@@ -7,7 +7,6 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import gzip
 import hashlib
-import heapq
 import html
 import json
 import math
@@ -18,11 +17,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from route_from_graph import calculate_route
+
 ROOT = Path(__file__).resolve().parent
 BBOX = (48.45, 10.7, 54.8, 19.0)  # south, west, north, east
 ENDPOINT = "https://overpass-api.de/api/interpreter"
 ATTRIBUTION = "© OpenStreetMap contributors"
 LICENSE = "https://opendatacommons.org/licenses/odbl/1-0/"
+# Review baseline for this regional snapshot, not every valid railway gauge.
+KNOWN_GAUGES_MM = frozenset({600, 750, 760, 900, 1000, 1435, 1520})
 
 # Regional hubs and the requested route stops; names are only selectors.
 # Coordinates and names in the outputs always come from OSM, never this list.
@@ -311,57 +314,6 @@ def compress_graph(elements):
     return nodes, edges, stations, missing, geometries, {"rail_ways": len(ways), "rail_nodes": len(coords), "atomic_segments": len(atoms)}
 
 
-def calculate_route(graph, station_keys):
-    stations = {s["id"]: s for s in graph["stations"]}
-    if any(key not in stations for key in station_keys):
-        return {"status": "unconfirmed", "reason": "필수 경유역이 원본에서 미확인"}
-    target_sets = [{a["node_id"] for a in stations[key]["anchors"]} for key in station_keys]
-    adj = defaultdict(list)
-    for edge in graph["edges"]:
-        adj[edge["from"]].append((edge["to"], edge["length_m"], edge["id"], True))
-        adj[edge["to"]].append((edge["from"], edge["length_m"], edge["id"], False))
-    distances, previous, queue = {}, {}, []
-    for node in sorted(target_sets[0]):
-        state = (node, 1)
-        distances[state] = 0
-        heapq.heappush(queue, (0, state))
-    end = None
-    while queue:
-        cost, state = heapq.heappop(queue)
-        if cost != distances.get(state):
-            continue
-        node, progress = state
-        if progress == len(target_sets):
-            end = state
-            break
-        if node in target_sets[progress]:
-            next_state = node, progress + 1
-            if cost < distances.get(next_state, math.inf):
-                distances[next_state] = cost
-                previous[next_state] = (state, None, True)
-                heapq.heappush(queue, (cost, next_state))
-        for neighbor, length, eid, forward in adj[node]:
-            next_state, next_cost = (neighbor, progress), cost + length
-            if next_cost < distances.get(next_state, math.inf):
-                distances[next_state] = next_cost
-                previous[next_state] = (state, eid, forward)
-                heapq.heappush(queue, (next_cost, next_state))
-    if end is None:
-        return {"status": "unconfirmed", "reason": "선택된 OSM 선로에서 모든 경유역을 연결하는 경로가 미확인"}
-    path, passes = [], []
-    state = end
-    while state in previous:
-        prior, eid, forward = previous[state]
-        if eid:
-            path.append({"edge_id": eid, "forward": forward})
-        else:
-            passes.append({"station_id": station_keys[state[1] - 1], "node_id": state[0], "distance_from_start_m": round(distances[state], 3)})
-        state = prior
-    passes.append({"station_id": station_keys[0], "node_id": state[0], "distance_from_start_m": 0})
-    return {"status": "connected", "length_m": round(distances[end], 3), "start_node": state[0], "end_node": end[0],
-            "waypoints": list(reversed(passes)), "path": list(reversed(path))}
-
-
 def write_json(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8", newline="\n")
 
@@ -492,6 +444,25 @@ def write_preview(graph, geometries, output):
     (output / "preview.local.html").write_text(content, encoding="utf-8")
 
 
+def find_gauge_anomalies(graph):
+    """Report values outside the review baseline without changing source data."""
+    anomalies, seen = [], set()
+    profiles = graph["attribute_profiles"]
+    for edge in graph["edges"]:
+        # A mixed edge has no aggregate gauge; inspect every source-way profile.
+        for segment in edge["segments"]:
+            profile = profiles[segment["attribute_id"]]
+            for gauge in profile.get("gauge_mm") or []:
+                key = edge["id"], segment["osm_way_id"], gauge
+                if gauge not in KNOWN_GAUGES_MM and key not in seen:
+                    seen.add(key)
+                    anomalies.append({"edge_id": edge["id"],
+                                      "osm_way_id": segment["osm_way_id"],
+                                      "source_url": f"https://www.openstreetmap.org/way/{segment['osm_way_id']}",
+                                      "gauge_mm": gauge})
+    return anomalies
+
+
 def validate_outputs(output):
     graph = json.loads((output / "graph.json").read_text(encoding="utf-8"))
     core = json.loads((output / "core.geojson").read_text(encoding="utf-8"))
@@ -538,7 +509,12 @@ def validate_outputs(output):
             assert waypoint["node_id"] in {a["node_id"] for a in stations[waypoint["station_id"]]["anchors"]}
         if route["id"] == "north_to_sassnitz":
             assert {b["name_original"] for b in route.get("ruegen_causeway_bridges", [])} == {"Rügendammbrücke", "Ziegelgrabenbrücke"}
-    print(f"Validation passed: {len(nodes)} nodes, {len(edges)} edges, {len(stations)} stations, {len(graph['routes'])} connected routes", flush=True)
+    anomalies = find_gauge_anomalies(graph)
+    for item in anomalies:
+        print(f"[WATCH] 궤간 검토 필요: {item['gauge_mm']}mm · 구간 {item['edge_id']} · "
+              f"OSM way {item['osm_way_id']} ({item['source_url']})", flush=True)
+    print(f"[PASS] 구조 검사 통과: 노드 {len(nodes):,}개, 구간 {len(edges):,}개, "
+          f"역 {len(stations)}개, 연결된 경로 {len(graph['routes'])}개 · 궤간 경고 {len(anomalies)}건", flush=True)
 
 
 def make_query(date=None):

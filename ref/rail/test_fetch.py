@@ -102,5 +102,82 @@ class RailTopologyTests(unittest.TestCase):
             self.assertEqual(source, replay)
 
 
+class RailGaugeTests(unittest.TestCase):
+    def graph_with_gauges(self, gauges):
+        profiles = {}
+        segments = []
+        for index, gauge in enumerate(gauges):
+            profile_id = f"a{index}"
+            profiles[profile_id] = fetch.attributes({"gauge": gauge} if gauge is not None else {})
+            segments.append({"attribute_id": profile_id, "osm_way_id": 10 + index})
+        return {"attribute_profiles": profiles,
+                "edges": [{"id": "e1", "gauge_mm": None, "segments": segments}]}
+
+    def test_known_gauges_are_not_anomalies(self):
+        for gauge in (600, 750, 760, 900, 1000, 1435, 1520):
+            with self.subTest(gauge=gauge):
+                graph = self.graph_with_gauges([str(gauge)])
+                self.assertEqual(fetch.find_gauge_anomalies(graph), [])
+
+    def test_multiple_known_gauges_are_not_anomalies(self):
+        graph = self.graph_with_gauges(["750;1435", "760;1435", "1000;1435;1520"])
+        self.assertEqual(fetch.find_gauge_anomalies(graph), [])
+
+    def test_missing_null_and_empty_gauges_are_not_anomalies(self):
+        graph = self.graph_with_gauges([None, None, None])
+        del graph["attribute_profiles"]["a0"]["gauge_mm"]
+        graph["attribute_profiles"]["a2"]["gauge_mm"] = []
+        self.assertEqual(fetch.find_gauge_anomalies(graph), [])
+
+    def test_unexpected_gauge_in_mixed_edge_identifies_source_way(self):
+        graph = self.graph_with_gauges(["1435", "6000"])
+        before = json.dumps(graph, sort_keys=True)
+        self.assertIsNone(graph["edges"][0]["gauge_mm"])
+        self.assertEqual(fetch.find_gauge_anomalies(graph), [{
+            "edge_id": "e1", "osm_way_id": 11,
+            "source_url": "https://www.openstreetmap.org/way/11", "gauge_mm": 6000,
+        }])
+        self.assertEqual(json.dumps(graph, sort_keys=True), before)
+
+    def test_unknown_member_of_multiple_gauges_is_reported_once(self):
+        graph = self.graph_with_gauges(["1435;6000"])
+        graph["edges"][0]["segments"].append(dict(graph["edges"][0]["segments"][0]))
+        anomalies = fetch.find_gauge_anomalies(graph)
+        self.assertEqual(len(anomalies), 1)
+        self.assertEqual(anomalies[0]["gauge_mm"], 6000)
+
+    def test_check_warns_but_succeeds_without_network_or_mutation(self):
+        graph = self.graph_with_gauges(["1435", "6000"])
+        coordinates = [[13, 52], [13.001, 52]]
+        length = round(fetch.distance(*coordinates), 3)
+        graph.update({"nodes": [{"id": "n1", "coordinates": coordinates[0]},
+                                {"id": "n2", "coordinates": coordinates[1]}],
+                      "stations": [], "routes": [],
+                      "source": {"attribution": fetch.ATTRIBUTION}})
+        edge = graph["edges"][0]
+        edge.update({"from": "n1", "to": "n2", "length_m": length})
+        for segment in edge["segments"]:
+            segment["length_m"] = length / 2
+        core = {"type": "FeatureCollection", "license": fetch.LICENSE,
+                "features": [{"id": "e1", "geometry": {"type": "LineString", "coordinates": coordinates}}]}
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            for name, payload in (("graph.json", graph), ("core.geojson", core)):
+                (output / name).write_text(json.dumps(payload), encoding="utf-8")
+            before = {path.name: path.read_bytes() for path in output.iterdir()}
+            with patch("sys.argv", ["fetch.py", "--check", "--output", temp]), \
+                    patch("sys.stdout", new_callable=io.StringIO) as stdout, \
+                    patch.object(fetch, "acquire", side_effect=AssertionError("Acquisition forbidden")), \
+                    patch.object(fetch, "build_outputs", side_effect=AssertionError("Rebuild forbidden")), \
+                    patch.object(fetch.urllib.request, "urlopen", side_effect=AssertionError("Network forbidden")):
+                self.assertIsNone(fetch.main())
+            self.assertIn("[WATCH] 궤간 검토 필요: 6000mm", stdout.getvalue())
+            self.assertIn("구간 e1", stdout.getvalue())
+            self.assertIn("https://www.openstreetmap.org/way/11", stdout.getvalue())
+            self.assertIn("[PASS] 구조 검사 통과", stdout.getvalue())
+            self.assertIn("궤간 경고 1건", stdout.getvalue())
+            self.assertEqual({path.name: path.read_bytes() for path in output.iterdir()}, before)
+
+
 if __name__ == "__main__":
     unittest.main()
