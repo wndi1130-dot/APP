@@ -82,7 +82,7 @@ export function metricLevel(metric: CommunityMetric, value: number): MetricLevel
       return { word: '여유', severity: 'normal' };
     case 'exposure':
       if (value >= 67) return { word: '높음', severity: 'serious' };
-      if (value >= 34) return { word: '보통', severity: 'warning' };
+      if (value >= 34) return { word: '보통', severity: 'normal' };
       return { word: '낮음', severity: 'normal' };
   }
 }

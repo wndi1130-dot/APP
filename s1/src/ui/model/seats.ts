@@ -24,11 +24,11 @@ export interface SeatBlock {
   seats: number;
 }
 
-/** 화면에 쓰는 기본 배치. 100석, 6줄. 테스트가 겹치지 않음을 확인한다. */
+/** 화면에 쓰는 기본 배치. 100석, 5줄. 가운데 빈 곳에 찬성 수를 쓴다. 테스트가 겹치지 않음을 확인한다. */
 export const DEFAULT_HEMICYCLE: Readonly<HemicycleOptions> = Object.freeze({
   total: 100,
-  rows: 6,
-  innerRadius: 62,
+  rows: 5,
+  innerRadius: 80,
   outerRadius: 150,
   seatRadius: 7,
 });
