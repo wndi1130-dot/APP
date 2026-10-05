@@ -1,0 +1,530 @@
+{
+  "_meta": {
+    "id": "central_europe_places_loot_draft",
+    "title": "중부 유럽 장소별 전리품·상징물 초안",
+    "status": "초안",
+    "reviewed_on": "2026-10-05",
+    "guide": "../docs/prototype/s1_content_guide.md#17-장소",
+    "reference": "places_central_europe.md",
+    "scope": "폴란드·독일 동부·체코의 건축 사례를 참고한 여섯 장소 유형. 국가별 확률 차이는 넣지 않는다.",
+    "envelope_contract": "places의 항목은 가이드 1.7의 장소 필드와 공통 id를 사용한다. 나머지 최상위 필드는 레퍼런스 메타데이터이며 런타임 스키마 필드로 확정하지 않는다.",
+    "loot_contract": "가이드 1.9의 여섯 자원 식별자를 사용한다. 한 번의 범주 추첨을 가정한 상대 가중치이며 각 장소의 합계는 100이다. 수량·재고·실측 출현율이 아니다.",
+    "zero_weight": "0은 이 기본 초안의 추첨에서 제외한다는 뜻이다. 현실에서 물건이 없다는 뜻이 아니다.",
+    "symbol_contract": "loot.symbol을 선택했을 때만 해당 장소의 symbols 목록을 후보 풀로 사용한다. symbols는 symbol_catalog의 id를 참조한다. 유형 사이에 id를 공유하지 않는다. 목록 내부 선택 방식과 획득 수량은 미확인이다.",
+    "secret_contract": "loot.secret은 정보 문서에서 비밀 카드를 얻는 범주다. 실제 secret 카드 id와 연결 규칙은 미확인이며 이 초안에서 만들지 않는다.",
+    "conditional_stock": "석탄은 연료 저장·하역 구역이 있는 장소에 한한다. 병원은 보관 상태가 확인된 의약품만 유효 전리품으로 가정한다. 현재 박물관인 건물에 현행 행정 문서나 산업 재고를 자동 배치하지 않는다.",
+    "risk_contract": "risk는 게임용 1~3 단계 초안이다. 구조·오염·동선 위험을 고려한 제안이며 현장 조사나 플레이 테스트로 검증하지 않았다.",
+    "moral_cards_contract": "카드 id가 정해지지 않아 빈 목록으로 둔다. 실제 카드와의 연결은 미확인이다.",
+    "unconfirmed": [
+      "각국에서 배치 유형이 얼마나 흔한지에 대한 통계와 소규모 병원·농촌 주택 표본",
+      "개별 건물의 붕괴 시점 용도, 실내 평면, 잔존 재고, 식량·의약품의 보존 상태",
+      "상징물의 실재 여부, 교파별 배치, 운반 가능성, 실제 도시 표식 사용 권리",
+      "loot 가중치·risk의 게임 균형, 국가·지역별 보정, 고갈·빈 결과 처리",
+      "최종 장소 JSON Schema, symbol 목록의 런타임 표현, secret·moral_cards의 참조 id"
+    ]
+  },
+  "sources": {
+    "freight_operations": {
+      "title": "DB Cargo 화물역 편성 절차",
+      "url": "https://www.dbcargo.com/rail-de-en/logistics-news/m-like-marshalling-yard-single-wagon-traffic-db-cargo-13973534",
+      "checked_on": "2026-10-05"
+    },
+    "freight_pl": {
+      "title": "PKP PLK 포즈난 프라노보 하역 시설",
+      "url": "https://www.plk-sa.pl/o-spolce/biuro-prasowe/informacje-prasowe/szczegoly/bedzie-lepsza-obsluga-pociagow-towarowych-na-stacji-poznan-franowo-5066",
+      "checked_on": "2026-10-05"
+    },
+    "freight_de": {
+      "title": "DB Cargo 제딘 화물역 역사",
+      "url": "https://www.dbcargo.com/rail-de-en/logistics-news/history-marshalling-yard-seddin-13088942",
+      "checked_on": "2026-10-05"
+    },
+    "freight_cz": {
+      "title": "Prague City Tourism 지슈코프 화물역",
+      "url": "https://prague.eu/en/objevujte/zizkov-freight-station/",
+      "checked_on": "2026-10-05"
+    },
+    "houses_pl": {
+      "title": "그단스크대학교 학술지의 팔로비에츠 건축 연구",
+      "url": "https://czasopisma.bg.ug.edu.pl/index.php/karto-teka/article/download/10619/9541/15067",
+      "checked_on": "2026-10-05"
+    },
+    "houses_de": {
+      "title": "visitBerlin 마르찬 조립식 아파트",
+      "url": "https://www.visitberlin.de/en/plattenbauten",
+      "checked_on": "2026-10-05"
+    },
+    "houses_cz": {
+      "title": "프라하 11구의 남부 신도시 형성 기록",
+      "url": "https://www.praha11.cz/redakce/tisk.php?clanek=182&lanG=cs&slozka=181",
+      "checked_on": "2026-10-05"
+    },
+    "hospital_pl": {
+      "title": "폴란드 국가기록원 바르샤바 병원 기록 해설",
+      "url": "https://www.szukajwarchiwach.gov.pl/de/zespol/-/zespol/99515",
+      "checked_on": "2026-10-05"
+    },
+    "hospital_de": {
+      "title": "베를린 판코 구청의 병원 정원 해설",
+      "url": "https://www.berlin.de/ba-pankow/politik-und-verwaltung/aemter/strassen-und-gruenflaechenamt/gruenflaechen/ausstellung/artikel.1509705.php",
+      "checked_on": "2026-10-05"
+    },
+    "hospital_cz": {
+      "title": "브르노 대학병원의 보후니체 기능주의 건축 해설",
+      "url": "https://www.fnbrno.cz/v-ramci-festivalu-open-house-brno-jsme-predstavili-funkcionalisticky-projekt-socialnich-ustavu-mesta-brna-oskara-porisky/t8172",
+      "checked_on": "2026-10-05"
+    },
+    "factory_pl": {
+      "title": "우치 시의 크셍지 므윈 산업 단지 해설",
+      "url": "https://lodz.pl/artykul/kolejny-rozdzial-w-historii-ksiezego-mlyna-beda-mieszkania-restauracje-i-park-w-miejsce-unionteksu-75419/",
+      "checked_on": "2026-10-05"
+    },
+    "factory_de": {
+      "title": "라이프치히 방직 공장 운영자의 건물·배치 해설",
+      "url": "https://www.spinnerei.de/gelaende-entwicklung/",
+      "checked_on": "2026-10-05"
+    },
+    "factory_cz": {
+      "title": "오스트라바 관광 기관의 돌니 비트코비체 해설",
+      "url": "https://www.visitostrava.eu/en/discover-ostrava/top-attractions/476-dolni-vitkovice-area.html",
+      "checked_on": "2026-10-05"
+    },
+    "church_pl_structure": {
+      "title": "Gdańsk Tourism Organization 고딕 건축 안내",
+      "url": "https://visitgdansk.com/pl/gotycka-architektura-w-gdansku",
+      "checked_on": "2026-10-05"
+    },
+    "church_pl_altar": {
+      "title": "그단스크 성모 성당의 주제단 해설",
+      "url": "https://bazylikamariacka.gdansk.pl/qr/oltarz-glowny/",
+      "checked_on": "2026-10-05"
+    },
+    "church_de_tradition": {
+      "title": "드레스덴 성모 교회의 루터교 전통 소개",
+      "url": "https://www.frauenkirche.de/kirche-heute.html",
+      "checked_on": "2026-10-05"
+    },
+    "church_de_structure": {
+      "title": "드레스덴 성모 교회의 건축 해설",
+      "url": "https://www.frauenkirche-dresden.de/architektur",
+      "checked_on": "2026-10-05"
+    },
+    "church_de_pulpit": {
+      "title": "드레스덴 성모 교회의 설교단 해설",
+      "url": "https://erfahrungswege.frauenkirche-dresden.de/de/objekte?o=kanzel",
+      "checked_on": "2026-10-05"
+    },
+    "church_cz_structure": {
+      "title": "UNESCO 쿠트나호라 성 바르바라 교회 해설",
+      "url": "https://whc.unesco.org/en/list/732",
+      "checked_on": "2026-10-05"
+    },
+    "church_cz_parish": {
+      "title": "쿠트나호라 가톨릭 본당의 성 바르바라 교회 관리 안내",
+      "url": "https://chramsvatebarbory.cz/pecujeme/",
+      "checked_on": "2026-10-05"
+    },
+    "office_pl": {
+      "title": "브로츠와프 관광 기관의 옛 시청 박물관 안내",
+      "url": "https://visitwroclaw.eu/en/trasy/cultural-adventure/",
+      "checked_on": "2026-10-05"
+    },
+    "office_de": {
+      "title": "베를린 문화재 데이터베이스의 붉은 시청 건축 해설",
+      "url": "https://denkmaldatenbank.berlin.de/daobj.php?obj_dok_nr=09011264",
+      "checked_on": "2026-10-05"
+    },
+    "office_cz_tower": {
+      "title": "오스트라바 시의 신시청 건축 해설",
+      "url": "https://www.ostrava.cz/cs/o-meste/aktualne/nova-radnice-slavi-90-let",
+      "checked_on": "2026-10-05"
+    },
+    "office_cz_wings": {
+      "title": "오스트라바 시의 신시청 창호 교체 범위",
+      "url": "https://www.ostrava.cz/cs/o-meste/tiskove-zpravy/nova-okna-pro-budovu-letos-85lete-nove-radnice",
+      "checked_on": "2026-10-05"
+    },
+    "hazards_industrial": {
+      "title": "EU-OSHA 작업장의 위험 물질",
+      "url": "https://osha.europa.eu/en/themes/dangerous-substances",
+      "checked_on": "2026-10-05"
+    },
+    "hazards_co": {
+      "title": "CDC 재난 뒤 일산화탄소 위험",
+      "url": "https://cdc.gov/carbon-monoxide/hcp/clinical-guidance/index.html",
+      "checked_on": "2026-10-05"
+    },
+    "medicine_storage": {
+      "title": "FDA 비상 상황의 인슐린 보관 안내",
+      "url": "https://www.fda.gov/drugs/emergency-preparedness-drugs/information-regarding-insulin-storage-and-switching-between-products-emergency",
+      "checked_on": "2026-10-05"
+    }
+  },
+  "symbol_catalog": [
+    {
+      "id": "symbol_freight_station_flag",
+      "type": "freight",
+      "name": "화물역 근무조 깃발",
+      "candidate_location": "역무동의 보관함",
+      "design_note": "그 역의 근무조가 쓰던 깃발이라는 출처를 부여한다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "freight_operations",
+        "freight_pl",
+        "freight_de",
+        "freight_cz"
+      ]
+    },
+    {
+      "id": "symbol_freight_dispatch_bell",
+      "type": "freight",
+      "name": "화물역 역무실 손종",
+      "candidate_location": "역무실",
+      "design_note": "편성을 알리던 작은 손종이라는 설정이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "freight_operations",
+        "freight_pl",
+        "freight_de",
+        "freight_cz"
+      ]
+    },
+    {
+      "id": "symbol_freight_crew_photo",
+      "type": "freight",
+      "name": "화물역 근무조 단체사진",
+      "candidate_location": "역무동 휴게실",
+      "design_note": "해당 역 근무조의 사진으로 한정한다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "freight_operations",
+        "freight_pl",
+        "freight_de",
+        "freight_cz"
+      ]
+    },
+    {
+      "id": "symbol_houses_family_album",
+      "type": "houses",
+      "name": "주택가 가족 사진첩",
+      "candidate_location": "세대 내부 서랍",
+      "design_note": "한 세대의 주소와 생활 흔적을 가진 사진첩이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "houses_pl",
+        "houses_de",
+        "houses_cz"
+      ]
+    },
+    {
+      "id": "symbol_houses_residents_banner",
+      "type": "houses",
+      "name": "주택가 주민회 깃발",
+      "candidate_location": "주민 공동실",
+      "design_note": "해당 단지 주민회의 표식이라는 설정이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "houses_pl",
+        "houses_de",
+        "houses_cz"
+      ]
+    },
+    {
+      "id": "symbol_houses_stairwell_plaque",
+      "type": "houses",
+      "name": "주택가 계단실 명패",
+      "candidate_location": "공동 출입구",
+      "design_note": "그 동의 주소를 새긴 작은 명패로 한정한다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "houses_pl",
+        "houses_de",
+        "houses_cz"
+      ]
+    },
+    {
+      "id": "symbol_hospital_staff_photo",
+      "type": "hospital",
+      "name": "병원 병동 직원사진",
+      "candidate_location": "병동 휴게실",
+      "design_note": "해당 병동 직원들이 함께 찍은 사진이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "hospital_pl",
+        "hospital_de",
+        "hospital_cz"
+      ]
+    },
+    {
+      "id": "symbol_hospital_ward_handbell",
+      "type": "hospital",
+      "name": "병원 병동 호출 손종",
+      "candidate_location": "병동 보관함",
+      "design_note": "그 병동에서 사용한 작은 손종이라는 설정이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "hospital_pl",
+        "hospital_de",
+        "hospital_cz"
+      ]
+    },
+    {
+      "id": "symbol_hospital_care_banner",
+      "type": "hospital",
+      "name": "병원 돌봄회 깃발",
+      "candidate_location": "봉사자 공동실",
+      "design_note": "병원의 돌봄 활동을 기억하는 표식이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "hospital_pl",
+        "hospital_de",
+        "hospital_cz"
+      ]
+    },
+    {
+      "id": "symbol_factory_shift_bell",
+      "type": "factory",
+      "name": "공장 교대 알림 종",
+      "candidate_location": "근무조 사무실",
+      "design_note": "운반 가능한 소형 교대 종이라는 설정이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "factory_pl",
+        "factory_de",
+        "factory_cz"
+      ]
+    },
+    {
+      "id": "symbol_factory_workers_banner",
+      "type": "factory",
+      "name": "공장 근무조 깃발",
+      "candidate_location": "근로자 공동실",
+      "design_note": "해당 공장 근무조의 표식으로 한정한다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "factory_pl",
+        "factory_de",
+        "factory_cz"
+      ]
+    },
+    {
+      "id": "symbol_factory_group_photo",
+      "type": "factory",
+      "name": "공장 작업반 단체사진",
+      "candidate_location": "작업반 휴게실",
+      "design_note": "그 공장에서 일하던 작업반의 사진이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "factory_pl",
+        "factory_de",
+        "factory_cz"
+      ]
+    },
+    {
+      "id": "symbol_church_sacristy_handbell",
+      "type": "church",
+      "name": "교회 제의실 손종",
+      "candidate_location": "가톨릭 제의실",
+      "design_note": "소형 손종을 후보로 삼는다. 모든 교파에 배치하지 않는다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "church_pl_structure",
+        "church_pl_altar",
+        "church_de_structure",
+        "church_de_pulpit",
+        "church_cz_structure",
+        "church_cz_parish"
+      ]
+    },
+    {
+      "id": "symbol_church_parish_hymnal",
+      "type": "church",
+      "name": "교회 회중 찬송집",
+      "candidate_location": "성가대 보관함",
+      "design_note": "그 회중이 사용한 표식과 필기가 남은 책이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "church_pl_structure",
+        "church_pl_altar",
+        "church_de_structure",
+        "church_de_pulpit",
+        "church_cz_structure",
+        "church_cz_parish"
+      ]
+    },
+    {
+      "id": "symbol_church_congregation_banner",
+      "type": "church",
+      "name": "교회 공동체 깃발",
+      "candidate_location": "본당 부속실",
+      "design_note": "그 종교 공동체의 기념 깃발이라는 설정이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "church_pl_structure",
+        "church_pl_altar",
+        "church_de_structure",
+        "church_de_pulpit",
+        "church_cz_structure",
+        "church_cz_parish"
+      ]
+    },
+    {
+      "id": "symbol_office_civic_flag",
+      "type": "office",
+      "name": "관청 도시 깃발",
+      "candidate_location": "의전 물품 보관실",
+      "design_note": "실제 국가 대신 가상 도시의 깃발로 제작한다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "office_pl",
+        "office_de",
+        "office_cz_tower",
+        "office_cz_wings"
+      ]
+    },
+    {
+      "id": "symbol_office_municipal_seal",
+      "type": "office",
+      "name": "관청 도시 인장",
+      "candidate_location": "문서 보관실",
+      "design_note": "가상 도시의 문서에 쓰던 인장이라는 설정이다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "office_pl",
+        "office_de",
+        "office_cz_tower",
+        "office_cz_wings"
+      ]
+    },
+    {
+      "id": "symbol_office_council_photo",
+      "type": "office",
+      "name": "관청 회의실 단체사진",
+      "candidate_location": "회의실",
+      "design_note": "유명 실존 인물 없이 가상 주민 대표들을 담는다.",
+      "evidence_status": "게임 제안; 실재 개별 물건과 수색 가능 여부 미확인",
+      "context_source_ids": [
+        "office_pl",
+        "office_de",
+        "office_cz_tower",
+        "office_cz_wings"
+      ]
+    }
+  ],
+  "places": [
+    {
+      "id": "place_freight_draft",
+      "type": "freight",
+      "risk": 3,
+      "loot": {
+        "coal": 40,
+        "food": 25,
+        "medicine": 5,
+        "luxury": 5,
+        "symbol": 10,
+        "secret": 15
+      },
+      "symbols": [
+        "symbol_freight_station_flag",
+        "symbol_freight_dispatch_bell",
+        "symbol_freight_crew_photo"
+      ],
+      "moral_cards": []
+    },
+    {
+      "id": "place_houses_draft",
+      "type": "houses",
+      "risk": 2,
+      "loot": {
+        "coal": 5,
+        "food": 35,
+        "medicine": 10,
+        "luxury": 20,
+        "symbol": 20,
+        "secret": 10
+      },
+      "symbols": [
+        "symbol_houses_family_album",
+        "symbol_houses_residents_banner",
+        "symbol_houses_stairwell_plaque"
+      ],
+      "moral_cards": []
+    },
+    {
+      "id": "place_hospital_draft",
+      "type": "hospital",
+      "risk": 3,
+      "loot": {
+        "coal": 0,
+        "food": 10,
+        "medicine": 55,
+        "luxury": 0,
+        "symbol": 10,
+        "secret": 25
+      },
+      "symbols": [
+        "symbol_hospital_staff_photo",
+        "symbol_hospital_ward_handbell",
+        "symbol_hospital_care_banner"
+      ],
+      "moral_cards": []
+    },
+    {
+      "id": "place_factory_draft",
+      "type": "factory",
+      "risk": 3,
+      "loot": {
+        "coal": 50,
+        "food": 10,
+        "medicine": 5,
+        "luxury": 5,
+        "symbol": 15,
+        "secret": 15
+      },
+      "symbols": [
+        "symbol_factory_shift_bell",
+        "symbol_factory_workers_banner",
+        "symbol_factory_group_photo"
+      ],
+      "moral_cards": []
+    },
+    {
+      "id": "place_church_draft",
+      "type": "church",
+      "risk": 2,
+      "loot": {
+        "coal": 0,
+        "food": 10,
+        "medicine": 0,
+        "luxury": 10,
+        "symbol": 60,
+        "secret": 20
+      },
+      "symbols": [
+        "symbol_church_sacristy_handbell",
+        "symbol_church_parish_hymnal",
+        "symbol_church_congregation_banner"
+      ],
+      "moral_cards": []
+    },
+    {
+      "id": "place_office_draft",
+      "type": "office",
+      "risk": 2,
+      "loot": {
+        "coal": 0,
+        "food": 5,
+        "medicine": 0,
+        "luxury": 10,
+        "symbol": 25,
+        "secret": 60
+      },
+      "symbols": [
+        "symbol_office_civic_flag",
+        "symbol_office_municipal_seal",
+        "symbol_office_council_photo"
+      ],
+      "moral_cards": []
+    }
+  ]
+}
