@@ -6,20 +6,20 @@
 
 ## 지금 상태
 
-- 1차에서 들어온 것: A1(#2), B2(#3), B4(#4), B6(#1)는 PR, A3와 B5는 브랜치만. 모두 '합쳐도 됨' 판정이라 다시 돌리지 않는다.
+- 1차 결과 중 A1(#2), B6(#1), B2(#3), B4(#4), B5(#5)는 main에 합쳤다(2026-10-05). A3는 브랜치(codex/a3-profile-generator)로 남아 있고 'A3 정리'에서 main 위로 옮긴다. 1차 결과는 다시 돌리지 않는다.
 - 다시 맡길 것: 1차에서 안 들어온 A2, A5, B1, B3, B7.
-- 고칠 것: A1 후속(금지어), A3 정리(합칠 때 손볼 것과 이름 중복), B4 후속(선택).
+- 고칠 것: A1 후속(금지어, 장소 loot 6키), A3 정리(합칠 때 손볼 것과 이름 중복), B4 후속(선택. 직결선 경로 계산 포함).
 - A4(화면 뼈대)는 클로드 코드로 따로 한다.
+- 반영한 결정(2026-10-05): 장소 loot는 6키, 첫 구간은 직결선 기본에 포즈난 우회. [decisions.md](../design/decisions.md)
 
 ## 순서
 
-0. 사람이 먼저 한다. #2(A1)를 합치고 #1, #3, #4를 합친다. B5는 codex/b5-central-europe 브랜치로 PR을 열어 합친다. A2와 A1 후속은 A1이 main에 있어야 돌릴 수 있다. A1 없이 돌리면 s1/ 뼈대를 또 만들어 충돌한다.
-1. 첫 묶음, 동시에 돌려도 된다: B1, B3, B7, A2, A1 후속. 고치는 파일이 서로 겹치지 않는다.
+1. 첫 묶음, 지금 바로 동시에 돌려도 된다: B1, B3, B7, A2, A1 후속. 고치는 파일이 서로 겹치지 않는다.
 2. B1이 합쳐지면: A3 정리.
 3. A3 정리가 합쳐지면: A5.
 4. 아무 때나(선택): B4 후속.
 
-결정이 나면 덧붙일 줄은 맨 아래 '결정이 나면 덧붙일 것'에 있다.
+코드 작업(A2, A1 후속, A3 정리, A5)은 A1이 main에 없으면 시작하지 않도록 프롬프트에 막아 두었다. A1 없이 돌면 s1/ 뼈대를 또 만들어 충돌하기 때문이다.
 
 ---
 
@@ -171,13 +171,13 @@
 - 테스트로 확인할 것: 의석 합은 언제나 100(무작위 인구 1000번), 51·67 경계, 파견 제외, 결속도, 공개·비밀 투표의 기록 차이, 같은 시드 재현, 효과 스키마의 모든 type 적용, 모르는 type 에러.
 ```
 
-## A1 후속. 콘텐츠 검사기 금지어
+## A1 후속. 콘텐츠 검사기 금지어와 장소 loot
 
 ```text
-[A1 후속] 콘텐츠 검사기 금지어 손보기
+[A1 후속] 콘텐츠 검사기 금지어와 장소 loot 손보기
 
 규칙
-- 저장소 https://github.com/wndi1130-dot/APP 에서 작업한다. 먼저 docs/handoff/codex_review.md의 '#2 A1' 검토와 docs/prototype/s1_content_guide.md 2장의 '쓰지 않는 것'을 읽는다.
+- 저장소 https://github.com/wndi1130-dot/APP 에서 작업한다. 먼저 docs/handoff/codex_review.md의 '#2 A1'과 'B5' 검토, docs/prototype/s1_content_guide.md 1.7(장소)과 2장의 '쓰지 않는 것'을 읽는다.
 - 전제: A1이 main에 합쳐져 있어야 한다. 없으면 시작하지 말고 그렇게 알린다.
 - docs/는 읽기만 한다. 고칠 파일은 s1/schema/, s1/tools/validate.ts(필요할 때만), s1/tests/, s1/fixtures/다. package.json, tsconfig.json, s1/src/는 고치지 않는다.
 - main에서 새 브랜치를 만들어 작업하고 PR로 낸다. main에 직접 push하지 않는다.
@@ -192,6 +192,7 @@
    - 영문 대문자, 하이픈, 숫자로 된 모델 코드 꼴(예: XX-12)은 패턴으로 경고한다.
 2. '강제 이주', '강제 추방'은 오류에서 경고로 낮춘다. 추방은 우리 게임의 정식 수단(추방 명단, 칸 분리)이다. '추방'만 쓴 문장은 막지 않는다. 수용소, 가스실, 절멸, 강제 이송은 오류로 남긴다.
 3. 테스트를 더한다: 새 금지어가 막히는 예, 정상 문장이 통과하는 예('추방 명단을 붙였다', '체코 국경', '총을 닦았다').
+4. 장소 loot를 6키로 넓힌다. s1/schema/place.schema.json의 loot가 coal, food, medicine, luxury, symbol, secret 여섯 키를 모두 받게 하고(0 이상의 수), fixtures와 테스트를 맞춘다. ref/places_loot_draft.json의 places 여섯 개가 검사를 통과하는지 확인해 PR에 적는다.
 
 완료 기준: npm test와 npm run build가 통과한다. fixtures/valid는 오류 0개다.
 ```
@@ -246,11 +247,11 @@
 ## B4 후속 (선택)
 
 ```text
-[B4 후속] 철도 데이터 다듬기
+[B4 후속] 철도 데이터 다듬기와 첫 구간 경로
 
 규칙
-- 저장소 https://github.com/wndi1130-dot/APP 에서 작업한다. 먼저 docs/handoff/codex_review.md의 '#4 B4' 검토와 ref/rail/README.md를 읽는다.
-- 전제: B4(#4)가 main에 합쳐져 있어야 한다.
+- 저장소 https://github.com/wndi1130-dot/APP 에서 작업한다. 먼저 docs/handoff/codex_review.md의 '#4 B4' 검토, ref/rail/README.md, docs/design/decisions.md '세계와 런'의 첫 구간 결정을 읽는다.
+- 전제: B4가 main에 합쳐져 있다(ref/rail/).
 - docs/는 읽기만 한다. ref/rail/만 고친다. OSM 원본(약 199MB)은 다시 받지 않는다.
 - main에서 새 브랜치를 만들어 작업하고 PR로 낸다. main에 직접 push하지 않는다.
 - 문서는 한국어, 코드와 커밋 메시지는 영어로 쓴다. 테스트는 실제로 돌려서 결과를 PR에 적는다.
@@ -259,20 +260,5 @@
 1. ref/rail/.gitattributes: core.geojson과 graph.json에 -diff linguist-generated=true를 더한다(eol=lf는 그대로).
 2. fetch.py --check에 궤간 이상값 검사를 더한다. 알려진 궤간(1435, 1520, 1000, 750, 600 등) 밖의 값(예: 6000mm 한 구간)은 경고로 보고한다. 데이터는 다시 만들지 않고, 이상값 목록을 README의 남은 문제에 적는다.
 3. ref/rail/route_from_graph.py(표준 라이브러리만)와 테스트: graph.json만으로 역과 역 사이 최단 경로와 거리를 계산한다. 원본 캐시 없이 돌아야 하고, fetch.py의 규칙(역 안에서 다른 선로로 순간이동하지 않기)을 그대로 따른다. routes.md의 네 경로를 다시 계산해 거리가 맞는지 확인한다.
-```
-
----
-
-## 결정이 나면 덧붙일 것
-
-장소 loot를 여섯 키로 하기로 하면, A1 후속 프롬프트의 '할 일' 끝에 붙인다.
-
-```text
-4. 장소 loot에 symbol·secret 가중치를 더한다. s1/schema/place.schema.json의 loot가 coal, food, medicine, luxury, symbol, secret 여섯 키를 모두 받게 하고(0 이상의 수), fixtures와 테스트를 맞춘다. ref/places_loot_draft.json(B5)의 places 여섯 개가 검사를 통과하는지 확인해 PR에 적는다.
-```
-
-첫 구간을 직결선으로 하기로 하면, B4 후속 프롬프트의 '할 일' 끝에 붙인다.
-
-```text
-4. route_from_graph.py로 두 경로를 계산해 routes.md에 더한다: 볼슈틴 → 즈봉시네크 → 제핀 → 프랑크푸르트 오데르 → 베를린 중앙역 → 라이프치히 중앙역, 그리고 볼슈틴 → 즈봉시네크 → 코트부스 → 라이프치히 중앙역. 볼슈틴–즈봉시네크 직결선이 지금 여객 운행 중인지는 '미확인'으로 적는다.
+4. 첫 구간 결정(직결선 기본, 포즈난 우회)에 맞춰 route_from_graph.py로 두 경로를 계산해 routes.md에 더한다: 볼슈틴 → 즈봉시네크 → 코트부스 → 라이프치히 중앙역(기본), 볼슈틴 → 즈봉시네크 → 제핀 → 프랑크푸르트 오데르 → 베를린 중앙역 → 라이프치히 중앙역. 기존 포즈난 경유 경로는 '우회 선택지'로 표시한다. 볼슈틴–즈봉시네크 직결선에 지금 여객 열차가 다니는지는 '미확인'으로 적는다.
 ```

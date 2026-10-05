@@ -107,7 +107,7 @@ S1의 글(프로필, 인물, 사건 카드, 법안, 일대기)은 Gemini 4.0이 
 |---|---|---|
 | type | 열거 | freight(화물역), houses(주택가), hospital(병원), factory(공장), church(교회), office(관청) |
 | risk | 1~3 | 위험도 |
-| loot | 자원별 가중치 | |
+| loot | 자원별 가중치 | coal, food, medicine, luxury, symbol, secret 여섯 키, 0 이상의 수. 필드 카드의 목표 6개와 같다. symbol이 뽑히면 symbols에서 고르고, 한 번 얻은 상징물은 다시 나오지 않는다 |
 | symbols | 목록 | 이곳에서만 나오는 상징물 |
 | moral_cards | 목록 | 올라올 수 있는 도덕적 선택 카드 id |
 
