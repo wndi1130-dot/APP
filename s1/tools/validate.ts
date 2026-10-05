@@ -30,6 +30,7 @@ interface Rule {
   message: string;
   terms: string[];
   patterns: string[];
+  pattern_flags?: 'u' | 'iu';
 }
 interface ContentRules {
   text_fields: Record<ContentKind, string[]>;
@@ -52,7 +53,7 @@ const validators = Object.fromEntries(contentKinds.map(kind => {
 const rules = JSON.parse(readFileSync(join(schemaDirectory, 'content_rules.json'), 'utf8')) as ContentRules;
 const compiledRules = rules.rules.map(rule => ({
   ...rule,
-  expressions: rule.patterns.map(pattern => new RegExp(pattern, 'iu')),
+  expressions: rule.patterns.map(pattern => new RegExp(pattern, rule.pattern_flags ?? 'iu')),
 }));
 const segmenter = new Intl.Segmenter('ko', { granularity: 'sentence' });
 const isRecord = (value: unknown): value is Record<string, unknown> =>

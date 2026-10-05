@@ -19,8 +19,9 @@ const temporaryFolder = () => {
   temporaryFolders.push(folder);
   return folder;
 };
+// Exercise the CLI entry point without requiring the tsx wrapper's IPC socket.
 const cli = (...args: string[]) => spawnSync(process.execPath,
-  [join(root, 'node_modules/tsx/dist/cli.mjs'), join(root, 'tools/validate.ts'), ...args],
+  ['--import', 'tsx', join(root, 'tools/validate.ts'), ...args],
   { cwd: root, encoding: 'utf8', timeout: 30_000 });
 
 afterEach(() => {

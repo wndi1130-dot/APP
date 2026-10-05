@@ -41,13 +41,23 @@
         "luxury": {
           "type": "number",
           "minimum": 0
+        },
+        "symbol": {
+          "type": "number",
+          "minimum": 0
+        },
+        "secret": {
+          "type": "number",
+          "minimum": 0
         }
       },
       "required": [
         "coal",
         "food",
         "medicine",
-        "luxury"
+        "luxury",
+        "symbol",
+        "secret"
       ],
       "additionalProperties": false
     },

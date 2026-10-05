@@ -6,7 +6,9 @@
     "coal": 4,
     "food": 1,
     "medicine": 0,
-    "luxury": 1
+    "luxury": 1,
+    "symbol": 1,
+    "secret": 0
   },
   "symbols": [
     "symbol_small_bell"

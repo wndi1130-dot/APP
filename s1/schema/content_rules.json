@@ -97,12 +97,36 @@
         "윈체스터",
         "발터",
         "칼라시니코프",
-        "우지"
+        "우지",
+        "에이케이",
+        "마우저",
+        "모신나강",
+        "마카로프",
+        "토카레프",
+        "브라우닝",
+        "루거",
+        "모스버그",
+        "체스카 즈브로요브카",
+        "슈타이어",
+        "사코"
       ],
       "patterns": [
-        "(?<![a-z0-9])(?:glock|beretta|colt|smith\\s*(?:&|and)\\s*wesson|heckler\\s*(?:&|and)\\s*koch|sig[\\s-]*sauer|remington|winchester|walther|fn[\\s-]*herstal|kalashnikov|uzi)(?![a-z0-9])",
-        "(?<![a-z0-9])(?:ak[\\s-]?(?:47|74)|ar[\\s-]?15|m[\\s-]?(?:16|4)|hk[\\s-]?416|g[\\s-]?(?:17|19))(?![a-z0-9])"
+        "(?<![\\p{Script=Latin}\\p{N}_])(?:glock|beretta|colt|smith\\s*(?:&|and)\\s*wesson|heckler\\s*(?:&|and)\\s*koch|sig[\\s-]*sauer|remington|winchester|walther|fn[\\s-]*herstal|kalashnikov|uzi|mauser|mosin[\\s-]*nagant|makarov|tokarev|browning|luger|ruger|mossberg|cz|(?:ceska|česká)[\\s-]+zbrojovka|steyr|sako)(?![\\p{Script=Latin}\\p{N}_])",
+        "(?<![\\p{Script=Latin}\\p{N}_])(?:ak(?:m|[\\s-]?(?:47|74))?|ar[\\s-]?15|m[\\s-]?(?:16|4)|mp[\\s-]?5|hk[\\s-]?416|g[\\s-]?(?:17|19))(?![\\p{Script=Latin}\\p{N}_])",
+        "에이\\s*케이|모신[\\s-]*나강|체스카\\s*즈브로요브카|(?:엠[\\s-]?(?:16|4)|에이\\s*알[\\s-]?15|엠\\s*피[\\s-]?5)(?![\\p{Script=Latin}\\p{N}_])",
+        "엠\\s*(?:십육|식스틴|포)|에이\\s*알\\s*(?:십오|피프틴)|엠\\s*피\\s*(?:오|파이브)"
       ]
+    },
+    {
+      "id": "firearm_model_code",
+      "severity": "warning",
+      "scope": "text",
+      "terms": [],
+      "patterns": [
+        "(?<![\\p{Script=Latin}\\p{N}_])[A-Z]+-[0-9]+[A-Z0-9]*(?![\\p{Script=Latin}\\p{N}_])"
+      ],
+      "pattern_flags": "u",
+      "message": "모델 코드처럼 보이는 표현입니다. 실제 총기 명칭인지 확인하세요. 이 항목은 경고입니다."
     },
     {
       "id": "dialogue_zombie",
@@ -124,19 +148,30 @@
         "강제이송",
         "강제 수송",
         "강제수송",
-        "강제 이주",
-        "강제이주",
-        "강제 추방",
-        "강제추방",
         "절멸",
         "가스실"
       ],
       "patterns": [
-        "강제\\s*(?:이송|수송|이주|추방)",
+        "강제\\s*(?:이송|수송)",
         "사람(?:들)?(?:을|들을)?[^.!?。！？\\n]{0,20}화물칸[^.!?。！？\\n]{0,20}(?:싣|실어|실었|몰아|넣)",
         "줄\\s*세워[^.!?。！？\\n]{0,20}(?:선별|가르|갈라)"
       ],
       "message": "수용소·강제 이송을 떠올리게 하는 어휘나 장면을 쓸 수 없습니다."
+    },
+    {
+      "id": "forced_displacement",
+      "severity": "warning",
+      "scope": "text",
+      "terms": [
+        "강제 이주",
+        "강제이주",
+        "강제 추방",
+        "강제추방"
+      ],
+      "patterns": [
+        "강제\\s*(?:이주|추방)"
+      ],
+      "message": "강제 이주·강제 추방은 게임의 추방 명단·칸 분리 맥락인지 확인하세요. 이 항목은 경고입니다."
     },
     {
       "id": "moral_score",
