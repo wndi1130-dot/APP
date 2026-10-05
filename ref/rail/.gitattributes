@@ -1,2 +1,4 @@
 *.json text eol=lf
 *.geojson text eol=lf
+core.geojson -diff linguist-generated=true
+graph.json -diff linguist-generated=true

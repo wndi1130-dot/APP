@@ -6,7 +6,63 @@ OSM 기준 시각: `2026-10-05T10:45:21Z`. 출처: [OpenStreetMap](https://www.o
 
 뤼겐 둑길 경유는 슈트랄준트 뤼겐담역에서 베르겐으로 이어지는 실제 선로의 다리 구간으로 확인한다. 도로 전용 뤼겐교는 경로에 넣지 않는다.
 
-## 볼슈틴에서 라이프치히: 오데르·베를린 경유
+## 첫 구간 기본: 즈봉시네크·코트부스 직결선
+
+[첫 구간 결정](../../docs/design/decisions.md)에 따른 기본 경로다. 볼슈틴 → 즈봉시네크 → 코트부스 중앙역 → 라이프치히 중앙역을 순서대로 지난다.
+
+총 **311.9km**(정확한 계산값 **311,875.372m**). 문서용 경로 ID: `first_leg_direct`.
+
+```sh
+python3 ref/rail/route_from_graph.py wolsztyn zbaszynek cottbus leipzig
+```
+
+| 구간 | 거리 | 누적 거리 |
+|---|---:|---:|
+| 볼슈틴 → 즈봉시네크 | 28.424km | 28.424km |
+| 즈봉시네크 → 코트부스 중앙역 | 134.900km | 163.324km |
+| 코트부스 중앙역 → 라이프치히 중앙역 | 148.551km | 311.875km |
+
+### 경유역 원본
+
+- [볼슈틴 (Wolsztyn)](https://www.openstreetmap.org/node/469291096)
+- [즈봉시네크 (Zbąszynek)](https://www.openstreetmap.org/node/2843454031)
+- [코트부스 중앙역 (Cottbus Hauptbahnhof / Chóśebuz głowne dwórnišćo)](https://www.openstreetmap.org/node/2599505466)
+- [라이프치히 중앙역 (Leipzig Hauptbahnhof)](https://www.openstreetmap.org/node/376142577)
+
+결정 문서의 ‘코트부스’는 그래프의 `cottbus`와 같은 역이며, 저장된 한글 이름은 ‘콧부스 중앙역’이다. 볼슈틴–즈봉시네크 직결선에 **현재 여객 열차가 다니는지는 미확인**이다.
+
+## 첫 구간 비교: 포즈난을 들르지 않는 오데르·베를린 경유
+
+볼슈틴 → 즈봉시네크 → 제핀 → 프랑크푸르트 오데르 → 베를린 중앙역 → 라이프치히 중앙역
+
+총 **383.7km**(정확한 계산값 **383,745.771m**). 문서용 경로 ID: `first_leg_via_berlin`. 위 직결선 기본 경로보다 71,870.399m 길다.
+
+```sh
+python3 ref/rail/route_from_graph.py wolsztyn zbaszynek rzepin frankfurt berlin leipzig
+```
+
+| 구간 | 거리 | 누적 거리 |
+|---|---:|---:|
+| 볼슈틴 → 즈봉시네크 | 28.266km | 28.266km |
+| 즈봉시네크 → 제핀 | 75.291km | 103.556km |
+| 제핀 → 프랑크푸르트 오데르 | 21.216km | 124.772km |
+| 프랑크푸르트 오데르 → 베를린 중앙역 | 90.862km | 215.634km |
+| 베를린 중앙역 → 라이프치히 중앙역 | 168.112km | 383.746km |
+
+### 경유역 원본
+
+- [볼슈틴 (Wolsztyn)](https://www.openstreetmap.org/node/469291096)
+- [즈봉시네크 (Zbąszynek)](https://www.openstreetmap.org/node/2843454031)
+- [제핀 (Rzepin)](https://www.openstreetmap.org/node/3258261975)
+- [프랑크푸르트 오데르 (Frankfurt (Oder))](https://www.openstreetmap.org/node/321555238)
+- [베를린 중앙역 (Berlin Hauptbahnhof)](https://www.openstreetmap.org/node/3856100103)
+- [라이프치히 중앙역 (Leipzig Hauptbahnhof)](https://www.openstreetmap.org/node/376142577)
+
+두 추가 경로는 `graph.json`의 기존 `stations`와 `edges`에서 새로 계산한 것이며, `graph.json.routes`에는 추가하지 않았다. 문서용 ID는 `--route`의 입력값이 아니므로 위 역 ID 명령으로 재현한다.
+
+구간 거리는 **전체 경로의 경유점 누적거리 차이**다. 볼슈틴 → 즈봉시네크는 후속 경로에 따라 같은 역의 다른 연결점에 도착해 28,424.268m와 28,265.799m로 다르다. 중간 역에서 다른 선로로 순간 이동하지 않는 조건에서 생기는 차이이며, 역 쌍별 최단거리 합계로 바꾸지 않는다. 표의 km 값은 반올림하므로 표시된 구간값 합과 누적값이 조금 다를 수 있다.
+
+## 우회 선택지: 포즈난·오데르·베를린 경유
 
 볼슈틴 → 포즈난 중앙역 → 즈봉시네크 → 제핀 → 프랑크푸르트 오데르 → 베를린 중앙역 → 라이프치히 중앙역
 
@@ -31,7 +87,7 @@ OSM 기준 시각: `2026-10-05T10:45:21Z`. 출처: [OpenStreetMap](https://www.o
 - [베를린 중앙역 (Berlin Hauptbahnhof)](https://www.openstreetmap.org/node/3856100103)
 - [라이프치히 중앙역 (Leipzig Hauptbahnhof)](https://www.openstreetmap.org/node/376142577)
 
-## 볼슈틴에서 라이프치히: 브로츠와프·드레스덴 경유
+## 우회 선택지: 포즈난·브로츠와프·드레스덴 경유
 
 볼슈틴 → 포즈난 중앙역 → 레슈노 → 브로츠와프 중앙역 → 레그니차 → 벵글리니에츠 → 괴를리츠 → 드레스덴 중앙역 → 라이프치히 중앙역
 
@@ -119,10 +175,25 @@ OSM 기준 시각: `2026-10-05T10:45:21Z`. 출처: [OpenStreetMap](https://www.o
 - [프르제로프 (Přerov)](https://www.openstreetmap.org/node/3266780396)
 - [오스트라바 중앙역 (Ostrava hlavní nádraží)](https://www.openstreetmap.org/node/3036772660)
 
+## 기존 네 경로 재계산 확인
+
+다음 명령은 저장된 거리·선로 목록을 답으로 읽지 않고, `graph.json`의 선로와 각 경로의 역 목록으로 다시 탐색한다. 원본 캐시·GeoJSON·네트워크는 필요 없다. 네 경로 모두 총거리뿐 아니라 시작·도착 노드, 구간 ID와 진행 방향, 경유역 노드와 누적거리까지 저장값과 일치했다.
+
+```sh
+python3 ref/rail/route_from_graph.py --check
+```
+
+| 그래프 경로 ID | 저장 거리 | 재계산 거리 | 차이 |
+|---|---:|---:|---:|
+| `west_via_berlin` | 514,743.385m | 514,743.385m | 0m |
+| `west_via_dresden` | 628,002.522m | 628,002.522m | 0m |
+| `north_to_sassnitz` | 449,545.406m | 449,545.406m | 0m |
+| `czech_corridor` | 550,623.158m | 550,623.158m | 0m |
+
 ## 해석 범위와 남은 문제
 
 - 이 데이터는 현재 OSM 기록을 바탕으로 한 게임 참고 자료다. 재난 이후의 운행 가능성을 뜻하지 않는다.
-- 보존 철도·폐선·공사 중 선로·협궤 경전철은 제외했다. 체코 전체와 서부 폴란드·동부 독일을 둘러싸는 사각 범위여서 경계 주변의 다른 지역도 일부 포함된다.
+- 보존 철도·폐선·공사 중 선로·경전철 태그는 제외했다. 궤간 수치로 거른 것은 아니므로 750mm 단독 구간 6개와 복수 궤간 구간은 남아 있다. 6000mm 이상값과 해당 원본 목록은 [README의 남은 문제](README.md#남은-문제)에 적었다. 체코 전체와 서부 폴란드·동부 독일을 둘러싸는 사각 범위여서 경계 주변의 다른 지역도 일부 포함된다.
 - 복선 여부와 경사 등 누락 태그는 미확인이다. 경사에 표고 모델은 사용하지 않았다.
 - 세부 경유역을 바꾸면 같은 데이터에서도 다른 후보가 나올 수 있다. 소규모 여객 정차장은 의도적으로 생략했다.
 - 데이터 배포 시 © OpenStreetMap contributors와 [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)을 표시한다.
