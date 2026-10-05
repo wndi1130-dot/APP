@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:law",
+  "title": "법안",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "rule"
+      ]
+    },
+    "opens_when": {
+      "$ref": "urn:s1:schema:common#/$defs/conditions"
+    },
+    "effects": {
+      "$ref": "urn:s1:schema:effects#/$defs/list"
+    },
+    "stances": {
+      "type": "object",
+      "properties": {
+        "ration": {
+          "type": "string",
+          "enum": [
+            "equal",
+            "contribution",
+            "neutral"
+          ]
+        },
+        "authority": {
+          "type": "string",
+          "enum": [
+            "discipline",
+            "practical",
+            "neutral"
+          ]
+        },
+        "technology": {
+          "type": "string",
+          "enum": [
+            "restoration",
+            "adaptation",
+            "neutral"
+          ]
+        }
+      },
+      "required": [
+        "ration",
+        "authority",
+        "technology"
+      ],
+      "additionalProperties": false
+    },
+    "preview": {
+      "type": "string",
+      "minLength": 1
+    },
+    "chronicle": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "rejected": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        }
+      },
+      "required": [
+        "passed",
+        "rejected"
+      ],
+      "additionalProperties": false
+    },
+    "content_type": {
+      "const": "law"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "opens_when",
+    "effects",
+    "stances",
+    "preview",
+    "chronicle"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,50 @@
+{
+  "id": "ev_tail_cold_01",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 1,
+      "max": 3
+    }
+  ],
+  "speaker": "tail",
+  "body": "난로가 꺼졌어요. 우리 칸으로 와 보세요.",
+  "choices": [
+    {
+      "label": "석탄을 나눈다",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -2
+        },
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": 1
+        }
+      ],
+      "followups": [],
+      "witnesses": [
+        "p_001"
+      ]
+    },
+    {
+      "label": "기관실에 묻는다",
+      "effects": [
+        {
+          "type": "flag",
+          "id": "heat_requested",
+          "value": true
+        }
+      ],
+      "followups": [
+        "ev_heat_reply"
+      ],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0,
+  "chronicle": "ch_heat_shared"
+}

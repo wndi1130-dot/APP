@@ -1,0 +1,17 @@
+{
+  "id": "place_old_freight",
+  "type": "camp",
+  "risk": 4,
+  "loot": {
+    "coal": 4,
+    "food": 1,
+    "medicine": 0,
+    "luxury": 1
+  },
+  "symbols": [
+    "symbol_small_bell"
+  ],
+  "moral_cards": [
+    "ev_stranded_worker"
+  ]
+}

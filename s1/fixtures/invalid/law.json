@@ -1,0 +1,28 @@
+{
+  "id": "law_secret_ballot",
+  "kind": "emergency",
+  "opens_when": [
+    {
+      "type": "flag",
+      "id": "council_open",
+      "value": true
+    }
+  ],
+  "effects": [
+    {
+      "type": "flag",
+      "id": "secret_ballot",
+      "value": true
+    }
+  ],
+  "stances": {
+    "ration": "neutral",
+    "authority": "practical",
+    "technology": "neutral"
+  },
+  "preview": "사람을 강제 이송한다.",
+  "chronicle": {
+    "passed": "ch_ballot_passed",
+    "rejected": "ch_ballot_rejected"
+  }
+}

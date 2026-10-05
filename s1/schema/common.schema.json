@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:common",
+  "title": "공통 값과 참조",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "영문 소문자로 시작하고 소문자, 숫자, 밑줄을 쓴다. 가이드의 p_001 예시에 맞춰 숫자를 허용한다."
+    },
+    "community": {
+      "type": "string",
+      "enum": [
+        "tail",
+        "engine",
+        "guard",
+        "medtech",
+        "front"
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "alive",
+        "injured",
+        "dead",
+        "away"
+      ]
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "captain",
+        "deputy",
+        "ration_officer",
+        "rep",
+        "aide",
+        "faction_leader"
+      ]
+    },
+    "profileFields": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name_original": {
+          "type": "string",
+          "minLength": 1
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 85
+        },
+        "community": {
+          "$ref": "urn:s1:schema:common#/$defs/community"
+        },
+        "origin_tag": {
+          "type": "string",
+          "enum": [
+            "original",
+            "rescued"
+          ]
+        },
+        "boarding": {
+          "type": "string",
+          "enum": [
+            "depot",
+            "bought",
+            "force",
+            "rescue",
+            "refugee",
+            "born"
+          ]
+        },
+        "hometown": {
+          "type": "string",
+          "minLength": 1
+        },
+        "like": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dislike": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "string",
+          "maxLength": 40,
+          "pattern": "^[^\\r\\n]*$"
+        },
+        "state": {
+          "$ref": "urn:s1:schema:common#/$defs/state"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "name_original",
+        "age",
+        "community",
+        "origin_tag",
+        "boarding",
+        "hometown",
+        "like",
+        "dislike",
+        "line",
+        "state"
+      ]
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "segment"
+            },
+            "min": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "type",
+            "min",
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "community"
+            },
+            "community": {
+              "$ref": "urn:s1:schema:common#/$defs/community"
+            },
+            "metric": {
+              "type": "string",
+              "enum": [
+                "warmth",
+                "ration",
+                "crowding",
+                "exposure"
+              ]
+            },
+            "operator": {
+              "type": "string",
+              "enum": [
+                "lt",
+                "lte",
+                "eq",
+                "gte",
+                "gt"
+              ]
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "community",
+            "metric",
+            "operator",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "flag"
+            },
+            "id": {
+              "$ref": "urn:s1:schema:common#/$defs/id"
+            },
+            "value": {
+              "type": [
+                "boolean",
+                "number",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "person"
+            },
+            "id": {
+              "$ref": "urn:s1:schema:common#/$defs/id"
+            },
+            "state": {
+              "$ref": "urn:s1:schema:common#/$defs/state"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/condition"
+      },
+      "minItems": 0
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/id"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "witness": {
+      "oneOf": [
+        {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "person": {
+              "$ref": "urn:s1:schema:common#/$defs/id"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "person",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "목격자 id 또는 목격자 id와 증언. 증언은 검사기에서 두 문장 이내로 확인한다."
+    }
+  }
+}

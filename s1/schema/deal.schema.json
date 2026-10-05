@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:deal",
+  "title": "거래 조건",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "tool": {
+      "type": "string",
+      "enum": [
+        "open",
+        "favor",
+        "fetch",
+        "bribe",
+        "blackmail"
+      ]
+    },
+    "from": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "ask": {
+      "$ref": "urn:s1:schema:effects#/$defs/list"
+    },
+    "deadline": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "gives": {
+      "$ref": "urn:s1:schema:effects#/$defs/list"
+    },
+    "breach": {
+      "$ref": "urn:s1:schema:effects#/$defs/list"
+    },
+    "arc_tags": {
+      "$ref": "urn:s1:schema:common#/$defs/references"
+    },
+    "content_type": {
+      "const": "deal"
+    }
+  },
+  "required": [
+    "id",
+    "tool",
+    "from",
+    "ask",
+    "deadline",
+    "gives",
+    "breach",
+    "arc_tags"
+  ],
+  "additionalProperties": false
+}

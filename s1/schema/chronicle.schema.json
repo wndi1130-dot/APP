@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:chronicle",
+  "title": "일대기 기록",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "who": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "what": {
+      "type": "string",
+      "minLength": 1
+    },
+    "where": {
+      "type": "string",
+      "minLength": 1
+    },
+    "when": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "why": {
+      "type": "string",
+      "minLength": 1
+    },
+    "witnesses": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:s1:schema:common#/$defs/witness"
+      },
+      "minItems": 0
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0
+    },
+    "template": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "content_type": {
+      "const": "chronicle"
+    }
+  },
+  "required": [
+    "id",
+    "who",
+    "what",
+    "where",
+    "when",
+    "why",
+    "witnesses",
+    "weight",
+    "template"
+  ],
+  "additionalProperties": false
+}

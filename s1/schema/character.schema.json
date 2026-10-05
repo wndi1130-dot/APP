@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:character",
+  "title": "이름 있는 인물",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "urn:s1:schema:common#/$defs/profileFields"
+    }
+  ],
+  "properties": {
+    "content_type": {
+      "const": "character"
+    },
+    "role": {
+      "$ref": "urn:s1:schema:common#/$defs/role"
+    },
+    "trait": {
+      "type": "string",
+      "enum": [
+        "greed",
+        "ideal",
+        "family",
+        "fear",
+        "ambition"
+      ]
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:s1:schema:common#/$defs/id"
+      },
+      "minItems": 0,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "family",
+              "friend",
+              "enemy"
+            ]
+          }
+        },
+        "required": [
+          "target",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "luxuries": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "debts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "person": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "owed_to",
+              "owed_from"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "person",
+          "direction",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "weights": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "number",
+          "minimum": 0
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "voice": {
+      "type": "string",
+      "enum": [
+        "tail",
+        "engine",
+        "guard",
+        "medtech",
+        "front",
+        "engine_faith",
+        "restoration",
+        "adaptation"
+      ]
+    },
+    "bio": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "role",
+    "trait",
+    "secrets",
+    "relations",
+    "luxuries",
+    "debts",
+    "weights",
+    "voice",
+    "bio"
+  ],
+  "unevaluatedProperties": false
+}

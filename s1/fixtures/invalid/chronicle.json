@@ -1,0 +1,16 @@
+{
+  "id": "ch_heat_shared",
+  "who": "p_001",
+  "what": "꼬리칸에 석탄을 나눴다.",
+  "where": "꼬리칸",
+  "when": -1,
+  "why": "꺼진 난로를 다시 피우려고.",
+  "witnesses": [
+    {
+      "person": "p_001",
+      "text": "문이 닫혔다. 발소리가 났다. 그는 돌아섰다."
+    }
+  ],
+  "weight": 0,
+  "template": "tpl_heat_shared"
+}

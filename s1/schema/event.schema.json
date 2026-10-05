@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:event",
+  "title": "사건 카드",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "s1a",
+        "s1b",
+        "s1c"
+      ]
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "travel",
+        "stop",
+        "council",
+        "settle"
+      ]
+    },
+    "trigger": {
+      "$ref": "urn:s1:schema:common#/$defs/conditions"
+    },
+    "speaker": {
+      "type": "string",
+      "enum": [
+        "captain",
+        "deputy",
+        "ration_officer",
+        "rep",
+        "aide",
+        "faction_leader",
+        "tail",
+        "engine",
+        "guard",
+        "medtech",
+        "front"
+      ]
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "choices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "pattern": "^[^\\r\\n]+$"
+          },
+          "effects": {
+            "$ref": "urn:s1:schema:effects#/$defs/list"
+          },
+          "followups": {
+            "$ref": "urn:s1:schema:common#/$defs/references"
+          },
+          "witnesses": {
+            "type": "array",
+            "items": {
+              "$ref": "urn:s1:schema:common#/$defs/witness"
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "label",
+          "effects",
+          "followups",
+          "witnesses"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 2,
+      "maxItems": 4
+    },
+    "repeat": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "chronicle": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "content_type": {
+      "const": "event"
+    }
+  },
+  "required": [
+    "id",
+    "stage",
+    "phase",
+    "trigger",
+    "speaker",
+    "body",
+    "choices",
+    "repeat"
+  ],
+  "additionalProperties": false
+}
