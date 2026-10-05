@@ -190,14 +190,30 @@ Visual style: high-quality 2D pixel art for a mobile political survival game set
 Mobile game screen mockup, very wide landscape (about 2.2:1). The side view of the train from the home screen is dimmed in the background, and a decision panel has slid up from the bottom, covering about two-thirds of the screen height, with a small chevron tab on its top edge for folding it away. Left third of the panel: a large, detailed pixel-art portrait of the speaker, Pavla Krejčí, a 41-year-old Czech refugee who speaks for the tail car: thin face, wind-chapped cheeks, dark hair tied under a knitted scarf, several patched coats layered, tired but sharp eyes, chin slightly raised; under the portrait a small name plate and the tail car's iron emblem (a coal shovel crossed with a tin cup). Right two-thirds, laid out like a paper dossier with thin brass rules: one short line of dialogue in placeholder English, then three stacked numbered choice plates. Each plate has a two- or three-word label and, on its right, only the costs that are certain now, shown as resource icons with minus numbers (for example coal -10, food -5); no arrows or faces predicting how people will react. One plate also carries a small eye icon meaning someone will witness this choice. Keep the top HUD: Trust and Tension meters with their labels on the left, the red-and-sky-blue bar with fist and open-palm buttons in the center, and coal cart, bread, pill and bottle, and ring icons with numbers on the right.
 ```
 
-## ④ 아이콘 판 10개 (새 기준 그림 첨부)
+## ④ 아이콘 판 두 장 (그림 두 장 첨부: card_v1, council_v1)
 
-설계 세션이 잘라 `s1/public/art/icons/`에 넣는다: res_coal, res_food, res_medicine, res_luxury, meter_trust, meter_tension, bar_discontent, bar_support, btn_log, btn_overview.
+②·③까지 나온 아이콘을 모두 모았다. 한 장에 너무 많으면 작아지고 흔들려서 두 장으로 나눴다. 긴장은 사용자 요청대로 다른 그림 둘을 같이 뽑아 고른다. 설계 세션이 잘라 `s1/public/art/icons/`에 넣는다.
+
+- ④a(16개): res_coal, res_food, res_medicine, res_luxury, meter_trust, meter_tension_glass, meter_tension_fuse, meter_tension_rope, bar_discontent, bar_support, btn_log, btn_dossier, btn_overview, btn_dataview, btn_return, stat_warmth
+- ④b(12개): vote_public, vote_secret, mark_witness, stat_crowding, trade_negotiate, trade_favor, trade_supply, trade_bribe, trade_leverage, ctrl_heating, ctrl_rations, stat_cohesion
 
 ```text
-Match the pixel style of the attached reference image.
+Match the pixel style and the icon designs of the attached images. Keep the four resource icons exactly as they appear in the first image.
 
-A sprite sheet of ten pixel-art UI icons in a 5 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid, centered in its cell with generous padding, same scale, light from the top left, a dark outline, crisp pixels with no smoothing, no text, no frames. Icons 1 to 4 are resources and use muted natural colors so each material reads at a glance; icons 5 to 10 are cream-white (#EDE6D6) with a small accent where noted. Left to right, top to bottom: 1) coal: a small iron mine cart heaped with black coal lumps and a faint ember; 2) food: a brown loaf of bread; 3) medicine: a two-tone pill capsule beside a squat brown glass bottle, no cross; 4) luxury goods: a small gold ring with a gem; 5) trust: two gloved hands clasped (blue accent); 6) tension: a cracked glass pane (red-orange accent); 7) discontent: a raised clenched fist (red accent); 8) support: a raised open palm (sky-blue accent); 9) log: a closed book with a ribbon bookmark; 10) overview: a train seen from directly above, a long rectangle split into car segments.
+A sprite sheet of sixteen pixel-art UI icons in a 4 by 4 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid and shown enlarged with hard square pixels, centered in its cell with generous padding, same scale, light from the top left, a dark outline, no smoothing, no text, no frames. Icons 1 to 4 use muted natural colors; the others are cream-white (#EDE6D6) with a small accent color where noted.
+Row 1: 1) coal: a small iron mine cart heaped with black coal and a faint ember; 2) food: a brown loaf of bread; 3) medicine: a two-tone pill capsule beside a squat brown bottle, no cross; 4) luxury goods: a small gold ring with a gem.
+Row 2: 5) trust: two gloved hands clasped (blue accent); 6) tension: a cracked glass pane (red-orange accent); 7) tension, alternative: a short burning fuse with sparks (red-orange accent); 8) tension, alternative: a taut rope starting to fray in the middle (red-orange accent).
+Row 3: 9) discontent: a raised clenched fist (red accent); 10) support: a raised open palm (sky-blue accent); 11) log: a closed book with a ribbon bookmark; 12) pending decisions: a worn bundle of papers tied with string, with a small red wax seal.
+Row 4: 13) overview: a train seen from directly above, a long rectangle split into car segments; 14) data view: three vertical bars of different heights on a small brass plate; 15) return: a left-pointing arrow above a small side-view train; 16) warmth: a small flame (amber accent).
+```
+
+```text
+Match the pixel style and the icon designs of the attached images, especially the trade button icons in the second image.
+
+A sprite sheet of twelve pixel-art UI icons in a 4 by 3 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid and shown enlarged with hard square pixels, centered in its cell with generous padding, same scale, light from the top left, a dark outline, no smoothing, no text, no frames. All icons are cream-white (#EDE6D6) with a small amber accent where noted.
+Row 1: 1) public vote: an open eye; 2) secret vote: a closed wooden ballot box with a slot; 3) witness: the head and shoulders of a shadowy figure with one bright eye, clearly different from the open eye; 4) crowding: three standing figures pressed together.
+Row 2: 5) negotiate: a handshake over a sheet of paper; 6) favor: a sealed envelope; 7) supply: a wooden crate with a map pin (amber accent); 8) bribe: a small drawstring pouch with a gold ring on top (amber accent).
+Row 3: 9) leverage: a folded document with a black wax seal; 10) heating: a small cast-iron stove with a glowing door (amber accent); 11) rations: a bowl beside a slice of bread; 12) cohesion: a tight rope knot.
 ```
 
 ## ⑤ 칸 명판 8개 (새 기준 그림 첨부)
