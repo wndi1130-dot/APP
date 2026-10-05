@@ -10,6 +10,7 @@
   > `docs/handoff/codex_tasks.md`의 공통 규칙을 지키면서 [A1] 작업을 해줘.
 - 저장소를 못 읽는 환경이면 '공통 규칙'과 해당 작업 블록을 통째로 붙여 넣는다.
 - 작업마다 바로 붙여 넣을 수 있게 줄인 프롬프트: [codex_prompts.md](codex_prompts.md)
+- 1차 결과 검토: [codex_review.md](codex_review.md). 그 결과를 반영한 2차 프롬프트: [round2_prompts.md](round2_prompts.md)
 - 순서
   - A(코드)는 차례대로 한다: A1 → A2 → A3 → A4 → A5. 모두 s1/ 폴더를 건드려서 동시에 돌리면 충돌한다.
   - B(레퍼런스)는 서로 독립이라 동시에 돌려도 된다. B1(이름)과 B6(좋아하는 것·싫어하는 것)은 A3보다 먼저 끝나면 좋다.
