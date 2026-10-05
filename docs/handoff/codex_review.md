@@ -16,8 +16,11 @@
 | A2 핵심 로직 | [#9](https://github.com/wndi1130-dot/APP/pull/9) | 합침 | 통과 |
 | A1 후속(금지어, loot 6키) | [#6](https://github.com/wndi1130-dot/APP/pull/6) | 합침 | 통과 |
 | B4 후속(선택) | [#7](https://github.com/wndi1130-dot/APP/pull/7) | 합침 | 통과 |
-| A3 정리 | | B1이 합쳐진 뒤 보낸다 | |
-| A5 Gemini 문장 생성 | | A3 정리가 합쳐진 뒤 보낸다 | |
+| A3 정리 | | B1이 합쳐진 뒤 Claude가 직접 한다 | |
+| A5 Gemini 문장 생성 | | A3 정리 뒤 Claude가 직접 한다 | |
+| A4 화면 뼈대 | | Claude가 직접 한다(22:20 KST 시작, B1과 무관) | |
+
+사용자 결정(2026-10-05 22:20 KST): B1이 끝나면 남은 작업(A3 정리, A5, A4)은 웹 모델에 보내지 않고 Claude가 직접 한다. B1에 고칠 게 나오면 그것도 Claude가 고친다. DOTS 신호판에는 새 신호를 올리지 않는다.
 
 보충 조사(사용자 요청, 2026-10-05): B1까지 들어오면 ref/ 문서의 '미확인' 가운데 설계에 닿고 공개 자료로 확인할 수 있는 것만 골라 Sonnet으로 찾아본다. 04:00 KST까지 B1이 안 오면 있는 문서로 먼저 한다. 결과는 docs/research/gap_fill.md에 정리하고, ref/ 원본은 고치지 않는다.
 
