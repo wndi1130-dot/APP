@@ -3,42 +3,43 @@
   "seed": "s1-winter-six",
   "sources": [
     {
-      "path": "temporary:names/pl",
-      "sha256": "a30bbe97e6cb39b1b5118926c8166bc47f9cf9a71c59dbb67b3d47e3a1400a6e"
+      "path": "ref/names/pl.json",
+      "sha256": "3575a195c39810a94f706df911c6a86874b2f3b20d90a38a5f9b1b7ef858826a"
     },
     {
-      "path": "temporary:names/de",
-      "sha256": "4f9b3ca66b6bad311783cfab91e27df1e4b794f9520f868a7e8193aa3b792359"
+      "path": "ref/names/de.json",
+      "sha256": "d8367233e267e527b359c6ff07aa031497718d0ac623a7f4ca8ef4cf70c87c33"
     },
     {
-      "path": "temporary:names/cz",
-      "sha256": "ba4140b1ec3cf73c32d3800735c267763fd523c7202bc7005f10cdf5439dc97c"
+      "path": "ref/names/cz.json",
+      "sha256": "118d9912171a383fbda4c4d3b290e60c0348755247f4b3420a52fddee50e750d"
     },
     {
-      "path": "temporary:names/other",
-      "sha256": "569ce688788c9a534a6a977a0d6189bb5259264494144506f62aa1ec09fc6801"
+      "path": "ref/names/other.json",
+      "sha256": "bc890c82d1375c518804964e98e852d6ed67b9aaede1a6e4fddd9af52bb1723f"
+    },
+    {
+      "path": "ref/names/famous_blocklist.json",
+      "sha256": "f863d11187d2c4e2cd4a3665d8c286e16b149bca8af83aad7d50f705fae09ff3"
+    },
+    {
+      "path": "ref/likes_dislikes.json",
+      "sha256": "0dbf3afdc52c480aa09b20258dc1de1820a24137c9fe1cbebca7eb5ebfa3324d"
     },
     {
       "path": "temporary:preferences",
       "sha256": "834cfea038e15e8c54ba189b67db534e7499fe1d3a5d80eb0850b278c3669ddc"
     }
   ],
-  "warnings": [
-    "B1 pl: 임시 이름 사용. 외래어 표기와 유명인 전수 대조는 미확인.",
-    "B1 de: 임시 이름 사용. 외래어 표기와 유명인 전수 대조는 미확인.",
-    "B1 cz: 임시 이름 사용. 외래어 표기와 유명인 전수 대조는 미확인.",
-    "B1 other: 임시 이름 사용. 외래어 표기와 유명인 전수 대조는 미확인.",
-    "B1 유명인 제외 목록 없음. 가상 성을 쓰는 임시 목록으로 생성하며 전수 대조는 미확인.",
-    "B6 없음. 나이대별 작은 임시 선호 목록 사용."
-  ],
-  "preference_fallbacks": 400,
+  "warnings": [],
+  "preference_fallbacks": 0,
   "families": [
     {
       "id": "f_001",
       "community": "tail",
       "parents": [
-        "p_042",
-        "p_087"
+        "p_030",
+        "p_016"
       ],
       "children": [
         "p_057",
@@ -49,8 +50,8 @@
       "id": "f_002",
       "community": "tail",
       "parents": [
-        "p_033",
-        "p_066"
+        "p_090",
+        "p_006"
       ],
       "children": [
         "p_037",
@@ -61,8 +62,8 @@
       "id": "f_003",
       "community": "tail",
       "parents": [
-        "p_044",
-        "p_055"
+        "p_087",
+        "p_011"
       ],
       "children": [
         "p_051",
@@ -73,8 +74,8 @@
       "id": "f_004",
       "community": "tail",
       "parents": [
-        "p_018",
-        "p_071"
+        "p_045",
+        "p_040"
       ],
       "children": [
         "p_035",
@@ -85,8 +86,8 @@
       "id": "f_005",
       "community": "tail",
       "parents": [
-        "p_009",
-        "p_011"
+        "p_019",
+        "p_036"
       ],
       "children": [
         "p_027",
@@ -97,8 +98,8 @@
       "id": "f_006",
       "community": "tail",
       "parents": [
-        "p_045",
-        "p_034"
+        "p_008",
+        "p_072"
       ],
       "children": [
         "p_062",
@@ -109,8 +110,8 @@
       "id": "f_007",
       "community": "tail",
       "parents": [
-        "p_019",
-        "p_083"
+        "p_085",
+        "p_079"
       ],
       "children": [
         "p_084",
@@ -122,7 +123,7 @@
       "community": "tail",
       "parents": [
         "p_022",
-        "p_063"
+        "p_034"
       ],
       "children": [
         "p_078",
@@ -133,8 +134,8 @@
       "id": "f_009",
       "community": "tail",
       "parents": [
-        "p_080",
-        "p_052"
+        "p_083",
+        "p_020"
       ],
       "children": [
         "p_017",
@@ -145,82 +146,82 @@
       "id": "f_010",
       "community": "front",
       "parents": [
-        "p_091",
-        "p_118"
+        "p_119",
+        "p_103"
       ],
       "children": [
-        "p_092",
-        "p_094"
+        "p_104",
+        "p_105"
       ]
     },
     {
       "id": "f_011",
       "community": "front",
       "parents": [
-        "p_117",
-        "p_112"
+        "p_100",
+        "p_106"
       ],
       "children": [
-        "p_101",
-        "p_106"
+        "p_112",
+        "p_096"
       ]
     },
     {
       "id": "f_012",
       "community": "front",
       "parents": [
-        "p_114",
-        "p_096"
+        "p_093",
+        "p_091"
       ],
       "children": [
-        "p_120"
+        "p_098"
       ]
     },
     {
       "id": "f_013",
       "community": "medtech",
       "parents": [
-        "p_129",
-        "p_123"
+        "p_132",
+        "p_128"
       ],
       "children": [
-        "p_125",
-        "p_133"
+        "p_149",
+        "p_125"
       ]
     },
     {
       "id": "f_014",
       "community": "medtech",
       "parents": [
-        "p_145",
-        "p_148"
+        "p_122",
+        "p_127"
       ],
       "children": [
-        "p_127"
+        "p_121"
       ]
     },
     {
       "id": "f_015",
       "community": "guard",
       "parents": [
-        "p_163",
-        "p_172"
+        "p_158",
+        "p_166"
       ],
       "children": [
-        "p_161",
-        "p_154"
+        "p_168",
+        "p_165"
       ]
     },
     {
       "id": "f_016",
       "community": "engine",
       "parents": [
-        "p_190",
-        "p_192"
+        "p_193",
+        "p_191"
       ],
       "children": [
-        "p_184",
-        "p_200"
+        "p_198",
+        "p_184"
       ]
     }
   ]

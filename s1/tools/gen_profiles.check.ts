@@ -63,6 +63,8 @@ function checkPopulation(data: Generated): void {
     else assert.equal(person.origin_tag, ['rescue', 'refugee'].includes(person.boarding) ? 'rescued' : 'original');
     if (person.boarding === 'force' || person.boarding === 'depot') assert(person.age >= 22);
   }
+  assert.equal(new Set(profiles.map((person) => person.name)).size, 200, '한글 전체 이름이 겹친다');
+  assert.equal(new Set(profiles.map((person) => person.name_original)).size, 200, '원어 전체 이름이 겹친다');
   assert.equal(profiles.filter((person) => person.age <= 15).length, 30);
   assert.equal(profiles.filter((person) => person.age >= 65).length, 20);
   assert.equal(profiles.filter((person) => person.boarding === 'born').length, 8);
@@ -149,10 +151,10 @@ test('체크인한 두 JSON은 기본 시드와 현재 레퍼런스로 재현된
 });
 
 function referenceFixture(root: string): void {
-  const given = Array.from({ length: 6 }, (_, index) => ({ original: `Safe${index}`, korean: `안전${index}` }));
-  const surname = { original: 'Fictional', korean: '가상성' };
-  for (const country of ['pl', 'de', 'cz', 'other']) writeJson(root, `names/${country}.json`, { given_names: given, surnames: [surname] });
-  writeJson(root, 'names/famous_blocklist.json', ['safe0 fictional', { original: 'Safe1 Fictional', korean: '안전1 가상성' }]);
+  const given = Array.from({ length: 20 }, (_, index) => ({ original: `Safe${index}`, korean: `안전${index}` }));
+  const surnames = Array.from({ length: 15 }, (_, index) => ({ original: `Fictional${index}`, korean: `가상성${index}` }));
+  for (const country of ['pl', 'de', 'cz', 'other']) writeJson(root, `names/${country}.json`, { given_names: given, surnames });
+  writeJson(root, 'names/famous_blocklist.json', ['safe0 fictional0', { original: 'Safe1 Fictional1', korean: '안전1 가상성1' }]);
   writeJson(root, 'likes_dislikes.json', {
     likes: [{ text: '시험용 선호', seasons: ['winter'] }, { text: '금지된 해빙 선호', seasons: ['thaw'] }],
     dislikes: [{ text: '시험용 기피', seasons: ['winter'] }, { text: '금지된 해빙 기피', seasons: ['thaw'] }],
@@ -168,7 +170,8 @@ test('B1·B6 읽기, 양쪽 표기 제외, 선호 태그, 원본 SHA-256 기록'
     assert.equal(data.familyData.warnings.length, 0);
     assert.equal(data.familyData.preference_fallbacks, 0);
     for (const person of data.profiles) {
-      assert.match(person.name_original, /^Safe[2-5] Fictional$/);
+      assert.match(person.name_original, /^Safe\d+ Fictional\d+$/);
+      assert(!['Safe0 Fictional0', 'Safe1 Fictional1'].includes(person.name_original), `막힌 이름: ${person.name_original}`);
       assert.equal(person.like, '시험용 선호');
       assert.equal(person.dislike, '시험용 기피');
     }
@@ -185,13 +188,17 @@ test('B1·B6 읽기, 양쪽 표기 제외, 선호 태그, 원본 SHA-256 기록'
 test('이름 성별 형태와 부분 B1 목록, 태그 미매칭 시 임시 선호', () => {
   const root = scratch();
   try {
-    const male = Array.from({ length: 4 }, (_, index) => ({ original: `Boy${index}`, korean: `남자${index}` }));
-    const female = Array.from({ length: 4 }, (_, index) => ({ original: `Girl${index}`, korean: `여자${index}` }));
-    writeJson(root, 'names/pl.json', { first_names: { male, female }, surnames: [{ male: { original: 'Root', korean: '남성형성' }, female: { original: 'Roota', korean: '여성형성' } }] });
+    const male = Array.from({ length: 30 }, (_, index) => ({ original: `Boy${index}`, korean: `남자${index}` }));
+    const female = Array.from({ length: 30 }, (_, index) => ({ original: `Girl${index}`, korean: `여자${index}` }));
+    const surnames = Array.from({ length: 3 }, (_, index) => ({
+      male: { original: `Root${index}`, korean: `남성형성${index}` }, female: { original: `Root${index}a`, korean: `여성형성${index}` },
+    }));
+    writeJson(root, 'names/pl.json', { first_names: { male, female }, surnames });
     const data = generateProfiles('gender-fixture', loadReferences(root));
+    checkPopulation(data);
     const named = data.profiles.filter((person) => /^(Boy|Girl)/u.test(person.name_original));
     assert(named.length > 0);
-    for (const person of named) assert.match(person.name_original, person.name_original.startsWith('Boy') ? / Root$/ : / Roota$/);
+    for (const person of named) assert.match(person.name_original, person.name_original.startsWith('Boy') ? / Root\d$/ : / Root\da$/);
     assert(data.familyData.sources.some((source) => source.path === 'temporary:names/de'));
     assert.equal(data.familyData.preference_fallbacks, 400);
   } finally { cleanScratch(root); }
@@ -243,9 +250,84 @@ test('손상된 레퍼런스·잘못된 태그·막힌 이름을 조용히 대�
     writeJson(root, 'likes_dislikes.json', { likes: ['가'.repeat(16)], dislikes: ['기피'] });
     assert.throws(() => loadReferences(root), /15자/u);
     referenceFixture(root);
-    writeJson(root, 'names/famous_blocklist.json', Array.from({ length: 6 }, (_, index) => `Safe${index} Fictional`));
+    const tiny = { given_names: [{ original: 'Safe0', korean: '안전0' }, { original: 'Safe1', korean: '안전1' }], surnames: [{ original: 'Fictional', korean: '가상성' }] };
+    for (const country of ['pl', 'de', 'cz', 'other']) writeJson(root, `names/${country}.json`, tiny);
+    writeJson(root, 'names/famous_blocklist.json', ['Safe0 Fictional', 'Safe1 Fictional']);
     assert.throws(() => generateProfiles('blocked-fixture', loadReferences(root)), /이름과 성이 부족/u);
+    // Two names cannot cover 200 people without repeats, so the generator refuses instead of reusing.
+    writeJson(root, 'names/famous_blocklist.json', []);
+    assert.throws(() => generateProfiles('tiny-fixture', loadReferences(root)), /이름과 성이 부족/u);
   } finally { cleanScratch(root); }
+});
+
+const OTHER_COUNTRIES = { uk: '우크라이나', sk: '슬로바키아', hu: '헝가리', lt: '리투아니아' } as const;
+type OtherLanguage = keyof typeof OTHER_COUNTRIES;
+function hometownOf(data: Generated, personId: string): string {
+  const person = data.profiles.find((candidate) => candidate.id === personId)!;
+  if (person.boarding !== 'born') return person.hometown;
+  const family = data.familyData.families.find((candidate) => candidate.children.includes(person.id))!;
+  return data.profiles.find((parent) => parent.id === family.parents[0])!.hometown;
+}
+test('피난민의 이름·성·고향은 한 언어로 묶이고 헝가리 이름은 성을 앞에 쓴다', () => {
+  const root = scratch();
+  try {
+    referenceFixture(root);
+    const languages = Object.keys(OTHER_COUNTRIES) as OtherLanguage[];
+    const given = languages.flatMap((language) => Array.from({ length: 12 }, (_, index) => ({ original: `${language}Given${index}`, korean: `${language}이름${index}`, language })));
+    const surnames = languages.flatMap((language) => Array.from({ length: 12 }, (_, index) => ({ original: `${language}Family${index}`, korean: `${language}성${index}`, language })));
+    writeJson(root, 'names/other.json', { given_names: given, surnames });
+    const data = generateProfiles('language-fixture', loadReferences(root));
+    checkPopulation(data);
+    const others = data.profiles.filter((person) => /^(uk|sk|hu|lt)/u.test(person.name_original));
+    assert(others.length > 0);
+    for (const person of others) {
+      const language = person.name_original.slice(0, 2) as OtherLanguage;
+      const pattern = language === 'hu' ? /^huFamily\d+ huGiven\d+$/u : new RegExp(`^${language}Given\\d+ ${language}Family\\d+$`, 'u');
+      assert.match(person.name_original, pattern);
+      assert(hometownOf(data, person.id).endsWith(`, ${OTHER_COUNTRIES[language]}`), `${person.name_original}: ${hometownOf(data, person.id)}`);
+    }
+  } finally { cleanScratch(root); }
+});
+test('저장소의 B1·B6로 30개 시드: 임시 목록 없이 이름이 겹치지 않고 피난민 이름의 언어가 맞는다', () => {
+  const refs = loadReferences();
+  assert.equal(refs.warnings.length, 0, refs.warnings.join('\n'));
+  const other = JSON.parse(readFileSync(resolve(S1_ROOT, '../ref/names/other.json'), 'utf8'));
+  // The same spelling can exist in two languages (e.g. a Slovak and a Hungarian given name).
+  const languagesOf = new Map<string, Set<string>>();
+  const addLanguage = (original: string, language: string) => languagesOf.set(original, (languagesOf.get(original) ?? new Set()).add(language));
+  const genderOf = new Map<string, string>();
+  for (const given of other.given_names) {
+    addLanguage(given.original, given.language);
+    genderOf.set(given.original, given.gender);
+  }
+  // Unmarried female form -> married form, for surnames that have one (Lithuanian).
+  const marriedFor = new Map<string, string>();
+  for (const surname of other.surnames) {
+    for (const key of ['male', 'female', 'female_married']) if (surname[key]) addLanguage(surname[key].original, surname.language);
+    if (surname.female_married) marriedFor.set(surname.female.original, surname.female_married.original);
+    if (surname.original) addLanguage(surname.original, surname.language);
+  }
+  for (const seed of [DEFAULT_SEED, ...Array.from({ length: 29 }, (_, index) => `repo-${index}`)]) {
+    const data = generateProfiles(seed, refs);
+    checkPopulation(data);
+    for (const person of data.profiles) {
+      const country = Object.entries(OTHER_COUNTRIES).find(([, name]) => hometownOf(data, person.id).endsWith(`, ${name}`));
+      if (!country) continue;
+      const [language] = country as [OtherLanguage, string];
+      const [first, second] = person.name_original.split(' ');
+      const [given, surname] = language === 'hu' ? [second, first] : [first, second];
+      assert(languagesOf.get(given)?.has(language), `${seed} 이름의 언어가 다름: ${person.name_original}`);
+      assert(languagesOf.get(surname)?.has(language), `${seed} 성의 언어가 다름: ${person.name_original}`);
+    }
+    // Mothers in Lithuanian families carry the married form when the pool has one.
+    for (const family of data.familyData.families) {
+      for (const id of family.parents) {
+        if (!hometownOf(data, id).endsWith(', 리투아니아')) continue;
+        const [given, surname] = data.profiles.find((person) => person.id === id)!.name_original.split(' ');
+        if (genderOf.get(given) === 'female') assert(!marriedFor.has(surname), `${seed} 미혼형을 쓴 어머니: ${given} ${surname}`);
+      }
+    }
+  }
 });
 test('CLI 재현 검사와 경로·시드 오류 처리', () => {
   const root = scratch();

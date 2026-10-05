@@ -9,6 +9,9 @@ export const COMMUNITIES = ['tail', 'front', 'medtech', 'guard', 'engine'] as co
 export type Community = typeof COMMUNITIES[number];
 export type Boarding = 'depot' | 'bought' | 'force' | 'rescue' | 'refugee' | 'born';
 type Country = 'pl' | 'de' | 'cz' | 'other';
+// Refugees from 'other' keep one language for given name, surname and hometown.
+type Language = 'pl' | 'de' | 'cz' | 'uk' | 'sk' | 'hu' | 'lt';
+const OTHER_LANGUAGES = ['uk', 'sk', 'hu', 'lt'] as const;
 type AgeGroup = 'child' | 'young' | 'adult' | 'middle' | 'elder';
 type Gender = 'male' | 'female';
 
@@ -24,11 +27,28 @@ const COHORTS = {
   engine: { children: 2, elders: 8, born: 1 },
 } as const;
 const BOARDINGS: Boarding[] = ['depot', 'bought', 'force', 'rescue', 'refugee'];
-const TOWNS: Record<Country, string[]> = {
-  pl: ['볼슈틴, 폴란드', '포즈난, 폴란드', '브로츠와프, 폴란드'],
-  de: ['라이프치히, 독일', '드레스덴, 독일', '베를린, 독일'],
-  cz: ['프라하, 체코', '브르노, 체코', '오스트라바, 체코'],
-  other: ['리비우, 우크라이나', '브라티슬라바, 슬로바키아', '부다페스트, 헝가리', '빌뉴스, 리투아니아'],
+function towns(country: string, names: string[]): string[] {
+  return names.map((name) => `${name}, ${country}`);
+}
+// Korean spellings come from ref/names/transliterate.py, written without spaces.
+// Established usages override it: 슈트랄준트, 켐니츠, 마그데부르크.
+const TOWNS: Record<Language, string[]> = {
+  pl: towns('폴란드', [
+    '볼슈틴', '포즈난', '브로츠와프', '레슈노', '즈봉신', '즈봉시네크', '라코니에비체', '노비토미실', '지엘로나구라', '술레후프',
+    '카르고바', '바비모스트', '그워구프', '레그니차', '코시치안', '시렘', '제핀', '시비에보진', '미엥지제치', '그로지스크비엘코폴스키',
+  ]),
+  de: towns('독일', [
+    '라이프치히', '드레스덴', '베를린', '코트부스', '괴를리츠', '구벤', '바우첸', '리자', '토르가우', '비텐베르크',
+    '할레', '아이젠휘텐슈타트', '젠프텐베르크', '치타우', '슈트랄준트', '노이브란덴부르크', '켐니츠', '츠비카우', '마그데부르크', '데사우',
+  ]),
+  cz: towns('체코', [
+    '프라하', '브르노', '오스트라바', '데친', '우스티나트라벰', '리베레츠', '파르두비체', '체스카트르제보바', '프르제로프', '올로모우츠',
+    '콜린', '이흘라바', '타보르', '클라드노', '모스트', '호무토프', '트루트노프', '나호트', '즐린', '흐라데츠크랄로베',
+  ]),
+  uk: towns('우크라이나', ['리비우', '키이우', '루츠크', '리우네', '지토미르']),
+  sk: towns('슬로바키아', ['브라티슬라바', '코시체', '질리나', '니트라']),
+  hu: towns('헝가리', ['부다페스트', '데브레첸', '죄르', '페치']),
+  lt: towns('리투아니아', ['빌뉴스', '카우나스', '클라이페다', '샤울레이']),
 };
 
 export interface Profile {
@@ -51,8 +71,8 @@ export interface Family {
   parents: string[];
   children: string[];
 }
-interface NamePart { original: string; korean: string; gender?: Gender }
-interface Surname { male: NamePart; female: NamePart }
+interface NamePart { original: string; korean: string; gender?: Gender; language?: string }
+interface Surname { male: NamePart; female: NamePart; femaleMarried?: NamePart; language?: string }
 interface NamePool { given: NamePart[]; surnames: Surname[] }
 interface Preference {
   text: string;
@@ -92,23 +112,24 @@ function parts(entries: string[]): NamePart[] {
 function temporaryPool(given: string[], surnames: string[]): NamePool {
   return { given: parts(given), surnames: parts(surnames).map((part) => ({ male: part, female: part })) };
 }
-// Surnames are fictional placeholders, not a researched B1 name pool.
+// Surnames are fictional placeholders, not a researched B1 name pool. Each pool is
+// large enough for 200 unique full names when ref/names/ is missing (tests).
 const TEMPORARY_NAMES: Record<Country, NamePool> = {
   pl: temporaryPool(
-    ['Marta|마르타', 'Zofia|조피아', 'Ewa|에바', 'Anna|안나', 'Piotr|피오트르', 'Jan|얀', 'Tomasz|토마시', 'Adam|아담'],
-    ['Welenik|벨레니크', 'Dalowik|달로비크', 'Zorenik|조레니크', 'Ralenik|랄레니크', 'Selenik|셀레니크', 'Talowik|탈로비크', 'Morenik|모레니크', 'Darenik|다레니크'],
+    ['Marta|마르타', 'Zofia|조피아', 'Ewa|에바', 'Anna|안나', 'Hanna|한나', 'Maria|마리아', 'Piotr|피오트르', 'Jan|얀', 'Tomasz|토마시', 'Adam|아담', 'Marek|마레크', 'Jakub|야쿠프'],
+    ['Welenik|벨레니크', 'Dalowik|달로비크', 'Zorenik|조레니크', 'Ralenik|랄레니크', 'Selenik|셀레니크', 'Talowik|탈로비크', 'Morenik|모레니크', 'Darenik|다레니크', 'Kalowik|칼로비크', 'Borenik|보레니크', 'Pelowik|펠로비크', 'Wirenik|비레니크'],
   ),
   de: temporaryPool(
-    ['Marta|마르타', 'Greta|그레타', 'Lena|레나', 'Anna|안나', 'Paul|파울', 'Emil|에밀', 'Otto|오토', 'Kurt|쿠르트'],
-    ['Talwick|탈비크', 'Sornfeld|조른펠트', 'Lernau|레르나우', 'Falkried|팔크리트', 'Welnau|벨나우', 'Dornwick|도른비크', 'Marnfeld|마른펠트', 'Selried|젤리트'],
+    ['Marta|마르타', 'Greta|그레타', 'Lena|레나', 'Anna|안나', 'Ilse|일제', 'Frieda|프리다', 'Paul|파울', 'Emil|에밀', 'Otto|오토', 'Kurt|쿠르트', 'Hans|한스', 'Karl|카를'],
+    ['Talwick|탈비크', 'Sornfeld|조른펠트', 'Lernau|레르나우', 'Falkried|팔크리트', 'Welnau|벨나우', 'Dornwick|도른비크', 'Marnfeld|마른펠트', 'Selried|젤리트', 'Halbern|할베른', 'Kornwald|코른발트', 'Brennau|브레나우', 'Gelwitz|겔비츠'],
   ),
   cz: temporaryPool(
-    ['Marta|마르타', 'Jana|야나', 'Eva|에바', 'Anna|안나', 'Pavel|파벨', 'Milan|밀란', 'Lukas|루카시', 'Adam|아담'],
-    ['Dalenik|달레니크', 'Velenec|벨레네츠', 'Zoravec|조라베츠', 'Ralovec|랄로베츠', 'Selenec|셀레네츠', 'Morenik|모레니크', 'Talenec|탈레네츠', 'Dorenik|도레니크'],
+    ['Marta|마르타', 'Jana|야나', 'Eva|에바', 'Anna|안나', 'Petra|페트라', 'Lucie|루치에', 'Pavel|파벨', 'Milan|밀란', 'Lukas|루카시', 'Adam|아담', 'Jiří|이르지', 'Tomáš|토마시'],
+    ['Dalenik|달레니크', 'Velenec|벨레네츠', 'Zoravec|조라베츠', 'Ralovec|랄로베츠', 'Selenec|셀레네츠', 'Morinek|모리네크', 'Talenec|탈레네츠', 'Dorenik|도레니크', 'Hrabec|흐라베츠', 'Kolenec|콜레네츠', 'Pivonec|피보네츠', 'Smolenec|스몰레네츠'],
   ),
   other: temporaryPool(
-    ['Marta|마르타', 'Elena|엘레나', 'Eva|에바', 'Anna|안나', 'Milan|밀란', 'Pavel|파벨', 'Adam|아담', 'Emil|에밀'],
-    ['Orlenik|오를레니크', 'Varenko|바렌코', 'Dorelka|도렐카', 'Zelenik|젤레니크', 'Tarenko|타렌코', 'Morelka|모렐카', 'Sarenik|사레니크', 'Darenko|다렌코'],
+    ['Marta|마르타', 'Elena|엘레나', 'Eva|에바', 'Anna|안나', 'Olena|올레나', 'Iryna|이리나', 'Milan|밀란', 'Pavel|파벨', 'Adam|아담', 'Emil|에밀', 'Taras|타라스', 'Andrii|안드리'],
+    ['Orlenik|오를레니크', 'Varenko|바렌코', 'Dorelka|도렐카', 'Zelenik|젤레니크', 'Tarenko|타렌코', 'Morelka|모렐카', 'Sarenik|사레니크', 'Darenko|다렌코', 'Kovrenko|코브렌코', 'Lisenko|리센코', 'Pavlenik|파블레니크', 'Hordenko|호르덴코'],
   ),
 };
 const TEMPORARY_LIKES = {
@@ -135,7 +156,11 @@ function namePart(value: unknown, context: string, gender?: Gender): NamePart {
   }
   const specified = item.gender ?? gender;
   if (specified !== undefined && specified !== 'male' && specified !== 'female') throw new Error(`${context}: gender 값이 잘못되었습니다.`);
-  return { original: item.original.trim(), korean: item.korean.trim(), ...(specified ? { gender: specified as Gender } : {}) };
+  const language = typeof item.language === 'string' && item.language.trim() ? item.language.trim() : undefined;
+  return {
+    original: item.original.trim(), korean: item.korean.trim(),
+    ...(specified ? { gender: specified as Gender } : {}), ...(language ? { language } : {}),
+  };
 }
 function parseNamePool(value: unknown, context: string): NamePool {
   const data = record(value, context);
@@ -152,9 +177,17 @@ function parseNamePool(value: unknown, context: string): NamePool {
   if (!names.length || !Array.isArray(data.surnames) || !data.surnames.length) throw new Error(`${context}: 이름과 성 목록이 비어 있습니다.`);
   const surnames = data.surnames.map((value): Surname => {
     const item = record(value, context);
-    if ('male' in item || 'female' in item) return { male: namePart(item.male, context), female: namePart(item.female, context) };
+    const own = typeof item.language === 'string' && item.language.trim() ? item.language.trim() : undefined;
+    if ('male' in item || 'female' in item) {
+      const male = namePart(item.male, context);
+      const female = namePart(item.female, context);
+      const femaleMarried = item.female_married === undefined ? undefined : namePart(item.female_married, context);
+      const language = own ?? male.language;
+      return { male, female, ...(femaleMarried ? { femaleMarried } : {}), ...(language ? { language } : {}) };
+    }
     const part = namePart(item, context);
-    return { male: part, female: part };
+    const language = own ?? part.language;
+    return { male: part, female: part, ...(language ? { language } : {}) };
   });
   return { given: names, surnames };
 }
@@ -285,6 +318,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
   const profiles: Profile[] = [];
   const families: Family[] = [];
   const countries = new Map<string, Country>();
+  const languages = new Map<string, Language>();
   const homeCountries = new Map<string, string>();
   for (const community of COMMUNITIES) {
     const cohort = COHORTS[community];
@@ -311,9 +345,11 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
     let refugeeIndex = 0;
     for (const person of members) {
       const country = person.boarding === 'refugee' && refugeeIndex++ % 3 === 0 ? 'other' : pick(['pl', 'de', 'cz'] as const);
+      const language: Language = country === 'other' ? pick(OTHER_LANGUAGES) : country;
       countries.set(person.id, country);
+      languages.set(person.id, language);
       person.origin_tag = originTag(person.boarding);
-      person.hometown = person.boarding === 'born' ? '열차, 출생 정차역 미상' : pick(TOWNS[country]);
+      person.hometown = person.boarding === 'born' ? '열차, 출생 정차역 미상' : pick(TOWNS[language]);
       homeCountries.set(person.id, person.boarding === 'born' ? '' : person.hometown.split(', ')[1]);
     }
     const children = members.filter((person) => person.age <= 15).sort((a, b) => a.age - b.age || a.id.localeCompare(b.id));
@@ -328,6 +364,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
       const country = countries.get(anchor.id)!;
       for (const person of [...parents, ...siblings]) {
         countries.set(person.id, country);
+        languages.set(person.id, languages.get(anchor.id)!);
         homeCountries.set(person.id, homeCountries.get(anchor.id)!);
         if (person.boarding !== 'born') person.hometown = anchor.hometown;
         else person.origin_tag = anchor.origin_tag;
@@ -337,30 +374,51 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
     profiles.push(...members);
   }
   const byId = new Map(profiles.map((person) => [person.id, person]));
-  const usedNames = new Map<string, number>();
+  const parentIds = new Set(families.flatMap((family) => family.parents));
+  // Players remember people by name, so no two of the 200 share a full name in either script.
+  const usedNames = new Set<string>();
   const assigned = new Set<string>();
-  function candidates(pool: NamePool, surname: Surname, excluded = new Set<string>()) {
-    return pool.given.map((given) => {
-      const last = surname[given.gender ?? 'male'];
-      return { original: `${given.original} ${last.original}`, korean: `${given.korean} ${last.korean}` };
-    }).filter((name) => !references.blocked.has(normalizedName(name.original)) && !references.blocked.has(normalizedName(name.korean)) && !excluded.has(name.original));
+  const fits = (entry: string | undefined, language: Language) => entry === undefined || entry === language;
+  function lastName(surname: Surname, gender: Gender, person: Profile): NamePart {
+    return gender === 'female' && surname.femaleMarried && parentIds.has(person.id) ? surname.femaleMarried : surname[gender];
+  }
+  function candidates(pool: NamePool, surname: Surname, person: Profile, language: Language, takenGiven: Set<string>, takenKeys: Set<string>) {
+    return pool.given.filter((given) => fits(given.language, language) && !takenGiven.has(given.original)).map((given) => {
+      const last = lastName(surname, given.gender ?? 'male', person);
+      // Hungarian names keep family-name-first order in Korean too (e.g. 버르토크 벨러).
+      const [first, second] = given.language === 'hu' ? [last, given] : [given, last];
+      return { given: given.original, original: `${first.original} ${second.original}`, korean: `${first.korean} ${second.korean}` };
+    }).filter((name) => ![normalizedName(name.original), normalizedName(name.korean)].some((key) => references.blocked.has(key) || usedNames.has(key) || takenKeys.has(key)));
   }
   function assignNames(members: Profile[]) {
     const pool = references.names[countries.get(members[0].id)!];
-    const surnames = pool.surnames.filter((surname) => candidates(pool, surname).length >= members.length);
-    if (!surnames.length) throw new Error('유명인 제외 후 가족 구성원에게 줄 이름과 성이 부족합니다.');
-    const surname = pick(surnames);
-    const excluded = new Set<string>();
-    for (const person of members) {
-      const available = candidates(pool, surname, excluded);
-      const minimum = Math.min(...available.map((name) => usedNames.get(name.original) ?? 0));
-      const name = pick(available.filter((name) => (usedNames.get(name.original) ?? 0) === minimum));
-      person.name = name.korean;
-      person.name_original = name.original;
-      usedNames.set(name.original, (usedNames.get(name.original) ?? 0) + 1);
-      excluded.add(name.original);
-      assigned.add(person.id);
+    const language = languages.get(members[0].id)!;
+    // Try surnames in seeded order; a family shares one surname but never a given name.
+    for (const surname of shuffle(pool.surnames.filter((surname) => fits(surname.language, language)))) {
+      // Different spellings can share a Korean form (Lukas, Lucas), so siblings are checked in both scripts.
+      const takenGiven = new Set<string>();
+      const takenKeys = new Set<string>();
+      const chosen: { person: Profile; name: ReturnType<typeof candidates>[number] }[] = [];
+      for (const person of members) {
+        const available = candidates(pool, surname, person, language, takenGiven, takenKeys);
+        if (!available.length) break;
+        const name = pick(available);
+        chosen.push({ person, name });
+        takenGiven.add(name.given);
+        takenKeys.add(normalizedName(name.original));
+        takenKeys.add(normalizedName(name.korean));
+      }
+      if (chosen.length !== members.length) continue;
+      for (const { person, name } of chosen) {
+        person.name = name.korean;
+        person.name_original = name.original;
+        usedNames.add(normalizedName(name.original));
+        usedNames.add(normalizedName(name.korean));
+        assigned.add(person.id);
+      }
+      return;
     }
+    throw new Error('유명인 제외와 이름 중복 금지 뒤 가족 구성원에게 줄 이름과 성이 부족합니다.');
   }
   for (const family of families) assignNames([...family.parents, ...family.children].map((id) => byId.get(id)!));
   for (const person of profiles) if (!assigned.has(person.id)) assignNames([person]);
