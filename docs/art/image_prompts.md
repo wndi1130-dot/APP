@@ -48,6 +48,39 @@
 - 열차를 2~3배 키우면 한 화면에 들어오는 칸이 줄어 '한눈에'와 부딪힌다. 평소 위 시점은 크게 보여 주고, '수치만 보기'가 전체를 작게 보여 주는 두 단계로 나누면 둘 다 살릴 수 있다.
 - 긴장 아이콘 후보: 불붙은 도화선, 끊어지려는 밧줄, 맞부딪친 두 주먹. 이름표(신임, 긴장)를 같이 달면 그림의 부담이 줄어든다.
 
+## ② 의회 시안 평가 (2026-10-06)
+
+시안은 [mockups/council_v1.webp](mockups/council_v1.webp)다. 사용자는 아쉬운 점이 없다고 했고, 아래는 설계 세션의 판단이다.
+
+잘 된 것
+
+- 반원 의석과 공동체 쐐기, 쐐기 끝 명판, 전령기 바늘과 51·67 눈금, 큰 숫자 '46 / 51'이 한눈에 읽힌다.
+- 고른 공동체에서 오른쪽 창으로 이어진 선, 지도자 초상(①b와 같은 얼굴), 의석·결속도, 거래 단추 다섯, 레버 모양의 표결 단추가 다 들어갔다.
+- 이름표를 단 신임·긴장(Trust, Tension)이 그림만 있을 때보다 훨씬 잘 읽힌다. 이름표 방식을 유지한다.
+- 투표함과 흰 돌·검은 돌이 장면 안에 있다.
+
+맞출 것 (시안끼리 어긋난 것)
+
+- 위 막대가 home_v2의 옛 모양으로 돌아갔다. 불만 띠가 빨강이 아니고, 석탄·의약품 아이콘도 옛것이다. 다음 시안부터는 HUD를 글로 못 박거나 새 HUD가 있는 그림을 첨부한다.
+- 쐐기 명판이 즉석에서 그려졌다(밀 이삭 등). ⑤ 명판을 뽑은 뒤 통일한다.
+- 법안 효과에 목재(통나무)가 나왔다. S1 자원이 아니다. 효과 줄에는 석탄, 식량, 의약품, 사치품, 온기처럼 실제 있는 값만 쓴다.
+- 연단의 열차장이 기관실 대표와 같은 얼굴이다. 열차장은 다른 얼굴이어야 한다.
+
+넣을 것 (코드에서)
+
+- 나가기 단추. 의회에서 열차로 돌아가는 길이 보이지 않는다. 왼쪽 아래(홈의 메뉴 자리)에 둔다.
+- 거래 단추마다 지금 드는 비용과 조건을 작게 표시한다(뇌물은 반지 수, 협박은 비밀 카드 수). 쓸 수 없으면 단추를 흐리게 한다. 공개 협상은 미이행 약속이 있으면 막힌다(기획서 8장).
+- 오른쪽 창에 그 공동체의 미이행 약속과 빚을 기한과 함께 한 줄로 보여 준다.
+- 예상 찬성은 점 하나가 아니라 폭으로 보여 준다. 결속도 때문에 약속한 표가 다 오지 않을 수 있어서다. 바늘 둘레의 옅은 부채꼴로 시험한다.
+- 일반 법이면 67 눈금을, 통치 법이면 51 눈금을 흐리게 한다.
+- 안건이 여럿이면 법안 창에 넘기는 화살표를 둔다.
+- 법안 창의 제목 판을 채우려면 법안에 짧은 이름(title)이 있어야 한다. A1 스키마에 title을 더하는 일을 화면 작업 때 같이 한다(제안).
+
+뺄 것
+
+- 반원 양 끝의 0과 100 표시. 51·67 눈금만 있으면 된다.
+- 배경(앞줄 사람들, 등잔, 컵)은 지우지 않고, 창이 열려 있을 때 더 어둡게 해서 대비를 높인다. 분위기를 만드는 장치다.
+
 ## 쓰는 법
 
 1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다. ① 수정까지 마친 판을 [mockups/home_v2.webp](mockups/home_v2.webp)에 두었다(2026-10-06 확정).
@@ -124,14 +157,16 @@ Right: the engine-crew wedge is selected; a thin brass line runs from that wedge
 Bottom right: one large vote button with a lever icon and the label Vote. Keep the top HUD of the first attached image, and add a tiny one-word label under each top-left meter (Trust, Tension).
 ```
 
-## ③ 결정 카드 시안: 수저린 형식 (새 기준 그림 첨부)
+## ③ 결정 카드 시안: 수저린 형식 (그림 두 장 첨부: council_v1, overview_v1)
+
+②까지의 평가를 반영했다. HUD를 글로 못 박고, 비용은 지금 확실한 것만 보여 준다(가이드 2장). 초상은 둘째 인물(파블라 크레이치)로 뽑아 ⑥을 미리 시험한다.
 
 ```text
-Match the art style, palette, line work and HUD design of the attached reference image.
+Match the pixel art style, the labelled HUD meters and the panel design of the first attached image, and use the resource icons and the red-and-sky-blue discontent-support bar of the second attached image.
 
-Visual style: high-quality 2D pixel art, one uniform pixel size, crisp hard edges, limited palette with careful dithering, cold blues with warm amber accents. Quiet, grim and humane. UI: dark navy panels with thin brass borders, cream-white pixel icons. Avoid: logos, gore, 3D render look, painterly brush strokes.
+Visual style: high-quality 2D pixel art for a mobile political survival game set on a steam train in a frozen Central Europe, sixth winter after a collapse. One uniform pixel size, crisp hard edges, no blur, no smooth gradients, no mixed resolutions; limited palette with careful dithering; cold blues with warm amber lamp light. Quiet, grim and humane. UI: dark navy panels with thin brass borders and angled corners, cream-white pixel icons, condensed pixel numerals. Short labels in plain English are allowed as placeholders; no long text. Avoid: logos, watermarks, modern objects, gore, neon, 3D render look, painterly brush strokes, red cross symbols.
 
-Mobile game screen mockup, very wide landscape (about 2.2:1). A decision dialogue panel slides up over the dimmed train scene. Left third: a large, detailed pixel-art portrait of the speaker, a 67-year-old Polish engine driver with soot in the lines of his face, white stubble, a wool flat cap and a heavy railway jacket with brass buttons, looking at the viewer. Right two-thirds, laid out like a paper dossier with thin brass rules: one short line of dialogue (illegible pixel text is fine), then three stacked numbered choice plates; each plate shows small cost icons (for example a coal icon with a minus sign) instead of explanatory text.
+Mobile game screen mockup, very wide landscape (about 2.2:1). The side view of the train from the home screen is dimmed in the background, and a decision panel has slid up from the bottom, covering about two-thirds of the screen height, with a small chevron tab on its top edge for folding it away. Left third of the panel: a large, detailed pixel-art portrait of the speaker, Pavla Krejčí, a 41-year-old Czech refugee who speaks for the tail car: thin face, wind-chapped cheeks, dark hair tied under a knitted scarf, several patched coats layered, tired but sharp eyes, chin slightly raised; under the portrait a small name plate and the tail car's iron emblem (a coal shovel crossed with a tin cup). Right two-thirds, laid out like a paper dossier with thin brass rules: one short line of dialogue in placeholder English, then three stacked numbered choice plates. Each plate has a two- or three-word label and, on its right, only the costs that are certain now, shown as resource icons with minus numbers (for example coal -10, food -5); no arrows or faces predicting how people will react. One plate also carries a small eye icon meaning someone will witness this choice. Keep the top HUD: Trust and Tension meters with their labels on the left, the red-and-sky-blue bar with fist and open-palm buttons in the center, and coal cart, bread, pill and bottle, and ring icons with numbers on the right.
 ```
 
 ## ④ 아이콘 판 10개 (새 기준 그림 첨부)
