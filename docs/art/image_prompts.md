@@ -11,7 +11,7 @@
 
 ## 쓰는 법
 
-1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다.
+1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다. ① 수정까지 마친 판을 [mockups/home_v2.webp](mockups/home_v2.webp)에 두었다(2026-10-06 확정).
 2. ① 수정은 기준 그림을 첨부하고 글상자를 붙여 넣는다. 새로 그리는 게 아니라 고치라는 프롬프트다. 결과가 마음에 들면 그게 새 기준 그림이 된다.
 3. ①b부터는 새 기준 그림을 첨부하고 글상자를 붙여 넣는다. 글상자 첫 문장이 "첨부한 그림과 같은 화풍으로"라는 뜻이다.
 4. 아이콘과 명판은 한 장에 여러 개를 격자로 뽑는다. 자르는 건 설계 세션이 한다.
@@ -44,6 +44,8 @@ Visual style: high-quality 2D pixel art for a side-scrolling mobile game about a
 ```
 
 ## ① 홈 화면 수정 (기준 그림 첨부)
+
+끝났다. 결과가 [mockups/home_v2.webp](mockups/home_v2.webp)다.
 
 ```text
 Edit the attached image. Keep its pixel art style, palette, lighting, parallax landscape and HUD frames as they are, and keep every element on the same small pixel size (the smoke must use the same pixels as the trees). Make these changes:
