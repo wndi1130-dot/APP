@@ -123,6 +123,31 @@ Edit the attached image. Keep the composition, the train, the HUD layout and the
 - 긴장은 세 후보 중 고른다. 설계 세션 추천은 끊어지려는 밧줄(8번)이다. '팽팽하다가 끊어지기 직전'이 긴장의 뜻에 가장 가깝다. 도화선은 폭탄으로, 금 간 유리는 '이미 깨짐'으로 읽힌다.
 - 한눈에 보기(13번)가 세로 막대처럼 보여 뜻이 읽히지 않는다. 다음에 다시 뽑는다(예: 위에서 본 열차를 가로로 눕히고 지붕 칸을 또렷하게, 또는 열차 윤곽이 그려진 도면 한 장).
 
+## ④b 아이콘 판 평가 (2026-10-06)
+
+판은 [mockups/icons_b_v1.webp](mockups/icons_b_v1.webp)다. 뜻이 읽히는지만 본다.
+
+- 그대로 쓸 것: 열린 눈(공개 투표), 그림자 인물(목격자), 세 사람(과밀), 악수와 서류(공개 협상), 봉투(사적 부탁), 주머니와 반지(뇌물), 난로(난방), 그릇과 빵(배급), 매듭(결속도).
+- 헷갈리는 짝 둘
+  - 투표함(2번)과 보급 상자(7번)가 둘 다 나무 상자다. 투표함을 쇠 상자로 바꾸고 흰 돌이 들어가는 모습을 넣는다.
+  - 봉투(6번 사적 부탁)와 봉인 서류(9번 협박)가 둘 다 검은 봉인이 찍힌 종이다. 협박은 자물쇠로 잠근 서류철로 바꾼다.
+- 보급 상자의 지도 핀은 요즘 지도 앱 기호라 세계와 맞지 않는다. 손수레에 실은 상자로 바꾼다.
+- 목격자는 '첩자'로도 읽힐 수 있다. 목격자 규칙과 뜻이 가까워서 그대로 둔다.
+
+## ④c 고칠 아이콘 4개 (icons_a_v1, icons_b_v1 첨부)
+
+④a의 한눈에 보기와 ④b에서 헷갈린 셋을 다시 뽑는다.
+
+```text
+Match the pixel style and icon designs of the attached images.
+
+A sprite sheet of four pixel-art UI icons in a 2 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid and shown enlarged with hard square pixels, centered in its cell with generous padding, same scale, light from the top left, a dark outline, no smoothing, no text, no frames, cream-white (#EDE6D6) with a small accent where noted.
+1) overview: a whole train seen from directly above, lying horizontally, with clearly separated car roofs and a small locomotive at the right end, drawn on a sheet of plan paper with a folded corner;
+2) secret vote: a dark iron ballot box with a slot and a white stone dropping into it, clearly different from a wooden crate;
+3) leverage: a closed document folder held shut by a small padlock (red accent), clearly different from an envelope;
+4) supply: a wooden crate on a small two-wheeled handcart (amber accent), with no map pin.
+```
+
 ## 쓰는 법
 
 1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다. ① 수정까지 마친 판을 [mockups/home_v2.webp](mockups/home_v2.webp)에 두었다(2026-10-06 확정).
