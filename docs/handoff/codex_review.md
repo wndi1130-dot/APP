@@ -17,7 +17,7 @@
 | A1 후속(금지어, loot 6키) | [#6](https://github.com/wndi1130-dot/APP/pull/6) | 합침 | 통과 |
 | B4 후속(선택) | [#7](https://github.com/wndi1130-dot/APP/pull/7) | 합침 | 통과 |
 | A3 정리 | main 직접 반영(5f1e048) | 끝남 | Claude가 직접 했다 |
-| A5 Gemini 문장 생성 | | Claude가 직접 하는 중 | |
+| A5 Gemini 문장 생성 | main 직접 반영(b8ccb40) | 끝남 | Claude가 직접 했다 |
 | A4 화면 뼈대 | | Claude(백그라운드 에이전트)가 만드는 중 | |
 
 사용자 결정(2026-10-05 22:20 KST): B1이 끝나면 남은 작업(A3 정리, A5, A4)은 웹 모델에 보내지 않고 Claude가 직접 한다. B1에 고칠 게 나오면 그것도 Claude가 고친다. DOTS 신호판에는 새 신호를 올리지 않는다.
@@ -83,6 +83,15 @@
 - 커밋: 7615d7d(A3 브랜치 합치기. .gitignore는 main 쪽), 5f1e048(정리).
 - 한 일: tsconfig에 `allowImportingTsExtensions`, `npm test`가 생성기 검사까지 돌게 했다. 200명 안에서 원어·한글 전체 이름이 겹치지 않는다(Lukas와 Lucas처럼 한글이 같아지는 경우 포함). 풀이 모자라면 오류로 멈춘다. B1 PR이 지적한 문제(A3가 언어 정보를 버려 600명 중 72건이 섞임)를 고쳐 피난민의 이름·성·고향을 한 언어로 묶었다. 헝가리 이름은 성을 앞에 쓰고, 리투아니아 가족의 어머니는 기혼형 성을 쓴다. 고향은 14곳에서 65곳으로 늘렸다(볼슈틴 주변 소도시 포함). B1·B6로 데이터를 다시 만들었다.
 - 확인한 것: `npm test`(Vitest 476개와 생성기 10개), `npm run build`, `--check`, `npm run validate -- data`(200항목 오류 0개·경고 0개) 모두 통과. 임시 목록 0건, 선호 대체 0건.
+
+### A5 Gemini 문장 생성 (Claude가 직접, 22:40 KST main 반영)
+
+- 커밋: b8ccb40. 파일: s1/tools/gen_text.ts, gen_text_prompt.ts, README_gen_text.md, s1/tests/gen_text.test.ts.
+- 한 일: 비어 있는 프로필 한 줄을 Gemini REST `generateContent`로 채운다. 고정 지시는 가이드 2장, 예시는 3.2만, 데이터는 3.5가 허락한 필드만 넘긴다. 답은 JSON 형식, 40자, 한 문장, 이름·나이 되풀이 금지, A1 검사기의 `line` 진단을 모두 통과해야 저장하고, 거절되면 이유를 붙여 최대 3번 다시 묻는다.
+- 설계 판단: 생성한 줄은 `data/profiles.json`이 아니라 `generated/profile_lines.json`에 id별로 저장한다. 같은 파일에 쓰면 A3의 재현 검사가 깨지기 때문이다. 게임은 `applyProfileLines`로 합쳐 읽는다.
+- 안전: 키는 `GEMINI_API_KEY`로만 받고 헤더로만 보내며 오류에서 가린다. 기본 한도 5개, 드라이런은 키와 모델 없이 돈다. `--write`가 없으면 저장하지 않는다.
+- 확인한 것: `npm test`(Vitest 489개와 생성기 10개), 타입 검사, 빌드 통과. 테스트는 가짜 응답으로만 돈다.
+- 남은 것: 실제 호출은 하지 않았다. 가이드가 적은 'Gemini 4.0'의 정확한 모델 이름을 확인하지 못해 기본값이 없다(`GEMINI_MODEL`로 정한다).
 
 ## 1차 현황
 
