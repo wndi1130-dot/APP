@@ -9,6 +9,17 @@
 - 화면에 설명 문장을 두지 않는다. 자원과 계기는 아이콘과 숫자로, 칸의 수치는 칸을 눌렀을 때만 보여 준다.
 - 홈 화면 구성은 [decisions.md](../design/decisions.md) '화면과 연출'에 적었다.
 
+## 홈 시안 평가 (2026-10-06, 사용자)
+
+기준 그림(home_v2)을 보고 남긴 아쉬운 점이다. ①b와 ④ 프롬프트에 반영했다.
+
+1. 칸 조절의 −/+ 단추가 마음에 들지 않는다. 프로스트펑크 2나 Claude Code의 추론 수준 고르기(낮음부터 최대까지 딱딱 끊기는 단계)처럼 단계 고르개로 바꾼다. 난방, 배급, 의약품도 같은 방식이다.
+2. 열차는 지금도 좋지만, 폰에서 볼 것을 생각하면 조금 더 키운다.
+3. 왼쪽 위 신임·긴장의 숫자(72, 28)만으로는 뜻이 읽히지 않는다. 숫자 옆에 짧은 눈금 막대를 붙이는 안을 ①b에서 시험한다.
+4. 불만은 빨강, 지지는 파랑이나 하늘색으로 한다.
+5. 자원 아이콘은 프로스트펑크 2의 자원 UI처럼 무엇인지 바로 읽혀야 한다. 지금 석탄은 석탄으로 안 보이고, 의약품 병은 총알처럼 보인다. 자원 아이콘만은 단색 대신 재료의 색을 살린다.
+6. 사치품이 왜 있는지 모르겠다. 참고: S1 기획서에서 사치품은 뇌물 수단이고 앞칸이 바라는 물자다([s1_political_prototype.md](../prototype/s1_political_prototype.md) 거래 수단). 남길지는 따로 정한다([decisions.md](../design/decisions.md) 열린 질문).
+
 ## 쓰는 법
 
 1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다. ① 수정까지 마친 판을 [mockups/home_v2.webp](mockups/home_v2.webp)에 두었다(2026-10-06 확정).
@@ -65,7 +76,8 @@ Match the art style, palette, line work and HUD design of the attached reference
 
 Visual style: high-quality 2D pixel art for a side-scrolling mobile game about a steam train crossing a frozen Central Europe in the sixth winter after a collapse. The whole image uses one uniform pixel size, with crisp hard edges, no blur, no smooth gradients and no mixed resolutions. Limited palette with careful dithering; warm amber light as the only saturated accent. Quiet, grim and humane. UI: dark navy panels with thin brass borders and angled corners, cream-white pixel icons, condensed pixel numerals, almost no text. Avoid: readable words, logos, watermarks, modern objects, gore, neon, 3D render look, painterly brush strokes, red cross symbols.
 
-Mobile game screen mockup, very wide landscape (about 2.2:1). The camera has risen above the train: a top-down view of a longer train of twelve cars with the roofs removed, so each car shows its floor plan (bunks, stoves, long tables, lockers, a desk with maps, upholstered seats, the locomotive's boiler and glowing firebox). The train stands vertically along the left third of the screen, locomotive at the top and tail at the bottom, on a track over snowy ground with a few pines. Each car has a muted color tint and outline by type so types read at a glance: tail cars cold grey-blue, tech and medical teal, dining car amber, guard car olive, captain's car gold, front cars burgundy, locomotive rust red. The locomotive car is selected and a dark panel has slid out over the right two-thirds: at its top the engine crew's pixel emblem and a small pixel portrait of their representative, below that three stat rows with icons and bars (warmth, crowding, coal), and below that three policy rows, each with a small icon and a pixel toggle switch. The top HUD is the same as in the reference; at the bottom center the overview button now shows a side-view train icon for returning.
+Mobile game screen mockup, very wide landscape (about 2.2:1). The camera has risen above the train: a top-down view of a longer train of twelve cars with the roofs removed, so each car shows its floor plan (bunks, stoves, long tables, lockers, a desk with maps, upholstered seats, the locomotive's boiler and glowing firebox). The train stands vertically along the left third of the screen, locomotive at the top and tail at the bottom, on a track over snowy ground with a few pines. Each car has a muted color tint and outline by type so types read at a glance: tail cars cold grey-blue, tech and medical teal, dining car amber, guard car olive, captain's car gold, front cars burgundy, locomotive rust red. The locomotive car is selected and a dark panel has slid out over the right two-thirds: at its top the engine crew's pixel emblem and a small pixel portrait of their representative; below that two stat rows with icons and short gauges (warmth, crowding); below that three control rows for heating, rations and medicine, each a horizontal stepped selector with five discrete notches from lowest to highest, the current notch lit in amber, like a level picker, with no plus or minus buttons; and at the bottom two policy rows, each with a small icon and a pixel toggle switch.
+HUD changes from the reference: on the top-center bar the discontent part is red and the support part is sky blue, with a few grey neutral segments between them; in the top-left panel each meter shows a short segmented gauge next to its number (trust in blue, tension in red-orange); the top-right resource icons are clearer and use muted natural colors: coal as a small iron mine cart heaped with black coal and a faint ember, food as a brown loaf of bread, medicine as a two-tone pill capsule beside a squat brown bottle, luxury goods as a small gold ring. At the bottom center the overview button now shows a side-view train icon for returning.
 ```
 
 ## ② 의회 화면 시안 (새 기준 그림 첨부)
@@ -93,9 +105,9 @@ Mobile game screen mockup, very wide landscape (about 2.2:1). A decision dialogu
 설계 세션이 잘라 `s1/public/art/icons/`에 넣는다: res_coal, res_food, res_medicine, res_luxury, meter_trust, meter_tension, bar_discontent, bar_support, btn_log, btn_overview.
 
 ```text
-Match the pixel style and the resource icons of the attached reference image.
+Match the pixel style of the attached reference image.
 
-A sprite sheet of ten pixel-art UI icons in a 5 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid, centered in its cell with generous padding, same scale, light from the top left, cream-white (#EDE6D6) with a dark outline and a small amber accent where noted, crisp pixels with no smoothing, no text, no frames. Left to right, top to bottom: 1) coal: a small pile of coal lumps with a faint ember (amber); 2) food: a loaf of dark bread; 3) medicine: a glass medicine bottle with a stopper and a blank label, no cross; 4) luxury goods: a ring with a small gem; 5) trust: two gloved hands clasped; 6) tension: a cracked glass pane; 7) discontent: a raised clenched fist; 8) support: a raised open palm; 9) log: a closed book with a ribbon bookmark; 10) overview: a train seen from directly above.
+A sprite sheet of ten pixel-art UI icons in a 5 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid, centered in its cell with generous padding, same scale, light from the top left, a dark outline, crisp pixels with no smoothing, no text, no frames. Icons 1 to 4 are resources and use muted natural colors so each material reads at a glance; icons 5 to 10 are cream-white (#EDE6D6) with a small accent where noted. Left to right, top to bottom: 1) coal: a small iron mine cart heaped with black coal lumps and a faint ember; 2) food: a brown loaf of bread; 3) medicine: a two-tone pill capsule beside a squat brown glass bottle, no cross; 4) luxury goods: a small gold ring with a gem; 5) trust: two gloved hands clasped (blue accent); 6) tension: a cracked glass pane (red-orange accent); 7) discontent: a raised clenched fist (red accent); 8) support: a raised open palm (sky-blue accent); 9) log: a closed book with a ribbon bookmark; 10) overview: a train seen from directly above, a long rectangle split into car segments.
 ```
 
 ## ⑤ 칸 명판 8개 (새 기준 그림 첨부)
