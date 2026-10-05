@@ -1,0 +1,1220 @@
+{
+  "description_ko": "국립국어원 규정 본문과 표기 일람표에서 실제 확인한 용례다. 일반어·인명·지명이 섞여 있으며, 모두 인명 심의 데이터베이스 항목이라는 뜻은 아니다. 기대값은 변환기로 만들지 않았다.",
+  "excluded_source_rows": [
+    {
+      "page": "P000131",
+      "original": "przjyaciół",
+      "reason_ko": "원문 철자 오류 의심으로 제외. 임의로 교정해 용례라고 부르지 않는다."
+    },
+    {
+      "page": "P000132",
+      "original": "sěst",
+      "reason_ko": "국립국어원 온라인가나다 문의 327473에서 철자 오류가 지적되어 제외.",
+      "source": "https://www.korean.go.kr/front/onlineQna/onlineQnaView.do?mn_id=90&pageIndex=1&qna_seq=327473"
+    },
+    {
+      "page": "P000125",
+      "original": "auβerhalb",
+      "reason_ko": "독일어 ß 대신 그리스어 β가 있어 제외. 원문의 문자를 몰래 바꾸지 않는다."
+    }
+  ],
+  "examples": [
+    {
+      "language": "de",
+      "original": "Hormon",
+      "korean": "호르몬",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Hormon[hɔrmoːn] 호르몬",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Hermes",
+      "korean": "헤르메스",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Hermes[hɛrmɛs] 헤르메스",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Herr",
+      "korean": "헤어",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Herr[hɛr] 헤어",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Rasur",
+      "korean": "라주어",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Rasur[razuːr] 라주어",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Tür",
+      "korean": "튀어",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Tür[tyːr] 튀어",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Ohr",
+      "korean": "오어",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Ohr[oːr] 오어",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Vater",
+      "korean": "파터",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Vater[faːt∂r] 파터",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Schiller",
+      "korean": "실러",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Schiller[ʃil∂r] 실러",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "verarbeiten",
+      "korean": "페어아르바이텐",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "verarbeiten[fɛrarbait∂n] 페어아르바이텐",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "zerknirschen",
+      "korean": "체어크니르셴",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "zerknirschen[ʦɛrknirʃ∂n] 체어크니르셴",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Fürsorge",
+      "korean": "퓌어조르게",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Fürsorge[fyːrzorgə] 퓌어조르게",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Vorbild",
+      "korean": "포어빌트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Vorbild[foːrbilt] 포어빌트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Urkunde",
+      "korean": "우어쿤데",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Urkunde[uːrkundə] 우어쿤데",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Vaterland",
+      "korean": "파터란트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Vaterland[faːtərlant] 파터란트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Rostock",
+      "korean": "로스토크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Rostock[rɔstɔk] 로스토크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Stadt",
+      "korean": "슈타트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Stadt[ʃtat] 슈타트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Heidelberg",
+      "korean": "하이델베르크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Heidelberg[haidəlbɛrk, -bɛrç] 하이델베르크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Hamburg",
+      "korean": "함부르크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Hamburg[hamburk, -burç] 함부르크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Mensch",
+      "korean": "멘슈",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Mensch[menʃ] 멘슈",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Mischling",
+      "korean": "미슐링",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Mischling[miʃliŋ] 미슐링",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Schüler",
+      "korean": "쉴러",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Schüler[ʃyːlər] 쉴러",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "schön",
+      "korean": "쇤",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "schön[ʃøːn] 쇤",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Schatz",
+      "korean": "샤츠",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Schatz[ʃaʦ] 샤츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "schon",
+      "korean": "숀",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "schon[ʃoːn] 숀",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Schule",
+      "korean": "슐레",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Schule[ʃuːlə] 슐레",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Schelle",
+      "korean": "셸레",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Schelle[ʃɛlə] 셸레",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "läuten",
+      "korean": "로이텐",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "läuten[lɔyt∂n] 로이텐",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Fräulein",
+      "korean": "프로일라인",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Fräulein[frɔylain] 프로일라인",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Europa",
+      "korean": "오이로파",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Europa[ɔyroːpa] 오이로파",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "de",
+      "original": "Freundin",
+      "korean": "프로인딘",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
+      "source_kind": "규정 본문",
+      "source_line": "Freundin[frɔyndin] 프로인딘",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "zamek",
+      "korean": "자메크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "zamek 자메크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "mokry",
+      "korean": "모크리",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "mokry 모크리",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Słupsk",
+      "korean": "스웁스크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "Słupsk 스웁스크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "od",
+      "korean": "오트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "od 오트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "zbrodnia",
+      "korean": "즈브로드니아",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "zbrodnia 즈브로드니아",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Grabski",
+      "korean": "그랍스키",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "Grabski 그랍스키",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "odpis",
+      "korean": "오트피스",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "odpis 오트피스",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "zabawka",
+      "korean": "자바프카",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "zabawka 자바프카",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "obraz",
+      "korean": "오브라스",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "obraz 오브라스",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Rzeszów",
+      "korean": "제슈프",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "Rzeszów 제슈프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Przemyśl",
+      "korean": "프셰미실",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "Przemyśl 프셰미실",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "grzmot",
+      "korean": "그주모트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "grzmot 그주모트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "łóżko",
+      "korean": "우슈코",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "łóżko 우슈코",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "pęcherz",
+      "korean": "펭헤시",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "pęcherz 펭헤시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "koszt",
+      "korean": "코슈트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "koszt 코슈트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "kosz",
+      "korean": "코시",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "kosz 코시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "łono",
+      "korean": "워노",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "łono 워노",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "głowa",
+      "korean": "그워바",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "głowa 그워바",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "olej",
+      "korean": "올레이",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "olej 올레이",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "mleko",
+      "korean": "믈레코",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "mleko 믈레코",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "mrówka",
+      "korean": "므루프카",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "mrówka 므루프카",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "ręka",
+      "korean": "렝카",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "ręka 렝카",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "proszę",
+      "korean": "프로셰",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "proszę 프로셰",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "stacja",
+      "korean": "스타차",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "stacja 스타차",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "fryzjer",
+      "korean": "프리제르",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000131",
+      "source_kind": "규정 본문",
+      "source_line": "fryzjer 프리제르",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "burak",
+      "korean": "부라크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "burak 부라크, szybko 십코, dobrze 도브제, chleb 흘레프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "szybko",
+      "korean": "십코",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "burak 부라크, szybko 십코, dobrze 도브제, chleb 흘레프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "dobrze",
+      "korean": "도브제",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "burak 부라크, szybko 십코, dobrze 도브제, chleb 흘레프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "chleb",
+      "korean": "흘레프",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "burak 부라크, szybko 십코, dobrze 도브제, chleb 흘레프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "cel",
+      "korean": "첼",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "cel 첼, Balicki 발리츠키, noc 노츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Balicki",
+      "korean": "발리츠키",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "cel 첼, Balicki 발리츠키, noc 노츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "noc",
+      "korean": "노츠",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "cel 첼, Balicki 발리츠키, noc 노츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "dać",
+      "korean": "다치",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "dać 다치",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Gdańsk",
+      "korean": "그단스크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "Gdańsk 그단스크, Poznań 포즈난",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Poznań",
+      "korean": "포즈난",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "Gdańsk 그단스크, Poznań 포즈난",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Warszawa",
+      "korean": "바르샤바",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "Warszawa 바르샤바, piwnica 피브니차, krew 크레프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "pl",
+      "original": "Hrubieszów",
+      "korean": "흐루비에슈프",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000110",
+      "source_kind": "표기 일람표",
+      "source_line": "herbata 헤르바타, Hrubieszów 흐루비에슈프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "mozek",
+      "korean": "모제크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "mozek 모제크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "koroptev",
+      "korean": "코롭테프",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "koroptev 코롭테프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "led",
+      "korean": "레트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "led 레트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "ledvina",
+      "korean": "레드비나",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "ledvina 레드비나",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "obchod",
+      "korean": "옵호트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "obchod 옵호트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "odpadky",
+      "korean": "오트파트키",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "odpadky 오트파트키",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "hmyz",
+      "korean": "흐미스",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "hmyz 흐미스",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "námořník",
+      "korean": "나모르주니크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "námořník 나모르주니크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "hořký",
+      "korean": "호르슈키",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "hořký 호르슈키",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "kouř",
+      "korean": "코우르시",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "kouř 코우르시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "puška",
+      "korean": "푸슈카",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "puška 푸슈카",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "myš",
+      "korean": "미시",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "myš 미시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "kolo",
+      "korean": "콜로",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "kolo 콜로",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "humr",
+      "korean": "후므르",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "humr 후므르",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "věk",
+      "korean": "베크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000132",
+      "source_kind": "규정 본문",
+      "source_line": "věk 베크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "barva",
+      "korean": "바르바",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "barva 바르바, obchod 옵호트, dobrý 도브리, jeřab 예르자프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "dobrý",
+      "korean": "도브리",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "barva 바르바, obchod 옵호트, dobrý 도브리, jeřab 예르자프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "jeřab",
+      "korean": "예르자프",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "barva 바르바, obchod 옵호트, dobrý 도브리, jeřab 예르자프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "cigareta",
+      "korean": "치가레타",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "cigareta 치가레타, nemocnice 네모츠니체, nemoc 네모츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "nemocnice",
+      "korean": "네모츠니체",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "cigareta 치가레타, nemocnice 네모츠니체, nemoc 네모츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "nemoc",
+      "korean": "네모츠",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "cigareta 치가레타, nemocnice 네모츠니체, nemoc 네모츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "čapek",
+      "korean": "차페크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "čapek 차페크, kulečnik 쿨레치니크, míč 미치",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "kulečnik",
+      "korean": "쿨레치니크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "čapek 차페크, kulečnik 쿨레치니크, míč 미치",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "míč",
+      "korean": "미치",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "čapek 차페크, kulečnik 쿨레치니크, míč 미치",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "dech",
+      "korean": "데흐",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "dech 데흐, divadlo 디바들로, led 레트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "divadlo",
+      "korean": "디바들로",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "dech 데흐, divadlo 디바들로, led 레트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "fík",
+      "korean": "피크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "fík 피크, knoflík 크노플리크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "knoflík",
+      "korean": "크노플리크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "fík 피크, knoflík 크노플리크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "gramofon",
+      "korean": "그라모폰",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "gramofon 그라모폰",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "bůh",
+      "korean": "부흐",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "hadr 하드르, hmyz 흐미스, bůh 부흐",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "chlapec",
+      "korean": "흘라페츠",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "choditi 호디티, chlapec 흘라페츠, prach 프라흐",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "Praha",
+      "korean": "프라하",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "Praha 프라하, koroptev 코롭테프, strop 스트로프",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "Plzeň",
+      "korean": "플젠",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "němý 네미, sáňky 산키, Plzeň 플젠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "Šternberk",
+      "korean": "슈테른베르크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "šaty 샤티, Šternberk 슈테른베르크, koš 코시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "řeka",
+      "korean": "르제카",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "řeka 르제카, námořník 나모르주니크, hořký 호르슈키, kouř 코우르시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "cz",
+      "original": "mrak",
+      "korean": "므라크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000111",
+      "source_kind": "표기 일람표",
+      "source_line": "most 모스트, mrak 므라크, podzim 포드짐",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "ablak",
+      "korean": "어블러크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "ablak 어블러크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "csipke",
+      "korean": "칩케",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "csipke 칩케",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "között",
+      "korean": "쾨죄트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "között 쾨죄트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "dinnye",
+      "korean": "딘네",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "dinnye 딘네",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "nulla",
+      "korean": "눌러",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "nulla 눌러",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "olaj",
+      "korean": "올러이",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "olaj 올러이",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "Pest",
+      "korean": "페슈트",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "Pest 페슈트",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "lapos",
+      "korean": "러포시",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "lapos 러포시",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "nyer",
+      "korean": "네르",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "nyer 네르",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "selyem",
+      "korean": "셰옘",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "source_kind": "규정 본문",
+      "source_line": "selyem 셰옘",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "bab",
+      "korean": "버브",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "bab 버브, ablak 어블러크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "citrom",
+      "korean": "치트롬",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "citrom 치트롬, nyolcvan 뇰츠번, arc 어르츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "nyolcvan",
+      "korean": "뇰츠번",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "citrom 치트롬, nyolcvan 뇰츠번, arc 어르츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "arc",
+      "korean": "어르츠",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "citrom 치트롬, nyolcvan 뇰츠번, arc 어르츠",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "csavar",
+      "korean": "처버르",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "csavar 처버르, kulcs 쿨치",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "kulcs",
+      "korean": "쿨치",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "csavar 처버르, kulcs 쿨치",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "daru",
+      "korean": "더루",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "daru 더루, medve 메드베, gond 곤드",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "medve",
+      "korean": "메드베",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "daru 더루, medve 메드베, gond 곤드",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "gond",
+      "korean": "곤드",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "daru 더루, medve 메드베, gond 곤드",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "dzsem",
+      "korean": "젬",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "dzsem 젬",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "gumi",
+      "korean": "구미",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "gumi 구미, nyugta 뉴그터, csomag 초머그",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "gyár",
+      "korean": "자르",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "gyár 자르, hagyma 허지머, nagy 너지",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "hagyma",
+      "korean": "허지머",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "gyár 자르, hagyma 허지머, nagy 너지",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "nagy",
+      "korean": "너지",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "gyár 자르, hagyma 허지머, nagy 너지",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "béka",
+      "korean": "베커",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "béka 베커, keksz 켁스, szék 세크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "szék",
+      "korean": "세크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "béka 베커, keksz 켁스, szék 세크",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "málna",
+      "korean": "말너",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "málna 말너, bomba 봄버, álom 알롬",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "nyak",
+      "korean": "녀크",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "nyak 녀크, hányszor 하니소르, irány 이라니",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "irány",
+      "korean": "이라니",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "nyak 녀크, hányszor 하니소르, irány 이라니",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "hu",
+      "original": "húsz",
+      "korean": "후스",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
+      "source_kind": "표기 일람표",
+      "source_line": "alszik 얼시크, asztal 어스털, húsz 후스",
+      "retrieved_at": "2026-10-05"
+    }
+  ]
+}
