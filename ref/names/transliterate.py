@@ -194,6 +194,7 @@ def _word(word: str, language: str) -> str:
     pronunciation = _pronunciation(word, language)
     if pronunciation:
         word = pronunciation["rewrite"]
+        language = pronunciation.get("rules_language", language)
     data = _table()["languages"][language]
     compiled = _compiled(language)
     normalized = _normalize(word, data, language)
@@ -243,8 +244,9 @@ def transcribe(text: str, language: str, *, use_examples: bool = True) -> dict:
     review_keys = {_key(x) for x in reviews["review_names"].get(language, [])}
     needs_review = any(_key(part) in review_keys for part in words)
     if unverified_note:
+        rules = unverified_note.get("rules_language", language)
         return {"original": text, "korean": korean, "korean_basis": "미확인",
-                "korean_source": RULE_SOURCES.get(language, _table()["languages"][language]["source"]),
+                "korean_source": RULE_SOURCES.get(rules, _table()["languages"][rules]["source"]),
                 "pronunciation_source": unverified_note["source"], "korean_note": unverified_note["note_ko"]}
     if needs_review:
         return {"original": text, "korean": korean, "korean_basis": "미확인",

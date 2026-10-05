@@ -1,5 +1,5 @@
 {
-  "description_ko": "원어 철자만으로 오판하기 쉬운 이름의 발음 보조 자료다. 내부 rewrite는 이름의 실제 철자가 아니라 규칙 엔진에 발음을 전달하기 위한 중간 표기다. Duden과 위키낱말사전의 발음 정보는 국립국어원 한글 용례가 아니므로 '용례'로 승격하지 않는다.",
+  "description_ko": "원어 철자만으로 오판하기 쉬운 이름의 발음 보조 자료다. 내부 rewrite는 이름의 실제 철자가 아니라 규칙 엔진에 발음을 전달하기 위한 중간 표기다. rules_language가 있으면 그 언어의 규칙표로 읽는다. Duden과 위키낱말사전의 발음 정보는 국립국어원 한글 용례가 아니므로 '용례'로 승격하지 않는다.",
   "entries": [
     {
       "language": "de",
@@ -48,52 +48,130 @@
     {
       "language": "sk",
       "original": "Tóth",
-      "rewrite": "Tót",
+      "rewrite": "Tóth",
+      "rules_language": "hu",
       "pronunciation": "[ˈtoːt]",
       "source": "https://en.wiktionary.org/wiki/T%C3%B3th",
-      "note_ko": "헝가리어에서 온 성이다. 옛 철자 th는 t로 읽는다. 발음은 사전의 헝가리어 항목이고, 사전의 슬로바키아어 항목은 헝가리어에서 온 성이라고 적는다. 국립국어원 용례는 찾지 못했다.",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 사전의 헝가리어 발음이고 th는 t다. 사전의 슬로바키아어 항목은 헝가리어에서 온 성이라고 적는다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     },
     {
       "language": "sk",
       "original": "Tóthová",
-      "rewrite": "Tótová",
+      "rewrite": "Tóthová",
+      "rules_language": "hu",
       "source": "https://en.wiktionary.org/wiki/T%C3%B3th",
-      "note_ko": "Tóth의 여성형이다. th는 t로 읽는다. 국립국어원 용례는 찾지 못했다.",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Tóth의 여성형이다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     },
     {
       "language": "sk",
       "original": "Horváth",
-      "rewrite": "Horvát",
+      "rewrite": "Horváth",
+      "rules_language": "hu",
       "pronunciation": "/ɦɔrvaːt/",
       "source": "https://en.wiktionary.org/wiki/Horv%C3%A1th",
-      "note_ko": "헝가리어에서 온 성이다. 사전의 슬로바키아어 항목 발음에서 th는 t다. 국립국어원 용례는 찾지 못했다.",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 사전의 슬로바키아어 항목 발음에서도 th는 t다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     },
     {
       "language": "sk",
       "original": "Horváthová",
-      "rewrite": "Horvátová",
+      "rewrite": "Horváthová",
+      "rules_language": "hu",
       "source": "https://en.wiktionary.org/wiki/Horv%C3%A1th",
-      "note_ko": "Horváth의 여성형이다. th는 t로 읽는다. 국립국어원 용례는 찾지 못했다.",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Horváth의 여성형이다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     },
     {
       "language": "sk",
       "original": "Kovács",
-      "rewrite": "Kováč",
+      "rewrite": "Kovács",
+      "rules_language": "hu",
       "pronunciation": "[ˈkovaːt͡ʃ]",
       "source": "https://en.wiktionary.org/wiki/Kov%C3%A1cs",
-      "note_ko": "헝가리어에서 온 성이다. cs는 č로 읽는다. 사전에는 헝가리어 항목만 있어 슬로바키아에서도 같게 읽는다고 보았다(추정). 같은 풀의 Kováč와 한글 표기가 같다.",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 용례 Kovács, Béla → 코바치, 벨러(헝가리 인물). 같은 풀의 Kováč와 한글 표기가 같다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     },
     {
       "language": "sk",
       "original": "Kovácsová",
-      "rewrite": "Kováčová",
+      "rewrite": "Kovácsová",
+      "rules_language": "hu",
       "source": "https://en.wiktionary.org/wiki/Kov%C3%A1cs",
-      "note_ko": "Kovács의 여성형이다. cs는 č로 읽는다(추정). 국립국어원 용례는 찾지 못했다.",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Kovács의 여성형이다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Nagy",
+      "rewrite": "Nagy",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 용례 Nagy, Imre → 너지, 임레(헝가리 인물). 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Nagyová",
+      "rewrite": "Nagyová",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Nagy의 여성형이다. gy 뒤의 o를 규칙대로 '조'로 적는다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Varga",
+      "rewrite": "Varga",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 용례 Varga, Mihály → 버르거, 미하이(헝가리 인물). 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Vargová",
+      "rewrite": "Vargová",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Varga의 여성형이다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Balog",
+      "rewrite": "Balog",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 헝가리어 풀의 Balog와 같은 표기다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Balogová",
+      "rewrite": "Balogová",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Balog의 여성형이다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Molnár",
+      "rewrite": "Molnár",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). 슬로바키아어 규칙으로 읽어도 표기가 같다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Molnárová",
+      "rewrite": "Molnárová",
+      "rules_language": "hu",
+      "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000135",
+      "note_ko": "헝가리어 철자로 적힌 성이라 헝가리어 표기 규칙으로 읽는다(2026-10-06 사용자 결정). Molnár의 여성형이다. 슬로바키아 인물의 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     }
   ],

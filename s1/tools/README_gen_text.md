@@ -10,7 +10,7 @@
 {
   "version": 1,
   "lines": {
-    "p_001": { "line": "...", "model": "모델 이름", "prompt_version": "profile-line-v1", "generated_at": "2026-10-05T12:00:00.000Z" }
+    "p_001": { "line": "...", "model": "모델 이름", "prompt_version": "profile-line-v2", "generated_at": "2026-10-05T12:00:00.000Z" }
   }
 }
 ```
@@ -66,6 +66,11 @@ GEMINI_API_KEY=... GEMINI_MODEL=모델이름 node s1/tools/gen_text.ts --limit 5
 수석 기관사: 헨리크 마주레크(Henryk Mazurek), 67세, 볼슈틴 출신, 기관실 대표. …
 꼬리칸 대표: 파블라 크레이치(Pavla Krejčí), 41세, 브르노 출신, 꼬리칸 대표. …
 
+[프로필 한 줄 예시: 콘텐츠 가이드 3.2]
+- 기술·의무진: 빈 약병도 씻어서 선반에 세운다.
+- 기관실: 석탄 냄새가 남은 장갑을 찾는다.
+- 꼬리칸: 해빙기에도 낡은 털장갑을 챙긴다.
+
 [이번 항목]
 {
   "이름": "알기르다스 유레비추스",
@@ -83,6 +88,6 @@ GEMINI_API_KEY=... GEMINI_MODEL=모델이름 node s1/tools/gen_text.ts --limit 5
 
 ## 남은 문제
 
-- 실제 Gemini 호출은 해 보지 않았다. 요청 형식은 Gemini REST `generateContent`를 따랐고 테스트는 가짜 응답으로만 돈다. 첫 실행은 `--limit 1`로 확인한다.
-- 가이드 3.2에는 프로필 한 줄 예시가 없다. 예시를 더할지(예: B7 노트의 창작 예문)는 설계에서 정한다.
+- 실제 Gemini 호출은 해 보지 않았다. 요청 형식은 Gemini REST `generateContent`를 따랐고 테스트는 가짜 응답으로만 돈다. 모델은 Gemini 4.0으로 정했고(2026-10-06), 공개되면 API 모델 이름을 `GEMINI_MODEL`에 넣고 `--limit 1`부터 돌린다.
+- 가이드 3.2에 B7 노트의 창작 예문 셋을 프로필 한 줄 예시로 넣었다(2026-10-06, `profile-line-v2`). 셋 중 둘이 장갑이라 지시에 '예시의 물건을 그대로 쓰지 않는다'를 더했다. 첫 실행에서 장갑이 되풀이되는지 본다.
 - 같은 공동체 사람들의 줄이 서로 비슷해지는지는 실제 생성 뒤에 사람이 본다.

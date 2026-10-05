@@ -115,6 +115,13 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(result["korean_basis"], "미확인")
         self.assertIn("wiktionary", result["pronunciation_source"])
 
+    def test_hungarian_spelled_slovak_surname_uses_hungarian_rules(self):
+        result = module.transcribe("Nagy", "sk")
+        self.assertEqual(result["korean"], "너지")
+        self.assertEqual(result["korean_basis"], "미확인")
+        self.assertTrue(result["korean_source"].endswith("P000135"))
+        self.assertEqual(module.transcribe("Nagyová", "sk")["korean"], "너조바")
+
     def test_hungarian_rules_exist_and_are_used(self):
         result = module.transcribe("János", "hu")
         self.assertEqual(result["korean"], "야노시")

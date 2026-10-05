@@ -2,7 +2,7 @@
 // The fixed instruction condenses docs/prototype/s1_content_guide.md chapter 2; examples come only from 3.2.
 import type { Profile } from './gen_profiles.ts';
 
-export const PROMPT_VERSION = 'profile-line-v1';
+export const PROMPT_VERSION = 'profile-line-v2';
 export const PROFILE_LINE_MAX = 40;
 
 const COMMUNITY_LABELS: Record<Profile['community'], string> = {
@@ -46,6 +46,7 @@ const PROFILE_LINE_TASK = [
   '- 3인칭 현재형 서술로, 그 사람이 다루는 물건이나 몸에 밴 습관 하나를 보여준다.',
   '- 주어진 이름, 나이, 공동체, 고향, 탄 경위, 좋아하는 것, 싫어하는 것만 근거로 삼는다. 성향, 비밀, 관계, 과거 사건을 지어내지 않는다.',
   '- 이름과 나이를 문장에 되풀이하지 않는다.',
+  '- 예시 문장의 물건(약병, 장갑)을 그대로 가져다 쓰지 않는다.',
   '',
   '[출력]',
   '- JSON 하나만 낸다: {"line": "..."}. 설명 문장이나 코드 블록 표시 없이.',
@@ -56,6 +57,11 @@ const GUIDE_EXAMPLES = [
   '[예시: 콘텐츠 가이드 3.2]',
   '수석 기관사: 헨리크 마주레크(Henryk Mazurek), 67세, 볼슈틴 출신, 기관실 대표. 붕괴 전 볼슈틴 차고의 자원봉사 기관사로, 첫 겨울에 박물관 기관차에 불을 넣은 사람 중 하나다. 좋아하는 것: 석탄 타는 냄새. 싫어하는 것: 기관차를 \'물건\'이라 부르는 사람. 말투 예: "압력 12. 더 올리면 할멈이 운다."',
   '꼬리칸 대표: 파블라 크레이치(Pavla Krejčí), 41세, 브르노 출신, 꼬리칸 대표. 세 번째 겨울에 태운 피난민. 좋아하는 것: 라디오 잡음 사이로 새어 나오는 음악. 싫어하는 것: 앞칸 창에 걸린 커튼. 말투 예: "우리 칸 난로는 이틀째 꺼져 있어요. 회의는 따뜻한 데서 하시죠?"',
+  '',
+  '[프로필 한 줄 예시: 콘텐츠 가이드 3.2]',
+  '- 기술·의무진: 빈 약병도 씻어서 선반에 세운다.',
+  '- 기관실: 석탄 냄새가 남은 장갑을 찾는다.',
+  '- 꼬리칸: 해빙기에도 낡은 털장갑을 챙긴다.',
 ].join('\n');
 
 export interface TextRequest {
