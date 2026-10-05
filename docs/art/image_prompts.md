@@ -150,7 +150,7 @@ A sprite sheet of four pixel-art UI icons in a 2 by 2 grid on a transparent back
 
 ## ④c 고친 아이콘 평가 (2026-10-06)
 
-판은 [mockups/icons_c_v1.webp](mockups/icons_c_v1.webp)다. 넷 다 통과다.
+넷 다 통과다. 그림 파일은 아직 저장하지 못했다(대화 중에 올라온 그림이 세션에 파일로 남지 않았다). 다시 올리면 mockups/icons_c_v1.webp로 넣는다.
 
 - 한눈에 보기: 도면 위에 가로로 누운 열차라 뜻이 읽힌다.
 - 비밀 투표: 쇠 투표함이라 보급 상자와 헷갈리지 않는다. 돌 대신 종이가 들어가는데, 아이콘에서는 종이가 더 잘 읽혀서 그대로 둔다. 장면 속 투표는 흰 돌·검은 돌 그대로다.
