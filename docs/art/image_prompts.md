@@ -148,6 +148,17 @@ A sprite sheet of four pixel-art UI icons in a 2 by 2 grid on a transparent back
 4) supply: a wooden crate on a small two-wheeled handcart (amber accent), with no map pin.
 ```
 
+## ④c 고친 아이콘 평가 (2026-10-06)
+
+판은 [mockups/icons_c_v1.webp](mockups/icons_c_v1.webp)다. 넷 다 통과다.
+
+- 한눈에 보기: 도면 위에 가로로 누운 열차라 뜻이 읽힌다.
+- 비밀 투표: 쇠 투표함이라 보급 상자와 헷갈리지 않는다. 돌 대신 종이가 들어가는데, 아이콘에서는 종이가 더 잘 읽혀서 그대로 둔다. 장면 속 투표는 흰 돌·검은 돌 그대로다.
+- 협박: 자물쇠 서류철이라 봉투와 갈린다.
+- 현장 조달: 손수레 위 상자라 지도 핀이 없어졌다.
+
+이로써 아이콘은 긴장만 남았다(UI 그림 방식과 같이 정한다, decisions.md 열린 질문).
+
 ## 쓰는 법
 
 1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다. ① 수정까지 마친 판을 [mockups/home_v2.webp](mockups/home_v2.webp)에 두었다(2026-10-06 확정).
@@ -264,14 +275,14 @@ Row 2: 5) negotiate: a handshake over a sheet of paper; 6) favor: a sealed envel
 Row 3: 9) leverage: a folded document with a black wax seal; 10) heating: a small cast-iron stove with a glowing door (amber accent); 11) rations: a bowl beside a slice of bread; 12) cohesion: a tight rope knot.
 ```
 
-## ⑤ 칸 명판 8개 (새 기준 그림 첨부)
+## ⑤ 칸 명판 8개 (그림 두 장 첨부: home_v2, council_v1)
 
-①에서 칸 문 위에 거는 명판이자 공동체 문장이다. 설계 세션이 잘라 `s1/public/art/emblems/`에 넣는다.
+①에서 칸 문 위에 거는 명판이자 공동체 문장이다. 시안들에서 잘 읽힌 문장(방패, 안락의자, 기어와 약병, 나침반)을 살려 통일했다. 식당칸은 투표함 대신 식탁으로 한다. 투표함은 비밀 투표 아이콘과 겹친다. 설계 세션이 잘라 `s1/public/art/emblems/`에 넣는다.
 
 ```text
-Match the pixel style of the attached reference image.
+Match the pixel style of the attached images, especially the small iron plaques hanging above the car doors in the first image.
 
-A sheet of eight small pixel-art plaques in a 4 by 2 grid on a transparent background (if not possible, pure black #000000). Each plaque is a small dark iron sign with riveted corners hanging from two short chains, carrying one cream-white pixel emblem; all the same size, readable at 32 pixels, no text. Left to right, top to bottom: 1) tail-car workers: a coal shovel crossed with a dented tin cup; 2) engine crew: a locomotive driving wheel with a spanner across it; 3) guard: a peaked guard cap above a storm lantern; 4) technicians and medics: an open tool roll with a stethoscope, no cross; 5) front-car passengers: an ornate key with a tassel; 6) captain: a compass; 7) dining car and council: a ballot box with a white stone; 8) workshop, for later: an anvil with a hammer.
+A sheet of eight small pixel-art plaques in a 4 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each plaque is a small dark iron sign with riveted corners hanging from two short chains, carrying one cream-white pixel emblem; all the same size, readable at 32 pixels, no text. Left to right, top to bottom: 1) tail-car workers: a coal shovel crossed with a dented tin cup; 2) engine crew: a locomotive driving wheel with a spanner across it; 3) guard: a plain shield; 4) technicians and medics: a gear beside a small medicine bottle, no cross; 5) front-car passengers: an upholstered armchair; 6) captain: a compass; 7) dining car: a long table under a hanging lamp; 8) workshop, for later: an anvil with a hammer.
 ```
 
 ## ⑥ 초상 두 장
