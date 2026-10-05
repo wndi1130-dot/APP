@@ -1,0 +1,144 @@
+{
+  "validated_at_utc": "2026-10-05T13:15:18.826616+00:00",
+  "status": "[PASS]",
+  "scope_ko": "B1 데이터 형식·수량·표기 변환·재현성 검증. 기존 A3의 의미상 제한과 자료의 미확인 범위는 별도 WATCH로 남긴다.",
+  "environment": {
+    "python": "3.13.13",
+    "node": "v24.15.0",
+    "platform": "win32"
+  },
+  "unit_tests": {
+    "command": "python -X utf8 -m unittest discover -s ref/names -v",
+    "tests": 36,
+    "seconds": 0.911,
+    "status": "[PASS]",
+    "failures": 0,
+    "errors": 0
+  },
+  "rebuild": {
+    "command": "python -X utf8 ref/names/build_pools.py --check",
+    "status": "[PASS]"
+  },
+  "name_counts": {
+    "pl": {
+      "given_names": 150,
+      "gender_counts": {
+        "male": 75,
+        "female": 75
+      },
+      "surname_roots": 200
+    },
+    "de": {
+      "given_names": 150,
+      "gender_counts": {
+        "male": 75,
+        "female": 75
+      },
+      "surname_roots": 200
+    },
+    "cz": {
+      "given_names": 150,
+      "gender_counts": {
+        "male": 75,
+        "female": 75
+      },
+      "surname_roots": 200
+    },
+    "uk": {
+      "given_names": 30,
+      "gender_counts": {
+        "male": 15,
+        "female": 15
+      },
+      "surname_roots": 40
+    },
+    "sk": {
+      "given_names": 30,
+      "gender_counts": {
+        "male": 15,
+        "female": 15
+      },
+      "surname_roots": 40
+    },
+    "hu": {
+      "given_names": 30,
+      "gender_counts": {
+        "male": 15,
+        "female": 15
+      },
+      "surname_roots": 40
+    },
+    "lt": {
+      "given_names": 30,
+      "gender_counts": {
+        "male": 15,
+        "female": 15
+      },
+      "surname_roots": 39
+    }
+  },
+  "name_transcription_bases": {
+    "규칙": 1408,
+    "미확인": 297,
+    "용례": 2
+  },
+  "basis_count_note_ko": "생성기용 이름과 성별 성형만 집계. 별도 기혼형·미확인 제외항목은 중복 집계하지 않는다.",
+  "nikl_examples": {
+    "de": 30,
+    "pl": 37,
+    "cz": 36,
+    "hu": 30
+  },
+  "blocklist": {
+    "people": 392,
+    "rows": 975,
+    "variants": 583,
+    "people_by_country": {
+      "pl": 65,
+      "de": 60,
+      "cz": 60,
+      "uk": 51,
+      "sk": 48,
+      "hu": 59,
+      "lt": 49
+    },
+    "korean_basis": "미확인",
+    "evidence_note_ko": "Wikidata 원어·한글 필드와 실인물 여부는 조회 대조했다. 국립국어원 개별 심의 표기는 전수 미확인이다."
+  },
+  "a3": {
+    "command": "node ref/names/verify_a3.mjs",
+    "result": {
+      "contract_status": "[PASS]",
+      "a3_blob_sha": "9b935fc2859632b0d24295bce34c31207efc364b",
+      "source_sha256": "d717b27769fc29a0b2f9bba82c7d638c681a27e6ac2a080c3cbc284e341e0cf6",
+      "seeds": [
+        "b1-reference-check",
+        "b1-determinism-check",
+        "b1-family-check"
+      ],
+      "profile_count": 600,
+      "reproducible": true,
+      "name_fallbacks": 0,
+      "checked_blocklist_rows": 975,
+      "generated_blocklist_matches": 0,
+      "other_language_status": "[WATCH]",
+      "mixed_other_language_names": 72,
+      "remaining_warnings": [
+        "B6 없음. 나이대별 작은 임시 선호 목록 사용."
+      ],
+      "note_ko": "고정 A3 코드를 실제 실행한 결과다. 프로필을 메모리에서만 생성했으며 s1/ 파일을 만들거나 수정하지 않았다."
+    }
+  },
+  "sha256": {
+    "pl.json": "3575a195c39810a94f706df911c6a86874b2f3b20d90a38a5f9b1b7ef858826a",
+    "de.json": "d8367233e267e527b359c6ff07aa031497718d0ac623a7f4ca8ef4cf70c87c33",
+    "cz.json": "118d9912171a383fbda4c4d3b290e60c0348755247f4b3420a52fddee50e750d",
+    "other.json": "bc890c82d1375c518804964e98e852d6ed67b9aaede1a6e4fddd9af52bb1723f",
+    "source_pools.json": "372a9bee59ac9f958db228830d6e356cee50a72ce12059249209a27c30977186",
+    "famous_blocklist.json": "f863d11187d2c4e2cd4a3665d8c286e16b149bca8af83aad7d50f705fae09ff3",
+    "transliterate.py": "86138085e0a5952aa3d7d11e4ceb14ea669124b156c0878b3452434f2fb1483e",
+    "transliteration_rules.json": "dc4222ff1a32f113197ac1fb86fb708e4cc7c3d59a0a6163d371dce7fc3292cb",
+    "nikl_examples.json": "f110b9e87377ffa1976c962aeb327b2182c1aad33dacd6a2ebeaa075043212d0",
+    "pronunciation_notes.json": "5146c51f124db237c76a8d17fa2f05da0490344d90ab96d33e80a90ab17f5b26"
+  }
+}
