@@ -311,11 +311,11 @@
 
 ## 열린 질문
 
-1. S1 기획서 초안 검토: [../prototype/s1_political_prototype.md](../prototype/s1_political_prototype.md). 초안이 지식인 시스템과 생산·기술 결정보다 먼저 써져서 어긋난다. 브리프들이 S1a에 넣겠다고 적은 범위(전문가 6~8명, 현황판, 칸 기능 8종, 기술 15~20개)를 다 넣으면 S1a가 작은 본편이 되므로 범위를 다시 자른다.
+1. S1 기획서 초안 검토(제안 검토 중): [../prototype/s1_political_prototype.md](../prototype/s1_political_prototype.md). 검토 브리프: [briefs/s1_review.md](briefs/s1_review.md). 초안이 지식인 시스템과 생산·기술 결정보다 먼저 써져서 어긋나고, 브리프들이 S1a에 넣겠다고 적은 범위를 다 넣으면 S1a가 작은 본편이 된다.
 2. 필드의 사람 능력(보류). 브리프: [briefs/field_system.md](briefs/field_system.md)
 3. 필드에서 아직 설계 전인 것: 장소 유형별 상세, 사람 적의 AI 세부.
-4. 열차 의회의 교섭 화폐(히트스탬프에 해당하는 것). S1 초안은 사치품으로 가정했다.
-5. 런 길이 목표. S1 초안은 24구간으로 가정했다.
+4. 열차 의회의 교섭 화폐(히트스탬프에 해당하는 것). S1 초안은 사치품으로 가정했다. 추천안: [briefs/s1_review.md](briefs/s1_review.md)
+5. 런 길이 목표. S1 초안은 24구간으로 가정했다. 추천안: [briefs/s1_review.md](briefs/s1_review.md)
 6. 적대 열차를 플레이어가 넘겨받을 때, 추상 시뮬레이션을 완전 시뮬레이션으로 펼치는 규칙.
 7. 원본 문서 질문 중 남은 것: 미국/유럽 노선(Q7), 캠페인 체크포인트(Q9).
 8. PC판의 성격: 모바일판에 시스템을 더한 확장판인지, 따로 설계한 판인지.
