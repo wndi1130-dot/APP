@@ -129,6 +129,7 @@
 - 프로스트펑크 1·2처럼 열차 전체를 구경할 수 있다. 성취감을 자극하는 장치다.
 - 아트 방향(2026-10-06): 전체 분위기는 프로스트펑크 2를 기준으로 This War of Mine을 섞는다. 결정·대화 화면의 형식은 수저린(Suzerain)을 참고한다(초상, 짧은 대사, 읽히는 선택지).
   - 화면에 설명 문장을 두지 않는다. 자원과 계기는 글자 대신 아이콘과 숫자로 보여 준다.
+  - 결정 카드는 지금 드는 비용만 보여 주고, 나중 결과는 미리 알려 주지 않는다(2026-10-06). 법은 표결 전에 바꿀 수치를 보여 준다.
   - 이미지 프롬프트와 폰트 후보: [../art/image_prompts.md](../art/image_prompts.md)
 
 ### 필드(파밍)
@@ -356,5 +357,5 @@
 3. 필드에서 아직 설계 전인 것: 장소 유형별 상세(레퍼런스: [ref/places_central_europe.md](../../ref/places_central_europe.md), 전리품 키는 결정됨), 사람 적의 AI 세부.
 4. 적대 열차를 플레이어가 넘겨받을 때, 추상 시뮬레이션을 완전 시뮬레이션으로 펼치는 규칙.
 5. PC판의 성격: 모바일판에 시스템을 더한 확장판인지, 따로 설계한 판인지.
-6. S1 콘텐츠 가이드 초안 검토: [../prototype/s1_content_guide.md](../prototype/s1_content_guide.md) B7 노트의 문체 가이드 후보 13개([ref/dialogue_references.md](../../ref/dialogue_references.md) 4장)를 넣을지도 여기서 정한다.
-7. S1 화면 질문(A4 화면 뼈대가 남긴 것): 열차 방향, 불만·지지 띠의 기준, 법안의 짧은 이름, 선택지 효과 미리보기, 집단 색. 이미지 시안([../art/image_prompts.md](../art/image_prompts.md))을 보고 정한다.
+6. S1 콘텐츠 가이드 초안 검토: [../prototype/s1_content_guide.md](../prototype/s1_content_guide.md) B7 노트의 문체 후보는 2026-10-06에 골라 가이드 2장에 넣었다.
+7. S1 화면 질문(A4 화면 뼈대가 남긴 것): 열차 방향, 불만·지지 띠의 기준, 법안의 짧은 이름, 집단 색. 이미지 시안([../art/image_prompts.md](../art/image_prompts.md))을 보고 정한다.
