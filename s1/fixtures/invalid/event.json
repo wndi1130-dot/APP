@@ -1,0 +1,49 @@
+{
+  "id": "ev_tail_cold_01",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 1,
+      "max": 3
+    }
+  ],
+  "speaker": "tail",
+  "body": "좀비가 문을 두드려요.",
+  "choices": [
+    {
+      "label": "가가가가가가가가가가가가가가가가",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -2
+        },
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": 1
+        }
+      ],
+      "followups": [],
+      "witnesses": [
+        "p_001"
+      ]
+    },
+    {
+      "label": "기관실에 묻는다",
+      "effects": [
+        {
+          "type": "unknown",
+          "amount": 1
+        }
+      ],
+      "followups": [
+        "ev_heat_reply"
+      ],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0,
+  "chronicle": "ch_heat_shared"
+}

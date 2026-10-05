@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:profile",
+  "title": "프로필",
+  "allOf": [
+    {
+      "$ref": "urn:s1:schema:common#/$defs/profileFields"
+    }
+  ],
+  "properties": {
+    "content_type": {
+      "const": "profile"
+    }
+  },
+  "type": "object",
+  "unevaluatedProperties": false
+}

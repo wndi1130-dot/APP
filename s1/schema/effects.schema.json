@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:effects",
+  "title": "효과 어휘와 인자",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "coal",
+            "food",
+            "medicine",
+            "luxury"
+          ]
+        },
+        "amount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "symbol",
+            "secret"
+          ]
+        },
+        "id": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "amount": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "community.warmth",
+            "community.ration",
+            "community.crowding",
+            "community.exposure"
+          ]
+        },
+        "target": {
+          "$ref": "urn:s1:schema:common#/$defs/community"
+        },
+        "amount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "trust",
+            "tension",
+            "fear"
+          ]
+        },
+        "amount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "relation",
+            "cohesion",
+            "votes"
+          ]
+        },
+        "target": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "amount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "person.state"
+        },
+        "target": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "state": {
+          "$ref": "urn:s1:schema:common#/$defs/state"
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "person.away"
+        },
+        "target": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "segments": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "segments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "flag"
+        },
+        "id": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "value": {
+          "type": [
+            "boolean",
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "followup"
+        },
+        "id": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "delay": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "delay"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "deal",
+            "chronicle"
+          ]
+        },
+        "id": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "list": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:s1:schema:effects"
+      },
+      "minItems": 0
+    }
+  },
+  "description": "가이드 1.9의 네 가지 흐름 효과는 flag, followup, deal, chronicle로 식별한다. 인자의 형식은 A1 최소 계약이다."
+}

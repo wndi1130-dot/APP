@@ -1,0 +1,39 @@
+{
+  "id": "c_tail_rep",
+  "name": "리나 바레크",
+  "name_original": "Lina Varek",
+  "age": 34,
+  "community": "tail",
+  "origin_tag": "rescued",
+  "boarding": "refugee",
+  "hometown": "브르노, 체코",
+  "like": "끓인 감자",
+  "dislike": "젖은 장갑",
+  "line": "가족에게 줄 감자를 주머니에 넣었다.",
+  "state": "alive",
+  "role": "rep",
+  "trait": "family",
+  "secrets": [
+    "s_hidden_crack"
+  ],
+  "relations": [
+    {
+      "target": "p_001",
+      "kind": "family"
+    }
+  ],
+  "luxuries": 1,
+  "debts": [
+    {
+      "person": "c_captain",
+      "direction": "owed_to",
+      "reason": "지난 정차에서 약을 받았다."
+    }
+  ],
+  "weights": [
+    0.7,
+    0.3
+  ],
+  "voice": "tail",
+  "bio": "난로 앞에 젖은 장갑을 폈다. 가족의 잔에 물을 먼저 따랐다."
+}

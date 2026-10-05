@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "description": "문장 필드만 검사한다. 식별자와 숨겨진 성향 값은 금지어 검사 대상이 아니다. 어휘 목록은 전체 실존 명칭 목록이 아니므로 사람 검수도 필요하다.",
+  "text_fields": {
+    "profile": [
+      "/name",
+      "/name_original",
+      "/hometown",
+      "/like",
+      "/dislike",
+      "/line"
+    ],
+    "character": [
+      "/name",
+      "/name_original",
+      "/hometown",
+      "/like",
+      "/dislike",
+      "/line",
+      "/bio",
+      "/debts/*/reason"
+    ],
+    "secret": [
+      "/text"
+    ],
+    "event": [
+      "/body",
+      "/choices/*/label",
+      "/choices/*/witnesses/*/text"
+    ],
+    "law": [
+      "/preview"
+    ],
+    "deal": [],
+    "place": [],
+    "chronicle": [
+      "/what",
+      "/where",
+      "/why",
+      "/witnesses/*/text"
+    ]
+  },
+  "dialogue_fields": {
+    "event": [
+      "/body",
+      "/choices/*/label",
+      "/choices/*/witnesses/*/text"
+    ],
+    "chronicle": [
+      "/witnesses/*/text"
+    ]
+  },
+  "sentence_limits": {
+    "character": [
+      {
+        "path": "/bio",
+        "max": 3
+      }
+    ],
+    "secret": [
+      {
+        "path": "/text",
+        "max": 2
+      }
+    ],
+    "event": [
+      {
+        "path": "/body",
+        "max": 3
+      },
+      {
+        "path": "/choices/*/witnesses/*/text",
+        "max": 2
+      }
+    ],
+    "chronicle": [
+      {
+        "path": "/witnesses/*/text",
+        "max": 2
+      }
+    ]
+  },
+  "rules": [
+    {
+      "id": "real_firearms",
+      "severity": "error",
+      "scope": "text",
+      "message": "실제 총기 제조사·모델명을 쓸 수 없습니다. 일반 명칭이나 별명으로 바꾸세요.",
+      "terms": [
+        "글록",
+        "베레타",
+        "콜트",
+        "스미스 앤 웨슨",
+        "헤클러 운트 코흐",
+        "지그 자우어",
+        "레밍턴",
+        "윈체스터",
+        "발터",
+        "칼라시니코프",
+        "우지"
+      ],
+      "patterns": [
+        "(?<![a-z0-9])(?:glock|beretta|colt|smith\\s*(?:&|and)\\s*wesson|heckler\\s*(?:&|and)\\s*koch|sig[\\s-]*sauer|remington|winchester|walther|fn[\\s-]*herstal|kalashnikov|uzi)(?![a-z0-9])",
+        "(?<![a-z0-9])(?:ak[\\s-]?(?:47|74)|ar[\\s-]?15|m[\\s-]?(?:16|4)|hk[\\s-]?416|g[\\s-]?(?:17|19))(?![a-z0-9])"
+      ]
+    },
+    {
+      "id": "dialogue_zombie",
+      "severity": "error",
+      "scope": "dialogue",
+      "terms": [
+        "좀비"
+      ],
+      "patterns": [],
+      "message": "대사에서는 좀비 대신 망자, 그것들 같은 세계관의 말을 쓰세요."
+    },
+    {
+      "id": "forced_transport",
+      "severity": "error",
+      "scope": "text",
+      "terms": [
+        "수용소",
+        "강제 이송",
+        "강제이송",
+        "강제 수송",
+        "강제수송",
+        "강제 이주",
+        "강제이주",
+        "강제 추방",
+        "강제추방",
+        "절멸",
+        "가스실"
+      ],
+      "patterns": [
+        "강제\\s*(?:이송|수송|이주|추방)",
+        "사람(?:들)?(?:을|들을)?[^.!?。！？\\n]{0,20}화물칸[^.!?。！？\\n]{0,20}(?:싣|실어|실었|몰아|넣)",
+        "줄\\s*세워[^.!?。！？\\n]{0,20}(?:선별|가르|갈라)"
+      ],
+      "message": "수용소·강제 이송을 떠올리게 하는 어휘나 장면을 쓸 수 없습니다."
+    },
+    {
+      "id": "moral_score",
+      "severity": "error",
+      "scope": "text",
+      "terms": [
+        "도덕 점수",
+        "선악 점수",
+        "도덕 수치",
+        "선악 수치"
+      ],
+      "patterns": [],
+      "message": "숨겨진 도덕·선악 수치를 문장으로 드러낼 수 없습니다."
+    },
+    {
+      "id": "trait_label",
+      "severity": "warning",
+      "scope": "text",
+      "terms": [
+        "탐욕스러운",
+        "탐욕스럽",
+        "겁쟁이",
+        "야심가",
+        "이상주의자"
+      ],
+      "patterns": [],
+      "message": "성향을 딱지처럼 붙이지 말고 행동으로 드러내세요. 이 항목은 경고입니다."
+    },
+    {
+      "id": "cliche",
+      "severity": "warning",
+      "scope": "text",
+      "terms": [
+        "희망의 불씨",
+        "운명의 수레바퀴",
+        "모든 것이 변했다"
+      ],
+      "patterns": [],
+      "message": "상투어 대신 사물과 행동을 구체적으로 쓰세요. 이 항목은 경고입니다."
+    }
+  ],
+  "manual_review": [
+    {
+      "id": "unlisted_real_names",
+      "reason": "목록에 없는 총기 명칭, 유명 실존 인물, 실제 정당과 단체의 이름은 별도로 확인한다."
+    },
+    {
+      "id": "cause_assertion",
+      "reason": "추위와 감염의 원인을 단정하지 않았는지, 인물의 해석으로만 표현했는지 확인한다."
+    },
+    {
+      "id": "ethnic_stereotype",
+      "reason": "국적이나 민족을 집단의 성격과 희생양의 근거로 쓰지 않았는지 확인한다."
+    },
+    {
+      "id": "violence_scene",
+      "reason": "신체 훼손과 강제 이송 장면의 직접 모방은 어휘 검사만으로 판정할 수 없으므로 사람이 읽는다."
+    },
+    {
+      "id": "voice_and_setting",
+      "reason": "공동체의 말투, 미터법·섭씨, 겨울·구간 표기, 중부 유럽의 물건과 장소를 확인한다."
+    }
+  ]
+}

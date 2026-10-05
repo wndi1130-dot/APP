@@ -1,0 +1,29 @@
+{
+  "id": "deal_tail_heat",
+  "tool": "threat",
+  "from": "tail",
+  "ask": [
+    {
+      "type": "community.warmth",
+      "target": "tail",
+      "amount": 1
+    }
+  ],
+  "deadline": -1,
+  "gives": [
+    {
+      "type": "votes",
+      "target": "tail",
+      "amount": 10
+    }
+  ],
+  "breach": [
+    {
+      "type": "trust",
+      "amount": -3
+    }
+  ],
+  "arc_tags": [
+    "promise_heat"
+  ]
+}

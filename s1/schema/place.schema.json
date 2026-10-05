@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:place",
+  "title": "장소",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "urn:s1:schema:common#/$defs/id"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "freight",
+        "houses",
+        "hospital",
+        "factory",
+        "church",
+        "office"
+      ]
+    },
+    "risk": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "loot": {
+      "type": "object",
+      "properties": {
+        "coal": {
+          "type": "number",
+          "minimum": 0
+        },
+        "food": {
+          "type": "number",
+          "minimum": 0
+        },
+        "medicine": {
+          "type": "number",
+          "minimum": 0
+        },
+        "luxury": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "coal",
+        "food",
+        "medicine",
+        "luxury"
+      ],
+      "additionalProperties": false
+    },
+    "symbols": {
+      "$ref": "urn:s1:schema:common#/$defs/references"
+    },
+    "moral_cards": {
+      "$ref": "urn:s1:schema:common#/$defs/references"
+    },
+    "content_type": {
+      "const": "place"
+    }
+  },
+  "required": [
+    "id",
+    "type",
+    "risk",
+    "loot",
+    "symbols",
+    "moral_cards"
+  ],
+  "additionalProperties": false
+}
