@@ -7,7 +7,7 @@
 - 그림은 옆 스크롤 픽셀 아트로 한다. 사용자가 Kingdom Two Crowns를 참고로 뽑은 홈 시안이 기준 그림이다.
 - 분위기는 그대로 프로스트펑크 2와 This War of Mine이다. 결정·대화 화면의 형식은 수저린을 참고한다.
 - 화면에 설명 문장을 두지 않는다. 자원과 계기는 아이콘과 숫자로, 칸의 수치는 칸을 눌렀을 때만 보여 준다.
-- **더 어둡게 (2026-10-06):** 지금 시안들은 밝다. 세기말의 어둡고 칙칙한 분위기로 간다. 참고: 프로스트펑크 1·2, This War of Mine, The Long Dark, 메트로 시리즈. 사람들은 모두 지쳐 있고 몇몇은 옷이나 붕대에 피가 배어 있다. UI·UX·레이아웃의 마감도 분위기에 맞게 자연스럽고 낡게 한다(메트로 적극 참고).
+- **더 어둡게 (2026-10-06, 마감 단계에서 한다):** 지금 시안들은 밝다. 다만 지금은 설계도(배치, 기능, 아이콘의 뜻)만 정하는 단계라, 분위기 보정은 프롬프트에 넣지 않고 마감 단계로 미룬다. 세기말의 어둡고 칙칙한 분위기로 간다. 참고: 프로스트펑크 1·2, This War of Mine, The Long Dark, 메트로 시리즈. 사람들은 모두 지쳐 있고 몇몇은 옷이나 붕대에 피가 배어 있다. UI·UX·레이아웃의 마감도 분위기에 맞게 자연스럽고 낡게 한다(메트로 적극 참고).
   - 피는 옷과 붕대의 얼룩까지만 그린다. 상처를 직접 그리지 않는다(콘텐츠 가이드 '쓰지 않는 것'). 피 표현은 앱의 연령 등급에도 영향을 준다.
   - 화면이 어두워져도 숫자, 아이콘, 단추는 또렷해야 한다. 폰은 밝은 곳에서도 본다.
   - 사용자 요청으로 프롬프트에 참고 작품 이름을 넣었다. 이름을 넣으면 원작과 닮게 나올 수 있으니 게임에 넣을 그림은 정리 단계에서 다시 본다.
@@ -25,9 +25,9 @@
 5. 자원 아이콘은 프로스트펑크 2의 자원 UI처럼 무엇인지 바로 읽혀야 한다. 지금 석탄은 석탄으로 안 보이고, 의약품 병은 총알처럼 보인다. 자원 아이콘만은 단색 대신 재료의 색을 살린다.
 6. 사치품이 왜 있는지 모르겠다. 참고: S1 기획서에서 사치품은 뇌물 수단이고 앞칸이 바라는 물자다([s1_political_prototype.md](../prototype/s1_political_prototype.md) 거래 수단). 남길지는 따로 정한다([decisions.md](../design/decisions.md) 열린 질문).
 
-## ①′ 기준 그림 어둡게 (home_v2 첨부)
+## (마감 단계) 기준 그림 어둡게 (home_v2 첨부)
 
-지금 기준 그림이 밝아서, 그대로 첨부하면 다음 시안도 밝게 나온다. 먼저 기준 그림을 어둡게 고치고, 그 결과를 새 기준 그림으로 첨부한다.
+설계도 단계에서는 쓰지 않는다(2026-10-06 사용자). 마감 단계에서 기준 그림을 어둡게 고친 뒤, 그 결과를 새 기준 그림으로 삼아 다시 뽑는다.
 
 ```text
 Edit the attached image. Keep the composition, the train, the HUD layout and the pixel art style. Make the whole scene darker and drearier, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: night instead of dusk, lower light, deeper shadows, dirtier and more muted colors, soot and frost on the train, heavier snowfall. Only the windows and the firebox keep their warm amber glow. The refugees running beside the train look exhausted and underfed, and one has a bloodstained bandage, with no wounds or gore. Make the HUD panels look worn, with scratched brass, chipped paint and grime in the corners, while every icon and number stays clearly readable.
@@ -115,6 +115,14 @@ Edit the attached image. Keep the composition, the train, the HUD layout and the
 - 서류 뭉치를 끌어오는 동작은 홈의 좌우 스크롤, 아이폰 사파리의 왼쪽 가장자리 뒤로 가기와 겹칠 수 있다. 누르기를 기본으로 하고, 끌기는 서류 뭉치 위에서 시작할 때만 받고, 서류 뭉치는 가장자리에서 조금 떨어뜨린다.
 - 카드가 왼쪽 절반만 덮으면 오른쪽에 열차가 보인다. 카드와 관련된 칸으로 열차를 자동으로 스크롤하면 맥락이 같이 보인다.
 
+## ④a 아이콘 판 평가 (2026-10-06)
+
+판은 [mockups/icons_a_v1.webp](mockups/icons_a_v1.webp)다. 설계도 단계라 뜻이 읽히는지만 본다. 자르고 배경을 따는 일은 에셋 단계에서 한다(이번 판은 흰 배경).
+
+- 그대로 쓸 것: 석탄 수레, 빵, 알약과 병, 반지, 맞잡은 손(신임), 주먹(빨간 소매)과 편 손(파란 소매), 일지 책, 서류 뭉치, 수치 막대, 돌아가기, 불꽃.
+- 긴장은 세 후보 중 고른다. 설계 세션 추천은 끊어지려는 밧줄(8번)이다. '팽팽하다가 끊어지기 직전'이 긴장의 뜻에 가장 가깝다. 도화선은 폭탄으로, 금 간 유리는 '이미 깨짐'으로 읽힌다.
+- 한눈에 보기(13번)가 세로 막대처럼 보여 뜻이 읽히지 않는다. 다음에 다시 뽑는다(예: 위에서 본 열차를 가로로 눕히고 지붕 칸을 또렷하게, 또는 열차 윤곽이 그려진 도면 한 장).
+
 ## 쓰는 법
 
 1. **기준 그림**은 사용자가 고른 홈 시안(픽셀 아트, 옆에서 본 열차)이다. ① 수정까지 마친 판을 [mockups/home_v2.webp](mockups/home_v2.webp)에 두었다(2026-10-06 확정).
@@ -147,8 +155,6 @@ Edit the attached image. Keep the composition, the train, the HUD layout and the
 
 ```text
 Visual style: high-quality 2D pixel art for a side-scrolling mobile game about a steam train crossing a frozen Central Europe in the sixth winter after a collapse. The whole image uses one uniform pixel size: snow, smoke, trees, people and UI all sit on the same pixel grid, with crisp hard edges, no blur, no smooth gradients and no mixed resolutions. Limited palette with careful dithering: deep blue and violet snow, black pine forests, a faint orange-pink band on the horizon, and warm amber window light and firebox glow as the only saturated accents; reflections on dark water and ice. Several parallax layers of landscape. Quiet, grim and humane rather than heroic. UI: dark navy panels with thin brass borders and angled corners, cream-white pixel icons, condensed pixel numerals, almost no text. Avoid: readable words unless asked, logos, watermarks, modern objects, gore, neon, 3D render look, painterly brush strokes, anime style, red cross symbols.
-
-Mood: darker and drearier than the attached images, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: low light, deep shadows, dirty and muted colors, soot and frost on everything; only lamps, windows and fireboxes keep a warm glow. People look exhausted and underfed; a few have bloodstains on their clothes or bandages, but no wounds or gore. UI panels look worn and lived-in, like scratched brass, chipped paint and stained paper, while every icon and number stays clearly readable.
 ```
 
 ## ① 홈 화면 수정 (기준 그림 첨부)
@@ -171,8 +177,6 @@ Edit the attached image. Keep its pixel art style, palette, lighting, parallax l
 ```text
 Match the art style, palette, line work and HUD design of the attached reference image.
 
-Mood: darker and drearier than the attached images, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: low light, deep shadows, dirty and muted colors, soot and frost on everything; only lamps, windows and fireboxes keep a warm glow. People look exhausted and underfed; a few have bloodstains on their clothes or bandages, but no wounds or gore. UI panels look worn and lived-in, like scratched brass, chipped paint and stained paper, while every icon and number stays clearly readable.
-
 Visual style: high-quality 2D pixel art for a side-scrolling mobile game about a steam train crossing a frozen Central Europe in the sixth winter after a collapse. The whole image uses one uniform pixel size, with crisp hard edges, no blur, no smooth gradients and no mixed resolutions. Limited palette with careful dithering; warm amber light as the only saturated accent. Quiet, grim and humane. UI: dark navy panels with thin brass borders and angled corners, cream-white pixel icons, condensed pixel numerals, almost no text. Avoid: readable words, logos, watermarks, modern objects, gore, neon, 3D render look, painterly brush strokes, red cross symbols.
 
 Mobile game screen mockup, very wide landscape (about 2.2:1). The camera has risen above the train: a top-down view of a longer train of twelve cars with the roofs removed, so each car shows its floor plan (bunks, stoves, long tables, lockers, a desk with maps, upholstered seats, the locomotive's boiler and glowing firebox). The train stands vertically along the left third of the screen, locomotive at the top and tail at the bottom, on a track over snowy ground with a few pines. Each car has a muted color tint and outline by type so types read at a glance: tail cars cold grey-blue, tech and medical teal, dining car amber, guard car olive, captain's car gold, front cars burgundy, locomotive rust red. The locomotive car is selected and a dark panel has slid out over the right two-thirds: at its top the engine crew's pixel emblem and a small pixel portrait of their representative; below that two stat rows with icons and short gauges (warmth, crowding); below that three control rows for heating, rations and medicine, each a horizontal stepped selector with five discrete notches from lowest to highest, the current notch lit in amber, like a level picker, with no plus or minus buttons; and at the bottom two policy rows, each with a small icon and a pixel toggle switch.
@@ -185,8 +189,6 @@ HUD changes from the reference: on the top-center bar the discontent part is red
 
 ```text
 Match the pixel art style and HUD of the first attached image, and the side-panel design and portrait style of the second attached image.
-
-Mood: darker and drearier than the attached images, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: low light, deep shadows, dirty and muted colors, soot and frost on everything; only lamps, windows and fireboxes keep a warm glow. People look exhausted and underfed; a few have bloodstains on their clothes or bandages, but no wounds or gore. UI panels look worn and lived-in, like scratched brass, chipped paint and stained paper, while every icon and number stays clearly readable.
 
 Visual style: high-quality 2D pixel art for a mobile political survival game set on a steam train in a frozen Central Europe, sixth winter after a collapse. One uniform pixel size, crisp hard edges, no blur, no smooth gradients, no mixed resolutions; limited palette with careful dithering; cold blues with warm amber lamp light. Quiet, grim and humane. UI: dark navy panels with thin brass borders and angled corners, cream-white pixel icons, condensed pixel numerals. Short one-word labels in plain English are allowed on buttons and panels as placeholders; no sentences. Avoid: logos, watermarks, modern objects, gore, neon, 3D render look, painterly brush strokes, red cross symbols.
 
@@ -204,8 +206,6 @@ Bottom right: one large vote button with a lever icon and the label Vote. Keep t
 ```text
 Match the pixel art style, the labelled HUD meters and the panel design of the first attached image, and use the resource icons and the red-and-sky-blue discontent-support bar of the second attached image.
 
-Mood: darker and drearier than the attached images, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: low light, deep shadows, dirty and muted colors, soot and frost on everything; only lamps, windows and fireboxes keep a warm glow. People look exhausted and underfed; a few have bloodstains on their clothes or bandages, but no wounds or gore. UI panels look worn and lived-in, like scratched brass, chipped paint and stained paper, while every icon and number stays clearly readable.
-
 Visual style: high-quality 2D pixel art for a mobile political survival game set on a steam train in a frozen Central Europe, sixth winter after a collapse. One uniform pixel size, crisp hard edges, no blur, no smooth gradients, no mixed resolutions; limited palette with careful dithering; cold blues with warm amber lamp light. Quiet, grim and humane. UI: dark navy panels with thin brass borders and angled corners, cream-white pixel icons, condensed pixel numerals. Short labels in plain English are allowed as placeholders; no long text. Avoid: logos, watermarks, modern objects, gore, neon, 3D render look, painterly brush strokes, red cross symbols.
 
 Mobile game screen mockup, very wide landscape (about 2.2:1). The side view of the train from the home screen is dimmed in the background, and a decision panel has slid up from the bottom, covering about two-thirds of the screen height, with a small chevron tab on its top edge for folding it away. Left third of the panel: a large, detailed pixel-art portrait of the speaker, Pavla Krejčí, a 41-year-old Czech refugee who speaks for the tail car: thin face, wind-chapped cheeks, dark hair tied under a knitted scarf, several patched coats layered, tired but sharp eyes, chin slightly raised; under the portrait a small name plate and the tail car's iron emblem (a coal shovel crossed with a tin cup). Right two-thirds, laid out like a paper dossier with thin brass rules: one short line of dialogue in placeholder English, then three stacked numbered choice plates. Each plate has a two- or three-word label and, on its right, only the costs that are certain now, shown as resource icons with minus numbers (for example coal -10, food -5); no arrows or faces predicting how people will react. One plate also carries a small eye icon meaning someone will witness this choice. Keep the top HUD: Trust and Tension meters with their labels on the left, the red-and-sky-blue bar with fist and open-palm buttons in the center, and coal cart, bread, pill and bottle, and ring icons with numbers on the right.
@@ -221,8 +221,6 @@ Mobile game screen mockup, very wide landscape (about 2.2:1). The side view of t
 ```text
 Match the pixel style and the icon designs of the attached images.
 
-Mood: a dark, worn end-of-the-world look in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: each icon looks scratched, sooty and lived-in, with muted colors and no shiny or clean surfaces, while staying clearly readable at small size.
-
 Keep the four resource icons exactly as they appear in the first image.
 
 A sprite sheet of sixteen pixel-art UI icons in a 4 by 4 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid and shown enlarged with hard square pixels, centered in its cell with generous padding, same scale, light from the top left, a dark outline, no smoothing, no text, no frames. Icons 1 to 4 use muted natural colors; the others are cream-white (#EDE6D6) with a small accent color where noted.
@@ -234,8 +232,6 @@ Row 4: 13) overview: a train seen from directly above, a long rectangle split in
 
 ```text
 Match the pixel style and the icon designs of the attached images, especially the trade button icons in the second image.
-
-Mood: a dark, worn end-of-the-world look in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: each icon looks scratched, sooty and lived-in, with muted colors and no shiny or clean surfaces, while staying clearly readable at small size.
 
 A sprite sheet of twelve pixel-art UI icons in a 4 by 3 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each icon is drawn on its own 32 by 32 pixel grid and shown enlarged with hard square pixels, centered in its cell with generous padding, same scale, light from the top left, a dark outline, no smoothing, no text, no frames. All icons are cream-white (#EDE6D6) with a small amber accent where noted.
 Row 1: 1) public vote: an open eye; 2) secret vote: a closed wooden ballot box with a slot; 3) witness: the head and shoulders of a shadowy figure with one bright eye, clearly different from the open eye; 4) crowding: three standing figures pressed together.
@@ -250,8 +246,6 @@ Row 3: 9) leverage: a folded document with a black wax seal; 10) heating: a smal
 ```text
 Match the pixel style of the attached reference image.
 
-Mood: a dark, worn end-of-the-world look in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: each icon looks scratched, sooty and lived-in, with muted colors and no shiny or clean surfaces, while staying clearly readable at small size.
-
 A sheet of eight small pixel-art plaques in a 4 by 2 grid on a transparent background (if not possible, pure black #000000). Each plaque is a small dark iron sign with riveted corners hanging from two short chains, carrying one cream-white pixel emblem; all the same size, readable at 32 pixels, no text. Left to right, top to bottom: 1) tail-car workers: a coal shovel crossed with a dented tin cup; 2) engine crew: a locomotive driving wheel with a spanner across it; 3) guard: a peaked guard cap above a storm lantern; 4) technicians and medics: an open tool roll with a stethoscope, no cross; 5) front-car passengers: an ornate key with a tassel; 6) captain: a compass; 7) dining car and council: a ballot box with a white stone; 8) workshop, for later: an anvil with a hammer.
 ```
 
@@ -262,15 +256,11 @@ A sheet of eight small pixel-art plaques in a 4 by 2 grid on a transparent backg
 ```text
 Match the pixel style of the attached reference image.
 
-Mood: darker and drearier than the attached images, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: low light, deep shadows, dirty and muted colors, soot and frost on everything; only lamps, windows and fireboxes keep a warm glow. People look exhausted and underfed; a few have bloodstains on their clothes or bandages, but no wounds or gore. UI panels look worn and lived-in, like scratched brass, chipped paint and stained paper, while every icon and number stays clearly readable.
-
 A detailed pixel-art portrait for a dialogue panel, vertical 3:4, half-length, facing the viewer, plain dark navy background with a faint warm rim light from the left, one uniform pixel size, limited palette, crisp pixels. Henryk Mazurek, 67, a retired Polish volunteer engine driver from a steam depot: weathered face, soot in the wrinkles, white stubble, wool flat cap, heavy dark railway jacket with brass buttons, calm and stubborn eyes.
 ```
 
 ```text
 Match the pixel style and framing of the attached reference portrait.
-
-Mood: darker and drearier than the attached images, an end-of-the-world tone in the spirit of Frostpunk 1 and 2, This War of Mine, The Long Dark and the Metro series: low light, deep shadows, dirty and muted colors, soot and frost on everything; only lamps, windows and fireboxes keep a warm glow. People look exhausted and underfed; a few have bloodstains on their clothes or bandages, but no wounds or gore. UI panels look worn and lived-in, like scratched brass, chipped paint and stained paper, while every icon and number stays clearly readable.
 
 A detailed pixel-art portrait for a dialogue panel, vertical 3:4, half-length, facing the viewer, plain dark navy background with a faint cold rim light from the right, one uniform pixel size, limited palette, crisp pixels. Pavla Krejčí, 41, a Czech refugee from Brno who now speaks for the tail car: thin face, wind-chapped cheeks, dark hair tied under a knitted scarf, several patched coats layered, tired but sharp eyes, chin slightly raised.
 ```
