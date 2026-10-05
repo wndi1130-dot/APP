@@ -1,5 +1,5 @@
 {
-  "description_ko": "국립국어원 규정 본문과 표기 일람표에서 실제 확인한 용례다. 일반어·인명·지명이 섞여 있으며, 모두 인명 심의 데이터베이스 항목이라는 뜻은 아니다. 기대값은 변환기로 만들지 않았다.",
+  "description_ko": "국립국어원 규정 본문과 표기 일람표, 외래어 표기 용례 검색에서 실제 확인한 용례다. 일반어·인명·지명이 섞여 있으며, 모두 인명 심의 데이터베이스 항목이라는 뜻은 아니다. 용례 검색에서 온 항목은 인명 항목('성, 이름')의 한 부분이고, 국명이 해당 나라로 표시된 항목만 넣었다. 기대값은 변환기로 만들지 않았다.",
   "excluded_source_rows": [
     {
       "page": "P000131",
@@ -1214,6 +1214,87 @@
       "source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000114",
       "source_kind": "표기 일람표",
       "source_line": "alszik 얼시크, asztal 어스털, húsz 후스",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "uk",
+      "original": "Максим",
+      "korean": "막심",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Kozytskyi, Maksym (우크라이나어명 Козицький, Максим) → 코지츠키, 막심 · 우크라이나 · 실무소위(2022. 4. 15.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "uk",
+      "original": "Олександр",
+      "korean": "올렉산드르",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Kubrakov, Oleksandr (우크라이나어명 Кубраков, Олександр) → 쿠브라코우, 올렉산드르 · 우크라이나 · 실무소위(2022. 8. 26.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "uk",
+      "original": "Андрій",
+      "korean": "안드리",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Yermak, Andrii (우크라이나어명 Єрмак, Андрій) → 예르마크, 안드리 · 우크라이나 · 실무소위(2022. 4. 1.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "uk",
+      "original": "Артем",
+      "korean": "아르템",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Dovbyk, Artem (우크라이나어명 Довбик, Артем) → 도우비크, 아르템 · 우크라이나 · 실무소위(2022. 9. 8.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "uk",
+      "original": "Дмитро",
+      "korean": "드미트로",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Kuleba, Dmytro (우크라이나어명 Кулеба, Дмитро) → 쿨레바, 드미트로 · 우크라이나 · 실무소위(2022. 4. 1.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "uk",
+      "original": "Денис",
+      "korean": "데니스",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Denys Shmyhal (우크라이나어명 Денис Шмигаль) → 시미할, 데니스 · 우크라이나 · 제161차 외래어 심의회(2022. 9. 28.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "lt",
+      "original": "Vytautas",
+      "korean": "비타우타스",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Landsbergis, Vytautas → 란츠베르기스, 비타우타스 · 리투아니아 · 제35차 외래어 심의회(2000. 10. 27.)의 결정 사항, 164차 외래어 심의회(2022. 12. 5.)",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "lt",
+      "original": "Mindaugas",
+      "korean": "민다우가스",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Mizgaitis, Mindaugas → 미즈가이티스, 민다우가스 · 리투아니아 · 심의 회차 표시 없음",
+      "retrieved_at": "2026-10-05"
+    },
+    {
+      "language": "lt",
+      "original": "Algirdas",
+      "korean": "알기르다스",
+      "source": "https://www.korean.go.kr/kornorms/example/exampleList.do",
+      "source_kind": "용례 검색(인명 항목의 이름 부분)",
+      "source_line": "Brazauskas, Algirdas → 브라자우스카스, 알기르다스 · 리투아니아 · 제35차 외래어 심의회(2000. 10. 27.)",
       "retrieved_at": "2026-10-05"
     }
   ]

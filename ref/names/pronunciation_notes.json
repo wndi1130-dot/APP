@@ -1,5 +1,5 @@
 {
-  "description_ko": "원어 철자만으로 오판하기 쉬운 이름의 발음 보조 자료다. 내부 rewrite는 이름의 실제 철자가 아니라 규칙 엔진에 발음을 전달하기 위한 중간 표기다. Duden의 발음 정보는 국립국어원 한글 용례가 아니므로 '용례'로 승격하지 않는다.",
+  "description_ko": "원어 철자만으로 오판하기 쉬운 이름의 발음 보조 자료다. 내부 rewrite는 이름의 실제 철자가 아니라 규칙 엔진에 발음을 전달하기 위한 중간 표기다. Duden과 위키낱말사전의 발음 정보는 국립국어원 한글 용례가 아니므로 '용례'로 승격하지 않는다.",
   "entries": [
     {
       "language": "de",
@@ -34,6 +34,66 @@
       "rewrite": "Joschua",
       "source": "https://gfds.de/vorname-der-woche-joschua/",
       "note_ko": "독일어권의 관련 형태 Joschua로 만든 전사 초안이다. 출처는 Joshua가 영어형이라고 구분한다. 해당 표본의 개인별 발음과 국립국어원 한글 표기는 미확인이다.",
+      "status": "미확인"
+    },
+    {
+      "language": "hu",
+      "original": "Balogh",
+      "rewrite": "Balog",
+      "pronunciation": "[ˈbɒloɡ]",
+      "source": "https://en.wiktionary.org/wiki/Balogh",
+      "note_ko": "성의 옛 철자 gh는 g로 읽는다. 사전의 헝가리어 발음을 헝가리어 표기 규칙에 넣었다. 같은 풀의 Balog와 한글 표기가 같다.",
+      "status": "규칙"
+    },
+    {
+      "language": "sk",
+      "original": "Tóth",
+      "rewrite": "Tót",
+      "pronunciation": "[ˈtoːt]",
+      "source": "https://en.wiktionary.org/wiki/T%C3%B3th",
+      "note_ko": "헝가리어에서 온 성이다. 옛 철자 th는 t로 읽는다. 발음은 사전의 헝가리어 항목이고, 사전의 슬로바키아어 항목은 헝가리어에서 온 성이라고 적는다. 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Tóthová",
+      "rewrite": "Tótová",
+      "source": "https://en.wiktionary.org/wiki/T%C3%B3th",
+      "note_ko": "Tóth의 여성형이다. th는 t로 읽는다. 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Horváth",
+      "rewrite": "Horvát",
+      "pronunciation": "/ɦɔrvaːt/",
+      "source": "https://en.wiktionary.org/wiki/Horv%C3%A1th",
+      "note_ko": "헝가리어에서 온 성이다. 사전의 슬로바키아어 항목 발음에서 th는 t다. 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Horváthová",
+      "rewrite": "Horvátová",
+      "source": "https://en.wiktionary.org/wiki/Horv%C3%A1th",
+      "note_ko": "Horváth의 여성형이다. th는 t로 읽는다. 국립국어원 용례는 찾지 못했다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Kovács",
+      "rewrite": "Kováč",
+      "pronunciation": "[ˈkovaːt͡ʃ]",
+      "source": "https://en.wiktionary.org/wiki/Kov%C3%A1cs",
+      "note_ko": "헝가리어에서 온 성이다. cs는 č로 읽는다. 사전에는 헝가리어 항목만 있어 슬로바키아에서도 같게 읽는다고 보았다(추정). 같은 풀의 Kováč와 한글 표기가 같다.",
+      "status": "미확인"
+    },
+    {
+      "language": "sk",
+      "original": "Kovácsová",
+      "rewrite": "Kováčová",
+      "source": "https://en.wiktionary.org/wiki/Kov%C3%A1cs",
+      "note_ko": "Kovács의 여성형이다. cs는 č로 읽는다(추정). 국립국어원 용례는 찾지 못했다.",
       "status": "미확인"
     }
   ],

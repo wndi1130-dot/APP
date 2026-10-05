@@ -244,7 +244,7 @@ def transcribe(text: str, language: str, *, use_examples: bool = True) -> dict:
     needs_review = any(_key(part) in review_keys for part in words)
     if unverified_note:
         return {"original": text, "korean": korean, "korean_basis": "미확인",
-                "korean_source": RULE_SOURCES[language],
+                "korean_source": RULE_SOURCES.get(language, _table()["languages"][language]["source"]),
                 "pronunciation_source": unverified_note["source"], "korean_note": unverified_note["note_ko"]}
     if needs_review:
         return {"original": text, "korean": korean, "korean_basis": "미확인",

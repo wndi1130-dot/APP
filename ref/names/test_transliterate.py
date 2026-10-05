@@ -101,12 +101,19 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(module.transliterate_rules("Herr-Schiller", "de"), "헤어-실러")
 
     def test_unverified_language_is_never_labeled_as_nikl_rule(self):
-        for language, name in (("uk", "Олександр"), ("lt", "Jonas"), ("sk", "Ján")):
+        # Names without an attested NIKL example; Олександр now has one.
+        for language, name in (("uk", "Богдан"), ("lt", "Jonas"), ("sk", "Ján")):
             with self.subTest(language=language):
                 result = module.transcribe(name, language)
                 self.assertEqual(result["korean_basis"], "미확인")
                 self.assertRegex(result["korean"], r"[가-힣]")
                 self.assertIn("미확인", result["korean_basis"])
+
+    def test_unverified_pronunciation_note_works_without_nikl_rules(self):
+        result = module.transcribe("Tóth", "sk")
+        self.assertEqual(result["korean"], "토트")
+        self.assertEqual(result["korean_basis"], "미확인")
+        self.assertIn("wiktionary", result["pronunciation_source"])
 
     def test_hungarian_rules_exist_and_are_used(self):
         result = module.transcribe("János", "hu")
