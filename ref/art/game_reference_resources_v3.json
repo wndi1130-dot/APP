@@ -1,0 +1,639 @@
+{
+  "schema": "app.art.reference-expansion/3",
+  "date": "2026-10-07",
+  "base_research_commit": "3505cc1fa0648da9dbe93ab42a9f12a95acbf67a",
+  "base_resource_catalog": "resource_index.json",
+  "scope": "조사·정리만. 게임 규칙/코드/기존 지시 변경 없음. 다운로드·설치·구매·렌더·실사용 시험 없음.",
+  "world_direction": "픽셀 월드가 아닌 좀보이드식 그래픽·사선 탑뷰. UI·초상·폰트는 별도 미확정.",
+  "references": [
+    {
+      "id": "R01",
+      "game": "This War of Mine",
+      "title": "Indie Game Exposes the Intimate Horror of War",
+      "author": "ACM SIGGRAPH / 개발팀 Dominik Zieliński·Olaf Pożoga·Przemek Marszał 인터뷰",
+      "url": "https://www.siggraph.org/news/indie-game-exposes-the-intimate-horror-of-war/",
+      "confirmed": "평범한 민간인을 표현하려고 실제 사람과 일상복을 스캔했고, 다른 게임에는 괜찮아도 이 작품의 지친 인물상과 맞지 않는 애니메이션은 버렸다고 설명한다.",
+      "proposal": "전투 가능 여부와 별개로 피로·추위·불안이 읽히는 자세와 생활 동작을 모션 검수 기준에 추가한다.",
+      "caution": "인물끼리 눈을 맞추거나 바람에 반응하는 행동은 인터뷰에서 더 만들고 싶다는 아쉬움이다. 구현된 기능으로 적지 않는다. 사진·캐릭터·원본 모션 사용권을 주는 자료가 아니다."
+    },
+    {
+      "id": "R02",
+      "game": "Frostpunk 1 / The Last Autumn",
+      "title": "Building a snow-free Frostpunk with RizomUV",
+      "author": "11 bit studios / 실제 제작팀의 작업 설명",
+      "url": "https://11bitstudios.com/frostpunk_rizomuv/",
+      "confirmed": "설경을 연결하는 눈 덮개 메시와, 비가 오는 환경에서 동토로 변하는 오브젝트의 여러 재질 설정·일부 별도 텍스처 세트를 설명한다. UV 재사용과 재질별 배치도 다룬다.",
+      "proposal": "눈은 단일 셰이더가 아니라 얇은 서리 마스크·두꺼운 덮개 메시·입자·흔적의 분리된 자원으로 설계 후보를 잡는다.",
+      "caution": "특정 DLC의 제작 방식이다. 본편 모든 눈의 구현이라고 확대하지 않는다. RizomUV 구매나 우리 프로젝트의 3개 상태 고정을 요구하는 근거도 아니다."
+    },
+    {
+      "id": "R03",
+      "game": "Frostpunk 2",
+      "title": "Frostpunk 2 – the Council splotch",
+      "author": "Adam Dyląg / 해당 효과 제작자",
+      "url": "https://gunzes.artstation.com/projects/kNVK9d",
+      "confirmed": "의회 화면의 기름 얼룩은 긴장도에 반응한다. 동적 후처리, Niagara 리본의 렌더 타깃, UI 재질을 결합하며, 긴장도에 따라 노이즈 움직임과 변형 강도가 달라진다.",
+      "proposal": "우리 UI에서는 독자적인 그을음·압력·성에 모티프를 후보로 삼고, 긴장도 하나가 변형 진폭·속도·테두리 침범량을 함께 제어하도록 비교한다.",
+      "caution": "원작 효과 파일을 제공하는 에셋이 아니다. Niagara는 Unity에 그대로 들어가지 않는다. 제작자는 GIC 2025 발표 슬라이드를 공개했지만 녹화본을 찾지 못했다고 적었다. 이번에는 발표 영상을 시청했다고 주장하지 않는다."
+    },
+    {
+      "id": "R04",
+      "game": "Frostpunk 2",
+      "title": "Game UX Case Study: Frostpunk 2 (2024)",
+      "author": "Milena Młynarska / 개발 참여자의 2026-05-08 사례 연구",
+      "url": "https://www.milenamlynarska.com/uxui",
+      "confirmed": "이벤트 표식과 창의 주요 모양을 맞추고, 공동체 패널의 아이콘을 내부 규칙보다 플레이어가 얻으려는 결과에 맞게 고친 사례를 설명한다.",
+      "proposal": "서류 뭉치 버튼과 실제 결정 카드, 공동체 표식과 펼쳐지는 패널의 형태·의미가 연결되는지 검수한다.",
+      "caution": "함께 소개된 저장/로딩 화면 재설계는 제작 사정으로 구현되지 않았다고 명시돼 있다. 이를 출시판 기능으로 소개하지 않는다. Heatstamps를 우리 게임에 추가하는 근거가 아니다."
+    },
+    {
+      "id": "R05",
+      "game": "Metro 2033 Redux",
+      "title": "Metro Redux 공식 Xbox 설명서",
+      "author": "게임 배포자의 Xbox 설명서",
+      "url": "https://dlassets-ssl.xboxlive.com/public/content/0767ea45-fabe-4f9c-8169-515713bdc97b/GameManual/972a91fd-b401-4c93-9823-2d9607ac510b/en-US/index.html",
+      "confirmed": "일지, 라이터, 충전기, 공기압 펌프, 방독면 필터 등 손에 드는 도구와 조작을 설명한다. HUD가 없는 설명은 Ranger 모드의 특성이다.",
+      "proposal": "열차에서는 압력계·무전기·일지 같은 사물이 실제 상태를 전달하게 하되, 작은 화면에서 필요한 수치·경고·자막은 유지한다.",
+      "caution": "1인칭 장비 손동작을 사선 탑뷰에 그대로 옮기지 않는다. 방사능·필터 자원·HUD 제거를 새 규칙으로 확정하지 않는다. Last Light PC 설명서 링크는 찾았으나 이번 원문 열람이 실패해 세부 근거로 쓰지 않았다."
+    },
+    {
+      "id": "R06",
+      "game": "Metro Exodus",
+      "title": "Metro Exodus – Main menu 제작 설명",
+      "author": "Andrii Krasavin / 해당 시기 Senior Game·Level Designer",
+      "url": "https://akrasavin.github.io/portfolio/projects/metro-exodus.html",
+      "confirmed": "열차 객실 메뉴가 여정의 계절·수집 소품·인물 상태에 반응하도록 만들었다. 저장 파일에 맞춰 카메라가 붙은 객실을 해당 환경으로 옮기는 장면 구성 방식을 설명한다.",
+      "proposal": "같은 열차장실을 재사용하면서 사진·빈자리·보수 흔적·지도·창밖 환경을 저장 상태에서 재구성하는 후보로 옮긴다.",
+      "caution": "메뉴 구현 설명을 실시간 이동 월드 전체의 구조로 확대하지 않는다. 원작 사물·얼굴·장면을 재사용하는 권한은 아니다. 우리 게임의 세계 계절과 원작의 4계절을 혼합하지 않는다."
+    }
+  ],
+  "resources": [
+    {
+      "id": "cmu_focused_mocap",
+      "name": "CMU Graphics Lab – 생활·부상·상호작용 모션",
+      "kind": "모션 데이터",
+      "reference_ids": [
+        "R01",
+        "R06"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "139_19·139_20·139_22~24는 Walk Wounded Leg, 139_06~08은 Poking Around On The Ground, 139_25는 Giving Directions다. Subject 62는 construction work, 18/19는 2인 상호작용 A/B로 분류돼 있다.",
+      "project_proposal": "부상 보행·바닥 수색·방향 지시를 공통 리그로 옮기는 출발점. 62와 18/19는 작업/두 사람 동작의 탐색 후보로만 남긴다.",
+      "license": "자체 이용 조건. 상업 제품에 포함 가능, 데이터 자체의 재판매는 변환한 형태도 금지. CC0라고 부르지 않는다. 공개 원본 재배포는 별도 확인 후 결정.",
+      "format_and_delivery": "ASF 골격 + AMC 동작, C3D 등. 공식 사이트가 외부 BVH 변환본을 안내하지만 그 변환본까지 취득·대조하지 않았다.",
+      "caution": "손·발끝 데이터의 노이즈를 경고하며 손가락·엄지 움직임은 실제 캡처한 것이 아니라고 설명한다. construction/interaction이라는 분류만으로 화부 삽질·부상자 부축이 있다고 판단하지 않는다.",
+      "next_test": "139_19 한 클립을 기준으로 축·키·휴식 자세를 맞추고 발 접지, 긴 외투 관통, 손 도구 접촉, 루프와 취소를 시험한다. 데이터베이스 대량 크롤링은 하지 않는다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://mocap.cs.cmu.edu/",
+        "https://mocap.cs.cmu.edu/search.php?subjectnumber=139",
+        "https://mocap.cs.cmu.edu/subjects.php"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "mh_shirts01_selected",
+      "name": "MakeHuman Shirts 01 – toigo_fisherman_sweater",
+      "kind": "복장 자산",
+      "reference_ids": [
+        "R01"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "v2 MPFB 후보의 구체적 자산 보충",
+      "source_confirmed": "공식 팩 목록에 MargaretToigo의 toigo_fisherman_sweater가 CC0로 기재돼 있다.",
+      "project_proposal": "군인 아닌 민간인의 니트 기본형 후보. 낡음·기워 붙임·색 차이는 우리 쪽 재질/변형으로 만든다.",
+      "license": "해당 항목 CC0. 다른 팩까지 CC0로 확대하지 않는다.",
+      "format_and_delivery": "MakeHuman/MPFB 의복 팩. 실제 다운로드 파일의 MHCLO·메시·텍스처 구성은 취득 후 확인.",
+      "caution": "혹한용 외투 세트가 아니다. 체형·리그·겹쳐 입은 옷의 호환과 성능은 미검증.",
+      "next_test": "성인 체형 변형과 팔굽힘·앉기에서 목/손목/허리 관통을 확인한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://static.makehumancommunity.org/assets/assetpacks/shirts01.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "mh_shirts02_selected",
+      "name": "MakeHuman Shirts 02 – 민간인 후드·가디건",
+      "kind": "복장 자산",
+      "reference_ids": [
+        "R01"
+      ],
+      "priority": "조건부 비교",
+      "prior_relation": "v2 MPFB 후보의 구체적 자산 보충",
+      "source_confirmed": "elvs_hooded_sweat_jacket1, janexx_old_female_sweater, mindfront_cardigan_long_open_front가 목록에 있고 CC-BY로 표시된다.",
+      "project_proposal": "후드·노년 여성 의상·가디건처럼 주민 실루엣을 넓히는 후보. 역할과 국적을 의복 하나로 고정하지 않는다.",
+      "license": "목록은 CC-BY. 정확한 라이선스 버전과 저자 표기는 개별 취득 파일/원본 페이지에서 더 확인한다.",
+      "format_and_delivery": "MakeHuman/MPFB 의복 자산. 최신 MPFB·우리 리그에서 미검증.",
+      "caution": "MPFB 프로그램이나 시스템 자산의 CC0를 이 팩에 적용하면 안 된다. 겨울 겹옷 완성품으로 보증하지 않는다.",
+      "next_test": "명시된 자산 1개씩 저자·라이선스 버전을 먼저 고정하고 체형·외투 중첩을 검사한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://static.makehumancommunity.org/assets/assetpacks/shirts02.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "mh_newsboy_cap",
+      "name": "MakeHuman Hats 01 – jujube_newsboy_cap",
+      "kind": "복장 자산",
+      "reference_ids": [
+        "R01",
+        "R06"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "v2 MPFB 후보의 구체적 자산 보충",
+      "source_confirmed": "jujube_newsboy_cap이 제작자 jujube, CC0로 등록돼 있다.",
+      "project_proposal": "기관사·노동자용 모자 기본형 비교. 모자만으로 특정 공동체의 얼굴을 전부 같게 만들지 않는다.",
+      "license": "해당 항목 CC0.",
+      "format_and_delivery": "MakeHuman 의복 자산.",
+      "caution": "팩에는 세계관에 맞지 않는 다른 모자도 있으므로 팩 전체를 자동 배치하지 않는다.",
+      "next_test": "머리 변형·머리카락과의 관통, 멀리서 읽히는 실루엣, 로고 유무를 확인한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://static.makehumancommunity.org/assets/assetpacks/hats01.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "mh_plain_gloves",
+      "name": "MakeHuman Gloves 01 – toigo_gloves_short/medium",
+      "kind": "복장 자산",
+      "reference_ids": [
+        "R01",
+        "R02"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "v2 MPFB 후보의 구체적 자산 보충",
+      "source_confirmed": "MargaretToigo의 short·medium·long 장갑이 각각 CC0로 기재돼 있다.",
+      "project_proposal": "난방 작업·운반·야외 수색자의 손을 구분하는 기본형 후보.",
+      "license": "해당 항목 CC0.",
+      "format_and_delivery": "MakeHuman 의복 자산.",
+      "caution": "목록은 따뜻한 방한 기능이나 화부용 보호구 성능을 증명하지 않는다. 판타지/격투 장갑도 팩에 섞여 있다.",
+      "next_test": "컵·삽·레버 그립에서 손가락과 도구가 관통하는지 검사하고 필요한 부분만 재가중한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://static.makehumancommunity.org/assets/assetpacks/gloves01.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "mh_plain_boots",
+      "name": "MakeHuman Shoes 01 – toigo_ankle_boots_male/female",
+      "kind": "복장 자산",
+      "reference_ids": [
+        "R01"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "v2 MPFB 후보의 구체적 자산 보충",
+      "source_confirmed": "MargaretToigo의 남녀 ankle boots 항목이 CC0로 등록돼 있다.",
+      "project_proposal": "민간인 신발 기본형 후보. 눈 위 밑창·발목 실루엣을 자가 변형할 출발점.",
+      "license": "해당 항목 CC0.",
+      "format_and_delivery": "MakeHuman 의복 자산.",
+      "caution": "이름이 boots라고 해서 실제 설상용 신발이거나 사선 탑뷰에 적합한 폴리곤 수라는 보장은 없다.",
+      "next_test": "보행 접지·발목 변형·바지 끝과의 관통, 신발만 바꿨을 때 발소리 태그 연결을 확인한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://static.makehumancommunity.org/assets/assetpacks/shoes01.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "atomic_postapoc",
+      "name": "Atomic Realm – Post-Apocalyptic World",
+      "kind": "환경·생활 소품",
+      "reference_ids": [
+        "R01",
+        "R06"
+      ],
+      "priority": "조건부 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "Interiors에 가구·라디오·난로·사무실, Pharmacy에 약품/의료 소품, Into The Wild에 야영 소품을 설명한다. 무료 샘플과 유료 Source(.blend)를 구분한다.",
+      "project_proposal": "의무칸·거주칸·역 관리동을 채울 사물 후보. 침상 주변 소지품과 약품 선반의 약탈 전/후 상태를 자체 구성한다.",
+      "license": "상업 사용·수정 허용, 저자 링크로 출처 표시 요구. 자산 형태의 재포장·재판매·재배포는 수정 후에도 금지. CC0가 아니다.",
+      "format_and_delivery": "FBX, OBJ, DAE, glTF를 안내. 편집 가능한 .blend는 Source 등급.",
+      "caution": "팩 전체와 무료 샘플을 혼동하지 않는다. 정확한 내부 파일/폴리곤/개별 파츠 분리는 아직 확인하지 않았다. 중앙유럽의 실제 건물 고증 자료도 아니다.",
+      "next_test": "난로·라디오·약품 선반 3종으로 규격·피벗·문/뚜껑 분리·재질 수·낡음 표현 통일 가능성을 확인한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://atomicrealm.itch.io/post-apocalyptic-world"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "mco_crowd",
+      "name": "MoCap Online – Crowd",
+      "kind": "의회·군중 애니메이션",
+      "reference_ids": [
+        "R03",
+        "R04"
+      ],
+      "priority": "자동 도입 보류",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "공식 목록에 Crowd_Seat_LapHds_Bored_Idle_1, Crowd_Seat_LapHds_Angry_1, Crowd_Seat_LapHds_To_Std, Crowd_Std_Angry_1 등이 있다.",
+      "project_proposal": "조용히 듣기·언짢은 반응·자리에서 일어나기만 골라 의회 동작의 비교 후보로 삼는다.",
+      "license": "유료 자체 라이선스. 독립 원본 배포 불가. 매출/이용자 규모·외주 여부 등 별도 Commercial License 조건이 있다.",
+      "format_and_delivery": "FBX 및 엔진별 형식을 안내. 구매하지 않아 실제 파일은 미확인.",
+      "caution": "스포츠 응원용 동작이 다수 포함된다. 원작 같은 의회 동작 완성팩이라고 소개하지 않는다. AI 조항은 학습만이 아니라 AI Applications와 관련된 사용을 넓게 서술한다.",
+      "next_test": "먼저 Claude/Codex/COS를 통한 로컬 변환·검수와 외부 전송을 각각 명시해 공급자에게 허용 범위를 확인한다. 허용 후에만 실제 클립을 시험한다.",
+      "ai_handling": "AI Applications에 관련된 사용에 사전 서면 허가를 요구한다. 로컬 에이전트 보조 작업의 적용 범위를 독자적으로 면제하지 않는다. 확인 전 자산 입력·자동 도입은 [BLOCKED].",
+      "sources": [
+        "https://mocaponline.com/products/crowd",
+        "https://mocaponline.com/pages/standard-license"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "audio_snow_611277",
+      "name": "Freesound 611277 – Footsteps on snow (clean)",
+      "kind": "음원",
+      "reference_ids": [
+        "R01",
+        "R02"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "xkeril의 눈길 발소리. 페이지에 CC0, WAV, 48 kHz, 24 bit, mono가 기재돼 있다.",
+      "project_proposal": "눈밭 보행의 기본 녹음 후보. 개별 발걸음으로 잘라 변형하고 발 접촉 시점에 재생한다.",
+      "license": "해당 음원 페이지 CC0. 제공자 표시와 원본 URL은 출처 관리상 보존한다.",
+      "format_and_delivery": "WAV, 페이지상 약 45초. 이번에는 다운로드/청취하지 않았다.",
+      "caution": "깨끗하다는 제목이 실제 잡음·루프 적합성 검증을 대신하지 않는다. 게임의 소음 반경은 이 파일의 음량과 별개다.",
+      "next_test": "청취 후 바람·대화·클리핑 확인, 발걸음 분할, 모노 폰 재생과 반복 피로도 검사.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://freesound.org/people/xkeril/sounds/611277/"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "audio_radiator_265013",
+      "name": "Freesound 265013 – NYC steam radiator hiss.wav",
+      "kind": "음원",
+      "reference_ids": [
+        "R02",
+        "R06"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "sethlind가 실제 가정용 증기난방 소리라고 설명하며 CC0, 48 kHz, 16 bit, mono로 표시한다.",
+      "project_proposal": "객차 난방이 살아 있는 상태와 꺼진 상태를 대비할 지속음 재료.",
+      "license": "해당 페이지 CC0.",
+      "format_and_delivery": "WAV, 약 42초. 이번에는 청취하지 않았다.",
+      "caution": "실제 폴란드 기관차/객차 난방의 실측 녹음이 아니다. 음색을 차용하는 후보이며 고증을 보증하지 않는다.",
+      "next_test": "루프 경계·바닥 잡음·장시간 피로를 듣고 난방 중단 때 믹서/재질 상태와 동기화한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://freesound.org/people/sethlind/sounds/265013/"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "audio_pressure_234782",
+      "name": "Freesound 234782 – Steam/hiss",
+      "kind": "음원",
+      "reference_ids": [
+        "R02"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "wubitog가 공기압 방출의 짧은 hiss/steam release로 설명하며 CC0로 표시한다.",
+      "project_proposal": "밸브 조작·짧은 증기 방출의 시작/끝 효과 후보. 기관차 작동 전체 녹음 대신 국소 효과로 쓴다.",
+      "license": "해당 페이지 CC0.",
+      "format_and_delivery": "WAV, 44.1 kHz, 16 bit, stereo, 약 1.47초.",
+      "caution": "태그 steamengine만으로 실제 증기기관차에서 채록된 것으로 쓰지 않는다.",
+      "next_test": "청취로 파열음/고음/스테레오 위상 확인, 원샷과 지속 루프를 분리한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://freesound.org/people/wubitog/sounds/234782/"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "audio_radio_524205",
+      "name": "Freesound 524205 – Radio Sign Off / Squelch",
+      "kind": "음원",
+      "reference_ids": [
+        "R05",
+        "R06"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "JovianSounds가 무전 대화 종료 때 나는 소리로 설명한다. CC0, WAV, 44.1 kHz, 24 bit, stereo다.",
+      "project_proposal": "열차장의 명령·망보기 보고의 시작/끝 문법을 만드는 짧은 효과 후보.",
+      "license": "해당 페이지 CC0.",
+      "format_and_delivery": "약 1.21초 원샷. 실제 음성 대본이나 성우 녹음이 포함된 자원이라고 보지 않는다.",
+      "caution": "라디오 왜곡 때문에 핵심 정보가 안 들리게 하지 않는다. 중요한 경고는 자막/표시와 짝지을 것을 제안한다.",
+      "next_test": "통신 UI 개폐와 중복 재생, 성우 대사의 마스킹, 모노 청취를 검사한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://freesound.org/people/JovianSounds/sounds/524205/"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "sonniss_gdc",
+      "name": "Sonniss #GameAudioGDC Bundle",
+      "kind": "음원 수급처",
+      "reference_ids": [
+        "R01",
+        "R02",
+        "R06"
+      ],
+      "priority": "조건부 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "공식 번들은 개인·상업 프로젝트용 로열티프리 효과음과 라이선스를 제공한다. AI 개발·학습 관련 제한이 있으며 CC0가 아니다.",
+      "project_proposal": "바람·금속문·옷 마찰·공구·기관 작동음의 빠진 부분을 트랙 목록에서 찾는 2차 수급처.",
+      "license": "자체 라이선스. 이번 조회에서 라이선스 본문의 구판 형태와 공식 이력의 Version 2.0(2026-08-27) 설명이 혼재했다. 최종 적용 조문은 실제 취득일의 원문을 보관해 확인할 때까지 [WATCH].",
+      "format_and_delivery": "대형 음원 번들. 개별 트랙은 아직 선별/다운로드/청취하지 않았다.",
+      "caution": "이력 페이지는 다운로드일의 버전이 적용되고 후속 버전을 소급하지 않는다고 설명한다. 번들 이름의 연도만 보고 권리를 판단하지 않는다. 별도 음원 원본 공개 배포를 기본 허용하지 않는다.",
+      "next_test": "라이선스 원문부터 고정하고 필요한 검색어로 트랙 목록을 좁힌다. 실제 기관차/석탄 삽질 소리가 있다고 아직 확정하지 않는다.",
+      "ai_handling": "AI 개발·학습·향상에 원본을 이용하는 행위는 별도 서면 허가 조항을 확인한다. 일반 믹싱과 AI 학습을 동일시하지 않으며 외부 입력 허가는 별도다.",
+      "sources": [
+        "https://sonniss.com/gameaudiogdc/",
+        "https://sonniss.com/gdc-bundle-license/",
+        "https://sonniss.com/gdc-bundle-license/previous-versions/"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "unity_audio_snapshots",
+      "name": "Unity Audio Mixer / Snapshots",
+      "kind": "엔진 기능",
+      "reference_ids": [
+        "R01",
+        "R02",
+        "R06"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "공식 문서는 오디오 그룹 라우팅, DSP, ducking, 상태 스냅샷과 런타임 전환을 설명한다.",
+      "project_proposal": "실외 눈보라/객차 안/무전 보고/의회 발언의 청취 우선순위를 바꾸는 후보. 기존 녹음 여러 개를 상태별로 섞는다.",
+      "license": "Unity 엔진 기능. 별도 CC0 라이브러리가 아니다. 프로젝트의 Unity 이용 조건을 따른다.",
+      "format_and_delivery": "Unity 6.0 공식 문서를 확인. S1 웹 코드에 그대로 넣을 수 있는 패키지가 아니다.",
+      "caution": "스냅샷은 모든 열차 소리의 물리 시뮬레이션을 해결하지 않는다. AudioSource의 거리 감쇠와 그룹 믹싱은 구분한다.",
+      "next_test": "무전/경고가 눈보라를 뚫고 읽히는지, 실내외 이동 때 팝·중첩이 없는지, 저장 복귀 시 믹스를 복원하는지 확인한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://docs.unity3d.com/6000.0/Documentation/Manual/AudioMixerOverview.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "cq_urp_volumetric",
+      "name": "Cristian Qiu – Unity URP Volumetric Light",
+      "kind": "오픈소스 셰이더/렌더 기능",
+      "reference_ids": [
+        "R05",
+        "R06"
+      ],
+      "priority": "후순위 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "MIT. 조사한 package.json은 0.5.9, Unity 2022.3.18f1을 적는다. README는 직교·원근 카메라, 주요/추가 광원과 Unity 6 Render Graph를 설명한다.",
+      "project_proposal": "역사의 먼지·차가운 안개 속 광선처럼 제한된 장면의 선택 후보.",
+      "license": "MIT, 저작권/허가 고지 보존.",
+      "format_and_delivery": "Unity URP용 C#/셰이더. Blender 셰이더도 S1 웹용도 아니다.",
+      "caution": "WebGL 미지원, 투명 오브젝트와 안개 합성 한계, 추가 광원 비용 경고가 있다. Vulkan/OpenGLES 지원 설명만으로 우리 휴대폰에서 빠르다고 판단하지 않는다.",
+      "next_test": "채택한 카메라/엔진 버전에서 한 광원부터 테스트. 유리/입김/연기 중첩을 보고, 폰에서 비용이 크면 단순 광선 메시+먼지 입자로 비교한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://github.com/CristianQiu/Unity-URP-Volumetric-Light",
+        "https://raw.githubusercontent.com/CristianQiu/Unity-URP-Volumetric-Light/main/LICENSE.md",
+        "https://raw.githubusercontent.com/CristianQiu/Unity-URP-Volumetric-Light/main/package.json"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "unity_ugui_shaders",
+      "name": "Unity Shader Graph – UGUI Shaders sample",
+      "kind": "UI 셰이더 예제",
+      "reference_ids": [
+        "R03",
+        "R04"
+      ],
+      "priority": "우선 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "Shader Graph 17.0.4 문서는 버튼·지표·배경용 서브그래프와 동적 절차 UI 예제를 설명한다.",
+      "project_proposal": "긴장도에 반응하는 테두리/계기/노이즈의 독자 구현 출발점. 글자·숫자·핵심 아이콘과 움직이는 배경을 분리한다.",
+      "license": "Unity 패키지 샘플. 오픈소스 MIT/CC0로 임의 분류하지 않는다. 취득 패키지의 고지와 이용 조건 확인.",
+      "format_and_delivery": "UGUI/Canvas용. UI Toolkit·웹·Blender의 동등 기능으로 보지 않는다. 사용할 패키지의 실제 샘플 포함 여부 확인.",
+      "caution": "텍스처 메모리가 줄어든다는 설명은 복잡한 노이즈/후처리가 공짜라는 뜻이 아니다. 공식 성능 메모도 복잡한 셰이더는 더 비쌀 수 있다고 경고한다.",
+      "next_test": "긴장도 정지/낮음/높음·작은 화면·종횡비·마스크·접근성 감소 동작 모드·GPU 비용을 대조한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://docs.unity3d.com/Packages/com.unity.shadergraph@17.0/manual/Shader-Graph-Sample-UGUI-Shaders.html",
+        "https://docs.unity3d.com/Packages/com.unity.shadergraph@17.0/manual/Shader-Graph-Sample-UGUI-Shaders-Notes-on-performance.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    },
+    {
+      "id": "unity_timeline",
+      "name": "Unity Timeline",
+      "kind": "장면·동작·효과 조율",
+      "reference_ids": [
+        "R01",
+        "R03",
+        "R06"
+      ],
+      "priority": "조건부 비교",
+      "prior_relation": "신규 조사",
+      "source_confirmed": "공식 1.8 문서는 애니메이션·게임플레이·오디오·입자 시퀀스와 자산/인스턴스의 구분을 설명한다.",
+      "project_proposal": "의회 시작, 구조자 귀환, 기술 복원처럼 짧게 정해진 장면의 재사용/타이밍 관리 후보.",
+      "license": "Unity 패키지. 취득 버전의 패키지 고지/Unity 이용 조건을 확인한다.",
+      "format_and_delivery": "Timeline asset/instance. 공식 조회 경로에 따라 1.8의 세부 패치 번호가 달라 보여 패치 버전을 고정하지 않았다.",
+      "caution": "상시 NPC AI·정치 상태·세이브를 대신하는 시스템이 아니다. 연출을 건너뛰었다고 실제 사건 결과가 누락되면 안 된다.",
+      "next_test": "두 인물의 접촉, 소품·음원 발생 시점, 중단/건너뛰기/백그라운드 복귀 때 결과의 중복·누락을 확인한다.",
+      "ai_handling": "파일을 외부 AI에 전송하는 권한은 별도 확인한다. 이번에는 원본 파일을 취득·전송하지 않았다.",
+      "sources": [
+        "https://docs.unity3d.com/Packages/com.unity.timeline@1.8/manual/index.html"
+      ],
+      "evidence_level": "공식/제작자 설명 및 목록 확인",
+      "status": "[WATCH]",
+      "package_downloaded": false,
+      "project_runtime_tested": false,
+      "audio_auditioned": false
+    }
+  ],
+  "scene_tests": [
+    {
+      "id": "S01",
+      "name": "난방이 꺼진 거주칸",
+      "reference_ids": [
+        "R01",
+        "R02"
+      ],
+      "resources": [
+        "mh_shirts01_selected",
+        "audio_radiator_265013",
+        "unity_audio_snapshots"
+      ],
+      "proposal": "난로 가동/식음, 창문 성에, 웅크림, 난방 소리 감소를 같은 상태 입력으로 묶는다.",
+      "deliverables": "난로·유리 상태 변형, 주민 반응 클립, 난방 루프, 믹서 스냅샷, 상태-ID 대응표",
+      "acceptance": "난방 상태를 숫자 없이도 구별할 수 있는가. 무음에도 읽히는가. 재접속 뒤 잘못된 상태로 보이지 않는가.",
+      "unresolved": "웅크림·손 비비기의 정확한 사용 가능 클립 및 성에용 재질은 미선정."
+    },
+    {
+      "id": "S02",
+      "name": "화부의 급탄 작업",
+      "reference_ids": [
+        "R01",
+        "R02"
+      ],
+      "resources": [
+        "cmu_focused_mocap",
+        "mh_plain_gloves",
+        "audio_pressure_234782"
+      ],
+      "proposal": "접근→삽 들기→석탄 뜨기→화실 투입→복귀, 손·삽·화실·소리의 접촉 타이밍을 정의한다.",
+      "deliverables": "작업 소켓, 삽·화실 분리 메시, 진입/반복/종료/중단 모션, 석탄 접촉음과 불빛",
+      "acceptance": "손·삽 관통과 석탄 순간이동이 없는가. 중단 뒤 손에 도구가 남지 않는가. 반복은 플레이어 클릭을 강요하지 않는가.",
+      "unresolved": "CMU 62의 정확한 삽질 클립과 기관차 급탄 적합성은 미확인. 실제 석탄 접촉음도 미선정."
+    },
+    {
+      "id": "S03",
+      "name": "부상자가 돌아온 의무칸",
+      "reference_ids": [
+        "R01",
+        "R06"
+      ],
+      "resources": [
+        "cmu_focused_mocap",
+        "atomic_postapoc",
+        "unity_timeline"
+      ],
+      "proposal": "혼자 절뚝임과 타인 부축을 다른 상태로 다루고, 침상·약품·조력자 위치를 연결한다.",
+      "deliverables": "부상 보행, 부축 짝동작, 눕히기·침상 소켓, 개인 소지품, 짧은 안내 음성/자막",
+      "acceptance": "두 인물 키가 달라도 발이 뜨지 않는가. 부축을 취소하거나 구조자가 바뀌어도 상태가 깨지지 않는가.",
+      "unresolved": "CMU 부상 보행은 목록 확인. 부축/들것은 정확한 공급 클립을 확보하지 못했다."
+    },
+    {
+      "id": "S04",
+      "name": "긴장이 높아지는 의회",
+      "reference_ids": [
+        "R03",
+        "R04"
+      ],
+      "resources": [
+        "unity_ugui_shaders",
+        "mco_crowd",
+        "unity_audio_snapshots"
+      ],
+      "proposal": "핵심 글자는 고정하고 테두리 움직임·배경 웅성거림·대표의 자세를 긴장도에 따라 조절한다.",
+      "deliverables": "독자 UI 재질, 저/고강도 파라미터, 감소 동작 옵션, 반응 클립, 의미-아이콘 표",
+      "acceptance": "의석·필요표·현재 비용이 가려지지 않는가. 비밀 투표자의 정체를 연출이 누설하지 않는가.",
+      "unresolved": "MoCap Online은 AI 사용 범위 서면 확인 전 원본 자동 도입 보류. 원작의 기름 얼룩 파일은 수급 대상이 아님."
+    },
+    {
+      "id": "S05",
+      "name": "이력이 남는 열차장실",
+      "reference_ids": [
+        "R05",
+        "R06"
+      ],
+      "resources": [
+        "atomic_postapoc",
+        "audio_radio_524205",
+        "unity_timeline"
+      ],
+      "proposal": "같은 객실에서 지도·사진·남은 물건·빈자리·보수 흔적만 기존 사건 상태에 맞춰 바꾼다.",
+      "deliverables": "공통 객실, 독립 상태 소품, 표시 조건/소유자 ID, 카메라 프리셋, 무전 이벤트",
+      "acceptance": "저장을 불러오면 같은 이력이 복원되는가. 열차의 이동 시뮬레이션과 메뉴 연출이 독립적인가.",
+      "unresolved": "실제 어떤 이력을 시각화할지는 콘텐츠/설계 선택. 여기서는 새 사건을 확정하지 않음."
+    },
+    {
+      "id": "S06",
+      "name": "약탈된 역·생활 공간",
+      "reference_ids": [
+        "R01",
+        "R06"
+      ],
+      "resources": [
+        "atomic_postapoc",
+        "cq_urp_volumetric",
+        "audio_snow_611277"
+      ],
+      "proposal": "모든 곳을 무너진 폐허로 만들지 말고 빈 선반·닫힌 문·이동한 가구·남은 생활 흔적으로 상태를 비교한다.",
+      "deliverables": "온전/약탈/보수 변형, 탐색 소켓·시야 차단 구분, 광선 대체재, 발소리 태그",
+      "acceptance": "장식된 문과 열 수 있는 문이 구별되는가. 안개가 위협 예고를 숨기지 않는가. 낮은 품질 설정도 같은 정보를 전달하는가.",
+      "unresolved": "중앙유럽 실제 역·일반 병원 자료와 게임용 동선은 별도 추가 선별 필요."
+    }
+  ],
+  "unresolved": [
+    "화부 급탄에 맞는 정확한 상용 가능 모션",
+    "두 사람 부축/들것의 실제 클립·짝 정렬 데이터",
+    "한겨울 외투/목도리·아동/노년 체형 조합",
+    "기관차/객차의 실제 작동·철도 소음",
+    "중앙유럽 소도시 역·병원의 최종 자료",
+    "폰에서의 셰이더/스키닝/음원 메모리 비용"
+  ],
+  "access_limitations": [
+    "일부 제작자 포트폴리오는 기본 웹 열람이 실패했으나 Exa로 본문을 확인했다.",
+    "Last Light 공식 PDF 설명서는 URL만 확인했고 원문 열람 실패. 세부 근거로 쓰지 않았다.",
+    "CMU subject 62·18·19 개별 페이지가 열리지 않아 전체 subjects 분류만 사용했다.",
+    "Sonniss 라이선스 본문과 공식 버전 이력의 조회 결과가 혼재하므로 실제 취득 시 조문을 고정해야 한다."
+  ]
+}

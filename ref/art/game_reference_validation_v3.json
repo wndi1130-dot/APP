@@ -1,0 +1,23 @@
+{
+  "status": "[PASS]",
+  "date": "2026-10-07",
+  "scope": "신규 연구 메타데이터·내부 참조·문서 형식만. 외부 링크 가용성, 법률 판단, Blender/게임 실행 검사가 아님.",
+  "reference_count": 6,
+  "candidate_count": 17,
+  "scene_test_plans": 6,
+  "unique_source_urls": 31,
+  "base_catalog_id_collisions": 0,
+  "runtime_tests_performed": 0,
+  "downloads_or_installs": 0,
+  "audio_files_auditioned": 0,
+  "checks": [
+    "필수 필드 비어 있지 않음",
+    "후보/참고 ID 중복 없음",
+    "장면의 후보/참고 ID 참조 정상",
+    "기존 2판 ID 충돌 없음",
+    "프로젝트 실행/다운로드/청취 미실행 표기 유지",
+    "출처 URL 형식",
+    "2판 묶음의 로컬 연결 파일 존재",
+    "문서 끝 공백 없음"
+  ]
+}
