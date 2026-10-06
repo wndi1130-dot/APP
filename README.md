@@ -19,5 +19,9 @@
 - [docs/research/notes/](docs/research/notes/): 프로스트펑크 2 보고서의 원자료 노트
 - [docs/research/reports/좀보이드 모드 설계 참고.md](docs/research/reports/좀보이드%20모드%20설계%20참고.md): 좀보이드 유명 모드 조사 보고서(무리 습격, 사람 적, 무기, 의료·절단, 지식, 열차)
 - [docs/research/research_notes/](docs/research/research_notes/): 좀보이드 모드 보고서의 원자료 노트
-- [docs/art/image_prompts.md](docs/art/image_prompts.md): 아트 방향과 이미지 프롬프트 1차(화면 시안, 아이콘, 문장, 초상), 폰트 후보
+- [docs/art/production_brief.md](docs/art/production_brief.md): 현재 월드·UI 구분과 3D 제작/조사 기준. 월드는 픽셀 아트가 아니라 좀보이드식 그래픽이다
+- [docs/art/image_prompts.md](docs/art/image_prompts.md): 현재 시안 지침. 과거 픽셀 원문은 별도 보관본으로 분리
+- [ref/art/production_resources.md](ref/art/production_resources.md): 3D 제작 자료 조사 2판(후보·출처·권리·버전·잔여 검증)
+- [docs/handoff/3d_research_tasks.md](docs/handoff/3d_research_tasks.md): Claude Code·Codex·웹 채팅 공통 조사 지시서
+- [docs/research/3d_instruction_audit.md](docs/research/3d_instruction_audit.md): 이번 지시사항 교정 내역과 검증 범위
 - [docs/research/gap_fill.md](docs/research/gap_fill.md): ref/ 자료의 '미확인' 보충 조사(증기기관차 소비·점화·제설, 피난민 이름 표기)

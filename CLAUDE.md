@@ -9,6 +9,12 @@
 - docs/design/apocalypse_train_game_design_log.md: 원본 설계 로그와 레퍼런스 조사
 - docs/research/프로스트펑크2 정치 시스템 분석.md: 정치 시스템 설계의 근거 자료
 
+## 아트·자료 조사
+
+- 월드는 픽셀 아트가 아니라 좀보이드식 그래픽과 사선 탑뷰다(2026-10-07 사용자 정정). 과거 픽셀 시안은 배치 참고다.
+- 아트를 다룰 때 docs/art/production_brief.md와 docs/handoff/3d_research_tasks.md를 먼저 읽는다. UI·초상·폰트는 별도 결정이다.
+- 현재 조사/문서 교정 요청을 설치·모델 제작·렌더·게임 구현 허가로 확대하지 않는다.
+
 ## 대화 방식
 
 - 한국어 반말로 대화한다.
