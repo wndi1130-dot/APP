@@ -179,7 +179,7 @@ function arriveStop(g: Game): void {
   g.phase = 'stop';
 }
 
-export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId; crewComm: Comm; crewSize: number }>): void {
+export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId; crewComm: Comm; crewSize: number; scout: boolean }>): void {
   if (!g.stop || g.stop.done) return;
   Object.assign(g.stop, patch);
   g.stop.crewSize = clamp(g.stop.crewSize, 2, 8);
@@ -197,6 +197,8 @@ export interface StopRisk {
   horde: boolean;
   /** 이번 정차에 무리 흔적이 새롭다 */
   fresh: boolean;
+  /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고 결과는 확률대로다. */
+  known: boolean;
 }
 
 /** 위험 줄이 뜨는 문턱. 줄이 뜨면 그 피해는 반드시 1명 이상이다(2026-10-07 사용자 결정, field_unified 8장). */
@@ -220,23 +222,24 @@ export function stopRisk(g: Game): StopRisk {
   const maxDead = Math.min(crew - 1, pDeath >= RISK_LINE.dead2 ? 2 : pDeath >= RISK_LINE.dead ? 1 : 0);
   // 죽는 사람과 크게 다치는 사람은 겹치지 않는다. 남은 인원으로 약속을 못 지키면 줄을 띄우지 않는다.
   const maxHurt = lam >= RISK_LINE.hurt ? Math.max(0, Math.min(crew - maxDead, Math.ceil(lam * 1.2))) : 0;
-  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: threat > 1 };
+  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: threat > 1, known: !!stop?.scout };
 }
 
 const NUM = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟'];
 
-/** 정차 화면의 위험 줄. 줄이 있으면 반드시 일어나고, '최악이면'은 넘지 않는 한계다.
+/** 정차 화면의 위험 줄. 줄이 있으면 반드시 일어나고, '최악'은 넘지 않는 한계다.
  * 줄이 없으면 죽음과 중상은 없다(긁히고 삐는 정도는 있다). */
-export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; why: string[] } {
-  const lines: string[] = [];
-  if (r.maxDead > 0) lines.push(r.maxDead > 1 ? `누군가 반드시 돌아오지 못한다. 최악이면 ${NUM[r.maxDead]} 명.` : '누군가 반드시 돌아오지 못한다.');
-  if (r.maxHurt > 0) lines.push(r.maxHurt > 1 ? `누군가 반드시 크게 다친다. 최악이면 ${NUM[r.maxHurt]} 명.` : '누군가 반드시 크게 다친다.');
+export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; why: string[]; unknown: string | null } {
   const why: string[] = [];
   if (r.guardRefused) why.push('경비대가 경계를 서지 않는다');
-  if (r.fresh) why.push('무리 흔적이 새롭다');
   if (r.horde) why.push('던진 시신에 무리가 몰려 있다');
+  if (!r.known) return { lines: [], calm: null, why, unknown: '위험 모름. 정찰하지 않으면 무엇이 기다리는지 모른다.' };
+  if (r.fresh) why.unshift('무리 흔적이 새롭다');
+  const lines: string[] = [];
+  if (r.maxDead > 0) lines.push(r.maxDead > 1 ? `반드시 죽는다. 최악 ${NUM[r.maxDead]} 명.` : '한 명은 반드시 죽는다.');
+  if (r.maxHurt > 0) lines.push(r.maxHurt > 1 ? `반드시 크게 다친다. 최악 ${NUM[r.maxHurt]} 명.` : '한 명은 반드시 크게 다친다.');
   const calm = lines.length ? null : r.lam >= 0.2 ? '크게 다칠 일은 없어 보인다. 긁히고 삐는 정도.' : '조용해 보인다.';
-  return { lines, calm, why };
+  return { lines, calm, why, unknown: null };
 }
 
 export function resolveStop(g: Game, go: boolean): StopResult | null {
@@ -254,7 +257,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   g.coal -= stay.coal;
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult');
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scout ? P.scoutHaul : 1);
   const notes: string[] = [];
   const tail = g.comms.tail;
   if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
@@ -284,24 +287,36 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const risk = stopRisk(g);
   if (risk.guardRefused) notes.push('경비대가 경계를 거부했다.');
   const names = crewNames(g, stop.crewComm, stop.crewSize);
-  // 줄이 약속한 대로: 줄이 있으면 1~최악 명, 없으면 0명. 주사위는 몇 명과 누구만 정한다(2026-10-07 사용자).
   const pool = [...names];
   for (let i = pool.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd(g) * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  const count = (max: number, p: number) => {
-    let n = max > 0 ? 1 : 0;
-    while (n < max && rnd(g) < p) n += 1;
-    return n;
-  };
-  const dead = pool.splice(0, count(risk.maxDead, risk.pDeath));
-  const hurt = pool.splice(0, count(risk.maxHurt, Math.min(0.6, risk.lam / 3)));
+  let dead: string[];
+  let hurt: string[];
+  if (risk.known) {
+    // 정찰했으면 줄이 약속한 대로: 줄이 있으면 1~최악 명, 없으면 0명. 주사위는 몇 명과 누구만 정한다(2026-10-07 사용자).
+    const count = (max: number, p: number) => {
+      let n = max > 0 ? 1 : 0;
+      while (n < max && rnd(g) < p) n += 1;
+      return n;
+    };
+    dead = pool.splice(0, count(risk.maxDead, risk.pDeath));
+    hurt = pool.splice(0, count(risk.maxHurt, Math.min(0.6, risk.lam / 3)));
+  } else {
+    // 정찰 없이 가면 원래 확률대로다.
+    dead = pool.splice(0, rnd(g) < risk.pDeath ? 1 : 0);
+    let n = 0;
+    for (let i = 0; i < 6; i += 1) if (rnd(g) < risk.lam / 6) n += 1;
+    hurt = pool.splice(0, n);
+  }
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
   if (dead.length > 0) onDeath(g, stop.crewComm, dead);
-  g.comms[stop.crewComm].away = stop.crewSize - dead.length;
+  const scouts = stop.scout ? P.scoutSize : 0;
+  if (scouts > 0 && rnd(g) < P.scoutSprain) notes.push('정찰조 하나가 발목을 삐었다.');
+  g.comms[stop.crewComm].away = stop.crewSize + scouts - dead.length;
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
-  journal(g, `${place.name}에 ${stay.name} 머물렀다(${COMM_NAME[stop.crewComm]} ${stop.crewSize}명). ${got || '빈손'}.${injuredOnly.length ? ` 부상 ${injuredOnly.length}.` : ''}`);
+  journal(g, `${place.name}에 ${stay.name} 머물렀다(${COMM_NAME[stop.crewComm]} ${stop.crewSize}명${scouts ? `, 정찰 ${scouts}명` : ''}). ${got || '빈손'}.${injuredOnly.length ? ` 부상 ${injuredOnly.length}.` : ''}`);
   // 도덕 카드: 부상자 발견, 물림.
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);

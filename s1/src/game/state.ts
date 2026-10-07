@@ -77,6 +77,8 @@ export interface StopState {
   crewSize: number;
   /** 이번 정차의 바깥 기척(0.8 조용함, 1 보통, 1.4 무리 흔적). 정차 장면 글과 위험 줄에 같이 들어간다. */
   threat?: number;
+  /** 정찰을 보내면 바깥 기척을 알고 위험 줄이 약속이 된다. 안 보내면 위험을 모른다(2026-10-07 사용자 카드 '정찰 따라'). */
+  scout?: boolean;
   done: boolean;
   result: StopResult | null;
 }

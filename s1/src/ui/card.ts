@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, PLACES, STAY, costLines, crewNames, politicsLines, riskLines, stopRisk, stopScene, viewCard,
+  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, STAY, costLines, crewNames, politicsLines, riskLines, stopRisk, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -66,15 +66,21 @@ function stopCard(view: View): HTMLElement | null {
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize - 1, 'aria-label': '한 명 덜' }, '−'),
         h('b', { class: 'num' }, `${stop.crewSize}명`),
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
-    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, ' · 이번 회기 표결에서 빠진다'))),
-    // 위험 줄은 준비를 바꿀 때마다 다시 계산된다. 줄이 있으면 반드시 일어난다.
-    h('div', { class: cx('danger', risk.lines.length > 0 && 'is-on'), 'aria-live': 'polite' },
-      risk.lines.map(t => h('p', { class: 'danger__line' }, t)),
-      risk.calm ? h('p', { class: 'danger__calm' }, risk.calm) : null,
-      risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),
+    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, stop.scout ? ` · 정찰 ${P.scoutSize}명까지 이번 회기 표결에서 빠진다` : ' · 이번 회기 표결에서 빠진다'))),
+    // 정찰: 바깥 기척을 알아 위험 줄이 약속이 된다. 대가는 산출과 표.
+    h('div', { class: 'field field--row' },
+      h('span', { class: 'field__label' }, '정찰'),
+      h('button', { class: cx('chip', !stop.scout && 'is-on'), 'data-action': 'stop-set', 'data-key': 'scout', 'data-value': '0' }, '안 한다', h('small', null, ' 위험 모름')),
+      h('button', { class: cx('chip', stop.scout && 'is-on'), 'data-action': 'stop-set', 'data-key': 'scout', 'data-value': '1' }, '한다', h('small', null, ` 산출 −${Math.round((1 - P.scoutHaul) * 100)}%, ${P.scoutSize}명 더`))),
     stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label}`))) : null,
     h('div', { class: 'sheet__actions' },
+      // 위험 줄은 준비를 바꿀 때마다 다시 계산된다. 줄이 있으면 반드시 일어난다.
+      h('div', { class: cx('danger', risk.lines.length > 0 && 'is-on'), 'aria-live': 'polite' },
+        risk.lines.map(t => h('p', { class: 'danger__line' }, t)),
+        risk.calm ? h('p', { class: 'danger__calm' }, risk.calm) : null,
+        risk.unknown ? h('p', { class: 'danger__calm' }, risk.unknown) : null,
+        risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),
       h('button', { class: 'btn btn--ghost', 'data-action': 'stop-go', 'data-go': '0' }, '지나친다'),
       h('button', { class: 'btn', 'data-action': 'stop-go', 'data-go': '1' }, '보낸다', icon('arrow'))));
 }

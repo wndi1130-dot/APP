@@ -51,9 +51,11 @@ export function stopScene(g: Game): { outside: string; disembark: string } | nul
   const stop = g.stop;
   if (!stop) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
-  const threat = stop.threat ?? 1;
+  // 바깥 기척은 정찰조가 돌아와야 안다. 정찰 없이는 장소 겉모습만 보인다.
+  const threat = stop.scout ? stop.threat ?? 1 : 1;
   const lines = threat > 1 ? THREAT_LINES.fresh : threat < 1 ? THREAT_LINES.calm : SCENE_LINES[Math.max(1, Math.min(3, place.risk))];
-  const outside = lines[(g.seg * 5 + place.id.length) % lines.length];
+  const seen = lines[(g.seg * 5 + place.id.length) % lines.length];
+  const outside = stop.scout ? `정찰조가 돌아와 알린다. ${seen}` : seen;
   return { outside, disembark: DISEMBARK_LINES[disembarkMood(g, stop.crewComm)] };
 }
 

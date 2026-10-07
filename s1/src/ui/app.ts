@@ -274,6 +274,7 @@ export function startApp(root: HTMLElement): void {
           else if (key === 'stay') setStop(next, { stay: value as StayId });
           else if (key === 'crewComm' && (COMMS as readonly string[]).includes(value)) setStop(next, { crewComm: value as Comm });
           else if (key === 'crewSize') setStop(next, { crewSize: Number(value) });
+          else if (key === 'scout') setStop(next, { scout: value === '1' });
         });
         return;
       }

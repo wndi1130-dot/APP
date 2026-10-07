@@ -328,7 +328,8 @@ export function viewCard(g: Game, card: Card): CardView {
         : `${COMM_NAME[c]} 대표가 빈 그릇을 들고 왔다. 지난번 거절한 날부터 그릇을 씻지 않았다고 한다. 배급 ${Math.round(r)}.`;
       return {
         title: which === 'heat' ? '난방 요구' : '배급 요구', speaker: leader(g, c), focus: c, required: true, key: `demand:${c}`,
-        body: past?.pick === '거절한다' ? refusedBody : firstBody,
+        // 같은 요구라도 관계에 따라 말투가 다르다(정치 디테일 2.1).
+        body: `${past?.pick === '거절한다' ? refusedBody : firstBody} ${s.rel >= 15 ? '말투는 부탁에 가깝다.' : s.rel <= -15 ? '답은 다음 회기 전까지 달라고 못 박는다.' : ''}`.trim(),
         choices: withAfford(g, [
           { label: which === 'heat' ? '난방을 올린다' : '배급을 올린다',
             say: which === 'heat' ? `${COMM_NAME[c]} 난로를 올려라. 밤에 얼어 죽는 사람은 없어야 한다.` : `${COMM_NAME[c]} 그릇을 채워라. 빈 그릇으로는 일 못 한다.`,

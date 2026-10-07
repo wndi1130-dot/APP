@@ -247,6 +247,10 @@ async function main() {
     await click(page, '[data-action="stop-go"][data-go="1"]');
     await page.locator('[data-action="stop-seen"]').waitFor();
     await capture(page, '08-stop-result');
+    // 회기가 아닌 구간: 정차를 덮으면 비상 소집 단추가 주 단추 옆에 뜬다.
+    await click(page, '[data-action="stop-seen"]');
+    await page.locator('.bottom [data-action="emergency"]').waitFor();
+    await capture(page, '08b-emergency');
 
     // 의회(3구간 회기)
     await until(page, '.council .hemi');

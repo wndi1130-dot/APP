@@ -22,6 +22,8 @@ export const P = Object.freeze({
   engineFatigue: 2, shiftRelief: 10, shiftCoal: 3,
   strikeRel: -15, refuseRel: 5, rescueRate: 0.2, crisisLine: 30,
   thrownHorde: 0.05, storeRisk: 0.03,
+  // 정찰 대가(제안, 파밍 자동 파견과 같은 값): 정찰조 2명이 체류 일부를 써서 산출 ×0.8, 정찰조도 표결에서 빠진다.
+  scoutSize: 2, scoutHaul: 0.8, scoutSprain: 0.15,
   repealCool: 2, repealRel: 10, hostileGrudge: 2, blackmailReputation: 3, grudgeDecay: 2,
   maxDealsPerSession: 3, promiseSegments: 3,
 });
