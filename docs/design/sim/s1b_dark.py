@@ -56,6 +56,11 @@ Q의 손잡이 (자세한 값은 아래 Q 주석)
                conf_after_lift(거둔 뒤 표결), conf_fail_agenda·conf_lock_trust(부결이면 k회기 안건을 AI가 고름, 위기 카드 없음)
                입장의 '약속'은 S1a 약속(promise_tick·break_promise)과 휴전 서약 조건을 칸마다 판 전체로 센 값이다.
                부결이 위기 카드를 여는 브리프 원안: --tune conf_fail_agenda=0 conf_after_lift=1
+  7라운드      '고의 불신임' 착취(외부 비평)와 두 보완안. 기본은 모두 끔(= 6차 그대로, 7차 추천 '가 그대로').
+               conf_throw(시험: 1 늘 일부러 짐, 2 적의 2 이상 칸이 있을 때만), conf_streak·conf_streak_trust
+               (연속 부결이면 신임 = min(신임, 20)으로 S1a 신임 위기), conf_debt·conf_debt_cap(정당성 부채:
+               DEBT_KEYS의 수단 하나 +1, 회기마다 −1, 정기 신임 입장 −min(3, k×부채), 통과 보너스 max(0, 5 − k×부채))
+               예: 착취 값 → --policies caretaker,tyrant --tune conf_throw=2
 """
 import math
 import random
@@ -194,7 +199,18 @@ Q = dict(
     conf_after_lift=0,    # 5.3 1이면 계엄을 거둔 뒤 첫 회기에 신임 표결 하나. 0이면 정기 일정만 잇는다(코디네이터 결정)
     conf_fail_agenda=1,   # k면 부결 때 위기 카드 대신 다음 k회기 동안 열차장이 안건을 못 올리고 AI 대표가 고른다. 0이면 S1a 신임 위기 카드
     conf_lock_trust=5,    # 위 규칙에서 부결의 신임 값(−k). conf_fail_agenda가 0이면 안 쓴다
+    # 7차: '고의 불신임' 착취(외부 비평)와 두 보완안. 모두 끄면 6차와 판마다 같다
+    conf_throw=0,         # (시험) 1이면 정책이 정기 신임을 늘 일부러 진다(표결 없이 부결, 값은 보통 부결과 같다).
+                          #   2면 적의 2 이상 칸이 하나라도 있을 때만 진다(AI 안건이 찬성으로 기울 때만 노리는 영리한 착취)
+    conf_streak=0,        # 1이면 정기 신임이 연달아 두 번(이상) 부결되면 S1a 신임 위기를 연다: 신임 = min(신임, conf_streak_trust),
+    conf_streak_trust=20, #   3구간 안에 25로 못 올리면 축출. 통과하면 연속이 끊긴다
+    conf_debt=0,          # k면 정당성 부채: 열차장이 고른 어두운 수단 하나마다 부채 +1(DEBT_KEYS), 회기마다 −1.
+    conf_debt_cap=3,      #   정기 신임에서 모든 칸 입장 −min(cap, k×부채), 통과 보너스는 max(0, conf_pass_trust − k×부채)
 )
+# 7차 정당성 부채로 세는 '열차장이 고른 어두운 수단'(10.1 선을 넘는 선택 + 수단 점수의 해산·즉결·협박 + 고른 가혹 법).
+# 즉결의 하차 명령(exiles)은 즉결과 한 선택이라 따로 세지 않는다. 의회가 맡긴 계엄·경비대장의 계엄은 빼고 플레이어가 연 문만
+DEBT_KEYS = ('assn_ordered', 'scapegoats', 'frames', 'executions', 'mass_arrest', 'summary', 'lynch_allowed',
+             'trial_bought', 'dispersals', 'blackmail', 'ml_door_extend', 'ml_door_brink', 'ml_door_war')
 RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
 BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
 DARK = ('saint', 'caretaker', 'tyrant', 'schemer_plus')
@@ -264,6 +280,8 @@ class DarkRun(A.Run):
         self.kept_by, self.broken_by = Counter(), Counter()  # 칸마다 지킨·어긴 약속(5.3 신임 입장, 6라운드). 세기만 한다
         self.conf_since, self.conf_after_ml, self.crisis_by_conf = 0, False, False  # 정기 신임(6라운드)
         self.conf_lock, self.conf_lock_next = 0, 0  # 부결로 안건을 잃은 회기 수(지금 / 다음 회기부터)
+        self.conf_fail_streak = 0  # 연달아 부결된 정기 신임 수(7차 conf_streak)
+        self.debt, self.debt_seen = 0, 0  # 정당성 부채와 지금까지 센 어두운 수단 수(7차 conf_debt)
 
     # ---------------- S1a 훅 ----------------
     def res(self, key, default=0.0):
@@ -1703,10 +1721,21 @@ class DarkRun(A.Run):
                     s = min(s, -3)
                 elif g >= 1:
                     s -= 1
+            s -= self.debt_pen()  # 7차 정당성 부채(conf_debt=0이면 0)
             if c in self.leaderless:
                 s = 0
             sc[c] = s
         return sc
+
+    def debt_pen(self):
+        return min(Q['conf_debt_cap'], Q['conf_debt'] * self.debt) if Q['conf_debt'] else 0
+
+    def debt_tick(self):
+        """7차 정당성 부채: 회기마다 묵은 부채 −1, 지난 회기 뒤 새로 고른 어두운 수단만큼 +1씩."""
+        S = self.stats
+        tot = sum(S[k] for k in DEBT_KEYS) + S['harsh_passed'] - S['harsh_forced']
+        self.debt = max(0, self.debt - 1) + max(0, tot - self.debt_seen)
+        self.debt_seen = max(tot, self.debt_seen)
 
     def pass_prob(self, scores, need):
         """vote_yes가 통과할 확률(미정 표의 이항 분포를 더한 값). 주사위를 굴리지 않는다(보고용)."""
@@ -1736,14 +1765,33 @@ class DarkRun(A.Run):
         S['conf_votes'] += 1; S['conf_p_sum'] += pp
         S['conf_p_coin'] += 0.2 <= pp <= 0.8; S['conf_p_sure'] += pp > 0.95; S['conf_p_lost'] += pp < 0.05
         S['conf_last_seg'] += self.seg >= P['segments'] - 2  # 부결돼도 위기 3구간이 판 안에 끝나지 않는 표결
-        if self.vote_yes(sc, Q['conf_need']):
+        if Q['conf_debt']:
+            S['conf_debt_sum'] += self.debt; S['conf_debt_pen'] += self.debt_pen()
+        throw = Q['conf_throw'] == 1 or (Q['conf_throw'] == 2 and any(
+            self.grudge[c] >= P['hostile_grudge'] for c in COMMS))  # 7차 시험: 일부러 진다
+        if throw:
+            S['conf_thrown'] += 1
+        elif self.vote_yes(sc, Q['conf_need']):
             S['conf_passed'] += 1
-            self.trust += Q['conf_pass_trust']
+            self.conf_fail_streak = 0
+            gain = Q['conf_pass_trust']
+            if Q['conf_debt']:
+                gain = max(0, gain - Q['conf_debt'] * self.debt)
+            self.trust += gain
             return
         S['conf_failed'] += 1
+        self.conf_fail_streak += 1
         if Q['conf_fail_agenda']:  # 쫓아내지 않는다: 신임 −5, 다음 k회기 안건을 AI가 고른다(위기 카드 없음)
             self.trust -= Q['conf_lock_trust']
             self.conf_lock_next = Q['conf_fail_agenda']
+            if Q['conf_streak'] and self.conf_fail_streak >= 2:  # 7차: 연속 부결이면 S1a 신임 위기
+                S['conf_streak_hit'] += 1
+                self.trust = min(self.trust, Q['conf_streak_trust'])
+                if self.trust_crisis is None:
+                    self.trust_crisis = self.seg + 3
+                    self.crisis_by_conf = True
+                    S['conf_crisis'] += 1; S['trust_crisis'] += 1
+                    S['conf_crisis_live'] += self.trust < 25
             return
         self.trust -= Q['conf_fail_trust']
         if self.trust_crisis is None:
@@ -1873,6 +1921,8 @@ class DarkRun(A.Run):
         if self.war:  # 내전 중엔 회기가 열리지 않는다
             S['council_skipped_war'] += 1
             return
+        if Q['conf_debt']:  # 7차 정당성 부채(계엄 포고 회기에도 줄어든다)
+            self.debt_tick()
         if self.ml:  # 의회 대신 포고
             self.session_bookkeeping(); self.decree()
             return
@@ -2054,6 +2104,9 @@ def report(policy, n, places):
               f"통과 확률 평균 {agg['conf_p_sum'] / v if v else 0:.0%}(0.2~0.8 {agg['conf_p_coin'] / v if v else 0:.0%}, "
               f">0.95 {agg['conf_p_sure'] / v if v else 0:.0%}, <0.05 {agg['conf_p_lost'] / v if v else 0:.0%}), "
               f"마지막 회기 표결 {a('conf_last_seg'):.2f}, 계엄 뒤 {a('conf_after_ml'):.3f}")
+        if Q['conf_throw'] or Q['conf_streak'] or Q['conf_debt']:
+            print(f"  7라운드: 일부러 진 표결 {a('conf_thrown'):.2f}/판, 연속 부결 위기 {a('conf_streak_hit'):.3f}/판, "
+                  f"표결 때 부채 평균 {agg['conf_debt_sum'] / v if v else 0:.2f}, 입장 벌점 평균 {agg['conf_debt_pen'] / v if v else 0:.2f}")
         if Q['conf_fail_agenda']:
             print(f"  부결로 잃은 회기 {a('conf_locked'):.2f}/판: AI 안건 {a('conf_lock_ai'):.2f}, 그중 통과 {a('conf_lock_ai_passed'):.2f}, "
                   f"빈 회기 {a('conf_lock_empty'):.2f}")
