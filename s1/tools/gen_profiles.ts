@@ -33,8 +33,9 @@ function towns(country: string, names: string[]): string[] {
 // Korean spellings come from ref/names/transliterate.py, written without spaces.
 // Established usages override it: 슈트랄준트, 켐니츠, 마그데부르크.
 const TOWNS: Record<Language, string[]> = {
+  // 다섯째·여섯째 자리는 쓰지 않는 지명(금지선, 2026-10-07)을 뺀 자리다. 같은 시드로 같은 사람이 나오게 자리 수를 지키고 포즈난·레슈노를 한 번 더 둔다.
   pl: towns('폴란드', [
-    '볼슈틴', '포즈난', '브로츠와프', '레슈노', '즈봉신', '즈봉시네크', '라코니에비체', '노비토미실', '지엘로나구라', '술레후프',
+    '볼슈틴', '포즈난', '브로츠와프', '레슈노', '포즈난', '레슈노', '라코니에비체', '노비토미실', '지엘로나구라', '술레후프',
     '카르고바', '바비모스트', '그워구프', '레그니차', '코시치안', '시렘', '제핀', '시비에보진', '미엥지제치', '그로지스크비엘코폴스키',
   ]),
   de: towns('독일', [
