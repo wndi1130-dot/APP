@@ -52,6 +52,9 @@
           "type": "string",
           "minLength": 1
         },
+        "name_lang": {
+          "$ref": "urn:s1:schema:common#/$defs/nameLang"
+        },
         "gender": {
           "type": "string",
           "enum": [
@@ -247,6 +250,19 @@
         "teacher",
         "laborer"
       ]
+    },
+    "nameLang": {
+      "type": "string",
+      "enum": [
+        "pl",
+        "de",
+        "cz",
+        "uk",
+        "sk",
+        "hu",
+        "lt"
+      ],
+      "description": "이름을 뽑은 언어 풀(ref/names). S1b 수사 순위는 일반 묶음 pl·de·cz만 올리고, 이 칸이 없으면 올리지 않는다(s1b_dark_path 1.4)."
     },
     "condition": {
       "oneOf": [
