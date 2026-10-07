@@ -331,3 +331,13 @@ v4의 {4번}:
 ```text
 (4) panel 4, the chief stepping down in front: his peaked cap becomes a soft fur-lined winter cap with ear flaps and no badge, and his long coat becomes a worn civilian winter greatcoat with a scarf: no belt across the chest, no shoulder straps, no shiny buttons; in panel 6 the chief at the table wears the same soft winter cap, and nobody anywhere wears a peaked cap;
 ```
+
+### 11단계 결과 (2026-10-07 18:40)
+
+| 시안 | 고른 것 | 까닭 |
+|---|---|---|
+| M7c 정차 | v3 | 둘 다 마을 연기 기둥이 없어졌고 나머지는 옛 PICK 그대로다. 둘이 거의 같아서 먼저 나온 v3을 고른다. 마을엔 교회 첨탑과 불 켜진 창 몇 개만 남았다(주문은 창 하나였지만 연기가 없으니 둔다). |
+| M7b 필드 | v8 | 초상 셋이 왼쪽 위에 세로로 서고, 명령 아이콘 줄은 지워졌다. 왼쪽 아래엔 옅은 스틱 고리만 있고, 오른쪽 아래 부채꼴에 조준(가장 큼), 수동 조준, 공격, 밀치기, 웅크리기가 있다. 일시정지는 오른쪽 위로 갔다. v7은 초상 밑에 작은 아이콘이 남았고 스틱이 진하다. |
+| M8 연출 | 보류 | 두 판 모두 3칸 마을 연기가 없어졌다. 2칸 기관차는 옅은 김만 내고, 1칸 연기는 뒤로 낮게 흐른다. 열차장은 v3이 챙 모자에 민간 외투, v4가 털모자에 목도리다. 어느 쪽이 덜 군인처럼 보이는지는 다른 모델들에게 눈을 가리고 묻는 검사 결과를 보고 고른다. |
+
+바탕화면 PICK을 바꿨고, 옛 PICK은 `M7c_stop_ingame_v2_PICKold.png`, `M7b_field_ingame_v5_PICKold.png`로 남겼다. 남은 약점: M7b의 망자 무리는 옛 그림 그대로 회색 긴 외투 차림이다. 망자 옷 줄이 생기기 전 그림이라, 실제 모델에선 공통 망자 줄을 따른다.
