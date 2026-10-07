@@ -192,7 +192,7 @@
 | [Unity 매뉴얼: Mecanim 성능과 최적화](https://docs.unity3d.com/Manual/MecanimPeformanceandOptimization.html) | 화면 밖이면 Cull Completely로 두고 Update When Offscreen을 끈다. 스케일 커브를 피하고, 안 쓰는 레이어는 무게를 0으로 두고, 아바타 마스크로 손가락과 IK를 뺀다. 칸 20~30개에 사람 수백 명을 둘 홈 화면의 기본 규칙. |
 | [An Indie Approach to Procedural Animation](http://www.gdcvault.com/play/1020583/Animation-Bootcamp-An-Indie-Approach) (David Rosen, GDC 2014) | 적은 키 포즈와 코드로 걷기와 달리기를 만든다. 지침, 다침, 추위 같은 상태마다 동작을 따로 만들지 않고 코드로 기울이고 늦추는 쪽의 참고. |
 | [MDN: Web Animations API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API) | S1(웹) 화면에서 레버 걸림, 바늘 따라오기, 서류 꺼내기를 라이브러리 없이 만든다. |
-| [LitMotion](https://github.com/annulusgames/LitMotion) (MIT) | S2부터 Unity에서 레버, 바늘, 카드 같은 UI 움직임을 메모리 할당 없이 만드는 트윈 라이브러리. 튕김(Punch)과 흔들림(Shake)도 있다. |
+| [LitMotion](https://github.com/annulusgames/LitMotion) (MIT) | (2026-10-07 엔진이 Godot 4로 정해져 참고로만 남긴다. Godot에서는 내장 Tween을 쓴다: docs/design/briefs/presentation_motion.md 8b장) S2부터 Unity에서 레버, 바늘, 카드 같은 UI 움직임을 메모리 할당 없이 만드는 트윈 라이브러리. 튕김(Punch)과 흔들림(Shake)도 있다. |
 
 ## 7. 직접 녹화해 두면 좋은 장면
 
