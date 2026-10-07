@@ -1,8 +1,8 @@
 import { createRng, nextRandom } from '../../core/rng';
 import type { RngState } from '../../core/rng';
-import { COMMS, OPPOSITE, REP_AGE, TRAIT_BAN, TRAITS } from '../data';
+import { COMM_NAME, COMMS, OPPOSITE, REP_AGE, TRAIT_BAN, TRAITS } from '../data';
 import type { Comm } from '../data';
-import { addCard, drawPerson, isGone, PROFILES } from '../state';
+import { addCard, drawPerson, isGone, journal, PROFILES } from '../state';
 import type { Card, Game, Profile } from '../state';
 import { B, TRAIN_ORDER } from './data';
 import type { MeansKey } from './data';
@@ -56,6 +56,8 @@ export interface Suspect {
   facts: Fact[];
   clues: Clue[];
   acq: boolean;
+  /** 이 사건으로 이미 벌받았다(측근이 시킨 사람을 대서 수사가 다시 열려도 다시 피고가 되지 않는다) */
+  served?: boolean;
 }
 
 export type CaseKind = 'assault' | 'assn' | 'order' | SabKind | 'theft';
@@ -87,6 +89,8 @@ export interface Case {
   crowdSeen?: number;
   /** 재판이 열린 회기 */
   triedAt?: number;
+  /** 열차장이 시킨 일이 이 사건으로 이미 드러났다(두 번 드러나지 않는다) */
+  exposed?: boolean;
 }
 
 export type OrderWhy = 'hostile' | 'silence' | 'truth';
@@ -111,8 +115,9 @@ export interface DarkState {
   embers: Ember[];
   cases: Case[];
   /** 죄 없이 벌받은 사람(진실이 드러날 수 있는 창) */
-  /** held: 입을 막으려는 명령이 걸려 있어 그 명령이 끝날 때까지 드러나지 않는다 */
-  innocents: { id: string; comm: Comm; seg: number; caseId: number; how: 'punish' | 'scapegoat' | 'lynch'; held?: boolean }[];
+  /** asked: 드러나려는 일 카드가 떠 있다. held: 입을 막으려는 명령이 걸려 있어 그 명령이 끝날 때까지 드러나지 않는다.
+   *  둘 다 창(seg부터 6구간)을 다시 열지 않는다. 명령이 성공하면 묻히고, 실패하거나 거둬지면 바로 드러난다. */
+  innocents: { id: string; comm: Comm; seg: number; caseId: number; how: 'punish' | 'scapegoat' | 'lynch'; asked?: boolean; held?: boolean }[];
   /** 전에 벌받은 사람(의심 +1) */
   punished: string[];
   violentUsed: number;
@@ -133,8 +138,8 @@ export interface DarkState {
   practiceAsked: number;
   /** 이번 구간 칸 안에서 죽은 사람(정산에 확인한다) */
   fresh: { comm: Comm; name: string }[];
-  /** 확인하지 않은 시신: 다음 정산에 이 확률로 일어난다 */
-  unchecked: { comm: Comm; name: string; p: number }[];
+  /** 확인하지 않은 시신(밤샘): 다음 정산에 이 확률로 한 번 굴린다. cold면 S1a 냉동칸 수(stored, burn이면 pyre)에도 들어 있다 */
+  unchecked: { comm: Comm; name: string; p: number; cold?: boolean; burn?: boolean }[];
   order: Order | null;
   ordersUsed: number;
   /** 실행자: 평생 약점을 쥔다(4.6) */
@@ -266,6 +271,13 @@ export function rivals(a: Comm, b: Comm): boolean {
 export function rivalOf(c: Comm): Comm | null {
   if (OPPOSITE[c]) return OPPOSITE[c];
   return COMMS.find(o => OPPOSITE[o] === c) ?? null;
+}
+
+/** 대표가 죽거나 내렸으면 잇고 일지에 남긴다. 죽음은 죽음 훅(hooks.ts)이, 하차는 정차 훅이 부른다. 대표가 아니면 아무 일도 없다. */
+export function repGone(g: Game, c: Comm, id: string): void {
+  if (g.comms[c].leader.personId !== id) return;
+  const next = succeedRep(g, c);
+  journal(g, `${next}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
 }
 
 /** 대표가 죽거나 내리면 그 칸의 다른 사람이 잇는다(S1a 수치 4.2, hub.ts succeed와 같은 모양). */

@@ -8,7 +8,7 @@ import type { Card, Game } from '../state';
 import { B, EXECUTION, TRAIN_ORDER } from './data';
 import {
   boardingText, caseById, coverUp, crimeTitle, crowdLine, eligible, level, LEVEL_WORD, mobTarget, openCase, protect, punish,
-  reveal, scapegoat, sendTrial, summary, topByClues, updateFlags,
+  scapegoat, sendTrial, settleTruth, summary, topByClues, updateFlags,
 } from './cases';
 import type { Punish } from './cases';
 import { closeChronicle, nightmareSay, reaction } from './chronicle';
@@ -18,7 +18,7 @@ import {
   afterOrder, answerThreat, dropOrder, exeOptions, exeVoice, METHOD, orderOpen, roleLine, setExe, setMethod, startOrder, successP,
 } from './order';
 import { adults, alive, commOf, darkCard, dpick, dr, eul, iga, nameOf, segFull } from './state';
-import type { OrderExe, OrderMethod } from './state';
+import type { Ember, OrderExe, OrderMethod } from './state';
 
 // S1b 카드(13장). 본문과 대사는 자리표시이고 Gemini가 같은 결로 쓴다. 선을 넘는 선택지는 cross에 반응 한 줄(10.1)을 단다.
 // 화면은 cross가 있으면 검은 띠를 두른다(ui/card.ts). 무뎌짐이면 반응 줄이 빈칸이다(10.5).
@@ -39,16 +39,19 @@ function view(g: Game, card: Card): CardView | null {
   const c = card.comm ?? 'tail';
   switch (card.kind) {
     case 'dark:sign': {
-      const e = d.embers.find(x => x.id === card.n);
-      const tier = card.text ?? 'kiche';
-      if (!e) return { title: '지나간 기척', speaker: officer(g), body: card.who ?? '', required: true, choices: [ok('알았다')] };
+      const pair = signPair(g, card);
+      if (pair) return pairView(g, pair);
+      const e = d.embers.find(x => x.id === card.n) ?? (card.vals?.n2 ? d.embers.find(x => x.id === Number(card.vals!.n2)) : undefined);
+      const solo = e && e.id !== card.n;
+      const tier = (solo ? card.vals?.tier2 : card.text) ?? 'kiche';
+      if (!e) return { title: '지나간 기척', speaker: officer(g), body: [card.who, card.vals?.who2].filter(Boolean).join('\n'), required: true, choices: [ok('알았다')] };
       const read = signRead(e, tier);
       const full = guardsOut(g) >= B.guardMax && !guarded(g, e);
       const boiler = tier === 'imm' && e.imm === 2 && e.sab === 'boiler';
       const coupling = tier === 'imm' && e.imm === 2 && e.sab === 'coupling';
       return {
         title: tier === 'kiche' ? '기척' : '임박', speaker: officer(g), focus: e.who, required: true,
-        body: `${card.who ?? ''} ${read}`,
+        body: `${(solo ? card.vals?.who2 : card.who) ?? ''} ${read}`,
         choices: [
           { label: '경비를 붙인다', say: '두 사람 붙여라. 밤에도 눈 떼지 마라.', effs: [], special: 'dark:guard', disabled: guarded(g, e) ? '이미 서 있다' : full ? '경비가 두 곳에 나가 있다' : undefined, extra: ['경비대 노출 +3', '공포 +2', ...(coupling ? ['꼬리칸 관계 −3'] : [])] },
           ...(boiler ? [{ label: '수석 기관사에게 맡긴다', say: `${g.comms.engine.leader.name}, 밤 교대는 네가 직접 봐라.`, effs: [], special: 'dark:engine', disabled: g.comms.engine.rel < 15 ? '기관실이 열차장을 따르지 않는다' : undefined }] : []),
@@ -266,18 +269,21 @@ function choose(g: Game, card: Card, ch: Choice): void {
   const cs = caseById(g, card.n);
   const say = (text: string, tone: 'dark' | 'bad' | undefined = 'dark') => { if (text) journal(g, text, tone); };
   switch (sp) {
-    case 'dark:guard': {
-      const e = d.embers.find(x => x.id === card.n);
-      if (e) postGuard(g, e);
+    case 'dark:guard': case 'dark:guard2': case 'dark:guard:both': {
+      // 묶인 쪽지(4.2)에선 첫째 줄, 둘째 줄, 둘 다. 홀로 남은 둘째 줄이면 그 불씨.
+      const pair = signPair(g, card);
+      const one = signEmbers(g, card)[0];
+      const picked = !pair ? (one ? [one] : []) : sp === 'dark:guard' ? [pair.a.e] : sp === 'dark:guard2' ? [pair.b.e] : [pair.a.e, pair.b.e];
+      for (const e of picked) postGuard(g, e);
       break;
     }
     case 'dark:engine': {
-      const e = d.embers.find(x => x.id === card.n);
+      const e = signEmbers(g, card).find(x => x.imm === 2 && x.sab === 'boiler');
       if (e) e.blocked = true;
       break;
     }
     case 'dark:call': {
-      const e = d.embers.find(x => x.id === card.n);
+      const e = signEmbers(g, card)[0];
       if (e && !g.cards.some(k => k.kind === 'demand')) darkCard(g, { kind: 'demand', comm: e.who }, false);
       break;
     }
@@ -325,13 +331,16 @@ function choose(g: Game, card: Card, ch: Choice): void {
       if (cs) { cs.clock = null; updateFlags(g); }
       break;
     case 'dark:truth:let': {
-      if (card.who) say(reveal(g, card.who, commOf(g, card.who)), 'bad');
+      if (card.who) say(settleTruth(g, card.who, true), 'bad');
       break;
     }
     case 'dark:truth:order':
       if (card.text && card.who) {
-        // 진실이 드러나기 전에 입을 막으려 한다. 실패하면 그대로 드러난다(order.ts runOrder).
-        d.innocents.push({ id: card.who, comm: commOf(g, card.who), seg: g.seg, caseId: card.n ?? -1, how: 'punish', held: true });
+        // 진실이 드러나기 전에 입을 막으려 한다. 명령이 끝날 때까지 묶어 두고(창을 다시 열지 않는다),
+        // 성공하면 묻히고 실패하거나 거두면 바로 드러난다(order.ts runOrder, dropOrder).
+        const x = d.innocents.find(y => y.id === card.who);
+        if (x) { x.asked = false; x.held = true; }
+        else d.innocents.push({ id: card.who, comm: commOf(g, card.who), seg: g.seg, caseId: card.n ?? -1, how: 'punish', held: true });
         startOrder(g, card.text, 'truth');
         d.order!.ref = card.who;
       }
@@ -365,6 +374,55 @@ function choose(g: Game, card: Card, ch: Choice): void {
       break;
     default: break;
   }
+}
+
+/** 징후 쪽지에 걸린 산 불씨들(첫째 줄, 둘째 줄 순) */
+function signEmbers(g: Game, card: Card): Ember[] {
+  const d = g.dark!;
+  const ids = [card.n, card.vals?.n2 !== undefined ? Number(card.vals.n2) : undefined];
+  return ids.map(id => d.embers.find(x => x.id === id)).filter((x): x is Ember => !!x);
+}
+
+interface SignLine { e: Ember; tier: string; line: string }
+/** 두 줄이 다 살아 있는 묶인 쪽지면 두 줄을 돌려준다. 하나만 남았으면 null(한 줄 쪽지로 본다). */
+function signPair(g: Game, card: Card): { a: SignLine; b: SignLine } | null {
+  if (!card.vals?.n2) return null;
+  const d = g.dark!;
+  const a = d.embers.find(x => x.id === card.n);
+  const b = d.embers.find(x => x.id === Number(card.vals!.n2));
+  if (!a || !b) return null;
+  return { a: { e: a, tier: card.text ?? 'kiche', line: card.who ?? '' }, b: { e: b, tier: card.vals.tier2 ?? 'kiche', line: card.vals.who2 ?? '' } };
+}
+
+/** 묶인 징후 쪽지(4.2): 두 줄과 각 해석. 경비는 한쪽이나 둘 다, 수석 기관사는 보일러 임박이 있을 때만. 대표 부르기는 한 줄 쪽지에만 있다. */
+function pairView(g: Game, p: { a: SignLine; b: SignLine }): CardView {
+  const { a, b } = p;
+  const free = B.guardMax - guardsOut(g);
+  const need = [a, b].filter(x => !guarded(g, x.e)).length;
+  const same = a.e.who === b.e.who;
+  const label = (x: SignLine, i: number) => (same ? `${i === 0 ? '첫째' : '둘째'} 일에 경비` : `${COMM_NAME[x.e.who]} 쪽에 경비`);
+  const coupling = (x: SignLine) => x.tier === 'imm' && x.e.imm === 2 && x.e.sab === 'coupling';
+  const boiler = [a, b].find(x => x.tier === 'imm' && x.e.imm === 2 && x.e.sab === 'boiler');
+  const one = (x: SignLine, i: number, special: string): Choice => ({
+    label: label(x, i), say: '두 사람 붙여라. 밤에도 눈 떼지 마라.', effs: [], special,
+    disabled: guarded(g, x.e) ? '이미 서 있다' : free < 1 ? '경비가 두 곳에 나가 있다' : undefined,
+    extra: [`경비대 노출 +${B.guardExpo}`, `공포 +${B.guardFear}`, ...(coupling(x) ? ['꼬리칸 관계 −3'] : [])],
+  });
+  return {
+    title: a.tier === 'imm' || b.tier === 'imm' ? '임박' : '기척', speaker: officer(g), focus: a.e.who, required: true,
+    body: `${a.line} ${signRead(a.e, a.tier)}\n${b.line} ${signRead(b.e, b.tier)}`,
+    choices: [
+      {
+        label: '둘 다 경비를 붙인다', say: '두 곳 다 두 사람씩 붙여라.', effs: [], special: 'dark:guard:both',
+        disabled: need === 0 ? '이미 서 있다' : free < need ? '경비가 모자란다' : undefined,
+        extra: [`경비대 노출 +${B.guardExpo * need}`, `공포 +${B.guardFear * need}`, ...([a, b].some(coupling) ? ['꼬리칸 관계 −3'] : [])],
+      },
+      one(a, 0, 'dark:guard'),
+      one(b, 1, 'dark:guard2'),
+      ...(boiler ? [{ label: '수석 기관사에게 맡긴다', say: `${g.comms.engine.leader.name}, 밤 교대는 네가 직접 봐라.`, effs: [], special: 'dark:engine', disabled: g.comms.engine.rel < 15 ? '기관실이 열차장을 따르지 않는다' : undefined }] : []),
+      { label: '모른 척한다', say: '쪽지 한 장에 경비를 뺄 수는 없다.', effs: [], special: 'dark:none' },
+    ],
+  };
 }
 
 CARD_EXTENSIONS.push({ view, choose });

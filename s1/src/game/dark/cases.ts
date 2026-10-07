@@ -149,7 +149,7 @@ export function addClue(g: Game, c: Case): Clue | null {
 
 /** 벌받지 않은(무죄로 풀려나지 않은) 산 용의자 */
 export function eligible(g: Game, c: Case): Suspect[] {
-  const live = c.sus.filter(s => alive(g, s.id));
+  const live = c.sus.filter(s => alive(g, s.id) && !s.served);
   const free = live.filter(s => !s.acq);
   return free.length ? free : live;
 }
@@ -176,7 +176,7 @@ export function updateFlags(g: Game): void {
   const ids = new Set<string>();
   for (const c of g.dark!.cases) {
     if (c.status === 'closed') continue;
-    for (const s of c.sus) if (!s.acq && alive(g, s.id) && flagged(g, s)) ids.add(s.id);
+    for (const s of c.sus) if (!s.acq && !s.served && alive(g, s.id) && flagged(g, s)) ids.add(s.id);
   }
   g.scapegoatOk = [...ids];
 }
@@ -290,7 +290,8 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       scene(g, 'exile', 2, `${g.seg}구간, ${name}에게 하차 명령을 내렸다.`, [s.id]);
       break;
     case 'execute':
-      cross(g, via === 'trial' ? 'executions' : 'executions');
+      d.harm += 1; // 처형도 사람이 죽은 피해 사건이다(1.2)
+      cross(g, 'executions');
       onDeath(g, comm, [name], 'chosen');
       offend(g, comm);
       g.fear = clamp(g.fear + 10, 0, 100);
@@ -306,12 +307,13 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       const boss: Suspect = { id: s.proxyFor, culprit: true, facts: factsOf(g, s.proxyFor, c.kind, c.victimComm), clues: [], acq: false };
       boss.clues.push({ kind: 'witness', truth: true, line: `${name}이(가) ${nameOf(g, s.proxyFor)}이(가) 시켰다고 댔다.`, seg: g.seg });
       s.culprit = false;
+      s.served = true;
       c.sus.push(boss);
       c.status = 'open';
       c.clock = null;
       lines.push(`${name}이(가) 시킨 사람을 댔다. ${nameOf(g, s.proxyFor)}. 수사를 다시 열 수 있다.`);
     }
-    if (c.own && dr(g) < B.orderNamesChief) lines.push(...exposeOrderLines(g, c));
+    if (c.own && !c.exposed && dr(g) < B.orderNamesChief) lines.push(...exposeOrderLines(g, c));
   } else {
     d.stats.misjudged += 1;
     d.innocents.push({ id: s.id, comm, seg: g.seg, caseId: c.id, how: 'punish' });
@@ -323,6 +325,8 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
 
 /** 실행자가 열차장을 댔다(4.6 실패·벌). 대면 신임 −20, 모든 칸 적의 +1, 대상 칸 적의 +2. */
 export function exposeOrderLines(g: Game, c: Case): string[] {
+  if (c.exposed) return [];
+  c.exposed = true;
   g.trust = clamp(g.trust - 20, 0, 100);
   for (const k of COMMS) offend(g, k);
   offend(g, c.victimComm);
@@ -401,14 +405,25 @@ export function truthTick(g: Game): void {
   const d = g.dark!;
   const keep: typeof d.innocents = [];
   for (const x of d.innocents) {
+    // 예고 카드가 떠 있거나 입막음 명령이 걸린 진실은 굴리지 않는다(그 카드와 명령이 끝을 정한다).
+    if (x.asked || x.held) { keep.push(x); continue; }
     if (g.seg - x.seg > B.revealWindow) continue;
     if (dr(g) >= B.revealP || g.cards.some(k => k.kind === 'dark:truth')) { keep.push(x); continue; }
     // 드러나기 전에 예고 카드: 말하려는 사람을 '조용히 처리한다'가 열릴 수 있다(4.6).
     const witnesses = adults(g, x.comm, { noRep: true }).filter(p => p.id !== x.id);
     const w = witnesses.length ? dpick(g, witnesses) : null;
     darkCard(g, { kind: 'dark:truth', comm: x.comm, who: x.id, n: x.caseId, ...(w ? { text: w.id } : {}) });
+    keep.push({ ...x, asked: true });
   }
   d.innocents = keep;
+}
+
+/** 드러나려던 진실 하나를 끝낸다. reveal이면 드러나고(한 줄을 돌려준다), 아니면 묻힌다. 진실 목록에서 빠진다. */
+export function settleTruth(g: Game, id: string, reveals: boolean): string {
+  const d = g.dark!;
+  const x = d.innocents.find(y => y.id === id);
+  d.innocents = d.innocents.filter(y => y.id !== id);
+  return reveals ? reveal(g, id, x?.comm ?? commOf(g, id)) : '';
 }
 
 /** 진실이 드러났다: 신임 −10, 벌받은 사람의 칸 적의 +1, 결과에 '죄 없는 사람을 벌했다'. */

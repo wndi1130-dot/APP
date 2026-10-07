@@ -6,11 +6,11 @@ import { offend } from '../politics';
 import { clamp, journal } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
-import { caseById, caught, coverUp, exposeOrderLines, openCase } from './cases';
+import { caseById, caught, coverUp, exposeOrderLines, openCase, settleTruth } from './cases';
 import { cross, scene } from './chronicle';
 import { newEmber } from './embers';
 import {
-  adults, alive, commOf, darkCard, dpick, dr, isRep, nameOf, rivalOf, succeedRep,
+  adults, alive, commOf, darkCard, dpick, dr, isRep, nameOf, rivalOf,
 } from './state';
 import type { Order, OrderExe, OrderMethod, OrderWhy } from './state';
 
@@ -103,10 +103,12 @@ export function setMethod(g: Game, method: OrderMethod): void {
   o.at = g.seg;
 }
 
-/** 명령을 거둔다(실행자·방법 카드에서). 이미 넘은 선은 남는다. */
+/** 명령을 거둔다(실행자·방법 카드에서). 이미 넘은 선은 남는다. 입을 막으려던 진실은 그대로 드러난다. */
 export function dropOrder(g: Game): void {
+  const ref = g.dark!.order?.ref;
   g.dark!.order = null;
   journal(g, '열차장이 말을 거뒀다. 실행자는 아무 말도 듣지 못한 척했다.', 'dark');
+  if (ref) journal(g, settleTruth(g, ref, true), 'bad');
 }
 
 /** 이동이나 정차에서 명령이 실행된다. 결과 카드를 돌려준다. */
@@ -120,6 +122,8 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
   const exe = o.exeId;
   if (!alive(g, o.target) || !alive(g, exe)) {
     journal(g, `${name}을(를) 두고 한 말은 일이 되지 않았다.`, 'dark');
+    // 입을 막으려던 사람이 이미 없으면 진실도 묻히고, 실행자가 없어 일이 안 됐으면 그 사람이 말한다.
+    if (o.ref) { const line = settleTruth(g, o.ref, alive(g, o.target)); if (line) journal(g, line, 'bad'); }
     return;
   }
   const tc = commOf(g, o.target);
@@ -129,15 +133,14 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
   if (ok) {
     d.stats.ordersOk += 1;
     d.harm += 1;
+    if (o.ref) settleTruth(g, o.ref, false); // 입을 막았다: 그 진실은 묻힌다
     const rep = isRep(g, o.target);
-    onDeath(g, tc, [name], 'chosen');
+    onDeath(g, tc, [name], 'chosen'); // 대표였으면 죽음 훅(hooks.ts)이 승계한다
     if (rep) {
       // 순교자 효과(4.6): 대상 칸 관계 −10, 열기 +1. 승계자는 대개 더 과격하다.
       const s = g.comms[tc];
       s.rel = clamp(s.rel - 10, -100, 100);
       s.fervor = Math.min(3, s.fervor + 1);
-      const next = succeedRep(g, tc);
-      journal(g, `${next}이(가) ${COMM_NAME[tc]} 대표 자리를 이었다.`, 'dark');
     }
     // 사고·정차로 꾸민 일은 들킬 때만 수사가 열린다. 칸 안 밤일은 늘 열린다(사람이 칸 안에서 죽었다).
     const detected = dr(g) < METHOD[o.method].caught;
@@ -166,6 +169,8 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
     line += ` ${nameOf(g, exe)}이(가) 그 자리에서 붙잡혔다.`;
     if (dr(g) < B.orderNamesChief) line += ` ${exposeOrderLines(g, c).join(' ')}`;
   }
+  // 입을 막으려던 사람이 살아남았다. 그 사람이 말한다.
+  if (o.ref) line += ` ${settleTruth(g, o.ref, true)}`;
   darkCard(g, { kind: 'dark:order_fail', who: o.target, comm: tc, n: c.id, text: line });
 }
 

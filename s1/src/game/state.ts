@@ -14,6 +14,8 @@ import profilesJson from '../../data/profiles.json';
 
 export type Phase = 'prep' | 'travel' | 'stop' | 'council' | 'settle' | 'end';
 export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt';
+/** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
+export const END_LINK: { finish: (g: Game, end: EndKind) => void } = { finish: (g, end) => { g.end = end; g.phase = 'end'; } };
 
 export interface Profile { id: string; name: string; age: number; community: Comm; like: string; dislike: string; hometown: string }
 export const PROFILES = profilesJson as unknown as Profile[];

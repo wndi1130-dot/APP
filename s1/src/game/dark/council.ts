@@ -3,11 +3,11 @@ import type { Comm } from '../data';
 import { MOTION_SOURCES, MOTIONS } from '../motions';
 import type { MotionDef } from '../motions';
 import { isLawAgenda, offend } from '../politics';
-import { clamp, journal, seats, stageOf } from '../state';
+import { clamp, END_LINK, journal, seats, stageOf } from '../state';
 import type { Agenda, Game, MotionAgenda, VoteResult } from '../state';
 import { B } from './data';
 import { caseById, crimeTitle, level, LEVEL_WORD, topByClues, updateFlags } from './cases';
-import { closeChronicle, cross, scene } from './chronicle';
+import { cross, scene } from './chronicle';
 import { DEFENSE_LINES } from './lines';
 import { newEmber } from './embers';
 import { byId, commOf, darkCard, eun, nameOf, rivals } from './state';
@@ -81,7 +81,8 @@ function verdict(g: Game, a: MotionAgenda, guilty: boolean): void {
   s.acq = true;
   g.comms[comm].rel = clamp(g.comms[comm].rel + 3, -100, 100);
   cs.status = 'open';
-  if (cs.clock !== null) cs.clock = 1;
+  // 군중은 다음 구간에 온다(4.4). 의회 바로 뒤가 같은 구간의 정산이라 시계를 둘로 둔다(그 정산에 하나 준다).
+  if (cs.clock !== null) cs.clock = 2;
   journal(g, `${nameOf(g, s.id)}이(가) 풀려났다. 사람들은 다음 이름을 찾는다.`, 'dark');
   updateFlags(g);
 }
@@ -97,12 +98,8 @@ const NO_CONFIDENCE: MotionDef = {
   },
   title: () => '열차장 불신임',
   changes: () => ['통과: 열차장이 물러난다(판이 끝난다)', '부결: 아무 일 없다'],
-  onPass: g => {
-    g.end = 'ousted';
-    g.phase = 'end';
-    journal(g, '의회가 열차장을 끌어내렸다.', 'bad');
-    closeChronicle(g);
-  },
+  // 판 끝은 다른 끝과 같은 길(turn.ts finish)로 간다: 끝 일지, 아이를 맡긴 칸, H7 한 줄.
+  onPass: g => END_LINK.finish(g, 'ousted'),
   onFail: (g, a) => {
     if (a.by) g.comms[a.by].rel = clamp(g.comms[a.by].rel - 3, -100, 100);
     journal(g, '불신임 동의가 부결됐다. 열차장은 자리를 지켰다.');
@@ -148,8 +145,6 @@ export function darkCouncilOpen(g: Game): void {
     if (!c.paused && c.clock !== null) { c.paused = true; c.clock += 1; }
     if (c.promised === g.session) c.promised = g.session + 1; // 위기 법이 밀어낸 회기는 약속 위반이 아니다
   }
-  // 불신임은 한 번 오르면 끝난다(통과하면 판이 끝나고, 부결이면 다시 조건이 서야 오른다).
-  if (council.options.some(o => !isLawAgenda(o) && o.motion === 'no_confidence')) { d.confBy = null; d.confLeader = null; d.lowTrust = 0; }
 }
 
 /** 회기를 마친 정산: 약속한 재판이 이 회기에 열리지 않았으면 약속 위반(S1a 수치 3.1의 값). */
@@ -174,7 +169,9 @@ export function trialPromises(g: Game): void {
 /** 표결 뒤(politics.ts 훅): 원수 두 대표가 갈렸으면 진 쪽에 20% 불씨, 위기 법 요구 없이 고른 가혹 법은 수단 1. */
 export function afterVote(g: Game, agenda: Agenda, r: VoteResult): void {
   const d = g.dark;
-  if (!d) return;
+  if (!d || g.phase === 'end') return;
+  // 불신임은 표결을 거쳐야 끝난다(부결이면 다시 조건이 서야 오른다). 목록에 오르기만 하고 다른 안건을 고르면 남는다.
+  if (!isLawAgenda(agenda) && agenda.motion === 'no_confidence') { d.confBy = null; d.confLeader = null; d.lowTrust = 0; }
   if (isLawAgenda(agenda) && r.passed && !agenda.repeal && !agenda.forced && !agenda.ratify && LAWS[agenda.law].tag === '가혹') cross(g, 'harsh_chosen');
   if (r.decree) return;
   const side = (c: Comm) => Math.sign(r.byComm[c].yes - r.byComm[c].no);
