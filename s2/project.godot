@@ -2,8 +2,8 @@
 config_version=5
 
 [application]
-config/name="S2 Phone Performance Spike"
-run/main_scene="res://scenes/main.tscn"
+config/name="S2 Sulechow Graybox"
+run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 
 [display]
@@ -12,6 +12,7 @@ window/size/viewport_height=720
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 window/handheld/orientation=0
 
 [rendering]

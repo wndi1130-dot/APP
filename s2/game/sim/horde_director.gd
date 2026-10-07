@@ -9,16 +9,25 @@ const PULL_PER_POINT := 5.0
 const MIN_GAP := 60.0
 const FIRST_SIZE := 6
 const SIZE_STEP := 2
-const BUDGET := 60
+## Total hordes are endless (2026-10-07 review: 60 is a concurrent cap the
+## field enforces, not a stop budget). budget_left stays for tests and debug.
+const BUDGET := 1 << 30
+const CONCURRENT_CAP := 60
 const REST_BASE := 45.0
 const REST_PER_SHOT := 5.0
 const REST_MIN := 15.0
 const CALL_RANGE_GROWTH := 0.6
 
-const ENTRIES := ["north", "south", "east"]
-const ENTRY_NAMES := {"north": "북쪽 맨홀", "south": "남쪽 맨홀", "east": "동쪽 맨홀"}
-## Hordes climb out of the sewers (user setting 2026-10-07: refugees fled underground with the infected).
-const FIRST_ENTRY := "east"
+## Rear hordes: the sewers are the endless source (user 2026-10-07: refugees
+## fled underground and the infected came with them). A rural stop has a small
+## sewer, so the train-following share on roads and the track end is large
+## (places.md 5). Weights are the share of hordes per entry.
+const ENTRIES := ["culvert", "manhole", "east_track", "north_road", "south_road"]
+const ENTRY_WEIGHTS := {"culvert": 0.3, "manhole": 0.2, "east_track": 0.25, "north_road": 0.125, "south_road": 0.125}
+const SEWERS := ["culvert", "manhole"]
+const ENTRY_NAMES := {"culvert": "급수탑 밑 암거", "manhole": "거리 맨홀", "east_track": "동쪽 선로 끝", "north_road": "북쪽 길", "south_road": "남쪽 길"}
+const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라온다", "manhole": "거리 맨홀에서 올라온다", "east_track": "동쪽 선로 끝으로 온다", "north_road": "북쪽 길로 온다", "south_road": "남쪽 길로 온다"}
+const FIRST_ENTRY := "east_track"
 
 ## Forecast bands, in game minutes left.
 const HOUR_MIN := 50.0
@@ -36,6 +45,8 @@ var rest_until: float = -INF
 ## Scheduled gap of the current wait; base for pressure().
 var interval: float = FIRST_INTERVAL
 var entry_history: Array[String] = []
+## Sewer holes closed for this stop (a manhole with something heavy on it).
+var blocked: Array[String] = []
 
 var _rng: RandomNumberGenerator
 
@@ -127,7 +138,7 @@ func forecast(now: float, precision: int, clock) -> String:
 			when = "한 시간쯤"
 		elif left_min >= HALF_MIN:
 			when = "반 시간쯤"
-		return "%s에서 올라온다, %s." % [where, when]
+		return "%s, %s." % [ENTRY_PHRASES.get(next_entry, where), when]
 	var at_min: float = _arrival_minutes(maxf(next_arrival, now), clock)
 	var rounded: int = roundi(at_min / 15.0) * 15
 	var hh: int = floori(rounded / 60.0) % 24
@@ -154,14 +165,47 @@ func _arrival_minutes(field_t: float, clock) -> float:
 	return FieldClock.minutes_at(field_t)
 
 
-## Random entry, never the same road three times in a row.
+## Close a sewer hole for this stop. Its share comes out of the other holes.
+func block(entry: String) -> void:
+	if not blocked.has(entry):
+		blocked.append(entry)
+	if next_entry == entry:
+		next_entry = _pick_entry()
+
+
+func is_open(entry: String) -> bool:
+	return ENTRIES.has(entry) and not blocked.has(entry)
+
+
+## A loud sound next to a sewer hole wakes that hole: the next horde climbs out there.
+func call_from(entry: String) -> bool:
+	if not SEWERS.has(entry) or not is_open(entry) or is_exhausted():
+		return false
+	next_entry = entry
+	return true
+
+
+static func is_sewer(entry: String) -> bool:
+	return SEWERS.has(entry)
+
+
+## Weighted random entry among open ones, never the same three times in a row.
 func _pick_entry() -> String:
-	var choices: Array[String] = []
 	var n: int = entry_history.size()
 	var banned: String = ""
 	if n >= 2 and entry_history[n - 1] == entry_history[n - 2]:
 		banned = entry_history[n - 1]
+	var total: float = 0.0
+	var choices: Array[String] = []
 	for e: String in ENTRIES:
-		if e != banned:
+		if e != banned and not blocked.has(e):
 			choices.append(e)
-	return choices[_rng.randi_range(0, choices.size() - 1)]
+			total += float(ENTRY_WEIGHTS[e])
+	if choices.is_empty():
+		return FIRST_ENTRY
+	var r: float = _rng.randf() * total
+	for e: String in choices:
+		r -= float(ENTRY_WEIGHTS[e])
+		if r <= 0.0:
+			return e
+	return choices[choices.size() - 1]

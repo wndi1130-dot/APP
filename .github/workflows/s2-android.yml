@@ -1,8 +1,8 @@
-name: S2 Android performance spike
+name: S2 Android field graybox
 
 on:
   push:
-    branches: [s2/perf-spike-20261007]
+    branches: [main]
     paths: [s2/**, .github/workflows/s2-android.yml]
   pull_request:
     paths: [s2/**, .github/workflows/s2-android.yml]
@@ -97,7 +97,7 @@ jobs:
           set -euo pipefail
           "$GODOT_BIN" --headless --path s2 --editor --quit 2>&1 | tee s2/build/import.log
           # Parse every project and test script, so one run reports all parse errors.
-          for script in $(cd s2 && find scripts tests -name '*.gd' | sort); do
+          for script in $(cd s2 && find game scripts tests -name '*.gd' | sort); do
             echo "== check $script" | tee -a s2/build/import.log
             "$GODOT_BIN" --headless --path s2 --check-only --script "res://$script" 2>&1 | tee -a s2/build/import.log || true
           done
@@ -151,10 +151,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$GODOT_BIN" --headless --path s2 --export-debug Android build/s2-perf-debug.apk 2>&1 | tee s2/build/export.log
-          test -s s2/build/s2-perf-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose s2/build/s2-perf-debug.apk | tee s2/build/signature.txt
-          sha256sum s2/build/s2-perf-debug.apk > s2/build/apk.sha256
+          "$GODOT_BIN" --headless --path s2 --export-debug Android build/s2-field-debug.apk 2>&1 | tee s2/build/export.log
+          test -s s2/build/s2-field-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose s2/build/s2-field-debug.apk | tee s2/build/signature.txt
+          sha256sum s2/build/s2-field-debug.apk > s2/build/apk.sha256
 
       - name: Upload test logs and debug APK
         if: always()
