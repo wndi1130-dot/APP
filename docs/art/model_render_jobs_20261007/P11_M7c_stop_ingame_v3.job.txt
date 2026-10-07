@@ -1,0 +1,4 @@
+Task: use your built-in image generation tool to create exactly one image from the prompt below. Attached reference images, in order: image 1 = M7c_stop_ingame_PICK.png; Save the generated image as M7c_stop_ingame_v3.png in the current working directory. Do not write any other files. Reply with one line: the saved path.
+
+--- PROMPT ---
+Edit the attached image. Keep everything exactly as it is: the camera, the platform, the train, the faces in the windows, the water tower, the lamps, the footprints, the two figures at the far end, the brake steam low along the wheels, the stop marker and the arrow button. Change only one thing: remove the dark column of smoke rising above the village behind the trees, so the sky there is the same snowy dusk haze; the village shows only the church spire, dark roofs and a single lit window. No chimney of any building gives smoke or steam. Do not add or remove any other part.

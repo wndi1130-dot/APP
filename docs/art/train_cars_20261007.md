@@ -323,6 +323,7 @@ Edit the attached image. Keep everything exactly as it is, both views, every car
 ### 다음
 
 - 다음에 좀비나 사람 무리가 나오는 주문을 쓸 때는 금지 줄과 함께 긍정 줄을 넣는다: "The dead wear only torn, ordinary civilian winter clothes: coats, jackets, knitted hats, scarves." 구간 배경에서 그림 모델이 망자를 철모 쓴 병사 무리로 그렸다(segment_backdrops_20261007.md 끝, 화면 스레드).
+- 17:58부터: 주문에 아이가 나오면 아이 일 줄을, 경찰서 망자가 나오면 방호 조끼 줄을 붙인다(문장은 model_renders_20261007.md '민감한 표식 규칙' 17:58).
 - 시안을 실제 모델로 옮길 때 지킬 것: 털모자와 외투는 민간복(T4b·M4 주의), 옷감은 모자이크 말고 흐린 손칠과 덧댐(F2·F3), 냉동칸 안에 식량 없음(T4c).
 
 ## 10단계 T6 v5·v6 결과와 고른 것 (2026-10-07 17:50)
