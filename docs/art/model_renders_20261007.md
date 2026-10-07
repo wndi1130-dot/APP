@@ -163,7 +163,7 @@ Real-time 3D for a mobile survival game seen mostly from a top-down three-quarte
 
 Model sheet on a plain mid-grey studio background with a faint floor grid and soft even light. Top row: untextured matte light-grey clay with visible flat-shaded facets, so the polygon structure and silhouette can be judged. Bottom row: the same models fully textured. Identical poses and camera angles in both rows. No labels except tiny placeholder numbers.
 
-Each row, from right to left in three-quarter view: (1) an old museum-restored steam locomotive with its tender, a large welded wedge-shaped steel plough over the front buffers for pushing through the dead on the track, extra steel plates bolted around the cab; (2) the front car: an old sleeper car with curtained windows; (3) the dining car with a stovepipe through its roof; (4) the tail car: a worn-out old wooden third-class passenger carriage with a row of passenger windows, some boarded or patched with planks, a crooked stovepipe and tarpaulin over a broken roof section; it must read clearly as a passenger carriage, never as a closed freight wagon. At the right end of the sheet, a small kit of separate add-on parts laid out on the floor: two bolt-on armour plates, a window grille, a roof lookout platform with a railing, a snow-covered tarpaulin, a coupler with chains.
+Each row, from right to left in three-quarter view: (1) an old museum-restored steam locomotive with its tender, a large welded wedge-shaped steel plough over the front buffers for pushing through the dead on the track, extra steel plates bolted around the cab; (2) the front car: an old sleeper car with curtained windows; (3) the dining car with a stovepipe through its roof; (4) the tail car: a worn-out old wooden third-class passenger carriage with a row of passenger windows, a few patched with planks that still leave gaps for warm light, a crooked stovepipe and tarpaulin over a broken roof section; it must read clearly as a passenger carriage, never as a closed freight wagon. At the right end of the sheet, a small kit of separate add-on parts laid out on the floor: two bolt-on armour plates, a plank window patch with gaps between the boards, a roof lookout platform with a railing, a snow-covered tarpaulin, a buffer-and-hook coupler.
 ```
 
 ## M7 게임 화면 안에서 (폰 실시간 3D 마감)
@@ -272,3 +272,12 @@ M7b 필드도 사람들이 철모와 군용 외투 차림이라 화물칸 옆의
 4단계(07:58): M4는 v3을 골랐다. 경비는 귀덮개 털모자, 소총, 몽둥이, 손등불로 읽히고 완장·철모·모표가 없다. v4는 털모자 앞에 작은 모표가 남아 뺐다. M7b v3·v4는 첨부 C1_field_v2에서 철모와 군용 외투를 다시 옮겨 와서, 화면 컨셉 스레드의 C1_field_v3가 나오면 그걸 첨부로 5단계에서 다시 뽑는다.
 
 5단계(08:05): M7b는 C1_field_v3를 첨부로 다시 뽑은 v5를 골라 PICK으로 바꿨다. 철모 없이 털모자·니트 모자·목도리 차림이고, 화차는 지붕 없는 석탄차, 열차는 객차다. 크레인 옆 두 명의 허리띠 맨 올리브 외투만 살짝 제복 느낌이 남았다. v6은 둥근 모자가 철모처럼 읽혀 뺐다. M8 콘티(M7b v1 기준)는 다시 뽑지 않았다. 5번 칸 사람이 작아 철모가 거의 안 읽히지만, 콘티를 다시 쓸 일이 생기면 새 PICK으로 다시 뽑는다.
+
+6단계(08:40, 누더기 방향 다시 뽑기): 사슬·막힌 창 문장(88bd380) 전에 e3ae628 판 주문으로 돌았다.
+
+| 항목 | 고른 판 | 이유 |
+|---|---|---|
+| M4 공동체 다섯 | v6 | 꼬리칸 사람(5번)이 해진 단, 덧댄 담요, 끈으로 묶은 보따리로 확실히 누더기가 됐다. 경비는 털모자·소총·몽둥이·손등불이고 모표가 없다(털모자 앞의 작은 점은 단추로 본다). 약점: 1·3번 외투 텍스처가 바둑판 네모로 나와 '칠해서 뭉갠' 문장을 또 어겼고, 2번 의무진과 4번 기술자는 아직 멀쩡한 편이다. v5는 텍스처가 더 낫지만 경비 털모자에 마름모 모표가 있어 뺐다 |
+| M6 열차 | v4 | 꼬리칸이 판자 덧댄 3등 객차로 읽히고, 판자 사이로 불빛이 새어 '막아 둔 칸'으로는 안 읽힌다. 2번 칸 색이 달라 칸 구별이 쉽다. 사람이 탄 칸에 사슬·빗장·자물쇠는 없다. v3은 객차가 너무 말끔하다 |
+
+둘 다 부품 판에 창살(쇠창살 창)과 사슬 달린 연결기가 나왔다. 내 M6 글상자가 '창 그릴'과 '사슬 연결기'를 주문했기 때문이라, 판자 틈 창 덧댐과 완충기·갈고리 연결기로 바꿨다. 쇠창살은 사람이 탄 칸에 붙는 순간 가둔 칸으로 읽히니 실제 에셋 목록에서도 뺀다. 객차 2·3번은 누더기 정도가 아직 약하다. 실제 에셋 단계에서 덧댄 판과 그을음을 칸마다 따로 칠하면 된다고 보고 다시 뽑지는 않았다.
