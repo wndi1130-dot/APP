@@ -13,6 +13,7 @@ var settings: Dictionary = {}
 var vat_assets: Dictionary = {}
 var camera: Camera3D
 var environment: Environment
+var sun: DirectionalLight3D
 var player: Node3D
 var destination := Vector3(-6, 0, 5)
 var blockers: Dictionary = {}
@@ -32,7 +33,8 @@ var noise_hits: int = 0
 func _ready() -> void:
 	rng.seed = 20261007
 	field_started_ms = Time.get_ticks_msec()
-	environment = Graybox.environment_for(self, bool(settings.get("fog", true)))
+	environment = Graybox.environment_for(self, bool(settings.get("fog", true)), bool(settings.get("shadows", true)))
+	sun = get_node("Sun") as DirectionalLight3D
 	Graybox.box(self, Vector3(WIDTH, 0.2, HEIGHT), Vector3(0, -0.2, 0), 0.42)
 	_build_station()
 	player = Node3D.new()
@@ -141,9 +143,15 @@ func _build_rain() -> void:
 func apply_settings(new_settings: Dictionary) -> void:
 	settings = new_settings.duplicate()
 	environment.fog_enabled = bool(settings["fog"])
+	sun.shadow_enabled = bool(settings["shadows"])
 	rain.emitting = bool(settings["rain"])
 	_refresh_visibility()
 	_render_crowd()
+
+func set_vat_assets(assets: Dictionary) -> void:
+	# The new mesh carries its own VAT texture and row count.
+	vat_assets = assets
+	crowd.multimesh.mesh = assets["mesh"]
 
 func emit_noise() -> void:
 	noise_target = player.position

@@ -1,5 +1,0 @@
-﻿PASS allowlist: 40 new files, no tracked/staged changes
-PASS branch: s2/perf-spike-20261007
-PASS git diff --check: exit 0, no output
-PASS SHA256: 25 source/config/document files match static manifest
-PASS delivery: required files exist, text whitespace checked, one next step

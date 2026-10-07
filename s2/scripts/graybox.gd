@@ -13,7 +13,7 @@ static func box(parent: Node3D, size: Vector3, at: Vector3, shade: float = 0.5) 
 	parent.add_child(node)
 	return node
 
-static func environment_for(parent: Node3D, fog: bool) -> Environment:
+static func environment_for(parent: Node3D, fog: bool, shadows: bool = false) -> Environment:
 	var world := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
@@ -28,9 +28,12 @@ static func environment_for(parent: Node3D, fog: bool) -> Environment:
 	world.environment = environment
 	parent.add_child(world)
 	var light := DirectionalLight3D.new()
+	light.name = "Sun"
 	light.rotation_degrees = Vector3(-55, -25, 0)
 	light.light_energy = 0.8
-	light.shadow_enabled = false
+	# One sun shadow; the distance covers the oblique top-view field.
+	light.shadow_enabled = shadows
+	light.directional_shadow_max_distance = 65.0
 	parent.add_child(light)
 	return environment
 

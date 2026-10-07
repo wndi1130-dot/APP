@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 25
     env:
       GODOT_VERSION: 4.7.2
-      GUT_VERSION: 9.3.0
+      GUT_VERSION: 9.7.1
     steps:
       - uses: actions/checkout@v4
 

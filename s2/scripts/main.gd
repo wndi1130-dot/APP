@@ -9,7 +9,8 @@ const FIELD_SCENE = preload("res://scenes/field.tscn")
 var flow := Flow.new()
 var active_scene: Node3D
 var vat_assets: Dictionary
-var settings: Dictionary = {"zombies": 100, "visibility": true, "fog": true, "rain": true}
+var settings: Dictionary = {"zombies": 100, "vertices": 1500, "visibility": true, "fog": true, "rain": true, "shadows": true}
+var vat_cache: Dictionary = {}
 var confident: bool = true
 var metrics: Label
 var hint: Label
@@ -19,6 +20,7 @@ var noise_button: Button
 var restart_button: Button
 var posture_button: Button
 var count_button: Button
+var vertex_button: Button
 var samples: Array[float] = []
 var hud_elapsed: float = 0.0
 var last_frame_us: int = 0
@@ -26,7 +28,7 @@ var station_ready: bool = false
 
 func _ready() -> void:
 	# Prewarm once before the train; field transition does not bake VAT again.
-	vat_assets = VatBaker.build()
+	vat_assets = _vat_for(int(settings["vertices"]))
 	_build_hud()
 	_switch_scene(HOME_SCENE)
 	_update_controls()
@@ -95,6 +97,21 @@ func _cycle_count() -> void:
 	count_button.text = "좀비: %d" % int(settings["zombies"])
 	_apply_settings()
 
+func _vat_for(target: int) -> Dictionary:
+	# Bake each vertex level once; switching back reuses the cached mesh.
+	if not vat_cache.has(target):
+		vat_cache[target] = VatBaker.build(target)
+	return vat_cache[target]
+
+func _cycle_vertices() -> void:
+	var levels: Array[int] = [144, 1500, 3000]
+	var index := levels.find(int(settings["vertices"]))
+	settings["vertices"] = levels[(index + 1) % levels.size()]
+	vat_assets = _vat_for(int(settings["vertices"]))
+	vertex_button.text = "정점: %d" % int(vat_assets["vertices"])
+	if flow.stage == Flow.Stage.FIELD:
+		active_scene.call("set_vat_assets", vat_assets)
+
 func _toggle_setting(enabled: bool, key: String) -> void:
 	settings[key] = enabled
 	_apply_settings()
@@ -162,9 +179,11 @@ func _build_hud() -> void:
 	var features := HBoxContainer.new()
 	controls.add_child(features)
 	count_button = _make_button(features, "좀비: 100", _cycle_count)
+	vertex_button = _make_button(features, "정점: %d" % int(vat_assets["vertices"]), _cycle_vertices)
 	_make_toggle(features, "시야 가리기", "visibility")
 	_make_toggle(features, "안개", "fog")
 	_make_toggle(features, "비", "rain")
+	_make_toggle(features, "그림자", "shadows")
 
 func _noise() -> void:
 	if flow.stage == Flow.Stage.FIELD:
@@ -203,7 +222,7 @@ func _process(delta: float) -> void:
 		drawn = int(active_scene.get("drawn_count"))
 		elapsed = (Time.get_ticks_msec() - int(active_scene.get("field_started_ms"))) / 1000.0
 		noise_hits = int(active_scene.get("noise_hits"))
-	metrics.text = "%s | FPS %d\nFrame %.2f ms | Max(120f) %.2f ms\n좀비 제출 %d / 설정 %d | 필드 %.0f 초\n시야 %s · 안개 %s · 비 %s | 소음 반응 %d" % [flow.label(), Engine.get_frames_per_second(), average, maximum, drawn, int(settings["zombies"]), elapsed, _on_off("visibility"), _on_off("fog"), _on_off("rain"), noise_hits]
+	metrics.text = "%s | FPS %d\nFrame %.2f ms | Max(120f) %.2f ms\n좀비 제출 %d / 설정 %d | 필드 %.0f 초\n정점 %d (설정 %d) · 시야 %s · 안개 %s · 비 %s · 그림자 %s | 소음 반응 %d" % [flow.label(), Engine.get_frames_per_second(), average, maximum, drawn, int(settings["zombies"]), elapsed, int(vat_assets["vertices"]), int(settings["vertices"]), _on_off("visibility"), _on_off("fog"), _on_off("rain"), _on_off("shadows"), noise_hits]
 
 func _on_off(key: String) -> String:
 	return "ON" if bool(settings[key]) else "OFF"

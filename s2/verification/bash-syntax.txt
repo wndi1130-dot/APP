@@ -1,8 +1,0 @@
-status: not_run (shell parser did not start)
-failure_code: F-SANDBOX-RUNTIME
-attempt: C:/Program Files/Git/bin/bash.exe --noprofile --norc -n s2/verification/ci-step-03.bash
-observed stderr: fatal error - CreateFileMapping [local account SID redacted], Win32 error 5. Terminating.
-PowerShell wrapper exit_code: 1 (Bash syntax failed: ci-step-03.bash)
-The runtime exists but cannot initialize in this restricted environment.
-No CI shell body was executed; remaining six shell blocks were not attempted.
-No elevation, network, installation or alternate sandbox route was attempted.

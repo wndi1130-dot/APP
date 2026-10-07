@@ -1,4 +1,0 @@
-﻿PASS structural: 12 GDScript, 4 scenes, 22 resource references
-PASS YAML parse: PyYAML SafeLoader + BaseLoader; version, triggers and paths checked
-SHA256 manifest: 25 files; s2/verification/static-checks.json
-NOT_RUN Godot parse / GUT / APK export / render / S22
