@@ -11,8 +11,9 @@ import { nameBtn, nameList, shortText } from './names';
 // 결정 카드: 홈 왼쪽의 서류 뭉치에서 꺼내 화면 왼쪽 절반에 펼친다. 오른쪽엔 열차가 그대로 보인다.
 // 형식은 수저린식(초상, 짧은 대사, 번호 붙은 선택지). 정차의 필드 결정 카드도 같은 자리에 펼친다.
 
-function sheet(cls: string, ...children: (Node | null)[]): HTMLElement {
-  return h('aside', { class: cx('sheet', cls), role: 'dialog', 'data-anim': '' },
+/** key가 같은 서류는 다시 그려도 미끄러져 들어오지 않고 스크롤도 그대로다. */
+function sheet(cls: string, key: string, ...children: (Node | null)[]): HTMLElement {
+  return h('aside', { class: cx('sheet', cls), role: 'dialog', 'data-anim': key, 'data-keep-scroll': `sheet-${key}` },
     h('button', { class: 'sheet__fold', 'data-action': 'fold', 'aria-label': '서류 접기' }, '접기'),
     children);
 }
@@ -25,7 +26,7 @@ function stopCard(view: View): HTMLElement | null {
   if (stop.done && stop.result) {
     const r = stop.result;
     const gains = LOOT_KEYS.filter(k => r.gains[k]).map(k => `${LOOT_NAME[k]} +${r.gains[k]}`);
-    return sheet('sheet--stop',
+    return sheet('sheet--stop', `stop-${g.seg}-result`,
       h('div', { class: 'sheet__head' }, h('div', null, h('span', { class: 'kicker' }, `정차 · ${place.name}`), h('b', { class: 'sheet__title' }, r.passed ? '지나쳤다' : '돌아왔다'))),
       h('ul', { class: 'result' },
         r.passed ? h('li', null, '얻은 것 없음. 석탄을 아꼈다.') : h('li', null, gains.length ? gains.join(' · ') : '빈손'),
@@ -39,7 +40,7 @@ function stopCard(view: View): HTMLElement | null {
   const stopPromises = promises.filter(x => x.p.kind === 'fetch' || x.p.cond.kind === 'target' || x.p.cond.kind === 'skip_dispatch');
   const maxW = Math.max(...LOOT_KEYS.map(k => place.loot[k]));
   const scene = stopScene(g);
-  return sheet('sheet--stop',
+  return sheet('sheet--stop', `stop-${g.seg}`,
     h('div', { class: 'sheet__head' },
       h('div', null,
         h('span', { class: 'kicker' }, `${g.seg}구간 정차`),
@@ -79,7 +80,7 @@ export function cardSheet(view: View): HTMLElement | null {
   const card = g.cards[0];
   if (!card) return null;
   const v = viewCard(g, card);
-  return sheet('',
+  return sheet('', `card-${card.uid}`,
     h('div', { class: 'sheet__head' },
       v.speaker ? portrait(v.speaker.name, v.speaker.comm) : h('div', { class: 'portrait portrait--none' }, icon('papers')),
       h('div', null,

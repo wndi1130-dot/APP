@@ -63,6 +63,7 @@ function menuPanel(view: View): HTMLElement {
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
     h('p', { class: 'sub' }, `시드 ${g.seed} · 저장은 자동(한 칸)`),
     h('div', { class: 'menu' },
+      h('button', { class: 'btn', 'data-action': 'fullscreen' }, document.fullscreenElement ? '전체 화면 끄기' : '전체 화면'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 처음부터'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'new-seed' }, '새 판(새 시드)'),
       h('button', { class: cx('btn btn--ghost', ui.debug && 'is-on'), 'data-action': 'toggle-debug' }, ui.debug ? '숨은 수치 끄기' : '숨은 수치 보기(테스트용)')));

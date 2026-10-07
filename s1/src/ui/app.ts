@@ -56,6 +56,12 @@ function freshUi(): Ui {
   };
 }
 
+const ANIMATED = '.sheet, .side, .drop, .person, .verdict, .toast';
+
+function animKey(el: HTMLElement): string {
+  return el.dataset.anim || `${el.className.replace(/\bis-still\b/, '').trim()}|${el.getAttribute('aria-label') ?? ''}|${el.classList.contains('toast') ? el.textContent : ''}`;
+}
+
 export function renderApp(view: View): HTMLElement {
   const { g, ui } = view;
   const screen = g.phase === 'end' ? 'end' : ui.screen;
@@ -142,6 +148,9 @@ export function startApp(root: HTMLElement): void {
       view = renderApp({ g, ui });
       endNames();
     }
+    // 이미 떠 있던 창(서류, 옆 창, 알림)은 다시 그려도 미끄러져 들어오지 않는다. 누를 때마다 튀는 것을 막는다.
+    const shown = new Set([...root.querySelectorAll<HTMLElement>(ANIMATED)].map(animKey));
+    for (const el of view.querySelectorAll<HTMLElement>(ANIMATED)) if (shown.has(animKey(el))) el.classList.add('is-still');
     root.replaceChildren(view);
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) {
       const key = el.dataset.keepScroll ?? '';
@@ -367,6 +376,16 @@ export function startApp(root: HTMLElement): void {
         save(g);
         toast(`새 판: 시드 ${g.seed}.`);
         return render();
+      case 'fullscreen': {
+        // 폰 가로에서 아티팩트 창 테두리 때문에 화면이 덜 차는 것을 막는다. 창이 막으면 알려 준다.
+        ui.panel = null;
+        const blocked = () => { toast('이 창에선 전체 화면이 막혀 있다.'); render(); };
+        const el = document.documentElement;
+        if (document.fullscreenElement) document.exitFullscreen().then(render, render);
+        else if (typeof el.requestFullscreen === 'function') el.requestFullscreen({ navigationUI: 'hide' }).then(render, blocked);
+        else blocked();
+        return render();
+      }
       case 'toggle-debug':
         ui.debug = !ui.debug;
         ui.panel = null;

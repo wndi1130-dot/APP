@@ -246,8 +246,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
   journal(g, `${place.name}에 ${stay.name} 머물렀다(${COMM_NAME[stop.crewComm]} ${stop.crewSize}명). ${got || '빈손'}.${injuredOnly.length ? ` 부상 ${injuredOnly.length}.` : ''}`);
   // 도덕 카드: 부상자 발견, 물림.
-  if (rnd(g) < P.rescueRate) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: names[0] });
-  if (injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
+  // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
+  const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);
+  if (since('rescue') >= 4 && rnd(g) < P.rescueRate) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: names[0] });
+  if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
   return stop.result;
 }
@@ -462,7 +464,9 @@ function aiLeaders(g: Game): void {
   }
   if (worst && !g.cards.some(x => x.kind === 'demand')) {
     addCard(g, { kind: 'demand', comm: worst });
-    g.comms[worst].demandCool = 2;
+    // 같은 요구를 여러 번 받았으면 다음 요구까지 조금 더 뜸하다.
+    const seen = Math.max(g.eventLog?.[`demand:${worst}`]?.n ?? 0, worst === 'engine' ? g.eventLog?.['demand:engine_shift']?.n ?? 0 : 0);
+    g.comms[worst].demandCool = 2 + Math.min(seen, 2);
     cards += 1;
   }
   // 파업 경고

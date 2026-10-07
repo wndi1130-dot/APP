@@ -383,6 +383,7 @@ small { font-size: 12px; }
   animation: slide-in .18s ease-out;
 }
 @keyframes slide-in { from { transform: translateX(-24px); opacity: 0; } }
+.is-still { animation: none !important; }
 .sheet__fold { position: absolute; right: 8px; top: 8px; height: 28px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 14px; background: transparent; color: var(--ink-2); font-size: 12px; }
 .sheet__head { display: flex; align-items: center; gap: 10px; padding-right: 64px; }
 .sheet__title { display: block; font-size: 16px; line-height: 1.3; }
