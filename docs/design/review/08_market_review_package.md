@@ -33,9 +33,9 @@
 ## 묶음 구성 (읽는 순서)
 
 1. **[08a_digest.md](08a_digest.md)**: 이 꾸러미의 본문이다. 저장소를 다 읽지 않아도 판단할 수 있게 영역별로 줄였다(정치, 어두운 길, 내정·경제·사람, 필드, 이야기·연출·소리). 원문 경로가 함께 있다.
-2. **[08b_market.md](08b_market.md)**: 비슷한 게임들의 가격 모델과 반응 자료(로컬 워커 조사, 도착하면 붙인다).
+2. **[08b_market.md](08b_market.md)**: 비슷한 게임 15개의 가격 모델과 반응 자료, 유료 대 F2P 매출 신호, 한국 시장 메모(로컬 워커 조사, 일부 미확인).
 3. **[06_summary.md](06_summary.md)**: 오늘 내부 기획 점검 종합. 약점이 이미 정리돼 있으니 겹치지 말고 그 위에서 봐 줘.
-4. 바깥 눈 점검 A(현실감·반복·인과): research/design-review-20261007 가지의 docs/design/review/realism_check_20261007.md. 같은 이유로 겹치지 않게.
+4. 바깥 눈 점검 A·B·C와 그 분류: [realism_check_20261007.md](realism_check_20261007.md)(현실감·반복·인과), [consistency_check_20261007.md](consistency_check_20261007.md)(문서 어긋남), [art_omens_check_20261007.md](art_omens_check_20261007.md)(그림의 조짐), [07_outside_eye_triage.md](07_outside_eye_triage.md)(지금 main 기준으로 무엇이 고쳐졌고 무엇이 남았나). 같은 이유로 겹치지 않게.
 5. 더 깊이 볼 때: docs/design/decisions.md(확정과 제안), docs/handoff/session_start.md(지금 상태), docs/design/briefs/ 아래 브리프들.
 6. 플레이 빌드: S1a 열차 정치 웹 빌드(링크는 사용자가 함께 준다). 화면 사진과 점검표는 프로젝트 파일 s1a_play/에 있다.
 
