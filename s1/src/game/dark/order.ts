@@ -3,7 +3,7 @@ import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { familyOf } from '../people';
 import { offend } from '../politics';
-import { clamp, journal } from '../state';
+import { clamp, CREW_EXTRAS, journal } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
 import { caseById, caught, coverUp, exposeOrderLines, openCase, settleTruth } from './cases';
@@ -117,15 +117,18 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
   const o = d.order;
   if (!o || !o.method || !o.exeId) return;
   if ((where === 'stop') !== (o.method === 'stop')) return;
-  d.order = null;
   const name = nameOf(g, o.target);
   const exe = o.exeId;
   if (!alive(g, o.target) || !alive(g, exe)) {
+    d.order = null;
     journal(g, `${name}을(를) 두고 한 말은 일이 되지 않았다.`, 'dark');
     // 입을 막으려던 사람이 이미 없으면 진실도 묻히고, 실행자가 없어 일이 안 됐으면 그 사람이 말한다.
     if (o.ref) { const line = settleTruth(g, o.ref, alive(g, o.target)); if (line) journal(g, line, 'bad'); }
     return;
   }
+  // 정차 암살은 둘이 같은 작업조로 나가야 한다(J09 5). 아니면 명령은 다음 정차를 기다린다.
+  if (where === 'stop' && !(witnesses.includes(name) && witnesses.includes(nameOf(g, exe)))) return;
+  d.order = null;
   const tc = commOf(g, o.target);
   const ok = dr(g) < successP(g, o);
   d.executors.push({ id: exe, comm: commOf(g, exe), seg: g.seg });
@@ -241,3 +244,11 @@ export function answerThreat(g: Game, id: string, how: 'give' | 'stand' | 'confe
   scene(g, 'exposed', 4, `${g.seg}구간, ${name}이(가) 열차장이 시킨 일을 식당칸에서 말했다.`, [id]);
   return `${name}이(가) 식당칸에서 말했다. 열차장이 시켰다고.`;
 }
+
+// 정차로 정한 명령이면 실행자와 대상이 그 정차 작업조 명단에 붙는다(명단 화면에 이름이 보인다). 먼저 다녀온 정찰조는 다시 안 나간다.
+CREW_EXTRAS.push(g => {
+  const o = g.dark?.order;
+  if (!o || o.method !== 'stop' || !o.exeId) return [];
+  const scouts = g.stop?.scoutReport?.names ?? [];
+  return [o.exeId, o.target].filter(id => alive(g, id)).map(id => nameOf(g, id)).filter(n => !scouts.includes(n));
+});

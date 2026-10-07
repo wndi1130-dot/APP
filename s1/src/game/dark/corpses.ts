@@ -111,7 +111,8 @@ export function corpseTick(g: Game): void {
   }
   d.unchecked = [];
   // 첫 칸 안 죽음: 누가 확인할지 정하는 관행 카드 한 장. 고르면 이번 시신을 모두 확인한다(ruleChosen).
-  if (d.practice === null) {
+  // 두 번째 칸 안 죽음에 한 번 더 묻는다('지난번처럼', 9.1). 답이 올 때까지 시신은 기다린다. 세 번째부터는 묻지 않는다.
+  if (d.practice === null || (d.practiceAsked === 1 && d.fresh.length)) {
     if (d.fresh.length && !g.cards.some(k => k.kind === 'dark:corpse_rule')) darkCard(g, { kind: 'dark:corpse_rule', comm: d.fresh[0].comm, who: d.fresh[0].name });
     return;
   }

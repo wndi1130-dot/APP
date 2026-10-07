@@ -39,7 +39,8 @@ function heldTruth(seed: string): { g: Game; innocent: string; witness: string }
   const g = darkGame(seed);
   const d = g.dark!;
   const [innocent, witness] = adults(g, 'tail', { noRep: true });
-  d.innocents.push({ id: innocent.id, comm: 'tail', seg: g.seg, caseId: 1, how: 'punish' });
+  // 벌한 건 지난 구간(진실은 벌한 다음 구간 정산부터 굴린다, J09 6)
+  d.innocents.push({ id: innocent.id, comm: 'tail', seg: g.seg - 1, caseId: 1, how: 'punish' });
   for (let i = 0; i < 200 && !g.cards.some(c => c.kind === 'dark:truth'); i += 1) truthTick(g);
   const card = g.cards.find(c => c.kind === 'dark:truth')!;
   card.text = witness.id;
@@ -242,8 +243,11 @@ describe('9·10. 처형과 무죄', () => {
   it('처형은 피해 사건으로 센다', () => {
     const g = darkGame('exec');
     const c = openCase(g, { kind: 'assault', culprit: adults(g, 'tail', { noRep: true })[0].id, victimComm: 'guard', dead: false, clock: 3, where: '통로' });
+    const s = c.sus.find(x => !x.culprit) ?? c.sus[0];
+    MOTIONS.trial.onPass(g, { kind: 'motion', motion: 'trial', person: s.id, ref: c.id });
+    expect(c.convicted).toBe(s.id);
     const harm = g.dark!.harm;
-    punish(g, c, c.sus.find(s => !s.culprit) ?? c.sus[0], 'execute', 'trial');
+    punish(g, c, s, 'execute', 'trial');
     expect(g.dark!.harm).toBe(harm + 1);
   });
 

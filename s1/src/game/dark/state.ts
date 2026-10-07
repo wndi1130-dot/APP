@@ -91,6 +91,8 @@ export interface Case {
   crowdSeen?: number;
   /** 재판이 열린 회기 */
   triedAt?: number;
+  /** 의회가 유죄로 판결한 피고. 처형은 이 사람에게만 할 수 있다(사용자 결정 '처형은 재판 유죄 뒤만') */
+  convicted?: string;
   /** 열차장이 시킨 일이 이 사건으로 이미 드러났다(두 번 드러나지 않는다) */
   exposed?: boolean;
 }

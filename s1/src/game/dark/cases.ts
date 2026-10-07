@@ -4,7 +4,7 @@ import { onDeath } from '../death';
 import { offend } from '../politics';
 import { clamp, journal, lawActive } from '../state';
 import type { Game } from '../state';
-import { B } from './data';
+import { B, EXECUTION } from './data';
 import { cross, scene } from './chronicle';
 import { CLUE_LINES, CROWD_LINES } from './lines';
 import {
@@ -164,11 +164,14 @@ export function mobTarget(g: Game, c: Case): Suspect | undefined {
   return [...eligible(g, c)].filter(s => flagged(g, s)).sort((a, b) => suspicion(b) - suspicion(a) || b.clues.length - a.clues.length)[0];
 }
 
+const MOB_LANGS = ['pl', 'de', 'cz'];
+
 /** 희생양 후보 표시(1.4 두 층): 그 사건에 닿은 사실(드나듦·사건 칸이나 옆 칸·피해자와 원수·그 사람을 가리킨 단서) 하나 이상과
- * 의심 점수 전체 2 이상. 늦게 탐·밖에서 옴은 순위만 올린다. 이름 거름(프로필의 mob_exempt, 생성기 몫)과 아이는 언제나 빠진다. */
+ * 의심 점수 전체 2 이상. 늦게 탐·밖에서 옴은 순위만 올린다. 이름 거름과 아이는 언제나 빠진다.
+ * 이름 거름(1.4, 제안): 프로필의 name_lang이 pl·de·cz인 사람만 오른다. 필드가 없으면 빠진다. 언어는 막는 쪽에만 쓴다. */
 export function flagged(g: Game, s: Suspect): boolean {
   const p = byId(s.id);
-  if (!p || p.age < 16 || (p as { mob_exempt?: boolean }).mob_exempt) return false;
+  if (!p || p.age < 16 || !MOB_LANGS.includes(p.name_lang ?? '')) return false;
   const tied = s.facts.some(f => TIE_FACTS.includes(f)) || s.clues.length > 0;
   return tied && suspicion(s) >= 2;
 }
@@ -269,6 +272,9 @@ export const PUNISH_SEGS = { ration: 3, confine: 4 };
 /** 벌(4.4 표). 벌은 긴장을 내리지 않는다. 군중 시계를 끝낼 뿐이다. */
 export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' | 'summary'): string[] {
   const d = g.dark!;
+  // 처형은 재판 유죄 뒤만(사용자 결정). 카드가 막아도 함수 쪽에서 한 번 더 본다. 약식 처형은 계엄의 경비대 재판 자리(trial_and_summary)다.
+  if (how === 'execute' && !(EXECUTION.rule === 'trial_and_summary' && via === 'summary') &&
+    (EXECUTION.rule === 'none' || via !== 'trial' || c.convicted !== s.id)) return [];
   const lines: string[] = [];
   const name = nameOf(g, s.id);
   const comm = commOf(g, s.id);
@@ -409,6 +415,8 @@ export function truthTick(g: Game): void {
   for (const x of d.innocents) {
     // 예고 카드가 떠 있거나 입막음 명령이 걸린 진실은 굴리지 않는다(그 카드와 명령이 끝을 정한다).
     if (x.asked || x.held) { keep.push(x); continue; }
+    // 벌한 구간의 정산은 건너뛴다(의회가 같은 구간 정산보다 먼저다). 다음 구간부터 revealWindow번 굴린다(4.4).
+    if (g.seg <= x.seg) { keep.push(x); continue; }
     if (g.seg - x.seg > B.revealWindow) continue;
     if (dr(g) >= B.revealP || g.cards.some(k => k.kind === 'dark:truth')) { keep.push(x); continue; }
     // 드러나기 전에 예고 카드: 말하려는 사람을 '조용히 처리한다'가 열릴 수 있다(4.6).

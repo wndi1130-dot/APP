@@ -74,6 +74,7 @@ function verdict(g: Game, a: MotionAgenda, guilty: boolean): void {
   }
   if (guilty) {
     d.stats.guilty += 1;
+    cs.convicted = s.id;
     darkCard(g, { kind: 'dark:punish', n: cs.id, who: s.id, comm, text: 'trial' });
     return;
   }
@@ -182,14 +183,19 @@ export function darkCouncilOpen(g: Game): void {
 /** 신임을 잃은 회기(5.3): 열차장 대신 AI 대표가 법 안건을 고른다(4장 '안건 올리기'와 같은 법). 고를 게 없으면 회기가 빈다.
  * 위기로 걸린 법이 아닌 안건(라이프치히 몫 나누기)은 남긴다. 재판은 다음 회기로 밀린다(아래 군중 시계 멈춤). */
 function aiSession(g: Game, council: CouncilState): void {
+  // 위기 안건(몫 나누기 따위)이 있으면 그 회기는 위기 안건 몫이다. 대표가 법을 골라 위기를 밀어내지 않는다.
+  const crisis = council.options.filter(o => !isLawAgenda(o) && MOTIONS[o.motion].rank === 'crisis');
   const laws = council.options.filter(isLawAgenda) as LawAgenda[];
-  const pick = aiAgendaPick(g, laws);
-  if (pick) {
+  const pick = crisis.length ? null : aiAgendaPick(g, laws);
+  if (crisis.length) {
+    council.options = crisis;
+    journal(g, `신임을 잃은 회기다. 대표들은 ${agendaTitle(crisis[0])}부터 올렸다.`, 'bad');
+  } else if (pick) {
     const agenda = { ...laws[pick.idx], by: pick.c };
     council.options = [agenda];
     journal(g, `신임을 잃은 회기다. ${COMM_NAME[pick.c]}이(가) 안건을 골랐다: ${agendaTitle(agenda)}.`, 'bad');
   } else {
-    council.options = council.options.filter(o => !isLawAgenda(o) && MOTIONS[o.motion].rank === 'crisis');
+    council.options = [];
     journal(g, '신임을 잃은 회기다. 대표들이 올릴 안건을 고르지 못했다.', 'bad');
   }
   council.idx = 0;

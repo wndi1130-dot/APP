@@ -5,6 +5,7 @@ import {
 import type { Game } from '../../src/game';
 import { afterVote } from '../../src/game/dark/council';
 import { B } from '../../src/game/dark/data';
+import { MOTION_SOURCES } from '../../src/game/motions';
 
 // 정기 신임 표결(s1b_dark_path 5.3, 사용자 결정 '정기 투표'). 숫자와 부결의 결과는 제안(B.conf*).
 
@@ -85,6 +86,23 @@ describe('정기 신임 표결', () => {
     // 그다음 회기는 다시 열차장이 고른다
     sessions(g, 1);
     expect(g.council!.locked).toBe(false);
+  });
+
+  it('부결 다음 회기에 위기 안건이 있으면 그 회기는 위기 안건이 받는다', () => {
+    const g = darkGame('conf-fail-crisis');
+    sessions(g, B.confEvery);
+    lean(g, -60);
+    castVote(g);
+    expect(g.dark!.confLock).toBe(B.confFailLock);
+    const share = () => [{ kind: 'motion' as const, motion: 'share' as const, subject: 'tail' as const }];
+    MOTION_SOURCES.push(share);
+    try {
+      sessions(g, 1);
+    } finally { MOTION_SOURCES.splice(MOTION_SOURCES.indexOf(share), 1); }
+    expect(g.council!.locked).toBe(true);
+    expect(g.council!.options).toHaveLength(1);
+    expect(currentAgenda(g)).toMatchObject({ kind: 'motion', motion: 'share' });
+    expect(g.journal.some(e => e.text.startsWith('신임을 잃은 회기다. 대표들은'))).toBe(true);
   });
 
   it('비상 소집은 정기 회기로 세지 않는다', () => {
