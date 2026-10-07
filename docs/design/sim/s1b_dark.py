@@ -185,6 +185,7 @@ Q = dict(
     ml_lift_after=0,      # (시험) n이면 tyrant·caretaker가 계엄 n구간 뒤 스스로 거둔다
     tyrant_trial=0,       # (시험) k면 exec_on일 때 tyrant가 단계 k 이상(1 정황, 2 증거) 사건을 재판에 넘긴다
     # 6라운드: 정기 신임 표결(5.3, 사용자 결정 10-07 17:33). 기본 켬(3회기마다, 부결이면 1회기 안건을 잃음). regular_conf=0이면 5라운드와 판마다 같다
+    acquit_next=1,        # 4.4 무죄 뒤 군중이 같은 구간 정산이 아니라 다음 구간에 오게(6차 뒤 코드 리뷰로 고침)
     regular_conf=3,       # 5.3 n이면 의회가 n번 열릴 때마다 정기 신임 표결(0이면 없음). 계엄 중엔 없고, 거둔 뒤 첫 회기에 하나
     conf_need=51,         # 5.3 정기 신임 통과선(일반 51)
     conf_pass_trust=5,    # 5.3 통과하면 신임 +k
@@ -1174,7 +1175,7 @@ class DarkRun(A.Run):
             self.rel[dfd['comm']] = clamp(self.rel[dfd['comm']] + 3, -100, 100)
             case['status'] = 'open'
             if case['clock'] is not None:
-                case['clock'] = 1  # 무죄면 군중은 다음 구간에 온다
+                case['clock'] = 1 + Q['acquit_next']  # 무죄면 군중은 다음 구간에 온다(같은 구간 정산이 먼저 하나 깎는다)
 
     # ---------------- 군중 (4.5) ----------------
     def crowd_card(self, case):
