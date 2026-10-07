@@ -1,0 +1,169 @@
+name: S2 Android performance spike
+
+on:
+  push:
+    branches: [s2/perf-spike-20261007]
+    paths: [s2/**, .github/workflows/s2-android.yml]
+  pull_request:
+    paths: [s2/**, .github/workflows/s2-android.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s2-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GODOT_VERSION: 4.7.2
+      GUT_VERSION: 9.3.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        shell: bash
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Download exact stable engine and matching export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="${GODOT_VERSION}-stable"
+          base="https://github.com/godotengine/godot-builds/releases/download/${release}"
+          engine="Godot_v${release}_linux.x86_64.zip"
+          templates="Godot_v${release}_export_templates.tpz"
+          mkdir -p "$RUNNER_TEMP/godot-download" s2/build
+          cd "$RUNNER_TEMP/godot-download"
+          curl --fail --location --retry 3 "$base/$engine" -o "$engine"
+          curl --fail --location --retry 3 "$base/$templates" -o "$templates"
+          curl --fail --location --retry 3 "$base/SHA512-SUMS.txt" -o SHA512-SUMS.txt
+          python3 - "$engine" "$templates" <<'PY'
+          import hashlib, pathlib, sys
+          sums = {}
+          for line in pathlib.Path('SHA512-SUMS.txt').read_text().splitlines():
+              fields = line.split()
+              if len(fields) == 2:
+                  sums[fields[1].lstrip('*')] = fields[0]
+          for name in sys.argv[1:]:
+              actual = hashlib.sha512(pathlib.Path(name).read_bytes()).hexdigest()
+              if sums.get(name) != actual:
+                  raise SystemExit(f'Checksum missing or mismatched: {name}')
+              print(f'SHA512 verified: {name}')
+          PY
+          unzip -q "$engine" -d engine
+          chmod +x "engine/Godot_v${release}_linux.x86_64"
+          echo "$PWD/engine" >> "$GITHUB_PATH"
+          echo "GODOT_BIN=$PWD/engine/Godot_v${release}_linux.x86_64" >> "$GITHUB_ENV"
+          "$PWD/engine/Godot_v${release}_linux.x86_64" --headless --version | tee "$GITHUB_WORKSPACE/s2/build/godot-version.txt"
+          test "$(cut -d. -f1-4 "$GITHUB_WORKSPACE/s2/build/godot-version.txt")" = "${GODOT_VERSION}.stable"
+          unzip -q "$templates" -d unpacked
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$template_dir"
+          cp -a unpacked/templates/. "$template_dir/"
+
+      - name: Fetch GUT only in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 "https://github.com/bitwes/Gut/archive/refs/tags/v${GUT_VERSION}.zip" -o "$RUNNER_TEMP/gut.zip"
+          unzip -q "$RUNNER_TEMP/gut.zip" -d "$RUNNER_TEMP/gut"
+          mkdir -p s2/addons
+          gut_root="$RUNNER_TEMP/gut/Gut-${GUT_VERSION}"
+          cp -a "$gut_root/addons/gut" s2/addons/gut
+          # Framework stays untracked; preserve its license alongside the CI copy.
+          for license in "$gut_root"/LICENSE* "$gut_root"/license*; do
+            if test -f "$license"; then
+              cp "$license" s2/addons/gut/LICENSE
+              break
+            fi
+          done
+          test -s s2/addons/gut/LICENSE
+          # Only the disposable CI checkout enables tests after GUT is present.
+          python3 -c "from pathlib import Path; Path('s2/tests/.gdignore').unlink()"
+
+      - name: Import resources and reject parse errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GODOT_BIN" --headless --path s2 --editor --quit 2>&1 | tee s2/build/import.log
+          python3 - <<'PY'
+          import pathlib, re
+          log = pathlib.Path('s2/build/import.log').read_text()
+          if re.search(r'(?m)^(?:SCRIPT ERROR:|ERROR:)|Parse Error:', log):
+              raise SystemExit('Godot import reported an error; inspect import.log')
+          PY
+
+      - name: Run GUT headless tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
+            -gdir=res://tests -ginclude_subdirs -gexit \
+            -gjunit_xml_file=res://build/gut-results.xml 2>&1 | tee s2/build/gut.log
+          # Require a real nonempty passing test report, even if runner exits zero.
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          report = ET.parse('s2/build/gut-results.xml').getroot()
+          cases = list(report.iter('testcase'))
+          if len(cases) < 9 or any(list(case.iter('failure')) or list(case.iter('error')) or list(case.iter('skipped')) for case in cases):
+              raise SystemExit('Missing, failed, errored or skipped GUT tests')
+          print(f'GUT report: {len(cases)} passing test cases')
+          PY
+
+      - name: Make ephemeral debug signing key and Android editor settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/s2-debug.keystore"
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          keytool -genkeypair -keystore "$key" -storepass "$password" -keypass "$password" \
+            -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA -keysize 2048 -validity 30 -storetype JKS -noprompt
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$key" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=$password" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+
+      - name: Export and verify debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GODOT_BIN" --headless --path s2 --export-debug Android build/s2-perf-debug.apk 2>&1 | tee s2/build/export.log
+          test -s s2/build/s2-perf-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose s2/build/s2-perf-debug.apk | tee s2/build/signature.txt
+          sha256sum s2/build/s2-perf-debug.apk > s2/build/apk.sha256
+
+      - name: Upload test logs and debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s2-android-debug-${{ github.run_number }}
+          path: |
+            s2/build/*.apk
+            s2/build/*.log
+            s2/build/*.xml
+            s2/build/*.txt
+            s2/build/*.sha256
+          if-no-files-found: warn
+          retention-days: 14
