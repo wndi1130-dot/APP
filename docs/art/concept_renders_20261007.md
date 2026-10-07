@@ -264,3 +264,12 @@ Recreate the attached image exactly, changing only the old car on the left sidin
 ```text
 Recreate the attached four-panel sheet with the same people, poses, door and framing, changing only clothing details. The train chief's peaked railway cap has no badge, emblem or cockade. The armed guard in panel 4 wears a fur hat with ear flaps and a patched civilian coat with a rope belt instead of a peaked cap and leather belt, and holds a hunting rifle. Nobody wears a helmet, armband, badge, star or insignia.
 ```
+
+### 다시 뽑은 결과 (2026-10-07 08:05)
+
+네 장 모두 고칠 점이 풀렸다. 기준 그림을 바꾼다.
+
+- **C1 v3**: 털모자, 니트 모자, 목도리 차림이고 철모·군용 외투·탄띠가 없다. 화차는 열린 석탄차, 뒤는 불 켜진 객차다. 배치와 HUD는 v2와 같다. → 필드 기준 그림은 C1 v3. M7b처럼 C1을 바탕으로 한 그림은 v3을 첨부한다.
+- **C3 v5**: 꼬리칸 둘이 판자 막은 창, 방수포, 연통을 단 낡은 객차가 됐고 안의 춥고 비좁은 모습은 그대로다. 뒷배경 선로도 창 있는 객차 줄이다. 맨 왼쪽 끝에 창이 안 보이는 작은 차량 두세 대가 남았지만 사람은 없고 폰 크기에선 거의 안 보인다. 실제 배경을 만들 때 열린 석탄차나 객차로 둔다. → 홈 기준 그림은 C3 v5(3D 스레드의 꼬리칸 카드가 추천안대로 닫힌다는 전제).
+- **C9 v5**: 옆 선로가 사슬 없이 문 열린 불탄 빈 객차다. 나머지는 v3과 같다. → 정차 기준 그림은 C9 v5.
+- **C10 v3**: 열차장 모자에 모표가 없고, 4번 칸 경비는 귀덮개 털모자, 밧줄 띠, 사냥총이다. 덕분에 4번이 2번과 더 잘 갈린다. 뒤 승강장의 긴 외투 인물들에 표식은 안 보인다. → 하차 기준 그림은 C10 v3(3번 칸 어깨 짚임은 v2가 더 분명).
