@@ -176,13 +176,6 @@ export const TECHS: Record<TechId, TechDef> = {
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];
 
-/** 복원을 막아 둔 기술. 옛 '아끼기만 하는' 다섯(E1·E2·X1·M3·E5)은 7.3 개편으로 법을 바꾸는 효과가 되어 풀었다
- * (2026-10-07 내정 스레드: '기술은 법을 바꾼다' 답 전까지만 막아 둔 것). 시뮬레이터 --pending-on과 화면 안내가 이 목록을 읽는다. */
-export const PENDING_TECHS: TechId[] = [];
-export function techPending(id: TechId): boolean {
-  return PENDING_TECHS.includes(id);
-}
-
 /** 같은 가지 안의 선행조건(7.1): 2단계는 1단계, 3단계는 2단계 하나. */
 export function prereqs(id: TechId): TechId[] {
   const def = TECHS[id];

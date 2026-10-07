@@ -1,8 +1,8 @@
 import {
-  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, HYGIENE_NAME, PENDING_TECHS, SKILL_NAME, TECHS,
+  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, HYGIENE_NAME, SKILL_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   hotWaterCoal, hotWaterFloor, hygiene, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
-  movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techMult, techPending, techRelSides, techTitle, techUsable, upkeepOf,
+  movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workPower, workshopChief, workshopState, zoneAt,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
@@ -312,12 +312,11 @@ export function stayLocked(g: Game, stay: string): boolean {
 
 // ---- 내정 창(공방 설계도, 지식 현황판, 칸 순서) ----
 
-type NodeState = 'pending' | 'unknown' | 'collect' | 'defect' | 'ready' | 'restoring' | 'done' | 'faded' | 'rust' | 'off';
+type NodeState = 'unknown' | 'collect' | 'defect' | 'ready' | 'restoring' | 'done' | 'faded' | 'rust' | 'off';
 
 function nodeState(g: Game, id: TechId): NodeState {
   const st = g.dom!.techs[id];
   if (!st) {
-    if (techPending(id)) return 'pending';
     const c = restoreCheck(g, id);
     if (!c.full || c.full === '부품이 모자라다' || c.full === '공방이 다른 복원 중' || c.full === '목재가 모자라다') return 'ready';
     if (!c.defect || c.defect === '부품이 모자라다' || c.defect === '공방이 다른 복원 중') return 'defect';
@@ -332,7 +331,7 @@ function nodeState(g: Game, id: TechId): NodeState {
 }
 
 const NODE_TAG: Record<NodeState, string> = {
-  pending: '보류', unknown: '', collect: '', defect: '결함판 가능', ready: '복원 가능', restoring: '복원 중', done: '', faded: '×0.7', rust: '고장', off: '세움',
+  unknown: '', collect: '', defect: '결함판 가능', ready: '복원 가능', restoring: '복원 중', done: '', faded: '×0.7', rust: '고장', off: '세움',
 };
 
 function techNode(g: Game, id: TechId, sel: boolean): HTMLElement {
@@ -360,6 +359,18 @@ function faces(cs: Comm[], g: Game): HTMLElement[] {
   return cs.map(c => h('span', { class: 'dom-face' }, portrait(g.comms[c].leader.name, c), COMM_NAME[c]));
 }
 
+/** 법에 걸린 기술의 쓸모 줄(7.3). 모르고 사는 함정을 막는다. */
+function useLine(g: Game, id: TechId, v?: Variant): HTMLElement | null {
+  const line = techUseLine(g, id, v);
+  return line ? h('p', { class: 'dom-use' }, line) : null;
+}
+function useTag(g: Game, id: TechId, v?: Variant): HTMLElement | null {
+  const laws = techLaws(id, v);
+  if (laws.length === 0) return null;
+  const now = laws.some(l => g.passed[l] !== undefined);
+  return h('span', { class: cx('pol', now ? 'pol--gray' : 'pol--red') }, now ? '쓸 법이 서 있다' : '쓸 법이 아직 없다');
+}
+
 function nodeDetail(g: Game, id: TechId): HTMLElement {
   const d = g.dom!;
   const def = TECHS[id];
@@ -369,7 +380,7 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
   const frags = d.frags[def.branch];
   const variants: (Variant | undefined)[] = def.variants && !st ? ['a', 'b'] : [undefined];
   const buttons: HTMLElement[] = [];
-  if (!st && !techPending(id)) {
+  if (!st) {
     for (const v of variants) {
       const vName = v && def.variants ? `${def.variants[v].name}: ` : '';
       const rel = sideLine(techRelSides(id, v));
@@ -379,6 +390,7 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
       h('span', { class: 'choice__meta' },
         h('span', { class: 'cost num' }, `부품 −${cost.parts}`), cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null,
         rel ? h('span', { class: 'pol pol--gray' }, rel) : null,
+        useTag(g, id, v),
         check.full ? h('span', { class: 'pol pol--gray' }, check.full) : null)));
       if (check.defect !== '없다' && check.defect !== '완성판으로 된다') {
         buttons.push(h('button', {
@@ -387,6 +399,7 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
         h('span', { class: 'choice__meta' },
           h('span', { class: 'cost num' }, `부품 −${cost.parts}`), h('span', { class: 'cost' }, `효과 절반, 고장 +${Math.round(D.defectBreak * 100)}%p`),
           rel ? h('span', { class: 'pol pol--gray' }, rel) : null,
+          useTag(g, id, v),
           check.defect ? h('span', { class: 'pol pol--gray' }, check.defect) : null)));
       }
     }
@@ -404,11 +417,12 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
       h('span', { class: 'kicker' }, `${BRANCH_NAME[def.branch]} · ${def.tier === 0 ? '적응' : ['', '응급 복원', '구시대 표준', '잃어버린 기술'][def.tier]}`),
       h('b', null, techTitle(g, id)),
       close('dom-node', { 'data-id': id })),
-    techPending(id) ? h('p', { class: 'dom-why' }, '아끼기만 하는 기술이라 사용자 결정 전까지 열지 않는다(기획 점검 03).') : null,
     def.variants && !st?.variant
       ? h('ul', { class: 'dom-variants' }, (['a', 'b'] as Variant[]).map(v => h('li', null,
-        h('b', null, `${v === 'a' ? '가' : '나'}. ${def.variants![v].name}`), ` ${def.variants![v].effect} · ${upkeepText(def.variants![v].upkeep)}`)))
+        h('b', null, `${v === 'a' ? '가' : '나'}. ${def.variants![v].name}`), ` ${def.variants![v].effect} · ${upkeepText(def.variants![v].upkeep)}`,
+        techUseLine(g, id, v) ? h('span', { class: 'dom-use' }, ` · ${techUseLine(g, id, v)}`) : null)))
       : h('p', null, def.variants && st?.variant ? def.variants[st.variant].effect : def.effect, h('span', { class: 'sub' }, ` · ${upkeepText(upkeepOf(g, id))}`)),
+    def.variants && !st?.variant ? null : useLine(g, id, st?.variant),
     !st ? h('ul', { class: 'dom-checks' },
       h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, `설계도 조각 ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
       cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, `코어 ${d.cores}/${cost.core}`) : null,
@@ -432,7 +446,7 @@ function planView(view: View): HTMLElement {
         tiers.map(t => h('div', { class: 'dom-plan__cell' },
           TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t).map(id => techNode(g, id, sel === id)))),
       ])),
-    h('p', { class: 'sub' }, `◇ 변형 둘 중 하나${PENDING_TECHS.length ? ` · 보류: ${PENDING_TECHS.map(id => TECHS[id].name).join(', ')}` : ''}`),
+    h('p', { class: 'sub' }, '◇ 변형 둘 중 하나'),
     sel && TECHS[sel] ? nodeDetail(g, sel) : null);
 }
 

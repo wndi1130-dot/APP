@@ -8,6 +8,7 @@ import { attachCar, giveCandidates, giveCar } from './cars';
 import { BRANCH_NAME, D, FIELD_NAME, TECHS } from './data';
 import type { Field, TechId, Variant } from './data';
 import { resolvePressure } from './hooks';
+import { techUseLine } from './lawtech';
 import { resolveLice, resolveTyphus } from './hygiene';
 import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
@@ -40,6 +41,13 @@ const GIVE_EXTRA: Record<string, string[]> = {
   cold: ['안치한 시신을 내놓는다', '온실 식량 +1.5/구간'], tail3: ['꼬리칸 과밀 +15', '온실 식량 +1.5/구간'],
 };
 
+/** 복원 확인 본문 끝의 쓸모 줄(7.3). 변형이 있으면 갈래 카드가 변형마다 붙인다. */
+function useText(g: Game, id: TechId): string {
+  if (TECHS[id].variants) return '';
+  const line = techUseLine(g, id);
+  return line ? ` ${line}.` : '';
+}
+
 export function domView(g: Game, card: Card): CardView | null {
   if (!card.kind.startsWith('dom:') || !g.dom) return null;
   const d = g.dom;
@@ -53,7 +61,7 @@ export function domView(g: Game, card: Card): CardView | null {
       const parts = (n: number) => [`부품 −${n}`, ...(ch.core ? [`코어 −${ch.core}`] : []), ...(ch.wood ? [`목재 −${ch.wood}`] : [])];
       return {
         title: '설계도가 맞았다', speaker: sp(chief(g, 'craft')), required: false,
-        body: `${BRANCH_NAME[def.branch]}의 ${def.name}. ${half ? '조각이 반만 맞는다. 금 간 채로라도 돌릴 수는 있다.' : '조각이 다 맞았다.'} ${def.effect}.`,
+        body: `${BRANCH_NAME[def.branch]}의 ${def.name}. ${half ? '조각이 반만 맞는다. 금 간 채로라도 돌릴 수는 있다.' : '조각이 다 맞았다.'} ${def.effect}.${useText(g, id)}`,
         choices: [
           { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', effs: def.variants ? [] : sidesEffs(id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
           ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', effs: def.variants ? [] : sidesEffs(id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
@@ -69,7 +77,7 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '두 갈래', speaker: sp(chief(g, def.branch)), required: true,
         body: `${def.name}은(는) 두 갈래로만 맞출 수 있다. 한 번 고르면 이 길에선 못 바꾼다.`,
         choices: (['a', 'b'] as Variant[]).map(v => ({
-          label: vs[v].label, say: vs[v].say, effs: sidesEffs(id, v), special: `dom:variant:${v}`, extra: [vs[v].effect],
+          label: vs[v].label, say: vs[v].say, effs: sidesEffs(id, v), special: `dom:variant:${v}`, extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : [])],
         })),
       };
     }

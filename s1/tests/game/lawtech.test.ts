@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  agendaOptions, agendaTitle, createGame, createS1cGame, D, domesticForecast, enactLaw, lawOpen, lawTechLines, lawTechRes, refreshSit, repealLaw, situation, techMult, variantMult,
+  agendaOptions, agendaTitle, createGame, createS1cGame, D, domesticForecast, enactLaw, lawOpen, lawTechLines, lawTechRes, refreshSit, repealLaw, situation, techLaws, techMult, techUseLine, variantMult,
 } from '../../src/game';
 import type { Game, TechId, Variant } from '../../src/game';
 
@@ -134,5 +134,21 @@ describe('가혹한 법에 덜 잔혹한 변형을 연다', () => {
     g.food = 10;
     g.coal = 10;
     expect([lawOpen(g, 'seed_half'), lawOpen(g, 'child_pack')]).toEqual([false, false]);
+  });
+});
+
+describe('쓸모 줄(모르고 사는 함정 막기)', () => {
+  it('법에 걸린 기술은 어느 법이 서 있어야 쓸모 있는지 말한다', () => {
+    const g = createS1cGame('lt-use');
+    expect(techLaws('e1')).toEqual(['snow_duty']);
+    expect(techLaws('e3', 'a')).toEqual(['common_heating']);
+    expect(techLaws('e3', 'b')).toEqual(['heat_quota']);
+    expect(techLaws('m3', 'a')).toEqual(['seed_grain']);
+    expect(techUseLine(g, 'e1')).toContain('(지금은 없다)');
+    enactLaw(g, 'snow_duty', []);
+    expect(techUseLine(g, 'e1')).toContain('(지금 서 있다)');
+    expect(techUseLine(g, 'x1')).toContain('대신');
+    // 법과 상관없는 기술엔 줄이 없다.
+    expect(techUseLine(g, 'r3')).toBeNull();
   });
 });

@@ -651,6 +651,8 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
   const base = LAW_VARIANT_OF[law];
   if (base && g.passed[base] !== undefined) {
     delete g.passed[base];
+    // 빈틈(내정 스레드 2026-10-07): 표를 사서 세운 원래 법을 개정하면 boughtBy가 지워져 약속 배신 셈을 피한다.
+    // 변형을 여는 기술이 셋(M3 가, X1, M2)뿐이라 두지만, S3에서 거래가 늘면 boughtBy를 변형 법으로 넘긴다(추천).
     delete g.boughtBy[base];
     g.repealedAt[base] = g.session;
     for (const c of COMMS) {

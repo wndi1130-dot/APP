@@ -4,9 +4,9 @@
 import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda,
-  setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore,
+  setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, LAW_ONLY_TECHS, lawActive, techLaws,
 } from '../src/game';
-import type { Card, CardView, Choice, Eff, Game } from '../src/game';
+import type { Card, CardView, Choice, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
 
 // 콘텐츠 JSON 사건(data/events)도 봇 판에 섞는다.
@@ -63,6 +63,14 @@ function scoreChoice(g: Game, ch: Choice): number {
   return s;
 }
 
+/** 봇이 이 기술을 살 때 고르는 변형. 법에만 걸린 기술인데 그 법이 없으면 null(사지 않는다). */
+function lawVariant(g: Game, id: TechId): Variant | undefined | null {
+  const def = TECHS[id];
+  const vs: (Variant | undefined)[] = def.variants ? ['a', 'b'] : [undefined];
+  if (!LAW_ONLY_TECHS.includes(id)) return vs[0];
+  return vs.find(v => techLaws(id, v).some(l => lawActive(g, l))) ?? null;
+}
+
 /** 내정 카드: 정책에 따른 고르기(특수 표시로 알아본다). */
 function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number {
   const ok = view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled);
@@ -70,7 +78,11 @@ function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number
   if (policy === 'idle') return by('dom:none') ?? (card.kind === 'dom:lice' ? by('dom:lice:endure') : undefined) ?? ok[0].i;
   switch (card.kind) {
     case 'dom:fit': return by('dom:restore:full') ?? by('dom:restore:defect') ?? ok[0].i;
-    case 'dom:fork': return card.text === 'e3' ? (by(g.comms.tail.rel < 0 ? 'dom:variant:a' : 'dom:variant:b') ?? ok[0].i) : ok[0].i;
+    case 'dom:fork': {
+      const v = TECHS[card.text as TechId]?.variants ? lawVariant(g, card.text as TechId) : undefined;
+      if (v) return by(`dom:variant:${v}`) ?? ok[0].i;
+      return card.text === 'e3' ? (by(g.comms.tail.rel < 0 ? 'dom:variant:a' : 'dom:variant:b') ?? ok[0].i) : ok[0].i;
+    }
     case 'dom:short': {
       const running = Object.values(g.dom?.techs ?? {}).some(t => t && (t.stage === 'done' || t.stage === 'defective') && !t.off);
       return (running && card.text === 'break' ? by('dom:short:stand') : by('dom:short:target')) ?? ok[0].i;
@@ -131,7 +143,9 @@ function domesticPrep(g: Game): void {
     const ids = TECH_IDS.filter(id => !d.techs[id]).sort((a, b) => TECHS[a].tier - TECHS[b].tier);
     for (const id of ids) {
       const ch = restoreCheck(g, id);
-      const v = TECHS[id].variants ? 'a' : undefined;
+      // 법을 바꾸는 기술(7.3)은 그 법이 서 있을 때만 산다. 변형은 서 있는 법 쪽으로 고른다(2026-10-07 내정 스레드).
+      const v = lawVariant(g, id);
+      if (v === null) continue;
       if (!ch.full && startRestore(g, id, 'full', v)) break;
       if (!ch.defect && startRestore(g, id, 'defect', v)) break;
     }

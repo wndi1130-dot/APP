@@ -2,7 +2,7 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed, techPending } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed } from './data';
 import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { domCard, refreshSit, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
@@ -69,7 +69,6 @@ export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   const out: RestoreCheck = { offer: false, fragsNeed: cost.frags, defectNeed: cost.defectFrags, parts: cost.parts, core: cost.core, wood: cost.wood };
   const fail = (why: string) => { out.full = why; out.defect = why; return out; };
   if (d.techs[id]) return fail('이미 손댔다');
-  if (techPending(id)) return fail('아직 열지 않는 기술');
   const pre = prereqs(id);
   if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return fail(`${TECHS[pre[0]].name}부터`);
   if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {

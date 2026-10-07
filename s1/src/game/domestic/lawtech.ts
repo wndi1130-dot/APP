@@ -99,6 +99,35 @@ const TOUCHES: (Pick & { law: LawId; text: string })[] = [
   { tech: 'm5', law: 'treat_all', text: '의약품 소모 ×1.6 → ×1.3' },
 ];
 
+/** 기술이 원래 법 대신 올릴 변형 법을 연다(laws.ts). 쓸모 줄과 봇이 읽는다. */
+const OPENS: (Pick & { law: LawId; base: LawId })[] = [
+  { tech: 'm3', variant: 'a', law: 'seed_half', base: 'seed_grain' },
+  { tech: 'x1', law: 'child_pack', base: 'child_labor' },
+  { tech: 'm2', law: 'triage_std', base: 'triage' },
+];
+const sameVariant = (p: Pick, v?: Variant) => !p.variant || !v || p.variant === v;
+
+/** 이 기술(변형)이 쓸모 있으려면 서 있어야 하는 법. 변형을 정하지 않았으면 두 변형의 법을 다 돌려준다. */
+export function techLaws(tech: TechId, variant?: Variant): LawId[] {
+  const laws = [...TOUCHES.filter(t => t.tech === tech && sameVariant(t, variant)).map(t => t.law),
+    ...OPENS.filter(o => o.tech === tech && sameVariant(o, variant)).map(o => o.base)];
+  return [...new Set(laws)];
+}
+
+/** 효과가 모두 법에 걸린 기술(7.3). 그 법이 없으면 사도 쓸 데가 없다. E4(대체 화부)·M5(이)는 법 밖 효과가 있어 빠진다. */
+export const LAW_ONLY_TECHS: TechId[] = ['e1', 'e2', 'e3', 'e5', 'm2', 'm3', 'x1'];
+
+/** 설계도와 복원 단추에 붙는 쓸모 줄(내정 7.3 함정 막기, 2026-10-07 내정 스레드). 법과 상관없는 기술이면 null. */
+export function techUseLine(g: Game, tech: TechId, variant?: Variant): string | null {
+  const parts = [
+    ...TOUCHES.filter(t => t.tech === tech && sameVariant(t, variant)).map(t => `${LAWS[t.law].title}이(가) 서 있을 때`),
+    ...OPENS.filter(o => o.tech === tech && sameVariant(o, variant)).map(o => `${LAWS[o.base].title} 대신 ${LAWS[o.law].title}을(를) 올릴 때`),
+  ];
+  if (parts.length === 0) return null;
+  const now = techLaws(tech, variant).some(l => lawActive(g, l));
+  return `쓸모: ${[...new Set(parts)].join(', ')}${now ? '(지금 서 있다)' : '(지금은 없다)'}`;
+}
+
 /** 지금 쓸 수 있는 기술이 이 법을 어떻게 바꾸는지(법 미리보기 끝에 붙는 줄). */
 export function lawTechLines(g: Game, law: LawId): string[] {
   return TOUCHES.filter(t => t.law === law && mult(g, t) > 0)

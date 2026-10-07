@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
-  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
+  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
   chooseCard, coldCap, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
@@ -50,7 +50,6 @@ describe('기술', () => {
   it('옛 아끼는 기술 다섯은 7.3 개편 뒤 풀렸다(법을 바꾸는 효과)', () => {
     const g = fresh();
     g.dom!.frags.engine = 5;
-    expect(PENDING_TECHS).toEqual([]);
     expect(restoreCheck(g, 'e1').full).toBeUndefined();
     expect(startRestore(g, 'e1', 'full')).toBe(true);
   });

@@ -1,10 +1,9 @@
 // S1a 판과 S1a+S1c 판을 같은 시드로 돌려 비교한다(s1c_domestic 14.1의 2번).
 // 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]
-// 실제 게임 코드를 돌린다. 기술 중 아끼기만 하는 다섯(E1, E2, X1, M3, E5)은 사용자 답 전이라 복원이 막혀 있다(domestic/data.ts PENDING_TECHS).
-// --pending-on을 주면 그 다섯도 열어서 잰다(답이 오면 볼 비교).
+// 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { D, PENDING_TECHS } from '../src/game';
+import { D } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, GameMetrics } from './s1c_bot';
 
@@ -12,7 +11,6 @@ const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const flags = process.argv.slice(2).filter(a => a.startsWith('--'));
 const N = Number(args[0] ?? 1000);
 const OUT = args[1];
-if (flags.includes('--pending-on')) PENDING_TECHS.splice(0, PENDING_TECHS.length);
 // --set=key:value 로 domestic/data.ts의 D 값을 바꿔 민감도를 본다(예: --set=hotWater0:0 --set=liceDirty:0.05).
 const sets: Record<string, number> = {};
 for (const f of flags.filter(x => x.startsWith('--set='))) {
@@ -79,5 +77,5 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     + `위기안건 ${s.forcedPerGame} 가혹법 ${s.harshPassed} 법 ${s.lawsPassed} 석탄최저 ${s.coalMin} 식량최저 ${s.foodMin} `
     + `석탄<30 ${s.coalUnder30} 식량<30 ${s.foodUnder30} 죽음 ${s.deaths} S1a카드 ${s.s1aCards} 내정카드 ${s.domCards}(${s.domCardsP10}~${s.domCardsP90})`);
 }
-console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${flags.includes('--pending-on') ? ', 아끼는 기술 다섯 켬' : ''}${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''})`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, pendingOn: flags.includes('--pending-on'), sets, runs: out }, null, 2));
+console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''})`);
+if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, sets, runs: out }, null, 2));
