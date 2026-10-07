@@ -73,7 +73,7 @@ export const D = {
   // 16.5 이와 발진티푸스
   boilCoal: 3, beddingWarm: 10, beddingSegs: 2, endureSegs: 3, typhusFromLice: 0.4, typhusFromLiceM5: 0.25,
   typhusPatients: 4, typhusMed: 0.5, typhusDeath: 0.15, typhusDeathM1: 0.1, typhusSpread: 0.2, typhusSpreadCrowd: 70,
-  typhusRecover: 0.25, quarantineRel: -15, quarantineFear: 5,
+  typhusRecover: 0.4, quarantineRel: -15, quarantineFear: 5,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)
   delegatePop: 5, delegateAfter: 6,
 };

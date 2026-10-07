@@ -157,9 +157,10 @@ function typhusTick(g: Game, notes: string[]): void {
     const kept: string[] = [];
     const hasMed = g.med >= need;
     if (hasMed) g.med -= need; else g.med = 0;
+    // 의약품을 받으면 구간마다 40%로 낫는다. 없으면 낫지 않고 15%(응급 처치면 10%)로 죽는다(s1c_domestic, triage N12).
     for (const who of t.patients) {
+      if (hasMed ? rnd(g) < D.typhusRecover : false) continue;
       if (!hasMed && rnd(g) < death) dead.push(who);
-      else if (rnd(g) < D.typhusRecover) continue;
       else kept.push(who);
     }
     t.patients = kept;
