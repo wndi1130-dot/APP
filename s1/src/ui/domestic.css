@@ -61,8 +61,15 @@
 .dom-mat b { color: var(--ink-1); }
 .dom-tag { display: inline-flex; gap: 6px; font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
 .dom-tag + .x { margin-left: 0; }
-.dom-hy.is-dirty { color: var(--serious); }
-.dom-hy.is-clean { color: var(--ink-2); }
+.dom-hy { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+/* 물 사정은 색으로 몰지 않는다: 꼬리칸이 처음부터 늘 빨간 칸으로 읽히지 않게(16.1 라). 높이는 대야 물로만 보인다. */
+.dom-hy { color: var(--ink-2); }
+/* 대야: 물이 찬 / 반쯤 / 빈 대야(16.3). 테두리는 그릇, 안쪽 채움이 물 높이다. */
+.dom-basin { position: relative; width: 14px; height: 7px; border: 1.5px solid currentColor; border-top: 0; border-radius: 0 0 7px 7px; overflow: hidden; }
+.dom-basin::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--ink-3); opacity: .7; }
+.dom-hy.is-clean .dom-basin::after { height: 100%; }
+.dom-hy.is-normal .dom-basin::after { height: 50%; }
+.dom-wash { color: var(--ink-2); }
 .carpop:has(.dom-engine) { width: 420px; }
 .carpop__levers:has(.dom-engine) { grid-template-columns: 1fr 1fr 92px; }
 .dom-engine { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 12px; padding-left: 8px; border-left: 1px solid var(--line); }

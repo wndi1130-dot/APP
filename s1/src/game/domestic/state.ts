@@ -90,7 +90,7 @@ export interface DomState {
   liceFree?: Partial<Record<Comm, number>>;
   /** 압력 경고 단계(8.7): 0 처음, 1이면 다음이 마지막 경고. */
   pressureStage?: number;
-  typhus: { comm: Comm; patients: string[]; quarantined: boolean; bay: boolean; at: number }[];
+  typhus: { comm: Comm; patients: string[]; apart: boolean; bay: boolean; at: number }[];
   /** 침구를 태운 공동체: 이 구간까지 온기 −10 */
   bedding: Partial<Record<Comm, number>>;
   penalties: Penalty[];
@@ -212,6 +212,11 @@ export function migrateDomestic(g: Game): void {
   d.stats.repairs ??= 0;
   d.stats.buried ??= 0;
   d.stats.moves ??= 0;
+  // 옛 '그 칸을 닫는다'(격리)는 뺐다(16.5). 그 판의 환자는 '따로 눕힌다'로 이어 간다.
+  for (const t of d.typhus as (DomState['typhus'][number] & { quarantined?: boolean })[]) {
+    t.apart ??= t.quarantined ?? false;
+    delete t.quarantined;
+  }
 }
 
 /** 내정 카드를 서류 뭉치에 쌓고 판당 장 수를 센다. */
