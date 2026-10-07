@@ -279,3 +279,23 @@ Recreate the attached four-panel sheet with the same people, poses, door and fra
 ### 옷차림 (2026-10-07 08:25)
 
 사용자가 사람들을 더 누더기처럼 하라고 했다. 기준 그림 C1 v3, C3 v5, C5, C10 v3의 옷은 기워 입었지만 아직 깔끔한 편이다. 이 그림들은 다시 뽑지 않는다. 사람 모습의 기준은 3D 모델링 스레드의 인물 모델이 정하고, 이 주문서의 그림은 화면 배치·빛·분위기 기준으로만 쓴다. 앞으로 뽑는 글상자에는 위 공통 화풍의 바뀐 옷차림 줄이 들어간다.
+
+## 바깥 눈 점검 C 반영 (2026-10-07 12:40)
+
+로컬 워커의 그림 조짐 점검(가지 research/design-review-20261007, docs/design/review/art_omens_check_20261007.md)에서 이 주문서 몫 둘이다.
+
+- **C3 v5 경비칸 명판의 교차 장총**: 원래 명판 주문(image_prompts.md ⑤ 칸 명판 8개)은 경비 = 무늬 없는 방패였는데, 그림에서 교차한 장총으로 나왔다. 군 병과 표식처럼 읽힌다. 채택하지 않는다. 명판은 무늬 없는 방패로 둔다. C3 v5는 배치 기준이라 다시 뽑지 않고, C4 약 아이콘·C11 모표처럼 실제 에셋 때 고친다. C3 v5를 첨부하는 새 주문(구간 배경 B1~B8)에는 고침 줄을 넣었다.
+- **조짐 자리**: 점검이 정차·필드 그림 네 장에 조짐 자리를 셋씩 잡았고, 소품을 정상·조짐·사건 뒤 세 상태로 묶자고 했다. 연출 문서 '조짐을 장면으로'에 규칙으로 넣었다. 폰 크기에서 세 상태가 읽히는지 C12로 한 번 본다.
+
+## C12 조짐 세 상태 (첨부: C9_stop_v5)
+
+```text
+Using the attached image's camera, station, train, weather and light, make one image with three horizontal strips showing the same stopped-train view at three moments. Change only two props between the strips; everything else stays identical.
+
+Prop A, beside the goods shed door on the left: top strip (normal) a few old footprints in the snow; middle strip (omen) a wide dark-brown drag mark leading over the snow to the shed threshold, one boot print beside it, and the hem of a coat moving behind a crate just inside the dark doorway; bottom strip (after) a dead figure in a ragged coat has stepped out of the doorway onto the platform.
+Prop B, on the platform walkway in the middle: top strip a flat iron drain cover under a thin skin of ice; middle strip a suitcase lying on the cover with one corner sunk in, thick cracks spreading from under it and a black gap opening; bottom strip the cover has collapsed, the suitcase has dropped in and a dark hole blocks the walkway.
+
+No warning text, no icons, no colored outlines; the props must read on their own at phone size. Blood and drag marks are small and dark brown, no gore. Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish.
+```
+
+공통 끝 두 줄(옷차림, 열차)을 붙인다. 저장은 바탕화면 `화면컨셉_20261007\C12_omen_states_v1.png`.

@@ -33,7 +33,7 @@ P = dict(
     recover_base=1, recover_cap=3, target_keep=0.85,
     engine_fatigue=2.0, shift_relief=10, shift_coal=3,
     natural_ceiling=15, engine_exposure0=45, strike_rel=-15, refuse_rel=5,
-    rescue_rate=0.2, crisis_line=30, forced_agenda=1, plan_line=120, thrown_horde=0.05, store_risk=0.03, lever_line=50,
+    rescue_rate=0.2, crisis_line=30, forced_agenda=1, plan_line=120, thrown_horde=0.05, store_risk=0.03, cold_cap=6, pyre_coal=1, pyre_kin_crowd=2, pyre_light=1.05, lever_line=50,
     repeal=1, repeal_cool=2, repeal_rel=10, hostile_grudge=2, blackmail_reputation=3, grudge_decay=2, blackmail_pull=1,
 )
 COMMS = ['tail', 'engine', 'guard', 'medtech', 'front']
@@ -82,7 +82,7 @@ LAWS = {
     'corpse_throw': law('normal', (0, -1, -1), lambda s: s.corpse_issue, res=d(corpse='throw'), crisis=('corpse',)),
     'corpse_store': law('normal', (1, 0, 1), lambda s: s.corpse_issue, like=d(tail=1, medtech=1, front=1),
                         res=d(corpse='store'), crisis=('corpse',)),
-    'corpse_burn': law('normal', (0, 1, 1), lambda s: s.corpse_issue, rels=d(medtech=-5, front=-5), like=d(engine=2),
+    'corpse_burn': law('normal', (0, 1, 1), lambda s: s.corpse_issue, rels=d(medtech=-5, front=-5), like=d(guard=1),
                        res=d(corpse='burn'), crisis=('corpse',)),
     # 의료와 감염
     'treat_all': law('normal', (1, 0, 1), like=ALL(1), res=d(med_mult=1.6, heal=0.7)),
@@ -162,6 +162,8 @@ class Run:
         self.corpse_issue = False  # 첫 죽음이 시신 처리 안건을 연다
         self.thrown = 0            # 밖으로 던진 시신: 선로를 따라오는 무리에 섞인다(아는 얼굴)
         self.stored = 0            # 냉동칸에 둔 시신
+        self.pyre = 0              # 다음 정차 장작불까지 냉동칸에 둔 시신
+        self.pyre_kin = Counter()  # 냉동칸이 차서 살던 칸에 둔 시신(칸마다 과밀 +2)
 
     # 처지 = 기준 + 레버 차이
     @property
@@ -214,8 +216,12 @@ class Run:
             self.stored += n
             self.base['tail'][2] += 1 * n
         elif way == 'burn':
-            self.coal += 2 * n
-            self.rel['tail'] = clamp(self.rel['tail'] - 3 * n, -100, 100)
+            # 정차 때 선로 옆 장작불(2026-10-07). 그때까지 냉동칸, 넘치면 살던 칸(s1c_domestic 4.1)
+            in_car = min(n, max(0, P['cold_cap'] - self.stored - self.pyre))
+            self.pyre += in_car
+            if n - in_car:
+                self.pyre_kin[c] += n - in_car
+                self.base[c][2] += P['pyre_kin_crowd'] * (n - in_car)
 
     def apply_law(self, law):
         L = LAWS[law]
@@ -283,6 +289,14 @@ class Run:
             self.stats['passed_stops'] += 1
             return
         self.coal -= P['coal_stop']
+        light = 1
+        bodies = self.pyre + sum(self.pyre_kin.values())
+        if bodies:  # 내린 정차에서 기다리던 시신을 태운다. 불쏘시개로 석탄을 쓰고 불빛이 무리를 끈다
+            self.coal -= min(max(0, self.coal), P['pyre_coal'] * bodies)
+            for k, v in self.pyre_kin.items():
+                self.base[k][2] -= P['pyre_kin_crowd'] * v
+            self.pyre = 0; self.pyre_kin = Counter()
+            light = P['pyre_light']
         weights = {k: v * (P['target_boost'] if k == target else 1) for k, v in loot.items()}
         tot = sum(weights.values())
         haul = P['haul_total'] * self.r.uniform(0.7, 1.3)
@@ -298,10 +312,10 @@ class Run:
             elif self.r.random() < amt / 10: self.stats['got_' + k] += 1
         guard_mult = 1.5 if (self.fervor['guard'] >= 1 and self.rel['guard'] <= -40) else 1
         horde = min(1.5, 1 + P['thrown_horde'] * self.thrown)  # 던진 시신이 무리를 키운다
-        lam = risk * P['injury_rate'] * guard_mult * horde
+        lam = risk * P['injury_rate'] * guard_mult * horde * light
         inj = sum(1 for _ in range(6) if self.r.random() < lam / 6)
         self.injured += inj
-        if self.r.random() < risk * P['death_rate'] * guard_mult * horde * self.res('death_mult'):
+        if self.r.random() < risk * P['death_rate'] * guard_mult * horde * light * self.res('death_mult'):
             self.on_death(1)
         self.stats['target_' + target] += 1
         # 구조 카드(ev_field_wounded): 생존자를 데려오면 꼬리칸 사람·과밀·부상자가 는다
@@ -326,6 +340,17 @@ class Run:
             dead = sum(1 for _ in range(self.injured) if self.r.random() < 0.1)
             self.injured -= dead
             self.on_death(dead)
+        # 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 두 배
+        kin = sum(self.pyre_kin.values())
+        weight = self.pyre + 2 * kin
+        if weight and self.r.random() < min(0.3, P['store_risk'] * weight):
+            if kin and self.r.random() < 2 * kin / weight:
+                k = next(x for x, v in self.pyre_kin.items() if v)
+                self.pyre_kin[k] -= 1; self.base[k][2] -= P['pyre_kin_crowd']
+            else:
+                self.pyre -= 1
+            self.injured += 1; self.tension += 5
+            self.stats['pyre_rose'] += 1
         # 냉동칸: 안치한 시신이 많을수록 녹아 일어나는 사고가 난다
         if self.stored and self.r.random() < min(0.3, P['store_risk'] * self.stored):
             self.injured += 2; self.tension += 8; self.stored = 0
