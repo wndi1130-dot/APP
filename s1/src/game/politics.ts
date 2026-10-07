@@ -2,6 +2,7 @@ import {
   COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FETCH_WANT, IDEO, LAWS, LAW_IDS, OPPOSITE, P,
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
+import { needOf } from './needs';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import type { Agenda, CouncilState, Deal, DealTool, Game, VoteFlip, VoteResult } from './state';
 
@@ -178,24 +179,28 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   for (const p of g.proposals) {
     if (options.some(o => o.law === p.law && o.repeal === p.repeal)) merged.push(p);
   }
-  for (const o of options) if (!merged.some(m => m.law === o.law && m.repeal === o.repeal)) merged.push(o);
+  // 법 요구가 걸린 안건을 그다음에 둔다.
+  const needed = (o: Agenda) => !o.repeal && needOf(g, o.law) !== null;
+  for (const o of [...options.filter(needed), ...options.filter(o => !needed(o))]) {
+    if (!merged.some(m => m.law === o.law && m.repeal === o.repeal)) merged.push(o);
+  }
   const crisis = crisisNow(g);
   const forced = merged.filter(o => (o.repeal ? drains(o.law) : LAWS[o.law].crisis).some(k => crisis.includes(k)));
   if (forced.length > 0) return { options: forced.map(o => ({ ...o, forced: true })), forced: true };
   return { options: merged, forced: false };
 }
 
-export function openCouncil(g: Game): void {
+export function openCouncil(g: Game, emergency = false): void {
   g.session += 1;
-  // 적의는 새 잘못 없이 2회기가 지나면 하나 준다(3.7).
-  for (const c of COMMS) {
+  // 적의는 새 잘못 없이 2회기가 지나면 하나 준다(3.7). 비상 소집으로 적의를 빨리 지우지는 못한다.
+  if (!emergency) for (const c of COMMS) {
     const s = g.comms[c];
     if (s.grudge > 0 && g.session - s.lastOffense >= P.grudgeDecay) {
       s.grudge -= 1;
       s.lastOffense = g.session;
     }
   }
-  if (lawActive(g, 'patrol') && rnd(g) < 0.25) {
+  if (!emergency && lawActive(g, 'patrol') && rnd(g) < 0.25) {
     const secret = addSecret(g);
     journal(g, `귀환 검사에서 ${COMM_NAME[secret.about]} 대표의 약점이 드러났다.`, 'dark');
   }
@@ -210,7 +215,7 @@ export function openCouncil(g: Game): void {
       if (sc > best) { best = sc; idx = i; }
     });
   }
-  g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null };
+  g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}) };
   if (g.agendaHolder && options.length > 0) journal(g, `${COMM_NAME[g.agendaHolder]}이(가) 안건을 골랐다: ${agendaTitle(options[idx])}.`);
   g.agendaHolder = null;
 }
@@ -458,11 +463,21 @@ export function castVote(g: Game, decree = false): VoteResult | null {
     g.fear = clamp(g.fear + 3, 0, 100);
     g.guidedLeft -= 1;
   }
-  // AI 발의를 무시했으면 발의한 쪽이 서운해한다.
-  for (const p of g.proposals) {
-    if (p.by && !(p.law === agenda.law && p.repeal === agenda.repeal)) g.comms[p.by].rel = clamp(g.comms[p.by].rel - 3, -100, 100);
+  // AI 발의를 무시했으면 발의한 쪽이 서운해한다. 비상 소집은 다음 정기 회기의 발의를 건드리지 않는다.
+  if (!council.emergency) {
+    for (const p of g.proposals) {
+      if (p.by && !(p.law === agenda.law && p.repeal === agenda.repeal)) g.comms[p.by].rel = clamp(g.comms[p.by].rel - 3, -100, 100);
+    }
+    g.proposals = [];
+  } else if (passed) {
+    // 기습 표결: 반대할 칸이 파견 나간 사이에 통과시켰다.
+    for (const c of COMMS) {
+      if (map[c].absent > 0 && map[c].score < 0) {
+        offend(g, c);
+        journal(g, `${COMM_NAME[c]}이(가) 밖에 나간 사이 표결했다. 기습으로 기억한다.`, 'dark');
+      }
+    }
   }
-  g.proposals = [];
   const title = agendaTitle(agenda);
   if (decree) {
     g.decreeLeft = 0;

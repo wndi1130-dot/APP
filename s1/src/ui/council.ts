@@ -1,6 +1,7 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
   lawNeed, openConditions, relStage, relationLine, toolStatus,
+  needOf,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, VoteResult } from '../game';
 import { cx, h, s } from './dom';
@@ -156,6 +157,7 @@ function billPanel(view: View): HTMLElement {
   const law = LAWS[agenda.law];
   const canSwitch = !council.locked && council.deals.length === 0 && !council.result && council.options.length > 1;
   const secret = lawActive(g, 'secret_ballot');
+  const need = needOf(g, agenda.law);
   return h('div', { class: 'bill' },
     h('div', { class: 'bill__nav' },
       h('button', { class: 'nav', 'data-action': 'agenda', 'data-step': -1, disabled: !canSwitch, 'aria-label': '이전 안건' }, '‹'),
@@ -166,6 +168,8 @@ function billPanel(view: View): HTMLElement {
       h('span', { class: 'tag' }, icon(secret ? 'eyeOff' : 'eye'), secret ? '비밀' : '공개'),
       h('span', { class: cx('tag', law.tag === '가혹' && 'tag--harsh', law.tag === '이상' && 'tag--ideal') }, law.tag),
       agenda.forced ? h('span', { class: 'tag tag--crisis' }, '위기') : null,
+      need && !agenda.repeal ? h('span', { class: 'tag tag--crisis' }, need.state.due > g.seg ? `요구 · ${need.state.due - g.seg}구간 남음` : '요구 · 기한 지남') : null,
+      council.emergency ? h('span', { class: 'tag' }, '비상 소집') : null,
       agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
       council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
     h('ul', { class: 'bill__changes' }, (agenda.repeal ? ['통과 때 바뀐 것을 되돌린다', ...law.changes.map(x => `되돌림: ${x}`)] : law.changes)

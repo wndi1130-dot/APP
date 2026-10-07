@@ -5,3 +5,4 @@ export * from './cards';
 export * from './turn';
 export * from './death';
 export * from './scene';
+export * from './needs';

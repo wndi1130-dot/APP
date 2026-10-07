@@ -10,7 +10,13 @@ import type { Game } from './state';
 export const SCENE_LINES: Record<number, string[]> = {
   1: ['바람 소리뿐이다. 눈 위에 발자국이 없다.', '역사 지붕이 무너져 있다. 움직이는 것은 없다.'],
   2: ['멀리 연기가 한 줄 오른다. 누군가 있거나, 있었다.', '창문 몇 개가 안쪽에서 막혀 있다.'],
-  3: ['눈 위에 발자국이 어지럽다. 오래되지 않았다.', '문짝마다 긁힌 자국이 있다. 수색대가 쇠막대를 고쳐 쥔다.', '플랫폼 끝에 짐이 버려져 있다. 버린 사람은 보이지 않는다.'],
+  3: ['문짝마다 긁힌 자국이 있다. 수색대가 쇠막대를 고쳐 쥔다.', '플랫폼 끝에 짐이 버려져 있다. 버린 사람은 보이지 않는다.'],
+};
+
+/** 바깥 기척이 장소 위험도보다 우선한다. 조용한 날과 무리 흔적이 있는 날. */
+export const THREAT_LINES: { calm: string[]; fresh: string[] } = {
+  calm: ['바람 소리뿐이다. 눈 위에 발자국이 없다.', '까마귀가 플랫폼에 앉아 있다. 놀라 날아오르지 않는다.'],
+  fresh: ['눈 위에 발자국이 어지럽다. 오래되지 않았다.', '역사 안쪽에서 무언가 끌리는 소리가 난다. 수색대가 쇠막대를 고쳐 쥔다.', '선로 옆 눈이 짓이겨져 있다. 한두 명이 아니다.'],
 };
 
 export type DisembarkMood = 'triumph' | 'cornered' | 'guilt' | 'cold' | 'warm' | 'plain';
@@ -45,7 +51,8 @@ export function stopScene(g: Game): { outside: string; disembark: string } | nul
   const stop = g.stop;
   if (!stop) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
-  const lines = SCENE_LINES[Math.max(1, Math.min(3, place.risk))];
+  const threat = stop.threat ?? 1;
+  const lines = threat > 1 ? THREAT_LINES.fresh : threat < 1 ? THREAT_LINES.calm : SCENE_LINES[Math.max(1, Math.min(3, place.risk))];
   const outside = lines[(g.seg * 5 + place.id.length) % lines.length];
   return { outside, disembark: DISEMBARK_LINES[disembarkMood(g, stop.crewComm)] };
 }

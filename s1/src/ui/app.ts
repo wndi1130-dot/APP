@@ -1,6 +1,6 @@
 import {
   openConditions,
-  COMMS, advance, castVote, chooseCard, cloneGame, createGame, currentAgenda, cutComm, makeDeal, resolveStop,
+  COMMS, advance, callEmergency, castVote, chooseCard, cloneGame, createGame, currentAgenda, cutComm, makeDeal, resolveStop,
   setAgenda, setAutoLevers, setLever, setStop, supportComm, uniqueAction, viewCard,
 } from '../game';
 import type { Comm, Game, StayId } from '../game';
@@ -25,7 +25,13 @@ function load(): Game | null {
     const raw = globalThis.localStorage?.getItem(SAVE_KEY);
     if (!raw) return null;
     const g = JSON.parse(raw) as Game;
-    return g && g.version === 1 && typeof g.seg === 'number' ? g : null;
+    if (!g || g.version !== 1 || typeof g.seg !== 'number') return null;
+    // 예전 판에 없던 칸을 채워 저장한 판을 이어 한다.
+    g.eventLog ??= {};
+    g.needs ??= {};
+    g.emergencyCalls ??= [];
+    g.hunger ??= 0;
+    return g;
   } catch {
     return null;
   }
@@ -243,6 +249,10 @@ export function startApp(root: HTMLElement): void {
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; }
         return render();
       }
+      case 'emergency':
+        act(next => { callEmergency(next); });
+        if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; ui.panel = null; }
+        return render();
       case 'person':
         ui.person = data.name || null;
         return render();

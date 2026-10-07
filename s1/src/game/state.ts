@@ -1,4 +1,5 @@
 import { createRng, nextRandom } from '../core/rng';
+import type { NeedId, NeedState } from './needs';
 import type { RngState } from '../core/rng';
 import {
   COH0, COMMS, IDEO, P, POP0, REL0, REP_AGE, SECRET_POOL, START, STAGES, TRAIT_BAN, TRAITS,
@@ -74,6 +75,8 @@ export interface StopState {
   stay: StayId;
   crewComm: Comm;
   crewSize: number;
+  /** 이번 정차의 바깥 기척(0.8 조용함, 1 보통, 1.4 무리 흔적). 정차 장면 글과 위험 줄에 같이 들어간다. */
+  threat?: number;
   done: boolean;
   result: StopResult | null;
 }
@@ -108,6 +111,8 @@ export interface CouncilState {
   locked: boolean;
   deals: Deal[];
   result: VoteResult | null;
+  /** 회기가 아닌 구간에 열차장이 부른 비상 소집 */
+  emergency?: boolean;
 }
 
 export interface JournalEntry { seg: number; text: string; tone?: 'good' | 'bad' | 'deal' | 'dark' }
@@ -164,6 +169,12 @@ export interface Game {
   recentEvents: string[];
   /** 사건별 기억(키: 이동 사건 id, 'demand:engine', 'favor:tail', 'rescue', 'bitten' 등) */
   eventLog: Record<string, EventMemo>;
+  /** 법 요구: 문제는 있는데 그 문제를 다루는 법이 없다(needs.ts) */
+  needs: Partial<Record<NeedId, NeedState>>;
+  /** 비상 소집을 부른 구간들 */
+  emergencyCalls: number[];
+  /** 식량 0으로 버틴 구간 수 */
+  hunger: number;
   nextCardUid: number;
   stop: StopState | null;
   council: CouncilState | null;
@@ -267,7 +278,7 @@ export function createGame(seed = 's1a'): Game {
     secrets: [], nextSecretId: 1, leashes: [], blackmails: 0, corpseIssue: false, thrown: 0, stored: 0, deaths: [],
     strikes: 0, inStrike: false, strikeWarned: -99, lostSegments: 0, trustCrisis: null, tensionWarned: false,
     tensionCrisisUsed: 0, emergencyUsed: false, guidedLeft: 0, decreeLeft: 0, guardEscort: false, forcedRun: false,
-    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, nextCardUid: 1, stop: null,
+    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, needs: {}, emergencyCalls: [], hunger: 0, nextCardUid: 1, stop: null,
     council: null, lastSettle: null, journal: [], usedProfiles: [], end: null,
     stats: { dealsMade: 0, promisesKept: 0, promisesBroken: 0, lawsPassed: 0, lawsFailed: 0, repeals: 0, bribes: 0, blackmails: 0 },
   } as Game;

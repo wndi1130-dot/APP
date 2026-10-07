@@ -1,4 +1,4 @@
-import { COMM_NAME, P, PHASES, PHASE_NAME, forecast, isSessionSeg, primaryAction, standings } from '../game';
+import { COMM_NAME, P, PHASES, PHASE_NAME, emergencyStatus, forecast, isSessionSeg, primaryAction, standings } from '../game';
 import { cx, h, pct } from './dom';
 import { icon } from './icons';
 import { fmt, signed } from './common';
@@ -74,6 +74,12 @@ export function bottomBar(view: View): HTMLElement {
       'data-action': primary.ok ? 'advance' : 'open-stack',
       'aria-label': primary.why ?? primary.label,
     }, h('span', null, primary.label), icon(primary.ok ? 'arrow' : 'papers'));
+  // 비상 소집: 회기가 아닌 구간에 정차를 마치면 신임을 써서 의회를 부를 수 있다.
+  const em = emergencyStatus(g);
+  const emergencyBtn = em.show && ui.screen === 'home' ? h('button', {
+    class: cx('secondary', !em.ok && 'is-off'), 'data-action': 'emergency', disabled: !em.ok,
+    'aria-label': em.why ? `비상 소집: ${em.why}` : `비상 소집, 신임 −${em.cost}`,
+  }, h('span', null, '비상 소집'), h('small', { class: 'num' }, em.why ?? `신임 −${em.cost}`)) : null;
   return h('footer', { class: 'bottom' },
     h('div', { class: 'bottom__left' }, left),
     h('div', { class: 'bottom__mid' },
@@ -83,5 +89,5 @@ export function bottomBar(view: View): HTMLElement {
         class: cx('round round--wide', ui.screen === 'overview' && 'is-on'), 'data-action': 'go',
         'data-screen': ui.screen === 'overview' ? 'home' : 'overview', 'aria-label': '한눈에 보기',
       }, icon('overview')) : null),
-    h('div', { class: 'bottom__right' }, primaryBtn));
+    h('div', { class: 'bottom__right' }, emergencyBtn, primaryBtn));
 }

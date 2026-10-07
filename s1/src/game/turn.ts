@@ -1,6 +1,7 @@
 import { addCard } from './state';
 import { drawTravelEvent } from './cards';
 import { onDeath } from './death';
+import { needTick } from './needs';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
 import { agendaOptions, agendaTitle, exposeBribe, offend, openCouncil, stance } from './politics';
@@ -168,9 +169,12 @@ function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
 function arriveStop(g: Game): void {
   const place = PLACES[Math.floor(rnd(g) * PLACES.length)];
   const tail = g.comms.tail.promise?.cond.kind === 'skip_dispatch';
+  // 같은 장소라도 정차마다 바깥 기척이 다르다. 무리 흔적이 있으면 기본 준비로도 죽음 줄이 뜰 수 있다.
+  const roll = rnd(g);
+  const threat = roll < 0.25 ? 0.8 : roll < 0.8 ? 1 : 1.4;
   g.stop = {
     place: place.id, target: suggestTarget(g, place.loot), stay: 'normal',
-    crewComm: tail ? 'guard' : 'tail', crewSize: 4, done: false, result: null,
+    crewComm: tail ? 'guard' : 'tail', crewSize: 4, threat, done: false, result: null,
   };
   g.phase = 'stop';
 }
@@ -191,6 +195,8 @@ export interface StopRisk {
   maxDead: number;
   guardRefused: boolean;
   horde: boolean;
+  /** 이번 정차에 무리 흔적이 새롭다 */
+  fresh: boolean;
 }
 
 /** 위험 줄이 뜨는 문턱. 줄이 뜨면 그 피해는 반드시 1명 이상이다(2026-10-07 사용자 결정, field_unified 8장). */
@@ -208,12 +214,13 @@ export function stopRisk(g: Game): StopRisk {
   const guardMult = guardRefused ? 1.5 : 1;
   const horde = Math.min(1.5, 1 + P.thrownHorde * g.thrown);
   const escort = g.guardEscort ? 0.5 : 1;
-  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort;
-  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort;
+  const threat = stop?.threat ?? 1;
+  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat;
+  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat;
   const maxDead = Math.min(crew - 1, pDeath >= RISK_LINE.dead2 ? 2 : pDeath >= RISK_LINE.dead ? 1 : 0);
   // 죽는 사람과 크게 다치는 사람은 겹치지 않는다. 남은 인원으로 약속을 못 지키면 줄을 띄우지 않는다.
   const maxHurt = lam >= RISK_LINE.hurt ? Math.max(0, Math.min(crew - maxDead, Math.ceil(lam * 1.2))) : 0;
-  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2 };
+  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: threat > 1 };
 }
 
 const NUM = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟'];
@@ -226,6 +233,7 @@ export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; 
   if (r.maxHurt > 0) lines.push(r.maxHurt > 1 ? `누군가 반드시 크게 다친다. 최악이면 ${NUM[r.maxHurt]} 명.` : '누군가 반드시 크게 다친다.');
   const why: string[] = [];
   if (r.guardRefused) why.push('경비대가 경계를 서지 않는다');
+  if (r.fresh) why.push('무리 흔적이 새롭다');
   if (r.horde) why.push('던진 시신에 무리가 몰려 있다');
   const calm = lines.length ? null : r.lam >= 0.2 ? '크게 다칠 일은 없어 보인다. 긁히고 삐는 정도.' : '조용해 보인다.';
   return { lines, calm, why };
@@ -370,6 +378,8 @@ function settle(g: Game): void {
   medicineTick(g, notes);
   drift(g);
   checkDuePromises(g);
+  hungerTick(g, notes);
+  needTick(g, notes);
   if (g.council) bribeDetection(g);
   leashTick(g);
   aiLeaders(g);
@@ -382,6 +392,55 @@ function settle(g: Game): void {
     rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel - before.rel[c]])) as Record<Comm, number>, notes,
   };
   if (g.phase !== 'end') g.phase = 'settle';
+}
+
+/** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 프로스트펑크식). */
+export const HUNGER_GRACE = 3;
+
+function hungerTick(g: Game, notes: string[]): void {
+  if (g.food > 0) { g.hunger = 0; return; }
+  g.hunger = (g.hunger ?? 0) + 1;
+  if (g.hunger === 1) {
+    addCard(g, { kind: 'info', who: '식량이 떨어졌다', text: `사람들은 허리띠를 졸라매고 버틴다. ${HUNGER_GRACE}구간을 넘기면 굶어 죽는 사람이 나온다.` });
+    return;
+  }
+  if (g.hunger <= HUNGER_GRACE) { notes.push(`굶은 지 ${g.hunger}구간째다.`); return; }
+  const who = PROFILES.filter(p => p.community === 'tail' && !g.deaths.includes(p.name)).map(p => p.name)[0];
+  if (who) {
+    onDeath(g, 'tail', [who]);
+    journal(g, `${who}이(가) 굶어 죽었다.`, 'bad');
+    notes.push('굶어 죽은 사람이 나왔다.');
+  }
+}
+
+// ---- 비상 소집(2026-10-07 사용자 후기) ----
+// 회기가 아닌 구간에도 정차를 마친 뒤 의회를 부를 수 있다. 신임을 쓰고, 최근에 자주 불렀을수록 비싸다(제안).
+// 파견 나간 칸의 표는 빠지므로, 반대하는 칸이 밖에 있을 때 부르면 '기습 표결'로 기억된다.
+export function emergencyCost(g: Game): number {
+  const recent = (g.emergencyCalls ?? []).filter(at => g.seg - at < 6).length;
+  return 6 + 4 * recent;
+}
+
+export function emergencyStatus(g: Game): { show: boolean; ok: boolean; cost: number; why?: string } {
+  const cost = emergencyCost(g);
+  const show = g.phase === 'stop' && !!g.stop?.done && !isSessionSeg(g.seg);
+  if (!show) return { show, ok: false, cost };
+  if (g.cards.length > 0) return { show, ok: false, cost, why: '먼저 서류를 처리한다' };
+  if (g.trust <= cost) return { show, ok: false, cost, why: '신임이 모자라다' };
+  if (agendaOptions(g).options.length === 0) return { show, ok: false, cost, why: '올릴 안건이 없다' };
+  return { show, ok: true, cost };
+}
+
+export function callEmergency(g: Game): boolean {
+  const st = emergencyStatus(g);
+  if (!st.ok) return false;
+  g.trust = clamp(g.trust - st.cost, 0, 100);
+  (g.emergencyCalls ??= []).push(g.seg);
+  openCouncil(g, true);
+  g.phase = 'council';
+  const away = COMMS.filter(c => g.comms[c].away > 0).map(c => COMM_NAME[c]);
+  journal(g, `열차장이 비상 소집을 불렀다(신임 −${st.cost}).${away.length ? ` ${away.join(', ')}은(는) 밖에 나가 있다.` : ''}`, 'dark');
+  return true;
 }
 
 function medicineTick(g: Game, notes: string[]): void {
