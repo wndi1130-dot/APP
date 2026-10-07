@@ -19,6 +19,9 @@ const FROST := Color(0.78, 0.88, 0.98)
 const HOLD_TIME: float = 0.35
 const DOUBLE_TAP: float = 0.32
 const DRAG_PX: float = 28.0
+## Omens are pale bone, never a red flag (presentation_motion 93).
+const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
+const MOAN_R: float = 20.0
 const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search", "수색"], ["cover", "엄호"], ["retreat", "후퇴"]]
 
 var game
@@ -1039,6 +1042,34 @@ func _draw_edges(view_size: Vector2) -> void:
 		var at: Vector3 = FieldGrid.center(game.data["manholes"][key])
 		if not game.camera.is_position_in_frustum(at):
 			_edge_arrow(center, view_size, at, "덜컹")
+	_draw_moans()
+
+
+## Heard, not seen (body_injury 8.3): the dead moving within MOAN_R of the
+## leader but outside sight show as a faint tick around the leader, one per
+## eighth of the compass. No count, no exact spot.
+func _draw_moans() -> void:
+	var p = game.player
+	var me := _project(p.position)
+	var marks: Dictionary = {}
+	for z in game.zombies.list:
+		if not game.zombies.active(z) or z["state"] == "frozen" or z["state"] == "wander":
+			continue
+		var d: float = z["pos"].distance_to(p.position)
+		if d > MOAN_R or d < 2.0 or game.cell_seen(z["pos"]):
+			continue
+		var dir := _project(z["pos"]) - me
+		if dir.length() < 1.0:
+			continue
+		var octant := int(round(dir.angle() / (PI / 4.0))) & 7
+		marks[octant] = minf(float(marks.get(octant, 1e9)), d)
+	for o in marks:
+		var a := float(o) * PI / 4.0
+		var v := Vector2(cos(a), sin(a))
+		var near := 1.0 - float(marks[o]) / MOAN_R
+		var col := Color(OMEN_COL.r, OMEN_COL.g, OMEN_COL.b, 0.35 + 0.5 * near)
+		overlay.draw_arc(me, 92.0, a - 0.28, a + 0.28, 10, col, 3.0)
+		overlay.draw_string(theme.default_font, me + v * 112.0 - Vector2(16, -6), "신음", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, col)
 
 
 func _edge_arrow(center: Vector2, view_size: Vector2, at: Vector3, text: String) -> void:
@@ -1052,6 +1083,6 @@ func _edge_arrow(center: Vector2, view_size: Vector2, at: Vector3, text: String)
 	var t := minf(absf(half.x / dir.x) if absf(dir.x) > 0.001 else 1e9, absf(half.y / dir.y) if absf(dir.y) > 0.001 else 1e9)
 	var tip := center + dir * t
 	var side := Vector2(-dir.y, dir.x)
-	var col := Color(0.95, 0.6, 0.5, 0.85)
+	var col := OMEN_COL
 	overlay.draw_colored_polygon(PackedVector2Array([tip + dir * 14.0, tip - dir * 8.0 + side * 10.0, tip - dir * 8.0 - side * 10.0]), col)
 	overlay.draw_string(theme.default_font, tip - dir * 30.0 - Vector2(24, -6), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)

@@ -45,14 +45,22 @@ func _product(key: String) -> float:
 
 ## Night cuts sight to this share (body_injury 8.3 start value).
 const DARK_SIGHT: float = 0.55
-## Two or more cutting conditions at once (fog and night...) do not multiply:
-## the shortest one holds (stand-in until 8.3 names 'foggy night' values).
+## Two or more cutting conditions at once do not multiply. Named pairs get
+## their own value (8.3: Sulechów's light fog with fine snow is about 13 m,
+## heavy fog alone stays 11 m); otherwise the shortest one holds.
+const PAIRS: Dictionary = {"fog+snow": 0.72}
 
 
 ## Sight range multiplier for people and the dead alike (body_injury 8.3).
 func sight_mult(dark: bool = false) -> float:
 	var cuts: Array[float] = []
 	var best := 1.0
+	var names := kinds.duplicate()
+	names.sort()
+	var pair := "+".join(names)
+	if PAIRS.has(pair):
+		var v: float = PAIRS[pair]
+		return minf(v, DARK_SIGHT) if dark else v
 	for k in kinds:
 		var v := float(ROWS[k]["sight"])
 		if v < 1.0:
