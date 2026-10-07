@@ -22,11 +22,13 @@ const CALL_RANGE_GROWTH := 0.6
 ## fled underground and the infected came with them). A rural stop has a small
 ## sewer, so the train-following share on roads and the track end is large
 ## (places.md 5). Weights are the share of hordes per entry.
-const ENTRIES := ["culvert", "manhole", "east_track", "north_road", "south_road"]
-const ENTRY_WEIGHTS := {"culvert": 0.3, "manhole": 0.2, "east_track": 0.25, "north_road": 0.125, "south_road": 0.125}
-const SEWERS := ["culvert", "manhole"]
-const ENTRY_NAMES := {"culvert": "급수탑 밑 암거", "manhole": "거리 맨홀", "east_track": "동쪽 선로 끝", "north_road": "북쪽 길", "south_road": "남쪽 길"}
-const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라온다", "manhole": "거리 맨홀에서 올라온다", "east_track": "동쪽 선로 끝으로 온다", "north_road": "북쪽 길로 온다", "south_road": "남쪽 길로 온다"}
+## The bigger Sulechów (user, build 20) adds the tenement cellar drain (a
+## sewer mouth inside a building) and the south-east road.
+const ENTRIES := ["culvert", "manhole", "east_track", "north_road", "south_road", "cellar", "east_road"]
+const ENTRY_WEIGHTS := {"culvert": 0.25, "manhole": 0.15, "east_track": 0.2, "north_road": 0.1, "south_road": 0.075, "cellar": 0.15, "east_road": 0.075}
+const SEWERS := ["culvert", "manhole", "cellar"]
+const ENTRY_NAMES := {"culvert": "급수탑 밑 암거", "manhole": "거리 맨홀", "east_track": "동쪽 선로 끝", "north_road": "북쪽 길", "south_road": "남쪽 길", "cellar": "공동주택 지하실 배수구", "east_road": "남동쪽 길"}
+const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라온다", "manhole": "거리 맨홀에서 올라온다", "east_track": "동쪽 선로 끝으로 온다", "north_road": "북쪽 길로 온다", "south_road": "남쪽 길로 온다", "cellar": "공동주택 지하실에서 올라온다", "east_road": "남동쪽 길로 온다"}
 const FIRST_ENTRY := "east_track"
 
 ## Forecast bands, in game minutes left.

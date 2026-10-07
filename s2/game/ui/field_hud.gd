@@ -366,7 +366,8 @@ func tick(delta: float) -> void:
 
 
 func _tick_portrait(p) -> void:
-	name_label.text = p.display_name + (" · 위층" if p.upstairs else "")
+	var lv: int = game.level_of(p.position)
+	name_label.text = p.display_name + (" · %d층" % (lv + 1) if lv > 0 else (" · 지하" if lv < 0 else ""))
 	var words: String = p.body.status_words()
 	if p.cold_level() >= 1 and words == "멀쩡함":
 		words = "추움"
@@ -832,6 +833,7 @@ func _on_touch(event: InputEvent) -> void:
 		aim_point = game.screen_to_ground(event.position)
 		var t = _pick_enemy(aim_point)
 		aim_target = t if t != null else aim_target
+		aim_point = _on_target_floor(aim_point, aim_target)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 		game.cam_size = maxf(game.cam_size - 2.0, 14.0)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -856,8 +858,8 @@ func _press(pos: Vector2) -> void:
 			aiming = true
 			# An enemy at your feet: pressing on it must not count as letting go on yourself.
 			aim_armed = not _over_player(pos)
-			aim_point = world
 			aim_target = target
+			aim_point = _on_target_floor(world, target)
 			p.target_zombie = {}
 			p.brain.erase("goal")
 	else:
@@ -917,6 +919,15 @@ func _melee(target, hold: bool) -> void:
 		p.hold_attack = hold
 
 
+## The finger's point moved to the floor the target stands on (shooting
+## down from an upstairs window at the yard).
+func _on_target_floor(world: Vector3, target) -> Vector3:
+	if target == null:
+		return world
+	var y: float = target["pos"].y if target is Dictionary else target.position.y
+	return game.shift_to_height(world, y)
+
+
 ## Nearest visible zombie, rising corpse or hostile person under the finger.
 func _pick_enemy(world: Vector3):
 	var best = null
@@ -924,13 +935,14 @@ func _pick_enemy(world: Vector3):
 	for z in game.zombies.list:
 		if z["state"] == "dead" or not game.cell_seen(z["pos"]):
 			continue
-		var d: float = world.distance_to(z["pos"])
+		# The finger is on your floor; a body on another floor sits elsewhere on the screen.
+		var d: float = game.shift_to_height(world, z["pos"].y).distance_to(z["pos"])
 		if d < best_d:
 			best_d = d
 			best = z
 	for r in game.raiders:
 		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone"]:
-			var d: float = world.distance_to(r.position)
+			var d: float = game.shift_to_height(world, r.position.y).distance_to(r.position)
 			if d < best_d:
 				best_d = d
 				best = r
@@ -944,7 +956,7 @@ func _tap(pos: Vector2) -> void:
 	var double: bool = now - last_tap_ms < int(DOUBLE_TAP * 1000.0) and pos.distance_to(last_tap_pos) < 70.0
 	last_tap_ms = now
 	last_tap_pos = pos
-	if p.upstairs:
+	if game.actions.on_signal_top(p):
 		offer([{"label": "내려간다", "call": game.actions.ladder.bind(p, "fast")}])
 		return
 	if not p.can_act():
@@ -954,7 +966,7 @@ func _tap(pos: Vector2) -> void:
 	p.target_zombie = {}
 	p.target_person = null
 	p.brain.erase("goal")
-	var path: PackedVector3Array = game.grid.find_path(p.position, world, false)
+	var path: PackedVector3Array = game.find_path(p.position, world, false)
 	if path.is_empty():
 		return
 	# Toggles are the default; the double-tap run is a setting (user, build 20).
@@ -981,13 +993,29 @@ func _tap_thing(p, world: Vector3) -> bool:
 			return true
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
-		if FieldGrid.center(c["cell"]).distance_to(world) < 1.0:
-			game.actions.go_and_do(p, "container", id, FieldGrid.center(c["cell"]))
+		var at: Vector3 = game.lift(c["cell"], int(c.get("level", 0)))
+		if at.distance_to(world) < 1.0:
+			game.actions.go_and_do(p, "container", id, at)
 			return true
+	# Stairs: a tap on them goes up (or down) them.
+	var lv: int = game.level_of(p.position)
+	for s in game.stairs:
+		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
+			continue
+		if game.lift(s["cell"], lv).distance_to(world) < 1.0:
+			var other: int = s["high"] if s["low"] == lv else s["low"]
+			var path: PackedVector3Array = game.find_path(p.position, game.lift(s["cell"], other), false)
+			if not path.is_empty():
+				p.brain.erase("goal")
+				p.go_to(path, run_button.button_pressed)
+				dest_marker = path[path.size() - 1]
+			return true
+	if lv != 0:
+		return false
 	for id in game.data["spots"]:
-		var s: Dictionary = game.data["spots"][id]
-		if FieldGrid.center(s["cell"]).distance_to(world) < 1.3:
-			game.actions.go_and_do(p, "spot", id, FieldGrid.center(s["cell"]))
+		var spot: Dictionary = game.data["spots"][id]
+		if FieldGrid.center(spot["cell"]).distance_to(world) < 1.3:
+			game.actions.go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
 			return true
 	if game.data["manholes"].has("manhole") and FieldGrid.center(game.data["manholes"]["manhole"]).distance_to(world) < 1.0:
 		game.actions.go_and_do(p, "manhole", "manhole", FieldGrid.center(game.data["manholes"]["manhole"]))

@@ -60,24 +60,26 @@ func go_and_do(p, kind: String, key, at: Vector3, verb: String = "") -> void:
 	p.target_zombie = {}
 	var stand: Vector3 = at
 	if kind in ["door", "window", "container", "spot", "manhole"]:
-		var c: Vector2i = game.grid.nearest_walkable(FieldGrid.cell_of(at), false, 2)
-		if game.grid.blocks_body(FieldGrid.cell_of(at)):
-			stand = FieldGrid.center(_side_cell(FieldGrid.cell_of(at), p.position))
+		var lg = game.grid_at(at)
+		var lv: int = game.level_of(at)
+		var c: Vector2i = lg.nearest_walkable(FieldGrid.cell_of(at), false, 2)
+		if lg.blocks_body(FieldGrid.cell_of(at)):
+			stand = game.lift(_side_cell(lg, FieldGrid.cell_of(at), p.position), lv)
 		elif FieldGrid.cell_of(at) != c:
-			stand = FieldGrid.center(c)
+			stand = game.lift(c, lv)
 	if p.position.distance_to(stand) <= REACH:
 		_do_goal(p)
 	else:
-		p.go_to(game.grid.find_path(p.position, stand, false), p.running)
+		p.go_to(game.find_path(p.position, stand, false), p.running)
 
 
 ## The walkable neighbour of a door/window cell on the walker's side.
-func _side_cell(c: Vector2i, from: Vector3) -> Vector2i:
+func _side_cell(lg, c: Vector2i, from: Vector3) -> Vector2i:
 	var best := c
 	var best_d := 999.0
 	for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 		var n: Vector2i = c + o
-		if not game.grid.people_can_walk(n) or game.grid.blocks_body(n):
+		if not lg.people_can_walk(n) or lg.blocks_body(n):
 			continue
 		var d: float = FieldGrid.center(n).distance_to(from)
 		if d < best_d:
@@ -467,10 +469,15 @@ func _nearest_companion(at: Vector3, r: float):
 
 # ---------------------------------------------------------------- signal box ladder
 
+## Up the signal box ladder (the only way down from there is the ladder).
+func on_signal_top(p) -> bool:
+	return p.upstairs and game.grid_at(p.position).building_at(FieldGrid.cell_of(p.position)) == 1
+
+
 ## Up the ladder: fast is a normal sound, careful is quiet but slow. Upstairs
 ## the forecast gets sharper and the view wider (s2_station 2.2).
 func ladder(p, verb: String) -> void:
-	if p.upstairs:
+	if on_signal_top(p):
 		p.start_action("climb", "내려가기", CLIMB_CAREFUL if verb == "careful" else CLIMB_FAST, _climbed.bind(p, false))
 		return
 	if verb == "":
@@ -487,7 +494,6 @@ func ladder(p, verb: String) -> void:
 
 func _climbed(p, up: bool) -> void:
 	p.brain["on_ladder"] = false
-	p.upstairs = up
 	p.position.y = UPSTAIRS_Y if up else 0.0
 	if p == game.player:
 		if up:
@@ -687,7 +693,7 @@ func context(p) -> Array:
 	for key in game.data["manholes"]:
 		if key == "manhole" and game.director.is_open(key) and p.position.distance_to(FieldGrid.center(game.data["manholes"][key])) < 2.5:
 			out.append({"label": "맨홀 막기", "call": block_lid.bind(p, key)})
-	if p.upstairs:
+	if on_signal_top(p):
 		out.append({"label": "내려가기", "call": ladder.bind(p, "fast")})
 	for o in game.allies_alive():
 		if o != p and o.body.bleed > 0 and o.position.distance_to(p.position) < 1.8:

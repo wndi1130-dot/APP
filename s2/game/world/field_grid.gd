@@ -1,8 +1,11 @@
 extends RefCounted
 ## 1m grid for one stop map: solids, floors, rooms, zones, doors, windows,
 ## two path grids (people open closed doors; the dead do not) and line of sight.
+## A map has one grid per level (ground 0, upper floors 1 and 2, cellar −1);
+## upper levels are AIR outside the buildings: nothing to stand on, nothing
+## in the way of the eye.
 
-enum Solid { NONE, WALL, BLOCK, LOW, DOOR, WINDOW }
+enum Solid { NONE, WALL, BLOCK, LOW, DOOR, WINDOW, AIR }
 enum Floor { SNOW, ROAD, PLATFORM, WOOD, RAIL, DEEP_SNOW, ICE, GRAVEL }
 const FLOOR_SOUND: Array[float] = [1.0, 1.0, 1.0, 1.0, 1.5, 0.5, 1.0, 1.0]
 const FLOOR_SPEED: Array[float] = [1.0, 1.0, 1.0, 1.0, 1.0, 0.7, 1.0, 1.0]

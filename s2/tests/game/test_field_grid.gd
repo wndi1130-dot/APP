@@ -91,6 +91,8 @@ func test_entries_and_sewers_are_on_the_map_and_reachable() -> void:
 	var g: FieldGrid = data["grid"]
 	var platform := Vector2i(50, 6)
 	for key in data["entries"]:
+		if int(data["entry_levels"].get(key, 0)) != 0:
+			continue   # the cellar drain: checked across floors in test_field_levels
 		for c in data["entries"][key]:
 			assert_true(g.inside(c), "%s entry %s inside" % [key, c])
 			var start: Vector2i = g.nearest_walkable(c, true, 3)

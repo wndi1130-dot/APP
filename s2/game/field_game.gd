@@ -29,6 +29,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const AMBIENT_C: float = -14.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
+const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
 const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
 const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a person (field_unified 6)
@@ -48,7 +49,9 @@ const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine"
 var opts: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var data: Dictionary
-var grid: FieldGrid
+var grid: FieldGrid                    # the ground level
+var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
+var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var zombies: Zombies
 var camera: Camera3D
@@ -121,7 +124,9 @@ func _ready() -> void:
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	data = SulehufMap.build()
 	grid = data["grid"]
-	seen_memory.resize(grid.width * grid.height)
+	levels = data["levels"]
+	stairs = data["stairs"]
+	seen_memory.resize(grid.width * grid.height * 4)
 	director = HordeDirector.new(rng)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
@@ -261,8 +266,12 @@ func _spawn_dead() -> void:
 	for key in ["dead_street", "dead_platform", "dead_siding_end"]:
 		for c in s[key]:
 			zombies.spawn("dead", FieldGrid.center(c))
-	for c in s["clothed_station"]:
-		zombies.spawn("clothed", FieldGrid.center(c))
+	for key in ["clothed_station", "clothed_shed"]:
+		for c in s.get(key, []):
+			zombies.spawn("clothed", FieldGrid.center(c))
+	# The dead indoors, on every floor and in the cellar.
+	for row in s.get("dead_levels", []):
+		zombies.spawn("dead", lift(row[0], int(row[1])))
 	for c in s["frozen_siding"]:
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
 
@@ -281,6 +290,174 @@ func allies_alive() -> Array:
 		if p.is_alive() and p.team != "raider":
 			out.append(p)
 	return out
+
+
+# ---------------------------------------------------------------- levels
+
+## Floors are stacked LEVEL_H apart; position.y says which one a body is on.
+func level_of(at: Vector3) -> int:
+	return clampi(roundi(at.y / SulehufMap.LEVEL_H), -1, 2)
+
+
+func grid_at(at: Vector3) -> FieldGrid:
+	return levels.get(level_of(at), grid)
+
+
+func level_y(lv: int) -> float:
+	return lv * SulehufMap.LEVEL_H
+
+
+## Centre of cell c on level lv.
+func lift(c: Vector2i, lv: int) -> Vector3:
+	return FieldGrid.center(c) + Vector3(0, lv * SulehufMap.LEVEL_H, 0)
+
+
+## Sight and memory keys: one slice of the map per level, cellar first.
+func seen_key(at: Vector3) -> int:
+	return (level_of(at) + 1) * grid.width * grid.height + grid.index(FieldGrid.cell_of(at))
+
+
+## What the camera draws from where the player stands: the cellar alone, or
+## the ground and every floor up to the player's own (nothing above it).
+func level_shown(lv: int) -> bool:
+	var pl := level_of(player.position)
+	return lv == -1 if pl < 0 else lv >= 0 and lv <= pl
+
+
+## A walkable cell for people (or the dead) near at, on at's level.
+func walkable_near(at: Vector3, for_dead: bool = false, r: int = 2) -> Vector3:
+	var c: Vector2i = grid_at(at).nearest_walkable(FieldGrid.cell_of(at), for_dead, r)
+	return at if c == FieldGrid.cell_of(at) else lift(c, level_of(at))
+
+
+## Line of sight between two bodies: only on the same floor, except that from
+## upstairs the eye goes out of a window and down to the ground (open air).
+func sight_clear(a: Vector3, b: Vector3) -> bool:
+	var la := level_of(a)
+	var lb := level_of(b)
+	if la == lb or (la > 0 and lb == 0) or (lb > 0 and la == 0):
+		return levels[maxi(la, lb)].line_clear(FieldGrid.cell_of(a), FieldGrid.cell_of(b)) and (la == lb or _open_below(b if la > lb else a, maxi(la, lb)))
+	return false
+
+
+## The cell under a ground body is open air on the upper level (no floor over it).
+func _open_below(ground: Vector3, upper: int) -> bool:
+	return levels[upper].solid_at(FieldGrid.cell_of(ground)) == FieldGrid.Solid.AIR
+
+
+## Path across floors: walk to a stair, step onto the other level, go on.
+## Ladders are not taken by a path (the dead cannot climb; people use the
+## ladder spot): a goal up a ladder ends at the foot of it, under the goal.
+func find_path(from: Vector3, to: Vector3, for_dead: bool = false) -> PackedVector3Array:
+	var lv := level_of(from)
+	var goal := level_of(to)
+	var out := PackedVector3Array()
+	var at := from
+	var guard := 0
+	while lv != goal and guard < 4:
+		guard += 1
+		var next_lv := lv + (1 if goal > lv else -1)
+		var best: Dictionary = {}
+		var best_cost := INF
+		for s in stairs:
+			if s["ladder"] or not ((s["low"] == lv and s["high"] == next_lv) or (s["high"] == lv and s["low"] == next_lv)):
+				continue
+			if not _joined(lv, FieldGrid.cell_of(at), s["cell"]) or not _reaches(s["cell"], next_lv, FieldGrid.cell_of(to), goal):
+				continue
+			var c := FieldGrid.center(s["cell"])
+			var cost := Vector2(at.x - c.x, at.z - c.z).length() + Vector2(c.x - to.x, c.z - to.z).length()
+			if cost < best_cost:
+				best_cost = cost
+				best = s
+		if best.is_empty():
+			# No stair (only a ladder up there): go as near as this floor allows.
+			goal = lv
+			break
+		var foot := lift(best["cell"], lv)
+		if FieldGrid.cell_of(at) != best["cell"]:
+			var leg: PackedVector3Array = levels[lv].find_path(at, foot, for_dead)
+			if leg.is_empty():
+				return PackedVector3Array()
+			_append_level(out, leg, lv)
+		out.append(foot)
+		at = lift(best["cell"], next_lv)
+		out.append(at)
+		lv = next_lv
+	if lv != goal:
+		return PackedVector3Array()
+	if FieldGrid.cell_of(at) == FieldGrid.cell_of(to) and not out.is_empty():
+		return out
+	var last: PackedVector3Array = levels[lv].find_path(at, to, for_dead)
+	if last.is_empty() and not out.is_empty():
+		return PackedVector3Array()
+	_append_level(out, last, lv)
+	return out
+
+
+## Upstairs and the cellar have no doors, so which rooms join never
+## changes: label them once. The ground is taken as one piece (A* decides).
+var _rooms_of: Dictionary = {}
+
+
+func _joined(lv: int, a: Vector2i, b: Vector2i) -> bool:
+	if lv == 0:
+		return true
+	if not _rooms_of.has(lv):
+		_rooms_of[lv] = _label_rooms(levels[lv])
+	var lg: FieldGrid = levels[lv]
+	var labels: PackedInt32Array = _rooms_of[lv]
+	var la := labels[lg.index(lg.nearest_walkable(a, false, 2))] if lg.inside(a) else -1
+	var lb := labels[lg.index(lg.nearest_walkable(b, false, 2))] if lg.inside(b) else -1
+	return la >= 0 and la == lb
+
+
+## From cell c on level lv, can a body get to cell to on level goal by stairs?
+func _reaches(c: Vector2i, lv: int, to: Vector2i, goal: int) -> bool:
+	if lv == goal:
+		return _joined(lv, c, to)
+	var next_lv := lv + (1 if goal > lv else -1)
+	for s in stairs:
+		if s["ladder"] or not ((s["low"] == lv and s["high"] == next_lv) or (s["high"] == lv and s["low"] == next_lv)):
+			continue
+		if _joined(lv, c, s["cell"]) and _reaches(s["cell"], next_lv, to, goal):
+			return true
+	return false
+
+
+static func _label_rooms(lg: FieldGrid) -> PackedInt32Array:
+	var labels := PackedInt32Array()
+	labels.resize(lg.width * lg.height)
+	labels.fill(-1)
+	var next := 0
+	for i in range(labels.size()):
+		var c := Vector2i(i % lg.width, i / lg.width)
+		if labels[i] >= 0 or not lg.people_can_walk(c):
+			continue
+		var todo: Array[Vector2i] = [c]
+		labels[i] = next
+		while not todo.is_empty():
+			var q: Vector2i = todo.pop_back()
+			for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = q + o
+				if lg.inside(n) and labels[lg.index(n)] < 0 and lg.people_can_walk(n):
+					labels[lg.index(n)] = next
+					todo.append(n)
+		next += 1
+	return labels
+
+
+func _append_level(out: PackedVector3Array, leg: PackedVector3Array, lv: int) -> void:
+	for q in leg:
+		out.append(Vector3(q.x, lv * SulehufMap.LEVEL_H, q.z))
+
+
+## The straight line on the screen through a point, moved to height y
+## (a finger on the floor you stand on, read against a body on another).
+func shift_to_height(world: Vector3, y: float) -> Vector3:
+	var dir := -camera.global_transform.basis.z
+	if absf(dir.y) < 0.0001:
+		return world
+	return world + dir * ((y - world.y) / dir.y)
 
 
 # ---------------------------------------------------------------- loop
@@ -311,7 +488,7 @@ func _process(delta: float) -> void:
 		_refresh_vision()
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
-		p.visible = _person_visible(p)
+		p.visible = level_shown(level_of(p.position)) and _person_visible(p)
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 
@@ -351,7 +528,9 @@ func _update_zone(delta: float) -> void:
 			looted = true
 	if looted and player.moving:
 		telemetry.carry_time(delta)
-	view.cut_away(grid.building_at(FieldGrid.cell_of(player.position)) if not player.upstairs else -1)
+	var pl := level_of(player.position)
+	view.show_levels(pl)
+	view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), pl)
 
 
 # ---------------------------------------------------------------- people
@@ -360,12 +539,13 @@ func _update_person(p: Person, delta: float) -> void:
 	if not p.is_alive():
 		return
 	var cell := FieldGrid.cell_of(p.position)
-	var indoor := grid.indoor(cell)
+	var lg := grid_at(p.position)
+	var indoor := lg.indoor(cell)
 	var stove := near_stove(p.position)
 	var ctx := {"running": p.is_running_now(), "swinging": p.swing_t > 0.0, "carry_state": p.carry_state(), "cold_level": p.cold_level(), "indoor_rest": indoor and not p.moving}
 	for ev in p.body.tick(delta, ctx):
 		_on_body_event(p, ev)
-	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": indoor and not building_open(grid.building_at(cell)), "stove": stove, "warmth": float(p.coat["warmth"]) + (0.1 if p.gloves else 0.0), "windproof": float(p.coat["windproof"]), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
+	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": indoor and not building_open(lg.building_at(cell)), "stove": stove, "warmth": float(p.coat["warmth"]) + (0.1 if p.gloves else 0.0), "windproof": float(p.coat["windproof"]), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
 	if weather.always_cold() and not indoor and not stove:
 		p.heat.heat = minf(p.heat.heat, 60.0)
 	p.panic = maxf(0.0, p.panic - delta * 0.08)
@@ -398,12 +578,15 @@ func _move_person(p: Person, delta: float) -> void:
 	var d := next - p.position
 	d.y = 0
 	if d.length() < 0.12:
+		# A stair: the next point is the same spot one floor up or down.
+		p.position.y = next.y
 		p.path.remove_at(0)
 		if p.path.is_empty():
 			p.moving = false
 		return
 	var cell := FieldGrid.cell_of(p.position)
-	var spd := p.speed(grid.floor_at(cell))
+	var lg := grid_at(p.position)
+	var spd := p.speed(lg.floor_at(cell))
 	if spd <= 0.0:
 		p.moving = false
 		if p == player:
@@ -413,12 +596,12 @@ func _move_person(p: Person, delta: float) -> void:
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
-	if grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
+	if lg == grid and grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
 		actions.open_door_on_way(p, dc)
 		return
-	if grid.blocks_body(dc):
+	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
-	if grid.windows.has(dc) and grid.windows[dc]["broken"] and not p.brain.get("vaulted_" + str(dc), false):
+	if lg == grid and grid.windows.has(dc) and grid.windows[dc]["broken"] and not p.brain.get("vaulted_" + str(dc), false):
 		actions.vault_window(p, dc)
 	p.facing = atan2(step.x, step.z)
 	p.position = dest
@@ -427,23 +610,25 @@ func _move_person(p: Person, delta: float) -> void:
 
 
 func _slide(at: Vector3, step: Vector3) -> Vector3:
+	var lg := grid_at(at)
 	var r := at
 	var cand := r + Vector3(step.x, 0, 0)
-	if not grid.blocks_body(FieldGrid.cell_of(cand)):
+	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.x = cand.x
 	cand = r + Vector3(0, 0, step.z)
-	if not grid.blocks_body(FieldGrid.cell_of(cand)):
+	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.z = cand.z
 	return r
 
 
 func _footsteps(p: Person, delta: float, cell: Vector2i) -> void:
 	var running := p.is_running_now()
-	var floor_kind := grid.floor_at(cell)
+	var lg := grid_at(p.position)
+	var floor_kind := lg.floor_at(cell)
 	p.brain["step_t"] = float(p.brain.get("step_t", 0.0)) - delta
 	if p.brain["step_t"] <= 0.0:
 		p.brain["step_t"] = 0.5
-		var glass: bool = grid.windows.has(cell) and grid.windows[cell]["glass"]
+		var glass: bool = lg.windows.has(cell) and lg.windows[cell]["glass"]
 		var trait_mult := 1.0
 		var r := SimNoise.footstep_radius(running, FieldGrid.FLOOR_SOUND[floor_kind], trait_mult, p.crouched, int(p.skills["stealth"]), glass) * weather.sound_mult(true)
 		zombies.hear(p.position, SimNoise.footstep_level(running, glass), r)
@@ -477,7 +662,7 @@ func _wake_frozen_near(p: Person) -> void:
 
 func near_stove(at: Vector3) -> bool:
 	for s in data["stoves"]:
-		if s["lit"] and FieldGrid.center(s["cell"]).distance_to(at) < 4.0:
+		if s["lit"] and lift(s["cell"], int(s.get("level", 0))).distance_to(at) < 4.0:
 			var b: int = s["building"]
 			if b < 0 or not building_open(b):
 				return true
@@ -544,7 +729,7 @@ func on_person_died(p: Person) -> void:
 ## where the sound was, not to whoever made it (body_injury 8.2).
 func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> void:
 	var now := clock.elapsed
-	var indoor := grid.indoor(FieldGrid.cell_of(at))
+	var indoor := grid_at(at).indoor(FieldGrid.cell_of(at))
 	# Next to a sewer mouth the sound rings in the tunnel: one step louder,
 	# and a loud one wakes that hole for the next horde (field_unified 6).
 	var hole := sewer_near(at, 12.0)
@@ -573,9 +758,19 @@ func sewer_near(at: Vector3, r: float) -> String:
 	for key in data["manholes"]:
 		if not director.is_open(key):
 			continue
-		if FieldGrid.center(data["manholes"][key]).distance_to(at) <= r:
+		if sewer_pos(key).distance_to(at) <= r:
 			return key
 	return ""
+
+
+func sewer_pos(key: String) -> Vector3:
+	return lift(data["manholes"][key], int(data["manhole_levels"].get(key, 0)))
+
+
+## Where bodies come in through an entry, on the entry's level.
+func entry_pos(key: String, i: int = 0) -> Vector3:
+	var cells: Array = data["entries"][key]
+	return lift(cells[i % cells.size()], int(data["entry_levels"].get(key, 0)))
 
 
 func _score(level: int, tag: String) -> void:
@@ -660,8 +855,9 @@ func _update_hordes(delta: float) -> void:
 			rattle[s["entry"]] = maxf(float(rattle.get(s["entry"], 0.0)), 0.5)
 	for key in rattle.keys():
 		rattle[key] -= delta
-		var node: MeshInstance3D = view.manhole_nodes[key]
-		node.position.y = absf(sin(now * 31.0)) * 0.08 if rattle[key] > 0.0 and key == "manhole" else 0.0
+		if key == "manhole":
+			var node: MeshInstance3D = view.manhole_nodes[key]
+			node.position.y = absf(sin(now * 31.0)) * 0.08 if rattle[key] > 0.0 else 0.0
 		if rattle[key] <= 0.0:
 			rattle.erase(key)
 	var h := director.update(now)
@@ -695,7 +891,7 @@ func _start_horde(h: Dictionary) -> void:
 	# Fair spawn: roads and the track end never let anything in on screen; pick
 	# another road out of sight. Sewer mouths may be on screen: they rattle first.
 	if not HordeDirector.is_sewer(key) and _entry_on_screen(key):
-		for other in ["east_track", "north_road", "south_road"]:
+		for other in ["east_track", "north_road", "south_road", "east_road"]:
 			if not _entry_on_screen(other):
 				key = other
 				break
@@ -704,9 +900,8 @@ func _start_horde(h: Dictionary) -> void:
 	var target := player.position
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
 	var lead := 3.0 if HordeDirector.is_sewer(key) else 0.0
-	var cells: Array = data["entries"][key]
 	for i in range(int(h["size"])):
-		pending_spawn.append({"t": now + lead + i * gap, "pos": FieldGrid.center(cells[i % cells.size()]), "horde": h["index"], "target": target, "entry": key})
+		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": target, "entry": key})
 	if HordeDirector.is_sewer(key):
 		set_radio("기관사: %s이 덜컹거린다. 올라온다." % HordeDirector.ENTRY_NAMES[key] if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % HordeDirector.ENTRY_NAMES[key])
 	else:
@@ -723,7 +918,7 @@ func _start_horde(h: Dictionary) -> void:
 
 
 func _entry_on_screen(key: String) -> bool:
-	return camera.is_position_in_frustum(FieldGrid.center(data["entries"][key][0]) + Vector3(0, 0.5, 0))
+	return camera.is_position_in_frustum(entry_pos(key) + Vector3(0, 0.5, 0))
 
 
 var forecast_t: float = 0.0
@@ -746,7 +941,7 @@ func _update_spawns(delta: float) -> void:
 		if HordeDirector.is_sewer(key) and not director.is_open(key):
 			key = "culvert"
 			s["entry"] = key
-			s["pos"] = FieldGrid.center(data["entries"][key][0])
+			s["pos"] = entry_pos(key)
 		if now < float(s["t"]):
 			keep.append(s)
 			continue
@@ -758,9 +953,9 @@ func _update_spawns(delta: float) -> void:
 		# Nobody climbs out right under someone's feet: that exit passes its
 		# share to the other open one (field_unified 6). Pressure stays the same.
 		if HordeDirector.is_sewer(key) and _someone_near(s["pos"], SEWER_CLEAR):
-			var other := "culvert" if key == "manhole" else "manhole"
-			var other_pos: Vector3 = FieldGrid.center(data["entries"][other][0])
-			if director.is_open(other) and not _someone_near(other_pos, SEWER_CLEAR):
+			var other := _free_sewer(key)
+			if other != "":
+				var other_pos := entry_pos(other)
 				s["entry"] = other
 				s["pos"] = other_pos
 				s["t"] = now + 3.0   # the other lid rattles first
@@ -783,9 +978,17 @@ func _update_spawns(delta: float) -> void:
 
 func _someone_near(at: Vector3, r: float) -> bool:
 	for p in people:
-		if p.is_alive() and Vector2(p.position.x - at.x, p.position.z - at.z).length() < r:
+		if p.is_alive() and p.position.distance_to(at) < r:
 			return true
 	return false
+
+
+## Another open sewer mouth with nobody near it, culvert first, or "".
+func _free_sewer(not_this: String) -> String:
+	for key in ["culvert", "manhole", "cellar"]:
+		if key != not_this and data["manholes"].has(key) and director.is_open(key) and not _someone_near(entry_pos(key), SEWER_CLEAR):
+			return key
+	return ""
 
 
 func set_radio(text: String) -> void:
@@ -802,20 +1005,32 @@ func say(p, text: String) -> void:
 # ---------------------------------------------------------------- vision & camera
 
 ## Zomboid-like sight: a wide cone ahead, a small circle all round, walls hide.
+## Upstairs the eye reaches further (out of the windows, over the yards);
+## the signal box top sees all round. Down in the cellar it is dark.
 func _refresh_vision() -> void:
 	var origin := FieldGrid.cell_of(player.position)
-	var base := SIGHT_UPSTAIRS if player.upstairs else SIGHT_RADIUS
-	var radius := maxi(3, int(round(base * weather.sight_mult(clock.is_dark()))))
+	var lv := level_of(player.position)
+	var lg := grid_at(player.position)
+	var tower: bool = lv > 0 and lg.building_at(origin) == 1
+	var base := SIGHT_UPSTAIRS if lv > 0 else (SIGHT_CELLAR if lv < 0 else SIGHT_RADIUS)
+	var radius := maxi(3, int(round(base * (weather.sight_mult(clock.is_dark()) if lv >= 0 else 1.0))))
 	if not mask_on:
 		seen_now = {}
 		view.set_mask_enabled(false)
 		return
 	view.set_mask_enabled(true)
-	var forward := Vector2.ZERO if player.upstairs else Vector2(sin(player.facing), cos(player.facing))
-	var result := grid.visible_cells(origin, radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
+	var forward := Vector2.ZERO if tower else Vector2(sin(player.facing), cos(player.facing))
+	var result := lg.visible_cells(origin, radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
+	var n := grid.width * grid.height
+	seen_now = {}
 	for i in result:
-		seen_memory[i] = 1
-	seen_now = result
+		# Open air upstairs is a look down to the floor below it.
+		var k := lv
+		while k > 0 and levels[k].solid[i] == FieldGrid.Solid.AIR:
+			k -= 1
+		var key: int = (k + 1) * n + i
+		seen_now[key] = true
+		seen_memory[key] = 1
 	view.update_vis(seen_now, seen_memory)
 	view.update_labels(seen_memory, mask_on)
 
@@ -825,11 +1040,11 @@ func _person_visible(p: Person) -> bool:
 		return true
 	if not mask_on:
 		return true
-	return seen_now.has(grid.index(FieldGrid.cell_of(p.position)))
+	return seen_now.has(seen_key(p.position))
 
 
 func cell_seen(at: Vector3) -> bool:
-	return not mask_on or seen_now.has(grid.index(FieldGrid.cell_of(at)))
+	return not mask_on or seen_now.has(seen_key(at))
 
 
 func _update_camera(delta: float) -> void:
@@ -850,7 +1065,8 @@ func screen_to_ground(screen: Vector2) -> Vector3:
 	var dir := camera.project_ray_normal(screen)
 	if absf(dir.y) < 0.0001:
 		return Vector3.ZERO
-	var t := -origin.y / dir.y
+	# The floor the player stands on is the plane a finger lands on.
+	var t := (level_of(player.position) * SulehufMap.LEVEL_H - origin.y) / dir.y
 	return origin + dir * t
 
 

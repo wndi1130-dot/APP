@@ -15,7 +15,7 @@ const THREAT_R: float = 3.0
 const COVER_R: float = 11.0
 const RAIDER_SIGHT: float = 22.0
 const NOTICE_TIME: float = 1.5
-const SOUTH_EXIT := Vector2i(60, 69)
+const SOUTH_EXIT := Vector2i(60, 99)
 const DIG_TIME: float = 45.0
 const TRIP_COAL: float = 0.25
 
@@ -76,7 +76,7 @@ func _threat_near(p, r: float) -> Dictionary:
 		if not game.zombies.active(z) or z["state"] == "downed":
 			continue
 		var d: float = p.position.distance_to(z["pos"])
-		if d < best_d and game.grid.line_clear(FieldGrid.cell_of(p.position), FieldGrid.cell_of(z["pos"])):
+		if d < best_d and game.sight_clear(p.position, z["pos"]):
 			best_d = d
 			best = z
 	return best
@@ -88,7 +88,7 @@ func _hostile_raider_near(p, r: float):
 			continue
 		if not o.brain.get("aware_of_us", false):
 			continue
-		if p.position.distance_to(o.position) <= r and game.grid.line_clear(FieldGrid.cell_of(p.position), FieldGrid.cell_of(o.position)):
+		if p.position.distance_to(o.position) <= r and game.sight_clear(p.position, o.position):
 			return o
 	return null
 
@@ -97,7 +97,7 @@ func _walk(p, to: Vector3, run: bool = false) -> void:
 	if p.brain.get("dest", Vector3.INF).distance_to(to) < 0.6 and not p.path.is_empty():
 		return
 	p.brain["dest"] = to
-	p.go_to(game.grid.find_path(p.position, to, false), run)
+	p.go_to(game.find_path(p.position, to, false), run)
 
 
 ## Use the melee slot for close work; keep the gun for when shooting is allowed.
@@ -218,8 +218,7 @@ func _companion(p) -> void:
 			var fwd := Vector3(sin(player.facing), 0, cos(player.facing))
 			var right := Vector3(fwd.z, 0, -fwd.x)
 			var spot: Vector3 = player.position + right * off.x + fwd * off.y
-			var cell: Vector2i = game.grid.nearest_walkable(FieldGrid.cell_of(spot), false, 3)
-			spot = FieldGrid.center(cell) if FieldGrid.cell_of(spot) != cell else spot
+			spot = game.walkable_near(spot, false, 3)
 			p.crouched = player.crouched
 			var d: float = p.position.distance_to(spot)
 			if d > 1.2:
@@ -437,7 +436,7 @@ func _raider_sees(r, p) -> bool:
 		sight *= 0.6
 	if d > sight:
 		return false
-	return game.grid.line_clear(FieldGrid.cell_of(r.position), FieldGrid.cell_of(p.position))
+	return game.sight_clear(r.position, p.position)
 
 
 ## A person has to stay in view 1-2 s before a raider notices (field_unified 11).

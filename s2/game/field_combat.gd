@@ -100,7 +100,7 @@ func _pursue_zombie(p, delta: float) -> void:
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
-			var path: PackedVector3Array = game.grid.find_path(p.position, z["pos"], false)
+			var path: PackedVector3Array = game.find_path(p.position, z["pos"], false)
 			if path.size() > 0:
 				path[path.size() - 1] = z["pos"] + (p.position - z["pos"]).normalized() * (reach * 0.8)
 			p.go_to(path, p.running)
@@ -145,7 +145,7 @@ func _pursue_person(p, delta: float) -> void:
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
-			p.go_to(game.grid.find_path(p.position, o.position, false), p.running)
+			p.go_to(game.find_path(p.position, o.position, false), p.running)
 		return
 	p.stop()
 	p.face_point(o.position)
@@ -294,7 +294,7 @@ func _push(z: Dictionary, from: Vector3, dist: float) -> void:
 	if away.length() < 0.01:
 		return
 	var dest: Vector3 = z["pos"] + away.normalized() * dist
-	if not game.grid.blocks_body(FieldGrid.cell_of(dest)):
+	if not game.grid_at(dest).blocks_body(FieldGrid.cell_of(dest)):
 		z["pos"] = dest
 
 
@@ -374,7 +374,7 @@ func bite(p) -> void:
 	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word])
 	var seen: Array = []
 	for o in game.allies_alive():
-		if o != p and o.position.distance_to(p.position) < 12.0 and game.grid.line_clear(FieldGrid.cell_of(o.position), FieldGrid.cell_of(p.position)):
+		if o != p and o.position.distance_to(p.position) < 12.0 and game.sight_clear(o.position, p.position):
 			seen.append(o.pid)
 	game.receipt.witness(p.pid, "bitten_" + part, _where(p.position), game.clock.label(), "grabbed_by_the_dead", seen)
 	game.receipt.person("bitten", p.pid)
@@ -382,7 +382,7 @@ func bite(p) -> void:
 
 func _where(at: Vector3) -> String:
 	var z: String = game.grid.zone_at(FieldGrid.cell_of(at))
-	return {"A": "station_building", "B": "freight_siding", "C": "water_tower", "D": "station_street", "E": "signal_box", "platform": "platform"}.get(z, "sulechow")
+	return {"A": "station_building", "B": "freight_siding", "C": "water_tower", "D": "station_street", "E": "signal_box", "F": "tenement", "G": "goods_shed", "H": "south_street", "platform": "platform"}.get(z, "sulechow")
 
 
 ## Falls on ice, under a load or off the ladder (body_injury 3.2).
@@ -453,7 +453,8 @@ func fire(p, at: Vector3, target = null) -> String:
 		p.aim.stop()
 		start_reload(p)
 		return "empty"
-	at.y = 0.0
+	if target == null or (target is Dictionary and target.is_empty()):
+		at.y = game.level_y(game.level_of(p.position))
 	p.face_point(at)
 	var dist: float = p.position.distance_to(at)
 	# Too close to aim: the gun becomes a shove (field_unified 10).
@@ -579,7 +580,7 @@ func _shoot_person(p, o, radius: float) -> bool:
 		return false
 	var cover := 0.0
 	# Low cover (cars, fences) between shooter and target halves the body.
-	if game.grid.solid_at(FieldGrid.cell_of(o.position + (p.position - o.position).normalized() * 1.0)) == FieldGrid.Solid.LOW:
+	if game.grid_at(o.position).solid_at(FieldGrid.cell_of(o.position + (p.position - o.position).normalized() * 1.0)) == FieldGrid.Solid.LOW:
 		cover = 0.5
 	var zone: String = AimModel.roll(rng, radius, 0.12, 0.34 * (1.0 - cover))
 	if zone == "miss":
@@ -597,6 +598,7 @@ func _shoot_person(p, o, radius: float) -> bool:
 
 
 func _first_wall(from: Vector3, to: Vector3):
+	var lg = game.grid_at(from)
 	var a := FieldGrid.cell_of(from)
 	var b := FieldGrid.cell_of(to)
 	var steps: int = maxi(absi(b.x - a.x), absi(b.y - a.y))
@@ -605,8 +607,8 @@ func _first_wall(from: Vector3, to: Vector3):
 		var c := FieldGrid.cell_of(from.lerp(to, t))
 		if c == a:
 			continue
-		if game.grid.opaque(c):
-			return FieldGrid.center(c)
+		if lg.opaque(c):
+			return FieldGrid.center(c) + Vector3(0, from.y, 0)
 	return null
 
 

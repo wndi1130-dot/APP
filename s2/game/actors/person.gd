@@ -57,7 +57,10 @@ var grabbers: Array = []                # zombie dicts holding this person
 var grab_left: float = 0.0
 var grab_front: bool = true
 var climbing: bool = false
-var upstairs: bool = false
+## Above the ground floor (floors are stacked 3 m apart on position.y).
+var upstairs: bool:
+	get:
+		return position.y > 1.5
 var carrying_wounded = null
 var downed_marked: bool = false
 var dead_marked: bool = false

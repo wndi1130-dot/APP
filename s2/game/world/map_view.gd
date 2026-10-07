@@ -2,11 +2,14 @@ extends Node3D
 ## Graybox visuals for the stop map. Ground, walls and props share one material
 ## that reads the low-resolution sight mask. Walls of the building the player is
 ## in are cut down so the rooms stay readable from the oblique camera.
+## Each floor hangs under its own root: upstairs floors show only once the
+## player climbs to them, and the cellar shows alone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
+const LEVEL_H: float = 3.0
 const CUT_H: float = 0.35
 const FLOOR_COLORS: Array[Color] = [
 	Color(0.66, 0.68, 0.71), Color(0.36, 0.36, 0.37), Color(0.48, 0.47, 0.45), Color(0.40, 0.34, 0.29),
@@ -20,8 +23,12 @@ var vis_image: Image
 var vis_texture: ImageTexture
 var vis_bytes := PackedByteArray()
 var vis_lit := PackedInt32Array()
-var wall_nodes: Dictionary = {}   # building id -> MeshInstance3D
+var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
 var cut_building: int = -2
+var cut_level: int = 0
+var levels: Dictionary = {}       # level -> FieldGrid
+var level_roots: Dictionary = {}  # level -> Node3D
+var shown_level: int = -99
 var door_nodes: Dictionary = {}   # Vector2i -> MeshInstance3D
 var window_nodes: Dictionary = {}
 var container_nodes: Dictionary = {}
@@ -34,6 +41,12 @@ var label_nodes: Array = []             # [Label3D, cell]
 func setup(map_data: Dictionary) -> void:
 	data = map_data
 	grid = data["grid"]
+	levels = data.get("levels", {0: grid})
+	for lv in levels:
+		var root := Node3D.new()
+		root.name = "Level%d" % lv
+		add_child(root)
+		level_roots[lv] = root
 	vis_image = Image.create(grid.width, grid.height, false, Image.FORMAT_RG8)
 	vis_image.fill(Color(0, 0, 0))
 	vis_texture = ImageTexture.create_from_image(vis_image)
@@ -44,6 +57,10 @@ func setup(map_data: Dictionary) -> void:
 	_build_ground()
 	_build_walls()
 	_build_blocks()
+	for lv in levels:
+		if lv != 0:
+			_build_level(lv)
+	_build_stairs()
 	for c in grid.doors:
 		var node := _mesh_node()
 		door_nodes[c] = node
@@ -53,7 +70,7 @@ func setup(map_data: Dictionary) -> void:
 		window_nodes[c] = node
 		update_window(c)
 	for id in data["containers"]:
-		var node := _mesh_node()
+		var node := _mesh_node(int(data["containers"][id].get("level", 0)))
 		container_nodes[id] = node
 		update_container(id)
 	for id in data["spots"]:
@@ -61,16 +78,19 @@ func setup(map_data: Dictionary) -> void:
 		spot_nodes[id] = node
 		update_spot(id)
 	for stove in data["stoves"]:
-		var node := _mesh_node()
+		var lv: int = int(stove.get("level", 0))
+		var node := _mesh_node(lv)
 		stove_nodes.append(node)
 		var st := _begin()
-		box(st, Vector3(0.8, 0.9 if not stove["upstairs"] else 0.5, 0.8), FieldGrid.center(stove["cell"]) + Vector3(0, 0.45, 0), Color(0.25, 0.24, 0.23))
+		var base := FieldGrid.center(stove["cell"]) + Vector3(0, lv * LEVEL_H, 0)
+		box(st, Vector3(0.8, 0.9, 0.8), base + Vector3(0, 0.45, 0), Color(0.25, 0.24, 0.23))
 		if stove["lit"]:
-			box(st, Vector3(0.5, 0.06, 0.5), FieldGrid.center(stove["cell"]) + Vector3(0, 0.93, 0), Color(0.95, 0.55, 0.25))
+			box(st, Vector3(0.5, 0.06, 0.5), base + Vector3(0, 0.93, 0), Color(0.95, 0.55, 0.25))
 		node.mesh = st.commit()
 	for key in data["manholes"]:
-		var node := _mesh_node()
-		node.position = FieldGrid.center(data["manholes"][key])
+		var lv: int = int(data.get("manhole_levels", {}).get(key, 0))
+		var node := _mesh_node(lv)
+		node.position = FieldGrid.center(data["manholes"][key]) + Vector3(0, lv * LEVEL_H, 0)
 		manhole_nodes[key] = node
 		update_manhole(key, false)
 	# What the people who fled underground left at the culvert mouth: a bundle,
@@ -91,18 +111,24 @@ func setup(map_data: Dictionary) -> void:
 		text.modulate = Color(0.85, 0.82, 0.76, 0.75)
 		text.outline_size = 0
 		text.rotation_degrees = Vector3(-90, 0, 0)
-		text.position = FieldGrid.center(label["cell"]) + Vector3(0, 0.03, 0)
+		var lv: int = int(label.get("level", 0))
+		text.position = FieldGrid.center(label["cell"]) + Vector3(0, lv * LEVEL_H + 0.03, 0)
 		text.no_depth_test = false
 		text.visible = false
-		add_child(text)
-		label_nodes.append([text, label["cell"]])
+		level_roots[lv].add_child(text)
+		label_nodes.append([text, label["cell"], lv])
 
 
 ## Manhole lid, or the culvert mouth; blocked shows a heavy plank stack on the lid.
 func update_manhole(key: String, blocked: bool) -> void:
 	var node: MeshInstance3D = manhole_nodes[key]
 	var st := _begin()
-	if key == "culvert":
+	if key == "cellar":
+		# A drain grate in the cellar floor.
+		box(st, Vector3(0.9, 0.05, 0.9), Vector3(0, 0.03, 0), Color(0.12, 0.12, 0.13))
+		for k in range(4):
+			box(st, Vector3(0.08, 0.07, 0.8), Vector3(-0.3 + k * 0.2, 0.05, 0), Color(0.3, 0.3, 0.32))
+	elif key == "culvert":
 		box(st, Vector3(2.0, 0.9, 0.5), Vector3(0, 0.45, -0.4), Color(0.32, 0.31, 0.3))
 		box(st, Vector3(1.4, 0.7, 0.2), Vector3(0, 0.35, -0.12), Color(0.05, 0.05, 0.06))
 	else:
@@ -115,29 +141,33 @@ func update_manhole(key: String, blocked: bool) -> void:
 
 ## Room names show once the room has been seen (no free map knowledge).
 func update_labels(memory: PackedByteArray, mask_on: bool) -> void:
+	var n := grid.width * grid.height
 	for row in label_nodes:
 		var c: Vector2i = row[1]
-		row[0].visible = not mask_on or memory[grid.index(c)] > 0
+		row[0].visible = not mask_on or memory[(int(row[2]) + 1) * n + grid.index(c)] > 0
 
 
 func set_mask_enabled(on: bool) -> void:
 	material.set_shader_parameter("mask_on", 1.0 if on else 0.0)
 
 
-## seen_now: cell index -> true; memory: PackedByteArray of seen-before flags.
+## seen_now: sight key (level slice * cells + cell index) -> true; memory:
+## PackedByteArray of seen-before flags by the same key. The mask is one
+## layer for all floors (only one floor's worth is on screen at a time).
 ## Only cells that changed since last call are touched.
 func update_vis(seen_now: Dictionary, memory: PackedByteArray) -> void:
 	var n := grid.width * grid.height
 	if vis_bytes.size() != n * 2:
 		vis_bytes.resize(n * 2)
 		vis_bytes.fill(0)
-		for i in range(n):
-			if memory[i]:
-				vis_bytes[i * 2 + 1] = 255
+		for k in range(memory.size()):
+			if memory[k]:
+				vis_bytes[(k % n) * 2 + 1] = 255
 	for i in vis_lit:
 		vis_bytes[i * 2] = 0
 	vis_lit = PackedInt32Array()
-	for i in seen_now:
+	for key in seen_now:
+		var i: int = key % n
 		vis_bytes[i * 2] = 255
 		vis_bytes[i * 2 + 1] = 255
 		vis_lit.append(i)
@@ -145,15 +175,26 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray) -> void:
 	vis_texture.update(vis_image)
 
 
-## Lower the walls of the building the player is inside (−1 = none).
-func cut_away(building_id: int) -> void:
-	if building_id == cut_building:
+## Show the floors the player can see from where they stand: the cellar
+## alone, or the ground and every floor up to theirs.
+func show_levels(player_level: int) -> void:
+	if player_level == shown_level:
+		return
+	shown_level = player_level
+	for lv in level_roots:
+		level_roots[lv].visible = lv == -1 if player_level < 0 else lv >= 0 and lv <= player_level
+
+
+## Lower the walls of the building the player is inside, on their floor (−1 = none).
+func cut_away(building_id: int, level: int = 0) -> void:
+	if building_id == cut_building and level == cut_level:
 		return
 	cut_building = building_id
-	for id in wall_nodes:
-		var node: MeshInstance3D = wall_nodes[id]
-		var tall := 2.0 if id == 1 else 1.0
-		node.scale = Vector3(1, CUT_H / WALL_H if id == building_id else tall, 1)
+	cut_level = level
+	for key in wall_nodes:
+		var node: MeshInstance3D = wall_nodes[key]
+		var cut: bool = key.x == building_id and key.y == level
+		node.scale = Vector3(1, CUT_H / WALL_H if cut else 1.0, 1)
 	for c in door_nodes:
 		update_door(c)
 	for c in window_nodes:
@@ -165,7 +206,7 @@ func update_door(c: Vector2i) -> void:
 	var node: MeshInstance3D = door_nodes[c]
 	var st := _begin()
 	var at := FieldGrid.center(c)
-	var h := WALL_H * (CUT_H / WALL_H if door["building"] == cut_building else 1.0)
+	var h := WALL_H * (CUT_H / WALL_H if door["building"] == cut_building and cut_level == 0 else 1.0)
 	var horizontal := not grid.blocks_body(c + Vector2i(1, 0)) or not grid.blocks_body(c + Vector2i(-1, 0))
 	horizontal = grid.solid_at(c + Vector2i(1, 0)) == S.WALL or grid.solid_at(c + Vector2i(-1, 0)) == S.WALL
 	var state: String = door["state"]
@@ -189,7 +230,7 @@ func update_window(c: Vector2i) -> void:
 	var node: MeshInstance3D = window_nodes[c]
 	var st := _begin()
 	var at := FieldGrid.center(c)
-	var cut: bool = win["building"] == cut_building
+	var cut: bool = win["building"] == cut_building and cut_level == 0
 	var horizontal := grid.solid_at(c + Vector2i(1, 0)) == S.WALL or grid.solid_at(c + Vector2i(-1, 0)) == S.WALL
 	var size := Vector3(1.0, 0.1, 0.25) if horizontal else Vector3(0.25, 0.1, 1.0)
 	box(st, size + Vector3(0, 0.75, 0), at + Vector3(0, 0.4, 0), Color(0.4, 0.4, 0.42))
@@ -210,7 +251,7 @@ func update_container(id: String) -> void:
 	var box_data: Dictionary = data["containers"][id]
 	var node: MeshInstance3D = container_nodes[id]
 	var st := _begin()
-	var at := FieldGrid.center(box_data["cell"])
+	var at := FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
 	var color := Color(0.62, 0.5, 0.3) if not box_data["searched"] else Color(0.35, 0.32, 0.28)
 	if box_data["id"] == "bell":
 		color = Color(0.75, 0.62, 0.25) if box_data["items"].size() > 0 else Color(0.3, 0.3, 0.3)
@@ -247,10 +288,10 @@ func update_spot(id: String) -> void:
 	node.mesh = st.commit()
 
 
-func _mesh_node() -> MeshInstance3D:
+func _mesh_node(lv: int = 0) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	node.material_override = material
-	add_child(node)
+	level_roots[lv].add_child(node)
 	return node
 
 
@@ -316,9 +357,7 @@ func _build_walls() -> void:
 	for b in tools:
 		var node := _mesh_node()
 		node.mesh = tools[b].commit()
-		wall_nodes[b] = node
-		if b == 1:
-			node.scale = Vector3(1, 2.0, 1)
+		wall_nodes[Vector2i(b, 0)] = node
 
 
 func _build_blocks() -> void:
@@ -353,3 +392,67 @@ func _build_blocks() -> void:
 		box(st, Vector3(r.size.x - 0.1, tall, r.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
 	var node := _mesh_node()
 	node.mesh = st.commit()
+
+
+## An upper floor or the cellar: a floor where there is one, walls by building
+## (so the player's own can be cut down), window frames.
+func _build_level(lv: int) -> void:
+	var lg: FieldGrid = levels[lv]
+	var y0 := lv * LEVEL_H
+	var floor_st := _begin()
+	var tools: Dictionary = {}
+	for y in range(lg.height):
+		for x in range(lg.width):
+			var c := Vector2i(x, y)
+			var kind := lg.solid_at(c)
+			if kind == S.AIR or (kind == S.BLOCK and lg.building_at(c) < 0):
+				continue
+			var color := FLOOR_COLORS[lg.floor_at(c)]
+			var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
+			color = Color(color.r + n, color.g + n, color.b + n)
+			var a := Vector3(x, y0, y)
+			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
+			for idx in [0, 1, 2, 0, 2, 3]:
+				floor_st.set_color(color)
+				floor_st.set_normal(Vector3.UP)
+				floor_st.add_vertex(quad[idx])
+			var b := lg.building_at(c)
+			if kind == S.WALL:
+				if not tools.has(b):
+					tools[b] = _begin()
+				box(tools[b], Vector3(1, WALL_H, 1), Vector3(x + 0.5, y0 + WALL_H * 0.5, y + 0.5), Color(0.55, 0.53, 0.5))
+			elif kind == S.WINDOW:
+				if not tools.has(b):
+					tools[b] = _begin()
+				var horizontal := lg.solid_at(c + Vector2i(1, 0)) == S.WALL or lg.solid_at(c + Vector2i(-1, 0)) == S.WALL
+				var size := Vector3(1.0, 0.85, 0.25) if horizontal else Vector3(0.25, 0.85, 1.0)
+				box(tools[b], size, Vector3(x + 0.5, y0 + 0.43, y + 0.5), Color(0.4, 0.4, 0.42))
+				box(tools[b], Vector3(1.0, 0.9, 0.08) if horizontal else Vector3(0.08, 0.9, 1.0), Vector3(x + 0.5, y0 + 1.3, y + 0.5), Color(0.62, 0.72, 0.78))
+				box(tools[b], size * Vector3(1, 0.12, 1), Vector3(x + 0.5, y0 + WALL_H - 0.05, y + 0.5), Color(0.4, 0.4, 0.42))
+	var floor_node := _mesh_node(lv)
+	floor_node.mesh = floor_st.commit()
+	floor_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for b in tools:
+		var node := _mesh_node(lv)
+		node.mesh = tools[b].commit()
+		wall_nodes[Vector2i(b, lv)] = node
+
+
+## Stairs: steps going up on the lower floor, a dark well with a rail on the upper.
+func _build_stairs() -> void:
+	for s in data.get("stairs", []):
+		if s["ladder"]:
+			continue
+		var c: Vector2i = s["cell"]
+		var low: int = s["low"]
+		var high: int = s["high"]
+		var st := _begin()
+		var base := Vector3(c.x + 0.5, low * LEVEL_H, c.y + 0.5)
+		for k in range(4):
+			box(st, Vector3(0.9, 0.3 + k * 0.3, 0.22), base + Vector3(0, (0.3 + k * 0.3) * 0.5, -0.33 + k * 0.22), Color(0.48, 0.4, 0.32))
+		_mesh_node(low).mesh = st.commit()
+		var up := _begin()
+		var top := Vector3(c.x + 0.5, high * LEVEL_H, c.y + 0.5)
+		box(up, Vector3(0.95, 0.03, 0.95), top + Vector3(0, 0.02, 0), Color(0.16, 0.15, 0.15))
+		box(up, Vector3(0.06, 0.9, 0.95), top + Vector3(0.47, 0.45, 0), Color(0.48, 0.4, 0.32))
+		_mesh_node(high).mesh = up.commit()

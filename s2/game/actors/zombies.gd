@@ -53,7 +53,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 		mm.mesh = vat["mesh"]
 		mm.instance_count = MAX_DRAW
 		mm.visible_instance_count = 0
-		mm.custom_aabb = AABB(Vector3(-5, -2, -5), Vector3(130, 8, 80))
+		mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 		node.multimesh = mm
 		var mat := ShaderMaterial.new()
 		mat.shader = preload("res://game/actors/dead_vat.gdshader")
@@ -78,15 +78,15 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	mm2.mesh = ring
 	mm2.instance_count = 32
 	mm2.visible_instance_count = 0
-	mm2.custom_aabb = AABB(Vector3(-5, -2, -5), Vector3(130, 8, 80))
+	mm2.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 	markers.multimesh = mm2
 	add_child(markers)
 
 
 func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 	var z := {
-		"id": next_id, "kind": kind, "pos": Vector3(at.x, 0, at.z), "state": "frozen" if kind == "frozen" else "wander",
-		"home": Vector3(at.x, 0, at.z), "target": Vector3(at.x, 0, at.z), "path": PackedVector3Array(), "path_t": 0.0,
+		"id": next_id, "kind": kind, "pos": _floor_y(at), "state": "frozen" if kind == "frozen" else "wander",
+		"home": _floor_y(at), "target": _floor_y(at), "path": PackedVector3Array(), "path_t": 0.0,
 		"angle": game.rng.randf() * TAU, "phase": game.rng.randf(), "t": 0.0, "linger": 0.0,
 		"victim": null, "windup": 0.0, "cooldown": 0.0, "grab_t": 0.0, "crawl": false,
 		"horde": int(opts.get("horde", -1)), "seen_t": 0.0, "last_seen": Vector3.ZERO, "age": 0.0,
@@ -99,6 +99,11 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 		z["target"] = opts["target"]
 	list.append(z)
 	return z
+
+
+## Bodies stand on a floor: y snaps to the level it is on.
+func _floor_y(at: Vector3) -> Vector3:
+	return Vector3(at.x, game.level_y(game.level_of(at)), at.z)
 
 
 ## A dead person becomes a corpse that stands up as "fresh" after RISE_TIME.
@@ -178,6 +183,10 @@ func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 		var reach := radius
 		if wind != null:
 			reach *= float(wind.downwind(at, z["pos"]))
+		# Every floor between halves what comes through it.
+		var floors: int = absi(game.level_of(at) - game.level_of(z["pos"]))
+		if floors > 0:
+			reach *= pow(0.5, floors)
 		if d > reach:
 			continue
 		if state == "frozen":
@@ -298,13 +307,16 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 	var best = null
 	var best_d := 999.0
 	var forward := Vector3(sin(z["angle"]), 0, cos(z["angle"]))
+	var zl: int = game.level_of(z["pos"])
+	var lg = game.grid_at(z["pos"])
 	for p in people:
+		# The dead do not look up through floors or out of upstairs windows.
+		if game.level_of(p.position) != zl:
+			continue
 		var d: float = z["pos"].distance_to(p.position)
 		var reach: float = sight * float(p.smell_mult()) * float(game.weather.downwind(p.position, z["pos"]) if p.smell > 0 else 1.0)
 		if p.crouched:
 			reach *= 0.55
-		if p.upstairs:
-			reach *= 0.5
 		var to_p: Vector3 = (p.position - z["pos"])
 		to_p.y = 0
 		var in_cone := d < FEEL or (to_p.length() > 0.01 and forward.dot(to_p.normalized()) >= CONE_COS)
@@ -313,7 +325,7 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			in_cone = true
 		if not in_cone or d > reach or d > best_d:
 			continue
-		if d > FEEL and not game.grid.line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position)):
+		if d > FEEL and not lg.line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position)):
 			continue
 		best = p
 		best_d = d
@@ -333,9 +345,18 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			z["angle"] = atan2(best.position.x - z["pos"].x, best.position.z - z["pos"].z)
 		return
 	if z["state"] == "chase":
-		# Memory holds only the spot it saw; it never reads where the target is now.
+		# Memory holds only the spot it saw; it never reads where the target is now,
+		# except up or down a stair it just watched them take: it hears the steps.
 		z["seen_t"] += 0.17
 		z["target"] = z["last_seen"]
+		var v = z["victim"]
+		if v != null and v.is_alive() and game.level_of(v.position) != zl and z["seen_t"] < 2.0:
+			var lseen: Vector3 = z["last_seen"]
+			if Vector2(v.position.x - lseen.x, v.position.z - lseen.z).length() < 3.0:
+				z["target"] = v.position
+				z["last_seen"] = v.position
+				z["path_t"] = 0.0
+				return
 		if z["pos"].distance_to(z["last_seen"]) < 1.0:
 			_begin_search(z, z["last_seen"])
 		elif z["seen_t"] > MEMORY:
@@ -394,7 +415,7 @@ func _speed(z: Dictionary) -> float:
 			s = SPEED_SHAMBLE
 		"horde":
 			s = SPEED_SHAMBLE
-	return s * float(FieldGrid.FLOOR_SPEED[game.grid.floor_at(FieldGrid.cell_of(z["pos"]))])
+	return s * float(FieldGrid.FLOOR_SPEED[game.grid_at(z["pos"]).floor_at(FieldGrid.cell_of(z["pos"]))])
 
 
 func _move(z: Dictionary, delta: float) -> void:
@@ -412,8 +433,9 @@ func _move(z: Dictionary, delta: float) -> void:
 					return
 				z["t"] = game.rng.randf_range(3.0, 8.0)
 				var off := Vector3(game.rng.randf_range(-5, 5), 0, game.rng.randf_range(-5, 5))
-				var c: Vector2i = game.grid.nearest_walkable(FieldGrid.cell_of(z["home"] + off), true, 2)
-				z["target"] = FieldGrid.center(c)
+				var home: Vector3 = Vector3(z["home"].x, at.y, z["home"].z)
+				var c: Vector2i = game.grid_at(at).nearest_walkable(FieldGrid.cell_of(home + off), true, 2)
+				z["target"] = game.lift(c, game.level_of(at))
 				z["path"] = PackedVector3Array()
 			return
 	elif state == "investigate":
@@ -444,7 +466,7 @@ func _move(z: Dictionary, delta: float) -> void:
 					z["t"] = 3.0
 					return
 				var off := Vector3(game.rng.randf_range(-3, 3), 0, game.rng.randf_range(-3, 3))
-				z["target"] = FieldGrid.center(game.grid.nearest_walkable(FieldGrid.cell_of(z["home"] + off), true, 2))
+				z["target"] = game.walkable_near(z["home"] + off, true, 2)
 				z["linger"] = 1.0
 				z["path_t"] = 0.0
 			return
@@ -465,10 +487,10 @@ func _move(z: Dictionary, delta: float) -> void:
 	if z["path_t"] <= 0.0 or path.is_empty():
 		var near := at.distance_to(game.player.position) < NEAR
 		z["path_t"] = (0.6 if near else 2.5) + game.rng.randf() * 0.4
-		if game.grid.clear_walk(FieldGrid.cell_of(at), FieldGrid.cell_of(target), true):
+		if game.level_of(at) == game.level_of(target) and game.grid_at(at).clear_walk(FieldGrid.cell_of(at), FieldGrid.cell_of(target), true):
 			path = PackedVector3Array([target])
 		else:
-			path = game.grid.find_path(at, target, false)
+			path = game.find_path(at, target, false)
 		z["path"] = path
 	if path.is_empty():
 		return
@@ -476,14 +498,17 @@ func _move(z: Dictionary, delta: float) -> void:
 	var dir := next - at
 	dir.y = 0
 	if dir.length() < 0.25:
+		# Stairs: the next point is the same spot a floor up or down.
+		z["pos"] = Vector3(at.x, game.level_y(game.level_of(next)), at.z)
 		path.remove_at(0)
 		z["path"] = path
 		return
 	var step := dir.normalized() * _speed(z) * delta
 	var dest := at + step
 	var dc := FieldGrid.cell_of(dest)
-	if game.grid.blocks_body(dc):
-		if game.grid.doors.has(dc):
+	var lg = game.grid_at(at)
+	if lg.blocks_body(dc):
+		if lg == game.grid and game.grid.doors.has(dc):
 			_bang(z, dc, delta)
 		else:
 			dest = _slide(at, step)
@@ -500,12 +525,13 @@ func _bang(z: Dictionary, c: Vector2i, delta: float) -> void:
 
 
 func _slide(at: Vector3, step: Vector3) -> Vector3:
+	var lg = game.grid_at(at)
 	var r := at
 	var cand := r + Vector3(step.x, 0, 0)
-	if not game.grid.blocks_body(FieldGrid.cell_of(cand)):
+	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.x = cand.x
 	cand = r + Vector3(0, 0, step.z)
-	if not game.grid.blocks_body(FieldGrid.cell_of(cand)):
+	if not lg.blocks_body(FieldGrid.cell_of(cand)):
 		r.z = cand.z
 	return r
 
@@ -582,11 +608,11 @@ func kill(z: Dictionary) -> void:
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 	var counts := {"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0}
 	var marks := 0
-	var grid = game.grid
 	for z in list:
 		var at: Vector3 = z["pos"]
-		var c := FieldGrid.cell_of(at)
-		if mask_on and not seen.has(grid.index(c)):
+		if mask_on and not seen.has(game.seen_key(at)):
+			continue
+		if not game.level_shown(game.level_of(at)):
 			continue
 		if not camera.is_position_in_frustum(at + Vector3(0, 0.6, 0)):
 			continue
@@ -600,16 +626,16 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			look = "corpse"
 		if state == "dead" or state == "downed" or state == "rising" or z["crawl"]:
 			basis = basis * Basis(Vector3.RIGHT, -PI * 0.5)
-			pos.y = 0.18
+			pos.y = at.y + 0.18
 			frozen_anim = 1.0 if state != "downed" or not z["crawl"] else 0.0
 		if state == "frozen":
 			look = "frozen"
 			frozen_anim = 1.0
 			basis = basis * Basis(Vector3.RIGHT, -0.5)
-			pos.y = -0.55
+			pos.y = at.y - 0.55
 		elif state == "waking":
 			look = "frozen"
-			pos.y = -0.55 * clampf(float(z["t"]) / WAKE_TIME, 0, 1) + sin(z["t"] * 40.0) * 0.04
+			pos.y = at.y - 0.55 * clampf(float(z["t"]) / WAKE_TIME, 0, 1) + sin(z["t"] * 40.0) * 0.04
 		if state == "rising" and marks < 32:
 			markers.multimesh.set_instance_transform(marks, Transform3D(Basis.IDENTITY, at + Vector3(0, 0.05, 0)))
 			marks += 1
