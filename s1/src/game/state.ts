@@ -118,7 +118,7 @@ export type Agenda = LawAgenda | MotionAgenda;
 /** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
 export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share' | 'trial' | 'no_confidence';
+export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence';
 /** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
 export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
 
@@ -143,6 +143,8 @@ export interface CouncilState {
   result: VoteResult | null;
   /** 회기가 아닌 구간에 열차장이 부른 비상 소집 */
   emergency?: boolean;
+  /** 안건 자리를 먹지 않고 법 안건 앞에 따로 여는 표결(S1b 정기 신임, s1b_dark_path 5.3). result가 서면 끝났다 */
+  pre?: { agenda: MotionAgenda; result?: VoteResult };
 }
 
 export interface JournalEntry { seg: number; text: string; tone?: 'good' | 'bad' | 'deal' | 'dark' }

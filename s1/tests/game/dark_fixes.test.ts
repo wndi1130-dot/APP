@@ -214,15 +214,16 @@ describe('8. 불신임', () => {
   const byComm = Object.fromEntries(COMMS.map(c => [c, { yes: 0, no: 0 }]));
   it('목록에 오르기만 하고 다른 안건을 고르면 조건이 남는다. 표결해야 지운다', () => {
     const g = darkGame('conf');
-    g.dark!.lowTrust = 2;
+    g.dark!.confBy = 'tail';
+    g.dark!.confLeader = g.comms.tail.leader.personId;
     g.council = { options: [conf], idx: 0, locked: false, deals: [], result: null } as never;
     darkCouncilOpen(g);
-    expect(g.dark!.lowTrust).toBe(2);
+    expect(g.dark!.confBy).toBe('tail');
     afterVote(g, { kind: 'motion', motion: 'trial' }, { yes: 0, no: 0, absent: 0, passed: false, byComm } as never);
-    expect(g.dark!.lowTrust).toBe(2);
+    expect(g.dark!.confBy).toBe('tail');
     MOTIONS.no_confidence.onFail(g, conf);
     afterVote(g, conf, { yes: 0, no: 0, absent: 0, passed: false, byComm } as never);
-    expect(g.dark!.lowTrust).toBe(0);
+    expect(g.dark!.confBy).toBeNull();
   });
   it('통과하면 다른 끝과 같은 길로 끝난다(끝 일지와 H7 한 줄)', () => {
     const g = darkGame('ousted');

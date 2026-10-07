@@ -109,8 +109,6 @@ export function darkSettle(g: Game): void {
     if (d.prevLeash.includes(c) && !leashed.includes(c)) newEmber(g, c, 'chief', 'leash');
     if (s.disgraced && !d.prevDisgraced.includes(c)) newEmber(g, c, 'chief', 'bribe');
   }
-  // 불신임 동의 조건(제안 (6)): 신임 30 아래로 2구간.
-  d.lowTrust = g.trust < 30 ? d.lowTrust + 1 : 0;
   d.prevFervor = Object.fromEntries(COMMS.map(c => [c, g.comms[c].fervor])) as Record<Comm, number>;
   d.prevGrudge = Object.fromEntries(COMMS.map(c => [c, g.comms[c].grudge])) as Record<Comm, number>;
   d.prevLeash = leashed;

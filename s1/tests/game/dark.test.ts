@@ -15,7 +15,8 @@ import { darkPyreWeights, darkStoredWeight } from '../../src/game/dark/corpses';
 import type { Ember } from '../../src/game/dark/state';
 import { playGame } from '../../tools/s1c_bot';
 
-// S1b 핵심 묶음(s1b_dark_path 2장 1번 '가'): 징후, 수사·재판·희생양, 암살 명령, 칸 안의 시신, 일대기. 제안 (6)(7)은 S1b 판에서만.
+// S1b 핵심 묶음(s1b_dark_path 2장 1번 '가'): 징후, 수사·재판·희생양, 암살 명령, 칸 안의 시신, 일대기, 정기 신임 표결(5.3).
+// '포고로 정한다'는 S1a 비상대권 규칙이라 모든 판에 붙는다(src/game/decree.ts).
 
 function darkGame(seed = 'dark-test'): Game {
   const g = createGame(seed);
@@ -246,15 +247,14 @@ describe('포고로 정한다(사용자 결정 \'붙인다\')', () => {
   });
 });
 
-describe('제안 (6) 조건부 불신임 동의', () => {
-  it('신임 30 아래로 2구간이면 안건이 되고, 통과하면 판이 끝난다', () => {
+describe('불신임 동의와 정기 신임 표결(5.3)', () => {
+  it('신임이 낮다는 것만으로는 불신임 동의가 오르지 않는다(\'정기 투표\'가 조건부를 대신한다)', () => {
     const g = darkGame('conf');
     toPrep(g, 2);
     g.trust = 20;
     darkSettle(g);
-    expect(motionsNow(g).some(m => m.motion === 'no_confidence')).toBe(false);
     darkSettle(g);
-    expect(motionsNow(g).some(m => m.motion === 'no_confidence')).toBe(true);
+    expect(motionsNow(g).some(m => m.motion === 'no_confidence')).toBe(false);
   });
   it('S1b가 아닌 판엔 오르지 않는다', () => {
     const g = createGame('conf-off');

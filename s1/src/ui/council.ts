@@ -1,6 +1,6 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
-  openConditions, relStage, relationLine, toolStatus,
+  openConditions, preVote, relStage, relationLine, toolStatus,
   needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, LawId, VoteResult } from '../game';
@@ -159,7 +159,9 @@ function billPanel(view: View): HTMLElement {
   if (!agenda) {
     return h('div', { class: 'bill' }, h('b', { class: 'bill__title' }, '안건 없음'), h('p', { class: 'sub' }, '올릴 수 있는 법이 없다.'));
   }
-  const canSwitch = !council.locked && council.deals.length === 0 && !council.result && council.options.length > 1;
+  // 법 안건 앞의 정기 신임 표결(S1b 5.3)은 바꿀 수도 거래할 수도 없다. 표결 뒤 주 단추가 이번 회기 안건으로 넘긴다.
+  const pre = preVote(g);
+  const canSwitch = !pre && !council.locked && council.deals.length === 0 && !council.result && council.options.length > 1;
   const secret = lawActive(g, 'secret_ballot');
   if (!isLawAgenda(agenda)) {
     // 법이 아닌 안건(몫 나누기 등): 통과와 부결이 무엇을 하는지만 보인다.
@@ -173,10 +175,11 @@ function billPanel(view: View): HTMLElement {
         h('span', { class: 'tag' }, icon(secret ? 'eyeOff' : 'eye'), secret ? '비밀' : '공개'),
         agenda.forced ? h('span', { class: 'tag tag--crisis' }, '마지막 회기') : null,
         agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
-        council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
+        pre ? h('span', { class: 'tag' }, '정기') : null,
+        !pre && council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
       h('ul', { class: 'bill__changes' }, MOTIONS[agenda.motion].changes(g, agenda).map(x => h('li', null, x))),
-      h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
-        council.locked && !council.result ? ' · 안건을 넘겼다' : ''));
+      h('div', { class: 'bill__foot num' }, pre ? '거래 없음' : `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
+        !pre && council.locked && !council.result ? ' · 안건을 넘겼다' : ''));
   }
   const law = LAWS[agenda.law];
   const need = needOf(g, agenda.law);
