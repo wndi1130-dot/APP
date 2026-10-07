@@ -40,8 +40,9 @@
 - 결과는 **공개 저장소에 올리지 않는다.** 사용자 바탕화면 `모델컨셉_20261007\`에 `M1_council_ingame_v1.png`처럼 번호를 붙여 저장한다.
 - 한 항목은 두 장까지 뽑아 나은 쪽을 고른다. 고르지 못하면 둘 다 둔다.
 - 한글 글자는 그리게 하지 않는다. 작품 이름은 프롬프트에 넣지 않는다([reference_analysis.md](reference_analysis.md) 4장).
-- 순서: **0단계 자료 → M1 → M3 → M7b → M8 → M6 → M2 → M5 → M4 → M7a → M7c.** 사용자가 정치 시뮬을 먼저 짚었으니 의회 칸(M1)을 먼저, 그다음 사람(M3), 탑뷰 게임 화면(M7b), 연출(M8)이다.
-- 앞 항목의 결과를 뒤 항목에 첨부하는 곳이 있다(M4·M5는 M3 결과). 앞 결과가 없으면 그 첨부만 빼고 뽑는다.
+- 순서: **0단계 자료 → M1 → M3 → M3b → M7b → M8 → M6 → M2 → M3c → M5 → M4 → M7a → M7c.** 사용자가 정치 시뮬을 먼저 짚었으니 의회 칸(M1)을 먼저, 그다음 사람(M3), 탑뷰 게임 화면(M7b), 연출(M8)이다.
+- 앞 항목의 결과를 뒤 항목에 첨부하는 곳이 있다(M5는 M3 결과, M4는 M3·M3b 결과). 앞 결과가 없으면 그 첨부만 빼고 뽑는다.
+- 세션 나누기: 바탕화면 `모델컨셉_20261007\_jobs\`에 이 주문서를 세션 하나에 그림 하나씩 나눈 작업 파일과 실행 순서(`00_실행순서.md`)가 있다. 0단계 조사 5, 1단계 렌더 18, 스레드가 고르는 관문, 2단계 4, 3단계 2다.
 
 ## 공통 화풍 (모든 글상자에 이미 들어 있음)
 
@@ -85,7 +86,7 @@ Each row shows, left to right: (1) the closed car in three-quarter view: an old 
 
 ## M3 열차장 모델 시트 (첨부: C10_chief_states_v1)
 
-얼굴은 캐릭터 생성(열린 질문 2) 전 임시다. C10과 같은 사람으로 맞춘다. 오른쪽 아래 작은 그림은 탑뷰 필드에서 실제로 보일 크기로, 폰에서 알아볼 수 있는지 본다.
+열차장은 플레이어가 만든다(성별, 체격 셋, 나이대 셋, 직업 16, 부위 조합 얼굴: [../design/briefs/character_creation.md](../design/briefs/character_creation.md) 5장, 초안). 이 시트는 그 가운데 기본값 하나(보통 체격 40대 남자)를 C10과 같은 사람으로 맞춘 것이다. 오른쪽 아래 작은 그림은 탑뷰 필드에서 실제로 보일 크기로, 폰에서 알아볼 수 있는지 본다.
 
 ```text
 Use the attached image only for this character's face, build and clothing. Draw a 3D character model sheet of him.
@@ -94,21 +95,47 @@ Real-time 3D for a mobile survival game seen mostly from a top-down three-quarte
 
 Model sheet on a plain mid-grey studio background with a faint floor grid and soft even light. Top row: untextured matte light-grey clay with visible flat-shaded facets, so the polygon structure and silhouette can be judged. Bottom row: the same models fully textured. Identical poses and camera angles in both rows. No labels except tiny placeholder numbers.
 
-The character: the train chief, a weathered man in his forties with a short dark beard, in a long dark railway greatcoat with a fur collar, a peaked railway cap, a leather satchel on a strap, gloves and worn boots; frost caught on his shoulders. Each row shows him four times in a relaxed A-pose: front, three-quarter, side and back. The beard and fur collar are simple solid shapes with painted texture, not strands; the coat skirt is one solid piece. On the right side of the sheet: a close-up of the textured head; below it, the same textured character shown tiny, about 40 pixels tall, from a three-quarter top-down camera at about 40 degrees on a patch of snowy ground, holding a lantern, exactly as small as he would appear in the top-down field view on a phone.
+The character: the train chief, a weathered man in his forties with a short dark beard, in a long dark railway greatcoat with a fur collar, a peaked railway cap, a leather satchel on a strap, gloves and worn boots; frost caught on his shoulders. Each row shows him four times in a relaxed A-pose: front, three-quarter, side and back. The beard and fur collar are simple solid shapes with painted texture, not strands; the coat skirt is one solid piece. Hair, beard and cap read as separate simple pieces fitted onto one head, the way a modular character is assembled. On the right side of the sheet: a close-up of the textured head; below it, the same textured character shown tiny, about 40 pixels tall, from a three-quarter top-down camera at about 40 degrees on a patch of snowy ground, holding a lantern, exactly as small as he would appear in the top-down field view on a phone.
 ```
 
-## M4 승객 다섯 공동체 (첨부: M3 결과, C3_home_v4_v1)
+## M3b 기본 몸 여섯과 변형 (첨부 없음)
 
-공동체 다섯은 [../design/decisions.md](../design/decisions.md) '세계관'의 탄 순서를 따른다. 같은 몸 몇 개에 옷과 소품을 바꿔 끼우는 방식이라야 사람 200명을 만들 수 있다. 그 방식이 그림에서 자연스러운지 본다.
+열차장 만들기 초안(character_creation.md 5장, 10장)의 3D 몸 안이다. 체격 셋(마른·보통·다부진) × 성별 둘 = 기본 몸 여섯. 쇠약은 같은 몸을 마른 쪽으로 미는 변형(블렌드 셰이프), 나이대는 머리색과 자세로 보인다. 몸 여섯이 탑뷰 크기에서 갈리는지, 쇠약과 나이가 옷 없이도 읽히는지 본다.
 
 ```text
-Match the modeling style and finish of the first attached image. Draw a 3D model sheet of five train passengers, one from each community on our train, all built on the same shared base body with swapped clothing and props.
+Draw a 3D base-body sheet for a mobile survival game: the few shared mannequin bodies that every character in the game is built on before clothing is added. All six share one skeleton and one animation set.
+
+Real-time 3D for a mobile survival game seen mostly from a top-down three-quarter camera, shown as it would actually look running on a mid-range phone, not a cinematic render: low polygon count with simple blocky forms and clear silhouettes; deliberately low-resolution painted textures that look soft and smudged when seen up close; baked ambient occlusion; no strand hair, no cloth simulation, no film-quality skin. The picture reads through light, fog and silhouette rather than surface detail. Believable adult proportions, never chibi or cartoon. Muted palette of soot black, umber, rust, olive, slate and pale grey-white frost. Avoid: pixel art, glossy product renders, logos, readable text.
+
+Model sheet on a plain mid-grey studio background with a faint floor grid and soft even light. The bodies are smooth untextured matte light-grey clay mannequins with visible flat-shaded facets and plain moulded grey thermal underwear, no anatomical detail. No labels except tiny placeholder numbers.
+
+Top row, six bodies standing in a relaxed A-pose in three-quarter view, left to right: thin man, average man, sturdy man, thin woman, average woman, sturdy woman. Thin is narrow and wiry; sturdy is broad-shouldered with thick arms and legs, strong rather than fat; none is heavy or obese. Middle row, left half: the average man and the average woman beside a starved version of the same mesh, pushed toward gaunt: hollow cheeks, sunken chest, sharp collarbones and elbows, thin neck, shown as the same body morphed, not a new model. Middle row, right half: the average man three times, changed only by hair colour and posture to show age: thirties standing upright with dark hair; forties slightly settled with grey at the temples; fifties and over with white hair and a forward-hunched stance. Bottom strip: the six bodies again, now tiny, about 40 pixels tall each, seen from a three-quarter top-down camera at about 40 degrees on a patch of snowy ground, to judge whether the builds still read at phone size.
+```
+
+## M3c 얼굴 부품 (첨부: C10_chief_states_v1)
+
+얼굴은 부위 조합(얼굴형, 눈, 코, 머리, 수염, 흉터)으로 만든다(character_creation.md 5.4). 얼굴은 탑뷰 40픽셀에서는 거의 안 보이고 하차 연출, 정차 카메라, 초상에서 보인다. 그래서 아래 띠에 작은 크기에서 무엇이 남는지(머리 모양, 수염, 모자 실루엣)를 같이 그리게 했다.
+
+```text
+Use the attached image only as a guide to the level of realism and the weathered look of the people. Draw a 3D modular face-parts kit sheet for a mobile survival game, where every character's head is assembled from a few swappable parts.
+
+Real-time 3D for a mobile survival game seen mostly from a top-down three-quarter camera, shown as it would actually look running on a mid-range phone, not a cinematic render: low polygon count with simple blocky forms and clear silhouettes; deliberately low-resolution painted textures that look soft and smudged when seen up close; baked ambient occlusion; no strand hair, no cloth simulation, no film-quality skin. The picture reads through light, fog and silhouette rather than surface detail. Believable adult proportions, never chibi or cartoon. Muted palette of soot black, umber, rust, olive, slate and pale grey-white frost. Avoid: pixel art, glossy product renders, logos, readable text.
+
+Kit sheet on a plain mid-grey studio background with soft even light. No labels except tiny placeholder numbers. Top left: one neutral base head in untextured matte light-grey clay with visible flat-shaded facets, front and three-quarter view. To its right, a grid of clay heads, one row per part, each part shown in a slightly warmer clay tone on the same neutral head: face shape (narrow, broad, square-jawed); eyes and brows (deep-set, heavy-lidded, narrow); nose (straight, broken, broad); hair as solid sculpted shapes (cropped, receding, long hair tied back, shaved with stubble); beard (none, stubble, short full beard); scar (none, a cheek scar, a frost-bitten ear). Bottom strip: four finished textured heads assembled from different combinations, two men and two women of different ages from thirties to sixties, each with weathered, wind-burned skin; next to each, the same character shown tiny, about 40 pixels tall, from a three-quarter top-down camera in a winter hat and coat, to show what of the face survives at phone size.
+```
+
+## M4 승객 다섯 공동체 (첨부: M3 결과, M3b 결과, C3_home_v4_v1)
+
+공동체 다섯은 [../design/decisions.md](../design/decisions.md) '세계관'의 탄 순서를 따른다. 같은 몸 몇 개에 옷과 소품을 바꿔 끼우는 방식이라야 사람 200명을 만들 수 있다. 그 방식이 그림에서 자연스러운지 본다. 다섯은 M3b의 몸 여섯 가운데 다섯을 하나씩 쓰고(보통 남자는 M3 열차장), 꼬리칸 피난민은 쇠약 변형이다.
+
+```text
+Match the modeling style and finish of the first attached image. Draw a 3D model sheet of five train passengers, one from each community on our train, built from a small set of shared base bodies (three builds, thin, average and sturdy, each in a male and a female version) with swapped clothing and props. The first attached image fixes the modeling finish; the second shows the bare base bodies.
 
 Real-time 3D for a mobile survival game seen mostly from a top-down three-quarter camera, shown as it would actually look running on a mid-range phone, not a cinematic render: low polygon count with simple blocky forms and clear silhouettes; deliberately low-resolution painted textures that look soft and smudged when seen up close; baked ambient occlusion; no strand hair, no cloth simulation, no film-quality skin. The picture reads through light, fog and silhouette rather than surface detail. Believable adult proportions, never chibi or cartoon. Muted palette of soot black, umber, rust, olive, slate and pale grey-white frost. People are exhausted; some have dark dried blood soaked into bandages, but no wounds or gore. Avoid: pixel art, glossy product renders, logos, real weapon brand marks, red cross symbols, readable text.
 
 Model sheet on a plain mid-grey studio background with a faint floor grid and soft even light. Top row: untextured matte light-grey clay with visible flat-shaded facets, so the polygon structure and silhouette can be judged. Bottom row: the same models fully textured. Identical poses and camera angles in both rows. No labels except tiny placeholder numbers.
 
-Five figures in three-quarter view, standing in neutral poses, left to right: (1) an old locomotive engine driver from the depot: coal-blackened padded jacket over oily overalls, a fur-lined cap with ear flaps, goggles pushed up, a heavy wrench; (2) a well-off front-car passenger: a good but frayed wool overcoat with a fur collar, a felt hat, leather gloves, a small locked case; (3) a guard: a mismatched military greatcoat with a dull ochre armband, a helmet with a cloth cover, a bolt-action rifle on a sling, a baton; (4) a technician and medic: a long leather apron over layered sweaters, a tool roll and a canvas bag, a cloth armband with no symbol, wire spectacles; (5) a tail-car refugee: wrapped in a grey blanket over layered rags, cloth-wrapped feet, a bandaged hand with a dark dried stain, a bundle on her back. Behind the figures, a faint ghosted outline of the single shared base body shows they are one body with different outfits.
+Five figures in three-quarter view, standing in neutral poses, left to right: (1) an old locomotive engine driver from the depot, sturdy man, white hair and a slight stoop: coal-blackened padded jacket over oily overalls, a fur-lined cap with ear flaps, goggles pushed up, a heavy wrench; (2) a well-off front-car passenger, average-build woman: a good but frayed wool overcoat with a fur collar, a felt cloche hat, leather gloves, a small locked case; (3) a guard, sturdy woman: a mismatched military greatcoat with a dull ochre armband, a helmet with a cloth cover, a bolt-action rifle on a sling, a baton; (4) a technician and medic, thin man: a long leather apron over layered sweaters, a tool roll and a canvas bag, a cloth armband with no symbol, wire spectacles; (5) a tail-car refugee, thin woman visibly starved, hollow-cheeked and gaunt: wrapped in a grey blanket over layered rags, cloth-wrapped feet, a bandaged hand with a dark dried stain, a bundle on her back. Behind each figure, a faint ghosted outline of the bare base body it uses shows that the five are built from the same few bodies with different outfits.
 ```
 
 ## M5 좀비 상태 넷 (첨부: M3 결과)
@@ -181,10 +208,11 @@ Panel 6, back aboard: the side cross-section again, the train pulling away; in t
 2. M3의 40픽셀 열차장과 M7b의 사람들이 폰 크기에서 사람·좀비·동료로 구별되는가. 뭉갠 텍스처로도 이게 되면 좀보이드 수준 마감으로 충분하다는 뜻이다.
 3. M8 여섯 칸이 한 게임의 흐름으로 이어져 보이는가. 특히 3(옆 앞쪽 카메라)에서 5(탑뷰)로 넘어갈 때 같은 역·같은 사람으로 읽히는가. 이게 안 되면 정차 연출을 실시간 3D로 해야 할 이유가 약해진다.
 4. M5 아랫줄 실루엣만으로 좀비 넷이 갈리는가. 망자와 갓 일어난 자가 자세만으로 구별되는가(대응이 달라서 꼭 갈려야 한다).
-5. M4 다섯이 같은 몸이라는 게 거슬리지 않으면서도 공동체가 옷만으로 읽히는가.
+5. M4 다섯이 같은 몸이라는 게 거슬리지 않으면서도 공동체가 옷만으로 읽히는가. M3b 몸 여섯이 40픽셀에서 갈리는가. 안 갈리면 체격 셋은 수치 차이만 남기고 몸은 둘(성별)로 줄이는 안도 낸다.
 6. M1·M7을 C 그림과 나란히 놓았을 때 "같은 게임, 낮은 마감"으로 받아들일 만한가, 아니면 실망스러운가. 실망스러우면 3D 범위를 줄이는 쪽(아래 안 B·C)을 다시 본다.
 7. M2 분해도처럼 칸을 지붕·앞벽·바닥으로 나누는 구조가 홈 단면, 한눈에 보기, 의회 배경에 다 쓰일 만한가.
 8. 빨강·하늘색이 모델에 쓰이지 않았는가. 빨간 십자가 없는가.
+9. M3c 얼굴 부품이 작게 보면 머리 모양·수염·모자 말고는 거의 사라지는가. 그렇다면 얼굴 부위는 초상과 가까운 카메라용으로만 만들어도 된다.
 
 ## 3D 여부: 그림이 오면 사용자에게 낼 안 (가안)
 
