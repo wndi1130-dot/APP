@@ -7,6 +7,7 @@ docs/design/briefs/s1a_politics_numbers.md의 수치로 24구간 판을 자동�
   caretaker  처지를 견딜 선 안으로 돌보고, 감당할 수 있는 요구는 들어주고, 공개 협상으로 법을 통과시킨다.
   nodeal     caretaker와 같지만 의회에서 거래하지 않는다.
 
+  schemer    caretaker에 협박을 더한다. 공개 협상으로 모자라면 비밀로 큰 집단부터 협박한다.
   idealist   caretaker처럼 거래하되, 의회가 가장 좋아하는 법(대개 이상 법)부터 올린다.
 
 넣지 않은 것: AI 지도자의 뇌물·협박, 사적 부탁, 세력, 결과 아크, 사건 카드의 개별 선택(생존자 데려오기만 넣었다),
@@ -33,6 +34,7 @@ P = dict(
     engine_fatigue=2.0, shift_relief=10, shift_coal=3,
     natural_ceiling=15, engine_exposure0=45, strike_rel=-15, refuse_rel=5,
     rescue_rate=0.2, crisis_line=30, forced_agenda=1, plan_line=120, thrown_horde=0.05, store_risk=0.03, lever_line=50,
+    repeal=1, repeal_cool=2, repeal_rel=10, hostile_grudge=2, blackmail_reputation=3, grudge_decay=2, blackmail_pull=1,
 )
 COMMS = ['tail', 'engine', 'guard', 'medtech', 'front']
 POP = dict(tail=90, engine=25, guard=25, medtech=30, front=30)
@@ -150,6 +152,13 @@ class Run:
         self.stats = Counter()
         self.end = None
         self.demand_cool = {c: 0 for c in COMMS}
+        self.grudge = {c: 0 for c in COMMS}      # 적의: 열차장 개인에 대한 원한(0~3). 처지와 따로 간다
+        self.last_offense = {c: 0 for c in COMMS}
+        self.passed_at = {}                         # 법 → 통과한 회기
+        self.secrets, self.blackmails = 1, 0
+        self.leashes = []  # 협박의 목줄(3.4): [공동체, 시작 구간]
+        self.repealed_at = {}                       # 법 → 폐지한 회기
+        self.bought_by = {}                         # 법 → (약속한 공동체들, 회기)
         self.corpse_issue = False  # 첫 죽음이 시신 처리 안건을 연다
         self.thrown = 0            # 밖으로 던진 시신: 선로를 따라오는 무리에 섞인다(아는 얼굴)
         self.stored = 0            # 냉동칸에 둔 시신
@@ -259,6 +268,7 @@ class Run:
         if self.seg % P['session_every'] == 0:
             self.council()
         self.promise_tick()
+        self.leash_tick()
         self.meters()
         self.check_end()
 
@@ -393,7 +403,7 @@ class Run:
                 self.stats['strike_conceded'] += 1
 
     # ---- 의회 ----
-    def stance(self, c, law):
+    def stance(self, c, law, repeal=False, grudge=True):
         L = LAWS[law]
         axes, mats, rels = L['axes'], L['mats'], L['rels']
         mat = L['like'].get(c, 0)
@@ -404,7 +414,14 @@ class Run:
         if c in rels:
             mat += -2 if rels[c] <= -15 else -1
         ide = sum(a * b for a, b in zip(axes, IDEO[c]))
-        return mat + ide + band(self.rel[c]), ide
+        if repeal:  # 폐지는 그 법의 반대 방향으로 셈한다. 열차장과의 관계는 그대로
+            mat, ide = -mat, -ide
+        score = mat + ide + band(self.rel[c])
+        if grudge and self.grudge[c] >= P['hostile_grudge']:
+            score = min(score, -3)  # 적대 표: 사상이 같아도 열차장의 안건엔 반대한다
+        elif grudge and self.grudge[c] >= 1:
+            score -= 1
+        return score, ide
 
     def split(self, score):
         if score >= 3: return 0.8, 0.2, 0.0
@@ -413,10 +430,10 @@ class Run:
         if score >= -2: return 0.1, 0.5, 0.4
         return 0.0, 0.2, 0.8
 
-    def blocs(self, law):
+    def blocs(self, law, repeal=False):
         out = {}
         for c in COMMS:
-            score, ide = self.stance(c, law)
+            score, ide = self.stance(c, law, repeal)
             y, u, n = self.split(score)
             s = SEATS[c]
             yes = round(s * y); no = round(s * n); und = s - yes - no
@@ -428,60 +445,138 @@ class Run:
 
     def council(self):
         self.session += 1
-        open_laws = [l for l, v in LAWS.items() if l not in self.passed and v['open'](self)
-                     and not (l in CORPSE and self.corpse)]
-        if not open_laws:
+        if self.session % 2 == 0: self.secrets += 1  # 밀고·필드 문서에서 비밀이 온다(대략)
+        for c in COMMS:  # 적의는 새 잘못 없이 2회기가 지나면 하나 준다
+            if self.grudge[c] and self.session - self.last_offense[c] >= P['grudge_decay']:
+                self.grudge[c] -= 1; self.last_offense[c] = self.session
+        self.stats['hostile_blocs'] += sum(1 for c in COMMS if self.grudge[c] >= P['hostile_grudge'])
+        cool = P['repeal_cool']
+        options = [(l, False) for l, v in LAWS.items() if l not in self.passed and v['open'](self)
+                   and not (l in CORPSE and self.corpse) and self.session - self.repealed_at.get(l, -99) > cool]
+        if P['repeal'] and self.policy not in ('passive', 'idealist'):
+            options += [(l, True) for l in self.passed if self.session - self.passed_at[l] >= cool]
+        if not options:
             return
         crisis = [k for k, lim in (('coal', P['crisis_line']), ('food', P['crisis_line'])) if getattr(self, k) < lim]
         if self.corpse_issue: crisis.append('corpse')
         if self.med <= 3 and self.injured >= 4: crisis.append('med')
-        forced = [l for l in open_laws if set(LAWS[l]['crisis']) & set(crisis)] if P['forced_agenda'] else []
+        forced = [o for o in options if (set(LAWS[o[0]]['crisis']) & set(crisis) if not o[1]
+                                         else set(self.drains(o[0])) & set(crisis))] if P['forced_agenda'] else []
         if forced:
-            # 위기가 안건을 정한다. 플레이어는 위기 법 가운데서만 고른다
+            # 위기가 안건을 정한다. 위기 법이나, 그 자원을 먹는 법의 폐지만 올릴 수 있다
             self.stats['forced'] += 1
-            open_laws = forced
+            options = forced
         if self.policy == 'passive' or self.random_laws:
-            law = self.r.choice(open_laws)
+            law, repeal = self.r.choice(options)
         elif self.policy == 'idealist':
-            law = max(open_laws, key=lambda l: self.law_ease(l) + self.r.random())
+            law, repeal = max(options, key=lambda o: self.law_ease(o[0]) + self.r.random())
         else:
-            law = max(open_laws, key=lambda l: self.law_value(l) + self.r.random() * 0.5)
-        self.stats['prop_' + law] += 1
+            law, repeal = max(options, key=lambda o: self.law_value(o[0], o[1]) + self.r.random() * 0.5)
+        self.stats[('rprop_' if repeal else 'prop_') + law] += 1
         kind = LAWS[law]['kind']
         need = 51 if kind == 'normal' else 67
-        blocs = self.blocs(law)
+        blocs = self.blocs(law, repeal)
         if 'guided_voting' in self.passed and self.stats['guided_left'] > 0:
-            for b in blocs.values():
-                moved = round(b['und'] * 0.3); b['yes'] += moved; b['und'] -= moved
+            for bl in blocs.values():
+                moved = round(bl['und'] * 0.3); bl['yes'] += moved; bl['und'] -= moved
             for c in COMMS: self.rel[c] -= 3
             self.fear += 3
             self.stats['guided_left'] -= 1
         exp0 = self.expected(blocs)
         self.stats['proposals'] += 1
+        if repeal: self.stats['repeal_proposals'] += 1
         if exp0 >= need:
             self.stats['easy_laws'] += 1
-        deals = 0
-        if self.policy in ('caretaker', 'idealist') and exp0 < need + 3:
-            for c in self.negotiate(blocs, need):
+        deals = []
+        if self.policy in ('caretaker', 'idealist', 'schemer') and exp0 < need + 3:
+            deals = self.negotiate(blocs, need)
+            for c in deals:
                 self.promises.append((c, self.seg + 3, self.r.choice(['lever', 'medicine', 'luxury', 'target'])))
-                deals += 1
-        self.stats['deals'] += deals
-        yes = sum(b['yes'] for b in blocs.values())
-        for b in blocs.values():
-            p = clamp(0.5 + 0.1 * b['score'], 0.2, 0.8)
-            yes += sum(1 for _ in range(b['und']) if self.r.random() < p)
-        if yes >= need:
-            self.passed.add(law)
-            self.apply_law(law)
-            self.stats['passed'] += 1
-            self.stats['pass_' + law] += 1
-            if law in HARSH: self.stats['harsh_passed'] += 1
-            if law in IDEAL: self.stats['ideal_passed'] += 1
-            if forced: self.stats['forced_passed'] += 1
-            if deals and exp0 < need: self.stats['bought_laws'] += 1
-        else:
+        self.stats['deals'] += len(deals)
+        if self.policy == 'schemer':
+            self.blackmail(blocs, need, deals)
+        yes = sum(bl['yes'] for bl in blocs.values())
+        for bl in blocs.values():
+            p = clamp(0.5 + 0.1 * bl['score'], 0.2, 0.8)
+            yes += sum(1 for _ in range(bl['und']) if self.r.random() < p)
+        if yes < need:
             self.stats['failed'] += 1
-            # 부결돼도 약속은 남는다. 그 집단은 약속대로 찬성했다(우리가 정한 규칙)
+            return  # 부결돼도 약속은 남는다. 그 집단은 약속대로 찬성했다(우리가 정한 규칙)
+        if forced: self.stats['forced_passed'] += 1
+        if deals and exp0 < need: self.stats['bought_laws'] += 1
+        if repeal:
+            self.repeal_law(law)
+            return
+        self.passed.add(law)
+        self.passed_at[law] = self.session
+        if deals: self.bought_by[law] = (set(deals), self.session)
+        self.apply_law(law)
+        self.stats['passed'] += 1
+        self.stats['pass_' + law] += 1
+        if law in HARSH: self.stats['harsh_passed'] += 1
+        if law in IDEAL: self.stats['ideal_passed'] += 1
+
+    def leash_tick(self):
+        keep = []
+        for c, since in self.leashes:
+            if self.r.random() < self.grudge[c] * 2 * 0.04:  # 원한 × 비밀 무게(보통 2) × 4%
+                self.rel[c] = clamp(self.rel[c] - (self.seg - since) * 3, -100, 100)
+                self.trust -= 5
+                self.stats['leash_snapped'] += 1
+            else:
+                keep.append([c, since])
+        self.leashes = keep
+
+    def blackmail(self, blocs, need, deals):
+        """협박: 비밀 하나로 대표가 집단 전체를 끌고 온다(결속도 1.0). 대가는 적의다."""
+        for c in sorted(COMMS, key=lambda c: -SEATS[c]):
+            if self.expected(blocs) >= need + 3 or self.secrets < 1:
+                break
+            bl = blocs[c]
+            if c in deals or bl['no'] + bl['und'] == 0:
+                continue
+            if self.grudge[c] >= P['hostile_grudge']:
+                continue  # 열차장을 미워하는 집단은 협박당한 대표를 따르지 않는다(대표 한 표뿐이라 쓰지 않는다)
+            # 대표가 끌고 오는 몫: blackmail_pull=1이면 집단 전체(브리프 3.1), 아니면 결속도만큼
+            pull = 1.0 if P['blackmail_pull'] else COH0[c]
+            moved_n = round(bl['no'] * pull); moved_u = round(bl['und'] * pull)
+            bl['yes'] += moved_n + moved_u; bl['no'] -= moved_n; bl['und'] -= moved_u
+            self.secrets -= 1
+            self.leashes.append([c, self.seg])
+            self.offend(c)
+            self.blackmails += 1
+            self.stats['blackmail'] += 1
+            if self.blackmails % P['blackmail_reputation'] == 0:  # 협박이 잦으면 열차 전체가 안다
+                for o in COMMS:
+                    self.offend(o)
+                self.stats['blackmail_known'] += 1
+
+    def drains(self, law):
+        """법이 먹는 자원. 위기 때 폐지 안건이 될 수 있다."""
+        r = LAWS[law]['res']; out = []
+        if r.get('ration_floor') or r.get('food_add', 0) > 0: out.append('food')
+        if r.get('heat_floor') or r.get('coal_add', 0) > 0: out.append('coal')
+        if r.get('med_mult', 1) > 1: out.append('med')
+        return out
+
+    def repeal_law(self, law):
+        L = LAWS[law]
+        supporters = [c for c in COMMS if self.stance(c, law, grudge=False)[0] >= 3]
+        self.passed.discard(law)
+        self.repealed_at[law] = self.session
+        for c, delta in L['mats'].items():
+            for i in range(4):
+                self.base[c][i] -= delta[i]
+        for c in supporters:  # 좋아하던 법을 빼앗긴 쪽
+            self.rel[c] = clamp(self.rel[c] - P['repeal_rel'], -100, 100)
+        bought = self.bought_by.pop(law, None)
+        if bought and self.session - bought[1] <= 3:  # 약속으로 통과시킨 법을 곧바로 뒤집으면 배신이다
+            for c in bought[0]:
+                self.offend(c); self.stats['repeal_betrayal'] += 1
+        if law in CORPSE:
+            self.corpse_issue = True
+        self.stats['repealed'] += 1
+        self.stats['repeal_' + law] += 1
 
     def negotiate(self, blocs, need, max_deals=3):
         """공개 협상. 미정 전부와 반대의 20%를 찬성으로 옮긴다. blocs를 바꾸고 거래한 공동체를 돌려준다."""
@@ -492,7 +587,8 @@ class Run:
             if self.expected(blocs) >= need + 3 or len(done) >= max_deals:
                 break
             b = blocs[c]
-            if c in open_promise or self.rel[c] <= -40 or b['ide'] <= -3 or b['und'] + b['no'] == 0:
+            if (c in open_promise or self.rel[c] <= -40 or b['ide'] <= -3 or b['und'] + b['no'] == 0
+                    or self.grudge[c] >= P['hostile_grudge']):
                 self.stats['closed_negotiation'] += 1
                 continue
             moved = round(b['no'] * 0.2)
@@ -519,20 +615,35 @@ class Run:
         w += r.get('food_once', 0) + r.get('heal', 0.4) * 10 - 4
         return w
 
-    def law_value(self, law):
+    def repeal_worth(self, law):
+        """폐지로 남은 구간에 아끼는 자원(레버 바닥은 보통 2로 돌아간다고 친다)."""
+        r = LAWS[law]['res']; left = P['segments'] - self.seg
+        w = r.get('coal_add', 0) * left + r.get('food_add', 0) * left
+        for c in COMMS:
+            w += max(0, r.get('ration_floor', 0) - 2) * self.pop[c] * P['food_per_person_lever'] * left
+            w += max(0, r.get('heat_floor', 0) - 2) * self.pop[c] / 40 * P['coal_heat_per_lever'] * left
+        w += (r.get('med_mult', 1) - 1) * self.injured * P['med_per_injured'] * left * 2
+        w -= (r.get('haul_mult', 1) - 1) * P['haul_total'] * 0.8 * left
+        heat = self.heat_cost()
+        food = sum(self.pop[c] * self.ration[c] for c in COMMS) * P['food_per_person_lever']
+        w -= heat * (1 - r.get('heat_mult', 1)) * left + food * (1 - r.get('food_mult', 1)) * left
+        return w - P['repeal_rel'] / 2  # 지지층을 잃는 값
+
+    def law_value(self, law, repeal=False):
         """생존을 따지는 정책: 자원이 빠듯할수록 자원 효과를 무겁게 본다."""
         tight = clamp((P['plan_line'] - min(self.coal, self.food)) / 60, 0.5, 1.5)
-        ease = self.law_ease(law)
+        ease = sum(self.stance(c, law, repeal)[0] * SEATS[c] for c in COMMS) / 10
         need = 51 if LAWS[law]['kind'] == 'normal' else 67
-        blocs = self.blocs(law)
+        blocs = self.blocs(law, repeal)
         exp = self.expected(blocs)
-        if exp < need and self.policy == 'caretaker':
+        if exp < need and self.policy in ('caretaker', 'schemer'):
             stats = self.stats.copy()
             self.negotiate(blocs, need)
             self.stats = stats
             exp = self.expected(blocs)
         reach = 1.0 if exp >= need else 0.1
-        return (self.law_worth(law) * tight + ease) * reach
+        worth = self.repeal_worth(law) if repeal else self.law_worth(law)
+        return (worth * tight + ease) * reach
 
     def promise_tick(self):
         keep = []
@@ -555,6 +666,7 @@ class Run:
                 ok = self.r.random() < P['target_keep']  # 다음 정차를 그 집단 뜻대로
             if ok:
                 self.trust += 4; self.rel[c] += 5; self.stats['kept'] += 1
+                if self.grudge[c] == 1: self.grudge[c] = 0  # 적의 1은 지킨 약속 하나로 풀린다
             else:
                 self.break_promise(p)
         self.promises = keep
@@ -566,6 +678,11 @@ class Run:
         self.fervor[c] = min(3, self.fervor[c] + 1)
         self.tension += 3
         self.stats['broken'] += 1
+        self.offend(c)
+
+    def offend(self, c):
+        self.grudge[c] = min(3, self.grudge[c] + 1)
+        self.last_offense[c] = self.session
 
     # ---- 계기 ----
     def meters(self):
@@ -677,7 +794,8 @@ def summarize(policy, n, places):
             'passed', 'deals', 'closed_negotiation', 'kept', 'broken', 'passed_stops',
             'target_coal', 'target_food', 'target_medicine', 'shift_relief', 'strike_conceded', 'fervor3',
             'forced', 'forced_passed', 'bought_laws', 'harsh_passed', 'ideal_passed', 'law_coal', 'law_food',
-            'rescued', 'rescue_refused', 'rescue_declined', 'cold_car_outbreak']
+            'rescued', 'rescue_refused', 'rescue_declined', 'cold_car_outbreak',
+            'repeal_proposals', 'repealed', 'repeal_betrayal', 'hostile_blocs', 'blackmail', 'blackmail_known', 'leash_snapped']
     print('평균:', ', '.join(f'{k} {agg[k] / n:.1f}' for k in keys))
     if agg['proposals']:
         print(f"거래 없이도 통과할 법(기댓값 기준): {agg['easy_laws'] / agg['proposals']:.0%}, "
@@ -695,7 +813,7 @@ def main():
             k, v = kv.split('=')
             P[k] = type(P[k])(float(v)) if isinstance(P[k], float) else int(v)
     places = load_places()
-    for policy in ('passive', 'idealist', 'nodeal', 'caretaker', 'caretaker_random'):
+    for policy in ('passive', 'idealist', 'nodeal', 'caretaker', 'schemer', 'caretaker_random'):
         summarize(policy, n, places)
 
 
