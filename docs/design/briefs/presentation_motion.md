@@ -540,7 +540,7 @@ Pro 조사(PR 12·21, ui_motion)는 Unity 도구를 골랐다. 엔진이 Godot 4
 | 먼지·잔입자 | ParticleEffectForUGUI | GPUParticles2D(폰에서 문제면 CPUParticles2D) |
 | 일시정지 중 메뉴 | unscaled time 확인 | 메뉴 노드 `process_mode = ALWAYS`, 게임은 `get_tree().paused` |
 | 낡아 가는 UI | — | StyleBoxTexture·NinePatchRect 판 + 단계별 덧칠 마스크를 셰이더 uniform으로 |
-| 한글 글꼴 | TextMeshPro 동적 아틀라스 | 동적 글꼴(MSDF 켜기)으로 Barlow Condensed와 IBM Plex Sans KR |
+| 한글 글꼴 | TextMeshPro 동적 아틀라스 | 동적 글꼴(MSDF 켜기)으로 Barlow Condensed와 IBM Plex Sans KR(둘 다 OFL 1.1, rights_ledger.md 2장). 한글을 추린 서브셋 파일은 예약 이름 때문에 파일·글꼴 이름에 'Plex'를 쓰지 않는다 |
 | 소리 층 | AudioMixer snapshot | Audio Bus 배치와 버스 효과, AudioStreamPlayer 우선순위 |
 
 정치 화면은 S3 전까지 웹(TypeScript)에서 만들므로, 그 사이 번짐 시험은 웹 캔버스로 하고(비교 데모와 같은 방식) 같은 공식을 Godot 셰이더로 옮긴다.
@@ -590,11 +590,11 @@ Pro 조사(PR 12·21, ui_motion)는 Unity 도구를 골랐다. 엔진이 Godot 4
 - **도구**: Godot 내장 의사 현지화(r8 5)를 쓴다. 글자 늘이기, 악센트 바꾸기, 앞뒤 표시를 켜면 번역 전에도 잘림과 하드코딩된 글이 드러난다. 정치 화면이 웹(TS)에 있는 S3 전까지는 같은 일을 웹 빌드에 작은 함수로 붙여 본다(글자를 늘리고 ą ł ř ß Ż 같은 글자로 바꿈).
 - **볼 곳**: 법안 이름과 설명, 결정 카드 선택지(행동 줄, 대사 줄), 객차 이름, 공동체 쐐기 이름, 일지 한 줄, 해석 말 넷, HUD 숫자 옆 단위.
 - **규칙**: 필수 정보에는 말줄임표(…)를 쓰지 않는다. 버튼과 카드 글상자는 폭 고정 대신 두 줄까지 늘고, 그래도 넘치면 글자를 정한 최소 크기까지만 줄인다. 그보다 길면 그 언어의 문장을 고친다(번역 요청으로 되돌림).
-- **악센트 높이**: 대문자 위 악센트(Ż, Ř, Ü)가 줄 간격에 잘리지 않는지 본다. 글꼴이 폴란드어·체코어 글자를 다 가지고 있는지도 같이 본다. 후보 글꼴 Barlow Condensed와 IBM Plex Sans KR이 라틴 확장 글자를 다 덮는지는 **확인 필요**다.
+- **악센트 높이**: 대문자 위 악센트(Ż, Ř, Ü)가 줄 간격에 잘리지 않는지 본다. 글꼴이 폴란드어·체코어 글자를 다 가지고 있는지도 같이 본다. 후보 글꼴 Barlow Condensed와 IBM Plex Sans KR이 라틴 확장 글자를 다 덮는지는 **확인 필요**다. 글꼴을 정하면 rights_ledger.md 2장의 후보 줄을 1장으로 옮긴다.
 - **글 쓰는 쪽과 묶기**: 이름 있는 자리표시자(사람 이름, 법 이름, 수량), 문맥 설명, 복수형 처리는 사건 데이터 규격에서 정한다(r8 2절 4, 정치·이야기 스레드 몫). 이 절은 화면에서 잘리지 않는지만 본다.
 - 군중 외침은 번역하지 않고, 의장 '정숙!' 자막만 번역한다(sound_music.md '외침의 언어').
 
-글꼴을 정하면 출처, 라이선스, 구매 증빙, 홍보물 사용 범위를 사운드 문서 11장 권리 장부에 같이 적는다.
+권리 기록은 docs/design/rights_ledger.md 한 곳에 둔다(글꼴, 그림·3D 모두).
 
 ## 9. 하지 않을 것
 

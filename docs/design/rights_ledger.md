@@ -79,4 +79,24 @@ AI로 만든 음악과 그림은 줄마다 'AI 생성'을 적는다. 사람이 �
 
 ## 4. 그림·3D
 
-화면 스레드와 3D 스레드가 위와 같은 칸으로 채운다. 렌더 시안은 바탕화면에만 두고 빌드에 넣지 않으므로 지금은 줄이 없다.
+화면 스레드와 3D 스레드가 위와 같은 칸으로 채운다. 렌더 시안은 바탕화면에만 두고 빌드에 넣지 않으므로 지금은 1장 줄이 없다.
+
+### 후보: 화면(UI 재질, 조짐 흔적, 성에) (2026-10-07 화면 스레드, Pro 수집 r5)
+
+| 자산 | 종류 | 출처 | 라이선스 | 조건 | 홍보 |
+|---|---|---|---|---|---|
+| Paper 001 | 그림(종이 재질) | [ambientCG](https://ambientcg.com/view?id=Paper001) | CC0 (r5 30, 표기만 확인) | 표시 의무 없음. 크레딧에는 넣는다. 법안·카드 종이 바탕(presentation_motion.md 3절) | 가능 |
+| Snow-Covered Surface 셰이더 | 코드 | [godotshaders.com](https://godotshaders.com/shader/snow-covered-surface/) | 코드만 CC0 (r5 22) | 시연 그림·영상·에셋은 포함 안 됨. 3D 스레드와 같이 씀 | 가능 |
+| 눈·모래 위 바퀴 자국 셰이더 | 코드 | [godotshaders.com](https://godotshaders.com/shader/car-tracks-on-snow-or-sand-using-viewport-textures-and-particles/) | 코드만 MIT (r5 37) | MIT 고지를 넣는다. 지금 방향은 이 방식 대신 찍는 조각(8b절)이라 쓸지 미정 | 가능 |
+| Bloody Pool 셰이더 | 코드 | [godotshaders.com](https://godotshaders.com/shader/bloody-pool-smooth-blood-trail/) | 코드만 MIT (r5 39) | MIT 고지. 폰 비용 확인 전엔 쓰지 않는다 | 가능 |
+
+### 레퍼런스로만 보는 것 (빌드·홍보에 넣지 않음)
+
+줄을 만들지 않고 규칙만 적는다. 아래는 보고 형태만 따는 자료라 파일을 빌드나 스토어 페이지에 넣지 않는다.
+- 박물관 사진 중 CC BY-NC-SA(r5 10~12 드레스덴 교통박물관, 31·32 Science Museum Group 압력계): 비상업 조건이라 상업 게임에 못 넣는다.
+- 구간 배경 사진(segment_backdrops_20261007.md 표, Commons CC BY·BY-SA 등): 바탕화면 `구간배경_20261007ef\`에서 사람이 비교만 한다. 이미지 모델에 첨부하지 않는다.
+- 다른 게임의 화면·아트북·제작기(프로스트펑크 2 등): 구성 원리만 본다.
+
+### AI 생성 렌더 시안
+
+C·B·M 렌더 시안(concept_renders, segment_backdrops, 바깥 눈 점검 주문)은 아스트라 울트라 등으로 만든 AI 생성물이고 바탕화면에만 있다. 스토어 페이지, 트레일러, 홍보 스크린샷에 시안을 쓰려면 그 전에 이 장에 줄을 만들고 만든 도구, 요금제, 만든 날, 사람이 손본 내역을 적는다. 기본값은 홍보에 시안을 쓰지 않고 실제 게임 화면을 쓰는 것이다.
