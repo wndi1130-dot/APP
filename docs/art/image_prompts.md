@@ -195,6 +195,8 @@ A sprite sheet of four pixel-art UI icons in a 2 by 2 grid on a transparent back
 
 ## 폰트
 
+**2026-10-07 정정:** UI가 매끈한 두 재질로 정해져(decisions.md 열린 질문 10) 아래의 갈무리 추천은 쓰지 않는다. 매끈한 폰트 쪽(Barlow Condensed, IBM Plex Sans KR 같은 계열)으로 가고, 어느 폰트를 쓸지는 아직 정하지 않았다. 아래는 2026-10-06 픽셀 시안 때의 기록이다.
+
 픽셀 아트로 바뀌어서 1차에 찾은 프로스트펑크 2의 폰트(Barlow Condensed, Crimson Pro, Cormorant Garamond, [Game Font Library](https://www.gamefontlibrary.com/games/frostpunk-2) 기준, 미확인)는 화면과 어울리지 않는다. 매끈한 글자가 픽셀 그림 위에 뜨면 따로 노는 것처럼 보인다.
 
 | 쓰임 | 추천 | 비고 |
