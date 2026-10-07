@@ -56,6 +56,7 @@
 | 짐 싣기 재료: 눈 발소리 559459, 석탄 넣기 386143, 증기기관차 대기·기적 686057 | [559459](https://freesound.org/people/mshahen/sounds/559459/), [386143](https://freesound.org/people/ldezem/sounds/386143/), [686057](https://freesound.org/people/relwin/sounds/686057/) | CC0 (r11, 청취 안 함) | 386143은 화덕 녹음이라 기관차 소리로 단정하지 않는다 | 가능 |
 | 자루 내려놓기 458124 | [Freesound](https://freesound.org/people/JonCon_Library/sounds/458124/) | CC BY 4.0 (r11) | 만든 사람, 라이선스 링크, 고친 내역을 크레딧에 적는다 | 가능(표시 조건) |
 | OpenGameArt 100 CC0 SFX | [opengameart.org](https://opengameart.org/content/100-cc0-sfx) | 이 묶음만 CC0 | OpenGameArt의 다른 자료는 조건이 다르다 | 가능 |
+| 망자 신음 재료(S2 회색 상자): Zombies Sound Pack, zombie noises and moans, zombie moans | [OpenGameArt](https://opengameart.org/content/zombies-sound-pack), [ianzazz](https://opengameart.org/content/zombie-noises-and-moans), [Darsycho](https://opengameart.org/content/zombie-moans) | CC0 (2026-10-07 페이지 표기 확인, 청취 안 함) | 표시 의무 없음. 크레딧에는 넣는다. 말이 들리는 파일은 뺀다(sound_music.md 12.1) | 가능 |
 | Mixkit 효과음(군중, 열차) | [Mixkit](https://mixkit.co/free-sound-effects/crowd/), [효과음 약관](https://mixkit.co/license/modal/sfxFree/) | Sound Effects Free License | 상업 게임 가능, 표시 불필요. 원음이나 소재 묶음으로 다시 나눠 주는 것은 금지 | 약관 확인 필요 |
 | ZapSplat | [라이선스 안내](https://www.zapsplat.com/license-type/standard-license/) | 무료형은 MP3·출처 표시, 유료형은 WAV·무표기 | 기본 1인 라이선스 | 형에 따라 |
 | BBC Sound Effects | [안내](https://blog.prosoundeffects.com/how-to-license-bbc-sound-effects-to-use-in-your-commercial-productions) | 상업 이용은 유료 허가 | 쓰려면 사용자에게 묻는다 | 허가 범위 |
