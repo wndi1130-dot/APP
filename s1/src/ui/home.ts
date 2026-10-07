@@ -2,9 +2,11 @@ import { COMM_NAME, P, isSessionSeg, relStage, situation, viewCard } from '../ga
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
-import { CARS, fmt } from './common';
+import { fmt } from './common';
 import type { CarDef, View } from './common';
 import { bar, lever } from './widgets';
+// S1c 내정 훅(ui/domestic.ts). S1a 판이면 모두 null이나 CARS를 돌려준다.
+import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, trainCars } from './domestic';
 
 // 홈: 옆에서 본 열차 단면. 화면보다 길어서 좌우로 스크롤한다. 칸 문 위 명판으로 칸을 구별한다.
 // 칸의 수치와 조절은 칸을 누르면 뜨는 작은 창에만 있다. 그림은 회색 상자 수준의 자리표시다.
@@ -43,7 +45,7 @@ function carEl(view: View, car: CarDef): HTMLElement {
     class: cx('car', `car--${car.kind}`, car.comm && `c-${car.comm}`, sit && warmthTone(sit[0]), ui.carPop === car.id && 'is-open', session && 'is-session', striking && 'is-strike'),
     'data-action': 'car', 'data-car': car.id, 'data-car-id': car.id, 'aria-label': car.name,
   },
-    car.plate ? h('span', { class: 'car__plate' }, car.plate) : null,
+    domPlate(g, car) ?? (car.plate ? h('span', { class: 'car__plate' }, car.plate) : null),
     car.kind === 'freight' ? h('span', { class: 'car__door' }) : h('span', { class: 'car__windows' }, h('i'), h('i'), h('i')),
     figures(g, car),
     car.kind === 'loco' ? h('span', { class: 'loco__stack' }, striking ? null : h('i', { class: 'smoke' })) : null,
@@ -52,6 +54,8 @@ function carEl(view: View, car: CarDef): HTMLElement {
 
 function carPopover(view: View, car: CarDef): HTMLElement | null {
   const { g } = view;
+  const dom = domesticPopover(view, car); // S1c 내정 훅
+  if (dom) return dom;
   if (car.kind === 'comm' || car.kind === 'engine') {
     const c = car.comm as Comm;
     const [w, r, cr, ex] = situation(g, c);
@@ -61,13 +65,14 @@ function carPopover(view: View, car: CarDef): HTMLElement | null {
         h('b', null, COMM_NAME[c]),
         h('span', { class: 'num' }, `${s.pop}명`),
         h('span', { class: cx('stage', `stage--${s.rel >= 15 ? 'up' : s.rel <= -15 ? 'down' : 'mid'}`) }, relStage(g, c)),
+        domesticCarTag(view, car), // S1c 내정 훅: 위생·침상
         h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
       h('div', { class: 'carpop__stats' },
         h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
         h('span', null, '배급 ', h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
         h('span', null, '과밀 ', h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
         h('span', null, '노출 ', h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
-      h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration')));
+      h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car)));
   }
   if (car.kind === 'dining') {
     const left = isSessionSeg(g.seg) ? 0 : P.sessionEvery - (g.seg % P.sessionEvery);
@@ -118,12 +123,13 @@ function paperStack(view: View): HTMLElement | null {
 export function homeScreen(view: View): HTMLElement {
   const { g, ui } = view;
   const moving = g.phase === 'travel' && !g.inStrike;
-  const open = CARS.find(c => c.id === ui.carPop);
+  const cars = trainCars(g); // S1c 내정 훅: 칸 순서와 덧붙인 칸
+  const open = cars.find(c => c.id === ui.carPop);
   return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike', ui.braking && 'is-braking') },
     h('div', { class: 'sky' }, h('i', { class: 'layer layer--far' }), h('i', { class: 'layer layer--mid' }), h('i', { class: 'snow' })),
     h('div', { class: 'scroller', 'data-keep-scroll': 'train' },
       h('div', { class: 'train' },
-        CARS.map(car => h('div', { class: 'slot', 'data-slot': car.id },
+        cars.map(car => h('div', { class: 'slot', 'data-slot': car.id },
           open?.id === car.id ? carPopover(view, car) : null,
           carEl(view, car)))),
       h('div', { class: 'rails' })),

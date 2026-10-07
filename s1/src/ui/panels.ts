@@ -8,6 +8,7 @@ import { fmt, signed } from './common';
 import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
+import { domesticEnd, domesticMenu, domesticPanel } from './domestic'; // S1c 내정 훅
 
 // 겹쳐 뜨는 창: 불만·지지 집단 창, 일지, 메뉴, 정산 요약, 디버그, 끝.
 
@@ -66,6 +67,7 @@ function menuPanel(view: View): HTMLElement {
       h('button', { class: 'btn', 'data-action': 'fullscreen' }, document.fullscreenElement ? '전체 화면 끄기' : '전체 화면'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 처음부터'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'new-seed' }, '새 판(새 시드)'),
+      domesticMenu(view),
       h('button', { class: cx('btn btn--ghost', ui.debug && 'is-on'), 'data-action': 'toggle-debug' }, ui.debug ? '숨은 수치 끄기' : '숨은 수치 보기(테스트용)')));
 }
 
@@ -108,6 +110,7 @@ export function overlay(view: View): HTMLElement | null {
   if (ui.panel === 'journal') return journalPanel(view);
   if (ui.panel === 'menu') return menuPanel(view);
   if (ui.panel === 'settle') return settlePanel(view);
+  if (ui.panel === 'dom') return domesticPanel(view);
   return null;
 }
 
@@ -129,6 +132,7 @@ export function endScreen(view: View): HTMLElement {
       h('b', { class: 'end__title' }, END_TITLE[g.end ?? 'complete']),
       h('p', { class: 'sub num' }, `거래 ${st.dealsMade} · 약속 지킴 ${st.promisesKept} · 어김 ${st.promisesBroken} · 가결 ${st.lawsPassed} · 부결 ${st.lawsFailed} · 폐지 ${st.repeals} · 뇌물 ${st.bribes} · 협박 ${st.blackmails} · 죽음 ${g.deaths.length}`)),
     h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))),
+    domesticEnd(view),
     h('div', { class: 'end__actions' },
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 다시'),
       h('button', { class: 'btn', 'data-action': 'new-seed' }, '새 판')));

@@ -1,7 +1,7 @@
 import {
   openConditions,
-  COMMS, advance, autoLeverStatus, callEmergency, castVote, chooseCard, cloneGame, createGame, currentAgenda, cutComm, makeDeal, resolveStop,
-  setAgenda, setAutoLevers, setLever, setStop, supportComm, uniqueAction, viewCard,
+  COMMS, advance, autoLeverStatus, callEmergency, castVote, chooseCard, cloneGame, currentAgenda, cutComm, makeDeal, resolveStop,
+  setAgenda, setAutoLevers, setLever, setStop, supportComm, uniqueAction, viewCard, migrateDomestic,
 } from '../game';
 import type { Comm, Game, StayId } from '../game';
 import { cx, h, s } from './dom';
@@ -13,6 +13,9 @@ import { councilScreen, voteLever } from './council';
 import { cardSheet, isLoot } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
 import { beginNames, endNames, personCard, shortText } from './names';
+// S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
+import { changeDomestic, h6Input, h6Render, handleDomestic, newGame, urlWantsS1c } from './domestic';
+import type { DomCtx, H6Clock } from './domestic';
 
 // 화면 조립과 입력. 상태가 바뀌면 통째로 다시 그리고, 스크롤 위치와 연결선은 그린 뒤에 되살린다.
 // 저장은 한 칸이고 행동마다 저절로 한다(되돌리기 없음, S1 기획서 2장).
@@ -32,6 +35,7 @@ function load(): Game | null {
     g.emergencyCalls ??= [];
     g.hunger ??= 0;
     g.linesSeen ??= [];
+    migrateDomestic(g);
     return g;
   } catch {
     return null;
@@ -137,13 +141,15 @@ export function startApp(root: HTMLElement): void {
   // 주소에 ?seed=가 있으면 그 시드로 시작한다(같은 판을 다시 볼 때, 스크린샷).
   const urlSeed = new URLSearchParams(globalThis.location?.search ?? '').get('seed');
   const saved = load();
-  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) ? saved : createGame(urlSeed || randomSeed());
+  const wantS1c = urlWantsS1c(); // S1c 내정 훅
+  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) ? saved : newGame(urlSeed || randomSeed(), wantS1c);
   let ui: Ui = freshUi();
   if (g.phase === 'council') ui.screen = 'council';
   const scroll: Record<string, number> = {};
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   let countTimer: ReturnType<typeof setInterval> | undefined;
   let focusCar: string | null = null;
+  const h6: H6Clock = { since: 0, seg: null }; // S1c 내정 훅: 내정 시간 재기
 
   function render(): void {
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) scroll[el.dataset.keepScroll ?? ''] = el.scrollLeft || el.scrollTop;
@@ -175,6 +181,7 @@ export function startApp(root: HTMLElement): void {
       }
       focusCar = null;
     }
+    h6Render(g, ui, h6, Date.now()); // S1c 내정 훅
     requestAnimationFrame(() => drawLinks(root));
   }
 
@@ -378,13 +385,13 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'restart':
-        g = createGame(g.seed);
+        g = newGame(g.seed, !!g.dom);
         ui = freshUi();
         save(g);
         toast(`같은 시드(${g.seed})로 처음부터.`);
         return render();
       case 'new-seed':
-        g = createGame(randomSeed());
+        g = newGame(randomSeed(), !!g.dom);
         ui = freshUi();
         save(g);
         toast(`새 판: 시드 ${g.seed}.`);
@@ -404,20 +411,29 @@ export function startApp(root: HTMLElement): void {
         ui.panel = null;
         return render();
       default:
+        handleDomestic(action, data, domCtx); // S1c 내정 훅
         return;
     }
   }
+
+  const domCtx: DomCtx = {
+    game: () => g, ui: () => ui, act, toast, render,
+    reset(next) { g = next; ui = freshUi(); save(g); },
+  };
 
   root.addEventListener('click', event => {
     const target = (event.target as Element | null)?.closest<HTMLElement | SVGElement>('[data-action]');
     if (!target || !root.contains(target)) return;
     if ((target as HTMLButtonElement).disabled) return;
+    h6Input(g, h6, Date.now(), target.dataset.action ?? ''); // S1c 내정 훅
     handle(target.dataset.action ?? '', target.dataset);
   });
 
   // 끌던 중에 다시 그리면 손잡이를 놓치므로 손을 뗐을 때(change) 반영한다.
   root.addEventListener('change', event => {
     const el = event.target as HTMLInputElement;
+    if (el.dataset.input) h6Input(g, h6, Date.now(), 'lever'); // S1c 내정 훅
+    if (changeDomestic(el, domCtx)) return;
     if (el.dataset.input !== 'lever') return;
     const c = el.dataset.comm as Comm;
     const which = el.dataset.which as 'heat' | 'ration';
