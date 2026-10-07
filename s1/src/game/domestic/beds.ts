@@ -4,13 +4,14 @@ import { D } from './data';
 // 의무칸 침상의 셈만 둔다(4.1, 4.6). 처지 보정(sit.ts)과 침상 규칙(medbay.ts)이 같이 읽는다.
 // state.ts를 부르지 않는다: refreshSit ↔ 침상 규칙 사이의 실행 시 import 순환을 끊으려고 따로 뺐다.
 
-export function typhusPatients(g: Game): number {
-  return (g.dom?.typhus ?? []).reduce((s, t) => s + t.patients.length, 0);
+/** 침상을 쓰는 열병 환자. '따로 눕힌' 환자는 제 칸 끝에서 앓아 침상에 들지 않는다(16.5, J10 2번). */
+export function typhusInBeds(g: Game): number {
+  return (g.dom?.typhus ?? []).filter(t => !t.apart).reduce((s, t) => s + t.patients.length, 0);
 }
 
 /** 눕힐 사람. '다친 사람 먼저'면 병자는 제 칸에서 앓아 침상을 쓰지 않는다. */
 export function bedNeed(g: Game): number {
-  const sick = g.dom?.bedOrder === 'workers' ? 0 : typhusPatients(g);
+  const sick = g.dom?.bedOrder === 'workers' ? 0 : typhusInBeds(g);
   return Math.max(0, g.injured) + sick;
 }
 

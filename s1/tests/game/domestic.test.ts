@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
   DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hotWaterShare, hygiene, hygieneScore, hygieneTick, situation, LAWS, hygieneWhy, resolveTyphus, startTyphus, WASH_NAME, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
-  chooseCard, coldCap, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
+  advance, bedOverflow, P, chooseCard, coldCap, openCouncil, resolveStop, takeAltPlace, PLACES, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
-import type { Card, Game } from '../../src/game';
+import type { Card, Game, TechId } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
 
 // S1c 내정(s1c_domestic.md 개정판)의 규칙 확인. 숫자는 제안이라 값보다 규칙의 모양을 본다.
@@ -63,8 +63,8 @@ describe('기술', () => {
     for (const p of g.dom!.people) if (p.field === 'craft' && p.skill === 3) p.alive = false;
     expect(secondPath(g, 'r3')).toBe(false);
     expect(knowledgeMult(g, 'radio', 3)).toBe(D.knowledgeLow);
-    g.dom!.techs.r2 = { stage: 'done', defect: false, variant: 'a', progress: 0, need: 0 } as NonNullable<Game['dom']>['techs']['r2'];
-    expect(restoreCheck(g, 'r3').full).toContain('공작 장인');
+    g.dom!.techs.x2 = { stage: 'done', defect: false, progress: 0, need: 0 } as NonNullable<Game['dom']>['techs']['x2'];
+    expect(restoreCheck(g, 'x3').full).toContain('공작 장인');
   });
 
   it('싫어하는 쪽이 없는 기술은 관계를 주지 않는다(기획 점검 03)', () => {
@@ -434,5 +434,113 @@ describe('M3 나 얼음 상자(7.3, main facf39c)', () => {
     g.passed.common_kitchen = g.session;
     expect(domesticForecast(g).food).toBeCloseTo(before.food - D.iceBoxFood * techMult(g, 'm3'));
     expect(TECHS.m3.variants!.b.upkeep).toEqual({});
+  });
+});
+
+
+describe('J10 1~4: 값이 틀리거나 효과가 없던 것', () => {
+  const done = (g: Game, id: TechId, variant?: 'a' | 'b') => {
+    g.dom!.techs[id] = { stage: 'done', defect: false, progress: 0, need: 0, ...(variant ? { variant } : {}) } as NonNullable<Game['dom']>['techs'][TechId];
+  };
+  const toStop = (g: Game) => {
+    g.phase = 'prep';
+    g.cards = [];
+    advance(g); g.cards = [];
+    advance(g); g.cards = [];
+    expect(g.phase).toBe('stop');
+  };
+
+  it('1. 이 카드에서 옷을 삶으면 석탄이 정확히 2 준다', () => {
+    const g = fresh();
+    g.dom!.lice.tail = { at: g.seg };
+    g.cards.push({ uid: 900, kind: 'dom:lice', comm: 'tail' } as Card);
+    const view = viewCard(g, g.cards[g.cards.length - 1]);
+    const coal = g.coal;
+    expect(chooseCard(g, 900, view.choices.findIndex(c => c.label === '옷을 삶는다'))).toBe(true);
+    expect(coal - g.coal).toBe(2);
+    expect(g.dom!.lice.tail).toBeUndefined();
+  });
+
+  it('2. 따로 눕힌 열병 환자는 침상에 들지 않는다', () => {
+    const g = fresh();
+    g.injured = 4;
+    startTyphus(g, 'tail', 4);
+    resolveTyphus(g, 'tail', 'apart');
+    expect(bedNeed(g)).toBe(4);
+    expect(bedOverflow(g)).toBe(0);
+    const h = fresh();
+    h.injured = 4;
+    startTyphus(h, 'tail', 4);
+    resolveTyphus(h, 'tail', 'bay');
+    expect(bedOverflow(h)).toBe(2);
+  });
+
+  it('3. R3은 아직 복원할 수 없다', () => {
+    const g = fresh();
+    done(g, 'r2', 'a');
+    expect(restoreCheck(g, 'r3').full).toBe('아직 이 열차에서 못 쓴다');
+    expect(restoreCheck(g, 'r3').offer).toBe(false);
+  });
+
+  it('3. R2 가(감청): 회기를 열 때 비밀을 들을 수 있다', () => {
+    const g = fresh('r2a');
+    done(g, 'r2', 'a');
+    const keep = D.r2aSecret;
+    D.r2aSecret = 1;
+    try {
+      const before = g.secrets.length;
+      openCouncil(g);
+      expect(g.secrets.length).toBe(before + 1);
+      expect(g.journal.some(l => l.text.includes('무전 감청'))).toBe(true);
+    } finally {
+      D.r2aSecret = keep;
+    }
+  });
+
+  it('3. R2 나(열차 방송): 공포 +1, 긴장 증가가 1 준다', () => {
+    const run = (on: boolean) => {
+      const g = fresh('r2b');
+      if (on) done(g, 'r2', 'b');
+      g.comms.tail.rel = -50;
+      g.fear = 30;
+      g.phase = 'prep';
+      advance(g); g.cards = [];
+      advance(g); g.cards = [];
+      resolveStop(g, false); g.cards = [];
+      while (g.phase !== 'prep' && g.phase !== 'end' && g.phase !== 'council') { advance(g); g.cards = []; }
+      return g;
+    };
+    const off = run(false);
+    const on = run(true);
+    expect(on.fear).toBeGreaterThan(off.fear);
+    expect(on.tension).toBeLessThan(off.tension);
+  });
+
+  it('3. X2(핸드카): 장소 후보가 하나 더 있고, 정찰 전에 한 번 바꾼다', () => {
+    const g = fresh('x2');
+    done(g, 'x2');
+    toStop(g);
+    const alt = g.dom!.altPlace;
+    expect(alt).toBeTruthy();
+    expect(alt).not.toBe(g.stop!.place);
+    takeAltPlace(g);
+    expect(g.stop!.place).toBe(alt);
+    expect(g.dom!.altPlace).toBeNull();
+    const h = fresh('x2');
+    toStop(h);
+    expect(h.dom!.altPlace).toBeNull();
+  });
+
+  it('4. X3(궤도 모터카): 지나쳐도 목표 자원이 무엇이든 그 자원으로 받는다', () => {
+    const g = fresh('x3');
+    done(g, 'x3');
+    toStop(g);
+    g.stop!.target = 'medicine';
+    const med = g.med;
+    const coal = g.coal;
+    resolveStop(g, false);
+    expect(g.med - med).toBe(Math.round(P.haulTotal * 0.6 * 0.5));
+    expect(coal - g.coal).toBeGreaterThanOrEqual(1);
+    expect(PLACES.length).toBeGreaterThan(1);
   });
 });

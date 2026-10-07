@@ -133,7 +133,7 @@ export function hygieneTick(g: Game, notes: string[]): void {
 export function resolveLice(g: Game, c: Comm, pick: 'boil' | 'burn' | 'endure'): void {
   const d = dom(g);
   if (pick === 'boil') {
-    g.coal -= D.boilCoal;
+    // 석탄 2는 카드 효과 줄(coal −boilCoal)이 깎는다. 여기서 또 깎으면 4가 나간다(J10 1번).
     delete d.lice[c];
     (d.liceFree ??= {})[c] = g.seg + D.liceImmune;
     journal(g, `${COMM_NAME[c]} 옷을 솥에 넣어 삶았다.`);

@@ -81,6 +81,8 @@ export const D = {
   typhusRecover: 0.4,
   // '따로 눕힌다'(16.5): 제 칸에 남아 번짐 절반, 약 받아도 25%로만 낫는다(춥고 돌볼 손이 없다)
   typhusRecoverApart: 0.25, typhusSpreadApart: 0.05,
+  // R2 가·나(7.3): 감청 비밀 확률/회기, 방송 긴장 증가 덜기·공포 +/구간
+  r2aSecret: 0.25, r2bTension: 1, r2bFear: 1,
   // 이 카드는 4구간부터(16.3, 16.1 가)
   liceFromSeg: 4,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)

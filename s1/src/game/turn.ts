@@ -17,10 +17,11 @@ import {
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
 import {
-  domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
+  domesticBroadcast, domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
+import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from './dark/hooks';
 import { darkPyreWeight, darkStoredWeight } from './dark/corpses';
@@ -257,7 +258,29 @@ function arriveStop(g: Game): void {
     crewComm: tail ? 'guard' : 'tail', crewSize: 4, threat, done: false, result: null,
   };
   rollStopView(g, g.stop, 1 + P.thrownHorde * g.thrown > 1.2);
+  // 핸드카 정찰(X2): 장소 후보가 하나 더 있다(7.3, J10 3번). X2가 없으면 주사위를 더 굴리지 않는다.
+  if (g.dom) {
+    g.dom.altPlace = null;
+    if (techMult(g, 'x2') > 0) {
+      const others = PLACES.filter(p => p.id !== place.id);
+      g.dom.altPlace = others[Math.floor(rnd(g) * others.length)].id;
+    }
+  }
   g.phase = 'stop';
+}
+
+/** 핸드카가 본 다른 곳으로 간다. 정찰을 보내기 전에 한 번만 고른다(되돌리면 바깥 기척을 다시 뽑게 되니 막는다). */
+export function takeAltPlace(g: Game): void {
+  const stop = g.stop;
+  const alt = g.dom?.altPlace;
+  if (!stop || stop.done || stop.scoutReport || !alt) return;
+  const place = PLACES.find(p => p.id === alt);
+  if (!place) return;
+  g.dom!.altPlace = null;
+  stop.place = place.id;
+  stop.target = suggestTarget(g, place.loot);
+  rollStopView(g, stop, 1 + P.thrownHorde * g.thrown > 1.2);
+  journal(g, `핸드카가 본 ${place.name}에 섰다.`);
 }
 
 export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId; crewComm: Comm; crewSize: number; scout: boolean }>): void {
@@ -433,7 +456,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     * (CREW_HAUL[stop.crewComm] ?? 1);
   const notes: string[] = [];
   const tail = g.comms.tail;
-  if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
+  // 꼬리칸 작업 거부는 꼬리칸이 작업조로 나갈 때만(J11). 다른 칸을 보내면 쉬는 꼬리칸의 거부가 운반량을 깎지 않는다.
+  if (stop.crewComm === 'tail' && tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
   // 상중인 사람은 손이 느리다(사람의 무게 A1).
   const grieving = crewNames(g, stop.crewComm, stop.crewSize).filter(n => mourners(g).includes(n));
   if (grieving.length > 0) { haul *= 1 - 0.1 * grieving.length; notes.push(`${grieving.join(', ')}은(는) 상중이라 손이 느렸다.`); }
@@ -890,9 +914,10 @@ function meters(g: Game): void {
   }
   if (g.food <= 0) inc += 8;
   inc += lawSum(g, 'tensionAdd');
-  g.fear = clamp(g.fear + lawSum(g, 'fearAdd'), 0, 100);
+  const cast = domesticBroadcast(g); // S1c 내정 훅: R2 나 열차 방송
+  g.fear = clamp(g.fear + lawSum(g, 'fearAdd') + cast.fear, 0, 100);
   if (inc <= 0) g.tension -= 2;
-  else g.tension += inc * (1 - g.fear / 200);
+  else g.tension += Math.max(0, inc - cast.tensionCut) * (1 - g.fear / 200);
   g.fear = clamp(g.fear - 1, 0, 100);
   g.tension = clamp(g.tension, 0, 100);
 }

@@ -454,6 +454,7 @@ small { font-size: 12px; }
 .pol--gray { color: var(--ink-3); }
 
 /* 정차 카드 */
+.chip--alt { min-height: 32px; padding: 0 10px; font-size: 13px; align-self: center; }
 .risk { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-3); }
 .risk i { width: 8px; height: 8px; border-radius: 2px; background: var(--surface-3); border: 1px solid var(--line-strong); }
 .risk i.is-on { background: var(--serious); border-color: var(--serious); }

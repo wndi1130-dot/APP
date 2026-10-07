@@ -7,7 +7,7 @@ import { icon } from './icons';
 import type { View } from './common';
 import { portrait } from './widgets';
 import { nameBtn, nameList, shortText } from './names';
-import { domesticStopRows, stayLocked } from './domestic'; // S1c 내정 훅
+import { domesticAltPlace, domesticStopRows, stayLocked } from './domestic'; // S1c 내정 훅
 import { darkCardShown } from './dark'; // S1b H7 훅
 
 // 결정 카드: 홈 왼쪽의 서류 뭉치에서 꺼내 화면 왼쪽 절반에 펼친다. 오른쪽엔 열차가 그대로 보인다.
@@ -49,7 +49,8 @@ function stopCard(view: View): HTMLElement | null {
         h('span', { class: 'kicker' }, `${g.seg}구간 정차`),
         h('div', { class: 'sheet__titleline' },
           h('b', { class: 'sheet__title' }, place.name),
-          h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') })))))),
+          h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') }))),
+          domesticAltPlace(view)))), // S1c 내정 훅: 핸드카 정찰
     scene ? h('p', { class: 'scene' }, scene.outside, ' ', scene.disembark) : null,
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '무엇을'),

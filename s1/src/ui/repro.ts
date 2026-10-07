@@ -1,7 +1,7 @@
 import {
   COMMS, CREW_COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
+  setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
 
@@ -47,6 +47,7 @@ export function applyStep(g: Game, s: Step): string | null {
       else if (d.key === 'crewComm' && (COMMS as readonly string[]).includes(value)) setStop(g, { crewComm: value as Comm });
       else if (d.key === 'crewSize') setStop(g, { crewSize: Number(value) });
       else if (d.key === 'scout') setStop(g, { scout: value === '1' });
+      else if (d.key === 'place' && value === 'alt') takeAltPlace(g);
       return null;
     }
     case 'stop-go': resolveStop(g, d.go === '1'); return null;
