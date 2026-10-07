@@ -217,6 +217,38 @@ class DarkRun(A.Run):
                 keep.append([c, since])
         self.leashes = keep
 
+    def blackmail(self, blocs, need, deals):
+        """D-2: 가혹 법이면 협박당한 대표는 의석 × 결속도 × harsh_pull만 끌고 온다. 나머지는 s1a 그대로."""
+        if not self.s1b or not Q['harsh_pull']:
+            return super().blackmail(blocs, need, deals)
+        law, repeal = (self._last_vote[0], self._last_vote[1]) if self._last_vote else (None, False)
+        harsh = law in HARSH and not repeal
+        for c in sorted(COMMS, key=lambda c: -SEATS[c]):
+            if self.expected(blocs) >= need + 3 or self.secrets < 1:
+                break
+            bl = blocs[c]
+            if c in deals or bl['no'] + bl['und'] == 0:
+                continue
+            if self.grudge[c] >= P['hostile_grudge']:
+                continue
+            if harsh:
+                share = round(SEATS[c] * A.COH0[c] * Q['harsh_pull'])  # 대표가 끌고 오는 표 수
+                moved_n = min(bl['no'], share); moved_u = min(bl['und'], share - moved_n)
+                self.stats['blackmail_harsh'] += 1
+            else:
+                pull = 1.0 if P['blackmail_pull'] else A.COH0[c]
+                moved_n = round(bl['no'] * pull); moved_u = round(bl['und'] * pull)
+            bl['yes'] += moved_n + moved_u; bl['no'] -= moved_n; bl['und'] -= moved_u
+            self.secrets -= 1
+            self.leashes.append([c, self.seg])
+            self.offend(c)
+            self.blackmails += 1
+            self.stats['blackmail'] += 1
+            if self.blackmails % P['blackmail_reputation'] == 0:
+                for o in COMMS:
+                    self.offend(o)
+                self.stats['blackmail_known'] += 1
+
     def check_end(self):
         if not self.s1b or not self.ml:
             return super().check_end()
@@ -948,8 +980,8 @@ class DarkRun(A.Run):
         t, exe = o['target'], o['exe']
         name, mmod, p_exp = o['method']
         p = clamp(Q['order_base'] + o['exe_mod'] + mmod + o['guard_mod'], 0.15, 0.85)
-        if o['why'] == 'silence':
-            self.executors = [x for x in self.executors if x != t] if t in self.executors else self.executors
+        if o['why'] == 'silence' and t in self.executors:
+            self.executors.remove(t)  # 입을 막으면 새 실행자가 또 약점을 쥔다
         self.executors.append(exe)
         if self.r2.random() < p:
             S['assn_succeeded'] += 1
@@ -1274,8 +1306,8 @@ def check(res):
     if 'saint' in res:
         print(f"15.3 saint 완주 {res['saint']['complete']:.0%} ≥ 35% → {'통과' if res['saint']['complete'] >= 0.35 else '실패'}")
     for p, r in res.items():
-        ok = 4 <= r['signs'] <= 8 and 1 <= r['violence'] <= 3 and r['violent_deaths'] <= 2
-        print(f"1.2 {p}: 징후 {r['signs']:.1f}(4~8), 실제 폭력 {r['violence']:.2f}(1~3), 폭력 사망 {r['violent_deaths']:.2f}(≤2)"
+        ok = 5 <= r['signs'] <= 10 and 1 <= r['violence'] <= 3 and r['violent_deaths'] <= 2
+        print(f"1.2 {p}: 징후 {r['signs']:.1f}(5~10), 실제 폭력 {r['violence']:.2f}(1~3), 폭력 사망 {r['violent_deaths']:.2f}(≤2)"
               f" → {'통과' if ok else '실패'}")
 
 
@@ -1313,6 +1345,8 @@ def main():
     places = A.load_places()
     if do_base:
         baseline(n, places)
+    if Q['ep_normal']:
+        LAWS['emergency_powers']['kind'] = 'normal'  # S1b 판에만(기준선 뒤에 바꾼다)
     res = {}
     for p in policies:
         res[p] = report(p, n, places)
