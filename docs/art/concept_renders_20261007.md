@@ -25,6 +25,13 @@
 
 문구를 고칠 때만 여기를 본다. home_v3 톤(사용자가 좋다고 한 분위기)과 2026-10-07 날씨·색 결정을 합쳤다.
 
+2026-10-07 07:50 덧붙임: 아래 두 줄은 앞으로 뽑는 모든 글상자 끝에 붙인다. 이미 나온 C1~C11 글상자에는 없어서 철모와 군용 외투가 섞여 나왔다(끝의 '민감 표식 점검' 절). 3D 모델링 주문서(main 6188d40, 7dd882e)와 같은 선이다.
+
+```text
+Clothing: no armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns, and everyone wears patched civilian layers. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
+Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
+```
+
 ```text
 Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish, believable proportions and worn real materials, simple enough to read on a phone; textures soft and economical rather than crisp up close. Setting: Central Europe in the sixth winter after civilization collapsed and the dead rose. Weather is dark and drab: low heavy clouds, freezing fog, wet sleet or snow squalls; the only warm light comes from lamps, stoves and fire. Cold is shown as pale grey-white frost and blue-grey shadow, never saturated blue; warmth is amber. Colour meanings: red appears only where something is wrong (discontent, shortage zones of gauges, danger warnings); sky blue appears only for political support. People are exhausted civilians in layered patched coats; some have blood soaked into bandages or clothing, but no wounds or gore are drawn. Avoid: pixel art, toy or cartoon proportions, glossy product renders, Victorian ornament, logos, real weapon brand marks, red cross symbols, readable text other than short English placeholder labels.
 ```
@@ -221,3 +228,39 @@ Recreate the attached sheet with the same layout, labels, numbers and icons, wit
 - **C9 정차(v3 확정)**: 승강장에 산 사람이 없고 창마다 얼굴, 먼 끝에 망자 둘, 화물창고로 들어가는 발자국과 끌린 자국이 읽힌다. 창고 입구 어둠 속 웅크린 사람은 지우지 않고 둔다. '창고 안에 뭔가 있다'는 단서라 읽기 박자에 오히려 맞다. v4는 그 사람을 지웠지만 발자국이 눈에 묻혀 '누가 먼저 왔다'가 안 읽힌다. 남은 아쉬움: 먼 망자 둘이 아직 산 사람처럼 곧게 서 있다(실제 장면에선 걸음걸이 동작으로 구별된다).
 - **C11 낡아 가는 UI(v5 확정)**: 0단계가 정말 새것이고, 2단계 얼룩이 아이콘을 비켜 가고, 4단계 계기 유리가 멀쩡하다. 글자·숫자·아이콘 위엔 아무것도 없다. 다만 4단계 피가 이번엔 너무 옅어 거의 안 보인다(v3은 너무 붉었고 v5는 너무 숨었다). 그림은 이걸로 충분하고, 피 마스크의 진하기는 제작 때 조절값으로 맞춘다. v4는 커피 자국이 기관차 아이콘을 감싸서 탈락.
 - 이로써 C1~C11 모두 기준 그림이 정해졌다. 더 뽑을 건 없다.
+
+## 민감 표식 점검 (2026-10-07 07:50)
+
+3D 모델링 스레드가 모델 렌더에서 철모·완장·휘장을 걸러 낸 뒤(main 6188d40, 7dd882e), 같은 눈으로 이 주문서의 기준 그림을 다시 봤다. 기준: europe_setting.md '조심할 것'(사람을 화물칸에 싣는 장면을 흉내 내지 않는다), 철모·완장·별·휘장·실제 군복 없음, 빨간 십자·초승달 없음.
+
+- **C1 필드 v2: 걸림.** 호위조와 소총수 여럿이 2차대전식 철모에 군용 외투와 탄띠 차림이라, 화차 옆 무장 제복 무리로 읽힌다. M7b가 이 그림을 바탕으로 해서 같은 문제가 옮아갔다. 열차는 열린 석탄차와 객차라 괜찮다. → C1 v3 다시.
+- **C3 홈 v4: 걸림.** 꼬리칸 둘이 창 없는 리벳 화차 안에 담요 쓴 사람들이 웅크린 모양이다. 장식이 없어도 이송 열차로 읽힐 수 있다. 그 칸 사람들 일부도 철모 같은 둥근 모자를 썼다. → 3D 스레드 카드의 추천안(꼬리칸은 낡은 3등 객차)대로 C3 v5 다시. 사용자가 '화차 개조 유지'를 고르면 이 판은 버린다.
+- **C9 정차 v3: 작게 걸림.** 사람은 없고 열차는 객차라 괜찮다. 다만 옆 선로의 '문을 사슬로 감은 칸'은 안에 사람이 갇힌 봉인 차량을 떠올리게 한다. 내가 쓴 지시문 탓이다. → 사슬을 빼고 '불탄 객차'만 남긴 C9 v5.
+- **C10 하차 v1·v2: 작게 걸림.** 철모·완장은 없다. 그런데 열차장 모자에 둥근 모표가 있고, 4번 칸 경비가 챙 모자에 가죽 띠, 소총이라 제복 경찰처럼 보인다. → 모표 없는 철도 모자, 경비는 귀덮개 털모자로 바꾼 C10 v3.
+- **C4 한눈에 보기:** 위에서 본 칸이라 화차 모양 문제는 없다. 약 아이콘 하나에 십자 같은 흐린 무늬가 있어 마감 때 민무늬 병으로.
+- **C5:** 기관실 명판의 십자 같은 모양은 1차 평가에 이미 적었다.
+- **C2, C6, C7, C8, C11:** 걸리는 것 없음. C11 열차장 초상의 모표는 C10과 같이 마감 때 뺀다.
+
+### C1 v3 (다시, 첨부: C1_field_v2)
+
+```text
+Recreate the attached image with the same camera, yard, weather, light and HUD, changing only the people and nothing else in the layout. Every person is a ragged civilian survivor in patched layered coats, scarves, knitted caps or fur hats with ear flaps; no steel helmets, no military greatcoats, no ammunition webbing, no uniforms, armbands, badges or insignia. The two escorts are told apart by a hunting rifle, a club and a hand lantern. The wagons stay open coal wagons; no closed freight wagons with people near their doors. No red cross or red crescent anywhere.
+```
+
+### C3 v5 (다시, 첨부: C3_home_v4_v1)
+
+```text
+Recreate the attached image with the same cross-section layout, weather, HUD and car order, with these changes. The two rear cars are old third-class wooden passenger coaches, not freight wagons: a row of small windows along the side, some boarded up with planks, a tarpaulin patch on the roof, a stove pipe. Inside, the same cold, crowded bunks and blankets. Nobody wears a helmet; people wear knitted caps, scarves and fur hats. The background siding shows only open coal wagons or empty passenger coaches, no row of closed freight wagons. No armbands, badges, insignia or red cross.
+```
+
+### C9 v5 (다시, 첨부: C9_stop_v3)
+
+```text
+Recreate the attached image exactly, changing only the old car on the left siding: it is a burnt-out passenger coach with broken and blackened windows and a collapsed roof corner; remove every chain and lock from its doors, and leave its doors hanging open on an empty interior.
+```
+
+### C10 v3 (다시, 첨부: C10_chief_states_v1)
+
+```text
+Recreate the attached four-panel sheet with the same people, poses, door and framing, changing only clothing details. The train chief's peaked railway cap has no badge, emblem or cockade. The armed guard in panel 4 wears a fur hat with ear flaps and a patched civilian coat with a rope belt instead of a peaked cap and leather belt, and holds a hunting rifle. Nobody wears a helmet, armband, badge, star or insignia.
+```
