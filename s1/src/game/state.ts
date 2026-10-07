@@ -159,6 +159,7 @@ export interface Game {
   /** 안건 선택권을 넘긴 집단 */
   agendaHolder: Comm | null;
   cards: Card[];
+  recentEvents: string[];
   nextCardUid: number;
   stop: StopState | null;
   council: CouncilState | null;
@@ -234,9 +235,9 @@ export function addCard(g: Game, card: Omit<Card, 'uid'>): void {
 
 /** 아직 이름이 불리지 않은 사람을 프로필 풀에서 뽑는다. */
 export function drawPerson(g: Game, c: Comm, ages?: [number, number]): Profile {
-  const pool = PROFILES.filter(p => p.community === c && !g.usedProfiles.includes(p.id) && !g.deaths.includes(p.id)
+  const pool = PROFILES.filter(p => p.community === c && !g.usedProfiles.includes(p.id) && !g.deaths.includes(p.name)
     && (!ages || (p.age >= ages[0] && p.age <= ages[1])));
-  const fallback = PROFILES.filter(p => p.community === c && !g.deaths.includes(p.id));
+  const fallback = PROFILES.filter(p => p.community === c && !g.deaths.includes(p.name));
   const person = pick(g, pool.length > 0 ? pool : fallback);
   if (!g.usedProfiles.includes(person.id)) g.usedProfiles.push(person.id);
   return person;
@@ -262,7 +263,7 @@ export function createGame(seed = 's1a'): Game {
     secrets: [], nextSecretId: 1, leashes: [], blackmails: 0, corpseIssue: false, thrown: 0, stored: 0, deaths: [],
     strikes: 0, inStrike: false, strikeWarned: -99, lostSegments: 0, trustCrisis: null, tensionWarned: false,
     tensionCrisisUsed: 0, emergencyUsed: false, guidedLeft: 0, decreeLeft: 0, guardEscort: false, forcedRun: false,
-    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], nextCardUid: 1, stop: null,
+    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], nextCardUid: 1, stop: null,
     council: null, lastSettle: null, journal: [], usedProfiles: [], end: null,
     stats: { dealsMade: 0, promisesKept: 0, promisesBroken: 0, lawsPassed: 0, lawsFailed: 0, repeals: 0, bribes: 0, blackmails: 0 },
   } as Game;
