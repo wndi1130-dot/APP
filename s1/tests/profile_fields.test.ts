@@ -79,3 +79,31 @@ describe('profile body and traits (character_creation 9)', () => {
     expect(issues.some(item => item.path.startsWith(path) && item.code.startsWith('schema.'))).toBe(true);
   });
 });
+
+// 이름 언어(s1b_dark_path 1.4 '거름을 두는 곳'). 값은 프로필 생성기의 Language와 같아야 한다.
+describe('profile name_lang (s1b_dark_path 1.4)', () => {
+  const generator = readFileSync(join(root, 'tools', 'gen_profiles.ts'), 'utf8');
+  const generatorLanguages = () => {
+    const line = generator.match(/^type Language = (.+);$/m);
+    if (!line) throw new Error('gen_profiles.ts에 type Language 줄이 없다');
+    return [...line[1].matchAll(/'([a-z]+)'/g)].map(match => match[1]);
+  };
+
+  it('matches the generator languages and keeps pl·de·cz in it', () => {
+    expect(common.$defs.nameLang.enum).toEqual(generatorLanguages());
+    expect(common.$defs.nameLang.enum).toEqual(expect.arrayContaining(['pl', 'de', 'cz']));
+  });
+
+  it('is optional and accepts every language on profile and character', () => {
+    expect(common.$defs.profileFields.required).not.toContain('name_lang');
+    for (const name_lang of common.$defs.nameLang.enum) {
+      expect(errors({ ...fixture('profile'), name_lang }, 'profile')).toEqual([]);
+      expect(errors({ ...fixture('character'), name_lang }, 'character')).toEqual([]);
+    }
+  });
+
+  it.each(['other', 'PL', 'ru', '', 1])('rejects %j', value => {
+    expect(errors({ ...fixture('profile'), name_lang: value }, 'profile'))
+      .toContainEqual(expect.objectContaining({ path: '/name_lang' }));
+  });
+});
