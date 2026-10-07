@@ -130,7 +130,7 @@ export const LAWS: Record<LawId, LawDef> = {
   child_labor: L({
     id: 'child_labor', title: '아동 노동', group: '노동', tag: '가혹', kind: 'normal', axes: [-1, -1, 0],
     mats: { tail: [0, 0, 0, 10] }, rels: { tail: -5, medtech: -10 }, res: { haulMult: 1.2, fearOnce: 5 }, crisis: ['coal', 'food'],
-    changes: ['정차 산출 +20%', '꼬리칸 노출 +10', '꼬리칸 관계 −5', '의무진 관계 −10', '공포 +5'], opensWhen: '석탄이나 식량 40 이하',
+    changes: ['정차 산출 +20%', '아이들은 열차 옆 승강장에서 짐만 받는다(필드 안엔 안 감)', '꼬리칸 노출 +10', '꼬리칸 관계 −5', '의무진 관계 −10', '공포 +5'], opensWhen: '석탄이나 식량 40 이하',
   }),
   corpse_throw: L({
     id: 'corpse_throw', title: '선로에 버리기', group: '시신', tag: '싼 답', kind: 'normal', axes: [0, -1, -1],
