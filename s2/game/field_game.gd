@@ -285,6 +285,21 @@ func allies_alive() -> Array:
 
 # ---------------------------------------------------------------- loop
 
+func _notification(what: int) -> void:
+	# A call, the home button or a dropped screen stops the field (reference harvest r1, #16).
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		interrupt()
+
+
+func interrupt() -> void:
+	if ended or paused:
+		return
+	paused = true
+	if hud != null:
+		hud.drop_touch()
+		hud.toast("멈췄다. 돌아오면 '계속'을 누른다.")
+
+
 func _process(delta: float) -> void:
 	delta = minf(delta, 0.1)
 	if not ended and not paused:

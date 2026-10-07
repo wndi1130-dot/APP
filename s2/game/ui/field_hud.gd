@@ -19,6 +19,7 @@ const FROST := Color(0.78, 0.88, 0.98)
 const HOLD_TIME: float = 0.35
 const DOUBLE_TAP: float = 0.32
 const DRAG_PX: float = 28.0
+const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go: no shot
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
 const MOAN_R: float = 20.0
@@ -65,6 +66,7 @@ var frame_ms: float = 0.0
 var pressing: bool = false
 var press_pos := Vector2.ZERO
 var press_ms: int = 0
+var aim_cancel: bool = false
 var aiming: bool = false
 var aim_point := Vector3.ZERO
 var aim_target = null
@@ -806,6 +808,9 @@ func _on_touch(event: InputEvent) -> void:
 		else:
 			_release(event.position)
 	elif event is InputEventMouseMotion and pressing and aiming:
+		aim_cancel = _over_player(event.position)
+		if aim_cancel:
+			return
 		aim_point = game.screen_to_ground(event.position)
 		var t = _pick_enemy(aim_point)
 		aim_target = t if t != null else aim_target
@@ -822,6 +827,7 @@ func _press(pos: Vector2) -> void:
 	melee_pending = null
 	melee_holding = false
 	aiming = false
+	aim_cancel = false
 	var p = game.player
 	var world: Vector3 = game.screen_to_ground(pos)
 	var target = _pick_enemy(world)
@@ -844,8 +850,10 @@ func _release(pos: Vector2) -> void:
 	if aiming:
 		aiming = false
 		if p.aim.active:
-			game.combat.fire(p, aim_point, aim_target)
+			if not (aim_cancel or _over_player(pos)):
+				game.combat.fire(p, aim_point, aim_target)
 			p.aim.stop()
+		aim_cancel = false
 		aim_target = null
 		return
 	if melee_pending != null:
@@ -859,6 +867,24 @@ func _release(pos: Vector2) -> void:
 	if pos.distance_to(press_pos) > DRAG_PX:
 		return
 	_tap(pos)
+
+
+func drop_touch() -> void:
+	# The finger that was down when the app lost focus never comes back up.
+	pressing = false
+	aiming = false
+	aim_cancel = false
+	aim_target = null
+	melee_pending = null
+	if melee_holding and game.player != null:
+		game.player.hold_attack = false
+	melee_holding = false
+	if game.player != null:
+		game.player.aim.stop()
+
+
+func _over_player(pos: Vector2) -> bool:
+	return pos.distance_to(_project(game.player.position + Vector3(0, 1.0, 0))) <= AIM_CANCEL_PX
 
 
 func _melee(target, hold: bool) -> void:
@@ -987,6 +1013,12 @@ func _draw_overlay() -> void:
 		var tight: bool = p.aim.deg <= p.aim.floor_deg * 1.05
 		overlay.draw_arc(c, r, 0, TAU, 40, Color(1, 1, 1, 0.9) if tight else Color(1, 0.85, 0.6, 0.8), 3.0 if tight else 2.0)
 		overlay.draw_circle(c, 2.5, Color(1, 1, 1, 0.9))
+		if aiming:
+			# Where to let go to lower the gun without firing.
+			var me := _project(p.position + Vector3(0, 1.0, 0))
+			var col := Color(1, 1, 1, 0.85) if aim_cancel else Color(1, 1, 1, 0.3)
+			overlay.draw_arc(me, AIM_CANCEL_PX, 0, TAU, 32, col, 2.0)
+			overlay.draw_string(theme.default_font, me + Vector2(-14, AIM_CANCEL_PX + 18), "내리기", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
 	for row in game.people:
 		if row.aim.active and row != p and row.visible:
 			var t = row.brain.get("target")
