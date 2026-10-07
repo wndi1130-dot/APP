@@ -215,3 +215,9 @@ Recreate the attached image with the same camera, train, station, weather and li
 ```text
 Recreate the attached sheet with the same layout, labels, numbers and icons, with these changes. Stage 0 must be truly clean and new: no stains, no soot, no dark spots, crisp off-white paper, bright enamel, polished brass. Stage 2 stays as it is, but move the coffee ring so it touches no icon, only blank paper. Stage 4: keep the rust, soot, torn corner and creases, keep the gauge glass uncracked over the bars, and paint any blood as a few small dried smears in dark brown, almost black, never bright red, only on paper margins and one button rim, never on the portrait, text, numbers or icons.
 ```
+
+## 평가 (2026-10-07, 3차: 다시 뽑은 C9·C11)
+
+- **C9 정차(v3 확정)**: 승강장에 산 사람이 없고 창마다 얼굴, 먼 끝에 망자 둘, 화물창고로 들어가는 발자국과 끌린 자국이 읽힌다. 창고 입구 어둠 속 웅크린 사람은 지우지 않고 둔다. '창고 안에 뭔가 있다'는 단서라 읽기 박자에 오히려 맞다. v4는 그 사람을 지웠지만 발자국이 눈에 묻혀 '누가 먼저 왔다'가 안 읽힌다. 남은 아쉬움: 먼 망자 둘이 아직 산 사람처럼 곧게 서 있다(실제 장면에선 걸음걸이 동작으로 구별된다).
+- **C11 낡아 가는 UI(v5 확정)**: 0단계가 정말 새것이고, 2단계 얼룩이 아이콘을 비켜 가고, 4단계 계기 유리가 멀쩡하다. 글자·숫자·아이콘 위엔 아무것도 없다. 다만 4단계 피가 이번엔 너무 옅어 거의 안 보인다(v3은 너무 붉었고 v5는 너무 숨었다). 그림은 이걸로 충분하고, 피 마스크의 진하기는 제작 때 조절값으로 맞춘다. v4는 커피 자국이 기관차 아이콘을 감싸서 탈락.
+- 이로써 C1~C11 모두 기준 그림이 정해졌다. 더 뽑을 건 없다.
