@@ -39,8 +39,8 @@
 ## 조심할 것
 
 - 닫힌 화차(공방칸, 창고칸, 탄수차) 그림에는 사람을 넣지 않는다. 공방칸은 문을 열어 작업대만 보인다. 게임 안에서 공방 일꾼을 보일지는 연출 단계에서 따로 본다.
-- **냉동칸은 잠정으로 난방 끊은 낡은 객차다(12:40).** 내정 스레드가 사용자에게 카드로 물었고 추천이 '난방 끊은 낡은 객차(성에 낀 창, 천에 싼 시신이 긴 의자에)'라 그 모양으로 주문을 바꿨다. 답이 다르면 다시 고친다. 시신은 답이 온 뒤에 따로 정한다. 객차 안 긴 의자에 천으로 싼 시신은 화차에 쌓은 장면보다 훨씬 덜 위험하지만, 시안 렌더에는 아직 넣지 않는다.
-- **냉동칸 안에 시신을 그리지 않는다.** 내정 문서는 냉동칸에 시신 안치(법 9)를 두는데, 중부 유럽에서 닫힌 화차에 시신을 쌓은 장면은 피해야 할 역사를 바로 떠올리게 한다. 그림에는 얼린 식량과 얼음만 둔다. 게임 안 표현(닫힌 문과 숫자만 보이기 등)은 내정 스레드와 사용자에게 넘긴다.
+- **냉동칸은 난방 끊은 낡은 객차다(12:47 사용자 확정, decisions.md, s1c_domestic.md 4.1).** 장작불을 기다리는 시신도 다음 정차까지 여기 둔다. 시안에서는 T4c v1은 얼린 식량만, v2는 같은 칸에 천으로 정성껏 싼 시신 둘을 긴 의자 하나에 따로 눕히고 촛불과 마른 꽃을 둔 판으로 뽑아 비교한다. 객차 안에서 한 사람씩 돌본 모습이면 화차에 쌓은 장면과 다르게 읽힌다고 본다(추정). 쌓거나 바닥에 늘어놓은 모습, 맨발이나 맨살이 보이는 모습은 넣지 않는다. v2가 어느 쪽으로든 그 장면으로 읽히면 버린다.
+- 처음 안(12:30)은 냉동칸을 닫힌 화차로 두고 시신을 그리지 않는 것이었다. 닫힌 화차에 시신을 쌓은 장면이 피해야 할 역사를 떠올리게 해서다. 위의 객차 확정으로 바뀌었다.
 - 의무칸에 십자, 초승달, 어떤 표장도 없다. 흰 커튼과 들것, 김 서린 유리로 알아보게 한다.
 - 사람이 탄 칸에 사슬, 빗장, 쇠창살, 잠긴 문, 다 막힌 창이 없다.
 - 프롬프트에 작품 이름과 캐릭터를 넣지 않는다. 참고 그림(R7)은 바탕화면에만 두고 저장소에 올리지 않는다.
@@ -134,7 +134,7 @@ Each row, from left to right: (1) the dining coach, which is also where the coun
 
 ### T4c 칸 안 단면: 공방칸, 창고칸, 냉동칸, 온실칸 (첨부: C3_home_v5, M2_council_car_kit_PICK)
 
-닫힌 화차 둘은 사람 없이 그린다. 냉동칸은 난방 끊은 객차로 그리고, 안에는 얼린 식량과 얼음만 둔다(위 '조심할 것').
+닫힌 화차 둘은 사람 없이 그린다. 냉동칸은 난방 끊은 객차로 그린다. v1은 얼린 식량만, v2는 천에 싼 시신 둘을 더한 판이다(위 '조심할 것').
 
 ```text
 Use the first attached image for the side cross-section framing and lighting of the inside of our train, and the second for how a car splits into floor, walls and roof. Draw four cars of our train as side cross-sections with the near wall removed, shown side by side as separate cutaways at the same scale, the way they appear in the game's home screen. The two wagons and the cold car have no people inside.
