@@ -108,7 +108,8 @@ AI로 만든 음악과 그림은 줄마다 'AI 생성'을 적는다. 사람이 �
 | Snow-Covered Surface 셰이더 | 코드 | 위 화면 줄과 같음 | 코드만 CC0 (r5 22) | 화면과 같이 씀. 칸 지붕·난간·화물 위 눈 | 가능 |
 | Quaternius Universal Base Characters | 3D(사람 기본 몸) | [quaternius.com](https://quaternius.com/packs/universalbasecharacters.html) | CC0 (art_reference_scan_20261007.md 68줄, 팩 페이지 표기) | 미리보기 그림의 권리는 따로 확인 못 함. 사람 기본 몸 후보 | 미정 |
 | Quaternius Universal Animation Library | 3D(동작) | [quaternius.com](https://quaternius.com/packs/universalanimationlibrary.html) | CC0 (같은 문서 69줄) | 사람 동작 후보 | 미정 |
-| MPFB(MakeHuman) | 3D(사람 몸 생성 도구) | MakeHuman 커뮤니티 | 미확인. 도구 코드와 만들어 낸 몸·옷 에셋의 라이선스가 다르다고 알려져 있으나 확인 전 | 쓰기 전에 도구와 에셋 라이선스를 각각 연다 | 미정 |
+| MPFB 플러그인(Blender) | 도구 | MakeHuman 커뮤니티 | GPL로 알려짐(미확인, 받을 때 원문 확인) | 만드는 도구로만 쓰고 게임에 넣지 않는다. 'GPL은 참고만' 규칙은 게임에 들어가는 코드 얘기라 도구 사용은 걸리지 않는다 | 해당 없음 |
+| MPFB로 만든 몸과 MakeHuman 에셋 | 3D(사람 몸) | MakeHuman 커뮤니티 | CC0로 알려짐(미확인, 받을 때 원문 확인) | 쓰는 에셋 묶음마다 라이선스를 따로 연다 | 미정 |
 | Kenney Train Kit | 3D(열차 회색 상자) | [kenney.nl](https://kenney.nl/assets/train-kit) | CC0 (같은 문서 70줄) | S2 회색 상자용. 출시판 열차는 T1 부품 키트로 직접 만든다 | 미정 |
 | Kenney Modular Buildings | 3D(건물 회색 상자) | [kenney.nl](https://kenney.nl/assets/modular-buildings) | CC0 (같은 문서 71줄) | 회색 상자용 | 미정 |
 | Kenney Furniture Kit | 3D(가구 회색 상자) | [kenney.nl](https://kenney.nl/assets/furniture-kit) | CC0 (같은 문서 72줄) | 회색 상자용 | 미정 |
