@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
   DOM_CARD_KINDS, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
-  chooseCard, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, techRelSides, viewCard,
+  chooseCard, coldCap, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -272,5 +272,19 @@ describe('내정 카드 글', () => {
     for (const v of [lice, viewCard(g, { uid: 2, kind: 'dom:typhus', comm: 'tail', n: 4 })]) {
       expect(`${v.body} ${v.choices.map(c => `${c.label} ${c.say}`).join(' ')}`).not.toMatch(/소독|옷을 벗|머리를 깎|민족|종교/);
     }
+  });
+});
+
+describe('M3 나 얼음 상자(7.3, main facf39c)', () => {
+  it('창고칸 자재 상한 40 → 34, 냉동칸 안치는 6 그대로, 공동 식당이면 식량 1.5/구간 덜 든다', () => {
+    const g = createS1cGame('icebox');
+    const before = { cap: storeCap(g), cold: coldCap(g), food: domesticForecast(g).food };
+    g.dom!.techs.m3 = { stage: 'done', defect: false, variant: 'b', progress: 0, need: 0 } as NonNullable<Game['dom']>['techs']['m3'];
+    expect(storeCap(g)).toBe(before.cap - D.iceBoxCap);
+    expect(coldCap(g)).toBe(before.cold);
+    expect(domesticForecast(g).food).toBe(before.food);
+    g.passed.common_kitchen = g.session;
+    expect(domesticForecast(g).food).toBeCloseTo(before.food - D.iceBoxFood * techMult(g, 'm3'));
+    expect(TECHS.m3.variants!.b.upkeep).toEqual({});
   });
 });

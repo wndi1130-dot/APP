@@ -69,7 +69,7 @@ export interface CommState {
 }
 
 /** cid: 콘텐츠 비밀(data/secrets)에서 온 것이면 그 id(content.ts) */
-export interface Secret { id: number; text: string; weight: number; about: Comm; uses: number; cid?: string }
+export interface Secret { id: number; text: string; weight: number; about: Comm; uses: number; cid?: string; /** 콘텐츠 비밀의 단계(1 소문, 2 증거). 무게와 따로 센다 */ proof?: 1 | 2 }
 export interface Leash { comm: Comm; since: number; weight: number }
 
 export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
@@ -261,8 +261,8 @@ export interface Game {
   contentDeals?: { id: string; comm: Comm; due: number }[];
   /** 일대기 기록(틀 id, 누가, 어디서(정차 id, 이동 중이면 빈칸), 언제, 목격자 id). S3 일대기 화면이 읽는다 */
   chronicle?: { template: string; who: string; where: string; when: number; witnesses: string[]; from: string }[];
-  /** 다음 표결 한 번에만 칸마다 열차장 쪽으로 옮기는 석 수(음수면 반대쪽). 표결이 끝나면 지운다 */
-  voteShift?: Partial<Record<Comm, number>>;
+  /** 다음 표결 한 번에만 옮기는 표: 칸, 석 수, 쪽(captain은 열차장이 밝힌 편, 열차장이 올린 안건이면 찬성). 표결이 끝나면 지운다 */
+  voteShift?: { comm: Comm; n: number; side: 'captain' | 'yes' | 'no' }[];
   /** 열차장 이름(열차장 만들기). S1a는 없어서 '열차장'으로 부른다 */
   captainName?: string;
   /** 희생양으로 이름이 불릴 수 있는 사람(프로필 id). 맡은 일·그 자리에 있었는지 같은 처지로만 켠다(칸·출신·이름 풀로 켜지 않는다). S1a엔 켜는 곳이 없다 */

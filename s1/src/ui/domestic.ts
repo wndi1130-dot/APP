@@ -165,6 +165,7 @@ function storePop(view: View, car: CarDef): HTMLElement {
     h('div', { class: 'dom-mats' },
       matRow('자재', materials(g), cap), matRow('고철', d.scrap), matRow('목재', d.wood), matRow('부품', d.parts)),
     h('p', { class: 'carpop__text' }, `식량 ${fmt(g.food)} · 의약품 ${fmt(g.med)} · 사치품 ${fmt(g.lux)}.`),
+    techMult(g, 'm3') > 0 && d.techs.m3?.variant === 'b' ? h('p', { class: 'sub' }, `얼음 상자가 자리 ${D.iceBoxCap}을 차지한다. 남는 음식을 묵힌다.`) : null,
     d.fullRule ? h('div', { class: 'dom-row' }, rules.map(r => h('button', {
       class: cx('chip', d.fullRule === r.id && 'is-on'), 'data-action': 'dom-full', 'data-rule': r.id,
     }, r.label))) : null);
@@ -179,7 +180,6 @@ function coldPop(view: View, car: CarDef): HTMLElement {
     h('p', { class: 'carpop__text' }, store || g.stored + (g.pyre ?? 0) > 0
       ? `천에 싸인 시신 ${g.stored + (g.pyre ?? 0)}/${coldCap(g)}구.${g.pyre ? ` ${g.pyre}구는 다음 정차 장작불을 기다린다.` : ''} 넘으면 녹는 사고가 두 배다.`
       : '비어 있다. 창마다 성에가 두껍다.'),
-    d.techs.m3?.variant === 'b' ? h('p', { class: 'carpop__text' }, '식량을 먼저 채운다(식량 보존).') : null,
     g.stored > 0 ? h('p', { class: 'sub' }, '길게 머무는 정차에서 묻고 갈 수 있다.') : null);
 }
 

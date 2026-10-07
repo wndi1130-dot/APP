@@ -4,7 +4,7 @@ import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed, techPending } from './data';
 import type { TechId, Upkeep, Variant } from './data';
-import { domCard, refreshSit, techMult, techUsable, topSkill, zoneOf } from './state';
+import { domCard, refreshSit, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
 // 공방(6장): 작업량, 일 목록, 목표치와 우선순위, 복원(7장), 유지비(7.4), 고장(6.5), 개조(4.4).
@@ -29,11 +29,12 @@ export function materials(g: Game): number {
   return d.scrap + d.wood;
 }
 
-/** 자재 상한(4.1): 창고칸마다 40. 창고를 온실로 내주면 0이다. */
+/** 자재 상한(4.1): 창고칸마다 40. 창고를 온실로 내주면 0이다. 얼음 상자(M3 나)는 처음 창고칸에서 6을 차지한다. */
 export function storeCap(g: Game): number {
   const d = dom(g);
   const base = d.greenhouse === 'store' ? 0 : 1;
-  return D.storeCap * (base + d.extraCars.filter(x => x === 'store').length);
+  const ice = base > 0 ? D.iceBoxCap * variantMult(g, 'm3', 'b') : 0;
+  return D.storeCap * (base + d.extraCars.filter(x => x === 'store').length) - ice;
 }
 
 // ---- 복원 조건(7.1, 7.2) ----

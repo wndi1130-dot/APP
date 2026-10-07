@@ -193,6 +193,10 @@ export function validateContent(value: unknown, file = 'content.json', prefix = 
   }
   textSpecDiagnostics(kind, value, add);
   if (kind === 'event') eventBindDiagnostics(value, add);
+  // 비밀 글의 자리표시자는 {person}(그 비밀을 쥔 사람)뿐이다(6.9).
+  if (kind === 'secret' && typeof value.text === 'string') {
+    for (const m of value.text.matchAll(TOKEN)) if (m[1] !== 'person') add('/text', 'error', 'secret.placeholder', `비밀 글엔 {person}만 쓴다. {${m[1]}}은(는) 값을 댈 곳이 없다.`);
+  }
   for (const key of ['trigger', 'opens_when']) {
     if (!Array.isArray(value[key])) continue;
     value[key].forEach((condition, index) => {

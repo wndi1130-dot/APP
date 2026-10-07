@@ -117,13 +117,21 @@ export function blocs(g: Game, agenda: Agenda, deals: readonly Deal[] = []): Rec
       b.und -= moved;
     }
     for (const deal of deals.filter(d => d.comm === c)) applyDeal(g, b, c, deal.tool);
-    shiftVotes(b, g.voteShift?.[c] ?? 0);
+    for (const v of g.voteShift ?? []) if (v.comm === c) shiftVotes(b, v.n * voteSide(agenda, v.side));
     out[c] = b;
   }
   return out;
 }
 
-/** 콘텐츠 사건의 votes(6.9): 그 칸 표가 n석만큼 찬성 쪽으로(음수면 반대 쪽으로) 옮긴다. 반대·미정에서 먼저 빼 온다. */
+/** 콘텐츠 사건의 votes 쪽(6.9): 찬성 1, 반대 −1. captain은 열차장이 밝힌 편인데, S1a에서 열차장이 편을 밝히는 건
+ * 자기가 올린 안건(찬성)뿐이다. AI가 올린 안건이면 밝힌 편이 없어 0(효과 없음). */
+export function voteSide(agenda: Agenda, side: 'captain' | 'yes' | 'no'): number {
+  if (side === 'yes') return 1;
+  if (side === 'no') return -1;
+  return agenda.by ? 0 : 1;
+}
+
+/** 그 칸 표가 n석만큼 찬성 쪽으로(음수면 반대 쪽으로) 옮긴다. 찬성 쪽이면 반대 → 미정 순으로 빼 온다. */
 function shiftVotes(b: Bloc, n: number): void {
   let left = Math.abs(Math.round(n));
   const from: ('no' | 'und' | 'yes')[] = n > 0 ? ['no', 'und'] : ['yes', 'und'];

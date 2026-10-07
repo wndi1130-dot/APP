@@ -32,7 +32,9 @@
     "law": [
       "/preview"
     ],
-    "deal": [],
+    "deal": [
+      "/say"
+    ],
     "place": [],
     "chronicle": [
       "/what",
@@ -50,6 +52,9 @@
     ],
     "chronicle": [
       "/witnesses/*/text"
+    ],
+    "deal": [
+      "/say"
     ]
   },
   "sentence_limits": {
@@ -82,6 +87,12 @@
     "chronicle": [
       {
         "path": "/witnesses/*/text",
+        "max": 2
+      }
+    ],
+    "deal": [
+      {
+        "path": "/say",
         "max": 2
       }
     ]

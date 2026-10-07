@@ -261,6 +261,17 @@ describe('text spec (s1_content_guide 6)', () => {
     expect(codes(leader)).toEqual([]);
     expect(codes({ ...fixture('event'), community: 'tail' })).toEqual(['warning:event.community:/community']);
   });
+  it('secret text uses only {person}, kind is an English id, deal say is short dialogue (6.9)', () => {
+    const secret = fixture('secret');
+    expect(codes(secret, 'secret')).toEqual([]);
+    secret.text = '{person}[은/는] {car}에 숨겼다.';
+    expect(codes(secret, 'secret')).toContain('error:secret.placeholder:/text');
+    expect(codes({ ...fixture('secret'), kind: '숨긴 상처' }, 'secret').some(code => code.startsWith('error:schema'))).toBe(true);
+    const deal = { ...fixture('deal'), say: '불을 올려 줘. 그러면 표를 모아 오겠다.' };
+    expect(codes(deal, 'deal')).toEqual([]);
+    deal.say = '불을 올려 줘. 그러면 표를 모아 오겠다. 이번 한 번뿐이다. 다음은 없다.';
+    expect(codes(deal, 'deal').some(code => code.startsWith('error'))).toBe(true);
+  });
   it('warns when a person looks like the subject without gender_of, and checks metadata keys', () => {
     const event = { ...fixture('event'), body: '{person}[은/는] 말없이 석탄을 퍼 왔다.', params: ['person'] };
     expect(codes(event)).toEqual(['warning:text.gender_of:/body']);

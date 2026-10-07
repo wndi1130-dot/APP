@@ -28,7 +28,8 @@ export type ContentEffect =
   | { type: 'symbol' | 'secret'; id: string; amount: number }
   | { type: 'community.warmth' | 'community.ration' | 'community.crowding' | 'community.exposure'; target: Comm; amount: number }
   | { type: 'trust' | 'tension' | 'fear'; amount: number }
-  | { type: 'relation' | 'cohesion' | 'votes'; target: string; amount: number }
+  | { type: 'relation' | 'cohesion'; target: string; amount: number }
+  | { type: 'votes'; target: string; amount: number; side?: 'captain' | 'yes' | 'no' }
   | { type: 'person.state'; target: string; state: 'alive' | 'injured' | 'dead' | 'away' }
   | { type: 'person.away'; target: string; segments: number }
   | { type: 'flag'; id: string; value: boolean | number | string }
@@ -53,6 +54,8 @@ export interface ContentSecret { id: string; kind: string; severity: number; pro
 /** 거래 조건(schema/deal.schema.json). ask는 기한에 열차장이 치를 것, gives는 받자마자 오는 것, breach는 못 치렀을 때 */
 export interface ContentDeal {
   id: string; tool: string; from: string; ask: ContentEffect[]; deadline: number; gives: ContentEffect[]; breach: ContentEffect[]; arc_tags: string[];
+  /** 요구하는 쪽의 말(40자). 요구·주는 것·어기면은 효과에서 비용 줄로 만든다 */
+  say?: string;
 }
 
 /** 읽어 들인 사건. 브라우저는 main.ts가 data/events를, 도구는 tools/content_fs.ts가 디스크에서 채운다. */
@@ -365,10 +368,13 @@ function applyRest(g: Game, list: ContentEffect[], ctx: EffectCtx): void {
       case 'person.state': setPerson(g, e.target, e.state); break;
       case 'person.away': (g.contentAway ??= {})[e.target] = g.seg + e.segments; break;
       case 'secret': gainSecret(g, e.id, e.amount, ctx); break;
-      case 'votes':
-        // 다음 표결 한 번에만 그 칸의 표가 옮긴다. 결속도를 걸지 않는다(politics.ts blocs).
-        if (isComm(e.target)) (g.voteShift ??= {})[e.target] = ((g.voteShift ?? {})[e.target] ?? 0) + e.amount;
+      case 'votes': {
+        // 다음 표결 한 번에만 그 칸의 표가 옮긴다. 결속도를 걸지 않는다(politics.ts blocs). 쪽은 표결 때 정한다.
+        if (!isComm(e.target)) break;
+        const shift = (g.voteShift ??= []).find(v => v.comm === e.target && v.side === (e.side ?? 'captain'));
+        if (shift) shift.n += e.amount; else g.voteShift.push({ comm: e.target, n: e.amount, side: e.side ?? 'captain' });
         break;
+      }
       case 'deal': addDealCard(g, e.id, ctx.comm); break;
       case 'chronicle':
         (g.chronicle ??= []).push({
@@ -381,12 +387,13 @@ function applyRest(g: Game, list: ContentEffect[], ctx: EffectCtx): void {
   }
 }
 
-/** 비밀을 손에 넣는다(6.9). 1 소문, 2 증거, 이미 가진 비밀이면 높은 단계로만 오른다.
- * 협박에 쓸 수 있게 S1a 비밀(g.secrets)에도 올린다: 쥔 사람의 칸을 누르는 재료이고, 무게는 소문 1·증거 2다. */
+/** 비밀을 손에 넣는다(6.9). 단계는 1 소문·2 증거로, 정의의 proof가 기본이고 효과의 amount가 더 높으면 그쪽이다.
+ * 이미 가진 비밀이면 높은 단계로만 오른다. 협박에 쓸 수 있게 S1a 비밀(g.secrets)에도 올린다: 쥔 사람의 칸을 누르는 재료이고,
+ * 무게는 정의의 severity(1~3)다. 소문·증거 단계는 무게와 따로 센다(s1a 3.4, 7장). */
 function gainSecret(g: Game, id: string, amount: number, ctx: EffectCtx): void {
   const def = CONTENT_SECRETS.find(x => x.id === id);
   if (!def) return;
-  const level = amount >= 2 ? 2 : 1;
+  const level: 1 | 2 = amount >= 2 || def.proof === 'evidence' ? 2 : 1;
   const who = ctx.vals.person ?? g.comms[ctx.comm].leader.name;
   const comm = PROFILES.find(p => p.name === who)?.community ?? ctx.comm;
   const had = (g.contentSecrets ??= {})[id];
@@ -394,8 +401,8 @@ function gainSecret(g: Game, id: string, amount: number, ctx: EffectCtx): void {
   g.contentSecrets[id] = { level, who, comm };
   const text = fillText(def.text, { person: who });
   const old = g.secrets.find(x => x.cid === id);
-  if (old) old.weight = Math.max(old.weight, level);
-  else { g.secrets.push({ id: g.nextSecretId, text, weight: level, about: comm, uses: 0, cid: id }); g.nextSecretId += 1; }
+  if (old) old.proof = level;
+  else { g.secrets.push({ id: g.nextSecretId, text, weight: clamp(Math.round(def.severity), 1, 3), about: comm, uses: 0, cid: id, proof: level }); g.nextSecretId += 1; }
   journal(g, `${level === 2 ? '증거를 쥐었다' : '소문을 들었다'}: ${text}`, 'dark');
 }
 
@@ -506,7 +513,7 @@ function dealView(g: Game, card: Card): CardView {
   const c = card.comm ?? 'tail';
   if (!def) return { title: '빈 서류', body: `읽을 수 없는 거래: ${card.text ?? ''}`, choices: [{ label: '덮는다', effs: [] }], required: false };
   const now = def.deadline <= 0;
-  const body = [`요구: ${effectText(def.ask)}`, `기한: ${now ? '지금' : `${def.deadline}구간 뒤`}`, `어기면: ${effectText(def.breach)}`].join('. ') + '.';
+  const body = [...(def.say ? [def.say] : []), `요구: ${effectText(def.ask)}`, `기한: ${now ? '지금' : `${def.deadline}구간 뒤`}`, `어기면: ${effectText(def.breach)}`].join('. ') + '.';
   const accept = toEffs(def.gives).concat(now ? toEffs(def.ask) : []);
   return {
     title: `${COMM_NAME[c]}의 거래`, speaker: { name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c }, body,

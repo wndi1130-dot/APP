@@ -114,7 +114,7 @@ function debugPanel(view: View): HTMLElement {
         const [w, r, cr, ex] = situation(g, c);
         return h('tr', null, [COMM_NAME[c], fmt(s.rel), s.coh.toFixed(2), s.fervor, s.grudge, fmt(w), fmt(r), fmt(cr), fmt(ex), TRAIT_NAME[s.leader.trait]].map(x => h('td', null, x)));
       })),
-    h('ul', { class: 'log' }, g.secrets.map(x => h('li', null, `${COMM_NAME[x.about]} 대표: ${shortText(x.text)} (무게 ${x.weight})`))));
+    h('ul', { class: 'log' }, g.secrets.map(x => h('li', null, `${COMM_NAME[x.about]} 대표: ${shortText(x.text)} (무게 ${x.weight}${x.proof ? `, ${x.proof === 2 ? '증거' : '소문'}` : ''})`))));
 }
 
 export function overlay(view: View): HTMLElement | null {

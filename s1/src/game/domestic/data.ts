@@ -30,7 +30,9 @@ export const D = {
   // 5.3 시작값
   scrap0: 10, wood0: 10, parts0: 4,
   // 4.1 창고·냉동칸
-  storeCap: 40, coldCap: 6, coldCapM3b: 3,
+  storeCap: 40, coldCap: 6,
+  /** M3 나 얼음 상자(7.3, main facf39c): 창고칸 자재 상한에서 빼는 자리, 공동 식당이 있을 때 덜 드는 식량/구간(+5 → +3.5) */
+  iceBoxCap: 6, iceBoxFood: 1.5,
   // 4.2 14번째 칸부터
   extraCarCoal: 0.4,
   // 4.4 쓸 만한 칸(화물역 정차)
@@ -141,7 +143,8 @@ export const TECHS: Record<TechId, TechDef> = {
     id: 'm3', branch: 'med', tier: 2, name: '식량 보존', effect: '변형 둘 중 하나',
     variants: {
       a: { name: '훈제·염장', effect: '식량 소모 ×0.9, 목재 0.5/구간', upkeep: { wood: 0.5 }, like: ['tail'], dislike: [], label: '훈제로 간다', say: '연기에 걸어라. 나무는 또 주우면 된다!' },
-      b: { name: '냉동 보관', effect: '식량 소모 ×0.9, 냉동칸 안치 6 → 3', upkeep: { coal: 0.3 }, like: ['medtech'], dislike: [], label: '냉동칸에 쌓는다', say: '냉동칸은 먹을 것부터 채운다!' },
+      // 나는 2026-10-07 내정 문서 7.3(main facf39c)대로 창고칸 얼음 상자다. 식량은 냉동칸에 두지 않는다(시신만 둔다).
+      b: { name: '얼음 상자', effect: '공동 식당의 식량 값 +5 → +3.5/구간, 창고칸 자재 상한 40 → 34', like: ['tail'], dislike: [], upkeep: {}, label: '얼음 상자를 짠다', say: '바깥 얼음을 퍼 와라. 남는 음식은 묵힌다!' },
     },
   }),
   m4: T({ id: 'm4', branch: 'med', tier: 3, name: '온실칸', effect: '칸 하나를 온실로(식량 +1.5~3/구간)', upkeep: { coal: 1, parts: 0.5 }, like: ['tail'] }),

@@ -1,7 +1,7 @@
 import { LAWS, P, STAY } from '../data';
 import type { Comm, LawId } from '../data';
 import type { PromiseState } from '../state';
-import { journal, rnd } from '../state';
+import { journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { BYPRODUCT, D, FIELDS, TECHS } from './data';
 import type { Field, TechId } from './data';
@@ -21,7 +21,6 @@ export const SAVING_EFFECTS: { id: TechId; runCoal?: number; foodMult?: number; 
   { id: 'e1', runCoal: 0.5 },
   { id: 'e2', runCoal: 1 },
   { id: 'e4', runCoal: 1.5 },
-  { id: 'm3', foodMult: 0.9 },
   { id: 'x1', haulMult: 1.1 },
 ];
 
@@ -37,6 +36,8 @@ export function techSavings(g: Game): { coal: number; foodMult: number; haulMult
     haulMult *= 1 + ((e.haulMult ?? 1) - 1) * m;
   }
   coal += 0.3 * variantMult(g, 'e3', 'b');
+  // M3 가(훈제·염장)는 아직 옛 효과(식량 ×0.9)다. 7.3의 '종자곡 반만 풀기' 변형은 기술→법 개편 때 넣는다.
+  foodMult *= 1 - 0.1 * variantMult(g, 'm3', 'a');
   return { coal, foodMult, haulMult };
 }
 
@@ -53,7 +54,9 @@ export function domesticForecast(g: Game): DomForecast {
   if (stokingNow(g) && techMult(g, 'e4') <= 0) coal += D.stokerCoal;
   if (!g.inStrike && topSkill(g, 'engine') === 1) coal += D.slowCoal;
   const grants = d.grants.filter(until => until >= g.seg).length * D.grantFood;
-  return { coal, food: grants - greenhouseFood(g), foodMult: save.foodMult };
+  // M3 나 얼음 상자: 공동 식당이 서 있으면 식량 값이 덜 든다(+5 → +3.5/구간, 7.3).
+  const ice = lawActive(g, 'common_kitchen') ? D.iceBoxFood * variantMult(g, 'm3', 'b') : 0;
+  return { coal, food: grants - greenhouseFood(g) - ice, foodMult: save.foodMult };
 }
 
 // ---- 출발(이동 단계) ----

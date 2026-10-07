@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   COMMS, COMM_NAME, CONTENT_DEALS, CONTENT_EVENTS, CONTENT_SECRETS, PROFILES, addContentCard, blocs, castVote, chooseCard, contentFollowupTick, contentPool,
-  createGame, fillText, josa, openCouncil, registerContentDeals, registerContentEvents, registerContentSecrets, viewCard,
+  createGame, fillText, josa, openCouncil, registerContentDeals, registerContentEvents, registerContentSecrets, viewCard, voteSide,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 import { validateFolder } from '../../tools/validate';
@@ -161,7 +161,7 @@ describe('자리표시자 묶기(6.9)', () => {
 });
 
 describe('효과 넷(6.9)', () => {
-  const secret = { id: 'sec_test', kind: '거짓', severity: 2, proof: 'rumor', sources: ['감시'], text: '{person}[은/는] 배급표를 두 장 쥐고 있다.' };
+  const secret = { id: 'sec_test', kind: 'lie', severity: 3, proof: 'rumor', sources: ['감시'], text: '{person}[은/는] 배급표를 두 장 쥐고 있다.' };
 
   it('secret: 정의가 없으면 안 뽑고, 있으면 쥔 사람과 단계를 남기고 높은 단계로만 오른다', () => {
     registerContentEvents([one([{ type: 'secret', id: 'sec_test', amount: 1 }]), one([{ type: 'secret', id: 'sec_test', amount: 2 }], { id: 'ev_test_proof' })]);
@@ -173,11 +173,20 @@ describe('효과 넷(6.9)', () => {
     const who = card.vals!.person;
     expect(g.contentSecrets?.sec_test).toEqual({ level: 1, who, comm: 'tail' });
     const s = g.secrets.find(x => x.cid === 'sec_test')!;
-    expect(s).toMatchObject({ about: 'tail', weight: 1 });
+    // 협박 무게는 정의의 severity, 소문·증거는 따로 센다.
+    expect(s).toMatchObject({ about: 'tail', weight: 3, proof: 1 });
     expect(s.text).toBe(`${who}${josa(who, '은/는')} 배급표를 두 장 쥐고 있다.`);
     chooseCard(g, draw(g, 'ev_test_proof').uid, 0);
     expect(g.contentSecrets?.sec_test.level).toBe(2);
-    expect(g.secrets.filter(x => x.cid === 'sec_test').map(x => x.weight)).toEqual([2]);
+    expect(g.secrets.filter(x => x.cid === 'sec_test').map(x => [x.weight, x.proof])).toEqual([[3, 2]]);
+    chooseCard(g, draw(g).uid, 0);
+    expect(g.contentSecrets?.sec_test.level).toBe(2);
+  });
+
+  it('secret: 정의의 proof가 evidence면 amount 1이어도 증거로 쥔다', () => {
+    registerContentSecrets([{ ...secret, proof: 'evidence' }]);
+    registerContentEvents([one([{ type: 'secret', id: 'sec_test', amount: 1 }])]);
+    const g = createGame('secret-proof');
     chooseCard(g, draw(g).uid, 0);
     expect(g.contentSecrets?.sec_test.level).toBe(2);
   });
@@ -186,9 +195,10 @@ describe('효과 넷(6.9)', () => {
     registerContentEvents([one([{ type: 'votes', target: 'guard', amount: 3 }])]);
     const g = createGame('votes');
     chooseCard(g, draw(g).uid, 0);
-    expect(g.voteShift).toEqual({ guard: 3 });
+    expect(g.voteShift).toEqual([{ comm: 'guard', n: 3, side: 'captain' }]);
     openCouncil(g);
     const agenda = g.council!.options[g.council!.idx];
+    expect(agenda.by).toBeUndefined();
     const shifted = blocs(g, agenda).guard;
     const plain = blocs({ ...g, voteShift: undefined }, agenda).guard;
     expect(shifted.yes).toBe(Math.min(plain.yes + 3, plain.yes + plain.no + plain.und));
@@ -197,9 +207,21 @@ describe('효과 넷(6.9)', () => {
     expect(g.voteShift).toBeUndefined();
   });
 
+  it('votes 쪽: captain은 열차장이 올린 안건만 찬성, AI 발의엔 효과 없음, yes·no는 그대로', () => {
+    expect([voteSide({ law: 'common_kitchen', repeal: false }, 'captain'), voteSide({ law: 'common_kitchen', repeal: false, by: 'tail' }, 'captain')]).toEqual([1, 0]);
+    expect([voteSide({ law: 'common_kitchen', repeal: false, by: 'tail' }, 'yes'), voteSide({ law: 'common_kitchen', repeal: false }, 'no')]).toEqual([1, -1]);
+    const g = createGame('votes-no');
+    openCouncil(g);
+    const agenda = g.council!.options[g.council!.idx];
+    const plain = blocs(g, agenda).guard;
+    g.voteShift = [{ comm: 'guard', n: 2, side: 'no' }];
+    const pushed = blocs(g, agenda).guard;
+    expect(pushed.no).toBe(Math.min(plain.no + 2, plain.yes + plain.no + plain.und));
+  });
+
   it('deal: 받으면 주는 것이 오고, 기한에 치르거나 못 치르면 어긴 값이 온다', () => {
     registerContentDeals([{
-      id: 'deal_test', tool: 'open', from: 'engine', deadline: 2, arc_tags: [],
+      id: 'deal_test', tool: 'open', from: 'engine', deadline: 2, arc_tags: [], say: '석탄을 먼저 내줘. 식량은 나중에 받겠다.',
       ask: [{ type: 'food', amount: -15 }], gives: [{ type: 'coal', amount: 10 }], breach: [{ type: 'relation', target: 'engine', amount: -10 }],
     }]);
     registerContentEvents([one([{ type: 'deal', id: 'deal_test' }])]);
@@ -210,6 +232,7 @@ describe('효과 넷(6.9)', () => {
       expect(deal.kind).toBe('content-deal');
       const v = viewCard(g, deal);
       expect(v.speaker?.name).toBe(g.comms.engine.leader.name);
+      expect(v.body.startsWith('석탄을 먼저 내줘. 식량은 나중에 받겠다.')).toBe(true);
       expect(v.body).toContain('식량 −15');
       const coal = g.coal;
       chooseCard(g, deal.uid, 0);

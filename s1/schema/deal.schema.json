@@ -38,6 +38,13 @@
     },
     "content_type": {
       "const": "deal"
+    },
+    "say": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[^\\r\\n]+$",
+      "description": "요구하는 쪽의 말(키 <id>.say). 요구·주는 것·어기면은 효과에서 비용 줄로 만든다(6.9)."
     }
   },
   "required": [

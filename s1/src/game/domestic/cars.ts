@@ -154,9 +154,10 @@ export function doBury(g: Game): void {
   journal(g, `언 땅을 파 냉동칸의 시신 ${n}구를 묻었다.`, 'good');
 }
 
-/** 냉동칸 안치 상한(4.1): 6, 냉동 보관(M3 나)이면 3. 넘으면 녹는 사고 확률 ×2. */
+/** 냉동칸 안치 상한(4.1): 6. 넘으면 녹는 사고 확률 ×2. 냉동칸엔 시신만 둔다(식량 보존 나는 창고칸 얼음 상자). */
 export function coldCap(g: Game): number {
-  return g.dom?.techs.m3?.variant === 'b' ? D.coldCapM3b : D.coldCap;
+  void g;
+  return D.coldCap;
 }
 export function thawMult(g: Game): number {
   return g.dom && g.stored > coldCap(g) ? 2 : 1;
