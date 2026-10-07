@@ -232,6 +232,51 @@ Edit the attached image. Keep the composition, the camera, the train, the car in
 Keep all labels and numbers sharp and readable; frost stays only in the screen corners.
 ```
 
+## 10. 웹에서 찾은 참고 자료 (2026-10-07)
+
+모두 저작물이라 링크와 우리 말 메모만 둔다. 그림을 저장하거나 저장소에 올리지 않는다. 재사용할 수 있는 사진 후보는 Wikimedia Commons뿐이고, 파일마다 라이선스를 따로 확인해야 한다.
+
+### 짚을 점
+
+- **프로스트펑크 2가 확대하면 뭉개지는 것이 메모리 절약 때문이라는 근거는 못 찾았다.** 기술 인터뷰와 벤치마크에 줌 단계별 텍스처·LOD 이야기는 없었다. 그 설명은 추정으로 다룬다. 우리가 텍스처를 아끼는 방향 자체는 맞고, 그 근거로는 좀보이드 개발 블로그가 더 낫다(아래).
+- **Last Train Home은 옆 단면이 아니라 위에서 내려다보는 3D 디오라마로 보인다**(체험기 기준, 영상으로 확인 전 추정). 우리 옆 단면 열차의 직접 선례는 This War of Mine, Fallout Shelter, Sheltered다.
+
+### 프로스트펑크 2
+
+- [GamingBolt: Zoom Stories와 UI 단순화](https://gamingbolt.com/frostpunk-2-gameplay-improvements-new-ui-features-and-zoom-stories-detailed): 평소엔 추상적인 지도, 지정한 곳을 확대할 때만 시민의 생활을 보여 준다. 우리 홈에서 칸을 눌렀을 때만 자세히 보여 주는 구조와 같다.
+- [PCGamesN: 베타 뒤 UI 재설계](https://www.pcgamesn.com/frostpunk-2/ui-improvements): 정보를 한 화면에 몰아넣었다가 비판받았다. 피할 점이다.
+- [Julie Baechtold: 이벤트 삽화 스케치](https://www.artstation.com/artwork/K35AJx): 역동성보다 다큐 같은 구도와 가독성을 우선했다. 결정 카드 삽화 기준으로 쓸 만하다.
+- [Robert Rejmak: 이벤트 일러스트](https://www.artstation.com/artwork/zxmbr4), [ZooWe Chen: 환경 컨셉](https://www.artstation.com/artwork/3EeBgo): 결정 결과 삽화의 톤, 서리 덮인 건물 실루엣.
+- [ComputerBase 벤치마크](https://www.computerbase.de/2024-09/frostpunk-2-benchmark-test/): 날씨에 따라 조명이 바뀐다. 발상은 가져오고, 모바일에서 동적 전역 조명은 피한다.
+- 못 연 것: Game UI Database(자동 접속 차단), [Xbox Wire 게임패드 UI 적용기](https://news.xbox.com/en-us/2025/09/18/adapting-frostpunk-2s-depth-to-a-gamepad/)(터치 UI에 참고할 가치가 커 보인다).
+
+### Last Train Home
+
+- [Ashborne 개발일지: 세계 만들기](https://ashbornegames.com/news/the-worldbuilding-of-last-train-home): 작전, 열차, 지도 세 화면으로 나뉜다. 역사 사진과 화가 세르게이 바소프를 참고했고, 게임을 위해 비율을 일부러 바꿨다. 동쪽으로 갈수록 풍경이 거칠어진다.
+- [THQ Nordic: 실제 군단 열차 복제](https://thqnordic.com/news/the-train-is-real-a-look-behind-the-scenes-of-last-train-home-s-reveal-trailer): 작업칸, 주방, 의무칸, 포차 구성. 칸 종류를 정할 때 참고한다.
+- [Game*Spark 체험기](https://www.gamespark.jp/article/2023/10/01/134648.html): 열차를 위에서 내려다보다가 줌아웃하면 필드로 넘어간다.
+- [Peter Minďaš: 지도 화면](https://www.artstation.com/artwork/9Eb4AR), [같은 작가: O급 증기기관차](https://www.artstation.com/artwork/Za2RxR): 계절별 지도 변형, 기관차 형태.
+
+### 궂은 날씨와 분위기
+
+- [The Long Dark 화풍 튜토리얼](https://www.creativebloq.com/how-to/how-to-create-stylised-game-artwork): 날카로운 실루엣, 넓은 면에 은은한 질감, 차분한 색. 텍스처를 적게 쓰면서 분위기를 내는 방법이라 모바일에 잘 맞는다.
+- [Pavel Panfilov: Pathologic 2 환경](https://www.artstation.com/artwork/L2O400): 불길한 러시아 소도시 분위기와 조명.
+- [Markus Lovadina: Metro Exodus 컨셉](https://malo.artstation.com/projects/BmbG3A): 회색 블록 위에 분위기를 덧칠하는 작업 순서. 우리 시안 작업에도 쓸 수 있다.
+- [GDC 2022: Horizon Forbidden West 폭풍](https://www.gdcvault.com/play/1027688/The-Real-Time-Volumetric-Superstorms): 위협을 연출하는 원리만 본다. 기법은 모바일에 무겁다.
+- Wikimedia Commons 분류 [안개 속 열차](https://commons.wikimedia.org/wiki/Category:Trains_in_fog), [안개](https://commons.wikimedia.org/wiki/Category:Fog): 못 열었다. 사진을 쓸 일이 생기면 파일별 라이선스를 확인한다.
+
+### 좀보이드 방식 (메모리 절약 근거)
+
+- [Play Your Cardz Right (2023-02)](https://projectzomboid.com/blog/news/2023/02/play-your-cardz-right/): 2D 타일에서 깊이 정보를 만들고 한 번 그려 캐시한다. 3D 캐릭터가 그 깊이에 맞춰 가려진다.
+- [42 Techdoid (2022-02)](https://projectzomboid.com/blog/news/2022/02/42-techdoid/): 청크 캐시는 속도를 얻는 대신 그래픽 메모리를 더 쓴다. 모바일에서는 이 대가가 크다.
+- [차량 녹 텍스처 글](https://projectzomboid.com/blog/?p=7876): 차마다 텍스처를 따로 두지 않고 공용 녹 맵을 겹쳐 메모리를 아꼈다. 우리 칸의 서리·그을음·녹에 그대로 옮길 수 있는 방법이다.
+
+### 옆 단면의 선례
+
+- [Kotaku: This War of Mine 제작기](https://kotaku.com/the-making-of-a-very-different-kind-of-war-video-game-1560735762), [TechRaptor 아트 인터뷰](https://techraptor.net/content/art-war-mine-interview-11-bit-studios): 집을 잘라 여러 방을 동시에 보여 주고, 무채색 위에 색을 골라 넣는다.
+- [Fallout Shelter 개요](https://fallout.wiki/wiki/Fallout_Shelter_Overview): 같은 방을 붙이면 합쳐지고, 사람은 늘 벽 앞에 그린다. 칸 확장 규칙과 가독성 규칙으로 참고한다.
+- [Sheltered 프리뷰](https://stevivor.com/previews/preview-sheltered/): 낮은 해상도 옆 단면에서 물건끼리 구별이 안 된다는 비판. 텍스처를 아낄 때도 사람과 상호작용 물건의 실루엣은 지켜야 한다.
+
 ## 출처
 
 - [PR 12: 월드 그래픽 정정과 3D 자원 조사](https://github.com/wndi1130-dot/APP/pull/12)
