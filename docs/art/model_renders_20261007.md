@@ -210,6 +210,8 @@ Panel 6, back aboard: the side cross-section again, the train pulling away; in t
 
 17:58 더함(코디네이터 전달, 기획 점검 답과 파밍): 앞으로 주문에 아이가 나오면 이 줄을 붙인다. "If children help with any work, they only take sacks and wooden crates handed down beside the train on the platform; children are never hurt, never lined up and never watched by armed adults; children are seen only small, from the usual top-down game distance, never in a close-up of their faces." (18:10 화면 스레드 전달로 끝 구절을 더함: 아이는 얼굴 클로즈업 없이 탑뷰 거리만.) 화차 문은 처음부터 열려 있고 짐은 자루와 나무 상자다. 경찰서가 나오는 망자 주문에는 이 줄을 붙인다. "The dead from the police station wear only a grey quilted protective vest and knee pads over the same torn civilian winter clothes, bareheaded or in a knitted hat; no helmet, no shield, no uniform colours, no lettering and no insignia." 두 줄은 공통 끝에 넣지 않는다. 조건 문장이라도 그림 모델이 없던 아이나 경찰 망자를 새로 그려 넣을 수 있어서다.
 
+19:10 더함(열차장 만들기 스레드 character_creation 6e43141, 제안): 다음 사람 그림 주문의 금지선 줄에 이 문장을 넣는다. "Police officers and conscripts wear invented civilian-style winter clothes, never a real uniform, insignia, rank marks or helmet; each job shows through one prop only: a short baton for a police officer, a cartridge belt worn at the waist (never across the chest) for a conscript." 탄띠는 허리에만 두게 했다. J06 점검에서 가슴에 맨 띠가 군인 인상을 남겼기 때문이다(M8 4칸 동행).
+
 ## 더 누더기로 (08:25 추가)
 
 사용자(2026-10-07 08:21): "좀 더 누더기 같아야 됨. 프로스트펑크나 워킹데드, 레프트 4 데드가 좋은 예시." 모든 글상자에 '여섯 겨울을 버틴 누더기' 문장을 넣었다: 짝 안 맞는 여러 겹, 해진 소매와 단, 몇 번이고 덧댄 천, 끈과 담요 조각으로 묶음, 그을음·기름·때, 바랜 색. 열차와 벽은 녹슬고 그을린 쇠, 합판·판자 덧댐, 구멍 위에 볼트로 박은 고철판, 방수포, 밧줄, 연통. 작품 이름과 캐릭터는 프롬프트에 넣지 않는다(특정 캐릭터를 닮으면 상업 게임에 위험하다). 참고 그림은 6단계 R6으로 모으고, 첨부는 마감을 맞추는 데만 쓴다. 기준 컨셉 그림은 C1 v3, C3 v5, C9 v5, C10 v3로 바뀌었다.
