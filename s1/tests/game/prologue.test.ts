@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, chooseCard, createGame, isGone, primaryAction, PROLOGUE, startPrologue, storyOf, viewCard } from '../../src/game';
+import { advance, chooseCard, createGame, isGone, platformNote, primaryAction, PROLOGUE, startPrologue, storyOf, viewCard } from '../../src/game';
 import type { Game } from '../../src/game';
 
 // 서막(first_leg_story 5장 '서막 흐름', 2026-10-07 사용자 결정): 약속 → 저탄장 수색 → 출발 → 열차 안 첫 거래.
@@ -36,6 +36,7 @@ describe('서막', () => {
       expect(storyOf(g).flags.depot_promise).toBe('kept');
       expect(g.comms.tail.rel).toBe(rel0 + 5);
       expect(g.stats.promisesKept).toBe(1);
+      expect(platformNote(g)).toBeNull();
       advance(g);
       expect(g.cards[0].kind).toBe('pro_deal');
       const heat = g.comms.tail.heat;
@@ -60,10 +61,14 @@ describe('서막', () => {
     expect(g.comms.tail.pop).toBe(pop0 - PROLOGUE.crew);
     expect(g.left).toHaveLength(PROLOGUE.crew);
     for (const n of g.left ?? []) expect(isGone(g, n)).toBe(true);
+    // 출발 레버가 걸리면 기적 전에 남은 이름을 묻고(5b.5), 떠나면 쪽지는 비운다.
+    expect(platformNote(g)).toEqual({ names: g.left, near: true });
     expect(g.trust).toBeLessThan(trust0);
     expect(g.comms.tail.fervor).toBe(1);
     expect(g.stats.promisesBroken).toBe(1);
     advance(g);
+    expect(platformNote(g)).toBeNull();
+    expect(g.platform).toBeUndefined();
     const heat = g.comms.tail.heat;
     const ration = g.comms.tail.ration;
     pick(g, '들어준다');

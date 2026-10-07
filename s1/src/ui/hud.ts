@@ -4,6 +4,7 @@ import { icon } from './icons';
 import { fmt, signed } from './common';
 import type { View } from './common';
 import { fxText, fxTone } from './fx';
+import { departLever } from './depart';
 import type { Fx, FxKey } from './fx';
 import type { Comm } from '../game';
 import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
@@ -116,6 +117,7 @@ export function bottomBar(view: View): HTMLElement {
   const showOverview = ui.screen === 'home' || ui.screen === 'overview';
   const primaryBtn = inCouncil && g.council && !g.council.result && g.council.options.length > 0
     ? null
+    : g.phase === 'prep' && primary.ok ? departLever() // 출발은 당겨 내리는 놋쇠 레버(5b.5)
     : h('button', {
       class: cx('primary', !primary.ok && 'is-blocked'),
       'data-action': primary.ok ? 'advance' : 'open-stack',

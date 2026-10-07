@@ -1,8 +1,9 @@
-import { openConditions, autoLeverStatus, cloneGame, currentAgenda, viewCard } from '../game';
+import { openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
 import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, vibrateOn } from './fx';
 import { fxPlay } from './fxplay';
+import { departInput, platformSheet, setDepartTap, departTapOn } from './depart';
 import type { Fx } from './fx';
 import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
@@ -135,6 +136,7 @@ export function renderApp(view: View): HTMLElement {
     ui.person ? h('div', { class: 'scrim scrim--person', 'data-action': 'person', 'data-name': '' }) : null,
     ui.person ? personCard(g, ui.person) : null,
     debugOverlay(view),
+    platformSheet(view),
     ui.toast ? h('div', { class: 'toast', role: 'status' }, shortText(ui.toast)) : null,
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
 }
@@ -352,6 +354,33 @@ export function startApp(root: HTMLElement): void {
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; }
         return render();
       }
+      case 'depart-pull':
+        // 레버가 걸렸다. 승강장에 사람이 남았으면 기적 전에 쪽지로 한 번 더 묻는다(5b.5).
+        if (platformNote(g)) { ui.departAsk = 'ask'; ui.panel = null; ui.cardOpen = false; return render(); }
+        return handle('advance', {});
+      case 'depart-wait':
+        ui.departAsk = null;
+        toast('기다린다. 기적은 울리지 않았다.');
+        return render();
+      case 'depart-leave': {
+        if (ui.departAsk !== 'ask') return;
+        // 낮은 타격(쪽지가 한 번 눌림), 굵은 펜 획으로 이름을 긋고, 진동 한 번. 그다음에 기적.
+        ui.departAsk = 'leaving';
+        buzz(Date.now());
+        render();
+        const ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 900;
+        setTimeout(() => {
+          ui.departAsk = null;
+          handle('advance', {});
+          toast('기적이 운다.');
+          render();
+        }, ms);
+        return;
+      }
+      case 'toggle-depart-tap':
+        setDepartTap(!departTapOn());
+        toast(departTapOn() ? '출발 레버를 두 번 눌러 출발한다.' : '출발 레버를 아래로 당겨 내려 출발한다.');
+        return render();
       case 'emergency':
         step({ a: 'emergency', d: {} });
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; ui.panel = null; }
@@ -534,10 +563,12 @@ export function startApp(root: HTMLElement): void {
     reset(next) { g = next; ui = freshUi(); persist(g); resetRepro(); },
   };
 
+  const lever = departInput(root, () => handle('depart-pull', {}), text => { toast(text); render(); });
   root.addEventListener('click', event => {
     const target = (event.target as Element | null)?.closest<HTMLElement | SVGElement>('[data-action]');
     if (!target || !root.contains(target)) return;
     if ((target as HTMLButtonElement).disabled) return;
+    if (target.dataset.action === 'depart') return lever.click(event);
     if (target.dataset.action === 'choose') fxOrigin = target.getBoundingClientRect();
     h6Input(g, h6, Date.now(), target.dataset.action ?? ''); // S1c 내정 훅
     handle(target.dataset.action ?? '', target.dataset);
@@ -558,7 +589,8 @@ export function startApp(root: HTMLElement): void {
 
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    if (ui.person) ui.person = null;
+    if (ui.departAsk === 'ask') ui.departAsk = null; // 출발 확인 쪽지: 닫으면 기다린다
+    else if (ui.person) ui.person = null;
     else if (ui.panel) ui.panel = null;
     else if (ui.cardOpen) ui.cardOpen = false;
     else if (ui.carPop) ui.carPop = null;

@@ -185,8 +185,22 @@ async function has(page, selector) {
   return (await page.locator(selector).count()) > 0;
 }
 
+/** 출발 레버(5b.5)를 아래로 끌어 내린다. 툭 누르면 떠나지 않는다. */
+async function pullLever(page) {
+  const box = await page.locator('.bottom [data-lever="depart"]').boundingBox();
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 60, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(60);
+}
+
 /** 한 걸음: 펼친 서류를 처리하거나, 창을 닫거나, 주 단추를 누른다. */
 async function step(page) {
+  if (await has(page, '.pnote [data-action="depart-leave"]:not([disabled])')) return click(page, '.pnote [data-action="depart-leave"]');
+  if (await has(page, '.pnote')) return page.waitForTimeout(100);
   if (await has(page, '.side, .drop, .settle')) return click(page, '.drop__head .x');
   if (await has(page, '[data-action="stop-go"]')) return click(page, '[data-action="stop-go"][data-go="1"]');
   if (await has(page, '[data-action="stop-seen"]')) return click(page, '[data-action="stop-seen"]');
@@ -194,6 +208,7 @@ async function step(page) {
   if (await has(page, '.skip')) return click(page, '.skip');
   if (await has(page, '.vote-actions [data-action="vote"]')) return click(page, '.vote-actions [data-action="vote"]');
   if (await has(page, '.bottom [data-action="advance"]')) return click(page, '.bottom [data-action="advance"]');
+  if (await has(page, '.bottom [data-lever="depart"]')) return pullLever(page);
   if (await has(page, '.bottom [data-action="open-stack"]')) return click(page, '.bottom [data-action="open-stack"]');
   throw new Error('누를 것이 없다');
 }
@@ -251,10 +266,14 @@ async function main() {
     await click(page, '.bottom [data-action="open-stack"]');
     await page.locator('.sheet').waitFor();
     await capture(page, '00-prologue');
-    await until(page, '.bottom [data-action="advance"]');
+    await until(page, '.bottom [data-lever="depart"]');
 
-    // 출발: 서류(서막을 거친 판은 열차 안 첫 거래)
-    await click(page, '.bottom [data-action="advance"]');
+    // 출발: 레버를 툭 누르면 안내만 하고 떠나지 않는다. 끌어 내려야 떠난다(5b.5).
+    await click(page, '.bottom [data-lever="depart"]');
+    if (!(await has(page, '.bottom [data-lever="depart"]'))) throw new Error('출발 레버를 툭 눌렀는데 떠났다');
+    await capture(page, '05b-depart-lever');
+    await pullLever(page);
+    // 서류(서막을 거친 판은 열차 안 첫 거래)
     await until(page, '.sheet');
     await capture(page, '06-card');
 
@@ -308,6 +327,31 @@ async function main() {
     await until(page, '.end', 2000);
     await capture(page, '16-end');
     await context.close();
+
+    // 출발 확인 쪽지(5b.5): 서막에서 운반조를 두고 오면 레버가 걸린 뒤 이름을 묻는다.
+    const left = await browser.newContext({
+      viewport: LANDSCAPE, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'ko-KR', reducedMotion: 'reduce',
+    });
+    const leftPage = await left.newPage();
+    leftPage.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
+    await leftPage.goto(`${url}?seed=${SEED}-left`);
+    await leftPage.locator('.home').waitFor();
+    await click(leftPage, '.bottom [data-action="open-stack"]');
+    await click(leftPage, '.choice:not([disabled])'); // 약속한다
+    await click(leftPage, '.choice:not([disabled]) >> nth=2'); // 바로 돌아선다
+    await until(leftPage, '.bottom [data-lever="depart"]');
+    await pullLever(leftPage);
+    await leftPage.locator('.pnote').waitFor();
+    const note = await leftPage.locator('.pnote').innerText();
+    if (!note.includes('무리가 가깝다') || !note.includes('승강장에 5명 남음')) throw new Error(`출발 쪽지가 이상하다: ${note}`);
+    await capture(leftPage, '05c-platform-note');
+    await click(leftPage, '.pnote [data-action="depart-wait"]');
+    if (await has(leftPage, '.pnote') || !(await has(leftPage, '.bottom [data-lever="depart"]'))) throw new Error('기다린다를 골랐는데 떠났다');
+    await pullLever(leftPage);
+    await click(leftPage, '.pnote [data-action="depart-leave"]');
+    await until(leftPage, '.sheet');
+    if (await has(leftPage, '.pnote')) throw new Error('떠난 뒤에도 쪽지가 남았다');
+    await left.close();
 
     // 세로 화면
     const portrait = await browser.newContext({

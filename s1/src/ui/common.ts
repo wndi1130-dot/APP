@@ -20,6 +20,8 @@ export interface Ui {
   cardOpen: boolean;
   /** 정차 결과를 읽고 덮었나 */
   stopSeen: boolean;
+  /** 출발 레버가 걸렸는데 승강장에 사람이 남아 묻는 중(ask), '떠난다'를 골라 이름을 긋는 중(leaving). depart.ts */
+  departAsk?: 'ask' | 'leaving' | null;
   overviewSel: string;
   numbersOnly: boolean;
   /** 의회에서 고른 쐐기 */
