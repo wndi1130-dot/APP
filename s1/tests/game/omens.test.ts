@@ -46,6 +46,13 @@ describe('정차 조짐 글', () => {
     }
   });
 
+  it('안전한 쪽 고요는 생활 소리를 남기고, 완전한 고요는 위험 쪽에만 있다(사운드 7.1)', () => {
+    const life = /새|참새|까마귀|까치|비둘기|고양이|쥐|개/;
+    const few = [...Object.values(PLACE_OMENS), ...Object.values(WEATHER_OMENS)].flatMap(t => t.few);
+    for (const t of few) if (/고요|기척|소리/.test(t)) expect(life.test(t), t).toBe(true);
+    for (const t of few) expect(/새소리.*(끊|없)|너무 조용/.test(t), t).toBe(false);
+  });
+
   it('조짐 글과 창밖 글은 서로 겹치지 않는다', () => {
     expect(new Set(omenLines).size).toBe(omenLines.length);
     expect(new Set(lookLines).size).toBe(lookLines.length);

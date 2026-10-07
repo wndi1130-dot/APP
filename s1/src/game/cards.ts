@@ -1,6 +1,6 @@
 import { COMMS, COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
-import { onDeath } from './death';
+import { logDeath, onDeath } from './death';
 import { offend } from './politics';
 import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './state';
 import { BIRTH, familyOf, recover, revertLater } from './people';
@@ -177,7 +177,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       choices: [
         { label: '커튼을 걷게 한다', say: past?.pick === '커튼을 걷게 한다' ? '밤에 먹든 낮에 먹든 같은 열차다. 문을 열어 둬라.' : '커튼을 걷어라. 이 열차에 숨어서 먹는 칸은 없다.', effs: [{ t: 'rel', c: 'front', v: -worse(past, 6, 2) }, { t: 'rel', c: 'tail', v: 4 }] },
         { label: '앞칸 편을 든다', say: past?.pick === '앞칸 편을 든다' ? '낙서한 자를 찾아라. 앞칸 식탁은 앞칸 일이다.' : '앞칸 식탁은 앞칸 일이다. 줄을 풀어라.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 4, 3) }, { t: 'rel', c: 'front', v: 4 }] },
-        { label: '대표 둘을 부른다', say: past ? '두 대표를 다시 불러라. 이번엔 내 식탁이다.' : '두 대표를 불러라. 한 식탁에 앉혀 보겠다.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
+        { label: '대표 둘을 부른다', say: past ? '또 커튼이냐. 두 대표를 내 식탁으로 다시 끌고 와라!' : '두 대표를 내 식탁에 앉혀라. 커튼 얘기는 밥 먹으며 끝낸다.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
       ],
     }),
   },
@@ -191,7 +191,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
         '다음 역까지 버틴다': '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
       }, '급수탑이 또 얼었다.'),
       choices: [
-        { label: '불을 피워 녹인다', say: '석탄을 태워서라도 관을 녹여라!', effs: [{ t: 'coal', v: -3 }] },
+        { label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
         { label: '꼬리칸이 눈을 녹인다', say: past?.pick === '꼬리칸이 눈을 녹인다' ? '꼬리칸이 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라.' : '꼬리칸은 양동이를 들어라. 눈을 퍼다 녹인다.', effs: [{ t: 'base', c: 'tail', i: 3, v: 5 }, { t: 'rel', c: 'tail', v: -worse(past, 4, 3) }] },
         { label: '다음 역까지 버틴다', say: past?.pick === '다음 역까지 버틴다' ? '관은 안 탄다. 내가 보증한다. 간다!' : '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -worse(past, 4, 2) }, ...(past?.pick === '다음 역까지 버틴다' ? [{ t: 'base' as const, c: 'engine' as const, i: 3 as const, v: 6 }] : [])] },
       ],
@@ -263,7 +263,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       }, '지붕 경계 대원들이 또 동상을 입었다.'),
       choices: [
         { label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
-        { label: '경계를 줄인다', say: '지붕 교대를 줄여라. 밤에는 창문으로 본다.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
+        { label: '경계를 줄인다', say: '얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
         { label: '그대로 선다', say: past?.pick === '그대로 선다' ? '거부는 없다. 지붕이 비면 다 같이 죽는다.' : '경계는 줄이지 않는다. 장갑을 두 겹 껴라.', effs: [{ t: 'rel', c: 'guard', v: -worse(past, 5, 4) }, { t: 'injured', v: 1 }] },
       ],
     }),
@@ -463,14 +463,14 @@ export function viewCard(g: Game, card: Card): CardView {
       return {
         title: '불신임', speaker: leader(g, 'guard'), required: true,
         body: `더는 열차장을 믿지 않는다는 말이 돈다. ${Math.max(0, (g.trustCrisis ?? g.seg) - g.seg)}구간 안에 신임을 25까지 되돌리지 못하면 끌려 내려온다.`,
-        choices: [{ label: '알았다', effs: [] }],
+        choices: [{ label: '알았다', say: '신임은 말로 되찾는 게 아니다. 결과로 보여 주겠다.', effs: [] }],
       };
     }
     case 'leash': {
       return {
         title: '목줄이 끊겼다', speaker: leader(g, c), focus: c, required: true,
         body: `${g.comms[c].leader.name}이(가) 스스로 비밀을 털어놓고 열차장이 협박했다고 말했다.`,
-        choices: [{ label: '알았다', effs: [] }],
+        choices: [{ label: '알았다', say: '제 입으로 털어놨으면 됐다. 더 할 말 없다.', effs: [] }],
       };
     }
     case 'need_warn': {
@@ -479,7 +479,7 @@ export function viewCard(g: Game, card: Card): CardView {
       if (!def) break;
       return {
         title: `${def.title}이 필요하다`, required: true,
-        body: `${def.warn} ${NEED_GRACE}구간 안에 정하지 않으면 손해가 난다. 약속하면 한 구간을 더 벌지만, 어기면 신임을 크게 잃는다.`,
+        body: `${def.warn[(card.n ?? 0) % def.warn.length]} ${NEED_GRACE}구간 안에 정하지 않으면 손해가 난다. 약속하면 한 구간을 더 벌지만, 어기면 신임을 크게 잃는다.`,
         choices: [
           { label: '약속한다', say: '다음 회기 안에 정하겠다. 내 이름을 걸고 약속한다.', effs: [], special: 'need_promise', log: `${def.title}을 정하겠다고 약속했다.` },
           { label: '두고 본다', say: '서두른다고 좋은 법이 나오지 않는다. 지켜봐라.', effs: [] },
@@ -685,7 +685,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
     case 'bite_shoot':
       g.hiddenBites = (g.hiddenBites ?? []).filter(b => b.who !== card.who);
-      onDeath(g, c, [card.who ?? '이름 모를 대원']);
+      onDeath(g, c, [card.who ?? '이름 모를 대원'], 'chosen', true);
       journal(g, `${card.who ?? '대원'}을(를) 쏘았다. 칸 사람들이 다 들었다.`, 'dark');
       break;
     case 'leave_bitten':
@@ -693,6 +693,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       offend(g, c);
       g.comms[c].pop = Math.max(1, g.comms[c].pop - 1);
       g.deaths.push(card.who ?? '이름 모를 대원');
+      logDeath(g, [card.who ?? '이름 모를 대원'], 'chosen', true);
       journal(g, `${card.who ?? '대원'}을(를) 역에 두고 왔다.`, 'dark');
       break;
     case 'need_promise': {

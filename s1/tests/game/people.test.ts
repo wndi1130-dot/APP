@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   advance, birthSeg, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, FAMILIES, fallSick, makeDeal, mourners, onDeath,
-  openCouncil, peopleCardRecent, peopleTick, primaryAction, PROFILES, resolveStop, toolStatus, viewCard,
+  openCouncil, peopleCardRecent, peopleTick, pickVictims, primaryAction, PROFILES, resolveStop, toolStatus, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -213,5 +213,27 @@ describe('카드 수', () => {
     expect(per('elder')).toBeLessThanOrEqual(1);
     expect(births / 200).toBeLessThan(0.45);
     writeFileSync(join(tmpdir(), 'people_counts.json'), JSON.stringify({ per: Object.fromEntries(Object.keys(count).map(k => [k, per(k)])), births: births / 200 }, null, 1));
+  });
+});
+
+describe('누가 죽나(기획 점검 01 2.6)', () => {
+  it('굶주림 사망은 판마다 다른 사람이고, 노인과 아이가 더 자주 쓰러진다', () => {
+    const first = new Set<string>();
+    let weak = 0;
+    for (let i = 0; i < 200; i += 1) {
+      const g = createGame(`victim-${i}`);
+      const [p] = pickVictims(g, 1, 'hunger', () => { const v = ((i * 7919 + first.size * 104729) % 1000) / 1000; return v; });
+      first.add(p.name);
+      if (p.age >= 65 || p.age <= 10) weak += 1;
+    }
+    expect(first.size).toBeGreaterThan(20);
+    const share = PROFILES.filter(p => p.age >= 65 || p.age <= 10).length / PROFILES.length;
+    expect(weak / 200).toBeGreaterThan(share);
+  });
+
+  it('다쳐서 죽는 사람은 파견 나이다', () => {
+    const g = createGame('victim-wound');
+    let k = 0;
+    for (const p of pickVictims(g, 10, 'wound', () => ((k++ * 37) % 100) / 100)) expect(p.age >= 16 && p.age <= 65).toBe(true);
   });
 });

@@ -2,7 +2,7 @@ import { addCard } from './state';
 import { drawTravelEvent } from './cards';
 import { onDeath } from './death';
 import { needTick } from './needs';
-import { mourners, peopleCardRecent, peopleTick, raisedLines } from './people';
+import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
@@ -331,7 +331,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   g.injured += injuredOnly.length;
   // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
   if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel - 2, -100, 100);
-  if (dead.length > 0) onDeath(g, stop.crewComm, dead);
+  // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
+  if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = stop.scout ? P.scoutSize : 0;
   if (scouts > 0 && rnd(g) < P.scoutSprain) notes.push('정찰조 하나가 발목을 삐었다.');
   g.comms[stop.crewComm].away = stop.crewSize + scouts - dead.length;
@@ -451,7 +452,7 @@ function biteTick(g: Game): void {
         keep.push(b);
         continue;
       }
-      onDeath(g, b.comm, [b.who]);
+      onDeath(g, b.comm, [b.who], 'chosen');
       continue;
     }
     if (!b.found && (lawActive(g, 'patrol') || rnd(g) < 0.5)) {
@@ -475,10 +476,10 @@ function hungerTick(g: Game, notes: string[]): void {
     return;
   }
   if (g.hunger <= HUNGER_GRACE) { notes.push(`굶은 지 ${g.hunger}구간째다.`); return; }
-  const who = PROFILES.filter(p => p.community === 'tail' && !isGone(g, p.name)).map(p => p.name)[0];
-  if (who) {
-    onDeath(g, 'tail', [who]);
-    journal(g, `${who}이(가) 굶어 죽었다.`, 'bad');
+  const [p] = pickVictims(g, 1, 'hunger', () => rnd(g));
+  if (p) {
+    onDeath(g, p.community, [p.name]);
+    journal(g, `${COMM_NAME[p.community]}의 ${p.name}(${p.age})이(가) 굶어 죽었다.`, 'bad');
     notes.push('굶어 죽은 사람이 나왔다.');
   }
 }
@@ -536,8 +537,7 @@ function medicineTick(g: Game, notes: string[]): void {
     for (let i = 0; i < g.injured; i += 1) if (rnd(g) < 0.1) dead += 1;
     g.injured -= dead;
     if (dead > 0) {
-      const names = PROFILES.filter(p => p.community === 'tail' && !isGone(g, p.name)).slice(0, dead).map(p => p.name);
-      onDeath(g, 'tail', names);
+      for (const p of pickVictims(g, dead, 'wound', () => rnd(g))) onDeath(g, p.community, [p.name]);
     }
     notes.push('의약품이 떨어졌다.');
   }

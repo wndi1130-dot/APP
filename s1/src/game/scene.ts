@@ -11,12 +11,13 @@ import { riskLevel, riskWhy, stopRisk } from './turn';
 // 바깥 문장은 날씨와 장소 겉모습만 보여 준다. 위험은 정찰조가 본 조짐으로 따로 알린다(omens.ts).
 // 내리는 문장은 지금 처지(지지, 불신임 직전, 죄책감)에 따라 달라진다.
 
-export type DisembarkMood = 'triumph' | 'cornered' | 'guilt' | 'cold' | 'warm' | 'plain';
+export type DisembarkMood = 'triumph' | 'cornered' | 'guilt' | 'grief' | 'cold' | 'warm' | 'plain';
 
 export const DISEMBARK_LINES: Record<DisembarkMood, string> = {
   triumph: '열차장이 발판에 서자 수색대가 고개를 든다. 개선장군을 맞는 얼굴들이다.',
   cornered: '열차장은 한숨을 쉬고 어깨를 늘어뜨린 채 내린다. 입김이 하얗게 번진다.',
-  guilt: '열차장이 멍하니 플랫폼 너머를 본다. 수색대 하나가 어깨를 툭 치고 지나간다.',
+  guilt: '열차장이 마지막 계단에서 멈춰 멍하니 플랫폼 너머를 본다. 수색대 하나가 어깨를 툭 치고 지나간다.',
+  grief: '열차장이 문 앞에서 한 박자 멈췄다가 내린다. 창가에 늘 앉던 자리 하나가 비어 있다.',
   cold: '수색대가 말없이 내린다. 아무도 열차장을 돌아보지 않는다.',
   warm: '수색대가 서로 장비를 챙겨 주며 내린다. 조장이 열차장에게 고개를 끄덕인다.',
   plain: '문이 열리고 찬 공기가 들어온다. 수색대가 하나씩 내린다.',
@@ -27,11 +28,13 @@ function supportShare(g: Game): number {
   return COMMS.reduce((sum, c) => sum + (g.comms[c].rel >= 15 ? g.comms[c].pop : 0), 0) / pop;
 }
 
-/** 내리는 장면의 분위기. 불신임 직전이 가장 먼저, 그다음 최근 죽음(죄책감), 크게 지지받음, 보낸 집단의 마음 순이다. */
+/** 내리는 장면의 분위기. 불신임 직전이 가장 먼저, 그다음 열차장이 고른 죽음(죄책감, 목격자가 있으면 3구간),
+ * 그 밖의 이름 있는 죽음(애도), 크게 지지받음, 보낸 집단의 마음 순이다. 둘이 겹치면 죄책감이 앞선다. */
 export function disembarkMood(g: Game, crew: Comm): DisembarkMood {
   if (g.trust < 25 || g.tension >= 75) return 'cornered';
-  const recentDeath = g.journal.some(e => e.seg >= g.seg - 1 && e.text.includes('죽었다'));
-  if (recentDeath) return 'guilt';
+  const log = g.deathLog ?? [];
+  if (log.some(d => d.cause !== 'other' && g.seg - d.seg < (d.witness ? 3 : 2))) return 'guilt';
+  if (log.some(d => d.cause === 'other' && g.seg - d.seg < 2)) return 'grief';
   if (g.trust >= 70 && supportShare(g) >= 0.5) return 'triumph';
   const band = stageOf(g.comms[crew].rel).band;
   if (band < 0) return 'cold';

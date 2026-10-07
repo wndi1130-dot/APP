@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advance, castVote, chooseCard, COMMS, createGame, currentAgenda, disembarkMood, makeDeal, primaryAction, relationLine, resolveStop,
+  advance, castVote, chooseCard, COMMS, createGame, currentAgenda, disembarkMood, makeDeal, onDeath, primaryAction, relationLine, resolveStop,
   toolStatus, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
@@ -75,5 +75,18 @@ describe('정차 장면과 관계 문장', () => {
     g.trust = 50;
     g.comms.tail.rel = -50;
     expect(disembarkMood(g, 'tail')).toBe('cold');
+  });
+
+  it('열차장이 고른 죽음엔 죄책감, 그 밖의 죽음엔 애도 장면이다(목격자가 있으면 죄책감이 3구간)', () => {
+    const g = createGame('scene-death');
+    g.seg = 5;
+    onDeath(g, 'tail', ['추위에 죽은 노인']);
+    expect(disembarkMood(g, 'tail')).toBe('grief');
+    onDeath(g, 'guard', ['쏘아 죽인 대원'], 'chosen', true);
+    expect(disembarkMood(g, 'tail')).toBe('guilt');
+    g.seg = 7;
+    expect(disembarkMood(g, 'tail')).toBe('guilt');
+    g.seg = 8;
+    expect(disembarkMood(g, 'tail')).not.toBe('guilt');
   });
 });

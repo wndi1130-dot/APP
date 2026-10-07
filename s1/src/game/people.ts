@@ -37,6 +37,43 @@ export function familyOf(g: Game, name: string): { fam: Family; isParent: boolea
   return { fam, isParent: fam.parents.includes(p.id), kids, others };
 }
 
+// ---- 누가 죽나(기획 점검 01 2.6) ----
+// 굶주림과 약 부족 사망이 늘 꼬리칸 첫 프로필부터 일어나지 않게, 나이·처지·법으로 무게를 두고 판마다 난수로 고른다. 숫자는 제안.
+export type VictimCause = 'hunger' | 'wound';
+
+export function victimWeight(g: Game, p: Profile, cause: VictimCause): number {
+  const old = p.age >= 65;
+  const child = p.age <= 10;
+  if (cause === 'wound') {
+    // 다친 사람은 파견 나이(16~65)다. 나이가 많을수록 못 버틴다. 중환자 분류 법은 가망 없는 쪽을 먼저 놓는다.
+    if (p.age < 16 || p.age > 65) return 0;
+    return (p.age >= 50 ? 1.6 : 1) * (lawActive(g, 'triage') && p.age >= 50 ? 1.5 : 1);
+  }
+  let w = old ? 3 : child ? 2.5 : 1;
+  // 기여 배급은 일 못 하는 사람 몫을 줄이고, 공동 식당은 약한 사람을 먼저 먹인다.
+  if (lawActive(g, 'contribution_ration') && (old || p.age < 16)) w *= 1.5;
+  if (lawActive(g, 'common_kitchen') && (old || child)) w *= 0.6;
+  // 배급이 나쁜 칸일수록 먼저 쓰러진다.
+  const ration = situation(g, p.community)[1];
+  return w * Math.max(0.3, (100 - ration) / 50);
+}
+
+/** 무게대로 n명을 고른다(대표는 빼고). */
+export function pickVictims(g: Game, n: number, cause: VictimCause, rnd: () => number): Profile[] {
+  const out: Profile[] = [];
+  const pool = PROFILES.filter(p => !isGone(g, p.name) && !COMMS.some(c => g.comms[c].leader.name === p.name))
+    .map(p => ({ p, w: victimWeight(g, p, cause) })).filter(x => x.w > 0);
+  for (let k = 0; k < n && pool.length > 0; k += 1) {
+    const total = pool.reduce((sum, x) => sum + x.w, 0);
+    let r = rnd() * total;
+    let i = 0;
+    while (i < pool.length - 1 && r >= pool[i].w) { r -= pool[i].w; i += 1; }
+    out.push(pool[i].p);
+    pool.splice(i, 1);
+  }
+  return out;
+}
+
 // ---- A1 유품과 남은 사람 ----
 /** 죽음이 나면 그 구간에 카드 하나(죽은 사람이 여럿이면 아이를 남긴 부모가 먼저). 대표가 죽으면 승계 몫이라 안 띄운다. */
 export function afterDeath(g: Game, c: Comm, names: readonly string[]): void {
