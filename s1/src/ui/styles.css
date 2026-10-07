@@ -876,3 +876,22 @@ small { font-size: 12px; }
 @keyframes scout-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .scout-report { animation: none; } }
 .scout-report__where { color: var(--ink-3); }
+
+/* S1b 어두운 길(ui/dark.ts). 선을 넘는 선택지는 검은 띠, 반응 한 줄은 대사 밑에 작게(10.1). */
+.choice.is-cross {
+  grid-template-areas: "n label" "n meta" "n cross";
+  background: #0a0b0c; border-color: #000; box-shadow: inset 6px 0 0 #000;
+}
+.choice.is-cross .choice__n { background: #000; color: var(--ink-2); }
+.choice__cross { grid-area: cross; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.end__right { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.end__right .log { overflow: visible; }
+.dark-end { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.dark-end__tone { font-size: 16px; line-height: 1.5; color: var(--ink-1); }
+.dark-end__scenes, .dark-end__said, .dark-end__wall { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; font-size: 13px; color: var(--ink-2); }
+.dark-end__scenes { list-style: decimal inside; }
+.dark-end__said q { color: var(--ink-1); }
+.dark-end__said small, .dark-end__wall small { color: var(--ink-3); }
+.dark-end__wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px 12px; }
+.dark-end__wall summary { cursor: pointer; }
+.dark-end__h7 textarea { width: 100%; font-size: 11px; background: var(--surface-1); color: var(--ink-2); border: 1px solid var(--line); }

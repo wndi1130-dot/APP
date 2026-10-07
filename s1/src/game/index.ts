@@ -13,3 +13,4 @@ export * from './needs';
 export * from './omens';
 export * from './people';
 export * from './domestic';
+export * from './dark';

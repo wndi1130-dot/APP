@@ -260,6 +260,9 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   return { options: merged, forced: false };
 }
 
+/** 의회를 연 직후와 표결 뒤에 부를 다른 묶음의 훅(S1b 재판·불신임, dark/hooks.ts가 등록한다). */
+export const COUNCIL_HOOKS: { open?: (g: Game) => void; vote?: (g: Game, agenda: Agenda, r: VoteResult) => void }[] = [];
+
 export function openCouncil(g: Game, emergency = false): void {
   g.session += 1;
   // 적의는 새 잘못 없이 2회기가 지나면 하나 준다(3.7). 비상 소집으로 적의를 빨리 지우지는 못한다.
@@ -288,6 +291,7 @@ export function openCouncil(g: Game, emergency = false): void {
   g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}) };
   if (g.agendaHolder && options.length > 0) journal(g, `${COMM_NAME[g.agendaHolder]}이(가) 안건을 골랐다: ${agendaTitle(options[idx])}.`);
   g.agendaHolder = null;
+  for (const hook of COUNCIL_HOOKS) hook.open?.(g);
 }
 
 
@@ -544,6 +548,13 @@ export function dropUnratified(g: Game): void {
 
 // ---- 표결 ----
 export function castVote(g: Game, decree = false): VoteResult | null {
+  const agenda = currentAgenda(g);
+  const r = vote(g, decree);
+  if (r && agenda) for (const hook of COUNCIL_HOOKS) hook.vote?.(g, agenda, r);
+  return r;
+}
+
+function vote(g: Game, decree: boolean): VoteResult | null {
   const council = g.council;
   const agenda = currentAgenda(g);
   if (!council || !agenda || council.result) return null;

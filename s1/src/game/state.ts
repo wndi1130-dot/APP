@@ -1,6 +1,7 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
 import type { DomState } from './domestic/state';
+import type { DarkState } from './dark/state';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import {
@@ -115,8 +116,9 @@ export type Agenda = LawAgenda | MotionAgenda;
 /** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
 export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share';
-export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean }
+export type MotionId = 'share' | 'trial' | 'no_confidence';
+/** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
+export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
 
 export interface VoteFlip { comm: Comm; yes: boolean }
 export interface VoteResult {
@@ -274,6 +276,8 @@ export interface Game {
   captainName?: string;
   /** 희생양으로 이름이 불릴 수 있는 사람(프로필 id). 맡은 일·그 자리에 있었는지 같은 처지로만 켠다(칸·출신·이름 풀로 켜지 않는다). S1a엔 켜는 곳이 없다 */
   scapegoatOk?: string[];
+  /** S1b 어두운 길(dark/state.ts). 없으면 S1a·S1c 판이다 */
+  dark?: DarkState;
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';

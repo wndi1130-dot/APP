@@ -8,6 +8,7 @@ import type { View } from './common';
 import { portrait } from './widgets';
 import { nameBtn, nameList, shortText } from './names';
 import { domesticStopRows, stayLocked } from './domestic'; // S1c 내정 훅
+import { darkCardShown } from './dark'; // S1b H7 훅
 
 // 결정 카드: 홈 왼쪽의 서류 뭉치에서 꺼내 화면 왼쪽 절반에 펼친다. 오른쪽엔 열차가 그대로 보인다.
 // 형식은 수저린식(초상, 짧은 대사, 번호 붙은 선택지). 정차의 필드 결정 카드도 같은 자리에 펼친다.
@@ -133,6 +134,7 @@ export function cardSheet(view: View): HTMLElement | null {
   const card = g.cards[0];
   if (!card) return null;
   const v = viewCard(g, card);
+  darkCardShown(g, card.uid); // S1b H7: 이 카드를 처음 본 시각
   return sheet(card.kind.startsWith('dom:') ? 'sheet--dom' : '', `card-${card.uid}`, // S1c 내정 카드는 놋쇠 클립
     h('div', { class: 'sheet__head' },
       v.speaker ? portrait(v.speaker.name, v.speaker.comm) : h('div', { class: 'portrait portrait--none' }, icon('papers')),
@@ -146,14 +148,16 @@ export function cardSheet(view: View): HTMLElement | null {
       const costs = costLines(ch);
       const pol = politicsLines(ch);
       return h('li', null, h('button', {
-        class: cx('choice', ch.disabled && 'is-off'), 'data-action': 'choose', 'data-uid': card.uid, 'data-index': i, disabled: !!ch.disabled,
+        // 선을 넘는 선택지(S1b 10.1)는 검은 띠를 두르고 반응 한 줄을 붙인다. 무뎌짐이면 띠만 남는다.
+        class: cx('choice', ch.disabled && 'is-off', ch.cross !== undefined && 'is-cross'), 'data-action': 'choose', 'data-uid': card.uid, 'data-index': i, disabled: !!ch.disabled,
       },
         h('b', { class: 'choice__n num' }, i + 1),
         h('span', { class: 'choice__label' }, shortText(ch.say ?? ch.label), ch.witness ? icon('witness', 'icon icon--witness') : null),
         h('span', { class: 'choice__meta' },
           costs.map(x => h('span', { class: 'cost num' }, x)),
           pol.map(p => h('span', { class: `pol pol--${p.tone}` }, p.text)),
-          ch.disabled ? h('span', { class: 'pol pol--gray' }, ch.disabled) : null)));
+          ch.disabled ? h('span', { class: 'pol pol--gray' }, ch.disabled) : null),
+        ch.cross ? h('span', { class: 'choice__cross' }, shortText(ch.cross)) : null));
     })));
 }
 

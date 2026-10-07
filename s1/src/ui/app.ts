@@ -16,6 +16,8 @@ import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
 import { changeDomestic, h6Input, h6Render, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
+// S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
+import { darkPickMs, urlWantsS1b } from './dark';
 import { TRAIL_MAX, applyStep, makeBundle, plainData, readSave, reviveSave, reproText, setReproSource } from './repro';
 import type { ReproError, SaveRead, Step, TrailEntry } from './repro';
 
@@ -182,7 +184,9 @@ export function startApp(root: HTMLElement): void {
   const urlSeed = new URLSearchParams(globalThis.location?.search ?? '').get('seed');
   const { g: saved, why: loadWhy } = load();
   const wantS1c = urlWantsS1c(); // S1c 내정 훅
-  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) ? saved : newGame(urlSeed || randomSeed(), wantS1c);
+  const wantS1b = urlWantsS1b(); // S1b 어두운 길 훅
+  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) && (!wantS1b || saved.dark)
+    ? saved : newGame(urlSeed || randomSeed(), wantS1c, wantS1b);
   let ui: Ui = freshUi();
   if (g.phase === 'council') ui.screen = 'council';
   const scroll: Record<string, number> = {};
@@ -364,7 +368,8 @@ export function startApp(root: HTMLElement): void {
       case 'choose': {
         const before = fxSnap(g);
         const kind = g.cards.find(x => x.uid === Number(data.uid))?.kind;
-        step({ a: 'choose', d: plainData(data) });
+        const ms = darkPickMs(g, Number(data.uid)); // S1b H7: 고르기까지 걸린 시간
+        step({ a: 'choose', d: { ...plainData(data), ...(ms ? { ms } : {}) } });
         showFx(fxDiff(before, g));
         if (stackCount(g, ui) > 0) focusForTopCard();
         // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
@@ -471,14 +476,14 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'restart':
-        g = newGame(g.seed, !!g.dom);
+        g = newGame(g.seed, !!g.dom, !!g.dark);
         ui = freshUi();
         persist(g);
         resetRepro();
         toast(`같은 시드(${g.seed})로 처음부터.`);
         return render();
       case 'new-seed':
-        g = newGame(randomSeed(), !!g.dom);
+        g = newGame(randomSeed(), !!g.dom, !!g.dark);
         ui = freshUi();
         persist(g);
         resetRepro();
@@ -510,6 +515,13 @@ export function startApp(root: HTMLElement): void {
       case 'toggle-debug':
         ui.debug = !ui.debug;
         ui.panel = null;
+        return render();
+      case 'dark-new': // S1b 어두운 길 훅: 켠(끈) 새 판, 내정 켬/끔은 그대로
+        g = newGame(g.seed, !!g.dom, data.on === '1');
+        ui = freshUi();
+        save(g);
+        resetRepro();
+        toast(data.on === '1' ? `어두운 길 켠 새 판: 시드 ${g.seed}.` : `어두운 길 끈 새 판: 시드 ${g.seed}.`);
         return render();
       default:
         handleDomestic(action, data, domCtx); // S1c 내정 훅

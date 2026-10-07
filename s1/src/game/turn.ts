@@ -21,6 +21,9 @@ import {
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
+// S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
+import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from './dark/hooks';
+import { darkPyreWeight, darkStoredWeight } from './dark/corpses';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
 
@@ -56,7 +59,10 @@ export function primaryAction(g: Game): Primary {
 export function advance(g: Game): void {
   if (!primaryAction(g).ok) return;
   switch (g.phase) {
-    case 'prep': return depart(g);
+    case 'prep':
+      depart(g);
+      if ((g.phase as Game['phase']) === 'travel') darkTravel(g);
+      return;
     case 'travel': return g.inStrike ? afterStop(g) : arriveStop(g);
     case 'stop': return afterStop(g);
     case 'council': return settle(g);
@@ -405,6 +411,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
   const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
   if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
+  darkStop(g, !!(go && stop.target), go && stop.target ? crewNames(g, stop.crewComm, stop.crewSize) : []);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
@@ -418,7 +425,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g)
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
   const notes: string[] = [];
   const tail = g.comms.tail;
@@ -564,6 +571,7 @@ function settle(g: Game): void {
   if (g.council) bribeDetection(g);
   leashTick(g);
   aiLeaders(g);
+  darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
   checkEnd(g);
@@ -685,7 +693,8 @@ function medicineTick(g: Game, notes: string[]): void {
   }
   // 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 따뜻해서 두 배(s1c_domestic 4.1).
   const kinBodies = pyreCount(g) - (g.pyre ?? 0);
-  const pyreWeight = (g.pyre ?? 0) + 2 * kinBodies;
+  // S1b: 머리를 확인한 시신은 일어나지 않는다(dark/corpses.ts). S1a 판이면 그대로.
+  const pyreWeight = darkPyreWeight(g, g.pyre ?? 0) + 2 * kinBodies;
   if (pyreWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * pyreWeight)) {
     const inKin = kinBodies > 0 && rnd(g) < (2 * kinBodies) / pyreWeight;
     if (inKin) takeKinBody(g);
@@ -694,7 +703,7 @@ function medicineTick(g: Game, notes: string[]): void {
     g.tension = clamp(g.tension + 5, 0, 100);
     journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
-  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored) * domesticThawMult(g)) {
+  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * darkStoredWeight(g, g.stored)) * domesticThawMult(g)) {
     g.injured += 2;
     g.tension = clamp(g.tension + 8, 0, 100);
     g.stored = 0;
@@ -921,6 +930,7 @@ function finish(g: Game, end: Game['end']): void {
   const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: '반란이 일어났다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   for (const line of raisedLines(g)) journal(g, line);
+  darkFinish(g);
 }
 
 function nextSegment(g: Game): void {
@@ -941,6 +951,7 @@ function nextSegment(g: Game): void {
   g.phase = 'prep';
   applyFloors(g);
   hubOmenTick(g); // 라이프치히 두 구간 전: 짐 싸는 징후
+  darkPrep(g); // S1b 훅: 단서, 불씨가 오를지(임박 징후)
   if (g.autoLevers && !autoLeverStatus(g).ok) {
     g.autoLevers = false;
     addCard(g, { kind: 'info', who: '배급장이 장부를 내려놓았다', text: '앞칸의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다.' });

@@ -4,7 +4,7 @@
 import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
-  setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant,
+  setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -13,10 +13,13 @@ import { loadContentEvents } from './content_fs';
 loadContentEvents();
 
 export type S1aPolicy = 'caretaker' | 'first';
+/** S1b 카드 고르기. kind: 선을 넘지 않는다(경비, 재판, 지킨다, 근신). blind: kind와 같지만 징후를 모른 척한다.
+ * cruel: 징후를 모른 척하고, 선을 넘는 쪽과 즉결을 먼저 고른다. */
+export type DarkPolicy = 'kind' | 'blind' | 'cruel';
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */
 export type DomPolicy = 'engaged' | 'idle';
 
-export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number] }
+export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy }
 
 export interface GameMetrics {
   end: string;
@@ -47,6 +50,27 @@ export interface GameMetrics {
     hotCoal: number; techCoal: number; apprentices: number; manuals: number; demands: number; partsMade: number; partsEnd: number;
     scrapEnd: number; woodEnd: number; buried: number; s1cLaws: number; techs: string[];
   };
+  dark?: Record<string, number>;
+}
+
+const KIND_PICK = ['경비를 붙인다', '재판에 넘긴다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
+const CRUEL_PICK = ['경비대가 처리한다', '처형', '하차 명령', '경비대가 한다'];
+
+/** S1b 카드: kind는 위 목록 순서로, 없으면 선을 넘지 않는 첫 선택지. cruel은 선을 넘는 선택지, 즉결 쪽을 먼저. */
+function darkPick(card: Card, view: CardView, policy: DarkPolicy): number {
+  const ok = view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled);
+  if (policy !== 'kind' && card.kind === 'dark:sign') {
+    const x = ok.find(y => y.c.label === '모른 척한다');
+    if (x) return x.i;
+  }
+  if (policy === 'cruel') {
+    const cross = ok.find(x => x.c.cross !== undefined);
+    if (cross) return cross.i;
+    for (const label of CRUEL_PICK) { const x = ok.find(y => y.c.label === label); if (x) return x.i; }
+  } else {
+    for (const label of KIND_PICK) { const x = ok.find(y => y.c.label === label); if (x) return x.i; }
+  }
+  return (ok.find(x => x.c.cross === undefined) ?? ok[0])?.i ?? 0;
 }
 
 const W: Partial<Record<Eff['t'], number>> = {
@@ -117,7 +141,9 @@ function council(g: Game, opts: BotOptions): void {
       const sc = ex + harsh + (isLawAgenda(o) && o.repeal ? -3 : 0) + (o.forced ? 5 : 0);
       if (sc > best) { best = sc; idx = i; }
     });
-    setAgenda(g, idx);
+    // S1b: 재판에 넘긴 사건이 있으면 그 안건을 고른다(재판 약속을 지킨다). 강제 위기 안건이 있으면 그쪽.
+    const trial = opts.s1b && !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'trial') : -1;
+    setAgenda(g, trial >= 0 ? trial : idx);
   }
   if (opts.policy === 'caretaker') {
     const a = currentAgenda(g)!;
@@ -181,6 +207,7 @@ function spacePolicy(g: Game): void {
 
 export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetrics } {
   const g = opts.s1c ? createS1cGame(seed) : createGame(seed);
+  if (opts.s1b) enableDark(g);
   if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();
   const cards: Record<string, number> = {};
@@ -214,6 +241,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       const pro = (['pro_promise', 'pro_search', 'pro_deal'] as string[]).indexOf(card.kind);
       if (pro >= 0 && opts.prologuePicks) idx = opts.prologuePicks[pro];
       else if (card.kind.startsWith('dom:')) idx = domPick(g, card, view, opts.dom);
+      else if (card.kind.startsWith('dark:')) idx = darkPick(card, view, opts.s1b ?? 'kind');
       else if (!opts.scoreCards) idx = view.choices.findIndex(c => !c.disabled);
       else {
         let best = -1e9;
@@ -267,6 +295,10 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       buried: d.stats.buried, s1cLaws: Object.keys(g.passed).filter(l => ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack'].includes(l)).length,
       techs: Object.keys(d.techs).filter(id => d.techs[id as keyof typeof d.techs]?.stage !== 'restoring'),
     };
+  }
+  if (g.dark) {
+    const dk = g.dark;
+    m.dark = { ...dk.stats, crossings: dk.crossed.length, harm: dk.harm, embersLeft: dk.embers.length };
   }
   return { g, m };
 }

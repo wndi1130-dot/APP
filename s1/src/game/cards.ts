@@ -34,6 +34,8 @@ export interface Choice {
   log?: string;
   /** 효과(Eff) 밖의 비용 줄(S1c 부품·자재 등). 비용 줄 끝에 붙는다 */
   extra?: string[];
+  /** 선을 넘는 선택(S1b 10.1). 있으면 단추에 검은 띠를 두르고 이 반응 한 줄을 대사 밑에 붙인다. 빈 문자열이면 띠만(무뎌짐) */
+  cross?: string;
 }
 
 export interface CardView {
@@ -336,9 +338,18 @@ export interface CardExtension {
   choose?: (g: Game, card: Card, choice: Choice) => void;
 }
 export const CARD_EXTENSIONS: CardExtension[] = [];
+/** 모든 카드 보기를 마지막에 한 번 거른다(S1b 악몽의 말 끊기, 비상대권의 '포고로 정한다'). 상태를 바꾸지 않는다. */
+export type ViewFilter = (g: Game, card: Card, v: CardView) => CardView;
+export const VIEW_FILTERS: ViewFilter[] = [];
 
 // ---- 카드 보기 ----
 export function viewCard(g: Game, card: Card): CardView {
+  let v = baseView(g, card);
+  for (const f of VIEW_FILTERS) v = f(g, card, v);
+  return v;
+}
+
+function baseView(g: Game, card: Card): CardView {
   for (const ext of CARD_EXTENSIONS) {
     const v = ext.view(g, card);
     if (v) return v;

@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt,
+  workPower, workshopChief, workshopState, zoneAt, enableDark,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, s } from './dom';
@@ -27,9 +27,10 @@ export function urlWantsS1c(): boolean {
   return v === '1' || v === 'on';
 }
 
-/** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. */
-export function newGame(seed: string, s1c: boolean): Game {
+/** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. s1b: S1b 어두운 길도 켠다(ui/dark.ts). */
+export function newGame(seed: string, s1c: boolean, s1b = false): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
+  if (s1b) enableDark(g);
   startPrologue(g);
   return g;
 }
@@ -673,7 +674,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   const du = domUi(ui);
   const g0 = ctx.game();
   if (action === 'dom-new') {
-    ctx.reset(newGame(g0.seed, data.on === '1'));
+    ctx.reset(newGame(g0.seed, data.on === '1', !!g0.dark));
     ctx.toast(data.on === '1' ? `내정 켠 새 판: 시드 ${g0.seed}.` : `내정 끈 새 판: 시드 ${g0.seed}.`);
     return true;
   }
