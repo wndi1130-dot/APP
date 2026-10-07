@@ -95,19 +95,45 @@ func test_each_missing_required_key_is_caught() -> void:
 
 func test_stay_minutes_boundary() -> void:
 	var r := _sample()
-	r.set_time("D1 10:30", "D1 10:30", 0)
+	assert_true(r.set_time("D1 10:30", "D1 10:30", 0))
 	assert_eq(Receipt.check(r.to_dict()), [] as Array[String])
-	r.set_time("D1 10:30", "D1 10:30", -1)
-	assert_true(_has_problem(Receipt.check(r.to_dict()), "time.stayGameMinutes"))
+	# The builder never writes a negative stay; check() still catches one.
+	assert_true(r.set_time("D1 10:30", "D1 10:30", -1))
+	assert_eq(r.to_dict()["time"]["stayGameMinutes"], 0)
+	var d := r.to_dict()
+	d["time"]["stayGameMinutes"] = -1
+	assert_true(_has_problem(Receipt.check(d), "time.stayGameMinutes"))
 
 
 func test_clock_format_boundaries() -> void:
 	var r := _sample()
-	r.set_time("D1 00:00", "D12 23:59", 10)
+	assert_true(r.set_time("D1 00:00", "D12 23:59", 10))
 	assert_eq(Receipt.check(r.to_dict()), [] as Array[String])
 	for bad: String in ["D0 10:30", "D1 24:00", "D1 10:60", "10:30", "D1 9:30", ""]:
-		r.set_time(bad, "D1 12:00", 10)
-		assert_true(_has_problem(Receipt.check(r.to_dict()), "time.arrive"), bad)
+		# The builder refuses and keeps the last good clocks.
+		assert_false(r.set_time(bad, "D1 12:00", 10), bad)
+		assert_false(r.set_time("D1 12:00", bad, 10), bad)
+		assert_eq(r.to_dict()["time"]["arrive"], "D1 00:00", bad)
+		var d := r.to_dict()
+		d["time"]["arrive"] = bad
+		assert_true(_has_problem(Receipt.check(d), "time.arrive"), bad)
+
+
+func test_builder_refuses_bad_ids_and_empty_witness_text() -> void:
+	var r := _sample()
+	var before := r.to_json()
+	assert_false(r.gain_item("Bell"))
+	assert_false(r.lose_item(""))
+	assert_false(r.person("sent", "S2 lead"))
+	assert_false(r.decision("water tower", "shovel_snow"))
+	assert_false(r.decision("water_tower", ""))
+	assert_false(r.promise("rep_engine", "Bring bell", true))
+	assert_false(r.witness("s2_lead", "", "west_siding", "D1 15:20", "bitten", []))
+	assert_false(r.witness("s2_lead", "x", "west_siding", "D1 15:20", "bitten", ["Medic"]))
+	assert_false(r.witness("s2_lead", "x", "west_siding", "D1 15:20", "bitten", [{"person": "s2_medic", "text": ""}]))
+	assert_eq(r.to_json(), before)
+	assert_true(r.witness("s2_lead", "x", "west_siding", "D1 15:20", "bitten", [{"person": "s2_medic", "text": "봤다."}]))
+	assert_eq(r.problems(), [] as Array[String])
 
 
 func test_stock_accumulates_in_fixed_order_and_refuses_unknown_keys() -> void:
@@ -189,6 +215,9 @@ const BREAKS := [
 	"people.dead", "people.heroes", "witnessed.0.why", "witnessed.1.when", "witnessed.0.what",
 	"placeState.looted", "placeState.remainingRisk", "promises.0", "source", "endReason",
 	"decisions.1", "extra", "content_type",
+	"place.extra", "time.extra", "items.extra", "witnessed.0.extra", "witnessed.0.witnesses.0",
+	"witnessed.1.witnesses.1", "witnessed.0.weight", "witnessed.0.template", "promises.0.extra",
+	"decisions.0.extra", "version", "people.wounds.0.part", "people.wounds.0.extra",
 ]
 
 
@@ -233,6 +262,35 @@ func _break(d: Dictionary, prefix: String) -> void:
 			d["extra"] = 1
 		"content_type":
 			d["content_type"] = "chronicle"
+		"place.extra":
+			d["place"]["extra"] = 1
+		"time.extra":
+			d["time"]["extra"] = 1
+		"items.extra":
+			d["items"]["extra"] = []
+		"witnessed.0.extra":
+			d["witnessed"][0]["extra"] = 1
+		"witnessed.0.witnesses.0":
+			d["witnessed"][0]["witnesses"][0] = "Medic"
+		"witnessed.1.witnesses.1":
+			d["witnessed"][1]["witnesses"].append({"person": "s2_crew_01", "text": "", "extra": 1})
+		"witnessed.0.weight":
+			d["witnessed"][0]["weight"] = -1
+		"witnessed.0.template":
+			d["witnessed"][0]["template"] = "Bad Template"
+		"promises.0.extra":
+			d["promises"][0]["extra"] = 1
+		"decisions.0.extra":
+			d["decisions"][0]["extra"] = 1
+		"version":
+			# Wounds need version 2; leaving it out is wrong.
+			d["people"]["wounds"] = [{"person": "s2_shooter", "part": "arm_left", "kind": "deep"}]
+		"people.wounds.0.part":
+			d["version"] = 2
+			d["people"]["wounds"] = [{"person": "s2_shooter", "part": "hand", "kind": "deep"}]
+		"people.wounds.0.extra":
+			d["version"] = 2
+			d["people"]["wounds"] = [{"person": "s2_shooter", "part": "arm_left", "kind": "deep", "extra": 1}]
 
 
 func test_check_catches_wrong_types_and_values() -> void:
@@ -248,6 +306,22 @@ func test_check_accepts_segment_when_and_content_type() -> void:
 	d["witnessed"][0]["when"] = 0
 	d["content_type"] = "receipt"
 	assert_eq(Receipt.check(d), [] as Array[String])
+
+
+func test_check_accepts_v2_wounds_and_chronicle_extras() -> void:
+	var d := _sample().to_dict()
+	d["version"] = 2
+	d["people"]["wounds"] = [
+		{"person": "s2_shooter", "part": "arm_left", "kind": "deep"},
+		{"person": "s2_crew_02", "part": "leg_right", "kind": "bite", "festering": false},
+	]
+	d["witnessed"][0]["id"] = "w_001"
+	d["witnessed"][0]["weight"] = 1.5
+	d["witnessed"][0]["template"] = "left_behind"
+	d["witnessed"][1]["witnesses"].append({"person": "s2_crew_02", "text": "물 탱크에 눈을 퍼 넣었다."})
+	assert_eq(Receipt.check(d), [] as Array[String])
+	d["version"] = 1
+	assert_true(_has_problem(Receipt.check(d), "version"))
 
 
 func test_to_json_round_trips_with_fixed_key_order() -> void:

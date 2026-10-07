@@ -6,7 +6,7 @@ import { fmt } from './common';
 import type { CarDef, View } from './common';
 import { bar, lever } from './widgets';
 // S1c 내정 훅(ui/domestic.ts). S1a 판이면 모두 null이나 CARS를 돌려준다.
-import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, trainCars } from './domestic';
+import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, domesticWhyLine, trainCars } from './domestic';
 
 // 홈: 옆에서 본 열차 단면. 화면보다 길어서 좌우로 스크롤한다. 칸 문 위 명판으로 칸을 구별한다.
 // 칸의 수치와 조절은 칸을 누르면 뜨는 작은 창에만 있다. 그림은 회색 상자 수준의 자리표시다.
@@ -96,6 +96,7 @@ function carPopover(view: View, car: CarDef): HTMLElement | null {
         domesticCarTag(view, car), // S1c 내정 훅: 위생·침상
         c === 'tail' ? spaceTab(view) : null,
         h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
+      domesticWhyLine(view, car),
       h('div', { class: 'carpop__stats' },
         h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
         h('span', null, '배급 ', h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),

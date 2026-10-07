@@ -300,8 +300,9 @@ class Run:
         weights = {k: v * (P['target_boost'] if k == target else 1) for k, v in loot.items()}
         tot = sum(weights.values())
         haul = P['haul_total'] * self.r.uniform(0.7, 1.3)
-        if self.fervor['tail'] >= 1 and self.rel['tail'] <= -40:
-            haul *= 0.7  # 꼬리칸 작업 거부
+        # 꼬리칸 작업 거부: 꼬리칸이 운송조로 나갈 때만(J11). 작업조를 고르는 하위 시뮬(tail_levers.py)은 self.crew를 둔다.
+        if getattr(self, 'crew', None) in (None, 'tail') and self.fervor['tail'] >= 1 and self.rel['tail'] <= -40:
+            haul *= 0.7
         haul *= self.res('haul_mult')
         for k, w in weights.items():
             amt = haul * w / tot

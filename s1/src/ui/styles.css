@@ -314,7 +314,7 @@ small { font-size: 12px; }
 .car.is-strike { box-shadow: inset 0 0 0 2px var(--discontent); }
 
 .carpop {
-  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translate(-50%, var(--pop-dy, 0px));
   width: 316px; z-index: 5;
   padding: 4px 10px 8px; border-radius: var(--radius);
   background: var(--surface-2); border: 1px solid var(--line-strong);
@@ -328,6 +328,7 @@ small { font-size: 12px; }
 .carpop__stats .mini-bar, .ov-panel__stats .mini-bar { grid-column: 1 / -1; }
 .carpop__stats b { color: var(--ink-1); }
 .carpop__levers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.carpop__why { display: block; color: var(--ink-2); font-size: 12px; margin: -2px 0 6px; }
 .carpop__text { color: var(--ink-2); font-size: 12px; margin-bottom: 8px; }
 /* 꼬리칸 공간 레버(6.4) */
 .space-tab { min-height: 28px; padding: 0 8px; margin-left: auto; }

@@ -2,15 +2,16 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  addCard, advance, B, castVote, chooseCard, COMMS, createGame, currentAgenda, enableDark, EXECUTION, logCardPick, motionsNow, onDeath, primaryAction,
-  resolveStop, viewCard,
+  addCard, advance, B, castVote, chooseCard, COMMS, COUNCIL_HOOKS, createGame, currentAgenda, DEATH_HOOKS, enableDark, EXECUTION, logCardPick, motionsNow,
+  onDeath, primaryAction, PROFILES, resolveStop, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
 import { escalate } from '../../src/game/dark/embers';
 import { openCase } from '../../src/game/dark/cases';
 import { theftTick } from '../../src/game/dark/cards';
 import { cross } from '../../src/game/dark/chronicle';
-import { darkSettle } from '../../src/game/dark/hooks';
+import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from '../../src/game/dark/hooks';
+import { darkPyreWeight, darkStoredWeight } from '../../src/game/dark/corpses';
 import type { Ember } from '../../src/game/dark/state';
 import { playGame } from '../../tools/s1c_bot';
 
@@ -56,11 +57,25 @@ describe('S1b를 켜지 않은 판', () => {
     expect(g.journal.some(e => e.text.startsWith('기록: 징후'))).toBe(false);
   });
 
-  it('봇 판 결과가 S1b 없는 판과 같다(훅이 S1a 주사위를 건드리지 않는다)', () => {
-    for (const seed of ['same-1', 'same-2', 'same-3']) {
-      const a = playGame(seed, { s1c: false, policy: 'caretaker', dom: 'idle' }).g;
-      const b = playGame(seed, { s1c: false, policy: 'caretaker', dom: 'idle' }).g;
-      expect(b.journal.map(e => e.text)).toEqual(a.journal.map(e => e.text));
+  it('S1b를 끈 판에선 훅이 판을 하나도 바꾸지 않는다(S1a 주사위 포함)', () => {
+    for (const [seed, seg] of [['inert-1', 2], ['inert-2', 5], ['inert-3', 9]] as const) {
+      const g = createGame(seed);
+      toPrep(g, seg);
+      const before = JSON.stringify(g);
+      darkPrep(g);
+      darkTravel(g);
+      darkStop(g, true, []);
+      darkSettle(g);
+      darkFinish(g);
+      for (const hook of DEATH_HOOKS) hook(g, 'tail', [g.comms.tail.leader.name], 'other');
+      for (const hook of COUNCIL_HOOKS) {
+        hook.open?.(g);
+        hook.vote?.(g, { kind: 'motion', motion: 'trial' }, { yes: 0, no: 0, absent: 0, passed: true, byComm: {} } as never);
+      }
+      expect(darkHaulMult(g)).toBe(1);
+      expect(darkStoredWeight(g, 4)).toBe(4);
+      expect(darkPyreWeight(g, 2)).toBe(2);
+      expect(JSON.stringify(g)).toBe(before);
     }
   });
 });
@@ -265,8 +280,9 @@ describe('악몽과 H7 기록(10.5, 15.1)', () => {
     expect(g.dark!.h7[0]).toMatchObject({ kind: 'demand', ms: 1200, crossing: false });
     const plain = createGame('h7-off');
     const c2 = add(plain, { kind: 'demand', comm: 'tail' });
+    const before = JSON.stringify(plain);
     logCardPick(plain, c2.uid, 0, 1200);
-    expect(plain.dark).toBeUndefined();
+    expect(JSON.stringify(plain)).toBe(before);
   });
   it('판이 끝나면 일지 끝에 H7 숫자 한 줄', () => {
     const { g } = playGame('h7-end', { s1c: false, policy: 'caretaker', dom: 'idle', s1b: 'cruel' });
@@ -280,8 +296,9 @@ interface Rule { id: string; severity: string; scope: string; terms?: string[]; 
 const rules = (JSON.parse(readFileSync(join(__dirname, '../../schema/content_rules.json'), 'utf8')) as { rules: Rule[] }).rules
   .filter(r => r.severity === 'error');
 
-function darkTexts(seed: string, pick: (n: number, i: number) => number): { text: string; dialogue: boolean }[] {
+function darkTexts(seed: string, pick: (n: number, i: number) => number, ended: Game[] = []): { text: string; dialogue: boolean }[] {
   const g = darkGame(seed);
+  ended.push(g);
   const out: { text: string; dialogue: boolean }[] = [];
   let k = 0;
   for (let guard = 0; guard < 4000 && g.phase !== 'end'; guard += 1) {
@@ -328,8 +345,10 @@ describe('S1b 글 규칙', () => {
 
   it('S1b 판 여러 갈래가 막히지 않고 끝난다', () => {
     for (let s = 0; s < 8; s += 1) {
-      const texts = darkTexts(`dark-run-${s}`, (n, i) => (i + s) % n);
+      const ended: Game[] = [];
+      const texts = darkTexts(`dark-run-${s}`, (n, i) => (i + s) % n, ended);
       expect(texts.length).toBeGreaterThan(0);
+      expect(ended[0].phase).toBe('end');
     }
   });
 
@@ -347,10 +366,16 @@ describe('S1b 글 규칙', () => {
     g.cards = [];
     advance(g);
     expect(g.phase).toBe('stop');
-    resolveStop(g, false);
+    // 지나치면 열차가 서지 않으니 기다리고(4.4 '다음 정차에 내려놓는다'), 서면 내린다.
+    const passed = JSON.parse(JSON.stringify(g)) as Game;
+    resolveStop(passed, false);
+    expect(passed.dark!.exile).toHaveLength(1);
+    resolveStop(g, true);
     expect(g.dark!.exile).toHaveLength(0);
-    expect(g.left).toBeDefined();
+    expect(g.left).toContain(nameOfId(s.id));
   });
 });
+
+const nameOfId = (id: string) => PROFILES.find(p => p.id === id)!.name;
 
 void B;

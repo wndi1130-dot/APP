@@ -479,3 +479,47 @@ func test_depart_note_says_the_horde_is_close_and_holds_time() -> void:
 	var z: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(25, 0, 0))
 	z["horde"] = 0
 	assert_true(hud.horde_close())
+
+
+func test_losing_focus_while_paused_still_lets_go_of_the_stick() -> void:
+	var hud = game.hud
+	var size: Vector2 = hud._view_size()
+	var at := Vector2(size.x * 0.3, size.y - 100)
+	hud.finger_down(0, at)
+	hud.finger_move(0, at + Vector2(50, 0))
+	game.paused = true
+	game.interrupt()
+	assert_eq(hud.stick_index, -1)
+	assert_eq(game.player.stick, Vector2.ZERO, "no walking off alone after coming back")
+
+
+func test_a_quick_thumb_on_the_stick_does_not_end_the_fight() -> void:
+	var p = game.player
+	var z := _axe_and_one_ahead()
+	var hud = game.hud
+	hud._pad_down(hud.attack_button, Vector2.ZERO)
+	var size: Vector2 = hud._view_size()
+	var at := Vector2(size.x * 0.3, size.y - 100)
+	hud.finger_down(0, at)
+	hud.finger_up(0, at)
+	assert_eq(p.target_zombie, z)
+	assert_true(p.hold_attack)
+
+
+func test_back_in_the_dead_zone_the_rim_run_ends() -> void:
+	var hud = game.hud
+	var p = game.player
+	game.opts["stick_rim_run"] = true
+	hud.stick_index = 0
+	hud.stick_origin = Vector2(200, 400)
+	hud.stick_at = Vector2(200 + hud.STICK_R, 400)
+	hud._apply_stick()
+	hud._update_rim(0.2)
+	hud._apply_stick()
+	assert_true(p.running)
+	hud.stick_at = Vector2(202, 400)
+	hud._apply_stick()
+	assert_false(p.running)
+	assert_eq(hud.stick_push, 0.0)
+	hud.tick(0.2)
+	assert_false(p.running, "the old push does not come back on the next frame")

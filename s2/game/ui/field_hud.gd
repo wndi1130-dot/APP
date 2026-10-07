@@ -1033,8 +1033,9 @@ func finger_up(index: int, pos: Vector2) -> bool:
 			stick_index = -1
 			stick_dash = false
 			_stick_release()
-			# A short touch that never moved is a tap on whatever is there.
-			if pos.distance_to(f["start"]) < DRAG_PX and Time.get_ticks_msec() - int(f["ms"]) < 350:
+			# A short touch that never moved is a tap on whatever is there; in a
+			# fight it is only a thumb set down, not an order to stop.
+			if pos.distance_to(f["start"]) < DRAG_PX and Time.get_ticks_msec() - int(f["ms"]) < 350 and not fighting(game.player):
 				stick_tap_ms = Time.get_ticks_msec()
 				stick_tap_pos = pos
 				_tap(pos)
@@ -1078,7 +1079,12 @@ func _apply_stick() -> void:
 		stick_origin = stick_at - v.normalized() * STICK_R   # the base follows a long drag
 		v = stick_at - stick_origin
 	if v.length() < STICK_DEAD:
+		# Back in the dead zone: no push left over to run on.
 		p.stick = Vector2.ZERO
+		stick_push = 0.0
+		rim_t = 0.0
+		rim_run = false
+		p.running = run_button.button_pressed or stick_dash
 		return
 	# The camera looks north with no turn: screen right is +x, screen down is +z.
 	var push := clampf(v.length() / STICK_R, 0.0, 1.0)

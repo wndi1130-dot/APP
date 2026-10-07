@@ -488,11 +488,13 @@ func _notification(what: int) -> void:
 
 
 func interrupt() -> void:
+	# Fingers down when the app goes away never come back up, paused or not.
+	if hud != null:
+		hud.drop_touch()
 	if ended or paused:
 		return
 	paused = true
 	if hud != null:
-		hud.drop_touch()
 		hud.toast("멈췄다. 돌아오면 '계속'을 누른다.")
 
 

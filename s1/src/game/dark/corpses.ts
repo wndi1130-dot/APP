@@ -47,24 +47,37 @@ function practiceCost(g: Game, p: Practice, c: Comm): void {
   }
 }
 
-/** 확인을 마친다. 그 칸이 하는 관행은 가족이 있으면 10%로 빠뜨린다. */
-export function checkBody(g: Game, x: { comm: Comm; name: string }): void {
+/** 냉동칸·찬 객차에 놓인 시신 하나를 S1a 굴림에서 뺀다(확인했거나, S1b가 밤샘 굴림으로 맡았다). n이 −1이면 되돌린다. */
+function holdCold(g: Game, n: 1 | -1 = 1): void {
+  const d = g.dark!;
+  if (placeOf(g) !== 'cold') return;
+  if (lawActive(g, 'corpse_burn')) d.checkedPyre = Math.max(0, d.checkedPyre + n);
+  else d.checkedStored = Math.max(0, d.checkedStored + n);
+}
+
+/** 확인을 마친다. 그 칸이 하는 관행은 가족이 있으면 10%로 빠뜨린다. held면 밤샘 카드를 띄울 때 이미 S1a 굴림에서 뺐다. */
+export function checkBody(g: Game, x: { comm: Comm; name: string }, held = false): void {
   const d = g.dark!;
   const p = d.practice ?? 'guard';
   practiceCost(g, p, x.comm);
   const missed = p === 'car' && !!familyOf(g, x.name) && dr(g) < B.carMiss;
-  if (missed) { leaveUnchecked(g, x, B.corpseRise, false); return; }
-  const where = placeOf(g);
-  if (where === 'cold') {
-    if (lawActive(g, 'corpse_burn')) d.checkedPyre += 1; else d.checkedStored += 1;
+  if (missed) {
+    if (held) holdCold(g, -1); // 빠뜨린 시신은 S1a 냉동칸 위험으로 돌아간다
+    leaveUnchecked(g, x, B.corpseRise, false);
+    return;
   }
+  if (!held) holdCold(g);
   journal(g, dpick(g, CHECK_LINES).replaceAll('{who}', x.name), 'dark');
 }
 
-/** 확인하지 않은 시신. 밤샘이면 살던 칸에서 다음 정산에 p로 일어난다. 아니면 놓인 자리를 따른다:
- * 냉동칸·찬 객차는 S1a 시신 법의 위험(3%/구간, darkStoredWeight가 확인 안 된 시신만 센다), 밖이면 일어날 데가 없다. */
+/** 확인하지 않은 시신. 밤샘이면 살던 칸에서 다음 정산에 p로 한 번 굴린다(9.1 '한 시신의 위험은 한 번만 굴린다').
+ * 그 시신이 S1a 냉동칸 수에도 들어 있으면 S1a 굴림에서 빼 둔다(checked 수에 넣는다). 일어나면 냉동칸 수에서도 빠진다.
+ * 밤샘이 아니면 놓인 자리를 따른다: 냉동칸·찬 객차는 S1a 시신 법의 위험(3%/구간, 확인 안 된 시신만 센다), 밖이면 일어날 데가 없다. */
 function leaveUnchecked(g: Game, x: { comm: Comm; name: string }, p: number, inCar: boolean): void {
-  if (inCar) g.dark!.unchecked.push({ comm: x.comm, name: x.name, p });
+  if (!inCar) return;
+  const cold = placeOf(g) === 'cold';
+  const burn = cold && lawActive(g, 'corpse_burn');
+  g.dark!.unchecked.push({ comm: x.comm, name: x.name, p, ...(cold ? { cold, burn } : {}) });
 }
 
 /** 이름 있는 인물(대표·측근)이나 가족이 있는 사람이면 밤샘을 청한다(9.2). */
@@ -80,6 +93,9 @@ export function corpseTick(g: Game): void {
   for (const x of d.unchecked) {
     if (dr(g) >= x.p) continue;
     d.stats.risen += 1;
+    // 일어난 시신은 냉동칸 수에서도 빠진다(S1a 굴림에서 빼 둔 몫도 같이).
+    if (x.cold && x.burn && (g.pyre ?? 0) > 0) { g.pyre = (g.pyre ?? 0) - 1; d.checkedPyre = Math.max(0, d.checkedPyre - 1); }
+    else if (x.cold && !x.burn && g.stored > 0) { g.stored -= 1; d.checkedStored = Math.max(0, d.checkedStored - 1); }
     const hit = victimNear(g, x.comm, x.name);
     g.tension = clamp(g.tension + 3, 0, 100);
     if (hit) {
@@ -100,6 +116,8 @@ export function corpseTick(g: Game): void {
   d.fresh = [];
   for (const x of fresh) {
     if (wantsVigil(g, x.name) && !segFull(g) && !g.cards.some(k => k.kind === 'dark:vigil')) {
+      // 밤샘 답이 올 때까지 이 시신은 S1b가 맡는다(S1a 냉동칸 굴림에서 뺀다). 한 시신은 한 번만 굴린다.
+      holdCold(g);
       darkCard(g, { kind: 'dark:vigil', comm: x.comm, who: x.name });
       continue;
     }
@@ -134,7 +152,7 @@ export function vigil(g: Game, x: { comm: Comm; name: string }, how: 'allow' | '
     leaveUnchecked(g, x, B.vigilGuarded, true);
   } else {
     g.comms[x.comm].rel = clamp(g.comms[x.comm].rel - 3, -100, 100);
-    checkBody(g, x);
+    checkBody(g, x, true);
   }
 }
 
