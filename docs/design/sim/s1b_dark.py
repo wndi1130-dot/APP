@@ -36,6 +36,14 @@ Q의 손잡이 (자세한 값은 아래 Q 주석)
   계엄         ml_rel(대권 연장 문의 경비대 관계, 15 = 호의), ep_normal=1(비상대권을 51표로), ml_direct, ml_lift, coup_*
   내전         brink_tension(101이면 긴장 길 없음), brink_clock, truce_cond(서약 조건), truce_sep, ai_ml_request, captain_ambition
   협박 값      leash_public(목줄이 끊기면 공개될 확률), harsh_pull
+  4라운드      브리프 b8f5cfb(로컬 워커 비평)의 규칙. 기본은 모두 켬, 0으로 하나씩 끈다. 모두 끄면 3라운드 숫자와 판마다 같다:
+               --tune evidence_true=0 harm_gate=0 susp_nostack=0 curfew_trainwide=0 ml_ratify=0 corpse_once=0 tone3=0
+               evidence_true(4.4 헛단서만으론 증거 아님), harm_gate·harm_cap(1.2 피해 사건), susp_nostack(4.5),
+               curfew_trainwide(5.1), ml_ratify(5.3 계엄을 거둔 뒤 포고 추인), corpse_once·corpse_field_checked(9.1·9.3),
+               tone3(10.2 톤 세 층, 보고만)
+               시뮬레이터에 없어 넣지 못한 것: 측근 → 지시한 사람(4.4, 용의자가 칸 단위라 측근이 없다),
+               '의회에 묻는다'와 대권 연장 표결(5.3, 그 길을 고르는 정책이 없다), 강제 해산의 사상(5.1, 원래 없다),
+               처형·법 24·25(법 25 아래의 벌은 수단 점수 자리만 있고 늘 0)
 """
 import random
 import sys
@@ -138,12 +146,26 @@ Q = dict(
     floor=1,              # 0이면 관계 바닥 환산(적의·불씨)이 없다
     trial_slot=1,         # 0이면 재판이 회기의 법 안건 자리를 먹지 않는다(시험)
     corpse_cost=1,        # 0이면 칸 안 시신 확인·밤샘의 관계·노출 값이 없다(일어나는 시신도 없다)
+    # 4라운드: 로컬 워커 비평을 받은 규칙(브리프 b8f5cfb). 하나씩 0으로 끄면 3라운드 동작이 돌아온다
+    evidence_true=1,      # 4.4 '증거'는 진범 단서가 하나 이상 있어야 한다. 헛단서만이면 정황에서 멈춘다
+    harm_gate=1,          # 1.2 피해 사건: 수사·군중 시계·내전 직전 중엔 다른 불씨가 사보타주(2) 위로 못 오르고,
+    harm_cap=6,           #     피해 사건이 판당 harm_cap건에 닿으면 새 불씨가 생기지 않는다(플레이어가 고른 탄압·처벌은 그대로)
+    susp_nostack=1,       # 4.5 판 중 합류(+2)와 구조민(+1)을 겹쳐 세지 않는다(둘 다면 +2)
+    curfew_trainwide=1,   # 5.1 통행 금지는 열차 전체: 경비대 외 모든 칸 관계 −1/구간(3라운드: 꼬리칸·앞칸 −2)
+    ml_ratify=1,          # 5.3 계엄을 거두면 계엄 중 포고를 추인 안건 하나(51)로 묶는다(ml_lift=1일 때만 쓰인다)
+    corpse_once=1,        # 9.1·9.3 확인한 시신은 어디 두든 안 일어난다. 확인 안 한 시신만 놓인 자리 값으로 일어난다
+    corpse_field_checked=0,  # (가정) 1이면 정차(바깥)에서 죽은 사람도 확인한 것으로 본다. 0이면 확인 안 한 시신으로 친다
+    tone3=1,              # 10.2 톤 세 층(깨끗·흔들림·어두움) 집계. 보고만 하고 판 결과는 바꾸지 않는다
 )
 RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
 BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
 DARK = ('saint', 'caretaker', 'tyrant', 'schemer_plus')
 MEANS = dict(assn_ordered=4, ml_means=1, executions=3, scapegoats=3, frames=3, exiles=2, lynch_allowed=2,
              mass_arrest=2, summary=2, trial_bought=2, dispersals=1, blackmail=1, harsh_chosen=1)
+# 10.1 선을 넘는 선택(계엄은 플레이어가 선포한 문만: 연장·내전 직전·내전. 의회가 맡긴 계엄과 경비대장의 계엄은 빼고 셈, 가정)
+CROSSINGS = ('assn_ordered', 'scapegoats', 'lynch_allowed', 'exiles', 'executions', 'mass_arrest',
+             'ml_door_extend', 'ml_door_brink', 'ml_door_war', 'trial_bought', 'frames')
+GRAVE = ('assn_ordered', 'executions', 'scapegoats', 'frames')  # 10.2 중대한 선택
 S1A_POLICIES = ('passive', 'idealist', 'nodeal', 'caretaker', 'schemer', 'caretaker_random')
 
 
@@ -196,6 +218,8 @@ class DarkRun(A.Run):
         self.brinks_n = self.wars_n = 0
         self.captain_ambitious = self.r2.random() < Q['captain_ambition']
         self.coup_line_now = Q['coup_line']
+        self.ml_decrees, self.ratify_pending = [], None  # 계엄 중 포고 (법, 폐지였나), 거둔 뒤 추인 안건(5.3)
+        self.uc_store = self.uc_pyre = 0  # 확인 안 한 채 냉동칸·찬 객차(장작불 대기)에 놓인 시신(9.1)
 
     # ---------------- S1a 훅 ----------------
     def res(self, key, default=0.0):
@@ -205,9 +229,62 @@ class DarkRun(A.Run):
         return v
 
     def on_death(self, n, c='tail'):
+        if not self.s1b or n <= 0:
+            return super().on_death(n, c)
+        pyre0 = self.pyre
         super().on_death(n, c)
-        if self.s1b and self._phase == 'medicine' and n > 0:
-            self.fresh_corpses += [c] * n  # 약이 없어 죽은 부상자: 칸 안의 죽음
+        way = self.corpse  # 시신이 가는 자리(S1a on_death와 같은 갈래)
+        if way == 'store':
+            dest = ['store'] * n
+        elif way == 'burn':
+            dp = self.pyre - pyre0
+            dest = ['pyre'] * dp + ['kin'] * (n - dp)
+        else:
+            dest = ['thrown'] * n
+        if self._phase in ('medicine', 'train'):  # 칸 안의 죽음(약이 없어 죽은 부상자, 폭력, 내전): 머리 확인으로
+            self.fresh_corpses += [(c, x) for x in dest]
+        elif Q['corpse_once'] and not Q['corpse_field_checked']:  # 정차에서 죽은 사람: 확인 카드 없이 들어온다(가정)
+            for x in dest:
+                self.stash_unchecked(c, x)
+
+    def stash_unchecked(self, comm, dest, in_car=False):
+        """확인 안 한 시신 하나를 놓인 자리의 위험에 건다(9.1, 4라운드). 한 시신은 한 자리에서만 굴린다.
+        냉동칸(법 9)·찬 객차(법 10 장작불 대기)면 S1a의 1구당 3%/구간, 살던 칸이면 다음 구간 25% 한 번.
+        던진 시신(법 없음·법 8)은 칸 안에서 빠뜨린 것(in_car)만 그 칸에서 굴린다(3라운드와 같다)."""
+        S = self.stats
+        if dest == 'store':
+            self.uc_store += 1; S['corpse_unchecked_store'] += 1
+        elif dest == 'pyre':
+            self.uc_pyre += 1; S['corpse_unchecked_pyre'] += 1
+        elif dest == 'kin' or in_car:  # 냉동칸이 차서 살던 칸에 둔 시신, 칸 안에서 확인을 빠뜨린 시신
+            self.unchecked.append([comm, Q['corpse_rise']]); S['corpse_unchecked_car'] += 1
+
+    def medicine_tick(self):
+        if not (self.s1b and Q['corpse_once']):
+            return super().medicine_tick()
+        # 약: s1a_balance.Run.medicine_tick 앞부분 그대로
+        need = self.injured * P['med_per_injured'] * self.res('med_mult')
+        if self.med >= need:
+            self.med -= need
+            heal = self.res('heal', 0.4)
+            healed = sum(1 for _ in range(self.injured) if self.r.random() < heal)
+            self.injured -= healed
+        else:
+            self.med = 0
+            dead = sum(1 for _ in range(self.injured) if self.r.random() < 0.1)
+            self.injured -= dead
+            self.on_death(dead)
+        # 일어나는 시신: S1a의 1구당 3%를 확인 안 한 시신에만 건다(9.1·9.3, 4라운드). 확인한 시신은 어디 있든 안 일어난다
+        S = self.stats
+        self.uc_pyre = min(self.uc_pyre, self.pyre)    # 정차 장작불에 태웠으면 0으로 돌아와 있다
+        self.uc_store = min(self.uc_store, self.stored)
+        if self.uc_pyre and self.r2.random() < min(0.3, P['store_risk'] * self.uc_pyre):
+            self.uc_pyre -= 1; self.pyre -= 1
+            self.injured += 1; self.tension += 5
+            S['pyre_rose'] += 1
+        if self.uc_store and self.r2.random() < min(0.3, P['store_risk'] * self.uc_store):
+            self.injured += 2; self.tension += 8; self.stored = 0; self.uc_store = 0
+            S['cold_car_outbreak'] += 1
 
     def stance(self, c, law, repeal=False, grudge=True):
         if not self.s1b:
@@ -412,7 +489,11 @@ class DarkRun(A.Run):
             self.tension += Q['ml_tension']; self.fear += 3
             if Q['curfew']:
                 self.tension += 1; self.fear += 2
-                for c in ('tail', 'front'): self.rel[c] = clamp(self.rel[c] - 2, -100, 100)
+                if Q['curfew_trainwide']:  # 5.1(4라운드): 열차 전체, 경비대 외 모든 칸 −1
+                    for c in COMMS:
+                        if c != 'guard': self.rel[c] = clamp(self.rel[c] - 1, -100, 100)
+                else:
+                    for c in ('tail', 'front'): self.rel[c] = clamp(self.rel[c] - 2, -100, 100)
             if self.rel['guard'] <= self.coup_line_now and self.coup_warn is None:
                 self.coup_warn = self.seg; S['coup_warning'] += 1
             if self.coup_warn is not None:
@@ -562,6 +643,8 @@ class DarkRun(A.Run):
     def new_ember(self, who, target, cause, p=None):
         S = self.stats
         S['ember_trigger'] += 1
+        if self.harm_capped():  # 1.2(4라운드): 피해 사건이 판당 harm_cap건에 닿았다
+            S['ember_harm_capped'] += 1; return
         p = Q['ember_p'] if p is None else p
         if self.seg <= self.repressed_until[who]:
             p *= 2
@@ -580,6 +663,23 @@ class DarkRun(A.Run):
         S['embers'] += 1; S['sign_kiche'] += 1; S['ember_' + cause] += 1
         if self.wants_guard(stage=0):
             self.post_guard(e)
+
+    # ---- 피해 사건 한데 세기 (1.2, 4라운드) ----
+    def harm(self, kind):
+        """사람이 다치거나 죽은 사건 하나. 누가 일으켰든 센다(통계는 플래그와 상관없이)."""
+        self.stats['harm_events'] += 1
+        self.stats['harm_' + kind] += 1
+
+    def harm_capped(self):
+        return bool(Q['harm_gate'] and Q['harm_cap'] and self.stats['harm_events'] >= Q['harm_cap'])
+
+    def harm_busy(self, e):
+        """수사(군중 시계 포함)나 내전 직전이 진행 중이면 그 일에 걸린 불씨가 아닌 '다른' 불씨는 2 위로 못 오른다."""
+        if not Q['harm_gate']:
+            return False
+        if any(c['status'] in ('open', 'trial') and c['ember'] is not e for c in self.cases):
+            return True
+        return bool(self.brink) and {e['who'], e['target']} != set(self.brink['pair'])
 
     def wants_guard(self, stage):
         if self.dark == 'tyrant' or stage >= 3:
@@ -626,6 +726,9 @@ class DarkRun(A.Run):
             if (nxt >= 3 and self.violent_used >= Q['violent_cap']) or \
                     (nxt == 4 and e['target'] == 'chief' and self.chief_attacked):
                 e['quiet'] += 1; S['ember_held_by_cap'] += 1
+                continue
+            if nxt >= 3 and self.harm_busy(e):
+                e['quiet'] += 1; S['ember_held_by_harm'] += 1
                 continue
             if self.r2.random() < self.esc_prob(e):
                 e['imm'] = nxt; S['sign_imminent'] += 1
@@ -702,7 +805,7 @@ class DarkRun(A.Run):
             if self.dark == 'saint':  # 사람이 안 다친 사보타주도 수사한다
                 self.open_case(e['who'], v, None, e, kind=k)
         elif st == 3:
-            S['act_assault'] += 1
+            S['act_assault'] += 1; self.harm('assault')
             if guarded: S['assault_halved'] += 1
             n = 1 if guarded else self.r2.choice([1, 2])
             self.tension += Q['assault_tension']
@@ -713,7 +816,7 @@ class DarkRun(A.Run):
             case = self.open_case(e['who'], v, Q['clock_death'] if dead else Q['clock_injury'], e, kind='assault')
             if guarded: self.caught(case)
         elif st == 4:
-            S['act_assassination'] += 1
+            S['act_assassination'] += 1; self.harm('assn')
             self.tension += Q['assn_tension']
             self.kill_ember(e, 'ember_spent')
             if e['target'] == 'chief':
@@ -738,7 +841,7 @@ class DarkRun(A.Run):
     def caught(self, case):
         """경비가 선 자리의 폭행·암살: 범인이 '증거' 단계로 잡힌다(4.2, 2판)."""
         cul = next(s for s in case['sus'] if s['culprit'])
-        cul['clues'] = max(cul['clues'], 2)
+        cul['clues'] = max(cul['clues'], 2); cul['tc'] = max(cul['tc'], 1)  # 현장에서 잡힌 것은 진범 단서다
         self.stats['caught_by_guard'] += 1
 
     def starving_theft(self):
@@ -771,14 +874,16 @@ class DarkRun(A.Run):
         if n <= 0:
             return
         ph, self._phase = self._phase, 'train'
-        self.on_death(n, comm)
+        self.on_death(n, comm)  # 칸 안의 시신은 on_death가 fresh_corpses에 올린다
         self._phase = ph
-        self.fresh_corpses += [comm] * n
         if violent:
             self.stats['violent_deaths'] += n
 
     # ---------------- 칸 안의 시신 (9.1, 9.2) ----------------
-    def check_corpse(self, comm):
+    def check_corpse(self, corpse):
+        """corpse = (칸, 놓일 자리). 자리는 corpse_once(9.1, 4라운드)에서만 쓴다.
+        밤샘은 그 칸에서 하룻밤 한 번 굴리고, 그 뒤엔 확인을 마친 것으로 본다(9.2)."""
+        comm, dest = corpse
         S = self.stats
         if self.practice is None:
             self.practice = 'guard' if self.dark == 'tyrant' else 'medtech'
@@ -801,7 +906,10 @@ class DarkRun(A.Run):
         else:
             self.rel[comm] = clamp(self.rel[comm] - 1, -100, 100); self.fear += 2
             if self.r2.random() < Q['car_miss']:
-                self.unchecked.append([comm, Q['corpse_rise']])
+                if Q['corpse_once']:  # 빠뜨린 시신은 놓인 자리 값 하나로만(냉동칸·찬 객차면 그쪽, 아니면 칸에서 25%)
+                    self.stash_unchecked(comm, dest, in_car=True)
+                else:
+                    self.unchecked.append([comm, Q['corpse_rise']])
 
     # ---------------- 수사와 처벌 (4.4) ----------------
     ACCESS = dict(boiler='engine', poison='front', assault='guard', assn='guard', order='guard', coupling='tail')
@@ -811,14 +919,18 @@ class DarkRun(A.Run):
         r2 = self.r2
         s = 0
         if comm == 'tail':
-            s += 1 if r2.random() < 0.9 else 0                       # 꼬리칸 90명 중 80명이 구조민
-            if self.stats['rescued'] and r2.random() < min(1.0, 2 * self.stats['rescued'] / 90 + (0 if culprit else 0.6)):
-                s += 2                                                 # 판 중에 데려온 사람
+            tag = r2.random() < 0.9                                    # 꼬리칸 90명 중 80명이 구조민
+            joined = bool(self.stats['rescued']) and \
+                r2.random() < min(1.0, 2 * self.stats['rescued'] / 90 + (0 if culprit else 0.6))  # 판 중에 데려온 사람
+            if joined and Q['susp_nostack']:
+                s += 2                                                 # 4.5(4라운드): 둘 다면 +2만
+            else:
+                s += (1 if tag else 0) + (2 if joined else 0)
         elif r2.random() < 0.34:
             s += 1                                                     # 다른 칸의 구조민(37/110)
         if comm in self.punished_comms and r2.random() < 0.5:
             s += 1
-        return dict(comm=comm, culprit=culprit, susp=s, clues=0, acq=False)
+        return dict(comm=comm, culprit=culprit, susp=s, clues=0, tc=0, acq=False)  # tc: 진범을 가리킨 단서 수
 
     def open_case(self, culprit, victim, clock, ember, own=False, kind='assault'):
         S = self.stats
@@ -846,11 +958,17 @@ class DarkRun(A.Run):
             S['culprit_top_suspect'] += 1
         return case
 
+    def level(self, s):
+        """소문 0 · 정황 1 · 증거 2. 4.4(4라운드): 증거엔 진범 단서가 하나 이상 있어야 한다(헛단서만이면 정황)."""
+        if s['clues'] >= 2 and (s['tc'] >= 1 or not Q['evidence_true']):
+            return 2
+        return 1 if s['clues'] >= 1 else 0
+
     def eligible(self, case):
         return [s for s in case['sus'] if not s['acq']] or case['sus']
 
     def top_by_clues(self, case):
-        return max(self.eligible(case), key=lambda s: (s['clues'], s['susp'], self.r2.random()))
+        return max(self.eligible(case), key=lambda s: (self.level(s), s['clues'], s['susp'], self.r2.random()))
 
     def top_by_susp(self, case):
         return max(self.eligible(case), key=lambda s: (s['susp'], s['clues'], self.r2.random()))
@@ -867,7 +985,7 @@ class DarkRun(A.Run):
             roll = self.r2.random()
             if roll < p_true:
                 s = next(s for s in case['sus'] if s['culprit'])
-                s['clues'] += 1; s['susp'] += 1; S['clue_true'] += 1
+                s['clues'] += 1; s['tc'] += 1; s['susp'] += 1; S['clue_true'] += 1
             elif roll < p_true + p_false:
                 s = self.r2.choice([s for s in case['sus'] if not s['culprit']])
                 s['clues'] += 1; s['susp'] += 1; S['clue_false'] += 1
@@ -877,9 +995,9 @@ class DarkRun(A.Run):
                 self.summary(case)
             elif self.ml:
                 self.guard_trial(case)
-            elif top['clues'] >= 2:
+            elif self.level(top) >= 2:
                 self.send_trial(case)
-            elif d == 'saint' and case['clock'] is not None and case['clock'] <= 1 and top['clues'] >= 1:
+            elif d == 'saint' and case['clock'] is not None and case['clock'] <= 1 and self.level(top) >= 1:
                 self.send_trial(case)
             elif self.seg - case['opened'] >= Q['cold_case']:
                 case['status'] = 'closed'; S['cold_cases'] += 1
@@ -895,7 +1013,8 @@ class DarkRun(A.Run):
         S = self.stats
         S['guard_trials'] += 1
         dfd = self.top_by_clues(case)
-        p = 1.0 if dfd['clues'] >= 2 else 0.6 if dfd['clues'] == 1 else 0.3
+        lv = self.level(dfd)
+        p = 1.0 if lv == 2 else 0.6 if lv == 1 else 0.3
         if self.r2.random() < p:
             self.punish(case, dfd, 'confine')
         else:
@@ -904,7 +1023,8 @@ class DarkRun(A.Run):
     def summary(self, case):
         S = self.stats
         top = self.top_by_clues(case)
-        p_mis = 0.0 if top['clues'] >= 2 else 0.4 if top['clues'] == 1 else 0.7
+        lv = self.level(top)
+        p_mis = 0.0 if lv == 2 else 0.4 if lv == 1 else 0.7
         if self.r2.random() < p_mis:
             person = self.r2.choice([s for s in case['sus'] if not s['culprit']])
         else:
@@ -948,7 +1068,8 @@ class DarkRun(A.Run):
         S = self.stats
         S['trials'] += 1
         dfd = self.top_by_clues(case)
-        ev = 2 if dfd['clues'] >= 2 else 0 if dfd['clues'] == 1 else -2
+        lv = self.level(dfd)
+        ev = 2 if lv == 2 else 0 if lv == 1 else -2
         yes = 0
         for c in COMMS:
             score = ev + (1 if c == case['victim'] else 0) - (2 if c == dfd['comm'] else 0) + band(self.rel[c])
@@ -987,13 +1108,13 @@ class DarkRun(A.Run):
         S = self.stats
         S['protected'] += 1
         if case['protects'] >= 1 and self.r2.random() < Q['protect_hurt']:
-            self.injured += 1; S['guard_hurt_protecting'] += 1
+            self.injured += 1; S['guard_hurt_protecting'] += 1; self.harm('protect')
         case['protects'] += 1
         case['clock'] = 1
         self.base['guard'][3] += 5; self.fear += 3
         v = case['victim']
         self.rel[v] = clamp(self.rel[v] - 5, -100, 100)
-        if case['status'] == 'open' and self.top_by_clues(case)['clues'] >= 1 and not self.ml:
+        if case['status'] == 'open' and self.level(self.top_by_clues(case)) >= 1 and not self.ml:
             self.send_trial(case)  # 정황 이상인 용의자가 있으면 재판에 넘긴다
 
     def scapegoat(self, case, allowed=False):
@@ -1002,7 +1123,7 @@ class DarkRun(A.Run):
         person = self.top_by_susp(case)
         c = person['comm']
         S['lynch_allowed' if allowed else 'scapegoats'] += 1
-        S['lynch_events'] += 1
+        S['lynch_events'] += 1; self.harm('lynch')
         if allowed: self.fear += 5
         if self.r2.random() < Q['scapegoat_death']:
             self.train_death(1, c, violent=True); S['lynch_deaths'] += 1
@@ -1049,6 +1170,7 @@ class DarkRun(A.Run):
         if o['why'] == 'silence' and t in self.executors:
             self.executors.remove(t)  # 입을 막으면 새 실행자가 또 약점을 쥔다
         self.executors.append(exe)
+        self.harm('order')
         if self.r2.random() < p:
             S['assn_succeeded'] += 1
             if name == 'stop':
@@ -1153,7 +1275,7 @@ class DarkRun(A.Run):
         """계엄으로 가는 문 넷(5.5). 들어선 뒤의 규칙은 5.3 그대로다."""
         S = self.stats
         self.ml = True; self.ml_start = self.seg; self.pre_ml_trust = self.trust
-        self.ep_on = False; self.ep_decrees = []
+        self.ep_on = False; self.ep_decrees = []; self.ml_decrees = []
         self.passed.discard('emergency_powers')
         S['ml_declared'] += 1; S['ml_door_' + door] += 1; S['ml_means'] += self.ML_DOOR_MEANS[door]
         if door == 'extend':
@@ -1342,7 +1464,7 @@ class DarkRun(A.Run):
         self.tension += 10; self.fear += 10
         if self.r2.random() < 0.5:  # 진 쪽 불씨가 바로 '폭행 임박'
             e = next((x for x in self.embers if x['who'] == lose and x['imm'] is None), None)
-            if e is None and len(self.embers) < Q['ember_max']:
+            if e is None and len(self.embers) < Q['ember_max'] and not self.harm_capped():
                 self.eid += 1
                 e = dict(id=self.eid, who=lose, target=win, cause='side', stage=2, imm=None, quiet=0,
                          guard_until=-1, sab=None, blocked=False)
@@ -1367,6 +1489,7 @@ class DarkRun(A.Run):
             n = self.r2.choice([1, 2])
             for _ in range(n):
                 self.train_death(1, self.r2.choice(w['pair'])); S['war_deaths'] += 1
+            self.harm('war')
             self.war = None; S['war_end_ml'] += 1; return
         if w['end_next'] == 'help':
             win, lose = w['help']
@@ -1374,7 +1497,7 @@ class DarkRun(A.Run):
             self.war = None; return
         # 싸움: 1명이 죽고 2명이 다친다. 정차 산출 −50%, 긴장 +8
         self.train_death(1, self.r2.choice(w['pair'])); S['war_deaths'] += 1
-        self.injured += 2
+        self.injured += 2; self.harm('war')
         self.haul_once *= 0.5
         self.tension += 8
         w['segs'] += 1
@@ -1403,7 +1526,7 @@ class DarkRun(A.Run):
     def war_loss(self, lose, trust):
         S = self.stats
         if self.r2.random() < 0.5:
-            S['war_leader_killed'] += 1
+            S['war_leader_killed'] += 1; self.harm('war')
             self.train_death(1, lose); S['war_deaths'] += 1
             self.succession(lose)
         self.grudge[lose] = 3; self.last_offense[lose] = self.session
@@ -1414,6 +1537,36 @@ class DarkRun(A.Run):
         self.stats['ml_lifted'] += 1
         self.trust = self.pre_ml_trust - 15
         self.stats['ml_len'] += self.seg - self.ml_start
+        if Q['ml_ratify'] and self.ml_decrees:  # 5.3(4라운드): 계엄 중 포고를 다음 정기 회기의 추인 안건 하나로
+            self.ratify_pending = self.ml_decrees
+            self.stats['ratify_queued'] += 1
+        self.ml_decrees = []
+
+    def ratify_vote(self):
+        """포고 추인(일반 51, 한 번에 가부). 칸마다 묶인 포고들의 입장 평균으로 표를 낸다(가정).
+        부결이면 포고로 통과한 법은 사라지고 포고로 폐지한 법은 되살아난다. 재상정 쿨다운은 걸지 않는다."""
+        S = self.stats
+        items, self.ratify_pending = self.ratify_pending, None
+        sc = {c: round(sum(self.stance(c, law, rep)[0] for law, rep in items) / len(items)) for c in COMMS}
+        S['ratify_votes'] += 1
+        if self.vote_yes(sc, 51):
+            S['ratify_passed'] += 1
+            return
+        S['ratify_failed'] += 1
+        for law, rep in reversed(items):
+            if rep and law not in self.passed and not (law in CORPSE and self.corpse):
+                self.passed.add(law); self.passed_at[law] = self.session
+                for c, delta in LAWS[law]['mats'].items():
+                    for i in range(4):
+                        self.base[c][i] += delta[i]
+                if law in CORPSE:
+                    self.corpse_issue = False
+                self.repealed_at.pop(law, None)
+                S['ratify_restored'] += 1
+            elif not rep and law in self.passed:
+                self.silent_remove(law)
+                self.repealed_at.pop(law, None)
+                S['ratify_removed'] += 1
 
     def council_options(self):
         cool = P['repeal_cool']
@@ -1448,6 +1601,8 @@ class DarkRun(A.Run):
         law, repeal = max(options, key=val)
         S = self.stats
         S['decrees'] += 1
+        if self.ml:
+            self.ml_decrees.append((law, repeal))
         if repeal:
             self.repeal_law(law); return None
         self.passed.add(law); self.passed_at[law] = self.session
@@ -1477,6 +1632,16 @@ class DarkRun(A.Run):
         if self.ml:  # 의회 대신 포고
             self.session_bookkeeping(); self.decree()
             return
+        if self.ratify_pending:  # 안건 순서: 강제 위기 법 > 포고 추인 > ... > 재판(4.4)
+            self.session += 1
+            _, forced = self.council_options()
+            self.session -= 1
+            if forced:
+                S['ratify_deferred'] += 1
+            else:
+                self.session_bookkeeping()
+                self.ratify_vote()
+                return
         trial = next((c for c in self.cases if c['status'] == 'trial'), None)
         if trial:
             self.session += 1
@@ -1530,6 +1695,17 @@ class DarkRun(A.Run):
             S = self.stats
             S['harsh_chosen'] = S['harsh_passed'] - S['harsh_forced']
             S['means'] = sum(w * S[k] for k, w in MEANS.items())
+            if Q['tone3']:  # 10.2(4라운드): 법 25 아래의 벌 하나마다 +1(셋까지). 법 25는 시뮬레이터에 없어 늘 0
+                S['means'] += min(3, S['law25_punish'])
+                S['crossings'] = sum(S[k] for k in CROSSINGS)
+                S['grave'] = sum(S[k] for k in GRAVE)
+                if S['crossings'] == 0 and not S['law25_passed']:
+                    S['tone3_clean'] = 1
+                    S['tone3_clean_means8'] = int(S['means'] >= 8)  # 선은 안 넘었지만 합이 8 이상(해산·즉결·협박 등)
+                elif S['means'] >= 8 or S['grave'] >= 2:
+                    S['tone3_dark'] = 1
+                else:
+                    S['tone3_shaken'] = 1
             S['violence'] = S['act_assault'] + S['act_assassination'] + S['lynch_events'] + S['assn_succeeded'] \
                 + S['assn_failed']
             S['signs'] = S['sign_kiche'] + S['sign_imminent']
@@ -1553,6 +1729,10 @@ def run_policy(policy, n, places, s1b=True):
             dark = run.stats['means'] >= 8
             saved = run.end == 'complete' and run.stats['deaths'] <= 6
             tone[('dark' if dark else 'clean') + '/' + ('saved' if saved else 'lost')] += 1
+            agg['harm_cap_hit'] += run.stats['harm_events'] >= (Q['harm_cap'] or 6)  # 피해 사건 상한(1.2)에 닿은 판
+            if Q['tone3']:
+                t3 = next(k for k in ('clean', 'shaken', 'dark') if run.stats['tone3_' + k])
+                agg['tone3_%s_%s' % (t3, 'saved' if saved else 'lost')] += 1
     return ends, agg, means, tone
 
 
@@ -1584,7 +1764,10 @@ def report(policy, n, places):
                  'truth_revealed', 'crowd_cards', 'protected', 'promised_trial', 'promise_trial_broken', 'cold_cases',
                  'guard_trials', 'culprit_top_suspect', 'deserters',
                  'exiles', 'confined', 'ration_cut']),
-        ('시신', ['train_corpses', 'vigil_allowed', 'corpse_rise', 'bites_found', 'bite_outbreak', 'deaths']),
+        ('시신', ['train_corpses', 'vigil_allowed', 'corpse_rise', 'bites_found', 'bite_outbreak', 'deaths',
+                 'cold_car_outbreak', 'pyre_rose', 'corpse_unchecked_store', 'corpse_unchecked_pyre', 'corpse_unchecked_car']),
+        ('피해 사건(1.2)', ['harm_events', 'harm_cap_hit', 'harm_assault', 'harm_assn', 'harm_lynch', 'harm_order', 'harm_war',
+                       'harm_protect', 'ember_held_by_harm', 'ember_harm_capped']),
         ('탄압·계엄', ['dispersals', 'guard_refused', 'ep_passed', 'ep_returned', 'ml_locked', 'ml_declared', 'ml_len',
                     'decrees', 'harsh_decreed', 'coup_warning']),
         ('내전', ['brink_any', 'brinks', 'brink_tail_front', 'brink_engine_medtech', 'brink_guard_tail', 'brink_end_peace',
@@ -1600,6 +1783,8 @@ def report(policy, n, places):
     ]
     for name, keys in groups:
         print(f'{name}:', ', '.join(f'{k} {a(k):.2f}' for k in keys))
+    print('4라운드:', ', '.join(f'{k} {a(k):.2f}' for k in (
+        'ratify_queued', 'ratify_votes', 'ratify_passed', 'ratify_failed', 'ratify_deferred', 'crossings', 'grave')))
     print('위기 속도 (시작 수 / 끝난 수 / 끝난 것의 평균 구간 / 1구간 안에 끝난 비율=시작 대비):')
     for t in ('strike', 'protest', 'resource', 'crowd'):
         st, rs = agg['crisis_%s_n' % t], agg['crisis_%s_resolved' % t]
@@ -1614,6 +1799,14 @@ def report(policy, n, places):
     print(f"수단 점수 평균 {out['means']:.1f}, 8 이상 {out['dark8']:.0%}. 톤:",
           ', '.join(f'{k} {v / n:.0%}' for k, v in sorted(tone.items())))
     out['ml_rate'] = ml_runs / n
+    out['harm'] = a('harm_events'); out['harm_cap_hit'] = a('harm_cap_hit')
+    out['rise9'] = a('cold_car_outbreak'); out['rise10'] = a('pyre_rose'); out['rise_car'] = a('corpse_rise')
+    if Q['tone3']:
+        for k in ('clean', 'shaken', 'dark'):
+            out['t3_' + k] = (agg['tone3_%s_saved' % k] + agg['tone3_%s_lost' % k]) / n
+        print('톤 세 층(10.2): ' + ', '.join(f"{k} {out['t3_' + k]:.0%}(살림 {agg['tone3_%s_saved' % k] / n:.0%})"
+                                          for k in ('clean', 'shaken', 'dark'))
+              + f"; 깨끗인데 합 8 이상 {a('tone3_clean_means8'):.0%}")
     for k in ('brink_any', 'war_any', 'ml_door_extend', 'ml_door_council', 'ml_door_brink', 'ml_door_war',
               'ml_door_captain', 'deaths', 'war_deaths', 'end_trust'):
         out[k] = agg[k] / n
@@ -1695,6 +1888,10 @@ def main():
         print(f"{p:13s} {r['brink_any']:.0%} {r['war_any']:.0%} | {r['ml_door_extend']:.0%} {r['ml_door_council']:.0%} "
               f"{r['ml_door_brink']:.0%} {r['ml_door_war']:.0%} {r['ml_door_captain']:.0%} | "
               f"{r['deaths']:.2f} {r['war_deaths']:.2f} {r['end_trust']:.0f}")
+    print('\n4라운드 요약: policy | harm/run cap_hit | 일어난 시신: 냉동칸(법 9) 장작불 대기(법 10) 칸 안 | 톤 깨끗 흔들림 어두움')
+    for p, r in res.items():
+        t3 = f"{r['t3_clean']:.0%} {r['t3_shaken']:.0%} {r['t3_dark']:.0%}" if Q['tone3'] else '-'
+        print(f"{p:13s} | {r['harm']:.2f} {r['harm_cap_hit']:.1%} | {r['rise9']:.3f} {r['rise10']:.3f} {r['rise_car']:.3f} | {t3}")
     print('\n요약표: policy complete stranded ousted revolt coup | signs violence vdeaths | means dark8 | ml_rate ml_len')
     for p, r in res.items():
         print(f"{p:13s} {r['complete']:.0%} {r['stranded']:.0%} {r['ousted']:.0%} {r['revolt']:.0%} {r['coup']:.0%} | "
