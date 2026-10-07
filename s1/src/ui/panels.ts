@@ -7,6 +7,7 @@ import { icon } from './icons';
 import { fmt, signed } from './common';
 import type { View } from './common';
 import { grudgeText } from './council';
+import { nameBtn, shortText } from './names';
 
 // 겹쳐 뜨는 창: 불만·지지 집단 창, 일지, 메뉴, 정산 요약, 디버그, 끝.
 
@@ -20,7 +21,7 @@ function factionRow(g: Game, c: Comm): HTMLElement {
       h('i', { class: 'dot' }), h('b', null, COMM_NAME[c]), h('span', { class: 'num sub' }, `${seatN}석`),
       h('span', { class: cx('stage', `stage--${s.rel >= 15 ? 'up' : s.rel <= -15 ? 'down' : 'mid'}`) }, relStage(g, c))),
     h('div', { class: 'frow__facts' },
-      h('span', null, `${REP_ROLE[c]} ${s.leader.name}`),
+      h('span', null, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
       s.fervor > 0 ? h('span', { class: 'is-red' }, `열기 ${s.fervor}${s.rel <= -40 || c === 'engine' ? ` · ${PROTEST[c]}` : ''}`) : null,
       grudge ? h('span', { class: 'is-red' }, grudge) : null,
       s.promise ? h('span', null, `약속: ${s.promise.label}`) : null),
@@ -51,7 +52,7 @@ function journalPanel(view: View): HTMLElement {
     h('div', { class: 'drop__head' }, icon('book'), h('b', null, '일지'),
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
     h('ol', { class: 'log' }, entries.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) },
-      h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, e.text)))));
+      h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))));
 }
 
 function menuPanel(view: View): HTMLElement {
@@ -79,7 +80,7 @@ function settlePanel(view: View): HTMLElement | null {
       h('span', null, icon('trust'), `신임 ${signed(s.trust)}`), h('span', null, icon('tension'), `긴장 ${signed(s.tension)}`)),
     rel.length ? h('ul', { class: 'settle__rel' }, rel.map(c => h('li', { class: s.rel[c] > 0 ? 'is-blue' : 'is-red' },
       `${COMM_NAME[c]} ${s.rel[c] > 0 ? '지지' : '불만'} ${'↑'} (${signed(s.rel[c])})`))) : null,
-    s.notes.length ? h('ul', { class: 'settle__notes' }, s.notes.map(n => h('li', null, n))) : null,
+    s.notes.length ? h('ul', { class: 'settle__notes' }, s.notes.map(n => h('li', null, shortText(n)))) : null,
     g.cards.length ? h('p', { class: 'sub' }, `새 서류 ${g.cards.length}장이 쌓였다.`) : null);
 }
 
@@ -96,7 +97,7 @@ function debugPanel(view: View): HTMLElement {
         const [w, r, cr, ex] = situation(g, c);
         return h('tr', null, [COMM_NAME[c], fmt(s.rel), s.coh.toFixed(2), s.fervor, s.grudge, fmt(w), fmt(r), fmt(cr), fmt(ex), TRAIT_NAME[s.leader.trait]].map(x => h('td', null, x)));
       })),
-    h('ul', { class: 'log' }, g.secrets.map(x => h('li', null, `${COMM_NAME[x.about]} 대표: ${x.text} (무게 ${x.weight})`))));
+    h('ul', { class: 'log' }, g.secrets.map(x => h('li', null, `${COMM_NAME[x.about]} 대표: ${shortText(x.text)} (무게 ${x.weight})`))));
 }
 
 export function overlay(view: View): HTMLElement | null {
@@ -125,7 +126,7 @@ export function endScreen(view: View): HTMLElement {
       h('span', { class: 'kicker' }, `${g.seg}구간`),
       h('b', { class: 'end__title' }, END_TITLE[g.end ?? 'complete']),
       h('p', { class: 'sub num' }, `거래 ${st.dealsMade} · 약속 지킴 ${st.promisesKept} · 어김 ${st.promisesBroken} · 가결 ${st.lawsPassed} · 부결 ${st.lawsFailed} · 폐지 ${st.repeals} · 뇌물 ${st.bribes} · 협박 ${st.blackmails} · 죽음 ${g.deaths.length}`)),
-    h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, e.text)))),
+    h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))),
     h('div', { class: 'end__actions' },
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 다시'),
       h('button', { class: 'btn', 'data-action': 'new-seed' }, '새 판')));

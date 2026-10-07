@@ -12,6 +12,7 @@ import { overviewScreen } from './overview';
 import { councilScreen, voteLever } from './council';
 import { cardSheet, isLoot } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
+import { personCard, shortText } from './names';
 
 // 화면 조립과 입력. 상태가 바뀌면 통째로 다시 그리고, 스크롤 위치와 연결선은 그린 뒤에 되살린다.
 // 저장은 한 칸이고 행동마다 저절로 한다(되돌리기 없음, S1 기획서 2장).
@@ -51,7 +52,7 @@ function randomSeed(): string {
 function freshUi(): Ui {
   return {
     screen: 'home', panel: null, carPop: null, cardOpen: false, stopSeen: false, overviewSel: 'tail', numbersOnly: false,
-    selComm: null, dealOpen: null, cutPick: null, count: null, toast: null, debug: false,
+    selComm: null, dealOpen: null, cutPick: null, count: null, toast: null, debug: false, person: null,
   };
 }
 
@@ -72,6 +73,8 @@ export function renderApp(view: View): HTMLElement {
     screen === 'council' ? voteLever(view) : null,
     panel ? h('div', { class: 'scrim', 'data-action': 'panel', 'data-panel': '' }) : null,
     panel,
+    ui.person ? h('div', { class: 'scrim scrim--person', 'data-action': 'person', 'data-name': '' }) : null,
+    ui.person ? personCard(g, ui.person) : null,
     debugOverlay(view),
     ui.toast ? h('div', { class: 'toast', role: 'status' }, ui.toast) : null,
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
@@ -90,14 +93,29 @@ function drawLinks(root: HTMLElement): void {
   const a = from.getBoundingClientRect();
   const b = to.getBoundingClientRect();
   if (a.width === 0 || b.width === 0) return;
-  const x1 = a.right - base.left;
-  const y1 = a.top + a.height / 2 - base.top;
+  svg.setAttribute('viewBox', `0 0 ${base.width} ${base.height}`);
+  let x1 = a.right - base.left;
+  let y1 = a.top + a.height / 2 - base.top;
+  let d: string;
+  const hemi = from.closest('svg.hemi');
+  if (hemi) {
+    // 의회 명판에서는 의석을 가로지르지 않게 반원 위쪽 길로 돌아 창에 닿는다.
+    const main = app.querySelector('.main')?.getBoundingClientRect();
+    const lane = Math.max((main ? main.top : a.top) - base.top + 3, Math.min(a.top, hemi.getBoundingClientRect().top) - base.top - 2);
+    x1 = a.left + a.width / 2 - base.left;
+    y1 = a.top - base.top;
+    const x2 = b.left - base.left;
+    const y2 = Math.max(lane, b.top - base.top + 20);
+    d = `M${x1} ${y1} L${x1} ${lane} L${x2 - 10} ${lane} L${x2 - 10} ${y2} L${x2} ${y2}`;
+    svg.append(s('path', { d, class: 'links__path' }), s('circle', { cx: x2, cy: y2, r: 3, class: 'links__dot' }), s('circle', { cx: x1, cy: y1, r: 3, class: 'links__dot' }));
+    return;
+  }
   const x2 = b.left - base.left;
   const y2 = Math.min(Math.max(y1, b.top - base.top + 16), b.bottom - base.top - 16);
-  svg.setAttribute('viewBox', `0 0 ${base.width} ${base.height}`);
   const mx = (x1 + x2) / 2;
+  d = `M${x1} ${y1} L${mx} ${y1} L${mx} ${y2} L${x2} ${y2}`;
   svg.append(
-    s('path', { d: `M${x1} ${y1} L${mx} ${y1} L${mx} ${y2} L${x2} ${y2}`, class: 'links__path' }),
+    s('path', { d, class: 'links__path' }),
     s('circle', { cx: x1, cy: y1, r: 3, class: 'links__dot' }),
     s('circle', { cx: x2, cy: y2, r: 3, class: 'links__dot' }));
 }
@@ -137,7 +155,7 @@ export function startApp(root: HTMLElement): void {
   }
 
   function toast(text: string): void {
-    ui.toast = text;
+    ui.toast = shortText(text);
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { ui.toast = null; render(); }, 2600);
   }
@@ -199,6 +217,9 @@ export function startApp(root: HTMLElement): void {
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; }
         return render();
       }
+      case 'person':
+        ui.person = data.name || null;
+        return render();
       case 'open-stack':
         openStack();
         return render();
@@ -358,7 +379,8 @@ export function startApp(root: HTMLElement): void {
 
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    if (ui.panel) ui.panel = null;
+    if (ui.person) ui.person = null;
+    else if (ui.panel) ui.panel = null;
     else if (ui.cardOpen) ui.cardOpen = false;
     else if (ui.carPop) ui.carPop = null;
     else if (ui.screen !== 'home' && g.phase !== 'council') ui.screen = 'home';

@@ -8,8 +8,9 @@ import { icon } from './icons';
 import type { IconName } from './icons';
 import { WEDGE_ORDER, fmt } from './common';
 import type { View } from './common';
-import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle } from './seats';
+import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle, wedgeBoundaries } from './seats';
 import { bar, portrait } from './widgets';
+import { nameBtn } from './names';
 
 // 의회: 식당칸 안 반원 100석을 공동체 쐐기로 나누고 쐐기 끝에 명판을 단다. 가운데 전령기 바늘과 51·67 눈금,
 // '예상 찬성 / 필요' 큰 숫자. 왼쪽은 법안 창, 오른쪽은 고른 공동체의 창(지도자, 의석, 결속도, 거래 단추 다섯).
@@ -85,6 +86,7 @@ function hemicycle(view: View, map: Record<Comm, Bloc>, need: number, est: { mea
   const vb = `${BOUNDS.minX - pad} ${-BOUNDS.maxY - pad} ${BOUNDS.maxX - BOUNDS.minX + pad * 2} ${BOUNDS.maxY - BOUNDS.minY + pad * 1.2}`;
   const outer = DEFAULT_HEMICYCLE.outerRadius + 16;
   const plates: SVGElement[] = [];
+  const arcs: SVGElement[] = [];
   // 쐐기의 경계와 명판은 실제 의석 각도에서 잡는다(줄마다 의석 수가 달라 의석 순번과 각도가 비례하지 않는다).
   let start = 0;
   for (const c of WEDGE_ORDER) {
@@ -100,14 +102,19 @@ function hemicycle(view: View, map: Record<Comm, Bloc>, need: number, est: { mea
     },
       s('rect', { x: px - 24, y: py - 10, width: 48, height: 20, rx: 4 }),
       s('text', { x: px, y: py + 4.5, 'text-anchor': 'middle' }, `${COMM_NAME[c].slice(0, 2)} ${n}`)));
-    if (start > 0) {
-      const edge = (SEATS[start - 1].angle + first.angle) / 2;
-      const [x1, y1] = polarAngle(edge, DEFAULT_HEMICYCLE.innerRadius - 8);
-      const [x2, y2] = polarAngle(edge, DEFAULT_HEMICYCLE.outerRadius + 8);
-      plates.push(s('line', { x1, y1, x2, y2, class: 'wedge-line' }));
-    }
+    // 쐐기 경계는 의석을 가로지르는 선 대신 바깥 테두리에 공동체 색 띠로 보인다.
+    const a0 = start > 0 ? (SEATS[start - 1].angle + first.angle) / 2 : Math.PI;
+    const a1 = start + n < SEATS.length ? (last.angle + SEATS[start + n].angle) / 2 : 0;
+    const band = DEFAULT_HEMICYCLE.outerRadius + DEFAULT_HEMICYCLE.seatRadius + 3;
+    const [bx0, by0] = polarAngle(a0 - 0.012, band);
+    const [bx1, by1] = polarAngle(a1 + 0.012, band);
+    arcs.push(s('path', { class: cx('wedge-band', `c-${c}`), d: `M${bx0} ${by0} A${band} ${band} 0 0 1 ${bx1} ${by1}` }));
     start += n;
   }
+  // 쐐기 사이 경계: 의석 틈을 따라 굽는 선(의석 수가 바뀌면 같이 움직인다).
+  const borders = wedgeBoundaries(DEFAULT_HEMICYCLE, SEATS, order).map(b => s('polyline', {
+    class: 'wedge-line', points: b.points.map(([x, y]) => `${x.toFixed(1)},${(-y).toFixed(1)}`).join(' '),
+  }));
   const seatEls = SEATS.map((seat, i) => {
     const c = order[i];
     const k = used[c] ?? 0;
@@ -134,7 +141,7 @@ function hemicycle(view: View, map: Record<Comm, Bloc>, need: number, est: { mea
       s('line', { x1, y1, x2, y2 }), s('text', { x: tx, y: ty + 4, 'text-anchor': 'middle' }, String(v)));
   };
   return s('svg', { class: 'hemi', viewBox: vb, role: 'img', 'aria-label': '의석' },
-    seatEls, plates, tick(51), tick(67), fan,
+    arcs, borders, seatEls, plates, tick(51), tick(67), fan,
     secret && !result ? null : s('line', { class: 'needle', x1: 0, y1: 0, x2: nx, y2: ny }),
     s('circle', { class: 'needle__hub', cx: 0, cy: 0, r: 6 }));
 }
@@ -211,7 +218,7 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
   const head = h('div', { class: 'cpanel__head' },
     portrait(st.leader.name, c),
     h('div', null,
-      h('b', null, st.leader.name),
+      nameBtn(st.leader.name, 'name--title'),
       h('div', { class: 'sub' }, `${REP_ROLE[c]} · ${traitText(g, c)}`),
       h('div', { class: 'sub num' }, `${b.seats}석${b.absent ? ` (부재 ${b.absent})` : ''} · ${relStage(g, c)}`)),
     h('button', { class: 'x', 'data-action': 'sel-comm', 'data-comm': '', 'aria-label': '닫기' }, '×'));

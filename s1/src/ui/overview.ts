@@ -5,6 +5,7 @@ import { icon } from './icons';
 import { GROUPS, fmt, signed } from './common';
 import type { GroupDef, View } from './common';
 import { bar, gauge, gaugeValue, lever, portrait } from './widgets';
+import { nameBtn } from './names';
 
 // 한눈에 보기: 카메라가 위로 올라간 열차. 열차는 왼쪽에 세로로 세우고 칸 종류별 색으로 구분한다.
 // 같은 종류의 칸은 묶는다. 칸을 누르면 오른쪽에 수치와 정책이 펼쳐지고, 고른 칸과 창을 선으로 잇는다.
@@ -30,7 +31,7 @@ function commPanel(view: View, c: Comm): HTMLElement {
       portrait(s.leader.name, c),
       h('div', null,
         h('b', null, COMM_NAME[c]),
-        h('div', { class: 'sub' }, `${REP_ROLE[c]} ${s.leader.name}`),
+        h('div', { class: 'sub' }, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
         h('div', { class: 'sub num' }, `${s.pop}명 · ${relStage(g, c)}`))),
     h('div', { class: 'ov-panel__stats' },
       h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),

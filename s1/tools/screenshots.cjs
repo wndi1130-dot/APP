@@ -257,6 +257,10 @@ async function main() {
       await click(page, `.clist [data-comm="${c}"], .plate[data-comm="${c}"]`);
       if (!dealt && await has(page, '[data-action="deal"][data-tool="open"]:not([disabled])')) {
         await capture(page, '10-council-leader');
+        await click(page, '.cpanel .name');
+        await page.locator('.person').waitFor();
+        await capture(page, '10b-person');
+        await click(page, '.person .x');
         await click(page, '[data-action="deal"][data-tool="open"]');
         await capture(page, '11-council-open-deal');
         await click(page, '.cond');

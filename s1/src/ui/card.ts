@@ -6,6 +6,7 @@ import { cx, h } from './dom';
 import { icon } from './icons';
 import type { View } from './common';
 import { portrait } from './widgets';
+import { nameBtn, nameList, shortText } from './names';
 
 // 결정 카드: 홈 왼쪽의 서류 뭉치에서 꺼내 화면 왼쪽 절반에 펼친다. 오른쪽엔 열차가 그대로 보인다.
 // 형식은 수저린식(초상, 짧은 대사, 번호 붙은 선택지). 정차의 필드 결정 카드도 같은 자리에 펼친다.
@@ -28,9 +29,9 @@ function stopCard(view: View): HTMLElement | null {
       h('div', { class: 'sheet__head' }, h('div', null, h('span', { class: 'kicker' }, `정차 · ${place.name}`), h('b', { class: 'sheet__title' }, r.passed ? '지나쳤다' : '돌아왔다'))),
       h('ul', { class: 'result' },
         r.passed ? h('li', null, '얻은 것 없음. 석탄을 아꼈다.') : h('li', null, gains.length ? gains.join(' · ') : '빈손'),
-        r.injured.length ? h('li', { class: 'is-red' }, `부상: ${r.injured.join(', ')}`) : null,
-        r.dead.length ? h('li', { class: 'is-red' }, `죽음: ${r.dead.join(', ')}`) : null,
-        r.notes.map(n => h('li', { class: 'sub' }, n))),
+        r.injured.length ? h('li', { class: 'is-red' }, '부상: ', nameList(r.injured)) : null,
+        r.dead.length ? h('li', { class: 'is-red' }, '죽음: ', nameList(r.dead)) : null,
+        r.notes.map(n => h('li', { class: 'sub' }, shortText(n)))),
       h('button', { class: 'btn', 'data-action': 'stop-seen' }, g.cards.length ? `덮는다 (서류 ${g.cards.length}장 더)` : '덮는다'));
   }
   const names = crewNames(g, stop.crewComm, stop.crewSize);
@@ -61,7 +62,7 @@ function stopCard(view: View): HTMLElement | null {
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize - 1, 'aria-label': '한 명 덜' }, '−'),
         h('b', { class: 'num' }, `${stop.crewSize}명`),
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
-    h('p', { class: 'crew' }, icon('people'), h('span', null, names.join(', '), h('small', null, ' · 이번 회기 표결에서 빠진다'))),
+    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, ' · 이번 회기 표결에서 빠진다'))),
     stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label}`))) : null,
     h('div', { class: 'sheet__actions' },
@@ -80,10 +81,10 @@ export function cardSheet(view: View): HTMLElement | null {
     h('div', { class: 'sheet__head' },
       v.speaker ? portrait(v.speaker.name, v.speaker.comm) : h('div', { class: 'portrait portrait--none' }, icon('papers')),
       h('div', null,
-        v.speaker ? h('span', { class: 'kicker' }, `${v.speaker.role} · ${v.speaker.name}`) : h('span', { class: 'kicker' }, '보고'),
+        v.speaker ? h('span', { class: 'kicker' }, `${v.speaker.role} · `, nameBtn(v.speaker.name)) : h('span', { class: 'kicker' }, '보고'),
         h('b', { class: 'sheet__title' }, v.title)),
       g.cards.length > 1 ? h('span', { class: 'sheet__more num' }, `+${g.cards.length - 1}`) : null),
-    h('p', { class: 'sheet__body' }, v.body),
+    h('p', { class: 'sheet__body' }, shortText(v.body)),
     h('ol', { class: 'choices' }, v.choices.map((ch, i) => {
       const costs = costLines(ch);
       const pol = politicsLines(ch);
@@ -91,7 +92,7 @@ export function cardSheet(view: View): HTMLElement | null {
         class: cx('choice', ch.disabled && 'is-off'), 'data-action': 'choose', 'data-uid': card.uid, 'data-index': i, disabled: !!ch.disabled,
       },
         h('b', { class: 'choice__n num' }, i + 1),
-        h('span', { class: 'choice__label' }, ch.label, ch.witness ? icon('witness', 'icon icon--witness') : null),
+        h('span', { class: 'choice__label' }, shortText(ch.label), ch.witness ? icon('witness', 'icon icon--witness') : null),
         h('span', { class: 'choice__meta' },
           costs.map(x => h('span', { class: 'cost num' }, x)),
           pol.map(p => h('span', { class: `pol pol--${p.tone}` }, p.text)),

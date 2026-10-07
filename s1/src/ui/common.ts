@@ -25,6 +25,8 @@ export interface Ui {
   /** 개표 연출: 갈린 미정 수. null이면 연출 없음 */
   count: number | null;
   toast: string | null;
+  /** 이름을 눌러 연 사람 정보(전체 이름) */
+  person: string | null;
   debug: boolean;
 }
 

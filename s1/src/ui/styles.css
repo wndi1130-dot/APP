@@ -526,7 +526,8 @@ small { font-size: 12px; }
 .plate.is-sel rect { fill: var(--ink-1); }
 .plate.is-sel text { fill: var(--on-light); font-weight: 700; }
 .plate { cursor: pointer; }
-.wedge-line { stroke: #0f1113; stroke-width: 3; }
+.wedge-line { fill: none; stroke: #6b727b; stroke-width: 1.2; stroke-linejoin: round; stroke-linecap: round; opacity: .55; }
+.wedge-band { fill: none; stroke: var(--cc); stroke-width: 3; stroke-linecap: round; opacity: .9; }
 .tick line { stroke: var(--ink-1); stroke-width: 2; }
 .tick text { fill: var(--ink-1); font-size: 12px; font-family: var(--font); font-weight: 600; }
 .tick.is-dim { opacity: .3; }
@@ -703,3 +704,21 @@ small { font-size: 12px; }
   .rotate { display: flex; }
   #app { display: none; }
 }
+
+/* ---------- 이름과 사람 창 ---------- */
+
+.name {
+  display: inline; padding: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-decoration: underline dotted; text-decoration-color: var(--ink-3); text-underline-offset: 3px;
+}
+.name--title { font-size: 14px; font-weight: 600; line-height: 1.25; color: var(--ink-1); }
+.scrim--person { z-index: 30; background: #0008; }
+.person {
+  position: absolute; z-index: 31; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(320px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto;
+  padding: 10px 12px 12px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--line-strong);
+  box-shadow: 0 8px 24px #000a;
+}
+.person .drop__head { align-items: flex-start; }
+.person .drop__head > div:not(.portrait) { flex: 1; min-width: 0; }
+.person__facts { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--ink-2); }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_HEMICYCLE, assignBlocks, hemicycleBounds, layoutHemicycle, minSeatDistance, seatsPerRow,
+  DEFAULT_HEMICYCLE, assignBlocks, hemicycleBounds, layoutHemicycle, minSeatDistance, seatsPerRow, wedgeBoundaries,
 } from '../../src/ui/seats';
 import type { HemicycleOptions } from '../../src/ui/seats';
 
@@ -84,5 +84,35 @@ describe('반원 100석 배치', () => {
     }
     expect(() => layoutHemicycle({ ...DEFAULT_HEMICYCLE, rows: 0 })).toThrow();
     expect(() => layoutHemicycle({ ...DEFAULT_HEMICYCLE, innerRadius: 200 })).toThrow();
+  });
+});
+
+describe('쐐기 경계선', () => {
+  const seats = layoutHemicycle(DEFAULT_HEMICYCLE);
+  const splits = [
+    [45, 15, 15, 12, 13],
+    [1, 1, 96, 1, 1],
+    [20, 20, 20, 20, 20],
+    [0, 50, 0, 49, 1],
+    [33, 7, 28, 2, 30],
+  ];
+
+  it.each(splits)('의석을 가로지르지 않는다 (%i·%i·%i·%i·%i)', (...counts) => {
+    const owners = assignBlocks(100, counts.map((n, i) => ({ id: `c${i}`, seats: n })));
+    const lines = wedgeBoundaries(DEFAULT_HEMICYCLE, seats, owners);
+    expect(lines).toHaveLength(counts.filter(n => n > 0).length - 1);
+    for (const line of lines) {
+      for (let i = 1; i < line.points.length; i += 1) {
+        const [x0, y0] = line.points[i - 1];
+        const [x1, y1] = line.points[i];
+        for (let t = 0; t <= 1; t += 0.1) {
+          const x = x0 + (x1 - x0) * t;
+          const y = y0 + (y1 - y0) * t;
+          for (const seat of seats) {
+            expect(Math.hypot(seat.x - x, seat.y - y)).toBeGreaterThan(DEFAULT_HEMICYCLE.seatRadius);
+          }
+        }
+      }
+    }
   });
 });
