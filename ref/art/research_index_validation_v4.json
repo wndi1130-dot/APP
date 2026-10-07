@@ -1,0 +1,74 @@
+{
+  "schema": "app.art.research-validation/4",
+  "date": "2026-10-07",
+  "base_commit": "38b959e4a8ba99c8d55acaad32c463bf1aa0091e",
+  "environment": {
+    "platform": "win32",
+    "python": "3.13.13"
+  },
+  "checks": [
+    {
+      "command": "python ref/art/build_research_index.py --check",
+      "status": "[PASS]",
+      "details": {
+        "resource_entries": 62,
+        "v4_new_entries": 8,
+        "v4_rechecks": 1,
+        "v4_leads": 2,
+        "source_records_v4": 18,
+        "local_links": 121
+      }
+    },
+    {
+      "command": "python ref/art/validate_catalog.py",
+      "status": "[PASS]",
+      "details": {
+        "v2_entries": 37,
+        "v2_new": 26,
+        "exclusions": 3,
+        "local_links": 113,
+        "historical_archive_preserved": true
+      }
+    },
+    {
+      "command": "python -m unittest discover -s ref/art -p test_*.py -v",
+      "status": "[PASS]",
+      "tests_run": 15,
+      "new_tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "command": "git diff --check",
+      "status": "[PASS]"
+    },
+    {
+      "command": "Compare README prefix against base commit",
+      "status": "[PASS]",
+      "details": "Existing README content preserved; new marked index block appended"
+    },
+    {
+      "command": "git diff --quiet -- s1 ref/names ref/rail docs/design docs/art/mockups",
+      "status": "[PASS]"
+    }
+  ],
+  "artifact_sha256": {
+    "README.md": "9c8f3cf55f434cd37d2d7c843d9273d8773b3bfe828770022fb84ce9a6202d31",
+    "ref/art/README.md": "eb209baf3006031881952c8f6550c926d50be919b40af1fc87ded229bc1ed7ca",
+    "ref/art/production_gap_resources_v4.json": "14a820f833c9c8de6752db9bcc125c21d57e3aae625f03d17bb4e2f104612be5",
+    "ref/art/production_gap_resources_v4.md": "3d3129ca59f42111feb2b3263b2f319881b1ab5536b2df5ffb044825b31ad999",
+    "ref/art/build_research_index.py": "07d88e3d2a7df88e47d6af735477a8770d9da499961ed3967a152a8222aa1c7c",
+    "ref/art/test_research_index.py": "e1e9652e375e48b3f29951d3da565ae585149f433f8764f7a462427445963aad"
+  },
+  "not_performed": [
+    "External URL availability sweep",
+    "Legal opinion or purchase-rights approval",
+    "Asset download or purchase",
+    "Audio audition",
+    "Blender/Unity execution",
+    "Mobile performance test",
+    "Existing game regression suite",
+    "Merge to main"
+  ],
+  "note": "Link counts belong to different document sets and overlap; do not add them into a unique total. Source records include prior references and a failed-PDF lead, not 18 complete new primary-source verifications."
+}
