@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, LAWS, makeDeal, PLACES,
-  RELATION_LINES, SCENE_LINES,
+  PLACE_LOOK, PLACE_OMENS, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS,
   primaryAction, resolveStop, SECRET_POOL, toolStatus, TRAVEL_EVENTS, viewCard,
 } from '../../src/game';
 import type { Card } from '../../src/game';
@@ -84,7 +84,11 @@ describe('화면 글 규칙', () => {
       ...SECRET_POOL.map(s => s.text),
       ...Object.values(CONDITIONS).flat().map(c => c.label),
       ...COMMON_CONDITIONS.map(c => c.label),
-      ...Object.values(SCENE_LINES).flat(),
+      ...Object.values(PLACE_LOOK).flat(),
+      ...Object.values(WEATHER_LOOK).flat(),
+      ...Object.values(PLACE_OMENS).flatMap(t => Object.values(t).flat()),
+      ...Object.values(WEATHER_OMENS).flatMap(t => Object.values(t).flat()),
+      ...Object.values(VERDICT),
       ...Object.values(DISEMBARK_LINES),
       ...Object.values(RELATION_LINES),
     ];

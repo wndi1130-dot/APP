@@ -1,5 +1,6 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
+import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import {
   COH0, COMMS, IDEO, P, POP0, REL0, REP_AGE, SECRET_POOL, START, STAGES, TRAIT_BAN, TRAITS,
@@ -80,6 +81,11 @@ export interface StopState {
   threat?: number;
   /** 정찰을 보내면 바깥 기척을 알고 위험 줄이 약속이 된다. 안 보내면 위험을 모른다(2026-10-07 사용자 카드 '정찰 따라'). */
   scout?: boolean;
+  /** 정차 날씨, 창밖 겉모습, 정찰조가 본 조짐과 그 기척 단계(omens.ts). 도착할 때 정해진다. */
+  weather?: Weather;
+  look?: string;
+  omen?: string;
+  sign?: SignTier;
   done: boolean;
   result: StopResult | null;
 }
@@ -178,6 +184,8 @@ export interface Game {
   emergencyCalls: number[];
   /** 식량 0으로 버틴 구간 수 */
   hunger: number;
+  /** 이번 판에 이미 본 정차 글(조짐, 창밖 겉모습). 같은 문장이 되도록 다시 안 나오게 한다. */
+  linesSeen: string[];
   /** 붕대로 감아 숨긴 물림. 2구간 안에 들키거나 칸 안에서 일어난다(body_injury 4.4). */
   hiddenBites: HiddenBite[];
   nextCardUid: number;
@@ -283,7 +291,7 @@ export function createGame(seed = 's1a'): Game {
     secrets: [], nextSecretId: 1, leashes: [], blackmails: 0, corpseIssue: false, thrown: 0, stored: 0, deaths: [],
     strikes: 0, inStrike: false, strikeWarned: -99, lostSegments: 0, trustCrisis: null, tensionWarned: false,
     tensionCrisisUsed: 0, emergencyUsed: false, guidedLeft: 0, decreeLeft: 0, guardEscort: false, forcedRun: false,
-    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, needs: {}, emergencyCalls: [], hunger: 0, hiddenBites: [], nextCardUid: 1, stop: null,
+    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, needs: {}, emergencyCalls: [], hunger: 0, linesSeen: [], hiddenBites: [], nextCardUid: 1, stop: null,
     council: null, lastSettle: null, journal: [], usedProfiles: [], end: null,
     stats: { dealsMade: 0, promisesKept: 0, promisesBroken: 0, lawsPassed: 0, lawsFailed: 0, repeals: 0, bribes: 0, blackmails: 0 },
   } as Game;

@@ -31,6 +31,7 @@ function load(): Game | null {
     g.needs ??= {};
     g.emergencyCalls ??= [];
     g.hunger ??= 0;
+    g.linesSeen ??= [];
     return g;
   } catch {
     return null;

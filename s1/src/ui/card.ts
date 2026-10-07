@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, STAY, costLines, crewNames, politicsLines, riskLines, stopRisk, stopScene, viewCard,
+  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, STAY, costLines, crewNames, politicsLines, riskView, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -40,7 +40,7 @@ function stopCard(view: View): HTMLElement | null {
   const stopPromises = promises.filter(x => x.p.kind === 'fetch' || x.p.cond.kind === 'target' || x.p.cond.kind === 'skip_dispatch');
   const maxW = Math.max(...LOOT_KEYS.map(k => place.loot[k]));
   const scene = stopScene(g);
-  const risk = riskLines(stopRisk(g));
+  const risk = riskView(g);
   return sheet('sheet--stop', `stop-${g.seg}`,
     h('div', { class: 'sheet__head' },
       h('div', null,
@@ -75,10 +75,9 @@ function stopCard(view: View): HTMLElement | null {
     stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label}`))) : null,
     h('div', { class: 'sheet__actions' },
-      // 위험 줄은 준비를 바꿀 때마다 다시 계산된다. 줄이 있으면 반드시 일어난다.
-      h('div', { class: cx('danger', risk.lines.length > 0 && 'is-on'), 'aria-live': 'polite' },
-        risk.lines.length ? h('p', { class: 'danger__tags' }, risk.lines.map(t => h('span', { class: 'danger__tag' }, '⚠ ', t))) : null,
-        risk.calm ? h('p', { class: 'danger__calm' }, risk.calm) : null,
+      // 정찰조가 본 조짐과 해석. 해석은 준비를 바꿀 때마다 다시 계산되고, 불길하다고 하면 반드시 일어난다.
+      h('div', { class: cx('danger', (risk.level === 'dead' || risk.level === 'hurt') && 'is-on'), 'aria-live': 'polite' },
+        risk.omen ? h('p', { class: 'danger__omen' }, risk.omen, ' ', h('b', { class: cx('danger__verdict', risk.level && `is-${risk.level}`) }, risk.verdict)) : null,
         risk.unknown ? h('p', { class: 'danger__calm' }, risk.unknown) : null,
         risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),
       h('button', { class: 'btn btn--ghost', 'data-action': 'stop-go', 'data-go': '0' }, '지나친다'),

@@ -2,6 +2,8 @@ import { addCard } from './state';
 import { drawTravelEvent } from './cards';
 import { onDeath } from './death';
 import { needTick } from './needs';
+import { markSeen, rollStopView } from './omens';
+import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
 import { agendaOptions, agendaTitle, exposeBribe, offend, openCouncil, stance } from './politics';
@@ -187,6 +189,7 @@ function arriveStop(g: Game): void {
     place: place.id, target: suggestTarget(g, place.loot), stay: 'normal',
     crewComm: tail ? 'guard' : 'tail', crewSize: 4, threat, done: false, result: null,
   };
+  rollStopView(g, g.stop, 1 + P.thrownHorde * g.thrown > 1.2);
   g.phase = 'stop';
 }
 
@@ -236,20 +239,20 @@ export function stopRisk(g: Game): StopRisk {
   return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: threat > 1, known: !!stop?.scout };
 }
 
-/** 정차 화면의 위험 꼬리표. 꼬리표가 있으면 그 피해가 1명 이상 반드시 일어나고, 내부 최악을 넘지 않는다.
- * 줄이 없으면 죽음과 중상은 없다(긁히고 삐는 정도는 있다). */
-export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; why: string[]; unknown: string | null } {
+/** 약속 단계. dead와 hurt면 그 피해가 1명 이상 반드시 일어나고 내부 최악을 넘지 않는다.
+ * light와 calm이면 죽음과 중상은 없다(light는 긁히고 삐는 정도가 있다). */
+export function riskLevel(r: StopRisk): RiskLevel {
+  if (r.maxDead > 0) return 'dead';
+  if (r.maxHurt > 0) return 'hurt';
+  return r.lam >= 0.2 ? 'light' : 'calm';
+}
+
+/** 정찰 여부와 상관없이 알 수 있는 까닭(정치가 키운 위험). */
+export function riskWhy(r: StopRisk): string[] {
   const why: string[] = [];
   if (r.guardRefused) why.push('경비대가 경계를 서지 않는다');
   if (r.horde) why.push('던진 시신에 무리가 몰려 있다');
-  if (!r.known) return { lines: [], calm: null, why, unknown: '위험 모름. 정찰하지 않으면 무엇이 기다리는지 모른다.' };
-  if (r.fresh) why.unshift('무리 흔적이 새롭다');
-  const lines: string[] = [];
-  // 프로스트펑크 1처럼 짧은 경고 꼬리표로 보인다(2026-10-07 사용자). 숫자는 안 보이지만, 뜨면 반드시 한 명 이상이다.
-  if (r.maxDead > 0) lines.push('사망 위험');
-  if (r.maxHurt > 0) lines.push('중상 위험');
-  const calm = lines.length ? null : r.lam >= 0.2 ? '크게 다칠 일은 없어 보인다. 긁히고 삐는 정도.' : '조용해 보인다.';
-  return { lines, calm, why, unknown: null };
+  return why;
 }
 
 export function resolveStop(g: Game, go: boolean): StopResult | null {
@@ -257,6 +260,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!stop || stop.done) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
   stop.done = true;
+  if (stop.scout && stop.omen) markSeen(g, stop.omen);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);

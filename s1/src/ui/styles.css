@@ -456,8 +456,9 @@ small { font-size: 12px; }
 .crew small { color: var(--ink-3); }
 .danger { flex: 1 1 100%; min-width: 0; display: grid; gap: 1px; padding: 2px 8px; border-left: 2px solid var(--line); font-size: 12px; line-height: 1.3; color: var(--ink-2); }
 .danger.is-on { border-left-color: var(--discontent); }
-.danger__tags { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.danger__tag { padding: 1px 8px; border: 1px solid var(--discontent); border-radius: 3px; color: var(--discontent); font-weight: 700; font-size: 13px; line-height: 1.5; }
+.danger__omen { margin: 0; font-size: 13px; color: var(--ink-1); }
+.danger__verdict { font-weight: 700; white-space: nowrap; }
+.danger__verdict.is-dead, .danger__verdict.is-hurt { color: var(--discontent); }
 .danger__calm { margin: 0; }
 .danger__why { margin: 0; font-size: 12px; color: var(--ink-3); }
 .promises { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--support); }

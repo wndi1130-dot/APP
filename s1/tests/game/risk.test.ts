@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, PLACES, resolveStop, riskLines, STAY, stopRisk } from '../../src/game';
+import { createGame, PLACES, resolveStop, riskLevel, riskView, STAY, stopRisk } from '../../src/game';
 import type { StayId } from '../../src/game';
 
-// 정차 위험 줄은 약속이다(2026-10-07 사용자 결정): 줄이 뜨면 그 피해가 반드시 1명 이상, 최악을 넘지 않는다.
-// 줄이 없으면 죽음과 중상은 없다.
+// 정찰조의 해석은 약속이다(2026-10-07 사용자 결정): '불길하다'가 뜨면 그 피해가 반드시 1명 이상, 최악을 넘지 않는다.
+// '괜찮을 것 같다' 쪽이면 죽음과 중상은 없다. 꼬리표 대신 조짐 글로 보인다(11:51 사용자).
 
 function setups() {
   const out: { seed: string; place: string; stay: StayId; size: number; thrown: number; refuse: boolean }[] = [];
@@ -35,39 +35,44 @@ describe('정차 위험 줄(정찰한 곳)', () => {
       if (risk.maxHurt > 0) { expect(r.injured.length, label).toBeGreaterThanOrEqual(1); expect(r.injured.length, label).toBeLessThanOrEqual(risk.maxHurt); }
       else expect(r.injured, label).toEqual([]);
       for (const n of r.dead) expect(r.injured).not.toContain(n);
-      lines += riskLines(risk).lines.length;
+      if (riskLevel(risk) === 'dead' || riskLevel(risk) === 'hurt') lines += 1;
     }
     expect(lines).toBeGreaterThan(0);
   });
 
-  it('준비를 바꾸면 줄이 사라질 수 있다', () => {
+  it('준비를 바꾸면 해석이 바뀌고 조짐은 그대로다', () => {
     const g = stopGame({ seed: 'risk-prep', place: 'freight', stay: 'long', size: 6, thrown: 0, refuse: false }, 1);
-    expect(riskLines(stopRisk(g)).lines.length).toBeGreaterThan(0);
+    const before = riskView(g);
+    expect(before.verdict).toContain('불길하다');
     g.stop!.stay = 'short'; g.stop!.crewSize = 2;
-    expect(riskLines(stopRisk(g)).lines).toEqual([]);
-    expect(riskLines(stopRisk(g)).calm).not.toBeNull();
+    const after = riskView(g);
+    expect(after.verdict).not.toContain('불길');
+    expect(after.omen).toBe(before.omen);
   });
 
-  it('줄의 숫자는 약속한 최악과 맞는다', () => {
-    for (const s of setups()) {
-      const risk = stopRisk(stopGame(s, 0));
-      const text = riskLines(risk).lines.join(' ');
-      expect(text.includes('사망 위험'), s.seed).toBe(risk.maxDead > 0);
-      expect(text.includes('중상 위험'), s.seed).toBe(risk.maxHurt > 0);
+  it('해석 말은 약속한 피해와 맞는다', () => {
+    for (const s of setups()) for (let k = 0; k < 3; k += 1) {
+      const g = stopGame(s, k);
+      const risk = stopRisk(g);
+      const view = riskView(g);
+      expect(view.omen, s.seed).toBeTruthy();
+      expect(view.verdict!.includes('매우 불길하다'), s.seed).toBe(risk.maxDead > 0);
+      expect(view.verdict!.includes('불길하다'), s.seed).toBe(risk.maxDead > 0 || risk.maxHurt > 0);
       expect(risk.maxDead + risk.maxHurt).toBeLessThanOrEqual(s.size);
     }
   });
 });
 
 describe('정찰하지 않은 곳', () => {
-  it('줄 대신 위험 모름이 뜨고, 경고 없이도 다치거나 죽을 수 있다', () => {
+  it('조짐 대신 모른다고 뜨고, 경고 없이도 다치거나 죽을 수 있다', () => {
     let hurt = 0;
     let dead = 0;
     for (const s of setups()) for (let k = 0; k < 4; k += 1) {
       const g = stopGame(s, k);
       g.stop!.scout = false;
-      const view = riskLines(stopRisk(g));
-      expect(view.lines).toEqual([]);
+      const view = riskView(g);
+      expect(view.omen).toBeNull();
+      expect(view.verdict).toBeNull();
       expect(view.unknown).not.toBeNull();
       const r = resolveStop(g, true)!;
       hurt += r.injured.length;

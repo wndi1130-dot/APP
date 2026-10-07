@@ -6,3 +6,4 @@ export * from './turn';
 export * from './death';
 export * from './scene';
 export * from './needs';
+export * from './omens';

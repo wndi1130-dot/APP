@@ -1,23 +1,15 @@
-import { COMMS, PLACES } from './data';
+import { COMMS } from './data';
 import { stageOf, totalPop } from './state';
 import type { Comm } from './data';
 import type { Game } from './state';
+import { stopView, verdictText } from './omens';
+import type { RiskLevel } from './omens';
+import { riskLevel, riskWhy, stopRisk } from './turn';
 
 // 정차 장면 글(자리표시). 나중엔 브레이크 소리와 함께 옆 앞쪽에서 본 정차 장면, 수색대와 열차장이 내리는 모습으로
 // 그린다(decisions.md 2026-10-07). 지금은 그 장면을 한두 문장으로 대신한다.
-// 바깥 문장은 위험을 간접으로 알리고, 내리는 문장은 지금 처지(지지, 불신임 직전, 죄책감)에 따라 달라진다.
-
-export const SCENE_LINES: Record<number, string[]> = {
-  1: ['바람 소리뿐이다. 눈 위에 발자국이 없다.', '역사 지붕이 무너져 있다. 움직이는 것은 없다.'],
-  2: ['멀리 연기가 한 줄 오른다. 누군가 있거나, 있었다.', '창문 몇 개가 안쪽에서 막혀 있다.'],
-  3: ['문짝마다 긁힌 자국이 있다. 수색대가 쇠막대를 고쳐 쥔다.', '플랫폼 끝에 짐이 버려져 있다. 버린 사람은 보이지 않는다.'],
-};
-
-/** 바깥 기척이 장소 위험도보다 우선한다. 조용한 날과 무리 흔적이 있는 날. */
-export const THREAT_LINES: { calm: string[]; fresh: string[] } = {
-  calm: ['바람 소리뿐이다. 눈 위에 발자국이 없다.', '까마귀가 플랫폼에 앉아 있다. 놀라 날아오르지 않는다.'],
-  fresh: ['눈 위에 발자국이 어지럽다. 오래되지 않았다.', '역사 안쪽에서 무언가 끌리는 소리가 난다. 수색대가 쇠막대를 고쳐 쥔다.', '선로 옆 눈이 짓이겨져 있다. 한두 명이 아니다.'],
-};
+// 바깥 문장은 날씨와 장소 겉모습만 보여 준다. 위험은 정찰조가 본 조짐으로 따로 알린다(omens.ts).
+// 내리는 문장은 지금 처지(지지, 불신임 직전, 죄책감)에 따라 달라진다.
 
 export type DisembarkMood = 'triumph' | 'cornered' | 'guilt' | 'cold' | 'warm' | 'plain';
 
@@ -50,13 +42,29 @@ export function disembarkMood(g: Game, crew: Comm): DisembarkMood {
 export function stopScene(g: Game): { outside: string; disembark: string } | null {
   const stop = g.stop;
   if (!stop) return null;
-  const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
-  // 바깥 기척은 정찰조가 돌아와야 안다. 정찰 없이는 장소 겉모습만 보인다.
-  const threat = stop.scout ? stop.threat ?? 1 : 1;
-  const lines = threat > 1 ? THREAT_LINES.fresh : threat < 1 ? THREAT_LINES.calm : SCENE_LINES[Math.max(1, Math.min(3, place.risk))];
-  const seen = lines[(g.seg * 5 + place.id.length) % lines.length];
-  const outside = stop.scout ? `정찰조가 돌아와 알린다. ${seen}` : seen;
-  return { outside, disembark: DISEMBARK_LINES[disembarkMood(g, stop.crewComm)] };
+  const v = stopView(g, stop, false);
+  return { outside: stop.look ?? `${v.sky} ${v.ground}`, disembark: DISEMBARK_LINES[disembarkMood(g, stop.crewComm)] };
+}
+
+export interface RiskView {
+  /** 약속 단계. 정찰 안 하면 null */
+  level: RiskLevel | null;
+  /** 정찰조가 본 조짐 */
+  omen: string | null;
+  /** 해석 말. 이 말이 약속이다 */
+  verdict: string | null;
+  why: string[];
+  unknown: string | null;
+}
+
+/** 정차 화면의 위험 글: 정찰조가 본 조짐과 해석(2026-10-07 사용자). 준비를 바꾸면 해석만 다시 계산되고 조짐은 그대로다. */
+export function riskView(g: Game): RiskView {
+  const r = stopRisk(g);
+  const why = riskWhy(r);
+  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: '정찰하지 않으면 안쪽 기척은 모른다.' };
+  const v = stopView(g, g.stop, r.horde);
+  const level = riskLevel(r);
+  return { level, omen: v.omen, verdict: verdictText(level, v.sign), why, unknown: null };
 }
 
 /** 관계 단계를 사람 말로. 열차장(플레이어)을 어떻게 보는지. */
