@@ -244,3 +244,39 @@ describe('receipt wounds (version 2)', () => {
     expect(issues(receipt)).toEqual([]);
   });
 });
+
+// 같은 변형 입력을 S1 스키마와 S2 Receipt.check()가 똑같이 판정하는지 보는 공용 판정표(J07).
+// S2 쪽은 s2/tests/game/test_receipt_contract.gd가 같은 표를 읽는다.
+type Step = (string | number)[];
+type ContractCase = { name: string; set: [Step, unknown][]; remove: Step[]; valid: boolean };
+const contractDir = join(root, '../s2/tests/game/fixtures');
+const contract = JSON.parse(readFileSync(join(contractDir, 'receipt_contract_cases.json'), 'utf8')) as
+  { base: string; cases: ContractCase[] };
+const applyCase = (base: Receipt, c: ContractCase): Receipt => {
+  const out = structuredClone(base);
+  const walk = (path: Step) => {
+    let node: any = out;
+    for (const key of path.slice(0, -1)) node = node[key];
+    return [node, path[path.length - 1]] as const;
+  };
+  for (const [path, value] of c.set) { const [node, key] = walk(path); node[key] = structuredClone(value); }
+  for (const path of c.remove) {
+    const [node, key] = walk(path);
+    if (Array.isArray(node)) node.splice(Number(key), 1); else delete node[key];
+  }
+  return out;
+};
+
+describe('receipt contract table (S1 schema = S2 check)', () => {
+  const base = read(join(contractDir, contract.base));
+  it('has unique names and both verdicts', () => {
+    expect(new Set(contract.cases.map(c => c.name)).size).toBe(contract.cases.length);
+    expect(contract.cases.some(c => c.valid)).toBe(true);
+    expect(contract.cases.some(c => !c.valid)).toBe(true);
+  });
+  it.each(contract.cases.map(c => [c.name, c] as const))('%s', (_, c) => {
+    const changed = applyCase(base, c);
+    if (c.set.length || c.remove.length) expect(changed).not.toEqual(base);
+    expect(issues(changed).length === 0).toBe(c.valid);
+  });
+});
