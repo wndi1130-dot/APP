@@ -78,6 +78,55 @@ func melee_person(p, other) -> void:
 	p.brain["repath_t"] = 0.0
 
 
+## Orders from the player's hand. The HUD calls these and does not write the
+## fight state (targets, hold, goal, path) itself.
+
+## In a one-press fight: still after someone, swinging on.
+func fighting(p) -> bool:
+	return p.hold_attack and (not p.target_zombie.is_empty() or p.target_person != null)
+
+
+## Go for an enemy; hold keeps swinging.
+func fight(p, target, hold: bool) -> void:
+	p.brain.erase("goal")
+	if target is Dictionary:
+		melee_target(p, target, hold)
+	else:
+		melee_person(p, target)
+		p.hold_attack = hold
+
+
+## The finger holding the swing is gone: finish this swing, then stop.
+func stop_holding(p) -> void:
+	p.hold_attack = false
+
+
+## Call the fight off where you stand (a tap on open ground).
+func call_off(p) -> void:
+	p.target_zombie = {}
+	p.target_person = null
+	p.hold_attack = false
+	p.brain.erase("goal")
+
+
+## Call the fight off and stop walking at the enemy too.
+func stop_fight(p) -> void:
+	call_off(p)
+	p.path = PackedVector3Array()
+
+
+## The stick takes over: whoever you were walking at is dropped.
+func drop_melee(p) -> void:
+	p.target_zombie = {}
+	p.target_person = null
+
+
+## The gun comes up: no walking at a zombie or to a goal meanwhile.
+func drop_target(p) -> void:
+	p.target_zombie = {}
+	p.brain.erase("goal")
+
+
 func _pursue_zombie(p, delta: float) -> void:
 	var z: Dictionary = p.target_zombie
 	if z.is_empty() or z["state"] == "dead":

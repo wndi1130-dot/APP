@@ -1105,8 +1105,7 @@ func _apply_stick() -> void:
 			return
 		stop_fight(p)
 	p.stick = v.normalized() * push
-	p.target_zombie = {}
-	p.target_person = null
+	game.combat.drop_melee(p)
 	_update_rim(0.0)
 	_set_running(p)
 
@@ -1232,8 +1231,7 @@ func _auto_aim_start() -> void:
 	auto_skip = 0
 	aim_target = null
 	aim_point = p.position + Vector3(sin(p.facing), 0, cos(p.facing)) * 4.0
-	p.target_zombie = {}
-	p.brain.erase("goal")
+	game.combat.drop_target(p)
 
 
 func _auto_aim_end(pos: Vector2) -> void:
@@ -1300,8 +1298,7 @@ func _press(pos: Vector2) -> void:
 			aim_armed = not _over_player(pos)
 			aim_target = target
 			aim_point = _on_target_floor(world, target)
-			p.target_zombie = {}
-			p.brain.erase("goal")
+			game.combat.drop_target(p)
 	else:
 		melee_pending = target
 
@@ -1363,7 +1360,7 @@ func drop_touch() -> void:
 	aim_target = null
 	melee_pending = null
 	if melee_holding and game.player != null:
-		game.player.hold_attack = false
+		game.combat.stop_holding(game.player)
 	melee_holding = false
 	if game.player != null:
 		game.player.aim.stop()
@@ -1393,15 +1390,11 @@ func _tick_primary(p) -> void:
 
 ## The player is in a one-press fight: still after someone, swinging on.
 func fighting(p) -> bool:
-	return p.hold_attack and (not p.target_zombie.is_empty() or p.target_person != null)
+	return game.combat.fighting(p)
 
 
 func stop_fight(p) -> void:
-	p.target_zombie = {}
-	p.target_person = null
-	p.hold_attack = false
-	p.brain.erase("goal")
-	p.path = PackedVector3Array()
+	game.combat.stop_fight(p)
 	attack_button.button_pressed = false
 
 
@@ -1413,13 +1406,7 @@ func _fight_dir(p) -> Vector2:
 
 
 func _melee(target, hold: bool) -> void:
-	var p = game.player
-	p.brain.erase("goal")
-	if target is Dictionary:
-		game.combat.melee_target(p, target, hold)
-	else:
-		game.combat.melee_person(p, target)
-		p.hold_attack = hold
+	game.combat.fight(game.player, target, hold)
 
 
 ## The finger's point moved to the floor the target stands on (shooting
@@ -1464,10 +1451,7 @@ func _tap(pos: Vector2) -> void:
 		return
 	# The ground itself is not an order any more (the stick walks, user 17:15);
 	# a tap on it only calls off a fight.
-	p.target_zombie = {}
-	p.target_person = null
-	p.hold_attack = false
-	p.brain.erase("goal")
+	game.combat.call_off(p)
 
 
 ## Doors, windows, containers, spots, lids, ground items and companions.
