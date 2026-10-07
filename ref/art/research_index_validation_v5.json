@@ -1,0 +1,82 @@
+{
+  "schema": "app.art.research-validation/5",
+  "date": "2026-10-07",
+  "base_commit": "da6797dcdbe782d4effea9c29e722ae77d9e3ce1",
+  "environment": {
+    "platform": "win32",
+    "python": "3.13.13"
+  },
+  "checks": [
+    {
+      "command": "python ref/art/build_research_index.py --check",
+      "status": "[PASS]",
+      "details": {
+        "v2_resources": 37,
+        "v3_resources": 17,
+        "v4_resources": 8,
+        "total_resource_entries": 71,
+        "game_references": 6,
+        "scene_plans": 6,
+        "v4_sources": 18,
+        "v4_rechecks": 1,
+        "v4_leads": 2,
+        "v2_exclusions": 3,
+        "v5_resources": 9,
+        "v5_sources": 21,
+        "v5_exclusions": 1
+      },
+      "local_links": 138
+    },
+    {
+      "command": "python ref/art/validate_catalog.py",
+      "status": "[PASS]",
+      "v2_entries": 37,
+      "local_links": 116
+    },
+    {
+      "command": "python -m unittest discover -s ref/art -p test_*.py -v",
+      "status": "[PASS]",
+      "tests_run": 19,
+      "new_tests": 4,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "command": "git diff --check",
+      "status": "[PASS]"
+    },
+    {
+      "command": "Compare README prefix and original v2-v4 research against base",
+      "status": "[PASS]"
+    },
+    {
+      "command": "git diff --quiet -- s1 ref/names ref/rail docs",
+      "status": "[PASS]"
+    }
+  ],
+  "artifact_sha256": {
+    "README.md": "4eaba951c948d4d416b444039e70c15bf541d5e30749cdd326bc89768c1cab2d",
+    "ref/art/README.md": "0639646dcda246f8e508b8d8070a623a8435e71f3079022dec6aab53e4c89f3c",
+    "ref/art/production_resources_v5.json": "9821d894ac4c8dce7a031d15e3b9892079d28eec39d03628a6046e26f145f301",
+    "ref/art/production_resources_v5.md": "200f727f0d81a2ae53e1788e08b18eefd118b7d72dede4b4506da995561d9ce4",
+    "ref/art/build_research_index.py": "cc16847ceeaf213841011dacf2cf47785cc4f2266c62628193db5f7845e11f1b",
+    "ref/art/test_research_index.py": "34104ee5758080158f6746c842a57eef6a16b3e3fcb5460fa97bc88c0b1ee6b4"
+  },
+  "not_performed": [
+    "Asset package download or purchase",
+    "Blender/Unity execution",
+    "Rendering",
+    "Audio audition",
+    "Mobile performance test",
+    "Cloud render deployment",
+    "External URL availability sweep",
+    "Existing game regression suite",
+    "Merge to main"
+  ],
+  "notes": [
+    "Source metadata for coat.mhclo was read through Exa; the asset package was not downloaded or redistributed.",
+    "HTTP citations are explicitly annotated legacy reference URLs, not permission to download or execute them.",
+    "The two local-link counts overlap and must not be added as unique links.",
+    "The tests assert documentation/metadata consistency, not asset quality or legal approval."
+  ]
+}

@@ -12,8 +12,9 @@ class ResearchIndexTests(unittest.TestCase):
     def test_actual_catalogs_and_generated_documents(self):
         root = (index.ROOT / "README.md").read_text(encoding="utf-8")
         outputs, counts = index.render(self.catalogs, root)
-        self.assertEqual(counts["total_resource_entries"], 62)
+        self.assertEqual(counts["total_resource_entries"], 71)
         self.assertEqual(counts["v4_resources"], 8)
+        self.assertEqual(counts["v5_resources"], 9)
         self.assertGreater(index.check_outputs(outputs), 0)
 
     def test_duplicate_across_versions_is_rejected(self):
@@ -44,6 +45,26 @@ class ResearchIndexTests(unittest.TestCase):
     def test_local_path_cannot_be_source_url(self):
         self.catalogs[2]["sources"]["S01"]["url"] = "file:///secret.txt"
         with self.assertRaisesRegex(ValueError, "Invalid source URL"):
+            index.validate(self.catalogs)
+
+    def test_http_reference_requires_explicit_note(self):
+        self.catalogs[3]["sources"]["S01"]["transport_note"] = ""
+        with self.assertRaisesRegex(ValueError, "Invalid source URL"):
+            index.validate(self.catalogs)
+
+    def test_http_exception_does_not_allow_other_hosts(self):
+        self.catalogs[3]["sources"]["S01"]["url"] = "http://example.org/untrusted"
+        with self.assertRaisesRegex(ValueError, "Invalid source URL"):
+            index.validate(self.catalogs)
+
+    def test_new_exclusion_cannot_reuse_resource_id(self):
+        self.catalogs[3]["excluded"][0]["id"] = self.catalogs[0]["resources"][0]["id"]
+        with self.assertRaisesRegex(ValueError, "Excluded ID collision"):
+            index.validate(self.catalogs)
+
+    def test_v5_does_not_claim_asset_package_download(self):
+        self.catalogs[3]["resources"][0]["package_downloaded"] = True
+        with self.assertRaisesRegex(ValueError, "Unsubstantiated execution claim"):
             index.validate(self.catalogs)
 
     def test_stale_readme_is_rejected(self):

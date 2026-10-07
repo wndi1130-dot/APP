@@ -31,7 +31,7 @@
 
 **[전체 자원 색인: ref/art/README.md](ref/art/README.md)** — 버전별 후보를 한곳에서 찾는다.
 
-조사 항목 **62개**: 2판 37개 + 3판 17개 + 4판 8개. 공급자 수나 확보한 파일 수가 아니며, 도구·서비스·기법·개별 자산을 포함한다. 프로젝트 적용은 미검증이다.
+조사 항목 **71개**: 2판 37개 + 3판 17개 + 4판 8개 + 5판 9개. 공급자 수나 확보한 파일 수가 아니며, 도구·서비스·기법·개별 자산을 포함한다. 프로젝트 적용은 미검증이다.
 
 | 순서 | 자료 | 내용 |
 |---|---|---|
@@ -40,19 +40,21 @@
 | 3 | [제작 자원 2판](ref/art/production_resources.md) · [JSON](ref/art/resource_index.json) | 기반 도구·리그·소품·재질·셰이더 37개, 별도 제외 3개 |
 | 4 | [작품별 보충 3판](ref/art/game_reference_resources_v3.md) · [JSON](ref/art/game_reference_resources_v3.json) | This War of Mine·Frostpunk 1·2·Metro 제작자 자료 6개, 후보 17개, 장면 검증안 6개 |
 | 5 | [빠진 자원 보충 4판](ref/art/production_gap_resources_v4.md) · [JSON](ref/art/production_gap_resources_v4.json) | 작업·구조 모션, 철도 음향, 의복/소품/경로 제작 8개, 재확인 1건, 자료 경로 2건 |
+| 6 | [방한복·소품·전달 보충 5판](ref/art/production_resources_v5.md) · [JSON](ref/art/production_resources_v5.json) | 구체 의복·생활 소품·의존 파일·렌더 관리·UV/텍스처·메모리 9개, 버전 제외 1개 |
 
-### 이번에 추가한 4판 항목
+### 이번에 추가한 5판 항목
 
 | 자원 | 필요한 부분 |
 |---|---|
-| [MoCap Central — Fix & Build](ref/art/production_gap_resources_v4.md#mcc_fix_build) | 삽질·렌치·탁상 정비·설계도 확인 동작의 조달 후보. |
-| [Reallusion — Injury & Rescue](ref/art/production_gap_resources_v4.md#reallusion_injury_rescue) | 부상자 부축·업거나 들기·들것 운반·구호물자 전달 비교. |
-| [Freesound 125211 — keithpeter의 증기열차 출발 녹음](ref/art/production_gap_resources_v4.md#audio_train_departure_125211) | 출발 순간의 증기·급탄·기적·차륜 소리 층을 비교할 재료. |
-| [Freesound 686058 — relwin의 기관차 기적](ref/art/production_gap_resources_v4.md#audio_loco_whistle_686058) | 열차 출발 신호의 실제 기관차 기적 후보. |
-| [Evocative Sound and Visuals — American Steam Trains](ref/art/production_gap_resources_v4.md#evocative_american_steam) | 화실 급탄·증기 방출·근접/원경 주행·정비 소리의 수급 후보. |
-| [MPFB — MakeClothes 의복 제작 절차](ref/art/production_gap_resources_v4.md#mpfb_makeclothes_workflow) | 긴 방한 외투를 찾지 못했을 때 자체 의복을 같은 몸체에 맞추는 대안. |
-| [Blender 4.5 — Child Of 제약과 소품 인계](ref/art/production_gap_resources_v4.md#blender_child_of_handoffs) | 삽을 집고 내려놓기, 물자 건네기, 들것 손잡이와 인물의 관계를 제작할 때 참고. |
-| [Unity Splines — 경로와 Spline Animate](ref/art/production_gap_resources_v4.md#unity_spline_train_path) | 곡선 위 열차 전경·카메라 이동·선로 주변 반복 배치의 후순위 비교. |
+| [punkduck — Winter coat](ref/art/production_resources_v5.md#mh_punkduck_winter_coat) | 민간인 방한 외투의 실루엣·겹쳐 입기 후보. |
+| [Elvaerwyn — Elvs Ladies winter scarf 1 OC](ref/art/production_resources_v5.md#mh_elvs_winter_scarf_oc) | 외투 위에 두르는 민간인 목도리 후보. |
+| [Poly Haven — Modular Industrial Pipes 01](ref/art/production_resources_v5.md#ph_modular_industrial_pipes) | 기관실·난방관·정비 공간의 배관과 밸브 후보. |
+| [Poly Haven — Vintage Day Bed](ref/art/production_resources_v5.md#ph_vintage_day_bed) | 앞칸의 낡은 안락함·임시 거주 공간을 비교할 침상 소품. |
+| [Blender 4.5 — Pack Resources / Linked Libraries](ref/art/production_resources_v5.md#blender_pack_dependencies) | 다른 에이전트·컴퓨터에서 텍스처나 링크된 파일이 누락되는 상황 예방. |
+| [Blender Flamenco — 자체 호스팅 렌더 작업 관리](ref/art/production_resources_v5.md#flamenco_render_dispatch) | 향후 별도 GPU 컴퓨터에서 프리뷰·연기 프레임·일괄 렌더를 수행할 때 검토. |
+| [KTX-Software + KtxUnity — 텍스처 전달 경로](ref/art/production_resources_v5.md#ktx_texture_pipeline) | 텍스처가 많은 옷·객차·소품의 전달량과 실제 로딩 비용을 비교. |
+| [xatlas — 고유 UV 생성 라이브러리](ref/art/production_resources_v5.md#xatlas_uv2) | 정적 역·객차 실내 모듈의 라이트맵용 UV를 만드는 보조 후보. |
+| [Unity Memory Profiler — Player 스냅샷 비교](ref/art/production_resources_v5.md#unity_memory_profiler) | 열차 홈→필드→복귀 전후의 잔류 자산·누적 메모리 확인. |
 
 [WATCH] 저장된 것은 작성한 조사 문서·출처 주소·메타데이터·검사 도구다. 원작 게임 자산, 외부 유료 팩, 모션·음원 원본, 도면 PDF를 이 저장소에 추가하지 않았다. 구매·다운로드·설치·Blender/Unity 실행·음원 청취·모바일 성능 검증은 이번 범위 밖이다.
 

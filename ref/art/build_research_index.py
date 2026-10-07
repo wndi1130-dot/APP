@@ -14,8 +14,9 @@ CATALOGS = (
     "ref/art/resource_index.json",
     "ref/art/game_reference_resources_v3.json",
     "ref/art/production_gap_resources_v4.json",
+    "ref/art/production_resources_v5.json",
 )
-REPORTS = ("production_resources.md", "game_reference_resources_v3.md", "production_gap_resources_v4.md")
+REPORTS = ("production_resources.md", "game_reference_resources_v3.md", "production_gap_resources_v4.md", "production_resources_v5.md")
 ALLOWED = {"[PASS]", "[WATCH]", "[PATCH REQUIRED]", "[FAIL]", "[BLOCKED]"}
 
 
@@ -33,8 +34,19 @@ def valid_url(url: str) -> bool:
     return parts.scheme == "https" and bool(parts.netloc) and not parts.username and not parts.password
 
 
+def valid_reference(source: dict) -> bool:
+    """Permit explicitly documented legacy HTTP citations, never download targets."""
+    url = source["url"]
+    if valid_url(url):
+        return True
+    parts = urlsplit(url)
+    return (parts.scheme == "http" and parts.hostname in {"makehumancommunity.org", "www.makehumancommunity.org"}
+            and not parts.username and not parts.password and parts.port in (None, 80)
+            and source.get("allow_insecure_reference") is True and bool(source.get("transport_note")))
+
+
 def validate(catalogs: list[dict]) -> dict[str, int]:
-    v2, v3, v4 = catalogs
+    v2, v3, v4, v5 = catalogs
     ids: set[str] = set()
     for data in catalogs:
         for row in data["resources"]:
@@ -49,15 +61,16 @@ def validate(catalogs: list[dict]) -> dict[str, int]:
             require(bool(row.get("name")), "Missing name")
             for url in row.get("sources", []):
                 require(valid_url(url), "Invalid source URL")
-    for source in v4["sources"].values():
-        require(valid_url(source["url"]), "Invalid source URL")
-        require(bool(source.get("access")), "Missing source access level")
+    for data in catalogs[2:]:
+        for source in data["sources"].values():
+            require(valid_reference(source), "Invalid source URL")
+            require(bool(source.get("access")), "Missing source access level")
+        for row in data["resources"]:
+            for key in ("kind", "prior_relation", "project_use", "confirmed", "proposal", "delivery",
+                        "license", "ai_handling", "limitations", "next_test", "source_ids"):
+                require(bool(row.get(key)), "Missing " + key)
+            require(set(row["source_ids"]) <= set(data["sources"]), "Unknown source reference")
     source_ids = set(v4["sources"])
-    for row in v4["resources"]:
-        for key in ("kind", "prior_relation", "project_use", "confirmed", "proposal", "delivery",
-                    "license", "ai_handling", "limitations", "next_test", "source_ids"):
-            require(bool(row.get(key)), "Missing " + key)
-        require(set(row["source_ids"]) <= source_ids, "Unknown source reference")
     old_ids = {r["id"] for d in (v2, v3) for r in d["resources"]}
     supplementary: set[str] = set()
     for row in v4["rechecks"] + v4["leads"]:
@@ -71,6 +84,11 @@ def validate(catalogs: list[dict]) -> dict[str, int]:
     for row in v2["excluded"]:
         require(row["id"] not in ids | supplementary, "Excluded ID collision")
         supplementary.add(row["id"])
+    for row in v5["excluded"]:
+        require(row["id"] not in ids | supplementary, "Excluded ID collision")
+        supplementary.add(row["id"])
+        require(row["status"] == "[BLOCKED]" and bool(row["reason"]), "Invalid exclusion")
+        require(bool(row["source_ids"]) and set(row["source_ids"]) <= set(v5["sources"]), "Unknown source reference")
     references = {r["id"] for r in v3["references"]}
     require(len(references) == len(v3["references"]), "Duplicate game reference")
     for row in v3["resources"] + v3["scene_tests"]:
@@ -84,6 +102,8 @@ def validate(catalogs: list[dict]) -> dict[str, int]:
         "game_references": len(references), "scene_plans": len(v3["scene_tests"]),
         "v4_sources": len(source_ids), "v4_rechecks": len(v4["rechecks"]),
         "v4_leads": len(v4["leads"]), "v2_exclusions": len(v2["excluded"]),
+        "v5_resources": len(v5["resources"]), "v5_sources": len(v5["sources"]),
+        "v5_exclusions": len(v5["excluded"]),
     }
 
 
@@ -96,10 +116,10 @@ def source_links(row: dict, v4: dict) -> str:
 
 
 def root_block(catalogs: list[dict], counts: dict) -> str:
-    _, _, v4 = catalogs
+    _, _, v4, v5 = catalogs
     lines = [START, "## 3D 제작 자료 목록", "",
         "**[전체 자원 색인: ref/art/README.md](ref/art/README.md)** — 버전별 후보를 한곳에서 찾는다.", "",
-        f'조사 항목 **{counts["total_resource_entries"]}개**: 2판 {counts["v2_resources"]}개 + 3판 {counts["v3_resources"]}개 + 4판 {counts["v4_resources"]}개. '
+        f'조사 항목 **{counts["total_resource_entries"]}개**: 2판 {counts["v2_resources"]}개 + 3판 {counts["v3_resources"]}개 + 4판 {counts["v4_resources"]}개 + 5판 {counts["v5_resources"]}개. '
         "공급자 수나 확보한 파일 수가 아니며, 도구·서비스·기법·개별 자산을 포함한다. 프로젝트 적용은 미검증이다.", "",
         "| 순서 | 자료 | 내용 |", "|---|---|---|",
         "| 1 | [현재 아트 기준](docs/art/production_brief.md) · [조사 지시서](docs/handoff/3d_research_tasks.md) | 비픽셀 월드·UI 분리와 작업 범위 |",
@@ -107,10 +127,11 @@ def root_block(catalogs: list[dict], counts: dict) -> str:
         f'| 3 | [제작 자원 2판](ref/art/{REPORTS[0]}) · [JSON](ref/art/resource_index.json) | 기반 도구·리그·소품·재질·셰이더 {counts["v2_resources"]}개, 별도 제외 {counts["v2_exclusions"]}개 |',
         f'| 4 | [작품별 보충 3판](ref/art/{REPORTS[1]}) · [JSON](ref/art/game_reference_resources_v3.json) | This War of Mine·Frostpunk 1·2·Metro 제작자 자료 {counts["game_references"]}개, 후보 {counts["v3_resources"]}개, 장면 검증안 {counts["scene_plans"]}개 |',
         f'| 5 | [빠진 자원 보충 4판](ref/art/{REPORTS[2]}) · [JSON](ref/art/production_gap_resources_v4.json) | 작업·구조 모션, 철도 음향, 의복/소품/경로 제작 {counts["v4_resources"]}개, 재확인 {counts["v4_rechecks"]}건, 자료 경로 {counts["v4_leads"]}건 |',
-        "", "### 이번에 추가한 4판 항목", "",
+        f'| 6 | [방한복·소품·전달 보충 5판](ref/art/{REPORTS[3]}) · [JSON](ref/art/production_resources_v5.json) | 구체 의복·생활 소품·의존 파일·렌더 관리·UV/텍스처·메모리 {counts["v5_resources"]}개, 버전 제외 {counts["v5_exclusions"]}개 |',
+        "", "### 이번에 추가한 5판 항목", "",
         "| 자원 | 필요한 부분 |", "|---|---|"]
-    for row in v4["resources"]:
-        lines.append(f'| [{cell(row["name"])}](ref/art/{REPORTS[2]}#{row["id"]}) | {cell(row["project_use"])} |')
+    for row in v5["resources"]:
+        lines.append(f'| [{cell(row["name"])}](ref/art/{REPORTS[3]}#{row["id"]}) | {cell(row["project_use"])} |')
     lines += ["", "[WATCH] 저장된 것은 작성한 조사 문서·출처 주소·메타데이터·검사 도구다. "
               "원작 게임 자산, 외부 유료 팩, 모션·음원 원본, 도면 PDF를 이 저장소에 추가하지 않았다. "
               "구매·다운로드·설치·Blender/Unity 실행·음원 청취·모바일 성능 검증은 이번 범위 밖이다.", "",
@@ -120,7 +141,7 @@ def root_block(catalogs: list[dict], counts: dict) -> str:
 
 
 def inventory(catalogs: list[dict], counts: dict) -> str:
-    v2, v3, v4 = catalogs
+    v2, v3, v4, v5 = catalogs
     lines = ["# 3D 제작 자료 전체 색인", "", "갱신: 2026-10-07", "",
         "[저장소 README](../../README.md) · [현재 제작 기준](../../docs/art/production_brief.md) · "
         "[조사 지시서](../../docs/handoff/3d_research_tasks.md)", "",
@@ -133,7 +154,8 @@ def inventory(catalogs: list[dict], counts: dict) -> str:
         f'| [{REPORTS[0]}]({REPORTS[0]}) · [resource_index.json](resource_index.json) | 2판 기반 후보 |',
         f'| [{REPORTS[1]}]({REPORTS[1]}) · [game_reference_resources_v3.json](game_reference_resources_v3.json) | 3판 작품별 근거·생활 자원·장면 검증안 |',
         f'| [{REPORTS[2]}]({REPORTS[2]}) · [production_gap_resources_v4.json](production_gap_resources_v4.json) | 4판 정확한 작업 모션·구조·철도음·제작 보완 |',
-        "| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 세 목록 통합 검사와 이 README/루트 목록/4판 보고서 생성 |",
+        f'| [{REPORTS[3]}]({REPORTS[3]}) · [production_resources_v5.json](production_resources_v5.json) | 5판 방한복·소품·전달·메모리 검수 |',
+        "| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 네 목록 통합 검사와 이 README/루트 목록/4·5판 보고서 생성 |",
         "| [validate_catalog.py](validate_catalog.py) · [test_validate_catalog.py](test_validate_catalog.py) | 기존 2판 메타데이터·현재 지시·보관본 검사 |",
         "| [archive_manifest.json](archive_manifest.json) | 과거 프롬프트 본문 보존 해시 |",
         "| [game_reference_validation_v3.json](game_reference_validation_v3.json) | 이전 3판의 검사 기록. 이번 재실행 기록과 구분 |", ""]
@@ -145,8 +167,8 @@ def inventory(catalogs: list[dict], counts: dict) -> str:
             title = f'`{row["id"]}` — {cell(row["name"])}'
             use = row.get("project_use", row.get("project_proposal", ""))
             kind = row.get("category", row.get("kind", ""))
-            if version == 4:
-                links = source_links(row, v4)
+            if version >= 4:
+                links = source_links(row, data)
                 report = f'{REPORTS[index]}#{row["id"]}'
             else:
                 links = " · ".join(f'[출처 {i + 1}]({u})' for i, u in enumerate(row["sources"]))
@@ -168,8 +190,11 @@ def inventory(catalogs: list[dict], counts: dict) -> str:
     lines += ["## 2판에서 제외한 항목", "", "| 항목 | 이유 |", "|---|---|"]
     for row in v2["excluded"]:
         lines.append(f'| {cell(row["name"])} | {cell(row["reason"])} |')
+    lines += ["", "## 5판에서 제외한 항목", "", "| 항목 | 이유·근거 |", "|---|---|"]
+    for row in v5["excluded"]:
+        lines.append(f'| {cell(row["name"])} | {cell(row["reason"])} · {source_links(row, v5)} |')
     lines += ["", "## 다시 만드는 법", "",
-              "`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4판 보고서만 갱신한다. "
+              "`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4·5판 보고서만 갱신한다. "
               "`--check`는 파일을 쓰지 않고 누락·목록 불일치·ID 충돌·출처·미실행 표기를 검사한다. "
               "외부 URL에 접속하거나 Blender를 실행하지 않는다.", ""]
     return "\n".join(lines)
@@ -238,6 +263,42 @@ def report(v4: dict) -> str:
     return "\n".join(lines)
 
 
+def report_v5(data: dict) -> str:
+    lines = [f'# {data["title"]}', "", f'작성: {data["date"]} · 기준 커밋: `{data["base_research_commit"]}`', "",
+             "[전체 색인](README.md) · [구조화 목록](production_resources_v5.json) · [4판](production_gap_resources_v4.md)", "",
+             "## 범위", "", data["scope"], "", data["world_direction"], "", "## 이번 조사에서 좁힌 것", ""]
+    for paragraph in data["summary"]:
+        lines += [paragraph, ""]
+    lines += ["## 사용 순서 제안", "",
+              "의복 두 항목은 기존 공통 몸체와의 호환 확인부터, 소품 두 항목은 크기·부품 분리부터 비교한다. "
+              "텍스처 최적화 전에 원본·전달본·측정 기준을 나눈다. 렌더 관리 서버는 지금 설치할 필수 도구가 아니다.", ""]
+    labels = (("project_use", "용도"), ("confirmed", "출처 확인"), ("proposal", "적용 제안"),
+              ("delivery", "형식·호환"), ("license", "권리"), ("ai_handling", "파일·AI 처리"),
+              ("limitations", "미확인·한계"), ("next_test", "후속 검증"))
+    for i, row in enumerate(data["resources"], 1):
+        lines += [f'<a id="{row["id"]}"></a>', f'## {i}. {row["name"]}', "",
+                  f'**{row["status"]} / {row["kind"]}**', "", row["prior_relation"], ""]
+        for key, title in labels:
+            lines += [f'**{title}:** {row[key]}', ""]
+        lines += ["근거: " + source_links(row, data), ""]
+    lines += ["## Blender 4.5 기준 제외", ""]
+    for row in data["excluded"]:
+        lines += [f'### {row["status"]} {row["name"]}', "", row["reason"], "", source_links(row, data), ""]
+    lines += ["## 조회 한계와 잘못 읽기 쉬운 부분", ""]
+    for note in data["check_notes"]:
+        lines += [note, ""]
+    lines += ["## 남은 검증", ""]
+    lines += [f'- {gap}' for gap in data["remaining_gaps"]]
+    lines += ["", "## 출처 장부", "", "| ID | 자료 | 열람 범위 |", "|---|---|---|"]
+    for key, source in data["sources"].items():
+        lines.append(f'| {key} | [{cell(source["title"])}]({source["url"]}) | {cell(source["access"])} |')
+    lines += ["", "## 저장·검사", "",
+              "GitHub 연구 브랜치의 원문과 COS 로컬 파일을 같은 커밋으로 맞춘다. "
+              "검사 기록은 `research_index_validation_v5.json`에, 실제 동작 결과는 후속 제작 단계에 별도로 남긴다. "
+              "목록 검사가 통과해도 에셋 품질·엔진 임포트·모바일 성능을 검증한 것은 아니다.", ""]
+    return "\n".join(lines)
+
+
 def render(catalogs: list[dict], root_text: str) -> tuple[dict[str, str], dict[str, int]]:
     counts = validate(catalogs)
     if START in root_text or END in root_text:
@@ -251,6 +312,7 @@ def render(catalogs: list[dict], root_text: str) -> tuple[dict[str, str], dict[s
         "README.md": new_root,
         "ref/art/README.md": inventory(catalogs, counts),
         "ref/art/production_gap_resources_v4.md": report(catalogs[2]),
+        "ref/art/production_resources_v5.md": report_v5(catalogs[3]),
     }, counts
 
 
@@ -283,7 +345,7 @@ def main() -> None:
             (ROOT / name).write_text(text, encoding="utf-8", newline="\n")
     links = check_outputs(outputs)
     print("[PASS] " + json.dumps(counts, ensure_ascii=False, sort_keys=True))
-    print(f"[PASS] Three generated documents match; {links} local links; no cross-catalog ID collisions")
+    print(f"[PASS] {len(outputs)} generated documents match; {links} local links; no cross-catalog ID collisions")
     print("[WATCH] Metadata/document checks only; no external URL, legal, audio, Blender, Unity, or mobile tests")
 
 

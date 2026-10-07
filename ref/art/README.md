@@ -4,7 +4,7 @@
 
 [저장소 README](../../README.md) · [현재 제작 기준](../../docs/art/production_brief.md) · [조사 지시서](../../docs/handoff/3d_research_tasks.md)
 
-**조사 항목 62개**를 나열한다. 새 공급처·무료팩·다운로드 완료 수가 아니다. 같은 생태계의 개별 의복이나 기능 문서도 항목으로 센다. 서로 다른 ID를 세었으며 유사 기능까지 독립 공급처로 주장하지 않는다.
+**조사 항목 71개**를 나열한다. 새 공급처·무료팩·다운로드 완료 수가 아니다. 같은 생태계의 개별 의복이나 기능 문서도 항목으로 센다. 서로 다른 ID를 세었으며 유사 기능까지 독립 공급처로 주장하지 않는다.
 
 기존 판은 당시 조사 기록으로 보존했다. 뒤의 판은 보충이지 전 항목의 최신성 재검증이 아니다. 특히 약관·지원 버전은 실제 취득할 때 원문과 파일을 다시 고정한다. 모든 후보의 프로젝트 실행은 [WATCH]다.
 
@@ -15,7 +15,8 @@
 | [production_resources.md](production_resources.md) · [resource_index.json](resource_index.json) | 2판 기반 후보 |
 | [game_reference_resources_v3.md](game_reference_resources_v3.md) · [game_reference_resources_v3.json](game_reference_resources_v3.json) | 3판 작품별 근거·생활 자원·장면 검증안 |
 | [production_gap_resources_v4.md](production_gap_resources_v4.md) · [production_gap_resources_v4.json](production_gap_resources_v4.json) | 4판 정확한 작업 모션·구조·철도음·제작 보완 |
-| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 세 목록 통합 검사와 이 README/루트 목록/4판 보고서 생성 |
+| [production_resources_v5.md](production_resources_v5.md) · [production_resources_v5.json](production_resources_v5.json) | 5판 방한복·소품·전달·메모리 검수 |
+| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 네 목록 통합 검사와 이 README/루트 목록/4·5판 보고서 생성 |
 | [validate_catalog.py](validate_catalog.py) · [test_validate_catalog.py](test_validate_catalog.py) | 기존 2판 메타데이터·현재 지시·보관본 검사 |
 | [archive_manifest.json](archive_manifest.json) | 과거 프롬프트 본문 보존 해시 |
 | [game_reference_validation_v3.json](game_reference_validation_v3.json) | 이전 3판의 검사 기록. 이번 재실행 기록과 구분 |
@@ -97,6 +98,20 @@
 | `blender_child_of_handoffs` — Blender 4.5 — Child Of 제약과 소품 인계 | 공식 기본 기능 문서 / 삽을 집고 내려놓기, 물자 건네기, 들것 손잡이와 인물의 관계를 제작할 때 참고. | [조사](production_gap_resources_v4.md#blender_child_of_handoffs) · [S12](https://docs.blender.org/manual/en/4.5/animation/constraints/relationship/child_of.html) |
 | `unity_spline_train_path` — Unity Splines — 경로와 Spline Animate | 공식 엔진 패키지/예제 / 곡선 위 열차 전경·카메라 이동·선로 주변 반복 배치의 후순위 비교. | [조사](production_gap_resources_v4.md#unity_spline_train_path) · [S13](https://docs.unity3d.com/Packages/com.unity.splines@2.8/manual/index.html) · [S14](https://docs.unity3d.com/Packages/com.unity.splines@2.8/manual/animate-spline.html) |
 
+## 5판 후보 9개
+
+| ID / 자원 | 분야·용도 | 근거 |
+|---|---|---|
+| `mh_punkduck_winter_coat` — punkduck — Winter coat | CC-BY 의복 자산 / 민간인 방한 외투의 실루엣·겹쳐 입기 후보. | [조사](production_resources_v5.md#mh_punkduck_winter_coat) · [S01](http://makehumancommunity.org/clothes/winter_coat.html) · [S02](http://www.makehumancommunity.org/sites/default/files/clothes/1665/1679758305/coat.mhclo) |
+| `mh_elvs_winter_scarf_oc` — Elvaerwyn — Elvs Ladies winter scarf 1 OC | CC-BY 의복 자산 / 외투 위에 두르는 민간인 목도리 후보. | [조사](production_resources_v5.md#mh_elvs_winter_scarf_oc) · [S03](http://makehumancommunity.org/clothes/elvs_ladies_winter_scarf_1_oc.html) |
+| `ph_modular_industrial_pipes` — Poly Haven — Modular Industrial Pipes 01 | CC0 모듈식 3D 소품 / 기관실·난방관·정비 공간의 배관과 밸브 후보. | [조사](production_resources_v5.md#ph_modular_industrial_pipes) · [S04](https://polyhaven.com/a/modular_industrial_pipes_01) · [S06](https://polyhaven.com/license) |
+| `ph_vintage_day_bed` — Poly Haven — Vintage Day Bed | CC0 생활 공간 3D 소품 / 앞칸의 낡은 안락함·임시 거주 공간을 비교할 침상 소품. | [조사](production_resources_v5.md#ph_vintage_day_bed) · [S05](https://polyhaven.com/a/vintage_day_bed) · [S06](https://polyhaven.com/license) · [S21](https://polyhaven.com/a/hospital_room_2) |
+| `blender_pack_dependencies` — Blender 4.5 — Pack Resources / Linked Libraries | 기본 기능·파일 전달 절차 / 다른 에이전트·컴퓨터에서 텍스처나 링크된 파일이 누락되는 상황 예방. | [조사](production_resources_v5.md#blender_pack_dependencies) · [S07](https://docs.blender.org/manual/en/4.5/files/blend/packed_data.html) |
+| `flamenco_render_dispatch` — Blender Flamenco — 자체 호스팅 렌더 작업 관리 | 오픈소스 렌더 관리 도구 / 향후 별도 GPU 컴퓨터에서 프리뷰·연기 프레임·일괄 렌더를 수행할 때 검토. | [조사](production_resources_v5.md#flamenco_render_dispatch) · [S08](https://flamenco.blender.org/about/) · [S09](https://flamenco.blender.org/) · [S10](https://flamenco.blender.org/usage/shared-storage/) |
+| `ktx_texture_pipeline` — KTX-Software + KtxUnity — 텍스처 전달 경로 | 텍스처 도구·Unity 로더 묶음 / 텍스처가 많은 옷·객차·소품의 전달량과 실제 로딩 비용을 비교. | [조사](production_resources_v5.md#ktx_texture_pipeline) · [S11](https://github.com/KhronosGroup/KTX-Software) · [S12](https://github.com/KhronosGroup/KTX-Software/blob/main/LICENSE.md) · [S13](https://github.com/atteneder/KtxUnity) · [S14](https://github.com/atteneder/KtxUnity/blob/main/LICENSE.md) |
+| `xatlas_uv2` — xatlas — 고유 UV 생성 라이브러리 | 오픈소스 C++ 라이브러리 / 정적 역·객차 실내 모듈의 라이트맵용 UV를 만드는 보조 후보. | [조사](production_resources_v5.md#xatlas_uv2) · [S15](https://github.com/jpcy/xatlas) · [S16](https://github.com/jpcy/xatlas/blob/master/LICENSE) |
+| `unity_memory_profiler` — Unity Memory Profiler — Player 스냅샷 비교 | 공식 엔진 검수 패키지 / 열차 홈→필드→복귀 전후의 잔류 자산·누적 메모리 확인. | [조사](production_resources_v5.md#unity_memory_profiler) · [S17](https://docs.unity3d.com/Packages/com.unity.memoryprofiler@1.1/manual/index.html) · [S18](https://docs.unity3d.com/Packages/com.unity.memoryprofiler@1.1/manual/snapshot-capture.html) |
+
 ## 작품 제작자 자료 6개
 
 참고 기법을 분석하는 문서다. 원작의 모션·음원·이미지 사용권을 주는 자산 목록이 아니다.
@@ -143,6 +158,12 @@ PDF 열람 실패로 도면·표·이미지를 검토하지 못했다. 색인의
 | purna Blender to Unity Shader Converter | 열람한 제작자 README의 Blender 요구는 5.1 이상이다. 4.5 기본 경로에서 제외. 노드별 bake-only/approximation/incompatible도 있어 모든 Blender 셰이더의 무손실 변환기로 설명하지 않는다. 라이선스 상세는 미확인. |
 | 전월드 등각 스프라이트·픽셀화 자동 변환 | 사용자가 픽셀 월드를 명시적으로 제외했다. 전월드 방향별 렌더·32px 격자·팔레트 강제는 제작 기본 경로에서 제외한다. 연기 flipbook·UI 아이콘·원거리 impostor 같은 국소 사용까지 금지하는 것은 아니다. |
 
+## 5판에서 제외한 항목
+
+| 항목 | 이유·근거 |
+|---|---|
+| Blender Asset Tracer v2 — Blender 4.5 기본 경로에서 제외 | 제작자 PyPI와 공식 staging README가 Blender 5.1 이상을 요구한다. 별도 4.5 프로젝트를 자동 업그레이드하거나 v1 호환을 추정하지 않는다. v2에 관한 캐시 누락 경고도 있어 모든 의존성을 완벽하게 수집한다고 보증하지 않는다. 도구 자체의 사용 금지가 아니라 현재 설치 버전과의 불일치다. · [S19](https://pypi.org/project/blender-asset-tracer/) · [S20](https://projects.staging.blender.org/blender/blender-asset-tracer/src/branch/main/README.md) |
+
 ## 다시 만드는 법
 
-`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4판 보고서만 갱신한다. `--check`는 파일을 쓰지 않고 누락·목록 불일치·ID 충돌·출처·미실행 표기를 검사한다. 외부 URL에 접속하거나 Blender를 실행하지 않는다.
+`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4·5판 보고서만 갱신한다. `--check`는 파일을 쓰지 않고 누락·목록 불일치·ID 충돌·출처·미실행 표기를 검사한다. 외부 URL에 접속하거나 Blender를 실행하지 않는다.
