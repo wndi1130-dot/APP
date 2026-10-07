@@ -57,7 +57,15 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 15,
-            "pattern": "^[^\\r\\n]+$"
+            "pattern": "^[^\\r\\n]+$",
+            "description": "무엇을 하는지 짧게. 일지에 남는다."
+          },
+          "say": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\r\\n]+$",
+            "description": "카드에 보이는 열차장의 말. 한두 문장. 효과와 비용은 넣지 않는다(2026-10-07 사용자)."
           },
           "effects": {
             "$ref": "urn:s1:schema:effects#/$defs/list"

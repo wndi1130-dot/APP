@@ -73,6 +73,8 @@ describe('화면 글 규칙', () => {
     expect(missing).toEqual([]);
     const said = everyCardView().flatMap(v => v.choices.map(ch => ch.say ?? ''));
     expect(said.flatMap(t => violations(t, true))).toEqual([]);
+    // 콘텐츠 가이드: 선택지 대사는 한두 문장, 40자 이내
+    expect(said.filter(t => t.length > 40 || (t.match(/[.!?]/g) ?? []).length > 2)).toEqual([]);
   });
 
   it('법, 장소, 비밀, 거래 조건 글에 금지 표현이 없다', () => {
