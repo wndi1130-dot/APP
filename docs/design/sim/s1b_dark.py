@@ -51,7 +51,13 @@ Q의 손잡이 (자세한 값은 아래 Q 주석)
                시험 깃발(기본 끔): brink_fresh·brink_mutual·brink_hold·brink_unrest(내전 직전 문턱 후보),
                ml_force_seg·ml_lift_after(계엄을 걸고 스스로 거두는 길을 강제로 잰다), tyrant_trial(tyrant가 재판에 넘김)
                예: 거둔 계엄의 추인 → --policies tyrant,caretaker --tune ml_force_seg=9 ml_lift_after=3 ml_lift_bonus=2
+  6라운드      정기 신임 표결(5.3, 12.3 '정기 신임'). 기본 켬. 끄면 5라운드와 판마다 같다: --tune regular_conf=0
+               regular_conf(n회기마다), conf_need, conf_pass_trust, conf_grudge, conf_fail_trust(시험),
+               conf_after_lift(거둔 뒤 표결), conf_fail_agenda·conf_lock_trust(부결이면 k회기 안건을 AI가 고름, 위기 카드 없음)
+               입장의 '약속'은 S1a 약속(promise_tick·break_promise)과 휴전 서약 조건을 칸마다 판 전체로 센 값이다.
+               부결이 위기 카드를 여는 브리프 원안: --tune conf_fail_agenda=0 conf_after_lift=1
 """
+import math
 import random
 import sys
 from collections import Counter, defaultdict
@@ -178,6 +184,16 @@ Q = dict(
     ml_force_seg=0,       # (시험) n이면 tyrant·caretaker가 n구간에 대권 연장 문으로 계엄을 건다(조건 없이)
     ml_lift_after=0,      # (시험) n이면 tyrant·caretaker가 계엄 n구간 뒤 스스로 거둔다
     tyrant_trial=0,       # (시험) k면 exec_on일 때 tyrant가 단계 k 이상(1 정황, 2 증거) 사건을 재판에 넘긴다
+    # 6라운드: 정기 신임 표결(5.3, 사용자 결정 10-07 17:33). 기본 켬(3회기마다, 부결이면 1회기 안건을 잃음). regular_conf=0이면 5라운드와 판마다 같다
+    acquit_next=1,        # 4.4 무죄 뒤 군중이 같은 구간 정산이 아니라 다음 구간에 오게(6차 뒤 코드 리뷰로 고침)
+    regular_conf=3,       # 5.3 n이면 의회가 n번 열릴 때마다 정기 신임 표결(0이면 없음). 계엄 중엔 없고, 거둔 뒤 첫 회기에 하나
+    conf_need=51,         # 5.3 정기 신임 통과선(일반 51)
+    conf_pass_trust=5,    # 5.3 통과하면 신임 +k
+    conf_grudge=1,        # 12.3 적의 규칙(적의 2 이상이면 −3 상한, 적의 1이면 −1)을 신임 입장에도 얹는다. 0이면 관계 단계·약속만
+    conf_fail_trust=0,    # (시험) 부결이면 신임 −k. 0이면 브리프 그대로(위기 카드만 열린다. 신임 25 이상이면 그 구간에 풀린다)
+    conf_after_lift=0,    # 5.3 1이면 계엄을 거둔 뒤 첫 회기에 신임 표결 하나. 0이면 정기 일정만 잇는다(코디네이터 결정)
+    conf_fail_agenda=1,   # k면 부결 때 위기 카드 대신 다음 k회기 동안 열차장이 안건을 못 올리고 AI 대표가 고른다. 0이면 S1a 신임 위기 카드
+    conf_lock_trust=5,    # 위 규칙에서 부결의 신임 값(−k). conf_fail_agenda가 0이면 안 쓴다
 )
 RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
 BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
@@ -245,6 +261,9 @@ class DarkRun(A.Run):
         self.uc_store = self.uc_pyre = 0  # 확인 안 한 채 냉동칸·찬 객차(장작불 대기)에 놓인 시신(9.1)
         self.brink_hold = Counter()  # 내전 직전 조건이 이어진 구간 수(5차 brink_hold)
         self.lift_bonus = 0  # 스스로 거둔 계엄 뒤 첫 추인 표결의 입장 보너스(5.3, 5라운드)
+        self.kept_by, self.broken_by = Counter(), Counter()  # 칸마다 지킨·어긴 약속(5.3 신임 입장, 6라운드). 세기만 한다
+        self.conf_since, self.conf_after_ml, self.crisis_by_conf = 0, False, False  # 정기 신임(6라운드)
+        self.conf_lock, self.conf_lock_next = 0, 0  # 부결로 안건을 잃은 회기 수(지금 / 다음 회기부터)
 
     # ---------------- S1a 훅 ----------------
     def res(self, key, default=0.0):
@@ -404,9 +423,30 @@ class DarkRun(A.Run):
                     self.offend(o)
                 self.stats['blackmail_known'] += 1
 
+    def promise_tick(self):
+        """S1a 약속 이행 그대로. 칸마다 지킨 수만 더 센다(어긴 수는 break_promise에서)."""
+        if not self.s1b:
+            return super().promise_tick()
+        due = Counter(p[0] for p in self.promises if self.seg >= p[1])
+        before = Counter(self.broken_by)
+        super().promise_tick()
+        for c, k in due.items():
+            self.kept_by[c] += k - (self.broken_by[c] - before[c])
+
+    def break_promise(self, p):
+        if self.s1b:
+            self.broken_by[p[0]] += 1  # S1a 약속과 S1b 재판 약속(trial_defer) 모두
+        super().break_promise(p)
+
     def check_end(self):
         if not self.s1b or not self.ml:
-            return super().check_end()
+            super().check_end()
+            if self.s1b and Q['regular_conf']:
+                if self.end == 'ousted' and self.crisis_by_conf:
+                    self.stats['conf_ousted'] += 1
+                if self.trust_crisis is None:
+                    self.crisis_by_conf = False
+            return
         # 계엄: 신임 위기로 축출되지 않는다(쿠데타는 pre_move에서)
         if self.coal <= 0:
             if not self.stats['emergency_used']:
@@ -1135,7 +1175,7 @@ class DarkRun(A.Run):
             self.rel[dfd['comm']] = clamp(self.rel[dfd['comm']] + 3, -100, 100)
             case['status'] = 'open'
             if case['clock'] is not None:
-                case['clock'] = 1  # 무죄면 군중은 다음 구간에 온다
+                case['clock'] = 1 + Q['acquit_next']  # 무죄면 군중은 다음 구간에 온다(같은 구간 정산이 먼저 하나 깎는다)
 
     # ---------------- 군중 (4.5) ----------------
     def crowd_card(self, case):
@@ -1480,6 +1520,7 @@ class DarkRun(A.Run):
                 b['kept'].add(c)
                 self.trust += 4; self.rel[c] = clamp(self.rel[c] + 5, -100, 100)
                 S['truce_cond_kept'] += 1
+                self.kept_by[c] += 1  # 서약 조건도 지킨 약속으로 센다(6라운드 신임 입장)
         if len(b['kept']) == len(b['cond']):
             S['brink_end_peace'] += 1; S['truce_kept'] += 1
             for x in b['pair']:
@@ -1599,6 +1640,8 @@ class DarkRun(A.Run):
     def lift_ml(self, voluntary=False):
         self.ml = False; self.coup_warn = None
         self.stats['ml_lifted'] += 1
+        if Q['regular_conf'] and Q['conf_after_lift']:
+            self.conf_after_ml = True  # 5.3: 거둔 뒤 첫 회기에 정기 신임 하나
         self.lift_bonus = 0
         if voluntary:  # 5.3(5라운드): 쿠데타 경고 없이 스스로 거두었다
             self.stats['ml_lifted_voluntary'] += 1
@@ -1643,6 +1686,131 @@ class DarkRun(A.Run):
                 self.silent_remove(law)
                 self.repealed_at.pop(law, None)
                 S['ratify_removed'] += 1
+
+    # ---------------- 정기 신임 표결 (5.3, 6라운드) ----------------
+    def conf_scores(self):
+        """입장 = 관계 단계 + 지킨 약속 − 어긴 약속(판 전체 누계). 법의 이념은 넣지 않는다.
+        적의 규칙(12.3)은 이 회기 장부에서 풀릴 적의를 먼저 뺀 값으로 얹는다(표결이 장부보다 먼저 돈다).
+        대표를 잃은 칸은 입장 0(blocs와 같은 가정)."""
+        sc = {}
+        for c in COMMS:
+            s = band(self.rel[c]) + self.kept_by[c] - self.broken_by[c]
+            if Q['conf_grudge']:
+                g = self.grudge[c]
+                if g and self.session + 1 - self.last_offense[c] >= P['grudge_decay']:
+                    g -= 1
+                if g >= P['hostile_grudge']:
+                    s = min(s, -3)
+                elif g >= 1:
+                    s -= 1
+            if c in self.leaderless:
+                s = 0
+            sc[c] = s
+        return sc
+
+    def pass_prob(self, scores, need):
+        """vote_yes가 통과할 확률(미정 표의 이항 분포를 더한 값). 주사위를 굴리지 않는다(보고용)."""
+        dist, base = [1.0], 0
+        for cc in COMMS:
+            y, u, n = self.split(scores[cc])
+            s = SEATS[cc]
+            yy = round(s * y); nn = round(s * n); uu = s - yy - nn
+            p = max(0.2, min(0.8, 0.5 + 0.1 * scores[cc]))
+            base += yy
+            pmf = [math.comb(uu, k) * p ** k * (1 - p) ** (uu - k) for k in range(uu + 1)]
+            new = [0.0] * (len(dist) + uu)
+            for i, a in enumerate(dist):
+                for k, b in enumerate(pmf):
+                    new[i + k] += a * b
+            dist = new
+        return sum(v for i, v in enumerate(dist) if base + i >= need)
+
+    def confidence_vote(self):
+        """통과 51이면 신임 +5. 부결이면 S1a 신임 위기 카드(3구간 안에 25, 이미 열려 있으면 그대로)."""
+        S = self.stats
+        self.conf_since = 0
+        S['conf_after_ml'] += self.conf_after_ml
+        self.conf_after_ml = False
+        sc = self.conf_scores()
+        pp = self.pass_prob(sc, Q['conf_need'])
+        S['conf_votes'] += 1; S['conf_p_sum'] += pp
+        S['conf_p_coin'] += 0.2 <= pp <= 0.8; S['conf_p_sure'] += pp > 0.95; S['conf_p_lost'] += pp < 0.05
+        S['conf_last_seg'] += self.seg >= P['segments'] - 2  # 부결돼도 위기 3구간이 판 안에 끝나지 않는 표결
+        if self.vote_yes(sc, Q['conf_need']):
+            S['conf_passed'] += 1
+            self.trust += Q['conf_pass_trust']
+            return
+        S['conf_failed'] += 1
+        if Q['conf_fail_agenda']:  # 쫓아내지 않는다: 신임 −5, 다음 k회기 안건을 AI가 고른다(위기 카드 없음)
+            self.trust -= Q['conf_lock_trust']
+            self.conf_lock_next = Q['conf_fail_agenda']
+            return
+        self.trust -= Q['conf_fail_trust']
+        if self.trust_crisis is None:
+            self.trust_crisis = self.seg + 3
+            self.crisis_by_conf = True
+            S['conf_crisis'] += 1; S['trust_crisis'] += 1
+            S['conf_crisis_live'] += self.trust < 25  # 25 이상이면 이 구간 끝에 바로 풀린다
+
+    def ai_session(self):
+        """AI 대표가 고르는 회기. 고르는 법은 게임 코드(turn.ts '안건 올리기')를 옮겼다: 의석 큰 칸부터, 입장(적의 빼고) 3 이상,
+        폐지면 2 이상, 적의 3이면 폐지에 +3. 고를 게 없으면 그 회기는 빈다. 열차장은 거래하지 않는다(가정).
+        표결 입장은 게임 stance()의 'AI가 올린 안건' 갈래: 적의 2 이상이면 +3 하한, 적의 1 벌점 없음."""
+        S = self.stats
+        S['conf_locked'] += 1
+        options, forced = self.council_options()
+        best = None
+        for c in sorted(COMMS, key=lambda c: -SEATS[c]):
+            for law, rp in options:
+                own = self.stance(c, law, rp, grudge=False)[0]
+                hostile = self.grudge[c] >= 3 and rp
+                score = own + (3 if hostile else 0)
+                if (own >= 3 or (rp and own >= 2) or hostile) and (best is None or score > best[0]):
+                    best = (score, c, law, rp)
+        if best is None:
+            S['conf_lock_empty'] += 1
+            return
+        _, by, law, rp = best
+        S['conf_lock_ai'] += 1
+        if forced:
+            S['forced'] += 1
+        need = 51 if LAWS[law]['kind'] == 'normal' else 67
+        blocs, yes = {}, 0
+        for c in COMMS:
+            score = self.stance(c, law, rp, grudge=False)[0]
+            if self.grudge[c] >= P['hostile_grudge']:
+                score = max(score, 3)
+            y, u, n = self.split(score)
+            st = SEATS[c]
+            yy = round(st * y); nn = round(st * n); uu = st - yy - nn
+            if c in self.leaderless:
+                uu += nn; nn = 0; score = 0
+            p = clamp(0.5 + 0.1 * score, 0.2, 0.8)
+            yy += sum(1 for _ in range(uu) if self.r2.random() < p)
+            blocs[c] = (yy, st - yy)
+            yes += yy
+        ok = yes >= need
+        self.leaderless.clear()
+        for a, b in RIVALS:  # 원수 대표가 갈리면 불씨(council과 같은 규칙)
+            sa = 1 if blocs[a][0] > blocs[a][1] else -1 if blocs[a][1] > blocs[a][0] else 0
+            sb = 1 if blocs[b][0] > blocs[b][1] else -1 if blocs[b][1] > blocs[b][0] else 0
+            if sa * sb == -1:
+                loser = a if (sa == 1) != ok else b
+                self.new_ember(loser, b if loser == a else a, 'rival', p=Q['rival_p'])
+        if not ok:
+            return
+        S['conf_lock_ai_passed'] += 1
+        if forced:
+            S['forced_passed'] += 1
+        if rp:
+            self.repeal_law(law)
+            return
+        self.passed.add(law); self.passed_at[law] = self.session
+        self.apply_law(law)
+        S['passed'] += 1; S['pass_' + law] += 1
+        if law in HARSH:
+            S['harsh_passed'] += 1; S['harsh_forced'] += 1  # 열차장이 고르지 않은 가혹 법: 수단에서 뺀다(가정)
+        if law in IDEAL: S['ideal_passed'] += 1
 
     def council_options(self):
         cool = P['repeal_cool']
@@ -1708,6 +1876,12 @@ class DarkRun(A.Run):
         if self.ml:  # 의회 대신 포고
             self.session_bookkeeping(); self.decree()
             return
+        if self.conf_lock_next:  # 지난 회기의 부결: 이번 회기부터 안건을 잃는다
+            self.conf_lock, self.conf_lock_next = self.conf_lock_next, 0
+        if Q['regular_conf']:  # 5.3 정기 신임: 안건 자리를 먹지 않고 법 안건 앞에 따로 연다
+            self.conf_since += 1
+            if self.conf_after_ml or self.conf_since >= Q['regular_conf']:
+                self.confidence_vote()
         if self.ratify_pending:  # 안건 순서: 강제 위기 법 > 포고 추인 > ... > 재판(4.4)
             self.session += 1
             _, forced = self.council_options()
@@ -1718,6 +1892,14 @@ class DarkRun(A.Run):
                 self.session_bookkeeping()
                 self.ratify_vote()
                 return
+        if self.conf_lock > 0:  # 신임을 잃은 회기: AI 대표가 안건을 고른다(재판도 다음으로 미룬다)
+            self.conf_lock -= 1
+            self.session_bookkeeping()
+            self.ai_session()
+            if 'emergency_powers' in self.passed and not self.ep_on and not self.ml:
+                self.ep_on = True; self.ep_left = Q['ep_len']; self.ep_decrees = []
+                S['ep_passed'] += 1
+            return
         trial = next((c for c in self.cases if c['status'] == 'trial'), None)
         if trial:
             self.session += 1
@@ -1865,6 +2047,16 @@ def report(policy, n, places):
         print('5라운드:', ', '.join(f'{k} {a(k):.3f}' for k in (
             'executions', 'exec_guard', 'exec_innocent', 'exec_deaths', 'harm_exec', 'ml_forced', 'ml_lifted_voluntary',
             'ratify_votes_bonus', 'ratify_passed_bonus')))
+    if Q['regular_conf']:
+        v = agg['conf_votes']
+        print(f"6라운드 정기 신임({Q['regular_conf']}회기마다): 판당 표결 {v / n:.2f}, 통과 {agg['conf_passed'] / v if v else 0:.0%}, "
+              f"부결로 연 위기 {a('conf_crisis'):.3f}(신임 25 아래 {a('conf_crisis_live'):.3f}), 그 위기로 축출 {a('conf_ousted'):.1%}, "
+              f"통과 확률 평균 {agg['conf_p_sum'] / v if v else 0:.0%}(0.2~0.8 {agg['conf_p_coin'] / v if v else 0:.0%}, "
+              f">0.95 {agg['conf_p_sure'] / v if v else 0:.0%}, <0.05 {agg['conf_p_lost'] / v if v else 0:.0%}), "
+              f"마지막 회기 표결 {a('conf_last_seg'):.2f}, 계엄 뒤 {a('conf_after_ml'):.3f}")
+        if Q['conf_fail_agenda']:
+            print(f"  부결로 잃은 회기 {a('conf_locked'):.2f}/판: AI 안건 {a('conf_lock_ai'):.2f}, 그중 통과 {a('conf_lock_ai_passed'):.2f}, "
+                  f"빈 회기 {a('conf_lock_empty'):.2f}")
     print('위기 속도 (시작 수 / 끝난 수 / 끝난 것의 평균 구간 / 1구간 안에 끝난 비율=시작 대비):')
     for t in ('strike', 'protest', 'resource', 'crowd'):
         st, rs = agg['crisis_%s_n' % t], agg['crisis_%s_resolved' % t]

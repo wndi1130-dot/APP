@@ -6,7 +6,8 @@ import { offend } from '../politics';
 import { CAR_COMM, COMM_CARS, D, ZONE_WARM } from './data';
 import type { Zone } from './data';
 import { CAR_NAME, startJob } from './workshop';
-import { domCard, refreshSit, zoneAt } from './state';
+import { refreshSit } from './sit';
+import { domCard, zoneAt } from './state';
 import type { DomState } from './state';
 
 // 칸(4장): 칸 순서 바꾸기(4.5), 쓸 만한 칸(4.4, 10장 7번), 칸을 내줄 곳(10장 8번), 냉동칸 '묻고 간다'(4.1).

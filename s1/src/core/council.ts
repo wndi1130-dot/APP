@@ -136,6 +136,8 @@ function assertRounding(value: VoteRounding): void {
  * 정한 집단 목록에 반영되어 있어야 한다. 잔여는 인구 큰 순, id 사전순으로 푼다.
  * 정수 분자·분모를 쓰므로 개별 인구나 총인구가 클 때도 잔여 비교가 정확하다.
  * 결과 순서는 입력 순서이며, 빈 집단 목록과 총인구 0은 오류다.
+ * 플레이는 이 함수를 쓰지 않는다. 기준은 game/state.ts의 seats()이고, 그쪽은 동률을 칸 순서(COMMS)로 푼다.
+ * 시작 200명이면 이 함수는 기관실 13·경비대 12, 플레이는 기관실 12·경비대 13이다.
  */
 export function allocateSeats(groups: readonly PopulationGroup[]): SeatAllocation[] {
   if (groups.length === 0) throw new RangeError('의석을 배분할 집단이 없습니다.');

@@ -15,8 +15,8 @@ import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
 import { changeDomestic, h6Input, h6Render, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
-import { TRAIL_MAX, applyStep, makeBundle, plainData, reviveSave, reproText, setReproSource } from './repro';
-import type { ReproError, Step, TrailEntry } from './repro';
+import { TRAIL_MAX, applyStep, makeBundle, plainData, readSave, reviveSave, reproText, setReproSource } from './repro';
+import type { ReproError, SaveRead, Step, TrailEntry } from './repro';
 
 // 화면 조립과 입력. 상태가 바뀌면 통째로 다시 그리고, 스크롤 위치와 연결선은 그린 뒤에 되살린다.
 // 저장은 한 칸이고 행동마다 저절로 한다(되돌리기 없음, S1 기획서 2장).
@@ -25,22 +25,41 @@ const SAVE_KEY = 's1a.game.v2';
 // 오류 재현 묶음(repro.ts): 최근 행동, 직전 저장, 마지막 오류. 다시 열어도 남게 따로 저장한다.
 const REPRO_KEY = 's1a.repro.v1';
 
-function load(): Game | null {
+// 못 읽은 저장은 지우지 않고 이 칸에 옮겨 둔다(새 판이 덮어쓰기 전에). 오류 재현 때 꺼내 본다.
+const BROKEN_KEY = 's1a.game.broken';
+
+/** 저장한 판을 읽는다. 못 읽었으면 옛 저장을 따로 남기고 까닭을 돌려준다(시작 화면 알림). */
+function load(): { g: Game | null; why: string | null } {
+  let raw: string | null | undefined;
   try {
-    const raw = globalThis.localStorage?.getItem(SAVE_KEY);
-    if (!raw) return null;
-    // 예전 판에 없던 칸을 채워 저장한 판을 이어 한다.
-    return reviveSave(JSON.parse(raw));
+    raw = globalThis.localStorage?.getItem(SAVE_KEY);
   } catch {
-    return null;
+    return { g: null, why: '이 창에선 저장 칸을 읽을 수 없다' };
+  }
+  if (!raw) return { g: null, why: null };
+  let r: SaveRead;
+  try {
+    r = readSave(JSON.parse(raw));
+  } catch {
+    r = { ok: false, why: '저장 글이 깨졌다' };
+  }
+  if (r.ok) return { g: r.g, why: null };
+  try {
+    globalThis.localStorage?.setItem(BROKEN_KEY, raw);
+    return { g: null, why: `${r.why}. 옛 저장은 따로 남겨 두었다` };
+  } catch {
+    // 옮겨 둘 자리가 없으면 그냥 둔다. 새 판이 저장할 때 덮인다.
+    return { g: null, why: r.why };
   }
 }
 
-function save(g: Game): void {
+/** 저장한다. 실패하면 false(저장 칸이 찼거나 막힌 창). 판은 그래도 이어진다. */
+function save(g: Game): boolean {
   try {
     globalThis.localStorage?.setItem(SAVE_KEY, JSON.stringify(g));
+    return true;
   } catch {
-    // 저장할 수 없어도 판은 이어진다.
+    return false;
   }
 }
 
@@ -160,7 +179,7 @@ function drawLinks(root: HTMLElement): void {
 export function startApp(root: HTMLElement): void {
   // 주소에 ?seed=가 있으면 그 시드로 시작한다(같은 판을 다시 볼 때, 스크린샷).
   const urlSeed = new URLSearchParams(globalThis.location?.search ?? '').get('seed');
-  const saved = load();
+  const { g: saved, why: loadWhy } = load();
   const wantS1c = urlWantsS1c(); // S1c 내정 훅
   let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) ? saved : newGame(urlSeed || randomSeed(), wantS1c);
   let ui: Ui = freshUi();
@@ -223,6 +242,14 @@ export function startApp(root: HTMLElement): void {
     toastTimer = setTimeout(() => { ui.toast = null; render(); }, 2600);
   }
 
+  let saveFailing = false;
+  /** 저장하고, 막 실패하기 시작했으면 한 번 알린다(다시 되면 조용히 풀린다). */
+  function persist(next: Game): void {
+    const ok = save(next);
+    if (!ok && !saveFailing) toast('저장하지 못했다. 판은 이어지지만 창을 닫으면 여기까지 잃는다.');
+    saveFailing = !ok;
+  }
+
   /** 판을 바꾸는 행동(repro.ts applyStep). 사본에 하고, 저장하고, 다시 그린다. 알림 글이 있으면 돌려준다.
    *  행동과 직전 판을 재현 묶음에 남긴다. 행동이 던지면 판은 그대로 두고 오류를 남긴다. */
   function step(st: Step): string | null {
@@ -242,7 +269,7 @@ export function startApp(root: HTMLElement): void {
       return null;
     }
     g = next;
-    save(g);
+    persist(g);
     saveRepro(repro);
     afterChange();
     render();
@@ -428,14 +455,14 @@ export function startApp(root: HTMLElement): void {
       case 'restart':
         g = newGame(g.seed, !!g.dom);
         ui = freshUi();
-        save(g);
+        persist(g);
         resetRepro();
         toast(`같은 시드(${g.seed})로 처음부터.`);
         return render();
       case 'new-seed':
         g = newGame(randomSeed(), !!g.dom);
         ui = freshUi();
-        save(g);
+        persist(g);
         resetRepro();
         toast(`새 판: 시드 ${g.seed}.`);
         return render();
@@ -470,7 +497,7 @@ export function startApp(root: HTMLElement): void {
 
   const domCtx: DomCtx = {
     game: () => g, ui: () => ui, step, toast, render,
-    reset(next) { g = next; ui = freshUi(); save(g); resetRepro(); },
+    reset(next) { g = next; ui = freshUi(); persist(g); resetRepro(); },
   };
 
   root.addEventListener('click', event => {
@@ -512,5 +539,6 @@ export function startApp(root: HTMLElement): void {
   window.addEventListener('error', event => noteError(event.error ?? event.message));
   window.addEventListener('unhandledrejection', event => noteError(event.reason));
   window.addEventListener('resize', () => drawLinks(root));
+  if (loadWhy) toast(`저장한 판을 못 읽어 새 판을 열었다: ${loadWhy}.`);
   render();
 }

@@ -78,7 +78,11 @@ export const D = {
   // 16.5 이와 발진티푸스
   boilCoal: 2, beddingWarm: 10, beddingSegs: 2, endureSegs: 3, typhusFromLice: 0.4, typhusFromLiceM5: 0.25,
   typhusPatients: 4, typhusMed: 0.5, typhusDeath: 0.15, typhusDeathM1: 0.1, typhusSpread: 0.2, typhusSpreadCrowd: 70,
-  typhusRecover: 0.4, quarantineRel: -15, quarantineFear: 5,
+  typhusRecover: 0.4,
+  // '따로 눕힌다'(16.5): 제 칸에 남아 번짐 절반, 약 받아도 25%로만 낫는다(춥고 돌볼 손이 없다)
+  typhusRecoverApart: 0.25, typhusSpreadApart: 0.1,
+  // 이 카드는 4구간부터(16.3, 16.1 가)
+  liceFromSeg: 4,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)
   delegatePop: 5, delegateAfter: 6, delegateOff: 15, delegateOn: 20,
 };
@@ -225,4 +229,6 @@ export const GREENHOUSE_SLOTS: { car: string; food: number }[] = [
 // ---- 더운물(16.2) ----
 export const HOT_WATER_NAMES = ['없음', '드물게', '보통', '넉넉'] as const;
 export const HYGIENE_NAME = { clean: '깨끗', normal: '보통', dirty: '불결' } as const;
+/** 화면 글은 사람이 아니라 물 사정으로 부른다(16.3, 16.1 라). 내부 이름은 코드와 문서에만 쓴다. */
+export const WASH_NAME: Record<keyof typeof HYGIENE_NAME, string> = { clean: '넉넉', normal: '빠듯', dirty: '없음' };
 export type Hygiene = keyof typeof HYGIENE_NAME;

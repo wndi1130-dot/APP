@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
-  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
+  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hotWaterShare, hygiene, hygieneTick, hygieneWhy, resolveTyphus, startTyphus, WASH_NAME, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
   chooseCard, coldCap, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
@@ -147,6 +147,86 @@ describe('위생과 침상', () => {
     expect(g.dom!.liceFree?.tail).toBe(g.seg + 3);
   });
 
+  it('이 카드는 4구간부터 온다: 1~3구간엔 불결한 칸에도 이가 안 돈다(16.3, 16.1 가)', () => {
+    const g = fresh();
+    g.dom!.lice = {};
+    D.liceDirty = 1;
+    try {
+      for (const seg of [1, 2, 3]) {
+        g.seg = seg;
+        hygieneTick(g, []);
+        expect(g.dom!.lice.tail, `구간 ${seg}`).toBeUndefined();
+      }
+      g.seg = 4;
+      hygieneTick(g, []);
+      expect(g.dom!.lice.tail).toBeDefined();
+    } finally {
+      D.liceDirty = 0.1;
+    }
+  });
+
+  it('뒤 구역 −1은 자리에 붙는다: 꼬리칸 객차 하나를 가운데로 올리면 몫이 2/3만 깎인다(16.2)', () => {
+    const g = fresh();
+    expect(hotWaterShare(g, 'tail')).toBe(0);
+    setHotWater(g, 2);
+    expect(hotWaterShare(g, 'tail')).toBe(1);
+    expect(hotWaterShare(g, 'medtech')).toBe(2);
+    const cars = g.dom!.cars;
+    const i = cars.indexOf('tail1');
+    [cars[3], cars[i]] = [cars[i], cars[3]];
+    expect(hotWaterShare(g, 'tail')).toBeCloseTo(2 - 2 / 3, 5);
+    expect(hygieneWhy(g, 'tail')).toMatch(/^보일러에서 먼 칸이 있음 · 과밀 \d+ · 몫 1$/);
+  });
+
+  it('화면 글은 물 사정으로 부르고 까닭 줄은 조건만 적는다(16.3 보이는 법)', () => {
+    const g = fresh();
+    expect(WASH_NAME[hygiene(g, 'tail')]).toBe('없음');
+    expect(WASH_NAME[hygiene(g, 'front')]).toBe('넉넉');
+    const why = hygieneWhy(g, 'tail');
+    expect(why).toMatch(/^보일러에서 가장 멂 · 과밀 \d+ · 몫 0$/);
+    expect(why).not.toMatch(/[.]\d|불결|더러/);
+  });
+
+  it('열병: 의무칸이면 번지지 않고, 따로 눕히면 번짐 절반·회복 25%이며 관계·공포 벌은 없다(16.5)', () => {
+    const g = fresh();
+    g.med = 100;
+    const rel = g.comms.tail.rel;
+    const fear = g.fear;
+    startTyphus(g, 'tail', 4);
+    resolveTyphus(g, 'tail', 'apart');
+    expect(g.dom!.typhus[0].apart).toBe(true);
+    expect(g.comms.tail.rel).toBe(rel);
+    expect(g.fear).toBe(fear);
+    expect(D.typhusSpreadApart).toBeCloseTo(D.typhusSpread / 2, 5);
+    expect(D.typhusRecoverApart).toBe(0.25);
+    expect(D.typhusRecover).toBe(0.4);
+    // 번질 조건을 다 열어도(과밀 문턱 0, 확률 1) 의무칸으로 옮긴 열병은 번지지 않고, 따로 눕힌 열병은 번진다.
+    const spreads = (pick: 'bay' | 'apart'): boolean => {
+      const h = fresh('bay');
+      h.med = 100;
+      startTyphus(h, 'tail', 4);
+      resolveTyphus(h, 'tail', pick);
+      const keep = [D.typhusSpread, D.typhusSpreadApart, D.typhusSpreadCrowd];
+      D.typhusSpread = 1; D.typhusSpreadApart = 1; D.typhusSpreadCrowd = 0;
+      try {
+        h.seg += 1;
+        hygieneTick(h, []);
+      } finally {
+        [D.typhusSpread, D.typhusSpreadApart, D.typhusSpreadCrowd] = keep;
+      }
+      return h.dom!.typhus.some(t => t.comm === 'medtech');
+    };
+    expect(spreads('bay')).toBe(false);
+    expect(spreads('apart')).toBe(true);
+  });
+
+  it('옛 저장의 격리 열병은 따로 눕힌 것으로 이어진다', () => {
+    const g = fresh();
+    g.dom!.typhus = [{ comm: 'tail', patients: ['가'], quarantined: true, bay: false, at: 1 } as never];
+    migrateDomestic(g);
+    expect(g.dom!.typhus[0]).toEqual({ comm: 'tail', patients: ['가'], apart: true, bay: false, at: 1 });
+  });
+
   it('침상이 처음 넘칠 때만 침상 카드가 온다', () => {
     const g = fresh();
     g.injured = 6;
@@ -283,7 +363,7 @@ describe('내정 카드 글', () => {
     const lice = viewCard(g, { uid: 1, kind: 'dom:lice', comm: 'tail' });
     expect(lice.body).toMatch(/담요|빨래/);
     for (const v of [lice, viewCard(g, { uid: 2, kind: 'dom:typhus', comm: 'tail', n: 4 })]) {
-      expect(`${v.body} ${v.choices.map(c => `${c.label} ${c.say}`).join(' ')}`).not.toMatch(/소독|옷을 벗|머리를 깎|민족|종교/);
+      expect(`${v.body} ${v.choices.map(c => `${c.label} ${c.say}`).join(' ')}`).not.toMatch(/소독|옷을 벗|머리를 깎|민족|종교|문을 닫|가둬|격리|에서 옮/);
     }
   });
 });

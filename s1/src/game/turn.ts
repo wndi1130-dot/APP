@@ -264,8 +264,10 @@ export function sendScouts(g: Game): StopState['scoutReport'] | null {
   const pool = names.length ? names : crewNames(g, c, P.scoutSize);
   const guard = g.comms.guard;
   const danger = place.risk * (stop.threat ?? 1) * Math.min(1.5, 1 + P.thrownHorde * g.thrown) * (guard.fervor >= 1 && guard.rel <= -40 ? 1.5 : 1);
-  const qd = P.scoutDeath * danger;
-  const qh = Math.min(0.5, P.scoutHurt * danger);
+  // 바깥이 실제로 고요하면(기척 0.8) 정찰조도 다치지 않는다. 다쳐 돌아온 정찰조 옆에 '괜찮을 것 같다'가 뜨면 정찰한 곳의 정직이 깨진다(파밍 스레드 17:11, 제안).
+  const calm = (stop.threat ?? 1) <= 0.8;
+  const qd = calm ? 0 : P.scoutDeath * danger;
+  const qh = calm ? 0 : Math.min(0.5, P.scoutHurt * danger);
   const dead = pool.filter(n => fateRoll(g, n, 'sd') < qd);
   const hurt = pool.filter(n => !dead.includes(n) && fateRoll(g, n, 'sh') < qh);
   stop.scoutReport = { comm: c, names: pool, hurt, dead };

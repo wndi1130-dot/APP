@@ -24,7 +24,7 @@ export const P = Object.freeze({
   thrownHorde: 0.05, storeRisk: 0.03, coldCap: 6, pyreCoal: 1, pyreKinCrowd: 2, pyreLight: 1.05,
   // 정찰 대가(제안, 파밍 자동 파견과 같은 값): 정찰조 2명이 체류 일부를 써서 산출 ×0.8, 정찰조도 표결에서 빠진다.
   scoutSize: 2, scoutHaul: 0.8,
-  /** 먼저 보낸 정찰조 한 사람의 위험(제안): 장소 위험 1~3 × 바깥 기척 × 무리 × 경비대 경계 거부. 크게 다침 5%, 못 돌아옴 1.2% 단위 */
+  /** 먼저 보낸 정찰조 한 사람의 위험(제안): 장소 위험 1~3 × 바깥 기척 × 무리 × 경비대 경계 거부. 크게 다침 5%, 못 돌아옴 1.2% 단위. 기척이 고요(0.8)면 0 */
   scoutHurt: 0.05, scoutDeath: 0.012,
   repealCool: 2, repealRel: 10, hostileGrudge: 2, blackmailReputation: 3, grudgeDecay: 2,
   maxDealsPerSession: 3, promiseSegments: 3,
@@ -130,7 +130,7 @@ export const LAWS: Record<LawId, LawDef> = {
   child_labor: L({
     id: 'child_labor', title: '아동 노동', group: '노동', tag: '가혹', kind: 'normal', axes: [-1, -1, 0],
     mats: { tail: [0, 0, 0, 10] }, rels: { tail: -5, medtech: -10 }, res: { haulMult: 1.2, fearOnce: 5 }, crisis: ['coal', 'food'],
-    changes: ['정차 산출 +20%', '꼬리칸 노출 +10', '꼬리칸 관계 −5', '의무진 관계 −10', '공포 +5'], opensWhen: '석탄이나 식량 40 이하',
+    changes: ['정차 산출 +20%', '아이들은 열차 옆 승강장에서 짐만 받는다(필드 안엔 안 감)', '꼬리칸 노출 +10', '꼬리칸 관계 −5', '의무진 관계 −10', '공포 +5'], opensWhen: '석탄이나 식량 40 이하',
   }),
   corpse_throw: L({
     id: 'corpse_throw', title: '선로에 버리기', group: '시신', tag: '싼 답', kind: 'normal', axes: [0, -1, -1],
@@ -248,6 +248,17 @@ export const PLACES: PlaceDef[] = [
   { id: 'church', name: '교회', risk: 2, loot: { coal: 0, food: 10, medicine: 0, luxury: 10, symbol: 60, secret: 20 } },
   { id: 'office', name: '관청', risk: 2, loot: { coal: 0, food: 5, medicine: 0, luxury: 10, symbol: 25, secret: 60 } },
 ];
+
+/** 정찰조가 당한 자리(파밍 스레드 17:16 제안). 위험이 장소 안쪽 한 자리에 묶여 있다고 읽히게 해서,
+ * 짧게·적게 보내면 그 자리를 비켜 간다는 '이 준비라면' 해석과 맞물린다. 숫자는 안 바꾼다. */
+export const SCOUT_DEEP: Record<string, string> = {
+  freight: '화물 창고 맨 안쪽',
+  houses: '골목 끝 집 지하실',
+  hospital: '병동 안쪽 복도 끝',
+  factory: '공장 안쪽 보일러실',
+  church: '교회 뒤 사제관 안쪽',
+  office: '관청 문서고 안쪽',
+};
 
 export const STAY = {
   short: { name: '짧게', mult: 0.6, risk: 0.6, coal: 1 },

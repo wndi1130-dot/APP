@@ -208,6 +208,8 @@ Panel 6, back aboard: the side cross-section again, the train pulling away; in t
 
 07:55 더함: 빨간 십자·적십자 표장(빨간 초승달, 십자 모양 의료 표식 포함)은 어디에도 넣지 않는다. 제네바 협약과 각국 법이 보호하는 표장이라 게임에서도 피하는 게 관례다. 꼬리칸은 개조한 유개화차가 아니라 낡은 3등 객차로 바꿨다([../design/briefs/europe_setting.md](../design/briefs/europe_setting.md) '조심할 것': 사람을 화물칸에 싣는 장면을 흉내 내지 않는다). 사람이 사는 칸은 객차 모양, 닫힌 화차는 짐과 석탄에만 쓴다. 이 방향은 사용자 확인을 기다리는 안이다.
 
+17:58 더함(코디네이터 전달, 기획 점검 답과 파밍): 앞으로 주문에 아이가 나오면 이 줄을 붙인다. "If children help with any work, they only take sacks and wooden crates handed down beside the train on the platform; children are never hurt, never lined up and never watched by armed adults; children are seen only small, from the usual top-down game distance, never in a close-up of their faces." (18:10 화면 스레드 전달로 끝 구절을 더함: 아이는 얼굴 클로즈업 없이 탑뷰 거리만.) 화차 문은 처음부터 열려 있고 짐은 자루와 나무 상자다. 경찰서가 나오는 망자 주문에는 이 줄을 붙인다. "The dead from the police station wear only a grey quilted protective vest and knee pads over the same torn civilian winter clothes, bareheaded or in a knitted hat; no helmet, no shield, no uniform colours, no lettering and no insignia." 두 줄은 공통 끝에 넣지 않는다. 조건 문장이라도 그림 모델이 없던 아이나 경찰 망자를 새로 그려 넣을 수 있어서다.
+
 ## 더 누더기로 (08:25 추가)
 
 사용자(2026-10-07 08:21): "좀 더 누더기 같아야 됨. 프로스트펑크나 워킹데드, 레프트 4 데드가 좋은 예시." 모든 글상자에 '여섯 겨울을 버틴 누더기' 문장을 넣었다: 짝 안 맞는 여러 겹, 해진 소매와 단, 몇 번이고 덧댄 천, 끈과 담요 조각으로 묶음, 그을음·기름·때, 바랜 색. 열차와 벽은 녹슬고 그을린 쇠, 합판·판자 덧댐, 구멍 위에 볼트로 박은 고철판, 방수포, 밧줄, 연통. 작품 이름과 캐릭터는 프롬프트에 넣지 않는다(특정 캐릭터를 닮으면 상업 게임에 위험하다). 참고 그림은 6단계 R6으로 모으고, 첨부는 마감을 맞추는 데만 쓴다. 기준 컨셉 그림은 C1 v3, C3 v5, C9 v5, C10 v3로 바뀌었다.
@@ -287,3 +289,45 @@ M7b 필드도 사람들이 철모와 군용 외투 차림이라 화물칸 옆의
 | M6 열차 | v4 | 꼬리칸이 판자 덧댄 3등 객차로 읽히고, 판자 사이로 불빛이 새어 '막아 둔 칸'으로는 안 읽힌다. 2번 칸 색이 달라 칸 구별이 쉽다. 사람이 탄 칸에 사슬·빗장·자물쇠는 없다. v3은 객차가 너무 말끔하다 |
 
 둘 다 부품 판에 창살(쇠창살 창)과 사슬 달린 연결기가 나왔다. 내 M6 글상자가 '창 그릴'과 '사슬 연결기'를 주문했기 때문이라, 판자 틈 창 덧댐과 완충기·갈고리 연결기로 바꿨다. 쇠창살은 사람이 탄 칸에 붙는 순간 가둔 칸으로 읽히니 실제 에셋 목록에서도 뺀다. 객차 2·3번은 누더기 정도가 아직 약하다. 실제 에셋 단계에서 덧댄 판과 그을음을 칸마다 따로 칠하면 된다고 보고 다시 뽑지는 않았다.
+
+## 11단계: 새 금지선과 필드 화면 배치로 고치기 (2026-10-07 17:58)
+
+PICK 셋을 다시 봤다. 화면 스레드가 C9 정차 그림의 마을 굴뚝 연기를 짚어서다.
+
+- **M7c 정차(PICK v2)**: 마을 교회 뒤로 짙은 연기 기둥이 곧게 오른다. 17:36에 넓힌 금지선('연기 나는 굴뚝', 색과 상관없음)에 걸린다. C9 v5를 첨부로 받으며 함께 들어왔다.
+- **M8 연출(PICK v2)**: 3칸에 같은 마을 연기가 있다. 2칸은 멈추는 기관차 굴뚝에서 짙은 연기가 곧게 오른다. 4칸 앞 열차장은 챙 모자, 긴 외투, 가슴 가죽띠 차림이라 장교복으로 읽힐 수 있다. 로컬 워커 점검(art_omens_check_20261007.md 5절 7번)도 같은 곳을 짚었다.
+- **M7b 필드(PICK v5)**: 초상 셋과 명령 줄이 아래 왼쪽에 있다. 17:15·17:32 결정 뒤 배치(presentation_motion '조작 화면 배치')에서는 이 자리가 스틱 자리다.
+
+고칠 때까지 이 PICK 셋은 마을 하늘, 기관차 연기, 열차장 옷, HUD 배치의 참고로 쓰지 않는다. 고치는 주문은 셋 다 PICK을 첨부로 받는 편집 주문이다. 공통 화풍 줄은 넣지 않는다. 바꿀 것만 말해야 그림이 덜 흔들려서다.
+
+M8은 v3과 v4를 다르게 주문한다. v3은 챙 모자를 남기고 외투만 민간 외투로 바꾼다. v4는 모자까지 부드러운 털모자로 바꾼다. 챙 모자 하나로도 장교로 읽히는지는 판단이 갈린다. 그래서 둘이 나오면 Claude 말고 다른 모델 하나 이상(Codex나 웹 GPT 등)에게도 "군인·장교로 읽히는가"를 따로 묻고 대조한다. v4가 이기면 M3 열차장 시트의 모자도 같이 바꿔야 한다. 이건 열차장 만들기 스레드와 맞춘다.
+
+### M7c v3·v4 마을 연기 지우기 (첨부: M7c_stop_ingame_PICK)
+
+```text
+Edit the attached image. Keep everything exactly as it is: the camera, the platform, the train, the faces in the windows, the water tower, the lamps, the footprints, the two figures at the far end, the brake steam low along the wheels, the stop marker and the arrow button. Change only one thing: remove the dark column of smoke rising above the village behind the trees, so the sky there is the same snowy dusk haze; the village shows only the church spire, dark roofs and a single lit window. No chimney of any building gives smoke or steam. Do not add or remove any other part.
+```
+
+### M7b v7·v8 필드 HUD 새 배치 (첨부: M7b_field_ingame_PICK)
+
+```text
+Edit the attached image. Keep the world exactly as it is: the camera, the water tower, the goods shed, the coal pile, the wagons, the train, every character and every one of the dead in place, and the red frost warning at the left edge. Change only the HUD layout. The four round gauges at the top left and the noise and horde gauges at the top right stay. The three character portraits move from the bottom left to a vertical column on the left edge just below the top-left gauges, a little smaller, stacked top to bottom, and the row of small order icons under the first portrait is removed. The rest of the left half of the screen below the portraits stays empty for the thumb; draw there only a faint translucent brass ring with an enamel knob, the virtual stick, at about 40 percent opacity. The weapon slots and the bag weight bar at the bottom centre stay. The bottom-right corner becomes a thumb fan: one large round aim button with a simple crosshair icon near the corner, a small round manual-aim button with a hand and crosshair icon at its upper left, and three medium round buttons arcing around the aim button for attack, shove and a context action, plus a small crouch toggle; every button is dark enamel with a brass rim, spaced apart, with simple icons and no text. The pause button moves to the top-right corner beside the horde gauge. No other change.
+```
+
+### M8 v3·v4 연기와 열차장 옷 (첨부: M8_stop_storyboard_PICK)
+
+```text
+Edit the attached six-panel sheet. Keep every panel, its framing, people, HUD and light exactly, and change only these things: (1) panel 1, the train is running: the locomotive's grey steam and coal smoke streams long and low back over the cars in the wind, never a dark column standing straight up; (2) panel 2, the train is braking to a stop: the locomotive gives only a little pale steam drifting sideways and the brake steam stays low along the wheels, with no smoke rising straight up from its chimney; (3) panel 3: remove the dark column of smoke rising above the village behind the trees, so the village shows only the church spire, dark roofs and one lit window; {4번} his companions keep their clothes. No building chimney anywhere gives smoke or steam. Do not add or remove any other part.
+```
+
+v3의 {4번}:
+
+```text
+(4) panel 4, the chief stepping down in front keeps his peaked railway cap, with no badge, but his long coat becomes a worn civilian winter greatcoat with a scarf: no belt across the chest, no shoulder straps, no shiny buttons;
+```
+
+v4의 {4번}:
+
+```text
+(4) panel 4, the chief stepping down in front: his peaked cap becomes a soft fur-lined winter cap with ear flaps and no badge, and his long coat becomes a worn civilian winter greatcoat with a scarf: no belt across the chest, no shoulder straps, no shiny buttons; in panel 6 the chief at the table wears the same soft winter cap, and nobody anywhere wears a peaked cap;
+```

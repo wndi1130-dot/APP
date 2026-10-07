@@ -173,11 +173,19 @@ describe('정찰은 먼저 보내는 일이다(2026-10-07 사용자)', () => {
     for (let k = 0; k < 400; k += 1) {
       const hi = sendScouts(fresh(k, 'factory', 1.4))!;
       hurtHi += hi.hurt.length; deadHi += hi.dead.length;
-      hurtLo += sendScouts(fresh(k, 'church', 0.8))!.hurt.length;
+      hurtLo += sendScouts(fresh(k, 'church', 1))!.hurt.length;
       expect(sendScouts(fresh(k, 'factory', 1.4))).toEqual(hi);
     }
     expect(deadHi).toBeGreaterThan(0);
     expect(hurtHi).toBeGreaterThan(hurtLo);
+  });
+
+  it('바깥이 고요한 정차에선 정찰조가 다치지도 죽지도 않는다', () => {
+    for (let k = 0; k < 400; k += 1) {
+      const rep = sendScouts(fresh(k, 'factory', 0.8))!;
+      expect(rep.hurt).toEqual([]);
+      expect(rep.dead).toEqual([]);
+    }
   });
 
   it('아무도 못 돌아오면 기척은 모른 채 남는다', () => {

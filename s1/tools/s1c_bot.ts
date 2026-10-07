@@ -93,7 +93,7 @@ function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number
     case 'dom:bed': return by('dom:bed:sick') ?? ok[0].i;
     case 'dom:officer': return by('dom:officer:revert') ?? ok[0].i;
     case 'dom:lice': return (g.coal > 50 ? by('dom:lice:boil') : by('dom:lice:burn')) ?? ok[0].i;
-    case 'dom:typhus': return (g.med > 6 ? by('dom:typhus:bay') : by('dom:typhus:quarantine')) ?? ok[0].i;
+    case 'dom:typhus': return (g.med > 6 ? by('dom:typhus:bay') : by('dom:typhus:apart')) ?? ok[0].i;
     case 'dom:stoker': return by('dom:stoker:tail') ?? ok[0].i;
     case 'dom:pressure': return by('dom:pressure:vent') ?? ok[0].i;
     default: return ok[0].i;
