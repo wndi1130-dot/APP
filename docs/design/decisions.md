@@ -408,7 +408,7 @@
 ## 열린 질문
 
 1. S1a 정치 콘텐츠와 수치(다음 설계 주제, 2026-10-06 결정): 법 15~20개, 사건 카드 40~60장, 인물 11~13명과 비밀, 시작 수치, AI 지도자의 판단, 거래, 기관실 파업 규칙. 초안: [briefs/s1a_politics_numbers.md](briefs/s1a_politics_numbers.md)
-2. 열차장 캐릭터 생성과 사람의 능력(정치 콘텐츠 다음 주제): 좀보이드식 스탯, 특성, 피지컬. 보류했던 필드 능력 초안(근접, 사격, 은신, 체력, 수색)과 지식 분야 5개를 하나의 틀로 묶어야 한다. 필드 쪽 틀은 두 층으로 정했다(2026-10-07): [briefs/field_unified.md](briefs/field_unified.md) 3장. 열차장 생성(특성, 출신 보너스, 피지컬)이 남았다. 브리프: [briefs/field_system.md](briefs/field_system.md), 레퍼런스: [ref/zomboid_character_creation.md](../../ref/zomboid_character_creation.md)
+2. 열차장 캐릭터 생성과 사람의 능력(정치 콘텐츠 다음 주제): 좀보이드식 스탯, 특성, 피지컬. 보류했던 필드 능력 초안(근접, 사격, 은신, 체력, 수색)과 지식 분야 5개를 하나의 틀로 묶어야 한다. 필드 쪽 틀은 두 층으로 정했다(2026-10-07): [briefs/field_unified.md](briefs/field_unified.md) 3장. 열차장 생성(특성, 출신 보너스, 피지컬)의 초안(2026-10-07, 제안): [briefs/character_creation.md](briefs/character_creation.md). 생성 방식과 정치에 닿는 특성 두 갈림길이 남았다(그 문서 11장). 브리프: [briefs/field_system.md](briefs/field_system.md), 레퍼런스: [ref/zomboid_character_creation.md](../../ref/zomboid_character_creation.md)
 3. 필드 상세: 장소 유형별 상세와 사람 적의 AI 세부는 안을 적었다(2026-10-07). 장소: [briefs/places.md](briefs/places.md), 사람 적: [briefs/field_unified.md](briefs/field_unified.md) 11장. 사용자 검토가 남았고, 숫자와 손맛은 S2 회색 상자([briefs/s2_station.md](briefs/s2_station.md))에서 맞춘다.
 4. 적대 열차를 플레이어가 넘겨받을 때, 추상 시뮬레이션을 완전 시뮬레이션으로 펼치는 규칙.
 5. PC판의 성격: 모바일판에 시스템을 더한 확장판인지, 따로 설계한 판인지.
