@@ -1,0 +1,1176 @@
+"""S1b 어두운 길 시뮬레이터 (설계 도구, 게임 코드가 아니다).
+
+docs/design/briefs/s1b_dark_path.md의 제안 규칙(4장 폭력·수사·희생양·암살, 5장 탄압·계엄, 9.1 칸 안 시신,
+10.2 수단 점수)을 s1a_balance.py의 Run 위에 얹어 돌린다. s1a_balance.py는 고치지 않는다.
+
+정책 (S1b 켬)
+  saint         caretaker와 같되 선을 넘지 않는다. 늘 수사·재판, 린치는 막는다, 탄압·계엄 없음.
+  caretaker     징후엔 형편껏 경비를 붙이고, 증거가 서면 재판, 아니면 더 캔다. 긴장 80을 넘을 때만 희생양을 내준다.
+  tyrant        항의·파업마다 강제 해산, 수사는 즉결(벌은 추방), 군중이 오면 바로 희생양, 대권이 끝나면 계엄,
+                위기 법이 부결되면 가장 적대적인 큰 집단 대표를 암살한다.
+  schemer_plus  schemer(협박)에 암살과 누명을 더한다.
+S1a 정책(passive, idealist, nodeal, caretaker, schemer, caretaker_random)은 --baseline으로 S1b를 끈 채 돌려
+s1a_balance.Run과 판마다 같은지 확인한다.
+
+사용: python3 docs/design/sim/s1b_dark.py [판 수] [--baseline] [--policies a,b] [--tune key=value ...]
+  --tune은 이 파일의 Q와 s1a_balance의 P를 모두 받는다.
+"""
+import random
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import s1a_balance as A  # noqa: E402
+from s1a_balance import P, COMMS, SEATS, LAWS, HARSH, IDEAL, CORPSE, OPPOSITE, band, clamp  # noqa: E402
+
+# ---- S1b 제안 수치 (브리프 절 번호). 브리프에 없는 값은 (가정) ----
+Q = dict(
+    # 4.1 불씨
+    ember_p=0.5,          # (가정) 원인이 생겼을 때 불씨가 실제로 생길 확률. 탄압 뒤 6구간은 두 배
+    rival_p=0.2,          # 원수 대표가 같은 표결에서 갈렸을 때
+    esc_base=0.25, esc_lack=0.10, esc_opp=0.10, esc_guard=0.15, esc_patrol=0.10, esc_min=0.05, esc_max=0.65,
+    ember_max=2, violent_cap=3, quiet_out=4,
+    guard_block=0.5,      # (가정) 경비를 붙인 불씨의 위협·폭행 임박을 막을 확률
+    guard_post_line=65,   # (가정) caretaker류는 경비대 노출이 이 아래일 때만 기척에 경비를 붙인다
+    lack_line=25, starve_line=20,
+    # 4.1 사다리
+    assault_death=0.2, assn_base=0.5, assn_guard=0.2, assn_guardcap=0.2,
+    # 4.4 수사
+    clue_true=0.5, clue_false=0.3, reveal_p=0.10, reveal_window=6, cold_case=8,
+    # 4.5 군중
+    clock_death=2, clock_injury=3, scapegoat_death=0.6, scapegoat_tension=80,
+    # 4.6 암살 명령
+    order_base=0.55, order_exposed_fail_caught=0.5, order_names_chief=0.7, leaderless=1,
+    exec_blackmail_p=0.2,  # (가정) 실행자 칸 관계가 회의 이하일 때 구간마다 열차장 협박 확률
+    # 5.1 탄압, 5.3 계엄
+    guard_refuse=0.5, ep_len=3, coup_line=-15, coup_clear=15, coup_wait=2, curfew=1, ml_direct=0, ml_lift=0,
+    ml_rel=15, ml_grudge_max=0,  # 계엄 조건: 경비대 관계 호의 이상, 경비대장 적의 0
+    tyrant_blackmail=0,   # (가정) 1이면 tyrant도 schemer처럼 협박한다(비상대권 67표를 모으는 길)
+    tyrant_ep_bonus=40,   # (가정) tyrant가 비상대권 안건을 고르는 가중
+    # 9.1 시신
+    corpse_rise=0.25, vigil_p=0.3, vigil_guarded=0.10, car_miss=0.10,
+    trial_defer=1,        # (가정) 위기 강제 안건이 있으면 재판을 다음 회기로 미룬다
+)
+RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
+BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
+DARK = ('saint', 'caretaker', 'tyrant', 'schemer_plus')
+MEANS = dict(assn_ordered=4, ml_declared=5, executions=3, scapegoats=3, frames=3, exiles=2, lynch_allowed=2,
+             mass_arrest=2, summary=2, trial_bought=2, dispersals=1, blackmail=1, harsh_passed=1)
+S1A_POLICIES = ('passive', 'idealist', 'nodeal', 'caretaker', 'schemer', 'caretaker_random')
+
+
+def rivals(a, b):
+    return (a, b) in RIVALS or (b, a) in RIVALS
+
+
+class DarkRun(A.Run):
+    def __init__(self, seed, policy, places, s1b=True):
+        self.s1b = s1b
+        self.dark = policy if s1b else None
+        base = BASE.get(policy, policy) if s1b else policy
+        if s1b and policy == 'tyrant' and Q['tyrant_blackmail']:
+            base = 'schemer'
+        super().__init__(seed, base, places)
+        if not s1b:
+            return
+        self.r2 = random.Random(seed * 7919 + 17)  # S1b 전용 주사위. S1a 쪽 흐름은 건드리지 않는다
+        self.ideo = {c: list(A.IDEO[c]) for c in COMMS}
+        self.embers, self.cases, self.innocents = [], [], []   # innocents: [칸, 벌받은 구간]
+        self.punished_comms = []
+        self.violent_used = 0
+        self.chief_attacked = False
+        self.prev_fervor = {c: 0 for c in COMMS}
+        self.prev_grudge = {c: 0 for c in COMMS}
+        self.lack_streak = {c: 0 for c in COMMS}
+        self.repressed_until = {c: -1 for c in COMMS}
+        self.dispersed = Counter()
+        self.fresh_corpses, self.unchecked, self.hidden_bites = [], [], []
+        self.practice = None
+        self.scheduled = []
+        self.ep_on, self.ep_left, self.ep_decrees = False, 0, []
+        self.ml, self.ml_start, self.pre_ml_trust, self.coup_warn, self.ml_floor = False, None, None, None, None
+        self.leaderless = set()
+        self.order = None
+        self.executors = []
+        self.haul_once = 1.0
+        self._phase = None
+        self._last_vote = None
+        self._snapped = []
+        self.eid = 0
+        self.crisis_open = {}
+
+    # ---------------- S1a 훅 ----------------
+    def res(self, key, default=0.0):
+        v = super().res(key, default)
+        if key == 'haul_mult' and self.s1b:
+            v *= self.haul_once
+        return v
+
+    def on_death(self, n, c='tail'):
+        super().on_death(n, c)
+        if self.s1b and self._phase == 'medicine' and n > 0:
+            self.fresh_corpses += [c] * n  # 약이 없어 죽은 부상자: 칸 안의 죽음
+
+    def stance(self, c, law, repeal=False, grudge=True):
+        if not self.s1b:
+            return super().stance(c, law, repeal, grudge)
+        L = LAWS[law]
+        axes, mats, rels = L['axes'], L['mats'], L['rels']
+        mat = L['like'].get(c, 0)
+        if c in mats:
+            dw, dr, dc, de = mats[c]
+            gain = dw + dr - dc - de
+            mat += 2 if gain >= 15 else 1 if gain >= 5 else -2 if gain <= -15 else -1 if gain <= -5 else 0
+        if c in rels:
+            mat += -2 if rels[c] <= -15 else -1
+        ide = sum(a * b for a, b in zip(axes, self.ideo[c]))  # 승계로 더 과격해진 이념
+        if repeal:
+            mat, ide = -mat, -ide
+        score = mat + ide + band(self.rel[c])
+        if grudge and self.grudge[c] >= P['hostile_grudge']:
+            score = min(score, -3)
+        elif grudge and self.grudge[c] >= 1:
+            score -= 1
+        return score, ide
+
+    def blocs(self, law, repeal=False):
+        out = super().blocs(law, repeal)
+        if self.s1b:
+            for c in self.leaderless:  # 대표를 잃은 집단은 다음 표결에서 누구도 따르지 않는다(가정)
+                b = out[c]; b['und'] += b['no']; b['no'] = 0; b['score'] = 0
+            self._last_vote = (law, repeal, out)
+        return out
+
+    def law_value(self, law, repeal=False):
+        v = super().law_value(law, repeal)
+        if self.s1b and self.dark == 'tyrant' and law == 'emergency_powers' and not repeal:
+            v += Q['tyrant_ep_bonus'] * (1.0 if v > -999 else 0)
+        return v
+
+    def policy_levers(self):
+        super().policy_levers()
+        if self.s1b and self.ml:
+            self.ration['guard'] = max(self.ration['guard'], self.ml_floor)
+            if self.coup_warn is not None or self.rel['guard'] < 15:  # 충성을 사려고 경비대를 먹이고 데운다
+                if self.food > 20: self.ration['guard'] = min(4, self.ration['guard'] + 1)
+                if self.coal > 20: self.heat['guard'] = min(4, self.heat['guard'] + 1)
+
+    def leash_tick(self):
+        if not self.s1b:
+            return super().leash_tick()
+        keep = []
+        for c, since in self.leashes:
+            if self.r.random() < self.grudge[c] * 2 * 0.04:
+                self.rel[c] = clamp(self.rel[c] - (self.seg - since) * 3, -100, 100)
+                self.trust -= 5
+                self.stats['leash_snapped'] += 1
+                self._snapped.append(c)
+            else:
+                keep.append([c, since])
+        self.leashes = keep
+
+    def check_end(self):
+        if not self.s1b or not self.ml:
+            return super().check_end()
+        # 계엄: 신임 위기로 축출되지 않는다(쿠데타는 pre_move에서)
+        if self.coal <= 0:
+            if not self.stats['emergency_used']:
+                self.stats['emergency_used'] = 1
+                self.coal += 15; self.tension += 10
+            else:
+                self.end = 'stranded'; return
+        if self.tension >= 100:
+            self.stats['tension_crisis'] += 1
+            if self.r.random() < 0.5 and self.tension_crisis_used < 2:
+                self.tension = 65; self.tension_crisis_used += 1
+            else:
+                self.end = 'revolt'; return
+        if any(self.fervor[c] >= 3 for c in COMMS):
+            self.stats['fervor3'] += 1
+
+    # ---------------- 구간 ----------------
+    def step(self):
+        if not self.s1b:
+            return super().step()
+        self.seg += 1
+        self.track_crises()  # 정책이 대응하기 전, 구간 시작의 상태로 잰다
+        if self.seg % P['winter_every'] == 0:
+            for c in COMMS:
+                self.base[c][0] -= P['winter_drop']
+        self.policy_levers()
+        self.pre_move()
+        if self.end:
+            return
+        striking = self.fervor['engine'] >= 1 and self.rel['engine'] <= P['strike_rel'] and 'strike_ban' not in self.passed
+        if striking:
+            self.strikes += 1 if not self.stats['in_strike'] else 0
+            self.stats['in_strike'] = 1
+            self.lost_segments += 1
+            self.tension += 3
+        else:
+            self.stats['in_strike'] = 0
+        base_heat = self.heat_cost()
+        heat_coal = base_heat * self.res('heat_mult') + self.res('coal_add')
+        food_use = sum(self.pop[c] * self.ration[c] for c in COMMS) * P['food_per_person_lever']
+        food_use = food_use * self.res('food_mult') + self.res('food_add')
+        self.stats['law_coal'] += heat_coal - base_heat
+        self.stats['law_food'] += food_use - sum(self.pop[c] * self.ration[c] for c in COMMS) * P['food_per_person_lever']
+        self.coal -= heat_coal + (4 if striking else P['coal_run'])
+        self.food -= food_use
+        self.move_phase()
+        if not striking:
+            self.base['engine'][3] += P['engine_fatigue']
+            self._phase = 'stop'; self.stop(); self._phase = None
+        self.haul_once = 1.0
+        self._phase = 'medicine'; self.medicine_tick(); self._phase = None
+        self.drift()
+        self.demands()
+        if self.seg % P['session_every'] == 0:
+            self.council()
+        self.promise_tick()
+        self.leash_tick()
+        self.settle()
+        self.meters()
+        self.check_end()
+
+    # ---- 위기가 얼마나 빨리 끝나나 (코디네이터 요청) ----
+    def crisis_states(self):
+        return dict(
+            strike=(self.fervor['engine'] >= 1 and self.rel['engine'] <= P['strike_rel']
+                    and 'strike_ban' not in self.passed),                           # 기관실 파업 조건
+            protest=self.fervor['tail'] >= 1 and self.rel['tail'] <= -40,           # 꼬리칸 작업 거부
+            resource=self.coal < P['crisis_line'] or self.food < P['crisis_line'],  # 위기 강제 안건이 걸리는 자원
+        )
+
+    def track_crises(self):
+        S = self.stats
+        for t, on in self.crisis_states().items():
+            start = self.crisis_open.get(t)
+            if on and start is None:
+                self.crisis_open[t] = self.seg; S['crisis_%s_n' % t] += 1
+            elif not on and start is not None:
+                self.crisis_done(t, self.seg - start)
+        for case in self.cases:  # 군중 위기: 사람이 다친 사건이 열린 뒤 누군가 벌받거나 닫힐 때까지
+            if case['crowd'] and not case.get('recorded'):
+                if not case.get('counted'):
+                    case['counted'] = True; S['crisis_crowd_n'] += 1
+                if case['status'] == 'closed':
+                    case['recorded'] = True
+                    self.crisis_done('crowd', max(1, self.seg - 1 - case['opened']))
+
+    def crisis_done(self, t, dur):
+        S = self.stats
+        self.crisis_open.pop(t, None)
+        S['crisis_%s_resolved' % t] += 1
+        S['crisis_%s_dur' % t] += dur
+        if dur <= 1:
+            S['crisis_%s_fast' % t] += 1
+
+    # ---- 출발 전 운영 ----
+    def pre_move(self):
+        S = self.stats
+        due = [s for s in self.scheduled if s[0] <= self.seg]
+        self.scheduled = [s for s in self.scheduled if s[0] > self.seg]
+        for _, fn in due:
+            fn()
+        if self.ml:
+            S['ml_segments'] += 1
+            self.base['guard'][3] += 2
+            self.tension += 2; self.fear += 3
+            if Q['curfew']:
+                self.tension += 1; self.fear += 2
+                for c in ('tail', 'front'): self.rel[c] = clamp(self.rel[c] - 2, -100, 100)
+            if self.rel['guard'] <= Q['coup_line'] and self.coup_warn is None:
+                self.coup_warn = self.seg; S['coup_warning'] += 1
+            if self.coup_warn is not None:
+                if self.rel['guard'] >= Q['coup_clear']:
+                    self.coup_warn = None
+                elif self.seg - self.coup_warn >= Q['coup_wait']:
+                    if Q['ml_lift'] and self.dark == 'tyrant':
+                        self.lift_ml()
+                    else:
+                        self.end = 'coup'; return
+        if self.ep_on:
+            if self.ep_left > 0:
+                law = self.decree()
+                if law: self.ep_decrees.append(law)
+                self.ep_left -= 1
+            else:
+                self.ep_expire()
+        elif (self.dark == 'tyrant' and Q['ml_direct'] and not self.ml
+              and (self.tension >= 50 or self.trust <= 10) and self.ml_ok()):
+            self.declare_ml()
+        if self.dark == 'tyrant':
+            for c in ('engine', 'tail'):
+                line = P['strike_rel'] if c == 'engine' else -40
+                if c == 'engine' and 'strike_ban' in self.passed:
+                    continue
+                if self.fervor[c] >= 1 and self.rel[c] <= line:
+                    self.disperse(c)
+        self.investigate()
+        self.escalate()
+
+    # ---- 이동 ----
+    def move_phase(self):
+        for e in list(self.embers):
+            if e['imm'] is not None:
+                self.act(e)
+        if self.order:
+            self.execute_order()
+
+    # ---- 정산 ----
+    def settle(self):
+        S = self.stats
+        m = self.m
+        # 숨긴 물림
+        keep = []
+        for comm, since in self.hidden_bites:
+            if 'patrol' in self.passed or self.r2.random() < 0.5:
+                S['bites_found'] += 1; self.trust -= 4
+                self.train_death(1, comm)
+            elif self.seg - since >= 2:
+                S['bite_outbreak'] += 1
+                self.tension += 8; self.fear += 5; self.injured += 1
+                self.train_death(1, comm)
+            else:
+                keep.append([comm, since])
+        self.hidden_bites = keep
+        # 확인하지 않은 시신이 일어난다
+        for comm, p in self.unchecked:
+            if self.r2.random() < p:
+                S['corpse_rise'] += 1
+                self.hidden_bites.append([comm, self.seg])
+        self.unchecked = []
+        # 이번 구간 칸 안의 죽음: 머리 확인
+        i = 0
+        while i < len(self.fresh_corpses):
+            self.check_corpse(self.fresh_corpses[i]); i += 1
+        self.fresh_corpses = []
+        # 군중 시계
+        for case in list(self.cases):
+            if case['status'] in ('open', 'trial') and case['clock'] is not None and not case['stopped'] \
+                    and case['opened'] < self.seg:
+                case['clock'] -= 1
+                if case['clock'] <= 0:
+                    self.crowd_card(case)
+        # 진실이 드러난다
+        keep = []
+        for comm, s0 in self.innocents:
+            if self.seg - s0 > Q['reveal_window']:
+                continue
+            if self.r2.random() < Q['reveal_p']:
+                S['truth_revealed'] += 1; self.trust -= 10; self.offend(comm)
+            else:
+                keep.append([comm, s0])
+        self.innocents = keep
+        # 실행자가 쥔 약점
+        for comm in self.executors:
+            if self.rel[comm] <= -15 and self.r2.random() < Q['exec_blackmail_p']:
+                S['executor_blackmail'] += 1
+                if self.lux >= 3: self.lux -= 3
+                else: self.food -= 5
+        # 불씨가 꺼진다: 원인이 풀렸거나 4구간 조용했다
+        for e in list(self.embers):
+            if e['imm'] is not None:
+                continue
+            w, ra = m[e['who']][0], m[e['who']][1]
+            solved = ((e['cause'] == 'fervor' and self.fervor[e['who']] <= 1)
+                      or (e['cause'] == 'grudge' and self.grudge[e['who']] <= 1)
+                      or (e['cause'] == 'lack' and w >= 45 and ra >= 45))
+            if solved:
+                self.kill_ember(e, 'ember_resolved')
+            elif e['quiet'] >= Q['quiet_out']:
+                self.kill_ember(e, 'ember_quiet')
+        # 불씨가 생긴다
+        for c in COMMS:
+            if self.fervor[c] >= 2 and self.prev_fervor[c] < 2:
+                self.new_ember(c, 'guard' if c != 'guard' else 'chief', 'fervor')
+            if self.grudge[c] >= 2 and self.prev_grudge[c] < 2:
+                self.new_ember(c, 'aide', 'grudge')
+            if m[c][0] <= Q['starve_line'] or m[c][1] <= Q['starve_line']:
+                self.lack_streak[c] += 1
+                if self.lack_streak[c] >= 2:
+                    self.lack_streak[c] = 0
+                    self.new_ember(c, 'store' if c != 'front' else 'tail', 'lack')
+            else:
+                self.lack_streak[c] = 0
+        for c in self._snapped:
+            self.new_ember(c, 'chief', 'leash')
+        self._snapped = []
+        self.prev_fervor = dict(self.fervor)
+        self.prev_grudge = dict(self.grudge)
+
+    # ---------------- 불씨와 사다리 (4.1~4.3) ----------------
+    def curfew_on(self):
+        return self.ml and Q['curfew']
+
+    def new_ember(self, who, target, cause, p=None):
+        S = self.stats
+        S['ember_trigger'] += 1
+        if self.curfew_on():
+            S['ember_curfew_blocked'] += 1; return
+        p = Q['ember_p'] if p is None else p
+        if self.seg <= self.repressed_until[who]:
+            p *= 2
+        if self.fear >= 80:
+            p *= 0.7
+        if self.r2.random() >= min(1.0, p):
+            return
+        if any(e['who'] == who and e['target'] == target for e in self.embers):
+            return
+        if len(self.embers) >= Q['ember_max']:
+            S['ember_capped'] += 1; return
+        self.eid += 1
+        e = dict(id=self.eid, who=who, target=target, cause=cause, stage=1 if self.fear >= 80 else 0,
+                 imm=None, quiet=0, guard=False, sab=None, blocked=False)
+        self.embers.append(e)
+        S['embers'] += 1; S['sign_kiche'] += 1; S['ember_' + cause] += 1
+        if self.dark == 'tyrant' or self.m['guard'][3] < Q['guard_post_line']:
+            self.post_guard(e)
+
+    def post_guard(self, e):
+        if e['guard']:
+            return
+        e['guard'] = True
+        self.fear += 2; self.base['guard'][3] += 3
+        self.stats['guard_posted'] += 1
+
+    def kill_ember(self, e, why):
+        if e in self.embers:
+            self.embers.remove(e)
+            self.stats[why] += 1
+
+    def esc_prob(self, e):
+        m = self.m[e['who']]
+        p = Q['esc_base']
+        p += Q['esc_lack'] * ((m[0] <= Q['lack_line']) + (m[1] <= Q['lack_line']))
+        opp = (self.fervor['guard'] >= 1 and self.rel['guard'] <= -40) + (self.ml and not Q['curfew'])
+        p += Q['esc_opp'] * opp
+        p -= Q['esc_guard'] * e['guard'] + Q['esc_patrol'] * ('patrol' in self.passed)
+        return clamp(p, Q['esc_min'], Q['esc_max'])
+
+    def escalate(self):
+        S = self.stats
+        for e in list(self.embers):
+            if e['imm'] is not None:
+                continue
+            nxt = e['stage'] + 1
+            if (nxt >= 3 and self.violent_used >= Q['violent_cap']) or \
+                    (nxt == 4 and e['target'] == 'chief' and self.chief_attacked):
+                e['quiet'] += 1; S['ember_held_by_cap'] += 1
+                continue
+            if self.r2.random() < self.esc_prob(e):
+                e['imm'] = nxt; S['sign_imminent'] += 1
+                if nxt >= 3: self.violent_used += 1
+                if nxt == 4 and e['target'] == 'chief': self.chief_attacked = True
+                self.react_imminent(e)
+            else:
+                e['quiet'] += 1
+
+    def react_imminent(self, e):
+        st = e['imm']; d = self.dark
+        e['blocked'] = False
+        if st == 2:
+            if self.lack_ember(e):
+                kind = 'theft'
+            elif e['who'] == 'tail':
+                kind = self.r2.choice(['coupling', 'heating'])
+            elif e['who'] == 'engine':
+                kind = 'boiler'
+            else:
+                kind = 'heating'
+            e['sab'] = kind
+            if kind == 'boiler' and self.rel['engine'] >= 15:
+                e['blocked'] = True  # 수석 기관사에게 맡긴다
+            elif kind == 'coupling':
+                self.rel['tail'] = clamp(self.rel['tail'] - 3, -100, 100); e['blocked'] = True  # 꼬리칸 끝에 경비
+            elif kind == 'theft' and (d == 'tyrant' or self.m['guard'][3] < Q['guard_post_line']):
+                self.base['guard'][3] += 3; e['blocked'] = True  # 창고 경비
+            return
+        if st >= 3 or d == 'tyrant':
+            self.post_guard(e)
+        if st in (1, 3) and e['guard'] and self.r2.random() < Q['guard_block']:
+            e['blocked'] = True
+
+    def lack_ember(self, e):
+        return e['cause'] == 'lack'
+
+    def victim_comm(self, target):
+        if target in COMMS:
+            return target
+        return 'front' if target == 'store' else 'guard'
+
+    def act(self, e):
+        S = self.stats
+        st = e['imm']; e['imm'] = None
+        if e['blocked']:
+            e['blocked'] = False; e['quiet'] = 0
+            S['blocked_act%d' % st] += 1
+            if st >= 3: self.violent_used -= 1
+            if st == 4 and e['target'] == 'chief': self.chief_attacked = False
+            return
+        e['stage'] = st; e['quiet'] = 0
+        v = self.victim_comm(e['target'])
+        if st == 1:
+            S['act_threat'] += 1
+            self.tension += 3; self.fear += 2
+            self.rel[v] = clamp(self.rel[v] - 3, -100, 100)
+        elif st == 2:
+            k = e['sab']; S['act_sabotage'] += 1; S['sab_' + k] += 1
+            if k == 'boiler':
+                self.coal -= 4
+                if self.r2.random() < 0.1: self.haul_once *= 0.5; S['boiler_damaged'] += 1
+            elif k == 'coupling':
+                self.coal -= 3; self.haul_once *= 0.7; self.fear += 5
+            elif k == 'theft':
+                self.food -= self.r2.uniform(6, 10)
+                w = e['who']; self.base[w][1] += 5
+                self.scheduled.append((self.seg + 2, lambda w=w: self.base[w].__setitem__(1, self.base[w][1] - 5)))
+            elif k == 'heating':
+                self.base[v][0] -= 15
+                self.scheduled.append((self.seg + 2, lambda v=v: self.base[v].__setitem__(0, self.base[v][0] + 15)))
+            if self.dark == 'saint':  # 사람이 안 다친 사보타주도 수사한다
+                self.open_case(e['who'], v, None, e)
+        elif st == 3:
+            S['act_assault'] += 1
+            n = self.r2.choice([1, 2])
+            self.tension += 6
+            dead = 1 if self.r2.random() < Q['assault_death'] else 0
+            self.injured += n - dead
+            if dead: self.train_death(1, v, violent=True)
+            self.open_case(e['who'], v, Q['clock_death'] if dead else Q['clock_injury'], e)
+        elif st == 4:
+            S['act_assassination'] += 1
+            self.tension += 6
+            self.kill_ember(e, 'ember_spent')
+            if e['target'] == 'chief':
+                S['chief_wounded'] += 1  # 첫 시도는 늘 부상(4.1 제동)
+                self.open_case(e['who'], 'guard', Q['clock_injury'], None)
+                return
+            p = Q['assn_base'] - Q['assn_guard'] * e['guard']
+            if e['target'] == 'guard' or (e['target'] == 'aide' and self.r2.random() < 1 / 3):
+                p -= Q['assn_guardcap']
+            if self.r2.random() < p:
+                S['ember_assn_killed'] += 1
+                self.train_death(1, v, violent=True)
+                if e['target'] in COMMS or e['target'] == 'store':
+                    self.succession(v)
+                self.open_case(e['who'], v, Q['clock_death'], None)
+            else:
+                self.injured += 1
+                self.open_case(e['who'], v, Q['clock_injury'], None)
+
+    def succession(self, c):
+        """대표가 죽으면 측근이 대표가 된다. 관계가 회의 이하면 이념이 한 축 더 극단으로(S1a 4.2)."""
+        self.stats['succession'] += 1
+        if self.rel[c] <= -15:
+            axes = [i for i in range(3) if self.ideo[c][i] != 0] or [0, 1, 2]
+            i = self.r2.choice(axes)
+            sgn = self.ideo[c][i] if self.ideo[c][i] else self.r2.choice([-1, 1])
+            self.ideo[c][i] = 2 * (1 if sgn > 0 else -1)
+
+    def train_death(self, n, comm, violent=False):
+        if n <= 0:
+            return
+        ph, self._phase = self._phase, 'train'
+        self.on_death(n, comm)
+        self._phase = ph
+        self.fresh_corpses += [comm] * n
+        if violent:
+            self.stats['violent_deaths'] += n
+
+    # ---------------- 칸 안의 시신 (9.1, 9.2) ----------------
+    def check_corpse(self, comm):
+        S = self.stats
+        if self.practice is None:
+            self.practice = 'guard' if self.dark == 'tyrant' else 'medtech'
+        S['train_corpses'] += 1
+        if self.r2.random() < Q['vigil_p']:
+            if self.dark == 'tyrant':
+                self.rel[comm] = clamp(self.rel[comm] - 3, -100, 100)
+            else:
+                S['vigil_allowed'] += 1
+                self.rel[comm] = clamp(self.rel[comm] + 4, -100, 100)
+                self.base['guard'][3] += 1
+                self.unchecked.append([comm, Q['vigil_guarded']])
+                return
+        if self.practice == 'guard':
+            self.base['guard'][3] += 1; self.rel['guard'] = clamp(self.rel['guard'] - 2, -100, 100)
+        elif self.practice == 'medtech':
+            self.rel['medtech'] = clamp(self.rel['medtech'] - 3, -100, 100)
+        else:
+            self.rel[comm] = clamp(self.rel[comm] - 1, -100, 100); self.fear += 2
+            if self.r2.random() < Q['car_miss']:
+                self.unchecked.append([comm, Q['corpse_rise']])
+
+    # ---------------- 수사와 처벌 (4.4) ----------------
+    def open_case(self, culprit, victim, clock, ember, own=False):
+        S = self.stats
+        r2 = self.r2
+        cul = dict(comm=culprit, culprit=True, susp=0, clues=0, acq=False)
+        if culprit == victim or r2.random() < 0.3: cul['susp'] += 1
+        if rivals(culprit, victim): cul['susp'] += 1
+        if culprit in self.punished_comms and r2.random() < 0.5: cul['susp'] += 1
+        pool = [dict(comm='tail', culprit=False, susp=2 + (2 if S['rescued'] > 0 else 0), clues=0, acq=False),
+                dict(comm=victim, culprit=False, susp=1, clues=0, acq=False)]
+        for a, b in RIVALS:
+            if victim in (a, b):
+                pool.append(dict(comm=b if victim == a else a, culprit=False, susp=1, clues=0, acq=False))
+                break
+        if self.punished_comms:
+            pool.append(dict(comm=r2.choice(self.punished_comms), culprit=False, susp=1, clues=0, acq=False))
+        pool.sort(key=lambda s: -(s['susp'] + r2.random() * 0.9))
+        case = dict(crowd=clock is not None, culprit=culprit, victim=victim, clock=clock, stopped=False, status='open', protects=0,
+                    promised=False, opened=self.seg, ember=ember, own=own, sus=[cul] + pool[:2])
+        self.cases.append(case)
+        S['cases'] += 1
+        return case
+
+    def eligible(self, case):
+        return [s for s in case['sus'] if not s['acq']] or case['sus']
+
+    def top_by_clues(self, case):
+        return max(self.eligible(case), key=lambda s: (s['clues'], s['susp'], self.r2.random()))
+
+    def top_by_susp(self, case):
+        return max(self.eligible(case), key=lambda s: (s['susp'], s['clues'], self.r2.random()))
+
+    def investigate(self):
+        S = self.stats
+        for case in list(self.cases):
+            if case['status'] != 'open':
+                continue
+            S['investigate_segments'] += 1
+            p_true = Q['clue_true'] + 0.15 * (self.rel['guard'] >= 15) + 0.15 * ('patrol' in self.passed) \
+                + 0.10 * (self.fear >= 20)
+            p_false = min(Q['clue_false'], max(0.0, 1 - p_true))
+            roll = self.r2.random()
+            if roll < p_true:
+                s = next(s for s in case['sus'] if s['culprit'])
+                s['clues'] += 1; s['susp'] += 1; S['clue_true'] += 1
+            elif roll < p_true + p_false:
+                s = self.r2.choice([s for s in case['sus'] if not s['culprit']])
+                s['clues'] += 1; s['susp'] += 1; S['clue_false'] += 1
+            d = self.dark
+            top = self.top_by_clues(case)
+            if d == 'tyrant':
+                self.summary(case)
+            elif top['clues'] >= 2 and not self.ml:
+                self.send_trial(case)
+            elif d == 'saint' and case['clock'] is not None and case['clock'] <= 1:
+                self.send_trial(case)
+            elif self.seg - case['opened'] >= Q['cold_case']:
+                case['status'] = 'closed'; S['cold_cases'] += 1
+
+    def send_trial(self, case):
+        case['status'] = 'trial'
+        if self.trust >= 40:
+            case['stopped'] = True
+        self.stats['sent_trial'] += 1
+
+    def summary(self, case):
+        S = self.stats
+        top = self.top_by_clues(case)
+        p_mis = 0.0 if top['clues'] >= 2 else 0.4 if top['clues'] == 1 else 0.7
+        if self.r2.random() < p_mis:
+            person = self.r2.choice([s for s in case['sus'] if not s['culprit']])
+        else:
+            person = next(s for s in case['sus'] if s['culprit'])
+        S['summary'] += 1
+        self.fear += 5
+        for c in COMMS:
+            if c != 'guard':
+                self.rel[c] = clamp(self.rel[c] - 2, -100, 100)
+        self.punish(case, person, 'exile' if self.dark == 'tyrant' else 'confine')
+
+    def punish(self, case, person, how):
+        S = self.stats
+        c = person['comm']
+        case['status'] = 'closed'
+        S['punished'] += 1
+        self.punished_comms.append(c)
+        if how == 'exile':
+            S['exiles'] += 1
+            self.rel[c] = clamp(self.rel[c] - 8, -100, 100); self.fear += 5; self.pop[c] -= 1
+        elif how == 'confine':
+            S['confined'] += 1
+            for k in range(4):
+                self.scheduled.append((self.seg + 1 + k, lambda: self.base['guard'].__setitem__(3, self.base['guard'][3] + 2)))
+        else:  # 배급을 끊는다
+            S['ration_cut'] += 1
+            self.rel[c] = clamp(self.rel[c] - 3, -100, 100); self.tension -= 2
+        if person['culprit']:
+            S['solved'] += 1
+            if case['ember'] is not None:
+                self.kill_ember(case['ember'], 'ember_punished')
+            if case['own'] and self.r2.random() < Q['order_names_chief']:
+                self.expose_order(case['victim'])
+        else:
+            S['misjudged'] += 1
+            self.innocents.append([c, self.seg])
+            self.new_ember(c, 'guard', 'misjudged')
+
+    def hold_trial(self, case):
+        S = self.stats
+        S['trials'] += 1
+        dfd = self.top_by_clues(case)
+        ev = 2 if dfd['clues'] >= 2 else 0 if dfd['clues'] == 1 else -2
+        yes = 0
+        for c in COMMS:
+            score = ev + (1 if c == case['victim'] else 0) - (2 if c == dfd['comm'] else 0) + band(self.rel[c])
+            y, u, n = self.split(score)
+            s = SEATS[c]
+            yy = round(s * y); nn = round(s * n); uu = s - yy - nn
+            p = clamp(0.5 + 0.1 * score, 0.2, 0.8)
+            yes += yy + sum(1 for _ in range(uu) if self.r2.random() < p)
+        if yes >= 51:
+            S['guilty'] += 1
+            self.punish(case, dfd, 'ration_cut' if self.dark == 'saint' else 'confine')
+        else:
+            S['acquitted'] += 1
+            dfd['acq'] = True
+            self.rel[dfd['comm']] = clamp(self.rel[dfd['comm']] + 3, -100, 100)
+            case['status'] = 'open'; case['stopped'] = False; case['promised'] = False
+
+    # ---------------- 군중 (4.5) ----------------
+    def crowd_card(self, case):
+        S = self.stats
+        d = self.dark
+        S['crowd_cards'] += 1
+        if d == 'tyrant' or (d in ('caretaker', 'schemer_plus') and self.tension > Q['scapegoat_tension']):
+            self.scapegoat(case)
+        elif self.trust >= 40 and not self.ml:
+            case['status'] = 'trial'; case['promised'] = True; case['stopped'] = True
+            S['promised_trial'] += 1
+        else:
+            self.protect(case)
+
+    def protect(self, case):
+        S = self.stats
+        S['protected'] += 1
+        if case['protects'] >= 1 and self.r2.random() < 0.5:
+            self.injured += 1; S['guard_hurt_protecting'] += 1
+        case['protects'] += 1
+        case['clock'] = 1
+        self.base['guard'][3] += 5; self.fear += 3
+        v = case['victim']
+        self.rel[v] = clamp(self.rel[v] - 5, -100, 100)
+        if case['status'] == 'open':
+            self.send_trial(case)
+
+    def scapegoat(self, case, allowed=False):
+        S = self.stats
+        person = self.top_by_susp(case)
+        c = person['comm']
+        S['lynch_allowed' if allowed else 'scapegoats'] += 1
+        S['lynch_events'] += 1
+        self.tension -= 8
+        if self.r2.random() < Q['scapegoat_death']:
+            self.train_death(1, c, violent=True); S['lynch_deaths'] += 1
+        else:
+            self.injured += 1
+        self.rel[c] = clamp(self.rel[c] - 10, -100, 100)
+        case['status'] = 'closed'
+        self.punished_comms.append(c)
+        if person['culprit']:
+            S['scapegoat_guilty'] += 1
+            if case['ember'] is not None:
+                self.kill_ember(case['ember'], 'ember_punished')
+        else:
+            S['scapegoat_innocent'] += 1
+            self.innocents.append([c, self.seg])
+        self.new_ember(c, 'guard', 'scapegoat')
+
+    # ---------------- 암살 명령 (4.6) ----------------
+    def order_assassination(self, blocs):
+        cands = [c for c in COMMS if blocs[c]['no'] > 0 and (self.grudge[c] >= 2 or self.rel[c] <= -40)]
+        if not cands:
+            cands = [c for c in COMMS if blocs[c]['no'] > 0 and SEATS[c] >= 12]
+        if not cands:
+            return
+        target = max(cands, key=lambda c: (blocs[c]['no'], SEATS[c]))
+        if self.rel['guard'] >= 15:
+            exe, mod = 'guard', 0.10
+        else:
+            enemy = next((b if a == target else a for a, b in RIVALS if target in (a, b)), None)
+            exe, mod = (enemy, 0.10) if enemy else (target, -0.10)
+        method = ('stop', 0.10, 0.30) if self.dark == 'tyrant' else ('accident', -0.10, 0.20)
+        self.order = dict(target=target, exe=exe, exe_mod=mod, method=method)
+        self.stats['assn_ordered'] += 1
+
+    def execute_order(self):
+        S = self.stats
+        o, self.order = self.order, None
+        t, exe = o['target'], o['exe']
+        name, mmod, p_exp = o['method']
+        p = clamp(Q['order_base'] + o['exe_mod'] + mmod - 0.10, 0.15, 0.85)
+        self.executors.append(exe)
+        if self.r2.random() < p:
+            S['assn_succeeded'] += 1
+            if name == 'stop':
+                ph, self._phase = self._phase, 'stop'
+                self.on_death(1, t); self._phase = ph
+                S['violent_deaths'] += 1
+            else:
+                self.train_death(1, t, violent=True)
+            self.succession(t)
+            self.rel[t] = clamp(self.rel[t] - 10, -100, 100)
+            self.fervor[t] = min(3, self.fervor[t] + 1)
+            if Q['leaderless']:
+                self.leaderless.add(t)
+            case = self.open_case(exe, t, Q['clock_death'], None, own=True)
+            if self.r2.random() < p_exp:
+                self.expose_order(t)
+            if self.dark == 'tyrant':  # 덮는다
+                case['status'] = 'closed'; S['covered_up'] += 1
+                self.offend(t); self.offend(t)
+            else:  # 누명: 다른 용의자에게 단서 하나, 실행자의 불씨가 커진다
+                inn = max((s for s in case['sus'] if not s['culprit']), key=lambda s: s['susp'])
+                inn['clues'] += 1; inn['susp'] += 1
+                S['frames'] += 1
+                self.new_ember(exe, 'chief', 'executor', p=1.0)
+        else:
+            S['assn_failed'] += 1
+            self.injured += 1
+            self.open_case(exe, t, Q['clock_injury'], None, own=True)
+            if self.r2.random() < Q['order_exposed_fail_caught'] and self.r2.random() < Q['order_names_chief']:
+                self.expose_order(t)
+
+    def expose_order(self, target):
+        S = self.stats
+        if S['_exposed_now'] == self.seg:
+            return
+        S['_exposed_now'] = self.seg
+        S['assn_exposed'] += 1
+        self.trust -= 20
+        for c in COMMS:
+            self.offend(c)
+        self.offend(target); self.offend(target)
+
+    # ---------------- 탄압과 계엄 (5.1, 5.3) ----------------
+    def disperse(self, c):
+        S = self.stats
+        if self.rel['guard'] <= -15 and self.r2.random() < Q['guard_refuse']:
+            S['guard_refused'] += 1
+            return
+        first = self.dispersed[c] == 0
+        self.dispersed[c] += 1
+        S['dispersals'] += 1
+        for e in list(self.embers):
+            if e['who'] == c and e['imm'] is None:
+                self.kill_ember(e, 'ember_repressed')
+        self.repressed_until[c] = self.seg + 6
+        if first:
+            self.fervor[c] = 0
+        else:
+            self.fervor[c] = max(0, self.fervor[c] - 1)
+            self.new_ember(c, 'guard', 'repression')
+        self.rel[c] = clamp(self.rel[c] - 15, -100, 100)
+        self.offend(c)
+        self.fear += 10; self.tension += 5
+        if S['dispersals'] % 3 == 0:
+            for o in COMMS:
+                self.offend(o)
+
+    def ml_ok(self):
+        return self.rel['guard'] >= Q['ml_rel'] and self.grudge['guard'] <= Q['ml_grudge_max']
+
+    def ep_expire(self):
+        S = self.stats
+        self.ep_on = False
+        self.passed.discard('emergency_powers')
+        self.repealed_at['emergency_powers'] = self.session
+        if self.dark == 'tyrant':
+            if self.ml_ok():
+                self.declare_ml(); return
+            S['ml_locked'] += 1
+        S['ep_returned'] += 1
+        self.trust += 5
+        for law in self.ep_decrees:  # 추인 안 된 포고는 사라진다
+            if law in self.passed:
+                self.silent_remove(law)
+        self.ep_decrees = []
+
+    def silent_remove(self, law):
+        self.passed.discard(law)
+        for c, delta in LAWS[law]['mats'].items():
+            for i in range(4):
+                self.base[c][i] -= delta[i]
+        if law in CORPSE:
+            self.corpse_issue = True
+
+    def declare_ml(self):
+        S = self.stats
+        self.ml = True; self.ml_start = self.seg; self.pre_ml_trust = self.trust
+        self.ep_on = False; self.ep_decrees = []
+        self.passed.discard('emergency_powers')
+        S['ml_declared'] += 1
+        for c in COMMS:
+            if c != 'guard':
+                self.offend(c)
+        self.tension += 10
+        self.ration['guard'] = min(4, self.ration['guard'] + 1)
+        self.ml_floor = self.ration['guard']
+
+    def lift_ml(self):
+        self.ml = False; self.coup_warn = None
+        self.stats['ml_lifted'] += 1
+        self.trust = self.pre_ml_trust - 15
+        self.stats['ml_len'] += self.seg - self.ml_start
+
+    def council_options(self):
+        cool = P['repeal_cool']
+        options = [(l, False) for l, v in LAWS.items() if l not in self.passed and v['open'](self)
+                   and not (l in CORPSE and self.corpse) and self.session - self.repealed_at.get(l, -99) > cool]
+        if P['repeal'] and self.policy not in ('passive', 'idealist'):
+            options += [(l, True) for l in self.passed if self.session - self.passed_at.get(l, 0) >= cool]
+        crisis = [k for k, lim in (('coal', P['crisis_line']), ('food', P['crisis_line'])) if getattr(self, k) < lim]
+        if self.corpse_issue: crisis.append('corpse')
+        if self.med <= 3 and self.injured >= 4: crisis.append('med')
+        forced = [o for o in options if (set(LAWS[o[0]]['crisis']) & set(crisis) if not o[1]
+                                         else set(self.drains(o[0])) & set(crisis))] if P['forced_agenda'] else []
+        return (forced or options), bool(forced)
+
+    def decree(self):
+        """표결 없는 포고: 법 하나를 통과시키거나 폐지한다."""
+        options, forced = self.council_options()
+        if forced:
+            self.stats['forced'] += 1; self.stats['forced_passed'] += 1  # 포고는 표결 없이 통과한다
+        options = [o for o in options if o[0] not in ('emergency_powers', 'guided_voting', 'secret_ballot')]
+        if not options:
+            return None
+        tight = clamp((P['plan_line'] - min(self.coal, self.food)) / 60, 0.5, 1.5)
+
+        def val(o):
+            law, rep = o
+            worth = self.repeal_worth(law) if rep else self.law_worth(law)
+            ease = sum(self.stance(c, law, rep)[0] * SEATS[c] for c in COMMS) / 10
+            return worth * tight + ease * 0.5 + self.r2.random() * 0.5
+        law, repeal = max(options, key=val)
+        S = self.stats
+        S['decrees'] += 1
+        if repeal:
+            self.repeal_law(law); return None
+        self.passed.add(law); self.passed_at[law] = self.session
+        self.apply_law(law)
+        S['passed'] += 1; S['pass_' + law] += 1
+        if law in HARSH: S['harsh_passed'] += 1; S['harsh_decreed'] += 1
+        if law in IDEAL: S['ideal_passed'] += 1
+        return law
+
+    def session_bookkeeping(self):
+        self.session += 1
+        if self.session % 2 == 0: self.secrets += 1
+        for c in COMMS:
+            if self.grudge[c] and self.session - self.last_offense[c] >= P['grudge_decay']:
+                self.grudge[c] -= 1; self.last_offense[c] = self.session
+        self.stats['hostile_blocs'] += sum(1 for c in COMMS if self.grudge[c] >= P['hostile_grudge'])
+
+    def council(self):
+        if not self.s1b:
+            return super().council()
+        S = self.stats
+        if self.ml:  # 의회 대신 포고
+            self.session_bookkeeping(); self.decree()
+            return
+        trial = next((c for c in self.cases if c['status'] == 'trial'), None)
+        if trial:
+            self.session += 1
+            _, forced = self.council_options()
+            self.session -= 1
+            if Q['trial_defer'] and forced:
+                S['trial_deferred'] += 1
+                if trial['promised']:  # 수사 약속을 어겼다
+                    S['promise_trial_broken'] += 1
+                    self.break_promise((trial['victim'], self.seg, 'trial'))
+                    trial['promised'] = False; trial['stopped'] = False; trial['clock'] = 1
+            else:
+                self.session_bookkeeping()
+                S['law_slot_lost_to_trial'] += 1
+                self.hold_trial(trial)
+                return
+        before = (S['proposals'], S['failed'], S['forced'])
+        self._last_vote = None
+        super().council()
+        S = self.stats  # law_value가 stats를 복사본으로 바꿔 끼운다
+        if S['proposals'] > before[0] and self._last_vote:
+            law, repeal, blocs = self._last_vote
+            failed = S['failed'] > before[1]
+            forced = S['forced'] > before[2]
+            self.leaderless.clear()
+            ok = not failed
+            for a, b in RIVALS:
+                sa = 1 if blocs[a]['yes'] > blocs[a]['no'] else -1 if blocs[a]['no'] > blocs[a]['yes'] else 0
+                sb = 1 if blocs[b]['yes'] > blocs[b]['no'] else -1 if blocs[b]['no'] > blocs[b]['yes'] else 0
+                if sa * sb == -1:
+                    loser = a if (sa == 1) != ok else b
+                    winner = b if loser == a else a
+                    self.new_ember(loser, winner, 'rival', p=Q['rival_p'])
+            if failed and forced and self.dark in ('tyrant', 'schemer_plus') and self.order is None \
+                    and self.seg < P['segments']:
+                self.order_assassination(blocs)
+        if 'emergency_powers' in self.passed and not self.ep_on and not self.ml:
+            self.ep_on = True; self.ep_left = Q['ep_len']; self.ep_decrees = []
+            S['ep_passed'] += 1
+
+    def play(self):
+        super().play()
+        if self.s1b:
+            if self.ml:
+                self.stats['ml_len'] += self.seg - self.ml_start + 1
+            S = self.stats
+            S['means'] = sum(w * S[k] for k, w in MEANS.items())
+            S['violence'] = S['act_assault'] + S['act_assassination'] + S['lynch_events'] + S['assn_succeeded'] \
+                + S['assn_failed']
+            S['signs'] = S['sign_kiche'] + S['sign_imminent']
+        return self
+
+
+# ---------------- 집계 ----------------
+def run_policy(policy, n, places, s1b=True):
+    ends = Counter(); agg = defaultdict(float); means = []
+    tone = Counter()
+    for i in range(n):
+        run = DarkRun(1000 + i, policy, places, s1b).play()
+        ends[run.end] += 1
+        for k, v in run.stats.items():
+            if not k.startswith('_'):
+                agg[k] += v
+        agg['end_trust'] += run.trust
+        agg['segments_played'] += run.seg
+        if s1b:
+            means.append(run.stats['means'])
+            dark = run.stats['means'] >= 8
+            saved = run.end == 'complete' and run.stats['deaths'] <= 6
+            tone[('dark' if dark else 'clean') + '/' + ('saved' if saved else 'lost')] += 1
+    return ends, agg, means, tone
+
+
+def pct(ends, k, n):
+    return ends.get(k, 0) / n
+
+
+def report(policy, n, places):
+    ends, agg, means, tone = run_policy(policy, n, places)
+    a = lambda k: agg[k] / n
+    out = dict(policy=policy, complete=pct(ends, 'complete', n), stranded=pct(ends, 'stranded', n),
+               ousted=pct(ends, 'ousted', n), revolt=pct(ends, 'revolt', n), coup=pct(ends, 'coup', n),
+               signs=a('signs'), kiche=a('sign_kiche'), imminent=a('sign_imminent'), violence=a('violence'),
+               violent_deaths=a('violent_deaths'), means=sum(means) / n, dark8=sum(1 for x in means if x >= 8) / n,
+               ml_rate=sum(1 for _ in range(1)) and agg['ml_declared'] / n)
+    print(f'\n## {policy} (S1b, {n}판)')
+    print('끝:', ', '.join(f'{k} {v / n:.0%}' for k, v in ends.most_common()))
+    groups = [
+        ('징후', ['signs', 'sign_kiche', 'sign_imminent', 'embers', 'ember_trigger', 'ember_capped', 'ember_curfew_blocked',
+                 'ember_fervor', 'ember_grudge', 'ember_lack', 'ember_leash', 'ember_rival', 'ember_misjudged',
+                 'ember_scapegoat', 'ember_repression', 'ember_executor', 'guard_posted']),
+        ('불씨 끝', ['ember_resolved', 'ember_quiet', 'ember_punished', 'ember_repressed', 'ember_spent', 'ember_held_by_cap']),
+        ('폭력', ['act_threat', 'act_sabotage', 'sab_boiler', 'sab_coupling', 'sab_theft', 'sab_heating', 'act_assault',
+                 'act_assassination', 'chief_wounded', 'ember_assn_killed', 'blocked_act1', 'blocked_act2',
+                 'blocked_act3', 'blocked_act4', 'violence', 'violent_deaths', 'lynch_events', 'lynch_deaths']),
+        ('수사', ['cases', 'clue_true', 'clue_false', 'sent_trial', 'trials', 'guilty', 'acquitted', 'trial_deferred',
+                 'law_slot_lost_to_trial', 'summary', 'solved', 'misjudged', 'scapegoats', 'scapegoat_innocent',
+                 'truth_revealed', 'crowd_cards', 'protected', 'promised_trial', 'promise_trial_broken', 'cold_cases',
+                 'exiles', 'confined', 'ration_cut']),
+        ('시신', ['train_corpses', 'vigil_allowed', 'corpse_rise', 'bites_found', 'bite_outbreak', 'deaths']),
+        ('탄압·계엄', ['dispersals', 'guard_refused', 'ep_passed', 'ep_returned', 'ml_locked', 'ml_declared', 'ml_len',
+                    'decrees', 'harsh_decreed', 'coup_warning']),
+        ('암살 명령', ['assn_ordered', 'assn_succeeded', 'assn_failed', 'assn_exposed', 'frames', 'covered_up',
+                    'executor_blackmail', 'succession']),
+        ('S1a', ['passed', 'harsh_passed', 'failed', 'blackmail', 'leash_snapped', 'strikes', 'max_tension', 'end_trust']),
+    ]
+    for name, keys in groups:
+        print(f'{name}:', ', '.join(f'{k} {a(k):.2f}' for k in keys))
+    print('위기 속도 (시작 수 / 끝난 수 / 끝난 것의 평균 구간 / 1구간 안에 끝난 비율=시작 대비):')
+    for t in ('strike', 'protest', 'resource', 'crowd'):
+        st, rs = agg['crisis_%s_n' % t], agg['crisis_%s_resolved' % t]
+        dur = agg['crisis_%s_dur' % t] / rs if rs else 0
+        fast = agg['crisis_%s_fast' % t] / st if st else 0
+        out['cr_' + t] = (st / n, dur, fast)
+        print(f'  {t}: 판당 {st / n:.2f}, 끝남 {rs / st if st else 0:.0%}, 평균 {dur:.1f}구간, 1구간 안 {fast:.0%}')
+    out['vote'] = agg['forced_passed'] / agg['forced'] if agg['forced'] else 0
+    print(f"  위기 안건: 판당 {agg['forced'] / n:.2f}, 통과 {out['vote']:.0%}")
+    ml_runs = agg['ml_declared']
+    print(f"계엄: {ml_runs / n:.0%}판, 계엄 판의 평균 길이 {agg['ml_len'] / ml_runs if ml_runs else 0:.1f}구간")
+    print(f"수단 점수 평균 {out['means']:.1f}, 8 이상 {out['dark8']:.0%}. 톤:",
+          ', '.join(f'{k} {v / n:.0%}' for k, v in sorted(tone.items())))
+    out['ml_rate'] = ml_runs / n
+    out['ml_len'] = agg['ml_len'] / ml_runs if ml_runs else 0
+    return out
+
+
+def check(res):
+    c = res['caretaker']
+    print('\n## 브리프 목표 확인')
+    ck = c['revolt'] + c['coup']
+    for d in ('tyrant', 'schemer_plus'):
+        if d not in res:
+            continue
+        r = res[d]; rc = r['revolt'] + r['coup']
+        ok1 = r['complete'] <= c['complete'] + 0.10
+        ok3 = r['complete'] <= c['complete'] + 0.03
+        ok2 = rc >= 1.5 * ck
+        print(f"1.1 {d}: 완주 {r['complete']:.0%} vs caretaker {c['complete']:.0%}: +10%p 안 {'통과' if ok1 else '실패'}, "
+              f"+3%p 안(코디네이터) {'통과' if ok3 else '실패'}; "
+              f"반란+쿠데타 {rc:.0%} ≥ 1.5×{ck:.0%}={1.5 * ck:.0%} → {'통과' if ok2 else '실패'}")
+    if 'saint' in res:
+        print(f"15.3 saint 완주 {res['saint']['complete']:.0%} ≥ 35% → {'통과' if res['saint']['complete'] >= 0.35 else '실패'}")
+    for p, r in res.items():
+        ok = 4 <= r['signs'] <= 8 and 1 <= r['violence'] <= 3 and r['violent_deaths'] <= 2
+        print(f"1.2 {p}: 징후 {r['signs']:.1f}(4~8), 실제 폭력 {r['violence']:.2f}(1~3), 폭력 사망 {r['violent_deaths']:.2f}(≤2)"
+              f" → {'통과' if ok else '실패'}")
+
+
+def baseline(n, places):
+    """S1b를 끈 DarkRun이 s1a_balance.Run과 판마다 같은지 확인한다."""
+    print('\n## S1a 기준선 (S1b 끔)')
+    for policy in S1A_POLICIES:
+        same = 0; ends = Counter()
+        for i in range(n):
+            a = A.Run(1000 + i, policy, places).play()
+            b = DarkRun(1000 + i, policy, places, s1b=False).play()
+            same += (a.end == b.end and a.stats == b.stats and a.seg == b.seg and a.trust == b.trust)
+            ends[b.end] += 1
+        print(f"{policy}: 끝 {', '.join(f'{k} {v / n:.0%}' for k, v in ends.most_common())}; s1a와 같은 판 {same}/{n}")
+
+
+def main():
+    n = 1000
+    args = sys.argv[1:]
+    if args and args[0].isdigit():
+        n = int(args.pop(0))
+    policies = list(DARK)
+    do_base = False
+    while args:
+        a = args.pop(0)
+        if a == '--baseline':
+            do_base = True
+        elif a == '--policies':
+            policies = args.pop(0).split(',')
+        elif a == '--tune':
+            while args and '=' in args[0]:
+                k, v = args.pop(0).split('=')
+                tgt = Q if k in Q else P
+                tgt[k] = float(v) if isinstance(tgt[k], float) else int(float(v))
+    places = A.load_places()
+    if do_base:
+        baseline(n, places)
+    res = {}
+    for p in policies:
+        res[p] = report(p, n, places)
+    if 'caretaker' in res:
+        check(res)
+    print('\n위기 속도 요약 (판당 시작 / 끝난 것 평균 구간 / 1구간 안 비율): strike | protest | resource | crowd | 위기 안건 통과')
+    for p, r in res.items():
+        print(f"{p:13s} " + ' | '.join(f"{r['cr_' + t][0]:.2f} {r['cr_' + t][1]:.1f} {r['cr_' + t][2]:.0%}"
+                                      for t in ('strike', 'protest', 'resource', 'crowd')) + f" | {r['vote']:.0%}")
+    print('\n요약표: policy complete stranded ousted revolt coup | signs violence vdeaths | means dark8 | ml_rate ml_len')
+    for p, r in res.items():
+        print(f"{p:13s} {r['complete']:.0%} {r['stranded']:.0%} {r['ousted']:.0%} {r['revolt']:.0%} {r['coup']:.0%} | "
+              f"{r['signs']:.1f} {r['violence']:.2f} {r['violent_deaths']:.2f} | {r['means']:.1f} {r['dark8']:.0%} | "
+              f"{r['ml_rate']:.0%} {r['ml_len']:.1f}")
+
+
+if __name__ == '__main__':
+    main()
