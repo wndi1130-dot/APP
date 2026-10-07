@@ -85,7 +85,8 @@ export function afterDeath(g: Game, c: Comm, names: readonly string[]): void {
   if (known.length === 0 || g.cards.some(x => x.kind === 'orphan' || x.kind === 'keepsake')) return;
   const parent = known.find(n => { const f = familyOf(g, n); return f && f.isParent && f.kids.length > 0; });
   if (parent) addPeopleCard(g, { kind: 'orphan', comm: c, who: parent });
-  else addPeopleCard(g, { kind: 'keepsake', comm: c, who: known[0] });
+  // 정차 중에 죽었으면 밖에서 죽은 것이다(유품 카드 문장이 달라진다).
+  else addPeopleCard(g, { kind: 'keepsake', comm: c, who: known[0], ...(g.phase === 'stop' ? { text: 'field' } : {}) });
 }
 
 /** 상중: 2구간. 게이지가 아니라 인물 상태다. 파견에 넣으면 사기가 낮고 회기엔 결석한다. */

@@ -509,11 +509,13 @@ export function viewCard(g: Game, card: Card): CardView {
       const kids = f?.kids ?? [];
       const other = f?.others.find(o => f.fam.parents.includes(o.id));
       const kidText = kids.map(k => `${k.name}(${k.age})`).join(', ');
-      const choices: Choice[] = [
-        { label: '같은 칸이 돌본다', say: '이 칸의 아이다. 이 칸이 함께 키운다.', effs: [{ t: 'base', c, i: 1, v: -2 }], special: 'orphan_same' },
-      ];
-      if (c !== 'front') choices.push({ label: '앞칸 집에 맡긴다', say: '앞칸에 빈 침대가 있다. 거기서 자게 해라.', effs: [{ t: 'base', c: 'front', i: 2, v: 1 }, { t: 'rel', c, v: 4 }, { t: 'rel', c: 'front', v: -4 }], special: 'orphan_front' });
-      if (c !== 'medtech') choices.push({ label: '의무칸에 둔다', say: '의무진이 맡아라. 아플 때 제일 가깝다.', effs: [{ t: 'base', c: 'medtech', i: 3, v: 2 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'trust', v: 1 }], special: 'orphan_med' });
+      // 곁에 부모 한쪽이 살아 있으면 그 부모가 키우고, 나머지 갈래는 그 손을 덜어 주는 쪽이다(triage N7).
+      const oc = other?.community ?? c;
+      const choices: Choice[] = other
+        ? [{ label: '곁의 부모가 키운다', say: `${other.name}${iga(other.name)} 키운다. 칸이 손을 보태라!`, effs: [{ t: 'base', c: oc, i: 1, v: -1 }, { t: 'rel', c: oc, v: 2 }], special: 'orphan_parent' }]
+        : [{ label: '같은 칸이 돌본다', say: '이 칸의 아이다. 이 칸이 함께 키운다.', effs: [{ t: 'base', c, i: 1, v: -2 }], special: 'orphan_same' }];
+      if (c !== 'front') choices.push({ label: '앞칸 집에 맡긴다', say: other ? `밤엔 앞칸 빈 침대에서 재워라. ${other.name}도 자야 한다.` : '앞칸에 빈 침대가 있다. 거기서 자게 해라.', effs: [{ t: 'base', c: 'front', i: 2, v: 1 }, { t: 'rel', c, v: 4 }, { t: 'rel', c: 'front', v: -4 }], special: 'orphan_front' });
+      if (c !== 'medtech') choices.push({ label: '의무칸에 둔다', say: other ? `낮엔 의무진이 맡아라. ${other.name}의 손을 덜어 줘라.` : '의무진이 맡아라. 아플 때 제일 가깝다.', effs: [{ t: 'base', c: 'medtech', i: 3, v: 2 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'trust', v: 1 }], special: 'orphan_med' });
       return {
         title: '남은 아이', speaker: leader(g, c), focus: c, required: true,
         body: other
@@ -531,10 +533,14 @@ export function viewCard(g: Game, card: Card): CardView {
         { label: '그 칸에 나눈다', say: '그 칸 사람들이 나눠 입어라. 그게 맞다.', effs: [{ t: 'base', c, i: 0, v: 2 }, { t: 'rel', c, v: 2 }], special: 'keep_share' },
       ];
       if (c !== 'tail') choices.push({ label: '꼬리칸에 보낸다', say: '꼬리칸엔 장화 없는 사람이 있다. 그리로 보내라.', effs: [{ t: 'base', c: 'tail', i: 0, v: 2 }, { t: 'rel', c, v: -3 }], special: 'keep_tail' });
-      choices.push({ label: '함께 보낸다', say: burn ? '그 옷은 그와 함께 불에 들어간다.' : '그 옷은 그와 함께 간다. 손대지 마라.', effs: [{ t: 'rel', c, v: 4 }] });
+      // 정차에서 죽은 사람은 몸도 입던 옷도 밖에 남았다. 남는 건 침상 밑 여벌이다(triage 02의 14).
+      const field = card.text === 'field';
+      choices.push(field
+        ? { label: '그대로 둔다', say: '그 침상은 아무도 건드리지 마라.', effs: [{ t: 'rel', c, v: 4 }] }
+        : { label: '함께 보낸다', say: burn ? '그 옷은 그와 함께 불에 들어간다.' : '그 옷은 그와 함께 간다. 손대지 마라.', effs: [{ t: 'rel', c, v: 4 }] });
       return {
         title: '외투와 장화', focus: c, required: true,
-        body: `${dead}의 외투와 장화가 남았다.${like ? ` 칸 사람들은 그를 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
+        body: `${field ? `${dead}은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다.` : `${dead}의 외투와 장화가 남았다.`}${like ? ` 칸 사람들은 그를 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
         choices: withAfford(g, choices),
       };
     }
@@ -620,6 +626,12 @@ const FAVORS: Record<Comm, { body: string; cost: Eff[] }> = {
 };
 
 /** 받침에 따라 을/를. */
+function iga(word: string): string {
+  const ch = word.charCodeAt(word.length - 1);
+  if (ch < 0xac00 || ch > 0xd7a3) return '이(가)';
+  return (ch - 0xac00) % 28 ? '이' : '가';
+}
+
 function eul(word: string): string {
   const ch = word.charCodeAt(word.length - 1);
   if (ch < 0xac00 || ch > 0xd7a3) return '을(를)';
@@ -717,10 +729,12 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       if (st && !st.promised) { st.promised = true; st.due += 1; }
       break;
     }
+    case 'orphan_parent':
     case 'orphan_same':
     case 'orphan_front':
     case 'orphan_med': {
-      const to: Comm = choice.special === 'orphan_front' ? 'front' : choice.special === 'orphan_med' ? 'medtech' : c;
+      const parentComm = familyOf(g, card.who ?? '')?.others.find(o => familyOf(g, card.who ?? '')?.fam.parents.includes(o.id))?.community ?? c;
+      const to: Comm = choice.special === 'orphan_front' ? 'front' : choice.special === 'orphan_med' ? 'medtech' : choice.special === 'orphan_parent' ? parentComm : c;
       if (to === c) g.comms[c].coh = clamp(g.comms[c].coh + 0.05, 0, 1);
       for (const k of familyOf(g, card.who ?? '')?.kids ?? []) (g.raised ??= {})[k.name] = to;
       break;

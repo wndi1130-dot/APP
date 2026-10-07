@@ -36,6 +36,31 @@ describe('A1 유품과 남은 사람', () => {
     expect(mourners(g, 'tail')).toContain(name(tailFamily.parents[1]).name);
   });
 
+  it('곁에 부모가 살아 있으면 그 부모가 키우는 갈래가 먼저 온다', () => {
+    const g = createGame('orphan-parent');
+    const parent = name(tailFamily.parents[0]);
+    const other = name(tailFamily.parents[1]);
+    onDeath(g, 'tail', [parent.name]);
+    const card = g.cards.find(c => c.kind === 'orphan')!;
+    const view = viewCard(g, card);
+    expect(view.choices[0].label).toBe('곁의 부모가 키운다');
+    expect(view.choices.map(c => c.label)).not.toContain('같은 칸이 돌본다');
+    pickChoice(g, 'orphan', '곁의 부모가 키운다');
+    expect(Object.values(g.raised ?? {})).toContain(other.community);
+  });
+
+  it('정차에서 죽은 사람의 유품은 침상 밑 여벌이다', () => {
+    const g = createGame('keepsake-field');
+    const who = PROFILES.find(p => p.community === 'guard' && !FAMILIES.some(f => f.parents.includes(p.id) || f.children.includes(p.id)) && !COMMS.some(c => g.comms[c].leader.name === p.name))!;
+    g.phase = 'stop';
+    onDeath(g, 'guard', [who.name]);
+    const card = g.cards.find(c => c.kind === 'keepsake')!;
+    expect(card.text).toBe('field');
+    const view = viewCard(g, card);
+    expect(view.body).toContain('침상 밑');
+    expect(view.choices.map(c => c.label)).toContain('그대로 둔다');
+  });
+
   it('그 밖의 죽음엔 외투와 장화 카드가 오고, 나눈 온기는 2구간 뒤 돌아간다', () => {
     const g = createGame('keepsake');
     const lone = PROFILES.find(p => p.community === 'guard' && !FAMILIES.some(f => [...f.parents, ...f.children].includes(p.id)) && p.name !== g.comms.guard.leader.name)!;

@@ -63,6 +63,7 @@ function everyCardView() {
     { kind: 'need_warn', text: 'coal' },
     { kind: 'orphan', comm: 'tail', who: PROFILES.find(p => p.id === FAMILIES[0].parents[0])!.name },
     { kind: 'keepsake', comm: 'guard', who: PROFILES.find(p => p.community === 'guard')!.name },
+    { kind: 'keepsake', comm: 'guard', who: PROFILES.find(p => p.community === 'guard')!.name, text: 'field' },
     { kind: 'elder', comm: 'tail', who: elderCandidate(g)!.name },
     { kind: 'birth', comm: 'tail', who: '엄마' }, { kind: 'naming', comm: 'tail', who: '엄마' },
   ];
