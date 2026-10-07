@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:s1:schema:receipt",
+  "title": "정차 영수증",
+  "description": "직접 정차(S2 필드)와 자동 파견(S1·S3)이 같이 내는 결과. field_unified 8장.",
+  "type": "object",
+  "properties": {
+    "place": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "type": {
+          "$ref": "urn:s1:schema:place#/properties/type"
+        },
+        "variant": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "variant"
+      ],
+      "additionalProperties": false
+    },
+    "time": {
+      "type": "object",
+      "properties": {
+        "arrive": {
+          "$ref": "#/$defs/clock"
+        },
+        "depart": {
+          "$ref": "#/$defs/clock"
+        },
+        "stayGameMinutes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "arrive",
+        "depart",
+        "stayGameMinutes"
+      ],
+      "additionalProperties": false
+    },
+    "stock": {
+      "type": "object",
+      "description": "키별 정수 증감. 가져온 것은 양수, 쓴 것은 음수. 모든 키는 선택이다.",
+      "properties": {
+        "coal": {
+          "type": "integer"
+        },
+        "food": {
+          "type": "integer"
+        },
+        "medicine": {
+          "type": "integer"
+        },
+        "luxury": {
+          "type": "integer"
+        },
+        "symbol": {
+          "type": "integer"
+        },
+        "info": {
+          "type": "integer"
+        },
+        "scrap": {
+          "type": "integer"
+        },
+        "wood": {
+          "type": "integer"
+        },
+        "ammo_pistol": {
+          "type": "integer"
+        },
+        "ammo_shell": {
+          "type": "integer"
+        },
+        "ammo_craft": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "object",
+      "description": "개별 물건(상징물, 문서, 매뉴얼, 무기). 같은 물건이 둘이면 두 번 적는다.",
+      "properties": {
+        "gained": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          }
+        },
+        "lost": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          }
+        }
+      },
+      "required": [
+        "gained",
+        "lost"
+      ],
+      "additionalProperties": false
+    },
+    "people": {
+      "type": "object",
+      "properties": {
+        "sent": {
+          "$ref": "#/$defs/personList"
+        },
+        "injured": {
+          "$ref": "#/$defs/personList"
+        },
+        "bitten": {
+          "$ref": "#/$defs/personList"
+        },
+        "dead": {
+          "$ref": "#/$defs/personList"
+        },
+        "missing": {
+          "$ref": "#/$defs/personList"
+        },
+        "leftBehind": {
+          "$ref": "#/$defs/personList"
+        },
+        "rescued": {
+          "$ref": "#/$defs/personList"
+        }
+      },
+      "required": [
+        "sent",
+        "injured",
+        "bitten",
+        "dead",
+        "missing",
+        "leftBehind",
+        "rescued"
+      ],
+      "additionalProperties": false
+    },
+    "witnessed": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/witnessed"
+      }
+    },
+    "placeState": {
+      "type": "object",
+      "description": "지속 세계에 남는 장소 상태. 장소별 추가 키(예: bridgeOder)를 허용한다.",
+      "properties": {
+        "looted": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "remainingRisk": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "looted",
+        "remainingRisk"
+      ],
+      "additionalProperties": true
+    },
+    "promises": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "leader": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          },
+          "condition": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          },
+          "kept": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "leader",
+          "condition",
+          "kept"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "direct",
+        "auto"
+      ],
+      "description": "S2 전용 선택 칸. direct는 필드에서 직접, auto는 자동 파견."
+    },
+    "endReason": {
+      "type": "string",
+      "enum": [
+        "departed",
+        "limit",
+        "wiped"
+      ],
+      "description": "S2 전용 선택 칸. 스스로 출발, 끝 신호·손실 한계, 전멸."
+    },
+    "decisions": {
+      "type": "array",
+      "description": "S2 전용 선택 칸. 정차 중 고른 것(급수탑, 항복 카드 등).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          },
+          "choice": {
+            "$ref": "urn:s1:schema:common#/$defs/id"
+          }
+        },
+        "required": [
+          "id",
+          "choice"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "content_type": {
+      "const": "receipt"
+    }
+  },
+  "required": [
+    "place",
+    "time",
+    "stock",
+    "items",
+    "people",
+    "witnessed",
+    "placeState",
+    "promises"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "clock": {
+      "type": "string",
+      "pattern": "^D[1-9][0-9]* ([01][0-9]|2[0-3]):[0-5][0-9]$",
+      "description": "게임 날짜와 시각. 예: D1 10:30"
+    },
+    "personList": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:s1:schema:common#/$defs/id"
+      },
+      "uniqueItems": true,
+      "description": "S1 프로필 id(p_001, p_chief), NPC id(npc_signalman), S2 견본 인물 id(s2_lead)를 모두 받는다."
+    },
+    "witnessed": {
+      "type": "object",
+      "description": "일대기 기록(chronicle)과 같은 칸을 쓴다. 정차 중엔 아직 기록 id·무게·틀이 없을 수 있어 선택이고, 시각은 구간 번호나 게임 시각을 받는다.",
+      "properties": {
+        "id": {
+          "$ref": "urn:s1:schema:chronicle#/properties/id"
+        },
+        "who": {
+          "$ref": "urn:s1:schema:chronicle#/properties/who"
+        },
+        "what": {
+          "$ref": "urn:s1:schema:chronicle#/properties/what"
+        },
+        "where": {
+          "$ref": "urn:s1:schema:chronicle#/properties/where"
+        },
+        "when": {
+          "oneOf": [
+            {
+              "$ref": "urn:s1:schema:chronicle#/properties/when"
+            },
+            {
+              "$ref": "#/$defs/clock"
+            }
+          ]
+        },
+        "why": {
+          "$ref": "urn:s1:schema:chronicle#/properties/why"
+        },
+        "witnesses": {
+          "$ref": "urn:s1:schema:chronicle#/properties/witnesses"
+        },
+        "weight": {
+          "$ref": "urn:s1:schema:chronicle#/properties/weight"
+        },
+        "template": {
+          "$ref": "urn:s1:schema:chronicle#/properties/template"
+        }
+      },
+      "required": [
+        "who",
+        "what",
+        "where",
+        "when",
+        "why",
+        "witnesses"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

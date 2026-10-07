@@ -1,0 +1,99 @@
+{
+  "place": {
+    "id": "first_leg_01_sulechow",
+    "type": "freight",
+    "variant": "s2_graybox"
+  },
+  "time": {
+    "arrive": "D1 10:30",
+    "depart": "D1 15:30",
+    "stayGameMinutes": 300
+  },
+  "stock": {
+    "coal": 7,
+    "food": 1,
+    "medicine": 2,
+    "ammo_pistol": -5,
+    "ammo_craft": -3
+  },
+  "items": {
+    "gained": [
+      "symbol_departure_bell"
+    ],
+    "lost": [
+      "weapon_pipe_shotgun"
+    ]
+  },
+  "people": {
+    "sent": [
+      "s2_lead",
+      "s2_medic",
+      "s2_shooter",
+      "s2_scout",
+      "s2_crew_01",
+      "s2_crew_02",
+      "s2_escort_01"
+    ],
+    "injured": [
+      "s2_shooter"
+    ],
+    "bitten": [
+      "s2_crew_02"
+    ],
+    "dead": [],
+    "missing": [],
+    "leftBehind": [
+      "s2_crew_02"
+    ],
+    "rescued": [
+      "npc_signalman"
+    ]
+  },
+  "witnessed": [
+    {
+      "who": "s2_lead",
+      "what": "left_bitten_crewman",
+      "where": "west_siding",
+      "when": "D1 15:20",
+      "why": "bitten",
+      "witnesses": [
+        "s2_medic",
+        "s2_escort_01"
+      ]
+    },
+    {
+      "who": "s2_scout",
+      "what": "shoveled_snow_into_tower",
+      "where": "water_tower",
+      "when": "D1 11:05",
+      "why": "water_tower_frozen",
+      "witnesses": [
+        "s2_crew_01"
+      ]
+    }
+  ],
+  "placeState": {
+    "looted": 0.35,
+    "remainingRisk": 3,
+    "raidersTaken": 2
+  },
+  "promises": [
+    {
+      "leader": "rep_engine",
+      "condition": "bring_symbol_departure_bell",
+      "kept": true
+    }
+  ],
+  "source": "direct",
+  "endReason": "limit",
+  "decisions": [
+    {
+      "id": "water_tower",
+      "choice": "shovel_snow"
+    },
+    {
+      "id": "raider_surrender",
+      "choice": "bind_take"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "place": {
+    "id": "first_leg_01_sulechow",
+    "type": "freight",
+    "variant": "small_station_siding"
+  },
+  "time": {
+    "arrive": "D1 10:30",
+    "depart": "D1 15:20",
+    "stayGameMinutes": 290
+  },
+  "stock": {
+    "coal": 12,
+    "food": 4,
+    "medicine": 2,
+    "luxury": 1
+  },
+  "items": {
+    "gained": [
+      "symbol_departure_bell",
+      "info_telegraph_oder_bridge"
+    ],
+    "lost": []
+  },
+  "people": {
+    "sent": [
+      "p_chief",
+      "p_guard_03",
+      "p_tail_11",
+      "p_tail_27",
+      "p_medtech_05",
+      "p_engine_09",
+      "p_engine_14",
+      "p_guard_08"
+    ],
+    "injured": [
+      "p_tail_27"
+    ],
+    "bitten": [],
+    "dead": [],
+    "missing": [],
+    "leftBehind": [
+      "npc_signalman"
+    ],
+    "rescued": []
+  },
+  "witnessed": [
+    {
+      "who": "p_chief",
+      "what": "left_survivor",
+      "where": "first_leg_01_sulechow",
+      "when": "D1 15:20",
+      "why": "food",
+      "witnesses": [
+        "p_guard_03",
+        "p_tail_11"
+      ]
+    },
+    {
+      "who": "p_tail_11",
+      "what": "melted_snow_for_boiler",
+      "where": "first_leg_01_sulechow",
+      "when": "D1 12:10",
+      "why": "water_tower_frozen",
+      "witnesses": [
+        "tail"
+      ]
+    }
+  ],
+  "placeState": {
+    "looted": 0.6,
+    "remainingRisk": 2,
+    "bridgeOder": "blocked"
+  },
+  "promises": [
+    {
+      "leader": "rep_engine",
+      "condition": "bring_symbol_departure_bell",
+      "kept": true
+    }
+  ]
+}
