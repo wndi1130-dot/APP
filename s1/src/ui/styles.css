@@ -582,6 +582,21 @@ small { font-size: 12px; }
 .big b.is-no { color: #f0a0a0; }
 .big__label { font-size: 12px; margin-right: 6px; }
 .big small { margin-left: 6px; color: var(--ink-3); }
+/* 표결 전 셈: 명판 셋(같은 크기, 낱말이 숫자 앞) + 보조 막대 */
+.tally { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(300px, 92%); display: flex; flex-direction: column; gap: 3px; }
+.tally__plates { display: flex; align-items: baseline; justify-content: center; gap: 6px; white-space: nowrap; }
+.tally__plate { display: inline-flex; align-items: baseline; gap: 4px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface-1); font-size: 12px; color: var(--ink-2); }
+.tally__plate b { font-size: 16px; line-height: 1.2; color: var(--ink-1); }
+.tally__plate.is-got b { color: var(--support); }
+.tally__plate.is-yes b { color: #9cc3f2; }
+.tally__plate.is-no b { color: #f0a0a0; }
+.tally__plate.is-need { border-color: var(--warning); }
+.tally__sure { font-size: 12px; font-weight: 700; color: #9cc3f2; }
+.tally__bar { position: relative; height: 6px; border-radius: 3px; background: var(--surface-3); }
+.tally__got { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--support); transition: width .3s ease-out; }
+.tally__range { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--support) 30%, transparent); }
+.tally__dot { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--ink-1); box-shadow: 0 0 0 2px var(--bg); }
+.tally__need { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--warning); }
 .legend { display: flex; gap: 10px; font-size: 12px; color: var(--ink-3); flex-wrap: wrap; justify-content: center; }
 .legend li { display: flex; align-items: center; gap: 4px; }
 .seat-key { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
@@ -724,7 +739,7 @@ small { font-size: 12px; }
 /* 아주 좁은 폰(667 등): 의석 범례가 두 줄로 접히니 큰 숫자를 그 위로 올린다. */
 @media (max-width: 700px) {
   .legend { gap: 2px 8px; }
-  .big { bottom: 40px; }
+  .big, .tally { bottom: 40px; }
 }
 
 /* 키 낮은 화면(폰 가로 기본): 위·아래를 조금 더 줄인다. */
