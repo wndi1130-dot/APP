@@ -204,6 +204,8 @@ export interface Game {
   deathLog?: { seg: number; name: string; cause: 'chosen' | 'warned' | 'other'; witness?: boolean }[];
   /** 장작불 법: 다음 정차에 태우려고 지키는 시신 */
   pyre?: number;
+  /** 냉동칸이 차서 살던 칸에 둔 시신(장작불 법). 그 칸 과밀이 시신마다 오른다. */
+  pyreKin?: Partial<Record<Comm, number>>;
   /** 상중인 사람 */
   mourning?: { name: string; comm: Comm; until: number }[];
   /** 잠깐 오른 처지 */

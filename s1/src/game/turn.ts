@@ -165,12 +165,27 @@ function depart(g: Game): void {
   g.phase = 'travel';
 }
 
-/** 장작불 법: 내린 정차에서 지키던 시신을 태운다. 불쏘시개로 석탄을 쓴다. */
-function burnPyre(g: Game): void {
-  const n = g.pyre ?? 0;
+/** 장작불을 기다리는 시신 수(냉동칸 + 살던 칸). */
+export function pyreCount(g: Game): number {
+  return (g.pyre ?? 0) + Object.values(g.pyreKin ?? {}).reduce((a, b) => a + (b ?? 0), 0);
+}
+
+/** 살던 칸에 둔 시신 하나를 치운다. 그 칸 과밀을 되돌린다. */
+function takeKinBody(g: Game): void {
+  const kin = g.pyreKin ?? {};
+  const c = COMMS.find(x => (kin[x] ?? 0) > 0);
+  if (!c) return;
+  kin[c] = (kin[c] ?? 0) - 1;
+  g.comms[c].base[2] -= P.pyreKinCrowd;
+}
+
+/** 장작불 법: 내린 정차에서 기다리던 시신을 태운다. 불쏘시개로 석탄을 쓴다. */
+export function burnPyre(g: Game): void {
+  const n = pyreCount(g);
   if (n <= 0) return;
   g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * n);
   g.pyre = 0;
+  while (pyreCount(g) > 0) takeKinBody(g);
   journal(g, `선로 옆 장작불에 시신 ${n}구를 태웠다.`, 'dark');
 }
 
@@ -222,6 +237,8 @@ export interface StopRisk {
   horde: boolean;
   /** 이번 정차에 무리 흔적이 새롭다 */
   fresh: boolean;
+  /** 태울 시신이 있어 장작불이 무리를 끈다 */
+  pyre: boolean;
   /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고 결과는 확률대로다. */
   known: boolean;
 }
@@ -241,13 +258,14 @@ export function stopRisk(g: Game): StopRisk {
   const guardMult = guardRefused ? 1.5 : 1;
   const horde = Math.min(1.5, 1 + P.thrownHorde * g.thrown);
   const escort = g.guardEscort ? 0.5 : 1;
-  const threat = stop?.threat ?? 1;
+  // 장작불의 불빛과 연기가 무리를 끈다(s1c_domestic 4.1). 태울 시신이 있으면 내리는 정차에 붙는다.
+  const threat = (stop?.threat ?? 1) * (pyreCount(g) > 0 ? P.pyreLight : 1);
   const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat;
   const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat;
   const maxDead = Math.min(crew - 1, pDeath >= RISK_LINE.dead2 ? 2 : pDeath >= RISK_LINE.dead ? 1 : 0);
   // 죽는 사람과 크게 다치는 사람은 겹치지 않는다. 남은 인원으로 약속을 못 지키면 줄을 띄우지 않는다.
   const maxHurt = lam >= RISK_LINE.hurt ? Math.max(0, Math.min(crew - maxDead, Math.ceil(lam * 1.2))) : 0;
-  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: threat > 1, known: !!stop?.scout };
+  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout, pyre: pyreCount(g) > 0 };
 }
 
 /** 약속 단계. dead와 hurt면 그 피해가 1명 이상 반드시 일어나고 내부 최악을 넘지 않는다.
@@ -263,6 +281,7 @@ export function riskWhy(r: StopRisk): string[] {
   const why: string[] = [];
   if (r.guardRefused) why.push('경비대가 경계를 서지 않는다');
   if (r.horde) why.push('던진 시신에 무리가 몰려 있다');
+  if (r.pyre) why.push('장작불 불빛이 무리를 끈다');
   return why;
 }
 
@@ -551,12 +570,16 @@ function medicineTick(g: Game, notes: string[]): void {
     }
     notes.push('의약품이 떨어졌다.');
   }
-  // 지키던 시신도 다음 정차까지 오래 두면 일어날 수 있다. 냉동칸보다는 덜하다(경비가 붙어 있다).
-  if ((g.pyre ?? 0) > 0 && rnd(g) < Math.min(0.2, P.pyreRisk * (g.pyre ?? 0))) {
-    g.pyre = (g.pyre ?? 0) - 1;
+  // 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 따뜻해서 두 배(s1c_domestic 4.1).
+  const kinBodies = pyreCount(g) - (g.pyre ?? 0);
+  const pyreWeight = (g.pyre ?? 0) + 2 * kinBodies;
+  if (pyreWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * pyreWeight)) {
+    const inKin = kinBodies > 0 && rnd(g) < (2 * kinBodies) / pyreWeight;
+    if (inKin) takeKinBody(g);
+    else g.pyre = (g.pyre ?? 0) - 1;
     g.injured += 1;
     g.tension = clamp(g.tension + 5, 0, 100);
-    journal(g, '태우려고 지키던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
+    journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
   if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored)) {
     g.injured += 2;

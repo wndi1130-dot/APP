@@ -21,7 +21,7 @@ export const P = Object.freeze({
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
   engineFatigue: 2, shiftRelief: 10, shiftCoal: 3,
   strikeRel: -15, refuseRel: 5, rescueRate: 0.2, crisisLine: 30,
-  thrownHorde: 0.05, storeRisk: 0.03, pyreCoal: 1, pyreRisk: 0.015,
+  thrownHorde: 0.05, storeRisk: 0.03, coldCap: 6, pyreCoal: 1, pyreKinCrowd: 2, pyreLight: 1.05,
   // 정찰 대가(제안, 파밍 자동 파견과 같은 값): 정찰조 2명이 체류 일부를 써서 산출 ×0.8, 정찰조도 표결에서 빠진다.
   scoutSize: 2, scoutHaul: 0.8, scoutSprain: 0.15,
   repealCool: 2, repealRel: 10, hostileGrudge: 2, blackmailReputation: 3, grudgeDecay: 2,
@@ -141,7 +141,7 @@ export const LAWS: Record<LawId, LawDef> = {
     // 다음 정차까지 시신을 지켜야 한다. 숫자는 제안.
     id: 'corpse_burn', title: '정차 때 장작불', group: '시신', tag: '가혹', kind: 'normal', axes: [0, 1, 1],
     rels: { medtech: -5, front: -5 }, like: { guard: 1 }, res: { corpse: 'burn' }, crisis: ['corpse'],
-    changes: ['다음 정차 때 선로 옆에서 태운다', '시신마다 석탄 −1(불쏘시개)', '그때까지 경비대가 시신을 지킨다', '의무진·앞칸 관계 −5'], opensWhen: '첫 죽음 뒤',
+    changes: ['다음에 내리는 정차에서 선로 옆에서 태운다', '시신마다 석탄 −1(불쏘시개)', '그때까지 냉동칸에 둔다. 6구가 넘으면 살던 칸에 둬서 과밀 +2', '태우는 정차는 불빛에 위험이 조금 커진다', '의무진·앞칸 관계 −5'], opensWhen: '첫 죽음 뒤',
   }),
   treat_all: L({
     id: 'treat_all', title: '모두를 치료', group: '의료', tag: '이상', kind: 'normal', axes: [1, 0, 1],

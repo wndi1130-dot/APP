@@ -1,4 +1,4 @@
-import { COMM_NAME } from './data';
+import { COMM_NAME, P } from './data';
 import type { Comm } from './data';
 import { clamp, journal, lawActive } from './state';
 import type { Game } from './state';
@@ -25,8 +25,17 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
     g.stored += n;
     g.comms.tail.base[2] += n;
   } else if (lawActive(g, 'corpse_burn')) {
-    // 다음 정차까지 지키다가 선로 옆 장작불에서 태운다.
-    g.pyre = (g.pyre ?? 0) + n;
+    // 다음에 내리는 정차까지 냉동칸(찬 객차)에 두었다가 선로 옆 장작불에서 태운다(s1c_domestic 4.1).
+    // 냉동칸은 안치한 시신과 함께 6구까지. 넘치면 살던 칸에 둔다.
+    const inCar = Math.min(n, Math.max(0, P.coldCap - g.stored - (g.pyre ?? 0)));
+    g.pyre = (g.pyre ?? 0) + inCar;
+    const over = n - inCar;
+    if (over > 0) {
+      const kin = (g.pyreKin ??= {});
+      kin[c] = (kin[c] ?? 0) + over;
+      g.comms[c].base[2] += P.pyreKinCrowd * over;
+      journal(g, `냉동칸이 찼다. 시신 ${over}구를 ${COMM_NAME[c]}에 둔다.`, 'dark');
+    }
   } else {
     // 정한 법이 없으면 누가 치울지 다투고, 일단 밖으로 던진다.
     if (!g.corpseIssue) journal(g, '첫 시신을 두고 다툼이 났다. 시신 처리가 안건에 올랐다.', 'bad');
