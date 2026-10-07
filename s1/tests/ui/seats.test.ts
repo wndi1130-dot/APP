@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_HEMICYCLE, assignBlocks, hemicycleBounds, layoutHemicycle, minSeatDistance, seatsPerRow,
-} from '../../src/ui/model/seats';
-import type { HemicycleOptions } from '../../src/ui/model/seats';
+} from '../../src/ui/seats';
+import type { HemicycleOptions } from '../../src/ui/seats';
 
 describe('반원 100석 배치', () => {
   const seats = layoutHemicycle(DEFAULT_HEMICYCLE);
