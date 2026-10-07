@@ -37,6 +37,8 @@ export interface Ember {
   /** 수석 기관사에게 맡겨 막힌 보일러 */
   blocked: boolean;
   born: number;
+  /** 임박이 뜬 뒤 진범이 벌받았다(4.2, J09 1번). 이동 때 '오지 않은 일' 카드 한 장을 내고 꺼진다 */
+  defused?: boolean;
 }
 
 /** 단서 종류(4.4): 발자국, 남은 물건, 목격, 밀고, 장부의 숫자, 공개된 증거물(의회에 내놓은 일지 같은 것) */
@@ -339,6 +341,12 @@ export function wa(word: string): string {
 export { B };
 
 /** 불씨 하나를 끈다(embers.ts가 다시 내보낸다. cases.ts도 쓰려고 여기 둔다). */
+/** 진범을 벌했을 때 그 불씨를 끈다. 임박이 이미 떴으면 지우지 않고 '오지 않은 일'로 남긴다(플레이어가 본 징후가 결과 없이 사라지지 않게). */
+export function defuseEmber(g: Game, e: Ember | undefined): void {
+  if (e && e.imm > 0) e.defused = true;
+  else killEmber(g, e);
+}
+
 export function killEmber(g: Game, e: Ember | undefined): void {
   if (!e) return;
   const d = g.dark!;

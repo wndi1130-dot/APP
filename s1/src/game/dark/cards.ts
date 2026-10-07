@@ -215,12 +215,14 @@ function view(g: Game, card: Card): CardView | null {
     case 'dark:order_done': {
       const name = nameOf(g, card.who ?? '');
       const kin = card.vals?.kin;
+      // 수사는 늘 열린다(4.6). 사고로 꾸며 들키지 않았으면 그 줄이 먼저다. 들켰으면 붙잡힌 줄이 text에 온다.
       const hidden = card.text === 'hidden';
+      const caughtLine = !hidden && card.text ? ` ${card.text}` : '';
       return {
         title: '끝났다', focus: c, required: true,
-        body: `${name}${iga(name)} 죽었다.${hidden ? ' 사고라고 적혔다.' : ' 수사가 열린다.'}${kin ? ` ${kin}${iga(kin)} 식당칸 문가에 서 있다.` : ''}`,
+        body: `${name}${iga(name)} 죽었다.${hidden ? ' 사고라고 적혔다. 그래도 수사가 열린다.' : ` 수사가 열린다.${caughtLine}`}${kin ? ` ${kin}${iga(kin)} 식당칸 문가에 서 있다.` : ''}`,
         ...(kin ? { faces: [kin] } : {}),
-        choices: hidden ? [ok('알았다')] : [
+        choices: [
           { label: '덮는다', say: '보일러 일지에 사고라고 적어라.', effs: [], special: 'dark:after:cover' },
           crossing(g, card, { label: '남에게 씌운다', say: '용의자 하나의 침상 밑을 뒤져라. 뭐가 나올 거다.', effs: [], special: 'dark:after:frame' }),
           { label: '수사하게 둔다', say: '수사는 수사대로 둬라.', effs: [], special: 'dark:after:let' },

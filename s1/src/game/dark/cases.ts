@@ -8,7 +8,7 @@ import { B } from './data';
 import { cross, scene } from './chronicle';
 import { CLUE_LINES, CROWD_LINES } from './lines';
 import {
-  adults, alive, byId, commOf, darkCard, dpick, dr, FACT_SCORE, isRep, killEmber, nameOf, neighbors, newId, rivals, segFull, TIE_FACTS,
+  adults, alive, byId, commOf, darkCard, dpick, dr, FACT_SCORE, isRep, defuseEmber, nameOf, neighbors, newId, rivals, segFull, TIE_FACTS,
 } from './state';
 import type { Case, CaseKind, Clue, ClueKind, Ember, EmberCause, Fact, Suspect, Target } from './state';
 
@@ -303,7 +303,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   }
   if (s.culprit) {
     d.stats.solved += 1;
-    killEmber(g, d.embers.find(e => e.id === c.ember));
+    defuseEmber(g, d.embers.find(e => e.id === c.ember));
     // 측근에서 지시한 사람으로(4.4): 50%로 시킨 사람을 댄다.
     if (s.proxyFor && alive(g, s.proxyFor) && dr(g) < 0.5) {
       const boss: Suspect = { id: s.proxyFor, culprit: true, facts: factsOf(g, s.proxyFor, c.kind, c.victimComm), clues: [], acq: false };
@@ -389,7 +389,7 @@ export function scapegoat(g: Game, c: Case, s: Suspect, allowed: boolean): strin
   d.punished.push(s.id);
   if (s.culprit) {
     d.stats.solved += 1;
-    killEmber(g, d.embers.find(e => e.id === c.ember));
+    defuseEmber(g, d.embers.find(e => e.id === c.ember));
   } else {
     d.innocents.push({ id: s.id, comm, seg: g.seg, caseId: c.id, how: allowed ? 'lynch' : 'scapegoat' });
   }

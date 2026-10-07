@@ -11,7 +11,7 @@ import { ACT_LINES, SIGN_LINES, SIGN_READ } from './lines';
 import type { SignKind } from './lines';
 import { EMBER_LINK, openCase, caught } from './cases';
 import {
-  adults, alive, commOf, darkCard, dpick, dr, killEmber, nameOf, newId, segFull,
+  adults, alive, commOf, darkCard, dpick, dr, eun, killEmber, nameOf, newId, segFull,
 } from './state';
 import type { Ember, EmberCause, SabKind, Stage, Target } from './state';
 
@@ -224,6 +224,13 @@ function act(g: Game, e: Ember): void {
   const st = e.imm;
   e.imm = 0;
   e.quiet = 0;
+  // 임박이 뜬 뒤 진범이 벌받았다(J09 1번, 4.2): 일은 오지 않는다. 폭행·암살 자리는 돌려주고, 열차장을 노린 첫 시도 기록은 남긴다.
+  if (e.defused) {
+    if (st >= 3) d.violentUsed = Math.max(0, d.violentUsed - 1);
+    darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: `${placeOf(e, st)}${eun(placeOf(e, st))} 조용했다. 기다리던 사람은 이미 벌받은 뒤였다.` });
+    killEmber(g, e);
+    return;
+  }
   const isGuarded = guarded(g, e);
   const v = victimComm(g, e);
   d.stats.acts += 1;

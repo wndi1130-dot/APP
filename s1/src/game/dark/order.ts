@@ -15,7 +15,7 @@ import {
 import type { Order, OrderExe, OrderMethod, OrderWhy } from './state';
 
 // 4.6 암살 명령, 4.7 정차를 이용한 죽음. 메뉴가 아니라 상황 카드의 '조용히 처리한다'에서만 열린다(1.3).
-// 판당 두 번. 대상은 그 카드에 나온 사람뿐이다. 성공해도 수사가 열리고(사고로 꾸민 일은 들킬 때만), 실행자는 평생 약점을 쥔다.
+// 판당 두 번. 대상은 그 카드에 나온 사람뿐이다. 성공해도 늘 수사가 열리고(사고로 꾸며도 사람이 죽었다, 4.6), 실행자는 평생 약점을 쥔다.
 
 export const EXE_BONUS: Record<OrderExe, number> = { guard: 0.1, rival: 0.1, bound: -0.1 };
 export const METHOD: Record<OrderMethod, { bonus: number; caught: number }> = {
@@ -142,21 +142,21 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
       s.rel = clamp(s.rel - 10, -100, 100);
       s.fervor = Math.min(3, s.fervor + 1);
     }
-    // 사고·정차로 꾸민 일은 들킬 때만 수사가 열린다. 칸 안 밤일은 늘 열린다(사람이 칸 안에서 죽었다).
+    // 수사는 늘 열린다(4.6, J09 2번). 사고·정차로 꾸며 들키지 않으면 '사고라고 적혔다'로 시작하고 실행자 단서 없이 연다.
+    // 들키면 실패 갈래처럼 그 자리에서 붙잡히고, 붙잡힌 실행자는 70%로 열차장을 댄다(J09 11번).
     const detected = dr(g) < METHOD[o.method].caught;
     const place = o.method === 'stop' ? '정차' : o.method === 'accident' ? '탄수차 승강대' : '통로';
     scene(g, 'order', 4, `${g.seg}구간, ${place}에서 ${COMM_NAME[tc]} ${name}의 죽음을 명령했다.`, [o.target], witnesses.length ? witnesses : undefined);
-    if (o.method !== 'night' && !detected) {
-      journal(g, o.method === 'stop' ? `${name}이(가) 정차에서 돌아오지 않았다. 사고라고 적혔다.` : `${name}이(가) ${place}에서 떨어졌다. 사고라고 적혔다.`, 'dark');
-      darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, text: 'hidden', ...(fam ? { vals: { kin: fam } } : {}) }, false);
-      return;
-    }
+    const hidden = o.method !== 'night' && !detected;
+    if (hidden) journal(g, o.method === 'stop' ? `${name}이(가) 정차에서 돌아오지 않았다. 사고라고 적혔다.` : `${name}이(가) ${place}에서 떨어졌다. 사고라고 적혔다.`, 'dark');
     const c = openCase(g, { kind: 'order', culprit: exe, victimComm: tc, victim: o.target, dead: true, clock: B.clockDeath, where: place, own: true });
+    let line = '';
     if (detected) {
-      const s = c.sus.find(x => x.culprit);
-      if (s) s.clues.push({ kind: 'witness', truth: true, line: `${nameOf(g, s.id)}이(가) 그 시각 ${place} 쪽에 있었다는 사람이 있다.`, seg: g.seg });
+      caught(g, c);
+      line = `${nameOf(g, exe)}이(가) 그 자리에서 붙잡혔다.`;
+      if (dr(g) < B.orderNamesChief) line += ` ${exposeOrderLines(g, c).join(' ')}`;
     }
-    darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, n: c.id, ...(fam ? { vals: { kin: fam } } : {}) });
+    darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, n: c.id, text: hidden ? 'hidden' : line, ...(fam ? { vals: { kin: fam } } : {}) });
     return;
   }
   // 실패: 대상이 다치고 수사가 열린다. 실행자 50%로 붙잡히고, 붙잡히면 70%로 열차장을 댄다.
