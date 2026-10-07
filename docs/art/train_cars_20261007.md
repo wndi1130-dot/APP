@@ -296,4 +296,5 @@ v2에서 고칠 것과 두 판 공통:
 
 ### 다음
 
+- 다음에 좀비나 사람 무리가 나오는 주문을 쓸 때는 금지 줄과 함께 긍정 줄을 넣는다: "The dead wear only torn, ordinary civilian winter clothes: coats, jackets, knitted hats, scarves." 구간 배경에서 그림 모델이 망자를 철모 쓴 병사 무리로 그렸다(segment_backdrops_20261007.md 끝, 화면 스레드).
 - 시안을 실제 모델로 옮길 때 지킬 것: 털모자와 외투는 민간복(T4b·M4 주의), 옷감은 모자이크 말고 흐린 손칠과 덧댐(F2·F3), 냉동칸 안에 식량 없음(T4c).
