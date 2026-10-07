@@ -762,7 +762,8 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     case 'orphan_med': {
       const parentComm = familyOf(g, card.who ?? '')?.others.find(o => familyOf(g, card.who ?? '')?.fam.parents.includes(o.id))?.community ?? c;
       const to: Comm = choice.special === 'orphan_front' ? 'front' : choice.special === 'orphan_med' ? 'medtech' : choice.special === 'orphan_parent' ? parentComm : c;
-      if (to === c) g.comms[c].coh = clamp(g.comms[c].coh + 0.05, 0, 1);
+      // 아이를 곁의 부모 칸(orphan_parent)이나 같은 칸(orphan_same)에 두면 그 칸 결속이 오른다.
+      if (choice.special === 'orphan_parent' || choice.special === 'orphan_same') g.comms[to].coh = clamp(g.comms[to].coh + 0.05, 0, 1);
       for (const k of familyOf(g, card.who ?? '')?.kids ?? []) (g.raised ??= {})[k.name] = to;
       break;
     }

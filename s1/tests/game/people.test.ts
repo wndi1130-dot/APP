@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  advance, birthSeg, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, FAMILIES, fallSick, makeDeal, mourners, onDeath,
-  openCouncil, peopleCardRecent, peopleTick, pickVictims, primaryAction, PROFILES, resolveStop, toolStatus, viewCard,
+  advance, birthSeg, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, FAMILIES, fallSick, LAW_IDS, makeDeal, mourners, onDeath,
+  openCouncil, peopleCardRecent, peopleTick, pickVictims, primaryAction, PROFILES, resolveStop, stance, toolStatus, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -74,6 +74,20 @@ describe('A1 유품과 남은 사람', () => {
     expect(g.comms.guard.base[0]).toBe(w0);
   });
 
+  it('유품 카드가 기다리는 중에 부모가 죽으면 그 카드가 남은 아이 카드로 바뀐다(남은 아이가 먼저)', () => {
+    const g = createGame('keepsake-then-orphan');
+    const lone = PROFILES.find(p => p.community === 'guard' && !FAMILIES.some(f => [...f.parents, ...f.children].includes(p.id)) && p.name !== g.comms.guard.leader.name)!;
+    onDeath(g, 'guard', [lone.name]);
+    expect(g.cards.filter(c => c.kind === 'keepsake')).toHaveLength(1);
+    const parent = name(tailFamily.parents[0]).name;
+    onDeath(g, 'tail', [parent]);
+    expect(g.cards.some(c => c.kind === 'keepsake')).toBe(false);
+    const orphans = g.cards.filter(c => c.kind === 'orphan');
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0].who).toBe(parent);
+    expect(orphans[0].comm).toBe('tail');
+  });
+
   it('상중인 사람은 회기에 빠진다', () => {
     const g = createGame('mourn-vote');
     g.seg = 3;
@@ -105,6 +119,23 @@ describe('A2 대표의 몸', () => {
     pickChoice(g, 'rep_sick', '약을 보낸다');
     expect(g.comms.tail.leader.name).toBe(rep);
     expect(g.comms.tail.sick).toBeUndefined();
+  });
+
+  it('측근의 처지 입장 1.5배는 찬반이 대칭이다(+1이 +2면 −1은 −2)', () => {
+    const g = createGame('proxy-mat');
+    let ones = 0;
+    for (const c of COMMS) {
+      const plain = LAW_IDS.map(law => stance(g, c, { law, repeal: false }).mat);
+      g.comms[c].sick = { since: g.seg, rep: g.comms[c].leader };
+      LAW_IDS.forEach((law, i) => {
+        const up = stance(g, c, { law, repeal: false }).mat;
+        const down = stance(g, c, { law, repeal: true }).mat;
+        expect(down, `${c} ${law}`).toBe(-up);
+        if (Math.abs(plain[i]) === 1) { ones += 1; expect(Math.abs(up)).toBe(2); }
+      });
+      g.comms[c].sick = undefined;
+    }
+    expect(ones).toBeGreaterThan(0);
   });
 
   it('3구간 안에 안 일어나면 측근이 대표 자리를 잇는다', () => {

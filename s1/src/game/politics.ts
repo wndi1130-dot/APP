@@ -73,7 +73,8 @@ export function stance(g: Game, c: Comm, agenda: Agenda, withGrudge = true): { s
     }
   }
   // 대신 나온 측근은 처지 입장에 1.5배 무게를 둔다(사람의 무게 A2).
-  if (g.comms[c].sick) mat = Math.round(mat * 1.5);
+  // 반올림을 부호 밖에서 해 찬반이 대칭이다(±1 → ±2).
+  if (g.comms[c].sick) mat = Math.sign(mat) * Math.round(Math.abs(mat) * 1.5);
   let score = mat + ideo + stageOf(g.comms[c].rel).band;
   const grudge = g.comms[c].grudge;
   // 적대 표(3.7): 열차장이 올린 안건엔 사상이 같아도 반대하고, 열차장이 막으려는 안건(AI 발의)엔 기운다.

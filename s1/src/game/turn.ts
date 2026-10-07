@@ -229,7 +229,9 @@ export function burnPyre(g: Game): void {
 export function crewNames(g: Game, c: Comm, size: number): string[] {
   // 먼저 다녀온 정찰조는 작업조에 다시 넣지 않는다.
   const scouts = g.stop?.scoutReport?.names ?? [];
-  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name));
+  // 앓아누운 원래 대표도 내보내지 않는다(사람의 무게 A2).
+  const sickRep = g.comms[c].sick?.rep.name;
+  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name) && p.name !== sickRep);
   if (alive.length === 0) return [];
   const start = (g.seg * 7) % alive.length;
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
