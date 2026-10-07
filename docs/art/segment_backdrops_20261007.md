@@ -38,7 +38,7 @@ Props: no abandoned suitcases, piles of luggage or piles of shoes beside the tra
 ## B1 대폴란드 호수 평야 (K1, 0–54km)
 
 ```text
-Outside: flat snowy farmland in western Poland. Above the roof line, a low horizon of birch and pine copses, a frozen lake catching grey light, and a small red-brick village with a slender church spire, windows dark. No overhead wires or wire masts along this track. Below the train, a drainage ditch, a row of pollarded willows and a small brick level-crossing hut with a broken barrier flash past. Danger level: quiet. Only crows on a fence and one abandoned car half buried in snow; no dead in sight.
+Outside: flat snowy farmland in western Poland. Above the roof line, a low horizon of birch and pine copses, a frozen lake catching grey light, and a small red-brick village with a church tower (a slender spire or a pale clock tower with a dark round cap), windows dark. No overhead wires or wire masts along this track. Below the train, a drainage ditch, a row of pollarded willows and a small brick level-crossing hut with a broken barrier flash past. Danger level: quiet. Only crows on a fence and one abandoned car half buried in snow; no dead in sight.
 ```
 
 ## B2 오데르·보브르 강 골짜기 (K2, 54–118km)
