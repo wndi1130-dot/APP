@@ -1,7 +1,8 @@
 import { openConditions, autoLeverStatus, cloneGame, currentAgenda, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
-import { FX_MS, fxDiff, fxSnap } from './fx';
+import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, vibrateOn } from './fx';
+import { fxPlay } from './fxplay';
 import type { Fx } from './fx';
 import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
@@ -222,17 +223,21 @@ export function startApp(root: HTMLElement): void {
       }
       focusCar = null;
     }
+    fxPlay(root, ui.fx, fxOrigin); // 꼬리표가 고른 선택지에서 위 막대 칸으로 날아가고 숫자가 센다(5b.6)
     h6Render(g, ui, h6, Date.now()); // S1c 내정 훅
     requestAnimationFrame(() => drawLinks(root));
   }
 
   let fxTimer: ReturnType<typeof setTimeout> | undefined;
+  /** 방금 누른 선택지의 자리: 꼬리표가 여기서 날아간다 */
+  let fxOrigin: DOMRect | null = null;
   /** 선택이 바꾼 수치를 위 막대에 띄운다(fx.ts). 크게 나쁘면 폰이 한 번 떨린다. */
   function showFx(fx: Fx | null): void {
     ui.fx = fx;
     clearTimeout(fxTimer);
     if (!fx) return;
-    if (fx.hard && !matchMedia('(prefers-reduced-motion: reduce)').matches) navigator.vibrate?.(40);
+    // 진동은 나쁜 쪽 선 넘음과 죽음에만(5b.6). 동작 감소 설정이 아니라 메뉴의 '진동'을 따른다.
+    if (fx.buzz) buzz(Date.now());
     fxTimer = setTimeout(() => { ui.fx = null; render(); }, FX_MS);
   }
 
@@ -485,6 +490,10 @@ export function startApp(root: HTMLElement): void {
         else blocked();
         return;
       }
+      case 'toggle-vibrate':
+        setVibrate(!vibrateOn());
+        toast(vibrateOn() ? '진동을 켰다. 나쁜 쪽으로 선을 넘거나 사람이 죽을 때만 짧게 떤다.' : '진동을 껐다.');
+        return render();
       case 'toggle-debug':
         ui.debug = !ui.debug;
         ui.panel = null;
@@ -504,6 +513,7 @@ export function startApp(root: HTMLElement): void {
     const target = (event.target as Element | null)?.closest<HTMLElement | SVGElement>('[data-action]');
     if (!target || !root.contains(target)) return;
     if ((target as HTMLButtonElement).disabled) return;
+    if (target.dataset.action === 'choose') fxOrigin = target.getBoundingClientRect();
     h6Input(g, h6, Date.now(), target.dataset.action ?? ''); // S1c 내정 훅
     handle(target.dataset.action ?? '', target.dataset);
   });

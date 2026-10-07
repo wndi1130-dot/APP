@@ -779,41 +779,64 @@ small { font-size: 12px; }
 .scene { font-size: 12px; color: var(--ink-2); line-height: 1.45; padding-left: 8px; border-left: 2px solid var(--line-strong); }
 .repro { margin-top: 10px; }
 
-/* ---------- 선택이 바꾼 수치(fx.ts, 2026-10-07 사용자) ---------- */
-/* 바뀐 계기 뒤로 색이 번지고, 숫자가 크게 떠올랐다 사라진다. 바뀐 칸 관계는 띠 밑에. 크게 나쁘면 위 막대가 짧게 흔들린다. */
-.meter, .res, .band { position: relative; }
-.fx-good { --fx: var(--support); }
-.fx-bad { --fx: var(--discontent); }
-.fx-hit b { color: var(--fx); transition: color .2s; }
-.fx-glow {
-  position: absolute; inset: -6px -8px; border-radius: 8px; pointer-events: none; z-index: 0;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--fx) 55%, transparent), transparent);
-  animation: fx-glow 1.4s ease-out forwards;
+/* ---------- 선택이 바꾼 수치(fx.ts·fxplay.ts, presentation_motion 5b.6) ---------- */
+/* 색은 재질로 가른다: 늘어남은 호박색 빛과 호박색 테의 종이, 줄어듦은 그을음과 그을린 종이. 빨강은 부족 선 아래와 불만 의석이 늘 때만.
+   선을 넘은 칸 하나만 흔들리고 '주의'·'위험'이 찍힌다. 크게 바뀌면(is-big) 꼬리표와 부풂만 키운다. */
+.meter, .res, .band, .band__nums > span { position: relative; }
+.fx-up { --fx: var(--warm); --fx-paper: color-mix(in srgb, var(--paper) 88%, var(--warm)); --fx-ink: var(--ink-1); }
+.fx-down { --fx: #000; --fx-paper: color-mix(in srgb, var(--paper) 70%, #000); --fx-ink: var(--ink-2); }
+.fx-red { --fx: var(--discontent); --fx-paper: color-mix(in srgb, var(--paper) 88%, var(--discontent)); --fx-ink: var(--ink-1); }
+.fx-hit b { display: inline-block; animation: fx-puff 250ms ease-out; }
+.fx-hit.is-big b { animation-name: fx-puff-big; }
+.fx-hit.fx-red b { color: var(--discontent); }
+@keyframes fx-puff { 50% { transform: scale(1.3); } }
+@keyframes fx-puff-big { 50% { transform: scale(1.45); } }
+.fx-glow { position: absolute; inset: -4px -6px; border-radius: 8px; pointer-events: none; z-index: 0; animation: fx-glow 400ms ease-out forwards; }
+.fx-glow.is-big { animation-duration: 600ms; }
+.fx-up.fx-glow, .fx-red.fx-glow { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--fx) 70%, transparent), inset 0 0 10px color-mix(in srgb, var(--fx) 45%, transparent); }
+.fx-down.fx-glow { background: radial-gradient(closest-side, #000c, #0000); }
+@keyframes fx-glow { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+.fx-down.fx-hit .meter__body, .fx-down.fx-hit .res__body { animation: fx-sink 400ms ease-out; }
+@keyframes fx-sink { 40% { transform: translateY(2px); } }
+/* 머무는 꼬리표: 종이 쪽지. 날아오는 칸이면 닿은 뒤(350ms)에 뜬다. */
+.fx-tag, .fx-flyer, .fx-seat, .fx-rel {
+  padding: 0 6px; border-radius: 3px; background: var(--fx-paper); color: var(--fx-ink);
+  border: 1px solid color-mix(in srgb, var(--fx) 75%, var(--line-strong)); font-weight: 800; white-space: nowrap;
+  box-shadow: 0 1px 3px #0008;
 }
-@keyframes fx-glow { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: scale(1); } }
-.fx-float {
-  position: absolute; left: 50%; top: 100%; z-index: 20; pointer-events: none;
-  padding: 1px 7px; border-radius: 10px; background: var(--fx); color: #fff;
-  font-size: 15px; font-weight: 800; line-height: 20px; white-space: nowrap;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--fx) 60%, transparent);
-  animation: fx-float 1.6s cubic-bezier(.2, .9, .3, 1) forwards;
+.fx-tag { position: absolute; left: 50%; top: 100%; z-index: 20; pointer-events: none; font-size: 14px; line-height: 19px; animation: fx-tag 2s ease-out forwards; }
+.fx-tag.is-big { font-size: 17px; line-height: 22px; }
+.fx-tag.is-late { animation-delay: 350ms; opacity: 0; }
+@keyframes fx-tag { 0% { opacity: 0; transform: translate(-50%, 2px) scale(.8); } 8% { opacity: 1; transform: translate(-50%, 4px) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 4px); } }
+.fx-down.fx-tag { background-image: radial-gradient(ellipse at 30% 40%, #0006, #0000 60%); }
+.fx-flyer { position: fixed; z-index: 60; pointer-events: none; font-size: 15px; line-height: 20px; transform: translate(-50%, -50%); }
+.fx-flyer.is-big { font-size: 18px; line-height: 23px; }
+/* 선 넘음: 그 칸만 흔들리고 글자가 찍힌다. 좋은 쪽으로 돌아오면 글자가 벗겨진다. */
+.fx-cross { animation: fx-cross 300ms ease-out; }
+@keyframes fx-cross { 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+.fx-word {
+  position: absolute; right: -4px; top: -6px; z-index: 21; pointer-events: none; padding: 0 4px; border-radius: 2px;
+  font-size: 12px; font-weight: 800; line-height: 16px; color: var(--warning); border: 1.5px solid currentColor; background: var(--bg);
+  transform: rotate(-6deg); animation: fx-stamp 2.2s ease-out forwards;
 }
-@keyframes fx-float {
-  0% { opacity: 0; transform: translate(-50%, -6px) scale(.5); }
-  12% { opacity: 1; transform: translate(-50%, 4px) scale(1.35); }
-  25% { transform: translate(-50%, 4px) scale(1); }
-  75% { opacity: 1; transform: translate(-50%, 10px); }
-  100% { opacity: 0; transform: translate(-50%, 18px); }
-}
+.fx-word.is-danger { color: var(--discontent); }
+.fx-word.is-peel { color: var(--ink-3); animation: fx-peel 600ms ease-in forwards; }
+@keyframes fx-stamp { 0% { opacity: 0; transform: rotate(-6deg) scale(1.6); } 8% { opacity: 1; transform: rotate(-6deg) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: rotate(-6deg); } }
+@keyframes fx-peel { 0% { opacity: 1; transform: rotate(-6deg); } 100% { opacity: 0; transform: rotate(-14deg) translate(4px, -6px); } }
+/* 의석과 칸 관계 꼬리표 */
+.fx-seat { display: inline-block; margin-left: 4px; vertical-align: 1px; font-size: 12px; line-height: 15px; pointer-events: none; animation: fx-rels 2s ease-out forwards; }
 .fx-rels {
   position: absolute; left: 42px; right: 42px; top: 100%; z-index: 20; pointer-events: none;
   display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 4px;
-  animation: fx-rels 1.7s ease-out forwards;
+  animation: fx-rels 2s ease-out forwards;
 }
-.fx-rel { padding: 1px 6px; border-radius: 9px; background: var(--fx); color: #fff; font-size: 12px; font-weight: 700; line-height: 18px; }
-@keyframes fx-rels { 0% { opacity: 0; transform: translateY(-6px) scale(.8); } 15% { opacity: 1; transform: translateY(0) scale(1.08); } 25% { transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(6px); } }
-.top.fx-hard { animation: fx-shake .38s ease-out; box-shadow: inset 0 -2px 0 var(--discontent); }
-@keyframes fx-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+.fx-rel { font-size: 12px; line-height: 18px; }
+@keyframes fx-rels { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .fx-hit b, .fx-cross, .fx-down.fx-hit .meter__body, .fx-down.fx-hit .res__body { animation: none; }
+  .fx-tag, .fx-tag.is-late { animation: fx-rels 2s linear forwards; animation-delay: 0s; transform: translateX(-50%); }
+  .fx-word { animation: fx-rels 2.2s linear forwards; }
+}
 .meter > :not(.fx), .res > :not(.fx) { position: relative; z-index: 1; }
 
 /* 정찰: 보내기 전엔 거는 것, 다녀온 뒤엔 보고 */
