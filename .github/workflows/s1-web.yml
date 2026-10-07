@@ -1,0 +1,111 @@
+name: S1 web checks
+
+# S1(웹 TS)의 테스트·타입 검사·빌드·화면 스모크. S1↔S2 영수증 계약 테스트(s1/tests/receipt.test.ts)가
+# S2의 GDScript 영수증 표본을 읽으므로, S2 쪽 영수증 파일을 바꾸는 PR에도 돈다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - s1/**
+      - s2/game/sim/receipt.gd
+      - s2/tests/game/test_receipt.gd
+      - s2/tests/game/fixtures/**
+      - .github/workflows/s1-web.yml
+  pull_request:
+    paths:
+      - s1/**
+      - s2/game/sim/receipt.gd
+      - s2/tests/game/test_receipt.gd
+      - s2/tests/game/fixtures/**
+      - .github/workflows/s1-web.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s1-web-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: s1
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: s1/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit, receipt contract and profile tests
+        run: npm test
+
+      - name: Typecheck and Vite build
+        run: npm run build
+
+      - name: Content validator on game data and fixtures
+        run: |
+          set -euo pipefail
+          npm run -s validate -- ./data
+          npm run -s validate -- fixtures/valid
+          # 실패 예제는 반드시 실패해야 한다.
+          if npm run -s validate -- fixtures/invalid > /dev/null; then
+            echo 'fixtures/invalid가 검사를 통과했다' >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s1-dist-${{ github.run_number }}
+          path: s1/dist
+          retention-days: 7
+
+  screen-smoke:
+    # 빌드한 화면을 가로 844×390으로 한 판 넘기며 넘침·잘림·작은 글자를 검사한다(tools/screenshots.cjs).
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: s1/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: s1-dist-${{ github.run_number }}
+          path: s1/dist
+
+      - name: Korean font and Playwright Chromium
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q fonts-noto-cjk
+          npm ci
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Screen smoke
+        run: SCREENSHOT_DIR="$RUNNER_TEMP/s1-shots" node tools/screenshots.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s1-screens-${{ github.run_number }}
+          path: ${{ runner.temp }}/s1-shots
+          if-no-files-found: warn
+          retention-days: 7
