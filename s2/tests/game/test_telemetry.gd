@@ -9,7 +9,7 @@ func test_empty_log_is_one_valid_line() -> void:
 	assert_false(line.contains("\n"))
 	var parsed: Variant = JSON.parse_string(line)
 	assert_true(parsed is Dictionary)
-	assert_eq((parsed as Dictionary).keys(), ["v", "run", "end", "staySec", "carrySec", "zones", "noise", "hordes", "injuries", "ammo"])
+	assert_eq((parsed as Dictionary).keys(), ["v", "run", "end", "staySec", "carrySec", "zones", "noise", "hordes", "injuries", "ammo", "trackDead"])
 	assert_eq(parsed["run"], "run_0")
 	assert_eq(parsed["end"], "")
 	assert_eq(parsed["staySec"], -1.0)
@@ -119,3 +119,9 @@ func test_full_run_line_round_trips() -> void:
 	assert_eq(parsed["hordes"][0]["entry"], "east")
 	assert_eq(parsed["ammo"]["pistol"], 4.0)
 	assert_eq(tm.to_json_line(), line)
+
+
+func test_track_dead_is_logged() -> void:
+	var tm := Telemetry.new("t")
+	tm.track(3, -1)
+	assert_eq(tm.to_dict()["trackDead"], {"west": 3, "east": 0})

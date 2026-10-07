@@ -19,9 +19,20 @@ const FROST := Color(0.78, 0.88, 0.98)
 const HOLD_TIME: float = 0.35
 const DRAG_PX: float = 28.0
 const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go: no shot
-const STICK_R: float = 72.0         # thumb travel to full push (the rim runs)
+const STICK_R: float = 72.0         # thumb travel to full push (the rim runs, if set)
 const STICK_DEAD: float = 10.0
 const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
+const STICK_STOPS_FIGHT: float = 0.3  # a push this hard away from the target calls off a fight
+const DOUBLE_TAP_MS: int = 300
+## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
+const PX_PER_MM: float = 10.3
+const BRASS := Color(0.86, 0.72, 0.42)
+const AMBER := Color(0.98, 0.66, 0.22)
+## Stick-rim run (a setting): stay past 90% for 0.15 s to run, back under 75%
+## to walk, so a shaking thumb does not flicker (field_unified 10, A3).
+const RIM_IN: float = 0.9
+const RIM_OUT: float = 0.75
+const RIM_DWELL: float = 0.15
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
 const MOAN_R: float = 20.0
@@ -47,7 +58,8 @@ var weapon_label: Label
 var allies_box: HBoxContainer
 var ally_buttons: Array = []
 var crew_button: Button
-var context_box: HBoxContainer
+var context_button: Button
+var context_rows: Array = []
 var context_t: float = 0.0
 var offer_box: HBoxContainer
 var toast_box: VBoxContainer
@@ -61,6 +73,7 @@ var aim_button: Button
 var manual_button: Button
 var attack_button: Button
 var shove_button: Button
+var blood_button: Button
 var pads: Array = []                   # Buttons the HUD hit-tests itself (any finger)
 var fingers: Dictionary = {}           # touch index -> {"kind", "start", "ms", ...}
 var stick_index: int = -1
@@ -69,7 +82,12 @@ var stick_at := Vector2.ZERO
 var auto_aim: bool = false             # the aim pad is held: the gun picks its target
 var auto_t: float = 0.0
 var auto_skip: int = 0                 # thumb slid along the pad: next target
-var attack_hold_t: float = -1.0
+var stick_dash: bool = false           # double-tap run (a setting): this hold runs
+var stick_push: float = 0.0
+var rim_t: float = 0.0
+var rim_run: bool = false
+var stick_tap_ms: int = -10000
+var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
 var debug_panel: PanelContainer
 var debug_label: Label
@@ -156,7 +174,7 @@ func _button(text: String, cb: Callable, min_size := Vector2(96, 64), size: int 
 
 
 ## A thumb pad: drawn like a button, hit-tested by the HUD (any finger).
-func _pad(text: String, at: Vector2, size: Vector2, font: int = 22) -> Button:
+func _pad(text: String, at: Vector2, size: Vector2, font: int = 22, anchor: int = Control.PRESET_BOTTOM_RIGHT) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = size
@@ -164,11 +182,24 @@ func _pad(text: String, at: Vector2, size: Vector2, font: int = 22) -> Button:
 	b.add_theme_font_size_override("font_size", font)
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	b.set_anchors_preset(anchor)
 	b.position = at
 	root.add_child(b)
 	pads.append(b)
 	return b
+
+
+## A toggle that is on keeps a brass rim; running glows amber (presentation_motion 5).
+func _lit_style(b: Button, rim: Color) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.3, 0.27, 0.2, 0.98)
+	sb.border_color = rim
+	sb.set_border_width_all(4)
+	sb.set_corner_radius_all(4)
+	b.add_theme_stylebox_override("pressed", sb)
+	b.add_theme_stylebox_override("hover_pressed", sb)
+	b.add_theme_color_override("font_pressed_color", rim)
+	b.add_theme_color_override("font_hover_pressed_color", rim)
 
 
 func _bar(color: Color) -> ProgressBar:
@@ -186,8 +217,11 @@ func _bar(color: Color) -> ProgressBar:
 
 
 func _build_top() -> void:
+	# Tactical pause sits at the left end of the gauge row, about 11 mm, away
+	# from the fight under the right thumb (presentation_motion 666274f).
+	pause_button = _pad("멈춤", Vector2(16, 14), Vector2(11.0 * PX_PER_MM, 11.0 * PX_PER_MM), 22, Control.PRESET_TOP_LEFT)
 	var tl := _panel()
-	tl.position = Vector2(16, 14)
+	tl.position = Vector2(16 + 11.0 * PX_PER_MM + 10, 14)
 	var v := VBoxContainer.new()
 	tl.add_child(v)
 	clock_label = _label("D1 10:30", 28)
@@ -210,13 +244,11 @@ func _build_top() -> void:
 	root.add_child(radio_label)
 	var tr := HBoxContainer.new()
 	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(-330, 14)
+	tr.position = Vector2(-238, 14)
 	tr.add_theme_constant_override("separation", 8)
 	root.add_child(tr)
 	tr.add_child(_button("−", _zoom.bind(4.0), Vector2(64, 56)))
 	tr.add_child(_button("+", _zoom.bind(-4.0), Vector2(64, 56)))
-	pause_button = _button("멈춤", _toggle_pause, Vector2(84, 56))
-	tr.add_child(pause_button)
 	tr.add_child(_button("D", _toggle_debug, Vector2(56, 56)))
 
 
@@ -272,36 +304,43 @@ func _build_allies() -> void:
 	allies_box.add_child(crew_button)
 
 
-## Right thumb (field_unified 10, user 17:15): aim with a small 'manual'
-## switch, attack, shove, run and crouch toggles. These are pads, not
-## Buttons: the left thumb is on the stick, so the right thumb is a second
-## finger, which Godot buttons do not take. The HUD hit-tests them itself.
+## Thumb pads (field_unified 10, user 17:15, coordinators 18:10-18:30). Right:
+## aim with a small 'manual' switch, attack, shove and the situation pad
+## (only when there is something to do). Left, above the stick: run and
+## crouch toggles, the two states that ride on moving; pause top left. These are pads, not Buttons: one thumb is
+## on the stick, so the other is a second finger, which Godot buttons do not
+## take. The HUD hit-tests them itself.
 func _build_thumbs() -> void:
 	attack_button = _pad("공격", Vector2(-160, -144), Vector2(140, 124), 26)
 	aim_button = _pad("조준", Vector2(-312, -144), Vector2(140, 124), 26)
 	manual_button = _pad("수동", Vector2(-312, -200), Vector2(92, 48), 18)
 	shove_button = _pad("밀치기", Vector2(-160, -238), Vector2(140, 84))
-	# Running is a toggle too, so no required move needs a double tap (presentation_motion 8c);
-	# the stick pushed to its rim also runs.
-	run_button = _pad("뛰기", Vector2(-160, -312), Vector2(140, 64), 20)
-	crouch_button = _pad("웅크림", Vector2(-312, -272), Vector2(140, 64), 20)
+	context_button = _pad("상황", Vector2(-312, -292), Vector2(140, 84), 20)
+	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
+	# the stick rim and a double tap run only when set on the start screen.
+	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
+	# up, two 11 mm keys 3 mm apart (presentation_motion 5, 57446c8).
+	var key := 11.0 * PX_PER_MM
+	var up := -(35.0 * PX_PER_MM + key)
+	run_button = _pad("뛰기", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	crouch_button = _pad("웅크림", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 20, Control.PRESET_BOTTOM_LEFT)
+	_lit_style(run_button, AMBER)
+	_lit_style(crouch_button, BRASS)
+	# A blood drop on the portrait's corner while you bleed: one press stops the
+	# worst of it and binds it (body_injury 4.6, 0f95fc0). Nothing more.
+	blood_button = _pad("피", Vector2(250, -186), Vector2(64, 64), 26, Control.PRESET_BOTTOM_LEFT)
+	blood_button.add_theme_color_override("font_color", WARN)
+	blood_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
 		b.toggle_mode = true
 	# Swap and bag sit on the left above the portrait (not needed with the stick held).
 	var left := HBoxContainer.new()
 	left.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	left.position = Vector2(16, -248)
+	left.position = Vector2(16, -252)
 	left.add_theme_constant_override("separation", 8)
 	root.add_child(left)
 	left.add_child(_button("무기", _swap, Vector2(110, 60), 20))
 	left.add_child(_button("가방", bag_panel, Vector2(110, 60), 20))
-	context_box = HBoxContainer.new()
-	context_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	context_box.position = Vector2(-760, -392)
-	context_box.size = Vector2(740, 72)
-	context_box.alignment = BoxContainer.ALIGNMENT_END
-	context_box.add_theme_constant_override("separation", 8)
-	root.add_child(context_box)
 	offer_box = HBoxContainer.new()
 	offer_box.set_anchors_preset(Control.PRESET_CENTER)
 	offer_box.position = Vector2(-260, 90)
@@ -312,7 +351,7 @@ func _build_thumbs() -> void:
 func _build_toasts() -> void:
 	toast_box = VBoxContainer.new()
 	toast_box.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	toast_box.position = Vector2(18, -120)
+	toast_box.position = Vector2(18, -236)
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast_box)
 
@@ -393,15 +432,16 @@ func tick(delta: float) -> void:
 		melee_holding = true
 		_melee(melee_pending, true)
 	_tick_auto_aim(delta)
-	# Attack pad held: keep swinging, picking up the next one in reach.
-	if attack_hold_t >= 0.0:
-		attack_hold_t += delta
-		if attack_hold_t >= HOLD_TIME and p.target_zombie.is_empty() and p.target_person == null and p.swing_t <= 0.0:
-			var t = game.combat.melee_pick(p)
-			if t != null:
-				_melee(t, true)
-		elif attack_hold_t >= HOLD_TIME:
-			p.hold_attack = true
+	_tick_context_hold()
+	if stick_index >= 0 and bool(game.opts.get("stick_rim_run", false)):
+		var was := rim_run
+		_update_rim(delta)
+		if rim_run != was and p.stick != Vector2.ZERO:
+			p.running = run_button.button_pressed or stick_dash or rim_run
+	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
+	attack_button.button_pressed = fighting(p)
+	_tick_primary(p)
+	blood_button.visible = p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
 	pause_button.text = "계속" if game.paused else "멈춤"
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
@@ -504,22 +544,46 @@ func _tick_debug() -> void:
 		if game.zombies.threat(z) and z["state"] != "frozen":
 			alive += 1
 	var next: float = game.director.seconds_to_next(now)
-	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n소음 점수 %d · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n%s" % [
+	var track: Dictionary = game.track_dead()
+	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n소음 점수 %d · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n선로 위 망자 서 %d · 동 %d · %s" % [
 		Engine.get_frames_per_second(), frame_ms, Engine.max_fps,
 		game.zombies.drawn_count, alive, game.cap, game.waiting,
 		game.ledger.total, "-" if is_inf(next) else str(roundi(next)), HordeDirector.ENTRY_NAMES.get(game.director.next_entry, ""),
 		game.director.call_range_mult(now), game.hordes.size(), game.clock.speed, roundi(now),
-		"시야 가림 켬" if game.mask_on else "시야 가림 끔",
+		track["west"], track["east"], "시야 가림 켬" if game.mask_on else "시야 가림 끔",
 	]
 
 
+## The situation pad shows the nearest thing to do; a tap does it, a hold
+## lays out the rest (open, pick up, door, stairs, bandage, depart...).
 func _rebuild_context(p) -> void:
-	for c in context_box.get_children():
-		c.queue_free()
-	if game.ended:
+	context_rows = [] if game.ended else game.actions.context(p)
+	# It rises only when there is something to do; otherwise the spot is empty.
+	context_button.visible = not context_rows.is_empty()
+	if context_rows.is_empty():
 		return
-	for row in game.actions.context(p):
-		context_box.add_child(_button(row["label"], _run_context.bind(row["call"]), Vector2(110, 64), 20))
+	var more: int = context_rows.size() - 1
+	context_button.text = String(context_rows[0]["label"]) + ("\n+%d (누르고 있기)" % more if more > 0 else "")
+
+
+func _context_tap() -> void:
+	_rebuild_context(game.player)
+	if context_rows.is_empty():
+		return
+	_run_context(context_rows[0]["call"])
+
+
+func _context_list() -> void:
+	_rebuild_context(game.player)
+	if context_rows.size() > 0:
+		offer(context_rows)
+
+
+func _tick_context_hold() -> void:
+	for f in fingers.values():
+		if f["kind"] == "pad" and f["pad"] == context_button and not f.get("opened", false) and Time.get_ticks_msec() - int(f["ms"]) >= int(HOLD_TIME * 1000.0):
+			f["opened"] = true
+			_context_list()
 
 
 func _run_context(cb: Callable) -> void:
@@ -769,8 +833,7 @@ func _depart_pick(choice: String) -> void:
 
 func show_end(result: Dictionary) -> void:
 	_close_modal()
-	for c in context_box.get_children():
-		c.queue_free()
+	context_rows = []
 	var v := _open_modal(820.0)
 	game.paused = true
 	var reason: String = {"departed": "출발했다", "limit": "기다릴 수 있는 시간이 끝났다", "wiped": "수색대가 모두 쓰러졌다"}.get(result["reason"], result["reason"])
@@ -903,6 +966,11 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(b, pos)
 			return true
+	# A ring 4 mm round the run and crouch keys starts nothing: setting the
+	# stick down there must not toggle them, nor plant a stick on their edge.
+	for b in [run_button, crouch_button]:
+		if b.get_global_rect().grow(4.0 * PX_PER_MM).has_point(pos):
+			return true
 	var ui := _button_at(pos)
 	if ui != null:
 		if index != 0:
@@ -913,7 +981,10 @@ func finger_down(index: int, pos: Vector2) -> bool:
 		stick_index = index
 		stick_origin = pos
 		stick_at = pos
-		fingers[index] = {"kind": "stick", "start": pos, "ms": Time.get_ticks_msec()}
+		var now := Time.get_ticks_msec()
+		# Double-tap run (a setting, off by default): tap, then hold and push.
+		stick_dash = bool(game.opts.get("double_tap_run", false)) and now - stick_tap_ms < DOUBLE_TAP_MS and pos.distance_to(stick_tap_pos) < 80.0
+		fingers[index] = {"kind": "stick", "start": pos, "ms": now}
 		return true
 	if fingers.values().any(func(f): return f["kind"] == "hand"):
 		return false
@@ -945,12 +1016,15 @@ func finger_up(index: int, pos: Vector2) -> bool:
 	match f["kind"]:
 		"stick":
 			stick_index = -1
+			stick_dash = false
 			_stick_release()
 			# A short touch that never moved is a tap on whatever is there.
 			if pos.distance_to(f["start"]) < DRAG_PX and Time.get_ticks_msec() - int(f["ms"]) < 350:
+				stick_tap_ms = Time.get_ticks_msec()
+				stick_tap_pos = pos
 				_tap(pos)
 		"pad":
-			_pad_up(f["pad"], pos)
+			_pad_up(f["pad"], pos, f)
 		"button":
 			var b: Button = f["button"]
 			if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
@@ -993,17 +1067,47 @@ func _apply_stick() -> void:
 		return
 	# The camera looks north with no turn: screen right is +x, screen down is +z.
 	var push := clampf(v.length() / STICK_R, 0.0, 1.0)
+	if fighting(p):
+		# A resting thumb, or a push at the one being hit, keeps the fight going;
+		# a real push elsewhere calls it off (field_unified 10).
+		var to := _fight_dir(p)
+		if push < STICK_STOPS_FIGHT or (to != Vector2.ZERO and v.normalized().dot(to) > 0.7):
+			p.stick = Vector2.ZERO
+			return
+		stop_fight(p)
 	p.stick = v.normalized() * push
 	p.target_zombie = {}
 	p.target_person = null
-	p.running = run_button.button_pressed or push >= game.STICK_RUN
+	stick_push = push
+	_update_rim(0.0)
+	p.running = run_button.button_pressed or stick_dash or rim_run
 	if p.running:
 		p.crouched = false
 		crouch_button.button_pressed = false
 
 
+## Stick-rim running with a way in and a way out (a setting, off by default).
+func _update_rim(delta: float) -> void:
+	if not bool(game.opts.get("stick_rim_run", false)) or stick_index < 0 and delta > 0.0:
+		rim_t = 0.0
+		rim_run = false
+		return
+	if stick_push >= RIM_IN:
+		rim_t += delta
+		if rim_t >= RIM_DWELL - 0.0001:
+			rim_run = true
+	elif stick_push < RIM_OUT:
+		rim_t = 0.0
+		rim_run = false
+	else:
+		rim_t = 0.0
+
+
 func _stick_release() -> void:
 	var p = game.player
+	stick_push = 0.0
+	rim_t = 0.0
+	rim_run = false
 	p.stick = Vector2.ZERO
 	p.running = run_button.button_pressed
 
@@ -1012,15 +1116,29 @@ func _stick_release() -> void:
 
 func _pad_down(b: Button, pos: Vector2) -> void:
 	var p = game.player
-	if b == aim_button:
+	if b == aim_button and primary_melee(p):
+		b = attack_button
+	if b == blood_button:
+		game.actions.self_bandage(p)
+	elif b == aim_button:
 		aim_button.button_pressed = true
 		_auto_aim_start()
 	elif b == attack_button:
-		attack_button.button_pressed = true
-		attack_hold_t = 0.0
+		# One press fights the one in reach until it is down, then the next
+		# within 2 m; a second press stops (field_unified 10, coordinator 18:10).
+		if fighting(p):
+			stop_fight(p)
+			return
 		var t = game.combat.melee_pick(p)
-		if t != null:
-			_melee(t, false)
+		if t == null:
+			toast("팔 닿는 데에 아무도 없다.")
+			return
+		_melee(t, true)
+		attack_button.button_pressed = true
+	elif b == context_button:
+		context_button.button_pressed = true
+	elif b == pause_button:
+		_toggle_pause()
 	elif b == manual_button:
 		manual_button.button_pressed = not manual_button.button_pressed
 		toast("수동 조준: 오른손으로 겨눌 곳을 끌어 놓고 뗀다." if manual_button.button_pressed else "자동 조준으로 돌아왔다.")
@@ -1050,14 +1168,16 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 		auto_t = maxf(auto_t, game.combat.acquire_time(game.player))
 
 
-func _pad_up(b: Button, pos: Vector2) -> void:
+func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
+	if b == aim_button and primary_melee(game.player):
+		return
 	if b == aim_button:
 		aim_button.button_pressed = false
 		_auto_aim_end(pos)
-	elif b == attack_button:
-		attack_button.button_pressed = false
-		attack_hold_t = -1.0
-		game.player.hold_attack = false
+	elif b == context_button:
+		context_button.button_pressed = false
+		if not f.get("opened", false) and b.get_global_rect().has_point(pos):
+			_context_tap()
 	elif b == shove_button:
 		shove_button.button_pressed = false
 
@@ -1197,10 +1317,10 @@ func drop_touch() -> void:
 	fingers.clear()
 	stick_index = -1
 	auto_aim = false
-	attack_hold_t = -1.0
+	stick_dash = false
 	if game.player != null:
 		game.player.stick = Vector2.ZERO
-	for b in [aim_button, attack_button, shove_button]:
+	for b in [aim_button, shove_button, context_button]:
 		if b != null:
 			b.button_pressed = false
 	pressing = false
@@ -1218,6 +1338,45 @@ func drop_touch() -> void:
 
 func _over_player(pos: Vector2) -> bool:
 	return pos.distance_to(_project(game.player.position + Vector3(0, 1.0, 0))) <= AIM_CANCEL_PX
+
+
+## 'One main action' (a start-screen trial, off by default; the user's card
+## decides): the aim pad turns into the attack pad while a melee weapon or
+## bare hands are out, and 'manual' shows only with a gun.
+func primary_melee(p) -> bool:
+	return bool(game.opts.get("primary_one", false)) and not W.is_ranged(p.weapon_id())
+
+
+func _tick_primary(p) -> void:
+	if not bool(game.opts.get("primary_one", false)):
+		return
+	var melee := primary_melee(p)
+	attack_button.visible = false
+	manual_button.visible = not melee
+	aim_button.text = "공격" if melee else "조준"
+	if melee:
+		aim_button.button_pressed = fighting(p)
+
+
+## The player is in a one-press fight: still after someone, swinging on.
+func fighting(p) -> bool:
+	return p.hold_attack and (not p.target_zombie.is_empty() or p.target_person != null)
+
+
+func stop_fight(p) -> void:
+	p.target_zombie = {}
+	p.target_person = null
+	p.hold_attack = false
+	p.brain.erase("goal")
+	p.path = PackedVector3Array()
+	attack_button.button_pressed = false
+
+
+## Screen direction from the player to the one being hit (camera looks north).
+func _fight_dir(p) -> Vector2:
+	var at: Vector3 = p.target_zombie["pos"] if not p.target_zombie.is_empty() else p.target_person.position
+	var d := Vector2(at.x - p.position.x, at.z - p.position.z)
+	return d.normalized() if d.length() > 0.05 else Vector2.ZERO
 
 
 func _melee(target, hold: bool) -> void:
@@ -1357,6 +1516,12 @@ func _draw_overlay() -> void:
 		overlay.draw_arc(stick_origin, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.28), 3.0)
 		var knob := stick_origin + (stick_at - stick_origin).limit_length(STICK_R)
 		overlay.draw_circle(knob, 26.0, Color(1, 1, 1, 0.35 if not p.running else 0.55))
+	# Sharp shooters see the dangerous ones marked while aiming (not chosen for them).
+	if auto_aim and int(p.skills.get("shooting", 0)) >= 7:
+		for z in game.zombies.list:
+			if z != aim_target and game.combat.marks_danger(p, z) and game.cell_seen(z["pos"]):
+				var m := _project(z["pos"] + Vector3(0, 2.1, 0))
+				overlay.draw_colored_polygon(PackedVector2Array([m + Vector2(-7, -10), m + Vector2(7, -10), m + Vector2(0, 0)]), Color(1, 0.75, 0.4, 0.9))
 	# What the auto aim has settled on.
 	if auto_aim and aim_target != null:
 		var at: Vector3 = aim_target["pos"] if aim_target is Dictionary else aim_target.position

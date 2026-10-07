@@ -84,7 +84,9 @@ func _pursue_zombie(p, delta: float) -> void:
 		p.target_zombie = {}
 		# One tap fights on: the next dead hand already at you is the next target (user, build 20).
 		# An emptied target is an order to stop, not a kill: no chaining then.
-		if p.hold_attack and not z.is_empty():
+		# The player's chaining is a start-screen choice (morning card; on by default).
+		var chain: bool = p != game.player or bool(game.opts.get("melee_chain", true))
+		if p.hold_attack and not z.is_empty() and chain:
 			var next := _next_close_zombie(p)
 			if next.is_empty():
 				p.hold_attack = false
@@ -170,11 +172,17 @@ func acquire_time(p) -> float:
 ## Auto aim candidates, best first: seen threats in range, those ahead before
 ## those behind, nearest first; from shooting 7 the dangerous ones (fresh, or
 ## already coming at us) jump the queue. Never a friend or a frightened survivor.
+## A sharp shooter (shooting 7+) is shown which ones are the danger (runners,
+## the ones already coming); the aim still takes the nearest and the player
+## slides to another (field_unified 10, A3: the game must not swap it for you).
+func marks_danger(p, z: Dictionary) -> bool:
+	return int(p.skills.get("shooting", 0)) >= 7 and z["state"] != "dead" and (z["kind"] == "fresh" or z["state"] in ["chase", "attack", "grab"])
+
+
 func aim_candidates(p) -> Array:
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("range", 20.0))
 	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
-	var sharp: bool = int(p.skills.get("shooting", 0)) >= 7
 	var rows: Array = []
 	for z in game.zombies.list:
 		if z["state"] == "dead" or not game.cell_seen(z["pos"]):
@@ -189,8 +197,6 @@ func aim_candidates(p) -> Array:
 			score += 8.0
 		if z["state"] == "frozen" or z["state"] == "rising":
 			score += 6.0
-		if sharp and (z["kind"] == "fresh" or z["state"] in ["chase", "attack", "grab"]):
-			score -= 4.0
 		rows.append([score, z])
 	for r in game.raiders:
 		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone", "flee"]:

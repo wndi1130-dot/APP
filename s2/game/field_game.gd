@@ -40,7 +40,13 @@ const ALLY_CAP: int = 12
 const DRIVE_START: float = 0.2          # seconds to get up to speed
 const DRIVE_STOP: float = 0.25          # seconds to stop from a walk
 const DRIVE_STOP_RUN: float = 0.4       # seconds to stop from a run
-const STICK_RUN: float = 0.92           # thumb at the rim: run
+## Start-screen choice to compare by hand (coordinator 18:19): first build,
+## middle (the default, field_unified 10 0f95fc0), short.
+const INERTIA: Dictionary = {
+	"now": [0.2, 0.25, 0.4],
+	"mid": [0.12, 0.15, 0.25],
+	"short": [0.10, 0.12, 0.20],
+}
 const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat"]
 const CAM_PITCH: float = 52.0
 const EXTRA_ITEMS: Dictionary = {
@@ -605,10 +611,11 @@ func _drive(p: Person, delta: float) -> void:
 		if not p.aim.active:
 			p.facing = atan2(dir.x, dir.z)   # aiming, you walk and keep the gun on it
 		want = p.speed(floor_kind) * clampf(push * 1.6, 0.35, 1.0)
+	var feel: Array = INERTIA.get(String(opts.get("inertia", "mid")), INERTIA["mid"])
 	if want > p.drive_speed:
-		p.drive_speed = minf(want, p.drive_speed + want / (DRIVE_START * heavy) * delta)
+		p.drive_speed = minf(want, p.drive_speed + want / (float(feel[0]) * heavy) * delta)
 	else:
-		var stop_t := (DRIVE_STOP_RUN if fast else DRIVE_STOP) * heavy * (2.0 if floor_kind == FieldGrid.Floor.ICE else 1.0)
+		var stop_t := float(feel[2] if fast else feel[1]) * heavy * (2.0 if floor_kind == FieldGrid.Floor.ICE else 1.0)
 		p.drive_speed = maxf(want, p.drive_speed - maxf(p.drive_speed, Person.WALK) / stop_t * delta)
 	if p.drive_speed <= 0.01:
 		p.drive_speed = 0.0
@@ -1191,6 +1198,25 @@ func _check_end() -> void:
 		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.")
 
 
+## Walking dead on the main track (rows 1-3, ground level) west and east of
+## the train at this moment: what a plough would push through on leaving
+## (s1c_domestic 6.6). Which way the train leaves is S3's to say.
+func track_dead() -> Dictionary:
+	var train: Rect2i = data["train"]
+	var out := {"west": 0, "east": 0}
+	for z in zombies.list:
+		if z["state"] == "dead" or level_of(z["pos"]) != 0:
+			continue
+		var c := FieldGrid.cell_of(z["pos"])
+		if c.y < train.position.y or c.y >= train.end.y:
+			continue
+		if c.x < train.position.x:
+			out["west"] += 1
+		elif c.x >= train.end.x:
+			out["east"] += 1
+	return out
+
+
 ## Departure: whistle (very loud), people on the platform board, the rest stay.
 func finish(reason: String) -> void:
 	if ended:
@@ -1254,6 +1280,8 @@ func finish(reason: String) -> void:
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
+	var on_track := track_dead()
+	telemetry.track(on_track["west"], on_track["east"])
 	telemetry.end(reason, now)
 	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size()}
 	_save(result)

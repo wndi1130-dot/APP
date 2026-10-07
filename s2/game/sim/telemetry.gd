@@ -12,6 +12,9 @@ var hordes: Array[Dictionary] = []
 var injuries: Array[Dictionary] = []
 var ammo_used: Dictionary = {}
 var carry_seconds: float = 0.0
+## Walking dead on the main track at departure, each side of the train
+## (s1c_domestic 6.6 plough price; S2 only records it).
+var track_dead: Dictionary = {"west": 0, "east": 0}
 var end_reason: String = ""
 var end_t: float = -1.0
 
@@ -59,6 +62,10 @@ func carry_time(delta: float) -> void:
 		carry_seconds += delta
 
 
+func track(west: int, east: int) -> void:
+	track_dead = {"west": maxi(west, 0), "east": maxi(east, 0)}
+
+
 ## reason: "departed" | "limit" | "wiped" (same as receipt endReason).
 func end(reason: String, t: float) -> bool:
 	if not Receipt.END_REASONS.has(reason):
@@ -96,6 +103,7 @@ func to_dict() -> Dictionary:
 		"hordes": horde_out,
 		"injuries": injury_out,
 		"ammo": ammo_used.duplicate(),
+		"trackDead": track_dead.duplicate(),
 	}
 
 
