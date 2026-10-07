@@ -54,6 +54,7 @@ var grab_button: Button
 var grab_bar: ProgressBar
 var grab_total: float = 1.0
 var crouch_button: Button
+var run_button: Button
 var pause_button: Button
 var debug_panel: PanelContainer
 var debug_label: Label
@@ -67,6 +68,7 @@ var pressing: bool = false
 var press_pos := Vector2.ZERO
 var press_ms: int = 0
 var aim_cancel: bool = false
+var aim_armed: bool = false        # the finger has been off the shooter at least once
 var aiming: bool = false
 var aim_point := Vector3.ZERO
 var aim_target = null
@@ -243,18 +245,22 @@ func _build_allies() -> void:
 
 func _build_thumbs() -> void:
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.columns = 3
 	grid.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	grid.position = Vector2(-262, -196)
+	grid.position = Vector2(-392, -196)
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	root.add_child(grid)
 	grid.add_child(_button("무기", _swap, Vector2(120, 84)))
 	grid.add_child(_button("밀치기", _shove, Vector2(120, 84)))
+	grid.add_child(_button("가방", bag_panel, Vector2(120, 84)))
+	# Running is a toggle too, so no required move needs a double tap (presentation_motion 8c).
+	run_button = _button("뛰기", _toggle_run, Vector2(120, 84))
+	run_button.toggle_mode = true
+	grid.add_child(run_button)
 	crouch_button = _button("웅크림", _toggle_crouch, Vector2(120, 84))
 	crouch_button.toggle_mode = true
 	grid.add_child(crouch_button)
-	grid.add_child(_button("가방", bag_panel, Vector2(120, 84)))
 	context_box = HBoxContainer.new()
 	context_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	context_box.position = Vector2(-760, -290)
@@ -787,6 +793,16 @@ func _toggle_crouch() -> void:
 	p.crouched = crouch_button.button_pressed
 	if p.crouched:
 		p.running = false
+		run_button.button_pressed = false
+
+
+func _toggle_run() -> void:
+	var p = game.player
+	if run_button.button_pressed:
+		p.crouched = false
+		crouch_button.button_pressed = false
+	if p.moving:
+		p.running = run_button.button_pressed
 
 
 func _shove() -> void:
@@ -808,7 +824,9 @@ func _on_touch(event: InputEvent) -> void:
 		else:
 			_release(event.position)
 	elif event is InputEventMouseMotion and pressing and aiming:
-		aim_cancel = _over_player(event.position)
+		var over := _over_player(event.position)
+		aim_armed = aim_armed or not over
+		aim_cancel = aim_armed and over
 		if aim_cancel:
 			return
 		aim_point = game.screen_to_ground(event.position)
@@ -836,6 +854,8 @@ func _press(pos: Vector2) -> void:
 	if W.is_ranged(p.weapon_id()) and not bool(p.weapon().get("broken", false)):
 		if game.combat.start_aim(p):
 			aiming = true
+			# An enemy at your feet: pressing on it must not count as letting go on yourself.
+			aim_armed = not _over_player(pos)
 			aim_point = world
 			aim_target = target
 			p.target_zombie = {}
@@ -850,7 +870,7 @@ func _release(pos: Vector2) -> void:
 	if aiming:
 		aiming = false
 		if p.aim.active:
-			if not (aim_cancel or _over_player(pos)):
+			if not (aim_cancel or (aim_armed and _over_player(pos))):
 				game.combat.fire(p, aim_point, aim_target)
 			p.aim.stop()
 		aim_cancel = false
@@ -874,6 +894,7 @@ func drop_touch() -> void:
 	pressing = false
 	aiming = false
 	aim_cancel = false
+	aim_armed = false
 	aim_target = null
 	melee_pending = null
 	if melee_holding and game.player != null:
@@ -937,8 +958,9 @@ func _tap(pos: Vector2) -> void:
 	var path: PackedVector3Array = game.grid.find_path(p.position, world, false)
 	if path.is_empty():
 		return
-	p.go_to(path, double)
-	if double:
+	var run: bool = double or run_button.button_pressed
+	p.go_to(path, run)
+	if run:
 		p.crouched = false
 		crouch_button.button_pressed = false
 	dest_marker = path[path.size() - 1]
@@ -1013,7 +1035,7 @@ func _draw_overlay() -> void:
 		var tight: bool = p.aim.deg <= p.aim.floor_deg * 1.05
 		overlay.draw_arc(c, r, 0, TAU, 40, Color(1, 1, 1, 0.9) if tight else Color(1, 0.85, 0.6, 0.8), 3.0 if tight else 2.0)
 		overlay.draw_circle(c, 2.5, Color(1, 1, 1, 0.9))
-		if aiming:
+		if aiming and aim_armed:
 			# Where to let go to lower the gun without firing.
 			var me := _project(p.position + Vector3(0, 1.0, 0))
 			var col := Color(1, 1, 1, 0.85) if aim_cancel else Color(1, 1, 1, 0.3)

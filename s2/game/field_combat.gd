@@ -431,7 +431,8 @@ func fire(p, at: Vector3, target = null) -> String:
 	p.face_point(at)
 	var dist: float = p.position.distance_to(at)
 	# Too close to aim: the gun becomes a shove (field_unified 10).
-	if target is Dictionary and not target.is_empty() and dist < float(d["min_dist"]):
+	# Measured to the enemy, not to the finger: a press on its head lands on the ground short of it.
+	if target is Dictionary and not target.is_empty() and p.position.distance_to(target["pos"]) < float(d["min_dist"]):
 		p.aim.stop()
 		shove(p)
 		return "shove"
