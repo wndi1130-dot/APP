@@ -17,7 +17,7 @@ import {
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
 import {
-  domesticBroadcast, domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
+  domesticBroadcast, domesticDepart, domesticForecast, domesticPyreWood, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
@@ -109,19 +109,32 @@ export function autoLevers(g: Game): string[] {
   return changes;
 }
 
-/** 배급장 맡기기가 열리는 조건(s1c_domestic 6.4, 제안): 지나온 정차 6번 이상, 배급장이 사는 앞칸이 호의 이상이고 적의가 없다.
+/** 배급장 맡기기가 열리는 조건(s1c_domestic 6.4, 제안): 지나온 정차 6번 이상, 배급장이 사는 공동체가 호의(+15) 이상이고 적의가 없다.
+ * 지지가 떨어져 꺼진 뒤 다시 켜는 선은 +20이다(공방장과 같다, J10 6번). 켜 둔 동안 끄는 선은 +15 그대로다.
  * 인구 조건은 S1에서 인구가 거의 늘지 않아 빼 두었다(S1c 시험판에서 '시작 인구 + 5'로 다시 본다). */
 export const DELEGATE_AFTER = 6;
+export const DELEGATE_ON = 15;
+export const DELEGATE_RE_ON = 20;
+/** 배급장이 사는 공동체. S1b 판이면 정해 둔 배급장의 칸, 아니면 앞칸(S1a 6장 #3: 앞칸이거나 기술·의무진). */
+export function rationComm(g: Game): Comm {
+  const id = g.dark?.staff.ration;
+  return (id ? PROFILES.find(p => p.id === id)?.community : undefined) ?? 'front';
+}
 export function autoLeverStatus(g: Game): { ok: boolean; why?: string } {
   if (g.seg - 1 < DELEGATE_AFTER) return { ok: false, why: `정차 ${DELEGATE_AFTER}번을 지나면 맡길 수 있다` };
-  const front = g.comms.front;
-  if (front.rel < 15 || front.grudge > 0) return { ok: false, why: '배급장이 사는 앞칸이 열차장을 따르지 않는다' };
+  const c = rationComm(g);
+  const s = g.comms[c];
+  const line = !g.autoLevers && g.autoDropped ? DELEGATE_RE_ON : DELEGATE_ON;
+  if (s.rel < line || s.grudge > 0) {
+    return { ok: false, why: `배급장이 사는 ${COMM_NAME[c]}${josa(COMM_NAME[c], '이/가')} 열차장을 따르지 않는다${line > DELEGATE_ON ? `(한 번 내려놓아서 관계 +${line}부터)` : ''}` };
+  }
   return { ok: true };
 }
 
 export function setAutoLevers(g: Game, on: boolean): void {
   if (on && !autoLeverStatus(g).ok) return;
   g.autoLevers = on;
+  if (on) g.autoDropped = false;
   if (on) {
     const changes = autoLevers(g);
     if (changes.length > 0) journal(g, `배급장이 레버를 움직였다: ${changes.join(', ')}.`);
@@ -220,7 +233,8 @@ function takeKinBody(g: Game): void {
 export function burnPyre(g: Game): void {
   const n = pyreCount(g);
   if (n <= 0) return;
-  g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * n);
+  const byWood = domesticPyreWood(g, n); // S1c 내정 훅: 목재 먼저(4.1)
+  g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * (n - byWood));
   g.pyre = 0;
   darkPyreWeight(g, 0); // S1b: 태운 시신의 확인 수도 비운다
   while (pyreCount(g) > 0) takeKinBody(g);
@@ -987,7 +1001,9 @@ function nextSegment(g: Game): void {
   darkPrep(g); // S1b 훅: 단서, 불씨가 오를지(임박 징후)
   if (g.autoLevers && !autoLeverStatus(g).ok) {
     g.autoLevers = false;
-    addCard(g, { kind: 'info', who: '배급장이 장부를 내려놓았다', text: '앞칸의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다.' });
+    g.autoDropped = true;
+    const rc = COMM_NAME[rationComm(g)];
+    addCard(g, { kind: 'info', who: '배급장이 장부를 내려놓았다', text: `${rc}의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다.` });
   }
   if (g.autoLevers) {
     const changes = autoLevers(g);

@@ -118,6 +118,15 @@ export function domesticBroadcast(g: Game): { tensionCut: number; fear: number }
   return { tensionCut: D.r2bTension * m, fear: D.r2bFear * m };
 }
 
+/** 화장 땔감(4.1): S1c 판이면 시신 1구마다 목재 4가 있으면 목재로 태운다. 목재로 태운 구 수를 돌려준다(나머지는 석탄). J10 5번. */
+export function domesticPyreWood(g: Game, n: number): number {
+  const d = g.dom;
+  if (!d || n <= 0) return 0;
+  const bodies = Math.min(n, Math.floor(d.wood / D.pyreWood));
+  d.wood -= bodies * D.pyreWood;
+  return bodies;
+}
+
 /** 정차를 마친 뒤: 부산물, 설계도 조각, 코어, 쓸 만한 칸, 데려간 전문가의 위험, 묻기, X3. */
 export function domesticStop(g: Game, passed: boolean, crewDead: number): string[] {
   const d = g.dom;

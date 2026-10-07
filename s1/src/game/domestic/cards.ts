@@ -1,4 +1,5 @@
 import { COMM_NAME } from '../data';
+import { josa } from '../josa';
 import type { Comm } from '../data';
 import { CARD_EXTENSIONS } from '../cards';
 import type { CardView, Choice, Eff } from '../cards';
@@ -28,6 +29,14 @@ function sp(p: DomPerson | undefined): CardView['speaker'] {
 
 function chief(g: Game, f: Field): DomPerson | undefined {
   return (g.dom?.people ?? []).filter(p => p.alive && !p.gone && p.field === f).sort((a, b) => b.skill - a.skill)[0];
+}
+
+/** 열병 카드에 앓는 사람 이름을 적는다(16.5, J10 11번). 이름이 없으면 수만. */
+function typhusNames(g: Game, c: Comm, n: number): string {
+  const names = (g.dom?.typhus ?? []).filter(t => t.comm === c).flatMap(t => t.patients);
+  if (names.length === 0) return `${n}명이`;
+  const last = names[names.length - 1];
+  return `${names.join(', ')}${josa(last, '이/가')}`;
 }
 
 const rel = (c: Comm, v: number): Eff => ({ t: 'rel', c, v });
@@ -236,7 +245,7 @@ export function domView(g: Game, card: Card): CardView | null {
       const c = needComm(card);
       return {
         title: '열병', focus: c, required: true,
-        body: `${COMM_NAME[c]}에서 ${card.n ?? 4}명이 열에 들떠 누웠다. 붐비고 담요를 같이 덮는 칸이다. 앓는 사람은 의약품을 먹는다. 붐비고 담요를 같이 덮는 칸은 어디든 열병이 날 수 있다.`,
+        body: `${COMM_NAME[c]}에서 ${typhusNames(g, c, card.n ?? 4)} 열에 들떠 누웠다. 붐비고 담요를 같이 덮는 칸이다. 앓는 사람은 의약품을 먹는다. 붐비고 담요를 같이 덮는 칸은 어디든 열병이 날 수 있다.`,
         choices: [
           { label: '의무칸을 비운다', say: '의무칸을 비워라. 앓는 사람이 먼저다!', effs: [], special: 'dom:typhus:bay', extra: ['번지지 않는다', `약 받으면 ${pct(D.typhusRecover)} 회복`, '부상자 회복이 멈춘다'] },
           { label: '따로 눕힌다', say: '앓는 사람은 그 칸 끝에 따로 눕혀라. 담요도 그릇도 따로다.', effs: [], special: 'dom:typhus:apart', extra: [`번질 확률 ${pct(D.typhusSpread)} → ${pct(D.typhusSpreadApart)}`, `약 받으면 ${pct(D.typhusRecoverApart)} 회복`, '부상자 회복은 그대로'] },

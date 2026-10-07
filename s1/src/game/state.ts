@@ -200,6 +200,8 @@ export interface Game {
   guardEscort: boolean;
   forcedRun: boolean;
   autoLevers: boolean;
+  /** 배급장이 지지가 떨어져 장부를 내려놓은 적이 있다(다시 켜는 선 +20, 6.4) */
+  autoDropped?: boolean;
   actedSeg: number;
   /** AI가 다음 회기에 올린 안건 */
   proposals: Agenda[];

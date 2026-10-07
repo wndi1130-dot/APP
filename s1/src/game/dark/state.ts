@@ -132,6 +132,8 @@ export interface DarkState {
   harm: number;
   /** 무기고 통제(관행). null이면 아직 안 물었다 */
   armory: boolean | null;
+  /** 무기고 카드를 칸이 차서 미뤘다(다음 출발 전 운영에 묻는다) */
+  armoryDue?: boolean;
   /** 머리 확인 관행(9.1). null이면 아직 안 정했다 */
   practice: 'guard' | 'medtech' | 'car' | null;
   /** 관행 카드를 고른 횟수(9.1: 두 번째부터 '지난번처럼'으로 묻는다) */

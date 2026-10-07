@@ -147,6 +147,8 @@ export function doBury(g: Game): void {
   d.bury = false;
   const n = Math.min(D.buryMax, g.stored);
   if (n <= 0) return;
+  // S1b: 묻은 시신만큼 확인 수도 줄인다. 어느 시신을 묻는지 고르지 않으니 비율로 뺀다.
+  if (g.dark && g.stored > 0) g.dark.checkedStored = Math.max(0, g.dark.checkedStored - Math.round((n * g.dark.checkedStored) / g.stored));
   g.stored -= n;
   d.stats.buried += n;
   if (lawActive(g, 'corpse_store')) {

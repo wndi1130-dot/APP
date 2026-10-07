@@ -83,6 +83,10 @@ export const D = {
   typhusRecoverApart: 0.25, typhusSpreadApart: 0.05,
   // R2 가·나(7.3): 감청 비밀 확률/회기, 방송 긴장 증가 덜기·공포 +/구간
   r2aSecret: 0.25, r2bTension: 1, r2bFear: 1,
+  // 화장: 1구에 목재 4(없으면 석탄 1, 4.1)
+  pyreWood: 4,
+  // 이상주의 공방장이 꼬리칸 단열을 끼워 넣을 때 꼬리칸 관계(6.4)
+  idealTailRel: 2,
   // 이 카드는 4구간부터(16.3, 16.1 가)
   liceFromSeg: 4,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)

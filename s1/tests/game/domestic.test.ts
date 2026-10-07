@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
   DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hotWaterShare, hygiene, hygieneScore, hygieneTick, situation, LAWS, hygieneWhy, resolveTyphus, startTyphus, WASH_NAME, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
-  advance, bedOverflow, P, chooseCard, coldCap, openCouncil, resolveStop, takeAltPlace, PLACES, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
+  advance, delegateTick, workshopChief, autoLeverStatus, bedOverflow, burnPyre, P, setAutoLevers, chooseCard, coldCap, openCouncil, resolveStop, takeAltPlace, PLACES, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game, TechId } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -323,7 +323,8 @@ describe('지식', () => {
   it('다른 칸 견습생이 붙으면 기술 통제법이 열린다', () => {
     const g = fresh();
     expect(lawOpen(g, 'tech_control')).toBe(false);
-    attachApprentice(g, 'craft', 'other', true);
+    // 공방장은 시작부터 용접공을 가르치느라 비어 있지 않다(8.1). 기관으로 본다.
+    attachApprentice(g, 'engine', 'other', true);
     expect(lawOpen(g, 'tech_control')).toBe(true);
     expect(lawOpen(g, 'apprentice_duty')).toBe(false);
   });
@@ -542,5 +543,69 @@ describe('J10 1~4: 값이 틀리거나 효과가 없던 것', () => {
     expect(g.med - med).toBe(Math.round(P.haulTotal * 0.6 * 0.5));
     expect(coal - g.coal).toBeGreaterThanOrEqual(1);
     expect(PLACES.length).toBeGreaterThan(1);
+  });
+});
+
+describe('J10 5~13: 문서 규칙', () => {
+  it('7. 용접공은 공방장의 견습으로 시작해 숙련(4구간) → 장인(6구간)으로 큰다', () => {
+    const g = fresh();
+    const chief = g.dom!.people.find(p => p.role === '공방장')!;
+    const welder = g.dom!.people.find(p => p.role === '용접공')!;
+    expect(welder.learn).toEqual({ by: chief.id, left: 4, cap: 3 });
+    expect(chief.pupil).toBe(welder.id);
+    expect(lawOpen(g, 'tech_control')).toBe(false);
+    for (let i = 0; i < 10; i += 1) knowledgeTick(g);
+    expect(welder.skill).toBe(3);
+    expect(welder.learn).toBeUndefined();
+  });
+
+  it('5. 화장은 목재 4가 있으면 목재로, 없으면 석탄 1', () => {
+    const g = fresh();
+    g.pyre = 3;
+    g.dom!.wood = 9;
+    const coal = g.coal;
+    burnPyre(g);
+    expect(g.dom!.wood).toBe(1);
+    expect(coal - g.coal).toBe(1);
+  });
+
+  it('6. 배급장이 장부를 내려놓은 뒤엔 관계 +20부터 다시 맡긴다', () => {
+    const g = createGame('ration');
+    g.seg = 10;
+    g.comms.front.rel = 16;
+    g.comms.front.grudge = 0;
+    expect(autoLeverStatus(g).ok).toBe(true);
+    g.autoDropped = true;
+    expect(autoLeverStatus(g).ok).toBe(false);
+    expect(autoLeverStatus(g).why).toContain('+20');
+    g.comms.front.rel = 20;
+    setAutoLevers(g, true);
+    expect(g.autoLevers).toBe(true);
+    expect(g.autoDropped).toBe(false);
+    g.comms.front.rel = 16;
+    expect(autoLeverStatus(g).ok).toBe(true);
+  });
+  it('9. 이상주의 공방장은 우선 방침이어도 꼬리칸 단열 하나를 끼워 넣는다', () => {
+    const g = fresh('ideal');
+    const chief = workshopChief(g)!;
+    chief.trait = 'ideal';
+    g.dom!.techs.e5 = { stage: 'done', defect: false, progress: 0, need: 0 } as NonNullable<Game['dom']>['techs']['e5'];
+    g.dom!.wood = 30;
+    g.dom!.delegate = { on: true, policy: 'ours' };
+    g.seg = 10;
+    g.comms[chief.comm].rel = 40;
+    const rel = g.comms.tail.rel;
+    delegateTick(g);
+    expect(g.dom!.job?.kind).toBe('insulate');
+    expect(g.dom!.job?.car.startsWith('tail')).toBe(true);
+    expect(g.comms.tail.rel).toBeGreaterThan(rel - 2);
+  });
+
+  it('11. 열병 카드에 앓는 사람 이름이 나온다', () => {
+    const g = fresh();
+    startTyphus(g, 'tail', 2);
+    const names = g.dom!.typhus[0].patients;
+    const view = viewCard(g, g.cards.find(c => c.kind === 'dom:typhus')!);
+    for (const n of names) expect(view.body).toContain(n);
   });
 });

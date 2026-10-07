@@ -2,12 +2,12 @@ import { COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, rnd, situation } from '../state';
 import type { Game } from '../state';
-import { D, TECHS, TECH_IDS } from './data';
+import { CAR_COMM, D, TECHS, TECH_IDS } from './data';
 import type { TechId } from './data';
 import { domCard, living } from './state';
 import type { DomPerson, DomState } from './state';
 import { LAW_ONLY_TECHS, usefulVariant } from './lawtech';
-import { restoreCheck, startRestore, techSides } from './workshop';
+import { jobCheck, restoreCheck, startJob, startRestore, techSides } from './workshop';
 
 // 간부에게 맡기기(6.4). S1c에서 새로 여는 것은 공방장 하나다(의무장·기관장·경비대장은 S1c 이후).
 // 열리는 조건: 정차 6번을 지남 + 공방장이 사는 공동체(기술·의무진)가 호의 이상이고 적의가 없음. 인구 조건은 S1에서 뺐다(6.4 짚을 점).
@@ -106,6 +106,15 @@ export function delegateTick(g: Game): void {
       const v = LAW_ONLY_TECHS.includes(id) ? usefulVariant(g, id) ?? undefined
         : TECHS[id].variants ? (d.delegate.policy === 'ours' && friendly(g).includes('front') ? 'b' : 'a') : undefined;
       if (startRestore(g, id, 'full', v)) journal(g, `공방장이 ${TECHS[id].name}을(를) 골랐다.`);
+    }
+  }
+  // 이상주의 공방장은 방침이 '우선'이어도 꼬리칸 단열 하나는 끼워 넣는다(6.4 성향 표, J10 9번). 꼬리칸 관계가 조금 오른다.
+  if (tier >= 2 && chief?.trait === 'ideal' && d.delegate.policy === 'ours' && !d.job) {
+    const tails = d.cars.filter(id => CAR_COMM[id] === 'tail');
+    const car = tails.some(id => d.insulated.includes(id)) ? undefined : tails.find(id => jobCheck(g, 'insulate', id).ok);
+    if (car && startJob(g, 'insulate', car)) {
+      g.comms.tail.rel = clamp(g.comms.tail.rel + D.idealTailRel, -100, 100);
+      journal(g, `${chief.name}이(가) 우선 일 사이에 꼬리칸 단열을 끼워 넣었다.`);
     }
   }
   if (d.delegate.policy === 'ours') {

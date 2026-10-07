@@ -224,11 +224,15 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
 }
 
-/** 이가 도는 칸은 대야를 누르지 않아도 칸 창에 까닭 한 줄을 띄운다(J10 W6). 병이 처지에서 왔다는 것을 늘 보인다. */
+/** 칸 창 머리 아래 줄(S1c): 이가 도는 칸은 대야를 누르지 않아도 까닭 한 줄(J10 W6), 열병이 돌면 앓는 사람 이름(16.5, J10 11번). */
 export function domesticWhyLine(view: View, car: CarDef): HTMLElement | null {
+  const d = view.g.dom;
   const c = car.comm;
-  if (!view.g.dom || !c || !view.g.dom.lice[c]) return null;
-  return h('small', { class: 'carpop__why' }, hygieneWhy(view.g, c));
+  if (!d || !c) return null;
+  const sick = d.typhus.filter(t => t.comm === c).flatMap(t => t.patients);
+  const why = d.lice[c] || sick.length ? hygieneWhy(view.g, c) : null;
+  if (!why) return null;
+  return h('small', { class: 'carpop__why' }, why, sick.length ? h('span', { class: 'is-red' }, ` · 열병: ${sick.join(', ')}`) : null);
 }
 
 /** 기관실 칸 창의 셋째 줄: 더운물 레버(16.2, 열차 전체 하나)와 지식 현황판 단추(11.4). */

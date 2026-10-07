@@ -16,7 +16,7 @@ export const B = {
   guardLen: 2, guardMax: 2, guardFear: 2, guardExpo: 3,
   // 4.3 사보타주
   boilerCoal: 4, boilerBreak: 0.1, couplingCoal: 3, couplingHaul: 0.7, couplingFear: 5,
-  poisonFood: 5, poisonSick: 0.2, heatingWarm: 15, heatingSegs: 2,
+  poisonFood: 5, poisonSick: 0.2, heatingWarm: 15, heatingSegs: 2, armorCut: 0.5,
   // 4.4 수사
   clueTrue: 0.4, clueCap: 0.75, falseMult: 0.5, falseMultFear: 0.7, coldCase: 8,
   revealP: 0.1, revealWindow: 6, summaryFear: 5, summaryRel: 2,

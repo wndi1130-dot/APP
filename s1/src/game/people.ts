@@ -134,6 +134,12 @@ export function fallSick(g: Game, c: Comm): void {
 export function recover(g: Game, c: Comm, why: string): void {
   const s = g.comms[c];
   if (!s.sick) return;
+  // 앓던 대표가 그사이 죽었으면 되돌릴 사람이 없다. 대신 나오던 측근이 자리를 잇는다.
+  if (isGone(g, s.sick.rep.name)) {
+    s.sick = undefined;
+    s.debt = false;
+    return;
+  }
   journal(g, `${s.sick.rep.name}이(가) ${why} 다시 대표 자리에 앉았다.`, 'good');
   s.leader = s.sick.rep;
   s.sick = undefined;
@@ -146,7 +152,8 @@ function sickTick(g: Game, rnd: () => number): void {
     const low = w < SICK.below || r < SICK.below;
     s.lowStreak = low ? (s.lowStreak ?? 0) + 1 : 0;
     if (s.sick) {
-      if (!low) recover(g, c, '처지가 나아지자');
+      if (isGone(g, s.sick.rep.name)) recover(g, c, '');
+      else if (!low) recover(g, c, '처지가 나아지자');
       else if (g.seg - s.sick.since >= SICK.succeed) {
         journal(g, `${s.sick.rep.name}은(는) 끝내 일어나지 못했다. ${s.leader.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
         s.sick = undefined;
