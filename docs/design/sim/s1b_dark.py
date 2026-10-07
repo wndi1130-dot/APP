@@ -79,7 +79,7 @@ Q = dict(
     assn_on_fail=0,       # 1판 시뮬레이터의 열림(위기 법 부결 뒤). 2판은 상황 카드에서만 연다
     exec_blackmail_p=0.2,  # (가정) 실행자 칸 관계가 회의 이하일 때 구간마다 열차장 협박 확률
     # 5.1 탄압, 5.3 계엄
-    repress_extinguish=1,  # 탄압이 그 칸 불씨를 끈다(5.1). 0이면 끄지 않는다(시험)
+    repress_extinguish=1, disperse_tension=5,  # 탄압이 그 칸 불씨를 끈다(5.1). 0이면 끄지 않는다(시험)
     guard_refuse=0.5, ep_len=3, coup_line=-15, coup_clear=15, coup_wait=2, curfew=1, ml_direct=0, ml_lift=0,
     ml_tension=2, decree_guard=-5,  # 계엄 긴장 +2/구간, 포고마다 경비대 관계 −5(2판)
     ep_normal=0,          # 1이면 비상대권을 일반 51표로(코디네이터 C-2 시험)
@@ -1063,7 +1063,7 @@ class DarkRun(A.Run):
             self.new_ember(c, 'guard', 'repression')
         self.rel[c] = clamp(self.rel[c] - 15, -100, 100)
         self.offend(c)
-        self.fear += 10; self.tension += 5
+        self.fear += 10; self.tension += Q['disperse_tension']
         if S['dispersals'] % 3 == 0:
             for o in COMMS:
                 self.offend(o)
