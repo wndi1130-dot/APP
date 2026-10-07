@@ -16,6 +16,8 @@ export const B = {
   assnTension: 3, assnBase: 0.5, assnGuard: 0.2, assnGuardCap: 0.2,
   // 4.2 경비
   guardLen: 2, guardMax: 2, guardFear: 2, guardExpo: 3,
+  /** 들킨 성공 암살을 덮을 때(경비대 입막음, 제안 PR 41 리뷰) */
+  hushFear: 5, hushExpo: 3,
   // 4.3 사보타주
   boilerCoal: 4, boilerBreak: 0.1, couplingCoal: 3, couplingHaul: 0.7, couplingFear: 5,
   poisonFood: 5, poisonSick: 0.2, heatingWarm: 15, heatingSegs: 2, armorCut: 0.5,

@@ -178,12 +178,19 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
 }
 
 /** 성공한 뒤: 덮거나, 남에게 씌우거나, 수사하게 둔다. */
-export function afterOrder(g: Game, caseId: number | undefined, how: 'cover' | 'frame' | 'let'): string {
+export function afterOrder(g: Game, caseId: number | undefined, how: 'cover' | 'hush' | 'frame' | 'let'): string {
   const c = caseById(g, caseId);
   if (!c) return '';
   if (how === 'cover') {
     coverUp(g, c);
     return '보일러 일지에 사고라고 적었다.';
+  }
+  if (how === 'hush') {
+    // 들킨 일을 덮는다: 본 경비대를 입단속한다. 일지로 덮는 것보다 값이 크다(제안).
+    coverUp(g, c);
+    g.fear = clamp(g.fear + B.hushFear, 0, 100);
+    g.comms.guard.base[3] += B.hushExpo;
+    return '경비대가 입을 다물었다. 본 사람들은 못 본 것이 됐다.';
   }
   if (how === 'frame') {
     // 헛단서를 심는다: 다른 용의자에게 단서 하나, 실행자의 불씨가 커진다(4.6).

@@ -243,3 +243,55 @@ describe('J09 6. 진실 창은 벌한 다음 구간부터 여섯 번', () => {
     } finally { B.revealP = revealP; }
   });
 });
+
+describe('PR 41 리뷰 2. 관행 카드 뒤에도 밤샘을 묻는다', () => {
+  it('두 번째 관행 카드에 답하면 대표 시신은 밤샘 카드를 거친다', () => {
+    const g = darkGame('practice-vigil');
+    g.phase = 'prep';
+    const first = adults(g, 'tail', { noRep: true })[0].name;
+    onDeath(g, 'tail', [first]);
+    darkSettle(g);
+    let card = g.cards.find(c => c.kind === 'dark:corpse_rule')!;
+    chooseCard(g, card.uid, 0);
+    g.cards = [];
+    // 대표는 죽자마자 다음 사람이 잇는다. 밤샘을 바랄 사람인지는 죽은 때 본다.
+    const rep = g.comms.engine.leader.name;
+    onDeath(g, 'engine', [rep]);
+    expect(g.comms.engine.leader.name).not.toBe(rep);
+    darkSettle(g);
+    card = g.cards.find(c => c.kind === 'dark:corpse_rule')!;
+    expect(viewCard(g, card).body).toContain('지난번처럼');
+    chooseCard(g, card.uid, 0);
+    expect(g.cards.some(c => c.kind === 'dark:vigil' && c.who === rep)).toBe(true);
+  });
+});
+
+describe('PR 41 리뷰 3. 들킨 성공 암살은 일지로 덮지 못한다', () => {
+  it("들켰으면 '덮는다' 대신 '입단속한다'(공포·경비대 노출)가 나온다", () => {
+    let checked = 0;
+    for (let i = 0; i < 200 && checked < 2; i += 1) {
+      const g = darkGame(`hush-${i}`);
+      const target = adults(g, 'front', { noRep: true })[0].id;
+      const exe = adults(g, 'guard', { noRep: true })[0].id;
+      g.dark!.order = { target, why: 'hostile', exe: 'guard', exeId: exe, method: 'accident', at: g.seg };
+      runOrder(g, 'travel');
+      const card = g.cards.find(x => x.kind === 'dark:order_done');
+      if (!card) continue;
+      const labels = viewCard(g, card).choices.map(c => c.label);
+      if (card.text === 'hidden') {
+        expect(labels).toContain('덮는다');
+        expect(labels).not.toContain('입단속한다');
+        continue;
+      }
+      checked += 1;
+      expect(labels).not.toContain('덮는다');
+      const fear = g.fear;
+      const expo = g.comms.guard.base[3];
+      chooseCard(g, card.uid, labels.indexOf('입단속한다'));
+      expect(g.fear).toBe(Math.min(100, fear + B.hushFear));
+      expect(g.comms.guard.base[3]).toBe(expo + B.hushExpo);
+      expect(g.dark!.cases.find(c => c.id === card.n)?.status).toBe('closed');
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+});

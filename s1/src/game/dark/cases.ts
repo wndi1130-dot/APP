@@ -272,7 +272,8 @@ export const PUNISH_SEGS = { ration: 3, confine: 4 };
 /** 벌(4.4 표). 벌은 긴장을 내리지 않는다. 군중 시계를 끝낼 뿐이다. */
 export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' | 'summary'): string[] {
   const d = g.dark!;
-  // 처형은 재판 유죄 뒤만(사용자 결정). 카드가 막아도 함수 쪽에서 한 번 더 본다. 약식 처형은 계엄의 경비대 재판 자리(trial_and_summary)다.
+  // 처형은 재판 유죄 뒤만(사용자 결정). 카드가 막아도 함수 쪽에서 한 번 더 본다.
+  // 'trial_and_summary'(즉결 처형도)는 17:01 카드에서 고르지 않은 안으로, 시험용으로만 남는다. 계엄의 경비대 재판이 아니다.
   if (how === 'execute' && !(EXECUTION.rule === 'trial_and_summary' && via === 'summary') &&
     (EXECUTION.rule === 'none' || via !== 'trial' || c.convicted !== s.id)) return [];
   const lines: string[] = [];

@@ -22,7 +22,8 @@ export function noteDeath(g: Game, c: Comm, names: readonly string[]): void {
   for (const name of names) {
     // 숨긴 물림은 이미 일어났거나 경비대가 처리했다(biteTick).
     if ((g.hiddenBites ?? []).some(b => b.who === name)) continue;
-    d.fresh.push({ comm: c, name });
+    // 밤샘을 바랄 사람인지는 죽은 때 본다(대표는 바로 다음 사람이 잇는다).
+    d.fresh.push({ comm: c, name, vigil: wantsVigil(g, name) });
     d.stats.corpses += 1;
   }
 }
@@ -116,10 +117,16 @@ export function corpseTick(g: Game): void {
     if (d.fresh.length && !g.cards.some(k => k.kind === 'dark:corpse_rule')) darkCard(g, { kind: 'dark:corpse_rule', comm: d.fresh[0].comm, who: d.fresh[0].name });
     return;
   }
+  settleFresh(g);
+}
+
+/** 기다리던 시신을 관행대로 확인한다. 밤샘을 바라는 시신(대표·가족)은 밤샘 카드부터 낸다(9.2). */
+function settleFresh(g: Game): void {
+  const d = g.dark!;
   const fresh = d.fresh;
   d.fresh = [];
   for (const x of fresh) {
-    if (wantsVigil(g, x.name) && !segFull(g) && !g.cards.some(k => k.kind === 'dark:vigil')) {
+    if ((x.vigil ?? wantsVigil(g, x.name)) && !segFull(g) && !g.cards.some(k => k.kind === 'dark:vigil')) {
       // 밤샘 답이 올 때까지 이 시신은 S1b가 맡는다(S1a 냉동칸 굴림에서 뺀다). 한 시신은 한 번만 굴린다.
       holdCold(g);
       darkCard(g, { kind: 'dark:vigil', comm: x.comm, who: x.name });
@@ -136,13 +143,10 @@ function victimNear(g: Game, c: Comm, name: string): string | null {
   return null;
 }
 
-/** 관행을 정했다(9.1). 기다리던 시신을 모두 확인한다. */
+/** 관행을 정했다(9.1). 기다리던 시신을 확인한다. 밤샘을 바라는 시신은 밤샘 카드를 거친다(PR 41 리뷰). */
 export function ruleChosen(g: Game, p: Practice): void {
-  const d = g.dark!;
-  d.practice = p;
-  const fresh = d.fresh;
-  d.fresh = [];
-  for (const x of fresh) checkBody(g, x);
+  g.dark!.practice = p;
+  settleFresh(g);
 }
 
 /** 밤샘의 답(9.2) */

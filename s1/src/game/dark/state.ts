@@ -143,7 +143,8 @@ export interface DarkState {
   /** 관행 카드를 고른 횟수(9.1: 두 번째부터 '지난번처럼'으로 묻는다) */
   practiceAsked: number;
   /** 이번 구간 칸 안에서 죽은 사람(정산에 확인한다) */
-  fresh: { comm: Comm; name: string }[];
+  /** vigil: 죽은 때 밤샘을 바랄 사람이었나(대표·측근·가족) */
+  fresh: { comm: Comm; name: string; vigil?: boolean }[];
   /** 확인하지 않은 시신(밤샘): 다음 정산에 이 확률로 한 번 굴린다. cold면 S1a 냉동칸 수(stored, burn이면 pyre)에도 들어 있다 */
   unchecked: { comm: Comm; name: string; p: number; cold?: boolean; burn?: boolean }[];
   order: Order | null;
