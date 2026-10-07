@@ -79,9 +79,13 @@ Q = dict(
     assn_on_fail=0,       # 1판 시뮬레이터의 열림(위기 법 부결 뒤). 2판은 상황 카드에서만 연다
     exec_blackmail_p=0.2,  # (가정) 실행자 칸 관계가 회의 이하일 때 구간마다 열차장 협박 확률
     # 5.1 탄압, 5.3 계엄
+    repress_extinguish=1,  # 탄압이 그 칸 불씨를 끈다(5.1). 0이면 끄지 않는다(시험)
     guard_refuse=0.5, ep_len=3, coup_line=-15, coup_clear=15, coup_wait=2, curfew=1, ml_direct=0, ml_lift=0,
     ml_tension=2, decree_guard=-5,  # 계엄 긴장 +2/구간, 포고마다 경비대 관계 −5(2판)
     ep_normal=0,          # 1이면 비상대권을 일반 51표로(코디네이터 C-2 시험)
+    brink_max=2, war_max=1, brink_clock=3, brink_tension=70, brink_esc=0.20,  # 5.5 내전 직전(3판)
+    ai_ml_request=0.4, pledge_cost=6, support_rel=10, war_help_trust=-10,
+    captain_ambition=0.3,  # (가정) 경비대장 성향이 야심일 확률
     leash_public=0.0,     # D-1: 목줄이 끊기면 이 확률로 대표가 공개(신임 −10, 그 칸 적의 +1, 결과 아크 +1)
     harsh_pull=0.0,       # D-2: 0이 아니면 가혹 법의 협박은 대표 몫 = 의석 × 결속도 × 이 값만 끌고 온다
     ml_rel=15, ml_grudge_max=0,  # 계엄 조건: 경비대 관계 호의 이상, 경비대장 적의 0
@@ -94,7 +98,7 @@ Q = dict(
 RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
 BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
 DARK = ('saint', 'caretaker', 'tyrant', 'schemer_plus')
-MEANS = dict(assn_ordered=4, ml_declared=5, executions=3, scapegoats=3, frames=3, exiles=2, lynch_allowed=2,
+MEANS = dict(assn_ordered=4, ml_means=1, executions=3, scapegoats=3, frames=3, exiles=2, lynch_allowed=2,
              mass_arrest=2, summary=2, trial_bought=2, dispersals=1, blackmail=1, harsh_chosen=1)
 S1A_POLICIES = ('passive', 'idealist', 'nodeal', 'caretaker', 'schemer', 'caretaker_random')
 
@@ -143,6 +147,10 @@ class DarkRun(A.Run):
         self.rel = RelDict(self, self.rel)
         self.armory = self.armory_asked = False
         self.ration_streak = {c: 0 for c in COMMS}
+        self.brink = self.war = None
+        self.brinks_n = self.wars_n = 0
+        self.captain_ambitious = self.r2.random() < Q['captain_ambition']
+        self.coup_line_now = Q['coup_line']
 
     # ---------------- S1a 훅 ----------------
     def res(self, key, default=0.0):
@@ -360,7 +368,7 @@ class DarkRun(A.Run):
             if Q['curfew']:
                 self.tension += 1; self.fear += 2
                 for c in ('tail', 'front'): self.rel[c] = clamp(self.rel[c] - 2, -100, 100)
-            if self.rel['guard'] <= Q['coup_line'] and self.coup_warn is None:
+            if self.rel['guard'] <= self.coup_line_now and self.coup_warn is None:
                 self.coup_warn = self.seg; S['coup_warning'] += 1
             if self.coup_warn is not None:
                 if self.rel['guard'] >= Q['coup_clear']:
@@ -379,7 +387,11 @@ class DarkRun(A.Run):
                 self.ep_expire()
         elif (self.dark == 'tyrant' and Q['ml_direct'] and not self.ml
               and (self.tension >= 50 or self.trust <= 10) and self.ml_ok()):
-            self.declare_ml()
+            self.declare_ml('extend')
+        if self.war:
+            self.war_card()
+        elif self.brink:
+            self.brink_card()
         if self.dark == 'tyrant':
             for c in ('engine', 'tail'):
                 line = P['strike_rel'] if c == 'engine' else -40
@@ -483,6 +495,7 @@ class DarkRun(A.Run):
         for c in self._snapped:
             self.new_ember(c, 'chief', 'leash')
         self._snapped = []
+        self.brink_tick()
         self.prev_fervor = dict(self.fervor)
         self.prev_grudge = dict(self.grudge)
 
@@ -555,6 +568,8 @@ class DarkRun(A.Run):
         p += Q['esc_opp'] * opp
         p -= Q['esc_guard'] * self.guarded(e) + Q['esc_patrol'] * ('patrol' in self.passed)
         p -= Q['curfew_esc'] * self.curfew_on()
+        if self.brink and {e['who'], e['target']} == set(self.brink['pair']):
+            p += Q['brink_esc']
         return clamp(p, Q['esc_min'], Q['esc_max'])
 
     def escalate(self):
@@ -1036,9 +1051,10 @@ class DarkRun(A.Run):
         first = self.dispersed[c] == 0
         self.dispersed[c] += 1
         S['dispersals'] += 1
-        for e in list(self.embers):
-            if e['who'] == c and e['imm'] is None:
-                self.kill_ember(e, 'ember_repressed')
+        if Q['repress_extinguish']:
+            for e in list(self.embers):
+                if e['who'] == c and e['imm'] is None:
+                    self.kill_ember(e, 'ember_repressed')
         self.repressed_until[c] = self.seg + 6
         if first:
             self.fervor[c] = 0
@@ -1062,7 +1078,7 @@ class DarkRun(A.Run):
         self.repealed_at['emergency_powers'] = self.session
         if self.dark == 'tyrant':
             if self.ml_ok():
-                self.declare_ml(); return
+                self.declare_ml('extend'); return
             S['ml_locked'] += 1
         S['ep_returned'] += 1
         self.trust += 5
@@ -1079,18 +1095,204 @@ class DarkRun(A.Run):
         if law in CORPSE:
             self.corpse_issue = True
 
-    def declare_ml(self):
+    # ---------------- 내전 직전과 내전 (5.5, 3판) ----------------
+    ML_DOOR_MEANS = dict(extend=5, council=2, brink=4, war=4, captain=0)
+
+    def declare_ml(self, door='extend', pair=()):
+        """계엄으로 가는 문 넷(5.5). 들어선 뒤의 규칙은 5.3 그대로다."""
         S = self.stats
         self.ml = True; self.ml_start = self.seg; self.pre_ml_trust = self.trust
         self.ep_on = False; self.ep_decrees = []
         self.passed.discard('emergency_powers')
-        S['ml_declared'] += 1
-        for c in COMMS:
-            if c != 'guard':
+        S['ml_declared'] += 1; S['ml_door_' + door] += 1; S['ml_means'] += self.ML_DOOR_MEANS[door]
+        if door == 'extend':
+            for c in COMMS:
+                if c != 'guard':
+                    self.offend(c)
+            self.tension += 10
+        elif door == 'council':
+            self.tension += 3
+        else:  # 내전 직전·내전에서 선포, 경비대장의 계엄
+            for c in pair:
                 self.offend(c)
-        self.tension += 10
+            for c in COMMS:
+                if c not in pair:
+                    self.rel[c] = clamp(self.rel[c] + (5 if door == 'brink' else 3), -100, 100)
+            self.tension += 5
+            if door == 'captain':
+                self.trust -= 10
+                self.coup_line_now = 14  # 쿠데타 경고 문턱이 한 단계 높다(중립 이하)
         self.ration['guard'] = min(4, self.ration['guard'] + 1)
         self.ml_floor = self.ration['guard']
+
+    def brink_tick(self):
+        """정산: 내전 직전이 시작되는지, 시계가 다 됐는지."""
+        S = self.stats
+        if self.brink:
+            b = self.brink
+            if b['start'] < self.seg:
+                b['clock'] -= 1
+            if b['clock'] <= 0:
+                self.brink = None
+                self.start_war(b['pair'])
+            return
+        if self.war or self.ml or self.wars_n >= Q['war_max'] or self.brinks_n >= Q['brink_max']:
+            return
+        for a, b in RIVALS:
+            if self.fervor[a] < 2 or self.fervor[b] < 2:
+                continue
+            sab = any(e['stage'] >= 2 and {e['who'], e['target']} == {a, b} for e in self.embers)
+            if sab or self.tension >= Q['brink_tension']:
+                clock = Q['brink_clock'] - (1 if (self.dispersed[a] or self.dispersed[b]) else 0)
+                self.brink = dict(pair=(a, b), clock=clock, start=self.seg, k=0, sep=False, pledge=False)
+                self.brinks_n += 1
+                S['brinks'] += 1; S['brink_any'] = 1; S['brink_' + a + '_' + b] += 1
+                return
+
+    def brink_card(self):
+        S = self.stats
+        b = self.brink
+        a, c = b['pair']
+        b['k'] += 1
+        self.tension += 3
+        S['sign_brink'] += 1
+        d = self.dark
+        guard_ok = self.rel['guard'] > -15 and 'guard' not in b['pair']
+        bigger, smaller = (a, c) if SEATS[a] >= SEATS[c] else (c, a)
+        if d == 'tyrant' and not self.ml and guard_ok:
+            self.declare_ml('brink', b['pair']); S['brink_end_ml'] += 1
+            for x in b['pair']: self.fervor[x] = min(self.fervor[x], 1)
+            self.brink = None; return
+        if d in ('tyrant', 'schemer_plus'):
+            self.take_side(bigger, smaller); S['brink_end_side'] += 1
+            self.brink = None; return
+        if not b['pledge'] and self.trust >= 40:  # 한 탁자에 앉힌다: 비상 소집으로 '휴전 서약'(가정)
+            b['pledge'] = True
+            self.trust -= Q['pledge_cost']; S['pledge_votes'] += 1
+            if self.pledge_vote(b['pair']):
+                S['brink_end_peace'] += 1
+                for x in b['pair']:
+                    self.fervor[x] = max(0, self.fervor[x] - 1)
+                    self.promises.append((x, self.seg + 3, self.r2.choice(['lever', 'medicine', 'luxury', 'target'])))
+                self.brink = None; return
+        elif not b['sep']:  # 떼어 놓는다
+            b['sep'] = True; b['clock'] += 1; S['brink_separate'] += 1
+            for x in b['pair']:
+                self.rel[x] = clamp(self.rel[x] - 5, -100, 100)
+        if self.brink and b['k'] == 2 and not self.ml and self.r2.random() < Q['ai_ml_request']:
+            S['ai_ml_request'] += 1
+            if self.ml_request_vote(b['pair']):
+                S['brink_end_ml'] += 1
+                self.declare_ml('council', b['pair'])
+                for x in b['pair']: self.fervor[x] = min(self.fervor[x], 1)
+                self.brink = None
+
+    def vote_yes(self, scores, need):
+        yes = 0
+        for cc in COMMS:
+            y, u, n = self.split(scores[cc])
+            s = SEATS[cc]
+            yy = round(s * y); nn = round(s * n); uu = s - yy - nn
+            p = clamp(0.5 + 0.1 * scores[cc], 0.2, 0.8)
+            yes += yy + sum(1 for _ in range(uu) if self.r2.random() < p)
+        return yes >= need
+
+    def pledge_vote(self, pair):
+        sc = {}
+        for x in COMMS:
+            s = band(self.rel[x]) + (0 if x in pair else 2)  # 끼지 않은 칸은 평화를 바란다(가정)
+            if self.grudge[x] >= P['hostile_grudge']:
+                s = min(s, -3)
+            elif self.grudge[x] >= 1:
+                s -= 1
+            sc[x] = s
+        ok = self.vote_yes(sc, 51)
+        self.stats['pledge_passed'] += ok
+        return ok
+
+    def ml_request_vote(self, pair):
+        lean = 1 if self.dark in ('tyrant', 'schemer_plus') else -1  # 열차장이 표를 모으거나 막는다
+        sc = {x: self.ideo[x][1] + (-1 if x in pair else 1) + (1 if x == 'guard' else 0) + lean for x in COMMS}
+        ok = self.vote_yes(sc, 67)
+        self.stats['ai_ml_passed'] += ok
+        return ok
+
+    def take_side(self, win, lose):
+        """한쪽 편을 든다: 고른 쪽에 지지, 다른 쪽에 지도부 근신(5.1)."""
+        S = self.stats
+        S['mass_arrest'] += 1
+        self.rel[win] = clamp(self.rel[win] + Q['support_rel'], -100, 100)
+        self.fervor[win] = max(0, self.fervor[win] - 1)
+        self.offend(lose); self.offend(lose)
+        self.tension += 10; self.fear += 10
+        if self.r2.random() < 0.5:  # 진 쪽 불씨가 바로 '폭행 임박'
+            e = next((x for x in self.embers if x['who'] == lose and x['imm'] is None), None)
+            if e is None and len(self.embers) < Q['ember_max']:
+                self.eid += 1
+                e = dict(id=self.eid, who=lose, target=win, cause='side', stage=2, imm=None, quiet=0,
+                         guard_until=-1, sab=None, blocked=False)
+                self.embers.append(e); S['embers'] += 1; S['ember_side'] += 1
+            if e is not None and self.violent_used < Q['violent_cap']:
+                e['stage'] = 2; e['imm'] = 3; self.violent_used += 1
+                S['sign_imminent'] += 1; S['side_assault_imminent'] += 1
+                self.react_imminent(e)
+
+    def start_war(self, pair):
+        S = self.stats
+        self.war = dict(pair=pair, segs=0, end_next=None)
+        self.wars_n += 1
+        S['wars'] += 1; S['war_any'] = 1
+
+    def war_card(self):
+        S = self.stats
+        w = self.war
+        a, c = w['pair']
+        bigger, smaller = (a, c) if SEATS[a] >= SEATS[c] else (c, a)
+        if w['end_next'] == 'ml':  # 진압: 싸움이 끝나지만 1~2명이 더 죽는다
+            n = self.r2.choice([1, 2])
+            for _ in range(n):
+                self.train_death(1, self.r2.choice(w['pair'])); S['war_deaths'] += 1
+            self.war = None; S['war_end_ml'] += 1; return
+        if w['end_next'] == 'help':
+            win, lose = w['help']
+            self.war_loss(lose, Q['war_help_trust']); S['war_end_help'] += 1
+            self.war = None; return
+        # 싸움: 1명이 죽고 2명이 다친다. 정차 산출 −50%, 긴장 +8
+        self.train_death(1, self.r2.choice(w['pair'])); S['war_deaths'] += 1
+        self.injured += 2
+        self.haul_once *= 0.5
+        self.tension += 8
+        w['segs'] += 1
+        S['war_segments'] += 1
+        d = self.dark
+        g = self.rel['guard']
+        locked = g <= -40
+        if d == 'tyrant' and not self.ml and g > -40 and 'guard' not in w['pair']:
+            self.declare_ml('war', w['pair']); w['end_next'] = 'ml'; return
+        if d in ('tyrant', 'schemer_plus') and not locked:
+            w['end_next'] = 'help'; w['help'] = (bigger, smaller); S['war_help'] += 1; return
+        if d in ('saint', 'caretaker') and self.trust >= 60:
+            S['war_truce_try'] += 1
+            if self.r2.random() < 0.5:
+                S['war_end_truce'] += 1; self.war = None; return
+        else:  # 손 놓는다
+            S['war_hands_off'] += 1
+            if (self.captain_ambitious and g >= 15 and not self.ml and 'guard' not in w['pair']
+                    and self.r2.random() < 0.4):
+                self.declare_ml('captain', w['pair']); w['end_next'] = 'ml'; return
+        if w['segs'] >= 2:  # 한쪽이 이긴다(의석 비율로 주사위)
+            win = a if self.r2.random() < SEATS[a] / (SEATS[a] + SEATS[c]) else c
+            self.war_loss(c if win == a else a, -15); S['war_end_fought'] += 1
+            self.war = None
+
+    def war_loss(self, lose, trust):
+        S = self.stats
+        if self.r2.random() < 0.5:
+            S['war_leader_killed'] += 1
+            self.train_death(1, lose); S['war_deaths'] += 1
+            self.succession(lose)
+        self.grudge[lose] = 3; self.last_offense[lose] = self.session
+        self.trust += trust
 
     def lift_ml(self):
         self.ml = False; self.coup_warn = None
@@ -1154,6 +1356,9 @@ class DarkRun(A.Run):
         if not self.s1b:
             return super().council()
         S = self.stats
+        if self.war:  # 내전 중엔 회기가 열리지 않는다
+            S['council_skipped_war'] += 1
+            return
         if self.ml:  # 의회 대신 포고
             self.session_bookkeeping(); self.decree()
             return
@@ -1265,6 +1470,11 @@ def report(policy, n, places):
         ('시신', ['train_corpses', 'vigil_allowed', 'corpse_rise', 'bites_found', 'bite_outbreak', 'deaths']),
         ('탄압·계엄', ['dispersals', 'guard_refused', 'ep_passed', 'ep_returned', 'ml_locked', 'ml_declared', 'ml_len',
                     'decrees', 'harsh_decreed', 'coup_warning']),
+        ('내전', ['brink_any', 'brinks', 'brink_tail_front', 'brink_engine_medtech', 'brink_guard_tail', 'brink_end_peace',
+                 'brink_end_side', 'brink_end_ml', 'brink_separate', 'pledge_votes', 'pledge_passed', 'ai_ml_request',
+                 'ai_ml_passed', 'war_any', 'war_segments', 'war_deaths', 'war_end_ml', 'war_end_help',
+                 'war_end_truce', 'war_end_fought', 'war_hands_off', 'war_leader_killed', 'council_skipped_war',
+                 'ml_door_extend', 'ml_door_council', 'ml_door_brink', 'ml_door_war', 'ml_door_captain']),
         ('암살 명령', ['assn_ordered', 'assn_why_hostile', 'assn_why_silence', 'assn_why_crisis_fail', 'assn_succeeded', 'assn_failed', 'assn_exposed', 'frames', 'covered_up',
                     'executor_blackmail', 'succession']),
         ('S1a', ['passed', 'harsh_passed', 'harsh_forced', 'failed', 'blackmail', 'leash_snapped', 'leash_public', 'strikes', 'max_tension', 'end_trust']),
@@ -1285,6 +1495,9 @@ def report(policy, n, places):
     print(f"수단 점수 평균 {out['means']:.1f}, 8 이상 {out['dark8']:.0%}. 톤:",
           ', '.join(f'{k} {v / n:.0%}' for k, v in sorted(tone.items())))
     out['ml_rate'] = ml_runs / n
+    for k in ('brink_any', 'war_any', 'ml_door_extend', 'ml_door_council', 'ml_door_brink', 'ml_door_war',
+              'ml_door_captain', 'deaths', 'war_deaths', 'end_trust'):
+        out[k] = agg[k] / n
     out['ml_len'] = agg['ml_len'] / ml_runs if ml_runs else 0
     return out
 
@@ -1356,6 +1569,11 @@ def main():
     for p, r in res.items():
         print(f"{p:13s} " + ' | '.join(f"{r['cr_' + t][0]:.2f} {r['cr_' + t][1]:.1f} {r['cr_' + t][2]:.0%}"
                                       for t in ('strike', 'protest', 'resource', 'crowd')) + f" | {r['vote']:.0%}")
+    print('\n내전 요약: policy brink% war% | 계엄 문: 연장 의회 직전 내전 경비대장 | deaths war_deaths end_trust')
+    for p, r in res.items():
+        print(f"{p:13s} {r['brink_any']:.0%} {r['war_any']:.0%} | {r['ml_door_extend']:.0%} {r['ml_door_council']:.0%} "
+              f"{r['ml_door_brink']:.0%} {r['ml_door_war']:.0%} {r['ml_door_captain']:.0%} | "
+              f"{r['deaths']:.2f} {r['war_deaths']:.2f} {r['end_trust']:.0f}")
     print('\n요약표: policy complete stranded ousted revolt coup | signs violence vdeaths | means dark8 | ml_rate ml_len')
     for p, r in res.items():
         print(f"{p:13s} {r['complete']:.0%} {r['stranded']:.0%} {r['ousted']:.0%} {r['revolt']:.0%} {r['coup']:.0%} | "
