@@ -6,6 +6,7 @@ import { bottomBar, topBar } from './hud';
 import { homeScreen, stackCount } from './home';
 import { overviewScreen } from './overview';
 import { councilScreen, voteLever } from './council';
+import { countSchedule, noiseStage } from './count_pace';
 import { cardSheet } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
 import { beginNames, endNames, personCard, shortText } from './names';
@@ -21,7 +22,6 @@ import type { ReproError, Step, TrailEntry } from './repro';
 const SAVE_KEY = 's1a.game.v2';
 // 오류 재현 묶음(repro.ts): 최근 행동, 직전 저장, 마지막 오류. 다시 열어도 남게 따로 저장한다.
 const REPRO_KEY = 's1a.repro.v1';
-const COUNT_MS = 45;
 
 function load(): Game | null {
   try {
@@ -165,7 +165,7 @@ export function startApp(root: HTMLElement): void {
   if (g.phase === 'council') ui.screen = 'council';
   const scroll: Record<string, number> = {};
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
-  let countTimer: ReturnType<typeof setInterval> | undefined;
+  let countTimer: ReturnType<typeof setTimeout> | undefined;
   let focusCar: string | null = null;
   const h6: H6Clock = { since: 0, seg: null }; // S1c 내정 훅: 내정 시간 재기
   let repro = loadRepro(g.seed);
@@ -266,16 +266,22 @@ export function startApp(root: HTMLElement): void {
 
   function startCount(): void {
     const result = g.council?.result;
-    clearInterval(countTimer);
+    clearTimeout(countTimer);
     if (!result || result.flips.length === 0 || matchMedia('(prefers-reduced-motion: reduce)').matches) { ui.count = null; return; }
+    // 찬성·반대가 먼저 앉고 미정이 하나씩 갈린다. 아직 뒤집힐 수 있는 마지막 몇 표는 느리게, 정해지면 남은 돌을 한꺼번에(count_pace.ts).
+    const plan = countSchedule(result, noiseStage(g.tension), g.session);
     ui.count = 0;
-    // 찬성·반대가 먼저 앉고 미정이 하나씩 갈린다. 마지막 몇 표는 느리게(숨죽이는 개표).
-    countTimer = setInterval(() => {
-      if (ui.count === null) { clearInterval(countTimer); return; }
-      ui.count += 1;
-      if (ui.count >= result.flips.length) { ui.count = null; clearInterval(countTimer); }
-      render();
-    }, COUNT_MS);
+    const next = (i: number) => {
+      if (i >= plan.length) return;
+      countTimer = setTimeout(() => {
+        if (ui.count === null) return;
+        const shown = plan[i][1];
+        ui.count = shown >= result.flips.length ? null : shown;
+        render();
+        next(i + 1);
+      }, plan[i][0]);
+    };
+    next(0);
   }
 
   function handle(action: string, data: DOMStringMap): void {
@@ -397,7 +403,7 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'skip-count':
         ui.count = null;
-        clearInterval(countTimer);
+        clearTimeout(countTimer);
         return render();
       case 'comm-act': {
         const why = step({ a: 'comm-act', d: plainData(data) });
