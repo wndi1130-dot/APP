@@ -1,10 +1,11 @@
 import {
-  COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FETCH_WANT, IDEO, LAWS, LAW_IDS, OPPOSITE, P,
+  COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FETCH_WANT, IDEO, LAWS, LAW_IDS, LAW_VARIANT_OF, OPPOSITE, P,
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
+import { refreshSit } from './domestic/state';
 import { MOTIONS, motionsNow } from './motions';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, VoteFlip, VoteResult } from './state';
@@ -653,17 +654,20 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
     if (r !== undefined) g.comms[c].rel = clamp(g.comms[c].rel + r, -100, 100);
   }
   // 1회 효과는 법마다 한 판에 한 번(R3 카드 1, 2026-10-07): 폐지했다 다시 통과시켜 또 받지 못한다. 관계 반응은 통과마다 그대로.
+  // 변형 법(종자곡 반만 풀기 등)은 원래 법과 한 묶음으로 센다.
   const res = def.res;
-  if (!(g.onceTaken ??= []).includes(law)) {
+  const once = LAW_VARIANT_OF[law] ?? law;
+  if (!(g.onceTaken ??= []).includes(once)) {
     if (res.trustOnce) g.trust = clamp(g.trust + res.trustOnce, 0, 100);
     if (res.fearOnce) g.fear = clamp(g.fear + res.fearOnce, 0, 100);
     if (res.foodOnce) g.food += res.foodOnce;
-    if (res.trustOnce || res.fearOnce || res.foodOnce) g.onceTaken.push(law);
+    if (res.trustOnce || res.fearOnce || res.foodOnce) g.onceTaken.push(once);
   }
   if (law === 'guided_voting') g.guidedLeft = 3;
   // 3구간짜리 대권(numbers 8장 법 16). 통과한 구간은 이미 표결이 끝났으니 다음 세 구간을 센다(nextSegment가 하나씩 줄인다).
   if (law === 'emergency_powers') { g.decreeLeft = DECREE_SEGS + 1; g.decreed = []; }
   if (CORPSE_LAWS.includes(law)) g.corpseIssue = false;
+  refreshSit(g); // 기술이 덜어 주는 법의 벌(7.3)
   g.stats.lawsPassed += 1;
 }
 
@@ -686,6 +690,7 @@ export function repealLaw(g: Game, law: LawId): void {
   if (CORPSE_LAWS.includes(law)) g.corpseIssue = true;
   if (law === 'guided_voting') g.guidedLeft = 0;
   if (law === 'emergency_powers') g.decreeLeft = 0;
+  refreshSit(g);
   g.stats.repeals += 1;
 }
 

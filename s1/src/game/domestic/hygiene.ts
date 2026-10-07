@@ -30,14 +30,13 @@ export function setHotWater(g: Game, v: number): void {
   dom(g).hotWater = clamp(Math.round(v), hotWaterFloor(g), 3);
 }
 
-/** 더운물 석탄/구간 = max(0, 레버 − 1) × 인구/40 × 0.1 × 법 × E2, 21가면 +0.25 고정(16.2, 16.4, 16.6, 16.9). '드물게'는 공짜다. */
+/** 더운물 석탄/구간 = max(0, 레버 − 1) × 인구/40 × 0.1 × 법, 21가면 +0.25 고정(16.2, 16.4, 16.6, 16.9). '드물게'는 공짜다. */
 export function hotWaterCoal(g: Game): number {
   const d = g.dom;
   if (!d) return 0;
   let m = 1;
   if (lawActive(g, 'bath_rota')) m *= D.bathRotaCoal;
   if (lawActive(g, 'hands_first')) m *= D.handsFirstCoal;
-  m *= 1 - (1 - D.e2HotWater) * techMult(g, 'e2');
   const rota = lawActive(g, 'bath_rota') ? D.bathRotaFlat : 0;
   return Math.max(0, Math.max(d.hotWater, hotWaterFloor(g)) - 1) * (totalPop(g) / 40) * D.hotWaterCoal * m + rota;
 }

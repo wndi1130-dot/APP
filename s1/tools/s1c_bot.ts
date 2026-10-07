@@ -211,7 +211,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       restored: d.stats.restored, tier3: d.stats.tier3, defective: d.stats.defective, breakdowns: d.stats.breakdowns, repairs: d.stats.repairs,
       lice: d.stats.lice, typhus: d.stats.typhus, hotCoal: d.stats.hotCoal, techCoal: d.stats.techCoal, apprentices: d.stats.apprentices,
       manuals: d.stats.manuals, demands: d.stats.demands, partsMade: d.stats.partsMade, partsEnd: d.parts, scrapEnd: d.scrap, woodEnd: d.wood,
-      buried: d.stats.buried, s1cLaws: Object.keys(g.passed).filter(l => ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first'].includes(l)).length,
+      buried: d.stats.buried, s1cLaws: Object.keys(g.passed).filter(l => ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack'].includes(l)).length,
       techs: Object.keys(d.techs).filter(id => d.techs[id as keyof typeof d.techs]?.stage !== 'restoring'),
     };
   }

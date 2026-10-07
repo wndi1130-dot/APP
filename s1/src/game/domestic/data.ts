@@ -21,7 +21,7 @@ export const D = {
   partWork: 1, partScrap: 2, partWood: 1,
   restoreWork: [3, 3, 6, 12], restoreParts: [0, 2, 4, 8], restoreFrags: [0, 1, 2, 3], defectFrags: [0, 1, 1, 2],
   adaptWork: 3, finishWork: 2,
-  insulateWork: 3, insulateWood: 8, insulateWarm: 10,
+  insulateWork: 3, insulateWood: 8,
   armorWork: 4, armorScrap: 12, armorExposure: 10,
   convertWork: 6, convertMaterials: 20,
   repairWork: 1, repairParts: 2,
@@ -33,6 +33,8 @@ export const D = {
   storeCap: 40, coldCap: 6,
   /** M3 나 얼음 상자(7.3, main facf39c): 창고칸 자재 상한에서 빼는 자리, 공동 식당이 있을 때 덜 드는 식량/구간(+5 → +3.5) */
   iceBoxCap: 6, iceBoxFood: 1.5,
+  /** 7.3 이상 법을 사는 값: E3 가는 공동 난방 석탄 +1.25 → +0.6(덜 드는 몫), M5는 모두를 치료 의약품 ×1.6 → ×1.3 */
+  e3aHeatCoal: 0.65, m5TreatMed: 1.3,
   // 4.2 14번째 칸부터
   extraCarCoal: 0.4,
   // 4.4 쓸 만한 칸(화물역 정차)
@@ -69,7 +71,7 @@ export const D = {
   // 9.1 법 20
   dutyMult: 0.9,
   // 16.2 더운물(16.9): 레버 1~3(드물게·보통·넉넉), 석탄 = max(0, 레버 − 1) × 인구/40 × 0.1. '드물게'는 공짜
-  hotWater0: 1, hotWaterCoal: 0.1, bathRotaCoal: 1.2, bathRotaFlat: 0.25, handsFirstCoal: 0.8, e2HotWater: 0.8,
+  hotWater0: 1, hotWaterCoal: 0.1, bathRotaCoal: 1.2, bathRotaFlat: 0.25, handsFirstCoal: 0.8,
   // 16.3 이 확률
   // 불결 관계 벌은 이가 도는 칸만, 이가 사라진 칸은 3구간 면역(16.9)
   liceNormal: 0.03, liceDirty: 0.1, liceWinter: 1.5, dirtyRel: 1, liceImmune: 3,
@@ -126,29 +128,30 @@ export interface TechDef {
 const T = (def: Omit<TechDef, 'upkeep' | 'like' | 'dislike'> & Partial<TechDef>): TechDef => ({ upkeep: {}, like: [], dislike: [], ...def });
 
 export const TECHS: Record<TechId, TechDef> = {
-  e1: T({ id: 'e1', branch: 'engine', tier: 1, name: '누설 막기', effect: '달리기 석탄 −0.5', like: ['engine'] }),
-  e2: T({ id: 'e2', branch: 'engine', tier: 2, name: '압력 조절', effect: '달리기 석탄 −1, 더운물 석탄 ×0.8', upkeep: { parts: 0.25 }, like: ['engine', 'front'] }),
+  // 7.3 '기술은 법을 바꾼다'(2026-10-07 사용자 카드 답): E1~E5, M3, M5, X1은 법의 벌·값·변형을 바꾼다(lawtech.ts, 변형 법은 data.ts LAWS).
+  e1: T({ id: 'e1', branch: 'engine', tier: 1, name: '누설 막기', effect: '눈 녹이기 당번: 온기 벌 없음, 노출 벌 절반', like: ['engine'] }),
+  e2: T({ id: 'e2', branch: 'engine', tier: 2, name: '압력 조절', effect: '난방 배당: 꼬리칸·의무진 온기 −10 → −5, 경비대 벌 없음', upkeep: { parts: 0.25 }, like: ['engine', 'front'] }),
   e3: T({
     id: 'e3', branch: 'engine', tier: 2, name: '난방 배관', effect: '변형 둘 중 하나', upkeep: { parts: 0.25 },
     variants: {
-      a: { name: '꼬리칸까지', effect: '꼬리칸 온기 +10', upkeep: { parts: 0.25 }, like: ['tail'], dislike: ['front'], label: '꼬리칸까지 놓는다', say: '열은 맨 끝 칸까지 간다!' },
-      b: { name: '앞칸 직결', effect: '앞칸 온기 +10, 난방 석탄 −0.3', upkeep: { parts: 0.25 }, like: ['front'], dislike: ['tail'], label: '앞칸에 잇는다', say: '앞이 얼면 열차가 멈춘다. 앞부터 데워라!' },
+      a: { name: '꼬리칸까지', effect: '공동 난방의 석탄 +1.25 → +0.6/구간', upkeep: { parts: 0.25 }, like: ['tail'], dislike: ['front'], label: '꼬리칸까지 놓는다', say: '열은 맨 끝 칸까지 간다!' },
+      b: { name: '앞칸 직결', effect: '난방 배당: 경비대 벌 없음, 앞칸 온기 +5', upkeep: { parts: 0.25 }, like: ['front'], dislike: ['tail'], label: '앞칸에 잇는다', say: '앞이 얼면 열차가 멈춘다. 앞부터 데워라!' },
     },
   }),
-  e4: T({ id: 'e4', branch: 'engine', tier: 3, name: '과열 증기', effect: '달리기 석탄 −1.5, 대체 화부의 석탄 벌 없음', upkeep: { parts: 0.5 }, like: ['engine'] }),
-  e5: T({ id: 'e5', branch: 'engine', tier: 0, name: '단열 개조', effect: '칸마다 목재 8로 온기 +10', like: ['tail'], dislike: ['engine'], adapt: { parts: 1, wood: 4 } }),
+  e4: T({ id: 'e4', branch: 'engine', tier: 3, name: '과열 증기', effect: '눈 녹이기 당번: 노출 벌 없음. 대체 화부의 석탄 벌 없음', upkeep: { parts: 0.5 }, like: ['engine'] }),
+  e5: T({ id: 'e5', branch: 'engine', tier: 0, name: '단열 개조', effect: '단열 개조가 열린다(칸마다 목재 8). 단열한 객차는 난방 배당의 온기 벌이 없다', like: ['tail'], dislike: ['engine'], adapt: { parts: 1, wood: 4 } }),
   m1: T({ id: 'm1', branch: 'med', tier: 1, name: '응급 처치', effect: '부상 회복 40% → 50%, 발진티푸스 사망 15% → 10%', like: ['medtech'] }),
   m2: T({ id: 'm2', branch: 'med', tier: 2, name: '환자 분류 기준', effect: '중환자 분류(기준) 법이 열린다', like: ['medtech'], dislike: ['tail'] }),
   m3: T({
     id: 'm3', branch: 'med', tier: 2, name: '식량 보존', effect: '변형 둘 중 하나',
     variants: {
-      a: { name: '훈제·염장', effect: '식량 소모 ×0.9, 목재 0.5/구간', upkeep: { wood: 0.5 }, like: ['tail'], dislike: [], label: '훈제로 간다', say: '연기에 걸어라. 나무는 또 주우면 된다!' },
+      a: { name: '훈제·염장', effect: "종자곡 풀기에 '반만 풀기' 변형이 열린다(식량 +15, 앞칸 −10)", upkeep: { wood: 0.5 }, like: ['tail'], dislike: ['front'], label: '훈제로 간다', say: '연기에 걸어라. 나무는 또 주우면 된다!' },
       // 나는 2026-10-07 내정 문서 7.3(main facf39c)대로 창고칸 얼음 상자다. 식량은 냉동칸에 두지 않는다(시신만 둔다).
       b: { name: '얼음 상자', effect: '공동 식당의 식량 값 +5 → +3.5/구간, 창고칸 자재 상한 40 → 34', like: ['tail'], dislike: [], upkeep: {}, label: '얼음 상자를 짠다', say: '바깥 얼음을 퍼 와라. 남는 음식은 묵힌다!' },
     },
   }),
   m4: T({ id: 'm4', branch: 'med', tier: 3, name: '온실칸', effect: '칸 하나를 온실로(식량 +1.5~3/구간)', upkeep: { coal: 1, parts: 0.5 }, like: ['tail'] }),
-  m5: T({ id: 'm5', branch: 'med', tier: 0, name: '약초와 민간요법', effect: '의약품 소모 ×0.85, 이가 병으로 번질 확률 40% → 25%', like: ['tail'], dislike: ['medtech'], adapt: { parts: 0, wood: 2 } }),
+  m5: T({ id: 'm5', branch: 'med', tier: 0, name: '약초와 민간요법', effect: '모두를 치료의 의약품 소모 ×1.6 → ×1.3, 이가 병으로 번질 확률 40% → 25%', like: ['tail'], dislike: ['medtech'], adapt: { parts: 0, wood: 2 } }),
   w1: T({ id: 'w1', branch: 'craft', tier: 1, name: '공구 수리', effect: '공방 작업량 ×1.25', like: ['medtech'] }),
   w2: T({
     id: 'w2', branch: 'craft', tier: 2, name: '사냥과 방어', effect: '변형 둘 중 하나',
@@ -167,14 +170,14 @@ export const TECHS: Record<TechId, TechDef> = {
     },
   }),
   r3: T({ id: 'r3', branch: 'radio', tier: 3, name: '장거리 무전', effect: '다음 정차를 미리 알고, 판에 세 번 다른 곳으로 바꾼다', upkeep: { parts: 0.5 }, like: ['medtech'] }),
-  x1: T({ id: 'x1', branch: 'expedition', tier: 1, name: '짐 꾸리기·방한 장비', effect: '정차 산출 +10%', like: ['tail'] }),
+  x1: T({ id: 'x1', branch: 'expedition', tier: 1, name: '짐 꾸리기·방한 장비', effect: "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다)", like: ['tail'] }),
   x2: T({ id: 'x2', branch: 'expedition', tier: 2, name: '핸드카 정찰', effect: '정차마다 장소 후보가 둘', upkeep: { parts: 0.25 }, like: ['guard'] }),
   x3: T({ id: 'x3', branch: 'expedition', tier: 3, name: '궤도 모터카', effect: '지나쳐도 짧게의 절반을 얻는다(석탄 1)', upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['engine'] }),
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];
 
-/** 아끼기만 하는 기술 다섯: 사용자 답을 기다리는 동안 복원을 막는다(2026-10-07 기획 점검 03, s1c_domestic 1.1 시뮬레이션에서
- * 완주 +10~22%p). 효과 계산(hooks.ts의 SAVING_EFFECTS)과 데이터는 남겨 두어, 답이 오면 이 목록에서 빼기만 하면 켜진다. */
+/** 복원을 막아 둔 기술(2026-10-07 기획 점검 03: 옛 '아끼기만 하는' 다섯). 7.3 개편으로 이제 법을 바꾸는 효과다(lawtech.ts).
+ * 이 목록이 사용자 카드에 걸린 건지는 내정 스레드에 묻는 중이다. 풀면 이 목록에서 빼기만 하면 켜진다. */
 export const PENDING_TECHS: TechId[] = ['e1', 'e2', 'x1', 'm3', 'e5'];
 export function techPending(id: TechId): boolean {
   return PENDING_TECHS.includes(id);

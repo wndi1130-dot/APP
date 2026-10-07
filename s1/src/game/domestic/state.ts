@@ -4,6 +4,7 @@ import { addCard, createGame, drawPerson, lawActive, pick, situation } from '../
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
 import type { Field, TechId, Variant, Zone } from './data';
+import { lawTechSit } from './lawtech';
 import { bedCrowd } from './medbay';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.
@@ -292,8 +293,8 @@ export function refreshSit(g: Game): void {
   const d = g.dom;
   if (!d) return;
   const sit = zeroSit();
-  sit.tail[0] += 10 * variantMult(g, 'e3', 'a');
-  sit.front[0] += 10 * variantMult(g, 'e3', 'b');
+  // 기술이 바꾼 법의 벌(7.3, lawtech.ts). 법을 통과·폐지할 때도 다시 부른다(politics.ts).
+  lawTechSit(g, sit);
   for (const c of COMMS) if ((d.bedding[c] ?? -1) >= g.seg) sit[c][0] -= D.beddingWarm;
   if (d.armored.includes('guard') && techUsable(g, 'w3')) sit.guard[3] -= D.armorExposure;
   const beds = bedCrowd(g);

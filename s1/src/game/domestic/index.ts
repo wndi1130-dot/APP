@@ -9,4 +9,5 @@ export * from './cars';
 export * from './delegate';
 export * from './hooks';
 export * from './laws';
+export * from './lawtech';
 export * from './cards';

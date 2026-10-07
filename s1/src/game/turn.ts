@@ -16,9 +16,10 @@ import {
 import type { Game, StopResult } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
 import {
-  domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticMedMult, domesticPromise, domesticRiskMult, domesticSettle,
+  domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
+import { lawTechRes } from './domestic/lawtech';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
 
@@ -71,7 +72,7 @@ export function setLever(g: Game, c: Comm, which: 'heat' | 'ration', value: numb
 
 export function lawFloor(g: Game, key: 'heatFloor' | 'rationFloor'): number {
   let floor = 0;
-  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) floor = Math.max(floor, LAWS[law].res[key] ?? 0);
+  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) floor = Math.max(floor, lawTechRes(g, law)[key] ?? 0);
   return floor;
 }
 
@@ -128,12 +129,12 @@ export function foodCost(g: Game): number {
 
 function lawSum(g: Game, key: 'tensionAdd' | 'foodAdd' | 'coalAdd' | 'fearAdd'): number {
   let sum = 0;
-  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) sum += LAWS[law].res[key] ?? 0;
+  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) sum += lawTechRes(g, law)[key] ?? 0;
   return sum;
 }
 function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'): number {
   let m = 1;
-  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) m *= LAWS[law].res[key] ?? 1;
+  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) m *= lawTechRes(g, law)[key] ?? 1;
   return m;
 }
 
@@ -573,7 +574,7 @@ export function callEmergency(g: Game): boolean {
 }
 
 function medicineTick(g: Game, notes: string[]): void {
-  const need = g.injured * P.medPerInjured * lawMult(g, 'medMult') * domesticMedMult(g);
+  const need = g.injured * P.medPerInjured * lawMult(g, 'medMult');
   const med = g.comms.medtech;
   const refusing = med.fervor >= 1 && med.rel <= -40;
   if (g.med >= need) {
@@ -582,7 +583,7 @@ function medicineTick(g: Game, notes: string[]): void {
       notes.push('의무진이 진료를 거부했다.');
     } else {
       let heal = 0.4;
-      for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) heal = Math.max(heal, LAWS[law].res.heal ?? 0);
+      for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) heal = Math.max(heal, lawTechRes(g, law).heal ?? 0);
       heal = domesticHealRate(g, heal); // S1c 내정 훅
       let healed = 0;
       for (let i = 0; i < g.injured; i += 1) if (rnd(g) < heal) healed += 1;

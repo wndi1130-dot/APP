@@ -8,6 +8,7 @@ import type { Field, TechId } from './data';
 import { doBury, extraCarCoal, rollUsefulCar, thawMult } from './cars';
 import { delegateTick, overreachTick } from './delegate';
 import { hotWaterCoal, hygieneTick } from './hygiene';
+import { lawTechCoal, lawTechFood, lawTechRes } from './lawtech';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick, domesticHeal } from './medbay';
 import { domCard, living, personById, refreshSit, techMult, topSkill, variantMult } from './state';
@@ -15,48 +16,19 @@ import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, 
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.
 
-// ---- 아끼기만 하는 기술(1.1, 사용자 답 대기) ----
-/** 달리기 석탄을 줄이는 기술과 그 양. E1·E2는 PENDING_TECHS라 복원되지 않아 지금은 0이다. 답이 오면 그대로 켜진다. */
-export const SAVING_EFFECTS: { id: TechId; runCoal?: number; foodMult?: number; haulMult?: number }[] = [
-  { id: 'e1', runCoal: 0.5 },
-  { id: 'e2', runCoal: 1 },
-  { id: 'e4', runCoal: 1.5 },
-  { id: 'x1', haulMult: 1.1 },
-];
-
-export function techSavings(g: Game): { coal: number; foodMult: number; haulMult: number } {
-  let coal = 0;
-  let foodMult = 1;
-  let haulMult = 1;
-  for (const e of SAVING_EFFECTS) {
-    const m = techMult(g, e.id);
-    if (m <= 0) continue;
-    coal += (e.runCoal ?? 0) * m;
-    foodMult *= 1 - (1 - (e.foodMult ?? 1)) * m;
-    haulMult *= 1 + ((e.haulMult ?? 1) - 1) * m;
-  }
-  coal += 0.3 * variantMult(g, 'e3', 'b');
-  // M3 가(훈제·염장)는 아직 옛 효과(식량 ×0.9)다. 7.3의 '종자곡 반만 풀기' 변형은 기술→법 개편 때 넣는다.
-  foodMult *= 1 - 0.1 * variantMult(g, 'm3', 'a');
-  return { coal, foodMult, haulMult };
-}
-
 // ---- 출발 전 운영 / 정산의 석탄·식량(forecast) ----
 export interface DomForecast { coal: number; food: number; foodMult: number }
 
-/** forecast에 더할 몫. 더운물, 석탄 유지비, 붙인 칸, 고장 벌, 대체 화부, 느린 열차, 기술 절약, 온실·가족 특혜. */
+/** forecast에 더할 몫. 더운물, 석탄 유지비, 붙인 칸, 고장 벌, 대체 화부, 느린 열차, 기술이 싸게 한 이상 법(7.3), 온실·가족 특혜. */
 export function domesticForecast(g: Game): DomForecast {
   const d = g.dom;
   if (!d) return { coal: 0, food: 0, foodMult: 1 };
-  const save = techSavings(g);
-  let coal = hotWaterCoal(g) + upkeepCoal(g) + extraCarCoal(g) - save.coal;
+  let coal = hotWaterCoal(g) + upkeepCoal(g) + extraCarCoal(g) - lawTechCoal(g);
   if (penaltyActive(g, 'coal')) coal += 1;
   if (stokingNow(g) && techMult(g, 'e4') <= 0) coal += D.stokerCoal;
   if (!g.inStrike && topSkill(g, 'engine') === 1) coal += D.slowCoal;
   const grants = d.grants.filter(until => until >= g.seg).length * D.grantFood;
-  // M3 나 얼음 상자: 공동 식당이 서 있으면 식량 값이 덜 든다(+5 → +3.5/구간, 7.3).
-  const ice = lawActive(g, 'common_kitchen') ? D.iceBoxFood * variantMult(g, 'm3', 'b') : 0;
-  return { coal, food: grants - greenhouseFood(g) - ice, foodMult: save.foodMult };
+  return { coal, food: grants - greenhouseFood(g) - lawTechFood(g), foodMult: 1 };
 }
 
 // ---- 출발(이동 단계) ----
@@ -97,11 +69,11 @@ export function domesticRiskMult(g: Game): { injury: number; death: number } {
   return { injury, death };
 }
 
-/** 정차 산출 곱(고장 벌 −20%, '묻고 간다' ×0.85, 아끼는 기술 X1). */
+/** 정차 산출 곱(고장 벌 −20%, '묻고 간다' ×0.85). */
 export function domesticHaulMult(g: Game): number {
   const d = g.dom;
   if (!d) return 1;
-  let m = techSavings(g).haulMult;
+  let m = 1;
   if (penaltyActive(g, 'haul')) m *= 0.8;
   if (d.bury && g.stop?.stay === 'long' && g.stored > 0) m *= D.buryHaul;
   return m;
@@ -150,9 +122,9 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
   const bp = BYPRODUCT[stop.place];
   if (bp) {
     const stay = stop.stay === 'short' ? 0.6 : stop.stay === 'long' ? 1.4 : 1;
-    // 부산물은 체류와 S1a 산출 보정(아동 노동 등), 고장 벌, 묻기를 같이 받는다(5.2). 아끼는 기술(X1)은 빼고 본다.
-    const lawHaul = (Object.keys(g.passed) as LawId[]).reduce((m, law) => m * (LAWS[law].res.haulMult ?? 1), 1);
-    const mult = stay * lawHaul * (esc?.field === 'craft' ? D.escortMaterials : 1) * domesticHaulMult(g) / Math.max(0.01, techSavings(g).haulMult);
+    // 부산물은 체류와 S1a 산출 보정(아동 노동 등), 고장 벌, 묻기를 같이 받는다(5.2).
+    const lawHaul = (Object.keys(g.passed) as LawId[]).reduce((m, law) => m * (lawTechRes(g, law).haulMult ?? 1), 1);
+    const mult = stay * lawHaul * (esc?.field === 'craft' ? D.escortMaterials : 1) * domesticHaulMult(g);
     const scrap = Math.round(bp.scrap * mult);
     const wood = Math.round(bp.wood * mult);
     addMaterials(g, scrap, wood);
@@ -183,11 +155,6 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
 }
 
 // ---- 정산 ----
-/** 의약품 소모 곱(M5). */
-export function domesticMedMult(g: Game): number {
-  return g.dom ? 1 - 0.15 * techMult(g, 'm5') : 1;
-}
-
 export function domesticHealRate(g: Game, heal: number): number {
   return domesticHeal(g, heal);
 }
@@ -202,7 +169,7 @@ export function domesticSettle(g: Game, notes: string[]): void {
   if (!d) return;
   domesticPromiseMade(g);
   d.stats.hotCoal += hotWaterCoal(g);
-  d.stats.techCoal += techSavings(g).coal;
+  d.stats.techCoal += lawTechCoal(g);
   delegateTick(g);
   payUpkeep(g);
   const ws = runWorkshop(g);

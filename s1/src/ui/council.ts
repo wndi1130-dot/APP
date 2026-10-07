@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
   openConditions, relStage, relationLine, toolStatus,
-  needOf, canDecree, agendaNeed, isLawAgenda, MOTIONS,
+  needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, LawId, VoteResult } from '../game';
 import { cx, h, s } from './dom';
@@ -12,6 +12,11 @@ import type { View } from './common';
 import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle, wedgeBoundaries } from './seats';
 import { bar, portrait } from './widgets';
 import { agendaLine, nameBtn } from './names';
+
+/** 법 미리보기 줄 끝에 기술이 바꾼 것(7.3)을 붙인다. 다섯 줄 안에 들도록 법 줄을 줄인다(셋까지는 남긴다). */
+function withTech(changes: string[], tech: string[]): string[] {
+  return [...changes.slice(0, Math.max(3, 5 - tech.length)), ...tech];
+}
 
 // 의회: 식당칸 안 반원 100석을 공동체 쐐기로 나누고 쐐기 끝에 명판을 단다. 가운데 전령기 바늘과 51·67 눈금,
 // '예상 찬성 / 필요' 큰 숫자. 왼쪽은 법안 창, 오른쪽은 고른 공동체의 창(지도자, 의석, 결속도, 거래 단추 다섯).
@@ -189,7 +194,7 @@ function billPanel(view: View): HTMLElement {
       council.emergency ? h('span', { class: 'tag' }, '비상 소집') : null,
       agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
       council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
-    h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law) : law.changes)
+    h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law) : withTech(law.changes, lawTechLines(g, agenda.law)))
       .slice(0, 5).map(x => h('li', null, x))),
     h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
       council.locked && !council.result ? ' · 안건을 넘겼다' : ''));

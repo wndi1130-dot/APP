@@ -60,7 +60,9 @@ export type LawId =
   | 'child_labor' | 'corpse_throw' | 'corpse_store' | 'corpse_burn' | 'treat_all' | 'triage' | 'no_outsiders'
   | 'patrol' | 'secret_ballot' | 'emergency_powers' | 'strike_ban' | 'guided_voting'
   // S1c 법 다섯(s1a_politics_numbers 8.5). S1c를 켠 판에서만 열린다(domestic/laws.ts).
-  | 'tech_control' | 'apprentice_duty' | 'triage_std' | 'bath_rota' | 'hands_first';
+  | 'tech_control' | 'apprentice_duty' | 'triage_std' | 'bath_rota' | 'hands_first'
+  // 기술이 여는 덜 잔혹한 변형(s1c_domestic 7.3): 원래 법과 하나만 설 수 있다(domestic/laws.ts).
+  | 'seed_half' | 'child_pack';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -207,9 +209,25 @@ export const LAWS: Record<LawId, LawDef> = {
     like: { engine: 1, guard: 1, tail: -1, front: -1 },
     changes: ['기관실·경비대·파견 칸 더운물 +1', '꼬리칸·앞칸 더운물 −1', '더운물 석탄 ×0.8', '목욕 순번이 닫힌다'], opensWhen: '이가 처음 돈 뒤',
   }),
+  // 7.3 M3 가(훈제·염장): 종자곡 풀기의 변형. 남긴 씨앗은 훈제해 둔다. 숫자는 내정 스레드 제안.
+  seed_half: L({
+    id: 'seed_half', title: '종자곡 반만 풀기', group: '식량', tag: '가혹', kind: 'normal', axes: [0, -1, -1],
+    rels: { front: -10, engine: -2, medtech: -2 }, like: { tail: 1 }, res: { foodOnce: 15 }, crisis: ['food'],
+    changes: ['식량 +15(한 번)', '앞칸 관계 −10', '기관실·의무진 관계 −2', '남긴 씨앗은 훈제해 둔다', '종자곡 풀기가 닫힌다'],
+    opensWhen: '훈제·염장을 복원한 뒤, 식량 50 이하',
+  }),
+  // 7.3 X1(짐 꾸리기·방한 장비): 아동 노동의 변형. 아이들은 내리지 않고 열차 안에서 짐을 꾸린다.
+  child_pack: L({
+    id: 'child_pack', title: '아동 노동(짐 꾸리기만)', group: '노동', tag: '가혹', kind: 'normal', axes: [-1, -1, 0],
+    rels: { tail: -5, medtech: -5 }, res: { haulMult: 1.1, fearOnce: 2 }, crisis: ['coal', 'food'],
+    changes: ['정차 산출 +10%', '아이들은 내리지 않고 열차 안에서 짐을 꾸린다', '꼬리칸 관계 −5', '의무진 관계 −5', '공포 +2', '아동 노동이 닫힌다'],
+    opensWhen: '짐 꾸리기·방한 장비를 복원한 뒤, 석탄이나 식량 40 이하',
+  }),
 };
 /** S1c 법. S1a 판에선 열리지 않는다. */
-export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first'];
+export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack'];
+/** 변형 법 → 원래 법. 1회 효과는 둘을 합쳐 판에 한 번이다(R3 카드 1). */
+export const LAW_VARIANT_OF: Partial<Record<LawId, LawId>> = { seed_half: 'seed_grain', child_pack: 'child_labor', triage_std: 'triage' };
 export const LAW_IDS = Object.keys(LAWS) as LawId[];
 export const CORPSE_LAWS: LawId[] = ['corpse_throw', 'corpse_store', 'corpse_burn'];
 

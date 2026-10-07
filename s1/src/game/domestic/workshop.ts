@@ -4,6 +4,7 @@ import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed, techPending } from './data';
 import type { TechId, Upkeep, Variant } from './data';
+import { lawTechNews } from './lawtech';
 import { domCard, refreshSit, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
@@ -190,6 +191,7 @@ function completeRestore(g: Game, id: TechId): void {
   journal(g, `${BRANCH_NAME[def.branch]}: ${techTitle(g, id)}을(를) ${st.defect ? '결함판으로 ' : ''}복원했다.${who ? ` ${who}.` : ''}`, 'good');
   if (id === 'm4') domCard(g, { kind: 'dom:give' });
   refreshSit(g);
+  for (const line of lawTechNews(g, id)) journal(g, line, 'good');
 }
 
 /** 복원을 마칠 때 실제로 관계가 움직이는 쪽. 싫어하는 쪽이 없으면 아무도 움직이지 않는다(7.5, 기획 점검 03). */
@@ -258,9 +260,8 @@ function completeJob(g: Game): void {
   d.job = null;
   if (job.kind === 'insulate') {
     d.insulated.push(job.car);
-    const c = CAR_COMM[job.car];
-    g.comms[c].base[0] += D.insulateWarm / COMM_CARS[c];
-    journal(g, `${CAR_NAME[job.car]} 벽에 판자와 펠트를 댔다. ${COMM_NAME[c]} 온기가 오른다.`, 'good');
+    // 단열은 공짜 온기가 아니라 난방 배당의 벌을 막는다(7.3 E5, lawtech.ts).
+    journal(g, `${CAR_NAME[job.car]} 벽에 판자와 펠트를 댔다. 난방을 줄여도 이 객차는 덜 춥다.`, 'good');
   } else if (job.kind === 'armor') {
     d.armored.push(job.car);
     journal(g, `${CAR_NAME[job.car]}에 철판을 댔다.`, 'good');

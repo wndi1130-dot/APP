@@ -161,7 +161,7 @@ describe('자리표시자 묶기(6.9)', () => {
 });
 
 describe('효과 넷(6.9)', () => {
-  const secret = { id: 'sec_test', kind: 'lie', severity: 3, proof: 'rumor', sources: ['감시'], text: '{person}[은/는] 배급표를 두 장 쥐고 있다.' };
+  const secret = { id: 'sec_test', kind: 'lie', severity: 3, proof: 'rumor', sources: ['surveillance'], text: '{person}[은/는] 배급표를 두 장 쥐고 있다.' };
 
   it('secret: 정의가 없으면 안 뽑고, 있으면 쥔 사람과 단계를 남기고 높은 단계로만 오른다', () => {
     registerContentEvents([one([{ type: 'secret', id: 'sec_test', amount: 1 }]), one([{ type: 'secret', id: 'sec_test', amount: 2 }], { id: 'ev_test_proof' })]);
