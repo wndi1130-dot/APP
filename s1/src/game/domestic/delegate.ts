@@ -115,7 +115,7 @@ export function delegateTick(g: Game): void {
   }
 }
 
-/** 열차장이 침상에 있는 동안 야심 간부가 범위를 넘는다(6.4, 10장 12번). S1a 판엔 열차장 부상이 없어 captainInBed를 켜는 곳이 아직 없다. */
+/** 열차장이 침상에 있는 동안 야심 간부가 범위를 넘는다(6.4, 10장 12번). 열차장 침상은 필드 중상·폐렴 때만이라 S3부터 켜진다(c491d50). 그 전엔 훅만 둔다. */
 export function overreachTick(g: Game): void {
   const d = dom(g);
   const chief = workshopChief(g);

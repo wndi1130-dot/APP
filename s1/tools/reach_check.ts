@@ -8,7 +8,7 @@ import type { BotOptions } from './s1c_bot';
 
 /** 자동 플레이로는 안 나오는 카드와 그 까닭. 봇이 쓰게 되거나 규칙이 들어오면 지운다. */
 export const REACH_NOTES: Record<string, string> = {
-  'dom:officer': '열차장 부상(captainInBed)을 켜는 곳이 아직 없다(delegate.ts overreachTick). 규칙이 들어오기 전엔 못 닿는다',
+  'dom:officer': '의도된 미도달. 열차장 침상은 필드 중상·폐렴 때만이고 S3부터 생긴다(내정 스레드 c491d50). 코드엔 훅(overreachTick)만 둔다',
   leash: '협박 거래 뒤에 온다. 봇은 협박을 안 쓴다',
   'dom:give': '기술 m4 복원 뒤에 온다. 봇은 m4를 거의 안 고른다',
   'dom:demand': '분야에 아는 사람이 하나뿐이고 그 분야 기술이 서 있어야 온다. 내정 봇은 견습생을 일찍 붙인다',
