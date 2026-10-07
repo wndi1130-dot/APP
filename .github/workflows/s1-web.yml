@@ -2,6 +2,7 @@ name: S1 web checks
 
 # S1(웹 TS)의 테스트·타입 검사·빌드·화면 스모크. S1↔S2 영수증 계약 테스트(s1/tests/receipt.test.ts)가
 # S2의 GDScript 영수증 표본을 읽으므로, S2 쪽 영수증 파일을 바꾸는 PR에도 돈다.
+# 프로필 필드 계약(s1/tests/profile_fields.test.ts)은 character_creation.md 9장의 id 목록을 읽으므로 그 문서가 바뀔 때도 돈다.
 on:
   push:
     branches: [main]
@@ -10,6 +11,7 @@ on:
       - s2/game/sim/receipt.gd
       - s2/tests/game/test_receipt.gd
       - s2/tests/game/fixtures/**
+      - docs/design/briefs/character_creation.md
       - .github/workflows/s1-web.yml
   pull_request:
     paths:
@@ -17,6 +19,7 @@ on:
       - s2/game/sim/receipt.gd
       - s2/tests/game/test_receipt.gd
       - s2/tests/game/fixtures/**
+      - docs/design/briefs/character_creation.md
       - .github/workflows/s1-web.yml
   workflow_dispatch:
 

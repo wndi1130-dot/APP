@@ -106,6 +106,66 @@
         "state": {
           "$ref": "urn:s1:schema:common#/$defs/state"
         },
+        "build": {
+          "type": "string",
+          "enum": [
+            "thin",
+            "average",
+            "stocky"
+          ],
+          "description": "체격(character_creation 8장). S2에서 모두가 하나를 가진다."
+        },
+        "char_traits": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:s1:schema:common#/$defs/charTrait"
+          },
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "몸·정치 특성(character_creation 9장). 지도자 성향 trait과 다르다."
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "stamina": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "melee": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "shooting": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "stealth": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "search": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            }
+          },
+          "required": [
+            "stamina",
+            "melee",
+            "shooting",
+            "stealth",
+            "search"
+          ],
+          "additionalProperties": false,
+          "description": "몸 능력 시작값(character_creation 4장·5.2)."
+        },
+        "job": {
+          "$ref": "urn:s1:schema:common#/$defs/job"
+        },
         "params": {
           "$ref": "urn:s1:schema:common#/$defs/textParams"
         },
@@ -133,6 +193,59 @@
         "dislike",
         "line",
         "state"
+      ]
+    },
+    "charTrait": {
+      "type": "string",
+      "enum": [
+        "cold_hardy",
+        "night_eyes",
+        "keen_ears",
+        "light_feet",
+        "tough",
+        "fast_healer",
+        "deft_hands",
+        "packhorse",
+        "quick_learner",
+        "steady",
+        "cold_weak",
+        "short_breath",
+        "jumpy",
+        "old_wound",
+        "slow_healer",
+        "heavy_feet",
+        "nearsighted",
+        "clumsy_hands",
+        "blood_shy",
+        "habit",
+        "silver_tongue",
+        "known_family",
+        "stern_face",
+        "judge_of_people",
+        "dark_past",
+        "debt",
+        "outsider"
+      ]
+    },
+    "job": {
+      "type": "string",
+      "enum": [
+        "engine_assistant",
+        "fireman",
+        "depot_mechanic",
+        "merchant",
+        "rail_official",
+        "hunter",
+        "police",
+        "conscript",
+        "forest_ranger",
+        "doctor",
+        "paramedic",
+        "radio_operator",
+        "miner",
+        "farmer",
+        "teacher",
+        "laborer"
       ]
     },
     "condition": {
