@@ -68,11 +68,12 @@ export interface CommState {
   lowStreak?: number;
 }
 
-export interface Secret { id: number; text: string; weight: number; about: Comm; uses: number }
+/** cid: 콘텐츠 비밀(data/secrets)에서 온 것이면 그 id(content.ts) */
+export interface Secret { id: number; text: string; weight: number; about: Comm; uses: number; cid?: string }
 export interface Leash { comm: Comm; since: number; weight: number }
 
 export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
-export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string; /** 콘텐츠 사건의 {person}·{person2}(content.ts) */ names?: string[] }
+export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string; /** 콘텐츠 사건의 자리표시자 값. 올릴 때 정해 얼려 둔다(content.ts). '@aide'는 말하는 측근 */ vals?: Record<string, string> }
 /** 한 사건을 마지막으로 겪은 때와 고른 것. 같은 사건이 다시 나오면 이걸 보고 본문과 대가를 바꾼다. */
 /** st: 그때의 상태 키(eventStateKey). 상태가 그대로면 같은 사건을 다시 열지 않는다. */
 export interface EventMemo { n: number; seg: number; pick: string; st?: string }
@@ -254,8 +255,18 @@ export interface Game {
   /** 자리를 비운 프로필 id → 돌아오는 구간 */
   contentAway?: Record<string, number>;
   contentInjured?: string[];
-  /** 아직 게임이 읽지 않는 효과(비밀·표·거래·연대기). 화면엔 안 보인다 */
-  contentPending?: string[];
+  /** 콘텐츠 비밀: id → 단계(1 소문, 2 증거), 쥔 사람, 그 칸 */
+  contentSecrets?: Record<string, { level: 1 | 2; who: string; comm: Comm }>;
+  /** 받은 거래 조건과 치를 구간 */
+  contentDeals?: { id: string; comm: Comm; due: number }[];
+  /** 일대기 기록(틀 id, 누가, 어디서(정차 id, 이동 중이면 빈칸), 언제, 목격자 id). S3 일대기 화면이 읽는다 */
+  chronicle?: { template: string; who: string; where: string; when: number; witnesses: string[]; from: string }[];
+  /** 다음 표결 한 번에만 칸마다 열차장 쪽으로 옮기는 석 수(음수면 반대쪽). 표결이 끝나면 지운다 */
+  voteShift?: Partial<Record<Comm, number>>;
+  /** 열차장 이름(열차장 만들기). S1a는 없어서 '열차장'으로 부른다 */
+  captainName?: string;
+  /** 희생양으로 이름이 불릴 수 있는 사람(프로필 id). 맡은 일·그 자리에 있었는지 같은 처지로만 켠다(칸·출신·이름 풀로 켜지 않는다). S1a엔 켜는 곳이 없다 */
+  scapegoatOk?: string[];
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';

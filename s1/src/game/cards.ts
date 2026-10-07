@@ -98,7 +98,7 @@ function leader(g: Game, c: Comm): { name: string; role: string; comm: Comm } {
   return { name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c };
 }
 
-function affordable(g: Game, effs: Eff[]): string | undefined {
+export function affordable(g: Game, effs: Eff[]): string | undefined {
   for (const e of effs) {
     if (e.t === 'coal' && e.v < 0 && g.coal < -e.v) return '석탄이 모자라다';
     if (e.t === 'food' && e.v < 0 && g.food < -e.v) return '식량이 모자라다';
@@ -109,7 +109,7 @@ function affordable(g: Game, effs: Eff[]): string | undefined {
   return undefined;
 }
 
-function withAfford(g: Game, choices: Choice[]): Choice[] {
+export function withAfford(g: Game, choices: Choice[]): Choice[] {
   return choices.map(ch => (ch.disabled ? ch : { ...ch, disabled: affordable(g, ch.effs) }));
 }
 

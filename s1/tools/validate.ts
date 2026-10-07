@@ -192,6 +192,7 @@ export function validateContent(value: unknown, file = 'content.json', prefix = 
     }
   }
   textSpecDiagnostics(kind, value, add);
+  if (kind === 'event') eventBindDiagnostics(value, add);
   for (const key of ['trigger', 'opens_when']) {
     if (!Array.isArray(value[key])) continue;
     value[key].forEach((condition, index) => {
@@ -226,6 +227,25 @@ export function textKey(item: Record<string, unknown>, path: string): string {
     } else out.push(parts[i]);
   }
   return out.join('.');
+}
+
+// 6.9: 기본값이 없는 자리표시자는 bind가 있어야 하고, 대표·측근 사건엔 community, 세력 지도자 사건엔 faction이 있어야 한다.
+const NEEDS_BIND = ['car', 'item', 'n', 'n2'];
+
+function eventBindDiagnostics(value: Record<string, unknown>, add: (path: string, severity: Severity, code: string, message: string) => void): void {
+  const params = new Set(Array.isArray(value.params) ? value.params.filter((x): x is string => typeof x === 'string') : []);
+  const bind = (isRecord(value.bind) ? value.bind : {}) as Record<string, unknown>;
+  for (const name of NEEDS_BIND) {
+    if (params.has(name) && bind[name] === undefined) add('/params', 'error', 'event.bind', `{${name}}은(는) 기본값이 없다. bind.${name}에 값을 어디서 가져올지 적는다(6.9).`);
+  }
+  for (const name of Object.keys(bind)) {
+    if (!params.has(name)) add(`/bind/${escapePointer(name)}`, 'error', 'event.bind', `bind.${name}이(가) 있는데 params에 ${name}이(가) 없다.`);
+  }
+  const speaker = value.speaker;
+  if ((speaker === 'rep' || speaker === 'aide') && value.community === undefined) add('/speaker', 'error', 'event.community', `말하는 이가 ${speaker}면 community(공동체 id나 any)가 있어야 한다(6.9).`);
+  if (speaker !== 'rep' && speaker !== 'aide' && value.community !== undefined) add('/community', 'warning', 'event.community', 'community는 말하는 이가 rep·aide일 때만 읽는다. 공동체가 말하면 speaker에 그 id를 쓴다.');
+  if (speaker === 'faction_leader' && value.faction === undefined) add('/speaker', 'error', 'event.faction', '말하는 이가 faction_leader면 faction이 있어야 한다(6.9). 세력이 없는 S1a는 이 사건을 뽑지 않는다.');
+  if (speaker !== 'faction_leader' && value.faction !== undefined) add('/faction', 'warning', 'event.faction', 'faction은 말하는 이가 faction_leader일 때만 읽는다.');
 }
 
 function textSpecDiagnostics(kind: ContentKind, value: Record<string, unknown>, add: (path: string, severity: Severity, code: string, message: string) => void): void {

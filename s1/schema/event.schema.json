@@ -119,6 +119,67 @@
     },
     "notes": {
       "$ref": "urn:s1:schema:common#/$defs/textNotes"
+    },
+    "bind": {
+      "type": "object",
+      "description": "자리표시자 값을 어디서 가져올지(s1_content_guide 6.9 표). car·item·n·n2를 쓰면 반드시 적는다.",
+      "properties": {
+        "person": {
+          "type": "string",
+          "pattern": "^(community:(tail|engine|guard|medtech|front)|role:[^\\s:][^:]*|witness|scapegoat)$"
+        },
+        "person2": {
+          "type": "string",
+          "pattern": "^(community:(tail|engine|guard|medtech|front)|role:[^\\s:][^:]*|witness|scapegoat)$"
+        },
+        "community": {
+          "type": "string",
+          "pattern": "^(tail|engine|guard|medtech|front|lowest_relation|highest_tension)$"
+        },
+        "law": {
+          "type": "string",
+          "pattern": "^(law:[a-z][a-z0-9_]*|last_repealed)$"
+        },
+        "place": {
+          "type": "string",
+          "enum": [
+            "last_stop",
+            "next_stop"
+          ]
+        },
+        "car": {
+          "type": "string",
+          "pattern": "^car:(tail|engine|guard|medtech|front)$"
+        },
+        "item": {
+          "type": "string",
+          "pattern": "^(last_symbol|resource:(coal|food|medicine|luxury|symbol))$"
+        },
+        "n": {
+          "type": "string",
+          "pattern": "^(food_shortfall|coal_left|food_left|dead_last_segment|injured|away|pop:(tail|engine|guard|medtech|front))$"
+        },
+        "n2": {
+          "type": "string",
+          "pattern": "^(food_shortfall|coal_left|food_left|dead_last_segment|injured|away|pop:(tail|engine|guard|medtech|front))$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "community": {
+      "description": "speaker가 rep·aide일 때 말하는 공동체. any면 조건을 만족하는 공동체 중 하나(6.9).",
+      "anyOf": [
+        {
+          "$ref": "urn:s1:schema:common#/$defs/community"
+        },
+        {
+          "const": "any"
+        }
+      ]
+    },
+    "faction": {
+      "description": "speaker가 faction_leader일 때 세력 id(S1b). 세력이 없는 S1a는 이 사건을 뽑지 않는다.",
+      "$ref": "urn:s1:schema:common#/$defs/id"
     }
   },
   "required": [

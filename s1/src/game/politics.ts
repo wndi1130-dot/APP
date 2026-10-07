@@ -117,9 +117,22 @@ export function blocs(g: Game, agenda: Agenda, deals: readonly Deal[] = []): Rec
       b.und -= moved;
     }
     for (const deal of deals.filter(d => d.comm === c)) applyDeal(g, b, c, deal.tool);
+    shiftVotes(b, g.voteShift?.[c] ?? 0);
     out[c] = b;
   }
   return out;
+}
+
+/** 콘텐츠 사건의 votes(6.9): 그 칸 표가 n석만큼 찬성 쪽으로(음수면 반대 쪽으로) 옮긴다. 반대·미정에서 먼저 빼 온다. */
+function shiftVotes(b: Bloc, n: number): void {
+  let left = Math.abs(Math.round(n));
+  const from: ('no' | 'und' | 'yes')[] = n > 0 ? ['no', 'und'] : ['yes', 'und'];
+  for (const k of from) {
+    const take = Math.min(left, b[k]);
+    b[k] -= take;
+    if (n > 0) b.yes += take; else b.no += take;
+    left -= take;
+  }
 }
 
 function applyDeal(g: Game, b: Bloc, c: Comm, tool: DealTool): void {
@@ -526,6 +539,8 @@ export function castVote(g: Game, decree = false): VoteResult | null {
   if (decree && (!canDecree(g) || !isLawAgenda(agenda) || agenda.ratify)) return null;
   const need = agendaNeed(agenda);
   const map = blocs(g, agenda, council.deals);
+  // 콘텐츠 사건으로 옮긴 표는 이 표결 한 번뿐이다. 포고는 표결이 아니라 남긴다.
+  if (!decree) delete g.voteShift;
   const byComm = {} as VoteResult['byComm'];
   const flips: VoteFlip[] = [];
   let yes = 0;

@@ -230,7 +230,9 @@ describe('text spec (s1_content_guide 6)', () => {
       expect(codes(event).filter(code => code.startsWith('error'))).toEqual([]);
     });
   it('needs plural for counts, no particle on counts, and one count per text', () => {
-    const event = { ...fixture('event'), body: '석탄 {n}포대를 나눴다.', params: ['n'] };
+    const event = { ...fixture('event'), body: '석탄 {n}포대를 나눴다.', params: ['n'], bind: { n: 'coal_left', n2: 'food_left' } as Record<string, string> };
+    expect(codes(event)).toContain('error:event.bind:/bind/n2');
+    delete event.bind.n2;
     expect(codes(event)).toEqual(['error:text.plural:/body']);
     event.plural = { body: 'n' };
     expect(codes(event)).toEqual([]);
@@ -239,6 +241,25 @@ describe('text spec (s1_content_guide 6)', () => {
     event.body = '{n}명이 {n2}포대를 나눴다.';
     event.params = ['n', 'n2'];
     expect(codes(event)).toContain('error:text.plural:/body');
+  });
+  it('needs bind for car·item·n·n2, community for rep·aide, faction for faction leaders (6.9)', () => {
+    const event = { ...fixture('event'), body: '{car}에 석탄이 없다.', params: ['car'] } as Record<string, unknown>;
+    expect(codes(event)).toEqual(['error:event.bind:/params']);
+    event.bind = { car: 'car:tail' };
+    expect(codes(event)).toEqual([]);
+    event.bind = { car: 'tail' };
+    expect(codes(event).some(code => code.startsWith('error:schema') && code.endsWith('/bind/car'))).toBe(true);
+    const rep = { ...fixture('event'), speaker: 'rep' } as Record<string, unknown>;
+    expect(codes(rep)).toEqual(['error:event.community:/speaker']);
+    rep.community = 'any';
+    expect(codes(rep)).toEqual([]);
+    rep.community = 'nowhere';
+    expect(codes(rep).some(code => code.startsWith('error:schema'))).toBe(true);
+    const leader = { ...fixture('event'), speaker: 'faction_leader' } as Record<string, unknown>;
+    expect(codes(leader)).toEqual(['error:event.faction:/speaker']);
+    leader.faction = 'f_order';
+    expect(codes(leader)).toEqual([]);
+    expect(codes({ ...fixture('event'), community: 'tail' })).toEqual(['warning:event.community:/community']);
   });
   it('warns when a person looks like the subject without gender_of, and checks metadata keys', () => {
     const event = { ...fixture('event'), body: '{person}[은/는] 말없이 석탄을 퍼 왔다.', params: ['person'] };
