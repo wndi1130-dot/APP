@@ -8,10 +8,12 @@ import { B } from './data';
 import { cross, scene } from './chronicle';
 import { CLUE_LINES, CROWD_LINES } from './lines';
 import {
-  adults, alive, byId, commOf, darkCard, dpick, dr, FACT_SCORE, isRep, nameOf, neighbors, newId, rivals, segFull, TIE_FACTS,
+  adults, alive, byId, commOf, darkCard, dpick, dr, FACT_SCORE, isRep, killEmber, nameOf, neighbors, newId, rivals, segFull, TIE_FACTS,
 } from './state';
-import type { Case, CaseKind, Clue, ClueKind, Fact, Suspect } from './state';
-import { killEmber, newEmber } from './embers';
+import type { Case, CaseKind, Clue, ClueKind, Ember, EmberCause, Fact, Suspect, Target } from './state';
+
+/** 불씨 만들기. embers.ts가 newEmber로 채운다(cases ↔ embers import 순환을 끊는다). 채우기 전엔 불씨가 안 생긴다. */
+export const EMBER_LINK: { born: (g: Game, who: Comm, target: Target, cause: EmberCause) => Ember | null } = { born: () => null };
 
 // 4.4 수사와 처벌, 4.5 린치와 희생양. 증거는 불완전하고, 수사하는 동안 군중이 기다리지 않는다.
 // 진범은 불씨의 '누가'로 정해진다. 단서와 증거는 의심 점수를 보지 않는다. 의심 점수는 '군중이 누구를 의심하나'다.
@@ -313,7 +315,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   } else {
     d.stats.misjudged += 1;
     d.innocents.push({ id: s.id, comm, seg: g.seg, caseId: c.id, how: 'punish' });
-    newEmber(g, comm, 'guard', 'misjudged');
+    EMBER_LINK.born(g, comm, 'guard', 'misjudged');
   }
   updateFlags(g);
   return lines;
@@ -385,7 +387,7 @@ export function scapegoat(g: Game, c: Case, s: Suspect, allowed: boolean): strin
   } else {
     d.innocents.push({ id: s.id, comm, seg: g.seg, caseId: c.id, how: allowed ? 'lynch' : 'scapegoat' });
   }
-  newEmber(g, comm, 'guard', 'scapegoat');
+  EMBER_LINK.born(g, comm, 'guard', 'scapegoat');
   scene(g, allowed ? 'lynch' : 'scapegoat', allowed ? 2 : 3,
     `${g.seg}구간, ${allowed ? `군중이 ${name}을(를) 끌어내는 것을 막지 않았다` : `${name}을(를) 군중에게 내줬다`}.${s.culprit ? '' : ` 그가 ${s.facts.includes('joined') || s.facts.includes('rescued') ? '밖에서 왔다는 것' : '그 자리에 있었다는 것'} 말고는 아무것도 없었다.`}`, [s.id]);
   updateFlags(g);

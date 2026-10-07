@@ -8,9 +8,9 @@ import type { Game } from '../state';
 import { B } from './data';
 import { ACT_LINES, SIGN_LINES, SIGN_READ } from './lines';
 import type { SignKind } from './lines';
-import { openCase, caught } from './cases';
+import { EMBER_LINK, openCase, caught } from './cases';
 import {
-  adults, alive, commOf, darkCard, dpick, dr, isRep, nameOf, newId, segFull, succeedRep,
+  adults, alive, commOf, darkCard, dpick, dr, isRep, killEmber, nameOf, newId, segFull, succeedRep,
 } from './state';
 import type { Ember, EmberCause, SabKind, Stage, Target } from './state';
 
@@ -97,6 +97,9 @@ export function newEmber(g: Game, who: Comm, target: Target, cause: EmberCause, 
   return e;
 }
 
+// cases.ts가 불씨를 만들 때 쓰는 자리를 채운다(cases ↔ embers import 순환을 끊는다).
+EMBER_LINK.born = newEmber;
+
 /** 다음에 오를 일의 종류(징후 글) */
 function signKind(e: Ember, stage: Stage): SignKind {
   if (stage <= 1) return stage === 0 ? kicheKind(e) : 'threat';
@@ -176,11 +179,7 @@ export function escalate(g: Game): void {
   }
 }
 
-export function killEmber(g: Game, e: Ember | undefined): void {
-  if (!e) return;
-  const d = g.dark!;
-  d.embers = d.embers.filter(x => x.id !== e.id);
-}
+export { killEmber };
 
 /** 경비 2명이 2구간 그 자리에 선다(4.2). 동시에 두 곳까지. */
 export function postGuard(g: Game, e: Ember): boolean {

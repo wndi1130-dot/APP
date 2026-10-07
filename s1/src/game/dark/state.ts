@@ -321,3 +321,10 @@ export function wa(word: string): string {
 }
 
 export { B };
+
+/** 불씨 하나를 끈다(embers.ts가 다시 내보낸다. cases.ts도 쓰려고 여기 둔다). */
+export function killEmber(g: Game, e: Ember | undefined): void {
+  if (!e) return;
+  const d = g.dark!;
+  d.embers = d.embers.filter(x => x.id !== e.id);
+}
