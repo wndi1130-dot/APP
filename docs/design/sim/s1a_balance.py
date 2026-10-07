@@ -33,7 +33,7 @@ P = dict(
     recover_base=1, recover_cap=3, target_keep=0.85,
     engine_fatigue=2.0, shift_relief=10, shift_coal=3,
     natural_ceiling=15, engine_exposure0=45, strike_rel=-15, refuse_rel=5,
-    rescue_rate=0.2, crisis_line=30, forced_agenda=1, plan_line=120, thrown_horde=0.05, store_risk=0.03, lever_line=50,
+    rescue_rate=0.2, crisis_line=30, forced_agenda=1, plan_line=120, thrown_horde=0.05, store_risk=0.03, pyre_coal=1, pyre_risk=0.015, lever_line=50,
     repeal=1, repeal_cool=2, repeal_rel=10, hostile_grudge=2, blackmail_reputation=3, grudge_decay=2, blackmail_pull=1,
 )
 COMMS = ['tail', 'engine', 'guard', 'medtech', 'front']
@@ -82,7 +82,7 @@ LAWS = {
     'corpse_throw': law('normal', (0, -1, -1), lambda s: s.corpse_issue, res=d(corpse='throw'), crisis=('corpse',)),
     'corpse_store': law('normal', (1, 0, 1), lambda s: s.corpse_issue, like=d(tail=1, medtech=1, front=1),
                         res=d(corpse='store'), crisis=('corpse',)),
-    'corpse_burn': law('normal', (0, 1, 1), lambda s: s.corpse_issue, rels=d(medtech=-5, front=-5), like=d(engine=2),
+    'corpse_burn': law('normal', (0, 1, 1), lambda s: s.corpse_issue, rels=d(medtech=-5, front=-5), like=d(guard=1),
                        res=d(corpse='burn'), crisis=('corpse',)),
     # 의료와 감염
     'treat_all': law('normal', (1, 0, 1), like=ALL(1), res=d(med_mult=1.6, heal=0.7)),
@@ -162,6 +162,7 @@ class Run:
         self.corpse_issue = False  # 첫 죽음이 시신 처리 안건을 연다
         self.thrown = 0            # 밖으로 던진 시신: 선로를 따라오는 무리에 섞인다(아는 얼굴)
         self.stored = 0            # 냉동칸에 둔 시신
+        self.pyre = 0              # 다음 정차 장작불까지 지키는 시신
 
     # 처지 = 기준 + 레버 차이
     @property
@@ -214,8 +215,7 @@ class Run:
             self.stored += n
             self.base['tail'][2] += 1 * n
         elif way == 'burn':
-            self.coal += 2 * n
-            self.rel['tail'] = clamp(self.rel['tail'] - 3 * n, -100, 100)
+            self.pyre += n  # 정차 때 선로 옆 장작불(2026-10-07). 그때까지 지킨다
 
     def apply_law(self, law):
         L = LAWS[law]
@@ -283,6 +283,9 @@ class Run:
             self.stats['passed_stops'] += 1
             return
         self.coal -= P['coal_stop']
+        if self.pyre:  # 내린 정차에서 지키던 시신을 태운다. 불쏘시개로 석탄을 쓴다
+            self.coal -= min(max(0, self.coal), P['pyre_coal'] * self.pyre)
+            self.pyre = 0
         weights = {k: v * (P['target_boost'] if k == target else 1) for k, v in loot.items()}
         tot = sum(weights.values())
         haul = P['haul_total'] * self.r.uniform(0.7, 1.3)
@@ -326,6 +329,10 @@ class Run:
             dead = sum(1 for _ in range(self.injured) if self.r.random() < 0.1)
             self.injured -= dead
             self.on_death(dead)
+        # 장작불까지 지키던 시신도 일어날 수 있다(경비가 붙어 냉동칸보다 덜하다)
+        if self.pyre and self.r.random() < min(0.2, P['pyre_risk'] * self.pyre):
+            self.pyre -= 1; self.injured += 1; self.tension += 5
+            self.stats['pyre_rose'] += 1
         # 냉동칸: 안치한 시신이 많을수록 녹아 일어나는 사고가 난다
         if self.stored and self.r.random() < min(0.3, P['store_risk'] * self.stored):
             self.injured += 2; self.tension += 8; self.stored = 0
