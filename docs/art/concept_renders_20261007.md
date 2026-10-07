@@ -154,6 +154,18 @@ Panel 3, carrying guilt: he stops on the bottom step and stares blankly at the f
 Panel 4, distrusted and watched: he steps down while an armed guard in the doorway watches his back; the scavengers glance at each other; a single figure in the window behind turns away.
 No text, no gore, no logos. Small panel numbers 1 to 4 in the corners only.
 
+## C11 낡아 가는 UI 세 단계 (첨부: C7a 결과)
+
+2026-10-07 사용자 결정: UI는 매끈하게 시작해 희생이 커질수록 녹·피·때에 찌든다([../design/briefs/presentation_motion.md](../design/briefs/presentation_motion.md) 8장). 같은 화면의 0·2·4단계를 나란히 본다.
+
+```text
+Using the attached image, draw three versions side by side in one wide sheet, separated by thin dark gaps, each a crop of the right-hand leader card, the trade buttons and the vote lever. Keep layout, labels, numbers and icons identical and perfectly legible in all three.
+Left, stage 0: clean enamel, bright worn brass rims, clean off-white paper.
+Middle, stage 2: rust blooms around the rivets and along the brass rims, enamel chipped at the corners, paper edges yellowed with a coffee ring and grimy thumbprints.
+Right, stage 4: heavy rust and soot on every rim, a hairline crack across the gauge glass, the paper creased, water-stained and torn at one corner, dried dark brown blood smears on the paper edge and on one button rim; no wounds or gore, and nothing covers any text, number or icon.
+Small labels 0, 2, 4 under each version only.
+```
+
 ## 받은 뒤 볼 것
 
 1. C1과 C5를 나란히 놓았을 때 같은 게임으로 보이는가(화풍, 빛, HUD 마감).
@@ -163,3 +175,18 @@ No text, no gore, no logos. Small panel numbers 1 to 4 in the corners only.
 5. 빨강·하늘색이 정치 뜻과 경고 말고 다른 데 쓰이지 않았는가. 빨간 십자가 없는가.
 6. C9에서 글 없이도 '물이 얼었다, 누가 먼저 왔다, 망자가 있다'가 읽히는가.
 7. C10 네 장이 폰 크기에서 자세만으로 구별되는가. 같은 사람·같은 문으로 유지됐는가(동작 섞기로 만들 수 있는 범위인지).
+
+## 평가 (2026-10-07, 1차 결과 12장)
+
+그림은 공개 저장소에 올리지 않았다. 원본은 사용자 바탕화면 `화면컨셉_20261007\`, 사본은 프로젝트 파일 `art/concepts_20261007/`.
+
+- **전체**: 필드(C1)와 정치 화면(C5, C6)이 같은 게임으로 보인다. 법랑과 놋쇠 HUD, 어두운 날씨, 호박색 불빛이 통일됐다. 필드는 눈 때문에 정치 화면보다 밝은데 자연스럽다.
+- **C5 의회(v1을 기준으로 씀)**: 배경 생활(손가락질하는 사람, 아이 안은 여자, 수군거림)이 표결 정보를 가리지 않는다. 가장자리 긴장 얼룩은 성에처럼 약하게 나왔다. 고칠 것: 법안 창의 온기 +2가 하늘색이라 '하늘색은 지지에만' 규칙과 어긋난다. 기관실 명판 위에 십자처럼 보이는 모양이 있다.
+- **C7 UI 세 벌**: a(두 재질)는 법안·지도자 카드가 진짜 서류처럼 읽히고, 고른 단추 뒤 그을음도 보인다. 종이 판이 밝아서 가운데 반원보다 눈을 먼저 끄는 건 마감 때 종이 명도를 낮춰 맞춘다. b는 깔끔하지만 요즘 앱처럼 보인다. c는 그림 배경 위에서 UI만 떠 보이고 초상만 픽셀로 깨진다. 추천은 a.
+- **C1 필드(v2 추천)**: v2가 이름표가 있고 덜 복잡하다. 무리가 오는 왼쪽 가장자리의 붉은 성에, 발소리 원, 운송조와 호위조가 읽힌다. 고칠 것: 'JUNCTION' 같은 영어 표지판은 게임에선 그 나라 말로. v1은 망자가 마당 안까지 너무 가깝다.
+- **C2 전술 일시정지**: 멈춤이 거의 안 보인다. 색 빠짐이 약하고 눈송이·증기가 멈춘 느낌이 없다. 조준 원과 적 조준 표시는 나왔다. 다시 뽑을 때 '화면 전체를 회갈색으로 확 바래게'를 더 세게 적는다.
+- **C3 홈 v4**: v4 수정 여덟 가지 가운데 날씨(진눈깨비), 차가운 꼬리칸, 톱니·약병 명판, 녹색 벨벳, 놋쇠 신임 막대, 지나치는 승강장 가족이 됐다. 레버는 여전히 눈금 칸 없는 슬라이더이고, 난방관이 꼬리칸 앞에서 끊기는 게 안 보인다.
+- **C4 한눈에 보기**: 세로 열차, 칸 묶음 괄호, 고른 칸과 창을 잇는 선, 레버와 반원 계기가 다 들어갔다. 고칠 것: 앞칸 의자가 빨강(빨강 규칙), 레버 단계가 셋(LOW/MED/HIGH)인데 단계 수는 아직 안 정했다.
+- **C6 결정 카드**: 가장 잘 나왔다. 서류 뭉치에서 꺼낸 종이, 목탄 초상, 선택지 옆 비용과 즉시 정치 변화 막대, 목격자 눈. 고칠 것: 화면엔 성을 빼고 이름만 쓰기로 했으니 명판은 'Pavla'만.
+- **C8 잉크 콘티**: 단계는 잘 나뉘었는데 검은 그을음이 어두운 법랑 위에서 잘 안 보인다(비교 데모에서도 같았다). 번짐 가장자리에 아주 옅은 따뜻한 테두리를 주거나 단추 바탕을 한 단계 밝혀야 한다.
+- **안 나온 것**: C9 정차 장면, C10 하차 네 가지, C11 낡아 가는 UI.
