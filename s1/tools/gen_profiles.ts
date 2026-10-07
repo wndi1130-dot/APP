@@ -55,6 +55,9 @@ export interface Profile {
   id: string;
   name: string;
   name_original: string;
+  /** 이름 풀의 성별. 폴란드어·체코어 과거형이 주어 성별을 따라서 번역에 쓴다(s1_content_guide 6.5). 화면엔 안 보인다.
+   *  성별을 적지 않은 이름 풀에서 뽑힌 사람은 비워 두고 경고를 남긴다(스키마 검사에서 걸린다). */
+  gender?: Gender;
   age: number;
   community: Community;
   origin_tag: 'original' | 'rescued';
@@ -109,8 +112,10 @@ function parts(entries: string[]): NamePart[] {
     return { original, korean };
   });
 }
+/** 임시 이름 목록은 앞 여섯이 여자 이름, 뒤 여섯이 남자 이름이다. */
 function temporaryPool(given: string[], surnames: string[]): NamePool {
-  return { given: parts(given), surnames: parts(surnames).map((part) => ({ male: part, female: part })) };
+  const named = parts(given).map((part, index): NamePart => ({ ...part, gender: index < given.length / 2 ? 'female' : 'male' }));
+  return { given: named, surnames: parts(surnames).map((part) => ({ male: part, female: part })) };
 }
 // Surnames are fictional placeholders, not a researched B1 name pool. Each pool is
 // large enough for 200 unique full names when ref/names/ is missing (tests).
@@ -332,7 +337,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
     while (ages.length < POPULATION[community]) ages.push(community === 'engine' ? integer(52, 64) : integer(community === 'guard' ? 22 : 16, 64));
     const members = shuffle(ages).map((age, index): Profile => ({
       id: `p_${String(profiles.length + index + 1).padStart(3, '0')}`,
-      name: '', name_original: '', age, community, origin_tag: 'original',
+      name: '', name_original: '', gender: undefined, age, community, origin_tag: 'original',
       boarding: DEFAULT_BOARDING[community], hometown: '', like: '', dislike: '', line: '', state: 'alive',
     }));
     const requiredExceptions = members.filter((person) => person.age <= 5 || ((community === 'guard' || community === 'engine') && person.age < 22));
@@ -377,6 +382,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
   const parentIds = new Set(families.flatMap((family) => family.parents));
   // Players remember people by name, so no two of the 200 share a full name in either script.
   const usedNames = new Set<string>();
+  const genderless = new Set<string>();
   const assigned = new Set<string>();
   const fits = (entry: string | undefined, language: Language) => entry === undefined || entry === language;
   function lastName(surname: Surname, gender: Gender, person: Profile): NamePart {
@@ -387,7 +393,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
       const last = lastName(surname, given.gender ?? 'male', person);
       // Hungarian names keep family-name-first order in Korean too (e.g. 버르토크 벨러).
       const [first, second] = given.language === 'hu' ? [last, given] : [given, last];
-      return { given: given.original, original: `${first.original} ${second.original}`, korean: `${first.korean} ${second.korean}` };
+      return { given: given.original, gender: given.gender, original: `${first.original} ${second.original}`, korean: `${first.korean} ${second.korean}` };
     }).filter((name) => ![normalizedName(name.original), normalizedName(name.korean)].some((key) => references.blocked.has(key) || usedNames.has(key) || takenKeys.has(key)));
   }
   function assignNames(members: Profile[]) {
@@ -412,6 +418,8 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
       for (const { person, name } of chosen) {
         person.name = name.korean;
         person.name_original = name.original;
+        if (name.gender) person.gender = name.gender;
+        else genderless.add(name.given);
         usedNames.add(normalizedName(name.original));
         usedNames.add(normalizedName(name.korean));
         assigned.add(person.id);
@@ -442,7 +450,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
   }
   return {
     profiles,
-    familyData: { version: 1, seed: String(seed), sources: references.sources.map((source) => ({ ...source })), warnings: [...references.warnings], preference_fallbacks: preferenceFallbacks, families },
+    familyData: { version: 1, seed: String(seed), sources: references.sources.map((source) => ({ ...source })), warnings: [...references.warnings, ...(genderless.size ? [`이름 풀에 성별이 없는 이름 ${genderless.size}개가 뽑혔다(${[...genderless].slice(0, 5).join(', ')}). 그 사람은 gender가 비어 번역 성별 검사가 빠진다.`] : [])], preference_fallbacks: preferenceFallbacks, families },
   };
 }
 

@@ -77,6 +77,18 @@
     },
     "content_type": {
       "const": "law"
+    },
+    "params": {
+      "$ref": "urn:s1:schema:common#/$defs/textParams"
+    },
+    "plural": {
+      "$ref": "urn:s1:schema:common#/$defs/textPlural"
+    },
+    "gender_of": {
+      "$ref": "urn:s1:schema:common#/$defs/textGender"
+    },
+    "notes": {
+      "$ref": "urn:s1:schema:common#/$defs/textNotes"
     }
   },
   "required": [

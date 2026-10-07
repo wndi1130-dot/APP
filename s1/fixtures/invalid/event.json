@@ -13,6 +13,7 @@
   "body": "좀비가 문을 두드려요.",
   "choices": [
     {
+      "id": "c_share_coal",
       "label": "가가가가가가가가가가가가가가가가",
       "effects": [
         {
@@ -31,6 +32,7 @@
       ]
     },
     {
+      "id": "c_ask_engine",
       "label": "기관실에 묻는다",
       "effects": [
         {

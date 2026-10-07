@@ -26,8 +26,8 @@ LEGS = [
     ('구벤', 71, 'place_houses_draft'),
     ('발전소', 17, 'place_factory_draft'),
     ('코트부스', 21, 'place_hospital_draft'),
-    ('팔켄베르크', 78, 'place_freight_draft'),
-    ('라이프치히', 71, None),
+    ('아일렌부르크', 124, 'place_freight_draft'),
+    ('라이프치히', 25, None),
 ]
 FIRST = dict(segments=len(LEGS), session_every=1, coal0=45, food0=55, haul_total=20, lever_line=25,
              lignite_value=0.5, lignite_exposure=3, water_fire_coal=3, water_skip_mult=1.5, hot_water=0.0)
@@ -123,7 +123,7 @@ def summarize(policy, n, places):
     print(f'도착 석탄: 평균 {sum(arrive) / n:.1f}, 하위 10% {arrive[n // 10]:.1f}, 최저 {arrive[0]:.1f}')
     keys = ['min_coal', 'low_coal_segments', 'emergency_used', 'end_food', 'end_med', 'starving_segments', 'deaths',
             'no_death_by_guben', 'strikes', 'target_coal', 'target_food', 'target_medicine', 'passed_stops',
-            'coal_from_술레후프', 'coal_from_발전소', 'coal_from_팔켄베르크', 'lignite_segments',
+            'coal_from_술레후프', 'coal_from_발전소', 'coal_from_아일렌부르크', 'lignite_segments',
             'water_fire', 'water_snow', 'water_skip', 'shift_relief']
     print('평균:', ', '.join(f'{k} {agg[k] / n:.2f}' for k in keys))
 

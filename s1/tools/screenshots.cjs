@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// S1a 화면 뼈대 스크린샷. 빌드한 dist/를 작은 정적 서버로 띄우고 Playwright(Chromium)로 찍는다.
+// S1a 플레이 빌드 스크린샷. 빌드한 dist/를 작은 정적 서버로 띄우고 Playwright(Chromium)로 찍는다.
 //
 //   npm run build
 //   NODE_PATH="$(npm root -g)" node tools/screenshots.cjs
@@ -98,10 +98,11 @@ function inspectLayout(minFont) {
   const smallText = [];
   const clipped = [];
   const truncated = [];
+  const inHScroll = element => !!element.closest('[data-keep-scroll]');
   for (const element of document.querySelectorAll('body *')) {
     if (!visible(element)) continue;
     const rect = element.getBoundingClientRect();
-    if (rect.right > window.innerWidth + 0.5 || rect.left < -0.5) {
+    if (!inHScroll(element) && (rect.right > window.innerWidth + 0.5 || rect.left < -0.5)) {
       outside.push(`${describe(element)} [${Math.round(rect.left)}, ${Math.round(rect.right)}]`);
     }
     if (mainRect && main.contains(element) && element !== main && !inScrollBox(element)
@@ -112,7 +113,7 @@ function inspectLayout(minFont) {
     const style = getComputedStyle(element);
     if (ownText && parseFloat(style.fontSize) < minFont) smallText.push(`${describe(element)} ${style.fontSize}`);
     const block = style.display !== 'inline' && style.display !== 'contents' && element.clientWidth > 0;
-    if (block && element.scrollWidth > element.clientWidth + 1) {
+    if (block && !(element instanceof SVGElement) && !element.hasAttribute('data-keep-scroll') && !inHScroll(element) && element.scrollWidth > element.clientWidth + 1) {
       const entry = `${describe(element)} ${element.scrollWidth}>${element.clientWidth}`;
       if (style.textOverflow === 'ellipsis') truncated.push(entry);
       else if (style.overflowX === 'hidden' || style.overflowX === 'clip') clipped.push(entry);
@@ -159,30 +160,39 @@ async function capture(page, name, { landscape = true } = {}) {
   console.log(`찍음 ${path.relative(ROOT, file)}${note}`);
 }
 
-async function tap(page, test) {
-  const locator = page.locator(`[data-test="${test}"]`).first();
+
+const SEED = process.env.SCREENSHOT_SEED || 'demo1';
+
+async function click(page, selector) {
+  const locator = page.locator(selector).first();
   await locator.waitFor({ state: 'visible', timeout: 5000 });
-  await locator.tap();
+  await locator.click();
+  await page.waitForTimeout(60);
 }
 
-async function expectText(page, test, text) {
-  const content = await page.locator(`[data-test="${test}"]`).first().innerText();
-  if (!content.includes(text)) throw new Error(`[${test}]에 "${text}"가 없다: ${content.slice(0, 200)}`);
+async function has(page, selector) {
+  return (await page.locator(selector).count()) > 0;
 }
 
-/** 주 단추를 누르고, 결정 카드가 뜨면 고른다. */
-async function advanceTo(page, segment, phase, choiceFor) {
-  for (let step = 0; step < 60; step += 1) {
-    const state = await page.locator('[data-test="stepper"]').getAttribute('aria-label');
-    if (state && state.startsWith(`${segment}구간, ${phase} 단계`)) return;
-    if (await page.locator('[data-test="decision-card"]').count() > 0) {
-      const card = await page.locator('[data-test="decision-card"]').innerText();
-      await tap(page, `choice-${choiceFor(card)}`);
-      continue;
-    }
-    await tap(page, 'primary');
+/** 한 걸음: 펼친 서류를 처리하거나, 창을 닫거나, 주 단추를 누른다. */
+async function step(page) {
+  if (await has(page, '.side, .drop, .settle')) return click(page, '.drop__head .x');
+  if (await has(page, '[data-action="stop-go"]')) return click(page, '[data-action="stop-go"][data-go="1"]');
+  if (await has(page, '[data-action="stop-seen"]')) return click(page, '[data-action="stop-seen"]');
+  if (await has(page, '.choice:not([disabled])')) return click(page, '.choice:not([disabled])');
+  if (await has(page, '.skip')) return click(page, '.skip');
+  if (await has(page, '.vote-actions [data-action="vote"]')) return click(page, '.vote-actions [data-action="vote"]');
+  if (await has(page, '.bottom [data-action="advance"]')) return click(page, '.bottom [data-action="advance"]');
+  if (await has(page, '.bottom [data-action="open-stack"]')) return click(page, '.bottom [data-action="open-stack"]');
+  throw new Error('누를 것이 없다');
+}
+
+async function until(page, selector, limit = 80) {
+  for (let i = 0; i < limit; i += 1) {
+    if (await has(page, selector)) return;
+    await step(page);
   }
-  throw new Error(`${segment}구간 ${phase} 단계에 닿지 못했다`);
+  throw new Error(`${selector}에 닿지 못했다`);
 }
 
 async function main() {
@@ -201,77 +211,85 @@ async function main() {
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
     page.on('console', message => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
-    await page.goto(url);
-    await page.locator('[data-test="support-bar"]').waitFor();
+    await page.goto(`${url}?seed=${SEED}`);
+    await page.locator('.home').waitFor();
 
-    // 1. 홈
+    // 홈: 열차 단면, 칸 작은 창
     await capture(page, '01-home');
+    await click(page, '[data-action="car"][data-car="tail1"]');
+    await page.locator('.carpop').waitFor();
+    await capture(page, '02-car-tail');
+    await click(page, '.carpop .x');
 
-    // 2. 불만·지지 패널
-    await tap(page, 'support-bar');
-    await page.locator('[data-test="faction-panel"]').waitFor();
-    await capture(page, '02-factions');
-    await tap(page, 'close-panel');
+    // 한눈에 보기와 수치만 보기
+    await click(page, '.bottom [data-screen="overview"]');
+    await page.locator('.overview').waitFor();
+    await capture(page, '03-overview');
+    await click(page, '[data-action="numbers"]');
+    await capture(page, '04-overview-numbers');
+    await click(page, '[data-action="numbers"]');
+    await click(page, '.bottom [data-screen="home"]');
 
-    // 3. 결정 카드(이동 단계의 사건 카드)
-    await tap(page, 'primary');
-    await page.locator('[data-test="decision-card"]').waitFor();
-    await capture(page, '03-card');
+    // 불만 쪽 창
+    await click(page, '.band__btn--unrest');
+    await page.locator('.drop').waitFor();
+    await capture(page, '05-factions');
+    await click(page, '.drop__head .x');
 
-    // 3구간 회기까지 진행한다. 정차에선 꼬리칸 4명을 보내 회기에 부재가 생기게 한다.
-    const pick = card => (card.includes('보낼 사람') ? 0 : 0);
-    await advanceTo(page, 3, '의회', pick);
-    await tap(page, 'primary'); // 식당칸으로
-    await page.locator('[data-test="council"]').waitFor();
-    await tap(page, 'mode-public');
-    await tap(page, 'primary'); // 표결
-    await expectText(page, 'council', '표결 끝');
+    // 출발: 서류(사건 카드)
+    await click(page, '.bottom [data-action="advance"]');
+    await until(page, '.sheet');
+    await capture(page, '06-card');
 
-    // 4·5. 같은 표결을 공개와 비밀로
-    await capture(page, '04-council-public');
-    await tap(page, 'mode-secret');
-    await expectText(page, 'council', '합계만 남는다');
-    await capture(page, '05-council-secret');
-    await tap(page, 'mode-public');
+    // 정차 카드와 결과
+    await until(page, '[data-action="stop-go"]');
+    await capture(page, '07-stop');
+    await click(page, '[data-action="stop-go"][data-go="1"]');
+    await page.locator('[data-action="stop-seen"]').waitFor();
+    await capture(page, '08-stop-result');
+    // 회기가 아닌 구간: 정차를 덮으면 비상 소집 단추가 주 단추 옆에 뜬다.
+    await click(page, '[data-action="stop-seen"]');
+    await page.locator('.bottom [data-action="emergency"]').waitFor();
+    await capture(page, '08b-emergency');
 
-    // 6. 열차장실(일지), 인물
-    await tap(page, 'back');
-    await tap(page, 'car-captain');
-    await page.locator('[data-test="journal"]').waitFor();
-    await capture(page, '06-captain-journal');
-    await tap(page, 'tab-people');
-    await page.locator('[data-test="people"]').waitFor();
-    await capture(page, '07-captain-people');
+    // 의회(3구간 회기)
+    await until(page, '.council .hemi');
+    await capture(page, '09-council');
+    // 거래 도구가 열린 집단을 고른다.
+    let dealt = false;
+    for (const c of ['tail', 'medtech', 'front', 'engine', 'guard']) {
+      await click(page, `.clist [data-comm="${c}"], .plate[data-comm="${c}"]`);
+      if (!dealt && await has(page, '[data-action="deal"][data-tool="open"]:not([disabled])')) {
+        await capture(page, '10-council-leader');
+        await click(page, '.cpanel .name');
+        await page.locator('.person').waitFor();
+        await capture(page, '10b-person');
+        await click(page, '.person .x');
+        await click(page, '[data-action="deal"][data-tool="open"]');
+        await capture(page, '11-council-open-deal');
+        await click(page, '.cond');
+        if (await has(page, '.cut-pick')) await click(page, '.cut-pick .chip');
+        await capture(page, '12-council-after-deal');
+        dealt = true;
+        break;
+      }
+    }
+    if (!dealt) throw new Error('공개 협상을 열 수 있는 집단이 없다');
+    await click(page, '.vote-actions [data-action="vote"]');
+    await page.locator('.verdict').waitFor();
+    await capture(page, '13-council-result');
 
-    // 공동체 칸(꼬리칸)
-    await tap(page, 'back');
-    await tap(page, 'car-tail');
-    await page.locator('[data-test="community-tail"]').waitFor();
-    await capture(page, '08-car-tail');
+    // 정산과 일지
+    await until(page, '.settle');
+    await capture(page, '14-settle');
+    await click(page, '.drop__head .x');
+    await click(page, '.bottom [data-panel="journal"]');
+    await capture(page, '15-journal');
+    await click(page, '.drop__head .x');
 
-    // 메뉴와 디버그
-    await tap(page, 'back');
-    await tap(page, 'menu');
-    await page.locator('[data-test="menu-popover"]').waitFor();
-    await tap(page, 'save');
-    await tap(page, 'menu');
-    await capture(page, '09-menu');
-    await tap(page, 'debug');
-    await page.locator('[data-test="debug"]').waitFor();
-    await page.locator('[data-test="toast"]').waitFor({ state: 'detached', timeout: 5000 });
-    await tap(page, 'flag-S1b');
-    await tap(page, 'flag-S1c');
-    await capture(page, '10-debug');
-
-    // 플래그와 더미 세력을 켠 상태: 공방칸 자리(S1c), 6집단 의회, S1b 자리
-    await tap(page, 'flag-faction');
-    await tap(page, 'back');
-    await capture(page, '11-home-flags');
-    await advanceTo(page, 4, '출발 전 운영', () => 1);
-    await tap(page, 'car-dining');
-    await page.locator('[data-test="council"]').waitFor();
-    await expectText(page, 'council', '복원파');
-    await capture(page, '12-council-faction');
+    // 끝까지 자동으로
+    await until(page, '.end', 2000);
+    await capture(page, '16-end');
     await context.close();
 
     // 세로 화면
@@ -285,7 +303,7 @@ async function main() {
     await overlay.waitFor({ state: 'visible' });
     const text = await overlay.innerText();
     if (!text.includes('가로로 돌려 주세요')) throw new Error(`세로 화면 안내가 없다: ${text}`);
-    await capture(portraitPage, '13-portrait', { landscape: false });
+    await capture(portraitPage, '17-portrait', { landscape: false });
     await portrait.close();
   } finally {
     await browser.close();

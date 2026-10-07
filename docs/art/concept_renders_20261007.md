@@ -31,9 +31,14 @@
 
 ```text
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
-Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
+Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors. Smoke from the locomotive and the coach stovepipes is thin pale grey wisps drifting low and sideways with the wind, never a thick black column.
 Props: no abandoned suitcases, piles of luggage or piles of shoes on platforms or beside the train; left-behind goods are only cargo sacks or wooden crates.
+The dead: ordinary civilians in torn everyday winter clothes (parkas, anoraks, wool coats, hoodies, work jackets, knit hats or bare heads, loose hair). No olive drab, no camouflage or mottled patterns, no military-style backpacks or webbing, no helmets or round helmet-like caps, never walking in step or in rows.
 ```
+
+2026-10-07 16:05 더함: Train 줄 끝의 연기 문장은 사용자 결정(16:00, 연기 카드 '옅게 둠')이다.
+
+2026-10-07 15:25 더함: 마지막 줄(망자 옷)은 구간 배경 시안(B2·B3·B6)에서 망자가 병사 무리처럼 나와서 넣었다. 구간 배경 주문서와 같은 문장이다.
 
 ```text
 Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish, believable proportions and worn real materials, simple enough to read on a phone; textures soft and economical rather than crisp up close. Setting: Central Europe in the sixth winter after civilization collapsed and the dead rose. Weather is dark and drab: low heavy clouds, freezing fog, wet sleet or snow squalls; the only warm light comes from lamps, stoves and fire. Cold is shown as pale grey-white frost and blue-grey shadow, never saturated blue; warmth is amber. Colour meanings: red appears only where something is wrong (discontent, shortage zones of gauges, danger warnings); sky blue appears only for political support. People are exhausted civilians in layered patched coats; some have blood soaked into bandages or clothing, but no wounds or gore are drawn. Avoid: pixel art, toy or cartoon proportions, glossy product renders, Victorian ornament, logos, real weapon brand marks, red cross symbols, readable text other than short English placeholder labels.
@@ -307,3 +312,14 @@ No warning text, no icons, no colored outlines; the props must read on their own
 - **걸린 것 1, 내 주문 잘못**: 가운데 줄의 여행가방. 승강장, 열차 옆에 버려진 여행가방은 이송을 기리는 추모 상징과 겹친다(코디네이터 지적). 주문에서 내가 가방을 적었다. 나무 상자로 바꾸고, 공통 끝에 '승강장·열차 옆에 버려진 여행가방·짐 더미·신발 무더기 없음, 남긴 물건은 화물 자루와 나무 상자만' 줄을 더했다(구간 배경 주문서에도). 연출 문서의 조짐 조각 목록도 고쳤다.
 - **걸린 것 2**: 아래 줄의 '사건 뒤' 인물이 산 노인처럼 보인다. 망자인지 생존자인지 모르면 조짐이 거짓말이 된다. 얼어붙은 회청색 피부, 늘어진 머리, 끄는 발로 고쳤다(고어 없음).
 - 표식·군복은 안 보인다(로컬 워커 점검과 같음). → **v2를 다시 뽑는다**(위 글상자는 고친 판).
+
+### C12 v2 평가 (2026-10-07 15:00)
+
+평가용 사본은 `/mnt/project-files/art/concepts_20261007/C12_omen_states_v2.png`.
+
+- **채택한다.** C12는 세 상태가 폰 크기에서 갈리는지 보려는 그림이었고, 그 목적은 채웠다. 다시 뽑지 않는다.
+- v1에서 걸린 두 가지는 고쳐졌다. 가운데 줄의 짐은 나무 상자로 바뀌었고 여행가방은 없다. 아래 줄 인물은 회색 피부와 늘어진 머리, 굳은 팔로 그려져 산 노인보다 망자에 가깝게 읽힌다. 다만 외투를 입은 구부정한 사람과 아직 헷갈릴 여지가 있으니, 실제 에셋에서는 걸음새(끄는 발, 흔들리는 몸)를 움직임으로 더해 확실하게 한다.
+- 배수구 줄(덮개, 상자가 내려앉고 금 감, 구멍)이 가장 잘 읽힌다. 끌린 자국은 갈색 띠로 보이고 고어는 없다.
+- **걸린 것**: 위 줄(정상)의 창고 문간 안쪽에 사람 그림자가 이미 서 있다. 정상 상태에 조짐이 새어 들어간 것이다. 다시 뽑을 일은 아니지만 실제 에셋에서는 정상 문간을 비운다. 연출 문서의 세 상태 규칙에 '정상 상태에는 조짐 단서가 없다'를 덧붙였다.
+- 세 줄 모두 승강장 먼 쪽에 걸어가는 사람 둘이 있다. 줄마다 같으니 상태 비교는 흐리지 않는다. 실제 장면에서 이런 배경 인물은 생존자로 읽히는 옷과 움직임으로 둔다.
+- 금지 목록(표식, 군복, 철조망, 연기 나는 굴뚝, 버려진 가방·신발 더미, 사람 칸의 빗장·쇠창살)은 보이지 않는다. 객차 창의 얼굴들은 불 켜진 창 안쪽이고 창살은 없다.

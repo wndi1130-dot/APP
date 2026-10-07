@@ -43,9 +43,10 @@ function checkPopulation(data: Generated): void {
   assert.equal(profiles.length, 200);
   const byId = new Map(profiles.map((person) => [person.id, person]));
   assert.equal(byId.size, 200);
-  const fields = ['id', 'name', 'name_original', 'age', 'community', 'origin_tag', 'boarding', 'hometown', 'like', 'dislike', 'line', 'state'].sort();
+  const fields = ['id', 'name', 'name_original', 'gender', 'age', 'community', 'origin_tag', 'boarding', 'hometown', 'like', 'dislike', 'line', 'state'].sort();
   for (const [index, person] of profiles.entries()) {
     assert.deepEqual(Object.keys(person).sort(), fields);
+    assert(person.gender === undefined || person.gender === 'male' || person.gender === 'female');
     assert.equal(person.id, `p_${String(index + 1).padStart(3, '0')}`);
     assert.match(person.id, /^[a-z][a-z_0-9]*$/);
     assert(Number.isInteger(person.age) && person.age >= 0 && person.age <= 85);
@@ -167,7 +168,10 @@ test('B1·B6 읽기, 양쪽 표기 제외, 선호 태그, 원본 SHA-256 기록'
     const refs = loadReferences(root);
     const data = generateProfiles('reference-fixture', refs);
     checkPopulation(data);
-    assert.equal(data.familyData.warnings.length, 0);
+    // 이 시험 풀은 성별을 적지 않아 gender가 비고, 그 경고 한 줄만 남는다.
+    assert.equal(data.familyData.warnings.length, 1);
+    assert.match(data.familyData.warnings[0], /^이름 풀에 성별이 없는 이름/u);
+    assert(data.profiles.every((person) => person.gender === undefined));
     assert.equal(data.familyData.preference_fallbacks, 0);
     for (const person of data.profiles) {
       assert.match(person.name_original, /^Safe\d+ Fictional\d+$/);

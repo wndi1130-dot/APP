@@ -1,4 +1,5 @@
 // 작은 DOM 도우미. 화면 뼈대는 프레임워크 없이 상태가 바뀔 때마다 통째로 다시 그린다.
+import { plainNumbers } from './plain';
 
 export type Child = Node | string | number | null | undefined | false | readonly Child[];
 export type Attrs = Record<string, string | number | boolean | null | undefined>;
@@ -9,7 +10,9 @@ function append(parent: Node, child: Child): void {
     for (const item of child) append(parent, item);
     return;
   }
-  parent.appendChild(child instanceof Node ? child : document.createTextNode(String(child)));
+  // 글자로 나가는 숫자는 소수점 없이(plain.ts).
+  if (child instanceof Node) parent.appendChild(child);
+  else parent.appendChild(document.createTextNode(typeof child === 'number' ? String(Number.isInteger(child) ? child : Math.round(child)) : plainNumbers(child as string)));
 }
 
 function setAttrs(element: Element, attrs: Attrs | null | undefined): void {
