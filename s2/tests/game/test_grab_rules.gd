@@ -10,18 +10,18 @@ func _rng(s: int) -> RandomNumberGenerator:
 
 
 func test_window_front_back_and_two_grabbers() -> void:
-	assert_almost_eq(G.window(true, 1, 0, 5), 1.0, 0.0001)
-	assert_almost_eq(G.window(false, 1, 0, 5), 0.5, 0.0001)
+	assert_almost_eq(G.window(true, 1, 0, 5), 1.5, 0.0001)
+	assert_almost_eq(G.window(false, 1, 0, 5), 0.75, 0.0001)
 	assert_eq(G.window(true, 2, 10, 10), 0.0)
 	assert_eq(G.window(false, 3, 0, 5), 0.0)
 
 
 func test_window_ability_and_mult() -> void:
 	# 1 + 0.03*5 + 0.02*(7-5) = 1.19
-	assert_almost_eq(G.window(true, 1, 5, 7), 1.19, 0.0001)
-	assert_almost_eq(G.window(false, 1, 5, 7, 0.8), 0.5 * 1.19 * 0.8, 0.0001)
+	assert_almost_eq(G.window(true, 1, 5, 7), 1.5 * 1.19, 0.0001)
+	assert_almost_eq(G.window(false, 1, 5, 7, 0.8), 0.75 * 1.19 * 0.8, 0.0001)
 	# weak person: 1 + 0 + 0.02*(2-5) = 0.94
-	assert_almost_eq(G.window(true, 1, 0, 2), 0.94, 0.0001)
+	assert_almost_eq(G.window(true, 1, 0, 2), 1.5 * 0.94, 0.0001)
 	assert_eq(G.window(true, 1, 0, 5, 0.0), 0.0)
 
 

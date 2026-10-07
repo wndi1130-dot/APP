@@ -86,3 +86,29 @@ func test_run_toggle_stands_you_up() -> void:
 	hud._toggle_run()
 	assert_false(game.player.crouched)
 	assert_false(hud.crouch_button.button_pressed)
+
+
+func test_one_tap_fights_on_to_the_next_close_enemy() -> void:
+	var p = game.player
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}]
+	var a: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+	var b: Dictionary = game.zombies.spawn("dead", p.position + Vector3(-1.2, 0, 0))
+	b["state"] = "chase"
+	game._refresh_vision()
+	game.combat.melee_target(p, a, true)
+	a["state"] = "dead"
+	game.combat._pursue_zombie(p, 0.1)
+	assert_eq(p.target_zombie, b, "the next one at you")
+	assert_true(p.hold_attack)
+
+
+func test_tapping_away_stops_the_fight() -> void:
+	var p = game.player
+	var b: Dictionary = game.zombies.spawn("dead", p.position + Vector3(-1.2, 0, 0))
+	b["state"] = "chase"
+	game._refresh_vision()
+	p.hold_attack = true
+	p.target_zombie = {}
+	game.combat._pursue_zombie(p, 0.1)
+	assert_true(p.target_zombie.is_empty(), "no new target after an order to stop")
+	assert_false(p.hold_attack)

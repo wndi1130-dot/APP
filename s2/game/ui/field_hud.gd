@@ -877,10 +877,9 @@ func _release(pos: Vector2) -> void:
 		aim_target = null
 		return
 	if melee_pending != null:
-		if melee_holding:
-			p.hold_attack = false
-		else:
-			_melee(melee_pending, false)
+		if not melee_holding:
+			# A tap keeps swinging until it is down (no tap per swing).
+			_melee(melee_pending, true)
 		melee_pending = null
 		melee_holding = false
 		return
@@ -958,7 +957,8 @@ func _tap(pos: Vector2) -> void:
 	var path: PackedVector3Array = game.grid.find_path(p.position, world, false)
 	if path.is_empty():
 		return
-	var run: bool = double or run_button.button_pressed
+	# Toggles are the default; the double-tap run is a setting (user, build 20).
+	var run: bool = run_button.button_pressed or (double and bool(game.opts.get("double_tap_run", false)))
 	p.go_to(path, run)
 	if run:
 		p.crouched = false

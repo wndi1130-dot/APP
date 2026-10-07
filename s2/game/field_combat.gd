@@ -82,6 +82,16 @@ func _pursue_zombie(p, delta: float) -> void:
 	var z: Dictionary = p.target_zombie
 	if z.is_empty() or z["state"] == "dead":
 		p.target_zombie = {}
+		# One tap fights on: the next dead hand already at you is the next target (user, build 20).
+		# An emptied target is an order to stop, not a kill: no chaining then.
+		if p.hold_attack and not z.is_empty():
+			var next := _next_close_zombie(p)
+			if next.is_empty():
+				p.hold_attack = false
+			else:
+				p.target_zombie = next
+		else:
+			p.hold_attack = false
 		return
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
@@ -105,6 +115,22 @@ func _pursue_zombie(p, delta: float) -> void:
 		swing(p, z)
 	if not p.hold_attack:
 		p.target_zombie = {}
+
+
+const CHAIN_R := 2.0
+
+
+func _next_close_zombie(p) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := CHAIN_R
+	for z in game.zombies.list:
+		if z["state"] in ["dead", "frozen", "wander"] or not game.cell_seen(z["pos"]):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		if d < best_d:
+			best_d = d
+			best = z
+	return best
 
 
 func _pursue_person(p, delta: float) -> void:

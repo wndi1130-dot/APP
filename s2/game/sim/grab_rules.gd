@@ -1,8 +1,9 @@
 extends RefCounted
 # Grab, bite and scratch rules (body_injury 2).
 
-const FRONT_WINDOW := 1.0
-const BACK_WINDOW := 0.5
+# 1 s felt too fast on the S22 (user, build 20); the back window keeps half of the front.
+const FRONT_WINDOW := 1.5
+const BACK_WINDOW := 0.75
 const GRAB_SHARE := 0.65
 const BITE_ARM := 0.60
 const BITE_TORSO := 0.25
