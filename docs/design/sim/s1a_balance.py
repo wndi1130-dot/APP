@@ -7,7 +7,10 @@ docs/design/briefs/s1a_politics_numbers.md의 수치로 24구간 판을 자동�
   caretaker  처지를 견딜 선 안으로 돌보고, 감당할 수 있는 요구는 들어주고, 공개 협상으로 법을 통과시킨다.
   nodeal     caretaker와 같지만 의회에서 거래하지 않는다.
 
-넣지 않은 것: AI 지도자의 뇌물·협박, 사적 부탁, 세력, 결과 아크, 사건 카드의 개별 선택.
+  idealist   caretaker처럼 거래하되, 의회가 가장 좋아하는 법(대개 이상 법)부터 올린다.
+
+넣지 않은 것: AI 지도자의 뇌물·협박, 사적 부탁, 세력, 결과 아크, 사건 카드의 개별 선택(생존자 데려오기만 넣었다),
+비밀 투표와 비상대권의 효과, 비밀.
 사용: python3 docs/design/sim/s1a_balance.py [판 수] [--tune key=value ...]
 """
 import json
@@ -19,16 +22,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
-# ---- 브리프 수치 (조정은 여기서). 시뮬레이션 뒤 고친 값: haul_total 20→32, engine_fatigue, natural_ceiling, engine_exposure0 35→45, strike_rel −40→−15, refuse_rel ----
+# ---- 브리프 수치 (조정은 여기서). 시뮬레이션 뒤 고친 값: haul_total 20→32→36(법 개정 뒤), engine_fatigue, natural_ceiling, engine_exposure0 35→45, strike_rel −40→−15, refuse_rel ----
 P = dict(
     segments=24, session_every=3,
     coal0=100, food0=100, med0=20, lux0=8, trust0=50, tension0=20,
     coal_run=6, coal_stop=2, coal_heat_per_lever=0.25, food_per_person_lever=0.025,
-    haul_total=32, target_boost=3.0, lever_step=12, winter_every=6, winter_drop=5,
+    haul_total=36, target_boost=3.0, lever_step=12, winter_every=6, winter_drop=5,
     injury_rate=0.25, death_rate=0.03, med_per_injured=0.5,
     recover_base=1, recover_cap=3, target_keep=0.85,
     engine_fatigue=2.0, shift_relief=10, shift_coal=3,
     natural_ceiling=15, engine_exposure0=45, strike_rel=-15, refuse_rel=5,
+    rescue_rate=0.2, crisis_line=30, forced_agenda=1, plan_line=120, thrown_horde=0.05, store_risk=0.03, lever_line=50,
 )
 COMMS = ['tail', 'engine', 'guard', 'medtech', 'front']
 POP = dict(tail=90, engine=25, guard=25, medtech=30, front=30)
@@ -41,29 +45,61 @@ COH0 = dict(tail=0.55, engine=0.85, guard=0.80, medtech=0.70, front=0.65)
 IDEO = dict(tail=(1, -1, -1), engine=(-1, 1, 1), guard=(-1, 1, 0), medtech=(0, -1, 1), front=(-1, -1, 1))
 OPPOSITE = dict(tail='front', front='tail', engine='medtech', medtech='engine', guard='tail')
 
-# 법: 종류, 축, 처지 변화(공동체: (온기, 배급, 과밀, 노출)), 관계 변화, 열림 조건
+# 법 (2026-10-07 개정). 프로스트펑크식: 모두에게 좋은 법은 자원이 많이 들고, 살리는 법은 다수가 싫어한다.
+# kind 일반/통치, axes (배급, 권위, 기술), mats 처지 변화 (온기, 배급, 과밀, 노출), rels 통과 때 관계 변화,
+# like 처지 밖의 선호(입장 점수에 더함), res 자원 효과, crisis 위기 때 강제 안건이 되는 자원, open 열림 조건
 def d(**kw):
     return kw
+def law(kind, axes, open_=lambda s: True, mats=None, rels=None, like=None, res=None, crisis=()):
+    return dict(kind=kind, axes=axes, open=open_, mats=mats or {}, rels=rels or {}, like=like or {},
+                res=res or {}, crisis=crisis)
+ALL = lambda v: {c: v for c in COMMS}
 LAWS = {
-    'secret_ballot': ('normal', (0, -1, 0), {}, {}, lambda s: True),
-    'equal_ration': ('normal', (1, 0, 0), d(tail=(0, 15, 0, 0), front=(0, -15, 0, 0)), {}, lambda s: True),
-    'contribution_ration': ('normal', (-1, 0, 0), d(engine=(0, 10, 0, 0), guard=(0, 10, 0, 0), tail=(0, -10, 0, 0)), {}, lambda s: True),
-    'relocation': ('normal', (1, 0, 0), d(tail=(0, 0, -15, 0), front=(-5, 0, 15, 0)), {}, lambda s: s.m['tail'][2] >= 70),
-    'common_heating': ('normal', (1, 0, -1), d(front=(-15, 0, 0, 0), tail=(15, 0, 0, 0)), {}, lambda s: s.m['tail'][0] <= 35),
-    'child_labor': ('normal', (-1, -1, 0), d(tail=(0, 0, 0, 10)), {}, lambda s: s.coal <= 30 or s.food <= 30),
-    'triage': ('normal', (0, -1, -1), {}, {}, lambda s: s.med <= 5 or s.injured >= 6),
-    'rotation': ('normal', (1, 0, 0), d(tail=(0, 0, 0, -20), front=(0, 0, 0, 20)), {}, lambda s: s.m['tail'][3] >= 60),
-    'patrol': ('normal', (0, 1, 0), {}, d(tail=-5), lambda s: s.tension >= 40),
-    'curfew': ('normal', (0, 1, 0), {}, {}, lambda s: s.seg >= 6),
-    'engine_ration': ('normal', (-1, 1, 1), d(engine=(0, 15, 0, 0)), {}, lambda s: s.strike_warned),
-    'luxury_levy': ('normal', (1, 0, 0), {}, d(front=-25), lambda s: s.seg >= 9),
-    'engine_rite': ('normal', (0, 1, 1), {}, {}, lambda s: True),
-    'surveillance': ('normal', (0, 1, 0), {}, {}, lambda s: True),
-    'refuse_rescue': ('normal', (0, -1, -1), {}, {}, lambda s: s.m['tail'][2] >= 80),
-    'emergency_powers': ('rule', (0, 1, 0), {}, {}, lambda s: s.tension >= 50 or s.trust <= 10),
-    'strike_ban': ('rule', (0, 1, 0), {}, d(engine=-30), lambda s: s.strikes > 0),
-    'guided_voting': ('rule', (0, 1, 0), {}, {}, lambda s: s.session >= 3),
+    # 식량: 다 같이 먹을까, 일한 만큼 먹을까, 내일 심을 씨앗을 오늘 먹을까
+    # 이상 법은 레버의 바닥을 법으로 묶는다. 위기에도 못 깎으니 비싸다
+    'common_kitchen': law('normal', (1, 0, 0), like=d(tail=2, medtech=1, guard=1, engine=1), rels=d(tail=10),
+                          res=d(ration_floor=3, tension_add=-1)),
+    # 가혹한 법은 피해자가 저마다 다르다. 다 꼬리칸에 몰면 45석이 사지지 않는다(12장)
+    'contribution_ration': law('normal', (-1, 0, 0), mats=d(engine=(0, 10, 0, 0), guard=(0, 10, 0, 0),
+                               tail=(0, -5, 0, 0), front=(0, -10, 0, 0), medtech=(0, -5, 0, 0)), res=d(food_add=-1.5),
+                               crisis=('food',)),
+    'seed_grain': law('normal', (0, -1, -1), lambda s: s.food <= 50, rels=d(front=-20, engine=-5, medtech=-5),
+                      like=d(tail=1), res=d(food_once=30), crisis=('food',)),
+    # 추위: 꼬리칸까지 데울까, 석탄을 나눠 줄까, 꼬리칸이 눈을 녹여 물을 댈까
+    'common_heating': law('normal', (1, 0, -1), lambda s: s.m['tail'][0] <= 40,
+                          like=d(tail=2, medtech=1), rels=d(tail=10), res=d(heat_floor=3, tension_add=-1)),
+    'heat_quota': law('normal', (-1, 1, 0), lambda s: s.coal <= 50,
+                      mats=d(tail=(-10, 0, 0, 0), medtech=(-10, 0, 0, 0), guard=(-5, 0, 0, 0)), res=d(heat_mult=0.5),
+                      crisis=('coal',)),
+    'snow_duty': law('normal', (1, 1, -1), mats=d(tail=(-5, 0, 0, 5), front=(-5, 0, 0, 15), medtech=(-5, 0, 0, 5)),
+                     res=d(coal_add=-1.0), crisis=('coal',)),
+    # 노동
+    'child_labor': law('normal', (-1, -1, 0), lambda s: s.coal <= 40 or s.food <= 40,
+                       mats=d(tail=(0, 0, 0, 10)), rels=d(tail=-5, medtech=-10), res=d(haul_mult=1.2, fear_once=5),
+                       crisis=('coal', 'food')),
+    'corpse_throw': law('normal', (0, -1, -1), lambda s: s.corpse_issue, res=d(corpse='throw'), crisis=('corpse',)),
+    'corpse_store': law('normal', (1, 0, 1), lambda s: s.corpse_issue, like=d(tail=1, medtech=1, front=1),
+                        res=d(corpse='store'), crisis=('corpse',)),
+    'corpse_burn': law('normal', (0, 1, 1), lambda s: s.corpse_issue, rels=d(medtech=-5, front=-5), like=d(engine=2),
+                       res=d(corpse='burn'), crisis=('corpse',)),
+    # 의료와 감염
+    'treat_all': law('normal', (1, 0, 1), like=ALL(1), res=d(med_mult=1.6, heal=0.7)),
+    'triage': law('normal', (0, -1, -1), lambda s: s.med <= 5 or s.injured >= 6,
+                  rels=d(medtech=-15, tail=-5), res=d(med_mult=0.6, trust_once=-5), crisis=('med',)),
+    'no_outsiders': law('normal', (0, 1, -1), lambda s: s.m['tail'][2] >= 75,
+                        rels=d(medtech=-10, tail=-10), res=d(no_rescue=1, trust_once=-5)),
+    # 질서와 통치
+    'patrol': law('normal', (0, 1, 0), lambda s: s.tension >= 40, rels=d(tail=-5),
+                  res=d(tension_add=-1, fear_add=2, food_add=0.5, death_mult=0.8)),
+    'secret_ballot': law('normal', (0, -1, 0)),
+    'emergency_powers': law('rule', (0, 1, 0), lambda s: s.tension >= 50 or s.trust <= 10),
+    'strike_ban': law('rule', (0, 1, 0), lambda s: s.strikes > 0, rels=d(engine=-30)),
+    'guided_voting': law('rule', (0, 1, 0), lambda s: s.session >= 3),
 }
+CORPSE = ['corpse_throw', 'corpse_store', 'corpse_burn']
+IDEAL = ['common_kitchen', 'common_heating', 'corpse_store', 'treat_all']
+HARSH = ['contribution_ration', 'seed_grain', 'heat_quota', 'snow_duty', 'child_labor', 'triage', 'no_outsiders',
+         'corpse_burn']
 SEATS = dict(tail=45, front=15, medtech=15, engine=13, guard=12)  # allocateSeats 결과(브리프 0.1)
 
 
@@ -114,6 +150,9 @@ class Run:
         self.stats = Counter()
         self.end = None
         self.demand_cool = {c: 0 for c in COMMS}
+        self.corpse_issue = False  # 첫 죽음이 시신 처리 안건을 연다
+        self.thrown = 0            # 밖으로 던진 시신: 선로를 따라오는 무리에 섞인다(아는 얼굴)
+        self.stored = 0            # 냉동칸에 둔 시신
 
     # 처지 = 기준 + 레버 차이
     @property
@@ -126,13 +165,67 @@ class Run:
                       clamp(cr, 0, 100), clamp(ex, 0, 100))
         return out
 
-    def apply_law_metrics(self, law):
-        _, _, mats, rels, _ = LAWS[law]
-        for c, delta in mats.items():
+    def res(self, key, default=0.0):
+        """통과한 법들의 자원 효과를 모은다. *_mult는 곱하고 나머지는 더한다."""
+        mult = key.endswith('_mult') or key == 'heal'
+        out = 1.0 if mult else default
+        for l in self.passed:
+            v = LAWS[l]['res'].get(key)
+            if v is None or isinstance(v, str):
+                continue
+            if key == 'heal':
+                out = max(out, v)
+            elif mult:
+                out *= v
+            else:
+                out += v
+        return out if not (key == 'heal' and out == 1.0) else default
+
+    @property
+    def corpse(self):
+        for l in CORPSE:
+            if l in self.passed:
+                return LAWS[l]['res']['corpse']
+        return None
+
+    def on_death(self, n, c='tail'):
+        """죽은 사람은 일어난다. 시신 처리 법이 대가를 정한다."""
+        if n <= 0:
+            return
+        self.pop[c] -= n
+        self.stats['deaths'] += n
+        way = self.corpse
+        if way is None:
+            self.corpse_issue = True
+            self.tension += 3 * n  # 누가 어떻게 치울지 다툰다. 일단 밖으로 던진다
+            self.thrown += n
+        elif way == 'throw':
+            self.thrown += n
+        elif way == 'store':
+            self.stored += n
+            self.base['tail'][2] += 1 * n
+        elif way == 'burn':
+            self.coal += 2 * n
+            self.rel['tail'] = clamp(self.rel['tail'] - 3 * n, -100, 100)
+
+    def apply_law(self, law):
+        L = LAWS[law]
+        for c, delta in L['mats'].items():
             for i in range(4):
                 self.base[c][i] += delta[i]
-        for c, dr in rels.items():
+        for c, dr in L['rels'].items():
             self.rel[c] = clamp(self.rel[c] + dr, -100, 100)
+        r = L['res']
+        self.trust += r.get('trust_once', 0)
+        self.fear += r.get('fear_once', 0)
+        self.food += r.get('food_once', 0)
+        self.lux += r.get('lux_once', 0)
+        if r.get('engine_calm'):
+            self.fervor['engine'] = max(0, self.fervor['engine'] - 1)
+        if law == 'guided_voting':
+            self.stats['guided_left'] = 3
+        if law in CORPSE:
+            self.corpse_issue = False
 
     # ---- 구간 진행 ----
     def step(self):
@@ -149,12 +242,12 @@ class Run:
             self.tension += 3
         else:
             self.stats['in_strike'] = 0
-        heat_coal = sum(self.heat.values()) * P['coal_heat_per_lever']
+        base_heat = self.heat_cost()
+        heat_coal = base_heat * self.res('heat_mult') + self.res('coal_add')
         food_use = sum(self.pop[c] * self.ration[c] for c in COMMS) * P['food_per_person_lever']
-        if 'engine_ration' in self.passed:
-            food_use += 1
-        if 'common_heating' in self.passed:
-            heat_coal -= 0.5
+        food_use = food_use * self.res('food_mult') + self.res('food_add')
+        self.stats['law_coal'] += heat_coal - base_heat
+        self.stats['law_food'] += food_use - sum(self.pop[c] * self.ration[c] for c in COMMS) * P['food_per_person_lever']
         self.coal -= heat_coal + (4 if striking else P['coal_run'])
         self.food -= food_use
         if not striking:
@@ -169,6 +262,10 @@ class Run:
         self.meters()
         self.check_end()
 
+    def heat_cost(self):
+        # 난방은 사람 수만큼 칸이 많다. 40명을 한 칸으로 친다(200명, 레버 2 → 2.5)
+        return sum(self.heat[c] * self.pop[c] / 40 for c in COMMS) * P['coal_heat_per_lever']
+
     def stop(self):
         pid, risk, loot = self.r.choice(self.places)
         target = self.policy_target(pid, loot)
@@ -181,8 +278,7 @@ class Run:
         haul = P['haul_total'] * self.r.uniform(0.7, 1.3)
         if self.fervor['tail'] >= 1 and self.rel['tail'] <= -40:
             haul *= 0.7  # 꼬리칸 작업 거부
-        if 'child_labor' in self.passed:
-            haul *= 1.15
+        haul *= self.res('haul_mult')
         for k, w in weights.items():
             amt = haul * w / tot
             if k == 'coal': self.coal += amt
@@ -191,26 +287,39 @@ class Run:
             elif k == 'luxury': self.lux += amt / 3
             elif self.r.random() < amt / 10: self.stats['got_' + k] += 1
         guard_mult = 1.5 if (self.fervor['guard'] >= 1 and self.rel['guard'] <= -40) else 1
-        lam = risk * P['injury_rate'] * guard_mult
+        horde = min(1.5, 1 + P['thrown_horde'] * self.thrown)  # 던진 시신이 무리를 키운다
+        lam = risk * P['injury_rate'] * guard_mult * horde
         inj = sum(1 for _ in range(6) if self.r.random() < lam / 6)
         self.injured += inj
-        if self.r.random() < risk * P['death_rate'] * guard_mult:
-            self.pop['tail'] -= 1
-            self.stats['deaths'] += 1
+        if self.r.random() < risk * P['death_rate'] * guard_mult * horde * self.res('death_mult'):
+            self.on_death(1)
         self.stats['target_' + target] += 1
+        # 구조 카드(ev_field_wounded): 생존자를 데려오면 꼬리칸 사람·과밀·부상자가 는다
+        if self.r.random() < P['rescue_rate']:
+            if self.res('no_rescue'):
+                self.trust -= 1; self.stats['rescue_refused'] += 1
+            elif self.policy != 'passive' and self.m['tail'][2] >= 80:
+                self.trust -= 1; self.rel['medtech'] -= 3; self.stats['rescue_declined'] += 1  # 카드에서 두고 온다
+            else:
+                self.pop['tail'] += 2; self.base['tail'][2] += 3; self.injured += 1
+                self.stats['rescued'] += 1
 
     def medicine_tick(self):
-        need = self.injured * P['med_per_injured'] * (0.6 if 'triage' in self.passed else 1)
+        need = self.injured * P['med_per_injured'] * self.res('med_mult')
         if self.med >= need:
             self.med -= need
-            healed = sum(1 for _ in range(self.injured) if self.r.random() < 0.4)
+            heal = self.res('heal', 0.4)
+            healed = sum(1 for _ in range(self.injured) if self.r.random() < heal)
             self.injured -= healed
         else:
             self.med = 0
             dead = sum(1 for _ in range(self.injured) if self.r.random() < 0.1)
             self.injured -= dead
-            self.pop['tail'] -= dead
-            self.stats['deaths'] += dead
+            self.on_death(dead)
+        # 냉동칸: 안치한 시신이 많을수록 녹아 일어나는 사고가 난다
+        if self.stored and self.r.random() < min(0.3, P['store_risk'] * self.stored):
+            self.injured += 2; self.tension += 8; self.stored = 0
+            self.stats['cold_car_outbreak'] += 1
 
     def drift(self):
         m = self.m
@@ -285,12 +394,13 @@ class Run:
 
     # ---- 의회 ----
     def stance(self, c, law):
-        kind, axes, mats, rels, _ = LAWS[law]
-        mat = 0
+        L = LAWS[law]
+        axes, mats, rels = L['axes'], L['mats'], L['rels']
+        mat = L['like'].get(c, 0)
         if c in mats:
             dw, dr, dc, de = mats[c]
             gain = dw + dr - dc - de
-            mat = 2 if gain >= 15 else 1 if gain >= 5 else -2 if gain <= -15 else -1 if gain <= -5 else 0
+            mat += 2 if gain >= 15 else 1 if gain >= 5 else -2 if gain <= -15 else -1 if gain <= -5 else 0
         if c in rels:
             mat += -2 if rels[c] <= -15 else -1
         ide = sum(a * b for a, b in zip(axes, IDEO[c]))
@@ -318,14 +428,26 @@ class Run:
 
     def council(self):
         self.session += 1
-        open_laws = [l for l, v in LAWS.items() if l not in self.passed and v[4](self)]
+        open_laws = [l for l, v in LAWS.items() if l not in self.passed and v['open'](self)
+                     and not (l in CORPSE and self.corpse)]
         if not open_laws:
             return
+        crisis = [k for k, lim in (('coal', P['crisis_line']), ('food', P['crisis_line'])) if getattr(self, k) < lim]
+        if self.corpse_issue: crisis.append('corpse')
+        if self.med <= 3 and self.injured >= 4: crisis.append('med')
+        forced = [l for l in open_laws if set(LAWS[l]['crisis']) & set(crisis)] if P['forced_agenda'] else []
+        if forced:
+            # 위기가 안건을 정한다. 플레이어는 위기 법 가운데서만 고른다
+            self.stats['forced'] += 1
+            open_laws = forced
         if self.policy == 'passive' or self.random_laws:
             law = self.r.choice(open_laws)
+        elif self.policy == 'idealist':
+            law = max(open_laws, key=lambda l: self.law_ease(l) + self.r.random())
         else:
-            law = max(open_laws, key=lambda l: self.law_value(l) + self.r.random())
-        kind = LAWS[law][0]
+            law = max(open_laws, key=lambda l: self.law_value(l) + self.r.random() * 0.5)
+        self.stats['prop_' + law] += 1
+        kind = LAWS[law]['kind']
         need = 51 if kind == 'normal' else 67
         blocs = self.blocs(law)
         if 'guided_voting' in self.passed and self.stats['guided_left'] > 0:
@@ -339,18 +461,8 @@ class Run:
         if exp0 >= need:
             self.stats['easy_laws'] += 1
         deals = 0
-        if self.policy == 'caretaker' and exp0 < need + 3:
-            open_promise = {p[0] for p in self.promises}
-            order = sorted(COMMS, key=lambda c: -(blocs[c]['und'] + blocs[c]['no'] * 0.2))
-            for c in order:
-                if self.expected(blocs) >= need + 3 or deals >= 3:
-                    break
-                b = blocs[c]
-                if c in open_promise or self.rel[c] <= -40 or b['ide'] <= -3 or b['und'] + b['no'] == 0:
-                    self.stats['closed_negotiation'] += 1
-                    continue
-                moved = round(b['no'] * 0.2)
-                b['yes'] += b['und'] + moved; b['no'] -= moved; b['und'] = 0
+        if self.policy in ('caretaker', 'idealist') and exp0 < need + 3:
+            for c in self.negotiate(blocs, need):
                 self.promises.append((c, self.seg + 3, self.r.choice(['lever', 'medicine', 'luxury', 'target'])))
                 deals += 1
         self.stats['deals'] += deals
@@ -360,28 +472,67 @@ class Run:
             yes += sum(1 for _ in range(b['und']) if self.r.random() < p)
         if yes >= need:
             self.passed.add(law)
-            self.apply_law_metrics(law)
+            self.apply_law(law)
             self.stats['passed'] += 1
-            if law == 'guided_voting':
-                self.stats['guided_left'] = 3
-            if law == 'engine_rite' or law == 'engine_ration':
-                self.fervor['engine'] = max(0, self.fervor['engine'] - 1)
-            if law == 'luxury_levy':
-                self.lux += 5
-            if law in ('triage', 'refuse_rescue'):
-                self.trust -= 5
-            if law == 'surveillance':
-                self.trust -= 3
+            self.stats['pass_' + law] += 1
+            if law in HARSH: self.stats['harsh_passed'] += 1
+            if law in IDEAL: self.stats['ideal_passed'] += 1
+            if forced: self.stats['forced_passed'] += 1
+            if deals and exp0 < need: self.stats['bought_laws'] += 1
         else:
             self.stats['failed'] += 1
             # 부결돼도 약속은 남는다. 그 집단은 약속대로 찬성했다(우리가 정한 규칙)
 
-    def law_value(self, law):
-        val = 0
+    def negotiate(self, blocs, need, max_deals=3):
+        """공개 협상. 미정 전부와 반대의 20%를 찬성으로 옮긴다. blocs를 바꾸고 거래한 공동체를 돌려준다."""
+        open_promise = {p[0] for p in self.promises}
+        order = sorted(COMMS, key=lambda c: -(blocs[c]['und'] + blocs[c]['no'] * 0.2))
+        done = []
+        for c in order:
+            if self.expected(blocs) >= need + 3 or len(done) >= max_deals:
+                break
+            b = blocs[c]
+            if c in open_promise or self.rel[c] <= -40 or b['ide'] <= -3 or b['und'] + b['no'] == 0:
+                self.stats['closed_negotiation'] += 1
+                continue
+            moved = round(b['no'] * 0.2)
+            b['yes'] += b['und'] + moved; b['no'] -= moved; b['und'] = 0
+            done.append(c)
+        return done
+
+    def law_ease(self, law):
+        """의회가 얼마나 좋아하나. 이상주의 정책은 이것만 본다."""
+        return sum(self.stance(c, law)[0] * SEATS[c] for c in COMMS) / 10
+
+    def law_worth(self, law):
+        """남은 구간 동안 법이 아끼거나 쓰는 석탄·식량·의약품(대략, 석탄 1 = 식량 1 = 의약품 0.5)."""
+        r = LAWS[law]['res']; left = P['segments'] - self.seg
+        heat = self.heat_cost()
+        food = sum(self.pop[c] * self.ration[c] for c in COMMS) * P['food_per_person_lever']
+        w = -r.get('coal_add', 0) * left - r.get('food_add', 0) * left
+        w += heat * (1 - r.get('heat_mult', 1)) * left + food * (1 - r.get('food_mult', 1)) * left
+        w += (r.get('haul_mult', 1) - 1) * P['haul_total'] * 0.8 * left
+        w += (1 - r.get('med_mult', 1)) * self.injured * P['med_per_injured'] * left * 2
         for c in COMMS:
-            score, _ = self.stance(c, law)
-            val += score * SEATS[c] / 10
-        return val
+            w -= max(0, r.get('ration_floor', 0) - self.ration[c]) * self.pop[c] * P['food_per_person_lever'] * left
+            w -= max(0, r.get('heat_floor', 0) - self.heat[c]) * self.pop[c] / 40 * P['coal_heat_per_lever'] * left
+        w += r.get('food_once', 0) + r.get('heal', 0.4) * 10 - 4
+        return w
+
+    def law_value(self, law):
+        """생존을 따지는 정책: 자원이 빠듯할수록 자원 효과를 무겁게 본다."""
+        tight = clamp((P['plan_line'] - min(self.coal, self.food)) / 60, 0.5, 1.5)
+        ease = self.law_ease(law)
+        need = 51 if LAWS[law]['kind'] == 'normal' else 67
+        blocs = self.blocs(law)
+        exp = self.expected(blocs)
+        if exp < need and self.policy == 'caretaker':
+            stats = self.stats.copy()
+            self.negotiate(blocs, need)
+            self.stats = stats
+            exp = self.expected(blocs)
+        reach = 1.0 if exp >= need else 0.1
+        return (self.law_worth(law) * tight + ease) * reach
 
     def promise_tick(self):
         keep = []
@@ -427,10 +578,8 @@ class Run:
             elif self.rel[c] <= -15: inc += 1
             if m[c][0] <= 25 or m[c][1] <= 25: inc += 2
         if self.food <= 0: inc += 8
-        if 'patrol' in self.passed:
-            inc -= 1; self.fear += 2
-        if 'surveillance' in self.passed: self.fear += 2
-        if 'curfew' in self.passed: self.fear += 1
+        inc += self.res('tension_add')
+        self.fear += self.res('fear_add')
         if inc <= 0:
             self.tension -= 2
         else:
@@ -468,15 +617,18 @@ class Run:
 
     # ---- 정책 ----
     def policy_levers(self):
+        hf, rf = self.res('heat_floor'), self.res('ration_floor')
+        for c in COMMS:
+            self.heat[c] = max(self.heat[c], int(hf)); self.ration[c] = max(self.ration[c], int(rf))
         if self.policy == 'passive':
             return
         m = self.m
         for c in COMMS:
             w, ra, _, _ = m[c]
-            if w < 45 and self.coal > 60 and self.heat[c] < 4: self.heat[c] += 1
-            if ra < 45 and self.food > 60 and self.ration[c] < 4: self.ration[c] += 1
-            if w > 65 and self.coal < 40 and self.heat[c] > 1: self.heat[c] -= 1
-            if ra > 65 and self.food < 40 and self.ration[c] > 1: self.ration[c] -= 1
+            if w < 45 and self.coal > P['lever_line'] and self.heat[c] < 4: self.heat[c] += 1
+            if ra < 45 and self.food > P['lever_line'] and self.ration[c] < 4: self.ration[c] += 1
+            if w > 65 and self.coal < 40 and self.heat[c] > max(1, hf): self.heat[c] -= 1
+            if ra > 65 and self.food < 40 and self.ration[c] > max(1, rf): self.ration[c] -= 1
 
     def policy_target(self, pid, loot):
         need = {'coal': self.coal / 252, 'food': self.food / 240}
@@ -523,7 +675,9 @@ def summarize(policy, n, places):
             'starving_segments', 'deaths', 'demands', 'demands_refused', 'strikes', 'lost_segments',
             'max_tension', 'tension_crisis', 'trust_crisis', 'end_trust', 'proposals', 'easy_laws',
             'passed', 'deals', 'closed_negotiation', 'kept', 'broken', 'passed_stops',
-            'target_coal', 'target_food', 'target_medicine', 'shift_relief', 'strike_conceded', 'fervor3']
+            'target_coal', 'target_food', 'target_medicine', 'shift_relief', 'strike_conceded', 'fervor3',
+            'forced', 'forced_passed', 'bought_laws', 'harsh_passed', 'ideal_passed', 'law_coal', 'law_food',
+            'rescued', 'rescue_refused', 'rescue_declined', 'cold_car_outbreak']
     print('평균:', ', '.join(f'{k} {agg[k] / n:.1f}' for k in keys))
     if agg['proposals']:
         print(f"거래 없이도 통과할 법(기댓값 기준): {agg['easy_laws'] / agg['proposals']:.0%}, "
@@ -541,7 +695,7 @@ def main():
             k, v = kv.split('=')
             P[k] = type(P[k])(float(v)) if isinstance(P[k], float) else int(v)
     places = load_places()
-    for policy in ('passive', 'nodeal', 'caretaker', 'nodeal_random', 'caretaker_random'):
+    for policy in ('passive', 'idealist', 'nodeal', 'caretaker', 'caretaker_random'):
         summarize(policy, n, places)
 
 
