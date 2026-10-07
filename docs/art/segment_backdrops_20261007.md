@@ -33,7 +33,10 @@ Clothing: everyone looks ragged after six winters: torn and frayed mismatched la
 Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
 Landscape: no barbed-wire fences, watchtowers, rows of barracks, loading ramps, or tall chimneys with smoke anywhere in the scene. Factory chimneys and cooling towers, if present, stand cold and smokeless.
 Props: no abandoned suitcases, piles of luggage or piles of shoes beside the track or on platforms; left-behind goods are only cargo sacks or wooden crates.
+The dead: ordinary civilians in torn everyday winter clothes (parkas, anoraks, wool coats, hoodies, work jackets, knit hats or bare heads, loose hair). No olive drab, no camouflage or mottled patterns, no military-style backpacks or webbing, no helmets or round helmet-like caps, never walking in step or in rows.
 ```
+
+15:20 더함: 마지막 줄(망자 옷)은 B2 v2, B3 v1·v2, B6 v1에서 망자가 둥근 모자나 철모 같은 머리, 국방색 배낭, 얼룩무늬 상의로 나와 병사 무리처럼 읽혀서 넣었다. 이 줄이 생기기 전에 뽑은 그림은 망자를 참고하지 않는다.
 
 ## B1 대폴란드 호수 평야 (K1, 0–54km)
 
@@ -110,6 +113,7 @@ Outside: the train is crossing a long steel truss railway bridge over a wide icy
 - 지붕 위 띠만 잘라 보고 여섯 키트가 서로 다른 동네로 읽히나.
 - 칸 안 호박색이 화면에서 가장 밝은가. 배경이 칸 안 정보를 덮지 않나.
 - 7b절의 금지 목록(철조망, 망루, 막사, 하역 경사로, 연기 나는 굴뚝, 사람이 모인 화차, 그 시대 표식, 적십자 표장)이 하나라도 섞였나.
+- 망자가 병사 무리로 읽히지 않나(철모 같은 머리, 국방색, 얼룩무늬, 줄 맞춘 걸음). 망자는 크게 잘라서 본다.
 
 ## 평가 (2026-10-07 13:20)
 
@@ -118,7 +122,7 @@ Outside: the train is crossing a long steel truss railway bridge over a wide icy
 
 ## B8 v2 평가 (2026-10-07 15:00)
 
-평가용 사본은 `/mnt/project-files/B8_oder_bridge_v2.png`. 같은 폴더의 `B8_oder_bridge_v2_old_props.png`와 견줬다.
+평가용 사본은 `/mnt/project-files/art/backdrops_20261007/B8_oder_bridge_v2.png`. 같은 폴더의 `B8_oder_bridge_v2_old_props.png`와 견줬다.
 
 - **B8_oder_bridge_v2를 고른다.** 다시 뽑지 않는다.
 - 트러스 부재가 창 앞을 지나며 바깥을 칸칸이 자르는 느낌이 산다. 앞쪽 부재는 움직임으로 흐리고, 칸 안 호박색이 화면에서 가장 밝다. 아래 강물의 얼음 조각과 안개도 주문대로다. K2라 전차선이 없어야 하는데 없다.
@@ -127,3 +131,22 @@ Outside: the train is crossing a long steel truss railway bridge over a wide icy
 - 볼 점 1: 화차가 '기관차 앞 다리 한가운데'가 아니라 열차 뒤 먼 선로에 서 있는 것처럼 보인다. 옆에서 보는 구도에서는 앞을 보여 주기 어렵다. 실제 장면에서는 다리를 다 건너기 직전 오른쪽 끝에 들어오게 하거나, 화차를 이 구간 사건 그림으로 따로 보여 준다.
 - 볼 점 2: 건너편 강가에 첨탑이 선 도시 윤곽이 있다. 주문은 헐벗은 숲이었고, 치가치체 근처 오데르는 큰 도시가 보이는 곳이 아니다. 실제 배경에서는 숲과 낮은 마을 지붕으로 바꾼다.
 - 볼 점 3: 건너편 강가의 망자들은 폰 크기에서 점에 가깝다. 위험도 '조용함'이라 지금 크기도 틀리지 않지만, 위험도가 올라간 판에서는 망자 무리를 더 크게, 더 가까이 둔다.
+
+## B1~B5·B7 평가 (2026-10-07 15:20)
+
+평가용 사본은 전부 `/mnt/project-files/art/backdrops_20261007/`에 있다(B1~B8 두 장씩, B6_PICK). B1~B4는 전차선 줄(B3·B4에 전차선 기둥)과 짐 줄, 망자 옷 줄이 생기기 전에 뽑은 그림이다. 그래서 B3·B4에 전차선 기둥이 없는 것은 그림 탓이 아니고, 실제 배경에서 넣는다.
+
+| 항목 | 고른 것 | 까닭 | 볼 점 |
+|---|---|---|---|
+| B1 호수 평야 | v2 | 얼어붙은 호수가 넓고 울타리 위 까마귀, 반쯤 묻힌 차, 건널목 초소와 차단기까지 주문이 다 들어갔다. 전차선 없음도 맞다. | 기관차 검은 연기가 오른쪽 위 하늘을 덮어 HUD 둘레가 어수선하다. 실제 장면에서 기관차 연기는 v1처럼 옅고 낮게 둔다. 반쯤 묻힌 차가 아래 HUD 단추 높이에 걸린다. |
+| B2 오데르·보브르 | v2(배경만) | 긴 범람원 제방과 띠처럼 깔린 안개, 강가 마을 탑이 있어 K2가 B1과 갈린다. | **v2의 망자는 쓰지 않는다.** 둥근 모자, 국방색 배낭과 옷이라 병사 무리로 읽힌다. 망자 참고는 v1(누더기 민간 옷, 후드, 산발)으로 한다. v1은 아래 HUD가 빠졌고 망자가 너무 크고 가깝다. 쓰러진 수위 표지는 둘 다 서 있다. |
+| B3 국경 소도시 | v2(배경만) | 조립 아파트 줄, 연기 없는 공장 굴뚝, 강 건너 철교와 교회 탑, 차고 줄과 불탄 차가 다 있고 '동독 소도시'가 지붕 위 띠만으로 읽힌다. | **두 장 다 망자를 쓰지 않는다.** v1은 철모처럼 둥근 머리에 갈색 옷을 입은 셋이 나란히 걸어 병사 행렬로 읽히고, v2는 오른쪽 망자가 얼룩무늬 상의다. |
+| B4 라우지츠 | v1 | 계단식 노천광, 노천광 호수, 멈춘 풍차, 김 없는 냉각탑, 소나무 열이 다 보이고, 소나무 사이 망자 하나가 분명하다. | 오른쪽 위의 높은 컨베이어 다리는 B5의 거대 컨베이어 다리(K5 랜드마크)와 겹친다. K4의 컨베이어는 아래 띠의 낮은 벨트로만 둔다. v2는 망자가 객차 지붕선 바로 위에 서 있어 지붕에 올라탄 사람으로 읽힐 수 있어 뺐다. |
+| B5 니더라우지츠 | v1 | 숲 등성이, 우묵한 곳의 소도시, 지평선의 컨베이어 다리, 등성이의 망자 둘이 주문대로다. 겨울 사진 없이도 겨울이 산다. | v2는 기관차 연기가 무겁다. 컨베이어 다리는 v1 크기로 충분하다. |
+| B7 밀도 세 단계 | v1 | 열차 단면과 HUD가 C3 v5와 같아 세 줄 비교가 정직하다. 고요(까마귀만), 흩어짐(여섯 일곱), 가득(울타리 넘는 무리)이 폰 크기에서 갈린다. | v2는 기관차와 탄수차, 객차 비례를 바꿔 그려 비교 기준이 흔들린다. v1의 '가득' 줄에서 망자 몇이 객차 옆면을 기어올라 칸 안 아래쪽을 가린다. 실제 게임에서는 망자가 바퀴선 아래에 머물거나 칸 바깥 테두리에만 겹친다. 망자 머리가 둥근 모자처럼 보이는 것도 있어 새 망자 옷 줄로 다시 확인한다. |
+
+여섯 키트를 지붕 위 띠만으로 견주면 대체로 갈린다. B3(조립 아파트·굴뚝), B4(노천광·냉각탑), B5(등성이·컨베이어 다리), B6(고가도로·전차선)은 실루엣만으로 바로 구별된다. **약한 곳은 B1과 B2다.** 둘 다 평평한 땅, 물, 뾰족탑 마을이라 띠만 보면 헷갈린다. B2는 제방 선과 다리를, B1은 자작나무 숲과 붉은 벽돌, 둥근 모자 시계탑을 앞세운다. 또 B1, B2, B3, B5, B8에 거의 같은 뾰족탑 교회가 되풀이된다. 탑 하나로 키트를 가르지 말고, 키트마다 탑 모양을 다르게 한다(K1 둥근 모자 시계탑, K3 양파 지붕 없는 네모 탑, K5 낮은 마을 교회).
+
+B8 v1도 봤다. 가까운 부재가 객차 여러 칸 안을 크게 가로질러 v2를 고른 판단 그대로다.
+
+칸 안 호박색은 모든 그림에서 가장 밝다. 7b절 금지 목록 가운데 철조망, 망루, 막사, 하역 경사로, 연기 나는 굴뚝(공장 굴뚝과 냉각탑은 모두 연기와 김이 없음), 사람이 모인 화차, 표식, 적십자는 어느 그림에도 없다. 남은 위험은 망자 옷 하나였고, 위 공통 끝 줄로 막았다.

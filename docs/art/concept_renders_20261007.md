@@ -310,7 +310,7 @@ No warning text, no icons, no colored outlines; the props must read on their own
 
 ### C12 v2 평가 (2026-10-07 15:00)
 
-평가용 사본은 `/mnt/project-files/C12_omen_states_v2.png`.
+평가용 사본은 `/mnt/project-files/art/concepts_20261007/C12_omen_states_v2.png`.
 
 - **채택한다.** C12는 세 상태가 폰 크기에서 갈리는지 보려는 그림이었고, 그 목적은 채웠다. 다시 뽑지 않는다.
 - v1에서 걸린 두 가지는 고쳐졌다. 가운데 줄의 짐은 나무 상자로 바뀌었고 여행가방은 없다. 아래 줄 인물은 회색 피부와 늘어진 머리, 굳은 팔로 그려져 산 노인보다 망자에 가깝게 읽힌다. 다만 외투를 입은 구부정한 사람과 아직 헷갈릴 여지가 있으니, 실제 에셋에서는 걸음새(끄는 발, 흔들리는 몸)를 움직임으로 더해 확실하게 한다.
