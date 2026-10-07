@@ -17,9 +17,11 @@ const DIM := Color(0.62, 0.62, 0.6)
 const WARN := Color(0.95, 0.55, 0.42)
 const FROST := Color(0.78, 0.88, 0.98)
 const HOLD_TIME: float = 0.35
-const DOUBLE_TAP: float = 0.32
 const DRAG_PX: float = 28.0
 const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go: no shot
+const STICK_R: float = 72.0         # thumb travel to full push (the rim runs)
+const STICK_DEAD: float = 10.0
+const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
 const MOAN_R: float = 20.0
@@ -55,6 +57,19 @@ var grab_bar: ProgressBar
 var grab_total: float = 1.0
 var crouch_button: Button
 var run_button: Button
+var aim_button: Button
+var manual_button: Button
+var attack_button: Button
+var shove_button: Button
+var pads: Array = []                   # Buttons the HUD hit-tests itself (any finger)
+var fingers: Dictionary = {}           # touch index -> {"kind", "start", "ms", ...}
+var stick_index: int = -1
+var stick_origin := Vector2.ZERO
+var stick_at := Vector2.ZERO
+var auto_aim: bool = false             # the aim pad is held: the gun picks its target
+var auto_t: float = 0.0
+var auto_skip: int = 0                 # thumb slid along the pad: next target
+var attack_hold_t: float = -1.0
 var pause_button: Button
 var debug_panel: PanelContainer
 var debug_label: Label
@@ -74,8 +89,6 @@ var aim_point := Vector3.ZERO
 var aim_target = null
 var melee_pending = null
 var melee_holding: bool = false
-var last_tap_ms: int = -10000
-var last_tap_pos := Vector2(-999, -999)
 var dest_marker := Vector3.INF
 
 
@@ -139,6 +152,22 @@ func _button(text: String, cb: Callable, min_size := Vector2(96, 64), size: int 
 	b.add_theme_font_size_override("font_size", size)
 	b.focus_mode = Control.FOCUS_NONE
 	b.pressed.connect(cb)
+	return b
+
+
+## A thumb pad: drawn like a button, hit-tested by the HUD (any finger).
+func _pad(text: String, at: Vector2, size: Vector2, font: int = 22) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = size
+	b.size = size
+	b.add_theme_font_size_override("font_size", font)
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	b.position = at
+	root.add_child(b)
+	pads.append(b)
 	return b
 
 
@@ -243,27 +272,32 @@ func _build_allies() -> void:
 	allies_box.add_child(crew_button)
 
 
+## Right thumb (field_unified 10, user 17:15): aim with a small 'manual'
+## switch, attack, shove, run and crouch toggles. These are pads, not
+## Buttons: the left thumb is on the stick, so the right thumb is a second
+## finger, which Godot buttons do not take. The HUD hit-tests them itself.
 func _build_thumbs() -> void:
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	grid.position = Vector2(-392, -196)
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	root.add_child(grid)
-	grid.add_child(_button("무기", _swap, Vector2(120, 84)))
-	grid.add_child(_button("밀치기", _shove, Vector2(120, 84)))
-	grid.add_child(_button("가방", bag_panel, Vector2(120, 84)))
-	# Running is a toggle too, so no required move needs a double tap (presentation_motion 8c).
-	run_button = _button("뛰기", _toggle_run, Vector2(120, 84))
-	run_button.toggle_mode = true
-	grid.add_child(run_button)
-	crouch_button = _button("웅크림", _toggle_crouch, Vector2(120, 84))
-	crouch_button.toggle_mode = true
-	grid.add_child(crouch_button)
+	attack_button = _pad("공격", Vector2(-160, -144), Vector2(140, 124), 26)
+	aim_button = _pad("조준", Vector2(-312, -144), Vector2(140, 124), 26)
+	manual_button = _pad("수동", Vector2(-312, -200), Vector2(92, 48), 18)
+	shove_button = _pad("밀치기", Vector2(-160, -238), Vector2(140, 84))
+	# Running is a toggle too, so no required move needs a double tap (presentation_motion 8c);
+	# the stick pushed to its rim also runs.
+	run_button = _pad("뛰기", Vector2(-160, -312), Vector2(140, 64), 20)
+	crouch_button = _pad("웅크림", Vector2(-312, -272), Vector2(140, 64), 20)
+	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
+		b.toggle_mode = true
+	# Swap and bag sit on the left above the portrait (not needed with the stick held).
+	var left := HBoxContainer.new()
+	left.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	left.position = Vector2(16, -248)
+	left.add_theme_constant_override("separation", 8)
+	root.add_child(left)
+	left.add_child(_button("무기", _swap, Vector2(110, 60), 20))
+	left.add_child(_button("가방", bag_panel, Vector2(110, 60), 20))
 	context_box = HBoxContainer.new()
 	context_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	context_box.position = Vector2(-760, -290)
+	context_box.position = Vector2(-760, -392)
 	context_box.size = Vector2(740, 72)
 	context_box.alignment = BoxContainer.ALIGNMENT_END
 	context_box.add_theme_constant_override("separation", 8)
@@ -358,6 +392,16 @@ func tick(delta: float) -> void:
 	if pressing and melee_pending != null and not melee_holding and Time.get_ticks_msec() - press_ms >= int(HOLD_TIME * 1000.0):
 		melee_holding = true
 		_melee(melee_pending, true)
+	_tick_auto_aim(delta)
+	# Attack pad held: keep swinging, picking up the next one in reach.
+	if attack_hold_t >= 0.0:
+		attack_hold_t += delta
+		if attack_hold_t >= HOLD_TIME and p.target_zombie.is_empty() and p.target_person == null and p.swing_t <= 0.0:
+			var t = game.combat.melee_pick(p)
+			if t != null:
+				_melee(t, true)
+		elif attack_hold_t >= HOLD_TIME:
+			p.hold_attack = true
 	pause_button.text = "계속" if game.paused else "멈춤"
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
@@ -816,28 +860,269 @@ func _shove() -> void:
 
 # ---------------------------------------------------------------- input
 
+## Fingers on a phone: every touch index, so the left thumb can hold the
+## stick while the right one aims or presses a pad.
+func _input(event: InputEvent) -> void:
+	if game == null or game.ended or modal_open:
+		return
+	if event is InputEventScreenTouch:
+		var used: bool = finger_down(event.index, event.position) if event.pressed else finger_up(event.index, event.position)
+		if used:
+			get_viewport().set_input_as_handled()
+	elif event is InputEventScreenDrag:
+		if finger_move(event.index, event.position):
+			get_viewport().set_input_as_handled()
+
+
+## A desktop mouse is one finger (index 0). Mouse events a touch screen makes
+## up for its first finger are skipped: _input already has that finger.
 func _on_touch(event: InputEvent) -> void:
 	if game == null or game.ended:
 		return
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			_press(event.position)
+			finger_down(0, event.position)
 		else:
-			_release(event.position)
-	elif event is InputEventMouseMotion and pressing and aiming:
-		var over := _over_player(event.position)
-		aim_armed = aim_armed or not over
-		aim_cancel = aim_armed and over
-		if aim_cancel:
-			return
-		aim_point = game.screen_to_ground(event.position)
-		var t = _pick_enemy(aim_point)
-		aim_target = t if t != null else aim_target
-		aim_point = _on_target_floor(aim_point, aim_target)
+			finger_up(0, event.position)
+	elif event is InputEventMouseMotion and fingers.has(0):
+		finger_move(0, event.position)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 		game.cam_size = maxf(game.cam_size - 2.0, 14.0)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 		game.cam_size = minf(game.cam_size + 2.0, 36.0)
+
+
+## Who gets a new finger: a pad, an ordinary button (left to Godot for the
+## first finger, pressed by hand for the others), the stick on the left
+## half, or the right hand (aim in manual mode, an enemy, a thing to use).
+func finger_down(index: int, pos: Vector2) -> bool:
+	for b in pads:
+		if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
+			_pad_down(b, pos)
+			return true
+	var ui := _button_at(pos)
+	if ui != null:
+		if index != 0:
+			fingers[index] = {"kind": "button", "button": ui, "start": pos}
+			return true
+		return false
+	if pos.x < _view_size().x * 0.5 and stick_index < 0:
+		stick_index = index
+		stick_origin = pos
+		stick_at = pos
+		fingers[index] = {"kind": "stick", "start": pos, "ms": Time.get_ticks_msec()}
+		return true
+	if fingers.values().any(func(f): return f["kind"] == "hand"):
+		return false
+	fingers[index] = {"kind": "hand", "start": pos}
+	_press(pos)
+	return true
+
+
+func finger_move(index: int, pos: Vector2) -> bool:
+	if not fingers.has(index):
+		return false
+	var f: Dictionary = fingers[index]
+	match f["kind"]:
+		"stick":
+			stick_at = pos
+			_apply_stick()
+		"pad":
+			_pad_move(f["pad"], pos, f)
+		"hand":
+			_hand_move(pos)
+	return true
+
+
+func finger_up(index: int, pos: Vector2) -> bool:
+	if not fingers.has(index):
+		return false
+	var f: Dictionary = fingers[index]
+	fingers.erase(index)
+	match f["kind"]:
+		"stick":
+			stick_index = -1
+			_stick_release()
+			# A short touch that never moved is a tap on whatever is there.
+			if pos.distance_to(f["start"]) < DRAG_PX and Time.get_ticks_msec() - int(f["ms"]) < 350:
+				_tap(pos)
+		"pad":
+			_pad_up(f["pad"], pos)
+		"button":
+			var b: Button = f["button"]
+			if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+				if b.toggle_mode:
+					b.button_pressed = not b.button_pressed
+				b.pressed.emit()
+		"hand":
+			_release(pos)
+	return true
+
+
+func _view_size() -> Vector2:
+	return root.get_viewport_rect().size
+
+
+## An ordinary visible button under the point (cards, companions, context).
+func _button_at(pos: Vector2) -> Button:
+	var stack: Array = [root]
+	var hit: Button = null
+	while not stack.is_empty():
+		var n = stack.pop_back()
+		if n is Button and n.mouse_filter != Control.MOUSE_FILTER_IGNORE and n.is_visible_in_tree() and n.get_global_rect().has_point(pos):
+			hit = n
+		for c in n.get_children():
+			if c is Control and c.visible:
+				stack.append(c)
+	return hit
+
+
+# ---------------------------------------------------------------- stick
+
+func _apply_stick() -> void:
+	var p = game.player
+	var v := stick_at - stick_origin
+	if v.length() > STICK_R:
+		stick_origin = stick_at - v.normalized() * STICK_R   # the base follows a long drag
+		v = stick_at - stick_origin
+	if v.length() < STICK_DEAD:
+		p.stick = Vector2.ZERO
+		return
+	# The camera looks north with no turn: screen right is +x, screen down is +z.
+	var push := clampf(v.length() / STICK_R, 0.0, 1.0)
+	p.stick = v.normalized() * push
+	p.target_zombie = {}
+	p.target_person = null
+	p.running = run_button.button_pressed or push >= game.STICK_RUN
+	if p.running:
+		p.crouched = false
+		crouch_button.button_pressed = false
+
+
+func _stick_release() -> void:
+	var p = game.player
+	p.stick = Vector2.ZERO
+	p.running = run_button.button_pressed
+
+
+# ---------------------------------------------------------------- pads
+
+func _pad_down(b: Button, pos: Vector2) -> void:
+	var p = game.player
+	if b == aim_button:
+		aim_button.button_pressed = true
+		_auto_aim_start()
+	elif b == attack_button:
+		attack_button.button_pressed = true
+		attack_hold_t = 0.0
+		var t = game.combat.melee_pick(p)
+		if t != null:
+			_melee(t, false)
+	elif b == manual_button:
+		manual_button.button_pressed = not manual_button.button_pressed
+		toast("수동 조준: 오른손으로 겨눌 곳을 끌어 놓고 뗀다." if manual_button.button_pressed else "자동 조준으로 돌아왔다.")
+	elif b == shove_button:
+		shove_button.button_pressed = true
+		_shove()
+	elif b == run_button:
+		run_button.button_pressed = not run_button.button_pressed
+		_toggle_run()
+	elif b == crouch_button:
+		crouch_button.button_pressed = not crouch_button.button_pressed
+		_toggle_crouch()
+
+
+func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
+	if b != aim_button or not auto_aim:
+		return
+	var over := _over_player(pos)
+	aim_armed = aim_armed or not over
+	aim_cancel = aim_armed and over
+	# Slide along the pad: the next target (or back).
+	var dx: float = pos.x - float(f.get("slide_x", f["start"].x))
+	if absf(dx) >= AIM_SLIDE_PX:
+		f["slide_x"] = pos.x
+		auto_skip += 1 if dx > 0 else -1
+		aim_target = null
+		auto_t = maxf(auto_t, game.combat.acquire_time(game.player))
+
+
+func _pad_up(b: Button, pos: Vector2) -> void:
+	if b == aim_button:
+		aim_button.button_pressed = false
+		_auto_aim_end(pos)
+	elif b == attack_button:
+		attack_button.button_pressed = false
+		attack_hold_t = -1.0
+		game.player.hold_attack = false
+	elif b == shove_button:
+		shove_button.button_pressed = false
+
+
+## Hold the aim pad: the gun comes up and, after a moment that shortens with
+## shooting skill, settles on the nearest threat ahead (field_unified 10).
+func _auto_aim_start() -> void:
+	var p = game.player
+	if not W.is_ranged(p.weapon_id()):
+		toast("총을 든 사람만 조준한다. 무기를 바꿔라.")
+		return
+	if not game.combat.start_aim(p):
+		return
+	auto_aim = true
+	aiming = true
+	aim_armed = true
+	aim_cancel = false
+	auto_t = 0.0
+	auto_skip = 0
+	aim_target = null
+	aim_point = p.position + Vector3(sin(p.facing), 0, cos(p.facing)) * 4.0
+	p.target_zombie = {}
+	p.brain.erase("goal")
+
+
+func _auto_aim_end(pos: Vector2) -> void:
+	var p = game.player
+	if not auto_aim:
+		return
+	auto_aim = false
+	aiming = false
+	if p.aim.active:
+		if aim_target != null and not aim_cancel:
+			game.combat.fire(p, aim_point, aim_target)
+		elif aim_target == null and not aim_cancel:
+			toast("겨눌 것을 못 잡았다.")
+		p.aim.stop()
+	aim_cancel = false
+	aim_target = null
+
+
+func _tick_auto_aim(delta: float) -> void:
+	if not auto_aim:
+		return
+	var p = game.player
+	if not p.aim.active:
+		auto_aim = false
+		aiming = false
+		return
+	auto_t += delta
+	if aim_target != null and not _target_ok(aim_target):
+		aim_target = null
+	if aim_target == null and auto_t >= game.combat.acquire_time(p):
+		var list: Array = game.combat.aim_candidates(p)
+		if not list.is_empty():
+			aim_target = list[posmod(auto_skip, list.size())]
+	if aim_target != null:
+		aim_point = aim_target["pos"] if aim_target is Dictionary else aim_target.position
+		p.face_point(aim_point)
+
+
+func _target_ok(t) -> bool:
+	if t is Dictionary:
+		return t["state"] != "dead" and game.cell_seen(t["pos"])
+	return t.is_alive() and t.visible
 
 
 func _press(pos: Vector2) -> void:
@@ -851,9 +1136,11 @@ func _press(pos: Vector2) -> void:
 	var p = game.player
 	var world: Vector3 = game.screen_to_ground(pos)
 	var target = _pick_enemy(world)
-	if target == null:
+	var gun: bool = W.is_ranged(p.weapon_id()) and not bool(p.weapon().get("broken", false))
+	# Manual aim: the right thumb puts the aim point anywhere, enemy or not.
+	if target == null and not (gun and manual_button.button_pressed):
 		return
-	if W.is_ranged(p.weapon_id()) and not bool(p.weapon().get("broken", false)):
+	if gun:
 		if game.combat.start_aim(p):
 			aiming = true
 			# An enemy at your feet: pressing on it must not count as letting go on yourself.
@@ -890,8 +1177,32 @@ func _release(pos: Vector2) -> void:
 	_tap(pos)
 
 
+## The right thumb dragging the aim point (manual, or pressed on an enemy).
+func _hand_move(pos: Vector2) -> void:
+	if not (pressing and aiming):
+		return
+	var over := _over_player(pos)
+	aim_armed = aim_armed or not over
+	aim_cancel = aim_armed and over
+	if aim_cancel:
+		return
+	aim_point = game.screen_to_ground(pos)
+	var t = _pick_enemy(aim_point)
+	aim_target = t if t != null else (aim_target if not manual_button.button_pressed else null)
+	aim_point = _on_target_floor(aim_point, aim_target)
+
+
 func drop_touch() -> void:
 	# The finger that was down when the app lost focus never comes back up.
+	fingers.clear()
+	stick_index = -1
+	auto_aim = false
+	attack_hold_t = -1.0
+	if game.player != null:
+		game.player.stick = Vector2.ZERO
+	for b in [aim_button, attack_button, shove_button]:
+		if b != null:
+			b.button_pressed = false
 	pressing = false
 	aiming = false
 	aim_cancel = false
@@ -952,10 +1263,6 @@ func _pick_enemy(world: Vector3):
 func _tap(pos: Vector2) -> void:
 	var p = game.player
 	var world: Vector3 = game.screen_to_ground(pos)
-	var now := Time.get_ticks_msec()
-	var double: bool = now - last_tap_ms < int(DOUBLE_TAP * 1000.0) and pos.distance_to(last_tap_pos) < 70.0
-	last_tap_ms = now
-	last_tap_pos = pos
 	if game.actions.on_signal_top(p):
 		offer([{"label": "내려간다", "call": game.actions.ladder.bind(p, "fast")}])
 		return
@@ -963,19 +1270,12 @@ func _tap(pos: Vector2) -> void:
 		return
 	if _tap_thing(p, world):
 		return
+	# The ground itself is not an order any more (the stick walks, user 17:15);
+	# a tap on it only calls off a fight.
 	p.target_zombie = {}
 	p.target_person = null
+	p.hold_attack = false
 	p.brain.erase("goal")
-	var path: PackedVector3Array = game.find_path(p.position, world, false)
-	if path.is_empty():
-		return
-	# Toggles are the default; the double-tap run is a setting (user, build 20).
-	var run: bool = run_button.button_pressed or (double and bool(game.opts.get("double_tap_run", false)))
-	p.go_to(path, run)
-	if run:
-		p.crouched = false
-		crouch_button.button_pressed = false
-	dest_marker = path[path.size() - 1]
 
 
 ## Doors, windows, containers, spots, lids, ground items and companions.
@@ -1003,12 +1303,9 @@ func _tap_thing(p, world: Vector3) -> bool:
 		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
 			continue
 		if game.lift(s["cell"], lv).distance_to(world) < 1.0:
-			var other: int = s["high"] if s["low"] == lv else s["low"]
-			var path: PackedVector3Array = game.find_path(p.position, game.lift(s["cell"], other), false)
-			if not path.is_empty():
-				p.brain.erase("goal")
-				p.go_to(path, run_button.button_pressed)
-				dest_marker = path[path.size() - 1]
+			game.actions.take_stairs(p, s)
+			if not p.path.is_empty():
+				dest_marker = p.path[p.path.size() - 1]
 			return true
 	if lv != 0:
 		return false
@@ -1053,8 +1350,18 @@ func _draw_overlay() -> void:
 		overlay.draw_rect(Rect2(Vector2.ZERO, Vector2(view_size.x, 18)), Color(0.25, 0.05, 0.04, a))
 		overlay.draw_rect(Rect2(Vector2(0, view_size.y - 18), Vector2(view_size.x, 18)), Color(0.25, 0.05, 0.04, a))
 	# Walk target.
-	if p.moving and dest_marker != Vector3.INF:
+	if p.moving and not p.path.is_empty() and dest_marker != Vector3.INF:
 		overlay.draw_arc(_project(dest_marker), 10.0, 0, TAU, 20, Color(1, 1, 1, 0.5), 2.0)
+	# The stick under the left thumb: base ring and knob (rim = run).
+	if stick_index >= 0:
+		overlay.draw_arc(stick_origin, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.28), 3.0)
+		var knob := stick_origin + (stick_at - stick_origin).limit_length(STICK_R)
+		overlay.draw_circle(knob, 26.0, Color(1, 1, 1, 0.35 if not p.running else 0.55))
+	# What the auto aim has settled on.
+	if auto_aim and aim_target != null:
+		var at: Vector3 = aim_target["pos"] if aim_target is Dictionary else aim_target.position
+		var c := _project(at + Vector3(0, 1.0, 0))
+		overlay.draw_arc(c, 22.0, 0, TAU, 24, Color(1, 0.9, 0.7, 0.9), 2.5)
 	# Aim circle: big when raised, shrinks while still (field_unified 10).
 	if p.aim.active:
 		var c := _project(aim_point + Vector3(0, 1.0, 0))

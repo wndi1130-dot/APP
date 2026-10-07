@@ -12,7 +12,6 @@ const CHOICES: Array = [
 	["weather", "날씨", [[["fog", "snow"], "안개·가는 눈"], [["fog"], "짙은 안개"], [["clear"], "맑음"], [["blizzard"], "눈보라"]]],
 	["cap", "동시 상한", [[60, "60"], [40, "40"], [80, "80"]]],
 	["fps_cap", "FPS 상한", [[60, "60"], [30, "30"]]],
-	["double_tap_run", "두 번 탭 뛰기", [[false, "끔 (뛰기 버튼)"], [true, "켬"]]],
 ]
 
 var settings: Dictionary = {}

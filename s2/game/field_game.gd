@@ -36,6 +36,12 @@ const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a per
 const BLOOD_SCENT_R: float = 12.0       # excessive blood smell event radius (body_injury 8.1)
 const EXIT_WIDTH: Dictionary = {"culvert": 2}   # dead out at once per exit; others one
 const ALLY_CAP: int = 12
+## Stick body weight (field_unified 10, numbers are S2 starting values).
+const DRIVE_START: float = 0.2          # seconds to get up to speed
+const DRIVE_STOP: float = 0.25          # seconds to stop from a walk
+const DRIVE_STOP_RUN: float = 0.4       # seconds to stop from a run
+const STICK_RUN: float = 0.92           # thumb at the rim: run
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat"]
 const CAM_PITCH: float = 52.0
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
@@ -91,6 +97,7 @@ var radio: String = ""
 var radio_t: float = 0.0
 var ammo: Dictionary = {"pistol": 8, "shell": 4, "craft": 8}
 var ammo_start: Dictionary = {}
+var loaded_start: Dictionary = {}      # rounds already in the squad's guns at the start
 var unloaded: Dictionary = {}
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
@@ -146,6 +153,7 @@ func _ready() -> void:
 	_spawn_people()
 	_spawn_dead()
 	ammo_start = ammo.duplicate()
+	loaded_start = loaded_totals()
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
@@ -559,6 +567,9 @@ func _update_person(p: Person, delta: float) -> void:
 		return
 	if p.body.downed:
 		return
+	# Pushing the stick walks away from slow work (search, prying, treating).
+	if p.stick.length() > 0.3 and STICK_BREAKS.has(p.action):
+		p.cancel_action()
 	if p.action != "":
 		p.action_t -= delta * float(p.mults()["hands"]) if p.action != "climb" else delta
 		if p.action_t <= 0.0:
@@ -567,7 +578,56 @@ func _update_person(p: Person, delta: float) -> void:
 			if done.is_valid():
 				done.call()
 		return
-	_move_person(p, delta)
+	if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
+		_drive(p, delta)
+	else:
+		_move_person(p, delta)
+
+
+## Left-thumb walking (field_unified 10, user 17:32): the direction follows
+## the thumb at once; the body takes a moment to get going and to stop, more
+## so loaded, worn out or on ice. A hard turn at a run drops to a walk first.
+func _drive(p: Person, delta: float) -> void:
+	var push := p.stick.length()
+	var lg := grid_at(p.position)
+	var cell := FieldGrid.cell_of(p.position)
+	var floor_kind := lg.floor_at(cell)
+	var heavy := 1.0 + 0.35 * maxi(0, p.carry_state()) + maxf(0.0, 1.0 - float(p.mults()["move"]))
+	var fast := p.drive_speed > Person.WALK * 1.1
+	var want := 0.0
+	if push > 0.05:
+		p.path = PackedVector3Array()
+		p.brain.erase("goal")
+		var dir := Vector3(p.stick.x, 0, p.stick.y).normalized()
+		if fast and p.drive_dir.dot(dir) < 0.0:
+			p.drive_speed = minf(p.drive_speed, Person.WALK * 0.6)
+		p.drive_dir = dir
+		if not p.aim.active:
+			p.facing = atan2(dir.x, dir.z)   # aiming, you walk and keep the gun on it
+		want = p.speed(floor_kind) * clampf(push * 1.6, 0.35, 1.0)
+	if want > p.drive_speed:
+		p.drive_speed = minf(want, p.drive_speed + want / (DRIVE_START * heavy) * delta)
+	else:
+		var stop_t := (DRIVE_STOP_RUN if fast else DRIVE_STOP) * heavy * (2.0 if floor_kind == FieldGrid.Floor.ICE else 1.0)
+		p.drive_speed = maxf(want, p.drive_speed - maxf(p.drive_speed, Person.WALK) / stop_t * delta)
+	if p.drive_speed <= 0.01:
+		p.drive_speed = 0.0
+		p.moving = false
+		return
+	var step := p.drive_dir * p.drive_speed * delta
+	var dest := p.position + step
+	var dc := FieldGrid.cell_of(dest)
+	if lg == grid and grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
+		p.drive_speed = 0.0
+		actions.open_door_on_way(p, dc)
+		return
+	if lg.blocks_body(dc):
+		dest = _slide(p.position, step)
+	if lg == grid and grid.windows.has(dc) and grid.windows[dc]["broken"] and not p.brain.get("vaulted_" + str(dc), false):
+		actions.vault_window(p, dc)
+	p.position = dest
+	p.moving = true
+	_footsteps(p, delta, dc)
 
 
 func _move_person(p: Person, delta: float) -> void:
@@ -1167,8 +1227,15 @@ func finish(reason: String) -> void:
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
+	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
+	# count, and so do the ones in a gun that stays behind with its carrier.
+	var boarded_squad: Array = []
+	for p in boarded:
+		if squad.has(p):
+			boarded_squad.append(p)
+	var loaded_end := loaded_totals(boarded_squad)
 	for k in ["pistol", "shell", "craft"]:
-		var used: int = int(ammo_start[k]) - int(ammo[k])
+		var used: int = int(ammo_start[k]) + int(loaded_start.get(k, 0)) - int(ammo[k]) - int(loaded_end.get(k, 0))
 		var key: String = "ammo_" + k
 		stock[key] = float(stock.get(key, 0.0)) - used
 		telemetry.ammo(k, used)
@@ -1204,6 +1271,19 @@ func _save(result: Dictionary) -> void:
 	if t:
 		t.seek_end()
 		t.store_line(result["telemetry"])
+
+
+## Rounds loaded in the guns of `who` (the whole squad when null), by ammo kind.
+func loaded_totals(who = null) -> Dictionary:
+	var out := {"pistol": 0, "shell": 0, "craft": 0}
+	for p in (squad if who == null else who):
+		for h in p.hands:
+			var id: String = String(h.get("id", ""))
+			if id != "" and W.is_ranged(id):
+				var kind: String = String(W.get_data(id).get("ammo", ""))
+				if out.has(kind):
+					out[kind] += int(h.get("loaded", 0))
+	return out
 
 
 func item_name(id: String) -> String:

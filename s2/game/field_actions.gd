@@ -681,7 +681,7 @@ func rub_snow(p) -> void:
 
 ## Things the player can do right here, for the context buttons.
 func context(p) -> Array:
-	var out: Array = []
+	var out: Array = _near_things(p)
 	if p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit")):
 		out.append({"label": "붕대", "call": self_bandage.bind(p)})
 	if (p.body.arm_fracture or p.body.leg_fracture) and not p.body.splinted:
@@ -702,6 +702,71 @@ func context(p) -> Array:
 	if on_platform(p):
 		out.append({"label": "출발", "call": game.hud.depart_card})
 	return out
+
+
+const NEAR_USE: float = 1.7
+
+
+## The situation pad (field_unified 10): what is within a step of the player
+## on their floor, closest first, at most two (stairs, a box, a door, a
+## window, something on the ground).
+func _near_things(p) -> Array:
+	var rows: Array = []
+	var lv: int = game.level_of(p.position)
+	for s in game.stairs:
+		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
+			continue
+		var at: Vector3 = game.lift(s["cell"], lv)
+		var d: float = at.distance_to(p.position)
+		if d < NEAR_USE:
+			var up: bool = s["low"] == lv
+			rows.append([d, "올라가기" if up else "내려가기", take_stairs.bind(p, s)])
+	for id in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][id]
+		var at: Vector3 = game.lift(c["cell"], int(c.get("level", 0)))
+		var d: float = at.distance_to(p.position)
+		if d < NEAR_USE and not c["searched"]:
+			rows.append([d, "뒤지기", go_and_do.bind(p, "container", id, at)])
+	for i in range(game.ground_items.size()):
+		var g: Dictionary = game.ground_items[i]
+		var d: float = g["pos"].distance_to(p.position)
+		if d < NEAR_USE:
+			rows.append([d, "줍기", go_and_do.bind(p, "item", i, g["pos"])])
+	if lv == 0:
+		var cell := FieldGrid.cell_of(p.position)
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var c: Vector2i = cell + Vector2i(dx, dy)
+				var at := FieldGrid.center(c)
+				var d: float = at.distance_to(p.position)
+				if game.grid.doors.has(c):
+					var st: String = game.grid.doors[c]["state"]
+					if st != "broken":
+						rows.append([d, "문 닫기" if st == "open" else ("문 따기" if st == "locked" else "문 열기"), go_and_do.bind(p, "door", c, at)])
+				elif game.grid.windows.has(c):
+					rows.append([d, "창", go_and_do.bind(p, "window", c, at)])
+		for id in game.data["spots"]:
+			var spot: Dictionary = game.data["spots"][id]
+			var at := FieldGrid.center(spot["cell"])
+			var d: float = at.distance_to(p.position)
+			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage"]:
+				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
+	rows.sort_custom(func(a, b): return a[0] < b[0])
+	var out: Array = []
+	for row in rows.slice(0, 2):
+		out.append({"label": row[1], "call": row[2]})
+	return out
+
+
+## Up or down the stair under (or next to) the player.
+func take_stairs(p, s: Dictionary) -> void:
+	var lv: int = game.level_of(p.position)
+	var other: int = s["high"] if s["low"] == lv else s["low"]
+	var path: PackedVector3Array = game.find_path(p.position, game.lift(s["cell"], other), false)
+	if not path.is_empty():
+		p.brain.erase("goal")
+		p.drive_speed = 0.0
+		p.go_to(path, p.running)
 
 
 # ---------------------------------------------------------------- platform

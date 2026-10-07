@@ -133,6 +133,74 @@ func _next_close_zombie(p) -> Dictionary:
 	return best
 
 
+## The attack pad's target (field_unified 10): the nearest enemy within arm's
+## reach ahead, or anything already at you; a downed one nearest is finished.
+func melee_pick(p):
+	var wid: String = p.weapon_id()
+	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var best = null
+	var best_d := INF
+	for z in game.zombies.list:
+		if not game.zombies.threat(z) or not game.cell_seen(z["pos"]):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		var to: Vector3 = z["pos"] - p.position
+		to.y = 0
+		var ahead := to.length() < 0.01 or fwd.dot(to.normalized()) >= 0.2
+		if (ahead and d <= reach + 0.8) or d <= 1.2:
+			if d < best_d:
+				best_d = d
+				best = z
+	for r in game.raiders:
+		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone"]:
+			var d: float = p.position.distance_to(r.position)
+			if d <= reach + 0.8 and d < best_d:
+				best_d = d
+				best = r
+	return best
+
+
+## Seconds before the auto aim settles on a target: shooting skill (0-10)
+## shortens it (field_unified 10; numbers are S2 starting values).
+func acquire_time(p) -> float:
+	return clampf(0.7 - 0.05 * int(p.skills.get("shooting", 0)), 0.15, 0.7)
+
+
+## Auto aim candidates, best first: seen threats in range, those ahead before
+## those behind, nearest first; from shooting 7 the dangerous ones (fresh, or
+## already coming at us) jump the queue. Never a friend or a frightened survivor.
+func aim_candidates(p) -> Array:
+	var wid: String = p.weapon_id()
+	var reach: float = float(W.get_data(wid).get("range", 20.0))
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var sharp: bool = int(p.skills.get("shooting", 0)) >= 7
+	var rows: Array = []
+	for z in game.zombies.list:
+		if z["state"] == "dead" or not game.cell_seen(z["pos"]):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		if d > reach:
+			continue
+		var to: Vector3 = z["pos"] - p.position
+		to.y = 0
+		var score := d
+		if to.length() > 0.01 and fwd.dot(to.normalized()) < 0.3:
+			score += 8.0
+		if z["state"] == "frozen" or z["state"] == "rising":
+			score += 6.0
+		if sharp and (z["kind"] == "fresh" or z["state"] in ["chase", "attack", "grab"]):
+			score -= 4.0
+		rows.append([score, z])
+	for r in game.raiders:
+		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone", "flee"]:
+			var d: float = p.position.distance_to(r.position)
+			if d <= reach:
+				rows.append([d - 2.0, r])
+	rows.sort_custom(func(a, b): return a[0] < b[0])
+	return rows.map(func(row): return row[1])
+
+
 func _pursue_person(p, delta: float) -> void:
 	var o = p.target_person
 	if o == null or not o.is_alive() or o.body.downed:
