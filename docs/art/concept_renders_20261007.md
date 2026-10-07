@@ -32,6 +32,7 @@
 ```text
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
 Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
+Props: no abandoned suitcases, piles of luggage or piles of shoes on platforms or beside the train; left-behind goods are only cargo sacks or wooden crates.
 ```
 
 ```text
@@ -292,10 +293,17 @@ Recreate the attached four-panel sheet with the same people, poses, door and fra
 ```text
 Using the attached image's camera, station, train, weather and light, make one image with three horizontal strips showing the same stopped-train view at three moments. Change only two props between the strips; everything else stays identical.
 
-Prop A, beside the goods shed door on the left: top strip (normal) a few old footprints in the snow; middle strip (omen) a wide dark-brown drag mark leading over the snow to the shed threshold, one boot print beside it, and the hem of a coat moving behind a crate just inside the dark doorway; bottom strip (after) a dead figure in a ragged coat has stepped out of the doorway onto the platform.
-Prop B, on the platform walkway in the middle: top strip a flat iron drain cover under a thin skin of ice; middle strip a suitcase lying on the cover with one corner sunk in, thick cracks spreading from under it and a black gap opening; bottom strip the cover has collapsed, the suitcase has dropped in and a dark hole blocks the walkway.
+Prop A, beside the goods shed door on the left: top strip (normal) a few old footprints in the snow; middle strip (omen) a wide dark-brown drag mark leading over the snow to the shed threshold, one boot print beside it, and the hem of a coat moving behind a crate just inside the dark doorway; bottom strip (after) one of the dead has stepped out of the doorway onto the platform: grey-blue frozen skin, head hanging, stiff arms, dragging one foot, clearly not a living survivor (no gore).
+Prop B, on the platform walkway in the middle: top strip a flat iron drain cover under a thin skin of ice; middle strip a heavy wooden crate lying on the cover with one corner sunk in, thick cracks spreading from under it and a black gap opening; bottom strip the cover has collapsed, the crate has dropped in and a dark hole blocks the walkway.
 
 No warning text, no icons, no colored outlines; the props must read on their own at phone size. Blood and drag marks are small and dark brown, no gore. Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish.
 ```
 
 공통 끝 두 줄(옷차림, 열차)을 붙인다. 저장은 바탕화면 `화면컨셉_20261007\C12_omen_states_v1.png`.
+
+### C12 v1 평가 (2026-10-07 13:20)
+
+- 읽힘: 세 상태가 폰 크기에서도 갈린다. 끌린 자국(가운데 줄)은 어두운 띠로 분명하고, 배수구 덮개의 금과 구멍도 잘 보인다. 문간의 외투 자락은 흐려서 끌린 자국 없이는 못 읽는다. 둘을 짝으로 두는 게 맞았다.
+- **걸린 것 1, 내 주문 잘못**: 가운데 줄의 여행가방. 승강장, 열차 옆에 버려진 여행가방은 이송을 기리는 추모 상징과 겹친다(코디네이터 지적). 주문에서 내가 가방을 적었다. 나무 상자로 바꾸고, 공통 끝에 '승강장·열차 옆에 버려진 여행가방·짐 더미·신발 무더기 없음, 남긴 물건은 화물 자루와 나무 상자만' 줄을 더했다(구간 배경 주문서에도). 연출 문서의 조짐 조각 목록도 고쳤다.
+- **걸린 것 2**: 아래 줄의 '사건 뒤' 인물이 산 노인처럼 보인다. 망자인지 생존자인지 모르면 조짐이 거짓말이 된다. 얼어붙은 회청색 피부, 늘어진 머리, 끄는 발로 고쳤다(고어 없음).
+- 표식·군복은 안 보인다(로컬 워커 점검과 같음). → **v2를 다시 뽑는다**(위 글상자는 고친 판).

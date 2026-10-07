@@ -32,6 +32,7 @@ The train is now running at speed, not stopped: the platform, lamp post and wait
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets. No red cross or red crescent on anything.
 Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
 Landscape: no barbed-wire fences, watchtowers, rows of barracks, loading ramps, or tall chimneys with smoke anywhere in the scene. Factory chimneys and cooling towers, if present, stand cold and smokeless.
+Props: no abandoned suitcases, piles of luggage or piles of shoes beside the track or on platforms; left-behind goods are only cargo sacks or wooden crates.
 ```
 
 ## B1 대폴란드 호수 평야 (K1, 0–54km)
@@ -105,3 +106,8 @@ Outside: the train is crossing a long steel truss railway bridge over a wide icy
 - 지붕 위 띠만 잘라 보고 여섯 키트가 서로 다른 동네로 읽히나.
 - 칸 안 호박색이 화면에서 가장 밝은가. 배경이 칸 안 정보를 덮지 않나.
 - 7b절의 금지 목록(철조망, 망루, 막사, 하역 경사로, 연기 나는 굴뚝, 사람이 모인 화차, 그 시대 표식, 적십자 표장)이 하나라도 섞였나.
+
+## 평가 (2026-10-07 13:20)
+
+- **B6**: 로컬 워커 PICK(v1)이 맞다. 지붕 위 띠만 잘라 봐도 고가도로의 멈춘 차, 조립 아파트, 전차선 기둥으로 '큰 도시 외곽'이 읽힌다. 칸 안 호박색이 가장 밝고 배경은 어둡다. 경비칸 명판이 방패로 고쳐져 나왔다. 아래 띠 '가득'도 분명하다.
+  - 볼 점: 앞줄 망자가 크고 빨라 보여서 아래쪽 HUD(진행 막대, 단추)와 겹친다. 실제 게임에서는 근경 망자를 HUD 높이 아래로 내리거나 흐리게 해야 한다(7b절 근경 층). 가운데 아래 한 명의 얼룩무늬 상의는 군복으로 읽힐 수 있어 실제 에셋에서는 민간 옷으로 둔다. 다시 뽑을 정도는 아니다.

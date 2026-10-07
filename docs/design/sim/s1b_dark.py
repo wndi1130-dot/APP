@@ -1,19 +1,41 @@
 """S1b 어두운 길 시뮬레이터 (설계 도구, 게임 코드가 아니다).
 
-docs/design/briefs/s1b_dark_path.md의 제안 규칙(4장 폭력·수사·희생양·암살, 5장 탄압·계엄, 9.1 칸 안 시신,
-10.2 수단 점수)을 s1a_balance.py의 Run 위에 얹어 돌린다. s1a_balance.py는 고치지 않는다.
+docs/design/briefs/s1b_dark_path.md의 제안 규칙(4장 불씨 사다리·수사·군중·희생양·암살 명령, 5장 탄압·계엄,
+5.5 내전 직전과 내전, 9.1 칸 안 시신, 10.2 수단 점수)을 s1a_balance.py의 Run 위에 얹어 돌린다.
+s1a_balance.py는 고치지 않는다. S1b 판의 주사위는 따로 굴려(r2) S1a 쪽 흐름을 건드리지 않는다.
 
-정책 (S1b 켬)
-  saint         caretaker와 같되 선을 넘지 않는다. 늘 수사·재판, 린치는 막는다, 탄압·계엄 없음.
-  caretaker     징후엔 형편껏 경비를 붙이고, 증거가 서면 재판, 아니면 더 캔다. 긴장 80을 넘을 때만 희생양을 내준다.
-  tyrant        항의·파업마다 강제 해산, 수사는 즉결(벌은 추방), 군중이 오면 바로 희생양, 대권이 끝나면 계엄,
-                위기 법이 부결되면 가장 적대적인 큰 집단 대표를 암살한다.
-  schemer_plus  schemer(협박)에 암살과 누명을 더한다.
-S1a 정책(passive, idealist, nodeal, caretaker, schemer, caretaker_random)은 --baseline으로 S1b를 끈 채 돌려
-s1a_balance.Run과 판마다 같은지 확인한다.
+정책 (S1b 켬. 회기 운영은 saint·caretaker·tyrant가 S1a caretaker, schemer_plus가 S1a schemer)
+  saint         선을 넘지 않는다. 늘 수사·재판(사보타주도 수사), 군중엔 재판 약속·보호, 탄압·계엄·희생양 없음.
+  caretaker     폭행·암살 임박에만 경비를 붙이고, 증거가 서면 재판, 아니면 더 캔다. 긴장 80을 넘을 때만 희생양.
+                내전 직전엔 신임 40 이상이면 휴전 서약, 아니면 떼어 놓는다.
+  tyrant        징후마다 경비, 항의·파업마다 강제 해산, 수사는 즉결(벌은 추방), 군중이 오면 바로 희생양,
+                대권이 끝나면 계엄(대권 연장 문), 내전 직전·내전엔 계엄 선포나 큰 쪽 편들기,
+                적의 3이 된 칸 대표와 약점을 쥔 실행자를 암살한다(판당 Q['assn_cap']번).
+  schemer_plus  schemer(협박)에 암살(적의 3 대표, 실행자 입막음)과 누명을 더한다. 내전 직전엔 편을 든다.
+S1a 정책(passive, idealist, nodeal, caretaker, schemer, caretaker_random)은 S1b를 끄면 s1a_balance.Run과 판마다 같다.
 
-사용: python3 docs/design/sim/s1b_dark.py [판 수] [--baseline] [--policies a,b] [--tune key=value ...]
-  --tune은 이 파일의 Q와 s1a_balance의 P를 모두 받는다.
+사용: python3 docs/design/sim/s1b_dark.py [판 수=1000] [--baseline] [--policies a,b] [--tune key=value ...]
+  판 수           정책마다 몇 판(씨앗 1000, 1001, ...). 같은 명령은 언제나 같은 숫자를 낸다.
+  --baseline      S1b 판 앞에, S1b를 끈 DarkRun이 S1a 정책 여섯에서 s1a_balance.Run과 판마다 같은지 센다
+                  ('s1a와 같은 판 n/n'). S1b 판 결과는 바꾸지 않는다.
+  --policies      돌릴 S1b 정책(쉼표로). 기본은 saint,caretaker,tyrant,schemer_plus. caretaker가 있어야 목표 확인이 나온다.
+  --tune          이 파일의 Q와 s1a_balance의 P를 판 전에 바꾼다(예: --tune esc_base=0.25 rival_p=0.1).
+
+기본값: 브리프 3판 16.1 표의 수치(esc_base 0.32, quiet_out 8, disperse_tension 6, leash_public 0.5,
+  brink_tension 101 = 긴장 70 길 없음)에 3라운드의 휴전 서약 조건(truce_cond 1)을 더했다.
+  3라운드에서 폭력 긴장을 낮춘 값(위협 1, 폭행·암살 3, 내전 직전 구간마다 1)을 기본값으로 올렸다
+  (브리프 16.1 표). 2라운드 표는 `--tune truce_cond=0 threat_tension=3 assault_tension=6 assn_tension=6 brink_seg_tension=3`.
+
+Q의 손잡이 (자세한 값은 아래 Q 주석)
+  사다리       ember_p(원인 → 불씨 확률, 0이면 사다리 끔), rival_p(원수 대표가 표결에서 갈릴 때), esc_base(오르는 확률),
+               quiet_out(조용한 구간 수만큼 지나면 꺼짐), guard_post_line, guard_len/guard_max, armory, theft_p, desert_p, fear_haul
+  긴장 출처    threat_tension/threat_fear(위협), assault_tension(폭행), assn_tension(암살), brink_seg_tension(내전 직전 구간마다),
+               disperse_tension(강제 해산), ml_tension(계엄 구간마다)
+  끄기(시험)   crowd=0(군중 시계 없음), sab_on=0(사보타주 손해 없음), guard_fear/guard_expo=0(경비 붙일 때 값 없음),
+               floor=0(관계 바닥 환산 없음), corpse_cost=0(시신 확인 값 없음), trial_slot=0(재판이 법 자리를 안 먹음)
+  계엄         ml_rel(대권 연장 문의 경비대 관계, 15 = 호의), ep_normal=1(비상대권을 51표로), ml_direct, ml_lift, coup_*
+  내전         brink_tension(101이면 긴장 길 없음), brink_clock, truce_cond(서약 조건), truce_sep, ai_ml_request, captain_ambition
+  협박 값      leash_public(목줄이 끊기면 공개될 확률), harsh_pull
 """
 import random
 import sys
@@ -44,7 +66,7 @@ class RelDict(dict):
 
     def __setitem__(self, c, v):
         run = self.run
-        if v <= -100 and run.floor_on:
+        if v <= -100 and run.floor_on and Q['floor']:
             raw = v if v < -100 else min(-100, _RAW[0])
             if raw < -100:
                 run.floor_debt(c, -100 - raw)
@@ -52,12 +74,19 @@ class RelDict(dict):
         _RAW[0] = 0.0
         super().__setitem__(c, v)
 
+class SortedSet(set):
+    """이름 순으로 도는 집합. s1a의 self.passed는 보통 set이라 도는 순서가 PYTHONHASHSEED에 따라 바뀌고,
+    회기 안건 고르기(max + 주사위)가 프로세스마다 달라진다(판 결과 ±1%p). S1b 판에서만 순서를 고정한다."""
+    def __iter__(self):
+        return iter(sorted(set.__iter__(self)))
+
+
 # ---- S1b 제안 수치 (브리프 절 번호). 브리프에 없는 값은 (가정) ----
 Q = dict(
     # 4.1 불씨
     ember_p=1.0,          # (가정, 2라운드 기준선) 원인이 생기면 불씨가 생길 확률. 1판 기본 0.5
     rival_p=0.2,          # 원수 대표가 같은 표결에서 갈렸을 때
-    esc_base=0.25, esc_lack=0.10, esc_opp=0.10, esc_guard=0.15, esc_patrol=0.10, esc_min=0.05, esc_max=0.65,
+    esc_base=0.32, esc_lack=0.10, esc_opp=0.10, esc_guard=0.15, esc_patrol=0.10, esc_min=0.05, esc_max=0.65,
     ember_max=2, violent_cap=3,
     quiet_out=8,          # 브리프 4구간. 2라운드 기준선은 8(조정)
     guard_post_line=0,    # (가정) caretaker류는 경비대 노출이 이 아래일 때만 기척·위협·사보타주에 경비를 붙인다(0 = 폭행·암살 임박에만)
@@ -79,14 +108,14 @@ Q = dict(
     assn_on_fail=0,       # 1판 시뮬레이터의 열림(위기 법 부결 뒤). 2판은 상황 카드에서만 연다
     exec_blackmail_p=0.2,  # (가정) 실행자 칸 관계가 회의 이하일 때 구간마다 열차장 협박 확률
     # 5.1 탄압, 5.3 계엄
-    repress_extinguish=1, disperse_tension=5,  # 탄압이 그 칸 불씨를 끈다(5.1). 0이면 끄지 않는다(시험)
+    repress_extinguish=1, disperse_tension=6,  # 탄압이 그 칸 불씨를 끈다(5.1). 0이면 끄지 않는다(시험)
     guard_refuse=0.5, ep_len=3, coup_line=-15, coup_clear=15, coup_wait=2, curfew=1, ml_direct=0, ml_lift=0,
     ml_tension=2, decree_guard=-5,  # 계엄 긴장 +2/구간, 포고마다 경비대 관계 −5(2판)
     ep_normal=0,          # 1이면 비상대권을 일반 51표로(코디네이터 C-2 시험)
-    brink_max=2, war_max=1, brink_clock=3, brink_tension=70, brink_esc=0.20,  # 5.5 내전 직전(3판)
+    brink_max=2, war_max=1, brink_clock=3, brink_tension=101, brink_esc=0.20,  # 5.5 내전 직전(3판)
     ai_ml_request=0.4, pledge_cost=6, support_rel=10, war_help_trust=-10,
     captain_ambition=0.3,  # (가정) 경비대장 성향이 야심일 확률
-    leash_public=0.0,     # D-1: 목줄이 끊기면 이 확률로 대표가 공개(신임 −10, 그 칸 적의 +1, 결과 아크 +1)
+    leash_public=0.5,     # D-1: 목줄이 끊기면 이 확률로 대표가 공개(신임 −10, 그 칸 적의 +1, 결과 아크 +1)
     harsh_pull=0.0,       # D-2: 0이 아니면 가혹 법의 협박은 대표 몫 = 의석 × 결속도 × 이 값만 끌고 온다
     ml_rel=15, ml_grudge_max=0,  # 계엄 조건: 경비대 관계 호의 이상, 경비대장 적의 0
     tyrant_blackmail=0,   # (가정) 1이면 tyrant도 schemer처럼 협박한다(비상대권 67표를 모으는 길)
@@ -94,6 +123,21 @@ Q = dict(
     # 9.1 시신
     corpse_rise=0.25, vigil_p=0.3, vigil_guarded=0.10, car_miss=0.10,
     trial_defer=1,        # (가정) 위기 강제 안건이 있으면 재판을 다음 회기로 미룬다
+    # 3라운드: 휴전 서약 조건(5.5)
+    truce_cond=1,         # 1이면 서약이 통과해도 두 집단의 조건(S1a 3.2 열린 협상 조건)을 시계 안에 지켜야 멈춘다. 0이면 통과만으로 멈춘다(2라운드)
+    truce_sep=0,          # (가정) 1이면 서약 뒤 조건이 남은 채 마지막 구간이면 떼어 놓기로 한 구간 번다
+    # 3라운드: 긴장 출처를 하나씩 끄는 손잡이(기본값 = 브리프 값)
+    threat_tension=1, threat_fear=2,   # 위협(사다리 1)
+    assault_tension=3,    # 폭행(사다리 3)
+    assn_tension=3,       # 암살(사다리 4)
+    ml_guard_party=1,     # 1이면 경비대가 맞선 한쪽이어도 계엄을 선포할 수 있다(편든 계엄: 상대 적의 +2, 끼지 않은 칸 −3, 수단 5). 0이면 3판처럼 잠긴다
+    brink_seg_tension=1,  # 내전 직전 구간마다
+    crowd=1,              # 0이면 군중 시계가 없다(사건은 수사만)
+    sab_on=1,             # 0이면 사보타주가 물자·사람에 손해를 주지 않는다(사다리 칸은 그대로)
+    guard_fear=2, guard_expo=3,  # 경비를 붙일 때 공포·경비대 노출
+    floor=1,              # 0이면 관계 바닥 환산(적의·불씨)이 없다
+    trial_slot=1,         # 0이면 재판이 회기의 법 안건 자리를 먹지 않는다(시험)
+    corpse_cost=1,        # 0이면 칸 안 시신 확인·밤샘의 관계·노출 값이 없다(일어나는 시신도 없다)
 )
 RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
 BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
@@ -117,6 +161,7 @@ class DarkRun(A.Run):
         super().__init__(seed, base, places)
         if not s1b:
             return
+        self.passed = SortedSet(self.passed)  # 프로세스마다 같은 결과(위 SortedSet)
         self.r2 = random.Random(seed * 7919 + 17)  # S1b 전용 주사위. S1a 쪽 흐름은 건드리지 않는다
         self.ideo = {c: list(A.IDEO[c]) for c in COMMS}
         self.embers, self.cases, self.innocents = [], [], []   # innocents: [칸, 벌받은 구간]
@@ -552,7 +597,7 @@ class DarkRun(A.Run):
             self.stats['guard_unavailable'] += 1
             return
         e['guard_until'] = self.seg + Q['guard_len'] - 1
-        self.fear += 2; self.base['guard'][3] += 3
+        self.fear += Q['guard_fear']; self.base['guard'][3] += Q['guard_expo']
         self.stats['guard_posted'] += 1
 
     def kill_ember(self, e, why):
@@ -636,11 +681,13 @@ class DarkRun(A.Run):
         v = self.victim_comm(e['target'])
         if st == 1:
             S['act_threat'] += 1
-            self.tension += 3; self.fear += 2
+            self.tension += Q['threat_tension']; self.fear += Q['threat_fear']
             self.rel[v] = clamp(self.rel[v] - 3, -100, 100)
         elif st == 2:
             k = e['sab']; S['act_sabotage'] += 1; S['sab_' + k] += 1
-            if k == 'boiler':
+            if not Q['sab_on']:
+                pass
+            elif k == 'boiler':
                 self.coal -= 4
                 if self.r2.random() < 0.1: self.haul_once *= 0.5; S['boiler_damaged'] += 1
             elif k == 'coupling':
@@ -658,7 +705,7 @@ class DarkRun(A.Run):
             S['act_assault'] += 1
             if guarded: S['assault_halved'] += 1
             n = 1 if guarded else self.r2.choice([1, 2])
-            self.tension += 6
+            self.tension += Q['assault_tension']
             pd = (Q['assault_death_armory'] if self.armory else Q['assault_death']) * (0.5 if guarded else 1)
             dead = 1 if self.r2.random() < pd else 0
             self.injured += n - dead
@@ -667,7 +714,7 @@ class DarkRun(A.Run):
             if guarded: self.caught(case)
         elif st == 4:
             S['act_assassination'] += 1
-            self.tension += 6
+            self.tension += Q['assn_tension']
             self.kill_ember(e, 'ember_spent')
             if e['target'] == 'chief':
                 S['chief_wounded'] += 1  # 첫 시도는 늘 부상(4.1 제동)
@@ -736,6 +783,8 @@ class DarkRun(A.Run):
         if self.practice is None:
             self.practice = 'guard' if self.dark == 'tyrant' else 'medtech'
         S['train_corpses'] += 1
+        if not Q['corpse_cost']:
+            return
         if self.r2.random() < Q['vigil_p']:
             if self.dark == 'tyrant':
                 self.rel[comm] = clamp(self.rel[comm] - 3, -100, 100)
@@ -786,6 +835,8 @@ class DarkRun(A.Run):
             if rivals(p['comm'], victim): p['susp'] += 1
         cul, pool = cands[0], cands[1:]
         pool.sort(key=lambda s: -(s['susp'] + r2.random() * 0.9))
+        if not Q['crowd']:
+            clock = None
         case = dict(crowd=clock is not None, culprit=culprit, victim=victim, clock=clock, status='open', protects=0,
                     promised=False, promise_used=False, trial_ext=False, opened=self.seg, ember=ember, own=own,
                     sus=[cul] + pool[:2])
@@ -1112,6 +1163,18 @@ class DarkRun(A.Run):
             self.tension += 10
         elif door == 'council':
             self.tension += 3
+        elif 'guard' in pair:  # 편든 계엄: 경비대가 맞선 한쪽이다(5.5, 4판)
+            other = [c for c in pair if c != 'guard']
+            for c in other:
+                self.offend(c); self.offend(c)
+            for c in COMMS:
+                if c not in pair:
+                    self.rel[c] = clamp(self.rel[c] - 3, -100, 100)
+            S['ml_means'] += 1; S['ml_partisan'] += 1
+            self.tension += 5
+            if door == 'captain':
+                self.trust -= 10
+                self.coup_line_now = 14
         else:  # 내전 직전·내전에서 선포, 경비대장의 계엄
             for c in pair:
                 self.offend(c)
@@ -1133,6 +1196,10 @@ class DarkRun(A.Run):
             if b['start'] < self.seg:
                 b['clock'] -= 1
             if b['clock'] <= 0:
+                if b.get('cond'):
+                    S['truce_failed'] += 1
+                    for kind in (b['cond'][c] for c in b['pair'] if c not in b['kept']):
+                        S['truce_miss_' + kind] += 1
                 self.brink = None
                 self.start_war(b['pair'])
             return
@@ -1154,10 +1221,12 @@ class DarkRun(A.Run):
         b = self.brink
         a, c = b['pair']
         b['k'] += 1
-        self.tension += 3
+        self.tension += Q['brink_seg_tension']
         S['sign_brink'] += 1
         d = self.dark
-        guard_ok = self.rel['guard'] > -15 and 'guard' not in b['pair']
+        guard_ok = self.rel['guard'] > -15 and (Q['ml_guard_party'] or 'guard' not in b['pair'])
+        if guard_ok and not self.ml:
+            S['ml_door_open_brink'] += 1
         bigger, smaller = (a, c) if SEATS[a] >= SEATS[c] else (c, a)
         if d == 'tyrant' and not self.ml and guard_ok:
             self.declare_ml('brink', b['pair']); S['brink_end_ml'] += 1
@@ -1166,15 +1235,29 @@ class DarkRun(A.Run):
         if d in ('tyrant', 'schemer_plus'):
             self.take_side(bigger, smaller); S['brink_end_side'] += 1
             self.brink = None; return
-        if not b['pledge'] and self.trust >= 40:  # 한 탁자에 앉힌다: 비상 소집으로 '휴전 서약'(가정)
+        if b.get('cond'):  # 서약이 통과했다: 남은 조건을 지킨다(5.5, 3라운드)
+            if self.truce_keep(b):
+                return
+            if Q['truce_sep'] and not b['sep'] and b['clock'] <= 1:
+                b['sep'] = True; b['clock'] += 1; S['brink_separate'] += 1
+                for x in b['pair']:
+                    self.rel[x] = clamp(self.rel[x] - 5, -100, 100)
+        elif not b['pledge'] and self.trust >= 40:  # 한 탁자에 앉힌다: 비상 소집으로 '휴전 서약'(가정)
             b['pledge'] = True
             self.trust -= Q['pledge_cost']; S['pledge_votes'] += 1
             if self.pledge_vote(b['pair']):
-                S['brink_end_peace'] += 1
-                for x in b['pair']:
-                    self.fervor[x] = max(0, self.fervor[x] - 1)
-                    self.promises.append((x, self.seg + 3, self.r2.choice(['lever', 'medicine', 'luxury', 'target'])))
-                self.brink = None; return
+                if not Q['truce_cond']:  # 2라운드: 통과만으로 멈춘다
+                    S['brink_end_peace'] += 1
+                    for x in b['pair']:
+                        self.fervor[x] = max(0, self.fervor[x] - 1)
+                        self.promises.append((x, self.seg + 3, self.r2.choice(['lever', 'medicine', 'luxury', 'target'])))
+                    self.brink = None; return
+                b['cond'] = {x: self.r2.choice(['lever', 'medicine', 'luxury', 'target']) for x in b['pair']}
+                b['kept'] = set()
+                for k in b['cond'].values():
+                    S['truce_cond_' + k] += 1
+                if self.truce_keep(b):
+                    return
         elif not b['sep']:  # 떼어 놓는다
             b['sep'] = True; b['clock'] += 1; S['brink_separate'] += 1
             for x in b['pair']:
@@ -1186,6 +1269,38 @@ class DarkRun(A.Run):
                 self.declare_ml('council', b['pair'])
                 for x in b['pair']: self.fervor[x] = min(self.fervor[x], 1)
                 self.brink = None
+
+    def truce_keep(self, b):
+        """서약의 두 조건을 S1a 약속 이행(3.2)과 같은 방식으로 지키려 한다. 둘 다 지키면 시계가 멈춘다.
+        'target'(다음 정차를 그 집단 뜻대로)은 한 번만 굴린다. 나머지는 물자가 될 때까지 구간마다 다시 본다."""
+        S = self.stats
+        for c, kind in b['cond'].items():
+            if c in b['kept']:
+                continue
+            ok = False
+            if kind == 'lever':
+                for lever in sorted((self.heat, self.ration), key=lambda lv: lv[c]):
+                    if lever[c] < 4 and self.coal > 25 and self.food > 25:
+                        lever[c] += 1; ok = True
+                        break
+            elif kind == 'medicine' and self.med >= 5:
+                self.med -= 5; ok = True
+            elif kind == 'luxury' and self.lux >= 3:
+                self.lux -= 3; ok = True
+            elif kind == 'target' and not b.get('target_rolled'):
+                b['target_rolled'] = True
+                ok = self.r2.random() < P['target_keep']
+            if ok:
+                b['kept'].add(c)
+                self.trust += 4; self.rel[c] = clamp(self.rel[c] + 5, -100, 100)
+                S['truce_cond_kept'] += 1
+        if len(b['kept']) == len(b['cond']):
+            S['brink_end_peace'] += 1; S['truce_kept'] += 1
+            for x in b['pair']:
+                self.fervor[x] = max(0, self.fervor[x] - 1)
+            self.brink = None
+            return True
+        return False
 
     def vote_yes(self, scores, need):
         yes = 0
@@ -1267,7 +1382,7 @@ class DarkRun(A.Run):
         d = self.dark
         g = self.rel['guard']
         locked = g <= -40
-        if d == 'tyrant' and not self.ml and g > -40 and 'guard' not in w['pair']:
+        if d == 'tyrant' and not self.ml and g > -40 and (Q['ml_guard_party'] or 'guard' not in w['pair']):
             self.declare_ml('war', w['pair']); w['end_next'] = 'ml'; return
         if d in ('tyrant', 'schemer_plus') and not locked:
             w['end_next'] = 'help'; w['help'] = (bigger, smaller); S['war_help'] += 1; return
@@ -1373,11 +1488,13 @@ class DarkRun(A.Run):
                     S['promise_trial_broken'] += 1
                     self.break_promise((trial['victim'], self.seg, 'trial'))
                     trial['promised'] = False
-            else:
+            elif Q['trial_slot']:
                 self.session_bookkeeping()
                 S['law_slot_lost_to_trial'] += 1
                 self.hold_trial(trial)
                 return
+            else:  # (시험) 재판이 법 안건 자리를 먹지 않는다
+                self.hold_trial(trial)
         before = (S['proposals'], S['failed'], S['forced'], S['harsh_passed'])
         self._last_vote = None
         super().council()
@@ -1474,7 +1591,9 @@ def report(policy, n, places):
                  'brink_end_side', 'brink_end_ml', 'brink_separate', 'pledge_votes', 'pledge_passed', 'ai_ml_request',
                  'ai_ml_passed', 'war_any', 'war_segments', 'war_deaths', 'war_end_ml', 'war_end_help',
                  'war_end_truce', 'war_end_fought', 'war_hands_off', 'war_leader_killed', 'council_skipped_war',
-                 'ml_door_extend', 'ml_door_council', 'ml_door_brink', 'ml_door_war', 'ml_door_captain']),
+                 'ml_door_extend', 'ml_door_council', 'ml_door_brink', 'ml_door_war', 'ml_door_captain',
+                 'truce_cond_kept', 'truce_kept', 'truce_failed', 'truce_miss_lever', 'truce_miss_medicine',
+                 'truce_miss_luxury', 'truce_miss_target']),
         ('암살 명령', ['assn_ordered', 'assn_why_hostile', 'assn_why_silence', 'assn_why_crisis_fail', 'assn_succeeded', 'assn_failed', 'assn_exposed', 'frames', 'covered_up',
                     'executor_blackmail', 'succession']),
         ('S1a', ['passed', 'harsh_passed', 'harsh_forced', 'failed', 'blackmail', 'leash_snapped', 'leash_public', 'strikes', 'max_tension', 'end_trust']),
@@ -1516,6 +1635,8 @@ def check(res):
         print(f"1.1 {d}: 완주 {r['complete']:.0%} vs caretaker {c['complete']:.0%}: +10%p 안 {'통과' if ok1 else '실패'}, "
               f"+3%p 안(코디네이터) {'통과' if ok3 else '실패'}; "
               f"반란+쿠데타 {rc:.0%} ≥ 1.5×{ck:.0%}={1.5 * ck:.0%} → {'통과' if ok2 else '실패'}")
+    print(f"16.1 caretaker 완주 {c['complete']:.0%} ≥ 46%(S1a 56% −10%p) → {'통과' if c['complete'] >= 0.46 else '실패'}; "
+          f"내전 직전 {c['brink_any']:.0%}(15~30%), 내전 {c['war_any']:.0%}(5~10%)")
     if 'saint' in res:
         print(f"15.3 saint 완주 {res['saint']['complete']:.0%} ≥ 35% → {'통과' if res['saint']['complete'] >= 0.35 else '실패'}")
     for p, r in res.items():
