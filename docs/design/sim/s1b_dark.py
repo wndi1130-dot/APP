@@ -44,6 +44,13 @@ Q의 손잡이 (자세한 값은 아래 Q 주석)
                시뮬레이터에 없어 넣지 못한 것: 측근 → 지시한 사람(4.4, 용의자가 칸 단위라 측근이 없다),
                '의회에 묻는다'와 대권 연장 표결(5.3, 그 길을 고르는 정책이 없다), 강제 해산의 사상(5.1, 원래 없다),
                처형·법 24·25(법 25 아래의 벌은 수단 점수 자리만 있고 늘 0)
+  5라운드      내전 직전 문턱, 거둔 계엄, 처형. 기본은 켬, 모두 끄면 4라운드 숫자와 판마다 같다:
+               --tune brink_late=0 brink_tension_fix=0 ml_lift_bonus=0 ml_lift_means=0 exec_on=0
+               brink_late(5.5 남은 구간이 시계보다 적으면 새 내전 직전 없음), brink_tension_fix(5.5 긴장 길의 새는 곳),
+               ml_lift_bonus·ml_lift_means(5.3 스스로 거둔 계엄), exec_on·exec_fear(4.4 처형은 재판 판결로만)
+               시험 깃발(기본 끔): brink_fresh·brink_mutual·brink_hold·brink_unrest(내전 직전 문턱 후보),
+               ml_force_seg·ml_lift_after(계엄을 걸고 스스로 거두는 길을 강제로 잰다), tyrant_trial(tyrant가 재판에 넘김)
+               예: 거둔 계엄의 추인 → --policies tyrant,caretaker --tune ml_force_seg=9 ml_lift_after=3 ml_lift_bonus=2
 """
 import random
 import sys
@@ -152,16 +159,32 @@ Q = dict(
     harm_cap=6,           #     피해 사건이 판당 harm_cap건에 닿으면 새 불씨가 생기지 않는다(플레이어가 고른 탄압·처벌은 그대로)
     susp_nostack=1,       # 4.5 판 중 합류(+2)와 구조민(+1)을 겹쳐 세지 않는다(둘 다면 +2)
     curfew_trainwide=1,   # 5.1 통행 금지는 열차 전체: 경비대 외 모든 칸 관계 −1/구간(3라운드: 꼬리칸·앞칸 −2)
-    ml_ratify=1,          # 5.3 계엄을 거두면 계엄 중 포고를 추인 안건 하나(51)로 묶는다(ml_lift=1일 때만 쓰인다)
+    ml_ratify=1,          # 5.3 계엄을 거두면 계엄 중 포고를 추인 안건 하나(51)로 묶는다(계엄을 거둘 때만 쓰인다: ml_lift=1이나 시험 깃발 ml_lift_after)
     corpse_once=1,        # 9.1·9.3 확인한 시신은 어디 두든 안 일어난다. 확인 안 한 시신만 놓인 자리 값으로 일어난다
     corpse_field_checked=0,  # (가정) 1이면 정차(바깥)에서 죽은 사람도 확인한 것으로 본다. 0이면 확인 안 한 시신으로 친다
     tone3=1,              # 10.2 톤 세 층(깨끗·흔들림·어두움) 집계. 보고만 하고 판 결과는 바꾸지 않는다
+    # 5라운드: 기본은 켬(시험 깃발 빼고). 모두 끄면 4라운드와 판마다 같다(아래 docstring의 끄는 명령)
+    brink_late=1,         # 5.5 남은 구간이 시계(brink_clock)보다 적으면 새 내전 직전을 열지 않는다
+    brink_tension_fix=1,  # 5.5 긴장 길 비교에 100으로 자른 긴장을 쓴다(4라운드는 정산 중 100 넘은 긴장이 새었다)
+    ml_lift_bonus=2,      # 5.3 스스로 거둔 뒤 첫 포고 추인 표결에서 모든 칸 입장 +k(쿠데타 경고 뒤면 없음, 5차: +1은 모자람)
+    ml_lift_means=1,      # 5.3 스스로 거둔 계엄은 수단 점수 2를 뺀다(대권 연장 5 → 3)
+    exec_on=1,            # 4.4 tyrant·schemer_plus는 유죄 판결(의회·경비대 재판) 뒤 늘 처형한다
+    exec_fear=10,         # 4.4 처형 하나의 공포
+    # 5라운드 시험 깃발(기본 끔)
+    brink_fresh=0,        # (후보) k면 원수 사이 사보타주가 최근 k구간 안에 있었을 때만 내전 직전
+    brink_mutual=0,       # (후보) 1이면 맞선 두 집단이 둘 다 살아 있는 불씨를 쥐어야 한다
+    brink_hold=0,         # (후보) n이면 내전 직전 조건이 n구간 이어져야 한다
+    brink_unrest=0,       # (후보) 1이면 두 집단 모두 열차장과 관계가 회의 이하여야 한다
+    ml_force_seg=0,       # (시험) n이면 tyrant·caretaker가 n구간에 대권 연장 문으로 계엄을 건다(조건 없이)
+    ml_lift_after=0,      # (시험) n이면 tyrant·caretaker가 계엄 n구간 뒤 스스로 거둔다
+    tyrant_trial=0,       # (시험) k면 exec_on일 때 tyrant가 단계 k 이상(1 정황, 2 증거) 사건을 재판에 넘긴다
 )
 RIVALS = [('tail', 'front'), ('engine', 'medtech'), ('guard', 'tail')]  # (가정) 원수 관계 = S1a OPPOSITE 짝
 BASE = dict(saint='caretaker', caretaker='caretaker', tyrant='caretaker', schemer_plus='schemer')
 DARK = ('saint', 'caretaker', 'tyrant', 'schemer_plus')
 MEANS = dict(assn_ordered=4, ml_means=1, executions=3, scapegoats=3, frames=3, exiles=2, lynch_allowed=2,
-             mass_arrest=2, summary=2, trial_bought=2, dispersals=1, blackmail=1, harsh_chosen=1)
+             mass_arrest=2, summary=2, trial_bought=2, dispersals=1, blackmail=1, harsh_chosen=1,
+             exec_guard=1)  # 경비대 재판의 처형은 3 + 1 = 4
 # 10.1 선을 넘는 선택(계엄은 플레이어가 선포한 문만: 연장·내전 직전·내전. 의회가 맡긴 계엄과 경비대장의 계엄은 빼고 셈, 가정)
 CROSSINGS = ('assn_ordered', 'scapegoats', 'lynch_allowed', 'exiles', 'executions', 'mass_arrest',
              'ml_door_extend', 'ml_door_brink', 'ml_door_war', 'trial_bought', 'frames')
@@ -220,6 +243,8 @@ class DarkRun(A.Run):
         self.coup_line_now = Q['coup_line']
         self.ml_decrees, self.ratify_pending = [], None  # 계엄 중 포고 (법, 폐지였나), 거둔 뒤 추인 안건(5.3)
         self.uc_store = self.uc_pyre = 0  # 확인 안 한 채 냉동칸·찬 객차(장작불 대기)에 놓인 시신(9.1)
+        self.brink_hold = Counter()  # 내전 직전 조건이 이어진 구간 수(5차 brink_hold)
+        self.lift_bonus = 0  # 스스로 거둔 계엄 뒤 첫 추인 표결의 입장 보너스(5.3, 5라운드)
 
     # ---------------- S1a 훅 ----------------
     def res(self, key, default=0.0):
@@ -483,6 +508,9 @@ class DarkRun(A.Run):
         self.scheduled = [s for s in self.scheduled if s[0] > self.seg]
         for _, fn in due:
             fn()
+        if (self.ml and Q['ml_lift_after'] and self.dark in ('tyrant', 'caretaker')
+                and self.seg - self.ml_start >= Q['ml_lift_after']):  # (시험) 스스로 거둔다
+            self.lift_ml(voluntary=self.coup_warn is None)
         if self.ml:
             S['ml_segments'] += 1
             self.base['guard'][3] += 2
@@ -514,6 +542,8 @@ class DarkRun(A.Run):
         elif (self.dark == 'tyrant' and Q['ml_direct'] and not self.ml
               and (self.tension >= 50 or self.trust <= 10) and self.ml_ok()):
             self.declare_ml('extend')
+        if self.dark in ('tyrant', 'caretaker') and Q['ml_force_seg'] and self.seg == Q['ml_force_seg'] and not self.ml:
+            S['ml_forced'] += 1; self.declare_ml('extend')  # (시험) 거두는 길을 재려고 계엄을 건다
         if self.war:
             self.war_card()
         elif self.brink:
@@ -991,7 +1021,10 @@ class DarkRun(A.Run):
                 s['clues'] += 1; s['susp'] += 1; S['clue_false'] += 1
             d = self.dark
             top = self.top_by_clues(case)
-            if d == 'tyrant':
+            if d == 'tyrant' and Q['exec_on'] and Q['tyrant_trial'] and self.level(top) >= Q['tyrant_trial']:
+                if self.ml: self.guard_trial(case)  # 처형하려고 재판에 넘긴다(즉결로는 처형할 수 없다)
+                else: self.send_trial(case)
+            elif d == 'tyrant':
                 self.summary(case)
             elif self.ml:
                 self.guard_trial(case)
@@ -1016,9 +1049,13 @@ class DarkRun(A.Run):
         lv = self.level(dfd)
         p = 1.0 if lv == 2 else 0.6 if lv == 1 else 0.3
         if self.r2.random() < p:
-            self.punish(case, dfd, 'confine')
+            self.punish(case, dfd, 'execute_guard' if self.wants_exec() else 'confine')
         else:
             dfd['acq'] = True
+
+    def wants_exec(self):
+        """처형은 재판 판결 뒤에만 고른다. tyrant·schemer_plus는 고를 수 있으면 늘 고른다(5라운드 가정)."""
+        return bool(Q['exec_on']) and self.dark in ('tyrant', 'schemer_plus')
 
     def summary(self, case):
         S = self.stats
@@ -1043,7 +1080,17 @@ class DarkRun(A.Run):
         case['status'] = 'closed'
         S['punished'] += 1
         self.punished_comms.append(c)
-        if how == 'exile':  # 하차 명령
+        if how in ('execute', 'execute_guard'):  # 처형(4.4, 5라운드): 재판 판결로만
+            S['executions'] += 1
+            if how == 'execute_guard':
+                S['exec_guard'] += 1
+            self.harm('exec')
+            self.offend(c); self.fear += Q['exec_fear']
+            self.train_death(1, c)  # 칸 안의 죽음: 머리 확인으로 간다. 폭력 사망에는 넣지 않는다
+            S['exec_deaths'] += 1
+            if not person['culprit']:
+                S['exec_innocent'] += 1
+        elif how == 'exile':  # 하차 명령
             S['exiles'] += 1
             self.rel[c] = clamp(self.rel[c] - 8, -100, 100); self.fear += 5; self.pop[c] -= 1
         elif how == 'confine':
@@ -1081,7 +1128,7 @@ class DarkRun(A.Run):
         case['promised'] = False
         if yes >= 51:
             S['guilty'] += 1
-            self.punish(case, dfd, 'ration_cut' if self.dark == 'saint' else 'confine')
+            self.punish(case, dfd, 'execute' if self.wants_exec() else 'ration_cut' if self.dark == 'saint' else 'confine')
         else:
             S['acquitted'] += 1
             dfd['acq'] = True
@@ -1278,6 +1325,7 @@ class DarkRun(A.Run):
         self.ep_on = False; self.ep_decrees = []; self.ml_decrees = []
         self.passed.discard('emergency_powers')
         S['ml_declared'] += 1; S['ml_door_' + door] += 1; S['ml_means'] += self.ML_DOOR_MEANS[door]
+        self.ml_pts = self.ML_DOOR_MEANS[door] + ('guard' in pair and door not in ('extend', 'council'))
         if door == 'extend':
             for c in COMMS:
                 if c != 'guard':
@@ -1327,13 +1375,29 @@ class DarkRun(A.Run):
             return
         if self.war or self.ml or self.wars_n >= Q['war_max'] or self.brinks_n >= Q['brink_max']:
             return
+        if Q['brink_late'] and P['segments'] - self.seg < Q['brink_clock']:  # 시계가 다 돌 구간이 남지 않았다
+            return
         for a, b in RIVALS:
             if self.fervor[a] < 2 or self.fervor[b] < 2:
+                self.brink_hold[(a, b)] = 0
                 continue
-            sab = any(e['stage'] >= 2 and {e['who'], e['target']} == {a, b} for e in self.embers)
-            if sab or self.tension >= Q['brink_tension']:
+            if Q['brink_unrest'] and (self.rel[a] > -15 or self.rel[b] > -15):  # 둘 다 지금 회의 이하
+                self.brink_hold[(a, b)] = 0
+                continue
+            sab = any(e['stage'] >= 2 and {e['who'], e['target']} == {a, b}
+                      and (not Q['brink_fresh'] or e['quiet'] < Q['brink_fresh']) for e in self.embers)
+            if sab and Q['brink_mutual']:  # 맞은편도 불씨를 쥐고 있다(서로를 노린다)
+                sab = {e['who'] for e in self.embers} >= {a, b}
+            if sab and Q['brink_hold']:  # 조건이 이어진 구간 수
+                self.brink_hold[(a, b)] += 1
+                sab = self.brink_hold[(a, b)] >= Q['brink_hold']
+            elif not sab:
+                self.brink_hold[(a, b)] = 0
+            tn = min(self.tension, 100) if Q['brink_tension_fix'] else self.tension  # 정산 중엔 긴장이 아직 안 잘렸다
+            if sab or tn >= Q['brink_tension']:
                 clock = Q['brink_clock'] - (1 if (self.dispersed[a] or self.dispersed[b]) else 0)
                 self.brink = dict(pair=(a, b), clock=clock, start=self.seg, k=0, sep=False, pledge=False)
+                self.brink_hold.clear()
                 self.brinks_n += 1
                 S['brinks'] += 1; S['brink_any'] = 1; S['brink_' + a + '_' + b] += 1
                 return
@@ -1532,9 +1596,15 @@ class DarkRun(A.Run):
         self.grudge[lose] = 3; self.last_offense[lose] = self.session
         self.trust += trust
 
-    def lift_ml(self):
+    def lift_ml(self, voluntary=False):
         self.ml = False; self.coup_warn = None
         self.stats['ml_lifted'] += 1
+        self.lift_bonus = 0
+        if voluntary:  # 5.3(5라운드): 쿠데타 경고 없이 스스로 거두었다
+            self.stats['ml_lifted_voluntary'] += 1
+            self.lift_bonus = Q['ml_lift_bonus']
+            if Q['ml_lift_means']:
+                self.stats['ml_means'] -= min(2, self.ml_pts)  # 대권 연장 5 → 3
         self.trust = self.pre_ml_trust - 15
         self.stats['ml_len'] += self.seg - self.ml_start
         if Q['ml_ratify'] and self.ml_decrees:  # 5.3(4라운드): 계엄 중 포고를 다음 정기 회기의 추인 안건 하나로
@@ -1547,10 +1617,16 @@ class DarkRun(A.Run):
         부결이면 포고로 통과한 법은 사라지고 포고로 폐지한 법은 되살아난다. 재상정 쿨다운은 걸지 않는다."""
         S = self.stats
         items, self.ratify_pending = self.ratify_pending, None
-        sc = {c: round(sum(self.stance(c, law, rep)[0] for law, rep in items) / len(items)) for c in COMMS}
+        sc = {c: round(sum(self.stance(c, law, rep)[0] for law, rep in items) / len(items)) + self.lift_bonus
+              for c in COMMS}
         S['ratify_votes'] += 1
+        bonus, self.lift_bonus = self.lift_bonus, 0
+        if bonus:
+            S['ratify_votes_bonus'] += 1
         if self.vote_yes(sc, 51):
             S['ratify_passed'] += 1
+            if bonus:
+                S['ratify_passed_bonus'] += 1
             return
         S['ratify_failed'] += 1
         for law, rep in reversed(items):
@@ -1785,6 +1861,10 @@ def report(policy, n, places):
         print(f'{name}:', ', '.join(f'{k} {a(k):.2f}' for k in keys))
     print('4라운드:', ', '.join(f'{k} {a(k):.2f}' for k in (
         'ratify_queued', 'ratify_votes', 'ratify_passed', 'ratify_failed', 'ratify_deferred', 'crossings', 'grave')))
+    if Q['exec_on'] or Q['ml_lift_bonus'] or Q['ml_lift_means'] or Q['ml_lift_after'] or Q['ml_force_seg']:
+        print('5라운드:', ', '.join(f'{k} {a(k):.3f}' for k in (
+            'executions', 'exec_guard', 'exec_innocent', 'exec_deaths', 'harm_exec', 'ml_forced', 'ml_lifted_voluntary',
+            'ratify_votes_bonus', 'ratify_passed_bonus')))
     print('위기 속도 (시작 수 / 끝난 수 / 끝난 것의 평균 구간 / 1구간 안에 끝난 비율=시작 대비):')
     for t in ('strike', 'protest', 'resource', 'crowd'):
         st, rs = agg['crisis_%s_n' % t], agg['crisis_%s_resolved' % t]
