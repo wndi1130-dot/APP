@@ -815,14 +815,15 @@ small { font-size: 12px; }
 .fx-cross { animation: fx-cross 300ms ease-out; }
 @keyframes fx-cross { 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
 .fx-word {
-  position: absolute; right: -4px; top: -6px; z-index: 21; pointer-events: none; padding: 0 4px; border-radius: 2px;
-  font-size: 12px; font-weight: 800; line-height: 16px; color: var(--warning); border: 1.5px solid currentColor; background: var(--bg);
-  transform: rotate(-6deg); animation: fx-stamp 2.2s ease-out forwards;
+  position: absolute; right: -4px; top: -6px; z-index: 21; pointer-events: none; padding: 0 3px;
+  font-size: 12px; font-weight: 800; line-height: 16px; color: var(--warning); background: var(--bg);
+  animation: fx-stamp 2.2s ease-out forwards;
 }
+/* 도장처럼 보이지 않게(도장은 판결·포고에서만, 5b.1): 테두리·기울임 없이 굵은 글자가 내려앉는다. */
 .fx-word.is-danger { color: var(--discontent); }
 .fx-word.is-peel { color: var(--ink-3); animation: fx-peel 600ms ease-in forwards; }
-@keyframes fx-stamp { 0% { opacity: 0; transform: rotate(-6deg) scale(1.6); } 8% { opacity: 1; transform: rotate(-6deg) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: rotate(-6deg); } }
-@keyframes fx-peel { 0% { opacity: 1; transform: rotate(-6deg); } 100% { opacity: 0; transform: rotate(-14deg) translate(4px, -6px); } }
+@keyframes fx-stamp { 0% { opacity: 0; transform: scale(1.6); } 8% { opacity: 1; transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fx-peel { 0% { opacity: 1; } 100% { opacity: 0; transform: translate(4px, -6px); } }
 /* 의석과 칸 관계 꼬리표 */
 .fx-seat { display: inline-block; margin-left: 4px; vertical-align: 1px; font-size: 12px; line-height: 15px; pointer-events: none; animation: fx-rels 2s ease-out forwards; }
 .fx-rels {
