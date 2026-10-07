@@ -52,7 +52,7 @@ function randomSeed(): string {
 function freshUi(): Ui {
   return {
     screen: 'home', panel: null, carPop: null, cardOpen: false, stopSeen: false, overviewSel: 'tail', numbersOnly: false,
-    selComm: null, dealOpen: null, cutPick: null, count: null, toast: null, debug: false, person: null,
+    selComm: null, dealOpen: null, cutPick: null, count: null, toast: null, debug: false, person: null, braking: false,
   };
 }
 
@@ -64,7 +64,7 @@ export function renderApp(view: View): HTMLElement {
   else if (screen === 'council') main = councilScreen(view);
   else if (screen === 'overview') main = overviewScreen(view);
   else main = homeScreen(view);
-  const sheet = screen === 'home' || screen === 'overview' ? cardSheet(view) : null;
+  const sheet = (screen === 'home' || screen === 'overview') && !ui.braking ? cardSheet(view) : null;
   const panel = overlay(view);
   return h('div', { class: cx('app', `app--${screen}`, sheet && 'has-sheet') },
     topBar(view),
@@ -212,6 +212,15 @@ export function startApp(root: HTMLElement): void {
         const wasSettle = g.phase === 'settle';
         act(next => advance(next));
         if (g.phase === 'settle' && !wasSettle) { ui.panel = 'settle'; ui.screen = 'home'; ui.selComm = null; ui.dealOpen = null; }
+        if (g.phase === 'stop' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          // 정차: 브레이크 소리와 함께 열차가 서고 나서 정차 서류가 펼쳐진다(나중엔 정차 장면으로 넘어가는 자리).
+          ui.stopSeen = false;
+          ui.screen = 'home';
+          ui.cardOpen = false;
+          ui.braking = true;
+          setTimeout(() => { ui.braking = false; if (stackCount(g, ui) > 0) openStack(); render(); }, 1100);
+          return render();
+        }
         if (g.phase === 'travel' || g.phase === 'stop') { ui.stopSeen = false; if (stackCount(g, ui) > 0) openStack(); }
         if (g.phase === 'prep') ui.panel = null;
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; }

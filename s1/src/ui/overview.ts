@@ -1,4 +1,4 @@
-import { COMM_NAME, REP_ROLE, forecast, relStage, situation } from '../game';
+import { COMM_NAME, REP_ROLE, forecast, relStage, relationLine, situation } from '../game';
 import type { Comm } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
@@ -32,7 +32,8 @@ function commPanel(view: View, c: Comm): HTMLElement {
       h('div', null,
         h('b', null, COMM_NAME[c]),
         h('div', { class: 'sub' }, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
-        h('div', { class: 'sub num' }, `${s.pop}명 · ${relStage(g, c)}`))),
+        h('div', { class: 'sub num' }, `${s.pop}명 · ${relStage(g, c)}`),
+        h('div', { class: cx('sub', s.rel >= 15 && 'is-blue', s.rel <= -15 && 'is-red') }, relationLine(s.rel)))),
     h('div', { class: 'ov-panel__stats' },
       h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
       h('span', null, '배급 ', h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),

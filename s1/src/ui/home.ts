@@ -108,7 +108,7 @@ export function homeScreen(view: View): HTMLElement {
   const { g, ui } = view;
   const moving = g.phase === 'travel' && !g.inStrike;
   const open = CARS.find(c => c.id === ui.carPop);
-  return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike') },
+  return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike', ui.braking && 'is-braking') },
     h('div', { class: 'sky' }, h('i', { class: 'layer layer--far' }), h('i', { class: 'layer layer--mid' }), h('i', { class: 'snow' })),
     h('div', { class: 'scroller', 'data-keep-scroll': 'train' },
       h('div', { class: 'train' },
@@ -117,6 +117,6 @@ export function homeScreen(view: View): HTMLElement {
           carEl(view, car)))),
       h('div', { class: 'rails' })),
     h('i', { class: 'layer layer--near' }),
-    paperStack(view),
+    ui.braking ? h('div', { class: 'brake', role: 'status' }, h('b', null, '끼이이익'), h('span', null, '열차가 선다')) : paperStack(view),
     g.phase === 'stop' && g.stop ? h('div', { class: 'platform-tag' }, icon('symbol'), '정차 중') : null);
 }

@@ -1,6 +1,6 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
-  lawNeed, openConditions, relStage, toolStatus,
+  lawNeed, openConditions, relStage, relationLine, toolStatus,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, VoteResult } from '../game';
 import { cx, h, s } from './dom';
@@ -10,7 +10,7 @@ import { WEDGE_ORDER, fmt } from './common';
 import type { View } from './common';
 import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle, wedgeBoundaries } from './seats';
 import { bar, portrait } from './widgets';
-import { nameBtn } from './names';
+import { agendaLine, nameBtn } from './names';
 
 // 의회: 식당칸 안 반원 100석을 공동체 쐐기로 나누고 쐐기 끝에 명판을 단다. 가운데 전령기 바늘과 51·67 눈금,
 // '예상 찬성 / 필요' 큰 숫자. 왼쪽은 법안 창, 오른쪽은 고른 공동체의 창(지도자, 의석, 결속도, 거래 단추 다섯).
@@ -223,6 +223,8 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
       h('div', { class: 'sub num' }, `${b.seats}석${b.absent ? ` (부재 ${b.absent})` : ''} · ${relStage(g, c)}`)),
     h('button', { class: 'x', 'data-action': 'sel-comm', 'data-comm': '', 'aria-label': '닫기' }, '×'));
   const facts = h('div', { class: 'cpanel__facts' },
+    h('span', { class: st.rel >= 15 ? 'is-blue' : st.rel <= -15 ? 'is-red' : '' }, relationLine(st.rel)),
+    agendaLine(g, c, 'span'),
     h('span', null, '결속도 ', bar(st.coh * 100, '--ink-2')),
     st.fervor > 0 ? h('span', { class: 'is-red' }, `열기 ${st.fervor}`) : null,
     grudge ? h('span', { class: 'is-red' }, grudge) : null,

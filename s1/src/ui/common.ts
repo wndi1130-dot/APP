@@ -27,6 +27,8 @@ export interface Ui {
   toast: string | null;
   /** 이름을 눌러 연 사람 정보(전체 이름) */
   person: string | null;
+  /** 정차 직전 브레이크 연출 중 */
+  braking: boolean;
   debug: boolean;
 }
 

@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, relStage, seats, situation,
+  COMMS, COMM_NAME, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, relStage, relationLine, seats, situation,
 } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
@@ -22,6 +22,7 @@ function factionRow(g: Game, c: Comm): HTMLElement {
       h('span', { class: cx('stage', `stage--${s.rel >= 15 ? 'up' : s.rel <= -15 ? 'down' : 'mid'}`) }, relStage(g, c))),
     h('div', { class: 'frow__facts' },
       h('span', null, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
+      h('span', { class: s.rel >= 15 ? 'is-blue' : s.rel <= -15 ? 'is-red' : '' }, relationLine(s.rel)),
       s.fervor > 0 ? h('span', { class: 'is-red' }, `열기 ${s.fervor}${s.rel <= -40 || c === 'engine' ? ` · ${PROTEST[c]}` : ''}`) : null,
       grudge ? h('span', { class: 'is-red' }, grudge) : null,
       s.promise ? h('span', null, `약속: ${s.promise.label}`) : null),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advance, castVote, chooseCard, COMMS, createGame, currentAgenda, makeDeal, primaryAction, resolveStop, toolStatus, viewCard,
+  advance, castVote, chooseCard, COMMS, createGame, currentAgenda, disembarkMood, makeDeal, primaryAction, relationLine, resolveStop,
+  toolStatus, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -55,5 +56,24 @@ describe('S1a 한 판', () => {
   it('상태를 JSON으로 저장하고 되살릴 수 있다', () => {
     const g = autoplay('json', false);
     expect(JSON.parse(JSON.stringify(g))).toEqual(g);
+  });
+});
+
+describe('정차 장면과 관계 문장', () => {
+  it('관계 일곱 단계마다 문장이 있다', () => {
+    for (const rel of [90, 50, 20, 0, -20, -50, -90]) expect(relationLine(rel)).not.toBe('');
+  });
+
+  it('불신임 직전이면 어깨가 처진 장면, 크게 지지받으면 개선장군 장면이다', () => {
+    const g = createGame('scene');
+    g.trust = 20;
+    expect(disembarkMood(g, 'tail')).toBe('cornered');
+    g.trust = 80;
+    g.tension = 10;
+    for (const c of COMMS) g.comms[c].rel = 60;
+    expect(disembarkMood(g, 'tail')).toBe('triumph');
+    g.trust = 50;
+    g.comms.tail.rel = -50;
+    expect(disembarkMood(g, 'tail')).toBe('cold');
   });
 });

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, LAWS, makeDeal, PLACES,
+  advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, LAWS, makeDeal, PLACES,
+  RELATION_LINES, SCENE_LINES,
   primaryAction, resolveStop, SECRET_POOL, toolStatus, viewCard,
 } from '../../src/game';
 
@@ -57,6 +58,9 @@ describe('화면 글 규칙', () => {
       ...SECRET_POOL.map(s => s.text),
       ...Object.values(CONDITIONS).flat().map(c => c.label),
       ...COMMON_CONDITIONS.map(c => c.label),
+      ...Object.values(SCENE_LINES).flat(),
+      ...Object.values(DISEMBARK_LINES),
+      ...Object.values(RELATION_LINES),
     ];
     expect(fixed.flatMap(t => violations(t, false))).toEqual([]);
   });

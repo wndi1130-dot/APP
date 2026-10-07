@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, PLACES, STAY, costLines, crewNames, politicsLines, viewCard,
+  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, PLACES, STAY, costLines, crewNames, politicsLines, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -38,6 +38,7 @@ function stopCard(view: View): HTMLElement | null {
   const promises = COMMS.map(c => g.comms[c].promise ? { c, p: g.comms[c].promise! } : null).filter(Boolean) as { c: Comm; p: NonNullable<typeof g.comms.tail.promise> }[];
   const stopPromises = promises.filter(x => x.p.kind === 'fetch' || x.p.cond.kind === 'target' || x.p.cond.kind === 'skip_dispatch');
   const maxW = Math.max(...LOOT_KEYS.map(k => place.loot[k]));
+  const scene = stopScene(g);
   return sheet('sheet--stop',
     h('div', { class: 'sheet__head' },
       h('div', null,
@@ -45,6 +46,7 @@ function stopCard(view: View): HTMLElement | null {
         h('div', { class: 'sheet__titleline' },
           h('b', { class: 'sheet__title' }, place.name),
           h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') })))))),
+    scene ? h('p', { class: 'scene' }, scene.outside, ' ', scene.disembark) : null,
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '무엇을'),
       h('div', { class: 'targets' }, LOOT_KEYS.map(k => h('button', {

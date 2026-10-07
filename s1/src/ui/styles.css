@@ -722,3 +722,21 @@ small { font-size: 12px; }
 .person .drop__head { align-items: flex-start; }
 .person .drop__head > div:not(.portrait) { flex: 1; min-width: 0; }
 .person__facts { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--ink-2); }
+
+/* ---------- 정차 브레이크 연출(자리표시) ---------- */
+
+.home.is-braking .train { animation: brake-shake .12s linear 8; }
+.home.is-braking .layer--mid { animation: pass .5s linear 2, pass 1.4s linear .5s 1; }
+.home.is-braking::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; animation: brake-dim 1.1s ease-in forwards; }
+.home.is-braking .car__wheels i { box-shadow: 0 0 6px 2px #fab21999; }
+@keyframes brake-shake { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-2px); } }
+@keyframes brake-dim { from { background: transparent; } to { background: #0f111399; } }
+.brake {
+  position: absolute; z-index: 4; left: 50%; top: 36%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none;
+  animation: brake-text 1.1s ease-out forwards;
+}
+.brake b { font-size: 28px; letter-spacing: .12em; color: var(--ink-1); }
+.brake span { font-size: 13px; color: var(--ink-2); }
+@keyframes brake-text { 0% { opacity: 0; transform: translate(-50%, -40%); } 20% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: .9; } }
+.scene { font-size: 12px; color: var(--ink-2); line-height: 1.45; padding-left: 8px; border-left: 2px solid var(--line-strong); }

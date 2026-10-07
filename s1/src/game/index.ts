@@ -4,3 +4,4 @@ export * from './politics';
 export * from './cards';
 export * from './turn';
 export * from './death';
+export * from './scene';
