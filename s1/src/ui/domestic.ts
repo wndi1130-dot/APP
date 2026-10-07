@@ -1,7 +1,7 @@
 import {
-  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, HYGIENE_NAME, SKILL_NAME, TECHS,
+  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
-  hotWaterCoal, hotWaterFloor, hygiene, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
+  COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workPower, workshopChief, workshopState, zoneAt,
 } from '../game';
@@ -201,7 +201,8 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
   return null;
 }
 
-/** 사람이 사는 칸 창 머리의 작은 표(S1c): 위생, 이·병, 의무칸 침상(16.3, 4.1). 칸 창 높이를 늘리지 않는다. */
+/** 사람이 사는 칸 창 머리의 작은 표(S1c): 씻을 물, 빨랫줄·열병, 의무칸 침상(16.3, 4.1). 칸 창 높이를 늘리지 않는다.
+ * 사람 상태가 아니라 물 사정을 띄운다. 이가 도는 동안엔 솥과 빨랫줄만 보이고 이 아이콘은 없다(16.1 라). 대야를 누르면 까닭 한 줄. */
 export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
   const g = view.g;
   const d = g.dom;
@@ -212,9 +213,10 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
   const sick = d.typhus.filter(t => t.comm === c).reduce((n, t) => n + t.patients.length, 0);
   const beds = Math.max(0, g.injured) + d.typhus.reduce((n, t) => n + t.patients.length, 0);
   return h('span', { class: 'dom-tag' },
-    h('span', { class: cx('dom-hy', `is-${hy}`) }, `위생 ${HYGIENE_NAME[hy]}`),
-    lice ? h('span', { class: 'is-red' }, '이') : null,
-    sick ? h('span', { class: 'is-red' }, `티푸스 ${sick}`) : null,
+    h('button', { class: cx('dom-hy', `is-${hy}`), 'data-action': 'dom-why', 'data-comm': c, 'aria-label': `씻을 물 ${WASH_NAME[hy]}, 까닭 보기` },
+      h('i', { class: 'dom-basin', 'aria-hidden': 'true' }), `씻을 물 ${WASH_NAME[hy]}`),
+    lice ? h('span', { class: 'dom-wash' }, '솥·빨랫줄') : null,
+    sick ? h('span', { class: 'is-red' }, `열병 ${sick}`) : null,
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
 }
 
@@ -687,6 +689,9 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
       break;
     case 'dom-mats':
       du.mats = !du.mats;
+      break;
+    case 'dom-why':
+      if (data.comm && (COMMS as readonly string[]).includes(data.comm)) why = hygieneWhy(g0, data.comm as Comm);
       break;
     case 'dom-restore':
     case 'dom-cancel':

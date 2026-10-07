@@ -86,17 +86,78 @@ export function applyStep(g: Game, s: Step): string | null {
   }
 }
 
-/** 저장한 판을 읽는다. 예전 판에 없던 칸을 채운다. 못 읽으면 null. */
-export function reviveSave(raw: unknown): Game | null {
-  const g = raw as Game | null;
-  if (!g || typeof g !== 'object' || g.version !== 1 || typeof g.seg !== 'number') return null;
+// ---- 저장 판 읽기(A2 코드 구조 점검 5번) ----
+// 칸을 더하기만 했으면 판 번호를 그대로 두고 fillDefaults에 ??=로 채운다.
+// 칸을 지우거나 이름·뜻을 바꾸면 SAVE_VERSION을 올리고 MIGRATE에 그 한 단계를 더한다(Game.version 타입도 같이).
+
+/** 이 빌드가 쓰는 저장 판 번호 */
+export const SAVE_VERSION = 1;
+
+/** 판 번호 v의 저장을 v+1로 옮기는 단계. 아직 판 번호를 올린 적이 없어 비어 있다. */
+const MIGRATE: Record<number, (g: Record<string, unknown>) => void> = {};
+
+const PHASES: readonly string[] = ['prep', 'travel', 'stop', 'council', 'settle', 'end'];
+
+export type SaveRead = { ok: true; g: Game } | { ok: false; why: string };
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** 판이 곧바로 읽는 뼈대가 다 있나. 처음 판부터 있던 칸만 본다(나중에 더한 칸은 fillDefaults가 채운다). 문제가 있으면 까닭. */
+function shapeProblem(g: Record<string, unknown>): string | null {
+  if (typeof g.seed !== 'string' || g.seed === '') return '시드가 없다';
+  if (!isObj(g.rng) || !isNum(g.rng.state)) return '난수 상태가 없다';
+  if (!isNum(g.seg) || g.seg < 0 || !Number.isInteger(g.seg)) return '구간 번호가 이상하다';
+  if (typeof g.phase !== 'string' || !PHASES.includes(g.phase)) return `모르는 단계: ${String(g.phase)}`;
+  for (const k of ['coal', 'food', 'med', 'trust', 'tension']) if (!isNum(g[k])) return `수치가 이상하다: ${k}`;
+  if (!isObj(g.comms)) return '공동체 칸이 없다';
+  for (const c of COMMS) {
+    const st = g.comms[c];
+    if (!isObj(st) || !isNum(st.pop) || !isNum(st.rel)) return `공동체가 이상하다: ${c}`;
+  }
+  for (const k of ['cards', 'journal']) if (!Array.isArray(g[k])) return `목록이 없다: ${k}`;
+  if (!isObj(g.passed)) return '통과한 법 칸이 없다';
+  if (g.dom !== undefined && !isObj(g.dom)) return '내정 칸이 이상하다';
+  return null;
+}
+
+/** 판 번호는 그대로인데 나중에 더한 칸을 채운다. */
+function fillDefaults(g: Game): void {
   g.eventLog ??= {};
   g.needs ??= {};
   g.emergencyCalls ??= [];
   g.hunger ??= 0;
   g.linesSeen ??= [];
   migrateDomestic(g);
-  return g;
+}
+
+/** 저장한 판을 읽는다: 판 번호 확인, 판 번호별 옮기기, 뼈대 검사, 나중에 더한 칸 채우기. 못 읽으면 까닭을 돌려준다. */
+export function readSave(raw: unknown): SaveRead {
+  if (!isObj(raw)) return { ok: false, why: '판 자료가 아니다' };
+  const v = raw.version;
+  if (!isNum(v) || !Number.isInteger(v) || v < 1) return { ok: false, why: '판 번호가 없다' };
+  if (v > SAVE_VERSION) return { ok: false, why: `더 새 빌드에서 저장한 판이다(판 번호 ${v})` };
+  try {
+    for (let at = v; at < SAVE_VERSION; at += 1) {
+      const up = MIGRATE[at];
+      if (!up) return { ok: false, why: `판 번호 ${at}에서 옮기는 길이 없다` };
+      up(raw);
+      raw.version = at + 1;
+    }
+    const why = shapeProblem(raw);
+    if (why) return { ok: false, why };
+    const g = raw as unknown as Game;
+    fillDefaults(g);
+    return { ok: true, g };
+  } catch (e) {
+    return { ok: false, why: `읽다 멈췄다: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+/** 저장한 판을 읽는다. 못 읽으면 null(까닭은 readSave). */
+export function reviveSave(raw: unknown): Game | null {
+  const r = readSave(raw);
+  return r.ok ? r.g : null;
 }
 
 export function buildId(): string {

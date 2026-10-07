@@ -5,7 +5,8 @@ import type { Game } from '../state';
 import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed } from './data';
 import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
-import { domCard, refreshSit, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
+import { refreshSit } from './sit';
+import { domCard, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
 // 공방(6장): 작업량, 일 목록, 목표치와 우선순위, 복원(7장), 유지비(7.4), 고장(6.5), 개조(4.4).

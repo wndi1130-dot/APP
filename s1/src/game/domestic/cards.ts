@@ -9,12 +9,14 @@ import { BRANCH_NAME, D, FIELD_NAME, TECHS } from './data';
 import type { Field, TechId, Variant } from './data';
 import { resolvePressure } from './hooks';
 import { techUseLine } from './lawtech';
-import { resolveLice, resolveTyphus } from './hygiene';
+import { hygieneWhy, resolveLice, resolveTyphus } from './hygiene';
 import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
 import { domCard, personById } from './state';
 import type { DomPerson } from './state';
 import { breakPenalty, BREAK_LINES, CAR_NAME, jobCheck, restoreCheck, setFullRule, setTarget, standDown, startRestore, techRelSides, techTitle } from './workshop';
+
+const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
 // 내정 카드 12장(10장)과 위생 카드 둘(16.5), 파업·느린 열차 카드 둘(8.7). 서류 뭉치에 S1a 카드와 같이 쌓인다.
 // 선택지 말은 열차장의 외침(15자 이름, 40자·두 문장 이내 말). 문장은 자리표시다(나중에 Gemini 문장으로 바꾼다).
@@ -216,9 +218,9 @@ export function domView(g: Game, card: Card): CardView | null {
       const c = card.comm ?? 'tail';
       return {
         title: '이가 돈다', focus: c, required: true,
-        body: `${COMM_NAME[c]}에서 밤새 긁는 소리가 난다. 같이 덮는 담요와 마르지 않는 빨래 탓이다.`,
+        body: `${COMM_NAME[c]}에서 밤새 긁는 소리가 난다. 같이 덮는 담요, 돌려 입는 옷, 말릴 데 없는 빨래 탓이다. (${hygieneWhy(g, c)})`,
         choices: [
-          { label: '옷을 삶는다', say: '그 칸 옷을 전부 삶아라. 석탄이 아까워도 지금이다!', effs: [{ t: 'coal', v: -D.boilCoal }], special: 'dom:lice:boil' },
+          { label: '옷을 삶는다', say: '옷이고 담요고 다 솥에 넣어라. 석탄이 아까워도 지금이다!', effs: [{ t: 'coal', v: -D.boilCoal }], special: 'dom:lice:boil' },
           { label: '침구를 태운다', say: '침구를 태워라. 오늘 밤은 추워도 참게.', effs: [], special: 'dom:lice:burn', extra: [`${COMM_NAME[c]} 온기 −${D.beddingWarm}(${D.beddingSegs}구간)`] },
           { label: '버틴다', say: '긁는 것도 일이다. 버텨라.', effs: [], special: 'dom:lice:endure', extra: [`${D.endureSegs}구간 뒤 열병이 될 수 있다`] },
         ],
@@ -228,10 +230,10 @@ export function domView(g: Game, card: Card): CardView | null {
       const c = card.comm ?? 'tail';
       return {
         title: '열병', focus: c, required: true,
-        body: `${COMM_NAME[c]}에서 ${card.n ?? 4}명이 열에 들떠 누웠다. 의약품을 먹고, 이웃 칸으로 번질 수 있다.`,
+        body: `${COMM_NAME[c]}에서 ${card.n ?? 4}명이 열에 들떠 누웠다. 붐비고 담요를 같이 덮는 칸이다. 앓는 사람은 의약품을 먹고, 붐비는 이웃 칸에도 열병이 날 수 있다.`,
         choices: [
-          { label: '의무칸을 비운다', say: '의무칸을 비워라. 앓는 사람이 먼저다!', effs: [], special: 'dom:typhus:bay', extra: ['부상자 회복이 멈춘다'] },
-          { label: '그 칸을 닫는다', say: '그 칸 문을 닫아라. 번지게 둘 순 없다.', effs: [rel(c, D.quarantineRel), { t: 'fear', v: D.quarantineFear }], special: 'dom:typhus:quarantine', witness: true },
+          { label: '의무칸을 비운다', say: '의무칸을 비워라. 앓는 사람이 먼저다!', effs: [], special: 'dom:typhus:bay', extra: ['번지지 않는다', `약 받으면 ${pct(D.typhusRecover)} 회복`, '부상자 회복이 멈춘다'] },
+          { label: '따로 눕힌다', say: '앓는 사람은 그 칸 끝에 따로 눕혀라. 담요도 그릇도 따로다.', effs: [], special: 'dom:typhus:apart', extra: [`번질 확률 ${pct(D.typhusSpread)} → ${pct(D.typhusSpreadApart)}`, `약 받으면 ${pct(D.typhusRecoverApart)} 회복`, '부상자 회복은 그대로'] },
         ],
       };
     }
@@ -343,7 +345,7 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
       resolveLice(g, card.comm ?? 'tail', arg as 'boil' | 'burn' | 'endure');
       break;
     case 'typhus':
-      resolveTyphus(g, card.comm ?? 'tail', arg as 'bay' | 'quarantine');
+      resolveTyphus(g, card.comm ?? 'tail', arg as 'bay' | 'apart');
       break;
     case 'stoker':
       d.stoker = arg as Comm;
