@@ -24,6 +24,7 @@ const Combat = preload("res://game/field_combat.gd")
 const AI = preload("res://game/field_ai.gd")
 const Actions = preload("res://game/field_actions.gd")
 const Hud = preload("res://game/ui/field_hud.gd")
+const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 
 const AMBIENT_C: float = -14.0
@@ -79,6 +80,7 @@ var combat: Combat
 var ai: AI
 var actions: Actions
 var hud: Hud
+var audio: FieldAudio
 
 var people: Array = []
 var squad: Array = []
@@ -163,6 +165,9 @@ func _ready() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
+	audio = FieldAudio.new()
+	add_child(audio)
+	audio.setup(self)
 	set_radio("기관사: " + director.forecast(0.0, 0, clock))
 	cam_focus = player.position
 	_update_camera(1.0)
@@ -505,6 +510,7 @@ func _process(delta: float) -> void:
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p)
 		p.refresh_view(p.visible)
 	hud.tick(delta)
+	audio.tick(delta)
 
 
 func _step(delta: float) -> void:
@@ -699,6 +705,8 @@ func _footsteps(p: Person, delta: float, cell: Vector2i) -> void:
 		var trait_mult := 1.0
 		var r := SimNoise.footstep_radius(running, FieldGrid.FLOOR_SOUND[floor_kind], trait_mult, p.crouched, int(p.skills["stealth"]), glass) * weather.sound_mult(true)
 		zombies.hear(p.position, SimNoise.footstep_level(running, glass), r)
+		if p == player and audio != null:
+			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
 	if running:
 		p.brain["run_score_t"] = float(p.brain.get("run_score_t", 0.0)) + delta
@@ -809,6 +817,8 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	zombies.hear(at, level, radius)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
+	if audio != null:
+		audio.on_sound(at, level, tag)
 	if level >= SimNoise.Level.LOUD:
 		ai.raiders_hear(at, radius, from)
 	if tag == "gun":
@@ -964,6 +974,7 @@ func _start_horde(h: Dictionary) -> void:
 				break
 	hordes[h["index"]] = {"t": now, "cleared": false, "entry": key, "size": h["size"]}
 	telemetry.horde(now, int(h["index"]), int(h["size"]), key)
+	audio.horde_started()
 	var target := player.position
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
 	var lead := 3.0 if HordeDirector.is_sewer(key) else 0.0

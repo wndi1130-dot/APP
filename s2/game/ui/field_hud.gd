@@ -820,14 +820,29 @@ func depart_card() -> void:
 	var text := "기적을 울리고 떠난다. 기적 소리는 멀리까지 간다."
 	if not left.is_empty():
 		text += "\n승강장에 없는 사람: %s. 이들은 남는다." % ", ".join(left)
+	# Words, not seconds: arrival spreads too widely to promise a number
+	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
+	if horde_close():
+		text += "\n무리가 가깝다."
 	card("depart", text, [
-		{"id": "go", "label": "출발한다", "say": "\"올라타! 기다리지 않는다!\""},
-		{"id": "wait", "label": "아직이다", "say": "\"조금만 더. 다 올 때까지.\""},
+		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
+		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
 	], _depart_pick)
+	game.audio.hold(true)
+
+
+## Some dead of a horde within 30 m of the player (presentation_motion 5b.5).
+func horde_close() -> bool:
+	for z in game.zombies.list:
+		if int(z["horde"]) >= 0 and game.zombies.threat(z) and z["pos"].distance_to(game.player.position) <= 30.0:
+			return true
+	return false
 
 
 func _depart_pick(choice: String) -> void:
+	game.audio.hold(false)
 	if choice == "go":
+		game.audio.depart()
 		game.finish("departed")
 
 
