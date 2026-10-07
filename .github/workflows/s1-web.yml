@@ -94,8 +94,13 @@ jobs:
           path: s1/dist
 
       - name: Korean font and Playwright Chromium
+        # 우분투 저장소가 대답 없이 멈추면 잡 15분을 다 써 버린다(10-07 두 번). 연결마다 시간 제한과
+        # 재시도를 걸고, 이 단계가 길어지면 빨리 끝나게 한다. playwright --with-deps의 apt도 같은 설정을 쓴다.
+        timeout-minutes: 8
         run: |
           set -euo pipefail
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+            | sudo tee /etc/apt/apt.conf.d/99ci-timeouts
           sudo apt-get update -q
           sudo apt-get install -y -q fonts-noto-cjk
           npm ci
