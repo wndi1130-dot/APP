@@ -1,6 +1,12 @@
 # S1 프로젝트와 콘텐츠 검사기
 
-[A1]의 정적 웹 프로젝트 뼈대와 콘텐츠 검사 도구다. 게임 로직과 화면은 아직 없다. `src/main.ts`는 빈 모듈이며 Vite는 정적 파일만 빌드한다. 별도 서버나 실시간 문장 생성은 없다.
+S1(정치·내정 텍스트 프로토타입)의 웹 빌드와 콘텐츠 검사 도구다. 폰 가로 화면에서 한 판 끝까지 할 수 있다(아래 'S1a 플레이 빌드'). 별도 서버나 실시간 문장 생성은 없다.
+
+- **용도**: S1은 S3(Godot) 전까지 규칙을 검증하는 시제품이다. 규칙·데이터·검증 사례는 S3로 옮기고, 이 화면 코드를 제품으로 오래 끌고 가지는 않는다(2026-10-07, A2 코드 구조 점검 답).
+- **규칙 기준은 `src/game/`이다.** 플레이가 실제로 도는 코드이고, 수치 문서와 다르면 이 코드가 지금의 규칙이다. `src/core/`는 A1·A2 때 만든 첫 뼈대(상태·의회·효과)로 플레이가 쓰지 않는다. 난수(`core/rng.ts`)만 `game/`이 가져다 쓴다. 의석 배분도 `core/council.ts`의 `allocateSeats`(남은 의석 동률을 인구·id 순으로 품)가 아니라 `game/state.ts`의 `seats()`(동률을 칸 순서로 품)가 기준이다. 시작 200명이면 기관실 12석, 경비대 13석이다.
+- **병합**: 코드 PR은 맡은 스레드가 열고, CI가 초록이면 통합 담당 한 곳이 합친다.
+
+아래 'A1' 절은 콘텐츠 검사기의 설명이다.
 
 기준 문서는 [공통 규칙과 A1](../docs/handoff/codex_tasks.md), [설계 결정](../docs/design/decisions.md), [S1 기획서](../docs/prototype/s1_political_prototype.md), [콘텐츠 가이드 1·2·5장](../docs/prototype/s1_content_guide.md)이다. `docs/`는 수정하지 않았다. 예제 문장은 검사 전용 창작 샘플이다.
 
@@ -107,7 +113,7 @@ npm run validate -- "./검사할 데이터"
 
 ## S1a 플레이 빌드
 
-S1a(정치 텍스트 프로토타입)를 폰 가로 화면에서 한 판 끝까지 할 수 있는 빌드다. 규칙과 수치는 [S1a 정치 수치 브리프](../docs/design/briefs/s1a_politics_numbers.md)와 시뮬레이터(`docs/design/sim/s1a_balance.py`)를 TypeScript로 옮겼고, 화면 배치는 [decisions.md](../docs/design/decisions.md)의 홈·의회·한눈에 보기·결정 카드 설계를 따른다. 그림은 회색 상자 수준의 자리표시다. 맨 위 소개의 "게임 로직과 화면은 아직 없다"는 A1 시절 설명이다.
+S1a(정치 텍스트 프로토타입)를 폰 가로 화면에서 한 판 끝까지 할 수 있는 빌드다. 규칙과 수치는 [S1a 정치 수치 브리프](../docs/design/briefs/s1a_politics_numbers.md)와 시뮬레이터(`docs/design/sim/s1a_balance.py`)를 TypeScript로 옮겼고, 화면 배치는 [decisions.md](../docs/design/decisions.md)의 홈·의회·한눈에 보기·결정 카드 설계를 따른다. 그림은 회색 상자 수준의 자리표시다.
 
 ```sh
 cd s1
@@ -135,6 +141,8 @@ NODE_PATH="$(npm root -g)" node tools/screenshots.cjs
 | 경로 | 내용 |
 |---|---|
 | `src/game/` | DOM 없는 규칙: 수치와 법 18개(`data`), 판 상태(`state`), 의회·거래 도구(`politics`), 서류 카드(`cards`), 구간 진행·정차·정산·AI 대표(`turn`), 죽음과 시신 법(`death`) |
+| `src/game/domestic/` | S1c 내정(공방, 기술, 전문가, 위생, 침상, 칸 편성). `?s1c=1`로 켠다 |
+| `src/core/` | A1·A2 첫 뼈대. 플레이는 `rng.ts`만 쓴다. 나머지는 테스트만 부른다 |
 | `src/ui/` | 화면: 위·아래 막대(`hud`), 홈 단면도(`home`), 한눈에 보기(`overview`), 의회(`council`), 서류·정차 카드(`card`), 겹쳐 뜨는 창(`panels`), 레버와 계기(`widgets`), 반원 좌석(`seats`), 입력과 저장(`app`) |
 | `tests/game/` | 자동 플레이 40판이 끝 조건으로 끝나는지, 같은 시드면 같은 판인지, 저장·복원, 화면 글 금지어 |
 | `tools/screenshots.cjs` | 스크린샷과 배치 검사 |
