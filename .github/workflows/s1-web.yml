@@ -93,11 +93,12 @@ jobs:
           name: s1-dist-${{ github.run_number }}
           path: s1/dist
 
-      - name: Cache Korean font package
+      - name: Cache apt packages
+        # 글꼴과 playwright --with-deps가 까는 .deb를 함께 둔다. 꾸러미가 바뀌면 v를 올린다.
         uses: actions/cache@v4
         with:
           path: ~/ci-debs
-          key: fonts-noto-cjk-${{ runner.os }}-noble-v1
+          key: ci-debs-${{ runner.os }}-noble-playwright-1.56.1-v2
 
       - name: Korean font
         # 글꼴 꾸러미(61MB)를 우분투 거울이 수 분씩 찔끔찔끔 보내 단계 시간이 다 간 적이 세 번 있다(10-07).
@@ -121,12 +122,19 @@ jobs:
           fc-list : family | grep -F 'Noto Sans CJK KR' >/dev/null
 
       - name: Playwright Chromium
+        # --with-deps가 까는 글꼴 꾸러미(21MB)도 같은 거울에서 4분 넘게 걸린 적이 있다(10-07).
+        # apt의 내려받기 자리를 캐시 폴더로 돌려, 한 번 받은 꾸러미는 다시 받지 않게 한다.
         timeout-minutes: 8
         run: |
           set -euo pipefail
+          mkdir -p ~/ci-debs/partial
+          printf 'Dir::Cache::Archives "%s/";\n' "$HOME/ci-debs" | sudo tee /etc/apt/apt.conf.d/99ci-debs
           npm ci
           npm install --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
+          # 캐시로 저장할 수 있게 apt가 남긴 잠금·임시 폴더를 치우고 주인을 돌려놓는다.
+          sudo rm -rf ~/ci-debs/lock ~/ci-debs/partial
+          sudo chown -R "$(id -u):$(id -g)" ~/ci-debs
 
       - name: Screen smoke
         run: SCREENSHOT_DIR="$RUNNER_TEMP/s1-shots" node tools/screenshots.cjs
