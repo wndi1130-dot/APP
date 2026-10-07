@@ -314,6 +314,11 @@ function remember(g: Game, key: string, pick: string): void {
   g.eventLog[key] = { n: (prev?.n ?? 0) + 1, seg: g.seg, pick, st: eventStateKey(g) };
 }
 
+/** viewCard가 직접 그리는 S1a 카드 종류(닿음 검사 tools/reach_check.ts가 읽는다). 사람의 무게는 PEOPLE_KINDS. */
+export const S1A_CARD_KINDS = [
+  'travel', 'demand', 'favor', 'strike_warn', 'strike', 'rescue', 'bitten', 'bite_found', 'tension_crisis', 'trust_crisis', 'leash', 'need_warn', 'info',
+] as const;
+
 // ---- 다른 묶음의 카드(S1c 내정, domestic/cards.ts가 등록한다) ----
 export interface CardExtension {
   /** 이 묶음의 카드면 보기를 돌려주고, 아니면 null */

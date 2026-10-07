@@ -28,6 +28,8 @@ export const HUB = Object.freeze({
   engineCoal: 5, tailFood: 0.15,
 });
 
+export const HUB_CARD_KINDS = ['hub_omen', 'hub_split', 'hub_few', 'hub_end'] as const;
+
 export function hubOf(g: Game): HubState {
   return (g.hub ??= { warned: [], stash: {}, agreed: [] });
 }

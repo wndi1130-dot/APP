@@ -161,6 +161,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         if (card.kind.startsWith('dom:')) m.domCards += 1; else m.s1aCards += 1;
       }
       const view = viewCard(g, card);
+      // 끊어진 후속: 카드는 생겼는데 그리는 곳이 없다(tools/reach_check.ts).
+      if (view.title === '빈 서류') throw new Error(`그리는 곳 없는 카드: ${card.kind}`);
       let idx: number;
       if (card.kind.startsWith('dom:')) idx = domPick(g, card, view, opts.dom);
       else if (!opts.scoreCards) idx = view.choices.findIndex(c => !c.disabled);
