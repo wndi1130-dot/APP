@@ -7,6 +7,7 @@ import { icon } from './icons';
 import type { View } from './common';
 import { portrait } from './widgets';
 import { nameBtn, nameList, shortText } from './names';
+import { domesticStopRows, stayLocked } from './domestic'; // S1c 내정 훅
 
 // 결정 카드: 홈 왼쪽의 서류 뭉치에서 꺼내 화면 왼쪽 절반에 펼친다. 오른쪽엔 열차가 그대로 보인다.
 // 형식은 수저린식(초상, 짧은 대사, 번호 붙은 선택지). 정차의 필드 결정 카드도 같은 자리에 펼친다.
@@ -57,7 +58,7 @@ function stopCard(view: View): HTMLElement | null {
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '얼마나'),
       (Object.keys(STAY) as StayId[]).map(k => h('button', {
-        class: cx('chip', stop.stay === k && 'is-on'), 'data-action': 'stop-set', 'data-key': 'stay', 'data-value': k,
+        class: cx('chip', stop.stay === k && 'is-on'), 'data-action': 'stop-set', 'data-key': 'stay', 'data-value': k, disabled: stayLocked(g, k),
       }, STAY[k].name, h('small', null, ` 석탄 −${STAY[k].coal}`)))),
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '누구를'),
@@ -72,6 +73,7 @@ function stopCard(view: View): HTMLElement | null {
       h('span', { class: 'field__label' }, '정찰'),
       h('button', { class: cx('chip', !stop.scout && 'is-on'), 'data-action': 'stop-set', 'data-key': 'scout', 'data-value': '0' }, '안 한다', h('small', null, ' 위험 모름')),
       h('button', { class: cx('chip', stop.scout && 'is-on'), 'data-action': 'stop-set', 'data-key': 'scout', 'data-value': '1' }, '한다', h('small', null, ` 산출 −${Math.round((1 - P.scoutHaul) * 100)}%, ${P.scoutSize}명 더`))),
+    domesticStopRows(view),
     stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label}`))) : null,
     h('div', { class: 'sheet__actions' },
@@ -91,7 +93,7 @@ export function cardSheet(view: View): HTMLElement | null {
   const card = g.cards[0];
   if (!card) return null;
   const v = viewCard(g, card);
-  return sheet('', `card-${card.uid}`,
+  return sheet(card.kind.startsWith('dom:') ? 'sheet--dom' : '', `card-${card.uid}`, // S1c 내정 카드는 놋쇠 클립
     h('div', { class: 'sheet__head' },
       v.speaker ? portrait(v.speaker.name, v.speaker.comm) : h('div', { class: 'portrait portrait--none' }, icon('papers')),
       h('div', null,

@@ -3,6 +3,7 @@ import { cx, h, pct } from './dom';
 import { icon } from './icons';
 import { fmt, signed } from './common';
 import type { View } from './common';
+import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
 
 // 위 막대: 왼쪽 신임·긴장, 가운데 불만·중립·지지 띠(양 끝 아이콘이 단추), 오른쪽 자원.
 // 아래 막대: 왼쪽 메뉴와 일지, 가운데 단계 표시줄과 한눈에 보기, 오른쪽 주 단추.
@@ -48,7 +49,8 @@ export function topBar(view: View): HTMLElement {
       resource('coal', '석탄', g.coal, -f.coal),
       resource('food', '식량', g.food, -f.food),
       resource('med', '의약품', g.med),
-      resource('lux', '사치품', g.lux)));
+      resource('lux', '사치품', g.lux),
+      domesticResource(view)));
 }
 
 export function bottomBar(view: View): HTMLElement {

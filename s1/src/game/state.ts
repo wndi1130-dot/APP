@@ -1,5 +1,6 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
+import type { DomState } from './domestic/state';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import {
@@ -229,6 +230,8 @@ export interface Game {
   usedProfiles: string[];
   end: EndKind | null;
   stats: { dealsMade: number; promisesKept: number; promisesBroken: number; lawsPassed: number; lawsFailed: number; repeals: number; bribes: number; blackmails: number };
+  /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
+  dom?: DomState;
 }
 
 // ---- 난수 ----
@@ -259,11 +262,13 @@ export function stageOf(rel: number): { name: string; band: number; index: numbe
 /** 처지 = 기준 + 레버 차이. [온기, 배급, 과밀, 노출] */
 export function situation(g: Game, c: Comm): [number, number, number, number] {
   const s = g.comms[c];
+  // S1c: 기술·침구·장갑이 더하는 처지 보정(domestic/state.ts refreshSit). S1a 판엔 없다.
+  const d = g.dom?.sit[c];
   return [
-    clamp(s.base[0] + P.leverStep * (s.heat - 2), 0, 100),
-    clamp(s.base[1] + P.leverStep * (s.ration - 2), 0, 100),
-    clamp(s.base[2], 0, 100),
-    clamp(s.base[3], 0, 100),
+    clamp(s.base[0] + P.leverStep * (s.heat - 2) + (d?.[0] ?? 0), 0, 100),
+    clamp(s.base[1] + P.leverStep * (s.ration - 2) + (d?.[1] ?? 0), 0, 100),
+    clamp(s.base[2] + (d?.[2] ?? 0), 0, 100),
+    clamp(s.base[3] + (d?.[3] ?? 0), 0, 100),
   ];
 }
 

@@ -12,6 +12,11 @@ import {
   addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
 } from './state';
 import type { Game, StopResult } from './state';
+// S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
+import {
+  domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticMedMult, domesticPromise, domesticRiskMult, domesticSettle,
+  domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
+} from './domestic/hooks';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
 
@@ -134,7 +139,8 @@ function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'
 export function forecast(g: Game): { coal: number; food: number } {
   const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
-  return { coal, food };
+  const dom = domesticForecast(g); // S1c 내정 훅
+  return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
 }
 
 function depart(g: Game): void {
@@ -142,14 +148,24 @@ function depart(g: Game): void {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
   }
+  // S1c 내정 훅: 기관 숙련자가 없으면 선다(매뉴얼도 없으면 끝), 고장 판정.
+  const domStall = domesticDepart(g);
+  if (domStall === 'end') return finish(g, 'stranded');
+  if (domStall === 'stall') {
+    g.inStrike = true;
+    g.lostSegments += 1;
+    journal(g, '기관을 아는 사람이 없다. 열차가 섰다.', 'bad');
+    g.phase = 'travel';
+    return;
+  }
   const engine = g.comms.engine;
-  const striking = engine.fervor >= 1 && engine.rel <= P.strikeRel;
+  const striking = engine.fervor >= 1 && engine.rel <= domesticStrikeLine(g, P.strikeRel);
   if (striking && lawActive(g, 'strike_ban')) {
     engine.fervor = 0;
     engine.rel = clamp(engine.rel - 10, -100, 100);
     g.fear = clamp(g.fear + 10, 0, 100);
     journal(g, '파업 금지법에 따라 경비대가 기관실 문을 열었다. 화부들이 불 앞으로 끌려갔다.', 'dark');
-  } else if (striking) {
+  } else if (striking && !domesticStrikeRuns(g)) {
     if (!g.inStrike) g.strikes += 1;
     g.inStrike = true;
     g.lostSegments += 1;
@@ -245,12 +261,13 @@ export interface StopRisk {
   known: boolean;
 }
 
-/** 정차 위험. 장소 위험도, 체류, 인원, 던진 시신이 키운 무리, 경비대의 경계 거부와 호위로 정해진다.
- * 준비(무엇을·얼마나·누구를·몇 명)를 바꾸면 바로 다시 계산되고, 결과는 이 줄이 약속한 범위를 벗어나지 않는다. */
 /** 이 정차에서 이 사람에게 정해 둔 난수(0~1). 난수 흐름을 건드리지 않게 판 씨앗으로 만든다. */
 function fateRoll(g: Game, name: string, kind: 'd' | 'h'): number {
   return hash(`${g.seed}|${g.seg}|${g.stop?.place ?? ''}|${name}|${kind}`) / 4294967296;
 }
+
+/** 정차 위험. 장소 위험도, 체류, 인원, 던진 시신이 키운 무리, 경비대의 경계 거부와 호위로 정해진다.
+ * 준비(무엇을·얼마나·누구를·몇 명)를 바꾸면 바로 다시 계산되고, 결과는 이 줄이 약속한 범위를 벗어나지 않는다. */
 
 export function stopRisk(g: Game): StopRisk {
   const stop = g.stop;
@@ -264,8 +281,9 @@ export function stopRisk(g: Game): StopRisk {
   const escort = g.guardEscort ? 0.5 : 1;
   // 장작불의 불빛과 연기가 무리를 끈다(s1c_domestic 4.1). 태울 시신이 있으면 내리는 정차에 붙는다.
   const threat = (stop?.threat ?? 1) * (pyreCount(g) > 0 ? P.pyreLight : 1);
-  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat;
-  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat;
+  const dm = domesticRiskMult(g); // S1c 내정 훅
+  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury;
+  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death;
   // 결과는 사람마다 정해 둔 난수로 먼저 정한다. 정찰은 이 결과를 드러내기만 해서 정찰 여부가 피해를 바꾸지 않는다
   // (07_outside_eye_triage N2). 준비를 바꾸면 같은 난수로 다시 계산하니 다시 굴리는 길도 없다.
   // 사람 하나의 죽을 확률은 pDeath/4(4명 기준 기대 사망 pDeath), 크게 다칠 확률은 lam/인원(기대 중상 lam).
@@ -310,6 +328,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
+    stop.result.notes.push(...domesticStop(g, true, 0)); // S1c 내정 훅
     checkStopPromises(g, null, {});
     return stop.result;
   }
@@ -318,7 +337,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scout ? P.scoutHaul : 1);
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scout ? P.scoutHaul : 1) * domesticHaulMult(g);
   const notes: string[] = [];
   const tail = g.comms.tail;
   if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
@@ -364,6 +383,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const scouts = stop.scout ? P.scoutSize : 0;
   if (scouts > 0 && rnd(g) < P.scoutSprain) notes.push('정찰조 하나가 발목을 삐었다.');
   g.comms[stop.crewComm].away = stop.crewSize + scouts - dead.length;
+  notes.push(...domesticStop(g, false, dead.length)); // S1c 내정 훅
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
   journal(g, `${place.name}에 ${stay.name} 머물렀다(${COMM_NAME[stop.crewComm]} ${stop.crewSize}명${scouts ? `, 정찰 ${scouts}명` : ''}). ${got || '빈손'}.${injuredOnly.length ? ` 부상 ${injuredOnly.length}.` : ''}`);
@@ -441,6 +461,7 @@ function settle(g: Game): void {
   g.forcedRun = false;
   g.guardEscort = false;
   medicineTick(g, notes);
+  domesticSettle(g, notes); // S1c 내정 훅
   drift(g);
   checkDuePromises(g);
   hungerTick(g, notes);
@@ -545,7 +566,7 @@ export function callEmergency(g: Game): boolean {
 }
 
 function medicineTick(g: Game, notes: string[]): void {
-  const need = g.injured * P.medPerInjured * lawMult(g, 'medMult');
+  const need = g.injured * P.medPerInjured * lawMult(g, 'medMult') * domesticMedMult(g);
   const med = g.comms.medtech;
   const refusing = med.fervor >= 1 && med.rel <= -40;
   if (g.med >= need) {
@@ -555,6 +576,7 @@ function medicineTick(g: Game, notes: string[]): void {
     } else {
       let heal = 0.4;
       for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) heal = Math.max(heal, LAWS[law].res.heal ?? 0);
+      heal = domesticHealRate(g, heal); // S1c 내정 훅
       let healed = 0;
       for (let i = 0; i < g.injured; i += 1) if (rnd(g) < heal) healed += 1;
       g.injured -= healed;
@@ -580,7 +602,7 @@ function medicineTick(g: Game, notes: string[]): void {
     g.tension = clamp(g.tension + 5, 0, 100);
     journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
-  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored)) {
+  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored) * domesticThawMult(g)) {
     g.injured += 2;
     g.tension = clamp(g.tension + 8, 0, 100);
     g.stored = 0;
@@ -626,6 +648,8 @@ function checkDuePromises(g: Game): void {
       if (g.inStrike) p.due = g.seg + 1;
       continue;
     }
+    const dom = domesticPromise(g, c, p); // S1c 내정 훅
+    if (dom !== null) { if (dom) keepPromise(g, c); else breakPromise(g, c); continue; }
     let ok = false;
     if (p.cond.kind === 'heat') ok = s.heat >= (p.baseline ?? 0) + 1;
     else if (p.cond.kind === 'ration') ok = s.ration >= (p.baseline ?? 0) + 1;

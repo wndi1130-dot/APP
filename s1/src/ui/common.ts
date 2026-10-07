@@ -3,7 +3,10 @@ import type { Comm, Game } from '../game';
 // 화면끼리 나눠 쓰는 형식과 열차 칸 배치.
 
 export type Screen = 'home' | 'overview' | 'council' | 'end';
-export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' | 'settle';
+export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' | 'settle' | 'dom';
+
+/** S1c 내정 창의 화면 상태(ui/domestic.ts). S1a 판에선 쓰지 않는다. */
+export interface DomUi { tab: 'workshop' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean }
 
 export interface Ui {
   screen: Screen;
@@ -30,6 +33,8 @@ export interface Ui {
   /** 정차 직전 브레이크 연출 중 */
   braking: boolean;
   debug: boolean;
+  /** S1c 내정 창(없으면 domestic.ts가 채운다) */
+  dom?: DomUi;
 }
 
 export interface View { g: Game; ui: Ui }

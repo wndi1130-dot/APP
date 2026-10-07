@@ -31,6 +31,8 @@ export interface Choice {
   /** 목격자가 있는 선택 */
   witness?: boolean;
   log?: string;
+  /** 효과(Eff) 밖의 비용 줄(S1c 부품·자재 등). 비용 줄 끝에 붙는다 */
+  extra?: string[];
 }
 
 export interface CardView {
@@ -64,6 +66,7 @@ export function costLines(choice: Choice): string[] {
     else if (e.t === 'lever') out.push(`${COMM_NAME[e.c]} ${e.which === 'heat' ? '난방' : '배급'} ${sign(e.v)}`);
     else if (e.t === 'pop') out.push(`${COMM_NAME[e.c]} ${sign(e.v)}명`);
   }
+  if (choice.extra) out.push(...choice.extra);
   return out;
 }
 
@@ -309,8 +312,21 @@ function remember(g: Game, key: string, pick: string): void {
   g.eventLog[key] = { n: (prev?.n ?? 0) + 1, seg: g.seg, pick, st: eventStateKey(g) };
 }
 
+// ---- 다른 묶음의 카드(S1c 내정, domestic/cards.ts가 등록한다) ----
+export interface CardExtension {
+  /** 이 묶음의 카드면 보기를 돌려주고, 아니면 null */
+  view: (g: Game, card: Card) => CardView | null;
+  /** 고른 뒤 special을 처리한다(효과 적용 뒤, 기억·일지 앞) */
+  choose?: (g: Game, card: Card, choice: Choice) => void;
+}
+export const CARD_EXTENSIONS: CardExtension[] = [];
+
 // ---- 카드 보기 ----
 export function viewCard(g: Game, card: Card): CardView {
+  for (const ext of CARD_EXTENSIONS) {
+    const v = ext.view(g, card);
+    if (v) return v;
+  }
   const c = card.comm ?? 'tail';
   switch (card.kind) {
     case 'travel': {
@@ -753,6 +769,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     default:
       break;
   }
+  for (const ext of CARD_EXTENSIONS) ext.choose?.(g, card, choice);
   if (view.key) remember(g, view.key, choice.label);
   const log = choice.log ?? `${view.title}: ${choice.label}.`;
   if (card.kind !== 'info' && card.kind !== 'trust_crisis' && card.kind !== 'leash') journal(g, log, choice.witness ? 'dark' : undefined);
