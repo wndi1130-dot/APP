@@ -194,7 +194,8 @@ function billPanel(view: View): HTMLElement {
       council.emergency ? h('span', { class: 'tag' }, '비상 소집') : null,
       agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
       council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
-    h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law) : withTech(law.changes, lawTechLines(g, agenda.law)))
+    h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law)
+      : withTech([...(agenda.amend ? [`${LAWS[agenda.amend].title} 대신 선다`] : []), ...law.changes], lawTechLines(g, agenda.law)))
       .slice(0, 5).map(x => h('li', null, x))),
     h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
       council.locked && !council.result ? ' · 안건을 넘겼다' : ''));

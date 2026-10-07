@@ -246,11 +246,18 @@ export function techUsable(g: Game, id: TechId): boolean {
 }
 
 /** 분야의 지식이 그 단계 기술을 받치는 정도(8.2). 화면엔 숫자 대신 줄 색과 '×0.7'로만 보인다. */
+/** 3단계의 둘째 길(7.1): 그 분야 숙련 + 살아 있는 공작 장인(공방장). 공작 가지는 자기 장인이 있어야 한다. */
+export function secondPath(g: Game, id: TechId): boolean {
+  const def = TECHS[id];
+  return def.tier === 3 && def.branch !== 'craft' && topSkill(g, def.branch) >= 2 && topSkill(g, 'craft') >= 3;
+}
+
 export function knowledgeMult(g: Game, f: Field, tier: number): number {
   if (tier === 0) return 1;
   const top = topSkill(g, f);
   if (top >= 3) return 1;
-  if (top === 2) return tier === 3 ? D.knowledgeLow : 1;
+  // 둘째 길: 공작 장인이 살아 있는 동안 ×1.0, 잃으면 8.2대로 ×0.7.
+  if (top === 2) return tier === 3 && topSkill(g, 'craft') < 3 ? D.knowledgeLow : 1;
   if (top === 1) return tier >= 2 ? D.knowledgeLow : 1;
   if (g.dom?.manuals[f]) return D.knowledgeLow;
   const cd = g.dom?.countdown[f];

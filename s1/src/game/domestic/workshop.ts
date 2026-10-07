@@ -5,7 +5,7 @@ import type { Game } from '../state';
 import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed, techPending } from './data';
 import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
-import { domCard, refreshSit, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
+import { domCard, refreshSit, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
 // 공방(6장): 작업량, 일 목록, 목표치와 우선순위, 복원(7장), 유지비(7.4), 고장(6.5), 개조(4.4).
@@ -72,7 +72,9 @@ export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   if (techPending(id)) return fail('아직 열지 않는 기술');
   const pre = prereqs(id);
   if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return fail(`${TECHS[pre[0]].name}부터`);
-  if (topSkill(g, def.branch) < skillNeed(id)) return fail(`${['', '견습', '숙련', '장인'][skillNeed(id)]} 이상이 없다`);
+  if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {
+    return fail(`${['', '견습', '숙련', '장인'][skillNeed(id)]} 이상이 없다${def.tier === 3 ? '(숙련 + 공작 장인이어도 된다)' : ''}`);
+  }
   const frags = d.frags[def.branch];
   const hasDefect = cost.defectFrags < cost.frags;
   if (cost.core > d.cores) return fail('코어가 없다');

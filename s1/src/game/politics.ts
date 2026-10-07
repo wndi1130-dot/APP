@@ -226,7 +226,8 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
     if (lawActive(g, law) || !lawOpen(g, law)) continue;
     if (CORPSE_LAWS.includes(law) && corpseSet) continue;
     if (g.session - (g.repealedAt[law] ?? -99) <= P.repealCool) continue;
-    options.push({ law, repeal: false });
+    const base = LAW_VARIANT_OF[law];
+    options.push(base && lawActive(g, base) ? { law, repeal: false, amend: base } : { law, repeal: false });
   }
   for (const law of LAW_IDS) {
     const at = g.passed[law];
@@ -292,6 +293,7 @@ export function openCouncil(g: Game, emergency = false): void {
 export function agendaTitle(a: Agenda): string {
   if (!isLawAgenda(a)) return MOTIONS[a.motion].title(a);
   if (a.ratify) return `${LAWS[a.law].title}${a.repeal ? ' 폐지' : ''} 추인`;
+  if (a.amend) return `${LAWS[a.amend].title} 개정: ${LAWS[a.law].title}`;
   return `${LAWS[a.law].title}${a.repeal ? ' 폐지' : ''}`;
 }
 
@@ -645,6 +647,18 @@ export function castVote(g: Game, decree = false): VoteResult | null {
 
 export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
   const def = LAWS[law];
+  // 개정(7.3): 변형이 서면 원래 법은 내려간다. 폐지가 아니라 고쳐 쓴 것이라 지지 칸 반발·약속 배신은 없다.
+  const base = LAW_VARIANT_OF[law];
+  if (base && g.passed[base] !== undefined) {
+    delete g.passed[base];
+    delete g.boughtBy[base];
+    g.repealedAt[base] = g.session;
+    for (const c of COMMS) {
+      const m = LAWS[base].mats[c];
+      if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] -= m[i];
+    }
+    journal(g, `${LAWS[base].title}을(를) ${def.title}(으)로 고쳤다.`);
+  }
   g.passed[law] = g.session;
   if (boughtFrom.length > 0) g.boughtBy[law] = { comms: boughtFrom, session: g.session };
   for (const c of COMMS) {

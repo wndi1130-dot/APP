@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createGame, createS1cGame, D, domesticForecast, enactLaw, lawOpen, lawTechLines, lawTechRes, refreshSit, repealLaw, situation, techMult, variantMult,
+  agendaOptions, agendaTitle, createGame, createS1cGame, D, domesticForecast, enactLaw, lawOpen, lawTechLines, lawTechRes, refreshSit, repealLaw, situation, techMult, variantMult,
 } from '../../src/game';
 import type { Game, TechId, Variant } from '../../src/game';
 
@@ -112,7 +112,24 @@ describe('가혹한 법에 덜 잔혹한 변형을 연다', () => {
     expect(lawOpen(g, 'child_labor')).toBe(false);
   });
 
-  it('S1a 판에선 변형 법이 안 열린다', () => {
+  it('원래 법이 서 있으면 변형은 개정 안건이 되고, 통과하면 원래 법이 내려간다(반발·1회 효과 없음)', () => {
+    const g = createS1cGame('lt-amend');
+    g.food = 40;
+    enactLaw(g, 'seed_grain', []);
+    done(g, 'm3', 'a');
+    g.food = 200;
+    const opt = agendaOptions(g).options.find(o => 'law' in o && o.law === 'seed_half');
+    expect(opt).toMatchObject({ law: 'seed_half', amend: 'seed_grain' });
+    expect(agendaTitle(opt!)).toBe('종자곡 풀기 개정: 종자곡 반만 풀기');
+    const [food, front] = [g.food, g.comms.front.rel];
+    enactLaw(g, 'seed_half', []);
+    expect(g.passed.seed_grain).toBeUndefined();
+    expect(g.passed.seed_half).toBeDefined();
+    expect(g.food).toBe(food);
+    expect(g.comms.front.rel).toBe(front - 10);
+  });
+
+    it('S1a 판에선 변형 법이 안 열린다', () => {
     const g = createGame('lt-s1a-v');
     g.food = 10;
     g.coal = 10;

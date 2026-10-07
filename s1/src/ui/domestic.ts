@@ -432,7 +432,7 @@ function planView(view: View): HTMLElement {
         tiers.map(t => h('div', { class: 'dom-plan__cell' },
           TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t).map(id => techNode(g, id, sel === id)))),
       ])),
-    h('p', { class: 'sub' }, `◇ 변형 둘 중 하나 · 보류: ${PENDING_TECHS.map(id => TECHS[id].name).join(', ')}(사용자 결정 대기)`),
+    h('p', { class: 'sub' }, `◇ 변형 둘 중 하나${PENDING_TECHS.length ? ` · 보류: ${PENDING_TECHS.map(id => TECHS[id].name).join(', ')}` : ''}`),
     sel && TECHS[sel] ? nodeDetail(g, sel) : null);
 }
 

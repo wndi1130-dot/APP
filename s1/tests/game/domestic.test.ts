@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
-  DOM_CARD_KINDS, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
+  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
   chooseCard, coldCap, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
@@ -47,11 +47,25 @@ describe('S1c 판 한 판', () => {
 });
 
 describe('기술', () => {
-  it('아끼기만 하는 기술 다섯은 사용자 답 전까지 복원이 막힌다', () => {
+  it('옛 아끼는 기술 다섯은 7.3 개편 뒤 풀렸다(법을 바꾸는 효과)', () => {
     const g = fresh();
     g.dom!.frags.engine = 5;
-    for (const id of PENDING_TECHS) expect(restoreCheck(g, id).full).toBe('아직 열지 않는 기술');
-    expect(startRestore(g, 'e1', 'full')).toBe(false);
+    expect(PENDING_TECHS).toEqual([]);
+    expect(restoreCheck(g, 'e1').full).toBeUndefined();
+    expect(startRestore(g, 'e1', 'full')).toBe(true);
+  });
+
+  it('3단계 둘째 길: 그 분야 숙련 + 살아 있는 공작 장인(7.1). 공방장을 잃으면 ×0.7', () => {
+    const g = fresh();
+    expect(topSkill(g, 'craft')).toBe(3);
+    expect(topSkill(g, 'radio')).toBe(2);
+    expect(secondPath(g, 'r3')).toBe(true);
+    expect(knowledgeMult(g, 'radio', 3)).toBe(1);
+    for (const p of g.dom!.people) if (p.field === 'craft' && p.skill === 3) p.alive = false;
+    expect(secondPath(g, 'r3')).toBe(false);
+    expect(knowledgeMult(g, 'radio', 3)).toBe(D.knowledgeLow);
+    g.dom!.techs.r2 = { stage: 'done', defect: false, variant: 'a', progress: 0, need: 0 } as NonNullable<Game['dom']>['techs']['r2'];
+    expect(restoreCheck(g, 'r3').full).toContain('공작 장인');
   });
 
   it('싫어하는 쪽이 없는 기술은 관계를 주지 않는다(기획 점검 03)', () => {

@@ -176,9 +176,9 @@ export const TECHS: Record<TechId, TechDef> = {
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];
 
-/** 복원을 막아 둔 기술(2026-10-07 기획 점검 03: 옛 '아끼기만 하는' 다섯). 7.3 개편으로 이제 법을 바꾸는 효과다(lawtech.ts).
- * 이 목록이 사용자 카드에 걸린 건지는 내정 스레드에 묻는 중이다. 풀면 이 목록에서 빼기만 하면 켜진다. */
-export const PENDING_TECHS: TechId[] = ['e1', 'e2', 'x1', 'm3', 'e5'];
+/** 복원을 막아 둔 기술. 옛 '아끼기만 하는' 다섯(E1·E2·X1·M3·E5)은 7.3 개편으로 법을 바꾸는 효과가 되어 풀었다
+ * (2026-10-07 내정 스레드: '기술은 법을 바꾼다' 답 전까지만 막아 둔 것). 시뮬레이터 --pending-on과 화면 안내가 이 목록을 읽는다. */
+export const PENDING_TECHS: TechId[] = [];
 export function techPending(id: TechId): boolean {
   return PENDING_TECHS.includes(id);
 }
@@ -202,7 +202,8 @@ export const SPECIALISTS: SpecialistDef[] = [
   { role: '견습 화부', field: 'engine', comm: 'engine', skill: 1, ages: [18, 30] },
   { role: '의무장', field: 'med', comm: 'medtech', skill: 3, leader: true },
   { role: '약사', field: 'med', comm: 'front', skill: 1, ages: [25, 50] },
-  { role: '공방장', field: 'craft', comm: 'medtech', skill: 2, ages: [30, 60] },
+  // 공방장은 60대 늙은 공작 장인, 용접공은 그 견습(8.1, 2026-10-07 기획 점검 03 기본값). 공방장이 3단계 둘째 길의 열쇠다(7.1).
+  { role: '공방장', field: 'craft', comm: 'medtech', skill: 3, ages: [60, 70] },
   { role: '용접공', field: 'craft', comm: 'tail', skill: 1, ages: [20, 45] },
   { role: '무전병', field: 'radio', comm: 'guard', skill: 2, ages: [20, 40] },
   { role: '경비대장', field: 'expedition', comm: 'guard', skill: 2, leader: true },

@@ -110,7 +110,8 @@ export interface Deal { comm: Comm; tool: DealTool; label: string }
  * kind가 없는 안건은 법으로 읽는다(옛 저장 데이터와 테스트). */
 export type Agenda = LawAgenda | MotionAgenda;
 /** ratify: 비상대권 포고를 의회가 추인하는 표결(통과하면 남고, 안 되면 사라진다) */
-export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean }
+/** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
+export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
 export type MotionId = 'share';
 export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean }
