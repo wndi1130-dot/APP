@@ -66,7 +66,7 @@ function stopCard(view: View): HTMLElement | null {
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize - 1, 'aria-label': '한 명 덜' }, '−'),
         h('b', { class: 'num' }, `${stop.crewSize}명`),
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
-    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, stop.scout ? ` · 정찰 ${P.scoutSize}명까지 이번 회기 표결에서 빠진다` : ' · 이번 회기 표결에서 빠진다'))),
+    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, stop.scout ? ` · 정찰 ${P.scoutSize}명까지 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다` : ' · 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다'))),
     // 정찰: 바깥 기척을 알아 위험 줄이 약속이 된다. 대가는 산출과 표.
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '정찰'),

@@ -30,6 +30,19 @@ describe('법 요구', () => {
     expect(g.needs.coal?.hits).toBe(1);
   });
 
+  it('시신 법 공백의 손해는 경비대가 지고, 실제 죽음 없이 던진 시신이 늘지 않는다', () => {
+    const g = createGame('need-corpse');
+    g.corpseIssue = true;
+    needTick(g, []);
+    g.seg += NEED_GRACE;
+    const thrown = g.thrown;
+    const rel = g.comms.guard.rel;
+    needTick(g, []);
+    needTick(g, []);
+    expect(g.thrown).toBe(thrown);
+    expect(g.comms.guard.rel).toBe(rel - 3 - 4);
+  });
+
   it('약속하면 기한이 한 구간 늘고, 어기면 신임을 크게 잃는다(사용자 카드 \'약속 넣기\')', () => {
     const g = createGame('need-promise');
     g.coal = 45;

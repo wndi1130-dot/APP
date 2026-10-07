@@ -67,7 +67,7 @@ export function undecidedChance(score: number): number {
 function baseBloc(g: Game, c: Comm, agenda: Agenda, seatCount: number): Bloc {
   const { score, ideo } = stance(g, c, agenda);
   const s = g.comms[c];
-  // 파견 나간 사람과 상중인 사람은 회기에 빠진다.
+  // 그 정차에 나갔던 사람과 상중인 사람은 회기에 빠진다. 나갔던 사람은 돌아와 언 몸을 녹이고 쓰러져 잔다(triage N3).
   const away = s.away + mourners(g, c).length;
   const absent = s.pop > 0 ? Math.min(seatCount, Math.round((seatCount * away) / s.pop)) : 0;
   const present = seatCount - absent;
@@ -519,7 +519,7 @@ export function castVote(g: Game, decree = false): VoteResult | null {
     for (const c of COMMS) {
       if (map[c].absent > 0 && map[c].score < 0) {
         offend(g, c);
-        journal(g, `${COMM_NAME[c]}이(가) 밖에 나간 사이 표결했다. 기습으로 기억한다.`, 'dark');
+        journal(g, `${COMM_NAME[c]}의 작업조가 돌아와 쓰러져 자는 사이 표결했다. 기습으로 기억한다.`, 'dark');
       }
     }
   }

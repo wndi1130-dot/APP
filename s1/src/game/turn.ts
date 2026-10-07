@@ -540,7 +540,7 @@ export function callEmergency(g: Game): boolean {
   openCouncil(g, true);
   g.phase = 'council';
   const away = COMMS.filter(c => g.comms[c].away > 0).map(c => COMM_NAME[c]);
-  journal(g, `열차장이 비상 소집을 불렀다(신임 −${st.cost}).${away.length ? ` ${away.join(', ')}은(는) 밖에 나가 있다.` : ''}`, 'dark');
+  journal(g, `열차장이 비상 소집을 불렀다(신임 −${st.cost}).${away.length ? ` ${away.join(', ')}의 작업조는 돌아와 쓰러져 잔다.` : ''}`, 'dark');
   return true;
 }
 
