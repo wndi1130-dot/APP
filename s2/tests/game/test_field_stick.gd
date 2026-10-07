@@ -451,3 +451,19 @@ func test_blood_drop_binds_the_worst_bleed() -> void:
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
 	assert_ne(p.action, "", "binding starts")
+
+
+func test_pistol_rounds_go_through_a_thick_coat() -> void:
+	_gun()
+	var p = game.player
+	var d: Dictionary = game.combat.W.get_data("pistol")
+	var stopped := 0
+	var landed := 0
+	for i in range(200):
+		var z: Dictionary = game.zombies.spawn("clothed", p.position + Vector3(5, 0, 0))
+		if game.combat._shoot_zombie(p, z, d, 0.6, 5.0):
+			landed += 1
+			if z["state"] != "downed" and z["state"] != "dead" and absf(float(z.get("stun", 0.0)) - 0.3) < 0.001:
+				stopped += 1
+	assert_gt(landed, 0)
+	assert_eq(stopped, 0, "coats stop blades and bites only (user 17:34)")

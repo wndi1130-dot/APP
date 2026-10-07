@@ -604,7 +604,6 @@ func _after_shot(p) -> void:
 
 func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) -> bool:
 	var rng: RandomNumberGenerator = game.rng
-	var clothed: bool = z["kind"] == "clothed"
 	if z["state"] == "rising":
 		if AimModel.roll(rng, radius) != "miss":
 			_kill(p, z, "")
@@ -619,7 +618,7 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 		var body: int = int(hits["body"])
 		if body <= 0:
 			return false
-		var knock := 1.0 - pow(1.0 - float(d["body_knockdown"]) * (0.5 if clothed else 1.0), body)
+		var knock := 1.0 - pow(1.0 - float(d["body_knockdown"]) , body)
 		if rng.randf() < knock or z["state"] == "frozen":
 			if z["state"] == "frozen":
 				_kill(p, z, "")
@@ -630,16 +629,12 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 		return true
 	var zone: String = AimModel.roll(rng, radius)
 	if zone == "head":
-		if clothed and p.weapon_id() == "pistol" and rng.randf() < 0.25:
-			game.zombies.knock_down(z)
-		else:
-			_kill(p, z, "")
+		_kill(p, z, "")
 		return true
 	if zone == "body":
-		# Pistol rounds stop in a 껴입은 자's coat (zombies.md).
-		if clothed and p.weapon_id() == "pistol":
-			z["stun"] = 0.3
-			return true
+		# A thick coat stops blades and bites only; rounds go through (user
+		# 17:34, zombies.md 82e27ce). Only a police vest would stop a pistol
+		# round, and Sulechów has no police station.
 		if rng.randf() < float(d["body_knockdown"]):
 			game.zombies.knock_down(z)
 		else:
