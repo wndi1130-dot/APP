@@ -200,7 +200,7 @@ export const LAWS: Record<LawId, LawDef> = {
   bath_rota: L({
     id: 'bath_rota', title: '목욕 순번', group: '위생', tag: '이상', kind: 'normal', axes: [1, 0, 0],
     like: { tail: 2, medtech: 1, front: -1 },
-    changes: ['모든 칸이 같은 더운물 몫', '더운물 석탄 ×1.2', '더운물 드물게 아래로 못 내림', '일하는 손 먼저가 닫힌다'], opensWhen: '이가 처음 돈 뒤',
+    changes: ['모든 칸이 같은 더운물 몫', '순번 돌리는 데 석탄 +0.25/구간', '더운물 석탄 ×1.2', '일하는 손 먼저가 닫힌다'], opensWhen: '이가 처음 돈 뒤',
   }),
   hands_first: L({
     id: 'hands_first', title: '일하는 손 먼저', group: '위생', tag: '가혹', kind: 'normal', axes: [-1, 0, 0],

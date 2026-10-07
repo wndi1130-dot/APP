@@ -747,7 +747,7 @@ export function changeDomestic(el: HTMLInputElement, ctx: DomCtx): boolean {
   if (el.dataset.which === 'target' && g.dom.target !== v) ctx.act(next => setTarget(next, v));
   else if (el.dataset.which === 'hot' && g.dom.hotWater !== v) {
     ctx.act(next => setHotWater(next, v));
-    if (v < hotWaterFloor(g)) ctx.toast('법으로 드물게 아래로 못 내린다.');
+    if (v < hotWaterFloor(g)) ctx.toast('드물게가 가장 낮다.');
   }
   return true;
 }

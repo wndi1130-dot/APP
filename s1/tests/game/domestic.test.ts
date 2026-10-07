@@ -108,13 +108,14 @@ describe('위생과 침상', () => {
     expect(g.dom!.hotWater).toBe(1);
   });
 
-  it('목욕 순번은 레버를 보통 아래로 못 내리고 석탄 ×1.2', () => {
+  it('목욕 순번은 드물게도 되고 구간당 석탄 +0.25, 레버 석탄 ×1.2', () => {
     const g = fresh();
     g.passed.bath_rota = g.session;
     setHotWater(g, 0);
-    expect(g.dom!.hotWater).toBe(2);
-    expect(hotWaterCoal(g)).toBeCloseTo(0.6, 5);
-    expect(hygiene(g, 'tail')).toBe('normal');
+    expect(g.dom!.hotWater).toBe(1);
+    expect(hotWaterCoal(g)).toBeCloseTo(0.25, 5);
+    setHotWater(g, 2);
+    expect(hotWaterCoal(g)).toBeCloseTo(0.6 + 0.25, 5);
   });
 
   it('불결해도 이가 돌 때만 관계가 깎이고, 이가 사라진 칸은 3구간 동안 다시 안 생긴다', () => {

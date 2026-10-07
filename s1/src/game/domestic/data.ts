@@ -67,7 +67,7 @@ export const D = {
   // 9.1 법 20
   dutyMult: 0.9,
   // 16.2 더운물(16.9): 레버 1~3(드물게·보통·넉넉), 석탄 = max(0, 레버 − 1) × 인구/40 × 0.1. '드물게'는 공짜
-  hotWater0: 1, hotWaterCoal: 0.1, bathRotaCoal: 1.2, handsFirstCoal: 0.8, e2HotWater: 0.8,
+  hotWater0: 1, hotWaterCoal: 0.1, bathRotaCoal: 1.2, bathRotaFlat: 0.25, handsFirstCoal: 0.8, e2HotWater: 0.8,
   // 16.3 이 확률
   // 불결 관계 벌은 이가 도는 칸만, 이가 사라진 칸은 3구간 면역(16.9)
   liceNormal: 0.03, liceDirty: 0.1, liceWinter: 1.5, dirtyRel: 1, liceImmune: 3,

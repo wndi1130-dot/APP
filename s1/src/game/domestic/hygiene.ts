@@ -21,16 +21,16 @@ const NEIGHBORS: Record<Comm, Comm[]> = {
   tail: ['medtech'], medtech: ['tail', 'guard'], guard: ['medtech', 'front'], front: ['guard', 'engine'], engine: ['front'],
 };
 
-/** 레버는 드물게(1)·보통(2)·넉넉(3). 21가는 '보통' 아래로 못 내린다(16.4, 16.9). */
-export function hotWaterFloor(g: Game): number {
-  return lawActive(g, 'bath_rota') ? 2 : 1;
+/** 레버는 드물게(1)·보통(2)·넉넉(3). 21가가 있어도 '드물게'까지 내릴 수 있다(16.4, 16.9). */
+export function hotWaterFloor(_g: Game): number {
+  return 1;
 }
 
 export function setHotWater(g: Game, v: number): void {
   dom(g).hotWater = clamp(Math.round(v), hotWaterFloor(g), 3);
 }
 
-/** 더운물 석탄/구간 = max(0, 레버 − 1) × 인구/40 × 0.1 × 법 × E2(16.2, 16.4, 16.6, 16.9). '드물게'는 공짜다. */
+/** 더운물 석탄/구간 = max(0, 레버 − 1) × 인구/40 × 0.1 × 법 × E2, 21가면 +0.25 고정(16.2, 16.4, 16.6, 16.9). '드물게'는 공짜다. */
 export function hotWaterCoal(g: Game): number {
   const d = g.dom;
   if (!d) return 0;
@@ -38,7 +38,8 @@ export function hotWaterCoal(g: Game): number {
   if (lawActive(g, 'bath_rota')) m *= D.bathRotaCoal;
   if (lawActive(g, 'hands_first')) m *= D.handsFirstCoal;
   m *= 1 - (1 - D.e2HotWater) * techMult(g, 'e2');
-  return Math.max(0, Math.max(d.hotWater, hotWaterFloor(g)) - 1) * (totalPop(g) / 40) * D.hotWaterCoal * m;
+  const rota = lawActive(g, 'bath_rota') ? D.bathRotaFlat : 0;
+  return Math.max(0, Math.max(d.hotWater, hotWaterFloor(g)) - 1) * (totalPop(g) / 40) * D.hotWaterCoal * m + rota;
 }
 
 /** 공동체의 더운물 몫(0~3). 법이 없으면 '탄 순서대로'. */
