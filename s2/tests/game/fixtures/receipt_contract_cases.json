@@ -1,0 +1,510 @@
+{
+  "_about": "영수증 계약 판정표. 표본(receipt_gd_sample.json)에 set·remove를 적용한 입력을 S1 스키마(s1/tests/receipt.test.ts)와 S2 Receipt.check()(s2/tests/game/test_receipt_contract.gd)가 똑같이 판정해야 한다. 길은 키와 번호의 배열이다. 줄을 더하거나 고치면 양쪽 테스트가 다 돈다.",
+  "base": "receipt_gd_sample.json",
+  "cases": [
+    {
+      "name": "표본 그대로",
+      "set": [],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "증언 붙은 목격자",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "witnesses",
+            0
+          ],
+          {
+            "person": "s2_medic",
+            "text": "그가 먼저 문을 닫았다."
+          }
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "목격 시각이 구간 번호",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "when"
+          ],
+          3
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "목격 기록 id·무게·틀",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "id"
+          ],
+          "ch_left_bitten"
+        ],
+        [
+          [
+            "witnessed",
+            0,
+            "weight"
+          ],
+          2
+        ],
+        [
+          [
+            "witnessed",
+            0,
+            "template"
+          ],
+          "tpl_left_behind"
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "장소 상태의 장소별 키",
+      "set": [
+        [
+          [
+            "placeState",
+            "bridgeOder"
+          ],
+          true
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "decisions 없음",
+      "set": [],
+      "remove": [
+        [
+          "decisions"
+        ]
+      ],
+      "valid": true
+    },
+    {
+      "name": "자동 파견",
+      "set": [
+        [
+          [
+            "source"
+          ],
+          "auto"
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "판 1을 적음",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "판 2와 부위 상처",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          2
+        ],
+        [
+          [
+            "people",
+            "wounds"
+          ],
+          [
+            {
+              "person": "s2_shooter",
+              "part": "arm_left",
+              "kind": "deep"
+            },
+            {
+              "person": "s2_crew_01",
+              "part": "leg_right",
+              "kind": "scratch",
+              "festering": false
+            }
+          ]
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "모르는 꼭대기 키",
+      "set": [
+        [
+          [
+            "extra"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "빈 도착 시각",
+      "set": [
+        [
+          [
+            "time",
+            "arrive"
+          ],
+          ""
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "음수 체류",
+      "set": [
+        [
+          [
+            "time",
+            "stayGameMinutes"
+          ],
+          -1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "잘못된 장소 id",
+      "set": [
+        [
+          [
+            "place",
+            "id"
+          ],
+          "Bad-Id"
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "모르는 재고 키",
+      "set": [
+        [
+          [
+            "stock",
+            "gold"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "보낸 사람 중복",
+      "set": [
+        [
+          [
+            "people",
+            "sent",
+            1
+          ],
+          "s2_lead"
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "빈 what",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "what"
+          ],
+          ""
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "목격자 원소가 숫자",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "witnesses",
+            0
+          ],
+          0
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "목격자 원소의 잘못된 id",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "witnesses",
+            0
+          ],
+          "Bad-Id"
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "증언 없는 목격자 객체",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "witnesses",
+            0
+          ],
+          {
+            "person": "s2_medic"
+          }
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "목격 무게 음수",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "weight"
+          ],
+          -1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "목격 기록 id 형식",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "id"
+          ],
+          "Bad"
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "place의 모르는 키",
+      "set": [
+        [
+          [
+            "place",
+            "extra"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "time의 모르는 키",
+      "set": [
+        [
+          [
+            "time",
+            "extra"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "items의 모르는 키",
+      "set": [
+        [
+          [
+            "items",
+            "extra"
+          ],
+          []
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "목격 기록의 모르는 키",
+      "set": [
+        [
+          [
+            "witnessed",
+            0,
+            "extra"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "약속의 모르는 키",
+      "set": [
+        [
+          [
+            "promises",
+            0,
+            "extra"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "선택의 모르는 키",
+      "set": [
+        [
+          [
+            "decisions",
+            0,
+            "extra"
+          ],
+          1
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "판 없이 부위 상처",
+      "set": [
+        [
+          [
+            "people",
+            "wounds"
+          ],
+          [
+            {
+              "person": "s2_shooter",
+              "part": "arm_left",
+              "kind": "deep"
+            }
+          ]
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "판 3",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          3
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "판 1인데 부위 상처",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          1
+        ],
+        [
+          [
+            "people",
+            "wounds"
+          ],
+          [
+            {
+              "person": "s2_shooter",
+              "part": "arm_left",
+              "kind": "deep"
+            }
+          ]
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
+      "name": "모르는 부위",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          2
+        ],
+        [
+          [
+            "people",
+            "wounds"
+          ],
+          [
+            {
+              "person": "s2_shooter",
+              "part": "tail",
+              "kind": "deep"
+            }
+          ]
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    }
+  ]
+}
