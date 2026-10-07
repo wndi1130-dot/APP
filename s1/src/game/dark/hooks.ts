@@ -9,7 +9,7 @@ import { investigate, crowdTick, truthTick } from './cases';
 import { theftTick } from './cards';
 import { closeChronicle } from './chronicle';
 import { corpseTick, noteDeath } from './corpses';
-import './decree';
+import '../decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { afterVote, darkCouncilOpen, trialPromises } from './council';
 import { actAll, escalate, killEmber, newEmber } from './embers';
 import { executorTick, runOrder } from './order';
@@ -109,8 +109,6 @@ export function darkSettle(g: Game): void {
     if (d.prevLeash.includes(c) && !leashed.includes(c)) newEmber(g, c, 'chief', 'leash');
     if (s.disgraced && !d.prevDisgraced.includes(c)) newEmber(g, c, 'chief', 'bribe');
   }
-  // 불신임 동의 조건(제안 (6)): 신임 30 아래로 2구간.
-  d.lowTrust = g.trust < 30 ? d.lowTrust + 1 : 0;
   d.prevFervor = Object.fromEntries(COMMS.map(c => [c, g.comms[c].fervor])) as Record<Comm, number>;
   d.prevGrudge = Object.fromEntries(COMMS.map(c => [c, g.comms[c].grudge])) as Record<Comm, number>;
   d.prevLeash = leashed;

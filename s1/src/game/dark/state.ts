@@ -153,10 +153,9 @@ export interface DarkState {
   staff: { deputy: string; ration: string };
   /** 판 중 합류한 사람(데려온 생존자, 길잡이). 지금 S1a엔 넣는 곳이 없다 */
   joined: string[];
-  /** 칸마다 지킨 약속·어긴 약속(불신임 동의 입장) */
+  /** 칸마다 지킨 약속·어긴 약속(불신임 동의·정기 신임 입장, turn.ts keepPromise·breakPromise와 재판 약속) */
   kept: Record<Comm, number>;
   broken: Record<Comm, number>;
-  lowTrust: number;
   /** 수단 점수와 선을 넘은 기록 */
   means: Partial<Record<MeansKey, number>>;
   crossed: { key: MeansKey; seg: number }[];
@@ -179,6 +178,9 @@ export interface DarkState {
   /** 불신임을 올리려는 적의 3 지도자(칸과 그 사람). 대표가 바뀌면 사라진다 */
   confBy: Comm | null;
   confLeader: string | null;
+  /** 정기 신임 표결(5.3): 지난 표결 뒤 연 정기 회기 수, 부결로 안건을 잃을 회기 수 */
+  confSince?: number;
+  confLock?: number;
   /** 지난 정산의 대표 상태(목줄·들킨 뇌물을 새로 알아본다) */
   prevLeash: Comm[];
   prevDisgraced: Comm[];
@@ -211,7 +213,7 @@ export function enableDark(g: Game): void {
     rng: createRng(`${g.seed}:s1b`), nextId: 1, embers: [], cases: [], innocents: [], punished: [], violentUsed: 0, chiefAttacked: false,
     craftHit: [], prevFervor: zero(), prevGrudge: zero(), lackStreak: zero(), rationStreak: zero(), harm: 0, armory: null, practice: null, practiceAsked: 0,
     fresh: [], unchecked: [], order: null, ordersUsed: 0, executors: [], confined: [], exile: [], staff: { deputy: '', ration: '' }, joined: [],
-    kept: zero(), broken: zero(), lowTrust: 0, means: {}, crossed: [], nightmareUntil: -1, numb: false, precedent: {}, seg: { at: 0, n: 0 },
+    kept: zero(), broken: zero(), means: {}, crossed: [], nightmareUntil: -1, numb: false, precedent: {}, seg: { at: 0, n: 0 },
     scenes: [], haul: 1, nightmareCards: 0, checkedStored: 0, checkedPyre: 0, councilAt: -1, confBy: null, confLeader: null,
     prevLeash: g.leashes.map(l => l.comm), prevDisgraced: COMMS.filter(c => g.comms[c].disgraced), h7: [], closed: false,
     stats: {

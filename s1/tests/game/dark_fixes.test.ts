@@ -3,7 +3,7 @@ import { addCard, chooseCard, cloneGame, COMMS, createGame, createS1cGame, enabl
 import type { Card, Game, MotionAgenda } from '../../src/game';
 import { crowdTick, eligible, exposeOrderLines, openCase, punish, truthTick } from '../../src/game/dark/cases';
 import { afterVote, darkCouncilOpen } from '../../src/game/dark/council';
-import { darkStoredWeight, vigil } from '../../src/game/dark/corpses';
+import { corpseTick, darkPyreWeights, darkStoredWeight, vigil } from '../../src/game/dark/corpses';
 import { actAll, escalate } from '../../src/game/dark/embers';
 import { darkSettle } from '../../src/game/dark/hooks';
 import { dropOrder, runOrder } from '../../src/game/dark/order';
@@ -214,15 +214,16 @@ describe('8. 불신임', () => {
   const byComm = Object.fromEntries(COMMS.map(c => [c, { yes: 0, no: 0 }]));
   it('목록에 오르기만 하고 다른 안건을 고르면 조건이 남는다. 표결해야 지운다', () => {
     const g = darkGame('conf');
-    g.dark!.lowTrust = 2;
+    g.dark!.confBy = 'tail';
+    g.dark!.confLeader = g.comms.tail.leader.personId;
     g.council = { options: [conf], idx: 0, locked: false, deals: [], result: null } as never;
     darkCouncilOpen(g);
-    expect(g.dark!.lowTrust).toBe(2);
+    expect(g.dark!.confBy).toBe('tail');
     afterVote(g, { kind: 'motion', motion: 'trial' }, { yes: 0, no: 0, absent: 0, passed: false, byComm } as never);
-    expect(g.dark!.lowTrust).toBe(2);
+    expect(g.dark!.confBy).toBe('tail');
     MOTIONS.no_confidence.onFail(g, conf);
     afterVote(g, conf, { yes: 0, no: 0, absent: 0, passed: false, byComm } as never);
-    expect(g.dark!.lowTrust).toBe(0);
+    expect(g.dark!.confBy).toBeNull();
   });
   it('통과하면 다른 끝과 같은 길로 끝난다(끝 일지와 H7 한 줄)', () => {
     const g = darkGame('ousted');
@@ -310,6 +311,47 @@ describe('S1b 고침 재점검의 낮은 틈', () => {
     recover(g, 'front', '처지가 나아지자');
     expect(g.comms.front.leader.name).toBe(proxy.name);
     expect(g.comms.front.sick).toBeUndefined();
+    expect(g.journal.some(e => e.text === `${proxy.name}이(가) 앞칸 대표 자리를 이었다.`)).toBe(true);
+  });
+});
+
+describe('재확인: 장작불 대기는 냉동칸·살던 칸 몫으로 나눠 굴린다', () => {
+  function burn(seed: string): Game {
+    const g = darkGame(seed);
+    g.passed.corpse_burn = { seg: 1 } as never;
+    expect(lawActive(g, 'corpse_burn')).toBe(true);
+    return g;
+  }
+  it('냉동칸이 차서 살던 칸에 둔 시신은 확인을 마치면 일어나지 않는다', () => {
+    const g = burn('pyre-kin');
+    // 냉동칸 6구는 예전에 확인했고, 이번 구간에 둘이 죽어 살던 칸으로 넘쳤다.
+    g.pyre = 6;
+    g.pyreKin = { tail: 2 };
+    g.dark!.checkedPyre = 6;
+    g.dark!.fresh = [{ comm: 'tail', name: 'a' }, { comm: 'tail', name: 'b' }];
+    expect(darkPyreWeights(g, 6, 2)).toEqual({ cold: 0, kin: 0 });
+    // 정산에서 둘을 확인한 뒤
+    g.dark!.fresh = [];
+    g.dark!.checkedPyre = 8;
+    expect(darkPyreWeights(g, 6, 2)).toEqual({ cold: 0, kin: 0 });
+  });
+  it('냉동칸의 확인 안 된 시신은 넘친 시신의 확인 대기에 밀려 굴림에서 빠지지 않는다', () => {
+    const g = burn('pyre-cold');
+    g.dark!.checkedPyre = 5;
+    g.dark!.fresh = [{ comm: 'tail', name: 'a' }];
+    expect(darkPyreWeights(g, 6, 1)).toEqual({ cold: 1, kin: 0 });
+  });
+  it('확인 안 한 시신이 일어날 때 냉동칸이 비었으면 살던 칸 몫에서 치운다', () => {
+    const g = burn('pyre-rise');
+    g.pyre = 0;
+    g.pyreKin = { tail: 1 };
+    const crowd = g.comms.tail.base[2];
+    g.dark!.practice = 'guard';
+    g.dark!.unchecked = [{ comm: 'tail', name: 'a', p: 1, cold: true, burn: true }];
+    corpseTick(g);
+    expect(g.dark!.stats.risen).toBe(1);
+    expect(g.pyreKin.tail).toBe(0);
+    expect(g.comms.tail.base[2]).toBeLessThan(crowd);
   });
 });
 

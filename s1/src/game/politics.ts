@@ -261,6 +261,23 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   return { options: merged, forced: false };
 }
 
+/** AI 대표가 올릴 법 안건(4장 '안건 올리기'): 의석 큰 칸부터, 제 입장(적의 빼고) 3 이상, 폐지면 2 이상,
+ * 적의 3이면 폐지에 +3. 고를 게 없으면 null. S1b 정기 신임 부결 뒤의 회기도 이 법으로 고른다(5.3). */
+export function aiAgendaPick(g: Game, options: readonly LawAgenda[]): { c: Comm; idx: number } | null {
+  let best: { c: Comm; idx: number; score: number } | null = null;
+  for (const c of [...COMMS].sort((a, b) => seats(g)[b] - seats(g)[a])) {
+    const s = g.comms[c];
+    options.forEach((o, idx) => {
+      const own = stance(g, c, o, false).score;
+      const hostileRepeal = s.grudge >= 3 && o.repeal;
+      const score = own + (hostileRepeal ? 3 : 0);
+      if ((own >= 3 || (o.repeal && own >= 2) || hostileRepeal) && (!best || score > best.score)) best = { c, idx, score };
+    });
+  }
+  const pick = best as { c: Comm; idx: number } | null;
+  return pick ? { c: pick.c, idx: pick.idx } : null;
+}
+
 /** 의회를 연 직후와 표결 뒤에 부를 다른 묶음의 훅(S1b 재판·불신임, dark/hooks.ts가 등록한다). */
 export const COUNCIL_HOOKS: { open?: (g: Game) => void; vote?: (g: Game, agenda: Agenda, r: VoteResult) => void }[] = [];
 
@@ -303,15 +320,30 @@ export function agendaTitle(a: Agenda): string {
   return `${LAWS[a.law].title}${a.repeal ? ' 폐지' : ''}`;
 }
 
+/** 법 안건 앞에 따로 여는 표결(정기 신임)이 아직 끝나지 않았다. 그동안은 그 표결이 지금 안건이다. */
+export function preVote(g: Game): boolean {
+  const pre = g.council?.pre;
+  return !!pre && !pre.result;
+}
+
+/** 앞선 표결의 결과를 접고 법 안건으로 넘어간다(주 단추 '다음 안건'). */
+export function finishPreVote(g: Game): void {
+  const council = g.council;
+  if (!council?.pre || council.pre.result || !council.result) return;
+  council.pre.result = council.result;
+  council.result = null;
+}
+
 export function currentAgenda(g: Game): Agenda | null {
   const council = g.council;
+  if (council?.pre && !council.pre.result) return council.pre.agenda;
   if (!council || council.options.length === 0) return null;
   return council.options[council.idx];
 }
 
 export function setAgenda(g: Game, idx: number): void {
   const council = g.council;
-  if (!council || council.locked || council.result) return;
+  if (!council || council.locked || council.result || preVote(g)) return;
   if (idx < 0 || idx >= council.options.length) return;
   council.idx = idx;
 }
@@ -327,6 +359,7 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
   const council = g.council;
   const agenda = currentAgenda(g);
   if (!council || !agenda) return { ok: false, why: '회기가 아니다' };
+  if (preVote(g)) return { ok: false, why: '신임 표결엔 거래하지 않는다' };
   if (council.result) return { ok: false, why: '표결이 끝났다' };
   if (council.deals.some(d => d.comm === c)) return { ok: false, why: '이미 거래했다' };
   if (council.deals.length >= P.maxDealsPerSession) return { ok: false, why: `회기당 ${P.maxDealsPerSession}건` };
@@ -563,8 +596,10 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   if (decree && (!canDecree(g) || !isLawAgenda(agenda) || agenda.ratify)) return null;
   const need = agendaNeed(agenda);
   const map = blocs(g, agenda, council.deals);
+  // 법 안건 앞의 표결(정기 신임)은 회기의 표결이 아니다. 옮긴 표, 유도 투표, AI 발의는 법 안건 표결에 남긴다.
+  const pre = preVote(g);
   // 콘텐츠 사건으로 옮긴 표는 이 표결 한 번뿐이다. 포고는 표결이 아니라 남긴다.
-  if (!decree) delete g.voteShift;
+  if (!decree && !pre) delete g.voteShift;
   const byComm = {} as VoteResult['byComm'];
   const flips: VoteFlip[] = [];
   let yes = 0;
@@ -598,18 +633,18 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   const result: VoteResult = { yes, no, absent, need, passed, byComm, flips, decree };
   council.result = result;
   if (!lawActive(g, 'secret_ballot') && !decree) g.fear = clamp(g.fear + 1, 0, 100);
-  if (lawActive(g, 'guided_voting') && g.guidedLeft > 0) {
+  if (lawActive(g, 'guided_voting') && g.guidedLeft > 0 && !pre) {
     for (const c of COMMS) g.comms[c].rel = clamp(g.comms[c].rel - 3, -100, 100);
     g.fear = clamp(g.fear + 3, 0, 100);
     g.guidedLeft -= 1;
   }
   // AI 발의를 무시했으면 발의한 쪽이 서운해한다. 비상 소집은 다음 정기 회기의 발의를 건드리지 않는다.
-  if (!council.emergency) {
+  if (!pre && !council.emergency) {
     for (const p of g.proposals) {
       if (p.by && !sameAgenda(p, agenda)) g.comms[p.by].rel = clamp(g.comms[p.by].rel - 3, -100, 100);
     }
     g.proposals = [];
-  } else if (passed) {
+  } else if (!pre && passed) {
     // 기습 표결: 반대할 칸이 파견 나간 사이에 통과시켰다.
     for (const c of COMMS) {
       if (map[c].absent > 0 && map[c].score < 0) {

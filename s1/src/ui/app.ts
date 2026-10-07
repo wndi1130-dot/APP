@@ -348,6 +348,8 @@ export function startApp(root: HTMLElement): void {
     switch (action) {
       case 'advance': {
         const wasSettle = g.phase === 'settle';
+        // 정기 신임 표결 뒤 '다음 안건': 개표 중이었으면 멈추고 이번 회기 안건으로 넘어간다.
+        if (g.phase === 'council') { ui.count = null; clearTimeout(countTimer); }
         step({ a: 'advance', d: {} });
         if (g.phase === 'settle' && !wasSettle) { ui.panel = 'settle'; ui.screen = 'home'; ui.selComm = null; ui.dealOpen = null; }
         if (g.phase === 'stop' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {

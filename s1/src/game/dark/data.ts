@@ -4,6 +4,8 @@ import type { Comm } from '../data';
 // 시뮬레이터(tools/s1b_sim.ts)가 --set으로 바꿔 민감도를 보므로 const 객체 하나에 모은다.
 
 export const B = {
+  // 5.3 정기 신임 표결(사용자 결정 '정기 투표', 숫자는 제안: 6차 시뮬레이션). 부결의 결과는 council.ts confFailed 한 곳.
+  confEvery: 3, confPassTrust: 5, confFailTrust: 5, confFailLock: 1,
   // 4.1 불씨
   emberP: 1.0, rivalP: 0.2, emberMax: 2, violentCap: 3, quietOut: 8, harmCap: 6,
   escBase: 0.32, escLack: 0.1, escOpp: 0.1, escGuard: 0.15, escPatrol: 0.1, escMin: 0.05, escMax: 0.65,

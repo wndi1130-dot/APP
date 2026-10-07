@@ -1,14 +1,14 @@
-import { COMM_NAME, COMMS, CORPSE_LAWS, LAWS } from '../data';
-import type { LawId } from '../data';
-import { CARD_EXTENSIONS, VIEW_FILTERS } from '../cards';
-import type { Choice } from '../cards';
-import { needLaws, NEEDS } from '../needs';
-import type { NeedId } from '../needs';
-import { canDecree, DECREE_REL, enactLaw, lawOpen, stance } from '../politics';
-import { clamp, journal, lawActive } from '../state';
-import type { Game } from '../state';
+import { COMM_NAME, COMMS, CORPSE_LAWS, LAWS } from './data';
+import type { LawId } from './data';
+import { CARD_EXTENSIONS, VIEW_FILTERS } from './cards';
+import type { Choice } from './cards';
+import { needLaws, NEEDS } from './needs';
+import type { NeedId } from './needs';
+import { canDecree, DECREE_REL, enactLaw, lawOpen, stance } from './politics';
+import { clamp, journal, lawActive } from './state';
+import type { Game } from './state';
 
-// 제안 (7) '포고로 정한다'(s1b_dark_path 5.3 끝, S1a R3 대조 7번). 사용자 답 전이라 S1b 판에서만 켜고, 이 파일 하나를 빼면 사라진다.
+// '포고로 정한다'(S1a R3 대조 7번, 2026-10-07 17:33 사용자 결정 '붙인다', s1b_dark_path 5.3). 비상대권은 S1a 규칙이라 모든 판에 붙는다.
 // 비상대권 3구간 동안 요구·파업·법 요구 카드에 선택지 하나가 붙는다. 그 구간 포고 자리를 쓰고(castVote 포고와 같은 자리),
 // 대권을 쥐는 값(포고마다 긴장 +5, 942df98)을 똑같이 치른다. 숫자는 제안이다.
 
@@ -45,7 +45,7 @@ function choices(g: Game, kind: string, c: string, text?: string): Choice[] {
 }
 
 VIEW_FILTERS.push((g, card, v) => {
-  if (!g.dark || !canDecree(g) || !KINDS.includes(card.kind)) return v;
+  if (!canDecree(g) || !KINDS.includes(card.kind)) return v;
   const add = choices(g, card.kind, card.comm ?? 'tail', card.text);
   return add.length ? { ...v, choices: [...v.choices, ...add] } : v;
 });
@@ -54,7 +54,7 @@ CARD_EXTENSIONS.push({
   view: () => null,
   choose: (g, card, ch) => {
     const sp = ch.special ?? '';
-    if (!g.dark || !sp.startsWith('dark:decree:')) return;
+    if (!sp.startsWith('dark:decree:')) return;
     g.decreeSeg = g.seg;
     if (sp.startsWith('dark:decree:law:')) {
       const law = sp.slice('dark:decree:law:'.length) as LawId;

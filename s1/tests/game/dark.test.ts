@@ -11,11 +11,12 @@ import { openCase } from '../../src/game/dark/cases';
 import { theftTick } from '../../src/game/dark/cards';
 import { cross } from '../../src/game/dark/chronicle';
 import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from '../../src/game/dark/hooks';
-import { darkPyreWeight, darkStoredWeight } from '../../src/game/dark/corpses';
+import { darkPyreWeights, darkStoredWeight } from '../../src/game/dark/corpses';
 import type { Ember } from '../../src/game/dark/state';
 import { playGame } from '../../tools/s1c_bot';
 
-// S1b 핵심 묶음(s1b_dark_path 2장 1번 '가'): 징후, 수사·재판·희생양, 암살 명령, 칸 안의 시신, 일대기. 제안 (6)(7)은 S1b 판에서만.
+// S1b 핵심 묶음(s1b_dark_path 2장 1번 '가'): 징후, 수사·재판·희생양, 암살 명령, 칸 안의 시신, 일대기, 정기 신임 표결(5.3).
+// '포고로 정한다'는 S1a 비상대권 규칙이라 모든 판에 붙는다(src/game/decree.ts).
 
 function darkGame(seed = 'dark-test'): Game {
   const g = createGame(seed);
@@ -74,7 +75,7 @@ describe('S1b를 켜지 않은 판', () => {
       }
       expect(darkHaulMult(g)).toBe(1);
       expect(darkStoredWeight(g, 4)).toBe(4);
-      expect(darkPyreWeight(g, 2)).toBe(2);
+      expect(darkPyreWeights(g, 2, 1)).toEqual({ cold: 2, kin: 1 });
       expect(JSON.stringify(g)).toBe(before);
     }
   });
@@ -203,14 +204,21 @@ describe('굶주림의 도둑질(4.3)', () => {
   });
 });
 
-describe('제안 (7) 포고로 정한다', () => {
+describe('포고로 정한다(사용자 결정 \'붙인다\')', () => {
   function demandView(g: Game) {
     return viewCard(g, add(g, { kind: 'demand', comm: 'tail' }));
   }
-  it('대권 중인 S1b 판에만 붙고, 고르면 이번 구간 포고 자리를 쓴다', () => {
+  it('S1b가 꺼진 판에도 대권 중이면 붙는다', () => {
     const plain = createGame('decree');
-    plain.decreeLeft = 2;
     expect(demandView(plain).choices.some(c => c.special?.startsWith('dark:decree'))).toBe(false);
+    plain.decreeLeft = 2;
+    const card = add(plain, { kind: 'demand', comm: 'tail' });
+    const i = viewCard(plain, card).choices.findIndex(c => c.special === 'dark:decree:refuse');
+    expect(i).toBeGreaterThan(-1);
+    chooseCard(plain, card.uid, i);
+    expect(plain.decreeSeg).toBe(plain.seg);
+  });
+  it('대권 중에 붙고, 고르면 이번 구간 포고 자리를 쓴다', () => {
     const g = darkGame('decree');
     expect(demandView(g).choices.some(c => c.special?.startsWith('dark:decree'))).toBe(false);
     g.decreeLeft = 2;
@@ -239,15 +247,14 @@ describe('제안 (7) 포고로 정한다', () => {
   });
 });
 
-describe('제안 (6) 조건부 불신임 동의', () => {
-  it('신임 30 아래로 2구간이면 안건이 되고, 통과하면 판이 끝난다', () => {
+describe('불신임 동의와 정기 신임 표결(5.3)', () => {
+  it('신임이 낮다는 것만으로는 불신임 동의가 오르지 않는다(\'정기 투표\'가 조건부를 대신한다)', () => {
     const g = darkGame('conf');
     toPrep(g, 2);
     g.trust = 20;
     darkSettle(g);
-    expect(motionsNow(g).some(m => m.motion === 'no_confidence')).toBe(false);
     darkSettle(g);
-    expect(motionsNow(g).some(m => m.motion === 'no_confidence')).toBe(true);
+    expect(motionsNow(g).some(m => m.motion === 'no_confidence')).toBe(false);
   });
   it('S1b가 아닌 판엔 오르지 않는다', () => {
     const g = createGame('conf-off');

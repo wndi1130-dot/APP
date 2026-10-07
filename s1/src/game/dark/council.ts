@@ -2,9 +2,9 @@ import { COMM_NAME, COMMS, LAWS } from '../data';
 import type { Comm } from '../data';
 import { MOTION_SOURCES, MOTIONS } from '../motions';
 import type { MotionDef } from '../motions';
-import { isLawAgenda, offend } from '../politics';
+import { agendaTitle, aiAgendaPick, isLawAgenda, offend } from '../politics';
 import { clamp, END_LINK, journal, seats, stageOf } from '../state';
-import type { Agenda, Game, MotionAgenda, VoteResult } from '../state';
+import type { Agenda, CouncilState, Game, LawAgenda, MotionAgenda, VoteResult } from '../state';
 import { B } from './data';
 import { caseById, crimeTitle, level, LEVEL_WORD, topByClues, updateFlags } from './cases';
 import { cross, scene } from './chronicle';
@@ -12,7 +12,7 @@ import { DEFENSE_LINES } from './lines';
 import { newEmber } from './embers';
 import { byId, commOf, darkCard, eun, nameOf, rivals } from './state';
 
-// 재판(4.4)과 불신임 동의(제안 (6), 1.7)를 의회 안건 표(motions.ts)에 더한다. 입장은 stance()가 lean()에서 받아
+// 재판(4.4), 적의 3 지도자의 불신임 동의, 정기 신임 표결(5.3)을 의회 안건 표(motions.ts)에 더한다. 입장은 stance()가 lean()에서 받아
 // 관계 단계와 적의 규칙을 법과 똑같이 얹는다. 그래서 협상·뇌물·협박이 안건 종류를 몰라도 돈다.
 
 const nameOfId = (id?: string) => (id ? byId(id)?.name ?? id : '');
@@ -87,7 +87,7 @@ function verdict(g: Game, a: MotionAgenda, guilty: boolean): void {
   updateFlags(g);
 }
 
-/** 불신임 동의(51, 제안 (6)). 입장 = 관계 단계 + 지킨 약속 − 어긴 약속(법의 이념은 넣지 않는다). 찬성이 열차장 반대라
+/** 불신임 동의(51). 적의 3 지도자가 올린다(5.3 '그대로 둔다'). 입장 = 관계 단계 + 지킨 약속 − 어긴 약속(법의 이념은 넣지 않는다). 찬성이 열차장 반대라
  * stance()가 더하는 관계 단계를 뒤집어 낸다(mat에 −2×단계). 적의 3 지도자가 올린 안건엔 적의 규칙이 그대로 기운다. */
 const NO_CONFIDENCE: MotionDef = {
   need: 51,
@@ -107,20 +107,40 @@ const NO_CONFIDENCE: MotionDef = {
   rank: 'confidence',
 };
 
-/** 비상대권 중 의회에 거는 일은 없다. 이 둘은 S1b 판에서만 안건이 된다. */
-Object.assign(MOTIONS, { trial: TRIAL, no_confidence: NO_CONFIDENCE });
+/** 정기 신임 표결(51, 5.3, 사용자 결정 '정기 투표'). 입장 = 관계 단계 + 지킨 약속 − 어긴 약속(stance()가 관계 단계와
+ * 적의 규칙을 얹는다). 안건 자리를 먹지 않고 법 안건 앞에 따로 연다(council.pre). 숫자와 부결의 결과는 제안이다. */
+const CONFIDENCE: MotionDef = {
+  need: 51,
+  lean: (g, c) => ({ mat: g.dark!.kept[c] - g.dark!.broken[c], ideo: 0 }),
+  title: () => '열차장 신임(정기)',
+  changes: () => [`통과: 신임 +${B.confPassTrust}`, `부결: 신임 −${B.confFailTrust}, 다음 회기 안건은 대표들이 고른다`, '안건 자리를 쓰지 않는다. 표결 뒤 이번 회기 안건으로 간다'],
+  onPass: g => {
+    g.trust = clamp(g.trust + B.confPassTrust, 0, 100);
+    journal(g, '의회가 열차장을 다시 믿기로 했다.', 'good');
+  },
+  onFail: g => confFailed(g),
+  rank: 'confidence',
+};
+
+/** 정기 신임이 부결됐다(5.3 제안, 아침 사용자 카드 대기). 쫓겨나지 않는다. 다른 답이 오면 여기만 바꾼다. */
+function confFailed(g: Game): void {
+  g.trust = clamp(g.trust - B.confFailTrust, 0, 100);
+  g.dark!.confLock = B.confFailLock;
+  journal(g, '의회가 열차장을 믿지 않는다. 다음 회기엔 대표들이 안건을 고른다.', 'bad');
+}
+
+/** 비상대권 중 의회에 거는 일은 없다. 이 셋은 S1b 판에서만 안건이 된다. */
+Object.assign(MOTIONS, { trial: TRIAL, no_confidence: NO_CONFIDENCE, confidence: CONFIDENCE });
 
 /** 회기마다 낼 S1b 안건 */
 MOTION_SOURCES.push(g => {
   const d = g.dark;
   if (!d) return [];
   const out: MotionAgenda[] = [];
-  // 불신임: 신임 30 아래로 2구간, 또는 적의 3 지도자가 올렸다(그 지도자가 아직 대표이고 조용히 처리되지 않았으면).
+  // 불신임: 적의 3 지도자가 올렸다(그 지도자가 아직 대표이고 조용히 처리되지 않았으면). 신임이 낮다는 조건만으로는
+  // 오르지 않는다(사용자 결정 '정기 투표'가 '조건부 불신임'을 대신한다, 5.3).
   const by = d.confBy && g.comms[d.confBy].leader.personId === d.confLeader ? d.confBy : null;
-  if (by || d.lowTrust >= 2) {
-    const raiser = by ?? [...COMMS].sort((a, b) => g.comms[a].rel - g.comms[b].rel)[0];
-    out.push({ kind: 'motion', motion: 'no_confidence', by: raiser });
-  }
+  if (by) out.push({ kind: 'motion', motion: 'no_confidence', by });
   for (const c of d.cases) {
     if (c.status !== 'trial') continue;
     const top = topByClues(g, c);
@@ -136,6 +156,18 @@ export function darkCouncilOpen(g: Game): void {
   const council = g.council;
   if (!d || !council) return;
   d.councilAt = g.session;
+  // 정기 회기만 센다(비상 소집은 아니다). 계엄·내전은 아직 코드에 없다(그때 의회가 멈추면 여기서 세지 않는다, 5.3).
+  if (!council.emergency) {
+    if (d.confLock) {
+      d.confLock -= 1;
+      aiSession(g, council);
+    }
+    d.confSince = (d.confSince ?? 0) + 1;
+    if (d.confSince >= B.confEvery) {
+      d.confSince = 0;
+      council.pre = { agenda: { kind: 'motion', motion: 'confidence' } };
+    }
+  }
   for (const c of d.cases.filter(x => x.status === 'trial')) {
     const i = council.options.findIndex(o => !isLawAgenda(o) && o.motion === 'trial' && o.ref === c.id);
     if (i >= 0) {
@@ -145,6 +177,23 @@ export function darkCouncilOpen(g: Game): void {
     if (!c.paused && c.clock !== null) { c.paused = true; c.clock += 1; }
     if (c.promised === g.session) c.promised = g.session + 1; // 위기 법이 밀어낸 회기는 약속 위반이 아니다
   }
+}
+
+/** 신임을 잃은 회기(5.3): 열차장 대신 AI 대표가 법 안건을 고른다(4장 '안건 올리기'와 같은 법). 고를 게 없으면 회기가 빈다.
+ * 위기로 걸린 법이 아닌 안건(라이프치히 몫 나누기)은 남긴다. 재판은 다음 회기로 밀린다(아래 군중 시계 멈춤). */
+function aiSession(g: Game, council: CouncilState): void {
+  const laws = council.options.filter(isLawAgenda) as LawAgenda[];
+  const pick = aiAgendaPick(g, laws);
+  if (pick) {
+    const agenda = { ...laws[pick.idx], by: pick.c };
+    council.options = [agenda];
+    journal(g, `신임을 잃은 회기다. ${COMM_NAME[pick.c]}이(가) 안건을 골랐다: ${agendaTitle(agenda)}.`, 'bad');
+  } else {
+    council.options = council.options.filter(o => !isLawAgenda(o) && MOTIONS[o.motion].rank === 'crisis');
+    journal(g, '신임을 잃은 회기다. 대표들이 올릴 안건을 고르지 못했다.', 'bad');
+  }
+  council.idx = 0;
+  council.locked = true;
 }
 
 /** 회기를 마친 정산: 약속한 재판이 이 회기에 열리지 않았으면 약속 위반(S1a 수치 3.1의 값). */
@@ -171,9 +220,10 @@ export function afterVote(g: Game, agenda: Agenda, r: VoteResult): void {
   const d = g.dark;
   if (!d || g.phase === 'end') return;
   // 불신임은 표결을 거쳐야 끝난다(부결이면 다시 조건이 서야 오른다). 목록에 오르기만 하고 다른 안건을 고르면 남는다.
-  if (!isLawAgenda(agenda) && agenda.motion === 'no_confidence') { d.confBy = null; d.confLeader = null; d.lowTrust = 0; }
+  if (!isLawAgenda(agenda) && agenda.motion === 'no_confidence') { d.confBy = null; d.confLeader = null; }
   if (isLawAgenda(agenda) && r.passed && !agenda.repeal && !agenda.forced && !agenda.ratify && LAWS[agenda.law].tag === '가혹') cross(g, 'harsh_chosen');
-  if (r.decree) return;
+  // 포고와 정기 신임 표결은 원수 대표가 갈려도 불씨를 만들지 않는다(신임은 칸 대 칸의 다툼이 아니다, 6차 시뮬레이션과 같게).
+  if (r.decree || (!isLawAgenda(agenda) && agenda.motion === 'confidence')) return;
   const side = (c: Comm) => Math.sign(r.byComm[c].yes - r.byComm[c].no);
   for (const a of COMMS) for (const b of COMMS) {
     if (a >= b || !rivals(a, b) || side(a) * side(b) !== -1) continue;

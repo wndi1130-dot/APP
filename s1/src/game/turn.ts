@@ -1,7 +1,7 @@
 import { addCard, END_LINK } from './state';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
-import { onDeath, strangerCorpse } from './death';
+import { onDeath, strangerCorpse, takeKinBody } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { josa } from './josa';
 import { needTick } from './needs';
@@ -10,7 +10,7 @@ import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
-import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
+import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
@@ -24,7 +24,7 @@ import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from './dark/hooks';
-import { darkPyreWeight, darkStoredWeight } from './dark/corpses';
+import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
 
@@ -48,7 +48,8 @@ export function primaryAction(g: Game): Primary {
     case 'stop': return g.stop?.done ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차 결정', ok: false, why: '정차 카드를 고른다' };
     case 'council': {
       const council = g.council;
-      if (council && council.options.length > 0 && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
+      if (council?.pre && !council.pre.result && council.result) return { label: '다음 안건', ok: true };
+      if (council && (council.options.length > 0 || preVote(g)) && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
       return { label: '정산으로', ok: true };
     }
     case 'settle': return { label: g.seg >= P.segments ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
@@ -66,7 +67,7 @@ export function advance(g: Game): void {
       return;
     case 'travel': return g.inStrike ? afterStop(g) : arriveStop(g);
     case 'stop': return afterStop(g);
-    case 'council': return settle(g);
+    case 'council': return preVote(g) ? finishPreVote(g) : settle(g);
     case 'settle': return nextSegment(g);
     default: return;
   }
@@ -220,15 +221,6 @@ export function pyreCount(g: Game): number {
   return (g.pyre ?? 0) + Object.values(g.pyreKin ?? {}).reduce((a, b) => a + (b ?? 0), 0);
 }
 
-/** 살던 칸에 둔 시신 하나를 치운다. 그 칸 과밀을 되돌린다. */
-function takeKinBody(g: Game): void {
-  const kin = g.pyreKin ?? {};
-  const c = COMMS.find(x => (kin[x] ?? 0) > 0);
-  if (!c) return;
-  kin[c] = (kin[c] ?? 0) - 1;
-  g.comms[c].base[2] -= P.pyreKinCrowd;
-}
-
 /** 장작불 법: 내린 정차에서 기다리던 시신을 태운다. 불쏘시개로 석탄을 쓴다. */
 export function burnPyre(g: Game): void {
   const n = pyreCount(g);
@@ -236,7 +228,7 @@ export function burnPyre(g: Game): void {
   const byWood = domesticPyreWood(g, n); // S1c 내정 훅: 목재 먼저(4.1)
   g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * (n - byWood));
   g.pyre = 0;
-  darkPyreWeight(g, 0); // S1b: 태운 시신의 확인 수도 비운다
+  darkPyreWeights(g, 0, 0); // S1b: 태운 시신의 확인 수도 비운다
   while (pyreCount(g) > 0) takeKinBody(g);
   journal(g, `선로 옆 장작불에 시신 ${n}구를 태웠다.`, 'dark');
 }
@@ -558,6 +550,7 @@ export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label 
   s.rel = clamp(s.rel + 5, -100, 100);
   if (s.grudge === 1) s.grudge = 0;
   g.stats.promisesKept += 1;
+  if (g.dark) g.dark.kept[c] += 1; // S1b 신임 입장(5.3): 칸마다 지킨 약속
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 지켰다: ${label}.`, 'good');
 }
 
@@ -570,6 +563,7 @@ export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label
   s.fervor = Math.min(3, s.fervor + 1);
   g.tension = clamp(g.tension + 3, 0, 100);
   g.stats.promisesBroken += 1;
+  if (g.dark) g.dark.broken[c] += 1;
   offend(g, c);
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
 }
@@ -735,10 +729,11 @@ function medicineTick(g: Game, notes: string[]): void {
   }
   // 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 따뜻해서 두 배(s1c_domestic 4.1).
   const kinBodies = pyreCount(g) - (g.pyre ?? 0);
-  // S1b: 머리를 확인한 시신은 일어나지 않는다(dark/corpses.ts). S1a 판이면 그대로.
-  const pyreWeight = darkPyreWeight(g, g.pyre ?? 0) + 2 * kinBodies;
+  // S1b: 머리를 확인한 시신은 일어나지 않는다(dark/corpses.ts). 칸마다 몫을 나눠 받는다. S1a 판이면 그대로.
+  const w = darkPyreWeights(g, g.pyre ?? 0, kinBodies);
+  const pyreWeight = w.cold + 2 * w.kin;
   if (pyreWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * pyreWeight)) {
-    const inKin = kinBodies > 0 && rnd(g) < (2 * kinBodies) / pyreWeight;
+    const inKin = w.kin > 0 && rnd(g) < (2 * w.kin) / pyreWeight;
     if (inKin) takeKinBody(g);
     else g.pyre = (g.pyre ?? 0) - 1;
     g.injured += 1;
@@ -895,18 +890,9 @@ function aiLeaders(g: Game): void {
     // AI는 법 안건만 낸다. 법이 아닌 안건은 저마다 나오는 곳이 있다(motions.ts).
     const options = agendaOptions(g).options.filter(isLawAgenda);
     g.session = saved;
-    let best: { c: Comm; idx: number; score: number } | null = null;
-    for (const c of [...COMMS].sort((a, b) => seats(g)[b] - seats(g)[a])) {
-      const s = g.comms[c];
-      options.forEach((o, idx) => {
-        const own = stance(g, c, o, false).score;
-        const hostileRepeal = s.grudge >= 3 && o.repeal;
-        const score = own + (hostileRepeal ? 3 : 0);
-        if ((own >= 3 || (o.repeal && own >= 2) || hostileRepeal) && (!best || score > best.score)) best = { c, idx, score };
-      });
-    }
+    const best = aiAgendaPick(g, options);
     if (best) {
-      const { c, idx } = best as { c: Comm; idx: number };
+      const { c, idx } = best;
       g.proposals = [{ ...options[idx], by: c }];
       journal(g, `${g.comms[c].leader.name}(${COMM_NAME[c]})이(가) 다음 회기 안건을 냈다: ${agendaTitle(options[idx])}.`);
     }
