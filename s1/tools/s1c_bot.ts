@@ -232,6 +232,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       if (!seen.has(card.uid)) {
         seen.add(card.uid);
         cards[card.kind] = (cards[card.kind] ?? 0) + 1;
+        // 위생 카드는 칸별로도 센다(꼬리칸 몫이 쏠리는지 본다, J10 W1).
+        if (card.kind === 'dom:lice' || card.kind === 'dom:typhus') cards[`${card.kind}@${card.comm}`] = (cards[`${card.kind}@${card.comm}`] ?? 0) + 1;
         if (card.kind.startsWith('dom:')) m.domCards += 1; else m.s1aCards += 1;
       }
       const view = viewCard(g, card);

@@ -16,11 +16,6 @@ function dom(g: Game): DomState {
   return g.dom;
 }
 
-/** 이웃 칸(발진티푸스가 번지는 길). 칸 순서: 꼬리칸 → 기술·의무진 → 경비대 → 앞칸 → 기관실. */
-const NEIGHBORS: Record<Comm, Comm[]> = {
-  tail: ['medtech'], medtech: ['tail', 'guard'], guard: ['medtech', 'front'], front: ['guard', 'engine'], engine: ['front'],
-};
-
 /** 레버는 드물게(1)·보통(2)·넉넉(3). 21가가 있어도 '드물게'까지 내릴 수 있다(16.4, 16.9). */
 export function hotWaterFloor(_g: Game): number {
   return 1;
@@ -68,16 +63,18 @@ export function hotWaterShare(g: Game, c: Comm): number {
   return clamp(lever - backShare(g, c), 0, 3);
 }
 
-/** 위생 점수 = 몫 − 과밀 보정(16.3). 앞칸은 제 난로가 있어 레버가 없음이어도 씻는다(문서의 'S1a 법 5'는 이 빌드에 없는 법이라 늘 그렇게 둔다). */
+/** 위생 점수 = 몫 − 과밀 보정(16.3). 문턱은 80/95: 꼬리칸이 판 시작부터 '씻을 물 없음'이 되지 않게 한다(16.3, J10 W1). 앞칸은 제 난로가 있어 레버가 없음이어도 씻는다(문서의 'S1a 법 5'는 이 빌드에 없는 법이라 늘 그렇게 둔다). */
 export function hygieneScore(g: Game, c: Comm): number {
   const crowd = situation(g, c)[2];
   const share = c === 'front' ? Math.max(1, hotWaterShare(g, c)) : hotWaterShare(g, c);
-  return share - (crowd >= 80 ? 2 : crowd >= 60 ? 1 : 0);
+  return share - (crowd >= 95 ? 2 : crowd >= 80 ? 1 : 0);
 }
 
-/** 대야를 누르면 나오는 까닭 한 줄(16.3 '보이는 법'). 늘 조건(자리·과밀·몫)만 적는다(16.1 가). 소수점은 안 띄운다. */
+/** 대야를 누르면 나오는 까닭 한 줄(16.3 '보이는 법'). 늘 조건(자리·과밀·온기·몫)만 적는다(16.1 가). 소수점은 안 띄운다.
+ * 이가 도는 칸은 칸 창에 늘 띄우고, 이·열병 일지 줄 끝에도 붙인다. 병이 사람이 아니라 처지에서 온다는 것을 보이는 줄이다. */
 export function hygieneWhy(g: Game, c: Comm): string {
-  const crowd = Math.round(situation(g, c)[2]);
+  const [warm, , crowdRaw] = situation(g, c);
+  const crowd = Math.round(crowdRaw);
   const b = backShare(g, c);
   const place = c === 'front' ? '보일러에서 가까움 · 제 난로'
     : c === 'engine' ? '보일러 옆'
@@ -85,7 +82,7 @@ export function hygieneWhy(g: Game, c: Comm): string {
     : b > 0 ? '보일러에서 먼 칸이 있음'
     : '보일러에서 중간';
   const share = c === 'front' ? Math.max(1, hotWaterShare(g, c)) : hotWaterShare(g, c);
-  return `${place} · 과밀 ${crowd} · 몫 ${Math.round(share)}`;
+  return `${place} · 과밀 ${crowd} · 온기 ${Math.round(warm)} · 몫 ${Math.round(share)}`;
 }
 
 export function hygiene(g: Game, c: Comm): Hygiene {
@@ -101,14 +98,17 @@ export function hygieneTick(g: Game, notes: string[]): void {
     const h = hygiene(g, c);
     const lice = d.lice[c];
     // 불결한 칸은 이가 돌 때만 관계를 깎는다(16.9).
-    if (h === 'dirty' && lice) g.comms[c].rel = clamp(g.comms[c].rel - D.dirtyRel, -100, 100);
+    if (h === 'dirty' && lice) {
+      g.comms[c].rel = clamp(g.comms[c].rel - D.dirtyRel, -100, 100);
+      notes.push(`${COMM_NAME[c]} 관계 −${D.dirtyRel}: 씻을 물이 모자라 불만.`);
+    }
     if (lice) {
       if (lice.endureDue !== undefined && g.seg >= lice.endureDue) {
         delete d.lice[c];
         (d.liceFree ??= {})[c] = g.seg + D.liceImmune;
         const p = techMult(g, 'm5') > 0 ? D.typhusFromLice + (D.typhusFromLiceM5 - D.typhusFromLice) * techMult(g, 'm5') : D.typhusFromLice;
         if (rnd(g) < p) startTyphus(g, c, D.typhusPatients);
-        else journal(g, `${COMM_NAME[c]}의 이가 겨울을 못 넘기고 줄었다.`);
+        else journal(g, `${COMM_NAME[c]}의 이가 겨울을 못 넘기고 줄었다. (${hygieneWhy(g, c)})`);
       }
       continue;
     }
@@ -123,6 +123,7 @@ export function hygieneTick(g: Game, notes: string[]): void {
       d.flags.lice = true;
       d.stats.lice += 1;
       domCard(g, { kind: 'dom:lice', comm: c });
+      journal(g, `${COMM_NAME[c]}에 이가 돈다. (${hygieneWhy(g, c)})`, 'bad');
     }
   }
   typhusTick(g, notes);
@@ -152,7 +153,7 @@ export function startTyphus(g: Game, c: Comm, n: number): void {
   d.typhus.push({ comm: c, patients, apart: false, bay: false, at: g.seg });
   d.stats.typhus += 1;
   domCard(g, { kind: 'dom:typhus', comm: c, n: patients.length });
-  journal(g, `${COMM_NAME[c]}에 열병이 돌았다. ${patients.length}명이 누웠다.`, 'bad');
+  journal(g, `${COMM_NAME[c]}에 열병이 돌았다. ${patients.length}명이 누웠다. (${hygieneWhy(g, c)})`, 'bad');
 }
 
 /** 열병 카드의 둘(16.5). 둘 다 강압이 아니라 관계·공포 벌이 없다. 고르는 것은 '부상자냐 열병 환자냐'다. */
@@ -197,10 +198,12 @@ function typhusTick(g: Game, notes: string[]): void {
       onDeath(g, t.comm, dead);
       notes.push(`열병으로 ${dead.length}명이 죽었다.`);
     }
-    // 의무칸으로 옮겼으면 번지지 않는다. 따로 눕혔으면 절반. 받는 칸의 과밀만 본다(16.1 나).
+    // 의무칸으로 옮겼으면 번지지 않는다. 따로 눕혔으면 절반. 이웃 칸을 따지지 않고, 과밀 70 이상인 다른 칸마다 따로 굴린다.
+    // 받는 칸의 과밀만 본다(16.1 나, J10 W4). 어느 칸에서 왔느냐가 아니라 붐비는 칸이면 어디든 날 수 있다.
     if (!t.bay && kept.length > 0) {
       const spread = t.apart ? D.typhusSpreadApart : D.typhusSpread;
-      for (const n of NEIGHBORS[t.comm]) {
+      for (const n of COMMS) {
+        if (n === t.comm) continue;
         if (d.typhus.some(x => x.comm === n)) continue;
         if (situation(g, n)[2] >= D.typhusSpreadCrowd && rnd(g) < spread) startTyphus(g, n, 2);
       }

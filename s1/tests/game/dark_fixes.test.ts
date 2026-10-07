@@ -275,3 +275,26 @@ describe('11. 하차 명령은 열차가 설 때', () => {
     expect(g.left).toContain(p.name);
   });
 });
+
+describe('용의자 후보 칸(J10 W 묶음과 같이 본 cases.ts)', () => {
+  it('꼬리칸을 늘 넣지 않는다: 보일러 사건이면 사건 칸·옆 칸·원수 칸에서만 오른다', () => {
+    for (let i = 0; i < 30; i += 1) {
+      const g = darkGame(`sus-${i}`);
+      const culprit = adults(g, 'engine', { noRep: true })[0].id;
+      const c = openCase(g, { kind: 'boiler', culprit, victimComm: 'engine', dead: false, clock: 3, where: '탄수차' });
+      const comms = c.sus.map(s => adults(g, 'tail').some(p => p.id === s.id) ? 'tail' : 'other');
+      expect(comms, `시드 ${i}`).not.toContain('tail');
+    }
+  });
+
+  it('꼬리칸이 사건에 닿으면(옆 칸) 후보에 오를 수 있다', () => {
+    let tail = 0;
+    for (let i = 0; i < 30; i += 1) {
+      const g = darkGame(`sus-m-${i}`);
+      const culprit = adults(g, 'medtech', { noRep: true })[0].id;
+      const c = openCase(g, { kind: 'assault', culprit, victimComm: 'medtech', dead: false, clock: 3, where: '통로' });
+      if (c.sus.some(s => adults(g, 'tail').some(p => p.id === s.id))) tail += 1;
+    }
+    expect(tail).toBeGreaterThan(0);
+  });
+});

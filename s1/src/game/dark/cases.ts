@@ -75,11 +75,13 @@ export function openCase(g: Game, a: OpenArgs): Case {
     culprit = { id: a.culprit, culprit: true, facts: factsOf(g, a.culprit, a.kind, a.victimComm), clues: [], acq: false };
   }
   const taken = new Set([culprit.id, a.victim ?? '', a.culprit]);
-  const comms: Comm[] = ['tail', a.victimComm];
+  // 후보는 사건에 닿은 칸에서만 뽑는다: 사건 칸과 옆 칸, 드나든 칸, 원수 칸(4.5 표). 꼬리칸을 늘 넣으면 구조민 +1과 겹쳐
+  // 의심이 언제나 꼬리칸으로 쏠린다(4.5 '출신을 +1로 낮춘 이유'). 위생 카드와 겹쳐 '꼬리칸 = 병 + 의심'으로 읽히지 않게 한다.
+  const comms: Comm[] = [a.victimComm, ...neighbors(a.victimComm)];
   const acc = ACCESS[a.kind];
-  if (acc) comms.push(acc);
+  if (acc && !comms.includes(acc)) comms.push(acc);
   const rival = COMMS.find(c => rivals(c, a.victimComm));
-  if (rival) comms.push(rival);
+  if (rival && !comms.includes(rival)) comms.push(rival);
   const cands: Suspect[] = [];
   for (const c of comms) {
     const pool = adults(g, c, { noRep: true }).filter(p => !taken.has(p.id) && !d.confined.some(x => x.id === p.id));
