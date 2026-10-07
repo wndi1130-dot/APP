@@ -1,0 +1,141 @@
+{
+  "attribution": "© OpenStreetMap contributors, ODbL",
+  "license": "https://opendatacommons.org/licenses/odbl/1-0/",
+  "server_base_utc": "2026-10-07T03:49:11Z",
+  "matches": [
+    {
+      "bridge_way_id": 318584357,
+      "bridge_tags": {
+        "bridge": "yes",
+        "electrified": "no",
+        "gauge": "1435",
+        "layer": "1",
+        "maxspeed": "70",
+        "operator": "PKP Polskie Linie Kolejowe",
+        "operator:short": "PKP PLK",
+        "railway": "rail",
+        "railway:shp": "yes",
+        "railway:track_class": "C3",
+        "railway:track_ref": "1",
+        "ref": "359",
+        "usage": "branch",
+        "workrules": "PL:Ir-1"
+      },
+      "matches": [
+        {
+          "way_id": 24769175,
+          "name": "Obra",
+          "waterway": "river",
+          "layer": null,
+          "relation_names": [
+            "Obra"
+          ],
+          "planar_intersection": true,
+          "crosses": true,
+          "distance_m": 0.0
+        }
+      ]
+    },
+    {
+      "bridge_way_id": 801395051,
+      "bridge_tags": {
+        "bridge": "yes",
+        "electrified": "no",
+        "gauge": "1435",
+        "layer": "1",
+        "maxspeed": "100",
+        "operator": "PKP Polskie Linie Kolejowe",
+        "operator:short": "PKP PLK",
+        "passenger_lines": "1",
+        "railway": "rail",
+        "railway:track_class": "C3",
+        "railway:track_ref": "1",
+        "ref": "358",
+        "usage": "main",
+        "workrules": "PL:Ir-1"
+      },
+      "matches": [
+        {
+          "way_id": 801855025,
+          "name": "Bóbr",
+          "waterway": "river",
+          "layer": null,
+          "relation_names": [
+            "Bóbr"
+          ],
+          "planar_intersection": true,
+          "crosses": true,
+          "distance_m": 0.0
+        }
+      ]
+    },
+    {
+      "bridge_way_id": 116512069,
+      "bridge_tags": {
+        "bridge": "yes",
+        "electrified": "contact_line",
+        "frequency": "16.7",
+        "gauge": "1435",
+        "layer": "1",
+        "maxspeed": "120",
+        "operator": "DB InfraGO AG",
+        "railway": "rail",
+        "railway:etcs": "no",
+        "railway:gnt": "no",
+        "railway:lzb": "no",
+        "railway:pzb": "yes",
+        "ref": "6345",
+        "usage": "main",
+        "voltage": "15000",
+        "workrules": "DE:EBO"
+      },
+      "matches": [
+        {
+          "way_id": 117860615,
+          "name": "Spree",
+          "waterway": "river",
+          "layer": null,
+          "relation_names": [
+            "Spree"
+          ],
+          "planar_intersection": true,
+          "crosses": true,
+          "distance_m": 0.0
+        }
+      ]
+    },
+    {
+      "bridge_way_id": 33775391,
+      "bridge_tags": {
+        "bridge": "yes",
+        "electrified": "contact_line",
+        "frequency": "16.7",
+        "gauge": "1435",
+        "layer": "1",
+        "maxspeed": "120",
+        "maxspeed:source": "https://geovdbn.deutschebahn.com/isr",
+        "operator": "DB InfraGO AG",
+        "passenger_lines": "2",
+        "railway": "rail",
+        "railway:pzb": "yes",
+        "ref": "6345",
+        "usage": "main",
+        "voltage": "15000"
+      },
+      "matches": [
+        {
+          "way_id": 22990464,
+          "name": "Schwarze Elster",
+          "waterway": "river",
+          "layer": null,
+          "relation_names": [
+            "Schwarze Elster"
+          ],
+          "planar_intersection": true,
+          "crosses": true,
+          "distance_m": 0.0
+        }
+      ]
+    }
+  ]
+}

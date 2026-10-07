@@ -1,0 +1,514 @@
+{
+  "status": "connected",
+  "length_m": 311875.372,
+  "start_node": "n3499181485",
+  "end_node": "n1962230583",
+  "waypoints": [
+    {
+      "station_id": "wolsztyn",
+      "node_id": "n3499181485",
+      "distance_from_start_m": 0
+    },
+    {
+      "station_id": "zbaszynek",
+      "node_id": "n10721152338",
+      "distance_from_start_m": 28424.268
+    },
+    {
+      "station_id": "cottbus",
+      "node_id": "n13297281695",
+      "distance_from_start_m": 163324.41
+    },
+    {
+      "station_id": "leipzig",
+      "node_id": "n1962230583",
+      "distance_from_start_m": 311875.372
+    }
+  ],
+  "path": [
+    {
+      "edge_id": "e003809",
+      "forward": false
+    },
+    {
+      "edge_id": "e003811",
+      "forward": true
+    },
+    {
+      "edge_id": "e019639",
+      "forward": true
+    },
+    {
+      "edge_id": "e019322",
+      "forward": false
+    },
+    {
+      "edge_id": "e019323",
+      "forward": true
+    },
+    {
+      "edge_id": "e019325",
+      "forward": true
+    },
+    {
+      "edge_id": "e021439",
+      "forward": true
+    },
+    {
+      "edge_id": "e020479",
+      "forward": false
+    },
+    {
+      "edge_id": "e020480",
+      "forward": true
+    },
+    {
+      "edge_id": "e027042",
+      "forward": true
+    },
+    {
+      "edge_id": "e020482",
+      "forward": false
+    },
+    {
+      "edge_id": "e020483",
+      "forward": true
+    },
+    {
+      "edge_id": "e027044",
+      "forward": true
+    },
+    {
+      "edge_id": "e027062",
+      "forward": false
+    },
+    {
+      "edge_id": "e027049",
+      "forward": false
+    },
+    {
+      "edge_id": "e027048",
+      "forward": true
+    },
+    {
+      "edge_id": "e015598",
+      "forward": false
+    },
+    {
+      "edge_id": "e015597",
+      "forward": false
+    },
+    {
+      "edge_id": "e015337",
+      "forward": false
+    },
+    {
+      "edge_id": "e015336",
+      "forward": true
+    },
+    {
+      "edge_id": "e025948",
+      "forward": false
+    },
+    {
+      "edge_id": "e009072",
+      "forward": false
+    },
+    {
+      "edge_id": "e009069",
+      "forward": false
+    },
+    {
+      "edge_id": "e009062",
+      "forward": false
+    },
+    {
+      "edge_id": "e009060",
+      "forward": true
+    },
+    {
+      "edge_id": "e026335",
+      "forward": false
+    },
+    {
+      "edge_id": "e009056",
+      "forward": false
+    },
+    {
+      "edge_id": "e009057",
+      "forward": true
+    },
+    {
+      "edge_id": "e009049",
+      "forward": false
+    },
+    {
+      "edge_id": "e009050",
+      "forward": true
+    },
+    {
+      "edge_id": "e025535",
+      "forward": true
+    },
+    {
+      "edge_id": "e025532",
+      "forward": false
+    },
+    {
+      "edge_id": "e025533",
+      "forward": true
+    },
+    {
+      "edge_id": "e025536",
+      "forward": true
+    },
+    {
+      "edge_id": "e008460",
+      "forward": false
+    },
+    {
+      "edge_id": "e008459",
+      "forward": true
+    },
+    {
+      "edge_id": "e025988",
+      "forward": true
+    },
+    {
+      "edge_id": "e025989",
+      "forward": true
+    },
+    {
+      "edge_id": "e008592",
+      "forward": false
+    },
+    {
+      "edge_id": "e008586",
+      "forward": false
+    },
+    {
+      "edge_id": "e008585",
+      "forward": true
+    },
+    {
+      "edge_id": "e008579",
+      "forward": false
+    },
+    {
+      "edge_id": "e008578",
+      "forward": true
+    },
+    {
+      "edge_id": "e008600",
+      "forward": true
+    },
+    {
+      "edge_id": "e008653",
+      "forward": false
+    },
+    {
+      "edge_id": "e008652",
+      "forward": true
+    },
+    {
+      "edge_id": "e008584",
+      "forward": false
+    },
+    {
+      "edge_id": "e008583",
+      "forward": true
+    },
+    {
+      "edge_id": "e008564",
+      "forward": false
+    },
+    {
+      "edge_id": "e008563",
+      "forward": true
+    },
+    {
+      "edge_id": "e010940",
+      "forward": false
+    },
+    {
+      "edge_id": "e010938",
+      "forward": false
+    },
+    {
+      "edge_id": "e008523",
+      "forward": false
+    },
+    {
+      "edge_id": "e008517",
+      "forward": false
+    },
+    {
+      "edge_id": "e008518",
+      "forward": true
+    },
+    {
+      "edge_id": "e008912",
+      "forward": false
+    },
+    {
+      "edge_id": "e008911",
+      "forward": true
+    },
+    {
+      "edge_id": "e008909",
+      "forward": false
+    },
+    {
+      "edge_id": "e000728",
+      "forward": false
+    },
+    {
+      "edge_id": "e000730",
+      "forward": true
+    },
+    {
+      "edge_id": "e000811",
+      "forward": false
+    },
+    {
+      "edge_id": "e000810",
+      "forward": true
+    },
+    {
+      "edge_id": "e008901",
+      "forward": true
+    },
+    {
+      "edge_id": "e008898",
+      "forward": false
+    },
+    {
+      "edge_id": "e008897",
+      "forward": true
+    },
+    {
+      "edge_id": "e013481",
+      "forward": false
+    },
+    {
+      "edge_id": "e013480",
+      "forward": false
+    },
+    {
+      "edge_id": "e008890",
+      "forward": false
+    },
+    {
+      "edge_id": "e008888",
+      "forward": true
+    },
+    {
+      "edge_id": "e008886",
+      "forward": false
+    },
+    {
+      "edge_id": "e003786",
+      "forward": false
+    },
+    {
+      "edge_id": "e003787",
+      "forward": true
+    },
+    {
+      "edge_id": "e008301",
+      "forward": false
+    },
+    {
+      "edge_id": "e008302",
+      "forward": true
+    },
+    {
+      "edge_id": "e009153",
+      "forward": true
+    },
+    {
+      "edge_id": "e009160",
+      "forward": false
+    },
+    {
+      "edge_id": "e009159",
+      "forward": false
+    },
+    {
+      "edge_id": "e009158",
+      "forward": false
+    },
+    {
+      "edge_id": "e009154",
+      "forward": false
+    },
+    {
+      "edge_id": "e007144",
+      "forward": false
+    },
+    {
+      "edge_id": "e007145",
+      "forward": true
+    },
+    {
+      "edge_id": "e025340",
+      "forward": true
+    },
+    {
+      "edge_id": "e007148",
+      "forward": false
+    },
+    {
+      "edge_id": "e007149",
+      "forward": true
+    },
+    {
+      "edge_id": "e009163",
+      "forward": true
+    },
+    {
+      "edge_id": "e009164",
+      "forward": true
+    },
+    {
+      "edge_id": "e006263",
+      "forward": false
+    },
+    {
+      "edge_id": "e000251",
+      "forward": false
+    },
+    {
+      "edge_id": "e000253",
+      "forward": true
+    },
+    {
+      "edge_id": "e006261",
+      "forward": true
+    },
+    {
+      "edge_id": "e007215",
+      "forward": false
+    },
+    {
+      "edge_id": "e007206",
+      "forward": false
+    },
+    {
+      "edge_id": "e007205",
+      "forward": true
+    },
+    {
+      "edge_id": "e007212",
+      "forward": false
+    },
+    {
+      "edge_id": "e007210",
+      "forward": true
+    },
+    {
+      "edge_id": "e017592",
+      "forward": false
+    },
+    {
+      "edge_id": "e003246",
+      "forward": false
+    },
+    {
+      "edge_id": "e003244",
+      "forward": true
+    },
+    {
+      "edge_id": "e001643",
+      "forward": false
+    },
+    {
+      "edge_id": "e001644",
+      "forward": true
+    },
+    {
+      "edge_id": "e023760",
+      "forward": true
+    },
+    {
+      "edge_id": "e025437",
+      "forward": false
+    },
+    {
+      "edge_id": "e012429",
+      "forward": false
+    },
+    {
+      "edge_id": "e012428",
+      "forward": false
+    },
+    {
+      "edge_id": "e012427",
+      "forward": true
+    },
+    {
+      "edge_id": "e012218",
+      "forward": false
+    },
+    {
+      "edge_id": "e003744",
+      "forward": false
+    },
+    {
+      "edge_id": "e003745",
+      "forward": true
+    },
+    {
+      "edge_id": "e025724",
+      "forward": false
+    },
+    {
+      "edge_id": "e025723",
+      "forward": true
+    },
+    {
+      "edge_id": "e025731",
+      "forward": true
+    },
+    {
+      "edge_id": "e003750",
+      "forward": false
+    },
+    {
+      "edge_id": "e003752",
+      "forward": true
+    },
+    {
+      "edge_id": "e013026",
+      "forward": false
+    }
+  ],
+  "input_files": {
+    "graph.json": {
+      "sha256": "092d2703c87d6887f8b71b2b6168fb7af04b369c6b6634a698d9db8c8ed166d2",
+      "hash_normalization": "UTF-8 text; universal newlines normalized to LF",
+      "collected_worktree_raw_sha256": "092d2703c87d6887f8b71b2b6168fb7af04b369c6b6634a698d9db8c8ed166d2"
+    },
+    "core.geojson": {
+      "sha256": "1197bea7f8b8c25b2d8ae465e8a12a61bec192d0b604b4baabc49fb1dc109701",
+      "hash_normalization": "UTF-8 text; universal newlines normalized to LF",
+      "collected_worktree_raw_sha256": "1197bea7f8b8c25b2d8ae465e8a12a61bec192d0b604b4baabc49fb1dc109701"
+    },
+    "route_from_graph.py": {
+      "sha256": "422db3349f4b0d5687226fe074afbba4dcf59fbd64e2c5467a58c4886603e80b",
+      "hash_normalization": "UTF-8 text; universal newlines normalized to LF",
+      "collected_worktree_raw_sha256": "0242b24370f7130bce2d01f4a5a388514d64f2efc6fc7282854948e34bf30d55"
+    }
+  },
+  "station_ids": [
+    "wolsztyn",
+    "zbaszynek",
+    "cottbus",
+    "leipzig"
+  ],
+  "source_graph_osm_base": "2026-10-05T10:45:21Z",
+  "attribution": "© OpenStreetMap contributors, ODbL",
+  "license": "https://opendatacommons.org/licenses/odbl/1-0/",
+  "geometry_vertices": 289,
+  "simplified_geometry_length_m": 311681.24069004506
+}
