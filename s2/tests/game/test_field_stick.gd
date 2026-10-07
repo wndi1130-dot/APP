@@ -523,3 +523,52 @@ func test_back_in_the_dead_zone_the_rim_run_ends() -> void:
 	assert_eq(hud.stick_push, 0.0)
 	hud.tick(0.2)
 	assert_false(p.running, "the old push does not come back on the next frame")
+
+
+func test_losing_focus_clears_the_rim_run_too() -> void:
+	var hud = game.hud
+	var p = game.player
+	game.opts["stick_rim_run"] = true
+	var at := Vector2(200, 400)
+	hud.finger_down(0, at)
+	hud.finger_move(0, at + Vector2(hud.STICK_R, 0))
+	hud.tick(0.2)
+	assert_true(hud.rim_run)
+	game.interrupt()
+	assert_false(hud.rim_run)
+	assert_eq(hud.stick_push, 0.0)
+	assert_false(p.running)
+	# Back again: a push between 75% and 90% is a walk, not the old run.
+	game.paused = false
+	hud.finger_down(1, at)
+	hud.finger_move(1, at + Vector2(hud.STICK_R * 0.8, 0))
+	hud.tick(0.05)
+	assert_false(p.running)
+
+
+func test_a_stick_finger_whose_lift_was_lost_is_let_go() -> void:
+	var hud = game.hud
+	var p = game.player
+	var at := Vector2(200, 400)
+	hud.finger_down(0, at)
+	hud.finger_move(0, at + Vector2(hud.STICK_R, 0))
+	assert_ne(p.stick, Vector2.ZERO)
+	# The same index comes down on the right half: no lift ever came.
+	hud.finger_down(0, Vector2(hud._view_size().x * 0.7, 300))
+	assert_eq(hud.stick_index, -1)
+	assert_eq(p.stick, Vector2.ZERO)
+
+
+func test_the_rim_run_stands_a_crouching_player_up() -> void:
+	var hud = game.hud
+	var p = game.player
+	game.opts["stick_rim_run"] = true
+	hud.crouch_button.button_pressed = true
+	hud._toggle_crouch()
+	assert_true(p.crouched)
+	var at := Vector2(200, 400)
+	hud.finger_down(0, at)
+	hud.finger_move(0, at + Vector2(hud.STICK_R, 0))
+	hud.tick(0.2)
+	assert_true(p.running)
+	assert_false(p.crouched, "running and crouching are not both on")
