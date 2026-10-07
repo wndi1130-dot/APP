@@ -5,6 +5,8 @@ import { portrait } from './widgets';
 
 // 이름 표시: 화면에는 성을 빼고 이름만 쓴다. 이름을 누르면 전체 이름과 간단한 정보가 뜬다
 // (2026-10-07 사용자 결정). 프로필 이름은 모두 '이름 성' 두 낱말이다.
+// 같은 이름의 다른 사람이 한 화면에 둘 이상 보이면 성 첫 글자를 붙인다('요나 호.', 2026-10-07 사용자 결정).
+// 그리는 동안 보인 이름을 모아 두고, 겹침이 바뀌면 화면을 한 번 더 그린다(app.ts render).
 
 interface ProfileInfo { name: string; name_original?: string; age: number; community: Comm; hometown: string; like: string; dislike: string }
 
@@ -16,14 +18,40 @@ export function given(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
 }
 
+let seen = new Map<string, Set<string>>();
+let clash = new Set<string>();
+
+/** 한 화면을 그리기 전에 부른다. */
+export function beginNames(): void {
+  seen = new Map();
+}
+
+/** 한 화면을 다 그린 뒤 부른다. 겹치는 이름이 바뀌었으면 true(다시 그려야 한다). */
+export function endNames(): boolean {
+  const next = new Set([...seen].filter(([, full]) => full.size > 1).map(([g]) => g));
+  const changed = next.size !== clash.size || [...next].some(g => !clash.has(g));
+  clash = next;
+  return changed;
+}
+
+/** 화면에 쓸 이름. 겹치면 '이름 성첫글자.' */
+export function shownName(name: string): string {
+  const g = given(name);
+  let set = seen.get(g);
+  if (!set) seen.set(g, set = new Set());
+  set.add(name);
+  const surname = name.trim().split(/\s+/)[1];
+  return clash.has(g) && surname ? `${g} ${surname[0]}.` : g;
+}
+
 /** 문장 안의 전체 이름을 이름만으로 줄인다(일지, 카드 본문, 알림). */
 export function shortText(text: string): string {
-  return FULL_NAMES.length ? text.replace(NAME_RE, m => given(m)) : text;
+  return FULL_NAMES.length ? text.replace(NAME_RE, m => shownName(m)) : text;
 }
 
 /** 누르면 그 사람 정보가 뜨는 이름. */
 export function nameBtn(name: string, cls?: string): HTMLElement {
-  return h('button', { class: cx('name', cls), type: 'button', 'data-action': 'person', 'data-name': name, 'aria-label': `${name} 정보` }, given(name));
+  return h('button', { class: cx('name', cls), type: 'button', 'data-action': 'person', 'data-name': name, 'aria-label': `${name} 정보` }, shownName(name));
 }
 
 /** 이름 목록을 쉼표로 이어 단추로 늘어놓는다. */

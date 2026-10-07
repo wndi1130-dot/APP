@@ -12,7 +12,7 @@ import { overviewScreen } from './overview';
 import { councilScreen, voteLever } from './council';
 import { cardSheet, isLoot } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
-import { personCard, shortText } from './names';
+import { beginNames, endNames, personCard, shortText } from './names';
 
 // 화면 조립과 입력. 상태가 바뀌면 통째로 다시 그리고, 스크롤 위치와 연결선은 그린 뒤에 되살린다.
 // 저장은 한 칸이고 행동마다 저절로 한다(되돌리기 없음, S1 기획서 2장).
@@ -76,7 +76,7 @@ export function renderApp(view: View): HTMLElement {
     ui.person ? h('div', { class: 'scrim scrim--person', 'data-action': 'person', 'data-name': '' }) : null,
     ui.person ? personCard(g, ui.person) : null,
     debugOverlay(view),
-    ui.toast ? h('div', { class: 'toast', role: 'status' }, ui.toast) : null,
+    ui.toast ? h('div', { class: 'toast', role: 'status' }, shortText(ui.toast)) : null,
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
 }
 
@@ -134,7 +134,15 @@ export function startApp(root: HTMLElement): void {
 
   function render(): void {
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) scroll[el.dataset.keepScroll ?? ''] = el.scrollLeft || el.scrollTop;
-    root.replaceChildren(renderApp({ g, ui }));
+    beginNames();
+    let view = renderApp({ g, ui });
+    if (endNames()) {
+      // 같은 이름이 새로 겹치거나 풀렸다. 성 첫 글자를 붙이거나 떼서 다시 그린다.
+      beginNames();
+      view = renderApp({ g, ui });
+      endNames();
+    }
+    root.replaceChildren(view);
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) {
       const key = el.dataset.keepScroll ?? '';
       if (scroll[key] === undefined) continue;
@@ -155,7 +163,7 @@ export function startApp(root: HTMLElement): void {
   }
 
   function toast(text: string): void {
-    ui.toast = shortText(text);
+    ui.toast = text;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { ui.toast = null; render(); }, 2600);
   }
