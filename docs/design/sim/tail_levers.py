@@ -66,7 +66,10 @@ class TailLevers(LF.FirstLegSplit):
             self.rest(()); return
         self.crew = self.pick_crew()
         haul0 = P['haul_total']
-        P['haul_total'] = haul0 * T['haul'][self.crew]
+        # s1a_balance.stop은 작업 거부(×0.7)를 늘 꼬리칸으로 본다. 거부는 실제로 나간 칸의 것으로 바꿔 낀다
+        refuse = lambda c: self.fervor[c] >= 1 and self.rel[c] <= -40
+        fix = (0.7 if refuse(self.crew) else 1) / (0.7 if refuse('tail') else 1)
+        P['haul_total'] = haul0 * T['haul'][self.crew] * fix
         passed, inj0, resc0 = self.stats['passed_stops'], self.injured, self.stats['rescued']
         try:
             super().stop()
@@ -117,8 +120,8 @@ class TailLevers(LF.FirstLegSplit):
     def space_lever(self):
         m = self.m
         if self.space and (self.rel[self.giver] < -15 or m['tail'][2] < 50):
-            self.move(-1); return  # 내준 칸이 돌아서거나 꼬리칸이 넉넉해지면 한 단 푼다
-        if self.space < T['space_max'] and m['tail'][2] >= 65:
+            self.move(-1)  # 내준 칸이 돌아서거나 꼬리칸이 넉넉해지면 한 단 푼다. 남은 단의 유지비는 아래에서 그대로 문다
+        elif self.space < T['space_max'] and m['tail'][2] >= 65:
             if self.giver is None:
                 ok = [c for c in ('front', 'medtech', 'guard') if self.rel[c] >= 0 and m[c][2] + 20 <= 60]
                 if not ok:
