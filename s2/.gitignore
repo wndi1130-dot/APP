@@ -1,0 +1,6 @@
+.godot/
+addons/gut/
+build/
+*.keystore
+*.jks
+export_credentials.cfg

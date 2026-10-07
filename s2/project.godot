@@ -1,0 +1,25 @@
+; Godot 4.7.2 stable. Generated graybox; no downloaded assets.
+config_version=5
+
+[application]
+config/name="S2 Phone Performance Spike"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "Mobile")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/handheld/orientation=0
+
+[rendering]
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+textures/vram_compression/import_etc2_astc=true
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.12, 0.12, 0.12, 1)
+
+[physics]
+common/physics_ticks_per_second=30
