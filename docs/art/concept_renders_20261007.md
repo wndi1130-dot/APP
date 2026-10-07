@@ -190,3 +190,28 @@ Small labels 0, 2, 4 under each version only.
 - **C6 결정 카드**: 가장 잘 나왔다. 서류 뭉치에서 꺼낸 종이, 목탄 초상, 선택지 옆 비용과 즉시 정치 변화 막대, 목격자 눈. 고칠 것: 화면엔 성을 빼고 이름만 쓰기로 했으니 명판은 'Pavla'만.
 - **C8 잉크 콘티**: 단계는 잘 나뉘었는데 검은 그을음이 어두운 법랑 위에서 잘 안 보인다(비교 데모에서도 같았다). 번짐 가장자리에 아주 옅은 따뜻한 테두리를 주거나 단추 바탕을 한 단계 밝혀야 한다.
 - **안 나온 것**: C9 정차 장면, C10 하차 네 가지, C11 낡아 가는 UI.
+
+## 평가 (2026-10-07, 2차 결과 9장)
+
+C9 v1·v2, C10 v1·v2, C11 v1·v2·v3, C2 v2·v3. 보관 위치는 1차와 같다.
+
+- **C9 정차 첫 장면**: 카메라 위치(기관차 약간 앞, 낮게, 열차 옆을 따라 뒤로 보는 구도)와 브레이크 증기·불꽃, 창에 붙은 얼굴, 얼어붙은 급수탑, 마을 굴뚝 연기는 둘 다 잘 나왔다. 정차 연출로 쓸 만하다. 문제는 **승강장에 이미 우리 사람이 내려와 있다는 것**이다(v1은 열차장과 수색조, v2는 상자 나르는 조). 다섯 박자 순서로는 이 장면이 하차 전 '읽기' 박자라 승강장이 비어 있어야 한다. 사람이 있으니 먼 끝의 망자 둘이 그냥 우리 사람처럼 보이고, '누가 먼저 왔다'는 발자국도 우리 발자국으로 읽힌다(점검 6번 절반만 통과). v2는 하차가 아니라 **떠나기 전 싣는 장면**으로 쓰기 좋다. → C9 v3을 다시 뽑는다(아래).
+- **C10 하차 네 가지**: 같은 얼굴·같은 문·같은 구도가 넷 내내 유지돼서, 기본 하차 동작에 자세와 짧은 동작을 섞는 방식이 그림으로는 성립한다. 1(환영)은 둘 다 한눈에 읽힌다. 3(어깨 짚임)은 v2가 손이 어깨에 닿아 더 분명하다. **2(불신임 직전)와 4(감시당함)는 폰 크기에서 거의 같아 보인다.** 둘 다 '어두운 얼굴로 내리는 남자'다. 차이는 열차장 자세보다 주변(빈 창과 커튼, 문간의 무장 경비, 돌아서는 사람)에서 난다. 그래서 하차 장면 연출은 열차장 동작만이 아니라 **창과 문간의 반응을 같이 바꿔야** 구별된다(연출 문서에 반영). 열차장 얼굴은 캐릭터 생성(열린 질문 2) 전 임시다. 다시 뽑지 않는다.
+- **C11 낡아 가는 UI(v3 추천)**: 녹은 테와 리벳에, 그을음은 가장자리에만 생겨서 공용 덧칠 마스크 방식과 맞는다. 세 단계 모두 글자와 숫자는 읽힌다. 고칠 것 셋.
+  - **0단계가 이미 더럽다.** 종이 모서리에 검은 얼룩, 판 전체에 때가 있다. 0이 깨끗하지 않으면 낡아 가는 폭이 줄고, 처음 본 화면이 기준이 되므로 0은 정말 깨끗해야 한다.
+  - **피가 너무 붉다.** v1·v2는 선홍색이라 경고 빨강과 헷갈린다. v3이 가장 어둡지만 아직 붉다. 마른 피는 짙은 갈색으로.
+  - **얼룩이 아이콘에 닿는다.** 2단계 커피 자국이 기관차 아이콘에 걸치고(v1, v3), v2의 4단계는 결속 계기 유리에 금이 가서 칸이 가려진다. '글자·숫자·아이콘 위엔 아무것도 없다' 규칙과 어긋난다.
+  → C11 v4를 다시 뽑는다(아래).
+- **C2 전술 일시정지(v3 추천)**: 화면 전체가 회갈색으로 바래고 HUD, 조준 원, 명령 선만 색이 남아 이제 '멈췄다'가 바로 읽힌다. v2는 1차와 같이 약하다. 고칠 것: 왼쪽 위 '추위' 계기가 하늘색이다(C5와 같은 문제, 추위는 회백색 성에). 'JUNCTION' 영어 표지판은 C1과 같이 그 나라 말로. 다시 뽑지 않고 마감 때 고친다.
+
+### C9 v3 (다시, 첨부: C9_stop_v1)
+
+```text
+Recreate the attached image with the same camera, train, station, weather and light, but this is the moment just after the train stops and before anyone has stepped off. The platform is completely empty of living people: no crew, no scavengers, no lanterns carried. Faces stay pressed to the glowing train windows, looking out. Keep the frozen water tower, the warning sign too far to read, the burnt-out car on the siding with its doors chained shut, crows on the roof and the thin chimney smoke in the village. Add a single line of old footprints and a dragged trail in the snow leading from the far end of the platform into the dark goods shed, half filled with fresh snow so they are clearly days old. At the far end of the platform two dead figures stand motionless in the fog, slightly hunched, arms hanging, clearly not living people. No text, no gore. Only the small translucent stop marker and one arrow button at the bottom-right corner.
+```
+
+### C11 v4 (다시, 첨부: C11_weathering_v3)
+
+```text
+Recreate the attached sheet with the same layout, labels, numbers and icons, with these changes. Stage 0 must be truly clean and new: no stains, no soot, no dark spots, crisp off-white paper, bright enamel, polished brass. Stage 2 stays as it is, but move the coffee ring so it touches no icon, only blank paper. Stage 4: keep the rust, soot, torn corner and creases, keep the gauge glass uncracked over the bars, and paint any blood as a few small dried smears in dark brown, almost black, never bright red, only on paper margins and one button rim, never on the portrait, text, numbers or icons.
+```
