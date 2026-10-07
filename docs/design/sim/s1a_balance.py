@@ -180,7 +180,7 @@ class Run:
         """통과한 법들의 자원 효과를 모은다. *_mult는 곱하고 나머지는 더한다."""
         mult = key.endswith('_mult') or key == 'heal'
         out = 1.0 if mult else default
-        for l in self.passed:
+        for l in sorted(self.passed):
             v = LAWS[l]['res'].get(key)
             if v is None or isinstance(v, str):
                 continue
@@ -479,7 +479,7 @@ class Run:
         options = [(l, False) for l, v in LAWS.items() if l not in self.passed and v['open'](self)
                    and not (l in CORPSE and self.corpse) and self.session - self.repealed_at.get(l, -99) > cool]
         if P['repeal'] and self.policy not in ('passive', 'idealist'):
-            options += [(l, True) for l in self.passed if self.session - self.passed_at[l] >= cool]
+            options += [(l, True) for l in sorted(self.passed) if self.session - self.passed_at[l] >= cool]
         if not options:
             return
         crisis = [k for k, lim in (('coal', P['crisis_line']), ('food', P['crisis_line'])) if getattr(self, k) < lim]
