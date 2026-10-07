@@ -3,6 +3,7 @@ import {
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { needOf } from './needs';
+import { domesticLawOpen } from './domestic/laws';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import type { Agenda, CouncilState, Deal, DealTool, Game, VoteFlip, VoteResult } from './state';
 
@@ -134,6 +135,9 @@ export function crisisNow(g: Game): Crisis[] {
 }
 
 export function lawOpen(g: Game, law: LawId): boolean {
+  // S1c 법과 S1c가 바꾸는 법(중환자 분류)은 domestic/laws.ts가 정한다. S1a 판에선 S1c 법이 닫혀 있다.
+  const dom = domesticLawOpen(g, law);
+  if (dom !== null) return dom;
   const sit = (c: Comm) => situation(g, c);
   switch (law) {
     case 'seed_grain': return g.food <= 50;
@@ -294,7 +298,7 @@ export function bribePrice(g: Game, c: Comm): number {
 
 /** 공개 협상 조건 셋: 처지가 가장 나쁜 쪽, 그 집단의 것 하나, 공통 하나. 회기마다 같은 판이면 같다. */
 export function openConditions(g: Game, c: Comm): ConditionDef[] {
-  const pool = CONDITIONS[c];
+  const pool = CONDITIONS[c].filter(x => !x.s1c || !!g.dom);
   const [w, r, cr] = situation(g, c);
   const worst = c === 'tail' && cr >= 70 ? pool.find(x => x.kind === 'relocate')
     : w < r ? pool.find(x => x.kind === 'heat') : pool.find(x => x.kind === 'ration');

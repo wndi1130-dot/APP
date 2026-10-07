@@ -58,7 +58,9 @@ export type Mats = Partial<Record<Comm, [number, number, number, number]>>;
 export type LawId =
   | 'common_kitchen' | 'contribution_ration' | 'seed_grain' | 'common_heating' | 'heat_quota' | 'snow_duty'
   | 'child_labor' | 'corpse_throw' | 'corpse_store' | 'corpse_burn' | 'treat_all' | 'triage' | 'no_outsiders'
-  | 'patrol' | 'secret_ballot' | 'emergency_powers' | 'strike_ban' | 'guided_voting';
+  | 'patrol' | 'secret_ballot' | 'emergency_powers' | 'strike_ban' | 'guided_voting'
+  // S1c 법 다섯(s1a_politics_numbers 8.5). S1c를 켠 판에서만 열린다(domestic/laws.ts).
+  | 'tech_control' | 'apprentice_duty' | 'triage_std' | 'bath_rota' | 'hands_first';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -177,7 +179,35 @@ export const LAWS: Record<LawId, LawDef> = {
     id: 'guided_voting', title: '유도 투표', group: '통치', tag: '통치', kind: 'rule', axes: [0, 1, 0],
     changes: ['회기마다 미정 30%가 찬성으로', '회기마다 모든 관계 −3', '공포 +3', '3회기 뒤 끝난다'], opensWhen: '세 번째 회기부터',
   }),
+  // ---- S1c 법(s1a_politics_numbers 8.5, s1c_domestic 9.1·16.4). 숫자는 제안. 효과는 domestic/*.ts가 lawActive로 읽는다. ----
+  tech_control: L({
+    id: 'tech_control', title: '기술 통제법', group: '지식', tag: '통치', kind: 'rule', axes: [0, 1, 1],
+    like: { engine: 2, guard: 1, tail: -1, medtech: -1 }, rels: { engine: 15, guard: 5 },
+    changes: ['견습생은 그 분야 전문가의 칸에서만', '기관실 관계 +15', '경비대 관계 +5', '견습 의무법이 닫힌다'], opensWhen: '다른 칸 견습생이 처음 붙은 뒤',
+  }),
+  apprentice_duty: L({
+    id: 'apprentice_duty', title: '견습 의무', group: '지식', tag: '이상', kind: 'normal', axes: [1, -1, 0],
+    like: { tail: 2, medtech: 1, engine: -2 },
+    changes: ['분야마다 견습생 하나는 다른 칸에서', '전문가가 늘 가르쳐 모든 기술 ×0.9', '기술 통제법이 닫힌다'], opensWhen: '대체 불가 요구가 처음 온 뒤',
+  }),
+  triage_std: L({
+    id: 'triage_std', title: '중환자 분류(기준)', group: '의료', tag: '가혹', kind: 'normal', axes: [0, -1, 0],
+    like: { front: 1, medtech: 1, tail: -1 }, rels: { medtech: -5 }, res: { medMult: 0.75, trustOnce: -2 }, crisis: ['med'],
+    changes: ['의약품 소모 ×0.75', '신임 −2', '의무진 관계 −5', '중환자 분류 대신 오른다'], opensWhen: '환자 분류 기준을 복원한 뒤',
+  }),
+  bath_rota: L({
+    id: 'bath_rota', title: '목욕 순번', group: '위생', tag: '이상', kind: 'normal', axes: [1, 0, 0],
+    like: { tail: 2, medtech: 1, front: -1 },
+    changes: ['모든 칸이 같은 더운물 몫', '더운물 석탄 ×1.2', '더운물 드물게 아래로 못 내림', '일하는 손 먼저가 닫힌다'], opensWhen: '이가 처음 돈 뒤',
+  }),
+  hands_first: L({
+    id: 'hands_first', title: '일하는 손 먼저', group: '위생', tag: '가혹', kind: 'normal', axes: [-1, 0, 0],
+    like: { engine: 1, guard: 1, tail: -1, front: -1 },
+    changes: ['기관실·경비대·파견 칸 더운물 +1', '꼬리칸·앞칸 더운물 −1', '더운물 석탄 ×0.8', '목욕 순번이 닫힌다'], opensWhen: '이가 처음 돈 뒤',
+  }),
 };
+/** S1c 법. S1a 판에선 열리지 않는다. */
+export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first'];
 export const LAW_IDS = Object.keys(LAWS) as LawId[];
 export const CORPSE_LAWS: LawId[] = ['corpse_throw', 'corpse_store', 'corpse_burn'];
 
@@ -234,8 +264,13 @@ export const SECRET_POOL: { text: string; weight: 1 | 2 | 3 }[] = [
 // ---- 공개 협상 조건(브리프 3.2) ----
 export type ConditionKind =
   | 'heat' | 'ration' | 'relocate' | 'skip_dispatch' | 'front_levy' | 'shift' | 'target' | 'give_med' | 'give_lux'
-  | 'keep_ration' | 'agenda' | 'cut';
-export interface ConditionDef { kind: ConditionKind; label: string; /** 지금 바로 치르는 조건인가 */ now: boolean; target?: LootKey; amount?: number }
+  | 'keep_ration' | 'agenda' | 'cut'
+  // S1c 조건 둘(s1a_politics_numbers 3.2, s1c_domestic 9.2)
+  | 'apprentice_pick' | 'research_pick';
+export interface ConditionDef {
+  kind: ConditionKind; label: string; /** 지금 바로 치르는 조건인가 */ now: boolean; target?: LootKey; amount?: number;
+  /** S1c를 켠 판에서만 내건다 */ s1c?: boolean;
+}
 export const CONDITIONS: Record<Comm, ConditionDef[]> = {
   tail: [
     { kind: 'heat', label: '꼬리칸 난방 +1', now: false },
@@ -248,6 +283,7 @@ export const CONDITIONS: Record<Comm, ConditionDef[]> = {
     { kind: 'ration', label: '기관실 배급 +1', now: false },
     { kind: 'shift', label: '화부 교대 늘리기', now: true },
     { kind: 'target', label: '다음 정차는 석탄', now: false, target: 'coal' },
+    { kind: 'apprentice_pick', label: '견습생 선발권', now: false, s1c: true },
   ],
   guard: [
     { kind: 'give_med', label: '장비: 의약품 3', now: false, amount: 3 },
@@ -258,6 +294,7 @@ export const CONDITIONS: Record<Comm, ConditionDef[]> = {
     { kind: 'give_med', label: '의약품 5', now: false, amount: 5 },
     { kind: 'heat', label: '의무칸 난방 +1', now: false },
     { kind: 'target', label: '다음 정차는 의약품', now: false, target: 'medicine' },
+    { kind: 'research_pick', label: '연구 우선권', now: false, s1c: true },
   ],
   front: [
     { kind: 'give_lux', label: '사치품 3', now: false, amount: 3 },
