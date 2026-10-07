@@ -1,0 +1,151 @@
+{
+  "schema": "app.ui-motion.capture-plan/1",
+  "checkpoints": [
+    {
+      "source_id": "G10",
+      "range_label": "03:13–04:20",
+      "start_seconds": 193,
+      "end_seconds": 260,
+      "time_basis": "author_chapters",
+      "title": "Menus & User Interface",
+      "note": "법률서와 일반 메뉴의 무게/반복 빈도를 비교할 위치.",
+      "url": "https://www.youtube.com/watch?v=kbjYl8m5cOI&t=193",
+      "directly_observed": false,
+      "audio_listened": false
+    },
+    {
+      "source_id": "G10",
+      "range_label": "06:00–07:03",
+      "start_seconds": 360,
+      "end_seconds": 423,
+      "time_basis": "author_chapters",
+      "title": "Sound Analysis",
+      "note": "저/중/고역 층을 분석자가 어떻게 나누는지 듣는다.",
+      "url": "https://www.youtube.com/watch?v=kbjYl8m5cOI&t=360",
+      "directly_observed": false,
+      "audio_listened": false
+    },
+    {
+      "source_id": "G10",
+      "range_label": "07:04–09:13",
+      "start_seconds": 424,
+      "end_seconds": 553,
+      "time_basis": "author_chapters",
+      "title": "Sound Design Breakdown",
+      "note": "분석자 자신의 재제작이지 원작 제작 공정이 아님.",
+      "url": "https://www.youtube.com/watch?v=kbjYl8m5cOI&t=424",
+      "directly_observed": false,
+      "audio_listened": false
+    },
+    {
+      "source_id": "G10",
+      "range_label": "09:14–10:26",
+      "start_seconds": 554,
+      "end_seconds": 626,
+      "time_basis": "author_chapters",
+      "title": "Notifiers",
+      "note": "법률 제정의 종/근무 전환의 나팔이라는 분석자 사례.",
+      "url": "https://www.youtube.com/watch?v=kbjYl8m5cOI&t=554",
+      "directly_observed": false,
+      "audio_listened": false
+    },
+    {
+      "source_id": "G03",
+      "range_label": "00:54–01:00",
+      "start_seconds": 54,
+      "end_seconds": 60,
+      "time_basis": "author_credit",
+      "title": "Idea Tree shader",
+      "note": "저자가 명시한 Marin Zujic 크레딧 구간.",
+      "url": "https://barbabis.artstation.com/projects/x3reN1",
+      "directly_observed": false,
+      "audio_listened": false
+    }
+  ],
+  "missing_original_checks": [
+    {
+      "id": "C01",
+      "game": "FP1",
+      "context": "법률서 열기/닫기/법 선택/확정",
+      "source_id": "G01",
+      "recording_url": null,
+      "build": null,
+      "platform": null,
+      "timestamp_start": null,
+      "timestamp_end": null,
+      "raw_audio_acquired": false,
+      "directly_observed": false,
+      "status": "[WATCH]"
+    },
+    {
+      "id": "C02",
+      "game": "FP1",
+      "context": "연구 항목 선택/시작/완료 알림",
+      "source_id": "G01",
+      "recording_url": null,
+      "build": null,
+      "platform": null,
+      "timestamp_start": null,
+      "timestamp_end": null,
+      "raw_audio_acquired": false,
+      "directly_observed": false,
+      "status": "[WATCH]"
+    },
+    {
+      "id": "C03",
+      "game": "FP2",
+      "context": "Council 낮은/높은 긴장/표결 진입",
+      "source_id": "G02",
+      "recording_url": null,
+      "build": null,
+      "platform": null,
+      "timestamp_start": null,
+      "timestamp_end": null,
+      "raw_audio_acquired": false,
+      "directly_observed": false,
+      "status": "[WATCH]"
+    },
+    {
+      "id": "C04",
+      "game": "FP2",
+      "context": "Idea Tree 진입/노드 선택/연구 진행·완료",
+      "source_id": "G03",
+      "recording_url": null,
+      "build": null,
+      "platform": null,
+      "timestamp_start": null,
+      "timestamp_end": null,
+      "raw_audio_acquired": false,
+      "directly_observed": false,
+      "status": "[WATCH]"
+    },
+    {
+      "id": "C05",
+      "game": "FP2",
+      "context": "modal 닫기/퀘스트 추가/호버-포커스 전환",
+      "source_id": "G04",
+      "recording_url": null,
+      "build": null,
+      "platform": null,
+      "timestamp_start": null,
+      "timestamp_end": null,
+      "raw_audio_acquired": false,
+      "directly_observed": false,
+      "status": "[WATCH]"
+    },
+    {
+      "id": "C06",
+      "game": "TWOM",
+      "context": "생존자 선택/제작 창/낮→밤/거래 승인",
+      "source_id": "G06",
+      "recording_url": null,
+      "build": null,
+      "platform": null,
+      "timestamp_start": null,
+      "timestamp_end": null,
+      "raw_audio_acquired": false,
+      "directly_observed": false,
+      "status": "[WATCH]"
+    }
+  ]
+}
