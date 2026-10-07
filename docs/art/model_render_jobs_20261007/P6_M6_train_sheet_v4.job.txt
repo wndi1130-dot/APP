@@ -1,4 +1,4 @@
-Task: use your built-in image generation tool to create exactly one image from the prompt below. Attached reference images, in order: image 1 = ..\화면컨셉_20261007\C3_home_v5.png; image 2 = ..\화면컨셉_20261007\C9_stop_v5.png; Save the generated image as M6_train_sheet_v1.png in the current working directory. Do not write any other files. Reply with one line: the saved path.
+Task: use your built-in image generation tool to create exactly one image from the prompt below. Attached reference images, in order: image 1 = ..\화면컨셉_20261007\C3_home_v5.png; image 2 = ..\화면컨셉_20261007\C9_stop_v5.png; Save the generated image as M6_train_sheet_v4.png in the current working directory. Do not write any other files. Reply with one line: the saved path.
 
 --- PROMPT ---
 Use the attached images only for the train's mood, materials and weather wear. Draw a 3D model sheet of our steam train.
