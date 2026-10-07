@@ -215,7 +215,7 @@ ref/rail의 기본 경로(`wolsztyn zbaszynek cottbus leipzig`, 311.9km)를 따�
 | 236 | 슈바르체 엘스터강 다리(62m, 확인) | [OSM way 33775391](https://www.openstreetmap.org/way/33775391) |
 | 221~265 | (엘베–엘스터 저지) | 지나가기만 한다. 정거장 후보에서 뺐고, 이름·사건·사진을 쓰지 않는다(2026-10-07, first_leg_story 0.4) |
 | 287 | 아일렌부르크 물데강 다리(284m, 확실) | [OSM way 89272457](https://www.openstreetmap.org/way/89272457). 여기서 선로 6360(아일렌부르크 철도)으로 갈아탄다 |
-| 302 | 타우하(Taucha) | |
+| 302 | (라이프치히 외곽) | 지나가기만 한다. 정차·사건·이름을 쓰지 않는다(2026-10-07, first_leg_story 0.4) |
 | 312 | 라이프치히 중앙역 | 1909~1915년에 지은 막다른 종착역. 개업 때 승강장 26면, 작센 쪽과 프로이센 쪽으로 나뉜 구조였고, 1944년 7월 공습 피해를 1965년까지 복구했다([Wikipedia](https://en.wikipedia.org/wiki/Leipzig_Hauptbahnhof)) |
 
 역의 출처: 즈봉시네크는 [Wikipedia](https://en.wikipedia.org/wiki/Zb%C4%85szynek_railway_station)와 [Urbaniak 2017](https://www.deutscherkunstverlag.de/article/10.1515/ATC-2017-0007)(유료 논문), 팔켄베르크는 [Wikipedia](https://en.wikipedia.org/wiki/Falkenberg_(Elster)_station). 6345선 복선 한쪽은 1945년 뒤 소련 배상으로 뜯겼다가 1970년까지 복구됐다는 Wikipedia 서술이 있다(원문 재확인 **미확인**).
