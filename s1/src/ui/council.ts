@@ -3,7 +3,7 @@ import {
   openConditions, relStage, relationLine, toolStatus,
   needOf, canDecree, agendaNeed, isLawAgenda, MOTIONS,
 } from '../game';
-import type { Bloc, Comm, DealTool, Game, VoteResult } from '../game';
+import type { Bloc, Comm, DealTool, Game, LawId, VoteResult } from '../game';
 import { cx, h, s } from './dom';
 import { icon } from './icons';
 import type { IconName } from './icons';
@@ -189,10 +189,23 @@ function billPanel(view: View): HTMLElement {
       council.emergency ? h('span', { class: 'tag' }, '비상 소집') : null,
       agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
       council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
-    h('ul', { class: 'bill__changes' }, (agenda.repeal ? ['통과 때 바뀐 것을 되돌린다', ...law.changes.map(x => `되돌림: ${x}`)] : law.changes)
+    h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law) : law.changes)
       .slice(0, 5).map(x => h('li', null, x))),
     h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
       council.locked && !council.result ? ' · 안건을 넘겼다' : ''));
+}
+
+/** 폐지 때 실제로 일어나는 것(politics.ts repealLaw). 통과 때 한 번 받은 것과 관계 변화는 되돌리지 않는다. */
+function repealLines(g: Game, law: LawId): string[] {
+  const def = LAWS[law];
+  const bought = g.boughtBy[law];
+  return [
+    Object.keys(def.mats).length ? '칸 처지에 준 변화를 되돌린다' : null,
+    '통과 때 한 번 받은 것과 관계 변화는 그대로 남는다',
+    `이 법을 지지하는 칸은 관계 −${P.repealRel}`,
+    bought && g.session - bought.session <= 3 ? `약속으로 산 칸(${bought.comms.map(c => COMM_NAME[c]).join(', ')})이 배신으로 기억한다` : null,
+    law === 'guided_voting' || law === 'emergency_powers' ? '남은 기간이 바로 끝난다' : null,
+  ].filter((x): x is string => !!x);
 }
 
 function traitText(g: Game, c: Comm): string {

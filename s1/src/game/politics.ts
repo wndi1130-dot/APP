@@ -348,7 +348,9 @@ export function openConditions(g: Game, c: Comm): ConditionDef[] {
   const first = worst ?? pool[0];
   const rest = pool.filter(x => x !== first);
   const second = rest[(g.session + g.seg) % rest.length];
-  const common = COMMON_CONDITIONS[(g.session + COMMS.indexOf(c)) % COMMON_CONDITIONS.length];
+  // 다음 안건 선택권은 하나뿐이다. 이미 누가 쥐었으면 같은 걸 또 팔지 않는다(먼저 받은 칸의 몫이 소리 없이 사라졌다).
+  const commons = COMMON_CONDITIONS.filter(x => x.kind !== 'agenda' || g.agendaHolder === null);
+  const common = commons[(g.session + COMMS.indexOf(c)) % commons.length];
   return [first, second, common];
 }
 
