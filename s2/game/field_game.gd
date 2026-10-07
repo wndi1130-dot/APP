@@ -29,8 +29,11 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const AMBIENT_C: float = -14.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
-const NEAR_SIGHT: float = 2.6
+const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
+const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a person (field_unified 6)
+const BLOOD_SCENT_R: float = 12.0       # excessive blood smell event radius (body_injury 8.1)
+const EXIT_WIDTH: Dictionary = {"culvert": 2}   # dead out at once per exit; others one
 const ALLY_CAP: int = 12
 const CAM_PITCH: float = 52.0
 const EXTRA_ITEMS: Dictionary = {
@@ -586,8 +589,7 @@ func _update_blood(delta: float) -> void:
 		p.brain["blood_noise_t"] = float(p.brain.get("blood_noise_t", 60.0)) - delta
 		if p.brain["blood_noise_t"] <= 0.0:
 			p.brain["blood_noise_t"] = 60.0
-			var radius := SimNoise.radius(SimNoise.Level.NORMAL, false, 1.0)
-			zombies.hear(p.position, SimNoise.Level.NORMAL, radius, weather)
+			zombies.smell(p.position, BLOOD_SCENT_R)
 			_score(SimNoise.Level.NORMAL, "blood")
 	while blood.size() > 0 and now - float(blood[0]["t"]) > 120.0:
 		blood.pop_front()
@@ -595,13 +597,17 @@ func _update_blood(delta: float) -> void:
 		blood.pop_front()
 
 
-## Freshest, closest trail point a zombie at `at` can smell (20 m, more downwind).
+## Freshest, closest trail point a zombie at `at` can smell: the same 12 m
+## event shape as the minute pulse; falling snow weakens older drops (8.1).
 func strongest_scent(at: Vector3) -> Dictionary:
 	var best: Dictionary = {}
 	var best_score := 0.0
 	var now := clock.elapsed
+	var snowing := weather.kinds.has("snow") or weather.kinds.has("blizzard")
 	for b in blood:
-		var reach: float = 20.0 * weather.downwind(b["pos"], at)
+		var reach: float = BLOOD_SCENT_R * weather.scent_mult(b["pos"], at)
+		if snowing and now - float(b["t"]) > 30.0:
+			reach *= 0.7
 		var d: float = at.distance_to(b["pos"])
 		if d > reach:
 			continue
@@ -729,21 +735,42 @@ func _update_spawns(delta: float) -> void:
 		if now < float(s["t"]):
 			keep.append(s)
 			continue
-		if alive >= cap or gate.has(key):
+		if alive >= cap or int(gate.get(key, 0)) >= int(EXIT_WIDTH.get(key, 1)):
 			waiting += 1
 			s["t"] = now + 0.5
+			keep.append(s)
+			continue
+		# Nobody climbs out right under someone's feet: that exit passes its
+		# share to the other open one (field_unified 6). Pressure stays the same.
+		if HordeDirector.is_sewer(key) and _someone_near(s["pos"], SEWER_CLEAR):
+			var other := "culvert" if key == "manhole" else "manhole"
+			var other_pos: Vector3 = FieldGrid.center(data["entries"][other][0])
+			if director.is_open(other) and not _someone_near(other_pos, SEWER_CLEAR):
+				s["entry"] = other
+				s["pos"] = other_pos
+				s["t"] = now + 3.0   # the other lid rattles first
+			else:
+				s["t"] = now + 0.5
+				waiting += 1
 			keep.append(s)
 			continue
 		var z := zombies.spawn("dead", s["pos"] + Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4)), {"horde": s["horde"], "target": s["target"]})
 		z["stander"] = false
 		alive += 1
-		gate[key] = true
+		gate[key] = int(gate.get(key, 0)) + 1
 	pending_spawn = keep
 	if forecast_t > 0.0:
 		forecast_t -= delta
 		if forecast_t <= 0.0:
 			set_radio("기관사: " + director.forecast(now, forecast_precision, clock))
 	deaf_t = maxf(0.0, deaf_t - delta)
+
+
+func _someone_near(at: Vector3, r: float) -> bool:
+	for p in people:
+		if p.is_alive() and Vector2(p.position.x - at.x, p.position.z - at.z).length() < r:
+			return true
+	return false
 
 
 func set_radio(text: String) -> void:
@@ -762,9 +789,8 @@ func say(p, text: String) -> void:
 ## Zomboid-like sight: a wide cone ahead, a small circle all round, walls hide.
 func _refresh_vision() -> void:
 	var origin := FieldGrid.cell_of(player.position)
-	var radius := SIGHT_UPSTAIRS if player.upstairs else SIGHT_RADIUS
-	if clock.is_dark():
-		radius = int(radius * 0.6)
+	var base := SIGHT_UPSTAIRS if player.upstairs else SIGHT_RADIUS
+	var radius := maxi(3, int(round(base * weather.sight_mult(clock.is_dark()))))
 	if not mask_on:
 		seen_now = {}
 		view.set_mask_enabled(false)

@@ -6,8 +6,8 @@ const Weather = preload("res://game/sim/weather.gd")
 func test_sulechow_default_fog_and_snow() -> void:
 	var w = Weather.new()
 	assert_eq(w.kinds, ["fog", "snow"] as Array[String])
-	assert_almost_eq(w.sight_mult(), 0.7 * 0.85, 0.0001)
-	assert_almost_eq(w.sight_mult(true), 0.7 * 0.85 * 0.6, 0.0001)
+	assert_almost_eq(w.sight_mult(), 0.6, 0.0001, "fog and snow do not multiply: the shorter holds")
+	assert_almost_eq(w.sight_mult(true), 0.55, 0.0001, "a foggy night is the night value")
 	assert_almost_eq(w.sound_mult(), 1.0, 0.0001, "fog and snow leave gunshots alone")
 	assert_almost_eq(w.sound_mult(true), 0.75, 0.0001, "snow muffles footsteps")
 	assert_false(w.always_cold())
@@ -54,3 +54,13 @@ func test_particles() -> void:
 	assert_eq(Weather.new(["fog"]).particles(), 0)
 	assert_eq(Weather.new(["fog", "snow"]).particles(), 300)
 	assert_eq(Weather.new(["blizzard", "snow"]).particles(), 900)
+
+
+func test_scent_wind_and_cold() -> void:
+	var w = Weather.new(["snow"], -14.0, Vector2(1, 0), 0.4)
+	var at := Vector3(10, 0, 10)
+	assert_almost_eq(w.scent_mult(at, at + Vector3(5, 0, 0)), 0.6 * 1.5, 0.0001, "downwind")
+	assert_almost_eq(w.scent_mult(at, at + Vector3(-5, 0, 0)), 0.6 * 0.6, 0.0001, "upwind")
+	assert_almost_eq(w.scent_mult(at, at + Vector3(0, 0, 5)), 0.6 * 0.9, 0.0001, "sideways")
+	var thaw = Weather.new(["sleet"], 1.0, Vector2(1, 0), 0.0)
+	assert_almost_eq(thaw.scent_mult(at, at + Vector3(5, 0, 0)), 1.0, 0.0001, "no wind, above zero")

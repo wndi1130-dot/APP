@@ -7,7 +7,7 @@ const ROWS: Dictionary = {
 	# sight: multiplier on sight range for people and the dead alike.
 	# sound: multiplier on every sound radius. footstep: extra on footsteps only.
 	"clear": {"name": "맑음", "sight": 1.25, "sound": 1.0, "footstep": 1.0, "always_cold": false, "wet": false, "ice_all": false, "particles": 0},
-	"fog": {"name": "안개", "sight": 0.7, "sound": 1.0, "footstep": 1.0, "always_cold": false, "wet": false, "ice_all": false, "particles": 0},
+	"fog": {"name": "안개", "sight": 0.6, "sound": 1.0, "footstep": 1.0, "always_cold": false, "wet": false, "ice_all": false, "particles": 0},
 	"snow": {"name": "눈 내림", "sight": 0.85, "sound": 1.0, "footstep": 0.75, "always_cold": false, "wet": false, "ice_all": false, "particles": 300},
 	"blizzard": {"name": "눈보라", "sight": 0.4, "sound": 0.75, "footstep": 1.0, "always_cold": true, "wet": false, "ice_all": false, "particles": 900},
 	"sleet": {"name": "진눈깨비", "sight": 0.85, "sound": 1.0, "footstep": 1.0, "always_cold": false, "wet": true, "ice_all": true, "particles": 400},
@@ -43,9 +43,27 @@ func _product(key: String) -> float:
 	return m
 
 
-## Sight range multiplier. Dusk and night cut it further (the clock decides when).
+## Night cuts sight to this share (body_injury 8.3 start value).
+const DARK_SIGHT: float = 0.55
+## Two or more cutting conditions at once (fog and night...) do not multiply:
+## the shortest one holds (stand-in until 8.3 names 'foggy night' values).
+
+
+## Sight range multiplier for people and the dead alike (body_injury 8.3).
 func sight_mult(dark: bool = false) -> float:
-	return _product("sight") * (0.6 if dark else 1.0)
+	var cuts: Array[float] = []
+	var best := 1.0
+	for k in kinds:
+		var v := float(ROWS[k]["sight"])
+		if v < 1.0:
+			cuts.append(v)
+		else:
+			best = maxf(best, v)
+	if dark:
+		cuts.append(DARK_SIGHT)
+	if cuts.is_empty():
+		return best
+	return float(cuts.min())
 
 
 ## Radius multiplier for a sound. Footsteps also take the footstep column.
@@ -91,6 +109,21 @@ func downwind(from: Vector3, to: Vector3) -> float:
 	if d.length() < 0.001:
 		return 1.0
 	return 1.0 + wind * maxf(0.0, wind_dir.dot(d.normalized()))
+
+
+## Excessive blood (body_injury 8.1): a 12 m smell event stretched by the wind
+## (downwind x1.5, upwind x0.6, sideways x0.9) and cut to x0.6 below zero.
+func scent_mult(from: Vector3, to: Vector3) -> float:
+	var m := 0.6 if ambient_c < 0.0 else 1.0
+	var d := Vector2(to.x - from.x, to.z - from.z)
+	if wind <= 0.0 or d.length() < 0.001:
+		return m
+	var dot := wind_dir.dot(d.normalized())
+	if dot >= 0.5:
+		return m * 1.5
+	if dot <= -0.5:
+		return m * 0.6
+	return m * 0.9
 
 
 func label() -> String:

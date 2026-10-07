@@ -27,6 +27,8 @@ const NEAR: float = 32.0
 const FEEL: float = 1.8          # all-round sense at arm's reach
 const CONE_COS: float = 0.5      # 120 degree forward sight cone
 const HERD: float = 8.0
+const MEMORY: float = 8.0        # seconds a lost target stays worth chasing (field_unified 11, 'normal')
+const SEARCH_TIME: float = 4.0   # look around the last seen spot, two corners, then wander
 const KINDS: Array[String] = ["dead", "clothed", "fresh", "frozen"]
 const TINTS: Dictionary = {"dead": Color(0.5, 0.52, 0.47), "clothed": Color(0.36, 0.38, 0.45), "fresh": Color(0.62, 0.45, 0.42), "frozen": Color(0.86, 0.9, 0.95), "corpse": Color(0.3, 0.3, 0.29)}
 
@@ -188,10 +190,43 @@ func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 		if level == SimNoise.Level.QUIET:
 			z["angle"] = atan2(at.x - z["pos"].x, at.z - z["pos"].z)
 			continue
+		# A fainter sound does not pull one already walking to a louder one.
+		if (state == "investigate" or state == "horde") and level < int(z.get("clue", 0)) and z["pos"].distance_to(z["target"]) > 1.2:
+			continue
+		# Idle dead first turn toward the noise, then set off (no instant lock-on).
+		if state == "wander" or state == "search":
+			z["turn_t"] = game.rng.randf_range(0.4, 0.9)
+		z["clue"] = level
 		z["state"] = "investigate"
 		z["target"] = at
 		z["linger"] = SimNoise.LINGER[level]
 		z["speed"] = SPEED_HURRY if level >= SimNoise.Level.LOUD else SPEED_SHAMBLE
+		z["path_t"] = 0.0
+		reacted += 1
+	return reacted
+
+
+## Excessive blood (body_injury 8.1): a smell event, separate from sound. The
+## dead within reach walk to the spot it came from (not to where the bleeder
+## is now). Frozen ones do not wake to it; silencers and quiet steps do not cut it.
+func smell(at: Vector3, radius: float) -> int:
+	var reacted := 0
+	for z in list:
+		var state: String = z["state"]
+		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase"]:
+			continue
+		var reach := radius * float(game.weather.scent_mult(at, z["pos"]))
+		if at.distance_to(z["pos"]) > reach:
+			continue
+		if state == "investigate" and int(z.get("clue", 0)) > SimNoise.Level.NORMAL and z["pos"].distance_to(z["target"]) > 1.2:
+			continue
+		if state == "wander" or state == "search":
+			z["turn_t"] = game.rng.randf_range(0.4, 0.9)
+		z["clue"] = SimNoise.Level.NORMAL
+		z["state"] = "investigate"
+		z["target"] = at
+		z["linger"] = 8.0
+		z["speed"] = SPEED_SHAMBLE
 		z["path_t"] = 0.0
 		reacted += 1
 	return reacted
@@ -286,6 +321,7 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		if z["state"] != "chase":
 			z["path_t"] = 0.0
 			_call_neighbours(z, best.position)
+		z["turn_t"] = 0.0
 		z["state"] = "chase"
 		z["victim"] = best
 		z["seen_t"] = 0.0
@@ -297,10 +333,15 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			z["angle"] = atan2(best.position.x - z["pos"].x, best.position.z - z["pos"].z)
 		return
 	if z["state"] == "chase":
+		# Memory holds only the spot it saw; it never reads where the target is now.
 		z["seen_t"] += 0.17
 		z["target"] = z["last_seen"]
-		if z["seen_t"] > 3.0:
+		if z["pos"].distance_to(z["last_seen"]) < 1.0:
 			_begin_search(z, z["last_seen"])
+		elif z["seen_t"] > MEMORY:
+			z["state"] = "wander"
+			z["home"] = z["pos"]
+			z["t"] = 2.0
 		return
 	# Blood: fresh trail points pull the dead (body_injury 8.1: heavy bleeding reaches far).
 	if z["state"] != "investigate" or float(z.get("smell_lock", 0.0)) <= 0.0:
@@ -320,8 +361,9 @@ func _begin_search(z: Dictionary, around: Vector3) -> void:
 	z["state"] = "search"
 	z["home"] = around
 	z["target"] = around
-	z["search_left"] = 3
-	z["linger"] = 2.0
+	z["search_left"] = 2
+	z["search_t"] = SEARCH_TIME
+	z["linger"] = 1.0
 	z["path_t"] = 0.0
 
 
@@ -385,6 +427,12 @@ func _move(z: Dictionary, delta: float) -> void:
 				z["angle"] += game.rng.randf_range(-1.5, 1.5)
 			return
 	elif state == "search":
+		z["search_t"] = float(z.get("search_t", SEARCH_TIME)) - delta
+		if z["search_t"] <= 0.0:
+			z["state"] = "wander"
+			z["home"] = at
+			z["t"] = 2.0
+			return
 		if at.distance_to(target) < 1.0:
 			z["linger"] -= delta
 			if game.rng.randf() < delta * 1.5:
@@ -395,9 +443,9 @@ func _move(z: Dictionary, delta: float) -> void:
 					z["state"] = "wander"
 					z["t"] = 3.0
 					return
-				var off := Vector3(game.rng.randf_range(-5, 5), 0, game.rng.randf_range(-5, 5))
+				var off := Vector3(game.rng.randf_range(-3, 3), 0, game.rng.randf_range(-3, 3))
 				z["target"] = FieldGrid.center(game.grid.nearest_walkable(FieldGrid.cell_of(z["home"] + off), true, 2))
-				z["linger"] = game.rng.randf_range(1.5, 3.5)
+				z["linger"] = 1.0
 				z["path_t"] = 0.0
 			return
 	elif state == "horde":
@@ -405,6 +453,11 @@ func _move(z: Dictionary, delta: float) -> void:
 			z["state"] = "investigate"
 			z["linger"] = 40.0
 			z["speed"] = SPEED_SHAMBLE
+	if float(z.get("turn_t", 0.0)) > 0.0:
+		z["turn_t"] = float(z["turn_t"]) - delta
+		var want := atan2(target.x - at.x, target.z - at.z)
+		z["angle"] = lerp_angle(float(z["angle"]), want, minf(1.0, delta * 6.0))
+		return
 	# Path refresh: straight when clear, otherwise A* on the people grid
 	# (closed doors are planned through and then banged on).
 	z["path_t"] -= delta
