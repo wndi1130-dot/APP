@@ -12,9 +12,12 @@ class ResearchIndexTests(unittest.TestCase):
     def test_actual_catalogs_and_generated_documents(self):
         root = (index.ROOT / "README.md").read_text(encoding="utf-8")
         outputs, counts = index.render(self.catalogs, root)
-        self.assertEqual(counts["total_resource_entries"], 71)
+        self.assertEqual(counts["total_resource_entries"], 85)
         self.assertEqual(counts["v4_resources"], 8)
         self.assertEqual(counts["v5_resources"], 9)
+        self.assertEqual(counts["v6_resources"], 14)
+        self.assertEqual(counts["v6_action_groups"], 10)
+        self.assertEqual(counts["v6_rechecks"], 1)
         self.assertGreater(index.check_outputs(outputs), 0)
 
     def test_duplicate_across_versions_is_rejected(self):
@@ -65,6 +68,37 @@ class ResearchIndexTests(unittest.TestCase):
     def test_v5_does_not_claim_asset_package_download(self):
         self.catalogs[3]["resources"][0]["package_downloaded"] = True
         with self.assertRaisesRegex(ValueError, "Unsubstantiated execution claim"):
+            index.validate(self.catalogs)
+
+    def test_v6_clip_requires_supported_evidence_level(self):
+        self.catalogs[4]["resources"][0]["clips"][0]["evidence"] = "played_in_blender"
+        with self.assertRaisesRegex(ValueError, "Unsubstantiated clip evidence"):
+            index.validate(self.catalogs)
+
+    def test_v6_clip_requires_source(self):
+        self.catalogs[4]["resources"][0]["clips"][0]["source_ids"] = ["MISSING"]
+        with self.assertRaisesRegex(ValueError, "Unknown clip source"):
+            index.validate(self.catalogs)
+
+    def test_v6_duplicate_clip_is_rejected(self):
+        clips = self.catalogs[4]["resources"][0]["clips"]
+        clips.append(copy.deepcopy(clips[0]))
+        with self.assertRaisesRegex(ValueError, "Duplicate or missing clip"):
+            index.validate(self.catalogs)
+
+    def test_v6_coverage_cannot_invent_resource(self):
+        self.catalogs[4]["coverage"][0]["resource_ids"] = ["imaginary_amputation_pack"]
+        with self.assertRaisesRegex(ValueError, "Unknown coverage resource"):
+            index.validate(self.catalogs)
+
+    def test_v6_exclusion_cannot_reuse_resource_id(self):
+        self.catalogs[4]["excluded"][0]["id"] = self.catalogs[0]["resources"][0]["id"]
+        with self.assertRaisesRegex(ValueError, "Duplicate supplementary ID"):
+            index.validate(self.catalogs)
+
+    def test_v6_missing_gap_is_rejected(self):
+        self.catalogs[4]["coverage"][0]["gap"] = ""
+        with self.assertRaisesRegex(ValueError, "Missing coverage gap"):
             index.validate(self.catalogs)
 
     def test_stale_readme_is_rejected(self):

@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from animation_research_v6 import report_v6, validate_v6
+
 ROOT = Path(__file__).resolve().parents[2]
 START = "<!-- APP_3D_RESEARCH_INDEX_BEGIN -->"
 END = "<!-- APP_3D_RESEARCH_INDEX_END -->"
@@ -15,8 +17,9 @@ CATALOGS = (
     "ref/art/game_reference_resources_v3.json",
     "ref/art/production_gap_resources_v4.json",
     "ref/art/production_resources_v5.json",
+    "ref/art/animation_resources_v6.json",
 )
-REPORTS = ("production_resources.md", "game_reference_resources_v3.md", "production_gap_resources_v4.md", "production_resources_v5.md")
+REPORTS = ("production_resources.md", "game_reference_resources_v3.md", "production_gap_resources_v4.md", "production_resources_v5.md", "animation_resources_v6.md")
 ALLOWED = {"[PASS]", "[WATCH]", "[PATCH REQUIRED]", "[FAIL]", "[BLOCKED]"}
 
 
@@ -46,7 +49,7 @@ def valid_reference(source: dict) -> bool:
 
 
 def validate(catalogs: list[dict]) -> dict[str, int]:
-    v2, v3, v4, v5 = catalogs
+    v2, v3, v4, v5, v6 = catalogs
     ids: set[str] = set()
     for data in catalogs:
         for row in data["resources"]:
@@ -96,6 +99,7 @@ def validate(catalogs: list[dict]) -> dict[str, int]:
     v3_ids = {r["id"] for r in v3["resources"]}
     for row in v3["scene_tests"]:
         require(set(row["resources"]) <= v3_ids, "Unknown scene resource")
+    v6_counts = validate_v6(v6, ids, {r["id"] for d in catalogs[:-1] for r in d["resources"]}, supplementary)
     return {
         "v2_resources": len(v2["resources"]), "v3_resources": len(v3["resources"]),
         "v4_resources": len(v4["resources"]), "total_resource_entries": len(ids),
@@ -104,6 +108,7 @@ def validate(catalogs: list[dict]) -> dict[str, int]:
         "v4_leads": len(v4["leads"]), "v2_exclusions": len(v2["excluded"]),
         "v5_resources": len(v5["resources"]), "v5_sources": len(v5["sources"]),
         "v5_exclusions": len(v5["excluded"]),
+        **v6_counts,
     }
 
 
@@ -116,10 +121,10 @@ def source_links(row: dict, v4: dict) -> str:
 
 
 def root_block(catalogs: list[dict], counts: dict) -> str:
-    _, _, v4, v5 = catalogs
+    _, _, v4, v5, v6 = catalogs
     lines = [START, "## 3D 제작 자료 목록", "",
         "**[전체 자원 색인: ref/art/README.md](ref/art/README.md)** — 버전별 후보를 한곳에서 찾는다.", "",
-        f'조사 항목 **{counts["total_resource_entries"]}개**: 2판 {counts["v2_resources"]}개 + 3판 {counts["v3_resources"]}개 + 4판 {counts["v4_resources"]}개 + 5판 {counts["v5_resources"]}개. '
+        f'조사 항목 **{counts["total_resource_entries"]}개**: 2판 {counts["v2_resources"]}개 + 3판 {counts["v3_resources"]}개 + 4판 {counts["v4_resources"]}개 + 5판 {counts["v5_resources"]}개 + 6판 {counts["v6_resources"]}개. '
         "공급자 수나 확보한 파일 수가 아니며, 도구·서비스·기법·개별 자산을 포함한다. 프로젝트 적용은 미검증이다.", "",
         "| 순서 | 자료 | 내용 |", "|---|---|---|",
         "| 1 | [현재 아트 기준](docs/art/production_brief.md) · [조사 지시서](docs/handoff/3d_research_tasks.md) | 비픽셀 월드·UI 분리와 작업 범위 |",
@@ -128,10 +133,11 @@ def root_block(catalogs: list[dict], counts: dict) -> str:
         f'| 4 | [작품별 보충 3판](ref/art/{REPORTS[1]}) · [JSON](ref/art/game_reference_resources_v3.json) | This War of Mine·Frostpunk 1·2·Metro 제작자 자료 {counts["game_references"]}개, 후보 {counts["v3_resources"]}개, 장면 검증안 {counts["scene_plans"]}개 |',
         f'| 5 | [빠진 자원 보충 4판](ref/art/{REPORTS[2]}) · [JSON](ref/art/production_gap_resources_v4.json) | 작업·구조 모션, 철도 음향, 의복/소품/경로 제작 {counts["v4_resources"]}개, 재확인 {counts["v4_rechecks"]}건, 자료 경로 {counts["v4_leads"]}건 |',
         f'| 6 | [방한복·소품·전달 보충 5판](ref/art/{REPORTS[3]}) · [JSON](ref/art/production_resources_v5.json) | 구체 의복·생활 소품·의존 파일·렌더 관리·UV/텍스처·메모리 {counts["v5_resources"]}개, 버전 제외 {counts["v5_exclusions"]}개 |',
-        "", "### 이번에 추가한 5판 항목", "",
+        f'| 7 | [애니메이션 보충 6판](ref/art/{REPORTS[4]}) · [JSON](ref/art/animation_resources_v6.json) | 사다리·계단·사격·부상·절단 이후 {counts["v6_resources"]}개, 대표 클립명 {counts["v6_named_clips"]}개, 동작 묶음 {counts["v6_action_groups"]}개 |',
+        "", "### 이번에 추가한 6판 항목", "",
         "| 자원 | 필요한 부분 |", "|---|---|"]
-    for row in v5["resources"]:
-        lines.append(f'| [{cell(row["name"])}](ref/art/{REPORTS[3]}#{row["id"]}) | {cell(row["project_use"])} |')
+    for row in v6["resources"]:
+        lines.append(f'| [{cell(row["name"])}](ref/art/{REPORTS[4]}#{row["id"]}) | {cell(row["project_use"])} |')
     lines += ["", "[WATCH] 저장된 것은 작성한 조사 문서·출처 주소·메타데이터·검사 도구다. "
               "원작 게임 자산, 외부 유료 팩, 모션·음원 원본, 도면 PDF를 이 저장소에 추가하지 않았다. "
               "구매·다운로드·설치·Blender/Unity 실행·음원 청취·모바일 성능 검증은 이번 범위 밖이다.", "",
@@ -141,7 +147,7 @@ def root_block(catalogs: list[dict], counts: dict) -> str:
 
 
 def inventory(catalogs: list[dict], counts: dict) -> str:
-    v2, v3, v4, v5 = catalogs
+    v2, v3, v4, v5, v6 = catalogs
     lines = ["# 3D 제작 자료 전체 색인", "", "갱신: 2026-10-07", "",
         "[저장소 README](../../README.md) · [현재 제작 기준](../../docs/art/production_brief.md) · "
         "[조사 지시서](../../docs/handoff/3d_research_tasks.md)", "",
@@ -155,7 +161,9 @@ def inventory(catalogs: list[dict], counts: dict) -> str:
         f'| [{REPORTS[1]}]({REPORTS[1]}) · [game_reference_resources_v3.json](game_reference_resources_v3.json) | 3판 작품별 근거·생활 자원·장면 검증안 |',
         f'| [{REPORTS[2]}]({REPORTS[2]}) · [production_gap_resources_v4.json](production_gap_resources_v4.json) | 4판 정확한 작업 모션·구조·철도음·제작 보완 |',
         f'| [{REPORTS[3]}]({REPORTS[3]}) · [production_resources_v5.json](production_resources_v5.json) | 5판 방한복·소품·전달·메모리 검수 |',
-        "| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 네 목록 통합 검사와 이 README/루트 목록/4·5판 보고서 생성 |",
+        f'| [{REPORTS[4]}]({REPORTS[4]}) · [animation_resources_v6.json](animation_resources_v6.json) | 6판 사다리·계단·사격·부상·절단 상태 |',
+        "| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 다섯 목록 통합 검사와 이 README/루트 목록/4~6판 보고서 생성 |",
+        "| [animation_research_v6.py](animation_research_v6.py) | 대표 클립명의 증거·동작 묶음 참조와 6판 보고서 생성 |",
         "| [validate_catalog.py](validate_catalog.py) · [test_validate_catalog.py](test_validate_catalog.py) | 기존 2판 메타데이터·현재 지시·보관본 검사 |",
         "| [archive_manifest.json](archive_manifest.json) | 과거 프롬프트 본문 보존 해시 |",
         "| [game_reference_validation_v3.json](game_reference_validation_v3.json) | 이전 3판의 검사 기록. 이번 재실행 기록과 구분 |", ""]
@@ -193,8 +201,15 @@ def inventory(catalogs: list[dict], counts: dict) -> str:
     lines += ["", "## 5판에서 제외한 항목", "", "| 항목 | 이유·근거 |", "|---|---|"]
     for row in v5["excluded"]:
         lines.append(f'| {cell(row["name"])} | {cell(row["reason"])} · {source_links(row, v5)} |')
+    lines += ["", "## 6판의 기존 후보 재확인", ""]
+    for row in v6["rechecks"]:
+        lines += [f'### {row["name"]}', f'기존 ID: `{row["updates_resource"]}`. {row["finding"]}', "",
+                  row["limits"], "", source_links(row, v6), ""]
+    lines += ["## 6판에서 특정 용도로 제외한 항목", "", "| 항목 | 이유·근거 |", "|---|---|"]
+    for row in v6["excluded"]:
+        lines.append(f'| {cell(row["name"])} | {cell(row["reason"])} · {source_links(row, v6)} |')
     lines += ["", "## 다시 만드는 법", "",
-              "`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4·5판 보고서만 갱신한다. "
+              "`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4~6판 보고서를 갱신한다. "
               "`--check`는 파일을 쓰지 않고 누락·목록 불일치·ID 충돌·출처·미실행 표기를 검사한다. "
               "외부 URL에 접속하거나 Blender를 실행하지 않는다.", ""]
     return "\n".join(lines)
@@ -313,6 +328,7 @@ def render(catalogs: list[dict], root_text: str) -> tuple[dict[str, str], dict[s
         "ref/art/README.md": inventory(catalogs, counts),
         "ref/art/production_gap_resources_v4.md": report(catalogs[2]),
         "ref/art/production_resources_v5.md": report_v5(catalogs[3]),
+        "ref/art/animation_resources_v6.md": report_v6(catalogs[4]),
     }, counts
 
 

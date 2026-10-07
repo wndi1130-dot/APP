@@ -31,7 +31,7 @@
 
 **[전체 자원 색인: ref/art/README.md](ref/art/README.md)** — 버전별 후보를 한곳에서 찾는다.
 
-조사 항목 **71개**: 2판 37개 + 3판 17개 + 4판 8개 + 5판 9개. 공급자 수나 확보한 파일 수가 아니며, 도구·서비스·기법·개별 자산을 포함한다. 프로젝트 적용은 미검증이다.
+조사 항목 **85개**: 2판 37개 + 3판 17개 + 4판 8개 + 5판 9개 + 6판 14개. 공급자 수나 확보한 파일 수가 아니며, 도구·서비스·기법·개별 자산을 포함한다. 프로젝트 적용은 미검증이다.
 
 | 순서 | 자료 | 내용 |
 |---|---|---|
@@ -41,20 +41,26 @@
 | 4 | [작품별 보충 3판](ref/art/game_reference_resources_v3.md) · [JSON](ref/art/game_reference_resources_v3.json) | This War of Mine·Frostpunk 1·2·Metro 제작자 자료 6개, 후보 17개, 장면 검증안 6개 |
 | 5 | [빠진 자원 보충 4판](ref/art/production_gap_resources_v4.md) · [JSON](ref/art/production_gap_resources_v4.json) | 작업·구조 모션, 철도 음향, 의복/소품/경로 제작 8개, 재확인 1건, 자료 경로 2건 |
 | 6 | [방한복·소품·전달 보충 5판](ref/art/production_resources_v5.md) · [JSON](ref/art/production_resources_v5.json) | 구체 의복·생활 소품·의존 파일·렌더 관리·UV/텍스처·메모리 9개, 버전 제외 1개 |
+| 7 | [애니메이션 보충 6판](ref/art/animation_resources_v6.md) · [JSON](ref/art/animation_resources_v6.json) | 사다리·계단·사격·부상·절단 이후 14개, 대표 클립명 34개, 동작 묶음 10개 |
 
-### 이번에 추가한 5판 항목
+### 이번에 추가한 6판 항목
 
 | 자원 | 필요한 부분 |
 |---|---|
-| [punkduck — Winter coat](ref/art/production_resources_v5.md#mh_punkduck_winter_coat) | 민간인 방한 외투의 실루엣·겹쳐 입기 후보. |
-| [Elvaerwyn — Elvs Ladies winter scarf 1 OC](ref/art/production_resources_v5.md#mh_elvs_winter_scarf_oc) | 외투 위에 두르는 민간인 목도리 후보. |
-| [Poly Haven — Modular Industrial Pipes 01](ref/art/production_resources_v5.md#ph_modular_industrial_pipes) | 기관실·난방관·정비 공간의 배관과 밸브 후보. |
-| [Poly Haven — Vintage Day Bed](ref/art/production_resources_v5.md#ph_vintage_day_bed) | 앞칸의 낡은 안락함·임시 거주 공간을 비교할 침상 소품. |
-| [Blender 4.5 — Pack Resources / Linked Libraries](ref/art/production_resources_v5.md#blender_pack_dependencies) | 다른 에이전트·컴퓨터에서 텍스처나 링크된 파일이 누락되는 상황 예방. |
-| [Blender Flamenco — 자체 호스팅 렌더 작업 관리](ref/art/production_resources_v5.md#flamenco_render_dispatch) | 향후 별도 GPU 컴퓨터에서 프리뷰·연기 프레임·일괄 렌더를 수행할 때 검토. |
-| [KTX-Software + KtxUnity — 텍스처 전달 경로](ref/art/production_resources_v5.md#ktx_texture_pipeline) | 텍스처가 많은 옷·객차·소품의 전달량과 실제 로딩 비용을 비교. |
-| [xatlas — 고유 UV 생성 라이브러리](ref/art/production_resources_v5.md#xatlas_uv2) | 정적 역·객차 실내 모듈의 라이트맵용 UV를 만드는 보조 후보. |
-| [Unity Memory Profiler — Player 스냅샷 비교](ref/art/production_resources_v5.md#unity_memory_profiler) | 열차 홈→필드→복귀 전후의 잔류 자산·누적 메모리 확인. |
+| [MoCap Online — LADDER](ref/art/animation_resources_v6.md#mco_ladder) | 역 설비·객차 접근 사다리의 진입, 오르내리기, 정지, 방향 전환, 이탈. |
+| [Motionbeats — Action Adventure Stairs and Slope](ref/art/animation_resources_v6.md#motionbeats_stairs_slopes) | 역 계단·승강장 단차·경사로에서 올라감/내려감과 시작/정지/회전. |
+| [KayKit — Character Animations](ref/art/animation_resources_v6.md#kaykit_character_animations) | 이동·기어가기·웅크리기·피격·사망과 한손/양손 원거리·활·도구 동작의 저비용 기반. |
+| [Kubold — Rifle Animset Pro](ref/art/animation_resources_v6.md#kubold_rifle_animset) | 조준·발사·재장전·이동과 방향별 피격·사망의 연결. |
+| [Kubold — Pistol Animset Pro](ref/art/animation_resources_v6.md#kubold_pistol_animset) | 권총 조준·이동·발사·재장전·피격을 비교. |
+| [Kubold — Cover Rifle Animset Pro](ref/art/animation_resources_v6.md#kubold_cover_rifle) | 역 기둥·상자·객차 옆에서 엄폐 진입, 노출 사격, 복귀, 재장전. |
+| [KaidoomDev — Pump-Action shotgun Character Animation Pack](ref/art/animation_resources_v6.md#kaidoom_pump_shotgun) | 산탄총 캐릭터 동작과 무기 작동·부분 재장전의 시각적 연결. |
+| [Ailive — Injury Animation Pack](ref/art/animation_resources_v6.md#ailive_injury) | 다친 다리, 다친 팔, 목발 보행 상태를 분리해 비교. |
+| [Raise Creation — Combat Injured Animation Pack](ref/art/animation_resources_v6.md#raise_combat_injured) | 다리 끌기, 무릎/바닥 자세 전환, 부축 진입·걷기·이탈을 연결. |
+| [Studio Ochi — Low Poly Disabled People Animated & Rigged](ref/art/animation_resources_v6.md#ochi_mobility_animations) | 지팡이·목발·보행기·휠체어와 몸의 접촉을 살펴볼 후보. |
+| [IKFootPlacement — plonkabartosz](ref/art/animation_resources_v6.md#ik_footplacement) | 계단/경사에서 발의 위치와 방향을 맞추는 구현 참고. |
+| [LimbHacker — JoeCooper](ref/art/animation_resources_v6.md#limbhacker) | 스킨드 메시·여러 렌더러·분리 뒤 래그돌 연결의 문제를 조사. |
+| [Unity — Animation Layers / Avatar Mask](ref/art/animation_resources_v6.md#unity_animation_layers_masks) | 다친 하체 이동과 상체 조준·재장전의 적용 범위를 나누는 후보. |
+| [Unity — Animator.MatchTarget](ref/art/animation_resources_v6.md#unity_target_matching) | 사다리 첫 발판·문턱·소품에 몸의 기준점이 닿도록 진입 동작을 정렬. |
 
 [WATCH] 저장된 것은 작성한 조사 문서·출처 주소·메타데이터·검사 도구다. 원작 게임 자산, 외부 유료 팩, 모션·음원 원본, 도면 PDF를 이 저장소에 추가하지 않았다. 구매·다운로드·설치·Blender/Unity 실행·음원 청취·모바일 성능 검증은 이번 범위 밖이다.
 

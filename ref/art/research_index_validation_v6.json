@@ -1,0 +1,129 @@
+{
+  "schema": "app.art.research-validation/6",
+  "date": "2026-10-07",
+  "base_commit": "23be388bc55be0062a6d637930ba7020bad8482c",
+  "environment": {
+    "platform": "win32",
+    "python": "3.13.13"
+  },
+  "counts": {
+    "v2_resources": 37,
+    "v3_resources": 17,
+    "v4_resources": 8,
+    "total_resource_entries": 85,
+    "game_references": 6,
+    "scene_plans": 6,
+    "v4_sources": 18,
+    "v4_rechecks": 1,
+    "v4_leads": 2,
+    "v2_exclusions": 3,
+    "v5_resources": 9,
+    "v5_sources": 21,
+    "v5_exclusions": 1,
+    "v6_resources": 14,
+    "v6_sources": 26,
+    "v6_named_clips": 34,
+    "v6_rechecks": 1,
+    "v6_exclusions": 1,
+    "v6_action_groups": 10
+  },
+  "generated_local_links": 165,
+  "tests_run": 25,
+  "new_tests": 6,
+  "checks": [
+    {
+      "command": [
+        "python",
+        "ref/art/build_research_index.py",
+        "--check"
+      ],
+      "status": "[PASS]",
+      "output": "[PASS] {\"game_references\": 6, \"scene_plans\": 6, \"total_resource_entries\": 85, \"v2_exclusions\": 3, \"v2_resources\": 37, \"v3_resources\": 17, \"v4_leads\": 2, \"v4_rechecks\": 1, \"v4_resources\": 8, \"v4_sources\": 18, \"v5_exclusions\": 1, \"v5_resources\": 9, \"v5_sources\": 21, \"v6_action_groups\": 10, \"v6_exclusions\": 1, \"v6_named_clips\": 34, \"v6_rechecks\": 1, \"v6_resources\": 14, \"v6_sources\": 26}\n[PASS] 5 generated documents match; 165 local links; no cross-catalog ID collisions\n[WATCH] Metadata/document checks only; no external URL, legal, audio, Blender, Unity, or mobile tests\n"
+    },
+    {
+      "command": [
+        "python",
+        "ref/art/validate_catalog.py"
+      ],
+      "status": "[PASS]",
+      "output": "[PASS] 37 resources; 26 new; 3 exclusions\n[PASS] IDs, required fields, 123 local links, active guidance and preserved archive\n[WATCH] No external URL, license/legal, Blender, Unity, or mobile runtime validation\n"
+    },
+    {
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "ref/art",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "status": "[PASS]",
+      "output": "test_actual_catalogs_and_generated_documents (test_research_index.ResearchIndexTests.test_actual_catalogs_and_generated_documents) ... ok\ntest_duplicate_across_versions_is_rejected (test_research_index.ResearchIndexTests.test_duplicate_across_versions_is_rejected) ... ok\ntest_http_exception_does_not_allow_other_hosts (test_research_index.ResearchIndexTests.test_http_exception_does_not_allow_other_hosts) ... ok\ntest_http_reference_requires_explicit_note (test_research_index.ResearchIndexTests.test_http_reference_requires_explicit_note) ... ok\ntest_local_path_cannot_be_source_url (test_research_index.ResearchIndexTests.test_local_path_cannot_be_source_url) ... ok\ntest_missing_license_is_rejected (test_research_index.ResearchIndexTests.test_missing_license_is_rejected) ... ok\ntest_new_exclusion_cannot_reuse_resource_id (test_research_index.ResearchIndexTests.test_new_exclusion_cannot_reuse_resource_id) ... ok\ntest_recheck_requires_existing_target (test_research_index.ResearchIndexTests.test_recheck_requires_existing_target) ... ok\ntest_stale_readme_is_rejected (test_research_index.ResearchIndexTests.test_stale_readme_is_rejected) ... ok\ntest_unknown_source_reference_is_rejected (test_research_index.ResearchIndexTests.test_unknown_source_reference_is_rejected) ... ok\ntest_unsubstantiated_runtime_is_rejected (test_research_index.ResearchIndexTests.test_unsubstantiated_runtime_is_rejected) ... ok\ntest_v5_does_not_claim_asset_package_download (test_research_index.ResearchIndexTests.test_v5_does_not_claim_asset_package_download) ... ok\ntest_v6_clip_requires_source (test_research_index.ResearchIndexTests.test_v6_clip_requires_source) ... ok\ntest_v6_clip_requires_supported_evidence_level (test_research_index.ResearchIndexTests.test_v6_clip_requires_supported_evidence_level) ... ok\ntest_v6_coverage_cannot_invent_resource (test_research_index.ResearchIndexTests.test_v6_coverage_cannot_invent_resource) ... ok\ntest_v6_duplicate_clip_is_rejected (test_research_index.ResearchIndexTests.test_v6_duplicate_clip_is_rejected) ... ok\ntest_v6_exclusion_cannot_reuse_resource_id (test_research_index.ResearchIndexTests.test_v6_exclusion_cannot_reuse_resource_id) ... ok\ntest_v6_missing_gap_is_rejected (test_research_index.ResearchIndexTests.test_v6_missing_gap_is_rejected) ... ok\ntest_actual_catalog_and_guidance (test_validate_catalog.CatalogTests.test_actual_catalog_and_guidance) ... ok\ntest_duplicate_resource_is_rejected (test_validate_catalog.CatalogTests.test_duplicate_resource_is_rejected) ... ok\ntest_empty_required_field_is_rejected (test_validate_catalog.CatalogTests.test_empty_required_field_is_rejected) ... ok\ntest_invalid_source_is_rejected (test_validate_catalog.CatalogTests.test_invalid_source_is_rejected) ... ok\ntest_invented_runtime_test_is_rejected (test_validate_catalog.CatalogTests.test_invented_runtime_test_is_rejected) ... ok\ntest_reused_excluded_id_is_rejected (test_validate_catalog.CatalogTests.test_reused_excluded_id_is_rejected) ... ok\ntest_unknown_status_is_rejected (test_validate_catalog.CatalogTests.test_unknown_status_is_rejected) ... ok\n\n----------------------------------------------------------------------\nRan 25 tests in 2.960s\n\nOK\n"
+    },
+    {
+      "command": [
+        "git",
+        "-c",
+        "core.autocrlf=false",
+        "diff",
+        "--check"
+      ],
+      "status": "[PASS]",
+      "output": ""
+    },
+    {
+      "command": "Compare original v2-v5 research and README prefix against base; check game/docs unchanged",
+      "status": "[PASS]"
+    }
+  ],
+  "artifact_sha256": {
+    "README.md": "e057345c0a9969195ee278f71d187f5db28603a6e27a37bb5ab1d26881932459",
+    "ref/art/README.md": "36de921954881043e3306994e0ab7b58285b8b998d6e3596e859d67c3cf9aeb3",
+    "ref/art/build_research_index.py": "d7f14698ee804904e854d46c739e72b8bccec93d3e5e8b66a8851c4c3104027e",
+    "ref/art/test_research_index.py": "a03f7866c82a587e52f746dcac0a6115cb43806df00ba445554abb50f5d18f11",
+    "ref/art/animation_research_v6.py": "2fae1a7841c6f730581285696068d2e3acbc32b77705871887b6c25d99736cc6",
+    "ref/art/animation_resources_v6.json": "f3ebf6ee925a6e69c6d508262c5067d55126d7d13ca28340387e75e1a5789ff8",
+    "ref/art/animation_resources_v6.md": "a54a21187f061d037341678b127d3e74205b68a7f364bf9b2dccaf89e7ea6981"
+  },
+  "local_copies": [
+    {
+      "source": "ref/art/animation_resources_v6.md",
+      "path": "C:\\COS_Blender_Test\\APP_3D_animation_research_v6.md",
+      "bytes": 46236,
+      "sha256": "a54a21187f061d037341678b127d3e74205b68a7f364bf9b2dccaf89e7ea6981"
+    },
+    {
+      "source": "ref/art/animation_resources_v6.json",
+      "path": "C:\\COS_Blender_Test\\APP_3D_animation_catalog_v6.json",
+      "bytes": 45308,
+      "sha256": "f3ebf6ee925a6e69c6d508262c5067d55126d7d13ca28340387e75e1a5789ff8"
+    },
+    {
+      "source": "ref/art/README.md",
+      "path": "C:\\COS_Blender_Test\\APP_3D_research_index_v6.md",
+      "bytes": 39269,
+      "sha256": "36de921954881043e3306994e0ab7b58285b8b998d6e3596e859d67c3cf9aeb3"
+    }
+  ],
+  "not_performed": [
+    "Animation package download or purchase",
+    "Asset installation",
+    "Animation playback or video audition",
+    "Blender/Unity runtime",
+    "Mobile performance",
+    "Existing game regression suite",
+    "Legal approval",
+    "External URL availability sweep",
+    "Merge to main"
+  ],
+  "notes": [
+    "34 identifiers are representative source-catalog names, not acquired animation files.",
+    "The old Cover Rifle catalog PDF was read as text and three page screenshots, not a motion preview.",
+    "Source count includes fixed project design documents and a CMU search-only lead; not 26 complete asset validations.",
+    "Generated-doc and v2-validator local-link counts overlap; do not sum them.",
+    "Local standalone copies preserve bytes but relative navigation should use the checkout's README."
+  ]
+}

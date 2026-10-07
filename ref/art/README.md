@@ -4,7 +4,7 @@
 
 [저장소 README](../../README.md) · [현재 제작 기준](../../docs/art/production_brief.md) · [조사 지시서](../../docs/handoff/3d_research_tasks.md)
 
-**조사 항목 71개**를 나열한다. 새 공급처·무료팩·다운로드 완료 수가 아니다. 같은 생태계의 개별 의복이나 기능 문서도 항목으로 센다. 서로 다른 ID를 세었으며 유사 기능까지 독립 공급처로 주장하지 않는다.
+**조사 항목 85개**를 나열한다. 새 공급처·무료팩·다운로드 완료 수가 아니다. 같은 생태계의 개별 의복이나 기능 문서도 항목으로 센다. 서로 다른 ID를 세었으며 유사 기능까지 독립 공급처로 주장하지 않는다.
 
 기존 판은 당시 조사 기록으로 보존했다. 뒤의 판은 보충이지 전 항목의 최신성 재검증이 아니다. 특히 약관·지원 버전은 실제 취득할 때 원문과 파일을 다시 고정한다. 모든 후보의 프로젝트 실행은 [WATCH]다.
 
@@ -16,7 +16,9 @@
 | [game_reference_resources_v3.md](game_reference_resources_v3.md) · [game_reference_resources_v3.json](game_reference_resources_v3.json) | 3판 작품별 근거·생활 자원·장면 검증안 |
 | [production_gap_resources_v4.md](production_gap_resources_v4.md) · [production_gap_resources_v4.json](production_gap_resources_v4.json) | 4판 정확한 작업 모션·구조·철도음·제작 보완 |
 | [production_resources_v5.md](production_resources_v5.md) · [production_resources_v5.json](production_resources_v5.json) | 5판 방한복·소품·전달·메모리 검수 |
-| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 네 목록 통합 검사와 이 README/루트 목록/4·5판 보고서 생성 |
+| [animation_resources_v6.md](animation_resources_v6.md) · [animation_resources_v6.json](animation_resources_v6.json) | 6판 사다리·계단·사격·부상·절단 상태 |
+| [build_research_index.py](build_research_index.py) · [test_research_index.py](test_research_index.py) | 다섯 목록 통합 검사와 이 README/루트 목록/4~6판 보고서 생성 |
+| [animation_research_v6.py](animation_research_v6.py) | 대표 클립명의 증거·동작 묶음 참조와 6판 보고서 생성 |
 | [validate_catalog.py](validate_catalog.py) · [test_validate_catalog.py](test_validate_catalog.py) | 기존 2판 메타데이터·현재 지시·보관본 검사 |
 | [archive_manifest.json](archive_manifest.json) | 과거 프롬프트 본문 보존 해시 |
 | [game_reference_validation_v3.json](game_reference_validation_v3.json) | 이전 3판의 검사 기록. 이번 재실행 기록과 구분 |
@@ -112,6 +114,25 @@
 | `xatlas_uv2` — xatlas — 고유 UV 생성 라이브러리 | 오픈소스 C++ 라이브러리 / 정적 역·객차 실내 모듈의 라이트맵용 UV를 만드는 보조 후보. | [조사](production_resources_v5.md#xatlas_uv2) · [S15](https://github.com/jpcy/xatlas) · [S16](https://github.com/jpcy/xatlas/blob/master/LICENSE) |
 | `unity_memory_profiler` — Unity Memory Profiler — Player 스냅샷 비교 | 공식 엔진 검수 패키지 / 열차 홈→필드→복귀 전후의 잔류 자산·누적 메모리 확인. | [조사](production_resources_v5.md#unity_memory_profiler) · [S17](https://docs.unity3d.com/Packages/com.unity.memoryprofiler@1.1/manual/index.html) · [S18](https://docs.unity3d.com/Packages/com.unity.memoryprofiler@1.1/manual/snapshot-capture.html) |
 
+## 6판 후보 14개
+
+| ID / 자원 | 분야·용도 | 근거 |
+|---|---|---|
+| `mco_ladder` — MoCap Online — LADDER | 유료 사다리 모션 팩 / 역 설비·객차 접근 사다리의 진입, 오르내리기, 정지, 방향 전환, 이탈. | [조사](animation_resources_v6.md#mco_ladder) · [S01](https://mocaponline.com/products/ladder) · [S02](https://mocaponline.com/pages/standard-license) |
+| `motionbeats_stairs_slopes` — Motionbeats — Action Adventure Stairs and Slope | 유료 계단·경사 전신 모션 / 역 계단·승강장 단차·경사로에서 올라감/내려감과 시작/정지/회전. | [조사](animation_resources_v6.md#motionbeats_stairs_slopes) · [S03](https://www.fab.com/listings/56775370-29a2-483e-ba90-cabac9ab92e4?lang=en) · [S12](https://www.fab.com/eula) |
+| `kaykit_character_animations` — KayKit — Character Animations | 무료 CC0 전신 애니메이션 / 이동·기어가기·웅크리기·피격·사망과 한손/양손 원거리·활·도구 동작의 저비용 기반. | [조사](animation_resources_v6.md#kaykit_character_animations) · [S04](https://kaylousberg.itch.io/kaykit-character-animations) |
+| `kubold_rifle_animset` — Kubold — Rifle Animset Pro | 유료 전신 소총 모션 / 조준·발사·재장전·이동과 방향별 피격·사망의 연결. | [조사](animation_resources_v6.md#kubold_rifle_animset) · [S05](https://www.fab.com/listings/e0eed5c5-54a6-41cc-bfa9-62b26c309bca?lang=en) · [S06](https://www.kubold.com/s/RifleAnimsetPro_v12_ListOfAnimations.html) · [S11](https://www.kubold.com/faq-unity) · [S12](https://www.fab.com/eula) |
+| `kubold_pistol_animset` — Kubold — Pistol Animset Pro | 유료 전신 권총 모션 / 권총 조준·이동·발사·재장전·피격을 비교. | [조사](animation_resources_v6.md#kubold_pistol_animset) · [S07](https://www.fab.com/listings/c5caff8c-6815-4e81-b825-aeb95967411e?lang=en) · [S08](https://www.kubold.com/s/PistolAnimsetPro_AnimationsDescriptions.html) · [S11](https://www.kubold.com/faq-unity) · [S12](https://www.fab.com/eula) · [S24](https://github.com/wndi1130-dot/APP/blob/23be388bc55be0062a6d637930ba7020bad8482c/docs/design/briefs/weapons.md) |
+| `kubold_cover_rifle` — Kubold — Cover Rifle Animset Pro | 유료 높은/낮은 엄폐 모션 / 역 기둥·상자·객차 옆에서 엄폐 진입, 노출 사격, 복귀, 재장전. | [조사](animation_resources_v6.md#kubold_cover_rifle) · [S09](https://www.fab.com/listings/f9e9fbcb-0f07-49a0-8c06-80b18eba0e90) · [S10](https://www.kubold.com/s/CoverRifleAnimsetPro_UE4_list.pdf) · [S11](https://www.kubold.com/faq-unity) · [S12](https://www.fab.com/eula) |
+| `kaidoom_pump_shotgun` — KaidoomDev — Pump-Action shotgun Character Animation Pack | 산탄총 캐릭터/무기 모션 후보 / 산탄총 캐릭터 동작과 무기 작동·부분 재장전의 시각적 연결. | [조사](animation_resources_v6.md#kaidoom_pump_shotgun) · [S25](https://www.fab.com/listings/4f89da93-387c-4251-9646-6f2a973e682a) · [S12](https://www.fab.com/eula) · [S24](https://github.com/wndi1130-dot/APP/blob/23be388bc55be0062a6d637930ba7020bad8482c/docs/design/briefs/weapons.md) |
+| `ailive_injury` — Ailive — Injury Animation Pack | 부상 보행·목발 전신 모션 / 다친 다리, 다친 팔, 목발 보행 상태를 분리해 비교. | [조사](animation_resources_v6.md#ailive_injury) · [S13](https://www.fab.com/listings/fb337e07-d758-4423-a0e3-a17a9610b1f6) · [S12](https://www.fab.com/eula) |
+| `raise_combat_injured` — Raise Creation — Combat Injured Animation Pack | 지속 부상 상태·구조 짝동작 / 다리 끌기, 무릎/바닥 자세 전환, 부축 진입·걷기·이탈을 연결. | [조사](animation_resources_v6.md#raise_combat_injured) · [S26](https://www.fab.com/listings/1e54821b-c2e3-48ed-b26e-52bd24d5c20c) · [S12](https://www.fab.com/eula) |
+| `ochi_mobility_animations` — Studio Ochi — Low Poly Disabled People Animated & Rigged | 보조기구·휠체어 인물 애니메이션 / 지팡이·목발·보행기·휠체어와 몸의 접촉을 살펴볼 후보. | [조사](animation_resources_v6.md#ochi_mobility_animations) · [S14](https://www.fab.com/listings/d07f9075-f2dd-477e-a6de-bfb3cdd5d14a) · [S12](https://www.fab.com/eula) |
+| `ik_footplacement` — IKFootPlacement — plonkabartosz | MIT 발 접촉 보정 예제 / 계단/경사에서 발의 위치와 방향을 맞추는 구현 참고. | [조사](animation_resources_v6.md#ik_footplacement) · [S15](https://github.com/plonkabartosz/IKFootPlacement) |
+| `limbhacker` — LimbHacker — JoeCooper | MIT 스킨드 메시 분리 연구 예제 / 스킨드 메시·여러 렌더러·분리 뒤 래그돌 연결의 문제를 조사. | [조사](animation_resources_v6.md#limbhacker) · [S16](https://github.com/JoeCooper/LimbHacker) · [S23](https://github.com/wndi1130-dot/APP/blob/23be388bc55be0062a6d637930ba7020bad8482c/docs/design/briefs/field_system.md) |
+| `unity_animation_layers_masks` — Unity — Animation Layers / Avatar Mask | 공식 동작 합성 기능 / 다친 하체 이동과 상체 조준·재장전의 적용 범위를 나누는 후보. | [조사](animation_resources_v6.md#unity_animation_layers_masks) · [S18](https://docs.unity3d.com/6000.0/Documentation/Manual/class-AvatarMask.html) · [S20](https://docs.unity3d.com/6000.0/Documentation/Manual/Retargeting.html) |
+| `unity_target_matching` — Unity — Animator.MatchTarget | 공식 진입·접촉 위치 보정 API / 사다리 첫 발판·문턱·소품에 몸의 기준점이 닿도록 진입 동작을 정렬. | [조사](animation_resources_v6.md#unity_target_matching) · [S19](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Animator.MatchTarget.html) |
+
 ## 작품 제작자 자료 6개
 
 참고 기법을 분석하는 문서다. 원작의 모션·음원·이미지 사용권을 주는 자산 목록이 아니다.
@@ -164,6 +185,21 @@ PDF 열람 실패로 도면·표·이미지를 검토하지 못했다. 색인의
 |---|---|
 | Blender Asset Tracer v2 — Blender 4.5 기본 경로에서 제외 | 제작자 PyPI와 공식 staging README가 Blender 5.1 이상을 요구한다. 별도 4.5 프로젝트를 자동 업그레이드하거나 v1 호환을 추정하지 않는다. v2에 관한 캐시 누락 경고도 있어 모든 의존성을 완벽하게 수집한다고 보증하지 않는다. 도구 자체의 사용 금지가 아니라 현재 설치 버전과의 불일치다. · [S19](https://pypi.org/project/blender-asset-tracer/) · [S20](https://projects.staging.blender.org/blender/blender-asset-tracer/src/branch/main/README.md) |
 
+## 6판의 기존 후보 재확인
+
+### CMU 계단 모션 경로
+기존 ID: `cmu_focused_mocap`. 공식 도메인 검색 색인에서 subject 143의 143_17 Walk Up Stairs And Over를 확인했다. 기존 CMU 공급처의 새 탐색 경로이며 독립 라이브러리로 세지 않는다.
+
+143·113 상세 본문은 web와 Exa에서 열리지 않았다. 색인만으로 양방향 계단·장비 상태·파일 형식을 검증하지 않는다. 본문이 불완전한 다른 subject 번호를 추측하지 않았다. 홈페이지는 상업 제품 포함을 허용하되 데이터 재판매를 금지하며 손가락을 실제 캡처하지 않았다고 설명한다.
+
+[S21](https://mocap.cs.cmu.edu/search.php?subjectnumber=143) · [S22](https://mocap.cs.cmu.edu/)
+
+## 6판에서 특정 용도로 제외한 항목
+
+| 항목 | 이유·근거 |
+|---|---|
+| EzySlice를 완성 캐릭터 절단/의수 시스템으로 사용하는 안 | 제작자 README의 범위는 평면에 의한 convex mesh slicing이다. 스킨드 메시 가중치·옷·본·소켓·래그돌·절단 이후 동작을 해결한다고 명시하지 않는다. 정적 소품 절단에 쓸 가능성까지 부정하는 것이 아니라 이번 캐릭터 절단 기본안에서 제외한다. · [S17](https://github.com/DavidArayan/ezy-slice) |
+
 ## 다시 만드는 법
 
-`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4·5판 보고서만 갱신한다. `--check`는 파일을 쓰지 않고 누락·목록 불일치·ID 충돌·출처·미실행 표기를 검사한다. 외부 URL에 접속하거나 Blender를 실행하지 않는다.
+`python ref/art/build_research_index.py --write`는 이 README, 루트 README의 표시된 목록 블록, 4~6판 보고서를 갱신한다. `--check`는 파일을 쓰지 않고 누락·목록 불일치·ID 충돌·출처·미실행 표기를 검사한다. 외부 URL에 접속하거나 Blender를 실행하지 않는다.

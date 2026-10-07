@@ -1,0 +1,315 @@
+{
+  "schema": "app.art.animation-research/6",
+  "title": "애니메이션 자료 6판 — 사다리·계단·사격·부상·절단 이후",
+  "date": "2026-10-07",
+  "base_research_commit": "23be388bc55be0062a6d637930ba7020bad8482c",
+  "scope": "추가 자료 조사, README 색인 갱신, GitHub 연구 브랜치와 COS 로컬 저장. 자산 구매·패키지 다운로드·설치·Blender/Unity 실행·렌더·게임 구현·main 병합 없음.",
+  "world_direction": "픽셀 월드가 아닌 좀보이드식 사선 탑뷰. S1 웹 정치 검증은 유지하며 여기의 동작/상태 묶음은 후속 제작을 위한 제안이다.",
+  "summary": [
+    "14개 신규 조사 항목은 모션 팩 10개와 접촉/레이어/메시 처리 자료 4개다. 기존 CMU의 계단 검색 결과 재확인 1건과 특정 용도에서 제외한 도구 1개는 후보 수에 더하지 않는다. 2~5판 71개와 합쳐 85개 항목이며, 확보한 모션 파일 수나 독립 공급자 수가 아니다.",
+    "사다리는 진입·상승·정지·하강·이탈을, 계단은 올라감·내려감·시작·좌우 발 정지를 구분한 실제 카탈로그를 찾았다. 사격은 전신 권총·소총·엄폐 동작과 펌프식 산탄총 후보를 분리했다.",
+    "이번에 부상자와 조력자의 짝 클립명이 있는 Combat Injured 자료를 찾았다. 단순히 두 사람 동작이라는 설명만 있던 기존 후보보다 공급 명세가 구체적이지만 실제 파일·상대 좌표·품질은 미검증이다.",
+    "절단은 처치 장면의 연기, 팔다리 상태를 바꾸는 메시/리그, 이후 이동과 보조기·의수의 세 층으로 조사했다. 기존 카메라 회피 연출을 유지하며 수술 방법이나 새 의료 규칙을 작성하지 않는다. 절뚝임을 의족 보행으로, 메시 절단기를 완성된 절단 애니메이션으로 간주하지 않는다."
+  ],
+  "sources": {
+    "S01": {"title": "MoCap Online LADDER 상품·클립 목록", "url": "https://mocaponline.com/products/ladder", "access": "제작자 본문과 클립명 목록 열람; 영상/원본 클립 미재생"},
+    "S02": {"title": "MoCap Online Standard License", "url": "https://mocaponline.com/pages/standard-license", "access": "현행 공개 약관의 AI Applications 사전 서면 허가 및 원본 배포 제한 열람"},
+    "S03": {"title": "Motionbeats Stairs and Slope", "url": "https://www.fab.com/listings/56775370-29a2-483e-ba90-cabac9ab92e4?lang=en", "access": "제작자 본문·클립명·FBX/루트모션/인플레이스·AI 표시 열람"},
+    "S04": {"title": "KayKit Character Animations", "url": "https://kaylousberg.itch.io/kaykit-character-animations", "access": "제작자 본문·CC0·무료/Source 구분·climbing의 예정 항목 표시 열람"},
+    "S05": {"title": "Kubold Rifle Animset Pro 상품", "url": "https://www.fab.com/listings/e0eed5c5-54a6-41cc-bfa9-62b26c309bca?lang=en", "access": "제작자 상품 본문 열람; 태그를 실제 클립명으로 사용하지 않음"},
+    "S06": {"title": "Kubold Rifle Animset Pro 기존 Unity 클립 설명", "url": "https://www.kubold.com/s/RifleAnimsetPro_v12_ListOfAnimations.html", "access": "공식 downloads 링크의 HTML 목록 열람. URL은 v1.2, 문서 표제는 v1.1; 구판 명세로 구분"},
+    "S07": {"title": "Kubold Pistol Animset Pro 상품", "url": "https://www.fab.com/listings/c5caff8c-6815-4e81-b825-aeb95967411e?lang=en", "access": "제작자 상품 본문과 FBX 원본 제공 설명 열람"},
+    "S08": {"title": "Kubold Pistol Animset Pro 기존 클립 설명", "url": "https://www.kubold.com/s/PistolAnimsetPro_AnimationsDescriptions.html", "access": "공식 downloads 링크의 기존 HTML 카탈로그 열람; 현재 구매 파일과 대조 안 함"},
+    "S09": {"title": "Kubold Cover Rifle Animset Pro 상품", "url": "https://www.fab.com/listings/f9e9fbcb-0f07-49a0-8c06-80b18eba0e90", "access": "제작자 본문·엄폐 모션/조준 포즈 구분 열람"},
+    "S10": {"title": "Kubold Cover Rifle UE4 클립 목록 PDF", "url": "https://www.kubold.com/s/CoverRifleAnimsetPro_UE4_list.pdf", "access": "공식 링크 PDF 3쪽의 텍스트 및 세 쪽 스크린샷 확인. 기존 UE4 명세이며 애니메이션 영상이 아님"},
+    "S11": {"title": "Kubold FAQ Unity / 라이선스·FBX", "url": "https://www.kubold.com/faq-unity", "access": "제작자 FAQ의 구워진 게임 배포·원본 재배포 제한·컨트롤러 구분 열람"},
+    "S12": {"title": "Fab Standard License 공개 요약", "url": "https://www.fab.com/eula", "access": "공식 요약 열람. 요약은 비구속적이며 각 상품의 구매 라이선스 원문 확인을 대신하지 않음"},
+    "S13": {"title": "Ailive Injury Animation Pack", "url": "https://www.fab.com/listings/fb337e07-d758-4423-a0e3-a17a9610b1f6", "access": "제작자 본문·5개 전신 클립명·FBX·AI 표시 열람"},
+    "S14": {"title": "Studio Ochi Low Poly Disabled People Animated & Rigged", "url": "https://www.fab.com/listings/d07f9075-f2dd-477e-a6de-bfb3cdd5d14a", "access": "제작자 본문 열람. 설명의 FBX/Blend와 포함 형식 표시의 GLB 사이 차이 기록"},
+    "S15": {"title": "IKFootPlacement 제작자 README", "url": "https://github.com/plonkabartosz/IKFootPlacement", "access": "README 기능·MIT 표시·요구 패키지·베이크 안내 열람; 실행 안 함"},
+    "S16": {"title": "LimbHacker 제작자 README", "url": "https://github.com/JoeCooper/LimbHacker", "access": "README와 MIT 표시, 알고리즘 문제/닫힌 메시 가정 경고 열람; 소스 실행 안 함"},
+    "S17": {"title": "EzySlice 제작자 README", "url": "https://github.com/DavidArayan/ezy-slice", "access": "convex mesh 절단 범위·MIT 표시 열람; 스킨드 캐릭터 완제품으로 인정하지 않음"},
+    "S18": {"title": "Unity 6 Avatar Mask", "url": "https://docs.unity3d.com/6000.0/Documentation/Manual/class-AvatarMask.html", "access": "공식 본문에서 신체/Transform 및 손발 IK 곡선 마스킹 설명 확인"},
+    "S19": {"title": "Unity 6 Animator.MatchTarget", "url": "https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Animator.MatchTarget.html", "access": "공식 API 본문 열람. base layer·단일 대상·applyRootMotion 제약 확인"},
+    "S20": {"title": "Unity 6 Retargeting", "url": "https://docs.unity3d.com/6000.0/Documentation/Manual/Retargeting.html", "access": "공식 Humanoid 리타기팅 설명 열람; Generic 리그에 같은 보장을 적용하지 않음"},
+    "S21": {"title": "CMU subject 143 계단 검색 결과", "url": "https://mocap.cs.cmu.edu/search.php?subjectnumber=143", "access": "검색 색인에 143_17 Walk Up Stairs And Over가 보임. web/Exa 본문 열람 실패; 검색 결과 수준"},
+    "S22": {"title": "CMU 이용 안내", "url": "https://mocap.cs.cmu.edu/", "access": "Exa로 공식 안내 열람. 상업 포함/데이터 재판매 제한과 손가락 미캡처 구분"},
+    "S23": {"title": "APP 필드 브리프의 절단 연출·의수 결정", "url": "https://github.com/wndi1130-dot/APP/blob/23be388bc55be0062a6d637930ba7020bad8482c/docs/design/briefs/field_system.md", "access": "고정 커밋의 COS 로컬 원문 열람. 외부 사실/법률 검증이 아닌 프로젝트 요구사항"},
+    "S24": {"title": "APP 무기 브리프의 조작·무기 원형", "url": "https://github.com/wndi1130-dot/APP/blob/23be388bc55be0062a6d637930ba7020bad8482c/docs/design/briefs/weapons.md", "access": "고정 커밋의 COS 로컬 원문 열람. 탭 사격과 원형 구분의 프로젝트 근거"},
+    "S25": {"title": "KaidoomDev Pump-Action shotgun Character Animation Pack", "url": "https://www.fab.com/listings/4f89da93-387c-4251-9646-6f2a973e682a", "access": "제작자 본문·1/3인칭 활용·무기 리그·AI 표시 열람; 파일 미취득"},
+    "S26": {"title": "Raise Creation Combat Injured Animation Pack", "url": "https://www.fab.com/listings/1e54821b-c2e3-48ed-b26e-52bd24d5c20c", "access": "제작자 상태별·구조자 짝 클립 목록·FBX·AI 표시 열람; 원본 미재생"}
+  },
+  "resources": [
+    {
+      "id": "mco_ladder", "name": "MoCap Online — LADDER", "kind": "유료 사다리 모션 팩",
+      "prior_relation": "기존 MoCap Online Crowd와 다른 사다리 동작 팩. MoCap Central과는 다른 업체.",
+      "project_use": "역 설비·객차 접근 사다리의 진입, 오르내리기, 정지, 방향 전환, 이탈.",
+      "confirmed": "공식 카탈로그가 상단/하단 진입·이탈, 상승/하강 루프와 정지, 방향 전환을 나눈다. 12inch·230mm·400mm 간격용 프리셋을 제시한다.",
+      "proposal": "접근→붙잡기→상승/하강→정지→상단/하단 이탈을 연결할 조달 후보. 가로대 간격은 실제 사다리 모델에 맞춰 비교한다.",
+      "delivery": "엔진/FBX/Blender 등 상품 형식을 선택하는 구조다. 정확한 구매 옵션·파일과 우리 리그 호환은 미확인.",
+      "license": "자체 유료 약관. 원본 공개 배포 불가. 업체 약관은 AI Applications와 관련한 사용에 사전 서면 허가를 요구한다.",
+      "ai_handling": "일반 모션 비교는 가능하나 원본의 에이전트 입력/처리는 허가 범위 확인 전 [BLOCKED]. 학습만 금지하는 조항으로 축소하지 않는다.",
+      "limitations": "카탈로그의 간격 명칭을 법정 규격으로 인용하지 않는다. 애니메이션 팩을 완성 사다리 컨트롤러로 보지 않는다. 중간 저장·막힌 출구·동료 점유 처리는 별도다.",
+      "next_test": "가로대 간격과 키가 다른 인물에서 손발 접촉, 최상단 이탈, 중간 방향 전환·취소를 시험한다.",
+      "source_ids": ["S01", "S02"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "LDR_O12_Std_Rlx_To_Ascd_LU", "purpose": "서 있는 자세에서 상승 진입", "evidence": "catalog_text", "source_ids": ["S01"]},
+        {"name": "LDR_O12_Ascd_LU_Loop", "purpose": "상승 반복", "evidence": "catalog_text", "source_ids": ["S01"]},
+        {"name": "LDR_O12_Ascd_LU_Stop", "purpose": "상승 정지", "evidence": "catalog_text", "source_ids": ["S01"]},
+        {"name": "LDR_O12_Ascd_To_Dscd_LU_Start", "purpose": "상승에서 하강으로 전환", "evidence": "catalog_text", "source_ids": ["S01"]},
+        {"name": "LDR_O12_Dscd_LU_Loop", "purpose": "하강 반복", "evidence": "catalog_text", "source_ids": ["S01"]},
+        {"name": "LDR_O12_Ascd_LU_To_Std_Rlx", "purpose": "상승에서 서 있는 자세로 이탈", "evidence": "catalog_text", "source_ids": ["S01"]}
+      ]
+    },
+    {
+      "id": "motionbeats_stairs_slopes", "name": "Motionbeats — Action Adventure Stairs and Slope", "kind": "유료 계단·경사 전신 모션",
+      "prior_relation": "기존 평지 보행·부상 보행과 구분되는 새 공급 후보.",
+      "project_use": "역 계단·승강장 단차·경사로에서 올라감/내려감과 시작/정지/회전.",
+      "confirmed": "UE4/UE5 스켈레톤, FBX, root motion과 in-place를 명시한다. 공식 목록에 좌우 발 정지·피벗·완만/급경사 변형이 있다.",
+      "proposal": "평지 보행 속도만 바꾸는 대신 계단용 동작과 접촉 보정을 비교한다. 정상·부상 상태를 무조건 같은 보폭으로 재생하지 않는다.",
+      "delivery": "FBX 제공 명시. 애니메이션만이며 Blueprint 컨트롤러는 제공하지 않는다고 적혀 있다.",
+      "license": "Fab 상품의 선택 라이선스 확인 필요. 무료/CC0로 분류하지 않고 원본 공개 저장은 하지 않는다.",
+      "ai_handling": "상품의 Allows usage with AI는 No. 플랫폼 태그와 구매 조항을 대조하며 원본 외부 입력을 허용으로 단정하지 않는다.",
+      "limitations": "패키지 수량에는 스켈레톤/루트모션 변형이 섞일 수 있다. 서로 다른 파일 수를 고유 동작 수로 합산하지 않는다. 실제 계단 높이·발판 깊이와의 일치는 미검증.",
+      "next_test": "서로 다른 단차에서 발 접지·골반 높이·좌우 정지발·진입/마지막 계단을 대조하고 엔진 이동과 root motion 중복을 검사한다.",
+      "source_ids": ["S03", "S12"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "walk_up_stairs_start", "purpose": "계단 상승 시작", "evidence": "catalog_text", "source_ids": ["S03"]},
+        {"name": "walk_up_stairs_root", "purpose": "상승 root 변형", "evidence": "catalog_text", "source_ids": ["S03"]},
+        {"name": "walk_up_stairs_stop_LF", "purpose": "왼발 정지 변형", "evidence": "catalog_text", "source_ids": ["S03"]},
+        {"name": "walk_up_stairs_stop_RF", "purpose": "오른발 정지 변형", "evidence": "catalog_text", "source_ids": ["S03"]},
+        {"name": "walk_down_stairs_start", "purpose": "계단 하강 시작", "evidence": "catalog_text", "source_ids": ["S03"]},
+        {"name": "walk_down_stairs_root", "purpose": "하강 root 변형", "evidence": "catalog_text", "source_ids": ["S03"]}
+      ]
+    },
+    {
+      "id": "kaykit_character_animations", "name": "KayKit — Character Animations", "kind": "무료 CC0 전신 애니메이션",
+      "prior_relation": "Quaternius/Mixamo 외에 비교할 새 라이브러리.",
+      "project_use": "이동·기어가기·웅크리기·피격·사망과 한손/양손 원거리·활·도구 동작의 저비용 기반.",
+      "confirmed": "제작자는 무료 FBX/glTF와 CC0를 명시하고 유료 .blend Source를 구분한다. 범주에 조준·발사·재장전·피격·사망·이동·도구 동작이 있다.",
+      "proposal": "초기 공통 동작의 기준 후보로 비교하되 몸체나 화풍까지 KayKit의 비례로 바꾸지 않는다.",
+      "delivery": "FBX/glTF 무료 제공, 편집용 .blend는 별도 Source 등급. Rig_Medium/Large의 제공 범위는 같지 않다.",
+      "license": "CC0 Universal 표기. 전체 원본을 취득한 것은 아니고 출처는 연구 장부에 유지한다.",
+      "ai_handling": "CC0에 근거 없는 포괄 AI 금지를 덧붙이지 않는다. 외부 서비스의 전송/보관 조건은 별도로 확인한다.",
+      "limitations": "스타일화된 움직임이 지친 민간인에게 맞는지는 미검증. 페이지의 Swimming/Climbing은 추가 예정이므로 현재 사다리 모션 확보로 세지 않는다. 개별 클립명은 미확인.",
+      "next_test": "작은 공통 리그에 조준·피격·기어가기·작업 대표 클립을 옮겨 보폭·손 접촉·과장 정도를 확인한다.",
+      "source_ids": ["S04"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    },
+    {
+      "id": "kubold_rifle_animset", "name": "Kubold — Rifle Animset Pro", "kind": "유료 전신 소총 모션",
+      "prior_relation": "범용 라이브러리에서 소총 전신 동작으로 구체화한 새 후보.",
+      "project_use": "조준·발사·재장전·이동과 방향별 피격·사망의 연결.",
+      "confirmed": "현재 상품 설명과 공식 구형 클립 카탈로그를 각각 읽었다. 구형 목록은 단발·연속 사격·additive 발사·재장전·방향별 피격/사망을 구분한다.",
+      "proposal": "실제 총 모델이 아닌 일반 소총 소켓을 기준으로 전신 자세·손 접촉·상하체 합성을 비교한다.",
+      "delivery": "공식 downloads의 기존 Unity 카탈로그 URL은 v1.2지만 문서 표제는 v1.1이다. 아래 이름을 현행 Fab 파일의 검증된 이름으로 승격하지 않는다.",
+      "license": "제작자 FAQ는 구워진 게임 배포와 원본 재배포를 구분한다. 선택 판매처/라이선스를 확인하며 공개 저장소에 모션 원본을 넣지 않는다.",
+      "ai_handling": "조회한 상품의 AI 사용 표시는 No. 해당 구매 조건과 외부 입력 권한을 별도 확인한다.",
+      "limitations": "Shotgun/Crossbow 태그만으로 펌프·2연발·석궁 전용 장전이 있다고 보지 않는다. 애니메이션과 컨트롤러는 별개며 오래된 데모 스크립트를 기본 채택하지 않는다.",
+      "next_test": "고른 현행 포맷의 실제 클립명을 대조하고 조준 방향·이동·발사 이벤트·피격 중단·리그 변환을 시험한다.",
+      "source_ids": ["S05", "S06", "S11", "S12"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "Rifle_ShootOnce", "purpose": "단발", "evidence": "legacy_catalog", "source_ids": ["S06"]},
+        {"name": "Rifle_ShootLoop_Additive", "purpose": "사격 additive 레이어", "evidence": "legacy_catalog", "source_ids": ["S06"]},
+        {"name": "Rifle_Reload_2", "purpose": "재장전 변형", "evidence": "legacy_catalog", "source_ids": ["S06"]},
+        {"name": "Rifle_Hit_L_1", "purpose": "방향별 피격", "evidence": "legacy_catalog", "source_ids": ["S06"]},
+        {"name": "Rifle_Death_L", "purpose": "방향별 사망", "evidence": "legacy_catalog", "source_ids": ["S06"]}
+      ]
+    },
+    {
+      "id": "kubold_pistol_animset", "name": "Kubold — Pistol Animset Pro", "kind": "유료 전신 권총 모션",
+      "prior_relation": "소총과 손·팔 자세가 다른 권총의 별도 후보.",
+      "project_use": "권총 조준·이동·발사·재장전·피격을 비교.",
+      "confirmed": "현재 상품은 전신 권총 동작과 FBX 원본 제공을 설명한다. 공식 기존 카탈로그에서 발사·재장전·이동·방향별 피격 이름을 확인했다.",
+      "proposal": "S2 권총 후보에 먼저 비교한다. 탭 사격을 FPS 조작으로 바꾸지 않고 조준 표시와 전신 동작을 맞춘다.",
+      "delivery": "상품의 FBX 제공 설명 확인. 아래 구형 카탈로그의 이름과 현행 구매 파일 일치는 미검증.",
+      "license": "Kubold FAQ와 실제 선택한 판매처 EULA를 함께 확인. 무료/CC0 아님, 모션 원본 공개 재배포 불가.",
+      "ai_handling": "상품의 AI 사용 표시 No를 기록하고 실제 조항/입력 권한을 확인한다.",
+      "limitations": "게임의 한손 권총+손전등, 한쪽 팔 상실, 리볼버 전용 장전까지 이 팩이 보장하는 것은 아니다. 다른 손의 존재가 필요 없는 모션인지 따로 봐야 한다.",
+      "next_test": "한손/양손 그립, 손전등, 장전 취소, 탄약 확정 시점과 실제 폰의 조준 가독성을 검사한다.",
+      "source_ids": ["S07", "S08", "S11", "S12", "S24"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "Pistol_ShootOnce", "purpose": "권총 발사", "evidence": "legacy_catalog", "source_ids": ["S08"]},
+        {"name": "Pistol_Reload_2", "purpose": "권총 재장전 변형", "evidence": "legacy_catalog", "source_ids": ["S08"]},
+        {"name": "Pistol_Hit_L_1", "purpose": "권총 자세 피격", "evidence": "legacy_catalog", "source_ids": ["S08"]},
+        {"name": "Pistol_RunFwdLoop", "purpose": "무장 전진 이동", "evidence": "legacy_catalog", "source_ids": ["S08"]}
+      ]
+    },
+    {
+      "id": "kubold_cover_rifle", "name": "Kubold — Cover Rifle Animset Pro", "kind": "유료 높은/낮은 엄폐 모션",
+      "prior_relation": "기본 사격과 다른 엄폐 진입/이탈·내밀어 조준하기의 연결 후보.",
+      "project_use": "역 기둥·상자·객차 옆에서 엄폐 진입, 노출 사격, 복귀, 재장전.",
+      "confirmed": "공식 UE4 카탈로그 PDF 세 쪽에서 높은/낮은 엄폐와 좌우 조준/전환/장전 동작을 확인했다. 상품은 움직이는 클립과 조준 포즈를 구분한다.",
+      "proposal": "좁은 전투 장소의 시야/충돌 규칙과 동작을 분리해 비교한다. 벽을 관통하지 않는 총구 위치가 핵심이다.",
+      "delivery": "열람한 것은 기존 UE4 목록. 현재 Fab는 Unreal 형식이 보여 실제 FBX 전달/추출 경로와 비용을 구매 전에 확인한다.",
+      "license": "Kubold FAQ/판매처 라이선스 적용. 원본 공개 배포 허가로 해석하지 않는다.",
+      "ai_handling": "상품의 AI 사용 표시 No. 구매 조건·외부 입력 범위 확인 전 원본 전송 안 함.",
+      "limitations": "엄폐를 선택하고 움직이는 AI·지형 분석 시스템이 아니다. 조준 포즈 개수와 연속 모션 개수를 합쳐 고유 모션 수로 홍보하지 않는다.",
+      "next_test": "낮은/높은 엄폐 높이·좌우 모서리·총구·카메라 가림·피격 중단을 대조한다.",
+      "source_ids": ["S09", "S10", "S11", "S12"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "CoverHi_Idle2CoverR", "purpose": "오른쪽 높은 엄폐 진입", "evidence": "catalog_pdf", "source_ids": ["S10"]},
+        {"name": "CoverHi_CoverR2AimR", "purpose": "높은 엄폐에서 오른쪽 조준", "evidence": "catalog_pdf", "source_ids": ["S10"]},
+        {"name": "CoverHi_ReloadR", "purpose": "높은 엄폐 재장전", "evidence": "catalog_pdf", "source_ids": ["S10"]},
+        {"name": "CoverLo_ReloadR", "purpose": "낮은 엄폐 재장전", "evidence": "catalog_pdf", "source_ids": ["S10"]}
+      ]
+    },
+    {
+      "id": "kaidoom_pump_shotgun", "name": "KaidoomDev — Pump-Action shotgun Character Animation Pack", "kind": "산탄총 캐릭터/무기 모션 후보",
+      "prior_relation": "소총 상품의 shotgun 태그가 아닌 실제 펌프식 산탄총 설명을 가진 새 후보.",
+      "project_use": "산탄총 캐릭터 동작과 무기 작동·부분 재장전의 시각적 연결.",
+      "confirmed": "제작자는 1/3인칭 사용, 남은 탄과 재고에 따른 장전 조합 데모, 애니메이션 가능한 산탄총 리그를 설명한다.",
+      "proposal": "무기 쪽 작동과 사람 손의 접촉 시점을 따로 가진 납품물을 비교한다. 기본 소총 동작 하나로 전 무기 장전을 때우지 않는다.",
+      "delivery": "Unreal Engine 형식만 확인. 직접 FBX·전체 몸 리그·Unity 가져오기는 미확인.",
+      "license": "Fab 선택 라이선스 확인 필요. 상용 게임 사용과 원본 팩 재배포는 다르며 원본은 이번 저장물에서 제외한다.",
+      "ai_handling": "상품의 Allows usage with AI는 Yes지만 특정 서비스 전송/재배포 전부 허용을 뜻한다고 확대하지 않는다.",
+      "limitations": "클립명과 정확한 루프/취소 범위는 미확인. 두 연발·볼트액션·리볼버를 해결하는 팩이 아니다. 예제 총기 이름/형태를 세계관에 자동 채택하지 않는다.",
+      "next_test": "실제 파일명·손/무기 리그·장전 중단·탄약 시각 표시·좁은 엄폐에서의 간섭을 검수한다.",
+      "source_ids": ["S25", "S12", "S24"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    },
+    {
+      "id": "ailive_injury", "name": "Ailive — Injury Animation Pack", "kind": "부상 보행·목발 전신 모션",
+      "prior_relation": "CMU 부상 보행에 더해 실제 FBX와 목발/팔 부상을 명시한 새 후보.",
+      "project_use": "다친 다리, 다친 팔, 목발 보행 상태를 분리해 비교.",
+      "confirmed": "제작자는 UE5 Manny 기반 전신 모캡과 손가락, FBX를 설명한다. 목록에 오른발 부상·왼팔 부상·목발 두 변형·느린 보행이 있다.",
+      "proposal": "피격 순간의 움찔함과 이후 계속되는 부상 이동을 다른 클립으로 다룬다.",
+      "delivery": "FBX 표시. 목발 소품의 포함 여부·접촉 리그·체형 호환은 미확인.",
+      "license": "상품 설명의 Use freely를 가격 무료나 CC0로 해석하지 않는다. Fab 실제 취득 조건을 확인한다.",
+      "ai_handling": "상품은 Allows usage with AI No, Generated with AI No다. 제작자의 별도 AI 서비스와 해당 파일 제작방식을 혼동하지 않는다.",
+      "limitations": "부상자가 다리를 절뚝이는 동작이지 의족 사용자나 다리 절단 후의 보행 고증 데이터가 아니다. 통증 행동을 모든 장애인의 기본 자세로 고정하지 않는다.",
+      "next_test": "목발 접지·발 위치·옷 관통과 정상/부상 전환을 시험하고 좌우를 뒤집을 때 장비 배치가 맞는지 확인한다.",
+      "source_ids": ["S13", "S12"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "Injured_Right_Foot_Walk", "purpose": "오른발 부상 보행", "evidence": "catalog_text", "source_ids": ["S13"]},
+        {"name": "Limping_with_Crutches", "purpose": "목발 보행", "evidence": "catalog_text", "source_ids": ["S13"]},
+        {"name": "Walking_with_Injured_Left_Arm", "purpose": "왼팔 부상 보행", "evidence": "catalog_text", "source_ids": ["S13"]}
+      ]
+    },
+    {
+      "id": "raise_combat_injured", "name": "Raise Creation — Combat Injured Animation Pack", "kind": "지속 부상 상태·구조 짝동작",
+      "prior_relation": "Reallusion 구조 후보와 별개로 조력자 짝 클립명까지 공개된 새 후보.",
+      "project_use": "다리 끌기, 무릎/바닥 자세 전환, 부축 진입·걷기·이탈을 연결.",
+      "confirmed": "공식 목록에 피해자/조력자의 Rescue_Walk와 Rescue_Walk_Help, 진입/이탈 대응 이름이 있다. FBX 제공과 두 사람 Rescue 묶음을 명시한다.",
+      "proposal": "부축을 부상자 한 사람의 동작으로 끝내지 않고 조력자와 소품/충돌을 같은 장면 상태로 묶는 후보.",
+      "delivery": "Unreal 및 FBX 표기. 실제 파일의 root 좌표·스케일·리그·프레임 수는 미검증.",
+      "license": "Fab 선택 라이선스 확인 필요. 원본 패키지 공유가 아니라 문서/대표 클립 식별자만 저장한다.",
+      "ai_handling": "상품의 Allows usage with AI는 Yes, Generated with AI No. 해당 표시를 저작권 포기/무제한 재배포로 확대하지 않는다.",
+      "limitations": "제작자는 순간 피격보다 부상 행동/이동용이라고 구분한다. Rescue 설명의 Value X = 45는 단위/축 기준을 확인하기 전 cm 또는 우리 게임 좌표로 전용하지 않는다. 팩의 전투 범주는 주먹/발 동작이며 부상 사격 완성품이 아니다.",
+      "next_test": "피해자/조력자 짝의 정확한 프레임 대응·키 차이·문 통과·부축 취소/조력자 교체·저장 복귀를 시험한다.",
+      "source_ids": ["S26", "S12"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false,
+      "clips": [
+        {"name": "AS_CI_Walk_Drag_Leg", "purpose": "다리를 끄는 부상 이동", "evidence": "catalog_text", "source_ids": ["S26"]},
+        {"name": "AS_CI_Stand_to_Knee", "purpose": "서기→무릎 자세", "evidence": "catalog_text", "source_ids": ["S26"]},
+        {"name": "AS_CI_Rescue_Walk", "purpose": "부상자의 부축 보행", "evidence": "catalog_text", "source_ids": ["S26"]},
+        {"name": "AS_CI_Rescue_Walk_Help", "purpose": "조력자 짝 보행", "evidence": "catalog_text", "source_ids": ["S26"]},
+        {"name": "AS_CI_Rescue_To_Help", "purpose": "조력자 부축 진입", "evidence": "catalog_text", "source_ids": ["S26"]},
+        {"name": "AS_CI_Rescue_Out_Help", "purpose": "조력자 부축 이탈", "evidence": "catalog_text", "source_ids": ["S26"]}
+      ]
+    },
+    {
+      "id": "ochi_mobility_animations", "name": "Studio Ochi — Low Poly Disabled People Animated & Rigged", "kind": "보조기구·휠체어 인물 애니메이션",
+      "prior_relation": "절뚝임뿐 아니라 보조기구를 사용하는 인물의 별도 자료.",
+      "project_use": "지팡이·목발·보행기·휠체어와 몸의 접촉을 살펴볼 후보.",
+      "confirmed": "제작자 설명에 도구별 애니메이션과 휴식 자세, FBX/GLB 및 애니메이션별 Blend가 언급된다. 제목의 Animated판을 정적 Posed판과 구분했다.",
+      "proposal": "장애 이후의 생활 동작과 장비 소켓을 분석하는 보조 자료. 전 인물을 같은 통증/무력한 자세로 만들지 않는다.",
+      "delivery": "설명은 FBX/GLB/Blend를 말하지만 Fab의 포함 형식 표시는 GLB 중심이다. 실제 판매 포맷은 취득 전에 문의/확인해야 한다.",
+      "license": "판매처의 선택 라이선스 확인 필요. 원본/수정 자산의 독립 배포를 허용으로 보지 않는다.",
+      "ai_handling": "실제 라이선스와 입력 서비스 조건 확인 전 원본 클라우드 전송은 하지 않는다.",
+      "limitations": "토이 비례·현대 장비가 최종 화풍과 맞는지는 별도다. 전문 의족 보행·절단 부위별 동작·의수 조작을 제공한다는 근거는 아니다.",
+      "next_test": "애니메이션판의 실제 파일과 도구 포함 여부를 확인하고 바닥/좌석/손잡이 접촉과 캐릭터 교체 가능성을 점검한다.",
+      "source_ids": ["S14", "S12"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    },
+    {
+      "id": "ik_footplacement", "name": "IKFootPlacement — plonkabartosz", "kind": "MIT 발 접촉 보정 예제",
+      "prior_relation": "기존 Unity Animation Rigging 후보의 계단 접촉 보정 사례 구체화.",
+      "project_use": "계단/경사에서 발의 위치와 방향을 맞추는 구현 참고.",
+      "confirmed": "제작자 README는 Two Bone IK Constraint, raycast와 IAnimationJob을 설명하며 Humanoid 전용이 아니라고 명시한다. Unity/Animation Rigging의 구형 기준 버전과 IK control baking을 안내한다.",
+      "proposal": "보행 클립을 먼저 정한 뒤 가까운 캐릭터의 접촉 오차를 줄이는 후보로 비교한다.",
+      "delivery": "Unity C# 소스. Blender 애드온이나 계단 오르기 모션 팩이 아니다. 현행 프로젝트 버전에서 미검증.",
+      "license": "MIT 표시. 취득 버전 고지와 포함 자산별 조건을 보존한다.",
+      "ai_handling": "MIT 코드의 권리와 외부 모션 입력물의 권리는 별개. 이번 실행/원본 입력은 없다.",
+      "limitations": "발 IK 하나가 골반·보폭·경로 충돌·노년/부상 동작을 자동 완성하지 않는다. 계단 모션·부모 이동·IK가 같은 위치를 중복 제어하지 않게 해야 한다.",
+      "next_test": "발판 가장자리·다양한 단차·시작/멈춤·멀리 있는 NPC의 보정 생략을 비교한다.",
+      "source_ids": ["S15"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    },
+    {
+      "id": "limbhacker", "name": "LimbHacker — JoeCooper", "kind": "MIT 스킨드 메시 분리 연구 예제",
+      "prior_relation": "애니메이션이 아닌 팔다리 상태 표현의 기술적 참고.",
+      "project_use": "스킨드 메시·여러 렌더러·분리 뒤 래그돌 연결의 문제를 조사.",
+      "confirmed": "제작자는 스킨드 캐릭터 분리 기능을 설명하지만 알고리즘 문제 때문에 상용 판매를 중단했다고 경고한다. 닫힌 솔리드 메시 가정과 여러 겹/겹치는 기하의 문제를 설명한다.",
+      "proposal": "완제품 추천보다 실패 모드 참고로 둔다. 이 게임의 초기 후보는 미리 분리 가능한 외형·단면 덮개·붕대/의수 상태와 공통 골격 유지 방식이다.",
+      "delivery": "Unity C# 소스. 수술/절단 연기 모션이나 Blender용 자동 제작기가 아니다.",
+      "license": "MIT 표시. 소스 고지 보존; 예제 캐릭터/외부 입력 자산은 따로 확인.",
+      "ai_handling": "오픈소스라는 이유로 입력 캐릭터·유료 의복 라이선스가 사라지지 않는다.",
+      "limitations": "겹쳐 입은 겨울옷·열린 메시·본 영향·물리 관절·손에 든 소품·저장을 통합 해결하지 않는다. 사용자의 카메라 회피 연출을 실시간 고어 절단 의무로 바꾸지 않는다.",
+      "next_test": "별도 제작 승인 뒤 허용된 단순 캐릭터에서 기하 실패·본/소켓 유지·의복 중첩을 비교하고, 사전 분할 방식보다 실익이 있는지 판단한다.",
+      "source_ids": ["S16", "S23"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    },
+    {
+      "id": "unity_animation_layers_masks", "name": "Unity — Animation Layers / Avatar Mask", "kind": "공식 동작 합성 기능",
+      "prior_relation": "기존 리타기팅·IK와 다른 상하체 동작 합성/적용 범위.",
+      "project_use": "다친 하체 이동과 상체 조준·재장전의 적용 범위를 나누는 후보.",
+      "confirmed": "Avatar Mask는 신체 또는 Transform별 애니메이션 적용과 손발 IK 곡선을 고를 수 있다. 기본 리타기팅의 Humanoid 조건도 별도 공식 문서로 확인했다.",
+      "proposal": "정상 이동, 부상 이동, 상체 동작, 짧은 반응의 책임을 나누고 상황별 중단 우선순위를 명세한다.",
+      "delivery": "Unity 공식 기능 문서. 구현과 캐릭터별 mask/레이어 자산은 아직 없다.",
+      "license": "Unity 이용 조건 적용. 문서 기법과 외부 모션의 권리는 분리한다.",
+      "ai_handling": "자작 컨트롤러와 라이선스 제한 모션을 구분한다. 이번 엔진 코드를 만들거나 유료 클립을 넣지 않았다.",
+      "limitations": "Mask는 모션 영향 범위이지 메시를 자르는 기능이 아니다. 없는 팔의 뼈를 삭제하거나 scale=0으로 만들기만 하면 Humanoid 매핑/소켓/물리가 깨질 수 있으므로 초기 기본안으로 고정하지 않는다. 부상 사격의 품질은 합성 시험 대상이다.",
+      "next_test": "걷기+조준+피격+장전 중단의 조합, 필요한 본 유지, 손전등/무기 소켓, 부상 상태 전환과 저장 복귀를 검사한다.",
+      "source_ids": ["S18", "S20"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    },
+    {
+      "id": "unity_target_matching", "name": "Unity — Animator.MatchTarget", "kind": "공식 진입·접촉 위치 보정 API",
+      "prior_relation": "발 IK·소품 부모 전환과 구분되는 클립 구간의 목표 정렬 기법.",
+      "project_use": "사다리 첫 발판·문턱·소품에 몸의 기준점이 닿도록 진입 동작을 정렬.",
+      "confirmed": "API는 지정된 클립 진행 구간에 AvatarTarget이 목표에 도달하도록 객체 위치/회전을 조정한다. base layer만, 한 번에 한 target, applyRootMotion 필요라는 제약을 명시한다.",
+      "proposal": "동작별 align/commit/release 시점을 명세하고 IK·엔진 이동·target matching이 같은 root를 경쟁하지 않게 비교한다.",
+      "delivery": "Unity 6.0 공식 API. 모든 엔진의 범용 Motion Warping이나 완성 컨트롤러라고 부르지 않는다.",
+      "license": "Unity 문서/엔진 이용 조건 적용. 입력 애니메이션 권리는 별도다.",
+      "ai_handling": "이번에는 공식 문서만 읽었으며 실행/원본 모션 입력은 하지 않았다.",
+      "limitations": "양손·양발 여러 접촉을 한 API 호출로 동시에 해결하지 않는다. 루프 중 과거 시작 시점을 주면 다음 루프로 넘어가는 특성에 유의한다.",
+      "next_test": "낮은 사다리 진입·상단 이탈에서 root 소유권, 클립 구간, 중단 시 순간이동, 점유된 출구를 검수한다.",
+      "source_ids": ["S19"], "status": "[WATCH]", "project_runtime_tested": false, "package_downloaded": false, "audio_auditioned": false, "clips": []
+    }
+  ],
+  "rechecks": [
+    {"id": "cmu_stairs_v6", "name": "CMU 계단 모션 경로", "updates_resource": "cmu_focused_mocap", "finding": "공식 도메인 검색 색인에서 subject 143의 143_17 Walk Up Stairs And Over를 확인했다. 기존 CMU 공급처의 새 탐색 경로이며 독립 라이브러리로 세지 않는다.", "limits": "143·113 상세 본문은 web와 Exa에서 열리지 않았다. 색인만으로 양방향 계단·장비 상태·파일 형식을 검증하지 않는다. 본문이 불완전한 다른 subject 번호를 추측하지 않았다. 홈페이지는 상업 제품 포함을 허용하되 데이터 재판매를 금지하며 손가락을 실제 캡처하지 않았다고 설명한다.", "source_ids": ["S21", "S22"], "status": "[WATCH]"}
+  ],
+  "excluded": [
+    {"id": "ezyslice_as_limb_solution", "name": "EzySlice를 완성 캐릭터 절단/의수 시스템으로 사용하는 안", "status": "[BLOCKED]", "reason": "제작자 README의 범위는 평면에 의한 convex mesh slicing이다. 스킨드 메시 가중치·옷·본·소켓·래그돌·절단 이후 동작을 해결한다고 명시하지 않는다. 정적 소품 절단에 쓸 가능성까지 부정하는 것이 아니라 이번 캐릭터 절단 기본안에서 제외한다.", "source_ids": ["S17"]}
+  ],
+  "coverage": [
+    {"id": "ladder_chain", "action": "사다리", "resource_ids": ["mco_ladder", "unity_target_matching"], "proposal": "접근·붙잡기·상승/하강 루프·중간 정지·방향 전환·상하단 이탈을 하나의 연결 묶음으로 명세한다.", "gap": "가로대 간격/캐릭터 키 조합, 다른 인물 점유, 사다리 도중 피격·저장·취소"},
+    {"id": "stairs_chain", "action": "계단·경사", "resource_ids": ["motionbeats_stairs_slopes", "ik_footplacement", "cmu_focused_mocap"], "proposal": "평지 진입→올라감/내려감→좌우발 정지→평지 복귀를 분리하고 발 접촉을 보정한다.", "gap": "부상·짐·두 사람 부축 상태의 계단 클립은 별도 미확보"},
+    {"id": "weapon_families", "action": "사격·장전", "resource_ids": ["kubold_pistol_animset", "kubold_rifle_animset", "kaidoom_pump_shotgun", "kaykit_character_animations"], "proposal": "조준·발사·장전·취소·이동을 무기군별로 비교하고 캐릭터/무기/탄약 확정 이벤트를 분리한다.", "gap": "리볼버·2연발·볼트액션·한손 장전·의수 그립의 정확한 전신 클립/파일은 미확인"},
+    {"id": "cover_chain", "action": "엄폐", "resource_ids": ["kubold_cover_rifle"], "proposal": "높은/낮은 엄폐, 좌우 노출, 조준, 복귀, 장전, 피격 이탈을 비교한다.", "gap": "캐릭터 전신 동작 외에 지형·시야·AI·총구 충돌 처리가 필요"},
+    {"id": "hit_vs_injury", "action": "피격과 지속 부상", "resource_ids": ["kubold_rifle_animset", "kubold_pistol_animset", "ailive_injury", "raise_combat_injured"], "proposal": "즉시 피격 반응과 이후 절뚝임/팔 감싸기/기어가기를 다른 상태로 둔다.", "gap": "공격받을 때 매번 긴 피격 클립에 갇히지 않는 중단/겹침 규칙"},
+    {"id": "assisted_rescue", "action": "부축·구조", "resource_ids": ["raise_combat_injured", "reallusion_injury_rescue", "unity_timeline"], "proposal": "환자와 조력자의 paired clip을 같은 시간축·상대 좌표·소켓 계약으로 묶는다.", "gap": "들것 실제 파일명/소품 포함, 계단과 좁은 문, 취소/조력자 교체"},
+    {"id": "fall_recovery", "action": "넘어짐·기상·사망", "resource_ids": ["kaykit_character_animations", "raise_combat_injured"], "proposal": "넘어짐→바닥/무릎 대기→기상 또는 사망을 구분하며 래그돌과 애니메이션의 제어권을 한 번만 전환한다.", "gap": "엎드림/반듯이 누움/벽 가까이 등의 기상 클립과 전환 품질은 파일 확인 필요"},
+    {"id": "amputation_scene", "action": "절단 처치 장면", "resource_ids": ["reallusion_injury_rescue", "unity_timeline"], "proposal": "기존 결정대로 카메라는 자르는 부위가 아니라 얼굴·잡은 손·관찰자로 향한다. 환자/조력자 자세·붕대 상태·장면 종료를 준비하는 연출 자료로 쓴다.", "gap": "카메라 회피용 짝 연기·정확한 클립은 미확보. 구조/응급처치 팩을 수술 애니메이션 팩으로 부르지 않음"},
+    {"id": "limb_state", "action": "팔다리 상실 표현", "resource_ids": ["limbhacker", "unity_animation_layers_masks"], "proposal": "초기 비교안은 공통 골격을 유지한 사전 분할 외형·단면 덮개·붕대/의수 상태다. 리깅·의복·장비 소켓·저장된 부위 상태를 함께 관리한다.", "gap": "실시간 절단 알고리즘은 의복/스킨드 메시 실패 위험이 크며 기본 채택하지 않음"},
+    {"id": "prosthesis_aftercare", "action": "절단 이후·의수/의족", "resource_ids": ["ailive_injury", "ochi_mobility_animations", "unity_animation_layers_masks"], "proposal": "초기 부상, 보조기구 사용, 적응한 의수/의족 동작을 같은 영구 통증 모션으로 묶지 않는다. 기능과 작업 역할에 맞는 동작을 검수한다.", "gap": "의족 전용 보행·한손 사다리·의수 장전/삽질·부위별 생활 동작의 검증된 완성 팩은 찾지 못함"}
+  ],
+  "implementation_notes": [
+    "모션 한 파일 대신 진입·반복·정지·이탈·취소, 손발 접촉점, 소품 소유 전환, 행동 결과 확정 시점, 허용 부상/장비 상태를 납품 계약으로 제안한다. 사다리·계단·양손무기·부축을 가능한 모든 조합으로 무조건 만들라는 뜻은 아니다. 실제 허용 조합은 게임 설계에서 선택한다.",
+    "현재 무기 브리프는 탭 사격과 일반 무기군을 사용한다. 원작 FPS 컨트롤러, 제조사 모델명, 소총 모션을 전 무기군에 강제하는 변경을 하지 않는다. 애니메이션 이름과 실제 화면의 무기 이름도 분리한다.",
+    "부위 상태가 바뀌어도 공통 골격/Avatar를 유지하고 외형·장비·IK 목표를 선택적으로 바꾸는 안을 먼저 비교한다. 이는 제안이며 원본 리그에 따라 달라진다. Avatar Mask는 메시 분리나 의족 모션을 자동 생성하지 않는다.",
+    "절단 처치·외형 교체·이후 이동을 독립적으로 검수한다. 카메라 회피가 소프트웨어/스토어의 등급 승인을 보장한다고 쓰지 않는다. 이 보고서는 의료 절차나 스토어 정책 판단이 아니다."
+  ],
+  "check_notes": [
+    "공식 클립명, 구형 카탈로그, PDF 표, 상품의 기능 범주, 검색 색인만 보인 항목을 구분한다. clip evidence가 catalog_text/legacy_catalog/catalog_pdf여도 실제 파일 재생을 뜻하지 않는다.",
+    "Kubold 소총 URL과 내부 문서 버전의 차이 및 구형 Unity/UE4 카탈로그를 그대로 표시했다. 구형 이름을 현행 판매 패키지에서 직접 확인했다고 쓰지 않는다.",
+    "MoCap Online의 AI Applications 조항은 넓은 서면 허가 조건이다. Fab의 AI No 표시는 특정 구매 약관의 의미와 대조해야 하며 모든 로컬 코드 보조에 같은 금지를 기계적으로 복사하지 않는다. AI Yes도 공개 원본 재배포 허가를 뜻하지 않는다.",
+    "Fab 요약은 특정 라이선스의 구속력 있는 전문이 아니다. 실제 구매 옵션/원본 형식/NoAI 조건을 취득일에 고정해야 한다. 아직 구매하거나 자산 원본을 외부 서비스에 넣지 않았다.",
+    "PDF 카탈로그 3쪽은 스크린샷으로 읽었다. 상품의 애니메이션 시연 영상은 시청했다고 기록하지 않는다. CMU 상세 본문은 열람 실패했고 검색 결과 수준만 남겼다.",
+    "의족/절단 검색에서 나온 2D 아이콘·의료 설명 영상·원작 모드 추출 파일을 3D 상용 애니메이션 자산으로 세지 않았다. 특정 모션을 찾지 못했다는 것은 시장에 없다는 증명이 아니다."
+  ],
+  "remaining_gaps": [
+    "사다리·계단에 맞춘 실제 체형/발판/가로대 접촉과 전환 품질",
+    "S2에서 우선 쓸 권총·산탄총·활의 원본 포맷과 구체 무기군별 장전",
+    "부상 상태의 사격·장전, 한손+손전등, 의수 그립과 작업 동작",
+    "의족 전용 움직임과 보조기구 없이 적응한 생활 동작",
+    "절단 장면 카메라 회피에 맞는 환자·조력자의 짝 연기",
+    "정적 포즈·목발·부축과 실제 절단 후의 다양한 능력을 구분한 연출 검수",
+    "다운로드 라이선스·우리 공통 리그·Blender/Unity 임포트·실기기 비용"
+  ]
+}
