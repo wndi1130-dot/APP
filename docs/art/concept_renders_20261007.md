@@ -25,10 +25,12 @@
 
 문구를 고칠 때만 여기를 본다. home_v3 톤(사용자가 좋다고 한 분위기)과 2026-10-07 날씨·색 결정을 합쳤다.
 
+2026-10-07 08:25 고침: 사용자가 옷차림을 더 누더기처럼 하라고 했다(3D 모델링 스레드). 옷차림 줄을 그 방향으로 바꿨다. 작품 이름은 글상자에 넣지 않고 모습만 풀어 쓴다.
+
 2026-10-07 07:50 덧붙임: 아래 두 줄은 앞으로 뽑는 모든 글상자 끝에 붙인다. 이미 나온 C1~C11 글상자에는 없어서 철모와 군용 외투가 섞여 나왔다(끝의 '민감 표식 점검' 절). 3D 모델링 주문서(main 6188d40, 7dd882e)와 같은 선이다.
 
 ```text
-Clothing: no armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns, and everyone wears patched civilian layers. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
+Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, soot and grime on faces and cuffs. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
 Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
 ```
 
@@ -273,3 +275,7 @@ Recreate the attached four-panel sheet with the same people, poses, door and fra
 - **C3 v5**: 꼬리칸 둘이 판자 막은 창, 방수포, 연통을 단 낡은 객차가 됐고 안의 춥고 비좁은 모습은 그대로다. 뒷배경 선로도 창 있는 객차 줄이다. 맨 왼쪽 끝에 창이 안 보이는 작은 차량 두세 대가 남았지만 사람은 없고 폰 크기에선 거의 안 보인다. 실제 배경을 만들 때 열린 석탄차나 객차로 둔다. → 홈 기준 그림은 C3 v5(3D 스레드의 꼬리칸 카드가 추천안대로 닫힌다는 전제).
 - **C9 v5**: 옆 선로가 사슬 없이 문 열린 불탄 빈 객차다. 나머지는 v3과 같다. → 정차 기준 그림은 C9 v5.
 - **C10 v3**: 열차장 모자에 모표가 없고, 4번 칸 경비는 귀덮개 털모자, 밧줄 띠, 사냥총이다. 덕분에 4번이 2번과 더 잘 갈린다. 뒤 승강장의 긴 외투 인물들에 표식은 안 보인다. → 하차 기준 그림은 C10 v3(3번 칸 어깨 짚임은 v2가 더 분명).
+
+### 옷차림 (2026-10-07 08:25)
+
+사용자가 사람들을 더 누더기처럼 하라고 했다. 기준 그림 C1 v3, C3 v5, C5, C10 v3의 옷은 기워 입었지만 아직 깔끔한 편이다. 이 그림들은 다시 뽑지 않는다. 사람 모습의 기준은 3D 모델링 스레드의 인물 모델이 정하고, 이 주문서의 그림은 화면 배치·빛·분위기 기준으로만 쓴다. 앞으로 뽑는 글상자에는 위 공통 화풍의 바뀐 옷차림 줄이 들어간다.
