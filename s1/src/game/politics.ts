@@ -5,7 +5,7 @@ import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
-import { refreshSit } from './domestic/state';
+import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, VoteFlip, VoteResult } from './state';

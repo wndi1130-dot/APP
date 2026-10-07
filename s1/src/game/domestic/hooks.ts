@@ -11,7 +11,8 @@ import { hotWaterCoal, hygieneTick } from './hygiene';
 import { lawTechCoal, lawTechFood, lawTechRes } from './lawtech';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick, domesticHeal } from './medbay';
-import { domCard, living, personById, refreshSit, techMult, topSkill, variantMult } from './state';
+import { refreshSit } from './sit';
+import { domCard, living, personById, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, rollBreakdown, runWorkshop, upkeepCoal } from './workshop';
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.

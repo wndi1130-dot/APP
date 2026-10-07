@@ -4,8 +4,6 @@ import { addCard, createGame, drawPerson, lawActive, pick, situation } from '../
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
 import type { Field, TechId, Variant, Zone } from './data';
-import { lawTechSit } from './lawtech';
-import { bedCrowd } from './medbay';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.
 // 저장할 수 있게 함수 없는 평범한 값만 담는다.
@@ -151,7 +149,7 @@ export function hasDom(g: Game): g is Game & { dom: DomState } {
   return !!g.dom;
 }
 
-function zeroSit(): Record<Comm, [number, number, number, number]> {
+export function zeroSit(): Record<Comm, [number, number, number, number]> {
   return Object.fromEntries(COMMS.map(c => [c, [0, 0, 0, 0]])) as unknown as Record<Comm, [number, number, number, number]>;
 }
 
@@ -298,21 +296,6 @@ export function variantOf(g: Game, id: TechId): Variant | undefined {
 /** 변형 기술의 그 변형 세기. */
 export function variantMult(g: Game, id: TechId, v: Variant): number {
   return variantOf(g, id) === v ? techMult(g, id) : 0;
-}
-
-/** situation()이 읽는 처지 보정을 다시 계산한다. 기술·침구·장갑이 바뀔 때마다 부른다. */
-export function refreshSit(g: Game): void {
-  const d = g.dom;
-  if (!d) return;
-  const sit = zeroSit();
-  // 기술이 바꾼 법의 벌(7.3, lawtech.ts). 법을 통과·폐지할 때도 다시 부른다(politics.ts).
-  lawTechSit(g, sit);
-  for (const c of COMMS) if ((d.bedding[c] ?? -1) >= g.seg) sit[c][0] -= D.beddingWarm;
-  if (d.armored.includes('guard') && techUsable(g, 'w3')) sit.guard[3] -= D.armorExposure;
-  const beds = bedCrowd(g);
-  sit.medtech[2] += beds.medtech;
-  sit.tail[2] += beds.tail;
-  d.sit = sit;
 }
 
 /** 공방이 선 구역(칸 순서가 바뀌면 달라진다, 4.3). */
