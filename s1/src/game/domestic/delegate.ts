@@ -6,6 +6,7 @@ import { D, TECHS, TECH_IDS } from './data';
 import type { TechId } from './data';
 import { domCard, living } from './state';
 import type { DomPerson, DomState } from './state';
+import { LAW_ONLY_TECHS, usefulVariant } from './lawtech';
 import { restoreCheck, startRestore, techSides } from './workshop';
 
 // 간부에게 맡기기(6.4). S1c에서 새로 여는 것은 공방장 하나다(의무장·기관장·경비대장은 S1c 이후).
@@ -60,19 +61,19 @@ function friendly(g: Game): Comm[] {
   return COMMS.filter(c => g.comms[c].rel >= 15);
 }
 
-/** 공방장이 고를 복원 대상: 방침과 성향(6.4 표). */
+/** 공방장이 고를 복원 대상: 방침과 성향(6.4 표). 법에만 걸린 기술은 그 법이 서 있을 때만 고른다(6.4, 2f1f64e).
+ *  성향과 방침은 그 안에서만 고른다. */
 export function chiefPick(g: Game): TechId | null {
   const d = dom(g);
   const chief = workshopChief(g);
   const trait = chief?.trait;
-  const ready = TECH_IDS.filter(id => !restoreCheck(g, id).full);
+  const ready = TECH_IDS.filter(id => !restoreCheck(g, id).full && usefulVariant(g, id) !== null);
   if (ready.length === 0) return null;
   const wants: Comm[] = trait === 'family' ? ['medtech'] : trait === 'ambition' ? ['guard']
     : d.delegate.policy === 'ours' ? friendly(g)
       : [[...COMMS].sort((a, b) => situation(g, a)[0] + situation(g, a)[1] - situation(g, b)[0] - situation(g, b)[1])[0]];
   const score = (id: TechId) => {
-    const v = TECHS[id].variants ? 'a' : undefined;
-    const s = techSides(id, v);
+    const s = techSides(id, usefulVariant(g, id) ?? undefined);
     return s.like.filter(c => wants.includes(c)).length * 2 - s.dislike.filter(c => wants.includes(c)).length - TECHS[id].tier * 0.1;
   };
   return [...ready].sort((a, b) => score(b) - score(a))[0];
@@ -101,7 +102,9 @@ export function delegateTick(g: Game): void {
   if (tier >= 3 && !d.restoring) {
     const id = chiefPick(g);
     if (id) {
-      const v = TECHS[id].variants ? (d.delegate.policy === 'ours' && friendly(g).includes('front') ? 'b' : 'a') : undefined;
+      // 법에 걸린 기술은 서 있는 법 쪽 변형, 법과 무관한 변형(W2·R2)은 지금처럼 방침으로 고른다.
+      const v = LAW_ONLY_TECHS.includes(id) ? usefulVariant(g, id) ?? undefined
+        : TECHS[id].variants ? (d.delegate.policy === 'ours' && friendly(g).includes('front') ? 'b' : 'a') : undefined;
       if (startRestore(g, id, 'full', v)) journal(g, `공방장이 ${TECHS[id].name}을(를) 골랐다.`);
     }
   }

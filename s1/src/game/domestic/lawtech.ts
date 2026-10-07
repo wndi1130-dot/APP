@@ -117,6 +117,14 @@ export function techLaws(tech: TechId, variant?: Variant): LawId[] {
 /** 효과가 모두 법에 걸린 기술(7.3). 그 법이 없으면 사도 쓸 데가 없다. E4(대체 화부)·M5(이)는 법 밖 효과가 있어 빠진다. */
 export const LAW_ONLY_TECHS: TechId[] = ['e1', 'e2', 'e3', 'e5', 'm2', 'm3', 'x1'];
 
+/** 이 기술을 복원할 때 쓸 변형. 법에만 걸린 기술이면 서 있는 법 쪽 변형(변형이 없으면 undefined), 그 법이 하나도 없으면 null(복원할 쓸모가 없다).
+ *  법과 상관없는 기술이면 첫 변형을 돌려주고 고르는 쪽(방침·봇)이 따로 정한다. 3단계 공방장(6.4, 2f1f64e)과 봇이 같이 쓴다. */
+export function usefulVariant(g: Game, tech: TechId): Variant | undefined | null {
+  const vs: (Variant | undefined)[] = TECHS[tech].variants ? ['a', 'b'] : [undefined];
+  if (!LAW_ONLY_TECHS.includes(tech)) return vs[0];
+  return vs.find(v => techLaws(tech, v).some(l => lawActive(g, l))) ?? null;
+}
+
 /** 설계도와 복원 단추에 붙는 쓸모 줄(내정 7.3 함정 막기, 2026-10-07 내정 스레드). 법과 상관없는 기술이면 null. */
 export function techUseLine(g: Game, tech: TechId, variant?: Variant): string | null {
   const parts = [

@@ -4,7 +4,7 @@
 import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda,
-  setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, LAW_ONLY_TECHS, lawActive, techLaws,
+  setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant,
 } from '../src/game';
 import type { Card, CardView, Choice, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -63,13 +63,8 @@ function scoreChoice(g: Game, ch: Choice): number {
   return s;
 }
 
-/** 봇이 이 기술을 살 때 고르는 변형. 법에만 걸린 기술인데 그 법이 없으면 null(사지 않는다). */
-function lawVariant(g: Game, id: TechId): Variant | undefined | null {
-  const def = TECHS[id];
-  const vs: (Variant | undefined)[] = def.variants ? ['a', 'b'] : [undefined];
-  if (!LAW_ONLY_TECHS.includes(id)) return vs[0];
-  return vs.find(v => techLaws(id, v).some(l => lawActive(g, l))) ?? null;
-}
+/** 봇이 이 기술을 살 때 고르는 변형. 법에만 걸린 기술인데 그 법이 없으면 null(사지 않는다). 공방장과 같은 규칙이다. */
+const lawVariant = usefulVariant;
 
 /** 내정 카드: 정책에 따른 고르기(특수 표시로 알아본다). */
 function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number {
@@ -77,7 +72,8 @@ function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number
   const by = (sp: string) => ok.find(x => x.c.special === sp)?.i;
   if (policy === 'idle') return by('dom:none') ?? (card.kind === 'dom:lice' ? by('dom:lice:endure') : undefined) ?? ok[0].i;
   switch (card.kind) {
-    case 'dom:fit': return by('dom:restore:full') ?? by('dom:restore:defect') ?? ok[0].i;
+    case 'dom:fit': if (lawVariant(g, card.text as TechId) === null) return by('dom:none') ?? ok[0].i;
+      return by('dom:restore:full') ?? by('dom:restore:defect') ?? ok[0].i;
     case 'dom:fork': {
       const v = TECHS[card.text as TechId]?.variants ? lawVariant(g, card.text as TechId) : undefined;
       if (v) return by(`dom:variant:${v}`) ?? ok[0].i;
