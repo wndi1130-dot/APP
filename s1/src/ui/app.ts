@@ -380,8 +380,12 @@ export function startApp(root: HTMLElement): void {
         const id = data.car ?? null;
         ui.carPop = ui.carPop === id ? null : id;
         ui.panel = null;
+        ui.spaceOpen = false;
         return render();
       }
+      case 'space-tab':
+        ui.spaceOpen = !ui.spaceOpen;
+        return render();
       case 'go': {
         const screen = (data.screen ?? 'home') as Screen;
         ui.screen = screen;
@@ -452,6 +456,12 @@ export function startApp(root: HTMLElement): void {
         ui.count = null;
         clearTimeout(countTimer);
         return render();
+      case 'space': {
+        const before = fxSnap(g);
+        const why = step({ a: 'space', d: plainData(data) });
+        if (why) toast(why); else showFx(fxDiff(before, g));
+        return render();
+      }
       case 'comm-act': {
         const why = step({ a: 'comm-act', d: plainData(data) });
         if (why) toast(why);

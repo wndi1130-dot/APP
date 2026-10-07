@@ -61,6 +61,11 @@ function summarize(ms: GameMetrics[]) {
     domCardsP10: pct(ms.map(m => m.domCards), 0.1),
     domCardsP90: pct(ms.map(m => m.domCards), 0.9),
     cardsPerGame,
+    tailExpoMax: +mean(ms.map(m => m.tailExpoMax ?? 0)).toFixed(1),
+    tailExpoEnd: +mean(ms.map(m => m.tailExpoEnd ?? 0)).toFixed(1),
+    tailExpoHit90: +mean(ms.map(m => ((m.tailExpoMax ?? 0) >= 90 ? 1 : 0))).toFixed(3),
+    crews: Object.fromEntries(['tail', 'medtech', 'guard', 'front'].map(c => [c, +mean(ms.map(m => m.crews?.[c] ?? 0)).toFixed(2)])),
+    spaceSegs: +mean(ms.map(m => m.spaceSegs ?? 0)).toFixed(2),
     dom,
     techFreq: Object.fromEntries(Object.entries(techFreq).sort().map(([k, v]) => [k, +(v / ms.length).toFixed(3)])),
   };

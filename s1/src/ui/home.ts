@@ -1,4 +1,4 @@
-import { COMM_NAME, P, isSessionSeg, relStage, situation, viewCard } from '../game';
+import { COMMS, COMM_NAME, COMM_SHORT, P, isSessionSeg, relStage, situation, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
@@ -52,6 +52,34 @@ function carEl(view: View, car: CarDef): HTMLElement {
     h('span', { class: 'car__wheels' }, h('i'), h('i')));
 }
 
+/** 꼬리칸 창 머리의 공간 단추: 지금 단을 보이고, 누르면 레버 자리에 공간 레버가 펼쳐진다(창 높이를 늘리지 않는다). */
+function spaceTab(view: View): HTMLElement {
+  const sp = view.g.space;
+  const on = sp && sp.step > 0 && sp.giver ? `자리 ${sp.step}단·${COMM_SHORT[sp.giver]}` : '자리';
+  return h('button', { class: cx('chip', 'space-tab', view.ui.spaceOpen && 'is-on'), 'data-action': 'space-tab', 'aria-expanded': view.ui.spaceOpen ? 'true' : 'false' }, on);
+}
+
+/** 꼬리칸 창의 공간 레버(first_leg_story 6.4): 다른 한 칸이 자리를 내준다. 0~2단. 내주는 칸은 0단일 때만 바꾼다. */
+function spaceLever(g: Game): HTMLElement {
+  const sp = g.space ?? { step: 0, giver: null };
+  const givers = COMMS.filter(c => c !== 'tail');
+  const who = sp.giver ? COMM_SHORT[sp.giver] : null;
+  const k = P.spaceStep * sp.step;
+  return h('div', { class: 'space' },
+    h('span', { class: 'space__name' }, '자리 내주기'),
+    h('span', { class: 'space__givers' }, givers.map(c => h('button', {
+      class: cx('chip', `c-${c}`, sp.giver === c && 'is-on'), 'data-action': 'space', 'data-giver': c, 'data-step': sp.step,
+      disabled: sp.step > 0 && sp.giver !== c,
+    }, COMM_SHORT[c]))),
+    h('span', { class: 'dom-hot' },
+      h('button', { class: 'nav', 'data-action': 'space', 'data-step': sp.step - 1, disabled: sp.step <= 0, 'aria-label': '자리 덜' }, '−'),
+      h('b', { class: 'num' }, `${sp.step}단`),
+      h('button', { class: 'nav', 'data-action': 'space', 'data-step': sp.step + 1, disabled: sp.step >= P.spaceMax || !sp.giver, 'aria-label': '자리 더' }, '+')),
+    h('small', { class: 'space__note' }, sp.step > 0 && who
+      ? `꼬리 과밀 −${k} · ${who} 과밀 +${k} · ${who} 관계 구간마다 −${-P.spaceHoldRel * sp.step}`
+      : who ? `한 단 당기면 ${who} 관계 −${-P.spacePullRel}` : '내줄 칸을 고른다'));
+}
+
 function carPopover(view: View, car: CarDef): HTMLElement | null {
   const { g } = view;
   const dom = domesticPopover(view, car); // S1c 내정 훅
@@ -66,13 +94,15 @@ function carPopover(view: View, car: CarDef): HTMLElement | null {
         h('span', { class: 'num' }, `${s.pop}명`),
         h('span', { class: cx('stage', `stage--${s.rel >= 15 ? 'up' : s.rel <= -15 ? 'down' : 'mid'}`) }, relStage(g, c)),
         domesticCarTag(view, car), // S1c 내정 훅: 위생·침상
+        c === 'tail' ? spaceTab(view) : null,
         h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
       h('div', { class: 'carpop__stats' },
         h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
         h('span', null, '배급 ', h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
         h('span', null, '과밀 ', h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
         h('span', null, '노출 ', h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
-      h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car)));
+      c === 'tail' && view.ui.spaceOpen ? spaceLever(g)
+        : h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car)));
   }
   if (car.kind === 'dining') {
     const left = isSessionSeg(g.seg) ? 0 : P.sessionEvery - (g.seg % P.sessionEvery);

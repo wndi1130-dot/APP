@@ -2,6 +2,7 @@ import {
   COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FETCH_WANT, IDEO, LAWS, LAW_IDS, LAW_VARIANT_OF, OPPOSITE, P,
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
+import { josa } from './josa';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
@@ -716,7 +717,9 @@ export function supportComm(g: Game, c: Comm): string | null {
   if (g.lux < 2) return '사치품 2가 필요하다';
   const s = g.comms[c];
   g.lux -= 2;
-  s.rel = clamp(s.rel + 10, -100, 100);
+  // 같은 칸을 3구간 안에 또 챙기면 덜 오른다: 지지 하나가 정답이 되지 않게(first_leg_story 7.7, 제안).
+  const again = g.seg - s.supportedAt < P.supportGap;
+  s.rel = clamp(s.rel + (again ? P.supportRepeatRel : P.supportRel), -100, 100);
   s.fervor = Math.max(0, s.fervor - 1);
   const other = OPPOSITE[c];
   g.comms[other].rel = clamp(g.comms[other].rel - 3, -100, 100);
@@ -727,6 +730,27 @@ export function supportComm(g: Game, c: Comm): string | null {
   s.supportedAt = g.seg;
   g.actedSeg = g.seg;
   journal(g, `${COMM_NAME[c]}에 공간과 사치품을 더 내줬다.`, 'good');
+  return null;
+}
+
+/** 공간 레버(first_leg_story 6.4): 꼬리칸 과밀을 다른 한 칸으로 옮긴다. 0~2단, 내주는 칸은 꼬리칸 말고 하나.
+ * 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1(정산). 내주는 칸을 바꾸려면 0단으로 풀었다가 다시 당긴다. 못 하면 까닭. */
+export function setSpace(g: Game, step: number, giver?: Comm): string | null {
+  const sp = (g.space ??= { step: 0, giver: null });
+  if (giver === 'tail') return '꼬리칸은 공간을 내줄 수 없다';
+  if (giver && giver !== sp.giver) {
+    if (sp.step > 0) return '내준 칸을 바꾸려면 먼저 공간을 거둬라';
+    sp.giver = giver;
+  }
+  const to = clamp(Math.round(step), 0, P.spaceMax);
+  if (to > 0 && !sp.giver) return '공간을 내줄 칸을 먼저 골라라';
+  if (to > sp.step && sp.giver) {
+    g.comms[sp.giver].rel = clamp(g.comms[sp.giver].rel + P.spacePullRel * (to - sp.step), -100, 100);
+    journal(g, `${COMM_NAME[sp.giver]}${josa(COMM_NAME[sp.giver], '이/가')} 꼬리칸에 자리를 내줬다(${to}단).`, 'bad');
+  } else if (to < sp.step) {
+    journal(g, to === 0 ? '꼬리칸에 내준 자리를 거뒀다.' : `꼬리칸에 내준 자리를 ${to}단으로 줄였다.`);
+  }
+  sp.step = to;
   return null;
 }
 

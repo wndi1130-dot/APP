@@ -3,10 +3,10 @@
 
 import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
-  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda,
+  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant,
 } from '../src/game';
-import type { Card, CardView, Choice, Eff, Game, TechId, Variant } from '../src/game';
+import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
 
 // 콘텐츠 JSON 사건(data/events)도 봇 판에 섞는다.
@@ -37,6 +37,11 @@ export interface GameMetrics {
   cards: Record<string, number>;
   s1aCards: number;
   domCards: number;
+  /** 꼬리칸 노출(6.4): 판 중 가장 높았던 값, 끝 값. 작업조를 어느 칸이 몇 번 냈나. 공간 레버를 당긴 구간 수. */
+  tailExpoMax: number;
+  tailExpoEnd: number;
+  crews: Record<string, number>;
+  spaceSegs: number;
   dom?: {
     restored: number; tier3: number; defective: number; breakdowns: number; repairs: number; lice: number; typhus: number;
     hotCoal: number; techCoal: number; apprentices: number; manuals: number; demands: number; partsMade: number; partsEnd: number;
@@ -148,6 +153,32 @@ function domesticPrep(g: Game): void {
   }
 }
 
+/** 돌보는 정책의 작업조(6.4, s1a_balance.py pick_crew를 고침): 꼬리칸 관계가 −30 이하인데 나가서 노출 50을 넘기면 다른 칸.
+ * 다른 칸은 나가도 50을 안 넘고 관계 5 이상인 칸 중 노출이 가장 낮은 칸. 경비대는 관계 25 이상일 때만. 없으면 꼬리칸. */
+function pickCrew(g: Game): Comm {
+  const def = g.stop!.crewComm;
+  const ex = (c: Comm) => situation(g, c)[3];
+  // 꼬리칸 관계가 버틸 만하면 꼬리칸을 낸다(운반이 가장 많다). 시뮬에서 늘 돌리면 운반이 줄어 완주가 떨어졌다.
+  if (def === 'tail' && (ex('tail') + P.crewGain <= 50 || g.comms.tail.rel > -30)) return 'tail';
+  const alt = CREW_COMMS.filter(c => c !== 'tail' && ex(c) + P.crewGain <= 50 && g.comms[c].rel >= (c === 'guard' ? 25 : 5))
+    .sort((a, b) => ex(a) - ex(b));
+  return alt[0] ?? def;
+}
+
+/** 돌보는 정책의 공간 레버(6.4): 꼬리칸 과밀이 75 이상이면 관계 20 이상인 칸 중 관계가 가장 좋은 칸에 한 단을 청한다.
+ * 내준 칸 관계가 0 아래로 내려가거나 꼬리칸 과밀이 55 아래면 거둔다. */
+function spacePolicy(g: Game): void {
+  const sp = g.space;
+  if (sp && sp.step > 0) {
+    if (g.comms[sp.giver!].rel < 0 || situation(g, 'tail')[2] < 55) setSpace(g, 0);
+    return;
+  }
+  if (situation(g, 'tail')[2] < 75) return;
+  const giver = ([...CREW_COMMS, 'engine'] as Comm[]).filter(c => c !== 'tail' && g.comms[c].rel >= 20)
+    .sort((a, b) => g.comms[b].rel - g.comms[a].rel)[0];
+  if (giver) setSpace(g, 1, giver);
+}
+
 export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetrics } {
   const g = opts.s1c ? createS1cGame(seed) : createGame(seed);
   const seen = new Set<number>();
@@ -155,6 +186,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   const m: GameMetrics = {
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
     deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, cards, s1aCards: 0, domCards: 0,
+    tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, spaceSegs: 0,
   };
   let lastSeg = -1;
   let lastCouncil = -1;
@@ -190,11 +222,18 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     }
     if (g.phase === 'prep' && prepSeg !== g.seg) {
       prepSeg = g.seg;
-      if (opts.policy === 'caretaker' && !opts.noLevers) autoLevers(g);
+      if (opts.policy === 'caretaker' && !opts.noLevers) { autoLevers(g); spacePolicy(g); }
+      if ((g.space?.step ?? 0) > 0) m.spaceSegs += 1;
       if (opts.s1c && opts.dom === 'engaged') domesticPrep(g);
       continue;
     }
-    if (g.phase === 'stop' && g.stop && !g.stop.done) { resolveStop(g, true); continue; }
+    if (g.phase === 'stop' && g.stop && !g.stop.done) {
+      if (opts.policy === 'caretaker') setStop(g, { crewComm: pickCrew(g) });
+      m.crews[g.stop.crewComm] = (m.crews[g.stop.crewComm] ?? 0) + 1;
+      resolveStop(g, true);
+      m.tailExpoMax = Math.max(m.tailExpoMax, situation(g, 'tail')[3]);
+      continue;
+    }
     if (g.phase === 'council' && g.council && !g.council.result && currentAgenda(g)) {
       if (lastCouncil !== g.session) {
         lastCouncil = g.session;
@@ -212,6 +251,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   m.lawsPassed = Object.keys(g.passed).length;
   m.harshPassed = Object.keys(g.passed).filter(l => LAWS[l as keyof typeof LAWS].tag === '가혹').length;
   m.deaths = g.deaths.length;
+  m.tailExpoEnd = situation(g, 'tail')[3];
   m.emergencyCoal = g.emergencyUsed;
   m.endCoal = g.coal;
   m.endFood = g.food;

@@ -28,7 +28,23 @@ export const P = Object.freeze({
   scoutHurt: 0.05, scoutDeath: 0.012,
   repealCool: 2, repealRel: 10, hostileGrudge: 2, blackmailReputation: 3, grudgeDecay: 2,
   maxDealsPerSession: 3, promiseSegments: 3,
+  // 꼬리칸 수단(first_leg_story 6.4, 사용자 16:00 '수단 더하기'. 숫자는 제안).
+  // 작업조를 낸 칸 노출 +5, 안 낸 칸 −10(쉼 바닥까지), 지나친 정차는 모두 쉰다. 의무진·앞칸은 궂은일 반감 관계 −3. 다친 사람 1명마다 그 칸 −2.
+  crewGain: 5, crewRest: 10, choreRel: -3, hurtRel: -2, snowExposure: 10,
+  // 작업조 노동으로는 노출이 60 위로 안 오른다: 꼬리칸의 시작 노출 60이 '늘 먼저 불려 나간' 값이다(6.4 첫 줄).
+  // 한계가 없으면 꼬리칸만 보내는 판이 노출 100에 닿아 완주가 42→24%로 무너졌다(4000판, 제안). 법·눈 녹이기는 이 위로도 올린다.
+  crewCap: 60,
+  // 공간 레버 0~2단: 한 단에 꼬리칸 과밀 −10, 내주는 칸 +10. 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1.
+  spaceStep: 10, spaceMax: 2, spacePullRel: -3, spaceHoldRel: -1,
+  // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').
+  supportRel: 10, supportRepeatRel: 5, supportGap: 3,
 });
+/** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
+export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };
+/** 운반 솜씨(손에 익었나). 기관실은 화부가 빠지면 열차가 못 가서 못 낸다. */
+export const CREW_HAUL: Partial<Record<Comm, number>> = { tail: 1, guard: 0.9, medtech: 0.9, front: 0.8 };
+/** 늘 하던 일이 아닌 칸: 낼 때마다 궂은일 반감 */
+export const CHORE_COMMS: readonly Comm[] = ['medtech', 'front'];
 
 // 처지 = [온기, 배급, 과밀, 위험 노출]. 레버 2(보통) 기준(브리프 2.1, 기관실 노출은 고친 값 45).
 export const START: Record<Comm, [number, number, number, number]> = {

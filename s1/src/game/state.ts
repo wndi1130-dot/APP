@@ -245,6 +245,10 @@ export interface Game {
   usedProfiles: string[];
   end: EndKind | null;
   stats: { dealsMade: number; promisesKept: number; promisesBroken: number; lawsPassed: number; lawsFailed: number; repeals: number; bribes: number; blackmails: number };
+  /** 공간 레버(first_leg_story 6.4): 꼬리칸에 내준 단(0~2)과 내주는 칸. 옛 저장엔 없다. */
+  space?: { step: number; giver: Comm | null };
+  /** 마지막으로 작업조를 낸 칸(급수탑 눈 녹이기의 기본 칸) */
+  lastCrew?: Comm;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
   /** 이야기 진행도(first_leg_story 9장). S1a는 표식 몇 개만 쓴다. */
@@ -329,10 +333,13 @@ export function situation(g: Game, c: Comm): [number, number, number, number] {
   const s = g.comms[c];
   // S1c: 기술·침구·장갑이 더하는 처지 보정(domestic/state.ts refreshSit). S1a 판엔 없다.
   const d = g.dom?.sit[c];
+  // 공간 레버: 꼬리칸 과밀을 내주는 칸으로 옮긴다(6.4).
+  const sp = g.space;
+  const room = sp && sp.giver && sp.step > 0 ? (c === 'tail' ? -1 : c === sp.giver ? 1 : 0) * P.spaceStep * sp.step : 0;
   return [
     clamp(s.base[0] + P.leverStep * (s.heat - 2) + (d?.[0] ?? 0), 0, 100),
     clamp(s.base[1] + P.leverStep * (s.ration - 2) + (d?.[1] ?? 0), 0, 100),
-    clamp(s.base[2] + (d?.[2] ?? 0), 0, 100),
+    clamp(s.base[2] + (d?.[2] ?? 0) + room, 0, 100),
     clamp(s.base[3] + (d?.[3] ?? 0), 0, 100),
   ];
 }

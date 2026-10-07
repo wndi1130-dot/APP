@@ -1,6 +1,6 @@
 import {
-  COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setAutoLevers, setBury, setDelegate,
+  COMMS, CREW_COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
+  migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, startFinish, startJob, startRestore, supportComm, uniqueAction,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
@@ -64,6 +64,7 @@ export function applyStep(g: Game, s: Step): string | null {
       return d.act === 'support' ? supportComm(g, c) : d.act === 'cut' ? cutComm(g, c) : uniqueAction(g, c);
     }
     case 'lever': setLever(g, d.comm as Comm, d.which as 'heat' | 'ration', Number(d.value)); return null;
+    case 'space': return setSpace(g, Number(d.step), (COMMS as readonly string[]).includes(d.giver ?? '') ? d.giver as Comm : undefined);
     // ---- S1c 내정 ----
     case 'dom-restore':
       return startRestore(g, d.id as TechId, d.mode === 'defect' ? 'defect' : 'full', (d.variant || undefined) as Variant | undefined) ? null : '지금은 시작할 수 없다';
@@ -128,6 +129,8 @@ function fillDefaults(g: Game): void {
   g.emergencyCalls ??= [];
   g.hunger ??= 0;
   g.linesSeen ??= [];
+  // 기관실은 작업조로 못 낸다(6.4). 그 전에 저장한 열린 정차가 기관실을 골라 뒀으면 경비대로 바꾼다.
+  if (g.stop && !g.stop.done && !CREW_COMMS.includes(g.stop.crewComm)) g.stop.crewComm = 'guard';
   migrateDomestic(g);
 }
 

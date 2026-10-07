@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, politicsLines, riskView, stopScene, viewCard,
+  COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, politicsLines, riskView, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -62,11 +62,12 @@ function stopCard(view: View): HTMLElement | null {
       }, STAY[k].name, h('small', null, ` 석탄 −${STAY[k].coal}`)))),
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '누구를'),
-      COMMS.map(c => h('button', { class: cx('chip', `c-${c}`, stop.crewComm === c && 'is-on'), 'data-action': 'stop-set', 'data-key': 'crewComm', 'data-value': c }, COMM_NAME[c].slice(0, 2))),
+      CREW_COMMS.map(c => h('button', { class: cx('chip', `c-${c}`, stop.crewComm === c && 'is-on'), 'data-action': 'stop-set', 'data-key': 'crewComm', 'data-value': c }, COMM_NAME[c].slice(0, 2))),
       h('span', { class: 'stepper' },
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize - 1, 'aria-label': '한 명 덜' }, '−'),
         h('b', { class: 'num' }, `${stop.crewSize}명`),
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
+    crewCost(view),
     h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, ' · 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다'))),
     domesticStopRows(view),
     stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
@@ -83,6 +84,18 @@ function stopCard(view: View): HTMLElement | null {
       scoutSend(view),
       h('button', { class: 'btn btn--ghost', 'data-action': 'stop-go', 'data-go': '0' }, '지나친다'),
       h('button', { class: 'btn', 'data-action': 'stop-go', 'data-go': '1' }, '보낸다', icon('arrow'))));
+}
+
+/** 작업조 값(6.4): 낸 칸 노출이 오르고, 늘 하던 일이 아니면 관계가 깎이고, 안 나간 칸은 쉰다. 보내기 전에 숫자로 보인다. */
+function crewCost(view: View): HTMLElement {
+  const { g } = view;
+  const c = g.stop!.crewComm;
+  const pv = crewPreview(g, c);
+  return h('p', { class: 'crew-cost' },
+    h('span', null, `${COMM_SHORT[c]} 노출 `, h('b', { class: 'num' }, `${pv.from} → ${pv.to}`)),
+    pv.rel ? h('span', null, ` · 관계 −${-pv.rel}`) : null,
+    pv.haul < 1 ? h('span', null, ` · 손에 안 익어 산출 −${Math.round((1 - pv.haul) * 100)}%`) : null,
+    pv.rest.length ? h('small', null, ` · 쉬는 칸 ${pv.rest.map(o => COMM_SHORT[o]).join('·')} 노출 −${P.crewRest}`) : null);
 }
 
 /** 정찰 보내기 단추. 다녀온 뒤엔 없다. */
