@@ -191,6 +191,7 @@ export function validateContent(value: unknown, file = 'content.json', prefix = 
       }
     }
   }
+  textSpecDiagnostics(kind, value, add);
   for (const key of ['trigger', 'opens_when']) {
     if (!Array.isArray(value[key])) continue;
     value[key].forEach((condition, index) => {
@@ -200,6 +201,86 @@ export function validateContent(value: unknown, file = 'content.json', prefix = 
     });
   }
   return diagnostics;
+}
+
+// ---- 글 데이터 규격(s1_content_guide 6장): 번역 키, 자리표시자, 조사, 복수형, 성별 ----
+
+export const PLACEHOLDERS = ['person', 'person2', 'captain', 'community', 'law', 'place', 'car', 'item', 'n', 'n2'] as const;
+const PEOPLE = new Set(['person', 'person2', 'captain']);
+const COUNTS = new Set(['n', 'n2']);
+/** 6.3 표의 대괄호 조사 짝(받침 있음/없음). */
+export const PARTICLE_PAIRS = ['이/가', '을/를', '은/는', '과/와', '이나/나', '아/야', '으로/로'] as const;
+// 받침에 따라 꼴이 바뀌는 조사를 맨글자로 붙였나. 긴 것부터 맞춘다(이나 → 이).
+const BARE_PARTICLE = /^(?:이나|으로|이|가|을|를|은|는|과|와|나|아|야|로)(?![가-힣])/u;
+const TOKEN = /\{([^{}]*)\}(\[[^\]]*\])?/gu;
+
+/** 글이 있는 JSON 경로(/choices/0/say)를 번역 키 꼴리(c_give.say)로. 선택지는 순번 대신 id를 쓴다(6.2). */
+export function textKey(item: Record<string, unknown>, path: string): string {
+  const parts = path.split('/').slice(1).map(part => part.replace(/~1/gu, '/').replace(/~0/gu, '~'));
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    if (parts[i] === 'choices' && i + 1 < parts.length && Array.isArray(item.choices)) {
+      const choice = item.choices[Number(parts[i + 1])];
+      out.push(isRecord(choice) && typeof choice.id === 'string' ? choice.id : `#${parts[i + 1]}`);
+      i += 1;
+    } else out.push(parts[i]);
+  }
+  return out.join('.');
+}
+
+function textSpecDiagnostics(kind: ContentKind, value: Record<string, unknown>, add: (path: string, severity: Severity, code: string, message: string) => void): void {
+  if (kind === 'event' && Array.isArray(value.choices)) {
+    const seen = new Map<string, number>();
+    value.choices.forEach((choice, index) => {
+      if (!isRecord(choice) || typeof choice.id !== 'string') return;
+      if (seen.has(choice.id)) add(`/choices/${index}/id`, 'error', 'text.choice_id', `선택지 id ${choice.id}이(가) ${seen.get(choice.id)}번 선택지와 겹친다. 번역 키가 같아진다.`);
+      else seen.set(choice.id, index);
+    });
+  }
+  const texts = rules.text_fields[kind].flatMap(pattern => selectPaths(value, pattern))
+    .filter((field): field is { path: string; value: string } => typeof field.value === 'string');
+  const keys = new Map(texts.map(field => [textKey(value, field.path), field]));
+  const params = new Set(Array.isArray(value.params) ? value.params.filter((x): x is string => typeof x === 'string') : []);
+  const used = new Set<string>();
+  const meta = (name: string) => (isRecord(value[name]) ? value[name] : {}) as Record<string, unknown>;
+  const plural = meta('plural');
+  const genderOf = meta('gender_of');
+  for (const field of texts) {
+    const key = textKey(value, field.path);
+    const inText = new Set<string>();
+    for (const match of field.value.matchAll(TOKEN)) {
+      const [whole, name, bracket] = match;
+      const after = field.value.slice((match.index ?? 0) + whole.length);
+      if (!(PLACEHOLDERS as readonly string[]).includes(name)) {
+        add(field.path, 'error', 'text.placeholder', `자리표시자 {${name}}은(는) 6.3 표에 없다. 쓸 수 있는 것: ${PLACEHOLDERS.join(', ')}.`);
+        continue;
+      }
+      inText.add(name);
+      used.add(name);
+      if (!params.has(name)) add(field.path, 'error', 'text.params', `{${name}}이(가) 문장에 있는데 params에 없다.`);
+      if (COUNTS.has(name)) {
+        if (bracket || BARE_PARTICLE.test(after)) add(field.path, 'error', 'text.particle', `수량 {${name}} 바로 뒤엔 조사를 붙이지 않는다. 단위를 두고 조사는 단위에 붙인다({${name}}명이).`);
+        continue;
+      }
+      if (bracket) {
+        if (!(PARTICLE_PAIRS as readonly string[]).includes(bracket.slice(1, -1))) add(field.path, 'error', 'text.particle', `${bracket}은(는) 6.3 표의 조사 짝이 아니다. 쓸 수 있는 것: ${PARTICLE_PAIRS.map(x => `[${x}]`).join(' ')}.`);
+      } else if (BARE_PARTICLE.test(after)) {
+        add(field.path, 'error', 'text.particle', `{${name}} 바로 뒤에 맨글자 조사(${after.match(BARE_PARTICLE)?.[0]})가 붙었다. {${name}}[이/가]처럼 짝을 대괄호에 쓴다.`);
+      }
+    }
+    const counts = [...inText].filter(name => COUNTS.has(name));
+    if (counts.length > 1) add(field.path, 'error', 'text.plural', '한 글에 수량이 둘이다. 문장을 나눈다(6.5).');
+    if (counts.length && plural[key] === undefined) add(field.path, 'error', 'text.plural', `{${counts[0]}}을(를) 쓴 글엔 plural에 "${key}": "${counts[0]}"이(가) 있어야 한다(6.5).`);
+    if (plural[key] !== undefined && !inText.has(String(plural[key]))) add(`/plural/${escapePointer(key)}`, 'error', 'text.plural', `plural이 가리키는 {${String(plural[key])}}이(가) ${key} 글에 없다.`);
+    // 주어인지는 문법을 다 읽어야 안다. 주격·보조사 조사가 붙은 사람 자리표시자를 주어로 어림한다.
+    const subject = [...field.value.matchAll(TOKEN)].find(m => PEOPLE.has(m[1]) && /^\[(이\/가|은\/는)\]$/u.test(m[2] ?? ''));
+    if (subject && genderOf[key] === undefined) add(field.path, 'warning', 'text.gender_of', `{${subject[1]}}이(가) 주어로 보인다. gender_of에 "${key}": "${subject[1]}"을(를) 밝힌다(6.5).`);
+    if (genderOf[key] !== undefined && !inText.has(String(genderOf[key]))) add(`/gender_of/${escapePointer(key)}`, 'error', 'text.gender_of', `gender_of가 가리키는 {${String(genderOf[key])}}이(가) ${key} 글에 없다.`);
+  }
+  for (const name of params) if (!used.has(name)) add('/params', 'error', 'text.params', `params의 ${name}을(를) 쓰는 글이 없다.`);
+  for (const name of ['plural', 'gender_of', 'notes']) {
+    for (const key of Object.keys(meta(name))) if (!keys.has(key)) add(`/${name}/${escapePointer(key)}`, 'error', 'text.key', `${name}의 키 ${key}에 맞는 글이 없다. 쓸 수 있는 키: ${[...keys.keys()].join(', ') || '없음'}.`);
+  }
 }
 
 export async function validateFolder(folder: string): Promise<ValidationResult> {

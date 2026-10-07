@@ -53,6 +53,11 @@
       "items": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^c_[a-z0-9_]+$",
+            "description": "선택지 id. 번역 키 <사건 id>.<선택지 id>.<필드>에 쓴다(6.2). 순번 대신 쓴다."
+          },
           "label": {
             "type": "string",
             "minLength": 1,
@@ -82,6 +87,7 @@
           }
         },
         "required": [
+          "id",
           "label",
           "effects",
           "followups",
@@ -101,6 +107,18 @@
     },
     "content_type": {
       "const": "event"
+    },
+    "params": {
+      "$ref": "urn:s1:schema:common#/$defs/textParams"
+    },
+    "plural": {
+      "$ref": "urn:s1:schema:common#/$defs/textPlural"
+    },
+    "gender_of": {
+      "$ref": "urn:s1:schema:common#/$defs/textGender"
+    },
+    "notes": {
+      "$ref": "urn:s1:schema:common#/$defs/textNotes"
     }
   },
   "required": [

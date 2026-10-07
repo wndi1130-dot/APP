@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { contentKinds, countSentences, validateContent, validateFolder } from '../tools/validate';
+import { contentKinds, countSentences, textKey, validateContent, validateFolder } from '../tools/validate';
 import type { ContentKind } from '../tools/validate';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -88,7 +88,7 @@ describe('length and count boundaries', () => {
   });
   it.each([1, 2, 4, 5])('accepts only two to four event choices (%i)', count => {
     const event = fixture('event');
-    event.choices = Array.from({ length: count }, () => event.choices[0]);
+    event.choices = Array.from({ length: count }, (_, index) => ({ ...event.choices[0], id: `c_copy_${index}` }));
     expect(errors(event, 'event').length === 0).toBe(count >= 2 && count <= 4);
   });
   it.each([0, 2, 3])('allows zero to two secrets (%i)', count => {
@@ -194,6 +194,65 @@ describe('content rules', () => {
     const processResult = cli(folder);
     expect(processResult.status).toBe(0);
     expect(processResult.stdout).toContain('경고');
+  });
+});
+
+describe('text spec (s1_content_guide 6)', () => {
+  const codes = (value: unknown, kind: ContentKind = 'event') => validateContent(value, `${kind}.json`).map(item => `${item.severity}:${item.code}:${item.path}`);
+  it('builds translation keys from choice ids, not order', () => {
+    const event = fixture('event');
+    expect(textKey(event, '/body')).toBe('body');
+    expect(textKey(event, '/choices/1/say')).toBe('c_ask_engine.say');
+    event.choices[1].id = event.choices[0].id;
+    expect(codes(event)).toContain('error:text.choice_id:/choices/1/id');
+    event.choices[1].id = '1번';
+    expect(codes(event)).toContain('error:schema.pattern:/choices/1/id');
+  });
+  it('matches placeholders with params both ways and rejects names outside the table', () => {
+    const event = fixture('event');
+    event.body = '{person}[이/가] 난로 앞에 섰다. {칸}에서 왔다.';
+    expect(codes(event)).toEqual(expect.arrayContaining(['error:text.params:/body', 'error:text.placeholder:/body']));
+    event.body = '{person}[이/가] 난로 앞에 섰다.';
+    event.params = ['person', 'place'];
+    event.gender_of = { body: 'person' };
+    expect(codes(event)).toEqual(['error:text.params:/params']);
+    event.params = ['person'];
+    expect(codes(event)).toEqual([]);
+  });
+  it.each(['{community}이 버텼다.', '{community}가 버텼다.', '{place}로 간다.', '{person}을 부른다.', '{community}[이/를] 본다.'])(
+    'rejects bare or mismatched particles (%s)', body => {
+      const event = { ...fixture('event'), body, params: [body.match(/\{(\w+)\}/u)![1]] };
+      expect(codes(event)).toContain('error:text.particle:/body');
+    });
+  it.each(['{community}의 난로가 꺼졌다.', '{community}에서 왔다.', '{place}[으로/로] 간다.', '{person}[아/야], 이리 와.'])(
+    'permits fixed particles and listed pairs (%s)', body => {
+      const event = { ...fixture('event'), body, params: [body.match(/\{(\w+)\}/u)![1]] };
+      expect(codes(event).filter(code => code.startsWith('error'))).toEqual([]);
+    });
+  it('needs plural for counts, no particle on counts, and one count per text', () => {
+    const event = { ...fixture('event'), body: '석탄 {n}포대를 나눴다.', params: ['n'] };
+    expect(codes(event)).toEqual(['error:text.plural:/body']);
+    event.plural = { body: 'n' };
+    expect(codes(event)).toEqual([]);
+    event.body = '{n}이 남았다.';
+    expect(codes(event)).toContain('error:text.particle:/body');
+    event.body = '{n}명이 {n2}포대를 나눴다.';
+    event.params = ['n', 'n2'];
+    expect(codes(event)).toContain('error:text.plural:/body');
+  });
+  it('warns when a person looks like the subject without gender_of, and checks metadata keys', () => {
+    const event = { ...fixture('event'), body: '{person}[은/는] 말없이 석탄을 퍼 왔다.', params: ['person'] };
+    expect(codes(event)).toEqual(['warning:text.gender_of:/body']);
+    event.gender_of = { body: 'person' };
+    event.notes = { 'c_share_coal.label': '난로 석탄을 꼬리칸에 나누는 것', 'c_gone.say': '없는 선택지' };
+    expect(codes(event)).toEqual(['error:text.key:/notes/c_gone.say']);
+  });
+  it('requires gender on profiles and warns on glossary synonyms', () => {
+    const profile = fixture('profile');
+    delete profile.gender;
+    expect(codes(profile, 'profile')).toContain('error:schema.required:/gender');
+    const event = { ...fixture('event'), body: '기차장, 문을 닫아요.' };
+    expect(codes(event)).toEqual(['warning:rule.glossary_synonym:/body']);
   });
 });
 
