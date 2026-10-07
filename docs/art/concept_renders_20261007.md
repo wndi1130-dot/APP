@@ -15,11 +15,11 @@
 - 한 항목은 두 장까지 뽑아 나은 쪽을 고른다. 고르지 못하면 둘 다 둔다.
 - 한글 글자는 그리게 하지 않는다. 짧은 영어 이름표는 자리표시로 괜찮다. 글자가 깨져도 된다.
 - 작품 이름은 프롬프트에 넣지 않는다. 넣으면 원작을 닮게 나온다([reference_analysis.md](reference_analysis.md) 4장).
-- 우선순위: **C5 → C7 → C1 → C6 → C4 → C3 → C2 → C8.** C5와 C7은 사용자 결정(열린 질문 10)에 쓰이므로 먼저 뽑는다.
+- 우선순위: **C5 → C7 → C1 → C9 → C10 → C6 → C4 → C3 → C2 → C8.** C5와 C7은 사용자 결정(열린 질문 10)에 쓰이므로 먼저 뽑는다. C9·C10(정차 장면)은 2026-10-07 사용자 요청으로 더했다.
 
 ## 3D 여부와의 관계
 
-엔진과 3D 여부는 "엔진 정하기" 스레드가 본다. 이 시안은 어느 쪽으로 가도 맞춰야 할 **보이는 목표**다. 그래서 "사실적 비례 + 칠한 듯한 질감 마감"으로 통일하고, 미리 렌더링한 스프라이트인지 실시간 3D인지는 정하지 않는다. 필드 카메라는 고정된 사선 시점(약 35~40도 내려다봄)으로 적었다. 실시간 3D로 가면 카메라를 돌릴 수 있지만, 시안은 고정 시점 하나로 본다.
+엔진은 Godot 4로 정했고, 정차 카메라가 옆면에서 앞쪽으로 도는 연출 때문에 캐릭터와 열차는 사실상 실시간 3D로 본다([../design/briefs/engine.md](../design/briefs/engine.md), 3D는 아직 제안). 이 시안은 어느 쪽으로 가도 맞춰야 할 **보이는 목표**다. 그래서 "사실적 비례 + 칠한 듯한 질감 마감"으로 통일하고, 미리 렌더링한 스프라이트인지 실시간 3D인지는 정하지 않는다. 필드 카메라는 고정된 사선 시점(약 35~40도 내려다봄)으로 적었다. 실시간 3D로 가면 카메라를 돌릴 수 있지만, 시안은 고정 시점 하나로 본다.
 
 ## 공통 화풍 (모든 글상자에 이미 들어 있음)
 
@@ -130,6 +130,30 @@ Edit the attached image. Keep the background scene exactly as it is, painterly a
 Using the UI style of the attached image, draw a storyboard sheet of six panels in two rows on a plain dark background, each panel a close-up of the same rectangular trade button with a handshake icon and the placeholder label 'Negotiate'. Panel 1: idle. Panel 2: a finger presses; the brass rim dips slightly. Panel 3: a small blot of dark sooty ink appears behind the icon where the finger touched. Panel 4: the blot spreads outward with soft branching tendrils, like ink dropped in water, while the icon and label stay perfectly sharp on top. Panel 5: the stain fills the button face and its tendrils reach just past the rim. Panel 6: the stain settles into a calm dark selected state with a thin bright rim; a faint lighter ring shows where the spread stopped. Small frame numbers 1 to 6 under each panel. No other text.
 ```
 
+## C9 정차: 카메라가 앞쪽으로 돈 첫 장면 (첨부: home_v3, C1 결과)
+
+2026-10-07 사용자 요청. 평소엔 단면으로 달리다가 정차를 누르면 끼익 소리와 함께 카메라가 열차 옆면에서 약간 앞쪽으로 돌아 정차한 곳을 보여 준다. 위험과 흔적은 글이 아니라 장면으로 준다. 장소는 첫 정차 후보인 작은 역(급수탑 결빙, [../design/briefs/first_leg_story.md](../design/briefs/first_leg_story.md))이다. HUD는 거의 숨긴다.
+
+```text
+Match the painterly realistic rendering and weather mood of the first attached image and the place style of the second, but this is a cinematic in-game shot, not a menu screen.
+
+Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish, believable proportions and worn real materials; textures soft and economical rather than crisp up close. Central Europe, sixth winter after civilization collapsed and the dead rose. Dark drab weather: low heavy clouds, freezing fog, wet sleet. Cold is pale grey-white frost and blue-grey shadow, warmth is amber. No gore, no logos, no red cross symbols, no readable text.
+
+Very wide landscape (about 2.2:1). The camera stands low beside the track a little ahead of the locomotive and looks back along the side of our steam train, which has just stopped at a small, abandoned country station in western Poland at dusk: brakes still steaming, sparks fading under the wheels, steam rolling across the platform. The train's patched cars recede into the fog behind, their windows glowing amber, faces pressed to the glass. Around the station the scene quietly tells the player what to expect without any text: a brick water tower with a thick skirt of ice and a frozen spout; a hand-painted warning sign nailed to a lamp post, too far to read; a burnt-out passenger car on a siding with its doors chained shut; fresh footprints and a dragged trail in the snow leading into the goods shed; two dead figures standing motionless at the far end of the platform, half hidden in fog; crows on the station roof; a faint smoke line rising from a chimney in the village beyond the trees. Only a small, translucent stop marker and a single arrow button remain at the bottom-right corner of the screen.
+```
+
+## C10 하차 장면 네 가지 (첨부: C9 결과)
+
+같은 문 앞에서 열차장이 내리는 모습을 정치 상태에 따라 넷으로 나란히 본다. 엔진 스레드 제안대로 기본 하차 동작에 자세(어깨, 고개)와 짧은 동작(한숨, 어깨 툭)을 섞는 방식이라, 그림도 같은 사람·같은 문·같은 구도로 맞춘다.
+
+```text
+Using the rendering, place and weather of the attached image, draw a sheet of four panels in a 2-by-2 grid, each the same medium shot from the platform of the same open carriage door of our stopped steam train at dusk, freezing fog, steam drifting. The same train chief steps down in each panel: a weathered man in his forties in a long dark railway greatcoat with a fur collar, a peaked cap and a satchel, with three scavengers behind him in the doorway (a woman with a fire axe, a young man with a lantern, an older man with a bolt-action rifle).
+Panel 1, strongly supported: he steps down chin raised, shoulders squared, one hand lifted in greeting; behind him faces crowd the windows and a few hands wave; the scavengers follow eagerly.
+Panel 2, on the edge of a no-confidence vote: he steps down slowly with slumped shoulders and his breath clouding in a long sigh, eyes on the snow; the windows behind him are empty or curtains drawn; the scavengers keep their distance.
+Panel 3, carrying guilt: he stops on the bottom step and stares blankly at the fog-bound station, frozen in thought, while the woman with the axe reaches past him to tap his shoulder.
+Panel 4, distrusted and watched: he steps down while an armed guard in the doorway watches his back; the scavengers glance at each other; a single figure in the window behind turns away.
+No text, no gore, no logos. Small panel numbers 1 to 4 in the corners only.
+
 ## 받은 뒤 볼 것
 
 1. C1과 C5를 나란히 놓았을 때 같은 게임으로 보이는가(화풍, 빛, HUD 마감).
@@ -137,3 +161,5 @@ Using the UI style of the attached image, draw a storyboard sheet of six panels 
 3. C5에서 배경 생활이 표결 정보(숫자, 쐐기 색)를 가리지 않는가. 긴장 얼룩이 숫자와 얼굴에 닿지 않는가.
 4. C7 세 장에서 어느 UI가 월드와 어울리는가. 특히 C7c에서 픽셀 UI가 비픽셀 월드 위에 떠 보이는지.
 5. 빨강·하늘색이 정치 뜻과 경고 말고 다른 데 쓰이지 않았는가. 빨간 십자가 없는가.
+6. C9에서 글 없이도 '물이 얼었다, 누가 먼저 왔다, 망자가 있다'가 읽히는가.
+7. C10 네 장이 폰 크기에서 자세만으로 구별되는가. 같은 사람·같은 문으로 유지됐는가(동작 섞기로 만들 수 있는 범위인지).
