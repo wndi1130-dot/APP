@@ -218,12 +218,16 @@ function view(g: Game, card: Card): CardView | null {
       // 수사는 늘 열린다(4.6). 사고로 꾸며 들키지 않았으면 그 줄이 먼저다. 들켰으면 붙잡힌 줄이 text에 온다.
       const hidden = card.text === 'hidden';
       const caughtLine = !hidden && card.text ? ` ${card.text}` : '';
+      const seen = !hidden && !!card.text;
       return {
         title: '끝났다', focus: c, required: true,
         body: `${name}${iga(name)} 죽었다.${hidden ? ' 사고라고 적혔다. 그래도 수사가 열린다.' : ` 수사가 열린다.${caughtLine}`}${kin ? ` ${kin}${iga(kin)} 식당칸 문가에 서 있다.` : ''}`,
         ...(kin ? { faces: [kin] } : {}),
         choices: [
-          { label: '덮는다', say: '보일러 일지에 사고라고 적어라.', effs: [], special: 'dark:after:cover' },
+          // 들켜서 실행자가 붙잡혔으면 일지로는 못 덮는다. 경비대 입을 막는 값 오른 줄이 대신 나온다(제안, PR 41 리뷰).
+          seen
+            ? { label: '입을 막는다', say: '경비대에 입을 다물라고 해라. 본 사람은 못 본 거다.', effs: [], special: 'dark:after:hush', extra: [`공포 +${B.hushFear}`, `경비대 노출 +${B.hushExpo}`] }
+            : { label: '덮는다', say: '보일러 일지에 사고라고 적어라.', effs: [], special: 'dark:after:cover' },
           crossing(g, card, { label: '남에게 씌운다', say: '용의자 하나의 침상 밑을 뒤져라. 뭐가 나올 거다.', effs: [], special: 'dark:after:frame' }),
           { label: '수사하게 둔다', say: '수사는 수사대로 둬라.', effs: [], special: 'dark:after:let' },
         ],
@@ -364,8 +368,8 @@ function choose(g: Game, card: Card, ch: Choice): void {
       setMethod(g, sp.slice('dark:method:'.length) as OrderMethod);
       break;
     case 'dark:order:drop': dropOrder(g); break;
-    case 'dark:after:cover': case 'dark:after:frame': case 'dark:after:let':
-      say(afterOrder(g, card.n, sp.slice('dark:after:'.length) as 'cover' | 'frame' | 'let'));
+    case 'dark:after:cover': case 'dark:after:hush': case 'dark:after:frame': case 'dark:after:let':
+      say(afterOrder(g, card.n, sp.slice('dark:after:'.length) as 'cover' | 'hush' | 'frame' | 'let'));
       break;
     case 'dark:rule:guard': case 'dark:rule:medtech': case 'dark:rule:car':
       d.practiceAsked += 1;
