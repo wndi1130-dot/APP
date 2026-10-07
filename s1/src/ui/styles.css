@@ -442,6 +442,11 @@ small { font-size: 12px; }
 .crew { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--ink-2); }
 .crew .icon { width: 16px; height: 16px; margin-top: 1px; }
 .crew small { color: var(--ink-3); }
+.danger { display: grid; gap: 2px; padding: 6px 8px; border-left: 2px solid var(--line); font-size: 12px; color: var(--ink-2); }
+.danger.is-on { border-left-color: var(--discontent); }
+.danger__line { margin: 0; color: var(--discontent); font-weight: 600; }
+.danger__calm { margin: 0; }
+.danger__why { margin: 0; font-size: 11px; color: var(--ink-3); }
 .promises { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--support); }
 .promises li { display: flex; align-items: center; gap: 6px; }
 .promises .icon { width: 14px; height: 14px; }

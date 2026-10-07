@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, PLACES, STAY, costLines, crewNames, politicsLines, stopScene, viewCard,
+  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, PLACES, STAY, costLines, crewNames, politicsLines, riskLines, stopRisk, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -40,6 +40,7 @@ function stopCard(view: View): HTMLElement | null {
   const stopPromises = promises.filter(x => x.p.kind === 'fetch' || x.p.cond.kind === 'target' || x.p.cond.kind === 'skip_dispatch');
   const maxW = Math.max(...LOOT_KEYS.map(k => place.loot[k]));
   const scene = stopScene(g);
+  const risk = riskLines(stopRisk(g));
   return sheet('sheet--stop', `stop-${g.seg}`,
     h('div', { class: 'sheet__head' },
       h('div', null,
@@ -66,6 +67,11 @@ function stopCard(view: View): HTMLElement | null {
         h('b', { class: 'num' }, `${stop.crewSize}명`),
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
     h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, ' · 이번 회기 표결에서 빠진다'))),
+    // 위험 줄은 준비를 바꿀 때마다 다시 계산된다. 줄이 있으면 반드시 일어난다.
+    h('div', { class: cx('danger', risk.lines.length > 0 && 'is-on'), 'aria-live': 'polite' },
+      risk.lines.map(t => h('p', { class: 'danger__line' }, t)),
+      risk.calm ? h('p', { class: 'danger__calm' }, risk.calm) : null,
+      risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),
     stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label}`))) : null,
     h('div', { class: 'sheet__actions' },

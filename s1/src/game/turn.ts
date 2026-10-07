@@ -181,6 +181,56 @@ export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId;
   g.stop.crewSize = clamp(g.stop.crewSize, 2, 8);
 }
 
+export interface StopRisk {
+  /** 기대 부상자 수(중상) */
+  lam: number;
+  pDeath: number;
+  /** 중상 줄. 0이면 줄이 없고 중상도 없다. 줄이 있으면 1~maxHurt명이 반드시 크게 다친다. */
+  maxHurt: number;
+  /** 죽음 줄. 0이면 줄이 없고 죽음도 없다. 줄이 있으면 1~maxDead명이 반드시 죽는다. */
+  maxDead: number;
+  guardRefused: boolean;
+  horde: boolean;
+}
+
+/** 위험 줄이 뜨는 문턱. 줄이 뜨면 그 피해는 반드시 1명 이상이다(2026-10-07 사용자 결정, field_unified 8장). */
+export const RISK_LINE = { hurt: 0.7, dead: 0.12, dead2: 0.25 } as const;
+
+/** 정차 위험. 장소 위험도, 체류, 인원, 던진 시신이 키운 무리, 경비대의 경계 거부와 호위로 정해진다.
+ * 준비(무엇을·얼마나·누구를·몇 명)를 바꾸면 바로 다시 계산되고, 결과는 이 줄이 약속한 범위를 벗어나지 않는다. */
+export function stopRisk(g: Game): StopRisk {
+  const stop = g.stop;
+  const place = PLACES.find(p => p.id === stop?.place) ?? PLACES[0];
+  const stay = STAY[stop?.stay ?? 'normal'];
+  const crew = stop?.crewSize ?? 4;
+  const guard = g.comms.guard;
+  const guardRefused = guard.fervor >= 1 && guard.rel <= -40;
+  const guardMult = guardRefused ? 1.5 : 1;
+  const horde = Math.min(1.5, 1 + P.thrownHorde * g.thrown);
+  const escort = g.guardEscort ? 0.5 : 1;
+  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort;
+  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort;
+  const maxDead = Math.min(crew - 1, pDeath >= RISK_LINE.dead2 ? 2 : pDeath >= RISK_LINE.dead ? 1 : 0);
+  // 죽는 사람과 크게 다치는 사람은 겹치지 않는다. 남은 인원으로 약속을 못 지키면 줄을 띄우지 않는다.
+  const maxHurt = lam >= RISK_LINE.hurt ? Math.max(0, Math.min(crew - maxDead, Math.ceil(lam * 1.2))) : 0;
+  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2 };
+}
+
+const NUM = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟'];
+
+/** 정차 화면의 위험 줄. 줄이 있으면 반드시 일어나고, '최악이면'은 넘지 않는 한계다.
+ * 줄이 없으면 죽음과 중상은 없다(긁히고 삐는 정도는 있다). */
+export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; why: string[] } {
+  const lines: string[] = [];
+  if (r.maxDead > 0) lines.push(r.maxDead > 1 ? `누군가 반드시 돌아오지 못한다. 최악이면 ${NUM[r.maxDead]} 명.` : '누군가 반드시 돌아오지 못한다.');
+  if (r.maxHurt > 0) lines.push(r.maxHurt > 1 ? `누군가 반드시 크게 다친다. 최악이면 ${NUM[r.maxHurt]} 명.` : '누군가 반드시 크게 다친다.');
+  const why: string[] = [];
+  if (r.guardRefused) why.push('경비대가 경계를 서지 않는다');
+  if (r.horde) why.push('던진 시신에 무리가 몰려 있다');
+  const calm = lines.length ? null : r.lam >= 0.2 ? '크게 다칠 일은 없어 보인다. 긁히고 삐는 정도.' : '조용해 보인다.';
+  return { lines, calm, why };
+}
+
 export function resolveStop(g: Game, go: boolean): StopResult | null {
   const stop = g.stop;
   if (!stop || stop.done) return null;
@@ -223,21 +273,20 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     const s = addSecret(g);
     notes.push(`문서에서 ${COMM_NAME[s.about]} 대표의 약점을 찾았다.`);
   }
-  // 위험: 장소 위험도, 체류, 인원, 던진 시신이 키운 무리, 경비대의 경계 거부와 호위.
-  const guard = g.comms.guard;
-  const guardMult = guard.fervor >= 1 && guard.rel <= -40 ? 1.5 : 1;
-  if (guardMult > 1) notes.push('경비대가 경계를 거부했다.');
-  const horde = Math.min(1.5, 1 + P.thrownHorde * g.thrown);
-  const escort = g.guardEscort ? 0.5 : 1;
-  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (stop.crewSize / 4) * escort;
+  const risk = stopRisk(g);
+  if (risk.guardRefused) notes.push('경비대가 경계를 거부했다.');
   const names = crewNames(g, stop.crewComm, stop.crewSize);
-  const hurt: string[] = [];
-  for (let i = 0; i < 6; i += 1) if (rnd(g) < lam / 6 && hurt.length < names.length) hurt.push(names[hurt.length]);
-  const dead: string[] = [];
-  if (rnd(g) < place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk) {
-    const who = names[names.length - 1];
-    if (who) dead.push(who);
-  }
+  // 줄이 약속한 대로: 줄이 있으면 1~최악 명, 없으면 0명. 주사위는 몇 명과 누구만 정한다(2026-10-07 사용자).
+  const pool = [...names];
+  for (let i = pool.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd(g) * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const count = (max: number, p: number) => {
+    let n = max > 0 ? 1 : 0;
+    while (n < max && rnd(g) < p) n += 1;
+    return n;
+  };
+  const dead = pool.splice(0, count(risk.maxDead, risk.pDeath));
+  const hurt = pool.splice(0, count(risk.maxHurt, Math.min(0.6, risk.lam / 3)));
+  if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
   if (dead.length > 0) onDeath(g, stop.crewComm, dead);
