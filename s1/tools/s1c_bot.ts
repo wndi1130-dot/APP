@@ -7,6 +7,10 @@ import {
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore,
 } from '../src/game';
 import type { Card, CardView, Choice, Eff, Game } from '../src/game';
+import { loadContentEvents } from './content_fs';
+
+// 콘텐츠 JSON 사건(data/events)도 봇 판에 섞는다.
+loadContentEvents();
 
 export type S1aPolicy = 'caretaker' | 'first';
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */

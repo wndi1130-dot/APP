@@ -72,7 +72,7 @@ export interface Secret { id: number; text: string; weight: number; about: Comm;
 export interface Leash { comm: Comm; since: number; weight: number }
 
 export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
-export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string }
+export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string; /** 콘텐츠 사건의 {person}·{person2}(content.ts) */ names?: string[] }
 /** 한 사건을 마지막으로 겪은 때와 고른 것. 같은 사건이 다시 나오면 이걸 보고 본문과 대가를 바꾼다. */
 /** st: 그때의 상태 키(eventStateKey). 상태가 그대로면 같은 사건을 다시 열지 않는다. */
 export interface EventMemo { n: number; seg: number; pick: string; st?: string }
@@ -242,6 +242,15 @@ export interface Game {
   story?: StoryState;
   /** 라이프치히 이탈(first_leg_story 7.7, hub.ts) */
   hub?: HubState;
+  // ---- 콘텐츠 JSON 사건(content.ts) ----
+  contentFlags?: Record<string, boolean | number | string>;
+  /** 미뤄 둔 후속 사건 */
+  contentQueue?: { id: string; at: number }[];
+  /** 자리를 비운 프로필 id → 돌아오는 구간 */
+  contentAway?: Record<string, number>;
+  contentInjured?: string[];
+  /** 아직 게임이 읽지 않는 효과(비밀·표·거래·연대기). 화면엔 안 보인다 */
+  contentPending?: string[];
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';

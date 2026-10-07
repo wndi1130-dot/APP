@@ -1,5 +1,6 @@
 import { addCard } from './state';
 import { drawTravelEvent } from './cards';
+import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { needTick } from './needs';
@@ -177,8 +178,11 @@ function depart(g: Game): void {
   }
   g.inStrike = false;
   // 사람 카드가 막 왔으면 이동 사건을 쉰다(사람의 무게 6.0: 카드 수를 늘리지 않는다).
-  const event = peopleCardRecent(g) ? null : drawTravelEvent(g);
-  if (event) addCard(g, { kind: 'travel', text: event });
+  contentAwayTick(g);
+  contentFollowupTick(g);
+  const event = peopleCardRecent(g) ? null : drawTravelEvent(g, contentPool(g).map(e => `content:${e.id}`));
+  if (event?.startsWith('content:')) addContentCard(g, event.slice('content:'.length));
+  else if (event) addCard(g, { kind: 'travel', text: event });
   g.phase = 'travel';
 }
 

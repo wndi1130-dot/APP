@@ -289,7 +289,8 @@ export function eventStateKey(g: Game): string {
   return `${leaders}|${band(g.coal, 40)}|${band(g.food, 40)}|${band(w, 10)}|${band(r, 10)}|${laws}`;
 }
 
-export function drawTravelEvent(g: Game): string | null {
+/** extra: 같은 풀에 섞을 다른 사건 id(콘텐츠 JSON 사건은 'content:<id>', turn.ts가 넣는다) */
+export function drawTravelEvent(g: Game, extra: string[] = []): string | null {
   const log = g.eventLog ?? {};
   const st = eventStateKey(g);
   const open = (id: string) => {
@@ -297,9 +298,9 @@ export function drawTravelEvent(g: Game): string | null {
     if (!m) return true;
     return g.seg - m.seg >= EVENT_COOLDOWN && m.n < EVENT_CHAIN_MAX && m.st !== st;
   };
-  const pool = TRAVEL_EVENTS.filter(e => e.when(g) && !g.recentEvents.includes(e.id) && open(e.id));
+  const pool = [...TRAVEL_EVENTS.filter(e => e.when(g) && open(e.id)).map(e => e.id), ...extra].filter(id => !g.recentEvents.includes(id));
   if (pool.length === 0) return null;
-  const id = pick(g, pool).id;
+  const id = pick(g, pool);
   g.recentEvents = [...g.recentEvents, id].slice(-4);
   return id;
 }

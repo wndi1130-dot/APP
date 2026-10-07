@@ -2,7 +2,7 @@
 // 사용: npx tsx tools/reach_check.ts [판 수=300]. 봇이 안 하는 행동이 있어야 나오는 카드는 REACH_NOTES에 까닭을 적는다.
 // 까닭 없이 안 나온 것이 있으면 종료 코드 1. 끊어진 후속(그리는 곳 없는 카드, 고를 수 없는 카드)은 봇이 바로 멈춘다.
 
-import { DOM_CARD_KINDS, HUB_CARD_KINDS, PEOPLE_KINDS, S1A_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
+import { CONTENT_EVENTS, DOM_CARD_KINDS, HUB_CARD_KINDS, PEOPLE_KINDS, S1A_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
 
@@ -27,7 +27,7 @@ export const CONFIGS: [string, BotOptions][] = [
   ['S1c 첫 선택지', { s1c: true, policy: 'first', dom: 'idle' }],
 ];
 
-export interface ReachReport { games: number; seen: Record<string, number>; unreached: string[]; unexpected: string[]; noted: string[] }
+export interface ReachReport { games: number; seen: Record<string, number>; unreached: string[]; unexpected: string[]; noted: string[]; notes: Record<string, string> }
 
 export function reachReport(n: number): ReachReport {
   const seen: Record<string, number> = {};
@@ -35,17 +35,30 @@ export function reachReport(n: number): ReachReport {
     for (let i = 0; i < n; i += 1) {
       const { g, m } = playGame(`reach-${i}`, opts);
       for (const [k, v] of Object.entries(m.cards)) if (k !== 'travel') seen[k] = (seen[k] ?? 0) + v;
-      for (const id of Object.keys(g.eventLog ?? {})) if (TRAVEL_EVENTS.some(e => e.id === id)) seen[`travel:${id}`] = (seen[`travel:${id}`] ?? 0) + 1;
+      for (const id of Object.keys(g.eventLog ?? {})) {
+        if (TRAVEL_EVENTS.some(e => e.id === id)) seen[`travel:${id}`] = (seen[`travel:${id}`] ?? 0) + 1;
+        if (id.startsWith('content:')) seen[id] = (seen[id] ?? 0) + 1;
+      }
     }
   }
   const all = [
     ...TRAVEL_EVENTS.map(e => `travel:${e.id}`), ...S1A_CARD_KINDS.filter(k => k !== 'travel'), ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...HUB_CARD_KINDS,
+    ...CONTENT_EVENTS.map(e => `content:${e.id}`),
   ];
+  // 콘텐츠 사건 중 게임이 아직 안 뽑는 단계(s1b, 이동 밖 단계)는 까닭을 붙인다. 후속으로만 오는 사건은 단계를 안 본다.
+  const notes: Record<string, string> = { ...REACH_NOTES };
+  const followed = new Set(CONTENT_EVENTS.flatMap(e => e.choices.flatMap(ch => [...ch.followups, ...ch.effects.flatMap(x => (x.type === 'followup' ? [x.id] : []))])));
+  for (const e of CONTENT_EVENTS) {
+    if (followed.has(e.id)) continue;
+    if (e.stage === 's1b') notes[`content:${e.id}`] ??= 'S1b 사건은 아직 안 뽑는다';
+    else if (e.phase !== 'travel') notes[`content:${e.id}`] ??= `${e.phase} 단계 콘텐츠 사건은 아직 안 뽑는다(content.ts)`;
+  }
   const unreached = all.filter(k => !seen[k]);
   return {
     games: n * CONFIGS.length, seen, unreached,
-    unexpected: unreached.filter(k => !REACH_NOTES[k]),
-    noted: unreached.filter(k => REACH_NOTES[k]),
+    unexpected: unreached.filter(k => !notes[k]),
+    noted: unreached.filter(k => notes[k]),
+    notes,
   };
 }
 
@@ -54,7 +67,7 @@ if (process.argv[1]?.endsWith('reach_check.ts')) {
   const t0 = Date.now();
   const r = reachReport(n);
   console.log(`${r.games}판 (${((Date.now() - t0) / 1000).toFixed(1)}초). 끊어진 후속 없음.`);
-  for (const k of r.noted) console.log(`  안 나옴(까닭 있음) ${k}: ${REACH_NOTES[k]}`);
+  for (const k of r.noted) console.log(`  안 나옴(까닭 있음) ${k}: ${r.notes[k]}`);
   for (const k of r.unexpected) console.log(`  안 나옴(까닭 없음) ${k}`);
   const rare = Object.entries(r.seen).filter(([, v]) => v < 5).map(([k, v]) => `${k} ${v}`);
   if (rare.length) console.log(`  드묾(5번 미만): ${rare.join(', ')}`);
