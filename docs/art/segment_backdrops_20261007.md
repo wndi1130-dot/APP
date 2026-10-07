@@ -32,7 +32,7 @@ The train is now running at speed, not stopped: the platform, lamp post and wait
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets. No red cross or red crescent on anything.
 Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
 Landscape: no barbed-wire fences, watchtowers, rows of barracks, loading ramps, or tall chimneys with smoke anywhere in the scene. Factory chimneys and cooling towers, if present, stand cold and smokeless.
-Props: no abandoned suitcases or piles of luggage beside the track or on platforms; left-behind goods are sacks, bundles or wooden crates.
+Props: no abandoned suitcases, piles of luggage or piles of shoes beside the track or on platforms; left-behind goods are only cargo sacks or wooden crates.
 ```
 
 ## B1 대폴란드 호수 평야 (K1, 0–54km)
