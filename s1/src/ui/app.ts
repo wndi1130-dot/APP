@@ -1,7 +1,8 @@
 import { openConditions, autoLeverStatus, cloneGame, currentAgenda, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
-import { FX_MS, fxDiff, fxSnap } from './fx';
+import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, vibrateOn } from './fx';
+import { fxPlay } from './fxplay';
 import type { Fx } from './fx';
 import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
@@ -15,6 +16,8 @@ import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
 import { changeDomestic, h6Input, h6Render, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
+// S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
+import { darkPickMs, urlWantsS1b } from './dark';
 import { TRAIL_MAX, applyStep, makeBundle, plainData, readSave, reviveSave, reproText, setReproSource } from './repro';
 import type { ReproError, SaveRead, Step, TrailEntry } from './repro';
 
@@ -181,7 +184,9 @@ export function startApp(root: HTMLElement): void {
   const urlSeed = new URLSearchParams(globalThis.location?.search ?? '').get('seed');
   const { g: saved, why: loadWhy } = load();
   const wantS1c = urlWantsS1c(); // S1c 내정 훅
-  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) ? saved : newGame(urlSeed || randomSeed(), wantS1c);
+  const wantS1b = urlWantsS1b(); // S1b 어두운 길 훅
+  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) && (!wantS1b || saved.dark)
+    ? saved : newGame(urlSeed || randomSeed(), wantS1c, wantS1b);
   let ui: Ui = freshUi();
   if (g.phase === 'council') ui.screen = 'council';
   const scroll: Record<string, number> = {};
@@ -222,17 +227,21 @@ export function startApp(root: HTMLElement): void {
       }
       focusCar = null;
     }
+    fxPlay(root, ui.fx, fxOrigin); // 꼬리표가 고른 선택지에서 위 막대 칸으로 날아가고 숫자가 센다(5b.6)
     h6Render(g, ui, h6, Date.now()); // S1c 내정 훅
     requestAnimationFrame(() => drawLinks(root));
   }
 
   let fxTimer: ReturnType<typeof setTimeout> | undefined;
+  /** 방금 누른 선택지의 자리: 꼬리표가 여기서 날아간다 */
+  let fxOrigin: DOMRect | null = null;
   /** 선택이 바꾼 수치를 위 막대에 띄운다(fx.ts). 크게 나쁘면 폰이 한 번 떨린다. */
   function showFx(fx: Fx | null): void {
     ui.fx = fx;
     clearTimeout(fxTimer);
     if (!fx) return;
-    if (fx.hard && !matchMedia('(prefers-reduced-motion: reduce)').matches) navigator.vibrate?.(40);
+    // 진동은 나쁜 쪽 선 넘음과 죽음에만(5b.6). 동작 감소 설정이 아니라 메뉴의 '진동'을 따른다.
+    if (fx.buzz) buzz(Date.now());
     fxTimer = setTimeout(() => { ui.fx = null; render(); }, FX_MS);
   }
 
@@ -358,9 +367,13 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'choose': {
         const before = fxSnap(g);
-        step({ a: 'choose', d: plainData(data) });
+        const kind = g.cards.find(x => x.uid === Number(data.uid))?.kind;
+        const ms = darkPickMs(g, Number(data.uid)); // S1b H7: 고르기까지 걸린 시간
+        step({ a: 'choose', d: { ...plainData(data), ...(ms ? { ms } : {}) } });
         showFx(fxDiff(before, g));
         if (stackCount(g, ui) > 0) focusForTopCard();
+        // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
+        else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; }
         return render();
       }
       case 'stop-set':
@@ -375,8 +388,12 @@ export function startApp(root: HTMLElement): void {
         const id = data.car ?? null;
         ui.carPop = ui.carPop === id ? null : id;
         ui.panel = null;
+        ui.spaceOpen = false;
         return render();
       }
+      case 'space-tab':
+        ui.spaceOpen = !ui.spaceOpen;
+        return render();
       case 'go': {
         const screen = (data.screen ?? 'home') as Screen;
         ui.screen = screen;
@@ -447,20 +464,26 @@ export function startApp(root: HTMLElement): void {
         ui.count = null;
         clearTimeout(countTimer);
         return render();
+      case 'space': {
+        const before = fxSnap(g);
+        const why = step({ a: 'space', d: plainData(data) });
+        if (why) toast(why); else showFx(fxDiff(before, g));
+        return render();
+      }
       case 'comm-act': {
         const why = step({ a: 'comm-act', d: plainData(data) });
         if (why) toast(why);
         return render();
       }
       case 'restart':
-        g = newGame(g.seed, !!g.dom);
+        g = newGame(g.seed, !!g.dom, !!g.dark);
         ui = freshUi();
         persist(g);
         resetRepro();
         toast(`같은 시드(${g.seed})로 처음부터.`);
         return render();
       case 'new-seed':
-        g = newGame(randomSeed(), !!g.dom);
+        g = newGame(randomSeed(), !!g.dom, !!g.dark);
         ui = freshUi();
         persist(g);
         resetRepro();
@@ -485,9 +508,20 @@ export function startApp(root: HTMLElement): void {
         else blocked();
         return;
       }
+      case 'toggle-vibrate':
+        setVibrate(!vibrateOn());
+        toast(vibrateOn() ? '진동을 켰다. 나쁜 쪽으로 선을 넘거나 사람이 죽을 때만 짧게 떤다.' : '진동을 껐다.');
+        return render();
       case 'toggle-debug':
         ui.debug = !ui.debug;
         ui.panel = null;
+        return render();
+      case 'dark-new': // S1b 어두운 길 훅: 켠(끈) 새 판, 내정 켬/끔은 그대로
+        g = newGame(g.seed, !!g.dom, data.on === '1');
+        ui = freshUi();
+        save(g);
+        resetRepro();
+        toast(data.on === '1' ? `어두운 길 켠 새 판: 시드 ${g.seed}.` : `어두운 길 끈 새 판: 시드 ${g.seed}.`);
         return render();
       default:
         handleDomestic(action, data, domCtx); // S1c 내정 훅
@@ -504,6 +538,7 @@ export function startApp(root: HTMLElement): void {
     const target = (event.target as Element | null)?.closest<HTMLElement | SVGElement>('[data-action]');
     if (!target || !root.contains(target)) return;
     if ((target as HTMLButtonElement).disabled) return;
+    if (target.dataset.action === 'choose') fxOrigin = target.getBoundingClientRect();
     h6Input(g, h6, Date.now(), target.dataset.action ?? ''); // S1c 내정 훅
     handle(target.dataset.action ?? '', target.dataset);
   });

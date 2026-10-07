@@ -1,6 +1,7 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
 import type { DomState } from './domestic/state';
+import type { DarkState } from './dark/state';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import {
@@ -115,8 +116,9 @@ export type Agenda = LawAgenda | MotionAgenda;
 /** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
 export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share';
-export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean }
+export type MotionId = 'share' | 'trial' | 'no_confidence';
+/** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
+export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
 
 export interface VoteFlip { comm: Comm; yes: boolean }
 export interface VoteResult {
@@ -245,6 +247,10 @@ export interface Game {
   usedProfiles: string[];
   end: EndKind | null;
   stats: { dealsMade: number; promisesKept: number; promisesBroken: number; lawsPassed: number; lawsFailed: number; repeals: number; bribes: number; blackmails: number };
+  /** 공간 레버(first_leg_story 6.4): 꼬리칸에 내준 단(0~2)과 내주는 칸. 옛 저장엔 없다. */
+  space?: { step: number; giver: Comm | null };
+  /** 마지막으로 작업조를 낸 칸(급수탑 눈 녹이기의 기본 칸) */
+  lastCrew?: Comm;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
   /** 이야기 진행도(first_leg_story 9장). S1a는 표식 몇 개만 쓴다. */
@@ -270,6 +276,8 @@ export interface Game {
   captainName?: string;
   /** 희생양으로 이름이 불릴 수 있는 사람(프로필 id). 맡은 일·그 자리에 있었는지 같은 처지로만 켠다(칸·출신·이름 풀로 켜지 않는다). S1a엔 켜는 곳이 없다 */
   scapegoatOk?: string[];
+  /** S1b 어두운 길(dark/state.ts). 없으면 S1a·S1c 판이다 */
+  dark?: DarkState;
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';
@@ -279,6 +287,10 @@ export interface StoryState {
   flags: {
     /** 우리 쪽 첫 죽음(S1a 규칙으로만) */
     first_death?: boolean;
+    /** 서막에서 운반조를 두고 떠났나(9.2) */
+    depot_left_behind?: boolean;
+    /** 서막 꼬리칸 대표의 약속(9.2). 없으면 서막을 거치지 않은 판이다 */
+    depot_promise?: 'kept' | 'broken' | 'refused';
     /** 첫 시신 안건이 무엇으로 열렸나 */
     first_corpse_agenda?: 'none' | 'own' | 'stranger';
     signal_heard?: boolean;
@@ -329,10 +341,13 @@ export function situation(g: Game, c: Comm): [number, number, number, number] {
   const s = g.comms[c];
   // S1c: 기술·침구·장갑이 더하는 처지 보정(domestic/state.ts refreshSit). S1a 판엔 없다.
   const d = g.dom?.sit[c];
+  // 공간 레버: 꼬리칸 과밀을 내주는 칸으로 옮긴다(6.4).
+  const sp = g.space;
+  const room = sp && sp.giver && sp.step > 0 ? (c === 'tail' ? -1 : c === sp.giver ? 1 : 0) * P.spaceStep * sp.step : 0;
   return [
     clamp(s.base[0] + P.leverStep * (s.heat - 2) + (d?.[0] ?? 0), 0, 100),
     clamp(s.base[1] + P.leverStep * (s.ration - 2) + (d?.[1] ?? 0), 0, 100),
-    clamp(s.base[2] + (d?.[2] ?? 0), 0, 100),
+    clamp(s.base[2] + (d?.[2] ?? 0) + room, 0, 100),
     clamp(s.base[3] + (d?.[3] ?? 0), 0, 100),
   ];
 }

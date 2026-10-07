@@ -9,7 +9,9 @@ import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
 import { domesticEnd, domesticMenu, domesticPanel } from './domestic'; // S1c 내정 훅
+import { darkEndSection, darkMenu } from './dark'; // S1b 어두운 길 훅
 import { reproError, reproText } from './repro';
+import { vibrateOn } from './fx';
 
 // 겹쳐 뜨는 창: 불만·지지 집단 창, 일지, 메뉴, 정산 요약, 디버그, 끝.
 
@@ -69,6 +71,9 @@ function menuPanel(view: View): HTMLElement {
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 처음부터'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'new-seed' }, '새 판(새 시드)'),
       domesticMenu(view),
+      // 진동(5b.6): 나쁜 쪽 선 넘음과 죽음에만 40ms. 동작 감소 설정과 따로 끈다. 아이폰 브라우저는 원래 안 떤다.
+      h('button', { class: cx('btn btn--ghost', vibrateOn() && 'is-on'), 'data-action': 'toggle-vibrate', 'aria-pressed': vibrateOn() ? 'true' : 'false' }, vibrateOn() ? '진동 켬' : '진동 끔'),
+      darkMenu(view),
       h('button', { class: cx('btn btn--ghost', ui.debug && 'is-on'), 'data-action': 'toggle-debug' }, ui.debug ? '숨은 수치 끄기' : '숨은 수치 보기(테스트용)'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'repro-copy' }, '오류 재현 묶음 복사')),
     reproSection());
@@ -144,7 +149,10 @@ export function endScreen(view: View): HTMLElement {
       h('span', { class: 'kicker' }, `${g.seg}구간`),
       h('b', { class: 'end__title' }, END_TITLE[g.end ?? 'complete']),
       h('p', { class: 'sub num' }, `거래 ${st.dealsMade} · 약속 지킴 ${st.promisesKept} · 어김 ${st.promisesBroken} · 가결 ${st.lawsPassed} · 부결 ${st.lawsFailed} · 폐지 ${st.repeals} · 뇌물 ${st.bribes} · 협박 ${st.blackmails} · 죽음 ${g.deaths.length}`)),
-    h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))),
+    // S1b 판이면 오른쪽 칸 위에 일대기·증언·추모의 벽을 두고, 일지 하이라이트는 그 밑에 둔다.
+    h('div', { class: 'end__right' },
+      darkEndSection(view),
+      h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text)))))),
     domesticEnd(view),
     h('div', { class: 'end__actions' },
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 다시'),

@@ -54,6 +54,13 @@ describe('오류 재현 묶음', () => {
     expect(r.g.comms.tail.ration).toBe(2);
     expect(() => applyStep(cloneGame(g), { a: 'deal', d: { comm: 'tail', tool: 'bribe' } })).not.toThrow();
   });
+
+  it('꼬리칸 공간 레버도 같은 길로 간다(6.4)', () => {
+    const g = createGame('repro-4');
+    const r = run(g, [{ a: 'space', d: { giver: 'front', step: '0' } }, { a: 'space', d: { step: '1' } }]);
+    expect(r.g.space).toEqual({ step: 1, giver: 'front' });
+    expect(applyStep(cloneGame(g), { a: 'space', d: { step: '1' } })).toBe('공간을 내줄 칸을 먼저 골라라');
+  });
 });
 
 // 저장 판 읽기(A2 코드 구조 점검 5번): 뼈대 검사, 판 번호, 나중에 더한 칸 채우기.

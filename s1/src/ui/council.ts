@@ -302,6 +302,28 @@ function verdict(result: VoteResult, need: number): HTMLElement {
     h('small', null, `반대 ${result.no}${result.absent ? ` · 부재 ${result.absent}` : ''}`));
 }
 
+/** 표결 전 셈(presentation_motion '확보·예상·필요 표', 18:19 교차 확인 반영): 같은 크기 명판 셋이 주인이고 막대는 거든다.
+ * 확보 = 이미 찬성과 거래로 약속받은 표(expected의 min), 예상 = 미정이 갈릴 몫까지 넣은 기댓값, 필요 = 이번 안건 기준.
+ * 막대: 확보는 꽉 찬 칸, 예상 범위(min~max)는 옅은 구간, 예상은 점, 눈금은 기준 하나. 비밀 투표면 약속만 안다. */
+function tally(est: { mean: number; min: number; max: number }, need: number, secret: boolean): HTMLElement {
+  const got = Math.round(est.min);
+  const mean = Math.round(est.mean);
+  const max = Math.round(est.max);
+  const sure = got >= need;
+  const plate = (label: string, v: number, cls?: string) => h('span', { class: cx('tally__plate', cls) }, h('span', null, label), ' ', h('b', { class: 'num' }, v));
+  return h('div', { class: cx('tally', sure && 'is-sure'), 'aria-label': secret ? `약속 ${got}, 필요 ${need}` : `확보 ${got}, 예상 ${mean}, 필요 ${need}` },
+    h('div', { class: 'tally__plates' },
+      plate(secret ? '약속' : '확보', got, 'is-got'),
+      secret ? null : plate('예상', mean, mean >= need ? 'is-yes' : 'is-no'),
+      plate('필요', need, 'is-need'),
+      sure ? h('span', { class: 'tally__sure' }, '필요 표 확보') : null),
+    h('div', { class: 'tally__bar', 'aria-hidden': 'true' },
+      secret ? null : h('i', { class: 'tally__range', style: `left:${got}%;width:${Math.max(0, max - got)}%` }),
+      h('i', { class: 'tally__got', style: `width:${got}%` }),
+      secret ? null : h('i', { class: 'tally__dot', style: `left:${mean}%` }),
+      h('i', { class: 'tally__need', style: `left:${need}%` })));
+}
+
 export function councilScreen(view: View): HTMLElement {
   const { g, ui } = view;
   const council = g.council;
@@ -325,9 +347,7 @@ export function councilScreen(view: View): HTMLElement {
   const secret = lawActive(g, 'secret_ballot');
   const big = result
     ? h('div', { class: 'big num' }, h('b', null, fmt(shownYes ?? 0)), h('span', null, ` / ${need}`))
-    : secret
-      ? h('div', { class: 'big num' }, h('span', null, '약속 '), h('b', null, fmt(est.min)), h('span', null, ` / ${need}`))
-      : h('div', { class: 'big num' }, h('span', { class: 'big__label' }, '예상 찬성'), h('b', { class: cx(est.mean >= need ? 'is-yes' : 'is-no') }, fmt(est.mean)), h('span', null, ` / ${need}`), h('small', null, `${est.min}~${est.max}`));
+    : tally(est, need, secret);
   return h('section', { class: 'council' },
     billPanel(view),
     h('div', { class: 'hemi-wrap' },

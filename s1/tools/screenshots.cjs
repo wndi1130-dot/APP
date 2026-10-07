@@ -247,7 +247,13 @@ async function main() {
     await capture(page, '05-factions');
     await click(page, '.drop__head .x');
 
-    // 출발: 서류(사건 카드)
+    // 서막(first_leg_story 5장): 약속 카드를 펼쳐 찍고, 수색까지 처리해 출발할 수 있게 한다.
+    await click(page, '.bottom [data-action="open-stack"]');
+    await page.locator('.sheet').waitFor();
+    await capture(page, '00-prologue');
+    await until(page, '.bottom [data-action="advance"]');
+
+    // 출발: 서류(서막을 거친 판은 열차 안 첫 거래)
     await click(page, '.bottom [data-action="advance"]');
     await until(page, '.sheet');
     await capture(page, '06-card');

@@ -3,6 +3,7 @@ import type { Comm, LawId } from './data';
 import { affordable, applyEffs, CARD_EXTENSIONS, costLines, EVENT_CHAIN_MAX, EVENT_COOLDOWN, memo, politicsLines, withAfford } from './cards';
 import type { CardView, Choice, Eff } from './cards';
 import { onDeath } from './death';
+import { josa } from './josa';
 import { CAR_COMM } from './domestic/data';
 import { living } from './domestic/state';
 import { CAR_NAME } from './domestic/workshop';
@@ -88,29 +89,7 @@ export const CONTENT_DEAL_KIND = 'content-deal';
 /** person.state away: 돌아오는 구간을 정하지 않은 떠남. 저장(JSON)에 Infinity를 못 써서 큰 수로 둔다 */
 const AWAY_FOREVER = 1e6;
 
-// ---- 한국어 조사(6.3) ----
-// 숫자는 한국어로 읽은 끝소리로 본다(1 일, 3 삼, 6 육, 7 칠, 8 팔, 0 영은 받침, 그중 1·7·8은 ㄹ).
-const DIGIT_FINAL: Record<string, 'none' | 'final' | 'rieul'> = {
-  0: 'final', 1: 'rieul', 2: 'none', 3: 'final', 4: 'none', 5: 'none', 6: 'final', 7: 'rieul', 8: 'rieul', 9: 'none',
-};
-
-function finalOf(word: string): 'none' | 'final' | 'rieul' {
-  const ch = [...word.trim()].pop() ?? '';
-  const code = ch.charCodeAt(0);
-  if (code >= 0xac00 && code <= 0xd7a3) {
-    const jong = (code - 0xac00) % 28;
-    return jong === 0 ? 'none' : jong === 8 ? 'rieul' : 'final';
-  }
-  return DIGIT_FINAL[ch] ?? 'none';
-}
-
-/** '이/가' 같은 짝에서 받침에 맞는 쪽을 고른다. 으로/로는 ㄹ 받침이면 로. */
-export function josa(word: string, pair: string): string {
-  const [withFinal, without] = pair.split('/');
-  const f = finalOf(word);
-  if (withFinal === '으로') return f === 'final' ? '으로' : '로';
-  return f === 'none' ? without : withFinal;
-}
+export { josa };
 
 /** {name}[a/b]를 값과 조사로 채운다. 값이 없는 자리표시자는 그대로 둔다(사건이 뽑히기 전에 거른다). */
 export function fillText(text: string, values: Partial<Record<Placeholder, string>>): string {

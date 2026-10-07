@@ -1,7 +1,7 @@
 import {
-  COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, startFinish, startJob, startRestore, supportComm, uniqueAction,
+  COMMS, CREW_COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
+  migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
+  setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
 
@@ -17,7 +17,7 @@ export interface TrailEntry extends Step { seg: number; phase: string; t: number
 export interface ReproError { msg: string; stack?: string; step?: Step; t: number }
 
 export interface ReproBundle {
-  kind: 's1a-repro'; v: 1; build: string; seed: string; s1c: boolean; when: string; screen?: string;
+  kind: 's1a-repro'; v: 1; build: string; seed: string; s1c: boolean; s1b?: boolean; when: string; screen?: string;
   trail: TrailEntry[]; error: ReproError | null; prev: Game | null; now: Game;
 }
 
@@ -36,7 +36,10 @@ export function applyStep(g: Game, s: Step): string | null {
   switch (s.a) {
     case 'advance': advance(g); return null;
     case 'emergency': callEmergency(g); return null;
-    case 'choose': chooseCard(g, Number(d.uid), Number(d.index)); return null;
+    case 'choose':
+      if (d.ms) logCardPick(g, Number(d.uid), Number(d.index), Number(d.ms)); // S1b H7
+      chooseCard(g, Number(d.uid), Number(d.index));
+      return null;
     case 'stop-set': {
       const value = d.value ?? '';
       if (d.key === 'target' && (LOOT_KEYS as readonly string[]).includes(value)) setStop(g, { target: value as LootKey });
@@ -64,6 +67,7 @@ export function applyStep(g: Game, s: Step): string | null {
       return d.act === 'support' ? supportComm(g, c) : d.act === 'cut' ? cutComm(g, c) : uniqueAction(g, c);
     }
     case 'lever': setLever(g, d.comm as Comm, d.which as 'heat' | 'ration', Number(d.value)); return null;
+    case 'space': return setSpace(g, Number(d.step), (COMMS as readonly string[]).includes(d.giver ?? '') ? d.giver as Comm : undefined);
     // ---- S1c 내정 ----
     case 'dom-restore':
       return startRestore(g, d.id as TechId, d.mode === 'defect' ? 'defect' : 'full', (d.variant || undefined) as Variant | undefined) ? null : '지금은 시작할 수 없다';
@@ -128,6 +132,8 @@ function fillDefaults(g: Game): void {
   g.emergencyCalls ??= [];
   g.hunger ??= 0;
   g.linesSeen ??= [];
+  // 기관실은 작업조로 못 낸다(6.4). 그 전에 저장한 열린 정차가 기관실을 골라 뒀으면 경비대로 바꾼다.
+  if (g.stop && !g.stop.done && !CREW_COMMS.includes(g.stop.crewComm)) g.stop.crewComm = 'guard';
   migrateDomestic(g);
 }
 
@@ -166,7 +172,7 @@ export function buildId(): string {
 
 export function makeBundle(now: Game, prev: Game | null, trail: TrailEntry[], error: ReproError | null, screen?: string): ReproBundle {
   return {
-    kind: 's1a-repro', v: 1, build: buildId(), seed: now.seed, s1c: !!now.dom, when: new Date().toISOString(), screen,
+    kind: 's1a-repro', v: 1, build: buildId(), seed: now.seed, s1c: !!now.dom, s1b: !!now.dark, when: new Date().toISOString(), screen,
     trail: trail.slice(-TRAIL_MAX), error, prev, now,
   };
 }

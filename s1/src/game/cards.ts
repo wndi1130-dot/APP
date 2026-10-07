@@ -1,6 +1,7 @@
-import { COMMS, COMM_NAME, P, REP_ROLE } from './data';
+import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
 import { logDeath, onDeath } from './death';
+import { josa } from './josa';
 import { offend } from './politics';
 import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './state';
 import { BIRTH, familyOf, recover, revertLater } from './people';
@@ -33,6 +34,8 @@ export interface Choice {
   log?: string;
   /** 효과(Eff) 밖의 비용 줄(S1c 부품·자재 등). 비용 줄 끝에 붙는다 */
   extra?: string[];
+  /** 선을 넘는 선택(S1b 10.1). 있으면 단추에 검은 띠를 두르고 이 반응 한 줄을 대사 밑에 붙인다. 빈 문자열이면 띠만(무뎌짐) */
+  cross?: string;
 }
 
 export interface CardView {
@@ -188,19 +191,26 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
   },
   {
     id: 'water_tower', when: g => g.seg >= 2,
-    view: (g, past) => ({
-      title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
-      body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
-        '불을 피워 녹인다': `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
-        '꼬리칸이 눈을 녹인다': '급수탑이 또 얼었다. 꼬리칸은 지난번 양동이 일로 손이 다 텄다. 이번에도 꼬리칸이냐고 묻는다.',
-        '다음 역까지 버틴다': '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
-      }, '급수탑이 또 얼었다.'),
-      choices: [
-        { label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
-        { label: '꼬리칸이 눈을 녹인다', say: past?.pick === '꼬리칸이 눈을 녹인다' ? '꼬리칸이 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라.' : '꼬리칸은 양동이를 들어라. 눈을 퍼다 녹인다.', effs: [{ t: 'base', c: 'tail', i: 3, v: 5 }, { t: 'rel', c: 'tail', v: -worse(past, 4, 3) }] },
-        { label: '다음 역까지 버틴다', say: past?.pick === '다음 역까지 버틴다' ? '관은 안 탄다. 내가 보증한다. 간다!' : '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -worse(past, 4, 2) }, ...(past?.pick === '다음 역까지 버틴다' ? [{ t: 'base' as const, c: 'engine' as const, i: 3 as const, v: 6 }] : [])] },
-      ],
-    }),
+    // 눈을 녹일 칸은 꼬리칸 고정이 아니라 마지막 작업조를 낸 칸이다(first_leg_story 6.4: 노출 +10, 의무진·앞칸은 궂은일 반감 −3).
+    view: (g, past) => {
+      const sc = g.lastCrew ?? 'tail';
+      const snowPast = past?.pick === '눈을 녹인다' || past?.pick === '꼬리칸이 눈을 녹인다';
+      const chore = CHORE_COMMS.includes(sc) ? P.choreRel : 0;
+      return {
+        title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
+        body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
+          '불을 피워 녹인다': `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
+          '눈을 녹인다': '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.',
+          '꼬리칸이 눈을 녹인다': '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.',
+          '다음 역까지 버틴다': '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
+        }, '급수탑이 또 얼었다.'),
+        choices: [
+          { label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
+          { label: '눈을 녹인다', say: snowPast ? `${COMM_NAME[sc]}${iga(COMM_NAME[sc])} 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라.` : `${COMM_NAME[sc]}${josa(COMM_NAME[sc], '은/는')} 양동이를 들어라. 눈을 퍼다 녹인다.`, effs: [{ t: 'base', c: sc, i: 3, v: P.snowExposure }, { t: 'rel', c: sc, v: -worse(past, 4, 3) + chore }] },
+          { label: '다음 역까지 버틴다', say: past?.pick === '다음 역까지 버틴다' ? '관은 안 탄다. 내가 보증한다. 간다!' : '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -worse(past, 4, 2) }, ...(past?.pick === '다음 역까지 버틴다' ? [{ t: 'base' as const, c: 'engine' as const, i: 3 as const, v: 6 }] : [])] },
+        ],
+      };
+    },
   },
   {
     id: 'snow_drift', when: g => g.seg >= 3,
@@ -328,9 +338,18 @@ export interface CardExtension {
   choose?: (g: Game, card: Card, choice: Choice) => void;
 }
 export const CARD_EXTENSIONS: CardExtension[] = [];
+/** 모든 카드 보기를 마지막에 한 번 거른다(S1b 악몽의 말 끊기, 비상대권의 '포고로 정한다'). 상태를 바꾸지 않는다. */
+export type ViewFilter = (g: Game, card: Card, v: CardView) => CardView;
+export const VIEW_FILTERS: ViewFilter[] = [];
 
 // ---- 카드 보기 ----
 export function viewCard(g: Game, card: Card): CardView {
+  let v = baseView(g, card);
+  for (const f of VIEW_FILTERS) v = f(g, card, v);
+  return v;
+}
+
+function baseView(g: Game, card: Card): CardView {
   for (const ext of CARD_EXTENSIONS) {
     const v = ext.view(g, card);
     if (v) return v;

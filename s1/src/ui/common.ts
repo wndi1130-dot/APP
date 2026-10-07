@@ -14,6 +14,8 @@ export interface Ui {
   panel: Panel;
   /** 홈에서 누른 칸의 작은 창 */
   carPop: string | null;
+  /** 꼬리칸 창에서 레버 대신 공간 레버(6.4)를 펼쳤나 */
+  spaceOpen?: boolean;
   /** 서류(결정 카드)가 펼쳐졌나 */
   cardOpen: boolean;
   /** 정차 결과를 읽고 덮었나 */

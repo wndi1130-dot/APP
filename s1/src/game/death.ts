@@ -14,6 +14,9 @@ export function logDeath(g: Game, names: readonly string[], cause: DeathCause, w
 }
 
 /** 죽은 사람은 일어난다. 시신 처리 법이 대가를 정한다(브리프 8.2). */
+/** 죽음 뒤에 부를 다른 묶음의 훅(S1b 칸 안의 시신, dark/hooks.ts가 등록한다). */
+export const DEATH_HOOKS: ((g: Game, c: Comm, names: readonly string[], cause: DeathCause) => void)[] = [];
+
 export function onDeath(g: Game, c: Comm, names: readonly string[], cause: DeathCause = 'other', witness = false): void {
   const n = names.length;
   if (n <= 0) return;
@@ -51,6 +54,7 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
   }
   journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad');
   afterDeath(g, c, names);
+  for (const hook of DEATH_HOOKS) hook(g, c, names, cause);
 }
 
 /** 두 번째 정차(구벤)까지 우리 쪽 죽음이 없으면 강가에서 이미 얼어 죽은 낯선 사람을 찾는다. 보장하는 건 죽음이 아니라

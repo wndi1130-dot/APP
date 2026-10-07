@@ -23,7 +23,8 @@ export interface MotionDef {
 
 const hubOf = (g: Game) => (g.hub ??= { warned: [], stash: {}, agreed: [] });
 
-export const MOTIONS: Record<MotionId, MotionDef> = {
+/** S1b(dark/council.ts)가 재판·불신임을 불러올 때 더한다. 그래서 타입은 모든 MotionId를 품되 값은 share부터 시작한다. */
+export const MOTIONS = {
   // 라이프치히 마지막 회기(first_leg_story 7.7). 통과하면 몫을 들고 평화롭게 떠나고, 부결되면 허브에서 몰래 가져가려 한다.
   share: {
     need: 51,
@@ -45,7 +46,7 @@ export const MOTIONS: Record<MotionId, MotionDef> = {
     },
     rank: 'crisis',
   },
-};
+} as Record<MotionId, MotionDef>;
 
 /** 회기마다 안건을 내는 곳(hub.ts 등이 등록한다). 돌려준 안건은 rank 순서대로 법 안건 앞뒤에 놓인다. */
 export const MOTION_SOURCES: ((g: Game) => MotionAgenda[])[] = [];

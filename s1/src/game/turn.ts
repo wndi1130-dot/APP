@@ -3,15 +3,16 @@ import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
+import { josa } from './josa';
 import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
 import {
-  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
+  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -20,6 +21,9 @@ import {
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
+// S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
+import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from './dark/hooks';
+import { darkPyreWeight, darkStoredWeight } from './dark/corpses';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
 
@@ -55,7 +59,10 @@ export function primaryAction(g: Game): Primary {
 export function advance(g: Game): void {
   if (!primaryAction(g).ok) return;
   switch (g.phase) {
-    case 'prep': return depart(g);
+    case 'prep':
+      depart(g);
+      if ((g.phase as Game['phase']) === 'travel') darkTravel(g);
+      return;
     case 'travel': return g.inStrike ? afterStop(g) : arriveStop(g);
     case 'stop': return afterStop(g);
     case 'council': return settle(g);
@@ -178,6 +185,12 @@ function depart(g: Game): void {
     return;
   }
   g.inStrike = false;
+  // 서막을 거친 판의 첫 출발: 열차 안 첫 거래가 이 구간의 사건이다(first_leg_story 5장 서막 흐름 6번, prologue.ts).
+  if (g.seg === 1 && storyOf(g).flags.depot_promise) {
+    addCard(g, { kind: 'pro_deal', comm: 'tail' });
+    g.phase = 'travel';
+    return;
+  }
   // 사람 카드가 막 왔으면 이동 사건을 쉰다(사람의 무게 6.0: 카드 수를 늘리지 않는다).
   contentAwayTick(g);
   contentFollowupTick(g);
@@ -247,6 +260,8 @@ export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId;
   if (!g.stop || g.stop.done) return;
   // 정찰은 끄고 켜는 단추가 아니라 먼저 보내는 일이다(sendScouts). 옛 재현 기록의 scout: true는 보내기로 읽는다.
   const { scout, ...rest } = patch;
+  // 기관실은 화부가 빠지면 열차가 못 가서 작업조로 못 낸다(first_leg_story 6.4).
+  if (rest.crewComm && !CREW_COMMS.includes(rest.crewComm)) delete rest.crewComm;
   Object.assign(g.stop, rest);
   g.stop.crewSize = clamp(g.stop.crewSize, 2, 8);
   if (scout) sendScouts(g);
@@ -357,6 +372,37 @@ export function riskWhy(r: StopRisk): string[] {
   return why;
 }
 
+/** 작업조를 낸 칸이 지친다: 노출 +gain, 늘 하던 일이 아닌 칸(의무진·앞칸)은 관계 −3(first_leg_story 6.4). 반감 줄을 돌려준다. */
+export function crewWork(g: Game, c: Comm, gain: number): string | null {
+  const s = g.comms[c];
+  // 이미 한계 위면 그대로 두고, 아래면 한계까지만 오른다.
+  s.base[3] = Math.max(s.base[3], Math.min(P.crewCap, s.base[3] + gain));
+  if (!CHORE_COMMS.includes(c)) return null;
+  s.rel = clamp(s.rel + P.choreRel, -100, 100);
+  return `${COMM_NAME[c]}${josa(COMM_NAME[c], '은/는')} 손에 안 익은 짐을 날랐다. 불만이 나온다.`;
+}
+
+/** 안 나간 칸은 쉰다: 노출 −10, 쉼 바닥(꼬리칸 35, 의무진 25, 앞칸 10) 아래로는 안 내려간다. 지나친 정차면 모두 쉰다. */
+export function crewRest(g: Game, busy: Comm | null): void {
+  for (const c of COMMS) {
+    const floor = REST_FLOOR[c];
+    if (floor === undefined || c === busy) continue;
+    const b = g.comms[c].base;
+    b[3] = Math.max(Math.min(floor, b[3]), b[3] - P.crewRest);
+  }
+}
+
+/** 작업조로 낼 수 있는 칸. 기관실은 못 낸다(6.4). */
+export const CREW_COMMS: readonly Comm[] = COMMS.filter(c => CREW_HAUL[c] !== undefined);
+
+/** 정차 카드에 미리 적는 작업조 값(6.4): 이 칸을 내면 노출이 얼마가 되고, 무엇을 잃고, 누가 쉬나. */
+export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: number; haul: number; rest: Comm[] } {
+  const from = Math.round(situation(g, c)[3]);
+  const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(P.crewCap, g.comms[c].base[3] + P.crewGain) - g.comms[c].base[3]));
+  const rest = COMMS.filter(o => o !== c && REST_FLOOR[o] !== undefined && g.comms[o].base[3] > REST_FLOOR[o]!);
+  return { from, to, rel: CHORE_COMMS.includes(c) ? P.choreRel : 0, haul: CREW_HAUL[c] ?? 1, rest };
+}
+
 export function resolveStop(g: Game, go: boolean): StopResult | null {
   const stop = g.stop;
   if (!stop || stop.done) return null;
@@ -365,9 +411,11 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
   const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
   if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
+  darkStop(g, !!(go && stop.target), go && stop.target ? crewNames(g, stop.crewComm, stop.crewSize) : []);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
+    crewRest(g, null);
     stop.result.notes.push(...domesticStop(g, true, 0)); // S1c 내정 훅
     checkStopPromises(g, null, {});
     return stop.result;
@@ -377,7 +425,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g);
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
+    * (CREW_HAUL[stop.crewComm] ?? 1);
   const notes: string[] = [];
   const tail = g.comms.tail;
   if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
@@ -417,11 +466,15 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
   // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
-  if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel - 2, -100, 100);
+  if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel + P.hurtRel * injuredOnly.length, -100, 100);
   // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
   if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = scoutsBack;
   g.comms[stop.crewComm].away += stop.crewSize - dead.length;
+  const chore = crewWork(g, stop.crewComm, P.crewGain);
+  if (chore) notes.push(chore);
+  crewRest(g, stop.crewComm);
+  g.lastCrew = stop.crewComm;
   notes.push(...domesticStop(g, false, dead.length)); // S1c 내정 훅
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
@@ -455,9 +508,9 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
   }
 }
 
-function keepPromise(g: Game, c: Comm): void {
+/** 약속을 지켰다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */
+export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
-  const label = s.promise?.label ?? '';
   s.promise = null;
   g.trust = clamp(g.trust + 4, 0, 100);
   s.rel = clamp(s.rel + 5, -100, 100);
@@ -466,9 +519,9 @@ function keepPromise(g: Game, c: Comm): void {
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 지켰다: ${label}.`, 'good');
 }
 
-function breakPromise(g: Game, c: Comm): void {
+/** 약속을 어겼다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */
+export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
-  const label = s.promise?.label ?? '';
   s.promise = null;
   g.trust = clamp(g.trust - (seats(g)[c] >= 30 ? 12 : 8), 0, 100);
   s.rel = clamp(s.rel - 20, -100, 100);
@@ -498,6 +551,11 @@ function settle(g: Game): void {
   g.food -= f.food;
   if (!g.inStrike) g.comms.engine.base[3] += P.engineFatigue;
   else g.tension = clamp(g.tension + 3, 0, 100);
+  // 공간을 내준 칸은 당겨 둔 동안 구간마다 단당 관계 −1(first_leg_story 6.4).
+  if (g.space?.giver && g.space.step > 0) {
+    const giver = g.comms[g.space.giver];
+    giver.rel = clamp(giver.rel + P.spaceHoldRel * g.space.step, -100, 100);
+  }
   g.forcedRun = false;
   g.guardEscort = false;
   medicineTick(g, notes);
@@ -513,6 +571,7 @@ function settle(g: Game): void {
   if (g.council) bribeDetection(g);
   leashTick(g);
   aiLeaders(g);
+  darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
   checkEnd(g);
@@ -634,7 +693,8 @@ function medicineTick(g: Game, notes: string[]): void {
   }
   // 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 따뜻해서 두 배(s1c_domestic 4.1).
   const kinBodies = pyreCount(g) - (g.pyre ?? 0);
-  const pyreWeight = (g.pyre ?? 0) + 2 * kinBodies;
+  // S1b: 머리를 확인한 시신은 일어나지 않는다(dark/corpses.ts). S1a 판이면 그대로.
+  const pyreWeight = darkPyreWeight(g, g.pyre ?? 0) + 2 * kinBodies;
   if (pyreWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * pyreWeight)) {
     const inKin = kinBodies > 0 && rnd(g) < (2 * kinBodies) / pyreWeight;
     if (inKin) takeKinBody(g);
@@ -643,7 +703,7 @@ function medicineTick(g: Game, notes: string[]): void {
     g.tension = clamp(g.tension + 5, 0, 100);
     journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
-  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored) * domesticThawMult(g)) {
+  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * darkStoredWeight(g, g.stored)) * domesticThawMult(g)) {
     g.injured += 2;
     g.tension = clamp(g.tension + 8, 0, 100);
     g.stored = 0;
@@ -870,6 +930,7 @@ function finish(g: Game, end: Game['end']): void {
   const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: '반란이 일어났다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   for (const line of raisedLines(g)) journal(g, line);
+  darkFinish(g);
 }
 
 function nextSegment(g: Game): void {
@@ -890,6 +951,7 @@ function nextSegment(g: Game): void {
   g.phase = 'prep';
   applyFloors(g);
   hubOmenTick(g); // 라이프치히 두 구간 전: 짐 싸는 징후
+  darkPrep(g); // S1b 훅: 단서, 불씨가 오를지(임박 징후)
   if (g.autoLevers && !autoLeverStatus(g).ok) {
     g.autoLevers = false;
     addCard(g, { kind: 'info', who: '배급장이 장부를 내려놓았다', text: '앞칸의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다.' });
