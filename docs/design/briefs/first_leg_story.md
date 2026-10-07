@@ -307,7 +307,7 @@ field_unified 8장의 형식이다. S3 테스트의 고정 입력(fixture)으로
 }
 ```
 
-필드 이름은 예시다. 스키마는 S2를 시작할 때 s1/schema에 넣는다(field_unified 8장).
+필드 이름은 예시다. 스키마는 S2를 시작할 때 TS와 GDScript가 같이 읽는 공용 JSON 스키마로 넣는다(field_unified 8장).
 
 ### 6.11 견본 대사
 
