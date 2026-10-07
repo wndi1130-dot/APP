@@ -368,6 +368,7 @@
   - 사람의 능력 틀은 두 층으로, 자재는 따로 세고 묶어 보이기로 정했다(확정 사항 '필드'). 탄약 4계열도 같은 방식으로 묶어 보이자는 제안이 남았다.
   - 기본값: 필드 실시간 1분 = 게임 15분, 소음 점수가 다음 무리를 앞당기는 식, 장소 유형 6개 유지(경찰서·소방서·광산 등은 변형, 군 시설은 특수 장소, 터널·산사태는 구간 사건), 직접·자동 정차가 같은 '정차 영수증'을 냄, 화면 위 아군 최대 12명, 무게만 보는 가방, 탭 기반 근접·사격과 언제든 거는 전술 일시정지.
   - 문서 낱말: '탑뷰'는 '사선 시점(좀보이드식 쿼터뷰)'으로 맞추자는 제안.
+  - 필드 조사 반영(2026-10-07, 제안): 조준 안정화, 최소 거리 안쪽은 밀치기로 자동 전환, 혹한은 기계(걸림)와 손(조준·재장전·걸림 해제) 두 축, 소리는 새 좀비를 만들지 않고 있는 좀비를 끎, 무리 뒤 짧은 휴식 창, 사람 적은 마지막 위치만 알고 사기가 떨어지면 엄폐 → 후퇴 → 항복, 좀비는 거리별 세 단계로 굴림. 근거: [research/field-mechanics-20261007 브랜치](https://github.com/wndi1130-dot/APP/tree/research/field-mechanics-20261007/docs/research/field_mechanics)
 - **사운드·음악 방향**(2026-10-07 초안): 설계 문서에 흩어진 소리의 역할(소음 4단계, 무리 예고, 무전, 절단, 투표함, 공포의 침묵)을 모으고 소리의 기준을 세운다. 세부: [briefs/sound_music.md](briefs/sound_music.md)
   - 원칙: 규칙에 쓰이는 소리는 모두 화면 표시를 짝으로 가진다. UI 소리는 세계 소음이 아니다. 침묵을 계기로 쓴다. 잔혹한 결정을 승리음으로 축하하지 않는다. 비밀 투표의 소리는 표를 흘리지 않는다. 폰 스피커 기준으로 중요한 신호는 중·고음에 둔다.
   - 기적 소리: 문서에서 '떠나야 할 때' 경고와 '출발' 둘 다에 쓰였다. 경고는 기관사 무전으로, 기적은 열차장이 출발을 부를 때만 울리고 세계 소음(매우 시끄러움)으로 세자는 안을 S2에서 시험한다.
@@ -405,7 +406,7 @@
 
 1. S1a 정치 콘텐츠와 수치(다음 설계 주제, 2026-10-06 결정): 법 15~20개, 사건 카드 40~60장, 인물 11~13명과 비밀, 시작 수치, AI 지도자의 판단, 거래, 기관실 파업 규칙. 초안: [briefs/s1a_politics_numbers.md](briefs/s1a_politics_numbers.md)
 2. 열차장 캐릭터 생성과 사람의 능력(정치 콘텐츠 다음 주제): 좀보이드식 스탯, 특성, 피지컬. 보류했던 필드 능력 초안(근접, 사격, 은신, 체력, 수색)과 지식 분야 5개를 하나의 틀로 묶어야 한다. 필드 쪽 틀은 두 층으로 정했다(2026-10-07): [briefs/field_unified.md](briefs/field_unified.md) 3장. 열차장 생성(특성, 출신 보너스, 피지컬)이 남았다. 브리프: [briefs/field_system.md](briefs/field_system.md), 레퍼런스: [ref/zomboid_character_creation.md](../../ref/zomboid_character_creation.md)
-3. 필드에서 아직 설계 전인 것: 장소 유형별 상세(레퍼런스: [ref/places_central_europe.md](../../ref/places_central_europe.md), 전리품 키는 결정됨), 사람 적의 AI 세부(로컬 워커 조사 중). 장소 유형 정리안: [briefs/field_unified.md](briefs/field_unified.md) 7장.
+3. 필드에서 아직 설계 전인 것: 장소 유형별 상세(레퍼런스: [ref/places_central_europe.md](../../ref/places_central_europe.md), 전리품 키는 결정됨), 사람 적의 AI 세부(필드 조사를 받아 안을 적음: [briefs/field_unified.md](briefs/field_unified.md) 11장). 장소 유형 정리안: [briefs/field_unified.md](briefs/field_unified.md) 7장.
 4. 적대 열차를 플레이어가 넘겨받을 때, 추상 시뮬레이션을 완전 시뮬레이션으로 펼치는 규칙.
 5. PC판의 성격: 모바일판에 시스템을 더한 확장판인지, 따로 설계한 판인지.
 6. S1 콘텐츠 가이드 초안 검토: [../prototype/s1_content_guide.md](../prototype/s1_content_guide.md) B7 노트의 문체 후보는 2026-10-06에 골라 가이드 2장에 넣었다.
