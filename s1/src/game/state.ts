@@ -15,9 +15,11 @@ import profilesJson from '../../data/profiles.json';
 export type Phase = 'prep' | 'travel' | 'stop' | 'council' | 'settle' | 'end';
 export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt';
 /** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
+/** 정차 작업조 명단에 더 붙는 사람(이름). S1b 정차 암살의 실행자와 대상이 여기서 붙는다(dark/order.ts). */
+export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
 export const END_LINK: { finish: (g: Game, end: EndKind) => void } = { finish: (g, end) => { g.end = end; g.phase = 'end'; } };
 
-export interface Profile { id: string; name: string; age: number; community: Comm; like: string; dislike: string; hometown: string }
+export interface Profile { id: string; name: string; name_lang?: string; age: number; community: Comm; like: string; dislike: string; hometown: string }
 export const PROFILES = profilesJson as unknown as Profile[];
 
 export interface Leader {

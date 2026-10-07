@@ -102,6 +102,11 @@ describe('profile name_lang (s1b_dark_path 1.4)', () => {
     }
   });
 
+  it('is written for every generated profile', () => {
+    const profiles = JSON.parse(readFileSync(join(root, 'data', 'profiles.json'), 'utf8')) as { name_lang?: string }[];
+    expect(profiles.every(p => common.$defs.nameLang.enum.includes(p.name_lang))).toBe(true);
+  });
+
   it.each(['other', 'PL', 'ru', '', 1])('rejects %j', value => {
     expect(errors({ ...fixture('profile'), name_lang: value }, 'profile'))
       .toContainEqual(expect.objectContaining({ path: '/name_lang' }));

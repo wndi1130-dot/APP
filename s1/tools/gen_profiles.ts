@@ -57,6 +57,8 @@ export interface Profile {
   id: string;
   name: string;
   name_original: string;
+  /** 이름을 뽑은 풀의 언어. 열차 출생은 부모 풀을 받는다. S1b 수사는 pl·de·cz만 군중 순위에 올린다(s1b_dark_path 1.4, 제안). */
+  name_lang: Language;
   /** 이름 풀의 성별. 폴란드어·체코어 과거형이 주어 성별을 따라서 번역에 쓴다(s1_content_guide 6.5). 화면엔 안 보인다.
    *  성별을 적지 않은 이름 풀에서 뽑힌 사람은 비워 두고 경고를 남긴다(스키마 검사에서 걸린다). */
   gender?: Gender;
@@ -339,7 +341,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
     while (ages.length < POPULATION[community]) ages.push(community === 'engine' ? integer(52, 64) : integer(community === 'guard' ? 22 : 16, 64));
     const members = shuffle(ages).map((age, index): Profile => ({
       id: `p_${String(profiles.length + index + 1).padStart(3, '0')}`,
-      name: '', name_original: '', gender: undefined, age, community, origin_tag: 'original',
+      name: '', name_original: '', name_lang: 'pl', gender: undefined, age, community, origin_tag: 'original',
       boarding: DEFAULT_BOARDING[community], hometown: '', like: '', dislike: '', line: '', state: 'alive',
     }));
     const requiredExceptions = members.filter((person) => person.age <= 5 || ((community === 'guard' || community === 'engine') && person.age < 22));
@@ -432,6 +434,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
   }
   for (const family of families) assignNames([...family.parents, ...family.children].map((id) => byId.get(id)!));
   for (const person of profiles) if (!assigned.has(person.id)) assignNames([person]);
+  for (const person of profiles) person.name_lang = languages.get(person.id)!;
   let preferenceFallbacks = 0;
   function preference(person: Profile, pool: Preference[], fallback: string[], excluded = ''): string {
     const country = countries.get(person.id)!;

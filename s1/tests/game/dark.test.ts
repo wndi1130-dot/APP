@@ -146,6 +146,7 @@ describe('처형은 재판으로만(2장 4번, 사용자 17:01)', () => {
   it('처형·하차 명령은 선을 넘는 선택지로 검은 띠가 붙는다', () => {
     const v = punishView(darkGame(), 'trial');
     expect(v.choices.find(c => c.label === '처형')?.cross).toBeTypeOf('string');
+    expect(v.choices.find(c => c.label === '하차 명령')?.cross).toBeTypeOf('string');
     expect(v.choices.find(c => c.label === '근신')?.cross).toBeUndefined();
   });
 });

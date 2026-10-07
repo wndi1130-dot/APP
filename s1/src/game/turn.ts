@@ -12,7 +12,7 @@ import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAW
 import type { Comm, LootKey, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
-  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
+  addSecret, clamp, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -23,6 +23,7 @@ import {
 import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
+import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
 
@@ -245,6 +246,15 @@ export function crewNames(g: Game, c: Comm, size: number): string[] {
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
 }
 
+/** 이번 정차에 실제로 나가는 명단: 작업조 + 붙는 사람(CREW_EXTRAS). 인원 셈(crewSize)과 위험 굴림은 작업조만 본다. */
+export function stopCrew(g: Game): string[] {
+  const stop = g.stop;
+  if (!stop) return [];
+  const names = crewNames(g, stop.crewComm, stop.crewSize);
+  for (const n of CREW_EXTRAS.flatMap(f => f(g))) if (!names.includes(n)) names.push(n);
+  return names;
+}
+
 function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
   const need: Partial<Record<LootKey, number>> = { coal: g.coal / 252, food: g.food / 240 };
   if (g.med < 8) need.medicine = g.med / 20;
@@ -444,7 +454,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
   const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
   if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
-  darkStop(g, !!(go && stop.target), go && stop.target ? crewNames(g, stop.crewComm, stop.crewSize) : []);
+  darkStop(g, !!(go && stop.target), go && stop.target ? stopCrew(g) : []);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);

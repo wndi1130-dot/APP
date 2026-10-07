@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, politicsLines, riskView, stopScene, viewCard,
+  COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, stopCrew, politicsLines, riskView, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -37,7 +37,7 @@ function stopCard(view: View): HTMLElement | null {
         r.notes.map(n => h('li', { class: 'sub' }, shortText(n)))),
       h('button', { class: 'btn', 'data-action': 'stop-seen' }, g.cards.length ? `덮는다 (서류 ${g.cards.length}장 더)` : '덮는다'));
   }
-  const names = crewNames(g, stop.crewComm, stop.crewSize);
+  const names = stopCrew(g);
   const promises = COMMS.map(c => g.comms[c].promise ? { c, p: g.comms[c].promise! } : null).filter(Boolean) as { c: Comm; p: NonNullable<typeof g.comms.tail.promise> }[];
   const stopPromises = promises.filter(x => x.p.kind === 'fetch' || x.p.cond.kind === 'target' || x.p.cond.kind === 'skip_dispatch');
   const maxW = Math.max(...LOOT_KEYS.map(k => place.loot[k]));

@@ -3,7 +3,7 @@ import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { familyOf } from '../people';
 import { offend } from '../politics';
-import { clamp, journal } from '../state';
+import { clamp, CREW_EXTRAS, journal } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
 import { caseById, caught, coverUp, exposeOrderLines, openCase, settleTruth } from './cases';
@@ -15,7 +15,7 @@ import {
 import type { Order, OrderExe, OrderMethod, OrderWhy } from './state';
 
 // 4.6 암살 명령, 4.7 정차를 이용한 죽음. 메뉴가 아니라 상황 카드의 '조용히 처리한다'에서만 열린다(1.3).
-// 판당 두 번. 대상은 그 카드에 나온 사람뿐이다. 성공해도 수사가 열리고(사고로 꾸민 일은 들킬 때만), 실행자는 평생 약점을 쥔다.
+// 판당 두 번. 대상은 그 카드에 나온 사람뿐이다. 성공해도 늘 수사가 열리고(사고로 꾸며도 사람이 죽었다, 4.6), 실행자는 평생 약점을 쥔다.
 
 export const EXE_BONUS: Record<OrderExe, number> = { guard: 0.1, rival: 0.1, bound: -0.1 };
 export const METHOD: Record<OrderMethod, { bonus: number; caught: number }> = {
@@ -117,15 +117,18 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
   const o = d.order;
   if (!o || !o.method || !o.exeId) return;
   if ((where === 'stop') !== (o.method === 'stop')) return;
-  d.order = null;
   const name = nameOf(g, o.target);
   const exe = o.exeId;
   if (!alive(g, o.target) || !alive(g, exe)) {
+    d.order = null;
     journal(g, `${name}을(를) 두고 한 말은 일이 되지 않았다.`, 'dark');
     // 입을 막으려던 사람이 이미 없으면 진실도 묻히고, 실행자가 없어 일이 안 됐으면 그 사람이 말한다.
     if (o.ref) { const line = settleTruth(g, o.ref, alive(g, o.target)); if (line) journal(g, line, 'bad'); }
     return;
   }
+  // 정차 암살은 둘이 같은 작업조로 나가야 한다(J09 5). 아니면 명령은 다음 정차를 기다린다.
+  if (where === 'stop' && !(witnesses.includes(name) && witnesses.includes(nameOf(g, exe)))) return;
+  d.order = null;
   const tc = commOf(g, o.target);
   const ok = dr(g) < successP(g, o);
   d.executors.push({ id: exe, comm: commOf(g, exe), seg: g.seg });
@@ -142,21 +145,21 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
       s.rel = clamp(s.rel - 10, -100, 100);
       s.fervor = Math.min(3, s.fervor + 1);
     }
-    // 사고·정차로 꾸민 일은 들킬 때만 수사가 열린다. 칸 안 밤일은 늘 열린다(사람이 칸 안에서 죽었다).
+    // 수사는 늘 열린다(4.6, J09 2번). 사고·정차로 꾸며 들키지 않으면 '사고라고 적혔다'로 시작하고 실행자 단서 없이 연다.
+    // 들키면 실패 갈래처럼 그 자리에서 붙잡히고, 붙잡힌 실행자는 70%로 열차장을 댄다(J09 11번).
     const detected = dr(g) < METHOD[o.method].caught;
     const place = o.method === 'stop' ? '정차' : o.method === 'accident' ? '탄수차 승강대' : '통로';
     scene(g, 'order', 4, `${g.seg}구간, ${place}에서 ${COMM_NAME[tc]} ${name}의 죽음을 명령했다.`, [o.target], witnesses.length ? witnesses : undefined);
-    if (o.method !== 'night' && !detected) {
-      journal(g, o.method === 'stop' ? `${name}이(가) 정차에서 돌아오지 않았다. 사고라고 적혔다.` : `${name}이(가) ${place}에서 떨어졌다. 사고라고 적혔다.`, 'dark');
-      darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, text: 'hidden', ...(fam ? { vals: { kin: fam } } : {}) }, false);
-      return;
-    }
+    const hidden = o.method !== 'night' && !detected;
+    if (hidden) journal(g, o.method === 'stop' ? `${name}이(가) 정차에서 돌아오지 않았다. 사고라고 적혔다.` : `${name}이(가) ${place}에서 떨어졌다. 사고라고 적혔다.`, 'dark');
     const c = openCase(g, { kind: 'order', culprit: exe, victimComm: tc, victim: o.target, dead: true, clock: B.clockDeath, where: place, own: true });
+    let line = '';
     if (detected) {
-      const s = c.sus.find(x => x.culprit);
-      if (s) s.clues.push({ kind: 'witness', truth: true, line: `${nameOf(g, s.id)}이(가) 그 시각 ${place} 쪽에 있었다는 사람이 있다.`, seg: g.seg });
+      caught(g, c);
+      line = `${nameOf(g, exe)}이(가) 그 자리에서 붙잡혔다.`;
+      if (dr(g) < B.orderNamesChief) line += ` ${exposeOrderLines(g, c).join(' ')}`;
     }
-    darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, n: c.id, ...(fam ? { vals: { kin: fam } } : {}) });
+    darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, n: c.id, text: hidden ? 'hidden' : line, ...(fam ? { vals: { kin: fam } } : {}) });
     return;
   }
   // 실패: 대상이 다치고 수사가 열린다. 실행자 50%로 붙잡히고, 붙잡히면 70%로 열차장을 댄다.
@@ -241,3 +244,11 @@ export function answerThreat(g: Game, id: string, how: 'give' | 'stand' | 'confe
   scene(g, 'exposed', 4, `${g.seg}구간, ${name}이(가) 열차장이 시킨 일을 식당칸에서 말했다.`, [id]);
   return `${name}이(가) 식당칸에서 말했다. 열차장이 시켰다고.`;
 }
+
+// 정차로 정한 명령이면 실행자와 대상이 그 정차 작업조 명단에 붙는다(명단 화면에 이름이 보인다). 먼저 다녀온 정찰조는 다시 안 나간다.
+CREW_EXTRAS.push(g => {
+  const o = g.dark?.order;
+  if (!o || o.method !== 'stop' || !o.exeId) return [];
+  const scouts = g.stop?.scoutReport?.names ?? [];
+  return [o.exeId, o.target].filter(id => alive(g, id)).map(id => nameOf(g, id)).filter(n => !scouts.includes(n));
+});

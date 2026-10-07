@@ -43,7 +43,7 @@ function checkPopulation(data: Generated): void {
   assert.equal(profiles.length, 200);
   const byId = new Map(profiles.map((person) => [person.id, person]));
   assert.equal(byId.size, 200);
-  const fields = ['id', 'name', 'name_original', 'gender', 'age', 'community', 'origin_tag', 'boarding', 'hometown', 'like', 'dislike', 'line', 'state'].sort();
+  const fields = ['id', 'name', 'name_original', 'name_lang', 'gender', 'age', 'community', 'origin_tag', 'boarding', 'hometown', 'like', 'dislike', 'line', 'state'].sort();
   for (const [index, person] of profiles.entries()) {
     assert.deepEqual(Object.keys(person).sort(), fields);
     assert(person.gender === undefined || person.gender === 'male' || person.gender === 'female');
@@ -55,6 +55,7 @@ function checkPopulation(data: Generated): void {
     assert(['depot', 'bought', 'force', 'rescue', 'refugee', 'born'].includes(person.boarding));
     for (const text of [person.name, person.hometown, person.like, person.dislike]) assert.match(text, /[가-힣]/u);
     assert(person.name_original.trim());
+    assert(['pl', 'de', 'cz', 'uk', 'sk', 'hu', 'lt'].includes(person.name_lang));
     assert.equal(person.line, '');
     assert.equal(person.state, 'alive');
     assert([...person.like].length <= 15 && [...person.dislike].length <= 15);
@@ -101,6 +102,7 @@ function checkPopulation(data: Generated): void {
     if (family.children.length === 2) siblingFamilies++;
     const ids = [...family.parents, ...family.children];
     assert.equal(new Set(ids).size, ids.length);
+    assert.equal(new Set(ids.map((id) => byId.get(id)?.name_lang)).size, 1, `${family.id}: 가족의 이름 풀 언어가 다르다`);
     for (const id of ids) {
       const person = byId.get(id);
       assert(person, `존재하지 않는 가족 구성원: ${id}`);
@@ -288,6 +290,7 @@ test('피난민의 이름·성·고향은 한 언어로 묶이고 헝가리 이�
       const language = person.name_original.slice(0, 2) as OtherLanguage;
       const pattern = language === 'hu' ? /^huFamily\d+ huGiven\d+$/u : new RegExp(`^${language}Given\\d+ ${language}Family\\d+$`, 'u');
       assert.match(person.name_original, pattern);
+      assert.equal(person.name_lang, language, `${person.name_original}: 이름 풀 언어`);
       assert(hometownOf(data, person.id).endsWith(`, ${OTHER_COUNTRIES[language]}`), `${person.name_original}: ${hometownOf(data, person.id)}`);
     }
   } finally { cleanScratch(root); }

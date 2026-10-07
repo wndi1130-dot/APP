@@ -9,7 +9,7 @@ import {
 import { PROMPT_VERSION, buildProfileLineRequest } from '../tools/gen_text_prompt.ts';
 
 const profile = (overrides: Partial<Profile> = {}): Profile => ({
-  id: 'p_001', name: '헨리크 마주레크', name_original: 'Henryk Mazurek', gender: 'male', age: 67, community: 'engine',
+  id: 'p_001', name: '헨리크 마주레크', name_original: 'Henryk Mazurek', name_lang: 'pl', gender: 'male', age: 67, community: 'engine',
   origin_tag: 'original', boarding: 'depot', hometown: '볼슈틴, 폴란드', like: '석탄 타는 냄새', dislike: '찬 침상',
   line: '', state: 'alive', ...overrides,
 });
