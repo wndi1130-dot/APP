@@ -231,6 +231,18 @@ Sheet on a plain mid-grey studio background with a faint floor grid and soft eve
 Top row: six people in their thirties: a thin man, an average man, a sturdy man, a thin woman, an average woman, a sturdy woman. Middle row: the same six builds in their forties. Bottom row: the same six builds aged fifty and over, with greying hair, stooped shoulders and slower stances. Below the grid, a short extra row: the average man and the average woman again, gaunt and starving with hollow cheeks, loose clothes and hunched posture; then one person with an arm in a sling, one leaning on a crutch with a bandaged leg, and one with a bandaged head. Everyone wears ragged, mismatched winter layers; their jobs show only through tools and clothing, never insignia.
 ```
 
+## 웹 레퍼런스 수집 r5에서 이 주문에 쓸 것 (13:55)
+
+출처: 가지 `research/reference-harvest-20261007`의 `docs/research/reference_harvest_20261007/r5_art_screens.md`(40개, 화면 스레드와 같이 본다). 링크만 쓰고 그림은 받지 않는다. 라이선스는 쓰기 전에 다시 확인한다.
+
+- **객차 모양과 칸 안**: 6(라트비아 3등 객차), 7·9(네덜란드 목조 객차), 10·11(드레스덴 3등 객차 난로, 짐받이), 8(짐받이·벽 패널 도면). T2·T4a·F1의 난로, 짐받이, 나무 의자 기준으로 본다. 10~12는 CC BY-NC-SA라 상업 이용은 따로 묻는다.
+- **화차**: 12(수하물차 도면), 13(밀폐형 화차). 구조만 보고, 사람 배치 자료로는 쓰지 않는다.
+- **누더기 옷**: 1~5(재활용 천 수선, 민간복 주름, 방한복). F3와 실제 사람 에셋의 '부위별 덧댐 규칙'(r5 2절 3번)으로 이어 간다.
+- **눈·성에**: 22·23(Godot 셰이더, 코드 CC0), 24·25(CC0 텍스처). 칸 지붕 눈 층, 창 성에, 냉동칸 성에에 쓴다.
+- **피와 잔해 표현의 제약**: 38(Godot Mobile 렌더러는 메시당 데칼 8개). T7 이야기 단계의 피·잔해는 데칼을 쌓지 말고 칸 텍스처 층을 바꿔 끼우는 방식으로 만든다. 39·40은 피 흔적 데칼 참고지만 39는 폰 비용 검증이 먼저다.
+- **조명**: 29(LightmapGI). 칸 순서 바꾸기(내정 4.5)와 단면 벽 숨김이 있어서 칸 안 조명을 굽기 전에 칸 단위로 구울지 확인해야 한다.
+- r5 2절 할 일 가운데 이 스레드 몫: 1(단면과 탑뷰에서 같은 사람이 알아보이는지), 3(수선 규칙과 대표 의상 셋), 6(객차 생활 모듈과 빈 화물 모듈 구분, T1·T4로 시작함), 7(단면에서 짐받이·난로가 사람을 가리는지). 8·10·11·16·17은 화면 스레드, 18은 S2 성능 시험 몫이다.
+
 ## 받은 뒤 볼 것
 
 1. T1 부품만으로 T2·T3 칸이 다 만들어질 것 같은가. 몸통이 셋으로 모자라면 넷째(낡은 짐차·우편차)를 더한다.
