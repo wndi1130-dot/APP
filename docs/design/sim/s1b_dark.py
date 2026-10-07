@@ -130,6 +130,7 @@ Q = dict(
     threat_tension=1, threat_fear=2,   # 위협(사다리 1)
     assault_tension=3,    # 폭행(사다리 3)
     assn_tension=3,       # 암살(사다리 4)
+    ml_guard_party=1,     # 1이면 경비대가 맞선 한쪽이어도 계엄을 선포할 수 있다(편든 계엄: 상대 적의 +2, 끼지 않은 칸 −3, 수단 5). 0이면 3판처럼 잠긴다
     brink_seg_tension=1,  # 내전 직전 구간마다
     crowd=1,              # 0이면 군중 시계가 없다(사건은 수사만)
     sab_on=1,             # 0이면 사보타주가 물자·사람에 손해를 주지 않는다(사다리 칸은 그대로)
@@ -1162,6 +1163,18 @@ class DarkRun(A.Run):
             self.tension += 10
         elif door == 'council':
             self.tension += 3
+        elif 'guard' in pair:  # 편든 계엄: 경비대가 맞선 한쪽이다(5.5, 4판)
+            other = [c for c in pair if c != 'guard']
+            for c in other:
+                self.offend(c); self.offend(c)
+            for c in COMMS:
+                if c not in pair:
+                    self.rel[c] = clamp(self.rel[c] - 3, -100, 100)
+            S['ml_means'] += 1; S['ml_partisan'] += 1
+            self.tension += 5
+            if door == 'captain':
+                self.trust -= 10
+                self.coup_line_now = 14
         else:  # 내전 직전·내전에서 선포, 경비대장의 계엄
             for c in pair:
                 self.offend(c)
@@ -1211,7 +1224,9 @@ class DarkRun(A.Run):
         self.tension += Q['brink_seg_tension']
         S['sign_brink'] += 1
         d = self.dark
-        guard_ok = self.rel['guard'] > -15 and 'guard' not in b['pair']
+        guard_ok = self.rel['guard'] > -15 and (Q['ml_guard_party'] or 'guard' not in b['pair'])
+        if guard_ok and not self.ml:
+            S['ml_door_open_brink'] += 1
         bigger, smaller = (a, c) if SEATS[a] >= SEATS[c] else (c, a)
         if d == 'tyrant' and not self.ml and guard_ok:
             self.declare_ml('brink', b['pair']); S['brink_end_ml'] += 1
@@ -1367,7 +1382,7 @@ class DarkRun(A.Run):
         d = self.dark
         g = self.rel['guard']
         locked = g <= -40
-        if d == 'tyrant' and not self.ml and g > -40 and 'guard' not in w['pair']:
+        if d == 'tyrant' and not self.ml and g > -40 and (Q['ml_guard_party'] or 'guard' not in w['pair']):
             self.declare_ml('war', w['pair']); w['end_next'] = 'ml'; return
         if d in ('tyrant', 'schemer_plus') and not locked:
             w['end_next'] = 'help'; w['help'] = (bigger, smaller); S['war_help'] += 1; return
