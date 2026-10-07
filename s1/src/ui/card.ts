@@ -94,7 +94,7 @@ export function cardSheet(view: View): HTMLElement | null {
         class: cx('choice', ch.disabled && 'is-off'), 'data-action': 'choose', 'data-uid': card.uid, 'data-index': i, disabled: !!ch.disabled,
       },
         h('b', { class: 'choice__n num' }, i + 1),
-        h('span', { class: 'choice__label' }, shortText(ch.label), ch.witness ? icon('witness', 'icon icon--witness') : null),
+        h('span', { class: 'choice__label' }, shortText(ch.say ?? ch.label), ch.witness ? icon('witness', 'icon icon--witness') : null),
         h('span', { class: 'choice__meta' },
           costs.map(x => h('span', { class: 'cost num' }, x)),
           pol.map(p => h('span', { class: `pol pol--${p.tone}` }, p.text)),

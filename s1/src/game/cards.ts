@@ -17,7 +17,10 @@ export type Eff =
   | { t: 'grudge'; c: Comm };
 
 export interface Choice {
+  /** 무엇을 하는지 짧게. 일지에 남는다 */
   label: string;
+  /** 카드에 보이는 열차장의 말(프로스트펑크식 선택지, 2026-10-07 사용자). 없으면 label을 보인다 */
+  say?: string;
   effs: Eff[];
   /** 효과 말고 따로 처리하는 일 */
   special?: string;
@@ -110,9 +113,9 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '꺼진 난로', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: '꼬리칸 난로가 이틀째 꺼져 있다. 아이들 손끝이 하얗다. 앞칸엔 난로가 두 개다.',
       choices: [
-        { label: '앞칸 연료를 덜어 온다', effs: [{ t: 'base', c: 'tail', i: 0, v: 5 }, { t: 'base', c: 'front', i: 0, v: -5 }, { t: 'rel', c: 'tail', v: 5 }, { t: 'rel', c: 'front', v: -8 }] },
-        { label: '담요를 나눈다', effs: [{ t: 'lux', v: -1 }, { t: 'rel', c: 'tail', v: 4 }] },
-        { label: '참으라 한다', effs: [{ t: 'rel', c: 'tail', v: -5 }, { t: 'tension', v: 2 }] },
+        { label: '앞칸 연료를 덜어 온다', say: '난로 두 개는 사치다. 하나를 꼬리칸으로 옮겨라!', effs: [{ t: 'base', c: 'tail', i: 0, v: 5 }, { t: 'base', c: 'front', i: 0, v: -5 }, { t: 'rel', c: 'tail', v: 5 }, { t: 'rel', c: 'front', v: -8 }] },
+        { label: '담요를 나눈다', say: '창고 담요를 풀어라. 아이들부터 덮어 줘라.', effs: [{ t: 'lux', v: -1 }, { t: 'rel', c: 'tail', v: 4 }] },
+        { label: '참으라 한다', say: '모두가 춥다. 꼬리칸만 추운 게 아니다.', effs: [{ t: 'rel', c: 'tail', v: -5 }, { t: 'tension', v: 2 }] },
       ],
     }),
   },
@@ -122,9 +125,9 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '자리 싸움', speaker: leader(g, 'guard'), focus: 'tail', required: true,
       body: '꼬리칸에서 누울 자리를 두고 주먹이 오갔다. 한 사람이 머리를 다쳤다.',
       choices: [
-        { label: '경비대가 말린다', effs: [{ t: 'rel', c: 'tail', v: -3 }, { t: 'tension', v: -3 }, { t: 'fear', v: 2 }] },
-        { label: '칸을 넓혀 준다', effs: [{ t: 'base', c: 'tail', i: 2, v: -5 }, { t: 'base', c: 'front', i: 2, v: 5 }, { t: 'rel', c: 'front', v: -5 }, { t: 'rel', c: 'tail', v: 3 }] },
-        { label: '내버려 둔다', effs: [{ t: 'injured', v: 1 }, { t: 'tension', v: 4 }] },
+        { label: '경비대가 말린다', say: '경비대, 떼어 놓아라! 또 주먹을 쓰면 묶어 둬라.', effs: [{ t: 'rel', c: 'tail', v: -3 }, { t: 'tension', v: -3 }, { t: 'fear', v: 2 }] },
+        { label: '칸을 넓혀 준다', say: '앞칸 짐을 치워라. 꼬리칸에도 누울 자리는 있어야 한다.', effs: [{ t: 'base', c: 'tail', i: 2, v: -5 }, { t: 'base', c: 'front', i: 2, v: 5 }, { t: 'rel', c: 'front', v: -5 }, { t: 'rel', c: 'tail', v: 3 }] },
+        { label: '내버려 둔다', say: '자리는 저들끼리 정하게 둬라.', effs: [{ t: 'injured', v: 1 }, { t: 'tension', v: 4 }] },
       ],
     }),
   },
@@ -134,9 +137,9 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '앞칸의 커튼', speaker: leader(g, 'tail'), focus: 'front', required: true,
       body: '앞칸 창에 커튼이 걸렸다. 식사 시간마다 닫힌다. 꼬리칸이 그 앞에 줄을 섰다.',
       choices: [
-        { label: '커튼을 걷게 한다', effs: [{ t: 'rel', c: 'front', v: -6 }, { t: 'rel', c: 'tail', v: 4 }] },
-        { label: '앞칸 편을 든다', effs: [{ t: 'rel', c: 'tail', v: -4 }, { t: 'rel', c: 'front', v: 4 }] },
-        { label: '대표 둘을 부른다', effs: [{ t: 'lux', v: -1 }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
+        { label: '커튼을 걷게 한다', say: '커튼을 걷어라. 이 열차에 숨어서 먹는 칸은 없다.', effs: [{ t: 'rel', c: 'front', v: -6 }, { t: 'rel', c: 'tail', v: 4 }] },
+        { label: '앞칸 편을 든다', say: '앞칸 식탁은 앞칸 일이다. 줄을 풀어라.', effs: [{ t: 'rel', c: 'tail', v: -4 }, { t: 'rel', c: 'front', v: 4 }] },
+        { label: '대표 둘을 부른다', say: '두 대표를 불러라. 한 식탁에 앉혀 보겠다.', effs: [{ t: 'lux', v: -1 }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
       ],
     }),
   },
@@ -146,9 +149,9 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: '급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 다음 급수탑까지는 멀다.',
       choices: [
-        { label: '불을 피워 녹인다', effs: [{ t: 'coal', v: -3 }] },
-        { label: '꼬리칸이 눈을 녹인다', effs: [{ t: 'base', c: 'tail', i: 3, v: 5 }, { t: 'rel', c: 'tail', v: -4 }] },
-        { label: '다음 역까지 버틴다', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -4 }] },
+        { label: '불을 피워 녹인다', say: '석탄을 태워서라도 관을 녹여라!', effs: [{ t: 'coal', v: -3 }] },
+        { label: '꼬리칸이 눈을 녹인다', say: '꼬리칸은 양동이를 들어라. 눈을 퍼다 녹인다.', effs: [{ t: 'base', c: 'tail', i: 3, v: 5 }, { t: 'rel', c: 'tail', v: -4 }] },
+        { label: '다음 역까지 버틴다', say: '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -4 }] },
       ],
     }),
   },
@@ -158,9 +161,9 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.',
       choices: [
-        { label: '모든 칸이 나눠 판다', effs: [{ t: 'food', v: -3 }, { t: 'rel', c: 'front', v: -3 }, { t: 'tension', v: -1 }] },
-        { label: '꼬리칸이 판다', effs: [{ t: 'rel', c: 'tail', v: -5 }] },
-        { label: '기관차로 밀어붙인다', effs: [{ t: 'coal', v: -4 }, { t: 'base', c: 'engine', i: 3, v: 4 }] },
+        { label: '모든 칸이 나눠 판다', say: '모든 칸이 삽을 든다. 앞칸도 예외는 없다!', effs: [{ t: 'food', v: -3 }, { t: 'rel', c: 'front', v: -3 }, { t: 'tension', v: -1 }] },
+        { label: '꼬리칸이 판다', say: '꼬리칸, 삽을 들어라. 손이 제일 많은 칸이다.', effs: [{ t: 'rel', c: 'tail', v: -5 }] },
+        { label: '기관차로 밀어붙인다', say: '화부들, 불을 올려라. 밀고 나간다!', effs: [{ t: 'coal', v: -4 }, { t: 'base', c: 'engine', i: 3, v: 4 }] },
       ],
     }),
   },
@@ -170,8 +173,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '측선의 탄수차', focus: 'engine', required: true,
       body: '측선에 버려진 탄수차가 서 있다. 안에 석탄이 보인다. 주위가 너무 조용하다.',
       choices: [
-        { label: '석탄을 옮긴다', effs: [{ t: 'coal', v: 8 }], special: 'risk_injury' },
-        { label: '지나친다', effs: [] },
+        { label: '석탄을 옮긴다', say: '조용하면 좋은 거다. 다 옮겨라, 서둘러!', effs: [{ t: 'coal', v: 8 }], special: 'risk_injury' },
+        { label: '지나친다', say: '너무 조용하다. 손대지 말고 지나간다.', effs: [] },
       ],
     }),
   },
@@ -181,8 +184,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '아이 열병', speaker: leader(g, 'medtech'), focus: 'medtech', required: true,
       body: '꼬리칸 아이 셋이 열이 난다. 해열제는 의무칸 상자에 있다.',
       choices: [
-        { label: '의약품을 쓴다', effs: [{ t: 'med', v: -2 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: 'medtech', v: 2 }] },
-        { label: '아껴 둔다', effs: [{ t: 'rel', c: 'tail', v: -4 }, { t: 'rel', c: 'medtech', v: -2 }] },
+        { label: '의약품을 쓴다', say: '의약품은 약자의 것이다. 아이들에게 먼저 써라!', effs: [{ t: 'med', v: -2 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: 'medtech', v: 2 }] },
+        { label: '아껴 둔다', say: '애들 열은 금방 내린다. 엄살 부리지 말라고 전해라!', effs: [{ t: 'rel', c: 'tail', v: -4 }, { t: 'rel', c: 'medtech', v: -2 }] },
       ],
     }),
   },
@@ -192,8 +195,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '배급 줄', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: '배급 줄 끝에서 빵이 떨어졌다. 뒤에 선 사람들이 소리친다.',
       choices: [
-        { label: '다시 나눈다', effs: [{ t: 'food', v: -4 }, { t: 'rel', c: 'tail', v: 3 }] },
-        { label: '경비대를 세운다', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c: 'tail', v: -3 }, { t: 'rel', c: 'guard', v: 2 }] },
+        { label: '다시 나눈다', say: '솥을 다시 열어라. 줄 끝까지 한 그릇씩 간다.', effs: [{ t: 'food', v: -4 }, { t: 'rel', c: 'tail', v: 3 }] },
+        { label: '경비대를 세운다', say: '경비대를 줄 옆에 세워라. 질서가 먼저다.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c: 'tail', v: -3 }, { t: 'rel', c: 'guard', v: 2 }] },
       ],
     }),
   },
@@ -203,9 +206,9 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '동상', speaker: leader(g, 'guard'), focus: 'guard', required: true,
       body: '지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.',
       choices: [
-        { label: '경비대 난방을 올린다', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
-        { label: '경계를 줄인다', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: 2 }] },
-        { label: '그대로 선다', effs: [{ t: 'rel', c: 'guard', v: -5 }, { t: 'injured', v: 1 }] },
+        { label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
+        { label: '경계를 줄인다', say: '지붕 교대를 줄여라. 밤에는 창문으로 본다.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: 2 }] },
+        { label: '그대로 선다', say: '경계는 줄이지 않는다. 장갑을 두 겹 껴라.', effs: [{ t: 'rel', c: 'guard', v: -5 }, { t: 'injured', v: 1 }] },
       ],
     }),
   },
@@ -236,9 +239,9 @@ export function viewCard(g: Game, card: Card): CardView {
           title: '화부 교대', speaker: leader(g, 'engine'), focus: 'engine', required: true,
           body: `화부들이 교대 없이 삽질을 한 지 오래다. 위험 노출 ${Math.round(ex)}. 교대를 늘려 달라고 한다.`,
           choices: withAfford(g, [
-            { label: '교대를 늘린다', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 3 }] },
-            { label: '견습생을 붙인다', effs: [{ t: 'base', c: 'engine', i: 3, v: -5 }, { t: 'base', c: 'tail', i: 3, v: 3 }, { t: 'rel', c: 'tail', v: -2 }] },
-            { label: '거절한다', effs: [{ t: 'fervor', c: 'engine', v: 1 }, { t: 'rel', c: 'engine', v: -P.refuseRel }] },
+            { label: '교대를 늘린다', say: '교대를 늘려라. 석탄보다 화부가 먼저 쓰러지면 끝이다.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 3 }] },
+            { label: '견습생을 붙인다', say: '꼬리칸에서 젊은 손을 데려가라. 삽질은 배우면 된다.', effs: [{ t: 'base', c: 'engine', i: 3, v: -5 }, { t: 'base', c: 'tail', i: 3, v: 3 }, { t: 'rel', c: 'tail', v: -2 }] },
+            { label: '거절한다', say: '보일러는 쉬지 않는다. 화부도 마찬가지다.', effs: [{ t: 'fervor', c: 'engine', v: 1 }, { t: 'rel', c: 'engine', v: -P.refuseRel }] },
           ]),
         };
       }
@@ -250,8 +253,9 @@ export function viewCard(g: Game, card: Card): CardView {
           ? `${COMM_NAME[c]} 온기 ${Math.round(w)}. 밤마다 사람들이 서로 붙어 잔다. 난방을 올려 달라고 한다.`
           : `${COMM_NAME[c]} 배급 ${Math.round(r)}. 그릇이 반만 찬다. 배급을 올려 달라고 한다.`,
         choices: withAfford(g, [
-          { label: which === 'heat' ? '난방을 올린다' : '배급을 올린다', effs: [{ t: 'lever', c, which, v: 1 }, { t: 'rel', c, v: 2 }] },
-          { label: '거절한다', effs: [{ t: 'fervor', c, v: 1 }, { t: 'rel', c, v: -P.refuseRel }] },
+          { label: which === 'heat' ? '난방을 올린다' : '배급을 올린다',
+            say: which === 'heat' ? `${COMM_NAME[c]} 난로를 올려라. 밤에 얼어 죽는 사람은 없어야 한다.` : `${COMM_NAME[c]} 그릇을 채워라. 빈 그릇으로는 일 못 한다.`, effs: [{ t: 'lever', c, which, v: 1 }, { t: 'rel', c, v: 2 }] },
+          { label: '거절한다', say: which === 'heat' ? '다들 붙어 자기는 마찬가지다. 지금은 안 된다.' : '모두 반 그릇이다. 더 나올 데가 없다.', effs: [{ t: 'fervor', c, v: 1 }, { t: 'rel', c, v: -P.refuseRel }] },
         ]),
       };
     }
@@ -260,8 +264,8 @@ export function viewCard(g: Game, card: Card): CardView {
       return {
         title: '사적인 부탁', speaker: leader(g, c), focus: c, required: true, body: fav.body,
         choices: withAfford(g, [
-          { label: '들어준다', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
-          { label: '거절한다', effs: [{ t: 'rel', c, v: -3 }] },
+          { label: '들어준다', say: '들어주지. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
+          { label: '거절한다', say: '사사로운 부탁은 받지 않는다.', effs: [{ t: 'rel', c, v: -3 }] },
         ]),
       };
     }
@@ -271,9 +275,9 @@ export function viewCard(g: Game, card: Card): CardView {
         title: '파업 경고', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: `"다음 역까지 답이 없으면 불을 끄겠다." 기관실 위험 노출 ${Math.round(ex)}, 배급 ${Math.round(situation(g, 'engine')[1])}.`,
         choices: withAfford(g, [
-          { label: '교대를 늘린다', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 6 }] },
-          { label: '기관실 배급 +1', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'rel', c: 'engine', v: 5 }, { t: 'rel', c: 'medtech', v: -2 }] },
-          { label: '듣기만 한다', effs: [{ t: 'rel', c: 'engine', v: -3 }] },
+          { label: '교대를 늘린다', say: '교대를 늘리겠다. 그러니 불은 끄지 마라.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 6 }] },
+          { label: '기관실 배급 +1', say: '기관실 그릇을 채워라. 불 지키는 사람이 굶으면 안 된다.', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'rel', c: 'engine', v: 5 }, { t: 'rel', c: 'medtech', v: -2 }] },
+          { label: '듣기만 한다', say: '불을 끄겠다고? 그럼 다 같이 얼어 죽는 거다.', effs: [{ t: 'rel', c: 'engine', v: -3 }] },
         ]),
       };
     }
@@ -282,10 +286,10 @@ export function viewCard(g: Game, card: Card): CardView {
         title: '파업', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: '보일러 불이 낮게 깔렸다. 열차가 선다. 기관실 문 앞에 화부들이 앉아 있다.',
         choices: withAfford(g, [
-          { label: '요구를 들어준다', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'fervor', c: 'medtech', v: 1 }, { t: 'rel', c: 'engine', v: 12 }] },
-          { label: '교대를 늘린다', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'rel', c: 'engine', v: 8 }] },
-          { label: '수석 기관사를 산다', effs: [{ t: 'lux', v: -3 }], special: 'strike_bribe' },
-          { label: '버틴다', effs: [{ t: 'tension', v: 3 }] },
+          { label: '요구를 들어준다', say: '요구를 받아들인다. 당장 불을 올려라!', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'fervor', c: 'medtech', v: 1 }, { t: 'rel', c: 'engine', v: 12 }] },
+          { label: '교대를 늘린다', say: '교대를 늘린다. 그러니 문 앞에서 일어나라.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'rel', c: 'engine', v: 8 }] },
+          { label: '수석 기관사를 산다', say: '수석 기관사를 따로 불러라. 줄 게 있다.', effs: [{ t: 'lux', v: -3 }], special: 'strike_bribe' },
+          { label: '버틴다', say: '협박에는 굽히지 않는다. 앉아 있고 싶으면 계속 앉아 있어라.', effs: [{ t: 'tension', v: 3 }] },
         ]),
       };
     }
@@ -295,11 +299,11 @@ export function viewCard(g: Game, card: Card): CardView {
         title: '부상자', speaker: { name: card.who ?? '수색대', role: '수색대' }, required: true,
         body: ban ? '역사 안에 다친 사람이 있다. 외부인 받지 않기 법이 있다.' : '역사 안에 다친 사람 둘이 있다. 데려가 달라고 한다. 꼬리칸은 이미 꽉 찼다.',
         choices: withAfford(g, ban ? [
-          { label: '법대로 두고 온다', effs: [{ t: 'trust', v: -1 }], witness: true },
+          { label: '법대로 두고 온다', say: '법은 법이다. 두고 와라.', effs: [{ t: 'trust', v: -1 }], witness: true },
         ] : [
-          { label: '데려온다', effs: [{ t: 'pop', c: 'tail', v: 2 }, { t: 'base', c: 'tail', i: 2, v: 3 }, { t: 'injured', v: 1 }, { t: 'rel', c: 'medtech', v: 3 }], witness: true },
-          { label: '물자만 받는다', effs: [{ t: 'food', v: 3 }, { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
-          { label: '두고 온다', effs: [{ t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
+          { label: '데려온다', say: '자리는 만들면 된다. 데려와라!', effs: [{ t: 'pop', c: 'tail', v: 2 }, { t: 'base', c: 'tail', i: 2, v: 3 }, { t: 'injured', v: 1 }, { t: 'rel', c: 'medtech', v: 3 }], witness: true },
+          { label: '물자만 받는다', say: '가진 식량만 받아라. 사람은 태울 수 없다.', effs: [{ t: 'food', v: 3 }, { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
+          { label: '두고 온다', say: '꼬리칸은 꽉 찼다. 문을 닫아라.', effs: [{ t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
         ]),
       };
     }
@@ -308,9 +312,9 @@ export function viewCard(g: Game, card: Card): CardView {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true,
         body: `${card.who ?? '대원'}이(가) 팔을 물렸다. 감염 창이 닫히기 전에 잘라야 한다.`,
         choices: withAfford(g, [
-          { label: '팔을 자른다', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
-          { label: '숨겨 준다', effs: [], special: 'hide_bite', witness: true },
-          { label: '두고 온다', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
+          { label: '팔을 자른다', say: '지금 잘라라! 망설이면 늦는다.', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
+          { label: '숨겨 준다', say: '아무도 못 본 거다. 붕대로 감아서 태워라.', effs: [], special: 'hide_bite', witness: true },
+          { label: '두고 온다', say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
         ]),
       };
     }
@@ -319,9 +323,9 @@ export function viewCard(g: Game, card: Card): CardView {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
         body: '칸마다 사람들이 모였다. 문이 잠기기 시작했다. 오늘 밤을 넘기지 못할 수도 있다.',
         choices: withAfford(g, [
-          { label: '경비대를 푼다', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
-          { label: '창고를 연다', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'tension_reset' },
-          { label: '아무것도 안 한다', effs: [], special: 'revolt' },
+          { label: '경비대를 푼다', say: '경비대를 풀어라! 문을 잠그는 자는 끌어내라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
+          { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'tension_reset' },
+          { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'revolt' },
         ]),
       };
     }

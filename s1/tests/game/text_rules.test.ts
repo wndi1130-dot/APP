@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, LAWS, makeDeal, PLACES,
   RELATION_LINES, SCENE_LINES,
-  primaryAction, resolveStop, SECRET_POOL, toolStatus, viewCard,
+  primaryAction, resolveStop, SECRET_POOL, toolStatus, TRAVEL_EVENTS, viewCard,
 } from '../../src/game';
+import type { Card } from '../../src/game';
 
 // 화면에 나오는 고정 글과 실제로 한 판 돌며 나온 글(서류 카드, 일지)을 content_rules.json의 오류 규칙으로 검사한다.
 // 경고 규칙(상투어 등)은 사람이 본다.
@@ -33,7 +34,7 @@ function playedTexts(seed: string): { text: string; dialogue: boolean }[] {
       const card = g.cards[0];
       const view = viewCard(g, card);
       texts.push({ text: view.title, dialogue: false }, { text: view.body, dialogue: true });
-      for (const ch of view.choices) texts.push({ text: ch.label, dialogue: true });
+      for (const ch of view.choices) texts.push({ text: ch.label, dialogue: true }, ...(ch.say ? [{ text: ch.say, dialogue: true }] : []));
       chooseCard(g, card.uid, view.choices.findIndex(c => !c.disabled));
       continue;
     }
@@ -50,7 +51,30 @@ function playedTexts(seed: string): { text: string; dialogue: boolean }[] {
   return texts;
 }
 
+// 모든 종류의 서류 카드를 한 장씩 만들어 본다(판에서 안 나온 카드도 검사하려고).
+function everyCardView() {
+  const g = createGame('every-card');
+  g.trustCrisis = g.seg + 2;
+  const kinds: Omit<Card, 'uid'>[] = [
+    ...TRAVEL_EVENTS.map(e => ({ kind: 'travel', text: e.id })),
+    ...COMMS.flatMap(c => [{ kind: 'demand', comm: c }, { kind: 'favor', comm: c }]),
+    { kind: 'strike_warn' }, { kind: 'strike' }, { kind: 'rescue', who: '수색대' }, { kind: 'bitten', comm: 'tail', who: '대원' },
+    { kind: 'tension_crisis' },
+  ];
+  const views = kinds.map((k, i) => viewCard(g, { uid: i + 1, ...k }));
+  g.passed.no_outsiders = g.seg;
+  views.push(viewCard(g, { uid: 99, kind: 'rescue', who: '수색대' }));
+  return views;
+}
+
 describe('화면 글 규칙', () => {
+  it('고르는 선택지는 모두 열차장의 말로 보인다', () => {
+    const missing = everyCardView().flatMap(v => v.choices.filter(ch => !ch.say).map(ch => `${v.title}: ${ch.label}`));
+    expect(missing).toEqual([]);
+    const said = everyCardView().flatMap(v => v.choices.map(ch => ch.say ?? ''));
+    expect(said.flatMap(t => violations(t, true))).toEqual([]);
+  });
+
   it('법, 장소, 비밀, 거래 조건 글에 금지 표현이 없다', () => {
     const fixed = [
       ...Object.values(LAWS).flatMap(l => [l.title, ...l.changes]),
