@@ -627,7 +627,10 @@ export function domesticEnd(view: View): HTMLElement | null {
       h('li', null, `조작 수 중앙값 ${sm.medianOps} `, pass(sm.medianOps <= 6)),
       h('li', null, `내정 카드 ${sm.picks}장 골랐다`)),
     h('p', { class: 'sub' }, '판 뒤 질문: 공방·현황판엔 확인하려고 들어갔나 바꾸려고 들어갔나? 견습생을 고를 때 기관실 반응을 생각했나? 결함판을 썼나? 맡기기를 켰다면 공방장이 뭘 했는지 알아챘나?'),
-    h('button', { class: 'btn btn--ghost', 'data-action': 'dom-export' }, '내정 기록 내보내기(JSON)'));
+    // 아티팩트 창은 내려받기를 막는다. 기록은 펼쳐서 복사한다.
+    h('details', { class: 'dom-export' },
+      h('summary', null, '내정 기록(JSON) 펼치기'),
+      h('textarea', { class: 'dom-export__text', readonly: true, rows: 6 }, h6Export(g))));
 }
 
 // ---- 입력 ----
@@ -642,19 +645,6 @@ export interface DomCtx {
   reset(next: Game): void;
 }
 
-function download(name: string, text: string): void {
-  try {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch {
-    // 내려받기가 막힌 창이면 조용히 넘어간다.
-  }
-}
-
 /** 내정 단추(data-action="dom-…"). 처리했으면 true. */
 export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx): boolean {
   if (!action.startsWith('dom-')) return false;
@@ -666,7 +656,6 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     ctx.toast(data.on === '1' ? `내정 켠 새 판: 시드 ${g0.seed}.` : `내정 끈 새 판: 시드 ${g0.seed}.`);
     return true;
   }
-  if (action === 'dom-export') { download(`s1c_h6_${g0.seed}.json`, h6Export(g0)); return true; }
   if (!g0.dom) return true;
   const d0 = g0.dom;
   let why: string | null = null;

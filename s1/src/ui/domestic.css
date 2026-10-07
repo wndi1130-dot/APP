@@ -175,3 +175,6 @@
   .dom-board__row { grid-template-columns: 34px 1fr; grid-template-areas: "f people" "f manual" "f relies" "f acts"; }
 }
 .dom-pass { color: var(--ink-1); }
+
+.dom-export summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
+.dom-export__text { width: 100%; margin-top: 6px; font: 11px/1.4 ui-monospace, monospace; background: #15181b; color: var(--ink-1); border: 1px solid var(--line-strong); }
