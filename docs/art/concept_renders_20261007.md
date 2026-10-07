@@ -30,7 +30,7 @@
 2026-10-07 07:50 덧붙임: 아래 두 줄은 앞으로 뽑는 모든 글상자 끝에 붙인다. 이미 나온 C1~C11 글상자에는 없어서 철모와 군용 외투가 섞여 나왔다(끝의 '민감 표식 점검' 절). 3D 모델링 주문서(main 6188d40, 7dd882e)와 같은 선이다.
 
 ```text
-Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, soot and grime on faces and cuffs. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
+Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
 Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
 ```
 
