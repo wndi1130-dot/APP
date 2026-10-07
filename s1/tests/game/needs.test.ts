@@ -3,6 +3,7 @@ import {
   advance, agendaOptions, callEmergency, castVote, createGame, emergencyCost, emergencyStatus, enactLaw, HUNGER_GRACE, NEED_GRACE,
   needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL, setAutoLevers,
   canDecree, currentAgenda, DECREE_SEGS, dropUnratified, endEmergencyPowers, lawActive, openCouncil,
+  COMMS, DECREE_REL, isLawAgenda, LAWS, repealLaw, stance,
 } from '../../src/game';
 import type { Game, LawAgenda } from '../../src/game';
 
@@ -269,3 +270,58 @@ describe('비상대권(법 16)', () => {
     expect(lawActive(g, law)).toBe(false);
   });
 });
+
+describe('R3 카드(2026-10-07): 1회 효과, 포고 폐지 추인, 포고 값', () => {
+  it('폐지했다 다시 통과시켜도 1회 효과는 다시 안 받는다', () => {
+    const g = createGame('once');
+    const food = g.food;
+    enactLaw(g, 'seed_grain', []);
+    expect(g.food).toBe(food + 30);
+    repealLaw(g, 'seed_grain');
+    enactLaw(g, 'seed_grain', []);
+    expect(g.food).toBe(food + 30);
+  });
+
+  it('포고로 한 폐지도 추인받아야 하고, 못 받으면 법이 돌아온다', () => {
+    const g = createGame('decree-repeal');
+    g.seg = 3;
+    enactLaw(g, 'seed_grain', []);
+    enactLaw(g, 'emergency_powers', []);
+    g.seg = 4;
+    g.decreeLeft -= 1;
+    g.session += 5;
+    openCouncil(g, true);
+    const at = g.council!.options.findIndex(o => isLawAgenda(o) && o.law === 'seed_grain' && o.repeal);
+    expect(at).toBeGreaterThanOrEqual(0);
+    g.council!.idx = at;
+    expect(castVote(g, true)?.decree).toBe(true);
+    expect(lawActive(g, 'seed_grain')).toBe(false);
+    g.decreeLeft = 0;
+    endEmergencyPowers(g);
+    expect(g.ratifyRepeal).toEqual(['seed_grain']);
+    g.seg = 6;
+    openCouncil(g);
+    expect(currentAgenda(g)).toMatchObject({ law: 'seed_grain', repeal: true, ratify: true });
+    dropUnratified(g);
+    expect(lawActive(g, 'seed_grain')).toBe(true);
+  });
+
+  it('포고마다 긴장 +5, 그 포고를 싫어하는 칸은 관계 −3', () => {
+    const g = createGame('decree-cost');
+    g.seg = 3;
+    enactLaw(g, 'emergency_powers', []);
+    g.seg = 4;
+    g.decreeLeft -= 1;
+    openCouncil(g, true);
+    const agenda = currentAgenda(g)!;
+    const haters = COMMS.filter(c => stance(g, c, agenda, false).score <= -3);
+    const rel = Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel]));
+    const tension = g.tension;
+    castVote(g, true);
+    expect(g.tension).toBeGreaterThanOrEqual(Math.min(100, tension + 5));
+    // 법 자체의 관계 반응(rels)에 더해, 싫어하는 칸만 −3이 붙는다.
+    const law = LAWS[(agenda as LawAgenda).law];
+    for (const c of COMMS) expect(g.comms[c].rel - rel[c]).toBeCloseTo(Math.max(-100 - rel[c], (law.rels[c] ?? 0) - (haters.includes(c) ? DECREE_REL : 0)));
+  });
+});
+

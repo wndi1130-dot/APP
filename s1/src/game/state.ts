@@ -184,6 +184,11 @@ export interface Game {
   decreeSeg?: number;
   /** 대권이 끝나 다음 회기 추인을 기다리는 포고 */
   ratify?: LawId[];
+  /** 이번 대권에서 포고로 폐지한 법과, 대권이 끝나 추인을 기다리는 폐지(R3 카드 2, 2026-10-07) */
+  decreedRepeals?: LawId[];
+  ratifyRepeal?: LawId[];
+  /** 1회 효과(신임·공포·식량)를 이미 받은 법. 다시 통과해도 또 받지 않는다(R3 카드 1) */
+  onceTaken?: LawId[];
   guardEscort: boolean;
   forcedRun: boolean;
   autoLevers: boolean;

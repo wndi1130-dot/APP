@@ -171,7 +171,7 @@ export const LAWS: Record<LawId, LawDef> = {
   }),
   emergency_powers: L({
     id: 'emergency_powers', title: '비상대권', group: '통치', tag: '통치', kind: 'rule', axes: [0, 1, 0],
-    changes: ['다음 회기 법 하나를 표결 없이 포고', '3구간 뒤 끝난다'], opensWhen: '긴장 50 이상이나 신임 10 이하',
+    changes: ['3구간 동안 구간마다 포고 하나(표결 없음)', '포고마다 긴장 +5, 싫어하는 칸 관계 −3', '끝나면 포고는 추인받아야 남는다'], opensWhen: '긴장 50 이상이나 신임 10 이하',
   }),
   strike_ban: L({
     id: 'strike_ban', title: '파업 금지', group: '통치', tag: '통치', kind: 'rule', axes: [0, 1, 0],

@@ -211,7 +211,10 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
     if (at !== undefined && g.session - at >= P.repealCool) options.push({ law, repeal: true });
   }
   // 대권이 끝난 포고의 추인을 가장 먼저 둔다(법 16: 추인하지 않은 포고는 사라진다).
-  const merged: Agenda[] = (g.ratify ?? []).filter(l => lawActive(g, l)).map(law => ({ law, repeal: false, ratify: true }));
+  const merged: Agenda[] = [
+    ...(g.ratify ?? []).filter(l => lawActive(g, l)).map(law => ({ law, repeal: false, ratify: true })),
+    ...(g.ratifyRepeal ?? []).filter(l => !lawActive(g, l)).map(law => ({ law, repeal: true, ratify: true })),
+  ];
   // 법이 아닌 안건은 순서 자리(s1b_dark_path 12.3: crisis > ratify > confidence > ai > player)에 끼운다.
   const motions = motionsNow(g);
   const ranked = (r: string) => motions.filter(m => MOTIONS[m.motion].rank === r);
@@ -266,7 +269,7 @@ export function openCouncil(g: Game, emergency = false): void {
 
 export function agendaTitle(a: Agenda): string {
   if (!isLawAgenda(a)) return MOTIONS[a.motion].title(a);
-  if (a.ratify) return `${LAWS[a.law].title} 추인`;
+  if (a.ratify) return `${LAWS[a.law].title}${a.repeal ? ' 폐지' : ''} 추인`;
   return `${LAWS[a.law].title}${a.repeal ? ' 폐지' : ''}`;
 }
 
@@ -469,6 +472,8 @@ export function exposeBribe(g: Game, c: Comm): void {
 
 // ---- 비상대권(법 16) ----
 export const DECREE_SEGS = 3;
+/** 포고 하나를 싫어하는 칸의 관계 하락(R3 카드 3) */
+export const DECREE_REL = 3;
 
 /** 이번 구간에 포고할 수 있나: 대권 기간이고, 이번 구간엔 아직 포고하지 않았다. */
 export function canDecree(g: Game): boolean {
@@ -479,26 +484,36 @@ export function canDecree(g: Game): boolean {
  * S1b 계엄(s1b_dark_path 5.3)은 여기서 '표결 없이 연장'을 끼워 넣는다. */
 export function endEmergencyPowers(g: Game): void {
   const decreed = (g.decreed ?? []).filter(l => lawActive(g, l));
+  const repeals = (g.decreedRepeals ?? []).filter(l => !lawActive(g, l));
   g.decreed = [];
+  g.decreedRepeals = [];
+  if (repeals.length > 0) g.ratifyRepeal = [...(g.ratifyRepeal ?? []), ...repeals];
+  const all = [...decreed.map(l => LAWS[l].title), ...repeals.map(l => `${LAWS[l].title} 폐지`)];
   if (lawActive(g, 'emergency_powers')) {
     delete g.passed.emergency_powers;
     g.repealedAt.emergency_powers = g.session;
   }
-  if (decreed.length > 0) {
-    g.ratify = [...(g.ratify ?? []), ...decreed];
-    journal(g, `비상대권이 끝났다. 포고한 ${decreed.map(l => LAWS[l].title).join(', ')}은(는) 다음 회기에 추인받아야 남는다.`, 'dark');
+  if (decreed.length > 0) g.ratify = [...(g.ratify ?? []), ...decreed];
+  if (all.length > 0) {
+    journal(g, `비상대권이 끝났다. 포고한 ${all.join(', ')}은(는) 다음 회기에 추인받아야 남는다.`, 'dark');
   } else {
     journal(g, '비상대권이 끝났다.');
   }
 }
 
-/** 회기를 마친 정산에서 부른다. 이번 회기에 추인받지 못한 포고는 사라진다. */
+/** 회기를 마친 정산에서 부른다. 이번 회기에 추인받지 못한 포고는 사라진다. 포고로 한 폐지가 추인받지 못하면 법이 돌아온다. */
 export function dropUnratified(g: Game): void {
   const left = (g.ratify ?? []).filter(l => lawActive(g, l));
   g.ratify = [];
   for (const law of left) {
     repealLaw(g, law);
     journal(g, `추인받지 못한 ${LAWS[law].title}이(가) 사라졌다.`, 'bad');
+  }
+  const back = (g.ratifyRepeal ?? []).filter(l => !lawActive(g, l));
+  g.ratifyRepeal = [];
+  for (const law of back) {
+    enactLaw(g, law, []);
+    journal(g, `포고로 폐지한 ${LAWS[law].title}이(가) 추인받지 못해 다시 걸렸다.`, 'bad');
   }
 }
 
@@ -574,11 +589,20 @@ export function castVote(g: Game, decree = false): VoteResult | null {
   if (decree) {
     // 대권 동안 구간마다 하나씩 포고할 수 있다. 대권이 끝나면 의회가 추인해야 남는다.
     g.decreeSeg = g.seg;
-    (g.decreed ??= []).push(agenda.law);
+    if (agenda.repeal) (g.decreedRepeals ??= []).push(agenda.law);
+    else (g.decreed ??= []).push(agenda.law);
+    // 대권을 쥐는 값(R3 카드 3): 포고마다 긴장 +5, 그 포고를 싫어하는 칸과 관계 −3.
     g.tension = clamp(g.tension + 5, 0, 100);
+    for (const c of COMMS) if (stance(g, c, agenda, false).score <= -3) g.comms[c].rel = clamp(g.comms[c].rel - DECREE_REL, -100, 100);
     journal(g, `비상대권으로 ${title}을(를) 포고했다.`, 'dark');
   } else {
     journal(g, `${title}: 찬성 ${yes}, 반대 ${no}${absent ? `, 부재 ${absent}` : ''}. ${passed ? '가결' : '부결'}.`, passed ? 'good' : 'bad');
+  }
+  if (agenda.ratify && agenda.repeal) {
+    g.ratifyRepeal = (g.ratifyRepeal ?? []).filter(l => l !== agenda.law);
+    if (passed) journal(g, `의회가 포고한 ${LAWS[agenda.law].title} 폐지를 추인했다.`, 'good');
+    else { enactLaw(g, agenda.law, []); journal(g, `의회가 ${LAWS[agenda.law].title} 폐지를 추인하지 않았다. 법이 다시 걸렸다.`, 'bad'); }
+    return result;
   }
   if (agenda.ratify) {
     g.ratify = (g.ratify ?? []).filter(l => l !== agenda.law);
@@ -605,10 +629,14 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
     const r = def.rels[c];
     if (r !== undefined) g.comms[c].rel = clamp(g.comms[c].rel + r, -100, 100);
   }
+  // 1회 효과는 법마다 한 판에 한 번(R3 카드 1, 2026-10-07): 폐지했다 다시 통과시켜 또 받지 못한다. 관계 반응은 통과마다 그대로.
   const res = def.res;
-  if (res.trustOnce) g.trust = clamp(g.trust + res.trustOnce, 0, 100);
-  if (res.fearOnce) g.fear = clamp(g.fear + res.fearOnce, 0, 100);
-  if (res.foodOnce) g.food += res.foodOnce;
+  if (!(g.onceTaken ??= []).includes(law)) {
+    if (res.trustOnce) g.trust = clamp(g.trust + res.trustOnce, 0, 100);
+    if (res.fearOnce) g.fear = clamp(g.fear + res.fearOnce, 0, 100);
+    if (res.foodOnce) g.food += res.foodOnce;
+    if (res.trustOnce || res.fearOnce || res.foodOnce) g.onceTaken.push(law);
+  }
   if (law === 'guided_voting') g.guidedLeft = 3;
   // 3구간짜리 대권(numbers 8장 법 16). 통과한 구간은 이미 표결이 끝났으니 다음 세 구간을 센다(nextSegment가 하나씩 줄인다).
   if (law === 'emergency_powers') { g.decreeLeft = DECREE_SEGS + 1; g.decreed = []; }
