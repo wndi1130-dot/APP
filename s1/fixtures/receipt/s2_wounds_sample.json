@@ -1,0 +1,113 @@
+{
+  "place": {
+    "id": "first_leg_01_sulechow",
+    "type": "freight",
+    "variant": "s2_graybox"
+  },
+  "time": {
+    "arrive": "D1 10:30",
+    "depart": "D1 14:45",
+    "stayGameMinutes": 255
+  },
+  "stock": {
+    "coal": 9,
+    "food": 2,
+    "medicine": 1,
+    "scrap": 1,
+    "ammo_pistol": -7,
+    "ammo_shell": 0,
+    "ammo_craft": -2
+  },
+  "items": {
+    "gained": [
+      "symbol_departure_bell",
+      "weapon_pipe_shotgun"
+    ],
+    "lost": [
+      "weapon_crowbar"
+    ]
+  },
+  "people": {
+    "sent": [
+      "s2_lead",
+      "s2_medic",
+      "s2_shooter",
+      "s2_scout",
+      "s2_crew_01",
+      "s2_crew_02",
+      "s2_crew_03",
+      "s2_crew_04",
+      "s2_escort_01",
+      "s2_escort_02"
+    ],
+    "injured": [
+      "s2_scout"
+    ],
+    "bitten": [],
+    "dead": [],
+    "missing": [],
+    "leftBehind": [],
+    "rescued": [],
+    "wounds": [
+      {
+        "person": "s2_scout",
+        "part": "leg_left",
+        "kind": "embedded",
+        "festering": false
+      },
+      {
+        "person": "s2_scout",
+        "part": "arm_right",
+        "kind": "laceration"
+      },
+      {
+        "person": "s2_crew_01",
+        "part": "arm_left",
+        "kind": "scratch"
+      }
+    ]
+  },
+  "witnessed": [
+    {
+      "who": "s2_crew_02",
+      "what": "lit_fire_under_water_tower",
+      "where": "water_tower",
+      "when": "D1 11:40",
+      "why": "water_tower_frozen",
+      "witnesses": [
+        "s2_crew_01",
+        "s2_escort_01"
+      ]
+    },
+    {
+      "who": "s2_lead",
+      "what": "disarmed_and_released_raiders",
+      "where": "pharmacy",
+      "when": "D1 13:55",
+      "why": "raiders_surrendered",
+      "witnesses": [
+        "s2_shooter",
+        "s2_scout"
+      ]
+    }
+  ],
+  "placeState": {
+    "looted": 0.45,
+    "remainingRisk": 2,
+    "raidersGone": true
+  },
+  "promises": [],
+  "version": 2,
+  "source": "direct",
+  "endReason": "departed",
+  "decisions": [
+    {
+      "id": "water_tower",
+      "choice": "melt_with_fire"
+    },
+    {
+      "id": "raider_surrender",
+      "choice": "disarm_release"
+    }
+  ]
+}

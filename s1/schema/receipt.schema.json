@@ -132,6 +132,13 @@
         },
         "rescued": {
           "$ref": "#/$defs/personList"
+        },
+        "wounds": {
+          "type": "array",
+          "description": "선택 칸(판 2부터). 필드에서 돌아올 때 사람마다 부위별 상처를 그대로 적는다(body_injury 4.6). S1은 접는다: 깊은 상처·박힌 것·골절이면 injured, 물림이면 bitten에도 있어야 하고, 긁힘·찢김만이면 한 구간 안에 낫는다. 곪음이 있으면 회복에 의약품 +0.5(S3).",
+          "items": {
+            "$ref": "#/$defs/wound"
+          }
         }
       },
       "required": [
@@ -194,6 +201,12 @@
         "additionalProperties": false
       }
     },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2,
+      "description": "영수증 판. 없으면 1. 2부터 people.wounds(부위별 상처, body_injury 4.6)를 받는다. people.wounds를 쓰면 2 이상이어야 한다."
+    },
     "source": {
       "type": "string",
       "enum": [
@@ -246,6 +259,41 @@
     "promises"
   ],
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "people": {
+            "type": "object",
+            "required": [
+              "wounds"
+            ],
+            "properties": {
+              "wounds": {
+                "type": "array"
+              }
+            }
+          }
+        },
+        "required": [
+          "people"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 2
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "clock": {
       "type": "string",
@@ -306,6 +354,48 @@
         "when",
         "why",
         "witnesses"
+      ],
+      "additionalProperties": false
+    },
+    "wound": {
+      "type": "object",
+      "properties": {
+        "person": {
+          "$ref": "urn:s1:schema:common#/$defs/id"
+        },
+        "part": {
+          "type": "string",
+          "enum": [
+            "head_neck",
+            "torso",
+            "arm_left",
+            "arm_right",
+            "leg_left",
+            "leg_right"
+          ],
+          "description": "부위 여섯. 손은 팔, 발은 다리."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "scratch",
+            "laceration",
+            "deep",
+            "embedded",
+            "bite",
+            "fracture"
+          ],
+          "description": "긁힘, 찢김, 깊은 상처, 박힌 것(유리·총알), 물림, 골절."
+        },
+        "festering": {
+          "type": "boolean",
+          "description": "곪음. 좀비 감염과 다르다. 없으면 false."
+        }
+      },
+      "required": [
+        "person",
+        "part",
+        "kind"
       ],
       "additionalProperties": false
     }

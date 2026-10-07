@@ -20,6 +20,7 @@ const read = (path: string): Receipt => JSON.parse(readFileSync(path, 'utf8'));
 const fixtures = {
   sulechow: join(root, 'fixtures/receipt/sulechow_sample.json'),
   s2Graybox: join(root, 'fixtures/receipt/s2_graybox_sample.json'),
+  s2Wounds: join(root, 'fixtures/receipt/s2_wounds_sample.json'),
   // Written by the GDScript builder (s2/tests/game/test_receipt.gd); both sides read this file.
   gdBuilder: join(root, '../s2/tests/game/fixtures/receipt_gd_sample.json'),
 };
@@ -168,5 +169,78 @@ describe('receipt rejections', () => {
       receipt.endReason = reason;
       expect(issues(receipt)).toEqual([]);
     }
+  });
+});
+
+// 판 2: 부위별 상처(body_injury 4.6). S1은 접는다. 깊은 상처·박힌 것·골절은 부상자, 물림은 물린 사람, 긁힘·찢김만이면 한 구간 안에 낫는다.
+const SERIOUS = new Set(['deep', 'embedded', 'fracture']);
+const foldGaps = (receipt: Receipt) => {
+  const p = receipt.people;
+  const gone = new Set([...p.dead, ...p.missing, ...p.leftBehind]);
+  return (p.wounds ?? []).flatMap((w: Receipt) => {
+    if (gone.has(w.person)) return [];
+    if (w.kind === 'bite' && !p.bitten.includes(w.person)) return [`${w.person} bite not in bitten`];
+    if (SERIOUS.has(w.kind) && !p.injured.includes(w.person)) return [`${w.person} ${w.kind} not in injured`];
+    return [];
+  });
+};
+
+describe('receipt wounds (version 2)', () => {
+  const wounded = () => read(fixtures.s2Wounds);
+
+  it('keeps version and wounds optional for version 1 receipts', () => {
+    for (const path of [fixtures.sulechow, fixtures.s2Graybox, fixtures.gdBuilder]) {
+      const receipt = read(path);
+      expect(receipt).not.toHaveProperty('version');
+      expect(receipt.people).not.toHaveProperty('wounds');
+    }
+    const receipt = sample();
+    receipt.version = 1;
+    expect(issues(receipt)).toEqual([]);
+  });
+
+  it('needs version 2 once wounds are written', () => {
+    const receipt = wounded();
+    delete receipt.version;
+    expect(issues(receipt)).toContainEqual(expect.objectContaining({ path: '', keyword: 'required', missing: 'version' }));
+    receipt.version = 1;
+    expect(issues(receipt)).toContainEqual(expect.objectContaining({ path: '/version', keyword: 'minimum' }));
+    receipt.version = 3;
+    expect(issues(receipt)).toContainEqual(expect.objectContaining({ path: '/version', keyword: 'maximum' }));
+  });
+
+  it('accepts an empty wound list and every part and kind', () => {
+    const receipt = wounded();
+    receipt.people.wounds = [];
+    expect(issues(receipt)).toEqual([]);
+    const parts = ['head_neck', 'torso', 'arm_left', 'arm_right', 'leg_left', 'leg_right'];
+    const kinds = ['scratch', 'laceration', 'deep', 'embedded', 'bite', 'fracture'];
+    receipt.people.wounds = parts.flatMap(part => kinds.map(kind => ({ person: 's2_lead', part, kind, festering: kind === 'deep' })));
+    expect(issues(receipt)).toEqual([]);
+  });
+
+  it.each([
+    ['/people/wounds/0/part', (w: Receipt) => { w.part = 'hand_left'; }],
+    ['/people/wounds/0/kind', (w: Receipt) => { w.kind = 'burn'; }],
+    ['/people/wounds/0/person', (w: Receipt) => { w.person = 'S2 Scout'; }],
+    ['/people/wounds/0/festering', (w: Receipt) => { w.festering = 'yes'; }],
+    ['/people/wounds/0', (w: Receipt) => { w.bandaged = true; }],
+    ['/people/wounds/0', (w: Receipt) => { delete w.kind; }],
+  ] as const)('rejects a malformed wound at %s', (path, mutate) => {
+    const receipt = wounded();
+    mutate(receipt.people.wounds[0]);
+    expect(issues(receipt).map(item => item.path)).toContain(path);
+  });
+
+  it('folds into the S1 lists: serious wounds are injured, bites are bitten, scratches heal', () => {
+    expect(foldGaps(wounded())).toEqual([]);
+    const receipt = wounded();
+    receipt.people.wounds.push({ person: 's2_crew_02', part: 'leg_right', kind: 'fracture' });
+    receipt.people.wounds.push({ person: 's2_crew_03', part: 'arm_left', kind: 'bite' });
+    expect(foldGaps(receipt)).toEqual(['s2_crew_02 fracture not in injured', 's2_crew_03 bite not in bitten']);
+    receipt.people.injured.push('s2_crew_02');
+    receipt.people.dead.push('s2_crew_03');
+    expect(foldGaps(receipt)).toEqual([]);
+    expect(issues(receipt)).toEqual([]);
   });
 });
