@@ -78,3 +78,18 @@ func test_noises_pick_their_sound() -> void:
 func test_a_horde_setting_off_gathers_far_moans() -> void:
 	game.audio.horde_started()
 	assert_gt(game.audio.gather_t, 0.0)
+
+
+func test_depart_note_holds_the_mix_and_leave_plays_its_beats_in_order() -> void:
+	var a = game.audio
+	game.hud.depart_card()
+	assert_true(a.held)
+	var bed: float = a.bed.volume_db
+	a.tick(0.5)
+	assert_eq(a.bed.volume_db, bed, "the bed stays put while the note is up")
+	game.hud._card_pick(game.hud._depart_pick, "go")
+	assert_false(a.held)
+	assert_true(game.ended)
+	assert_eq(a.played, ["impact"], "impact at once, the rest follow")
+	await wait_seconds(1.0)
+	assert_eq(a.played, ["impact", "pen", "whistle"])

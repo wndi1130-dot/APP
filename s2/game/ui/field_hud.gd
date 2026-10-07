@@ -825,9 +825,10 @@ func depart_card() -> void:
 	if horde_close():
 		text += "\n무리가 가깝다."
 	card("depart", text, [
-		{"id": "go", "label": "출발한다", "say": "\"올라타! 기다리지 않는다!\""},
-		{"id": "wait", "label": "아직이다", "say": "\"조금만 더. 다 올 때까지.\""},
+		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
+		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
 	], _depart_pick)
+	game.audio.hold(true)
 
 
 ## Some dead of a horde within 30 m of the player (presentation_motion 5b.5).
@@ -839,7 +840,9 @@ func horde_close() -> bool:
 
 
 func _depart_pick(choice: String) -> void:
+	game.audio.hold(false)
 	if choice == "go":
+		game.audio.depart()
 		game.finish("departed")
 
 

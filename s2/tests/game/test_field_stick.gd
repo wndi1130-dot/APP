@@ -473,7 +473,7 @@ func test_depart_note_says_the_horde_is_close_and_holds_time() -> void:
 	var hud = game.hud
 	hud.depart_card()
 	assert_true(game.paused, "the note stops field time")
-	assert_false(game.ended, "no whistle before '출발한다'")
+	assert_false(game.ended, "no whistle before '떠난다'")
 	hud._close_modal()
 	assert_false(hud.horde_close())
 	var z: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(25, 0, 0))

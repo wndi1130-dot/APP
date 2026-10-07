@@ -12,9 +12,14 @@ extends Node3D
 ##   wind       outdoor bed
 ##   train_idle the waiting engine, placed on the train
 ##   whistle    departure
+##   pen        the pen stroke when '떠난다' is pressed
+## While the depart note is up (sound_music 5): the horde bed holds low where
+## it was, moans and steps only fade out, wind and the engine go on; '기다린다'
+## comes back in 0.3 s; '떠난다' is impact, pen, a gap, then the whistle.
 ## Buses: Master and SFX. Indoor gunfire's deafness (field 8.2) ducks SFX.
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen"]
+const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
 const BED_RANGE: float = 40.0
@@ -36,6 +41,9 @@ var birds_t: float = 0.0
 var pick_t: float = 0.0
 var crowd: float = 0.0                 # weighted dead near the player (for the bed)
 var last_tag_group: String = ""        # what the last make_sound played (tests)
+var held: bool = false                 # the depart note is up
+var departing: bool = false            # '떠난다' plays its own whistle
+var played: Array = []                 # groups played, in order (tests)
 
 
 func setup(field_game) -> void:
@@ -127,6 +135,12 @@ func tick(delta: float) -> void:
 		for p in [bed, gather, wind]:
 			p.volume_db = -80.0
 		return
+	if held:
+		# The note is up: the bed stays where it was, lower; nothing new starts.
+		for s in slots:
+			var p: AudioStreamPlayer3D = s["player"]
+			p.volume_db = maxf(-80.0, p.volume_db - 40.0 * delta)
+		return
 	pick_t -= delta
 	if pick_t <= 0.0:
 		pick_t = 0.4
@@ -195,6 +209,34 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 
 # ---------------------------------------------------------------- events
 
+## The depart note goes up (true) or away (false; the mix is back in 0.3 s).
+func hold(on: bool) -> void:
+	held = on
+	if on:
+		bed.volume_db -= 9.0
+		gather.volume_db -= 9.0
+	else:
+		bed.volume_db += 9.0
+		gather.volume_db += 9.0
+
+
+## '떠난다': impact, pen stroke, a gap, the whistle.
+func depart() -> void:
+	departing = true
+	for beat in DEPART_BEATS:
+		var g: String = beat[0]
+		if float(beat[1]) <= 0.0:
+			_play_beat(g)
+		else:
+			get_tree().create_timer(float(beat[1]), true).timeout.connect(_play_beat.bind(g))
+
+
+func _play_beat(group: String) -> void:
+	played.append(group)
+	if has(group):
+		_one_shot(group, game.player.position, 0.9 if group != "pen" else 0.6, 1.0)
+
+
 ## A horde sets off: far moans gather, and once in a while birds go up.
 func horde_started() -> void:
 	gather_t = GATHER_TIME
@@ -207,6 +249,8 @@ func horde_started() -> void:
 func on_sound(at: Vector3, level: int, tag: String) -> void:
 	var group := ""
 	if tag == "whistle":
+		if departing:
+			return
 		group = "whistle"
 	elif tag == "gun":
 		group = "gun" if has("gun") else "impact"
@@ -227,7 +271,7 @@ func footstep(at: Vector3, running: bool) -> void:
 
 
 func _one_shot(group: String, at: Vector3, lin: float, pitch: float) -> void:
-	if lin <= 0.01:
+	if lin <= 0.01 or not has(group):
 		return
 	var o: AudioStreamPlayer3D = one_shots[0]
 	for p in one_shots:
