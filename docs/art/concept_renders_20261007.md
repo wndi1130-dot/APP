@@ -31,10 +31,12 @@
 
 ```text
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets; guards are told apart by fur hats with ear flaps, rifles, clubs and hand lanterns. No red cross or red crescent on anything; medicine is a plain bottle or a pill.
-Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
+Train: people live and ride only in old passenger coaches (boarded-up windows, tarpaulin patches, stove pipes are fine); closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors. Smoke from the locomotive and the coach stovepipes is thin pale grey wisps drifting low and sideways with the wind, never a thick black column.
 Props: no abandoned suitcases, piles of luggage or piles of shoes on platforms or beside the train; left-behind goods are only cargo sacks or wooden crates.
 The dead: ordinary civilians in torn everyday winter clothes (parkas, anoraks, wool coats, hoodies, work jackets, knit hats or bare heads, loose hair). No olive drab, no camouflage or mottled patterns, no military-style backpacks or webbing, no helmets or round helmet-like caps, never walking in step or in rows.
 ```
+
+2026-10-07 16:05 더함: Train 줄 끝의 연기 문장은 사용자 결정(16:00, 연기 카드 '옅게 둠')이다.
 
 2026-10-07 15:25 더함: 마지막 줄(망자 옷)은 구간 배경 시안(B2·B3·B6)에서 망자가 병사 무리처럼 나와서 넣었다. 구간 배경 주문서와 같은 문장이다.
 

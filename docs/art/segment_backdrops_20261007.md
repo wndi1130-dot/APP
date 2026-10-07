@@ -30,11 +30,13 @@ The train is now running at speed, not stopped: the platform, lamp post and wait
 
 ```text
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets. No red cross or red crescent on anything.
-Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors.
+Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors. Smoke from the locomotive and the coach stovepipes is thin pale grey wisps drifting low and sideways with the wind, never a thick black column.
 Landscape: no barbed-wire fences, watchtowers, rows of barracks, loading ramps, or tall chimneys with smoke anywhere in the scene. Factory chimneys and cooling towers, if present, stand cold and smokeless.
 Props: no abandoned suitcases, piles of luggage or piles of shoes beside the track or on platforms; left-behind goods are only cargo sacks or wooden crates.
 The dead: ordinary civilians in torn everyday winter clothes (parkas, anoraks, wool coats, hoodies, work jackets, knit hats or bare heads, loose hair). No olive drab, no camouflage or mottled patterns, no military-style backpacks or webbing, no helmets or round helmet-like caps, never walking in step or in rows.
 ```
+
+16:05 더함: Train 줄 끝의 연기 문장은 사용자 결정(16:00, 연기 카드 '옅게 둠')이다. 기관차와 객차 난로 연기는 남기되 짙은 검은 기둥 없이 옅고 비스듬히 흐르게 한다.
 
 15:20 더함: 마지막 줄(망자 옷)은 B2 v2, B3 v1·v2, B6 v1에서 망자가 둥근 모자나 철모 같은 머리, 국방색 배낭, 얼룩무늬 상의로 나와 병사 무리처럼 읽혀서 넣었다. 이 줄이 생기기 전에 뽑은 그림은 망자를 참고하지 않는다.
 
