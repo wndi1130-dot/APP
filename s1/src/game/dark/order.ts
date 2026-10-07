@@ -186,7 +186,7 @@ export function afterOrder(g: Game, caseId: number | undefined, how: 'cover' | '
     return '보일러 일지에 사고라고 적었다.';
   }
   if (how === 'hush') {
-    // 들킨 일을 덮는다: 본 경비대의 입을 막는다. 일지로 덮는 것보다 값이 크다(제안).
+    // 들킨 일을 덮는다: 본 경비대를 입단속한다. 일지로 덮는 것보다 값이 크다(제안).
     coverUp(g, c);
     g.fear = clamp(g.fear + B.hushFear, 0, 100);
     g.comms.guard.base[3] += B.hushExpo;

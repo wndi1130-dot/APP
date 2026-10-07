@@ -267,7 +267,7 @@ describe('PR 41 리뷰 2. 관행 카드 뒤에도 밤샘을 묻는다', () => {
 });
 
 describe('PR 41 리뷰 3. 들킨 성공 암살은 일지로 덮지 못한다', () => {
-  it("들켰으면 '덮는다' 대신 '입을 막는다'(공포·경비대 노출)가 나온다", () => {
+  it("들켰으면 '덮는다' 대신 '입단속한다'(공포·경비대 노출)가 나온다", () => {
     let checked = 0;
     for (let i = 0; i < 200 && checked < 2; i += 1) {
       const g = darkGame(`hush-${i}`);
@@ -280,14 +280,14 @@ describe('PR 41 리뷰 3. 들킨 성공 암살은 일지로 덮지 못한다', (
       const labels = viewCard(g, card).choices.map(c => c.label);
       if (card.text === 'hidden') {
         expect(labels).toContain('덮는다');
-        expect(labels).not.toContain('입을 막는다');
+        expect(labels).not.toContain('입단속한다');
         continue;
       }
       checked += 1;
       expect(labels).not.toContain('덮는다');
       const fear = g.fear;
       const expo = g.comms.guard.base[3];
-      chooseCard(g, card.uid, labels.indexOf('입을 막는다'));
+      chooseCard(g, card.uid, labels.indexOf('입단속한다'));
       expect(g.fear).toBe(Math.min(100, fear + B.hushFear));
       expect(g.comms.guard.base[3]).toBe(expo + B.hushExpo);
       expect(g.dark!.cases.find(c => c.id === card.n)?.status).toBe('closed');

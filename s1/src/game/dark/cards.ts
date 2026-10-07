@@ -226,7 +226,7 @@ function view(g: Game, card: Card): CardView | null {
         choices: [
           // 들켜서 실행자가 붙잡혔으면 일지로는 못 덮는다. 경비대 입을 막는 값 오른 줄이 대신 나온다(제안, PR 41 리뷰).
           seen
-            ? { label: '입을 막는다', say: '경비대에 입을 다물라고 해라. 본 사람은 못 본 거다.', effs: [], special: 'dark:after:hush', extra: [`공포 +${B.hushFear}`, `경비대 노출 +${B.hushExpo}`] }
+            ? { label: '입단속한다', say: '경비대에 입을 다물라고 해라. 본 사람은 못 본 거다.', effs: [], special: 'dark:after:hush', extra: [`공포 +${B.hushFear}`, `경비대 노출 +${B.hushExpo}`] }
             : { label: '덮는다', say: '보일러 일지에 사고라고 적어라.', effs: [], special: 'dark:after:cover' },
           crossing(g, card, { label: '남에게 씌운다', say: '용의자 하나의 침상 밑을 뒤져라. 뭐가 나올 거다.', effs: [], special: 'dark:after:frame' }),
           { label: '수사하게 둔다', say: '수사는 수사대로 둬라.', effs: [], special: 'dark:after:let' },
