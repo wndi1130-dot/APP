@@ -96,6 +96,25 @@ AI로 만든 음악과 그림은 줄마다 'AI 생성'을 적는다. 사람이 �
 | 눈·모래 위 바퀴 자국 셰이더 | 코드 | [godotshaders.com](https://godotshaders.com/shader/car-tracks-on-snow-or-sand-using-viewport-textures-and-particles/) | 코드만 MIT (r5 37) | MIT 고지를 넣는다. 지금 방향은 이 방식 대신 찍는 조각(8b절)이라 쓸지 미정 | 가능 |
 | Bloody Pool 셰이더 | 코드 | [godotshaders.com](https://godotshaders.com/shader/bloody-pool-smooth-blood-trail/) | 코드만 MIT (r5 39) | MIT 고지. 폰 비용 확인 전엔 쓰지 않는다 | 가능 |
 
+### 후보: 3D(열차·사람·재질·조명) (2026-10-07 3D 스레드)
+
+라이선스는 조사 문서의 표기를 옮긴 것이고 3D 스레드가 원문을 다시 열어 보진 않았다. 파일을 받을 때 원문을 열고 확인한 날을 고쳐 적는다. 회색 상자용 묶음은 출시판에서 직접 만든 모델로 바뀔 수 있다.
+
+| 자산 | 종류 | 출처 | 라이선스 | 조건 | 홍보 |
+|---|---|---|---|---|---|
+| Snow 015 | 그림(눈 재질) | [ambientCG](https://ambientcg.com/view?id=Snow015) | CC0 (r5 24, 표기만 확인) | 표시 의무 없음. 크레딧에는 넣는다. 폰용으로 해상도·맵을 줄여 쓴다. 역사 주변 지저분한 눈, 칸 지붕 눈 층 | 가능 |
+| Passendorf Snow HDRI | 3D(조명 환경) | [Poly Haven](https://polyhaven.com/a/passendorf_snow) | CC0 (r5 25, 표기만 확인) | 맑은 날 자료라 흐린 날·폭설 기준으로 쓰지 않는다. 재질 조명 시험용, 빌드에 넣을지는 미정 | 가능 |
+| Improved frosted glass 셰이더 | 코드 | [godotshaders.com](https://godotshaders.com/shader/improved-frosted-glass/) | 코드만 CC0 (r5 23) | 시연 그림·영상은 포함 안 됨. 객차 창 성에 시험. 폰 비용 확인 전 | 가능 |
+| Snow-Covered Surface 셰이더 | 코드 | 위 화면 줄과 같음 | 코드만 CC0 (r5 22) | 화면과 같이 씀. 칸 지붕·난간·화물 위 눈 | 가능 |
+| Quaternius Universal Base Characters | 3D(사람 기본 몸) | [quaternius.com](https://quaternius.com/packs/universalbasecharacters.html) | CC0 (art_reference_scan_20261007.md 68줄, 팩 페이지 표기) | 미리보기 그림의 권리는 따로 확인 못 함. 사람 기본 몸 후보 | 미정 |
+| Quaternius Universal Animation Library | 3D(동작) | [quaternius.com](https://quaternius.com/packs/universalanimationlibrary.html) | CC0 (같은 문서 69줄) | 사람 동작 후보 | 미정 |
+| MPFB(MakeHuman) | 3D(사람 몸 생성 도구) | MakeHuman 커뮤니티 | 미확인. 도구 코드와 만들어 낸 몸·옷 에셋의 라이선스가 다르다고 알려져 있으나 확인 전 | 쓰기 전에 도구와 에셋 라이선스를 각각 연다 | 미정 |
+| Kenney Train Kit | 3D(열차 회색 상자) | [kenney.nl](https://kenney.nl/assets/train-kit) | CC0 (같은 문서 70줄) | S2 회색 상자용. 출시판 열차는 T1 부품 키트로 직접 만든다 | 미정 |
+| Kenney Modular Buildings | 3D(건물 회색 상자) | [kenney.nl](https://kenney.nl/assets/modular-buildings) | CC0 (같은 문서 71줄) | 회색 상자용 | 미정 |
+| Kenney Furniture Kit | 3D(가구 회색 상자) | [kenney.nl](https://kenney.nl/assets/furniture-kit) | CC0 (같은 문서 72줄) | 회색 상자용 | 미정 |
+
+'홍보'가 미정인 줄은 회색 상자용이라 실제 게임 화면에 남을지가 정해지지 않았다는 뜻이다. 남으면 그때 '가능'으로 고친다(CC0라 막히는 건 없다).
+
 ### 레퍼런스로만 보는 것 (빌드·홍보에 넣지 않음)
 
 줄을 만들지 않고 규칙만 적는다. 아래는 보고 형태만 따는 자료라 파일을 빌드나 스토어 페이지에 넣지 않는다.
@@ -105,4 +124,4 @@ AI로 만든 음악과 그림은 줄마다 'AI 생성'을 적는다. 사람이 �
 
 ### AI 생성 렌더 시안
 
-C·B·M 렌더 시안(concept_renders, segment_backdrops, 바깥 눈 점검 주문)은 아스트라 울트라 등으로 만든 AI 생성물이고 바탕화면에만 있다. 스토어 페이지, 트레일러, 홍보 스크린샷에 시안을 쓰려면 그 전에 이 장에 줄을 만들고 만든 도구, 요금제, 만든 날, 사람이 손본 내역을 적는다. 기본값은 홍보에 시안을 쓰지 않고 실제 게임 화면을 쓰는 것이다.
+C·B·M 렌더 시안(concept_renders, segment_backdrops, 바깥 눈 점검 주문)과 3D 스레드의 M·T·F 시안(model_renders_20261007.md, train_cars_20261007.md)은 아스트라 울트라 등으로 만든 AI 생성물이고 바탕화면에만 있다. 스토어 페이지, 트레일러, 홍보 스크린샷에 시안을 쓰려면 그 전에 이 장에 줄을 만들고 만든 도구, 요금제, 만든 날, 사람이 손본 내역을 적는다. 기본값은 홍보에 시안을 쓰지 않고 실제 게임 화면을 쓰는 것이다.
