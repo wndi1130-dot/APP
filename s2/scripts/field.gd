@@ -2,7 +2,7 @@ extends Node3D
 
 const Graybox = preload("res://scripts/graybox.gd")
 const Visibility = preload("res://scripts/grid_visibility.gd")
-const Noise = preload("res://scripts/noise_radius.gd")
+const NoiseRadius = preload("res://scripts/noise_radius.gd")
 const WIDTH: int = 48
 const HEIGHT: int = 32
 const MAX_ZOMBIES: int = 150
@@ -151,7 +151,7 @@ func emit_noise() -> void:
 	noise_hits = 0
 	for index in range(int(settings["zombies"])):
 		var at: Vector3 = zombies[index]["position"]
-		if Noise.contains(Vector2(at.x, at.z), Vector2(noise_target.x, noise_target.z), NOISE_RADIUS):
+		if NoiseRadius.contains(Vector2(at.x, at.z), Vector2(noise_target.x, noise_target.z), NOISE_RADIUS):
 			zombies[index]["target"] = noise_target
 			zombies[index]["chase"] = 6.0
 			noise_hits += 1

@@ -4,13 +4,7 @@ unzip -q "$RUNNER_TEMP/gut.zip" -d "$RUNNER_TEMP/gut"
 mkdir -p s2/addons
 gut_root="$RUNNER_TEMP/gut/Gut-${GUT_VERSION}"
 cp -a "$gut_root/addons/gut" s2/addons/gut
-# Framework stays untracked; preserve its license alongside the CI copy.
-for license in "$gut_root"/LICENSE* "$gut_root"/license*; do
-  if test -f "$license"; then
-    cp "$license" s2/addons/gut/LICENSE
-    break
-  fi
-done
-test -s s2/addons/gut/LICENSE
+# Framework stays untracked; GUT ships its license inside addons/gut.
+test -s s2/addons/gut/LICENSE.md
 # Only the disposable CI checkout enables tests after GUT is present.
 python3 -c "from pathlib import Path; Path('s2/tests/.gdignore').unlink()"
