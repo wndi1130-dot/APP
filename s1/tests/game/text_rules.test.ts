@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, LAWS, makeDeal, PLACES,
-  PLACE_LOOK, PLACE_OMENS, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS,
+  elderCandidate, fallSick, FAMILIES, PLACE_LOOK, PLACE_OMENS, PROFILES, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS,
   primaryAction, resolveStop, SECRET_POOL, toolStatus, TRAVEL_EVENTS, viewCard,
 } from '../../src/game';
 import type { Card } from '../../src/game';
@@ -60,7 +60,14 @@ function everyCardView() {
     ...COMMS.flatMap(c => [{ kind: 'demand', comm: c }, { kind: 'favor', comm: c }]),
     { kind: 'strike_warn' }, { kind: 'strike' }, { kind: 'rescue', who: '수색대' }, { kind: 'bitten', comm: 'tail', who: '대원' }, { kind: 'bite_found', comm: 'tail', who: '대원', text: '열이 오르는 걸 의무장이 알아챘다.' },
     { kind: 'tension_crisis' },
+    { kind: 'need_warn', text: 'coal' },
+    { kind: 'orphan', comm: 'tail', who: PROFILES.find(p => p.id === FAMILIES[0].parents[0])!.name },
+    { kind: 'keepsake', comm: 'guard', who: PROFILES.find(p => p.community === 'guard')!.name },
+    { kind: 'elder', comm: 'tail', who: elderCandidate(g)!.name },
+    { kind: 'birth', comm: 'tail', who: '엄마' }, { kind: 'naming', comm: 'tail', who: '엄마' },
   ];
+  fallSick(g, 'front');
+  kinds.push({ kind: 'rep_sick', comm: 'front' });
   const views = kinds.map((k, i) => viewCard(g, { uid: i + 1, ...k }));
   g.passed.no_outsiders = g.seg;
   views.push(viewCard(g, { uid: 99, kind: 'rescue', who: '수색대' }));

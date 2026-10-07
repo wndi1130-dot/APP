@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   advance, agendaOptions, callEmergency, castVote, createGame, emergencyCost, emergencyStatus, enactLaw, HUNGER_GRACE, NEED_GRACE,
   needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL, setAutoLevers,
+  canDecree, currentAgenda, DECREE_SEGS, dropUnratified, endEmergencyPowers, lawActive, openCouncil,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -16,7 +17,7 @@ describe('법 요구', () => {
     const notes: string[] = [];
     needTick(g, notes);
     expect(g.needs.coal).toMatchObject({ since: g.seg, due: g.seg + NEED_GRACE, hits: 0 });
-    expect(g.cards.some(c => c.kind === 'info' && c.who?.includes('필요'))).toBe(true);
+    expect(g.cards.some(c => c.kind === 'need_warn' && c.text === 'coal')).toBe(true);
     const coal = g.coal;
     g.seg += NEED_GRACE - 1;
     needTick(g, notes);
@@ -27,6 +28,38 @@ describe('법 요구', () => {
     expect(g.coal).toBeLessThan(coal);
     expect(g.trust).toBeLessThan(trust);
     expect(g.needs.coal?.hits).toBe(1);
+  });
+
+  it('약속하면 기한이 한 구간 늘고, 어기면 신임을 크게 잃는다(사용자 카드 \'약속 넣기\')', () => {
+    const g = createGame('need-promise');
+    g.coal = 45;
+    needTick(g, []);
+    const card = g.cards.find(c => c.kind === 'need_warn')!;
+    const view = viewCard(g, card);
+    expect(view.choices.map(c => c.label)).toEqual(['약속한다', '두고 본다']);
+    chooseCard(g, card.uid, 0);
+    expect(g.needs.coal).toMatchObject({ promised: true, due: g.seg + NEED_GRACE + 1 });
+    g.seg += NEED_GRACE;
+    const coal = g.coal;
+    needTick(g, []);
+    expect(g.coal).toBe(coal);
+    g.seg += 1;
+    const trust = g.trust;
+    needTick(g, []);
+    expect(g.trust).toBe(Math.max(0, trust - 8 - 2));
+    expect(g.needs.coal?.hits).toBe(1);
+  });
+
+  it('약속을 지키면 신임이 조금 오른다', () => {
+    const g = createGame('need-promise-kept');
+    g.food = 40;
+    needTick(g, []);
+    chooseCard(g, g.cards.find(c => c.kind === 'need_warn')!.uid, 0);
+    const trust = g.trust;
+    enactLaw(g, 'common_kitchen', []);
+    needTick(g, []);
+    expect(g.needs.food).toBeUndefined();
+    expect(g.trust).toBeGreaterThan(trust);
   });
 
   it('같은 묶음의 어느 법이든 통과하면 요구가 풀린다', () => {
@@ -89,6 +122,8 @@ describe('비상 소집', () => {
       if (idx < 0) continue;
       setAgenda(g, idx);
       const before = { ...Object.fromEntries(Object.entries(g.comms).map(([c, s]) => [c, s.grudge])) };
+      // 표결 결과와 상관없이 통과시키려고 비상대권 중인 판으로 둔다.
+      g.decreeLeft = 2;
       const r = castVote(g, true);
       if (!r) continue;
       const ambushed = g.journal.some(j => j.text.includes('기습'));
@@ -183,5 +218,41 @@ describe('배급장 맡기기 조건', () => {
     advance(g);
     expect(g.autoLevers).toBe(false);
     expect(g.cards.some(c => c.who?.includes('장부'))).toBe(true);
+  });
+});
+
+describe('비상대권(법 16)', () => {
+  it('3구간 동안 구간마다 하나씩 포고하고, 끝나면 다음 회기에 추인받지 못한 포고는 사라진다', () => {
+    const g = createGame('decree');
+    g.seg = 3;
+    enactLaw(g, 'emergency_powers', []);
+    expect(g.decreeLeft).toBe(DECREE_SEGS + 1);
+    // 4구간: 비상 소집이 공짜이고 포고 하나
+    g.seg = 4;
+    g.decreeLeft -= 1;
+    expect(canDecree(g)).toBe(true);
+    expect(emergencyCost(g)).toBe(0);
+    openCouncil(g, true);
+    const law = currentAgenda(g)!.law;
+    expect(castVote(g, true)?.decree).toBe(true);
+    expect(lawActive(g, law)).toBe(true);
+    expect(canDecree(g)).toBe(false);
+    // 다음 구간엔 다시 포고할 수 있다
+    g.seg = 5;
+    g.decreeLeft -= 1;
+    expect(canDecree(g)).toBe(true);
+    // 대권이 끝나면 포고는 추인 안건이 되고, 대권 법은 내려놓는다
+    g.decreeLeft = 0;
+    endEmergencyPowers(g);
+    expect(g.ratify).toEqual([law]);
+    expect(lawActive(g, 'emergency_powers')).toBe(false);
+    g.seg = 6;
+    openCouncil(g);
+    expect(currentAgenda(g)).toMatchObject({ law, ratify: true });
+    // 추인 안건엔 포고가 안 된다
+    expect(castVote(g, true)).toBeNull();
+    // 표결을 안 거치면 정산에서 사라진다
+    dropUnratified(g);
+    expect(lawActive(g, law)).toBe(false);
   });
 });

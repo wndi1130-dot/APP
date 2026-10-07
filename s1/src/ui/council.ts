@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
   lawNeed, openConditions, relStage, relationLine, toolStatus,
-  needOf,
+  needOf, canDecree,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, VoteResult } from '../game';
 import { cx, h, s } from './dom';
@@ -223,7 +223,7 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
     portrait(st.leader.name, c),
     h('div', null,
       nameBtn(st.leader.name, 'name--title'),
-      h('div', { class: 'sub' }, `${REP_ROLE[c]} · ${traitText(g, c)}`),
+      h('div', { class: 'sub' }, st.sick ? `${REP_ROLE[c]} 대리(${st.sick.rep.name} 앓음) · ${traitText(g, c)}` : `${REP_ROLE[c]} · ${traitText(g, c)}`),
       h('div', { class: 'sub num' }, `${b.seats}석${b.absent ? ` (부재 ${b.absent})` : ''} · ${relStage(g, c)}`)),
     h('button', { class: 'x', 'data-action': 'sel-comm', 'data-comm': '', 'aria-label': '닫기' }, '×'));
   const facts = h('div', { class: 'cpanel__facts' },
@@ -233,7 +233,8 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
     st.fervor > 0 ? h('span', { class: 'is-red' }, `열기 ${st.fervor}`) : null,
     grudge ? h('span', { class: 'is-red' }, grudge) : null,
     st.promise ? h('span', null, `약속: ${st.promise.label} (${st.promise.due}구간까지)`) : null,
-    st.debt ? h('span', { class: 'is-blue' }, '받을 빚 1') : null,
+    st.debt && !st.sick ? h('span', { class: 'is-blue' }, '받을 빚 1') : null,
+    st.sick ? h('span', null, '측근과는 빚도 뇌물도 안 통한다') : null,
     deal ? h('span', { class: 'is-blue' }, `이번 회기: ${deal.label}`) : null);
   if (ui.dealOpen === c) {
     const conds = openConditions(g, c);
@@ -312,7 +313,7 @@ export function voteLever(view: View): HTMLElement | null {
   const council = g.council;
   if (!council || council.result || !currentAgenda(g)) return null;
   return h('div', { class: 'vote-actions' },
-    g.decreeLeft > 0 ? h('button', { class: 'btn btn--dark', 'data-action': 'decree' }, '포고') : null,
+    canDecree(g) && !currentAgenda(g)?.ratify ? h('button', { class: 'btn btn--dark', 'data-action': 'decree' }, '포고') : null,
     h('button', { class: 'primary primary--lever', 'data-action': 'vote' }, icon('lever'), h('span', null, '표결')));
 }
 

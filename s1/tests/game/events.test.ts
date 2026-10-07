@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseCard, createGame, drawTravelEvent, EVENT_COOLDOWN, TRAVEL_EVENTS, viewCard } from '../../src/game';
+import { chooseCard, COMMS, createGame, drawTravelEvent, EVENT_CHAIN_MAX, EVENT_COOLDOWN, eventStateKey, TRAVEL_EVENTS, viewCard } from '../../src/game';
 import type { Card } from '../../src/game';
 
 // 같은 사건이 다시 나오면 지난번 고른 것에 따라 본문이 달라지고, 다섯 구간 안에는 다시 나오지 않는다(2026-10-07 사용자 후기).
@@ -60,5 +60,33 @@ describe('사건 기억', () => {
     const first = play(g, { kind: 'favor', comm: 'front' }, 1);
     const second = viewCard(g, { uid: 999, kind: 'favor', comm: 'front' });
     expect(second.body).not.toBe(first.body);
+  });
+});
+
+describe('사건 재등장 규칙(프로스트펑크 사건 사슬 조사 안 2)', () => {
+  it('다시 나온 사건은 본문·선택지 대사·대가 중 적어도 두 곳이 다르다', () => {
+    const g = createGame('again-two');
+    g.coal = 40; g.food = 40;
+    for (const c of COMMS) { g.comms[c].base[0] = 20; g.comms[c].base[1] = 20; }
+    for (const e of TRAVEL_EVENTS) {
+      const first = e.view(g, undefined);
+      for (const ch of first.choices) {
+        const next = e.view(g, { n: 1, seg: 1, pick: ch.label });
+        const body = first.body !== next.body;
+        const say = first.choices.map(x => x.say).join('|') !== next.choices.map(x => x.say).join('|');
+        const cost = JSON.stringify(first.choices.map(x => x.effs)) !== JSON.stringify(next.choices.map(x => x.effs));
+        expect([body, say, cost].filter(Boolean).length, `${e.id} after ${ch.label}`).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('상태가 그대로면 같은 사건을 다시 열지 않고, 사슬은 세 박자까지다', () => {
+    const g = createGame('again-gate');
+    const id = TRAVEL_EVENTS[0].id;
+    g.eventLog[id] = { n: 1, seg: 1, pick: 'x', st: eventStateKey(g) };
+    g.seg = 20;
+    for (let i = 0; i < 30; i += 1) { g.recentEvents = []; expect(drawTravelEvent(g)).not.toBe(id); }
+    g.eventLog[id] = { n: EVENT_CHAIN_MAX, seg: 1, pick: 'x', st: 'old' };
+    for (let i = 0; i < 30; i += 1) { g.recentEvents = []; expect(drawTravelEvent(g)).not.toBe(id); }
   });
 });

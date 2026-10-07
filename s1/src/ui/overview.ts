@@ -31,7 +31,7 @@ function commPanel(view: View, c: Comm): HTMLElement {
       portrait(s.leader.name, c),
       h('div', null,
         h('b', null, COMM_NAME[c]),
-        h('div', { class: 'sub' }, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
+        h('div', { class: 'sub' }, s.sick ? `${REP_ROLE[c]} 대리 ` : `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
         h('div', { class: 'sub num' }, `${s.pop}명 · ${relStage(g, c)}`),
         h('div', { class: cx('sub', s.rel >= 15 && 'is-blue', s.rel <= -15 && 'is-red') }, relationLine(s.rel)))),
     h('div', { class: 'ov-panel__stats' },

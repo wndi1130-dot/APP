@@ -1,8 +1,11 @@
 import { COMMS, COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
-import { onDeath } from './death';
+import { logDeath, onDeath } from './death';
 import { offend } from './politics';
-import { clamp, journal, pick, rnd, situation } from './state';
+import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './state';
+import { BIRTH, familyOf, recover, revertLater } from './people';
+import { NEED_GRACE, NEEDS } from './needs';
+import type { NeedId } from './needs';
 import type { Card, EventMemo, Game } from './state';
 
 // 결정 카드. 수저린식: 말하는 사람, 짧은 본문, 번호 붙은 선택지. 선택지는 지금 확실한 비용과
@@ -177,7 +180,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       choices: [
         { label: '커튼을 걷게 한다', say: past?.pick === '커튼을 걷게 한다' ? '밤에 먹든 낮에 먹든 같은 열차다. 문을 열어 둬라.' : '커튼을 걷어라. 이 열차에 숨어서 먹는 칸은 없다.', effs: [{ t: 'rel', c: 'front', v: -worse(past, 6, 2) }, { t: 'rel', c: 'tail', v: 4 }] },
         { label: '앞칸 편을 든다', say: past?.pick === '앞칸 편을 든다' ? '낙서한 자를 찾아라. 앞칸 식탁은 앞칸 일이다.' : '앞칸 식탁은 앞칸 일이다. 줄을 풀어라.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 4, 3) }, { t: 'rel', c: 'front', v: 4 }] },
-        { label: '대표 둘을 부른다', say: past ? '두 대표를 다시 불러라. 이번엔 내 식탁이다.' : '두 대표를 불러라. 한 식탁에 앉혀 보겠다.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
+        { label: '대표 둘을 부른다', say: past ? '또 커튼이냐. 두 대표를 내 식탁으로 다시 끌고 와라!' : '두 대표를 내 식탁에 앉혀라. 커튼 얘기는 밥 먹으며 끝낸다.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
       ],
     }),
   },
@@ -191,7 +194,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
         '다음 역까지 버틴다': '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
       }, '급수탑이 또 얼었다.'),
       choices: [
-        { label: '불을 피워 녹인다', say: '석탄을 태워서라도 관을 녹여라!', effs: [{ t: 'coal', v: -3 }] },
+        { label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
         { label: '꼬리칸이 눈을 녹인다', say: past?.pick === '꼬리칸이 눈을 녹인다' ? '꼬리칸이 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라.' : '꼬리칸은 양동이를 들어라. 눈을 퍼다 녹인다.', effs: [{ t: 'base', c: 'tail', i: 3, v: 5 }, { t: 'rel', c: 'tail', v: -worse(past, 4, 3) }] },
         { label: '다음 역까지 버틴다', say: past?.pick === '다음 역까지 버틴다' ? '관은 안 탄다. 내가 보증한다. 간다!' : '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -worse(past, 4, 2) }, ...(past?.pick === '다음 역까지 버틴다' ? [{ t: 'base' as const, c: 'engine' as const, i: 3 as const, v: 6 }] : [])] },
       ],
@@ -263,7 +266,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       }, '지붕 경계 대원들이 또 동상을 입었다.'),
       choices: [
         { label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
-        { label: '경계를 줄인다', say: '지붕 교대를 줄여라. 밤에는 창문으로 본다.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
+        { label: '경계를 줄인다', say: '얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
         { label: '그대로 선다', say: past?.pick === '그대로 선다' ? '거부는 없다. 지붕이 비면 다 같이 죽는다.' : '경계는 줄이지 않는다. 장갑을 두 겹 껴라.', effs: [{ t: 'rel', c: 'guard', v: -worse(past, 5, 4) }, { t: 'injured', v: 1 }] },
       ],
     }),
@@ -272,10 +275,27 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
 
 /** 다섯 구간 안에 나왔던 사건은 다시 고르지 않는다. */
 export const EVENT_COOLDOWN = 5;
+/** 한 사건의 사슬은 세 박자(도입, 압력, 결말)까지(프로스트펑크 사건 사슬 조사, 2026-10-07). */
+export const EVENT_CHAIN_MAX = 3;
+
+/** 사건 재등장 상태 키: 화자들, 자원 띠, 꼬리칸 처지 띠, 법. 이 중 하나라도 바뀌어야 같은 사건이 다시 열린다. */
+export function eventStateKey(g: Game): string {
+  const band = (v: number, w: number) => Math.floor(Math.max(0, v) / w);
+  const [w, r] = situation(g, 'tail');
+  const leaders = COMMS.map(c => g.comms[c].leader.name).join(',');
+  const laws = Object.keys(g.passed).sort().join(',');
+  return `${leaders}|${band(g.coal, 40)}|${band(g.food, 40)}|${band(w, 10)}|${band(r, 10)}|${laws}`;
+}
 
 export function drawTravelEvent(g: Game): string | null {
   const log = g.eventLog ?? {};
-  const pool = TRAVEL_EVENTS.filter(e => e.when(g) && !g.recentEvents.includes(e.id) && !(log[e.id] && g.seg - log[e.id].seg < EVENT_COOLDOWN));
+  const st = eventStateKey(g);
+  const open = (id: string) => {
+    const m = log[id];
+    if (!m) return true;
+    return g.seg - m.seg >= EVENT_COOLDOWN && m.n < EVENT_CHAIN_MAX && m.st !== st;
+  };
+  const pool = TRAVEL_EVENTS.filter(e => e.when(g) && !g.recentEvents.includes(e.id) && open(e.id));
   if (pool.length === 0) return null;
   const id = pick(g, pool).id;
   g.recentEvents = [...g.recentEvents, id].slice(-4);
@@ -289,7 +309,7 @@ export function memo(g: Game, key: string): EventMemo | undefined {
 function remember(g: Game, key: string, pick: string): void {
   g.eventLog ??= {};
   const prev = g.eventLog[key];
-  g.eventLog[key] = { n: (prev?.n ?? 0) + 1, seg: g.seg, pick };
+  g.eventLog[key] = { n: (prev?.n ?? 0) + 1, seg: g.seg, pick, st: eventStateKey(g) };
 }
 
 // ---- 다른 묶음의 카드(S1c 내정, domestic/cards.ts가 등록한다) ----
@@ -421,7 +441,8 @@ export function viewCard(g: Game, card: Card): CardView {
       const echo = past?.pick === '숨겨 준다' ? ' 지난번 일 때문에 다들 상처부터 본다.' : past?.pick === '두고 온다' ? ' 지난번 역에 두고 온 사람을 다들 기억한다.' : '';
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
-        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. 감염 창이 닫히기 전에 잘라야 한다.${echo}`,
+        // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).
+        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.${echo}`,
         choices: withAfford(g, [
           { label: `${partObj} 자른다`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
           { label: '숨겨 준다', say: past?.pick === '숨겨 준다' ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
@@ -458,14 +479,118 @@ export function viewCard(g: Game, card: Card): CardView {
       return {
         title: '불신임', speaker: leader(g, 'guard'), required: true,
         body: `더는 열차장을 믿지 않는다는 말이 돈다. ${Math.max(0, (g.trustCrisis ?? g.seg) - g.seg)}구간 안에 신임을 25까지 되돌리지 못하면 끌려 내려온다.`,
-        choices: [{ label: '알았다', effs: [] }],
+        choices: [{ label: '알았다', say: '신임은 말로 되찾는 게 아니다. 결과로 보여 주겠다.', effs: [] }],
       };
     }
     case 'leash': {
       return {
         title: '목줄이 끊겼다', speaker: leader(g, c), focus: c, required: true,
         body: `${g.comms[c].leader.name}이(가) 스스로 비밀을 털어놓고 열차장이 협박했다고 말했다.`,
-        choices: [{ label: '알았다', effs: [] }],
+        choices: [{ label: '알았다', say: '제 입으로 털어놨으면 됐다. 더 할 말 없다.', effs: [] }],
+      };
+    }
+    case 'need_warn': {
+      // 법 요구 예고. 약속하면 기한이 한 구간 늘고, 어기면 신임을 크게 잃는다(프로스트펑크 1식, 2026-10-07 사용자 카드 '약속 넣기').
+      const def = NEEDS[card.text as NeedId];
+      if (!def) break;
+      return {
+        title: `${def.title}이 필요하다`, required: true,
+        body: `${def.warn[(card.n ?? 0) % def.warn.length]} ${NEED_GRACE}구간 안에 정하지 않으면 손해가 난다. 약속하면 한 구간을 더 벌지만, 어기면 신임을 크게 잃는다.`,
+        choices: [
+          { label: '약속한다', say: '다음 회기 안에 정하겠다. 내 이름을 걸고 약속한다.', effs: [], special: 'need_promise', log: `${def.title}을 정하겠다고 약속했다.` },
+          { label: '두고 본다', say: '서두른다고 좋은 법이 나오지 않는다. 지켜봐라.', effs: [] },
+        ],
+      };
+    }
+    case 'orphan': {
+      // 사람의 무게 A1(가): 아이를 남긴 부모가 죽었다. 정해 주는 건 열차장이다.
+      const dead = card.who ?? '';
+      const f = familyOf(g, dead);
+      const kids = f?.kids ?? [];
+      const other = f?.others.find(o => f.fam.parents.includes(o.id));
+      const kidText = kids.map(k => `${k.name}(${k.age})`).join(', ');
+      const choices: Choice[] = [
+        { label: '같은 칸이 돌본다', say: '이 칸의 아이다. 이 칸이 함께 키운다.', effs: [{ t: 'base', c, i: 1, v: -2 }], special: 'orphan_same' },
+      ];
+      if (c !== 'front') choices.push({ label: '앞칸 집에 맡긴다', say: '앞칸에 빈 침대가 있다. 거기서 자게 해라.', effs: [{ t: 'base', c: 'front', i: 2, v: 1 }, { t: 'rel', c, v: 4 }, { t: 'rel', c: 'front', v: -4 }], special: 'orphan_front' });
+      if (c !== 'medtech') choices.push({ label: '의무칸에 둔다', say: '의무진이 맡아라. 아플 때 제일 가깝다.', effs: [{ t: 'base', c: 'medtech', i: 3, v: 2 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'trust', v: 1 }], special: 'orphan_med' });
+      return {
+        title: '남은 아이', speaker: leader(g, c), focus: c, required: true,
+        body: other
+          ? `${dead}이(가) 아이 ${kidText}을(를) 남겼다. 곁엔 ${other.name}뿐인데, 혼자서는 버거워 보인다. 칸이 열차장의 말을 기다린다.`
+          : `${dead}이(가) 아이 ${kidText}을(를) 남겼다. 이제 아무도 없다. 칸이 열차장의 말을 기다린다.`,
+        choices: withAfford(g, choices),
+      };
+    }
+    case 'keepsake': {
+      // 사람의 무게 A1(나): 외투와 장화.
+      const dead = card.who ?? '';
+      const like = PROFILES.find(p => p.name === dead)?.like;
+      const burn = lawActive(g, 'corpse_burn');
+      const choices: Choice[] = [
+        { label: '그 칸에 나눈다', say: '그 칸 사람들이 나눠 입어라. 그게 맞다.', effs: [{ t: 'base', c, i: 0, v: 2 }, { t: 'rel', c, v: 2 }], special: 'keep_share' },
+      ];
+      if (c !== 'tail') choices.push({ label: '꼬리칸에 보낸다', say: '꼬리칸엔 장화 없는 사람이 있다. 그리로 보내라.', effs: [{ t: 'base', c: 'tail', i: 0, v: 2 }, { t: 'rel', c, v: -3 }], special: 'keep_tail' });
+      choices.push({ label: '함께 보낸다', say: burn ? '그 옷은 그와 함께 불에 들어간다.' : '그 옷은 그와 함께 간다. 손대지 마라.', effs: [{ t: 'rel', c, v: 4 }] });
+      return {
+        title: '외투와 장화', focus: c, required: true,
+        body: `${dead}의 외투와 장화가 남았다.${like ? ` 칸 사람들은 그를 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
+        choices: withAfford(g, choices),
+      };
+    }
+    case 'rep_sick': {
+      // 사람의 무게 A2: 대표가 앓고 측근이 대신 나온다. 측근과는 빚도 뇌물도 안 통한다.
+      const s = g.comms[c];
+      const rep = s.sick?.rep.name ?? s.leader.name;
+      return {
+        title: '대표가 앓는다', speaker: leader(g, c), focus: c, required: true,
+        body: s.sick
+          ? `"${rep}이(가) 사흘째 일어나지 못한다. 회기엔 내가 나간다." 측근 ${s.leader.name}이(가) 말한다.`
+          : `${rep}이(가) 앓다가 일어났다. 칸이 한숨 돌렸다.`,
+        choices: withAfford(g, s.sick ? [
+          { label: '약을 보낸다', say: '의무진을 보내라. 대표는 회기에 나와야 한다.', effs: [{ t: 'med', v: -2 }, { t: 'rel', c, v: 3 }], special: 'rep_heal' },
+          { label: '측근을 만난다', say: '대신 나온다는 자를 데려와라. 얼굴을 봐야겠다.', effs: [], special: 'proxy_meet' },
+          { label: '그냥 둔다', say: '대표가 누구든 표는 표다.', effs: [] },
+        ] : [{ label: '알았다', effs: [] }]),
+      };
+    }
+    case 'elder': {
+      // 사람의 무게 A3: 노인이 스스로 정했다. 플레이어가 누구를 내리게 고르는 카드가 아니다.
+      const who = card.who ?? '노인';
+      const age = PROFILES.find(p => p.name === who)?.age;
+      return {
+        title: '내리겠다는 노인', speaker: { name: who, role: `${COMM_NAME[c]}${age ? ` · ${age}세` : ''}`, comm: c }, focus: c, required: true,
+        body: `${who}이(가) 스스로 정했다며 찾아왔다. "다음 역에서 내리겠다. 내 몫은 아이들에게."`,
+        choices: withAfford(g, [
+          { label: '붙잡는다', say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }] },
+          { label: '보내 준다', say: '원한다면 막지 않겠다. 몫은 아이들에게 간다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'rel', c, v: -5 }, { t: 'trust', v: -2 }], special: 'elder_leave', witness: true },
+          { label: '작별을 치른다', say: '모두 모여라. 그를 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
+        ]),
+      };
+    }
+    case 'birth': {
+      // 사람의 무게 A4: 판마다 확률로, 예고 없이.
+      const mother = card.who ?? '';
+      const cold = situation(g, c)[0] < BIRTH.warm;
+      return {
+        title: '아이가 나온다', speaker: leader(g, 'medtech'), focus: c, required: true,
+        body: `${COMM_NAME[c]}에서 ${mother}의 아이가 나온다. ${cold ? '거긴 너무 춥다.' : '칸은 그럭저럭 따뜻하다.'}`,
+        choices: withAfford(g, [
+          { label: '의무칸으로 옮긴다', say: '의무칸을 비워라. 아이는 따뜻한 데서 나온다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
+          { label: '그 칸에서 낳는다', say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
+        ]),
+      };
+    }
+    case 'naming': {
+      const mother = card.who ?? '';
+      return {
+        title: '아이의 이름', speaker: { name: mother, role: COMM_NAME[c], comm: c }, focus: c, required: true,
+        body: `${mother}의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다.`,
+        choices: withAfford(g, [
+          { label: '엄마가 짓는다', say: '이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.', effs: [{ t: 'rel', c, v: 3 }] },
+          { label: '열차 이름을 준다', say: '이 아이는 열차 모두의 아이다. 열차 이름을 줘라.', effs: [], special: 'name_train' },
+          { label: '내 이름을 준다', say: '내 이름을 줘라. 이 아이는 내가 지킨다.', effs: [{ t: 'trust', v: 3 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'rel', c: 'tail', v: -2 }], log: '아이에게 열차장의 이름을 주었다.' },
+        ]),
       };
     }
     case 'info': {
@@ -493,6 +618,13 @@ const FAVORS: Record<Comm, { body: string; cost: Eff[] }> = {
   front: { body: '"술 두 병만. 손님을 맞아야 한다." 앞칸 대표가 웃는다.', cost: [{ t: 'lux', v: -2 }] },
   engine: { body: '"견습생 하나를 꼬리칸에서 데려가고 싶다. 내가 고른 아이로."', cost: [{ t: 'rel', c: 'tail', v: -2 }] },
 };
+
+/** 받침에 따라 을/를. */
+function eul(word: string): string {
+  const ch = word.charCodeAt(word.length - 1);
+  if (ch < 0xac00 || ch > 0xd7a3) return '을(를)';
+  return (ch - 0xac00) % 28 ? '을' : '를';
+}
 
 // ---- 고르기 ----
 export function applyEffs(g: Game, effs: readonly Eff[]): void {
@@ -569,7 +701,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
     case 'bite_shoot':
       g.hiddenBites = (g.hiddenBites ?? []).filter(b => b.who !== card.who);
-      onDeath(g, c, [card.who ?? '이름 모를 대원']);
+      onDeath(g, c, [card.who ?? '이름 모를 대원'], 'chosen', true);
       journal(g, `${card.who ?? '대원'}을(를) 쏘았다. 칸 사람들이 다 들었다.`, 'dark');
       break;
     case 'leave_bitten':
@@ -577,7 +709,54 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       offend(g, c);
       g.comms[c].pop = Math.max(1, g.comms[c].pop - 1);
       g.deaths.push(card.who ?? '이름 모를 대원');
+      logDeath(g, [card.who ?? '이름 모를 대원'], 'chosen', true);
       journal(g, `${card.who ?? '대원'}을(를) 역에 두고 왔다.`, 'dark');
+      break;
+    case 'need_promise': {
+      const st = g.needs?.[card.text as NeedId];
+      if (st && !st.promised) { st.promised = true; st.due += 1; }
+      break;
+    }
+    case 'orphan_same':
+    case 'orphan_front':
+    case 'orphan_med': {
+      const to: Comm = choice.special === 'orphan_front' ? 'front' : choice.special === 'orphan_med' ? 'medtech' : c;
+      if (to === c) g.comms[c].coh = clamp(g.comms[c].coh + 0.05, 0, 1);
+      for (const k of familyOf(g, card.who ?? '')?.kids ?? []) (g.raised ??= {})[k.name] = to;
+      break;
+    }
+    case 'keep_share':
+      revertLater(g, c, 0, 2, 2);
+      break;
+    case 'keep_tail':
+      revertLater(g, 'tail', 0, 2, 2);
+      break;
+    case 'rep_heal':
+      recover(g, c, '의무진의 약을 먹고');
+      break;
+    case 'proxy_meet':
+      g.comms[c].leader.traitShown = 2;
+      break;
+    case 'elder_leave':
+      // 인원은 효과(pop −1)로 이미 줄었다. 떠난 사람으로만 남긴다.
+      (g.left ??= []).push(card.who ?? '노인');
+      break;
+    case 'birth_ok':
+      g.comms[c].pop += 1;
+      for (const o of COMMS) g.comms[o].rel = clamp(g.comms[o].rel + 2, -100, 100);
+      g.tension = clamp(g.tension - 3, 0, 100);
+      if (g.born) g.born.weak = false;
+      g.cards.unshift({ uid: g.nextCardUid, kind: 'naming', comm: c, who: card.who });
+      g.nextCardUid += 1;
+      journal(g, `${card.who ?? ''}의 아이가 태어났다. 열차가 잠깐 조용해졌다.`, 'good');
+      break;
+    case 'birth_weak':
+      g.comms[c].pop += 1;
+      if (g.born) { g.born.weak = true; g.born.left = BIRTH.weakSegs; }
+      journal(g, `${card.who ?? ''}의 아이가 작게 태어났다. 의무진이 의약품을 아껴 둔다.`, 'bad');
+      break;
+    case 'name_train':
+      for (const o of COMMS) g.comms[o].coh = clamp(g.comms[o].coh + 0.02, 0, 1);
       break;
     case 'tension_reset':
       g.tension = 65;

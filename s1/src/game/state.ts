@@ -62,6 +62,10 @@ export interface CommState {
   cutAt: number[];
   /** 한 번 들킨 대표 */
   disgraced: boolean;
+  /** 대표가 앓는 동안 원래 대표(leader는 대신 나온 측근이다, 사람의 무게 A2) */
+  sick?: { since: number; rep: Leader };
+  /** 온기나 배급이 30 아래로 이어진 구간 수 */
+  lowStreak?: number;
 }
 
 export interface Secret { id: number; text: string; weight: number; about: Comm; uses: number }
@@ -70,7 +74,8 @@ export interface Leash { comm: Comm; since: number; weight: number }
 export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
 export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string }
 /** 한 사건을 마지막으로 겪은 때와 고른 것. 같은 사건이 다시 나오면 이걸 보고 본문과 대가를 바꾼다. */
-export interface EventMemo { n: number; seg: number; pick: string }
+/** st: 그때의 상태 키(eventStateKey). 상태가 그대로면 같은 사건을 다시 열지 않는다. */
+export interface EventMemo { n: number; seg: number; pick: string; st?: string }
 
 export interface StopState {
   place: string;
@@ -100,7 +105,8 @@ export interface StopResult {
 
 export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail';
 export interface Deal { comm: Comm; tool: DealTool; label: string }
-export interface Agenda { law: LawId; repeal: boolean; by?: Comm; forced?: boolean }
+/** ratify: 비상대권 포고를 의회가 추인하는 표결(통과하면 남고, 안 되면 사라진다) */
+export interface Agenda { law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean }
 
 export interface VoteFlip { comm: Comm; yes: boolean }
 export interface VoteResult {
@@ -167,6 +173,11 @@ export interface Game {
   emergencyUsed: boolean;
   guidedLeft: number;
   decreeLeft: number;
+  /** 이번 대권에서 포고한 법과 마지막으로 포고한 구간 */
+  decreed?: LawId[];
+  decreeSeg?: number;
+  /** 대권이 끝나 다음 회기 추인을 기다리는 포고 */
+  ratify?: LawId[];
   guardEscort: boolean;
   forcedRun: boolean;
   autoLevers: boolean;
@@ -181,10 +192,30 @@ export interface Game {
   eventLog: Record<string, EventMemo>;
   /** 법 요구: 문제는 있는데 그 문제를 다루는 법이 없다(needs.ts) */
   needs: Partial<Record<NeedId, NeedState>>;
+  /** 법 요구마다 예고가 몇 번 왔나(예고 글 변주) */
+  needAsked?: Partial<Record<NeedId, number>>;
   /** 비상 소집을 부른 구간들 */
   emergencyCalls: number[];
   /** 식량 0으로 버틴 구간 수 */
   hunger: number;
+  // ---- 사람의 무게(people.ts) ----
+  /** 사람 카드가 마지막으로 온 구간(그다음 이동 사건을 쉰다) */
+  peopleSeg?: number;
+  /** 죽음 기록(원인 태그). 하차 장면이 죄책감과 애도를 가른다 */
+  deathLog?: { seg: number; name: string; cause: 'chosen' | 'warned' | 'other'; witness?: boolean }[];
+  /** 장작불 법: 다음 정차에 태우려고 지키는 시신 */
+  pyre?: number;
+  /** 상중인 사람 */
+  mourning?: { name: string; comm: Comm; until: number }[];
+  /** 잠깐 오른 처지 */
+  tempBase?: { c: Comm; i: 0 | 1 | 2 | 3; v: number; until: number }[];
+  sickCount?: number;
+  elderAsked?: boolean;
+  /** 스스로 열차에서 내린 사람 */
+  left?: string[];
+  born?: { comm: Comm; mother: string; weak: boolean; left: number; lost?: boolean };
+  /** 부모를 잃은 아이를 맡은 칸 */
+  raised?: Record<string, Comm>;
   /** 이번 판에 이미 본 정차 글(조짐, 창밖 겉모습). 같은 문장이 되도록 다시 안 나오게 한다. */
   linesSeen: string[];
   /** 붕대로 감아 숨긴 물림. 2구간 안에 들키거나 칸 안에서 일어난다(body_injury 4.4). */
@@ -215,6 +246,11 @@ export function clamp(value: number, lo: number, hi: number): number {
 }
 
 // ---- 읽기 ----
+/** 죽었거나 열차에서 내린 사람 */
+export function isGone(g: Game, name: string): boolean {
+  return g.deaths.includes(name) || (g.left ?? []).includes(name);
+}
+
 export function stageOf(rel: number): { name: string; band: number; index: number } {
   const index = STAGES.findIndex(stage => rel >= stage.min);
   const stage = STAGES[index === -1 ? STAGES.length - 1 : index];
@@ -268,9 +304,9 @@ export function addCard(g: Game, card: Omit<Card, 'uid'>): void {
 
 /** 아직 이름이 불리지 않은 사람을 프로필 풀에서 뽑는다. */
 export function drawPerson(g: Game, c: Comm, ages?: [number, number]): Profile {
-  const pool = PROFILES.filter(p => p.community === c && !g.usedProfiles.includes(p.id) && !g.deaths.includes(p.name)
+  const pool = PROFILES.filter(p => p.community === c && !g.usedProfiles.includes(p.id) && !isGone(g, p.name)
     && (!ages || (p.age >= ages[0] && p.age <= ages[1])));
-  const fallback = PROFILES.filter(p => p.community === c && !g.deaths.includes(p.name));
+  const fallback = PROFILES.filter(p => p.community === c && !isGone(g, p.name));
   const person = pick(g, pool.length > 0 ? pool : fallback);
   if (!g.usedProfiles.includes(person.id)) g.usedProfiles.push(person.id);
   return person;

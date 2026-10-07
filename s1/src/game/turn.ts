@@ -2,13 +2,14 @@ import { addCard } from './state';
 import { drawTravelEvent } from './cards';
 import { onDeath } from './death';
 import { needTick } from './needs';
+import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
-import { agendaOptions, agendaTitle, exposeBribe, offend, openCouncil, stance } from './politics';
+import { agendaOptions, agendaTitle, canDecree, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
 import {
-  addSecret, clamp, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
+  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
 } from './state';
 import type { Game, StopResult } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -174,14 +175,24 @@ function depart(g: Game): void {
     return;
   }
   g.inStrike = false;
-  const event = drawTravelEvent(g);
+  // 사람 카드가 막 왔으면 이동 사건을 쉰다(사람의 무게 6.0: 카드 수를 늘리지 않는다).
+  const event = peopleCardRecent(g) ? null : drawTravelEvent(g);
   if (event) addCard(g, { kind: 'travel', text: event });
   g.phase = 'travel';
 }
 
+/** 장작불 법: 내린 정차에서 지키던 시신을 태운다. 불쏘시개로 석탄을 쓴다. */
+function burnPyre(g: Game): void {
+  const n = g.pyre ?? 0;
+  if (n <= 0) return;
+  g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * n);
+  g.pyre = 0;
+  journal(g, `선로 옆 장작불에 시신 ${n}구를 태웠다.`, 'dark');
+}
+
 // ---- 정차(S1 기획서 7장, 필드 결정 카드) ----
 export function crewNames(g: Game, c: Comm, size: number): string[] {
-  const alive = PROFILES.filter(p => p.community === c && !g.deaths.includes(p.name) && p.age >= 16 && p.age <= 65);
+  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65);
   if (alive.length === 0) return [];
   const start = (g.seg * 7) % alive.length;
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
@@ -287,12 +298,16 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   }
   const stay = STAY[stop.stay];
   g.coal -= stay.coal;
+  burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
   let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scout ? P.scoutHaul : 1) * domesticHaulMult(g);
   const notes: string[] = [];
   const tail = g.comms.tail;
   if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
+  // 상중인 사람은 손이 느리다(사람의 무게 A1).
+  const grieving = crewNames(g, stop.crewComm, stop.crewSize).filter(n => mourners(g).includes(n));
+  if (grieving.length > 0) { haul *= 1 - 0.1 * grieving.length; notes.push(`${grieving.join(', ')}은(는) 상중이라 손이 느렸다.`); }
   const gains: Partial<Record<LootKey, number>> = {};
   for (const k of LOOT_KEYS) {
     const amt = (haul * weights[k]) / tot;
@@ -344,7 +359,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   g.injured += injuredOnly.length;
   // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
   if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel - 2, -100, 100);
-  if (dead.length > 0) onDeath(g, stop.crewComm, dead);
+  // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
+  if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = stop.scout ? P.scoutSize : 0;
   if (scouts > 0 && rnd(g) < P.scoutSprain) notes.push('정찰조 하나가 발목을 삐었다.');
   g.comms[stop.crewComm].away = stop.crewSize + scouts - dead.length;
@@ -432,6 +448,8 @@ function settle(g: Game): void {
   hungerTick(g, notes);
   biteTick(g);
   needTick(g, notes);
+  peopleTick(g, () => rnd(g));
+  if (g.council && !g.council.emergency) dropUnratified(g);
   if (g.council) bribeDetection(g);
   leashTick(g);
   aiLeaders(g);
@@ -464,7 +482,7 @@ function biteTick(g: Game): void {
         keep.push(b);
         continue;
       }
-      onDeath(g, b.comm, [b.who]);
+      onDeath(g, b.comm, [b.who], 'chosen');
       continue;
     }
     if (!b.found && (lawActive(g, 'patrol') || rnd(g) < 0.5)) {
@@ -488,10 +506,10 @@ function hungerTick(g: Game, notes: string[]): void {
     return;
   }
   if (g.hunger <= HUNGER_GRACE) { notes.push(`굶은 지 ${g.hunger}구간째다.`); return; }
-  const who = PROFILES.filter(p => p.community === 'tail' && !g.deaths.includes(p.name)).map(p => p.name)[0];
-  if (who) {
-    onDeath(g, 'tail', [who]);
-    journal(g, `${who}이(가) 굶어 죽었다.`, 'bad');
+  const [p] = pickVictims(g, 1, 'hunger', () => rnd(g));
+  if (p) {
+    onDeath(g, p.community, [p.name]);
+    journal(g, `${COMM_NAME[p.community]}의 ${p.name}(${p.age})이(가) 굶어 죽었다.`, 'bad');
     notes.push('굶어 죽은 사람이 나왔다.');
   }
 }
@@ -500,6 +518,8 @@ function hungerTick(g: Game, notes: string[]): void {
 // 회기가 아닌 구간에도 정차를 마친 뒤 의회를 부를 수 있다. 신임을 쓰고, 최근에 자주 불렀을수록 비싸다(제안).
 // 파견 나간 칸의 표는 빠지므로, 반대하는 칸이 밖에 있을 때 부르면 '기습 표결'로 기억된다.
 export function emergencyCost(g: Game): number {
+  // 대권 중엔 열차장이 바로 부른다(포고하려고). 그 밖엔 신임을 쓴다.
+  if (canDecree(g)) return 0;
   const recent = (g.emergencyCalls ?? []).filter(at => g.seg - at < 6).length;
   return 6 + 4 * recent;
 }
@@ -548,10 +568,16 @@ function medicineTick(g: Game, notes: string[]): void {
     for (let i = 0; i < g.injured; i += 1) if (rnd(g) < 0.1) dead += 1;
     g.injured -= dead;
     if (dead > 0) {
-      const names = PROFILES.filter(p => p.community === 'tail' && !g.deaths.includes(p.name)).slice(0, dead).map(p => p.name);
-      onDeath(g, 'tail', names);
+      for (const p of pickVictims(g, dead, 'wound', () => rnd(g))) onDeath(g, p.community, [p.name]);
     }
     notes.push('의약품이 떨어졌다.');
+  }
+  // 지키던 시신도 다음 정차까지 오래 두면 일어날 수 있다. 냉동칸보다는 덜하다(경비가 붙어 있다).
+  if ((g.pyre ?? 0) > 0 && rnd(g) < Math.min(0.2, P.pyreRisk * (g.pyre ?? 0))) {
+    g.pyre = (g.pyre ?? 0) - 1;
+    g.injured += 1;
+    g.tension = clamp(g.tension + 5, 0, 100);
+    journal(g, '태우려고 지키던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
   if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored) * domesticThawMult(g)) {
     g.injured += 2;
@@ -778,13 +804,17 @@ function finish(g: Game, end: Game['end']): void {
   g.phase = 'end';
   const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: '반란이 일어났다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
+  for (const line of raisedLines(g)) journal(g, line);
 }
 
 function nextSegment(g: Game): void {
   if (g.seg >= P.segments) return finish(g, 'complete');
   g.seg += 1;
   g.stop = null;
-  if (g.decreeLeft > 0) g.decreeLeft -= 1;
+  if (g.decreeLeft > 0) {
+    g.decreeLeft -= 1;
+    if (g.decreeLeft === 0) endEmergencyPowers(g);
+  }
   g.phase = 'prep';
   applyFloors(g);
   if (g.autoLevers && !autoLeverStatus(g).ok) {
