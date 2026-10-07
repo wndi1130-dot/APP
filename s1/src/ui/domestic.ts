@@ -1,10 +1,9 @@
 import {
-  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, HYGIENE_NAME, PENDING_TECHS, SKILL_NAME, TECHS, TECH_IDS,
-  applyMove, buryOpen, cancelRestore, coldCap, createGame, createS1cGame, delegateStatus, delegateTier, escortOptions, finishCheck,
-  freeTeacher, hotWaterCoal, hotWaterFloor, hygiene, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter,
-  materials, moveOpen, moveTask, movedThisStop, previewMove, requestApprentice, requestManual, restartTech, restoreCheck, restoreCost,
-  setBury, setDelegate, setEscort, setFullRule, setHotWater, setTarget, startFinish, startJob, startRestore, storeCap, techMult,
-  techPending, techRelSides, techTitle, techUsable, upkeepOf, workPower, workshopChief, workshopState, zoneAt,
+  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, HYGIENE_NAME, PENDING_TECHS, SKILL_NAME, TECHS,
+  TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
+  hotWaterCoal, hotWaterFloor, hygiene, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
+  movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techMult, techPending, techRelSides, techTitle, techUsable, upkeepOf,
+  workPower, workshopChief, workshopState, zoneAt,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, s } from './dom';
@@ -12,6 +11,8 @@ import { CARS, fmt, signed } from './common';
 import type { CarDef, DomUi, Ui, View } from './common';
 import { bar, portrait } from './widgets';
 import { nameBtn, shownName } from './names';
+import { plainData } from './repro';
+import type { Step } from './repro';
 import './domestic.css';
 
 // S1c 내정 화면(s1c_domestic 11장). S1a 화면 파일에는 한 줄짜리 훅만 두고 내정 화면은 모두 여기서 그린다.
@@ -638,7 +639,8 @@ export function domesticEnd(view: View): HTMLElement | null {
 export interface DomCtx {
   game(): Game;
   ui(): Ui;
-  act(fn: (next: Game) => void): void;
+  /** 판을 바꾸는 행동(repro.ts applyStep). 알림 글이 있으면 돌려준다. */
+  step(s: Step): string | null;
   toast(text: string): void;
   render(): void;
   /** 새 판으로 바꾼다 */
@@ -672,46 +674,20 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-mats':
       du.mats = !du.mats;
       break;
-    case 'dom-restore': {
-      const id = data.id as TechId;
-      ctx.act(next => { if (!startRestore(next, id, data.mode === 'defect' ? 'defect' : 'full', (data.variant || undefined) as Variant | undefined)) why = '지금은 시작할 수 없다'; });
-      break;
-    }
+    case 'dom-restore':
     case 'dom-cancel':
-      ctx.act(next => cancelRestore(next));
-      break;
     case 'dom-finish':
-      ctx.act(next => { if (!startFinish(next, data.id as TechId)) why = '지금은 고칠 수 없다'; });
-      break;
     case 'dom-restart':
-      ctx.act(next => restartTech(next, data.id as TechId));
-      break;
     case 'dom-order':
-      ctx.act(next => moveTask(next, data.task as Task, data.step === '-1' ? -1 : 1));
-      break;
     case 'dom-delegate':
-      ctx.act(next => { if (!setDelegate(next, data.on === '1', data.policy as 'ours' | 'neutral' | undefined)) why = delegateStatus(next).why ?? '맡길 수 없다'; });
-      break;
     case 'dom-apprentice':
-      ctx.act(next => { why = requestApprentice(next, data.field as Field) ? '견습생 후보 서류가 쌓였다.' : '가르칠 사람이 없거나 서류가 이미 있다.'; });
-      break;
     case 'dom-manual':
-      ctx.act(next => { why = requestManual(next, data.field as Field) ? '매뉴얼 요청 서류가 쌓였다.' : '써 줄 사람이 없거나 서류가 이미 있다.'; });
-      break;
     case 'dom-hot':
-      ctx.act(next => setHotWater(next, Number(data.value)));
-      break;
     case 'dom-full':
-      ctx.act(next => setFullRule(next, data.rule as 'parts' | 'dump' | 'aisle'));
-      break;
     case 'dom-job':
-      ctx.act(next => { if (!startJob(next, data.kind as ModKind, data.car ?? '')) why = '개조를 올릴 수 없다'; });
-      break;
     case 'dom-escort':
-      ctx.act(next => setEscort(next, data.id || null));
-      break;
     case 'dom-bury':
-      ctx.act(next => setBury(next, data.on === '1'));
+      why = ctx.step({ a: action, d: plainData(data) });
       break;
     case 'dom-move': {
       const order = du.order && du.order.length === d0.cars.length ? [...du.order] : [...d0.cars];
@@ -726,7 +702,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
       break;
     case 'dom-move-apply': {
       const order = du.order ?? [...d0.cars];
-      ctx.act(next => { if (!applyMove(next, order)) why = '입환할 수 없다'; });
+      why = ctx.step({ a: action, d: { order: order.join(',') } });
       if (!why) { ui.panel = null; du.order = null; ui.cardOpen = true; }
       break;
     }
@@ -744,9 +720,9 @@ export function changeDomestic(el: HTMLInputElement, ctx: DomCtx): boolean {
   const g = ctx.game();
   if (!g.dom) return true;
   const v = Number(el.value);
-  if (el.dataset.which === 'target' && g.dom.target !== v) ctx.act(next => setTarget(next, v));
+  if (el.dataset.which === 'target' && g.dom.target !== v) ctx.step({ a: 'dom-target', d: { value: String(v) } });
   else if (el.dataset.which === 'hot' && g.dom.hotWater !== v) {
-    ctx.act(next => setHotWater(next, v));
+    ctx.step({ a: 'dom-hot', d: { value: String(v) } });
     if (v < hotWaterFloor(g)) ctx.toast('드물게가 가장 낮다.');
   }
   return true;

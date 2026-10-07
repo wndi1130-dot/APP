@@ -7,6 +7,7 @@ import {
   H6_IDLE_MS, domesticActive, domesticOp, h6Input, h6Render, h6Summary, handleDomestic, newGame, stayLocked, trainCars,
 } from '../../src/ui/domestic';
 import type { DomCtx, H6Clock } from '../../src/ui/domestic';
+import { applyStep } from '../../src/ui/repro';
 
 // S1c 내정 화면의 DOM 없이 볼 수 있는 규칙: 편성 순서, 칸 순서 바꾸기 입력, H6 재기(s1c_domestic 11장, 12장).
 
@@ -17,12 +18,12 @@ function ui(over: Partial<Ui> = {}): Ui {
   };
 }
 
-/** app.ts의 act처럼 사본에 하고 바꿔 끼운다. */
+/** app.ts의 step처럼 사본에 하고 바꿔 끼운다. */
 function ctxFor(start: Game, u: Ui) {
   const box = { g: start, toasts: [] as string[] };
   const ctx: DomCtx = {
     game: () => box.g, ui: () => u,
-    act(fn) { const next = cloneGame(box.g); fn(next); box.g = next; },
+    step(st) { const next = cloneGame(box.g); const text = applyStep(next, st); box.g = next; return text; },
     toast(t) { box.toasts.push(t); },
     render() {},
     reset(next) { box.g = next; },

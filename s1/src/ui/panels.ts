@@ -9,6 +9,7 @@ import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
 import { domesticEnd, domesticMenu, domesticPanel } from './domestic'; // S1c 내정 훅
+import { reproError, reproText } from './repro';
 
 // 겹쳐 뜨는 창: 불만·지지 집단 창, 일지, 메뉴, 정산 요약, 디버그, 끝.
 
@@ -68,7 +69,19 @@ function menuPanel(view: View): HTMLElement {
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 처음부터'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'new-seed' }, '새 판(새 시드)'),
       domesticMenu(view),
-      h('button', { class: cx('btn btn--ghost', ui.debug && 'is-on'), 'data-action': 'toggle-debug' }, ui.debug ? '숨은 수치 끄기' : '숨은 수치 보기(테스트용)')));
+      h('button', { class: cx('btn btn--ghost', ui.debug && 'is-on'), 'data-action': 'toggle-debug' }, ui.debug ? '숨은 수치 끄기' : '숨은 수치 보기(테스트용)'),
+      h('button', { class: 'btn btn--ghost', 'data-action': 'repro-copy' }, '오류 재현 묶음 복사')),
+    reproSection());
+}
+
+/** 오류 재현 묶음(repro.ts): 복사 단추 아래 안내와, 복사가 막힌 창을 위한 펼치는 칸. */
+function reproSection(): HTMLElement {
+  const err = reproError();
+  return h('div', { class: 'repro' },
+    h('p', { class: 'sub' }, err ? `마지막 오류: ${shortText(err.msg)}` : '이상한 일이 생기면 위 묶음을 복사해 보내 줘. 시드, 최근 행동, 직전 저장이 들어 있다.'),
+    h('details', { class: 'dom-export' },
+      h('summary', null, '복사가 안 되면 펼쳐서 길게 눌러 복사'),
+      h('textarea', { class: 'dom-export__text', readonly: true, rows: 5 }, reproText())));
 }
 
 function settlePanel(view: View): HTMLElement | null {

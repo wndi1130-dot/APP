@@ -777,3 +777,4 @@ small { font-size: 12px; }
 .brake span { font-size: 13px; color: var(--ink-2); }
 @keyframes brake-text { 0% { opacity: 0; transform: translate(-50%, -40%); } 20% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: .9; } }
 .scene { font-size: 12px; color: var(--ink-2); line-height: 1.45; padding-left: 8px; border-left: 2px solid var(--line-strong); }
+.repro { margin-top: 10px; }

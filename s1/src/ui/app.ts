@@ -1,42 +1,34 @@
-import {
-  openConditions,
-  COMMS, advance, autoLeverStatus, callEmergency, castVote, chooseCard, cloneGame, currentAgenda, cutComm, makeDeal, resolveStop,
-  setAgenda, setAutoLevers, setLever, setStop, supportComm, uniqueAction, viewCard, migrateDomestic,
-} from '../game';
-import type { Comm, Game, StayId } from '../game';
+import { openConditions, autoLeverStatus, cloneGame, currentAgenda, viewCard } from '../game';
+import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
 import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
 import { homeScreen, stackCount } from './home';
 import { overviewScreen } from './overview';
 import { councilScreen, voteLever } from './council';
-import { cardSheet, isLoot } from './card';
+import { cardSheet } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
 import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
 import { changeDomestic, h6Input, h6Render, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
+import { TRAIL_MAX, applyStep, makeBundle, plainData, reviveSave, reproText, setReproSource } from './repro';
+import type { ReproError, Step, TrailEntry } from './repro';
 
 // 화면 조립과 입력. 상태가 바뀌면 통째로 다시 그리고, 스크롤 위치와 연결선은 그린 뒤에 되살린다.
 // 저장은 한 칸이고 행동마다 저절로 한다(되돌리기 없음, S1 기획서 2장).
 
 const SAVE_KEY = 's1a.game.v2';
+// 오류 재현 묶음(repro.ts): 최근 행동, 직전 저장, 마지막 오류. 다시 열어도 남게 따로 저장한다.
+const REPRO_KEY = 's1a.repro.v1';
 const COUNT_MS = 45;
 
 function load(): Game | null {
   try {
     const raw = globalThis.localStorage?.getItem(SAVE_KEY);
     if (!raw) return null;
-    const g = JSON.parse(raw) as Game;
-    if (!g || g.version !== 1 || typeof g.seg !== 'number') return null;
     // 예전 판에 없던 칸을 채워 저장한 판을 이어 한다.
-    g.eventLog ??= {};
-    g.needs ??= {};
-    g.emergencyCalls ??= [];
-    g.hunger ??= 0;
-    g.linesSeen ??= [];
-    migrateDomestic(g);
-    return g;
+    return reviveSave(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -48,6 +40,32 @@ function save(g: Game): void {
   } catch {
     // 저장할 수 없어도 판은 이어진다.
   }
+}
+
+interface Repro { seed: string; trail: TrailEntry[]; prev: Game | null; error: ReproError | null }
+
+function loadRepro(seed: string): Repro {
+  try {
+    const raw = globalThis.localStorage?.getItem(REPRO_KEY);
+    const r = raw ? JSON.parse(raw) as Repro : null;
+    if (r && r.seed === seed && Array.isArray(r.trail)) return { seed, trail: r.trail, prev: reviveSave(r.prev), error: r.error ?? null };
+  } catch {
+    // 못 읽으면 새로 모은다.
+  }
+  return { seed, trail: [], prev: null, error: null };
+}
+
+function saveRepro(r: Repro): void {
+  try {
+    globalThis.localStorage?.setItem(REPRO_KEY, JSON.stringify(r));
+  } catch {
+    // 저장 칸이 모자라도 판은 이어진다.
+  }
+}
+
+function errorOf(e: unknown, step?: Step): ReproError {
+  const err = e instanceof Error ? e : new Error(String(e));
+  return { msg: err.message, stack: err.stack?.split('\n').slice(0, 12).join('\n'), step, t: Date.now() };
 }
 
 function randomSeed(): string {
@@ -150,6 +168,8 @@ export function startApp(root: HTMLElement): void {
   let countTimer: ReturnType<typeof setInterval> | undefined;
   let focusCar: string | null = null;
   const h6: H6Clock = { since: 0, seg: null }; // S1c 내정 훅: 내정 시간 재기
+  let repro = loadRepro(g.seed);
+  setReproSource(() => makeBundle(g, repro.prev, repro.trail, repro.error, ui.screen), () => repro.error);
 
   function render(): void {
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) scroll[el.dataset.keepScroll ?? ''] = el.scrollLeft || el.scrollTop;
@@ -191,14 +211,35 @@ export function startApp(root: HTMLElement): void {
     toastTimer = setTimeout(() => { ui.toast = null; render(); }, 2600);
   }
 
-  /** 판을 바꾸는 행동. 사본에 하고, 저장하고, 다시 그린다. */
-  function act(fn: (next: Game) => void): void {
+  /** 판을 바꾸는 행동(repro.ts applyStep). 사본에 하고, 저장하고, 다시 그린다. 알림 글이 있으면 돌려준다.
+   *  행동과 직전 판을 재현 묶음에 남긴다. 행동이 던지면 판은 그대로 두고 오류를 남긴다. */
+  function step(st: Step): string | null {
+    const before = g;
     const next = cloneGame(g);
-    fn(next);
+    const entry: TrailEntry = { ...st, seg: before.seg, phase: before.phase, t: Date.now() };
+    repro.trail = [...repro.trail, entry].slice(-TRAIL_MAX);
+    repro.prev = before;
+    let text: string | null;
+    try {
+      text = applyStep(next, st);
+    } catch (e) {
+      repro.error = errorOf(e, st);
+      saveRepro(repro);
+      toast('오류가 났다. 메뉴에서 오류 재현 묶음을 복사해 보내 줘.');
+      render();
+      return null;
+    }
     g = next;
     save(g);
+    saveRepro(repro);
     afterChange();
     render();
+    return text;
+  }
+
+  function resetRepro(): void {
+    repro = { seed: g.seed, trail: [], prev: null, error: null };
+    saveRepro(repro);
   }
 
   function afterChange(): void {
@@ -241,7 +282,7 @@ export function startApp(root: HTMLElement): void {
     switch (action) {
       case 'advance': {
         const wasSettle = g.phase === 'settle';
-        act(next => advance(next));
+        step({ a: 'advance', d: {} });
         if (g.phase === 'settle' && !wasSettle) { ui.panel = 'settle'; ui.screen = 'home'; ui.selComm = null; ui.dealOpen = null; }
         if (g.phase === 'stop' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
           // 정차: 브레이크 소리와 함께 열차가 서고 나서 정차 서류가 펼쳐진다(나중엔 정차 장면으로 넘어가는 자리).
@@ -258,7 +299,7 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'emergency':
-        act(next => { callEmergency(next); });
+        step({ a: 'emergency', d: {} });
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; ui.panel = null; }
         return render();
       case 'person':
@@ -271,23 +312,12 @@ export function startApp(root: HTMLElement): void {
         ui.cardOpen = false;
         return render();
       case 'choose':
-        act(next => { chooseCard(next, Number(data.uid), Number(data.index)); });
+        step({ a: 'choose', d: plainData(data) });
         if (stackCount(g, ui) > 0) focusForTopCard();
         return render();
-      case 'stop-set': {
-        const key = data.key;
-        const value = data.value ?? '';
-        act(next => {
-          if (key === 'target' && isLoot(value)) setStop(next, { target: value });
-          else if (key === 'stay') setStop(next, { stay: value as StayId });
-          else if (key === 'crewComm' && (COMMS as readonly string[]).includes(value)) setStop(next, { crewComm: value as Comm });
-          else if (key === 'crewSize') setStop(next, { crewSize: Number(value) });
-          else if (key === 'scout') setStop(next, { scout: value === '1' });
-        });
-        return;
-      }
+      case 'stop-set':
       case 'stop-go':
-        act(next => { resolveStop(next, data.go === '1'); });
+        step({ a: action, d: plainData(data) });
         return;
       case 'stop-seen':
         ui.stopSeen = true;
@@ -321,7 +351,7 @@ export function startApp(root: HTMLElement): void {
         ui.numbersOnly = !ui.numbersOnly;
         return render();
       case 'auto-levers':
-        act(next => setAutoLevers(next, !next.autoLevers));
+        step({ a: 'auto-levers', d: {} });
         if (!g.autoLevers && autoLeverStatus(g).why) { toast(autoLeverStatus(g).why!); return render(); }
         toast(g.autoLevers ? '배급장에게 맡겼다. 출발 전마다 레버를 움직인다.' : '레버를 직접 잡는다.');
         return render();
@@ -330,33 +360,27 @@ export function startApp(root: HTMLElement): void {
         ui.dealOpen = null;
         ui.cutPick = null;
         return render();
-      case 'agenda': {
-        const council = g.council;
-        if (!council) return;
-        const n = council.options.length;
-        act(next => setAgenda(next, (council.idx + Number(data.step) + n) % n));
+      case 'agenda':
+        if (!g.council) return;
+        step({ a: 'agenda', d: plainData(data) });
         return;
-      }
       case 'deal': {
         const c = data.comm as Comm;
-        const tool = data.tool as Parameters<typeof makeDeal>[2];
+        const tool = data.tool;
         if (tool === 'open') { ui.dealOpen = c; ui.cutPick = null; return render(); }
-        let text = '';
-        act(next => { text = makeDeal(next, c, tool).text; });
-        toast(text);
+        const text = step({ a: 'deal', d: plainData(data) });
+        if (text) toast(text);
         return render();
       }
       case 'deal-cond': {
         const c = data.comm as Comm;
         const index = Number(data.index);
-        const cut = data.cut as Comm | undefined;
-        const isCut = !cut && openConditions(g, c)[index]?.kind === 'cut';
+        const isCut = !data.cut && openConditions(g, c)[index]?.kind === 'cut';
         if (isCut) { ui.cutPick = index; return render(); }
-        let text = '';
-        act(next => { text = makeDeal(next, c, 'open', index, cut).text; });
+        const text = step({ a: 'deal-cond', d: plainData(data) });
         ui.dealOpen = null;
         ui.cutPick = null;
-        toast(text);
+        if (text) toast(text);
         return render();
       }
       case 'deal-close':
@@ -366,7 +390,7 @@ export function startApp(root: HTMLElement): void {
       case 'vote':
       case 'decree':
         if (!currentAgenda(g)) return;
-        act(next => { castVote(next, action === 'decree'); });
+        step({ a: action, d: {} });
         ui.selComm = null;
         ui.dealOpen = null;
         startCount();
@@ -376,11 +400,7 @@ export function startApp(root: HTMLElement): void {
         clearInterval(countTimer);
         return render();
       case 'comm-act': {
-        const c = data.comm as Comm;
-        let why: string | null = null;
-        act(next => {
-          why = data.act === 'support' ? supportComm(next, c) : data.act === 'cut' ? cutComm(next, c) : uniqueAction(next, c);
-        });
+        const why = step({ a: 'comm-act', d: plainData(data) });
         if (why) toast(why);
         return render();
       }
@@ -388,12 +408,14 @@ export function startApp(root: HTMLElement): void {
         g = newGame(g.seed, !!g.dom);
         ui = freshUi();
         save(g);
+        resetRepro();
         toast(`같은 시드(${g.seed})로 처음부터.`);
         return render();
       case 'new-seed':
         g = newGame(randomSeed(), !!g.dom);
         ui = freshUi();
         save(g);
+        resetRepro();
         toast(`새 판: 시드 ${g.seed}.`);
         return render();
       case 'fullscreen': {
@@ -406,6 +428,15 @@ export function startApp(root: HTMLElement): void {
         else blocked();
         return render();
       }
+      case 'repro-copy': {
+        // 아티팩트 창이 클립보드를 막을 수 있다. 막히면 펼치는 칸으로 안내한다.
+        const text = reproText();
+        const blocked = () => { toast('복사가 막혔다. 아래 칸을 펼쳐 길게 눌러 복사해 줘.'); render(); };
+        const clip = globalThis.navigator?.clipboard;
+        if (clip?.writeText) clip.writeText(text).then(() => { toast(`복사했다(${Math.round(text.length / 1000)}KB). 채팅에 붙여 보내 줘.`); render(); }, blocked);
+        else blocked();
+        return;
+      }
       case 'toggle-debug':
         ui.debug = !ui.debug;
         ui.panel = null;
@@ -417,8 +448,8 @@ export function startApp(root: HTMLElement): void {
   }
 
   const domCtx: DomCtx = {
-    game: () => g, ui: () => ui, act, toast, render,
-    reset(next) { g = next; ui = freshUi(); save(g); },
+    game: () => g, ui: () => ui, step, toast, render,
+    reset(next) { g = next; ui = freshUi(); save(g); resetRepro(); },
   };
 
   root.addEventListener('click', event => {
@@ -439,7 +470,7 @@ export function startApp(root: HTMLElement): void {
     const which = el.dataset.which as 'heat' | 'ration';
     const value = Number(el.value);
     if (g.comms[c][which] === value) return;
-    act(next => setLever(next, c, which, value));
+    step({ a: 'lever', d: { comm: c, which, value: String(value) } });
   });
 
   document.addEventListener('keydown', event => {
@@ -452,6 +483,13 @@ export function startApp(root: HTMLElement): void {
     render();
   });
 
+  // 행동 밖에서 난 오류(그리기, 타이머)도 재현 묶음에 남긴다. 그리기가 깨졌을 수 있으니 여기서 다시 그리지는 않는다.
+  const noteError = (e: unknown) => {
+    repro.error = errorOf(e, repro.trail[repro.trail.length - 1]);
+    saveRepro(repro);
+  };
+  window.addEventListener('error', event => noteError(event.error ?? event.message));
+  window.addEventListener('unhandledrejection', event => noteError(event.reason));
   window.addEventListener('resize', () => drawLinks(root));
   render();
 }
