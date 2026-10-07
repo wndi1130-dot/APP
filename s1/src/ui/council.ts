@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
-  lawNeed, openConditions, relStage, relationLine, toolStatus,
-  needOf, canDecree,
+  openConditions, relStage, relationLine, toolStatus,
+  needOf, canDecree, agendaNeed, isLawAgenda, MOTIONS,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, VoteResult } from '../game';
 import { cx, h, s } from './dom';
@@ -154,9 +154,26 @@ function billPanel(view: View): HTMLElement {
   if (!agenda) {
     return h('div', { class: 'bill' }, h('b', { class: 'bill__title' }, '안건 없음'), h('p', { class: 'sub' }, '올릴 수 있는 법이 없다.'));
   }
-  const law = LAWS[agenda.law];
   const canSwitch = !council.locked && council.deals.length === 0 && !council.result && council.options.length > 1;
   const secret = lawActive(g, 'secret_ballot');
+  if (!isLawAgenda(agenda)) {
+    // 법이 아닌 안건(몫 나누기 등): 통과와 부결이 무엇을 하는지만 보인다.
+    return h('div', { class: 'bill' },
+      h('div', { class: 'bill__nav' },
+        h('button', { class: 'nav', 'data-action': 'agenda', 'data-step': -1, disabled: !canSwitch, 'aria-label': '이전 안건' }, '‹'),
+        h('b', { class: 'bill__title' }, agendaTitle(agenda)),
+        h('button', { class: 'nav', 'data-action': 'agenda', 'data-step': 1, disabled: !canSwitch, 'aria-label': '다음 안건' }, '›')),
+      h('div', { class: 'bill__tags' },
+        h('span', { class: 'tag' }, `안건 ${agendaNeed(agenda)}`),
+        h('span', { class: 'tag' }, icon(secret ? 'eyeOff' : 'eye'), secret ? '비밀' : '공개'),
+        agenda.forced ? h('span', { class: 'tag tag--crisis' }, '마지막 회기') : null,
+        agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
+        council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
+      h('ul', { class: 'bill__changes' }, MOTIONS[agenda.motion].changes(g, agenda).map(x => h('li', null, x))),
+      h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
+        council.locked && !council.result ? ' · 안건을 넘겼다' : ''));
+  }
+  const law = LAWS[agenda.law];
   const need = needOf(g, agenda.law);
   return h('div', { class: 'bill' },
     h('div', { class: 'bill__nav' },
@@ -164,7 +181,7 @@ function billPanel(view: View): HTMLElement {
       h('b', { class: 'bill__title' }, agendaTitle(agenda)),
       h('button', { class: 'nav', 'data-action': 'agenda', 'data-step': 1, disabled: !canSwitch, 'aria-label': '다음 안건' }, '›')),
     h('div', { class: 'bill__tags' },
-      h('span', { class: 'tag' }, `${law.kind === 'rule' ? '통치' : '일반'} ${lawNeed(agenda.law)}`),
+      h('span', { class: 'tag' }, `${law.kind === 'rule' ? '통치' : '일반'} ${agendaNeed(agenda)}`),
       h('span', { class: 'tag' }, icon(secret ? 'eyeOff' : 'eye'), secret ? '비밀' : '공개'),
       h('span', { class: cx('tag', law.tag === '가혹' && 'tag--harsh', law.tag === '이상' && 'tag--ideal') }, law.tag),
       agenda.forced ? h('span', { class: 'tag tag--crisis' }, '위기') : null,
@@ -277,7 +294,7 @@ export function councilScreen(view: View): HTMLElement {
     return h('section', { class: 'council' }, billPanel(view), h('p', { class: 'empty' }, '올릴 안건이 없다. 정산으로 간다.'));
   }
   const map = blocs(g, agenda, council.deals);
-  const need = lawNeed(agenda.law);
+  const need = agendaNeed(agenda);
   const est = expected(map);
   const result = council.result;
   const counting = result && ui.count !== null && ui.count < result.flips.length;
@@ -307,13 +324,17 @@ export function councilScreen(view: View): HTMLElement {
     commPanel(view, map));
 }
 
+function isDecreeable(a: ReturnType<typeof currentAgenda>): boolean {
+  return !!a && isLawAgenda(a) && !a.ratify;
+}
+
 /** 아래 오른쪽의 표결 레버(회기 중, 표결 전). */
 export function voteLever(view: View): HTMLElement | null {
   const { g } = view;
   const council = g.council;
   if (!council || council.result || !currentAgenda(g)) return null;
   return h('div', { class: 'vote-actions' },
-    canDecree(g) && !currentAgenda(g)?.ratify ? h('button', { class: 'btn btn--dark', 'data-action': 'decree' }, '포고') : null,
+    canDecree(g) && isDecreeable(currentAgenda(g)) ? h('button', { class: 'btn btn--dark', 'data-action': 'decree' }, '포고') : null,
     h('button', { class: 'primary primary--lever', 'data-action': 'vote' }, icon('lever'), h('span', null, '표결')));
 }
 

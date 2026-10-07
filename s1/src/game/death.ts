@@ -1,6 +1,7 @@
 import { COMM_NAME, P } from './data';
 import type { Comm } from './data';
-import { clamp, journal, lawActive } from './state';
+import { CORPSE_LAWS } from './data';
+import { clamp, journal, lawActive, storyOf } from './state';
 import type { Game } from './state';
 import { afterDeath } from './people';
 
@@ -19,6 +20,7 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
   g.comms[c].pop = Math.max(1, g.comms[c].pop - n);
   g.deaths.push(...names);
   logDeath(g, names, cause, witness);
+  storyOf(g).flags.first_death = true;
   if (lawActive(g, 'corpse_throw')) {
     g.thrown += n;
   } else if (lawActive(g, 'corpse_store')) {
@@ -38,11 +40,28 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
     }
   } else {
     // 정한 법이 없으면 누가 치울지 다투고, 일단 밖으로 던진다.
-    if (!g.corpseIssue) journal(g, '첫 시신을 두고 다툼이 났다. 시신 처리가 안건에 올랐다.', 'bad');
+    if (!g.corpseIssue) {
+      journal(g, '첫 시신을 두고 다툼이 났다. 시신 처리가 안건에 올랐다.', 'bad');
+      const flags = storyOf(g).flags;
+      if (!flags.first_corpse_agenda || flags.first_corpse_agenda === 'none') flags.first_corpse_agenda = 'own';
+    }
     g.corpseIssue = true;
     g.tension = clamp(g.tension + 3 * n, 0, 100);
     g.thrown += n;
   }
   journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad');
   afterDeath(g, c, names);
+}
+
+/** 두 번째 정차(구벤)까지 우리 쪽 죽음이 없으면 강가에서 이미 얼어 죽은 낯선 사람을 찾는다. 보장하는 건 죽음이 아니라
+ * 시신 안건이다(first_leg_story 2.2, 바깥 눈 대조 N22). 우리 사람이 죽는 길은 S1a 규칙에만 맡긴다. */
+export const STRANGER_SEG = 2;
+export function strangerCorpse(g: Game): boolean {
+  const flags = storyOf(g).flags;
+  if (g.seg !== STRANGER_SEG || flags.first_death || g.corpseIssue || CORPSE_LAWS.some(l => lawActive(g, l))) return false;
+  if (flags.first_corpse_agenda && flags.first_corpse_agenda !== 'none') return false;
+  g.corpseIssue = true;
+  flags.first_corpse_agenda = 'stranger';
+  journal(g, '강가에 낯선 사람이 얼어 죽어 있다. 강을 건너오다 쓰러진 모양이다. 데려가 묻을지, 두고 갈지, 선로 밖으로 치울지 말이 갈렸다. 시신 처리가 안건에 올랐다.', 'bad');
+  return true;
 }

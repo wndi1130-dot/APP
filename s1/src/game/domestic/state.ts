@@ -109,7 +109,8 @@ export interface DomState {
   /** 장거리 무전(R3)으로 바꿀 수 있는 남은 횟수 */
   reroutes: number;
   /** 공방장 맡기기(6.4) */
-  delegate: { on: boolean; policy: 'ours' | 'neutral' };
+  /** dropped: 지지가 떨어져 꺼진 적이 있다. 다시 켜려면 관계 +20 이상(6.4 조건 2, 켜는 선과 끄는 선이 다르다) */
+  delegate: { on: boolean; policy: 'ours' | 'neutral'; dropped?: boolean };
   /** 수리에 쓴 작업(다음 공방 작업에서 뺀다) */
   workDebt: number;
   /** 기술·의무진의 연구 우선권으로 고른 복원 대상(9.2) */

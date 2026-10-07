@@ -46,6 +46,8 @@ export interface CardView {
   focus?: Comm;
   /** 사건 기억 키. 고르면 g.eventLog에 남는다 */
   key?: string;
+  /** 결정하는 순간에 보여 주는 얼굴과 이름(라이프치히 이탈) */
+  faces?: string[];
 }
 
 const RES_NAME: Record<string, string> = {

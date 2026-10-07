@@ -101,6 +101,7 @@ export function cardSheet(view: View): HTMLElement | null {
         h('b', { class: 'sheet__title' }, v.title)),
       g.cards.length > 1 ? h('span', { class: 'sheet__more num' }, `+${g.cards.length - 1}`) : null),
     h('p', { class: 'sheet__body' }, shortText(v.body)),
+    v.faces?.length ? h('div', { class: 'faces' }, v.faces.map(n => h('span', { class: 'face' }, portrait(n, card.comm), nameBtn(n)))) : null,
     h('ol', { class: 'choices' }, v.choices.map((ch, i) => {
       const costs = costLines(ch);
       const pol = politicsLines(ch);

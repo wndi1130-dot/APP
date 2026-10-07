@@ -105,8 +105,14 @@ export interface StopResult {
 
 export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail';
 export interface Deal { comm: Comm; tool: DealTool; label: string }
+/** 의회 안건. 법(제정·폐지·추인)이거나 법이 아닌 안건(motion)이다(s1b_dark_path 12.3).
+ * kind가 없는 안건은 법으로 읽는다(옛 저장 데이터와 테스트). */
+export type Agenda = LawAgenda | MotionAgenda;
 /** ratify: 비상대권 포고를 의회가 추인하는 표결(통과하면 남고, 안 되면 사라진다) */
-export interface Agenda { law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean }
+export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean }
+/** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
+export type MotionId = 'share';
+export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean }
 
 export interface VoteFlip { comm: Comm; yes: boolean }
 export interface VoteResult {
@@ -232,7 +238,38 @@ export interface Game {
   stats: { dealsMade: number; promisesKept: number; promisesBroken: number; lawsPassed: number; lawsFailed: number; repeals: number; bribes: number; blackmails: number };
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
+  /** 이야기 진행도(first_leg_story 9장). S1a는 표식 몇 개만 쓴다. */
+  story?: StoryState;
+  /** 라이프치히 이탈(first_leg_story 7.7, hub.ts) */
+  hub?: HubState;
 }
+
+export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';
+export interface StoryState {
+  /** 9.1 진행 단계. S1a는 출발 1(leg1_river), 라이프치히 6(leg1_hub)만 쓴다. */
+  stage: number;
+  flags: {
+    /** 우리 쪽 첫 죽음(S1a 규칙으로만) */
+    first_death?: boolean;
+    /** 첫 시신 안건이 무엇으로 열렸나 */
+    first_corpse_agenda?: 'none' | 'own' | 'stranger';
+    signal_heard?: boolean;
+    hub_split?: Partial<Record<Comm, HubFate>>;
+  };
+}
+export interface HubState {
+  /** 짐 싸는 징후를 받은 칸 */
+  warned: Comm[];
+  /** 미리 빠진 물자(장부 불일치). 남으면 돌아오고, 떠나면 들고 간 셈이다. */
+  stash: Partial<Record<Comm, { food: number; med: number }>>;
+  /** '우리 몫을 내놔라'가 통과한 칸. 올라왔는데 통과 못 한 칸은 허브에서 몰래 더 가져가려 한다. */
+  agreed: Comm[];
+  /** 도착 때 정한 떠나려는 사람(칸마다) */
+  plan?: Partial<Record<Comm, HubPlan>>;
+  /** 허브 결과 줄 */
+  lines?: string[];
+}
+export interface HubPlan { share: number; n: number; names: string[]; leaderGoes: boolean }
 
 // ---- 난수 ----
 export function rnd(g: Game): number {
@@ -270,6 +307,11 @@ export function situation(g: Game, c: Comm): [number, number, number, number] {
     clamp(s.base[2] + (d?.[2] ?? 0), 0, 100),
     clamp(s.base[3] + (d?.[3] ?? 0), 0, 100),
   ];
+}
+
+/** 이야기 진행도. 옛 저장 데이터엔 없으니 처음 읽을 때 만든다. */
+export function storyOf(g: Game): StoryState {
+  return (g.story ??= { stage: 1, flags: { first_death: false, first_corpse_agenda: 'none' } });
 }
 
 export function totalPop(g: Game): number {
@@ -350,6 +392,7 @@ export function createGame(seed = 's1a'): Game {
     };
   }
   addSecret(g);
+  storyOf(g);
   journal(g, '볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간.');
   return g;
 }

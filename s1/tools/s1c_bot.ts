@@ -3,7 +3,7 @@
 
 import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
-  irreplaceable, knowers, LAWS, lawNeed, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda,
+  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore,
 } from '../src/game';
 import type { Card, CardView, Choice, Eff, Game } from '../src/game';
@@ -95,16 +95,16 @@ function council(g: Game, opts: BotOptions): void {
     let best = -99;
     let idx = 0;
     c.options.forEach((o, i) => {
-      const ex = expected(blocs(g, o, c.deals)).mean - lawNeed(o.law);
-      const harsh = LAWS[o.law].tag === '가혹' ? -1.5 : 0;
-      const sc = ex + harsh + (o.repeal ? -3 : 0) + (o.forced ? 5 : 0);
+      const ex = expected(blocs(g, o, c.deals)).mean - agendaNeed(o);
+      const harsh = isLawAgenda(o) && LAWS[o.law].tag === '가혹' ? -1.5 : 0;
+      const sc = ex + harsh + (isLawAgenda(o) && o.repeal ? -3 : 0) + (o.forced ? 5 : 0);
       if (sc > best) { best = sc; idx = i; }
     });
     setAgenda(g, idx);
   }
   if (opts.policy === 'caretaker') {
     const a = currentAgenda(g)!;
-    if (expected(blocs(g, a, c.deals)).mean < lawNeed(a.law) + 3) {
+    if (expected(blocs(g, a, c.deals)).mean < agendaNeed(a) + 3) {
       for (const k of COMMS) if (toolStatus(g, k, 'open').ok) makeDeal(g, k, 'open', 0);
     }
   }

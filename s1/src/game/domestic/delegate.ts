@@ -22,13 +22,16 @@ export function workshopChief(g: Game): DomPerson | undefined {
   return living(g).find(p => p.role === '공방장') ?? [...living(g)].filter(p => p.field === 'craft').sort((a, b) => b.skill - a.skill)[0];
 }
 
-export function delegateStatus(g: Game): { ok: boolean; why?: string } {
+/** keep: 이미 맡긴 걸 유지하나(끄는 선 +15). 아니면 켜는 선: 처음엔 +15, 지지가 떨어져 꺼진 뒤엔 +20(6.4 조건 2). */
+export function delegateStatus(g: Game, keep = false): { ok: boolean; why?: string } {
   if (!g.dom) return { ok: false, why: 'S1c가 꺼진 판' };
   if (g.seg - 1 < D.delegateAfter) return { ok: false, why: `정차 ${D.delegateAfter}번을 지나면 맡길 수 있다` };
   const chief = workshopChief(g);
   if (!chief) return { ok: false, why: '공방을 맡을 사람이 없다' };
   const s = g.comms[chief.comm];
-  if (s.rel < 15 || s.grudge > 0) return { ok: false, why: '공방장이 사는 칸이 열차장을 따르지 않는다' };
+  const line = !keep && g.dom.delegate.dropped ? D.delegateOn : D.delegateOff;
+  if (s.grudge > 0 || s.rel < D.delegateOff) return { ok: false, why: '공방장이 사는 칸이 열차장을 따르지 않는다' };
+  if (s.rel < line) return { ok: false, why: `장부를 내려놓았던 공방장은 관계 +${D.delegateOn} 이상이어야 다시 맡는다` };
   return { ok: true };
 }
 
@@ -47,6 +50,7 @@ export function setDelegate(g: Game, on: boolean, policy?: 'ours' | 'neutral'): 
   const d = dom(g);
   if (on && !delegateStatus(g).ok) return false;
   d.delegate.on = on;
+  if (on) d.delegate.dropped = false;
   if (policy) d.delegate.policy = policy;
   journal(g, on ? `공방을 공방장에게 맡겼다(${d.delegate.policy === 'ours' ? '우리 편 먼저' : '중립'}).` : '공방을 다시 열차장이 잡는다.');
   return true;
@@ -84,8 +88,9 @@ export function delegateTick(g: Game): void {
     if (caught) journal(g, `공방 부품 상자가 장부보다 가볍다. ${chief.name}의 침상 밑에서 사치품이 나왔다.`, 'dark');
   }
   if (!d.delegate.on) return;
-  if (!delegateStatus(g).ok) {
+  if (!delegateStatus(g, true).ok) {
     d.delegate.on = false;
+    d.delegate.dropped = true;
     journal(g, '공방장이 장부를 내려놓았다. 공방은 다시 열차장이 잡는다.', 'bad');
     return;
   }

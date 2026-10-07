@@ -4,7 +4,7 @@ import {
   needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL, setAutoLevers,
   canDecree, currentAgenda, DECREE_SEGS, dropUnratified, endEmergencyPowers, lawActive, openCouncil,
 } from '../../src/game';
-import type { Game } from '../../src/game';
+import type { Game, LawAgenda } from '../../src/game';
 
 // 법 요구(예고 뒤 손해), 비상 소집, 식량 0 버티기(2026-10-07 사용자 후기).
 
@@ -90,7 +90,7 @@ describe('법 요구', () => {
     g.injured = 5;
     needTick(g, []);
     const { options } = agendaOptions(g);
-    expect(['treat_all', 'triage', 'no_outsiders']).toContain(options[0].law);
+    expect(['treat_all', 'triage', 'no_outsiders']).toContain((options[0] as LawAgenda).law);
   });
 });
 
@@ -246,7 +246,7 @@ describe('비상대권(법 16)', () => {
     expect(canDecree(g)).toBe(true);
     expect(emergencyCost(g)).toBe(0);
     openCouncil(g, true);
-    const law = currentAgenda(g)!.law;
+    const law = (currentAgenda(g) as LawAgenda).law;
     expect(castVote(g, true)?.decree).toBe(true);
     expect(lawActive(g, law)).toBe(true);
     expect(canDecree(g)).toBe(false);

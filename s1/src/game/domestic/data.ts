@@ -76,7 +76,7 @@ export const D = {
   typhusPatients: 4, typhusMed: 0.5, typhusDeath: 0.15, typhusDeathM1: 0.1, typhusSpread: 0.2, typhusSpreadCrowd: 70,
   typhusRecover: 0.4, quarantineRel: -15, quarantineFear: 5,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)
-  delegatePop: 5, delegateAfter: 6,
+  delegatePop: 5, delegateAfter: 6, delegateOff: 15, delegateOn: 20,
 };
 
 // ---- 장소 부산물(5.2) ----

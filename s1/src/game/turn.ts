@@ -1,13 +1,14 @@
 import { addCard } from './state';
 import { drawTravelEvent } from './cards';
-import { onDeath } from './death';
+import { onDeath, strangerCorpse } from './death';
+import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
-import { agendaOptions, agendaTitle, canDecree, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
+import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
 import {
   addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
 } from './state';
@@ -43,7 +44,7 @@ export function primaryAction(g: Game): Primary {
       if (council && council.options.length > 0 && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
       return { label: '정산으로', ok: true };
     }
-    case 'settle': return { label: g.seg >= P.segments ? '도착' : '다음 구간', ok: true };
+    case 'settle': return { label: g.seg >= P.segments ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
     default: return { label: '', ok: false };
   }
 }
@@ -441,6 +442,7 @@ function breakPromise(g: Game, c: Comm): void {
 }
 
 function afterStop(g: Game): void {
+  strangerCorpse(g);
   if (isSessionSeg(g.seg)) {
     openCouncil(g);
     g.phase = 'council';
@@ -462,6 +464,7 @@ function settle(g: Game): void {
   g.guardEscort = false;
   medicineTick(g, notes);
   domesticSettle(g, notes); // S1c 내정 훅
+  hubLeakTick(g, notes); // 라이프치히 두 구간 전부터 창고 유출
   drift(g);
   checkDuePromises(g);
   hungerTick(g, notes);
@@ -746,7 +749,8 @@ function aiLeaders(g: Game): void {
   if (isSessionSeg(g.seg + 1)) {
     const saved = g.session;
     g.session += 1; // 다음 회기 기준으로 열린 안건을 본다.
-    const { options } = agendaOptions(g);
+    // AI는 법 안건만 낸다. 법이 아닌 안건은 저마다 나오는 곳이 있다(motions.ts).
+    const options = agendaOptions(g).options.filter(isLawAgenda);
     g.session = saved;
     let best: { c: Comm; idx: number; score: number } | null = null;
     for (const c of [...COMMS].sort((a, b) => seats(g)[b] - seats(g)[a])) {
@@ -831,7 +835,14 @@ function finish(g: Game, end: Game['end']): void {
 }
 
 function nextSegment(g: Game): void {
-  if (g.seg >= P.segments) return finish(g, 'complete');
+  if (g.seg >= P.segments) {
+    // 라이프치히 도착: 먼저 누가 내리는지 고르고(hub.ts), 다 고르면 판을 닫는다.
+    if (!g.hub?.plan) {
+      arriveHub(g);
+      if (g.cards.length > 0) return;
+    }
+    return finish(g, 'complete');
+  }
   g.seg += 1;
   g.stop = null;
   if (g.decreeLeft > 0) {
@@ -840,6 +851,7 @@ function nextSegment(g: Game): void {
   }
   g.phase = 'prep';
   applyFloors(g);
+  hubOmenTick(g); // 라이프치히 두 구간 전: 짐 싸는 징후
   if (g.autoLevers && !autoLeverStatus(g).ok) {
     g.autoLevers = false;
     addCard(g, { kind: 'info', who: '배급장이 장부를 내려놓았다', text: '앞칸의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다.' });

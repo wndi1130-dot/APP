@@ -5,8 +5,9 @@ import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
+import { MOTIONS, motionsNow } from './motions';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
-import type { Agenda, CouncilState, Deal, DealTool, Game, VoteFlip, VoteResult } from './state';
+import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, VoteFlip, VoteResult } from './state';
 
 // 의회: 입장 점수, 찬성·반대·미정, 거래 다섯, 개표, 폐지(브리프 1.3, 3장, 8.4).
 
@@ -27,21 +28,47 @@ export function lawNeed(law: LawId): number {
   return LAWS[law].kind === 'rule' ? 67 : 51;
 }
 
+export function isLawAgenda(a: Agenda): a is LawAgenda {
+  return a.kind !== 'motion';
+}
+
+export function agendaNeed(a: Agenda): number {
+  return isLawAgenda(a) ? lawNeed(a.law) : MOTIONS[a.motion].need;
+}
+
+/** 같은 안건인가(AI 발의와 지금 안건을 맞춰 볼 때) */
+export function sameAgenda(a: Agenda, b: Agenda): boolean {
+  if (isLawAgenda(a) && isLawAgenda(b)) return a.law === b.law && a.repeal === b.repeal;
+  if (!isLawAgenda(a) && !isLawAgenda(b)) return a.motion === b.motion && a.subject === b.subject && a.person === b.person;
+  return false;
+}
+
+/** 법이 아닌 안건의 물질·이념 몫(motions.ts). */
+function motionLean(g: Game, c: Comm, a: MotionAgenda): { mat: number; ideo: number } {
+  return MOTIONS[a.motion].lean(g, c, a);
+}
+
 /** 입장 = 물질 + 이념 + 관계(브리프 1.3). 폐지는 물질과 이념의 부호를 뒤집는다. 적의는 열차장의 안건에만 건다. */
 export function stance(g: Game, c: Comm, agenda: Agenda, withGrudge = true): { score: number; ideo: number; mat: number } {
-  const law = LAWS[agenda.law];
-  let mat = law.like[c] ?? 0;
-  const m = law.mats[c];
-  if (m) {
-    const gain = m[0] + m[1] - m[2] - m[3];
-    mat += gain >= 15 ? 2 : gain >= 5 ? 1 : gain <= -15 ? -2 : gain <= -5 ? -1 : 0;
-  }
-  const r = law.rels[c];
-  if (r !== undefined) mat += r <= -15 ? -2 : r < 0 ? -1 : r >= 10 ? 1 : 0;
-  let ideo = law.axes.reduce((sum, a, i) => sum + a * IDEO[c][i], 0);
-  if (agenda.repeal) {
-    mat = -mat;
-    ideo = -ideo;
+  let mat = 0;
+  let ideo = 0;
+  if (!isLawAgenda(agenda)) {
+    ({ mat, ideo } = motionLean(g, c, agenda));
+  } else {
+    const law = LAWS[agenda.law];
+    mat = law.like[c] ?? 0;
+    const m = law.mats[c];
+    if (m) {
+      const gain = m[0] + m[1] - m[2] - m[3];
+      mat += gain >= 15 ? 2 : gain >= 5 ? 1 : gain <= -15 ? -2 : gain <= -5 ? -1 : 0;
+    }
+    const r = law.rels[c];
+    if (r !== undefined) mat += r <= -15 ? -2 : r < 0 ? -1 : r >= 10 ? 1 : 0;
+    ideo = law.axes.reduce((sum, a, i) => sum + a * IDEO[c][i], 0);
+    if (agenda.repeal) {
+      mat = -mat;
+      ideo = -ideo;
+    }
   }
   // 대신 나온 측근은 처지 입장에 1.5배 무게를 둔다(사람의 무게 A2).
   if (g.comms[c].sick) mat = Math.round(mat * 1.5);
@@ -171,7 +198,7 @@ export function drains(law: LawId): Crisis[] {
 }
 
 export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
-  const options: Agenda[] = [];
+  const options: LawAgenda[] = [];
   const corpseSet = CORPSE_LAWS.some(l => lawActive(g, l));
   for (const law of LAW_IDS) {
     if (lawActive(g, law) || !lawOpen(g, law)) continue;
@@ -185,17 +212,23 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   }
   // 대권이 끝난 포고의 추인을 가장 먼저 둔다(법 16: 추인하지 않은 포고는 사라진다).
   const merged: Agenda[] = (g.ratify ?? []).filter(l => lawActive(g, l)).map(law => ({ law, repeal: false, ratify: true }));
+  // 법이 아닌 안건은 순서 자리(s1b_dark_path 12.3: crisis > ratify > confidence > ai > player)에 끼운다.
+  const motions = motionsNow(g);
+  const ranked = (r: string) => motions.filter(m => MOTIONS[m.motion].rank === r);
+  merged.push(...ranked('ratify'), ...ranked('confidence'));
   // AI 지도자가 올린 안건(4장)은 그다음에 둔다.
   for (const p of g.proposals) {
-    if (options.some(o => o.law === p.law && o.repeal === p.repeal)) merged.push(p);
+    if (!isLawAgenda(p) || options.some(o => sameAgenda(o, p))) merged.push(p);
   }
+  merged.push(...ranked('ai'));
   // 법 요구가 걸린 안건을 그다음에 둔다.
-  const needed = (o: Agenda) => !o.repeal && needOf(g, o.law) !== null;
+  const needed = (o: LawAgenda) => !o.repeal && needOf(g, o.law) !== null;
   for (const o of [...options.filter(needed), ...options.filter(o => !needed(o))]) {
-    if (!merged.some(m => m.law === o.law && m.repeal === o.repeal)) merged.push(o);
+    if (!merged.some(m => sameAgenda(m, o))) merged.push(o);
   }
+  merged.push(...ranked('player'));
   const crisis = crisisNow(g);
-  const forced = merged.filter(o => (o.repeal ? drains(o.law) : LAWS[o.law].crisis).some(k => crisis.includes(k)));
+  const forced: Agenda[] = [...ranked('crisis'), ...merged.filter(isLawAgenda).filter(o => (o.repeal ? drains(o.law) : LAWS[o.law].crisis).some(k => crisis.includes(k)))];
   if (forced.length > 0) return { options: forced.map(o => ({ ...o, forced: true })), forced: true };
   return { options: merged, forced: false };
 }
@@ -232,6 +265,7 @@ export function openCouncil(g: Game, emergency = false): void {
 
 
 export function agendaTitle(a: Agenda): string {
+  if (!isLawAgenda(a)) return MOTIONS[a.motion].title(a);
   if (a.ratify) return `${LAWS[a.law].title} 추인`;
   return `${LAWS[a.law].title}${a.repeal ? ' 폐지' : ''}`;
 }
@@ -341,7 +375,7 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
       const baseline = cond.kind === 'heat' ? s.heat : cond.kind === 'ration' || cond.kind === 'keep_ration' ? s.ration : undefined;
       s.promise = {
         kind: 'open', cond, label, due: cond.kind === 'target' || cond.kind === 'skip_dispatch' ? g.seg + 1 : g.seg + P.promiseSegments,
-        madeSession: g.session, law: agenda.law, ...(baseline === undefined ? {} : { baseline }),
+        madeSession: g.session, ...(isLawAgenda(agenda) ? { law: agenda.law } : {}), ...(baseline === undefined ? {} : { baseline }),
       };
     }
     // 처지가 아니라 거래로 지지가 쌓인다(1.2): 약속을 받은 쪽은 조금 누그러진다.
@@ -351,7 +385,7 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
     label = `현장 조달: ${want}`;
     s.promise = {
       kind: 'fetch', cond: { kind: 'target', label: want, now: false }, label, due: g.seg + 1,
-      madeSession: g.session, law: agenda.law,
+      madeSession: g.session, ...(isLawAgenda(agenda) ? { law: agenda.law } : {}),
     };
     journal(g, `${name}에 약속했다: 다음 정차에서 ${want}을(를) 가져온다.`, 'deal');
   } else if (tool === 'favor') {
@@ -471,8 +505,9 @@ export function castVote(g: Game, decree = false): VoteResult | null {
   const council = g.council;
   const agenda = currentAgenda(g);
   if (!council || !agenda || council.result) return null;
-  if (decree && (!canDecree(g) || agenda.ratify)) return null;
-  const need = lawNeed(agenda.law);
+  // 포고는 법만 한다. 추인과 법이 아닌 안건은 의회가 표결한다.
+  if (decree && (!canDecree(g) || !isLawAgenda(agenda) || agenda.ratify)) return null;
+  const need = agendaNeed(agenda);
   const map = blocs(g, agenda, council.deals);
   const byComm = {} as VoteResult['byComm'];
   const flips: VoteFlip[] = [];
@@ -515,7 +550,7 @@ export function castVote(g: Game, decree = false): VoteResult | null {
   // AI 발의를 무시했으면 발의한 쪽이 서운해한다. 비상 소집은 다음 정기 회기의 발의를 건드리지 않는다.
   if (!council.emergency) {
     for (const p of g.proposals) {
-      if (p.by && !(p.law === agenda.law && p.repeal === agenda.repeal)) g.comms[p.by].rel = clamp(g.comms[p.by].rel - 3, -100, 100);
+      if (p.by && !sameAgenda(p, agenda)) g.comms[p.by].rel = clamp(g.comms[p.by].rel - 3, -100, 100);
     }
     g.proposals = [];
   } else if (passed) {
@@ -528,6 +563,12 @@ export function castVote(g: Game, decree = false): VoteResult | null {
     }
   }
   const title = agendaTitle(agenda);
+  if (!isLawAgenda(agenda)) {
+    journal(g, `${title}: 찬성 ${yes}, 반대 ${no}${absent ? `, 부재 ${absent}` : ''}. ${passed ? '가결' : '부결'}.`, passed ? 'good' : 'bad');
+    if (passed) MOTIONS[agenda.motion].onPass(g, agenda);
+    else MOTIONS[agenda.motion].onFail(g, agenda);
+    return result;
+  }
   if (decree) {
     // 대권 동안 구간마다 하나씩 포고할 수 있다. 대권이 끝나면 의회가 추인해야 남는다.
     g.decreeSeg = g.seg;

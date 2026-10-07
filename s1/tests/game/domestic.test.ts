@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  addMaterials, agendaOptions, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
+  addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
   DOM_CARD_KINDS, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
   chooseCard, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, techRelSides, viewCard,
 } from '../../src/game';
@@ -32,7 +32,7 @@ describe('S1c 판 한 판', () => {
     const g = createGame('s1a');
     expect(g.dom).toBeUndefined();
     for (const law of ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first'] as const) expect(lawOpen(g, law)).toBe(false);
-    expect(agendaOptions(g).options.some(o => ['tech_control', 'bath_rota'].includes(o.law))).toBe(false);
+    expect(agendaOptions(g).options.some(o => isLawAgenda(o) && ['tech_control', 'bath_rota'].includes(o.law))).toBe(false);
   });
 
   it('예전 저장 판을 불러오면 새 칸을 채운다', () => {

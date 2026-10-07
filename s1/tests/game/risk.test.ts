@@ -125,3 +125,20 @@ describe('정찰하지 않은 곳', () => {
     expect(withScout).toBeLessThan(without);
   });
 });
+
+describe('예약한 결과는 저장하고 다시 켜도 그대로다(r8)', () => {
+  it('정찰한 위험 줄과 정차 결과가 JSON 저장·불러오기 뒤에도 같다', () => {
+    for (let k = 0; k < 20; k += 1) {
+      const g = createGame(`reload-${k}`);
+      g.phase = 'stop';
+      g.stop = { place: 'factory', target: 'coal', stay: 'long', crewComm: 'tail', crewSize: 6, scout: true, threat: 1.4, done: false, result: null };
+      const before = stopRisk(g);
+      const loaded = JSON.parse(JSON.stringify(g)) as typeof g;
+      expect(stopRisk(loaded).fate).toEqual(before.fate);
+      const a = resolveStop(g, true);
+      const b = resolveStop(loaded, true);
+      expect(b?.dead).toEqual(a?.dead);
+      expect(b?.injured).toEqual(a?.injured);
+    }
+  });
+});
