@@ -895,3 +895,58 @@ small { font-size: 12px; }
 .dark-end__wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px 12px; }
 .dark-end__wall summary { cursor: pointer; }
 .dark-end__h7 textarea { width: 100%; font-size: 11px; background: var(--surface-1); color: var(--ink-2); border: 1px solid var(--line); }
+
+/* ---------- 출발 레버와 승강장 확인 쪽지(presentation_motion 5b.5, depart.ts) ---------- */
+
+/* 아래로 약 12mm 끌어야 걸린다. 끄는 동안 손잡이가 홈을 따라 내려가고(--pull 0~1), 걸리면 테두리가 빛난다. */
+.primary--depart {
+  --pull: 0;
+  gap: 10px; padding: 0 14px 0 10px;
+  background: linear-gradient(#c9a465, #9c7a3e); color: var(--on-light);
+  border: 1px solid #e0c68e55;
+  touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab;
+}
+.primary--depart.is-grab { cursor: grabbing; }
+.primary--depart.is-caught { box-shadow: 0 0 0 2px var(--ink-1); }
+.depart__slot { position: relative; width: 18px; height: 32px; flex: none; }
+.depart__slot::before {
+  content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 8px;
+  border-radius: 4px; background: #0f111366; box-shadow: inset 0 1px 2px #0008;
+}
+.depart__handle {
+  position: absolute; left: 0; top: 0; width: 18px; height: 12px; border-radius: 3px;
+  background: linear-gradient(#f1dfb6, #b8924f); box-shadow: 0 1px 2px #0009;
+  transform: translateY(calc(var(--pull) * 20px));
+}
+.primary--depart:not(.is-grab) .depart__handle { transition: transform .18s ease-out; }
+.depart__text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+.depart__text small { font-size: 12px; font-weight: 600; opacity: .75; }
+
+.pnote-wrap { position: absolute; inset: 0; z-index: 35; }
+.scrim--pnote { background: #0008; z-index: auto; }
+.pnote {
+  position: absolute; right: var(--gutter-r); bottom: calc(var(--bottom-h) + 10px);
+  width: min(360px, calc(100% - 24px)); padding: 14px 16px 12px;
+  background: var(--paper); border: 1px solid var(--line-strong); border-radius: 4px;
+  box-shadow: 0 10px 28px #000c; animation: pnote-in .15s ease-out;
+}
+.pnote__near { margin: 0 0 6px; color: var(--discontent); font-weight: 700; font-size: 13px; }
+.pnote__head { margin: 0; font-size: 15px; font-weight: 700; }
+.pnote__names { margin: 6px 0 14px; font-size: 15px; line-height: 1.6; }
+.pnote__name { position: relative; white-space: nowrap; }
+/* '떠난다': 굵은 펜 획 하나가 이름을 긋는다. 도장은 없다. */
+.pnote__name::after {
+  content: ''; position: absolute; left: -2px; right: -2px; top: 55%; height: 3px; border-radius: 2px;
+  background: var(--ink-1); transform: scaleX(0); transform-origin: left center;
+}
+.pnote.is-leaving { animation: pnote-thud .2s ease-out; }
+.pnote.is-leaving .pnote__name::after { transform: scaleX(1); transition: transform .45s ease-in .15s; }
+/* '기다린다'는 레버 가까이 오른쪽, '떠난다'는 반대쪽 왼쪽 */
+.pnote__actions { display: flex; justify-content: space-between; gap: 48px; }
+.pnote__actions .btn { min-width: 104px; }
+@keyframes pnote-in { from { transform: translateY(12px); opacity: 0; } }
+@keyframes pnote-thud { 0% { transform: translateY(0); } 35% { transform: translateY(3px); } 100% { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .pnote.is-leaving { animation: none; }
+  .pnote.is-leaving .pnote__name::after { transition: none; }
+}

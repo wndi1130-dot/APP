@@ -154,6 +154,7 @@ export function forecast(g: Game): { coal: number; food: number } {
 }
 
 function depart(g: Game): void {
+  delete g.platform; // 승강장에 남은 사람은 떠나면서 일지에 그어졌다(5b.5)
   if (g.seg % P.winterEvery === 0) {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');

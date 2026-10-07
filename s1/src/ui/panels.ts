@@ -12,6 +12,7 @@ import { domesticEnd, domesticMenu, domesticPanel } from './domestic'; // S1c �
 import { darkEndSection, darkMenu } from './dark'; // S1b 어두운 길 훅
 import { reproError, reproText } from './repro';
 import { vibrateOn } from './fx';
+import { departTapOn } from './depart';
 
 // 겹쳐 뜨는 창: 불만·지지 집단 창, 일지, 메뉴, 정산 요약, 디버그, 끝.
 
@@ -73,6 +74,8 @@ function menuPanel(view: View): HTMLElement {
       domesticMenu(view),
       // 진동(5b.6): 나쁜 쪽 선 넘음과 죽음에만 40ms. 동작 감소 설정과 따로 끈다. 아이폰 브라우저는 원래 안 떤다.
       h('button', { class: cx('btn btn--ghost', vibrateOn() && 'is-on'), 'data-action': 'toggle-vibrate', 'aria-pressed': vibrateOn() ? 'true' : 'false' }, vibrateOn() ? '진동 켬' : '진동 끔'),
+      // 출발 레버(5b.5)를 끌기 어려우면 두 번 눌러 출발한다.
+      h('button', { class: cx('btn btn--ghost', departTapOn() && 'is-on'), 'data-action': 'toggle-depart-tap', 'aria-pressed': departTapOn() ? 'true' : 'false' }, departTapOn() ? '출발: 두 번 눌러' : '출발: 레버 당겨'),
       darkMenu(view),
       h('button', { class: cx('btn btn--ghost', ui.debug && 'is-on'), 'data-action': 'toggle-debug' }, ui.debug ? '숨은 수치 끄기' : '숨은 수치 보기(테스트용)'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'repro-copy' }, '오류 재현 묶음 복사')),

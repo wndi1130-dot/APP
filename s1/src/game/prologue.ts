@@ -129,6 +129,7 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
       if (left > 0) {
         const names = leftNames(g, left);
         (g.left ??= []).push(...names);
+        g.platform = { names, near: true }; // 망자가 얼음을 건너오는 중이라 늘 가깝다(제안)
         g.comms.tail.pop = Math.max(1, g.comms.tail.pop - left);
         g.comms.tail.rel = clamp(g.comms.tail.rel + PROLOGUE.leftRel, -100, 100);
         flags.depot_left_behind = true;
@@ -161,3 +162,8 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
 }
 
 CARD_EXTENSIONS.push({ view: prologueView, choose: prologueChoose });
+
+/** 출발 레버가 걸렸을 때 한 번 더 물을 승강장의 이름들(5b.5). 출발 전에만, 없으면 null */
+export function platformNote(g: Game): { names: string[]; near: boolean } | null {
+  return g.phase === 'prep' && g.platform && g.platform.names.length > 0 ? g.platform : null;
+}

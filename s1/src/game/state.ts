@@ -232,6 +232,8 @@ export interface Game {
   elderAsked?: boolean;
   /** 스스로 열차에서 내린 사람 */
   left?: string[];
+  /** 승강장에 남은 사람(출발 확인 쪽지, presentation_motion 5b.5). near면 쪽지 첫 줄에 '무리가 가깝다'. 출발하면 비운다 */
+  platform?: { names: string[]; near: boolean };
   born?: { comm: Comm; mother: string; weak: boolean; left: number; lost?: boolean };
   /** 부모를 잃은 아이를 맡은 칸 */
   raised?: Record<string, Comm>;
