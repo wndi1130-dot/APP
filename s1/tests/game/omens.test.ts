@@ -39,6 +39,13 @@ describe('정차 조짐 글', () => {
     for (const t of omenLines) expect(/불길|괜찮/.test(t), t).toBe(false);
   });
 
+  it('사람이나 무리가 화차·닫힌 칸 안에 있는 장면이 없다(이송 열차로 읽히는 금지선)', () => {
+    for (const t of [...omenLines, ...lookLines]) {
+      expect(t.includes('화물칸'), t).toBe(false);
+      if (t.includes('화차')) expect(/안|갇|두드|신음|피/.test(t), t).toBe(false);
+    }
+  });
+
   it('조짐 글과 창밖 글은 서로 겹치지 않는다', () => {
     expect(new Set(omenLines).size).toBe(omenLines.length);
     expect(new Set(lookLines).size).toBe(lookLines.length);

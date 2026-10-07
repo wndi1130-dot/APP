@@ -2,13 +2,14 @@ import { addCard } from './state';
 import { drawTravelEvent } from './cards';
 import { onDeath } from './death';
 import { needTick } from './needs';
+import { mourners, peopleCardRecent, peopleTick, raisedLines } from './people';
 import { markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
-import { agendaOptions, agendaTitle, exposeBribe, offend, openCouncil, stance } from './politics';
+import { agendaOptions, agendaTitle, canDecree, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
 import {
-  addSecret, clamp, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
+  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
 } from './state';
 import type { Game, StopResult } from './state';
 
@@ -158,14 +159,15 @@ function depart(g: Game): void {
     return;
   }
   g.inStrike = false;
-  const event = drawTravelEvent(g);
+  // 사람 카드가 막 왔으면 이동 사건을 쉰다(사람의 무게 6.0: 카드 수를 늘리지 않는다).
+  const event = peopleCardRecent(g) ? null : drawTravelEvent(g);
   if (event) addCard(g, { kind: 'travel', text: event });
   g.phase = 'travel';
 }
 
 // ---- 정차(S1 기획서 7장, 필드 결정 카드) ----
 export function crewNames(g: Game, c: Comm, size: number): string[] {
-  const alive = PROFILES.filter(p => p.community === c && !g.deaths.includes(p.name) && p.age >= 16 && p.age <= 65);
+  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65);
   if (alive.length === 0) return [];
   const start = (g.seg * 7) % alive.length;
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
@@ -275,6 +277,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const notes: string[] = [];
   const tail = g.comms.tail;
   if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
+  // 상중인 사람은 손이 느리다(사람의 무게 A1).
+  const grieving = crewNames(g, stop.crewComm, stop.crewSize).filter(n => mourners(g).includes(n));
+  if (grieving.length > 0) { haul *= 1 - 0.1 * grieving.length; notes.push(`${grieving.join(', ')}은(는) 상중이라 손이 느렸다.`); }
   const gains: Partial<Record<LootKey, number>> = {};
   for (const k of LOOT_KEYS) {
     const amt = (haul * weights[k]) / tot;
@@ -412,6 +417,8 @@ function settle(g: Game): void {
   hungerTick(g, notes);
   biteTick(g);
   needTick(g, notes);
+  peopleTick(g, () => rnd(g));
+  if (g.council && !g.council.emergency) dropUnratified(g);
   if (g.council) bribeDetection(g);
   leashTick(g);
   aiLeaders(g);
@@ -468,7 +475,7 @@ function hungerTick(g: Game, notes: string[]): void {
     return;
   }
   if (g.hunger <= HUNGER_GRACE) { notes.push(`굶은 지 ${g.hunger}구간째다.`); return; }
-  const who = PROFILES.filter(p => p.community === 'tail' && !g.deaths.includes(p.name)).map(p => p.name)[0];
+  const who = PROFILES.filter(p => p.community === 'tail' && !isGone(g, p.name)).map(p => p.name)[0];
   if (who) {
     onDeath(g, 'tail', [who]);
     journal(g, `${who}이(가) 굶어 죽었다.`, 'bad');
@@ -480,6 +487,8 @@ function hungerTick(g: Game, notes: string[]): void {
 // 회기가 아닌 구간에도 정차를 마친 뒤 의회를 부를 수 있다. 신임을 쓰고, 최근에 자주 불렀을수록 비싸다(제안).
 // 파견 나간 칸의 표는 빠지므로, 반대하는 칸이 밖에 있을 때 부르면 '기습 표결'로 기억된다.
 export function emergencyCost(g: Game): number {
+  // 대권 중엔 열차장이 바로 부른다(포고하려고). 그 밖엔 신임을 쓴다.
+  if (canDecree(g)) return 0;
   const recent = (g.emergencyCalls ?? []).filter(at => g.seg - at < 6).length;
   return 6 + 4 * recent;
 }
@@ -527,7 +536,7 @@ function medicineTick(g: Game, notes: string[]): void {
     for (let i = 0; i < g.injured; i += 1) if (rnd(g) < 0.1) dead += 1;
     g.injured -= dead;
     if (dead > 0) {
-      const names = PROFILES.filter(p => p.community === 'tail' && !g.deaths.includes(p.name)).slice(0, dead).map(p => p.name);
+      const names = PROFILES.filter(p => p.community === 'tail' && !isGone(g, p.name)).slice(0, dead).map(p => p.name);
       onDeath(g, 'tail', names);
     }
     notes.push('의약품이 떨어졌다.');
@@ -755,13 +764,17 @@ function finish(g: Game, end: Game['end']): void {
   g.phase = 'end';
   const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: '반란이 일어났다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
+  for (const line of raisedLines(g)) journal(g, line);
 }
 
 function nextSegment(g: Game): void {
   if (g.seg >= P.segments) return finish(g, 'complete');
   g.seg += 1;
   g.stop = null;
-  if (g.decreeLeft > 0) g.decreeLeft -= 1;
+  if (g.decreeLeft > 0) {
+    g.decreeLeft -= 1;
+    if (g.decreeLeft === 0) endEmergencyPowers(g);
+  }
   g.phase = 'prep';
   applyFloors(g);
   if (g.autoLevers && !autoLeverStatus(g).ok) {

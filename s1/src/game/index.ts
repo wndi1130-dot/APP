@@ -7,3 +7,4 @@ export * from './death';
 export * from './scene';
 export * from './needs';
 export * from './omens';
+export * from './people';

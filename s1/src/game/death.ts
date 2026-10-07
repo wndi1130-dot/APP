@@ -2,6 +2,7 @@ import { COMM_NAME } from './data';
 import type { Comm } from './data';
 import { clamp, journal, lawActive } from './state';
 import type { Game } from './state';
+import { afterDeath } from './people';
 
 /** 죽은 사람은 일어난다. 시신 처리 법이 대가를 정한다(브리프 8.2). */
 export function onDeath(g: Game, c: Comm, names: readonly string[]): void {
@@ -25,4 +26,5 @@ export function onDeath(g: Game, c: Comm, names: readonly string[]): void {
     g.thrown += n;
   }
   journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad');
+  afterDeath(g, c, names);
 }

@@ -17,7 +17,12 @@ export interface NeedState {
   due: number;
   /** 손해가 난 횟수 */
   hits: number;
+  /** 열차장이 기한 안에 정하겠다고 약속했다(기한 +1, 어기면 신임 −8·긴장 +5) */
+  promised?: boolean;
 }
+
+/** 약속을 어기면 한 번 잃는 것(제안). */
+export const NEED_PROMISE = { trust: 8, tension: 5 } as const;
 
 interface NeedDef {
   group: string;
@@ -80,16 +85,26 @@ export function needTick(g: Game, notes: string[]): void {
     const state = g.needs[id];
     if (settled || !def.open(g)) {
       if (state && settled) journal(g, `${def.title}이 정해지자 요구가 잦아들었다.`, 'good');
+      if (state && settled && state.promised && state.hits === 0) {
+        g.trust = clamp(g.trust + 3, 0, 100);
+        journal(g, '열차장이 약속을 지켰다.', 'good');
+      }
       delete g.needs[id];
       continue;
     }
     if (!state) {
       g.needs[id] = { since: g.seg, due: g.seg + NEED_GRACE, hits: 0 };
-      addCard(g, { kind: 'info', who: `${def.title}이 필요하다`, text: `${def.warn} ${NEED_GRACE}구간 안에 정하지 않으면 손해가 난다.` });
+      addCard(g, { kind: 'need_warn', text: id });
       journal(g, `${def.title}이 필요하다는 목소리가 커진다(${NEED_GRACE}구간 안에).`, 'bad');
       continue;
     }
     if (g.seg < state.due) continue;
+    if (state.promised && state.hits === 0) {
+      g.trust = clamp(g.trust - NEED_PROMISE.trust, 0, 100);
+      g.tension = clamp(g.tension + NEED_PROMISE.tension, 0, 100);
+      notes.push('열차장이 약속을 어겼다.');
+      journal(g, `${def.title}을 정하겠다던 열차장의 약속은 지켜지지 않았다.`, 'bad');
+    }
     def.apply(g, state.hits);
     if (state.hits === 0) addCard(g, { kind: 'info', who: '기한이 지났다', text: `${def.hit} 법을 정할 때까지 구간마다 되풀이된다.` });
     state.hits += 1;
