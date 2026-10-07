@@ -212,6 +212,14 @@ field_unified 7장대로 다리와 급수는 정차가 아니라 짧은 시련 �
 - 예전 결정 카드('운반조를 기다릴까')는 이 수색이 대신한다. 자동 진행을 고르면(접근성) 같은 내용이 카드 하나로 나온다.
 - 싣기 장면의 선은 그대로다. 사람은 객차로만 타고, 독일어 명령 외침은 없고, 화차 문은 처음부터 열려 있다. 운반조는 자기 발로 걸어와 객차 문으로 오른다.
 
+**서막 건너뛰기** (재미·상품성 점검 review/09 8장 2·3번, main 00319c3. 다른 모델 대조 네 답이 같았다. 제안)
+
+- 여기서 '서막'은 5장의 차고 장면만이 아니라 첫 구간 전체다(볼슈틴 → 라이프치히, 1.1 공통 서막).
+- 서막을 한 번 끝낸 계정에는 '서막 클리어'가 남는다. 다음 판부터는 시작할 때 '서막 다시 하기'와 '라이프치히에서 시작' 가운데 고른다. 무료판과 유료판이 같고, 새로 시작하는 캠페인도 같다.
+- 라이프치히에서 시작하면 세계, 자원, 관계를 새로 만든다. 판은 라이프치히 도착(`leg1_hub`)에서 열린다. 신호와 이탈(7.7)은 그대로 나오지만, 이탈 몫을 새 관계로 계산하므로 대개 적다(기본값).
+- 시작 자원은 첫 구간 시뮬의 라이프치히 도착값 근처로 둔다. 돌봄 정책 기준으로 석탄 약 20, 식량 약 40이다(7.7). 숫자는 S1a와 S3에서 맞춘다.
+- 건너뛴 구간의 표식은 `unknown`(모름)으로 둔다(9.2). `unknown`을 읽는 화면은 그 사건을 가리키는 장면과 대사를 내지 않고, 숫자 효과도 없는 것으로 친다.
+
 ## 6. 첫 정차 상세: 술레후프 역 (S3용)
 
 ### 6.1 한 줄과 역할
@@ -680,17 +688,19 @@ S1a 공식(s1a_politics_numbers 1.7)을 첫 구간의 실제 거리로 옮긴 �
 
 | id | 값 | 켜지는 곳 |
 |---|---|---|
-| `depot_left_behind` | 참/거짓 | 서막에서 운반조를 두고 떠남 |
-| `depot_promise` | `kept` / `broken` / `refused` | 서막에서 꼬리칸 대표의 약속을 지켰나, 어겼나, 받지 않았나(5장 서막 흐름 3·6번) |
-| `signalman` | `none` / `rescued` / `left` / `dead` | 술레후프 신호소, 유품 카드(4.2) |
-| `oder_bridge` | `blocked` / `open` / `reblocked` | 오데르 다리 구간 사건 |
+| `prologue_skipped` | 참/거짓 | 라이프치히에서 시작한 판(5장 '서막 건너뛰기') |
+| `depot_left_behind` | 참/거짓/`unknown` | 서막에서 운반조를 두고 떠남 |
+| `depot_promise` | `kept` / `broken` / `refused` / `unknown` | 서막에서 꼬리칸 대표의 약속을 지켰나, 어겼나, 받지 않았나(5장 서막 흐름 3·6번) |
+| `signalman` | `none` / `rescued` / `left` / `dead` / `unknown` | 술레후프 신호소, 유품 카드(4.2) |
+| `oder_bridge` | `blocked` / `open` / `reblocked` / `unknown` | 오데르 다리 구간 사건 |
 | `guide_secret` | `hidden` / `rumor` / `revealed` / `held`(협박으로 쥠) / `burned` | 술레후프 분필 표식, 잔해의 일지(7.4), 길잡이 유품 카드(4.2) |
-| `first_death` | 참/거짓 | 우리 쪽 첫 죽음(S1a 규칙으로만) |
-| `first_corpse_agenda` | `none` / `own` / `stranger` | 첫 시신 안건이 무엇으로 열렸나. `stranger`는 구벤 강가의 죽은 사람(2.2) |
+| `first_death` | 참/거짓/`unknown` | 우리 쪽 첫 죽음(S1a 규칙으로만) |
+| `first_corpse_agenda` | `none` / `own` / `stranger` / `unknown` | 첫 시신 안건이 무엇으로 열렸나. `stranger`는 구벤 강가의 죽은 사람(2.2) |
 | `bad_coal_loaded` | 0~ (남은 갈탄 양. 때면 줄고 0이면 벌이 멈춘다) | 발전소 저탄장 |
 | `signal_heard` | 참/거짓 | 라이프치히 허브 |
 | `hub_split` | 공동체마다 `stayed` / `left` / `persuaded` / `forced` | 라이프치히 이탈(7.7) |
 
+- 라이프치히에서 시작한 판(`prologue_skipped` 참)에서는 `depot_left_behind`, `depot_promise`, `signalman`, `oder_bridge`, `first_death`, `first_corpse_agenda` 여섯이 `unknown`이다. `guide_secret`은 `hidden`, `bad_coal_loaded`는 0으로 시작한다. 아무도 단서를 찾지 않은 세계라서 이 값이 실제 상태이고, 모름이 아니다. `signal_heard`와 `hub_split`은 라이프치히에서 평소대로 켜진다(제안).
 - 내리는 장면의 예: `guide_secret`이 `revealed`면 길잡이가 맨 뒤에 따로 내린다. `depot_left_behind`가 참이면 첫 정차에서 꼬리칸 대원이 열차장과 눈을 마주치지 않는다. `signalman`이 `left`면 다음 정차에 내릴 때 열차장이 승강장 끝을 한 번 돌아본다.
 
 ## 10. 나중에 정할 것: 수직 슬라이스를 막는 순서
