@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
-  DOM_CARD_KINDS, forecast, hotWaterCoal, hygiene, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
-  rollBreakdown, setBury, setFullRule, setHotWater, startRestore, techRelSides, viewCard,
+  DOM_CARD_KINDS, forecast, hotWaterCoal, hygiene, hygieneTick, knowledgeTick, lawOpen, migrateDomestic, PENDING_TECHS, previewMove, restoreCheck,
+  chooseCard, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -93,24 +93,44 @@ describe('기술', () => {
 });
 
 describe('위생과 침상', () => {
-  it('더운물 드물게는 200명에서 석탄 0.5, 시작 위생은 앞칸 깨끗·꼬리칸 불결', () => {
+  it('더운물 드물게는 공짜, 보통은 200명에서 석탄 0.5, 시작 위생은 앞칸 깨끗·꼬리칸 불결(16.9)', () => {
     const g = fresh();
-    expect(hotWaterCoal(g)).toBeCloseTo(0.5, 5);
+    expect(hotWaterCoal(g)).toBe(0);
     expect(hygiene(g, 'front')).toBe('clean');
     expect(hygiene(g, 'tail')).toBe('dirty');
     expect(hygiene(g, 'engine')).toBe('normal');
-    expect(domesticForecast(g).coal).toBeCloseTo(0.5, 5);
     const s1a = createGame('dom');
-    expect(forecast(g).coal - forecast(s1a).coal).toBeCloseTo(0.5, 5);
+    expect(forecast(g).coal - forecast(s1a).coal).toBeCloseTo(0, 5);
+    setHotWater(g, 2);
+    expect(hotWaterCoal(g)).toBeCloseTo(0.5, 5);
+    expect(domesticForecast(g).coal).toBeCloseTo(0.5, 5);
+    setHotWater(g, 0);
+    expect(g.dom!.hotWater).toBe(1);
   });
 
-  it('목욕 순번은 레버를 드물게 아래로 못 내리고 석탄 ×1.2', () => {
+  it('목욕 순번은 레버를 보통 아래로 못 내리고 석탄 ×1.2', () => {
     const g = fresh();
     g.passed.bath_rota = g.session;
     setHotWater(g, 0);
-    expect(g.dom!.hotWater).toBe(1);
+    expect(g.dom!.hotWater).toBe(2);
     expect(hotWaterCoal(g)).toBeCloseTo(0.6, 5);
     expect(hygiene(g, 'tail')).toBe('normal');
+  });
+
+  it('불결해도 이가 돌 때만 관계가 깎이고, 이가 사라진 칸은 3구간 동안 다시 안 생긴다', () => {
+    const g = fresh();
+    const rel = g.comms.tail.rel;
+    g.dom!.lice = {};
+    g.dom!.liceFree = { tail: g.seg + 99 };
+    hygieneTick(g, []);
+    expect(g.comms.tail.rel).toBe(rel);
+    expect(g.dom!.lice.tail).toBeUndefined();
+    g.dom!.liceFree = {};
+    g.dom!.lice.tail = { at: g.seg };
+    hygieneTick(g, []);
+    expect(g.comms.tail.rel).toBe(rel - 1);
+    resolveLice(g, 'tail', 'boil');
+    expect(g.dom!.liceFree?.tail).toBe(g.seg + 3);
   });
 
   it('침상이 처음 넘칠 때만 침상 카드가 온다', () => {
@@ -193,6 +213,27 @@ const rules = (JSON.parse(readFileSync(join(__dirname, '../../schema/content_rul
 function bad(text: string): boolean {
   return rules.some(r => (r.terms ?? []).some(t => text.includes(t)) || (r.patterns ?? []).some(p => new RegExp(p, r.pattern_flags ?? 'iu').test(text)));
 }
+
+describe('압력 경고(8.7, N13)', () => {
+  it('첫 경고를 무시하면 마지막 경고가 오고, 그것도 무시하면 반드시 터진다. 김을 빼면 처음으로', () => {
+    const pick = (g: Game, label: string) => {
+      g.cards.push({ uid: 900 + g.cards.length, kind: 'dom:pressure' } as Card);
+      const card = g.cards[g.cards.length - 1];
+      const view = viewCard(g, card);
+      const i = view.choices.findIndex(c => c.label === label);
+      expect(chooseCard(g, card.uid, i)).toBe(true);
+      return view;
+    };
+    const g = fresh('pressure');
+    expect(pick(g, '그대로 간다').title).toBe('압력 경고');
+    expect(g.phase).not.toBe('end');
+    expect(pick(g, '김을 뺀다').title).toBe('마지막 압력 경고');
+    expect(pick(g, '그대로 간다').title).toBe('압력 경고');
+    expect(g.phase).not.toBe('end');
+    expect(pick(g, '그대로 간다').title).toBe('마지막 압력 경고');
+    expect(g.phase).toBe('end');
+  });
+});
 
 describe('내정 카드 글', () => {
   it('모든 내정 카드: 선택지 이름 15자, 열차장의 말 40자·두 문장 이내, 금지 표현 없음', () => {

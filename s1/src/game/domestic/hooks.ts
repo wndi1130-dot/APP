@@ -253,12 +253,16 @@ export function researchChoice(g: Game): TechId | null {
   return ids.sort((a, b) => TECHS[a].tier - TECHS[b].tier)[0] ?? null;
 }
 
-/** 압력 경고(8.7): 무시하면 5% 확률로 보일러가 터진다. */
+/** 압력 경고(8.7, N13): 두 단계다. 첫 경고를 무시하면 다음이 마지막 경고, 그것도 무시하면 반드시 터진다.
+ * 확률로 터지지 않는다(조짐은 약속). 김을 빼면 처음으로 돌아간다(석탄은 카드 효과로 뺀다). */
 export function resolvePressure(g: Game, vent: boolean): boolean {
-  if (vent) { g.coal -= 2; return false; }
-  if (rnd(g) < D.boilerBurst) {
+  const d = g.dom;
+  if (!d) return false;
+  if (vent) { d.pressureStage = 0; return false; }
+  if ((d.pressureStage ?? 0) >= 1) {
     journal(g, '보일러가 터졌다. 기관차를 잃었다.', 'bad');
     return true;
   }
+  d.pressureStage = 1;
   return false;
 }

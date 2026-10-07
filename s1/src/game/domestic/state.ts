@@ -85,6 +85,10 @@ export interface DomState {
   countdown: Partial<Record<Field, number>>;
   hotWater: number;
   lice: Partial<Record<Comm, { at: number; endureDue?: number }>>;
+  /** 이가 사라진 칸: 이 구간 전까지 이 판정을 건너뛴다(16.9). */
+  liceFree?: Partial<Record<Comm, number>>;
+  /** 압력 경고 단계(8.7): 0 처음, 1이면 다음이 마지막 경고. */
+  pressureStage?: number;
   typhus: { comm: Comm; patients: string[]; quarantined: boolean; bay: boolean; at: number }[];
   /** 침구를 태운 공동체: 이 구간까지 온기 −10 */
   bedding: Partial<Record<Comm, number>>;

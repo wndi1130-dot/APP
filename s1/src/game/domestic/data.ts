@@ -60,18 +60,19 @@ export const D = {
   // 8.6 대체 불가 요구
   demandEvery: 6, demandRel: 3, demandFair: -3, sabotageMult: 0.8, sabotageSegs: 3, leaveChance: 0.1, grantFood: 0.5, grantSegs: 6,
   // 8.7 파업과의 연결
-  stokerExposure: 5, stokerCoal: 2, stokerEngineRel: -5, slowCoal: 3, pressureChance: 0.3, boilerBurst: 0.05,
+  stokerExposure: 5, stokerCoal: 2, stokerEngineRel: -5, slowCoal: 3, pressureChance: 0.3, ventCoal: 1,
   strikeRelManual: -30,
   // 8.8 전문가 데려가기
   escortCore: 2, escortInjury: 0.8, escortMaterials: 1.5, escortFrag: 0.2, escortRisk: 0.8,
   // 9.1 법 20
   dutyMult: 0.9,
-  // 16.2 더운물: 석탄 = 레버 × 인구/40 × 0.1
+  // 16.2 더운물(16.9): 레버 1~3(드물게·보통·넉넉), 석탄 = max(0, 레버 − 1) × 인구/40 × 0.1. '드물게'는 공짜
   hotWater0: 1, hotWaterCoal: 0.1, bathRotaCoal: 1.2, handsFirstCoal: 0.8, e2HotWater: 0.8,
   // 16.3 이 확률
-  liceNormal: 0.03, liceDirty: 0.1, liceWinter: 1.5, dirtyRel: 1,
+  // 불결 관계 벌은 이가 도는 칸만, 이가 사라진 칸은 3구간 면역(16.9)
+  liceNormal: 0.03, liceDirty: 0.1, liceWinter: 1.5, dirtyRel: 1, liceImmune: 3,
   // 16.5 이와 발진티푸스
-  boilCoal: 3, beddingWarm: 10, beddingSegs: 2, endureSegs: 3, typhusFromLice: 0.4, typhusFromLiceM5: 0.25,
+  boilCoal: 2, beddingWarm: 10, beddingSegs: 2, endureSegs: 3, typhusFromLice: 0.4, typhusFromLiceM5: 0.25,
   typhusPatients: 4, typhusMed: 0.5, typhusDeath: 0.15, typhusDeathM1: 0.1, typhusSpread: 0.2, typhusSpreadCrowd: 70,
   typhusRecover: 0.4, quarantineRel: -15, quarantineFear: 5,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)

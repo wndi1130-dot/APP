@@ -21,16 +21,16 @@ const NEIGHBORS: Record<Comm, Comm[]> = {
   tail: ['medtech'], medtech: ['tail', 'guard'], guard: ['medtech', 'front'], front: ['guard', 'engine'], engine: ['front'],
 };
 
-/** 21가는 레버를 '드물게' 아래로 못 내린다. */
+/** 레버는 드물게(1)·보통(2)·넉넉(3). 21가는 '보통' 아래로 못 내린다(16.4, 16.9). */
 export function hotWaterFloor(g: Game): number {
-  return lawActive(g, 'bath_rota') ? 1 : 0;
+  return lawActive(g, 'bath_rota') ? 2 : 1;
 }
 
 export function setHotWater(g: Game, v: number): void {
   dom(g).hotWater = clamp(Math.round(v), hotWaterFloor(g), 3);
 }
 
-/** 더운물 석탄/구간 = 레버 × 인구/40 × 0.1 × 법 × E2(16.2, 16.4, 16.6). */
+/** 더운물 석탄/구간 = max(0, 레버 − 1) × 인구/40 × 0.1 × 법 × E2(16.2, 16.4, 16.6, 16.9). '드물게'는 공짜다. */
 export function hotWaterCoal(g: Game): number {
   const d = g.dom;
   if (!d) return 0;
@@ -38,12 +38,12 @@ export function hotWaterCoal(g: Game): number {
   if (lawActive(g, 'bath_rota')) m *= D.bathRotaCoal;
   if (lawActive(g, 'hands_first')) m *= D.handsFirstCoal;
   m *= 1 - (1 - D.e2HotWater) * techMult(g, 'e2');
-  return d.hotWater * (totalPop(g) / 40) * D.hotWaterCoal * m;
+  return Math.max(0, Math.max(d.hotWater, hotWaterFloor(g)) - 1) * (totalPop(g) / 40) * D.hotWaterCoal * m;
 }
 
 /** 공동체의 더운물 몫(0~3). 법이 없으면 '탄 순서대로'. */
 export function hotWaterShare(g: Game, c: Comm): number {
-  const lever = g.dom?.hotWater ?? 0;
+  const lever = Math.max(g.dom?.hotWater ?? 1, hotWaterFloor(g));
   if (lawActive(g, 'bath_rota')) return lever;
   if (lawActive(g, 'hands_first')) {
     const crew = g.stop?.crewComm;
@@ -74,11 +74,13 @@ export function hygieneTick(g: Game, notes: string[]): void {
   const winter = g.seg % P.winterEvery === 0;
   for (const c of COMMS) {
     const h = hygiene(g, c);
-    if (h === 'dirty') g.comms[c].rel = clamp(g.comms[c].rel - D.dirtyRel, -100, 100);
     const lice = d.lice[c];
+    // 불결한 칸은 이가 돌 때만 관계를 깎는다(16.9).
+    if (h === 'dirty' && lice) g.comms[c].rel = clamp(g.comms[c].rel - D.dirtyRel, -100, 100);
     if (lice) {
       if (lice.endureDue !== undefined && g.seg >= lice.endureDue) {
         delete d.lice[c];
+        (d.liceFree ??= {})[c] = g.seg + D.liceImmune;
         const p = techMult(g, 'm5') > 0 ? D.typhusFromLice + (D.typhusFromLiceM5 - D.typhusFromLice) * techMult(g, 'm5') : D.typhusFromLice;
         if (rnd(g) < p) startTyphus(g, c, D.typhusPatients);
         else journal(g, `${COMM_NAME[c]}의 이가 겨울을 못 넘기고 줄었다.`);
@@ -87,6 +89,7 @@ export function hygieneTick(g: Game, notes: string[]): void {
     }
     if (h === 'clean' || g.cards.some(x => x.kind === 'dom:lice' && x.comm === c)) continue;
     if (d.typhus.some(t => t.comm === c)) continue;
+    if (g.seg < (d.liceFree?.[c] ?? 0)) continue;
     const chance = (h === 'dirty' ? D.liceDirty : D.liceNormal) * (winter ? D.liceWinter : 1);
     if (rnd(g) < chance) {
       d.lice[c] = { at: g.seg };
@@ -104,10 +107,12 @@ export function resolveLice(g: Game, c: Comm, pick: 'boil' | 'burn' | 'endure'):
   if (pick === 'boil') {
     g.coal -= D.boilCoal;
     delete d.lice[c];
+    (d.liceFree ??= {})[c] = g.seg + D.liceImmune;
     journal(g, `${COMM_NAME[c]} 옷을 솥에 넣어 삶았다.`);
   } else if (pick === 'burn') {
     d.bedding[c] = g.seg + D.beddingSegs - 1;
     delete d.lice[c];
+    (d.liceFree ??= {})[c] = g.seg + D.liceImmune;
     journal(g, `${COMM_NAME[c]} 침구를 태웠다. 오늘 밤은 춥다.`, 'bad');
   } else {
     d.lice[c] = { at: d.lice[c]?.at ?? g.seg, endureDue: g.seg + D.endureSegs };
