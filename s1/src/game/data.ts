@@ -218,14 +218,14 @@ export const LAWS: Record<LawId, LawDef> = {
     changes: ['의약품 소모 ×0.75', '신임 −2', '의무진 관계 −5', '중환자 분류 대신 오른다'], opensWhen: '환자 분류 기준을 복원한 뒤',
   }),
   bath_rota: L({
-    id: 'bath_rota', title: '목욕 순번', group: '위생', tag: '이상', kind: 'normal', axes: [1, 0, 0],
+    id: 'bath_rota', title: '더운물 고루 나누기', group: '위생', tag: '이상', kind: 'normal', axes: [1, 0, 0],
     like: { tail: 2, medtech: 1, front: -1 },
-    changes: ['모든 칸이 같은 더운물 몫', '순번 돌리는 데 석탄 +0.25/구간', '더운물 석탄 ×1.2', '일하는 손 먼저가 닫힌다'], opensWhen: '이가 처음 돈 뒤',
+    changes: ['모든 칸이 같은 더운물 몫', '순번 돌리는 데 석탄 +0.25/구간', '더운물 석탄 ×1.2', '일하는 손 먼저가 닫힌다'], opensWhen: '판 시작부터',
   }),
   hands_first: L({
     id: 'hands_first', title: '일하는 손 먼저', group: '위생', tag: '가혹', kind: 'normal', axes: [-1, 0, 0],
     like: { engine: 1, guard: 1, tail: -1, front: -1 },
-    changes: ['기관실·경비대·파견 칸 더운물 +1', '꼬리칸·앞칸 더운물 −1', '더운물 석탄 ×0.8', '목욕 순번이 닫힌다'], opensWhen: '이가 처음 돈 뒤',
+    changes: ['기관실·경비대·파견 칸 더운물 +1', '꼬리칸·앞칸 더운물 −1', '더운물 석탄 ×0.8', '더운물 고루 나누기가 닫힌다'], opensWhen: '판 시작부터',
   }),
   // 7.3 M3 가(훈제·염장): 종자곡 풀기의 변형. 남긴 씨앗은 훈제해 둔다. 숫자는 내정 스레드 제안.
   seed_half: L({

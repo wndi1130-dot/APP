@@ -116,6 +116,15 @@ function animKey(el: HTMLElement): string {
   return el.dataset.anim || `${el.className.replace(/\bis-still\b/, '').trim()}|${el.getAttribute('aria-label') ?? ''}|${el.classList.contains('toast') ? el.textContent : ''}`;
 }
 
+/** 칸 창이 위 막대 밑으로 들어가지 않게 그만큼 아래로 민다(키 작은 폰, 까닭 줄이 붙은 칸 창). */
+function keepPopInside(root: HTMLElement): void {
+  const pop = root.querySelector<HTMLElement>('.carpop');
+  const top = root.querySelector<HTMLElement>('header.top');
+  if (!pop || !top) return;
+  const over = top.getBoundingClientRect().bottom + 4 - pop.getBoundingClientRect().top;
+  if (over > 0) pop.style.setProperty('--pop-dy', `${Math.ceil(over)}px`);
+}
+
 export function renderApp(view: View): HTMLElement {
   const { g, ui } = view;
   const screen = g.phase === 'end' ? 'end' : ui.screen;
@@ -213,6 +222,7 @@ export function startApp(root: HTMLElement): void {
     const shown = new Set([...root.querySelectorAll<HTMLElement>(ANIMATED)].map(animKey));
     for (const el of view.querySelectorAll<HTMLElement>(ANIMATED)) if (shown.has(animKey(el))) el.classList.add('is-still');
     root.replaceChildren(view);
+    keepPopInside(root);
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) {
       const key = el.dataset.keepScroll ?? '';
       if (scroll[key] === undefined) continue;

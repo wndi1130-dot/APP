@@ -1,4 +1,4 @@
-import { addCard } from './state';
+import { addCard, END_LINK } from './state';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse } from './death';
@@ -221,6 +221,7 @@ export function burnPyre(g: Game): void {
   if (n <= 0) return;
   g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * n);
   g.pyre = 0;
+  darkPyreWeight(g, 0); // S1b: 태운 시신의 확인 수도 비운다
   while (pyreCount(g) > 0) takeKinBody(g);
   journal(g, `선로 옆 장작불에 시신 ${n}구를 태웠다.`, 'dark');
 }
@@ -229,7 +230,9 @@ export function burnPyre(g: Game): void {
 export function crewNames(g: Game, c: Comm, size: number): string[] {
   // 먼저 다녀온 정찰조는 작업조에 다시 넣지 않는다.
   const scouts = g.stop?.scoutReport?.names ?? [];
-  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name));
+  // 앓아누운 원래 대표도 내보내지 않는다(사람의 무게 A2).
+  const sickRep = g.comms[c].sick?.rep.name;
+  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name) && p.name !== sickRep);
   if (alive.length === 0) return [];
   const start = (g.seg * 7) % alive.length;
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
@@ -704,10 +707,13 @@ function medicineTick(g: Game, notes: string[]): void {
     g.tension = clamp(g.tension + 5, 0, 100);
     journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
-  if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * darkStoredWeight(g, g.stored)) * domesticThawMult(g)) {
+  // S1b: 무게를 늘 먼저 셈해 냉동칸이 비면 확인 수도 0으로 돌린다. S1a 판이면 무게가 곧 시신 수다.
+  const storedWeight = darkStoredWeight(g, g.stored);
+  if (storedWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * storedWeight) * domesticThawMult(g)) {
     g.injured += 2;
     g.tension = clamp(g.tension + 8, 0, 100);
     g.stored = 0;
+    darkStoredWeight(g, 0);
     journal(g, '냉동칸의 시신이 녹아 일어났다. 둘이 다쳤다.', 'bad');
   }
 }
@@ -925,6 +931,7 @@ function checkEnd(g: Game): void {
   }
 }
 
+END_LINK.finish = (g, end) => finish(g, end);
 function finish(g: Game, end: Game['end']): void {
   g.end = end;
   g.phase = 'end';

@@ -13,21 +13,27 @@ import './decree';
 import { afterVote, darkCouncilOpen, trialPromises } from './council';
 import { actAll, escalate, killEmber, newEmber } from './embers';
 import { executorTick, runOrder } from './order';
-import { darkCard, nameOf, succeedRep } from './state';
+import { byName, darkCard, nameOf, repGone } from './state';
 
 // S1b가 S1a 구간 다섯 단계에 붙는 곳(3장 표). turn.ts는 이 파일의 함수만 부른다. g.dark가 없으면 모두 아무 일도 안 한다.
 // 죽음(death.ts)과 의회(politics.ts)엔 훅 목록으로 붙는다. 이 파일을 불러오면 등록된다.
 
-DEATH_HOOKS.push((g, c, names) => noteDeath(g, c, names));
+DEATH_HOOKS.push((g, c, names) => {
+  noteDeath(g, c, names);
+  // 희생양, 린치, 처형, 암살로 대표가 죽으면 그 칸이 잇는다(S1b 판에서만. S1a 죽음은 대표를 고르지 않는다).
+  if (!g.dark) return;
+  for (const name of names) { const p = byName(name); if (p) repGone(g, c, p.id); }
+});
 COUNCIL_HOOKS.push({ open: darkCouncilOpen, vote: afterVote });
 
-/** 출발 전 운영(nextSegment 끝): 근신이 끝나고, 열린 수사에 단서가 붙고, 불씨가 한 칸 오를지 본다(오르면 임박 징후). */
+/** 출발 전 운영(nextSegment 끝): 근신이 끝나고, 불씨가 한 칸 오를지 보고(오르면 임박 징후), 열린 수사에 단서가 붙는다.
+ * 미룰 수 없는 임박을 먼저 센다. 수사 서류는 필수 결정이 셋이면 다음 구간으로 미룬다(1.2). */
 export function darkPrep(g: Game): void {
   const d = g.dark;
   if (!d) return;
   d.confined = d.confined.filter(x => x.until >= g.seg);
-  investigate(g);
   escalate(g);
+  investigate(g);
 }
 
 /** 이동(출발 직후, 파업으로 서도): 임박했던 일이 일어나고, 사고·밤으로 정한 명령이 실행된다. */
@@ -37,18 +43,19 @@ export function darkTravel(g: Game): void {
   runOrder(g, 'travel');
 }
 
-/** 정차를 풀 때(resolveStop): 하차 명령을 받은 사람이 내리고, 내렸으면 정차로 정한 명령이 실행된다. */
+/** 정차를 풀 때(resolveStop): 열차가 섰으면 하차 명령을 받은 사람이 내리고, 정차로 정한 명령이 실행된다.
+ * 지나치면 서지 않으니 하차 명령은 다음 정차까지 기다린다(4.4 '다음 정차에 내려놓는다'). */
 export function darkStop(g: Game, went: boolean, crew: string[]): void {
   const d = g.dark;
-  if (!d) return;
+  if (!d || !went) return;
   for (const x of d.exile) {
     const name = nameOf(g, x.id);
     (g.left ??= []).push(name);
     g.comms[x.comm].pop = Math.max(1, g.comms[x.comm].pop - 1);
-    if (g.comms[x.comm].leader.personId === x.id) succeedRep(g, x.comm);
+    repGone(g, x.comm, x.id);
   }
   d.exile = [];
-  if (went) runOrder(g, 'stop', crew);
+  runOrder(g, 'stop', crew);
 }
 
 /** 정차 산출 배수(연결기 풀기, 보일러 고장). S1a 판이면 1. */

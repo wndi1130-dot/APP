@@ -206,7 +206,7 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
 }
 
 /** 사람이 사는 칸 창 머리의 작은 표(S1c): 씻을 물, 빨랫줄·열병, 의무칸 침상(16.3, 4.1). 칸 창 높이를 늘리지 않는다.
- * 사람 상태가 아니라 물 사정을 띄운다. 이가 도는 동안엔 솥과 빨랫줄만 보이고 이 아이콘은 없다(16.1 라). 대야를 누르면 까닭 한 줄. */
+ * 사람 상태가 아니라 물 사정을 띄운다. 이가 도는 동안엔 솥·빨랫줄이 붙고, 벌레 그림이나 긁는 사람은 그리지 않는다(16.1 라). 대야를 누르면 까닭 한 줄. */
 export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
   const g = view.g;
   const d = g.dom;
@@ -222,6 +222,13 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
     lice ? h('span', { class: 'dom-wash' }, '솥·빨랫줄') : null,
     sick ? h('span', { class: 'is-red' }, `열병 ${sick}`) : null,
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
+}
+
+/** 이가 도는 칸은 대야를 누르지 않아도 칸 창에 까닭 한 줄을 띄운다(J10 W6). 병이 처지에서 왔다는 것을 늘 보인다. */
+export function domesticWhyLine(view: View, car: CarDef): HTMLElement | null {
+  const c = car.comm;
+  if (!view.g.dom || !c || !view.g.dom.lice[c]) return null;
+  return h('small', { class: 'carpop__why' }, hygieneWhy(view.g, c));
 }
 
 /** 기관실 칸 창의 셋째 줄: 더운물 레버(16.2, 열차 전체 하나)와 지식 현황판 단추(11.4). */

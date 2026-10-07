@@ -29,8 +29,9 @@ export function domesticLawOpen(g: Game, law: LawId): boolean | null {
     case 'seed_grain': return lawActive(g, 'seed_half') ? false : null;
     case 'child_pack': return techMult(g, 'x1') > 0 && (lawActive(g, 'child_labor') || g.coal <= 40 || g.food <= 40);
     case 'child_labor': return lawActive(g, 'child_pack') ? false : null;
-    case 'bath_rota': return d.flags.lice && !lawActive(g, 'hands_first');
-    case 'hands_first': return d.flags.lice && !lawActive(g, 'bath_rota');
+    // 위생 두 법은 판 시작부터 연다(J10 W2). 이가 돌기 전에 물을 나눌 수 있어야 막을 시간이 있다.
+    case 'bath_rota': return !lawActive(g, 'hands_first');
+    case 'hands_first': return !lawActive(g, 'bath_rota');
     default: return null;
   }
 }

@@ -10,7 +10,7 @@ import { ACT_LINES, SIGN_LINES, SIGN_READ } from './lines';
 import type { SignKind } from './lines';
 import { EMBER_LINK, openCase, caught } from './cases';
 import {
-  adults, alive, commOf, darkCard, dpick, dr, isRep, killEmber, nameOf, newId, segFull, succeedRep,
+  adults, alive, commOf, darkCard, dpick, dr, killEmber, nameOf, newId, segFull,
 } from './state';
 import type { Ember, EmberCause, SabKind, Stage, Target } from './state';
 
@@ -66,9 +66,12 @@ export function harmCapped(g: Game): boolean {
   return g.dark!.harm >= B.harmCap;
 }
 
-/** 다른 일(수사·군중 시계)이 진행 중이면 그 일에 걸리지 않은 불씨는 사보타주 위로 못 오른다(1.2). */
+/** 다른 일(수사·군중 시계, 다른 불씨의 폭행·암살 임박)이 진행 중이면 그 일에 걸리지 않은 불씨는 사보타주 위로 못 오른다(1.2).
+ * 같은 출발 전에 불씨 둘이 함께 폭행·암살 임박이 되지 않게 한다. */
 function harmBusy(g: Game, e: Ember): boolean {
-  return g.dark!.cases.some(c => (c.status === 'open' || c.status === 'trial') && c.ember !== e.id);
+  const d = g.dark!;
+  return d.cases.some(c => (c.status === 'open' || c.status === 'trial') && c.ember !== e.id)
+    || d.embers.some(x => x.id !== e.id && x.imm >= 3);
 }
 
 export function guarded(g: Game, e: Ember): boolean {
@@ -127,14 +130,21 @@ function sign(g: Game, e: Ember, tier: 'kiche' | 'imm'): void {
   const fresh = pool.filter(t => !g.linesSeen.includes(t));
   d.stats.signs += 1;
   if (tier === 'imm') d.stats.imminent += 1;
-  if (tier === 'kiche' && (fresh.length === 0 || segFull(g))) {
+  // 같은 구간의 징후 둘은 쪽지 한 장에 두 줄로 묶는다(4.2). 묶인 둘째 줄은 필수 결정 수에 따로 세지 않는다.
+  const open = g.cards.find(k => k.kind === 'dark:sign' && k.n !== undefined && k.n !== e.id && !k.vals?.n2);
+  if (tier === 'kiche' && (fresh.length === 0 || (segFull(g) && !open))) {
     if (segFull(g)) d.stats.cardsDeferred += 1;
     journal(g, `${COMM_NAME[e.who]}에 무언가 끓고 있다는 말이 돈다.`, 'dark');
     return;
   }
   const text = pickFresh(pool, g.linesSeen, `${g.seed}|${e.id}|${tier}|${stage}`);
   markSeen(g, text);
-  darkCard(g, { kind: 'dark:sign', comm: e.who, n: e.id, text: tier, who: fill(g, text, e, stage) });
+  const line = fill(g, text, e, stage);
+  if (open) {
+    open.vals = { ...(open.vals ?? {}), n2: String(e.id), tier2: tier, who2: line };
+    return;
+  }
+  darkCard(g, { kind: 'dark:sign', comm: e.who, n: e.id, text: tier, who: line });
 }
 
 export function signRead(e: Ember, tier: string): string {
@@ -172,7 +182,8 @@ export function escalate(g: Game): void {
       if (nxt === 4 && e.mark === 'chief') d.chiefAttacked = true;
       e.blocked = false;
       sign(g, e, 'imm');
-      if (nxt === 3 && d.armory === null) darkCard(g, { kind: 'dark:armory' });
+      // 무기고 관행은 미룰 수 있는 카드다: 필수 결정이 셋이면 다음 폭행 임박 때 묻는다. 한 번에 한 장.
+      if (nxt === 3 && d.armory === null && !segFull(g) && !g.cards.some(k => k.kind === 'dark:armory')) darkCard(g, { kind: 'dark:armory' });
     } else {
       e.quiet += 1;
     }
@@ -282,10 +293,7 @@ function act(g: Game, e: Ember): void {
   const killed = !firstCraft && dr(g) < p;
   if (killed) {
     d.stats.violentDeaths += 1;
-    const rep = isRep(g, e.mark);
-    onDeath(g, v, [markName], 'other');
-    const next = rep ? succeedRep(g, v) : null;
-    if (next) journal(g, `${next}이(가) ${COMM_NAME[v]} 대표 자리를 이었다.`, 'dark');
+    onDeath(g, v, [markName], 'other'); // 대표였으면 죽음 훅(hooks.ts)이 승계한다
   } else {
     g.injured += 1;
   }

@@ -32,6 +32,12 @@ function chief(g: Game, f: Field): DomPerson | undefined {
 
 const rel = (c: Comm, v: number): Eff => ({ t: 'rel', c, v });
 
+/** 위생 카드의 공동체. 비어 있으면 꼬리칸으로 떨어뜨리지 않고 멈춘다(J10 W9: 병이 늘 꼬리칸 몫으로 읽히지 않게, 시험에서 잡히게). */
+function needComm(card: Card): Comm {
+  if (!card.comm) throw new Error(`${card.kind} 카드에 공동체가 없다`);
+  return card.comm;
+}
+
 function sidesEffs(id: TechId, v?: Variant): Eff[] {
   const s = techRelSides(id, v);
   return [...s.like.map(c => rel(c, D.techRel)), ...s.dislike.map(c => rel(c, -D.techRel))];
@@ -215,22 +221,22 @@ export function domView(g: Game, card: Card): CardView | null {
       };
     }
     case 'dom:lice': {
-      const c = card.comm ?? 'tail';
+      const c = needComm(card);
       return {
         title: '이가 돈다', focus: c, required: true,
         body: `${COMM_NAME[c]}에서 밤새 긁는 소리가 난다. 같이 덮는 담요, 돌려 입는 옷, 말릴 데 없는 빨래 탓이다. (${hygieneWhy(g, c)})`,
         choices: [
           { label: '옷을 삶는다', say: '옷이고 담요고 다 솥에 넣어라. 석탄이 아까워도 지금이다!', effs: [{ t: 'coal', v: -D.boilCoal }], special: 'dom:lice:boil' },
           { label: '침구를 태운다', say: '침구를 태워라. 오늘 밤은 추워도 참게.', effs: [], special: 'dom:lice:burn', extra: [`${COMM_NAME[c]} 온기 −${D.beddingWarm}(${D.beddingSegs}구간)`] },
-          { label: '버틴다', say: '긁는 것도 일이다. 버텨라.', effs: [], special: 'dom:lice:endure', extra: [`${D.endureSegs}구간 뒤 열병이 될 수 있다`] },
+          { label: '버틴다', say: '석탄을 아껴야 한다. 며칠만 버텨 다오.', effs: [], special: 'dom:lice:endure', extra: [`${D.endureSegs}구간 뒤 열병이 될 수 있다`] },
         ],
       };
     }
     case 'dom:typhus': {
-      const c = card.comm ?? 'tail';
+      const c = needComm(card);
       return {
         title: '열병', focus: c, required: true,
-        body: `${COMM_NAME[c]}에서 ${card.n ?? 4}명이 열에 들떠 누웠다. 붐비고 담요를 같이 덮는 칸이다. 앓는 사람은 의약품을 먹고, 붐비는 이웃 칸에도 열병이 날 수 있다.`,
+        body: `${COMM_NAME[c]}에서 ${card.n ?? 4}명이 열에 들떠 누웠다. 붐비고 담요를 같이 덮는 칸이다. 앓는 사람은 의약품을 먹는다. 붐비고 담요를 같이 덮는 칸은 어디든 열병이 날 수 있다.`,
         choices: [
           { label: '의무칸을 비운다', say: '의무칸을 비워라. 앓는 사람이 먼저다!', effs: [], special: 'dom:typhus:bay', extra: ['번지지 않는다', `약 받으면 ${pct(D.typhusRecover)} 회복`, '부상자 회복이 멈춘다'] },
           { label: '따로 눕힌다', say: '앓는 사람은 그 칸 끝에 따로 눕혀라. 담요도 그릇도 따로다.', effs: [], special: 'dom:typhus:apart', extra: [`번질 확률 ${pct(D.typhusSpread)} → ${pct(D.typhusSpreadApart)}`, `약 받으면 ${pct(D.typhusRecoverApart)} 회복`, '부상자 회복은 그대로'] },
@@ -342,10 +348,10 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
       }
       break;
     case 'lice':
-      resolveLice(g, card.comm ?? 'tail', arg as 'boil' | 'burn' | 'endure');
+      resolveLice(g, needComm(card), arg as 'boil' | 'burn' | 'endure');
       break;
     case 'typhus':
-      resolveTyphus(g, card.comm ?? 'tail', arg as 'bay' | 'apart');
+      resolveTyphus(g, needComm(card), arg as 'bay' | 'apart');
       break;
     case 'stoker':
       d.stoker = arg as Comm;

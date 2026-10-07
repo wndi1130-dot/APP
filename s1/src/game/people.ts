@@ -82,8 +82,14 @@ export function afterDeath(g: Game, c: Comm, names: readonly string[]): void {
     const f = familyOf(g, n);
     if (f) for (const o of f.others) mourn(g, o.name, o.community);
   }
-  if (known.length === 0 || g.cards.some(x => x.kind === 'orphan' || x.kind === 'keepsake')) return;
+  if (known.length === 0 || g.cards.some(x => x.kind === 'orphan')) return;
   const parent = known.find(n => { const f = familyOf(g, n); return f && f.isParent && f.kids.length > 0; });
+  // 남은 아이가 먼저다: 유품 카드가 기다리는 중에 부모가 죽으면 그 카드를 남은 아이 카드로 바꾼다.
+  const waiting = g.cards.find(x => x.kind === 'keepsake');
+  if (waiting) {
+    if (parent) { waiting.kind = 'orphan'; waiting.comm = c; waiting.who = parent; delete waiting.text; }
+    return;
+  }
   if (parent) addPeopleCard(g, { kind: 'orphan', comm: c, who: parent });
   // 정차 중에 죽었으면 밖에서 죽은 것이다(유품 카드 문장이 달라진다).
   else addPeopleCard(g, { kind: 'keepsake', comm: c, who: known[0], ...(g.phase === 'stop' ? { text: 'field' } : {}) });

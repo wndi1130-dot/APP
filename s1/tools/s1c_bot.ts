@@ -53,7 +53,7 @@ export interface GameMetrics {
   dark?: Record<string, number>;
 }
 
-const KIND_PICK = ['경비를 붙인다', '재판에 넘긴다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
+const KIND_PICK = ['둘 다 경비를 붙인다', '경비를 붙인다', '재판에 넘긴다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
 const CRUEL_PICK = ['경비대가 처리한다', '처형', '하차 명령', '경비대가 한다'];
 
 /** S1b 카드: kind는 위 목록 순서로, 없으면 선을 넘지 않는 첫 선택지. cruel은 선을 넘는 선택지, 즉결 쪽을 먼저. */
@@ -232,6 +232,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       if (!seen.has(card.uid)) {
         seen.add(card.uid);
         cards[card.kind] = (cards[card.kind] ?? 0) + 1;
+        // 위생 카드는 칸별로도 센다(꼬리칸 몫이 쏠리는지 본다, J10 W1).
+        if (card.kind === 'dom:lice' || card.kind === 'dom:typhus') cards[`${card.kind}@${card.comm}`] = (cards[`${card.kind}@${card.comm}`] ?? 0) + 1;
         if (card.kind.startsWith('dom:')) m.domCards += 1; else m.s1aCards += 1;
       }
       const view = viewCard(g, card);

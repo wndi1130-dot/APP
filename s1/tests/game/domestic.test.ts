@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   addMaterials, agendaOptions, isLawAgenda, applyMove, attachApprentice, bedNeed, bedTick, setBedOrder, createGame, createS1cGame, D, domesticForecast, domesticHaulMult,
-  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hotWaterShare, hygiene, hygieneTick, hygieneWhy, resolveTyphus, startTyphus, WASH_NAME, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
+  DOM_CARD_KINDS, knowledgeMult, secondPath, topSkill, forecast, hotWaterCoal, hotWaterShare, hygiene, hygieneScore, hygieneTick, situation, LAWS, hygieneWhy, resolveTyphus, startTyphus, WASH_NAME, knowledgeTick, lawOpen, migrateDomestic, previewMove, restoreCheck,
   chooseCard, coldCap, resolveLice, rollBreakdown, setBury, setFullRule, setHotWater, startRestore, storeCap, techMult, TECHS, techRelSides, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
@@ -106,12 +106,18 @@ describe('기술', () => {
 });
 
 describe('위생과 침상', () => {
-  it('더운물 드물게는 공짜, 보통은 200명에서 석탄 0.5, 시작 위생은 앞칸 깨끗·꼬리칸 불결(16.9)', () => {
+  it('더운물 드물게는 공짜, 보통은 200명에서 석탄 0.5, 시작 위생은 앞칸 깨끗·꼬리칸 보통(16.9, 과밀 문턱 80/95)', () => {
     const g = fresh();
     expect(hotWaterCoal(g)).toBe(0);
     expect(hygiene(g, 'front')).toBe('clean');
-    expect(hygiene(g, 'tail')).toBe('dirty');
+    expect(hygiene(g, 'tail')).toBe('normal');
     expect(hygiene(g, 'engine')).toBe('normal');
+    // 과밀 80이면 −1, 95면 −2(J10 W1). 시작 꼬리칸은 80 아래라 판 시작부터 '씻을 물 없음'이 아니다.
+    expect(situation(g, 'tail')[2]).toBeLessThan(80);
+    g.comms.tail.base[2] = 80;
+    expect(hygieneScore(g, 'tail')).toBe(-1);
+    g.comms.tail.base[2] = 95;
+    expect(hygieneScore(g, 'tail')).toBe(-2);
     const s1a = createGame('dom');
     expect(forecast(g).coal - forecast(s1a).coal).toBeCloseTo(0, 5);
     setHotWater(g, 2);
@@ -121,7 +127,7 @@ describe('위생과 침상', () => {
     expect(g.dom!.hotWater).toBe(1);
   });
 
-  it('목욕 순번은 드물게도 되고 구간당 석탄 +0.25, 레버 석탄 ×1.2', () => {
+  it('더운물 고루 나누기는 드물게도 되고 구간당 석탄 +0.25, 레버 석탄 ×1.2', () => {
     const g = fresh();
     g.passed.bath_rota = g.session;
     setHotWater(g, 0);
@@ -133,6 +139,7 @@ describe('위생과 침상', () => {
 
   it('불결해도 이가 돌 때만 관계가 깎이고, 이가 사라진 칸은 3구간 동안 다시 안 생긴다', () => {
     const g = fresh();
+    g.comms.tail.base[2] = 85;
     const rel = g.comms.tail.rel;
     g.dom!.lice = {};
     g.dom!.liceFree = { tail: g.seg + 99 };
@@ -141,14 +148,18 @@ describe('위생과 침상', () => {
     expect(g.dom!.lice.tail).toBeUndefined();
     g.dom!.liceFree = {};
     g.dom!.lice.tail = { at: g.seg };
-    hygieneTick(g, []);
+    const notes: string[] = [];
+    hygieneTick(g, notes);
     expect(g.comms.tail.rel).toBe(rel - 1);
+    // 관계가 움직인 까닭을 적는다(J10 W8).
+    expect(notes).toContain('꼬리칸 관계 −1: 씻을 물이 모자라 불만.');
     resolveLice(g, 'tail', 'boil');
     expect(g.dom!.liceFree?.tail).toBe(g.seg + 3);
   });
 
   it('이 카드는 4구간부터 온다: 1~3구간엔 불결한 칸에도 이가 안 돈다(16.3, 16.1 가)', () => {
     const g = fresh();
+    g.comms.tail.base[2] = 85;
     g.dom!.lice = {};
     D.liceDirty = 1;
     try {
@@ -160,6 +171,8 @@ describe('위생과 침상', () => {
       g.seg = 4;
       hygieneTick(g, []);
       expect(g.dom!.lice.tail).toBeDefined();
+      // 이가 돈 일지 줄 끝에 까닭 줄이 붙는다(J10 W6).
+      expect(g.journal.some(l => /꼬리칸에 이가 돈다\. \(보일러에서 가장 멂 · 과밀 85 · 온기 \d+ · 몫 0\)/.test(l.text))).toBe(true);
     } finally {
       D.liceDirty = 0.1;
     }
@@ -175,15 +188,17 @@ describe('위생과 침상', () => {
     const i = cars.indexOf('tail1');
     [cars[3], cars[i]] = [cars[i], cars[3]];
     expect(hotWaterShare(g, 'tail')).toBeCloseTo(2 - 2 / 3, 5);
-    expect(hygieneWhy(g, 'tail')).toMatch(/^보일러에서 먼 칸이 있음 · 과밀 \d+ · 몫 1$/);
+    expect(hygieneWhy(g, 'tail')).toMatch(/^보일러에서 먼 칸이 있음 · 과밀 \d+ · 온기 \d+ · 몫 1$/);
   });
 
   it('화면 글은 물 사정으로 부르고 까닭 줄은 조건만 적는다(16.3 보이는 법)', () => {
     const g = fresh();
+    expect(WASH_NAME[hygiene(g, 'tail')]).toBe('빠듯');
+    g.comms.tail.base[2] = 85;
     expect(WASH_NAME[hygiene(g, 'tail')]).toBe('없음');
     expect(WASH_NAME[hygiene(g, 'front')]).toBe('넉넉');
     const why = hygieneWhy(g, 'tail');
-    expect(why).toMatch(/^보일러에서 가장 멂 · 과밀 \d+ · 몫 0$/);
+    expect(why).toMatch(/^보일러에서 가장 멂 · 과밀 85 · 온기 \d+ · 몫 0$/);
     expect(why).not.toMatch(/[.]\d|불결|더러/);
   });
 
@@ -218,6 +233,46 @@ describe('위생과 침상', () => {
     };
     expect(spreads('bay')).toBe(false);
     expect(spreads('apart')).toBe(true);
+  });
+
+  it('위생 두 법은 판 시작부터 열리고, 21가 이름은 더운물 고루 나누기다(J10 W2·W3)', () => {
+    const g = fresh();
+    expect(g.dom!.flags.lice).toBeFalsy();
+    expect(lawOpen(g, 'bath_rota')).toBe(true);
+    expect(lawOpen(g, 'hands_first')).toBe(true);
+    g.passed.bath_rota = g.session;
+    expect(lawOpen(g, 'hands_first')).toBe(false);
+    expect(LAWS.bath_rota.title).toBe('더운물 고루 나누기');
+    expect(LAWS.hands_first.changes.join(' ')).toContain('더운물 고루 나누기가 닫힌다');
+    expect(JSON.stringify(LAWS)).not.toContain('목욕 순번');
+  });
+
+  it('열병은 이웃이 아니라 과밀 70 이상인 칸 어디로든 번질 수 있다(J10 W4)', () => {
+    const h = fresh('spread');
+    h.med = 100;
+    for (const c of ['medtech', 'guard', 'front', 'engine'] as const) h.comms[c].base[2] = 10;
+    h.comms.front.base[2] = 90;
+    startTyphus(h, 'tail', 4);
+    resolveTyphus(h, 'tail', 'apart');
+    const keep = D.typhusSpreadApart;
+    D.typhusSpreadApart = 1;
+    try {
+      h.seg += 1;
+      hygieneTick(h, []);
+    } finally {
+      D.typhusSpreadApart = keep;
+    }
+    expect(h.dom!.typhus.map(t => t.comm).sort()).toEqual(['front', 'tail']);
+    expect(D.typhusSpread).toBe(0.1);
+    expect(D.typhusSpreadApart).toBe(0.05);
+  });
+
+  it('위생 카드에 공동체가 없으면 꼬리칸으로 떨어지지 않고 멈춘다(J10 W9)', () => {
+    const g = fresh();
+    expect(() => viewCard(g, { uid: 99, kind: 'dom:lice' } as Card)).toThrow();
+    expect(() => viewCard(g, { uid: 99, kind: 'dom:typhus' } as Card)).toThrow();
+    const v = viewCard(g, { uid: 99, kind: 'dom:lice', comm: 'guard' } as Card);
+    expect(v.choices.find(c => c.label === '버틴다')?.say).toBe('석탄을 아껴야 한다. 며칠만 버텨 다오.');
   });
 
   it('옛 저장의 격리 열병은 따로 눕힌 것으로 이어진다', () => {
