@@ -23,8 +23,8 @@ S1a 정책(passive, idealist, nodeal, caretaker, schemer, caretaker_random)은 S
 
 기본값: 브리프 3판 16.1 표의 수치(esc_base 0.32, quiet_out 8, disperse_tension 6, leash_public 0.5,
   brink_tension 101 = 긴장 70 길 없음)에 3라운드의 휴전 서약 조건(truce_cond 1)을 더했다.
-  `--tune truce_cond=0`이면 16.1 표가 그대로 나온다. 3라운드 제안(폭력 긴장 낮춤)은
-  `--tune threat_tension=1 assault_tension=3 assn_tension=3 brink_seg_tension=1`.
+  3라운드에서 폭력 긴장을 낮춘 값(위협 1, 폭행·암살 3, 내전 직전 구간마다 1)을 기본값으로 올렸다
+  (브리프 16.1 표). 2라운드 표는 `--tune truce_cond=0 threat_tension=3 assault_tension=6 assn_tension=6 brink_seg_tension=3`.
 
 Q의 손잡이 (자세한 값은 아래 Q 주석)
   사다리       ember_p(원인 → 불씨 확률, 0이면 사다리 끔), rival_p(원수 대표가 표결에서 갈릴 때), esc_base(오르는 확률),
@@ -127,10 +127,10 @@ Q = dict(
     truce_cond=1,         # 1이면 서약이 통과해도 두 집단의 조건(S1a 3.2 열린 협상 조건)을 시계 안에 지켜야 멈춘다. 0이면 통과만으로 멈춘다(2라운드)
     truce_sep=0,          # (가정) 1이면 서약 뒤 조건이 남은 채 마지막 구간이면 떼어 놓기로 한 구간 번다
     # 3라운드: 긴장 출처를 하나씩 끄는 손잡이(기본값 = 브리프 값)
-    threat_tension=3, threat_fear=2,   # 위협(사다리 1)
-    assault_tension=6,    # 폭행(사다리 3)
-    assn_tension=6,       # 암살(사다리 4)
-    brink_seg_tension=3,  # 내전 직전 구간마다
+    threat_tension=1, threat_fear=2,   # 위협(사다리 1)
+    assault_tension=3,    # 폭행(사다리 3)
+    assn_tension=3,       # 암살(사다리 4)
+    brink_seg_tension=1,  # 내전 직전 구간마다
     crowd=1,              # 0이면 군중 시계가 없다(사건은 수사만)
     sab_on=1,             # 0이면 사보타주가 물자·사람에 손해를 주지 않는다(사다리 칸은 그대로)
     guard_fear=2, guard_expo=3,  # 경비를 붙일 때 공포·경비대 노출
