@@ -175,9 +175,9 @@ function coldPop(view: View, car: CarDef): HTMLElement {
   const store = lawActive(g, 'corpse_store');
   return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
     popHead(car),
-    h('p', { class: 'carpop__text' }, store || g.stored > 0
-      ? `안치한 시신 ${g.stored}/${coldCap(g)}구. 넘으면 녹는 사고가 두 배다.`
-      : '비어 있다. 냉기가 문틈으로 샌다.'),
+    h('p', { class: 'carpop__text' }, store || g.stored + (g.pyre ?? 0) > 0
+      ? `천에 싸인 시신 ${g.stored + (g.pyre ?? 0)}/${coldCap(g)}구.${g.pyre ? ` ${g.pyre}구는 다음 정차 장작불을 기다린다.` : ''} 넘으면 녹는 사고가 두 배다.`
+      : '비어 있다. 창마다 성에가 두껍다.'),
     d.techs.m3?.variant === 'b' ? h('p', { class: 'carpop__text' }, '식량을 먼저 채운다(식량 보존).') : null,
     g.stored > 0 ? h('p', { class: 'sub' }, '길게 머무는 정차에서 묻고 갈 수 있다.') : null);
 }

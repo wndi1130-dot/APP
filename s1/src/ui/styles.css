@@ -283,6 +283,8 @@ small { font-size: 12px; }
 .car--captain { width: 120px; }
 .car--engine { width: 150px; background: linear-gradient(#2e2a26, #24211e); }
 .car--freight { width: 112px; border-radius: 3px 3px 2px 2px; background: repeating-linear-gradient(90deg, #2a2724 0 10px, #25221f 10px 11px); }
+.car--cold { width: 140px; background: linear-gradient(#2c3136, #24282c); }
+.car--cold .car__windows i { background: #aebccb; border-color: #d4dee7; opacity: .45; }
 .car__door { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 40px; height: 52px; border: 1px solid #4a4540; background: #2f2b27; }
 .car--loco { width: 128px; height: 92px; border-radius: 18px 10px 2px 2px; background: linear-gradient(#33373c, #26292d); }
 .car::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--cc, transparent); border-radius: 6px 6px 0 0; opacity: .9; }

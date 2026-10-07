@@ -30,7 +30,7 @@ function figures(g: Game, car: CarDef): HTMLElement {
     count = g.phase === 'council' ? 12 : 4;
   } else if (car.kind === 'captain') {
     count = 2;
-  } else if (car.kind === 'loco' || car.kind === 'freight') {
+  } else if (car.kind === 'loco' || car.kind === 'freight' || car.kind === 'cold') {
     count = 0;
   }
   return h('div', { class: 'car__people' }, Array.from({ length: count }, (_, i) => h('i', { class: 'fig', style: `--i:${i}` })));
@@ -89,9 +89,10 @@ function carPopover(view: View, car: CarDef): HTMLElement | null {
       h('p', { class: 'carpop__text' }, `일지 ${g.journal.length}줄. 쥔 비밀 ${g.secrets.length}. 상징물 ${g.symbols}.`),
       h('button', { class: 'btn', 'data-action': 'panel', 'data-panel': 'journal' }, '일지 펼치기'));
   }
-  if (car.kind === 'freight') {
+  if (car.kind === 'freight' || car.kind === 'cold') {
+    const waiting = g.pyre ?? 0;
     const text = car.id === 'cold'
-      ? (g.stored > 0 ? `안치한 시신 ${g.stored}구. 녹으면 일어난다.` : '비어 있다. 냉기가 문틈으로 샌다.')
+      ? (g.stored + waiting > 0 ? `천에 싸인 시신 ${g.stored + waiting}구가 긴 의자에 누워 있다.${waiting ? ` ${waiting}구는 다음 정차 장작불을 기다린다.` : ''}` : '비어 있다. 창마다 성에가 두껍다.')
       : car.id === 'store'
         ? `식량 ${fmt(g.food)} · 의약품 ${fmt(g.med)} · 사치품 ${fmt(g.lux)}.`
         : '차고 공방을 통째로 실은 칸이다. 공구가 벽에 걸려 있다.';
