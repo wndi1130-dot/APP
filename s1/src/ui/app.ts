@@ -1,6 +1,6 @@
 import {
   openConditions,
-  COMMS, advance, callEmergency, castVote, chooseCard, cloneGame, createGame, currentAgenda, cutComm, makeDeal, resolveStop,
+  COMMS, advance, autoLeverStatus, callEmergency, castVote, chooseCard, cloneGame, createGame, currentAgenda, cutComm, makeDeal, resolveStop,
   setAgenda, setAutoLevers, setLever, setStop, supportComm, uniqueAction, viewCard,
 } from '../game';
 import type { Comm, Game, StayId } from '../game';
@@ -314,6 +314,7 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'auto-levers':
         act(next => setAutoLevers(next, !next.autoLevers));
+        if (!g.autoLevers && autoLeverStatus(g).why) { toast(autoLeverStatus(g).why!); return render(); }
         toast(g.autoLevers ? '배급장에게 맡겼다. 출발 전마다 레버를 움직인다.' : '레버를 직접 잡는다.');
         return render();
       case 'sel-comm':

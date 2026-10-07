@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   advance, agendaOptions, callEmergency, castVote, createGame, emergencyCost, emergencyStatus, enactLaw, HUNGER_GRACE, NEED_GRACE,
-  needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL,
+  needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL, setAutoLevers,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -166,5 +166,22 @@ describe('숨긴 물림', () => {
 
   it('숨긴 물림은 더는 비밀 풀에 없다', () => {
     expect(SECRET_POOL.some(s => s.text === '물린 걸 숨기고 있다')).toBe(false);
+  });
+});
+
+describe('배급장 맡기기 조건', () => {
+  it('정차 여섯 번을 지나야 열리고, 앞칸 지지가 떨어지면 장부를 내려놓는다', () => {
+    const g = createGame('delegate');
+    setAutoLevers(g, true);
+    expect(g.autoLevers).toBe(false);
+    g.seg = 7;
+    g.comms.front.rel = 30;
+    setAutoLevers(g, true);
+    expect(g.autoLevers).toBe(true);
+    g.comms.front.rel = 0;
+    g.phase = 'settle'; g.cards = [];
+    advance(g);
+    expect(g.autoLevers).toBe(false);
+    expect(g.cards.some(c => c.who?.includes('장부'))).toBe(true);
   });
 });

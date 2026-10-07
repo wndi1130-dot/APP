@@ -236,6 +236,8 @@ small { font-size: 12px; }
 }
 .secondary small { font-size: 12px; font-weight: 400; color: var(--ink-3); }
 .secondary.is-off { opacity: .55; }
+.ov-why { font-size: 12px; color: var(--ink-3); }
+.chip:disabled { opacity: .55; }
 
 /* ---------- 홈: 열차 단면 ---------- */
 

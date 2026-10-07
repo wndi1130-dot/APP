@@ -1,4 +1,4 @@
-import { COMM_NAME, REP_ROLE, forecast, relStage, relationLine, situation } from '../game';
+import { COMM_NAME, REP_ROLE, autoLeverStatus, forecast, relStage, relationLine, situation } from '../game';
 import type { Comm } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
@@ -72,10 +72,14 @@ export function overviewScreen(view: View): HTMLElement {
   const { g, ui } = view;
   const gr = GROUPS.find(x => x.id === ui.overviewSel) ?? GROUPS[GROUPS.length - 1];
   const f = forecast(g);
+  const delegate = autoLeverStatus(g);
   return h('section', { class: 'overview' },
     h('div', { class: 'ov-tools' },
       h('button', { class: cx('chip', ui.numbersOnly && 'is-on'), 'data-action': 'numbers' }, icon('numbers'), '수치만 보기'),
-      h('button', { class: cx('chip', g.autoLevers && 'is-on'), 'data-action': 'auto-levers' }, icon('lever'), '배급장에게 맡기기'),
+      h('button', {
+        class: cx('chip', g.autoLevers && 'is-on'), 'data-action': 'auto-levers', disabled: !g.autoLevers && !delegate.ok, title: delegate.why ?? '',
+      }, icon('lever'), '배급장에게 맡기기'),
+      !g.autoLevers && delegate.why ? h('small', { class: 'ov-why' }, delegate.why) : null,
       h('span', { class: 'ov-forecast num' }, icon('coal'), `${signed(-f.coal)}/구간`, icon('food'), `${signed(-f.food)}/구간`)),
     ui.numbersOnly ? numbersOnly(view) : h('div', { class: 'ov-body' },
       trainColumn(view),
