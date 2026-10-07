@@ -30,13 +30,13 @@ The train is now running at speed, not stopped: the platform, lamp post and wait
 
 ```text
 Clothing: everyone looks ragged after six winters: torn and frayed mismatched layers, scavenged coats too big or too small, blankets and sacking worn as cloaks, holes patched with burlap, rags and rope wrapped over boots and hands, frayed sleeves and stained knees, soot and grime on faces and cuffs, gear and bundles tied on with cord and straps. No armbands, stars, badges, cap badges, insignia, rank marks, real army uniforms or steel helmets. No red cross or red crescent on anything.
-Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors. Smoke from the locomotive and the coach stovepipes is thin pale grey wisps drifting low and sideways with the wind, never a thick black column.
+Train: people live and ride only in old passenger coaches; closed freight wagons carry only cargo and coal and never have people inside or crowded at their doors. Only the running locomotive smokes: it pours out a long, heavy, billowing plume of grey steam and coal smoke that streams far back and up over the whole train in the wind, and the coach stovepipes give only thin pale wisps. Chimneys of buildings, factories and cooling towers give no smoke or steam at all, a standing locomotive never sends smoke straight up, and closed wagons have no stovepipe and never smoke. Washing and hygiene appear only as cooking pots, steam, laundry lines and empty basins; never anyone treating or washing a person's body, people scratching, lice, disinfection signs or sprays, or a living car being closed off.
 Landscape: no barbed-wire fences, watchtowers, rows of barracks, loading ramps, or tall chimneys with smoke anywhere in the scene. Factory chimneys and cooling towers, if present, stand cold and smokeless.
 Props: no abandoned suitcases, piles of luggage or piles of shoes beside the track or on platforms; left-behind goods are only cargo sacks or wooden crates.
 The dead: ordinary civilians in torn everyday winter clothes (parkas, anoraks, wool coats, hoodies, work jackets, knit hats or bare heads, loose hair). No olive drab, no camouflage or mottled patterns, no military-style backpacks or webbing, no helmets or round helmet-like caps, never walking in step or in rows.
 ```
 
-16:05 더함: Train 줄 끝의 연기 문장은 사용자 결정(16:00, 연기 카드 '옅게 둠')이다. 기관차와 객차 난로 연기는 남기되 짙은 검은 기둥 없이 옅고 비스듬히 흐르게 한다.
+16:05 더함: Train 줄 끝의 연기 문장은 사용자 결정(16:00, 연기 카드 '옅게 둠')이다. 기관차와 객차 난로 연기는 남기되 짙은 검은 기둥 없이 옅고 비스듬히 흐르게 한다. 17:40 고침: 사용자가 17:12에 기관차 연기를 굵고 길게 바꿨다. Train 줄 끝의 연기·위생 문장은 3D 스레드 주문 공통 줄(4a002fa·14d3c36)과 글자까지 같게 맞췄다. 달리는 기관차만 굵은 회색 연기를 뒤로 길게 끌고, 멈춘 기관차·건물 굴뚝·냉각탑·닫힌 화차는 연기가 없다. 위생은 솥·김·빨랫줄·빈 대야로만 보인다.
 
 15:20 더함: 마지막 줄(망자 옷)은 B2 v2, B3 v1·v2, B6 v1에서 망자가 둥근 모자나 철모 같은 머리, 국방색 배낭, 얼룩무늬 상의로 나와 병사 무리처럼 읽혀서 넣었다. 이 줄이 생기기 전에 뽑은 그림은 망자를 참고하지 않는다.
 
@@ -140,11 +140,11 @@ Outside: the train is crossing a long steel truss railway bridge over a wide icy
 
 | 항목 | 고른 것 | 까닭 | 볼 점 |
 |---|---|---|---|
-| B1 호수 평야 | v2 | 얼어붙은 호수가 넓고 울타리 위 까마귀, 반쯤 묻힌 차, 건널목 초소와 차단기까지 주문이 다 들어갔다. 전차선 없음도 맞다. | 기관차 검은 연기가 오른쪽 위 하늘을 덮어 HUD 둘레가 어수선하다. 실제 장면에서 기관차 연기는 v1처럼 옅고 낮게 둔다. 반쯤 묻힌 차가 아래 HUD 단추 높이에 걸린다. |
+| B1 호수 평야 | v2 | 얼어붙은 호수가 넓고 울타리 위 까마귀, 반쯤 묻힌 차, 건널목 초소와 차단기까지 주문이 다 들어갔다. 전차선 없음도 맞다. | 기관차 검은 연기가 오른쪽 위 하늘을 덮어 HUD 둘레가 어수선하다. 17:12 결정 뒤에도 연기가 굵고 긴 것은 맞지만, 이 장의 연기는 검은 덩어리라 틀렸다. 회색으로 뒤로 흐르게 하고, 위 띠 뒤로는 지나가도 칸 단면의 창과 얼굴은 덮지 않는다(7b '열차 연기'). 반쯤 묻힌 차가 아래 HUD 단추 높이에 걸린다. |
 | B2 오데르·보브르 | v2(배경만) | 긴 범람원 제방과 띠처럼 깔린 안개, 강가 마을 탑이 있어 K2가 B1과 갈린다. | **v2의 망자는 쓰지 않는다.** 둥근 모자, 국방색 배낭과 옷이라 병사 무리로 읽힌다. 망자 참고는 v1(누더기 민간 옷, 후드, 산발)으로 한다. v1은 아래 HUD가 빠졌고 망자가 너무 크고 가깝다. 쓰러진 수위 표지는 둘 다 서 있다. |
 | B3 국경 소도시 | v2(배경만) | 조립 아파트 줄, 연기 없는 공장 굴뚝, 강 건너 철교와 교회 탑, 차고 줄과 불탄 차가 다 있고 '동독 소도시'가 지붕 위 띠만으로 읽힌다. | **두 장 다 망자를 쓰지 않는다.** v1은 철모처럼 둥근 머리에 갈색 옷을 입은 셋이 나란히 걸어 병사 행렬로 읽히고, v2는 오른쪽 망자가 얼룩무늬 상의다. |
 | B4 라우지츠 | v1 | 계단식 노천광, 노천광 호수, 멈춘 풍차, 김 없는 냉각탑, 소나무 열이 다 보이고, 소나무 사이 망자 하나가 분명하다. | 오른쪽 위의 높은 컨베이어 다리는 B5의 거대 컨베이어 다리(K5 랜드마크)와 겹친다. K4의 컨베이어는 아래 띠의 낮은 벨트로만 둔다. v2는 망자가 객차 지붕선 바로 위에 서 있어 지붕에 올라탄 사람으로 읽힐 수 있어 뺐다. |
-| B5 니더라우지츠 | v1 | 숲 등성이, 우묵한 곳의 소도시, 지평선의 컨베이어 다리, 등성이의 망자 둘이 주문대로다. 겨울 사진 없이도 겨울이 산다. | v2는 기관차 연기가 무겁다. 컨베이어 다리는 v1 크기로 충분하다. |
+| B5 니더라우지츠 | v1 | 숲 등성이, 우묵한 곳의 소도시, 지평선의 컨베이어 다리, 등성이의 망자 둘이 주문대로다. 겨울 사진 없이도 겨울이 산다. | v2는 기관차 연기가 무겁다(17:12 결정으로 굵은 연기는 괜찮아졌지만, v2 연기는 검고 하늘을 덮어서 여전히 v1을 고른다). 컨베이어 다리는 v1 크기로 충분하다. |
 | B7 밀도 세 단계 | v1 | 열차 단면과 HUD가 C3 v5와 같아 세 줄 비교가 정직하다. 고요(까마귀만), 흩어짐(여섯 일곱), 가득(울타리 넘는 무리)이 폰 크기에서 갈린다. | v2는 기관차와 탄수차, 객차 비례를 바꿔 그려 비교 기준이 흔들린다. v1의 '가득' 줄에서 망자 몇이 객차 옆면을 기어올라 칸 안 아래쪽을 가린다. 실제 게임에서는 망자가 바퀴선 아래에 머물거나 칸 바깥 테두리에만 겹친다. 망자 머리가 둥근 모자처럼 보이는 것도 있어 새 망자 옷 줄로 다시 확인한다. |
 
 여섯 키트를 지붕 위 띠만으로 견주면 대체로 갈린다. B3(조립 아파트·굴뚝), B4(노천광·냉각탑), B5(등성이·컨베이어 다리), B6(고가도로·전차선)은 실루엣만으로 바로 구별된다. **약한 곳은 B1과 B2다.** 둘 다 평평한 땅, 물, 뾰족탑 마을이라 띠만 보면 헷갈린다. B2는 제방 선과 다리를, B1은 자작나무 숲과 붉은 벽돌, 둥근 모자 시계탑을 앞세운다. 또 B1, B2, B3, B5, B8에 거의 같은 뾰족탑 교회가 되풀이된다. 탑 하나로 키트를 가르지 말고, 키트마다 탑 모양을 다르게 한다(K1 둥근 모자 시계탑, K3 양파 지붕 없는 네모 탑, K5 낮은 마을 교회).
