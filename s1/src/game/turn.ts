@@ -165,6 +165,15 @@ function depart(g: Game): void {
   g.phase = 'travel';
 }
 
+/** 장작불 법: 내린 정차에서 지키던 시신을 태운다. 불쏘시개로 석탄을 쓴다. */
+function burnPyre(g: Game): void {
+  const n = g.pyre ?? 0;
+  if (n <= 0) return;
+  g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * n);
+  g.pyre = 0;
+  journal(g, `선로 옆 장작불에 시신 ${n}구를 태웠다.`, 'dark');
+}
+
 // ---- 정차(S1 기획서 7장, 필드 결정 카드) ----
 export function crewNames(g: Game, c: Comm, size: number): string[] {
   const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65);
@@ -271,6 +280,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   }
   const stay = STAY[stop.stay];
   g.coal -= stay.coal;
+  burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
   let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scout ? P.scoutHaul : 1);
@@ -540,6 +550,13 @@ function medicineTick(g: Game, notes: string[]): void {
       for (const p of pickVictims(g, dead, 'wound', () => rnd(g))) onDeath(g, p.community, [p.name]);
     }
     notes.push('의약품이 떨어졌다.');
+  }
+  // 지키던 시신도 다음 정차까지 오래 두면 일어날 수 있다. 냉동칸보다는 덜하다(경비가 붙어 있다).
+  if ((g.pyre ?? 0) > 0 && rnd(g) < Math.min(0.2, P.pyreRisk * (g.pyre ?? 0))) {
+    g.pyre = (g.pyre ?? 0) - 1;
+    g.injured += 1;
+    g.tension = clamp(g.tension + 5, 0, 100);
+    journal(g, '태우려고 지키던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
   if (g.stored > 0 && rnd(g) < Math.min(0.3, P.storeRisk * g.stored)) {
     g.injured += 2;

@@ -202,6 +202,8 @@ export interface Game {
   peopleSeg?: number;
   /** 죽음 기록(원인 태그). 하차 장면이 죄책감과 애도를 가른다 */
   deathLog?: { seg: number; name: string; cause: 'chosen' | 'warned' | 'other'; witness?: boolean }[];
+  /** 장작불 법: 다음 정차에 태우려고 지키는 시신 */
+  pyre?: number;
   /** 상중인 사람 */
   mourning?: { name: string; comm: Comm; until: number }[];
   /** 잠깐 오른 처지 */

@@ -25,8 +25,8 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
     g.stored += n;
     g.comms.tail.base[2] += n;
   } else if (lawActive(g, 'corpse_burn')) {
-    g.coal += 2 * n;
-    g.comms.tail.rel = clamp(g.comms.tail.rel - 3 * n, -100, 100);
+    // 다음 정차까지 지키다가 선로 옆 장작불에서 태운다.
+    g.pyre = (g.pyre ?? 0) + n;
   } else {
     // 정한 법이 없으면 누가 치울지 다투고, 일단 밖으로 던진다.
     if (!g.corpseIssue) journal(g, '첫 시신을 두고 다툼이 났다. 시신 처리가 안건에 올랐다.', 'bad');
