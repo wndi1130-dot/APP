@@ -13,7 +13,7 @@ import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, end
 import {
   addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
 } from './state';
-import type { Game, StopResult } from './state';
+import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
 import {
   domesticDepart, domesticForecast, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
@@ -213,7 +213,9 @@ export function burnPyre(g: Game): void {
 
 // ---- 정차(S1 기획서 7장, 필드 결정 카드) ----
 export function crewNames(g: Game, c: Comm, size: number): string[] {
-  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65);
+  // 먼저 다녀온 정찰조는 작업조에 다시 넣지 않는다.
+  const scouts = g.stop?.scoutReport?.names ?? [];
+  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name));
   if (alive.length === 0) return [];
   const start = (g.seg * 7) % alive.length;
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
@@ -243,8 +245,36 @@ function arriveStop(g: Game): void {
 
 export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId; crewComm: Comm; crewSize: number; scout: boolean }>): void {
   if (!g.stop || g.stop.done) return;
-  Object.assign(g.stop, patch);
+  // 정찰은 끄고 켜는 단추가 아니라 먼저 보내는 일이다(sendScouts). 옛 재현 기록의 scout: true는 보내기로 읽는다.
+  const { scout, ...rest } = patch;
+  Object.assign(g.stop, rest);
   g.stop.crewSize = clamp(g.stop.crewSize, 2, 8);
+  if (scout) sendScouts(g);
+}
+
+/** 정찰조 2명을 먼저 보낸다(2026-10-07 사용자). 정찰조도 다치거나 못 돌아올 수 있다. 하나라도 돌아오면 바깥 기척을 알고
+ * 위험 줄이 약속이 된다. 아무도 못 돌아오면 기척은 모른 채로 남는다. 정찰조는 이번 회기 표결에 빠지고, 작업 시간이 줄어 산출이 준다.
+ * 결과는 사람마다 정해 둔 난수라 난수 흐름을 건드리지 않는다. */
+export function sendScouts(g: Game): StopState['scoutReport'] | null {
+  const stop = g.stop;
+  if (!stop || stop.done || stop.scoutReport) return null;
+  const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
+  const c = stop.crewComm;
+  const names = crewNames(g, c, stop.crewSize + P.scoutSize).slice(stop.crewSize);
+  const pool = names.length ? names : crewNames(g, c, P.scoutSize);
+  const guard = g.comms.guard;
+  const danger = place.risk * (stop.threat ?? 1) * Math.min(1.5, 1 + P.thrownHorde * g.thrown) * (guard.fervor >= 1 && guard.rel <= -40 ? 1.5 : 1);
+  const qd = P.scoutDeath * danger;
+  const qh = Math.min(0.5, P.scoutHurt * danger);
+  const dead = pool.filter(n => fateRoll(g, n, 'sd') < qd);
+  const hurt = pool.filter(n => !dead.includes(n) && fateRoll(g, n, 'sh') < qh);
+  stop.scoutReport = { comm: c, names: pool, hurt, dead };
+  stop.scout = dead.length < pool.length;
+  if (stop.scout && stop.omen) markSeen(g, stop.omen);
+  g.injured += hurt.length;
+  if (dead.length > 0) onDeath(g, c, dead, 'other');
+  journal(g, `${place.name}에 정찰조(${pool.join(', ')})를 먼저 보냈다.${stop.scout ? ' 돌아왔다.' : ' 아무도 돌아오지 않았다.'}${hurt.length ? ` ${hurt.join(', ')}이(가) 크게 다쳤다.` : ''}${dead.length && stop.scout ? ` ${dead.join(', ')}은(는) 돌아오지 못했다.` : ''}`, dead.length || hurt.length ? 'bad' : undefined);
+  return stop.scoutReport;
 }
 
 export interface StopRisk {
@@ -268,7 +298,7 @@ export interface StopRisk {
 }
 
 /** 이 정차에서 이 사람에게 정해 둔 난수(0~1). 난수 흐름을 건드리지 않게 판 씨앗으로 만든다. */
-function fateRoll(g: Game, name: string, kind: 'd' | 'h'): number {
+function fateRoll(g: Game, name: string, kind: 'd' | 'h' | 'sd' | 'sh'): number {
   return hash(`${g.seed}|${g.seg}|${g.stop?.place ?? ''}|${name}|${kind}`) / 4294967296;
 }
 
@@ -330,7 +360,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!stop || stop.done) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
   stop.done = true;
-  if (stop.scout && stop.omen) markSeen(g, stop.omen);
+  // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
+  const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
+  if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
@@ -343,7 +375,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scout ? P.scoutHaul : 1) * domesticHaulMult(g);
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g);
   const notes: string[] = [];
   const tail = g.comms.tail;
   if (tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
@@ -386,9 +418,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel - 2, -100, 100);
   // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
   if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
-  const scouts = stop.scout ? P.scoutSize : 0;
-  if (scouts > 0 && rnd(g) < P.scoutSprain) notes.push('정찰조 하나가 발목을 삐었다.');
-  g.comms[stop.crewComm].away = stop.crewSize + scouts - dead.length;
+  const scouts = scoutsBack;
+  g.comms[stop.crewComm].away += stop.crewSize - dead.length;
   notes.push(...domesticStop(g, false, dead.length)); // S1c 내정 훅
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');

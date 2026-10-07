@@ -1,3 +1,4 @@
+import type { Fx } from './fx';
 import type { Comm, Game } from '../game';
 
 // 화면끼리 나눠 쓰는 형식과 열차 칸 배치.
@@ -32,6 +33,8 @@ export interface Ui {
   person: string | null;
   /** 정차 직전 브레이크 연출 중 */
   braking: boolean;
+  /** 방금 고른 선택이 바꾼 수치(위 막대 연출, fx.ts) */
+  fx?: Fx | null;
   debug: boolean;
   /** S1c 내정 창(없으면 domestic.ts가 채운다) */
   dom?: DomUi;

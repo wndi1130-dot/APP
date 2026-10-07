@@ -64,7 +64,7 @@ export interface RiskView {
 export function riskView(g: Game): RiskView {
   const r = stopRisk(g);
   const why = riskWhy(r);
-  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: '정찰하지 않으면 안쪽 기척은 모른다.' };
+  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.' };
   const v = stopView(g, g.stop, r.horde);
   const level = riskLevel(r);
   return { level, omen: v.omen, verdict: verdictText(level, v.sign), why, unknown: null };

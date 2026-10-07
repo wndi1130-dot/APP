@@ -337,7 +337,7 @@ export function addMaterials(g: Game, scrap: number, wood: number): { scrap: num
     return { scrap, wood, lost: 0 };
   }
   const lost = trimToCap(g, cap);
-  if (lost > 0) journal(g, `창고가 넘쳐 자재 ${lost}을(를) ${d.fullRule === 'parts' ? '부품감만 남기고 ' : ''}선로 밖에 버렸다.`);
+  if (lost > 0) journal(g, `창고가 넘쳐 자재 ${Math.max(1, Math.round(lost))}을(를) ${d.fullRule === 'parts' ? '부품감만 남기고 ' : ''}선로 밖에 버렸다.`);
   return { scrap, wood, lost };
 }
 

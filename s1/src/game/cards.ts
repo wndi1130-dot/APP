@@ -190,8 +190,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     id: 'water_tower', when: g => g.seg >= 2,
     view: (g, past) => ({
       title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
-      body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${g.coal} 남았다.`, {
-        '불을 피워 녹인다': `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${g.coal} 남았다.`,
+      body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
+        '불을 피워 녹인다': `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
         '꼬리칸이 눈을 녹인다': '급수탑이 또 얼었다. 꼬리칸은 지난번 양동이 일로 손이 다 텄다. 이번에도 꼬리칸이냐고 묻는다.',
         '다음 역까지 버틴다': '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
       }, '급수탑이 또 얼었다.'),
@@ -234,7 +234,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '열병이 번진다' : '아이 열병', speaker: leader(g, 'medtech'), focus: 'medtech', required: true,
       body: again(past, '꼬리칸 아이 셋이 열이 난다. 해열제는 의무칸 상자에 있다.', {
-        '의약품을 쓴다': `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 ${g.med} 남았다.`,
+        '의약품을 쓴다': `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 ${Math.round(g.med)} 남았다.`,
         '아껴 둔다': '지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다.',
       }, '아이들이 또 열이 난다.'),
       choices: [
@@ -248,7 +248,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '배급 줄', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: again(past, '배급 줄 끝에서 빵이 떨어졌다. 뒤에 선 사람들이 소리친다.', {
-        '다시 나눈다': `배급 줄 끝에서 또 빵이 떨어졌다. 사람들이 "지난번처럼!"을 외친다. 식량은 ${g.food} 남았다.`,
+        '다시 나눈다': `배급 줄 끝에서 또 빵이 떨어졌다. 사람들이 "지난번처럼!"을 외친다. 식량은 ${Math.round(g.food)} 남았다.`,
         '경비대를 세운다': '경비대가 섰던 날 이후로 배급 줄이 조용하다. 너무 조용하다. 오늘도 빵이 모자란다.',
       }, '배급 줄 끝에서 또 빵이 떨어졌다.'),
       choices: [

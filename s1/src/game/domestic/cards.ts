@@ -87,7 +87,7 @@ export function domView(g: Game, card: Card): CardView | null {
       const penalty = ['다음 3구간 석탄 +1', '정차 산출 −20%(3구간)', '꼬리칸 난방 −1'][n];
       return {
         title: '부품이 모자란다', speaker: sp(chief(g, 'craft')), required: true, key: 'dom:short',
-        body: isBreak ? `${BREAK_LINES[n]}. 고칠 부품이 없다. 부품 ${d.parts}개.` : `유지비를 못 낸 기계가 반쯤만 돈다(${(card.text ?? '').split(',').map(x => TECHS[x as TechId]?.name ?? x).join(', ')}).`,
+        body: isBreak ? `${BREAK_LINES[n]}. 고칠 부품이 없다. 부품 ${Math.floor(d.parts)}개.` : `유지비를 못 낸 기계가 반쯤만 돈다(${(card.text ?? '').split(',').map(x => TECHS[x as TechId]?.name ?? x).join(', ')}).`,
         choices: [
           { label: '하나를 세운다', say: '그건 세워라. 그 부품으로 보일러부터 막는다!', effs: [], special: 'dom:short:stand', extra: ['기술 하나가 멈춘다'] },
           { label: '그냥 달린다', say: '삐걱대도 달린다!', effs: [], special: 'dom:short:go', extra: isBreak ? [penalty] : ['반쯤만 돈다'] },
@@ -184,7 +184,7 @@ export function domView(g: Game, card: Card): CardView | null {
     case 'dom:full':
       return {
         title: '창고가 넘친다', speaker: sp(chief(g, 'craft')), required: true,
-        body: `창고칸에 쇳조각과 판자가 천장까지 찼다. ${card.n ?? 0}만큼이 통로에 나와 있다. 정한 답이 뒤로도 규칙이 된다.`,
+        body: `창고칸에 쇳조각과 판자가 천장까지 찼다. ${Math.max(1, Math.round(card.n ?? 0))}만큼이 통로에 나와 있다. 정한 답이 뒤로도 규칙이 된다.`,
         choices: [
           { label: '부품으로 만든다', say: '쌓아 두지 말고 부품으로 만들어라!', effs: [], special: 'dom:full:parts', extra: ['부품 목표치 +3', '넘친 몫은 버림'] },
           { label: '내다 버린다', say: '무게만 늘린다. 내다 버려라.', effs: [], special: 'dom:full:dump', extra: ['넘친 몫은 버림'] },

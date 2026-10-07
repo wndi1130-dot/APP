@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, PLACES, resolveStop, riskLevel, riskView, STAY, stopRisk } from '../../src/game';
+import { createGame, PLACES, resolveStop, riskLevel, riskView, sendScouts, STAY, stopRisk } from '../../src/game';
 import type { StayId } from '../../src/game';
 
 // 정찰조의 해석은 약속이다(2026-10-07 사용자 결정): '불길하다'가 뜨면 그 피해가 반드시 1명 이상, 최악을 넘지 않는다.
@@ -114,10 +114,11 @@ describe('정찰하지 않은 곳', () => {
     let without = 0;
     for (let k = 0; k < 40; k += 1) {
       const a = stopGame(base, k);
-      a.stop!.scout = true;
+      const rep = sendScouts(a)!;
       const ra = resolveStop(a, true)!;
       withScout += Object.values(ra.gains).reduce((x, y) => x + (y ?? 0), 0);
-      expect(a.comms.tail.away).toBe(4 + 2 - ra.dead.length);
+      expect(a.comms.tail.away).toBe(4 + rep.names.length - rep.dead.length - ra.dead.length);
+      for (const n of rep.names) expect(ra.dead).not.toContain(n); // 정찰조는 작업조에 다시 안 든다
       const b = stopGame(base, k);
       b.stop!.scout = false;
       without += Object.values(resolveStop(b, true)!.gains).reduce((x, y) => x + (y ?? 0), 0);
@@ -139,6 +140,51 @@ describe('예약한 결과는 저장하고 다시 켜도 그대로다(r8)', () =
       const b = resolveStop(loaded, true);
       expect(b?.dead).toEqual(a?.dead);
       expect(b?.injured).toEqual(a?.injured);
+    }
+  });
+});
+
+describe('정찰은 먼저 보내는 일이다(2026-10-07 사용자)', () => {
+  function fresh(k: number, place = 'factory', threat = 1.4) {
+    const g = createGame(`scout-send-${k}`);
+    g.phase = 'stop';
+    g.stop = { place, target: 'coal', stay: 'normal', crewComm: 'tail', crewSize: 4, threat, done: false, result: null };
+    return g;
+  }
+
+  it('보내기 전엔 기척을 모르고, 돌아오면 안다', () => {
+    const g = fresh(0);
+    expect(stopRisk(g).known).toBe(false);
+    const rep = sendScouts(g)!;
+    expect(rep.names).toHaveLength(2);
+    if (rep.dead.length < rep.names.length) expect(stopRisk(g).known).toBe(true);
+  });
+
+  it('두 번 보낼 수 없고, 정찰조는 작업조와 겹치지 않는다', () => {
+    const g = fresh(1);
+    const rep = sendScouts(g)!;
+    expect(sendScouts(g)).toBeNull();
+    const crew = stopRisk(g).fate;
+    for (const n of rep.names) { expect(crew.dead).not.toContain(n); expect(crew.hurt).not.toContain(n); }
+  });
+
+  it('정찰조도 다치거나 못 돌아온다. 위험한 곳일수록 잦고, 결과는 다시 굴려도 같다', () => {
+    let hurtHi = 0, deadHi = 0, hurtLo = 0;
+    for (let k = 0; k < 400; k += 1) {
+      const hi = sendScouts(fresh(k, 'factory', 1.4))!;
+      hurtHi += hi.hurt.length; deadHi += hi.dead.length;
+      hurtLo += sendScouts(fresh(k, 'church', 0.8))!.hurt.length;
+      expect(sendScouts(fresh(k, 'factory', 1.4))).toEqual(hi);
+    }
+    expect(deadHi).toBeGreaterThan(0);
+    expect(hurtHi).toBeGreaterThan(hurtLo);
+  });
+
+  it('아무도 못 돌아오면 기척은 모른 채 남는다', () => {
+    for (let k = 0; k < 2000; k += 1) {
+      const g = fresh(k);
+      const rep = sendScouts(g)!;
+      if (rep.dead.length === rep.names.length) { expect(stopRisk(g).known).toBe(false); return; }
     }
   });
 });

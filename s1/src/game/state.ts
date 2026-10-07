@@ -88,6 +88,8 @@ export interface StopState {
   threat?: number;
   /** 정찰을 보내면 바깥 기척을 알고 위험 줄이 약속이 된다. 안 보내면 위험을 모른다(2026-10-07 사용자 카드 '정찰 따라'). */
   scout?: boolean;
+  /** 먼저 보낸 정찰조(2026-10-07 사용자): 누가 갔고, 누가 다치고 누가 못 돌아왔나. 한 정차에 한 번 */
+  scoutReport?: { comm: Comm; names: string[]; hurt: string[]; dead: string[] };
   /** 정차 날씨, 창밖 겉모습, 정찰조가 본 조짐과 그 기척 단계(omens.ts). 도착할 때 정해진다. */
   weather?: Weather;
   look?: string;

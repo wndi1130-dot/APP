@@ -3,21 +3,39 @@ import { cx, h, pct } from './dom';
 import { icon } from './icons';
 import { fmt, signed } from './common';
 import type { View } from './common';
+import { fxTag } from './fx';
+import type { Fx, FxKey } from './fx';
+import type { Comm } from '../game';
 import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
 
 // 위 막대: 왼쪽 신임·긴장, 가운데 불만·중립·지지 띠(양 끝 아이콘이 단추), 오른쪽 자원.
 // 아래 막대: 왼쪽 메뉴와 일지, 가운데 단계 표시줄과 한눈에 보기, 오른쪽 주 단추.
 
-function meter(name: 'trust' | 'tension', label: string, value: number, tone: string) {
-  return h('div', { class: cx('meter', value >= 99.5 && 'is-full'), 'aria-label': `${label} ${fmt(value)}` },
+/** 방금 바뀐 수치: 계기가 부풀며 색이 번지고 숫자가 떠오른다(fx.ts). data-anim에 연출 번호를 넣어 다시 그려도 한 번만 돈다. */
+function fxFloat(fx: Fx | null | undefined, key: FxKey): HTMLElement[] | null {
+  const t = fxTag(fx ?? null, key);
+  return t && fx ? [
+    h('span', { class: cx('fx fx-glow', t.cls), 'data-anim': `fx-${fx.id}-${key}-glow`, 'aria-hidden': 'true' }),
+    h('span', { class: cx('fx fx-float num', t.cls), 'data-anim': `fx-${fx.id}-${key}`, 'aria-hidden': 'true' }, t.text),
+  ] : null;
+}
+function fxCls(fx: Fx | null | undefined, key: FxKey): string | false {
+  const t = fxTag(fx ?? null, key);
+  return !!t && `fx-hit ${t.cls}`;
+}
+
+function meter(name: 'trust' | 'tension', label: string, value: number, tone: string, fx?: Fx | null) {
+  return h('div', { class: cx('meter', value >= 99.5 && 'is-full', fxCls(fx, name)), 'aria-label': `${label} ${fmt(value)}` },
+    fxFloat(fx, name),
     icon(name, 'meter__icon'),
     h('div', { class: 'meter__body' },
       h('div', { class: 'meter__row' }, h('b', { class: 'num' }, fmt(value)), h('span', { class: 'meter__label' }, label)),
       h('div', { class: 'meter__bar' }, h('i', { style: `width:${pct(value)};background:var(${tone})` }))));
 }
 
-function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: number, delta?: number) {
-  return h('div', { class: 'res', 'aria-label': `${label} ${fmt(value)}` },
+function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: number, delta?: number, fx?: Fx | null) {
+  return h('div', { class: cx('res', fxCls(fx, name)), 'aria-label': `${label} ${fmt(value)}` },
+    fxFloat(fx, name),
     icon(name, `res__icon res__icon--${name}`),
     h('div', { class: 'res__body' },
       h('b', { class: cx('num', value < P.crisisLine && name !== 'lux' && name !== 'med' && 'is-low') }, fmt(value)),
@@ -29,10 +47,12 @@ export function topBar(view: View): HTMLElement {
   const st = standings(g);
   const order = [...st.byComm].sort((a, b) => a.side - b.side || g.comms[a.c].rel - g.comms[b.c].rel);
   const f = forecast(g);
-  return h('header', { class: 'top' },
+  const fx = ui.fx;
+  const rels = fx ? (Object.keys(fx.rel) as Comm[]) : [];
+  return h('header', { class: cx('top', fx?.hard && 'fx fx-hard'), ...(fx?.hard ? { 'data-anim': `fx-${fx.id}-top` } : {}) },
     h('div', { class: 'top__meters' },
-      meter('trust', '신임', g.trust, '--support'),
-      meter('tension', '긴장', g.tension, '--discontent')),
+      meter('trust', '신임', g.trust, '--support', fx),
+      meter('tension', '긴장', g.tension, '--discontent', fx)),
     h('div', { class: 'band' },
       h('button', { class: cx('band__btn band__btn--unrest', ui.panel === 'unrest' && 'is-on'), 'data-action': 'panel', 'data-panel': 'unrest', 'aria-label': '불만 쪽 집단 펼치기' }, icon('fist')),
       h('div', { class: 'band__track' },
@@ -44,12 +64,17 @@ export function topBar(view: View): HTMLElement {
           class: cx('band__seg', x.side < 0 && 'is-unrest', x.side > 0 && 'is-support'),
           style: `flex:${x.seats}`, title: `${COMM_NAME[x.c]} ${x.seats}석`,
         })))),
-      h('button', { class: cx('band__btn band__btn--support', ui.panel === 'support' && 'is-on'), 'data-action': 'panel', 'data-panel': 'support', 'aria-label': '지지 쪽 집단 펼치기' }, icon('hand'))),
+      h('button', { class: cx('band__btn band__btn--support', ui.panel === 'support' && 'is-on'), 'data-action': 'panel', 'data-panel': 'support', 'aria-label': '지지 쪽 집단 펼치기' }, icon('hand')),
+      // 관계가 바뀐 칸: 띠 밑에 칸 이름과 숫자가 떠오른다.
+      rels.length && fx ? h('div', { class: 'fx fx-rels', 'data-anim': `fx-${fx.id}-rel`, 'aria-hidden': 'true' }, rels.map(c => {
+        const v = fx.rel[c]!;
+        return h('span', { class: cx('fx-rel num', v > 0 ? 'fx-good' : 'fx-bad') }, `${COMM_NAME[c].slice(0, 2)} ${v > 0 ? `+${v}` : `−${Math.abs(v)}`}`);
+      })) : null),
     h('div', { class: 'top__res' },
-      resource('coal', '석탄', g.coal, -f.coal),
-      resource('food', '식량', g.food, -f.food),
-      resource('med', '의약품', g.med),
-      resource('lux', '사치품', g.lux),
+      resource('coal', '석탄', g.coal, -f.coal, fx),
+      resource('food', '식량', g.food, -f.food, fx),
+      resource('med', '의약품', g.med, undefined, fx),
+      resource('lux', '사치품', g.lux, undefined, fx),
       domesticResource(view)));
 }
 

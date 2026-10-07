@@ -1,6 +1,8 @@
 import { openConditions, autoLeverStatus, cloneGame, currentAgenda, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
+import { FX_MS, fxDiff, fxSnap } from './fx';
+import type { Fx } from './fx';
 import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
 import { homeScreen, stackCount } from './home';
@@ -85,7 +87,7 @@ function freshUi(): Ui {
   };
 }
 
-const ANIMATED = '.sheet, .side, .drop, .person, .verdict, .toast';
+const ANIMATED = '.sheet, .side, .drop, .person, .verdict, .toast, .fx, .scout-report';
 
 function animKey(el: HTMLElement): string {
   return el.dataset.anim || `${el.className.replace(/\bis-still\b/, '').trim()}|${el.getAttribute('aria-label') ?? ''}|${el.classList.contains('toast') ? el.textContent : ''}`;
@@ -205,6 +207,16 @@ export function startApp(root: HTMLElement): void {
     requestAnimationFrame(() => drawLinks(root));
   }
 
+  let fxTimer: ReturnType<typeof setTimeout> | undefined;
+  /** 선택이 바꾼 수치를 위 막대에 띄운다(fx.ts). 크게 나쁘면 폰이 한 번 떨린다. */
+  function showFx(fx: Fx | null): void {
+    ui.fx = fx;
+    clearTimeout(fxTimer);
+    if (!fx) return;
+    if (fx.hard && !matchMedia('(prefers-reduced-motion: reduce)').matches) navigator.vibrate?.(40);
+    fxTimer = setTimeout(() => { ui.fx = null; render(); }, FX_MS);
+  }
+
   function toast(text: string): void {
     ui.toast = text;
     clearTimeout(toastTimer);
@@ -317,10 +329,13 @@ export function startApp(root: HTMLElement): void {
       case 'fold':
         ui.cardOpen = false;
         return render();
-      case 'choose':
+      case 'choose': {
+        const before = fxSnap(g);
         step({ a: 'choose', d: plainData(data) });
+        showFx(fxDiff(before, g));
         if (stackCount(g, ui) > 0) focusForTopCard();
         return render();
+      }
       case 'stop-set':
       case 'stop-go':
         step({ a: action, d: plainData(data) });
