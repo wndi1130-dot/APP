@@ -1,0 +1,117 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, LAWS, makeDeal, PLACES,
+  elderCandidate, fallSick, FAMILIES, PLACE_LOOK, PLACE_OMENS, PROFILES, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS,
+  primaryAction, resolveStop, SECRET_POOL, toolStatus, TRAVEL_EVENTS, viewCard,
+} from '../../src/game';
+import type { Card } from '../../src/game';
+
+// 화면에 나오는 고정 글과 실제로 한 판 돌며 나온 글(서류 카드, 일지)을 content_rules.json의 오류 규칙으로 검사한다.
+// 경고 규칙(상투어 등)은 사람이 본다.
+
+interface Rule { id: string; severity: string; scope: string; terms?: string[]; patterns?: string[]; pattern_flags?: string }
+const rules = (JSON.parse(readFileSync(join(__dirname, '../../schema/content_rules.json'), 'utf8')) as { rules: Rule[] }).rules
+  .filter(r => r.severity === 'error');
+
+function violations(text: string, dialogue: boolean): string[] {
+  const out: string[] = [];
+  for (const rule of rules) {
+    if (rule.scope === 'dialogue' && !dialogue) continue;
+    const hitTerm = (rule.terms ?? []).find(t => text.includes(t));
+    const hitPattern = (rule.patterns ?? []).find(p => new RegExp(p, rule.pattern_flags ?? 'iu').test(text));
+    if (hitTerm || hitPattern) out.push(`${rule.id}: ${text}`);
+  }
+  return out;
+}
+
+function playedTexts(seed: string): { text: string; dialogue: boolean }[] {
+  const g = createGame(seed);
+  const texts: { text: string; dialogue: boolean }[] = [];
+  for (let guard = 0; guard < 2000 && g.phase !== 'end'; guard += 1) {
+    if (g.cards.length > 0) {
+      const card = g.cards[0];
+      const view = viewCard(g, card);
+      texts.push({ text: view.title, dialogue: false }, { text: view.body, dialogue: true });
+      for (const ch of view.choices) texts.push({ text: ch.label, dialogue: true }, ...(ch.say ? [{ text: ch.say, dialogue: true }] : []));
+      chooseCard(g, card.uid, view.choices.findIndex(c => !c.disabled));
+      continue;
+    }
+    if (g.phase === 'stop' && g.stop && !g.stop.done) { resolveStop(g, true); continue; }
+    if (g.phase === 'council' && g.council && !g.council.result && currentAgenda(g)) {
+      for (const c of COMMS) if (toolStatus(g, c, 'open').ok) makeDeal(g, c, 'open', 0);
+      castVote(g);
+      continue;
+    }
+    if (!primaryAction(g).ok) break;
+    advance(g);
+  }
+  for (const e of g.journal) texts.push({ text: e.text, dialogue: false });
+  return texts;
+}
+
+// 모든 종류의 서류 카드를 한 장씩 만들어 본다(판에서 안 나온 카드도 검사하려고).
+function everyCardView() {
+  const g = createGame('every-card');
+  g.trustCrisis = g.seg + 2;
+  const kinds: Omit<Card, 'uid'>[] = [
+    ...TRAVEL_EVENTS.map(e => ({ kind: 'travel', text: e.id })),
+    ...COMMS.flatMap(c => [{ kind: 'demand', comm: c }, { kind: 'favor', comm: c }]),
+    { kind: 'strike_warn' }, { kind: 'strike' }, { kind: 'rescue', who: '수색대' }, { kind: 'bitten', comm: 'tail', who: '대원' }, { kind: 'bite_found', comm: 'tail', who: '대원', text: '열이 오르는 걸 의무장이 알아챘다.' },
+    { kind: 'tension_crisis' },
+    { kind: 'need_warn', text: 'coal' },
+    { kind: 'orphan', comm: 'tail', who: PROFILES.find(p => p.id === FAMILIES[0].parents[0])!.name },
+    { kind: 'keepsake', comm: 'guard', who: PROFILES.find(p => p.community === 'guard')!.name },
+    { kind: 'keepsake', comm: 'guard', who: PROFILES.find(p => p.community === 'guard')!.name, text: 'field' },
+    { kind: 'elder', comm: 'tail', who: elderCandidate(g)!.name },
+    { kind: 'birth', comm: 'tail', who: '엄마' }, { kind: 'naming', comm: 'tail', who: '엄마' },
+  ];
+  fallSick(g, 'front');
+  kinds.push({ kind: 'rep_sick', comm: 'front' });
+  const views = kinds.map((k, i) => viewCard(g, { uid: i + 1, ...k }));
+  g.passed.no_outsiders = g.seg;
+  views.push(viewCard(g, { uid: 99, kind: 'rescue', who: '수색대' }));
+  return views;
+}
+
+describe('화면 글 규칙', () => {
+  it('고르는 선택지는 모두 열차장의 말로 보인다', () => {
+    const missing = everyCardView().flatMap(v => v.choices.filter(ch => !ch.say).map(ch => `${v.title}: ${ch.label}`));
+    expect(missing).toEqual([]);
+    const said = everyCardView().flatMap(v => v.choices.map(ch => ch.say ?? ''));
+    expect(said.flatMap(t => violations(t, true))).toEqual([]);
+    // 콘텐츠 가이드: 선택지 대사는 한두 문장, 40자 이내
+    expect(said.filter(t => t.length > 40 || (t.match(/[.!?]/g) ?? []).length > 2)).toEqual([]);
+  });
+
+  it('법, 장소, 비밀, 거래 조건 글에 금지 표현이 없다', () => {
+    const fixed = [
+      ...Object.values(LAWS).flatMap(l => [l.title, ...l.changes]),
+      ...PLACES.map(p => p.name),
+      ...SECRET_POOL.map(s => s.text),
+      ...Object.values(CONDITIONS).flat().map(c => c.label),
+      ...COMMON_CONDITIONS.map(c => c.label),
+      ...Object.values(PLACE_LOOK).flat(),
+      ...Object.values(WEATHER_LOOK).flat(),
+      ...Object.values(PLACE_OMENS).flatMap(t => Object.values(t).flat()),
+      ...Object.values(WEATHER_OMENS).flatMap(t => Object.values(t).flat()),
+      ...Object.values(VERDICT),
+      ...Object.values(DISEMBARK_LINES),
+      ...Object.values(RELATION_LINES),
+    ];
+    expect(fixed.flatMap(t => violations(t, false))).toEqual([]);
+  });
+
+  it('여러 판에서 나온 카드와 일지에 금지 표현이 없다', () => {
+    const found: string[] = [];
+    let seen = 0;
+    for (let i = 0; i < 12; i += 1) {
+      const texts = playedTexts(`text-${i}`);
+      seen += texts.length;
+      for (const t of texts) found.push(...violations(t.text, t.dialogue));
+    }
+    expect(seen).toBeGreaterThan(300);
+    expect([...new Set(found)]).toEqual([]);
+  });
+});

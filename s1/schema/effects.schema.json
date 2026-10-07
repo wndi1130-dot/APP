@@ -103,8 +103,7 @@
           "type": "string",
           "enum": [
             "relation",
-            "cohesion",
-            "votes"
+            "cohesion"
           ]
         },
         "target": {
@@ -112,6 +111,35 @@
         },
         "amount": {
           "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "target",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "votes"
+        },
+        "target": {
+          "$ref": "urn:s1:schema:common#/$defs/community"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "captain",
+            "yes",
+            "no"
+          ],
+          "description": "표가 옮길 쪽. captain(기본)은 열차장이 그 안건에 밝힌 편(열차장이 올린 안건이면 찬성), 밝힌 편이 없으면 효과 없음(6.9)."
         }
       },
       "required": [

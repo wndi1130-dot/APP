@@ -52,6 +52,14 @@
           "type": "string",
           "minLength": 1
         },
+        "gender": {
+          "type": "string",
+          "enum": [
+            "male",
+            "female"
+          ],
+          "description": "폴란드어·체코어 과거형이 주어 성별을 따라서 번역에 쓴다(6.5). 화면엔 안 보인다."
+        },
         "age": {
           "type": "integer",
           "minimum": 0,
@@ -97,12 +105,25 @@
         },
         "state": {
           "$ref": "urn:s1:schema:common#/$defs/state"
+        },
+        "params": {
+          "$ref": "urn:s1:schema:common#/$defs/textParams"
+        },
+        "plural": {
+          "$ref": "urn:s1:schema:common#/$defs/textPlural"
+        },
+        "gender_of": {
+          "$ref": "urn:s1:schema:common#/$defs/textGender"
+        },
+        "notes": {
+          "$ref": "urn:s1:schema:common#/$defs/textNotes"
         }
       },
       "required": [
         "id",
         "name",
         "name_original",
+        "gender",
         "age",
         "community",
         "origin_tag",
@@ -264,6 +285,61 @@
         }
       ],
       "description": "목격자 id 또는 목격자 id와 증언. 증언은 검사기에서 두 문장 이내로 확인한다."
+    },
+    "placeholder": {
+      "type": "string",
+      "enum": [
+        "person",
+        "person2",
+        "captain",
+        "community",
+        "law",
+        "place",
+        "car",
+        "item",
+        "n",
+        "n2"
+      ],
+      "description": "이름 있는 자리표시자(s1_content_guide 6.3). 문장엔 {person}처럼 쓴다."
+    },
+    "textParams": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:s1:schema:common#/$defs/placeholder"
+      },
+      "uniqueItems": true,
+      "description": "이 항목의 글이 쓰는 자리표시자 전부(6.3)."
+    },
+    "textPlural": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "n",
+          "n2"
+        ]
+      },
+      "description": "글 키(body, c_give.say 등) → 수를 정하는 자리표시자(6.5)."
+    },
+    "textGender": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "person",
+          "person2",
+          "captain"
+        ]
+      },
+      "description": "글 키 → 주어인 사람 자리표시자(6.5)."
+    },
+    "textNotes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "글 키 → 번역자·Gemini용 문맥 한 줄(6.4)."
     }
   }
 }

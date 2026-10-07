@@ -26,12 +26,15 @@
     "event": [
       "/body",
       "/choices/*/label",
+      "/choices/*/say",
       "/choices/*/witnesses/*/text"
     ],
     "law": [
       "/preview"
     ],
-    "deal": [],
+    "deal": [
+      "/say"
+    ],
     "place": [],
     "chronicle": [
       "/what",
@@ -44,10 +47,14 @@
     "event": [
       "/body",
       "/choices/*/label",
+      "/choices/*/say",
       "/choices/*/witnesses/*/text"
     ],
     "chronicle": [
       "/witnesses/*/text"
+    ],
+    "deal": [
+      "/say"
     ]
   },
   "sentence_limits": {
@@ -71,11 +78,21 @@
       {
         "path": "/choices/*/witnesses/*/text",
         "max": 2
+      },
+      {
+        "path": "/choices/*/say",
+        "max": 2
       }
     ],
     "chronicle": [
       {
         "path": "/witnesses/*/text",
+        "max": 2
+      }
+    ],
+    "deal": [
+      {
+        "path": "/say",
         "max": 2
       }
     ]
@@ -211,6 +228,18 @@
       ],
       "patterns": [],
       "message": "상투어 대신 사물과 행동을 구체적으로 쓰세요. 이 항목은 경고입니다."
+    },
+    {
+      "id": "glossary_synonym",
+      "severity": "warning",
+      "scope": "text",
+      "message": "용어집에 없는 동의어다. 용어집 낱말을 쓴다(예: 좀비 → 망자, 기차장 → 열차장, s1_content_guide 6.6).",
+      "terms": [
+        "좀비",
+        "의회장",
+        "기차장"
+      ],
+      "patterns": []
     }
   ],
   "manual_review": [
