@@ -437,7 +437,7 @@ func tick(delta: float) -> void:
 		var was := rim_run
 		_update_rim(delta)
 		if rim_run != was and p.stick != Vector2.ZERO:
-			p.running = run_button.button_pressed or stick_dash or rim_run
+			_set_running(p)
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
 	attack_button.button_pressed = fighting(p)
 	_tick_primary(p)
@@ -976,6 +976,13 @@ func _on_touch(event: InputEvent) -> void:
 ## first finger, pressed by hand for the others), the stick on the left
 ## half, or the right hand (aim in manual mode, an enemy, a thing to use).
 func finger_down(index: int, pos: Vector2) -> bool:
+	# The same index again means its lift was lost (the app went away): let the
+	# old stick go before the new finger is read.
+	if fingers.has(index) and fingers[index]["kind"] == "stick":
+		fingers.erase(index)
+		stick_index = -1
+		stick_dash = false
+		_stick_release()
 	for b in pads:
 		if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
@@ -1088,6 +1095,7 @@ func _apply_stick() -> void:
 		return
 	# The camera looks north with no turn: screen right is +x, screen down is +z.
 	var push := clampf(v.length() / STICK_R, 0.0, 1.0)
+	stick_push = push
 	if fighting(p):
 		# A resting thumb, or a push at the one being hit, keeps the fight going;
 		# a real push elsewhere calls it off (field_unified 10).
@@ -1099,8 +1107,12 @@ func _apply_stick() -> void:
 	p.stick = v.normalized() * push
 	p.target_zombie = {}
 	p.target_person = null
-	stick_push = push
 	_update_rim(0.0)
+	_set_running(p)
+
+
+## Running from the stick, the run key or the rim; running stands you up.
+func _set_running(p) -> void:
 	p.running = run_button.button_pressed or stick_dash or rim_run
 	if p.running:
 		p.crouched = false
@@ -1340,7 +1352,7 @@ func drop_touch() -> void:
 	auto_aim = false
 	stick_dash = false
 	if game.player != null:
-		game.player.stick = Vector2.ZERO
+		_stick_release()
 	for b in [aim_button, shove_button, context_button]:
 		if b != null:
 			b.button_pressed = false
