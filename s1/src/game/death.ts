@@ -1,4 +1,4 @@
-import { COMM_NAME, P } from './data';
+import { COMM_NAME, COMMS, P } from './data';
 import type { Comm } from './data';
 import { CORPSE_LAWS } from './data';
 import { clamp, journal, lawActive, storyOf } from './state';
@@ -8,6 +8,15 @@ import { afterDeath } from './people';
 /** 죽음의 원인. chosen: 열차장이 고른 일로 죽음(사살, 버림, 숨긴 물림). warned: '매우 불길하다'를 보고도 보낸 파견.
  * other: 그 밖(추위, 굶주림, 병, 약속 밖의 사고). 하차 장면이 죄책감과 애도를 가른다(presentation_motion, 2026-10-07). */
 export type DeathCause = 'chosen' | 'warned' | 'other';
+
+/** 장작불법에서 살던 칸에 둔 시신 하나를 치운다. 그 칸 과밀을 되돌린다(turn.ts 굴림·태우기, S1b 일어남). */
+export function takeKinBody(g: Game): void {
+  const kin = g.pyreKin ?? {};
+  const c = COMMS.find(x => (kin[x] ?? 0) > 0);
+  if (!c) return;
+  kin[c] = (kin[c] ?? 0) - 1;
+  g.comms[c].base[2] -= P.pyreKinCrowd;
+}
 
 export function logDeath(g: Game, names: readonly string[], cause: DeathCause, witness = false): void {
   for (const name of names) (g.deathLog ??= []).push({ seg: g.seg, name, cause, ...(witness ? { witness } : {}) });

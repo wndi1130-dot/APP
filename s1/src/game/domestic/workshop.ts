@@ -300,6 +300,7 @@ function convertGreenhouse(g: Game, car: string): void {
         journal(g, `냉동칸 안치법을 지킬 수 없게 됐다. 시신 ${g.stored}구를 선로에 내놓았다.`, 'bad');
       }
       g.stored = 0;
+      if (g.dark) g.dark.checkedStored = 0; // S1b: 확인 수도 같이 비운다
     }
     journal(g, '냉동칸을 온실로 바꿨다.', 'good');
   } else {

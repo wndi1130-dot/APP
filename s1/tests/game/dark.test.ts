@@ -11,7 +11,7 @@ import { openCase } from '../../src/game/dark/cases';
 import { theftTick } from '../../src/game/dark/cards';
 import { cross } from '../../src/game/dark/chronicle';
 import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from '../../src/game/dark/hooks';
-import { darkPyreWeight, darkStoredWeight } from '../../src/game/dark/corpses';
+import { darkPyreWeights, darkStoredWeight } from '../../src/game/dark/corpses';
 import type { Ember } from '../../src/game/dark/state';
 import { playGame } from '../../tools/s1c_bot';
 
@@ -74,7 +74,7 @@ describe('S1b를 켜지 않은 판', () => {
       }
       expect(darkHaulMult(g)).toBe(1);
       expect(darkStoredWeight(g, 4)).toBe(4);
-      expect(darkPyreWeight(g, 2)).toBe(2);
+      expect(darkPyreWeights(g, 2, 1)).toEqual({ cold: 2, kin: 1 });
       expect(JSON.stringify(g)).toBe(before);
     }
   });
@@ -203,14 +203,21 @@ describe('굶주림의 도둑질(4.3)', () => {
   });
 });
 
-describe('제안 (7) 포고로 정한다', () => {
+describe('포고로 정한다(사용자 결정 \'붙인다\')', () => {
   function demandView(g: Game) {
     return viewCard(g, add(g, { kind: 'demand', comm: 'tail' }));
   }
-  it('대권 중인 S1b 판에만 붙고, 고르면 이번 구간 포고 자리를 쓴다', () => {
+  it('S1b가 꺼진 판에도 대권 중이면 붙는다', () => {
     const plain = createGame('decree');
-    plain.decreeLeft = 2;
     expect(demandView(plain).choices.some(c => c.special?.startsWith('dark:decree'))).toBe(false);
+    plain.decreeLeft = 2;
+    const card = add(plain, { kind: 'demand', comm: 'tail' });
+    const i = viewCard(plain, card).choices.findIndex(c => c.special === 'dark:decree:refuse');
+    expect(i).toBeGreaterThan(-1);
+    chooseCard(plain, card.uid, i);
+    expect(plain.decreeSeg).toBe(plain.seg);
+  });
+  it('대권 중에 붙고, 고르면 이번 구간 포고 자리를 쓴다', () => {
     const g = darkGame('decree');
     expect(demandView(g).choices.some(c => c.special?.startsWith('dark:decree'))).toBe(false);
     g.decreeLeft = 2;

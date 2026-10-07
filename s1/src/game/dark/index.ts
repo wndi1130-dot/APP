@@ -2,7 +2,6 @@
 import './hooks';
 import './cards';
 import './council';
-import './decree';
 
 export { enableDark, hasDark } from './state';
 export type { DarkState } from './state';

@@ -1,5 +1,6 @@
 import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
+import { takeKinBody } from '../death';
 import { familyOf } from '../people';
 import { clamp, journal, lawActive } from '../state';
 import type { Game } from '../state';
@@ -94,7 +95,9 @@ export function corpseTick(g: Game): void {
     if (dr(g) >= x.p) continue;
     d.stats.risen += 1;
     // 일어난 시신은 냉동칸 수에서도 빠진다(S1a 굴림에서 빼 둔 몫도 같이).
+    // 장작불 대기는 냉동칸이 비었으면 살던 칸에 둔 몫에서 치운다(수로 나눈다, darkPyreWeights).
     if (x.cold && x.burn && (g.pyre ?? 0) > 0) { g.pyre = (g.pyre ?? 0) - 1; d.checkedPyre = Math.max(0, d.checkedPyre - 1); }
+    else if (x.cold && x.burn && Object.values(g.pyreKin ?? {}).some(v => (v ?? 0) > 0)) { takeKinBody(g); d.checkedPyre = Math.max(0, d.checkedPyre - 1); }
     else if (x.cold && !x.burn && g.stored > 0) { g.stored -= 1; d.checkedStored = Math.max(0, d.checkedStored - 1); }
     const hit = victimNear(g, x.comm, x.name);
     g.tension = clamp(g.tension + 3, 0, 100);
@@ -165,10 +168,17 @@ export function darkStoredWeight(g: Game, stored: number): number {
   const pending = lawActive(g, 'corpse_store') ? d.fresh.length : 0;
   return Math.max(0, stored - d.checkedStored - pending);
 }
-export function darkPyreWeight(g: Game, pyre: number): number {
+/** 장작불 대기 시신의 무게를 냉동칸·살던 칸으로 나눠 준다(turn.ts 훅). 몸마다 자리를 남기지 않고 수로 나눈다.
+ * 냉동칸이 먼저 차고 넘친 시신이 살던 칸으로 가니(death.ts), 확인한 수는 냉동칸 몫부터, 이번 구간 확인 대기(fresh)는
+ * 살던 칸 몫부터 뺀다(넘친 시신은 늘 이번에 죽은 몫이다). S1a 판이면 그대로 돌려준다. */
+export function darkPyreWeights(g: Game, pyre: number, kin: number): { cold: number; kin: number } {
   const d = g.dark;
-  if (!d) return pyre;
-  d.checkedPyre = Math.min(d.checkedPyre, pyre);
+  if (!d) return { cold: pyre, kin };
+  d.checkedPyre = Math.min(d.checkedPyre, pyre + kin);
   const pending = lawActive(g, 'corpse_burn') ? d.fresh.length : 0;
-  return Math.max(0, pyre - d.checkedPyre - pending);
+  const pendKin = Math.min(kin, pending);
+  const pendCold = Math.min(pyre, pending - pendKin);
+  const chkCold = Math.min(pyre - pendCold, d.checkedPyre);
+  const chkKin = Math.min(kin - pendKin, d.checkedPyre - chkCold);
+  return { cold: pyre - pendCold - chkCold, kin: kin - pendKin - chkKin };
 }

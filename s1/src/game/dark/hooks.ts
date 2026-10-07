@@ -9,7 +9,7 @@ import { investigate, crowdTick, truthTick } from './cases';
 import { theftTick } from './cards';
 import { closeChronicle } from './chronicle';
 import { corpseTick, noteDeath } from './corpses';
-import './decree';
+import '../decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { afterVote, darkCouncilOpen, trialPromises } from './council';
 import { actAll, escalate, killEmber, newEmber } from './embers';
 import { executorTick, runOrder } from './order';

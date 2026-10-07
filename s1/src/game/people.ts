@@ -136,6 +136,7 @@ export function recover(g: Game, c: Comm, why: string): void {
   if (!s.sick) return;
   // 앓던 대표가 그사이 죽었으면 되돌릴 사람이 없다. 대신 나오던 측근이 자리를 잇는다.
   if (isGone(g, s.sick.rep.name)) {
+    journal(g, `${s.leader.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
     s.sick = undefined;
     s.debt = false;
     return;
