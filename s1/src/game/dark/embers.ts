@@ -5,6 +5,7 @@ import { pickFresh, markSeen } from '../omens';
 import { revertLater } from '../people';
 import { clamp, journal, lawActive, situation as situationOf } from '../state';
 import type { Game } from '../state';
+import { CAR_COMM } from '../domestic/data';
 import { B } from './data';
 import { ACT_LINES, SIGN_LINES, SIGN_READ } from './lines';
 import type { SignKind } from './lines';
@@ -183,7 +184,10 @@ export function escalate(g: Game): void {
       e.blocked = false;
       sign(g, e, 'imm');
       // 무기고 관행은 미룰 수 있는 카드다: 필수 결정이 셋이면 다음 폭행 임박 때 묻는다. 한 번에 한 장.
-      if (nxt === 3 && d.armory === null && !segFull(g) && !g.cards.some(k => k.kind === 'dark:armory')) darkCard(g, { kind: 'dark:armory' });
+      if (nxt === 3 && d.armory === null && !g.cards.some(k => k.kind === 'dark:armory')) {
+        if (segFull(g)) d.armoryDue = true;
+        else darkCard(g, { kind: 'dark:armory' });
+      }
     } else {
       e.quiet += 1;
     }
@@ -321,9 +325,19 @@ function sabotage(g: Game, e: Ember, v: Comm): void {
       break;
     case 'heating': {
       const c = COMMS.includes(e.target as Comm) ? (e.target as Comm) : v;
-      g.comms[c].base[0] -= B.heatingWarm;
-      revertLater(g, c, 0, -B.heatingWarm, B.heatingSegs);
+      // 장갑 객차(W3)는 칸을 겨누는 사보타주 피해가 절반이다. 공동체가 사는 칸 가운데 장갑 댄 비율만큼 준다(J10 13번).
+      const warm = Math.round(B.heatingWarm * (1 - B.armorCut * armoredShare(g, c)));
+      g.comms[c].base[0] -= warm;
+      revertLater(g, c, 0, -warm, B.heatingSegs);
       break;
     }
   }
+}
+
+/** 그 공동체가 사는 칸 가운데 장갑을 댄 비율(0~1). S1c 내정이 없는 판이면 0. */
+function armoredShare(g: Game, c: Comm): number {
+  const d = g.dom;
+  if (!d || d.armored.length === 0) return 0;
+  const cars = d.cars.filter(id => CAR_COMM[id] === c);
+  return cars.length ? cars.filter(id => d.armored.includes(id)).length / cars.length : 0;
 }

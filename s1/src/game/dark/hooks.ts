@@ -13,7 +13,7 @@ import './decree';
 import { afterVote, darkCouncilOpen, trialPromises } from './council';
 import { actAll, escalate, killEmber, newEmber } from './embers';
 import { executorTick, runOrder } from './order';
-import { byName, darkCard, nameOf, repGone } from './state';
+import { alive, byName, darkCard, nameOf, repGone, segFull } from './state';
 
 // S1b가 S1a 구간 다섯 단계에 붙는 곳(3장 표). turn.ts는 이 파일의 함수만 부른다. g.dark가 없으면 모두 아무 일도 안 한다.
 // 죽음(death.ts)과 의회(politics.ts)엔 훅 목록으로 붙는다. 이 파일을 불러오면 등록된다.
@@ -33,6 +33,11 @@ export function darkPrep(g: Game): void {
   if (!d) return;
   d.confined = d.confined.filter(x => x.until >= g.seg);
   escalate(g);
+  // 칸이 차서 미뤄 둔 무기고 관행 카드는 자리가 나면 묻는다(폭행 임박이 판에 몇 번 없어 끝내 안 물을 수 있었다).
+  if (d.armoryDue && d.armory === null && !segFull(g) && !g.cards.some(k => k.kind === 'dark:armory')) {
+    d.armoryDue = false;
+    darkCard(g, { kind: 'dark:armory' });
+  }
   investigate(g);
 }
 
@@ -49,6 +54,8 @@ export function darkStop(g: Game, went: boolean, crew: string[]): void {
   const d = g.dark;
   if (!d || !went) return;
   for (const x of d.exile) {
+    // 하차를 기다리는 사이 죽은 사람은 내릴 사람이 아니다(이름이 두 번 남고 인구가 두 번 깎인다).
+    if (!alive(g, x.id)) continue;
     const name = nameOf(g, x.id);
     (g.left ??= []).push(name);
     g.comms[x.comm].pop = Math.max(1, g.comms[x.comm].pop - 1);

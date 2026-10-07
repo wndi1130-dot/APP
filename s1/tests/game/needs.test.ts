@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advance, agendaOptions, callEmergency, castVote, createGame, emergencyCost, emergencyStatus, enactLaw, HUNGER_GRACE, NEED_GRACE,
+  advance, agendaOptions, setStop, callEmergency, castVote, createGame, emergencyCost, emergencyStatus, enactLaw, HUNGER_GRACE, NEED_GRACE,
   needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL, setAutoLevers,
   canDecree, currentAgenda, DECREE_SEGS, dropUnratified, endEmergencyPowers, lawActive, openCouncil,
   COMMS, DECREE_REL, isLawAgenda, LAWS, repealLaw, stance,
@@ -325,3 +325,22 @@ describe('R3 카드(2026-10-07): 1회 효과, 포고 폐지 추인, 포고 값',
   });
 });
 
+
+describe('꼬리칸 작업 거부(J11)', () => {
+  it('꼬리칸이 작업조로 나갈 때만 운반 −30%', () => {
+    const refused = (crew: 'tail' | 'front') => {
+      const g = createGame('refuse');
+      g.seg = 2;
+      g.phase = 'prep';
+      clear(g);
+      advance(g); clear(g);
+      advance(g); clear(g);
+      g.comms.tail.fervor = 1;
+      g.comms.tail.rel = -50;
+      setStop(g, { crewComm: crew });
+      return resolveStop(g, true)!.notes.some(n => n.includes('작업을 거부'));
+    };
+    expect(refused('tail')).toBe(true);
+    expect(refused('front')).toBe(false);
+  });
+});

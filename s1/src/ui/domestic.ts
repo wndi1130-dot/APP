@@ -1,9 +1,9 @@
 import {
-  BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
+  BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark,
+  workPower, workshopChief, workshopState, zoneAt, enableDark, josa, PLACES,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, s } from './dom';
@@ -215,7 +215,7 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
   const hy = hygiene(g, c);
   const lice = d.lice[c];
   const sick = d.typhus.filter(t => t.comm === c).reduce((n, t) => n + t.patients.length, 0);
-  const beds = Math.max(0, g.injured) + d.typhus.reduce((n, t) => n + t.patients.length, 0);
+  const beds = bedNeed(g); // 따로 눕힌 열병 환자는 침상에 들지 않는다
   return h('span', { class: 'dom-tag' },
     h('button', { class: cx('dom-hy', `is-${hy}`), 'data-action': 'dom-why', 'data-comm': c, 'aria-label': `씻을 물 ${WASH_NAME[hy]}, 까닭 보기` },
       h('i', { class: 'dom-basin', 'aria-hidden': 'true' }), `씻을 물 ${WASH_NAME[hy]}`),
@@ -224,11 +224,15 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
 }
 
-/** 이가 도는 칸은 대야를 누르지 않아도 칸 창에 까닭 한 줄을 띄운다(J10 W6). 병이 처지에서 왔다는 것을 늘 보인다. */
+/** 칸 창 머리 아래 줄(S1c): 이가 도는 칸은 대야를 누르지 않아도 까닭 한 줄(J10 W6), 열병이 돌면 앓는 사람 이름(16.5, J10 11번). */
 export function domesticWhyLine(view: View, car: CarDef): HTMLElement | null {
+  const d = view.g.dom;
   const c = car.comm;
-  if (!view.g.dom || !c || !view.g.dom.lice[c]) return null;
-  return h('small', { class: 'carpop__why' }, hygieneWhy(view.g, c));
+  if (!d || !c) return null;
+  const sick = d.typhus.filter(t => t.comm === c).flatMap(t => t.patients);
+  const why = d.lice[c] || sick.length ? hygieneWhy(view.g, c) : null;
+  if (!why) return null;
+  return h('small', { class: 'carpop__why' }, why, sick.length ? h('span', { class: 'is-red' }, ` · 열병: ${sick.join(', ')}`) : null);
 }
 
 /** 기관실 칸 창의 셋째 줄: 더운물 레버(16.2, 열차 전체 하나)와 지식 현황판 단추(11.4). */
@@ -271,6 +275,15 @@ export function domesticResource(view: View): HTMLElement | null {
 // ---- 정차 카드의 내정 줄 ----
 
 /** 정차 준비 카드에 더하는 줄: 전문가 데려가기(8.8), 냉동칸 묻고 가기(4.1), 화물역 칸 순서(4.5). */
+/** 정차 서류 머리, 장소 이름 옆: 핸드카 정찰(X2)이 본 다른 곳. 정찰을 보내기 전에 한 번만 바꾼다(7.3). */
+export function domesticAltPlace(view: View): HTMLElement | null {
+  const g = view.g;
+  const alt = g.dom?.altPlace ? PLACES.find(p => p.id === g.dom!.altPlace) : undefined;
+  if (!alt || !g.stop || g.stop.done || g.stop.scoutReport) return null;
+  return h('button', { class: 'chip chip--alt', 'data-action': 'stop-set', 'data-key': 'place', 'data-value': 'alt', title: '핸드카가 먼저 본 곳이다. 바꾸면 되돌릴 수 없다.' },
+    `핸드카: ${alt.name}${josa(alt.name, '으로/로')}`, h('small', null, ` 위험 ${alt.risk}`));
+}
+
 export function domesticStopRows(view: View): HTMLElement | null {
   const g = view.g;
   const d = g.dom;

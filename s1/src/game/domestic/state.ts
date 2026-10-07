@@ -164,6 +164,13 @@ export function enableDomestic(g: Game): void {
       trait: leader ? leader.trait : pick(g, TRAITS), alive: true,
     });
   });
+  // 용접공은 공방장의 견습으로 시작한다(8.1): 견습 → 숙련 4구간, 숙련 → 장인 6구간. 그동안 공방은 가르치느라 느리다(J10 7번).
+  const chief = people.find(p => p.role === '공방장');
+  const welder = people.find(p => p.role === '용접공');
+  if (chief && welder) {
+    welder.learn = { by: chief.id, left: D.learnSegs[welder.skill], cap: chief.skill };
+    chief.pupil = welder.id;
+  }
   g.dom = {
     scrap: D.scrap0, wood: D.wood0, parts: D.parts0, partWork: 0, cores: 0,
     frags: { engine: 1, med: 1, craft: 0, radio: 0, expedition: 0 },

@@ -1,7 +1,8 @@
-import { LAWS, P, STAY } from '../data';
+import { COMM_NAME, LAWS, LOOT_NAME, P, STAY } from '../data';
 import type { Comm, LawId } from '../data';
 import type { PromiseState } from '../state';
-import { journal, lawActive, rnd } from '../state';
+import { COUNCIL_HOOKS } from '../politics';
+import { addSecret, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { BYPRODUCT, D, FIELDS, TECHS } from './data';
 import type { Field, TechId } from './data';
@@ -100,6 +101,32 @@ export function setEscort(g: Game, id: string | null): void {
   g.dom.escort = opt && !opt.why ? id : null;
 }
 
+// R2 가(감청): 회기를 열 때마다 비밀 하나를 들을 확률 +25%(7.3). 순찰 법의 귀환 검사와 따로 굴린다. J10 3번.
+COUNCIL_HOOKS.push({
+  open: g => {
+    const m = variantMult(g, 'r2', 'a');
+    if (m > 0 && rnd(g) < D.r2aSecret * m) {
+      const secret = addSecret(g);
+      journal(g, `무전 감청에서 ${COMM_NAME[secret.about]} 대표의 약점을 들었다.`, 'dark');
+    }
+  },
+});
+
+/** R2 나(열차 방송): 긴장이 오르는 구간엔 그 증가를 1 덜고, 공포는 구간마다 +1(7.3, meters가 부른다). J10 3번. */
+export function domesticBroadcast(g: Game): { tensionCut: number; fear: number } {
+  const m = variantMult(g, 'r2', 'b');
+  return { tensionCut: D.r2bTension * m, fear: D.r2bFear * m };
+}
+
+/** 화장 땔감(4.1): S1c 판이면 시신 1구마다 목재 4가 있으면 목재로 태운다. 목재로 태운 구 수를 돌려준다(나머지는 석탄). J10 5번. */
+export function domesticPyreWood(g: Game, n: number): number {
+  const d = g.dom;
+  if (!d || n <= 0) return 0;
+  const bodies = Math.min(n, Math.floor(d.wood / D.pyreWood));
+  d.wood -= bodies * D.pyreWood;
+  return bodies;
+}
+
 /** 정차를 마친 뒤: 부산물, 설계도 조각, 코어, 쓸 만한 칸, 데려간 전문가의 위험, 묻기, X3. */
 export function domesticStop(g: Game, passed: boolean, crewDead: number): string[] {
   const d = g.dom;
@@ -110,13 +137,21 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
   d.escort = null;
   if (passed) {
     d.bury = false;
-    // 궤도 모터카(X3): 지나쳐도 '짧게'의 절반(석탄 1).
+    // 궤도 모터카(X3): 지나쳐도 '짧게'의 절반(석탄 1을 쓴다). 목표 자원이 무엇이든 그 자원으로 받는다(7.3, J10 4번).
+    // 바꾸는 비율은 정차 산출과 같다: 사치품은 3분의 1, 상징물·비밀은 10에 하나(최대 2). 여기선 주사위를 굴리지 않는다.
     const m = techMult(g, 'x3');
     if (m > 0 && stop.target) {
       g.coal -= 1;
-      const amt = Math.round(P.haulTotal * STAY.short.mult * 0.5 * m * (stop.target === 'coal' || stop.target === 'food' ? 1 : 0));
-      if (stop.target === 'coal') g.coal += amt; else if (stop.target === 'food') g.food += amt;
-      if (amt > 0) notes.push(`궤도 모터카가 ${amt}을(를) 실어 왔다.`);
+      const raw = P.haulTotal * STAY.short.mult * 0.5 * m;
+      const t = stop.target;
+      const amt = t === 'luxury' ? Math.round(raw / 3) : t === 'symbol' || t === 'secret' ? Math.min(2, Math.floor(raw / 10)) : Math.round(raw);
+      if (t === 'coal') g.coal += amt;
+      else if (t === 'food') g.food += amt;
+      else if (t === 'medicine') g.med += amt;
+      else if (t === 'luxury') g.lux += amt;
+      else if (t === 'symbol') g.symbols += amt;
+      else for (let i = 0; i < amt; i += 1) addSecret(g);
+      if (amt > 0) notes.push(`궤도 모터카가 ${LOOT_NAME[t]} ${amt}을(를) 실어 왔다.`);
     }
     return notes;
   }

@@ -63,6 +63,9 @@ export function restoreCost(id: TechId): { parts: number; frags: number; defectF
   };
 }
 
+/** 효과를 아직 못 넣은 기술(J10 3번): 부품을 받고 아무것도 안 주지 않게 복원을 막는다. R3(다음 정차 미리 보기·세 번 바꾸기)은 다음 정차 미리 보기 화면이 들어오면 연다. */
+export const NOT_YET: TechId[] = ['r3'];
+
 export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   const d = dom(g);
   const def = TECHS[id];
@@ -70,6 +73,7 @@ export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   const out: RestoreCheck = { offer: false, fragsNeed: cost.frags, defectNeed: cost.defectFrags, parts: cost.parts, core: cost.core, wood: cost.wood };
   const fail = (why: string) => { out.full = why; out.defect = why; return out; };
   if (d.techs[id]) return fail('이미 손댔다');
+  if (NOT_YET.includes(id)) return fail('아직 이 열차에서 못 쓴다');
   const pre = prereqs(id);
   if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return fail(`${TECHS[pre[0]].name}부터`);
   if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {

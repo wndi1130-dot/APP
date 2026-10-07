@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { addCard, chooseCard, cloneGame, COMMS, createGame, enableDark, lawActive, MOTIONS, onDeath, viewCard } from '../../src/game';
+import { addCard, chooseCard, cloneGame, COMMS, createGame, createS1cGame, enableDark, lawActive, MOTIONS, onDeath, viewCard } from '../../src/game';
 import type { Card, Game, MotionAgenda } from '../../src/game';
 import { crowdTick, eligible, exposeOrderLines, openCase, punish, truthTick } from '../../src/game/dark/cases';
 import { afterVote, darkCouncilOpen } from '../../src/game/dark/council';
 import { darkStoredWeight, vigil } from '../../src/game/dark/corpses';
-import { escalate } from '../../src/game/dark/embers';
+import { actAll, escalate } from '../../src/game/dark/embers';
 import { darkSettle } from '../../src/game/dark/hooks';
 import { dropOrder, runOrder } from '../../src/game/dark/order';
 import { adults } from '../../src/game/dark/state';
@@ -274,6 +274,43 @@ describe('11. 하차 명령은 열차가 설 때', () => {
     expect(g.dark!.exile).toHaveLength(0);
     expect(g.left).toContain(p.name);
   });
+
+  it('기다리는 사이 죽은 사람은 내리지 않는다(이름·인구가 두 번 깎이지 않는다)', async () => {
+    const { darkStop } = await import('../../src/game/dark/hooks');
+    const g = darkGame('exile-dead');
+    const p = adults(g, 'tail', { noRep: true })[0];
+    g.dark!.exile.push({ id: p.id, comm: 'tail' });
+    onDeath(g, 'tail', [p.name]);
+    const pop = g.comms.tail.pop;
+    const left = (g.left ?? []).filter(n => n === p.name).length;
+    darkStop(g, true, []);
+    expect(g.comms.tail.pop).toBe(pop);
+    expect((g.left ?? []).filter(n => n === p.name).length).toBe(left);
+    expect(g.dark!.exile).toHaveLength(0);
+  });
+});
+
+describe('S1b 고침 재점검의 낮은 틈', () => {
+  it('칸이 차서 못 물은 무기고 카드는 다음 출발 전에 묻는다', async () => {
+    const { darkPrep } = await import('../../src/game/dark/hooks');
+    const g = darkGame('armory-due');
+    g.dark!.armoryDue = true;
+    darkPrep(g);
+    expect(g.cards.some(c => c.kind === 'dark:armory')).toBe(true);
+    expect(g.dark!.armoryDue).toBe(false);
+  });
+
+  it('앓던 대표가 죽으면 되살아나 자리에 앉지 않는다', async () => {
+    const { fallSick, recover } = await import('../../src/game/people');
+    const g = createGame('sick-dead');
+    const rep = g.comms.front.leader;
+    fallSick(g, 'front');
+    const proxy = g.comms.front.leader;
+    onDeath(g, 'front', [rep.name]);
+    recover(g, 'front', '처지가 나아지자');
+    expect(g.comms.front.leader.name).toBe(proxy.name);
+    expect(g.comms.front.sick).toBeUndefined();
+  });
 });
 
 describe('용의자 후보 칸(J10 W 묶음과 같이 본 cases.ts)', () => {
@@ -296,5 +333,22 @@ describe('용의자 후보 칸(J10 W 묶음과 같이 본 cases.ts)', () => {
       if (c.sus.some(s => adults(g, 'tail').some(p => p.id === s.id))) tail += 1;
     }
     expect(tail).toBeGreaterThan(0);
+  });
+});
+
+describe('장갑 객차와 사보타주(J10 13번)', () => {
+  it('꼬리칸 객차를 모두 장갑하면 난방 사보타주의 온기 피해가 절반', () => {
+    const hit = (armored: boolean) => {
+      const g = createS1cGame('armor');
+      enableDark(g);
+      g.seg = 3;
+      if (armored) g.dom!.armored = ['tail1', 'tail2', 'tail3'];
+      const before = g.comms.tail.base[0];
+      ember(g, { who: 'tail', target: 'tail', mark: 'tail', sab: 'heating', imm: 2 });
+      actAll(g);
+      return before - g.comms.tail.base[0];
+    };
+    expect(hit(false)).toBe(15);
+    expect(hit(true)).toBe(8);
   });
 });

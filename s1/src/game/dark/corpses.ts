@@ -161,11 +161,14 @@ export function darkStoredWeight(g: Game, stored: number): number {
   const d = g.dark;
   if (!d) return stored;
   d.checkedStored = Math.min(d.checkedStored, stored);
-  return stored - d.checkedStored;
+  // 이번 구간에 죽어 아직 정산 확인(corpseTick)을 기다리는 시신은 S1b가 굴린다. S1a 냉동칸 굴림이 먼저 돌아도 한 번 더 굴리지 않는다.
+  const pending = lawActive(g, 'corpse_store') ? d.fresh.length : 0;
+  return Math.max(0, stored - d.checkedStored - pending);
 }
 export function darkPyreWeight(g: Game, pyre: number): number {
   const d = g.dark;
   if (!d) return pyre;
   d.checkedPyre = Math.min(d.checkedPyre, pyre);
-  return pyre - d.checkedPyre;
+  const pending = lawActive(g, 'corpse_burn') ? d.fresh.length : 0;
+  return Math.max(0, pyre - d.checkedPyre - pending);
 }

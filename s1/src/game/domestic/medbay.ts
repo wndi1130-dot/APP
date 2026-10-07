@@ -1,7 +1,7 @@
 import { journal } from '../state';
 import type { Game } from '../state';
 import { D } from './data';
-import { bedOverflow, typhusPatients } from './beds';
+import { bedNeed, bedOverflow } from './beds';
 import { refreshSit } from './sit';
 import { domCard, techMult } from './state';
 
@@ -16,7 +16,8 @@ export type BedOrder = 'workers' | 'sick' | 'rota';
 export function bedTick(g: Game): void {
   const d = g.dom;
   if (!d) return;
-  const need = Math.max(0, g.injured) + typhusPatients(g);
+  // 침상 셈은 bedNeed 하나로 한다(따로 눕힌 환자는 빼고). 순서를 정하기 전이라 bedOrder는 늘 null이다.
+  const need = bedNeed(g);
   if (d.bedOrder === null && need > D.beds && !g.cards.some(c => c.kind === 'dom:bed')) domCard(g, { kind: 'dom:bed', n: need });
 }
 
