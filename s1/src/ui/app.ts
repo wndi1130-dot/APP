@@ -363,9 +363,12 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'choose': {
         const before = fxSnap(g);
+        const kind = g.cards.find(x => x.uid === Number(data.uid))?.kind;
         step({ a: 'choose', d: plainData(data) });
         showFx(fxDiff(before, g));
         if (stackCount(g, ui) > 0) focusForTopCard();
+        // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
+        else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; }
         return render();
       }
       case 'stop-set':

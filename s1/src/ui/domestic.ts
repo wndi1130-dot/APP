@@ -1,6 +1,6 @@
 import {
   BRANCH_NAME, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
-  TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
+  TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workPower, workshopChief, workshopState, zoneAt,
@@ -27,8 +27,11 @@ export function urlWantsS1c(): boolean {
   return v === '1' || v === 'on';
 }
 
+/** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. */
 export function newGame(seed: string, s1c: boolean): Game {
-  return s1c ? createS1cGame(seed) : createGame(seed);
+  const g = s1c ? createS1cGame(seed) : createGame(seed);
+  startPrologue(g);
+  return g;
 }
 
 function domUi(ui: Ui): DomUi {

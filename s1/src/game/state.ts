@@ -283,6 +283,10 @@ export interface StoryState {
   flags: {
     /** 우리 쪽 첫 죽음(S1a 규칙으로만) */
     first_death?: boolean;
+    /** 서막에서 운반조를 두고 떠났나(9.2) */
+    depot_left_behind?: boolean;
+    /** 서막 꼬리칸 대표의 약속(9.2). 없으면 서막을 거치지 않은 판이다 */
+    depot_promise?: 'kept' | 'broken' | 'refused';
     /** 첫 시신 안건이 무엇으로 열렸나 */
     first_corpse_agenda?: 'none' | 'own' | 'stranger';
     signal_heard?: boolean;

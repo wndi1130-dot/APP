@@ -3,7 +3,7 @@
 
 import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
-  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
+  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
@@ -16,7 +16,7 @@ export type S1aPolicy = 'caretaker' | 'first';
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */
 export type DomPolicy = 'engaged' | 'idle';
 
-export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean }
+export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number] }
 
 export interface GameMetrics {
   end: string;
@@ -181,6 +181,7 @@ function spacePolicy(g: Game): void {
 
 export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetrics } {
   const g = opts.s1c ? createS1cGame(seed) : createGame(seed);
+  if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();
   const cards: Record<string, number> = {};
   const m: GameMetrics = {
@@ -210,7 +211,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       // 끊어진 후속: 카드는 생겼는데 그리는 곳이 없다(tools/reach_check.ts).
       if (view.title === '빈 서류') throw new Error(`그리는 곳 없는 카드: ${card.kind}`);
       let idx: number;
-      if (card.kind.startsWith('dom:')) idx = domPick(g, card, view, opts.dom);
+      const pro = (['pro_promise', 'pro_search', 'pro_deal'] as string[]).indexOf(card.kind);
+      if (pro >= 0 && opts.prologuePicks) idx = opts.prologuePicks[pro];
+      else if (card.kind.startsWith('dom:')) idx = domPick(g, card, view, opts.dom);
       else if (!opts.scoreCards) idx = view.choices.findIndex(c => !c.disabled);
       else {
         let best = -1e9;

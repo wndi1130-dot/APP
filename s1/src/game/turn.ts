@@ -12,7 +12,7 @@ import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAW
 import type { Comm, LootKey, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, offend, openCouncil, stance } from './politics';
 import {
-  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf,
+  addSecret, clamp, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -179,6 +179,12 @@ function depart(g: Game): void {
     return;
   }
   g.inStrike = false;
+  // 서막을 거친 판의 첫 출발: 열차 안 첫 거래가 이 구간의 사건이다(first_leg_story 5장 서막 흐름 6번, prologue.ts).
+  if (g.seg === 1 && storyOf(g).flags.depot_promise) {
+    addCard(g, { kind: 'pro_deal', comm: 'tail' });
+    g.phase = 'travel';
+    return;
+  }
   // 사람 카드가 막 왔으면 이동 사건을 쉰다(사람의 무게 6.0: 카드 수를 늘리지 않는다).
   contentAwayTick(g);
   contentFollowupTick(g);
@@ -495,9 +501,9 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
   }
 }
 
-function keepPromise(g: Game, c: Comm): void {
+/** 약속을 지켰다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */
+export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
-  const label = s.promise?.label ?? '';
   s.promise = null;
   g.trust = clamp(g.trust + 4, 0, 100);
   s.rel = clamp(s.rel + 5, -100, 100);
@@ -506,9 +512,9 @@ function keepPromise(g: Game, c: Comm): void {
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 지켰다: ${label}.`, 'good');
 }
 
-function breakPromise(g: Game, c: Comm): void {
+/** 약속을 어겼다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */
+export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
-  const label = s.promise?.label ?? '';
   s.promise = null;
   g.trust = clamp(g.trust - (seats(g)[c] >= 30 ? 12 : 8), 0, 100);
   s.rel = clamp(s.rel - 20, -100, 100);

@@ -2,7 +2,7 @@
 // 사용: npx tsx tools/reach_check.ts [판 수=300]. 봇이 안 하는 행동이 있어야 나오는 카드는 REACH_NOTES에 까닭을 적는다.
 // 까닭 없이 안 나온 것이 있으면 종료 코드 1. 끊어진 후속(그리는 곳 없는 카드, 고를 수 없는 카드)은 봇이 바로 멈춘다.
 
-import { CONTENT_EVENTS, DOM_CARD_KINDS, HUB_CARD_KINDS, PEOPLE_KINDS, S1A_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
+import { CONTENT_EVENTS, DOM_CARD_KINDS, HUB_CARD_KINDS, PEOPLE_KINDS, PROLOGUE_CARD_KINDS, S1A_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
 
@@ -18,6 +18,7 @@ export const REACH_NOTES: Record<string, string> = {
   strike_warn: '기관실이 크게 틀어져야 온다. 봇 판에선 드물다',
   strike: '파업 경고 뒤에 온다. 봇 판에선 드물다',
   hub_few: '라이프치히에 모든 칸이 중립 이상으로 닿아야 온다. 봇 판에선 드물다',
+  rep_sick: '온기나 배급이 38 아래로 두 구간 머문 칸에 온다. 서막 첫 거래에서 봇이 늘 꼬리칸 난방을 올려서 봇 판엔 그런 칸이 거의 없다(서막 없는 판에선 나온다)',
 };
 
 export const CONFIGS: [string, BotOptions][] = [
@@ -42,7 +43,7 @@ export function reachReport(n: number): ReachReport {
     }
   }
   const all = [
-    ...TRAVEL_EVENTS.map(e => `travel:${e.id}`), ...S1A_CARD_KINDS.filter(k => k !== 'travel'), ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...HUB_CARD_KINDS,
+    ...TRAVEL_EVENTS.map(e => `travel:${e.id}`), ...S1A_CARD_KINDS.filter(k => k !== 'travel'), ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...HUB_CARD_KINDS, ...PROLOGUE_CARD_KINDS,
     ...CONTENT_EVENTS.map(e => `content:${e.id}`),
   ];
   // 콘텐츠 사건 중 게임이 아직 안 뽑는 단계(s1b, 이동 밖 단계)는 까닭을 붙인다. 후속으로만 오는 사건은 단계를 안 본다.
