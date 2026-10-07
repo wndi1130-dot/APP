@@ -123,7 +123,7 @@ export function signTier(threat: number, horde: boolean): SignTier {
   return 'some';
 }
 
-function hash(s: string): number {
+export function hash(s: string): number {
   let x = 2166136261;
   for (let i = 0; i < s.length; i += 1) x = Math.imul(x ^ s.charCodeAt(i), 16777619);
   return x >>> 0;

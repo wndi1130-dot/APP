@@ -3,6 +3,7 @@ import { createGame, PLACES, resolveStop, riskLevel, riskView, STAY, stopRisk } 
 import type { StayId } from '../../src/game';
 
 // 정찰조의 해석은 약속이다(2026-10-07 사용자 결정): '불길하다'가 뜨면 그 피해가 반드시 1명 이상, 최악을 넘지 않는다.
+// 결과는 사람마다 정해 둔 난수로 먼저 정하고 정찰은 드러내기만 한다(07_outside_eye_triage N2).
 // '괜찮을 것 같다' 쪽이면 죽음과 중상은 없다. 꼬리표 대신 조짐 글로 보인다(11:51 사용자).
 
 function setups() {
@@ -80,6 +81,31 @@ describe('정찰하지 않은 곳', () => {
     }
     expect(hurt).toBeGreaterThan(0);
     expect(dead).toBeGreaterThan(0);
+  });
+
+  it('정찰은 결과를 드러내기만 한다: 같은 준비면 정찰하든 안 하든 같은 사람이 죽고 다친다', () => {
+    let seen = 0;
+    for (const s of setups()) for (let k = 0; k < 3; k += 1) {
+      const a = stopGame(s, k);
+      const b = stopGame(s, k);
+      b.stop!.scout = false;
+      const ra = resolveStop(a, true)!;
+      const rb = resolveStop(b, true)!;
+      expect(rb.dead, s.seed).toEqual(ra.dead);
+      expect(rb.injured, s.seed).toEqual(ra.injured);
+      seen += ra.dead.length;
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('준비를 바꿔 다시 봐도 같은 사람의 운은 그대로다(줄여서 살릴 수는 있어도 다시 굴릴 수는 없다)', () => {
+    for (const s of setups().filter(x => x.size === 8)) {
+      const g = stopGame(s, 2);
+      const big = stopRisk(g).fate;
+      g.stop!.stay = 'short';
+      const small = stopRisk(g).fate;
+      for (const n of small.dead) expect(big.dead, s.seed).toContain(n);
+    }
   });
 
   it('정찰하면 산출이 줄고 정찰조도 표결에서 빠진다', () => {

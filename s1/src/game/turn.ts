@@ -3,7 +3,7 @@ import { drawTravelEvent } from './cards';
 import { onDeath } from './death';
 import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
-import { markSeen, rollStopView } from './omens';
+import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, COMMS, COMM_NAME, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
@@ -229,25 +229,29 @@ export interface StopRisk {
   /** 기대 부상자 수(중상) */
   lam: number;
   pDeath: number;
-  /** 중상 줄. 0이면 줄이 없고 중상도 없다. 줄이 있으면 1~maxHurt명이 반드시 크게 다친다. */
+  /** 이 준비로 가면 크게 다칠 사람 수. 정찰하든 안 하든 같다(정찰은 드러내기만 한다). */
   maxHurt: number;
-  /** 죽음 줄. 0이면 줄이 없고 죽음도 없다. 줄이 있으면 1~maxDead명이 반드시 죽는다. */
+  /** 이 준비로 가면 죽을 사람 수. */
   maxDead: number;
+  /** 정해 둔 결과: 누가 죽고 누가 크게 다치나. */
+  fate: { dead: string[]; hurt: string[] };
   guardRefused: boolean;
   horde: boolean;
   /** 이번 정차에 무리 흔적이 새롭다 */
   fresh: boolean;
   /** 태울 시신이 있어 장작불이 무리를 끈다 */
   pyre: boolean;
-  /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고 결과는 확률대로다. */
+  /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고, 결과는 정찰했을 때와 같다. */
   known: boolean;
 }
 
-/** 위험 줄이 뜨는 문턱. 줄이 뜨면 그 피해는 반드시 1명 이상이다(2026-10-07 사용자 결정, field_unified 8장). */
-export const RISK_LINE = { hurt: 0.7, dead: 0.12, dead2: 0.25 } as const;
-
 /** 정차 위험. 장소 위험도, 체류, 인원, 던진 시신이 키운 무리, 경비대의 경계 거부와 호위로 정해진다.
  * 준비(무엇을·얼마나·누구를·몇 명)를 바꾸면 바로 다시 계산되고, 결과는 이 줄이 약속한 범위를 벗어나지 않는다. */
+/** 이 정차에서 이 사람에게 정해 둔 난수(0~1). 난수 흐름을 건드리지 않게 판 씨앗으로 만든다. */
+function fateRoll(g: Game, name: string, kind: 'd' | 'h'): number {
+  return hash(`${g.seed}|${g.seg}|${g.stop?.place ?? ''}|${name}|${kind}`) / 4294967296;
+}
+
 export function stopRisk(g: Game): StopRisk {
   const stop = g.stop;
   const place = PLACES.find(p => p.id === stop?.place) ?? PLACES[0];
@@ -262,10 +266,22 @@ export function stopRisk(g: Game): StopRisk {
   const threat = (stop?.threat ?? 1) * (pyreCount(g) > 0 ? P.pyreLight : 1);
   const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat;
   const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat;
-  const maxDead = Math.min(crew - 1, pDeath >= RISK_LINE.dead2 ? 2 : pDeath >= RISK_LINE.dead ? 1 : 0);
-  // 죽는 사람과 크게 다치는 사람은 겹치지 않는다. 남은 인원으로 약속을 못 지키면 줄을 띄우지 않는다.
-  const maxHurt = lam >= RISK_LINE.hurt ? Math.max(0, Math.min(crew - maxDead, Math.ceil(lam * 1.2))) : 0;
-  return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout, pyre: pyreCount(g) > 0 };
+  // 결과는 사람마다 정해 둔 난수로 먼저 정한다. 정찰은 이 결과를 드러내기만 해서 정찰 여부가 피해를 바꾸지 않는다
+  // (07_outside_eye_triage N2). 준비를 바꾸면 같은 난수로 다시 계산하니 다시 굴리는 길도 없다.
+  // 사람 하나의 죽을 확률은 pDeath/4(4명 기준 기대 사망 pDeath), 크게 다칠 확률은 lam/인원(기대 중상 lam).
+  const fate = { dead: [] as string[], hurt: [] as string[] };
+  if (stop) {
+    const names = crewNames(g, stop.crewComm, crew);
+    const qd = pDeath / 4;
+    const qh = Math.min(0.9, lam / Math.max(1, names.length));
+    // 한 명은 반드시 살아 돌아온다.
+    fate.dead = names.filter(n => fateRoll(g, n, 'd') < qd).slice(0, Math.max(0, names.length - 1));
+    fate.hurt = names.filter(n => !fate.dead.includes(n) && fateRoll(g, n, 'h') < qh);
+  }
+  return {
+    lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
+    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout, pyre: pyreCount(g) > 0,
+  };
 }
 
 /** 약속 단계. dead와 hurt면 그 피해가 1명 이상 반드시 일어나고 내부 최악을 넘지 않는다.
@@ -335,26 +351,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const risk = stopRisk(g);
   if (risk.guardRefused) notes.push('경비대가 경계를 거부했다.');
   const names = crewNames(g, stop.crewComm, stop.crewSize);
-  const pool = [...names];
-  for (let i = pool.length - 1; i > 0; i -= 1) { const j = Math.floor(rnd(g) * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  let dead: string[];
-  let hurt: string[];
-  if (risk.known) {
-    // 정찰했으면 줄이 약속한 대로: 줄이 있으면 1~최악 명, 없으면 0명. 주사위는 몇 명과 누구만 정한다(2026-10-07 사용자).
-    const count = (max: number, p: number) => {
-      let n = max > 0 ? 1 : 0;
-      while (n < max && rnd(g) < p) n += 1;
-      return n;
-    };
-    dead = pool.splice(0, count(risk.maxDead, risk.pDeath));
-    hurt = pool.splice(0, count(risk.maxHurt, Math.min(0.6, risk.lam / 3)));
-  } else {
-    // 정찰 없이 가면 원래 확률대로다.
-    dead = pool.splice(0, rnd(g) < risk.pDeath ? 1 : 0);
-    let n = 0;
-    for (let i = 0; i < 6; i += 1) if (rnd(g) < risk.lam / 6) n += 1;
-    hurt = pool.splice(0, n);
-  }
+  // 정해 둔 결과 그대로. 정찰했으면 위험 줄이 이걸 미리 보여 줬다.
+  const dead = risk.fate.dead;
+  const hurt = risk.fate.hurt;
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
