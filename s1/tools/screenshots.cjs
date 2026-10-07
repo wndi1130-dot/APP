@@ -99,6 +99,17 @@ function inspectLayout(minFont) {
   const clipped = [];
   const truncated = [];
   const inHScroll = element => !!element.closest('[data-keep-scroll]');
+  // 선택 연출(.fx, aria-hidden)의 번짐·뜨는 숫자는 일부러 상자 밖으로 나온다. 넘침 검사는 그것을 빼고 잰다.
+  // 화면 밖·막대 침범 검사는 그대로 .fx도 본다.
+  const fx = [...document.querySelectorAll('.fx[aria-hidden="true"]')];
+  const contentWidth = element => {
+    if (!fx.some(node => element.contains(node))) return element.scrollWidth;
+    const saved = fx.map(node => node.style.display);
+    fx.forEach(node => { node.style.display = 'none'; });
+    const width = element.scrollWidth;
+    fx.forEach((node, i) => { node.style.display = saved[i]; });
+    return width;
+  };
   for (const element of document.querySelectorAll('body *')) {
     if (!visible(element)) continue;
     const rect = element.getBoundingClientRect();
@@ -113,8 +124,8 @@ function inspectLayout(minFont) {
     const style = getComputedStyle(element);
     if (ownText && parseFloat(style.fontSize) < minFont) smallText.push(`${describe(element)} ${style.fontSize}`);
     const block = style.display !== 'inline' && style.display !== 'contents' && element.clientWidth > 0;
-    if (block && !(element instanceof SVGElement) && !element.hasAttribute('data-keep-scroll') && !inHScroll(element) && element.scrollWidth > element.clientWidth + 1) {
-      const entry = `${describe(element)} ${element.scrollWidth}>${element.clientWidth}`;
+    if (block && !(element instanceof SVGElement) && !element.hasAttribute('data-keep-scroll') && !inHScroll(element) && contentWidth(element) > element.clientWidth + 1) {
+      const entry = `${describe(element)} ${contentWidth(element)}>${element.clientWidth}`;
       if (style.textOverflow === 'ellipsis') truncated.push(entry);
       else if (style.overflowX === 'hidden' || style.overflowX === 'clip') clipped.push(entry);
       else if (style.overflowX === 'visible') clipped.push(`${entry} (상자 밖으로 넘침)`);
