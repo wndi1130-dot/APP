@@ -3,6 +3,7 @@ import {
   advance, breakPromise, castVote, createGame, currentAgenda, enableDark, keepPromise, makeDeal, openCouncil, preVote, primaryAction,
 } from '../../src/game';
 import type { Game } from '../../src/game';
+import { afterVote } from '../../src/game/dark/council';
 import { B } from '../../src/game/dark/data';
 
 // 정기 신임 표결(s1b_dark_path 5.3, 사용자 결정 '정기 투표'). 숫자와 부결의 결과는 제안(B.conf*).
@@ -99,6 +100,15 @@ describe('정기 신임 표결', () => {
     const g = createGame('conf-plain');
     sessions(g, B.confEvery * 2);
     expect(g.council!.pre).toBeUndefined();
+  });
+
+  it('원수 대표가 갈려도 불씨를 만들지 않는다', () => {
+    const g = darkGame('conf-rival');
+    const comms = Object.keys(g.comms) as (keyof Game['comms'])[];
+    const byComm = Object.fromEntries(comms.map((c, i) => [c, i % 2 ? { yes: 9, no: 0 } : { yes: 0, no: 9 }]));
+    const before = g.dark!.embers.length;
+    for (let i = 0; i < 50; i += 1) afterVote(g, { kind: 'motion', motion: 'confidence' }, { yes: 0, no: 0, absent: 0, passed: true, byComm } as never);
+    expect(g.dark!.embers.length).toBe(before);
   });
 
   it('칸마다 지킨 약속과 어긴 약속을 센다(신임 입장)', () => {

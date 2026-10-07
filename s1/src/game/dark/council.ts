@@ -222,7 +222,8 @@ export function afterVote(g: Game, agenda: Agenda, r: VoteResult): void {
   // 불신임은 표결을 거쳐야 끝난다(부결이면 다시 조건이 서야 오른다). 목록에 오르기만 하고 다른 안건을 고르면 남는다.
   if (!isLawAgenda(agenda) && agenda.motion === 'no_confidence') { d.confBy = null; d.confLeader = null; }
   if (isLawAgenda(agenda) && r.passed && !agenda.repeal && !agenda.forced && !agenda.ratify && LAWS[agenda.law].tag === '가혹') cross(g, 'harsh_chosen');
-  if (r.decree) return;
+  // 포고와 정기 신임 표결은 원수 대표가 갈려도 불씨를 만들지 않는다(신임은 칸 대 칸의 다툼이 아니다, 6차 시뮬레이션과 같게).
+  if (r.decree || (!isLawAgenda(agenda) && agenda.motion === 'confidence')) return;
   const side = (c: Comm) => Math.sign(r.byComm[c].yes - r.byComm[c].no);
   for (const a of COMMS) for (const b of COMMS) {
     if (a >= b || !rivals(a, b) || side(a) * side(b) !== -1) continue;
