@@ -824,3 +824,4 @@ small { font-size: 12px; }
 .scout-report .is-red { color: var(--discontent); }
 @keyframes scout-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .scout-report { animation: none; } }
+.scout-report__where { color: var(--ink-3); }

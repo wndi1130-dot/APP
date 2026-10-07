@@ -249,6 +249,17 @@ export const PLACES: PlaceDef[] = [
   { id: 'office', name: '관청', risk: 2, loot: { coal: 0, food: 5, medicine: 0, luxury: 10, symbol: 25, secret: 60 } },
 ];
 
+/** 정찰조가 당한 자리(파밍 스레드 17:16 제안). 위험이 장소 안쪽 한 자리에 묶여 있다고 읽히게 해서,
+ * 짧게·적게 보내면 그 자리를 비켜 간다는 '이 준비라면' 해석과 맞물린다. 숫자는 안 바꾼다. */
+export const SCOUT_DEEP: Record<string, string> = {
+  freight: '화물 창고 맨 안쪽',
+  houses: '골목 끝 집 지하실',
+  hospital: '병동 안쪽 복도 끝',
+  factory: '공장 안쪽 보일러실',
+  church: '교회 뒤 사제관 안쪽',
+  office: '관청 문서고 안쪽',
+};
+
 export const STAY = {
   short: { name: '짧게', mult: 0.6, risk: 0.6, coal: 1 },
   normal: { name: '보통', mult: 1, risk: 1, coal: 2 },

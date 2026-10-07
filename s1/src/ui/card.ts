@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, STAY, costLines, crewNames, politicsLines, riskView, stopScene, viewCard,
+  COMMS, COMM_NAME, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, politicsLines, riskView, stopScene, viewCard,
 } from '../game';
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -107,7 +107,10 @@ function scoutReport(view: View): HTMLElement {
     h('b', null, back.length ? '정찰조가 돌아왔다' : '정찰조가 돌아오지 않았다'), ' ',
     back.length ? nameList(back) : null,
     rep.hurt.length ? h('span', { class: 'is-red' }, ' · 크게 다침 ', nameList(rep.hurt)) : null,
-    rep.dead.length ? h('span', { class: 'is-red' }, ' · 못 돌아옴 ', nameList(rep.dead)) : null);
+    rep.dead.length ? h('span', { class: 'is-red' }, ' · 못 돌아옴 ', nameList(rep.dead)) : null,
+    // 어디서 당했는지: 위험은 그 자리에 있고, 짧게 적게 보내면 비켜 갈 수 있다고 읽힌다.
+    rep.hurt.length || rep.dead.length ? h('small', { class: 'scout-report__where' },
+      ` ${SCOUT_DEEP[stop.place] ?? '안쪽 깊숙이'}까지 들어갔다가 ${rep.hurt.length ? '당했다' : '소식이 끊겼다'}.`) : null);
 }
 
 export function cardSheet(view: View): HTMLElement | null {
