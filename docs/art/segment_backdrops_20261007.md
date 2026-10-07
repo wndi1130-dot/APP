@@ -23,7 +23,7 @@
 ```text
 Match the painterly realistic rendering, side-on camera, size of the train cross-section and the HUD layout of the attached image exactly. Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish, believable proportions and worn real materials; textures soft and economical. Central Europe, present-day places, sixth winter after civilization collapsed and the dead rose. Dark drab weather: low heavy clouds, freezing fog, wet sleet. Cold is pale grey-white frost and blue-grey shadow, warmth is amber. No gore, no logos, no red cross symbols, no readable text.
 
-The train is now running at speed, not stopped: the platform, lamp post and waiting family of the attached image are gone. The ground below the train streaks past with slight motion blur; the far horizon above the roof barely moves. The lit car interiors stay the brightest, warmest part of the image; everything outside is darker and less saturated so the interiors read first. Only the outside landscape changes from the attached image, with one fix: the iron plaque above the guard car shows a plain shield, not crossed rifles.
+The train is now running at speed, not stopped: the platform, lamp post and waiting family of the attached image are gone. The ground below the train streaks past with slight motion blur; the far horizon above the roof barely moves. The lit car interiors stay the brightest, warmest part of the image; everything outside is darker and less saturated so the interiors read first. Only the outside landscape changes from the attached image, with one fix: the iron plaque above the guard car shows a plain railway hand lantern, not crossed rifles or a shield.
 ```
 
 ## 공통 끝 (모든 글상자 맨 끝)
@@ -128,7 +128,7 @@ Outside: the train is crossing a long steel truss railway bridge over a wide icy
 
 - **B8_oder_bridge_v2를 고른다.** 다시 뽑지 않는다.
 - 트러스 부재가 창 앞을 지나며 바깥을 칸칸이 자르는 느낌이 산다. 앞쪽 부재는 움직임으로 흐리고, 칸 안 호박색이 화면에서 가장 밝다. 아래 강물의 얼음 조각과 안개도 주문대로다. K2라 전차선이 없어야 하는데 없다.
-- old_props와 갈리는 점: old_props는 가까운 부재가 경비칸 왼쪽을 덮어 칸 안 사람이 가려지고, 식당칸 명판까지 방패로 나왔다. v2는 부재가 칸 사이 이음매에 걸려 칸 안을 덮지 않고, 명판도 식당 = 포크·나이프, 경비 = 무늬 없는 방패로 맞다.
+- old_props와 갈리는 점: old_props는 가까운 부재가 경비칸 왼쪽을 덮어 칸 안 사람이 가려지고, 식당칸 명판까지 방패로 나왔다. v2는 부재가 칸 사이 이음매에 걸려 칸 안을 덮지 않고, 명판도 식당 = 포크·나이프, 경비 = 무늬 없는 방패로 맞다. (2026-10-07 19:00 고침: J06 점검에서 방패가 휘장으로 읽힐 수 있다고 나와 경비 명판은 철도 손등으로 바꿨다. 주문 줄은 고쳤고, 이미 뽑은 B 그림은 배치 기준이라 다시 뽑지 않고 실제 에셋 때 고친다.)
 - 석탄 화차 두 칸은 문 없는 무개차에 석탄만 실렸고 사람이 없다. 금지 목록(철조망, 망루, 막사, 하역 경사로, 연기 나는 굴뚝, 사람이 모인 화차, 표식, 적십자)은 섞이지 않았다.
 - 볼 점 1: 화차가 '기관차 앞 다리 한가운데'가 아니라 열차 뒤 먼 선로에 서 있는 것처럼 보인다. 옆에서 보는 구도에서는 앞을 보여 주기 어렵다. 실제 장면에서는 다리를 다 건너기 직전 오른쪽 끝에 들어오게 하거나, 화차를 이 구간 사건 그림으로 따로 보여 준다.
 - 볼 점 2: 건너편 강가에 첨탑이 선 도시 윤곽이 있다. 주문은 헐벗은 숲이었고, 치가치체 근처 오데르는 큰 도시가 보이는 곳이 아니다. 실제 배경에서는 숲과 낮은 마을 지붕으로 바꾼다.

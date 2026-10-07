@@ -296,12 +296,12 @@ Row 3: 9) leverage: a folded document with a black wax seal; 10) heating: a smal
 
 ## ⑤ 칸 명판 8개 (그림 두 장 첨부: home_v2, council_v1)
 
-①에서 칸 문 위에 거는 명판이자 공동체 문장이다. 시안들에서 잘 읽힌 문장(방패, 안락의자, 기어와 약병, 나침반)을 살려 통일했다. 식당칸은 투표함 대신 식탁으로 한다. 투표함은 비밀 투표 아이콘과 겹친다. 설계 세션이 잘라 `s1/public/art/emblems/`에 넣는다.
+①에서 칸 문 위에 거는 명판이자 공동체 문장이다. 시안들에서 잘 읽힌 문장(안락의자, 기어와 약병, 나침반)을 살려 통일했다. 경비 문장은 처음엔 방패였지만 2026-10-07 J06 금지선 점검에서 방패가 휘장으로 읽힐 수 있다고 나와, 역할은 도구 그림으로 한다는 방향(model_renders 6e236bb)에 맞춰 철도 손등으로 바꿨다(제안). 열쇠 꾸러미·호루라기·몽둥이는 잠긴 문·싣기 장면 금지선이나 무기에 닿아 쓰지 않는다. 식당칸은 투표함 대신 식탁으로 한다. 투표함은 비밀 투표 아이콘과 겹친다. 설계 세션이 잘라 `s1/public/art/emblems/`에 넣는다.
 
 ```text
 Match the pixel style of the attached images, especially the small iron plaques hanging above the car doors in the first image.
 
-A sheet of eight small pixel-art plaques in a 4 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each plaque is a small dark iron sign with riveted corners hanging from two short chains, carrying one cream-white pixel emblem; all the same size, readable at 32 pixels, no text. Left to right, top to bottom: 1) tail-car workers: a coal shovel crossed with a dented tin cup; 2) engine crew: a locomotive driving wheel with a spanner across it; 3) guard: a plain shield; 4) technicians and medics: a gear beside a small medicine bottle, no cross; 5) front-car passengers: an upholstered armchair; 6) captain: a compass; 7) dining car: a long table under a hanging lamp; 8) workshop, for later: an anvil with a hammer.
+A sheet of eight small pixel-art plaques in a 4 by 2 grid on a transparent background (if transparency is not possible, a pure black #000000 background). Each plaque is a small dark iron sign with riveted corners hanging from two short chains, carrying one cream-white pixel emblem; all the same size, readable at 32 pixels, no text. Left to right, top to bottom: 1) tail-car workers: a coal shovel crossed with a dented tin cup; 2) engine crew: a locomotive driving wheel with a spanner across it; 3) guard: a railway hand lantern with a wire handle, unlit; 4) technicians and medics: a gear beside a small medicine bottle, no cross; 5) front-car passengers: an upholstered armchair; 6) captain: a compass; 7) dining car: a long table under a hanging lamp; 8) workshop, for later: an anvil with a hammer.
 ```
 
 ## ⑥ 초상 두 장
