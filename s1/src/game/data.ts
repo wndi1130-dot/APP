@@ -225,7 +225,9 @@ export const SECRET_POOL: { text: string; weight: 1 | 2 | 3 }[] = [
   { text: '사치품을 빼돌린다', weight: 2 }, { text: '다른 지도자와 몰래 거래했다', weight: 2 },
   { text: '가족을 앞칸으로 몰래 옮겼다', weight: 2 }, { text: '의약품을 사적으로 썼다', weight: 2 },
   { text: '지난 회기 표를 팔았다', weight: 2 }, { text: '보일러 점검을 건너뛰었다', weight: 2 },
-  { text: '물린 걸 숨기고 있다', weight: 3 }, { text: '예전 정차에서 사람을 버리고 왔다', weight: 3 },
+  // 숨긴 물림은 2구간이면 끝나서 오래가는 비밀이 못 된다. 그 자리에 오래가는 비밀 둘(body_injury 4.4).
+  { text: '물린 가족을 숨겨 줬다가 몰래 처리했다', weight: 3 }, { text: '예전 정차에서 사람을 버리고 왔다', weight: 3 },
+  { text: '필드에서 긁혔는데 검사를 피했다', weight: 2 },
   { text: '외부와 몰래 무전을 한다', weight: 3 }, { text: '첫 겨울에 사람을 죽였다', weight: 3 },
 ];
 

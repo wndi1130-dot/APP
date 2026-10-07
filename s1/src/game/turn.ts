@@ -310,6 +310,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
+  // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
+  if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel - 2, -100, 100);
   if (dead.length > 0) onDeath(g, stop.crewComm, dead);
   const scouts = stop.scout ? P.scoutSize : 0;
   if (scouts > 0 && rnd(g) < P.scoutSprain) notes.push('정찰조 하나가 발목을 삐었다.');
@@ -394,6 +396,7 @@ function settle(g: Game): void {
   drift(g);
   checkDuePromises(g);
   hungerTick(g, notes);
+  biteTick(g);
   needTick(g, notes);
   if (g.council) bribeDetection(g);
   leashTick(g);
@@ -407,6 +410,37 @@ function settle(g: Game): void {
     rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel - before.rel[c]])) as Record<Comm, number>, notes,
   };
   if (g.phase !== 'end') g.phase = 'settle';
+}
+
+/** 숨긴 물림의 시계(body_injury 4.4, 숫자는 제안). 귀환 검사 법이 있으면 바로, 없으면 열이 올라 구간마다 반쯤 들킨다.
+ * 기한까지 안 들키면 그 칸 안에서 일어난다. 격리했으면 조용히 끝난다. */
+function biteTick(g: Game): void {
+  const keep: typeof g.hiddenBites = [];
+  for (const b of g.hiddenBites ?? []) {
+    if (g.seg >= b.due) {
+      if (b.isolated) {
+        journal(g, `격리된 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
+      } else if (!b.found) {
+        const bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
+        g.injured += bitten;
+        g.tension = clamp(g.tension + 8, 0, 100);
+        g.fear = clamp(g.fear + 5, 0, 100);
+        journal(g, `${b.who}이(가) ${COMM_NAME[b.comm]} 안에서 일어났다. ${bitten}명이 물렸다.`, 'bad');
+      } else {
+        keep.push(b);
+        continue;
+      }
+      onDeath(g, b.comm, [b.who]);
+      continue;
+    }
+    if (!b.found && (lawActive(g, 'patrol') || rnd(g) < 0.5)) {
+      b.found = true;
+      const how = lawActive(g, 'patrol') ? '귀환 검사에서 드러났다.' : '열이 오르는 걸 의무장이 알아챘다.';
+      addCard(g, { kind: 'bite_found', comm: b.comm, who: b.who, text: how });
+    }
+    keep.push(b);
+  }
+  g.hiddenBites = keep;
 }
 
 /** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 프로스트펑크식). */

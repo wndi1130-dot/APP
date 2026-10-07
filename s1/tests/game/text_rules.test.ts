@@ -58,7 +58,7 @@ function everyCardView() {
   const kinds: Omit<Card, 'uid'>[] = [
     ...TRAVEL_EVENTS.map(e => ({ kind: 'travel', text: e.id })),
     ...COMMS.flatMap(c => [{ kind: 'demand', comm: c }, { kind: 'favor', comm: c }]),
-    { kind: 'strike_warn' }, { kind: 'strike' }, { kind: 'rescue', who: '수색대' }, { kind: 'bitten', comm: 'tail', who: '대원' },
+    { kind: 'strike_warn' }, { kind: 'strike' }, { kind: 'rescue', who: '수색대' }, { kind: 'bitten', comm: 'tail', who: '대원' }, { kind: 'bite_found', comm: 'tail', who: '대원', text: '열이 오르는 걸 의무장이 알아챘다.' },
     { kind: 'tension_crisis' },
   ];
   const views = kinds.map((k, i) => viewCard(g, { uid: i + 1, ...k }));

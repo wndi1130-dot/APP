@@ -34,18 +34,22 @@ export interface Ui {
 
 export interface View { g: Game; ui: Ui }
 
-export interface CarDef { id: string; comm?: Comm; name: string; plate: string; kind: 'comm' | 'dining' | 'captain' | 'engine' | 'loco' }
+export interface CarDef { id: string; comm?: Comm; name: string; plate: string; kind: 'comm' | 'dining' | 'captain' | 'engine' | 'loco' | 'freight' }
 
 // 왼쪽이 꼬리, 오른쪽이 기관차(2026-10-06 홈 시안).
+// 13칸 편성(s1c_domestic 4.2): 사람이 자는 칸은 낡은 객차, 닫힌 화차는 짐·석탄·기계만 싣는다(2026-10-07 사용자 결정).
 export const CARS: CarDef[] = [
   { id: 'tail3', comm: 'tail', name: '꼬리칸 3', plate: '꼬리', kind: 'comm' },
   { id: 'tail2', comm: 'tail', name: '꼬리칸 2', plate: '꼬리', kind: 'comm' },
   { id: 'tail1', comm: 'tail', name: '꼬리칸 1', plate: '꼬리', kind: 'comm' },
+  { id: 'cold', name: '냉동칸', plate: '냉동', kind: 'freight' },
+  { id: 'store', name: '창고칸', plate: '창고', kind: 'freight' },
   { id: 'medtech', comm: 'medtech', name: '의무칸', plate: '의무', kind: 'comm' },
   { id: 'dining', name: '식당칸', plate: '의회', kind: 'dining' },
   { id: 'guard', comm: 'guard', name: '경비대칸', plate: '경비', kind: 'comm' },
   { id: 'captain', name: '열차장실', plate: '일지', kind: 'captain' },
   { id: 'front', comm: 'front', name: '앞칸', plate: '앞칸', kind: 'comm' },
+  { id: 'workshop', name: '공방칸', plate: '공방', kind: 'freight' },
   { id: 'engine', comm: 'engine', name: '기관실·탄수차', plate: '기관', kind: 'engine' },
   { id: 'loco', name: '기관차', plate: '', kind: 'loco' },
 ];

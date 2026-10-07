@@ -8,7 +8,7 @@ import type { View } from './common';
 // 아래 막대: 왼쪽 메뉴와 일지, 가운데 단계 표시줄과 한눈에 보기, 오른쪽 주 단추.
 
 function meter(name: 'trust' | 'tension', label: string, value: number, tone: string) {
-  return h('div', { class: 'meter', 'aria-label': `${label} ${fmt(value)}` },
+  return h('div', { class: cx('meter', value >= 99.5 && 'is-full'), 'aria-label': `${label} ${fmt(value)}` },
     icon(name, 'meter__icon'),
     h('div', { class: 'meter__body' },
       h('div', { class: 'meter__row' }, h('b', { class: 'num' }, fmt(value)), h('span', { class: 'meter__label' }, label)),

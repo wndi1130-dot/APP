@@ -280,6 +280,8 @@ small { font-size: 12px; }
 .car--dining { width: 168px; }
 .car--captain { width: 120px; }
 .car--engine { width: 150px; background: linear-gradient(#2e2a26, #24211e); }
+.car--freight { width: 112px; border-radius: 3px 3px 2px 2px; background: repeating-linear-gradient(90deg, #2a2724 0 10px, #25221f 10px 11px); }
+.car__door { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 40px; height: 52px; border: 1px solid #4a4540; background: #2f2b27; }
 .car--loco { width: 128px; height: 92px; border-radius: 18px 10px 2px 2px; background: linear-gradient(#33373c, #26292d); }
 .car::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--cc, transparent); border-radius: 6px 6px 0 0; opacity: .9; }
 .car.is-open { border-color: var(--ink-1); }
@@ -684,6 +686,8 @@ small { font-size: 12px; }
   .steps__item span { display: none; }
   .steps__item.is-now span { display: inline; }
   .meter { width: 70px; }
+  /* 100은 세 자리라 좁은 폰에선 낱말을 숨긴다(아이콘과 막대가 남는다). */
+  .meter.is-full .meter__label { display: none; }
   .top__res { gap: 6px; }
   .council { grid-template-columns: 184px minmax(0, 1fr) 210px; gap: 6px; }
   .ov-body { grid-template-columns: 160px minmax(0, 1fr); gap: 32px; }

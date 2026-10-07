@@ -65,6 +65,7 @@ export interface CommState {
 export interface Secret { id: number; text: string; weight: number; about: Comm; uses: number }
 export interface Leash { comm: Comm; since: number; weight: number }
 
+export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
 export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string }
 /** 한 사건을 마지막으로 겪은 때와 고른 것. 같은 사건이 다시 나오면 이걸 보고 본문과 대가를 바꾼다. */
 export interface EventMemo { n: number; seg: number; pick: string }
@@ -177,6 +178,8 @@ export interface Game {
   emergencyCalls: number[];
   /** 식량 0으로 버틴 구간 수 */
   hunger: number;
+  /** 붕대로 감아 숨긴 물림. 2구간 안에 들키거나 칸 안에서 일어난다(body_injury 4.4). */
+  hiddenBites: HiddenBite[];
   nextCardUid: number;
   stop: StopState | null;
   council: CouncilState | null;
@@ -280,7 +283,7 @@ export function createGame(seed = 's1a'): Game {
     secrets: [], nextSecretId: 1, leashes: [], blackmails: 0, corpseIssue: false, thrown: 0, stored: 0, deaths: [],
     strikes: 0, inStrike: false, strikeWarned: -99, lostSegments: 0, trustCrisis: null, tensionWarned: false,
     tensionCrisisUsed: 0, emergencyUsed: false, guidedLeft: 0, decreeLeft: 0, guardEscort: false, forcedRun: false,
-    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, needs: {}, emergencyCalls: [], hunger: 0, nextCardUid: 1, stop: null,
+    autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, needs: {}, emergencyCalls: [], hunger: 0, hiddenBites: [], nextCardUid: 1, stop: null,
     council: null, lastSettle: null, journal: [], usedProfiles: [], end: null,
     stats: { dealsMade: 0, promisesKept: 0, promisesBroken: 0, lawsPassed: 0, lawsFailed: 0, repeals: 0, bribes: 0, blackmails: 0 },
   } as Game;

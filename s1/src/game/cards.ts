@@ -413,6 +413,20 @@ export function viewCard(g: Game, card: Card): CardView {
         ]),
       };
     }
+    case 'bite_found': {
+      const bite = (g.hiddenBites ?? []).find(b => b.who === card.who);
+      const canCut = !!bite && g.seg <= bite.at;
+      return {
+        title: '숨긴 물림이 드러났다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_found',
+        body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
+        choices: withAfford(g, [
+          { label: '의무칸에서 자른다', say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'trust', v: -3 }], special: 'bite_cut',
+            ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
+          { label: '격리한다', say: '빈 칸 끝에 따로 둬라. 마지막은 가족과 보내게 해라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '쏜다', say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
+        ]),
+      };
+    }
     case 'tension_crisis': {
       return {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
@@ -525,17 +539,26 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       }
       break;
     case 'hide_bite':
-      g.injured += 1;
-      if (rnd(g) < 0.5) {
-        g.tension = clamp(g.tension + 8, 0, 100);
-        g.injured = Math.max(0, g.injured - 1);
-        journal(g, `${card.who ?? '숨겨 준 대원'}이(가) 밤중에 일어났다. 칸 안에서.`, 'bad');
-        onDeath(g, c, [card.who ?? '이름 모를 대원']);
-      } else {
-        journal(g, `${card.who ?? '대원'}의 상처는 덧나지 않았다. 아무도 모른다.`, 'dark');
-      }
+      // 숨긴 물림은 비밀이 아니라 시한 사건이다: 2구간 안에 들키거나 칸 안에서 일어난다(body_injury 4.4).
+      (g.hiddenBites ??= []).push({ who: card.who ?? '이름 모를 대원', comm: c, at: g.seg, due: g.seg + 2 });
+      journal(g, `${card.who ?? '대원'}의 상처를 붕대로 감아 태웠다. 아는 사람은 수색대뿐이다.`, 'dark');
+      break;
+    case 'bite_cut':
+      g.hiddenBites = (g.hiddenBites ?? []).filter(b => b.who !== card.who);
+      journal(g, `숨겼던 ${card.who ?? '대원'}의 물린 곳을 의무칸에서 잘랐다.`, 'dark');
+      break;
+    case 'bite_isolate':
+      for (const b of g.hiddenBites ?? []) if (b.who === card.who) b.isolated = true;
+      journal(g, `${card.who ?? '대원'}을(를) 빈 칸 끝에 따로 두었다.`, 'dark');
+      break;
+    case 'bite_shoot':
+      g.hiddenBites = (g.hiddenBites ?? []).filter(b => b.who !== card.who);
+      onDeath(g, c, [card.who ?? '이름 모를 대원']);
+      journal(g, `${card.who ?? '대원'}을(를) 쏘았다. 칸 사람들이 다 들었다.`, 'dark');
       break;
     case 'leave_bitten':
+      // 사람을 버렸다는 증언은 적의로 남는다(body_injury 4.3).
+      offend(g, c);
       g.comms[c].pop = Math.max(1, g.comms[c].pop - 1);
       g.deaths.push(card.who ?? '이름 모를 대원');
       journal(g, `${card.who ?? '대원'}을(를) 역에 두고 왔다.`, 'dark');

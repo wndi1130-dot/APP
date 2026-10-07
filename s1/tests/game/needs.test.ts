@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   advance, agendaOptions, callEmergency, castVote, createGame, emergencyCost, emergencyStatus, enactLaw, HUNGER_GRACE, NEED_GRACE,
-  needTick, resolveStop, blocs, setAgenda,
+  needTick, resolveStop, blocs, setAgenda, chooseCard, viewCard, SECRET_POOL,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -116,5 +116,55 @@ describe('식량 0', () => {
       else expect(deaths(), `구간 ${i + 1}`).toBeGreaterThan(before);
       g.phase = 'council';
     }
+  });
+});
+
+describe('숨긴 물림', () => {
+  function hide(seed: string) {
+    const g = createGame(seed);
+    g.cards = [{ uid: 1, kind: 'bitten', comm: 'tail', who: '대원' }];
+    g.nextCardUid = 2;
+    expect(chooseCard(g, 1, 1)).toBe(true);
+    return g;
+  }
+
+  it('숨기면 비밀이 아니라 2구간 시계가 걸린다', () => {
+    const g = hide('bite-hide');
+    expect(g.hiddenBites).toEqual([{ who: '대원', comm: 'tail', at: g.seg, due: g.seg + 2 }]);
+  });
+
+  it('귀환 검사 법이 있으면 첫 정산에 드러나고, 그 구간 안이면 아직 자를 수 있다', () => {
+    const g = hide('bite-patrol');
+    enactLaw(g, 'patrol', []);
+    g.phase = 'council'; g.council = null; g.cards = [];
+    advance(g);
+    const found = g.cards.find(c => c.kind === 'bite_found');
+    expect(found).toBeDefined();
+    expect(viewCard(g, found!).choices[0].disabled).toBeFalsy();
+  });
+
+  it('들키지 않으면 기한에 칸 안에서 일어나 사람을 문다', () => {
+    let rose = false;
+    for (let i = 0; i < 20 && !rose; i += 1) {
+      const g = hide(`bite-rise-${i}`);
+      for (let k = 0; k < 3 && !rose; k += 1) {
+        g.phase = 'council'; g.council = null;
+        if (g.cards.some(c => c.kind === 'bite_found')) break;
+        g.cards = [];
+        const injured = g.injured;
+        advance(g);
+        if (g.journal.some(j => j.text.includes('안에서 일어났다'))) {
+          rose = true;
+          expect(g.injured).toBeGreaterThan(injured);
+          expect(g.deaths).toContain('대원');
+        }
+        g.seg += 1;
+      }
+    }
+    expect(rose).toBe(true);
+  });
+
+  it('숨긴 물림은 더는 비밀 풀에 없다', () => {
+    expect(SECRET_POOL.some(s => s.text === '물린 걸 숨기고 있다')).toBe(false);
   });
 });
