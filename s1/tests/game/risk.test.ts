@@ -52,9 +52,8 @@ describe('정차 위험 줄(정찰한 곳)', () => {
     for (const s of setups()) {
       const risk = stopRisk(stopGame(s, 0));
       const text = riskLines(risk).lines.join(' ');
-      expect(text.includes('죽는다'), s.seed).toBe(risk.maxDead > 0);
-      expect(text.includes('크게 다친다'), s.seed).toBe(risk.maxHurt > 0);
-      expect(text.includes('최악 '), s.seed).toBe(risk.maxDead > 1 || risk.maxHurt > 1);
+      expect(text.includes('사망 위험'), s.seed).toBe(risk.maxDead > 0);
+      expect(text.includes('중상 위험'), s.seed).toBe(risk.maxHurt > 0);
       expect(risk.maxDead + risk.maxHurt).toBeLessThanOrEqual(s.size);
     }
   });

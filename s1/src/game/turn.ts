@@ -236,9 +236,7 @@ export function stopRisk(g: Game): StopRisk {
   return { lam, pDeath, maxHurt, maxDead, guardRefused, horde: horde > 1.2, fresh: threat > 1, known: !!stop?.scout };
 }
 
-const NUM = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟'];
-
-/** 정차 화면의 위험 줄. 줄이 있으면 반드시 일어나고, '최악'은 넘지 않는 한계다.
+/** 정차 화면의 위험 꼬리표. 꼬리표가 있으면 그 피해가 1명 이상 반드시 일어나고, 내부 최악을 넘지 않는다.
  * 줄이 없으면 죽음과 중상은 없다(긁히고 삐는 정도는 있다). */
 export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; why: string[]; unknown: string | null } {
   const why: string[] = [];
@@ -247,8 +245,9 @@ export function riskLines(r: StopRisk): { lines: string[]; calm: string | null; 
   if (!r.known) return { lines: [], calm: null, why, unknown: '위험 모름. 정찰하지 않으면 무엇이 기다리는지 모른다.' };
   if (r.fresh) why.unshift('무리 흔적이 새롭다');
   const lines: string[] = [];
-  if (r.maxDead > 0) lines.push(r.maxDead > 1 ? `반드시 죽는다. 최악 ${NUM[r.maxDead]} 명.` : '한 명은 반드시 죽는다.');
-  if (r.maxHurt > 0) lines.push(r.maxHurt > 1 ? `반드시 크게 다친다. 최악 ${NUM[r.maxHurt]} 명.` : '한 명은 반드시 크게 다친다.');
+  // 프로스트펑크 1처럼 짧은 경고 꼬리표로 보인다(2026-10-07 사용자). 숫자는 안 보이지만, 뜨면 반드시 한 명 이상이다.
+  if (r.maxDead > 0) lines.push('사망 위험');
+  if (r.maxHurt > 0) lines.push('중상 위험');
   const calm = lines.length ? null : r.lam >= 0.2 ? '크게 다칠 일은 없어 보인다. 긁히고 삐는 정도.' : '조용해 보인다.';
   return { lines, calm, why, unknown: null };
 }

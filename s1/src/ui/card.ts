@@ -77,7 +77,7 @@ function stopCard(view: View): HTMLElement | null {
     h('div', { class: 'sheet__actions' },
       // 위험 줄은 준비를 바꿀 때마다 다시 계산된다. 줄이 있으면 반드시 일어난다.
       h('div', { class: cx('danger', risk.lines.length > 0 && 'is-on'), 'aria-live': 'polite' },
-        risk.lines.map(t => h('p', { class: 'danger__line' }, t)),
+        risk.lines.length ? h('p', { class: 'danger__tags' }, risk.lines.map(t => h('span', { class: 'danger__tag' }, '⚠ ', t))) : null,
         risk.calm ? h('p', { class: 'danger__calm' }, risk.calm) : null,
         risk.unknown ? h('p', { class: 'danger__calm' }, risk.unknown) : null,
         risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),
