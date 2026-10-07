@@ -24,7 +24,7 @@ export const P = Object.freeze({
   thrownHorde: 0.05, storeRisk: 0.03, coldCap: 6, pyreCoal: 1, pyreKinCrowd: 2, pyreLight: 1.05,
   // 정찰 대가(제안, 파밍 자동 파견과 같은 값): 정찰조 2명이 체류 일부를 써서 산출 ×0.8, 정찰조도 표결에서 빠진다.
   scoutSize: 2, scoutHaul: 0.8,
-  /** 먼저 보낸 정찰조 한 사람의 위험(제안): 장소 위험 1~3 × 바깥 기척 × 무리 × 경비대 경계 거부. 크게 다침 5%, 못 돌아옴 1.2% 단위 */
+  /** 먼저 보낸 정찰조 한 사람의 위험(제안): 장소 위험 1~3 × 바깥 기척 × 무리 × 경비대 경계 거부. 크게 다침 5%, 못 돌아옴 1.2% 단위. 기척이 고요(0.8)면 0 */
   scoutHurt: 0.05, scoutDeath: 0.012,
   repealCool: 2, repealRel: 10, hostileGrudge: 2, blackmailReputation: 3, grudgeDecay: 2,
   maxDealsPerSession: 3, promiseSegments: 3,
