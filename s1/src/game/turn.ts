@@ -12,7 +12,7 @@ import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAW
 import type { Comm, LootKey, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
-  addSecret, clamp, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
+  addSecret, clamp, CREW_BUSY, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -240,7 +240,9 @@ export function crewNames(g: Game, c: Comm, size: number): string[] {
   const scouts = g.stop?.scoutReport?.names ?? [];
   // 앓아누운 원래 대표도 내보내지 않는다(사람의 무게 A2).
   const sickRep = g.comms[c].sick?.rep.name;
-  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name) && p.name !== sickRep);
+  // 근신 중이거나 경비를 서는 사람도 못 나간다(S1b, K02 5).
+  const busy = CREW_BUSY.flatMap(f => f(g));
+  const alive = PROFILES.filter(p => p.community === c && !isGone(g, p.name) && p.age >= 16 && p.age <= 65 && !scouts.includes(p.name) && p.name !== sickRep && !busy.includes(p.name));
   if (alive.length === 0) return [];
   const start = (g.seg * 7) % alive.length;
   return Array.from({ length: Math.min(size, alive.length) }, (_, i) => alive[(start + i) % alive.length].name);
@@ -638,7 +640,8 @@ function biteTick(g: Game): void {
     if (g.seg >= b.due) {
       if (b.isolated) {
         journal(g, `격리된 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
-      } else if (!b.found) {
+      } else if (!b.found || !g.cards.some(k => k.kind === 'bite_found' && k.who === b.who)) {
+        // 숨긴 물림, 또는 드러났는데 아무도 처리하지 않은 채 기한이 온 물림(K02 1 보험: 무기한으로 남지 않는다).
         const bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
         g.injured += bitten;
         g.tension = clamp(g.tension + 8, 0, 100);

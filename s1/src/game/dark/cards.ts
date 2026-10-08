@@ -13,7 +13,7 @@ import {
 import type { Punish } from './cases';
 import { closeChronicle, nightmareSay, reaction } from './chronicle';
 import { ruleChosen, vigil } from './corpses';
-import { fill, guarded, guardsOut, postGuard, signRead } from './embers';
+import { fill, freeGuards, guarded, guardsOut, postGuard, signRead } from './embers';
 import {
   afterOrder, answerThreat, dropOrder, exeOptions, exeVoice, METHOD, orderOpen, roleLine, setExe, setMethod, startOrder, successP,
 } from './order';
@@ -53,7 +53,7 @@ function view(g: Game, card: Card): CardView | null {
         title: tier === 'kiche' ? '기척' : '임박', speaker: officer(g), focus: e.who, required: true,
         body: `${(solo ? card.vals?.who2 : card.who) ?? ''} ${read}`,
         choices: [
-          { label: '경비를 붙인다', say: '두 사람 붙여라. 밤에도 눈 떼지 마라.', effs: [], special: 'dark:guard', disabled: guarded(g, e) ? '이미 서 있다' : full ? '경비가 두 곳에 나가 있다' : undefined, extra: ['경비대 노출 +3', '공포 +2', ...(coupling ? ['꼬리칸 관계 −3'] : [])] },
+          { label: '경비를 붙인다', say: '두 사람 붙여라. 밤에도 눈 떼지 마라.', effs: [], special: 'dark:guard', disabled: guarded(g, e) ? '이미 서 있다' : full ? '경비가 두 곳에 나가 있다' : freeGuards(g).length < B.guardPair ? '경비대에 남은 사람이 모자라다' : undefined, extra: ['경비대 노출 +3', '공포 +2', ...(coupling ? ['꼬리칸 관계 −3'] : [])] },
           ...(boiler ? [{ label: '수석 기관사에게 맡긴다', say: `${g.comms.engine.leader.name}, 밤 교대는 네가 직접 봐라.`, effs: [], special: 'dark:engine', disabled: g.comms.engine.rel < 15 ? '기관실이 열차장을 따르지 않는다' : undefined }] : []),
           { label: '대표를 부른다', say: `${g.comms[e.who].leader.name}, 네 칸에서 무슨 말이 도는지 들어 보자.`, effs: [], special: 'dark:call' },
           { label: '모른 척한다', say: '쪽지 한 장에 경비를 뺄 수는 없다.', effs: [], special: 'dark:none' },
@@ -405,13 +405,14 @@ function pairView(g: Game, p: { a: SignLine; b: SignLine }): CardView {
   const { a, b } = p;
   const free = B.guardMax - guardsOut(g);
   const need = [a, b].filter(x => !guarded(g, x.e)).length;
+  const hands = Math.floor(freeGuards(g).length / B.guardPair);
   const same = a.e.who === b.e.who;
   const label = (x: SignLine, i: number) => (same ? `${i === 0 ? '첫째' : '둘째'} 일에 경비` : `${COMM_NAME[x.e.who]} 쪽에 경비`);
   const coupling = (x: SignLine) => x.tier === 'imm' && x.e.imm === 2 && x.e.sab === 'coupling';
   const boiler = [a, b].find(x => x.tier === 'imm' && x.e.imm === 2 && x.e.sab === 'boiler');
   const one = (x: SignLine, i: number, special: string): Choice => ({
     label: label(x, i), say: '두 사람 붙여라. 밤에도 눈 떼지 마라.', effs: [], special,
-    disabled: guarded(g, x.e) ? '이미 서 있다' : free < 1 ? '경비가 두 곳에 나가 있다' : undefined,
+    disabled: guarded(g, x.e) ? '이미 서 있다' : free < 1 ? '경비가 두 곳에 나가 있다' : hands < 1 ? '경비대에 남은 사람이 모자라다' : undefined,
     extra: [`경비대 노출 +${B.guardExpo}`, `공포 +${B.guardFear}`, ...(coupling(x) ? ['꼬리칸 관계 −3'] : [])],
   });
   return {
@@ -420,7 +421,7 @@ function pairView(g: Game, p: { a: SignLine; b: SignLine }): CardView {
     choices: [
       {
         label: '둘 다 경비를 붙인다', say: '두 곳 다 두 사람씩 붙여라.', effs: [], special: 'dark:guard:both',
-        disabled: need === 0 ? '이미 서 있다' : free < need ? '경비가 모자란다' : undefined,
+        disabled: need === 0 ? '이미 서 있다' : free < need || hands < need ? '경비가 모자란다' : undefined,
         extra: [`경비대 노출 +${B.guardExpo * need}`, `공포 +${B.guardFear * need}`, ...([a, b].some(coupling) ? ['꼬리칸 관계 −3'] : [])],
       },
       one(a, 0, 'dark:guard'),
