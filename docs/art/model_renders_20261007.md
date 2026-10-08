@@ -459,3 +459,23 @@ Match the modeling style of the attached image. Draw a 3D props sheet for washin
 - **네모 조각 무늬**: 공통 줄에 '네모 모자이크·위장무늬 금지'를 넣었는데도 F4, F5a, F5b 옷감이 네모 조각으로 나왔다. 첨부한 M4 PICK과 M3 PICK의 무늬를 그대로 따라 한 것으로 본다(추정). 사람 시트를 다시 뽑을 땐 첨부를 빼거나, 무늬가 매끈한 그림을 첨부로 쓴다.
 - **납작한 천 모자**: 금지 줄의 'caps with peaks'를 그림 모델이 납작한 노동자 모자에는 적용하지 않는다. 모자 카드 답이 나오면 직업 시트 줄도 그에 맞춘다.
 - **M5b 조끼**: 위 판정대로 검사 뒤 정한다.
+
+## 13단계 (K13): 열차장 털모자 확정 뒤 고칠 주문 (2026-10-08 09:10 KST)
+
+사용자가 모자 카드에서 B '털모자'를 골랐다(2026-10-08 08:53 KST, 추천은 맨머리였다). 두 번째 눈 가림 검사(K12c-1, Codex와 Claude 새 맥락 4번)에서 털모자는 4번 모두 군인으로 읽혔고, 단서는 위장무늬처럼 읽히는 얼룩진 외투, 동행 소총, 몸을 가로지르는 끈이었다. 그래서 털모자는 두고 그 셋을 뺀 판을 다시 뽑아 같은 검사를 돌린다. 그래도 군인으로 읽히면 사용자에게 다시 묻는다.
+
+K12c-2는 M5b v2 조끼를 두 모델 모두 방탄복이나 플레이트 캐리어로 읽었다. 로컬 워커가 조끼 줄만 '얇고 헐렁한 둥근 누빔, 판·네모 구획·어깨끈·주머니 없음'으로 바꾼 v3·v4를 뽑는 중이다. K12c-3은 F5a·F5b v2의 위장무늬와 가로지르는 띠(F5a 총끈, F5b 가방끈), T9 v2 빨랫감의 얼룩·덧댐과 단면 실내가 열차 칸인지 애매한 점을 짚었다. T8 v2는 걸리는 데가 없다.
+
+이번 주문부터 사람과 천이 나오는 그림은 공통 줄 두 곳을 바꿔 쓴다(작업 생성기 p13, 원래 공통 줄은 그대로 둠).
+- 누더기 줄: '여러 번 덧댄 다른 색 천, 허리띠와 끈, 그을음·기름·진흙 얼룩'을 빼고 '덧댐 몇 곳은 가까운 색, 옷 한 벌은 한 가지 단색, 고르게 낡음'으로 바꿨다. 다른 색 덧댐과 얼룩이 겹치면 위장무늬로 읽힌다.
+- 텍스처 줄: "Textures look hand-painted, smooth and blurred; cloth is plain and solid-coloured, never mottled, blotchy, spotted, checked or made of small repeated squares or patches that could read as camouflage, and never a pixel mosaic. Nobody wears a strap, belt or sling running diagonally across the chest or body: bags are carried in the hand or hang from one shoulder on the same side, and long guns are carried in the hands or hang straight down the back from one shoulder."
+- 징집병 줄은 소총이 '한쪽 어깨에서 등 뒤로 곧게 매달림'으로 바뀌었다(가로지르는 총끈 금지와 맞춤).
+
+| 작업 | 첨부 | 고칠 것 |
+|---|---|---|
+| M3 열차장 시트 털모자판 v1·v2 | M8 PICK(v5), 얼굴과 모자만 참고 | 귀덮개 털모자, 목도리, 무릎 길이 단색 갈색 외투, 손에 일지, 같은 쪽 어깨에 가방. 아래 게임 크기에 동행 둘(등불·배낭, 도끼·밧줄), 총 없음. M3·M4 PICK은 네모 무늬 때문에 첨부하지 않는다. |
+| F5a 직업 여덟 v3·v4 | 없음 | 옷 단색, 총은 등 뒤로 곧게, 사무원 옷깃의 금속 장식 없음, 챙 모자 대신 뜨개·털모자·후드. |
+| F5b 직업 여덟 v3·v4 | 없음 | 옷 단색, 가방은 손에, 무전기는 두 손에, 산림 감시원 외투는 녹색 말고 갈색. |
+| T9 빨래 소품 v3·v4 | T9 PICK(v2) 고치기 | 빨랫감은 단색 천에 덧댐 하나까지, 단면 실내는 둥근 지붕·객차 창·객차 의자로 객차 끝임을 분명히. |
+
+실행 순서와 세션 나눔은 [model_render_jobs_20261007/00_실행순서.md](model_render_jobs_20261007/00_실행순서.md) 13단계에 있다. M8 PICK은 털모자 v5를 그대로 둔다(동행 하나가 등에 멘 소총은 다음에 M8을 고칠 때 뺀다).
