@@ -572,3 +572,14 @@ func test_the_rim_run_stands_a_crouching_player_up() -> void:
 	hud.tick(0.2)
 	assert_true(p.running)
 	assert_false(p.crouched, "running and crouching are not both on")
+
+
+func test_heavy_inertia_is_the_default() -> void:
+	# User 10-08 morning list, answer C: heavy (0.2, 0.25, 0.4) first.
+	var Boot = load("res://game/boot.gd")
+	for row in Boot.CHOICES:
+		if row[0] == "inertia":
+			assert_eq(row[2][0][0], "now")
+	assert_false(game.opts.has("inertia"))
+	# An unset or unknown choice falls back to heavy too.
+	assert_eq(_run_then_stop_time("now"), _run_then_stop_time(""))

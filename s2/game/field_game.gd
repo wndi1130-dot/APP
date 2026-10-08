@@ -41,8 +41,8 @@ const ALLY_CAP: int = 12
 const DRIVE_START: float = 0.2          # seconds to get up to speed
 const DRIVE_STOP: float = 0.25          # seconds to stop from a walk
 const DRIVE_STOP_RUN: float = 0.4       # seconds to stop from a run
-## Start-screen choice to compare by hand (coordinator 18:19): first build,
-## middle (the default, field_unified 10 0f95fc0), short.
+## Start-screen choice to compare by hand (coordinator 18:19): heavy (the
+## first build's, default since the user's 10-08 morning answer C), middle, short.
 const INERTIA: Dictionary = {
 	"now": [0.2, 0.25, 0.4],
 	"mid": [0.12, 0.15, 0.25],
@@ -619,7 +619,7 @@ func _drive(p: Person, delta: float) -> void:
 		if not p.aim.active:
 			p.facing = atan2(dir.x, dir.z)   # aiming, you walk and keep the gun on it
 		want = p.speed(floor_kind) * clampf(push * 1.6, 0.35, 1.0)
-	var feel: Array = INERTIA.get(String(opts.get("inertia", "mid")), INERTIA["mid"])
+	var feel: Array = INERTIA.get(String(opts.get("inertia", "now")), INERTIA["now"])
 	if want > p.drive_speed:
 		p.drive_speed = minf(want, p.drive_speed + want / (float(feel[0]) * heavy) * delta)
 	else:
