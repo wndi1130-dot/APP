@@ -487,6 +487,17 @@ function baseView(g: Game, card: Card): CardView {
     case 'bite_found': {
       const bite = (g.hiddenBites ?? []).find(b => b.who === card.who);
       const canCut = !!bite && g.seg <= bite.at;
+      // 칸 안에 두었던 시신에게 물렸다(S1b, K02 1). 숨긴 일이 아니니 '열차장이 숨겼다'는 말과 신임 벌점은 없다.
+      if (card.text === 'corpse') return {
+        title: '시신에게 물렸다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_corpse',
+        body: `${card.who ?? '그 사람'}이(가) 두었던 시신에게 물렸다.`,
+        choices: withAfford(g, [
+          { label: '의무칸에서 자른다', say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
+            ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
+          { label: '격리한다', say: '빈 칸 끝에 따로 둬라. 마지막은 가족과 보내게 해라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '쏜다', say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
+        ]),
+      };
       return {
         title: '숨긴 물림이 드러났다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_found',
         body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
@@ -739,7 +750,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
     case 'bite_cut':
       g.hiddenBites = (g.hiddenBites ?? []).filter(b => b.who !== card.who);
-      journal(g, `숨겼던 ${card.who ?? '대원'}의 물린 곳을 의무칸에서 잘랐다.`, 'dark');
+      journal(g, `${card.text === 'corpse' ? '' : '숨겼던 '}${card.who ?? '대원'}의 물린 곳을 의무칸에서 잘랐다.`, 'dark');
       break;
     case 'bite_isolate':
       for (const b of g.hiddenBites ?? []) if (b.who === card.who) b.isolated = true;

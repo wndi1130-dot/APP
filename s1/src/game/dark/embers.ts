@@ -81,6 +81,17 @@ export function guarded(g: Game, e: Ember): boolean {
 export function guardsOut(g: Game): number {
   return g.dark!.embers.filter(e => guarded(g, e)).length;
 }
+/** 묶인 사람(K02 5): 근신 중인 사람과 경비를 서는 사람. 정차 작업조와 명령 실행자에서 빠진다. */
+export function busyIds(g: Game): string[] {
+  const d = g.dark;
+  if (!d) return [];
+  return [...d.confined.map(x => x.id), ...d.embers.filter(e => guarded(g, e)).flatMap(e => e.guardIds ?? [])];
+}
+/** 경비로 세울 수 있는 경비대 사람(대표와 묶인 사람 빼고). */
+export function freeGuards(g: Game): string[] {
+  const exe = g.dark?.order?.exeId;
+  return adults(g, 'guard', { noRep: true, except: [...busyIds(g), ...(exe ? [exe] : [])] }).map(p => p.id);
+}
 
 /** 불씨 하나. 같은 칸·같은 대상이 이미 있으면 새로 안 생긴다. 생기면 기척 징후 쪽지. */
 export function newEmber(g: Game, who: Comm, target: Target, cause: EmberCause, p = B.emberP): Ember | null {
@@ -200,6 +211,11 @@ export { killEmber };
 export function postGuard(g: Game, e: Ember): boolean {
   if (guarded(g, e)) return true;
   if (guardsOut(g) >= B.guardMax) return false;
+  const free = freeGuards(g);
+  if (free.length < B.guardPair) return false;
+  const ids: string[] = [];
+  while (ids.length < B.guardPair) { const id = dpick(g, free.filter(x => !ids.includes(x))); ids.push(id); }
+  e.guardIds = ids;
   e.guardUntil = g.seg + B.guardLen - 1;
   g.fear = clamp(g.fear + B.guardFear, 0, 100);
   g.comms.guard.base[3] += B.guardExpo;
@@ -258,7 +274,14 @@ function act(g: Game, e: Ember): void {
     return;
   }
   if (st === 2) {
-    sabotage(g, e, v);
+    const sick = sabotage(g, e, v);
+    if (sick > 0) {
+      // 사람이 다친 사보타주는 피해 사건이라 수사가 바로 열리고 군중 시계가 돈다(4.3·4.4, K02 2).
+      const kind = (e.sab ?? 'poison') as 'boiler' | 'coupling' | 'poison' | 'heating';
+      openCase(g, { kind, culprit: e.actor, victimComm: v, dead: false, clock: B.clockInjury, ember: e.id, where: placeOf(e, 2) });
+      darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: `${actLine(g, e, st, false)} ${sick}명이 앓아누웠다. 수사가 열린다.` });
+      return;
+    }
     // 사람이 안 다친 사보타주는 수사가 선택이다(카드에서 고른다).
     darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: actLine(g, e, st, false), vals: { sab: e.sab, v } });
     return;
@@ -313,8 +336,8 @@ function act(g: Game, e: Ember): void {
   darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: `${actLine(g, e, 4, false)} ${killed ? `${markName}이(가) 죽었다.` : `${markName}이(가) 다쳤다.`}${isGuarded ? ' 경비가 한 사람을 붙잡았다.' : ''} 수사가 열린다.` });
 }
 
-/** 4.3 사보타주의 손해 */
-function sabotage(g: Game, e: Ember, v: Comm): void {
+/** 4.3 사보타주의 손해. 앓아누운 사람 수를 돌려준다(식량 오염만 사람을 다치게 한다). */
+function sabotage(g: Game, e: Ember, v: Comm): number {
   const d = g.dark!;
   switch (e.sab) {
     case 'boiler':
@@ -328,7 +351,7 @@ function sabotage(g: Game, e: Ember, v: Comm): void {
       break;
     case 'poison':
       g.food -= B.poisonFood;
-      if (dr(g) < B.poisonSick) { g.injured += dr(g) < 0.5 ? 1 : 2; d.harm += 1; }
+      if (dr(g) < B.poisonSick) { const n = dr(g) < 0.5 ? 1 : 2; g.injured += n; d.harm += 1; return n; }
       break;
     case 'heating': {
       const c = COMMS.includes(e.target as Comm) ? (e.target as Comm) : v;
@@ -339,6 +362,7 @@ function sabotage(g: Game, e: Ember, v: Comm): void {
       break;
     }
   }
+  return 0;
 }
 
 /** 그 공동체가 사는 칸 가운데 장갑을 댄 비율(0~1). S1c 내정이 없는 판이면 0. */

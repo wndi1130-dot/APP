@@ -33,6 +33,8 @@ export interface Ember {
   imm: Stage;
   quiet: number;
   guardUntil: number;
+  /** 경비를 서는 경비대 두 사람(K02 5). 그동안 정차·명령에 안 나간다 */
+  guardIds?: string[];
   sab: SabKind;
   /** 수석 기관사에게 맡겨 막힌 보일러 */
   blocked: boolean;

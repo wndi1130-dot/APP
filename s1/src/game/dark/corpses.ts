@@ -2,7 +2,7 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { takeKinBody } from '../death';
 import { familyOf } from '../people';
-import { clamp, journal, lawActive } from '../state';
+import { addCard, clamp, journal, lawActive } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
 import { CHECK_LINES } from './lines';
@@ -104,6 +104,8 @@ export function corpseTick(g: Game): void {
     g.tension = clamp(g.tension + 3, 0, 100);
     if (hit) {
       (g.hiddenBites ??= []).push({ who: hit, comm: x.comm, at: g.seg, due: g.seg + 2, found: true });
+      // 모두가 본 물림이라 바로 의무장이 묻는다(K02 1). 숨긴 물림 카드의 문장·벌점은 쓰지 않는다.
+      addCard(g, { kind: 'bite_found', comm: x.comm, who: hit, text: 'corpse' });
       journal(g, `${COMM_NAME[x.comm]}에 두었던 ${x.name}이(가) 일어났다. ${hit}이(가) 물렸다.`, 'bad');
     } else {
       g.injured += 1;

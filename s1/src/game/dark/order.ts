@@ -3,12 +3,12 @@ import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { familyOf } from '../people';
 import { offend } from '../politics';
-import { clamp, CREW_EXTRAS, journal } from '../state';
+import { clamp, CREW_BUSY, CREW_EXTRAS, journal } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
 import { caseById, caught, coverUp, exposeOrderLines, openCase, settleTruth } from './cases';
 import { cross, scene } from './chronicle';
-import { newEmber } from './embers';
+import { busyIds, newEmber } from './embers';
 import {
   adults, alive, commOf, darkCard, dpick, dr, isRep, nameOf, rivalOf,
 } from './state';
@@ -48,11 +48,13 @@ function guardOf(g: Game, target: string): number {
 /** 실행자 후보와 막힌 까닭 */
 export function exeOptions(g: Game, target: string): Record<OrderExe, { id?: string; why?: string }> {
   const tc = commOf(g, target);
-  const guardPool = adults(g, 'guard', { noRep: true, except: [target] });
+  // 근신 중이거나 경비를 서는 사람은 보낼 수 없다(K02 5).
+  const busy = busyIds(g);
+  const guardPool = adults(g, 'guard', { noRep: true, except: [target, ...busy] });
   const rc = rivalOf(tc);
-  const rivalPool = rc ? adults(g, rc, { noRep: true, except: [target] }) : [];
+  const rivalPool = rc ? adults(g, rc, { noRep: true, except: [target, ...busy] }) : [];
   const bound = COMMS.filter(c => c !== tc && (g.comms[c].debt || g.leashes.some(l => l.comm === c)))
-    .map(c => g.comms[c].leader.personId).filter(id => id !== target && alive(g, id));
+    .map(c => g.comms[c].leader.personId).filter(id => id !== target && alive(g, id) && !busy.includes(id));
   return {
     guard: g.comms.guard.rel < 15 ? { why: '경비대가 열차장을 따르지 않는다' } : guardPool.length ? { id: guardPool[0].id } : { why: '보낼 사람이 없다' },
     rival: !rc ? { why: '원수가 없다' } : rivalPool.length ? { id: rivalPool[0].id } : { why: '보낼 사람이 없다' },
@@ -126,6 +128,8 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
     if (o.ref) { const line = settleTruth(g, o.ref, alive(g, o.target)); if (line) journal(g, line, 'bad'); }
     return;
   }
+  // 실행자가 그새 근신됐으면 근신이 끝날 때까지 기다린다(K02 5). 실행 직전에 다시 본다.
+  if (d.confined.some(x => x.id === exe)) return;
   // 정차 암살은 둘이 같은 작업조로 나가야 한다(J09 5). 아니면 명령은 다음 정차를 기다린다.
   if (where === 'stop' && !(witnesses.includes(name) && witnesses.includes(nameOf(g, exe)))) return;
   d.order = null;
@@ -253,9 +257,11 @@ export function answerThreat(g: Game, id: string, how: 'give' | 'stand' | 'confe
 }
 
 // 정차로 정한 명령이면 실행자와 대상이 그 정차 작업조 명단에 붙는다(명단 화면에 이름이 보인다). 먼저 다녀온 정찰조는 다시 안 나간다.
+CREW_BUSY.push(g => busyIds(g).filter(id => alive(g, id)).map(id => nameOf(g, id)));
+
 CREW_EXTRAS.push(g => {
   const o = g.dark?.order;
-  if (!o || o.method !== 'stop' || !o.exeId) return [];
+  if (!o || o.method !== 'stop' || !o.exeId || g.dark!.confined.some(x => x.id === o.exeId)) return [];
   const scouts = g.stop?.scoutReport?.names ?? [];
   return [o.exeId, o.target].filter(id => alive(g, id)).map(id => nameOf(g, id)).filter(n => !scouts.includes(n));
 });

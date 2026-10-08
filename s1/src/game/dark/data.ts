@@ -15,7 +15,7 @@ export const B = {
   assaultTension: 3, assaultDeath: 0.2, assaultDeathArmory: 0.1,
   assnTension: 3, assnBase: 0.5, assnGuard: 0.2, assnGuardCap: 0.2,
   // 4.2 경비
-  guardLen: 2, guardMax: 2, guardFear: 2, guardExpo: 3,
+  guardLen: 2, guardMax: 2, guardFear: 2, guardExpo: 3, guardPair: 2, confineExpo: 2,
   /** 들킨 성공 암살을 덮을 때(경비대 입막음, 제안 PR 41 리뷰) */
   hushFear: 5, hushExpo: 3,
   // 4.3 사보타주

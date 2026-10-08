@@ -31,6 +31,8 @@ export function darkPrep(g: Game): void {
   const d = g.dark;
   if (!d) return;
   d.confined = d.confined.filter(x => x.until >= g.seg);
+  // 근신은 경비대가 지켜보는 자리라 사람마다 구간마다 노출이 붙는다(4.4 표, K02 5).
+  g.comms.guard.base[3] += B.confineExpo * d.confined.length;
   escalate(g);
   // 칸이 차서 미뤄 둔 무기고 관행 카드는 자리가 나면 묻는다(폭행 임박이 판에 몇 번 없어 끝내 안 물을 수 있었다).
   if (d.armoryDue && d.armory === null && !segFull(g) && !g.cards.some(k => k.kind === 'dark:armory')) {
