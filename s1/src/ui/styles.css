@@ -810,7 +810,7 @@ small { font-size: 12px; }
 
 /* ---------- 선택이 바꾼 수치(fx.ts·fxplay.ts, presentation_motion 5b.6) ---------- */
 /* 색은 재질로 가른다: 늘어남은 호박색 빛과 호박색 테의 종이, 줄어듦은 그을음과 그을린 종이. 빨강은 부족 선 아래와 불만 의석이 늘 때만.
-   선을 넘은 칸 하나만 흔들리고 '주의'·'위험'이 찍힌다. 크게 바뀌면(is-big) 꼬리표와 부풂만 키운다. */
+   선을 넘은 칸 하나만 흔들리고 '주의'·'위험'이 찍힌다. 크게 나빠지면 위 띠 전체가 먼저 한 번 흔들린다(fx-band). 크게 바뀌면(is-big) 꼬리표와 부풂도 키운다. */
 .meter, .res, .band, .band__nums > span { position: relative; }
 .fx-up { --fx: var(--warm); --fx-paper: color-mix(in srgb, var(--paper) 88%, var(--warm)); --fx-ink: var(--ink-1); }
 .fx-down { --fx: #000; --fx-paper: color-mix(in srgb, var(--paper) 70%, #000); --fx-ink: var(--ink-2); }
@@ -843,6 +843,9 @@ small { font-size: 12px; }
 /* 선 넘음: 그 칸만 흔들리고 글자가 찍힌다. 좋은 쪽으로 돌아오면 글자가 벗겨진다. */
 .fx-cross { animation: fx-cross 300ms ease-out; }
 @keyframes fx-cross { 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+/* 크게 나빠짐(아침 목록 4번 B): 위 띠 전체가 한 번 흔들리고, 선 넘은 칸은 그 뒤에 한 번 더. */
+.top.fx-band { animation: fx-cross 300ms ease-out; }
+.top.fx-band .fx-cross { animation-delay: 300ms; }
 .fx-word {
   position: absolute; right: -4px; top: -6px; z-index: 21; pointer-events: none; padding: 0 3px;
   font-size: 12px; font-weight: 800; line-height: 16px; color: var(--warning); background: var(--bg);
@@ -863,7 +866,7 @@ small { font-size: 12px; }
 .fx-rel { font-size: 12px; line-height: 18px; }
 @keyframes fx-rels { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .fx-hit b, .fx-cross, .fx-down.fx-hit .meter__body, .fx-down.fx-hit .res__body { animation: none; }
+  .fx-hit b, .fx-cross, .top.fx-band, .fx-down.fx-hit .meter__body, .fx-down.fx-hit .res__body { animation: none; }
   .fx-tag, .fx-tag.is-late { animation: fx-rels 2s linear forwards; animation-delay: 0s; transform: translateX(-50%); }
   .fx-word { animation: fx-rels 2.2s linear forwards; }
 }

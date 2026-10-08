@@ -70,7 +70,7 @@ export function topBar(view: View): HTMLElement {
   const f = forecast(g);
   const fx = ui.fx;
   const rels = fx ? (Object.keys(fx.rel) as Comm[]) : [];
-  return h('header', { class: 'top' },
+  return h('header', { class: cx('top', fx?.band && 'fx-band'), ...(fx?.band ? { 'data-anim': `fx-${fx.id}-band` } : {}) },
     h('div', { class: 'top__meters' },
       meter('trust', '신임', g.trust, '--support', fx),
       meter('tension', '긴장', g.tension, '--discontent', fx)),

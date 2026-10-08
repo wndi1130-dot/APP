@@ -6,8 +6,11 @@ import type { Comm, Game } from '../game';
 // - 변화량은 보이는 값의 차이: 반올림한 새 값 − 반올림한 옛 값. 0이면 꼬리표도 없다.
 // - 색은 좋고 나쁨이 아니라 재질: 늘어남은 호박색 빛, 줄어듦은 그을음. 파랑은 지지 의석, 빨강은 불만 의석이 늘 때와
 //   자원이 부족 선 아래로 갈 때만 쓴다.
-// - 선을 넘을 때만 세게: 선 넘은 칸 하나만 흔들리고 '주의'·'위험'이 찍힌다. 위 막대 전체는 안 흔든다.
-// - 크게 바뀔 때(신임·긴장 5 이상, 자원 지금 값의 20% 이상)는 꼬리표와 부풂만 키운다.
+// - 선을 넘으면 그 칸 하나(가장 무거운 것)에 '주의'·'위험'이 찍힌다. 위 막대 전체는 안 흔든다.
+// - 크게 나빠지면(신임 −5·긴장 +5 이상, 자원 지금 값의 20% 이상 줄어듦, 이름 있는 사람의 죽음) 위 띠 전체를 한 번 흔든다
+//   (2026-10-08 사용자 아침 목록 4번 B, presentation_motion 5b.6 '크게 바뀔 때'). 선 넘은 칸은 띠 흔들림 뒤에 한 번 더 흔들린다.
+//   진동은 그대로 선 넘음과 죽음에만.
+// - 크게 바뀔 때는 꼬리표와 부풂도 키운다.
 // - 진동은 나쁜 쪽 선 넘음과 죽음에만, 한 번 40ms. 메뉴의 '진동'으로 끈다(동작 감소 설정과 따로).
 
 export type FxKey = 'trust' | 'tension' | 'coal' | 'food' | 'med' | 'lux';
@@ -34,8 +37,10 @@ export interface Fx {
   rel: Partial<Record<Comm, number>>;
   /** 불만·지지 의석 변화 */
   seats: { unrest: number; support: number };
-  /** 선 넘음 박자를 쓰는 칸 하나(가장 무거운 것). 이 칸만 흔들리고 글자가 찍힌다 */
+  /** 선 넘음 박자를 쓰는 칸 하나(가장 무거운 것). 이 칸에 글자가 찍힌다 */
   heavy: FxKey | null;
+  /** 위 띠 전체를 흔들 일: 크게 나빠짐이나 죽음(4번 B). 카드 한 장에 한 번 */
+  band: boolean;
   /** 진동할 일(나쁜 쪽 선 넘음, 죽음) */
   buzz: boolean;
   /** 날아가는 꼬리표 순서(최대 셋): 선 넘는 칸 → 나머지 */
@@ -104,8 +109,9 @@ export function fxDiff(before: FxSnap, g: Game): Fx | null {
   const died = after.deaths > before.deaths;
   if (Object.keys(d).length === 0 && Object.keys(rel).length === 0 && !seats.unrest && !seats.support && !died) return null;
   const changed = KEYS.filter(k => d[k]);
+  const band = died || changed.some(k => d[k]!.big && (k === 'tension' ? d[k]!.v > 0 : d[k]!.v < 0));
   const fly = [...changed.filter(k => d[k]!.word || d[k]!.red), ...changed.filter(k => !d[k]!.word && !d[k]!.red)].slice(0, 3);
-  return { id: nextId++, d, rel, seats, heavy, buzz: !!heavy || died, fly };
+  return { id: nextId++, d, rel, seats, heavy, band, buzz: !!heavy || died, fly };
 }
 
 /** 꼬리표 글: 부호와 정수 */
