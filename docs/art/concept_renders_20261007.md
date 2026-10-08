@@ -11,7 +11,7 @@
 ## 받는 사람에게 (로컬 워커)
 
 - 아래 글상자를 그대로 이미지 모델에 넣는다. 첨부할 그림은 각 항목에 적었다. 저장소 그림은 `docs/art/mockups/`에 있다(공개 저장소라 내려받아도 된다).
-- 결과는 **공개 저장소에 올리지 않는다.** 사용자 바탕화면 `화면컨셉_20261007\`에 `C1_field_v1.png`처럼 번호를 붙여 저장하고, 같은 그림을 이 스레드("화면 컨셉과 UI 연출")에 올려 평가받는다.
+- 결과는 **공개 저장소에 올리지 않는다.** 사용자 바탕화면 `좀비\화면컨셉_20261007\`에 `C1_field_v1.png`처럼 번호를 붙여 저장하고, 같은 그림을 이 스레드("화면 컨셉과 UI 연출")에 올려 평가받는다.
 - 한 항목은 두 장까지 뽑아 나은 쪽을 고른다. 고르지 못하면 둘 다 둔다.
 - 한글 글자는 그리게 하지 않는다. 짧은 영어 이름표는 자리표시로 괜찮다. 글자가 깨져도 된다.
 - 작품 이름은 프롬프트에 넣지 않는다. 넣으면 원작을 닮게 나온다([reference_analysis.md](reference_analysis.md) 4장).
@@ -193,7 +193,7 @@ Small labels 0, 2, 4 under each version only.
 
 ## 평가 (2026-10-07, 1차 결과 12장)
 
-그림은 공개 저장소에 올리지 않았다. 원본은 사용자 바탕화면 `화면컨셉_20261007\`, 사본은 프로젝트 파일 `art/concepts_20261007/`.
+그림은 공개 저장소에 올리지 않았다. 원본은 사용자 바탕화면 `좀비\화면컨셉_20261007\`, 사본은 프로젝트 파일 `art/concepts_20261007/`.
 
 - **전체**: 필드(C1)와 정치 화면(C5, C6)이 같은 게임으로 보인다. 법랑과 놋쇠 HUD, 어두운 날씨, 호박색 불빛이 통일됐다. 필드는 눈 때문에 정치 화면보다 밝은데 자연스럽다.
 - **C5 의회(v1을 기준으로 씀)**: 배경 생활(손가락질하는 사람, 아이 안은 여자, 수군거림)이 표결 정보를 가리지 않는다. 가장자리 긴장 얼룩은 성에처럼 약하게 나왔다. 고칠 것: 법안 창의 온기 +2가 하늘색이라 '하늘색은 지지에만' 규칙과 어긋난다. 기관실 명판 위에 십자처럼 보이는 모양이 있다.
@@ -304,7 +304,7 @@ Prop B, on the platform walkway in the middle: top strip a flat iron drain cover
 No warning text, no icons, no colored outlines; the props must read on their own at phone size. Blood and drag marks are small and dark brown, no gore. Not pixel art: a grounded, realistic 3D-rendered look with a painterly texture finish.
 ```
 
-공통 끝 두 줄(옷차림, 열차)을 붙인다. 저장은 바탕화면 `화면컨셉_20261007\C12_omen_states_v1.png`.
+공통 끝 두 줄(옷차림, 열차)을 붙인다. 저장은 바탕화면 `좀비\화면컨셉_20261007\C12_omen_states_v1.png`.
 
 ### C12 v1 평가 (2026-10-07 13:20)
 
