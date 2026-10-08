@@ -12,7 +12,7 @@
 
 **초안.** 법·카드·인물·시작 수치는 모두 출발값이고, 규칙의 기준은 코드 `s1/src/game/`이다(문서와 다르면 코드가 지금의 규칙). 다음 디테일 묶음은 '열차 정치'(소문, 눈보라, 라이프치히 뒤 노선 표결)로 문서 초안이 나왔다.
 
-**남은 것.** 바깥 검수 K01 높음 10개를 고친 PR 45가 CI를 기다린다(막는 테스트 12개 더함, 전체 948개 통과). 아침 결정 두 줄(위 띠 흔들림 B, 서막 약속 위반 가볍게)을 코드에 옮긴다. 정치 디테일 스레드가 넘긴 코드 다섯(측근 1.5배 반올림 치우침, 남은 아이 결속도, 유품 카드가 남은 아이 카드를 막음, 앓는 대표가 작업조에 뽑힘, 노인 밤 이탈). 이름 풀 점검이 끝나면 프로필을 다시 만든다. 열차 정치 묶음은 소문 시뮬레이션 결과를 보고 숫자를 붙인다.
+**남은 것.** 바깥 검수 K01 높음 10개를 고친 PR 45가 CI를 기다린다(막는 테스트 12개 더함, 전체 948개 통과). 아침 결정 두 줄(위 띠 흔들림 B, 서막 약속 위반 가볍게)을 코드에 옮긴다. 정치 디테일 스레드가 넘긴 코드 다섯(측근 1.5배 반올림 치우침, 남은 아이 결속도, 유품 카드가 남은 아이 카드를 막음, 앓는 대표가 작업조에 뽑힘, 노인 밤 이탈). 이름 풀 점검이 끝나면 프로필을 다시 만든다. 노인 카드 후속(politics_detail 6.3). 열차 정치 묶음은 소문 규칙 시뮬레이션(다음 세션에 맡김)을 보고 숫자를 붙인다. 연결기 카드('꼬리칸을 떼자')가 금지선에 걸리는지 S1b의 판단을 기다린다.
 
 **깊은 문서.** [s1a_politics_numbers.md](../design/briefs/s1a_politics_numbers.md)(수치), [politics_detail.md](../design/briefs/politics_detail.md)(디테일 후보, 열차 정치), [s1_political_prototype.md](../prototype/s1_political_prototype.md)(S1 기획서), [s1_content_guide.md](../prototype/s1_content_guide.md)(글 규격, 6장), [s1/README.md](../../s1/README.md)(코드 구성).
 
@@ -44,7 +44,7 @@
 
 **잰 것(시뮬레이션, 추정).** 동쪽 선로 끝의 무리는 40m에서 10m까지 약 29초, '무리가 가깝다'가 뜨는 30m에서는 약 20초가 남는다. 출발 기적을 울리면 승강장 둘레 망자가 3~13초 안에 10m 안으로 들어온다.
 
-**남은 것.** H3 판정과 피드백 반영. 효과음 파일(자리만 있음, 받기를 맡김). 로우폴리 열차 키트가 오면 폰 성능과 기관차 연기 입자 비용 재기. 하수도로 올라오는 무리의 여유 시간 재기. 부위별 상처를 영수증 판 2로 내보내기(3단계). 필드 숫자(매달린 망자 +4/+2, 정찰대 피해율, 붕대·처치 시간)는 모두 출발값이다.
+**남은 것.** H3 판정과 피드백 반영. 효과음 파일(자리만 있음, 받기를 맡김). 로우폴리 열차 키트가 오면 폰 성능과 기관차 연기 입자 비용 재기. 하수도로 올라오는 무리의 여유 시간 재기. 부위별 상처를 영수증 판 2로 내보내기(3단계). 바깥 정적 검수 K03의 높음 9개(잡힘이 안 풀려 물림으로 이어짐, 근접 공격이 창을 뚫음, 조준점과 다른 대상에 피해 등)를 최신 main과 대조해 고치기. 필드 숫자(매달린 망자 +4/+2, 정찰대 피해율, 붕대·처치 시간)는 모두 출발값이다.
 
 **깊은 문서.** [s2_station.md](../design/briefs/s2_station.md), [field_unified.md](../design/briefs/field_unified.md)(정찰대 8장, 조작 10장), [places.md](../design/briefs/places.md), [body_injury.md](../design/briefs/body_injury.md), [zombies.md](../design/briefs/zombies.md), [weapons.md](../design/briefs/weapons.md), [survival_detail.md](../design/briefs/survival_detail.md), [engine.md](../design/briefs/engine.md), [s2/README.md](../../s2/README.md).
 
@@ -112,4 +112,4 @@
 
 ## 11. 점검과 바깥 검토
 
-기획 점검(좀보이드, 프로스트펑크 2, This War of Mine에 비춰 현실감과 일관성)과 바깥 모델 검토 묶음이 [docs/design/review/](../design/review/)에 있다. 요약은 [06_summary.md](../design/review/06_summary.md), [07_outside_eye_triage.md](../design/review/07_outside_eye_triage.md)(새 항목 N1~N25를 주인별로 나눔), [09_market_review_answer.md](../design/review/09_market_review_answer.md)(재미 조건부, 상품성 조건부. 점검자는 시험판을 못 열고 문서로만 평가했다)에 있다. 옛 문장과 결정 반영 여부를 감사하는 Codex 점검 둘(C1, C2)은 결과를 기다린다. 망자의 제복·안전모로 장소를 알리는 places.md 줄이 망자 공통 금지선과 부딪치는지 필드 스레드가 확인 중이다.
+기획 점검(좀보이드, 프로스트펑크 2, This War of Mine에 비춰 현실감과 일관성)과 바깥 모델 검토 묶음이 [docs/design/review/](../design/review/)에 있다. 요약은 [06_summary.md](../design/review/06_summary.md), [07_outside_eye_triage.md](../design/review/07_outside_eye_triage.md)(새 항목 N1~N25를 주인별로 나눔), [09_market_review_answer.md](../design/review/09_market_review_answer.md)(재미 조건부, 상품성 조건부. 점검자는 시험판을 못 열고 문서로만 평가했다)에 있다. 옛 문장과 결정 반영 여부를 감사하는 Codex 점검 둘(C1, C2)은 결과를 기다린다. 바깥 검수 K05(금지선 표: 높음 16, 중간 74, 낮음 9)와 K06(문서 충돌 남은 32건)이 연구 가지 research/astra-20261008에 와 있고, 각각 S1b·문서 주인과 기획 점검이 확인한다. 망자의 제복·안전모로 장소를 알리는 places.md 줄이 망자 공통 금지선과 부딪치는지 필드 스레드가 확인 중이다.
