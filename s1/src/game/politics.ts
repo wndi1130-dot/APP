@@ -108,6 +108,11 @@ function baseBloc(g: Game, c: Comm, agenda: Agenda, seatCount: number): Bloc {
   return { seats: seatCount, absent, yes, und: present - yes - no, no, pool: 0, poolChance: 0, score, ideo };
 }
 
+/** 표를 움직이는 거래인가. 거절당한 뇌물은 자리만 쓰고 표는 못 움직인다(옛 저장은 글로 가린다). */
+export function dealHolds(d: Deal): boolean {
+  return !d.refused && d.label !== '뇌물을 거절당함';
+}
+
 /** 거래를 반영한 지금의 쐐기. */
 export function blocs(g: Game, agenda: Agenda, deals: readonly Deal[] = []): Record<Comm, Bloc> {
   const seatMap = seats(g);
@@ -119,7 +124,7 @@ export function blocs(g: Game, agenda: Agenda, deals: readonly Deal[] = []): Rec
       b.yes += moved;
       b.und -= moved;
     }
-    for (const deal of deals.filter(d => d.comm === c)) applyDeal(g, b, c, deal.tool);
+    for (const deal of deals.filter(d => d.comm === c && dealHolds(d))) applyDeal(g, b, c, deal.tool);
     for (const v of g.voteShift ?? []) if (v.comm === c) shiftVotes(b, v.n * voteSide(agenda, v.side));
     out[c] = b;
   }
@@ -284,7 +289,9 @@ export const COUNCIL_HOOKS: { open?: (g: Game) => void; vote?: (g: Game, agenda:
 export function openCouncil(g: Game, emergency = false): void {
   g.session += 1;
   // 적의는 새 잘못 없이 2회기가 지나면 하나 준다(3.7). 비상 소집으로 적의를 빨리 지우지는 못한다.
-  if (!emergency) for (const c of COMMS) {
+  // 비상 회기는 회기 수에 들어가지만 적의 시계는 그만큼 미룬다(K01 8): 정기 회기만 센다.
+  if (emergency) for (const c of COMMS) g.comms[c].lastOffense += 1;
+  else for (const c of COMMS) {
     const s = g.comms[c];
     if (s.grudge > 0 && g.session - s.lastOffense >= P.grudgeDecay) {
       s.grudge -= 1;
@@ -469,7 +476,7 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
     if (s.leader.trait === 'ideal') {
       // 이상주의자는 뇌물을 내밀면 폭로한다(3.3).
       exposeBribe(g, c);
-      council.deals.push({ comm: c, tool, label: '뇌물을 거절당함' });
+      council.deals.push({ comm: c, tool, label: '뇌물을 거절당함', refused: true });
       return { ok: false, text: `${s.leader.name}이(가) 뇌물을 의회 앞에서 내보였다.` };
     }
     journal(g, `${s.leader.name}에게 사치품 ${price}을(를) 건넸다.`, 'dark');
@@ -630,7 +637,7 @@ function vote(g: Game, decree: boolean): VoteResult | null {
     [flips[i], flips[j]] = [flips[j], flips[i]];
   }
   const passed = decree || yes >= need;
-  const result: VoteResult = { yes, no, absent, need, passed, byComm, flips, decree };
+  const result: VoteResult = { yes, no, absent, need, passed, byComm, flips, decree, secret: lawActive(g, 'secret_ballot') };
   council.result = result;
   if (!lawActive(g, 'secret_ballot') && !decree) g.fear = clamp(g.fear + 1, 0, 100);
   if (lawActive(g, 'guided_voting') && g.guidedLeft > 0 && !pre) {

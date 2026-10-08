@@ -6,7 +6,7 @@ import {
   workPower, workshopChief, workshopState, zoneAt, enableDark, josa, PLACES,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
-import { cx, h, s } from './dom';
+import { cx, h, raw, s } from './dom';
 import { CARS, fmt, signed } from './common';
 import type { CarDef, DomUi, Ui, View } from './common';
 import { bar, portrait } from './widgets';
@@ -671,7 +671,7 @@ export function domesticEnd(view: View): HTMLElement | null {
     // 아티팩트 창은 내려받기를 막는다. 기록은 펼쳐서 복사한다.
     h('details', { class: 'dom-export' },
       h('summary', null, '내정 기록(JSON) 펼치기'),
-      h('textarea', { class: 'dom-export__text', readonly: true, rows: 6 }, h6Export(g))));
+      h('textarea', { class: 'dom-export__text', readonly: true, rows: 6 }, raw(h6Export(g)))));
 }
 
 // ---- 입력 ----

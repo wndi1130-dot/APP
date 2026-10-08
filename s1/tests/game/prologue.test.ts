@@ -49,10 +49,12 @@ describe('서막', () => {
     throw new Error('다 데려오는 판을 못 찾았다');
   });
 
-  it('약속하고 하나라도 남기면 어긴 것(3.7 위반), 남은 사람은 승강장에 남고 첫 거래가 무겁다', () => {
+  it('약속하고 하나라도 남기면 어긴 것(서막만 가벼운 위반), 남은 사람은 승강장에 남고 첫 거래가 무겁다', () => {
     const g = started('pro-broken');
     const pop0 = g.comms.tail.pop;
     const trust0 = g.trust;
+    const { rel: rel0, fervor: fervor0, grudge: grudge0 } = g.comms.tail;
+    const tension0 = g.tension;
     pick(g, '약속한다');
     pick(g, '바로 돌아선다');
     const flags = storyOf(g).flags;
@@ -63,8 +65,10 @@ describe('서막', () => {
     for (const n of g.left ?? []) expect(isGone(g, n)).toBe(true);
     // 출발 레버가 걸리면 기적 전에 남은 이름을 묻고(5b.5), 떠나면 쪽지는 비운다.
     expect(platformNote(g)).toEqual({ names: g.left, near: true });
-    expect(g.trust).toBeLessThan(trust0);
-    expect(g.comms.tail.fervor).toBe(1);
+    // 서막만 가볍게(아침 목록 9번 B): 신임 −4, 꼬리칸 관계는 남긴 몫 −8에 어김 −10, 열기·긴장·적의는 그대로.
+    expect(g.trust).toBe(trust0 + PROLOGUE.brokenTrust);
+    expect(g.comms.tail.rel).toBe(rel0 + PROLOGUE.leftRel + PROLOGUE.brokenRel);
+    expect([g.comms.tail.fervor, g.tension, g.comms.tail.grudge]).toEqual([fervor0, tension0, grudge0]);
     expect(g.stats.promisesBroken).toBe(1);
     advance(g);
     expect(platformNote(g)).toBeNull();

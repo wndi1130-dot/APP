@@ -2,7 +2,7 @@ import { COMM_NAME, COMMS, LAWS } from '../data';
 import type { Comm } from '../data';
 import { MOTION_SOURCES, MOTIONS } from '../motions';
 import type { MotionDef } from '../motions';
-import { agendaTitle, aiAgendaPick, isLawAgenda, offend } from '../politics';
+import { agendaTitle, aiAgendaPick, dealHolds, isLawAgenda, offend } from '../politics';
 import { clamp, END_LINK, journal, seats, stageOf } from '../state';
 import type { Agenda, CouncilState, Game, LawAgenda, MotionAgenda, VoteResult } from '../state';
 import { B } from './data';
@@ -68,7 +68,7 @@ function verdict(g: Game, a: MotionAgenda, guilty: boolean): void {
   if (pre && pre.level === lv && pre.guilty !== guilty) g.comms[pre.comm].rel = clamp(g.comms[pre.comm].rel - 2, -100, 100);
   d.precedent[cs.kind] = { level: lv, guilty, comm };
   // 재판에서 표를 산 것은 가장 어두운 거래라 일대기에 따로 남는다.
-  if ((g.council?.deals ?? []).some(x => x.tool === 'bribe' || x.tool === 'blackmail' || x.tool === 'favor')) {
+  if ((g.council?.deals ?? []).some(x => dealHolds(x) && (x.tool === 'bribe' || x.tool === 'blackmail' || x.tool === 'favor'))) {
     cross(g, 'trial_bought');
     scene(g, 'trial_bought', 3, `${g.seg}구간, ${nameOf(g, s.id)}의 재판에서 표를 샀다.`, [s.id]);
   }

@@ -346,7 +346,14 @@ export const VIEW_FILTERS: ViewFilter[] = [];
 export function viewCard(g: Game, card: Card): CardView {
   let v = baseView(g, card);
   for (const f of VIEW_FILTERS) v = f(g, card, v);
-  return v;
+  return guardCosts(g, v);
+}
+
+/** 확장 카드(내정·S1b)와 거르개가 더한 선택지까지 마지막에 값을 따진다(K01 9). chooseCard도 이 보기로 고르니 실행 직전 검사도 된다.
+ *  모든 길이 막히면 카드에 갇히므로 그때만 원래대로 둔다. */
+function guardCosts(g: Game, v: CardView): CardView {
+  const choices = withAfford(g, v.choices);
+  return choices.some(ch => !ch.disabled) ? { ...v, choices } : v;
 }
 
 function baseView(g: Game, card: Card): CardView {

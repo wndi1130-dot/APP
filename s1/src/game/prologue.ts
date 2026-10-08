@@ -4,7 +4,7 @@ import type { CardView, Choice } from './cards';
 import { josa } from './josa';
 import { addCard, clamp, isGone, journal, PROFILES, rnd, storyOf } from './state';
 import type { Card, Game } from './state';
-import { breakPromise, keepPromise, setLever } from './turn';
+import { keepPromise, setLever } from './turn';
 
 // 서막: 볼슈틴 차고(first_leg_story 5장 '서막 흐름', 2026-10-07 18:20 사용자 결정 '서막에 한 바퀴').
 // 약속 → 저탄장 수색 → 출발 → 열차 안 첫 거래가 첫 10분에 한 바퀴 돈다. S1a엔 필드가 없어서 수색은 필드 결정 카드로 대신하고,
@@ -18,6 +18,9 @@ export const PROLOGUE = Object.freeze({
   leftRel: -8,
   /** 첫 거래를 거절하면 꼬리칸 관계(제안) */
   dealRefuseRel: -5,
+  /** 서막 약속을 어기면 신임과 꼬리칸 관계만 깎는다(2026-10-08 사용자 아침 목록 9번 B '서막만 가볍게'). 3.7의 열기·긴장·적의는 안 건다 */
+  brokenTrust: -4,
+  brokenRel: -10,
 });
 
 /** 수색 방식마다 데려오는 사람 수와 주운 석탄(주사위 범위, 양 끝 포함). 석탄 상한 8은 예전 '기다린다'의 +8.
@@ -107,6 +110,17 @@ function leftNames(g: Game, n: number): string[] {
   return out;
 }
 
+/** 서막만 가볍게 어긴다(9번 B). 어긴 기록(통계, S1b의 어긴 수)은 본 게임 약속과 같이 남는다. */
+function breakPrologue(g: Game): void {
+  const s = g.comms.tail;
+  s.promise = null;
+  g.trust = clamp(g.trust + PROLOGUE.brokenTrust, 0, 100);
+  s.rel = clamp(s.rel + PROLOGUE.brokenRel, -100, 100);
+  g.stats.promisesBroken += 1;
+  if (g.dark) g.dark.broken.tail += 1;
+  journal(g, `${COMM_NAME.tail}과(와)의 약속을 어겼다: 저탄장 운반조를 다 데려온다.`, 'bad');
+}
+
 function prologueChoose(g: Game, card: Card, choice: Choice): void {
   const flags = storyOf(g).flags;
   switch (choice.special) {
@@ -140,7 +154,7 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
       const promised = card.text === 'promised';
       if (!promised) flags.depot_promise = 'refused';
       else if (left === 0) { flags.depot_promise = 'kept'; keepPromise(g, 'tail', '저탄장 운반조를 다 데려온다'); }
-      else { flags.depot_promise = 'broken'; breakPromise(g, 'tail', '저탄장 운반조를 다 데려온다'); }
+      else { flags.depot_promise = 'broken'; breakPrologue(g); }
       journal(g, '볼슈틴 차고를 떠났다. 쟁기가 선로 위 망자를 밀어낸다. 라이프치히 중앙역까지 24구간.');
       return;
     }

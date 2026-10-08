@@ -15,6 +15,11 @@ function append(parent: Node, child: Child): void {
   else parent.appendChild(document.createTextNode(typeof child === 'number' ? String(Number.isInteger(child) ? child : Math.round(child)) : plainNumbers(child as string)));
 }
 
+/** 거르지 않은 글(K01 10). 복사해 가는 JSON·재현 묶음은 소수점이 그대로 있어야 다시 읽힌다. */
+export function raw(text: string): Text {
+  return document.createTextNode(text);
+}
+
 function setAttrs(element: Element, attrs: Attrs | null | undefined): void {
   if (!attrs) return;
   for (const [name, value] of Object.entries(attrs)) {

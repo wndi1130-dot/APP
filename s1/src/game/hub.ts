@@ -443,7 +443,8 @@ function hubChoose(g: Game, card: Card, choice: Choice): void {
     }
     case 'hub_persuade': {
       if (!plan) return;
-      const pn = persuadedCount(g, plan.n);
+      // 내린 사람 수는 카드가 이미 깎은 인구 그대로(K01 5). 신임을 먼저 치른 뒤 다시 세면 문턱을 넘나들어 명단과 어긋난다.
+      const pn = choice.effs.reduce((n, e) => n + (e.t === 'pop' && e.c === c ? -e.v : 0), 0);
       const st = hub.stash[c];
       if (st) { g.food += st.food; g.med += st.med; delete hub.stash[c]; }
       const promise = promiseFor(c);

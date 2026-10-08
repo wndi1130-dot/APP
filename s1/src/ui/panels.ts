@@ -2,7 +2,7 @@ import {
   COMMS, COMM_NAME, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, relStage, relationLine, seats, situation,
 } from '../game';
 import type { Comm, Game } from '../game';
-import { cx, h } from './dom';
+import { cx, h, raw } from './dom';
 import { icon } from './icons';
 import { fmt, signed } from './common';
 import type { View } from './common';
@@ -89,7 +89,7 @@ function reproSection(): HTMLElement {
     h('p', { class: 'sub' }, err ? `마지막 오류: ${shortText(err.msg)}` : '이상한 일이 생기면 위 묶음을 복사해 보내 줘. 시드, 최근 행동, 직전 저장이 들어 있다.'),
     h('details', { class: 'dom-export' },
       h('summary', null, '복사가 안 되면 펼쳐서 길게 눌러 복사'),
-      h('textarea', { class: 'dom-export__text', readonly: true, rows: 5 }, reproText())));
+      h('textarea', { class: 'dom-export__text', readonly: true, rows: 5 }, raw(reproText()))));
 }
 
 function settlePanel(view: View): HTMLElement | null {

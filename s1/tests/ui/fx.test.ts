@@ -36,6 +36,7 @@ describe('위 띠 변화', () => {
     g.trust = 33;
     const fx = fxDiff(before, g)!;
     expect(fx.heavy).toBeNull();
+    expect(fx.band).toBe(false);
     expect(fx.buzz).toBe(false);
     expect(fx.d.trust).toMatchObject({ word: null, peel: '위험', big: true });
   });
@@ -55,6 +56,34 @@ describe('위 띠 변화', () => {
     expect(fxTone(fx.d.trust!)).toBe('fx-up');
     expect(fx.d.food!.big).toBe(false);
     expect(fx.d.coal!.big).toBe(true);
+  });
+
+  it('크게 나빠지면 선을 안 넘어도 위 띠 전체를 흔들고, 글자·진동은 없다(아침 목록 4번 B)', () => {
+    const g = createGame('fx-6');
+    g.trust = 80; g.tension = 10; g.coal = 100; g.food = 100;
+    const at = (set: (x: typeof g) => void) => { const b = fxSnap(g); set(g); return fxDiff(b, g)!; };
+    for (const fx of [at(x => { x.trust = 75; }), at(x => { x.tension = 15; }), at(x => { x.coal = 75; })]) {
+      expect(fx.band).toBe(true);
+      expect(fx.heavy).toBeNull();
+      expect(Object.values(fx.d).every(c => c!.word === null)).toBe(true);
+      expect(fx.buzz).toBe(false);
+    }
+    // 작게 나빠지거나 크게 좋아지면 흔들지 않는다.
+    expect(at(x => { x.trust = 72; }).band).toBe(false);
+    expect(at(x => { x.food = 81; }).band).toBe(false);
+    expect(at(x => { x.trust = 90; x.coal = 120; x.tension = 2; }).band).toBe(false);
+  });
+
+  it('죽음은 위 띠를 흔들고, 선 넘음만 있으면 칸만 흔든다', () => {
+    const g = createGame('fx-7');
+    g.trust = 46;
+    const before = fxSnap(g);
+    g.trust = 44;
+    const fx = fxDiff(before, g)!;
+    expect([fx.band, fx.heavy]).toEqual([false, 'trust']);
+    const b2 = fxSnap(g);
+    g.deaths.push('누군가');
+    expect(fxDiff(b2, g)!.band).toBe(true);
   });
 
   it('죽음만 있어도 진동할 일이다', () => {

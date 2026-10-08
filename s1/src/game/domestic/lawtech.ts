@@ -122,7 +122,9 @@ export const LAW_ONLY_TECHS: TechId[] = ['e1', 'e2', 'e3', 'e5', 'm2', 'm3', 'x1
 export function usefulVariant(g: Game, tech: TechId): Variant | undefined | null {
   const vs: (Variant | undefined)[] = TECHS[tech].variants ? ['a', 'b'] : [undefined];
   if (!LAW_ONLY_TECHS.includes(tech)) return vs[0];
-  return vs.find(v => techLaws(tech, v).some(l => lawActive(g, l))) ?? null;
+  // 변형 없는 기술은 찾아도 undefined다. 찾은 것과 못 찾은 것(null)을 가른다(K01 6).
+  const i = vs.findIndex(v => techLaws(tech, v).some(l => lawActive(g, l)));
+  return i < 0 ? null : vs[i];
 }
 
 /** 설계도와 복원 단추에 붙는 쓸모 줄(내정 7.3 함정 막기, 2026-10-07 내정 스레드). 법과 상관없는 기술이면 null. */
