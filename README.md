@@ -4,6 +4,7 @@
 
 ## 문서
 
+- [docs/handbook/](docs/handbook/README.md): 개발 현황 핸드북. 지금 어디까지 왔는지 천천히 훑어볼 때 먼저 본다
 - [docs/handoff/session_start.md](docs/handoff/session_start.md): 새 세션 시작 안내. 가장 먼저 읽는다
 - [docs/design/decisions.md](docs/design/decisions.md): 확정 사항, 검토 중인 제안, 열린 질문
 - [docs/design/briefs/](docs/design/briefs/): 결정을 앞둔 주제의 브리프
