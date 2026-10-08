@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, bribePrice, currentAgenda, expected, lawActive,
+  COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, dealHolds, bribePrice, currentAgenda, expected, lawActive,
   openConditions, preVote, relStage, relationLine, toolStatus,
   needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS,
 } from '../game';
@@ -36,7 +36,7 @@ const TOOLS: { tool: DealTool; name: string; icon: IconName }[] = [
 ];
 
 /** 쐐기마다 좌석 상태를 각도 순서로 늘어놓는다. 개표 중이면 미정이 하나씩 갈린다. */
-function seatStates(g: Game, map: Record<Comm, Bloc>, result: VoteResult | null, revealed: number, secret: boolean): Record<Comm, SeatState[]> {
+export function seatStates(g: Game, map: Record<Comm, Bloc>, result: VoteResult | null, revealed: number, secret: boolean): Record<Comm, SeatState[]> {
   const out = {} as Record<Comm, SeatState[]>;
   const flipsByComm: Record<string, boolean[]> = {};
   if (result) {
@@ -54,7 +54,7 @@ function seatStates(g: Game, map: Record<Comm, Bloc>, result: VoteResult | null,
       for (let i = 0; i < pending; i += 1) list.push('und');
       for (let i = 0; i < b.no + fn; i += 1) list.push('no');
     } else if (secret) {
-      const promised = g.council?.deals.some(d => d.comm === c) ? b.yes + b.pool : 0;
+      const promised = g.council?.deals.some(d => d.comm === c && dealHolds(d)) ? b.yes + b.pool : 0;
       for (let i = 0; i < promised; i += 1) list.push('promised');
       for (let i = 0; i < b.seats - b.absent - promised; i += 1) list.push('hidden');
     } else {
@@ -65,6 +65,51 @@ function seatStates(g: Game, map: Record<Comm, Bloc>, result: VoteResult | null,
     }
     for (let i = 0; i < b.absent; i += 1) list.push('absent');
     out[c] = list;
+  }
+  return out;
+}
+
+/** 비밀 투표 개표(presentation_motion 5b, K01 2): 의석은 쐐기가 아니라 전체 수만 켜진다. 켜지는 자리는 회기마다 섞어
+ * 어느 쐐기 자리가 찬성으로 켜졌는지가 칸의 표를 흘리지 않게 한다(난수 상태는 쓰지 않는다). 부재는 공개라 칸 자리에 남는다. */
+export function secretStates(g: Game, map: Record<Comm, Bloc>, result: VoteResult, revealed: number): Record<Comm, SeatState[]> {
+  const shown = result.flips.slice(0, revealed);
+  const fy = shown.filter(f => f.yes).length;
+  let yes = COMMS.reduce((n, c) => n + map[c].yes, 0) + fy;
+  let no = COMMS.reduce((n, c) => n + map[c].no, 0) + shown.length - fy;
+  const slots: [Comm, number][] = [];
+  for (const c of COMMS) for (let k = 0; k < map[c].seats - map[c].absent; k += 1) slots.push([c, k]);
+  let x = (g.session * 7919 + g.seg * 104729) >>> 0 || 1;
+  for (let i = slots.length - 1; i > 0; i -= 1) {
+    x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+    const j = x % (i + 1);
+    [slots[i], slots[j]] = [slots[j], slots[i]];
+  }
+  const out = {} as Record<Comm, SeatState[]>;
+  for (const c of COMMS) out[c] = [];
+  for (const [c, k] of slots) {
+    out[c][k] = yes > 0 ? 'yes' : no > 0 ? 'no' : 'und';
+    if (yes > 0) yes -= 1; else if (no > 0) no -= 1;
+  }
+  for (const c of COMMS) for (let i = 0; i < map[c].absent; i += 1) out[c].push('absent');
+  return out;
+}
+
+/** 이 회기 화면의 투표 방식. 표결이 끝났으면 그 표결 때 방식을 따른다(K01 2: 비밀 투표 법 자체를 표결해도 뒤집히지 않는다). */
+export function ballotSecret(g: Game): boolean {
+  return g.council?.result?.secret ?? lawActive(g, 'secret_ballot');
+}
+
+/** 표결이 끝났으면 쐐기를 결과에서 되살린다(K01 3): 확정표 = 칸의 결과 − 갈린 표. 표결 뒤 바뀐 관계·옮긴 표·유도 투표로
+ * 다시 셈하지 않는다. 표결 전이면 지금 셈 그대로. */
+export function shownBlocs(g: Game, live: Record<Comm, Bloc>): Record<Comm, Bloc> {
+  const result = g.council?.result;
+  if (!result) return live;
+  const out = {} as Record<Comm, Bloc>;
+  for (const c of COMMS) {
+    const r = result.byComm[c];
+    const fl = result.flips.filter(f => f.comm === c);
+    const fy = fl.filter(f => f.yes).length;
+    out[c] = { ...live[c], seats: r.yes + r.no + r.absent, absent: r.absent, yes: r.yes - fy, no: r.no - (fl.length - fy), und: fl.length, pool: 0 };
   }
   return out;
 }
@@ -82,9 +127,9 @@ function hemicycle(view: View, map: Record<Comm, Bloc>, need: number, est: { mea
   const { g, ui } = view;
   const council = g.council!;
   const result = council.result;
-  const secret = lawActive(g, 'secret_ballot');
+  const secret = ballotSecret(g);
   const revealed = ui.count ?? (result ? result.flips.length : 0);
-  const states = seatStates(g, map, result, revealed, secret && !result);
+  const states = secret && result ? secretStates(g, map, result, revealed) : seatStates(g, map, result, revealed, secret && !result);
   const order: Comm[] = [];
   for (const c of WEDGE_ORDER) for (let i = 0; i < map[c].seats; i += 1) order.push(c);
   const used: Record<string, number> = {};
@@ -162,7 +207,7 @@ function billPanel(view: View): HTMLElement {
   // 법 안건 앞의 정기 신임 표결(S1b 5.3)은 바꿀 수도 거래할 수도 없다. 표결 뒤 주 단추가 이번 회기 안건으로 넘긴다.
   const pre = preVote(g);
   const canSwitch = !pre && !council.locked && council.deals.length === 0 && !council.result && council.options.length > 1;
-  const secret = lawActive(g, 'secret_ballot');
+  const secret = ballotSecret(g);
   if (!isLawAgenda(agenda)) {
     // 법이 아닌 안건(몫 나누기 등): 통과와 부결이 무엇을 하는지만 보인다.
     return h('div', { class: 'bill' },
@@ -236,13 +281,13 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
   const c = ui.selComm;
   const council = g.council!;
   if (!c) {
-    const secret = lawActive(g, 'secret_ballot');
+    const secret = ballotSecret(g);
     const result = council.result;
     const nums = (x: Comm) => {
       if (result && !result.decree && !secret) {
         return h('span', { class: 'num clist__nums' }, h('b', { class: 'is-yes' }, result.byComm[x].yes), h('span', null, '·'), h('b', { class: 'is-no' }, result.byComm[x].no));
       }
-      if (secret) return h('span', { class: 'num' }, council.deals.some(d => d.comm === x) ? '약속' : '?');
+      if (secret) return h('span', { class: 'num' }, council.deals.some(d => d.comm === x && dealHolds(d)) ? '약속' : '?');
       return h('span', { class: 'num clist__nums' },
         h('b', { class: 'is-yes' }, map[x].yes + map[x].pool), h('span', null, map[x].und), h('b', { class: 'is-no' }, map[x].no));
     };
@@ -337,7 +382,7 @@ export function councilScreen(view: View): HTMLElement {
   if (!agenda) {
     return h('section', { class: 'council' }, billPanel(view), h('p', { class: 'empty' }, '올릴 안건이 없다. 정산으로 간다.'));
   }
-  const map = blocs(g, agenda, council.deals);
+  const map = shownBlocs(g, blocs(g, agenda, council.deals));
   const need = agendaNeed(agenda);
   const est = expected(map);
   const result = council.result;
@@ -347,7 +392,7 @@ export function councilScreen(view: View): HTMLElement {
     const k = ui.count ?? result.flips.length;
     shownYes = COMMS.reduce((sum, c) => sum + map[c].yes, 0) + result.flips.slice(0, k).filter(f => f.yes).length;
   }
-  const secret = lawActive(g, 'secret_ballot');
+  const secret = ballotSecret(g);
   const big = result
     ? h('div', { class: 'big num' }, h('b', null, fmt(shownYes ?? 0)), h('span', null, ` / ${need}`))
     : tally(est, need, secret);

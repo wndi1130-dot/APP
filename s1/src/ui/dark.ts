@@ -1,6 +1,6 @@
 import { COMM_NAME, darkEnd, wallDetail, wallLine } from '../game';
 import type { Game } from '../game';
-import { h } from './dom';
+import { h, raw } from './dom';
 import type { View } from './common';
 import { shortText } from './names';
 
@@ -58,5 +58,5 @@ export function darkEndSection(view: View): HTMLElement | null {
         : h('p', { class: 'sub' }, '벽에 새긴 이름이 없다.')),
     h('details', { class: 'dark-end__h7' },
       h('summary', null, 'H7 기록(JSON) 펼치기'),
-      h('textarea', { readonly: true, rows: 5 }, JSON.stringify({ seed: g.seed, ...e.h7, picks: g.dark.h7 }))));
+      h('textarea', { readonly: true, rows: 5 }, raw(JSON.stringify({ seed: g.seed, ...e.h7, picks: g.dark.h7 })))));
 }

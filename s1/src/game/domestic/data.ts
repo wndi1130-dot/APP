@@ -223,6 +223,8 @@ export const ZONE0: Record<string, Zone> = {
 export const CARS0 = ['workshop', 'front', 'captain', 'guard', 'dining', 'medtech', 'store', 'cold', 'tail1', 'tail2', 'tail3'];
 export const ZONE_WARM: Record<Zone, number> = { front: 10, middle: 0, back: -10 };
 export const ZONE_WORK: Record<Zone, number> = { front: 1, middle: 0.8, back: 0.8 };
+/** 온실 산출(4.3 표): 앞 3 기준으로 가운데 ×0.75, 뒤 ×0.5. */
+export const ZONE_GREEN: Record<Zone, number> = { front: 3, middle: 2.25, back: 1.5 };
 export const CAR_COMM: Record<string, Comm> = { tail1: 'tail', tail2: 'tail', tail3: 'tail', medtech: 'medtech', guard: 'guard', front: 'front', engine: 'engine' };
 /** 공동체가 사는 칸 수(온기 효과를 칸 수로 나눈다, 4.5) */
 export const COMM_CARS: Record<Comm, number> = { tail: 3, medtech: 1, guard: 1, front: 1, engine: 1 };

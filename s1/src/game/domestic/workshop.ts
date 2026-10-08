@@ -2,7 +2,7 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE_WORK, prereqs, skillNeed } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE0, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
 import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
@@ -312,8 +312,11 @@ function convertGreenhouse(g: Game, car: string): void {
 export function greenhouseFood(g: Game): number {
   const d = g.dom;
   if (!d?.greenhouse) return 0;
+  // 처음 자리(4.4 표)에 있으면 표 값, 칸 순서를 바꿔 구역을 옮겼으면 지금 구역의 4.3 표 값(K01 7).
   const slot = GREENHOUSE_SLOTS.find(s => s.car === d.greenhouse);
-  return (slot?.food ?? 1.5) * techMult(g, 'm4');
+  const zone = zoneOf(g, d.greenhouse);
+  const base = slot && zone === ZONE0[slot.car] ? slot.food : ZONE_GREEN[zone];
+  return base * techMult(g, 'm4');
 }
 
 function trimToCap(g: Game, cap: number): number {

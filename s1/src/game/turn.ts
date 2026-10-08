@@ -10,7 +10,7 @@ import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, STAY } from './data';
 import type { Comm, LootKey, StayId } from './data';
-import { agendaOptions, agendaTitle, canDecree, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
+import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
@@ -463,6 +463,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     checkStopPromises(g, null, {});
     return stop.result;
   }
+  // 위험은 정차 상태를 바꾸기 전에 정한다(K01 4). 장작불이 시신을 태우면 불빛 배수가 빠져 예고한 피해와 달라진다.
+  const risk = stopRisk(g);
   const stay = STAY[stop.stay];
   g.coal -= stay.coal;
   burnPyre(g);
@@ -500,7 +502,6 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     const s = addSecret(g);
     notes.push(`문서에서 ${COMM_NAME[s.about]} 대표의 약점을 찾았다.`);
   }
-  const risk = stopRisk(g);
   if (risk.guardRefused) notes.push('경비대가 경계를 거부했다.');
   const names = crewNames(g, stop.crewComm, stop.crewSize);
   // 정해 둔 결과 그대로. 정찰했으면 위험 줄이 이걸 미리 보여 줬다.
@@ -813,7 +814,7 @@ function checkDuePromises(g: Game): void {
 
 function bribeDetection(g: Game): void {
   for (const deal of g.council?.deals ?? []) {
-    if (deal.tool === 'bribe' && deal.label !== '뇌물을 거절당함') {
+    if (deal.tool === 'bribe' && dealHolds(deal)) {
       const s = g.comms[deal.comm];
       if (rnd(g) < BRIBE_EXPOSE[s.leader.trait]) exposeBribe(g, deal.comm);
     } else if (deal.tool === 'favor' && rnd(g) < 0.15) {

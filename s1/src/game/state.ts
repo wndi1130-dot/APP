@@ -112,7 +112,8 @@ export interface StopResult {
 }
 
 export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail';
-export interface Deal { comm: Comm; tool: DealTool; label: string }
+/** refused: 이상주의 대표가 뇌물을 거절했다. 거래 자리는 썼지만 표는 움직이지 않는다(K01 1). */
+export interface Deal { comm: Comm; tool: DealTool; label: string; refused?: boolean }
 /** 의회 안건. 법(제정·폐지·추인)이거나 법이 아닌 안건(motion)이다(s1b_dark_path 12.3).
  * kind가 없는 안건은 법으로 읽는다(옛 저장 데이터와 테스트). */
 export type Agenda = LawAgenda | MotionAgenda;
@@ -135,6 +136,8 @@ export interface VoteResult {
   /** 개표 연출: 확정표가 먼저 앉고, 미정이 하나씩 갈린다. */
   flips: VoteFlip[];
   decree: boolean;
+  /** 표결한 그때 비밀 투표였나. 비밀 투표 법을 통과·폐지한 표결이어도 화면은 표결 때 방식을 따른다(K01 2) */
+  secret?: boolean;
 }
 
 export interface CouncilState {
