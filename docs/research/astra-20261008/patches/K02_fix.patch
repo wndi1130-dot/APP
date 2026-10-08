@@ -1,0 +1,67 @@
+diff --git a/s1/src/game/dark/order.ts b/s1/src/game/dark/order.ts
+--- a/s1/src/game/dark/order.ts
++++ b/s1/src/game/dark/order.ts
+@@ -15,7 +15,7 @@
+ import type { Order, OrderExe, OrderMethod, OrderWhy } from './state';
+ 
+ // 4.6 암살 명령, 4.7 정차를 이용한 죽음. 메뉴가 아니라 상황 카드의 '조용히 처리한다'에서만 열린다(1.3).
+-// 판당 두 번. 대상은 그 카드에 나온 사람뿐이다. 성공해도 수사가 열리고(사고로 꾸민 일은 들킬 때만), 실행자는 평생 약점을 쥔다.
++// 판당 두 번. 대상은 그 카드에 나온 사람뿐이다. 성공해도 수사가 열리고, 실행자는 평생 약점을 쥔다.
+ 
+ export const EXE_BONUS: Record<OrderExe, number> = { guard: 0.1, rival: 0.1, bound: -0.1 };
+ export const METHOD: Record<OrderMethod, { bonus: number; caught: number }> = {
+@@ -142,20 +142,15 @@
+       s.rel = clamp(s.rel - 10, -100, 100);
+       s.fervor = Math.min(3, s.fervor + 1);
+     }
+-    // 사고·정차로 꾸민 일은 들킬 때만 수사가 열린다. 칸 안 밤일은 늘 열린다(사람이 칸 안에서 죽었다).
++    // 성공한 명령도 수사를 연다. 들킬 확률은 실행자가 바로 붙잡히는 판정이다.
+     const detected = dr(g) < METHOD[o.method].caught;
+     const place = o.method === 'stop' ? '정차' : o.method === 'accident' ? '탄수차 승강대' : '통로';
+     scene(g, 'order', 4, `${g.seg}구간, ${place}에서 ${COMM_NAME[tc]} ${name}의 죽음을 명령했다.`, [o.target], witnesses.length ? witnesses : undefined);
+     if (o.method !== 'night' && !detected) {
+       journal(g, o.method === 'stop' ? `${name}이(가) 정차에서 돌아오지 않았다. 사고라고 적혔다.` : `${name}이(가) ${place}에서 떨어졌다. 사고라고 적혔다.`, 'dark');
+-      darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, text: 'hidden', ...(fam ? { vals: { kin: fam } } : {}) }, false);
+-      return;
+     }
+     const c = openCase(g, { kind: 'order', culprit: exe, victimComm: tc, victim: o.target, dead: true, clock: B.clockDeath, where: place, own: true });
+-    if (detected) {
+-      const s = c.sus.find(x => x.culprit);
+-      if (s) s.clues.push({ kind: 'witness', truth: true, line: `${nameOf(g, s.id)}이(가) 그 시각 ${place} 쪽에 있었다는 사람이 있다.`, seg: g.seg });
+-    }
++    if (detected) caught(g, c);
+     darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, n: c.id, ...(fam ? { vals: { kin: fam } } : {}) });
+     return;
+   }
+diff --git a/s1/src/game/dark/cases.ts b/s1/src/game/dark/cases.ts
+--- a/s1/src/game/dark/cases.ts
++++ b/s1/src/game/dark/cases.ts
+@@ -68,7 +68,7 @@
+   let culprit: Suspect;
+   if (isRep(g, a.culprit)) {
+     const c = commOf(g, a.culprit);
+-    const hands = adults(g, c, { noRep: true });
++    const hands = adults(g, c, { noRep: true, except: [a.victim ?? '', ...d.confined.map(x => x.id)] });
+     const hand = hands.length ? dpick(g, hands).id : a.culprit;
+     culprit = { id: hand, culprit: true, ...(hand !== a.culprit ? { proxyFor: a.culprit } : {}), facts: factsOf(g, hand, a.kind, a.victimComm), clues: [], acq: false };
+   } else {
+diff --git a/s1/src/game/dark/hooks.ts b/s1/src/game/dark/hooks.ts
+--- a/s1/src/game/dark/hooks.ts
++++ b/s1/src/game/dark/hooks.ts
+@@ -13,7 +13,7 @@
+ import { afterVote, darkCouncilOpen, trialPromises } from './council';
+ import { actAll, escalate, killEmber, newEmber } from './embers';
+ import { executorTick, runOrder } from './order';
+-import { byName, darkCard, nameOf, repGone } from './state';
++import { alive, byName, darkCard, nameOf, repGone } from './state';
+ 
+ // S1b가 S1a 구간 다섯 단계에 붙는 곳(3장 표). turn.ts는 이 파일의 함수만 부른다. g.dark가 없으면 모두 아무 일도 안 한다.
+ // 죽음(death.ts)과 의회(politics.ts)엔 훅 목록으로 붙는다. 이 파일을 불러오면 등록된다.
+@@ -49,6 +49,7 @@
+   const d = g.dark;
+   if (!d || !went) return;
+   for (const x of d.exile) {
++    if (!alive(g, x.id)) continue;
+     const name = nameOf(g, x.id);
+     (g.left ??= []).push(name);
+     g.comms[x.comm].pop = Math.max(1, g.comms[x.comm].pop - 1);
