@@ -1,0 +1,69 @@
+--- a/s2/game/actors/zombies.gd
++++ b/s2/game/actors/zombies.gd
+@@ -576,7 +576,9 @@
+ ## Release a grab (shoved off or victim died). Shove pushes the body back.
+ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
+ 	if z.is_empty() or z["state"] == "dead":
+ 		return
++	if z["state"] == "grab" and z["victim"] != null:
++		z["victim"].release_grab(z)
+ 	var away: Vector3 = z["pos"] - push_from
+ 	away.y = 0
+ 	if away.length() < 0.01:
+@@ -591,6 +593,8 @@
+ 
+ 
+ func knock_down(z: Dictionary) -> void:
++	if z["state"] == "grab" and z["victim"] != null:
++		z["victim"].release_grab(z)
+ 	z["state"] = "downed"
+ 	z["t"] = game.rng.randf_range(GET_UP.x, GET_UP.y)
+ 	z["victim"] = null
+--- a/s2/game/field_combat.gd
++++ b/s2/game/field_combat.gd
+@@ -327,6 +327,8 @@
+ 
+ ## Shove: a short cone in front, breaks a grab, sometimes knocks down.
+ func shove(p) -> void:
++	if p.swing_t > 0.0:
++		return
+ 	var rng: RandomNumberGenerator = game.rng
+ 	var m: Dictionary = p.mults()
+ 	p.swing_t = SHOVE_TIME / float(m["swing"])
+@@ -738,5 +740,5 @@
+ 	p.aim.stop()
+ 	p.reload_t = 0.0
+-	var t: float = Carry.swap_time("belt", p.carry_state()) / float(p.mults()["swap"])
++	var t: float = Carry.swap_time("belt", p.carry_state())
+ 	p.start_action("swap", "무기 바꿈", t, func() -> void: p.swap_weapons())
+ 
+--- a/s2/game/field_game.gd
++++ b/s2/game/field_game.gd
+@@ -584,5 +584,6 @@
+ 		p.cancel_action()
+ 	if p.action != "":
+-		p.action_t -= delta * float(p.mults()["hands"]) if p.action != "climb" else delta
++		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
++		p.action_t -= delta * rate
+ 		if p.action_t <= 0.0:
+ 			var done := p.action_done
+--- a/s2/game/field_actions.gd
++++ b/s2/game/field_actions.gd
+@@ -369,5 +369,5 @@
+ 			if spot["state"] == "intact":
+ 				game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+-				p.start_action("salvage", "뜯어내기", SALVAGE_TIME / float(p.mults()["hands"]), _salvaged.bind(p, id))
++				p.start_action("salvage", "뜯어내기", SALVAGE_TIME, _salvaged.bind(p, id))
+ 		"water_tower":
+ 			water_tower_card(p)
+--- a/s2/game/boot.gd
++++ b/s2/game/boot.gd
+@@ -38,7 +38,7 @@
+ 
+ 
+ func _show_menu() -> void:
+ 	if menu != null:
+-		menu.queue_free()
++		menu.get_parent().queue_free()
+ 	var layer := CanvasLayer.new()
+ 	add_child(layer)
