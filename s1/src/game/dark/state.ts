@@ -1,7 +1,7 @@
 import { createRng, nextRandom } from '../../core/rng';
 import type { RngState } from '../../core/rng';
 import { COMM_NAME, COMMS, OPPOSITE, REP_AGE, TRAIT_BAN, TRAITS } from '../data';
-import type { Comm } from '../data';
+import type { Comm, LawId } from '../data';
 import { addCard, drawPerson, isGone, journal, PROFILES } from '../state';
 import type { Card, Game, Profile } from '../state';
 import { B, TRAIN_ORDER } from './data';
@@ -113,6 +113,29 @@ export interface DarkStats {
   cases: number; solved: number; misjudged: number; trials: number; guilty: number; acquitted: number;
   scapegoats: number; lynches: number; protected: number; orders: number; ordersOk: number; revealed: number;
   corpses: number; risen: number; theft: number; cardsDeferred: number;
+  /** 둘째 묶음: 경비대 재판 수와 그 처형, 계엄 구간 수, 거둔 횟수 */
+  gtrials: number; gexec: number; martialSegs: number; lifted: number;
+}
+
+/** 계엄으로 들어선 문(5.5 표): 대권 연장, 의회가 맡김, 내전 직전·내전에서 선포, 편든 계엄, 경비대장의 계엄 */
+export type MartialDoor = 'extend' | 'council' | 'brink' | 'sided' | 'captain';
+export interface Martial {
+  door: MartialDoor;
+  /** 선포한 구간 */
+  since: number;
+  /** 거둘 때 돌아갈 기준(직전 신임 −15, 5.3) */
+  trustBefore: number;
+  /** 계엄 중 포고로 통과·폐지한 법(거둘 때 안건 하나로 묶어 추인) */
+  decreed: LawId[];
+  repealed: LawId[];
+  /** 쿠데타 경고가 뜬 뒤 되돌릴 기한(구간). null이면 경고 없음 */
+  coupWarnAt: number | null;
+  /** 경고가 한 번이라도 떴다(거둔 뒤 추인 보너스 없음) */
+  warned: boolean;
+  /** 계엄이 올린 경비대 배급 레버 값(계엄 동안 그 아래로 못 내린다) */
+  rationLocked: number;
+  /** 편든 계엄에서 누른 쪽 */
+  against?: Comm;
 }
 
 export interface DarkState {
@@ -175,6 +198,14 @@ export interface DarkState {
   scenes: Scene[];
   /** 이번 구간 정차 산출 배수(연결기 풀기, 보일러 고장) */
   haul: number;
+  /** 5.3 계엄(둘째 묶음). null이면 평시 */
+  martial: Martial | null;
+  /** 거둔 계엄: 다음 정기 회기의 포고 추인 안건이 +2를 받는지(쿠데타 경고 뒤 거두면 없음) */
+  martialLifted?: { seg: number; bonus: boolean; decreed: LawId[]; repealed: LawId[] };
+  /** 대권이 끝나는 카드에서 고른 것(안 고르면 돌려준다) */
+  powersPlan?: 'return' | 'ask' | 'extend';
+  /** 계엄으로 들어선 문의 기록(H7 15.1, 시뮬) */
+  martialDoors: MartialDoor[];
   /** 악몽이 남은 카드 수(10.5) */
   nightmareCards: number;
   /** 냉동칸·찬 객차에 둔 시신 가운데 확인을 마친 수(9.1: 확인한 시신은 일어나지 않는다) */
@@ -221,11 +252,12 @@ export function enableDark(g: Game): void {
     craftHit: [], prevFervor: zero(), prevGrudge: zero(), lackStreak: zero(), rationStreak: zero(), harm: 0, armory: null, practice: null, practiceAsked: 0,
     fresh: [], unchecked: [], order: null, ordersUsed: 0, executors: [], confined: [], exile: [], staff: { deputy: '', ration: '' }, joined: [],
     kept: zero(), broken: zero(), means: {}, crossed: [], nightmareUntil: -1, numb: false, precedent: {}, seg: { at: 0, n: 0 },
-    scenes: [], haul: 1, nightmareCards: 0, checkedStored: 0, checkedPyre: 0, councilAt: -1, confBy: null, confLeader: null,
+    scenes: [], haul: 1, martial: null, martialDoors: [], nightmareCards: 0, checkedStored: 0, checkedPyre: 0, councilAt: -1, confBy: null, confLeader: null,
     prevLeash: g.leashes.map(l => l.comm), prevDisgraced: COMMS.filter(c => g.comms[c].disgraced), h7: [], closed: false,
     stats: {
       signs: 0, imminent: 0, acts: 0, violent: 0, violentDeaths: 0, blocked: 0, cases: 0, solved: 0, misjudged: 0, trials: 0, guilty: 0,
       acquitted: 0, scapegoats: 0, lynches: 0, protected: 0, orders: 0, ordersOk: 0, revealed: 0, corpses: 0, risen: 0, theft: 0, cardsDeferred: 0,
+      gtrials: 0, gexec: 0, martialSegs: 0, lifted: 0,
     },
   };
   g.dark.staff = staffPick(g);

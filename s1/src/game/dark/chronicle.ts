@@ -70,7 +70,8 @@ export type Tone = 'hope' | 'hope_cost' | 'shade' | 'tragedy' | 'worth' | 'despa
 export function meansTotal(g: Game): number {
   const d = g.dark!;
   const chosen = (Object.keys(d.means) as MeansKey[]).reduce((s, k) => s + MEANS[k] * (d.means[k] ?? 0), 0);
-  return chosen + MEANS.blackmail * g.stats.blackmails;
+  // 거둔 계엄(−2)은 합을 0 아래로 내리지 않는다(5.3: 5가 3이 될 뿐이다).
+  return Math.max(0, chosen + MEANS.blackmail * g.stats.blackmails);
 }
 export function meansLayer(g: Game): Means3 {
   const d = g.dark!;
@@ -101,6 +102,7 @@ const TONE_LINE: Record<Tone, string> = {
 const CROSS_WORD: Record<MeansKey, string> = {
   assn_ordered: '암살 명령', executions: '처형', scapegoats: '희생양', frames: '누명', exiles: '하차 명령', lynch_allowed: '막지 않은 린치',
   summary: '즉결', trial_bought: '산 재판', blackmail: '협박', harsh_chosen: '가혹한 법',
+  martial: '계엄', martial_sided: '편든 계엄', martial_brink: '내전을 막은 계엄', martial_council: '의회가 맡긴 계엄', martial_lifted: '거둔 계엄', guard_exec: '경비대 재판의 처형',
 };
 
 // ---- 10.3 증언 ----
