@@ -14,9 +14,9 @@ import { chooseElder, elderPerson, elderPupil, elderSign, elderSpan, elderWhy } 
 import { hygieneWhy, resolveLice, resolveTyphus } from './hygiene';
 import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
-import { domCard, personById } from './state';
+import { domCard, personById, techMult } from './state';
 import type { DomPerson } from './state';
-import { breakPenalty, BREAK_LINES, CAR_NAME, greenhouseBase, jobCheck, relMoved, restoreCheck, setFullRule, setTarget, standDown, startRestore, techRelSides, techTitle } from './workshop';
+import { breakPenalty, BREAK_LINES, CAR_NAME, greenhouseBase, jobCheck, relDelta, restoreCheck, setFullRule, setTarget, standDown, startRestore, techRelSides, techTitle } from './workshop';
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
@@ -48,12 +48,9 @@ function needComm(card: Card): Comm {
   return card.comm;
 }
 
+/** 복원을 시작하면 움직일 관계(workshop.ts relDelta). E3 난방 배관은 추인 표결 때 움직여 비어 있다(7.3, pipe.ts). */
 function sidesEffs(g: Game, id: TechId, v?: Variant): Eff[] {
-  // E3 난방 배관의 관계 ±5는 시작이 아니라 의회 추인 표결 결과가 나올 때 움직인다(7.3, pipe.ts).
-  if (id === 'e3') return [];
-  if (relMoved(g, id, v)) return [];
-  const s = techRelSides(id, v);
-  return [...s.like.map(c => rel(c, D.techRel)), ...s.dislike.map(c => rel(c, -D.techRel))];
+  return (Object.entries(relDelta(g, id, v)) as [Comm, number][]).map(([c, n]) => rel(c, n));
 }
 
 const GIVE_LABEL: Record<string, string> = { front: '앞칸을 내준다', store: '창고칸을 내준다', cold: '냉동칸을 내준다', tail3: '꼬리칸 하나를' };
@@ -63,7 +60,8 @@ const GIVE_EXTRA: Record<string, string> = {
 
 /** 내줄 칸의 대가와 온실 산출(4.4). 산출은 그 칸이 지금 선 구역으로 센다. */
 function giveExtra(g: Game, car: string): string[] {
-  const food = +greenhouseBase(g, car).toFixed(2);
+  // 실제 산출(greenhouseFood)과 같이 기술 배수를 곱한다. 결함판이면 절반이다(PC 리뷰 PR 57 5번).
+  const food = +(greenhouseBase(g, car) * techMult(g, 'm4')).toFixed(2);
   return [...(GIVE_EXTRA[car] ? [GIVE_EXTRA[car]] : []), `온실 식량 +${food}/구간`];
 }
 
@@ -99,13 +97,17 @@ export function domView(g: Game, card: Card): CardView | null {
       const id = card.text as TechId;
       const def = TECHS[id];
       const vs = def.variants!;
+      // 갈래 카드를 연 채 다른 복원을 먼저 시작했으면 지금은 못 시작한다. 고르면 관계만 받고 복원은 안 되던 길을 막는다(PC 리뷰 PR 57 2번).
+      const ch = restoreCheck(g, id);
+      const why = card.n === 1 ? ch.defect : ch.full;
       return {
         title: '두 갈래', speaker: sp(chief(g, def.branch)), required: true,
         body: `${def.name}은(는) 두 갈래로만 맞출 수 있다. 한 번 고르면 이 길에선 못 바꾼다.`,
         choices: (['a', 'b'] as Variant[]).map(v => ({
           label: vs[v].label, say: vs[v].say, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`,
+          disabled: why,
           extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : []), ...(id === 'e3' ? ['다음 회기 추인 표결 뒤에 관계가 움직인다'] : [])],
-        })),
+        } as Choice)).concat(why ? [{ label: '나중에', say: '공방이 비면 다시 보자.', effs: [], special: 'dom:none' }] : []),
       };
     }
     case 'dom:short': {
