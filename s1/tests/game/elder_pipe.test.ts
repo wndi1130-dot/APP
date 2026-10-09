@@ -406,6 +406,21 @@ function openAndVote(g: Game, rel: number): void {
 }
 
 describe('E3 배관 추인(7.3)', () => {
+  it('같은 변형으로 취소·재시작해 다시 추인받아도 관계는 한 번만 움직인다(7.5 취소 악용)', () => {
+    const g = fresh('pipe-again');
+    const d = g.dom!;
+    d.techs.e1 = { stage: 'done', defect: false, progress: 3, need: 3 };
+    d.frags.engine = 10;
+    d.parts = 20;
+    const tail0 = g.comms.tail.rel;
+    for (let i = 0; i < 3; i += 1) {
+      expect(startRestore(g, 'e3', 'full', 'a')).toBe(true);
+      MOTIONS.pipe.onPass!(g, { kind: 'motion', motion: 'pipe' });
+      cancelRestore(g);
+    }
+    expect(g.comms.tail.rel).toBe(tail0 + D.techRel);
+  });
+
   it('복원을 시작해도 관계가 안 움직이고, 다음 회기에 배관 추인 안건이 오른다', () => {
     const g = fresh('pipe-start');
     const d = g.dom!;

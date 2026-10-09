@@ -44,7 +44,8 @@ export function ratifyPipe(g: Game, passed: boolean): void {
   st.pending = false;
   st.variant = result;
   if (!passed) d.pipeFlip = result;
-  moveRel(g, result);
+  if (d.pipeMoved !== result) moveRel(g, result);
+  d.pipeMoved = result;
   const sides = techRelSides('e3', result);
   const who = [
     sides.like.length ? `${sides.like.map(c => COMM_NAME[c]).join('·')}이(가) 반긴다` : '',

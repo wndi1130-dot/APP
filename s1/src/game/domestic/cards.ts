@@ -16,7 +16,7 @@ import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWri
 import { setBedOrder } from './medbay';
 import { domCard, personById } from './state';
 import type { DomPerson } from './state';
-import { breakPenalty, BREAK_LINES, CAR_NAME, jobCheck, restoreCheck, setFullRule, setTarget, standDown, startRestore, techRelSides, techTitle } from './workshop';
+import { breakPenalty, BREAK_LINES, CAR_NAME, greenhouseBase, jobCheck, relMoved, restoreCheck, setFullRule, setTarget, standDown, startRestore, techRelSides, techTitle } from './workshop';
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
@@ -48,18 +48,24 @@ function needComm(card: Card): Comm {
   return card.comm;
 }
 
-function sidesEffs(id: TechId, v?: Variant): Eff[] {
+function sidesEffs(g: Game, id: TechId, v?: Variant): Eff[] {
   // E3 난방 배관의 관계 ±5는 시작이 아니라 의회 추인 표결 결과가 나올 때 움직인다(7.3, pipe.ts).
   if (id === 'e3') return [];
+  if (relMoved(g, id, v)) return [];
   const s = techRelSides(id, v);
   return [...s.like.map(c => rel(c, D.techRel)), ...s.dislike.map(c => rel(c, -D.techRel))];
 }
 
 const GIVE_LABEL: Record<string, string> = { front: '앞칸을 내준다', store: '창고칸을 내준다', cold: '냉동칸을 내준다', tail3: '꼬리칸 하나를' };
-const GIVE_EXTRA: Record<string, string[]> = {
-  front: ['앞칸 온기 −15, 과밀 +20', '온실 식량 +3/구간'], store: ['자재 상한 0', '온실 식량 +1.5/구간'],
-  cold: ['안치한 시신을 내놓는다', '온실 식량 +1.5/구간'], tail3: ['꼬리칸 과밀 +15', '온실 식량 +1.5/구간'],
+const GIVE_EXTRA: Record<string, string> = {
+  front: '앞칸 온기 −15, 과밀 +20', store: '자재 상한 0', cold: '안치한 시신을 내놓는다', tail3: '꼬리칸 과밀 +15',
 };
+
+/** 내줄 칸의 대가와 온실 산출(4.4). 산출은 그 칸이 지금 선 구역으로 센다. */
+function giveExtra(g: Game, car: string): string[] {
+  const food = +greenhouseBase(g, car).toFixed(2);
+  return [...(GIVE_EXTRA[car] ? [GIVE_EXTRA[car]] : []), `온실 식량 +${food}/구간`];
+}
 
 /** 복원 확인 본문 끝의 쓸모 줄(7.3). 변형이 있으면 갈래 카드가 변형마다 붙인다. */
 function useText(g: Game, id: TechId): string {
@@ -83,8 +89,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '설계도가 맞았다', speaker: sp(chief(g, 'craft')), required: false,
         body: `${BRANCH_NAME[def.branch]}의 ${def.name}. ${half ? '조각이 반만 맞는다. 금 간 채로라도 돌릴 수는 있다.' : '조각이 다 맞았다.'} ${def.effect}.${useText(g, id)}`,
         choices: [
-          { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', effs: def.variants ? [] : sidesEffs(id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
-          ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', effs: def.variants ? [] : sidesEffs(id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
+          { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', effs: def.variants ? [] : sidesEffs(g, id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
+          ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', effs: def.variants ? [] : sidesEffs(g, id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
           later,
         ],
       };
@@ -97,7 +103,7 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '두 갈래', speaker: sp(chief(g, def.branch)), required: true,
         body: `${def.name}은(는) 두 갈래로만 맞출 수 있다. 한 번 고르면 이 길에선 못 바꾼다.`,
         choices: (['a', 'b'] as Variant[]).map(v => ({
-          label: vs[v].label, say: vs[v].say, effs: sidesEffs(id, v), special: `dom:variant:${v}`,
+          label: vs[v].label, say: vs[v].say, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`,
           extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : []), ...(id === 'e3' ? ['다음 회기 추인 표결 뒤에 관계가 움직인다'] : [])],
         })),
       };
@@ -187,7 +193,7 @@ export function domView(g: Game, card: Card): CardView | null {
         choices: [
           ...cands.map(car => ({
             label: GIVE_LABEL[car] ?? `${CAR_NAME[car]} 내준다`, say: say[car], effs: effs[car] ?? [], special: `dom:give:${car}`,
-            disabled: jobCheck(g, 'convert', car).why, extra: [...(GIVE_EXTRA[car] ?? []), '자재 −20, 공방 작업 6'],
+            disabled: jobCheck(g, 'convert', car).why, extra: [...giveExtra(g, car), '자재 −20, 공방 작업 6'],
           })),
           { label: '아직 아니다', say: '아직은 어느 칸도 못 내준다.', effs: [], special: 'dom:none' },
         ],

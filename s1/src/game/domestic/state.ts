@@ -160,8 +160,10 @@ export interface DomState {
   elder?: ElderArc;
   /** E3 추인이 부결돼 정해진 변형: 이 판에선 그 변형으로 고정된다(취소하고 다시 시작해도 못 바꾼다, 7.3) */
   pipeFlip?: Variant;
+  /** 배관 추인 표결로 관계를 마지막에 옮긴 변형. 같은 변형이면 다시 추인돼도 관계를 또 옮기지 않는다(취소·재시작 되풀이 막기, PR 57과 같은 까닭). */
+  pipeMoved?: Variant;
   /** 복원을 시작한 기록과 견습생을 붙인 기록(협상 조건 이행을 본다, 9.2) */
-  log: { restores: { seg: number; id: TechId }[]; apprentices: { seg: number; field: Field; other: boolean }[] };
+  log: { restores: { seg: number; id: TechId; v?: Variant }[]; apprentices: { seg: number; field: Field; other: boolean }[] };
   /** H6 재기(12장): 구간별 내정 시간과 조작 수, 내정 카드 선택 기록 */
   h6: { segs: Record<string, H6Seg>; picks: { seg: number; title: string; label: string }[] };
   stats: {

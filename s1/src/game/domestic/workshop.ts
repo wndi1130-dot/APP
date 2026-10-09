@@ -2,7 +2,7 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREENHOUSE_SLOTS, TECHS, TECH_IDS, ZONE0, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREEN_BODY, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
 import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
@@ -120,8 +120,9 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   const asked = pipe && !d.pipeFlip;
   d.techs[id] = { stage: 'restoring', defect: mode === 'defect', progress: 0, need: cost.work, ...(variant ? { variant } : {}), ...(asked ? { pending: true } : {}) };
   d.restoring = id;
-  d.log.restores.push({ seg: g.seg, id });
-  if (!relApplied && !pipe) {
+  const moved = relMoved(g, id, variant);
+  d.log.restores.push({ seg: g.seg, id, ...(variant ? { v: variant } : {}) });
+  if (!relApplied && !pipe && !moved) {
     const sides = techRelSides(id, variant);
     for (const c of sides.like) g.comms[c].rel = clamp(g.comms[c].rel + D.techRel, -100, 100);
     for (const c of sides.dislike) g.comms[c].rel = clamp(g.comms[c].rel - D.techRel, -100, 100);
@@ -129,6 +130,12 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   if (d.researchPick === id) d.researchPick = null;
   journal(g, `공방이 ${techTitle(g, id)} 복원을 시작했다${mode === 'defect' ? '(결함판)' : ''}.${asked ? ' 다음 회기에 배관 추인을 받아야 끝난다.' : ''}`);
   return true;
+}
+
+/** 이 기술(변형)로 관계가 이미 움직였나. 지난번 시작과 같은 변형으로 다시 시작하면 또 움직이지 않는다(7.5 취소 악용). */
+export function relMoved(g: Game, id: TechId, variant?: Variant): boolean {
+  const last = [...dom(g).log.restores].reverse().find(r => r.id === id);
+  return !!last && last.v === variant;
 }
 
 export function startFinish(g: Game, id: TechId): boolean {
@@ -314,14 +321,15 @@ function convertGreenhouse(g: Game, car: string): void {
   }
 }
 
+/** 그 칸을 온실로 쓰면 내는 식량(기술 배수 전): 지금 구역의 4.3 값 × 칸 몸체(화차 ×1.5). */
+export function greenhouseBase(g: Game, car: string): number {
+  return ZONE_GREEN[zoneOf(g, car)] * (GREEN_BODY[car] ?? 1);
+}
+
 export function greenhouseFood(g: Game): number {
   const d = g.dom;
   if (!d?.greenhouse) return 0;
-  // 처음 자리(4.4 표)에 있으면 표 값, 칸 순서를 바꿔 구역을 옮겼으면 지금 구역의 4.3 표 값(K01 7).
-  const slot = GREENHOUSE_SLOTS.find(s => s.car === d.greenhouse);
-  const zone = zoneOf(g, d.greenhouse);
-  const base = slot && zone === ZONE0[slot.car] ? slot.food : ZONE_GREEN[zone];
-  return base * techMult(g, 'm4');
+  return greenhouseBase(g, d.greenhouse) * techMult(g, 'm4');
 }
 
 function trimToCap(g: Game, cap: number): number {

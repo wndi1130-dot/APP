@@ -141,7 +141,7 @@ describe('K01 6: 변형 없는 기술도 법이 서 있으면 복원 후보', ()
 });
 
 describe('K01 7: 온실은 지금 구역만큼 낸다', () => {
-  it('처음 자리면 4.4 표 값, 구역을 옮기면 4.3 표 값', () => {
+  it('지금 구역의 4.3 값, 화차(창고칸)는 ×1.5', () => {
     const g = createS1cGame('k01-green');
     const d = g.dom!;
     d.techs.m4 = { stage: 'done' } as NonNullable<typeof d.techs.m4>;
@@ -156,6 +156,9 @@ describe('K01 7: 온실은 지금 구역만큼 낸다', () => {
     expect(greenhouseFood(g) / m).toBeCloseTo(3);
     d.greenhouse = 'store';
     expect(greenhouseFood(g) / m).toBeCloseTo(2.25);
+    // 창고칸을 가운데로 옮기면 이득이 생긴다(옛 코드는 2.25 그대로였다).
+    d.cars = d.cars.filter(c => c !== 'store'); d.cars.splice(3, 0, 'store');
+    expect(greenhouseFood(g) / m).toBeCloseTo(3.375);
   });
 });
 
