@@ -88,6 +88,7 @@ var crew: Array = []
 var raiders: Array = []
 var player: Person
 var paused: bool = false
+var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
 var seen_now: Dictionary = {}
 var seen_memory := PackedByteArray()
@@ -485,6 +486,8 @@ func _notification(what: int) -> void:
 	# A call, the home button or a dropped screen stops the field (reference harvest r1, #16).
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		interrupt()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+		welcome_back()
 
 
 func interrupt() -> void:
@@ -494,8 +497,17 @@ func interrupt() -> void:
 	if ended or paused:
 		return
 	paused = true
-	if hud != null:
-		hud.toast("멈췄다. 돌아오면 '계속'을 누른다.")
+	away = true
+
+
+## Back from an interrupt: one line, once (ui_states N4). Only when the app
+## paused the field; a pause the player chose is not announced again.
+func welcome_back() -> void:
+	if not away:
+		return
+	away = false
+	if hud != null and not ended:
+		hud.toast("멈춰 둔 자리다.")
 
 
 func _process(delta: float) -> void:
@@ -1313,6 +1325,9 @@ func _save(result: Dictionary) -> void:
 	var f := FileAccess.open("user://runs/receipt_%s.json" % stamp, FileAccess.WRITE)
 	if f:
 		f.store_string(result["receipt_json"])
+	elif hud != null:
+		# The run is over but its record is not on disk: say so once (ui_states N2).
+		hud.toast("기록 파일을 적지 못했다. 영수증은 끝 화면에서 복사할 수 있다.", hud.TOAST_WARN)
 	var t := FileAccess.open("user://runs/telemetry.jsonl", FileAccess.READ_WRITE if FileAccess.file_exists("user://runs/telemetry.jsonl") else FileAccess.WRITE)
 	if t:
 		t.seek_end()

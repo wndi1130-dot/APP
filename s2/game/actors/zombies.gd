@@ -73,7 +73,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	ring.outer_radius = 0.45
 	var rm := StandardMaterial3D.new()
 	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.albedo_color = Color(0.85, 0.3, 0.25)
+	rm.albedo_color = Color(0.78, 0.76, 0.72)   # off-white: no red in the field (fx colour rule)
 	ring.material = rm
 	mm2.mesh = ring
 	mm2.instance_count = 32
