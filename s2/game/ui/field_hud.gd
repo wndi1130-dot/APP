@@ -15,7 +15,7 @@ const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
 const DIM := Color(0.62, 0.62, 0.6)
 const WARN := Color(0.95, 0.55, 0.42)
-const FROST := Color(0.78, 0.88, 0.98)
+const FROST := Color(0.8, 0.81, 0.8)     # off-white, not sky blue (fx colour rule)
 const HOLD_TIME: float = 0.35
 const DRAG_PX: float = 28.0
 const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go: no shot
@@ -24,6 +24,11 @@ const STICK_DEAD: float = 10.0
 const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
 const STICK_STOPS_FIGHT: float = 0.3  # a push this hard away from the target calls off a fight
 const DOUBLE_TAP_MS: int = 300
+const TOAST_NORMAL := "normal"      # play and block notes (ui_states N1)
+const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap to close (N2)
+const TOAST_S: float = 3.5
+const TOAST_WARN_S: float = 6.0
+const TOAST_MAX: int = 4
 ## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
 const PX_PER_MM: float = 10.3
 const BRASS := Color(0.86, 0.72, 0.42)
@@ -533,8 +538,7 @@ func _tick_toasts(delta: float) -> void:
 		t["t"] -= delta
 		t["l"].modulate.a = clampf(t["t"] / 0.8, 0.0, 1.0)
 		if t["t"] <= 0.0:
-			t["l"].queue_free()
-			toasts.erase(t)
+			_toast_drop(t)
 
 
 func _tick_debug() -> void:
@@ -593,17 +597,59 @@ func _run_context(cb: Callable) -> void:
 
 # ---------------------------------------------------------------- messages
 
-func toast(text: String) -> void:
+## A note on the left. Normal ones fade in 3.5 s; a warn one stays 6 s, is
+## amber (never red) and goes away when tapped. One warn at a time, and a
+## normal note never pushes a warn out. Cries in the scene ("잡혔다!") stay normal.
+func toast(text: String, kind: String = TOAST_NORMAL) -> void:
 	if toast_box == null:
+		return
+	if kind == TOAST_WARN:
+		_toast_warn(text)
 		return
 	var l := _label(text, 20, INK)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	l.add_theme_constant_override("outline_size", 6)
 	toast_box.add_child(l)
-	toasts.append({"l": l, "t": 3.5})
-	while toasts.size() > 4:
-		var old: Dictionary = toasts.pop_front()
-		old["l"].queue_free()
+	toasts.append({"l": l, "t": TOAST_S, "kind": TOAST_NORMAL})
+	while toasts.size() > TOAST_MAX:
+		var oldest: Dictionary = toasts[0]
+		for t in toasts:
+			if t["kind"] == TOAST_NORMAL:
+				oldest = t
+				break
+		_toast_drop(oldest)
+
+
+func _toast_warn(text: String) -> void:
+	for t in toasts.duplicate():
+		if t["kind"] == TOAST_WARN:
+			_toast_drop(t)
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	b.custom_minimum_size = Vector2(480, 0)
+	b.add_theme_font_size_override("font_size", 20)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.13, 0.12, 0.1, 0.94)
+	sb.border_color = AMBER
+	sb.set_border_width_all(1)
+	sb.border_width_left = 4
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(10)
+	for state in ["normal", "hover", "pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(state, sb)
+	toast_box.add_child(b)
+	var entry := {"l": b, "t": TOAST_WARN_S, "kind": TOAST_WARN}
+	toasts.append(entry)
+	b.pressed.connect(_toast_drop.bind(entry))
+
+
+func _toast_drop(entry: Dictionary) -> void:
+	if is_instance_valid(entry["l"]):
+		entry["l"].queue_free()
+	toasts.erase(entry)
 
 
 func radio(text: String) -> void:
