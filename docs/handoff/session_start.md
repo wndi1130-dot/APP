@@ -1,52 +1,56 @@
 # 새 세션 시작 안내
 
-작성: 2026-10-06 · 고침: 2026-10-07 · 새 Claude 세션(Opus, Fable 등)이 가장 먼저 읽는 문서다.
+작성: 2026-10-06 · 고침: 2026-10-09 · 새 Claude 세션(Opus, Fable 등)이 가장 먼저 읽는 문서다.
+
+지금 무엇이 어디에 있는지는 [개발 현황 핸드북](../handbook/README.md)에 더 자세히 있다. 다른 계정의 프로젝트에서 이어 가는 첫 세션이면 [핸드북의 옮기기 절](../handbook/working.md#다른-계정-프로젝트로-옮길-때)부터 본다.
 
 ## 지금 단계
 
-- 1단계(S1a 정치)는 끝났다. 사용자가 PR 20 플레이 빌드를 해 보고 관문 H1(정치 거래가 잡무가 아니라 재미있는가)을 통과시켰다(2026-10-07). 후기 반영과 S1c·몸과 부상에서 넘긴 묶음도 PR 20 브랜치에 들어갔다.
-- 엔진은 갤럭시 S22 성능 시험을 통과해 Godot 4.7.2를 그대로 쓴다(PR 22 병합, s2/). 그림은 전부 실시간 3D다.
-- 지금 나란히 하는 일(2026-10-07 11:52 사용자 '기획 점검과 제작을 같이'): 기획 점검, S1b 어두운 길 설계, S1c 내정 코드, S2 파밍 회색 상자 제작.
-- s1/에 S1 코드가 있다: 콘텐츠 검사기(A1), 핵심 로직(A2), 프로필 200명 생성기(A3), Gemini 문장 생성(A5), S1a 화면(A4). 사용자가 H1을 판정한 플레이 빌드는 PR 20 가지에 있고 main에는 아직 안 합쳐졌다.
-- ref/에 레퍼런스 자료가 있다: 이름 풀(B1), 좀보이드 캐릭터 생성(B2), 증기기관차 운용(B3), 철도망(B4), 장소 유형(B5), 좋아하는 것·싫어하는 것(B6), 대사 레퍼런스(B7), 첫 구간 지도(ref/map/).
+- 1단계 S1a(정치 거래)는 끝났다. 사용자가 관문 H1(정치 거래가 잡무가 아니라 재미있는가)을 통과시켰다(2026-10-07). 플레이 빌드는 웹 v22이고 코드는 모두 main에 있다(PR 20·45·46 등).
+- S1b 어두운 길, S1c 내정, S2 필드 회색 상자를 나란히 만들고 있다.
+  - S1b: 핵심 묶음 코드가 main에 있고 판에서는 기본 꺼짐. 켜기 전 필수 셋은 고쳤고(PR 46), 높음 둘(K02 3·4)이 남았다. 관문 H7.
+  - S1c: 기능 플래그로 코드가 들어갔다(메뉴 '내정 켠 새 판'). 사용자가 H6를 판정할 차례다.
+  - S2: Godot 4.7.2 술레후프 역 회색 상자. 빌드 39(관성 무거움 기본)로 사용자가 H3를 판정할 차례다.
+- 엔진은 갤럭시 S22 성능 시험을 통과해 Godot 4.7.2를 쓴다. 그림은 전부 실시간 3D다.
+- 캠페인 정차 표는 확정했다(2026-10-08). 실제 이름 14곳, 나머지는 이름 없는 생성 역, 신호 지점은 지어낸 송신소다(first_leg_story 8.1~8.3).
+- 2026-10-08에 모든 스레드가 마무리 요약을 남기고 한 번 멈췄다. 그 뒤 새로 정한 것은 없다.
 
-## 2026-10-07에 정한 것 (자세한 건 decisions.md)
+## 최근 정한 것 (자세한 건 decisions.md)
 
-- 엔진: Godot 4.7.2(GDScript). 갤럭시 S22 성능 시험을 통과해 Godot을 그대로 쓴다(engine.md 8장, PR 22 병합). 정치는 S3 전까지 웹(TypeScript)에서 만들고 S3 시작 때 한 번 옮긴다. 그림은 열차, 칸 안, 사람, 좀비, 필드, 정차 장면 모두 실시간 3D다(2026-10-07 사용자). 텍스처·뼈대가 붙은 실제 3D 모델이 나오면 같은 화면으로 다시 잰다.
-- 그림: 월드와 홈은 픽셀이 아니라 좀보이드식 그래픽이다. UI는 매끈한 두 재질(계기·단추는 법랑과 놋쇠, 서류는 종이)이고, 지나온 정차 수 대비 희생 비율만큼 낡는다. 아트를 다룰 때 [docs/art/reference_analysis.md](../art/reference_analysis.md)를 먼저 본다.
-- 정차 연출: 단면으로 달리다 정차하면 끼익 소리와 로딩, 카메라가 옆면에서 약간 앞쪽으로 돌아 역을 보여 주고, 내리는 모습이 정치 상태에 따라 달라진 뒤 사선 탑뷰 필드로 넘어간다.
-- 첫 구간(볼슈틴 → 라이프치히): 무한모드 첫 런과 캠페인이 함께 쓰는 서막이다. 출발은 망자가 와서 앞당겨지고, 필드 정차는 5곳, 라이프치히는 허브 장면이다.
-- 음악: 열차 안에서 나는 음악(노래, 축음기, 라디오, 선전 방송)에 현악 중심 메인 악보를 얹는다.
-- 수제 총 품질은 걸림이 아니라 조준 원과 닳는 속도에 걸린다.
+- 10-08 아침 목록 30개와 카드 답: 몸 관성 무거움(0.2·0.25·0.4초), 위 띠는 선을 넘을 때와 크게 나빠질 때 모두 흔듦, 의회 외침은 AI 음성(결제는 사용자), 서막 약속을 어기면 신임 −4·꼬리칸 −10만, 열차장 몫을 꼬리칸으로 돌리는 단추, 캠페인은 1막만 무료, 유료판은 한 번 사는 해금만, 열차장은 털모자.
+- 꼬리칸 연결기 카드는 위협만 둔다. 실제로 풀지 않고, 거절하면 파업이나 원한이며, 앞칸이 떼자는 안건은 없다.
+- 캠페인 정차 거르기: '역에서 보이는 곳' 기준, '모름'은 지도로 다시, 일반 피해자 추모비도 걸림으로 셈. 1막 마지막 역은 Greiffenberg, 신호 지점은 '브란덴부르크 북동부'의 지어낸 옛 송신소.
+- PC 옵시디언 위키의 이 게임 트랙은 세션 시작 회상에 등재하지 않는다.
 
 ## 읽는 순서
 
 1. [docs/design/decisions.md](../design/decisions.md): 확정 사항, 검토 중인 제안, 열린 질문. 모든 논의의 출발점이다.
-2. [docs/design/briefs/first_slice_scope.md](../design/briefs/first_slice_scope.md): 첫 검증판 S1 → S2 → S3의 범위.
-3. [docs/prototype/s1_political_prototype.md](../prototype/s1_political_prototype.md): S1 기획서(S1a 거래, S1b 어두운 길, S1c 내정). 수치는 [briefs/s1a_politics_numbers.md](../design/briefs/s1a_politics_numbers.md).
-4. [docs/prototype/s1_content_guide.md](../prototype/s1_content_guide.md): 콘텐츠 가이드(스키마, 문체, 캐릭터 바이블).
-5. 주제별 브리프([docs/design/briefs/](../design/briefs/)): 엔진 [engine.md](../design/briefs/engine.md), 필드 [field_unified.md](../design/briefs/field_unified.md)와 [s2_station.md](../design/briefs/s2_station.md), 이야기 [first_leg_story.md](../design/briefs/first_leg_story.md), UI 연출 [presentation_motion.md](../design/briefs/presentation_motion.md), 소리 [sound_music.md](../design/briefs/sound_music.md), 열차장 [character_creation.md](../design/briefs/character_creation.md).
-6. [docs/handoff/codex_review.md](codex_review.md): 지금까지 코드와 레퍼런스 작업의 기록. S2 지시서는 [s2_perf_spike.md](s2_perf_spike.md).
-7. 아트를 다룰 때: [docs/art/reference_analysis.md](../art/reference_analysis.md), 시안 주문서 [concept_renders_20261007.md](../art/concept_renders_20261007.md)와 [model_renders_20261007.md](../art/model_renders_20261007.md). [image_prompts.md](../art/image_prompts.md)는 2026-10-06 픽셀 시안 기록이다.
-8. 필요할 때: [docs/research/gap_fill.md](../research/gap_fill.md)(증기기관차·이름 보충 조사), [docs/research/프로스트펑크2 정치 시스템 분석.md](../research/프로스트펑크2%20정치%20시스템%20분석.md), [ref/](../../ref/).
+2. [docs/handbook/](../handbook/README.md): 지금 상태, 기다리는 것, 다음 할 일, 정할 것, 빌드 받는 법, 일하는 방식.
+3. [docs/design/briefs/first_slice_scope.md](../design/briefs/first_slice_scope.md): 첫 검증판 S1 → S2 → S3의 범위와 관문.
+4. [docs/prototype/s1_political_prototype.md](../prototype/s1_political_prototype.md): S1 기획서. 수치는 [briefs/s1a_politics_numbers.md](../design/briefs/s1a_politics_numbers.md). 규칙의 기준 구현은 `s1/src/game/`이다.
+5. [docs/prototype/s1_content_guide.md](../prototype/s1_content_guide.md): 콘텐츠 가이드. 글 규격은 6장.
+6. 주제별 브리프([docs/design/briefs/](../design/briefs/)): 어두운 길 [s1b_dark_path.md](../design/briefs/s1b_dark_path.md), 내정 [s1c_domestic.md](../design/briefs/s1c_domestic.md), 필드 [field_unified.md](../design/briefs/field_unified.md)와 [s2_station.md](../design/briefs/s2_station.md), 이야기 [first_leg_story.md](../design/briefs/first_leg_story.md), 정치 디테일 [politics_detail.md](../design/briefs/politics_detail.md), UI 연출 [presentation_motion.md](../design/briefs/presentation_motion.md), 소리 [sound_music.md](../design/briefs/sound_music.md), 열차장 [character_creation.md](../design/briefs/character_creation.md), 엔진 [engine.md](../design/briefs/engine.md).
+7. 아트를 다룰 때: [docs/art/reference_analysis.md](../art/reference_analysis.md), 시안 기록 [concept_renders_20261007.md](../art/concept_renders_20261007.md)와 [model_renders_20261007.md](../art/model_renders_20261007.md).
+8. 필요할 때: [docs/research/](../research/), [ref/](../../ref/), 바깥 점검 [docs/design/review/](../design/review/), 다른 모델에 맡긴 일의 기록 [docs/handoff/](.).
 
 ## 다음 할 일
 
-장기 목표(게임 완성까지의 단계와 관문)는 [coordinator_goal.md](coordinator_goal.md)에 있다.
+장기 목표(게임 완성까지의 단계와 관문)는 [coordinator_goal.md](coordinator_goal.md)에 있다. 순서와 세부는 [핸드북 '다음 할 일'](../handbook/README.md#다음-할-일)을 따른다.
 
-1. **S1b 어두운 길 설계**: 범위와 규칙 줄만 있고 숫자, 카드, 관문이 없어서 설계부터 한다.
-2. **S1c 내정 코드**: S1a 스레드가 PR 20 위에서 만든다. 설계는 [s1c_domestic.md](../design/briefs/s1c_domestic.md), 관문은 H6.
-3. **S2 파밍 회색 상자**: 술레후프 역([s2_station.md](../design/briefs/s2_station.md))을 Godot 4.7.2로 만든다. 성능 시험 프로젝트(s2/)가 출발점이고, 실제 3D 모델이 나오면 성능을 다시 잰다.
-4. **기획 점검**: 좀보이드, 프로스트펑크 2, This War of Mine에 비춰 디테일과 현실감을 본다. 외부 검토 묶음은 [docs/design/review/](../design/review/).
-5. **사용자 답을 기다리는 카드**: 스레드마다 다르니 현황 문서의 대기 목록을 본다. 완성의 정의는 2026-10-07 '36곳, 일부 자동'(무한모드 본체 + 캠페인 해금, 캠페인 36곳·약 15시간)으로 닫혔고, S2는 추천대로 H1 뒤 같이 시작해 진행 중이다.
-6. 열린 질문 10개(decisions.md '열린 질문' 1~9와 14. 10·12·13은 닫혔고 11은 없다).
+1. **사용자 판정 받기**: H3(S2 빌드 39), H6(S1 v22의 내정 켠 판). 피드백으로 S2와 S1c를 고친다. S2는 바깥 검수 K03 높음 9개도 확인해 고친다.
+2. **S1a 코드**: 이름 풀 정리(원 통계 사본은 PC에서 찾음), S1b 켜기 전 남은 높음 둘과 중간·낮음, K01 중간 넷, 내정 버그 목록(공유 폴더 `s1c_handoff/s1a_bugs_20261008.md`).
+3. **내정 설계 이어 가기**: 온실 값 4.3·4.4 어긋남, 복원 비용 값.
+4. **S1b**: 켠 판으로 시뮬레이션을 다시 돌려 H7 판정을 묻고, 계엄 묶음을 짠다.
+5. **이야기**: 라이프치히 뒤 1막 정차 뼈대. 1막 큰 희생 내용은 안 두세 개로 묻는다.
+6. **바깥 검수 정리**: K03~K06 교차 확인, Codex 점검 넷 결과를 주인 스레드로.
+7. 관문을 넘으면 **S3**: 정치 로직을 GDScript로 옮기고 술레후프 정차 한 번을 왕복한다.
 
 ## 작업 방식
 
-- 한국어 반말로, 비판적인 협업 파트너로 답한다. 불확실한 것은 불확실하다고 적는다.
-- 새로 정한 것은 decisions.md에 반영한다. 확정과 제안을 구분한다.
+- 한국어 반말로, 짧게, 비판적인 협업 파트너로 답한다. 불확실한 것은 불확실하다고 적는다.
+- 새로 정한 것은 decisions.md에 반영한다. 확정과 제안을 구분한다. 단계를 마치면 이 문서의 '다음 할 일'과 핸드북을 고친다.
 - 설계 문서는 main에 바로 올려도 된다. 코드는 브랜치와 PR로 올리고, 테스트와 빌드가 통과한 것만 합친다.
-- 저장소는 공개다. 대본, 아트북, 남의 게임 화면 같은 저작물은 올리지 않는다. 시안 그림은 저장소가 아니라 프로젝트 파일이나 사용자 바탕화면\좀비\에 둔다. 비밀 키는 커밋하지 않는다(GEMINI_API_KEY는 환경 변수로만).
-- 새 웹 조사는 클라우드 세션이 직접 하지 않고, 사용자 PC의 로컬 워커에게 맡긴다. 맡기기 전에 저장소의 조사 브랜치(research/…)에 이미 있는지 먼저 본다.
+- 저장소는 공개다. 대본, 아트북, 남의 게임 화면 같은 저작물, 시안 그림, 모델 답 원문, 비밀 키는 올리지 않는다(GEMINI_API_KEY는 환경 변수로만). 커밋 작성자 주소는 noreply 주소만 쓰고 개인 이메일은 쓰지 않는다.
+- 민감한 역사 금지선은 프로젝트 지침에 전문이 있다. 글, 그림 주문, 소리, 움직임, 조사, 게임 데이터, 외부 모델 의뢰에 모두 적용하고, 장소 목록은 저장소에 옮기지 않는다.
+- 새 웹 조사는 클라우드 세션이 직접 하지 않고 사용자 PC의 로컬 워커에게 맡긴다. 맡기기 전에 저장소의 조사 가지(research/…)에 이미 있는지 먼저 본다.
 - 클라우드 환경은 npm과 pypi만 열려 있어 Godot을 내려받지 못한다. Godot 빌드와 테스트는 GitHub Actions에서 돈다.
-- 큰 코드 작업은 웹 모델에 지시서로 맡길 수 있다. 지시서와 검토 기록은 docs/handoff/에 있다.
