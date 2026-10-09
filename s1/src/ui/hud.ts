@@ -66,7 +66,8 @@ function deltaLine(value: number, delta: number): HTMLElement {
   const n = runway(value, delta);
   if (n === null) return h('span', { class: 'res__delta num' }, signed(delta));
   const why = n === 0 ? '이번 구간에 바닥난다' : `정차에서 못 채우면 ${n}구간 뒤 바닥난다`;
-  return h('span', { class: cx('res__delta num', n <= 3 && 'is-low'), title: why, 'aria-label': why },
+  // 탭하면 쪽지로 뜬다(폰엔 title이 없다). 윗 띠 자원 칸 자체엔 data-action이 없어 다른 동작을 가리지 않는다.
+  return h('button', { type: 'button', class: cx('res__delta num tip', n <= 3 && 'is-low'), 'data-action': 'tip', 'data-tip': why, 'aria-label': why },
     `${signed(delta)}·${n === 0 ? '바닥' : `${n}구간`}`);
 }
 

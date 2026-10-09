@@ -4,7 +4,8 @@ import {
 import type { Comm, Game } from '../game';
 import { cx, h, raw } from './dom';
 import { icon } from './icons';
-import { fmt, signed } from './common';
+import { TIP, fmt, signed } from './common';
+import { tip } from './widgets';
 import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
@@ -119,7 +120,7 @@ function debugPanel(view: View): HTMLElement {
       h('button', { class: 'x', 'data-action': 'toggle-debug', 'aria-label': '닫기' }, '×')),
     h('p', { class: 'sub num' }, `공포 ${fmt(g.fear)} · 부상자 ${g.injured} · 비밀 ${g.secrets.length} · 목줄 ${g.leashes.length} · 협박 ${g.blackmails} · 던진 시신 ${g.thrown} · 냉동칸 ${g.stored} · 파업 ${g.strikes}`),
     h('table', { class: 'dbg num' },
-      h('tr', null, ['', '관계', '결속', '열기', '적의', '온기', '배급', '과밀', '노출', '성향'].map(x => h('th', null, x))),
+      h('tr', null, ['', '관계', '결속', '열기', '적의', '온기', '배급', '과밀', '노출', '성향'].map(x => h('th', null, x === '노출' ? tip(x, TIP.exposure) : x))),
       COMMS.map(c => {
         const s = g.comms[c];
         const [w, r, cr, ex] = situation(g, c);

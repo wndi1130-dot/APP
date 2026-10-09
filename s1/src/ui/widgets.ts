@@ -57,3 +57,8 @@ export function portrait(name: string, comm?: Comm, big = false): HTMLElement {
   return h('div', { class: cx('portrait', comm && `c-${comm}`, big && 'portrait--big'), 'aria-hidden': 'true' },
     h('span', { class: 'portrait__head' }), h('span', { class: 'portrait__body' }), h('b', null, initial));
 }
+
+/** 탭하면 설명이 쪽지로 뜨는 글자(app.ts 'tip'). 단추지만 글자처럼 보이고 점선 밑줄만 준다. */
+export function tip(label: string, text: string): HTMLElement {
+  return h('button', { type: 'button', class: 'tip', 'data-action': 'tip', 'data-tip': text }, label);
+}

@@ -112,6 +112,8 @@ export interface StopResult {
   injured: string[];
   dead: string[];
   notes: string[];
+  /** 수색대가 내리는 문장. 보냈을 때만, 결과를 적용하기 전 처지로 담는다. 지나쳤거나 옛 저장이면 없다. */
+  disembark?: string;
 }
 
 export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail';
