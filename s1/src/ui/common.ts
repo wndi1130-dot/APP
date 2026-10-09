@@ -1,5 +1,6 @@
 import type { Fx } from './fx';
 import type { Comm, Game } from '../game';
+import type { ToastKind } from './notice';
 
 // 화면끼리 나눠 쓰는 형식과 열차 칸 배치.
 
@@ -33,6 +34,10 @@ export interface Ui {
   /** 개표 연출: 갈린 미정 수. null이면 연출 없음 */
   count: number | null;
   toast: string | null;
+  /** 알림 종류. 경고(warn)는 호박색에 6초, 눌러 닫는다(notice.ts) */
+  toastKind?: ToastKind | null;
+  /** 두 번 눌러 확정: 첫 탭의 동작과 시각(notice.ts) */
+  confirm?: { action: string; t: number } | null;
   /** 이름을 눌러 연 사람 정보(전체 이름) */
   person: string | null;
   /** 정차 직전 브레이크 연출 중 */

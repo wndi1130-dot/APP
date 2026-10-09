@@ -57,8 +57,9 @@ function journalPanel(view: View): HTMLElement {
   return h('div', { class: 'side', role: 'dialog' },
     h('div', { class: 'drop__head' }, icon('book'), h('b', null, '일지'),
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
-    h('ol', { class: 'log' }, entries.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) },
-      h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))));
+    entries.length === 0 ? h('p', { class: 'empty' }, '아직 적힌 일이 없다.')
+      : h('ol', { class: 'log' }, entries.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) },
+        h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))));
 }
 
 function menuPanel(view: View): HTMLElement {
@@ -155,7 +156,8 @@ export function endScreen(view: View): HTMLElement {
     // S1b 판이면 오른쪽 칸 위에 일대기·증언·추모의 벽을 두고, 일지 하이라이트는 그 밑에 둔다.
     h('div', { class: 'end__right' },
       darkEndSection(view),
-      h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text)))))),
+      highlights.length === 0 ? h('p', { class: 'empty' }, '남길 만한 일이 없었다.')
+        : h('ol', { class: 'log' }, highlights.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) }, h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text)))))),
     domesticEnd(view),
     h('div', { class: 'end__actions' },
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 다시'),
