@@ -163,3 +163,17 @@ func test_apply_writes_every_global_and_nothing_else() -> void:
 	assert_eq(written.size(), FxState.GLOBALS.size())
 	assert_false(written.has("not_a_global"))
 	FxState.apply(FxState.params_for([], -5.0))
+
+
+func test_gallery_has_touch_controls_and_a_way_back() -> void:
+	# On the phone there are no number keys and no other way out (S2 PR 88 menu).
+	var gallery = load("res://fx/gallery.tscn").instantiate()
+	add_child_autofree(gallery)
+	for name in ["BackButton", "PrevButton", "NextButton"]:
+		assert_not_null(gallery.find_child(name, true, false), name)
+	assert_true(ResourceLoader.exists(gallery.menu_scene()), gallery.menu_scene())
+	assert_false(get_tree().is_quit_on_go_back(), "back gesture goes to the menu")
+	gallery.step(-1)
+	assert_eq(gallery.current, gallery.PRESETS.size() - 1, "previous wraps to the last preset")
+	gallery.step(1)
+	assert_eq(gallery.current, 0, "next wraps to the first preset")

@@ -1,12 +1,15 @@
 extends Node3D
 ## Shader gallery: one graybox yard showing every fx shader under the
-## situations of docs/design/briefs/shaders.md 2장. Keys 1-9 and 0 switch preset.
+## situations of docs/design/briefs/shaders.md 2장. Keys 1-9 and 0 switch preset;
+## on the phone the buttons top-left step presets and go back to the start menu
+## (the Android back gesture does the same).
 ## Headless capture (CI or a cloud check, needs a GPU or llvmpipe):
 ##   godot --path s2 --rendering-driver opengl3 res://fx/gallery.tscn -- --shots=/tmp/shots
 ## writes one PNG per preset and quits.
 
 const FxState = preload("res://fx/fx_state.gd")
 const Smoke = preload("res://fx/smoke.gd")
+const UiTheme = preload("res://game/ui/ui_theme.gd")
 const SH := "res://fx/shaders/"
 
 ## name, weather kinds, air C, hour, ground snow (-1 = from temperature),
@@ -39,9 +42,13 @@ var caption: Label
 var current := 0
 var scroll := 0.0
 var speed := 0.0
+var _quit_on_back := true
 
 
 func _ready() -> void:
+	# The back gesture returns to the menu instead of closing the app.
+	_quit_on_back = get_tree().is_quit_on_go_back()
+	get_tree().set_quit_on_go_back(false)
 	_build_world()
 	_build_props()
 	_build_ui()
@@ -285,6 +292,19 @@ func _build_ui() -> void:
 	caption.add_theme_font_size_override("font_size", 20)
 	caption.add_theme_color_override("font_color", Color(0.92, 0.9, 0.85))
 	layer.add_child(caption)
+	# Touch controls under the caption: the phone has no number keys.
+	var bar := HBoxContainer.new()
+	bar.position = Vector2(16, 48)
+	bar.theme = UiTheme.make(22)
+	bar.add_theme_constant_override("separation", 10)
+	layer.add_child(bar)
+	for spec in [["BackButton", "메뉴로", back_to_menu], ["PrevButton", "◀ 이전", step.bind(-1)], ["NextButton", "다음 ▶", step.bind(1)]]:
+		var b := Button.new()
+		b.name = spec[0]
+		b.text = spec[1]
+		b.custom_minimum_size = Vector2(120, 56)
+		b.pressed.connect(spec[2])
+		bar.add_child(b)
 
 
 func apply_preset(i: int) -> void:
@@ -324,6 +344,28 @@ func apply_preset(i: int) -> void:
 	om.set_shader_parameter("pause_dim", p["pause"])
 	om.set_shader_parameter("vignette", 0.5 if night > 0.0 else 0.3)
 	caption.text = "%s  |  wet %.2f snow %.2f frost %.2f  |  %s" % [p["name"], params["fx_wet"], params["fx_snow"], params["fx_frost"], light["band"]]
+
+
+## Next or previous preset, wrapping around.
+func step(by: int) -> void:
+	apply_preset(posmod(current + by, PRESETS.size()))
+
+
+func menu_scene() -> String:
+	return String(ProjectSettings.get_setting("application/run/main_scene"))
+
+
+func back_to_menu() -> void:
+	get_tree().change_scene_to_file(menu_scene())
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		back_to_menu()
+
+
+func _exit_tree() -> void:
+	get_tree().set_quit_on_go_back(_quit_on_back)
 
 
 func _process(delta: float) -> void:
