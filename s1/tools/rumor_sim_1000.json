@@ -1,0 +1,128 @@
+{
+  "n": 1000,
+  "base": "9714567",
+  "seeds": "rumor-0..rumor-(n-1)",
+  "elapsedSeconds": 57.032,
+  "runs": {
+    "caretaker/off": {
+      "games": 1000,
+      "terminal": 1000,
+      "completed": 461,
+      "completionRate": 0.461,
+      "votes": 6864,
+      "passed": 6473,
+      "votePassRate": 0.9430361305361306,
+      "tensionPeakMean": 34.453784999999996,
+      "rumorCardsMean": 0,
+      "overlapMean": 0,
+      "cardsMean": 39.648,
+      "repeatedCardsMean": 16.121,
+      "travelCardsMean": 15.185,
+      "travelRepeatsMean": 8.901,
+      "contentCardsMean": 0,
+      "contentRepeatsMean": 0,
+      "segmentsMean": 21.116,
+      "rumorChoices": [
+        0,
+        0,
+        0
+      ],
+      "ends": {
+        "complete": 461,
+        "stranded": 538,
+        "ousted": 1,
+        "revolt": 0
+      }
+    },
+    "caretaker/on": {
+      "games": 1000,
+      "terminal": 1000,
+      "completed": 423,
+      "completionRate": 0.423,
+      "votes": 6807,
+      "passed": 6080,
+      "votePassRate": 0.8931981783458205,
+      "tensionPeakMean": 43.0754950000001,
+      "rumorCardsMean": 1.83,
+      "overlapMean": 14.531,
+      "cardsMean": 41.734,
+      "repeatedCardsMean": 16.951,
+      "travelCardsMean": 14.987,
+      "travelRepeatsMean": 8.774,
+      "contentCardsMean": 0,
+      "contentRepeatsMean": 0,
+      "segmentsMean": 21,
+      "rumorChoices": [
+        1573,
+        250,
+        7
+      ],
+      "ends": {
+        "complete": 423,
+        "stranded": 576,
+        "ousted": 1,
+        "revolt": 0
+      }
+    },
+    "first/off": {
+      "games": 1000,
+      "terminal": 1000,
+      "completed": 380,
+      "completionRate": 0.38,
+      "votes": 6785,
+      "passed": 3032,
+      "votePassRate": 0.4468680913780398,
+      "tensionPeakMean": 49.83215999999997,
+      "rumorCardsMean": 0,
+      "overlapMean": 0,
+      "cardsMean": 44.147,
+      "repeatedCardsMean": 16.693,
+      "travelCardsMean": 16.345,
+      "travelRepeatsMean": 9.251,
+      "contentCardsMean": 0,
+      "contentRepeatsMean": 0,
+      "segmentsMean": 20.962,
+      "rumorChoices": [
+        0,
+        0,
+        0
+      ],
+      "ends": {
+        "complete": 380,
+        "stranded": 616,
+        "ousted": 2,
+        "revolt": 2
+      }
+    },
+    "first/on": {
+      "games": 1000,
+      "terminal": 1000,
+      "completed": 398,
+      "completionRate": 0.398,
+      "votes": 6787,
+      "passed": 2941,
+      "votePassRate": 0.4333284219832032,
+      "tensionPeakMean": 54.16576499999992,
+      "rumorCardsMean": 1.958,
+      "overlapMean": 13.1,
+      "cardsMean": 46.223,
+      "repeatedCardsMean": 17.707,
+      "travelCardsMean": 16.292,
+      "travelRepeatsMean": 9.206,
+      "contentCardsMean": 0,
+      "contentRepeatsMean": 0,
+      "segmentsMean": 20.953,
+      "rumorChoices": [
+        1958,
+        0,
+        0
+      ],
+      "ends": {
+        "complete": 398,
+        "stranded": 601,
+        "ousted": 0,
+        "revolt": 1
+      }
+    }
+  }
+}

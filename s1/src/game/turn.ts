@@ -1,4 +1,5 @@
 import { addCard, END_LINK } from './state';
+import { rumorEvent, rumorSettle } from './rumor';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
@@ -449,6 +450,9 @@ export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: 
 }
 
 export function resolveStop(g: Game, go: boolean): StopResult | null {
+  return rumorEvent(g, g.stop?.crewComm, () => resolveStopNow(g, go), '수색조 작업의 결과');
+}
+function resolveStopNow(g: Game, go: boolean): StopResult | null {
   const stop = g.stop;
   if (!stop || stop.done) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
@@ -571,6 +575,9 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
 
 /** 약속을 지켰다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */
 export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
+  return rumorEvent(g, c, () => keepPromiseNow(g, c, label), '열차장이 약속을 지킨 결과');
+}
+function keepPromiseNow(g: Game, c: Comm, label: string): void {
   const s = g.comms[c];
   s.promise = null;
   g.trust = clamp(g.trust + 4, 0, 100);
@@ -583,6 +590,9 @@ export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label 
 
 /** 약속을 어겼다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */
 export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
+  return rumorEvent(g, c, () => breakPromiseNow(g, c, label), '열차장이 약속을 어긴 결과');
+}
+function breakPromiseNow(g: Game, c: Comm, label: string): void {
   const s = g.comms[c];
   s.promise = null;
   g.trust = clamp(g.trust - (seats(g)[c] >= 30 ? 12 : 8), 0, 100);
@@ -635,6 +645,7 @@ function settle(g: Game): void {
   leashTick(g);
   aiLeaders(g);
   darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
+  rumorSettle(g);
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
   checkEnd(g);

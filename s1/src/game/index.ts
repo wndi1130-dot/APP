@@ -14,3 +14,4 @@ export * from './omens';
 export * from './people';
 export * from './domestic';
 export * from './dark';
+export * from './rumor';

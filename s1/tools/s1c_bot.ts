@@ -9,11 +9,13 @@ import {
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
+import { enableRumor } from '../src/game/rumor';
 
 // 콘텐츠 JSON 사건(data/events)도 봇 판에 섞는다.
 loadContentEvents();
 
 export type S1aPolicy = 'caretaker' | 'first';
+export interface BotOptions { rumor?: boolean }
 /** S1b 카드 고르기. kind: 선을 넘지 않는다(경비, 재판, 지킨다, 근신). blind: kind와 같지만 징후를 모른 척한다.
  * cruel: 징후를 모른 척하고, 선을 넘는 쪽과 즉결을 먼저 고른다. */
 export type DarkPolicy = 'kind' | 'blind' | 'cruel';
@@ -23,6 +25,11 @@ export type DomPolicy = 'engaged' | 'idle';
 export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy }
 
 export interface GameMetrics {
+  voteTotal: number;
+  votesPassed: number;
+  tensionPeak: number;
+  rumorOverlaps: number;
+  rumorChoices: [number, number, number];
   end: string;
   segReached: number;
   coalMin: number;
@@ -228,11 +235,13 @@ function spacePolicy(g: Game): void {
 
 export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetrics } {
   const g = opts.s1c ? createS1cGame(seed) : createGame(seed);
+  if (opts.rumor) enableRumor(g);
   if (opts.s1b) enableDark(g);
   if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();
   const cards: Record<string, number> = {};
   const m: GameMetrics = {
+    voteTotal: 0, votesPassed: 0, tensionPeak: g.tension, rumorOverlaps: 0, rumorChoices: [0, 0, 0],
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
     deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, cards, s1aCards: 0, domCards: 0,
     tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, spaceSegs: 0,
@@ -247,6 +256,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   let lastCouncil = -1;
   let prepSeg = -1;
   for (let guard = 0; guard < 5000 && g.phase !== 'end'; guard += 1) {
+    m.tensionPeak = Math.max(m.tensionPeak, g.tension);
     if (g.seg !== lastSeg && g.phase === 'prep') {
       lastSeg = g.seg;
       if (g.coal < 30) m.coalUnder30 += 1;
@@ -292,7 +302,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       }
       let idx: number;
       const pro = (['pro_promise', 'pro_search', 'pro_deal'] as string[]).indexOf(card.kind);
-      if (pro >= 0 && opts.prologuePicks) idx = opts.prologuePicks[pro];
+      if (card.kind === 'rumor') idx = opts.policy === 'first' ? 0 : g.trust >= 50 ? 0 : g.comms[g.rumor!.events[card.n!].source].grudge === 0 && g.fear < 30 ? 1 : 2;
+      else if (pro >= 0 && opts.prologuePicks) idx = opts.prologuePicks[pro];
       else if (card.kind.startsWith('dom:')) idx = domPick(g, card, view, opts.dom);
       else if (card.kind.startsWith('dark:')) idx = darkPick(card, view, opts.s1b ?? 'kind');
       else if (!opts.scoreCards) idx = view.choices.findIndex(c => !c.disabled);
@@ -327,6 +338,11 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         if (g.council.options[0]?.forced) m.forced += 1;
       }
       if (opts.plainCouncil) castVote(g); else council(g, opts);
+      const result = g.council?.result as import('../src/game').VoteResult | null | undefined;
+      if (result) {
+        m.voteTotal++;
+        if (result.passed) m.votesPassed++;
+      }
       continue;
     }
     if (!primaryAction(g).ok) throw new Error(`막혔다: ${g.phase} ${primaryAction(g).why ?? ''}`);
@@ -339,6 +355,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     m.cardsPerSegMax = Math.max(m.cardsPerSegMax, n);
   }
   m.end = g.end ?? 'none';
+  m.tensionPeak = Math.max(m.tensionPeak, g.tension);
+  m.rumorOverlaps = g.rumor?.stats.overlaps ?? 0;
+  m.rumorChoices = g.rumor?.stats.choices ?? [0, 0, 0];
   m.segReached = g.seg;
   m.lawsPassed = Object.keys(g.passed).length;
   m.harshPassed = Object.keys(g.passed).filter(l => LAWS[l as keyof typeof LAWS].tag === '가혹').length;

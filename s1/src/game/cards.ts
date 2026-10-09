@@ -1,4 +1,5 @@
 import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
+import { resolveRumor, rumorEvent } from './rumor';
 import type { Comm } from './data';
 import { logDeath, onDeath } from './death';
 import { josa } from './josa';
@@ -357,6 +358,19 @@ function guardCosts(g: Game, v: CardView): CardView {
 }
 
 function baseView(g: Game, card: Card): CardView {
+  if (card.kind === 'rumor' && g.rumor) {
+    const c = card.comm ?? 'tail';
+    return {
+      title: '소문이 닿았다', focus: c, required: true,
+      speaker: { name: g.comms[c].leader.name, role: '대표', comm: c },
+      body: card.text ?? '',
+      choices: [
+        { label: '사실을 붙인다', say: '게시판에 붙여라. 있었던 일만 적는다.', effs: [], extra: [g.trust >= 50 ? '소문 중단, 부풀린 관계 변화 복원' : '신임 −2, 해명이 새 소문으로 퍼짐'] },
+        { label: '입단속을 시킨다', say: '대표들은 그 얘기를 칸에 옮기지 마라.', effs: [], extra: ['소문 중단, 일이 난 칸 원한 +1, 공포 +3'] },
+        { label: '내버려 둔다', say: '말은 말이다. 다들 일이나 하라.', effs: [] },
+      ],
+    };
+  }
   for (const ext of CARD_EXTENSIONS) {
     const v = ext.view(g, card);
     if (v) return v;
@@ -710,6 +724,16 @@ export function applyEffs(g: Game, effs: readonly Eff[]): void {
 }
 
 export function chooseCard(g: Game, uid: number, index: number): boolean {
+  const card = g.cards.find(x => x.uid === uid);
+  if (card?.kind === 'rumor') {
+    if (!resolveRumor(g, card.n ?? -1, index)) return false;
+    g.cards = g.cards.filter(x => x.uid !== uid);
+    return true;
+  }
+  return rumorEvent(g, card?.comm, () => chooseCardNow(g, uid, index), '열차장의 사건 선택');
+}
+
+function chooseCardNow(g: Game, uid: number, index: number): boolean {
   const card = g.cards.find(x => x.uid === uid);
   if (!card) return false;
   const view = viewCard(g, card);

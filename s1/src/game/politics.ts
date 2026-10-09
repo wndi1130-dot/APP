@@ -3,6 +3,7 @@ import {
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { josa } from './josa';
+import { rumorEvent } from './rumor';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
@@ -432,6 +433,9 @@ export type DealOutcome = { ok: true; text: string } | { ok: false; text: string
 
 /** 거래를 맺는다. 공개 협상이면 condIndex로 조건을 고른다. */
 export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTarget?: Comm): DealOutcome {
+  return rumorEvent(g, c, () => makeDealNow(g, c, tool, condIndex, cutTarget), '대표와 열차장의 공개·비공개 거래');
+}
+function makeDealNow(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTarget?: Comm): DealOutcome {
   const status = toolStatus(g, c, tool);
   const council = g.council;
   const agenda = currentAgenda(g);
@@ -589,6 +593,9 @@ export function dropUnratified(g: Game): void {
 
 // ---- 표결 ----
 export function castVote(g: Game, decree = false): VoteResult | null {
+  return rumorEvent(g, undefined, () => castVoteNow(g, decree), decree ? '열차장 포고' : '의회 표결');
+}
+function castVoteNow(g: Game, decree = false): VoteResult | null {
   const agenda = currentAgenda(g);
   const r = vote(g, decree);
   if (r && agenda) for (const hook of COUNCIL_HOOKS) hook.vote?.(g, agenda, r);
@@ -701,6 +708,9 @@ function vote(g: Game, decree: boolean): VoteResult | null {
 }
 
 export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
+  return rumorEvent(g, undefined, () => enactLawNow(g, law, boughtFrom), '법의 통과');
+}
+function enactLawNow(g: Game, law: LawId, boughtFrom: Comm[]): void {
   const def = LAWS[law];
   // 개정(7.3): 변형이 서면 원래 법은 내려간다. 폐지가 아니라 고쳐 쓴 것이라 지지 칸 반발·약속 배신은 없다.
   const base = LAW_VARIANT_OF[law];
@@ -743,6 +753,9 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
 }
 
 export function repealLaw(g: Game, law: LawId): void {
+  return rumorEvent(g, undefined, () => repealLawNow(g, law), '법의 폐지');
+}
+function repealLawNow(g: Game, law: LawId): void {
   const def = LAWS[law];
   const supporters = COMMS.filter(c => stance(g, c, { law, repeal: false }, false).score >= 3);
   delete g.passed[law];
@@ -767,6 +780,9 @@ export function repealLaw(g: Game, law: LawId): void {
 
 // ---- 공동체 행동(3.6) ----
 export function supportComm(g: Game, c: Comm): string | null {
+  return rumorEvent(g, c, () => supportCommNow(g, c), '열차장이 칸을 더 챙긴 결정');
+}
+function supportCommNow(g: Game, c: Comm): string | null {
   if (g.actedSeg === g.seg) return '이번 구간엔 이미 했다';
   if (g.lux < 2) return '사치품 2가 필요하다';
   const s = g.comms[c];
@@ -790,6 +806,9 @@ export function supportComm(g: Game, c: Comm): string | null {
 /** 공간 레버(first_leg_story 6.4): 꼬리칸 과밀을 다른 한 칸으로 옮긴다. 0~2단, 내주는 칸은 꼬리칸 말고 하나.
  * 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1(정산). 내주는 칸을 바꾸려면 0단으로 풀었다가 다시 당긴다. 못 하면 까닭. */
 export function setSpace(g: Game, step: number, giver?: Comm): string | null {
+  return rumorEvent(g, giver ?? g.space?.giver ?? undefined, () => setSpaceNow(g, step, giver), '열차장이 공간을 배분한 결정');
+}
+function setSpaceNow(g: Game, step: number, giver?: Comm): string | null {
   const sp = (g.space ??= { step: 0, giver: null });
   if (giver === 'tail') return '꼬리칸은 공간을 내줄 수 없다';
   if (giver && giver !== sp.giver) {
@@ -809,6 +828,9 @@ export function setSpace(g: Game, step: number, giver?: Comm): string | null {
 }
 
 export function cutComm(g: Game, c: Comm, asAction = true): string | null {
+  return rumorEvent(g, c, () => cutCommNow(g, c, asAction), '열차장이 배급과 특권을 깎은 결정');
+}
+function cutCommNow(g: Game, c: Comm, asAction = true): string | null {
   if (asAction && g.actedSeg === g.seg) return '이번 구간엔 이미 했다';
   const s = g.comms[c];
   s.rel = clamp(s.rel - 15, -100, 100);

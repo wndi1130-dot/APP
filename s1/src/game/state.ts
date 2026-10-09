@@ -159,6 +159,8 @@ export interface JournalEntry { seg: number; text: string; tone?: 'good' | 'bad'
 export interface Settlement { coal: number; food: number; med: number; rel: Record<Comm, number>; trust: number; tension: number; notes: string[] }
 
 export interface Game {
+  /** C1 실험 플래그. 없으면 기존 판과 동일하다. */
+  rumor?: import('./rumor').RumorState;
   version: 1;
   seed: string;
   rng: RngState;
