@@ -131,10 +131,10 @@ export function darkTrustMeter(view: View): HTMLElement | null {
   const stage = stageOf(rel);
   const line = m.door === 'captain' ? 0 : -1;
   const below = stage.band <= line;
-  // 문턱 바로 위 단계의 아래 끝: 회의 이하면 중립(−14), 중립 이하면 호의(15)가 되돌아와야 하는 선
-  const need = m.door === 'captain' ? 15 : -14;
+  // 경고가 풀리는 선: 문이 무엇이든 호의(15) 이상으로 되돌아와야 한다(martialSettle). 문턱(경고가 서는 선)은 회의·중립으로 문마다 다르다.
+  const need = 15;
   const left = coupLeft(g);
-  const needName = m.door === 'captain' ? '호의' : '중립';
+  const needName = '호의';
   const label = left !== null ? `쿠데타 ${left}구간` : '충성';
   const text = left !== null ? `경비대의 충성 ${stage.name}. 쿠데타 경고: ${left}구간 안에 ${needName} 이상으로` : `경비대의 충성 ${stage.name}`;
   return h('div', { class: cx('meter meter--loyal', below && 'is-below', left !== null && 'is-coup'), 'data-fx-cell': 'loyal', 'aria-label': text, title: text },

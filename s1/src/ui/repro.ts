@@ -141,6 +141,14 @@ function fillDefaults(g: Game): void {
   g.linesSeen ??= [];
   // 기관실은 작업조로 못 낸다(6.4). 그 전에 저장한 열린 정차가 기관실을 골라 뒀으면 경비대로 바꾼다.
   if (g.stop && !g.stop.done && !CREW_COMMS.includes(g.stop.crewComm)) g.stop.crewComm = 'guard';
+  // S1b 둘째 묶음(계엄)이 더한 칸: 그 전에 저장한 어두운 길 판에는 없다.
+  if (g.dark) {
+    const dk = g.dark as unknown as Record<string, unknown>;
+    dk.martial ??= null;
+    dk.martialDoors ??= [];
+    const st = g.dark.stats as unknown as Record<string, number>;
+    for (const k of ['gtrials', 'gexec', 'martialSegs', 'lifted', 'ratifyPassed', 'ratifyFailed']) st[k] ??= 0;
+  }
   migrateDomestic(g);
 }
 

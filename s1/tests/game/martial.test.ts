@@ -106,6 +106,13 @@ describe('계엄을 거둔다', () => {
     g.dark!.martial!.warned = true;
     liftMartial(g);
     expect(g.dark!.martialLifted!.bonus).toBe(false);
+    expect(g.dark!.means.martial_lifted).toBeUndefined(); // 경고 뒤 거둔 계엄은 수단을 깎지 않는다
+  });
+  it('의회가 맡긴 계엄은 거둬도 수단 −2가 없다(들어설 때 2라서)', () => {
+    const g = darkGame();
+    enterMartial(g, 'council');
+    liftMartial(g);
+    expect(g.dark!.means.martial_lifted).toBeUndefined();
   });
 });
 
@@ -131,6 +138,9 @@ describe('쿠데타', () => {
     const g = darkGame();
     enterMartial(g, 'extend');
     g.comms.guard.rel = -30;
+    martialSettle(g);
+    expect(g.dark!.martial!.coupWarnAt).not.toBeNull();
+    g.comms.guard.rel = -5; // 중립: 문턱 위지만 호의가 아니라 경고가 그대로
     martialSettle(g);
     expect(g.dark!.martial!.coupWarnAt).not.toBeNull();
     g.comms.guard.rel = 20;
@@ -327,6 +337,15 @@ describe('경비대 재판', () => {
     expect(d.means.guard_exec).toBe(1);
     expect(d.means.executions).toBe(1);
     expect(c.status).toBe('closed');
+  });
+  it('군중에게 약속한 재판은 경비대 재판으로 지킨 것이다', () => {
+    const g = darkGame('gtrial-promise');
+    g.seg = 5;
+    const { c } = evidenceCase(g);
+    c.promised = g.session + 1;
+    enterMartial(g, 'extend');
+    guardTrial(g, c);
+    expect(c.promised).toBeUndefined();
   });
   it('증거가 모자라면 풀려난다(소문 단계)', () => {
     const g = darkGame('gtrial-free');

@@ -78,7 +78,7 @@ powersPlan?: 'return' | 'ask' | 'extend';          // 대권이 끝나는 카드
 
 **쿠데타** (`darkSettle`, 정산마다):
 - 문턱 `band`: 보통 `stageOf(guard.rel).band <= -1`(회의 이하), captain 문이면 `<= 0`(중립 이하).
-- 문턱 아래인데 `coupWarnAt === null`이면 `coupWarnAt = g.seg + 2`, `warned = true`, 카드 `dark:coup_warn`(정보, 화자 부관: "경비대장이 당직표를 제 손으로 다시 짰다. 열차장 이름은 없다."). 문턱 위(호의 이상, captain이면 중립 이상)로 돌아오면 `coupWarnAt = null`. `g.seg >= coupWarnAt`이면 `END_LINK.finish(g, 'coup')`.
+- 문턱 아래인데 `coupWarnAt === null`이면 `coupWarnAt = g.seg + 2`, `warned = true`, 카드 `dark:coup_warn`(정보, 화자 부관: "경비대장이 당직표를 제 손으로 다시 짰다. 열차장 이름은 없다."). 경고는 문이 무엇이든 **호의 이상**(단계 번호 2 이하)으로 돌아와야 풀린다(`coupWarnAt = null`, 일지 '경비대장이 당직표를 원래대로 돌렸다'). 문턱 바로 위(중립)로만 올라오면 경고가 그대로 돈다(PC 리뷰: 문턱 언저리에서 경고가 깜빡이지 않게). `g.seg >= coupWarnAt`이면 `END_LINK.finish(g, 'coup')`.
 - 계엄 중 `supportComm(g,'guard')`는 막힌다("계엄 중엔 지지로 충성을 사지 못한다", 5.3). 경비대 배급 레버 올리기는 된다. 레버를 `rationLocked` 아래로 내리는 행동은 turn.ts 레버 처리에서 막는다.
 
 **유지비** (`darkSettle`): 경비대 노출(`base[3]`) +2, 긴장 +2, 공포 +3 (`B.mlExpo, mlTension, mlFear`).
@@ -88,10 +88,12 @@ powersPlan?: 'return' | 'ask' | 'extend';          // 대권이 끝나는 카드
 **거두기 `liftMartial(g)`**:
 - `g.trust = clamp(martial.trustBefore - 15, 0, 100)`. `d.martial = null`, `d.martialLifted = { seg, bonus: !martial.warned }`. 경비대 배급 레버 잠금 해제(값은 그대로).
 - 포고로 바꾼 법 전부를 **안건 하나** `ratify_decrees`(법이 아닌 안건, 일반 51, rank `ratify`)로 다음 정기 회기에 올린다. `changes`에 법 이름을 전부 적는다. 통과하면 그대로, 부결이면 `decreed`는 `repealLaw`, `repealed`는 `enactLaw`. 재상정 쿨다운은 걸지 않는다. 이 안건의 `lean`은 법마다의 입장 평균 + (`martialLifted.bonus`면 +2, `B.mlLiftBonus`). 표결이 끝나면 `martialLifted`를 지운다.
-- `cross(g,'martial_lifted')`(수단 −2). 일지: "투표함 뚜껑이 다시 열렸다."
+- 경고 없이 거뒀고 문이 extend·sided·brink(들어설 때 수단 4·5)일 때만 `cross(g,'martial_lifted')`(수단 −2). 의회가 맡긴 계엄(2)과 경비대장의 계엄(0)은 깎을 게 없다. 일지: "투표함 뚜껑이 다시 열렸다."
 - 정기 신임 표결은 정기 일정만 잇는다(거둔 직후 따로 열지 않음, `confSince`는 계엄 전 값 그대로).
 
 **끝까지 가면**: 완주·좌초·반란·쿠데타. 완주하면 일대기에 '계엄 아래 닿았다' 장면. 포고는 추인 없이 남는다.
+
+**끝 순서**(제안, 2026-10-09. 'S1 코드 마무리'가 확인: main엔 끝이 겹칠 길이 없었다): `finish`는 이미 끝난 판이면 아무 일도 안 한다(먼저 난 끝이 남는다). 한 정산 안에서는 쿠데타(`darkSettle`) → 좌초(석탄) → 축출(신임 위기 둘째 패) → 반란(긴장 100 둘째) 순으로 판정하고, 완주는 그다음 구간으로 넘어갈 때라 늘 뒤다. 쿠데타 경고가 끝나는 구간에 석탄도 바닥나면 쿠데타다(열차를 잃은 뒤의 좌초는 열차장의 일이 아니다). 같은 정산에 둘이 겹치는 일은 드물어 플레이어가 느끼는 규칙으로는 보지 않았다. 세는 자리: turn.ts `finish`, `settle`의 `if (g.phase !== 'end') checkEnd(g)`.
 
 ## 4. 경비대 재판 (PR A)
 
@@ -102,6 +104,7 @@ powersPlan?: 'return' | 'ask' | 'extend';          // 대권이 끝나는 카드
   - hear: 유죄 확률 증거 1.0 / 정황 0.6 / 소문 0.3 (`B.gtrialP = [0.3, 0.6, 1]`). 유죄면 `cs.convicted = id`, `d.stats.trials += 1, guilty += 1`, `precedent`는 의회 재판과 같이 적고, 벌 카드 `dark:punish`(`text: 'guard'`)로 간다. 벌 넷 모두 열리고 처형도 된다(`punish(g, c, s, how, 'guard')`: `via`에 `'guard'`를 더하고 `EXECUTION.rule === 'trial'`에서 `via === 'trial' || via === 'guard'`를 허락한다. 처형이면 `cross(g,'executions')`에 더해 `cross(g,'guard_exec')`. 장면 글: '경비대장의 판결로').
   - 무죄면 의회 무죄와 같이 `acq = true`, `status = 'open'`, 시계 2. 피고 칸 관계 +3은 없다(표결이 없었다). 일지: "경비대장이 서류를 돌려보냈다. 증거가 모자란다고 했다."
   - free: 의회 무죄와 같다(`acq`, open, 시계 2). 공개로 풀어 준 것이라 피고 칸 관계 +3.
+- 군중에게 '재판을 약속한다'로 넘긴 사건(`cs.promised`)은 경비대 재판이 열리면 지킨 것이다(`guardTrial`이 `promised`를 지운다. 안 그러면 다음 회기 `trialPromises`가 의회 재판이 안 열렸다고 약속 위반으로 센다). '풀어 준다'는 재판이 아니라 약속 위반으로 남는다.
 - 군중: 재판 카드가 뜨는 구간엔 군중 시계가 그대로 돈다(의회 재판처럼 회기 하나를 밀어내지 않으니 더 빠르다, 5.3 '의회 재판보다 빠르다').
 - 계엄을 거둘 때 `status === 'trial'`인 사건은 다음 정기 회기 의회 재판으로 돌아간다(아무 것도 안 해도 된다. `MOTION_SOURCES`가 다시 집는다).
 
@@ -139,7 +142,17 @@ brink: Brink | null; war: War | null; brinkCount: number; warCount: number;
 
 시뮬에서 계엄은 거의 열리지 않았다(16.1 5차: 정책으로는 0%). 사용자가 H7 판정에서 계엄을 한 번은 봐야 하니, 주소 `?s1b=1&scene=powers`로 시작하는 **시험 시작 상태**를 둔다: 비상대권이 통과된 채 포고 마지막 구간(`decreeLeft = 1`)에서 시작해 첫 서류가 '대권이 끝나는 카드'다. `scene=brink`는 내전 직전 시계 2구간째다. 메뉴에는 넣지 않고 주소로만 연다(플레이 빌드 점검표에 적는다). 비상대권이 열리는 조건(법 16, 긴장 50 이상이나 신임 10 이하)을 낮추는 건 핵심 규칙 변경이라 H7 결과를 보고 사용자에게 묻는다.
 
-## 8. 다른 스레드와 겹치는 파일
+## 8. PR A에서 바뀐 것과 PC 리뷰 반영 (2026-10-09)
+
+PR A(브랜치 claude/s1b-dark-path-rrx2a6)는 2~4·6·7장을 그대로 짰고, PC 워커(Codex)의 리뷰 묶음(`worker_packets/s1b_martial_review.md`, 요약은 공유 폴더 `martial_review_SUMMARY.md`. 원문은 저장소에 안 올린다)에서 받은 것은:
+
+- 반영: 포고 길이 계엄 중에도 열리게 `canDecree`에 계엄 분기(포고권 수는 `martial.decreed/repealed`로 셈). 계엄 중 거래·비상 소집·법이 아닌 안건 막힘. `checkEnd` 앞의 끝 가드와 끝 순서(3장). 경비대 재판 유죄의 벌 카드 `via: 'guard'`. 옛 저장 읽기(`fillDefaults`: `martial` null, `martialDoors` [], 새 stats 0). 쿠데타 경고 해제를 호의 이상으로. 거둔 계엄의 수단 −2 조건. 경비대 재판이 약속한 재판을 지운다. 계엄 중 `g.trust`는 그대로 두고 거둘 때 `trustBefore − 15`로 되돌린다(계엄 중 meters가 신임을 깎아도 거둘 때 덮인다).
+- 안 받음: 소문 단계(유죄 30%) 경비대 재판은 봇이 닿지 못한다(사건이 소문만으로 재판에 가지 않음) → 그대로 둠. 비상대권이 열리는 조건 낮추기 → 핵심 규칙이라 H7 뒤 사용자 결정(7장).
+- PR B로 미룸: 문 2·3·4(의회가 맡김, 내전 직전·내전, 편든 계엄), `war` 분기, 파밍 배수(`darkHaulMult`)와 계엄의 관계, `P.segments`를 넘는 계엄의 완주 장면.
+
+시험 시작 상태는 7장의 `?s1b=1&scene=powers`와 `scene=martial`(계엄 중 시작, 문 extend) 둘이다(`ui/dark.ts urlScene`, `dark/martial.ts devScene`). 시뮬 결과는 s1b_dark_path.md 16.1 9차.
+
+## 9. 다른 스레드와 겹치는 파일
 
 - `politics.ts`: `openCouncil`(계엄 회기), `agendaOptions`(계엄이면 법만), `castVote`/`afterVote` 훅은 이미 있다. `endEmergencyPowers`는 건드리지 않고 turn.ts에서 앞에 `darkPowersEnd`를 끼운다.
 - `state.ts`: `EndKind`에 `coup`, `CouncilState`에 `martial?: boolean`.

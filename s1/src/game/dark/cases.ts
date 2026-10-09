@@ -252,6 +252,7 @@ export function guardTrial(g: Game, cs: Case): void {
   d.stats.trials += 1;
   d.stats.gtrials += 1;
   cs.triedAt = g.session;
+  cs.promised = undefined; // 군중에게 약속한 재판을 경비대 재판으로 지켰다(의회 재판처럼 trialPromises가 어긴 것으로 세지 않는다)
   const lv = level(top);
   const comm = commOf(g, top.id);
   const guilty = dr(g) < B.gtrialP[lv];

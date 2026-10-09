@@ -985,6 +985,8 @@ function checkEnd(g: Game): void {
 
 END_LINK.finish = (g, end) => finish(g, end);
 function finish(g: Game, end: Game['end']): void {
+  // 먼저 난 끝이 남는다. 한 정산 안에선 쿠데타(darkSettle) → 좌초 → 축출 → 반란 순으로 판정하고, 완주는 다음 구간으로 넘어갈 때다.
+  if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
   const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: '반란이 일어났다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];

@@ -114,7 +114,8 @@ export function liftMartial(g: Game, _why: 'self' = 'self'): void {
   d.martialLifted = { seg: g.seg, bonus: !m.warned, decreed: [...(prev?.decreed ?? []), ...m.decreed], repealed: [...(prev?.repealed ?? []), ...m.repealed] };
   d.martial = null;
   d.stats.lifted += 1;
-  cross(g, 'martial_lifted');
+  // 수단 −2(5.3 '거둔 계엄은 5가 아니라 3'): 경고 없이 거뒀고 들어설 때 수단 4·5를 적은 문(extend·sided·brink)일 때만. 의회가 맡긴 계엄(2)과 경비대장의 계엄(0)은 깎을 게 없다.
+  if (!m.warned && (m.door === 'extend' || m.door === 'sided' || m.door === 'brink')) cross(g, 'martial_lifted');
   journal(g, '투표함 뚜껑이 다시 열렸다.', 'dark');
   // 계엄 회기에서 눌렀으면 그 회기는 바로 닫힌다(의회는 다음 정기 회기부터). 정기 신임 간격(confSince)은 건드리지 않는다.
   if (g.phase === 'council' && g.council?.martial) g.council.options = [];
@@ -129,17 +130,21 @@ export function martialSettle(g: Game): void {
   g.comms.guard.base[3] += B.mlExpo;
   g.tension = clamp(g.tension + B.mlTension, 0, 100);
   g.fear = clamp(g.fear + B.mlFear, 0, 100);
-  // 문턱: 경비대 관계 단계가 회의 이하(band -1). 경비대장의 계엄이면 한 단계 높아 중립 이하(band 0).
+  // 문턱: 경비대 관계 단계가 회의 이하(band -1)면 경고. 경비대장의 계엄이면 한 단계 높아 중립 이하(band 0).
+  // 경고는 호의 이상(단계 번호 2 이하)으로 되돌려야 풀린다. 문턱 바로 위(중립)로만 올라오면 경고가 그대로 돈다(PC 리뷰: 문턱 언저리에서 깜빡이지 않게).
   const line = m.door === 'captain' ? 0 : -1;
-  if (stageOf(g.comms.guard.rel).band > line) {
-    m.coupWarnAt = null;
-    return;
-  }
+  const st = stageOf(g.comms.guard.rel);
   if (m.coupWarnAt === null) {
+    if (st.band > line) return;
     m.coupWarnAt = g.seg + B.mlCoupSegs;
     m.warned = true;
     darkCard(g, { kind: 'dark:coup_warn' });
-    journal(g, `경비대의 충성이 무너지고 있다. ${B.mlCoupSegs}구간 안에 되돌리지 못하면 열차를 잃는다.`, 'bad');
+    journal(g, `경비대의 충성이 무너지고 있다. ${B.mlCoupSegs}구간 안에 호의로 되돌리지 못하면 열차를 잃는다.`, 'bad');
+    return;
+  }
+  if (st.index <= 2) {
+    m.coupWarnAt = null;
+    journal(g, '경비대장이 당직표를 원래대로 돌렸다.', 'good');
     return;
   }
   if (g.seg >= m.coupWarnAt) {
