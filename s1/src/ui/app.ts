@@ -15,7 +15,7 @@ import { cardSheet } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
 import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
-import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGame, urlWantsS1c } from './domestic';
+import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGame, notePrologue, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
 // S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
 import { darkPickMs, darkPickReset, darkVisibility, urlWantsS1b } from './dark';
@@ -324,6 +324,7 @@ export function startApp(root: HTMLElement): void {
   let saveFailing = false;
   /** 저장하고, 막 실패하기 시작했으면 한 번 알린다(다시 되면 조용히 풀린다). */
   function persist(next: Game): void {
+    notePrologue(next);
     const ok = save(next);
     if (!ok && !saveFailing) toast('저장하지 못했다. 판은 이어지지만 창을 닫으면 여기까지 잃는다.', 'warn');
     saveFailing = !ok;
@@ -594,6 +595,14 @@ export function startApp(root: HTMLElement): void {
         if (!confirmDiscard(action)) return;
         newSeedGame();
         toast(`새 판: 시드 ${g.seed}.`);
+        return render();
+      case 'new-skip':
+        if (!confirmDiscard(action)) return;
+        g = newGame(randomSeed(), !!g.dom, !!g.dark, false);
+        ui = freshUi();
+        persist(g);
+        resetRepro();
+        toast(`서막 없이 새 판: 시드 ${g.seed}. 볼슈틴 차고를 막 떠났다.`);
         return render();
       case 'fullscreen': {
         // 폰 가로에서 아티팩트 창 테두리 때문에 화면이 덜 차는 것을 막는다. 창이 막으면 알려 준다.
