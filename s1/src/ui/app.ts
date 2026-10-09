@@ -200,6 +200,11 @@ function drawLinks(root: HTMLElement): void {
     s('circle', { cx: x2, cy: y2, r: 3, class: 'links__dot' }));
 }
 
+/** 다시 그린 뒤 같은 단추를 찾는 열쇠: 동작과 data 값들(못 누름 흔들기용) */
+function deniedKey(el: HTMLElement): string {
+  return el.dataset.action ? JSON.stringify(Object.entries(el.dataset).sort()) : '';
+}
+
 export function startApp(root: HTMLElement): void {
   // 주소에 ?seed=가 있으면 그 시드로 시작한다(같은 판을 다시 볼 때, 스크린샷).
   const urlSeed = new URLSearchParams(globalThis.location?.search ?? '').get('seed');
@@ -641,6 +646,23 @@ export function startApp(root: HTMLElement): void {
     if (target.dataset.action === 'choose') fxOrigin = target.getBoundingClientRect();
     h6Input(g, h6, Date.now(), target.dataset.action ?? ''); // S1c 내정 훅
     handle(target.dataset.action ?? '', target.dataset);
+  });
+
+  // 못 누름(ui_states.md P3): 막힌 단추는 click이 오지 않아 손을 뗄 때(pointerup) 받는다. 이유(title)를 쪽지로 띄우고
+  // 단추를 한 번 흔든다. 끌다 뗀 것(스크롤)은 무시한다. pointerup을 막힌 단추에 보내지 않는 브라우저에선 지금처럼 조용하다.
+  let downAt: { x: number; y: number } | null = null;
+  root.addEventListener('pointerdown', event => { downAt = { x: event.clientX, y: event.clientY }; });
+  root.addEventListener('pointerup', event => {
+    const btn = (event.target as Element | null)?.closest<HTMLButtonElement>('button:disabled');
+    const moved = !downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 10;
+    downAt = null;
+    if (!btn || !root.contains(btn) || moved || ui.braking) return;
+    const why = btn.title.trim();
+    const key = deniedKey(btn);
+    if (why) toast(why);
+    render();
+    const again = key ? [...root.querySelectorAll<HTMLButtonElement>('button:disabled')].find(b => deniedKey(b) === key) : null;
+    again?.classList.add('is-denied');
   });
 
   // 끌던 중에 다시 그리면 손잡이를 놓치므로 손을 뗐을 때(change) 반영한다.
