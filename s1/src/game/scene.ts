@@ -4,6 +4,7 @@ import type { Comm } from './data';
 import type { Game } from './state';
 import { stopView, verdictText } from './omens';
 import type { RiskLevel } from './omens';
+import { blizzardActive } from './disaster';
 import { riskLevel, riskWhy, stopRisk } from './turn';
 
 // 정차 장면 글(자리표시). 나중엔 브레이크 소리와 함께 옆 앞쪽에서 본 정차 장면, 수색대와 열차장이 내리는 모습으로
@@ -64,7 +65,7 @@ export interface RiskView {
 export function riskView(g: Game): RiskView {
   const r = stopRisk(g);
   const why = riskWhy(r);
-  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.' };
+  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.' };
   const v = stopView(g, g.stop, r.horde);
   const level = riskLevel(r);
   return { level, omen: v.omen, verdict: verdictText(level, v.sign), why, unknown: null };

@@ -1,9 +1,9 @@
 // S1a 판과 S1a+S1c 판을 같은 시드로 돌려 비교한다(s1c_domestic 14.1의 2번).
-// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]
+// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never]
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { D, TRAVEL_EVENTS } from '../src/game';
+import { D, DZ, TRAVEL_EVENTS } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, GameMetrics } from './s1c_bot';
 
@@ -19,6 +19,17 @@ for (const f of flags.filter(x => x.startsWith('--set='))) {
   (D as unknown as Record<string, number>)[k] = Number(v);
   sets[k] = Number(v);
 }
+// --dz=key:value 로 disaster.ts의 DZ 값을 바꾼다(예: --dz=blizzardWarm:3 --dz=coldWarm:5). --disasters면 모든 정책을 재난 켬으로 돌린다.
+const dzSets: Record<string, number> = {};
+for (const f of flags.filter(x => x.startsWith('--dz='))) {
+  const [k, v] = f.slice(5).split(':');
+  if (!(k in DZ)) throw new Error(`DZ에 없는 값: ${k}`);
+  (DZ as unknown as Record<string, number>)[k] = Number(v);
+  dzSets[k] = Number(v);
+}
+const disasters = flags.includes('--disasters');
+const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
+if (prepFlag && prepFlag !== 'auto' && prepFlag !== 'never') throw new Error(`--prep는 auto나 never: ${prepFlag}`);
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 
 const RUNS: { name: string; opts: BotOptions }[] = [
@@ -84,6 +95,12 @@ function summarize(ms: GameMetrics[]) {
     lawsPassed: +mean(ms.map(m => m.lawsPassed)).toFixed(2),
     harshPassed: +mean(ms.map(m => m.harshPassed)).toFixed(2),
     deaths: +mean(ms.map(m => m.deaths)).toFixed(2),
+    disasters: { blizzard: +mean(ms.map(m => m.disasters.blizzard)).toFixed(3), cold: +mean(ms.map(m => m.disasters.cold)).toFixed(3) },
+    disasterDeaths: +mean(ms.map(m => m.disasterDeaths)).toFixed(3),
+    prep: Object.fromEntries((['coal', 'huddle', 'none'] as const).map(k => [k, +mean(ms.map(m => m.prep[k])).toFixed(3)])),
+    tensionMax: +mean(ms.map(m => m.tensionMax)).toFixed(1),
+    tensionEnd: +mean(ms.map(m => m.tensionEnd)).toFixed(1),
+    warmEnd: +mean(ms.map(m => m.warmEnd)).toFixed(1),
     emergencyCoal: +mean(ms.map(m => (m.emergencyCoal ? 1 : 0))).toFixed(3),
     endCoal: +mean(ms.map(m => m.endCoal)).toFixed(1),
     endFood: +mean(ms.map(m => m.endFood)).toFixed(1),
@@ -108,15 +125,17 @@ const out: Record<string, ReturnType<typeof summarize>> = {};
 const t0 = Date.now();
 for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c)) {
   const ms: GameMetrics[] = [];
-  for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, run.opts).m);
+  const opts: BotOptions = disasters ? { ...run.opts, disasters: true, prep: prepFlag as 'auto' | 'never' | undefined } : run.opts;
+  for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);
   const s = out[run.name];
   console.log(`${run.name.padEnd(28)} 완주 ${(100 * (s.ends.complete ?? 0)).toFixed(0)}% 좌초 ${(100 * (s.ends.stranded ?? 0)).toFixed(0)}% `
     + `위기안건 ${s.forcedPerGame} 가혹법 ${s.harshPassed} 법 ${s.lawsPassed} 석탄최저 ${s.coalMin} 식량최저 ${s.foodMin} `
     + `석탄<30 ${s.coalUnder30} 식량<30 ${s.foodUnder30} 죽음 ${s.deaths} S1a카드 ${s.s1aCards} 내정카드 ${s.domCards}(${s.domCardsP10}~${s.domCardsP90})`);
+  console.log(`${''.padEnd(28)} 재난(판당) 눈보라 ${s.disasters.blizzard} 한파 ${s.disasters.cold} · 재난사망 ${s.disasterDeaths} · 대비(석탄/모아잠/그냥) ${s.prep.coal}/${s.prep.huddle}/${s.prep.none} · 긴장 최고 ${s.tensionMax} 끝 ${s.tensionEnd} · 끝 온기 ${s.warmEnd}`);
   const r = s.repeat;
   console.log(`${''.padEnd(28)} 이동사건 ${r.travelCards}(반복 ${r.travelRepeats}) 콘텐츠사건 ${r.contentCards}(반복 ${r.contentRepeats}) 제목반복 ${r.titleRepeats}/${r.titleTotal}(${(100 * r.titleRepeatRate).toFixed(1)}%) `
     + `이동사건없는구간 ${r.segsNoTravel}/${r.segs}(쉼 ${r.segsNoTravelRest} 빔 ${r.segsNoTravelEmpty} 그외 ${r.segsNoTravelOther}) 구간별카드[0,1,2,3,4+] ${r.cardsPerSegDist.join('/')} 최대 ${r.cardsPerSegMax}`);
 }
-console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''})`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, sets, runs: out }, null, 2));
+console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''})`);
+if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, sets, disasters, prep: prepFlag, dz: dzSets, runs: out }, null, 2));

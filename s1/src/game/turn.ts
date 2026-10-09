@@ -1,4 +1,5 @@
 import { addCard, END_LINK } from './state';
+import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
@@ -163,7 +164,7 @@ function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + disasterCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -175,6 +176,7 @@ function depart(g: Game): void {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
   }
+  disasterDepart(g);
   // S1c 내정 훅: 기관 숙련자가 없으면 선다(매뉴얼도 없으면 끝), 고장 판정.
   const domStall = domesticDepart(g);
   if (domStall === 'end') return finish(g, 'stranded');
@@ -396,7 +398,7 @@ export function stopRisk(g: Game): StopRisk {
   }
   return {
     lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
-    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout, pyre: pyreCount(g) > 0,
+    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout && !blizzardActive(g), pyre: pyreCount(g) > 0,
   };
 }
 
@@ -635,6 +637,7 @@ function settle(g: Game): void {
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
   checkEnd(g);
+  if (g.phase !== 'end') disasterSettle(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
     trust: g.trust - before.trust, tension: g.tension - before.tension,
