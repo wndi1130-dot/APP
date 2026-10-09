@@ -176,7 +176,7 @@
 | 17 | 간부 맡기기 인구 조건 | s1c_domestic.md:247 (배급장 220 등 인구 기준) | s1a_politics_numbers.md:640 "인구 조건은 … 뺐다" | B | A에 S1 예외 명시(286줄과 합침) | 낮음 |
 | 18 | 간부 수 | s1c_domestic.md:55 "간부 넷 모두" | decisions.md:241 간부 다섯(배급장, 공방장, 의무장, 기관장, 경비대장), s1c_domestic.md:287 "다섯 간부" | B | A | 낮음 |
 | 19 | 맡길 때 방침 이름 | s1c_domestic.md:3 "'친화 세력 우선'" | decisions.md:241 "열차장 쪽 세력 우선" | B | A | 낮음 |
-| 20 | 닫힌 화차 용도 | decisions.md:64 "닫힌 화차는 짐과 석탄에만" | s1c_domestic.md:106 (창고·냉동·공방칸·탄수차), s1a_politics_numbers.md:641 | B | A ("짐, 석탄, 기계, 시신") | 낮음 |
+| 20 | 닫힌 화차 용도 | decisions.md:64 "닫힌 화차는 짐과 석탄에만" | s1c_domestic.md:106 (창고·냉동·공방칸·탄수차), s1a_politics_numbers.md:641 | B | A ("짐, 석탄, 기계". 시신은 찬 객차에만, 2026-10-09 금지선 반영) | 낮음 |
 | 21 | 비밀 풀 수 | s1a_politics_numbers.md:387 "비밀 풀 (25개)" (8+9+8) | s1a_politics_numbers.md:519 "비밀 24개" | 판정 불가 | 519줄 | 낮음 |
 | 22 | 회기 간격 | s1a_politics_numbers.md (3구간마다), s1/README.md "회기는 3, 6, 9 … 구간에만" | first_leg_story.md:108 "정차마다 한 번이다(기본값)" | 판정 불가, decisions.md:53이 S3로 미룸 | decisions:53에 first_leg 기본값을 제안으로 적기 | 중간 |
 | 23 | 첫 구간 시작 석탄과 법 요구 | first_leg_story.md:152 "석탄 약 45", s1a:647 | s1a_politics_numbers.md:635 "석탄 50 이하 … 예고" | 인과 문제 | s1a:647 | 중간 |
