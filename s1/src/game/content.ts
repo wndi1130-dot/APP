@@ -6,7 +6,7 @@ import { onDeath } from './death';
 import { josa } from './josa';
 import { SPECIALISTS } from './domestic/data';
 import { CAR_COMM } from './domestic/data';
-import { living } from './domestic/state';
+import { domesticAide, living } from './domestic/state';
 import { CAR_NAME } from './domestic/workshop';
 import { addCard, clamp, isGone, journal, lawActive, pick, PROFILES, situation } from './state';
 import type { Card, Game, Profile } from './state';
@@ -286,16 +286,6 @@ function bindValues(g: Game, ev: ContentEvent, c: Comm): Record<string, string> 
   if (params.includes('car') && bind.car?.startsWith('car:')) vals.car = CAR_NAME[pick(g, carsOf(bind.car.slice(4)))];
   if (ev.speaker === 'aide') vals['@aide'] = domesticAide(g, c) ?? pick(g, people(g, c).map(p => p.name));
   return vals;
-}
-
-/** S1c 판에선 견습 화부가 기관실 측근(#10), 약사가 앞칸 측근(#11)을 겸한다(s1c_domestic 8.1, J10 8번). 살아 있으면 그 사람이 말한다. */
-// 전문가 id는 SPECIALISTS 순서로 정해진다(enableDomestic). 배우며 직함이 바뀌어도 id로 찾는다.
-const AIDE_ROLE: Partial<Record<Comm, string>> = { engine: '견습 화부', front: '약사' };
-function domesticAide(g: Game, c: Comm): string | undefined {
-  const role = AIDE_ROLE[c];
-  const i = role ? SPECIALISTS.findIndex(x => x.role === role) : -1;
-  const p = i >= 0 ? g.dom?.people.find(x => x.id === `sp${i + 1}` && x.comm === c && x.alive && !x.gone) : undefined;
-  return p && !isGone(g, p.name) ? p.name : undefined;
 }
 
 function stageOpen(g: Game, ev: ContentEvent): boolean {
