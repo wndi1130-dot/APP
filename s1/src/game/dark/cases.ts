@@ -242,6 +242,48 @@ export function sendTrial(g: Game, c: Case): void {
   if (c.clock !== null && !c.trialExt) { c.trialExt = true; c.clock += 1; }
 }
 
+/** 경비대 재판(5.3, 계엄 중): 경비대장이 표결 없이 판결한다. 유죄 확률은 증거 단계 소문 30% / 정황 60% / 증거 100%(B.gtrialP).
+ * 유죄면 의회 재판과 같은 자리(사건의 convicted)에 적히고 벌 카드로 간다. 무죄면 풀려난다(표결이 없었으니 피고 칸 관계는 그대로).
+ * 선례는 유죄·무죄 모두 의회 재판과 같이 적는다(같은 단계에서 반대면 지난 피고 칸 관계 −2). 피고가 없으면 아무 일도 안 한다. */
+export function guardTrial(g: Game, cs: Case): void {
+  const d = g.dark!;
+  const top = topByClues(g, cs);
+  if (!top) return;
+  d.stats.trials += 1;
+  d.stats.gtrials += 1;
+  cs.triedAt = g.session;
+  const lv = level(top);
+  const comm = commOf(g, top.id);
+  const guilty = dr(g) < B.gtrialP[lv];
+  const pre = d.precedent[cs.kind];
+  if (pre && pre.level === lv && pre.guilty !== guilty) g.comms[pre.comm].rel = clamp(g.comms[pre.comm].rel - 2, -100, 100);
+  d.precedent[cs.kind] = { level: lv, guilty, comm };
+  if (guilty) {
+    d.stats.guilty += 1;
+    cs.convicted = top.id;
+    darkCard(g, { kind: 'dark:punish', n: cs.id, who: top.id, comm, text: 'guard' });
+    return;
+  }
+  d.stats.acquitted += 1;
+  top.acq = true;
+  cs.status = 'open';
+  if (cs.clock !== null) cs.clock = 2;
+  journal(g, '경비대장이 서류를 돌려보냈다. 증거가 모자란다고 했다.', 'dark');
+  updateFlags(g);
+}
+
+/** 경비대 재판 카드에서 '풀어 준다': 의회 무죄와 같다(acq, 수사가 다시 열림, 시계 2). 공개로 풀어 준 것이라 피고 칸 관계 +3. */
+export function guardFree(g: Game, cs: Case): void {
+  const top = topByClues(g, cs);
+  if (!top) return;
+  top.acq = true;
+  g.comms[commOf(g, top.id)].rel = clamp(g.comms[commOf(g, top.id)].rel + 3, -100, 100);
+  cs.status = 'open';
+  if (cs.clock !== null) cs.clock = 2;
+  journal(g, `${nameOf(g, top.id)}이(가) 풀려났다. 사람들은 다음 이름을 찾는다.`, 'dark');
+  updateFlags(g);
+}
+
 /** 즉결(4.4): 경비대장이 바로 벌한다. 오판 확률 증거 0%, 정황 40%, 소문 70%. 공포 +5, 경비대 외 모든 칸 관계 −2. */
 export function summary(g: Game, c: Case): Suspect | undefined {
   const top = topByClues(g, c);
@@ -282,12 +324,12 @@ function basisLine(s: Suspect, lv: 0 | 1 | 2): string {
 }
 
 /** 벌(4.4 표). 벌은 긴장을 내리지 않는다. 군중 시계를 끝낼 뿐이다. */
-export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' | 'summary'): string[] {
+export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' | 'summary' | 'guard'): string[] {
   const d = g.dark!;
-  // 처형은 재판 유죄 뒤만(사용자 결정). 카드가 막아도 함수 쪽에서 한 번 더 본다.
-  // 'trial_and_summary'(즉결 처형도)는 17:01 카드에서 고르지 않은 안으로, 시험용으로만 남는다. 계엄의 경비대 재판이 아니다.
+  // 처형은 재판 유죄 뒤만(사용자 결정). 카드가 막아도 함수 쪽에서 한 번 더 본다. 계엄의 경비대 재판('guard')도 재판이라 같은 길이다(5.3).
+  // 'trial_and_summary'(즉결 처형도)는 17:01 카드에서 고르지 않은 안으로, 시험용으로만 남는다.
   if (how === 'execute' && !(EXECUTION.rule === 'trial_and_summary' && via === 'summary') &&
-    (EXECUTION.rule === 'none' || via !== 'trial' || c.convicted !== s.id)) return [];
+    (EXECUTION.rule === 'none' || (via !== 'trial' && via !== 'guard') || c.convicted !== s.id)) return [];
   const lines: string[] = [];
   const name = nameOf(g, s.id);
   const comm = commOf(g, s.id);
@@ -317,11 +359,12 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       d.harm += 1; // 처형도 사람이 죽은 피해 사건이고 폭력 사망이다(1.2, K02 10)
       d.stats.violentDeaths += 1;
       cross(g, 'executions');
+      if (via === 'guard') { cross(g, 'guard_exec'); d.stats.gexec += 1; }
       onDeath(g, comm, [name], 'chosen');
       offend(g, comm);
       g.fear = clamp(g.fear + 10, 0, 100);
       lines.push(`해가 지기 전에 총소리 하나가 났다. ${name}의 일은 그것으로 끝났다.`);
-      scene(g, 'execute', 3, `${g.seg}구간, ${via === 'trial' ? '의회의 판결로' : '경비대의 손으로'} ${name}을(를) 처형했다.`, [s.id]);
+      scene(g, 'execute', 3, `${g.seg}구간, ${via === 'trial' ? '의회의 판결로' : via === 'guard' ? '경비대장의 판결로' : '경비대의 손으로'} ${name}을(를) 처형했다.`, [s.id]);
       break;
   }
   lines.push(basisLine(s, lv));

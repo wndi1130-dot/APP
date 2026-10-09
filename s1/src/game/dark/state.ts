@@ -204,6 +204,8 @@ export interface DarkState {
   martialLifted?: { seg: number; bonus: boolean; decreed: LawId[]; repealed: LawId[] };
   /** 대권이 끝나는 카드에서 고른 것(안 고르면 돌려준다) */
   powersPlan?: 'return' | 'ask' | 'extend';
+  /** '의회에 묻는다'를 골랐다: 다음 정기 회기에 '대권 연장'(67) 안건이 오른다. 표결이 끝나면 꺼진다 */
+  extendAsk?: boolean;
   /** 계엄으로 들어선 문의 기록(H7 15.1, 시뮬) */
   martialDoors: MartialDoor[];
   /** 악몽이 남은 카드 수(10.5) */

@@ -8,10 +8,12 @@ import type { Card, Game } from '../state';
 import { B, EXECUTION, TRAIN_ORDER } from './data';
 import {
   boardingText, caseById, coverUp, crimeTitle, crowdLine, eligible, level, LEVEL_WORD, mobTarget, openCase, protect, punish,
-  scapegoat, sendTrial, settleTruth, summary, topByClues, updateFlags,
+  guardFree, guardTrial, scapegoat, sendTrial, settleTruth, summary, topByClues, updateFlags,
 } from './cases';
 import type { Punish } from './cases';
 import { closeChronicle, nightmareSay, reaction } from './chronicle';
+import { defenseLine } from './council';
+import { canExtend } from './martial';
 import { ruleChosen, vigil } from './corpses';
 import { fill, freeGuards, guarded, guardsOut, postGuard, signRead } from './embers';
 import {
@@ -90,25 +92,29 @@ function view(g: Game, card: Card): CardView | null {
       const lines = live.map(s => `${nameOf(g, s.id)}(${boardingText(g, s.id)}) · ${LEVEL_WORD[level(s)]}${s.clues.length ? `: ${s.clues[s.clues.length - 1].line}` : ''}`);
       const top = topByClues(g, cs);
       const canTrial = !!top && level(top) >= 1;
+      const martial = !!d.martial;
       return {
         title: `수사: ${crimeTitle(g, cs)}`, speaker: officer(g, cs.sus.map(s => s.id)), focus: cs.victimComm, required: true,
         body: [`${cs.where}. 용의자 셋.`, ...lines].join('\n'), faces: live.map(s => nameOf(g, s.id)),
         choices: [
           { label: '더 캔다', say: '아직 이르다. 그날 밤 교대 명단부터 다시 가져와.', effs: [], special: 'dark:dig' },
-          { label: '재판에 넘긴다', say: '식당칸에서 모두가 보는 앞에서 가린다.', effs: [], special: 'dark:trial', disabled: cs.status === 'trial' ? '이미 넘겼다' : canTrial ? undefined : '정황 이상인 용의자가 없다', extra: ['다음 회기 안건 자리를 쓴다'] },
+          martial
+            ? { label: '경비대 재판에 넘긴다', say: '경비대장, 서류를 읽고 판결해라. 식당칸은 닫혀 있다.', effs: [], special: 'dark:trial', disabled: cs.status === 'trial' ? '이미 넘겼다' : canTrial ? undefined : '정황 이상인 용의자가 없다', extra: ['다음 출발 전 경비대장이 판결한다'] }
+            : { label: '재판에 넘긴다', say: '식당칸에서 모두가 보는 앞에서 가린다.', effs: [], special: 'dark:trial', disabled: cs.status === 'trial' ? '이미 넘겼다' : canTrial ? undefined : '정황 이상인 용의자가 없다', extra: ['다음 회기 안건 자리를 쓴다'] },
           { label: '경비대가 처리한다', say: '경비대장, 오늘 안에 끝내라. 이름은 네가 골라.', effs: [], special: 'dark:summary', extra: ['공포 +5', '경비대 외 관계 −2'] },
           { label: '덮는다', say: '보일러 일지에 미끄러졌다고 적어라. 오늘 날짜로.', effs: [], special: 'dark:cover', extra: [`${COMM_NAME[cs.victimComm]} 적의 +1`] },
         ],
       };
     }
     case 'dark:punish': {
-      const via = card.text === 'summary' ? 'summary' : 'trial';
+      const via = card.text === 'summary' ? 'summary' : card.text === 'guard' ? 'guard' : 'trial';
       const who = card.who ?? '';
       const name = nameOf(g, who);
       const execOff = EXECUTION.rule === 'none' ? '처형은 없다' : EXECUTION.rule === 'trial' && via === 'summary' ? '처형은 재판 판결로만' : undefined;
       return {
-        title: `${name}의 벌`, speaker: via === 'trial' ? undefined : officer(g, [who]), focus: c, required: true,
-        body: via === 'trial' ? `의회가 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.` : `경비대장이 ${name}${eul(name)} 데려왔다.`,
+        title: `${name}의 벌`, speaker: via === 'trial' ? undefined : via === 'guard' ? rep(g, 'guard') : officer(g, [who]), focus: c, required: true,
+        body: via === 'trial' ? `의회가 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.`
+          : via === 'guard' ? `경비대장이 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.` : `경비대장이 ${name}${eul(name)} 데려왔다.`,
         faces: [name],
         choices: [
           { label: '배급을 끊는다', say: '그 몫은 피해 칸에 돌려라. 사흘이다.', effs: [], special: 'dark:punish:ration' },
@@ -249,13 +255,55 @@ function view(g: Game, card: Card): CardView | null {
     }
     case 'dark:vigil': {
       const name = card.who ?? '';
+      const martial = !!d.martial; // 계엄 중엔 통행을 허락하는 사람이 경비대장이다(5.3 비상 변형)
       return {
-        title: '밤샘', speaker: rep(g, c), focus: c, required: true,
+        title: '밤샘', speaker: martial ? rep(g, 'guard') : rep(g, c), focus: c, required: true,
         body: `${name}의 곁을 하룻밤 지키겠다고 한다.`,
         choices: [
-          { label: '허락한다', say: '하룻밤이다. 등잔 하나는 켜 둬라.', effs: [], special: 'dark:vigil:allow', extra: [`${COMM_NAME[c]} 관계 +4`] },
+          { label: martial ? '통행 쪽지를 써 준다' : '허락한다', say: martial ? '하룻밤이다. 쪽지에 칸 이름과 시간을 적어라.' : '하룻밤이다. 등잔 하나는 켜 둬라.', effs: [], special: 'dark:vigil:allow', extra: [`${COMM_NAME[c]} 관계 +4`] },
           { label: '경비와 함께', say: '지켜라. 다만 경비 하나가 문가에 선다.', effs: [], special: 'dark:vigil:guard', extra: [`${COMM_NAME[c]} 관계 +2`, '경비대 노출 +1'] },
           { label: '거절한다', say: '오늘 보내야 한다. 미안하다.', effs: [], special: 'dark:vigil:refuse', extra: [`${COMM_NAME[c]} 관계 −3`] },
+        ],
+      };
+    }
+    case 'dark:powers_end': {
+      const deputy = { name: nameOf(g, d.staff.deputy), role: '부관', comm: 'front' as Comm };
+      const why = canExtend(g);
+      const decrees = (g.decreed ?? []).length + (g.decreedRepeals ?? []).length;
+      return {
+        title: '약속한 날', speaker: deputy, required: true,
+        body: `대권이 오늘로 끝난다. 포고한 법이 ${decrees}건 책상에 쌓여 있다.`,
+        choices: [
+          { label: '돌려준다', say: '약속한 날이다. 권한을 의회에 돌려준다.', effs: [], special: 'dark:powers:return', extra: [`신임 +${B.powersReturnTrust}`, '포고는 다음 정기 회기에 추인받아야 남는다'] },
+          { label: '의회에 묻는다', say: '아직 끝나지 않았다. 의회가 정하게 하라.', effs: [], special: 'dark:powers:ask', extra: ['대권은 약속한 날에 끝난다', '다음 회기 안건: 비상대권 연장(67표)'] },
+          crossing(g, card, { label: '연장한다', say: '의회는 기다릴 수 없다. 대권은 계속된다.', effs: [], special: 'dark:powers:extend', disabled: why ?? undefined, extra: ['계엄이 선다. 의회 대신 포고, 신임 대신 경비대의 충성', '경비대 외 모든 칸 적의 +1', '긴장 +10'] }),
+        ],
+      };
+    }
+    case 'dark:coup_warn':
+      return {
+        title: '당직표', speaker: { name: nameOf(g, d.staff.deputy), role: '부관', comm: 'front' }, required: true,
+        body: '경비대장이 당직표를 제 손으로 다시 짰다. 열차장 이름은 없다.',
+        choices: [ok('알았다')],
+      };
+    case 'dark:gtrial': {
+      const cs = caseById(g, card.n);
+      const top = cs ? topByClues(g, cs) : undefined;
+      if (!cs || !top || cs.status !== 'trial') return { title: '닫힌 서류', body: '이 재판은 이미 끝났다.', required: true, choices: [ok('알았다')] };
+      const name = nameOf(g, top.id);
+      const lv = level(top);
+      const pre = d.precedent[cs.kind];
+      const lines = [
+        `${name}(${boardingText(g, top.id)}) · ${crimeTitle(g, cs)}`,
+        `증거 단계: ${LEVEL_WORD[lv]}${top.clues.length ? `. ${top.clues[top.clues.length - 1].line}` : ''}`,
+        `피고의 말: "${defenseLine(g, { kind: 'motion', motion: 'trial', person: top.id, ref: cs.id })}"`,
+        ...(pre ? [`지난번엔 ${LEVEL_WORD[pre.level]}만으로 ${pre.guilty ? '유죄' : '무죄'}를 냈다.`] : []),
+      ];
+      return {
+        title: `경비대 재판: ${name}`, speaker: rep(g, 'guard'), focus: cs.victimComm, required: true, body: lines.join('\n'), faces: [name],
+        choices: [
+          { label: '판결을 듣는다', say: '경비대장, 읽어라. 나는 듣겠다.', effs: [], special: 'dark:gtrial:hear', extra: [['소문이면 유죄가 나기 어렵다', '정황이면 유죄가 날 때가 많다', '증거면 유죄가 난다'][lv], '유죄면 벌 넷이 모두 열린다'] },
+          { label: '풀어 준다', say: '증거가 모자라다. 풀어 줘라.', effs: [], special: 'dark:gtrial:free', extra: [`${COMM_NAME[commOf(g, top.id)]} 관계 +3`, '군중이 다음 구간에 온다'] },
         ],
       };
     }
@@ -314,9 +362,14 @@ function choose(g: Game, card: Card, ch: Choice): void {
       break;
     }
     case 'dark:cover': if (cs) coverUp(g, cs); break;
+    case 'dark:powers:return': d.powersPlan = 'return'; break;
+    case 'dark:powers:ask': d.powersPlan = 'ask'; break;
+    case 'dark:powers:extend': d.powersPlan = 'extend'; break;
+    case 'dark:gtrial:hear': if (cs && cs.status === 'trial') guardTrial(g, cs); break;
+    case 'dark:gtrial:free': if (cs && cs.status === 'trial') guardFree(g, cs); break;
     case 'dark:punish:ration': case 'dark:punish:confine': case 'dark:punish:exile': case 'dark:punish:execute': {
       const s = cs?.sus.find(x => x.id === card.who);
-      if (cs && s) for (const line of punish(g, cs, s, sp.slice('dark:punish:'.length) as Punish, card.text === 'summary' ? 'summary' : 'trial')) say(line);
+      if (cs && s) for (const line of punish(g, cs, s, sp.slice('dark:punish:'.length) as Punish, card.text === 'summary' ? 'summary' : card.text === 'guard' ? 'guard' : 'trial')) say(line);
       break;
     }
     case 'dark:mob:give': case 'dark:mob:lynch': {

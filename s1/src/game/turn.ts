@@ -24,7 +24,7 @@ import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
-import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
+import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
@@ -50,7 +50,7 @@ export function primaryAction(g: Game): Primary {
     case 'council': {
       const council = g.council;
       if (council?.pre && !council.pre.result && council.result) return { label: '다음 안건', ok: true };
-      if (council && (council.options.length > 0 || preVote(g)) && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
+      if (council && !council.martial && (council.options.length > 0 || preVote(g)) && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
       return { label: '정산으로', ok: true };
     }
     case 'settle': return { label: g.seg >= P.segments ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
@@ -76,6 +76,9 @@ export function advance(g: Game): void {
 
 // ---- 출발 전 운영 ----
 export function setLever(g: Game, c: Comm, which: 'heat' | 'ration', value: number): void {
+  // S1b 계엄 중엔 경비대 배급 레버를 계엄이 올린 값 아래로 못 내린다(5.3 유지비). 거절이면 값은 그대로다.
+  const lock = g.dark?.martial;
+  if (lock && c === 'guard' && which === 'ration' && Math.round(value) < lock.rationLocked) return;
   const floor = which === 'heat' ? lawFloor(g, 'heatFloor') : lawFloor(g, 'rationFloor');
   g.comms[c][which] = clamp(Math.round(value), floor, 4);
 }
@@ -106,7 +109,7 @@ export function autoLevers(g: Game): string[] {
     if (w < 45 && g.coal > 50 && s.heat < 4) { s.heat += 1; changes.push(`${COMM_NAME[c]} 난방 +1`); }
     if (r < 45 && g.food > 50 && s.ration < 4) { s.ration += 1; changes.push(`${COMM_NAME[c]} 배급 +1`); }
     if (w > 65 && g.coal < 40 && s.heat > Math.max(1, hf)) { s.heat -= 1; changes.push(`${COMM_NAME[c]} 난방 −1`); }
-    if (r > 65 && g.food < 40 && s.ration > Math.max(1, rf)) { s.ration -= 1; changes.push(`${COMM_NAME[c]} 배급 −1`); }
+    if (r > 65 && g.food < 40 && s.ration > Math.max(1, rf, c === 'guard' ? g.dark?.martial?.rationLocked ?? 0 : 0)) { s.ration -= 1; changes.push(`${COMM_NAME[c]} 배급 −1`); }
   }
   return changes;
 }
@@ -623,14 +626,14 @@ function settle(g: Game): void {
   biteTick(g);
   needTick(g, notes);
   peopleTick(g, () => rnd(g));
-  if (g.council && !g.council.emergency) dropUnratified(g);
+  if (g.council && !g.council.emergency && !g.council.martial) dropUnratified(g);
   if (g.council) bribeDetection(g);
   leashTick(g);
   aiLeaders(g);
   darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
-  checkEnd(g);
+  if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
     trust: g.trust - before.trust, tension: g.tension - before.tension,
@@ -705,6 +708,7 @@ export function emergencyStatus(g: Game): { show: boolean; ok: boolean; cost: nu
   const show = g.phase === 'stop' && !!g.stop?.done && !isSessionSeg(g.seg);
   if (!show) return { show, ok: false, cost };
   if (g.cards.length > 0) return { show, ok: false, cost, why: '먼저 서류를 처리한다' };
+  if (g.dark?.martial) return { show, ok: false, cost, why: '의회가 닫혀 있다' };
   if (g.trust <= cost) return { show, ok: false, cost, why: '신임이 모자라다' };
   if (agendaOptions(g).options.length === 0) return { show, ok: false, cost, why: '올릴 안건이 없다' };
   return { show, ok: true, cost };
@@ -955,11 +959,13 @@ function checkEnd(g: Game): void {
     }
   }
   if (g.food < 0) g.food = 0;
-  if (g.trust <= 0 && g.trustCrisis === null) {
+  // S1b 계엄 중엔 신임 대신 경비대의 충성을 쥔다. 신임 위기로 축출되지 않는다(5.3).
+  const martial = !!g.dark?.martial;
+  if (!martial && g.trust <= 0 && g.trustCrisis === null) {
     g.trustCrisis = g.seg + 3;
     addCard(g, { kind: 'trust_crisis' });
     journal(g, '신임이 바닥났다. 3구간 안에 25까지 되돌려야 한다.', 'bad');
-  } else if (g.trustCrisis !== null) {
+  } else if (!martial && g.trustCrisis !== null) {
     if (g.trust >= 25) {
       g.trustCrisis = null;
       journal(g, '불신임의 말이 잦아들었다.', 'good');
@@ -1000,7 +1006,8 @@ function nextSegment(g: Game): void {
   g.stop = null;
   if (g.decreeLeft > 0) {
     g.decreeLeft -= 1;
-    if (g.decreeLeft === 0) endEmergencyPowers(g);
+    // S1b 판이면 대권이 끝나는 카드에서 고른 길(돌려준다·묻는다·연장한다)을 따른다. 아니면 S1a 그대로.
+    if (g.decreeLeft === 0 && !darkPowersEnd(g)) endEmergencyPowers(g);
   }
   g.phase = 'prep';
   applyFloors(g);

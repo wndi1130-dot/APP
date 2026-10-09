@@ -53,8 +53,8 @@ export interface GameMetrics {
   dark?: Record<string, number>;
 }
 
-const KIND_PICK = ['둘 다 경비를 붙인다', '경비를 붙인다', '재판에 넘긴다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
-const CRUEL_PICK = ['경비대가 처리한다', '처형', '하차 명령', '경비대가 한다'];
+const KIND_PICK = ['둘 다 경비를 붙인다', '경비를 붙인다', '재판에 넘긴다', '경비대 재판에 넘긴다', '돌려준다', '풀어 준다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
+const CRUEL_PICK = ['경비대가 처리한다', '처형', '하차 명령', '경비대가 한다', '판결을 듣는다'];
 
 /** S1b 카드: kind는 위 목록 순서로, 없으면 선을 넘지 않는 첫 선택지. cruel은 선을 넘는 선택지, 즉결 쪽을 먼저. */
 function darkPick(card: Card, view: CardView, policy: DarkPolicy): number {
@@ -272,6 +272,12 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         lastCouncil = g.session;
         m.councils += 1;
         if (g.council.options[0]?.forced) m.forced += 1;
+      }
+      // 계엄 회기(5.3): 표결이 없다. 어두운 길 봇(cruel)만 포고 하나를 하고, 나머지는 회기를 그냥 닫는다.
+      if (g.council.martial) {
+        const r = opts.s1b === 'cruel' ? castVote(g, true) : null;
+        if (!r) advance(g);
+        continue;
       }
       if (opts.plainCouncil) castVote(g); else council(g, opts);
       continue;
