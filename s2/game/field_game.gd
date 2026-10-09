@@ -585,7 +585,9 @@ func _update_person(p: Person, delta: float) -> void:
 	if p.stick.length() > 0.3 and STICK_BREAKS.has(p.action):
 		p.cancel_action()
 	if p.action != "":
-		p.action_t -= delta * float(p.mults()["hands"]) if p.action != "climb" else delta
+		# Each action takes its body multiplier once, here (not also in its length).
+		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
+		p.action_t -= delta * rate
 		if p.action_t <= 0.0:
 			var done := p.action_done
 			p.cancel_action()
@@ -1254,7 +1256,7 @@ func finish(reason: String) -> void:
 			receipt.person("leftBehind", p.pid)
 		if p.body.infection == "bite":
 			receipt.person("bitten", p.pid)
-		elif p.body.bleed >= 2 or p.body.leg_fracture or p.body.arm_fracture or p.body.downed:
+		if p.body.bleed >= 2 or p.body.leg_fracture or p.body.arm_fracture or p.body.downed:
 			receipt.person("injured", p.pid)
 	var stock: Dictionary = {}
 	for id in unloaded:

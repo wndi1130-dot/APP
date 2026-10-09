@@ -273,8 +273,9 @@ func search(p, id: String) -> void:
 		if p == game.player:
 			game.hud.loot(id)
 		return
-	c["busy"] = true
 	p.start_action("search", "뒤지기", search_time(p, c), _searched.bind(p, id))
+	c["busy"] = true
+	p.action_busy = c
 
 
 func _unlock(id: String) -> void:
@@ -368,7 +369,7 @@ func spot_default(p, id: String, verb: String) -> void:
 		"salvage":
 			if spot["state"] == "intact":
 				game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
-				p.start_action("salvage", "뜯어내기", SALVAGE_TIME / float(p.mults()["hands"]), _salvaged.bind(p, id))
+				p.start_action("salvage", "뜯어내기", SALVAGE_TIME, _salvaged.bind(p, id))
 		"water_tower":
 			water_tower_card(p)
 		"ladder":

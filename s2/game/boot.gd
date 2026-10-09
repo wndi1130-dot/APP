@@ -39,7 +39,7 @@ func _ready() -> void:
 
 func _show_menu() -> void:
 	if menu != null:
-		menu.queue_free()
+		menu.get_parent().queue_free()
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	menu = Control.new()

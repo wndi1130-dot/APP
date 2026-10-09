@@ -49,6 +49,7 @@ var action_label: String = ""
 var action_t: float = 0.0
 var action_total: float = 0.0
 var action_done: Callable
+var action_busy: Dictionary = {}        # container reserved by a search; freed when the action ends or is cut short
 var action_noise_t: float = 0.0
 var swing_t: float = 0.0
 var reload_t: float = 0.0
@@ -228,6 +229,7 @@ func take_item(id: String, n: int = 1) -> bool:
 
 
 func start_action(id: String, label: String, seconds: float, done: Callable) -> void:
+	_free_busy()
 	action = id
 	action_label = label
 	action_t = seconds
@@ -238,9 +240,16 @@ func start_action(id: String, label: String, seconds: float, done: Callable) -> 
 
 
 func cancel_action() -> void:
+	_free_busy()
 	action = ""
 	action_label = ""
 	action_t = 0.0
+
+
+func _free_busy() -> void:
+	if not action_busy.is_empty():
+		action_busy["busy"] = false
+		action_busy = {}
 
 
 func go_to(p: PackedVector3Array, run: bool = false) -> void:

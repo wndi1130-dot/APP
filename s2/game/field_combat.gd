@@ -51,7 +51,7 @@ func update(delta: float) -> void:
 			continue
 		if not p.target_zombie.is_empty():
 			_pursue_zombie(p, delta)
-		elif p.target_person != null and p.team != "raider":
+		elif p.target_person != null:
 			_pursue_person(p, delta)
 	var keep: Array = []
 	for t in tracers:
@@ -127,6 +127,18 @@ func drop_target(p) -> void:
 	p.brain.erase("goal")
 
 
+## Someone still worth hitting: a raider who gave up, was taken or left is not.
+func hostile(o) -> bool:
+	return o.is_alive() and not (o.brain.get("state", "") in ["surrender", "prisoner", "gone"])
+
+
+## A wall, shut door or whole window (or another floor) between p and the spot.
+func melee_blocked(p, at: Vector3) -> bool:
+	if game.level_of(p.position) != game.level_of(at):
+		return true
+	return not game.grid_at(p.position).body_line_clear(FieldGrid.cell_of(p.position), FieldGrid.cell_of(at))
+
+
 func _pursue_zombie(p, delta: float) -> void:
 	var z: Dictionary = p.target_zombie
 	if z.is_empty() or z["state"] == "dead":
@@ -147,7 +159,8 @@ func _pursue_zombie(p, delta: float) -> void:
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
 	var d: float = p.position.distance_to(z["pos"])
-	if d > reach + 0.15:
+	# Shut off by a wall or a whole window: no swing, walk round instead.
+	if d > reach + 0.15 or melee_blocked(p, z["pos"]):
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
@@ -258,13 +271,18 @@ func aim_candidates(p) -> Array:
 
 func _pursue_person(p, delta: float) -> void:
 	var o = p.target_person
-	if o == null or not o.is_alive() or o.body.downed:
+	if o == null or not hostile(o) or o.body.downed:
 		p.target_person = null
 		return
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
 	var d: float = p.position.distance_to(o.position)
-	if d > reach + 0.15:
+	var shut: bool = d <= reach + 0.15 and melee_blocked(p, o.position)
+	# A raider's walking is the AI's: out of reach or shut off, it lets the target go.
+	if p.team == "raider" and (d > reach + 0.15 or shut):
+		p.target_person = null
+		return
+	if d > reach + 0.15 or shut:
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
@@ -376,6 +394,9 @@ func _kill(p, z: Dictionary, msg: String) -> void:
 
 ## Shove: a short cone in front, breaks a grab, sometimes knocks down.
 func shove(p) -> void:
+	# One shove per swing time: mashing the button must not stack stuns.
+	if p.swing_t > 0.0:
+		return
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
 	p.swing_t = SHOVE_TIME / float(m["swing"])
@@ -537,14 +558,21 @@ func aim_mods(p) -> Dictionary:
 
 func can_shoot(p) -> bool:
 	var wid: String = p.weapon_id()
-	return p.can_act() and W.is_ranged(wid) and p.reload_t <= 0.0 and p.jam_t <= 0.0 and not bool(p.weapon().get("broken", false))
+	return p.can_act() and W.is_ranged(wid) and not arm_too_hurt(p) and p.reload_t <= 0.0 and p.jam_t <= 0.0 and not bool(p.weapon().get("broken", false))
+
+
+## A broken arm leaves one hand: two-handed guns and the bow stay down (body_injury 4.2).
+func arm_too_hurt(p) -> bool:
+	return bool(p.mults()["one_hand"]) and int(W.get_data(p.weapon_id()).get("hands", 1)) >= 2
 
 
 ## Press and hold: start the aim circle. Standing still shrinks it.
 func start_aim(p) -> bool:
 	if not can_shoot(p):
 		if p == game.player and W.is_ranged(p.weapon_id()):
-			if bool(p.weapon().get("broken", false)):
+			if arm_too_hurt(p):
+				game.hud.toast("팔이 부러져 두 손 무기를 못 쓴다.")
+			elif bool(p.weapon().get("broken", false)):
 				game.hud.toast("총이 망가졌다.")
 			elif p.jam_t > 0.0:
 				game.hud.toast("걸림을 푸는 중이다.")
@@ -578,6 +606,10 @@ func fire(p, at: Vector3, target = null) -> String:
 		return "empty"
 	if target == null or (target is Dictionary and target.is_empty()):
 		at.y = game.level_y(game.level_of(p.position))
+	else:
+		# The shot goes where the target is, not where a dragged finger ended.
+		var spot: Vector3 = target["pos"] if target is Dictionary else target.position
+		at = Vector3(spot.x, at.y, spot.z)
 	p.face_point(at)
 	var dist: float = p.position.distance_to(at)
 	# Too close to aim: the gun becomes a shove (field_unified 10).
@@ -694,7 +726,7 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 
 func _shoot_person(p, o, radius: float) -> bool:
 	var rng: RandomNumberGenerator = game.rng
-	if not o.is_alive():
+	if not hostile(o):
 		return false
 	var cover := 0.0
 	# Low cover (cars, fences) between shooter and target halves the body.
@@ -786,5 +818,5 @@ func swap(p) -> void:
 		return
 	p.aim.stop()
 	p.reload_t = 0.0
-	var t: float = Carry.swap_time("belt", p.carry_state()) / float(p.mults()["swap"])
+	var t: float = Carry.swap_time("belt", p.carry_state())
 	p.start_action("swap", "무기 바꿈", t, func() -> void: p.swap_weapons())
