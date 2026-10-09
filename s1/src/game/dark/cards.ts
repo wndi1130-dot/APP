@@ -29,6 +29,7 @@ import type { Ember, OrderExe, OrderMethod } from './state';
 export const DARK_CARD_KINDS = [
   'dark:sign', 'dark:armory', 'dark:act', 'dark:theft', 'dark:case', 'dark:punish', 'dark:mob', 'dark:truth', 'dark:hostile', 'dark:exec_threat',
   'dark:order_exe', 'dark:order_method', 'dark:order_done', 'dark:order_fail', 'dark:corpse_rule', 'dark:vigil',
+  'dark:powers_end', 'dark:coup_warn', 'dark:gtrial',
 ] as const;
 
 const rep = (g: Game, c: Comm) => ({ name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c });
