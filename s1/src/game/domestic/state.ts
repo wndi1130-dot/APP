@@ -1,6 +1,7 @@
 import { COMMS, TRAITS } from '../data';
 import type { Comm, Trait } from '../data';
 import { addCard, createGame, drawPerson, lawActive, pick, situation } from '../state';
+import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
 import type { Field, TechId, Variant, Zone } from './data';
@@ -32,6 +33,25 @@ export interface DomPerson {
   /** 요구를 거절당해 다음 정차에서 떠날 수 있다 */
   leaveRisk?: boolean;
   lastDemand?: number;
+  /** 늙은 장인 아크에서 쉬는 중(8.9): 가르치지도 쓰이지도 않는다 */
+  resting?: boolean;
+}
+
+/** 늙은 장인의 마지막(8.9). 판에 한 번뿐이고 enableDomestic이 씨앗으로 정한다(난수 흐름을 건드리지 않는다).
+ * stage: 0 조짐 전, 1 첫 조짐, 2 짙은 조짐, 3 끝(쓰러졌거나 그 전에 다른 까닭으로 죽었다). */
+export interface ElderArc {
+  /** 뽑힌 전문가 id */
+  who: string;
+  /** 첫 조짐이 뜨는 구간(정산) */
+  first: number;
+  /** 첫 조짐에서 짙은 조짐까지 구간 수(2~3) */
+  gap: number;
+  stage: 0 | 1 | 2 | 3;
+  /** 짙은 조짐 구간, 쓰러지는 구간(첫 조짐이 뜬 뒤에 정해진다) */
+  strong?: number;
+  fall?: number;
+  /** 첫 조짐 카드에서 고른 것 */
+  choice?: 'pupil' | 'manual' | 'rest';
 }
 
 export interface TechState {
@@ -47,6 +67,8 @@ export interface TechState {
   starved?: boolean;
   /** 돌릴 수 없어 세워 뒀다(카드 4) */
   off?: boolean;
+  /** E3 난방 배관: 의회 추인을 기다린다. 추인 전엔 복원을 마쳐도 완성되지 않는다(7.3) */
+  pending?: boolean;
 }
 
 export type ModKind = 'insulate' | 'armor' | 'convert';
@@ -134,6 +156,10 @@ export interface DomState {
   cars: string[];
   /** 열차장이 의무칸 침상에 있다. S1a 판엔 열차장 부상이 아직 없어서 아무도 켜지 않는다(6.4, 10장 12번 훅) */
   captainInBed: boolean;
+  /** 늙은 장인의 마지막(8.9). 옛 저장 판엔 없다 */
+  elder?: ElderArc;
+  /** E3 추인이 부결돼 정해진 변형: 이 판에선 그 변형으로 고정된다(취소하고 다시 시작해도 못 바꾼다, 7.3) */
+  pipeFlip?: Variant;
   /** 복원을 시작한 기록과 견습생을 붙인 기록(협상 조건 이행을 본다, 9.2) */
   log: { restores: { seg: number; id: TechId }[]; apprentices: { seg: number; field: Field; other: boolean }[] };
   /** H6 재기(12장): 구간별 내정 시간과 조작 수, 내정 카드 선택 기록 */
@@ -190,6 +216,22 @@ export function enableDomestic(g: Game): void {
       partsMade: 0, repairs: 0, buried: 0, moves: 0, cards: {},
     },
   };
+  g.dom.elder = pickElder(g, people);
+}
+
+/** 늙은 장인의 마지막(8.9): 수석 기관사, 의무장, 공방장 가운데 하나를 같은 확률로 고른다. 판 씨앗으로 정해 난수 흐름은 건드리지 않는다(hub.ts와 같다).
+ * 의무장이 뽑히면 나이를 60 이상으로 뽑는다(대표 나이도 같이 맞춘다). */
+function pickElder(g: Game, people: DomPerson[]): ElderArc {
+  const h = (k: string): number => hash(`${g.seed}|elder|${k}`);
+  const pool = ['수석 기관사', '의무장', '공방장'].map(role => people.find(p => p.role === role)).filter((p): p is DomPerson => !!p);
+  const who = pool[h('who') % pool.length];
+  if (who.role === '의무장' && who.age < D.elderMedAge[0]) {
+    who.age = D.elderMedAge[0] + (h('age') % (D.elderMedAge[1] - D.elderMedAge[0] + 1));
+    g.comms[who.comm].leader.age = who.age;
+  }
+  const [f0, f1] = D.elderFirst;
+  const [g0, g1] = D.elderGap;
+  return { who: who.id, first: f0 + (h('first') % (f1 - f0 + 1)), gap: g0 + (h('gap') % (g1 - g0 + 1)), stage: 0 };
 }
 
 /** S1c를 켠 새 판. */
@@ -276,13 +318,26 @@ export function knowledgeMult(g: Game, f: Field, tier: number): number {
   return cd !== undefined && cd > 0 ? D.knowledgeLow : 0;
 }
 
+/** 늙은 장인이 견습을 서두르거나(×0.7) 쉬는(×0.85) 동안 그 사람의 분야 기술에 걸리는 곱(8.9). 조짐이 뜬 뒤 쓰러질 때까지. */
+export function elderMult(g: Game, f: Field): number {
+  const a = g.dom?.elder;
+  if (!a || (a.stage !== 1 && a.stage !== 2) || !a.choice) return 1;
+  const p = personById(g, a.who);
+  if (!p || !p.alive || p.gone || p.field !== f) return 1;
+  return a.choice === 'pupil' ? D.elderPupilMult : a.choice === 'rest' ? D.elderRestMult : 1;
+}
+
 /** 그 분야 기술 전체에 걸리는 곱(가르치기, 매뉴얼 쓰기, 견습 의무법, 태업). */
 export function fieldMult(g: Game, f: Field): number {
   const d = g.dom;
   if (!d) return 0;
   let m = 1;
-  if (living(g).some(p => p.field === f && p.pupil)) m *= D.teachMult;
-  if (living(g).some(p => p.field === f && (p.writing ?? 0) > 0)) m *= D.writeMult;
+  // 늙은 장인이 견습을 서두르거나 쉬는 동안은 그 곱이 가르치기·쓰기 곱을 대신한다(8.9).
+  const elder = elderMult(g, f);
+  const skip = elder !== 1 ? d.elder?.who : undefined;
+  if (living(g).some(p => p.field === f && p.pupil && !p.resting && p.id !== skip)) m *= D.teachMult;
+  if (living(g).some(p => p.field === f && (p.writing ?? 0) > 0 && p.id !== skip)) m *= D.writeMult;
+  m *= elder;
   if (lawActive(g, 'apprentice_duty')) m *= D.dutyMult;
   if ((d.sabotage[f] ?? -1) >= g.seg) m *= D.sabotageMult;
   return m;

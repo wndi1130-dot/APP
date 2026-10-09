@@ -396,6 +396,7 @@ describe('내정 카드 글', () => {
       { kind: 'dom:demand', who: 'sp7', n: 1 }, { kind: 'dom:demand', who: 'sp7', n: 2 }, { kind: 'dom:car', n: 0 }, { kind: 'dom:car', n: 1 },
       { kind: 'dom:give' }, { kind: 'dom:box' }, { kind: 'dom:full', n: 5 }, { kind: 'dom:bed', n: 8 }, { kind: 'dom:officer', who: 'sp5' },
       { kind: 'dom:lice', comm: 'tail' }, { kind: 'dom:typhus', comm: 'tail', n: 4 }, { kind: 'dom:stoker' }, { kind: 'dom:pressure' },
+      { kind: 'dom:elder', who: 'sp1' }, { kind: 'dom:elder', who: 'sp3' }, { kind: 'dom:elder', who: 'sp5' },
     ];
     const kinds = new Set(cards.map(c => c.kind));
     for (const k of DOM_CARD_KINDS) expect(kinds.has(k), k).toBe(true);

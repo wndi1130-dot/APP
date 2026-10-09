@@ -125,6 +125,7 @@ function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number
     case 'dom:typhus': return (g.med > 6 ? by('dom:typhus:bay') : by('dom:typhus:apart')) ?? ok[0].i;
     case 'dom:stoker': return by('dom:stoker:tail') ?? ok[0].i;
     case 'dom:pressure': return by('dom:pressure:vent') ?? ok[0].i;
+    case 'dom:elder': return by('dom:elder:pupil') ?? by('dom:elder:manual') ?? by('dom:elder:rest') ?? ok[0].i;
     default: return ok[0].i;
   }
 }
@@ -143,7 +144,9 @@ function council(g: Game, opts: BotOptions): void {
     });
     // S1b: 재판에 넘긴 사건이 있으면 그 안건을 고른다(재판 약속을 지킨다). 강제 위기 안건이 있으면 그쪽.
     const trial = opts.s1b && !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'trial') : -1;
-    setAgenda(g, trial >= 0 ? trial : idx);
+    // E3 배관 추인이 올라와 있으면 그 안건을 고른다(추인 전엔 복원이 끝나지 않는다, 7.3). 강제 위기 안건이 있으면 그쪽.
+    const pipe = !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'pipe') : -1;
+    setAgenda(g, trial >= 0 ? trial : pipe >= 0 ? pipe : idx);
   }
   if (opts.policy === 'caretaker') {
     const a = currentAgenda(g)!;
