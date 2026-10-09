@@ -303,6 +303,12 @@ func _begin() -> SurfaceTool:
 
 
 ## Append an axis-aligned box with a flat vertex colour.
+## Vertex alpha the world shader reads as "open to the sky": 1 outdoors, 0 under
+## a roof, so snow and wet stay off floors inside buildings.
+static func sky_alpha(g: FieldGrid, c: Vector2i) -> float:
+	return 0.0 if g.indoor(c) else 1.0
+
+
 static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> void:
 	var h := size * 0.5
 	var faces := [
@@ -333,6 +339,7 @@ func _build_ground() -> void:
 			color = Color(color.r + n, color.g + n, color.b + n)
 			if f == F.RAIL and (x % 2 == 0):
 				color = color.darkened(0.15)
+			color.a = sky_alpha(grid, c)
 			var a := Vector3(x, 0, y)
 			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
 			for idx in [0, 1, 2, 0, 2, 3]:
@@ -411,6 +418,7 @@ func _build_level(lv: int) -> void:
 			var color := FLOOR_COLORS[lg.floor_at(c)]
 			var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
 			color = Color(color.r + n, color.g + n, color.b + n)
+			color.a = 0.0   # upper floors and the cellar are all under a roof
 			var a := Vector3(x, y0, y)
 			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
 			for idx in [0, 1, 2, 0, 2, 3]:

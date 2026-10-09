@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const Boot = preload("res://game/boot.gd")
+const MapView = preload("res://game/world/map_view.gd")
 
 
 func _stop(weather: Array) -> Node:
@@ -55,3 +56,20 @@ func test_hour_is_the_arrival_hour() -> void:
 	var game = _stop(["clear"])
 	var night: Dictionary = FxState.params_for(["clear"], game.weather.ambient_c, game.weather.wind_dir, game.weather.wind, 23.0)
 	assert_gt(Color(game.fx_params["fx_tint"]).v, Color(night["fx_tint"]).v)
+
+
+func test_floors_under_a_roof_are_kept_from_snow_and_wet() -> void:
+	var game = _stop(["snow"])
+	var g = game.grid
+	var indoor := Vector2i(-1, -1)
+	var outdoor := Vector2i(-1, -1)
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			if indoor.x < 0 and g.indoor(c):
+				indoor = c
+			elif outdoor.x < 0 and not g.indoor(c):
+				outdoor = c
+	assert_true(indoor.x >= 0 and outdoor.x >= 0, "the map has both")
+	assert_eq(MapView.sky_alpha(g, indoor), 0.0)
+	assert_eq(MapView.sky_alpha(g, outdoor), 1.0)

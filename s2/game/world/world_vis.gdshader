@@ -20,14 +20,15 @@ void fragment() {
 	vec3 base = COLOR.rgb;
 	// Weather (fx_common globals): wet darkens and shines, snow dusts up faces.
 	// Snow is capped and spares saturated colours, so loot, stove and floor
-	// kinds stay readable (the mesh has no indoor flag yet, so floors inside
-	// buildings are dusted too).
+	// kinds stay readable. Floors under a roof get neither.
 	float up = clamp(world_nrm.y, 0.0, 1.0);
-	float wet = clamp(fx_wet, 0.0, 1.0);
+	// Vertex alpha: 1 open to the sky, 0 under a roof (map_view.sky_alpha).
+	float sky = COLOR.a;
+	float wet = clamp(fx_wet, 0.0, 1.0) * sky;
 	float drift = fx_fbm2(world_pos.xz * 0.35);
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = smoothstep(0.6, 0.9, up) * clamp(fx_snow * (0.6 + 0.8 * drift), 0.0, 1.0);
-	cover *= 0.55 * (1.0 - smoothstep(0.08, 0.3, chroma));
+	cover *= 0.55 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	base *= 1.0 - 0.35 * wet;
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet), cover);
 	vec2 uv = world_pos.xz / map_size;
