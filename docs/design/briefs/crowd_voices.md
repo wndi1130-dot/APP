@@ -46,10 +46,10 @@
 | # | 뜻 | 독일어 | 폴란드어 | 체코어 |
 |---|---|---|---|---|
 | A01 | 부탁이에요! | Bitte! | Proszę! | Prosím! |
-| A02 | 기다려요! | Wartet! | Zaczekajcie! | Počkejte! |
-| A03 | 데려가 줘요! | Nehmt uns mit! | Weźcie nas! | Vezměte nás! |
+| A02 | 기다려요! | Wartet, bitte! | Zaczekajcie, proszę! | Počkejte, prosím! |
+| A03 | 데려가 줘요! | Nehmt uns mit! | Zabierzcie nas! | Vezměte nás s sebou! |
 | A04 | 자리 있잖아요! | Da ist doch Platz! | Jest miejsce! | Je tam místo! |
-| A05 | 두고 가지 마요! | Lasst uns nicht hier! | Nie zostawiajcie nas! | Nenechávejte nás tu! |
+| A05 | 두고 가지 마요! | Lasst uns nicht hier! | Nie zostawiajcie nas! | Nenechte nás tu! |
 | A06 | 도와줘요! | Hilfe! | Pomocy! | Pomoc! |
 | A07 | 일할 수 있어요! | Ich kann arbeiten! | Mogę pracować! | Můžu pracovat! |
 | A08 | 한 사람만요! | Nur eine Person! | Tylko jedna osoba! | Jen jednoho! |
@@ -188,7 +188,7 @@
 | 바깥에서 물리는 사람 | 홈에서 내정 중 창밖 사건 | B + G | 같은 곳, 사용자 10-09 예시 | 결정 카드가 열려 있을 땐 띄우지 않는다(presentation_motion.md 바깥 사건 규칙). 홈에는 소음 시계가 없으니 세계 소음이 아니다. 소리를 꺼도 잃는 정보가 없다 |
 | 쫓기는 사람, 선로를 걷는 생존자 | 창밖 근경 | B07·B08·B09 + G | presentation_motion.md 바깥 사건 | 줄 맞춰 걷지 않는다 |
 | 창밖 사람끼리의 다툼 | 창밖 '가끔' | C | 같은 곳 | 한 언어를 늘 가해 쪽에 두지 않는다. 박자 맞춘 외침 없음 |
-| 불타는 농가 곁 | 창밖 '가끔' | B07·B15 + G, 멀리서 | 같은 곳 | 건물 안에서 부르거나 두드리는 소리는 없다. 밖에 선 사람이 누군가를 부르는 소리만 |
+| 불타는 농가 곁 | 창밖 '가끔' | B07·B15 + G, 멀리서 | 같은 곳 | 건물 안에서 부르거나 두드리는 소리는 없다. 밖에 선 사람이 누군가를 부르는 소리만. 불타는 건물과 사람 소리가 한 장면에 모이는 것을 금지선 점검 스레드에 물었다(2026-10-09). 답 전엔 이 자리 대사를 늘리지 않는다 |
 | 칸 안 생활 | 홈 상시, 칸 상태를 따름 | F + G | sound_music.md 7장 표 | 공포 60·80 침묵 규칙이 이긴다. 아이는 평온한 소리만 |
 | 상중인 사람 | 그 칸에서 사람이 죽은 뒤 | F06 + 흐느낌, 이름 한 번 | sound_music.md 9.3(노래가 멎고 이름 한 줄) | 기도·찬송 없음 |
 | 식당칸 배식 | 홈 식당칸 | F02·F09 + 중얼거림 | s1b_dark_path.md 배식 | 호명, 숫자 세기, 줄 세우는 말 없음 |

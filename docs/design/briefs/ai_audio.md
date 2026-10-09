@@ -24,12 +24,13 @@
 | 말도 안 돼! | Unsinn! | Bzdura! | Nesmysl! | 언쟁 이상 |
 | 옳소! | Richtig! | Słusznie! | Správně! | 맞장구(8b.3 '반응하는 쪽') |
 | 그래! / 아니야! | Ja! / Nein! | Tak! / Nie! | Ano! / Ne! | 맞장구·언쟁 |
-| 빵은 어디 있어? | Wo ist das Brot? | Gdzie jest chleb? | Kde je chleba? | 고함·야유 |
+| 빵은 어디 있어? | Wo bleibt das Brot? | Gdzie chleb? | Kde je chleba? | 고함·야유 |
 | 공평하지 않아! | Das ist nicht gerecht! | To niesprawiedliwe! | To není spravedlivé! | 언쟁 이상 |
 | 말하게 해! | Lasst ihn reden! | Niech mówi! | Nechte ho mluvit! | 언쟁 |
-| 표결해! | Abstimmen! | Głosować! | Hlasovat! | 언쟁 이상 |
+| 표결하자! | Abstimmung! | Głosowanie! | Hlasujme! | 언쟁 이상 |
 | 우우 (야유) | 말 없음 | 말 없음 | 말 없음 | 고함·야유 |
 
+- 낱말 점검(2026-10-09 Codex sol): 세 언어 모두 굳은 정치 구호·선전 문구에 걸리는 것은 없다(역사 전수 대조는 안 함). 부정사 명령이라 거친 '표결해'와 덜 자연스러운 몇 줄을 대안으로 바꿨다. 독일어 'Lasst uns nicht zurück'(대안)은 'zurück'(물러서)이 출발 장면에서 명령으로 들릴 수 있어 받지 않았다. 'Wartet!'처럼 단호하게 외치면 명령으로 들리는 줄은 'bitte'를 붙여 애원으로 둔다. 사람 화자 검토는 아직이다.
 - 의장의 '정숙!': Ruhe! / Cisza! / Ticho!, 긴 판(일어서서 식당칸 전체)과 짧은 판(한 쐐기) 두 가지. 회기마다 세 언어를 돌려 쓴다(8b.3 기본값). 자막은 한국어 '정숙!'.
 - **한목소리 연호는 만들지 않는다.** 여럿이 같은 낱말을 박자에 맞춰 되풀이하면 집회 구호로 들린다(민감한 역사 금지선: 실제 시위 구호 연상). 외침은 늘 한 사람씩, 박자 없이 겹친다. 'Schande!'·'Hanba!'·'Wstyd!'는 한 사람의 야유로만 쓰고 여럿이 되풀이하는 판은 만들지 않는다.
 - 의회 밖(짐 싣기, 승하차, 경비대)에는 이 외침을 쓰지 않는다. 독일어 명령조(빨리, 나와, 멈춰 같은 말)는 어디에도 없다.
@@ -50,10 +51,10 @@
 | 뜻 | 독일어 | 폴란드어 | 체코어 |
 |---|---|---|---|
 | 부탁이에요! | Bitte! | Proszę! | Prosím! |
-| 기다려요! | Wartet! | Zaczekajcie! | Počkejte! |
-| 데려가 줘요! | Nehmt uns mit! | Weźcie nas! | Vezměte nás! |
+| 기다려요! | Wartet, bitte! | Zaczekajcie, proszę! | Počkejte, prosím! |
+| 데려가 줘요! | Nehmt uns mit! | Zabierzcie nas! | Vezměte nás s sebou! |
 | 자리 있잖아요! | Da ist doch Platz! | Jest miejsce! | Je tam místo! |
-| 두고 가지 마요! | Lasst uns nicht hier! | Nie zostawiajcie nas! | Nenechávejte nás tu! |
+| 두고 가지 마요! | Lasst uns nicht hier! | Nie zostawiajcie nas! | Nenechte nás tu! |
 | 도와줘요! | Hilfe! | Pomocy! | Pomoc! |
 
 - 'Halt'는 피난민 입이라도 쓰지 않는다(금지선에 이름이 오른 낱말).
@@ -155,5 +156,7 @@
 | 쓰임 | 첫 후보 | 다음 후보 | 뺀 것 |
 |---|---|---|---|
 | 의회 외침·애원 | 무료 귀 비교의 승자(ElevenLabs 유료 또는 Gemini TTS 유료) | MOSS-TTS v1.5(열린, 독·폴·체) | OpenAI TTS(2027-01 폐기 예고), Azure(폴·체 감정 스타일 없음), XTTS-v2·F5·Fish·Higgs(비상업), Chatterbox(체코어 없음) |
-| 메인 악보 | AIVA Pro(MIDI, 저작권 양도) | Stable Audio 3(열린, 매출 $1M 미만 무료), 작곡 외주 | ElevenLabs Music(여러 플랫폼 게임 제외), Udio(다운로드 막힘), MusicGen(비상업) |
-| 열차 안 노래 | Suno Pro(다운로드한 곡만 상업 이용) | ACE-Step 1.5(열린, MIT) | YuE·SongGeneration(독·폴·체 미지원) |
+| 메인 악보 | AIVA Pro(MIDI, 저작권 양도) | Stable Audio(웹 무료도 게임 배경음 가능, 열린 가중치는 매출 $1M 미만 무료), 작곡 외주 | Udio(다운로드 막힘), MusicGen(비상업). ElevenLabs Music은 10-09 약관에 '인디 게임' 구분이 생겨 다시 볼 것 |
+| 열차 안 노래 | Suno Pro(다운로드한 곡만 상업 이용) | ACE-Step 1.5(열린, MIT) | YuE·SongGeneration(독·폴·체 미지원, YuE2 가중치는 비상업) |
+
+두 조사(소넷, Codex luna)가 엇갈린 곳: ElevenLabs 요금(소넷은 할인 표시 $1·$11, luna는 Starter $6·Creator $22), OpenAI TTS 폐기 예고(소넷만 찾음), ACE-Step 코드 라이선스(MIT와 Apache-2.0, 모델 카드는 둘 다 MIT로 읽음). 베타 때 서비스를 고를 때 원문을 다시 연다. Gemini API(Lyria, TTS) 약관에는 18세 미만이 쓸 법한 앱을 제한하는 줄이 있다. 미리 만든 소리 파일을 넣는 건 앱이 API를 쓰는 게 아니라서 걸리지 않을 것 같지만 확실하지 않다.
