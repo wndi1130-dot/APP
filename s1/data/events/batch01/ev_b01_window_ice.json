@@ -1,0 +1,71 @@
+{
+  "id": "ev_b01_window_ice",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 20
+    },
+    {
+      "type": "community",
+      "community": "front",
+      "metric": "warmth",
+      "operator": "lte",
+      "value": 42
+    }
+  ],
+  "speaker": "front",
+  "body": "앞칸 창 안쪽에 두꺼운 얼음이 붙어 틈으로 찬바람이 듭니다. 창가에서 자던 사람이 젖은 천을 들고 덧댈 것을 찾습니다.",
+  "choices": [
+    {
+      "id": "c_patch",
+      "label": "창틈을 덧댄다",
+      "say": "마른 천을 가져와라. 창틈부터 덧댄다.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -3
+        },
+        {
+          "type": "coal",
+          "amount": -2
+        },
+        {
+          "type": "community.warmth",
+          "target": "front",
+          "amount": 5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_engine_cloth",
+      "label": "기관실 천을 빌린다",
+      "say": "기관실의 마른 천을 내어라. 창틈에 덧댄다.",
+      "effects": [
+        {
+          "type": "community.warmth",
+          "target": "engine",
+          "amount": -4
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -4
+        },
+        {
+          "type": "community.warmth",
+          "target": "front",
+          "amount": 4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

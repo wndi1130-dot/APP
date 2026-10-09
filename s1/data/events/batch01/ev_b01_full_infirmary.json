@@ -1,0 +1,72 @@
+{
+  "id": "ev_b01_full_infirmary",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 2,
+      "max": 20
+    },
+    {
+      "type": "community",
+      "community": "medtech",
+      "metric": "crowding",
+      "operator": "gte",
+      "value": 70
+    }
+  ],
+  "speaker": "medtech",
+  "body": "의무칸 침상이 모두 찼습니다. 치료를 마친 사람은 스스로 옮길 자리를 찾고, 의무진은 침상 사이에서 돌아설 틈도 없습니다.",
+  "choices": [
+    {
+      "id": "c_bedding",
+      "label": "다른 객차에 자리를 편다",
+      "say": "담요를 가져와라. 옮기려는 사람에게 자리를 펴 준다.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -4
+        },
+        {
+          "type": "community.crowding",
+          "target": "medtech",
+          "amount": -6
+        },
+        {
+          "type": "relation",
+          "target": "medtech",
+          "amount": 3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_space",
+      "label": "앞칸에 자리를 부탁한다",
+      "say": "앞칸이 자리를 내어라. 옮길 사람의 뜻부터 묻는다.",
+      "effects": [
+        {
+          "type": "community.crowding",
+          "target": "front",
+          "amount": 5
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -4
+        },
+        {
+          "type": "community.crowding",
+          "target": "medtech",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

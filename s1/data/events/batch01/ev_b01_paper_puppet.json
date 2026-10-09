@@ -1,0 +1,53 @@
+{
+  "id": "ev_b01_paper_puppet",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 20
+    }
+  ],
+  "speaker": "ration_officer",
+  "body": "구겨진 종이로 접은 새가 장부 끝에 앉았습니다. 배급 담당이 새의 부리를 흔들며 자기 몫도 적어 달라고 장난칩니다.",
+  "choices": [
+    {
+      "id": "c_make",
+      "label": "종이 새를 더 접는다",
+      "say": "종이를 가져와라. 이 새 옆에 한 마리 더 접자.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -2
+        },
+        {
+          "type": "tension",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_paper",
+      "label": "앞칸 종이를 받는다",
+      "say": "앞칸 종이를 내어라. 새 한 마리를 더 접자.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        },
+        {
+          "type": "tension",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

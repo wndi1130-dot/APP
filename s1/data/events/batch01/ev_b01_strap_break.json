@@ -1,0 +1,69 @@
+{
+  "id": "ev_b01_strap_break",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 24
+    },
+    {
+      "type": "flag",
+      "id": "b01_strap_pending",
+      "value": false
+    }
+  ],
+  "speaker": "engine",
+  "body": "매듭을 보탰던 끈이 끊어져 상자가 바닥으로 내려앉았습니다. 받침 판도 갈라져 짐을 다시 받쳐야 합니다.",
+  "choices": [
+    {
+      "id": "c_repair",
+      "label": "끈과 받침을 바꾼다",
+      "say": "상자를 비워라. 끈과 받침을 함께 바꾼다.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -4
+        },
+        {
+          "type": "food",
+          "amount": -2
+        },
+        {
+          "type": "flag",
+          "id": "b01_strap_pending",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_hold",
+      "label": "앞칸에 짐을 나눈다",
+      "say": "앞칸이 상자를 나눠 맡아라. 받침은 치운다.",
+      "effects": [
+        {
+          "type": "community.crowding",
+          "target": "front",
+          "amount": 6
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "b01_strap_pending",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

@@ -1,0 +1,54 @@
+{
+  "id": "ev_b01_two_wagons",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 4,
+      "max": 20
+    }
+  ],
+  "speaker": "engine",
+  "body": "이름 없는 들판의 선로를 버려진 화차 두 량이 막았습니다. 문은 처음부터 열려 있고 안은 비어 있어, 측선으로 밀어 옮길 수 있습니다.",
+  "choices": [
+    {
+      "id": "c_move",
+      "label": "화차를 측선으로 옮긴다",
+      "say": "화차를 살펴라. 기관차로 측선까지 밀어 옮긴다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -6
+        },
+        {
+          "type": "food",
+          "amount": -2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_guard_push",
+      "label": "경비칸에 밀기를 맡긴다",
+      "say": "경비칸이 화차를 밀어라. 측선까지 함께 본다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 8
+        },
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

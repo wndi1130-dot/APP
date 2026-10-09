@@ -1,0 +1,54 @@
+{
+  "id": "ev_b01_doubtful_bridge",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 5,
+      "max": 20
+    }
+  ],
+  "speaker": "engine",
+  "body": "이름 없는 숲의 작은 골짜기 다리에서 받침 하나가 기울었습니다. 건너기 전에 받침을 보강하고 바퀴가 지날 곳을 확인해야 합니다.",
+  "choices": [
+    {
+      "id": "c_brace",
+      "label": "다리 받침을 보강한다",
+      "say": "받침을 대라. 바퀴가 지날 곳을 먼저 살핀다.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -4
+        },
+        {
+          "type": "coal",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_engine_brace",
+      "label": "기관실에 보강을 맡긴다",
+      "say": "기관실이 받침을 맞춰라. 건너는 건 그다음이다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 8
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
