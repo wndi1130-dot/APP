@@ -68,6 +68,12 @@ export function darkStop(g: Game, went: boolean, crew: string[]): string[] {
   return line ? [line] : [];
 }
 
+/** 이번 정차에 걸려 있는 명령의 대상 이름(없으면 null). resolveStop이 같은 사람의 부상을 두 번 세지 않으려고 본다. */
+export function darkStopTarget(g: Game): string | null {
+  const o = g.dark?.order;
+  return o && o.method === 'stop' && o.exeId ? nameOf(g, o.target) : null;
+}
+
 /** 정차 산출 배수(연결기 풀기, 보일러 고장). S1a 판이면 1. */
 export function darkHaulMult(g: Game): number {
   return g.dark?.haul ?? 1;
