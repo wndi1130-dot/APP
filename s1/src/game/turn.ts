@@ -24,7 +24,7 @@ import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
-import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkTravel } from './dark/hooks';
+import { darkFinish, darkHaulMult, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
@@ -456,6 +456,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
   const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
   if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
+  // 위험은 어두운 길 훅이 사람을 빼기 전에 정한다(K01 4와 같은 까닭). 하차나 정차 명령으로 사람이 빠지면 작업조 명단이 돌고,
+  // 시신이 생기면 불빛 배수가 붙어 정찰이 약속한 피해와 달라진다. stopRisk는 난수 흐름을 쓰지 않는다.
+  const risk = stopRisk(g);
+  const orderTarget = darkStopTarget(g);
   const darkNotes = darkStop(g, !!(go && stop.target), go && stop.target ? stopCrew(g) : []);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
@@ -465,8 +469,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     checkStopPromises(g, null, {});
     return stop.result;
   }
-  // 위험은 정차 상태를 바꾸기 전에 정한다(K01 4). 장작불이 시신을 태우면 불빛 배수가 빠져 예고한 피해와 달라진다.
-  const risk = stopRisk(g);
+  // 위험은 위에서 정차 상태를 바꾸기 전에 정했다(K01 4). 장작불이 시신을 태우면 불빛 배수가 빠져 예고한 피해와 달라진다.
   const stay = STAY[stop.stay];
   g.coal -= stay.coal;
   burnPyre(g);
@@ -508,8 +511,11 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (risk.guardRefused) notes.push('경비대가 경계를 거부했다.');
   const names = crewNames(g, stop.crewComm, stop.crewSize);
   // 정해 둔 결과 그대로. 정찰했으면 위험 줄이 이걸 미리 보여 줬다.
-  const dead = risk.fate.dead;
-  const hurt = risk.fate.hurt;
+  // 정차 명령이나 하차로 이미 열차에 없는 사람은 약속한 피해에서 뺀다(같은 사람이 두 번 죽지 않는다).
+  const dead = risk.fate.dead.filter(n => !isGone(g, n));
+  // 정차 명령이 실행돼 대상이 이미 다쳤으면(runOrder가 셌다) 약속한 부상에서 또 세지 않는다.
+  const orderHit = orderTarget && !g.dark?.order ? orderTarget : null;
+  const hurt = risk.fate.hurt.filter(n => !isGone(g, n) && n !== orderHit);
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;

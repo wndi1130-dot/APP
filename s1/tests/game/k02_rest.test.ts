@@ -5,6 +5,7 @@ import { level, openCase, punish, PUNISH_PROOF_REL } from '../../src/game/dark/c
 import type { Punish } from '../../src/game/dark/cases';
 import { adults, byId, nameOf } from '../../src/game/dark/state';
 import type { Clue, Suspect } from '../../src/game/dark/state';
+import { crewNames, stopRisk } from '../../src/game/turn';
 
 // K02 판정(/mnt/project-files/s1b_wip/k02_verdict.md)의 남은 높음 둘(3·4).
 
@@ -110,5 +111,52 @@ describe('K02 4. 벌의 반응은 증거 단계를 따른다', () => {
     expect(punished(0, 'ration').lines).toContain('근거(소문): 단서는 없었다. 사람들이 그렇게 말했을 뿐이다.');
     expect(punished(1, 'ration').lines).toContain('근거(정황): foot 단서 줄');
     expect(punished(2, 'ration').lines).toContain('근거(증거): witness 단서 줄');
+  });
+});
+
+describe('K02 3 뒤. 정차 명령이 정찰이 약속한 피해를 바꾸지 않는다', () => {
+  // 대상은 작업조 칸의 조원(regular), 조에 안 든 같은 칸 사람(same), 다른 칸 사람(other) 셋으로 본다.
+  function crewOrder(seed: string, kind: 'regular' | 'same' | 'other', place: number) {
+    const g = darkGame(seed);
+    g.stop = { place: PLACES[place].id, target: 'coal', stay: Object.keys(STAY).at(-1) as never, crewComm: 'tail', crewSize: 6, threat: 1.4, scout: true, done: false, result: null };
+    const crew = crewNames(g, 'tail', 6);
+    const pool = adults(g, kind === 'other' ? 'front' : 'tail', { noRep: true });
+    const target = (kind === 'regular' ? pool.find(p => crew.includes(p.name)) : pool.find(p => !crew.includes(p.name)))!.id;
+    const exe = adults(g, 'guard', { noRep: true })[0].id;
+    g.dark!.order = { target, why: 'hostile', exe: 'guard', exeId: exe, method: 'stop', at: g.seg };
+    return { g, name: nameOf(g, target) };
+  }
+
+  it('명령으로 사람이 빠져도 약속한 사망·중상 명단은 그대로다(대상 자신만 빠진다)', () => {
+    let harmed = 0;
+    for (const kind of ['regular', 'same', 'other'] as const) {
+      for (let i = 0; i < 40; i += 1) {
+        for (const place of [0, PLACES.length - 1]) {
+          const { g, name } = crewOrder(`k02-3-fate-${kind}-${i}`, kind, place);
+          const before = stopRisk(g).fate;
+          const res = resolveStop(g, true)!;
+          // 명령이 성공했으면 대상은 이미 죽어 약속한 사망에서 빠진다. 실패했으면(다쳤으면) 약속한 죽음은 그대로다.
+          const killed = res.notes.some(n => n.startsWith('정찰 약속 밖의 죽음'));
+          expect(res.dead).toEqual(before.dead.filter(n => n !== name || !killed));
+          expect(res.injured).toEqual(before.hurt.filter(n => n !== name && !before.dead.includes(n)));
+          harmed += before.dead.length + before.hurt.length;
+        }
+      }
+    }
+    expect(harmed).toBeGreaterThan(0);
+  });
+
+  it('명령이 실패해 다친 대상은 부상으로 한 번만 센다', () => {
+    let failed = 0;
+    for (let i = 0; i < 80; i += 1) {
+      const { g, name } = crewOrder(`k02-3-hurt-${i}`, 'regular', PLACES.length - 1);
+      const before = g.injured;
+      const res = resolveStop(g, true)!;
+      if (!res.notes.some(n => n.startsWith('정찰 약속 밖의 부상'))) continue;
+      failed += 1;
+      expect(res.injured).not.toContain(name);
+      expect(g.injured - before).toBe(1 + res.injured.length);
+    }
+    expect(failed).toBeGreaterThan(0);
   });
 });
