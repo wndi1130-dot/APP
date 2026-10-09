@@ -20,18 +20,38 @@ export function darkMenu(view: View): HTMLElement {
 }
 
 // ---- H7: 카드를 고르기까지 걸린 시간(15.1) ----
-let shown = { uid: -1, at: 0 };
+/** 맨 위 카드를 처음 본 시각(at)과, 그 뒤 앱이 뒤로 가 있던 시간(away). hiddenSince: 지금 뒤로 가 있으면 그 시작 시각. */
+let shown = { uid: -1, at: 0, away: 0 };
+let hiddenSince: number | null = null;
 
 /** 서류 화면이 맨 위 카드를 그릴 때 부른다. 같은 카드를 다시 그려도 처음 본 시각을 지킨다. */
-export function darkCardShown(g: Game, uid: number): void {
+export function darkCardShown(g: Game, uid: number, now = performance.now()): void {
   if (!g.dark || shown.uid === uid) return;
-  shown = { uid, at: performance.now() };
+  shown = { uid, at: now, away: 0 };
 }
 
-/** 고르기 행동에 실을 ms(못 쟀으면 빈 값). */
-export function darkPickMs(g: Game, uid: number): string | undefined {
+/** 앱이 뒤로 가거나(hidden) 돌아왔다. 뒤에 있던 시간은 망설임에서 뺀다(K02 9, h6Visibility와 같은 모양). */
+export function darkVisibility(now: number, hidden: boolean): void {
+  if (hidden) {
+    hiddenSince ??= now;
+    return;
+  }
+  if (hiddenSince === null) return;
+  shown.away += Math.max(0, now - Math.max(hiddenSince, shown.at));
+  hiddenSince = null;
+}
+
+/** 새 판이나 불러오기: 지난 판 카드의 시각이 새 판에 붙지 않게 지운다. */
+export function darkPickReset(): void {
+  shown = { uid: -1, at: 0, away: 0 };
+  hiddenSince = null;
+}
+
+/** 고르기 행동에 실을 ms(못 쟀으면 빈 값). 뒤로 가 있던 시간은 뺀다. */
+export function darkPickMs(g: Game, uid: number, now = performance.now()): string | undefined {
   if (!g.dark || shown.uid !== uid) return undefined;
-  return String(Math.round(performance.now() - shown.at));
+  const away = shown.away + (hiddenSince === null ? 0 : Math.max(0, now - Math.max(hiddenSince, shown.at)));
+  return String(Math.max(0, Math.round(now - shown.at - away)));
 }
 
 // ---- 끝 화면(10.3, 10.4) ----

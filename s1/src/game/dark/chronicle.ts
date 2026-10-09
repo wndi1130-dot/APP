@@ -37,6 +37,13 @@ export function scene(g: Game, key: string, weight: number, text: string, who: s
   (g.chronicle ??= []).push({ template: `s1b.${key}`, who: who[0] ?? 'chief', where: g.stop?.place ?? '', when: g.seg, witnesses: seen, from: 's1b' });
 }
 
+/** 남겨 둔 장면을 거둔다(그 사람 하나에 대한 key 장면). 끝내 안 드러난 오판 장면이 드러난 뒤에 남지 않게 한다. */
+export function dropScene(g: Game, key: string, who: string): void {
+  const d = g.dark!;
+  d.scenes = d.scenes.filter(s => !(s.key === key && s.who[0] === who));
+  if (g.chronicle) g.chronicle = g.chronicle.filter(c => !(c.template === `s1b.${key}` && c.who === who));
+}
+
 /** 선을 넘는 선택지에 붙는 반응 한 줄(10.1). 무뎌짐이면 지운다(10.5: 경고가 안 보이는 것 자체가 값).
  * 카드를 그릴 때마다 불리므로 난수를 쓰지 않고 카드마다 정해진 줄을 고른다(다시 그려도 같은 줄, 난수 흐름도 그대로). */
 export function reaction(g: Game, about: string | undefined, salt: string): string {
@@ -104,6 +111,7 @@ const TESTIMONY: Record<string, { warm: string; cold: string }> = {
   lynch: { warm: '경비대는 보고만 있었어요. 열차장도요.', cold: '사람들이 화가 나 있었죠.' },
   order: { warm: '사고였다고들 했어요. 아무도 믿지 않았어요.', cold: '사고였어요.' },
   exposed: { warm: '그 말을 듣고 식당칸이 조용해졌어요.', cold: '다들 짐작은 했어요.' },
+  misjudged: { warm: '그 사람이 정말 그랬는지, 저는 지금도 모르겠어요.', cold: '벌은 벌이에요. 정해졌으니까요.' },
   innocent: { warm: '그 사람은 죄가 없었어요. 다들 알게 됐죠.', cold: '틀릴 수도 있죠.' },
   frame: { warm: '그 사람 침상 밑에서 나온 게 진짜였는지 모르겠어요.', cold: '증거가 나왔으니까요.' },
   trial_bought: { warm: '표가 어디서 왔는지 다 알았어요.', cold: '의회가 정한 거예요.' },

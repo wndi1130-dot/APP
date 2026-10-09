@@ -5,7 +5,7 @@ import { offend } from '../politics';
 import { clamp, journal, lawActive } from '../state';
 import type { Game } from '../state';
 import { B, EXECUTION } from './data';
-import { cross, scene } from './chronicle';
+import { cross, dropScene, scene } from './chronicle';
 import { CLUE_LINES, CROWD_LINES } from './lines';
 import {
   adults, alive, byId, commOf, darkCard, dpick, dr, FACT_SCORE, isRep, defuseEmber, nameOf, neighbors, newId, rivals, segFull, TIE_FACTS,
@@ -68,7 +68,8 @@ export function openCase(g: Game, a: OpenArgs): Case {
   let culprit: Suspect;
   if (isRep(g, a.culprit)) {
     const c = commOf(g, a.culprit);
-    const hands = adults(g, c, { noRep: true });
+    // 피해자 본인과 근신 중인 사람은 대신 오를 수 없다(K02 7).
+    const hands = adults(g, c, { noRep: true, except: [a.victim ?? '', ...d.confined.map(x => x.id)] });
     const hand = hands.length ? dpick(g, hands).id : a.culprit;
     culprit = { id: hand, culprit: true, ...(hand !== a.culprit ? { proxyFor: a.culprit } : {}), facts: factsOf(g, hand, a.kind, a.victimComm), clues: [], acq: false };
   } else {
@@ -313,7 +314,8 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       scene(g, 'exile', 2, `${g.seg}구간, ${name}에게 하차 명령을 내렸다.`, [s.id]);
       break;
     case 'execute':
-      d.harm += 1; // 처형도 사람이 죽은 피해 사건이다(1.2)
+      d.harm += 1; // 처형도 사람이 죽은 피해 사건이고 폭력 사망이다(1.2, K02 10)
+      d.stats.violentDeaths += 1;
       cross(g, 'executions');
       onDeath(g, comm, [name], 'chosen');
       offend(g, comm);
@@ -348,6 +350,13 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   } else {
     d.stats.misjudged += 1;
     d.innocents.push({ id: s.id, comm, seg: g.seg, caseId: c.id, how: 'punish' });
+    // 배급·근신 오판도 장면을 남긴다(4.4 '드러나지 않아도 남는 것', K02 6). 목격자는 그 칸 사람 둘이다. 하차·처형은 위에서 이미 남겼다.
+    if (how === 'ration' || how === 'confine') {
+      const pool = adults(g, comm, { noRep: true, except: [s.id] });
+      const at = pool.length ? g.seg % pool.length : 0;
+      const witnesses = [...pool.slice(at), ...pool.slice(0, at)].slice(0, 2).map(p => p.id);
+      scene(g, 'misjudged', 1, `${g.seg}구간, 죄 없는 ${name}에게 ${how === 'ration' ? '배급을 끊는 벌' : '근신'}을 내렸다.`, [s.id], witnesses);
+    }
     EMBER_LINK.born(g, comm, 'guard', 'misjudged');
   }
   updateFlags(g);
@@ -466,6 +475,7 @@ export function reveal(g: Game, id: string, comm: Comm): string {
   g.trust = clamp(g.trust - 10, 0, 100);
   offend(g, comm);
   const name = nameOf(g, id);
+  dropScene(g, 'misjudged', id); // 드러났으니 '끝내 안 드러난 오판' 장면은 거둔다(아래 장면이 대신한다)
   scene(g, 'innocent', 3, `${g.seg}구간, 벌받은 ${name}이(가) 죄가 없었다는 것이 드러났다.`, [id]);
   return `${name}은(는) 그날 밤 거기 없었다. 진짜 한 사람은 따로 있었다. 열차가 그걸 알게 됐다.`;
 }
