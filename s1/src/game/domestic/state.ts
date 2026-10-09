@@ -54,7 +54,9 @@ export interface ModJob { kind: ModKind; car: string; progress: number; need: nu
 export type Task = 'parts' | 'restore' | 'modify';
 export type Penalty = { kind: 'coal' | 'haul'; until: number };
 
-export interface H6Seg { ms: number; ops: number; cards: number }
+/** ms: 내정 화면이 열려 있던 시간. all: 화면과 상관없이 그 구간에 앱을 보고 있던 시간(12.1 구간 전체, 참고 값).
+ * crisis: 그 구간에 위기(석탄·식량 바닥 등)가 걸려 있었다. 옛 저장 판에는 all·crisis가 없다. */
+export interface H6Seg { ms: number; ops: number; cards: number; all?: number; crisis?: boolean }
 
 export interface DomState {
   scrap: number;

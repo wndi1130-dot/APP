@@ -4,7 +4,7 @@ import { logDeath, onDeath } from './death';
 import { josa } from './josa';
 import { offend } from './politics';
 import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './state';
-import { BIRTH, familyOf, recover, revertLater } from './people';
+import { BIRTH, ELDER_NIGHT, familyOf, recover, revertLater } from './people';
 import { NEED_GRACE, NEEDS } from './needs';
 import type { NeedId } from './needs';
 import type { Card, EventMemo, Game } from './state';
@@ -498,12 +498,11 @@ function baseView(g: Game, card: Card): CardView {
           { label: '쏜다', say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
+      // 숨긴 물림은 드러났을 땐 이미 늦어 자를 수 없다(2026-10-08 사용자 아침 목록 17번 '가'). 자르기는 데려오자마자 의무칸에서만 한다.
       return {
         title: '숨긴 물림이 드러났다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_found',
-        body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
+        body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
         choices: withAfford(g, [
-          { label: '의무칸에서 자른다', say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'trust', v: -3 }], special: 'bite_cut',
-            ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
           { label: '격리한다', say: '빈 칸 끝에 따로 둬라. 마지막은 가족과 보내게 해라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
           { label: '쏜다', say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
@@ -613,7 +612,7 @@ function baseView(g: Game, card: Card): CardView {
         title: '내리겠다는 노인', speaker: { name: who, role: `${COMM_NAME[c]}${age ? ` · ${age}세` : ''}`, comm: c }, focus: c, required: true,
         body: `${who}이(가) 스스로 정했다며 찾아왔다. "다음 역에서 내리겠다. 내 몫은 아이들에게."`,
         choices: withAfford(g, [
-          { label: '붙잡는다', say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }] },
+          { label: '붙잡는다', say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }], special: 'elder_hold' },
           { label: '보내 준다', say: '원한다면 막지 않겠다. 몫은 아이들에게 간다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'rel', c, v: -5 }, { t: 'trust', v: -2 }], special: 'elder_leave', witness: true },
           { label: '작별을 치른다', say: '모두 모여라. 그를 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
         ]),
@@ -800,6 +799,10 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     case 'elder_leave':
       // 인원은 효과(pop −1)로 이미 줄었다. 떠난 사람으로만 남긴다.
       (g.left ??= []).push(card.who ?? '노인');
+      break;
+    case 'elder_hold':
+      // 붙잡았다. 그 뒤 2구간 동안 식량이 바닥이면 밤에 혼자 내릴 수 있다(politics_detail 6.3, people.ts elderNightTick).
+      if (card.who) g.elderHeld = { who: card.who, comm: c, at: g.seg, until: g.seg + ELDER_NIGHT.segs };
       break;
     case 'birth_ok':
       g.comms[c].pop += 1;

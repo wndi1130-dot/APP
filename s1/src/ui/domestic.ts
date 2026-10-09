@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark, josa, PLACES,
+  workPower, workshopChief, workshopState, zoneAt, enableDark, josa, PLACES, crisisNow,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, raw, s } from './dom';
@@ -68,17 +68,24 @@ function gear(mode: 'work' | 'idle' | 'short'): SVGSVGElement {
 
 // ---- 홈: 편성 순서와 칸 명판 ----
 
-/** 홈에 그릴 칸(왼쪽 꼬리 → 오른쪽 기관차). S1c 판이면 dom.cars 순서와 덧붙인 칸을 따른다(4.2, 4.4, 4.5). */
+/** 덧붙인 칸의 실제 id는 attachCar가 `${종류}${붙인 순번}`(store1, coach2 …)으로 만든다. 그림 정보는 그 id로 찾는다. */
+function extraDefs(extraCars: ('store' | 'coach')[]): Map<string, CarDef> {
+  return new Map(extraCars.map((k, i): [string, CarDef] => {
+    const id = `${k}${i + 1}`;
+    return [id, k === 'store'
+      ? { id, name: '덧붙인 창고칸', plate: '창고', kind: 'freight' }
+      : { id, comm: 'tail', name: '덧붙인 객차', plate: '객차', kind: 'comm' }];
+  }));
+}
+
+/** 홈에 그릴 칸(왼쪽 꼬리 → 오른쪽 기관차). S1c 판이면 dom.cars 순서를 그대로 따른다. 덧붙인 칸도 실제 id로 그 자리에 그린다(4.2, 4.4, 4.5). */
 export function trainCars(g: Game): CarDef[] {
   const d = g.dom;
   if (!d) return CARS;
-  const byId = new Map(CARS.map(c => [c.id, c]));
-  const extras: CarDef[] = d.extraCars.map((k, i) => k === 'store'
-    ? { id: `extra${i}`, name: '덧붙인 창고칸', plate: '창고', kind: 'freight' }
-    : { id: `extra${i}`, comm: 'tail', name: '덧붙인 객차', plate: '객차', kind: 'comm' });
+  const byId = new Map([...CARS.map((c): [string, CarDef] => [c.id, c]), ...extraDefs(d.extraCars)]);
   const body = [...d.cars].reverse().map(id => byId.get(id)).filter((c): c is CarDef => !!c);
   const head = ['engine', 'loco'].map(id => byId.get(id)).filter((c): c is CarDef => !!c);
-  return [...extras.reverse(), ...body, ...head];
+  return [...body, ...head];
 }
 
 /** 명판(S1c): 공방칸에만 상태 톱니를 단다(11.1). 온실이 된 칸은 명판이 '온실'로 바뀐다. null이면 S1a 명판. */
@@ -146,11 +153,12 @@ function workshopPop(view: View, car: CarDef): HTMLElement {
     jobRow(g));
 }
 
-/** 공방에 올릴 수 있는 개조(장갑). 단열은 사용자 결정 대기, 온실은 '칸을 내줄 곳' 카드로 간다. */
+/** 공방에 올릴 수 있는 개조(단열, 장갑). 온실은 '칸을 내줄 곳' 카드로 간다.
+ * 단열(E5)은 규칙·맡기기(공방장)엔 이미 있었는데 화면만 막혀 있었다(K01 중간). 문서 4.4·7.3 E5 줄대로 연다. */
 function jobRow(g: Game): HTMLElement | null {
   const d = g.dom!;
   if (d.job) return null;
-  const kinds: ModKind[] = ['armor'];
+  const kinds: ModKind[] = ['insulate', 'armor'];
   const items = kinds.flatMap(k => Object.keys(CAR_COMM).filter(c => c !== 'engine' && jobCheck(g, k, c).ok).map(c => ({ k, c })));
   if (items.length === 0) return null;
   return h('div', { class: 'dom-row' }, h('span', { class: 'sub' }, '개조'),
@@ -201,7 +209,7 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
   if (car.id === 'workshop') return workshopPop(view, car);
   if (car.id === 'store') return storePop(view, car);
   if (car.id === 'cold') return coldPop(view, car);
-  if (car.id.startsWith('extra')) return extraPop(view, car);
+  if (view.g.dom.extraCars.some((k, i) => car.id === `${k}${i + 1}`)) return extraPop(view, car);
   return null;
 }
 
@@ -580,14 +588,19 @@ export function domesticMenu(view: View): HTMLElement {
 
 // ---- H6 재기(12장) ----
 
-/** 이만큼 입력이 없으면 그 뒤는 세지 않는다(자리를 비운 시간). */
-export const H6_IDLE_MS = 30_000;
+// 입력 없이 읽거나 고민하는 시간도 센다. 앱이 뒤로 가거나 화면이 꺼진 시간만 뺀다(12.1, 옛 30초 무입력 컷은 없앰, K01).
 
 export interface H6Clock {
-  /** 지난 입력 시각 */
+  /** 지난 입력 시각(내정 시간). 0이면 재고 있지 않다 */
   since: number;
   /** 내정 화면이 열려 있던 구간. null이면 열려 있지 않았다 */
   seg: number | null;
+  /** 구간 전체 시간을 잰 시작 시각. 0이면 재고 있지 않다 */
+  allSince?: number;
+  /** 구간 전체 시간을 더할 구간 */
+  allSeg?: number;
+  /** 앱이 뒤로 가 있다(그동안은 아무것도 세지 않는다) */
+  hidden?: boolean;
 }
 
 /** 내정 시간으로 세는 화면이 열려 있나(12.1): 칸 창, 한눈에 보기, 내정 창, 내정 카드. 의회·정차 카드·정치 카드는 빼다. */
@@ -613,10 +626,22 @@ function h6Seg(g: Game, seg: number) {
   return (g.dom!.h6.segs[String(seg)] ??= { ms: 0, ops: 0, cards: 0 });
 }
 
-/** 입력 하나가 오기 전: 지난 입력부터 지금까지 내정 화면이 열려 있었으면 그 구간에 더하고, 조작이면 센다. */
+/** 지난 입력부터 지금까지를 더한다: 내정 화면이 열려 있었으면 내정 시간에, 늘 구간 전체 시간에. 앱이 뒤에 있었으면 세지 않는다. */
+function h6Flush(g: Game, clock: H6Clock, now: number): void {
+  if (clock.hidden) return;
+  if (clock.seg !== null && clock.since > 0) h6Seg(g, clock.seg).ms += Math.max(0, now - clock.since);
+  if (clock.allSince && clock.allSeg !== undefined) {
+    const seg = h6Seg(g, clock.allSeg);
+    seg.all = (seg.all ?? 0) + Math.max(0, now - clock.allSince);
+    if (crisisNow(g).length > 0) seg.crisis = true;
+  }
+}
+
+/** 입력 하나가 오기 전: 지난 입력부터의 시간을 더하고, 조작이면 센다. */
 export function h6Input(g: Game, clock: H6Clock, now: number, action: string): void {
   if (!g.dom) return;
-  if (clock.seg !== null && clock.since > 0) h6Seg(g, clock.seg).ms += Math.max(0, Math.min(now - clock.since, H6_IDLE_MS));
+  h6Flush(g, clock, now);
+  clock.allSince = now;
   if (domesticOp(g, action)) {
     h6Seg(g, g.seg).ops += 1;
     if (action === 'choose') h6Seg(g, g.seg).cards += 1;
@@ -631,9 +656,29 @@ export function h6Render(g: Game, ui: Ui, clock: H6Clock, now: number): void {
   const active = domesticActive(g, ui);
   if (active && clock.seg === null) clock.since = now;
   clock.seg = active ? g.seg : null;
+  if (!clock.allSince) clock.allSince = now;
+  clock.allSeg = g.seg;
 }
 
-export interface H6Summary { segs: number; medianS: number; p90S: number; maxS: number; medianOps: number; picks: number }
+/** 앱이 뒤로 가거나(hidden) 돌아왔다. 뒤로 갈 때까지를 더하고, 돌아오면 그때부터 다시 잰다(12.1). */
+export function h6Visibility(g: Game, clock: H6Clock, now: number, hidden: boolean): void {
+  if (!g.dom) return;
+  if (hidden) {
+    h6Flush(g, clock, now);
+    clock.hidden = true;
+    return;
+  }
+  if (!clock.hidden) return;
+  clock.hidden = false;
+  if (clock.seg !== null) clock.since = now;
+  if (clock.allSince) clock.allSince = now;
+}
+
+/** allPeaceS·allCrisisS: 구간 전체 시간의 중앙값(평시·위기 따로, 참고 값). 그런 구간이 없으면 null. */
+export interface H6Summary {
+  segs: number; medianS: number; p90S: number; maxS: number; medianOps: number; picks: number;
+  allPeaceS: number | null; allCrisisS: number | null;
+}
 
 export function h6Summary(g: Game): H6Summary | null {
   const d = g.dom;
@@ -641,9 +686,13 @@ export function h6Summary(g: Game): H6Summary | null {
   const all = Array.from({ length: Math.max(1, g.seg) }, (_, i) => d.h6.segs[String(i + 1)] ?? { ms: 0, ops: 0, cards: 0 });
   const q = (xs: number[], p: number) => { const s2 = [...xs].sort((a, b) => a - b); return s2[Math.min(s2.length - 1, Math.floor(p * s2.length))] ?? 0; };
   const ms = all.map(x => x.ms);
+  const whole = (crisis: boolean) => {
+    const xs = all.filter(x => x.all !== undefined && !!x.crisis === crisis).map(x => x.all!);
+    return xs.length ? Math.round(q(xs, 0.5) / 1000) : null;
+  };
   return {
     segs: all.length, medianS: Math.round(q(ms, 0.5) / 1000), p90S: Math.round(q(ms, 0.9) / 1000), maxS: Math.round(Math.max(0, ...ms) / 1000),
-    medianOps: q(all.map(x => x.ops), 0.5), picks: d.h6.picks.length,
+    medianOps: q(all.map(x => x.ops), 0.5), picks: d.h6.picks.length, allPeaceS: whole(false), allCrisisS: whole(true),
   };
 }
 
@@ -666,7 +715,8 @@ export function domesticEnd(view: View): HTMLElement | null {
       h('li', null, `상위 10% ${sm.p90S}초 `, pass(sm.p90S <= 300)),
       h('li', null, `가장 긴 구간 ${sm.maxS}초 `, pass(sm.maxS <= 600)),
       h('li', null, `조작 수 중앙값 ${sm.medianOps} `, pass(sm.medianOps <= 6)),
-      h('li', null, `내정 카드 ${sm.picks}장 골랐다`)),
+      h('li', null, `내정 카드 ${sm.picks}장 골랐다`),
+      h('li', null, `구간 전체(참고) 평시 ${sm.allPeaceS ?? '−'}초 · 위기 ${sm.allCrisisS ?? '−'}초`)),
     h('p', { class: 'sub' }, '판 뒤 질문: 공방·현황판엔 확인하려고 들어갔나 바꾸려고 들어갔나? 견습생을 고를 때 기관실 반응을 생각했나? 결함판을 썼나? 맡기기를 켰다면 공방장이 뭘 했는지 알아챘나?'),
     // 아티팩트 창은 내려받기를 막는다. 기록은 펼쳐서 복사한다.
     h('details', { class: 'dom-export' },

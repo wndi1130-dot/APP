@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  advance, birthSeg, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, FAMILIES, fallSick, LAW_IDS, makeDeal, mourners, onDeath,
+  advance, birthSeg, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, FAMILIES, fallSick, LAW_IDS, makeDeal, motherOf, mourners, onDeath,
   openCouncil, peopleCardRecent, peopleTick, pickVictims, primaryAction, PROFILES, resolveStop, stance, toolStatus, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
@@ -173,6 +173,48 @@ describe('A3 내리겠다는 노인', () => {
     peopleTick(g, () => 1);
     expect(g.cards.some(c => c.kind === 'elder')).toBe(false);
   });
+
+  it('붙잡았는데 2구간 안에 식량이 바닥이면 밤에 혼자 내린다. 카드 없이 일지 한 줄, 신임은 그대로', () => {
+    const g = createGame('elder-night');
+    g.food = 10;
+    peopleTick(g, () => 1);
+    const card = g.cards.find(c => c.kind === 'elder')!;
+    const c = card.comm!;
+    pickChoice(g, 'elder', '붙잡는다');
+    expect(g.elderHeld?.who).toBe(card.who);
+    g.cards = [];
+    // 붙잡은 그 구간에는 내리지 않는다.
+    peopleTick(g, () => 0);
+    expect(g.left ?? []).not.toContain(card.who);
+    g.seg += 1;
+    const pop = g.comms[c].pop;
+    const rel = g.comms[c].rel;
+    const trust = g.trust;
+    peopleTick(g, () => 0);
+    expect(g.left).toContain(card.who);
+    expect(g.comms[c].pop).toBe(pop - 1);
+    expect(g.comms[c].rel).toBe(rel - 5);
+    expect(g.trust).toBe(trust);
+    expect(g.journal.at(-1)?.text).toBe(`${card.who}이(가) 밤에 혼자 내렸다.`);
+    expect(g.cards.some(k => k.kind === 'elder')).toBe(false);
+    expect(g.elderHeld).toBeNull();
+  });
+
+  it('식량이 회복되거나 2구간이 지나면 내리지 않는다', () => {
+    const g = createGame('elder-stay');
+    g.food = 10;
+    peopleTick(g, () => 1);
+    const card = g.cards.find(c => c.kind === 'elder')!;
+    pickChoice(g, 'elder', '붙잡는다');
+    g.cards = [];
+    g.food = 100;
+    for (let k = 0; k < 2; k += 1) { g.seg += 1; peopleTick(g, () => 0); }
+    g.food = 10;
+    g.seg += 1;
+    peopleTick(g, () => 0);
+    expect(g.left ?? []).not.toContain(card.who);
+    expect(g.elderHeld).toBeNull();
+  });
 });
 
 describe('A4 출산', () => {
@@ -200,6 +242,34 @@ describe('A4 출산', () => {
       if (g.cards.some(c => c.kind === 'birth')) return g;
     }
   }
+
+  it('어머니 후보는 여성만이다: 여성이 모두 빠진 칸에서 남성 부모가 어머니로 뽑히지 않는다', () => {
+    for (const c of ['tail', 'front'] as const) {
+      const g = createGame('mother-gender');
+      const mother = motherOf(g, c);
+      if (mother) expect(mother.gender).toBe('female');
+      // 그 칸의 여성을 모두 내보낸다. 18~40세 남성 부모가 있는 칸이어도 어머니는 없다.
+      const women = PROFILES.filter(p => p.community === c && p.gender === 'female').map(p => p.name);
+      g.deaths.push(...women);
+      expect(PROFILES.some(p => p.community === c && p.gender === 'male' && p.age >= 18 && p.age <= 40 && !g.deaths.includes(p.name))).toBe(true);
+      expect(motherOf(g, c)).toBeNull();
+    }
+  });
+
+  it('어머니 후보가 없으면 출산 카드를 내지 않는다', () => {
+    for (let i = 0; ; i += 1) {
+      const seed = `born-${i}`;
+      const at = birthSeg(seed);
+      if (at === null) continue;
+      const g = createGame(seed);
+      g.deaths.push(...PROFILES.filter(p => p.gender === 'female').map(p => p.name));
+      g.seg = at;
+      peopleTick(g, () => 1);
+      expect(g.cards.some(c => c.kind === 'birth')).toBe(false);
+      expect(g.born).toBeFalsy();
+      break;
+    }
+  });
 
   it('따뜻한 데서 낳으면 바로 이름 카드가 붙는다', () => {
     const g = birthGame();

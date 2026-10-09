@@ -182,14 +182,16 @@ describe('숨긴 물림', () => {
     expect(g.hiddenBites).toEqual([{ who: '대원', comm: 'tail', at: g.seg, due: g.seg + 2 }]);
   });
 
-  it('귀환 검사 법이 있으면 첫 정산에 드러나고, 그 구간 안이면 아직 자를 수 있다', () => {
+  it('귀환 검사 법이 있으면 첫 정산에 드러나지만, 드러난 숨긴 물림은 자를 수 없다(아침 목록 17 가)', () => {
     const g = hide('bite-patrol');
     enactLaw(g, 'patrol', []);
     g.phase = 'council'; g.council = null; g.cards = [];
     advance(g);
     const found = g.cards.find(c => c.kind === 'bite_found');
     expect(found).toBeDefined();
-    expect(viewCard(g, found!).choices[0].disabled).toBeFalsy();
+    const choices = viewCard(g, found!).choices;
+    expect(choices.map(ch => ch.label)).toEqual(['격리한다', '쏜다']);
+    expect(choices.some(ch => ch.special === 'bite_cut')).toBe(false);
   });
 
   it('들키지 않으면 기한에 칸 안에서 일어나 사람을 문다', () => {

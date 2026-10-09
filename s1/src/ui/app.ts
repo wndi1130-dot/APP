@@ -15,7 +15,7 @@ import { cardSheet } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
 import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
-import { changeDomestic, h6Input, h6Render, handleDomestic, newGame, urlWantsS1c } from './domestic';
+import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
 // S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
 import { darkPickMs, urlWantsS1b } from './dark';
@@ -205,6 +205,7 @@ export function startApp(root: HTMLElement): void {
   let countTimer: ReturnType<typeof setTimeout> | undefined;
   let focusCar: string | null = null;
   const h6: H6Clock = { since: 0, seg: null }; // S1c 내정 훅: 내정 시간 재기
+  document.addEventListener('visibilitychange', () => h6Visibility(g, h6, Date.now(), document.hidden)); // 뒤로 간 시간은 빼고 잰다
   let repro = loadRepro(g.seed);
   setReproSource(() => makeBundle(g, repro.prev, repro.trail, repro.error, ui.screen), () => repro.error);
 
@@ -300,6 +301,8 @@ export function startApp(root: HTMLElement): void {
   function resetRepro(): void {
     repro = { seed: g.seed, trail: [], prev: null, error: null };
     saveRepro(repro);
+    // 새 판이면 내정 시간도 처음부터 잰다(지난 판의 시간이 새 판 구간에 붙지 않게).
+    Object.assign(h6, { since: 0, seg: null, allSince: 0, allSeg: undefined });
   }
 
   function afterChange(): void {
