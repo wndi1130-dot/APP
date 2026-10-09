@@ -160,7 +160,7 @@ export const TECHS: Record<TechId, TechDef> = {
       b: { name: '얼음 상자', effect: '공동 식당의 식량 값 +5 → +3.5/구간, 창고칸 자재 상한 40 → 34', like: ['tail'], dislike: [], upkeep: {}, label: '얼음 상자를 짠다', say: '바깥 얼음을 퍼 와라. 남는 음식은 묵힌다!' },
     },
   }),
-  m4: T({ id: 'm4', branch: 'med', tier: 3, name: '온실칸', effect: '칸 하나를 온실로(식량 +1.5~3/구간)', upkeep: { coal: 1, parts: 0.5 }, like: ['tail'] }),
+  m4: T({ id: 'm4', branch: 'med', tier: 3, name: '온실칸', effect: '칸 하나를 온실로(식량 +1.5~4.5/구간)', upkeep: { coal: 1, parts: 0.5 }, like: ['tail'] }),
   m5: T({ id: 'm5', branch: 'med', tier: 0, name: '약초와 민간요법', effect: '모두를 치료의 의약품 소모 ×1.6 → ×1.3, 이가 병으로 번질 확률 40% → 25%', like: ['tail'], dislike: ['medtech'], adapt: { parts: 0, wood: 2 } }),
   w1: T({ id: 'w1', branch: 'craft', tier: 1, name: '공구 수리', effect: '공방 작업량 ×1.25', like: ['medtech'] }),
   w2: T({
@@ -229,10 +229,10 @@ export const CAR_COMM: Record<string, Comm> = { tail1: 'tail', tail2: 'tail', ta
 /** 공동체가 사는 칸 수(온기 효과를 칸 수로 나눈다, 4.5) */
 export const COMM_CARS: Record<Comm, number> = { tail: 3, medtech: 1, guard: 1, front: 1, engine: 1 };
 
-/** 온실을 들일 때 내줄 수 있는 칸과 산출(4.4 표 그대로). */
-export const GREENHOUSE_SLOTS: { car: string; food: number }[] = [
-  { car: 'front', food: 3 }, { car: 'store', food: 2.25 }, { car: 'cold', food: 1.5 }, { car: 'tail3', food: 1.5 },
-];
+/** 온실을 들일 때 내줄 수 있는 칸(4.4). 산출은 칸 값이 아니라 구역 값(ZONE_GREEN) × 칸 몸체(GREEN_BODY)로 낸다. */
+export const GREENHOUSE_CARS = ['front', 'store', 'cold', 'tail3'] as const;
+/** 화차는 지붕 전체를 유리로 갈 수 있어 객차보다 ×1.5(4.4, 2026-10-09). 창고칸만 화차다. */
+export const GREEN_BODY: Record<string, number> = { store: 1.5 };
 
 // ---- 더운물(16.2) ----
 export const HOT_WATER_NAMES = ['없음', '드물게', '보통', '넉넉'] as const;
