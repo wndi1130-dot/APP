@@ -153,6 +153,9 @@ small { font-size: 12px; }
   }
 }
 .btn:disabled, .primary:disabled, .secondary:disabled, .x:disabled, .round:disabled { opacity: .45; cursor: default; }
+/* 못 누름(P3): 좌우로 한 번 흔들린다. 빨강은 쓰지 않는다. */
+@media (prefers-reduced-motion: no-preference) { .is-denied { animation: denied .24s ease-out; } }
+@keyframes denied { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 
 .stage { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--surface-3); color: var(--ink-2); white-space: nowrap; }
 .stage--up { color: #9cc3f2; }
