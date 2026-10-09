@@ -24,10 +24,26 @@ const RAIDER_AMMO: int = 6
 var game
 var tracers: Array = []                 # {"from", "to", "t"} for the view
 var kills: int = 0
+# Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
+var _wound_rng := RandomNumberGenerator.new()
+var _wound_seeded: bool = false
 
 
 func _init(field_game) -> void:
 	game = field_game
+
+
+## Seeds the wound stream on first use, from the game seed.
+func wound_rng() -> RandomNumberGenerator:
+	if not _wound_seeded:
+		_wound_seeded = true
+		_wound_rng.seed = int(game.rng.seed) ^ 0x5eed
+	return _wound_rng
+
+
+## A part of the group ("arm" or "leg") with a random side, for wounds from other scripts.
+func wound_side(group: String) -> String:
+	return BodyState.pick_side(wound_rng(), group)
 
 
 func update(delta: float) -> void:
@@ -373,7 +389,7 @@ func swing_person(p, o) -> void:
 	game.make_sound(o.position, SimNoise.Level.NORMAL, "fight", p)
 	var hit: float = clampf(0.45 + 0.05 * int(p.skills["melee"]) - 0.03 * int(o.skills["melee"]), 0.2, 0.85)
 	if rng.randf() < hit:
-		o.body.apply_cut(wid == "axe" or rng.randf() < 0.3, game.clock.elapsed)
+		o.body.apply_cut(wid == "axe" or rng.randf() < 0.3, game.clock.elapsed, BodyState.pick_part(wound_rng()))
 		o.last_hurt_by = p.pid
 		game.telemetry.injury(game.clock.elapsed, o.pid, "cut")
 		if o.team == "raider":
@@ -485,7 +501,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			if p == game.player:
 				game.hud.grab_alert(front)
 		"scratch":
-			p.body.apply_scratch(rng, now)
+			p.body.apply_scratch(rng, now, BodyState.pick_scratch_part(wound_rng()))
 			p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
@@ -505,7 +521,7 @@ func bite(p) -> void:
 	for z in p.grabbers:
 		crawler = crawler or bool(z.get("crawl", false))
 	var part: String = GrabRules.bite_location(rng, crawler)
-	p.body.apply_bite(rng, part, now)
+	p.body.apply_bite(rng, BodyState.pick_side(wound_rng(), part), now)
 	for z in p.grabbers.duplicate():
 		game.zombies.release(z, p.position, false)
 	p.grabbers.clear()
@@ -537,7 +553,7 @@ func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> v
 	p.aim.stop()
 	game.make_sound(p.position, SimNoise.Level.NORMAL, "fall", p)
 	if game.rng.randf() < fracture_chance:
-		p.body.fracture(not leg)
+		p.body.fracture(not leg, wound_side("leg" if leg else "arm"), game.clock.elapsed)
 		game.telemetry.injury(game.clock.elapsed, p.pid, "fracture")
 		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"])
 	elif p.team != "raider":
@@ -638,7 +654,7 @@ func fire(p, at: Vector3, target = null) -> String:
 	if rng.randf() < W.burst_chance(wid, quality):
 		h["broken"] = true
 		h["condition"] = 0.0
-		p.body.apply_cut(false, now)
+		p.body.apply_cut(false, now, wound_side("arm"))
 		game.make_sound(p.position, SimNoise.Level.LOUD, "gun", p)
 		p.aim.stop()
 		game.say(p, "%s 총열이 터졌다." % p.display_name)

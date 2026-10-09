@@ -352,3 +352,84 @@ func test_gd_sample_fixture_matches_builder() -> void:
 	assert_true(parsed is Dictionary)
 	if parsed is Dictionary:
 		assert_eq(Receipt.check(parsed), [] as Array[String])
+
+
+# --- version 2 wounds (body_injury 4.6) ---
+
+func test_builder_without_wounds_stays_version_one() -> void:
+	var d := _sample().to_dict()
+	assert_false(d.has("version"))
+	assert_false((d["people"] as Dictionary).has("wounds"))
+
+
+func test_add_wound_makes_a_version_two_receipt_that_passes_check() -> void:
+	var r := _sample()
+	assert_true(r.add_wound("s2_shooter", "leg_left", "embedded"))
+	assert_true(r.add_wound("s2_shooter", "arm_right", "laceration"))
+	assert_true(r.add_wound("s2_crew_01", "torso", "scratch", true))
+	var d := r.to_dict()
+	assert_eq(d["version"], 2)
+	assert_eq(d["people"]["wounds"], [
+		{"person": "s2_shooter", "part": "leg_left", "kind": "embedded"},
+		{"person": "s2_shooter", "part": "arm_right", "kind": "laceration"},
+		{"person": "s2_crew_01", "part": "torso", "kind": "scratch", "festering": true},
+	])
+	assert_eq(Receipt.check(d), [] as Array[String])
+	assert_eq(Receipt.check(r.to_dict()), r.problems())
+
+
+func test_version_sits_between_promises_and_source_in_the_json() -> void:
+	var r := _sample()
+	r.add_wound("s2_shooter", "arm_left", "fracture")
+	var parsed: Variant = JSON.parse_string(r.to_json())
+	assert_eq((parsed as Dictionary).keys(), ["place", "time", "stock", "items", "people", "witnessed", "placeState", "promises", "version", "source", "endReason", "decisions"])
+	assert_eq(Receipt.check(parsed), [] as Array[String])
+	assert_true(_same(parsed, r.to_dict()))
+
+
+func test_add_wound_refuses_unknown_names_and_bad_ids() -> void:
+	var r := _sample()
+	assert_false(r.add_wound("s2_shooter", "hand_left", "scratch"))
+	assert_false(r.add_wound("s2_shooter", "torso", "burn"))
+	assert_false(r.add_wound("S2 Shooter", "torso", "scratch"))
+	assert_false(r.to_dict().has("version"), "nothing was added")
+	for part: String in Receipt.WOUND_PARTS:
+		for kind: String in Receipt.WOUND_KINDS:
+			assert_true(r.add_wound("s2_scout", part, kind), "%s %s" % [part, kind])
+	assert_eq(Receipt.check(r.to_dict()), [] as Array[String])
+
+
+func test_add_wound_folds_bites_and_serious_wounds_into_the_lists() -> void:
+	var r := Receipt.new("first_leg_01_sulechow")
+	r.add_wound("s2_lead", "arm_left", "bite")
+	r.add_wound("s2_medic", "leg_right", "fracture")
+	r.add_wound("s2_scout", "torso", "deep")
+	r.add_wound("s2_shooter", "leg_left", "embedded")
+	r.add_wound("s2_crew_01", "arm_right", "laceration")
+	r.add_wound("s2_crew_02", "torso", "scratch")
+	var people: Dictionary = r.to_dict()["people"]
+	assert_eq(people["bitten"], ["s2_lead"])
+	assert_eq(people["injured"], ["s2_medic", "s2_scout", "s2_shooter"])
+	assert_eq(Receipt.fold_gaps(r.to_dict()), [] as Array[String])
+
+
+func test_fold_gaps_names_what_is_missing_and_skips_the_gone() -> void:
+	var d := _sample().to_dict()
+	d["version"] = 2
+	d["people"]["wounds"] = [
+		{"person": "s2_crew_01", "part": "leg_right", "kind": "fracture"},
+		{"person": "s2_lead", "part": "arm_left", "kind": "bite"},
+		{"person": "s2_crew_02", "part": "torso", "kind": "bite"},
+		{"person": "s2_scout", "part": "torso", "kind": "laceration"},
+	]
+	assert_eq(Receipt.fold_gaps(d), ["s2_crew_01 fracture not in injured", "s2_lead bite not in bitten"] as Array[String])
+	assert_eq(Receipt.check(d), [] as Array[String], "folding is a separate check")
+	assert_eq(Receipt.fold_gaps(_sample().to_dict()), [] as Array[String])
+
+
+func test_check_still_wants_version_two_for_wounds_from_the_builder() -> void:
+	var d := _sample().to_dict()
+	d["people"]["wounds"] = [{"person": "s2_shooter", "part": "torso", "kind": "deep"}]
+	assert_true(_has_problem(Receipt.check(d), "version"))
+	d["version"] = 2
+	assert_eq(Receipt.check(d), [] as Array[String])

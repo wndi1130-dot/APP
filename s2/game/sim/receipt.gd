@@ -12,6 +12,7 @@ const WITNESS_KEYS := ["who", "what", "where", "when", "why", "witnesses"]
 const WITNESS_OPTIONAL := ["id", "weight", "template"]
 const WOUND_PARTS := ["head_neck", "torso", "arm_left", "arm_right", "leg_left", "leg_right"]
 const WOUND_KINDS := ["scratch", "laceration", "deep", "embedded", "bite", "fracture"]
+const SERIOUS_KINDS := ["deep", "embedded", "fracture"]   # these fold into people.injured (S1)
 const ID_PATTERN := "^[a-z][a-z0-9_]*$"
 const CLOCK_PATTERN := "^D[1-9][0-9]* ([01][0-9]|2[0-3]):[0-5][0-9]$"
 
@@ -25,6 +26,7 @@ var _stock: Dictionary = {}
 var _gained: Array[String] = []
 var _lost: Array[String] = []
 var _people: Dictionary = {}
+var _wounds: Array[Dictionary] = []
 var _witnessed: Array[Dictionary] = []
 var _looted: float = 0.0
 var _risk: int = 0
@@ -85,6 +87,24 @@ func person(list_name: String, id: String) -> bool:
 	var list: Array[String] = _people[list_name]
 	if not list.has(id):
 		list.append(id)
+	return true
+
+
+## One wound of one person (body_injury 4.6). Refused for a bad id, part or kind.
+## It folds the way S1 expects: a bite also puts the person in bitten, a deep wound,
+## an embedded one or a fracture in injured. festering is written only when true.
+func add_wound(person_id: String, part: String, kind: String, festering: bool = false) -> bool:
+	if not _id_ok(person_id) or not WOUND_PARTS.has(part) or not WOUND_KINDS.has(kind):
+		push_warning("receipt: wound refused (%s %s %s)" % [person_id, part, kind])
+		return false
+	var row := {"person": person_id, "part": part, "kind": kind}
+	if festering:
+		row["festering"] = true
+	_wounds.append(row)
+	if kind == "bite":
+		person("bitten", person_id)
+	elif SERIOUS_KINDS.has(kind):
+		person("injured", person_id)
 	return true
 
 
@@ -172,6 +192,8 @@ func to_dict() -> Dictionary:
 	var place_state := {"looted": _looted, "remainingRisk": _risk}
 	for key: String in _place_extra:
 		place_state[key] = _place_extra[key]
+	if not _wounds.is_empty():
+		people["wounds"] = _wounds.duplicate(true)
 	var d := {
 		"place": {"id": _place_id, "type": _place_type, "variant": _variant},
 		"time": {"arrive": _arrive, "depart": _depart, "stayGameMinutes": _stay_min},
@@ -181,8 +203,10 @@ func to_dict() -> Dictionary:
 		"witnessed": _witnessed.duplicate(true),
 		"placeState": place_state,
 		"promises": _promises.duplicate(true),
-		"source": _source,
 	}
+	if not _wounds.is_empty():
+		d["version"] = 2
+	d["source"] = _source
 	if _end_reason != "":
 		d["endReason"] = _end_reason
 	if not _decisions.is_empty():
@@ -193,6 +217,28 @@ func to_dict() -> Dictionary:
 ## Two-space indent, insertion (fixed) key order.
 func to_json() -> String:
 	return JSON.stringify(to_dict(), "  ", false)
+
+
+## Where the wound rows and the person lists disagree (S1 folding, receipt.schema people.wounds).
+## Dead, missing and left-behind people are skipped. Empty means they agree.
+static func fold_gaps(d: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var p: Variant = d.get("people")
+	if not (p is Dictionary and p.get("wounds") is Array):
+		return out
+	var gone: Array = []
+	for key: String in ["dead", "missing", "leftBehind"]:
+		gone.append_array(p.get(key, []))
+	for w: Variant in p["wounds"]:
+		if not (w is Dictionary) or gone.has(w.get("person")):
+			continue
+		var who: String = str(w.get("person"))
+		var kind: String = str(w.get("kind"))
+		if kind == "bite" and not (p.get("bitten", []) as Array).has(w.get("person")):
+			out.append("%s bite not in bitten" % who)
+		elif SERIOUS_KINDS.has(kind) and not (p.get("injured", []) as Array).has(w.get("person")):
+			out.append("%s %s not in injured" % [who, kind])
+	return out
 
 
 ## Thin shape check (no JSON Schema in GDScript). Returns problems; empty means OK.
