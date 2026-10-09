@@ -269,6 +269,9 @@ export function answerThreat(g: Game, id: string, how: 'give' | 'stand' | 'confe
 // 정차로 정한 명령이면 실행자와 대상이 그 정차 작업조 명단에 붙는다(명단 화면에 이름이 보인다). 먼저 다녀온 정찰조는 다시 안 나간다.
 CREW_BUSY.push(g => busyIds(g).filter(id => alive(g, id)).map(id => nameOf(g, id)));
 
+// 하차를 기다리는 사람은 작업조로 안 나간다: 정차에서 내리면 약속한 피해가 사라지고 조가 한 명 모자란다.
+CREW_BUSY.push(g => (g.dark?.exile ?? []).filter(x => alive(g, x.id)).map(x => nameOf(g, x.id)));
+
 CREW_EXTRAS.push(g => {
   const o = g.dark?.order;
   if (!o || o.method !== 'stop' || !o.exeId || g.dark!.confined.some(x => x.id === o.exeId)) return [];

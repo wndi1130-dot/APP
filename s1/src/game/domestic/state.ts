@@ -1,6 +1,6 @@
 import { COMMS, TRAITS } from '../data';
 import type { Comm, Trait } from '../data';
-import { addCard, createGame, drawPerson, lawActive, pick, situation } from '../state';
+import { addCard, createGame, drawPerson, isGone, lawActive, pick, situation } from '../state';
 import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
@@ -181,6 +181,17 @@ export function hasDom(g: Game): g is Game & { dom: DomState } {
 
 export function zeroSit(): Record<Comm, [number, number, number, number]> {
   return Object.fromEntries(COMMS.map(c => [c, [0, 0, 0, 0]])) as unknown as Record<Comm, [number, number, number, number]>;
+}
+
+/** S1c 판에선 견습 화부가 기관실 측근(#10), 약사가 앞칸 측근(#11)을 겸한다(s1c_domestic 8.1, J10 8번). 살아 있으면 그 사람 이름.
+ * 사건의 측근 화자(content.ts)와 대표가 앓을 때 대신 나오는 측근(people.ts fallSick)이 같이 쓴다. */
+// 전문가 id는 SPECIALISTS 순서로 정해진다(enableDomestic). 배우며 직함이 바뀌어도 id로 찾는다.
+const AIDE_ROLE: Partial<Record<Comm, string>> = { engine: '견습 화부', front: '약사' };
+export function domesticAide(g: Game, c: Comm): string | undefined {
+  const role = AIDE_ROLE[c];
+  const i = role ? SPECIALISTS.findIndex(x => x.role === role) : -1;
+  const p = i >= 0 ? g.dom?.people.find(x => x.id === `sp${i + 1}` && x.comm === c && x.alive && !x.gone) : undefined;
+  return p && !isGone(g, p.name) ? p.name : undefined;
 }
 
 /** S1a 판에 S1c 내정을 켠다. 전문가 8명을 프로필에서 뽑고, 시작 자재와 조각을 둔다(5.3, 8.1). */

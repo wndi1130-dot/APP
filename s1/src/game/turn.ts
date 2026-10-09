@@ -1,4 +1,5 @@
 import { addCard, END_LINK } from './state';
+import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
@@ -163,7 +164,7 @@ function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + disasterCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -175,6 +176,7 @@ function depart(g: Game): void {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
   }
+  disasterDepart(g);
   // S1c 내정 훅: 기관 숙련자가 없으면 선다(매뉴얼도 없으면 끝), 고장 판정.
   const domStall = domesticDepart(g);
   if (domStall === 'end') return finish(g, 'stranded');
@@ -396,7 +398,7 @@ export function stopRisk(g: Game): StopRisk {
   }
   return {
     lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
-    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout, pyre: pyreCount(g) > 0,
+    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout && !blizzardActive(g), pyre: pyreCount(g) > 0,
   };
 }
 
@@ -453,16 +455,18 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!stop || stop.done) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
   stop.done = true;
-  // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
-  const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
-  if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
   // 위험은 어두운 길 훅이 사람을 빼기 전에 정한다(K01 4와 같은 까닭). 하차나 정차 명령으로 사람이 빠지면 작업조 명단이 돌고,
   // 시신이 생기면 불빛 배수가 붙어 정찰이 약속한 피해와 달라진다. stopRisk는 난수 흐름을 쓰지 않는다.
   const risk = stopRisk(g);
   const orderTarget = darkStopTarget(g);
   // 출발 명단도 훅 전에 한 번만 뽑아 끝까지 쓴다(명령으로 사람이 빠져도 영수증 이름과 자리 비움이 실제 나간 사람과 같다).
   const names = crewNames(g, stop.crewComm, stop.crewSize);
+  const injuredBefore = g.injured;
   const darkNotes = darkStop(g, !!(go && stop.target), go && stop.target ? stopCrew(g) : []);
+  // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지). 하차로 내린 사람은 빼니 훅 뒤에 센다.
+  const sr = stop.scoutReport;
+  const scoutsBack = sr ? sr.names.filter(n => !sr.dead.includes(n) && !isGone(g, n)).length : 0;
+  if (sr) g.comms[sr.comm].away += scoutsBack;
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
@@ -515,7 +519,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 정차 명령이나 하차로 이미 열차에 없는 사람은 약속한 피해에서 뺀다(같은 사람이 두 번 죽지 않는다).
   const dead = risk.fate.dead.filter(n => !isGone(g, n));
   // 정차 명령이 실행돼 대상이 이미 다쳤으면(runOrder가 셌다) 약속한 부상에서 또 세지 않는다.
-  const orderHit = orderTarget && !g.dark?.order ? orderTarget : null;
+  // darkStop 안에서 g.injured를 바꾸는 건 runOrder 실패 갈래뿐이다. 취소된 명령은 부상을 세지 않았다.
+  const orderHit = orderTarget && g.injured > injuredBefore ? orderTarget : null;
   const hurt = risk.fate.hurt.filter(n => !isGone(g, n) && n !== orderHit);
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
@@ -635,6 +640,7 @@ function settle(g: Game): void {
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
   checkEnd(g);
+  if (g.phase !== 'end') disasterSettle(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
     trust: g.trust - before.trust, tension: g.tension - before.tension,

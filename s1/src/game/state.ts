@@ -2,6 +2,7 @@ import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
 import type { DomState } from './domestic/state';
 import type { DarkState } from './dark/state';
+import type { DisasterKind, DisasterState } from './disaster';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import {
@@ -295,6 +296,15 @@ export interface Game {
   scapegoatOk?: string[];
   /** S1b 어두운 길(dark/state.ts). 없으면 S1a·S1c 판이다 */
   dark?: DarkState;
+  /** 재난 시제품(disaster.ts)이 켜진 판. 없으면 꺼진 판이고 아래 세 칸도 없다 */
+  disasters?: boolean;
+  disaster?: DisasterState;
+  /** 판 통계: 종류별로 예고가 뜬 횟수 */
+  disasterStats?: Record<DisasterKind, number>;
+  /** 마지막 재난이 끝난 구간 */
+  disasterEnd?: number;
+  /** 판 전체 재난 사망 수(상한 DZ.deathCap) */
+  disasterDeaths?: number;
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';

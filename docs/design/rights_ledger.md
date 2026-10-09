@@ -30,6 +30,7 @@
 |---|---|---|---|---|---|---|---|
 | Godot Engine 4.7.2 | 엔진 | [godotengine.org](https://godotengine.org) | MIT, 엔진에 든 제3자 구성요소 각자의 라이선스 | 출시판에 Godot 라이선스 고지와 제3자 고지를 넣는다([Complying with licenses](https://docs.godotengine.org/en/stable/about/complying_with_licenses.html)). 외부 에셋의 권리는 MIT가 풀어 주지 않는다 | 필요 없음 | 가능 | S2 |
 | 시스템 폰트 | 폰트 | 기기에 깔린 글꼴(S1a CSS의 system-ui 묶음, S2 `SystemFont`) | 기기 제공 | 빌드에 글꼴 파일이 들어가지 않는다. 화면이 기기마다 다르게 보일 뿐 권리 문제는 없다 | 필요 없음 | 스크린샷은 기기 글꼴로 찍힌다 | S1a 웹, S2 |
+| s2/fx 셰이더 묶음(11개와 fx_common) | 코드 | 이 저장소에서 새로 짬(셰이더와 화면 효과 스레드, 2026-10-09) | 저장소와 같음 | 남의 코드·그림 없음. 공개 셰이더를 들여오면 이 표에 따로 줄을 만든다 | 필요 없음 | 가능 | S2 |
 
 소리와 음악 파일은 아직 어느 빌드에도 없다(2026-10-07).
 
@@ -70,11 +71,12 @@
 | 비발디 '겨울' 곡 | [IMSLP](https://imslp.org/wiki/Winter_(Vivaldi,_Antonio)) | 공공 영역 | 기존 연주 녹음과 현대 판본 악보는 쓰지 않는다 | 가능 |
 | Suno Pro 또는 Premier 생성곡 | [suno.com/terms](https://suno.com/terms) | 2026-08-10 개정·09-03 시행 약관(2026-10-09 소넷 워커가 읽음): 유료 요금제에서 그달 다운로드 몫(Pro 20곡, Premier 60곡)으로 받은 곡만 상업 이용, 받은 곡의 상업권은 해지 뒤에도 유지. 무료는 다운로드 불가 | 다운로드하지 않은 곡과 리믹스는 상업 이용 불가. 곡마다 만든 날, 요금제, 모델, 받은 날을 적는다. 소유권 표현('양도'인지 '상업권'인지)은 원문으로 다시 확인 | 약관 확인 필요 |
 | AI 음성 생성 외침(의회 군중·'정숙!', 후보 ElevenLabs 유료 요금제) | elevenlabs.io | 유료 구독 중 만든 음성은 해지 뒤에도 상업 이용 가능(2026-10-08 도움말 확인, 10-09 다시 확인). 무료 요금제 생성물은 상업 이용 불가이고 공개할 때 elevenlabs.io 표시가 필요하다(10-09). 군중 소리 재료로만 쓴다(주인공·주요 인물 대사 아님, 사용자 10-09). 다른 후보: Gemini TTS(무료 몫 생성물의 상업 조항 불분명, 남길 것은 유료로), 열린 가중치 MOSS-TTS v1.5(Apache-2.0) | 목소리는 Voice Design(글로 만든 합성 목소리)이나 라이브러리 목소리만 쓰고 실제 사람 목소리 복제는 하지 않는다. 대사마다 만든 날, 요금제, 모델, 목소리 이름을 적는다. 영수증은 PC에만 | 결제 전(sound_ai_voice.md 카드) |
-| Stable Audio 생성곡(웹 서비스) | stableaudio.com | 10-07 조사는 '요금제와 상관없이 상업 이용 허용'. 10-09엔 약관 본문을 못 읽어 미확인 | 쓸 때 약관을 다시 연다 | 약관 확인 필요 |
+| Stable Audio 생성곡(웹 서비스) | [상업·사용권 안내](https://kb.stability.ai/knowledge-base/stable-audio-commerical-and-usage-licensing), [약관](https://stability.ai/terms-of-service) | 무료 요금제 생성물도 모바일 앱·게임 배경음에 넣을 수 있다고 도움말이 명시(10-09 Codex luna 확인, 약관 시행 2026-09-30) | 쓸 때 약관을 다시 연다 | 약관 확인 필요 |
 | Stable Audio 3 Small·Medium 생성곡(열린 가중치) | [Hugging Face](https://huggingface.co/stabilityai/stable-audio-3-medium), [stability.ai/license](https://stability.ai/license) | Stability AI Community License: 연 매출 $1M 미만 무료, 넘으면 기업 라이선스. 생성물은 사용자 소유. 텍스트 인코더에 Gemma 약관이 같이 걸린다(10-09 소넷 워커, 원문 다시 확인) | 매출 기준을 넘으면 라이선스를 사야 한다. 보컬 없음 | 조건부 |
 | ACE-Step 1.5 생성곡(열린 가중치) | [GitHub](https://github.com/ace-step/ACE-Step-1.5) | 코드·가중치 MIT, 모델 카드가 생성물 상업 이용을 명시(10-09 소넷 워커, 원문 다시 확인) | 학습 자료 세부는 공개 안 됨. 노래 시안 후보 | 가능(확인 뒤) |
 | AIVA Pro 생성곡 | [aiva.ai/pricing](https://aiva.ai/pricing) | Pro는 저작권을 넘겨받음(10-09 다시 확인, 연 결제 월 €33, 월 300곡 다운로드) | 무료·Standard 요금제는 조건이 다르다. 해지 뒤 조건 미확인 | 가능(Pro) |
-| 쓰지 않음: ElevenLabs Music(두 플랫폼 이상 파는 게임은 셀프 구독 제외, 약관 2026-05-26), Udio(다운로드 막힘), MusicGen(가중치 비상업), XTTS-v2·F5-TTS·Fish Speech·Higgs v3(비상업) | 각 약관 | 10-09 확인 | | 안 됨 |
+| ElevenLabs Music 생성곡 | [Music 약관](https://elevenlabs.io/music-terms) | 2026-10-09 약관이 바뀌었다: 돈 버는 게임은 'Studio Game', 그중 누적 매출 $50만 미만이고 회사 게임 매출 $100만 미만이면 'Indie Game'으로 따로 둔다. 요금제별 권리표(Exhibit A)는 확인 못 함(10-09 Codex luna) | 인디 게임으로 셀프 구독에서 쓸 수 있는지는 권리표를 읽어야 안다. 그 전엔 쓰지 않는다 | 미정 |
+| 쓰지 않음: Udio(다운로드 막힘), MusicGen(가중치 비상업), XTTS-v2·F5-TTS·Fish Speech·Higgs v3(비상업) | 각 약관 | 10-09 확인 | | 안 됨 |
 
 AI로 만든 음악과 그림은 줄마다 'AI 생성'을 적는다. 사람이 손본 내역(편곡, 녹음, 믹스)도 같이 적는다. AI 생성물은 저작권 보호가 약해서 사람이 고친 부분이 권리의 근거가 되고, Steam은 출시 때 AI 사용을 밝히라고 한다.
 
