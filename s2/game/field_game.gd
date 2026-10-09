@@ -1258,6 +1258,9 @@ func finish(reason: String) -> void:
 			receipt.person("bitten", p.pid)
 		if p.body.bleed >= 2 or p.body.leg_fracture or p.body.arm_fracture or p.body.downed:
 			receipt.person("injured", p.pid)
+		# Wounds go on as they are; the receipt folds bites and serious ones into the lists.
+		for row: Dictionary in p.body.receipt_wounds():
+			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)))
 	var stock: Dictionary = {}
 	for id in unloaded:
 		if STOCK_OF.has(id):

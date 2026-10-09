@@ -248,7 +248,7 @@ func vault_window(p, c: Vector2i) -> void:
 	p.brain["vaulted_" + str(c)] = true
 	var w: Dictionary = game.grid.windows[c]
 	if w["glass"] and game.rng.randf() < (0.2 if p.gloves else 0.5):
-		p.body.apply_cut(false, game.clock.elapsed)
+		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
 		if p.team != "raider":
 			game.say(p, "%s 유리에 베였다." % p.display_name)
