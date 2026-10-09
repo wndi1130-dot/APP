@@ -46,7 +46,7 @@
 
 **잰 것(시뮬레이션, 추정).** 동쪽 선로 끝의 무리는 40m에서 10m까지 약 29초, '무리가 가깝다'가 뜨는 30m에서는 약 20초가 남는다. 출발 기적을 울리면 승강장 둘레 망자가 3~13초 안에 10m 안으로 들어온다.
 
-**남은 것.** H3 판정과 피드백 반영. 효과음 파일(자리만 있음, 받기를 맡김). 로우폴리 열차 키트가 오면 폰 성능과 기관차 연기 입자 비용 재기. 하수도로 올라오는 무리의 여유 시간 재기. 부위별 상처를 영수증 판 2로 내보내기(3단계). 바깥 정적 검수 K03의 높음 9개(잡힘이 안 풀려 물림으로 이어짐, 근접 공격이 창을 뚫음, 조준점과 다른 대상에 피해 등)를 최신 main과 대조해 고치기. 필드 숫자(매달린 망자 +4/+2, 정찰대 피해율, 붕대·처치 시간)는 모두 출발값이다.
+**남은 것.** H3 판정과 피드백 반영. 효과음 파일(자리만 있음, 받기를 맡김). 로우폴리 열차 키트가 오면 폰 성능과 기관차 연기 입자 비용 재기. 하수도로 올라오는 무리의 여유 시간 재기. 부위별 상처는 모델과 영수증 판 2 생성까지 들어갔다(PR 69, 10-09). 몸 그림 화면, 상처 단위 처치, 곪음·붕대 젖음, 부위별 동작 벌점(골절 밖)은 남았다. K03 높음 9개는 고쳤다(PR 62, 69). 필드 숫자(매달린 망자 +4/+2, 정찰대 피해율, 붕대·처치 시간)는 모두 출발값이다.
 
 **깊은 문서.** [s2_station.md](../design/briefs/s2_station.md), [field_unified.md](../design/briefs/field_unified.md)(정찰대 8장, 조작 10장), [places.md](../design/briefs/places.md), [body_injury.md](../design/briefs/body_injury.md), [zombies.md](../design/briefs/zombies.md), [weapons.md](../design/briefs/weapons.md), [survival_detail.md](../design/briefs/survival_detail.md), [engine.md](../design/briefs/engine.md), [s2/README.md](../../s2/README.md).
 
