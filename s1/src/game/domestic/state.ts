@@ -135,7 +135,7 @@ export interface DomState {
   /** 열차장이 의무칸 침상에 있다. S1a 판엔 열차장 부상이 아직 없어서 아무도 켜지 않는다(6.4, 10장 12번 훅) */
   captainInBed: boolean;
   /** 복원을 시작한 기록과 견습생을 붙인 기록(협상 조건 이행을 본다, 9.2) */
-  log: { restores: { seg: number; id: TechId }[]; apprentices: { seg: number; field: Field; other: boolean }[] };
+  log: { restores: { seg: number; id: TechId; v?: Variant }[]; apprentices: { seg: number; field: Field; other: boolean }[] };
   /** H6 재기(12장): 구간별 내정 시간과 조작 수, 내정 카드 선택 기록 */
   h6: { segs: Record<string, H6Seg>; picks: { seg: number; title: string; label: string }[] };
   stats: {

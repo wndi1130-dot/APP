@@ -3,7 +3,7 @@ import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { offend } from '../politics';
-import { CAR_COMM, COMM_CARS, D, ZONE_WARM } from './data';
+import { CAR_COMM, COMM_CARS, D, GREENHOUSE_CARS, ZONE_WARM } from './data';
 import type { Zone } from './data';
 import { CAR_NAME, startJob } from './workshop';
 import { refreshSit } from './sit';
@@ -118,8 +118,7 @@ export function extraCarCoal(g: Game): number {
 /** 온실(또는 칸 기능 바꾸기)로 내줄 수 있는 칸. 화차는 거주칸이 될 수 없지만 온실은 된다(4.4). */
 export function giveCandidates(g: Game): string[] {
   const d = dom(g);
-  const base = ['front', 'store', 'cold', 'tail3'];
-  return base.filter(c => d.cars.includes(c) && d.greenhouse !== c);
+  return GREENHOUSE_CARS.filter(c => d.cars.includes(c) && d.greenhouse !== c);
 }
 
 export function giveCar(g: Game, car: string): boolean {

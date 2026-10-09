@@ -10,13 +10,17 @@ import type { BotOptions, GameMetrics } from './s1c_bot';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const flags = process.argv.slice(2).filter(a => a.startsWith('--'));
+// 판 수는 양의 정수만 받는다(0·음수·소수·글자는 빈 결과나 NaN 평균으로 새어 나간다, K02 11).
+if (args[0] !== undefined && !/^[1-9]\d*$/.test(args[0])) throw new Error(`판 수는 양의 정수여야 한다: ${args[0]}`);
 const N = Number(args[0] ?? 1000);
 const OUT = args[1];
 // --set=key:value 로 dark/data.ts의 B 값을 바꿔 민감도를 본다(예: --set=escBase:0.25).
 const sets: Record<string, number> = {};
 for (const f of flags.filter(x => x.startsWith('--set='))) {
   const [k, v] = f.slice(6).split(':');
-  if (!(k in B)) throw new Error(`B에 없는 값: ${k}`);
+  // `in`은 toString 같은 상속 속성도 통과시킨다. B 자신의 속성만 받는다(K02 11).
+  if (!Object.hasOwn(B, k)) throw new Error(`B에 없는 값: ${k}`);
+  if (v === undefined || v.trim() === '' || !Number.isFinite(Number(v))) throw new Error(`숫자가 아닌 값: ${k}:${v}`);
   (B as unknown as Record<string, number>)[k] = Number(v);
   sets[k] = Number(v);
 }
