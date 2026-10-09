@@ -138,11 +138,14 @@ export function runOrder(g: Game, where: 'travel' | 'stop', crew: string[] = [])
   d.order = null;
   const tc = commOf(g, o.target);
   const ok = dr(g) < successP(g, o);
+  // 실행자는 사람마다 하나다(K02 8). 두 번째 명령이면 기록만 새로 쓰고, 맨 뒤로 보낸다(누명 갈래가 마지막 실행자를 읽는다).
+  d.executors = d.executors.filter(x => x.id !== exe);
   d.executors.push({ id: exe, comm: commOf(g, exe), seg: g.seg });
   const fam = familyOf(g, name)?.others[0]?.name;
   if (ok) {
     d.stats.ordersOk += 1;
     d.harm += 1;
+    d.stats.violentDeaths += 1; // 명령 암살도 피해 사건이고 폭력 사망이다(1.2, K02 10)
     if (o.ref) settleTruth(g, o.ref, false); // 입을 막았다: 그 진실은 묻힌다
     const rep = isRep(g, o.target);
     onDeath(g, tc, [name], 'chosen'); // 대표였으면 죽음 훅(hooks.ts)이 승계한다
@@ -224,7 +227,9 @@ export function executorTick(g: Game): void {
     if (alive(g, x.id)) continue;
     d.executors = d.executors.filter(y => y !== x);
     const heirs = adults(g, x.comm, { noRep: true });
-    if (heirs.length && dr(g) < 0.3) d.executors.push({ id: dpick(g, heirs).id, comm: x.comm, seg: g.seg });
+    if (!heirs.length || dr(g) >= 0.3) continue;
+    const heir = dpick(g, heirs).id;
+    if (!d.executors.some(y => y.id === heir)) d.executors.push({ id: heir, comm: x.comm, seg: g.seg }); // 이미 약점을 쥔 사람이면 따로 적지 않는다(K02 8)
   }
   if (g.cards.some(k => k.kind === 'dark:exec_threat')) return;
   for (const x of d.executors) {

@@ -18,7 +18,7 @@ import { beginNames, endNames, personCard, shortText } from './names';
 import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
 // S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
-import { darkPickMs, urlWantsS1b } from './dark';
+import { darkPickMs, darkPickReset, darkVisibility, urlWantsS1b } from './dark';
 import { showCrash } from './crash';
 import { CONFIRM_MS, confirmed, replacesToast, toastMs } from './notice';
 import type { ToastKind } from './notice';
@@ -220,7 +220,10 @@ export function startApp(root: HTMLElement): void {
   let countTimer: ReturnType<typeof setTimeout> | undefined;
   let focusCar: string | null = null;
   const h6: H6Clock = { since: 0, seg: null }; // S1c 내정 훅: 내정 시간 재기
-  document.addEventListener('visibilitychange', () => h6Visibility(g, h6, Date.now(), document.hidden)); // 뒤로 간 시간은 빼고 잰다
+  document.addEventListener('visibilitychange', () => {
+    h6Visibility(g, h6, Date.now(), document.hidden); // 뒤로 간 시간은 빼고 잰다
+    darkVisibility(performance.now(), document.hidden); // S1b H7 망설임도 같다
+  });
   let repro = loadRepro(g.seed);
   setReproSource(() => makeBundle(g, repro.prev, repro.trail, repro.error, ui.screen), () => repro.error);
 
@@ -357,6 +360,7 @@ export function startApp(root: HTMLElement): void {
     saveRepro(repro);
     // 새 판이면 내정 시간도 처음부터 잰다(지난 판의 시간이 새 판 구간에 붙지 않게).
     Object.assign(h6, { since: 0, seg: null, allSince: 0, allSeg: undefined });
+    darkPickReset(); // S1b H7: 지난 판 카드의 처음 본 시각도 지운다
   }
 
   function afterChange(): void {
