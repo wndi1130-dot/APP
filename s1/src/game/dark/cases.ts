@@ -268,6 +268,17 @@ export function coverUp(g: Game, c: Case): void {
 
 export type Punish = 'ration' | 'confine' | 'exile' | 'execute';
 export const PUNISH_SEGS = { ration: 3, confine: 4 };
+/** 증거 단계(소문·정황·증거)에 따른 피고 칸 관계 손실 배수(4.4). 처형·하차의 적의와 공포에는 안 붙는다. */
+export const PUNISH_REL_MULT = [1.5, 1, 0.5] as const;
+/** 증거로 벌했을 때 피해 칸 관계(4.4) */
+export const PUNISH_PROOF_REL = 2;
+
+/** 무엇을 보고 벌했는지 한 줄(4.4). 밀고가 아닌 단서 가운데 가장 최근 것, 없으면 가장 최근 밀고.
+ * 참·헛을 보고 고르지 않는다(고른 줄이 진범 여부를 흘리면 안 된다). */
+function basisLine(s: Suspect, lv: 0 | 1 | 2): string {
+  const clue = [...s.clues].reverse().find(x => x.kind !== 'informant') ?? s.clues[s.clues.length - 1];
+  return clue ? `근거(${LEVEL_WORD[lv]}): ${clue.line}` : `근거(${LEVEL_WORD[lv]}): 단서는 없었다. 사람들이 그렇게 말했을 뿐이다.`;
+}
 
 /** 벌(4.4 표). 벌은 긴장을 내리지 않는다. 군중 시계를 끝낼 뿐이다. */
 export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' | 'summary'): string[] {
@@ -279,11 +290,14 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   const lines: string[] = [];
   const name = nameOf(g, s.id);
   const comm = commOf(g, s.id);
+  // 벌의 반응은 벌할 때의 증거 단계를 따른다(4.4, K02 4). 표의 관계 값은 정황 기준이다.
+  const lv = level(s);
+  const relLoss = (base: number) => Math.round(base * PUNISH_REL_MULT[lv]);
   c.status = 'closed';
   d.punished.push(s.id);
   switch (how) {
     case 'ration':
-      g.comms[comm].rel = clamp(g.comms[comm].rel - 3, -100, 100);
+      g.comms[comm].rel = clamp(g.comms[comm].rel - relLoss(3), -100, 100);
       lines.push(`${name}의 배급을 사흘 끊었다. 그 몫은 피해 칸에 갔다.`);
       break;
     case 'confine':
@@ -292,7 +306,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       break;
     case 'exile':
       d.exile.push({ id: s.id, comm });
-      g.comms[comm].rel = clamp(g.comms[comm].rel - 8, -100, 100);
+      g.comms[comm].rel = clamp(g.comms[comm].rel - relLoss(8), -100, 100);
       g.fear = clamp(g.fear + 5, 0, 100);
       cross(g, 'exiles');
       lines.push(`${name}에게 짐 하나와 사흘 치 빵을 줬다. 다음 역에서 내린다.`);
@@ -307,6 +321,14 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       lines.push(`해가 지기 전에 총소리 하나가 났다. ${name}의 일은 그것으로 끝났다.`);
       scene(g, 'execute', 3, `${g.seg}구간, ${via === 'trial' ? '의회의 판결로' : '경비대의 손으로'} ${name}을(를) 처형했다.`, [s.id]);
       break;
+  }
+  lines.push(basisLine(s, lv));
+  // 증거로 벌하면 피해 칸은 됐다고 본다. 소문으로 벌하면 피고 칸 대표가 억울하다는 줄을 남긴다.
+  if (lv === 2 && c.victimComm !== comm) g.comms[c.victimComm].rel = clamp(g.comms[c.victimComm].rel + PUNISH_PROOF_REL, -100, 100);
+  if (lv === 0) {
+    const rep = g.comms[comm].leader;
+    const who = rep.personId === s.id ? `${COMM_NAME[comm]} 사람들` : rep.name;
+    journal(g, `${who}: "${name}이(가) 한 일이라는 건 소문뿐이었다. 억울하다."`, 'bad');
   }
   if (s.culprit) {
     d.stats.solved += 1;
