@@ -39,7 +39,7 @@
 
 ## 3. 대사 묶음
 
-낱말은 이 스레드가 고른 가안이다. 그 언어를 아는 사람(또는 둘 이상의 모델 대조 뒤 사람)이 한 번 훑는다(worker_packets/ai_audio_crosscheck.md와 같은 방식). 이름을 부르는 줄은 3.9의 이름만 쓴다.
+낱말은 이 스레드가 고른 가안을 Codex sol 점검(2026-10-09, 공유 폴더 words3_sol.md)대로 고친 것이다. 명령형이 애원으로 들리게 'bitte/proszę/prosím'을 붙인 줄이 있고, 약탈자 E05·E06은 구령처럼 들려 바꿨다. 굳은 구호나 철자 오류는 없었다. 그 언어를 아는 사람(또는 둘 이상의 모델 대조 뒤 사람)이 한 번 훑는다(worker_packets/ai_audio_crosscheck.md와 같은 방식). 이름을 부르는 줄은 3.9의 이름만 쓴다.
 
 ### 3.1 출발 때 매달리는 피난민 (A)
 
@@ -53,16 +53,16 @@
 | A06 | 도와줘요! | Hilfe! | Pomocy! | Pomoc! |
 | A08 | 잠깐만요! | Einen Moment! | Chwileczkę! | Chvilku! |
 | A09 | 값은 치를게요! | Ich kann bezahlen! | Mogę zapłacić! | Můžu zaplatit! |
-| A10 | 우린 안 물렸어요! | Wir sind nicht gebissen! | Nie jesteśmy pogryzieni! | Nejsme pokousaní! |
+| A10 | 우린 안 물렸어요! | Keiner von uns wurde gebissen! | Nie jesteśmy pogryzieni! | Nejsme pokousaní! |
 | A11 | 그것들이 와요! | Sie kommen! | Idą! | Jdou sem! |
-| A12 | 손 잡아요! | Nimm meine Hand! | Daj rękę! | Podej mi ruku! |
-| A13 | 천천히요! | Langsamer! | Wolniej! | Pomaleji! |
+| A12 | 손 잡아 줘요! | Nimm meine Hand, bitte! | Złap mnie za rękę, proszę! | Chyť mě za ruku, prosím! |
+| A13 | 천천히요! | Langsamer, bitte! | Wolniej, proszę! | Pomaleji, prosím! |
 | A14 | 왜요?! | Warum?! | Dlaczego?! | Proč?! |
 | A15 | 제발요, 하느님! | Um Gottes willen! | Na litość boską! | Proboha! |
 | A16 | 겁쟁이들! | Feiglinge! | Tchórze! | Zbabělci! |
 | A17 | 안 돼… (기차가 멀어질 때) | Nein… | Nie… | Ne… |
 | A18 | 여기요, 여기! | Hier! Hier! | Tutaj! Tutaj! | Tady! Tady! |
-| A19 | 이름 부르기(일행을 놓침) | Thomas! / Sabine! | Tomek! / Ewa! | Petr! / Jana! |
+| A19 | 이름 부르기(일행을 놓침) | Thomas! / Sabine! | Tomek! / Ewa! | Petře! / Jano! |
 | A20 | 다음 열차는 언제예요? (멀리서, 체념) | Wann kommt der nächste? | Kiedy następny? | Kdy jede další? |
 
 - 쓰는 곳: 서막처럼 사람을 다 못 태우는 출발, 창밖 층의 '매달리려는 피난민'(presentation_motion.md 바깥 사건 '가끔'). 우리 사람이 남겨진 출발은 다르다: 그때 승강장은 조용하다(sound_music.md 7장).
@@ -77,20 +77,20 @@
 | B01 | 도와줘! | Hilfe! | Pomocy! | Pomoc! |
 | B02 | 안 돼, 안 돼! | Nein, nein, nein! | Nie, nie, nie! | Ne, ne, ne! |
 | B03 | 놔! | Lass mich los! | Puść mnie! | Pusť mě! |
-| B04 | 떼어 줘! | Nimm es weg! | Zabierzcie to! | Sundejte to ze mě! |
+| B04 | 떼어 줘! | Nimm es von mir weg! | Ściągnijcie to ze mnie! | Sundejte to ze mě! |
 | B05 | 물렸어! | Es hat mich gebissen! | Ugryzł mnie! | Kousl mě! |
 | B06 | 아파! | Es tut weh! | Boli! | Bolí to! |
-| B07 | 누구 없어요?! | Irgendwer?! | Ktokolwiek?! | Někdo?! |
+| B07 | 누구 없어요?! | Ist da jemand?! | Jest tu ktoś?! | Je tu někdo?! |
 | B08 | 뛰어! (같이 있던 사람에게) | Lauf! | Uciekaj! | Utíkej! |
 | B09 | 뒤에! | Hinter dir! | Za tobą! | Za tebou! |
 | B10 | 그만해! (망자에게) | Hör auf! | Przestań! | Přestaň! |
 | B11 | 여기, 여기로! (열차를 보고) | Hierher! | Tutaj! | Sem! |
 | B12 | 기차다! | Der Zug! | Pociąg! | Vlak! |
-| B13 | 하느님! | Gott! | Boże! | Bože! |
+| B13 | 하느님! | Oh Gott! | Boże! | Bože! |
 | B14 | 엄마! (어른이 무너질 때) | Mama! | Mamo! | Mami! |
-| B15 | 이름 부르기 | Thomas! / Sabine! | Tomek! / Ewa! | Petr! / Jana! |
+| B15 | 이름 부르기 | Thomas! / Sabine! | Tomek! / Ewa! | Petře! / Jano! |
 | B16 | 놓지 마! (끌려가는 사람을 잡고) | Lass nicht los! | Nie puszczaj! | Nepouštěj! |
-| B17 | 너무 많아! | Es sind zu viele! | Za dużo ich! | Je jich moc! |
+| B17 | 너무 많아! | Es sind zu viele! | Jest ich za dużo! | Je jich moc! |
 | B18 | 가, 그냥 가! (포기, 일행에게) | Geh! Lauf weg! | Idź! Uciekaj! | Běž! Uteč! |
 
 - 쓰는 곳: 홈에서 내정을 하는 동안 창밖 바깥 사건('쫓아오는 망자', '바깥에서 죽고 죽이는 장면'), 필드에서 먼 곳의 남(우리 사람 아님). 홈에서는 창 너머 거리로만 들려서 내정 화면을 덮지 않는다.
@@ -107,7 +107,7 @@
 | C04 | 저리 가! | Verschwinde! | Spadaj! | Zmiz! |
 | C05 | 그만들 해! (말리는 사람) | Hört auf! | Przestańcie! | Přestaňte! |
 | C06 | 우리 애들 먹을 거야! | Das ist für meine Kinder! | To dla moich dzieci! | To je pro moje děti! |
-| C07 | 나눠, 나눠 먹자고! | Teilen! Wir teilen! | Dzielimy się! | Rozdělíme se! |
+| C07 | 나눠 먹자고! | Teilen wir das! | Podzielmy się! | Podělíme se! |
 | C08 | 거짓말쟁이! | Lügner! | Kłamca! | Lhář! |
 
 ### 3.4 필드에서 만나는 떠도는 생존자 (D)
@@ -115,11 +115,11 @@
 | # | 뜻 | 독일어 | 폴란드어 | 체코어 |
 |---|---|---|---|---|
 | D01 | 거기 누구 있어요? | Hallo? Ist da jemand? | Halo? Jest tu ktoś? | Haló? Je tu někdo? |
-| D02 | 쏘지 마요! | Nicht schießen! | Nie strzelajcie! | Nestřílejte! |
+| D02 | 쏘지 마요! | Bitte nicht schießen! | Nie strzelajcie, proszę! | Nestřílejte, prosím! |
 | D03 | 우린 둘뿐이에요! | Wir sind nur zu zweit! | Jest nas tylko dwoje! | Jsme jen dva! |
 | D04 | 물 있어요? | Habt ihr Wasser? | Macie wodę? | Máte vodu? |
 | D05 | 위층이에요! | Hier oben! | Tu na górze! | Tady nahoře! |
-| D06 | 안 물렸어요, 봐요! | Nicht gebissen, seht! | Nie pogryziony, patrzcie! | Nejsem pokousaný, podívejte! |
+| D06 | 안 물렸어요, 봐요! | Ich wurde nicht gebissen, schaut her! | Nie jestem pogryziony, patrzcie! | Nejsem pokousaný, podívejte se! |
 | D07 | 그 기차, 어디로 가요? | Wohin fährt der Zug? | Dokąd jedzie ten pociąg? | Kam jede ten vlak? |
 | D08 | 고마워요… | Danke… | Dziękuję… | Děkuju… |
 | D09 | 조용히, 듣잖아요! (속삭임) | Leise, sie hören uns! | Cicho, słyszą nas! | Potichu, slyší nás! |
@@ -134,11 +134,10 @@
 | E01 | 여긴 우리 구역이야 | Das ist unser Revier! | To nasz teren! | Tohle je naše území! |
 | E02 | 저기다! | Da drüben! | Tam! | Tamhle! |
 | E03 | (비웃음) 겁먹었네 | Angst, was? | Boisz się, co? | Bojíš se, co? |
-| E04 | 맞았어! (자기편이 맞음) | Ich bin getroffen! | Dostałem! | Dostal jsem to! |
-| E05 | 물러나, 물러나자! (자기들끼리) | Zurück, zurück! | Wycofać się! | Ustupte! |
-| E06 | 약 내놓으면 보내 줄게 | Gebt uns die Medizin! | Dawajcie leki! | Dejte nám léky! |
+| E04 | 맞았어! (자기편이 맞음) | Ihn hat's erwischt! | Dostał! | Dostal to! |
+| E05 | 빠지자! (자기들끼리) | Wir müssen weg! | Musimy uciekać! | Musíme pryč! |
+| E06 | 약 내놓으면 보내 줄게 | Wenn wir die Medizin kriegen, könnt ihr gehen! | Dacie leki, to was puścimy! | Dáte nám léky a necháme vás jít! |
 
-- E05 'Zurück'은 자기들끼리 물러나자는 말이다. 열차 출발 장면에서 쓰면 '물러서'로 들리므로 약탈자 총격전(필드)에만 쓴다.
 - 약탈자의 외침은 총소리 사이에 드물게. 군대식 신호, 무전 은어, 구령은 없다.
 
 ### 3.6 칸 안 생활 소리 (F, 홈, 낮게)
@@ -150,7 +149,7 @@
 | F03 | 아직 멀었어? | Wie lange noch? | Jak długo jeszcze? | Jak dlouho ještě? |
 | F04 | 여기가 어디야? | Wo sind wir? | Gdzie jesteśmy? | Kde jsme? |
 | F05 | 잘 자 | Gute Nacht. | Dobranoc. | Dobrou noc. |
-| F06 | 쉿 | Psst. | Ćśś. | Pšt. |
+| F06 | 쉿 | Psst. | Ciii… | Pšt. |
 | F07 | 괜찮아, 괜찮아 (달래기) | Schon gut, schon gut. | Już dobrze, już dobrze. | To je dobrý, to je dobrý. |
 | F08 | 문 좀 닫아, 바람 들어와 (객차 문을 안에서) | Mach die Tür zu, es zieht! | Zamknij drzwi, wieje! | Zavři dveře, táhne! |
 | F09 | 나눠 줄게 | Hier, nimm. | Masz, weź. | Na, vezmi si. |
@@ -201,7 +200,7 @@
 | # | 뜻 | 독일어 | 폴란드어 | 체코어 |
 |---|---|---|---|---|
 | H01 | 왔다! | Da sind sie! | Są! Wrócili! | Jsou tady! |
-| H02 | 다 왔어? | Alle da? | Wszyscy są? | Jsou všichni? |
+| H02 | 다 왔어? | Alle da? | Wszyscy są? | Jsou tu všichni? |
 | H03 | 다행이다… | Gott sei Dank… | Dzięki Bogu… | Díky bohu… |
 | H04 | 뭘 가져왔어? | Was habt ihr? | Co macie? | Co nesete? |
 | H05 | (짧은 손뼉, 웃음, 이름 부르기 3.9) | | | |
