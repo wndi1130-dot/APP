@@ -49,7 +49,10 @@ function stopCard(view: View): HTMLElement | null {
         h('span', { class: 'kicker' }, `${g.seg}구간 정차`),
         h('div', { class: 'sheet__titleline' },
           h('b', { class: 'sheet__title' }, place.name),
-          h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') }))),
+          // 위험 칸은 정찰한 뒤에만 보인다. 미리 보이면 정찰을 할 까닭이 준다(사용자 2026-10-09).
+          stop.scoutReport
+            ? h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') })))
+            : h('span', { class: 'risk', 'aria-label': '위험 모름' }, '위험 ?'),
           domesticAltPlace(view)))), // S1c 내정 훅: 핸드카 정찰
     scene ? h('p', { class: 'scene' }, scene.outside, ' ', scene.disembark) : null,
     h('div', { class: 'field field--row' },

@@ -160,7 +160,7 @@ HUD: top left, trust (two clasped gloved hands) and tension (a taut, fraying rop
 
 UI finish, as a proposal: smooth, not pixel; dark gunmetal panels like enamel railway signs, thin brass rims, slightly worn edges, condensed numerals. Frost creeps in only at the screen corners and never covers numbers.
 
-Red appears only where something is wrong (the discontent end of the bar, gauge shortage zones); sky blue appears only for support. Show cold as pale grey-white frost and blue-grey shadow rather than saturated blue, and warmth as amber light. Avoid pixel art, toy or cartoon proportions, glossy product renders, Victorian ornament, readable text other than the tiny labels, logos, red cross symbols, wounds and gore.
+Red appears only where something is wrong (the discontent end of the bar, gauge shortage zones); sky blue appears only for support. Show cold as pale grey-white frost and blue-grey shadow rather than saturated blue, and warmth as amber light. Avoid pixel art, toy or cartoon proportions, glossy product renders, Victorian ornament, readable text other than the tiny labels, logos, red cross symbols, wounds and gore. The dead wear only worn, ordinary civilian winter clothes: no olive drab, no camouflage or mottled fabric, no military backpacks, no helmets or helmet-like headgear, and they never walk in step or in a column.
 ```
 
 ### home_v2에서 바뀐 것
@@ -229,7 +229,7 @@ Edit the attached image. Keep the composition, the camera, the train, the car in
 6) Turn the two controls in the selected car's panel into lever handles that move along a track with clear notched steps, like a ship's engine-order lever, keeping the semicircular gauges with needles leaning into the red.
 7) Lower or clear the foreground fence and figures in the bottom-left so the dossier bundle, menu and book buttons sit on a calm, dark area.
 8) Outside, near the middle cars, add a small platform the train passes without stopping, with a family waiting on it.
-Keep all labels and numbers sharp and readable; frost stays only in the screen corners.
+Keep all labels and numbers sharp and readable; frost stays only in the screen corners. The dead wear only worn, ordinary civilian winter clothes: no olive drab, no camouflage or mottled fabric, no military backpacks, no helmets or helmet-like headgear, and they never walk in step or in a column.
 ```
 
 ## 10. 웹에서 찾은 참고 자료 (2026-10-07)
