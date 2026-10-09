@@ -285,6 +285,43 @@ func line_clear(a: Vector2i, b: Vector2i) -> bool:
 	return true
 
 
+## A cell that stops a blow: wall, block, shut door, whole window. Low cover
+## and open air do not; glass lets the eye through but not an axe.
+func stops_melee(c: Vector2i) -> bool:
+	match solid_at(c):
+		Solid.WALL, Solid.BLOCK:
+			return true
+		Solid.DOOR, Solid.WINDOW:
+			return blocks_body(c)
+	return false
+
+
+## Nothing that stops a blow between two cells (same Bresenham as line_clear).
+func body_line_clear(a: Vector2i, b: Vector2i) -> bool:
+	var x := a.x
+	var y := a.y
+	var dx := absi(b.x - x)
+	var dy := absi(b.y - y)
+	var sx := 1 if x < b.x else -1
+	var sy := 1 if y < b.y else -1
+	var err := dx - dy
+	while x != b.x or y != b.y:
+		var px := x
+		var py := y
+		var e2 := err * 2
+		if e2 > -dy:
+			err -= dy
+			x += sx
+		if e2 < dx:
+			err += dx
+			y += sy
+		if x != px and y != py and stops_melee(Vector2i(x, py)) and stops_melee(Vector2i(px, y)):
+			return false
+		if stops_melee(Vector2i(x, y)):
+			return false
+	return true
+
+
 ## Visible cells within radius of origin; result maps cell index -> true.
 ## Slow reference (every cell gets its own line); kept for tests.
 func visible_from(origin: Vector2i, radius: int) -> Dictionary:

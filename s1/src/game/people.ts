@@ -2,6 +2,7 @@ import { COMMS, COMM_NAME, TRAIT_BAN, TRAITS } from './data';
 import type { Comm, Trait } from './data';
 import { addCard, clamp, drawPerson, isGone, journal, lawActive, PROFILES, situation } from './state';
 import type { Game, Leader, Profile } from './state';
+import { domesticAide } from './domestic/state';
 import familiesJson from '../../generated/profile_families.json';
 
 // 사람의 무게(2026-10-07 사용자가 고른 묶음, politics_detail 6장). 카드 구성과 숫자는 제안이다.
@@ -122,7 +123,9 @@ function proxyTrait(rep: Trait, c: Comm): Trait {
 /** 대표가 앓아눕고 측근이 회기에 나온다. 측근과는 빚(부탁)과 뇌물이 안 통한다. */
 export function fallSick(g: Game, c: Comm): void {
   const s = g.comms[c];
-  const p = drawPerson(g, c, [25, 60]);
+  // S1c 판이면 기관실·앞칸 측근은 견습 화부·약사가 겸한다(8.1). 그 사람이 없으면 새로 뽑는다.
+  const aide = domesticAide(g, c);
+  const p = (aide && PROFILES.find(x => x.name === aide && x.community === c)) || drawPerson(g, c, [25, 60]);
   const proxy: Leader = { personId: p.id, name: p.name, age: p.age, trait: proxyTrait(s.leader.trait, c), traitShown: 0 };
   s.sick = { since: g.seg, rep: s.leader };
   s.leader = proxy;

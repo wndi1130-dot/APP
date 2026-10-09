@@ -295,9 +295,15 @@ func update(delta: float) -> void:
 func _sense(z: Dictionary, people: Array, delta: float) -> void:
 	# Far dead keep their errand; near ones look (forward cone), feel (arm's
 	# reach all round) and smell blood. Senses tick at ~6 Hz per zombie.
-	var player_pos: Vector3 = game.player.position
-	if z["pos"].distance_to(player_pos) > NEAR and z["state"] != "chase":
-		return
+	# Far from every person (not just the player) and not chasing: skip.
+	if z["state"] != "chase":
+		var anyone_near := false
+		for q in people:
+			if z["pos"].distance_squared_to(q.position) <= NEAR * NEAR:
+				anyone_near = true
+				break
+		if not anyone_near:
+			return
 	z["sense_t"] = float(z.get("sense_t", 0.0)) - delta
 	if z["sense_t"] > 0.0 and z["state"] != "chase":
 		return
@@ -591,6 +597,9 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 
 
 func knock_down(z: Dictionary) -> void:
+	# Knocked off its victim: the victim is let go, or the grab still bites.
+	if z["state"] == "grab" and z["victim"] != null:
+		z["victim"].release_grab(z)
 	z["state"] = "downed"
 	z["t"] = game.rng.randf_range(GET_UP.x, GET_UP.y)
 	z["victim"] = null

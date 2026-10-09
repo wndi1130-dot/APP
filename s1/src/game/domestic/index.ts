@@ -11,4 +11,6 @@ export * from './delegate';
 export * from './hooks';
 export * from './laws';
 export * from './lawtech';
+export * from './pipe';
+export * from './elder';
 export * from './cards';

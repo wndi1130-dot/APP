@@ -24,3 +24,36 @@ environment/defaults/default_clear_color=Color(0.12, 0.12, 0.12, 1)
 
 [physics]
 common/physics_ticks_per_second=30
+
+[shader_globals]
+; Weather state for every fx shader. Only fx/fx_state.gd writes these
+; (docs/design/briefs/shaders.md 3장).
+
+fx_wet={
+"type": "float",
+"value": 0.0
+}
+fx_snow={
+"type": "float",
+"value": 0.0
+}
+fx_frost={
+"type": "float",
+"value": 0.0
+}
+fx_wind={
+"type": "vec3",
+"value": Vector3(1, 0, 0.4)
+}
+fx_tint={
+"type": "color",
+"value": Color(0.72, 0.74, 0.78, 1)
+}
+fx_flash={
+"type": "float",
+"value": 0.0
+}
+fx_fade={
+"type": "float",
+"value": 0.0
+}

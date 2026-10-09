@@ -123,3 +123,26 @@ func test_find_path_goes_around_a_wall() -> void:
 		assert_true(g.people_can_walk(FieldGrid.cell_of(p)))
 	assert_true(g.clear_walk(Vector2i(10, 26), Vector2i(20, 26), false))
 	assert_false(g.clear_walk(Vector2i(10, 5), Vector2i(20, 5), false))
+
+
+func test_a_whole_window_or_shut_door_stops_a_blow_but_not_the_eye() -> void:
+	var g := FieldGrid.new(30, 30)
+	for y in range(5, 25):
+		g.set_solid(Vector2i(15, y), S.WALL)
+	var win := Vector2i(15, 15)
+	g.set_solid(win, S.WINDOW)
+	g.windows[win] = {"broken": false, "glass": false, "building": 0, "cell": win}
+	var door := Vector2i(15, 18)
+	g.set_solid(door, S.DOOR)
+	g.doors[door] = {"state": "closed", "hp": 8, "building": 0}
+	g.set_solid(Vector2i(10, 12), S.LOW)
+	g.refresh_paths()
+	assert_true(g.line_clear(Vector2i(14, 15), Vector2i(16, 15)), "glass is clear to the eye")
+	assert_false(g.body_line_clear(Vector2i(14, 15), Vector2i(16, 15)), "but whole glass stops an axe")
+	assert_false(g.body_line_clear(Vector2i(14, 18), Vector2i(16, 18)), "so does a shut door")
+	assert_false(g.body_line_clear(Vector2i(14, 12), Vector2i(16, 12)), "and a wall")
+	assert_true(g.body_line_clear(Vector2i(9, 12), Vector2i(11, 12)), "low cover can be reached over")
+	g.break_window(win)
+	g.set_door_state(door, "open")
+	assert_true(g.body_line_clear(Vector2i(14, 15), Vector2i(16, 15)))
+	assert_true(g.body_line_clear(Vector2i(14, 18), Vector2i(16, 18)))

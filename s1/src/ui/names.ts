@@ -83,7 +83,8 @@ export function personCard(g: Game, name: string): HTMLElement {
   const comm = lead ?? p?.community;
   const dead = g.deaths.includes(name);
   const facts: (HTMLElement | null)[] = [
-    h('li', null, `${comm ? COMM_NAME[comm] : '소속 모름'}${p ? ` · ${p.age}세` : ''}`),
+    // 대표는 판이 나이를 정할 수 있다(늙은 장인 아크의 의무장, s1c_domestic 8.9). 그 밖엔 프로필 나이.
+    h('li', null, `${comm ? COMM_NAME[comm] : '소속 모름'}${lead ? ` · ${g.comms[lead].leader.age}세` : p ? ` · ${p.age}세` : ''}`),
     lead ? h('li', null, `${REP_ROLE[lead]} · ${(() => {
       const l = g.comms[lead].leader;
       return l.traitShown === 0 ? '성향 가려짐' : l.traitShown === 1 ? `아마 ${TRAIT_NAME[l.trait]}` : TRAIT_NAME[l.trait];

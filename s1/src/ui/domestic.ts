@@ -27,12 +27,24 @@ export function urlWantsS1c(): boolean {
   return v === '1' || v === 'on';
 }
 
-/** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. s1b: S1b 어두운 길도 켠다(ui/dark.ts). */
-export function newGame(seed: string, s1c: boolean, s1b = false): Game {
+/** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. s1b: S1b 어두운 길도 켠다(ui/dark.ts).
+ * prologue=false: 서막 카드 없이 볼슈틴에서 바로 출발한다(서막 건너뛰기, 5장. depot_promise가 비어 '서막을 거치지 않은 판'이 된다). */
+export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
   if (s1b) enableDark(g);
-  startPrologue(g);
+  if (prologue) startPrologue(g);
   return g;
+}
+
+const PROLOGUE_KEY = 's1.prologueDone';
+/** 이 브라우저에서 서막을 한 번 끝냈나(5장 '서막 클리어'). 저장소가 막히면 없는 것으로 본다. */
+export function prologueDone(): boolean {
+  try { return globalThis.localStorage?.getItem(PROLOGUE_KEY) === '1'; } catch { return false; }
+}
+/** 서막을 지나 2구간에 들어선 판이면 서막 클리어를 남긴다. 그 뒤 메뉴에 '서막 없이 새 판'이 보인다. */
+export function notePrologue(g: Game): void {
+  if (g.seg < 2 || !g.story?.flags.depot_promise || prologueDone()) return;
+  try { globalThis.localStorage?.setItem(PROLOGUE_KEY, '1'); } catch { /* 저장이 막혀도 판은 그대로 */ }
 }
 
 function domUi(ui: Ui): DomUi {

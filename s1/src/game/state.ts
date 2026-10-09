@@ -124,7 +124,7 @@ export type Agenda = LawAgenda | MotionAgenda;
 /** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
 export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'extend_powers' | 'ratify_decrees';
+export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees';
 /** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
 export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
 

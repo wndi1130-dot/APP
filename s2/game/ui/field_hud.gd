@@ -944,7 +944,12 @@ func _input(event: InputEvent) -> void:
 	if game == null or game.ended or modal_open:
 		return
 	if event is InputEventScreenTouch:
-		var used: bool = finger_down(event.index, event.position) if event.pressed else finger_up(event.index, event.position)
+		# A cancelled touch is not a lift: no shot, no tap.
+		var used: bool
+		if event.canceled:
+			used = finger_cancel(event.index)
+		else:
+			used = finger_down(event.index, event.position) if event.pressed else finger_up(event.index, event.position)
 		if used:
 			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
@@ -1056,6 +1061,40 @@ func finger_up(index: int, pos: Vector2) -> bool:
 				b.pressed.emit()
 		"hand":
 			_release(pos)
+	return true
+
+
+## The system took this finger away (a cancelled touch): let go of what it
+## held without firing, tapping or pressing anything.
+func finger_cancel(index: int) -> bool:
+	if not fingers.has(index):
+		return false
+	var f: Dictionary = fingers[index]
+	fingers.erase(index)
+	match f["kind"]:
+		"stick":
+			stick_index = -1
+			stick_dash = false
+			_stick_release()
+		"pad":
+			if auto_aim:
+				aim_cancel = true
+				_auto_aim_end(Vector2.ZERO)
+			for b in [aim_button, context_button, shove_button]:
+				if f["pad"] == b:
+					b.button_pressed = false
+		"hand":
+			if aiming and game.player.aim.active:
+				game.player.aim.stop()
+			pressing = false
+			aiming = false
+			aim_cancel = false
+			aim_armed = false
+			aim_target = null
+			melee_pending = null
+			if melee_holding:
+				game.combat.stop_holding(game.player)
+			melee_holding = false
 	return true
 
 
@@ -1273,7 +1312,7 @@ func _tick_auto_aim(delta: float) -> void:
 func _target_ok(t) -> bool:
 	if t is Dictionary:
 		return t["state"] != "dead" and game.cell_seen(t["pos"])
-	return t.is_alive() and t.visible
+	return game.combat.hostile(t) and t.visible
 
 
 func _press(pos: Vector2) -> void:
