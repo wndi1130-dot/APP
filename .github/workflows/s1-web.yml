@@ -40,9 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -68,7 +68,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: s1-dist-${{ github.run_number }}
           path: s1/dist
@@ -80,22 +80,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: s1/package-lock.json
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: s1-dist-${{ github.run_number }}
           path: s1/dist
 
       - name: Cache apt packages
         # 글꼴과 playwright --with-deps가 까는 .deb를 함께 둔다. 꾸러미가 바뀌면 v를 올린다.
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/ci-debs
           key: ci-debs-${{ runner.os }}-noble-playwright-1.56.1-v2
@@ -139,7 +139,7 @@ jobs:
       - name: Screen smoke
         run: SCREENSHOT_DIR="$RUNNER_TEMP/s1-shots" node tools/screenshots.cjs
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: s1-screens-${{ github.run_number }}

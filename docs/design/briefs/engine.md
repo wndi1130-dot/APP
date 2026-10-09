@@ -2,7 +2,7 @@
 
 작성: 2026-10-07 · 상태: 결정됨(2026-10-07 사용자가 1안 Godot 4 선택). decisions.md '개발 순서'에 옮겼다. 아트는 전부 실시간 3D로 정해졌다(2026-10-07 사용자, decisions.md). S22 성능 시험은 통과했다(아래 8장).
 
-S2 필드 회색 상자(topic 3단계)를 만들기 전에 엔진이 정해져야 한다. 지금 저장소에는 엔진 결정이 없고, [first_slice_scope.md](first_slice_scope.md)의 'S2 (Unity, 모바일)'라는 계획만 있다. Pro 조사(PR 12, ui-motion-sound 브랜치)도 Unity를 전제로 도구를 골랐지만, 그건 계획을 따른 것이지 비교한 결과가 아니다.
+S2 필드 회색 상자(topic 3단계)를 만들기 전에 엔진이 정해져야 한다. 엔진은 Godot 4로 확정됐고(decisions.md, 갤럭시 S22 시험 통과), 아래 비교는 그 전 기록이다. 그 전에는 저장소에 엔진 결정이 없고 [first_slice_scope.md](first_slice_scope.md)의 'S2 (Unity, 모바일)'라는 계획만 있었다. Pro 조사(PR 12, ui-motion-sound 브랜치)도 Unity를 전제로 도구를 골랐지만, 그건 계획을 따른 것이지 비교한 결과가 아니다.
 
 ## 1. 무엇을 기준으로 고르나
 
@@ -101,7 +101,7 @@ S2 필드 회색 상자(topic 3단계)를 만들기 전에 엔진이 정해져�
 
 ## 6. 정해지면 할 일
 
-1. decisions.md '개발 순서'에 엔진을 확정으로 옮기고, first_slice_scope.md의 'S2 (Unity, 모바일)'를 고친다.
+1. decisions.md '개발 순서'에 엔진을 확정으로 옮기고, first_slice_scope.md의 'S2 (Unity, 모바일)'를 고친다. (끝남 2026-10-07)
 2. 1안이나 2안이면 사용자가 클라우드 환경의 네트워크 허용을 넓힌다(Godot: GitHub 릴리스 내려받기, Unity: Unity 내려받기 서버와 라이선스 서버). 그 전까지 엔진 작업은 GitHub Actions나 사용자 PC에서 한다.
 3. S2 첫 일감(폰 성능 시험)을 Codex 워커에 맡길 지시서로 쓴다.
 4. 사용자 폰 기종을 묻는다(성능 시험 기준).

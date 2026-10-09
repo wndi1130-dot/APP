@@ -9,7 +9,7 @@
 - [1차] The Long Dark의 공식 과거 패치 기록은 옷 겹, 젖음·결빙·건조, 동상 체계를 소개하며, 세부 온도 규칙은 아래에서 페이지 버전 한계를 붙여 설명한다. [Resolute Outfitter](https://www.thelongdark.com/time-capsule/resolute-outfitter/)
 - [2차] 7 Days to Die 2.5는 날고기 냄새 시스템을 다시 넣었고, State of Decay 2는 ScentBlock과 Zombait를 아이템으로 사용한다. [7 Days Raw Meat](https://7daystodie.wiki.gg/wiki/Raw_Meat) · [State of Decay 2 Consumables](https://state-of-decay-2.fandom.com/wiki/Consumables)
 - [2차] DayZ의 공개 감염자 설명은 시야·소리 탐지와 수색을 다루지만 냄새 규칙은 확인되지 않았다. [DayZ Infected](https://dayz.wiki.gg/wiki/Infected)
-- [제안] 모바일에서는 냄새를 한 가지 탐지 거리 보정으로 두고, 냄새 원인·씻기 선택·상태 표시를 짧은 순환으로 묶는 편이 초안의 짧은 필드 임무에 맞는다. [설계 초안](../design/briefs/body_injury.md)
+- [제안] 모바일에서는 냄새를 한 가지 탐지 거리 보정으로 두고, 냄새 원인·옷 삶기 선택·상태 표시를 짧은 순환으로 묶는 편이 초안의 짧은 필드 임무에 맞는다. [설계 초안](../design/briefs/body_injury.md)
 
 ## 2. 항목별 조사
 
@@ -101,7 +101,7 @@
 
 [제안] 세 게임의 공통 설계점은 냄새가 환경·아이템·임무 선택을 바꾸는 단일 탐지 신호라는 점이며, 복잡한 생물학 모델보다 명확한 반경과 사라지는 조건을 플레이어에게 알리는 방식이 모바일에 맞는다. [7 Days to Die Raw Meat](https://7daystodie.wiki.gg/wiki/Raw_Meat) · [State of Decay 2 Consumables](https://state-of-decay-2.fandom.com/wiki/Consumables)
 
-[제안] 초안의 깨끗함·땀내·악취 3단계와 씻기 선택은 유지하되, 냄새가 바꾸는 것은 감지 거리 하나로 제한하고 수치 대신 작은 아이콘·바람 방향·옷 얼룩으로 알린다. [설계 초안](../design/briefs/body_injury.md) · [비교 규칙](https://7daystodie.wiki.gg/wiki/Raw_Meat)
+[제안] 초안의 깨끗함·땀내·악취 3단계와 옷 삶기 선택은 유지하되, 냄새가 바꾸는 것은 감지 거리 하나로 제한하고 수치 대신 작은 아이콘·바람 방향·옷 얼룩으로 알린다. [설계 초안](../design/briefs/body_injury.md) · [비교 규칙](https://7daystodie.wiki.gg/wiki/Raw_Meat)
 
 [제안] 세척은 전원 공통으로 한 번 선택하게 하고 비용·기회비용을 붙여 반복 잡무를 줄인다. [설계 초안](../design/briefs/survival_detail.md) · [공식 커뮤니티 반응](https://community.thefunpimps.com/threads/arrow-sponges-even-with-a-headshot-are-annoying-and-other-musings-2-5.46550/)
 
@@ -125,7 +125,7 @@
 
 [제안] 열차 내 위생 설계는 공동 침구·옷 공유, 세탁물 말릴 공간, 온수·연료 배급 같은 생활 조건을 사건 원인으로 삼고 특정 사람 집단을 병원체와 연결하지 않는다. [암스테르담 시립 기록보관소](https://www.amsterdam.nl/stadsarchief/stukken/eerste-wereldoorlog/leven-loods/) · [ECDC Lice Factsheet](https://www.ecdc.europa.eu/en/all-topics-z/disease-vectors/facts/factsheet-lice-phthiraptera)
 
-[제안] 모바일에서는 공동체 위생을 한 단계 값으로 요약하고, 목욕·의복 교체·침구 건조 중 한두 가지 행동만 선택지로 노출한다. [설계 초안](../design/briefs/survival_detail.md) · [설계 초안](../design/briefs/body_injury.md)
+[제안] 모바일에서는 공동체 위생을 한 단계 값으로 요약하고, 옷 삶기·의복 교체·침구 건조 중 한두 가지 행동만 선택지로 노출한다. [설계 초안](../design/briefs/survival_detail.md) · [설계 초안](../design/briefs/body_injury.md)
 
 ## 3. 초안 항목과 근거 연결표
 
