@@ -19,6 +19,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
+const FxState = preload("res://fx/fx_state.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
 const AI = preload("res://game/field_ai.gd")
@@ -130,12 +131,15 @@ var player_downed_t: float = 0.0
 var spotted_events: int = 0
 var unseen_rattle: bool = false
 var light_t: float = 0.0
+## What the stop wrote into the fx_* shader globals (the server cannot be read back at runtime).
+var fx_params: Dictionary = {}
 
 
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
 	weather = Weather.new(opts.get("weather", ["fog", "snow"]), AMBIENT_C, Vector2(1, 0.2), 0.4)
+	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	data = SulehufMap.build()
@@ -174,6 +178,14 @@ func _ready() -> void:
 	_update_camera(1.0)
 	_refresh_vision()
 	telemetry.zone_enter(grid.zone_at(FieldGrid.cell_of(player.position)), 0.0)
+
+
+## Weather is fixed for the whole stop, so the shader globals are set once.
+## Lying snow is not tracked yet: -1 lets FxState guess it from the air temperature.
+func _apply_fx() -> void:
+	var hour := clock.game_minutes() / 60.0
+	fx_params = FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour)
+	FxState.apply(fx_params)
 
 
 func _build_world() -> void:
