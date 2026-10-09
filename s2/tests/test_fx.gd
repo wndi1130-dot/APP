@@ -77,7 +77,7 @@ func _sky_blue(c: Color) -> bool:
 func test_no_sky_blue_or_red_in_weather_colours() -> void:
 	for kind in FxState.KIND_TINT:
 		assert_false(_sky_blue(FxState.KIND_TINT[kind]), kind)
-	for band in FxState.HOURS:
+	for band in FxState.BAND_LOOK.values():
 		for key in ["sun", "ambient", "tint"]:
 			var c: Color = band[key]
 			assert_false(_sky_blue(c), "%s %s" % [band["name"], key])
@@ -92,6 +92,30 @@ func test_hour_bands() -> void:
 	assert_eq(String(FxState.hour_band(16.0)["name"]), "dusk")
 	assert_eq(String(FxState.hour_band(23.5)["name"]), "night")
 	assert_eq(String(FxState.hour_band(-1.0)["name"]), "night")
+	# Deep winter is the default (seasons_regions.md 7장: 07:00 / 08:30 / 14:50 / 16:30).
+	assert_eq(String(FxState.hour_band(14.9)["name"]), "dusk")
+	assert_eq(String(FxState.hour_band(16.6)["name"]), "night")
+
+
+func test_hour_bands_follow_the_season() -> void:
+	assert_eq(String(FxState.hour_band(6.0, "deep_winter")["name"]), "night")
+	assert_eq(String(FxState.hour_band(6.0, "early_thaw")["name"]), "dawn")
+	assert_eq(String(FxState.hour_band(17.0, "deep_winter")["name"]), "night")
+	assert_eq(String(FxState.hour_band(17.0, "late_winter")["name"]), "dusk")
+	assert_eq(String(FxState.hour_band(16.0, "early_thaw")["name"]), "day")
+	# Unknown season falls back to deep winter.
+	assert_eq(FxState.hour_band(16.0, "summer"), FxState.hour_band(16.0))
+	for season in FxState.SEASON_BANDS:
+		var b: Dictionary = FxState.SEASON_BANDS[season]
+		assert_true(b["dawn"] < b["day"] and b["day"] < b["dusk"] and b["dusk"] < b["night"], season)
+
+
+func test_snow_level_by_season() -> void:
+	assert_eq(FxState.snow_level_for("deep_winter"), 2)
+	assert_eq(FxState.snow_level_for("late_winter", true), 1)
+	assert_eq(FxState.snow_level_for("early_thaw"), 1)
+	assert_eq(FxState.snow_level_for("early_thaw", true), 0)
+	assert_eq(FxState.snow_for_level(FxState.snow_level_for("early_thaw", true)), 0.0)
 
 
 func test_smoke_has_no_chimney_or_column_kinds() -> void:

@@ -26,13 +26,30 @@ const KIND_TINT: Dictionary = {
 ## Hour bands (presentation_motion.md 정차 변주 축 가: dawn grey-blue, day
 ## lead-grey, dusk amber windows, night lamps and torches only).
 ## sun: directional light colour and energy, ambient: fill colour and energy.
-const HOURS: Array[Dictionary] = [
-	{"name": "night", "from": 0.0, "sun": Color(0.58, 0.6, 0.64), "sun_energy": 0.05, "ambient": Color(0.31, 0.32, 0.345), "ambient_energy": 0.16, "tint": Color(0.33, 0.34, 0.36)},
-	{"name": "dawn", "from": 6.0, "sun": Color(0.76, 0.77, 0.79), "sun_energy": 0.32, "ambient": Color(0.53, 0.55, 0.58), "ambient_energy": 0.36, "tint": Color(0.62, 0.64, 0.67)},
-	{"name": "day", "from": 8.5, "sun": Color(0.84, 0.84, 0.85), "sun_energy": 0.55, "ambient": Color(0.60, 0.61, 0.63), "ambient_energy": 0.45, "tint": Color(0.76, 0.76, 0.77)},
-	{"name": "dusk", "from": 15.0, "sun": Color(0.80, 0.70, 0.58), "sun_energy": 0.32, "ambient": Color(0.46, 0.46, 0.48), "ambient_energy": 0.32, "tint": Color(0.60, 0.58, 0.56)},
-	{"name": "night", "from": 17.0, "sun": Color(0.58, 0.6, 0.64), "sun_energy": 0.05, "ambient": Color(0.31, 0.32, 0.345), "ambient_energy": 0.16, "tint": Color(0.33, 0.34, 0.36)},
-]
+const BAND_LOOK: Dictionary = {
+	"night": {"name": "night", "sun": Color(0.58, 0.6, 0.64), "sun_energy": 0.05, "ambient": Color(0.31, 0.32, 0.345), "ambient_energy": 0.16, "tint": Color(0.33, 0.34, 0.36)},
+	"dawn": {"name": "dawn", "sun": Color(0.76, 0.77, 0.79), "sun_energy": 0.32, "ambient": Color(0.53, 0.55, 0.58), "ambient_energy": 0.36, "tint": Color(0.62, 0.64, 0.67)},
+	"day": {"name": "day", "sun": Color(0.84, 0.84, 0.85), "sun_energy": 0.55, "ambient": Color(0.60, 0.61, 0.63), "ambient_energy": 0.45, "tint": Color(0.76, 0.76, 0.77)},
+	"dusk": {"name": "dusk", "sun": Color(0.80, 0.70, 0.58), "sun_energy": 0.32, "ambient": Color(0.46, 0.46, 0.48), "ambient_energy": 0.32, "tint": Color(0.60, 0.58, 0.56)},
+}
+
+## Where each band starts (hours) per season state, from sunrise and sunset
+## (seasons_regions.md 7장): dawn 1 h before sunrise, day 30 min after it,
+## dusk 1 h before sunset, night 40 min after it.
+const SEASON_BANDS: Dictionary = {
+	"deep_winter": {"dawn": 7.0, "day": 8.5, "dusk": 14.0 + 50.0 / 60.0, "night": 16.5},
+	"late_winter": {"dawn": 6.5, "day": 8.0, "dusk": 15.5, "night": 17.0 + 10.0 / 60.0},
+	"early_thaw": {"dawn": 5.75, "day": 7.25, "dusk": 16.25, "night": 17.0 + 55.0 / 60.0},
+}
+const DEFAULT_SEASON := "deep_winter"
+
+## Snow thickness level by season state (seasons_regions.md 7장). open_ground:
+## wind-scoured plain (late winter) or sunny, slushy ground (early thaw).
+const SEASON_SNOW: Dictionary = {
+	"deep_winter": [2, 2],
+	"late_winter": [2, 1],
+	"early_thaw": [1, 0],
+}
 
 ## Lying snow by the season design's three thicknesses (seasons_regions.md
 ## 7장: 0 none, 1 a crust on flat tops, 2 deep snow that also takes slopes).
@@ -46,18 +63,26 @@ static func snow_for_level(level: int) -> float:
 	return SNOW_LEVELS[clampi(level, 0, SNOW_LEVELS.size() - 1)]
 
 
-static func hour_band(hour: float) -> Dictionary:
+static func snow_level_for(season: String, open_ground := false) -> int:
+	var row: Array = SEASON_SNOW.get(season, SEASON_SNOW[DEFAULT_SEASON])
+	return int(row[1 if open_ground else 0])
+
+
+static func hour_band(hour: float, season := DEFAULT_SEASON) -> Dictionary:
+	var starts: Dictionary = SEASON_BANDS.get(season, SEASON_BANDS[DEFAULT_SEASON])
 	var h := fposmod(hour, 24.0)
-	var band: Dictionary = HOURS[0]
-	for row in HOURS:
-		if h >= float(row["from"]):
-			band = row
-	return band
+	if h >= float(starts["night"]) or h < float(starts["dawn"]):
+		return BAND_LOOK["night"]
+	if h >= float(starts["dusk"]):
+		return BAND_LOOK["dusk"]
+	if h >= float(starts["day"]):
+		return BAND_LOOK["day"]
+	return BAND_LOOK["dawn"]
 
 
 ## Shader globals for a stop. ground_snow < 0 means "guess from temperature";
-## the season design (계절·시간대와 지역 변형 thread) should pass its own value.
-static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0), wind := 0.4, hour := 12.0, ground_snow := -1.0) -> Dictionary:
+## pass snow_for_level(snow_level_for(season, open_ground)) from the season state.
+static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0), wind := 0.4, hour := 12.0, ground_snow := -1.0, season := DEFAULT_SEASON) -> Dictionary:
 	var known: Array[String] = []
 	for k in kinds:
 		var key := String(k)
@@ -86,7 +111,7 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 			# Darkest weather wins the wash.
 			if KIND_TINT[k].v < tint.v:
 				tint = KIND_TINT[k]
-	var band := hour_band(hour)
+	var band := hour_band(hour, season)
 	tint = tint * Color(band["tint"])
 	var dir := wind_dir.normalized() if wind_dir.length() > 0.001 else Vector2(1, 0)
 	return {
@@ -101,8 +126,8 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 
 
 ## Light and fog for the WorldEnvironment and sun of a stop at this hour.
-static func lighting_for(kinds: Array, hour := 12.0) -> Dictionary:
-	var band := hour_band(hour)
+static func lighting_for(kinds: Array, hour := 12.0, season := DEFAULT_SEASON) -> Dictionary:
+	var band := hour_band(hour, season)
 	var dim := 1.0
 	for k in kinds:
 		match String(k):
