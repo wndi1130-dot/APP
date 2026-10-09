@@ -1,6 +1,6 @@
 # 첫 구간 지도 조사 — 2026-10-07
 
-볼슈틴 → 즈봉시네크 → 코트부스 → 라이프치히. 지정한 `calculate_route`로 다시 계산한 거리는 **311.875372km**다. 원본 문서: [지도 참고 §4](../map_references.md). 계산·조회 근거는 [수집 기록](collection_manifest.json), [재현 방법](README.md)에 있다.
+볼슈틴 → 국경 들판 구간 → 코트부스 → 라이프치히. 지정한 `calculate_route`로 다시 계산한 거리는 **311.875372km**다. 원본 문서: [지도 참고 §4](../map_references.md). 계산·조회 근거는 [수집 기록](collection_manifest.json), [재현 방법](README.md)에 있다.
 
 ## [PASS] 받은 자료
 

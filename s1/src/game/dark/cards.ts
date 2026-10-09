@@ -25,6 +25,12 @@ import type { Ember, OrderExe, OrderMethod } from './state';
 // S1b 카드(13장). 본문과 대사는 자리표시이고 Gemini가 같은 결로 쓴다. 선을 넘는 선택지는 cross에 반응 한 줄(10.1)을 단다.
 // 화면은 cross가 있으면 검은 띠를 두른다(ui/card.ts). 무뎌짐이면 반응 줄이 빈칸이다(10.5).
 
+/** S1b가 올리는 카드 종류(구간 예산 등급표 budget.ts가 빠진 것을 가린다). 새 dark: 카드를 만들면 여기도 넣는다. */
+export const DARK_CARD_KINDS = [
+  'dark:sign', 'dark:armory', 'dark:act', 'dark:theft', 'dark:case', 'dark:punish', 'dark:mob', 'dark:truth', 'dark:hostile', 'dark:exec_threat',
+  'dark:order_exe', 'dark:order_method', 'dark:order_done', 'dark:order_fail', 'dark:corpse_rule', 'dark:vigil',
+] as const;
+
 const rep = (g: Game, c: Comm) => ({ name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c });
 /** 수사·징후의 화자: 경비대장. 경비대장이 용의자이거나 경비대 적의 2 이상이면 부관(4.4). */
 function officer(g: Game, suspects: string[] = []): { name: string; role: string; comm: Comm } {

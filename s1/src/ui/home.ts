@@ -2,9 +2,9 @@ import { COMMS, COMM_NAME, COMM_SHORT, P, isSessionSeg, relStage, situation, vie
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
-import { fmt } from './common';
+import { TIP, fmt } from './common';
 import type { CarDef, View } from './common';
-import { bar, lever } from './widgets';
+import { bar, lever, tip } from './widgets';
 // S1c 내정 훅(ui/domestic.ts). S1a 판이면 모두 null이나 CARS를 돌려준다.
 import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, domesticWhyLine, trainCars } from './domestic';
 
@@ -98,10 +98,10 @@ function carPopover(view: View, car: CarDef): HTMLElement | null {
         h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
       domesticWhyLine(view, car),
       h('div', { class: 'carpop__stats' },
-        h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
-        h('span', null, '배급 ', h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
-        h('span', null, '과밀 ', h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
-        h('span', null, '노출 ', h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
+        h('span', null, tip('온기', TIP.warmth), h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
+        h('span', null, tip('배급', TIP.ration), h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
+        h('span', null, tip('과밀', TIP.crowding), h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
+        h('span', null, tip('노출', TIP.exposure), h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
       c === 'tail' && view.ui.spaceOpen ? spaceLever(g)
         : h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car)));
   }
@@ -117,7 +117,7 @@ function carPopover(view: View, car: CarDef): HTMLElement | null {
     return h('div', { class: 'carpop carpop--small', role: 'dialog' },
       h('div', { class: 'carpop__head' }, h('b', null, '열차장실'),
         h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
-      h('p', { class: 'carpop__text' }, `일지 ${g.journal.length}줄. 쥔 비밀 ${g.secrets.length}. 상징물 ${g.symbols}.`),
+      h('p', { class: 'carpop__text' }, `일지 ${g.journal.length}줄. `, tip('쥔 비밀', TIP.secrets), ` ${g.secrets.length}. `, tip('상징물', TIP.symbols), ` ${g.symbols}.`),
       h('button', { class: 'btn', 'data-action': 'panel', 'data-panel': 'journal' }, '일지 펼치기'));
   }
   if (car.kind === 'freight' || car.kind === 'cold') {

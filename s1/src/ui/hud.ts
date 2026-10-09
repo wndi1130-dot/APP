@@ -53,7 +53,23 @@ function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: n
     icon(name, `res__icon res__icon--${name}`),
     h('div', { class: 'res__body' },
       h('b', { class: cx('num', value < P.crisisLine && name !== 'lux' && name !== 'med' && 'is-low'), ...rollAttr(fx, name) }, fmt(value)),
-      delta !== undefined ? h('span', { class: 'res__delta num' }, signed(delta)) : h('span', { class: 'res__delta' }, label)));
+      delta !== undefined ? deltaLine(value, delta) : h('span', { class: 'res__delta' }, label)));
+}
+
+/** 이번 구간 증감과, 줄어드는 중이면 정차에서 못 채울 때 몇 구간 뒤 바닥나는지(사용자 2026-10-09). */
+export function runway(value: number, delta: number): number | null {
+  const use = -Math.round(delta);
+  if (use <= 0) return null;
+  return Math.max(0, Math.floor(value / use));
+}
+
+function deltaLine(value: number, delta: number): HTMLElement {
+  const n = runway(value, delta);
+  if (n === null) return h('span', { class: 'res__delta num' }, signed(delta));
+  const why = n === 0 ? '이번 구간에 바닥난다' : `정차에서 못 채우면 ${n}구간 뒤 바닥난다`;
+  // 탭하면 쪽지로 뜬다(폰엔 title이 없다). 윗 띠 자원 칸 자체엔 data-action이 없어 다른 동작을 가리지 않는다.
+  return h('button', { type: 'button', class: cx('res__delta num tip', n <= 3 && 'is-low'), 'data-action': 'tip', 'data-tip': why, 'aria-label': why },
+    `${signed(delta)}·${n === 0 ? '바닥' : `${n}구간`}`);
 }
 
 /** 의석 꼬리표: 불만 의석이 늘면 빨강(이때만), 나머지는 재질대로 */

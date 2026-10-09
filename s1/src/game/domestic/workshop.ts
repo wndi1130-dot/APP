@@ -120,22 +120,31 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   const asked = pipe && !d.pipeFlip;
   d.techs[id] = { stage: 'restoring', defect: mode === 'defect', progress: 0, need: cost.work, ...(variant ? { variant } : {}), ...(asked ? { pending: true } : {}) };
   d.restoring = id;
-  const moved = relMoved(g, id, variant);
+  const delta = relDelta(g, id, variant);
   d.log.restores.push({ seg: g.seg, id, ...(variant ? { v: variant } : {}) });
-  if (!relApplied && !pipe && !moved) {
-    const sides = techRelSides(id, variant);
-    for (const c of sides.like) g.comms[c].rel = clamp(g.comms[c].rel + D.techRel, -100, 100);
-    for (const c of sides.dislike) g.comms[c].rel = clamp(g.comms[c].rel - D.techRel, -100, 100);
-  }
+  if (!relApplied) for (const [c, n] of Object.entries(delta) as [Comm, number][]) g.comms[c].rel = clamp(g.comms[c].rel + n, -100, 100);
   if (d.researchPick === id) d.researchPick = null;
   journal(g, `공방이 ${techTitle(g, id)} 복원을 시작했다${mode === 'defect' ? '(결함판)' : ''}.${asked ? ' 다음 회기에 배관 추인을 받아야 끝난다.' : ''}`);
   return true;
 }
 
-/** 이 기술(변형)로 관계가 이미 움직였나. 지난번 시작과 같은 변형으로 다시 시작하면 또 움직이지 않는다(7.5 취소 악용). */
-export function relMoved(g: Game, id: TechId, variant?: Variant): boolean {
+/** 이 기술(변형)을 시작할 때 움직일 관계(7.5 취소 악용 막기). 지난번 시작한 변형의 몫을 되돌리고 이번 변형의 몫을 더한다.
+ * 그래서 같은 변형을 되풀이하면 0이고, 변형을 오가도 순증은 지금 변형 한 번 몫뿐이다(PC 리뷰 PR 57 1번: R2 가·나 왕복이 쌓였다).
+ * v 없는 옛 기록(PR 57 전 저장)은 어느 변형이었는지 몰라 이미 움직인 것으로 본다. E3 배관은 추인 때 움직여 여기서 0이다(pipe.ts). */
+export function relDelta(g: Game, id: TechId, variant?: Variant): Partial<Record<Comm, number>> {
+  const out: Partial<Record<Comm, number>> = {};
+  if (id === 'e3') return out;
   const last = [...dom(g).log.restores].reverse().find(r => r.id === id);
-  return !!last && last.v === variant;
+  if (last && (last.v === variant || (TECHS[id].variants && !last.v))) return out;
+  const add = (v: Variant | undefined, sign: number) => {
+    const sides = techRelSides(id, v);
+    for (const c of sides.like) out[c] = (out[c] ?? 0) + sign * D.techRel;
+    for (const c of sides.dislike) out[c] = (out[c] ?? 0) - sign * D.techRel;
+  };
+  if (last) add(last.v, -1);
+  add(variant, 1);
+  for (const c of Object.keys(out) as Comm[]) if (out[c] === 0) delete out[c];
+  return out;
 }
 
 export function startFinish(g: Game, id: TechId): boolean {
@@ -533,15 +542,30 @@ export function standDown(g: Game): TechId | null {
   const id = cands[0];
   if (!id) return null;
   d.techs[id]!.off = true;
+  d.techs[id]!.refund = true;
   d.parts += 1;
   journal(g, `${techTitle(g, id)}을(를) 세웠다. 그 몫의 부품을 돌린다.`, 'bad');
   refreshSit(g);
   return id;
 }
 
+/** 다시 돌릴 수 없는 까닭. 세울 때 돌려받은 부품 1을 다시 내야 한다. */
+export function restartWhy(g: Game, id: TechId): string | undefined {
+  const d = dom(g);
+  const st = d.techs[id];
+  if (!st?.off) return '세워 둔 기술이 아니다';
+  if (st.refund && d.parts < 1) return '세울 때 돌려받은 부품 1이 든다';
+  return undefined;
+}
+
 export function restartTech(g: Game, id: TechId): void {
-  const st = dom(g).techs[id];
-  if (st?.off) { st.off = false; refreshSit(g); }
+  const d = dom(g);
+  const st = d.techs[id];
+  if (!st || restartWhy(g, id)) return;
+  if (st.refund) d.parts -= 1;
+  st.off = false;
+  delete st.refund;
+  refreshSit(g);
 }
 
 export function penaltyActive(g: Game, kind: 'coal' | 'haul'): boolean {

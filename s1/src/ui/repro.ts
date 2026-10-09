@@ -1,6 +1,6 @@
 import {
   COMMS, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
+  migrateDomestic, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
@@ -50,7 +50,7 @@ export function applyStep(g: Game, s: Step): string | null {
       else if (d.key === 'place' && value === 'alt') takeAltPlace(g);
       return null;
     }
-    case 'stop-go': resolveStop(g, d.go === '1'); return null;
+    case 'stop-go': sendStop(g, d.go === '1'); return null;
     case 'auto-levers': setAutoLevers(g, !g.autoLevers); return null;
     case 'agenda': {
       const council = g.council;
@@ -129,6 +129,7 @@ function shapeProblem(g: Record<string, unknown>): string | null {
   for (const k of ['cards', 'journal']) if (!Array.isArray(g[k])) return `목록이 없다: ${k}`;
   if (!isObj(g.passed)) return '통과한 법 칸이 없다';
   if (g.dom !== undefined && !isObj(g.dom)) return '내정 칸이 이상하다';
+  if (g.deferred !== undefined && !Array.isArray(g.deferred)) return '미뤄 둔 카드 목록이 이상하다';
   return null;
 }
 
@@ -139,6 +140,11 @@ function fillDefaults(g: Game): void {
   g.emergencyCalls ??= [];
   g.hunger ??= 0;
   g.linesSeen ??= [];
+  // 카드 구간 예산을 켠 판의 미뤄 둔 카드와 통계(budget.ts)
+  if (g.budget) {
+    g.deferred ??= [];
+    g.budget.stats ??= { deferred: {}, faded: {}, dropped: {} };
+  }
   // 기관실은 작업조로 못 낸다(6.4). 그 전에 저장한 열린 정차가 기관실을 골라 뒀으면 경비대로 바꾼다.
   if (g.stop && !g.stop.done && !CREW_COMMS.includes(g.stop.crewComm)) g.stop.crewComm = 'guard';
   // S1b 둘째 묶음(계엄)이 더한 칸: 그 전에 저장한 어두운 길 판에는 없다.

@@ -67,6 +67,8 @@ export interface TechState {
   starved?: boolean;
   /** 돌릴 수 없어 세워 뒀다(카드 4) */
   off?: boolean;
+  /** 세울 때 부품 1을 돌려받았다. 다시 돌리려면 그 1을 다시 낸다(PC 리뷰 PR 57 3번: 세웠다 켜기로 부품이 늘었다) */
+  refund?: boolean;
   /** E3 난방 배관: 의회 추인을 기다린다. 추인 전엔 복원을 마쳐도 완성되지 않는다(7.3) */
   pending?: boolean;
 }

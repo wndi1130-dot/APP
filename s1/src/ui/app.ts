@@ -581,6 +581,9 @@ export function startApp(root: HTMLElement): void {
         if (why) toast(why);
         return render();
       }
+      case 'tip': // 폰엔 title 툴팁이 없어, 설명 글자를 탭하면 쪽지로 띄운다(내정 시간 측정은 domesticOp가 세지 않는다)
+        if (data.tip) toast(data.tip, 'info', 5000);
+        return render();
       case 'toast-close':
         clearTimeout(toastTimer);
         ui.toast = null;

@@ -1,4 +1,6 @@
 import { addCard, END_LINK } from './state';
+import { budgetNextSeg } from './budget';
+import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
@@ -166,7 +168,7 @@ function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + disasterCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -178,6 +180,7 @@ function depart(g: Game): void {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
   }
+  disasterDepart(g);
   // S1c 내정 훅: 기관 숙련자가 없으면 선다(매뉴얼도 없으면 끝), 고장 판정.
   const domStall = domesticDepart(g);
   if (domStall === 'end') return finish(g, 'stranded');
@@ -399,7 +402,7 @@ export function stopRisk(g: Game): StopRisk {
   }
   return {
     lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
-    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout, pyre: pyreCount(g) > 0,
+    guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout && !blizzardActive(g), pyre: pyreCount(g) > 0,
   };
 }
 
@@ -641,6 +644,7 @@ function settle(g: Game): void {
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
+  if (g.phase !== 'end') disasterSettle(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
     trust: g.trust - before.trust, tension: g.tension - before.tension,
@@ -1013,6 +1017,7 @@ function nextSegment(g: Game): void {
   }
   g.seg += 1;
   g.stop = null;
+  budgetNextSeg(g); // 구간 예산(budget.ts): 미뤄 둔 카드를 맨 앞으로 되돌린다. 꺼진 판은 아무 일도 안 한다
   if (g.decreeLeft > 0) {
     g.decreeLeft -= 1;
     // S1b 판이면 대권이 끝나는 카드에서 고른 길(돌려준다·묻는다·연장한다)을 따른다. 아니면 S1a 그대로.

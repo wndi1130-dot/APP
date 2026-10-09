@@ -6,6 +6,7 @@ import { offend } from './politics';
 import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './state';
 import { BIRTH, ELDER_NIGHT, familyOf, recover, revertLater } from './people';
 import { NEED_GRACE, NEEDS } from './needs';
+import { BUDGET_TITLE, budgetPass, budgetPick } from './budget';
 import type { NeedId } from './needs';
 import type { Card, EventMemo, Game } from './state';
 
@@ -716,6 +717,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
   const choice = view.choices[index];
   if (!choice || choice.disabled) return false;
   g.cards = g.cards.filter(x => x.uid !== uid);
+  budgetPick(g); // 구간 예산(budget.ts): 고른 수를 센다. 꺼진 판은 아무 일도 안 한다
   applyEffs(g, choice.effs);
   const c = card.comm ?? 'tail';
   switch (choice.special) {
@@ -844,6 +846,9 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       g.comms[crew].rel = clamp(g.comms[crew].rel + (harsh ? -5 : 3), -100, 100);
     }
   }
+  budgetPass(g); // addCard를 안 거치고 맨 앞에 붙은 카드(출산 뒤 이름, 후속 사건)도 예산을 본다
   return true;
 }
+
+BUDGET_TITLE.fn = (g, card) => viewCard(g, card).title;
 

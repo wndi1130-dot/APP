@@ -845,6 +845,13 @@ small { font-size: 12px; }
 .brake b { font-size: 28px; letter-spacing: .12em; color: var(--ink-1); }
 .brake span { font-size: 13px; color: var(--ink-2); }
 @keyframes brake-text { 0% { opacity: 0; transform: translate(-50%, -40%); } 20% { opacity: 1; transform: translate(-50%, -50%); } 100% { opacity: .9; } }
+.tip {
+  /* font·color는 위 button 규칙이 이미 물려받는다. 여기서 또 쓰면 .res__delta 같은 글자 크기·색을 덮는다 */
+  appearance: none; background: none; border: 0; padding: 0; margin: 0; text-align: inherit; line-height: inherit;
+  text-decoration: underline dotted; text-underline-offset: 2px; position: relative; cursor: help; -webkit-tap-highlight-color: transparent;
+}
+.tip::after { content: ''; position: absolute; inset: -8px 0; } /* 손가락이 닿을 자리를 위아래로만 넓힌다. 옆으로 늘리면 자리 폭이 늘어난다 */
+.target-note { margin: -2px 0 0 46px; font-size: 12px; color: var(--ink-3); line-height: 1.35; }
 .scene { font-size: 12px; color: var(--ink-2); line-height: 1.45; padding-left: 8px; border-left: 2px solid var(--line-strong); }
 .repro { margin-top: 10px; }
 

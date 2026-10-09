@@ -19,6 +19,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
+const FxState = preload("res://fx/fx_state.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
 const AI = preload("res://game/field_ai.gd")
@@ -88,6 +89,7 @@ var crew: Array = []
 var raiders: Array = []
 var player: Person
 var paused: bool = false
+var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
 var seen_now: Dictionary = {}
 var seen_memory := PackedByteArray()
@@ -129,12 +131,15 @@ var player_downed_t: float = 0.0
 var spotted_events: int = 0
 var unseen_rattle: bool = false
 var light_t: float = 0.0
+## What the stop wrote into the fx_* shader globals (the server cannot be read back at runtime).
+var fx_params: Dictionary = {}
 
 
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
 	weather = Weather.new(opts.get("weather", ["fog", "snow"]), AMBIENT_C, Vector2(1, 0.2), 0.4)
+	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	data = SulehufMap.build()
@@ -173,6 +178,14 @@ func _ready() -> void:
 	_update_camera(1.0)
 	_refresh_vision()
 	telemetry.zone_enter(grid.zone_at(FieldGrid.cell_of(player.position)), 0.0)
+
+
+## Weather is fixed for the whole stop, so the shader globals are set once.
+## Lying snow is not tracked yet: -1 lets FxState guess it from the air temperature.
+func _apply_fx() -> void:
+	var hour := clock.game_minutes() / 60.0
+	fx_params = FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour)
+	FxState.apply(fx_params)
 
 
 func _build_world() -> void:
@@ -485,6 +498,8 @@ func _notification(what: int) -> void:
 	# A call, the home button or a dropped screen stops the field (reference harvest r1, #16).
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		interrupt()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+		welcome_back()
 
 
 func interrupt() -> void:
@@ -494,8 +509,17 @@ func interrupt() -> void:
 	if ended or paused:
 		return
 	paused = true
-	if hud != null:
-		hud.toast("멈췄다. 돌아오면 '계속'을 누른다.")
+	away = true
+
+
+## Back from an interrupt: one line, once (ui_states N4). Only when the app
+## paused the field; a pause the player chose is not announced again.
+func welcome_back() -> void:
+	if not away:
+		return
+	away = false
+	if hud != null and not ended:
+		hud.toast("멈춰 둔 자리다.")
 
 
 func _process(delta: float) -> void:
@@ -1313,6 +1337,9 @@ func _save(result: Dictionary) -> void:
 	var f := FileAccess.open("user://runs/receipt_%s.json" % stamp, FileAccess.WRITE)
 	if f:
 		f.store_string(result["receipt_json"])
+	elif hud != null:
+		# The run is over but its record is not on disk: say so once (ui_states N2).
+		hud.toast("기록 파일을 적지 못했다. 영수증은 끝 화면에서 복사할 수 있다.", hud.TOAST_WARN)
 	var t := FileAccess.open("user://runs/telemetry.jsonl", FileAccess.READ_WRITE if FileAccess.file_exists("user://runs/telemetry.jsonl") else FileAccess.WRITE)
 	if t:
 		t.seek_end()

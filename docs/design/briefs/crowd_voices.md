@@ -29,7 +29,7 @@
 | 세기 | 셋(애원, 절박, 무너짐) | 같은 말을 세기만 바꿔 뽑는다 |
 | 거리 | 셋(가까이, 창 너머, 멀리) | 생성이 아니라 엔진 처리(낮은음 통과, 잔향, 음량). 생성 수에 안 들어간다 |
 
-생성 수 예: 출발 애원 20뜻 × 3언어 × 목소리 4(뜻마다 10개 중 무작위 4) × 세기 2 = 480개. 물림 외침 18뜻 × 3 × 4 × 2 = 432개. 말 아닌 소리(숨, 울음, 비명)는 언어가 없어 목소리 10 × 종류 8 × 변형 3 = 240개. 다 합쳐 1,500~2,000개(짧은 소리라 글자 수로는 3만~5만 자, 추정).
+생성 수 예: 출발 애원 19뜻 × 3언어 × 목소리 4(뜻마다 10개 중 무작위 4) × 세기 2 = 456개. 물림 외침 18뜻 × 3 × 4 × 2 = 432개. 말 아닌 소리(숨, 울음, 비명)는 언어가 없어 목소리 10 × 종류 8 × 변형 3 = 240개. 다 합쳐 1,500~2,000개(짧은 소리라 글자 수로는 3만~5만 자, 추정).
 
 틀 때 반복을 막는 규칙(엔진 쪽, 제안):
 - 같은 뜻은 그 묶음에서 마지막 5번 안에 다시 나오지 않는다. 같은 목소리는 연달아 두 번 나오지 않는다.
@@ -39,7 +39,7 @@
 
 ## 3. 대사 묶음
 
-낱말은 이 스레드가 고른 가안이다. 그 언어를 아는 사람(또는 둘 이상의 모델 대조 뒤 사람)이 한 번 훑는다(worker_packets/ai_audio_crosscheck.md와 같은 방식). 이름을 부르는 줄은 3.9의 이름만 쓴다.
+낱말은 이 스레드가 고른 가안을 Codex sol 점검(2026-10-09, 공유 폴더 words3_sol.md)대로 고친 것이다. 명령형이 애원으로 들리게 'bitte/proszę/prosím'을 붙인 줄이 있고, 약탈자 E05·E06은 구령처럼 들려 바꿨다. 굳은 구호나 철자 오류는 없었다. 그 언어를 아는 사람(또는 둘 이상의 모델 대조 뒤 사람)이 한 번 훑는다(worker_packets/ai_audio_crosscheck.md와 같은 방식). 이름을 부르는 줄은 3.9의 이름만 쓴다.
 
 ### 3.1 출발 때 매달리는 피난민 (A)
 
@@ -51,25 +51,24 @@
 | A04 | 자리 있잖아요! | Da ist doch Platz! | Jest miejsce! | Je tam místo! |
 | A05 | 두고 가지 마요! | Lasst uns nicht hier! | Nie zostawiajcie nas! | Nenechte nás tu! |
 | A06 | 도와줘요! | Hilfe! | Pomocy! | Pomoc! |
-| A07 | 일할 수 있어요! | Ich kann arbeiten! | Mogę pracować! | Můžu pracovat! |
-| A08 | 한 사람만요! | Nur eine Person! | Tylko jedna osoba! | Jen jednoho! |
+| A08 | 잠깐만요! | Einen Moment! | Chwileczkę! | Chvilku! |
 | A09 | 값은 치를게요! | Ich kann bezahlen! | Mogę zapłacić! | Můžu zaplatit! |
-| A10 | 우린 안 물렸어요! | Wir sind nicht gebissen! | Nie jesteśmy pogryzieni! | Nejsme pokousaní! |
+| A10 | 우린 안 물렸어요! | Keiner von uns wurde gebissen! | Nie jesteśmy pogryzieni! | Nejsme pokousaní! |
 | A11 | 그것들이 와요! | Sie kommen! | Idą! | Jdou sem! |
-| A12 | 손 잡아요! | Nimm meine Hand! | Daj rękę! | Podej mi ruku! |
-| A13 | 천천히요! | Langsamer! | Wolniej! | Pomaleji! |
+| A12 | 손 잡아 줘요! | Nimm meine Hand, bitte! | Złap mnie za rękę, proszę! | Chyť mě za ruku, prosím! |
+| A13 | 천천히요! | Langsamer, bitte! | Wolniej, proszę! | Pomaleji, prosím! |
 | A14 | 왜요?! | Warum?! | Dlaczego?! | Proč?! |
 | A15 | 제발요, 하느님! | Um Gottes willen! | Na litość boską! | Proboha! |
 | A16 | 겁쟁이들! | Feiglinge! | Tchórze! | Zbabělci! |
 | A17 | 안 돼… (기차가 멀어질 때) | Nein… | Nie… | Ne… |
 | A18 | 여기요, 여기! | Hier! Hier! | Tutaj! Tutaj! | Tady! Tady! |
-| A19 | 이름 부르기(일행을 놓침) | Thomas! / Sabine! | Tomek! / Ewa! | Petr! / Jana! |
+| A19 | 이름 부르기(일행을 놓침) | Thomas! / Sabine! | Tomek! / Ewa! | Petře! / Jano! |
 | A20 | 다음 열차는 언제예요? (멀리서, 체념) | Wann kommt der nächste? | Kiedy następny? | Kdy jede další? |
 
 - 쓰는 곳: 서막처럼 사람을 다 못 태우는 출발, 창밖 층의 '매달리려는 피난민'(presentation_motion.md 바깥 사건 '가끔'). 우리 사람이 남겨진 출발은 다르다: 그때 승강장은 조용하다(sound_music.md 7장).
 - 확정 선(2026-10-09 20:25 사용자 카드 '좁혀서 허용'): 한 번 들릴 때 말은 한두 마디이고, 늘 창 너머로 멀고 흐릿하다(거리 축에서 '가까이'는 쓰지 않는다). 나머지는 숨, 울음, 발소리다. 변형 수는 많아도 된다.
 - 흐름: 기적 → 달리는 발소리와 숨 → 창 너머 말 하나(A01~A12) → 열차가 빨라지며 더 멀어진 말 하나가 있을 수도 있다(A13~A18) → 끝 소리는 말 없이 끊기거나, 드물게 A16·A17·A20 중 하나. 세 단계를 다 채우지 않고 한 장면에 말은 둘까지.
-- 빼는 말: 아이를 건네거나 아이 이름을 부르는 말, '문 열어요', 곳 이름, 출신을 밝히는 말.
+- 빼는 말: 아이를 건네거나 아이 이름을 부르는 말, '문 열어요', 곳 이름, 출신을 밝히는 말. 일할 수 있다는 말(노동력으로 사람을 고르는 장면의 말), 사람 수를 세는 말('한 사람만')도 뺀다(2026-10-09 금지선 점검 스레드). A07은 그래서 비어 있다.
 
 ### 3.2 망자에게 물리는 바깥 사람 (B, 홈 창밖과 필드 먼 곳)
 
@@ -78,23 +77,22 @@
 | B01 | 도와줘! | Hilfe! | Pomocy! | Pomoc! |
 | B02 | 안 돼, 안 돼! | Nein, nein, nein! | Nie, nie, nie! | Ne, ne, ne! |
 | B03 | 놔! | Lass mich los! | Puść mnie! | Pusť mě! |
-| B04 | 떼어 줘! | Nimm es weg! | Zabierzcie to! | Sundejte to ze mě! |
+| B04 | 떼어 줘! | Nimm es von mir weg! | Ściągnijcie to ze mnie! | Sundejte to ze mě! |
 | B05 | 물렸어! | Es hat mich gebissen! | Ugryzł mnie! | Kousl mě! |
 | B06 | 아파! | Es tut weh! | Boli! | Bolí to! |
-| B07 | 누구 없어요?! | Irgendwer?! | Ktokolwiek?! | Někdo?! |
+| B07 | 누구 없어요?! | Ist da jemand?! | Jest tu ktoś?! | Je tu někdo?! |
 | B08 | 뛰어! (같이 있던 사람에게) | Lauf! | Uciekaj! | Utíkej! |
 | B09 | 뒤에! | Hinter dir! | Za tobą! | Za tebou! |
 | B10 | 그만해! (망자에게) | Hör auf! | Przestań! | Přestaň! |
 | B11 | 여기, 여기로! (열차를 보고) | Hierher! | Tutaj! | Sem! |
 | B12 | 기차다! | Der Zug! | Pociąg! | Vlak! |
-| B13 | 하느님! | Gott! | Boże! | Bože! |
+| B13 | 하느님! | Oh Gott! | Boże! | Bože! |
 | B14 | 엄마! (어른이 무너질 때) | Mama! | Mamo! | Mami! |
-| B15 | 이름 부르기 | Thomas! / Sabine! | Tomek! / Ewa! | Petr! / Jana! |
-| B16 | 놓지 마! (끌려가는 사람을 잡고) | Halt dich fest! | Trzymaj się! | Drž se! |
-| B17 | 너무 많아! | Es sind zu viele! | Za dużo ich! | Je jich moc! |
+| B15 | 이름 부르기 | Thomas! / Sabine! | Tomek! / Ewa! | Petře! / Jano! |
+| B16 | 놓지 마! (끌려가는 사람을 잡고) | Lass nicht los! | Nie puszczaj! | Nepouštěj! |
+| B17 | 너무 많아! | Es sind zu viele! | Jest ich za dużo! | Je jich moc! |
 | B18 | 가, 그냥 가! (포기, 일행에게) | Geh! Lauf weg! | Idź! Uciekaj! | Běž! Uteč! |
 
-- B16의 'Halt dich fest'는 'Halt'로 시작하지만 '꽉 잡아'라는 뜻이고 명령조 '멈춰'가 아니다. 그래도 낱말이 같아 헷갈리게 들리면 'Festhalten!' 대신 'Lass nicht los!'(놓지 마)로 바꾼다. 듣기 거르기에서 정한다.
 - 쓰는 곳: 홈에서 내정을 하는 동안 창밖 바깥 사건('쫓아오는 망자', '바깥에서 죽고 죽이는 장면'), 필드에서 먼 곳의 남(우리 사람 아님). 홈에서는 창 너머 거리로만 들려서 내정 화면을 덮지 않는다.
 - 흐름: 비명이나 숨 → 말 하나(B01~B12) → 망자 신음 겹침 → 끝 소리(B13~B18 중 하나, 또는 끊김). 끝을 피와 살 소리로 길게 끌지 않는다(절단 소리처럼 스토어 심사 걱정이 있는 쪽, field_system.md). 끊김이 더 무섭다.
 - 우리 사람(작업조, 열차장 무리)이 물릴 때는 이 묶음을 쓰지 않는다. 우리 사람은 이름과 얼굴이 있어서 따로 정한다(5장 '아직 정할 것').
@@ -109,7 +107,7 @@
 | C04 | 저리 가! | Verschwinde! | Spadaj! | Zmiz! |
 | C05 | 그만들 해! (말리는 사람) | Hört auf! | Przestańcie! | Přestaňte! |
 | C06 | 우리 애들 먹을 거야! | Das ist für meine Kinder! | To dla moich dzieci! | To je pro moje děti! |
-| C07 | 나눠, 나눠 먹자고! | Teilen! Wir teilen! | Dzielimy się! | Rozdělíme se! |
+| C07 | 나눠 먹자고! | Teilen wir das! | Podzielmy się! | Podělíme se! |
 | C08 | 거짓말쟁이! | Lügner! | Kłamca! | Lhář! |
 
 ### 3.4 필드에서 만나는 떠도는 생존자 (D)
@@ -117,11 +115,11 @@
 | # | 뜻 | 독일어 | 폴란드어 | 체코어 |
 |---|---|---|---|---|
 | D01 | 거기 누구 있어요? | Hallo? Ist da jemand? | Halo? Jest tu ktoś? | Haló? Je tu někdo? |
-| D02 | 쏘지 마요! | Nicht schießen! | Nie strzelajcie! | Nestřílejte! |
+| D02 | 쏘지 마요! | Bitte nicht schießen! | Nie strzelajcie, proszę! | Nestřílejte, prosím! |
 | D03 | 우린 둘뿐이에요! | Wir sind nur zu zweit! | Jest nas tylko dwoje! | Jsme jen dva! |
 | D04 | 물 있어요? | Habt ihr Wasser? | Macie wodę? | Máte vodu? |
 | D05 | 위층이에요! | Hier oben! | Tu na górze! | Tady nahoře! |
-| D06 | 안 물렸어요, 봐요! | Nicht gebissen, seht! | Nie pogryziony, patrzcie! | Nejsem pokousaný, podívejte! |
+| D06 | 안 물렸어요, 봐요! | Ich wurde nicht gebissen, schaut her! | Nie jestem pogryziony, patrzcie! | Nejsem pokousaný, podívejte se! |
 | D07 | 그 기차, 어디로 가요? | Wohin fährt der Zug? | Dokąd jedzie ten pociąg? | Kam jede ten vlak? |
 | D08 | 고마워요… | Danke… | Dziękuję… | Děkuju… |
 | D09 | 조용히, 듣잖아요! (속삭임) | Leise, sie hören uns! | Cicho, słyszą nas! | Potichu, slyší nás! |
@@ -136,11 +134,10 @@
 | E01 | 여긴 우리 구역이야 | Das ist unser Revier! | To nasz teren! | Tohle je naše území! |
 | E02 | 저기다! | Da drüben! | Tam! | Tamhle! |
 | E03 | (비웃음) 겁먹었네 | Angst, was? | Boisz się, co? | Bojíš se, co? |
-| E04 | 맞았어! (자기편이 맞음) | Ich bin getroffen! | Dostałem! | Dostal jsem to! |
-| E05 | 물러나, 물러나자! (자기들끼리) | Zurück, zurück! | Wycofać się! | Ustupte! |
-| E06 | 약 내놓으면 보내 줄게 | Gebt uns die Medizin! | Dawajcie leki! | Dejte nám léky! |
+| E04 | 맞았어! (자기편이 맞음) | Ihn hat's erwischt! | Dostał! | Dostal to! |
+| E05 | 빠지자! (자기들끼리) | Wir müssen weg! | Musimy uciekać! | Musíme pryč! |
+| E06 | 약 내놓으면 보내 줄게 | Wenn wir die Medizin kriegen, könnt ihr gehen! | Dacie leki, to was puścimy! | Dáte nám léky a necháme vás jít! |
 
-- E05 'Zurück'은 자기들끼리 물러나자는 말이다. 열차 출발 장면에서 쓰면 '물러서'로 들리므로 약탈자 총격전(필드)에만 쓴다.
 - 약탈자의 외침은 총소리 사이에 드물게. 군대식 신호, 무전 은어, 구령은 없다.
 
 ### 3.6 칸 안 생활 소리 (F, 홈, 낮게)
@@ -152,7 +149,7 @@
 | F03 | 아직 멀었어? | Wie lange noch? | Jak długo jeszcze? | Jak dlouho ještě? |
 | F04 | 여기가 어디야? | Wo sind wir? | Gdzie jesteśmy? | Kde jsme? |
 | F05 | 잘 자 | Gute Nacht. | Dobranoc. | Dobrou noc. |
-| F06 | 쉿 | Psst. | Ćśś. | Pšt. |
+| F06 | 쉿 | Psst. | Ciii… | Pšt. |
 | F07 | 괜찮아, 괜찮아 (달래기) | Schon gut, schon gut. | Już dobrze, już dobrze. | To je dobrý, to je dobrý. |
 | F08 | 문 좀 닫아, 바람 들어와 (객차 문을 안에서) | Mach die Tür zu, es zieht! | Zamknij drzwi, wieje! | Zavři dveře, táhne! |
 | F09 | 나눠 줄게 | Hier, nimm. | Masz, weź. | Na, vezmi si. |
@@ -188,7 +185,7 @@
 | 바깥에서 물리는 사람 | 홈에서 내정 중 창밖 사건 | B + G | 같은 곳, 사용자 10-09 예시 | 결정 카드가 열려 있을 땐 띄우지 않는다(presentation_motion.md 바깥 사건 규칙). 홈에는 소음 시계가 없으니 세계 소음이 아니다. 소리를 꺼도 잃는 정보가 없다 |
 | 쫓기는 사람, 선로를 걷는 생존자 | 창밖 근경 | B07·B08·B09 + G | presentation_motion.md 바깥 사건 | 줄 맞춰 걷지 않는다 |
 | 창밖 사람끼리의 다툼 | 창밖 '가끔' | C | 같은 곳 | 한 언어를 늘 가해 쪽에 두지 않는다. 박자 맞춘 외침 없음 |
-| 불타는 농가 곁 | 창밖 '가끔' | B07·B15 + G, 멀리서 | 같은 곳 | 건물 안에서 부르거나 두드리는 소리는 없다. 밖에 선 사람이 누군가를 부르는 소리만. 불타는 건물과 사람 소리가 한 장면에 모이는 것을 금지선 점검 스레드에 물었다(2026-10-09). 답 전엔 이 자리 대사를 늘리지 않는다 |
+| 무너진 농가에서 짐을 나르는 피난민 | 창밖 '가끔' | 외침 없음. 짐 부리는 소리, 낮은 말소리(웅얼거림), 숨 | presentation_motion.md 바깥 사건(PR 80에서 '불타는 농가'를 바꿈) | 불·연기 없음. 불타는 건물 곁 사람 소리는 금지선 점검 스레드가 뺐다(2026-10-09) |
 | 칸 안 생활 | 홈 상시, 칸 상태를 따름 | F + G | sound_music.md 7장 표 | 공포 60·80 침묵 규칙이 이긴다. 아이는 평온한 소리만 |
 | 상중인 사람 | 그 칸에서 사람이 죽은 뒤 | F06 + 흐느낌, 이름 한 번 | sound_music.md 9.3(노래가 멎고 이름 한 줄) | 기도·찬송 없음 |
 | 식당칸 배식 | 홈 식당칸 | F02·F09 + 중얼거림 | s1b_dark_path.md 배식 | 호명, 숫자 세기, 줄 세우는 말 없음 |
@@ -203,7 +200,7 @@
 | # | 뜻 | 독일어 | 폴란드어 | 체코어 |
 |---|---|---|---|---|
 | H01 | 왔다! | Da sind sie! | Są! Wrócili! | Jsou tady! |
-| H02 | 다 왔어? | Alle da? | Wszyscy są? | Jsou všichni? |
+| H02 | 다 왔어? | Alle da? | Wszyscy są? | Jsou tu všichni? |
 | H03 | 다행이다… | Gott sei Dank… | Dzięki Bogu… | Díky bohu… |
 | H04 | 뭘 가져왔어? | Was habt ihr? | Co macie? | Co nesete? |
 | H05 | (짧은 손뼉, 웃음, 이름 부르기 3.9) | | | |
