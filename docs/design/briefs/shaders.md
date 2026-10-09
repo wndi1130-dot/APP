@@ -53,7 +53,8 @@ var light := FxState.lighting_for(weather.kinds, hour)  # 해 색·세기, 주�
 ```
 
 - 날씨 종류는 `game/sim/weather.gd`를 따르고, seasons_regions.md 4장의 여섯 가운데 `overcast`(흐림)와 무한모드용 `rain`을 더 받는다. 모르는 종류는 weather.gd처럼 버린다.
-- 시각 띠는 넷이다: 새벽(6시~) 청회색, 낮(8시 반~) 납빛, 해 질 녘(15시~) 호박빛이 섞인 회색, 밤(17시~) 등불만. 띠 경계 시각은 한겨울 낮 길이(08:00~15:50)에 맞춘 가안이고, 계절 스레드가 계절별 해 뜸·짐을 주면 그 값으로 바꾼다.
+- 시각 띠는 넷이다: 새벽 청회색, 낮 납빛, 해 질 녘 호박빛이 섞인 회색, 밤 등불만. 경계 시각은 계절 상태마다 다르다(seasons_regions.md 7장): 한겨울 07:00 / 08:30 / 14:50 / 16:30, 늦겨울 06:30 / 08:00 / 15:30 / 17:10, 해빙 초입 05:45 / 07:15 / 16:15 / 17:55. `params_for`·`lighting_for`의 `season`(deep_winter, late_winter, early_thaw, 기본 한겨울)으로 고른다.
+- 눈 두께는 `snow_level_for(season, open_ground)`: 한겨울 2, 늦겨울 2(바람에 깎인 평원은 1), 해빙 초입 1(볕·진창은 0).
 - 계절 스레드와 닿는 곳은 `params_for`의 `ground_snow`와 시각 띠 둘이다. 셰이더는 고치지 않고 이 두 입력만 바꾸면 된다.
 
 ## 4. 숫자 (가안)
