@@ -93,7 +93,10 @@ var light := FxState.lighting_for(weather.kinds, hour)  # 해 색·세기, 주�
 
 - 이번 묶음 열한 개와 공용 함수는 모두 이 저장소에서 새로 짰다. 남의 코드나 그림을 들여오지 않았다(권리 장부 1장에 한 줄).
 - 이미 조사된 후보(권리 장부 4장, Pro 수집 r5): Snow-Covered Surface(CC0), Improved frosted glass(CC0), 눈 위 바퀴 자국(MIT), Bloody Pool(MIT). 앞의 둘은 이번에 같은 일을 직접 짰으니 들여오지 않는다. 서리 유리는 화면을 읽어 5장 예산에 걸린다.
-- 상황별 공개 셰이더를 더 찾는 일은 PC 워커(루나 웹 조사 + 솔 교차)에 넘겼다(공유 폴더 `worker_packets/shader_refs.md`). 결과가 오면 쓸 만한 것만 권리 장부 후보 줄에 적고, 라이선스가 CC0·MIT·Apache·BSD가 아니면 쓰지 않는다.
+- 상황별 공개 셰이더 조사(2026-10-10, PC 워커 루나 웹 조사 + 솔 교차, 원문은 공유 폴더 `refs_luna.md`·`refs_sol.md`·`refs_COMPARE.md`): 두 모델이 라이선스까지 겹친 것은 다섯이다(Snow-Covered Surface CC0, Frostbite CC0, Noise-Based Moving Smoke Effect CC0, More Advanced "Simple 2D dissolve" CC0, Basic Fog of War Shader MIT). 링크는 사람이 열어 보지 않았고 Mobile 렌더러 동작은 둘 다 확인하지 않았다.
+  - 판단(제안): 지금은 들여오지 않는다. 눈·연기·디졸브는 이번 묶음이 같은 일을 하고, Frostbite와 Fog of War 셰이더는 화면을 읽어 5장 예산에 걸린다. 종이 잉크 번짐과 부드러운 시야 경계는 그대로 쓸 예제가 없다는 데 둘이 같았다.
+  - 다음 묶음에 쓸 엔진 기본 기능(엔진 MIT, 권리 장부의 Godot 줄로 덮임): 손전등·등불 빛 쿠키는 `Light3D.light_projector`, 색 보정은 `Environment`의 조정과 3D LUT, 연기를 더 싸게 할 때는 `GPUParticles3D` 플립북. 부드러운 입자(Proximity Fade)는 깊이를 읽어 쓰지 않는다.
+  - 공개 셰이더를 들여올 때는 코드만 허가 범위이고 미리보기 그림·딸린 텍스처는 따로 확인한다. 라이선스가 CC0·MIT·Apache·BSD가 아니면 쓰지 않는다.
 
 ## 8. 미리보기
 
