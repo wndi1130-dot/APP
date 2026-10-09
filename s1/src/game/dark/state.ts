@@ -115,6 +115,8 @@ export interface DarkStats {
   corpses: number; risen: number; theft: number; cardsDeferred: number;
   /** 둘째 묶음: 경비대 재판 수와 그 처형, 계엄 구간 수, 거둔 횟수 */
   gtrials: number; gexec: number; martialSegs: number; lifted: number;
+  /** 거둔 뒤 계엄 포고 추인 안건의 결과(시뮬레이터가 센다) */
+  ratifyPassed: number; ratifyFailed: number;
 }
 
 /** 계엄으로 들어선 문(5.5 표): 대권 연장, 의회가 맡김, 내전 직전·내전에서 선포, 편든 계엄, 경비대장의 계엄 */
@@ -259,7 +261,7 @@ export function enableDark(g: Game): void {
     stats: {
       signs: 0, imminent: 0, acts: 0, violent: 0, violentDeaths: 0, blocked: 0, cases: 0, solved: 0, misjudged: 0, trials: 0, guilty: 0,
       acquitted: 0, scapegoats: 0, lynches: 0, protected: 0, orders: 0, ordersOk: 0, revealed: 0, corpses: 0, risen: 0, theft: 0, cardsDeferred: 0,
-      gtrials: 0, gexec: 0, martialSegs: 0, lifted: 0,
+      gtrials: 0, gexec: 0, martialSegs: 0, lifted: 0, ratifyPassed: 0, ratifyFailed: 0,
     },
   };
   g.dark.staff = staffPick(g);

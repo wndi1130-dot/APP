@@ -174,8 +174,9 @@ const RATIFY_DECREES: MotionDef = {
       '부결: 포고로 통과한 법은 사라지고 포고로 폐지한 법은 되살아난다',
     ];
   },
-  onPass: g => journal(g, '의회가 계엄 중의 포고를 추인했다.', 'good'),
+  onPass: g => { g.dark!.stats.ratifyPassed += 1; journal(g, '의회가 계엄 중의 포고를 추인했다.', 'good'); },
   onFail: g => {
+    g.dark!.stats.ratifyFailed += 1;
     const lifted = g.dark!.martialLifted;
     for (const law of lifted?.decreed ?? []) {
       if (!lawActive(g, law)) continue;

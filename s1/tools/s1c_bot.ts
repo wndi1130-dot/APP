@@ -2,7 +2,7 @@
 // 실제 게임 코드(src/game)를 그대로 돌린다. 파이썬 s1a_balance.py의 caretaker를 흉내 내지만 같은 정책은 아니다(아래 '돌보는 정책').
 
 import {
-  advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
+  advance, canLift, enterMartial, liftMartial, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
 } from '../src/game';
@@ -14,12 +14,15 @@ loadContentEvents();
 
 export type S1aPolicy = 'caretaker' | 'first';
 /** S1b 카드 고르기. kind: 선을 넘지 않는다(경비, 재판, 지킨다, 근신). blind: kind와 같지만 징후를 모른 척한다.
- * cruel: 징후를 모른 척하고, 선을 넘는 쪽과 즉결을 먼저 고른다. */
-export type DarkPolicy = 'kind' | 'blind' | 'cruel';
+ * cruel: 징후를 모른 척하고, 선을 넘는 쪽과 즉결을 먼저 고른다.
+ * tyrant: cruel처럼 고르되 계엄을 노린다(긴장 50 이상이면 비상대권 안건을 먼저, 대권이 끝나면 연장, 계엄 회기엔 가혹·통치 법 포고, 경비대 재판은 판결을 듣고 처형, 계엄은 거두지 않는다).
+ * tyrant_lift: tyrant와 같되 계엄 3회기째나 쿠데타 경고가 뜨면 계엄을 거둔다. */
+export type DarkPolicy = 'kind' | 'blind' | 'cruel' | 'tyrant' | 'tyrant_lift';
+const isTyrant = (p: DarkPolicy | undefined): boolean => p === 'tyrant' || p === 'tyrant_lift';
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */
 export type DomPolicy = 'engaged' | 'idle';
 
-export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy }
+export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number }
 
 export interface GameMetrics {
   end: string;
@@ -53,6 +56,22 @@ export interface GameMetrics {
   dark?: Record<string, number>;
 }
 
+const isRatifyPicked = (c: NonNullable<Game['council']>): boolean => { const a = c.options[c.idx]; return !!a && !isLawAgenda(a) && a.motion === 'ratify_decrees'; };
+
+/** 계엄 회기에 포고할 법: 가혹 법, 통치 법, 아무 법 순서로 폐지가 아닌 것을 먼저. */
+function decreePick(g: Game): number {
+  const opts = g.council!.options;
+  const score = (o: (typeof opts)[number]): number => {
+    if (!isLawAgenda(o)) return -1;
+    const tag = LAWS[o.law].tag;
+    return (tag === '가혹' ? 4 : tag === '통치' ? 2 : 0) + (o.repeal ? 0 : 1);
+  };
+  let best = -1;
+  let idx = 0;
+  opts.forEach((o, i) => { const sc = score(o); if (sc > best) { best = sc; idx = i; } });
+  return idx;
+}
+
 const KIND_PICK = ['둘 다 경비를 붙인다', '경비를 붙인다', '재판에 넘긴다', '경비대 재판에 넘긴다', '돌려준다', '풀어 준다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
 const CRUEL_PICK = ['경비대가 처리한다', '처형', '하차 명령', '경비대가 한다', '판결을 듣는다'];
 
@@ -63,7 +82,17 @@ function darkPick(card: Card, view: CardView, policy: DarkPolicy): number {
     const x = ok.find(y => y.c.label === '모른 척한다');
     if (x) return x.i;
   }
-  if (policy === 'cruel') {
+  if (isTyrant(policy)) {
+    const by = (...labels: string[]) => { for (const l of labels) { const x = ok.find(y => y.c.label === l); if (x) return x.i; } return undefined; };
+    let t: number | undefined;
+    if (card.kind === 'dark:powers_end') t = by('연장한다', '의회에 묻는다');
+    else if (card.kind === 'dark:coup_warn') t = by('알았다');
+    else if (card.kind === 'dark:gtrial') t = by('판결을 듣는다');
+    else if (card.kind === 'dark:punish') t = by('처형');
+    else if (card.kind === 'dark:case') t = by('경비대 재판에 넘긴다'); // 계엄 중에만 있는 선택지(식당칸이 닫혀 경비대 재판이 대신한다)
+    if (t !== undefined) return t;
+  }
+  if (policy === 'cruel' || isTyrant(policy)) {
     const cross = ok.find(x => x.c.cross !== undefined);
     if (cross) return cross.i;
     for (const label of CRUEL_PICK) { const x = ok.find(y => y.c.label === label); if (x) return x.i; }
@@ -130,7 +159,7 @@ function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number
 }
 
 /** 의회: 위기면 강제 안건 중, 아니면 통과 가능성이 가장 높은 안건. 돌보는 정책은 공개 협상을 건다. */
-function council(g: Game, opts: BotOptions): void {
+function council(g: Game, opts: BotOptions, tally?: Record<string, number>): void {
   const c = g.council!;
   if (!c.locked && opts.policy === 'caretaker') {
     let best = -99;
@@ -144,6 +173,20 @@ function council(g: Game, opts: BotOptions): void {
     // S1b: 재판에 넘긴 사건이 있으면 그 안건을 고른다(재판 약속을 지킨다). 강제 위기 안건이 있으면 그쪽.
     const trial = opts.s1b && !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'trial') : -1;
     setAgenda(g, trial >= 0 ? trial : idx);
+    // tyrant: 거둔 계엄의 포고 추인 안건이 오르면 먼저 고른다(안 고르면 표결 없이 쌓여 추인 통과·부결을 잴 수 없다).
+    if (isTyrant(opts.s1b)) {
+      const r = c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'ratify_decrees');
+      if (r >= 0) setAgenda(g, r);
+    }
+    // tyrant: 긴장 50 이상이고 비상대권 안건이 목록에 있으면 그것을 먼저 고른다(열차장이 안건을 고르는 자리).
+    if (isTyrant(opts.s1b) && g.tension >= 50 && !isRatifyPicked(c)) {
+      const e = c.options.findIndex(o => isLawAgenda(o) && o.law === 'emergency_powers' && !o.repeal);
+      if (e >= 0) { setAgenda(g, e); if (tally) tally.emgPicked = (tally.emgPicked ?? 0) + 1; }
+    }
+  }
+  if (tally && isTyrant(opts.s1b) && c.options.some(o => isLawAgenda(o) && o.law === 'emergency_powers' && !o.repeal)) {
+    tally.emgSeen = (tally.emgSeen ?? 0) + 1;
+    if (g.tension >= 50) tally.emgSeen50 = (tally.emgSeen50 ?? 0) + 1;
   }
   if (opts.policy === 'caretaker') {
     const a = currentAgenda(g)!;
@@ -151,7 +194,13 @@ function council(g: Game, opts: BotOptions): void {
       for (const k of COMMS) if (toolStatus(g, k, 'open').ok) makeDeal(g, k, 'open', 0);
     }
   }
-  castVote(g);
+  const a = currentAgenda(g);
+  const emg = !!a && isLawAgenda(a) && a.law === 'emergency_powers' && !a.repeal;
+  const r = castVote(g);
+  if (tally && emg && r) {
+    tally.emgVoted = (tally.emgVoted ?? 0) + 1;
+    if (r.passed) tally.emgPassed = (tally.emgPassed ?? 0) + 1;
+  }
 }
 
 /** 내정 쪽 손: 대체 불가나 한 명뿐인 분야에 견습생을 청하고, 기관 매뉴얼을 청하고, 공방장 맡기기를 켠다. */
@@ -219,11 +268,30 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   let lastSeg = -1;
   let lastCouncil = -1;
   let prepSeg = -1;
+  // S1b 봇 쪽 계수: 비상대권 안건(emg*), 위기(열린 군중 시계) 길이, 한 계엄 안에서 센 계엄 회기 수.
+  const tally: Record<string, number> = {};
+  const watch = new Map<number, { opened: number; martial: boolean; closed: number | null }>();
+  let martialCouncils = 0;
+  let lastMartialSession = -1;
+  let forcedMartial = false;
+  let martialSince = -1;
   for (let guard = 0; guard < 5000 && g.phase !== 'end'; guard += 1) {
     if (g.seg !== lastSeg && g.phase === 'prep') {
       lastSeg = g.seg;
       if (g.coal < 30) m.coalUnder30 += 1;
       if (g.food < 30) m.foodUnder30 += 1;
+    }
+    if (opts.forceMartial !== undefined && !forcedMartial && g.dark && !g.dark.martial && g.phase === 'prep' && g.seg >= opts.forceMartial) {
+      forcedMartial = true;
+      enterMartial(g, 'extend');
+    }
+    if (g.dark) {
+      // 군중 시계가 있는 사건이 처음 보인 때와 닫힌 때(보인 시점의 구간 번호라 ±1구간 오차가 있다).
+      for (const cs of g.dark.cases) {
+        let w = watch.get(cs.id);
+        if (!w) { if (cs.clock === null) continue; w = { opened: cs.opened, martial: !!g.dark.martial, closed: null }; watch.set(cs.id, w); }
+        if (w.closed === null && cs.status === 'closed') w.closed = g.seg;
+      }
     }
     m.coalMin = Math.min(m.coalMin, g.coal);
     m.foodMin = Math.min(m.foodMin, g.food);
@@ -272,14 +340,32 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         lastCouncil = g.session;
         m.councils += 1;
         if (g.council.options[0]?.forced) m.forced += 1;
+        // 비상대권이 열리는 조건(긴장 50 이상, 신임 10 이하)이 선 회기와, 그중 위기 법이 안건을 독차지한 회기(비상대권이 목록에 못 든다).
+        if (!g.council.martial && !g.council.emergency && (g.tension >= 50 || g.trust <= 10)) {
+          tally.councilEmgOpen = (tally.councilEmgOpen ?? 0) + 1;
+          if (g.council.options[0]?.forced) tally.councilEmgOpenForced = (tally.councilEmgOpenForced ?? 0) + 1;
+        }
       }
-      // 계엄 회기(5.3): 표결이 없다. 어두운 길 봇(cruel)만 포고 하나를 하고, 나머지는 회기를 그냥 닫는다.
+      // 계엄 회기(5.3): 표결이 없다. 어두운 길 봇(cruel, tyrant)만 포고 하나를 하고, 나머지는 회기를 그냥 닫는다.
+      // tyrant_lift는 3회기째나 쿠데타 경고가 뜨면 포고 대신 계엄을 거둔다(의회 화면의 거둔다 단추).
       if (g.council.martial) {
-        const r = opts.s1b === 'cruel' ? castVote(g, true) : null;
+        const mt = g.dark?.martial;
+        if (mt && mt.since !== martialSince) { martialSince = mt.since; martialCouncils = 0; }
+        if (lastMartialSession !== g.session) { lastMartialSession = g.session; martialCouncils += 1; }
+        if (opts.s1b === 'tyrant_lift' && mt && (martialCouncils >= 3 || mt.warned) && canLift(g) === null) {
+          // 거두는 순간 포고가 몇 건 쌓여 있었나(추인 안건이 오르려면 1건 이상이어야 한다).
+          tally.liftDecrees = (tally.liftDecrees ?? 0) + mt.decreed.length + mt.repealed.length;
+          if (mt.decreed.length + mt.repealed.length > 0) tally.liftWithDecree = (tally.liftWithDecree ?? 0) + 1;
+          liftMartial(g);
+          continue;
+        }
+        let r = null;
+        if (opts.s1b === 'cruel') r = castVote(g, true);
+        else if (isTyrant(opts.s1b)) { setAgenda(g, decreePick(g)); r = castVote(g, true); }
         if (!r) advance(g);
         continue;
       }
-      if (opts.plainCouncil) castVote(g); else council(g, opts);
+      if (opts.plainCouncil) castVote(g); else council(g, opts, tally);
       continue;
     }
     if (!primaryAction(g).ok) throw new Error(`막혔다: ${g.phase} ${primaryAction(g).why ?? ''}`);
@@ -307,6 +393,21 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (g.dark) {
     const dk = g.dark;
     m.dark = { ...dk.stats, crossings: dk.crossed.length, harm: dk.harm, embersLeft: dk.embers.length };
+    // 계엄: 들어선 문별 횟수(문 다섯을 늘 0으로 깔아 둔다), 들어선 수. 계엄 구간 수·거둔 수·경비대 재판·처형·추인은 stats에 있다.
+    for (const door of ['extend', 'council', 'brink', 'sided', 'captain']) m.dark[`martial:${door}`] = 0;
+    for (const door of dk.martialDoors) m.dark[`martial:${door}`] += 1;
+    m.dark.martialEntered = dk.martialDoors.length;
+    m.dark.martialAtEnd = dk.martial ? 1 : 0;
+    m.dark.endTrust = g.trust;
+    // 위기 길이: 군중 시계가 있던 사건이 닫히기까지 구간 수의 합과 건수(요약에서 평균). 계엄 중에 열린 사건은 따로.
+    let sum = 0, n = 0, msum = 0, mn = 0;
+    for (const w of watch.values()) {
+      if (w.closed === null) continue;
+      const len = Math.max(0, w.closed - w.opened);
+      if (w.martial) { msum += len; mn += 1; } else { sum += len; n += 1; }
+    }
+    m.dark.crisisLenSum = sum; m.dark.crisisN = n; m.dark.crisisMartialLenSum = msum; m.dark.crisisMartialN = mn;
+    for (const [k, v] of Object.entries(tally)) m.dark[k] = v;
   }
   return { g, m };
 }
