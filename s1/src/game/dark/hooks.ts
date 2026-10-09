@@ -50,10 +50,11 @@ export function darkTravel(g: Game): void {
 }
 
 /** 정차를 풀 때(resolveStop): 열차가 섰으면 하차 명령을 받은 사람이 내리고, 정차로 정한 명령이 실행된다.
- * 지나치면 서지 않으니 하차 명령은 다음 정차까지 기다린다(4.4 '다음 정차에 내려놓는다'). */
-export function darkStop(g: Game, went: boolean, crew: string[]): void {
+ * 지나치면 서지 않으니 하차 명령은 다음 정차까지 기다린다(4.4 '다음 정차에 내려놓는다').
+ * 정차 영수증에 따로 붙일 줄(정찰 약속 밖의 죽음·부상)을 돌려준다. */
+export function darkStop(g: Game, went: boolean, crew: string[]): string[] {
   const d = g.dark;
-  if (!d || !went) return;
+  if (!d || !went) return [];
   for (const x of d.exile) {
     // 하차를 기다리는 사이 죽은 사람은 내릴 사람이 아니다(이름이 두 번 남고 인구가 두 번 깎인다).
     if (!alive(g, x.id)) continue;
@@ -63,7 +64,8 @@ export function darkStop(g: Game, went: boolean, crew: string[]): void {
     repGone(g, x.comm, x.id);
   }
   d.exile = [];
-  runOrder(g, 'stop', crew);
+  const line = runOrder(g, 'stop', crew);
+  return line ? [line] : [];
 }
 
 /** 정차 산출 배수(연결기 풀기, 보일러 고장). S1a 판이면 1. */

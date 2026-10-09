@@ -456,7 +456,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 먼저 다녀온 정찰조는 지쳐 쓰러져 이번 회기 표결에 빠진다(지나쳐도 마찬가지).
   const scoutsBack = stop.scoutReport ? stop.scoutReport.names.length - stop.scoutReport.dead.length : 0;
   if (stop.scoutReport) g.comms[stop.scoutReport.comm].away += scoutsBack;
-  darkStop(g, !!(go && stop.target), go && stop.target ? stopCrew(g) : []);
+  const darkNotes = darkStop(g, !!(go && stop.target), go && stop.target ? stopCrew(g) : []);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
@@ -474,7 +474,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
   let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
-  const notes: string[] = [];
+  // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).
+  const notes: string[] = [...darkNotes];
   const tail = g.comms.tail;
   // 꼬리칸 작업 거부는 꼬리칸이 작업조로 나갈 때만(J11). 다른 칸을 보내면 쉬는 꼬리칸의 거부가 운반량을 깎지 않는다.
   if (stop.crewComm === 'tail' && tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }

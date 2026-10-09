@@ -10,7 +10,7 @@ import { caseById, caught, coverUp, exposeOrderLines, openCase, settleTruth } fr
 import { cross, scene } from './chronicle';
 import { busyIds, newEmber } from './embers';
 import {
-  adults, alive, commOf, darkCard, dpick, dr, isRep, nameOf, rivalOf,
+  adults, alive, byName, commOf, darkCard, dpick, dr, isRep, nameOf, rivalOf,
 } from './state';
 import type { Order, OrderExe, OrderMethod, OrderWhy } from './state';
 
@@ -113,12 +113,13 @@ export function dropOrder(g: Game): void {
   if (ref) journal(g, settleTruth(g, ref, true), 'bad');
 }
 
-/** 이동이나 정차에서 명령이 실행된다. 결과 카드를 돌려준다. */
-export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] = []): void {
+/** 이동이나 정차에서 명령이 실행된다. 결과는 카드로 낸다.
+ * 정차에서 실행되면 정차 영수증에 붙일 '정찰 약속 밖' 한 줄을 돌려준다(4.7, K02 3). crew는 같이 나간 사람 이름이다. */
+export function runOrder(g: Game, where: 'travel' | 'stop', crew: string[] = []): string | null {
   const d = g.dark!;
   const o = d.order;
-  if (!o || !o.method || !o.exeId) return;
-  if ((where === 'stop') !== (o.method === 'stop')) return;
+  if (!o || !o.method || !o.exeId) return null;
+  if ((where === 'stop') !== (o.method === 'stop')) return null;
   const name = nameOf(g, o.target);
   const exe = o.exeId;
   if (!alive(g, o.target) || !alive(g, exe)) {
@@ -126,12 +127,14 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
     journal(g, `${name}을(를) 두고 한 말은 일이 되지 않았다.`, 'dark');
     // 입을 막으려던 사람이 이미 없으면 진실도 묻히고, 실행자가 없어 일이 안 됐으면 그 사람이 말한다.
     if (o.ref) { const line = settleTruth(g, o.ref, alive(g, o.target)); if (line) journal(g, line, 'bad'); }
-    return;
+    return null;
   }
   // 실행자가 그새 근신됐으면 근신이 끝날 때까지 기다린다(K02 5). 실행 직전에 다시 본다.
-  if (d.confined.some(x => x.id === exe)) return;
+  if (d.confined.some(x => x.id === exe)) return null;
   // 정차 암살은 둘이 같은 작업조로 나가야 한다(J09 5). 아니면 명령은 다음 정차를 기다린다.
-  if (where === 'stop' && !(witnesses.includes(name) && witnesses.includes(nameOf(g, exe)))) return;
+  if (where === 'stop' && !(crew.includes(name) && crew.includes(nameOf(g, exe)))) return null;
+  // 끝 증언(darkEnd)은 프로필 id로 목격자를 읽는다. 같이 나간 사람 이름을 id로 바꾸고, 대상은 뺀다(K02 3).
+  const witnesses = crew.map(n => byName(n)?.id).filter((id): id is string => !!id && id !== o.target);
   d.order = null;
   const tc = commOf(g, o.target);
   const ok = dr(g) < successP(g, o);
@@ -164,7 +167,8 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
       if (dr(g) < B.orderNamesChief) line += ` ${exposeOrderLines(g, c).join(' ')}`;
     }
     darkCard(g, { kind: 'dark:order_done', who: o.target, comm: tc, n: c.id, text: hidden ? 'hidden' : line, ...(fam ? { vals: { kin: fam } } : {}) });
-    return;
+    if (where !== 'stop') return null;
+    return `정찰 약속 밖의 죽음: ${COMM_NAME[tc]} ${name}이(가) 돌아오지 않았다.${detected ? ` ${nameOf(g, exe)}이(가) 그 자리에서 붙잡혔다.` : ''}`;
   }
   // 실패: 대상이 다치고 수사가 열린다. 실행자 50%로 붙잡히고, 붙잡히면 70%로 열차장을 댄다.
   g.injured += 1;
@@ -179,6 +183,7 @@ export function runOrder(g: Game, where: 'travel' | 'stop', witnesses: string[] 
   // 입을 막으려던 사람이 살아남았다. 그 사람이 말한다.
   if (o.ref) line += ` ${settleTruth(g, o.ref, true)}`;
   darkCard(g, { kind: 'dark:order_fail', who: o.target, comm: tc, n: c.id, text: line });
+  return where === 'stop' ? `정찰 약속 밖의 부상: ${COMM_NAME[tc]} ${name}이(가) 크게 다쳐 돌아왔다.` : null;
 }
 
 /** 성공한 뒤: 덮거나, 남에게 씌우거나, 수사하게 둔다. */
