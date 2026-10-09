@@ -16,6 +16,8 @@ export const B = {
   assnTension: 3, assnBase: 0.5, assnGuard: 0.2, assnGuardCap: 0.2,
   // 4.2 경비
   guardLen: 2, guardMax: 2, guardFear: 2, guardExpo: 3, guardPair: 2, confineExpo: 2,
+  /** 시험 손잡이: 1이면 경비가 막은 위협·사보타주도 사다리를 한 칸 올린다(다음 임박이 한 단계 위). 기본 0(막히면 제자리) */
+  blockClimb: 0,
   /** 들킨 성공 암살을 덮을 때(경비대 입막음, 제안 PR 41 리뷰) */
   hushFear: 5, hushExpo: 3,
   // 4.3 사보타주
