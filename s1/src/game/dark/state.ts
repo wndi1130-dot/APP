@@ -49,8 +49,9 @@ export interface Clue { kind: ClueKind; truth: boolean; line: string; seg: numbe
 /** 의심 점수의 사실(4.5 표). joined·rescued·punished는 처지라 혼자서 희생양 표시를 켜지 않는다(1.4). */
 export type Fact = 'access' | 'car' | 'rival' | 'joined' | 'rescued' | 'punished';
 export const FACT_SCORE: Record<Fact, number> = { joined: 2, access: 2, rescued: 1, car: 1, rival: 1, punished: 1 };
-/** 사건에 닿은 사실(표시를 켜는 쪽) */
-export const TIE_FACTS: Fact[] = ['access', 'car', 'rival'];
+/** 사건에 닿은 사실(표시를 켜는 쪽). 칸 소속(car: 사건 칸이나 옆 칸)과 칸끼리의 원한(rival: 피해 칸과 원수 칸)은 넣지 않는다.
+ * 둘 다 그 사람이 아니라 칸의 사실이라, 칸·출신만으로 희생양 후보가 켜지면 안 된다(금지선, K05). 둘은 의심 점수에만 남는다. */
+export const TIE_FACTS: Fact[] = ['access'];
 
 export interface Suspect {
   id: string;

@@ -167,7 +167,7 @@ export function mobTarget(g: Game, c: Case): Suspect | undefined {
 
 const MOB_LANGS = ['pl', 'de', 'cz'];
 
-/** 희생양 후보 표시(1.4 두 층): 그 사건에 닿은 사실(드나듦·사건 칸이나 옆 칸·피해자와 원수·그 사람을 가리킨 단서) 하나 이상과
+/** 희생양 후보 표시(1.4 두 층): 그 사건에 닿은 사실(드나듦·그 사람을 가리킨 단서) 하나 이상과
  * 의심 점수 전체 2 이상. 늦게 탐·밖에서 옴은 순위만 올린다. 이름 거름과 아이는 언제나 빠진다.
  * 이름 거름(1.4, 제안): 프로필의 name_lang이 pl·de·cz인 사람만 오른다. 필드가 없으면 빠진다. 언어는 막는 쪽에만 쓴다. */
 export function flagged(g: Game, s: Suspect): boolean {

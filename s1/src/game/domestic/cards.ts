@@ -243,7 +243,7 @@ export function domView(g: Game, card: Card): CardView | null {
       const c = needComm(card);
       return {
         title: '이가 돈다', focus: c, required: true,
-        body: `${COMM_NAME[c]}에서 밤새 긁는 소리가 난다. 같이 덮는 담요, 돌려 입는 옷, 말릴 데 없는 빨래 탓이다. (${hygieneWhy(g, c)})`,
+        body: `${COMM_NAME[c]}에서 젖은 담요가 밤새 마르지 않는다. 같이 덮는 담요, 돌려 입는 옷, 말릴 데 없는 빨래 탓이다. (${hygieneWhy(g, c)})`,
         choices: [
           { label: '옷을 삶는다', say: '옷이고 담요고 다 솥에 넣어라. 석탄이 아까워도 지금이다!', effs: [{ t: 'coal', v: -D.boilCoal }], special: 'dom:lice:boil' },
           { label: '침구를 태운다', say: '침구를 태워라. 오늘 밤은 추워도 참게.', effs: [], special: 'dom:lice:burn', extra: [`${COMM_NAME[c]} 온기 −${D.beddingWarm}(${D.beddingSegs}구간)`] },
