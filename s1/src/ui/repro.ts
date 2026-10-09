@@ -1,6 +1,6 @@
 import {
   COMMS, CREW_COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
+  migrateDomestic, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
@@ -50,7 +50,7 @@ export function applyStep(g: Game, s: Step): string | null {
       else if (d.key === 'place' && value === 'alt') takeAltPlace(g);
       return null;
     }
-    case 'stop-go': resolveStop(g, d.go === '1'); return null;
+    case 'stop-go': sendStop(g, d.go === '1'); return null;
     case 'auto-levers': setAutoLevers(g, !g.autoLevers); return null;
     case 'agenda': {
       const council = g.council;

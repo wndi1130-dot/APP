@@ -160,6 +160,18 @@ describe('K01 7: 온실은 지금 구역만큼 낸다', () => {
     d.cars = d.cars.filter(c => c !== 'store'); d.cars.splice(3, 0, 'store');
     expect(greenhouseFood(g) / m).toBeCloseTo(3.375);
   });
+
+  it('칸을 내줄 곳 카드의 온실 산출 안내는 실제 산출과 같다(결함판이면 절반, PC 리뷰 PR 57 5번)', () => {
+    const g = createS1cGame('k01-green-card');
+    const d = g.dom!;
+    d.techs.m4 = { stage: 'defective', defect: true } as NonNullable<typeof d.techs.m4>;
+    const v = viewCard(g, { uid: 1, kind: 'dom:give' });
+    const store = v.choices.find(c => c.special === 'dom:give:store')!;
+    d.greenhouse = 'store';
+    const real = +greenhouseFood(g).toFixed(2);
+    expect(real).toBeGreaterThan(0);
+    expect(store.extra).toContain(`온실 식량 +${real}/구간`);
+  });
 });
 
 describe('K01 8: 비상 소집은 적의를 빨리 풀지 못한다', () => {

@@ -4,8 +4,9 @@ import {
 import type { Comm, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
+import { TARGET_NOTE, TIP } from './common';
 import type { View } from './common';
-import { portrait } from './widgets';
+import { portrait, tip } from './widgets';
 import { nameBtn, nameList, shortText } from './names';
 import { domesticAltPlace, domesticStopRows, stayLocked } from './domestic'; // S1c 내정 훅
 import { darkCardShown } from './dark'; // S1b H7 훅
@@ -30,6 +31,8 @@ function stopCard(view: View): HTMLElement | null {
     const gains = LOOT_KEYS.filter(k => r.gains[k]).map(k => `${LOOT_NAME[k]} +${r.gains[k]}`);
     return sheet('sheet--stop', `stop-${g.seg}-result`,
       h('div', { class: 'sheet__head' }, h('div', null, h('span', { class: 'kicker' }, `정차 · ${place.name}`), h('b', { class: 'sheet__title' }, r.passed ? '지나쳤다' : '돌아왔다'))),
+      // 수색대가 내리는 문장은 '보낸다'를 누른 뒤에 뜬다. 지나쳤거나 옛 저장이면 없다.
+      r.disembark ? h('p', { class: 'scene' }, r.disembark) : null,
       h('ul', { class: 'result' },
         r.passed ? h('li', null, '얻은 것 없음. 석탄을 아꼈다.') : h('li', null, gains.length ? gains.join(' · ') : '빈손'),
         r.injured.length ? h('li', { class: 'is-red' }, '부상: ', nameList(r.injured)) : null,
@@ -54,12 +57,14 @@ function stopCard(view: View): HTMLElement | null {
             ? h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') })))
             : h('span', { class: 'risk', 'aria-label': '위험 모름' }, '위험 ?'),
           domesticAltPlace(view)))), // S1c 내정 훅: 핸드카 정찰
-    scene ? h('p', { class: 'scene' }, scene.outside, ' ', scene.disembark) : null,
+    scene ? h('p', { class: 'scene' }, scene.outside) : null,
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '무엇을'),
       h('div', { class: 'targets' }, LOOT_KEYS.map(k => h('button', {
         class: cx('target', stop.target === k && 'is-on'), 'data-action': 'stop-set', 'data-key': 'target', 'data-value': k,
       }, h('span', null, LOOT_NAME[k]), h('i', { class: 'target__bar', style: `width:${Math.round((place.loot[k] / maxW) * 100)}%` }))))),
+    // 지금 고른 목표가 무엇이고 어디에 쓰이는지 늘 보이게 둔다.
+    stop.target ? h('p', { class: 'target-note' }, h('small', null, `${LOOT_NAME[stop.target]}: ${TARGET_NOTE[stop.target]}`)) : null,
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '얼마나'),
       (Object.keys(STAY) as StayId[]).map(k => h('button', {
@@ -97,7 +102,7 @@ function crewCost(view: View): HTMLElement {
   const c = g.stop!.crewComm;
   const pv = crewPreview(g, c);
   return h('p', { class: 'crew-cost' },
-    h('span', null, `${COMM_SHORT[c]} 노출 `, h('b', { class: 'num' }, `${pv.from} → ${pv.to}`)),
+    h('span', null, `${COMM_SHORT[c]} `, tip('노출', TIP.exposure), ' ', h('b', { class: 'num' }, `${pv.from} → ${pv.to}`)),
     pv.rel ? h('span', null, ` · 관계 −${-pv.rel}`) : null,
     pv.haul < 1 ? h('span', null, ` · 손에 안 익어 산출 −${Math.round((1 - pv.haul) * 100)}%`) : null,
     pv.rest.length ? h('small', null, ` · 쉬는 칸 ${pv.rest.map(o => COMM_SHORT[o]).join('·')} 노출 −${P.crewRest}`) : null);

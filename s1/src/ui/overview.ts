@@ -1,10 +1,11 @@
 import { COMM_NAME, REP_ROLE, autoLeverStatus, forecast, relStage, relationLine, situation } from '../game';
 import type { Comm } from '../game';
 import { cx, h } from './dom';
+import type { Child } from './dom';
 import { icon } from './icons';
-import { GROUPS, fmt, signed } from './common';
+import { GROUPS, TIP, fmt, signed } from './common';
 import type { GroupDef, View } from './common';
-import { bar, gauge, gaugeValue, lever, portrait } from './widgets';
+import { bar, gauge, gaugeValue, lever, portrait, tip } from './widgets';
 import { nameBtn } from './names';
 
 // 한눈에 보기: 카메라가 위로 올라간 열차. 열차는 왼쪽에 세로로 세우고 칸 종류별 색으로 구분한다.
@@ -35,18 +36,18 @@ function commPanel(view: View, c: Comm): HTMLElement {
         h('div', { class: 'sub num' }, `${s.pop}명 · ${relStage(g, c)}`),
         h('div', { class: cx('sub', s.rel >= 15 && 'is-blue', s.rel <= -15 && 'is-red') }, relationLine(s.rel)))),
     h('div', { class: 'ov-panel__stats' },
-      h('span', null, '온기 ', h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
-      h('span', null, '배급 ', h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
-      h('span', null, '과밀 ', h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
-      h('span', null, '노출 ', h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
+      h('span', null, tip('온기', TIP.warmth), h('b', { class: 'num' }, fmt(w)), bar(w, w < 45 ? '--discontent' : '--warm')),
+      h('span', null, tip('배급', TIP.ration), h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
+      h('span', null, tip('과밀', TIP.crowding), h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
+      h('span', null, tip('노출', TIP.exposure), h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
     h('div', { class: 'ov-panel__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration')));
 }
 
 function otherPanel(view: View, gr: GroupDef): HTMLElement {
   const { g } = view;
-  const text = gr.id === 'dining'
+  const text: Child = gr.id === 'dining'
     ? (g.phase === 'council' ? '회기가 열렸다.' : '회기 날 의회가 열리는 칸이다.')
-    : `일지 ${g.journal.length}줄. 쥔 비밀 ${g.secrets.length}. 상징물 ${g.symbols}.`;
+    : [`일지 ${g.journal.length}줄. `, tip('쥔 비밀', TIP.secrets), ` ${g.secrets.length}. `, tip('상징물', TIP.symbols), ` ${g.symbols}.`];
   return h('div', { class: 'ov-panel', 'data-link': 'to' },
     h('div', { class: 'ov-panel__head' }, h('div', null, h('b', null, gr.name), h('div', { class: 'sub' }, text))),
     gr.id === 'dining' && g.phase === 'council' ? h('button', { class: 'btn', 'data-action': 'go', 'data-screen': 'council' }, '의회로') : null,

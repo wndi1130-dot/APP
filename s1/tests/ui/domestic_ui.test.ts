@@ -173,6 +173,7 @@ describe('H6 재기', () => {
     expect(domesticActive(g, ui({ cardOpen: true }))).toBe(false);
     expect(domesticOp(g, 'choose')).toBe(false);
     expect(domesticOp(g, 'dom-tab')).toBe(false);
+    expect(domesticOp(g, 'tip')).toBe(false); // 설명 글자 탭은 내정 조작이 아니다
     expect(domesticActive(createGame('a'), ui({ carPop: 'engine' }))).toBe(false);
   });
 });

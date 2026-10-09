@@ -87,6 +87,26 @@ export const GROUPS: GroupDef[] = [
 // 의회 반원의 쐐기 순서: 균등(왼쪽)에서 기여·규율(오른쪽)으로.
 export const WEDGE_ORDER: Comm[] = ['tail', 'medtech', 'front', 'engine', 'guard'];
 
+/** 탭하면 쪽지로 뜨는 설명 글(ui/widgets.ts tip). 폰엔 title 툴팁이 없다. 기준은 game/turn.ts drift()와 작업조 crewGain·crewRest. */
+export const TIP = {
+  exposure: '위험 노출: 바깥 일과 궂은일에 얼마나 내몰리나. 50을 넘으면 그 칸 관계가 구간마다 깎인다. 작업조로 내보내면 오르고, 안 내보낸 칸은 쉬면서 내려간다.',
+  warmth: '온기: 그 칸이 얼마나 따뜻한가. 45 아래면 관계가 구간마다 깎인다. 난방 레버로 올린다.',
+  ration: '배급: 그 칸이 얼마나 먹는가. 45 아래면 관계가 구간마다 깎인다. 배급 레버로 올린다.',
+  crowding: '과밀: 그 칸이 얼마나 빽빽한가. 60을 넘으면 관계가 구간마다 깎인다.',
+  secrets: '쥔 비밀: 문서에서 찾은 대표의 약점. 의회에서 그 칸을 협박하는 데 쓰고, 쓰면 사라진다.',
+  symbols: '상징물: 출발 종 같은 이름 있는 물건. 경비대가 가져오길 바라고, 사건에서 내놓을 수 있다.',
+} as const;
+
+/** 정차 서류에서 고른 목표의 한 줄 설명. 산출 환산은 game/turn.ts resolveStop. */
+export const TARGET_NOTE: Record<'coal' | 'food' | 'medicine' | 'luxury' | 'symbol' | 'secret', string> = {
+  coal: '열차를 달리게 하는 연료. 구한 만큼 그대로 쌓인다.',
+  food: '모두의 끼니. 바닥나면 모든 칸 관계가 깎인다.',
+  medicine: '다친 이와 아픈 이에게 쓴다. 의무진이 바라는 물건이다.',
+  luxury: '앞칸이 바라고 뇌물에 쓴다. 산출이 3분의 1로 줄어 얻기 어렵다.',
+  symbol: '출발 종 같은 이름 있는 물건. 경비대가 바라고 사건에서 내놓을 수 있다. 10에 하나꼴, 한 번에 최대 2.',
+  secret: '문서에서 대표의 약점을 찾아 \'쥔 비밀\'로 쥔다. 의회에서 협박에 쓴다. 10에 하나꼴, 한 번에 최대 2.',
+};
+
 export function fmt(n: number): string {
   return String(Math.round(n));
 }

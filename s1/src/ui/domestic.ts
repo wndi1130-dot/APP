@@ -2,7 +2,7 @@ import {
   BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
-  movedThisStop, previewMove, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
+  movedThisStop, previewMove, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workPower, workshopChief, workshopState, zoneAt, enableDark, josa, PLACES, crisisNow,
 } from '../game';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
@@ -161,7 +161,7 @@ function workshopPop(view: View, car: CarDef): HTMLElement {
       h('ol', { class: 'dom-order' }, d.order.map((t, i) => h('li', null,
         h('span', { class: 'num' }, i + 1), h('span', { class: 'dom-order__name' }, taskName(t)),
         h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑'))))),
-    off.length ? h('div', { class: 'dom-row' }, off.map(id => h('button', { class: 'chip', 'data-action': 'dom-restart', 'data-id': id }, `${TECHS[id].name} 다시 돌린다`))) : null,
+    off.length ? h('div', { class: 'dom-row' }, off.map(id => h('button', { class: 'chip', 'data-action': 'dom-restart', 'data-id': id, disabled: !!restartWhy(g, id), title: restartWhy(g, id) ?? '' }, `${TECHS[id].name} 다시 돌린다`))) : null,
     jobRow(g));
 }
 
@@ -456,7 +456,7 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
     buttons.push(h('button', { class: 'btn btn--dark', 'data-action': 'dom-finish', 'data-id': id, disabled: !!why, title: why ?? '' },
       `완성판으로 고친다(조각 ${cost.frags - cost.defectFrags})`));
   }
-  if (st?.off) buttons.push(h('button', { class: 'btn btn--dark', 'data-action': 'dom-restart', 'data-id': id }, '다시 돌린다'));
+  if (st?.off) buttons.push(h('button', { class: 'btn btn--dark', 'data-action': 'dom-restart', 'data-id': id, disabled: !!restartWhy(g, id), title: restartWhy(g, id) ?? '' }, st.refund ? '다시 돌린다(부품 1)' : '다시 돌린다'));
   const sides = { like: def.variants && st?.variant ? def.variants[st.variant].like : def.like, dislike: def.variants && st?.variant ? def.variants[st.variant].dislike : def.dislike };
   return h('div', { class: 'dom-detail' },
     h('div', { class: 'dom-detail__head' },
