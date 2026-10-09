@@ -1,6 +1,6 @@
 import { COMMS } from '../data';
 import type { Comm } from '../data';
-import { endEmergencyPowers, offend } from '../politics';
+import { endEmergencyPowers, enactLaw, offend } from '../politics';
 import { clamp, END_LINK, journal, lawActive, stageOf } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
@@ -173,4 +173,26 @@ export function darkPowersEnd(g: Game): boolean {
     g.trust = clamp(g.trust + B.powersReturnTrust, 0, 100);
   }
   return true;
+}
+
+/** 시험 시작 상태(impl 7장, ui/dark.ts urlScene). 새 판(서막 카드가 쌓인 채) 바로 뒤에 부른다. 메뉴엔 없고 주소(?s1b=1&scene=)로만 연다.
+ * powers: 비상대권이 통과된 채 포고 마지막 구간 직전에서 시작한다. nextSegment가 decreeLeft를 먼저 하나 줄이고 darkPrep이
+ *   decreeLeft===1에서 '대권이 끝나는 카드'를 내므로, 서막 뒤 첫 출발 전 운영(2구간)에 그 카드가 선다. 연장 문이 열리게 경비대 관계는 지지로 올린다.
+ * martial: 계엄 중으로 시작한다(문 1). 첫 출발 뒤 곧 회기가 서도록 3구간에서 시작하고, 경비대 관계는 호의로 올린다.
+ * 알 수 없는 이름이거나 g.dark가 없으면 false(아무 것도 바꾸지 않는다). */
+export function devScene(g: Game, name: string): boolean {
+  if (!g.dark) return false;
+  if (name === 'powers') {
+    g.comms.guard.rel = Math.max(g.comms.guard.rel, 40);
+    enactLaw(g, 'emergency_powers', []);
+    g.decreeLeft = 2;
+    return true;
+  }
+  if (name === 'martial') {
+    g.seg = 3;
+    g.comms.guard.rel = Math.max(g.comms.guard.rel, 30); // 서자마자 쿠데타 경고가 뜨지 않게
+    enterMartial(g, 'extend');
+    return true;
+  }
+  return false;
 }

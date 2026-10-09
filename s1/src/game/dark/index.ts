@@ -9,4 +9,4 @@ export { darkEnd, logPick, wallDetail, wallLine } from './chronicle';
 export { logCardPick } from './h7';
 export type { DarkEnd, H7Pick, Testimony, WallName } from './chronicle';
 export { B, EXECUTION } from './data';
-export { canExtend, canLift, enterMartial, isMartial, liftMartial } from './martial';
+export { canExtend, canLift, devScene, enterMartial, isMartial, liftMartial } from './martial';

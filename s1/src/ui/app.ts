@@ -1,4 +1,4 @@
-import { openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
+import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
 import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, vibrateOn } from './fx';
@@ -18,7 +18,8 @@ import { beginNames, endNames, personCard, shortText } from './names';
 import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGame, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
 // S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
-import { darkPickMs, darkPickReset, darkVisibility, urlWantsS1b } from './dark';
+import { darkLeverWhy } from './dark_lock';
+import { darkPickMs, darkPickReset, darkVisibility, liftAsk, noteScene, sceneResumes, urlScene, urlWantsS1b } from './dark';
 import { showCrash } from './crash';
 import { CONFIRM_MS, confirmed, replacesToast, toastMs } from './notice';
 import type { ToastKind } from './notice';
@@ -211,8 +212,10 @@ export function startApp(root: HTMLElement): void {
   const { g: saved, why: loadWhy } = load();
   const wantS1c = urlWantsS1c(); // S1c 내정 훅
   const wantS1b = urlWantsS1b(); // S1b 어두운 길 훅
-  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) && (!wantS1b || saved.dark)
+  const scene = urlScene(); // S1b 시험 시작 상태(?s1b=1&scene=powers|martial). 메뉴엔 없고 주소로만
+  let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) && (!wantS1b || saved.dark) && sceneResumes(scene, saved)
     ? saved : newGame(urlSeed || randomSeed(), wantS1c, wantS1b);
+  if (g !== saved && scene && g.dark && devScene(g, scene)) { noteScene(scene, g); save(g); }
   let ui: Ui = freshUi();
   if (g.phase === 'council') ui.screen = 'council';
   const scroll: Record<string, number> = {};
@@ -302,13 +305,13 @@ export function startApp(root: HTMLElement): void {
   }
 
   /** 판을 버리는 메뉴 동작은 판이 끝나기 전엔 두 번 눌러야 한다(3초 안). 실행해도 되면 true. */
-  function confirmDiscard(action: string): boolean {
+  function confirmDiscard(action: string, ask = '한 번 더 누르면 지금 판을 버린다.'): boolean {
     if (g.phase === 'end') return true;
     const now = Date.now();
     if (confirmed(ui.confirm, action, now)) { ui.confirm = null; ui.toast = null; ui.toastKind = null; return true; }
     ui.confirm = { action, t: now };
     // 경고 쪽지로 띄워 다른 경고에 묻히지 않게 하고, 확정 시간만큼만 둔다.
-    toast('한 번 더 누르면 지금 판을 버린다.', 'warn', CONFIRM_MS);
+    toast(ask, 'warn', CONFIRM_MS);
     render();
     return false;
   }
@@ -622,6 +625,15 @@ export function startApp(root: HTMLElement): void {
         ui.debug = !ui.debug;
         ui.panel = null;
         return render();
+      case 'dark-lift': {
+        // S1b 계엄 회기: 계엄을 거둔다. 되돌릴 수 없어 두 번 눌러 확정(ui_states P5)하고, 첫 탭에 신임이 얼마로 돌아오는지 보인다.
+        if (!confirmDiscard('dark-lift', liftAsk(g))) return;
+        const why = step({ a: 'dark-lift', d: {} });
+        ui.selComm = null;
+        ui.dealOpen = null;
+        if (why) toast(why, 'warn'); else toast('계엄을 거두었다. 투표함 뚜껑이 다시 열렸다.');
+        return render();
+      }
       case 'dark-new': // S1b 어두운 길 훅: 켠(끈) 새 판, 내정 켬/끔은 그대로
         g = newGame(g.seed, !!g.dom, data.on === '1');
         ui = freshUi();
@@ -679,6 +691,14 @@ export function startApp(root: HTMLElement): void {
     const which = el.dataset.which as 'heat' | 'ration';
     const value = Number(el.value);
     if (g.comms[c][which] === value) return;
+    // S1b 계엄 중 경비대 배급은 계엄이 올린 값 아래로 못 내린다: 레버를 되돌리고 이유를 쪽지로 띄운다(못 누름 P3).
+    const lockWhy = darkLeverWhy(g, c, which, value);
+    if (lockWhy) {
+      toast(lockWhy);
+      render();
+      root.querySelector(`.lever__input[data-comm="${c}"][data-which="${which}"]`)?.closest('.lever')?.classList.add('is-denied');
+      return;
+    }
     step({ a: 'lever', d: { comm: c, which, value: String(value) } });
   });
 

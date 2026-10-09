@@ -1,5 +1,5 @@
 import {
-  COMMS, CREW_COMMS, LOOT_KEYS, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
+  COMMS, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   migrateDomestic, moveTask, requestApprentice, requestManual, resolveStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
@@ -66,6 +66,12 @@ export function applyStep(g: Game, s: Step): string | null {
     case 'comm-act': {
       const c = d.comm as Comm;
       return d.act === 'support' ? supportComm(g, c) : d.act === 'cut' ? cutComm(g, c) : uniqueAction(g, c);
+    }
+    case 'dark-lift': { // S1b 계엄 회기에서 계엄을 거둔다(그 회기는 liftMartial이 닫는다)
+      const why = canLift(g);
+      if (why) return why;
+      liftMartial(g, 'self');
+      return null;
     }
     case 'lever': setLever(g, d.comm as Comm, d.which as 'heat' | 'ration', Number(d.value)); return null;
     case 'space': return setSpace(g, Number(d.step), (COMMS as readonly string[]).includes(d.giver ?? '') ? d.giver as Comm : undefined);

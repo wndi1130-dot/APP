@@ -9,7 +9,7 @@ import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
 import { domesticEnd, domesticMenu, domesticPanel } from './domestic'; // S1c 내정 훅
-import { darkEndSection, darkMenu } from './dark'; // S1b 어두운 길 훅
+import { darkEndSection, darkMenu, darkSupportWhy } from './dark'; // S1b 어두운 길 훅
 import { reproError, reproText } from './repro';
 import { vibrateOn } from './fx';
 import { departTapOn } from './depart';
@@ -21,6 +21,7 @@ function factionRow(g: Game, c: Comm): HTMLElement {
   const seatN = seats(g)[c];
   const acted = g.actedSeg === g.seg;
   const grudge = grudgeText(s.grudge);
+  const supportWhy = darkSupportWhy(g, c); // S1b 계엄 중 경비대 지지
   return h('li', { class: cx('frow', `c-${c}`) },
     h('div', { class: 'frow__head' },
       h('i', { class: 'dot' }), h('b', null, COMM_NAME[c]), h('span', { class: 'num sub' }, `${seatN}석`),
@@ -32,7 +33,7 @@ function factionRow(g: Game, c: Comm): HTMLElement {
       grudge ? h('span', { class: 'is-red' }, grudge) : null,
       s.promise ? h('span', null, `약속: ${s.promise.label}`) : null),
     h('div', { class: 'frow__actions' },
-      h('button', { class: 'chip', 'data-action': 'comm-act', 'data-act': 'support', 'data-comm': c, disabled: acted || g.lux < 2 }, '지지', h('small', null, ' 사치품 −2')),
+      h('button', { class: 'chip', 'data-action': 'comm-act', 'data-act': 'support', 'data-comm': c, disabled: acted || g.lux < 2 || !!supportWhy, title: supportWhy }, '지지', h('small', null, ' 사치품 −2')),
       h('button', { class: 'chip', 'data-action': 'comm-act', 'data-act': 'cut', 'data-comm': c, disabled: acted }, '칼질', h('small', null, ' 식량 +4')),
       s.rel >= 15 ? h('button', { class: 'chip', 'data-action': 'comm-act', 'data-act': 'unique', 'data-comm': c, disabled: acted }, UNIQUE_ACTION[c]) : null));
 }
@@ -141,7 +142,7 @@ export function debugOverlay(view: View): HTMLElement | null {
 }
 
 const END_TITLE: Record<string, string> = {
-  complete: '라이프치히 중앙역', stranded: '좌초', ousted: '축출', revolt: '반란',
+  complete: '라이프치히 중앙역', stranded: '좌초', ousted: '축출', revolt: '반란', coup: '쿠데타',
 };
 
 export function endScreen(view: View): HTMLElement {

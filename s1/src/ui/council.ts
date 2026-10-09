@@ -12,6 +12,7 @@ import type { View } from './common';
 import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle, wedgeBoundaries } from './seats';
 import { bar, portrait } from './widgets';
 import { agendaLine, nameBtn } from './names';
+import { darkBillFoot, darkClosedNote, darkCloseButton, darkDecreeNote, darkNoDeals } from './dark'; // S1b 계엄 회기 훅
 
 /** 법 미리보기 줄 끝에 기술이 바꾼 것(7.3)을 붙인다. 다섯 줄 안에 들도록 법 줄을 줄인다(셋까지는 남긴다). */
 function withTech(changes: string[], tech: string[]): string[] {
@@ -182,7 +183,8 @@ function hemicycle(view: View, map: Record<Comm, Bloc>, need: number, est: { mea
   const [nx, ny] = polar(value, r0);
   const [ax, ay] = polar(est.min, r0);
   const [bx, by] = polar(est.max, r0);
-  const fan = !result && !secret ? s('path', { class: 'fan', d: `M0 0 L${ax} ${ay} A${r0} ${r0} 0 0 1 ${bx} ${by} Z` }) : null;
+  const martial = !!council.martial; // S1b 계엄 회기: 표결이 없어 바늘과 51·67 눈금을 그리지 않는다
+  const fan = !result && !secret && !martial ? s('path', { class: 'fan', d: `M0 0 L${ax} ${ay} A${r0} ${r0} 0 0 1 ${bx} ${by} Z` }) : null;
   // 51·67 눈금은 바늘이 도는 안쪽 원에 단다.
   const tick = (v: number) => {
     const [x1, y1] = polar(v, r0 - 8);
@@ -192,9 +194,9 @@ function hemicycle(view: View, map: Record<Comm, Bloc>, need: number, est: { mea
       s('line', { x1, y1, x2, y2 }), s('text', { x: tx, y: ty + 4, 'text-anchor': 'middle' }, String(v)));
   };
   return s('svg', { class: 'hemi', viewBox: vb, role: 'img', 'aria-label': '의석' },
-    arcs, borders, seatEls, plates, tick(51), tick(67), fan,
-    secret && !result ? null : s('line', { class: 'needle', x1: 0, y1: 0, x2: nx, y2: ny }),
-    s('circle', { class: 'needle__hub', cx: 0, cy: 0, r: 6 }));
+    arcs, borders, seatEls, plates, martial ? null : tick(51), martial ? null : tick(67), fan,
+    (secret || martial) && !result ? null : s('line', { class: 'needle', x1: 0, y1: 0, x2: nx, y2: ny }),
+    martial && !result ? null : s('circle', { class: 'needle__hub', cx: 0, cy: 0, r: 6 }));
 }
 
 function billPanel(view: View): HTMLElement {
@@ -202,7 +204,10 @@ function billPanel(view: View): HTMLElement {
   const council = g.council!;
   const agenda = currentAgenda(g);
   if (!agenda) {
-    return h('div', { class: 'bill' }, h('b', { class: 'bill__title' }, '안건 없음'), h('p', { class: 'sub' }, '올릴 수 있는 법이 없다.'));
+    return h('div', { class: 'bill' },
+      h('b', { class: 'bill__title' }, council.martial ? '계엄' : '안건 없음'),
+      council.martial ? null : h('p', { class: 'sub' }, '올릴 수 있는 법이 없다.'),
+      darkBillFoot(view));
   }
   // 법 안건 앞의 정기 신임 표결(S1b 5.3)은 바꿀 수도 거래할 수도 없다. 표결 뒤 주 단추가 이번 회기 안건으로 넘긴다.
   const pre = preVote(g);
@@ -234,18 +239,19 @@ function billPanel(view: View): HTMLElement {
       h('b', { class: 'bill__title' }, agendaTitle(agenda)),
       h('button', { class: 'nav', 'data-action': 'agenda', 'data-step': 1, disabled: !canSwitch, 'aria-label': '다음 안건' }, '›')),
     h('div', { class: 'bill__tags' },
-      h('span', { class: 'tag' }, `${law.kind === 'rule' ? '통치' : '일반'} ${agendaNeed(agenda)}`),
+      council.martial ? null : h('span', { class: 'tag' }, `${law.kind === 'rule' ? '통치' : '일반'} ${agendaNeed(agenda)}`),
       h('span', { class: 'tag' }, icon(secret ? 'eyeOff' : 'eye'), secret ? '비밀' : '공개'),
       h('span', { class: cx('tag', law.tag === '가혹' && 'tag--harsh', law.tag === '이상' && 'tag--ideal') }, law.tag),
       agenda.forced ? h('span', { class: 'tag tag--crisis' }, '위기') : null,
       need && !agenda.repeal ? h('span', { class: 'tag tag--crisis' }, need.state.due > g.seg ? `요구 · ${need.state.due - g.seg}구간 남음` : '요구 · 기한 지남') : null,
       council.emergency ? h('span', { class: 'tag' }, '비상 소집') : null,
+      council.martial ? h('span', { class: 'tag tag--crisis' }, '계엄') : null,
       agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
       council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
     h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law)
       : withTech([...(agenda.amend ? [`${LAWS[agenda.amend].title} 대신 선다`] : []), ...law.changes], lawTechLines(g, agenda.law)))
       .slice(0, 5).map(x => h('li', null, x))),
-    h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
+    darkBillFoot(view) ?? h('div', { class: 'bill__foot num' }, `거래 ${council.deals.length}/${P.maxDealsPerSession}`,
       council.locked && !council.result ? ' · 안건을 넘겼다' : ''));
 }
 
@@ -333,7 +339,7 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
       h('button', { class: 'btn btn--ghost', 'data-action': 'deal-close' }, '돌아가기'));
   }
   return h('div', { class: 'cpanel', 'data-link': 'to' }, head, facts,
-    h('div', { class: 'tools' }, TOOLS.map(t => {
+    council.martial ? darkNoDeals() : h('div', { class: 'tools' }, TOOLS.map(t => {
       const status = toolStatus(g, c, t.tool);
       const cost = t.tool === 'bribe' ? `사치품 ${bribePrice(g, c)}` : status.cost ?? '';
       return h('button', { class: cx('tool', !status.ok && 'is-off'), 'data-action': 'deal', 'data-comm': c, 'data-tool': t.tool, disabled: !status.ok },
@@ -380,7 +386,7 @@ export function councilScreen(view: View): HTMLElement {
     return h('section', { class: 'council' }, h('p', { class: 'empty' }, '회기가 아니다.'));
   }
   if (!agenda) {
-    return h('section', { class: 'council' }, billPanel(view), h('p', { class: 'empty' }, '올릴 안건이 없다. 정산으로 간다.'));
+    return h('section', { class: 'council' }, billPanel(view), h('p', { class: 'empty' }, darkClosedNote(g) ?? '올릴 안건이 없다. 정산으로 간다.'));
   }
   const map = shownBlocs(g, blocs(g, agenda, council.deals));
   const need = agendaNeed(agenda);
@@ -395,7 +401,7 @@ export function councilScreen(view: View): HTMLElement {
   const secret = ballotSecret(g);
   const big = result
     ? h('div', { class: 'big num' }, h('b', null, fmt(shownYes ?? 0)), h('span', null, ` / ${need}`))
-    : tally(est, need, secret);
+    : darkDecreeNote(view) ?? tally(est, need, secret);
   return h('section', { class: 'council' },
     billPanel(view),
     h('div', { class: 'hemi-wrap' },
@@ -420,6 +426,8 @@ export function voteLever(view: View): HTMLElement | null {
   const { g } = view;
   const council = g.council;
   if (!council || council.result || !currentAgenda(g)) return null;
+  // S1b 계엄 회기: 표결 단추 대신 포고와 '포고 없이 닫는다'
+  if (council.martial) return h('div', { class: 'vote-actions' }, canDecree(g) && isDecreeable(currentAgenda(g)) ? h('button', { class: 'btn btn--dark', 'data-action': 'decree' }, '포고') : null, darkCloseButton());
   return h('div', { class: 'vote-actions' },
     canDecree(g) && isDecreeable(currentAgenda(g)) ? h('button', { class: 'btn btn--dark', 'data-action': 'decree' }, '포고') : null,
     h('button', { class: 'primary primary--lever', 'data-action': 'vote' }, icon('lever'), h('span', null, '표결')));
