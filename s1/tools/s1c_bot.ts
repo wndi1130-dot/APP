@@ -5,6 +5,7 @@ import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
+  peopleCardRecent, CONTENT_CARD_KIND,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -51,6 +52,23 @@ export interface GameMetrics {
     scrapEnd: number; woodEnd: number; buried: number; s1cLaws: number; techs: string[];
   };
   dark?: Record<string, number>;
+  /** 사건 반복·카드 밀도 측정(2026-10-09). 이동 사건 = card.kind==='travel'(id는 card.text). */
+  travelById: Record<string, number>;
+  /** 이 판에서 이미 본 이동 사건 id가 다시 나온 횟수 */
+  travelRepeats: number;
+  /** 콘텐츠 JSON 사건(kind 'content', id는 card.text): 이동 단계에서 이동 사건과 같은 자리를 다툰다 */
+  contentById: Record<string, number>;
+  contentRepeats: number;
+  /** 모든 카드 중 이 판에서 이미 본 제목(viewCard의 title)이 다시 나온 횟수와 전체 카드 수 */
+  titleRepeats: number;
+  titleTotal: number;
+  /** 이동 사건(travel·content)이 없던 구간 수. rest: 사람 카드로 쉼, empty: 후보가 없어 빔, other: 파업·멈춤·서막 첫 거래 등 */
+  segsTotal: number;
+  segsWithTravel: number;
+  segsNoTravel: { rest: number; empty: number; other: number };
+  /** 구간별로 플레이어가 고른 카드 수의 분포 [0,1,2,3,4+ 구간 수]와 최대값 */
+  cardsPerSeg: number[];
+  cardsPerSegMax: number;
 }
 
 const KIND_PICK = ['둘 다 경비를 붙인다', '경비를 붙인다', '재판에 넘긴다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
@@ -218,7 +236,13 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
     deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, cards, s1aCards: 0, domCards: 0,
     tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, spaceSegs: 0,
+    travelById: {}, travelRepeats: 0, contentById: {}, contentRepeats: 0, titleRepeats: 0, titleTotal: 0,
+    segsTotal: 0, segsWithTravel: 0, segsNoTravel: { rest: 0, empty: 0, other: 0 }, cardsPerSeg: [0, 0, 0, 0, 0], cardsPerSegMax: 0,
   };
+  const titlesSeen = new Set<string>();
+  const pickedPerSeg = new Map<number, number>();
+  let travelSeg = -1;
+  const travelSegs = new Set<number>();
   let lastSeg = -1;
   let lastCouncil = -1;
   let prepSeg = -1;
@@ -230,10 +254,29 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     }
     m.coalMin = Math.min(m.coalMin, g.coal);
     m.foodMin = Math.min(m.foodMin, g.food);
+    // 구간마다 한 번: 출발 때 이동 사건 자리가 어떻게 채워졌나(turn.ts depart).
+    if (g.phase === 'travel' && travelSeg !== g.seg) {
+      travelSeg = g.seg;
+      travelSegs.add(g.seg);
+      m.segsTotal += 1;
+      const has = g.cards.some(c => c.kind === 'travel' || c.kind === CONTENT_CARD_KIND);
+      if (has) m.segsWithTravel += 1;
+      else if (g.inStrike || g.cards.some(c => c.kind === 'strike' || c.kind === 'pro_deal')) m.segsNoTravel.other += 1;
+      else if (peopleCardRecent(g)) m.segsNoTravel.rest += 1;
+      else m.segsNoTravel.empty += 1;
+    }
     if (g.cards.length > 0) {
       const card = g.cards[0];
-      if (!seen.has(card.uid)) {
+      const fresh = !seen.has(card.uid);
+      if (fresh) {
         seen.add(card.uid);
+        if (card.kind === 'travel' && card.text) {
+          if (m.travelById[card.text]) m.travelRepeats += 1;
+          m.travelById[card.text] = (m.travelById[card.text] ?? 0) + 1;
+        } else if (card.kind === CONTENT_CARD_KIND && card.text) {
+          if (m.contentById[card.text]) m.contentRepeats += 1;
+          m.contentById[card.text] = (m.contentById[card.text] ?? 0) + 1;
+        }
         cards[card.kind] = (cards[card.kind] ?? 0) + 1;
         // 위생 카드는 칸별로도 센다(꼬리칸 몫이 쏠리는지 본다, J10 W1).
         if (card.kind === 'dom:lice' || card.kind === 'dom:typhus') cards[`${card.kind}@${card.comm}`] = (cards[`${card.kind}@${card.comm}`] ?? 0) + 1;
@@ -242,6 +285,11 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       const view = viewCard(g, card);
       // 끊어진 후속: 카드는 생겼는데 그리는 곳이 없다(tools/reach_check.ts).
       if (view.title === '빈 서류') throw new Error(`그리는 곳 없는 카드: ${card.kind}`);
+      if (fresh) {
+        m.titleTotal += 1;
+        if (titlesSeen.has(view.title)) m.titleRepeats += 1;
+        titlesSeen.add(view.title);
+      }
       let idx: number;
       const pro = (['pro_promise', 'pro_search', 'pro_deal'] as string[]).indexOf(card.kind);
       if (pro >= 0 && opts.prologuePicks) idx = opts.prologuePicks[pro];
@@ -253,7 +301,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         idx = 0;
         view.choices.forEach((c, i) => { if (c.disabled) return; const s = scoreChoice(g, c); if (s > best) { best = s; idx = i; } });
       }
+      const segAtPick = g.seg;
       if (!chooseCard(g, card.uid, idx)) throw new Error(`카드를 못 골랐다: ${card.kind} ${idx}`);
+      pickedPerSeg.set(segAtPick, (pickedPerSeg.get(segAtPick) ?? 0) + 1);
       continue;
     }
     if (g.phase === 'prep' && prepSeg !== g.seg) {
@@ -281,6 +331,12 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     }
     if (!primaryAction(g).ok) throw new Error(`막혔다: ${g.phase} ${primaryAction(g).why ?? ''}`);
     advance(g);
+  }
+  // 고른 카드가 0장인 구간도 센다: 이동 단계에 들어간 구간과 카드를 고른 구간의 합집합이 분모다.
+  for (const sg of new Set([...travelSegs, ...pickedPerSeg.keys()])) {
+    const n = pickedPerSeg.get(sg) ?? 0;
+    m.cardsPerSeg[Math.min(4, n)] += 1;
+    m.cardsPerSegMax = Math.max(m.cardsPerSegMax, n);
   }
   m.end = g.end ?? 'none';
   m.segReached = g.seg;
