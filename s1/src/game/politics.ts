@@ -19,6 +19,8 @@ export interface Bloc {
   yes: number;
   und: number;
   no: number;
+  /** 반대 가운데 꿈쩍 않는 표(no에 들어 있다). 어떤 거래·협박·옮긴 표로도 안 넘어온다(사용자 2026-10-09). */
+  hard: number;
   /** 뇌물·빚으로 대표가 끌고 오는 표. 개표 때 결속도만큼 찬성으로 온다. */
   pool: number;
   poolChance: number;
@@ -95,6 +97,18 @@ export function undecidedChance(score: number): number {
   return clamp(0.5 + 0.1 * score, 0.2, 0.8);
 }
 
+/** 꿈쩍 않는 반대의 몫(출석 대비). 고정 수가 아니라 안건의 이념 충돌, 관계, 앙금에 따라 회기마다 바뀐다(제안 값).
+ * 매수 한 번에 칸 전체가 넘어오는 게 너무 쉬웠다(사용자 2026-10-09 H6 플레이). */
+export function hardShare(g: Game, c: Comm, ideo: number): number {
+  const s = g.comms[c];
+  const band = stageOf(s.rel).band;
+  let share = P.hardNoBase + P.hardNoIdeo * Math.max(0, -ideo);
+  if (band < 0) share += P.hardNoCold;
+  else if (band > 0) share -= P.hardNoWarm;
+  if (s.grudge >= 1) share += P.hardNoGrudge;
+  return clamp(share, P.hardNoMin, P.hardNoMax);
+}
+
 function baseBloc(g: Game, c: Comm, agenda: Agenda, seatCount: number): Bloc {
   const { score, ideo } = stance(g, c, agenda);
   const s = g.comms[c];
@@ -105,7 +119,8 @@ function baseBloc(g: Game, c: Comm, agenda: Agenda, seatCount: number): Bloc {
   const [y, , n] = split(score);
   const yes = Math.round(present * y);
   const no = Math.round(present * n);
-  return { seats: seatCount, absent, yes, und: present - yes - no, no, pool: 0, poolChance: 0, score, ideo };
+  const hard = Math.min(no, Math.round(present * hardShare(g, c, ideo)));
+  return { seats: seatCount, absent, yes, und: present - yes - no, no, hard, pool: 0, poolChance: 0, score, ideo };
 }
 
 /** 표를 움직이는 거래인가. 거절당한 뇌물은 자리만 쓰고 표는 못 움직인다(옛 저장은 글로 가린다). */
@@ -139,36 +154,38 @@ export function voteSide(agenda: Agenda, side: 'captain' | 'yes' | 'no'): number
   return agenda.by ? 0 : 1;
 }
 
-/** 그 칸 표가 n석만큼 찬성 쪽으로(음수면 반대 쪽으로) 옮긴다. 찬성 쪽이면 반대 → 미정 순으로 빼 온다. */
+/** 그 칸 표가 n석만큼 찬성 쪽으로(음수면 반대 쪽으로) 옮긴다. 찬성 쪽이면 반대 → 미정 순으로 빼 온다. 꿈쩍 않는 반대는 안 옮긴다. */
 function shiftVotes(b: Bloc, n: number): void {
   let left = Math.abs(Math.round(n));
   const from: ('no' | 'und' | 'yes')[] = n > 0 ? ['no', 'und'] : ['yes', 'und'];
   for (const k of from) {
-    const take = Math.min(left, b[k]);
+    const take = Math.min(left, k === 'no' ? b.no - b.hard : b[k]);
     b[k] -= take;
     if (n > 0) b.yes += take; else b.no += take;
     left -= take;
   }
 }
 
+/** 거래는 꿈쩍 않는 반대(b.hard)를 건드리지 못한다. 움직이는 건 미정과 나머지 반대뿐이다. */
 function applyDeal(g: Game, b: Bloc, c: Comm, tool: DealTool): void {
+  const soft = b.no - b.hard;
   if (tool === 'open' || tool === 'fetch') {
-    // 공개 약속은 새지 않는다(원작). 미정 전부와 반대의 20%.
-    const moved = Math.round(b.no * 0.2);
+    // 공개 약속은 새지 않는다(원작). 미정 전부와 움직이는 반대의 20%.
+    const moved = Math.round(soft * 0.2);
     b.yes += b.und + moved;
     b.no -= moved;
     b.und = 0;
   } else if (tool === 'blackmail') {
-    // 협박은 대표가 집단을 통째로 끌고 온다(3.1, 결속도 1.0).
-    b.yes += b.und + b.no;
+    // 협박은 대표가 집단을 끌고 온다(3.1, 결속도 1.0). 꿈쩍 않는 반대는 대표 말도 안 듣는다.
+    b.yes += b.und + soft;
     b.und = 0;
-    b.no = 0;
+    b.no = b.hard;
   } else {
     // 뇌물과 빚: 대표 몫. 남은 표가 결속도만큼 찬성으로 온다.
-    b.pool += b.und + b.no;
+    b.pool += b.und + soft;
     b.poolChance = g.comms[c].coh;
     b.und = 0;
-    b.no = 0;
+    b.no = b.hard;
   }
 }
 
@@ -383,7 +400,7 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
   if (council.deals.length >= P.maxDealsPerSession) return { ok: false, why: `회기당 ${P.maxDealsPerSession}건` };
   const s = g.comms[c];
   const b = blocs(g, agenda, council.deals)[c];
-  if (b.und + b.no === 0) return { ok: false, why: '살 표가 없다' };
+  if (b.und + b.no - b.hard === 0) return { ok: false, why: b.hard > 0 ? '남은 반대는 꿈쩍 않는다' : '살 표가 없다' };
   const hostile = s.grudge >= P.hostileGrudge;
   switch (tool) {
     case 'open':
