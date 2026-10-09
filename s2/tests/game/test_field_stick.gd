@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const Person = preload("res://game/actors/person.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 var game
 
@@ -583,3 +584,160 @@ func test_heavy_inertia_is_the_default() -> void:
 	assert_false(game.opts.has("inertia"))
 	# An unset or unknown choice falls back to heavy too.
 	assert_eq(_run_then_stop_time("now"), _run_then_stop_time(""))
+
+
+# ---------------------------------------------------------------- K03 fixes (2026-10-09)
+
+func _raider(at: Vector3):
+	var row := {"id": "npc_raider_t", "name": "약탈자", "role": "raider", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 1, "search": 1}, "hands": [["axe", "factory", 0.9]]}
+	var r = game.make_person(row, at)
+	r.brain = {"role": "flanker", "state": "fight", "morale": 1.0, "last_seen": Vector3.ZERO, "home": at}
+	game.raiders.append(r)
+	return r
+
+
+func test_a_shove_inside_its_swing_time_does_nothing() -> void:
+	var p = game.player
+	p.facing = PI * 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+	var at: Vector3 = z["pos"]
+	p.swing_t = 0.4
+	game.combat.shove(p)
+	assert_eq(p.swing_t, 0.4, "the swing time is not restarted")
+	assert_eq(z["pos"], at, "nobody is pushed")
+
+
+func test_knocking_down_a_grabber_lets_its_victim_go() -> void:
+	var p = game.player
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.5, 0, 0))
+	z["state"] = "grab"
+	z["victim"] = p
+	p.grabbers.append(z)
+	p.grab_left = 1.0
+	game.zombies.knock_down(z)
+	assert_eq(z["state"], "downed")
+	assert_true(p.grabbers.is_empty())
+	assert_eq(p.grab_left, 0.0, "no bite is left to come")
+
+
+func test_a_raider_who_closes_in_swings_its_axe() -> void:
+	var p = game.player
+	var r = _raider(p.position + Vector3(1.0, 0, 0))
+	game.combat.melee_person(r, p)
+	game.combat.update(0.02)
+	assert_gt(r.swing_t, 0.0, "the raider's blow is thrown")
+
+
+func test_a_raider_out_of_reach_lets_the_target_go() -> void:
+	var p = game.player
+	var r = _raider(p.position + Vector3(6.0, 0, 0))
+	game.combat.melee_person(r, p)
+	game.combat.update(0.02)
+	assert_null(r.target_person, "walking is the AI's job")
+	assert_eq(r.swing_t, 0.0)
+
+
+func _window_between(p, z_at: float) -> Dictionary:
+	var c: Vector2i = FieldGrid.cell_of(p.position) + Vector2i(1, 0)
+	game.grid.set_solid(c, FieldGrid.Solid.WINDOW)
+	game.grid.windows[c] = {"broken": false, "glass": false, "building": 0, "cell": c}
+	game.grid.refresh_cell(c)
+	return game.zombies.spawn("dead", p.position + Vector3(z_at, 0, 0))
+
+
+func test_an_axe_does_not_swing_through_a_whole_window() -> void:
+	var p = game.player
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}]
+	var z := _window_between(p, 1.7)
+	p.target_zombie = z
+	game.combat.update(0.02)
+	assert_eq(p.swing_t, 0.0, "glass is in the way")
+	game.grid.break_window(FieldGrid.cell_of(p.position) + Vector2i(1, 0))
+	game.combat.update(0.02)
+	assert_gt(p.swing_t, 0.0, "a broken window lets the blow through")
+
+
+func test_a_prisoner_is_not_hit_by_the_one_who_was_hitting() -> void:
+	var p = game.player
+	var r = _raider(p.position + Vector3(1.0, 0, 0))
+	game.combat.melee_person(p, r)
+	assert_eq(p.target_person, r)
+	game.ai._surrender(r)
+	assert_null(p.target_person, "the old target is let go")
+	assert_false(p.hold_attack)
+	assert_false(game.combat.hostile(r))
+	assert_false(game.hud._target_ok(r), "the aim lets go too")
+	p.target_person = r
+	game.combat.update(0.02)
+	assert_null(p.target_person, "even a stale order does not strike")
+	assert_eq(p.swing_t, 0.0)
+
+
+func test_both_bitten_and_hurt_land_on_the_receipt() -> void:
+	var p = game.squad[1]
+	p.body.apply_bite(game.rng, "arm", 0.0)
+	p.body.fracture(true)
+	var got: Array = []
+	game.finished.connect(func(r): got.append(r))
+	game.finish("departed")
+	var people: Dictionary = got[0]["receipt"]["people"]
+	assert_has(people["bitten"], p.pid)
+	assert_has(people["injured"], p.pid, "a bite does not hide the broken arm")
+
+
+func test_a_swap_with_a_hurt_arm_takes_its_multiplier_once() -> void:
+	var p = game.player
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}, {"id": "knife", "quality": "factory", "condition": 0.9, "loaded": 0}]
+	p.body.fracture(true)
+	game.combat.swap(p)
+	assert_eq(p.action, "swap")
+	var expected: float = p.action_total / float(p.mults()["swap"])
+	var t := 0.0
+	while p.action != "" and t < 30.0:
+		game._update_person(p, 0.02)
+		t += 0.02
+	assert_almost_eq(t, expected, 0.06)
+
+
+func test_salvage_with_a_hurt_arm_takes_its_multiplier_once() -> void:
+	var p = game.player
+	p.body.fracture(true)
+	game.actions.spot_default(p, "salv_bench", "")
+	assert_eq(p.action, "salvage")
+	assert_eq(p.action_total, game.actions.SALVAGE_TIME, "the length is the plain time")
+	var expected: float = game.actions.SALVAGE_TIME / float(p.mults()["hands"])
+	var t := 0.0
+	while p.action != "" and t < 60.0:
+		game._update_person(p, 0.02)
+		t += 0.02
+	assert_almost_eq(t, expected, 0.06)
+
+
+func test_a_broken_arm_leaves_no_two_handed_gun_or_bow() -> void:
+	var p = game.player
+	p.body.fracture(true)
+	p.hands = [{"id": "pipe_shotgun", "quality": "crude", "condition": 1.0, "loaded": 1}]
+	assert_false(game.combat.can_shoot(p))
+	assert_false(game.combat.start_aim(p))
+	p.hands = [{"id": "bow", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	assert_false(game.combat.can_shoot(p))
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}]
+	assert_true(game.combat.can_shoot(p), "one hand is enough for a pistol")
+
+
+func test_a_search_cut_short_frees_the_box() -> void:
+	var p = game.player
+	var id := ""
+	for key in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][key]
+		if not c["locked"] and not c["searched"]:
+			id = key
+			break
+	assert_ne(id, "")
+	var box: Dictionary = game.data["containers"][id]
+	game.actions.search(p, id)
+	assert_true(box["busy"])
+	p.stick = Vector2(1, 0)
+	_step(p, 0.1)
+	assert_eq(p.action, "")
+	assert_false(box["busy"], "a companion may search it now")

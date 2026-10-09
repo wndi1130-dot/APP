@@ -112,3 +112,53 @@ func test_tapping_away_stops_the_fight() -> void:
 	game.combat._pursue_zombie(p, 0.1)
 	assert_true(p.target_zombie.is_empty(), "no new target after an order to stop")
 	assert_false(p.hold_attack)
+
+
+func test_the_shot_goes_to_the_target_not_the_dragged_point() -> void:
+	var p = game.player
+	p.facing = PI * 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 0))
+	game.combat.tracers.clear()
+	var guard := 0
+	while game.combat.tracers.is_empty() and guard < 20:
+		guard += 1
+		p.jam_t = 0.0
+		p.reload_t = 0.0
+		# The finger was dragged off to the side; the target stayed.
+		game.combat.fire(p, p.position + Vector3(0, 0, 8), z)
+	assert_false(game.combat.tracers.is_empty())
+	var end: Vector3 = game.combat.tracers[0]["to"]
+	assert_almost_eq(end.x, z["pos"].x, 0.01)
+	assert_almost_eq(end.z, z["pos"].z, 0.01)
+
+
+func _cancelled(index: int) -> InputEventScreenTouch:
+	var ev := InputEventScreenTouch.new()
+	ev.index = index
+	ev.pressed = false
+	ev.canceled = true
+	ev.position = game.hud._project(game.player.position) + Vector2(300, 0)
+	return ev
+
+
+func test_a_cancelled_touch_on_the_aim_hand_does_not_fire() -> void:
+	_raise()
+	game.hud.fingers[3] = {"kind": "hand", "start": Vector2.ZERO}
+	game.hud._input(_cancelled(3))
+	assert_false(game.hud.fingers.has(3))
+	assert_false(game.player.aim.active)
+	assert_false(game.hud.aiming)
+	assert_false(_tried(), "a cancel is not a lift")
+
+
+func test_a_cancelled_touch_on_the_aim_pad_does_not_fire() -> void:
+	var z: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(6, 0, 0))
+	game.hud.fingers[4] = {"kind": "pad", "pad": game.hud.aim_button, "start": Vector2.ZERO, "ms": 0}
+	game.hud._pad_down(game.hud.aim_button, Vector2.ZERO)
+	assert_true(game.hud.auto_aim)
+	game.hud.aim_target = z
+	game.hud._input(_cancelled(4))
+	assert_false(game.hud.auto_aim)
+	assert_false(game.player.aim.active)
+	assert_false(game.hud.aim_button.button_pressed)
+	assert_false(_tried(), "no shot from a cancelled pad")

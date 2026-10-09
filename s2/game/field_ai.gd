@@ -570,6 +570,11 @@ func _surrender(r) -> void:
 	r.aim.stop()
 	r.stop()
 	r.target_person = null
+	# Whoever was hitting this raider stops: the card decides what happens next.
+	for q in game.people_alive():
+		if q.target_person == r:
+			q.target_person = null
+			q.hold_attack = false
 	if not r.hands.is_empty():
 		var h: Dictionary = r.hands[0]
 		game.ground_items.append({"pos": r.position + Vector3(0.6, 0, 0), "id": h["id"], "n": 1, "weapon": h.duplicate()})

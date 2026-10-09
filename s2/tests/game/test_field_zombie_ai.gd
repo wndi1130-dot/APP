@@ -97,3 +97,16 @@ func test_blood_smell_is_short_upwind() -> void:
 	var z := _zombie(Vector3(40.5, 0, 7.5))
 	assert_eq(game.zombies.smell(Vector3(46.5, 0, 7.5), 12.0), 0, "6 m upwind in the cold is out of reach")
 	assert_eq(z["state"], "wander")
+
+
+func test_dead_far_from_the_player_still_notice_a_companion_beside_them() -> void:
+	var far: Vector3 = game.lift(Vector2i(130, 7), 0)
+	for q in game.squad:
+		q.position = far
+	var ally = game.squad[1]
+	ally.position = game.lift(Vector2i(20, 7), 0)
+	var z := _zombie(ally.position + Vector3(1.5, 0, 0))
+	assert_gt(z["pos"].distance_to(game.player.position), 32.0)
+	for i in range(20):
+		game.zombies.update(0.1)
+	assert_true(z["state"] in ["chase", "attack", "grab"], "the companion is seen even with the player far away")
