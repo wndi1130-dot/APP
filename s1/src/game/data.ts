@@ -373,5 +373,5 @@ export const UNIQUE_ACTION: Record<Comm, string> = {
 
 // 항의(브리프 1.6)
 export const PROTEST: Record<Comm, string> = {
-  engine: '파업', tail: '작업 거부', guard: '경계 거부', medtech: '진료 거부', front: '문 걸어 잠그기',
+  engine: '파업', tail: '작업 거부', guard: '경계 거부', medtech: '진료 거부', front: '거래 거부',
 };

@@ -511,9 +511,9 @@ function baseView(g: Game, card: Card): CardView {
     case 'tension_crisis': {
       return {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
-        body: '칸마다 사람들이 모였다. 문이 잠기기 시작했다. 오늘 밤을 넘기지 못할 수도 있다.',
+        body: '칸마다 사람들이 모였다. 통로마다 막아선 사람들이 거래를 끊었다. 오늘 밤을 넘기지 못할 수도 있다.',
         choices: withAfford(g, [
-          { label: '경비대를 푼다', say: '경비대를 풀어라! 문을 잠그는 자는 끌어내라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
+          { label: '경비대를 푼다', say: '경비대를 풀어라! 통로를 막는 자는 끌어내라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
           { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'tension_reset' },
           { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'revolt' },
         ]),
