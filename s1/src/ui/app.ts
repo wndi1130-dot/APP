@@ -19,6 +19,9 @@ import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGam
 import type { DomCtx, H6Clock } from './domestic';
 // S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
 import { darkPickMs, darkPickReset, darkVisibility, urlWantsS1b } from './dark';
+import { showCrash } from './crash';
+import { CONFIRM_MS, confirmed, replacesToast, toastMs } from './notice';
+import type { ToastKind } from './notice';
 import { TRAIL_MAX, applyStep, makeBundle, plainData, readSave, reviveSave, reproText, setReproSource } from './repro';
 import type { ReproError, SaveRead, Step, TrailEntry } from './repro';
 
@@ -146,8 +149,15 @@ export function renderApp(view: View): HTMLElement {
     ui.person ? personCard(g, ui.person) : null,
     debugOverlay(view),
     platformSheet(view),
-    ui.toast ? h('div', { class: 'toast', role: 'status' }, shortText(ui.toast)) : null,
+    ui.toast ? toastEl(ui.toast, ui.toastKind ?? 'info') : null,
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
+}
+
+/** 알림 쪽지. 경고는 호박색이고 눌러 닫는다(notice.ts). */
+function toastEl(text: string, kind: ToastKind): HTMLElement {
+  return kind === 'warn'
+    ? h('div', { class: 'toast toast--warn', role: 'alert', 'data-action': 'toast-close' }, shortText(text))
+    : h('div', { class: 'toast', role: 'status' }, shortText(text));
 }
 
 /** 고른 것(data-link="from")과 창(data-link="to")을 선으로 잇는다. */
@@ -212,7 +222,23 @@ export function startApp(root: HTMLElement): void {
   let repro = loadRepro(g.seed);
   setReproSource(() => makeBundle(g, repro.prev, repro.trail, repro.error, ui.screen), () => repro.error);
 
+  // 행동 밖에서 난 오류(그리기, 타이머)도 재현 묶음에 남긴다. 그리기가 깨졌을 수 있으니 여기서 다시 그리지는 않는다.
+  function noteError(e: unknown): void {
+    repro.error = errorOf(e, repro.trail[repro.trail.length - 1]);
+    saveRepro(repro);
+  }
+
   function render(): void {
+    try {
+      draw();
+    } catch (e) {
+      // 화면을 못 그렸다. 판은 그대로 두고 오류를 남긴 뒤 전체 화면 안내(다시 그리다 또 던져도 안내만 다시 뜬다).
+      noteError(e);
+      showCrash(root, 'render', { onRetry: render, onNew: () => { newSeedGame(); render(); } });
+    }
+  }
+
+  function draw(): void {
     for (const el of root.querySelectorAll<HTMLElement>('[data-keep-scroll]')) scroll[el.dataset.keepScroll ?? ''] = el.scrollLeft || el.scrollTop;
     beginNames();
     let view = renderApp({ g, ui });
@@ -261,17 +287,40 @@ export function startApp(root: HTMLElement): void {
     fxTimer = setTimeout(() => { ui.fx = null; render(); }, FX_MS);
   }
 
-  function toast(text: string): void {
+  function toast(text: string, kind: ToastKind = 'info', ms = toastMs(kind)): void {
+    // 떠 있는 경고는 보통 알림이 덮지 않는다.
+    if (!replacesToast(ui.toast ? ui.toastKind ?? 'info' : null, kind)) return;
     ui.toast = text;
+    ui.toastKind = kind;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { ui.toast = null; render(); }, 2600);
+    toastTimer = setTimeout(() => { ui.toast = null; ui.toastKind = null; render(); }, ms);
+  }
+
+  /** 판을 버리는 메뉴 동작은 판이 끝나기 전엔 두 번 눌러야 한다(3초 안). 실행해도 되면 true. */
+  function confirmDiscard(action: string): boolean {
+    if (g.phase === 'end') return true;
+    const now = Date.now();
+    if (confirmed(ui.confirm, action, now)) { ui.confirm = null; ui.toast = null; ui.toastKind = null; return true; }
+    ui.confirm = { action, t: now };
+    // 경고 쪽지로 띄워 다른 경고에 묻히지 않게 하고, 확정 시간만큼만 둔다.
+    toast('한 번 더 누르면 지금 판을 버린다.', 'warn', CONFIRM_MS);
+    render();
+    return false;
+  }
+
+  /** 새 시드로 새 판을 연다(저장, 재현 묶음 초기화 포함). 그리지는 않는다. */
+  function newSeedGame(): void {
+    g = newGame(randomSeed(), !!g.dom, !!g.dark);
+    ui = freshUi();
+    persist(g);
+    resetRepro();
   }
 
   let saveFailing = false;
   /** 저장하고, 막 실패하기 시작했으면 한 번 알린다(다시 되면 조용히 풀린다). */
   function persist(next: Game): void {
     const ok = save(next);
-    if (!ok && !saveFailing) toast('저장하지 못했다. 판은 이어지지만 창을 닫으면 여기까지 잃는다.');
+    if (!ok && !saveFailing) toast('저장하지 못했다. 판은 이어지지만 창을 닫으면 여기까지 잃는다.', 'warn');
     saveFailing = !ok;
   }
 
@@ -289,7 +338,7 @@ export function startApp(root: HTMLElement): void {
     } catch (e) {
       repro.error = errorOf(e, st);
       saveRepro(repro);
-      toast('오류가 났다. 메뉴에서 오류 재현 묶음을 복사해 보내 줘.');
+      toast('이 행동은 먹히지 않았다. 판은 그 앞에서 멈춰 있다. 메뉴에서 오류 묶음을 복사해 보내 줘.', 'warn');
       render();
       return null;
     }
@@ -523,7 +572,13 @@ export function startApp(root: HTMLElement): void {
         if (why) toast(why);
         return render();
       }
+      case 'toast-close':
+        clearTimeout(toastTimer);
+        ui.toast = null;
+        ui.toastKind = null;
+        return render();
       case 'restart':
+        if (!confirmDiscard(action)) return;
         g = newGame(g.seed, !!g.dom, !!g.dark);
         ui = freshUi();
         persist(g);
@@ -531,10 +586,8 @@ export function startApp(root: HTMLElement): void {
         toast(`같은 시드(${g.seed})로 처음부터.`);
         return render();
       case 'new-seed':
-        g = newGame(randomSeed(), !!g.dom, !!g.dark);
-        ui = freshUi();
-        persist(g);
-        resetRepro();
+        if (!confirmDiscard(action)) return;
+        newSeedGame();
         toast(`새 판: 시드 ${g.seed}.`);
         return render();
       case 'fullscreen': {
@@ -567,7 +620,7 @@ export function startApp(root: HTMLElement): void {
       case 'dark-new': // S1b 어두운 길 훅: 켠(끈) 새 판, 내정 켬/끔은 그대로
         g = newGame(g.seed, !!g.dom, data.on === '1');
         ui = freshUi();
-        save(g);
+        persist(g);
         resetRepro();
         toast(data.on === '1' ? `어두운 길 켠 새 판: 시드 ${g.seed}.` : `어두운 길 끈 새 판: 시드 ${g.seed}.`);
         return render();
@@ -586,6 +639,7 @@ export function startApp(root: HTMLElement): void {
   root.addEventListener('click', event => {
     const target = (event.target as Element | null)?.closest<HTMLElement | SVGElement>('[data-action]');
     if (!target || !root.contains(target)) return;
+    if (ui.braking) return; // 브레이크 연출(1.1초)이 도는 동안은 받지 않는다(타이머가 풀어 준다)
     if ((target as HTMLButtonElement).disabled) return;
     if (target.dataset.action === 'depart') return lever.click(event);
     if (target.dataset.action === 'choose') fxOrigin = target.getBoundingClientRect();
@@ -617,14 +671,9 @@ export function startApp(root: HTMLElement): void {
     render();
   });
 
-  // 행동 밖에서 난 오류(그리기, 타이머)도 재현 묶음에 남긴다. 그리기가 깨졌을 수 있으니 여기서 다시 그리지는 않는다.
-  const noteError = (e: unknown) => {
-    repro.error = errorOf(e, repro.trail[repro.trail.length - 1]);
-    saveRepro(repro);
-  };
   window.addEventListener('error', event => noteError(event.error ?? event.message));
   window.addEventListener('unhandledrejection', event => noteError(event.reason));
   window.addEventListener('resize', () => drawLinks(root));
-  if (loadWhy) toast(`저장한 판을 못 읽어 새 판을 열었다: ${loadWhy}.`);
+  if (loadWhy) toast(`저장한 판을 못 읽어 새 판을 열었다: ${loadWhy}.`, 'warn');
   render();
 }

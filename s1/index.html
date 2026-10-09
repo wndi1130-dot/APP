@@ -9,9 +9,34 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="icon" href="data:," />
     <title>S1a 열차 정치</title>
+    <style>
+      /* 첫 로딩(L1·L2). styles.css는 스크립트와 함께 들어오니 이 화면은 자기 스타일을 들고 있다. */
+      html, body { margin: 0; height: 100%; background: #0f1113; }
+      .boot { height: 100%; display: grid; place-items: center; padding: 16px; font: 14px/1.5 system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; color: #b9bfc6; text-align: center; }
+      .boot__band { min-width: 220px; max-width: 360px; padding: 12px 20px; background: #1e2226; border: 1px solid #c7a75f55; border-radius: 8px; }
+      .boot__band p { margin: 0; animation: boot-pulse 1.6s ease-in-out infinite; }
+      .boot__slow { margin-top: 12px; opacity: 0; visibility: hidden; animation: boot-slow .01s 8s forwards; }
+      .boot__slow p { margin: 0 0 8px; animation: none; }
+      .boot__slow button { min-height: 40px; padding: 0 16px; border: 1px solid #c7a75f88; border-radius: 8px; background: transparent; color: #eef0f2; font: inherit; font-weight: 600; }
+      @keyframes boot-pulse { 50% { opacity: .55; } }
+      @keyframes boot-slow { to { opacity: 1; visibility: visible; } }
+      @media (prefers-reduced-motion: reduce) { .boot__band p { animation: none; } }
+    </style>
+    <noscript><style>.boot { display: none; } #app noscript { display: block; padding: 24px; color: #b9bfc6; text-align: center; font: 14px/1.5 system-ui, sans-serif; }</style></noscript>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div class="boot" role="status">
+        <div class="boot__band">
+          <p>보일러를 데우는 중이다.</p>
+          <div class="boot__slow">
+            <p>오래 걸린다. 그대로 기다리거나 다시 불러 줘.</p>
+            <button type="button" onclick="location.reload()">다시 불러오기</button>
+          </div>
+        </div>
+      </div>
+      <noscript>이 화면은 자바스크립트가 켜져 있어야 돈다.</noscript>
+    </div>
     <div class="rotate" role="alert" aria-live="assertive">
       <div class="rotate__phone" aria-hidden="true"></div>
       <p class="rotate__title">가로로 돌려 주세요</p>

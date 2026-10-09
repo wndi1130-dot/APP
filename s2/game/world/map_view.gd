@@ -93,14 +93,15 @@ func setup(map_data: Dictionary) -> void:
 		node.position = FieldGrid.center(data["manholes"][key]) + Vector3(0, lv * LEVEL_H, 0)
 		manhole_nodes[key] = node
 		update_manhole(key, false)
-	# What the people who fled underground left at the culvert mouth: a bundle,
-	# a blanket, a small shoe. Shown, never explained (field_unified 6 하수도).
+	# What the people who fled underground left at the culvert mouth: a wooden
+	# crate, a wet blanket, a burnt-out oil lamp. Shown, never explained
+	# (field_unified 6 하수도). No bundles or shoes here (금지선).
 	if data["manholes"].has("culvert"):
 		var st := _begin()
 		var at := FieldGrid.center(data["manholes"]["culvert"])
-		box(st, Vector3(0.5, 0.3, 0.4), at + Vector3(1.6, 0.15, 0.4), Color(0.42, 0.36, 0.3))
+		box(st, Vector3(0.6, 0.4, 0.45), at + Vector3(1.6, 0.2, 0.4), Color(0.4, 0.32, 0.22))
 		box(st, Vector3(1.0, 0.06, 0.7), at + Vector3(1.2, 0.03, 1.3), Color(0.35, 0.3, 0.36))
-		box(st, Vector3(0.14, 0.08, 0.22), at + Vector3(2.1, 0.04, 1.0), Color(0.45, 0.25, 0.22))
+		box(st, Vector3(0.12, 0.22, 0.12), at + Vector3(2.1, 0.11, 1.0), Color(0.3, 0.29, 0.27))
 		var remains := _mesh_node()
 		remains.mesh = st.commit()
 	for label in data["labels"]:
