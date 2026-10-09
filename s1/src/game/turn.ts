@@ -1,4 +1,5 @@
 import { addCard, END_LINK } from './state';
+import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
@@ -1008,6 +1009,7 @@ function nextSegment(g: Game): void {
   }
   g.seg += 1;
   g.stop = null;
+  budgetNextSeg(g); // 구간 예산(budget.ts): 미뤄 둔 카드를 맨 앞으로 되돌린다. 꺼진 판은 아무 일도 안 한다
   if (g.decreeLeft > 0) {
     g.decreeLeft -= 1;
     if (g.decreeLeft === 0) endEmergencyPowers(g);

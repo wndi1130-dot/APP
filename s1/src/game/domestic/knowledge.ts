@@ -248,7 +248,7 @@ export function commList(): readonly Comm[] { return COMMS; }
 /** 현황판의 '견습생 붙이기' 단추: 견습생 후보 서류를 만든다(11.4). */
 export function requestApprentice(g: Game, f: Field): boolean {
   if (!freeTeacher(g, f) || g.cards.some(c => c.kind === 'dom:pupil' && c.text === f)) return false;
-  domCard(g, { kind: 'dom:pupil', text: f });
+  domCard(g, { kind: 'dom:pupil', text: f, ...(g.budget ? { ask: true } : {}) }); // ask: 구간 예산이 미루지 않는다(budget.ts)
   return true;
 }
 
@@ -256,6 +256,6 @@ export function requestApprentice(g: Game, f: Field): boolean {
 export function requestManual(g: Game, f: Field): boolean {
   const { who } = manualWriter(g, f);
   if (!who || g.cards.some(c => c.kind === 'dom:manual')) return false;
-  domCard(g, { kind: 'dom:manual', text: f, who: who.id });
+  domCard(g, { kind: 'dom:manual', text: f, who: who.id, ...(g.budget ? { ask: true } : {}) });
   return true;
 }

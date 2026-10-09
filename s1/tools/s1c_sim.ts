@@ -1,9 +1,10 @@
 // S1a 판과 S1a+S1c 판을 같은 시드로 돌려 비교한다(s1c_domestic 14.1의 2번).
-// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never]
+// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never] [--budget]
+// --budget: 카드 구간 예산(src/game/budget.ts, events_disasters 3.1)을 켠다. 상한은 --set=perSeg:4 처럼 바꾼다(D에 없고 BUDGET에 있는 키는 BUDGET을 바꾼다).
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { D, DZ, TRAVEL_EVENTS } from '../src/game';
+import { BUDGET, D, DZ, TRAVEL_EVENTS } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, GameMetrics } from './s1c_bot';
 
@@ -15,8 +16,9 @@ const OUT = args[1];
 const sets: Record<string, number> = {};
 for (const f of flags.filter(x => x.startsWith('--set='))) {
   const [k, v] = f.slice(6).split(':');
-  if (!(k in D)) throw new Error(`D에 없는 값: ${k}`);
-  (D as unknown as Record<string, number>)[k] = Number(v);
+  if (k in D) (D as unknown as Record<string, number>)[k] = Number(v);
+  else if (k in BUDGET) (BUDGET as unknown as Record<string, number>)[k] = Number(v);
+  else throw new Error(`D와 BUDGET에 없는 값: ${k}`);
   sets[k] = Number(v);
 }
 // --dz=key:value 로 disaster.ts의 DZ 값을 바꾼다(예: --dz=blizzardWarm:3 --dz=coldWarm:5). --disasters면 모든 정책을 재난 켬으로 돌린다.
@@ -28,6 +30,7 @@ for (const f of flags.filter(x => x.startsWith('--dz='))) {
   dzSets[k] = Number(v);
 }
 const disasters = flags.includes('--disasters');
+const budget = flags.includes('--budget');
 const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
 if (prepFlag && prepFlag !== 'auto' && prepFlag !== 'never') throw new Error(`--prep는 auto나 never: ${prepFlag}`);
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
@@ -74,6 +77,12 @@ function summarizeRepeat(ms: GameMetrics[]) {
   };
 }
 
+/** 카드 구간 예산: 판당 평균. 등급별(1~7) 미룬 횟수·흐지부지(일지 한 줄로 사라짐)·돌아올 때 대상이 없어 버린 수 */
+function summarizeBudget(ms: GameMetrics[]) {
+  const per = (key: 'deferred' | 'faded' | 'dropped') => Object.fromEntries(['3', '4', '5', '6', '7'].map(gr => [gr, +mean(ms.map(m => m.budget?.[key][gr] ?? 0)).toFixed(3)]));
+  return { deferredByGrade: per('deferred'), fadedByGrade: per('faded'), droppedByGrade: per('dropped') };
+}
+
 function summarize(ms: GameMetrics[]) {
   const ends: Record<string, number> = {};
   for (const m of ms) ends[m.end] = (ends[m.end] ?? 0) + 1;
@@ -117,6 +126,7 @@ function summarize(ms: GameMetrics[]) {
     dom,
     // 사건 반복·카드 밀도(2026-10-09). 판당 평균. travelById는 TRAVEL_EVENTS 전체 id를 넣어 0회 사건도 보인다.
     repeat: summarizeRepeat(ms),
+    budget: ms[0]?.budget ? summarizeBudget(ms) : undefined,
     techFreq: Object.fromEntries(Object.entries(techFreq).sort().map(([k, v]) => [k, +(v / ms.length).toFixed(3)])),
   };
 }
@@ -125,7 +135,11 @@ const out: Record<string, ReturnType<typeof summarize>> = {};
 const t0 = Date.now();
 for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c)) {
   const ms: GameMetrics[] = [];
-  const opts: BotOptions = disasters ? { ...run.opts, disasters: true, prep: prepFlag as 'auto' | 'never' | undefined } : run.opts;
+  const opts: BotOptions = {
+    ...run.opts,
+    ...(disasters ? { disasters: true, prep: prepFlag as 'auto' | 'never' | undefined } : {}),
+    ...(budget ? { budget: true } : {}),
+  };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);
   const s = out[run.name];
@@ -134,8 +148,9 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     + `석탄<30 ${s.coalUnder30} 식량<30 ${s.foodUnder30} 죽음 ${s.deaths} S1a카드 ${s.s1aCards} 내정카드 ${s.domCards}(${s.domCardsP10}~${s.domCardsP90})`);
   console.log(`${''.padEnd(28)} 재난(판당) 눈보라 ${s.disasters.blizzard} 한파 ${s.disasters.cold} · 재난사망 ${s.disasterDeaths} · 대비(석탄/모아잠/그냥) ${s.prep.coal}/${s.prep.huddle}/${s.prep.none} · 긴장 최고 ${s.tensionMax} 끝 ${s.tensionEnd} · 끝 온기 ${s.warmEnd}`);
   const r = s.repeat;
+  if (s.budget) console.log(`${''.padEnd(28)} 예산(판당, 등급 3/4/5/6/7) 미룸 ${Object.values(s.budget.deferredByGrade).join('/')} 흐지부지 ${Object.values(s.budget.fadedByGrade).join('/')} 대상 없어 버림 ${Object.values(s.budget.droppedByGrade).join('/')}`);
   console.log(`${''.padEnd(28)} 이동사건 ${r.travelCards}(반복 ${r.travelRepeats}) 콘텐츠사건 ${r.contentCards}(반복 ${r.contentRepeats}) 제목반복 ${r.titleRepeats}/${r.titleTotal}(${(100 * r.titleRepeatRate).toFixed(1)}%) `
     + `이동사건없는구간 ${r.segsNoTravel}/${r.segs}(쉼 ${r.segsNoTravelRest} 빔 ${r.segsNoTravelEmpty} 그외 ${r.segsNoTravelOther}) 구간별카드[0,1,2,3,4+] ${r.cardsPerSegDist.join('/')} 최대 ${r.cardsPerSegMax}`);
 }
-console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''})`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, sets, disasters, prep: prepFlag, dz: dzSets, runs: out }, null, 2));
+console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''}${budget ? `, 카드 예산 켬 ${JSON.stringify(BUDGET)}` : ''})`);
+if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), runs: out }, null, 2));

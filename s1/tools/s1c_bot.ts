@@ -5,7 +5,7 @@ import {
   advance, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
-  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters,
+  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableBudget,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -20,7 +20,7 @@ export type DarkPolicy = 'kind' | 'blind' | 'cruel';
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */
 export type DomPolicy = 'engaged' | 'idle';
 
-export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never' }
+export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never' }
 
 export interface GameMetrics {
   end: string;
@@ -77,6 +77,8 @@ export interface GameMetrics {
   /** 구간별로 플레이어가 고른 카드 수의 분포 [0,1,2,3,4+ 구간 수]와 최대값 */
   cardsPerSeg: number[];
   cardsPerSegMax: number;
+  /** 카드 구간 예산을 켠 판의 등급별(문자열 '1'~'7') 미룬 횟수, 두 번 밀려 일지 한 줄이 된 수, 돌아올 때 대상이 없어 버린 수. 끈 판은 없다 */
+  budget?: { deferred: Record<string, number>; faded: Record<string, number>; dropped: Record<string, number> };
 }
 
 const KIND_PICK = ['둘 다 경비를 붙인다', '경비를 붙인다', '재판에 넘긴다', '재판을 약속한다', '지킨다', '근신', '말하게 둔다', '받는다', '의무진이 한다', '경비와 함께', '수사하게 둔다', '거둔다'];
@@ -238,6 +240,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   const g = opts.s1c ? createS1cGame(seed) : createGame(seed);
   if (opts.s1b) enableDark(g);
   if (opts.disasters) enableDisasters(g);
+  if (opts.budget) enableBudget(g);
   if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();
   const cards: Record<string, number> = {};
@@ -271,6 +274,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       m.segsTotal += 1;
       const has = g.cards.some(c => c.kind === 'travel' || c.kind === CONTENT_CARD_KIND);
       if (has) m.segsWithTravel += 1;
+      else if (g.deferred?.some(c => c.kind === 'travel' || c.kind === CONTENT_CARD_KIND)) m.segsNoTravel.other += 1; // 예산이 미룸
       else if (g.inStrike || g.cards.some(c => c.kind === 'strike' || c.kind === 'pro_deal')) m.segsNoTravel.other += 1;
       else if (peopleCardRecent(g)) m.segsNoTravel.rest += 1;
       else m.segsNoTravel.empty += 1;
@@ -352,6 +356,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     m.cardsPerSeg[Math.min(4, n)] += 1;
     m.cardsPerSegMax = Math.max(m.cardsPerSegMax, n);
   }
+  if (g.budget) m.budget = g.budget.stats;
   m.end = g.end ?? 'none';
   m.segReached = g.seg;
   m.lawsPassed = Object.keys(g.passed).length;
