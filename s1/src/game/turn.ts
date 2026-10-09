@@ -460,6 +460,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 시신이 생기면 불빛 배수가 붙어 정찰이 약속한 피해와 달라진다. stopRisk는 난수 흐름을 쓰지 않는다.
   const risk = stopRisk(g);
   const orderTarget = darkStopTarget(g);
+  // 출발 명단도 훅 전에 한 번만 뽑아 끝까지 쓴다(명령으로 사람이 빠져도 영수증 이름과 자리 비움이 실제 나간 사람과 같다).
+  const names = crewNames(g, stop.crewComm, stop.crewSize);
   const darkNotes = darkStop(g, !!(go && stop.target), go && stop.target ? stopCrew(g) : []);
   if (!go || !stop.target) {
     stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
@@ -483,7 +485,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 꼬리칸 작업 거부는 꼬리칸이 작업조로 나갈 때만(J11). 다른 칸을 보내면 쉬는 꼬리칸의 거부가 운반량을 깎지 않는다.
   if (stop.crewComm === 'tail' && tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
   // 상중인 사람은 손이 느리다(사람의 무게 A1).
-  const grieving = crewNames(g, stop.crewComm, stop.crewSize).filter(n => mourners(g).includes(n));
+  const grieving = names.filter(n => !isGone(g, n) && mourners(g).includes(n));
   if (grieving.length > 0) { haul *= 1 - 0.1 * grieving.length; notes.push(`${grieving.join(', ')}은(는) 상중이라 손이 느렸다.`); }
   const gains: Partial<Record<LootKey, number>> = {};
   for (const k of LOOT_KEYS) {
@@ -509,7 +511,6 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     notes.push(`문서에서 ${COMM_NAME[s.about]} 대표의 약점을 찾았다.`);
   }
   if (risk.guardRefused) notes.push('경비대가 경계를 거부했다.');
-  const names = crewNames(g, stop.crewComm, stop.crewSize);
   // 정해 둔 결과 그대로. 정찰했으면 위험 줄이 이걸 미리 보여 줬다.
   // 정차 명령이나 하차로 이미 열차에 없는 사람은 약속한 피해에서 뺀다(같은 사람이 두 번 죽지 않는다).
   const dead = risk.fate.dead.filter(n => !isGone(g, n));
@@ -519,12 +520,15 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
+  // 명령에 다친 대상이 약속대로 죽으면 runOrder가 센 부상을 되돌린다.
+  if (orderHit && dead.includes(orderHit)) g.injured = Math.max(0, g.injured - 1);
   // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
   if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel + P.hurtRel * injuredOnly.length, -100, 100);
   // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
   if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = scoutsBack;
-  g.comms[stop.crewComm].away += stop.crewSize - dead.length;
+  const returned = names.filter(n => !isGone(g, n)); // 살아 돌아온 작업조(명령으로 죽은 사람도 뺀다)
+  g.comms[stop.crewComm].away += returned.length;
   const chore = crewWork(g, stop.crewComm, P.crewGain);
   if (chore) notes.push(chore);
   crewRest(g, stop.crewComm);
@@ -536,7 +540,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 도덕 카드: 부상자 발견, 물림.
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);
-  if (since('rescue') >= 4 && rnd(g) < P.rescueRate) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: names[0] });
+  if (since('rescue') >= 4 && rnd(g) < P.rescueRate) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
   if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
   return stop.result;
