@@ -81,7 +81,19 @@ export interface Secret { id: number; text: string; weight: number; about: Comm;
 export interface Leash { comm: Comm; since: number; weight: number }
 
 export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
-export interface Card { uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string; /** 콘텐츠 사건의 자리표시자 값. 올릴 때 정해 얼려 둔다(content.ts). '@aide'는 말하는 측근 */ vals?: Record<string, string> }
+export interface Card {
+  uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string;
+  /** 콘텐츠 사건의 자리표시자 값. 올릴 때 정해 얼려 둔다(content.ts). '@aide'는 말하는 측근 */
+  vals?: Record<string, string>;
+  /** 구간 예산(budget.ts)이 이 카드를 미룬 횟수. 미룬 적 없으면 없다 */
+  pushed?: number;
+  /** 플레이어가 단추로 직접 청한 서류(견습생·매뉴얼). 예산이 미루지 않는다. 예산을 켠 판에서만 붙는다 */
+  ask?: boolean;
+}
+/** 카드 구간 예산 통계: 등급(문자열 '1'~'7')별 횟수. deferred 미룬 횟수, faded 두 번 밀려 일지 한 줄로 사라진 수, dropped 돌아올 때 대상이 없어 버린 수 */
+export interface BudgetStats { deferred: Record<string, number>; faded: Record<string, number>; dropped: Record<string, number> }
+/** 구간 예산을 켠 판의 장부(budget.ts). seg 구간에 플레이어가 고른 카드 수 */
+export interface BudgetState { seg: number; picked: number; stats: BudgetStats }
 /** 한 사건을 마지막으로 겪은 때와 고른 것. 같은 사건이 다시 나오면 이걸 보고 본문과 대가를 바꾼다. */
 /** st: 그때의 상태 키(eventStateKey). 상태가 그대로면 같은 사건을 다시 열지 않는다. */
 export interface EventMemo { n: number; seg: number; pick: string; st?: string }
@@ -307,6 +319,10 @@ export interface Game {
   disasterEnd?: number;
   /** 판 전체 재난 사망 수(상한 DZ.deathCap) */
   disasterDeaths?: number;
+  /** 카드 구간 예산(budget.ts)이 켜진 판. 없으면 꺼진 판이고 아래 deferred도 없다 */
+  budget?: BudgetState;
+  /** 예산 때문에 미뤄 둔 카드. 다음 구간 처음에 맨 앞으로 돌아온다 */
+  deferred?: Card[];
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';
@@ -413,9 +429,13 @@ export function journal(g: Game, text: string, tone?: JournalEntry['tone']): voi
   g.journal.push({ seg: g.seg, text, ...(tone ? { tone } : {}) });
 }
 
+/** 카드 구간 예산(budget.ts)이 걸어 두는 자리. import 순환을 피하려고 여기 둔다. g.budget이 있는 판에서만 불린다. */
+export const BUDGET_HOOK: { onAdd: ((g: Game) => void) | null } = { onAdd: null };
+
 export function addCard(g: Game, card: Omit<Card, 'uid'>): void {
   g.cards.push({ uid: g.nextCardUid, ...card });
   g.nextCardUid += 1;
+  if (g.budget) BUDGET_HOOK.onAdd?.(g);
 }
 
 /** 아직 이름이 불리지 않은 사람을 프로필 풀에서 뽑는다. */
