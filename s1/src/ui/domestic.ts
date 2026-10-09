@@ -731,7 +731,7 @@ export interface DomCtx {
   ui(): Ui;
   /** 판을 바꾸는 행동(repro.ts applyStep). 알림 글이 있으면 돌려준다. */
   step(s: Step): string | null;
-  toast(text: string): void;
+  toast(text: string, kind?: 'info' | 'warn'): void;
   render(): void;
   /** 새 판으로 바꾼다 */
   reset(next: Game): void;
