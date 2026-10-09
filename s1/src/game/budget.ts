@@ -78,6 +78,10 @@ export const CARD_GRADE: Record<string, KindRule> = {
   'dark:order_fail': R(2, false, '명령 실패 보고와 수사 시작', 4),
   'dark:corpse_rule': R(2, false, '갓 생긴 시신의 확인 규칙(d.fresh)', 4),
   'dark:vigil': R(2, false, '그 정차·그 시신의 밤샘', 4),
+  // 계엄(s1b_martial_impl 2·3·4장): 대권이 끝나는 구간의 길 고르기, 쿠데타 경고 시계, 경비대 재판(군중 시계가 같이 흐른다)
+  'dark:powers_end': R(2, false, '포고 마지막 구간에 고르는 길(돌려준다·묻는다·연장). 구간이 지나면 대권은 이미 끝났다', 4),
+  'dark:coup_warn': R(2, false, '쿠데타 경고 알림. 2구간 시계가 흐른다', 4),
+  'dark:gtrial': R(2, false, '계엄 중 경비대 재판. 군중 시계가 같이 흐른다', 4),
   // 5 정산의 요구·부탁
   demand: R(5, true, '처지가 나쁜 칸의 요구. 돌아왔을 때 요구가 사라졌으면 버린다'),
   favor: R(5, true, '사적인 부탁. 미뤄도 말이 된다'),

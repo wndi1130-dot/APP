@@ -19,6 +19,8 @@ export interface MotionDef {
   onFail: (g: Game, a: MotionAgenda) => void;
   /** 안건 순서: crisis > ratify > confidence > ai > player */
   rank: MotionRank;
+  /** rank가 ratify인 안건 가운데 법 추인보다도 앞에 놓는다(대권 연장: 연장이 되면 그 사이 포고는 추인된 것으로 본다) */
+  lead?: boolean;
 }
 
 const hubOf = (g: Game) => (g.hub ??= { warned: [], stash: {}, agreed: [] });

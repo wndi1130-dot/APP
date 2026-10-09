@@ -2,6 +2,7 @@ import { LEVER_NAMES, lawFloor, situation } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
 import { icon } from './icons';
+import { darkLeverFloor } from './dark_lock'; // S1b 계엄 중 경비대 배급 잠금
 
 // 레버와 반원 계기(배의 기관 전령기 모양). 손잡이는 단계마다 딱 걸리고, 바늘은 충분하면 가운데,
 // 최대로 당겨도 모자라면 빨간 왼쪽, 남으면 호박색 오른쪽으로 간다(decisions.md 홈 화면).
@@ -31,7 +32,7 @@ export function gauge(value: number, small = false): SVGSVGElement {
 
 export function lever(g: Game, c: Comm, which: 'heat' | 'ration'): HTMLElement {
   const value = g.comms[c][which];
-  const floor = lawFloor(g, which === 'heat' ? 'heatFloor' : 'rationFloor');
+  const floor = Math.max(lawFloor(g, which === 'heat' ? 'heatFloor' : 'rationFloor'), darkLeverFloor(g, c, which));
   const label = which === 'heat' ? '난방' : '배급';
   return h('div', { class: 'lever' },
     h('div', { class: 'lever__head' },
@@ -44,7 +45,7 @@ export function lever(g: Game, c: Comm, which: 'heat' | 'ration'): HTMLElement {
       'aria-label': `${label} 레버`, 'aria-valuetext': LEVER_NAMES[value],
     }),
     h('div', { class: 'lever__ticks' }, LEVER_NAMES.map((n, i) => h('span', { class: cx(i === value && 'is-on', i < floor && 'is-locked') }, n))),
-    floor > 0 ? h('div', { class: 'lever__floor' }, `법으로 ${LEVER_NAMES[floor]} 아래 금지`) : null);
+    floor > 0 ? h('div', { class: 'lever__floor' }, `${floor > lawFloor(g, which === 'heat' ? 'heatFloor' : 'rationFloor') ? '계엄으로' : '법으로'} ${LEVER_NAMES[floor]} 아래 금지`) : null);
 }
 
 export function bar(value: number, tone: string, max = 100): HTMLElement {

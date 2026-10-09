@@ -260,11 +260,13 @@ function act(g: Game, e: Ember): void {
   if (e.blocked || (st <= 2 && isGuarded)) {
     e.blocked = false;
     d.stats.blocked += 1;
-    // 시험 손잡이(4000판 시뮬 2026-10-09): 막혀도 사다리는 오른 것으로 센다. 경비가 피해만 막고 다음 임박은 한 칸 위가 된다. 기본은 꺼짐.
-    if (B.blockClimb > 0 && st <= 2) e.stage = st;
+    // 막혀도 사다리는 오른 것으로 센다(4.2, 2026-10-09 사용자 결정 '오르게 하기'): 경비는 피해만 막고 다음 임박은 한 칸 위다.
+    // 카드 끝 한 줄로 알린다(경비가 헛일로 읽히지 않게). blockClimb 0은 옛 규칙(시뮬 비교용).
+    const climbs = B.blockClimb > 0 && st <= 2;
+    if (climbs) e.stage = st;
     if (st >= 3) d.violentUsed = Math.max(0, d.violentUsed - 1);
     if (st === 4 && e.mark === 'chief') d.chiefAttacked = false;
-    darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: actLine(g, e, st, true) });
+    darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: `${actLine(g, e, st, true)}${climbs ? ' 이번엔 막았다. 다음엔 더 세게 온다.' : ''}` });
     return;
   }
   e.stage = st;

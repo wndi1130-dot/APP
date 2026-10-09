@@ -2,17 +2,20 @@ import { COMMS } from '../data';
 import { DEATH_HOOKS } from '../death';
 import { COUNCIL_HOOKS } from '../politics';
 import type { Comm } from '../data';
-import { situation } from '../state';
+import { lawActive, situation } from '../state';
 import type { Game } from '../state';
 import { B } from './data';
-import { investigate, crowdTick, truthTick } from './cases';
+import { investigate, crowdTick, topByClues, truthTick } from './cases';
 import { theftTick } from './cards';
 import { closeChronicle } from './chronicle';
 import { corpseTick, noteDeath } from './corpses';
 import { afterVote, darkCouncilOpen, trialPromises } from './council';
 import { actAll, escalate, killEmber, newEmber } from './embers';
+import { martialSettle } from './martial';
 import { executorTick, runOrder } from './order';
 import { alive, byName, darkCard, nameOf, repGone, segFull } from './state';
+
+export { darkPowersEnd } from './martial';
 
 // S1b가 S1a 구간 다섯 단계에 붙는 곳(3장 표). turn.ts는 이 파일의 함수만 부른다. g.dark가 없으면 모두 아무 일도 안 한다.
 // 죽음(death.ts)과 의회(politics.ts)엔 훅 목록으로 붙는다. 이 파일을 불러오면 등록된다.
@@ -40,6 +43,17 @@ export function darkPrep(g: Game): void {
     darkCard(g, { kind: 'dark:armory' });
   }
   investigate(g);
+  // 5.3 대권이 끝나는 구간(포고할 수 있는 마지막 구간)의 카드. 대권마다 한 번이라 이미 길을 골랐으면 다시 내지 않는다.
+  if (lawActive(g, 'emergency_powers') && g.decreeLeft === 1 && d.powersPlan === undefined && !g.cards.some(k => k.kind === 'dark:powers_end')) {
+    darkCard(g, { kind: 'dark:powers_end' });
+  }
+  // 5.4 경비대 재판: 계엄 중 재판에 넘긴 사건마다 한 장(같은 사건 카드가 떠 있으면 다시 내지 않는다).
+  if (d.martial) {
+    for (const c of d.cases) {
+      if (c.status !== 'trial' || c.convicted || !topByClues(g, c) || g.cards.some(k => k.kind === 'dark:gtrial' && k.n === c.id)) continue;
+      darkCard(g, { kind: 'dark:gtrial', comm: c.victimComm, n: c.id });
+    }
+  }
 }
 
 /** 이동(출발 직후, 파업으로 서도): 임박했던 일이 일어나고, 사고·밤으로 정한 명령이 실행된다. */
@@ -83,6 +97,9 @@ export function darkHaulMult(g: Game): number {
 export function darkSettle(g: Game): void {
   const d = g.dark;
   if (!d) return;
+  // 계엄의 유지비와 쿠데타 판정이 먼저다(S1a 정산의 신임 위기·긴장 위기보다 앞). 쿠데타로 판이 끝났으면 이후를 건너뛴다.
+  martialSettle(g);
+  if (g.phase === 'end') return;
   corpseTick(g);
   crowdTick(g);
   truthTick(g);

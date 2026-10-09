@@ -241,14 +241,16 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
     if (at !== undefined && g.session - at >= P.repealCool) options.push({ law, repeal: true });
   }
   // 대권이 끝난 포고의 추인을 가장 먼저 둔다(법 16: 추인하지 않은 포고는 사라진다).
+  const motions = motionsNow(g);
+  const ranked = (r: string) => motions.filter(m => MOTIONS[m.motion].rank === r);
+  const lead = ranked('ratify').filter(m => MOTIONS[m.motion].lead);
   const merged: Agenda[] = [
+    ...lead,
     ...(g.ratify ?? []).filter(l => lawActive(g, l)).map(law => ({ law, repeal: false, ratify: true })),
     ...(g.ratifyRepeal ?? []).filter(l => !lawActive(g, l)).map(law => ({ law, repeal: true, ratify: true })),
   ];
   // 법이 아닌 안건은 순서 자리(s1b_dark_path 12.3: crisis > ratify > confidence > ai > player)에 끼운다.
-  const motions = motionsNow(g);
-  const ranked = (r: string) => motions.filter(m => MOTIONS[m.motion].rank === r);
-  merged.push(...ranked('ratify'), ...ranked('confidence'));
+  merged.push(...ranked('ratify').filter(m => !lead.includes(m)), ...ranked('confidence'));
   // AI 지도자가 올린 안건(4장)은 그다음에 둔다.
   for (const p of g.proposals) {
     if (!isLawAgenda(p) || options.some(o => sameAgenda(o, p))) merged.push(p);
@@ -302,7 +304,15 @@ export function openCouncil(g: Game, emergency = false): void {
     const secret = addSecret(g);
     journal(g, `귀환 검사에서 ${COMM_NAME[secret.about]} 대표의 약점이 드러났다.`, 'dark');
   }
-  const { options } = agendaOptions(g);
+  let { options } = agendaOptions(g);
+  // S1b 계엄 회기(s1b_martial_impl 3장): 법 제정·폐지만 안건이 된다. 추인·AI 발의·법이 아닌 안건은 없고, 안건을 넘겨받은 칸도 없다.
+  // 비상대권 자체는 계엄 중 포고로 다시 세울 수 없다(계엄은 법이 아니라 상태다).
+  const martial = !!g.dark?.martial && !emergency;
+  if (martial) {
+    options = options.filter(isLawAgenda).filter(o => !o.ratify && o.law !== 'emergency_powers');
+    g.proposals = [];
+    g.agendaHolder = null;
+  }
   let idx = 0;
   if (g.agendaHolder) {
     // 안건 선택권을 넘긴 집단이 고른다: 그 집단이 가장 좋아하는 안건.
@@ -313,7 +323,7 @@ export function openCouncil(g: Game, emergency = false): void {
       if (sc > best) { best = sc; idx = i; }
     });
   }
-  g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}) };
+  g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}), ...(martial ? { martial } : {}) };
   if (g.agendaHolder && options.length > 0) journal(g, `${COMM_NAME[g.agendaHolder]}이(가) 안건을 골랐다: ${agendaTitle(options[idx])}.`);
   g.agendaHolder = null;
   for (const hook of COUNCIL_HOOKS) hook.open?.(g);
@@ -366,6 +376,7 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
   const council = g.council;
   const agenda = currentAgenda(g);
   if (!council || !agenda) return { ok: false, why: '회기가 아니다' };
+  if (council.martial) return { ok: false, why: '계엄 중엔 거래가 없다' };
   if (preVote(g)) return { ok: false, why: '신임 표결엔 거래하지 않는다' };
   if (council.result) return { ok: false, why: '표결이 끝났다' };
   if (council.deals.some(d => d.comm === c)) return { ok: false, why: '이미 거래했다' };
@@ -547,6 +558,8 @@ export const DECREE_REL = 3;
 
 /** 이번 구간에 포고할 수 있나: 대권 기간이고, 이번 구간엔 아직 포고하지 않았다. */
 export function canDecree(g: Game): boolean {
+  // S1b 계엄 회기: 의회 대신 열차장이 법 하나를 포고한다(회기마다 한 번, 결과가 서면 닫힌다).
+  if (g.dark?.martial && g.council?.martial && g.phase === 'council') return !g.council.result;
   return g.decreeLeft > 0 && g.decreeSeg !== g.seg;
 }
 
@@ -601,6 +614,8 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   if (!council || !agenda || council.result) return null;
   // 포고는 법만 한다. 추인과 법이 아닌 안건은 의회가 표결한다.
   if (decree && (!canDecree(g) || !isLawAgenda(agenda) || agenda.ratify)) return null;
+  // 계엄 회기엔 표결이 없다. 포고만 된다.
+  if (council.martial && !decree) return null;
   const need = agendaNeed(agenda);
   const map = blocs(g, agenda, council.deals);
   // 법 안건 앞의 표결(정기 신임)은 회기의 표결이 아니다. 옮긴 표, 유도 투표, AI 발의는 법 안건 표결에 남긴다.
@@ -670,12 +685,15 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   if (decree) {
     // 대권 동안 구간마다 하나씩 포고할 수 있다. 대권이 끝나면 의회가 추인해야 남는다.
     g.decreeSeg = g.seg;
-    if (agenda.repeal) (g.decreedRepeals ??= []).push(agenda.law);
-    else (g.decreed ??= []).push(agenda.law);
+    // 계엄 중 포고는 g.decreed에 쌓지 않는다(추인 안건이 되지 않는다). dark/council.ts afterVote가 계엄 기록(martial.decreed)에 적는다.
+    if (!council.martial) {
+      if (agenda.repeal) (g.decreedRepeals ??= []).push(agenda.law);
+      else (g.decreed ??= []).push(agenda.law);
+    }
     // 대권을 쥐는 값(R3 카드 3): 포고마다 긴장 +5, 그 포고를 싫어하는 칸과 관계 −3.
     g.tension = clamp(g.tension + 5, 0, 100);
     for (const c of COMMS) if (stance(g, c, agenda, false).score <= -3) g.comms[c].rel = clamp(g.comms[c].rel - DECREE_REL, -100, 100);
-    journal(g, `비상대권으로 ${title}을(를) 포고했다.`, 'dark');
+    journal(g, council.martial ? `계엄 포고로 ${title}을(를) 정했다.` : `비상대권으로 ${title}을(를) 포고했다.`, 'dark');
   } else {
     journal(g, `${title}: 찬성 ${yes}, 반대 ${no}${absent ? `, 부재 ${absent}` : ''}. ${passed ? '가결' : '부결'}.`, passed ? 'good' : 'bad');
   }
@@ -767,6 +785,7 @@ export function repealLaw(g: Game, law: LawId): void {
 
 // ---- 공동체 행동(3.6) ----
 export function supportComm(g: Game, c: Comm): string | null {
+  if (c === 'guard' && g.dark?.martial) return '계엄 중엔 지지로 충성을 사지 못한다';
   if (g.actedSeg === g.seg) return '이번 구간엔 이미 했다';
   if (g.lux < 2) return '사치품 2가 필요하다';
   const s = g.comms[c];

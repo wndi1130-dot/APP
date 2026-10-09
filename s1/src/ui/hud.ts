@@ -8,6 +8,7 @@ import { departLever } from './depart';
 import type { Fx, FxKey } from './fx';
 import type { Comm } from '../game';
 import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
+import { darkTrustMeter } from './dark'; // S1b 훅: 계엄 중 신임 자리의 경비대 충성
 
 // 위 막대: 왼쪽 신임·긴장, 가운데 불만·중립·지지 띠(양 끝 아이콘이 단추), 오른쪽 자원.
 // 아래 막대: 왼쪽 메뉴와 일지, 가운데 단계 표시줄과 한눈에 보기, 오른쪽 주 단추.
@@ -88,7 +89,7 @@ export function topBar(view: View): HTMLElement {
   const rels = fx ? (Object.keys(fx.rel) as Comm[]) : [];
   return h('header', { class: cx('top', fx?.band && 'fx-band'), ...(fx?.band ? { 'data-anim': `fx-${fx.id}-band` } : {}) },
     h('div', { class: 'top__meters' },
-      meter('trust', '신임', g.trust, '--support', fx),
+      darkTrustMeter(view) ?? meter('trust', '신임', g.trust, '--support', fx),
       meter('tension', '긴장', g.tension, '--discontent', fx)),
     h('div', { class: 'band' },
       h('button', { class: cx('band__btn band__btn--unrest', ui.panel === 'unrest' && 'is-on'), 'data-action': 'panel', 'data-panel': 'unrest', 'aria-label': '불만 쪽 집단 펼치기' }, icon('fist')),

@@ -14,7 +14,8 @@ import profilesJson from '../../data/profiles.json';
 // S1a 한 판의 상태. 저장할 수 있게 함수 없는 평범한 값만 담는다.
 
 export type Phase = 'prep' | 'travel' | 'stop' | 'council' | 'settle' | 'end';
-export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt';
+/** coup: S1b 계엄 중 경비대 충성이 무너져 경비대장이 열차를 잡았다(s1b_dark_path 5.3, 둘째 묶음). */
+export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup';
 /** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
 /** 정차 작업조 명단에 더 붙는 사람(이름). S1b 정차 암살의 실행자와 대상이 여기서 붙는다(dark/order.ts). */
 export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
@@ -138,7 +139,7 @@ export type Agenda = LawAgenda | MotionAgenda;
 /** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
 export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe';
+export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees';
 /** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
 export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
 
@@ -165,6 +166,8 @@ export interface CouncilState {
   result: VoteResult | null;
   /** 회기가 아닌 구간에 열차장이 부른 비상 소집 */
   emergency?: boolean;
+  /** S1b 계엄 회기(s1b_martial_impl 3장): 법 안건만, 거래·정기 신임·재판 없음, 표결 대신 포고 하나 */
+  martial?: boolean;
   /** 안건 자리를 먹지 않고 법 안건 앞에 따로 여는 표결(S1b 정기 신임, s1b_dark_path 5.3). result가 서면 끝났다 */
   pre?: { agenda: MotionAgenda; result?: VoteResult };
 }

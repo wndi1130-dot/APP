@@ -1,9 +1,9 @@
 import { COMM_NAME, COMMS, LAWS } from '../data';
-import type { Comm } from '../data';
+import type { Comm, LawId } from '../data';
 import { MOTION_SOURCES, MOTIONS } from '../motions';
 import type { MotionDef } from '../motions';
-import { agendaTitle, aiAgendaPick, dealHolds, isLawAgenda, offend } from '../politics';
-import { clamp, END_LINK, journal, seats, stageOf } from '../state';
+import { agendaTitle, aiAgendaPick, dealHolds, enactLaw, isLawAgenda, offend, repealLaw, stance } from '../politics';
+import { clamp, END_LINK, journal, lawActive, seats, stageOf } from '../state';
 import type { Agenda, CouncilState, Game, LawAgenda, MotionAgenda, VoteResult } from '../state';
 import { B } from './data';
 import { caseById, crimeTitle, level, LEVEL_WORD, topByClues, updateFlags } from './cases';
@@ -130,13 +130,76 @@ function confFailed(g: Game): void {
   journal(g, '의회가 열차장을 믿지 않는다. 다음 회기엔 대표들이 안건을 고른다.', 'bad');
 }
 
-/** 비상대권 중 의회에 거는 일은 없다. 이 셋은 S1b 판에서만 안건이 된다. */
-Object.assign(MOTIONS, { trial: TRIAL, no_confidence: NO_CONFIDENCE, confidence: CONFIDENCE });
+/** 대권 연장(5.3 '의회에 묻는다'의 다음 회기 안건, 통치 67). 통과하면 대권 3구간이 다시 서고 그 사이 포고는 추인된 것으로 본다.
+ * 입장은 비상대권 법의 입장과 같다(stance가 법 입장의 물질·이념 몫을 돌려준다). 부결이면 아무 일도 없고, 포고는 이어서 추인 안건으로 오른다. */
+const EXTEND_POWERS: MotionDef = {
+  need: 67,
+  lean: (g, c) => {
+    const s = stance(g, c, { law: 'emergency_powers', repeal: false }, false);
+    return { mat: s.mat, ideo: s.ideo };
+  },
+  title: () => '비상대권 연장',
+  changes: () => ['통과: 비상대권 3구간이 다시 선다. 그 사이 포고는 추인된 것으로 본다', '부결: 포고는 이어서 추인 안건으로 오른다'],
+  onPass: g => {
+    enactLaw(g, 'emergency_powers', []);
+    g.ratify = [];
+    g.ratifyRepeal = [];
+    journal(g, '의회가 비상대권을 연장했다. 그동안의 포고는 추인된 것으로 본다.', 'dark');
+  },
+  onFail: () => { /* 아무 일도 없다 */ },
+  rank: 'ratify',
+  lead: true,
+};
+
+/** 계엄 포고 추인(5.3 '거둔 뒤의 포고'): 계엄 중 포고로 바꾼 법 전부를 안건 하나로 묶는다(일반 51). 입장 = 법마다의 입장 평균 + (스스로 거두고 경고가 없었으면 +2).
+ * 부결이면 포고로 통과한 법은 사라지고 포고로 폐지한 법은 되살아난다. 재상정 쿨다운은 따로 걸지 않는다(repealLaw·enactLaw가 남기는 repealedAt 말고는 손대지 않는다). */
+const RATIFY_DECREES: MotionDef = {
+  need: 51,
+  lean: (g, c) => {
+    const lifted = g.dark!.martialLifted;
+    const laws = [...(lifted?.decreed ?? []).map(law => ({ law, repeal: false })), ...(lifted?.repealed ?? []).map(law => ({ law, repeal: true }))];
+    let mat = 0;
+    let ideo = 0;
+    for (const a of laws) { const s = stance(g, c, a, false); mat += s.mat; ideo += s.ideo; }
+    const n = Math.max(1, laws.length);
+    return { mat: Math.round(mat / n) + (lifted?.bonus ? B.mlLiftBonus : 0), ideo: Math.round(ideo / n) };
+  },
+  title: () => '계엄 포고 추인',
+  changes: g => {
+    const lifted = g.dark!.martialLifted;
+    return [
+      ...(lifted?.decreed ?? []).map(l => `포고로 통과: ${LAWS[l].title}`),
+      ...(lifted?.repealed ?? []).map(l => `포고로 폐지: ${LAWS[l].title}`),
+      '통과: 모두 그대로 남는다',
+      '부결: 포고로 통과한 법은 사라지고 포고로 폐지한 법은 되살아난다',
+    ];
+  },
+  onPass: g => { g.dark!.stats.ratifyPassed += 1; journal(g, '의회가 계엄 중의 포고를 추인했다.', 'good'); },
+  onFail: g => {
+    g.dark!.stats.ratifyFailed += 1;
+    const lifted = g.dark!.martialLifted;
+    for (const law of lifted?.decreed ?? []) {
+      if (!lawActive(g, law)) continue;
+      repealLaw(g, law);
+      journal(g, `추인받지 못한 ${LAWS[law].title}이(가) 사라졌다.`, 'bad');
+    }
+    for (const law of lifted?.repealed ?? []) {
+      if (lawActive(g, law)) continue;
+      enactLaw(g, law, []);
+      journal(g, `포고로 폐지한 ${LAWS[law].title}이(가) 추인받지 못해 다시 걸렸다.`, 'bad');
+    }
+  },
+  rank: 'ratify',
+};
+
+/** 비상대권 중 의회에 거는 일은 없다. 이 다섯은 S1b 판에서만 안건이 된다. */
+Object.assign(MOTIONS, { trial: TRIAL, no_confidence: NO_CONFIDENCE, confidence: CONFIDENCE, extend_powers: EXTEND_POWERS, ratify_decrees: RATIFY_DECREES });
 
 /** 회기마다 낼 S1b 안건 */
 MOTION_SOURCES.push(g => {
   const d = g.dark;
-  if (!d) return [];
+  // 계엄 중엔 의회가 닫혀 있다: 불신임 동의(쌓이기만 한다)도 재판(경비대 재판이 대신한다)도 오르지 않는다(5.3).
+  if (!d || d.martial) return [];
   const out: MotionAgenda[] = [];
   // 불신임: 적의 3 지도자가 올렸다(그 지도자가 아직 대표이고 조용히 처리되지 않았으면). 신임이 낮다는 조건만으로는
   // 오르지 않는다(사용자 결정 '정기 투표'가 '조건부 불신임'을 대신한다, 5.3).
@@ -150,14 +213,36 @@ MOTION_SOURCES.push(g => {
   return out;
 });
 
+/** 대권 연장 안건('의회에 묻는다')과 계엄 포고 추인 안건(스스로 거둔 뒤)을 회기마다 낸다(5.3). 안건 수는 표결 뒤 afterVote가 정리한다. */
+MOTION_SOURCES.push(g => {
+  const d = g.dark;
+  if (!d || d.martial) return [];
+  const out: MotionAgenda[] = [];
+  if (d.extendAsk) out.push({ kind: 'motion', motion: 'extend_powers' });
+  const lifted = d.martialLifted;
+  if (lifted) {
+    if (lifted.decreed.length + lifted.repealed.length > 0) out.push({ kind: 'motion', motion: 'ratify_decrees' });
+    else delete d.martialLifted; // 포고가 없었으면 묶을 것도 없다
+  }
+  return out;
+});
+
 /** 의회를 연 직후(turn.ts 훅): 재판을 걸어 둔 게 있으면 그 안건을 먼저 고른 자리에 둔다(열차장이 이미 넘긴 일).
  * 위기 법에 밀려 재판이 못 오른 사건은 군중 시계가 그 회기만큼 한 번 멈춘다(4.4 밀린 안건의 기한). */
 export function darkCouncilOpen(g: Game): void {
   const d = g.dark;
   const council = g.council;
   if (!d || !council) return;
+  // 계엄 회기(5.3): 정기 신임, 신임 잠금, 재판 안건 끼우기, 재판 약속 점검(councilAt), 정기 신임 간격(confSince) 모두 건너뛴다. 의회가 멈춰 있다.
+  if (council.martial) return;
   d.councilAt = g.session;
-  // 정기 회기만 센다(비상 소집은 아니다). 계엄·내전은 아직 코드에 없다(그때 의회가 멈추면 여기서 세지 않는다, 5.3).
+  // 대권 연장은 정기 회기 안건이다. 비상 소집 회기엔 오르지 않고 다음 정기 회기까지 남는다.
+  if (council.emergency && council.options.some(o => !isLawAgenda(o) && o.motion === 'extend_powers')) {
+    const cur = council.options[council.idx];
+    council.options = council.options.filter(o => isLawAgenda(o) || o.motion !== 'extend_powers');
+    council.idx = Math.max(0, council.options.indexOf(cur));
+  }
+  // 정기 회기만 센다(비상 소집은 아니다). 계엄 회기는 위에서 이미 빠졌다(의회가 멈추면 여기서 세지 않는다, 5.3).
   if (!council.emergency) {
     if (d.confLock) {
       d.confLock -= 1;
@@ -227,6 +312,14 @@ export function afterVote(g: Game, agenda: Agenda, r: VoteResult): void {
   if (!d || g.phase === 'end') return;
   // 불신임은 표결을 거쳐야 끝난다(부결이면 다시 조건이 서야 오른다). 목록에 오르기만 하고 다른 안건을 고르면 남는다.
   if (!isLawAgenda(agenda) && agenda.motion === 'no_confidence') { d.confBy = null; d.confLeader = null; }
+  // 표결이 끝나면 대권 연장 안건과 계엄 포고 추인 안건은 다시 오르지 않는다(5.3).
+  if (!isLawAgenda(agenda) && agenda.motion === 'extend_powers') d.extendAsk = false;
+  if (!isLawAgenda(agenda) && agenda.motion === 'ratify_decrees') delete d.martialLifted;
+  // 계엄 포고(5.3): 포고마다 경비대 관계 −5(경비대가 그 법을 집행하는 몫). 바꾼 법은 계엄 기록에 적고, 거둘 때 안건 하나로 묶는다.
+  if (r.decree && d.martial && isLawAgenda(agenda)) {
+    g.comms.guard.rel = clamp(g.comms.guard.rel - B.mlDecreeLoyal, -100, 100);
+    (agenda.repeal ? d.martial.repealed : d.martial.decreed).push(agenda.law);
+  }
   if (isLawAgenda(agenda) && r.passed && !agenda.repeal && !agenda.forced && !agenda.ratify && LAWS[agenda.law].tag === '가혹') cross(g, 'harsh_chosen');
   // 포고와 정기 신임 표결은 원수 대표가 갈려도 불씨를 만들지 않는다(신임은 칸 대 칸의 다툼이 아니다, 6차 시뮬레이션과 같게).
   if (r.decree || (!isLawAgenda(agenda) && agenda.motion === 'confidence')) return;
