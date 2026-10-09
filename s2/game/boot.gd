@@ -4,6 +4,8 @@ extends Node
 
 const FieldGame = preload("res://game/field_game.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+## Shader gallery (fx library), opened from the menu for a look on the phone.
+const GALLERY_SCENE := "res://fx/gallery.tscn"
 
 const CHOICES: Array = [
 	["raiders", "약탈자", [[true, "있음"], [false, "없음"]]],
@@ -78,6 +80,12 @@ func _show_menu() -> void:
 	perf.custom_minimum_size = Vector2(240, 64)
 	perf.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://scenes/main.tscn"))
 	go.add_child(perf)
+	var gallery := Button.new()
+	gallery.name = "GalleryButton"
+	gallery.text = "셰이더 보기"
+	gallery.custom_minimum_size = Vector2(240, 64)
+	gallery.pressed.connect(func() -> void: get_tree().change_scene_to_file(GALLERY_SCENE))
+	go.add_child(gallery)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
