@@ -1,6 +1,6 @@
 import { COMMS, COMM_NAME, TRAIT_BAN, TRAITS } from './data';
 import type { Comm, Trait } from './data';
-import { addCard, drawPerson, isGone, journal, lawActive, PROFILES, situation } from './state';
+import { addCard, clamp, drawPerson, isGone, journal, lawActive, PROFILES, situation } from './state';
 import type { Game, Leader, Profile } from './state';
 import familiesJson from '../../generated/profile_families.json';
 
@@ -174,6 +174,24 @@ export function elderCandidate(g: Game): Profile | null {
   return alive.filter(p => p.age >= 60).sort((a, b) => b.age - a.age)[0] ?? null;
 }
 
+/** 붙잡은 노인이 밤에 혼자 내리는 일(politics_detail 6.3, 2026-10-08 사용자 결정). 확률과 효과는 제안. */
+export const ELDER_NIGHT = { segs: 2, food: 20, chance: 0.3, rel: -5 } as const;
+
+/** 붙잡은 뒤 2구간 동안 식량이 바닥이면 정산마다 30%로 밤에 혼자 내린다. 카드는 없고 일지 한 줄. 판에 한 번.
+ * 노인이 스스로 정한 일이라 열차장 신임은 건드리지 않는다(인원 −1, 그 칸 관계 −5). */
+function elderNightTick(g: Game, rnd: () => number): void {
+  const h = g.elderHeld;
+  if (!h) return;
+  if (g.seg > h.until || isGone(g, h.who)) { g.elderHeld = null; return; }
+  if (g.seg === h.at || g.food >= ELDER_NIGHT.food) return;
+  if (rnd() >= ELDER_NIGHT.chance) return;
+  g.elderHeld = null;
+  g.comms[h.comm].pop = Math.max(1, g.comms[h.comm].pop - 1);
+  g.comms[h.comm].rel = clamp(g.comms[h.comm].rel + ELDER_NIGHT.rel, -100, 100);
+  (g.left ??= []).push(h.who);
+  journal(g, `${h.who}이(가) 밤에 혼자 내렸다.`, 'dark');
+}
+
 function elderTick(g: Game): void {
   if (g.elderAsked) return;
   if (!(g.food < 20 || situation(g, 'tail')[1] < 30)) return;
@@ -199,11 +217,12 @@ export function birthSeg(seed: string): number | null {
   return BIRTH.from + (Math.floor(h / 1000) % (BIRTH.to - BIRTH.from + 1));
 }
 
+/** 출산 카드의 어머니는 프로필 성별이 여성인 사람만 고른다(politics_detail 6장: 어머니가 이름을 짓는다). 후보가 없으면 null이고, 호출한 쪽은 카드를 내지 않는다. */
 export function motherOf(g: Game, c: Comm): Profile | null {
   const fam = FAMILIES.filter(f => f.community === c).flatMap(f => f.parents).map(byId)
-    .find(p => p && !isGone(g, p.name) && p.age >= 18 && p.age <= 42);
+    .find(p => p && p.gender === 'female' && !isGone(g, p.name) && p.age >= 18 && p.age <= 42);
   if (fam) return fam;
-  return PROFILES.find(p => p.community === c && !isGone(g, p.name) && p.age >= 18 && p.age <= 40) ?? null;
+  return PROFILES.find(p => p.community === c && p.gender === 'female' && !isGone(g, p.name) && p.age >= 18 && p.age <= 40) ?? null;
 }
 
 function birthTick(g: Game): void {
@@ -244,6 +263,7 @@ export function peopleTick(g: Game, rnd: () => number): void {
   });
   weakTick(g);
   sickTick(g, rnd);
+  elderNightTick(g, rnd);
   elderTick(g);
   birthTick(g);
 }

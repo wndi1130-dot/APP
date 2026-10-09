@@ -21,7 +21,7 @@ export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
 export const CREW_BUSY: ((g: Game) => string[])[] = [];
 export const END_LINK: { finish: (g: Game, end: EndKind) => void } = { finish: (g, end) => { g.end = end; g.phase = 'end'; } };
 
-export interface Profile { id: string; name: string; name_lang?: string; age: number; community: Comm; like: string; dislike: string; hometown: string }
+export interface Profile { id: string; name: string; name_lang?: string; gender: 'male' | 'female'; age: number; community: Comm; like: string; dislike: string; hometown: string }
 export const PROFILES = profilesJson as unknown as Profile[];
 
 export interface Leader {
@@ -243,6 +243,8 @@ export interface Game {
   tempBase?: { c: Comm; i: 0 | 1 | 2 | 3; v: number; until: number }[];
   sickCount?: number;
   elderAsked?: boolean;
+  /** 붙잡은 노인(사람의 무게 A3). 붙잡은 뒤 2구간 동안 식량이 바닥이면 밤에 혼자 내릴 수 있다. 내렸거나 기한이 지나면 지운다. */
+  elderHeld?: { who: string; comm: Comm; at: number; until: number } | null;
   /** 스스로 열차에서 내린 사람 */
   left?: string[];
   /** 승강장에 남은 사람(출발 확인 쪽지, presentation_motion 5b.5). near면 쪽지 첫 줄에 '무리가 가깝다'. 출발하면 비운다 */

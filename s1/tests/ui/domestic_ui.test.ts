@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { advance, chooseCard, cloneGame, createGame, createS1cGame } from '../../src/game';
 import type { Game } from '../../src/game';
+import { attachCar } from '../../src/game/domestic/cars';
 import { CARS } from '../../src/ui/common';
 import type { Ui } from '../../src/ui/common';
 import {
-  H6_IDLE_MS, domesticActive, domesticOp, h6Input, h6Render, h6Summary, handleDomestic, newGame, stayLocked, trainCars,
+  domesticActive, domesticOp, h6Input, h6Render, h6Summary, h6Visibility, handleDomestic, newGame, stayLocked, trainCars,
 } from '../../src/ui/domestic';
 import type { DomCtx, H6Clock } from '../../src/ui/domestic';
 import { applyStep } from '../../src/ui/repro';
@@ -46,15 +47,36 @@ describe('홈 편성', () => {
     expect(trainCars(createS1cGame('a')).map(c => c.id)).toEqual(CARS.map(c => c.id));
   });
 
-  it('칸 순서와 덧붙인 칸을 따른다(덧붙인 칸은 꼬리 끝, 기관차는 늘 오른쪽 끝)', () => {
+  it('칸 순서를 따른다(기관차는 늘 오른쪽 끝)', () => {
     const g = createS1cGame('a');
     g.dom!.cars = ['workshop', 'front', 'captain', 'guard', 'tail1', 'dining', 'medtech', 'store', 'cold', 'tail2', 'tail3'];
-    g.dom!.extraCars = ['store', 'coach'];
     const ids = trainCars(g).map(c => c.id);
-    expect(ids.slice(0, 3)).toEqual(['extra1', 'extra0', 'tail3']);
+    expect(ids.slice(0, 3)).toEqual(['tail3', 'tail2', 'cold']);
     expect(ids.slice(-2)).toEqual(['engine', 'loco']);
     expect(ids.indexOf('tail1')).toBeGreaterThan(ids.indexOf('dining'));
-    expect(trainCars(g).find(c => c.id === 'extra1')?.comm).toBe('tail');
+  });
+
+  it('덧붙인 칸도 실제 id로 찾아 dom.cars 순서대로 그린다(꼬리 끝에 붙인 뒤 순서를 바꿔도)', () => {
+    const g = createS1cGame('a');
+    attachCar(g, 'store');
+    attachCar(g, 'coach');
+    expect(g.dom!.cars.slice(-2)).toEqual(['store1', 'coach2']);
+    const ids = () => trainCars(g).map(c => c.id);
+    // 붙인 직후: 오른쪽이 앞, 왼쪽이 꼬리 끝이니 d.cars를 뒤집은 순서 + 기관차
+    expect(ids()).toEqual([...g.dom!.cars].reverse().concat(['engine', 'loco']));
+    expect(ids().slice(0, 2)).toEqual(['coach2', 'store1']);
+    // 칸 순서 바꾸기로 덧붙인 칸 둘을 가운데로 옮긴다
+    const moved = g.dom!.cars.filter(c => c !== 'store1' && c !== 'coach2');
+    moved.splice(5, 0, 'coach2', 'store1');
+    g.dom!.cars = moved;
+    expect(ids()).toEqual([...moved].reverse().concat(['engine', 'loco']));
+    expect(ids().indexOf('store1')).toBeGreaterThan(0);
+    const coach = trainCars(g).find(c => c.id === 'coach2');
+    expect(coach?.comm).toBe('tail');
+    expect(coach?.kind).toBe('comm');
+    expect(trainCars(g).find(c => c.id === 'store1')?.kind).toBe('freight');
+    // 기본 칸의 그림은 그대로
+    for (const base of CARS) expect(trainCars(g).find(c => c.id === base.id)).toBe(base);
   });
 
   it('새 판은 내정 스위치를 이어 간다', () => {
@@ -93,7 +115,7 @@ describe('칸 순서 바꾸기 입력', () => {
 });
 
 describe('H6 재기', () => {
-  it('내정 화면이 열려 있던 시간만, 30초 넘게 손을 놓은 시간은 빼고 센다', () => {
+  it('내정 화면이 열려 있던 시간만 센다. 손을 놓고 읽는 시간도 센다(30초 컷 없음)', () => {
     const g = createS1cGame('h6');
     const clock: H6Clock = { since: 0, seg: null };
     // 칸 창을 연다 → 10초 뒤 레버 → 100초 손을 놓았다가 닫는다.
@@ -106,9 +128,37 @@ describe('H6 재기', () => {
     // 닫힌 동안은 세지 않는다.
     h6Input(g, clock, 500_000, 'advance');
     const seg = g.dom!.h6.segs[String(g.seg)];
-    expect(seg.ms).toBe(10_000 + H6_IDLE_MS);
+    expect(seg.ms).toBe(110_000);
     expect(seg.ops).toBe(1);
-    expect(h6Summary(g)!.maxS).toBe(40);
+    expect(h6Summary(g)!.maxS).toBe(110);
+    // 구간 전체 시간은 화면과 상관없이 처음 그린 때부터 마지막 입력까지다.
+    expect(seg.all).toBe(499_000);
+  });
+
+  it('앱이 뒤로 간 시간은 내정 시간과 구간 전체 시간에서 뺀다', () => {
+    const g = createS1cGame('h6-hidden');
+    const clock: H6Clock = { since: 0, seg: null };
+    h6Render(g, ui({ carPop: 'engine' }), clock, 1_000);
+    h6Visibility(g, clock, 21_000, true);
+    h6Visibility(g, clock, 621_000, false);
+    h6Input(g, clock, 631_000, 'dom-hot');
+    const seg = g.dom!.h6.segs[String(g.seg)];
+    expect(seg.ms).toBe(30_000);
+    expect(seg.all).toBe(30_000);
+  });
+
+  it('구간 전체 시간은 평시와 위기 구간을 따로 요약한다', () => {
+    const g = createS1cGame('h6-crisis');
+    const clock: H6Clock = { since: 0, seg: null };
+    h6Render(g, ui(), clock, 1_000);
+    h6Input(g, clock, 41_000, 'advance');
+    g.seg += 1;
+    g.coal = 0; // 석탄 바닥: 위기 구간
+    h6Render(g, ui(), clock, 41_000);
+    h6Input(g, clock, 101_000, 'advance');
+    const sm = h6Summary(g)!;
+    expect(sm.allPeaceS).toBe(40);
+    expect(sm.allCrisisS).toBe(60);
   });
 
   it('의회와 정차 카드는 내정 시간이 아니고, 내정 카드는 내정 시간이다', () => {
