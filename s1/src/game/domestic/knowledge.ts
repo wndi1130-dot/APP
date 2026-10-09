@@ -22,7 +22,7 @@ export function fieldOwner(g: Game, f: Field): Comm {
 
 /** 가르칠 수 있는 사람: 견습 이상이고 지금 가르치거나 쓰지 않는다. 없으면 매뉴얼. */
 export function freeTeacher(g: Game, f: Field): DomPerson | 'manual' | null {
-  const t = [...knowers(g, f)].filter(p => !p.pupil && !(p.writing ?? 0) && !p.learn).sort((a, b) => b.skill - a.skill)[0];
+  const t = [...knowers(g, f)].filter(p => !p.pupil && !(p.writing ?? 0) && !p.learn && !p.resting).sort((a, b) => b.skill - a.skill)[0];
   if (t) return t;
   return dom(g).manuals[f] && !living(g).some(p => p.field === f && p.learn?.by === 'manual') ? 'manual' : null;
 }
@@ -65,17 +65,17 @@ const FIELD_LABEL: Record<Field, string> = { engine: '기관', med: '의술', cr
 export function manualWriter(g: Game, f: Field): { who?: DomPerson; why?: string } {
   const d = dom(g);
   if (d.manuals[f]) return { why: '이미 있다' };
-  const who = [...knowers(g, f)].filter(p => p.skill >= 2 && !(p.writing ?? 0)).sort((a, b) => b.skill - a.skill)[0];
+  const who = [...knowers(g, f)].filter(p => p.skill >= 2 && !(p.writing ?? 0) && !p.resting).sort((a, b) => b.skill - a.skill)[0];
   if (!who) return { why: '숙련 이상이 없다' };
   if (f === 'engine' && g.comms.engine.rel <= -15) return { who, why: '기관실이 거절한다' };
   if (g.comms[who.comm].rel <= -40) return { who, why: '그 칸이 거절한다' };
   return { who };
 }
 
-export function startManual(g: Game, f: Field): boolean {
+export function startManual(g: Game, f: Field, segs: number = D.writeSegs): boolean {
   const { who, why } = manualWriter(g, f);
   if (!who || why) return false;
-  who.writing = D.writeSegs;
+  who.writing = segs;
   journal(g, `${who.name}이(가) ${FIELD_LABEL[f]} 매뉴얼을 쓰기 시작했다.`);
   return true;
 }
@@ -119,6 +119,8 @@ export function knowledgeTick(g: Game): void {
       if (l.by !== 'manual') { const t = d.people.find(x => x.id === l.by); if (t) { t.pupil = p.id; l.cap = t.skill; } } else l.cap = 2;
       journal(g, `${p.name}이(가) ${l.by === 'manual' ? '매뉴얼로' : '다른 스승에게'} 견습을 잇는다.`);
     }
+    // 스승이 쉬는 동안은 배우는 것도 멈춘다(8.9).
+    if (l.by !== 'manual' && d.people.find(x => x.id === l.by)?.resting) continue;
     l.left -= 1;
     if (l.left > 0) continue;
     const teacher = l.by === 'manual' ? null : d.people.find(x => x.id === l.by);
@@ -135,7 +137,7 @@ export function knowledgeTick(g: Game): void {
   }
   // 매뉴얼 쓰기
   for (const p of living(g)) {
-    if (!p.writing) continue;
+    if (!p.writing || p.resting) continue;
     p.writing -= 1;
     if (p.writing > 0) continue;
     delete p.writing;

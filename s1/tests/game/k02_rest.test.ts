@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, enableDark, PLACES, resolveStop, STAY } from '../../src/game';
+import { createGame, enableDark, PLACES, resolveStop, STAY, viewCard } from '../../src/game';
 import type { Game } from '../../src/game';
 import { level, openCase, punish, PUNISH_PROOF_REL } from '../../src/game/dark/cases';
 import type { Punish } from '../../src/game/dark/cases';
@@ -107,6 +107,34 @@ describe('K02 4. 벌의 반응은 증거 단계를 따른다', () => {
     expect(punished(2, 'ration').journal.some(t => t.includes('억울하다'))).toBe(false);
   });
 
+  it('피고가 피해 칸 사람이어도 증거로 벌하면 피해 칸 +2가 붙는다(4.4에 예외가 없다)', () => {
+    const g = darkGame('k02-4-same');
+    const actor = adults(g, 'front', { noRep: true })[0].id;
+    const c = openCase(g, { kind: 'heating', culprit: actor, victimComm: 'front', dead: false, clock: 3, where: '앞칸' });
+    const s = c.sus.find(x => x.culprit) as Suspect;
+    s.proxyFor = undefined;
+    s.clues = [...CLUES[2]];
+    const front = g.comms.front.rel;
+    punish(g, c, s, 'ration', 'trial');
+    expect(g.comms.front.rel - front).toBe(-2 + PUNISH_PROOF_REL);
+  });
+
+  it('벌 카드는 고르기 전에 근거 줄과 단계에 맞춘 관계 값을 보인다(내릴 때와 같은 값)', () => {
+    for (const lv of [0, 1, 2] as const) {
+      const g = darkGame(`k02-4-card-${lv}`);
+      const actor = adults(g, 'tail', { noRep: true })[0].id;
+      const c = openCase(g, { kind: 'heating', culprit: actor, victimComm: 'front', dead: false, clock: 3, where: '앞칸' });
+      const s = c.sus.find(x => x.culprit) as Suspect;
+      s.clues = [...CLUES[lv]];
+      const v = viewCard(g, { uid: 999, kind: 'dark:punish', n: c.id, who: s.id, comm: 'tail', text: 'trial', seg: g.seg } as never);
+      const extra = (label: string) => v.choices.find(ch => ch.label === label)?.extra ?? [];
+      expect(v.body).toContain(`근거(${['소문', '정황', '증거'][lv]})`);
+      expect(extra('배급을 끊는다')).toContain(`꼬리칸 관계 −${[5, 3, 2][lv]}`);
+      expect(extra('하차 명령')).toContain(`꼬리칸 관계 −${[12, 8, 4][lv]}`);
+      expect(extra('근신').some(x => x === '앞칸 관계 +2')).toBe(lv === 2);
+    }
+  });
+
   it('결과 줄에 무엇을 보고 벌했는지 단계와 단서 한 줄이 붙는다', () => {
     expect(punished(0, 'ration').lines).toContain('근거(소문): 단서는 없었다. 사람들이 그렇게 말했을 뿐이다.');
     expect(punished(1, 'ration').lines).toContain('근거(정황): foot 단서 줄');
@@ -144,6 +172,27 @@ describe('K02 3 뒤. 정차 명령이 정찰이 약속한 피해를 바꾸지 �
       }
     }
     expect(harmed).toBeGreaterThan(0);
+  });
+
+  it('자리 비움은 살아 돌아온 작업조만 세고, 명령에 다친 대상이 약속대로 죽으면 부상 셈을 되돌린다', () => {
+    let killed = 0;
+    let hurtThenDead = 0;
+    for (let i = 0; i < 120; i += 1) {
+      const { g, name } = crewOrder(`k02-3-away-${i}`, 'regular', PLACES.length - 1);
+      const crew = crewNames(g, 'tail', 6);
+      const fate = stopRisk(g).fate;
+      const away = g.comms.tail.away;
+      const injured = g.injured;
+      const res = resolveStop(g, true)!;
+      const gone = (n: string) => g.deaths.includes(n) || (g.left ?? []).includes(n);
+      expect(g.comms.tail.away - away).toBe(crew.filter(n => !gone(n)).length);
+      if (res.notes.some(n => n.startsWith('정찰 약속 밖의 죽음'))) killed += 1;
+      if (res.notes.some(n => n.startsWith('정찰 약속 밖의 부상')) && fate.dead.includes(name)) {
+        hurtThenDead += 1;
+        expect(g.injured - injured).toBe(res.injured.length);
+      }
+    }
+    expect(killed).toBeGreaterThan(0);
   });
 
   it('명령이 실패해 다친 대상은 부상으로 한 번만 센다', () => {

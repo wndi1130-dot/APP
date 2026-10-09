@@ -22,7 +22,7 @@ export function workPower(g: Game): number {
   const d = dom(g);
   const craft = topSkill(g, 'craft');
   let w = D.work * D.workSkill[craft] * ZONE_WORK[zoneOf(g, 'workshop')] * (1 + (D.w1Work - 1) * techMult(g, 'w1'));
-  if (d.people.some(p => p.alive && !p.gone && p.field === 'craft' && p.pupil)) w *= D.teachWork;
+  if (d.people.some(p => p.alive && !p.gone && p.field === 'craft' && p.pupil && !p.resting)) w *= D.teachWork;
   return w;
 }
 
@@ -101,29 +101,34 @@ export function finishCheck(g: Game, id: TechId): string | undefined {
 }
 
 /** 복원 시작. 원하는 쪽·싫어하는 쪽 관계는 시작할 때 바로 움직인다(결정 카드 규칙: 즉시 바뀌는 정치 변화). 취소해도 되돌리지 않는다(7.5).
- * relApplied: 카드 효과 줄이 이미 관계를 움직였다. */
+ * relApplied: 카드 효과 줄이 이미 관계를 움직였다.
+ * 예외는 E3 난방 배관(7.3): 관계는 시작이 아니라 의회 추인 표결 결과가 나올 때 결과의 변형으로 움직이고(pipe.ts), 추인 전엔 완성되지 않는다.
+ * 추인이 부결된 판(pipeFlip)에선 변형이 그쪽으로 고정되고 다시 표결하지 않는다. */
 export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', variant?: Variant, relApplied = false): boolean {
   const d = dom(g);
   const check = restoreCheck(g, id);
   if (mode === 'full' ? check.full : check.defect) return false;
   const def = TECHS[id];
+  const pipe = id === 'e3';
+  if (pipe && d.pipeFlip) variant = d.pipeFlip;
   if (def.variants && !variant) return false;
   const cost = restoreCost(id);
   d.parts -= cost.parts;
   d.wood -= cost.wood;
   d.frags[def.branch] -= mode === 'full' ? cost.frags : cost.defectFrags;
   d.cores -= cost.core;
-  d.techs[id] = { stage: 'restoring', defect: mode === 'defect', progress: 0, need: cost.work, ...(variant ? { variant } : {}) };
+  const asked = pipe && !d.pipeFlip;
+  d.techs[id] = { stage: 'restoring', defect: mode === 'defect', progress: 0, need: cost.work, ...(variant ? { variant } : {}), ...(asked ? { pending: true } : {}) };
   d.restoring = id;
   const moved = relMoved(g, id, variant);
   d.log.restores.push({ seg: g.seg, id, ...(variant ? { v: variant } : {}) });
-  if (!relApplied && !moved) {
+  if (!relApplied && !pipe && !moved) {
     const sides = techRelSides(id, variant);
     for (const c of sides.like) g.comms[c].rel = clamp(g.comms[c].rel + D.techRel, -100, 100);
     for (const c of sides.dislike) g.comms[c].rel = clamp(g.comms[c].rel - D.techRel, -100, 100);
   }
   if (d.researchPick === id) d.researchPick = null;
-  journal(g, `공방이 ${techTitle(g, id)} 복원을 시작했다${mode === 'defect' ? '(결함판)' : ''}.`);
+  journal(g, `공방이 ${techTitle(g, id)} 복원을 시작했다${mode === 'defect' ? '(결함판)' : ''}.${asked ? ' 다음 회기에 배관 추인을 받아야 끝난다.' : ''}`);
   return true;
 }
 
@@ -401,7 +406,8 @@ export function runWorkshop(g: Game): { used: number; did: string[] } {
       const spend = Math.min(w, st.need - st.progress);
       st.progress += spend;
       w -= spend;
-      if (st.progress >= st.need - 1e-9) { completeRestore(g, id); did.push(`${TECHS[id].name} 복원`); }
+      // E3은 추인 전엔 작업을 다 해도 완성되지 않는다(7.3). 추인을 받으면 다음 공방 작업에서 마친다.
+      if (st.progress >= st.need - 1e-9 && !st.pending) { completeRestore(g, id); did.push(`${TECHS[id].name} 복원`); }
     } else if (task === 'modify' && d.job) {
       const job = d.job;
       const spend = Math.min(w, job.need - job.progress);
@@ -421,7 +427,11 @@ export function workshopState(g: Game): { now: string; mode: 'work' | 'idle' | '
       if (d.scrap >= D.partScrap && d.wood >= D.partWood) return { now: '부품 만들기', mode: 'work' };
       if (!d.restoring && !d.job) return { now: '부품 재료가 모자라다', mode: 'short' };
     }
-    if (task === 'restore' && d.restoring) return { now: `복원: ${TECHS[d.restoring].name}`, mode: 'work' };
+    if (task === 'restore' && d.restoring) {
+      const st = d.techs[d.restoring];
+      if (st?.pending && st.progress >= st.need - 1e-9) return { now: '배관 추인을 기다린다', mode: 'idle' };
+      return { now: `복원: ${TECHS[d.restoring].name}`, mode: 'work' };
+    }
     if (task === 'modify' && d.job) return { now: `개조: ${jobTitle(d.job.kind, d.job.car)}`, mode: 'work' };
   }
   return { now: '쉬는 중', mode: 'idle' };

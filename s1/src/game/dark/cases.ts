@@ -281,6 +281,17 @@ function basisLine(s: Suspect, lv: 0 | 1 | 2): string {
   return clue ? `근거(${LEVEL_WORD[lv]}): ${clue.line}` : `근거(${LEVEL_WORD[lv]}): 단서는 없었다. 사람들이 그렇게 말했을 뿐이다.`;
 }
 
+/** 벌의 관계 손실(4.4 표의 정황 값 × 단계 배수, 정수로 반올림). 배급 −5/−3/−2, 하차 −12/−8/−4(소문/정황/증거). 카드와 punish가 같이 쓴다. */
+export function punishRelLoss(base: number, lv: 0 | 1 | 2): number {
+  return Math.round(base * PUNISH_REL_MULT[lv]);
+}
+
+/** 벌 카드가 고르기 전에 보일 것(4.4): 단계, 근거 한 줄, 배급·하차의 관계 손실. 벌을 내릴 때와 같은 값이다. */
+export function punishPreview(s: Suspect): { lv: 0 | 1 | 2; basis: string; ration: number; exile: number } {
+  const lv = level(s);
+  return { lv, basis: basisLine(s, lv), ration: punishRelLoss(3, lv), exile: punishRelLoss(8, lv) };
+}
+
 /** 벌(4.4 표). 벌은 긴장을 내리지 않는다. 군중 시계를 끝낼 뿐이다. */
 export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' | 'summary'): string[] {
   const d = g.dark!;
@@ -293,7 +304,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   const comm = commOf(g, s.id);
   // 벌의 반응은 벌할 때의 증거 단계를 따른다(4.4, K02 4). 표의 관계 값은 정황 기준이다.
   const lv = level(s);
-  const relLoss = (base: number) => Math.round(base * PUNISH_REL_MULT[lv]);
+  const relLoss = (base: number) => punishRelLoss(base, lv);
   c.status = 'closed';
   d.punished.push(s.id);
   switch (how) {
@@ -325,8 +336,8 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       break;
   }
   lines.push(basisLine(s, lv));
-  // 증거로 벌하면 피해 칸은 됐다고 본다. 소문으로 벌하면 피고 칸 대표가 억울하다는 줄을 남긴다.
-  if (lv === 2 && c.victimComm !== comm) g.comms[c.victimComm].rel = clamp(g.comms[c.victimComm].rel + PUNISH_PROOF_REL, -100, 100);
+  // 증거로 벌하면 피해 칸은 됐다고 본다(피고가 같은 칸 사람이어도 그렇다, 문서 4.4에 예외가 없다). 소문으로 벌하면 피고 칸 대표가 억울하다는 줄을 남긴다.
+  if (lv === 2) g.comms[c.victimComm].rel = clamp(g.comms[c.victimComm].rel + PUNISH_PROOF_REL, -100, 100);
   if (lv === 0) {
     const rep = g.comms[comm].leader;
     const who = rep.personId === s.id ? `${COMM_NAME[comm]} 사람들` : rep.name;

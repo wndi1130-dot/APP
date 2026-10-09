@@ -61,6 +61,10 @@ export const D = {
   learnSegs: [2, 4, 6], teachMult: 0.85, distributeRel: -10, guildRel: 3,
   // 8.4 매뉴얼: 쓰는 데 3구간, 읽기 없음→견습 3, 견습→숙련 4
   writeSegs: 3, writeMult: 0.85, readSegs: [3, 4], manualLoss: 0.05, engineManualRel: -10,
+  // 8.9 늙은 장인의 마지막(숫자는 제안): 첫 조짐 구간 범위, 첫 조짐에서 짙은 조짐까지 구간 범위, 견습을 서두르는 동안 / 쉬는 동안 그 분야 기술 곱,
+  // 쉬면 그 공동체 관계, 매뉴얼을 쓰는 구간, 쉬면 늦춰지는 구간, 의무장이 뽑히면 나이 하한과 상한
+  elderFirst: [8, 14], elderGap: [2, 3], elderPupilMult: 0.7, elderRestMult: 0.85, elderRestRel: 3, elderManualSegs: 2, elderRestDelay: 1,
+  elderMedAge: [60, 65],
   // 8.6 대체 불가 요구
   demandEvery: 6, demandRel: 3, demandFair: -3, sabotageMult: 0.8, sabotageSegs: 3, leaveChance: 0.1, grantFood: 0.5, grantSegs: 6,
   // 8.7 파업과의 연결

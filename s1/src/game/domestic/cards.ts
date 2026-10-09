@@ -10,6 +10,7 @@ import { BRANCH_NAME, D, FIELD_NAME, TECHS } from './data';
 import type { Field, TechId, Variant } from './data';
 import { resolvePressure } from './hooks';
 import { techUseLine } from './lawtech';
+import { chooseElder, elderPerson, elderPupil, elderSign, elderSpan, elderWhy } from './elder';
 import { hygieneWhy, resolveLice, resolveTyphus } from './hygiene';
 import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
@@ -48,6 +49,8 @@ function needComm(card: Card): Comm {
 }
 
 function sidesEffs(g: Game, id: TechId, v?: Variant): Eff[] {
+  // E3 난방 배관의 관계 ±5는 시작이 아니라 의회 추인 표결 결과가 나올 때 움직인다(7.3, pipe.ts).
+  if (id === 'e3') return [];
   if (relMoved(g, id, v)) return [];
   const s = techRelSides(id, v);
   return [...s.like.map(c => rel(c, D.techRel)), ...s.dislike.map(c => rel(c, -D.techRel))];
@@ -100,7 +103,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '두 갈래', speaker: sp(chief(g, def.branch)), required: true,
         body: `${def.name}은(는) 두 갈래로만 맞출 수 있다. 한 번 고르면 이 길에선 못 바꾼다.`,
         choices: (['a', 'b'] as Variant[]).map(v => ({
-          label: vs[v].label, say: vs[v].say, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`, extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : [])],
+          label: vs[v].label, say: vs[v].say, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`,
+          extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : []), ...(id === 'e3' ? ['다음 회기 추인 표결 뒤에 관계가 움직인다'] : [])],
         })),
       };
     }
@@ -268,6 +272,41 @@ export function domView(g: Game, card: Card): CardView | null {
           { label: '세워 둔다', say: '기관실과 이야기하겠다. 기다려라.', effs: [], special: 'dom:none' },
         ],
       };
+    case 'dom:elder': {
+      const p = personById(g, card.who) ?? elderPerson(g);
+      const arc = d.elder;
+      // 조짐 카드는 고를 수 있는 동안만 선택지가 있다. 그 사람이 먼저 죽었거나 이미 골랐으면 알리는 줄이다.
+      if (!p || !p.alive || p.gone || !arc || arc.stage >= 3 || arc.choice) {
+        return {
+          title: '장인의 조짐', speaker: sp(p), required: true,
+          body: `${p?.name ?? '그 사람'}의 일은 이미 끝났다.`,
+          choices: [{ label: '알았다', say: '알았다.', effs: [], special: 'dom:none' }],
+        };
+      }
+      const f = p.field;
+      const pupil = elderPupil(g, p);
+      const [s0, s1] = elderSpan();
+      const field = FIELD_NAME[f];
+      const why = (k: 'pupil' | 'manual' | 'rest') => elderWhy(g, p, k);
+      return {
+        title: '장인의 조짐', speaker: sp(p), required: true,
+        body: `${p.role} ${p.name}. ${elderSign(f, false)}. 조짐은 틀리지 않는다. ${s0}~${s1}구간 안에 쓰러진다.`,
+        choices: [
+          {
+            label: '견습을 서두른다', say: '견습을 붙여라. 남은 날에 다 가르쳐 달라고 해!', effs: [], special: 'dom:elder:pupil', disabled: why('pupil'),
+            extra: [pupil?.learn ? `견습 남은 구간 ${pupil.learn.left} → ${Math.max(1, Math.ceil(pupil.learn.left / 2))}` : '견습생이 붙는다', `${field} 기술 ×${D.elderPupilMult}`],
+          },
+          {
+            label: '매뉴얼을 남긴다', say: '매뉴얼을 남기게 해라.', effs: [], special: 'dom:elder:manual', disabled: why('manual'),
+            extra: [`${D.elderManualSegs}구간에 쓴다`, ...(f === 'engine' ? [`다 쓰면 기관실 관계 ${D.engineManualRel}`] : [])],
+          },
+          {
+            label: '쉬게 둔다', say: '쉬게 둬라. 일은 우리가 나눠 진다.', effs: [rel(p.comm, D.elderRestRel)], special: 'dom:elder:rest',
+            extra: [`쓰러지는 때가 ${D.elderRestDelay}구간 늦춰진다`, `${field} 기술 ×${D.elderRestMult}`],
+          },
+        ],
+      };
+    }
     case 'dom:pressure': {
       const last = (g.dom?.pressureStage ?? 0) >= 1;
       return {
@@ -297,8 +336,9 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
   switch (what) {
     case 'restore': {
       const id = card.text as TechId;
-      if (TECHS[id].variants) domCard(g, { kind: 'dom:fork', text: id, n: arg === 'defect' ? 1 : 0 });
-      else startRestore(g, id, arg as 'full' | 'defect', undefined, true);
+      // 추인이 부결된 E3은 변형이 고정돼 있어 갈래를 다시 묻지 않는다(7.3).
+      if (TECHS[id].variants && !(id === 'e3' && d.pipeFlip)) domCard(g, { kind: 'dom:fork', text: id, n: arg === 'defect' ? 1 : 0 });
+      else startRestore(g, id, arg as 'full' | 'defect', id === 'e3' ? d.pipeFlip : undefined, true);
       break;
     }
     case 'variant':
@@ -371,6 +411,9 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
     case 'stoker':
       d.stoker = arg as Comm;
       break;
+    case 'elder':
+      chooseElder(g, arg as 'pupil' | 'manual' | 'rest');
+      break;
     case 'pressure':
       if (resolvePressure(g, arg === 'vent')) { g.end = 'stranded'; g.phase = 'end'; }
       break;
@@ -390,5 +433,5 @@ registerDomesticCards();
 
 export const DOM_CARD_KINDS = [
   'dom:fit', 'dom:fork', 'dom:short', 'dom:pupil', 'dom:manual', 'dom:demand', 'dom:car', 'dom:give', 'dom:box', 'dom:full', 'dom:bed', 'dom:officer',
-  'dom:lice', 'dom:typhus', 'dom:stoker', 'dom:pressure',
+  'dom:lice', 'dom:typhus', 'dom:stoker', 'dom:pressure', 'dom:elder',
 ] as const;

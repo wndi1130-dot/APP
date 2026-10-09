@@ -7,7 +7,7 @@ import { revertLater } from '../people';
 import type { Card, Game } from '../state';
 import { B, EXECUTION, TRAIN_ORDER } from './data';
 import {
-  boardingText, caseById, coverUp, crimeTitle, crowdLine, eligible, level, LEVEL_WORD, mobTarget, openCase, protect, punish,
+  boardingText, caseById, coverUp, crimeTitle, crowdLine, eligible, level, LEVEL_WORD, mobTarget, openCase, protect, punish, punishPreview,
   scapegoat, sendTrial, settleTruth, summary, topByClues, updateFlags,
 } from './cases';
 import type { Punish } from './cases';
@@ -106,15 +106,21 @@ function view(g: Game, card: Card): CardView | null {
       const who = card.who ?? '';
       const name = nameOf(g, who);
       const execOff = EXECUTION.rule === 'none' ? '처형은 없다' : EXECUTION.rule === 'trial' && via === 'summary' ? '처형은 재판 판결로만' : undefined;
+      // 벌의 반응은 증거 단계를 따른다(4.4). 고르기 전에 근거 한 줄과 단계에 맞춘 관계 값을 보인다(벌을 내릴 때와 같은 값).
+      const pcs = caseById(g, card.n);
+      const s = pcs?.sus.find(x => x.id === who);
+      const pv = s ? punishPreview(s) : null;
+      const proof = pv?.lv === 2 && pcs ? [`${COMM_NAME[pcs.victimComm]} 관계 +2`] : [];
+      const head = via === 'trial' ? `의회가 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.` : `경비대장이 ${name}${eul(name)} 데려왔다.`;
       return {
         title: `${name}의 벌`, speaker: via === 'trial' ? undefined : officer(g, [who]), focus: c, required: true,
-        body: via === 'trial' ? `의회가 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.` : `경비대장이 ${name}${eul(name)} 데려왔다.`,
+        body: pv ? `${head}\n${pv.basis}` : head,
         faces: [name],
         choices: [
-          { label: '배급을 끊는다', say: '그 몫은 피해 칸에 돌려라. 사흘이다.', effs: [], special: 'dark:punish:ration' },
-          { label: '근신', say: '경비대 칸 구석에 앉혀라. 손은 묶지 마라.', effs: [], special: 'dark:punish:confine', extra: ['경비대 노출 +2/구간'] },
-          crossing(g, card, { label: '하차 명령', say: '짐 하나와 사흘 치 빵을 줘라. 다음 역에서 내린다.', effs: [], special: 'dark:punish:exile', extra: [`${COMM_NAME[c]} 관계 −8`, '공포 +5'] }, who),
-          ...(EXECUTION.rule === 'none' ? [] : [crossing(g, card, { label: '처형', say: '판결은 났다. 해가 지기 전에 끝내라.', effs: [], special: 'dark:punish:execute', disabled: execOff, extra: [`${COMM_NAME[c]} 적의 +1`, '공포 +10'] }, who)]),
+          { label: '배급을 끊는다', say: '그 몫은 피해 칸에 돌려라. 사흘이다.', effs: [], special: 'dark:punish:ration', extra: [`${COMM_NAME[c]} 관계 −${pv?.ration ?? 3}`, ...proof] },
+          { label: '근신', say: '경비대 칸 구석에 앉혀라. 손은 묶지 마라.', effs: [], special: 'dark:punish:confine', extra: ['경비대 노출 +2/구간', ...proof] },
+          crossing(g, card, { label: '하차 명령', say: '짐 하나와 사흘 치 빵을 줘라. 다음 역에서 내린다.', effs: [], special: 'dark:punish:exile', extra: [`${COMM_NAME[c]} 관계 −${pv?.exile ?? 8}`, '공포 +5', ...proof] }, who),
+          ...(EXECUTION.rule === 'none' ? [] : [crossing(g, card, { label: '처형', say: '판결은 났다. 해가 지기 전에 끝내라.', effs: [], special: 'dark:punish:execute', disabled: execOff, extra: [`${COMM_NAME[c]} 적의 +1`, '공포 +10', ...proof] }, who)]),
         ],
       };
     }
