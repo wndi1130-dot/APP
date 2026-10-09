@@ -16,6 +16,7 @@ from transliterate import transcribe
 
 ROOT = Path(__file__).resolve().parent
 CORE = ("pl", "de", "cz")
+MIN_SURNAMES = {"de": 193}
 OTHER = ("uk", "sk", "hu", "lt")
 LANGUAGES = CORE + OTHER
 ALLOWED_BASES = {"용례", "규칙", "미확인"}
@@ -79,6 +80,8 @@ def make_language(language: str, source: dict) -> dict:
             selected.append(entry)
         surnames = selected
     min_given, min_surnames = (150, 200) if language in CORE else (30, 39 if language == "lt" else 40)
+    # 독일 성은 출처 표(상위 200)에서 편집 기준으로 뺀 자리를 채울 다음 순위가 없어 193개다.
+    min_surnames = MIN_SURNAMES.get(language, min_surnames)
     if len(given) < min_given or len(surnames) < min_surnames:
         raise ValueError(f"{language}: 최소 이름 {min_given}개와 성 {min_surnames}개가 필요합니다.")
     result = {"language": language, "given_names": [], "surnames": [],

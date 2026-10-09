@@ -4,19 +4,19 @@
   "sources": [
     {
       "path": "ref/names/pl.json",
-      "sha256": "3575a195c39810a94f706df911c6a86874b2f3b20d90a38a5f9b1b7ef858826a"
+      "sha256": "5a5fc22f258fc07c24573ebae8982dfbe18df147539e8a0256b003e1055b326d"
     },
     {
       "path": "ref/names/de.json",
-      "sha256": "d8367233e267e527b359c6ff07aa031497718d0ac623a7f4ca8ef4cf70c87c33"
+      "sha256": "5daf1980dc6070579fa755203eeeb8c2c10949e2c7b2636be9c80c0b6142f63f"
     },
     {
       "path": "ref/names/cz.json",
-      "sha256": "118d9912171a383fbda4c4d3b290e60c0348755247f4b3420a52fddee50e750d"
+      "sha256": "ce0688330edcb54f40ea89b3a4a7937760d04c0b4865072252577c09696e544b"
     },
     {
       "path": "ref/names/other.json",
-      "sha256": "6e38c96a32366a38c4440c800c1ac53b6801f1dfe18ed8645a4f01887bf595a3"
+      "sha256": "eeadec6e001477f3a24e82d7820961552e180d2749e8b0039ddf6db32bf158ce"
     },
     {
       "path": "ref/names/famous_blocklist.json",

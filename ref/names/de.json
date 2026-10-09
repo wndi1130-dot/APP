@@ -398,28 +398,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Levi",
-      "gender": "male",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 181,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 40,
-        "2020": 44,
-        "2021": 49,
-        "2022": 48
-      },
-      "derived_rank": 20,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "레비",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Samuel",
       "gender": "male",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -886,28 +864,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Malik",
-      "gender": "male",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 119,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 25,
-        "2020": 27,
-        "2021": 30,
-        "2022": 37
-      },
-      "derived_rank": 43,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "말리크",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Jonah",
       "gender": "male",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -1018,28 +974,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Aaron",
-      "gender": "male",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 106,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 25,
-        "2020": 34,
-        "2021": 30,
-        "2022": 17
-      },
-      "derived_rank": 49,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "아론",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Benjamin",
       "gender": "male",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -1146,28 +1080,6 @@
       "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
       "language": "de",
       "korean": "리누스",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
-      "original": "Emir",
-      "gender": "male",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 98,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 34,
-        "2020": 21,
-        "2021": 24,
-        "2022": 19
-      },
-      "derived_rank": 55,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "에미어",
       "korean_basis": "규칙",
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
@@ -1480,28 +1392,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Ali",
-      "gender": "male",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 81,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 18,
-        "2020": 23,
-        "2021": 24,
-        "2022": 16
-      },
-      "derived_rank": 70,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "알리",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Carl",
       "gender": "male",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -1546,29 +1436,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
       "pronunciation_source": "https://gfds.de/vorname-der-woche-joschua/",
       "korean_note": "독일어권의 관련 형태 Joschua로 만든 전사 초안이다. 출처는 Joshua가 영어형이라고 구분한다. 해당 표본의 개인별 발음과 국립국어원 한글 표기는 미확인이다."
-    },
-    {
-      "original": "Hamza",
-      "gender": "male",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 78,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 22,
-        "2020": 14,
-        "2021": 22,
-        "2022": 20
-      },
-      "derived_rank": 74,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "함차",
-      "korean_basis": "미확인",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
-      "korean_note": "철자만으로 언어별·개인별 발음을 확정하지 못해 독일어 일반 규칙으로 만든 초안을 미확인으로 표시했다. 검토 대상 선정은 통계적 사실이나 당사자의 국적·민족에 관한 판단이 아니다."
     },
     {
       "original": "Daniel",
@@ -1655,6 +1522,138 @@
       "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
       "language": "de",
       "korean": "킬리안",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Lasse",
+      "gender": "male",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 69,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 17,
+        "2020": 18,
+        "2021": 23,
+        "2022": 11
+      },
+      "derived_rank": 79,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "라세",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Maxim",
+      "gender": "male",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 66,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 16,
+        "2020": 16,
+        "2021": 11,
+        "2022": 23
+      },
+      "derived_rank": 81,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "막심",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Nico",
+      "gender": "male",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 64,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 20,
+        "2020": 12,
+        "2021": 14,
+        "2022": 18
+      },
+      "derived_rank": 83,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "니코",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Ole",
+      "gender": "male",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 64,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 18,
+        "2020": 19,
+        "2021": 18,
+        "2022": 9
+      },
+      "derived_rank": 83,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "올레",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Till",
+      "gender": "male",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 64,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 16,
+        "2020": 20,
+        "2021": 16,
+        "2022": 12
+      },
+      "derived_rank": 83,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "틸",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Frederik",
+      "gender": "male",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 63,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 17,
+        "2020": 17,
+        "2021": 21,
+        "2022": 8
+      },
+      "derived_rank": 86,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "프레데리크",
       "korean_basis": "규칙",
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
@@ -3052,28 +3051,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Elif",
-      "gender": "female",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 86,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 29,
-        "2020": 19,
-        "2021": 23,
-        "2022": 15
-      },
-      "derived_rank": 64,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "엘리프",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Helena",
       "gender": "female",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -3162,29 +3139,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Zeynep",
-      "gender": "female",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 82,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 24,
-        "2020": 22,
-        "2021": 21,
-        "2022": 15
-      },
-      "derived_rank": 68,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "차이네프",
-      "korean_basis": "미확인",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
-      "korean_note": "철자만으로 언어별·개인별 발음을 확정하지 못해 독일어 일반 규칙으로 만든 초안을 미확인으로 표시했다. 검토 대상 선정은 통계적 사실이나 당사자의 국적·민족에 관한 판단이 아니다."
-    },
-    {
       "original": "Isabella",
       "gender": "female",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -3251,29 +3205,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Leyla",
-      "gender": "female",
-      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
-      "source_id": "de_cologne_2019_2022",
-      "source_count": 76,
-      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
-      "source_counts_by_year": {
-        "2019": 19,
-        "2020": 18,
-        "2021": 18,
-        "2022": 21
-      },
-      "derived_rank": 73,
-      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
-      "data_date": "2019-2022",
-      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
-      "language": "de",
-      "korean": "라일라",
-      "korean_basis": "미확인",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125",
-      "korean_note": "철자만으로 언어별·개인별 발음을 확정하지 못해 독일어 일반 규칙으로 만든 초안을 미확인으로 표시했다. 검토 대상 선정은 통계적 사실이나 당사자의 국적·민족에 관한 판단이 아니다."
-    },
-    {
       "original": "Alina",
       "gender": "female",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
@@ -3296,24 +3227,90 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Amira",
+      "original": "Merle",
       "gender": "female",
       "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
       "source_id": "de_cologne_2019_2022",
       "source_count": 74,
       "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
       "source_counts_by_year": {
-        "2019": 19,
+        "2019": 15,
         "2020": 18,
-        "2021": 17,
-        "2022": 20
+        "2021": 19,
+        "2022": 22
       },
       "derived_rank": 75,
       "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
       "data_date": "2019-2022",
       "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
       "language": "de",
-      "korean": "아미라",
+      "korean": "메를레",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Zoe",
+      "gender": "female",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 74,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 14,
+        "2020": 18,
+        "2021": 20,
+        "2022": 22
+      },
+      "derived_rank": 75,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "초에",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Elina",
+      "gender": "female",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 67,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 11,
+        "2020": 18,
+        "2021": 17,
+        "2022": 21
+      },
+      "derived_rank": 79,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "엘리나",
+      "korean_basis": "규칙",
+      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
+    },
+    {
+      "original": "Lisa",
+      "gender": "female",
+      "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+      "source_id": "de_cologne_2019_2022",
+      "source_count": 66,
+      "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+      "source_counts_by_year": {
+        "2019": 28,
+        "2020": 19,
+        "2021": 11,
+        "2022": 8
+      },
+      "derived_rank": 80,
+      "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+      "data_date": "2019-2022",
+      "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+      "language": "de",
+      "korean": "리자",
       "korean_basis": "규칙",
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     }
@@ -3498,19 +3495,6 @@
       "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
       "language": "de",
       "korean": "바우어",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
-      "original": "Klein",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 15,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "클라인",
       "korean_basis": "규칙",
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
@@ -4035,19 +4019,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Roth",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 56,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "로트",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Berger",
       "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
       "source_id": "de_marynissen_nubling_2010_table4",
@@ -4204,19 +4175,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Kraus",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 69,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "크라우스",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Schumacher",
       "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
       "source_id": "de_marynissen_nubling_2010_table4",
@@ -4291,19 +4249,6 @@
       "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
       "language": "de",
       "korean": "오토",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
-      "original": "Stein",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 76,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "슈타인",
       "korean_basis": "규칙",
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
@@ -5049,19 +4994,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Kaufmann",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 134,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "카우프만",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Thiel",
       "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
       "source_id": "de_marynissen_nubling_2010_table4",
@@ -5110,19 +5042,6 @@
       "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
       "language": "de",
       "korean": "아른트",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
-      "original": "Marx",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 139,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "마르크스",
       "korean_basis": "규칙",
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
@@ -5881,19 +5800,6 @@
       "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
     },
     {
-      "original": "Blum",
-      "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
-      "source_id": "de_marynissen_nubling_2010_table4",
-      "source_table_position": 198,
-      "rank_scope": "원논문 표4의 번호; 2005년 전화가입 빈도순 목록에서 Nowak을 제외한 번호이며 전국 주민등록 순위가 아님",
-      "data_date": "2005",
-      "commonness_status": "2005년 전화가입 자료를 분석한 1차 연구의 상위 성 목록에서 확인; 2026년 인구 빈도는 미확인",
-      "language": "de",
-      "korean": "블룸",
-      "korean_basis": "규칙",
-      "korean_source": "https://www.korean.go.kr/front/page/pageView.do?mn_id=97&page_id=P000125"
-    },
-    {
       "original": "Körner",
       "source": "https://kups.ub.uni-koeln.de/10755/2/FamNamKontrastivMarynissenNuebling2010.pdf",
       "source_id": "de_marynissen_nubling_2010_table4",
@@ -5935,7 +5841,7 @@
       "geographic_scope": "독일 쾰른시 출생등록 자료",
       "population_scope": "해당 연도에 등록된 이름; 독일 전국 전체 주민·성인·고령층 표본이 아님",
       "row_count": 27170,
-      "selection": "position=1만 사용. 철자와 성별별로 2019~2022년 anzahl를 합산한 뒤 최종 독일 성 목록과 원어 표기가 같은 이름을 제외하고 남녀 각각 75개 선택. 같은 빈도는 원문 NFC 문자열 오름차순. 실제 표기가 다른 변형은 합치지 않음.",
+      "selection": "position=1만 사용. 철자와 성별별로 2019~2022년 anzahl를 합산한 뒤 최종 독일 성 목록과 원어 표기가 같은 이름을 제외하고 남녀 각각 75개 선택. 같은 빈도는 원문 NFC 문자열 오름차순. 실제 표기가 다른 변형은 합치지 않음. 그다음 편집 기준(저장소에 싣지 않는 내부 검토 기록)으로 뺀 이름이 있으면 같은 성별 원자료 순서의 다음 후보로 보충함.",
       "rank_method": "derived_rank는 편집상 교차중복 제외 전 원래 성별 첫이름 모집단에서 더 큰 합계를 가진 표기의 수에 1을 더한 공동순위. 원자료가 제공한 순위라고 주장하지 않으며 제외 후 순위를 다시 매기지 않음.",
       "editorial_exclusion_rule": "동일 언어 이름·성 사이의 원어 교차중복을 없애기 위한 편집 규칙. 성 200개를 유지하고 겹치는 이름만 원래 집계순 다음 후보로 보충함.",
       "editorial_exclusions": [
@@ -6054,6 +5960,196 @@
           "data_date": "2019-2022",
           "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
           "reason": "이름·성 교차중복 제외 후 같은 성별 원자료 순서에서 보충"
+        },
+        {
+          "original": "Lasse",
+          "gender": "male",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 69,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 17,
+            "2020": 18,
+            "2021": 23,
+            "2022": 11
+          },
+          "derived_rank": 79,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Maxim",
+          "gender": "male",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 66,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 16,
+            "2020": 16,
+            "2021": 11,
+            "2022": 23
+          },
+          "derived_rank": 81,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Nico",
+          "gender": "male",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 64,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 20,
+            "2020": 12,
+            "2021": 14,
+            "2022": 18
+          },
+          "derived_rank": 83,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Ole",
+          "gender": "male",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 64,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 18,
+            "2020": 19,
+            "2021": 18,
+            "2022": 9
+          },
+          "derived_rank": 83,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Till",
+          "gender": "male",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 64,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 16,
+            "2020": 20,
+            "2021": 16,
+            "2022": 12
+          },
+          "derived_rank": 83,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Frederik",
+          "gender": "male",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 63,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 17,
+            "2020": 17,
+            "2021": 21,
+            "2022": 8
+          },
+          "derived_rank": 86,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Merle",
+          "gender": "female",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 74,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 15,
+            "2020": 18,
+            "2021": 19,
+            "2022": 22
+          },
+          "derived_rank": 75,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Zoe",
+          "gender": "female",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 74,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 14,
+            "2020": 18,
+            "2021": 20,
+            "2022": 22
+          },
+          "derived_rank": 75,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Elina",
+          "gender": "female",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 67,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 11,
+            "2020": 18,
+            "2021": 17,
+            "2022": 21
+          },
+          "derived_rank": 79,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
+        },
+        {
+          "original": "Lisa",
+          "gender": "female",
+          "source": "https://www.offenedaten-koeln.de/sites/default/files/distribution/Gesamt_Vornamen_2019-2022_0.csv",
+          "source_id": "de_cologne_2019_2022",
+          "source_count": 66,
+          "count_unit": "쾰른 2019~2022년 첫 번째 이름 등록 건수 합계(position=1)",
+          "source_counts_by_year": {
+            "2019": 28,
+            "2020": 19,
+            "2021": 11,
+            "2022": 8
+          },
+          "derived_rank": 80,
+          "rank_scope": "쾰른 2019~2022년 첫 번째 이름 등록 건수의 성별 합계 내 공동순위; 직접 계산",
+          "data_date": "2019-2022",
+          "commonness_status": "쾰른 해당 출생등록 표본의 상위 이름임을 확인; 독일 전국·성인·고령층의 흔함은 미확인",
+          "reason": "편집 기준으로 뺀 이름 대신 같은 성별 원자료 순서에서 보충(뺀 이름은 저장소에 싣지 않음)"
         }
       ],
       "limitations": [
@@ -6092,12 +6188,12 @@
       "count_unit": "전화가입(Telefonanschlüsse); 사람 수나 주민등록 건수가 아님",
       "license": "KUPS에 Open Access 표기. 해당 자료의 구체적 재배포 라이선스는 미확인.",
       "reuse_scope": "이름 표기와 표 안 번호라는 사실만 전사. 논문 문장·이름 뜻풀이·도표 디자인·분포지도는 복제하지 않음. 원본 PDF는 검증용 캐시이며 체크인 대상이 아님.",
-      "selection": "표4의 서로 다른 성 표기 200개 전부. 독일어 철자 변형은 표와 같이 별개 표기로 보존.",
+      "selection": "표4의 서로 다른 성 표기 200개 가운데 편집 기준(저장소에 싣지 않는 내부 검토 기록)으로 뺀 7개를 제외한 193개. 표에 200위 뒤가 없어 다른 출처로 보충하지 않음. 독일어 철자 변형은 표와 같이 별개 표기로 보존.",
       "limitations": [
         "표4는 Nowak을 제외했다고 명시한다. source_table_position은 제외 후 표의 번호이므로 독일 전국의 정확한 인구순위로 해석하면 안 됨.",
         "개별 성의 전화가입 건수는 표4에 없어 source_count를 넣지 않음.",
         "2005년 자료이며 현재 빈도를 검증하지 않음.",
-        "200개는 서로 다른 성 표기의 개수이며 어원이 서로 다른 200개 뿌리를 뜻하지 않음.",
+        "193개는 서로 다른 성 표기의 개수이며 어원이 서로 다른 193개 뿌리를 뜻하지 않음.",
         "KUPS 서지 메타데이터의 쪽수(11–35)와 PDF 인쇄 쪽수가 일치하지 않음. 실제 확인한 표4의 인쇄322–323쪽/PDF12–13쪽을 기준으로 인용함."
       ],
       "cache_file": "ref/names/.cache/de_surnames_paper_2010.pdf",
@@ -6105,6 +6201,6 @@
       "sha256": "7276e4ac138286c6d86b01476ea96aaf165cc0c558e06cbb7da33c54fad53edd"
     }
   ],
-  "source_pools_sha256": "372a9bee59ac9f958db228830d6e356cee50a72ce12059249209a27c30977186",
+  "source_pools_sha256": "e854b9de03e3589c1953fc7864e4741b1496b764ebc39623b64dee8401c84355",
   "transcription_note": "용례는 국립국어원의 확인된 표기, 규칙은 변환 결과, 미확인은 추가 검수가 필요한 초안이다. 규칙 표시는 해당 인명의 개별 심의 완료를 뜻하지 않는다."
 }
