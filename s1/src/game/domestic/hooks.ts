@@ -16,7 +16,7 @@ import './pipe';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick, domesticHeal } from './medbay';
 import { refreshSit } from './sit';
-import { domCard, living, personById, techMult, topSkill, variantMult } from './state';
+import { domCard, living, personById, techAdopted, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, rollBreakdown, runWorkshop, upkeepCoal } from './workshop';
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -237,11 +237,12 @@ export function domesticPromise(g: Game, c: Comm, p: PromiseState): boolean | nu
     return !since.some(a => a.other);
   }
   if (p.cond.kind === 'research_pick') {
-    // 기술·의무진이 고른 복원(그들이 지정한 그 기술)을 다음 회기까지 시작했나. 다른 복원은 아무리 좋아하는 것이어도 치지 않는다(A01).
+    // 기술·의무진이 고른 복원(그들이 지정한 그 기술)을 기한까지 D.pickFulfil 기준으로 이뤘나. 다른 복원은 아무리 좋아하는 것이어도 치지 않는다(A01).
     // 지정한 기술이 없던 약속(후보가 없었거나 옛 저장)은 지킬 일이 없어 지킨 것으로 본다.
     const target = d.researchPick;
     d.researchPick = null;
     if (!target) return true;
+    if (D.pickFulfil === 'adopt') return techAdopted(g, target);
     if (D.pickFulfil === 'complete') return d.techs[target]?.stage === 'done';
     return d.log.restores.some(r => r.id === target && r.seg >= p.due - P.promiseSegments);
   }

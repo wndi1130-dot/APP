@@ -321,6 +321,20 @@ export function techUsable(g: Game, id: TechId): boolean {
   return !!st && (st.stage === 'done' || st.stage === 'defective');
 }
 
+/**
+ * 기술을 '채택'했나(「고른 복원」 약속의 이행 기준, A01): 완성판이고(결함판은 안 친다), 꺼 두지 않았고, 추인 대기가 아니고,
+ * 칸에 놓는 기술(온실칸·단열·장갑)은 한 칸 이상에 실제로 놓았다.
+ */
+export function techAdopted(g: Game, id: TechId): boolean {
+  const d = g.dom;
+  const st = d?.techs[id];
+  if (!d || !st || st.stage !== 'done' || st.off || st.pending) return false;
+  if (id === 'm4') return d.greenhouse !== null;
+  if (id === 'e5') return d.insulated.length > 0;
+  if (id === 'w3') return d.armored.length > 0;
+  return true;
+}
+
 /** 분야의 지식이 그 단계 기술을 받치는 정도(8.2). 화면엔 숫자 대신 줄 색과 '×0.7'로만 보인다. */
 /** 3단계의 둘째 길(7.1): 그 분야 숙련 + 살아 있는 공작 장인(공방장). 공작 가지는 자기 장인이 있어야 한다. */
 export function secondPath(g: Game, id: TechId): boolean {

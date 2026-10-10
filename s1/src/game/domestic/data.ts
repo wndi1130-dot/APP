@@ -45,8 +45,9 @@ export const D = {
   defectMult: 0.5, defectBreak: 0.03,
   // 7.5 복원을 마치면(싫어하는 쪽이 없는 기술은 관계를 주지 않는다, 기획 점검 03)
   techRel: 5,
-  /** 「고른 복원」 약속(research_pick)을 지킨 것으로 보는 때: 지정한 기술을 'start' 시작하면 / 'complete' 복원을 마치면(시스템 통합 보고서 A01) */
-  pickFulfil: 'start' as 'start' | 'complete',
+  /** 「고른 복원」 약속(research_pick)을 지킨 것으로 보는 때(시스템 통합 보고서 A01, 사용자 2026-10-10 「완성하고 채택까지」):
+   * 지정한 기술을 'start' 시작하면 / 'complete' 완성판이 되면 / 'adopt' 채택까지(techAdopted: 완성판·꺼 두지 않음·추인 대기 아님·칸에 놓는 기술은 놓음) */
+  pickFulfil: 'adopt' as 'start' | 'complete' | 'adopt',
   // 6.5 고장: 부품이 이만큼 있으면 저절로 고친다
   autoRepairParts: 2,
   // 4.1 의무칸 침상, 넘치면 한 명마다 기술·의무진 과밀 +5. 10장 11번 '누가 침상에 눕나'
