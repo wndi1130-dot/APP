@@ -702,17 +702,16 @@ func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> 
 	var index: int = o.body.index_of(wound)
 	if index < 0:
 		return
-	# The tool comes from the one who treats first, then from the one treated.
-	var tool_id: String = String(step["tool"])
-	var src = medic if int(medic.items.get(tool_id, 0)) > 0 else o
-	var other = o if src == medic else medic
-	var used: int = Treatment.apply(o.body, index, String(step["id"]))
-	if used <= 0:
+	if Treatment.apply(o.body, index, String(step["id"])) <= 0:
 		return
-	var from_first: int = mini(used, int(src.items.get(tool_id, 0)))
-	src.take_item(tool_id, from_first)
-	if used > from_first:
-		other.take_item(tool_id, used - from_first)
+	# What it takes comes from the one who treats first, then from the one treated.
+	for item: String in step["uses"]:
+		var used: int = int(step["uses"][item])
+		var from_first: int = mini(used, int(medic.items.get(item, 0)))
+		if from_first > 0:
+			medic.take_item(item, from_first)
+		if used > from_first:
+			o.take_item(item, used - from_first)
 	if not _care_next(medic, o, wound, mode):
 		game.say(medic, "%s: 처치했다." % Treatment.wound_text(wound))
 

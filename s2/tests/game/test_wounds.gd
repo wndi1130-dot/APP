@@ -547,3 +547,75 @@ func test_a_first_bite_still_opens_the_window() -> void:
 	var b := Body.new()
 	b.apply_bite(_rng(1), "arm", 0.0)
 	assert_eq(b.window_left, Body.WINDOW)
+
+
+# ---------------------------------------------------------------- festering (stage 2)
+
+func _run(b, seconds: float) -> Array:
+	var events: Array = []
+	var t := 0.0
+	while t < seconds:
+		events.append_array(b.tick(1.0, {}))
+		t += 1.0
+	return events
+
+
+func test_a_torn_wound_left_dirty_festers_after_six_minutes() -> void:
+	var b = Body.new()
+	var i: int = b.add_wound("arm_left", "laceration", 0.0)
+	b.bandage_wound(i)
+	assert_false(_run(b, Body.FESTER_TIME - 2.0).has("festering"))
+	assert_false(b.wounds[i]["festering"])
+	assert_true(_run(b, 3.0).has("festering"), "it says so once")
+	assert_true(b.wounds[i]["festering"])
+	assert_false(_run(b, 30.0).has("festering"))
+	assert_eq(b.most_urgent(), i, "a festering wound is next after blood")
+	assert_true(b.receipt_wounds()[0]["festering"])
+
+
+func test_cleaning_in_time_stops_it() -> void:
+	var b = Body.new()
+	var i: int = b.add_wound("arm_left", "laceration", 0.0)
+	_run(b, 200.0)
+	b.disinfect(i)
+	_run(b, 400.0)
+	assert_false(b.wounds[i]["festering"])
+
+
+func test_what_festers_and_what_does_not() -> void:
+	var b = Body.new()
+	var scratch: int = b.add_wound("arm_left", "scratch", 0.0)
+	var deep: int = b.add_wound("torso", "deep", 0.0)
+	var bite: int = b.add_wound("arm_right", "bite", 0.0)
+	var broken: int = b.add_wound("leg_left", "fracture", 0.0)
+	var shot: int = b.add_wound("leg_right", "embedded", 0.0)
+	b.use_kit()
+	b.disinfect(shot)
+	_run(b, Body.FESTER_TIME + 5.0)
+	for i in [scratch, deep, bite, broken]:
+		assert_false(b.wounds[i]["festering"], b.wounds[i]["kind"])
+	assert_true(b.wounds[shot]["festering"], "cleaned, but the thing is still in")
+	var b2 = Body.new()
+	var out: int = b2.add_wound("leg_right", "embedded", 0.0)
+	b2.pull_wound(out)
+	b2.disinfect(out)
+	_run(b2, Body.FESTER_TIME + 5.0)
+	assert_false(b2.wounds[out]["festering"], "pulled and cleaned")
+
+
+func test_a_festering_wound_slows_what_that_part_does() -> void:
+	var clean: Dictionary = Body.new().multipliers({})
+	var b = Body.new()
+	b.set_festering(b.add_wound("arm_left", "laceration", 0.0, 0.0), true)
+	var arm: Dictionary = b.multipliers({})
+	assert_almost_eq(float(arm["hands"]), float(clean["hands"]) * Body.FESTER_MULT, 0.0001)
+	assert_almost_eq(float(arm["reload"]), float(clean["reload"]) * Body.FESTER_MULT, 0.0001)
+	assert_almost_eq(float(arm["move"]), float(clean["move"]), 0.0001)
+	var c = Body.new()
+	c.set_festering(c.add_wound("leg_right", "laceration", 0.0, 0.0), true)
+	assert_almost_eq(float(c.multipliers({})["move"]), float(clean["move"]) * Body.FESTER_MULT, 0.0001)
+	var notes: Array = c.status_notes()
+	assert_eq(notes.size(), 1)
+	assert_eq([notes[0]["id"], notes[0]["short"], notes[0]["title"]], ["fester", "곪음", "곪은 상처"])
+	assert_false(notes[0]["severe"])
+

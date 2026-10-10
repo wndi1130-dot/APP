@@ -17,6 +17,11 @@ const KINDS := ["scratch", "laceration", "deep", "embedded", "bite", "fracture"]
 # Starting blood flow per kind (start values). Heavy bleeding is a total of 1.0 or more.
 const BLOOD := {"scratch": 0.15, "laceration": 0.4, "deep": 1.0, "embedded": 1.0, "bite": 0.4, "fracture": 0.0}
 const HEAVY_BLOOD := 1.0
+## Festering (body_injury 4.6 stage 2; start values, to be set on the phone).
+const FESTER_IN_FIELD := true    # false: nothing festers on the field, only the train decides
+const FESTER_TIME := 360.0       # seconds a dirty wound is left before it turns
+const FESTER_KINDS := ["laceration", "embedded"]
+const FESTER_MULT := 0.9
 const SEEP_BLOOD := 0.4          # a heavy wound with a plain bandage seeps on as a light one
 
 const RUN_FATIGUE := 0.004       # exhaustion per second while running
@@ -32,8 +37,10 @@ const MOVE_FLOOR := 0.25
 const AIM_UP := 1.4
 const AIM_MAX := 3.0
 
-# One entry per wound: {part, kind, blood, disinfected, bandaged, splinted, festering, at}.
-# blood is the flow now (0 once stopped); festering is only a slot until stage 2 sets it.
+# One entry per wound: {part, kind, blood, disinfected, bandaged, splinted, festering, at}
+# and, from stage 2, {tourniquet, pulled, sutured, what, open_t}.
+# blood is the flow now (0 once stopped). what: "bullet" for a round that stayed in.
+# open_t: seconds the wound has been left dirty (it festers at FESTER_TIME).
 var wounds: Array[Dictionary] = []
 var infection: String = ""       # "" | "scratch" | "bite"
 var infected: bool = false       # hidden for scratches
@@ -99,6 +106,7 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 		"part": part, "kind": kind,
 		"blood": float(BLOOD[kind]) if blood < 0.0 else blood,
 		"disinfected": false, "bandaged": false, "splinted": false, "festering": false,
+		"tourniquet": false, "pulled": false, "sutured": false, "what": "", "open_t": 0.0,
 		"at": now,
 	})
 	_refresh()
@@ -149,7 +157,7 @@ func apply_gunshot(rng: RandomNumberGenerator, now: float, zone: String = "") ->
 	elif roll < GUNSHOT_LEG:
 		part = "leg"
 	var fine: String = "head_neck" if part == "head" else ("torso" if part == "torso" else ("leg_left" if roll < GUNSHOT_LEG * 0.5 else "leg_right"))
-	add_wound(fine, "embedded", now)
+	wounds[add_wound(fine, "embedded", now)]["what"] = "bullet"
 	injured_at = now
 	if part == "leg" and not _has_fracture_on(fine):
 		add_wound(fine, "fracture", now)
@@ -210,6 +218,70 @@ func splint_wound(index: int) -> bool:
 		return false
 	w["splinted"] = true
 	return true
+
+
+# A tourniquet on a limb (stage 2): a heavy flow drops to a seep at once. It does
+# not close the wound. False when there is nothing for it to do there.
+func tourniquet_wound(index: int) -> bool:
+	if index < 0 or index >= wounds.size():
+		return false
+	var w: Dictionary = wounds[index]
+	if bool(w["tourniquet"]) or w["kind"] == "fracture" or coarse(String(w["part"])) not in ["arm", "leg"]:
+		return false
+	w["tourniquet"] = true
+	w["blood"] = minf(float(w["blood"]), SEEP_BLOOD)
+	_refresh()
+	return true
+
+
+# Takes out what is stuck in an embedded wound (stage 2). Until then it cannot be cleaned.
+func pull_wound(index: int) -> bool:
+	if index < 0 or index >= wounds.size():
+		return false
+	var w: Dictionary = wounds[index]
+	if w["kind"] != "embedded" or bool(w["pulled"]):
+		return false
+	w["pulled"] = true
+	return true
+
+
+# Stitches a wound shut (stage 2): the blood stops for good, no seeping on.
+func suture_wound(index: int) -> bool:
+	if index < 0 or index >= wounds.size():
+		return false
+	var w: Dictionary = wounds[index]
+	if bool(w["sutured"]) or w["kind"] not in ["deep", "embedded"]:
+		return false
+	if w["kind"] == "embedded" and not bool(w["pulled"]):
+		return false
+	w["sutured"] = true
+	w["blood"] = 0.0
+	_refresh()
+	return true
+
+
+# Will this wound fester if left as it is (stage 2)? A torn wound not cleaned, or
+# anything still stuck in. Never the plague: this is 'festering' and nothing else.
+func festers(w: Dictionary) -> bool:
+	if bool(w["festering"]) or String(w["kind"]) not in FESTER_KINDS:
+		return false
+	if w["kind"] == "embedded" and not bool(w["pulled"]):
+		return true
+	return not bool(w["disinfected"])
+
+
+func festering_on(group: String) -> bool:
+	for w: Dictionary in wounds:
+		if bool(w["festering"]) and _in_group(String(w["part"]), group):
+			return true
+	return false
+
+
+func has_festering() -> bool:
+	for w: Dictionary in wounds:
+		if bool(w["festering"]):
+			return true
+	return false
 
 
 # Where a wound sits in the list now (-1 when it is gone). By identity, not by value:
@@ -422,6 +494,15 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 			events.append("died")
 			return events
 
+	# Festering (stage 2): a dirty wound left FESTER_TIME turns.
+	if FESTER_IN_FIELD:
+		for w: Dictionary in wounds:
+			if festers(w):
+				w["open_t"] = float(w["open_t"]) + delta
+				if float(w["open_t"]) >= FESTER_TIME:
+					w["festering"] = true
+					events.append("festering")
+
 	# Infection window
 	if infection != "" and window_left > 0.0:
 		window_left = maxf(0.0, window_left - delta)
@@ -510,6 +591,15 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 		_mul(m, "move", 0.6 if fractures_splinted("leg") else MOVE_FLOOR)
 		_mul(m, "swing", 0.9)
 		_mul(m, "shove_window", 0.7)
+	# A festering wound hurts where it is: arm slows the hands, leg the walk, the rest the swing.
+	if festering_on("arm"):
+		_mul(m, "reload", FESTER_MULT)
+		_mul(m, "swap", FESTER_MULT)
+		_mul(m, "hands", FESTER_MULT)
+	if festering_on("leg"):
+		_mul(m, "move", FESTER_MULT)
+	if festering_on("torso") or festering_on("head_neck"):
+		_mul(m, "swing", FESTER_MULT)
 	# Cold: 추움 row from level 1, hypothermia rows stack on top
 	if cold >= 1:
 		_mul(m, "move", 0.95)
@@ -562,6 +652,8 @@ func icons() -> Array:
 		rest.append({"id": "bleed", "severe": bleed >= 2})
 	if arm_fracture or leg_fracture:
 		rest.append({"id": "fracture", "severe": leg_fracture and not fractures_splinted("leg")})
+	if has_festering():
+		rest.append({"id": "fester", "severe": false})
 	if cold_level >= 1:
 		rest.append({"id": "cold", "severe": cold_level >= 3, "faint": cold_level == 1})
 	if exhaustion_level() >= 1:
@@ -610,6 +702,10 @@ func status_notes() -> Array:
 				else:
 					row["title"] = "팔 골절"
 					row["text"] = "양손 무기를 못 쓴다. 재장전과 손일이 느리고 조준이 흔들린다"
+			"fester":
+				row["short"] = "곪음"
+				row["title"] = "곪은 상처"
+				row["text"] = "그 자리가 아프다. 팔이면 손일과 재장전이, 다리면 걸음이, 몸통이면 휘두르기가 느리다. 열차에서 약이 더 든다"
 			"cold":
 				row["short"] = "추움"
 				row["title"] = "추위"
