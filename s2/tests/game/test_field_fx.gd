@@ -188,9 +188,11 @@ func test_a_storm_stop_plays_by_its_stage_and_looks_like_it() -> void:
 		for row in game.storm_layers:
 			total += row[0].amount
 		assert_lte(total, StormLook.MAX_PARTICLES)
-		var layer: CanvasLayer = game.storm_screen.get_parent()
+		# The layer is drawn on a small page; what shows is that page, stretched.
+		var layer: CanvasLayer = game.storm_view.get_parent()
 		assert_lt(layer.layer, game.hud.layer, "under the HUD")
-		assert_eq(game.storm_screen.mouse_filter, Control.MOUSE_FILTER_IGNORE, "taps pass through")
+		assert_eq(game.storm_view.mouse_filter, Control.MOUSE_FILTER_IGNORE, "taps pass through")
+		assert_eq(game.storm_screen.get_parent(), game.storm_port)
 	# Screen: dark bank before, snow-fog inside, neither after.
 	assert_gt(float(before.storm_screen.material.get_shader_parameter("front")), 0.0)
 	assert_gt(float(during.storm_screen.material.get_shader_parameter("whiteout")), 0.5)
@@ -276,4 +278,21 @@ func test_the_storm_test_key_turns_the_layers_off_one_at_a_time() -> void:
 	game.hud._debug_storm()
 	assert_eq(game.storm_cut, 0)
 	assert_true(game.storm_screen.visible and game.storm_layers[0][0].visible and game.storm_layers[0][0].emitting)
+
+
+# The screen layer cost 9~12 ms a frame at full size on the phone.
+func test_the_storm_screen_layer_is_drawn_small_and_stretched() -> void:
+	var game = _storm_stop("during")
+	game._update_storm()
+	var view: Vector2 = game.get_viewport().get_visible_rect().size
+	assert_lt(game.STORM_SCREEN_SCALE, 0.6)
+	assert_almost_eq(float(game.storm_port.size.x), view.x * game.STORM_SCREEN_SCALE, 1.0)
+	assert_almost_eq(float(game.storm_port.size.y), view.y * game.STORM_SCREEN_SCALE, 1.0)
+	assert_eq(game.storm_screen.size, Vector2(game.storm_port.size), "the layer fills its small page")
+	assert_eq(game.storm_view.texture, game.storm_port.get_texture())
+	await wait_frames(2)
+	assert_almost_eq(game.storm_view.size.x, view.x, 1.0, "and is stretched over the whole view")
+	game.hud._debug_storm()
+	assert_false(game.storm_view.visible)
+	assert_eq(game.storm_port.render_target_update_mode, SubViewport.UPDATE_DISABLED, "off: not drawn at all")
 
