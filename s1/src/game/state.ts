@@ -287,6 +287,8 @@ export interface Game {
   meterLog?: MeterWhy[];
   /** 석탄·식량·의약품·사치품이 최근 무엇 때문에 바뀌었나. meterLog와 같은 길로 남는다. */
   resLog?: ResWhy[];
+  /** 집단 관계가 최근 무엇 때문에 바뀌었나(바뀐 집단만). meterLog와 같은 길로 남는다. */
+  relLog?: { seg: number; label: string; rel: Partial<Record<Comm, number>> }[];
   journal: JournalEntry[];
   usedProfiles: string[];
   end: EndKind | null;

@@ -1114,5 +1114,10 @@ small { font-size: 12px; }
 .recap li { display: flex; align-items: baseline; gap: 6px; }
 .recap__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .recap__arrow { flex: none; color: var(--ink-3); }
-.recap li b { flex: none; }
+.recap li b { flex: 0 1 auto; min-width: 0; }
+.recap li { flex-wrap: wrap; }
 .recap__title { margin: 4px 0 2px; font-size: 12px; }
+
+/* 칸 창 머리가 꽉 차면(의무칸: 씻을 물, 상징물, 침상) 다음 줄로 넘긴다. 닫기 단추는 늘 오른쪽 위에 둔다. */
+.carpop__head { flex-wrap: wrap; position: relative; padding-right: 32px; }
+.carpop__head .x { position: absolute; right: 0; top: 0; margin-left: 0; }

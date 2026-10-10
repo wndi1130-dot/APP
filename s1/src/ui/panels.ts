@@ -113,7 +113,8 @@ const RECAP_KEYS = [['trust', '신임'], ['tension', '긴장'], ['coal', '석탄
  *  까닭 기록(meterLog, resLog)에서 그 구간의 줄을 일의 이름으로 묶는다. 정산 자체는 뺀다. 최근 RECAP_ROWS개. */
 export function segRecap(g: Game): { label: string; parts: string[] }[] {
   const logs: ({ seg: number; label: string } & Partial<Record<(typeof RECAP_KEYS)[number][0], number>>)[] = [...(g.meterLog ?? []), ...(g.resLog ?? [])];
-  const settled = logs.filter(r => r.label === '구간 정산').map(r => r.seg);
+  const rels = g.relLog ?? [];
+  const settled = [...logs, ...rels].filter(r => r.label === '구간 정산').map(r => r.seg);
   if (settled.length === 0) return [];
   const seg = Math.max(...settled);
   const sums = new Map<string, Record<string, number>>();
@@ -123,8 +124,25 @@ export function segRecap(g: Game): { label: string; parts: string[] }[] {
     for (const [k] of RECAP_KEYS) sum[k] = (sum[k] ?? 0) + (r[k] ?? 0);
     sums.set(r.label, sum);
   }
-  return [...sums].map(([label, sum]) => ({ label, parts: RECAP_KEYS.filter(([k]) => sum[k]).map(([k, name]) => `${name} ${signed(sum[k])}`) }))
-    .filter(r => r.parts.length > 0).slice(-RECAP_ROWS);
+  // 집단 관계는 수치 뒤에, 크게 바뀐 것부터 적는다.
+  const relSums = new Map<string, Partial<Record<Comm, number>>>();
+  for (const r of rels) {
+    if (r.seg !== seg || r.label === '구간 정산') continue;
+    const sum = relSums.get(r.label) ?? {};
+    for (const c of COMMS) if (r.rel[c]) sum[c] = (sum[c] ?? 0) + r.rel[c]!;
+    relSums.set(r.label, sum);
+    if (!sums.has(r.label)) sums.set(r.label, {});
+  }
+  return [...sums].map(([label, sum]) => {
+    const rel = relSums.get(label) ?? {};
+    return {
+      label,
+      parts: [
+        ...RECAP_KEYS.filter(([k]) => sum[k]).map(([k, name]) => `${name} ${signed(sum[k])}`),
+        ...COMMS.filter(c => rel[c]).sort((a, b) => Math.abs(rel[b]!) - Math.abs(rel[a]!)).map(c => `${COMM_NAME[c]} 관계 ${signed(rel[c]!)}`),
+      ],
+    };
+  }).filter(r => r.parts.length > 0).slice(-RECAP_ROWS);
 }
 
 function settlePanel(view: View): HTMLElement | null {
@@ -138,7 +156,7 @@ function settlePanel(view: View): HTMLElement | null {
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
     recap.length ? h('p', { class: 'recap__title sub' }, '이번 구간에 내가 한 일') : null,
     recap.length ? h('ul', { class: 'recap' }, recap.map(r => h('li', null,
-      h('span', { class: 'recap__label' }, r.label), h('span', { class: 'recap__arrow', 'aria-hidden': 'true' }, '→'), h('b', { class: 'num' }, r.parts.join(' · '))))) : null,
+      h('span', { class: 'recap__label' }, r.label), h('span', { class: 'recap__arrow', 'aria-hidden': 'true' }, '→'), h('b', { class: 'num recap__parts' }, r.parts.join(' · '))))) : null,
     recap.length ? h('p', { class: 'recap__title sub' }, '구간이 가져간 것') : null,
     h('div', { class: 'settle__res num' },
       h('span', null, icon('coal'), signed(s.coal)), h('span', null, icon('food'), signed(s.food)), h('span', null, icon('med'), signed(s.med)),
