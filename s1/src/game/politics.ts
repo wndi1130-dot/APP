@@ -9,7 +9,7 @@ import { domesticLawOpen } from './domestic/laws';
 import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
-import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, VoteFlip, VoteResult } from './state';
+import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, PromiseState, VoteFlip, VoteResult } from './state';
 
 // 의회: 입장 점수, 찬성·반대·미정, 거래 다섯, 개표, 폐지(브리프 1.3, 3장, 8.4).
 
@@ -463,6 +463,16 @@ export function openConditions(g: Game, c: Comm): ConditionDef[] {
   return [first, second, common];
 }
 
+
+/** 정차에서 판정하는 약속인가(현장 조달, 다음 정차 목표, 다음 파견 제외). */
+export function isStopPromise(p: PromiseState): boolean {
+  return p.kind === 'fetch' || p.cond.kind === 'target' || p.cond.kind === 'skip_dispatch';
+}
+
+/** 약속의 남은 때를 화면에 쓸 말로: 정차 약속은 다음 정차, 그 밖은 판정하는 구간까지 남은 구간 수. */
+export function promiseWhen(g: Game, p: PromiseState): string {
+  return isStopPromise(p) ? '다음 정차' : `남은 ${Math.max(0, p.due - g.seg)}구간`;
+}
 
 export type DealOutcome = { ok: true; text: string } | { ok: false; text: string };
 
