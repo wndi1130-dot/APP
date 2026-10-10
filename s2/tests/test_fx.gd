@@ -195,7 +195,8 @@ func test_gallery_shows_the_three_storm_stops() -> void:
 	var before: float = gallery.sun.light_energy
 	gallery.apply_preset(at["12_storm_during"])
 	assert_false(gallery.sun.shadow_enabled, "no shadows inside the storm")
-	assert_true(gallery.snow_fx.emitting)
+	assert_true(gallery.storm_fx["near"].emitting, "storm layers stand in for the plain snowfall")
+	assert_gt(float(gallery.overlay.material.get_shader_parameter("whiteout")), 0.5)
 	assert_lt(gallery.sun.light_energy, before)
 	gallery.apply_preset(at["13_storm_after"])
 	assert_true(gallery.sun.shadow_enabled)
@@ -206,6 +207,10 @@ func test_gallery_shows_the_three_storm_stops() -> void:
 	assert_lt(float(p["wind"]), float(gallery.PRESETS[at["12_storm_during"]]["wind"]))
 	gallery.apply_preset(0)
 	assert_true(gallery.sun.shadow_enabled, "other presets keep shadows")
+	assert_eq(float(gallery.overlay.material.get_shader_parameter("whiteout")), 0.0, "and no storm on the screen")
+	assert_almost_eq(gallery.sun.rotation_degrees.x, -50.0, 0.001)
+	for key in gallery.storm_fx:
+		assert_false(gallery.storm_fx[key].emitting, key)
 
 
 func test_gallery_crate_carries_a_snow_cap() -> void:
@@ -227,3 +232,41 @@ func test_gallery_crate_carries_a_snow_cap() -> void:
 			assert_almost_eq(points[i].y, 0.25, 0.0001, "inside is lifted to the full depth")
 	var code := FileAccess.get_file_as_string("res://fx/shaders/snowcap.gdshader")
 	assert_true(code.contains("fx_snow") and code.contains("COLOR.r"))
+
+
+func test_storm_stages_look_different_and_fit_the_phone() -> void:
+	# weather_fx 14장: coming, at its height, gone. Picture values only.
+	var StormLook = load("res://fx/storm_look.gd")
+	var before: Dictionary = StormLook.look("before")
+	var during: Dictionary = StormLook.look("during")
+	var after: Dictionary = StormLook.look("after")
+	assert_true(StormLook.look("nothing").is_empty())
+	for stage in ["before", "during", "after"]:
+		assert_lte(StormLook.particle_count(stage), StormLook.MAX_PARTICLES, stage)
+		for key in ["sun_color", "ambient_color"]:
+			var c: Color = StormLook.look(stage)[key]
+			assert_lte(c.b - c.r, 0.08, "%s %s: no sky blue" % [stage, key])
+			assert_lte(c.r - c.b, 0.2, "%s %s: no red" % [stage, key])
+	# Layers and thickness: most snow, and the fattest streaks, inside the storm.
+	assert_gt(StormLook.particle_count("during"), StormLook.particle_count("before"))
+	assert_gt(StormLook.particle_count("before"), StormLook.particle_count("after"))
+	assert_gte(during["layers"].size(), 3)
+	# The view closes only inside; the dark bank shows only before.
+	assert_gt(float(before["front"]), 0.0)
+	assert_eq(float(before["whiteout"]), 0.0)
+	assert_gt(float(during["whiteout"]), 0.5)
+	assert_eq(float(after["whiteout"]) + float(after["front"]), 0.0)
+	# Frost: least before, most inside, some left in the cold after.
+	assert_lt(float(before["edge_frost"]), float(after["edge_frost"]))
+	assert_lt(float(after["edge_frost"]), float(during["edge_frost"]))
+	# Light: dimmest inside without shadows, brightest after with a low sun.
+	assert_lt(float(during["sun"]), float(before["sun"]))
+	assert_gt(float(after["sun"]), float(before["sun"]))
+	assert_false(bool(during["shadows"]))
+	assert_gt(float(after["sun_pitch"]), float(before["sun_pitch"]), "lower sun, longer shadows")
+	# Snow piles up only inside the storm.
+	assert_gt(float(during["fall_cm_h"]), 0.0)
+	assert_eq(float(before["fall_cm_h"]) + float(after["fall_cm_h"]), 0.0)
+	# Snow flies flat on the wind at lean 1 and falls at lean 0.
+	assert_almost_eq(StormLook.fall_dir(Vector2(1, 0), 1.0).x, 1.0, 0.01)
+	assert_lt(StormLook.fall_dir(Vector2(1, 0), 0.0).y, -0.99)
