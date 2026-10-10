@@ -119,7 +119,7 @@ func test_a_tap_on_the_fixed_stick_is_not_a_tap_on_the_world() -> void:
 	var p = game.player
 	p.hold_attack = false
 	var home: Vector2 = hud.stick_home()
-	var before := p.path.size()
+	var before: int = p.path.size()
 	hud.finger_down(0, home)
 	hud.finger_up(0, home)
 	assert_eq(p.path.size(), before)
@@ -257,6 +257,7 @@ func test_dragging_off_the_enemy_leaves_no_target_behind() -> void:
 	_gun()
 	_camera_like_a_phone()
 	var p = game.player
+	p.facing = PI * 0.5
 	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 0))
 	game._refresh_vision()
 	var on_z: Vector2 = game.hud._project(z["pos"])
@@ -275,6 +276,8 @@ func test_release_near_an_enemy_still_picks_that_enemy() -> void:
 	_gun()
 	_camera_like_a_phone()
 	var p = game.player
+	# Both in the forward cone: one to the east, one to the south.
+	p.facing = PI * 0.25
 	var a: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 0))
 	var b: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0, 0, 7))
 	game._refresh_vision()
@@ -295,6 +298,7 @@ func test_a_press_that_never_moves_stays_on_the_enemy_pressed() -> void:
 	_gun()
 	_camera_like_a_phone()
 	var p = game.player
+	p.facing = PI * 0.5
 	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 0))
 	game._refresh_vision()
 	var on_z: Vector2 = game.hud._project(z["pos"])
