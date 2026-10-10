@@ -536,17 +536,17 @@ export function settleTruth(g: Game, id: string, reveals: boolean): string {
   const d = g.dark!;
   const x = d.innocents.find(y => y.id === id);
   d.innocents = d.innocents.filter(y => y.id !== id);
-  return reveals ? reveal(g, id, x?.comm ?? commOf(g, id)) : '';
+  return reveals ? reveal(g, id, x?.comm ?? commOf(g, id), x?.seg) : '';
 }
 
-/** 진실이 드러났다: 신임 −10, 벌받은 사람의 칸 적의 +1, 결과에 '죄 없는 사람을 벌했다'. */
-export function reveal(g: Game, id: string, comm: Comm): string {
+/** 진실이 드러났다: 신임 −10, 벌받은 사람의 칸 적의 +1, 결과에 '죄 없는 사람을 벌했다'. seg는 벌을 내린 구간(그 구간의 오판 장면만 거둔다). */
+export function reveal(g: Game, id: string, comm: Comm, seg?: number): string {
   const d = g.dark!;
   d.stats.revealed += 1;
   g.trust = clamp(g.trust - 10, 0, 100);
   offend(g, comm);
   const name = nameOf(g, id);
-  dropScene(g, 'misjudged', id); // 드러났으니 '끝내 안 드러난 오판' 장면은 거둔다(아래 장면이 대신한다)
+  dropScene(g, 'misjudged', id, seg); // 드러났으니 '끝내 안 드러난 오판' 장면은 거둔다(아래 장면이 대신한다)
   scene(g, 'innocent', 3, `${g.seg}구간, 벌받은 ${name}이(가) 죄가 없었다는 것이 드러났다.`, [id]);
   return `${name}은(는) 그날 밤 거기 없었다. 진짜 한 사람은 따로 있었다. 열차가 그걸 알게 됐다.`;
 }

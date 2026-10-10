@@ -37,11 +37,12 @@ export function scene(g: Game, key: string, weight: number, text: string, who: s
   (g.chronicle ??= []).push({ template: `s1b.${key}`, who: who[0] ?? 'chief', where: g.stop?.place ?? '', when: g.seg, witnesses: seen, from: 's1b' });
 }
 
-/** 남겨 둔 장면을 거둔다(그 사람 하나에 대한 key 장면). 끝내 안 드러난 오판 장면이 드러난 뒤에 남지 않게 한다. */
-export function dropScene(g: Game, key: string, who: string): void {
+/** 남겨 둔 장면을 거둔다(그 사람 하나에 대한 key 장면). 끝내 안 드러난 오판 장면이 드러난 뒤에 남지 않게 한다.
+ * seg를 주면 그 구간에 남긴 장면만 거둔다(같은 사람의 앞 오판은 남는다). */
+export function dropScene(g: Game, key: string, who: string, seg?: number): void {
   const d = g.dark!;
-  d.scenes = d.scenes.filter(s => !(s.key === key && s.who[0] === who));
-  if (g.chronicle) g.chronicle = g.chronicle.filter(c => !(c.template === `s1b.${key}` && c.who === who));
+  d.scenes = d.scenes.filter(s => !(s.key === key && s.who[0] === who && (seg === undefined || s.seg === seg)));
+  if (g.chronicle) g.chronicle = g.chronicle.filter(c => !(c.template === `s1b.${key}` && c.who === who && (seg === undefined || c.when === seg)));
 }
 
 /** 선을 넘는 선택지에 붙는 반응 한 줄(10.1). 무뎌짐이면 지운다(10.5: 경고가 안 보이는 것 자체가 값).

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createGame, darkEnd, enableDark, onDeath, PROFILES } from '../../src/game';
 import type { Game } from '../../src/game';
 import { openCase, punish, reveal, scapegoat, sendTrial } from '../../src/game/dark/cases';
-import { h7Record } from '../../src/game/dark/chronicle';
+import { h7Record, scene } from '../../src/game/dark/chronicle';
 import { darkSettle, darkTravel } from '../../src/game/dark/hooks';
 import { executorTick, runOrder } from '../../src/game/dark/order';
 import { adults, commOf, isRep } from '../../src/game/dark/state';
@@ -64,6 +64,16 @@ describe('K02 6. 끝까지 안 드러난 배급·근신 오판은 끝 증언에�
     expect(g.dark!.scenes.some(x => x.key === 'misjudged')).toBe(false);
     expect(g.dark!.scenes.some(x => x.key === 'innocent')).toBe(true);
     expect((g.chronicle ?? []).some(x => x.template === 's1b.misjudged')).toBe(false);
+  });
+
+  it('같은 사람의 앞 오판이 따로 있으면, 드러난 구간의 장면만 거둔다', () => {
+    const { g, s } = misjudged('k02-6-twice', 'ration'); // g.seg 4에 남긴 첫 오판
+    g.seg = 9;
+    scene(g, 'misjudged', 1, '9구간, 죄 없는 사람에게 근신을 내렸다.', [s.id]);
+    reveal(g, s.id, commOf(g, s.id), 9);
+    const left = g.dark!.scenes.filter(x => x.key === 'misjudged');
+    expect(left.map(x => x.seg)).toEqual([4]);
+    expect((g.chronicle ?? []).filter(x => x.template === 's1b.misjudged').map(x => x.when)).toEqual([4]);
   });
 });
 

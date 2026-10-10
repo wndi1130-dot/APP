@@ -11,7 +11,7 @@ import type { BotOptions, GameMetrics } from './s1c_bot';
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const flags = process.argv.slice(2).filter(a => a.startsWith('--'));
 // 판 수는 양의 정수만 받는다(0·음수·소수·글자는 빈 결과나 NaN 평균으로 새어 나간다, K02 11).
-if (args[0] !== undefined && !/^[1-9]\d*$/.test(args[0])) throw new Error(`판 수는 양의 정수여야 한다: ${args[0]}`);
+if (args[0] !== undefined && !(/^[1-9]\d*$/.test(args[0]) && Number.isSafeInteger(Number(args[0])))) throw new Error(`판 수는 양의 정수여야 한다: ${args[0]}`);
 const N = Number(args[0] ?? 1000);
 const OUT = args[1];
 // --set=key:value 로 dark/data.ts의 B 값을 바꿔 민감도를 본다(예: --set=escBase:0.25).
