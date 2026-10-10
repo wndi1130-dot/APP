@@ -25,11 +25,11 @@
       "effects": [
         {
           "type": "food",
-          "amount": -6
+          "amount": -4
         },
         {
           "type": "trust",
-          "amount": -2
+          "amount": -1
         },
         {
           "type": "flag",
@@ -53,12 +53,12 @@
         {
           "type": "community.ration",
           "target": "tail",
-          "amount": -8
+          "amount": -6
         },
         {
           "type": "relation",
           "target": "tail",
-          "amount": -6
+          "amount": -4
         },
         {
           "type": "flag",

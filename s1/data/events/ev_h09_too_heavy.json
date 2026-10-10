@@ -51,7 +51,17 @@
       "effects": [
         {
           "type": "food",
-          "amount": -11
+          "amount": -7
+        },
+        {
+          "type": "flag",
+          "id": "h09_food_down",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h09_dropped_food",
+          "delay": 1
         }
       ],
       "followups": [],

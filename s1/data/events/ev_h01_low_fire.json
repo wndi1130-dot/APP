@@ -49,12 +49,16 @@
       "say": "속도를 줄여라. 하루 더 걸려도 불은 지킨다.",
       "effects": [
         {
+          "type": "coal",
+          "amount": 3
+        },
+        {
           "type": "food",
-          "amount": -8
+          "amount": -6
         },
         {
           "type": "tension",
-          "amount": 3
+          "amount": 2
         }
       ],
       "followups": [],
