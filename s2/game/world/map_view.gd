@@ -35,6 +35,7 @@ var container_nodes: Dictionary = {}
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
+const LEVEL_WAYS := {-1: "지하로", 0: "1층으로", 1: "2층으로", 2: "3층으로"}
 var label_nodes: Array = []             # [Label3D, cell]
 
 
@@ -458,10 +459,30 @@ func _build_stairs() -> void:
 		var st := _begin()
 		var base := Vector3(c.x + 0.5, low * LEVEL_H, c.y + 0.5)
 		for k in range(4):
-			box(st, Vector3(0.9, 0.3 + k * 0.3, 0.22), base + Vector3(0, (0.3 + k * 0.3) * 0.5, -0.33 + k * 0.22), Color(0.48, 0.4, 0.32))
+			box(st, Vector3(0.9, 0.3 + k * 0.3, 0.22), base + Vector3(0, (0.3 + k * 0.3) * 0.5, -0.33 + k * 0.22), Color(0.62, 0.55, 0.44))
 		_mesh_node(low).mesh = st.commit()
 		var up := _begin()
 		var top := Vector3(c.x + 0.5, high * LEVEL_H, c.y + 0.5)
 		box(up, Vector3(0.95, 0.03, 0.95), top + Vector3(0, 0.02, 0), Color(0.16, 0.15, 0.15))
 		box(up, Vector3(0.06, 0.9, 0.95), top + Vector3(0.47, 0.45, 0), Color(0.48, 0.4, 0.32))
 		_mesh_node(high).mesh = up.commit()
+		# Named on both floors so the way up or down is found (H3 2026-10-09: never seen).
+		_floor_label(LEVEL_WAYS.get(high, ""), c, low)
+		_floor_label(LEVEL_WAYS.get(low, ""), c, high)
+
+
+## A word on the floor, shown once its cell has been seen (as room names are).
+func _floor_label(text: String, c: Vector2i, lv: int) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 44
+	label.pixel_size = 0.012
+	label.modulate = Color(0.93, 0.88, 0.7, 0.95)
+	label.outline_size = 8
+	label.outline_modulate = Color(0.1, 0.09, 0.08, 0.8)
+	label.rotation_degrees = Vector3(-90, 0, 0)
+	label.position = FieldGrid.center(c) + Vector3(0, lv * LEVEL_H + 1.3, 0)
+	label.no_depth_test = false
+	label.visible = false
+	level_roots[lv].add_child(label)
+	label_nodes.append([label, c, lv])

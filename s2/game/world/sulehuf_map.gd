@@ -100,6 +100,7 @@ static func build() -> Dictionary:
 	# climb out of and up the stairs (cannot be blocked; close the cellar door).
 	# The train-following share comes along the roads and the east track end.
 	data["manholes"] = {"manhole": Vector2i(54, 33), "culvert": Vector2i(3, 14), "cellar": Vector2i(110, 50)}
+	data["labels"].append({"text": "맨홀", "cell": Vector2i(54, 32)})
 	data["manhole_levels"] = {"cellar": -1}
 	data["sewer_names"] = {"manhole": "거리 맨홀", "culvert": "급수탑 밑 암거", "cellar": "지하실 배수구"}
 	data["entries"] = {
