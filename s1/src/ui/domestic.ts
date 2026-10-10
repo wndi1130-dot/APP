@@ -10,7 +10,7 @@ import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Varia
 import { cx, h, raw, s } from './dom';
 import { CARS, fmt, signed } from './common';
 import type { CarDef, DomUi, Ui, View } from './common';
-import { bar, portrait } from './widgets';
+import { bar, portrait, tip } from './widgets';
 import { nameBtn, shownName } from './names';
 import { plainData } from './repro';
 import type { Step } from './repro';
@@ -213,10 +213,9 @@ function coldPop(view: View, car: CarDef): HTMLElement {
   const store = lawActive(g, 'corpse_store');
   return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
     popHead(car),
-    h('p', { class: 'carpop__text' }, store || g.stored + (g.pyre ?? 0) > 0
-      ? `천에 싸인 시신 ${g.stored + (g.pyre ?? 0)}/${coldCap(g)}구.${g.pyre ? ` ${g.pyre}구는 다음 정차 장작불을 기다린다.` : ''} 넘으면 녹는 사고가 두 배다.`
-      : '비어 있다. 창마다 성에가 두껍다.'),
-    g.stored > 0 ? h('p', { class: 'sub' }, '길게 머무는 정차에서 묻고 갈 수 있다.') : null);
+    // 구실 한 줄(사용자 2026-10-11: 왜 있는 칸인지 모르겠다). 규칙 그대로: 시신만 둔다, 식량은 창고칸에 둔다.
+    h('p', { class: 'carpop__text' }, `죽은 사람을 모셔 두는 칸이다. 지금 ${g.stored + (g.pyre ?? 0)}/${coldCap(g)}구. `,
+      tip('더 보기', `식량은 여기 두지 않는다(창고칸에 둔다). ${coldCap(g)}구를 넘으면 녹는 사고가 두 배다.${g.pyre ? ` ${g.pyre}구는 다음 정차 장작불을 기다린다.` : ''}${store ? '' : ' 시신을 어떻게 할지는 법으로 정한다.'} 길게 머무는 정차에서 묻고 갈 수 있다.`)));
 }
 
 function extraPop(view: View, car: CarDef): HTMLElement {
@@ -348,7 +347,7 @@ export function domesticStopRows(view: View): HTMLElement | null {
       h('button', { class: cx('chip', !d.escort && 'is-on'), 'data-action': 'dom-escort', 'data-id': '' }, '안 데려간다'),
       opts.map(o => h('button', {
         class: cx('chip', d.escort === o.id && 'is-on', o.last && 'dom-last'), 'data-action': 'dom-escort', 'data-id': o.id, disabled: !!o.why, title: o.why ?? '',
-      }, escortLabel(g, o.id, o.label), o.last ? h('small', { class: 'is-red' }, ' 마지막') : null))));
+      }, escortLabel(g, o.id, o.label), escortGain(g, o.id), o.last ? h('small', { class: 'is-red' }, ' 마지막') : null))));
   }
   if (g.stored > 0) {
     const b = buryOpen(g);
@@ -373,6 +372,24 @@ function escortLabel(g: Game, id: string, fallback: string): string {
   const p = g.dom?.people.find(x => x.id === id);
   return p ? `${shownName(p.name)} ${FIELD_NAME[p.field]}${dots(p.skill)}` : fallback;
 }
+
+/** 분야마다 정차에 데려가면 얻는 것(hooks.ts domesticStopHaul·afterStop의 값 그대로). 사용자 2026-10-11: 전문가가 무슨 효과를 내는지 모르겠다. */
+export const ESCORT_GAIN: Record<Field, string> = {
+  craft: `자재 ×${D.escortMaterials}`,
+  med: `부상 ×${D.escortInjury}`,
+  expedition: `부상·사망 ×${D.escortRisk}`,
+  engine: `코어 ×${D.escortCore}`,
+  radio: `정보에서 조각 +${Math.round(D.escortFrag * 100)}%`,
+};
+
+function escortGain(g: Game, id: string): HTMLElement | null {
+  const p = g.dom?.people.find(x => x.id === id);
+  return p ? h('small', { class: 'dom-gain' }, ` ${ESCORT_GAIN[p.field]}`) : null;
+}
+
+/** 조각과 코어가 어디서 나오나(hooks.ts afterStop의 규칙 그대로). 얻은 자리는 판에 남지 않아 나오는 길만 말한다. */
+export const FRAG_FROM = `정차 수색에서 가끔 나온다. 「정보」를 찾으러 가면 두 배다. 통신 전문가를 데려가면 더 잘 나온다.`;
+export const CORE_FROM = `기계가 남은 곳에서 길게 머물 때만 가끔 나온다. 기관 전문가를 데려가면 두 배다.`;
 
 /** 칸 순서를 바꾼 정차는 '짧게'를 못 고른다(4.5). */
 export function stayLocked(g: Game, stay: string): boolean {
@@ -501,8 +518,8 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
     def.variants && !st?.variant ? null : useLine(g, id, st?.variant),
     researchPromise(g)?.tech === id ? h('p', { class: 'dom-promise' }, `${COMM_NAME.medtech}에게 건 약속이다. 남은 ${researchPromise(g)!.left}구간.`) : null,
     !st ? h('ul', { class: 'dom-checks' },
-      h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, `설계도 조각 ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
-      cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, `코어 ${d.cores}/${cost.core}`) : null,
+      h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, tip('설계도 조각', FRAG_FROM), ` ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
+      cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, tip('코어', CORE_FROM), ` ${d.cores}/${cost.core}`) : null,
       h('li', { class: check.full === `${['', '견습', '숙련', '장인'][def.tier]} 이상이 없다` ? '' : 'is-ok' },
         def.tier === 0 ? '사람 조건 없음' : `${FIELD_NAME[def.branch]} ${SKILL_NAME[def.tier]} 이상`)) : null,
     sides.like.length || sides.dislike.length ? h('div', { class: 'dom-sides' },
@@ -553,7 +570,7 @@ function boardView(view: View): HTMLElement {
       const teacher = freeTeacher(g, f);
       const writer = manualWriter(g, f);
       return h('li', { class: cx('dom-board__row', only && 'is-only', k.length === 0 && 'is-empty') },
-        h('b', { class: 'dom-board__field' }, FIELD_NAME[f]),
+        h('b', { class: 'dom-board__field' }, tip(FIELD_NAME[f], `정차에 데려가면 ${ESCORT_GAIN[f]}. ${FIELD_NAME[f]} 기술을 되살리고 지키려면 이 분야 사람이 있어야 한다.`)),
         h('div', { class: 'dom-board__people' },
           people.length ? people.map(p => personChip(g, p)) : h('span', { class: 'is-red' }, '아무도 없다'),
           cd !== undefined ? h('span', { class: 'dom-count num', title: '남은 구간' }, cd) : null,

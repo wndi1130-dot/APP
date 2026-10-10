@@ -1130,3 +1130,7 @@ small { font-size: 12px; }
   .is-dragging .scroller { cursor: grabbing; }
   .is-dragging .scroller * { pointer-events: none; }
 }
+
+/* 위 띠의 중립 조각(사용자 2026-10-11: 중립이 푸른 조각으로 칠해져 지지처럼 보였다).
+   기운 정도는 조각을 채우지 않고 밑의 가는 줄로만 보인다. 조각 색은 늘 숫자가 말하는 편(불만, 중립, 지지)이다. */
+.band__fill { top: auto; height: 3px; opacity: 1; }
