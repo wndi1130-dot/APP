@@ -257,3 +257,23 @@ func test_windows_are_lit_all_day_inside_a_storm_only() -> void:
 	var plain = _stop(["blizzard"])
 	plain.lamp_cells()
 	assert_false(plain.lamp_key.contains("window"), "an ordinary blizzard keeps the dusk rule")
+
+
+# Test key for the phone: which storm layer costs what (2026-10-11, 17 fps at night).
+func test_the_storm_test_key_turns_the_layers_off_one_at_a_time() -> void:
+	var game = _storm_stop("during")
+	assert_gt(game.storm_layers.size(), 0)
+	assert_true(game.storm_screen.visible)
+	game.hud._debug_storm()
+	assert_false(game.storm_screen.visible, "1: no screen layer")
+	assert_true(game.storm_layers[0][0].visible)
+	game.hud._debug_storm()
+	assert_true(game.storm_screen.visible, "2: no falling snow")
+	assert_false(game.storm_layers[0][0].visible)
+	game.hud._debug_storm()
+	assert_false(game.storm_screen.visible, "3: neither")
+	assert_false(game.storm_layers[0][0].visible)
+	game.hud._debug_storm()
+	assert_eq(game.storm_cut, 0)
+	assert_true(game.storm_screen.visible and game.storm_layers[0][0].visible and game.storm_layers[0][0].emitting)
+

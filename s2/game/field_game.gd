@@ -98,6 +98,10 @@ var snow: GPUParticles3D
 var storm: Dictionary = {}
 var storm_layers: Array = []
 var storm_screen: ColorRect
+## Test key (D panel): which storm layers are drawn, to see on the phone what
+## each costs. 0 all, 1 no screen layer, 2 no falling snow, 3 neither.
+const STORM_CUTS: Array[String] = ["다 켬", "화면 층 끔", "눈발 끔", "둘 다 끔"]
+var storm_cut: int = 0
 var clock := FieldClock.new()
 var ledger := NoiseLedger.new()
 var director: HordeDirector
@@ -522,6 +526,15 @@ func storm_glows() -> Array:
 			continue
 		out.append(Vector4(uv.x, uv.y, spot[1] / maxf(camera.size, 0.01), clampf(spot[2], 0.0, 1.0)))
 	return out
+
+
+func set_storm_cut(n: int) -> void:
+	storm_cut = posmod(n, STORM_CUTS.size())
+	for row in storm_layers:
+		row[0].visible = storm_cut < 2
+		row[0].emitting = storm_cut < 2
+	if storm_screen != null:
+		storm_screen.visible = storm_cut == 0 or storm_cut == 2
 
 
 func _update_storm() -> void:
