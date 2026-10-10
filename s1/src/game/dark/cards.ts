@@ -7,7 +7,7 @@ import { revertLater } from '../people';
 import type { Card, Game } from '../state';
 import { B, EXECUTION, TRAIN_ORDER } from './data';
 import {
-  boardingText, caseById, coverUp, crimeTitle, crowdLine, eligible, level, LEVEL_WORD, mobTarget, openCase, protect, punish, punishPreview,
+  caseById, coverUp, crimeTitle, crowdLine, eligible, level, LEVEL_WORD, mobCry, mobTarget, openCase, protect, punish, punishPreview,
   guardFree, guardTrial, scapegoat, sendTrial, settleTruth, summary, topByClues, updateFlags,
 } from './cases';
 import type { Punish } from './cases';
@@ -148,10 +148,11 @@ function view(g: Game, card: Card): CardView | null {
         };
       }
       const name = nameOf(g, t.id);
+      const cries = mobCry(t);
       const canTrial = !cs.promiseUsed;
       return {
         title: '사람들이 범인을 찾는다', speaker: rep(g, cs.victimComm), focus: cs.victimComm, required: true,
-        body: `${crowdLine(g, cs)} 사람들이 ${name}${eul(name)} 끌어내려 한다. ${name}${iga(name)} ${boardingText(g, t.id)}.`, faces: [name],
+        body: `${crowdLine(g, cs)} 사람들이 ${name}${eul(name)} 끌어내려 한다.${cries.length ? ` 사람들이 외친다. ${cries.map(x => `"${x}"`).join(' ')}` : ''}`, faces: [name],
         choices: [
           crossing(g, card, { label: '내준다', say: '그날 밤 거기 있던 건 그자뿐이다. 데려가라.', effs: [], special: 'dark:mob:give' }, t.id),
           { label: '지킨다', say: '아무도 손대지 마라. 경비대, 그 앞에 서라.', effs: [], special: 'dark:mob:protect', extra: ['경비대 노출 +5', `${COMM_NAME[cs.victimComm]} 관계 −5`, '공포 +3'] },

@@ -57,6 +57,16 @@ export function boardingText(g: Game, id: string): string {
   return ({ refugee: '피난길에 탔다', bought: '자리를 사서 탔다', rescue: '구조돼 탔다', depot: '차고에서부터 있었다', force: '밀고 올라탔다', born: '열차에서 났다' } as Record<string, string>)[b ?? ''] ?? '처음부터 탔다';
 }
 
+/** 군중의 따옴표 외침(4.5). 그 사람의 facts와 단서에 있는 것만 쓰고(늦게 탐·밖에서 옴·그날 밤 거기), 없으면 처지 말을 넣지 않는다.
+ * 이름·말씨·출신지·칸을 겨냥한 외침은 없다. boardingText는 중립 화면에만 쓴다(금지선, 2026-10-10). */
+export function mobCry(s: Suspect): string[] {
+  const cries: string[] = [];
+  if (s.facts.includes('joined')) cries.push('늦게 탄 사람이다!');
+  else if (s.facts.includes('rescued')) cries.push('밖에서 온 사람이다!');
+  if (s.facts.includes('access') || s.clues.length) cries.push('그날 밤 거기 있었다!');
+  return cries;
+}
+
 export interface OpenArgs {
   kind: CaseKind; culprit: string; victimComm: Comm; victim?: string; dead: boolean; clock: number | null; ember?: number; where: string; own?: boolean;
 }

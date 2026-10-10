@@ -131,6 +131,47 @@ describe('K05 수사·재판 카드에는 탄 경위 문구가 안 나온다', (
   });
 });
 
+describe('K05 군중 카드는 서술 대신 사실에 있는 따옴표 외침만 쓴다', () => {
+  const PHRASES = ['판 중에 탔다', '피난길에 탔다', '자리를 사서 탔다', '구조돼 탔다', '차고에서부터 있었다', '밀고 올라탔다', '열차에서 났다', '처음부터 탔다'];
+  const mobBody = (facts: Fact[], clues = 1): string => {
+    const g = darkGame('k05-mob');
+    const c = openCase(g, args('assault', g));
+    c.sus = [{ ...sus(facts, clues), id: adult.id }];
+    updateFlags(g);
+    expect(g.scapegoatOk).toContain(adult.id);
+    g.cards.length = 0;
+    addCard(g, { kind: 'dark:mob', n: c.id, comm: 'guard' });
+    const body = viewCard(g, g.cards[g.cards.length - 1]).body;
+    for (const ph of PHRASES) expect(body, ph).not.toContain(ph);
+    return body;
+  };
+
+  it('늦게 탄 사람이면 늦게 탄 외침과 그날 밤 외침이 따옴표로 나온다', () => {
+    const b = mobBody(['joined']);
+    expect(b).toContain('"늦게 탄 사람이다!"');
+    expect(b).toContain('"그날 밤 거기 있었다!"');
+  });
+
+  it('구조민이면 밖에서 온 외침이 나오고, 늦게 탄 외침은 없다', () => {
+    const b = mobBody(['rescued']);
+    expect(b).toContain('"밖에서 온 사람이다!"');
+    expect(b).not.toContain('늦게 탄');
+  });
+
+  it('처지 사실이 없으면 처지 외침이 없다. 단서에서 온 그날 밤 외침만 있다', () => {
+    const b = mobBody([], 2);
+    expect(b).not.toContain('늦게 탄');
+    expect(b).not.toContain('밖에서 온');
+    expect(b).toContain('"그날 밤 거기 있었다!"');
+  });
+
+  it('칸·원한·벌받음 사실은 외침이 되지 않는다', () => {
+    const b = mobBody(['car', 'rival', 'punished']);
+    expect(b).not.toContain('늦게 탄');
+    expect(b).not.toContain('밖에서 온');
+  });
+});
+
 describe('K05 옛 저장의 후보 목록은 불러온 뒤 다시 센다', () => {
   it('flagged가 아닌 사람이 scapegoatOk에 남은 저장을 불러오면 빠진다', () => {
     const g = darkGame('k05-old');
