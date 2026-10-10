@@ -1,3 +1,4 @@
+import { backdropEl } from './backdrop';
 import { COMMS, COMM_NAME, COMM_SHORT, P, isSessionSeg, relStage, situation, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
@@ -158,7 +159,7 @@ export function homeScreen(view: View): HTMLElement {
   const cars = trainCars(g); // S1c 내정 훅: 칸 순서와 덧붙인 칸
   const open = cars.find(c => c.id === ui.carPop);
   return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike', ui.braking && 'is-braking') },
-    h('div', { class: 'sky' }, h('i', { class: 'layer layer--far' }), h('i', { class: 'layer layer--mid' }), h('i', { class: 'snow' })),
+    backdropEl(g, moving), // 달리는 배경(backdrop.ts)
     h('div', { class: 'scroller', 'data-keep-scroll': 'train' },
       h('div', { class: 'train' },
         cars.map(car => h('div', { class: 'slot', 'data-slot': car.id },
