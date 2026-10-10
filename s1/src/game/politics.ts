@@ -305,6 +305,9 @@ export function aiAgendaPick(g: Game, options: readonly LawAgenda[]): { c: Comm;
 /** 의회를 연 직후와 표결 뒤에 부를 다른 묶음의 훅(S1b 재판·불신임, dark/hooks.ts가 등록한다). */
 export const COUNCIL_HOOKS: { open?: (g: Game) => void; vote?: (g: Game, agenda: Agenda, r: VoteResult) => void }[] = [];
 
+/** S1c가 채우는 「고른 복원」 제안(프펑2식: 세력이 구체적인 항목을 내놓는다). pick이 null이면 그 조건은 협상 목록에 오르지 않는다. */
+export const RESEARCH_OFFER: { pick?: (g: Game) => { id: string; title: string } | null; made?: (g: Game, id: string) => void } = {};
+
 export function openCouncil(g: Game, emergency = false): void {
   g.session += 1;
   // 적의는 새 잘못 없이 2회기가 지나면 하나 준다(3.7). 비상 소집으로 적의를 빨리 지우지는 못한다.
@@ -442,7 +445,12 @@ export function bribePrice(g: Game, c: Comm): number {
 
 /** 공개 협상 조건 셋: 처지가 가장 나쁜 쪽, 그 집단의 것 하나, 공통 하나. 회기마다 같은 판이면 같다. */
 export function openConditions(g: Game, c: Comm): ConditionDef[] {
-  const pool = CONDITIONS[c].filter(x => !x.s1c || !!g.dom);
+  // 연구 우선권은 의무진이 구체적인 기술을 제안으로 내놓는다. 지금 완성판을 시작할 수 있는 기술이 없으면 목록에 오르지 않는다.
+  const pool = CONDITIONS[c].filter(x => !x.s1c || !!g.dom).flatMap(x => {
+    if (x.kind !== 'research_pick') return [x];
+    const offer = RESEARCH_OFFER.pick?.(g);
+    return offer ? [{ ...x, label: `${x.label}: ${offer.title}` }] : [];
+  });
   const [w, r, cr] = situation(g, c);
   const worst = c === 'tail' && cr >= 70 ? pool.find(x => x.kind === 'relocate')
     : w < r ? pool.find(x => x.kind === 'heat') : pool.find(x => x.kind === 'ration');
@@ -480,6 +488,10 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
         kind: 'open', cond, label, due: cond.kind === 'target' || cond.kind === 'skip_dispatch' ? g.seg + 1 : g.seg + P.promiseSegments,
         madeSession: g.session, ...(isLawAgenda(agenda) ? { law: agenda.law } : {}), ...(baseline === undefined ? {} : { baseline }),
       };
+    }
+    if (cond.kind === 'research_pick') {
+      const offer = RESEARCH_OFFER.pick?.(g);
+      if (offer) RESEARCH_OFFER.made?.(g, offer.id); // 제안한 그 기술을 지정한다
     }
     // 처지가 아니라 거래로 지지가 쌓인다(1.2): 약속을 받은 쪽은 조금 누그러진다.
     journal(g, `${name}과(와) 공개 협상: ${label}. ${agendaTitle(agenda)}에 찬성하기로 했다.`, 'deal');

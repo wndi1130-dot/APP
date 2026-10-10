@@ -1,7 +1,7 @@
 import { COMM_NAME, LAWS, LOOT_NAME, P, STAY } from '../data';
 import type { Comm, LawId } from '../data';
 import type { PromiseState } from '../state';
-import { COUNCIL_HOOKS } from '../politics';
+import { COUNCIL_HOOKS, RESEARCH_OFFER } from '../politics';
 import { addSecret, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { BYPRODUCT, D, FIELDS, TECHS } from './data';
@@ -17,7 +17,7 @@ import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strike
 import { bedTick, domesticHeal } from './medbay';
 import { refreshSit } from './sit';
 import { domCard, living, personById, techAdopted, techMult, topSkill, variantMult } from './state';
-import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, rollBreakdown, runWorkshop, upkeepCoal } from './workshop';
+import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, restoreCheck, rollBreakdown, runWorkshop, techTitle, upkeepCoal } from './workshop';
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.
 
@@ -261,13 +261,20 @@ export function domesticPromiseMade(g: Game): void {
   else if (!d.researchPick) d.researchPick = researchChoice(g);
 }
 
-/** 기술·의무진이 고르는 다음 복원 대상: 그들이 원하는 것 중 이 열차에서 실제로 시작할 수 있는 것(A02: 잠긴 R3나 선행·숙련이 모자란 것은 고르지 않는다). */
+/** 기술·의무진이 제안하는 다음 복원 대상: 그들이 원하는 것 중 지금 완성판을 바로 시작할 수 있는 것(A02: 잠긴 R3나 선행·숙련이 모자란 것은 고르지 않고,
+ * 프펑2식으로 지킬 수 없는 제안은 내놓지 않는다: 조각·부품·목재가 모자라거나 공방이 차 있으면 후보가 아니다). 없으면 null이고 그 조건은 협상 목록에서 빠진다. */
 export function researchChoice(g: Game): TechId | null {
   const d = g.dom;
   if (!d) return null;
-  const ids = (Object.keys(TECHS) as TechId[]).filter(id => TECHS[id].like.includes('medtech') && !restoreBlock(g, id));
+  const ids = (Object.keys(TECHS) as TechId[]).filter(id => TECHS[id].like.includes('medtech') && !restoreBlock(g, id) && !restoreCheck(g, id).full);
   return ids.sort((a, b) => TECHS[a].tier - TECHS[b].tier)[0] ?? null;
 }
+
+RESEARCH_OFFER.pick = g => {
+  const id = researchChoice(g);
+  return id ? { id, title: techTitle(g, id) } : null;
+};
+RESEARCH_OFFER.made = (g, id) => { if (g.dom) g.dom.researchPick = id as TechId; };
 
 /** 압력 경고(8.7, N13): 두 단계다. 첫 경고를 무시하면 다음이 마지막 경고, 그것도 무시하면 반드시 터진다.
  * 확률로 터지지 않는다(조짐은 약속). 김을 빼면 처음으로 돌아간다(석탄은 카드 효과로 뺀다). */
