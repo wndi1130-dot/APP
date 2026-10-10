@@ -83,6 +83,36 @@ describe('홈 편성', () => {
     expect(newGame('x', true).dom).toBeDefined();
     expect(newGame('x', false).dom).toBeUndefined();
   });
+
+  it('내정 켠 새 판은 새 이동 사건 묶음을 켠 채 시작하고, 내정 끈 판에는 그 칸이 없다', () => {
+    expect(newGame('x', true).eventPack).toBe(true);
+    expect('eventPack' in newGame('x', false)).toBe(false);
+    // 끈 판을 따로 만들 수 있다(비교용). 서막을 건너뛴 판도 같다.
+    expect('eventPack' in newGame('x', true, false, true, false)).toBe(false);
+    expect(newGame('x', true, false, false).eventPack).toBe(true);
+    expect(newGame('x', true, true).eventPack).toBe(true);
+  });
+
+  it("메뉴의 '사건 끈(켠) 새 판'은 사건만 바꾸고 시드·내정·어두운 길은 그대로 둔다", () => {
+    const { box, ctx } = ctxFor(newGame('ev-1', true, true), ui());
+    expect(box.g.eventPack).toBe(true);
+    handleDomestic('dom-events', { on: '0' }, ctx);
+    expect('eventPack' in box.g).toBe(false);
+    expect([box.g.seed, !!box.g.dom, !!box.g.dark]).toEqual(['ev-1', true, true]);
+    handleDomestic('dom-events', { on: '1' }, ctx);
+    expect(box.g.eventPack).toBe(true);
+    expect([box.g.seed, !!box.g.dom, !!box.g.dark]).toEqual(['ev-1', true, true]);
+    expect(box.toasts).toEqual(['사건 끈 새 판: 시드 ev-1.', '사건 켠 새 판: 시드 ev-1.']);
+  });
+
+  it("메뉴의 '내정 켠(끈) 새 판'은 사건을 내정과 함께 켜고 끈다", () => {
+    const { box, ctx } = ctxFor(newGame('ev-2', false), ui());
+    handleDomestic('dom-new', { on: '1' }, ctx);
+    expect([!!box.g.dom, box.g.eventPack]).toEqual([true, true]);
+    handleDomestic('dom-new', { on: '0' }, ctx);
+    expect(box.g.dom).toBeUndefined();
+    expect('eventPack' in box.g).toBe(false);
+  });
 });
 
 describe('칸 순서 바꾸기 입력', () => {
