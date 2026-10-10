@@ -33,6 +33,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const AMBIENT_C: float = -14.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
+const HORDE_HOME := Vector2i(50, 10)   # the platform by the train: where a horde walks with no sound to follow
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
 const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
@@ -120,6 +121,7 @@ var sounds: Array = []                 # recent sounds for the HUD: {pos, level,
 var shot_times: Array = []
 var hordes: Dictionary = {}            # index -> {"t": arrival, "ids": [], "cleared": bool, "entry": key}
 var pending_spawn: Array = []          # {"t", "pos", "horde", "target"}
+var last_loud = null                   # where the last loud sound was (Vector3): hordes walk there
 var rattle: Dictionary = {}            # manhole key -> seconds of rattling left
 var ground_items: Array = []           # {pos, id, n}
 var decisions: Array = []
@@ -900,6 +902,9 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	zombies.hear(at, level, radius)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
+	if level >= SimNoise.Level.LOUD:
+		last_loud = at
+		director.noticed(now)
 	if audio != null:
 		audio.on_sound(at, level, tag)
 	if level >= SimNoise.Level.LOUD:
@@ -1020,6 +1025,10 @@ func _update_hordes(delta: float) -> void:
 			node.position.y = absf(sin(now * 31.0)) * 0.08 if rattle[key] > 0.0 else 0.0
 		if rattle[key] <= 0.0:
 			rattle.erase(key)
+	if _squad_hunted():
+		director.noticed(now)
+	elif director.update_lost(now):
+		set_radio("기관사: 놓친 것 같다. 다음 것들이 늦어진다. 숨 돌려라.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -1045,6 +1054,24 @@ func _update_hordes(delta: float) -> void:
 			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
 
 
+## Is anything after the squad right now (chasing, or already at someone)?
+func _squad_hunted() -> bool:
+	for z in zombies.list:
+		if z["state"] in ["chase", "attack", "grab"]:
+			var v = z["victim"]
+			if v == null or v.team != "raider":
+				return true
+	return false
+
+
+## Where a horde walks: the last loud sound, or the platform if there was none.
+## Not to the squad: hiding has to be worth something (user, build 47).
+func horde_target() -> Vector3:
+	if last_loud != null:
+		return last_loud
+	return FieldGrid.center(HORDE_HOME)
+
+
 func _start_horde(h: Dictionary) -> void:
 	var now := clock.elapsed
 	var key: String = h["entry"]
@@ -1058,7 +1085,7 @@ func _start_horde(h: Dictionary) -> void:
 	hordes[h["index"]] = {"t": now, "cleared": false, "entry": key, "size": h["size"]}
 	telemetry.horde(now, int(h["index"]), int(h["size"]), key)
 	audio.horde_started()
-	var target := player.position
+	var target := horde_target()
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
 	var lead := 3.0 if HordeDirector.is_sewer(key) else 0.0
 	for i in range(int(h["size"])):
