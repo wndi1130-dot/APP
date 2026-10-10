@@ -296,3 +296,28 @@ func test_the_storm_screen_layer_is_drawn_small_and_stretched() -> void:
 	assert_false(game.storm_view.visible)
 	assert_eq(game.storm_port.render_target_update_mode, SubViewport.UPDATE_DISABLED, "off: not drawn at all")
 
+
+func test_snow_banks_against_walls_the_wind_blows_at() -> void:
+	# weather_fx 14.1: the ground rises at the foot of a wall on the wind's side.
+	var MapView = load("res://game/world/map_view.gd")
+	var FieldGrid = load("res://game/world/field_grid.gd")
+	var g = FieldGrid.new(8, 8)
+	for y in range(1, 6):
+		g.set_solid(Vector2i(3, y), FieldGrid.Solid.WALL)
+	g.set_solid(Vector2i(3, 6), FieldGrid.Solid.DOOR)
+	assert_eq(MapView.drift_uv(g, Vector2i(3, 3)), Vector2(1, 0), "wall to the east of this corner")
+	assert_eq(MapView.drift_uv(g, Vector2i(4, 3)), Vector2(-1, 0), "wall to the west")
+	assert_eq(MapView.drift_uv(g, Vector2i(3, 1)), Vector2(1, 1), "the wall's end: both ways")
+	assert_eq(MapView.drift_uv(g, Vector2i(1, 3)), Vector2.ZERO, "open ground")
+	assert_eq(MapView.drift_uv(g, Vector2i(3, 6)), Vector2.ZERO, "level by a door")
+	assert_eq(MapView.drift_uv(g, Vector2i(0, 0)), Vector2.ZERO, "map edge")
+	var code := FileAccess.get_file_as_string("res://game/world/world_vis.gdshader")
+	assert_true(code.contains("fx_wind") and code.contains("bank"))
+	# Same ground mesh, no new node: the bank costs no draw call.
+	var game = _storm_stop("after")
+	var banked := 0
+	for y in range(game.grid.height + 1):
+		for x in range(game.grid.width + 1):
+			if MapView.drift_uv(game.grid, Vector2i(x, y)) != Vector2.ZERO:
+				banked += 1
+	assert_gt(banked, 50)

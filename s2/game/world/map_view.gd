@@ -368,6 +368,27 @@ static func sky_alpha(g: FieldGrid, c: Vector2i) -> float:
 	return 0.0 if g.indoor(c) else 1.0
 
 
+## Which way the walls stand from a corner of the ground grid (the point where
+## four cells meet): +1 or -1 on each axis, 0 for none or both. Snow banks up
+## there when the wind blows that way (world_vis). Nothing next to a door, so
+## the way in stays level; the shader keeps it off floors under a roof.
+static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
+	var side := Vector2i.ZERO
+	var open := false
+	for d in [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0)]:
+		var c: Vector2i = corner + d
+		if not g.inside(c):
+			continue
+		var kind := g.solid_at(c)
+		if kind == S.DOOR:
+			return Vector2.ZERO
+		if kind == S.WALL or kind == S.BLOCK or kind == S.WINDOW:
+			side += Vector2i(1, 1) + d * 2
+		elif kind == S.NONE and not g.indoor(c):
+			open = true
+	return Vector2(signi(side.x), signi(side.y)) if open else Vector2.ZERO
+
+
 static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> void:
 	var h := size * 0.5
 	var faces := [
@@ -388,6 +409,11 @@ static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> vo
 
 func _build_ground() -> void:
 	var st := _begin()
+	# One answer a corner, shared by the cells that meet there.
+	var banks := PackedVector2Array()
+	for y in range(grid.height + 1):
+		for x in range(grid.width + 1):
+			banks.append(drift_uv(grid, Vector2i(x, y)))
 	for y in range(grid.height):
 		for x in range(grid.width):
 			var c := Vector2i(x, y)
@@ -404,6 +430,7 @@ func _build_ground() -> void:
 			for idx in [0, 1, 2, 0, 2, 3]:
 				st.set_color(color)
 				st.set_normal(Vector3.UP)
+				st.set_uv(banks[int(quad[idx].z) * (grid.width + 1) + int(quad[idx].x)])
 				st.add_vertex(quad[idx])
 	var node := _mesh_node()
 	node.mesh = st.commit()
