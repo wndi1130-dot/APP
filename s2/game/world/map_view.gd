@@ -33,6 +33,7 @@ var vis_texture: ImageTexture
 var vis_bytes := PackedByteArray()
 var vis_lit := PackedInt32Array()
 var lamp_lit := PackedInt32Array()   # cells the lamp channel was written to last time
+var track_wait: Dictionary = {}      # snow marks handed over, written at the next sight update
 var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
 var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
@@ -190,6 +191,9 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary 
 		vis_bytes[i * 4] = 255
 		vis_bytes[i * 4 + 1] = 255
 		vis_lit.append(i)
+	for i in track_wait:
+		vis_bytes[int(i) * 4 + 3] = int(track_wait[i])
+	track_wait = {}
 	for i in lamp_lit:
 		vis_bytes[i * 4 + 2] = 0
 	lamp_lit = PackedInt32Array()
@@ -198,6 +202,13 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary 
 		lamp_lit.append(int(i))
 	vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RGBA8, vis_bytes)
 	vis_texture.update(vis_image)
+
+
+## Snow marks (SnowTracks.take_changed: cell index -> byte, 255 untouched) for
+## the A channel. Uploaded with the next sight update, so it costs no extra upload.
+func update_tracks(changed: Dictionary) -> void:
+	for i in changed:
+		track_wait[i] = changed[i]
 
 
 ## How strong the lamp light shows on the ground: faint by day, full at night.

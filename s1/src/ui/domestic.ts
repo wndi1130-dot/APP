@@ -2,7 +2,7 @@ import {
   BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
-  movedThisStop, previewMove, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
+  movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy,
 } from '../game';
 import { copyText } from './clip';
@@ -408,7 +408,8 @@ function techNode(g: Game, id: TechId, sel: boolean): HTMLElement {
     h('span', { class: 'dom-node__name' }, techTitle(g, id), def.variants && !st?.variant ? ' ◇' : ''),
     ns === 'collect' || ns === 'unknown' ? h('span', { class: 'dom-node__frag num' }, `${d.frags[def.branch]}/${cost.frags}`) : null,
     ns === 'restoring' && st ? bar(st.progress, '--warm', st.need) : null,
-    tag ? h('small', { class: 'dom-node__tag' }, tag) : null);
+    tag ? h('small', { class: 'dom-node__tag' }, tag) : null,
+    researchPromise(g)?.tech === id ? h('small', { class: 'dom-node__promise' }, `약속 · 남은 ${researchPromise(g)!.left}구간`) : null);
 }
 
 function sideLine(sides: { like: Comm[]; dislike: Comm[] }): string {
@@ -483,6 +484,7 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
         techUseLine(g, id, v) ? h('span', { class: 'dom-use' }, ` · ${techUseLine(g, id, v)}`) : null)))
       : h('p', null, def.variants && st?.variant ? def.variants[st.variant].effect : def.effect, h('span', { class: 'sub' }, ` · ${upkeepText(upkeepOf(g, id))}`)),
     def.variants && !st?.variant ? null : useLine(g, id, st?.variant),
+    researchPromise(g)?.tech === id ? h('p', { class: 'dom-promise' }, `${COMM_NAME.medtech}에게 건 약속이다. 남은 ${researchPromise(g)!.left}구간.`) : null,
     !st ? h('ul', { class: 'dom-checks' },
       h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, `설계도 조각 ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
       cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, `코어 ${d.cores}/${cost.core}`) : null,
