@@ -66,6 +66,7 @@ export function applyStep(g: Game, s: Step): string | null {
   const label = stepLabel(g, s);
   const before = { seg: g.seg, trust: Math.round(g.trust), tension: Math.round(g.tension), settle: g.lastSettle };
   const res = { coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux) };
+  const rel0 = COMMS.map(c => Math.round(g.comms[c].rel));
   const text = runStep(g, s);
   const why = g.lastSettle && g.lastSettle !== before.settle ? '구간 정산' : label;
   const trust = Math.round(g.trust) - before.trust;
@@ -78,6 +79,9 @@ export function applyStep(g: Game, s: Step): string | null {
   if (d.coal !== 0 || d.food !== 0 || d.med !== 0 || d.lux !== 0) {
     g.resLog = [...(g.resLog ?? []), { seg: before.seg, label: why, ...d }].slice(-RES_LOG_MAX);
   }
+  const rel: Partial<Record<Comm, number>> = {};
+  COMMS.forEach((c, i) => { const v = Math.round(g.comms[c].rel) - rel0[i]; if (v !== 0) rel[c] = v; });
+  if (Object.keys(rel).length > 0) g.relLog = [...(g.relLog ?? []), { seg: before.seg, label: why, rel }].slice(-RES_LOG_MAX);
   return text;
 }
 
