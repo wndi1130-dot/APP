@@ -605,7 +605,7 @@ func test_the_dusk_test_key_jumps_to_1540_and_keeps_the_next_horde_as_far_off() 
 	assert_eq(game.clock.elapsed, at, "a second press does nothing")
 
 
-func test_state_icons_sit_in_a_small_column_at_the_right_edge() -> void:
+func test_state_icons_sit_in_a_column_at_the_right_edge_big_enough_to_see() -> void:
 	var p = game.player
 	var hud = game.hud
 	p.body.add_wound("torso", "deep", 0.0)
@@ -618,7 +618,15 @@ func test_state_icons_sit_in_a_small_column_at_the_right_edge() -> void:
 	assert_gt(a.position.x, view.x * 0.8, "right edge")
 	assert_almost_eq(a.end.x, b.end.x, 0.5, "one column, right-aligned")
 	assert_gt(b.position.y, a.end.y - 0.5, "one under the other")
-	assert_lt(hud.status_pads[0].get_theme_font_size("font_size"), 18, "small words")
-	for pad in [hud.shove_button, hud.manual_button, hud.aim_button]:
+	# Build 116 (user): at 58x38 with 15pt words they were not seen at all.
+	for i in hud.STATUS_SLOTS:
+		assert_gte(hud.status_pads[i].size.x, 90.0, "wide enough to see")
+		assert_gte(hud.status_pads[i].size.y, 48.0)
+		assert_gte(hud.status_pads[i].get_theme_font_size("font_size"), 20)
+	var plate: StyleBoxFlat = hud.status_pads[0].get_theme_stylebox("normal")
+	assert_gte(plate.border_width_left, 3, "a rim in the state's colour")
+	assert_gt(plate.bg_color.a, 0.8, "a plate, not loose words")
+	for pad in [hud.shove_button, hud.manual_button, hud.aim_button, hud.context_button]:
 		assert_false(hud.status_pads[4].get_global_rect().intersects(pad.get_global_rect()))
+		assert_false(hud.status_pads[0].get_global_rect().intersects(pad.get_global_rect()))
 
