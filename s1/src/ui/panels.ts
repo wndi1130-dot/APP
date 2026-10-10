@@ -5,7 +5,8 @@ import type { Comm, Game } from '../game';
 import { cx, h, raw } from './dom';
 import { icon } from './icons';
 import { TIP, fmt, signed } from './common';
-import { tip } from './widgets';
+import { bar, tip } from './widgets';
+import { sharePcts } from './share';
 import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
@@ -19,13 +20,18 @@ import { departTapOn } from './depart';
 
 function factionRow(g: Game, c: Comm): HTMLElement {
   const s = g.comms[c];
-  const seatN = seats(g)[c];
+  const map = seats(g);
+  const seatN = map[c];
+  const total = COMMS.reduce((sum, x) => sum + map[x], 0);
+  const share = sharePcts(COMMS.map(x => map[x]))[COMMS.indexOf(c)];
   const acted = g.actedSeg === g.seg;
   const grudge = grudgeText(s.grudge);
   const supportWhy = darkSupportWhy(g, c); // S1b 계엄 중 경비대 지지
   return h('li', { class: cx('frow', `c-${c}`) },
     h('div', { class: 'frow__head' },
-      h('i', { class: 'dot' }), h('b', null, COMM_NAME[c]), h('span', { class: 'num sub' }, `${seatN}석`),
+      h('i', { class: 'dot' }), h('b', null, COMM_NAME[c]),
+      // 의석은 비율로, 막대와 함께. 석수는 누르면 뜬다(사용자 2026-10-11).
+      h('span', { class: 'frow__share' }, bar(share, '--ink-3'), tip(`${share}%`, `${COMM_NAME[c]}: 의회 ${seatN}석(전체 ${total}석).`)),
       h('span', { class: cx('stage', `stage--${s.rel >= 15 ? 'up' : s.rel <= -15 ? 'down' : 'mid'}`) }, relStage(g, c))),
     h('div', { class: 'frow__facts' },
       h('span', null, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
