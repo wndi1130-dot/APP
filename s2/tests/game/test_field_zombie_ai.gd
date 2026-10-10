@@ -148,7 +148,7 @@ func test_unseen_and_quiet_for_thirty_seconds_puts_the_next_horde_back() -> void
 	game.clock.elapsed = 171.0
 	game._update_hordes(0.1)
 	assert_almost_eq(d.next_arrival, due + d.LOST_REST, 0.001)
-	assert_true(game.radio.contains("놓친"), "the driver says so")
+	assert_true(game.radio_wait.is_empty(), "by default the driver calls only a horde coming in")
 	assert_eq(d.losses_left(), 2)
 
 

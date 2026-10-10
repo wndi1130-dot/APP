@@ -442,7 +442,7 @@ func _thawed() -> void:
 	var tower: Dictionary = game.data["spots"]["water_tower"]
 	tower["state"] = "thawed"
 	game.view.update_spot("water_tower")
-	game.set_radio("기관사: 급수탑 물이 나온다. 넣는다.")
+	game.set_radio("기관사: 급수탑 물이 나온다. 넣는다.", "reply")
 
 
 func _tower(delta: float) -> void:
@@ -501,7 +501,7 @@ func _climbed(p, up: bool) -> void:
 	if p == game.player:
 		if up:
 			game.forecast_precision = 1
-			game.set_radio("신호소 위: " + game.director.forecast(game.clock.elapsed, 1, game.clock))
+			game.set_radio("신호소 위: " + game.director.forecast(game.clock.elapsed, 1, game.clock), "say")
 		else:
 			game.hud.toast("내려왔다.")
 
@@ -554,7 +554,7 @@ func start_work(p) -> void:
 		q.brain = {"job": "dig", "side": i % 2}
 		game.crew.append(q)
 		game.receipt.person("sent", q.pid)
-	game.set_radio("기관사: 작업조 내려간다. 석탄을 퍼 오게 지켜라.")
+	game.set_radio("기관사: 작업조 내려간다. 석탄을 퍼 오게 지켜라.", "reply")
 	game.hud.work_panel()
 
 
