@@ -547,6 +547,16 @@ func can_run() -> bool:
 
 # body_injury 4.2. Speed factors (time = base / factor) except aim_min (circle floor size, bigger is worse).
 # ctx: carry_state 0..3, cold_level 0..3, gloves, heavy_coat, panic, strength.
+## How well a blow lands (body_injury 4.2, decisions 2026-10-11 '근접 타수'):
+## the one action that may fall below half. It scales the chance to hit the
+## head and to knock down (weapons.melee_odds), so a spent, bleeding, frozen
+## hand needs many blows where a fresh one needs two.
+const MELEE_HIT_FLOOR: float = 0.15
+## Hunger and sore muscles come from the train; the field has no such state
+## yet. ctx["hunger_level"], ctx["sore_level"]: 0 none, 1 some, 2 bad.
+const MELEE_HIT_NEED: Array[float] = [1.0, 0.85, 0.65]
+
+
 func multipliers(ctx: Dictionary) -> Dictionary:
 	var carry: int = int(ctx.get("carry_state", 0))
 	var cold: int = int(ctx.get("cold_level", 0))
@@ -554,6 +564,7 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	var m: Dictionary = {
 		"move": 1.0, "swing": 1.0, "aim_min": 1.0, "reload": 1.0,
 		"swap": 1.0, "hands": 1.0, "shove_window": 1.0, "aim_shrink": 1.0,
+		"melee_hit": 1.0,
 	}
 	# Bag (strength 7+ halves these)
 	if carry == 1:
@@ -562,15 +573,18 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 		_mul(m, "move", _soft(0.7, strong))
 		_mul(m, "swing", _soft(0.85, strong))
 		_mul(m, "shove_window", _soft(0.8, strong))
+		_mul(m, "melee_hit", _soft(0.8, strong))
 	# Exhaustion (strength 7+ halves these)
 	var ex: int = exhaustion_level()
 	if ex == 1:
 		_mul(m, "swing", _soft(0.9, strong))
 		_mul(m, "hands", _soft(0.9, strong))
 		_mul(m, "aim_shrink", _soft(0.7, strong))
+		_mul(m, "melee_hit", _soft(0.7, strong))
 	elif ex == 2:
 		_mul(m, "swing", _soft(0.75, strong))
 		_mul(m, "hands", _soft(0.75, strong))
+		_mul(m, "melee_hit", _soft(0.4, strong))
 		_mul(m, "shove_window", _soft(0.8, strong))
 		_mul(m, "aim_shrink", _soft(0.5, strong))
 		m["aim_min"] = float(m["aim_min"]) * (1.0 + (AIM_UP - 1.0) * (0.5 if strong else 1.0))
@@ -578,6 +592,7 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	if bleed >= 2:
 		_mul(m, "move", 0.8)
 		_mul(m, "swing", 0.85)
+		_mul(m, "melee_hit", 0.6)
 		_mul(m, "aim_min", AIM_UP)
 	# Arm fracture
 	if arm_fracture:
@@ -590,6 +605,7 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	if leg_fracture:
 		_mul(m, "move", 0.6 if fractures_splinted("leg") else MOVE_FLOOR)
 		_mul(m, "swing", 0.9)
+		_mul(m, "melee_hit", 0.8)
 		_mul(m, "shove_window", 0.7)
 	# A festering wound hurts where it is: arm slows the hands, leg the walk, the rest the swing.
 	if festering_on("arm"):
@@ -600,12 +616,14 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 		_mul(m, "move", FESTER_MULT)
 	if festering_on("torso") or festering_on("head_neck"):
 		_mul(m, "swing", FESTER_MULT)
+		_mul(m, "melee_hit", 0.85)
 	# Cold: 추움 row from level 1, hypothermia rows stack on top
 	if cold >= 1:
 		_mul(m, "move", 0.95)
 		_mul(m, "swing", 0.95)
 		_mul(m, "reload", 0.9)
 		_mul(m, "hands", 0.9)
+		_mul(m, "melee_hit", 0.8 if cold == 1 else 0.64)
 	if cold == 2:
 		_mul(m, "aim_min", AIM_UP)
 		_mul(m, "reload", 0.8)
@@ -624,11 +642,15 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	if bool(ctx.get("heavy_coat", false)):
 		_mul(m, "move", 0.85)
 		_mul(m, "swing", 0.9)
+		_mul(m, "melee_hit", 0.9)
 	if bool(ctx.get("panic", false)):
 		_mul(m, "aim_min", AIM_UP)
 		_mul(m, "reload", 0.8)
 		_mul(m, "swap", 0.8)
 		_mul(m, "hands", 0.6)
+	_mul(m, "melee_hit", MELEE_HIT_NEED[clampi(int(ctx.get("hunger_level", 0)), 0, 2)])
+	_mul(m, "melee_hit", MELEE_HIT_NEED[clampi(int(ctx.get("sore_level", 0)), 0, 2)])
+	m["melee_hit"] = maxf(MELEE_HIT_FLOOR, float(m["melee_hit"]))
 	# Floors and caps
 	for k: String in ["swing", "reload", "swap", "hands", "shove_window", "aim_shrink"]:
 		m[k] = maxf(FLOOR, float(m[k]))

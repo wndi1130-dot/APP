@@ -622,3 +622,37 @@ func test_state_icons_sit_in_a_small_column_at_the_right_edge() -> void:
 	for pad in [hud.shove_button, hud.manual_button, hud.aim_button]:
 		assert_false(hud.status_pads[4].get_global_rect().intersects(pad.get_global_rect()))
 
+
+# decisions 2026-10-11 '근접 타수': a spent hand needs about twice the blows.
+func _mean_blows(spent: float) -> float:
+	var p = game.player
+	p.facing = PI * 0.5
+	var blows := 0
+	var kills := 0
+	for i in 240:
+		game.zombies.list.clear()
+		var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+		z["state"] = "chase"
+		z["angle"] = -PI * 0.5   # facing the chief
+		for n in 60:
+			p.body.exhaustion = spent
+			p.swing_t = 0.0
+			game.combat.swing(p, z)
+			blows += 1
+			if z["state"] == "dead":
+				kills += 1
+				break
+	assert_eq(kills, 240)
+	return float(blows) / float(kills)
+
+
+func test_a_spent_hand_needs_more_blows_than_a_fresh_one() -> void:
+	var p = game.player
+	p.hands = [{"id": "crowbar", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	assert_eq(p.weapon_id(), "crowbar")
+	game.rng.seed = 7
+	var fresh := _mean_blows(0.0)
+	var spent := _mean_blows(0.9)
+	assert_between(fresh, 1.8, 2.8, "hale with a crowbar: two or three")
+	assert_between(spent, 3.2, 5.0, "badly spent: about four")
+

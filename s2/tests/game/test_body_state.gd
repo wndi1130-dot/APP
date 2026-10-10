@@ -443,3 +443,23 @@ func test_status_words() -> void:
 	assert_eq(b.status_words(), "쓰러짐")
 	b.dead = true
 	assert_eq(b.status_words(), "죽음")
+
+
+# body_injury 4.2 + decisions 2026-10-11: how well a blow lands is the one
+# action that may fall below half, down to 0.15.
+func test_the_state_of_the_hand_takes_from_how_well_a_blow_lands() -> void:
+	var b = Body.new()
+	assert_eq(b.multipliers({})["melee_hit"], 1.0)
+	b.exhaustion = 0.6
+	assert_almost_eq(float(b.multipliers({})["melee_hit"]), 0.7, 0.0001)
+	assert_almost_eq(float(b.multipliers({"strength": 7})["melee_hit"]), 0.85, 0.0001, "strength halves what tiredness takes")
+	b.exhaustion = 0.9
+	assert_almost_eq(float(b.multipliers({})["melee_hit"]), 0.4, 0.0001)
+	assert_almost_eq(float(b.multipliers({"cold_level": 1})["melee_hit"]), 0.32, 0.0001)
+	assert_eq(float(b.multipliers({"cold_level": 2, "carry_state": 2, "heavy_coat": true, "hunger_level": 2})["melee_hit"]), b.MELEE_HIT_FLOOR, "never below the floor")
+	assert_eq(float(b.multipliers({})["swing"]), 0.75, "the speed of the swing keeps its own floor of a half")
+	# Hunger and sore muscles: the holes are there, the train fills them later.
+	var hale = Body.new()
+	assert_almost_eq(float(hale.multipliers({"hunger_level": 1})["melee_hit"]), 0.85, 0.0001)
+	assert_almost_eq(float(hale.multipliers({"hunger_level": 2, "sore_level": 2})["melee_hit"]), 0.65 * 0.65, 0.0001)
+

@@ -151,3 +151,28 @@ func test_unknown_id_is_safe() -> void:
 	assert_eq(W.min_deg("rifle", "factory", 0), 0.0)
 	assert_true(W.is_ranged("bow"))
 	assert_false(W.is_ranged("axe"))
+
+
+# decisions 2026-10-11 '근접 타수' (user): at the best one or two blows, hale
+# two or three, at the worst about ten.
+func _blows(id: String, skill: int, behind: bool, hit: float, strength: int) -> float:
+	return W.melee_mean_swings(W.melee_odds(id, skill, false, behind, hit, strength))
+
+
+func test_blows_to_end_one_run_from_one_or_two_to_about_ten() -> void:
+	assert_between(_blows("axe", 3, true, 1.0, 8), 1.2, 1.8, "the best: skilled, strong, a hatchet, from behind")
+	for id in ["knife", "crowbar", "axe"]:
+		assert_between(_blows(id, 1, false, 1.0, 5), 1.8, 3.2, "hale: " + id)
+		assert_between(_blows(id, 1, false, 0.15, 5), 6.0, 10.5, "the worst: " + id)
+		assert_gt(_blows(id, 1, false, 0.4, 5), _blows(id, 1, false, 0.7, 5), "worse state, more blows: " + id)
+		assert_gt(_blows(id, 1, false, 0.7, 5), _blows(id, 1, false, 1.0, 5))
+	assert_eq(W.melee_odds("crowbar", 0, true, false, 0.15, 5)["head"], 1.0, "one on the ground is ended in one, whatever the hand")
+
+
+func test_strength_against_the_weight_in_the_hand() -> void:
+	assert_almost_eq(W.melee_weight_mult("crowbar", 5), 1.0, 0.0001, "crowbar asks for 5")
+	assert_almost_eq(W.melee_weight_mult("axe", 5), 0.7, 0.0001, "a hatchet asks for 7")
+	assert_almost_eq(W.melee_weight_mult("knife", 5), 1.15, 0.0001, "strength to spare: a little more, capped")
+	assert_almost_eq(W.melee_weight_mult("axe", 1), 0.4, 0.0001, "and a floor")
+	assert_gt(_blows("axe", 1, false, 1.0, 3), _blows("axe", 1, false, 1.0, 7), "a weak arm needs more blows with a heavy thing")
+
