@@ -209,6 +209,14 @@ small { font-size: 12px; }
 .band__seg { display: block; min-width: 2px; border-radius: 2px; background: var(--neutral); }
 .band__seg.is-unrest { background: var(--discontent); }
 .band__seg.is-support { background: var(--support); }
+/* 중립 칸이 불만 선(왼쪽에서 붉게)·지지 선(오른쪽에서 푸르게)까지 간 만큼 조각 안을 채운다(hud.ts segFill). */
+.band__seg { position: relative; overflow: hidden; }
+.band__fill { position: absolute; top: 0; bottom: 0; opacity: .6; }
+.band__fill.is-neg { left: 0; background: var(--discontent); }
+.band__fill.is-pos { right: 0; background: var(--support); }
+/* 관계가 방금 바뀐 칸의 조각이 두 번 깜빡인다. */
+.band__seg.fx-seg { animation: fx-seg 700ms ease-in-out 2; }
+@keyframes fx-seg { 50% { filter: brightness(2.2); transform: scaleY(1.9); } }
 
 .top__res { display: flex; gap: 10px; flex: none; }
 .res { display: flex; align-items: center; gap: 4px; min-width: 50px; }
@@ -915,6 +923,7 @@ small { font-size: 12px; }
 .fx-rel { font-size: 12px; line-height: 18px; }
 @keyframes fx-rels { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
+  .band__seg.fx-seg { animation: none; outline: 1px solid var(--ink-1); }
   .fx-hit b, .fx-cross, .top.fx-band, .fx-down.fx-hit .meter__body, .fx-down.fx-hit .res__body { animation: none; }
   .fx-tag, .fx-tag.is-late { animation: fx-rels 2s linear forwards; animation-delay: 0s; transform: translateX(-50%); }
   .fx-word { animation: fx-rels 2.2s linear forwards; }
