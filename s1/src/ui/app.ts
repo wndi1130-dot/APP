@@ -15,6 +15,7 @@ import { cardSheet } from './card';
 import { debugOverlay, endScreen, overlay } from './panels';
 import { beginNames, endNames, personCard, shortText } from './names';
 // S1c 내정 훅(ui/domestic.ts): ?s1c=1로 켠 판, 내정 단추와 레버, H6 재기.
+import { copyText } from './clip';
 import { changeDomestic, h6Input, h6Render, h6Visibility, handleDomestic, newGame, notePrologue, urlWantsS1c } from './domestic';
 import type { DomCtx, H6Clock } from './domestic';
 // S1b 어두운 길 훅(ui/dark.ts): ?s1b=1로 켠 판, 메뉴 단추, H7 고르기 시간.
@@ -621,12 +622,12 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'repro-copy': {
-        // 아티팩트 창이 클립보드를 막을 수 있다. 막히면 펼치는 칸으로 안내한다.
+        // 창이 클립보드를 막을 수 있다(아티팩트 창, 폰에서 http로 연 판은 clip.ts가 옛 방식으로 복사). 막히면 펼치는 칸으로 안내한다.
         const text = reproText();
-        const blocked = () => { toast('복사가 막혔다. 아래 칸을 펼쳐 길게 눌러 복사해 줘.'); render(); };
-        const clip = globalThis.navigator?.clipboard;
-        if (clip?.writeText) clip.writeText(text).then(() => { toast(`복사했다(${Math.round(text.length / 1000)}KB). 채팅에 붙여 보내 줘.`); render(); }, blocked);
-        else blocked();
+        copyText(text).then(ok => {
+          toast(ok ? `복사했다(${Math.round(text.length / 1000)}KB). 채팅에 붙여 보내 줘.` : '복사가 막혔다. 아래 칸을 펼쳐 길게 눌러 복사해 줘.');
+          render();
+        });
         return;
       }
       case 'toggle-vibrate':

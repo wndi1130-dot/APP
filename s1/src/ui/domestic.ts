@@ -5,6 +5,7 @@ import {
   movedThisStop, previewMove, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow,
 } from '../game';
+import { copyText } from './clip';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, raw, s } from './dom';
 import { CARS, fmt, signed } from './common';
@@ -739,7 +740,8 @@ export function domesticEnd(view: View): HTMLElement | null {
       h('li', null, `내정 카드 ${sm.picks}장 골랐다`),
       h('li', null, `구간 전체(참고) 평시 ${sm.allPeaceS ?? '−'}초 · 위기 ${sm.allCrisisS ?? '−'}초`)),
     h('p', { class: 'sub' }, '판 뒤 질문: 공방·현황판엔 확인하려고 들어갔나 바꾸려고 들어갔나? 견습생을 고를 때 기관실 반응을 생각했나? 결함판을 썼나? 맡기기를 켰다면 공방장이 뭘 했는지 알아챘나?'),
-    // 아티팩트 창은 내려받기를 막는다. 기록은 펼쳐서 복사한다.
+    // 아티팩트 창은 내려받기를 막는다. 기록은 단추로 복사하고, 복사가 막힌 창에선 펼쳐서 복사한다.
+    h('button', { class: 'btn btn--ghost', 'data-action': 'dom-export-copy' }, '내정 기록(JSON) 복사'),
     h('details', { class: 'dom-export' },
       h('summary', null, '내정 기록(JSON) 펼치기'),
       h('textarea', { class: 'dom-export__text', readonly: true, rows: 6 }, raw(h6Export(g)))));
@@ -767,6 +769,13 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   if (action === 'dom-new') {
     ctx.reset(newGame(g0.seed, data.on === '1', !!g0.dark));
     ctx.toast(data.on === '1' ? `내정 켠 새 판: 시드 ${g0.seed}.` : `내정 끈 새 판: 시드 ${g0.seed}.`);
+    return true;
+  }
+  if (action === 'dom-export-copy') {
+    copyText(h6Export(g0)).then(ok => {
+      ctx.toast(ok ? '내정 기록을 복사했다. 채팅에 붙여 보내 줘.' : '복사가 막혔다. 아래 칸을 펼쳐 길게 눌러 복사해 줘.');
+      ctx.render();
+    });
     return true;
   }
   if (action === 'dom-events') {

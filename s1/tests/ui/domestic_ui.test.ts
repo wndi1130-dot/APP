@@ -105,6 +105,16 @@ describe('홈 편성', () => {
     expect(box.toasts).toEqual(['사건 끈 새 판: 시드 ev-1.', '사건 켠 새 판: 시드 ev-1.']);
   });
 
+  it("끝 화면의 '내정 기록(JSON) 복사'는 복사가 막힌 창에서 펼치는 칸으로 안내하고 판은 그대로 둔다", async () => {
+    const g0 = newGame('ev-3', true);
+    const { box, ctx } = ctxFor(g0, ui());
+    expect(handleDomestic('dom-export-copy', {}, ctx)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(box.g).toBe(g0);
+    expect(box.toasts).toEqual(['복사가 막혔다. 아래 칸을 펼쳐 길게 눌러 복사해 줘.']);
+  });
+
   it("메뉴의 '내정 켠(끈) 새 판'은 사건을 내정과 함께 켜고 끈다", () => {
     const { box, ctx } = ctxFor(newGame('ev-2', false), ui());
     handleDomestic('dom-new', { on: '1' }, ctx);
