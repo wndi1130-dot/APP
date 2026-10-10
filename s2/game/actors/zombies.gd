@@ -29,6 +29,7 @@ const CONE_COS: float = 0.5      # 120 degree forward sight cone
 const HERD: float = 8.0
 const MEMORY: float = 8.0        # seconds a lost target stays worth chasing (field_unified 11, 'normal')
 const SEARCH_TIME: float = 4.0   # look around the last seen spot, two corners, then wander
+const SHOVED_TIME: float = 0.28  # a shoved body is seen stumbling back this long (it is already there for the rules)
 const NO_WAY_WAIT: float = 2.5   # no way through to the target: look for one again this much later
 const KINDS: Array[String] = ["dead", "clothed", "fresh", "frozen"]
 const TINTS: Dictionary = {"dead": Color(0.5, 0.52, 0.47), "clothed": Color(0.36, 0.38, 0.45), "fresh": Color(0.62, 0.45, 0.42), "frozen": Color(0.86, 0.9, 0.95), "corpse": Color(0.3, 0.3, 0.29)}
@@ -257,6 +258,8 @@ func update(delta: float) -> void:
 		z["age"] += delta
 		z["cooldown"] = maxf(0.0, z["cooldown"] - delta)
 		z["stun"] = maxf(0.0, z["stun"] - delta)
+		if z.has("shoved_t"):
+			z["shoved_t"] = maxf(0.0, float(z["shoved_t"]) - delta)
 		match z["state"]:
 			"dead", "frozen":
 				continue
@@ -609,6 +612,8 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	away.y = 0
 	if away.length() < 0.01:
 		away = Vector3(0, 0, 1)
+	z["shoved_from"] = z["pos"]
+	z["shoved_t"] = SHOVED_TIME
 	z["pos"] = _slide(z["pos"], away.normalized() * 1.3)
 	z["cooldown"] = 1.8
 	if knock:
@@ -616,6 +621,24 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	else:
 		z["state"] = "chase"
 		z["stun"] = 1.0
+
+
+## How far a shoved body has been seen to go: 0 still where it stood, 1 where
+## the shove put it (build 89: it jumped there at once). The rules use "pos".
+func shoved_k(z: Dictionary) -> float:
+	var left: float = float(z.get("shoved_t", 0.0))
+	if left <= 0.0:
+		return 1.0
+	var k := 1.0 - left / SHOVED_TIME
+	return 1.0 - (1.0 - k) * (1.0 - k)
+
+
+func draw_pos(z: Dictionary) -> Vector3:
+	var k := shoved_k(z)
+	if k >= 1.0:
+		return z["pos"]
+	var from: Vector3 = z["shoved_from"]
+	return from.lerp(z["pos"], k)
 
 
 func knock_down(z: Dictionary) -> void:
@@ -650,15 +673,18 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		var look: String = z["kind"]
 		var state: String = z["state"]
 		var basis := Basis(Vector3.UP, z["angle"])
-		var pos := at
+		var pos := draw_pos(z)
+		var reel := 1.0 - shoved_k(z)
 		var frozen_anim := 0.0
 		var shade := 1.0
 		if state == "dead":
 			look = "corpse"
 		if state == "dead" or state == "downed" or state == "rising" or z["crawl"]:
 			basis = basis * Basis(Vector3.RIGHT, -PI * 0.5)
-			pos.y = at.y + 0.18
+			pos.y = pos.y + 0.18
 			frozen_anim = 1.0 if state != "downed" or not z["crawl"] else 0.0
+		elif reel > 0.0:
+			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
 		if state == "frozen":
 			look = "frozen"
 			frozen_anim = 1.0

@@ -17,6 +17,8 @@ const SHOVE_KNOCK: float = 0.35
 ## Lockout between shoves: a press that comes out about a third of a second
 ## after the last one (user, build 47: 0.5 felt late). Still one per swing time.
 const SHOVE_TIME: float = 0.35
+const SHOVE_WINDUP: float = 0.15     # the arms come back first; then the shove lands (build 89: it was instant)
+const SHOVE_LUNGE: float = 0.15
 const CLOSE: float = 1.8
 const JAM_CLEAR: float = 2.5
 const FALL_TIME: float = 1.5
@@ -53,6 +55,15 @@ func update(delta: float) -> void:
 	for p in game.people_alive():
 		var m: Dictionary = p.mults()
 		p.swing_t = maxf(0.0, p.swing_t - delta)
+		p.lunge_t = maxf(0.0, p.lunge_t - delta)
+		if p.shove_t > 0.0:
+			p.shove_t -= delta
+			if p.shove_t <= 0.0:
+				p.shove_t = 0.0
+				if p.can_act() and p.grabbers.is_empty():
+					p.swing_t = 0.0
+					p.lunge_t = SHOVE_LUNGE
+					shove(p)
 		if p.jam_t > 0.0:
 			p.jam_t -= delta * float(m["hands"])
 			if p.jam_t <= 0.0 and p == game.player:
@@ -432,6 +443,15 @@ func _kill(p, z: Dictionary, msg: String) -> void:
 
 
 ## Shove: a short cone in front, breaks a grab, sometimes knocks down.
+## The player's shove key: the arms come back for a moment, then it lands.
+## Companions shove on reflex (shove itself).
+func start_shove(p) -> void:
+	if p.swing_t > 0.0 or p.shove_t > 0.0 or game.paused:
+		return
+	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
+	p.swing_t = p.shove_t
+
+
 func shove(p) -> void:
 	# One shove per swing time: mashing the button must not stack stuns.
 	if p.swing_t > 0.0 or game.paused:

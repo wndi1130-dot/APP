@@ -40,9 +40,13 @@ const PORTRAIT_W: float = 290.0
 ## State icons sit in a row right of the blood key: the two most urgent big,
 ## the rest small (body_injury 4 '둘까지만 크게').
 ## Narrow enough that all five stay on the left half of a 1280-wide screen.
-const STATUS_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
-const STATUS_BIG := Vector2(60.0, 56.0)
-const STATUS_SMALL := Vector2(48.0, 44.0)
+const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+# State icons: a small column down the right edge, under the zoom keys (build 89:
+# the words were too big and sat in the way; pictures come with the art).
+const STATUS_AT := Vector2(-16.0, 84.0)
+const STATUS_BIG := Vector2(58.0, 38.0)
+const STATUS_SMALL := Vector2(50.0, 32.0)
+const DUSK_TEST_MIN: float = 940.0   # the test key jumps to 15:40, five minutes before sunset
 const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
 const FESTER_RIM := Color(0.74, 0.7, 0.3)           # a festering part: a sallow rim, never red
@@ -128,6 +132,7 @@ var rim_run: bool = false
 var stick_tap_ms: int = -10000
 var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
+var stick_opt_button: Button         # shown while paused: fixed stick or one that follows
 var debug_panel: PanelContainer
 var debug_label: Label
 var modal: Control
@@ -392,13 +397,16 @@ func _build_thumbs() -> void:
 	blood_button.add_theme_color_override("font_color", WARN)
 	blood_button.visible = false
 	# State icons (user, build 47): press one and it says what it does to you.
-	var sx := 0.0
+	var sy := 0.0
 	for i in STATUS_SLOTS:
 		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
-		var pad := _pad("", STATUS_AT + Vector2(sx, 0), size, 20 if i < 2 else 15, Control.PRESET_TOP_LEFT)
+		var pad := _pad("", STATUS_AT + Vector2(-size.x, sy), size, 15 if i < 2 else 12, Control.PRESET_TOP_RIGHT)
 		pad.visible = false
 		status_pads.append(pad)
-		sx += size.x + 4.0
+		sy += size.y + 4.0
+	# Paused: the stick can be changed here, not only on the start screen (build 89).
+	stick_opt_button = _pad("", Vector2(-120, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
+	stick_opt_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
 	# The bag sits on the left, above the fixed stick's catch ring. There is no
@@ -420,7 +428,7 @@ func _build_toasts() -> void:
 	toast_box = VBoxContainer.new()
 	# Right of the portrait and the blood key, under the state icons.
 	toast_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	toast_box.position = STATUS_AT + Vector2(0, STATUS_BIG.y + 8.0)
+	toast_box.position = TOAST_AT + Vector2(0, 64.0)
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast_box)
 
@@ -444,7 +452,7 @@ func _build_grab() -> void:
 func _build_debug() -> void:
 	debug_panel = _panel(Color(0, 0, 0, 0.72))
 	debug_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	debug_panel.position = Vector2(-430, 84)
+	debug_panel.position = Vector2(-430 - 16 - STATUS_BIG.x, 84)   # left of the state icons' column
 	debug_panel.custom_minimum_size = Vector2(410, 0)
 	var v := VBoxContainer.new()
 	debug_panel.add_child(v)
@@ -456,6 +464,9 @@ func _build_debug() -> void:
 	h.add_child(_button("FPS 상한", _debug_fps, Vector2(96, 48), 16))
 	h.add_child(_button("시야 가림", _debug_mask, Vector2(96, 48), 16))
 	h.add_child(_button("무리 지금", _debug_horde, Vector2(96, 48), 16))
+	var h2 := HBoxContainer.new()
+	v.add_child(h2)
+	h2.add_child(_button("해 질 녘으로", _debug_dusk, Vector2(140, 48), 16))
 	debug_panel.visible = false
 	root.add_child(debug_panel)
 
@@ -474,6 +485,20 @@ func _debug_mask() -> void:
 
 func _debug_horde() -> void:
 	game.director.next_arrival = game.clock.elapsed
+
+
+## Test key: the clock jumps to 15:40 so dusk and the lanterns can be seen
+## without playing twenty minutes. The next horde keeps its distance in time.
+func _debug_dusk() -> void:
+	var to: float = (DUSK_TEST_MIN - float(game.clock.ARRIVE_MIN)) * 60.0 / game.clock.GAME_PER_REAL
+	var jump: float = to - game.clock.elapsed
+	if jump <= 0.0:
+		toast("이미 해 질 녘이다.")
+		return
+	game.clock.elapsed = to
+	if game.director.next_arrival < INF:
+		game.director.next_arrival += jump
+	toast("시험: 15:40으로 넘겼다. 20초쯤 뒤 해가 진다. 떠날 때도 가까워졌다.")
 
 
 # ---------------------------------------------------------------- per frame
@@ -523,6 +548,8 @@ func tick(delta: float) -> void:
 		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
 	_tick_status(p)
 	pause_button.text = "계속" if game.paused else "멈춤"
+	stick_opt_button.visible = game.paused and not modal_open
+	stick_opt_button.text = "스틱: 따라오기" if stick_floats() else "스틱: 고정"
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
@@ -1247,7 +1274,7 @@ func _shove() -> void:
 	if not p.grabbers.is_empty():
 		game.combat.break_grab(p)
 	elif p.can_act():
-		game.combat.shove(p)
+		game.combat.start_shove(p)
 
 
 # ---------------------------------------------------------------- input
@@ -1569,6 +1596,9 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		context_button.button_pressed = true
 	elif b == pause_button:
 		_toggle_pause()
+	elif b == stick_opt_button:
+		game.opts["stick_float"] = not stick_floats()
+		toast("스틱이 엄지 댄 자리로 따라온다." if stick_floats() else "스틱이 왼쪽 아래 제자리에 있다.")
 	elif b == lamp_button:
 		game.set_lamps(not game.lamps_on())
 		lamp_button.button_pressed = game.lamps_on()

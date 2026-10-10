@@ -167,7 +167,8 @@ func test_run_crouch_and_pause_on_the_left_four_on_the_right() -> void:
 	hud.context_button.visible = true
 	var right: Array = []
 	for b in hud.pads:
-		if b.get_global_rect().position.x > half and b != hud.manual_button:
+		# The state icons moved to the right edge (build 89); they tell, they are not keys to fight with.
+		if b.get_global_rect().position.x > half and b != hud.manual_button and not hud.status_pads.has(b):
 			right.append(b)
 	assert_eq(right.size(), 4, "aim, attack, shove, situation")
 	var top_left: Rect2 = hud.pause_button.get_global_rect()

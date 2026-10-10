@@ -58,6 +58,8 @@ var action_done: Callable
 var action_busy: Dictionary = {}        # container reserved by a search; freed when the action ends or is cut short
 var action_noise_t: float = 0.0
 var swing_t: float = 0.0
+var shove_t: float = 0.0                # the shove is winding up (field_combat.start_shove)
+var lunge_t: float = 0.0                # the shove just landed: arms out
 var reload_t: float = 0.0
 var jam_t: float = 0.0
 var target_zombie: Dictionary = {}
@@ -337,6 +339,11 @@ func refresh_view(show_tag: bool) -> void:
 		head_mesh.position = Vector3(0, 0.22, 1.05)
 	else:
 		var bend := 0.45 if crouched else (0.2 if body.exhaustion_level() >= 1 else 0.0)
+		# A shove: back on the heels, then thrown forward.
+		if shove_t > 0.0:
+			bend -= 0.3
+		elif lunge_t > 0.0:
+			bend += 0.55
 		body_mesh.rotation = Vector3(bend, 0, 0)
 		body_mesh.position = Vector3(0, 0.75 - bend * 0.25, 0)
 		head_mesh.position = Vector3(0, 1.6 - bend * 0.5, 0.04 + bend * 0.4)
