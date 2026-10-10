@@ -235,3 +235,25 @@ func test_lamps_stay_readable_through_the_snow_fog() -> void:
 	assert_eq(int(game.storm_screen.material.get_shader_parameter("glow_count")), glows.size())
 	# No fog, no need: the dark bank before a storm hides no lamps.
 	assert_eq(_storm_stop("before").storm_glows().size(), 0)
+
+
+func test_windows_are_lit_all_day_inside_a_storm_only() -> void:
+	# Coordinator 2026-10-11: at the storm's height the car windows burn at noon too.
+	var during = _storm_stop("during")
+	var lit := 0
+	for l in during.data["lights"]:
+		if l["kind"] == "car_window":
+			lit += 1
+			var front: Vector2i = l["cell"] + l["side"]
+			assert_gt(int(during.lamp_cells().get(front.y * during.grid.width + front.x, 0)), 0, l["id"])
+	assert_gt(lit, 0)
+	assert_true(during.lamp_key.contains("window"))
+	assert_false(during.lamp_key.contains("hideout"), "nobody hides there: still dark")
+	during._update_lantern(0.1)
+	for stage in ["before", "after"]:
+		var game = _storm_stop(stage)
+		game.lamp_cells()
+		assert_false(game.lamp_key.contains("window"), stage)
+	var plain = _stop(["blizzard"])
+	plain.lamp_cells()
+	assert_false(plain.lamp_key.contains("window"), "an ordinary blizzard keeps the dusk rule")
