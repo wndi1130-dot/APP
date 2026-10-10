@@ -452,7 +452,7 @@ func _build_grab() -> void:
 func _build_debug() -> void:
 	debug_panel = _panel(Color(0, 0, 0, 0.72))
 	debug_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	debug_panel.position = Vector2(-430, 84)
+	debug_panel.position = Vector2(-430 - 16 - STATUS_BIG.x, 84)   # left of the state icons' column
 	debug_panel.custom_minimum_size = Vector2(410, 0)
 	var v := VBoxContainer.new()
 	debug_panel.add_child(v)
