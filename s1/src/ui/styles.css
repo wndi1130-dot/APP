@@ -1105,7 +1105,7 @@ small { font-size: 12px; }
 
 /* 자원 까닭 창(panels.ts resPanel): 드는 곳은 이름, 작은 막대, 값. */
 .res[data-action] { cursor: pointer; }
-.why__title { margin: 6px 0 2px; font-size: 11px; }
+.why__title { margin: 6px 0 2px; font-size: 12px; }
 .why--use .why__row { align-items: center; }
 .why--use .why__label { flex: 0 0 150px; }
 .why--use .mini-bar { flex: 1; min-width: 40px; }
@@ -1117,4 +1117,4 @@ small { font-size: 12px; }
 .recap__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .recap__arrow { flex: none; color: var(--ink-3); }
 .recap li b { flex: none; }
-.recap__title { margin: 4px 0 2px; font-size: 11px; }
+.recap__title { margin: 4px 0 2px; font-size: 12px; }
