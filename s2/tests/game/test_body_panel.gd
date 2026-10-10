@@ -354,3 +354,61 @@ func test_the_blood_key_is_pointed_at_once_and_says_what_it_binds() -> void:
 	hud.finger_up(1, at)
 	assert_true(_toast_texts().has("지혈한다: 왼팔 찢김 · 피 보통."))
 	assert_ne(p.action, "", "and it starts")
+
+
+# ---------------------------------------------------------------- stage 2 on the field
+
+func test_the_needle_and_tweezers_are_where_a_medic_and_a_pharmacy_would_have_them() -> void:
+	var joanna = game.squad.filter(func(q): return q.medical == "skilled")[0]
+	assert_eq(int(joanna.items.get("tweezers", 0)), 1)
+	assert_eq(int(joanna.items.get("needle_thread", 0)), 3)
+	for id in ["pharmacy_store", "office_desk"]:
+		var items: Array = game.data["containers"][id]["items"]
+		assert_eq(items.count("tweezers"), 1, id)
+		assert_eq(items.count("needle_thread"), 3, id)
+	assert_true(game.actions.UNLOAD_KEEP.has("tweezers"))
+	assert_true(game.actions.UNLOAD_KEEP.has("needle_thread"))
+
+
+func test_full_care_of_a_bullet_hole_runs_to_the_end_and_keeps_the_tweezers() -> void:
+	var p = game.player
+	p.items = {"tweezers": 1, "bottle_spirit": 1, "needle_thread": 2, "bandage": 2}
+	p.body.apply_gunshot(RandomNumberGenerator.new(), 0.0, "head")
+	var w: Dictionary = p.body.wounds[0]
+	game.actions.treat_wound(p, p, w, Treatment.FULL)
+	_step(p, 40.0)
+	assert_true(w["pulled"])
+	assert_true(w["disinfected"])
+	assert_true(w["sutured"])
+	assert_true(w["bandaged"])
+	assert_eq(p.body.bleed_level(), 0)
+	assert_eq(int(p.items.get("tweezers", 0)), 1, "kept")
+	assert_eq(int(p.items.get("needle_thread", 0)), 1, "one length used")
+	assert_false(p.items.has("bottle_spirit"))
+
+
+func test_a_tourniquet_takes_the_cloth_and_the_plank() -> void:
+	var p = game.player
+	p.items = {"cloth": 1, "plank": 1}
+	var i: int = p.body.add_wound("leg_left", "deep", 0.0)
+	game.actions.treat_wound(p, p, p.body.wounds[i], Treatment.FULL)
+	_step(p, 6.0)
+	assert_true(p.body.wounds[i]["tourniquet"])
+	assert_eq(p.body.bleed_level(), 1, "from heavy to a seep")
+	assert_true(p.items.is_empty(), "both used")
+
+
+func test_a_festering_part_wears_a_sallow_rim_and_says_so() -> void:
+	var p = game.player
+	var hud = game.hud
+	p.body.set_festering(p.body.add_wound("arm_left", "laceration", 0.0, 0.0), true)
+	p.body.add_wound("leg_right", "laceration", 0.0)
+	hud.body_panel(p, "leg_right")
+	var arm: Button = hud.body_parts["arm_left"]
+	assert_true(String(arm.text).contains("곪음"))
+	var sb: StyleBoxFlat = arm.get_theme_stylebox("normal")
+	assert_eq(sb.border_color, hud.FESTER_RIM)
+	assert_gt(sb.border_width_left, 0)
+	assert_lt(sb.border_color.r - sb.border_color.g, 0.1, "not red")
+	assert_eq(hud.body_parts["leg_right"].get_theme_stylebox("normal").border_color, hud.BRASS, "the chosen one keeps its brass")
+

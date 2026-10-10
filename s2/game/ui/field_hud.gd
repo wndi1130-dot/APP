@@ -44,6 +44,7 @@ const STATUS_BIG := Vector2(60.0, 56.0)
 const STATUS_SMALL := Vector2(48.0, 44.0)
 const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
+const FESTER_RIM := Color(0.74, 0.7, 0.3)           # a festering part: a sallow rim, never red
 ## Where the six parts sit in the body picture (your left on the left, like a mirror).
 const BODY_LAYOUT: Dictionary = {
 	"head_neck": Rect2(109, 0, 100, 76),
@@ -909,9 +910,11 @@ func _body_figure(o, chosen: String) -> Control:
 		var r: Rect2 = BODY_LAYOUT[part]
 		var kinds: Array = []
 		var blood := 0.0
+		var festering := false
 		for w: Dictionary in o.body.wounds:
 			if w["part"] == part:
 				blood += float(w["blood"])
+				festering = festering or bool(w["festering"])
 				var k: String = Treatment.KIND_NAMES[w["kind"]]
 				if not kinds.has(k):
 					kinds.append(k)
@@ -924,8 +927,12 @@ func _body_figure(o, chosen: String) -> Control:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95))
 		sb.set_corner_radius_all(6)
-		sb.set_border_width_all(4 if part == chosen else 0)
-		sb.border_color = BRASS
+		# The chosen part wears brass; a festering one a sallow rim (inside the brass when both).
+		sb.set_border_width_all(4 if part == chosen else (3 if festering else 0))
+		sb.border_color = BRASS if part == chosen else FESTER_RIM
+		if festering:
+			text += "\n곪음"
+			b.text = text
 		for state in ["normal", "hover", "pressed"]:
 			b.add_theme_stylebox_override(state, sb)
 		fig.add_child(b)

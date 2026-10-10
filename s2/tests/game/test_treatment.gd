@@ -73,7 +73,7 @@ func test_stage_two_steps_read_as_missing_tools() -> void:
 	assert_eq(_ids(Treatment.plan(b.wounds[torso], {})), ["suture", "bandage"], "no tourniquet on the torso")
 	var shot: int = b.add_wound("torso", "embedded", 0.0)
 	var pull: Array = Treatment.plan(b.wounds[shot], {"bandage": 5, "bottle_spirit": 2})
-	assert_eq(_ids(pull), ["pull", "disinfect", "bandage"])
+	assert_eq(_ids(pull), ["pull", "disinfect", "bandage"], "what is stuck is not known to be a bullet: glass")
 	assert_eq(pull[0]["need"], "핀셋 없음")
 	# First aid still stops the blood of both.
 	assert_eq(_states(Treatment.plan(b.wounds[deep], {"bandage": 2}, Treatment.FIRST_AID)), [Treatment.DO])
@@ -194,18 +194,23 @@ func test_tweezers_pull_and_are_kept() -> void:
 	assert_eq(b.wounds[i]["what"], "bullet")
 	assert_false(b.suture_wound(i), "not with the round still in")
 	var steps: Array = Treatment.plan(b.wounds[i], {"tweezers": 1, "bottle_spirit": 1, "bandage": 2})
-	assert_eq(_ids(steps), ["pull", "disinfect", "bandage"], "a bullet hole is not stitched (the open choice is off)")
-	assert_eq(_states(steps), [Treatment.DO, Treatment.DO, Treatment.DO])
+	assert_eq(_ids(steps), ["pull", "disinfect", "suture", "bandage"], "a bullet hole is stitched too (user 2026-10-10)")
+	assert_eq(_states(steps), [Treatment.DO, Treatment.DO, Treatment.MISSING, Treatment.BLOCKED], "and with no needle it stays open")
+	assert_eq(steps[2]["need"], "바늘과 실 없음")
 	assert_eq(steps[0]["tool"], "tweezers")
 	assert_true(steps[0]["uses"].is_empty(), "tweezers are not used up")
 	assert_eq(Treatment.apply(b, i, "pull"), 1)
 	assert_eq(Treatment.apply(b, i, "pull"), 0)
 	assert_true(Treatment.wound_text(b.wounds[i]).contains("뺌"))
+	assert_true(b.suture_wound(i), "pulled: now it can be stitched")
+	# Glass is never stitched.
+	var glass: int = b.add_wound("arm_left", "embedded", 0.0)
+	assert_eq(_ids(Treatment.plan(b.wounds[glass], {})), ["pull", "disinfect", "bandage"])
 
 
-func test_the_open_choices_are_off_and_every_stage_two_step_has_a_tool() -> void:
+func test_a_medkit_is_not_a_needle_and_every_stage_two_step_has_a_tool() -> void:
 	assert_false(Treatment.KIT_STANDS_IN)
-	assert_false(Treatment.BULLET_NEEDS_SUTURE)
+	assert_true(Treatment.BULLET_NEEDS_SUTURE)
 	for id: String in Treatment.STAGE_TWO:
 		assert_false(Treatment.tools_of(id).is_empty(), id)
 		assert_false(Treatment.tools_of(id).has("medkit"), id)

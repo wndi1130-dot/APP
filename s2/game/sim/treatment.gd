@@ -18,11 +18,11 @@ const DONE := "done"        # already done on this wound
 const MISSING := "missing"  # the tool is not there: the run stops here
 const BLOCKED := "blocked"  # behind a missing step
 
-## Open choices (the user decides; one line each to change):
-## a medkit stands in for the three stage 2 tools and is used up by each step.
+## The user's choices (2026-10-10), one line each to change:
+## a medkit does not stand in for the three stage 2 tools.
 const KIT_STANDS_IN := false
 ## a bullet hole is stitched after it is cleaned (glass never is).
-const BULLET_NEEDS_SUTURE := false
+const BULLET_NEEDS_SUTURE := true
 const STAGE_TWO: Array = ["tourniquet", "pull", "suture"]
 
 ## seconds: body_injury 4.6 start values. tools: any one of them does (one is
