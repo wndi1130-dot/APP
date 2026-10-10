@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## Zombie senses and sewer exits on the real field (headless, no rendering checks).
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 
 var game
@@ -180,4 +181,62 @@ func test_the_dead_after_a_raider_do_not_count() -> void:
 	assert_false(game._squad_hunted())
 	z["victim"] = game.player
 	assert_true(game._squad_hunted())
+
+
+func _wall_in(c: Vector2i) -> void:
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			if dx != 0 or dy != 0:
+				game.grid.set_solid(c + Vector2i(dx, dy), FieldGrid.Solid.WALL)
+	game.grid.refresh_paths()
+
+
+# Build 89 (user): the dead jammed and the field slowed. A target they cannot
+# get to (walled off) made every one of them search the whole map again and again.
+func test_the_dead_ask_less_often_for_a_way_to_a_walled_off_target() -> void:
+	var cell := Vector2i(100, 20)
+	var open: Dictionary = game.zombies.spawn("dead", FieldGrid.center(Vector2i(92, 24)))
+	open["state"] = "investigate"
+	open["target"] = FieldGrid.center(Vector2i(100, 26))
+	open["linger"] = 30.0
+	_wall_in(cell)
+	var shut: Dictionary = game.zombies.spawn("dead", FieldGrid.center(Vector2i(92, 20)))
+	shut["state"] = "investigate"
+	shut["target"] = FieldGrid.center(cell)
+	shut["linger"] = 30.0
+	game.player.position = FieldGrid.center(Vector2i(60, 60))
+	game.zombies.update(0.05)
+	assert_eq(float(open.get("no_way_t", 0.0)), 0.0, "a way: asks again as before")
+	assert_gt(float(shut["no_way_t"]), 2.0, "no way: waits before asking again")
+	var from: Vector3 = shut["pos"]
+	for i in range(240):
+		game.zombies.update(0.05)
+	assert_gt(shut["pos"].distance_to(from), 2.0, "it still walks as near as it can get")
+	# There, with nowhere left to walk, it does not search again every frame.
+	shut["no_way_t"] = 0.0
+	shut["path"] = PackedVector3Array()
+	game.zombies.update(0.05)
+	assert_gt(float(shut["no_way_t"]), 2.0)
+	var held: float = shut["no_way_t"]
+	game.zombies.update(0.05)
+	assert_lt(float(shut["no_way_t"]), held, "the wait runs down, no new search")
+	# A new target somewhere it can get to is not kept waiting.
+	shut["target"] = FieldGrid.center(Vector2i(92, 26))
+	shut["path_t"] = 0.0   # as hearing or seeing something new sets it
+	game.zombies.update(0.05)
+	assert_eq(float(shut["no_way_t"]), 0.0)
+	assert_gt(shut["path"].size(), 0, "it has a way and takes it at once")
+
+
+func test_a_path_that_stops_short_ends_in_its_last_cell_not_at_the_wall() -> void:
+	var cell := Vector2i(100, 20)
+	_wall_in(cell)
+	var to := FieldGrid.center(cell) + Vector3(0.3, 0, 0.3)
+	var path: PackedVector3Array = game.grid.find_path(FieldGrid.center(Vector2i(92, 20)), to, false)
+	assert_gt(path.size(), 0, "as near as it can")
+	var last: Vector3 = path[path.size() - 1]
+	assert_ne(FieldGrid.cell_of(last), cell)
+	assert_false(game.grid.blocks_body(FieldGrid.cell_of(last)))
+	var free: PackedVector3Array = game.grid.find_path(FieldGrid.center(Vector2i(92, 24)), FieldGrid.center(Vector2i(100, 26)) + Vector3(0.3, 0, 0.3), false)
+	assert_almost_eq(free[free.size() - 1].x, 100.8, 0.01, "a path that arrives still ends on the exact spot")
 

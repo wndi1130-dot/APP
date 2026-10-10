@@ -29,6 +29,7 @@ const CONE_COS: float = 0.5      # 120 degree forward sight cone
 const HERD: float = 8.0
 const MEMORY: float = 8.0        # seconds a lost target stays worth chasing (field_unified 11, 'normal')
 const SEARCH_TIME: float = 4.0   # look around the last seen spot, two corners, then wander
+const NO_WAY_WAIT: float = 2.5   # no way through to the target: look for one again this much later
 const KINDS: Array[String] = ["dead", "clothed", "fresh", "frozen"]
 const TINTS: Dictionary = {"dead": Color(0.5, 0.52, 0.47), "clothed": Color(0.36, 0.38, 0.45), "fresh": Color(0.62, 0.45, 0.42), "frozen": Color(0.86, 0.9, 0.95), "corpse": Color(0.3, 0.3, 0.29)}
 
@@ -489,14 +490,25 @@ func _move(z: Dictionary, delta: float) -> void:
 	# Path refresh: straight when clear, otherwise A* on the people grid
 	# (closed doors are planned through and then banged on).
 	z["path_t"] -= delta
+	z["no_way_t"] = maxf(0.0, float(z.get("no_way_t", 0.0)) - delta)
 	var path: PackedVector3Array = z["path"]
-	if z["path_t"] <= 0.0 or path.is_empty():
+	# The wait holds only for the cell that had no way: a new target is looked for at once.
+	var waiting: bool = float(z["no_way_t"]) > 0.0 and z.get("no_way_cell") == FieldGrid.cell_of(target)
+	if (z["path_t"] <= 0.0 or path.is_empty()) and not waiting:
+		z["no_way_t"] = 0.0
 		var near := at.distance_to(game.player.position) < NEAR
 		z["path_t"] = (0.6 if near else 2.5) + game.rng.randf() * 0.4
 		if game.level_of(at) == game.level_of(target) and game.grid_at(at).clear_walk(FieldGrid.cell_of(at), FieldGrid.cell_of(target), true):
 			path = PackedVector3Array([target])
 		else:
 			path = game.find_path(at, target, false)
+			# Walled off (a locked room, up a ladder): the search that finds no way
+			# is the dearest one, and with nowhere left to walk every one of the
+			# crowd ran it again each frame, which slowed the whole field (build 89).
+			# They stand where they got to and ask again a little later.
+			if path.is_empty() or FieldGrid.cell_of(path[path.size() - 1]) != FieldGrid.cell_of(target):
+				z["no_way_t"] = NO_WAY_WAIT + game.rng.randf() * 0.5
+				z["no_way_cell"] = FieldGrid.cell_of(target)
 		z["path"] = path
 	if path.is_empty():
 		return
