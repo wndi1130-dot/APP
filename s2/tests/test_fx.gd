@@ -206,3 +206,24 @@ func test_gallery_shows_the_three_storm_stops() -> void:
 	assert_lt(float(p["wind"]), float(gallery.PRESETS[at["12_storm_during"]]["wind"]))
 	gallery.apply_preset(0)
 	assert_true(gallery.sun.shadow_enabled, "other presets keep shadows")
+
+
+func test_gallery_crate_carries_a_snow_cap() -> void:
+	# weather_fx 13장: rim on the surface (vertex colour R 0), inside lifted (R 1).
+	var gallery = load("res://fx/gallery.tscn").instantiate()
+	add_child_autofree(gallery)
+	var cap: MeshInstance3D = gallery.snowcap
+	assert_not_null(cap)
+	assert_eq((cap.material_override as ShaderMaterial).shader.resource_path, "res://fx/shaders/snowcap.gdshader")
+	assert_eq(cap.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "takes shadows, throws none")
+	var arrays := cap.mesh.surface_get_arrays(0)
+	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	assert_eq(points.size(), colours.size())
+	for i in range(points.size()):
+		if colours[i].r < 0.5:
+			assert_almost_eq(points[i].y, 0.0, 0.0001, "rim stays on the lid")
+		else:
+			assert_almost_eq(points[i].y, 0.25, 0.0001, "inside is lifted to the full depth")
+	var code := FileAccess.get_file_as_string("res://fx/shaders/snowcap.gdshader")
+	assert_true(code.contains("fx_snow") and code.contains("COLOR.r"))
