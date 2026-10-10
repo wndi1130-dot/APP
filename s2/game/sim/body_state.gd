@@ -185,6 +185,42 @@ func bandage(count: int = 1) -> bool:
 	return done
 
 
+# Dresses one chosen wound (the body picture, body_injury 4.6). Same rule as bandage():
+# a heavy wound takes two and seeps on as a light one, any other takes one and stops.
+# Returns the bandages used (0: nothing to dress there).
+func bandage_wound(index: int) -> int:
+	if index < 0 or index >= wounds.size():
+		return 0
+	var w: Dictionary = wounds[index]
+	if w["kind"] == "fracture" or (bool(w["bandaged"]) and float(w["blood"]) <= 0.0):
+		return 0
+	var heavy: bool = float(w["blood"]) >= HEAVY_BLOOD
+	w["blood"] = SEEP_BLOOD if heavy else 0.0
+	w["bandaged"] = true
+	_refresh()
+	return 2 if heavy else 1
+
+
+# Splints one chosen fracture. False when that wound is not an unsplinted fracture.
+func splint_wound(index: int) -> bool:
+	if index < 0 or index >= wounds.size():
+		return false
+	var w: Dictionary = wounds[index]
+	if w["kind"] != "fracture" or bool(w["splinted"]):
+		return false
+	w["splinted"] = true
+	return true
+
+
+# Where a wound sits in the list now (-1 when it is gone). By identity, not by value:
+# two wounds can read the same.
+func index_of(wound: Dictionary) -> int:
+	for i in wounds.size():
+		if is_same(wounds[i], wound):
+			return i
+	return -1
+
+
 # A medkit stops the blood of every wound at once.
 func use_kit() -> bool:
 	if bleed_level() == 0:

@@ -8,6 +8,7 @@ const W = preload("res://game/sim/weapons.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
+const Treatment = preload("res://game/sim/treatment.gd")
 
 const REACH: float = 1.4
 const DOOR_TIME: float = 0.5
@@ -23,6 +24,7 @@ const CLIMB_CAREFUL: float = 6.0
 const BLOCK_LID_TIME: float = 8.0
 const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
+const CARE_REACH: float = 2.0     # how near you must be to treat someone else
 const UNLOAD_KEEP: Array = ["bandage", "cloth", "plank", "medkit", "bottle_spirit", "arrow", "flare"]
 const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
 
@@ -653,6 +655,66 @@ func self_bandage(p) -> void:
 		game.hud.toast("피가 나지 않는다.")
 		return
 	treat(p, p)
+
+
+## What the two of them carry between them: the tools of the treatment plan.
+func care_tools(medic, o) -> Dictionary:
+	var have := {}
+	for who in ([medic] if medic == o else [medic, o]):
+		for id in who.items:
+			have[id] = int(have.get(id, 0)) + int(who.items[id])
+	return have
+
+
+## Your own body, or someone within arm's reach.
+func in_care_reach(medic, o) -> bool:
+	return medic == o or medic.position.distance_to(o.position) <= CARE_REACH
+
+
+## The plan for one wound with what the two carry (body picture, body_injury 4.6).
+func care_plan(medic, o, wound: Dictionary, mode: String) -> Array:
+	return Treatment.plan(wound, care_tools(medic, o), mode)
+
+
+## Care for one chosen wound: first aid (blood only) or every step the tools
+## allow, one timed step after another. Moving away cuts it short like any
+## other slow work; what was done stays done. False when nothing can be done.
+func treat_wound(medic, o, wound: Dictionary, mode: String) -> bool:
+	if medic.action != "" or not medic.can_act() or not in_care_reach(medic, o):
+		return false
+	return _care_next(medic, o, wound, mode)
+
+
+func _care_next(medic, o, wound: Dictionary, mode: String) -> bool:
+	if o.body.index_of(wound) < 0 or not medic.can_act() or not in_care_reach(medic, o):
+		return false
+	var steps: Array = Treatment.runnable(care_plan(medic, o, wound, mode))
+	if steps.is_empty():
+		return false
+	var step: Dictionary = steps[0]
+	if medic != o:
+		medic.face_point(o.position)
+	medic.start_action("treat", String(step["label"]), Treatment.seconds(step, medic.medical), _care_done.bind(medic, o, wound, mode, step))
+	return true
+
+
+func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> void:
+	var index: int = o.body.index_of(wound)
+	if index < 0:
+		return
+	# The tool comes from the one who treats first, then from the one treated.
+	var tool_id: String = String(step["tool"])
+	var src = medic if int(medic.items.get(tool_id, 0)) > 0 else o
+	var other = o if src == medic else medic
+	var used: int = Treatment.apply(o.body, index, String(step["id"]))
+	if used <= 0:
+		return
+	var from_first: int = mini(used, int(src.items.get(tool_id, 0)))
+	src.take_item(tool_id, from_first)
+	if used > from_first:
+		other.take_item(tool_id, used - from_first)
+	if not _care_next(medic, o, wound, mode):
+		game.say(medic, "%s: 처치했다." % Treatment.wound_text(wound))
 
 
 func splint(p) -> void:
