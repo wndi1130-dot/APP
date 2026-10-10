@@ -1,0 +1,69 @@
+{
+  "id": "ev_b01_scattered_grain",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 24
+    },
+    {
+      "type": "flag",
+      "id": "b01_sack_pending",
+      "value": true
+    }
+  ],
+  "speaker": "ration_officer",
+  "body": "받침만 댄 자루가 더 벌어졌다. 곡식이 젖은 바닥에 흩어져 쓸 몫과 버릴 몫을 나눠야 한다.",
+  "choices": [
+    {
+      "id": "c_replace",
+      "label": "남은 식량으로 메운다",
+      "say": "젖은 곡식은 걷어라. 남은 자루부터 확인한다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -4
+        },
+        {
+          "type": "trust",
+          "amount": -2
+        },
+        {
+          "type": "flag",
+          "id": "b01_sack_pending",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_tail_cut",
+      "label": "꼬리칸 몫을 줄인다",
+      "say": "꼬리칸 자루를 덜어라. 흩어진 곡식은 치운다.",
+      "effects": [
+        {
+          "type": "community.ration",
+          "target": "tail",
+          "amount": -6
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "b01_sack_pending",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

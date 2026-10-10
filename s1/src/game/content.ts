@@ -1,8 +1,9 @@
 import { COMMS, COMM_NAME, LAWS, P, PLACES, REP_ROLE } from './data';
 import type { Comm, LawId } from './data';
-import { affordable, applyEffs, CARD_EXTENSIONS, costLines, EVENT_CHAIN_MAX, EVENT_COOLDOWN, memo, politicsLines, withAfford } from './cards';
+import { affordable, applyEffs, CARD_EXTENSIONS, costLines, DRAW, DRAW_HOOKS, EVENT_CHAIN_MAX, EVENT_COOLDOWN, memo, politicsLines, withAfford } from './cards';
 import type { CardView, Choice, Eff } from './cards';
 import { onDeath } from './death';
+import { inEventPack } from './event_pack';
 import { josa } from './josa';
 import { SPECIALISTS } from './domestic/data';
 import { CAR_COMM } from './domestic/data';
@@ -292,15 +293,33 @@ function stageOpen(g: Game, ev: ContentEvent): boolean {
   return ev.stage === 's1a' || (ev.stage === 's1c' && !!g.dom);
 }
 
-/** 이동 단계에서 뽑을 수 있는 콘텐츠 사건. 같은 사건은 쿨다운·사슬 한도·repeat를 지킨다. */
+/** 이동 단계에서 뽑을 수 있는 콘텐츠 사건. 같은 사건은 쿨다운·사슬 한도·repeat를 지킨다. 새 묶음(ev_b01_)은 g.eventPack이 켜진 판에서만 든다. */
 export function contentPool(g: Game, phase: ContentEvent['phase'] = 'travel'): ContentEvent[] {
   return CONTENT_EVENTS.filter(ev => {
     if (ev.phase !== phase || !stageOpen(g, ev)) return false;
+    if (!g.eventPack && inEventPack(ev.id)) return false; // 새 이동 사건 묶음(event_pack.ts)은 켠 판에서만
     const m = memo(g, `content:${ev.id}`);
     if (m && (m.n > ev.repeat || m.n >= EVENT_CHAIN_MAX || g.seg - m.seg < EVENT_COOLDOWN)) return false;
     return ev.trigger.every(c => holds(g, c)) && canBind(g, ev);
   });
 }
+
+/**
+ * 가중 뽑기용(cards.ts drawTravelEvent): trigger의 community 조건(lt/lte/gt/gte)에서 문턱을 벗어난 거리를 재서
+ * 처지 압박 원값(1 + 거리/pressDiv, 여러 조건이면 가장 큰 거리)을 낸다. 조건이 없거나 eq뿐이면 1. 난수를 쓰지 않는다.
+ */
+export function contentDrawInfo(g: Game, id: string): { pressure: number; comm?: Comm } {
+  const ev = CONTENT_EVENTS.find(e => e.id === id);
+  if (!ev) return { pressure: 1 };
+  let dist = 0;
+  for (const c of ev.trigger) {
+    if (c.type !== 'community' || c.operator === 'eq') continue;
+    const v = situation(g, c.community)[METRIC_INDEX[c.metric]];
+    dist = Math.max(dist, c.operator === 'lt' || c.operator === 'lte' ? c.value - v : v - c.value);
+  }
+  return { pressure: 1 + dist / DRAW.pressDiv, comm: speakerComm(ev) };
+}
+DRAW_HOOKS.content = contentDrawInfo;
 
 /** 사건을 카드로 올린다. 자리표시자 값은 이때 정해 카드에 붙인다. 값을 못 대면 올리지 않는다. */
 export function addContentCard(g: Game, id: string, front = false): boolean {

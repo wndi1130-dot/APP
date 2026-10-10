@@ -1,0 +1,53 @@
+{
+  "id": "ev_b01_mended_harmonica",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 20
+    }
+  ],
+  "speaker": "engine",
+  "body": "찌그러진 하모니카를 펴니 한 음이 다시 났다. 연주자가 그 음만 길게 불자 듣던 사람이 뒤 음을 입으로 붙인다.",
+  "choices": [
+    {
+      "id": "c_finish",
+      "label": "하모니카를 마저 고친다",
+      "say": "헝겊을 가져와라. 하모니카를 마저 닦자.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -2
+        },
+        {
+          "type": "tension",
+          "amount": -4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_cloth",
+      "label": "앞칸 헝겊을 받는다",
+      "say": "앞칸 헝겊을 내어라. 하모니카를 함께 닦자.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        },
+        {
+          "type": "tension",
+          "amount": -4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

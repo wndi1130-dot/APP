@@ -18,3 +18,4 @@ export * from './dark';
 export * from './disaster';
 export * from './disaster_cards';
 export * from './budget';
+export * from './event_pack';

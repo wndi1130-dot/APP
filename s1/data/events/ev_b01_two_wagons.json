@@ -1,0 +1,73 @@
+{
+  "id": "ev_b01_two_wagons",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 4,
+      "max": 20
+    }
+  ],
+  "speaker": "engine",
+  "body": "들판 한가운데서 석탄을 부리다 만 무개화차 두 량이 선로를 막았다. 바퀴는 돈다. 측선으로 밀어 옮길 수 있다.",
+  "choices": [
+    {
+      "id": "c_scrape",
+      "label": "남은 석탄을 긁어 싣는다",
+      "say": "바닥에 남은 석탄부터 긁어 실어라. 그다음 민다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": 8
+        },
+        {
+          "type": "community.exposure",
+          "target": "tail",
+          "amount": 8
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_move",
+      "label": "기관차로 밀어 옮긴다",
+      "say": "화차를 살펴라. 기관차로 측선까지 밀어 옮긴다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_guard_push",
+      "label": "경비칸에 밀기를 맡긴다",
+      "say": "경비칸이 화차를 밀어라. 측선까지 함께 본다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 8
+        },
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
