@@ -32,8 +32,9 @@ const MOVE_FLOOR := 0.25
 const AIM_UP := 1.4
 const AIM_MAX := 3.0
 
-# One entry per wound: {part, kind, blood, disinfected, bandaged, splinted, festering, at}.
-# blood is the flow now (0 once stopped); festering is only a slot until stage 2 sets it.
+# One entry per wound: {part, kind, blood, disinfected, bandaged, splinted, festering, at,
+# removed, sutured, tourniquet}. blood is the flow now (0 once stopped); festering is only a
+# slot until stage 2 sets it; removed / sutured / tourniquet are the care steps done so far.
 var wounds: Array[Dictionary] = []
 var infection: String = ""       # "" | "scratch" | "bite"
 var infected: bool = false       # hidden for scratches
@@ -99,7 +100,7 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 		"part": part, "kind": kind,
 		"blood": float(BLOOD[kind]) if blood < 0.0 else blood,
 		"disinfected": false, "bandaged": false, "splinted": false, "festering": false,
-		"at": now,
+		"at": now, "removed": false, "sutured": false, "tourniquet": false,
 	})
 	_refresh()
 	if wounds[-1]["blood"] > 0.0 and bleed_level() == 1:
@@ -243,6 +244,80 @@ func has_deep_leg_wound() -> bool:
 		if w["kind"] == "deep" and _in_group(String(w["part"]), "leg"):
 			return true
 	return false
+
+
+## Urgency of the wound at `index` (see most_urgent); 0 when nothing needs care.
+func urgency(index: int) -> float:
+	if index < 0 or index >= wounds.size():
+		return 0.0
+	return _order_key(index)
+
+
+## Index of the wound that bleeds most (-1 when none bleeds).
+func worst_bleeder() -> int:
+	return _top_bleeder()
+
+
+# --- care steps on one wound (body_injury 4.6 'every step the tools allow, in order') ---
+
+const CARE_STEPS := ["tourniquet", "extract", "disinfect", "suture", "bandage", "splint"]
+
+## True when `step` still has to be done on the wound dict `w`. Per kind:
+## scratch / laceration: disinfect, bandage; deep: tourniquet (limbs), suture, bandage;
+## embedded: extract, disinfect, bandage; bite: bandage; fracture: splint.
+static func step_pending(w: Dictionary, step: String) -> bool:
+	var kind: String = w["kind"]
+	match step:
+		"tourniquet":
+			var part: String = w["part"]
+			return kind == "deep" and (part.begins_with("arm_") or part.begins_with("leg_")) \
+				and not w["tourniquet"] and not w["sutured"] and float(w["blood"]) > 0.0
+		"extract":
+			return kind == "embedded" and not w["removed"]
+		"disinfect":
+			return kind in ["scratch", "laceration", "embedded"] and not w["disinfected"]
+		"suture":
+			return kind == "deep" and not w["sutured"]
+		"bandage":
+			return kind != "fracture" and not w["bandaged"]
+		"splint":
+			return kind == "fracture" and not w["splinted"]
+	return false
+
+
+## How many bandages the wound takes now: a heavy flow takes two (see bandage()).
+static func bandage_cost(w: Dictionary) -> int:
+	return 2 if float(w["blood"]) >= HEAVY_BLOOD else 1
+
+
+## Does `step` on the dict `w`: flags and the flow. The tourniquet stops the flow, a stitch
+## closes it (or leaves a light seep until the bandage), a bandage on a heavy flow seeps on.
+static func apply_step(w: Dictionary, step: String) -> void:
+	match step:
+		"tourniquet":
+			w["tourniquet"] = true
+			w["blood"] = 0.0
+		"extract":
+			w["removed"] = true
+		"disinfect":
+			w["disinfected"] = true
+		"suture":
+			w["sutured"] = true
+			w["blood"] = 0.0 if w["bandaged"] else minf(float(w["blood"]), SEEP_BLOOD)
+		"bandage":
+			w["blood"] = SEEP_BLOOD if float(w["blood"]) >= HEAVY_BLOOD else 0.0
+			w["bandaged"] = true
+		"splint":
+			w["splinted"] = true
+
+
+## Does one care step on the wound at `index`; false for a bad index or a step that is not pending.
+func care_step(index: int, step: String) -> bool:
+	if index < 0 or index >= wounds.size() or not step_pending(wounds[index], step):
+		return false
+	apply_step(wounds[index], step)
+	_refresh()
+	return true
 
 
 func has_fracture(group: String) -> bool:
