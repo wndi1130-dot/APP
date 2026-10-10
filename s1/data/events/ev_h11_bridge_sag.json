@@ -51,17 +51,17 @@
     {
       "id": "c_engine_brace2",
       "label": "기관실에 맡긴다",
-      "say": "기관실이 맡아라. 건너는 건 그다음이다.",
+      "say": "기관실이 맡아라. 지난번에 그냥 건넌 건 내 탓이다.",
       "effects": [
         {
           "type": "community.exposure",
           "target": "engine",
-          "amount": 8
+          "amount": 10
         },
         {
           "type": "relation",
           "target": "engine",
-          "amount": -5
+          "amount": -7
         },
         {
           "type": "flag",

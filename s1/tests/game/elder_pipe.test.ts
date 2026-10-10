@@ -467,8 +467,10 @@ describe('E3 배관 추인(7.3)', () => {
     g.council!.idx = pipeIndex(g);
     lean(g, 100);
     const before = relSnap(g);
+    g.contentFlags = {};
     const r = castVote(g)!;
     expect(r.passed).toBe(true);
+    expect(g.contentFlags.ev_achieved).toBe(true); // 배관 추인은 위로 카드 열쇠를 세운다
     const st = g.dom!.techs.e3!;
     expect(st.variant).toBe('a');
     expect(st.pending).toBe(false);
@@ -488,8 +490,10 @@ describe('E3 배관 추인(7.3)', () => {
     g.council!.idx = pipeIndex(g);
     lean(g, -100);
     const before = relSnap(g);
+    g.contentFlags = {};
     const r = castVote(g)!;
     expect(r.passed).toBe(false);
+    expect(g.contentFlags.ev_achieved).toBeUndefined();
     const st = g.dom!.techs.e3!;
     expect(st.variant).toBe('b');
     expect(st.pending).toBe(false);

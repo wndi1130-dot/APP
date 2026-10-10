@@ -22,7 +22,7 @@
     {
       "id": "c_cut_stoves",
       "label": "뒤쪽 난로를 하나씩 줄인다",
-      "say": "뒤쪽부터 하나씩 꺼라. 불부터 아껴야 한다.",
+      "say": "뒤쪽 난로부터 불을 낮춰라. 화실이 먼저다.",
       "effects": [
         {
           "type": "community.warmth",
@@ -63,7 +63,7 @@
     {
       "id": "c_burn_furniture",
       "label": "앞칸 가구를 땔감으로 낸다",
-      "say": "앞칸 가구를 내라. 쓸 만한 것부터 가져온다.",
+      "say": "앞칸 가구를 내라. 마른 나무부터 화실로 보낸다.",
       "requires": [
         {
           "type": "resource",
