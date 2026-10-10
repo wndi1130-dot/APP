@@ -17,5 +17,8 @@ export function eventPackOn(g: Game): boolean {
   return !!g.eventPack;
 }
 
+/** 어려워진 사건 묶음(H01~H10과 후속, 기획 30장)의 id 모양. ev_h01_low_fire, ev_h02_sour_pot 처럼 ev_h와 두 자리 숫자로 시작한다 */
+const HARD_PACK_ID = /^ev_h\d\d_/u;
+
 /** 이 콘텐츠 사건 id가 묶음 소속이면 true */
-export const inEventPack = (id: string): boolean => id.startsWith(EVENT_PACK_PREFIX);
+export const inEventPack = (id: string): boolean => id.startsWith(EVENT_PACK_PREFIX) || HARD_PACK_ID.test(id);

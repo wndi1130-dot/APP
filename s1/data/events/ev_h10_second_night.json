@@ -1,0 +1,84 @@
+{
+  "id": "ev_h10_second_night",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 7,
+      "max": 24
+    },
+    {
+      "type": "community",
+      "community": "medtech",
+      "metric": "warmth",
+      "operator": "lte",
+      "value": 45
+    }
+  ],
+  "speaker": "medtech",
+  "body": "의무장이 이틀째 침상 곁을 못 떠났고 붕대를 감던 손이 한 번 멈췄다. 조수가 열차장에게 낮게 말한다. \"두 밤째입니다, 저분 손을 제가 봤습니다.\"",
+  "choices": [
+    {
+      "id": "c_sleep_urgent",
+      "label": "급한 사람만 보고 재운다",
+      "say": "급한 환자만 보게 하고 재워라.",
+      "effects": [
+        {
+          "type": "medicine",
+          "amount": -3
+        },
+        {
+          "type": "tension",
+          "amount": 3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_aide_takes_over",
+      "label": "조수가 대신 본다",
+      "say": "조수가 대신 봐라. 하룻밤이면 된다.",
+      "effects": [
+        {
+          "type": "person.away",
+          "target": "leader_medtech",
+          "segments": 2
+        },
+        {
+          "type": "flag",
+          "id": "h10_pending",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h10_wrong_dose",
+          "delay": 1
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_keep_watching",
+      "label": "그대로 보게 한다",
+      "say": "그대로 두어라. 의무장이 끝까지 본다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "medtech",
+          "amount": -6
+        },
+        {
+          "type": "trust",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

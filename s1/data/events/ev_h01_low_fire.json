@@ -1,0 +1,95 @@
+{
+  "id": "ev_h01_low_fire",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 4,
+      "max": 24
+    },
+    {
+      "type": "resource",
+      "resource": "coal",
+      "operator": "lte",
+      "value": 40
+    }
+  ],
+  "speaker": "engine",
+  "body": "화부장이 화실 문을 연다. \"이 삽질로는 다음 탑까지 불이 안 갑니다. 어디서든 덜어야 합니다.\"",
+  "choices": [
+    {
+      "id": "c_cut_stoves",
+      "label": "뒤쪽 난로를 하나씩 줄인다",
+      "say": "뒤쪽부터 하나씩 꺼라. 불부터 아껴야 한다.",
+      "effects": [
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": -8
+        },
+        {
+          "type": "community.warmth",
+          "target": "guard",
+          "amount": -4
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_slow_down",
+      "label": "속도를 줄여 하루 더 간다",
+      "say": "속도를 줄여라. 하루 더 걸려도 불은 지킨다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -8
+        },
+        {
+          "type": "tension",
+          "amount": 3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_burn_furniture",
+      "label": "앞칸 가구를 땔감으로 낸다",
+      "say": "앞칸 가구를 내라. 쓸 만한 것부터 가져온다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 3
+        }
+      ],
+      "effects": [
+        {
+          "type": "coal",
+          "amount": 4
+        },
+        {
+          "type": "luxury",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -6
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

@@ -1,0 +1,82 @@
+{
+  "id": "ev_h11_bridge_sag",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "b01_bridge_ignored",
+      "value": true
+    }
+  ],
+  "speaker": "engine",
+  "body": "그냥 건넌 다리의 받침이 더 기울었다. 기관사가 바퀴 아래 틈을 가리킨다. \"이제는 받침을 새로 대야 건넙니다.\"",
+  "choices": [
+    {
+      "id": "c_new_brace",
+      "label": "받침을 새로 댄다",
+      "say": "받침을 새로 대라. 이번에는 제대로 한다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 4
+        }
+      ],
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -5
+        },
+        {
+          "type": "luxury",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "b01_bridge_ignored",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_engine_brace2",
+      "label": "기관실에 맡긴다",
+      "say": "기관실이 맡아라. 건너는 건 그다음이다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 8
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "b01_bridge_ignored",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

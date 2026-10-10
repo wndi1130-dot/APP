@@ -1,0 +1,95 @@
+{
+  "id": "ev_h06_split_pipe",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 4,
+      "max": 22
+    }
+  ],
+  "speaker": "engine",
+  "body": "가운데 객차 난방관 이음이 터져 뒤쪽 칸으로 가는 김이 샌다. 화부장이 말한다. \"세우면 반나절, 달리면서 고치면 손이 얼고, 두면 뒤가 얼어요.\"",
+  "choices": [
+    {
+      "id": "c_stop_fix",
+      "label": "세우고 고친다",
+      "say": "열차를 세워라. 반나절이면 된다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -5
+        },
+        {
+          "type": "food",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_fix_running",
+      "label": "달리면서 고친다",
+      "say": "달리면서 고쳐라. 손이 얼면 교대한다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 5
+        }
+      ],
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 6
+        },
+        {
+          "type": "luxury",
+          "amount": -5
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_leave_it",
+      "label": "다음 정차까지 둔다",
+      "say": "다음 정차까지 둔다. 뒤쪽 난로를 아껴라.",
+      "effects": [
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": -6
+        },
+        {
+          "type": "community.warmth",
+          "target": "guard",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "h06_pending",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h06_frozen_pipe",
+          "delay": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

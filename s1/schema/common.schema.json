@@ -372,8 +372,48 @@
             "state"
           ],
           "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/resourceCondition"
         }
       ]
+    },
+    "resourceCondition": {
+      "type": "object",
+      "description": "자원이 얼마 이상/이하인가. 석탄·식량·의약품·사치품은 창고 수량, symbol은 지금 가진 상징물 수.",
+      "properties": {
+        "type": {
+          "const": "resource"
+        },
+        "resource": {
+          "type": "string",
+          "enum": [
+            "coal",
+            "food",
+            "medicine",
+            "luxury",
+            "symbol"
+          ]
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "lte",
+            "gte"
+          ]
+        },
+        "value": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "type",
+        "resource",
+        "operator",
+        "value"
+      ],
+      "additionalProperties": false
     },
     "conditions": {
       "type": "array",

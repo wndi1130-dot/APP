@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerContentDeals, registerContentEvents, registerContentSecrets } from '../src/game';
 
-export const EVENTS_DIR = fileURLToPath(new URL('../data/events/', import.meta.url));
+// S1_EVENTS_DIR: 측정 때 사건 폴더를 바꿔 끼운다(예: 옛 20장만 든 폴더로 '전' 값을 다시 잰다). 시험은 이 값을 안 쓴다.
+export const EVENTS_DIR = process.env.S1_EVENTS_DIR ?? fileURLToPath(new URL('../data/events/', import.meta.url));
 
 export function readContentEvents(dir = EVENTS_DIR): unknown[] {
   if (!existsSync(dir)) return [];

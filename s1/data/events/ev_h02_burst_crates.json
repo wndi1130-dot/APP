@@ -1,0 +1,73 @@
+{
+  "id": "ev_h02_burst_crates",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 20
+    }
+  ],
+  "speaker": "ration_officer",
+  "body": "창고칸 통조림 상자 여섯이 얼어 터졌다. 배급 담당이 부푼 깡통을 들어 보인다. \"끓이면 먹을 수는 있습니다, 탈이 날지는 모릅니다.\"",
+  "choices": [
+    {
+      "id": "c_throw_away",
+      "label": "다 버린다",
+      "say": "다 버려라. 탈 날 걸 먹일 순 없다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -9
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_boil_mix",
+      "label": "끓여서 배급에 섞는다",
+      "say": "푹 끓여 섞어라. 한 알도 허투루 못 쓴다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -3
+        },
+        {
+          "type": "flag",
+          "id": "h02_pending",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h02_sour_pot",
+          "delay": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_swap_front",
+      "label": "앞칸 비축과 바꿔 채운다",
+      "say": "앞칸 비축을 풀어라. 그쪽 몫으로 채운다.",
+      "effects": [
+        {
+          "type": "community.ration",
+          "target": "front",
+          "amount": -5
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

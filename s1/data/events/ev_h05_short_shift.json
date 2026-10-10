@@ -1,0 +1,95 @@
+{
+  "id": "ev_h05_short_shift",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 5,
+      "max": 22
+    },
+    {
+      "type": "community",
+      "community": "engine",
+      "metric": "warmth",
+      "operator": "lte",
+      "value": 55
+    }
+  ],
+  "speaker": "engine",
+  "body": "기관실 대표가 온다. \"화부 넷이 손을 못 씁니다. 사람을 주든 석탄을 더 주든 하십시오, 아니면 불이 느려집니다.\"",
+  "choices": [
+    {
+      "id": "c_tail_shovel",
+      "label": "꼬리칸에서 넷이 삽을 든다",
+      "say": "꼬리칸에서 넷을 뽑아라. 삽 쥘 손이면 된다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "tail",
+          "amount": 6
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -4
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_raise_share",
+      "label": "기관실 몫을 올려 준다",
+      "say": "기관실 몫을 올려라. 손이 모자라면 몫으로 채운다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -6
+        },
+        {
+          "type": "food",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_hold_on",
+      "label": "지금 사람으로 버티라 한다",
+      "say": "지금 사람으로 버텨라. 더 줄 손이 없다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -6
+        },
+        {
+          "type": "flag",
+          "id": "h05_pending",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h05_slow_fire",
+          "delay": 3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

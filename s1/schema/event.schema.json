@@ -72,6 +72,14 @@
             "pattern": "^[^\\r\\n]+$",
             "description": "카드에 보이는 열차장의 말. 한두 문장. 효과와 비용은 넣지 않는다(2026-10-07 사용자)."
           },
+          "requires": {
+            "type": "array",
+            "description": "자원이 모자라면 이 선택지를 카드에서 숨긴다(모두 참일 때만 보인다). 숨길 선택지만 거르고, 다 숨어야 하면 숨기지 않는다.",
+            "items": {
+              "$ref": "urn:s1:schema:common#/$defs/resourceCondition"
+            },
+            "minItems": 1
+          },
           "effects": {
             "$ref": "urn:s1:schema:effects#/$defs/list"
           },

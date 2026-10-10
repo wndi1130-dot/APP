@@ -411,6 +411,25 @@ describe('조건 종류와 경계', () => {
     expect(evaluateConditions(state, [...conditions, { type: 'person', id: 'p_alive', state: 'dead' }])).toBe(false);
   });
 
+  it('자원 조건은 창고 수량과 상징물 수를 이하·이상으로 비교한다', () => {
+    const state = applyEffect(initialState(), { type: 'symbol', id: 'sym_a', amount: 1 });
+    const coal = state.resources.coal;
+    const cases = [
+      { condition: { type: 'resource', resource: 'coal', operator: 'lte', value: coal }, expected: true },
+      { condition: { type: 'resource', resource: 'coal', operator: 'lte', value: coal - 1 }, expected: false },
+      { condition: { type: 'resource', resource: 'coal', operator: 'gte', value: coal + 1 }, expected: false },
+      { condition: { type: 'resource', resource: 'symbol', operator: 'gte', value: 1 }, expected: true },
+      { condition: { type: 'resource', resource: 'symbol', operator: 'gte', value: 2 }, expected: false },
+    ] as const;
+    for (const { condition, expected } of cases) {
+      expect(validateConditionSchema(condition), JSON.stringify(validateConditionSchema.errors)).toBe(true);
+      expect(evaluateCondition(state, condition as Condition)).toBe(expected);
+    }
+    expect(validateConditionSchema({ type: 'resource', resource: 'water', operator: 'lte', value: 1 })).toBe(false);
+    expect(validateConditionSchema({ type: 'resource', resource: 'coal', operator: 'eq', value: 1 })).toBe(false);
+    expect(() => evaluateCondition(state, { type: 'resource', resource: 'water', operator: 'lte', value: 1 } as unknown as Condition)).toThrow();
+  });
+
   it.each([
     [6, false], [7, true], [8, true], [9, true], [10, false],
   ] as const)('구간 %s에서 양쪽 끝을 포함한 7~9구간 조건을 평가한다', (segment, expected) => {

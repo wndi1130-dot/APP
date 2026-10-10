@@ -27,12 +27,12 @@
       "effects": [
         {
           "type": "medicine",
-          "amount": -2
+          "amount": -3
         },
         {
           "type": "relation",
           "target": "engine",
-          "amount": 4
+          "amount": 2
         }
       ],
       "followups": [],

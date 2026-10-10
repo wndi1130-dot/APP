@@ -20,7 +20,7 @@
       "effects": [
         {
           "type": "coal",
-          "amount": 8
+          "amount": 5
         },
         {
           "type": "community.exposure",

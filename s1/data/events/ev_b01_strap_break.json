@@ -31,6 +31,10 @@
           "type": "flag",
           "id": "b01_strap_pending",
           "value": false
+        },
+        {
+          "type": "coal",
+          "amount": -2
         }
       ],
       "followups": [],

@@ -1,5 +1,6 @@
 // S1a 판과 S1a+S1c 판을 같은 시드로 돌려 비교한다(s1c_domestic 14.1의 2번).
-// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D·BUDGET·DRAW키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never] [--budget] [--events]
+// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D·BUDGET·DRAW키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never] [--budget] [--events] [--pick=second|random]
+// --pick: 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸이나 안 막힌 칸 아무거나를 고르는 봇(첫 칸 치우침을 가르는 측정용)
 // --budget: 카드 구간 예산(src/game/budget.ts, events_disasters 3.1)을 켠다. 상한은 --set=perSeg:4 처럼 바꾼다(D에 없고 BUDGET에 있는 키는 BUDGET을 바꾼다).
 // --events: 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(src/game/event_pack.ts)를 켠다. 가중치 상수는 --set=pressMax:4 처럼 DRAW 키로 바꾼다.
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
@@ -38,6 +39,8 @@ const events = flags.includes('--events');
 const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
 if (prepFlag && prepFlag !== 'auto' && prepFlag !== 'never') throw new Error(`--prep는 auto나 never: ${prepFlag}`);
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
+const pickRule = flags.find(x => x.startsWith('--pick='))?.slice(7);
+if (pickRule && pickRule !== 'second' && pickRule !== 'random') throw new Error(`--pick는 second나 random: ${pickRule}`);
 
 const RUNS: { name: string; opts: BotOptions }[] = [
   { name: 'S1a caretaker', opts: { s1c: false, policy: 'caretaker', dom: 'idle' } },
@@ -144,6 +147,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(disasters ? { disasters: true, prep: prepFlag as 'auto' | 'never' | undefined } : {}),
     ...(budget ? { budget: true } : {}),
     ...(events ? { eventPack: true } : {}),
+    ...(pickRule ? { pickRule: pickRule as 'second' | 'random' } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);

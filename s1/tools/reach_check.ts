@@ -27,6 +27,18 @@ export const REACH_NOTES: Record<string, string> = {
   'content:ev_b01_stoker_burn': '기관실 과밀이 60 이상이어야 온다. 봇 판에선 거의 없다',
   'content:ev_b01_window_ice': '앞칸 온기가 42 이하여야 온다. 봇 판에선 거의 없다',
   'content:ev_b01_wobbly_cart': '앞칸 과밀이 55 이상이어야 온다. 봇 판에선 거의 없다',
+  'content:ev_b01_frost_bird': '빚을 치른 표식(ev_achieved)이 서야 온다. 표식은 후속 사건(ev_h02_sour_pot 등)을 고르면 선다. 봇은 그 길을 안 간다',
+  'content:ev_b01_mended_harmonica': '빚을 치른 표식(ev_achieved)이 서야 온다. 표식은 후속 사건(ev_h02_sour_pot 등)을 고르면 선다. 봇은 그 길을 안 간다',
+  'content:ev_b01_paper_puppet': '빚을 치른 표식(ev_achieved)이 서야 온다. 표식은 후속 사건(ev_h02_sour_pot 등)을 고르면 선다. 봇은 그 길을 안 간다',
+  'content:ev_b01_uneven_mittens': '빚을 치른 표식(ev_achieved)이 서야 온다. 표식은 후속 사건(ev_h02_sour_pot 등)을 고르면 선다. 봇은 그 길을 안 간다',
+  'content:ev_b01_warm_potatoes': '빚을 치른 표식(ev_achieved)이 서야 온다. 표식은 후속 사건(ev_h02_sour_pot 등)을 고르면 선다. 봇은 그 길을 안 간다',
+  'content:ev_h02_sour_pot': '앞 사건 ev_h02_burst_crates에서 끓여 섞는 선택을 해야 온다. 봇은 첫 칸(다 버린다)만 고른다',
+  'content:ev_h04_one_box': '의약품이 3~10일 때만 온다. 봇 판에선 거의 없다',
+  'content:ev_h05_slow_fire': '앞 사건 ev_h05_short_shift에서 버티라 하는 선택을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h06_frozen_pipe': '앞 사건 ev_h06_split_pipe에서 다음 정차까지 두는 선택을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h10_wrong_dose': '앞 사건 ev_h10_second_night에서 조수가 대신 보는 선택을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h11_bridge_sag': '앞 사건 ev_b01_doubtful_bridge에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h12_switch_stuck': '앞 사건 ev_b01_frozen_switch에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
 };
 
 export const CONFIGS: [string, BotOptions][] = [

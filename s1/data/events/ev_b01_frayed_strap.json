@@ -21,11 +21,6 @@
         {
           "type": "luxury",
           "amount": -2
-        },
-        {
-          "type": "relation",
-          "target": "engine",
-          "amount": 3
         }
       ],
       "followups": [],

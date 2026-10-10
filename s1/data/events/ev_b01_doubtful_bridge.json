@@ -48,6 +48,25 @@
       ],
       "followups": [],
       "witnesses": []
+    },
+    {
+      "id": "c_pass_anyway",
+      "label": "그대로 지난다",
+      "say": "받침은 두고 지나간다. 버텨 주길 바란다.",
+      "effects": [
+        {
+          "type": "flag",
+          "id": "b01_bridge_ignored",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h11_bridge_sag",
+          "delay": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
     }
   ],
   "repeat": 0
