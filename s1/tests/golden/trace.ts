@@ -1,6 +1,7 @@
 import {
   advance, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, cutComm, enableDark, enableDisasters, enableEventPack,
-  makeDeal, resolveStop, supportComm, toolStatus, viewCard,
+  FIELDS, hangSymbol, makeDeal, requestApprentice, requestManual, resolveStop, setBury, setDelegate, startJob, startRestore, supportComm, TECH_IDS, toolStatus,
+  unhangSymbol, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -57,9 +58,25 @@ export function stepOnce(g: Game, r: Run, n: number): boolean {
   if (r.busy && g.phase === 'prep') {
     const c = COMMS[(g.seg + n) % COMMS.length];
     if (g.seg % 3 === 0) supportComm(g, c); else if (g.seg % 3 === 1) cutComm(g, c);
+    if (g.dom) domestic(g, r);
   }
   advance(g);
   return true;
+}
+
+/** 내정 행동을 구간마다 조금씩 해 본다(되는 것만 된다). 공방, 개조, 상징물, 기술 물려주기, 맡기기, 안치. */
+function domestic(g: Game, r: Run): void {
+  const d = g.dom!;
+  const seg = g.seg;
+  for (const id of r.pick === 'first' ? TECH_IDS : [...TECH_IDS].reverse()) if (startRestore(g, id, seg % 4 === 0 ? 'defect' : 'full')) break;
+  const kind = (['insulate', 'armor', 'convert'] as const)[seg % 3];
+  for (const car of d.cars) if (startJob(g, kind, car)) break;
+  const c = COMMS[seg % COMMS.length];
+  if (seg % 5 === 4) unhangSymbol(g, c); else hangSymbol(g, c);
+  if (seg % 2 === 0) requestApprentice(g, FIELDS[seg % FIELDS.length]); else requestManual(g, FIELDS[seg % FIELDS.length]);
+  if (seg === 4) setBury(g, true);
+  if (seg === 6) setDelegate(g, true, r.pick === 'first' ? 'ours' : 'neutral');
+  if (seg === 14) setDelegate(g, false);
 }
 
 export function trace(r: Run): (number | string)[][] {

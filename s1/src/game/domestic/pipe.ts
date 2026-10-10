@@ -1,8 +1,9 @@
+import { bumpRel } from '../ledger';
 import { COMM_NAME } from '../data';
 import type { Comm } from '../data';
 import { MOTION_SOURCES, MOTIONS } from '../motions';
 import type { MotionDef } from '../motions';
-import { achieve, clamp, journal } from '../state';
+import { achieve, journal } from '../state';
 import type { Game, MotionAgenda } from '../state';
 import { D, TECHS } from './data';
 import type { Variant } from './data';
@@ -31,8 +32,8 @@ function variantLine(v: Variant): string {
 /** 표결 결과로 관계 ±5를 옮긴다: 결과의 변형에서 원하는 쪽 +5, 싫어하는 쪽 −5(7.5). */
 function moveRel(g: Game, v: Variant): void {
   const sides = techRelSides('e3', v);
-  for (const c of sides.like) g.comms[c].rel = clamp(g.comms[c].rel + D.techRel, -100, 100);
-  for (const c of sides.dislike) g.comms[c].rel = clamp(g.comms[c].rel - D.techRel, -100, 100);
+  for (const c of sides.like) bumpRel(g, c, D.techRel, 'tech');
+  for (const c of sides.dislike) bumpRel(g, c, -D.techRel, 'tech');
 }
 
 /** 표결이 끝났을 때 부른다. 안건이 오른 뒤에 복원이 취소됐으면 아무 일도 없다. */

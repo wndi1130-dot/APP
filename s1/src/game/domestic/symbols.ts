@@ -1,3 +1,4 @@
+import { bumpRel } from '../ledger';
 import { COMM_NAME } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal } from '../state';
@@ -24,7 +25,7 @@ export function hangWhy(g: Game, c: Comm): string | null {
 function lose(g: Game, c: Comm): void {
   const s = g.comms[c];
   s.coh = clamp(s.coh - SYM.lossCoh, 0, 1);
-  s.rel = clamp(s.rel - SYM.lossRel, -100, 100);
+  bumpRel(g, c, -SYM.lossRel, 'symbol');
 }
 
 /** 상징물을 건다. 걸었으면 true. */

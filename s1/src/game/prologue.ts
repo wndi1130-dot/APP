@@ -1,8 +1,9 @@
+import { bump, bumpRel } from './ledger';
 import { COMM_NAME, REP_ROLE } from './data';
 import { CARD_EXTENSIONS } from './cards';
 import type { CardView, Choice } from './cards';
 import { josa } from './josa';
-import { addCard, clamp, isGone, journal, PROFILES, rnd, storyOf } from './state';
+import { addCard, isGone, journal, PROFILES, rnd, storyOf } from './state';
 import type { Card, Game } from './state';
 import { keepPromise, setLever } from './turn';
 
@@ -114,8 +115,8 @@ function leftNames(g: Game, n: number): string[] {
 function breakPrologue(g: Game): void {
   const s = g.comms.tail;
   s.promise = null;
-  g.trust = clamp(g.trust + PROLOGUE.brokenTrust, 0, 100);
-  s.rel = clamp(s.rel + PROLOGUE.brokenRel, -100, 100);
+  bump(g, 'trust', PROLOGUE.brokenTrust, 'promise');
+  bumpRel(g, 'tail', PROLOGUE.brokenRel, 'promise');
   g.stats.promisesBroken += 1;
   if (g.dark) g.dark.broken.tail += 1;
   journal(g, `${COMM_NAME.tail}과(와)의 약속을 어겼다: 저탄장 운반조를 다 데려온다.`, 'bad');
@@ -138,14 +139,14 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
       const back = roll(g, def.people);
       const coal = roll(g, def.coal);
       const left = PROLOGUE.crew - back;
-      g.coal += coal;
+      bump(g, 'coal', coal, 'card');
       journal(g, `저탄장에서 운반조 ${back}명을 데려오고 석탄 ${coal}을(를) 실었다.`);
       if (left > 0) {
         const names = leftNames(g, left);
         (g.left ??= []).push(...names);
         g.platform = { names, near: true }; // 망자가 얼음을 건너오는 중이라 늘 가깝다(제안)
         g.comms.tail.pop = Math.max(1, g.comms.tail.pop - left);
-        g.comms.tail.rel = clamp(g.comms.tail.rel + PROLOGUE.leftRel, -100, 100);
+        bumpRel(g, 'tail', PROLOGUE.leftRel, 'card');
         flags.depot_left_behind = true;
         journal(g, `${names.join(', ')}${josa(names[names.length - 1] ?? '', '이/가')} 승강장에 남았다. 꼬리칸 사람들이 창에 붙어 그들을 봤다.`, 'dark');
       } else {

@@ -1,3 +1,4 @@
+import { bump, bumpRel, put } from './ledger';
 import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
 import { logDeath, onDeath } from './death';
@@ -794,15 +795,15 @@ function eul(word: string): string {
 export function applyEffs(g: Game, effs: readonly Eff[]): void {
   for (const e of effs) {
     switch (e.t) {
-      case 'coal': g.coal += e.v; break;
-      case 'food': g.food += e.v; break;
-      case 'med': g.med = Math.max(0, g.med + e.v); break;
-      case 'lux': g.lux = Math.max(0, g.lux + e.v); break;
-      case 'trust': g.trust = clamp(g.trust + e.v, 0, 100); break;
-      case 'tension': g.tension = clamp(g.tension + e.v, 0, 100); break;
+      case 'coal': bump(g, 'coal', e.v, 'card'); break;
+      case 'food': bump(g, 'food', e.v, 'card'); break;
+      case 'med': bump(g, 'med', e.v, 'card', { floor0: true }); break;
+      case 'lux': bump(g, 'lux', e.v, 'card', { floor0: true }); break;
+      case 'trust': bump(g, 'trust', e.v, 'card'); break;
+      case 'tension': bump(g, 'tension', e.v, 'card'); break;
       case 'fear': g.fear = clamp(g.fear + e.v, 0, 100); break;
       case 'injured': g.injured = Math.max(0, g.injured + e.v); break;
-      case 'rel': g.comms[e.c].rel = clamp(g.comms[e.c].rel + e.v, -100, 100); break;
+      case 'rel': bumpRel(g, e.c, e.v, 'card'); break;
       case 'fervor': g.comms[e.c].fervor = clamp(g.comms[e.c].fervor + e.v, 0, 3); break;
       case 'pop': g.comms[e.c].pop = Math.max(1, g.comms[e.c].pop + e.v); break;
       case 'base': g.comms[e.c].base[e.i] += e.v; break;
@@ -835,17 +836,17 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     case 'favor_risk':
       g.comms[c].favorCool = 4;
       if (rnd(g) < 0.15) {
-        for (const o of COMMS) if (o !== c) g.comms[o].rel = clamp(g.comms[o].rel - 5, -100, 100);
+        for (const o of COMMS) if (o !== c) bumpRel(g, o, -5, 'leak');
         journal(g, `${g.comms[c].leader.name}의 부탁을 들어준 게 알려졌다. 공정성 시비가 붙었다.`, 'bad');
       }
       break;
     case 'strike_bribe':
       if (rnd(g) < 0.25) {
-        g.comms.engine.rel = clamp(g.comms.engine.rel - 30, -100, 100);
+        bumpRel(g, 'engine', -30, 'leak');
         journal(g, '수석 기관사를 사려던 게 드러났다. 기관실이 등을 돌렸다.', 'bad');
       } else if (rnd(g) < g.comms.engine.coh) {
         g.comms.engine.fervor = 0;
-        g.comms.engine.rel = clamp(g.comms.engine.rel + 5, -100, 100);
+        bumpRel(g, 'engine', 5, 'card');
         journal(g, '수석 기관사가 화부들을 불 앞으로 돌려보냈다.', 'dark');
       } else {
         journal(g, '수석 기관사는 받았지만 화부들이 따르지 않았다.', 'bad');
@@ -915,8 +916,8 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
     case 'birth_ok':
       g.comms[c].pop += 1;
-      for (const o of COMMS) g.comms[o].rel = clamp(g.comms[o].rel + 2, -100, 100);
-      g.tension = clamp(g.tension - 3, 0, 100);
+      for (const o of COMMS) bumpRel(g, o, 2, 'birth');
+      bump(g, 'tension', -3, 'birth');
       if (g.born) g.born.weak = false;
       g.cards.unshift({ uid: g.nextCardUid, kind: 'naming', comm: c, who: card.who });
       g.nextCardUid += 1;
@@ -931,7 +932,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       for (const o of COMMS) g.comms[o].coh = clamp(g.comms[o].coh + 0.02, 0, 1);
       break;
     case 'tension_reset':
-      g.tension = 65;
+      put(g, 'tension', 65, 'card');
       g.tensionCrisisUsed += 1;
       break;
     case 'revolt':
@@ -950,7 +951,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     const crew = g.stop?.crewComm;
     if (crew) {
       const harsh = choice.effs.some(e => e.t === 'trust' && e.v < 0) || choice.special === 'leave_bitten' || choice.special === 'hide_bite';
-      g.comms[crew].rel = clamp(g.comms[crew].rel + (harsh ? -5 : 3), -100, 100);
+      bumpRel(g, crew, harsh ? -5 : 3, 'card');
     }
   }
   budgetPass(g); // addCard를 안 거치고 맨 앞에 붙은 카드(출산 뒤 이름, 후속 사건)도 예산을 본다
