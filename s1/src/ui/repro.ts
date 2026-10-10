@@ -1,6 +1,6 @@
 import {
   COMMS, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDark, migrateDomestic, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
+  migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
@@ -141,6 +141,7 @@ function shapeProblem(g: Record<string, unknown>): string | null {
 /** 판 번호는 그대로인데 나중에 더한 칸을 채운다. */
 function fillDefaults(g: Game): void {
   g.eventLog ??= {};
+  migrateEventPicks(g); // 사건 기억이 라벨 글로 남던 저장(A03)을 고정 id로 잇는다
   g.needs ??= {};
   g.emergencyCalls ??= [];
   g.hunger ??= 0;

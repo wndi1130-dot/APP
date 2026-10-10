@@ -22,6 +22,8 @@ export type Eff =
   | { t: 'grudge'; c: Comm };
 
 export interface Choice {
+  /** 고정 id. 사건 기억(eventLog.pick)은 이걸로 남기고 읽는다(PICKS). 라벨 글을 고쳐도 기억이 이어진다. 없으면 라벨이 남는다 */
+  id?: PickId;
   /** 무엇을 하는지 짧게. 일지에 남는다 */
   label: string;
   /** 카드에 보이는 열차장의 말(프로스트펑크식 선택지, 2026-10-07 사용자). 없으면 label을 보인다 */
@@ -122,10 +124,54 @@ export function withAfford(g: Game, choices: Choice[]): Choice[] {
 // 프로스트펑크처럼 발생은 하되 세부가 달라져야 한다). 한 사건은 다섯 구간 안에 다시 나오지 않는다.
 interface TravelEvent { id: string; when: (g: Game) => boolean; /** 처지 압박의 원값(1 + 문턱까지 거리/20). drawTravelEvent가 1~DRAW.pressMax로 자른다. 없으면 1 */ pressure?: (g: Game) => number; /** 기본 무게(드문 사건 0.5, 모자란 자원을 주는 사건은 올린다). 없으면 1 */ base?: () => number; view: (g: Game, past: EventMemo | undefined) => CardView }
 
+/**
+ * 사건 선택지의 고정 id → 이 id가 생기기 전 저장이 남긴 라벨(A03). 라벨 글을 고쳐도 이 표의 글은 고치지 않는다:
+ * 옛 저장의 eventLog.pick은 그때 라벨이라, 읽을 때(migrateEventPicks) 이 표로 id로 바꿔 잇는다. 새 선택지는 여기 id만 더한다.
+ */
+const PICKS = {
+  fuel_front: '앞칸 연료를 덜어 온다', blankets: '담요를 나눈다', endure: '참으라 한다',
+  guard_break: '경비대가 말린다', widen: '칸을 넓혀 준다', let_be: '내버려 둔다',
+  curtain_open: '커튼을 걷게 한다', side_front: '앞칸 편을 든다', call_reps: '대표 둘을 부른다',
+  burn_melt: '불을 피워 녹인다', snow_melt: '눈을 녹인다', hold_on: '다음 역까지 버틴다',
+  dig_all: '모든 칸이 나눠 판다', dig_tail: '꼬리칸이 판다', plow: '기관차로 밀어붙인다',
+  tender_take: '석탄을 옮긴다', tender_pass: '지나친다',
+  med_use: '의약품을 쓴다', med_save: '아껴 둔다',
+  reshare: '다시 나눈다', guard_line: '경비대를 세운다',
+  guard_heat: '경비대 난방을 올린다', watch_less: '경계를 줄인다', hold_post: '그대로 선다',
+  shift_more: '교대를 늘린다', shift_apprentice: '견습생을 붙인다',
+  heat_up: '난방을 올린다', ration_up: '배급을 올린다',
+  grant: '들어준다', refuse: '거절한다',
+  leave_law: '법대로 두고 온다', take_in: '데려온다', supplies_only: '물자만 받는다', leave: '두고 온다',
+  cut: '자른다', hide: '숨겨 준다',
+} as const;
+export type PickId = keyof typeof PICKS;
+/** 옛 라벨 → id. 같은 id를 가리키던 옛 라벨이 둘 이상이면 여기 더한다(예전 급수탑은 '꼬리칸이 눈을 녹인다'였다) */
+const LEGACY_PICK: Record<string, PickId> = {
+  ...Object.fromEntries(Object.entries(PICKS).map(([id, label]) => [label, id as PickId])),
+  '꼬리칸이 눈을 녹인다': 'snow_melt', '팔을 자른다': 'cut', '다리를 자른다': 'cut', '손을 자른다': 'cut',
+};
+
+/** 이 사건 기억 키가 PICKS 선택지를 남기는 쪽인가(콘텐츠 사건 'content:'와 내정 카드의 라벨은 건드리지 않는다). */
+function picksKey(key: string): boolean {
+  return TRAVEL_EVENTS.some(e => e.id === key) || key.startsWith('demand:') || key.startsWith('favor:') || key === 'rescue' || key === 'bitten';
+}
+
+/** 저장을 읽을 때: 옛 라벨로 남은 사건 기억의 pick을 id로 바꾼다. 이미 id면 그대로 둔다(되풀이해도 같다). */
+export function migrateEventPicks(g: Game): void {
+  for (const [key, m] of Object.entries(g.eventLog ?? {})) {
+    if (picksKey(key) && typeof m.pick === 'string') m.pick = LEGACY_PICK[m.pick] ?? m.pick;
+  }
+}
+
+/** 지난번 그 사건에서 이 선택지를 골랐나. */
+function was(past: EventMemo | undefined, id: PickId): boolean {
+  return past?.pick === id;
+}
+
 /** 지난번 그 사건에서 무엇을 골랐는지에 따라 본문을 고른다. 처음이면 first. */
-function again(past: EventMemo | undefined, first: string, byPick: Record<string, string>, fallback: string): string {
+function again(past: EventMemo | undefined, first: string, byPick: Partial<Record<PickId, string>>, fallback: string): string {
   if (!past) return first;
-  return byPick[past.pick] ?? fallback;
+  return byPick[past.pick as PickId] ?? fallback;
 }
 
 /** 다시 나올수록 거절·방치 쪽 대가가 커진다. */
@@ -143,18 +189,18 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '또 꺼진 난로' : '꺼진 난로', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: again(past, `꼬리칸 난로가 이틀째 꺼져 있다. 아이 ${kids(g, 'tail')}명의 손끝이 하얗다. 앞칸엔 난로가 두 개다.`, {
-        '앞칸 연료를 덜어 온다': '꼬리칸 난로가 또 꺼졌다. 지난번 덜어 온 연료는 사흘을 못 갔다. 앞칸은 이제 연료 상자에 자물쇠를 걸었다.',
-        '담요를 나눈다': '꼬리칸 난로가 또 꺼졌다. 나눠 준 담요는 젖은 채 얼었다. 밤마다 기침 소리가 칸을 넘어온다.',
-        '참으라 한다': '꼬리칸 난로가 또 꺼졌다. 아이들이 "참아라" 하는 열차장 말투를 흉내 내며 논다. 어른들은 웃지 않는다.',
+        fuel_front: '꼬리칸 난로가 또 꺼졌다. 지난번 덜어 온 연료는 사흘을 못 갔다. 앞칸은 이제 연료 상자에 자물쇠를 걸었다.',
+        blankets: '꼬리칸 난로가 또 꺼졌다. 나눠 준 담요는 젖은 채 얼었다. 밤마다 기침 소리가 칸을 넘어온다.',
+        endure: '꼬리칸 난로가 또 꺼졌다. 아이들이 "참아라" 하는 열차장 말투를 흉내 내며 논다. 어른들은 웃지 않는다.',
       }, '꼬리칸 난로가 또 꺼졌다. 이번엔 노인 하나가 아침에 일어나지 않았다.'),
       choices: [
         {
-          label: '앞칸 연료를 덜어 온다',
-          say: past?.pick === '앞칸 연료를 덜어 온다' ? '자물쇠를 따라. 연료는 열차 전체의 것이다!' : '난로 두 개는 사치다. 하나를 꼬리칸으로 옮겨라!',
+          id: 'fuel_front', label: '앞칸 연료를 덜어 온다',
+          say: was(past, 'fuel_front') ? '자물쇠를 따라. 연료는 열차 전체의 것이다!' : '난로 두 개는 사치다. 하나를 꼬리칸으로 옮겨라!',
           effs: [{ t: 'base', c: 'tail', i: 0, v: 5 }, { t: 'base', c: 'front', i: 0, v: -5 }, { t: 'rel', c: 'tail', v: 5 }, { t: 'rel', c: 'front', v: -worse(past, 8, 3) }],
         },
-        { label: '담요를 나눈다', say: past ? '창고 담요를 전부 풀어라. 젖은 건 보일러 옆에서 말려라.' : '창고 담요를 풀어라. 아이들부터 덮어 줘라.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'rel', c: 'tail', v: 4 }] },
-        { label: '참으라 한다', say: past ? '아직 아무도 얼어 죽지 않았다. 버텨라.' : '모두가 춥다. 꼬리칸만 추운 게 아니다.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 5, 3) }, { t: 'tension', v: worse(past, 2, 2) }] },
+        { id: 'blankets', label: '담요를 나눈다', say: past ? '창고 담요를 전부 풀어라. 젖은 건 보일러 옆에서 말려라.' : '창고 담요를 풀어라. 아이들부터 덮어 줘라.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'rel', c: 'tail', v: 4 }] },
+        { id: 'endure', label: '참으라 한다', say: past ? '아직 아무도 얼어 죽지 않았다. 버텨라.' : '모두가 춥다. 꼬리칸만 추운 게 아니다.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 5, 3) }, { t: 'tension', v: worse(past, 2, 2) }] },
       ],
     }),
   },
@@ -163,14 +209,14 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '또 자리 싸움' : '자리 싸움', speaker: leader(g, 'guard'), focus: 'tail', required: true,
       body: again(past, '꼬리칸에서 누울 자리를 두고 주먹이 오갔다. 한 사람이 머리를 다쳤다.', {
-        '경비대가 말린다': '또 주먹이 오갔다. 지난번 끌려갔던 사내가 이번엔 먼저 휘둘렀다. 경비대를 보는 눈이 곱지 않다.',
-        '칸을 넓혀 준다': '넓혀 준 자리에도 사람이 다시 찼다. 이번엔 깨진 병이 나왔다.',
-        '내버려 둔다': '또 싸움이 났다. 지난번 다친 사람은 아직 못 일어난다. 이번엔 편이 갈렸다.',
+        guard_break: '또 주먹이 오갔다. 지난번 끌려갔던 사내가 이번엔 먼저 휘둘렀다. 경비대를 보는 눈이 곱지 않다.',
+        widen: '넓혀 준 자리에도 사람이 다시 찼다. 이번엔 깨진 병이 나왔다.',
+        let_be: '또 싸움이 났다. 지난번 다친 사람은 아직 못 일어난다. 이번엔 편이 갈렸다.',
       }, '자리 싸움이 또 났다. 누가 먼저였는지 아무도 말하지 않는다.'),
       choices: [
-        { label: '경비대가 말린다', say: '경비대, 떼어 놓아라! 또 주먹을 쓰면 묶어 둬라.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 3, 2) }, { t: 'tension', v: -3 }, { t: 'fear', v: 2 }] },
-        { label: '칸을 넓혀 준다', say: '앞칸 짐을 치워라. 꼬리칸에도 누울 자리는 있어야 한다.', effs: [{ t: 'base', c: 'tail', i: 2, v: -5 }, { t: 'base', c: 'front', i: 2, v: 5 }, { t: 'rel', c: 'front', v: -5 }, { t: 'rel', c: 'tail', v: 3 }] },
-        { label: '내버려 둔다', say: past ? '저들끼리 끝내게 둬라. 열차장은 심판이 아니다.' : '자리는 저들끼리 정하게 둬라.', effs: [{ t: 'injured', v: past ? 2 : 1 }, { t: 'tension', v: worse(past, 4, 2) }] },
+        { id: 'guard_break', label: '경비대가 말린다', say: '경비대, 떼어 놓아라! 또 주먹을 쓰면 묶어 둬라.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 3, 2) }, { t: 'tension', v: -3 }, { t: 'fear', v: 2 }] },
+        { id: 'widen', label: '칸을 넓혀 준다', say: '앞칸 짐을 치워라. 꼬리칸에도 누울 자리는 있어야 한다.', effs: [{ t: 'base', c: 'tail', i: 2, v: -5 }, { t: 'base', c: 'front', i: 2, v: 5 }, { t: 'rel', c: 'front', v: -5 }, { t: 'rel', c: 'tail', v: 3 }] },
+        { id: 'let_be', label: '내버려 둔다', say: past ? '저들끼리 끝내게 둬라. 열차장은 심판이 아니다.' : '자리는 저들끼리 정하게 둬라.', effs: [{ t: 'injured', v: past ? 2 : 1 }, { t: 'tension', v: worse(past, 4, 2) }] },
       ],
     }),
   },
@@ -179,14 +225,14 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '다시 걸린 커튼' : '앞칸의 커튼', speaker: leader(g, 'tail'), focus: 'front', required: true,
       body: again(past, '앞칸 창에 커튼이 걸렸다. 식사 시간마다 닫힌다. 꼬리칸이 그 앞에 줄을 섰다.', {
-        '커튼을 걷게 한다': '커튼은 걷혔다. 대신 앞칸이 식사를 밤으로 옮겼다. 꼬리칸이 자는 사이에 먹는다.',
-        '앞칸 편을 든다': '커튼 앞 줄이 길어졌다. 누군가 커튼에 숯으로 "배부른 칸"이라고 썼다.',
-        '대표 둘을 부른다': '두 대표가 한 식탁에 앉았던 일은 사흘을 못 갔다. 커튼이 다시 걸렸다.',
+        curtain_open: '커튼은 걷혔다. 대신 앞칸이 식사를 밤으로 옮겼다. 꼬리칸이 자는 사이에 먹는다.',
+        side_front: '커튼 앞 줄이 길어졌다. 누군가 커튼에 숯으로 "배부른 칸"이라고 썼다.',
+        call_reps: '두 대표가 한 식탁에 앉았던 일은 사흘을 못 갔다. 커튼이 다시 걸렸다.',
       }, '커튼이 또 걸렸다.'),
       choices: [
-        { label: '커튼을 걷게 한다', say: past?.pick === '커튼을 걷게 한다' ? '밤에 먹든 낮에 먹든 같은 열차다. 문을 열어 둬라.' : '커튼을 걷어라. 이 열차에 숨어서 먹는 칸은 없다.', effs: [{ t: 'rel', c: 'front', v: -worse(past, 6, 2) }, { t: 'rel', c: 'tail', v: 4 }] },
-        { label: '앞칸 편을 든다', say: past?.pick === '앞칸 편을 든다' ? '낙서한 자를 찾아라. 앞칸 식탁은 앞칸 일이다.' : '앞칸 식탁은 앞칸 일이다. 줄을 풀어라.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 4, 3) }, { t: 'rel', c: 'front', v: 4 }] },
-        { label: '대표 둘을 부른다', say: past ? '또 커튼이냐. 두 대표를 내 식탁으로 다시 끌고 와라!' : '두 대표를 내 식탁에 앉혀라. 커튼 얘기는 밥 먹으며 끝낸다.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
+        { id: 'curtain_open', label: '커튼을 걷게 한다', say: was(past, 'curtain_open') ? '밤에 먹든 낮에 먹든 같은 열차다. 문을 열어 둬라.' : '커튼을 걷어라. 이 열차에 숨어서 먹는 칸은 없다.', effs: [{ t: 'rel', c: 'front', v: -worse(past, 6, 2) }, { t: 'rel', c: 'tail', v: 4 }] },
+        { id: 'side_front', label: '앞칸 편을 든다', say: was(past, 'side_front') ? '낙서한 자를 찾아라. 앞칸 식탁은 앞칸 일이다.' : '앞칸 식탁은 앞칸 일이다. 줄을 풀어라.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 4, 3) }, { t: 'rel', c: 'front', v: 4 }] },
+        { id: 'call_reps', label: '대표 둘을 부른다', say: past ? '또 커튼이냐. 두 대표를 내 식탁으로 다시 끌고 와라!' : '두 대표를 내 식탁에 앉혀라. 커튼 얘기는 밥 먹으며 끝낸다.', effs: [{ t: 'lux', v: -worse(past, 1, 1) }, { t: 'tension', v: -2 }, { t: 'trust', v: 1 }] },
       ],
     }),
   },
@@ -195,20 +241,19 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     // 눈을 녹일 칸은 꼬리칸 고정이 아니라 마지막 작업조를 낸 칸이다(first_leg_story 6.4: 노출 +10, 의무진·앞칸은 궂은일 반감 −3).
     view: (g, past) => {
       const sc = g.lastCrew ?? 'tail';
-      const snowPast = past?.pick === '눈을 녹인다' || past?.pick === '꼬리칸이 눈을 녹인다';
+      const snowPast = was(past, 'snow_melt');
       const chore = CHORE_COMMS.includes(sc) ? P.choreRel : 0;
       return {
         title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
-          '불을 피워 녹인다': `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
-          '눈을 녹인다': '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.',
-          '꼬리칸이 눈을 녹인다': '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.',
-          '다음 역까지 버틴다': '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
+          burn_melt: `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
+          snow_melt: '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.',
+          hold_on: '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
         }, '급수탑이 또 얼었다.'),
         choices: [
-          { label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
-          { label: '눈을 녹인다', say: snowPast ? `${COMM_NAME[sc]}${iga(COMM_NAME[sc])} 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라.` : `${COMM_NAME[sc]}${josa(COMM_NAME[sc], '은/는')} 양동이를 들어라. 눈을 퍼다 녹인다.`, effs: [{ t: 'base', c: sc, i: 3, v: P.snowExposure }, { t: 'rel', c: sc, v: -worse(past, 4, 3) + chore }] },
-          { label: '다음 역까지 버틴다', say: past?.pick === '다음 역까지 버틴다' ? '관은 안 탄다. 내가 보증한다. 간다!' : '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -worse(past, 4, 2) }, ...(past?.pick === '다음 역까지 버틴다' ? [{ t: 'base' as const, c: 'engine' as const, i: 3 as const, v: 6 }] : [])] },
+          { id: 'burn_melt', label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
+          { id: 'snow_melt', label: '눈을 녹인다', say: snowPast ? `${COMM_NAME[sc]}${iga(COMM_NAME[sc])} 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라.` : `${COMM_NAME[sc]}${josa(COMM_NAME[sc], '은/는')} 양동이를 들어라. 눈을 퍼다 녹인다.`, effs: [{ t: 'base', c: sc, i: 3, v: P.snowExposure }, { t: 'rel', c: sc, v: -worse(past, 4, 3) + chore }] },
+          { id: 'hold_on', label: '다음 역까지 버틴다', say: was(past, 'hold_on') ? '관은 안 탄다. 내가 보증한다. 간다!' : '물을 아껴라. 다음 급수탑까지 간다.', effs: [{ t: 'coal', v: -2 }, { t: 'rel', c: 'engine', v: -worse(past, 4, 2) }, ...(was(past, 'hold_on') ? [{ t: 'base' as const, c: 'engine' as const, i: 3 as const, v: 6 }] : [])] },
         ],
       };
     },
@@ -218,14 +263,14 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
-        '모든 칸이 나눠 판다': '또 눈더미다. 지난번 함께 판 일을 사람들이 아직 말한다. 앞칸 몇은 벌써 삽을 들었다.',
-        '꼬리칸이 판다': '또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. "이번엔 앞칸 차례다."',
-        '기관차로 밀어붙인다': '또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.',
+        dig_all: '또 눈더미다. 지난번 함께 판 일을 사람들이 아직 말한다. 앞칸 몇은 벌써 삽을 들었다.',
+        dig_tail: '또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. "이번엔 앞칸 차례다."',
+        plow: '또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.',
       }, '선로가 또 눈에 묻혔다.'),
       choices: [
-        { label: '모든 칸이 나눠 판다', say: '모든 칸이 삽을 든다. 앞칸도 예외는 없다!', effs: [{ t: 'food', v: -3 }, { t: 'rel', c: 'front', v: past?.pick === '모든 칸이 나눠 판다' ? -1 : -3 }, { t: 'tension', v: -1 }] },
-        { label: '꼬리칸이 판다', say: past?.pick === '꼬리칸이 판다' ? '앉아 있으면 열차도 선다. 꼬리칸, 일어나라.' : '꼬리칸, 삽을 들어라. 손이 제일 많은 칸이다.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 5, 3) }, ...(past?.pick === '꼬리칸이 판다' ? [{ t: 'tension' as const, v: 3 }] : [])] },
-        { label: '기관차로 밀어붙인다', say: '화부들, 불을 올려라. 밀고 나간다!', effs: [{ t: 'coal', v: -worse(past, 4, 1) }, { t: 'base', c: 'engine', i: 3, v: worse(past, 4, 2) }] },
+        { id: 'dig_all', label: '모든 칸이 나눠 판다', say: '모든 칸이 삽을 든다. 앞칸도 예외는 없다!', effs: [{ t: 'food', v: -3 }, { t: 'rel', c: 'front', v: was(past, 'dig_all') ? -1 : -3 }, { t: 'tension', v: -1 }] },
+        { id: 'dig_tail', label: '꼬리칸이 판다', say: was(past, 'dig_tail') ? '앉아 있으면 열차도 선다. 꼬리칸, 일어나라.' : '꼬리칸, 삽을 들어라. 손이 제일 많은 칸이다.', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 5, 3) }, ...(was(past, 'dig_tail') ? [{ t: 'tension' as const, v: 3 }] : [])] },
+        { id: 'plow', label: '기관차로 밀어붙인다', say: '화부들, 불을 올려라. 밀고 나간다!', effs: [{ t: 'coal', v: -worse(past, 4, 1) }, { t: 'base', c: 'engine', i: 3, v: worse(past, 4, 2) }] },
       ],
     }),
   },
@@ -235,8 +280,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '측선의 탄수차', focus: 'engine', required: true,
       body: past ? '측선에 또 버려진 탄수차가 있다. 이번엔 문짝마다 손톱자국이 나 있다.' : '측선에 버려진 탄수차가 서 있다. 안에 석탄이 보인다. 주위가 너무 조용하다.',
       choices: [
-        { label: '석탄을 옮긴다', say: past ? '자국은 오래된 거다. 빨리 옮기고 빠진다!' : '조용하면 좋은 거다. 다 옮겨라, 서둘러!', effs: [{ t: 'coal', v: 8 }], special: 'risk_injury' },
-        { label: '지나친다', say: '너무 조용하다. 손대지 말고 지나간다.', effs: [] },
+        { id: 'tender_take', label: '석탄을 옮긴다', say: past ? '자국은 오래된 거다. 빨리 옮기고 빠진다!' : '조용하면 좋은 거다. 다 옮겨라, 서둘러!', effs: [{ t: 'coal', v: 8 }], special: 'risk_injury' },
+        { id: 'tender_pass', label: '지나친다', say: '너무 조용하다. 손대지 말고 지나간다.', effs: [] },
       ],
     }),
   },
@@ -245,12 +290,12 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '열병이 번진다' : '아이 열병', speaker: leader(g, 'medtech'), focus: 'medtech', required: true,
       body: again(past, '꼬리칸 아이 셋이 열이 난다. 해열제는 의무칸 상자에 있다.', {
-        '의약품을 쓴다': `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 ${Math.round(g.med)} 남았다.`,
-        '아껴 둔다': '지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다.',
+        med_use: `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 ${Math.round(g.med)} 남았다.`,
+        med_save: '지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다.',
       }, '아이들이 또 열이 난다.'),
       choices: [
-        { label: '의약품을 쓴다', say: '의약품은 약자의 것이다. 아이들에게 먼저 써라!', effs: [{ t: 'med', v: past?.pick === '의약품을 쓴다' ? -3 : -2 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: 'medtech', v: 2 }] },
-        { label: '아껴 둔다', say: past?.pick === '아껴 둔다' ? '약은 살 사람에게 쓴다. 그 엄마를 문 앞에서 데려가라.' : '애들 열은 금방 내린다. 엄살 부리지 말라고 전해라!', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 4, 3) }, { t: 'rel', c: 'medtech', v: -2 }, ...(past?.pick === '아껴 둔다' ? [{ t: 'trust' as const, v: -2 }] : [])] },
+        { id: 'med_use', label: '의약품을 쓴다', say: '의약품은 약자의 것이다. 아이들에게 먼저 써라!', effs: [{ t: 'med', v: was(past, 'med_use') ? -3 : -2 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: 'medtech', v: 2 }] },
+        { id: 'med_save', label: '아껴 둔다', say: was(past, 'med_save') ? '약은 살 사람에게 쓴다. 그 엄마를 문 앞에서 데려가라.' : '애들 열은 금방 내린다. 엄살 부리지 말라고 전해라!', effs: [{ t: 'rel', c: 'tail', v: -worse(past, 4, 3) }, { t: 'rel', c: 'medtech', v: -2 }, ...(was(past, 'med_save') ? [{ t: 'trust' as const, v: -2 }] : [])] },
       ],
     }),
   },
@@ -259,12 +304,12 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '배급 줄', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: again(past, '배급 줄 끝에서 빵이 떨어졌다. 뒤에 선 사람들이 소리친다.', {
-        '다시 나눈다': `배급 줄 끝에서 또 빵이 떨어졌다. 사람들이 "지난번처럼!"을 외친다. 식량은 ${Math.round(g.food)} 남았다.`,
-        '경비대를 세운다': '경비대가 섰던 날 이후로 배급 줄이 조용하다. 너무 조용하다. 오늘도 빵이 모자란다.',
+        reshare: `배급 줄 끝에서 또 빵이 떨어졌다. 사람들이 "지난번처럼!"을 외친다. 식량은 ${Math.round(g.food)} 남았다.`,
+        guard_line: '경비대가 섰던 날 이후로 배급 줄이 조용하다. 너무 조용하다. 오늘도 빵이 모자란다.',
       }, '배급 줄 끝에서 또 빵이 떨어졌다.'),
       choices: [
-        { label: '다시 나눈다', say: '솥을 다시 열어라. 줄 끝까지 한 그릇씩 간다.', effs: [{ t: 'food', v: -worse(past, 4, 1) }, { t: 'rel', c: 'tail', v: 3 }] },
-        { label: '경비대를 세운다', say: past?.pick === '경비대를 세운다' ? '조용하면 됐다. 경비대는 그대로 선다.' : '경비대를 줄 옆에 세워라. 질서가 먼저다.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c: 'tail', v: -3 }, { t: 'rel', c: 'guard', v: 2 }, ...(past ? [{ t: 'tension' as const, v: worse(past, 0, 2) }] : [])] },
+        { id: 'reshare', label: '다시 나눈다', say: '솥을 다시 열어라. 줄 끝까지 한 그릇씩 간다.', effs: [{ t: 'food', v: -worse(past, 4, 1) }, { t: 'rel', c: 'tail', v: 3 }] },
+        { id: 'guard_line', label: '경비대를 세운다', say: was(past, 'guard_line') ? '조용하면 됐다. 경비대는 그대로 선다.' : '경비대를 줄 옆에 세워라. 질서가 먼저다.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c: 'tail', v: -3 }, { t: 'rel', c: 'guard', v: 2 }, ...(past ? [{ t: 'tension' as const, v: worse(past, 0, 2) }] : [])] },
       ],
     }),
   },
@@ -273,14 +318,14 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '동상', speaker: leader(g, 'guard'), focus: 'guard', required: true,
       body: again(past, '지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.', {
-        '그대로 선다': '지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대가 지붕 교대를 거부하겠다고 한다.',
-        '경계를 줄인다': '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.',
-        '경비대 난방을 올린다': '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위는 여전히 영하 서른이다.',
+        hold_post: '지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대가 지붕 교대를 거부하겠다고 한다.',
+        watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.',
+        guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위는 여전히 영하 서른이다.',
       }, '지붕 경계 대원들이 또 동상을 입었다.'),
       choices: [
-        { label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
-        { label: '경계를 줄인다', say: '얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
-        { label: '그대로 선다', say: past?.pick === '그대로 선다' ? '거부는 없다. 지붕이 비면 다 같이 죽는다.' : '경계는 줄이지 않는다. 장갑을 두 겹 껴라.', effs: [{ t: 'rel', c: 'guard', v: -worse(past, 5, 4) }, { t: 'injured', v: 1 }] },
+        { id: 'guard_heat', label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
+        { id: 'watch_less', label: '경계를 줄인다', say: '얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
+        { id: 'hold_post', label: '그대로 선다', say: was(past, 'hold_post') ? '거부는 없다. 지붕이 비면 다 같이 죽는다.' : '경계는 줄이지 않는다. 장갑을 두 겹 껴라.', effs: [{ t: 'rel', c: 'guard', v: -worse(past, 5, 4) }, { t: 'injured', v: 1 }] },
       ],
     }),
   },
@@ -439,14 +484,14 @@ function baseView(g: Game, card: Card): CardView {
         return {
           title: past ? '화부 교대, 다시' : '화부 교대', speaker: leader(g, 'engine'), focus: 'engine', required: true, key: 'demand:engine_shift',
           body: again(past, `화부들이 교대 없이 삽질을 한 지 오래다. 위험 노출 ${Math.round(ex)}. 교대를 늘려 달라고 한다.`, {
-            '거절한다': `화부들이 다시 왔다. 이번엔 수석 기관사도 함께다. 위험 노출 ${Math.round(ex)}.`,
-            '견습생을 붙인다': `붙여 준 견습생 하나가 화상을 입었다. 화부들이 교대를 다시 요구한다. 위험 노출 ${Math.round(ex)}.`,
-            '교대를 늘린다': `늘린 교대로도 모자란다. 석탄이 줄수록 삽질은 늘었다. 위험 노출 ${Math.round(ex)}.`,
+            refuse: `화부들이 다시 왔다. 이번엔 수석 기관사도 함께다. 위험 노출 ${Math.round(ex)}.`,
+            shift_apprentice: `붙여 준 견습생 하나가 화상을 입었다. 화부들이 교대를 다시 요구한다. 위험 노출 ${Math.round(ex)}.`,
+            shift_more: `늘린 교대로도 모자란다. 석탄이 줄수록 삽질은 늘었다. 위험 노출 ${Math.round(ex)}.`,
           }, `화부들이 또 교대를 요구한다. 위험 노출 ${Math.round(ex)}.`),
           choices: withAfford(g, [
-            { label: '교대를 늘린다', say: '교대를 늘려라. 석탄보다 화부가 먼저 쓰러지면 끝이다.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 3 }] },
-            { label: '견습생을 붙인다', say: past?.pick === '견습생을 붙인다' ? '견습생을 더 붙여라. 화상은 배우는 값이다.' : '꼬리칸에서 젊은 손을 데려가라. 삽질은 배우면 된다.', effs: [{ t: 'base', c: 'engine', i: 3, v: -5 }, { t: 'base', c: 'tail', i: 3, v: 3 }, { t: 'rel', c: 'tail', v: -worse(past, 2, 2) }] },
-            { label: '거절한다', say: past?.pick === '거절한다' ? '수석 기관사가 와도 답은 같다. 불 앞으로 돌아가라.' : '보일러는 쉬지 않는다. 화부도 마찬가지다.', effs: [{ t: 'fervor', c: 'engine', v: 1 }, { t: 'rel', c: 'engine', v: -worse(past, P.refuseRel, 3) }] },
+            { id: 'shift_more', label: '교대를 늘린다', say: '교대를 늘려라. 석탄보다 화부가 먼저 쓰러지면 끝이다.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 3 }] },
+            { id: 'shift_apprentice', label: '견습생을 붙인다', say: was(past, 'shift_apprentice') ? '견습생을 더 붙여라. 화상은 배우는 값이다.' : '꼬리칸에서 젊은 손을 데려가라. 삽질은 배우면 된다.', effs: [{ t: 'base', c: 'engine', i: 3, v: -5 }, { t: 'base', c: 'tail', i: 3, v: 3 }, { t: 'rel', c: 'tail', v: -worse(past, 2, 2) }] },
+            { id: 'refuse', label: '거절한다', say: was(past, 'refuse') ? '수석 기관사가 와도 답은 같다. 불 앞으로 돌아가라.' : '보일러는 쉬지 않는다. 화부도 마찬가지다.', effs: [{ t: 'fervor', c: 'engine', v: 1 }, { t: 'rel', c: 'engine', v: -worse(past, P.refuseRel, 3) }] },
           ]),
         };
       }
@@ -462,14 +507,14 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: which === 'heat' ? '난방 요구' : '배급 요구', speaker: leader(g, c), focus: c, required: true, key: `demand:${c}`,
         // 같은 요구라도 관계에 따라 말투가 다르다(정치 디테일 2.1).
-        body: `${past?.pick === '거절한다' ? refusedBody : firstBody} ${s.rel >= 15 ? '말투는 부탁에 가깝다.' : s.rel <= -15 ? '답은 다음 회기 전까지 달라고 못 박는다.' : ''}`.trim(),
+        body: `${was(past, 'refuse') ? refusedBody : firstBody} ${s.rel >= 15 ? '말투는 부탁에 가깝다.' : s.rel <= -15 ? '답은 다음 회기 전까지 달라고 못 박는다.' : ''}`.trim(),
         choices: withAfford(g, [
-          { label: which === 'heat' ? '난방을 올린다' : '배급을 올린다',
+          { id: which === 'heat' ? 'heat_up' : 'ration_up', label: which === 'heat' ? '난방을 올린다' : '배급을 올린다',
             say: which === 'heat' ? `${COMM_NAME[c]} 난로를 올려라. 밤에 얼어 죽는 사람은 없어야 한다.` : `${COMM_NAME[c]} 그릇을 채워라. 빈 그릇으로는 일 못 한다.`,
             effs: [{ t: 'lever', c, which, v: 1 }, { t: 'rel', c, v: 2 }] },
-          { label: '거절한다',
-            say: past?.pick === '거절한다' ? '사람을 몰고 와도 석탄은 늘지 않는다.' : which === 'heat' ? '다들 붙어 자기는 마찬가지다. 지금은 안 된다.' : '모두 반 그릇이다. 더 나올 데가 없다.',
-            effs: [{ t: 'fervor', c, v: 1 }, { t: 'rel', c, v: -worse(past?.pick === '거절한다' ? past : undefined, P.refuseRel, 3) }] },
+          { id: 'refuse', label: '거절한다',
+            say: was(past, 'refuse') ? '사람을 몰고 와도 석탄은 늘지 않는다.' : which === 'heat' ? '다들 붙어 자기는 마찬가지다. 지금은 안 된다.' : '모두 반 그릇이다. 더 나올 데가 없다.',
+            effs: [{ t: 'fervor', c, v: 1 }, { t: 'rel', c, v: -worse(was(past, 'refuse') ? past : undefined, P.refuseRel, 3) }] },
         ]),
       };
     }
@@ -479,8 +524,8 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '사적인 부탁', speaker: leader(g, c), focus: c, required: true, body: fav.body, key: `favor:${c}`,
         choices: withAfford(g, [
-          { label: '들어준다', say: past ? '이번까지다. 다음은 없다.' : '들어주지. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
-          { label: '거절한다', say: past ? '한 번 들어줬다고 버릇이 되면 안 된다.' : '사사로운 부탁은 받지 않는다.', effs: [{ t: 'rel', c, v: past ? -4 : -3 }] },
+          { id: 'grant', label: '들어준다', say: past ? '이번까지다. 다음은 없다.' : '들어주지. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
+          { id: 'refuse', label: '거절한다', say: past ? '한 번 들어줬다고 버릇이 되면 안 된다.' : '사사로운 부탁은 받지 않는다.', effs: [{ t: 'rel', c, v: past ? -4 : -3 }] },
         ]),
       };
     }
@@ -518,32 +563,32 @@ function baseView(g: Game, card: Card): CardView {
         '플랫폼 끝에 여자 하나가 앉아 있다. 다리를 다쳤고, 아이를 안고 있다.',
         '대합실 의자 밑에서 남자 하나가 기어 나왔다. 기관사였다고 한다. 손이 떨린다.',
       ][n % 4];
-      const echo = past?.pick === '두고 온다' || past?.pick === '법대로 두고 온다' ? ' 수색대가 이번엔 먼저 묻는다. 또 두고 가느냐고.'
-        : past?.pick === '데려온다' ? ` 지난번 데려온 사람들로 꼬리칸 과밀이 ${Math.round(situation(g, 'tail')[2])}이다.` : ' 꼬리칸은 이미 꽉 찼다.';
+      const echo = was(past, 'leave') || was(past, 'leave_law') ? ' 수색대가 이번엔 먼저 묻는다. 또 두고 가느냐고.'
+        : was(past, 'take_in') ? ` 지난번 데려온 사람들로 꼬리칸 과밀이 ${Math.round(situation(g, 'tail')[2])}이다.` : ' 꼬리칸은 이미 꽉 찼다.';
       return {
         title: '부상자', speaker: { name: card.who ?? '수색대', role: '수색대' }, required: true, key: 'rescue',
         body: ban ? `${who} 외부인 받지 않기 법이 있다.` : `${who}${echo}`,
         choices: withAfford(g, ban ? [
-          { label: '법대로 두고 온다', say: '법은 법이다. 두고 와라.', effs: [{ t: 'trust', v: -1 }], witness: true },
+          { id: 'leave_law', label: '법대로 두고 온다', say: '법은 법이다. 두고 와라.', effs: [{ t: 'trust', v: -1 }], witness: true },
         ] : [
-          { label: '데려온다', say: '자리는 만들면 된다. 데려와라!', effs: [{ t: 'pop', c: 'tail', v: 2 }, { t: 'base', c: 'tail', i: 2, v: 3 }, { t: 'injured', v: 1 }, { t: 'rel', c: 'medtech', v: 3 }], witness: true },
-          { label: '물자만 받는다', say: '가진 식량만 받아라. 사람은 태울 수 없다.', effs: [{ t: 'food', v: 3 }, { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
-          { label: '두고 온다', say: past?.pick === '두고 온다' ? '그래, 또 두고 간다. 우리 먼저 살아야 한다.' : '꼬리칸은 꽉 찼다. 문을 닫아라.', effs: [{ t: 'trust', v: -worse(past?.pick === '두고 온다' ? past : undefined, 1, 1) }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
+          { id: 'take_in', label: '데려온다', say: '자리는 만들면 된다. 데려와라!', effs: [{ t: 'pop', c: 'tail', v: 2 }, { t: 'base', c: 'tail', i: 2, v: 3 }, { t: 'injured', v: 1 }, { t: 'rel', c: 'medtech', v: 3 }], witness: true },
+          { id: 'supplies_only', label: '물자만 받는다', say: '가진 식량만 받아라. 사람은 태울 수 없다.', effs: [{ t: 'food', v: 3 }, { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
+          { id: 'leave', label: '두고 온다', say: was(past, 'leave') ? '그래, 또 두고 간다. 우리 먼저 살아야 한다.' : '꼬리칸은 꽉 찼다. 문을 닫아라.', effs: [{ t: 'trust', v: -worse(was(past, 'leave') ? past : undefined, 1, 1) }, { t: 'rel', c: 'medtech', v: -3 }], witness: true },
         ]),
       };
     }
     case 'bitten': {
       const past = memo(g, 'bitten');
       const [part, partObj] = ([['팔', '팔을'], ['다리', '다리를'], ['손', '손을']] as const)[card.uid % 3];
-      const echo = past?.pick === '숨겨 준다' ? ' 지난번 일 때문에 다들 상처부터 본다.' : past?.pick === '두고 온다' ? ' 지난번 역에 두고 온 사람을 다들 기억한다.' : '';
+      const echo = was(past, 'hide') ? ' 지난번 일 때문에 다들 상처부터 본다.' : was(past, 'leave') ? ' 지난번 역에 두고 온 사람을 다들 기억한다.' : '';
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
         // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).
         body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.${echo}`,
         choices: withAfford(g, [
-          { label: `${partObj} 자른다`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
-          { label: '숨겨 준다', say: past?.pick === '숨겨 준다' ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
-          { label: '두고 온다', say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
+          { id: 'cut', label: `${partObj} 자른다`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
+          { id: 'hide', label: '숨겨 준다', say: was(past, 'hide') ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
+          { id: 'leave', label: '두고 온다', say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
         ]),
       };
     }
@@ -897,7 +942,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
   }
   for (const ext of CARD_EXTENSIONS) ext.choose?.(g, card, choice);
-  if (view.key) remember(g, view.key, choice.label);
+  if (view.key) remember(g, view.key, choice.id ?? choice.label);
   const log = choice.log ?? `${view.title}: ${choice.label}.`;
   if (card.kind !== 'info' && card.kind !== 'trust_crisis' && card.kind !== 'leash') journal(g, log, choice.witness ? 'dark' : undefined);
   if (choice.witness) {
