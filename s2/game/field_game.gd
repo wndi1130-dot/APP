@@ -1384,6 +1384,7 @@ func set_radio(text: String, kind: String = "info", at = null) -> void:
 	radio_wait = {"text": text, "ring": ring}
 	radio_wait_t = RADIO_HISS
 	hud.radio("…치직")
+	audio.radio("hiss")
 
 
 func _tick_radio(delta: float) -> void:
@@ -1398,6 +1399,7 @@ func _tick_radio(delta: float) -> void:
 	# The set is on the chief: the dead within the ring hear it, crouched or not.
 	if player != null and player.is_alive():
 		radio_rings.append({"t": clock.elapsed, "r": float(call["ring"])})
+		audio.radio("urgent" if float(call["ring"]) > RADIO_RING else "call")
 		zombies.hear(player.position, SimNoise.Level.NORMAL, float(call["ring"]))
 
 

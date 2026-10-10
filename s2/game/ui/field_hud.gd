@@ -48,7 +48,7 @@ const STATUS_BIG := Vector2(58.0, 38.0)
 const STATUS_SMALL := Vector2(50.0, 32.0)
 const RADIO_TIPS: Dictionary = {
 	"urgent": "무전: 무리가 들어올 때만 부른다. 울리면 가까운 망자가 듣는다.",
-	"often": "무전: 예보까지 다 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
+	"often": "무전: 무리가 지나가면 다음 예보도 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
 	"off": "무전을 껐다. 떠날 때 말고는 울리지 않고, 아무것도 듣지 못한다.",
 }
 const DUSK_TEST_MIN: float = 940.0   # the test key jumps to 15:40, five minutes before sunset
