@@ -1044,3 +1044,17 @@ small { font-size: 12px; }
 .why__row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 20px; }
 .why__seg { flex: none; width: 44px; color: var(--ink-3); font-size: 12px; }
 .why__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 바뀐 것 쪽지(app.ts slipEl): 아래 띠 바로 위 가운데. 색은 재질 규칙을 따른다(늘어남 호박색, 줄어듦 그을음). */
+.slip {
+  position: absolute; z-index: 41; left: 50%; bottom: calc(var(--bottom-h, 56px) + 8px); transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; max-width: min(620px, calc(100% - 24px));
+  padding: 6px 12px; border-radius: var(--radius); background: var(--surface-3); border: 1px solid var(--line-strong);
+  box-shadow: 0 6px 18px #000a; font-size: 13px; cursor: pointer; animation: slide-in .15s ease-out;
+}
+.slip__item { display: inline-flex; align-items: baseline; gap: 4px; color: var(--ink-2); white-space: nowrap; }
+.slip__item b { font-weight: 700; }
+.slip__item.is-up b { color: var(--warm); }
+.slip__item.is-down b { color: var(--ink-1); }
+.slip__more { color: var(--ink-3); }
+.slip--top { bottom: auto; top: calc(var(--top-h) + 8px); }

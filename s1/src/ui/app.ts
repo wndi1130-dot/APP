@@ -1,7 +1,7 @@
 import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
-import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, vibrateOn } from './fx';
+import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, slipItems, vibrateOn } from './fx';
 import { fxPlay } from './fxplay';
 import { departInput, platformSheet, setDepartTap, departTapOn } from './depart';
 import type { Fx } from './fx';
@@ -152,7 +152,18 @@ export function renderApp(view: View): HTMLElement {
     debugOverlay(view),
     platformSheet(view),
     ui.toast ? toastEl(ui.toast, ui.toastKind ?? 'info') : null,
+    ui.fx && ui.slipOff !== ui.fx.id ? slipEl(ui.fx, !!sheet || !!panel || screen !== 'home') : null,
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
+}
+
+/** 바뀐 것 쪽지: 방금 한 선택이 바꾼 것을 한 줄에 모아 보인다. 누르면 바로 사라진다.
+ *  서류나 창이 떠 있으면 아래쪽 단추를 가리지 않게 위 띠 바로 아래에 뜬다. */
+function slipEl(fx: Fx, top: boolean): HTMLElement | null {
+  const { items, more } = slipItems(fx);
+  if (items.length === 0) return null;
+  return h('div', { class: cx('slip', top && 'slip--top'), role: 'status', 'data-action': 'slip-close', 'data-anim': `slip-${fx.id}` },
+    items.map(it => h('span', { class: cx('slip__item', it.up ? 'is-up' : 'is-down') }, it.label, h('b', { class: 'num' }, it.text))),
+    more ? h('span', { class: 'slip__more' }, `외 ${more}`) : null);
 }
 
 /** 알림 쪽지. 경고는 호박색이고 눌러 닫는다(notice.ts). */
@@ -584,6 +595,9 @@ export function startApp(root: HTMLElement): void {
       }
       case 'tip': // 폰엔 title 툴팁이 없어, 설명 글자를 탭하면 쪽지로 띄운다(내정 시간 측정은 domesticOp가 세지 않는다)
         if (data.tip) toast(data.tip, 'info', 5000);
+        return render();
+      case 'slip-close':
+        ui.slipOff = ui.fx?.id;
         return render();
       case 'toast-close':
         clearTimeout(toastTimer);

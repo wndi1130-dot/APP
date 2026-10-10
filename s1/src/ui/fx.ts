@@ -1,4 +1,4 @@
-import { COMMS, P, standings } from '../game';
+import { COMMS, COMM_NAME, P, standings } from '../game';
 import type { Comm, Game } from '../game';
 
 // 선택하면 위 막대에서 바뀐 수치가 눈에 따라온다(2026-10-07 사용자: "위에 변하는 거 이펙트를 강하게").
@@ -117,6 +117,23 @@ export function fxDiff(before: FxSnap, g: Game): Fx | null {
 /** 꼬리표 글: 부호와 정수 */
 export function fxText(v: number): string {
   return v > 0 ? `+${v}` : `−${Math.abs(v)}`;
+}
+
+// ---- 바뀐 것 쪽지(사용자 2026-10-11: "내가 이렇게 선택해서 열차가 이렇게 바뀌었구나") ----
+// 선택 직후 바뀐 것을 한 줄에 모아 보인다. 위 막대의 깜빡임은 어디가 바뀌었는지만 알려 주고 묶어 주지는 않는다.
+const SLIP_NAME: Record<FxKey, string> = { trust: '신임', tension: '긴장', coal: '석탄', food: '식량', med: '의약품', lux: '사치품' };
+/** 쪽지에 적는 칸 수. 넘치면 '외 N'으로 줄인다. */
+export const SLIP_MAX = 6;
+export interface SlipItem { key: string; label: string; text: string; up: boolean }
+
+/** 쪽지에 적을 것: 수치 여섯(신임, 긴장, 자원) 먼저, 그다음 집단 관계를 크게 바뀐 것부터. */
+export function slipItems(fx: Fx): { items: SlipItem[]; more: number } {
+  const all: SlipItem[] = [
+    ...KEYS.filter(k => fx.d[k]).map(k => ({ key: k, label: SLIP_NAME[k], text: fxText(fx.d[k]!.v), up: fx.d[k]!.v > 0 })),
+    ...COMMS.filter(c => fx.rel[c]).sort((a, b) => Math.abs(fx.rel[b]!) - Math.abs(fx.rel[a]!))
+      .map(c => ({ key: `rel-${c}`, label: `${COMM_NAME[c]} 관계`, text: fxText(fx.rel[c]!), up: fx.rel[c]! > 0 })),
+  ];
+  return { items: all.slice(0, SLIP_MAX), more: Math.max(0, all.length - SLIP_MAX) };
 }
 
 /** 칸의 재질 클래스: 늘어남은 호박색 빛, 줄어듦은 그을음, 부족 선 아래로 가면 빨강 */
