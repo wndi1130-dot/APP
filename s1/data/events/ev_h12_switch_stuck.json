@@ -51,17 +51,17 @@
     {
       "id": "c_guard_clear2",
       "label": "경비칸에 맡긴다",
-      "say": "경비칸이 맡아라. 갈래를 확인한다.",
+      "say": "경비칸이 맡아라. 미룬 값은 내가 기억한다.",
       "effects": [
         {
           "type": "community.exposure",
           "target": "guard",
-          "amount": 6
+          "amount": 8
         },
         {
           "type": "relation",
           "target": "guard",
-          "amount": -4
+          "amount": -6
         },
         {
           "type": "flag",
