@@ -11,10 +11,10 @@ import { createRng, nextRandom, randomInt } from '../src/core/rng';
 import type { RngState } from '../src/core/rng';
 import * as DATA from '../src/game/data';
 import {
-  advance, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, isLawAgenda, makeDeal, primaryAction, resolveStop, seats,
+  advance, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, dealHolds, isLawAgenda, makeDeal, primaryAction, resolveStop, seats,
   split, stageOf, toolStatus, undecidedChance, viewCard,
 } from '../src/game';
-import type { Agenda, Bloc, Comm, Game, VoteResult } from '../src/game';
+import type { Agenda, Bloc, Comm, DealTool, Game, VoteResult } from '../src/game';
 
 export const RECORD_FORMAT = 's3-record-v1';
 export const VECTORS_FORMAT = 's3-vectors-v1';
@@ -55,8 +55,8 @@ export interface RecordVote {
 export interface GameRecord {
   format: typeof RECORD_FORMAT;
   seed: string;
-  /** deal: 의회에서 되는 칸마다 공개 약속을 건다. 그 밖엔 늘 첫 번째로 고를 수 있는 선택지를 고른다. */
-  policy: { deal: boolean };
+  /** deal: 의회에서 되는 칸마다 거래를 건다(true는 공개 약속, 글자면 그 도구). 그 밖엔 늘 첫 번째로 고를 수 있는 선택지를 고른다. */
+  policy: { deal: boolean | DealTool };
   comms: readonly Comm[];
   steps: RecordStep[];
   votes: RecordVote[];
@@ -80,10 +80,11 @@ function snapshot(g: Game, i: number, act: string): RecordStep {
 /**
  * 정해진 자동 플레이로 S1a 한 판을 돌려 기록한다(서막·내정·어두운 길 없음).
  * 플레이 규칙은 tests/game/play.test.ts의 자동 플레이와 같다: 서류는 맨 앞 것의 첫 가능한 선택지,
- * 정차는 수색대를 보내고, 의회는 (deal이면 공개 약속을 건 뒤) 바로 표결, 그 밖엔 다음 단계로.
+ * 정차는 수색대를 보내고, 의회는 (deal이면 되는 칸마다 그 거래를 건 뒤) 바로 표결, 그 밖엔 다음 단계로.
  * GDScript 쪽은 이 규칙만 그대로 옮기면 같은 기록을 내야 한다.
  */
-export function recordGame(seed: string, deal = false, maxSteps = 2000): GameRecord {
+export function recordGame(seed: string, deal: boolean | DealTool = false, maxSteps = 2000, probe?: (g: Game, agenda: Agenda) => void): GameRecord {
+  const tool: DealTool | null = deal === true ? 'open' : deal || null;
   const g = createGame(seed);
   const steps: RecordStep[] = [snapshot(g, 0, 'new')];
   const votes: RecordVote[] = [];
@@ -103,7 +104,8 @@ export function recordGame(seed: string, deal = false, maxSteps = 2000): GameRec
     }
     const agenda = g.phase === 'council' && g.council && !g.council.result ? currentAgenda(g) : null;
     if (agenda && g.council) {
-      if (deal) for (const c of COMMS) if (toolStatus(g, c, 'open').ok) makeDeal(g, c, 'open', 0);
+      if (tool) for (const c of COMMS) if (toolStatus(g, c, tool).ok) makeDeal(g, c, tool, 0);
+      probe?.(g, agenda);
       const map = blocs(g, agenda, g.council.deals);
       const rngBefore = g.rng.state;
       const r = castVote(g);
@@ -202,11 +204,42 @@ export function algoVectors(): Record<string, unknown> {
 
 /**
  * 수치에 기대는 표본. stages는 표본을 만들 때의 관계 단계 표이고, votes는 실제 판 기록에서 모은 개표(쐐기와 난수 상태 → 표)다.
+ * deals는 거래가 쐐기를 옮긴 앞뒤(칸별 도구와 결속도), shifts는 옮긴 표 n석(양수는 찬성 쪽)이 한 칸 쐐기를 옮긴 앞뒤다.
  * GDScript 시험은 여기 담긴 입력을 그대로 넣어 맞대므로 data.ts가 바뀌어도 표본은 스스로 맞는다.
  */
 export function dataVectors(): Record<string, unknown> {
   const rels = [-100, -70, -69, -40, -39, -15, -14, 0, 14, 15, 39, 40, 69, 70, 100];
-  const votes = ['seed-0', 'seed-1', 'seed-2'].flatMap((seed, k) => recordGame(seed, k % 2 === 0).votes)
+  // 거래 도구마다 한 판씩: 뇌물·빚은 대표 몫(pool)을 결속도로 뽑는 길을, 협박은 미정이 0인 개표를 낸다.
+  const runs: [string, boolean | DealTool][] = [['seed-0', true], ['seed-1', false], ['seed-2', true], ['seed-3', 'bribe'], ['seed-4', 'favor'], ['seed-5', 'blackmail']];
+  const deals: unknown[] = [];
+  const shifts: unknown[] = [];
+  let probed = 0;
+  // 개표 직전의 판에서 쐐기 셈만 따로 뽑는다. blocs()는 판을 읽기만 하므로 판 기록은 그대로다.
+  const probe = (g: Game, agenda: Agenda): void => {
+    if (!g.council || (g.voteShift ?? []).length > 0) return;
+    const before = blocs(g, agenda, []);
+    const held = g.council.deals.filter(dealHolds);
+    if (held.length > 0) {
+      const after = blocs(g, agenda, g.council.deals);
+      deals.push({
+        tools: byComm(c => held.filter(d => d.comm === c).map(d => d.tool)), coh: byComm(c => g.comms[c].coh),
+        before: byComm(c => ({ ...before[c] })), after: byComm(c => ({ ...after[c] })),
+      });
+    }
+    // 옮긴 표(콘텐츠 사건의 votes)는 S1a 판에 안 나오므로 한 표결에만 잠깐 걸어 본 뒤 지운다.
+    probed += 1;
+    if (probed % 4 !== 1 || shifts.length >= 120) return;
+    for (const c of COMMS) {
+      for (const n of [1, 4, 60]) {
+        for (const side of ['yes', 'no'] as const) {
+          g.voteShift = [{ comm: c, n, side }];
+          shifts.push({ n: side === 'yes' ? n : -n, before: { ...before[c] }, after: { ...blocs(g, agenda, [])[c] } });
+        }
+      }
+    }
+    delete g.voteShift;
+  };
+  const votes = runs.flatMap(([seed, deal]) => recordGame(seed, deal, 2000, probe).votes)
     .map(({ step: _step, seg: _seg, ...rest }) => rest);
   return {
     format: VECTORS_FORMAT,
@@ -214,6 +247,8 @@ export function dataVectors(): Record<string, unknown> {
     stages: DATA.STAGES,
     stageOf: rels.map(rel => ({ rel, ...stageOf(rel) })),
     votes,
+    deals,
+    shifts,
   };
 }
 
