@@ -150,6 +150,9 @@ var fx_params: Dictionary = {}
 var fx_light: Dictionary = {}
 ## Lying snow of this stop and the game minute it was last advanced to.
 var snow_cover: SnowCover = SnowCover.new()
+## Weather kinds the picture is drawn with: weather.kinds unless opts["look"]
+## gives others (overcast before a storm plays by clear rules).
+var look_kinds: Array = []
 var snow_at_min: float = 0.0
 ## Footprints in the lying snow (weather_fx 15장), and the cell each walker was
 ## last seen in ("p<instance id>" or "z<id>" -> cell index). Picture only.
@@ -169,6 +172,9 @@ func _ready() -> void:
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
 	weather = Weather.new(opts.get("weather", ["fog", "snow"]), AMBIENT_C, Vector2(1, 0.2), 0.4)
+	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
+	look_kinds = opts.get("look", weather.kinds)
+	snow_cover = SnowCover.new(SnowCover.DEFAULT_SEASON, false, float(opts.get("storm_cm", 0.0)))
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
@@ -215,10 +221,10 @@ func _ready() -> void:
 func _apply_fx() -> void:
 	var hour := clock.game_minutes() / 60.0
 	snow_at_min = clock.game_minutes()
-	fx_params = FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
+	fx_params = FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
 	FxState.apply(fx_params)
-	fx_light = FxState.lighting_for(weather.kinds, hour)
-	fx_light_night = FxState.lighting_for(weather.kinds, 0.0)
+	fx_light = FxState.lighting_for(look_kinds, hour)
+	fx_light_night = FxState.lighting_for(look_kinds, 0.0)
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -231,7 +237,7 @@ func _update_snow() -> void:
 	if snow_tracks != null:
 		snow_tracks.refill(now - snow_at_min, SnowCover.rate_cm_h(weather.kinds, weather.ambient_c))
 	snow_at_min = now
-	var p := FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, now / 60.0, snow_cover.cover())
+	var p := FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, now / 60.0, snow_cover.cover())
 	if absf(float(p["fx_snow"]) - float(fx_params["fx_snow"])) < 0.002:
 		return
 	fx_params["fx_snow"] = p["fx_snow"]

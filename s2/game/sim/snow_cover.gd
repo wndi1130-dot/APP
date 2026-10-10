@@ -23,14 +23,18 @@ const COVER_SCALE_CM: float = 13.5
 
 ## Total depth on undisturbed ground.
 var depth_cm: float = 0.0
-## What fell since arrival: this is what settles on things that came in bare
-## (the train, cleared paths, footprints) and on what people disturb.
+## New snow on top of the old crust: what a storm laid just before arrival
+## (on everything that stood through it, so not on the train) plus what fell
+## since. This is what settles on cleared paths, footprints and disturbed things.
 var fresh_cm: float = 0.0
 
 
-func _init(season := DEFAULT_SEASON, open_ground := false) -> void:
+## storm_cm: snow a storm laid just before arrival (weather_fx.md 14장, the stop
+## after the storm). It is added to the season depth and counts as fresh.
+func _init(season := DEFAULT_SEASON, open_ground := false, storm_cm := 0.0) -> void:
 	var row: Array = SEASON_START_CM.get(season, SEASON_START_CM[DEFAULT_SEASON])
-	depth_cm = float(row[1 if open_ground else 0])
+	fresh_cm = clampf(storm_cm, 0.0, MAX_CM)
+	depth_cm = minf(float(row[1 if open_ground else 0]) + fresh_cm, MAX_CM)
 
 
 ## Net change in cm per hour for this weather. Snow kinds only lay snow at or
