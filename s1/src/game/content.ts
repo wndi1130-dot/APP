@@ -25,7 +25,10 @@ export type ContentCondition =
   | { type: 'segment'; min: number; max: number }
   | { type: 'community'; community: Comm; metric: CommunityMetric; operator: 'lt' | 'lte' | 'eq' | 'gte' | 'gt'; value: number }
   | { type: 'flag'; id: string; value: boolean | number | string }
-  | { type: 'person'; id: string; state: 'alive' | 'injured' | 'dead' | 'away' };
+  | { type: 'person'; id: string; state: 'alive' | 'injured' | 'dead' | 'away' }
+  | ResourceCondition;
+/** 자원이 얼마 이상/이하인가. symbol은 지금 가진 상징물 수 */
+export interface ResourceCondition { type: 'resource'; resource: 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol'; operator: 'lte' | 'gte'; value: number }
 export type ContentEffect =
   | { type: 'coal' | 'food' | 'medicine' | 'luxury'; amount: number }
   | { type: 'symbol' | 'secret'; id: string; amount: number }
@@ -39,7 +42,9 @@ export type ContentEffect =
   | { type: 'followup'; id: string; delay: number }
   | { type: 'deal' | 'chronicle'; id: string };
 export interface ContentChoice {
-  id: string; label: string; say?: string; effects: ContentEffect[]; followups: string[];
+  id: string; label: string; say?: string;
+  /** 모두 참일 때만 카드에 보인다. 자원이 모자라면 회색이 아니라 숨긴다 */
+  requires?: ResourceCondition[]; effects: ContentEffect[]; followups: string[];
   witnesses: (string | { person: string; text: string })[];
 }
 export interface ContentEvent {
@@ -129,6 +134,10 @@ function holds(g: Game, c: ContentCondition): boolean {
     }
     case 'flag': return flagsOf(g)[c.id] === c.value;
     case 'person': return personState(g, c.id) === c.state;
+    case 'resource': {
+      const v = c.resource === 'coal' ? g.coal : c.resource === 'food' ? g.food : c.resource === 'medicine' ? g.med : c.resource === 'luxury' ? g.lux : g.symbols;
+      return c.operator === 'lte' ? v <= c.value : v >= c.value;
+    }
     default: return false;
   }
 }
@@ -364,8 +373,8 @@ function applyRest(g: Game, list: ContentEffect[], ctx: EffectCtx): void {
       case 'cohesion': if (isComm(e.target)) g.comms[e.target].coh = clamp(g.comms[e.target].coh + e.amount, 0, 1); break;
       case 'flag': flags[e.id] = e.value; break;
       case 'followup': queue(g, e.id, e.delay); break;
-      case 'person.state': setPerson(g, e.target, e.state); break;
-      case 'person.away': (g.contentAway ??= {})[e.target] = g.seg + e.segments; break;
+      case 'person.state': setPerson(g, personTarget(g, e.target), e.state); break;
+      case 'person.away': (g.contentAway ??= {})[personTarget(g, e.target)] = g.seg + e.segments; break;
       case 'secret': gainSecret(g, e.id, e.amount, ctx); break;
       case 'votes': {
         // 다음 표결 한 번에만 그 칸의 표가 옮긴다. 결속도를 걸지 않는다(politics.ts blocs). 쪽은 표결 때 정한다.
@@ -408,6 +417,12 @@ function gainSecret(g: Game, id: string, amount: number, ctx: EffectCtx): void {
 function queue(g: Game, id: string, delay: number): void {
   if (delay <= 0) addContentCard(g, id, true);
   else (g.contentQueue ??= []).push({ id, at: g.seg + delay });
+}
+
+/** 효과의 대상 사람. leader_<칸>은 그 칸의 지금 대표(대표는 판마다 달라 id를 고정할 수 없다) */
+function personTarget(g: Game, id: string): string {
+  const m = /^leader_([a-z]+)$/u.exec(id);
+  return m && isComm(m[1]) ? g.comms[m[1]].leader.personId : id;
 }
 
 function setPerson(g: Game, id: string, state: 'alive' | 'injured' | 'dead' | 'away'): void {
@@ -497,12 +512,13 @@ function contentView(g: Game, card: Card): CardView | null {
   const vals = (card.vals ?? {}) as Partial<Record<Placeholder, string>>;
   const speaker = speakerOf(g, ev, card);
   const c = speaker.comm;
-  const choices: Choice[] = ev.choices.map(ch => ({
+  const shown = ev.choices.filter(ch => (ch.requires ?? []).every(r => holds(g, r)));
+  const choices: Choice[] = (shown.length > 0 ? shown : ev.choices).map(ch => ({
     label: fillText(ch.label, vals), ...(ch.say ? { say: fillText(ch.say, vals) } : {}),
     effs: toEffs(ch.effects), special: `content:${ch.id}`, witness: ch.witnesses.length > 0,
   }));
   return {
-    title: c ? COMM_NAME[c] : speaker.name, speaker, body: fillText(ev.body, vals), choices: withAfford(g, choices), required: true, key: `content:${ev.id}`,
+    title: c ? COMM_NAME[c] : speaker.name, speaker, body: fillText(ev.body, vals), choices, required: true, key: `content:${ev.id}`, // 값 따지기는 viewCard의 guardCosts가 한다(모든 칸이 모자라면 막지 않는다)
     ...(c ? { focus: c } : {}),
   };
 }

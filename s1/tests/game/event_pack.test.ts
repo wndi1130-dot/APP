@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CONTENT_EVENTS, DRAW, EVENT_CHAIN_MAX, EVENT_PACK_PREFIX, TRAVEL_EVENTS, cloneGame, contentDrawInfo, contentPool, createGame, drawTravelEvent, enableEventPack,
-  eventPackOn, noveltyOf, pressureOf, registerContentEvents, rnd, situation, travelWeight,
+  eventPackOn, inEventPack, noveltyOf, pressureOf, registerContentEvents, rnd, situation, travelWeight,
 } from '../../src/game';
 import type { Comm, Game } from '../../src/game';
 import { readSave } from '../../src/ui/repro';
@@ -17,7 +17,7 @@ beforeEach(() => { CONTENT_EVENTS.length = 0; loadContentEvents(); });
 afterEach(() => { Object.assign(DRAW, DRAW0); CONTENT_EVENTS.length = 0; });
 
 const PACK = () => CONTENT_EVENTS.filter(e => e.id.startsWith(EVENT_PACK_PREFIX));
-const packIds = (g: Game) => contentPool(g).map(e => e.id).filter(id => id.startsWith(EVENT_PACK_PREFIX));
+const packIds = (g: Game) => contentPool(g).map(e => e.id).filter(inEventPack);
 
 const CONFIGS: BotOptions[] = [
   { s1c: false, policy: 'caretaker', dom: 'idle' },
@@ -66,8 +66,8 @@ describe('꺼짐(기본)', () => {
     expect(packIds(on).length).toBeGreaterThan(0);
     // 묶음이 아닌 사건은 켜고 끔에 상관없이 같다
     registerContentEvents([fake('ev_zz_other', [{ type: 'segment', min: 1, max: 30 }])]);
-    expect(contentPool(g).filter(e => !e.id.startsWith(EVENT_PACK_PREFIX)).map(e => e.id)).toEqual(['ev_zz_other']);
-    expect(contentPool(on).filter(e => !e.id.startsWith(EVENT_PACK_PREFIX)).map(e => e.id)).toEqual(['ev_zz_other']);
+    expect(contentPool(g).filter(e => !inEventPack(e.id)).map(e => e.id)).toEqual(['ev_zz_other']);
+    expect(contentPool(on).filter(e => !inEventPack(e.id)).map(e => e.id)).toEqual(['ev_zz_other']);
   });
 
   it('끈 판을 끝까지 돌려도 ev_b01_ 카드가 한 번도 안 나온다. 켠 판은 나온다', () => {
@@ -79,11 +79,12 @@ describe('꺼짐(기본)', () => {
         expect(off.g.eventPack).toBeUndefined();
         for (const id of Object.keys(off.m.contentById)) offIds.add(id);
         expect(JSON.stringify(off.g)).not.toContain(EVENT_PACK_PREFIX);
+        expect(JSON.stringify(off.g)).not.toMatch(/ev_h\d\d_/u);
         for (const id of Object.keys(playGame(seed, { ...opts, eventPack: true }).m.contentById)) onIds.add(id);
       }
     }
-    expect([...offIds].filter(id => id.startsWith(EVENT_PACK_PREFIX))).toEqual([]);
-    expect([...onIds].filter(id => id.startsWith(EVENT_PACK_PREFIX)).length).toBeGreaterThanOrEqual(5);
+    expect([...offIds].filter(inEventPack)).toEqual([]);
+    expect([...onIds].filter(inEventPack).length).toBeGreaterThanOrEqual(5);
   });
 
   it('drawTravelEvent는 균등 pick과 같다: 난수 한 번, 고른 칸이 floor(r×길이)', () => {

@@ -1,0 +1,86 @@
+{
+  "id": "ev_h06_frozen_pipe",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "h06_pending",
+      "value": true
+    }
+  ],
+  "speaker": "engine",
+  "body": "샌 물이 관 안에서 얼어 관 한 마디가 갈라졌다. 화부장이 갈라진 마디를 들어 보인다. \"그때 고쳤으면 이음 하나였습니다, 지금은 마디 하나입니다.\"",
+  "choices": [
+    {
+      "id": "c_new_pipe",
+      "label": "관을 통째로 간다",
+      "say": "관을 통째로 갈아라. 또 터지면 안 된다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 8
+        }
+      ],
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -8
+        },
+        {
+          "type": "coal",
+          "amount": -6
+        },
+        {
+          "type": "flag",
+          "id": "h06_pending",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_back_stove",
+      "label": "뒤쪽 칸에 난로를 따로 둔다",
+      "say": "뒤쪽 칸에 난로를 따로 놓아라.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -9
+        },
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": 3
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        },
+        {
+          "type": "flag",
+          "id": "h06_pending",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

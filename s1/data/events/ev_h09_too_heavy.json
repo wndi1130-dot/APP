@@ -1,0 +1,88 @@
+{
+  "id": "ev_h09_too_heavy",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 8,
+      "max": 24
+    }
+  ],
+  "speaker": "engine",
+  "body": "긴 오르막에서 바퀴가 헛돌아 기관사가 짐칸을 가리킨다. \"이 무게로는 못 넘습니다. 뭐든 내려놓으셔야 합니다.\"",
+  "choices": [
+    {
+      "id": "c_drop_boxes",
+      "label": "앞칸 살림 상자를 내린다",
+      "say": "앞칸 상자부터 내려라. 오르막을 넘는 게 먼저다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 6
+        }
+      ],
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -6
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_drop_food",
+      "label": "예비 식량을 내린다",
+      "say": "예비 식량을 내려라. 넘고 나서 다시 모은다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -11
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_drop_symbol",
+      "label": "걸어 둔 상징물을 내린다",
+      "say": "상징물을 내려라. 사람보다 앞설 순 없다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "symbol",
+          "operator": "gte",
+          "value": 1
+        }
+      ],
+      "effects": [
+        {
+          "type": "symbol",
+          "id": "symbol",
+          "amount": -1
+        },
+        {
+          "type": "tension",
+          "amount": 4
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

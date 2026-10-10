@@ -1,0 +1,59 @@
+{
+  "id": "ev_h08_white_wind",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 6,
+      "max": 24
+    }
+  ],
+  "speaker": "engine",
+  "body": "들판에 바람이 서고 기관사가 앞유리를 닦는다. \"한 시간 안에 앞이 안 보입니다. 밀고 가면 석탄을 먹고, 숲 그늘에 서면 솥이 빕니다.\"",
+  "choices": [
+    {
+      "id": "c_push_on",
+      "label": "밀고 간다",
+      "say": "밀고 간다. 불을 더 먹여라.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -9
+        },
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 6
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_wait_in_woods",
+      "label": "숲 그늘에 세워 버틴다",
+      "say": "숲 그늘에 세워라. 바람이 지나길 기다린다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -8
+        },
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": -4
+        },
+        {
+          "type": "community.warmth",
+          "target": "guard",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

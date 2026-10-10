@@ -28,11 +28,6 @@
         {
           "type": "luxury",
           "amount": -3
-        },
-        {
-          "type": "relation",
-          "target": "front",
-          "amount": 3
         }
       ],
       "followups": [],

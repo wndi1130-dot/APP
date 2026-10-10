@@ -1,0 +1,77 @@
+{
+  "id": "ev_h05_slow_fire",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "h05_pending",
+      "value": true
+    }
+  ],
+  "speaker": "engine",
+  "body": "삽질이 느려져 압력이 떨어졌고 기관실 대표가 압력계를 두드린다. \"말씀드렸습니다. 이 손 수로는 이 눈금입니다.\"",
+  "choices": [
+    {
+      "id": "c_give_up_speed",
+      "label": "속도를 포기한다",
+      "say": "속도를 낮춰라. 눈금에 맞춰 간다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -8
+        },
+        {
+          "type": "coal",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "h05_pending",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_take_shovel",
+      "label": "밤새 직접 삽을 든다",
+      "say": "삽을 이리 다오. 밤새 내가 든다.",
+      "effects": [
+        {
+          "type": "trust",
+          "amount": 2
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -3
+        },
+        {
+          "type": "tension",
+          "amount": 4
+        },
+        {
+          "type": "flag",
+          "id": "h05_pending",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

@@ -1,0 +1,82 @@
+{
+  "id": "ev_h12_switch_stuck",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "b01_switch_ignored",
+      "value": true
+    }
+  ],
+  "speaker": "engine",
+  "body": "그냥 지난 분기기가 반쯤 얼어 굳었다. 기관사가 갈래 틈을 두드린다. \"이제는 날을 갈아 끼워야 움직입니다.\"",
+  "choices": [
+    {
+      "id": "c_new_blade",
+      "label": "날을 새로 갈아 끼운다",
+      "say": "날을 새로 갈아라. 이번에는 끝까지 한다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 4
+        }
+      ],
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -5
+        },
+        {
+          "type": "luxury",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "b01_switch_ignored",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_guard_clear2",
+      "label": "경비칸에 맡긴다",
+      "say": "경비칸이 맡아라. 갈래를 확인한다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 6
+        },
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "b01_switch_ignored",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

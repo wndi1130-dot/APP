@@ -30,14 +30,13 @@
           "amount": -4
         },
         {
+          "type": "coal",
+          "amount": -1
+        },
+        {
           "type": "community.crowding",
           "target": "medtech",
           "amount": -6
-        },
-        {
-          "type": "relation",
-          "target": "medtech",
-          "amount": 3
         }
       ],
       "followups": [],

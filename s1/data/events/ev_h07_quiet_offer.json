@@ -1,0 +1,101 @@
+{
+  "id": "ev_h07_quiet_offer",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 6,
+      "max": 22
+    },
+    {
+      "type": "community",
+      "community": "tail",
+      "metric": "ration",
+      "operator": "lte",
+      "value": 50
+    }
+  ],
+  "speaker": "rep",
+  "community": "front",
+  "body": "앞칸 대표가 혼자 찾아와 앉는다. \"다음 회기에 우리 표를 드리겠습니다. 대신 이번 겨울 앞칸 솥은 건드리지 않는다고 말씀만 해 주십시오.\"",
+  "choices": [
+    {
+      "id": "c_accept",
+      "label": "받는다",
+      "say": "알겠다. 앞칸 솥은 건드리지 않겠다.",
+      "effects": [
+        {
+          "type": "votes",
+          "target": "front",
+          "amount": 4,
+          "side": "yes"
+        },
+        {
+          "type": "community.ration",
+          "target": "tail",
+          "amount": -4
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "h07_promise",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_refuse",
+      "label": "거절한다",
+      "say": "거절한다. 표로 사지 않겠다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -6
+        },
+        {
+          "type": "tension",
+          "amount": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_open_session",
+      "label": "회기에서 공개한다",
+      "say": "회기에서 밝히겠다. 모두가 듣게 하자.",
+      "effects": [
+        {
+          "type": "trust",
+          "amount": 3
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -8
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": 2
+        },
+        {
+          "type": "tension",
+          "amount": 4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

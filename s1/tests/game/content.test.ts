@@ -263,6 +263,94 @@ describe('효과 넷(6.9)', () => {
   });
 });
 
+describe('모든 선택지가 모자랄 때', () => {
+  it('막지 않고 고를 수 있게 둔다(카드에 갇히지 않는다)', () => {
+    registerContentEvents([ev({
+      id: 'ev_test_broke', body: '다 모자란다.', params: [], speaker: 'engine',
+      choices: [
+        { id: 'c_a', label: '가', effects: [{ type: 'coal', amount: -9999 }], followups: [], witnesses: [] },
+        { id: 'c_b', label: '나', effects: [{ type: 'food', amount: -9999 }], followups: [], witnesses: [] },
+      ],
+    })]);
+    const g = createGame('all-short');
+    g.cards = [];
+    addContentCard(g, 'ev_test_broke');
+    expect(viewCard(g, g.cards[0]).choices.map(c => !!c.disabled)).toEqual([false, false]);
+    expect(chooseCard(g, g.cards[0].uid, 0)).toBe(true);
+  });
+});
+
+describe('자원 조건과 선택지 requires', () => {
+  const eff = [{ type: 'tension', amount: 1 }];
+  const pick = (over: Record<string, unknown>, ...rest: Record<string, unknown>[]) => ev({
+    id: 'ev_test_res', body: '자원을 본다.', params: [], speaker: 'engine',
+    choices: [
+      { id: 'c_a', label: '가', effects: eff, followups: [], witnesses: [], ...over },
+      { id: 'c_b', label: '나', effects: eff, followups: [], witnesses: [] },
+      ...rest,
+    ],
+  });
+
+  it.each([
+    ['coal', 'lte', 40, 'coal', 40, true], ['coal', 'lte', 40, 'coal', 41, false], ['coal', 'gte', 3, 'coal', 2, false], ['coal', 'gte', 3, 'coal', 3, true],
+    ['food', 'lte', 5, 'food', 5, true], ['medicine', 'gte', 8, 'med', 7, false], ['medicine', 'lte', 10, 'med', 10, true], ['luxury', 'gte', 5, 'lux', 4, false],
+    ['symbol', 'gte', 1, 'symbols', 0, false], ['symbol', 'gte', 1, 'symbols', 1, true],
+  ] as const)('트리거 resource %s %s %s: 창고 %s=%s이면 %s', (resource, operator, value, key, have, expected) => {
+    registerContentEvents([ev({ id: 'ev_test_res', body: '자원을 본다.', params: [], speaker: 'engine', trigger: [{ type: 'resource', resource, operator, value }] })]);
+    const g = createGame('res-cond');
+    (g as unknown as Record<string, number>)[key] = have;
+    expect(contentPool(g).map(e => e.id)).toEqual(expected ? ['ev_test_res'] : []);
+  });
+
+  it('requires가 모자라면 선택지를 숨기고 맞으면 보인다', () => {
+    registerContentEvents([pick({ requires: [{ type: 'resource', resource: 'medicine', operator: 'gte', value: 8 }] })]);
+    const g = createGame('res-req');
+    g.cards = [];
+    g.med = 7;
+    addContentCard(g, 'ev_test_res');
+    expect(viewCard(g, g.cards[0]).choices.map(c => c.label)).toEqual(['나']);
+    g.med = 8;
+    expect(viewCard(g, g.cards[0]).choices.map(c => c.label)).toEqual(['가', '나']);
+  });
+
+  it('숨긴 칸 뒤의 선택지도 제 효과로 돈다', () => {
+    registerContentEvents([pick({ requires: [{ type: 'resource', resource: 'symbol', operator: 'gte', value: 1 }], effects: [{ type: 'coal', amount: -2 }] })]);
+    const g = createGame('res-pick');
+    g.cards = [];
+    g.symbols = 0;
+    addContentCard(g, 'ev_test_res');
+    const coal = g.coal;
+    const t = g.tension;
+    expect(chooseCard(g, g.cards[0].uid, 0)).toBe(true);
+    expect(g.coal).toBe(coal); // 숨은 '가'(석탄 −2)가 아니라 보이는 첫 칸 '나'가 돈다
+    expect(g.tension).toBe(t + 1);
+  });
+
+  it('모든 선택지가 숨어야 하면 숨기지 않는다', () => {
+    const need = [{ type: 'resource', resource: 'symbol', operator: 'gte', value: 9 }];
+    registerContentEvents([ev({
+      id: 'ev_test_res', body: '자원을 본다.', params: [], speaker: 'engine',
+      choices: [
+        { id: 'c_a', label: '가', requires: need, effects: eff, followups: [], witnesses: [] },
+        { id: 'c_b', label: '나', requires: need, effects: eff, followups: [], witnesses: [] },
+      ],
+    })]);
+    const g = createGame('res-all');
+    g.cards = [];
+    addContentCard(g, 'ev_test_res');
+    expect(viewCard(g, g.cards[0]).choices.map(c => c.label)).toEqual(['가', '나']);
+  });
+
+  it('person.away의 leader_<칸>은 그 칸의 지금 대표를 보낸다', () => {
+    registerContentEvents([pick({ effects: [{ type: 'person.away', target: 'leader_medtech', segments: 2 }] })]);
+    const g = createGame('res-away');
+    g.cards = [];
+    addContentCard(g, 'ev_test_res');
+    expect(chooseCard(g, g.cards[0].uid, 0)).toBe(true);
+    expect(g.contentAway?.[g.comms.medtech.leader.personId]).toBe(g.seg + 2);
+  });
+});
+
 describe('data/events', () => {
   const list = readContentEvents() as { id: string; choices: { followups: string[]; effects: { type: string; id?: string }[] }[] }[];
   it.skipIf(list.length === 0)('검사기를 통과하고 후속 id가 모두 있다', async () => {

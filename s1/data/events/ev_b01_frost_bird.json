@@ -15,6 +15,11 @@
       "metric": "warmth",
       "operator": "lte",
       "value": 55
+    },
+    {
+      "type": "flag",
+      "id": "ev_achieved",
+      "value": true
     }
   ],
   "speaker": "tail",

@@ -29,7 +29,8 @@ export type Condition =
     operator: ConditionOperator; value: number;
   }
   | { type: 'flag'; id: string; value: FlagValue }
-  | { type: 'person'; id: string; state: PersonStatus };
+  | { type: 'person'; id: string; state: PersonStatus }
+  | { type: 'resource'; resource: 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol'; operator: 'lte' | 'gte'; value: number };
 
 // 효과에는 거래 id만 들어간다. 실행에 필요한 정의는 호출자가 주입한다.
 export interface EffectDealDefinition {
@@ -183,6 +184,14 @@ function validateCondition(value: unknown): asserts value is Condition {
       exactFields(condition, ['type', 'id', 'state']);
       assertId(condition.id);
       personStatus(condition.state);
+      return;
+    case 'resource':
+      exactFields(condition, ['type', 'resource', 'operator', 'value']);
+      if (typeof condition.resource !== 'string' || !['coal', 'food', 'medicine', 'luxury', 'symbol'].includes(condition.resource)) {
+        throw new TypeError('모르는 자원입니다: ' + String(condition.resource));
+      }
+      if (condition.operator !== 'lte' && condition.operator !== 'gte') throw new TypeError('모르는 비교 연산자입니다: ' + String(condition.operator));
+      finiteNumber(condition.value, '조건 비교값');
       return;
     default:
       throw new TypeError('모르는 조건 type입니다: ' + String(condition.type));
@@ -368,6 +377,10 @@ function evaluateValidatedCondition(state: GameState, condition: Condition): boo
       return Object.hasOwn(state.flags, condition.id) && state.flags[condition.id] === condition.value;
     case 'person':
       return Object.hasOwn(state.persons, condition.id) && state.persons[condition.id].state === condition.state;
+    case 'resource': {
+      const actual = condition.resource === 'symbol' ? state.symbols.length : state.resources[condition.resource];
+      return condition.operator === 'lte' ? actual <= condition.value : actual >= condition.value;
+    }
   }
   throw new TypeError('평가할 수 없는 조건입니다.');
 }

@@ -1,0 +1,96 @@
+{
+  "id": "ev_h04_one_box",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 4,
+      "max": 22
+    },
+    {
+      "type": "resource",
+      "resource": "medicine",
+      "operator": "gte",
+      "value": 3
+    },
+    {
+      "type": "resource",
+      "resource": "medicine",
+      "operator": "lte",
+      "value": 10
+    }
+  ],
+  "speaker": "medtech",
+  "body": "의무장이 상자를 연다. \"폐에 물이 찬 화부 하나, 지붕에서 떨어진 대원 하나. 둘 다 살리려면 이 상자가 다 듭니다.\"",
+  "choices": [
+    {
+      "id": "c_use_all",
+      "label": "상자를 다 쓴다",
+      "say": "상자째 써라. 둘 다 살려야 한다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "medicine",
+          "operator": "gte",
+          "value": 8
+        }
+      ],
+      "effects": [
+        {
+          "type": "medicine",
+          "amount": -8
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_stoker_first",
+      "label": "화부에게 쓴다",
+      "say": "화부부터 살려라. 불이 꺼지면 다 죽는다.",
+      "effects": [
+        {
+          "type": "medicine",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -5
+        },
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_guard_first",
+      "label": "대원에게 쓴다",
+      "say": "대원부터 살려라. 지붕 위 사람이 먼저다.",
+      "effects": [
+        {
+          "type": "medicine",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -5
+        },
+        {
+          "type": "coal",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
