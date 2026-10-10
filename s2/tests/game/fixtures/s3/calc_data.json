@@ -1,0 +1,10514 @@
+{
+ "format": "s3-vectors-v1",
+ "comms": [
+  "tail",
+  "medtech",
+  "guard",
+  "front",
+  "engine"
+ ],
+ "stages": [
+  {
+   "min": 70,
+   "name": "헌신",
+   "band": 2
+  },
+  {
+   "min": 40,
+   "name": "지지",
+   "band": 1
+  },
+  {
+   "min": 15,
+   "name": "호의",
+   "band": 1
+  },
+  {
+   "min": -14,
+   "name": "중립",
+   "band": 0
+  },
+  {
+   "min": -39,
+   "name": "회의",
+   "band": -1
+  },
+  {
+   "min": -69,
+   "name": "반대",
+   "band": -1
+  },
+  {
+   "min": -100,
+   "name": "적대",
+   "band": -2
+  }
+ ],
+ "stageOf": [
+  {
+   "rel": -100,
+   "name": "적대",
+   "band": -2,
+   "index": 6
+  },
+  {
+   "rel": -70,
+   "name": "적대",
+   "band": -2,
+   "index": 6
+  },
+  {
+   "rel": -69,
+   "name": "반대",
+   "band": -1,
+   "index": 5
+  },
+  {
+   "rel": -40,
+   "name": "반대",
+   "band": -1,
+   "index": 5
+  },
+  {
+   "rel": -39,
+   "name": "회의",
+   "band": -1,
+   "index": 4
+  },
+  {
+   "rel": -15,
+   "name": "회의",
+   "band": -1,
+   "index": 4
+  },
+  {
+   "rel": -14,
+   "name": "중립",
+   "band": 0,
+   "index": 3
+  },
+  {
+   "rel": 0,
+   "name": "중립",
+   "band": 0,
+   "index": 3
+  },
+  {
+   "rel": 14,
+   "name": "중립",
+   "band": 0,
+   "index": 3
+  },
+  {
+   "rel": 15,
+   "name": "호의",
+   "band": 1,
+   "index": 2
+  },
+  {
+   "rel": 39,
+   "name": "호의",
+   "band": 1,
+   "index": 2
+  },
+  {
+   "rel": 40,
+   "name": "지지",
+   "band": 1,
+   "index": 1
+  },
+  {
+   "rel": 69,
+   "name": "지지",
+   "band": 1,
+   "index": 1
+  },
+  {
+   "rel": 70,
+   "name": "헌신",
+   "band": 2,
+   "index": 0
+  },
+  {
+   "rel": 100,
+   "name": "헌신",
+   "band": 2,
+   "index": 0
+  }
+ ],
+ "votes": [
+  {
+   "agenda": "law:corpse_burn",
+   "need": 51,
+   "rngBefore": 2031188076,
+   "rngAfter": 3103035825,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "medtech",
+     "tool": "open"
+    },
+    {
+     "comm": "guard",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 12,
+     "und": 0,
+     "no": 31,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 10,
+     "und": 0,
+     "no": 5,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 48,
+   "no": 50,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     12,
+     31,
+     2
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     12,
+     1,
+     0
+    ],
+    [
+     3,
+     12,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_store",
+   "need": 51,
+   "rngBefore": 255987160,
+   "rngAfter": 1327834909,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "front",
+     "tool": "open"
+    },
+    {
+     "comm": "engine",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 40,
+     "und": 0,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 84,
+   "no": 14,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     40,
+     4,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     5,
+     7,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:child_labor",
+   "need": 51,
+   "rngBefore": 2775753540,
+   "rngAfter": 2832118437,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "open"
+    },
+    {
+     "comm": "guard",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 7,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 57,
+   "no": 41,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     10,
+     34,
+     2
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_store",
+   "need": 51,
+   "rngBefore": 182844644,
+   "rngAfter": 615280423,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 18,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 69,
+   "no": 29,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     30,
+     14,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     5,
+     7,
+     0
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_kitchen",
+   "need": 51,
+   "rngBefore": 1559245778,
+   "rngAfter": 224056941,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ],
+   "yes": 72,
+   "no": 26,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     43,
+     0,
+     2
+    ],
+    [
+     12,
+     3,
+     0
+    ],
+    [
+     4,
+     9,
+     0
+    ],
+    [
+     4,
+     11,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:treat_all",
+   "need": 51,
+   "rngBefore": 4199318252,
+   "rngAfter": 1472575681,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 17,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    }
+   ],
+   "yes": 72,
+   "no": 26,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     30,
+     13,
+     2
+    ],
+    [
+     14,
+     1,
+     0
+    ],
+    [
+     9,
+     4,
+     0
+    ],
+    [
+     11,
+     4,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:contribution_ration",
+   "need": 51,
+   "rngBefore": 1784705366,
+   "rngAfter": 1457423081,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 10,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "yes": 44,
+   "no": 54,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     9,
+     35,
+     2
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ],
+    [
+     8,
+     7,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:contribution_ration",
+   "need": 51,
+   "rngBefore": 1769552766,
+   "rngAfter": 3337777491,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 1,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 10,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 5,
+     "und": 7,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "yes": 55,
+   "no": 44,
+   "absent": 1,
+   "passed": true,
+   "byComm": [
+    [
+     11,
+     33,
+     1
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     10,
+     3,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:seed_grain",
+   "need": 51,
+   "rngBefore": 1186505693,
+   "rngAfter": 859223408,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 3,
+     "yes": 17,
+     "und": 21,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 7,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -2
+    }
+   ],
+   "yes": 52,
+   "no": 45,
+   "absent": 3,
+   "passed": true,
+   "byComm": [
+    [
+     34,
+     8,
+     3
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     2,
+     11,
+     0
+    ],
+    [
+     3,
+     12,
+     0
+    ],
+    [
+     4,
+     8,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:heat_quota",
+   "need": 51,
+   "rngBefore": 3634754576,
+   "rngAfter": 1163776793,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -4,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 33,
+   "no": 65,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     3,
+     41,
+     2
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ],
+    [
+     5,
+     10,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "motion:share:tail",
+   "need": 51,
+   "rngBefore": 3307472291,
+   "rngAfter": 452847326,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 3,
+     "yes": 17,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    }
+   ],
+   "yes": 54,
+   "no": 43,
+   "absent": 3,
+   "passed": true,
+   "byComm": [
+    [
+     33,
+     10,
+     3
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     2,
+     10,
+     0
+    ],
+    [
+     3,
+     12,
+     0
+    ],
+    [
+     6,
+     6,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_store",
+   "need": 51,
+   "rngBefore": 1997632838,
+   "rngAfter": 542137907,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "medtech",
+     "tool": "open"
+    },
+    {
+     "comm": "guard",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 40,
+     "und": 0,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 7,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 79,
+   "no": 19,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     40,
+     4,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_kitchen",
+   "need": 51,
+   "rngBefore": 158490725,
+   "rngAfter": 470620410,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "front",
+     "tool": "open"
+    },
+    {
+     "comm": "engine",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 44,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 10,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ],
+   "yes": 79,
+   "no": 19,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     44,
+     0,
+     2
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     5,
+     7,
+     0
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:treat_all",
+   "need": 51,
+   "rngBefore": 1982480238,
+   "rngAfter": 4182540633,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "open"
+    },
+    {
+     "comm": "guard",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 1,
+     "yes": 5,
+     "und": 35,
+     "no": 5,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 7,
+     "und": 0,
+     "no": 5,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    }
+   ],
+   "yes": 68,
+   "no": 31,
+   "absent": 1,
+   "passed": true,
+   "byComm": [
+    [
+     27,
+     18,
+     1
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     10,
+     2,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:contribution_ration",
+   "need": 51,
+   "rngBefore": 3230998978,
+   "rngAfter": 3543128663,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "front",
+     "tool": "open"
+    },
+    {
+     "comm": "engine",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 28,
+     "und": 0,
+     "no": 16,
+     "hard": 10,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "yes": 67,
+   "no": 31,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     28,
+     16,
+     2
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:child_labor",
+   "need": 51,
+   "rngBefore": 1959751338,
+   "rngAfter": 1640045353,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "open"
+    },
+    {
+     "comm": "guard",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 45,
+   "no": 53,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     0,
+     44,
+     2
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:child_labor",
+   "need": 51,
+   "rngBefore": 56668028,
+   "rngAfter": 368797713,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "front",
+     "tool": "open"
+    },
+    {
+     "comm": "engine",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 3,
+     "yes": 14,
+     "und": 0,
+     "no": 29,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    }
+   ],
+   "yes": 55,
+   "no": 42,
+   "absent": 3,
+   "passed": true,
+   "byComm": [
+    [
+     14,
+     29,
+     3
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:seed_grain",
+   "need": 51,
+   "rngBefore": 1312763068,
+   "rngAfter": 2384610817,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "open"
+    },
+    {
+     "comm": "medtech",
+     "tool": "open"
+    },
+    {
+     "comm": "guard",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 40,
+     "und": 0,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 10,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 7,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 0,
+     "und": 2,
+     "no": 10,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    }
+   ],
+   "yes": 61,
+   "no": 37,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     40,
+     4,
+     2
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ],
+    [
+     4,
+     11,
+     0
+    ],
+    [
+     0,
+     12,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_heating",
+   "need": 51,
+   "rngBefore": 361221413,
+   "rngAfter": 3576764660,
+   "deals": [
+    {
+     "comm": "front",
+     "tool": "open"
+    },
+    {
+     "comm": "engine",
+     "tool": "open"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 47,
+     "absent": 2,
+     "yes": 36,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 4,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 14,
+     "absent": 0,
+     "yes": 8,
+     "und": 0,
+     "no": 6,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 3,
+     "und": 0,
+     "no": 9,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    }
+   ],
+   "yes": 67,
+   "no": 31,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     44,
+     1,
+     2
+    ],
+    [
+     7,
+     8,
+     0
+    ],
+    [
+     5,
+     7,
+     0
+    ],
+    [
+     8,
+     6,
+     0
+    ],
+    [
+     3,
+     9,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_burn",
+   "need": 51,
+   "rngBefore": 3244526559,
+   "rngAfter": 3300891456,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "bribe"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 19,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 30,
+   "no": 68,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     0,
+     44,
+     2
+    ],
+    [
+     4,
+     11,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_store",
+   "need": 51,
+   "rngBefore": 2349349801,
+   "rngAfter": 1262349452,
+   "deals": [
+    {
+     "comm": "guard",
+     "tool": "bribe"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 0,
+     "no": 3,
+     "hard": 3,
+     "pool": 8,
+     "poolChance": 0.8,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 60,
+   "no": 38,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     18,
+     26,
+     2
+    ],
+    [
+     14,
+     1,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ],
+    [
+     11,
+     4,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_kitchen",
+   "need": 51,
+   "rngBefore": 2206314807,
+   "rngAfter": 1502961640,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 35,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ],
+   "yes": 73,
+   "no": 25,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     44,
+     0,
+     2
+    ],
+    [
+     8,
+     7,
+     0
+    ],
+    [
+     6,
+     6,
+     0
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:treat_all",
+   "need": 51,
+   "rngBefore": 615361182,
+   "rngAfter": 2559656789,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    }
+   ],
+   "yes": 63,
+   "no": 35,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     24,
+     20,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     3,
+     9,
+     0
+    ],
+    [
+     11,
+     4,
+     0
+    ],
+    [
+     10,
+     2,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:contribution_ration",
+   "need": 51,
+   "rngBefore": 2871786474,
+   "rngAfter": 400808691,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "bribe"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 14,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "yes": 39,
+   "no": 59,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     1,
+     43,
+     2
+    ],
+    [
+     5,
+     10,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:contribution_ration",
+   "need": 51,
+   "rngBefore": 648997179,
+   "rngAfter": 2472986692,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 14,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "yes": 39,
+   "no": 59,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     1,
+     43,
+     2
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     10,
+     2,
+     0
+    ],
+    [
+     7,
+     8,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:child_labor",
+   "need": 51,
+   "rngBefore": 1585386234,
+   "rngAfter": 3409375747,
+   "deals": [
+    {
+     "comm": "guard",
+     "tool": "bribe"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 10,
+     "poolChance": 0.8,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 46,
+   "no": 52,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     1,
+     43,
+     2
+    ],
+    [
+     11,
+     4,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "motion:share:tail",
+   "need": 51,
+   "rngBefore": 2457834092,
+   "rngAfter": 107162403,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    }
+   ],
+   "yes": 36,
+   "no": 62,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     21,
+     23,
+     2
+    ],
+    [
+     4,
+     11,
+     0
+    ],
+    [
+     3,
+     9,
+     0
+    ],
+    [
+     5,
+     10,
+     0
+    ],
+    [
+     3,
+     9,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_burn",
+   "need": 51,
+   "rngBefore": 2730134222,
+   "rngAfter": 3391651,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 17,
+     "hard": 12,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 5,
+     "und": 7,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 42,
+   "no": 56,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     10,
+     33,
+     2
+    ],
+    [
+     5,
+     10,
+     0
+    ],
+    [
+     10,
+     3,
+     0
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_store",
+   "need": 51,
+   "rngBefore": 3914711765,
+   "rngAfter": 4091382756,
+   "deals": [
+    {
+     "comm": "front",
+     "tool": "favor"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 7,
+     "poolChance": 0.65,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 54,
+   "no": 44,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     19,
+     25,
+     2
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     3,
+     9,
+     0
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     10,
+     2,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_kitchen",
+   "need": 51,
+   "rngBefore": 1308275288,
+   "rngAfter": 1108875397,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "favor"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 8,
+     "poolChance": 0.7,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ],
+   "yes": 79,
+   "no": 19,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     41,
+     2,
+     2
+    ],
+    [
+     10,
+     5,
+     0
+    ],
+    [
+     9,
+     4,
+     0
+    ],
+    [
+     9,
+     6,
+     0
+    ],
+    [
+     10,
+     2,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:treat_all",
+   "need": 51,
+   "rngBefore": 2492852831,
+   "rngAfter": 142181142,
+   "deals": [
+    {
+     "comm": "engine",
+     "tool": "favor"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 4,
+     "und": 35,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 6,
+     "poolChance": 0.85,
+     "score": 2,
+     "ideo": 0
+    }
+   ],
+   "yes": 64,
+   "no": 34,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     21,
+     22,
+     2
+    ],
+    [
+     14,
+     1,
+     0
+    ],
+    [
+     6,
+     7,
+     0
+    ],
+    [
+     12,
+     3,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:snow_duty",
+   "need": 51,
+   "rngBefore": 1022205300,
+   "rngAfter": 694923015,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 0,
+     "und": 3,
+     "no": 12,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -5,
+     "ideo": -3
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    }
+   ],
+   "yes": 31,
+   "no": 67,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     11,
+     33,
+     2
+    ],
+    [
+     4,
+     11,
+     0
+    ],
+    [
+     9,
+     3,
+     0
+    ],
+    [
+     0,
+     15,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:child_labor",
+   "need": 51,
+   "rngBefore": 2206782843,
+   "rngAfter": 871594006,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "favor"
+    },
+    {
+     "comm": "front",
+     "tool": "favor"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 8,
+     "poolChance": 0.7,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 7,
+     "poolChance": 0.65,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "yes": 35,
+   "no": 63,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     0,
+     44,
+     2
+    ],
+    [
+     12,
+     3,
+     0
+    ],
+    [
+     5,
+     7,
+     0
+    ],
+    [
+     11,
+     4,
+     0
+    ],
+    [
+     7,
+     5,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     4,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:heat_quota",
+   "need": 51,
+   "rngBefore": 1687676967,
+   "rngAfter": 3511666480,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -4,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 33,
+   "no": 65,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     2,
+     42,
+     2
+    ],
+    [
+     7,
+     8,
+     0
+    ],
+    [
+     8,
+     4,
+     0
+    ],
+    [
+     4,
+     11,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_burn",
+   "need": 51,
+   "rngBefore": 249955120,
+   "rngAfter": 4097334037,
+   "deals": [
+    {
+     "comm": "guard",
+     "tool": "blackmail"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 36,
+   "no": 62,
+   "absent": 2,
+   "passed": false,
+   "byComm": [
+    [
+     2,
+     41,
+     2
+    ],
+    [
+     6,
+     9,
+     0
+    ],
+    [
+     12,
+     1,
+     0
+    ],
+    [
+     5,
+     10,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     1,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_burn",
+   "need": 51,
+   "rngBefore": 3713686855,
+   "rngAfter": 1626356254,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "blackmail"
+    },
+    {
+     "comm": "front",
+     "tool": "blackmail"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 19,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "yes": 58,
+   "no": 40,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     4,
+     39,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     13,
+     0,
+     0
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_kitchen",
+   "need": 51,
+   "rngBefore": 42978929,
+   "rngAfter": 4018240240,
+   "deals": [
+    {
+     "comm": "engine",
+     "tool": "blackmail"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    }
+   ],
+   "yes": 97,
+   "no": 1,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     42,
+     1,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     13,
+     0,
+     0
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_burn:repeal",
+   "need": 51,
+   "rngBefore": 4202487531,
+   "rngAfter": 2491227812,
+   "deals": [
+    {
+     "comm": "guard",
+     "tool": "blackmail"
+    },
+    {
+     "comm": "front",
+     "tool": "blackmail"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 17,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -2
+    }
+   ],
+   "yes": 84,
+   "no": 14,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     29,
+     14,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     13,
+     0,
+     0
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:seed_grain",
+   "need": 51,
+   "rngBefore": 3875205246,
+   "rngAfter": 2923663591,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 35,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -2
+    }
+   ],
+   "yes": 95,
+   "no": 3,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     44,
+     0,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     11,
+     1,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     4,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ]
+   ]
+  },
+  {
+   "agenda": "law:corpse_store",
+   "need": 51,
+   "rngBefore": 2540016409,
+   "rngAfter": 1708780848,
+   "deals": [],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    }
+   ],
+   "yes": 72,
+   "no": 26,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     20,
+     24,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "law:common_kitchen:repeal",
+   "need": 51,
+   "rngBefore": 3724593952,
+   "rngAfter": 4164606031,
+   "deals": [
+    {
+     "comm": "tail",
+     "tool": "blackmail"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 28,
+     "und": 0,
+     "no": 16,
+     "hard": 16,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -5,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "yes": 80,
+   "no": 18,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     28,
+     16,
+     2
+    ],
+    [
+     13,
+     2,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     1,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     1,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     1,
+     false
+    ]
+   ]
+  },
+  {
+   "agenda": "motion:share:tail",
+   "need": 51,
+   "rngBefore": 3780958849,
+   "rngAfter": 2197581524,
+   "deals": [
+    {
+     "comm": "medtech",
+     "tool": "blackmail"
+    }
+   ],
+   "blocs": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 35,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    }
+   ],
+   "yes": 84,
+   "no": 14,
+   "absent": 2,
+   "passed": true,
+   "byComm": [
+    [
+     40,
+     4,
+     2
+    ],
+    [
+     15,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ],
+    [
+     5,
+     10,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ],
+   "flips": [
+    [
+     3,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     3,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     0,
+     false
+    ],
+    [
+     4,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     2,
+     true
+    ],
+    [
+     0,
+     true
+    ],
+    [
+     3,
+     false
+    ]
+   ]
+  }
+ ]
+}
