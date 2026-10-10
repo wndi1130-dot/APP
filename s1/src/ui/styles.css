@@ -573,6 +573,8 @@ small { font-size: 12px; }
 .tag--ideal { border-color: var(--support); color: #9cc3f2; }
 .tag--crisis { background: var(--warning); color: var(--on-light); border-color: var(--warning); font-weight: 600; }
 .tag--plain { border-color: transparent; }
+.bill__why { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-1, var(--ink-2)); }
+.bill__why--not { color: var(--ink-3); }
 .bill__changes { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-2); }
 .bill__changes li { padding-left: 10px; position: relative; }
 .bill__changes li::before { content: ""; position: absolute; left: 0; top: 7px; width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); }

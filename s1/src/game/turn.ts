@@ -1,6 +1,7 @@
 import { addCard, END_LINK } from './state';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
+import { calmCoal, calmNight, calmSettle, calmTension } from './calm';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
@@ -168,7 +169,7 @@ function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + disasterCoal(g);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + disasterCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -634,11 +635,13 @@ function settle(g: Game): void {
   domesticSettle(g, notes); // S1c 내정 훅
   hubLeakTick(g, notes); // 라이프치히 두 구간 전부터 창고 유출
   drift(g);
+  calmSettle(g); // 저녁 솥불·벽 장부
   checkDuePromises(g);
   hungerTick(g, notes);
   biteTick(g);
   needTick(g, notes);
   peopleTick(g, () => rnd(g));
+  calmNight(g); // 떠난 사람의 밤: 이번 구간 죽음이 다 난 뒤
   if (g.council && !g.council.emergency && !g.council.martial) dropUnratified(g);
   if (g.council) bribeDetection(g);
   leashTick(g);
@@ -952,7 +955,7 @@ function meters(g: Game): void {
     if (w <= 25 || r <= 25) inc += 2;
   }
   if (g.food <= 0) inc += 8;
-  inc += lawSum(g, 'tensionAdd');
+  inc += lawSum(g, 'tensionAdd') + calmTension(g);
   const cast = domesticBroadcast(g); // S1c 내정 훅: R2 나 열차 방송
   g.fear = clamp(g.fear + lawSum(g, 'fearAdd') + cast.fear, 0, 100);
   if (inc <= 0) g.tension -= 2;

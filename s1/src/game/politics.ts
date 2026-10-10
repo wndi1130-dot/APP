@@ -2,6 +2,7 @@ import {
   COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FETCH_WANT, IDEO, LAWS, LAW_IDS, LAW_VARIANT_OF, OPPOSITE, P,
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
+import { calmEnact, calmRepeal } from './calm';
 import { josa } from './josa';
 import { needOf } from './needs';
 import { mourners } from './people';
@@ -228,6 +229,7 @@ export function lawOpen(g: Game, law: LawId): boolean {
     case 'patrol': return g.tension >= 40;
     case 'emergency_powers': return g.tension >= 50 || g.trust <= 10 || g.trustCrisis !== null;
     case 'strike_ban': return g.strikes > 0;
+    case 'night_of_names': return g.deaths.length > 0;
     case 'guided_voting': return g.session >= 3;
     default: return true;
   }
@@ -791,6 +793,7 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
     if (res.foodOnce) g.food += res.foodOnce;
     if (res.trustOnce || res.fearOnce || res.foodOnce) g.onceTaken.push(once);
   }
+  calmEnact(g, law);
   if (law === 'guided_voting') g.guidedLeft = 3;
   // 3구간짜리 대권(numbers 8장 법 16). 통과한 구간은 이미 표결이 끝났으니 다음 세 구간을 센다(nextSegment가 하나씩 줄인다).
   if (law === 'emergency_powers') { g.decreeLeft = DECREE_SEGS + 1; g.decreed = []; }
@@ -816,6 +819,7 @@ export function repealLaw(g: Game, law: LawId): void {
     journal(g, `약속으로 통과시킨 ${def.title}을(를) 뒤집었다. ${bought.comms.map(c => COMM_NAME[c]).join(', ')}이(가) 배신으로 기억한다.`, 'bad');
   }
   if (CORPSE_LAWS.includes(law)) g.corpseIssue = true;
+  calmRepeal(g, law);
   if (law === 'guided_voting') g.guidedLeft = 0;
   if (law === 'emergency_powers') g.decreeLeft = 0;
   refreshSit(g);

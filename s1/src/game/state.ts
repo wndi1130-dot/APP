@@ -172,6 +172,21 @@ export interface CouncilState {
   pre?: { agenda: MotionAgenda; result?: VoteResult };
 }
 
+/** 저녁 솥불·벽 장부·떠난 사람의 밤이 구간마다 쌓는 값(calm.ts). 모두 선택 칸이라 옛 저장도 그대로 읽힌다. */
+export interface CalmState {
+  /** 솥불이 켜져 있는가. 없으면 석탄으로 정한다 */
+  potOn?: boolean;
+  /** 솥불이 켜진 채 지난 구간 수(일지 간격) */
+  potSegs?: number;
+  /** 벽 장부의 지난 처지('rich' 넉넉, 'mid' 사이, 'poor' 모자람) */
+  ledger?: 'rich' | 'mid' | 'poor';
+  ledgerSegs?: number;
+  /** 지금까지 연 밤의 수 */
+  nights?: number;
+  /** 이 구간까지의 죽음은 이미 밤으로 셌다 */
+  nightSeg?: number;
+}
+
 export interface JournalEntry { seg: number; text: string; tone?: 'good' | 'bad' | 'deal' | 'dark' }
 
 export interface Settlement { coal: number; food: number; med: number; rel: Record<Comm, number>; trust: number; tension: number; notes: string[] }
@@ -250,7 +265,9 @@ export interface Game {
   /** 사람 카드가 마지막으로 온 구간(그다음 이동 사건을 쉰다) */
   peopleSeg?: number;
   /** 죽음 기록(원인 태그). 하차 장면이 죄책감과 애도를 가른다 */
-  deathLog?: { seg: number; name: string; cause: 'chosen' | 'warned' | 'other'; witness?: boolean }[];
+  deathLog?: { seg: number; name: string; cause: 'chosen' | 'warned' | 'other'; witness?: boolean; comm?: Comm }[];
+  /** 불만을 낮추는 법 셋(calm.ts)의 진행 값. 법이 선 적이 없으면 없다. */
+  calm?: CalmState;
   /** 장작불 법: 다음 정차에 태우려고 지키는 시신 */
   pyre?: number;
   /** 냉동칸이 차서 살던 칸에 둔 시신(장작불 법). 그 칸 과밀이 시신마다 오른다. */

@@ -18,8 +18,8 @@ export function takeKinBody(g: Game): void {
   g.comms[c].base[2] -= P.pyreKinCrowd;
 }
 
-export function logDeath(g: Game, names: readonly string[], cause: DeathCause, witness = false): void {
-  for (const name of names) (g.deathLog ??= []).push({ seg: g.seg, name, cause, ...(witness ? { witness } : {}) });
+export function logDeath(g: Game, names: readonly string[], cause: DeathCause, witness = false, comm?: Comm): void {
+  for (const name of names) (g.deathLog ??= []).push({ seg: g.seg, name, cause, ...(witness ? { witness } : {}), ...(comm ? { comm } : {}) });
 }
 
 /** 죽은 사람은 일어난다. 시신 처리 법이 대가를 정한다(브리프 8.2). */
@@ -31,7 +31,7 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
   if (n <= 0) return;
   g.comms[c].pop = Math.max(1, g.comms[c].pop - n);
   g.deaths.push(...names);
-  logDeath(g, names, cause, witness);
+  logDeath(g, names, cause, witness, c);
   storyOf(g).flags.first_death = true;
   if (lawActive(g, 'corpse_throw')) {
     g.thrown += n;

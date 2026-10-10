@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, dealHolds, bribePrice, currentAgenda, expected, lawActive,
   openConditions, preVote, promiseWhen, relStage, relationLine, toolStatus,
-  needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS,
+  needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS, calmRepealLines, calmStateLine,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, LawId, VoteResult } from '../game';
 import { cx, h, s } from './dom';
@@ -249,6 +249,8 @@ function billPanel(view: View): HTMLElement {
       council.martial ? h('span', { class: 'tag tag--crisis' }, '계엄') : null,
       agenda.by ? h('span', { class: 'tag' }, `${COMM_NAME[agenda.by]} 발의`) : null,
       council.options.length > 1 ? h('span', { class: 'tag tag--plain num' }, `${council.idx + 1}/${council.options.length}`) : null),
+    law.why ? h('p', { class: 'bill__why' }, law.why) : null,
+    law.whyNot ? h('p', { class: 'bill__why bill__why--not' }, law.whyNot) : null,
     h('ul', { class: 'bill__changes' }, (agenda.repeal ? repealLines(g, agenda.law)
       : withTech([...(agenda.amend ? [`${LAWS[agenda.amend].title} 대신 선다`] : []), ...law.changes], lawTechLines(g, agenda.law)))
       .slice(0, 5).map(x => h('li', null, x))),
@@ -266,6 +268,8 @@ function repealLines(g: Game, law: LawId): string[] {
     `이 법을 지지하는 칸은 관계 −${P.repealRel}`,
     bought && g.session - bought.session <= 3 ? `약속으로 산 칸(${bought.comms.map(c => COMM_NAME[c]).join(', ')})이 배신으로 기억한다` : null,
     law === 'guided_voting' || law === 'emergency_powers' ? '남은 기간이 바로 끝난다' : null,
+    ...calmRepealLines(law),
+    calmStateLine(g, law),
   ].filter((x): x is string => !!x);
 }
 
