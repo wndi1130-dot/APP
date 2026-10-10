@@ -66,6 +66,10 @@
         },
         "amount": {
           "type": "number"
+        },
+        "segments": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": [

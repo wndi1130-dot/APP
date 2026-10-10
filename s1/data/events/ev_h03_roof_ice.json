@@ -39,12 +39,17 @@
       "effects": [
         {
           "type": "food",
-          "amount": -8
+          "amount": -4
         },
         {
           "type": "community.exposure",
           "target": "tail",
-          "amount": 6
+          "amount": 4
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": 3
         }
       ],
       "followups": [],

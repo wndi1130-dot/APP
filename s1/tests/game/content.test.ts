@@ -104,6 +104,23 @@ const one = (effects: unknown[], over: Record<string, unknown> = {}) => ev({
 });
 const draw = (g: Game, id = 'ev_test_one') => { g.cards = []; expect(addContentCard(g, id)).toBe(true); return g.cards[0]; };
 
+describe('처지 효과의 segments(한 구간만 걸림)', () => {
+  it('고르면 처지가 내려가고, 정산이 그 구간을 지나면 되돌아온다', async () => {
+    const { peopleTick } = await import('../../src/game');
+    registerContentEvents([one([{ type: 'community.ration', target: 'tail', amount: -2, segments: 1 }])]);
+    const g = createGame('content-seg');
+    const before = g.comms.tail.base[1];
+    const card = draw(g);
+    expect(chooseCard(g, card.uid, 0)).toBe(true);
+    expect(g.comms.tail.base[1]).toBe(before - 2);
+    peopleTick(g, () => 1);
+    expect(g.comms.tail.base[1]).toBe(before - 2);
+    g.seg += 1;
+    peopleTick(g, () => 1);
+    expect(g.comms.tail.base[1]).toBe(before);
+  });
+});
+
 describe('자리표시자 묶기(6.9)', () => {
   it('bind로 n에 남은 석탄을 댄다', () => {
     registerContentEvents([ev({ id: 'ev_test_count', body: '석탄 {n}포대가 남았다.', params: ['n'], bind: { n: 'coal_left' } })]);

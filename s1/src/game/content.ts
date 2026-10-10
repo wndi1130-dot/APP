@@ -32,7 +32,7 @@ export interface ResourceCondition { type: 'resource'; resource: 'coal' | 'food'
 export type ContentEffect =
   | { type: 'coal' | 'food' | 'medicine' | 'luxury'; amount: number }
   | { type: 'symbol' | 'secret'; id: string; amount: number }
-  | { type: 'community.warmth' | 'community.ration' | 'community.crowding' | 'community.exposure'; target: Comm; amount: number }
+  | { type: 'community.warmth' | 'community.ration' | 'community.crowding' | 'community.exposure'; target: Comm; amount: number; segments?: number }
   | { type: 'trust' | 'tension' | 'fear'; amount: number }
   | { type: 'relation' | 'cohesion'; target: string; amount: number }
   | { type: 'votes'; target: string; amount: number; side?: 'captain' | 'yes' | 'no' }
@@ -359,7 +359,7 @@ function toEffs(list: ContentEffect[]): Eff[] {
   const out: Eff[] = [];
   for (const e of list) {
     if (e.type in RES) out.push({ t: RES[e.type], v: (e as { amount: number }).amount });
-    else if (e.type in BASE && 'target' in e && isComm(e.target)) out.push({ t: 'base', c: e.target, i: BASE[e.type], v: (e as { amount: number }).amount });
+    else if (e.type in BASE && 'target' in e && isComm(e.target)) out.push({ t: 'base', c: e.target, i: BASE[e.type], v: (e as { amount: number }).amount, ...('segments' in e && e.segments ? { seg: e.segments } : {}) });
     else if (e.type === 'trust' || e.type === 'tension' || e.type === 'fear') out.push({ t: e.type, v: e.amount });
     else if (e.type === 'relation' && isComm(e.target)) out.push({ t: 'rel', c: e.target, v: e.amount });
   }

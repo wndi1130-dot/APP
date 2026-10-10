@@ -33,6 +33,7 @@ export const REACH_NOTES: Record<string, string> = {
   'content:ev_h06_frozen_pipe': '앞 사건 ev_h06_split_pipe에서 다음 정차까지 두는 선택을 해야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h10_wrong_dose': '앞 사건 ev_h10_second_night에서 조수가 대신 보는 선택을 해야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h10_aide_night': '앞 사건 ev_h10_second_night에서 조수가 대신 보는 선택을 하고, 의무칸 과밀이 60 아래여야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h09_dropped_food': '앞 사건 ev_h09_too_heavy에서 예비 식량을 내리는 선택을 해야 온다. 봇은 첫 칸(앞칸 살림 상자)만 고른다',
   'content:ev_h11_bridge_sag': '앞 사건 ev_b01_doubtful_bridge에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h12_switch_stuck': '앞 사건 ev_b01_frozen_switch에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
 };

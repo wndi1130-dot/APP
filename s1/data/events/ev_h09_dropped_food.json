@@ -1,0 +1,54 @@
+{
+  "id": "ev_h09_dropped_food",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "h09_food_down",
+      "value": true
+    }
+  ],
+  "speaker": "tail",
+  "body": "꼬리칸 사람이 뛰어와 숨을 고른다. \"내려 둔 식량 상자가 선로 옆에 그대로 있습니다.\"",
+  "choices": [
+    {
+      "id": "c_fetch",
+      "label": "세워서 되찾는다",
+      "say": "세워라. 상자를 도로 싣는다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": 4
+        },
+        {
+          "type": "coal",
+          "amount": -2
+        },
+        {
+          "type": "flag",
+          "id": "h09_food_down",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_leave",
+      "label": "그대로 두고 간다",
+      "say": "두고 간다. 설 틈이 없다.",
+      "effects": [
+        {
+          "type": "flag",
+          "id": "h09_food_down",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

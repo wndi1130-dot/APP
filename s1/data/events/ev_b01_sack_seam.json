@@ -27,6 +27,36 @@
           "amount": -2
         },
         {
+          "type": "community.ration",
+          "target": "tail",
+          "amount": -2,
+          "segments": 1
+        },
+        {
+          "type": "community.ration",
+          "target": "medtech",
+          "amount": -2,
+          "segments": 1
+        },
+        {
+          "type": "community.ration",
+          "target": "guard",
+          "amount": -2,
+          "segments": 1
+        },
+        {
+          "type": "community.ration",
+          "target": "front",
+          "amount": -2,
+          "segments": 1
+        },
+        {
+          "type": "community.ration",
+          "target": "engine",
+          "amount": -2,
+          "segments": 1
+        },
+        {
           "type": "flag",
           "id": "ev_achieved",
           "value": true
@@ -61,7 +91,7 @@
       "effects": [
         {
           "type": "food",
-          "amount": -2
+          "amount": -1
         },
         {
           "type": "flag",
