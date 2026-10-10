@@ -1108,3 +1108,11 @@ small { font-size: 12px; }
 .why--use .why__label { flex: 0 0 150px; }
 .why--use .mini-bar { flex: 1; min-width: 40px; }
 .drop--why { max-height: calc(100% - var(--top-h) - 16px); overflow-y: auto; }
+
+/* 정산 창 머리의 '이번 구간에 내가 한 일'(panels.ts segRecap): 일의 이름 → 바뀐 것. */
+.recap { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 2px; font-size: 12px; }
+.recap li { display: flex; align-items: baseline; gap: 6px; }
+.recap__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.recap__arrow { flex: none; color: var(--ink-3); }
+.recap li b { flex: none; }
+.recap__title { margin: 4px 0 2px; font-size: 11px; }
