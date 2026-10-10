@@ -1,0 +1,91 @@
+{
+  "id": "ev_h07_broken_word",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 6,
+      "max": 24
+    },
+    {
+      "type": "flag",
+      "id": "h07_promise",
+      "value": true
+    },
+    {
+      "type": "flag",
+      "id": "front_pot_touched",
+      "value": true
+    }
+  ],
+  "speaker": "rep",
+  "community": "front",
+  "body": "앞칸 대표가 빈 그릇을 들고 왔다. \"겨울 솥은 건드리지 않겠다고 하셨습니다. 뒤에 선 사람들이 그 말을 기억합니다.\"",
+  "choices": [
+    {
+      "id": "c_admit",
+      "label": "어긴 것을 인정한다",
+      "say": "내가 어겼다. 표는 돌려준다.",
+      "effects": [
+        {
+          "type": "votes",
+          "target": "front",
+          "amount": -7,
+          "side": "yes"
+        },
+        {
+          "type": "trust",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "h07_promise",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "front_pot_touched",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_deny",
+      "label": "솥은 그대로라고 우긴다",
+      "say": "솥은 그대로다. 그 말은 지켰다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -8
+        },
+        {
+          "type": "tension",
+          "amount": 4
+        },
+        {
+          "type": "flag",
+          "id": "h07_promise",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "front_pot_touched",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

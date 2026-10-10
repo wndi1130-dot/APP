@@ -34,6 +34,11 @@
           "type": "relation",
           "target": "front",
           "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "front_pot_touched",
+          "value": true
         }
       ],
       "followups": [],

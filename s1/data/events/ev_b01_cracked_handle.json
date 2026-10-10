@@ -21,6 +21,11 @@
         {
           "type": "luxury",
           "amount": -3
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],

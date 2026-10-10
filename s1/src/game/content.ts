@@ -330,10 +330,14 @@ export function contentDrawInfo(g: Game, id: string): { pressure: number; comm?:
 }
 DRAW_HOOKS.content = contentDrawInfo;
 
-/** 사건을 카드로 올린다. 자리표시자 값은 이때 정해 카드에 붙인다. 값을 못 대면 올리지 않는다. */
-export function addContentCard(g: Game, id: string, front = false): boolean {
+/**
+ * 사건을 카드로 올린다. 자리표시자 값은 이때 정해 카드에 붙인다. 값을 못 대면 올리지 않는다.
+ * recheck가 참이면(후속 사건이 들어올 때) 자기 trigger도 이때의 판에서 다시 본다: 예약한 뒤 상황이 바뀌어 조건이 깨졌으면 올리지 않는다.
+ */
+export function addContentCard(g: Game, id: string, front = false, recheck = false): boolean {
   const ev = CONTENT_EVENTS.find(e => e.id === id);
   if (!ev || !canBind(g, ev)) return false;
+  if (recheck && !ev.trigger.every(c => holds(g, c))) return false;
   let c = speakerComm(ev) ?? 'tail';
   if (ev.community === 'any' && !isComm(ev.speaker)) {
     const ok = COMMS.filter(o => canBind(g, { ...ev, community: o }));
@@ -415,7 +419,7 @@ function gainSecret(g: Game, id: string, amount: number, ctx: EffectCtx): void {
 }
 
 function queue(g: Game, id: string, delay: number): void {
-  if (delay <= 0) addContentCard(g, id, true);
+  if (delay <= 0) addContentCard(g, id, true, true);
   else (g.contentQueue ??= []).push({ id, at: g.seg + delay });
 }
 
@@ -489,7 +493,7 @@ export function contentFollowupTick(g: Game): void {
   const due = (g.contentQueue ?? []).filter(q => q.at <= g.seg);
   if (due.length === 0) return;
   g.contentQueue = (g.contentQueue ?? []).filter(q => q.at > g.seg);
-  for (const q of due) addContentCard(g, q.id);
+  for (const q of due) addContentCard(g, q.id, false, true);
 }
 
 // ---- 카드 ----

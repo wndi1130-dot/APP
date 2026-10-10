@@ -53,6 +53,37 @@
       ],
       "followups": [],
       "witnesses": []
+    },
+    {
+      "id": "c_full_tender",
+      "label": "쌓아 둔 석탄으로 밀고 간다",
+      "say": "불을 먹여라. 쌓아 둔 것이 오늘 몫이다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "coal",
+          "operator": "gte",
+          "value": 60
+        }
+      ],
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -7
+        },
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 3
+        },
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
     }
   ],
   "repeat": 0

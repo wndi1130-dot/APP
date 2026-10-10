@@ -25,6 +25,11 @@
         {
           "type": "coal",
           "amount": -1
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],

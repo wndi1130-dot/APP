@@ -21,6 +21,11 @@
         {
           "type": "food",
           "amount": -9
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],
@@ -62,6 +67,32 @@
         {
           "type": "relation",
           "target": "front",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "front_pot_touched",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_ice_box",
+      "label": "얼음 상자 몫으로 채운다",
+      "say": "얼음 상자 몫을 꺼내라. 터진 건 다 버린다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "food",
+          "operator": "gte",
+          "value": 60
+        }
+      ],
+      "effects": [
+        {
+          "type": "food",
           "amount": -5
         }
       ],

@@ -67,11 +67,6 @@
           "type": "flag",
           "id": "b01_switch_ignored",
           "value": false
-        },
-        {
-          "type": "flag",
-          "id": "ev_achieved",
-          "value": true
         }
       ],
       "followups": [],

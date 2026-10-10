@@ -56,6 +56,11 @@
           "type": "followup",
           "id": "ev_h10_wrong_dose",
           "delay": 1
+        },
+        {
+          "type": "followup",
+          "id": "ev_h10_aide_night",
+          "delay": 1
         }
       ],
       "followups": [],

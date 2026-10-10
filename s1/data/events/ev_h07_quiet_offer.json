@@ -19,7 +19,7 @@
   ],
   "speaker": "rep",
   "community": "front",
-  "body": "앞칸 대표가 혼자 찾아와 앉는다. \"다음 회기에 우리 표를 드리겠습니다. 대신 이번 겨울 앞칸 솥은 건드리지 않는다고 말씀만 해 주십시오.\"",
+  "body": "앞칸 대표가 혼자 찾아와 앉는다. \"다음 회기 표는 드립니다, 안건을 좋아해서가 아닙니다. 이번 겨울 앞칸 솥만 건드리지 말아 주십시오.\"",
   "choices": [
     {
       "id": "c_accept",
@@ -46,6 +46,11 @@
           "type": "flag",
           "id": "h07_promise",
           "value": true
+        },
+        {
+          "type": "flag",
+          "id": "front_pot_touched",
+          "value": false
         }
       ],
       "followups": [],
@@ -91,6 +96,11 @@
         {
           "type": "tension",
           "amount": 4
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],
