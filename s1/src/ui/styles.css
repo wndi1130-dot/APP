@@ -1093,6 +1093,8 @@ small { font-size: 12px; }
 .slip__item.is-down b { color: var(--ink-1); }
 .slip__more { color: var(--ink-3); }
 .slip--top { bottom: auto; top: calc(var(--top-h) + 8px); }
+/* 알림 쪽지와 같이 뜨면 그 아래로 내려간다. */
+.toast ~ .slip--top { top: calc(var(--top-h) + 52px); }
 
 /* 칸 창 양옆의 옆 칸 넘기기 화살표(home.ts withNav). 창 바깥에 붙어 창 안을 가리지 않는다. */
 .carpop__nav { position: absolute; top: calc(50% - 14px); width: 28px; height: 28px; box-shadow: 0 4px 10px #0008; }
