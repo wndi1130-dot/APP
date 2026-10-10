@@ -151,14 +151,14 @@
 /* 지식 현황판(11.4): 분야 5줄 */
 .dom-board__rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .dom-board__row {
-  display: grid; grid-template-columns: 40px 1fr auto; grid-template-areas: "f people manual" "f relies acts"; gap: 2px 8px; align-items: center;
+  display: grid; grid-template-columns: 40px 1fr auto; grid-template-areas: "f people acts" "f relies acts"; gap: 2px 8px; align-items: center;
   padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px;
 }
 .dom-board__row.is-only { border-color: var(--discontent); }
 .dom-board__row.is-empty { border-color: var(--discontent); background: #2a1515; }
 .dom-board__field { grid-area: f; }
 .dom-board__people { grid-area: people; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
-.dom-manual { grid-area: manual; color: var(--ink-3); }
+.dom-manual { color: var(--ink-3); }
 .dom-manual.is-on { color: var(--ink-1); }
 .dom-relies { grid-area: relies; }
 .dom-board__acts { grid-area: acts; display: flex; gap: 4px; }
@@ -183,9 +183,16 @@
 
 @media (max-width: 700px) {
   .dom-plan__grid { grid-template-columns: 56px repeat(4, minmax(0, 1fr)); }
-  .dom-board__row { grid-template-columns: 34px 1fr; grid-template-areas: "f people" "f manual" "f relies" "f acts"; }
+  .dom-board__row { grid-template-columns: 34px 1fr; grid-template-areas: "f people" "f relies" "f acts"; }
 }
 .dom-pass { color: var(--ink-1); }
 
 .dom-export summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
 .dom-export__text { width: 100%; margin-top: 6px; font: 11px/1.4 ui-monospace, monospace; background: #15181b; color: var(--ink-1); border: 1px solid var(--line-strong); }
+
+/* 기술 되살리기: 마디 설명은 표 아래로 늘어뜨리지 않고 창 바닥에 붙는 판으로 띄운다. 같은 말은 한 줄에 한 번. */
+.dom-plan .dom-detail { position: sticky; bottom: 0; z-index: 2; max-height: 64vh; overflow-y: auto; box-shadow: 0 -10px 18px #000b; }
+.dom-common { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.dom-vrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 4px; border-top: 1px solid var(--line); }
+.dom-vrow__acts { display: flex; gap: 6px; margin-left: auto; }
+.dom-board__acts { align-items: center; }
