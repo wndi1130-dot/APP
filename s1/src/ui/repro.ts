@@ -1,7 +1,7 @@
 import {
   COMMS, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   migrateDark, migrateDomestic, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
+  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
 
@@ -92,6 +92,11 @@ export function applyStep(g: Game, s: Step): string | null {
     case 'dom-job': return startJob(g, d.kind as ModKind, d.car ?? '') ? null : '개조를 올릴 수 없다';
     case 'dom-escort': setEscort(g, d.id || null); return null;
     case 'dom-bury': setBury(g, d.on === '1'); return null;
+    case 'dom-hang': {
+      const c = d.comm as Comm;
+      if (d.on !== '1') { unhangSymbol(g, c); return null; }
+      return hangWhy(g, c) ?? (hangSymbol(g, c), null);
+    }
     case 'dom-move-apply': return applyMove(g, (d.order ?? '').split(',').filter(Boolean)) ? null : '입환할 수 없다';
     default: throw new Error(`모르는 행동: ${s.a}`);
   }

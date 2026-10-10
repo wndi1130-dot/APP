@@ -61,6 +61,7 @@
 .dom-mat b { color: var(--ink-1); }
 .dom-tag { display: inline-flex; gap: 6px; font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
 .dom-tag + .x { margin-left: 0; }
+.dom-tag .chip { min-height: 22px; padding: 0 6px; font-size: 11px; }
 .dom-hy { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 /* 물 사정은 색으로 몰지 않는다: 꼬리칸이 처음부터 늘 빨간 칸으로 읽히지 않게(16.1 라). 높이는 대야 물로만 보인다. */
 .dom-hy { color: var(--ink-2); }

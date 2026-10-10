@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow,
+  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy,
 } from '../game';
 import { copyText } from './clip';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
@@ -244,7 +244,18 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
       h('i', { class: 'dom-basin', 'aria-hidden': 'true' }), `씻을 물 ${WASH_NAME[hy]}`),
     lice ? h('span', { class: 'dom-wash' }, '솥·빨랫줄') : null,
     sick ? h('span', { class: 'is-red' }, `열병 ${sick}`) : null,
+    hangBtn(g, c),
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
+}
+
+/** 상징물 걸기 단추(제안). 건 칸은 '내린다'(내리면 크게 깎인다), 아닌 칸은 못 거는 까닭이 있으면 막고 까닭을 title로. */
+function hangBtn(g: Game, c: Comm): HTMLElement {
+  const on = !!g.dom?.hung.includes(c);
+  const why = on ? null : hangWhy(g, c);
+  return h('button', {
+    class: cx('chip', on && 'is-on'), 'data-action': 'dom-hang', 'data-comm': c, 'data-on': on ? '0' : '1',
+    disabled: !!why, title: why ?? (on ? '내리면 이 칸 결속과 관계가 크게 깎인다.' : '걸어 두면 이 칸 결속이 구간마다 조금 오른다.'),
+  }, on ? '상징물 걸림 · 내린다' : '상징물 건다');
 }
 
 /** 칸 창 머리 아래 줄(S1c): 이가 도는 칸은 대야를 누르지 않아도 까닭 한 줄(J10 W6), 열병이 돌면 앓는 사람 이름(16.5, J10 11번). */
@@ -815,6 +826,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-job':
     case 'dom-escort':
     case 'dom-bury':
+    case 'dom-hang':
       why = ctx.step({ a: action, d: plainData(data) });
       break;
     case 'dom-move': {
