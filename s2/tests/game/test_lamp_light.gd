@@ -129,6 +129,11 @@ func test_the_hideout_gap_shows_only_while_someone_hides_there() -> void:
 	held.clock.elapsed = DUSK_ELAPSED
 	held._refresh_vision()
 	assert_true(held.view.light_is_on("hideout"))
+	# Once they have all come out, the gap goes dark.
+	for r in held.raiders:
+		r.position = Vector3(120.5, 0.0, 60.5)
+	held._refresh_vision()
+	assert_false(held.view.light_is_on("hideout"))
 
 
 func test_the_mask_carries_the_lamp_channel_and_real_lights_stay_at_two() -> void:

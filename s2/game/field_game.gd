@@ -245,9 +245,14 @@ func _tower_fire() -> bool:
 	return String(data["spots"]["water_tower"].get("state", "")) == "fire"
 
 
+## Is a living raider still inside the hideout (the building its light names)?
 func _raiders_in() -> bool:
+	var hideout := -1
+	for l in data["lights"]:
+		if l["kind"] == "hideout":
+			hideout = int(l.get("building", -1))
 	for r in raiders:
-		if r.is_alive():
+		if r.is_alive() and grid.building_at(FieldGrid.cell_of(r.position)) == hideout:
 			return true
 	return false
 
