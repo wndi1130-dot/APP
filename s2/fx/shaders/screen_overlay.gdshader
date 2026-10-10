@@ -24,6 +24,10 @@ uniform float front : hint_range(0.0, 1.0) = 0.0;
 uniform float whiteout : hint_range(0.0, 1.0) = 0.0;
 // Screen direction the wind blows toward (x right, y down).
 uniform vec2 storm_dir = vec2(1.0, 0.0);
+// Lamps that stay readable through the snow-fog: xy screen position (0..1),
+// z reach as a share of the screen height, w strength.
+uniform int glow_count : hint_range(0, 8) = 0;
+uniform vec4 glow[8];
 
 void fragment() {
 	vec2 uv = SCREEN_UV;
@@ -55,6 +59,8 @@ void fragment() {
 	// Storm layers. Skipped (no noise cost) on an ordinary stop.
 	float bank = 0.0;
 	float fog = 0.0;
+	float lit = 0.0;
+	float halo = 0.0;
 	if (front > 0.001 || whiteout > 0.001) {
 		vec2 wdir = normalize(storm_dir + vec2(1e-4, 0.0));
 		vec2 q = uv * vec2(aspect, 1.0);
@@ -69,13 +75,21 @@ void fragment() {
 		// A little open round the middle, where the squad stands.
 		float open = mix(0.5, 1.0, smoothstep(0.05, 0.6, length(d)));
 		fog = whiteout * (0.3 + 0.7 * sheets) * gust * open;
+		// Lamplight burns a hole in the fog and leaves an amber halo in it.
+		for (int i = 0; i < glow_count; i++) {
+			float away = length((uv - glow[i].xy) * vec2(aspect, 1.0));
+			lit = max(lit, glow[i].w * (1.0 - smoothstep(0.0, glow[i].z, away)));
+		}
+		halo = lit * fog * 0.45;
+		fog *= 1.0 - 0.8 * lit;
 	}
 	vec3 fog_col = mix(vec3(0.74, 0.75, 0.77), fx_tint.rgb, 0.35);
 	vec3 bank_col = vec3(0.10, 0.10, 0.11);
 
 	float g = (fx_hash(uv * px * 0.5 + fract(TIME * 7.13)) - 0.5) * grain;
-	vec3 col = (FX_RIME * frost + bank_col * bank + fog_col * fog) / max(frost + dark + bank + fog, 1e-4);
-	float a = clamp(dark + frost * 0.85 + bank + fog, 0.0, 1.0);
+	vec3 lamp_col = vec3(1.0, 0.64, 0.30);
+	vec3 col = (FX_RIME * frost + bank_col * bank + fog_col * fog + lamp_col * halo) / max(frost + dark + bank + fog + halo, 1e-4);
+	float a = clamp(dark + frost * 0.85 + bank + fog + halo, 0.0, 1.0);
 	// Lightning: a pale wash; grain rides on whatever is there.
 	col = mix(col, vec3(0.86, 0.88, 0.9), fx_flash * 0.5);
 	a = max(a, fx_flash * 0.28);

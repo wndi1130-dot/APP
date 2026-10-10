@@ -151,3 +151,87 @@ func test_world_shader_reads_frost_and_fade_and_no_screen() -> void:
 		assert_true(code.contains(word), word)
 	assert_false(code.contains("hint_screen_texture"))
 	assert_false(code.contains("hint_depth_texture"))
+
+
+func _storm_stop(stage: String, more := {}) -> Node:
+	var game = load("res://game/field_game.gd").new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "storm": stage}
+	game.opts.merge(more)
+	add_child_autofree(game)
+	game.set_process(false)
+	return game
+
+
+func test_a_plain_stop_has_no_storm_layers() -> void:
+	var game = _stop(["fog", "snow"])
+	assert_true(game.storm.is_empty())
+	assert_eq(game.storm_layers.size(), 0)
+	assert_null(game.storm_screen)
+	assert_true(game.snow.emitting, "plain snowfall as before")
+	assert_almost_eq(game.sun.rotation_degrees.x, -50.0, 0.001)
+	assert_eq(game.storm_glows().size(), 0)
+
+
+func test_a_storm_stop_plays_by_its_stage_and_looks_like_it() -> void:
+	# weather_fx 14장: rules are clear, blizzard, clear; the picture is the stage's.
+	var StormLook = load("res://fx/storm_look.gd")
+	var before = _storm_stop("before")
+	var during = _storm_stop("during")
+	var after = _storm_stop("after")
+	assert_eq(before.weather.kinds, ["clear"])
+	assert_eq(during.weather.kinds, ["blizzard"])
+	assert_eq(after.weather.kinds, ["clear"])
+	for game in [before, during, after]:
+		assert_false(game.snow.emitting, "the stage's layers stand in for the plain snowfall")
+		assert_eq(game.storm_layers.size(), game.storm["layers"].size())
+		var total := 0
+		for row in game.storm_layers:
+			total += row[0].amount
+		assert_lte(total, StormLook.MAX_PARTICLES)
+		var layer: CanvasLayer = game.storm_screen.get_parent()
+		assert_lt(layer.layer, game.hud.layer, "under the HUD")
+		assert_eq(game.storm_screen.mouse_filter, Control.MOUSE_FILTER_IGNORE, "taps pass through")
+	# Screen: dark bank before, snow-fog inside, neither after.
+	assert_gt(float(before.storm_screen.material.get_shader_parameter("front")), 0.0)
+	assert_gt(float(during.storm_screen.material.get_shader_parameter("whiteout")), 0.5)
+	assert_eq(float(after.storm_screen.material.get_shader_parameter("whiteout")), 0.0)
+	# Light: dimmest inside without shadows, brightest after with a low sun.
+	assert_lt(during.sun.light_energy, before.sun.light_energy)
+	assert_gt(after.sun.light_energy, before.sun.light_energy)
+	assert_false(during.sun.shadow_enabled)
+	assert_true(after.sun.shadow_enabled)
+	assert_gt(after.sun.rotation_degrees.x, before.sun.rotation_degrees.x)
+	# Snow: 25 cm more lies after, and it piles up only inside the storm.
+	assert_eq(after.snow_cover.depth_cm, before.snow_cover.depth_cm + 25.0)
+	for game in [before, during, after]:
+		game.clock.elapsed = 60.0 * 60.0 / 15.0
+		game._update_snow()
+	assert_gt(during.snow_cover.fresh_cm, 2.9)
+	assert_eq(before.snow_cover.fresh_cm, 0.0)
+	assert_eq(after.snow_cover.fresh_cm, 25.0)
+
+
+func test_storm_layers_follow_the_view_and_can_be_switched_off() -> void:
+	var game = _storm_stop("during")
+	game.cam_focus = Vector3(40, 0, 20)
+	game._update_storm()
+	for row in game.storm_layers:
+		assert_eq(row[0].position, game.cam_focus + row[1])
+	var bare = _storm_stop("during", {"snow": false})
+	assert_eq(bare.storm_layers.size(), 0, "the snow option still turns particles off")
+	assert_not_null(bare.storm_screen)
+
+
+func test_lamps_stay_readable_through_the_snow_fog() -> void:
+	var game = _storm_stop("during")
+	game.clock.elapsed = (960.0 - 630.0) * 60.0 / 15.0   # 16:00, lanterns and windows lit
+	game._update_camera(0.1)
+	var glows: Array = game.storm_glows()
+	assert_gt(glows.size(), 0, "the squad's lanterns at least")
+	assert_lte(glows.size(), 8)
+	for g in glows:
+		assert_gt(g.z, 0.0)
+		assert_true(g.w > 0.0 and g.w <= 1.0)
+	assert_eq(int(game.storm_screen.material.get_shader_parameter("glow_count")), glows.size())
+	# No fog, no need: the dark bank before a storm hides no lamps.
+	assert_eq(_storm_stop("before").storm_glows().size(), 0)
