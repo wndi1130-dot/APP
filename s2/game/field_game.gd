@@ -20,6 +20,7 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
+const SnowCover = preload("res://game/sim/snow_cover.gd")
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
@@ -140,6 +141,9 @@ var light_t: float = 0.0
 var fx_params: Dictionary = {}
 ## Sun, fill and haze colours of the arrival hour and of full night (FxState.lighting_for).
 var fx_light: Dictionary = {}
+## Lying snow of this stop and the game minute it was last advanced to.
+var snow_cover: SnowCover = SnowCover.new()
+var snow_at_min: float = 0.0
 var fx_light_night: Dictionary = {}
 
 
@@ -188,14 +192,30 @@ func _ready() -> void:
 	telemetry.zone_enter(grid.zone_at(FieldGrid.cell_of(player.position)), 0.0)
 
 
-## Weather is fixed for the whole stop, so the shader globals are set once.
-## Lying snow is not tracked yet: -1 lets FxState guess it from the air temperature.
+## Weather is fixed for the whole stop, so the shader globals are set once;
+## only lying snow moves afterwards (_update_snow).
 func _apply_fx() -> void:
 	var hour := clock.game_minutes() / 60.0
-	fx_params = FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour)
+	snow_at_min = clock.game_minutes()
+	fx_params = FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
 	FxState.apply(fx_params)
 	fx_light = FxState.lighting_for(weather.kinds, hour)
 	fx_light_night = FxState.lighting_for(weather.kinds, 0.0)
+
+
+## Snow keeps falling through the stop: lying snow deepens with the field clock
+## and the shader global follows once the change would show.
+func _update_snow() -> void:
+	var now := clock.game_minutes()
+	if now - snow_at_min < 1.0:
+		return
+	snow_cover.advance(now - snow_at_min, weather.kinds, weather.ambient_c)
+	snow_at_min = now
+	var p := FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, now / 60.0, snow_cover.cover())
+	if absf(float(p["fx_snow"]) - float(fx_params["fx_snow"])) < 0.002:
+		return
+	fx_params["fx_snow"] = p["fx_snow"]
+	FxState.apply({"fx_snow": p["fx_snow"]})
 
 
 ## Tactical pause fades the world like an old photo (shaders.md 2장); people,
@@ -558,6 +578,7 @@ func _process(delta: float) -> void:
 	delta = minf(delta, 0.1)
 	if not ended and not paused:
 		_step(delta)
+		_update_snow()
 	_update_fade(delta)
 	_update_camera(delta)
 	vis_t -= delta
