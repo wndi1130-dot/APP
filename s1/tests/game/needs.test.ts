@@ -76,7 +76,7 @@ describe('법 요구', () => {
     expect(g.trust).toBeGreaterThan(trust);
   });
 
-  it('위로 카드 열쇠: 법이 서거나 약속을 지키면 서고, 요구만 열렸을 땐 서지 않는다', () => {
+  it('위로 카드 열쇠: 약속을 지키면 서고, 요구가 열리거나 법만 서서는 서지 않는다', () => {
     const g = createGame('need-achieve');
     g.food = 40;
     needTick(g, []);
@@ -88,7 +88,7 @@ describe('법 요구', () => {
     const h = createGame('need-achieve-law');
     expect(h.contentFlags?.ev_achieved).toBeUndefined();
     enactLaw(h, 'common_kitchen', []);
-    expect(h.contentFlags?.ev_achieved).toBe(true);
+    expect(h.contentFlags?.ev_achieved).toBeUndefined();
   });
 
   it('같은 묶음의 어느 법이든 통과하면 요구가 풀린다', () => {

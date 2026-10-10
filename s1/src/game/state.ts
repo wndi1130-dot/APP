@@ -430,7 +430,7 @@ export function lawActive(g: Game, law: LawId): boolean {
   return g.passed[law] !== undefined;
 }
 
-/** 위로 카드를 여는 열쇠(결정 016 '이룬 뒤에만'). 일을 제때 이룬 자리마다 세운다: 법 통과, 배관 추인, 지킨 약속, 다친 사람 없는 정차, 새 카드의 제값 치른 선택. */
+/** 위로 카드를 여는 열쇠(결정 016 '이룬 뒤에만'). 일을 제때 이룬 자리마다 세운다: 배관 추인, 지킨 약속, 새 카드의 제값 치른 선택(법 통과와 다친 사람 없는 정차는 열쇠가 너무 흔해져 뺐다). */
 export function achieve(g: Game): void {
   (g.contentFlags ??= {}).ev_achieved = true;
 }
