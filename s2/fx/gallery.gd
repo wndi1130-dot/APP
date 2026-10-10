@@ -9,6 +9,7 @@ extends Node3D
 
 const FxState = preload("res://fx/fx_state.gd")
 const Smoke = preload("res://fx/smoke.gd")
+const StormLook = preload("res://fx/storm_look.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const SH := "res://fx/shaders/"
 
@@ -27,11 +28,12 @@ const PRESETS: Array[Dictionary] = [
 	{"name": "9_snow_level_1", "kinds": ["overcast"], "c": -6.0, "hour": 12.0, "snow": 0.38, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0},
 	{"name": "10_snow_level_2", "kinds": ["overcast"], "c": -6.0, "hour": 12.0, "snow": 0.9, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0},
 	# Three stops around a storm (weather_fx.md 14장). Optional keys: wind
-	# (default 0.6), shadows (default true). Snow is SnowCover.cover_for of
-	# 25 cm before and during, 50 cm after.
-	{"name": "11_storm_before", "kinds": ["overcast"], "c": -10.0, "hour": 12.0, "snow": 0.8, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.15},
-	{"name": "12_storm_during", "kinds": ["blizzard"], "c": -22.0, "hour": 12.0, "snow": 0.8, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.9, "shadows": false},
-	{"name": "13_storm_after", "kinds": ["clear"], "c": -25.0, "hour": 12.0, "snow": 0.93, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.1},
+	# (default 0.6), shadows (default true), storm (a StormLook stage: light,
+	# snow layers, snow-fog and edge frost come from there). Snow is
+	# SnowCover.cover_for of 25 cm before and during, 50 cm after.
+	{"name": "11_storm_before", "kinds": ["overcast"], "c": -10.0, "hour": 12.0, "snow": 0.8, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.15, "storm": "before"},
+	{"name": "12_storm_during", "kinds": ["blizzard"], "c": -22.0, "hour": 12.0, "snow": 0.8, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.9, "shadows": false, "storm": "during"},
+	{"name": "13_storm_after", "kinds": ["clear"], "c": -25.0, "hour": 12.0, "snow": 0.93, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.1, "storm": "after"},
 ]
 
 var env: Environment
@@ -42,6 +44,8 @@ var window_mats: Array[ShaderMaterial] = []
 var snow_fx: GPUParticles3D
 var snowcap: MeshInstance3D
 var rain_fx: GPUParticles3D
+## Storm snow layers by name (StormLook layers), made the first time they show.
+var storm_fx: Dictionary = {}
 var loco_run: GPUParticles3D
 var loco_idle: GPUParticles3D
 var ink_mat: ShaderMaterial
@@ -260,6 +264,79 @@ func _precip(shape: int, amount: int, size: Vector2, life: float, fall: float) -
 	return p
 
 
+## One layer of storm snow (StormLook): made once, then only switched and re-aimed.
+func _storm_layer(spec: Dictionary, wind_dir: Vector2) -> GPUParticles3D:
+	var key := String(spec["name"])
+	var p: GPUParticles3D = storm_fx.get(key)
+	if p == null:
+		p = GPUParticles3D.new()
+		p.process_material = ParticleProcessMaterial.new()
+		var q := QuadMesh.new()
+		q.material = _mat("precip.gdshader")
+		p.draw_pass_1 = q
+		p.visibility_aabb = AABB(Vector3(-60, -14, -40), Vector3(120, 30, 80))
+		add_child(p)
+		storm_fx[key] = p
+	var dir := StormLook.fall_dir(wind_dir, float(spec["lean"]))
+	var fast := float(spec["speed"])
+	var high := float(spec["height"])
+	# Long enough to cross the yard, whichever way it flies.
+	var life := clampf(maxf(high / maxf(-dir.y * fast, 0.01), 0.0) if dir.y < -0.3 else 44.0 / fast, 1.2, 12.0)
+	p.amount = int(spec["amount"])
+	p.lifetime = life
+	p.preprocess = life
+	# Start upwind so the layer fills the view as it flies.
+	p.position = Vector3(0, high, 0) - Vector3(dir.x, 0, dir.z) * fast * life * 0.5
+	var pm := p.process_material as ParticleProcessMaterial
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(30, minf(high * 0.4, 3.0), 20)
+	pm.direction = dir
+	pm.spread = 4.0
+	pm.initial_velocity_min = fast * 0.75
+	pm.initial_velocity_max = fast
+	pm.gravity = Vector3.ZERO
+	var q := p.draw_pass_1 as QuadMesh
+	q.size = spec["size"]
+	var m := q.material as ShaderMaterial
+	m.set_shader_parameter("shape", int(spec["shape"]))
+	m.set_shader_parameter("opacity", float(spec["opacity"]))
+	m.set_shader_parameter("axis", dir)
+	m.set_shader_parameter("twinkle", float(spec.get("twinkle", 0.0)))
+	return p
+
+
+## Light, snow layers, snow-fog and edge frost of a storm stage ("" = none).
+func _apply_storm(stage: String, wind_dir: Vector2, base_sun: float) -> void:
+	var look := StormLook.look(stage)
+	var shown: Dictionary = {}
+	for spec in look.get("layers", []):
+		var p := _storm_layer(spec, wind_dir)
+		p.emitting = true
+		p.visible = true
+		p.restart()
+		shown[String(spec["name"])] = true
+	for key in storm_fx:
+		if not shown.has(key):
+			storm_fx[key].emitting = false
+			storm_fx[key].visible = false
+	var om := overlay.material as ShaderMaterial
+	om.set_shader_parameter("front", float(look.get("front", 0.0)))
+	om.set_shader_parameter("whiteout", float(look.get("whiteout", 0.0)))
+	# The camera looks down the -Z axis from above: world z runs down the screen.
+	om.set_shader_parameter("storm_dir", Vector2(wind_dir.x, wind_dir.y * 0.7))
+	sun.rotation_degrees.x = float(look.get("sun_pitch", -50.0))
+	if look.is_empty():
+		return
+	sun.light_color = look["sun_color"]
+	sun.light_energy = base_sun * float(look["sun"])
+	sun.shadow_enabled = bool(look["shadows"])
+	env.ambient_light_color = look["ambient_color"]
+	om.set_shader_parameter("edge_frost", float(look["edge_frost"]))
+	om.set_shader_parameter("frost_dir", Vector2.ZERO)
+	# The storm layers stand in for the plain snowfall.
+	snow_fx.emitting = false
+
+
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -385,6 +462,8 @@ func apply_preset(i: int) -> void:
 	om.set_shader_parameter("frost_dir", Vector2(1, 0) if float(p["frost_edge"]) > 0.0 else Vector2.ZERO)
 	om.set_shader_parameter("pause_dim", p["pause"])
 	om.set_shader_parameter("vignette", 0.5 if night > 0.0 else 0.3)
+	var day_sun: float = FxState.lighting_for(["clear"], p["hour"])["sun_energy"]
+	_apply_storm(String(p.get("storm", "")), Vector2(1, 0.3), day_sun)
 	caption.text = "%s  |  wet %.2f snow %.2f frost %.2f  |  %s" % [p["name"], params["fx_wet"], params["fx_snow"], params["fx_frost"], light["band"]]
 
 
