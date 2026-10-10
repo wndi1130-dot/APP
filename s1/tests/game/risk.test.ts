@@ -42,7 +42,7 @@ describe('정차 위험 줄(정찰한 곳)', () => {
   });
 
   it('준비를 바꾸면 해석이 바뀌고 조짐은 그대로다', () => {
-    const g = stopGame({ seed: 'risk-prep', place: 'freight', stay: 'long', size: 6, thrown: 0, refuse: false }, 1);
+    const g = stopGame({ seed: 'risk-prep-1', place: 'freight', stay: 'long', size: 6, thrown: 0, refuse: false }, 1);
     const before = riskView(g);
     expect(before.verdict).toContain('불길하다');
     g.stop!.stay = 'short'; g.stop!.crewSize = 2;

@@ -203,7 +203,7 @@ describe('K02 3 뒤. 정차 명령이 정찰이 약속한 피해를 바꾸지 �
   it('명령이 실패해 다친 대상은 부상으로 한 번만 센다', () => {
     let failed = 0;
     for (let i = 0; i < 80; i += 1) {
-      const { g, name } = crewOrder(`k02-3-hurt-${i}`, 'regular', PLACES.length - 1);
+      const { g, name } = crewOrder(`k02-3-hurt-c-${i}`, 'regular', PLACES.length - 1);
       const before = g.injured;
       const res = resolveStop(g, true)!;
       if (!res.notes.some(n => n.startsWith('정찰 약속 밖의 부상'))) continue;
