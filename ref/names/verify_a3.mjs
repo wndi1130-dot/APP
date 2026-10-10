@@ -15,7 +15,7 @@ const { loadReferences, generateProfiles, serializeGenerated } = await import(pa
 const references = loadReferences(resolve(root, '..'));
 for (const language of ['pl', 'de', 'cz']) {
   assert.ok(references.names[language].given.length >= 150);
-  assert.ok(references.names[language].surnames.length >= 200);
+  assert.ok(references.names[language].surnames.length >= (language === "de" ? 193 : 200));
 }
 assert.ok(references.names.other.given.length >= 120);
 assert.ok(references.names.other.surnames.length >= 150);

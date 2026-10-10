@@ -389,6 +389,8 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
   const genderless = new Set<string>();
   const assigned = new Set<string>();
   const fits = (entry: string | undefined, language: Language) => entry === undefined || entry === language;
+  // The screen tells two people with the same given name apart by the surname's first letter, so that pair is avoided whenever the pool allows.
+  const initialKey = (korean: string) => { const [first, second = ''] = korean.split(/\s+/); return `initial:${first} ${second.charAt(0)}`; };
   function lastName(surname: Surname, gender: Gender, person: Profile): NamePart {
     return gender === 'female' && surname.femaleMarried && parentIds.has(person.id) ? surname.femaleMarried : surname[gender];
   }
@@ -412,11 +414,14 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
       for (const person of members) {
         const available = candidates(pool, surname, person, language, takenGiven, takenKeys);
         if (!available.length) break;
-        const name = pick(available);
+        // Prefer a name whose given name + surname initial is still free; tiny test pools fall back to any name.
+        const fresh = available.filter((name) => !usedNames.has(initialKey(name.korean)) && !takenKeys.has(initialKey(name.korean)));
+        const name = pick(fresh.length ? fresh : available);
         chosen.push({ person, name });
         takenGiven.add(name.given);
         takenKeys.add(normalizedName(name.original));
         takenKeys.add(normalizedName(name.korean));
+        takenKeys.add(initialKey(name.korean));
       }
       if (chosen.length !== members.length) continue;
       for (const { person, name } of chosen) {
@@ -426,6 +431,7 @@ export function generateProfiles(seed: string | number = DEFAULT_SEED, reference
         else genderless.add(name.given);
         usedNames.add(normalizedName(name.original));
         usedNames.add(normalizedName(name.korean));
+        usedNames.add(initialKey(name.korean));
         assigned.add(person.id);
       }
       return;
