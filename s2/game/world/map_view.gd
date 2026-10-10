@@ -11,6 +11,15 @@ const F = FieldGrid.Floor
 const WALL_H: float = 2.1
 const LEVEL_H: float = 3.0
 const CUT_H: float = 0.35
+const FxState = preload("res://fx/fx_state.gd")
+## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
+const WINDOW_DARK := Color(0.16, 0.16, 0.17)
+## Size (along the wall, up, thickness) and height of each glowing face.
+const LIGHT_FACES: Dictionary = {
+	"car_window": {"size": Vector3(0.9, 0.7, 0.08), "y": 1.9},
+	"firebox": {"size": Vector3(0.6, 0.4, 0.08), "y": 0.6},
+	"hideout": {"size": Vector3(0.12, 0.5, 0.08), "y": 1.4},
+}
 const FLOOR_COLORS: Array[Color] = [
 	Color(0.66, 0.68, 0.71), Color(0.36, 0.36, 0.37), Color(0.48, 0.47, 0.45), Color(0.40, 0.34, 0.29),
 	Color(0.30, 0.28, 0.27), Color(0.74, 0.76, 0.79), Color(0.58, 0.66, 0.72), Color(0.45, 0.44, 0.42),
@@ -23,6 +32,9 @@ var vis_image: Image
 var vis_texture: ImageTexture
 var vis_bytes := PackedByteArray()
 var vis_lit := PackedInt32Array()
+var lamp_lit := PackedInt32Array()   # cells the lamp channel was written to last time
+var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
+var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
 var cut_building: int = -2
 var cut_level: int = 0
@@ -48,13 +60,15 @@ func setup(map_data: Dictionary) -> void:
 		root.name = "Level%d" % lv
 		add_child(root)
 		level_roots[lv] = root
-	vis_image = Image.create(grid.width, grid.height, false, Image.FORMAT_RG8)
-	vis_image.fill(Color(0, 0, 0))
+	# R seen now, G seen before, B warm lamp light, A kept for cell snow (weather_fx 12.2).
+	vis_image = Image.create(grid.width, grid.height, false, Image.FORMAT_RGBA8)
+	vis_image.fill(Color(0, 0, 0, 1))
 	vis_texture = ImageTexture.create_from_image(vis_image)
 	material = ShaderMaterial.new()
 	material.shader = preload("res://game/world/world_vis.gdshader")
 	material.set_shader_parameter("vis", vis_texture)
 	material.set_shader_parameter("map_size", Vector2(grid.width, grid.height))
+	material.set_shader_parameter("lamp_color", FxState.LAMP)
 	_build_ground()
 	_build_walls()
 	_build_blocks()
@@ -156,25 +170,58 @@ func set_mask_enabled(on: bool) -> void:
 ## seen_now: sight key (level slice * cells + cell index) -> true; memory:
 ## PackedByteArray of seen-before flags by the same key. The mask is one
 ## layer for all floors (only one floor's worth is on screen at a time).
+## lamp: cell index -> byte of warm light (LampLight), written to the B channel.
 ## Only cells that changed since last call are touched.
-func update_vis(seen_now: Dictionary, memory: PackedByteArray) -> void:
+func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary = {}) -> void:
 	var n := grid.width * grid.height
-	if vis_bytes.size() != n * 2:
-		vis_bytes.resize(n * 2)
+	if vis_bytes.size() != n * 4:
+		vis_bytes.resize(n * 4)
 		vis_bytes.fill(0)
+		for i in range(n):
+			vis_bytes[i * 4 + 3] = 255
 		for k in range(memory.size()):
 			if memory[k]:
-				vis_bytes[(k % n) * 2 + 1] = 255
+				vis_bytes[(k % n) * 4 + 1] = 255
 	for i in vis_lit:
-		vis_bytes[i * 2] = 0
+		vis_bytes[i * 4] = 0
 	vis_lit = PackedInt32Array()
 	for key in seen_now:
 		var i: int = key % n
-		vis_bytes[i * 2] = 255
-		vis_bytes[i * 2 + 1] = 255
+		vis_bytes[i * 4] = 255
+		vis_bytes[i * 4 + 1] = 255
 		vis_lit.append(i)
-	vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RG8, vis_bytes)
+	for i in lamp_lit:
+		vis_bytes[i * 4 + 2] = 0
+	lamp_lit = PackedInt32Array()
+	for i in lamp:
+		vis_bytes[int(i) * 4 + 2] = int(lamp[i])
+		lamp_lit.append(int(i))
+	vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RGBA8, vis_bytes)
 	vis_texture.update(vis_image)
+
+
+## How strong the lamp light shows on the ground: faint by day, full at night.
+func set_lamp_gain(gain: float) -> void:
+	material.set_shader_parameter("lamp_gain", clampf(gain, 0.0, 1.0))
+
+
+## The glowing faces themselves (car windows, the firebox door, the gap in the
+## hideout boards): lit ones show amber, unlit car windows stay as dark glass.
+func set_light_on(kind: String, on: bool) -> void:
+	if not light_nodes.has(kind):
+		return
+	if kind == "car_window":
+		light_mats[kind].albedo_color = FxState.LAMP if on else WINDOW_DARK
+	else:
+		light_nodes[kind].visible = on
+
+
+func light_is_on(kind: String) -> bool:
+	if not light_nodes.has(kind):
+		return false
+	if kind == "car_window":
+		return light_mats[kind].albedo_color == FxState.LAMP
+	return light_nodes[kind].visible
 
 
 ## Show the floors the player can see from where they stand: the cellar
@@ -373,13 +420,13 @@ func _build_blocks() -> void:
 	var st := _begin()
 	# Train: four cars and the engine at the east end; dark so the platform reads.
 	var train: Rect2i = data["train"]
-	var cars := 4
-	var car_len := float(train.size.x) / cars
-	for k in range(cars):
-		var x0 := train.position.x + k * car_len
-		box(st, Vector3(car_len - 0.6, 3.0, 2.8), Vector3(x0 + car_len * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if k < 3 else Color(0.22, 0.22, 0.24))
-		for d in range(3):
-			box(st, Vector3(1.0, 2.0, 0.1), Vector3(x0 + 3 + d * (car_len - 6) / 2.0, 1.4, train.position.y + 2.95), Color(0.42, 0.38, 0.33))
+	for car in data["train_cars"]:
+		var r: Rect2i = car["rect"]
+		box(st, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
+	# Doors where people step down to the platform.
+	for c in data["spawns"]["train_door"]:
+		box(st, Vector3(1.0, 2.0, 0.1), Vector3(c.x + 0.5, 1.4, train.position.y + 2.95), Color(0.42, 0.38, 0.33))
+	_build_lights()
 	for w in data["wagons"]:
 		var r: Rect2i = w["rect"]
 		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
@@ -401,6 +448,36 @@ func _build_blocks() -> void:
 		box(st, Vector3(r.size.x - 0.1, tall, r.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
 	var node := _mesh_node()
 	node.mesh = st.commit()
+
+
+## The faces that glow (weather_fx 12.1): one mesh per kind, unshaded, so they
+## cost no light. The pool on the ground is the lamp channel of the sight mask.
+func _build_lights() -> void:
+	var tools: Dictionary = {}
+	for l in data["lights"]:
+		var kind := String(l["kind"])
+		if not LIGHT_FACES.has(kind):
+			continue
+		if not tools.has(kind):
+			tools[kind] = _begin()
+		var face: Dictionary = LIGHT_FACES[kind]
+		var side: Vector2i = l.get("side", Vector2i.ZERO)
+		var at := FieldGrid.center(l["cell"]) + Vector3(side.x * 0.46, float(face["y"]), side.y * 0.46)
+		var size: Vector3 = face["size"]
+		box(tools[kind], size if side.y != 0 else Vector3(size.z, size.y, size.x), at, Color(1, 1, 1))
+	for kind in tools:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = WINDOW_DARK if kind == "car_window" else FxState.LAMP
+		var node := MeshInstance3D.new()
+		node.name = "Light_%s" % kind
+		node.mesh = tools[kind].commit()
+		node.material_override = mat
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visible = kind == "car_window"
+		level_roots[0].add_child(node)
+		light_nodes[kind] = node
+		light_mats[kind] = mat
 
 
 ## An upper floor or the cellar: a floor where there is one, walls by building
