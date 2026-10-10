@@ -14,7 +14,7 @@ import {
   advance, blocs, castVote, chooseCard, COMMS, createGame, currentAgenda, isLawAgenda, makeDeal, primaryAction, resolveStop, seats,
   split, stageOf, toolStatus, undecidedChance, viewCard,
 } from '../src/game';
-import type { Agenda, Bloc, Comm, Game, VoteResult } from '../src/game';
+import type { Agenda, Bloc, Comm, DealTool, Game, VoteResult } from '../src/game';
 
 export const RECORD_FORMAT = 's3-record-v1';
 export const VECTORS_FORMAT = 's3-vectors-v1';
@@ -55,8 +55,8 @@ export interface RecordVote {
 export interface GameRecord {
   format: typeof RECORD_FORMAT;
   seed: string;
-  /** deal: 의회에서 되는 칸마다 공개 약속을 건다. 그 밖엔 늘 첫 번째로 고를 수 있는 선택지를 고른다. */
-  policy: { deal: boolean };
+  /** deal: 의회에서 되는 칸마다 거래를 건다(true는 공개 약속, 글자면 그 도구). 그 밖엔 늘 첫 번째로 고를 수 있는 선택지를 고른다. */
+  policy: { deal: boolean | DealTool };
   comms: readonly Comm[];
   steps: RecordStep[];
   votes: RecordVote[];
@@ -80,10 +80,11 @@ function snapshot(g: Game, i: number, act: string): RecordStep {
 /**
  * 정해진 자동 플레이로 S1a 한 판을 돌려 기록한다(서막·내정·어두운 길 없음).
  * 플레이 규칙은 tests/game/play.test.ts의 자동 플레이와 같다: 서류는 맨 앞 것의 첫 가능한 선택지,
- * 정차는 수색대를 보내고, 의회는 (deal이면 공개 약속을 건 뒤) 바로 표결, 그 밖엔 다음 단계로.
+ * 정차는 수색대를 보내고, 의회는 (deal이면 되는 칸마다 그 거래를 건 뒤) 바로 표결, 그 밖엔 다음 단계로.
  * GDScript 쪽은 이 규칙만 그대로 옮기면 같은 기록을 내야 한다.
  */
-export function recordGame(seed: string, deal = false, maxSteps = 2000): GameRecord {
+export function recordGame(seed: string, deal: boolean | DealTool = false, maxSteps = 2000): GameRecord {
+  const tool: DealTool | null = deal === true ? 'open' : deal || null;
   const g = createGame(seed);
   const steps: RecordStep[] = [snapshot(g, 0, 'new')];
   const votes: RecordVote[] = [];
@@ -103,7 +104,7 @@ export function recordGame(seed: string, deal = false, maxSteps = 2000): GameRec
     }
     const agenda = g.phase === 'council' && g.council && !g.council.result ? currentAgenda(g) : null;
     if (agenda && g.council) {
-      if (deal) for (const c of COMMS) if (toolStatus(g, c, 'open').ok) makeDeal(g, c, 'open', 0);
+      if (tool) for (const c of COMMS) if (toolStatus(g, c, tool).ok) makeDeal(g, c, tool, 0);
       const map = blocs(g, agenda, g.council.deals);
       const rngBefore = g.rng.state;
       const r = castVote(g);
@@ -206,7 +207,9 @@ export function algoVectors(): Record<string, unknown> {
  */
 export function dataVectors(): Record<string, unknown> {
   const rels = [-100, -70, -69, -40, -39, -15, -14, 0, 14, 15, 39, 40, 69, 70, 100];
-  const votes = ['seed-0', 'seed-1', 'seed-2'].flatMap((seed, k) => recordGame(seed, k % 2 === 0).votes)
+  // 거래 도구마다 한 판씩: 뇌물·빚은 대표 몫(pool)을 결속도로 뽑는 길을, 협박은 미정이 0인 개표를 낸다.
+  const runs: [string, boolean | DealTool][] = [['seed-0', true], ['seed-1', false], ['seed-2', true], ['seed-3', 'bribe'], ['seed-4', 'favor'], ['seed-5', 'blackmail']];
+  const votes = runs.flatMap(([seed, deal]) => recordGame(seed, deal).votes)
     .map(({ step: _step, seg: _seg, ...rest }) => rest);
   return {
     format: VECTORS_FORMAT,
