@@ -7,9 +7,11 @@ Run with Blender (or the `bpy` pip module):
 What it does, in order:
   1. Imports the .glb into an empty scene and joins all meshes into one object.
   2. Merges by distance, deletes loose geometry, recalculates normals.
-  3. Scales so the longest side matches --height or keeps the source size,
-     and puts the origin at the bottom centre (props stand on the floor).
-  4. Decimates to the triangle budget of the size class (LOD0) and makes
+  3. Scales so the height matches --height, or the longest side matches
+     --longest, or keeps the source size, and puts the origin at the bottom
+     centre (props stand on the floor).
+  4. Decimates to the triangle budget of the size class (LOD0), or to
+     --tris when the order sheet gives a budget for this item, and makes
      a lighter copy for LOD1 when the class has one.
   5. Shrinks every texture to the class texture size and drops normal,
      roughness and metallic maps (flat hand-painted look, no PBR).
@@ -18,6 +20,14 @@ What it does, in order:
      with triangle counts and texture sizes.
 
 Budgets follow docs/art/tripo_pipeline.md section 3 (proposal values).
+
+Measured on real Tripo files (Blender 4.5.10, 2026-10-10):
+  - Smart-mesh output (528 triangles) goes to 400 in seconds and keeps
+    its look.
+  - HD output (about 1.8 million triangles) keeps its shape down to
+    about 5,000 triangles. Pushed to 400 it stops near 1,300 and the
+    shape collapses, so the report says ok=false. Order small props as
+    smart mesh, or give HD files a budget of 5,000 or more.
 """
 
 import argparse
@@ -45,6 +55,8 @@ def parse_args():
     p.add_argument("--size", choices=BUDGETS, default="medium")
     p.add_argument("--tris", type=int, help="override LOD0 triangle budget")
     p.add_argument("--height", type=float, help="target height in metres")
+    p.add_argument("--longest", type=float,
+                   help="target length of the longest side in metres")
     p.add_argument("--desat", type=float, default=0.0, help="0 keeps colour, 1 grey")
     return p.parse_args(argv)
 
@@ -75,6 +87,7 @@ def import_and_join(path):
         if o is not obj:
             bpy.data.objects.remove(o, do_unlink=True)
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    obj.data.validate()
     return obj
 
 
@@ -88,13 +101,14 @@ def clean(obj):
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def place(obj, height):
-    if height:
-        dims = obj.dimensions
-        if dims.z > 0:
-            s = height / dims.z
-            obj.scale = (s, s, s)
-            bpy.ops.object.transform_apply(scale=True)
+def place(obj, height, longest):
+    dims = obj.dimensions
+    have = dims.z if height else max(dims)
+    want = height or longest
+    if want and have > 0:
+        s = want / have
+        obj.scale = (s, s, s)
+        bpy.ops.object.transform_apply(scale=True)
     # Origin at bottom centre of the bounding box.
     xs = [v.co.x for v in obj.data.vertices]
     ys = [v.co.y for v in obj.data.vertices]
@@ -108,15 +122,18 @@ def place(obj, height):
 
 
 def decimate(obj, target):
-    now = tri_count(obj)
-    if now <= target:
-        return
-    mod = obj.modifiers.new("decimate", "DECIMATE")
-    mod.decimate_type = "COLLAPSE"
-    mod.ratio = max(target / now, 0.0005)
-    mod.use_collapse_triangulate = True
+    # One collapse pass can stop short on meshes made of many islands,
+    # so repeat with the ratio recomputed until the budget is met.
     bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.modifier_apply(modifier=mod.name)
+    for _ in range(6):
+        now = tri_count(obj)
+        if now <= target:
+            return
+        mod = obj.modifiers.new("decimate", "DECIMATE")
+        mod.decimate_type = "COLLAPSE"
+        mod.ratio = target / now * 0.97
+        mod.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier=mod.name)
 
 
 def flatten_materials(obj, tex_px, desat):
@@ -175,8 +192,10 @@ def main():
     obj = import_and_join(a.src)
     raw_tris = tri_count(obj)
     clean(obj)
-    place(obj, a.height)
+    place(obj, a.height, a.longest)
     decimate(obj, lod0_max)
+    # Collapse can pull the bounding box in, so set the size again.
+    place(obj, a.height, a.longest)
     tex = flatten_materials(obj, tex_px, a.desat)
     obj.name = f"{name}_LOD0"
 
