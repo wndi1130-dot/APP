@@ -16,7 +16,7 @@
     {
       "id": "c_guard_up",
       "label": "경비칸이 올라간다",
-      "say": "경비칸이 올라가라. 줄을 매고 깨라.",
+      "say": "경비칸이 올라가라. 지난번 올라간 사람은 빼라.",
       "effects": [
         {
           "type": "community.exposure",
@@ -53,11 +53,20 @@
     {
       "id": "c_captain_up",
       "label": "열차장이 먼저 올라간다",
-      "say": "내가 먼저 올라간다. 줄을 이리 다오.",
+      "say": "내가 먼저 올라간다. 줄 잡을 둘만 따라와라.",
       "effects": [
         {
-          "type": "trust",
+          "type": "coal",
+          "amount": -3
+        },
+        {
+          "type": "community.exposure",
+          "target": "guard",
           "amount": 3
+        },
+        {
+          "type": "trust",
+          "amount": 2
         },
         {
           "type": "tension",
@@ -73,6 +82,37 @@
           "type": "relation",
           "target": "guard",
           "amount": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_geared_up",
+      "label": "줄과 징을 갖춰 올려 보낸다",
+      "say": "줄과 징을 내라. 갖추고 올라간다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 3
+        }
+      ],
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -3
+        },
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 4
+        },
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -2
         }
       ],
       "followups": [],

@@ -46,6 +46,11 @@ const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_
 const STATUS_AT := Vector2(-16.0, 84.0)
 const STATUS_BIG := Vector2(58.0, 38.0)
 const STATUS_SMALL := Vector2(50.0, 32.0)
+const RADIO_TIPS: Dictionary = {
+	"urgent": "무전: 무리가 들어올 때만 부른다. 울리면 가까운 망자가 듣는다.",
+	"often": "무전: 예보까지 다 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
+	"off": "무전을 껐다. 떠날 때 말고는 울리지 않고, 아무것도 듣지 못한다.",
+}
 const DUSK_TEST_MIN: float = 940.0   # the test key jumps to 15:40, five minutes before sunset
 const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
@@ -132,6 +137,7 @@ var rim_run: bool = false
 var stick_tap_ms: int = -10000
 var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
+var radio_opt_button: Button         # shown while paused: how much the driver calls (each call rings)
 var stick_opt_button: Button         # shown while paused: fixed stick or one that follows
 var debug_panel: PanelContainer
 var debug_label: Label
@@ -405,8 +411,10 @@ func _build_thumbs() -> void:
 		status_pads.append(pad)
 		sy += size.y + 4.0
 	# Paused: the stick can be changed here, not only on the start screen (build 89).
-	stick_opt_button = _pad("", Vector2(-120, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
+	stick_opt_button = _pad("", Vector2(-250, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
 	stick_opt_button.visible = false
+	radio_opt_button = _pad("", Vector2(10, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
+	radio_opt_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
 	# The bag sits on the left, above the fixed stick's catch ring. There is no
@@ -550,6 +558,8 @@ func tick(delta: float) -> void:
 	pause_button.text = "계속" if game.paused else "멈춤"
 	stick_opt_button.visible = game.paused and not modal_open
 	stick_opt_button.text = "스틱: 따라오기" if stick_floats() else "스틱: 고정"
+	radio_opt_button.visible = stick_opt_button.visible
+	radio_opt_button.text = "무전: " + String(game.RADIO_NAMES[game.radio_mode()])
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
@@ -1596,6 +1606,11 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		context_button.button_pressed = true
 	elif b == pause_button:
 		_toggle_pause()
+	elif b == radio_opt_button:
+		var modes: Array = game.RADIO_MODES
+		var next: String = modes[(modes.find(game.radio_mode()) + 1) % modes.size()]
+		game.opts["radio"] = next
+		toast(RADIO_TIPS[next])
 	elif b == stick_opt_button:
 		game.opts["stick_float"] = not stick_floats()
 		toast("스틱이 엄지 댄 자리로 따라온다." if stick_floats() else "스틱이 왼쪽 아래 제자리에 있다.")

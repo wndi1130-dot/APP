@@ -41,7 +41,9 @@ function rollAttr(fx: Fx | null | undefined, key: FxKey): Record<string, string>
 }
 
 function meter(name: 'trust' | 'tension', label: string, value: number, tone: string, fx?: Fx | null) {
-  return h('div', { class: cx('meter', value >= 99.5 && 'is-full', ...fxCls(fx, name)), 'data-fx-cell': name, ...(fx?.heavy === name ? { 'data-anim': `fx-${fx.id}-${name}-cross` } : {}), 'aria-label': `${label} ${fmt(value)}` },
+  // 누르면 최근에 무엇 때문에 바뀌었는지 뜬다(panels.ts meterPanel, 사용자 2026-10-11).
+  return h('div', { class: cx('meter', value >= 99.5 && 'is-full', ...fxCls(fx, name)), 'data-fx-cell': name, ...(fx?.heavy === name ? { 'data-anim': `fx-${fx.id}-${name}-cross` } : {}),
+    role: 'button', tabindex: 0, 'data-action': 'panel', 'data-panel': `why-${name}`, 'aria-label': `${label} ${fmt(value)}, 최근에 바뀐 까닭 보기` },
     fxBits(fx, name),
     icon(name, 'meter__icon'),
     h('div', { class: 'meter__body' },

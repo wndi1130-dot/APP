@@ -30,6 +30,11 @@
         {
           "type": "tension",
           "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": false
         }
       ],
       "followups": [],
@@ -48,6 +53,11 @@
         {
           "type": "tension",
           "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": false
         }
       ],
       "followups": [],

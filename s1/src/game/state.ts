@@ -189,6 +189,9 @@ export interface CalmState {
 
 export interface JournalEntry { seg: number; text: string; tone?: 'good' | 'bad' | 'deal' | 'dark' }
 
+/** 신임·긴장이 바뀐 까닭 한 줄(ui/repro.ts applyStep이 행동마다 남긴다). 값은 보이는 정수의 차이다. */
+export interface MeterWhy { seg: number; label: string; trust: number; tension: number }
+
 export interface Settlement { coal: number; food: number; med: number; rel: Record<Comm, number>; trust: number; tension: number; notes: string[] }
 
 export interface Game {
@@ -295,6 +298,8 @@ export interface Game {
   stop: StopState | null;
   council: CouncilState | null;
   lastSettle: Settlement | null;
+  /** 신임·긴장이 최근 무엇 때문에 바뀌었나(사용자 2026-10-11). 화면에서 한 행동만 남는다(봇·시뮬 판엔 없다). 최근 것이 뒤. */
+  meterLog?: MeterWhy[];
   journal: JournalEntry[];
   usedProfiles: string[];
   end: EndKind | null;

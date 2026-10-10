@@ -40,6 +40,7 @@ var overlay: ColorRect
 var backdrop_mat: ShaderMaterial
 var window_mats: Array[ShaderMaterial] = []
 var snow_fx: GPUParticles3D
+var snowcap: MeshInstance3D
 var rain_fx: GPUParticles3D
 var loco_run: GPUParticles3D
 var loco_idle: GPUParticles3D
@@ -84,6 +85,38 @@ func _box(size: Vector3, pos: Vector3, m: Material) -> MeshInstance3D:
 	return mi
 
 
+## A snow cap for a box top, laid out like tools/blender/tripo_prep.py
+## --snowcap makes them: the rim (vertex colour R 0) sits on the surface and
+## the inside (R 1) is lifted to the full depth.
+func _snowcap_box(top: Vector2, at: Vector3, depth := 0.25, rim := 0.06) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var hx := top.x * 0.5
+	var hz := top.y * 0.5
+	var outer: Array[Vector3] = [Vector3(-hx, 0, -hz), Vector3(hx, 0, -hz), Vector3(hx, 0, hz), Vector3(-hx, 0, hz)]
+	var inner: Array[Vector3] = []
+	for v in outer:
+		inner.append(Vector3(v.x - signf(v.x) * rim, depth, v.z - signf(v.z) * rim))
+	var quads: Array = [[inner[0], inner[1], inner[2], inner[3], 1.0, 1.0]]
+	for i in range(4):
+		var j := (i + 1) % 4
+		quads.append([outer[i], outer[j], inner[j], inner[i], 0.0, 1.0])
+	for q in quads:
+		var shares: Array[float] = [q[4], q[4], q[5], q[5]]
+		for k in [0, 1, 2, 0, 2, 3]:
+			st.set_color(Color(shares[k], shares[k], shares[k]))
+			st.add_vertex(q[k])
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "SnowCap"
+	mi.mesh = st.commit()
+	mi.position = at
+	mi.material_override = _mat("snowcap.gdshader")
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	return mi
+
+
 func _weathered(color: Color, porosity := 0.6, extra := {}) -> ShaderMaterial:
 	var m := _mat("weathered.gdshader")
 	m.set_shader_parameter("albedo", color)
@@ -123,6 +156,8 @@ func _build_props() -> void:
 	_box(Vector3(7, 0.3, 5), Vector3(-8, 4.15, -3), _weathered(Color(0.30, 0.29, 0.29), 0.3))
 	_box(Vector3(3, 0.15, 2), Vector3(-8, 0.08, 0.2), _weathered(Color(0.40, 0.38, 0.35), 0.6, {"sheltered": 1.0}))
 	_box(Vector3(1.2, 1.0, 1.2), Vector3(-3, 0.5, 2), _weathered(Color(0.45, 0.36, 0.26), 0.8))
+	# Snow cap on the crate: grows and shrinks with lying snow (presets 8-10, 13).
+	snowcap = _snowcap_box(Vector2(1.2, 1.2), Vector3(-3, 1.0, 2))
 	_box(Vector3(1.0, 0.8, 1.6), Vector3(-1.4, 0.4, 2.4), _weathered(Color(0.28, 0.30, 0.32), 0.1, {"metallic": 0.6, "roughness_base": 0.5}))
 	for i in range(14):
 		_box(Vector3(0.25, 0.12, 2.4), Vector3(-6 + i * 1.6, 0.06, 6.5), _weathered(Color(0.30, 0.26, 0.22), 0.8))

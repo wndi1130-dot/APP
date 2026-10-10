@@ -37,6 +37,11 @@
           "type": "community.crowding",
           "target": "medtech",
           "amount": -6
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],

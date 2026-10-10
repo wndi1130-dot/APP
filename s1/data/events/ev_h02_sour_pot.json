@@ -62,11 +62,6 @@
           "type": "flag",
           "id": "h02_pending",
           "value": false
-        },
-        {
-          "type": "flag",
-          "id": "ev_achieved",
-          "value": true
         }
       ],
       "followups": [],

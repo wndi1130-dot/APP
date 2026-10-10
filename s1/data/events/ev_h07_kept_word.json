@@ -1,0 +1,80 @@
+{
+  "id": "ev_h07_kept_word",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 20,
+      "max": 24
+    },
+    {
+      "type": "flag",
+      "id": "h07_promise",
+      "value": true
+    },
+    {
+      "type": "flag",
+      "id": "front_pot_touched",
+      "value": false
+    }
+  ],
+  "speaker": "rep",
+  "community": "front",
+  "body": "앞칸 대표가 회기 앞에 잠깐 선다. \"겨울 솥은 그대로였습니다. 말씀대로였습니다.\"",
+  "choices": [
+    {
+      "id": "c_nod",
+      "label": "고개만 끄덕인다",
+      "say": "그 말이면 됐다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -2
+        },
+        {
+          "type": "flag",
+          "id": "h07_promise",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_open",
+      "label": "회기에서 말하게 한다",
+      "say": "회기에서 말해라. 모두가 듣는다.",
+      "effects": [
+        {
+          "type": "trust",
+          "amount": 2
+        },
+        {
+          "type": "tension",
+          "amount": 2
+        },
+        {
+          "type": "flag",
+          "id": "h07_promise",
+          "value": false
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
