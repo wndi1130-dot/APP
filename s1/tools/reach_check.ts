@@ -31,6 +31,7 @@ export const REACH_NOTES: Record<string, string> = {
   'content:ev_h04_one_box': '의약품이 3~10일 때만 온다. 봇 판에선 거의 없다',
   'content:ev_h05_slow_fire': '앞 사건 ev_h05_short_shift에서 버티라 하는 선택을 해야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h06_frozen_pipe': '앞 사건 ev_h06_split_pipe에서 다음 정차까지 두는 선택을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h07_broken_word': '앞 사건 ev_h07_quiet_offer에서 약속(h07_promise)을 하고 앞칸 솥을 건드려야(front_pot_touched) 온다. 봇 판에선 300판에 한 번 나올까 말까라 법 안건이 하나 늘어 판이 달라지면 안 나온다',
   'content:ev_h10_wrong_dose': '앞 사건 ev_h10_second_night에서 조수가 대신 보는 선택을 해야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h10_aide_night': '앞 사건 ev_h10_second_night에서 조수가 대신 보는 선택을 하고, 의무칸 과밀이 60 아래여야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h11_bridge_sag': '앞 사건 ev_b01_doubtful_bridge에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
