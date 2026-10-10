@@ -1100,3 +1100,11 @@ small { font-size: 12px; }
 .carpop__nav { position: absolute; top: calc(50% - 14px); width: 28px; height: 28px; box-shadow: 0 4px 10px #0008; }
 .carpop__nav--prev { left: -34px; }
 .carpop__nav--next { right: -34px; }
+
+/* 자원 까닭 창(panels.ts resPanel): 드는 곳은 이름, 작은 막대, 값. */
+.res[data-action] { cursor: pointer; }
+.why__title { margin: 6px 0 2px; font-size: 11px; }
+.why--use .why__row { align-items: center; }
+.why--use .why__label { flex: 0 0 150px; }
+.why--use .mini-bar { flex: 1; min-width: 40px; }
+.drop--why { max-height: calc(100% - var(--top-h) - 16px); overflow-y: auto; }
