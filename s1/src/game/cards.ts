@@ -874,7 +874,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       offend(g, c);
       g.comms[c].pop = Math.max(1, g.comms[c].pop - 1);
       g.deaths.push(card.who ?? '이름 모를 대원');
-      logDeath(g, [card.who ?? '이름 모를 대원'], 'chosen', true);
+      logDeath(g, [card.who ?? '이름 모를 대원'], 'chosen', true, c);
       journal(g, `${card.who ?? '대원'}을(를) 역에 두고 왔다.`, 'dark');
       break;
     case 'need_promise': {

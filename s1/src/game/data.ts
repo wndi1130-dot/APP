@@ -83,7 +83,9 @@ export type LawId =
   // S1c 법 다섯(s1a_politics_numbers 8.5). S1c를 켠 판에서만 열린다(domestic/laws.ts).
   | 'tech_control' | 'apprentice_duty' | 'triage_std' | 'bath_rota' | 'hands_first'
   // 기술이 여는 덜 잔혹한 변형(s1c_domestic 7.3): 원래 법과 하나만 설 수 있다(domestic/laws.ts).
-  | 'seed_half' | 'child_pack';
+  | 'seed_half' | 'child_pack'
+  // 불만을 낮추는 법 셋(coordinator 결정 035, calm.ts). 구간마다 천천히 깎이는 꼴이라 효과는 res가 아니라 calm.ts가 셈한다.
+  | 'evening_pot' | 'wall_ledger' | 'night_of_names';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -108,6 +110,10 @@ export interface LawDef {
   /** 바뀌는 수치. 표결 전에 보여 준다(decisions.md 화면과 연출). */
   changes: string[];
   opensWhen: string;
+  /** 법 화면에 changes 위로 보이는 까닭 한 줄 */
+  why?: string;
+  /** 싫어하는 칸이 있는 까닭 한 줄 */
+  whyNot?: string;
 }
 
 const L = (def: Omit<LawDef, 'mats' | 'rels' | 'like' | 'res' | 'crisis'> & Partial<LawDef>): LawDef => ({
@@ -243,6 +249,32 @@ export const LAWS: Record<LawId, LawDef> = {
     rels: { tail: -5, medtech: -5 }, res: { haulMult: 1.1, fearOnce: 2 }, crisis: ['coal', 'food'],
     changes: ['정차 산출 +10%', '아이들은 내리지 않고 열차 안에서 짐을 꾸린다', '꼬리칸 관계 −5', '의무진 관계 −5', '공포 +2', '아동 노동이 닫힌다'],
     opensWhen: '짐 꾸리기·방한 장비를 복원한 뒤, 석탄이나 식량 40 이하',
+  }),
+  // ---- 불만을 낮추는 법 셋(H6_불만법_명세 3장, 결정 035). 숫자는 제안이고 사건 줄기가 재서 고친다. 효과는 calm.ts가 lawActive로 셈한다.
+  // 축은 비워 두고 like만으로 표결한다(like에 이미 칸별 호오를 적었다).
+  evening_pot: L({
+    id: 'evening_pot', title: '저녁 솥불', group: '살림', tag: '이상', kind: 'normal', axes: [0, 0, 0],
+    like: { tail: 2, medtech: 1, engine: -1 },
+    why: '저녁에 한 시간, 식당칸 솥 자리에 불을 더 켜 둔다. 누구든 와서 앉는다. 마주 앉은 칸끼리는 덜 미워한다.',
+    whyNot: '기관실: 그 석탄이면 보일러가 반 구간을 더 간다.',
+    changes: ['석탄 +0.5/구간', '관계 −15 이하인 칸만 구간마다 조금씩 오른다', '긴장이 조금 덜 오른다', '석탄이 20 이하면 불이 꺼진다(30에 다시 켜진다)'],
+    opensWhen: '판 시작부터',
+  }),
+  wall_ledger: L({
+    id: 'wall_ledger', title: '벽 장부', group: '살림', tag: '이상', kind: 'normal', axes: [0, 0, 0],
+    like: { medtech: 1, front: 1, guard: -1 },
+    why: '남은 것과 쓴 곳을 분필로 벽에 적는다. 넉넉할 때는 숫자가 사람을 재우고, 모자랄 때는 숫자가 사람을 깨운다.',
+    whyNot: '경비대: 창고에 얼마가 있는지 온 열차가 아는 것은 문을 열어 두는 것과 같다.',
+    changes: ['석탄·식량이 둘 다 50 이상이면 긴장이 조금 덜 오르고 신임이 조금씩 오른다(70까지)', '하나라도 40 이하면 긴장이 더 오르고 꼬리칸이 불안해한다', '지우면(폐지) 신임 −5'],
+    opensWhen: '판 시작부터',
+  }),
+  night_of_names: L({
+    id: 'night_of_names', title: '떠난 사람의 밤', group: '살림', tag: '이상', kind: 'normal', axes: [0, 0, 0],
+    like: { tail: 1, medtech: 1, guard: -1 },
+    why: '사람이 죽은 날 밤, 온 칸이 모여 그 이름을 한 번씩 부른다. 불린 이름은 숫자가 되지 않는다.',
+    whyNot: '경비대: 밤에 통로가 통째로 빈다.',
+    changes: ['사람이 죽은 구간의 밤: 공포 −2, 긴장 −2, 그 사람의 칸 관계 +3', '그 밤 석탄 −1, 사치품 −1(사치품이 없으면 효과 반)', '세 번째 밤부터 효과가 반이다', '열차장이 고른 죽음이면 신임 −2가 같이 온다'],
+    opensWhen: '판에서 첫 죽음이 난 뒤',
   }),
 };
 /** S1c 법. S1a 판에선 열리지 않는다. */
