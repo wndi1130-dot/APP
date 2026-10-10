@@ -1288,7 +1288,8 @@ func finish(reason: String) -> void:
 				unloaded[id] = int(unloaded.get(id, 0)) + int(p.items[id])
 		else:
 			receipt.person("leftBehind", p.pid)
-		if p.body.infection == "bite":
+		# A confirmed infection from a scratch goes back as a bite would (body_injury 2.1).
+		if p.body.infection == "bite" or p.body.infected:
 			receipt.person("bitten", p.pid)
 		if p.body.bleed >= 2 or p.body.leg_fracture or p.body.arm_fracture or p.body.downed:
 			receipt.person("injured", p.pid)

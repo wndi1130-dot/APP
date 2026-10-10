@@ -768,7 +768,7 @@ func _shoot_person(p, o, radius: float) -> bool:
 	if zone == "miss":
 		return false
 	o.last_hurt_by = p.pid
-	var part: String = o.body.apply_gunshot(rng, game.clock.elapsed)
+	var part: String = o.body.apply_gunshot(rng, game.clock.elapsed, zone)
 	if zone == "head":
 		o.body.downed = true
 	game.telemetry.injury(game.clock.elapsed, o.pid, "gunshot")

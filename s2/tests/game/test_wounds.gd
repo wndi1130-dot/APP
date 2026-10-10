@@ -423,3 +423,127 @@ func test_no_wounds_keeps_the_receipt_at_version_one() -> void:
 	assert_false(d.has("version"))
 	assert_false(d["people"].has("wounds"))
 	assert_eq(Receipt.check(d), [] as Array[String])
+
+
+# --- PR 69 review (PC, 2026-10-10) ---
+
+func test_a_deep_leg_wound_stops_running_without_a_fracture() -> void:
+	var b := Body.new()
+	assert_true(b.can_run())
+	b.apply_cut(true, 0.0, "leg_left")
+	assert_false(b.leg_fracture)
+	assert_false(b.can_run(), "deep leg wound: no running")
+
+
+func test_a_deep_arm_wound_still_lets_you_run() -> void:
+	var b := Body.new()
+	b.apply_cut(true, 0.0, "arm_left")
+	assert_true(b.can_run())
+
+
+func test_a_head_hit_puts_the_round_in_the_head() -> void:
+	for s in range(1, 30):
+		var b := Body.new()
+		var part: String = b.apply_gunshot(_rng(s), 0.0, "head")
+		assert_eq(part, "head")
+		assert_eq(b.wounds[0]["part"], "head_neck", "seed %d" % s)
+		assert_eq(b.wounds.size(), 1, "no leg fracture from a head hit")
+
+
+func test_a_body_hit_still_rolls_torso_or_leg() -> void:
+	var legs := 0
+	for s in range(1, 200):
+		var b := Body.new()
+		var part: String = b.apply_gunshot(_rng(s), 0.0, "body")
+		assert_true(part in ["torso", "leg"])
+		legs += 1 if part == "leg" else 0
+	assert_gt(legs, 0)
+
+
+func test_an_infected_scratch_goes_back_as_bitten() -> void:
+	_field()
+	var c = game.squad[2]
+	c.body.add_wound("torso", "scratch", 0.0)
+	c.body.infection = "scratch"
+	c.body.infected = true
+	c.body.window_left = 380.0
+	var got: Array = []
+	game.finished.connect(func(r): got.append(r))
+	game.finish("departed")
+	assert_has(got[0]["receipt"]["people"]["bitten"], c.pid)
+
+
+func test_a_clean_scratch_does_not_go_back_as_bitten() -> void:
+	_field()
+	var c = game.squad[2]
+	c.body.add_wound("torso", "scratch", 0.0)
+	c.body.infection = "scratch"
+	c.body.infected = false
+	var got: Array = []
+	game.finished.connect(func(r): got.append(r))
+	game.finish("departed")
+	assert_false(got[0]["receipt"]["people"]["bitten"].has(c.pid))
+
+
+func test_bandage_reports_what_it_really_used() -> void:
+	var b := Body.new()
+	for i in range(3):
+		b.add_wound("arm_left", "laceration", 0.0)
+	b.bandage(2)
+	assert_eq(b.last_bandages_used, 1, "a heavy total stops after one light wound drops it below heavy")
+	var c := Body.new()
+	c.add_wound("torso", "deep", 0.0)
+	c.bandage(2)
+	assert_eq(c.last_bandages_used, 2)
+
+
+func test_treating_takes_only_the_bandages_wound_on() -> void:
+	_field()
+	var medic = game.squad[1]
+	var o = game.squad[2]
+	for i in range(3):
+		o.body.add_wound("arm_left", "laceration", 0.0)
+	medic.items["bandage"] = 3
+	medic.medical = "none"
+	game.actions._treated(medic, o, medic, true)
+	assert_eq(int(medic.items.get("bandage", 0)), 3 - o.body.last_bandages_used)
+	assert_eq(int(medic.items.get("bandage", 0)), 2, "one used, two kept")
+
+
+func test_ai_bandaging_takes_only_what_was_used() -> void:
+	_field()
+	var giver = game.squad[1]
+	var who = game.squad[2]
+	for i in range(3):
+		who.body.add_wound("arm_left", "laceration", 0.0)
+	giver.items["bandage"] = 2
+	game.ai._use_bandage(giver, who, 2)
+	assert_eq(int(giver.items.get("bandage", 0)), 1)
+
+
+func test_a_dressed_heavy_wound_seeps_on_for_the_full_time() -> void:
+	var b := Body.new()
+	b.add_wound("arm_left", "laceration", 0.0)
+	b.tick(Body.LIGHT_BLEED_STOP - 1.0, IDLE)
+	b.add_wound("leg_left", "deep", 0.0)
+	assert_eq(b.bleed_level(), 2)
+	b.bandage(2)
+	assert_eq(b.bleed_level(), 1, "the deep one seeps")
+	b.tick(1.5, IDLE)
+	assert_eq(b.bleed_level(), 1, "the old light-bleed clock did not stop it at once")
+
+
+func test_a_closed_window_is_not_reopened_by_a_new_bite() -> void:
+	var b := Body.new()
+	b.apply_bite(_rng(1), "arm", 0.0)
+	b.window_left = 0.0
+	b.apply_bite(_rng(2), "leg", 10.0)
+	assert_eq(b.window_left, 0.0)
+	b.apply_scratch(_rng(3), 20.0)
+	assert_eq(b.window_left, 0.0, "nor by a scratch")
+
+
+func test_a_first_bite_still_opens_the_window() -> void:
+	var b := Body.new()
+	b.apply_bite(_rng(1), "arm", 0.0)
+	assert_eq(b.window_left, Body.WINDOW)

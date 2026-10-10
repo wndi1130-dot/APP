@@ -44,6 +44,7 @@ var downed: bool = false
 var dead: bool = false
 var heavy_bleed_time: float = 0.0
 var light_bleed_time: float = 0.0
+var last_bandages_used: int = 0  # what the last bandage() call really used (callers take only that)
 var down_time: float = 0.0       # time spent downed while bleeding heavily
 var injured_at: float = -INF
 var cold_level: int = 0          # last cold_level seen by tick(), for icons
@@ -107,11 +108,12 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 
 
 func apply_bite(_rng: RandomNumberGenerator, part: String, now: float) -> void:
-	var had_window: bool = infected and window_left > 0.0
+	# Already infected: the window runs on (a closed one stays closed); a new bite never resets it.
+	var was_infected: bool = infected
 	add_wound(_fine_part(part, "bite"), "bite", now)
 	injured_at = now
 	infection = "bite"
-	window_left = minf(window_left, WINDOW) if had_window else WINDOW
+	window_left = minf(window_left, WINDOW) if was_infected else WINDOW
 	infected = true
 
 
@@ -119,10 +121,14 @@ func apply_scratch(rng: RandomNumberGenerator, now: float, part: String = "torso
 	add_wound(_fine_part(part, "scratch"), "scratch", now)
 	injured_at = now
 	var roll: bool = rng.randf() < SCRATCH_INFECT
+	var was_infected: bool = infected
 	if infection != "bite":
 		infection = "scratch"
 	infected = infected or roll
-	window_left = minf(window_left, WINDOW) if window_left > 0.0 else WINDOW
+	if was_infected:
+		window_left = minf(window_left, WINDOW)
+	else:
+		window_left = minf(window_left, WINDOW) if window_left > 0.0 else WINDOW
 
 
 # A light cut tears (laceration), a heavy one goes deep.
@@ -132,14 +138,17 @@ func apply_cut(heavy: bool, now: float, part: String = "torso") -> void:
 
 
 # Heavy bleed (a bullet stays in); 25% hits a leg and breaks it. Already bleeding heavily: downed.
-# Returns the coarse place ("torso" or "leg"). The side comes from the same roll.
-func apply_gunshot(rng: RandomNumberGenerator, now: float) -> String:
+# Returns the coarse place ("head", "torso" or "leg"). The side comes from the same roll.
+# zone "head" (the aim roll hit the head) puts the round there, not on a rolled part.
+func apply_gunshot(rng: RandomNumberGenerator, now: float, zone: String = "") -> String:
 	var was_heavy: bool = bleed_level() >= 2
 	var roll: float = rng.randf()
 	var part: String = "torso"
-	if roll < GUNSHOT_LEG:
+	if zone == "head":
+		part = "head"
+	elif roll < GUNSHOT_LEG:
 		part = "leg"
-	var fine: String = "torso" if part == "torso" else ("leg_left" if roll < GUNSHOT_LEG * 0.5 else "leg_right")
+	var fine: String = "head_neck" if part == "head" else ("torso" if part == "torso" else ("leg_left" if roll < GUNSHOT_LEG * 0.5 else "leg_right"))
 	add_wound(fine, "embedded", now)
 	injured_at = now
 	if part == "leg" and not _has_fracture_on(fine):
@@ -153,6 +162,7 @@ func apply_gunshot(rng: RandomNumberGenerator, now: float) -> String:
 # takes two and then seeps on as a light one; any other takes one and stops. When the
 # person bled heavily this is one step: it ends once the level drops below heavy.
 func bandage(count: int = 1) -> bool:
+	last_bandages_used = 0
 	var budget: int = count
 	var start: int = bleed_level()
 	var done := false
@@ -167,6 +177,7 @@ func bandage(count: int = 1) -> bool:
 		wounds[i]["blood"] = SEEP_BLOOD if heavy else 0.0
 		wounds[i]["bandaged"] = true
 		budget -= cost
+		last_bandages_used += cost
 		done = true
 		_refresh()
 		if start >= 2 and bleed_level() < 2:
@@ -224,6 +235,14 @@ func most_urgent() -> int:
 			best = i
 			best_key = k
 	return best
+
+
+## A deep wound on a leg: no running (body_injury 4.6 '깊은 상처는 달리기 못 함').
+func has_deep_leg_wound() -> bool:
+	for w: Dictionary in wounds:
+		if w["kind"] == "deep" and _in_group(String(w["part"]), "leg"):
+			return true
+	return false
 
 
 func has_fracture(group: String) -> bool:
@@ -406,7 +425,7 @@ func exhaustion_level() -> int:
 
 
 func can_run() -> bool:
-	return not leg_fracture and exhaustion_level() < 2 and breath > RUN_BREATH_MIN and not downed and not dead
+	return not leg_fracture and not has_deep_leg_wound() and exhaustion_level() < 2 and breath > RUN_BREATH_MIN and not downed and not dead
 
 
 # body_injury 4.2. Speed factors (time = base / factor) except aim_min (circle floor size, bigger is worse).
@@ -557,6 +576,7 @@ func _refresh() -> void:
 		heavy_bleed_time = 0.0
 		down_time = 0.0
 		downed = false
+		light_bleed_time = 0.0   # a dressed heavy wound seeps on for the full time
 	if level == 0:
 		light_bleed_time = 0.0
 	_level_seen = level

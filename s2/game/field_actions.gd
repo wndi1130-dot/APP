@@ -630,12 +630,18 @@ func _treated(medic, o, src, heavy: bool) -> void:
 	if heavy and src.take_item("medkit"):
 		o.body.use_kit()
 	elif heavy and int(src.items.get("bandage", 0)) >= 2:
-		src.take_item("bandage", 2)
+		# Only what was really wound on is taken.
 		o.body.bandage(2)
-		if medic.medical != "none" and o.body.quick_treat_ok(game.clock.elapsed):
+		var used: int = o.body.last_bandages_used
+		if medic.medical != "none" and o.body.quick_treat_ok(game.clock.elapsed) and int(src.items.get("bandage", 0)) > used:
 			o.body.bandage(1)
-	elif src.take_item("bandage"):
+			used += o.body.last_bandages_used
+		if used > 0:
+			src.take_item("bandage", used)
+	elif int(src.items.get("bandage", 0)) >= 1:
 		o.body.bandage(1)
+		if o.body.last_bandages_used > 0:
+			src.take_item("bandage", o.body.last_bandages_used)
 	else:
 		game.say(medic, "붕대가 없다.")
 		return
