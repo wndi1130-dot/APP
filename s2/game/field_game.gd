@@ -130,6 +130,7 @@ var glass_warned: bool = false
 var player_downed_t: float = 0.0
 var spotted_events: int = 0
 var unseen_rattle: bool = false
+var lid_tip_told: bool = false           # the driver has said once how the street manhole is shut
 var light_t: float = 0.0
 ## What the stop wrote into the fx_* shader globals (the server cannot be read back at runtime).
 var fx_params: Dictionary = {}
@@ -173,7 +174,7 @@ func _ready() -> void:
 	audio = FieldAudio.new()
 	add_child(audio)
 	audio.setup(self)
-	set_radio("기관사: " + director.forecast(0.0, 0, clock))
+	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip())
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()
@@ -987,7 +988,7 @@ func _update_hordes(delta: float) -> void:
 				if now - float(t) < 60.0:
 					recent += 1
 			director.horde_cleared(now, recent)
-			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock))
+			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
 
 
 func _start_horde(h: Dictionary) -> void:
@@ -1078,7 +1079,7 @@ func _update_spawns(delta: float) -> void:
 	if forecast_t > 0.0:
 		forecast_t -= delta
 		if forecast_t <= 0.0:
-			set_radio("기관사: " + director.forecast(now, forecast_precision, clock))
+			set_radio("기관사: " + director.forecast(now, forecast_precision, clock) + lid_tip())
 	deaf_t = maxf(0.0, deaf_t - delta)
 
 
@@ -1087,6 +1088,15 @@ func _someone_near(at: Vector3, r: float) -> bool:
 		if p.is_alive() and p.position.distance_to(at) < r:
 			return true
 	return false
+
+
+## Once per field, when the next wave comes up the open street manhole: how to
+## shut it (H3 2026-10-09: the player never found that it can be shut).
+func lid_tip() -> String:
+	if lid_tip_told or director.next_entry != "manhole" or not director.is_open("manhole") or director.is_exhausted():
+		return ""
+	lid_tip_told = true
+	return " 맨홀은 판자나 고철로 누르면 막힌다."
 
 
 ## Another open sewer mouth with nobody near it, culvert first, or "".

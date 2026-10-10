@@ -156,3 +156,66 @@ func test_signal_box_ladder_is_never_a_path() -> void:
 	var path: PackedVector3Array = game.find_path(game.lift(Vector2i(100, 9), 0), top, false)
 	assert_gt(path.size(), 0, "walks to under it")
 	assert_eq(game.level_of(path[path.size() - 1]), 0, "but stays on the ground")
+
+
+# ---------------------------------------------------------------- finding floors (H3 2026-10-09)
+
+func _labels_at(c: Vector2i, lv: int) -> Array:
+	var out: Array = []
+	for row in game.view.label_nodes:
+		if row[1] == c and int(row[2]) == lv:
+			out.append(row[0].text)
+	return out
+
+
+func test_every_stair_is_named_on_both_floors() -> void:
+	var names := {-1: "지하로", 0: "1층으로", 1: "2층으로", 2: "3층으로"}
+	var seen := 0
+	for s in game.stairs:
+		if s["ladder"]:
+			continue
+		assert_has(_labels_at(s["cell"], s["low"]), names[s["high"]])
+		assert_has(_labels_at(s["cell"], s["high"]), names[s["low"]])
+		seen += 1
+	assert_gt(seen, 0, "the map has stairs")
+
+
+func test_the_cellar_stair_says_down_to_the_cellar_from_the_ground() -> void:
+	var found := false
+	for s in game.stairs:
+		if not s["ladder"] and s["low"] == -1:
+			found = found or _labels_at(s["cell"], 0).has("지하로")
+	assert_true(found)
+
+
+func test_stair_names_wait_until_the_spot_is_seen() -> void:
+	var memory := PackedByteArray()
+	memory.resize(4 * game.grid.width * game.grid.height)
+	game.view.update_labels(memory, true)
+	for row in game.view.label_nodes:
+		assert_false(row[0].visible, "nothing is named before it is seen")
+
+
+func test_the_street_manhole_is_named() -> void:
+	var c: Vector2i = game.data["manholes"]["manhole"]
+	var named := false
+	for row in game.view.label_nodes:
+		named = named or (row[0].text == "맨홀" and int(row[2]) == 0 and (row[1] - c).length() <= 1.5)
+	assert_true(named)
+
+
+func test_the_driver_says_once_how_to_shut_the_manhole() -> void:
+	game.lid_tip_told = false
+	game.director.next_entry = "manhole"
+	var tip: String = game.lid_tip()
+	assert_string_contains(tip, "판자나 고철")
+	assert_eq(game.lid_tip(), "", "only once")
+
+
+func test_no_manhole_tip_when_the_next_wave_comes_elsewhere_or_it_is_shut() -> void:
+	game.lid_tip_told = false
+	game.director.next_entry = "culvert"
+	assert_eq(game.lid_tip(), "")
+	game.director.next_entry = "manhole"
+	game.director.block("manhole")
+	assert_eq(game.lid_tip(), "", "already shut")
