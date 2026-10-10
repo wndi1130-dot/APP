@@ -50,6 +50,15 @@ export function notePrologue(g: Game): void {
   try { globalThis.localStorage?.setItem(PROLOGUE_KEY, '1'); } catch { /* 저장이 막혀도 판은 그대로 */ }
 }
 
+/** 사람 키우기 화면의 안내 한 줄은 처음에만 보인다(단추를 한 번 누르거나 다른 탭으로 가면 끝). */
+const BOARD_HINT_KEY = 's1c.hint.board';
+function boardHintSeen(): boolean {
+  try { return globalThis.localStorage?.getItem(BOARD_HINT_KEY) === '1'; } catch { return false; }
+}
+function noteBoardHint(): void {
+  try { globalThis.localStorage?.setItem(BOARD_HINT_KEY, '1'); } catch { /* 저장이 막혀도 판은 그대로 */ }
+}
+
 function domUi(ui: Ui): DomUi {
   ui.dom ??= { tab: 'workshop', node: null, order: null, mats: false };
   return ui.dom;
@@ -144,7 +153,7 @@ function workshopPop(view: View, car: CarDef): HTMLElement {
       d.delegate.on || !ds.ok ? h('button', {
         class: cx('chip', d.delegate.on && 'is-on'), 'data-action': 'dom-delegate', 'data-on': '0', disabled: !d.delegate.on, title: ds.why ?? '',
       }, d.delegate.on ? '맡김 · 거둔다' : '맡기기') : null,
-      h('button', { class: 'btn btn--dark btn--small', 'data-action': 'dom-tab', 'data-tab': 'plan' }, '설계도 →')),
+      h('button', { class: 'btn btn--dark btn--small', 'data-action': 'dom-tab', 'data-tab': 'plan' }, '기술 되살리기 →')),
     !d.delegate.on && ds.ok ? h('div', { class: 'dom-row' },
       h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'neutral' }, '중립으로', h('small', null, ' 가장 추운 칸부터')),
       h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'ours' }, '우리 편 먼저', h('small', null, ' 호의 +1 · 나머지 −1/구간'))) : null,
@@ -283,7 +292,7 @@ export function domesticEngineCol(view: View, car: CarDef): HTMLElement | null {
       h('button', { class: 'nav', 'data-action': 'dom-hot', 'data-value': d.hotWater + 1, disabled: d.hotWater >= 3, 'aria-label': '더운물 더' }, '+')),
     h('small', { class: 'sub num' }, `석탄 ${hotWaterCoal(g).toFixed(1)}/구간`),
     floor > 0 ? h('small', { class: 'sub' }, '법으로 드물게 이상') : null,
-    h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'board' }, '현황판'));
+    h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'board' }, '사람 키우기'));
 }
 
 // ---- 위 자원 줄: 자재 ----
@@ -408,7 +417,7 @@ function techNode(g: Game, id: TechId, sel: boolean): HTMLElement {
     h('span', { class: 'dom-node__name' }, techTitle(g, id), def.variants && !st?.variant ? ' ◇' : ''),
     ns === 'collect' || ns === 'unknown' ? h('span', { class: 'dom-node__frag num' }, `${d.frags[def.branch]}/${cost.frags}`) : null,
     ns === 'restoring' && st ? bar(st.progress, '--warm', st.need) : null,
-    tag ? h('small', { class: 'dom-node__tag' }, tag) : null,
+    tag && ns !== 'ready' ? h('small', { class: 'dom-node__tag' }, tag) : null, // '복원 가능'은 테두리 색으로만 보인다
     researchPromise(g)?.tech === id ? h('small', { class: 'dom-node__promise' }, `약속 · 남은 ${researchPromise(g)!.left}구간`) : null);
 }
 
@@ -432,6 +441,12 @@ function useTag(g: Game, id: TechId, v?: Variant): HTMLElement | null {
   return h('span', { class: cx('pol', now ? 'pol--gray' : 'pol--red') }, now ? '쓸 법이 서 있다' : '쓸 법이 아직 없다');
 }
 
+/** 쓸 법 표가 변형마다 같은지 견줄 때 쓰는 값. */
+function useKey(g: Game, id: TechId, v?: Variant): string {
+  const laws = techLaws(id, v);
+  return laws.length === 0 ? '' : laws.some(l => g.passed[l] !== undefined) ? 'on' : 'off';
+}
+
 function nodeDetail(g: Game, id: TechId): HTMLElement {
   const d = g.dom!;
   const def = TECHS[id];
@@ -442,27 +457,27 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
   const variants: (Variant | undefined)[] = def.variants && !st ? ['a', 'b'] : [undefined];
   const buttons: HTMLElement[] = [];
   if (!st) {
+    // 값, 막힌 까닭, 쓸 법처럼 단추마다 같은 말은 위에 한 번만 적는다(사용자 2026-10-11: 글이 많다).
+    const canDefect = check.defect !== '없다' && check.defect !== '완성판으로 된다';
+    const sameUse = variants.every(v => useKey(g, id, v) === useKey(g, id, variants[0]));
+    buttons.push(h('div', { class: 'dom-common' },
+      h('span', { class: 'cost num' }, `부품 −${cost.parts}`), cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null,
+      sameUse ? useTag(g, id, variants[0]) : null,
+      check.full ? h('span', { class: 'pol pol--gray' }, check.full) : null,
+      canDefect ? h('span', { class: 'sub' }, `결함판: 효과 절반, 고장 +${Math.round(D.defectBreak * 100)}%p${check.defect ? ` · ${check.defect}` : ''}`) : null));
     for (const v of variants) {
-      const vName = v && def.variants ? `${def.variants[v].name}: ` : '';
       const rel = sideLine(techRelSides(id, v));
-      buttons.push(h('button', {
-        class: 'choice', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'full', 'data-variant': v ?? '', disabled: !!check.full,
-      }, h('span', { class: 'choice__label' }, `${vName}복원 시작`),
-      h('span', { class: 'choice__meta' },
-        h('span', { class: 'cost num' }, `부품 −${cost.parts}`), cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null,
+      buttons.push(h('div', { class: 'dom-vrow' },
+        v && def.variants ? h('b', { class: 'dom-vrow__name' }, def.variants[v].name) : null,
         rel ? h('span', { class: 'pol pol--gray' }, rel) : null,
-        useTag(g, id, v),
-        check.full ? h('span', { class: 'pol pol--gray' }, check.full) : null)));
-      if (check.defect !== '없다' && check.defect !== '완성판으로 된다') {
-        buttons.push(h('button', {
-          class: 'choice', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'defect', 'data-variant': v ?? '', disabled: !!check.defect,
-        }, h('span', { class: 'choice__label' }, `${vName}결함판으로`),
-        h('span', { class: 'choice__meta' },
-          h('span', { class: 'cost num' }, `부품 −${cost.parts}`), h('span', { class: 'cost' }, `효과 절반, 고장 +${Math.round(D.defectBreak * 100)}%p`),
-          rel ? h('span', { class: 'pol pol--gray' }, rel) : null,
-          useTag(g, id, v),
-          check.defect ? h('span', { class: 'pol pol--gray' }, check.defect) : null)));
-      }
+        sameUse ? null : useTag(g, id, v),
+        h('span', { class: 'dom-vrow__acts' },
+          h('button', {
+            class: 'btn btn--dark btn--small', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'full', 'data-variant': v ?? '', disabled: !!check.full, title: check.full ?? '',
+          }, '복원 시작'),
+          canDefect ? h('button', {
+            class: 'btn btn--ghost btn--small', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'defect', 'data-variant': v ?? '', disabled: !!check.defect, title: check.defect ?? '',
+          }, '결함판으로') : null)));
     }
   }
   if (st && d.restoring === id) buttons.push(h('button', { class: 'btn btn--ghost', 'data-action': 'dom-cancel' }, '복원을 멈춘다(부품은 안 돌아온다)'));
@@ -543,13 +558,14 @@ function boardView(view: View): HTMLElement {
           people.length ? people.map(p => personChip(g, p)) : h('span', { class: 'is-red' }, '아무도 없다'),
           cd !== undefined ? h('span', { class: 'dom-count num', title: '남은 구간' }, cd) : null,
           only ? h('span', { class: 'dom-only' }, '대체 불가') : null),
-        h('span', { class: cx('dom-manual', d.manuals[f] && 'is-on') }, `매뉴얼 ${d.manuals[f] ? '✓' : '✕'}`),
-        h('span', { class: 'dom-relies sub' }, relies.length ? relies.join('·') : '(기대는 기술 없음)'),
+        relies.length ? h('span', { class: 'dom-relies sub' }, relies.join('·')) : null,
         h('span', { class: 'dom-board__acts' },
           h('button', { class: 'chip', 'data-action': 'dom-apprentice', 'data-field': f, disabled: !teacher, title: teacher ? '' : '가르칠 사람이 없다' }, '견습생 붙이기'),
-          h('button', { class: 'chip', 'data-action': 'dom-manual', 'data-field': f, disabled: !writer.who || !!writer.why, title: writer.why ?? '' }, '매뉴얼 쓰게 하기')));
+          // 매뉴얼이 있으면 표시, 없으면 단추 하나로만 말한다.
+          d.manuals[f] ? h('span', { class: 'dom-manual is-on' }, '매뉴얼 ✓')
+            : h('button', { class: 'chip', 'data-action': 'dom-manual', 'data-field': f, disabled: !writer.who || !!writer.why, title: writer.why ?? '' }, '매뉴얼 쓰게 하기')));
     })),
-    h('p', { class: 'sub' }, '단추는 서류를 만든다. 결정은 서류에서 한다.'));
+    boardHintSeen() ? null : h('p', { class: 'sub' }, '단추는 서류를 만든다. 결정은 서류에서 한다.'));
 }
 
 function moveView(view: View): HTMLElement {
@@ -590,9 +606,10 @@ export function domesticPanel(view: View): HTMLElement | null {
   if (!g.dom) return null;
   const du = domUi(view.ui);
   const tabs: { id: DomUi['tab']; label: string; show: boolean }[] = [
-    { id: 'workshop', label: '공방', show: true },
-    { id: 'plan', label: '설계도', show: true },
-    { id: 'board', label: '지식 현황판', show: true },
+    // 이름은 화면 종류가 아니라 하려는 일로 부른다(사용자 2026-10-11).
+    { id: 'workshop', label: '만들기', show: true },
+    { id: 'plan', label: '기술 되살리기', show: true },
+    { id: 'board', label: '사람 키우기', show: true },
     { id: 'move', label: '칸 순서', show: moveOpen(g).ok },
   ];
   const tab = tabs.find(t => t.id === du.tab && t.show) ? du.tab : 'plan';
@@ -799,6 +816,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   if (!g0.dom) return true;
   const d0 = g0.dom;
   let why: string | null = null;
+  if (action === 'dom-apprentice' || action === 'dom-manual' || (action === 'dom-tab' && du.tab === 'board' && data.tab !== 'board')) noteBoardHint();
   switch (action) {
     case 'dom-tab':
       ui.panel = 'dom';

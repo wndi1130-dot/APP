@@ -1,10 +1,10 @@
 import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
-import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, vibrateOn } from './fx';
+import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, slipItems, vibrateOn } from './fx';
 import { fxPlay } from './fxplay';
 import { departInput, platformSheet, setDepartTap, departTapOn } from './depart';
-import type { Fx } from './fx';
+import type { Fx, FxSnap } from './fx';
 import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
 import { homeScreen, stackCount } from './home';
@@ -152,7 +152,18 @@ export function renderApp(view: View): HTMLElement {
     debugOverlay(view),
     platformSheet(view),
     ui.toast ? toastEl(ui.toast, ui.toastKind ?? 'info') : null,
+    ui.fx && !panel && ui.slipOff !== ui.fx.id ? slipEl(ui.fx, !!sheet || screen !== 'home') : null, // 창이 떠 있으면 가리지 않게 띄우지 않는다
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
+}
+
+/** 바뀐 것 쪽지: 방금 한 선택이 바꾼 것을 한 줄에 모아 보인다. 누르면 바로 사라진다.
+ *  서류나 창이 떠 있으면 아래쪽 단추를 가리지 않게 위 띠 바로 아래에 뜬다. */
+function slipEl(fx: Fx, top: boolean): HTMLElement | null {
+  const { items, more } = slipItems(fx);
+  if (items.length === 0) return null;
+  return h('div', { class: cx('slip', top && 'slip--top'), role: 'status', 'data-action': 'slip-close', 'data-anim': `slip-${fx.id}` },
+    items.map(it => h('span', { class: cx('slip__item', it.up ? 'is-up' : 'is-down') }, it.label, h('b', { class: 'num' }, it.text))),
+    more ? h('span', { class: 'slip__more' }, `외 ${more}`) : null);
 }
 
 /** 알림 쪽지. 경고는 호박색이고 눌러 닫는다(notice.ts). */
@@ -390,10 +401,24 @@ export function startApp(root: HTMLElement): void {
     focusForTopCard();
   }
 
+  /** 서류 고르기가 아닌 행동(정차, 거래, 집단 행동)이 바꾼 것도 쪽지로 모아 보인다. 날아가는 꼬리표는 없다. */
+  function slipAfter(before: FxSnap): void {
+    fxOrigin = null;
+    showFx(fxDiff(before, g));
+  }
+  /** 표결이 바꾼 것은 개표가 끝난 뒤에 보인다(결과를 먼저 흘리지 않는다). */
+  let afterCount: Fx | null = null;
+  function flushCount(): void {
+    if (!afterCount) return;
+    fxOrigin = null;
+    showFx(afterCount);
+    afterCount = null;
+  }
+
   function startCount(): void {
     const result = g.council?.result;
     clearTimeout(countTimer);
-    if (!result || result.flips.length === 0 || matchMedia('(prefers-reduced-motion: reduce)').matches) { ui.count = null; return; }
+    if (!result || result.flips.length === 0 || matchMedia('(prefers-reduced-motion: reduce)').matches) { ui.count = null; flushCount(); return; }
     // 찬성·반대가 먼저 앉고 미정이 하나씩 갈린다. 아직 뒤집힐 수 있는 마지막 몇 표는 느리게, 정해지면 남은 돌을 한꺼번에(count_pace.ts).
     const plan = countSchedule(result, noiseStage(g.tension), g.session);
     ui.count = 0;
@@ -403,6 +428,7 @@ export function startApp(root: HTMLElement): void {
         if (ui.count === null) return;
         const shown = plan[i][1];
         ui.count = shown >= result.flips.length ? null : shown;
+        if (ui.count === null) flushCount();
         render();
         next(i + 1);
       }, plan[i][0]);
@@ -459,10 +485,13 @@ export function startApp(root: HTMLElement): void {
         setDepartTap(!departTapOn());
         toast(departTapOn() ? '출발 레버를 두 번 눌러 출발한다.' : '출발 레버를 아래로 당겨 내려 출발한다.');
         return render();
-      case 'emergency':
+      case 'emergency': {
+        const before = fxSnap(g);
         step({ a: 'emergency', d: {} });
+        slipAfter(before);
         if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; ui.panel = null; }
         return render();
+      }
       case 'person':
         ui.person = data.name || null;
         return render();
@@ -484,9 +513,12 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'stop-set':
-      case 'stop-go':
+      case 'stop-go': {
+        const before = fxSnap(g);
         step({ a: action, d: plainData(data) });
-        return;
+        slipAfter(before);
+        return render();
+      }
       case 'stop-seen':
         ui.stopSeen = true;
         if (stackCount(g, ui) === 0) ui.cardOpen = false; else focusForTopCard();
@@ -496,7 +528,10 @@ export function startApp(root: HTMLElement): void {
         ui.carPop = ui.carPop === id ? null : id;
         ui.panel = null;
         ui.spaceOpen = false;
-        return render();
+        render();
+        // 화살표로 옆 칸에 넘어갔으면 그 칸이 보이게 열차를 민다.
+        if (data.nav) root.querySelector('.carpop')?.closest('.slot')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+        return;
       }
       case 'space-tab':
         ui.spaceOpen = !ui.spaceOpen;
@@ -540,7 +575,9 @@ export function startApp(root: HTMLElement): void {
         const c = data.comm as Comm;
         const tool = data.tool;
         if (tool === 'open') { ui.dealOpen = c; ui.cutPick = null; return render(); }
+        const before = fxSnap(g);
         const text = step({ a: 'deal', d: plainData(data) });
+        slipAfter(before);
         if (text) toast(text);
         return render();
       }
@@ -549,7 +586,9 @@ export function startApp(root: HTMLElement): void {
         const index = Number(data.index);
         const isCut = !data.cut && openConditions(g, c)[index]?.kind === 'cut';
         if (isCut) { ui.cutPick = index; return render(); }
+        const before = fxSnap(g);
         const text = step({ a: 'deal-cond', d: plainData(data) });
+        slipAfter(before);
         ui.dealOpen = null;
         ui.cutPick = null;
         if (text) toast(text);
@@ -562,7 +601,11 @@ export function startApp(root: HTMLElement): void {
       case 'vote':
       case 'decree':
         if (!currentAgenda(g)) return;
-        step({ a: action, d: {} });
+        {
+          const before = fxSnap(g);
+          step({ a: action, d: {} });
+          afterCount = fxDiff(before, g);
+        }
         ui.selComm = null;
         ui.dealOpen = null;
         startCount();
@@ -570,6 +613,7 @@ export function startApp(root: HTMLElement): void {
       case 'skip-count':
         ui.count = null;
         clearTimeout(countTimer);
+        flushCount();
         return render();
       case 'space': {
         const before = fxSnap(g);
@@ -578,12 +622,16 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'comm-act': {
+        const before = fxSnap(g);
         const why = step({ a: 'comm-act', d: plainData(data) });
-        if (why) toast(why);
+        if (why) toast(why); else slipAfter(before);
         return render();
       }
       case 'tip': // 폰엔 title 툴팁이 없어, 설명 글자를 탭하면 쪽지로 띄운다(내정 시간 측정은 domesticOp가 세지 않는다)
         if (data.tip) toast(data.tip, 'info', 5000);
+        return render();
+      case 'slip-close':
+        ui.slipOff = ui.fx?.id;
         return render();
       case 'toast-close':
         clearTimeout(toastTimer);

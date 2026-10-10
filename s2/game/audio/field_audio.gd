@@ -13,12 +13,14 @@ extends Node3D
 ##   train_idle the waiting engine, placed on the train
 ##   whistle    departure
 ##   pen        the pen stroke when '떠난다' is pressed
+##   radio_hiss the set hissing before the driver speaks (the dead do not hear it)
+##   radio      the call itself, where the chief stands; an urgent one is louder
 ## While the depart note is up (sound_music 5): the horde bed holds low where
 ## it was, moans and steps only fade out, wind and the engine go on; '기다린다'
 ## comes back in 0.3 s; '떠난다' is impact, pen, a gap, then the whistle.
 ## Buses: Master and SFX. Indoor gunfire's deafness (field 8.2) ducks SFX.
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen", "radio_hiss", "radio"]
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -243,6 +245,17 @@ func horde_started() -> void:
 	if birds_t <= 0.0 and has("birds"):
 		birds_t = 90.0
 		_one_shot("birds", game.player.position + Vector3(0, 0, -20), 0.7, 1.0)
+
+
+## The radio on the chief (decisions 032): "hiss" before a call, then the call;
+## an urgent one (a horde coming in, time to leave) is the loudest.
+const RADIO_LOUD: Dictionary = {"hiss": 0.35, "call": 0.6, "urgent": 1.0}
+
+
+func radio(kind: String) -> void:
+	var group := "radio_hiss" if kind == "hiss" else "radio"
+	played.append(group)
+	_one_shot(group, game.player.position, float(RADIO_LOUD.get(kind, 0.6)), 1.0)
 
 
 ## A sound the dead can hear is also one the player hears (field make_sound).

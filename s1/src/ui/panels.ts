@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, promiseWhen, relStage, relationLine, seats, situation,
+  COMMS, COMM_NAME, P, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, forecast, promiseWhen, relStage, relationLine, seats, situation,
 } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, raw } from './dom';
@@ -7,6 +7,7 @@ import { icon } from './icons';
 import { TIP, fmt, signed } from './common';
 import { bar, tip } from './widgets';
 import { sharePcts } from './share';
+import { runway } from './hud';
 import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
@@ -104,14 +105,41 @@ function reproSection(): HTMLElement {
       h('textarea', { class: 'dom-export__text', readonly: true, rows: 5 }, raw(reproText()))));
 }
 
+/** 정산 창 머리에 적는 내 선택의 줄 수 */
+export const RECAP_ROWS = 4;
+const RECAP_KEYS = [['trust', '신임'], ['tension', '긴장'], ['coal', '석탄'], ['food', '식량'], ['med', '의약품'], ['lux', '사치품']] as const;
+
+/** 방금 정산한 구간에 내가 한 일과 그 결과(사용자 2026-10-11: "내가 이렇게 선택해서 열차가 이렇게 바뀌었구나").
+ *  까닭 기록(meterLog, resLog)에서 그 구간의 줄을 일의 이름으로 묶는다. 정산 자체는 뺀다. 최근 RECAP_ROWS개. */
+export function segRecap(g: Game): { label: string; parts: string[] }[] {
+  const logs: ({ seg: number; label: string } & Partial<Record<(typeof RECAP_KEYS)[number][0], number>>)[] = [...(g.meterLog ?? []), ...(g.resLog ?? [])];
+  const settled = logs.filter(r => r.label === '구간 정산').map(r => r.seg);
+  if (settled.length === 0) return [];
+  const seg = Math.max(...settled);
+  const sums = new Map<string, Record<string, number>>();
+  for (const r of logs) {
+    if (r.seg !== seg || r.label === '구간 정산') continue;
+    const sum = sums.get(r.label) ?? {};
+    for (const [k] of RECAP_KEYS) sum[k] = (sum[k] ?? 0) + (r[k] ?? 0);
+    sums.set(r.label, sum);
+  }
+  return [...sums].map(([label, sum]) => ({ label, parts: RECAP_KEYS.filter(([k]) => sum[k]).map(([k, name]) => `${name} ${signed(sum[k])}`) }))
+    .filter(r => r.parts.length > 0).slice(-RECAP_ROWS);
+}
+
 function settlePanel(view: View): HTMLElement | null {
   const { g } = view;
   const s = g.lastSettle;
   if (!s) return null;
   const rel = COMMS.filter(c => Math.round(s.rel[c]) !== 0);
+  const recap = segRecap(g);
   return h('div', { class: 'settle', role: 'dialog' },
     h('div', { class: 'drop__head' }, h('b', null, `${g.seg}구간 정산`),
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
+    recap.length ? h('p', { class: 'recap__title sub' }, '이번 구간에 내가 한 일') : null,
+    recap.length ? h('ul', { class: 'recap' }, recap.map(r => h('li', null,
+      h('span', { class: 'recap__label' }, r.label), h('span', { class: 'recap__arrow', 'aria-hidden': 'true' }, '→'), h('b', { class: 'num' }, r.parts.join(' · '))))) : null,
+    recap.length ? h('p', { class: 'recap__title sub' }, '구간이 가져간 것') : null,
     h('div', { class: 'settle__res num' },
       h('span', null, icon('coal'), signed(s.coal)), h('span', null, icon('food'), signed(s.food)), h('span', null, icon('med'), signed(s.med)),
       h('span', null, icon('trust'), `신임 ${signed(s.trust)}`), h('span', null, icon('tension'), `긴장 ${signed(s.tension)}`)),
@@ -163,9 +191,64 @@ function meterPanel(view: View, which: 'trust' | 'tension'): HTMLElement {
       : h('p', { class: 'sub' }, `아직 ${name}이 바뀐 일이 없다.`));
 }
 
+export type ResKey = 'coal' | 'food' | 'med' | 'lux';
+const RES_NAME: Record<ResKey, string> = { coal: '석탄', food: '식량', med: '의약품', lux: '사치품' };
+/** 자원 까닭 창의 묶음마다 보일 줄 수 */
+export const RES_ROWS = 4;
+
+/** 이번 구간에 그 자원이 어디에 얼마 드나(정차 제외). 칸마다의 난방·배급과 운행은 판에서 바로 읽고,
+ *  법·기술·재난·내정이 더하고 빼는 몫은 예고 합계와의 차이로 '그 밖'에 모은다. 큰 것부터. */
+export function resUse(g: Game, key: 'coal' | 'food'): { total: number; rows: { label: string; v: number }[] } {
+  const total = forecast(g)[key];
+  const rows = COMMS.map(c => ({
+    label: `${COMM_NAME[c]} ${key === 'coal' ? '난방' : '배급'}`,
+    v: key === 'coal' ? ((g.comms[c].heat * g.comms[c].pop) / 40) * P.coalHeatPerLever : g.comms[c].pop * g.comms[c].ration * P.foodPerPersonLever,
+  }));
+  if (key === 'coal') rows.push({ label: g.inStrike ? '서 있는 기관' : '기관 운행', v: g.inStrike ? P.coalStrike : P.coalRun });
+  const rest = total - rows.reduce((sum, r) => sum + r.v, 0);
+  const shown = rows.filter(r => Math.round(r.v * 10) !== 0).sort((a, b) => b.v - a.v);
+  if (Math.round(rest * 10) !== 0) shown.push({ label: '그 밖(법, 기술, 재난, 내정)', v: rest });
+  return { total, rows: shown };
+}
+
+/** 그 자원이 최근에 준 일과 는 일: 최근 것부터 RES_ROWS줄씩. */
+export function resRows(g: Game, key: ResKey): { out: { seg: number; label: string; v: number }[]; into: { seg: number; label: string; v: number }[] } {
+  const all = (g.resLog ?? []).filter(r => r[key] !== 0).map(r => ({ seg: r.seg, label: r.label, v: r[key] })).reverse();
+  return { out: all.filter(r => r.v < 0).slice(0, RES_ROWS), into: all.filter(r => r.v > 0).slice(0, RES_ROWS) };
+}
+
+/** 자원 까닭 창: 합계 → 어디에 얼마(이번 구간) → 최근에 준 일(붉게) → 최근에 는 일. */
+function resPanel(view: View, key: ResKey): HTMLElement {
+  const { g } = view;
+  const name = RES_NAME[key];
+  const use = key === 'coal' || key === 'food' ? resUse(g, key) : null;
+  const left = use ? runway(g[key], -use.total) : null;
+  const { out, into } = resRows(g, key);
+  const one = (n: number) => (Math.round(n * 10) / 10).toString().replace('-', '−');
+  const list = (title: string, rows: { seg: number; label: string; v: number }[], red: boolean) => (rows.length ? [
+    h('p', { class: 'why__title sub' }, title),
+    h('ol', { class: 'why' }, rows.map(r => h('li', { class: 'why__row' },
+      h('span', { class: 'why__seg num' }, `${r.seg}구간`), h('span', { class: 'why__label' }, r.label),
+      h('b', { class: cx('num', red && 'is-red') }, signed(r.v))))),
+  ] : []);
+  return h('div', { class: 'drop drop--why', role: 'dialog', 'aria-label': `${name}이 드는 곳과 바뀐 까닭` },
+    h('div', { class: 'drop__head' },
+      icon(key), h('b', null, `${name} ${fmt(g[key])}`),
+      use ? h('span', { class: 'sub num' }, `이번 구간 −${one(use.total)}${left === null ? '' : left === 0 ? ' · 이번 구간에 바닥' : ` · ${left}구간 뒤 바닥`}`) : null,
+      h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
+    use ? h('p', { class: 'why__title sub' }, '이번 구간에 드는 곳') : null,
+    use ? h('ol', { class: 'why why--use' }, use.rows.map(r => h('li', { class: 'why__row' },
+      h('span', { class: 'why__label' }, r.label), bar(Math.max(0, (r.v / Math.max(1, use.total)) * 100), '--ink-3'),
+      h('b', { class: 'num' }, r.v < 0 ? `+${one(-r.v)}` : `−${one(r.v)}`)))) : null,
+    list('최근에 준 일', out, true),
+    list('최근에 는 일', into, false),
+    !use && out.length + into.length === 0 ? h('p', { class: 'sub' }, `아직 ${name}이 바뀐 일이 없다.`) : null);
+}
+
 export function overlay(view: View): HTMLElement | null {
   const { ui } = view;
   if (ui.panel === 'why-trust' || ui.panel === 'why-tension') return meterPanel(view, ui.panel === 'why-trust' ? 'trust' : 'tension');
+  if (ui.panel === 'why-coal' || ui.panel === 'why-food' || ui.panel === 'why-med' || ui.panel === 'why-lux') return resPanel(view, ui.panel.slice(4) as ResKey);
   if (ui.panel === 'unrest' || ui.panel === 'support') return factionPanel(view);
   if (ui.panel === 'journal') return journalPanel(view);
   if (ui.panel === 'menu') return menuPanel(view);
