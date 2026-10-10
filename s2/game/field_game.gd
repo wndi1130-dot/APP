@@ -22,6 +22,7 @@ const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
+const SnowTracks = preload("res://game/sim/snow_tracks.gd")
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
@@ -150,6 +151,10 @@ var fx_light: Dictionary = {}
 ## Lying snow of this stop and the game minute it was last advanced to.
 var snow_cover: SnowCover = SnowCover.new()
 var snow_at_min: float = 0.0
+## Footprints in the lying snow (weather_fx 15장), and the cell each walker was
+## last seen in ("p<instance id>" or "z<id>" -> cell index). Picture only.
+var snow_tracks: SnowTracks
+var track_last: Dictionary = {}
 ## Warm light (weather_fx 12장): fixed lights that are on, their cells, and the
 ## two real lights (the chief's lantern and the firebox).
 var lamp_key: String = "-"
@@ -223,6 +228,8 @@ func _update_snow() -> void:
 	if now - snow_at_min < 1.0:
 		return
 	snow_cover.advance(now - snow_at_min, weather.kinds, weather.ambient_c)
+	if snow_tracks != null:
+		snow_tracks.refill(now - snow_at_min, SnowCover.rate_cm_h(weather.kinds, weather.ambient_c))
 	snow_at_min = now
 	var p := FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, now / 60.0, snow_cover.cover())
 	if absf(float(p["fx_snow"]) - float(fx_params["fx_snow"])) < 0.002:
@@ -294,6 +301,35 @@ func _update_lantern(delta: float) -> void:
 	lantern.light_energy = float(player.lamp.get("strength", 1.0)) * (1.0 - 0.3 * lamp_pulse)
 	var night := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
 	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night))
+
+
+## Whoever crossed into a new outdoor ground cell leaves a mark: people (deeper
+## when running, deepest where one went down) and the dead alike. Nothing reads
+## the marks back; falling snow fills them (_update_snow).
+func _mark_tracks() -> void:
+	if snow_tracks == null:
+		snow_tracks = SnowTracks.new(grid.width * grid.height)
+	for p in people:
+		if not p.is_alive():
+			continue
+		_mark_step("p%d" % p.get_instance_id(), p.position, "drag" if p.downed_marked else ("run" if p.is_running_now() else "walk"))
+	for z in zombies.list:
+		if String(z["state"]) in ["dead", "frozen"]:
+			continue
+		_mark_step("z%d" % int(z["id"]), z["pos"], "walk")
+	view.update_tracks(snow_tracks.take_changed())
+
+
+func _mark_step(who: String, at: Vector3, kind: String) -> void:
+	var cell := FieldGrid.cell_of(at)
+	if level_of(at) != 0 or not grid.inside(cell) or grid.indoor(cell):
+		track_last.erase(who)
+		return
+	var i := grid.index(cell)
+	if int(track_last.get(who, -1)) == i:
+		return
+	track_last[who] = i
+	snow_tracks.press(i, kind)
 
 
 ## Tactical pause fades the world like an old photo (shaders.md 2장); people,
@@ -1334,6 +1370,8 @@ func _refresh_vision() -> void:
 		var key: int = (k + 1) * n + i
 		seen_now[key] = true
 		seen_memory[key] = 1
+	if not ended and not paused:
+		_mark_tracks()
 	view.update_vis(seen_now, seen_memory, lamp_cells(result))
 	view.update_labels(seen_memory, mask_on)
 
