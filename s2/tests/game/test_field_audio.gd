@@ -93,3 +93,16 @@ func test_depart_note_holds_the_mix_and_leave_plays_its_beats_in_order() -> void
 	assert_eq(a.played, ["impact"], "impact at once, the rest follow")
 	await wait_seconds(1.0)
 	assert_eq(a.played, ["impact", "pen", "whistle"])
+
+
+func test_the_shipped_files_load_and_the_two_not_found_yet_stay_silent() -> void:
+	var a = game.audio
+	for g in ["moan", "horde_bed", "gather", "impact", "gun", "step_snow", "wind", "train_idle", "whistle"]:
+		var list: Array = a._load_group(g)
+		assert_gt(list.size(), 0, g)
+		for s in list:
+			assert_gt(s.get_length(), 0.1, g)
+	assert_eq(a._load_group("moan").size(), 8)
+	for g in ["birds", "pen"]:
+		assert_eq(a._load_group(g).size(), 0, g)
+
