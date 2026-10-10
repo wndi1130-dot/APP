@@ -576,6 +576,52 @@ func icons() -> Array:
 	return out.slice(0, 5)
 
 
+# The icons with their words (user, build 47: 'icons like Zomboid; press one and it
+# says what it does to you'). Same order as icons(). Each row: id, short (the two
+# letters on the icon), title (a noun phrase), good (a help or a harm), severe, text.
+func status_notes() -> Array:
+	var out: Array = []
+	for icon: Dictionary in icons():
+		var severe: bool = bool(icon["severe"])
+		var row := {"id": icon["id"], "short": "", "title": "", "good": false, "severe": severe, "text": ""}
+		match String(icon["id"]):
+			"infection":
+				row["short"] = "감염"
+				if infection == "bite":
+					row["title"] = "물린 상처"
+					row["text"] = "감염 창이 %d분 %02d초 남았다. 닫히기 전에 정해야 한다" % [int(window_left) / 60, int(window_left) % 60] if window_left > 0.0 else "감염 창이 닫혔다"
+				else:
+					row["title"] = "긁힌 상처"
+					row["text"] = "감염됐는지 아직 모른다. 창이 끝나야 안다"
+			"bleed":
+				row["short"] = "출혈"
+				if severe:
+					row["title"] = "심한 출혈"
+					row["text"] = "걸음과 휘두르기가 느리고 조준이 흔들린다. 2분쯤 뒤 쓰러진다. 피 냄새가 퍼진다"
+				else:
+					row["title"] = "가벼운 출혈"
+					row["text"] = "뛰지 않으면 4분쯤 뒤 저절로 멎는다. 피 냄새가 퍼진다"
+			"fracture":
+				row["short"] = "골절"
+				if leg_fracture:
+					var splint_on: bool = fractures_splinted("leg")
+					row["title"] = "부목 댄 다리 골절" if splint_on else "다리 골절"
+					row["text"] = "절뚝이며 걷는다. 뛰지 못한다" if splint_on else "기어간다. 뛰지 못한다. 부목을 대면 절뚝이며 걷는다"
+				else:
+					row["title"] = "팔 골절"
+					row["text"] = "양손 무기를 못 쓴다. 재장전과 손일이 느리고 조준이 흔들린다"
+			"cold":
+				row["short"] = "추움"
+				row["title"] = "추위"
+				row["text"] = "걷기와 휘두르기가 조금 느리고 재장전과 손일이 느리다. 불 곁이나 실내에서 풀린다"
+			"exhaustion":
+				row["short"] = "지침"
+				row["title"] = "심한 탈진" if severe else "탈진"
+				row["text"] = "뛰지 못한다. 휘두르기가 느리고 조준이 흔들린다. 실내에서 쉬면 풀린다" if severe else "휘두르기와 손일이 느리고 조준이 천천히 줄어든다. 실내에서 쉬면 풀린다"
+		out.append(row)
+	return out
+
+
 # One short word for the roster screen (body_injury 4.2: '느림', '손이 떨림').
 func status_words() -> String:
 	if dead:
