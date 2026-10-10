@@ -10,6 +10,8 @@ const Carry = preload("res://game/sim/carry.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const Treatment = preload("res://game/sim/treatment.gd")
+const BodyState = preload("res://game/sim/body_state.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -29,6 +31,28 @@ const DOUBLE_TAP_MS: int = 300
 ## under the run and crouch keys; a touch within STICK_CATCH radii of it takes the stick.
 const STICK_HOME_MM := Vector2(21.0, 14.5)
 const STICK_CATCH: float = 2.0
+## The body picture slows the field, it does not stop it (body_injury 4.6).
+const BODY_SLOW: float = 0.3
+## The portrait sits top left under the pause key and the clock.
+const PORTRAIT_AT := Vector2(16.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+const PORTRAIT_W: float = 290.0
+## State icons sit in a row right of the blood key: the two most urgent big,
+## the rest small (body_injury 4 '둘까지만 크게').
+## Narrow enough that all five stay on the left half of a 1280-wide screen.
+const STATUS_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+const STATUS_BIG := Vector2(60.0, 56.0)
+const STATUS_SMALL := Vector2(48.0, 44.0)
+const STATUS_SLOTS: int = 5
+const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
+## Where the six parts sit in the body picture (your left on the left, like a mirror).
+const BODY_LAYOUT: Dictionary = {
+	"head_neck": Rect2(109, 0, 100, 76),
+	"arm_left": Rect2(0, 84, 100, 128),
+	"torso": Rect2(109, 84, 100, 128),
+	"arm_right": Rect2(218, 84, 100, 128),
+	"leg_left": Rect2(56, 220, 100, 110),
+	"leg_right": Rect2(162, 220, 100, 110),
+}
 const TOAST_NORMAL := "normal"      # play and block notes (ui_states N1)
 const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap to close (N2)
 const TOAST_S: float = 3.5
@@ -104,6 +128,14 @@ var debug_label: Label
 var modal: Control
 var modal_paused_before: bool = false
 var modal_open: bool = false
+var modal_slows: bool = false      # the panel up slows the field instead of stopping it
+var status_pads: Array = []        # the state icons, most urgent first
+var status_rows: Array = []        # what each shows now (body.status_notes())
+var bleed_hint_done: bool = false  # the one-time line that points at the blood key
+var body_shown = null              # whose body picture is (or was last) up
+var body_part: String = ""
+var body_parts: Dictionary = {}    # part -> its button in the picture
+var body_buttons: Array = []       # [{wound, aid, full}] of the rows shown
 var fps_t: float = 0.0
 var frame_ms: float = 0.0
 
@@ -275,17 +307,25 @@ func _build_portrait() -> void:
 	portrait_style = portrait.get_theme_stylebox("panel").duplicate()
 	portrait_style.set_border_width_all(0)
 	portrait.add_theme_stylebox_override("panel", portrait_style)
-	portrait.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	portrait.position = Vector2(16, -178)
-	portrait.custom_minimum_size = Vector2(290, 160)
+	# Top left, under the clock: the bottom-left corner is the fixed stick's
+	# (it sat under the thumb there). A tap on it opens the body picture; the
+	# HUD hit-tests it itself, like the pads.
+	portrait.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	portrait.position = PORTRAIT_AT
+	portrait.custom_minimum_size = Vector2(PORTRAIT_W, 0)
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 4)
+	v.add_theme_constant_override("separation", 0)
 	portrait.add_child(v)
+	# Name and state share a line: the panel must end above the run and crouch keys.
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 10)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(top)
 	name_label = _label("열차장", 24)
-	v.add_child(name_label)
+	top.add_child(name_label)
 	status_label = _label("멀쩡함", 18, DIM)
-	v.add_child(status_label)
+	top.add_child(status_label)
 	weapon_label = _label("", 18, INK)
 	v.add_child(weapon_label)
 	bag_label = _label("가방", 16, DIM)
@@ -338,9 +378,18 @@ func _build_thumbs() -> void:
 	_lit_style(crouch_button, BRASS)
 	# A blood drop on the portrait's corner while you bleed: one press stops the
 	# worst of it and binds it (body_injury 4.6, 0f95fc0). Nothing more.
-	blood_button = _pad("피", Vector2(250, -186), Vector2(64, 64), 26, Control.PRESET_BOTTOM_LEFT)
+	# It sits at the portrait's right edge, clear of the stick.
+	blood_button = _pad("지혈", PORTRAIT_AT + Vector2(PORTRAIT_W + 8.0, 0), Vector2(84, 64), 24, Control.PRESET_TOP_LEFT)
 	blood_button.add_theme_color_override("font_color", WARN)
 	blood_button.visible = false
+	# State icons (user, build 47): press one and it says what it does to you.
+	var sx := 0.0
+	for i in STATUS_SLOTS:
+		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
+		var pad := _pad("", STATUS_AT + Vector2(sx, 0), size, 20 if i < 2 else 15, Control.PRESET_TOP_LEFT)
+		pad.visible = false
+		status_pads.append(pad)
+		sx += size.x + 4.0
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
 		b.toggle_mode = true
 	# The bag sits on the left, above the fixed stick's catch ring. There is no
@@ -360,8 +409,9 @@ func _build_thumbs() -> void:
 
 func _build_toasts() -> void:
 	toast_box = VBoxContainer.new()
-	toast_box.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	toast_box.position = Vector2(18, -236)
+	# Right of the portrait and the blood key, under the state icons.
+	toast_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	toast_box.position = STATUS_AT + Vector2(0, STATUS_BIG.y + 8.0)
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast_box)
 
@@ -453,6 +503,11 @@ func tick(delta: float) -> void:
 	attack_button.button_pressed = fighting(p)
 	_tick_primary(p)
 	blood_button.visible = p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
+	# The first time it shows, one line points at it (build 47: it was never found).
+	if blood_button.visible and not bleed_hint_done:
+		bleed_hint_done = true
+		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
+	_tick_status(p)
 	pause_button.text = "계속" if game.paused else "멈춤"
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
@@ -468,6 +523,22 @@ func _drop_stale_person() -> void:
 		melee_holding = false
 	if aim_target != null and not (aim_target is Dictionary) and not game.combat.hostile(aim_target):
 		aim_target = null
+
+
+func _tick_status(p) -> void:
+	status_rows = p.body.status_notes()
+	for i in status_pads.size():
+		var pad: Button = status_pads[i]
+		pad.visible = i < status_rows.size()
+		if pad.visible:
+			var row: Dictionary = status_rows[i]
+			pad.text = String(row["short"])
+			pad.add_theme_color_override("font_color", BRASS if row["good"] else (WARN if row["severe"] else INK))
+
+
+## What a state icon says when pressed: the noun phrase, good or bad, and what it does.
+func status_line(row: Dictionary) -> String:
+	return "%s (%s): %s." % [row["title"], "좋음" if row["good"] else "나쁨", row["text"]]
 
 
 func _tick_portrait(p) -> void:
@@ -708,13 +779,19 @@ func _offer_pick(cb: Callable) -> void:
 
 # ---------------------------------------------------------------- modal panels
 
-func _open_modal(width: float = 640.0) -> VBoxContainer:
+## pauses false: the field goes on at BODY_SLOW under the panel (the body picture).
+func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
 	_close_modal()
 	# Fingers held now will lift under the panel: let go of them first.
 	drop_touch()
-	modal_paused_before = game.paused
-	game.paused = true
+	modal_slows = not pauses
+	if pauses:
+		modal_paused_before = game.paused
+		game.paused = true
+	else:
+		game.slow = BODY_SLOW
 	modal_open = true
+	body_buttons = []
 	modal = Control.new()
 	modal.set_anchors_preset(Control.PRESET_FULL_RECT)
 	modal.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -739,9 +816,116 @@ func _close_modal() -> void:
 	if modal != null:
 		modal.queue_free()
 		modal = null
-		if modal_open:
+		if modal_open and not modal_slows:
 			game.paused = modal_paused_before
+		game.slow = 1.0
+		modal_slows = false
 		modal_open = false
+
+
+## The body picture (body_injury 4.6): six parts, the wounds of the part
+## chosen, and two buttons a wound: first aid (blood only) and full care (every
+## step the tools allow; a step whose tool is missing is named and the run
+## stops there). The most urgent wound comes chosen. While it is open the field
+## runs at BODY_SLOW, it does not stop; pressing a button closes it and the
+## care goes on in the field at its own pace.
+func body_panel(o = null, part: String = "") -> void:
+	var p = game.player
+	if o == null:
+		o = p
+	var v := _open_modal(920.0, false)
+	body_shown = o
+	var urgent: int = o.body.most_urgent()
+	if part == "":
+		part = String(o.body.wounds[urgent]["part"]) if urgent >= 0 else "torso"
+	body_part = part
+	v.add_child(_label("%s · %s" % [o.display_name, o.body.status_words()], 24))
+	var have: Dictionary = game.actions.care_tools(p, o)
+	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0))], 18, DIM))
+	var near: bool = game.actions.in_care_reach(p, o)
+	if not near:
+		v.add_child(_label("가까이 가야 처치할 수 있다.", 18, WARN))
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 18)
+	v.add_child(h)
+	h.add_child(_body_figure(o, part))
+	var right := VBoxContainer.new()
+	right.custom_minimum_size = Vector2(540, 0)
+	right.add_theme_constant_override("separation", 8)
+	h.add_child(right)
+	right.add_child(_label(Treatment.PART_NAMES[part], 22, BRASS))
+	var rows: Array = body_rows(o, part)
+	if rows.is_empty():
+		right.add_child(_label("다친 데가 없다.", 20, DIM))
+	for w: Dictionary in rows:
+		var first: bool = urgent >= 0 and is_same(w, o.body.wounds[urgent])
+		right.add_child(_label(Treatment.wound_text(w) + (" · 가장 급함" if first else ""), 20, WARN if float(w["blood"]) >= BodyState.HEAVY_BLOOD else INK))
+		var full: Array = game.actions.care_plan(p, o, w, Treatment.FULL)
+		var steps := _label(Treatment.steps_text(full), 16, DIM)
+		steps.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		steps.custom_minimum_size = Vector2(520, 0)
+		right.add_child(steps)
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 10)
+		right.add_child(hb)
+		var aid := _button("응급", _care.bind(o, w, Treatment.FIRST_AID), Vector2(150, 60), 20)
+		aid.disabled = not near or Treatment.runnable(game.actions.care_plan(p, o, w, Treatment.FIRST_AID)).is_empty()
+		hb.add_child(aid)
+		var all := _button("정밀", _care.bind(o, w, Treatment.FULL), Vector2(150, 60), 20)
+		all.disabled = not near or Treatment.runnable(full).is_empty()
+		hb.add_child(all)
+		body_buttons.append({"wound": w, "aid": aid, "full": all})
+	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+
+
+## The wounds on a part, the most urgent first.
+func body_rows(o, part: String) -> Array:
+	var rows: Array = []
+	for i in o.body.wounds.size():
+		if o.body.wounds[i]["part"] == part:
+			rows.append([o.body._order_key(i), -i, o.body.wounds[i]])
+	rows.sort_custom(func(a, b): return a[0] > b[0] or (a[0] == b[0] and a[1] > b[1]))
+	return rows.map(func(r): return r[2])
+
+
+## Six parts laid out like a body. A part that bleeds is dark brown (no red,
+## nothing gory); the chosen one has a brass rim.
+func _body_figure(o, chosen: String) -> Control:
+	var fig := Control.new()
+	fig.custom_minimum_size = Vector2(318, 330)
+	body_parts = {}
+	for part: String in BODY_LAYOUT:
+		var r: Rect2 = BODY_LAYOUT[part]
+		var kinds: Array = []
+		var blood := 0.0
+		for w: Dictionary in o.body.wounds:
+			if w["part"] == part:
+				blood += float(w["blood"])
+				var k: String = Treatment.KIND_NAMES[w["kind"]]
+				if not kinds.has(k):
+					kinds.append(k)
+		var text: String = Treatment.PART_NAMES[part]
+		if not kinds.is_empty():
+			text += "\n" + "\n".join(kinds.slice(0, 2)) + ("…" if kinds.size() > 2 else "")
+		var b := _button(text, body_panel.bind(o, part), r.size, 16)
+		b.position = r.position
+		b.size = r.size
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95))
+		sb.set_corner_radius_all(6)
+		sb.set_border_width_all(4 if part == chosen else 0)
+		sb.border_color = BRASS
+		for state in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(state, sb)
+		fig.add_child(b)
+		body_parts[part] = b
+	return fig
+
+
+func _care(o, wound: Dictionary, mode: String) -> void:
+	_close_modal()
+	if not game.actions.treat_wound(game.player, o, wound, mode):
+		toast("지금은 처치할 수 없다.")
 
 
 ## Decision card: the line the leader shouts, and the cost under it (S1a style).
@@ -851,7 +1035,11 @@ func _ally_menu(p) -> void:
 	v.add_child(g)
 	for c in COMMANDS:
 		g.add_child(_button(c[1], _command.bind(p, c[0]), Vector2(150, 64)))
-	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 10)
+	v.add_child(foot)
+	foot.add_child(_button("몸 상태", body_panel.bind(p), Vector2(150, 60)))
+	foot.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
 
 
 func _command(p, cmd: String) -> void:
@@ -1105,6 +1293,10 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(b, pos)
 			return true
+	# The portrait: a tap opens the body picture (on the lift, if it never moved).
+	if portrait.get_global_rect().has_point(pos):
+		fingers[index] = {"kind": "portrait", "start": pos}
+		return true
 	# A ring 4 mm round the run and crouch keys starts nothing: setting the
 	# stick down there must not toggle them, nor plant a stick on their edge.
 	for b in [run_button, crouch_button]:
@@ -1181,6 +1373,9 @@ func finger_up(index: int, pos: Vector2) -> bool:
 				b.pressed.emit()
 		"hand":
 			_release(pos)
+		"portrait":
+			if pos.distance_to(f["start"]) < DRAG_PX and portrait.get_global_rect().has_point(pos):
+				body_panel()
 	return true
 
 
@@ -1324,7 +1519,16 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 	var p = game.player
 	if b == aim_button and primary_melee(p):
 		b = attack_button
+	if status_pads.has(b):
+		var slot: int = status_pads.find(b)
+		if slot < status_rows.size():
+			toast(status_line(status_rows[slot]))
+		return
 	if b == blood_button:
+		# Say what the press does: it was pressed without knowing (build 47).
+		var worst: int = p.body._top_bleeder()
+		if worst >= 0 and p.action == "" and p.can_act():
+			toast("지혈한다: %s." % Treatment.wound_text(p.body.wounds[worst]))
 		game.actions.self_bandage(p)
 	elif b == aim_button:
 		aim_button.button_pressed = true
