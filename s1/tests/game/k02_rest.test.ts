@@ -177,7 +177,8 @@ describe('K02 3 뒤. 정차 명령이 정찰이 약속한 피해를 바꾸지 �
   it('자리 비움은 살아 돌아온 작업조만 세고, 명령에 다친 대상이 약속대로 죽으면 부상 셈을 되돌린다', () => {
     let killed = 0;
     let hurtThenDead = 0;
-    for (let i = 0; i < 120; i += 1) {
+    // 명령이 실패해 다친 대상이 약속대로 죽는 갈래는 드물다(3000판 중 22판, 처음은 177번). 400판이면 4번 밟는다.
+    for (let i = 0; i < 400; i += 1) {
       const { g, name } = crewOrder(`k02-3-away-${i}`, 'regular', PLACES.length - 1);
       const crew = crewNames(g, 'tail', 6);
       const fate = stopRisk(g).fate;
@@ -189,10 +190,14 @@ describe('K02 3 뒤. 정차 명령이 정찰이 약속한 피해를 바꾸지 �
       if (res.notes.some(n => n.startsWith('정찰 약속 밖의 죽음'))) killed += 1;
       if (res.notes.some(n => n.startsWith('정찰 약속 밖의 부상')) && fate.dead.includes(name)) {
         hurtThenDead += 1;
+        // 대상은 약속대로 죽은 것으로만 세고(죽음 목록에 있고 부상 목록에 없다), 명령이 센 부상 하나는 되돌려진다.
+        expect(res.dead).toContain(name);
+        expect(res.injured).not.toContain(name);
         expect(g.injured - injured).toBe(res.injured.length);
       }
     }
     expect(killed).toBeGreaterThan(0);
+    expect(hurtThenDead).toBeGreaterThan(0);
   });
 
   it('명령이 실패해 다친 대상은 부상으로 한 번만 센다', () => {

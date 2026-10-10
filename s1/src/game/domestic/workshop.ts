@@ -161,6 +161,17 @@ export function startFinish(g: Game, id: TechId): boolean {
   return true;
 }
 
+/** 이미 열린 회기에 오른 '배관 추인' 안건을 내린다(취소한 복원의 안건이 남지 않게). 표결이 끝난 회기는 건드리지 않는다.
+ * 지금 고른 안건이었으면 첫 안건으로 돌리고 그 안건에 건 거래를 비운다. 앞쪽 안건이 빠지면 고른 안건이 그대로 가리키게 한 칸 당긴다. */
+function dropPipeAgenda(g: Game): void {
+  const c = g.council;
+  if (!c || c.result) return;
+  const i = c.options.findIndex(o => o.kind === 'motion' && o.motion === 'pipe');
+  if (i < 0) return;
+  c.options.splice(i, 1);
+  if (i === c.idx) { c.idx = 0; c.deals = []; } else if (i < c.idx) c.idx -= 1;
+}
+
 /** 복원 취소: 쓴 부품은 돌아오지 않는다(7.5, 반응을 다시 굴리는 악용을 막는다). 조각은 돌아온다. */
 export function cancelRestore(g: Game): void {
   const d = dom(g);
@@ -176,6 +187,7 @@ export function cancelRestore(g: Game): void {
     d.frags[TECHS[id].branch] += st.defect ? cost.defectFrags : cost.frags;
     d.cores += cost.core;
     delete d.techs[id];
+    if (id === 'e3') dropPipeAgenda(g);
   }
   d.restoring = null;
   journal(g, `${TECHS[id].name} 복원을 멈췄다. 쓴 부품은 돌아오지 않는다.`, 'bad');
@@ -194,7 +206,7 @@ export function techSides(id: TechId, variant?: Variant): { like: Comm[]; dislik
   return { like: def.like, dislike: def.dislike };
 }
 
-function completeRestore(g: Game, id: TechId): void {
+export function completeRestore(g: Game, id: TechId): void {
   const d = dom(g);
   const st = d.techs[id]!;
   d.restoring = null;
@@ -415,7 +427,7 @@ export function runWorkshop(g: Game): { used: number; did: string[] } {
       const spend = Math.min(w, st.need - st.progress);
       st.progress += spend;
       w -= spend;
-      // E3은 추인 전엔 작업을 다 해도 완성되지 않는다(7.3). 추인을 받으면 다음 공방 작업에서 마친다.
+      // E3은 추인 전엔 작업을 다 해도 완성되지 않는다(7.3). 작업을 다 마친 E3는 추인이 나는 그 자리에서 마친다(pipe.ts ratifyPipe).
       if (st.progress >= st.need - 1e-9 && !st.pending) { completeRestore(g, id); did.push(`${TECHS[id].name} 복원`); }
     } else if (task === 'modify' && d.job) {
       const job = d.job;

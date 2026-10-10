@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agendaOptions, cancelRestore, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, D, domesticSettle, elderMult, elderPerson,
   elderTick, escortOptions, fieldMult, freeTeacher, isLawAgenda, knowledgeTick, motionsNow, openCouncil, personById, pipePending, runWorkshop,
-  setEscort, startRestore, techMult, techRelSides, viewCard, workshopState, addCard, MOTIONS, enableDark,
+  setEscort, startRestore, enactLaw, domesticForecast, migrateDomestic, techMult, techRelSides, viewCard, workshopState, addCard, MOTIONS, enableDark,
 } from '../../src/game';
 import type { Comm, Game, Variant } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -502,7 +502,7 @@ describe('E3 배관 추인(7.3)', () => {
     expect(g.journal.some(e => e.text.includes('추인하지 않았다'))).toBe(true);
   });
 
-  it('추인 전엔 작업을 다 해도 완성되지 않고, 추인 뒤 다음 공방 작업에서 마친다', () => {
+  it('추인 전엔 작업을 다 해도 완성되지 않고, 추인을 받는 그 자리에서 마친다', () => {
     const g = pipeGame('pipe-hold', 'b');
     const d = g.dom!;
     const st = d.techs.e3!;
@@ -516,11 +516,48 @@ describe('E3 배관 추인(7.3)', () => {
     for (let i = 0; i < 3; i += 1) runWorkshop(g);
     expect(st.stage).toBe('restoring');
     openAndVote(g, 100);
-    expect(st.stage).toBe('restoring');
-    runWorkshop(g);
+    // 작업을 다 마친 E3는 추인이 나는 그 자리에서 완성된다(다음 공방 작업까지 기다리지 않는다)
     expect(st.stage).toBe('done');
     expect(d.restoring).toBeNull();
     expect(techMult(g, 'e3')).toBeGreaterThan(0);
+    runWorkshop(g);
+    expect(st.stage).toBe('done');
+  });
+
+  it('추인 뒤 첫 정산부터 E3 절감을 받는다: 가결·부결 모두 완성판과 같은 석탄 비용(공동 난방)', () => {
+    const ref = fresh('pipe-coal');
+    ref.dom!.techs.e3 = { stage: 'done', defect: false, progress: 4, need: 4, variant: 'a' };
+    enactLaw(ref, 'common_heating', []);
+    const want = domesticForecast(ref).coal;
+
+    const g = pipeGame('pipe-coal', 'a');
+    enactLaw(g, 'common_heating', []);
+    const st = g.dom!.techs.e3!;
+    st.progress = st.need;
+    const held = domesticForecast(g).coal;
+    expect(held).toBeCloseTo(want + D.e3aHeatCoal);
+    openAndVote(g, 100);
+    expect(st.stage).toBe('done');
+    expect(domesticForecast(g).coal).toBeCloseTo(want);
+
+    // 부결이면 반대(b) 변형이 서서 가 절감은 없다. 그래도 그 자리에서 완성돼 변형 b의 몫이 선다.
+    const f = pipeGame('pipe-coal-fail', 'a');
+    enactLaw(f, 'common_heating', []);
+    const sf = f.dom!.techs.e3!;
+    sf.progress = sf.need;
+    openAndVote(f, -100);
+    expect(sf.variant).toBe('b');
+    expect(sf.stage).toBe('done');
+    expect(f.dom!.restoring).toBeNull();
+  });
+
+  it('작업이 덜 끝난 E3는 추인을 받아도 그 자리에서 완성되지 않는다', () => {
+    const g = pipeGame('pipe-early', 'a');
+    const st = g.dom!.techs.e3!;
+    st.progress = st.need - 1;
+    openAndVote(g, 100);
+    expect(st.stage).toBe('restoring');
+    expect(g.dom!.restoring).toBe('e3');
   });
 
   it('복원이 회기 뒤에 끝나면 추인 결과의 변형으로 끝난다', () => {
@@ -544,13 +581,101 @@ describe('E3 배관 추인(7.3)', () => {
     cancelRestore(g);
     expect(motionsNow(g)).toEqual([]);
     expect(agendaOptions(g).options.some(o => !isLawAgenda(o) && o.motion === 'pipe')).toBe(false);
-    g.council!.idx = i;
-    lean(g, -100);
-    const before = relSnap(g);
-    castVote(g);
+    // 이미 열린 회기의 안건 목록에서도 내려간다(열린 회기가 취소한 안건을 들고 있지 않는다)
+    expect(pipeIndex(g)).toBe(-1);
     expect(g.dom!.techs.e3).toBeUndefined();
     expect(g.dom!.pipeFlip).toBeUndefined();
-    for (const c of COMMS) expect(g.comms[c].rel).toBe(before[c]);
+  });
+
+  it('고른 배관 안건을 취소하면 회기에서 내려가고, 표결해도 배관 결과가 나오지 않는다(공포·관계 그대로)', () => {
+    const g = pipeGame('pipe-cancel-open', 'a');
+    openCouncil(g);
+    g.phase = 'council';
+    const n = g.council!.options.length;
+    g.council!.idx = pipeIndex(g);
+    g.council!.deals = [{ comm: 'tail', tool: 'bribe' } as never];
+    expect(currentAgenda(g)).toMatchObject({ kind: 'motion', motion: 'pipe' });
+    cancelRestore(g);
+    const c = g.council!;
+    expect(c.options.length).toBe(n - 1);
+    expect(pipeIndex(g)).toBe(-1);
+    expect(c.idx).toBe(0);
+    expect(c.deals).toEqual([]);
+    const cur = currentAgenda(g);
+    expect(cur === null || isLawAgenda(cur) || cur.motion !== 'pipe').toBe(true);
+    // 남은 안건이 하나도 없으면 표결은 아무 결과도 내지 않는다
+    c.options = [];
+    c.idx = 0;
+    expect(currentAgenda(g)).toBeNull();
+    const fear = g.fear;
+    const before = relSnap(g);
+    expect(castVote(g)).toBeNull();
+    expect(g.fear).toBe(fear);
+    expect(relSnap(g)).toEqual(before);
+    expect(g.journal.some(e => e.text.includes('추인했다') || e.text.includes('추인하지 않았다'))).toBe(false);
+  });
+
+  it('배관 안건보다 뒤에 있던 안건을 고른 채 취소해도 고른 안건은 그대로 가리킨다', () => {
+    const g = pipeGame('pipe-cancel-after', 'a');
+    openCouncil(g);
+    const i = pipeIndex(g);
+    const opts = g.council!.options;
+    if (i < opts.length - 1) {
+      g.council!.idx = opts.length - 1;
+      const keep = opts[opts.length - 1];
+      cancelRestore(g);
+      expect(g.council!.options[g.council!.idx]).toBe(keep);
+    } else {
+      // 배관 안건이 맨 뒤라면 앞 안건을 고른 채 취소해도 그대로다
+      g.council!.idx = 0;
+      const keep = opts[0];
+      cancelRestore(g);
+      expect(g.council!.options[g.council!.idx]).toBe(keep);
+    }
+  });
+
+  it('이미 표결을 마친 회기는 취소해도 건드리지 않는다', () => {
+    const g = pipeGame('pipe-cancel-done', 'a');
+    openCouncil(g);
+    g.phase = 'council';
+    g.council!.idx = pipeIndex(g);
+    lean(g, 100);
+    castVote(g);
+    const n = g.council!.options.length;
+    cancelRestore(g);
+    expect(g.council!.options.length).toBe(n);
+    expect(g.council!.result).not.toBeNull();
+  });
+
+  it('옛 저장의 복원 중 E3(pending 없음, 추인 받은 적 없음)는 불러오면 추인을 기다린다', () => {
+    const g = pipeGame('pipe-old', 'a');
+    const st = g.dom!.techs.e3!;
+    delete st.pending;
+    st.progress = st.need;
+    expect(g.dom!.pipeMoved).toBeUndefined();
+    migrateDomestic(g);
+    expect(st.pending).toBe(true);
+    runWorkshop(g);
+    expect(st.stage).toBe('restoring');
+    expect(g.dom!.restoring).toBe('e3');
+    expect(pipePending(g)).toBe('a');
+    const notes: string[] = [];
+    domesticSettle(g, notes);
+    expect(st.stage).toBe('restoring');
+    expect(pipePending(g)).toBe('a');
+  });
+
+  it('옛 저장 이송은 추인을 받은 판(pipeMoved)과 이미 대기 값이 있는 판은 건드리지 않는다', () => {
+    const g = pipeGame('pipe-old2', 'a');
+    const st = g.dom!.techs.e3!;
+    delete st.pending;
+    g.dom!.pipeMoved = 'a';
+    migrateDomestic(g);
+    expect(st.pending).toBeUndefined();
+    const h = pipeGame('pipe-old3', 'a');
+    h.dom!.techs.e3!.pending = false;
+    migrateDomestic(h);
+    expect(h.dom!.techs.e3!.pending).toBe(false);
   });
 
   it('부결로 반대 변형이 된 뒤엔 취소하고 다시 시작해도 그 변형으로 고정되고, 다시 표결하지 않는다', () => {

@@ -257,7 +257,8 @@ export function createS1cGame(seed = 's1c'): Game {
   return g;
 }
 
-/** 예전 저장 판에 없던 칸을 채운다(app.ts load에서 부른다). */
+/** 예전 저장 판에 없던 칸을 채운다(app.ts load에서 부른다).
+ * 옛 S1c 저장에는 늙은 장인 아크(d.elder)를 만들지 않는다(시제품 저장 호환은 새 판 기준). */
 export function migrateDomestic(g: Game): void {
   const d = g.dom;
   if (!d) return;
@@ -276,6 +277,9 @@ export function migrateDomestic(g: Game): void {
   d.stats.repairs ??= 0;
   d.stats.buried ??= 0;
   d.stats.moves ??= 0;
+  // 배관 추인(7.3) 전에 저장한 복원 중 E3: 추인을 받은 적 없으면(pipeMoved 없음) 추인을 기다리게 한다. 안 그러면 추인 없이 완성된다.
+  const e3 = d.techs.e3;
+  if (e3 && e3.stage === 'restoring' && e3.variant && e3.pending === undefined && d.pipeMoved === undefined) e3.pending = true;
   // 옛 '그 칸을 닫는다'(격리)는 뺐다(16.5). 그 판의 환자는 '따로 눕힌다'로 이어 간다.
   for (const t of d.typhus as (DomState['typhus'][number] & { quarantined?: boolean })[]) {
     t.apart ??= t.quarantined ?? false;
