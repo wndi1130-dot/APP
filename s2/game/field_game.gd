@@ -21,6 +21,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
+const LampLight = preload("res://game/sim/lamp_light.gd")
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
@@ -58,6 +59,7 @@ const FADE_TIME: float = 0.25           # seconds for the pause fade to come and
 const NIGHT_SUN_MIN: float = 0.1
 const LAMP_OFF_SIGHT: float = 0.3      # how far the eye reaches at night with the lanterns out (0.55 with them)
 const NIGHT_AMBIENT_MIN: float = 0.2
+const LAMP_GAIN_DAY: float = 0.25       # how much of the lamp light shows on the ground by day
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
@@ -148,6 +150,13 @@ var fx_light: Dictionary = {}
 ## Lying snow of this stop and the game minute it was last advanced to.
 var snow_cover: SnowCover = SnowCover.new()
 var snow_at_min: float = 0.0
+## Warm light (weather_fx 12장): fixed lights that are on, their cells, and the
+## two real lights (the chief's lantern and the firebox).
+var lamp_key: String = "-"
+var lamp_fixed: Dictionary = {}
+var lantern: OmniLight3D
+var firebox: OmniLight3D
+var lamp_pulse: float = 0.0
 var fx_light_night: Dictionary = {}
 
 
@@ -222,6 +231,71 @@ func _update_snow() -> void:
 	FxState.apply({"fx_snow": p["fx_snow"]})
 
 
+func _warm_light(reach: float, strength: float) -> OmniLight3D:
+	var l := OmniLight3D.new()
+	l.light_color = FxState.LAMP
+	l.light_energy = strength
+	l.omni_range = reach
+	l.shadow_enabled = false
+	add_child(l)
+	return l
+
+
+func _tower_fire() -> bool:
+	return String(data["spots"]["water_tower"].get("state", "")) == "fire"
+
+
+## Is a living raider still inside the hideout (the building its light names)?
+func _raiders_in() -> bool:
+	var hideout := -1
+	for l in data["lights"]:
+		if l["kind"] == "hideout":
+			hideout = int(l.get("building", -1))
+	for r in raiders:
+		if r.is_alive() and grid.building_at(FieldGrid.cell_of(r.position)) == hideout:
+			return true
+	return false
+
+
+## Warm light for the sight mask: fixed lights (stamped again only when one
+## comes on or goes out) plus every lit lantern. sight: the chief's own sight
+## cells, so their lantern does not shine through walls.
+func lamp_cells(sight: Dictionary = {}) -> Dictionary:
+	var now := clock.game_minutes()
+	var fire := _tower_fire()
+	var raid := _raiders_in()
+	var lights: Array = data["lights"]
+	var key := LampLight.on_key(lights, now, fire, raid)
+	if key != lamp_key:
+		lamp_key = key
+		lamp_fixed = LampLight.fixed_cells(lights, grid.width, grid.height, now, fire, raid)
+		for kind in ["car_window", "firebox", "hideout"]:
+			var on := false
+			for l in lights:
+				if l["kind"] == kind and LampLight.is_on(l, now, fire, raid):
+					on = true
+			view.set_light_on(kind, on)
+	var cells := lamp_fixed.duplicate()
+	var dark := clock.is_dark()
+	for p in people:
+		if not p.lamp_lit(dark, level_of(p.position) < 0):
+			continue
+		var only: Dictionary = sight if p == player else {}
+		LampLight.stamp(cells, grid.width, grid.height, FieldGrid.cell_of(p.position), Vector2i.ZERO, float(p.lamp["strength"]), float(p.lamp["reach"]), only)
+	return cells
+
+
+## The chief's lantern is a real light, so people and the dead near it are lit
+## too; it dips for a moment when the night's light sound goes out.
+func _update_lantern(delta: float) -> void:
+	lamp_pulse = move_toward(lamp_pulse, 0.0, delta * 2.0)
+	lantern.visible = player.lamp_lit(clock.is_dark(), level_of(player.position) < 0)
+	lantern.position = player.position + Vector3(0, 1.4, 0)
+	lantern.light_energy = float(player.lamp.get("strength", 1.0)) * (1.0 - 0.3 * lamp_pulse)
+	var night := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night))
+
+
 ## Tactical pause fades the world like an old photo (shaders.md 2장); people,
 ## the dead and the HUD do not read fx_fade and keep their colour.
 func _update_fade(delta: float) -> void:
@@ -264,6 +338,15 @@ func _build_world() -> void:
 	sun.shadow_enabled = bool(opts.get("shadows", true))
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
+	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
+	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
+	lantern.visible = false
+	firebox = _warm_light(4.0, 0.8)
+	for l in data["lights"]:
+		if l["kind"] == "firebox":
+			firebox.omni_range = float(l["reach"])
+			firebox.light_energy = float(l["strength"])
+			firebox.position = FieldGrid.center(l["cell"]) + Vector3(0, 0.8, 0.6)
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = cam_size
@@ -584,6 +667,7 @@ func _process(delta: float) -> void:
 		_step(delta * slow)
 		_update_snow()
 	_update_fade(delta)
+	_update_lantern(delta)
 	_update_camera(delta)
 	vis_t -= delta
 	if vis_t <= 0.0:
@@ -1002,6 +1086,7 @@ func _update_night(delta: float) -> void:
 	light_t -= delta
 	if light_t <= 0.0:
 		light_t = 60.0
+		lamp_pulse = 1.0
 		for p in squad:
 			if p.is_alive() and p.lamp_on:
 				make_sound(p.position, SimNoise.Level.NORMAL, "light")
@@ -1234,6 +1319,7 @@ func _refresh_vision() -> void:
 	if not mask_on:
 		seen_now = {}
 		view.set_mask_enabled(false)
+		view.update_vis(seen_now, seen_memory, lamp_cells())
 		return
 	view.set_mask_enabled(true)
 	var forward := Vector2.ZERO if tower else Vector2(sin(player.facing), cos(player.facing))
@@ -1248,7 +1334,7 @@ func _refresh_vision() -> void:
 		var key: int = (k + 1) * n + i
 		seen_now[key] = true
 		seen_memory[key] = 1
-	view.update_vis(seen_now, seen_memory)
+	view.update_vis(seen_now, seen_memory, lamp_cells(result))
 	view.update_labels(seen_memory, mask_on)
 
 

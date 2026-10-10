@@ -7,6 +7,9 @@ uniform sampler2D vis : filter_linear, repeat_disable;
 uniform vec2 map_size = vec2(120.0, 70.0);
 uniform float mask_on = 1.0;
 uniform float frost = 0.0;
+// Warm lamp light from the mask's B channel (weather_fx 12.2): no light nodes.
+uniform vec3 lamp_color : source_color = vec3(1.0, 0.64, 0.30);
+uniform float lamp_gain = 0.0;
 
 varying vec3 world_pos;
 varying vec3 world_nrm;
@@ -36,7 +39,8 @@ void fragment() {
 	rime *= 0.16 * smoothstep(0.3, 0.9, fx_fbm2(vec2((world_pos.x + world_pos.z) * 0.7, world_pos.y * 1.6)));
 	base = mix(base, FX_RIME, rime * (1.0 - smoothstep(0.08, 0.3, chroma)));
 	vec2 uv = world_pos.xz / map_size;
-	vec2 seen = texture(vis, uv).rg;
+	vec4 cell = texture(vis, uv);
+	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
 	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
@@ -44,4 +48,7 @@ void fragment() {
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
+	// A lamp out of sight still shows faintly, so mates can be found in the dark.
+	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
+	EMISSION = lamp_color * (0.25 + 0.75 * grey) * lamp;
 }
