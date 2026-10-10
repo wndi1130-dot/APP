@@ -1,3 +1,4 @@
+import { installTrainScroll } from './train_scroll';
 import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
@@ -727,6 +728,7 @@ export function startApp(root: HTMLElement): void {
 
   // 못 누름(ui_states.md P3): 막힌 단추는 click이 오지 않아 손을 뗄 때(pointerup) 받는다. 이유(title)를 쪽지로 띄우고
   // 단추를 한 번 흔든다. 끌다 뗀 것(스크롤)은 무시한다. pointerup을 막힌 단추에 보내지 않는 브라우저에선 지금처럼 조용하다.
+  installTrainScroll(root); // 열차 띠를 마우스 휠·끌기·화살표 글쇠로 넘긴다
   let downAt: { x: number; y: number } | null = null;
   root.addEventListener('pointerdown', event => { downAt = { x: event.clientX, y: event.clientY }; });
   root.addEventListener('pointerup', event => {
