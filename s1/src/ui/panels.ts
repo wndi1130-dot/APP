@@ -137,8 +137,35 @@ function debugPanel(view: View): HTMLElement {
     h('ul', { class: 'log' }, g.secrets.map(x => h('li', null, `${COMM_NAME[x.about]} 대표: ${shortText(x.text)} (무게 ${x.weight}${x.proof ? `, ${x.proof === 2 ? '증거' : '소문'}` : ''})`))));
 }
 
+/** 까닭 목록에 보일 줄 수 */
+export const METER_ROWS = 6;
+
+/** 신임(또는 긴장)이 최근에 바뀐 까닭: 그 수치가 움직인 줄만, 최근 것부터 METER_ROWS줄. */
+export function meterRows(g: Game, which: 'trust' | 'tension'): { seg: number; label: string; v: number }[] {
+  return (g.meterLog ?? []).filter(r => r[which] !== 0).map(r => ({ seg: r.seg, label: r.label, v: r[which] })).reverse().slice(0, METER_ROWS);
+}
+
+function meterPanel(view: View, which: 'trust' | 'tension'): HTMLElement {
+  const { g } = view;
+  const rows = meterRows(g, which);
+  const name = which === 'trust' ? '신임' : '긴장';
+  // 신임은 내리면 나쁘고 긴장은 오르면 나쁘다. 나쁜 쪽만 붉게 한다.
+  const bad = (v: number) => (which === 'trust' ? v < 0 : v > 0);
+  return h('div', { class: 'drop drop--why', role: 'dialog', 'aria-label': `${name}이 바뀐 까닭` },
+    h('div', { class: 'drop__head' },
+      icon(which), h('b', null, `${name} ${fmt(g[which])}`), h('span', { class: 'sub' }, '최근에 바뀐 까닭'),
+      h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
+    rows.length
+      ? h('ol', { class: 'why' }, rows.map(r => h('li', { class: 'why__row' },
+        h('span', { class: 'why__seg num' }, `${r.seg}구간`),
+        h('span', { class: 'why__label' }, r.label),
+        h('b', { class: cx('num', bad(r.v) && 'is-red') }, signed(r.v)))))
+      : h('p', { class: 'sub' }, `아직 ${name}이 바뀐 일이 없다.`));
+}
+
 export function overlay(view: View): HTMLElement | null {
   const { ui } = view;
+  if (ui.panel === 'why-trust' || ui.panel === 'why-tension') return meterPanel(view, ui.panel === 'why-trust' ? 'trust' : 'tension');
   if (ui.panel === 'unrest' || ui.panel === 'support') return factionPanel(view);
   if (ui.panel === 'journal') return journalPanel(view);
   if (ui.panel === 'menu') return menuPanel(view);

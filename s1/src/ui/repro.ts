@@ -1,5 +1,5 @@
 import {
-  COMMS, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
+  COMMS, COMM_NAME, PHASE_NAME, viewCard, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
@@ -30,8 +30,50 @@ export function plainData(d: Record<string, string | undefined>): Record<string,
   return out;
 }
 
-/** 판을 바꾸는 행동을 한다. 띄울 알림 글이 있으면 돌려준다. 모르는 행동이면 던진다. */
+/** 까닭 기록에 남기는 줄 수 */
+export const METER_LOG_MAX = 12;
+
+/** 이 행동을 까닭 목록에 뭐라고 적을까(행동하기 전의 판으로 정한다). 서류는 '제목: 고른 말', 나머지는 한 일의 이름. */
+export function stepLabel(g: Game, s: Step): string {
+  const d = s.d;
+  switch (s.a) {
+    case 'choose': {
+      const card = g.cards.find(c => c.uid === Number(d.uid));
+      if (!card) return '서류';
+      const view = viewCard(g, card);
+      const pick = view.choices[Number(d.index)]?.label;
+      return pick ? `${view.title}: ${pick}` : view.title;
+    }
+    case 'advance': return PHASE_NAME[g.phase] ?? '진행';
+    case 'vote': return '의회 표결';
+    case 'decree': return '포고';
+    case 'deal':
+    case 'deal-cond': return `${COMM_NAME[d.comm as Comm] ?? ''} 거래`.trim();
+    case 'stop-go': return d.go === '1' ? '정차 수색' : '정차를 지나침';
+    case 'comm-act': return `${COMM_NAME[d.comm as Comm] ?? ''} ${d.act === 'support' ? '지지' : d.act === 'cut' ? '칼질' : '고유 행동'}`.trim();
+    case 'emergency': return '비상 소집';
+    case 'dark-lift': return '계엄을 거둠';
+    case 'lever': return '난방·배급 레버';
+    default: return s.a.startsWith('dom-') ? '내정' : '그 밖의 일';
+  }
+}
+
+/** 판을 바꾸는 행동을 한다. 띄울 알림 글이 있으면 돌려준다. 모르는 행동이면 던진다.
+ *  신임·긴장의 보이는 값이 바뀌었으면 까닭 한 줄을 g.meterLog에 남긴다(정산이 돈 행동은 '구간 정산'으로 적는다). */
 export function applyStep(g: Game, s: Step): string | null {
+  const label = stepLabel(g, s);
+  const before = { seg: g.seg, trust: Math.round(g.trust), tension: Math.round(g.tension), settle: g.lastSettle };
+  const text = runStep(g, s);
+  const trust = Math.round(g.trust) - before.trust;
+  const tension = Math.round(g.tension) - before.tension;
+  if (trust !== 0 || tension !== 0) {
+    const row = { seg: before.seg, label: g.lastSettle && g.lastSettle !== before.settle ? '구간 정산' : label, trust, tension };
+    g.meterLog = [...(g.meterLog ?? []), row].slice(-METER_LOG_MAX);
+  }
+  return text;
+}
+
+function runStep(g: Game, s: Step): string | null {
   const d = s.d;
   switch (s.a) {
     case 'advance': advance(g); return null;
