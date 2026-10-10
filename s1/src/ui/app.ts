@@ -152,7 +152,7 @@ export function renderApp(view: View): HTMLElement {
     debugOverlay(view),
     platformSheet(view),
     ui.toast ? toastEl(ui.toast, ui.toastKind ?? 'info') : null,
-    ui.fx && ui.slipOff !== ui.fx.id ? slipEl(ui.fx, !!sheet || !!panel || screen !== 'home') : null,
+    ui.fx && !panel && ui.slipOff !== ui.fx.id ? slipEl(ui.fx, !!sheet || screen !== 'home') : null, // 창이 떠 있으면 가리지 않게 띄우지 않는다
     s('svg', { class: 'links', 'aria-hidden': 'true' }));
 }
 
