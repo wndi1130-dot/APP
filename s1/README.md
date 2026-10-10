@@ -146,6 +146,21 @@ NODE_PATH="$(npm root -g)" node tools/screenshots.cjs
 | `src/ui/` | 화면: 위·아래 막대(`hud`), 홈 단면도(`home`), 한눈에 보기(`overview`), 의회(`council`), 서류·정차 카드(`card`), 겹쳐 뜨는 창(`panels`), 레버와 계기(`widgets`), 반원 좌석(`seats`), 입력과 저장(`app`) |
 | `tests/game/` | 자동 플레이 40판이 끝 조건으로 끝나는지, 같은 시드면 같은 판인지, 저장·복원, 화면 글 금지어 |
 | `tools/screenshots.cjs` | 스크린샷과 배치 검사 |
+| `tools/s3_dump.ts` | S3 맞대기 기록(아래) |
+
+### S3 맞대기 기록
+
+S3에서 규칙을 GDScript로 옮길 때 두 구현이 같은 시드에서 같은 판을 내는지 맞대 볼 기준 기록을 낸다. 규칙 코드는 읽기만 한다. 같은 인자면 늘 같은 바이트가 나온다.
+
+```sh
+npx tsx tools/s3_dump.ts record seed-0 나갈.json --deal   # 판 기록: 행동마다 난수 상태와 주요 수치, 개표마다 쐐기와 표
+npx tsx tools/s3_dump.ts vectors 나갈.json                # 계산 표본: 난수, 의석, 찬반 몫, 관계 단계, 실제 판의 개표
+npx tsx tools/s3_dump.ts tables 나갈.json                 # 수치 표: data.ts에서 함수가 아닌 값만 그대로
+```
+
+- 판 기록의 자동 플레이는 `tests/game/play.test.ts`와 같다(서류는 첫 가능한 선택지, 정차는 수색대를 보냄, 의회는 `--deal`이면 공개 약속을 건 뒤 바로 표결). 서막·내정·어두운 길은 켜지 않는다.
+- 칸별 값은 `COMMS` 순서(꼬리칸, 의무진, 경비대, 앞칸, 기관실)의 배열이다.
+- 걸음마다 적힌 `rng`(uint32)가 가장 센 검사다. 한 걸음이라도 다르면 그 걸음의 행동에서 두 구현이 난수를 다르게 썼다.
 
 ### 화면과 조작
 
