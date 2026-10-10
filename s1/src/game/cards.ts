@@ -16,8 +16,7 @@ import type { Card, EventMemo, Game } from './state';
 export type Eff =
   | { t: 'coal' | 'food' | 'med' | 'lux' | 'trust' | 'tension' | 'fear' | 'injured'; v: number }
   | { t: 'rel' | 'fervor' | 'pop'; c: Comm; v: number }
-  /** seg가 있으면 그 구간 수만큼만 걸리고 정산(peopleTick)에서 되돌린다 */
-  | { t: 'base'; c: Comm; i: 0 | 1 | 2 | 3; v: number; seg?: number }
+  | { t: 'base'; c: Comm; i: 0 | 1 | 2 | 3; v: number }
   | { t: 'lever'; c: Comm; which: 'heat' | 'ration'; v: number }
   | { t: 'debt'; c: Comm }
   | { t: 'grudge'; c: Comm };
@@ -71,7 +70,7 @@ export function costLines(choice: Choice): string[] {
   const out: string[] = [];
   for (const e of choice.effs) {
     if (e.t === 'coal' || e.t === 'food' || e.t === 'med' || e.t === 'lux' || e.t === 'injured') out.push(`${RES_NAME[e.t]} ${sign(e.v)}`);
-    else if (e.t === 'base') out.push(`${COMM_NAME[e.c]} ${BASE_NAME[e.i]} ${sign(e.v)}${e.seg ? ' (한 구간)' : ''}`);
+    else if (e.t === 'base') out.push(`${COMM_NAME[e.c]} ${BASE_NAME[e.i]} ${sign(e.v)}`);
     else if (e.t === 'lever') out.push(`${COMM_NAME[e.c]} ${e.which === 'heat' ? '난방' : '배급'} ${sign(e.v)}`);
     else if (e.t === 'pop') out.push(`${COMM_NAME[e.c]} ${sign(e.v)}명`);
   }
@@ -806,10 +805,7 @@ export function applyEffs(g: Game, effs: readonly Eff[]): void {
       case 'rel': g.comms[e.c].rel = clamp(g.comms[e.c].rel + e.v, -100, 100); break;
       case 'fervor': g.comms[e.c].fervor = clamp(g.comms[e.c].fervor + e.v, 0, 3); break;
       case 'pop': g.comms[e.c].pop = Math.max(1, g.comms[e.c].pop + e.v); break;
-      case 'base':
-        g.comms[e.c].base[e.i] += e.v;
-        if (e.seg) (g.tempBase ??= []).push({ c: e.c, i: e.i, v: e.v, until: g.seg + e.seg });
-        break;
+      case 'base': g.comms[e.c].base[e.i] += e.v; break;
       case 'lever': {
         const s = g.comms[e.c];
         s[e.which] = clamp(s[e.which] + e.v, 0, 4);

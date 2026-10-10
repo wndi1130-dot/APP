@@ -27,36 +27,6 @@
           "amount": -2
         },
         {
-          "type": "community.ration",
-          "target": "tail",
-          "amount": -2,
-          "segments": 1
-        },
-        {
-          "type": "community.ration",
-          "target": "medtech",
-          "amount": -2,
-          "segments": 1
-        },
-        {
-          "type": "community.ration",
-          "target": "guard",
-          "amount": -2,
-          "segments": 1
-        },
-        {
-          "type": "community.ration",
-          "target": "front",
-          "amount": -2,
-          "segments": 1
-        },
-        {
-          "type": "community.ration",
-          "target": "engine",
-          "amount": -2,
-          "segments": 1
-        },
-        {
           "type": "flag",
           "id": "ev_achieved",
           "value": true
@@ -89,10 +59,6 @@
       "label": "받침만 대 둔다",
       "say": "자루 밑에 상자를 대라. 봉제선은 뒤에 보자.",
       "effects": [
-        {
-          "type": "food",
-          "amount": -1
-        },
         {
           "type": "flag",
           "id": "b01_sack_pending",
