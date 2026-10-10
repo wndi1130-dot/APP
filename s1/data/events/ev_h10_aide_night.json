@@ -10,11 +10,10 @@
       "value": true
     },
     {
-      "type": "community",
-      "community": "medtech",
-      "metric": "crowding",
-      "operator": "lt",
-      "value": 60
+      "type": "resource",
+      "resource": "medicine",
+      "operator": "gte",
+      "value": 35
     }
   ],
   "speaker": "aide",

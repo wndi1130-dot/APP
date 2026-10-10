@@ -15,13 +15,14 @@ const TOUCH = new Set(['ev_h01_low_fire/2', 'ev_h02_burst_crates/2', 'ev_h09_too
 interface Night { crowd: number; med: number; injured: number; seg: number; pick: string }
 const nights: Night[] = [];
 let quietShown = 0, quietAccept = 0, acceptThenTouch = 0, anyTouch = 0, brokenShown = 0, keptShown = 0, promiseGames = 0;
+let wrongShown = 0, aideShown = 0, acceptThenBroken = 0, acceptThenKept = 0, acceptThenEither = 0;
 const touchSeen: Record<string, number> = {};
 const endSegs: number[] = [];
 const ends: Record<string, number> = {};
 const quietSeg: number[] = [];
 
 for (let i = 0; i < N; i += 1) {
-  let accepted = false, touched = false, acceptThenTouchHere = false, quiet = false;
+  let accepted = false, touched = false, acceptThenTouchHere = false, quiet = false, wrong = false, aideSeen = false, broken = false, kept = false;
   const opts: BotOptions = {
     s1c: true, policy: 'caretaker', dom: 'engaged', eventPack: true, ...extra,
     probe: {
@@ -34,8 +35,10 @@ for (let i = 0; i < N; i += 1) {
           touched = true; touchSeen[`${id}/${pick}`] = (touchSeen[`${id}/${pick}`] ?? 0) + 1;
           if (accepted) acceptThenTouchHere = true;
         }
-        if (id === 'ev_h07_broken_word') brokenShown += 1;
-        if (id === 'ev_h07_kept_word') keptShown += 1;
+        if (id === 'ev_h07_broken_word') { brokenShown += 1; broken = true; }
+        if (id === 'ev_h07_kept_word') { keptShown += 1; kept = true; }
+        if (id === 'ev_h10_wrong_dose') wrong = true;
+        if (id === 'ev_h10_aide_night') aideSeen = true;
       },
     },
   };
@@ -43,6 +46,11 @@ for (let i = 0; i < N; i += 1) {
   if (quiet) quietShown += 1;
   if (accepted) { quietAccept += 1; promiseGames += 1; }
   if (acceptThenTouchHere) acceptThenTouch += 1;
+  if (wrong) wrongShown += 1;
+  if (aideSeen) aideShown += 1;
+  if (accepted && broken) acceptThenBroken += 1;
+  if (accepted && kept) acceptThenKept += 1;
+  if (accepted && (broken || kept)) acceptThenEither += 1;
   if (touched) anyTouch += 1;
   endSegs.push(m.segReached);
   ends[m.end] = (ends[m.end] ?? 0) + 1;
@@ -63,8 +71,9 @@ const stat = (ns: Night[]) => ({
 const gt = (k: number) => +(endSegs.filter(s => s > k).length / N).toFixed(3);
 const out = {
   bot: BOT, games: N,
+  h10: { wrongDoseGameRate: +(wrongShown / N).toFixed(3), aideNightGameRate: +(aideShown / N).toFixed(3) },
   secondNight: { shownRate: +(nights.length / N).toFixed(3), presentedAll: stat(nights), choseAide: stat(aide), picks: nights.reduce<Record<string, number>>((a, n) => { a[n.pick] = (a[n.pick] ?? 0) + 1; return a; }, {}) },
-  quiet: { shownRate: +(quietShown / N).toFixed(3), acceptRate: +(quietAccept / N).toFixed(3), acceptOfShown: +(quietAccept / Math.max(1, quietShown)).toFixed(3), shownSegMean: mean(quietSeg), acceptThenTouchRate: +(acceptThenTouch / N).toFixed(3), anyTouchRate: +(anyTouch / N).toFixed(3), touchPicksPerGame: Object.fromEntries(Object.entries(touchSeen).map(([k, v]) => [k, +(v / N).toFixed(3)])), brokenPerGame: +(brokenShown / N).toFixed(4), keptPerGame: +(keptShown / N).toFixed(4) },
+  quiet: { shownRate: +(quietShown / N).toFixed(3), acceptRate: +(quietAccept / N).toFixed(3), acceptOfShown: +(quietAccept / Math.max(1, quietShown)).toFixed(3), shownSegMean: mean(quietSeg), acceptThenTouchRate: +(acceptThenTouch / N).toFixed(3), anyTouchRate: +(anyTouch / N).toFixed(3), touchPicksPerGame: Object.fromEntries(Object.entries(touchSeen).map(([k, v]) => [k, +(v / N).toFixed(3)])), acceptedGames: quietAccept, acceptThenBrokenOfAccepted: +(acceptThenBroken / Math.max(1, quietAccept)).toFixed(3), acceptThenKeptOfAccepted: +(acceptThenKept / Math.max(1, quietAccept)).toFixed(3), acceptThenEitherOfAccepted: +(acceptThenEither / Math.max(1, quietAccept)).toFixed(3), brokenPerGame: +(brokenShown / N).toFixed(4), keptPerGame: +(keptShown / N).toFixed(4) },
   end: { ends: Object.fromEntries(Object.entries(ends).map(([k, v]) => [k, +(v / N).toFixed(3)])), segHist2: hist(endSegs, 2), segMean: mean(endSegs), over14: gt(14), over20: gt(20), over10: gt(10), reach24: +(endSegs.filter(s => s >= 24).length / N).toFixed(3) },
 };
 console.log(JSON.stringify(out, null, 1));
