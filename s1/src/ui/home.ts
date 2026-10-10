@@ -153,6 +153,20 @@ function paperStack(view: View): HTMLElement | null {
     h('span', { class: 'stack__title' }, title));
 }
 
+/** 칸 창 양옆에 옆 칸으로 넘기는 화살표를 붙인다(사용자 2026-10-11: 칸끼리 견주기 쉽게). 창 안은 건드리지 않는다. */
+function withNav(pop: HTMLElement | null, prev?: CarDef, next?: CarDef): HTMLElement | null {
+  if (!pop) return null;
+  const nav = (car: CarDef | undefined, side: 'prev' | 'next') => (car ? h('button', {
+    class: `nav carpop__nav carpop__nav--${side}`, 'data-action': 'car', 'data-car': car.id, 'data-nav': '1',
+    'aria-label': `${side === 'prev' ? '뒤쪽' : '앞쪽'} 칸: ${car.name}`,
+  }, side === 'prev' ? '‹' : '›') : null);
+  const a = nav(prev, 'prev');
+  const b = nav(next, 'next');
+  if (a) pop.append(a);
+  if (b) pop.append(b);
+  return pop;
+}
+
 export function homeScreen(view: View): HTMLElement {
   const { g, ui } = view;
   const moving = g.phase === 'travel' && !g.inStrike;
@@ -162,8 +176,8 @@ export function homeScreen(view: View): HTMLElement {
     backdropEl(g, moving), // 달리는 배경(backdrop.ts)
     h('div', { class: 'scroller', 'data-keep-scroll': 'train' },
       h('div', { class: 'train' },
-        cars.map(car => h('div', { class: 'slot', 'data-slot': car.id },
-          open?.id === car.id ? carPopover(view, car) : null,
+        cars.map((car, i) => h('div', { class: 'slot', 'data-slot': car.id },
+          open?.id === car.id ? withNav(carPopover(view, car), cars[i - 1], cars[i + 1]) : null,
           carEl(view, car)))),
       h('div', { class: 'rails' })),
     h('i', { class: 'layer layer--near' }),

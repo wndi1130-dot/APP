@@ -507,7 +507,10 @@ export function startApp(root: HTMLElement): void {
         ui.carPop = ui.carPop === id ? null : id;
         ui.panel = null;
         ui.spaceOpen = false;
-        return render();
+        render();
+        // 화살표로 옆 칸에 넘어갔으면 그 칸이 보이게 열차를 민다.
+        if (data.nav) root.querySelector('.carpop')?.closest('.slot')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+        return;
       }
       case 'space-tab':
         ui.spaceOpen = !ui.spaceOpen;
