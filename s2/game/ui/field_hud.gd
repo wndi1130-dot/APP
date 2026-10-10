@@ -24,6 +24,11 @@ const STICK_DEAD: float = 10.0
 const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
 const STICK_STOPS_FIGHT: float = 0.3  # a push this hard away from the target calls off a fight
 const DOUBLE_TAP_MS: int = 300
+## The fixed stick (the default; build 47: a floating one made the thumb re-set
+## it all the time). Home is 21 mm in and 14.5 mm up from the bottom-left corner,
+## under the run and crouch keys; a touch within STICK_CATCH radii of it takes the stick.
+const STICK_HOME_MM := Vector2(21.0, 14.5)
+const STICK_CATCH: float = 2.0
 const TOAST_NORMAL := "normal"      # play and block notes (ui_states N1)
 const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap to close (N2)
 const TOAST_S: float = 3.5
@@ -300,7 +305,7 @@ func _build_allies() -> void:
 	for p in game.squad:
 		if p == game.player:
 			continue
-		var b := _button(p.display_name, _ally_menu.bind(p), Vector2(150, 76), 18)
+		var b := _button(_ally_text(p, ""), _ally_menu.bind(p), Vector2(150, 76), 18)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		allies_box.add_child(b)
 		ally_buttons.append({"p": p, "b": b})
@@ -338,13 +343,13 @@ func _build_thumbs() -> void:
 	blood_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
 		b.toggle_mode = true
-	# Swap and bag sit on the left above the portrait (not needed with the stick held).
+	# The bag sits on the left, above the fixed stick's catch ring. There is no
+	# swap button here any more: swapping is inside the bag panel (build 47).
 	var left := HBoxContainer.new()
 	left.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	left.position = Vector2(16, -252)
+	left.position = Vector2(16, -340)
 	left.add_theme_constant_override("separation", 8)
 	root.add_child(left)
-	left.add_child(_button("무기", _swap, Vector2(110, 60), 20))
 	left.add_child(_button("가방", bag_panel, Vector2(110, 60), 20))
 	offer_box = HBoxContainer.new()
 	offer_box.set_anchors_preset(Control.PRESET_CENTER)
@@ -437,6 +442,7 @@ func tick(delta: float) -> void:
 		melee_holding = true
 		_melee(melee_pending, true)
 	_tick_auto_aim(delta)
+	_drop_stale_person()
 	_tick_context_hold()
 	if stick_index >= 0 and bool(game.opts.get("stick_rim_run", false)):
 		var was := rim_run
@@ -452,6 +458,16 @@ func tick(delta: float) -> void:
 		fps_t = 0.25
 		_tick_debug()
 	overlay.queue_redraw()
+
+
+## A finger still down on a raider who has just given up, ran or been taken:
+## he stops being the target (nothing is struck, nothing is aimed at him).
+func _drop_stale_person() -> void:
+	if melee_pending != null and not (melee_pending is Dictionary) and not game.combat.hostile(melee_pending):
+		melee_pending = null
+		melee_holding = false
+	if aim_target != null and not (aim_target is Dictionary) and not game.combat.hostile(aim_target):
+		aim_target = null
 
 
 func _tick_portrait(p) -> void:
@@ -494,6 +510,21 @@ func _tick_portrait(p) -> void:
 	(bag_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = WARN if state >= 2 else Color(0.75, 0.72, 0.6)
 
 
+## Short name of the weapon in hand ("펌프식 산탄총" -> "산탄총").
+func short_weapon(p) -> String:
+	var id: String = p.weapon_id()
+	if id == "":
+		return "맨손"
+	var parts: PackedStringArray = String(W.get_data(id).get("name", id)).split(" ")
+	return parts[parts.size() - 1]
+
+
+## An ally's button: name and the weapon held, then what they are doing.
+func _ally_text(p, second: String) -> String:
+	var first := "%s · %s" % [p.display_name, short_weapon(p)]
+	return first if second == "" else first + "\n" + second
+
+
 func _tick_allies() -> void:
 	for row in ally_buttons:
 		var p = row["p"]
@@ -509,7 +540,7 @@ func _tick_allies() -> void:
 			word = "열차에"
 		elif p.action != "":
 			word = p.action_label
-		b.text = "%s\n%s · %s" % [p.display_name, cmd, word]
+		b.text = _ally_text(p, "%s · %s" % [cmd, word])
 		b.modulate = Color(1, 0.6, 0.55) if not p.grabbers.is_empty() or p.body.downed else (Color(0.6, 0.6, 0.6) if not p.is_alive() else Color.WHITE)
 	crew_button.visible = game.actions.work_started
 	if crew_button.visible:
@@ -769,6 +800,14 @@ func bag_panel() -> void:
 	var p = game.player
 	var v := _open_modal(560.0)
 	v.add_child(_label("%s · %.1f / %.0f · %s" % [Carry.BAGS[p.bag]["name"], p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]], 22))
+	if p.hands.size() > 1:
+		var hw := HBoxContainer.new()
+		hw.add_child(_label("손 %s · 허리 %s" % [short_weapon(p), W.get_data(p.hands[1]["id"]).get("name", "")], 20))
+		var gap := Control.new()
+		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hw.add_child(gap)
+		hw.add_child(_button("바꾸기", _swap_from_bag, Vector2(120, 52), 18))
+		v.add_child(hw)
 	if p.items.is_empty():
 		v.add_child(_label("빈 가방이다.", 20, DIM))
 	for id in p.items.keys():
@@ -781,6 +820,11 @@ func bag_panel() -> void:
 		v.add_child(h)
 	v.add_child(_label("탄: 권총 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])], 18, DIM))
 	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+
+
+func _swap_from_bag() -> void:
+	_close_modal()
+	_swap()
 
 
 func _drop(id: String) -> void:
@@ -976,6 +1020,17 @@ func _toggle_run() -> void:
 		p.running = run_button.button_pressed
 
 
+func run_hold() -> bool:
+	return String(game.opts.get("run_mode", "toggle")) == "hold"
+
+
+## The run key let go in hold mode: the run ends unless the stick keeps it going.
+func _run_key_up() -> void:
+	run_button.button_pressed = false
+	if game.player != null:
+		game.player.running = stick_dash or rim_run
+
+
 func _shove() -> void:
 	var p = game.player
 	if game.paused:
@@ -1061,14 +1116,20 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			fingers[index] = {"kind": "button", "button": ui, "start": pos}
 			return true
 		return false
-	if pos.x < _view_size().x * 0.5 and stick_index < 0:
+	var floats := stick_floats()
+	var in_reach: bool = pos.x < _view_size().x * 0.5 if floats else pos.distance_to(stick_home()) <= STICK_R * STICK_CATCH
+	if in_reach and stick_index < 0:
 		stick_index = index
-		stick_origin = pos
+		# Fixed (default): the base stays at home and the touch is the knob.
+		# Floating (a setting): the base is wherever the thumb landed.
+		stick_origin = pos if floats else stick_home()
 		stick_at = pos
 		var now := Time.get_ticks_msec()
 		# Double-tap run (a setting, off by default): tap, then hold and push.
 		stick_dash = bool(game.opts.get("double_tap_run", false)) and now - stick_tap_ms < DOUBLE_TAP_MS and pos.distance_to(stick_tap_pos) < 80.0
-		fingers[index] = {"kind": "stick", "start": pos, "ms": now}
+		fingers[index] = {"kind": "stick", "start": pos, "ms": now, "fixed": not floats}
+		if not floats:
+			_apply_stick()
 		return true
 	if fingers.values().any(func(f): return f["kind"] == "hand"):
 		return false
@@ -1104,10 +1165,12 @@ func finger_up(index: int, pos: Vector2) -> bool:
 			_stick_release()
 			# A short touch that never moved is a tap on whatever is there; in a
 			# fight it is only a thumb set down, not an order to stop.
+			# The fixed stick is not the world: a tap on it is only a thumb set down.
 			if pos.distance_to(f["start"]) < DRAG_PX and Time.get_ticks_msec() - int(f["ms"]) < 350 and not fighting(game.player):
 				stick_tap_ms = Time.get_ticks_msec()
 				stick_tap_pos = pos
-				_tap(pos)
+				if not f.get("fixed", false):
+					_tap(pos)
 		"pad":
 			_pad_up(f["pad"], pos, f)
 		"button":
@@ -1140,6 +1203,8 @@ func finger_cancel(index: int) -> bool:
 			for b in [aim_button, context_button, shove_button]:
 				if f["pad"] == b:
 					b.button_pressed = false
+			if f["pad"] == run_button and run_hold():
+				_run_key_up()
 		"hand":
 			if aiming and game.player.aim.active:
 				game.player.aim.stop()
@@ -1179,8 +1244,11 @@ func _apply_stick() -> void:
 	var p = game.player
 	var v := stick_at - stick_origin
 	if v.length() > STICK_R:
-		stick_origin = stick_at - v.normalized() * STICK_R   # the base follows a long drag
-		v = stick_at - stick_origin
+		if stick_floats():
+			stick_origin = stick_at - v.normalized() * STICK_R   # the floating base follows a long drag
+			v = stick_at - stick_origin
+		else:
+			v = v.normalized() * STICK_R                          # the fixed base stays put
 	if v.length() < STICK_DEAD:
 		# Back in the dead zone: no push left over to run on.
 		p.stick = Vector2.ZERO
@@ -1204,6 +1272,16 @@ func _apply_stick() -> void:
 	game.combat.drop_melee(p)
 	_update_rim(0.0)
 	_set_running(p)
+
+
+## The floating stick is a start-screen option; the default is fixed at home.
+func stick_floats() -> bool:
+	return bool(game.opts.get("stick_float", false))
+
+
+## Where the fixed stick sits (bottom-left, under the run and crouch keys).
+func stick_home() -> Vector2:
+	return Vector2(STICK_HOME_MM.x * PX_PER_MM, _view_size().y - STICK_HOME_MM.y * PX_PER_MM)
 
 
 ## Running from the stick, the run key or the rim; running stands you up.
@@ -1274,7 +1352,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		shove_button.button_pressed = true
 		_shove()
 	elif b == run_button:
-		run_button.button_pressed = not run_button.button_pressed
+		# Toggle (default), or run only while the key is held (a setting).
+		run_button.button_pressed = true if run_hold() else not run_button.button_pressed
 		_toggle_run()
 	elif b == crouch_button:
 		crouch_button.button_pressed = not crouch_button.button_pressed
@@ -1308,6 +1387,8 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 			_context_tap()
 	elif b == shove_button:
 		shove_button.button_pressed = false
+	elif b == run_button and run_hold():
+		_run_key_up()
 
 
 ## Hold the aim pad: the gun comes up and, after a moment that shortens with
@@ -1406,6 +1487,7 @@ func _release(pos: Vector2) -> void:
 		aiming = false
 		if p.aim.active:
 			if not (aim_cancel or (aim_armed and _over_player(pos))):
+				_aim_from(pos)
 				game.combat.fire(p, aim_point, aim_target)
 			p.aim.stop()
 		aim_cancel = false
@@ -1432,10 +1514,19 @@ func _hand_move(pos: Vector2) -> void:
 	aim_cancel = aim_armed and over
 	if aim_cancel:
 		return
-	aim_point = game.screen_to_ground(pos)
-	var t = _pick_enemy(aim_point)
-	aim_target = t if t != null else (aim_target if not manual_button.button_pressed else null)
-	aim_point = _on_target_floor(aim_point, aim_target)
+	_aim_from(pos)
+
+
+## Where the dragged finger puts the aim: on an enemy within the pick radius
+## it is that enemy, on empty ground it is that ground (free aim; build 47: the
+## shot used to snap back to the enemy first pressed). A finger that has not
+## really moved off the one it pressed stays on him.
+func _aim_from(pos: Vector2) -> void:
+	if aim_target != null and pos.distance_to(press_pos) <= DRAG_PX and _target_ok(aim_target):
+		return
+	var world: Vector3 = game.screen_to_ground(pos)
+	aim_target = _pick_enemy(world)
+	aim_point = _on_target_floor(world, aim_target)
 
 
 func drop_touch() -> void:
@@ -1444,6 +1535,8 @@ func drop_touch() -> void:
 	stick_index = -1
 	auto_aim = false
 	stick_dash = false
+	if run_button != null and run_hold():
+		run_button.button_pressed = false
 	if game.player != null:
 		_stick_release()
 	for b in [aim_button, shove_button, context_button]:
@@ -1527,7 +1620,7 @@ func _pick_enemy(world: Vector3):
 			best_d = d
 			best = z
 	for r in game.raiders:
-		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone"]:
+		if r.visible and game.combat.hostile(r):
 			var d: float = game.shift_to_height(world, r.position.y).distance_to(r.position)
 			if d < best_d:
 				best_d = d
@@ -1625,10 +1718,16 @@ func _draw_overlay() -> void:
 	if p.moving and not p.path.is_empty() and dest_marker != Vector3.INF:
 		overlay.draw_arc(_project(dest_marker), 10.0, 0, TAU, 20, Color(1, 1, 1, 0.5), 2.0)
 	# The stick under the left thumb: base ring and knob (rim = run).
-	if stick_index >= 0:
-		overlay.draw_arc(stick_origin, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.28), 3.0)
-		var knob := stick_origin + (stick_at - stick_origin).limit_length(STICK_R)
-		overlay.draw_circle(knob, 26.0, Color(1, 1, 1, 0.35 if not p.running else 0.55))
+	# The fixed one stays drawn faintly where it is; the floating one only while held.
+	var fixed := not stick_floats()
+	if fixed or stick_index >= 0:
+		var base := stick_home() if fixed else stick_origin
+		overlay.draw_arc(base, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.28 if stick_index >= 0 else 0.14), 3.0)
+		if stick_index >= 0:
+			var knob := base + (stick_at - base).limit_length(STICK_R)
+			overlay.draw_circle(knob, 26.0, Color(1, 1, 1, 0.35 if not p.running else 0.55))
+		else:
+			overlay.draw_circle(base, 8.0, Color(1, 1, 1, 0.14))
 	# Sharp shooters see the dangerous ones marked while aiming (not chosen for them).
 	if auto_aim and int(p.skills.get("shooting", 0)) >= 7:
 		for z in game.zombies.list:
