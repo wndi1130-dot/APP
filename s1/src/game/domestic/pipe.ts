@@ -6,12 +6,13 @@ import { clamp, journal } from '../state';
 import type { Game, MotionAgenda } from '../state';
 import { D, TECHS } from './data';
 import type { Variant } from './data';
-import { techRelSides, techTitle } from './workshop';
+import { completeRestore, techRelSides, techTitle } from './workshop';
 
 // E3 난방 배관의 의회 추인(s1c_domestic 7.3, 2026-10-08 사용자 아침 목록 답, 기획 점검 19번 '가').
 // 복원을 시작하면 다음 회기 안건에 '배관 추인'이 하나 오른다(그 회기 안건 자리 하나를 쓴다). 표결은 S1a 표결 그대로다.
 // 가결이면 고른 변형, 부결이면 반대 변형으로 간다. 관계 ±5는 시작이 아니라 이 표결 결과가 나올 때 결과의 변형으로 움직인다.
-// 추인 전엔 복원을 마쳐도 완성되지 않는다(workshop.ts). 복원을 취소하면 techs.e3가 지워져 안건도 저절로 내려간다.
+// 추인 전엔 복원을 마쳐도 완성되지 않는다(workshop.ts). 작업을 다 마친 E3는 추인이 나는 그 자리에서 완성돼, 추인 뒤 첫 정산부터 절감을 받는다.
+// 복원을 취소하면 techs.e3가 지워져 안건 공급이 끊기고, 이미 열린 회기의 안건도 cancelRestore가 내린다.
 // 회기에 못 올라갔거나 다른 안건을 골라 표결하지 않았으면 안건은 다음 회기로 이어진다(추정, 문서에 없다).
 
 const other = (v: Variant): Variant => (v === 'a' ? 'b' : 'a');
@@ -54,6 +55,8 @@ export function ratifyPipe(g: Game, passed: boolean): void {
   journal(g, passed
     ? `의회가 ${techTitle(g, 'e3')} 배관을 추인했다.${who ? ` ${who}.` : ''}`
     : `의회가 추인하지 않았다. 배관은 반대쪽으로 놓는다: ${techTitle(g, 'e3')}.${who ? ` ${who}.` : ''}`, passed ? 'good' : 'bad');
+  // 작업을 이미 다 마친 E3는 다음 공방 작업을 기다리지 않고 지금 완성한다: 추인 뒤 첫 정산 비용부터 절감을 받는다.
+  if (d.restoring === 'e3' && st.progress >= st.need - 1e-9) completeRestore(g, 'e3');
 }
 
 /** 변형 하나에 대한 한 집단의 물질 몫(−2~+2): 그 변형을 좋아하면 +2, 싫어하면 −2. */
