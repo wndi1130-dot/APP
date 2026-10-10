@@ -23,7 +23,16 @@ const isTyrant = (p: DarkPolicy | undefined): boolean => p === 'tyrant' || p ===
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */
 export type DomPolicy = 'engaged' | 'idle';
 
-export interface BotOptions { s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number }
+/** 측정용 훅(tools/tension_probe.ts). 판의 결과를 바꾸지 않고 읽기만 한다. */
+export interface BotProbe {
+  /** 카드 하나를 고르기 직전과 직후 */
+  beforePick?: (g: Game, card: Card, view: CardView, idx: number) => void;
+  afterPick?: (g: Game, card: Card) => void;
+  /** 구간 정산이 한 번 끝날 때마다(g.lastSettle이 새로 생겼을 때) */
+  onSettle?: (g: Game) => void;
+}
+
+export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number }
 
 export interface GameMetrics {
   end: string;
@@ -315,7 +324,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   let lastMartialSession = -1;
   let forcedMartial = false;
   let martialSince = -1;
+  let settleSeen: unknown = null;
   for (let guard = 0; guard < 5000 && g.phase !== 'end'; guard += 1) {
+    if (opts.probe?.onSettle && g.lastSettle !== settleSeen) { settleSeen = g.lastSettle; if (g.lastSettle) opts.probe.onSettle(g); }
     if (g.seg !== lastSeg && g.phase === 'prep') {
       lastSeg = g.seg;
       if (g.coal < 30) m.coalUnder30 += 1;
@@ -389,7 +400,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         view.choices.forEach((c, i) => { if (c.disabled) return; const s = scoreChoice(g, c); if (s > best) { best = s; idx = i; } });
       }
       const segAtPick = g.seg;
+      opts.probe?.beforePick?.(g, card, view, idx);
       if (!chooseCard(g, card.uid, idx)) throw new Error(`카드를 못 골랐다: ${card.kind} ${idx}`);
+      opts.probe?.afterPick?.(g, card);
       pickedPerSeg.set(segAtPick, (pickedPerSeg.get(segAtPick) ?? 0) + 1);
       continue;
     }
@@ -443,6 +456,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     if (!primaryAction(g).ok) throw new Error(`막혔다: ${g.phase} ${primaryAction(g).why ?? ''}`);
     advance(g);
   }
+  if (opts.probe?.onSettle && g.lastSettle !== settleSeen && g.lastSettle) opts.probe.onSettle(g);
   // 고른 카드가 0장인 구간도 센다: 이동 단계에 들어간 구간과 카드를 고른 구간의 합집합이 분모다.
   for (const sg of new Set([...travelSegs, ...pickedPerSeg.keys()])) {
     const n = pickedPerSeg.get(sg) ?? 0;
