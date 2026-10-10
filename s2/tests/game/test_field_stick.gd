@@ -138,6 +138,8 @@ func test_setting_the_stick_down_by_the_toggles_starts_nothing() -> void:
 
 
 func test_double_tap_run_only_when_set() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	var hud = game.hud
 	var size: Vector2 = hud._view_size()
 	var at := Vector2(size.x * 0.3, size.y - 100)
@@ -214,6 +216,8 @@ func test_shorter_inertia_stops_sooner() -> void:
 
 
 func test_left_thumb_on_stick_right_thumb_on_aim_pad() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	_gun()
 	var hud = game.hud
 	var size: Vector2 = hud._view_size()
@@ -483,6 +487,8 @@ func test_depart_note_says_the_horde_is_close_and_holds_time() -> void:
 
 
 func test_losing_focus_while_paused_still_lets_go_of_the_stick() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	var hud = game.hud
 	var size: Vector2 = hud._view_size()
 	var at := Vector2(size.x * 0.3, size.y - 100)
@@ -495,6 +501,8 @@ func test_losing_focus_while_paused_still_lets_go_of_the_stick() -> void:
 
 
 func test_a_quick_thumb_on_the_stick_does_not_end_the_fight() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	var p = game.player
 	var z := _axe_and_one_ahead()
 	var hud = game.hud
@@ -527,6 +535,8 @@ func test_back_in_the_dead_zone_the_rim_run_ends() -> void:
 
 
 func test_losing_focus_clears_the_rim_run_too() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	var hud = game.hud
 	var p = game.player
 	game.opts["stick_rim_run"] = true
@@ -548,6 +558,8 @@ func test_losing_focus_clears_the_rim_run_too() -> void:
 
 
 func test_a_stick_finger_whose_lift_was_lost_is_let_go() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	var hud = game.hud
 	var p = game.player
 	var at := Vector2(200, 400)
@@ -561,6 +573,8 @@ func test_a_stick_finger_whose_lift_was_lost_is_let_go() -> void:
 
 
 func test_the_rim_run_stands_a_crouching_player_up() -> void:
+	# Written for the floating stick (a start-screen option since build 47).
+	game.opts["stick_float"] = true
 	var hud = game.hud
 	var p = game.player
 	game.opts["stick_rim_run"] = true

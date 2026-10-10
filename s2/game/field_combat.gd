@@ -14,7 +14,9 @@ const BodyState = preload("res://game/sim/body_state.gd")
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
 const SHOVE_KNOCK: float = 0.35
-const SHOVE_TIME: float = 0.5
+## Lockout between shoves: a press that comes out about a third of a second
+## after the last one (user, build 47: 0.5 felt late). Still one per swing time.
+const SHOVE_TIME: float = 0.35
 const CLOSE: float = 1.8
 const JAM_CLEAR: float = 2.5
 const FALL_TIME: float = 1.5
@@ -64,6 +66,12 @@ func update(delta: float) -> void:
 				p.aim.stop()
 			else:
 				p.aim.tick(delta, aim_mods(p))
+		# A person who gave up, was taken or ran is no longer someone to hit,
+		# whoever held the order (player hand, companion, a stale tap).
+		if p.target_person != null and not hostile(p.target_person):
+			p.target_person = null
+			if p.target_zombie.is_empty():
+				p.hold_attack = false
 		if not p.can_act():
 			continue
 		if not p.target_zombie.is_empty():
@@ -105,6 +113,10 @@ func fighting(p) -> bool:
 
 ## Go for an enemy; hold keeps swinging.
 func fight(p, target, hold: bool) -> void:
+	# A raider who surrendered, ran or was taken is not a target (a tap that
+	# lands a moment late, a finger still down on him).
+	if target == null or (not (target is Dictionary) and not hostile(target)):
+		return
 	p.brain.erase("goal")
 	if target is Dictionary:
 		melee_target(p, target, hold)
@@ -144,9 +156,10 @@ func drop_target(p) -> void:
 	p.brain.erase("goal")
 
 
-## Someone still worth hitting: a raider who gave up, was taken or left is not.
+## Someone still worth hitting: a raider who gave up, ran, was taken or left is
+## not (a disarmed raider sent off runs south and is let go, build 47).
 func hostile(o) -> bool:
-	return o.is_alive() and not (o.brain.get("state", "") in ["surrender", "prisoner", "gone"])
+	return o.is_alive() and not (o.brain.get("state", "") in ["surrender", "flee", "prisoner", "gone"])
 
 
 ## How far from the body a blow can land (guns and bare hands: arm's length).
@@ -241,7 +254,7 @@ func melee_pick(p):
 				best_d = d
 				best = z
 	for r in game.raiders:
-		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone"]:
+		if hostile(r) and r.visible:
 			var d: float = p.position.distance_to(r.position)
 			if d <= reach + 0.8 and d < best_d:
 				best_d = d
@@ -285,7 +298,7 @@ func aim_candidates(p) -> Array:
 			score += 6.0
 		rows.append([score, z])
 	for r in game.raiders:
-		if r.is_alive() and r.visible and r.brain.get("state", "") not in ["surrender", "prisoner", "gone", "flee"]:
+		if hostile(r) and r.visible:
 			var d: float = p.position.distance_to(r.position)
 			if d <= reach:
 				rows.append([d - 2.0, r])
@@ -297,6 +310,8 @@ func _pursue_person(p, delta: float) -> void:
 	var o = p.target_person
 	if o == null or not hostile(o) or o.body.downed:
 		p.target_person = null
+		if p.target_zombie.is_empty():
+			p.hold_attack = false
 		return
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
