@@ -389,6 +389,13 @@ function escortGain(g: Game, id: string): HTMLElement | null {
 
 /** 조각과 코어가 어디서 나오나(hooks.ts afterStop의 규칙 그대로). 얻은 자리는 판에 남지 않아 나오는 길만 말한다. */
 export const FRAG_FROM = `정차 수색에서 가끔 나온다. 「정보」를 찾으러 가면 두 배다. 통신 전문가를 데려가면 더 잘 나온다.`;
+/** 조각·코어를 얻은 자리 가운데 최근 셋(사용자 2026-10-11: 어디서 왔는지 안 보인다). 얻은 적이 없으면 빈 글. */
+export function findsLine(g: Game, what: 'frag' | 'core', field?: Field): string {
+  const rows = (g.dom?.finds ?? []).filter(f => f.what === what && (what === 'core' || f.field === field)).slice(-3).reverse();
+  if (!rows.length) return '';
+  const place = (id: string) => PLACES.find(x => x.id === id)?.name ?? id;
+  return ` 최근: ${rows.map(f => `${f.seg}구간 ${place(f.place)}${f.via === 'event' ? '(사건)' : ''}`).join(', ')}.`;
+}
 export const CORE_FROM = `기계가 남은 곳에서 길게 머물 때만 가끔 나온다. 기관 전문가를 데려가면 두 배다.`;
 
 /** 칸 순서를 바꾼 정차는 '짧게'를 못 고른다(4.5). */
@@ -518,8 +525,8 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
     def.variants && !st?.variant ? null : useLine(g, id, st?.variant),
     researchPromise(g)?.tech === id ? h('p', { class: 'dom-promise' }, `${COMM_NAME.medtech}에게 건 약속이다. 남은 ${researchPromise(g)!.left}구간.`) : null,
     !st ? h('ul', { class: 'dom-checks' },
-      h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, tip('설계도 조각', FRAG_FROM), ` ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
-      cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, tip('코어', CORE_FROM), ` ${d.cores}/${cost.core}`) : null,
+      h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, tip('설계도 조각', FRAG_FROM + findsLine(g, 'frag', def.branch)), ` ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
+      cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, tip('코어', CORE_FROM + findsLine(g, 'core')), ` ${d.cores}/${cost.core}`) : null,
       h('li', { class: check.full === `${['', '견습', '숙련', '장인'][def.tier]} 이상이 없다` ? '' : 'is-ok' },
         def.tier === 0 ? '사람 조건 없음' : `${FIELD_NAME[def.branch]} ${SKILL_NAME[def.tier]} 이상`)) : null,
     sides.like.length || sides.dislike.length ? h('div', { class: 'dom-sides' },

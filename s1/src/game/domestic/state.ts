@@ -82,6 +82,15 @@ export type Penalty = { kind: 'coal' | 'haul'; until: number };
  * crisis: 그 구간에 위기(석탄·식량 바닥 등)가 걸려 있었다. 옛 저장 판에는 all·crisis가 없다. */
 export interface H6Seg { ms: number; ops: number; cards: number; all?: number; crisis?: boolean }
 
+/** 설계도 조각·코어를 얻은 자리 한 줄(화면이 「어디서 왔나」를 보여 주려고 남긴다. 규칙은 읽지 않는다). */
+export interface Find { seg: number; place: string; what: 'frag' | 'core'; field?: Field; via: 'stop' | 'event' }
+export const FINDS_MAX = 12;
+
+/** 얻은 자리를 적는다. 오래된 줄부터 버린다. */
+export function noteFind(d: DomState, f: Find): void {
+  d.finds = [...(d.finds ?? []), f].slice(-FINDS_MAX);
+}
+
 export interface DomState {
   scrap: number;
   wood: number;
@@ -90,6 +99,8 @@ export interface DomState {
   partWork: number;
   cores: number;
   frags: Record<Field, number>;
+  /** 조각·코어를 얻은 자리(최근 FINDS_MAX줄). 옛 저장 판에는 없다. */
+  finds?: Find[];
   manuals: Record<Field, boolean>;
   /** 부품 유지 목표치(6.3) */
   target: number;
