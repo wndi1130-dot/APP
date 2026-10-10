@@ -106,3 +106,21 @@ func test_the_shipped_files_load_and_the_two_not_found_yet_stay_silent() -> void
 	for g in ["birds", "pen"]:
 		assert_eq(a._load_group(g).size(), 0, g)
 
+
+func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> void:
+	var a = game.audio
+	for g in ["radio_hiss", "radio"]:
+		assert_eq(a._load_group(g).size(), 1, g)
+		assert_gt(a._load_group(g)[0].get_length(), 0.5, g)
+	a.played.clear()
+	game.radio_last = -INF
+	game.set_radio("들어온다", "urgent")
+	assert_eq(a.played, ["radio_hiss"], "the hiss first")
+	game._tick_radio(game.RADIO_HISS + 0.01)
+	assert_eq(a.played, ["radio_hiss", "radio"], "then the call")
+	assert_gt(float(a.RADIO_LOUD["urgent"]), float(a.RADIO_LOUD["call"]))
+	assert_gt(float(a.RADIO_LOUD["call"]), float(a.RADIO_LOUD["hiss"]))
+	a.played.clear()
+	game.set_radio("신호소 위: 동쪽", "say")
+	assert_eq(a.played, [], "what is said to your face makes no radio sound")
+
