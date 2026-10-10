@@ -361,6 +361,8 @@ func test_the_shove_pad_does_nothing_inside_the_lockout() -> void:
 	p.facing = PI * 0.5
 	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
 	hud._shove()
+	assert_eq(z["pos"], p.position + Vector3(0.8, 0, 0), "the arms come back first")
+	game.combat.update(game.combat.SHOVE_WINDUP + 0.01)
 	var pos1: Vector3 = z["pos"]
 	var t1: float = p.swing_t
 	z["pos"] = p.position + Vector3(0.8, 0, 0)
@@ -549,3 +551,74 @@ func test_swapping_is_inside_the_bag_panel() -> void:
 	for i in range(100):
 		game._update_person(p, 0.05)
 	assert_ne(p.weapon_id(), first, "the other weapon is in hand")
+
+
+# Build 89 (user): the shove landed the instant the key went down and the body
+# jumped back. Now it winds up, and the shoved body is seen going back.
+func test_a_shove_winds_up_and_the_body_is_seen_going_back() -> void:
+	var p = game.player
+	var hud = game.hud
+	p.facing = PI * 0.5
+	var from: Vector3 = p.position + Vector3(0.8, 0, 0)
+	var z: Dictionary = game.zombies.spawn("dead", from)
+	hud._shove()
+	assert_gt(p.shove_t, 0.0)
+	hud._shove()
+	game.combat.update(0.05)
+	assert_eq(z["pos"], from, "not yet")
+	game.combat.update(game.combat.SHOVE_WINDUP)
+	assert_gt(z["pos"].distance_to(from), 1.0, "it lands")
+	assert_gt(p.lunge_t, 0.0)
+	assert_almost_eq(game.zombies.draw_pos(z).distance_to(from), 0.0, 0.01, "drawn where it stood")
+	game.zombies.update(game.zombies.SHOVED_TIME * 0.5)
+	var mid: float = game.zombies.draw_pos(z).distance_to(from)
+	assert_gt(mid, 0.3)
+	game.zombies.update(game.zombies.SHOVED_TIME)
+	assert_eq(game.zombies.shoved_k(z), 1.0, "then it is drawn where the rules have it")
+
+
+func test_paused_the_stick_can_be_switched_between_fixed_and_following() -> void:
+	var hud = game.hud
+	hud.tick(0.02)
+	assert_false(hud.stick_opt_button.visible, "only while paused")
+	game.paused = true
+	hud.tick(0.02)
+	assert_true(hud.stick_opt_button.visible)
+	assert_false(hud.stick_floats())
+	hud._pad_down(hud.stick_opt_button, Vector2.ZERO)
+	assert_true(hud.stick_floats())
+	hud.tick(0.02)
+	assert_eq(hud.stick_opt_button.text, "스틱: 따라오기")
+	hud._pad_down(hud.stick_opt_button, Vector2.ZERO)
+	assert_false(hud.stick_floats())
+
+
+func test_the_dusk_test_key_jumps_to_1540_and_keeps_the_next_horde_as_far_off() -> void:
+	var hud = game.hud
+	var gap: float = game.director.next_arrival - game.clock.elapsed
+	hud._debug_dusk()
+	assert_almost_eq(game.clock.game_minutes(), 940.0, 0.01)
+	assert_false(game.clock.is_dark())
+	assert_almost_eq(game.director.next_arrival - game.clock.elapsed, gap, 0.01)
+	var at: float = game.clock.elapsed
+	hud._debug_dusk()
+	assert_eq(game.clock.elapsed, at, "a second press does nothing")
+
+
+func test_state_icons_sit_in_a_small_column_at_the_right_edge() -> void:
+	var p = game.player
+	var hud = game.hud
+	p.body.add_wound("torso", "deep", 0.0)
+	p.body.add_wound("arm_left", "fracture", 0.0)
+	hud.tick(0.02)
+	await wait_frames(2)
+	var view: Vector2 = hud.root.get_viewport_rect().size
+	var a: Rect2 = hud.status_pads[0].get_global_rect()
+	var b: Rect2 = hud.status_pads[1].get_global_rect()
+	assert_gt(a.position.x, view.x * 0.8, "right edge")
+	assert_almost_eq(a.end.x, b.end.x, 0.5, "one column, right-aligned")
+	assert_gt(b.position.y, a.end.y - 0.5, "one under the other")
+	assert_lt(hud.status_pads[0].get_theme_font_size("font_size"), 18, "small words")
+	for pad in [hud.shove_button, hud.manual_button, hud.aim_button]:
+		assert_false(hud.status_pads[4].get_global_rect().intersects(pad.get_global_rect()))
+
