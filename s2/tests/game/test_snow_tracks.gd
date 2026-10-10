@@ -110,6 +110,71 @@ func test_world_shader_reads_tracks_only_where_snow_can_lie() -> void:
 	assert_false(code.contains("hint_depth_texture"))
 
 
+func _stop(weather: Array) -> Node:
+	var game = load("res://game/field_game.gd").new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": weather}
+	add_child_autofree(game)
+	game.set_process(false)
+	return game
+
+
+func test_walkers_mark_outdoor_ground_and_not_floors_inside() -> void:
+	var game = _stop(["clear"])
+	game._mark_tracks()
+	var grid = game.grid
+	var here: int = grid.index(grid.get_script().cell_of(game.player.position))
+	assert_lt(game.snow_tracks.value(here), 1.0, "the chief stands on the platform")
+	# The stop's first sight update already handed the marks to the view.
+	assert_lt(game.view.vis_bytes[here * 4 + 3], 255, "written to the A channel")
+	# Standing still marks the cell once.
+	var once: float = game.snow_tracks.value(here)
+	game._mark_tracks()
+	assert_eq(game.snow_tracks.value(here), once)
+	# A step to the next cell marks that one too.
+	game.player.position += Vector3(1.0, 0.0, 0.0)
+	game._mark_tracks()
+	assert_lt(game.snow_tracks.value(grid.index(grid.get_script().cell_of(game.player.position))), 1.0)
+	# Under a roof nothing is marked.
+	var indoor := Vector2i(-1, -1)
+	for y in range(grid.height):
+		for x in range(grid.width):
+			if indoor.x < 0 and grid.indoor(Vector2i(x, y)):
+				indoor = Vector2i(x, y)
+	game.player.position = grid.get_script().center(indoor)
+	game._mark_tracks()
+	assert_eq(game.snow_tracks.value(grid.index(indoor)), 1.0)
+
+
+func test_the_dead_leave_marks_too() -> void:
+	var game = _stop(["clear"])
+	var walker: Dictionary = {}
+	for z in game.zombies.list:
+		if not (String(z["state"]) in ["dead", "frozen"]):
+			walker = z
+			break
+	assert_false(walker.is_empty(), "the stop has walking dead")
+	walker["pos"] = Vector3(60.5, 0.0, 30.5)
+	game._mark_tracks()
+	assert_lt(game.snow_tracks.value(game.grid.index(Vector2i(60, 30))), 1.0)
+
+
+func test_field_snowfall_fills_marks_and_clear_weather_keeps_them() -> void:
+	var snowy = _stop(["blizzard"])
+	snowy._mark_tracks()
+	var here: int = snowy.grid.index(snowy.grid.get_script().cell_of(snowy.player.position))
+	var before: float = snowy.snow_tracks.value(here)
+	snowy.clock.elapsed = 60.0 * 60.0 / 15.0   # one game hour
+	snowy._update_snow()
+	assert_gt(snowy.snow_tracks.value(here), before)
+	var clear = _stop(["clear"])
+	clear._mark_tracks()
+	here = clear.grid.index(clear.grid.get_script().cell_of(clear.player.position))
+	before = clear.snow_tracks.value(here)
+	clear.clock.elapsed = 1800.0
+	clear._update_snow()
+	assert_eq(clear.snow_tracks.value(here), before)
+
+
 func test_no_game_rule_reads_the_tracks() -> void:
 	# Picture only (user 2026-10-10): the dead, mates, raiders and sound never read marks.
 	for path in ["res://game/field_ai.gd", "res://game/field_combat.gd", "res://game/field_actions.gd", "res://game/actors/zombies.gd", "res://game/actors/person.gd", "res://game/sim/weather.gd", "res://game/sim/noise.gd", "res://game/sim/horde_director.gd", "res://game/world/field_grid.gd"]:
