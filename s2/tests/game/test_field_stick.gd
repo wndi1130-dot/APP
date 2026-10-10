@@ -741,3 +741,226 @@ func test_a_search_cut_short_frees_the_box() -> void:
 	_step(p, 0.1)
 	assert_eq(p.action, "")
 	assert_false(box["busy"], "a companion may search it now")
+
+
+# ---------------------------------------------------------------- PR 62 review fixes (2026-10-09)
+
+## A zombie on a victim: the grab state both sides read.
+func _grab(z: Dictionary, victim, left: float) -> void:
+	z["state"] = "grab"
+	z["victim"] = victim
+	victim.grabbers.append(z)
+	victim.grab_left = left
+
+
+func test_a_shove_that_does_not_knock_down_still_frees_the_one_it_held() -> void:
+	var q = game.squad[1]
+	var z: Dictionary = game.zombies.spawn("dead", q.position + Vector3(0.5, 0, 0))
+	_grab(z, q, 0.1)
+	game.zombies.release(z, game.player.position, false)
+	assert_eq(z["state"], "chase", "not knocked down")
+	assert_true(q.grabbers.is_empty(), "the ally is let go")
+	assert_eq(q.grab_left, 0.0, "no bite is left to come")
+
+
+func test_shoving_one_of_two_grabbers_leaves_the_other_holding() -> void:
+	var q = game.squad[1]
+	var a: Dictionary = game.zombies.spawn("dead", q.position + Vector3(0.5, 0, 0))
+	var b: Dictionary = game.zombies.spawn("dead", q.position + Vector3(-0.5, 0, 0))
+	_grab(a, q, 2.0)
+	_grab(b, q, 2.0)
+	game.zombies.release(a, game.player.position, false)
+	assert_eq(q.grabbers, [b])
+	assert_gt(q.grab_left, 0.0, "the other one still holds")
+
+
+func test_a_player_shove_saves_an_ally_whichever_way_the_roll_goes() -> void:
+	# Both rolls (knocked down or only pushed) must let the ally go.
+	var seen_chase := false
+	var seen_downed := false
+	for s in range(1, 40):
+		var q = game.squad[1]
+		q.grabbers.clear()
+		game.zombies.list.clear()
+		game.player.swing_t = 0.0
+		game.player.position = q.position + Vector3(-0.6, 0, 0)
+		game.player.facing = PI * 0.5
+		var z: Dictionary = game.zombies.spawn("dead", q.position + Vector3(0.5, 0, 0))
+		_grab(z, q, 0.1)
+		game.rng.seed = s
+		game.combat.shove(game.player)
+		seen_chase = seen_chase or z["state"] == "chase"
+		seen_downed = seen_downed or z["state"] == "downed"
+		assert_true(q.grabbers.is_empty(), "seed %d: the ally is let go" % s)
+		assert_eq(q.grab_left, 0.0)
+	assert_true(seen_chase and seen_downed, "both branches were tried")
+
+
+func test_a_shove_that_frees_the_shover_runs_both_releases_safely() -> void:
+	var p = game.player
+	p.facing = PI * 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.5, 0, 0))
+	_grab(z, p, 1.0)
+	game.combat.shove(p)
+	assert_true(p.grabbers.is_empty())
+	assert_eq(p.grab_left, 0.0)
+	p.release_grab(z)
+	assert_true(p.grabbers.is_empty(), "a third release changes nothing")
+
+
+## Walls on the two side cells of a diagonal: close enough to bite, shut off to a blow.
+func _corner(p, walls: bool) -> Dictionary:
+	var base: Vector2i = FieldGrid.cell_of(p.position)
+	if walls:
+		for c in [base + Vector2i(1, 0), base + Vector2i(0, 1)]:
+			game.grid.set_solid(c, FieldGrid.Solid.WALL)
+			game.grid.refresh_cell(c)
+	p.position = Vector3(base.x + 0.7, p.position.y, base.y + 0.7)
+	return game.zombies.spawn("dead", Vector3(base.x + 1.3, p.position.y, base.y + 1.3))
+
+
+func test_a_zombie_in_the_open_starts_its_attack_at_the_same_spot() -> void:
+	var z := _corner(game.player, false)
+	assert_lt(z["pos"].distance_to(game.player.position), game.zombies.ATTACK_RANGE)
+	game.zombies.update(0.2)
+	assert_eq(z["state"], "attack", "control: with no wall it comes")
+
+
+func test_a_zombie_does_not_start_an_attack_across_a_wall_corner() -> void:
+	var z := _corner(game.player, true)
+	assert_lt(z["pos"].distance_to(game.player.position), game.zombies.ATTACK_RANGE)
+	for i in range(10):
+		game.zombies.update(0.2)
+		assert_ne(z["state"], "attack")
+		assert_ne(z["state"], "grab")
+	assert_true(game.player.grabbers.is_empty())
+
+
+func test_an_attack_already_winding_up_is_dropped_when_a_wall_is_between() -> void:
+	var p = game.player
+	var z := _corner(p, true)
+	z["state"] = "attack"
+	z["victim"] = p
+	z["windup"] = 0.0
+	game.zombies._update_attack(z, 0.1)
+	assert_eq(z["state"], "chase", "no blow lands through the corner")
+	assert_eq(z["cooldown"], 0.0, "nothing was thrown")
+	assert_true(p.grabbers.is_empty())
+
+
+func test_a_zombie_on_another_floor_cannot_finish_an_attack() -> void:
+	var p = game.player
+	var z := _corner(p, false)
+	z["state"] = "attack"
+	z["victim"] = p
+	z["windup"] = 0.0
+	p.position.y += 3.0
+	game.zombies._update_attack(z, 0.1)
+	assert_ne(z["state"], "grab")
+	assert_eq(z["cooldown"], 0.0)
+
+
+func test_a_shove_does_not_reach_a_zombie_behind_a_wall_corner() -> void:
+	var p = game.player
+	var z := _corner(p, true)
+	z["state"] = "chase"
+	p.facing = PI * 0.25
+	var at: Vector3 = z["pos"]
+	game.combat.shove(p)
+	assert_eq(z["pos"], at, "not pushed")
+	assert_eq(z["stun"], 0.0, "not stunned")
+	assert_eq(z["state"], "chase")
+
+
+func test_the_same_shove_in_the_open_lands() -> void:
+	var p = game.player
+	var z := _corner(p, false)
+	z["state"] = "chase"
+	p.facing = PI * 0.25
+	var at: Vector3 = z["pos"]
+	game.combat.shove(p)
+	assert_ne(z["pos"], at, "control: pushed when nothing is between")
+
+
+func test_a_shove_does_not_pass_a_whole_window() -> void:
+	var p = game.player
+	var base: Vector2i = FieldGrid.cell_of(p.position)
+	p.position = Vector3(base.x + 0.9, p.position.y, base.y + 0.5)
+	var c: Vector2i = base + Vector2i(1, 0)
+	game.grid.set_solid(c, FieldGrid.Solid.WINDOW)
+	game.grid.windows[c] = {"broken": false, "glass": false, "building": 0, "cell": c}
+	game.grid.refresh_cell(c)
+	var z: Dictionary = game.zombies.spawn("dead", Vector3(base.x + 2.1, p.position.y, base.y + 0.5))
+	z["state"] = "chase"
+	p.facing = PI * 0.5
+	var at: Vector3 = z["pos"]
+	game.combat.shove(p)
+	assert_eq(z["pos"], at, "glass is in the way")
+	game.grid.break_window(c)
+	p.swing_t = 0.0
+	game.combat.shove(p)
+	assert_ne(z["pos"], at, "a broken window lets the shove through")
+
+
+func test_a_shove_still_frees_a_grabber_even_if_a_wall_cell_is_beside_it() -> void:
+	var p = game.player
+	var z := _corner(p, true)
+	_grab(z, p, 1.0)
+	game.combat.shove(p)
+	assert_true(p.grabbers.is_empty(), "what holds you comes off")
+
+
+func test_the_flanker_names_its_target_only_inside_the_axe_reach() -> void:
+	var p = game.player
+	var near = _raider(p.position + Vector3(1.6, 0, 0))
+	game.ai._raider_fight(near, p, true)
+	assert_eq(near.target_person, p, "1.6 m is inside an axe's 1.75")
+	var far = _raider(p.position + Vector3(0, 0, 2.0))
+	game.ai._raider_fight(far, p, true)
+	assert_null(far.target_person, "2.0 m is not: no target to set and clear")
+	assert_false(far.path.is_empty(), "it keeps walking in")
+
+
+func test_a_flanker_shut_off_by_glass_walks_instead_of_naming_a_target() -> void:
+	var p = game.player
+	var base: Vector2i = FieldGrid.cell_of(p.position)
+	p.position = Vector3(base.x + 0.9, p.position.y, base.y + 0.5)
+	var c: Vector2i = base + Vector2i(1, 0)
+	game.grid.set_solid(c, FieldGrid.Solid.WINDOW)
+	game.grid.windows[c] = {"broken": false, "glass": false, "building": 0, "cell": c}
+	game.grid.refresh_cell(c)
+	var r = _raider(Vector3(base.x + 2.2, p.position.y, base.y + 0.5))
+	game.ai._raider_fight(r, p, true)
+	assert_null(r.target_person, "it cannot hit through whole glass")
+
+
+func test_an_axe_raider_two_metres_off_closes_in_and_swings() -> void:
+	# AI and fight run together on the real loop: no stall between 1.75 m and 2.5 m.
+	var p = game.player
+	var r = _raider(p.position + Vector3(2.0, 0, 0))
+	r.brain["target"] = p
+	r.brain["aware"] = 1.0
+	var swung := false
+	var nearest := 99.0
+	for i in range(160):
+		game._step(0.05)
+		swung = swung or r.swing_t > 0.0
+		nearest = minf(nearest, r.position.distance_to(p.position))
+	assert_true(swung, "the axe came down")
+	assert_lt(nearest, 1.75, "it walked in to reach")
+
+
+func test_nothing_is_fired_or_shoved_while_paused() -> void:
+	var p = game.player
+	p.facing = PI * 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+	z["state"] = "chase"
+	var at: Vector3 = z["pos"]
+	game.paused = true
+	game.combat.shove(p)
+	assert_eq(z["pos"], at, "a paused shove does nothing")
+	assert_eq(p.swing_t, 0.0, "and costs nothing")
+	assert_eq(game.combat.fire(p, z["pos"]), "none", "no shot leaves the gun")
+	game.paused = false
+	game.combat.shove(p)
+	assert_ne(z["pos"], at, "control: unpaused it lands")

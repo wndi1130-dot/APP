@@ -679,6 +679,8 @@ func _offer_pick(cb: Callable) -> void:
 
 func _open_modal(width: float = 640.0) -> VBoxContainer:
 	_close_modal()
+	# Fingers held now will lift under the panel: let go of them first.
+	drop_touch()
 	modal_paused_before = game.paused
 	game.paused = true
 	modal_open = true
@@ -976,6 +978,9 @@ func _toggle_run() -> void:
 
 func _shove() -> void:
 	var p = game.player
+	if game.paused:
+		toast("멈춘 동안은 밀치지 못한다.")
+		return
 	if not p.grabbers.is_empty():
 		game.combat.break_grab(p)
 	elif p.can_act():
@@ -987,7 +992,13 @@ func _shove() -> void:
 ## Fingers on a phone: every touch index, so the left thumb can hold the
 ## stick while the right one aims or presses a pad.
 func _input(event: InputEvent) -> void:
-	if game == null or game.ended or modal_open:
+	if game == null or game.ended:
+		return
+	if modal_open:
+		# A panel is up: its buttons get the touch, but a lift or cancel still
+		# clears any finger the field held (never fires, never taps).
+		if event is InputEventScreenTouch and not event.pressed:
+			finger_cancel(event.index)
 		return
 	if event is InputEventScreenTouch:
 		# A cancelled touch is not a lift: no shot, no tap.

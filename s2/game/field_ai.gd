@@ -507,8 +507,9 @@ func _raider_fight(r, target, sees: bool) -> void:
 				b["aiming"] = false
 				_walk(r, _cover_near(at, r.position), false)
 		"flanker":
-			# Goes round the side and closes in with the axe.
-			if d < 2.5 and sees:
+			# Goes round the side and closes in with the axe: it names a target only
+			# within the blow's reach and with nothing in the way, else it walks on.
+			if sees and d <= game.combat.melee_range(r) and not game.combat.melee_blocked(r, target.position):
 				game.combat.melee_person(r, target)
 			else:
 				var side := Vector3(-(at - r.position).z, 0, (at - r.position).x).normalized() * 5.0
