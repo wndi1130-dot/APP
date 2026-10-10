@@ -22,6 +22,20 @@ func test_start_depth_follows_the_season() -> void:
 	assert_eq(SnowCover.new("summer").depth_cm, SnowCover.new().depth_cm, "unknown season is deep winter")
 
 
+func test_a_storm_before_arrival_lies_on_top_as_fresh_snow() -> void:
+	# weather_fx 14장, the stop after the storm: season depth + 25 cm.
+	var after := SnowCover.new("deep_winter", false, 25.0)
+	assert_eq(after.depth_cm, 50.0)
+	assert_eq(after.fresh_cm, 25.0)
+	assert_gt(after.cover(), SnowCover.new("deep_winter").cover())
+	assert_almost_eq(after.fresh_cover(), SnowCover.cover_for(25.0), 0.0001)
+	# Clear and cold afterwards: nothing more falls.
+	assert_eq(after.advance(60.0, ["clear"], -25.0), 0.0)
+	assert_eq(after.fresh_cm, 25.0)
+	assert_eq(SnowCover.new("deep_winter", false, -5.0).depth_cm, 25.0, "no negative storm")
+	assert_eq(SnowCover.new("deep_winter", false, 500.0).depth_cm, SnowCover.MAX_CM)
+
+
 func test_cover_curve_matches_the_three_thicknesses() -> void:
 	assert_eq(SnowCover.cover_for(0.0), 0.0)
 	assert_almost_eq(SnowCover.cover_for(7.0), FxState.snow_for_level(1), 0.03)
@@ -88,3 +102,21 @@ func test_field_snow_stays_put_on_a_clear_day() -> void:
 	game.clock.elapsed = 1800.0
 	game._update_snow()
 	assert_eq(float(game.fx_params["fx_snow"]), at_arrival)
+
+
+func test_field_takes_the_storm_pictures_without_changing_rules() -> void:
+	# weather_fx 14장: the look and the storm snow are picture inputs only.
+	var plain = _stop(["clear"])
+	var before = FieldGame.new()
+	before.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"], "look": ["overcast"]}
+	add_child_autofree(before)
+	before.set_process(false)
+	assert_eq(before.weather.kinds, plain.weather.kinds, "rules play as clear")
+	assert_lt(float(before.fx_light["sun_energy"]), float(plain.fx_light["sun_energy"]), "the sky is darker")
+	var after = FieldGame.new()
+	after.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"], "storm_cm": 25.0}
+	add_child_autofree(after)
+	after.set_process(false)
+	assert_eq(after.snow_cover.depth_cm, 50.0)
+	assert_gt(float(after.fx_params["fx_snow"]), float(plain.fx_params["fx_snow"]))
+	assert_eq(after.look_kinds, after.weather.kinds, "no look given: drawn as it plays")

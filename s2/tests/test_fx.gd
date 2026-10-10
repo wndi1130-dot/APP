@@ -177,3 +177,32 @@ func test_gallery_has_touch_controls_and_a_way_back() -> void:
 	assert_eq(gallery.current, gallery.PRESETS.size() - 1, "previous wraps to the last preset")
 	gallery.step(1)
 	assert_eq(gallery.current, 0, "next wraps to the first preset")
+
+
+func test_gallery_shows_the_three_storm_stops() -> void:
+	# weather_fx 14장: before (still, overcast), during (blizzard, no shadows),
+	# after (clear, coldest, deepest snow).
+	var gallery = load("res://fx/gallery.tscn").instantiate()
+	add_child_autofree(gallery)
+	var at: Dictionary = {}
+	for i in range(gallery.PRESETS.size()):
+		at[String(gallery.PRESETS[i]["name"])] = i
+	for name in ["11_storm_before", "12_storm_during", "13_storm_after"]:
+		assert_true(at.has(name), name)
+	gallery.apply_preset(at["11_storm_before"])
+	assert_true(gallery.sun.shadow_enabled)
+	assert_false(gallery.snow_fx.emitting, "nothing falls before the storm")
+	var before: float = gallery.sun.light_energy
+	gallery.apply_preset(at["12_storm_during"])
+	assert_false(gallery.sun.shadow_enabled, "no shadows inside the storm")
+	assert_true(gallery.snow_fx.emitting)
+	assert_lt(gallery.sun.light_energy, before)
+	gallery.apply_preset(at["13_storm_after"])
+	assert_true(gallery.sun.shadow_enabled)
+	assert_false(gallery.snow_fx.emitting)
+	assert_gt(gallery.sun.light_energy, before, "brightest after the storm")
+	var p: Dictionary = gallery.PRESETS[at["13_storm_after"]]
+	assert_gt(float(p["snow"]), float(gallery.PRESETS[at["11_storm_before"]]["snow"]))
+	assert_lt(float(p["wind"]), float(gallery.PRESETS[at["12_storm_during"]]["wind"]))
+	gallery.apply_preset(0)
+	assert_true(gallery.sun.shadow_enabled, "other presets keep shadows")
