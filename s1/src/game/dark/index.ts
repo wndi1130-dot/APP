@@ -4,6 +4,7 @@ import './cards';
 import './council';
 
 export { enableDark, hasDark } from './state';
+export { migrateDark } from './cases';
 export { DARK_CARD_KINDS } from './cards';
 export type { DarkState } from './state';
 export { darkEnd, logPick, wallDetail, wallLine } from './chronicle';

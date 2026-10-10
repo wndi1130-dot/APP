@@ -156,9 +156,9 @@ export function eligible(g: Game, c: Case): Suspect[] {
   const free = live.filter(s => !s.acq);
   return free.length ? free : live;
 }
-/** 단서로 본 맨 위(재판의 피고, 즉결 대상) */
+/** 단서로 본 맨 위(재판의 피고, 즉결 대상). 피고는 단서로만 고르고 편견 점수로 가르지 않는다. 동점이면 c.sus의 원래 순서(openCase가 섞어 둠)를 따른다(sort는 안정 정렬). */
 export function topByClues(g: Game, c: Case): Suspect | undefined {
-  return [...eligible(g, c)].sort((a, b) => level(b) - level(a) || b.clues.length - a.clues.length || suspicion(b) - suspicion(a))[0];
+  return [...eligible(g, c)].sort((a, b) => level(b) - level(a) || b.clues.length - a.clues.length)[0];
 }
 /** 군중이 끌어낼 사람: 희생양 표시가 켜진 사람 중 의심 점수 맨 위. 없으면 undefined(군중이 이름에 모이지 못한다). */
 export function mobTarget(g: Game, c: Case): Suspect | undefined {
@@ -167,13 +167,14 @@ export function mobTarget(g: Game, c: Case): Suspect | undefined {
 
 const MOB_LANGS = ['pl', 'de', 'cz'];
 
-/** 희생양 후보 표시(1.4 두 층): 그 사건에 닿은 사실(드나듦·그 사람을 가리킨 단서) 하나 이상과
- * 의심 점수 전체 2 이상. 늦게 탐·밖에서 옴은 순위만 올린다. 이름 거름과 아이는 언제나 빠진다.
+/** 희생양 후보 표시(1.4 두 층): 그 사건에 닿은 사실(TIE_FACTS, 지금은 없음. 그 사람을 가리킨 출처 있는 단서가 대신 센다) 하나 이상과
+ * 의심 점수 전체 2 이상. 칸 단위 드나듦(access)은 점수에만 든다. 개인 드나듦 기록이 생기면 그때 닿은 사실로 센다. 늦게 탐·밖에서 옴은 순위만 올린다. 이름 거름과 아이는 언제나 빠진다.
  * 이름 거름(1.4, 제안): 프로필의 name_lang이 pl·de·cz인 사람만 오른다. 필드가 없으면 빠진다. 언어는 막는 쪽에만 쓴다. */
 export function flagged(g: Game, s: Suspect): boolean {
   const p = byId(s.id);
   if (!p || p.age < 16 || !MOB_LANGS.includes(p.name_lang ?? '')) return false;
-  const tied = s.facts.some(f => TIE_FACTS.includes(f)) || s.clues.length > 0;
+  // 출처 없는 밀고(익명 쪽지)와 떠도는 말(informant)은 닿은 사실로 세지 않는다. 의심 점수와 소문 단계에만 든다(1.4, 2026-10-10 금지선 점검).
+  const tied = s.facts.some(f => TIE_FACTS.includes(f)) || s.clues.some(c => c.kind !== 'informant');
   return tied && suspicion(s) >= 2;
 }
 
@@ -185,6 +186,11 @@ export function updateFlags(g: Game): void {
     for (const s of c.sus) if (!s.acq && !s.served && alive(g, s.id) && flagged(g, s)) ids.add(s.id);
   }
   g.scapegoatOk = [...ids];
+}
+
+/** 옛 저장을 불러온 뒤 후보 목록을 다시 센다(app의 불러오기가 부른다). 예전 규칙으로 켜진 칸 소속 후보가 g.scapegoatOk에 남지 않게 한다. */
+export function migrateDark(g: Game): void {
+  if (g.dark) updateFlags(g);
 }
 
 export function caseById(g: Game, id: number | undefined): Case | undefined {

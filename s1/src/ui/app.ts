@@ -608,7 +608,7 @@ export function startApp(root: HTMLElement): void {
         ui = freshUi();
         persist(g);
         resetRepro();
-        toast(`서막 없이 새 판: 시드 ${g.seed}. 볼슈틴 차고를 막 떠났다.`);
+        toast(`차고 장면 건너뛰기: 시드 ${g.seed}. 볼슈틴 차고를 막 떠났다.`);
         return render();
       case 'fullscreen': {
         // 폰 가로에서 아티팩트 창 테두리 때문에 화면이 덜 차는 것을 막는다. 창이 막으면 알려 준다.
