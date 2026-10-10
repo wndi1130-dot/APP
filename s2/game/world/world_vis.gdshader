@@ -31,12 +31,17 @@ void fragment() {
 	cover *= 0.55 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	base *= 1.0 - 0.35 * wet;
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet), cover);
+	// Rime on upright faces in hard cold: thin and patchy, never a white wall.
+	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
+	rime *= 0.16 * smoothstep(0.3, 0.9, fx_fbm2(vec2((world_pos.x + world_pos.z) * 0.7, world_pos.y * 1.6)));
+	base = mix(base, FX_RIME, rime * (1.0 - smoothstep(0.08, 0.3, chroma)));
 	vec2 uv = world_pos.xz / map_size;
 	vec2 seen = texture(vis, uv).rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
 	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
-	ALBEDO = mix(dimmed, vec3(0.86, 0.88, 0.9), frost) * lit;
+	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
+	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
 }

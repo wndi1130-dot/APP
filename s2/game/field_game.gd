@@ -20,6 +20,7 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
+const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
 const AI = preload("res://game/field_ai.gd")
@@ -51,6 +52,9 @@ const INERTIA: Dictionary = {
 }
 const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat"]
 const CAM_PITCH: float = 52.0
+const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
+const NIGHT_SUN_MIN: float = 0.1
+const NIGHT_AMBIENT_MIN: float = 0.2
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
@@ -134,6 +138,9 @@ var lid_tip_told: bool = false           # the driver has said once how the stre
 var light_t: float = 0.0
 ## What the stop wrote into the fx_* shader globals (the server cannot be read back at runtime).
 var fx_params: Dictionary = {}
+## Sun, fill and haze colours of the arrival hour and of full night (FxState.lighting_for).
+var fx_light: Dictionary = {}
+var fx_light_night: Dictionary = {}
 
 
 func _ready() -> void:
@@ -187,27 +194,49 @@ func _apply_fx() -> void:
 	var hour := clock.game_minutes() / 60.0
 	fx_params = FxState.params_for(weather.kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour)
 	FxState.apply(fx_params)
+	fx_light = FxState.lighting_for(weather.kinds, hour)
+	fx_light_night = FxState.lighting_for(weather.kinds, 0.0)
+
+
+## Tactical pause fades the world like an old photo (shaders.md 2장); people,
+## the dead and the HUD do not read fx_fade and keep their colour.
+func _update_fade(delta: float) -> void:
+	var target := 1.0 if paused and not ended else 0.0
+	var fade: float = fx_params["fx_fade"]
+	if is_equal_approx(fade, target):
+		return
+	fx_params["fx_fade"] = move_toward(fade, target, delta / FADE_TIME)
+	FxState.apply({"fx_fade": fx_params["fx_fade"]})
+
+
+## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
+func _update_light() -> void:
+	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	# The night band is lamps only; the gray-box field has no lamps yet, so the
+	# floors keep people, doors and the platform edge readable after dark.
+	sun.light_energy = lerpf(float(fx_light["sun_energy"]), maxf(float(fx_light_night["sun_energy"]), NIGHT_SUN_MIN), t)
+	environment.ambient_light_energy = lerpf(float(fx_light["ambient_energy"]), maxf(float(fx_light_night["ambient_energy"]), NIGHT_AMBIENT_MIN), t)
 
 
 func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.13, 0.135, 0.15)
+	environment.background_color = Color(fx_params["fx_tint"]).darkened(0.75)
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.62, 0.66, 0.72)
-	environment.ambient_light_energy = 0.6
+	environment.ambient_light_color = fx_light["ambient_color"]
+	environment.ambient_light_energy = fx_light["ambient_energy"]
 	# Weather fog lives in the sight mask (weather.gd); depth fog would wash
 	# the whole oblique view out, so it stays off unless asked for.
 	environment.fog_enabled = bool(opts.get("fog", false))
 	environment.fog_density = 0.012
-	environment.fog_light_color = Color(0.7, 0.72, 0.75)
+	environment.fog_light_color = fx_light["fog_color"]
 	world.environment = environment
 	add_child(world)
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, -30, 0)
-	sun.light_energy = 0.7
-	sun.light_color = Color(0.86, 0.9, 0.98)
+	sun.light_energy = fx_light["sun_energy"]
+	sun.light_color = fx_light["sun_color"]
 	sun.shadow_enabled = bool(opts.get("shadows", true))
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
@@ -231,11 +260,13 @@ func _build_world() -> void:
 	pm.initial_velocity_max = 2.2
 	pm.gravity = Vector3(0.2, -0.6, 0)
 	snow.process_material = pm
-	var flake := BoxMesh.new()
-	flake.size = Vector3(0.05, 0.05, 0.05)
-	var fm := StandardMaterial3D.new()
-	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fm.albedo_color = Color(0.95, 0.96, 0.98)
+	# Flakes take the weather tint and the pause fade from the fx library.
+	var flake := QuadMesh.new()
+	flake.size = Vector2(0.1, 0.1)
+	var fm := ShaderMaterial.new()
+	fm.shader = PrecipShader
+	fm.set_shader_parameter("shape", 1)
+	fm.set_shader_parameter("opacity", 0.85)
 	flake.material = fm
 	snow.draw_pass_1 = flake
 	snow.emitting = bool(opts.get("snow", true)) and weather.particles() > 0
@@ -527,6 +558,7 @@ func _process(delta: float) -> void:
 	delta = minf(delta, 0.1)
 	if not ended and not paused:
 		_step(delta)
+	_update_fade(delta)
 	_update_camera(delta)
 	vis_t -= delta
 	if vis_t <= 0.0:
@@ -1172,8 +1204,7 @@ func _update_camera(delta: float) -> void:
 	camera.position = cam_focus + back
 	camera.look_at(cam_focus, Vector3.UP)
 	snow.position = cam_focus + Vector3(0, 9, 0)
-	sun.light_energy = lerpf(0.7, 0.1, clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0))
-	environment.ambient_light_energy = lerpf(0.6, 0.2, clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0))
+	_update_light()
 
 
 func screen_to_ground(screen: Vector2) -> Vector3:
