@@ -1033,3 +1033,7 @@ small { font-size: 12px; }
 .martial-foot { display: flex; }
 .martial-lift { min-height: 36px; padding: 0 10px; font-size: 13px; width: 100%; }
 .martial-lift.is-armed { background: var(--warning); color: var(--on-light); border-color: var(--warning); }
+
+/* 집단 창의 의석 비율: 작은 막대와 %(석수는 누르면 쪽지). */
+.frow__share { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-3); }
+.frow__share .mini-bar { width: 36px; }

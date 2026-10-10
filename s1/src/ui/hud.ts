@@ -6,6 +6,7 @@ import type { View } from './common';
 import { fxText, fxTone } from './fx';
 import { departLever } from './depart';
 import { tip } from './widgets';
+import { seatLine, sharePcts } from './share';
 import type { Fx, FxKey } from './fx';
 import type { Comm } from '../game';
 import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
@@ -73,9 +74,10 @@ function deltaLine(value: number, delta: number): HTMLElement {
     `${signed(delta)}·${n === 0 ? '바닥' : `${n}구간`}`);
 }
 
-/** 의석 꼬리표: 불만 의석이 늘면 빨강(이때만), 나머지는 재질대로 */
-function seatTag(fx: Fx | null | undefined, which: 'unrest' | 'support'): HTMLElement | null {
-  const v = fx?.seats[which];
+/** 의석 꼬리표(띠 숫자처럼 %p로): 불만 의석이 늘면 빨강(이때만), 나머지는 재질대로 */
+function seatTag(fx: Fx | null | undefined, which: 'unrest' | 'support', total: number): HTMLElement | null {
+  const moved = fx?.seats[which];
+  const v = moved && total > 0 ? Math.round((moved * 100) / total) || Math.sign(moved) : 0;
   if (!fx || !v) return null;
   const tone = which === 'unrest' && v > 0 ? 'fx-red' : v > 0 ? 'fx-up' : 'fx-down';
   return h('span', { class: cx('fx fx-seat num', tone), 'data-anim': `fx-${fx.id}-seat-${which}`, 'aria-hidden': 'true' }, fxText(v));
@@ -97,7 +99,7 @@ function bandSeg(g: View['g'], x: { c: Comm; seats: number; side: -1 | 0 | 1 }, 
   const moved = fx?.rel[x.c];
   return h('i', {
     class: cx('band__seg', x.side < 0 && 'is-unrest', x.side > 0 && 'is-support', !!moved && 'fx-seg'),
-    style: `flex:${x.seats}`, title: `${COMM_NAME[x.c]} ${x.seats}석 · 관계 ${fmt(rel)}`,
+    style: `flex:${x.seats}`, title: `${COMM_NAME[x.c]} · 관계 ${fmt(rel)}`,
     ...(fx && moved ? { 'data-anim': `fx-${fx.id}-seg-${x.c}` } : {}),
   }, fill.side ? h('b', { class: cx('band__fill', fill.side < 0 ? 'is-neg' : 'is-pos'), style: `width:${pct(fill.ratio * 100)}` }) : null);
 }
@@ -109,6 +111,11 @@ export function topBar(view: View): HTMLElement {
   const f = forecast(g);
   const fx = ui.fx;
   const rels = fx ? (Object.keys(fx.rel) as Comm[]) : [];
+  // 띠 숫자는 비율(%)이다. 조각 너비와 같은 것을 말한다. 석수는 글자를 누르면 뜨는 쪽지에 있다(사용자 2026-10-11).
+  const total = st.unrest + st.neutral + st.support;
+  const [pu, pn, ps] = sharePcts([st.unrest, st.neutral, st.support]);
+  const who = (side: -1 | 0 | 1) => seatLine(order.filter(x => x.side === side).map(x => ({ name: COMM_NAME[x.c], seats: x.seats })));
+  const note = (text: string, seatsN: number, side: -1 | 0 | 1) => `${text} 지금 ${seatsN}석(전체 ${total}석): ${who(side)}.`;
   return h('header', { class: cx('top', fx?.band && 'fx-band'), ...(fx?.band ? { 'data-anim': `fx-${fx.id}-band` } : {}) },
     h('div', { class: 'top__meters' },
       darkTrustMeter(view) ?? meter('trust', '신임', g.trust, '--support', fx),
@@ -117,9 +124,9 @@ export function topBar(view: View): HTMLElement {
       h('button', { class: cx('band__btn band__btn--unrest', ui.panel === 'unrest' && 'is-on'), 'data-action': 'panel', 'data-panel': 'unrest', 'aria-label': '불만 쪽 집단 펼치기' }, icon('fist')),
       h('div', { class: 'band__track' },
         h('div', { class: 'band__nums' },
-          h('span', { class: 'is-unrest' }, tip('불만', TIP.unrest), ` ${st.unrest}`, seatTag(fx, 'unrest')),
-          h('span', null, tip('중립', TIP.neutral), ` ${st.neutral}`),
-          h('span', { class: 'is-support' }, tip('지지', TIP.support), ` ${st.support}`, seatTag(fx, 'support'))),
+          h('span', { class: 'is-unrest' }, tip('불만', note(TIP.unrest, st.unrest, -1)), h('b', { class: 'num' }, ` ${pu}%`), seatTag(fx, 'unrest', total)),
+          h('span', null, tip('중립', note(TIP.neutral, st.neutral, 0)), h('b', { class: 'num' }, ` ${pn}%`)),
+          h('span', { class: 'is-support' }, tip('지지', note(TIP.support, st.support, 1)), h('b', { class: 'num' }, ` ${ps}%`), seatTag(fx, 'support', total))),
         h('div', { class: 'band__bar' }, order.map(x => bandSeg(g, x, fx)))),
       h('button', { class: cx('band__btn band__btn--support', ui.panel === 'support' && 'is-on'), 'data-action': 'panel', 'data-panel': 'support', 'aria-label': '지지 쪽 집단 펼치기' }, icon('hand')),
       // 관계가 바뀐 칸: 띠 밑에 칸 이름과 숫자가 떠오른다.
