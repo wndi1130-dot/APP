@@ -326,6 +326,8 @@ export interface Game {
   budget?: BudgetState;
   /** 예산 때문에 미뤄 둔 카드. 다음 구간 처음에 맨 앞으로 돌아온다 */
   deferred?: Card[];
+  /** 새 이동 사건 묶음과 가중 뽑기(event_pack.ts)가 켜진 판. 없으면 꺼진 판 */
+  eventPack?: true;
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';

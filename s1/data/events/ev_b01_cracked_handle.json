@@ -1,0 +1,78 @@
+{
+  "id": "ev_b01_cracked_handle",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 18
+    }
+  ],
+  "speaker": "engine",
+  "body": "수리용 망치 자루에 금이 갔다. 공구를 든 사람이 금 끝을 손톱으로 짚으며 새 자루를 찾는다.",
+  "choices": [
+    {
+      "id": "c_replace",
+      "label": "자루를 새로 깎는다",
+      "say": "망치를 내려라. 자루를 새로 깎아 끼운다.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": 3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_guard_lend",
+      "label": "경비칸 공구를 빌린다",
+      "say": "경비칸 망치를 빌려라. 이 자루는 빼 둔다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -4
+        },
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_defer",
+      "label": "자루에 천을 감는다",
+      "say": "금 간 자루에 천을 감아라. 다시 살펴보자.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -2
+        },
+        {
+          "type": "flag",
+          "id": "b01_handle_pending",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_b01_handle_break",
+          "delay": 4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

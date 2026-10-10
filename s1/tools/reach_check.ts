@@ -19,6 +19,14 @@ export const REACH_NOTES: Record<string, string> = {
   strike: '파업 경고 뒤에 온다. 봇 판에선 드물다',
   hub_few: '라이프치히에 모든 칸이 중립 이상으로 닿아야 온다. 봇 판에선 드물다',
   rep_sick: '온기나 배급이 38 아래로 두 구간 머문 칸에 온다. 서막 첫 거래에서 봇이 늘 꼬리칸 난방을 올려서 봇 판엔 그런 칸이 거의 없다(서막 없는 판에선 나온다)',
+  // 새 이동 사건 묶음(ev_b01_, 켠 판에서만). 손으로 조건을 맞추면 모두 뽑힌다. 봇이 그 길을 안 가서 안 나온다(시뮬 4,000판×5정책에서도 0번)
+  'content:ev_b01_handle_break': '앞 사건 cracked_handle에서 미루는 선택(c_defer)을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_b01_scattered_grain': '앞 사건 sack_seam에서 미루는 선택(c_defer)을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_b01_strap_break': '앞 사건 frayed_strap에서 미루는 선택(c_defer)을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_b01_full_infirmary': '기술·의무진 과밀이 70 이상이어야 온다. 봇 판에선 거의 없다',
+  'content:ev_b01_stoker_burn': '기관실 과밀이 60 이상이어야 온다. 봇 판에선 거의 없다',
+  'content:ev_b01_window_ice': '앞칸 온기가 42 이하여야 온다. 봇 판에선 거의 없다',
+  'content:ev_b01_wobbly_cart': '앞칸 과밀이 55 이상이어야 온다. 봇 판에선 거의 없다',
 };
 
 export const CONFIGS: [string, BotOptions][] = [
@@ -26,6 +34,8 @@ export const CONFIGS: [string, BotOptions][] = [
   ['S1a 첫 선택지', { s1c: false, policy: 'first', dom: 'idle' }],
   ['S1c 돌봄', { s1c: true, policy: 'caretaker', dom: 'engaged' }],
   ['S1c 첫 선택지', { s1c: true, policy: 'first', dom: 'idle' }],
+  // 새 이동 사건 묶음(ev_b01_, event_pack.ts)은 기본 꺼짐이라 켠 판을 따로 돌려야 닿는다
+  ['S1c 돌봄 묶음 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', eventPack: true }],
 ];
 
 export interface ReachReport { games: number; seen: Record<string, number>; unreached: string[]; unexpected: string[]; noted: string[]; notes: Record<string, string> }

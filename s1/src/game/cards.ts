@@ -120,7 +120,7 @@ export function withAfford(g: Game, choices: Choice[]): Choice[] {
 // ---- 이동 사건(브리프 9장의 묶음에서 고른 것) ----
 // 같은 사건이 다시 나올 수 있지만, 지난번 고른 것과 지금 처지에 따라 본문과 대가가 달라진다(2026-10-07 사용자 후기:
 // 프로스트펑크처럼 발생은 하되 세부가 달라져야 한다). 한 사건은 다섯 구간 안에 다시 나오지 않는다.
-interface TravelEvent { id: string; when: (g: Game) => boolean; view: (g: Game, past: EventMemo | undefined) => CardView }
+interface TravelEvent { id: string; when: (g: Game) => boolean; /** 처지 압박의 원값(1 + 문턱까지 거리/20). drawTravelEvent가 1~DRAW.pressMax로 자른다. 없으면 1 */ pressure?: (g: Game) => number; /** 기본 무게(드문 사건 0.5, 모자란 자원을 주는 사건은 올린다). 없으면 1 */ base?: () => number; view: (g: Game, past: EventMemo | undefined) => CardView }
 
 /** 지난번 그 사건에서 무엇을 골랐는지에 따라 본문을 고른다. 처음이면 first. */
 function again(past: EventMemo | undefined, first: string, byPick: Record<string, string>, fallback: string): string {
@@ -139,7 +139,7 @@ function kids(g: Game, c: Comm): number {
 
 export const TRAVEL_EVENTS: TravelEvent[] = [
   {
-    id: 'tail_cold', when: g => situation(g, 'tail')[0] <= 38,
+    id: 'tail_cold', pressure: g => 1 + (38 - situation(g, 'tail')[0]) / DRAW.pressDiv, when: g => situation(g, 'tail')[0] <= 38,
     view: (g, past) => ({
       title: past ? '또 꺼진 난로' : '꺼진 난로', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: again(past, `꼬리칸 난로가 이틀째 꺼져 있다. 아이 ${kids(g, 'tail')}명의 손끝이 하얗다. 앞칸엔 난로가 두 개다.`, {
@@ -159,7 +159,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
-    id: 'crowd_fight', when: g => situation(g, 'tail')[2] >= 78,
+    id: 'crowd_fight', pressure: g => 1 + (situation(g, 'tail')[2] - 78) / DRAW.pressDiv, when: g => situation(g, 'tail')[2] >= 78,
     view: (g, past) => ({
       title: past ? '또 자리 싸움' : '자리 싸움', speaker: leader(g, 'guard'), focus: 'tail', required: true,
       body: again(past, '꼬리칸에서 누울 자리를 두고 주먹이 오갔다. 한 사람이 머리를 다쳤다.', {
@@ -230,7 +230,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
-    id: 'abandoned_tender', when: g => g.seg >= 2 && g.coal < 80,
+    id: 'abandoned_tender', pressure: g => 1 + (80 - g.coal) / DRAW.pressDiv, base: () => DRAW.tenderBase, when: g => g.seg >= 2 && g.coal < 80,
     view: (_g, past) => ({
       title: '측선의 탄수차', focus: 'engine', required: true,
       body: past ? '측선에 또 버려진 탄수차가 있다. 이번엔 문짝마다 손톱자국이 나 있다.' : '측선에 버려진 탄수차가 서 있다. 안에 석탄이 보인다. 주위가 너무 조용하다.',
@@ -255,7 +255,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
-    id: 'ration_line', when: g => situation(g, 'tail')[1] < 45,
+    id: 'ration_line', pressure: g => 1 + (45 - situation(g, 'tail')[1]) / DRAW.pressDiv, when: g => situation(g, 'tail')[1] < 45,
     view: (g, past) => ({
       title: '배급 줄', speaker: leader(g, 'tail'), focus: 'tail', required: true,
       body: again(past, '배급 줄 끝에서 빵이 떨어졌다. 뒤에 선 사람들이 소리친다.', {
@@ -269,7 +269,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
-    id: 'guard_frost', when: g => situation(g, 'guard')[0] < 50,
+    id: 'guard_frost', pressure: g => 1 + (50 - situation(g, 'guard')[0]) / DRAW.pressDiv, when: g => situation(g, 'guard')[0] < 50,
     view: (g, past) => ({
       title: '동상', speaker: leader(g, 'guard'), focus: 'guard', required: true,
       body: again(past, '지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.', {
@@ -300,6 +300,68 @@ export function eventStateKey(g: Game): string {
   return `${leaders}|${band(g.coal, 40)}|${band(g.food, 40)}|${band(w, 10)}|${band(r, 10)}|${laws}`;
 }
 
+/**
+ * 이동 사건 가중 뽑기 상수(events_disasters 3.2). 시뮬은 --set=키:값으로 바꾼다(tools/s1c_sim.ts).
+ * 무게 = 기본 × 처지 압박 × 새로움 × 화자 고르기.
+ */
+export const DRAW = {
+  /** 처지 압박 = 1 + (문턱에서 벗어난 거리) / pressDiv, 1~pressMax로 자른다(시뮬 4,000판으로 3에서 4로, tenderBase 1에서 4로 조정) */
+  pressDiv: 20,
+  pressMax: 4,
+  /** 측선의 탄수차 기본 무게(석탄 +8을 주는 사건이 묽어지지 않게) */
+  tenderBase: 4,
+  /** 새로움: 이 판에서 이미 본 횟수 0은 1, 1은 seen1, 2 이상은 seen2 */
+  seen1: 0.6,
+  seen2: 0.3,
+  /** 직전 두 이동 사건 중 하나라도 같은 칸이 화자면 곱한다 */
+  speakerPenalty: 0.5,
+};
+
+/** 콘텐츠 JSON 사건의 처지 압박 원값과 화자 칸. content.ts가 올릴 때 채운다(cards↔content 순환을 피하려는 훅). */
+export const DRAW_HOOKS: { content?: (g: Game, id: string) => { pressure: number; comm?: Comm } } = {};
+
+export const pressureOf = (raw: number): number => clamp(raw, 1, DRAW.pressMax);
+export const noveltyOf = (seen: number): number => (seen <= 0 ? 1 : seen === 1 ? DRAW.seen1 : DRAW.seen2);
+
+/** 이동 사건 id의 화자 칸(focus나 speaker). 모르면(any) undefined. */
+function travelComm(g: Game, id: string): Comm | undefined {
+  if (id.startsWith('content:')) return DRAW_HOOKS.content?.(g, id.slice(8)).comm;
+  const e = TRAVEL_EVENTS.find(x => x.id === id);
+  if (!e) return undefined;
+  const v = e.view(g, g.eventLog?.[id]);
+  return v.focus ?? v.speaker?.comm;
+}
+
+/** 후보 하나의 무게. */
+export function travelWeight(g: Game, id: string, recentComms: (Comm | undefined)[]): number {
+  let base = 1;
+  let press = 1;
+  if (id.startsWith('content:')) press = pressureOf(DRAW_HOOKS.content?.(g, id.slice(8)).pressure ?? 1);
+  else {
+    const e = TRAVEL_EVENTS.find(x => x.id === id);
+    base = e?.base?.() ?? 1;
+    press = pressureOf(e?.pressure?.(g) ?? 1);
+  }
+  const seen = g.eventLog?.[id]?.n ?? 0;
+  const comm = travelComm(g, id);
+  const sp = comm && recentComms.includes(comm) ? DRAW.speakerPenalty : 1;
+  return base * press * noveltyOf(seen) * sp;
+}
+
+/** 켠 판의 가중 뽑기. 난수는 한 번만 쓴다(균등 pick과 같은 소비 수). 누적 가중치 위에서 고른다. */
+function weightedTravelPick(g: Game, pool: string[]): string {
+  const recentComms = g.recentEvents.slice(-2).map(r => travelComm(g, r));
+  const weights = pool.map(id => travelWeight(g, id, recentComms));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let x = rnd(g) * total;
+  let idx = pool.length - 1;
+  for (let i = 0; i < pool.length; i += 1) {
+    x -= weights[i];
+    if (x < 0) { idx = i; break; }
+  }
+  return pool[idx];
+}
+
 /** extra: 같은 풀에 섞을 다른 사건 id(콘텐츠 JSON 사건은 'content:<id>', turn.ts가 넣는다) */
 export function drawTravelEvent(g: Game, extra: string[] = []): string | null {
   const log = g.eventLog ?? {};
@@ -311,7 +373,7 @@ export function drawTravelEvent(g: Game, extra: string[] = []): string | null {
   };
   const pool = [...TRAVEL_EVENTS.filter(e => e.when(g) && open(e.id)).map(e => e.id), ...extra].filter(id => !g.recentEvents.includes(id));
   if (pool.length === 0) return null;
-  const id = pick(g, pool);
+  const id = g.eventPack ? weightedTravelPick(g, pool) : pick(g, pool); // 꺼진 판(event_pack.ts)은 원래의 균등 뽑기다
   g.recentEvents = [...g.recentEvents, id].slice(-4);
   return id;
 }

@@ -1,0 +1,60 @@
+{
+  "id": "ev_b01_frost_bird",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 2,
+      "max": 20
+    },
+    {
+      "type": "community",
+      "community": "tail",
+      "metric": "warmth",
+      "operator": "lte",
+      "value": 55
+    }
+  ],
+  "speaker": "tail",
+  "body": "아이가 성에 위에 새를 그렸다. 열차가 흔들릴 때마다 새가 고개를 까딱하는 것 같아 곁에 있던 어른도 웃는다.",
+  "choices": [
+    {
+      "id": "c_draw",
+      "label": "다른 창에도 그린다",
+      "say": "천을 가져와라. 새가 앉을 자리부터 닦자.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -2
+        },
+        {
+          "type": "tension",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_space",
+      "label": "앞칸 창을 그림에 내준다",
+      "say": "앞칸도 창가를 내어라. 그린 새를 함께 보자.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        },
+        {
+          "type": "tension",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

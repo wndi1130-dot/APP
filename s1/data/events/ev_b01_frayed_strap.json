@@ -1,0 +1,79 @@
+{
+  "id": "ev_b01_frayed_strap",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 2,
+      "max": 18
+    }
+  ],
+  "speaker": "engine",
+  "body": "나무 상자를 받친 끈이 닳아 실밥이 풀린다. 흔들릴 때마다 상자가 조금씩 기운다.",
+  "choices": [
+    {
+      "id": "c_replace",
+      "label": "끈을 갈아 준다",
+      "say": "상자부터 받쳐라. 끈은 새것으로 갈자.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -2
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": 3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_hold",
+      "label": "앞칸에 받침을 맡긴다",
+      "say": "앞칸이 상자를 받쳐라. 끈은 내가 살피겠다.",
+      "effects": [
+        {
+          "type": "community.crowding",
+          "target": "front",
+          "amount": 4
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_defer",
+      "label": "매듭만 보탠다",
+      "say": "끈에 매듭을 보태라. 다음 점검 때 다시 보자.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -3
+        },
+        {
+          "type": "flag",
+          "id": "b01_strap_pending",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_b01_strap_break",
+          "delay": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

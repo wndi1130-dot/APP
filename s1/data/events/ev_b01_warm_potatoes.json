@@ -1,0 +1,58 @@
+{
+  "id": "ev_b01_warm_potatoes",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 2,
+      "max": 20
+    }
+  ],
+  "speaker": "ration_officer",
+  "body": "솥 가장자리에 둔 감자가 알맞게 익었다. 배급 담당이 작은 그릇을 내밀며 오늘은 냄새도 먹음직하다고 웃는다.",
+  "choices": [
+    {
+      "id": "c_share",
+      "label": "감자를 조금씩 나눈다",
+      "say": "감자를 잘라라. 한 조각씩 맛을 보자.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -2
+        },
+        {
+          "type": "tension",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_front_share",
+      "label": "앞칸 몫에서 나눈다",
+      "say": "앞칸 감자를 내어라. 그릇을 돌려 보자.",
+      "effects": [
+        {
+          "type": "community.ration",
+          "target": "front",
+          "amount": -2
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        },
+        {
+          "type": "tension",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
