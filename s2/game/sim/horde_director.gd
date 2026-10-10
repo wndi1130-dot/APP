@@ -17,6 +17,12 @@ const REST_BASE := 45.0
 const REST_PER_SHOT := 5.0
 const REST_MIN := 15.0
 const CALL_RANGE_GROWTH := 0.6
+## Shaking them off (user 2026-10-10, 'a breather after being found'): once the
+## dead have noticed the squad, LOST_QUIET seconds unseen and without a loud
+## sound counts as lost, and the next horde comes LOST_REST later. LOST_MAX a stop.
+const LOST_QUIET := 30.0
+const LOST_REST := 45.0
+const LOST_MAX := 3
 
 ## Rear hordes: the sewers are the endless source (user 2026-10-07: refugees
 ## fled underground and the infected came with them). A rural stop has a small
@@ -44,6 +50,10 @@ var next_entry: String = FIRST_ENTRY
 ## Total seconds pulled forward by noise (for logs).
 var pulled_seconds: float = 0.0
 var rest_until: float = -INF
+## When the dead last saw the squad or heard a loud sound; armed once that has happened.
+var noticed_t: float = -INF
+var lost_armed: bool = false
+var losses_used: int = 0
 ## Scheduled gap of the current wait; base for pressure().
 var interval: float = FIRST_INTERVAL
 var entry_history: Array[String] = []
@@ -100,6 +110,29 @@ func update(now: float) -> Dictionary:
 		next_arrival = now + gap
 		next_entry = _pick_entry()
 	return {"index": k, "size": n, "entry": e}
+
+
+## The dead see the squad, or something loud was heard: the quiet count starts over.
+func noticed(now: float) -> void:
+	noticed_t = now
+	lost_armed = true
+
+
+## True the moment the squad has shaken them off: the next horde is put back.
+func update_lost(now: float) -> bool:
+	if not lost_armed or losses_used >= LOST_MAX or is_exhausted():
+		return false
+	if now - noticed_t < LOST_QUIET:
+		return false
+	lost_armed = false
+	losses_used += 1
+	next_arrival = maxf(next_arrival, now) + LOST_REST
+	interval += LOST_REST
+	return true
+
+
+func losses_left() -> int:
+	return LOST_MAX - losses_used
 
 
 ## Rest window after a horde is cleared. Recent gunshots shorten it.

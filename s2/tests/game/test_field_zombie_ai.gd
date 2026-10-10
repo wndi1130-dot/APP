@@ -110,3 +110,74 @@ func test_dead_far_from_the_player_still_notice_a_companion_beside_them() -> voi
 	for i in range(20):
 		game.zombies.update(0.1)
 	assert_true(z["state"] in ["chase", "attack", "grab"], "the companion is seen even with the player far away")
+
+
+# ---------------------------------------------------------------- hordes and hiding
+
+func test_a_horde_walks_to_the_last_loud_sound_not_to_the_player() -> void:
+	game.player.position = Vector3(120.5, 0, 60.5)
+	assert_eq(game.horde_target(), game.FieldGrid.center(game.HORDE_HOME), "no sound yet: the platform")
+	game.make_sound(Vector3(30.5, 0, 33.5), SimNoise.Level.NORMAL, "step")
+	assert_eq(game.horde_target(), game.FieldGrid.center(game.HORDE_HOME), "a normal sound is not followed")
+	var bang := Vector3(80.5, 0, 33.5)
+	game.make_sound(bang, SimNoise.Level.LOUD, "glass")
+	game.zombies.list.clear()
+	game._start_horde({"index": 0, "size": 6, "entry": "east_track"})
+	assert_eq(game.pending_spawn.size(), 6)
+	for s in game.pending_spawn:
+		assert_eq(s["target"], bang)
+
+
+func test_unseen_and_quiet_for_thirty_seconds_puts_the_next_horde_back() -> void:
+	var d = game.director
+	var z := _zombie(Vector3(40.5, 0, 7.5))
+	z["state"] = "chase"
+	z["victim"] = game.player
+	game.clock.elapsed = 100.0
+	game._update_hordes(0.1)
+	assert_true(d.lost_armed, "something is after the squad")
+	var due: float = d.next_arrival
+	game.clock.elapsed = 140.0
+	game._update_hordes(0.1)
+	assert_almost_eq(d.next_arrival, due, 0.001, "still chased: no breather")
+	z["state"] = "wander"
+	game.clock.elapsed = 169.0
+	game._update_hordes(0.1)
+	assert_almost_eq(d.next_arrival, due, 0.001, "29 seconds is not enough")
+	game.clock.elapsed = 171.0
+	game._update_hordes(0.1)
+	assert_almost_eq(d.next_arrival, due + d.LOST_REST, 0.001)
+	assert_true(game.radio.contains("놓친"), "the driver says so")
+	assert_eq(d.losses_left(), 2)
+
+
+func test_a_loud_sound_starts_the_quiet_count_over() -> void:
+	var d = game.director
+	game.clock.elapsed = 100.0
+	game.make_sound(Vector3(30.5, 0, 33.5), SimNoise.Level.LOUD, "glass")
+	game.zombies.list.clear()
+	var due: float = d.next_arrival
+	game.clock.elapsed = 120.0
+	game.make_sound(Vector3(30.5, 0, 33.5), SimNoise.Level.LOUD, "glass")
+	game.zombies.list.clear()
+	due = d.next_arrival
+	game.clock.elapsed = 140.0
+	game._update_hordes(0.1)
+	assert_almost_eq(d.next_arrival, due, 0.001)
+	game.clock.elapsed = 150.0
+	game._update_hordes(0.1)
+	assert_almost_eq(d.next_arrival, due + d.LOST_REST, 0.001)
+
+
+func test_the_dead_after_a_raider_do_not_count() -> void:
+	var z := _zombie(Vector3(40.5, 0, 7.5))
+	z["state"] = "chase"
+	var Person = preload("res://game/actors/person.gd")
+	var r = Person.new()
+	add_child_autofree(r)
+	r.setup("r", "r", "raider", Vector3(41.5, 0, 7.5))
+	z["victim"] = r
+	assert_false(game._squad_hunted())
+	z["victim"] = game.player
+	assert_true(game._squad_hunted())
+

@@ -344,3 +344,55 @@ func test_weights_cover_entries() -> void:
 		assert_has(HordeDirector.ENTRY_PHRASES, e)
 		total += HordeDirector.ENTRY_WEIGHTS[e]
 	assert_almost_eq(total, 1.0, 0.0001)
+
+
+# ---------------------------------------------------------------- shaking them off
+
+func test_never_noticed_never_earns_a_breather() -> void:
+	var h = _make()
+	assert_false(h.update_lost(100.0), "nothing to shake off")
+	assert_almost_eq(h.next_arrival, 270.0, 0.0001)
+	assert_eq(h.losses_left(), 3)
+
+
+func test_thirty_quiet_seconds_after_being_noticed_put_the_next_horde_back() -> void:
+	var h = _make()
+	h.noticed(100.0)
+	assert_false(h.update_lost(129.9), "not yet")
+	assert_true(h.update_lost(130.0))
+	assert_almost_eq(h.next_arrival, 270.0 + HordeDirector.LOST_REST, 0.0001)
+	assert_almost_eq(h.pressure(130.0), 1.0 - 185.0 / 315.0, 0.0001, "the bar reads the longer wait")
+	assert_false(h.update_lost(200.0), "once for one escape")
+	assert_eq(h.losses_left(), 2)
+
+
+func test_being_seen_again_starts_the_count_over() -> void:
+	var h = _make()
+	h.noticed(100.0)
+	h.noticed(125.0)
+	assert_false(h.update_lost(140.0))
+	assert_true(h.update_lost(155.0))
+
+
+func test_three_breathers_a_stop_and_no_more() -> void:
+	var h = _make()
+	var t: float = 0.0
+	for i in 3:
+		h.noticed(t)
+		t += HordeDirector.LOST_QUIET
+		assert_true(h.update_lost(t), "breather %d" % (i + 1))
+	h.noticed(t)
+	assert_false(h.update_lost(t + 60.0), "the fourth is not given")
+	assert_almost_eq(h.next_arrival, 270.0 + 3.0 * HordeDirector.LOST_REST, 0.0001)
+	assert_eq(h.losses_left(), 0)
+
+
+func test_an_overdue_horde_is_put_back_from_now() -> void:
+	var h = _make()
+	h.noticed(250.0)
+	assert_true(h.update_lost(280.0))
+	assert_almost_eq(h.next_arrival, 325.0, 0.0001)
+	# Noise still pulls it, never below now.
+	h.add_noise(100, 290.0)
+	assert_almost_eq(h.next_arrival, 290.0, 0.0001)
+
