@@ -20,7 +20,7 @@ describe('사건 기억', () => {
       const first = play(g, { kind: 'travel', text: ev.id }, 0);
       const second = viewCard(g, { uid: 999, kind: 'travel', text: ev.id });
       expect(second.body, ev.id).not.toBe(first.body);
-      expect(g.eventLog[ev.id]).toMatchObject({ n: 1, pick: first.choices[0].label });
+      expect(g.eventLog[ev.id]).toMatchObject({ n: 1, pick: first.choices[0].id ?? first.choices[0].label });
     }
   });
 
