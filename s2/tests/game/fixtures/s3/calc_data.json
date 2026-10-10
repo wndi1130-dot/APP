@@ -10510,5 +10510,6557 @@
     ]
    ]
   }
+ ],
+ "deals": [
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 5,
+     "und": 7,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 12,
+     "und": 0,
+     "no": 31,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 10,
+     "und": 0,
+     "no": 5,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [],
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ]
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 40,
+     "und": 0,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 7,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 7,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 18,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 40,
+     "und": 0,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 7,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [],
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ]
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 35,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 44,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 10,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 1,
+     "yes": 5,
+     "und": 35,
+     "no": 5,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 1,
+     "yes": 5,
+     "und": 35,
+     "no": 5,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 7,
+     "und": 0,
+     "no": 5,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [],
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ]
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 22,
+     "no": 18,
+     "hard": 10,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 28,
+     "und": 0,
+     "no": 16,
+     "hard": 10,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [],
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ]
+   ],
+   "coh": [
+    0.6000000000000001,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 3,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 3,
+     "yes": 14,
+     "und": 0,
+     "no": 29,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 11,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.6000000000000001,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 18,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 0,
+     "und": 2,
+     "no": 10,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 40,
+     "und": 0,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 10,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 7,
+     "und": 0,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 0,
+     "und": 2,
+     "no": 10,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [],
+    [
+     "open"
+    ],
+    [
+     "open"
+    ]
+   ],
+   "coh": [
+    0.6000000000000001,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 47,
+     "absent": 2,
+     "yes": 36,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 4,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 14,
+     "absent": 0,
+     "yes": 1,
+     "und": 7,
+     "no": 6,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 0,
+     "und": 2,
+     "no": 10,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    }
+   ],
+   "after": [
+    {
+     "seats": 47,
+     "absent": 2,
+     "yes": 36,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 4,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 14,
+     "absent": 0,
+     "yes": 8,
+     "und": 0,
+     "no": 6,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": -2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 3,
+     "und": 0,
+     "no": 9,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [
+     "bribe"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.35000000000000003,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 0,
+     "no": 3,
+     "hard": 3,
+     "pool": 8,
+     "poolChance": 0.8,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [
+     "bribe"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.35000000000000003,
+    0.49999999999999994,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 10,
+     "poolChance": 0.8,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [],
+    [
+     "favor"
+    ],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 4,
+     "und": 36,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 6,
+     "no": 5,
+     "hard": 3,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 7,
+     "poolChance": 0.65,
+     "score": 1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "favor"
+    ],
+    [],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 8,
+     "poolChance": 0.7,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 11,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": -1
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "favor"
+    ]
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 4,
+     "und": 35,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 4,
+     "und": 35,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 1,
+     "und": 11,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 6,
+     "poolChance": 0.85,
+     "score": 2,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "favor"
+    ],
+    [],
+    [
+     "favor"
+    ],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 7,
+     "no": 2,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 11,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 8,
+     "poolChance": 0.7,
+     "score": 1,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 1,
+     "und": 10,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 0,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 6,
+     "und": 0,
+     "no": 2,
+     "hard": 2,
+     "pool": 7,
+     "poolChance": 0.65,
+     "score": 2,
+     "ideo": 2
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 5,
+     "und": 6,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 0
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [
+     "blackmail"
+    ],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 5,
+     "und": 7,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 17,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 1,
+     "hard": 1,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 2,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 2,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -1,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "blackmail"
+    ],
+    [],
+    [
+     "blackmail"
+    ],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 19,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 34,
+     "hard": 19,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -3,
+     "ideo": -2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 2
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [],
+    [],
+    [
+     "blackmail"
+    ]
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 34,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 12,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [],
+    [
+     "blackmail"
+    ],
+    [
+     "blackmail"
+    ],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 17,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 10,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -2
+    }
+   ],
+   "after": [
+    {
+     "seats": 45,
+     "absent": 2,
+     "yes": 17,
+     "und": 22,
+     "no": 4,
+     "hard": 4,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 1,
+     "ideo": 2
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 13,
+     "absent": 0,
+     "yes": 13,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": -2
+    }
+   ]
+  },
+  {
+   "tools": [
+    [
+     "blackmail"
+    ],
+    [],
+    [],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 0,
+     "und": 9,
+     "no": 35,
+     "hard": 16,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -5,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 28,
+     "und": 0,
+     "no": 16,
+     "hard": 16,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -5,
+     "ideo": -1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 1
+    }
+   ]
+  },
+  {
+   "tools": [
+    [],
+    [
+     "blackmail"
+    ],
+    [],
+    [],
+    []
+   ],
+   "coh": [
+    0.55,
+    0.7,
+    0.8,
+    0.65,
+    0.85
+   ],
+   "before": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 35,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 12,
+     "und": 3,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    }
+   ],
+   "after": [
+    {
+     "seats": 46,
+     "absent": 2,
+     "yes": 35,
+     "und": 9,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 15,
+     "und": 0,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    },
+    {
+     "seats": 15,
+     "absent": 0,
+     "yes": 2,
+     "und": 7,
+     "no": 6,
+     "hard": 5,
+     "pool": 0,
+     "poolChance": 0,
+     "score": -2,
+     "ideo": 0
+    },
+    {
+     "seats": 12,
+     "absent": 0,
+     "yes": 10,
+     "und": 2,
+     "no": 0,
+     "hard": 0,
+     "pool": 0,
+     "poolChance": 0,
+     "score": 3,
+     "ideo": 0
+    }
+   ]
+  }
+ ],
+ "shifts": [
+  {
+   "n": 1,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 9,
+    "no": 34,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 1,
+    "und": 9,
+    "no": 33,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 9,
+    "no": 34,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 8,
+    "no": 35,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 9,
+    "no": 34,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 4,
+    "und": 9,
+    "no": 30,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 9,
+    "no": 34,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 5,
+    "no": 38,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 9,
+    "no": 34,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 26,
+    "und": 0,
+    "no": 17,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 9,
+    "no": 34,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 0,
+    "no": 43,
+    "hard": 17,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -3,
+    "ideo": -2
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 3,
+    "und": 7,
+    "no": 5,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 7,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 5,
+    "no": 10,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 13,
+    "und": 0,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 6,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 4,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 9,
+    "und": 3,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 12,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 13,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 3,
+    "und": 7,
+    "no": 5,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 7,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 5,
+    "no": 10,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 13,
+    "und": 0,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 10,
+    "und": 2,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 11,
+    "und": 1,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 10,
+    "und": 2,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 9,
+    "und": 2,
+    "no": 1,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 10,
+    "und": 2,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 12,
+    "und": 0,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 10,
+    "und": 2,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 6,
+    "und": 2,
+    "no": 4,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 10,
+    "und": 2,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 12,
+    "und": 0,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 10,
+    "und": 2,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 12,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 2
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 35,
+    "und": 8,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 33,
+    "und": 9,
+    "no": 1,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 38,
+    "und": 5,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 30,
+    "und": 9,
+    "no": 4,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 43,
+    "und": 0,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 45,
+    "absent": 2,
+    "yes": 0,
+    "und": 0,
+    "no": 43,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 7,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 3,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 10,
+    "und": 4,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 14,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 2,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 8,
+    "no": 5,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 12,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 13,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 3,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 7,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 6,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 5,
+    "no": 10,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 12,
+    "und": 0,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 6,
+    "und": 5,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 4,
+    "und": 6,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 9,
+    "und": 2,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 11,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 12,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 17,
+    "und": 21,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 18,
+    "und": 20,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 17,
+    "und": 21,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 16,
+    "und": 21,
+    "no": 5,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 17,
+    "und": 21,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 21,
+    "und": 17,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 17,
+    "und": 21,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 13,
+    "und": 21,
+    "no": 8,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 17,
+    "und": 21,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 38,
+    "und": 0,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 17,
+    "und": 21,
+    "no": 4,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   },
+   "after": {
+    "seats": 45,
+    "absent": 3,
+    "yes": 0,
+    "und": 0,
+    "no": 42,
+    "hard": 4,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 2,
+    "ideo": 2
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 3,
+    "und": 11,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 1,
+    "und": 11,
+    "no": 3,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 8,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 9,
+    "no": 6,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 14,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 11,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 4,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 5,
+    "und": 5,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 4,
+    "no": 9,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 10,
+    "und": 0,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 13,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 13,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 3,
+    "und": 7,
+    "no": 5,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 7,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 5,
+    "no": 10,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 13,
+    "und": 0,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 2,
+    "und": 6,
+    "no": 4,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 6,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 4,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 3,
+    "no": 9,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 9,
+    "und": 0,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 12,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -2,
+    "ideo": -2
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 35,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 36,
+    "und": 8,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 35,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 34,
+    "und": 9,
+    "no": 1,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 35,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 39,
+    "und": 5,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 35,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 31,
+    "und": 9,
+    "no": 4,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 35,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 44,
+    "und": 0,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 35,
+    "und": 9,
+    "no": 0,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   },
+   "after": {
+    "seats": 46,
+    "absent": 2,
+    "yes": 0,
+    "und": 0,
+    "no": 44,
+    "hard": 0,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 3,
+    "ideo": 1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 7,
+    "und": 6,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 5,
+    "und": 7,
+    "no": 3,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 10,
+    "und": 3,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 13,
+    "und": 0,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 7,
+    "no": 2,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 2,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": 0
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 2,
+    "und": 9,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 10,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 7,
+    "no": 5,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 11,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 10,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 12,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 0,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 3,
+    "und": 7,
+    "no": 5,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 1,
+    "und": 7,
+    "no": 7,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 6,
+    "und": 6,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 5,
+    "no": 10,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 12,
+    "und": 0,
+    "no": 3,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 2,
+    "und": 7,
+    "no": 6,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 15,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 15,
+    "hard": 3,
+    "pool": 0,
+    "poolChance": 0,
+    "score": -1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 6,
+    "und": 5,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -1,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 4,
+    "und": 6,
+    "no": 2,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 9,
+    "und": 2,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -4,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 1,
+    "und": 6,
+    "no": 5,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": 60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 11,
+    "und": 0,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  },
+  {
+   "n": -60,
+   "before": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 5,
+    "und": 6,
+    "no": 1,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   },
+   "after": {
+    "seats": 12,
+    "absent": 0,
+    "yes": 0,
+    "und": 0,
+    "no": 12,
+    "hard": 1,
+    "pool": 0,
+    "poolChance": 0,
+    "score": 1,
+    "ideo": -1
+   }
+  }
  ]
 }
