@@ -26,6 +26,12 @@ const PRESETS: Array[Dictionary] = [
 	{"name": "8_snow_level_0", "kinds": ["overcast"], "c": -6.0, "hour": 12.0, "snow": 0.0, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0},
 	{"name": "9_snow_level_1", "kinds": ["overcast"], "c": -6.0, "hour": 12.0, "snow": 0.38, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0},
 	{"name": "10_snow_level_2", "kinds": ["overcast"], "c": -6.0, "hour": 12.0, "snow": 0.9, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0},
+	# Three stops around a storm (weather_fx.md 14장). Optional keys: wind
+	# (default 0.6), shadows (default true). Snow is SnowCover.cover_for of
+	# 25 cm before and during, 50 cm after.
+	{"name": "11_storm_before", "kinds": ["overcast"], "c": -10.0, "hour": 12.0, "snow": 0.8, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.15},
+	{"name": "12_storm_during", "kinds": ["blizzard"], "c": -22.0, "hour": 12.0, "snow": 0.8, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.9, "shadows": false},
+	{"name": "13_storm_after", "kinds": ["clear"], "c": -25.0, "hour": 12.0, "snow": 0.93, "frost_edge": 0.0, "pause": 0.0, "speed": 0.0, "wind": 0.1},
 ]
 
 var env: Environment
@@ -310,12 +316,13 @@ func _build_ui() -> void:
 func apply_preset(i: int) -> void:
 	current = clampi(i, 0, PRESETS.size() - 1)
 	var p: Dictionary = PRESETS[current]
-	var params := FxState.params_for(p["kinds"], p["c"], Vector2(1, 0.3), 0.6, p["hour"], p["snow"])
+	var params := FxState.params_for(p["kinds"], p["c"], Vector2(1, 0.3), float(p.get("wind", 0.6)), p["hour"], p["snow"])
 	params["fx_fade"] = p["pause"]
 	FxState.apply(params)
 	var light := FxState.lighting_for(p["kinds"], p["hour"])
 	sun.light_color = light["sun_color"]
 	sun.light_energy = light["sun_energy"]
+	sun.shadow_enabled = bool(p.get("shadows", true))
 	env.ambient_light_color = light["ambient_color"]
 	env.ambient_light_energy = light["ambient_energy"]
 	env.background_color = Color(params["fx_tint"]).darkened(0.55)
