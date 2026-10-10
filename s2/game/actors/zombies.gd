@@ -345,7 +345,7 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		z["seen_t"] = 0.0
 		z["last_seen"] = best.position
 		z["target"] = best.position
-		if best_d <= ATTACK_RANGE and z["cooldown"] <= 0.0:
+		if best_d <= ATTACK_RANGE and z["cooldown"] <= 0.0 and can_reach(z, best):
 			z["state"] = "attack"
 			z["windup"] = WINDUP
 			z["angle"] = atan2(best.position.x - z["pos"].x, best.position.z - z["pos"].z)
@@ -550,6 +550,13 @@ func _avoid_people(z: Dictionary, dest: Vector3) -> Vector3:
 	return dest
 
 
+## Same floor and nothing that stops a blow between (a wall corner, a shut door, whole glass).
+func can_reach(z: Dictionary, victim) -> bool:
+	if game.level_of(z["pos"]) != game.level_of(victim.position):
+		return false
+	return game.grid_at(z["pos"]).body_line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(victim.position))
+
+
 func _update_attack(z: Dictionary, delta: float) -> void:
 	var victim = z["victim"]
 	if victim == null or not victim.is_alive():
@@ -557,7 +564,7 @@ func _update_attack(z: Dictionary, delta: float) -> void:
 		return
 	z["windup"] -= delta
 	var d: float = z["pos"].distance_to(victim.position)
-	if d > ATTACK_RANGE + 0.4:
+	if d > ATTACK_RANGE + 0.4 or not can_reach(z, victim):
 		z["state"] = "chase"
 		return
 	if z["windup"] > 0.0:
@@ -583,6 +590,9 @@ func _update_grab(z: Dictionary, delta: float) -> void:
 func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	if z.is_empty() or z["state"] == "dead":
 		return
+	# Whoever it held is let go, knocked down or not (release_grab is safe to repeat).
+	if z["state"] == "grab" and z["victim"] != null:
+		z["victim"].release_grab(z)
 	var away: Vector3 = z["pos"] - push_from
 	away.y = 0
 	if away.length() < 0.01:

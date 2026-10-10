@@ -19,6 +19,7 @@ const CLOSE: float = 1.8
 const JAM_CLEAR: float = 2.5
 const FALL_TIME: float = 1.5
 const BEHIND_COS: float = -0.3
+const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon's reach
 const RAIDER_AMMO: int = 6
 
 var game
@@ -148,6 +149,13 @@ func hostile(o) -> bool:
 	return o.is_alive() and not (o.brain.get("state", "") in ["surrender", "prisoner", "gone"])
 
 
+## How far from the body a blow can land (guns and bare hands: arm's length).
+func melee_range(p) -> float:
+	var wid: String = p.weapon_id()
+	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
+	return reach + MELEE_SLACK
+
+
 ## A wall, shut door or whole window (or another floor) between p and the spot.
 func melee_blocked(p, at: Vector3) -> bool:
 	if game.level_of(p.position) != game.level_of(at):
@@ -176,7 +184,7 @@ func _pursue_zombie(p, delta: float) -> void:
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
 	var d: float = p.position.distance_to(z["pos"])
 	# Shut off by a wall or a whole window: no swing, walk round instead.
-	if d > reach + 0.15 or melee_blocked(p, z["pos"]):
+	if d > reach + MELEE_SLACK or melee_blocked(p, z["pos"]):
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
@@ -293,12 +301,12 @@ func _pursue_person(p, delta: float) -> void:
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
 	var d: float = p.position.distance_to(o.position)
-	var shut: bool = d <= reach + 0.15 and melee_blocked(p, o.position)
+	var shut: bool = d <= reach + MELEE_SLACK and melee_blocked(p, o.position)
 	# A raider's walking is the AI's: out of reach or shut off, it lets the target go.
-	if p.team == "raider" and (d > reach + 0.15 or shut):
+	if p.team == "raider" and (d > reach + MELEE_SLACK or shut):
 		p.target_person = null
 		return
-	if d > reach + 0.15 or shut:
+	if d > reach + MELEE_SLACK or shut:
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
@@ -411,7 +419,7 @@ func _kill(p, z: Dictionary, msg: String) -> void:
 ## Shove: a short cone in front, breaks a grab, sometimes knocks down.
 func shove(p) -> void:
 	# One shove per swing time: mashing the button must not stack stuns.
-	if p.swing_t > 0.0:
+	if p.swing_t > 0.0 or game.paused:
 		return
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
@@ -426,6 +434,9 @@ func shove(p) -> void:
 		to_z.y = 0
 		var grabbing: bool = p.grabbers.has(z)
 		if not grabbing and to_z.length() > 0.2 and forward.dot(to_z.normalized()) < SHOVE_COS:
+			continue
+		# Walls, shut doors and whole glass stop a shove too (a grabber is on you, so it counts).
+		if not grabbing and melee_blocked(p, z["pos"]):
 			continue
 		if grabbing:
 			p.release_grab(z)
@@ -612,6 +623,11 @@ func fire(p, at: Vector3, target = null) -> String:
 	var d: Dictionary = W.get_data(wid)
 	if not can_shoot(p):
 		p.aim.stop()
+		return "none"
+	# Paused: a target may be picked, nothing leaves the gun (field_unified 10, tactical pause).
+	if game.paused:
+		p.aim.stop()
+		_toast(p, "멈춘 동안은 쏘지 못한다.")
 		return "none"
 	if not p.aim.active:
 		p.aim.start(wid, aim_mods(p))
