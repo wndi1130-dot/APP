@@ -21,6 +21,9 @@ export const WHY_NAME: Record<string, string> = {
   birth: '아이가 태어남',
   leak: '들통난 거래',
   decree: '포고',
+  'calm.pot': '저녁 솥불',
+  'calm.ledger': '벽 장부',
+  'calm.night': '떠난 사람의 밤',
   // 아직 안 옮긴 자리(turn.ts, politics.ts, dark/)가 쓸 이름
   'stop.loot': '정차 수색',
   'stop.stay': '정차하며 땐 석탄',
@@ -30,6 +33,7 @@ export const WHY_NAME: Record<string, string> = {
   short: '석탄이나 식량이 바닥남',
   pyre: '화장',
   mood: '집단들의 마음',
+  situation: '칸의 처지',
   drift: '쌓인 불만과 두려움',
   strike: '일손을 놓음',
   trip: '기관 고장',

@@ -1,3 +1,4 @@
+import { bump, bumpRel, put } from './ledger';
 import { COMM_NAME, COMMS } from './data';
 import type { Comm, LawId } from './data';
 import { clamp, journal, lawActive } from './state';
@@ -69,7 +70,7 @@ export function calmEnact(g: Game, law: LawId): void {
 /** 폐지 때 값(politics.ts repealLaw). 벽 장부를 지우면 신임 −5 한 번. */
 export function calmRepeal(g: Game, law: LawId): void {
   if (law === 'wall_ledger') {
-    g.trust = clamp(g.trust + CALM.repealTrust, 0, 100);
+    bump(g, 'trust', CALM.repealTrust, 'calm.ledger');
     journal(g, '벽 장부를 지웠다. 숨기는 것이 있다는 말이 돈다.', 'bad');
   } else if (law === 'evening_pot') {
     if (g.calm) delete g.calm.potOn;
@@ -98,7 +99,7 @@ export function calmSettle(g: Game): void {
     const was = c.potOn ?? g.coal > CALM.potOffCoal;
     if (was && g.coal <= CALM.potOffCoal) {
       c.potOn = false;
-      for (const k of COMMS) if (g.comms[k].rel <= CALM.potRelLine) g.comms[k].rel = clamp(g.comms[k].rel + CALM.potOffRel, -100, 100);
+      for (const k of COMMS) if (g.comms[k].rel <= CALM.potRelLine) bumpRel(g, k, CALM.potOffRel, 'calm.pot');
       journal(g, '저녁 솥불이 꺼졌다. 석탄이 모자란다.', 'bad');
     } else if (!was && g.coal >= CALM.potOnCoal) {
       c.potOn = true;
@@ -112,7 +113,7 @@ export function calmSettle(g: Game): void {
       for (const k of COMMS) {
         const s = g.comms[k];
         if (s.rel <= CALM.potRelLine) {
-          s.rel = clamp(s.rel + CALM.potRel, -100, 100);
+          bumpRel(g, k, CALM.potRel, 'calm.pot');
           if (!lifted || s.rel < g.comms[lifted].rel) lifted = k;
         }
       }
@@ -123,9 +124,9 @@ export function calmSettle(g: Game): void {
   if (lawActive(g, 'wall_ledger')) {
     const level = ledgerLevel(g);
     if (level === 'rich') {
-      if (g.trust < CALM.trustCap) g.trust = Math.min(CALM.trustCap, g.trust + CALM.richTrust);
+      if (g.trust < CALM.trustCap) put(g, 'trust', Math.min(CALM.trustCap, g.trust + CALM.richTrust), 'calm.ledger');
     } else if (level === 'poor') {
-      g.comms.tail.rel = clamp(g.comms.tail.rel + CALM.poorRel, -100, 100);
+      bumpRel(g, 'tail', CALM.poorRel, 'calm.ledger');
     }
     c.ledgerSegs = c.ledger === level ? (c.ledgerSegs ?? 0) + 1 : 0;
     if (c.ledger !== level) {
@@ -153,15 +154,15 @@ export function calmNight(g: Game): void {
   c.nights = (c.nights ?? 0) + 1;
   // 세 번째 밤부터 반, 사치품이 없어 어둡게 모이면 또 반. 값(석탄·사치품)은 그대로 든다.
   const k = (c.nights >= CALM.nightHalfFrom ? 0.5 : 1) * (g.lux <= 0 ? 0.5 : 1);
-  g.coal -= CALM.nightCoal;
-  g.lux = Math.max(0, g.lux - CALM.nightLux);
+  bump(g, 'coal', -CALM.nightCoal, 'calm.night');
+  bump(g, 'lux', -CALM.nightLux, 'calm.night', { floor0: true });
   g.fear = clamp(g.fear + CALM.nightFear * k, 0, 100);
-  g.tension = clamp(g.tension + CALM.nightTension * k, 0, 100);
+  bump(g, 'tension', CALM.nightTension * k, 'calm.night');
   const mourning = new Set<Comm>();
   for (const d of fresh) if (d.comm) mourning.add(d.comm);
-  for (const k2 of mourning) g.comms[k2].rel = clamp(g.comms[k2].rel + CALM.nightRel * k, -100, 100);
+  for (const k2 of mourning) bumpRel(g, k2, CALM.nightRel * k, 'calm.night');
   // 열차장이 고른 죽음(사살, 버림, 불길한 파견)이면 추모가 면죄부가 되지 않게 신임을 깎는다. 하차 장면의 죄책(disembark.ts)과 같은 기준이다.
   const chosen = fresh.some(d => d.cause !== 'other');
-  if (chosen) g.trust = clamp(g.trust + CALM.chosenTrust, 0, 100);
+  if (chosen) bump(g, 'trust', CALM.chosenTrust, 'calm.night');
   journal(g, `떠난 사람의 밤. 식당칸에 모여 ${fresh.map(d => d.name).join(', ')}의 이름을 불렀다.${chosen ? ' 그중에는 열차장이 고른 죽음이 있었다.' : ''}`, chosen ? 'bad' : 'good');
 }

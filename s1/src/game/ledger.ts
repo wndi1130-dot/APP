@@ -31,6 +31,24 @@ export function bump(g: Game, k: Stat, d: number, why: string, opt?: { floor0?: 
   note(g, k, g[k] - before, why);
 }
 
+/** 수치를 d만큼 한 번에 바꾸되(자르기도 한 번), 까닭은 여럿으로 나눠 적는다. parts는 [까닭, 몫]이고 몫의 비율대로 나눈다.
+ *  여러 몫을 곱하고 더해 한 숫자로 움직이는 자리(구간 정산의 긴장, 운행·난방·배급을 한꺼번에 빼는 석탄)에 쓴다.
+ *  몫마다 따로 bump하면 자르는 횟수가 달라져 숫자가 바뀐다. 마지막 까닭이 나머지를 받아 적은 합이 실제 변화와 꼭 같다. */
+export function bumpParts(g: Game, k: Stat, d: number, parts: [string, number][], opt?: { floor0?: boolean }): void {
+  const before = g[k];
+  const raw = before + d;
+  g[k] = k === 'trust' || k === 'tension' ? clamp(raw, 0, 100) : opt?.floor0 ? Math.max(0, raw) : raw;
+  const real = g[k] - before;
+  const total = parts.reduce((a, [, w]) => a + w, 0);
+  if (real === 0 || parts.length === 0) return;
+  let left = real;
+  parts.forEach(([why, w], i) => {
+    const share = i === parts.length - 1 || total === 0 ? left : real * (w / total);
+    left -= share;
+    note(g, k, share, why);
+  });
+}
+
 /** 값을 통째로 놓는 자리(긴장을 65로, 의약품을 0으로). 차이를 적는다. */
 export function put(g: Game, k: Stat, v: number, why: string): void {
   const before = g[k];

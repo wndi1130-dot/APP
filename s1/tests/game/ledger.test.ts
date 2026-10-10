@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bump, bumpRel, createS1cGame, drain, LEDGER_MAX, put, viewCard } from '../../src/game';
+import { bump, bumpParts, bumpRel, createS1cGame, drain, LEDGER_MAX, put, viewCard } from '../../src/game';
 import { RUNS, start, stepOnce } from '../golden/trace';
 import { WHY_NAME } from '../../src/ui/why_names';
 import { applyStep, namedSums } from '../../src/ui/repro';
@@ -24,6 +24,20 @@ describe('까닭 장부', () => {
     ]);
     expect('ledger' in g).toBe(false);
     expect(drain(g)).toEqual([]);
+  });
+
+  it('한 번에 바꾸고 까닭만 나눠 적는다: 숫자는 한 번 바꾼 것과 같고, 적은 합은 실제 변화와 같다', () => {
+    const g = createS1cGame('led-parts');
+    g.tension = 96; g.coal = 20;
+    bumpParts(g, 'tension', 10, [['drift', 3], ['short', 1]]); // 100에서 잘려 실제로는 +4
+    bumpParts(g, 'coal', -9.5, [['run', 5], ['heat', 4], ['calm.pot', 0.5]]);
+    expect([g.tension, g.coal]).toEqual([100, 10.5]);
+    const rows = drain(g);
+    expect(rows.filter(r => r.k === 'tension').map(r => [r.why, r.d])).toEqual([['drift', 3], ['short', 1]]);
+    const coal = rows.filter(r => r.k === 'coal');
+    expect(coal.map(r => r.why)).toEqual(['run', 'heat', 'calm.pot']);
+    expect(coal.reduce((a, r) => a + r.d, 0)).toBe(-9.5);
+    expect(coal[0].d).toBeCloseTo(-5, 10);
   });
 
   it('화면 없이 오래 돌려도 상한을 넘지 않는다', () => {
