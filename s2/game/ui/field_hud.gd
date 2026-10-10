@@ -853,7 +853,7 @@ func body_panel(o = null, part: String = "") -> void:
 	body_part = part
 	v.add_child(_label("%s · %s" % [o.display_name, o.body.status_words()], 24))
 	var have: Dictionary = game.actions.care_tools(p, o)
-	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0))], 18, DIM))
+	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))], 18, DIM))
 	var near: bool = game.actions.in_care_reach(p, o)
 	if not near:
 		v.add_child(_label("가까이 가야 처치할 수 있다.", 18, WARN))
