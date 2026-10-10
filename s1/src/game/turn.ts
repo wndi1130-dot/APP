@@ -886,7 +886,7 @@ function aiLeaders(g: Game): void {
     addCard(g, { kind: 'demand', comm: worst });
     // 같은 요구를 여러 번 받았으면 다음 요구까지 조금 더 뜸하다.
     const seen = Math.max(g.eventLog?.[`demand:${worst}`]?.n ?? 0, worst === 'engine' ? g.eventLog?.['demand:engine_shift']?.n ?? 0 : 0);
-    g.comms[worst].demandCool = 2 + Math.min(seen, 2);
+    g.comms[worst].demandCool = 3 + Math.min(seen, 2) * 3;
     cards += 1;
   }
   // 파업 경고

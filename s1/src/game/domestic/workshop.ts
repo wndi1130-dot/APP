@@ -584,7 +584,16 @@ export function penaltyActive(g: Game, kind: 'coal' | 'haul'): boolean {
   return (g.dom?.penalties ?? []).some(p => p.kind === kind && p.until >= g.seg);
 }
 
-/** '조각이 맞았다' 카드: 처음으로 복원 조건을 채운 기술마다 한 번(10장 1·2번). */
+/** '설계도가 맞았다' 카드에 고를 게 있나. 조각이 반만 맞아 결함판으로 지금 돌릴지 갈리거나, 싫어하는 쪽이 있어 관계가 움직일 때만이다.
+ * 변형이 있는 기술은 갈래 카드가 그 결정을 맡는다. 고를 게 없으면 '완성판 복원/나중에'뿐이라 공방 화면과 같다(H6 반복, 판당 7장). */
+export function fitHasChoice(g: Game, id: TechId): boolean {
+  const def = TECHS[id];
+  const ch = restoreCheck(g, id);
+  if (dom(g).frags[def.branch] < ch.fragsNeed) return true;
+  return !def.variants && techRelSides(id).dislike.length > 0;
+}
+
+/** '조각이 맞았다': 처음으로 복원 조건을 채운 기술마다 한 번(10장 1·2번). 고를 게 있으면 카드, 없으면 일지 한 줄. */
 export function offerRestores(g: Game): void {
   const d = dom(g);
   for (const id of TECH_IDS) {
@@ -592,7 +601,8 @@ export function offerRestores(g: Game): void {
     const check = restoreCheck(g, id);
     if (!check.offer) continue;
     d.offered.push(id);
-    domCard(g, { kind: 'dom:fit', text: id });
+    if (fitHasChoice(g, id)) domCard(g, { kind: 'dom:fit', text: id });
+    else journal(g, `${BRANCH_NAME[TECHS[id].branch]}: ${TECHS[id].name} 설계도가 맞았다. 공방에서 복원할 수 있다.`, 'good');
   }
 }
 
