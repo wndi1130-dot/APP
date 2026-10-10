@@ -85,7 +85,7 @@ function stopCard(view: View): HTMLElement | null {
         h('b', { class: 'num' }, `${stop.crewSize}명`),
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
     crewCost(view),
-    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, ' · 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다'))),
+    h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), ' ', tip('표결 빠짐', '정차에 나간 사람은 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다.'))),
     domesticStopRows(view),
     stopPromises.length || research ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label} (${promiseWhen(g, x.p)})`)), researchRow(g)) : null,
