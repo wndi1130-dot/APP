@@ -21,11 +21,6 @@
         {
           "type": "food",
           "amount": -9
-        },
-        {
-          "type": "flag",
-          "id": "ev_achieved",
-          "value": true
         }
       ],
       "followups": [],
