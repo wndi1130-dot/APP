@@ -28,18 +28,23 @@ void fragment() {
 	// Vertex alpha: 1 open to the sky, 0 under a roof (map_view.sky_alpha).
 	float sky = COLOR.a;
 	float wet = clamp(fx_wet, 0.0, 1.0) * sky;
+	vec2 uv = world_pos.xz / map_size;
+	vec4 cell = texture(vis, uv);
+	// A: how much of the cell's snow is untouched (1 fresh; lower where someone
+	// walked). Marks thin the snow and show the darker ground through it.
+	float trodden = (1.0 - cell.a) * sky * smoothstep(0.6, 0.9, up);
 	float drift = fx_fbm2(world_pos.xz * 0.35);
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = smoothstep(0.6, 0.9, up) * clamp(fx_snow * (0.6 + 0.8 * drift), 0.0, 1.0);
 	cover *= 0.55 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	base *= 1.0 - 0.35 * wet;
+	cover *= 1.0 - 0.9 * trodden;
+	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet), cover);
 	// Rime on upright faces in hard cold: thin and patchy, never a white wall.
 	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
 	rime *= 0.16 * smoothstep(0.3, 0.9, fx_fbm2(vec2((world_pos.x + world_pos.z) * 0.7, world_pos.y * 1.6)));
 	base = mix(base, FX_RIME, rime * (1.0 - smoothstep(0.08, 0.3, chroma)));
-	vec2 uv = world_pos.xz / map_size;
-	vec4 cell = texture(vis, uv);
 	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
 	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
