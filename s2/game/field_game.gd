@@ -56,6 +56,7 @@ const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid",
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
+const LAMP_OFF_SIGHT: float = 0.3      # how far the eye reaches at night with the lanterns out (0.55 with them)
 const NIGHT_AMBIENT_MIN: float = 0.2
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
@@ -1002,8 +1003,27 @@ func _update_night(delta: float) -> void:
 	if light_t <= 0.0:
 		light_t = 60.0
 		for p in squad:
-			if p.is_alive():
+			if p.is_alive() and p.lamp_on:
 				make_sound(p.position, SimNoise.Level.NORMAL, "light")
+
+
+## The lanterns go out and on together, the chief's and everyone's (user 2026-10-10).
+func lamps_on() -> bool:
+	return player.lamp_on
+
+
+func set_lamps(on: bool) -> void:
+	for p in squad + crew:
+		p.lamp_on = on
+	vis_t = 0.0
+
+
+## How far the eye reaches of what it would on a clear day: the weather, the
+## dark, and the dark with no lantern.
+func eye_mult() -> float:
+	var dark: bool = clock.is_dark()
+	var mult: float = weather.sight_mult(dark)
+	return minf(mult, LAMP_OFF_SIGHT) if dark and not lamps_on() else mult
 
 
 # ---------------------------------------------------------------- hordes
@@ -1210,7 +1230,7 @@ func _refresh_vision() -> void:
 	var lg := grid_at(player.position)
 	var tower: bool = lv > 0 and lg.building_at(origin) == 1
 	var base := SIGHT_UPSTAIRS if lv > 0 else (SIGHT_CELLAR if lv < 0 else SIGHT_RADIUS)
-	var radius := maxi(3, int(round(base * (weather.sight_mult(clock.is_dark()) if lv >= 0 else 1.0))))
+	var radius := maxi(3, int(round(base * (eye_mult() if lv >= 0 else 1.0))))
 	if not mask_on:
 		seen_now = {}
 		view.set_mask_enabled(false)

@@ -108,6 +108,8 @@ var manual_button: Button
 var attack_button: Button
 var shove_button: Button
 var blood_button: Button
+var lamp_button: Button
+var lamp_hint_done: bool = false   # the one-time line when the key first shows
 var pads: Array = []                   # Buttons the HUD hit-tests itself (any finger)
 var fingers: Dictionary = {}           # touch index -> {"kind", "start", "ms", ...}
 var stick_index: int = -1
@@ -374,6 +376,10 @@ func _build_thumbs() -> void:
 	var up := -(35.0 * PX_PER_MM + key)
 	run_button = _pad("뛰기", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
 	crouch_button = _pad("웅크림", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 20, Control.PRESET_BOTTOM_LEFT)
+	# The lantern key, a third in the row; it is there only after sunset.
+	lamp_button = _pad("등불", Vector2(20.0 * PX_PER_MM + 2.0 * (key + 3.0 * PX_PER_MM), up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	lamp_button.visible = false
+	_lit_style(lamp_button, AMBER)
 	_lit_style(run_button, AMBER)
 	_lit_style(crouch_button, BRASS)
 	# A blood drop on the portrait's corner while you bleed: one press stops the
@@ -390,7 +396,7 @@ func _build_thumbs() -> void:
 		pad.visible = false
 		status_pads.append(pad)
 		sx += size.x + 4.0
-	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
+	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
 	# The bag sits on the left, above the fixed stick's catch ring. There is no
 	# swap button here any more: swapping is inside the bag panel (build 47).
@@ -503,6 +509,11 @@ func tick(delta: float) -> void:
 	attack_button.button_pressed = fighting(p)
 	_tick_primary(p)
 	blood_button.visible = p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
+	lamp_button.visible = game.clock.is_dark()
+	lamp_button.button_pressed = game.lamps_on()
+	if lamp_button.visible and not lamp_hint_done:
+		lamp_hint_done = true
+		toast("해가 졌다. 등불은 1분마다 들킨다. '등불'을 눌러 끄면 안 들키지만 멀리 안 보인다.")
 	# The first time it shows, one line points at it (build 47: it was never found).
 	if blood_button.visible and not bleed_hint_done:
 		bleed_hint_done = true
@@ -1549,6 +1560,10 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		context_button.button_pressed = true
 	elif b == pause_button:
 		_toggle_pause()
+	elif b == lamp_button:
+		game.set_lamps(not game.lamps_on())
+		lamp_button.button_pressed = game.lamps_on()
+		toast("등불을 켰다. 1분마다 불빛이 들킨다." if game.lamps_on() else "모두 등불을 껐다. 불빛으로는 안 들킨다. 멀리 안 보인다.")
 	elif b == manual_button:
 		manual_button.button_pressed = not manual_button.button_pressed
 		toast("수동 조준: 오른손으로 겨눌 곳을 끌어 놓고 뗀다." if manual_button.button_pressed else "자동 조준으로 돌아왔다.")

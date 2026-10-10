@@ -38,6 +38,7 @@ var gloves: bool = true
 var smell: int = 0                     # 0 clean, 1 sweat, 2 stench
 var traits: Array = []
 var lamp: Dictionary = {}              # {strength, reach} of the lantern carried; empty = none
+var lamp_on: bool = true               # put out by hand (weather_fx 12.3 stage 2)
 
 var path := PackedVector3Array()
 var running: bool = false
@@ -91,7 +92,7 @@ var tag: Label3D
 ## Is the lantern lit (weather_fx 12.1): everyone's after sunset, the chief's
 ## always down in a cellar. The picture only; the night sound rule is the game's.
 func lamp_lit(dark: bool, cellar: bool = false) -> bool:
-	if lamp.is_empty() or not is_alive():
+	if lamp.is_empty() or not lamp_on or not is_alive():
 		return false
 	return dark or (cellar and role == "chief")
 
