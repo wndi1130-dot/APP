@@ -570,7 +570,10 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
     } else if (p.cond.kind === 'target') {
       if (target === p.cond.target) keepPromise(g, c); else breakPromise(g, c);
     } else if (p.cond.kind === 'skip_dispatch') {
-      if (g.stop?.crewComm !== 'tail' || !target) keepPromise(g, c); else breakPromise(g, c);
+      // 정차 없이 지나간 구간에는 확인할 파견이 없었다. 지킨 것으로 치지 않고 판정을 다음 정차로 미룬다(파업 때와 같다).
+      if (!target) p.due = g.seg + 1;
+      else if (g.stop?.crewComm !== 'tail') keepPromise(g, c);
+      else breakPromise(g, c);
     }
   }
 }
