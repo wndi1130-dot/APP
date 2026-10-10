@@ -64,11 +64,6 @@
           "type": "flag",
           "id": "b01_sack_pending",
           "value": false
-        },
-        {
-          "type": "flag",
-          "id": "ev_achieved",
-          "value": true
         }
       ],
       "followups": [],

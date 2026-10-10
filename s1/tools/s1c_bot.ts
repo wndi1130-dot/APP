@@ -30,9 +30,11 @@ export interface BotProbe {
   afterPick?: (g: Game, card: Card) => void;
   /** 구간 정산이 한 번 끝날 때마다(g.lastSettle이 새로 생겼을 때) */
   onSettle?: (g: Game) => void;
+  /** 정차 하나가 끝난 직후(resolveStop 뒤) */
+  afterStop?: (g: Game) => void;
 }
 
-export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number }
+export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number }
 
 export interface GameMetrics {
   end: string;
@@ -144,7 +146,7 @@ const W: Partial<Record<Eff['t'], number>> = {
 };
 
 /** 돌보는 정책의 S1a 카드 고르기: 효과 줄 점수가 가장 높은 것. */
-function scoreChoice(g: Game, ch: Choice): number {
+export function scoreChoice(g: Game, ch: Choice): number {
   let s = 0;
   // 석탄·식량이 적을수록 무겁게 본다.
   const w: Partial<Record<Eff['t'], number>> = { ...W, coal: 0.2 + 25 / Math.max(10, g.coal), food: 0.15 + 20 / Math.max(10, g.food) };
@@ -415,6 +417,10 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         idx = 0;
         view.choices.forEach((c, i) => { if (c.disabled) return; const s = scoreChoice(g, c); if (s > best) { best = s; idx = i; } });
       }
+      if (opts.forcePick) {
+        const f = opts.forcePick(g, card, view, view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled).map(x => x.i));
+        if (f !== undefined) idx = f;
+      }
       const segAtPick = g.seg;
       opts.probe?.beforePick?.(g, card, view, idx);
       if (!chooseCard(g, card.uid, idx)) throw new Error(`카드를 못 골랐다: ${card.kind} ${idx}`);
@@ -433,6 +439,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       if (opts.policy === 'caretaker') setStop(g, { crewComm: pickCrew(g) });
       m.crews[g.stop.crewComm] = (m.crews[g.stop.crewComm] ?? 0) + 1;
       resolveStop(g, true);
+      opts.probe?.afterStop?.(g);
       m.tailExpoMax = Math.max(m.tailExpoMax, situation(g, 'tail')[3]);
       continue;
     }

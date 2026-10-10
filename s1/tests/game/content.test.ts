@@ -66,6 +66,19 @@ describe('콘텐츠 사건', () => {
     expect(contentPool(g).map(e => e.id)).not.toContain('ev_test_stove');
   });
 
+  it('미룬 후속은 들어올 때 자기 조건을 다시 보고, 깨졌으면 올리지 않는다', () => {
+    registerContentEvents([ev(), after]);
+    const g = createGame('content-2b');
+    g.cards = [];
+    addContentCard(g, 'ev_test_stove');
+    chooseCard(g, g.cards[0].uid, 0);
+    g.seg += 2;
+    g.contentFlags!.stove_shared = false;
+    contentFollowupTick(g);
+    expect(g.cards).toEqual([]);
+    expect(g.contentQueue).toEqual([]);
+  });
+
   it('값을 댈 수 없는 자리표시자(n)를 쓰는 사건은 안 뽑는다', () => {
     registerContentEvents([ev({ id: 'ev_test_count', body: '석탄 {n}포대가 남았다.', params: ['n'] })]);
     expect(contentPool(createGame('content-3'))).toEqual([]);
