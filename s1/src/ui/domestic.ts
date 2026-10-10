@@ -3,8 +3,9 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark, josa, PLACES, crisisNow,
+  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow,
 } from '../game';
+import { copyText } from './clip';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, raw, s } from './dom';
 import { CARS, fmt, signed } from './common';
@@ -28,10 +29,12 @@ export function urlWantsS1c(): boolean {
 }
 
 /** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. s1b: S1b 어두운 길도 켠다(ui/dark.ts).
- * prologue=false: 서막 카드 없이 볼슈틴에서 바로 출발한다(서막 건너뛰기, 5장. depot_promise가 비어 '서막을 거치지 않은 판'이 된다). */
-export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true): Game {
+ * prologue=false: 서막 카드 없이 볼슈틴에서 바로 출발한다(서막 건너뛰기, 5장. depot_promise가 비어 '서막을 거치지 않은 판'이 된다).
+ * events: 새 이동 사건 묶음(game/event_pack.ts)을 켠다. 내정을 켠 새 판은 켠 채 시작한다(사용자 2026-10-10). 끈 판은 메뉴의 '사건 끈 새 판'으로 비교한다. */
+export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
   if (s1b) enableDark(g);
+  if (events) enableEventPack(g);
   if (prologue) startPrologue(g);
   return g;
 }
@@ -598,6 +601,13 @@ export function domesticMenu(view: View): HTMLElement {
   return h('button', { class: 'btn btn--ghost', 'data-action': 'dom-new', 'data-on': on ? '0' : '1' }, on ? '내정 끈 새 판(S1a)' : '내정 켠 새 판(S1c)');
 }
 
+/** 메뉴의 단추: 새 이동 사건 묶음을 끈(켠) 새 판. 내정을 켠 판에만 보인다(비교용). 내정·어두운 길 켬/끔은 그대로 둔다. */
+export function eventsMenu(view: View): HTMLElement | null {
+  if (!view.g.dom) return null;
+  const on = !!view.g.eventPack;
+  return h('button', { class: 'btn btn--ghost', 'data-action': 'dom-events', 'data-on': on ? '0' : '1' }, on ? '사건 끈 새 판(비교용)' : '사건 켠 새 판');
+}
+
 // ---- H6 재기(12장) ----
 
 // 입력 없이 읽거나 고민하는 시간도 센다. 앱이 뒤로 가거나 화면이 꺼진 시간만 뺀다(12.1, 옛 30초 무입력 컷은 없앰, K01).
@@ -711,7 +721,7 @@ export function h6Summary(g: Game): H6Summary | null {
 /** 판 뒤 JSON(12.1: 구간별 표와 내정 카드 선택). */
 export function h6Export(g: Game): string {
   const d = g.dom;
-  return JSON.stringify({ seed: g.seed, end: g.end, seg: g.seg, h6: d?.h6 ?? null, summary: h6Summary(g), stats: d?.stats ?? null }, null, 2);
+  return JSON.stringify({ seed: g.seed, end: g.end, seg: g.seg, events: !!g.eventPack, h6: d?.h6 ?? null, summary: h6Summary(g), stats: d?.stats ?? null }, null, 2);
 }
 
 /** 끝 화면에 붙이는 H6 요약과 판 뒤 질문(12.2, 12.3). */
@@ -730,7 +740,8 @@ export function domesticEnd(view: View): HTMLElement | null {
       h('li', null, `내정 카드 ${sm.picks}장 골랐다`),
       h('li', null, `구간 전체(참고) 평시 ${sm.allPeaceS ?? '−'}초 · 위기 ${sm.allCrisisS ?? '−'}초`)),
     h('p', { class: 'sub' }, '판 뒤 질문: 공방·현황판엔 확인하려고 들어갔나 바꾸려고 들어갔나? 견습생을 고를 때 기관실 반응을 생각했나? 결함판을 썼나? 맡기기를 켰다면 공방장이 뭘 했는지 알아챘나?'),
-    // 아티팩트 창은 내려받기를 막는다. 기록은 펼쳐서 복사한다.
+    // 아티팩트 창은 내려받기를 막는다. 기록은 단추로 복사하고, 복사가 막힌 창에선 펼쳐서 복사한다.
+    h('button', { class: 'btn btn--ghost', 'data-action': 'dom-export-copy' }, '내정 기록(JSON) 복사'),
     h('details', { class: 'dom-export' },
       h('summary', null, '내정 기록(JSON) 펼치기'),
       h('textarea', { class: 'dom-export__text', readonly: true, rows: 6 }, raw(h6Export(g)))));
@@ -758,6 +769,18 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   if (action === 'dom-new') {
     ctx.reset(newGame(g0.seed, data.on === '1', !!g0.dark));
     ctx.toast(data.on === '1' ? `내정 켠 새 판: 시드 ${g0.seed}.` : `내정 끈 새 판: 시드 ${g0.seed}.`);
+    return true;
+  }
+  if (action === 'dom-export-copy') {
+    copyText(h6Export(g0)).then(ok => {
+      ctx.toast(ok ? '내정 기록을 복사했다. 채팅에 붙여 보내 줘.' : '복사가 막혔다. 아래 칸을 펼쳐 길게 눌러 복사해 줘.');
+      ctx.render();
+    });
+    return true;
+  }
+  if (action === 'dom-events') {
+    ctx.reset(newGame(g0.seed, !!g0.dom, !!g0.dark, true, data.on === '1'));
+    ctx.toast(data.on === '1' ? `사건 켠 새 판: 시드 ${g0.seed}.` : `사건 끈 새 판: 시드 ${g0.seed}.`);
     return true;
   }
   if (!g0.dom) return true;

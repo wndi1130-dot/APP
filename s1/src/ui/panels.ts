@@ -9,7 +9,7 @@ import { tip } from './widgets';
 import type { View } from './common';
 import { grudgeText } from './council';
 import { nameBtn, shortText } from './names';
-import { domesticEnd, domesticMenu, domesticPanel, prologueDone } from './domestic'; // S1c 내정 훅
+import { domesticEnd, domesticMenu, domesticPanel, eventsMenu, prologueDone } from './domestic'; // S1c 내정 훅
 import { darkEndSection, darkMenu, darkSupportWhy } from './dark'; // S1b 어두운 길 훅
 import { reproError, reproText } from './repro';
 import { vibrateOn } from './fx';
@@ -77,6 +77,7 @@ function menuPanel(view: View): HTMLElement {
       // 서막을 한 번 끝낸 브라우저에만 보인다(first_leg_story 5장 '서막 건너뛰기', 제안).
       prologueDone() ? h('button', { class: 'btn btn--ghost', 'data-action': 'new-skip' }, '차고 장면 건너뛰기') : null,
       domesticMenu(view),
+      eventsMenu(view),
       // 진동(5b.6): 나쁜 쪽 선 넘음과 죽음에만 40ms. 동작 감소 설정과 따로 끈다. 아이폰 브라우저는 원래 안 떤다.
       h('button', { class: cx('btn btn--ghost', vibrateOn() && 'is-on'), 'data-action': 'toggle-vibrate', 'aria-pressed': vibrateOn() ? 'true' : 'false' }, vibrateOn() ? '진동 켬' : '진동 끔'),
       // 출발 레버(5b.5)를 끌기 어려우면 두 번 눌러 출발한다.
