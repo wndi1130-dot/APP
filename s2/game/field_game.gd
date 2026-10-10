@@ -93,6 +93,7 @@ var crew: Array = []
 var raiders: Array = []
 var player: Person
 var paused: bool = false
+var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
 var seen_now: Dictionary = {}
@@ -557,7 +558,7 @@ func welcome_back() -> void:
 func _process(delta: float) -> void:
 	delta = minf(delta, 0.1)
 	if not ended and not paused:
-		_step(delta)
+		_step(delta * slow)
 	_update_fade(delta)
 	_update_camera(delta)
 	vis_t -= delta
