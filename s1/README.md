@@ -154,7 +154,7 @@ S3에서 규칙을 GDScript로 옮길 때 두 구현이 같은 시드에서 같�
 
 ```sh
 npx tsx tools/s3_dump.ts record seed-0 나갈.json --deal   # 판 기록: 행동마다 난수 상태와 주요 수치, 개표마다 쐐기와 표
-npx tsx tools/s3_dump.ts vectors 나갈.json                # 계산 표본: 난수, 의석, 찬반 몫, 관계 단계, 실제 판의 개표
+npx tsx tools/s3_dump.ts vectors 나갈.json                # 계산 표본: 난수, 의석, 찬반 몫, 관계 단계, 실제 판의 개표(--only=algo|data로 나눠 낸다)
 npx tsx tools/s3_dump.ts tables 나갈.json                 # 수치 표: data.ts에서 함수가 아닌 값만 그대로
 ```
 
