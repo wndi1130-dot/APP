@@ -146,3 +146,76 @@ func test_a_whole_window_or_shut_door_stops_a_blow_but_not_the_eye() -> void:
 	g.set_door_state(door, "open")
 	assert_true(g.body_line_clear(Vector2i(14, 15), Vector2i(16, 15)))
 	assert_true(g.body_line_clear(Vector2i(14, 18), Vector2i(16, 18)))
+
+
+
+# ---------------------------------------------------------------- lights
+
+func _lights_of(data: Dictionary, kind: String) -> Array:
+	return data["lights"].filter(func(l): return l["kind"] == kind)
+
+
+func test_sixteen_car_windows_face_the_platform_clear_of_the_doors() -> void:
+	var data := SulehufMap.build()
+	var train: Rect2i = data["train"]
+	var cars: Array = data["train_cars"].filter(func(c): return c["kind"] == "car")
+	assert_eq(cars.size(), 4)
+	assert_eq(data["train_cars"].size(), 5, "four cars and the engine")
+	assert_eq(data["train_cars"][4]["rect"].end.x, train.end.x, "the pieces fill the train")
+	var windows: Array = _lights_of(data, "car_window")
+	assert_eq(windows.size(), 16)
+	var doors: Array = data["spawns"]["train_door"].map(func(c): return c.x)
+	var seen: Dictionary = {}
+	for l: Dictionary in windows:
+		var c: Vector2i = l["cell"]
+		seen[c] = true
+		assert_eq(c.y, train.end.y - 1, "the platform side")
+		assert_false(doors.has(c.x), "not where a door is")
+		assert_eq(cars.filter(func(car): return car["rect"].has_point(c)).size(), 1, "in a car, not the engine")
+		assert_true(data["platform"].has_point(c + l["side"]), "it falls on the platform")
+		assert_eq([l["strength"], l["falls"], l["reach"], l["when"], l["from_min"]], [1.0, 0.6, 3.0, "dusk", 890])
+	assert_eq(seen.size(), 16, "no two in one place")
+	for car: Dictionary in cars:
+		assert_eq(windows.filter(func(l): return car["rect"].has_point(l["cell"])).size(), 4)
+
+
+func test_the_firebox_the_tower_fire_and_the_hideout_are_one_each() -> void:
+	var data := SulehufMap.build()
+	var g: FieldGrid = data["grid"]
+	assert_eq(data["lights"].size(), 19)
+	var fire: Dictionary = _lights_of(data, "firebox")[0]
+	assert_true(data["train_cars"][4]["rect"].has_point(fire["cell"]), "in the engine")
+	assert_eq([fire["strength"], fire["reach"], fire["when"]], [0.8, 4.0, "always"])
+	var tower: Dictionary = _lights_of(data, "tower_fire")[0]
+	assert_eq(tower["cell"], data["spots"]["water_tower"]["cell"], "where the fire is lit")
+	assert_eq([tower["strength"], tower["reach"], tower["when"]], [0.7, 5.0, "tower_fire"])
+	var hide: Dictionary = _lights_of(data, "hideout")[0]
+	assert_true(g.windows.has(hide["cell"]), "a window")
+	assert_eq(int(g.windows[hide["cell"]]["building"]), int(hide["building"]))
+	assert_eq(data["buildings"][hide["building"]]["name"], "약국")
+	assert_false(data["buildings"][hide["building"]]["rect"].has_point(hide["cell"] + hide["side"]), "it shows outward")
+	assert_eq([hide["strength"], hide["reach"], hide["when"], hide["from_min"]], [0.35, 1.5, "raiders_dusk", 890])
+	var ids: Dictionary = {}
+	for l: Dictionary in data["lights"]:
+		ids[l["id"]] = true
+	assert_eq(ids.size(), 19, "every light has its own id")
+
+
+func test_who_carries_a_lantern_and_when_it_is_lit() -> void:
+	var Person = preload("res://game/actors/person.gd")
+	var made: Dictionary = {}
+	for role: String in ["chief", "companion", "worker", "escort", "raider"]:
+		var p = Person.new()
+		add_child_autofree(p)
+		p.setup(role, role, role, Vector3.ZERO)
+		made[role] = p
+	assert_eq(made["chief"].lamp, {"strength": 1.0, "reach": 7.0})
+	for role: String in ["companion", "worker", "escort"]:
+		assert_eq(made[role].lamp, {"strength": 0.6, "reach": 4.0}, role)
+		assert_true(made[role].lamp_lit(true))
+		assert_false(made[role].lamp_lit(false, true), "only the chief's is lit in a cellar by day")
+	assert_true(made["raider"].lamp.is_empty())
+	assert_false(made["raider"].lamp_lit(true))
+	assert_false(made["chief"].lamp_lit(false))
+	assert_true(made["chief"].lamp_lit(true))
+	assert_true(made["chief"].lamp_lit(false, true))

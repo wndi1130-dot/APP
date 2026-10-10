@@ -17,6 +17,10 @@ const ROLE_COLORS: Dictionary = {
 	"escort": Color(0.45, 0.5, 0.42), "raider": Color(0.7, 0.3, 0.26), "survivor": Color(0.6, 0.6, 0.7),
 }
 
+## Lanterns (weather_fx 12.1): the chief's lights their own ring, a mate's says where they are.
+const LAMP_CHIEF: Dictionary = {"strength": 1.0, "reach": 7.0}
+const LAMP_MATE: Dictionary = {"strength": 0.6, "reach": 4.0}
+
 var pid: String = ""
 var display_name: String = ""
 var role: String = "companion"
@@ -33,6 +37,7 @@ var coat: Dictionary = {"name": "철도원 외투", "warmth": 0.7, "windproof": 
 var gloves: bool = true
 var smell: int = 0                     # 0 clean, 1 sweat, 2 stench
 var traits: Array = []
+var lamp: Dictionary = {}              # {strength, reach} of the lantern carried; empty = none
 
 var path := PackedVector3Array()
 var running: bool = false
@@ -83,11 +88,20 @@ var ring: MeshInstance3D
 var tag: Label3D
 
 
+## Is the lantern lit (weather_fx 12.1): everyone's after sunset, the chief's
+## always down in a cellar. The picture only; the night sound rule is the game's.
+func lamp_lit(dark: bool, cellar: bool = false) -> bool:
+	if lamp.is_empty() or not is_alive():
+		return false
+	return dark or (cellar and role == "chief")
+
+
 func setup(id: String, name_text: String, p_role: String, at: Vector3) -> void:
 	pid = id
 	display_name = name_text
 	role = p_role
 	team = "raider" if role == "raider" else ("crew" if role == "worker" or role == "escort" else "squad")
+	lamp = {} if team == "raider" else (LAMP_CHIEF.duplicate() if role == "chief" else LAMP_MATE.duplicate())
 	position = at
 	var color: Color = ROLE_COLORS.get(role, Color(0.7, 0.7, 0.7))
 	body_mesh = _part(CapsuleMesh.new(), color)
