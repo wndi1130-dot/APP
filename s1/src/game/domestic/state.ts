@@ -127,6 +127,8 @@ export interface DomState {
   /** 기관 숙련자가 없어 선 열차 */
   stalled: boolean;
   flags: { otherApprentice: boolean; irreplaceable: boolean; lice: boolean };
+  /** 상징물을 건 공동체(건 순서대로, 칸마다 최대 1개). 걸린 수는 g.symbols를 넘을 수 없다. 옛 저장 판엔 없다(symbols.ts) */
+  hung: Comm[];
   /** 이번 정차에 데려간 전문가 id */
   escort: string | null;
   /** 핸드카 정찰(X2)의 두 번째 후보 */
@@ -223,7 +225,7 @@ export function enableDomestic(g: Game): void {
     people, nextPersonId: people.length + 1, countdown: {}, hotWater: D.hotWater0, lice: {}, typhus: [], bedding: {},
     penalties: [], sabotage: {}, grants: [], stoker: null, stalled: false,
     flags: { otherApprentice: false, irreplaceable: false, lice: false },
-    escort: null, altPlace: null, reroutes: 3, delegate: { on: false, policy: 'neutral' }, workDebt: 0,
+    hung: [], escort: null, altPlace: null, reroutes: 3, delegate: { on: false, policy: 'neutral' }, workDebt: 0,
     researchPick: null, enginePick: false, sit: zeroSit(), h6: { segs: {}, picks: [] },
     bedOrder: null, fullRule: null, bury: false, cars: [...CARS0], captainInBed: false, log: { restores: [], apprentices: [] },
     stats: {
@@ -272,6 +274,7 @@ export function migrateDomestic(g: Game): void {
   d.bury ??= false;
   d.cars ??= [...CARS0];
   d.captainInBed ??= false;
+  d.hung ??= [];
   d.log ??= { restores: [], apprentices: [] };
   d.stats.cards ??= {};
   d.stats.repairs ??= 0;

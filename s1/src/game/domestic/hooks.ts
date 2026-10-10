@@ -11,6 +11,7 @@ import { delegateTick, overreachTick } from './delegate';
 import { hotWaterCoal, hygieneTick } from './hygiene';
 import { lawTechCoal, lawTechFood, lawTechRes } from './lawtech';
 import { elderTick } from './elder';
+import { symbolTick } from './symbols';
 import './pipe';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick, domesticHeal } from './medbay';
@@ -215,6 +216,7 @@ export function domesticSettle(g: Game, notes: string[]): void {
   knowledgeTick(g);
   elderTick(g);
   hygieneTick(g, notes);
+  symbolTick(g, notes);
   bedTick(g);
   overreachTick(g);
   if (!d.delegate.on || d.restoring) offerRestores(g);
