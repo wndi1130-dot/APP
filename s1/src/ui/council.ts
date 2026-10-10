@@ -1,6 +1,6 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, dealHolds, bribePrice, currentAgenda, expected, lawActive,
-  openConditions, preVote, relStage, relationLine, toolStatus,
+  openConditions, preVote, promiseWhen, relStage, relationLine, toolStatus,
   needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, LawId, VoteResult } from '../game';
@@ -325,7 +325,7 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
     grudge ? h('span', { class: 'is-red' }, grudge) : null,
     // 꿈쩍 않는 반대(사용자 2026-10-09): 어떤 거래로도 안 넘어온다. 비밀 투표면 칸의 표를 흘리지 않게 숨긴다.
     b.hard > 0 && !council.result && !ballotSecret(g) ? h('span', { class: 'is-red' }, `꿈쩍 않는 반대 ${b.hard}석`) : null,
-    st.promise ? h('span', null, `약속: ${st.promise.label} (${st.promise.due}구간까지)`) : null,
+    st.promise ? h('span', null, `약속: ${st.promise.label} (${promiseWhen(g, st.promise)})`) : null,
     st.debt && !st.sick ? h('span', { class: 'is-blue' }, '받을 빚 1') : null,
     st.sick ? h('span', null, '측근과는 빚도 뇌물도 안 통한다') : null,
     deal ? h('span', { class: 'is-blue' }, `이번 회기: ${deal.label}`) : null);

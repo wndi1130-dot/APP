@@ -268,6 +268,14 @@ export function researchChoice(g: Game): TechId | null {
   return ids.sort((a, b) => TECHS[a].tier - TECHS[b].tier)[0] ?? null;
 }
 
+/** 지금 걸린 「고른 복원」 약속: 의무진이 지정한 기술과 남은 구간. 화면 표시용이다. */
+export function researchPromise(g: Game): { tech: TechId; left: number } | null {
+  const p = g.comms.medtech.promise;
+  const tech = g.dom?.researchPick;
+  if (!p || p.cond.kind !== 'research_pick' || !tech) return null;
+  return { tech, left: Math.max(0, p.due - g.seg) };
+}
+
 /** 압력 경고(8.7, N13): 두 단계다. 첫 경고를 무시하면 다음이 마지막 경고, 그것도 무시하면 반드시 터진다.
  * 확률로 터지지 않는다(조짐은 약속). 김을 빼면 처음으로 돌아간다(석탄은 카드 효과로 뺀다). */
 export function resolvePressure(g: Game, vent: boolean): boolean {

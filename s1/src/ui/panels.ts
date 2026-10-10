@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, relStage, relationLine, seats, situation,
+  COMMS, COMM_NAME, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, promiseWhen, relStage, relationLine, seats, situation,
 } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, raw } from './dom';
@@ -32,7 +32,7 @@ function factionRow(g: Game, c: Comm): HTMLElement {
       h('span', { class: s.rel >= 15 ? 'is-blue' : s.rel <= -15 ? 'is-red' : '' }, relationLine(s.rel)),
       s.fervor > 0 ? h('span', { class: 'is-red' }, `열기 ${s.fervor}${s.rel <= -40 || c === 'engine' ? ` · ${PROTEST[c]}` : ''}`) : null,
       grudge ? h('span', { class: 'is-red' }, grudge) : null,
-      s.promise ? h('span', null, `약속: ${s.promise.label}`) : null),
+      s.promise ? h('span', null, `약속: ${s.promise.label} (${promiseWhen(g, s.promise)})`) : null),
     h('div', { class: 'frow__actions' },
       h('button', { class: 'chip', 'data-action': 'comm-act', 'data-act': 'support', 'data-comm': c, disabled: acted || g.lux < 2 || !!supportWhy, title: supportWhy }, '지지', h('small', null, ' 사치품 −2')),
       h('button', { class: 'chip', 'data-action': 'comm-act', 'data-act': 'cut', 'data-comm': c, disabled: acted }, '칼질', h('small', null, ' 식량 +4')),

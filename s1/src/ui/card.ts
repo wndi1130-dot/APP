@@ -1,7 +1,7 @@
 import {
-  COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, stopCrew, politicsLines, riskView, stopScene, viewCard,
+  COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, isStopPromise, promiseWhen, researchPromise, stopCrew, politicsLines, riskView, stopScene, techTitle, viewCard,
 } from '../game';
-import type { Comm, LootKey, StayId } from '../game';
+import type { Comm, Game, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
 import { TARGET_NOTE, TIP } from './common';
@@ -13,6 +13,12 @@ import { darkCardShown } from './dark'; // S1b H7 훅
 
 // 결정 카드: 홈 왼쪽의 서류 뭉치에서 꺼내 화면 왼쪽 절반에 펼친다. 오른쪽엔 열차가 그대로 보인다.
 // 형식은 수저린식(초상, 짧은 대사, 번호 붙은 선택지). 정차의 필드 결정 카드도 같은 자리에 펼친다.
+
+/** 의무진과 걸어 둔 「고른 복원」 약속 한 줄: 어느 기술을 얼마나 남았는지. 약속이 없으면 없다. */
+function researchRow(g: Game): HTMLElement | null {
+  const r = researchPromise(g);
+  return r ? h('li', null, icon('open'), `${COMM_NAME.medtech}: ${techTitle(g, r.tech)} 복원 (남은 ${r.left}구간)`) : null;
+}
 
 /** key가 같은 서류는 다시 그려도 미끄러져 들어오지 않고 스크롤도 그대로다. */
 function sheet(cls: string, key: string, ...children: (Node | null)[]): HTMLElement {
@@ -41,8 +47,9 @@ function stopCard(view: View): HTMLElement | null {
       h('button', { class: 'btn', 'data-action': 'stop-seen' }, g.cards.length ? `덮는다 (서류 ${g.cards.length}장 더)` : '덮는다'));
   }
   const names = stopCrew(g);
+  const research = researchPromise(g);
   const promises = COMMS.map(c => g.comms[c].promise ? { c, p: g.comms[c].promise! } : null).filter(Boolean) as { c: Comm; p: NonNullable<typeof g.comms.tail.promise> }[];
-  const stopPromises = promises.filter(x => x.p.kind === 'fetch' || x.p.cond.kind === 'target' || x.p.cond.kind === 'skip_dispatch');
+  const stopPromises = promises.filter(x => isStopPromise(x.p));
   const maxW = Math.max(...LOOT_KEYS.map(k => place.loot[k]));
   const scene = stopScene(g);
   const risk = riskView(g);
@@ -80,8 +87,8 @@ function stopCard(view: View): HTMLElement | null {
     crewCost(view),
     h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), h('small', null, ' · 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다'))),
     domesticStopRows(view),
-    stopPromises.length ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
-      icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label}`))) : null,
+    stopPromises.length || research ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
+      icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label} (${promiseWhen(g, x.p)})`)), researchRow(g)) : null,
     h('div', { class: 'sheet__actions' },
       // 정찰조가 본 조짐과 해석. 해석은 준비를 바꿀 때마다 다시 계산되고, 불길하다고 하면 반드시 일어난다.
       h('div', { class: cx('danger', (risk.level === 'dead' || risk.level === 'hurt') && 'is-on'), 'aria-live': 'polite' },
@@ -152,6 +159,7 @@ export function cardSheet(view: View): HTMLElement | null {
         h('b', { class: 'sheet__title' }, v.title)),
       g.cards.length > 1 ? h('span', { class: 'sheet__more num' }, `+${g.cards.length - 1}`) : null),
     h('p', { class: 'sheet__body' }, shortText(v.body)),
+    researchPromise(g) ? h('ul', { class: 'promises' }, researchRow(g)) : null,
     v.faces?.length ? h('div', { class: 'faces' }, v.faces.map(n => h('span', { class: 'face' }, portrait(n, card.comm), nameBtn(n)))) : null,
     h('ol', { class: 'choices' }, v.choices.map((ch, i) => {
       const costs = costLines(ch);
