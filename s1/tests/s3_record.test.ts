@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { COMMS, LAWS, P } from '../src/game';
-import { calcVectors, dataTables, recordGame } from '../tools/s3_record';
+import { algoVectors, calcVectors, dataTables, recordGame } from '../tools/s3_record';
 
 // S3 맞대기 기록(tools/s3_record.ts). GDScript 이식이 이 기록을 기준으로 삼으므로, 기록이 시드만으로 정해지는지와
 // 기록에 담긴 값이 스스로 맞는지를 본다.
@@ -82,6 +84,15 @@ describe('S3 계산 표본', () => {
   it('찬반 몫은 합이 1이고, 실제 판의 개표가 들어 있다', () => {
     for (const s of v.split) expect(s.split.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
     expect(v.votes.length).toBeGreaterThan(0);
+  });
+});
+
+describe('S3 알고리즘 표본(S2와 같이 보는 파일)', () => {
+  // GDScript 이식(s2/game/politics)의 GUT 시험이 읽는 파일이다. 난수나 의석 셈법이 바뀌면 여기서 먼저 걸린다.
+  // 다시 뽑기: npx tsx tools/s3_dump.ts vectors ../s2/tests/game/fixtures/s3/calc_algo.json --only=algo
+  it('넣어 둔 calc_algo.json이 지금 규칙으로 다시 만든 것과 같다', () => {
+    const path = fileURLToPath(new URL('../../s2/tests/game/fixtures/s3/calc_algo.json', import.meta.url));
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(JSON.parse(JSON.stringify(algoVectors())));
   });
 });
 

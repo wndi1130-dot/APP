@@ -139,6 +139,7 @@ function voteRecord(g: Game, step: number, agenda: Agenda, map: Record<Comm, Blo
 const RNG_SEEDS: (string | number)[] = ['s1a', 'seed-0', '', 'a', '술레후프 급수탑', 'Sulechów', 0, 1, 42, 4294967295, 4294967296, -1];
 /** 뒤 두 줄은 너비가 2^32를 나누지 못해 버리고 다시 뽑는 경우가 나온다. */
 const INT_RANGES: [number, number][] = [[0, 0], [0, 1], [1, 6], [-5, 5], [0, 99], [0, 2999999999], [-2147483648, 2147483647]];
+const SCORES = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
 const SEAT_POPS: number[][] = [
   [90, 30, 25, 30, 25], [40, 40, 40, 40, 40], [1, 1, 1, 0, 0], [0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [3, 3, 3, 3, 1],
   [33, 33, 34, 0, 0], [7, 7, 7, 7, 7], [199, 1, 0, 0, 0], [61, 29, 27, 31, 22],
@@ -185,25 +186,40 @@ function seatVectors(): { pop: number[]; seats: number[] }[] {
 }
 
 /**
- * 판 상태 없이 맞대 볼 수 있는 계산의 입력과 답. votes는 실제 판 기록에서 모은 개표(쐐기와 난수 상태 → 표)다.
- * stages는 표본을 만들 때의 관계 단계 표다. GDScript 시험은 이 표를 그대로 넣어 맞대므로 data.ts가 바뀌어도 표본은 스스로 맞는다.
+ * 알고리즘만 담긴 표본(난수, 의석, 찬반 몫, 미정 확률). data.ts 수치와 무관해서 규칙의 셈법이 바뀔 때만 바뀐다.
+ * s2/tests/game/fixtures/s3/calc_algo.json 에 넣어 두고 양쪽 CI가 본다(tests/s3_record.test.ts).
  */
-export function calcVectors(): Record<string, unknown> {
-  const scores = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+export function algoVectors(): Record<string, unknown> {
+  return {
+    format: VECTORS_FORMAT,
+    comms: COMMS,
+    rng: rngVectors(),
+    seats: seatVectors(),
+    split: SCORES.map(score => ({ score, split: split(score) })),
+    undecided: SCORES.map(score => ({ score, chance: undecidedChance(score) })),
+  };
+}
+
+/**
+ * 수치에 기대는 표본. stages는 표본을 만들 때의 관계 단계 표이고, votes는 실제 판 기록에서 모은 개표(쐐기와 난수 상태 → 표)다.
+ * GDScript 시험은 여기 담긴 입력을 그대로 넣어 맞대므로 data.ts가 바뀌어도 표본은 스스로 맞는다.
+ */
+export function dataVectors(): Record<string, unknown> {
   const rels = [-100, -70, -69, -40, -39, -15, -14, 0, 14, 15, 39, 40, 69, 70, 100];
   const votes = ['seed-0', 'seed-1', 'seed-2'].flatMap((seed, k) => recordGame(seed, k % 2 === 0).votes)
     .map(({ step: _step, seg: _seg, ...rest }) => rest);
   return {
     format: VECTORS_FORMAT,
     comms: COMMS,
-    rng: rngVectors(),
-    seats: seatVectors(),
-    split: scores.map(score => ({ score, split: split(score) })),
-    undecided: scores.map(score => ({ score, chance: undecidedChance(score) })),
     stages: DATA.STAGES,
     stageOf: rels.map(rel => ({ rel, ...stageOf(rel) })),
     votes,
   };
+}
+
+/** 판 상태 없이 맞대 볼 수 있는 계산의 입력과 답 전부(알고리즘 표본 + 수치에 기대는 표본). */
+export function calcVectors(): Record<string, unknown> {
+  return { ...algoVectors(), ...dataVectors() };
 }
 
 // ---- 수치 표 ----
