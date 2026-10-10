@@ -104,12 +104,13 @@ func test_dusk_dims_the_arrival_light_down_to_the_night_band() -> void:
 	game.clock.elapsed = (945.0 - 630.0) * 60.0 / 15.0
 	game._update_light()
 	assert_lt(game.sun.light_energy, day)
-	assert_gt(game.sun.light_energy, float(night["sun_energy"]))
+	assert_gt(game.sun.light_energy, game.NIGHT_SUN_MIN)
 	game.clock.elapsed = 1800.0
 	game._update_light()
-	assert_almost_eq(game.sun.light_energy, float(night["sun_energy"]), 0.0001)
-	assert_almost_eq(game.environment.ambient_light_energy, float(night["ambient_energy"]), 0.0001)
-	assert_gt(game.environment.ambient_light_energy, 0.1, "night stays readable")
+	# No lamps in the gray box yet: night never goes under the field's floors.
+	assert_almost_eq(game.sun.light_energy, maxf(float(night["sun_energy"]), game.NIGHT_SUN_MIN), 0.0001)
+	assert_almost_eq(game.environment.ambient_light_energy, maxf(float(night["ambient_energy"]), game.NIGHT_AMBIENT_MIN), 0.0001)
+	assert_gte(game.environment.ambient_light_energy, 0.2, "night stays readable")
 
 
 func test_pause_fades_the_world_and_resume_brings_it_back() -> void:

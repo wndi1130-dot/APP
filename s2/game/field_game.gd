@@ -53,6 +53,8 @@ const INERTIA: Dictionary = {
 const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat"]
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
+const NIGHT_SUN_MIN: float = 0.1
+const NIGHT_AMBIENT_MIN: float = 0.2
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
@@ -210,8 +212,10 @@ func _update_fade(delta: float) -> void:
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
 	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
-	sun.light_energy = lerpf(float(fx_light["sun_energy"]), float(fx_light_night["sun_energy"]), t)
-	environment.ambient_light_energy = lerpf(float(fx_light["ambient_energy"]), float(fx_light_night["ambient_energy"]), t)
+	# The night band is lamps only; the gray-box field has no lamps yet, so the
+	# floors keep people, doors and the platform edge readable after dark.
+	sun.light_energy = lerpf(float(fx_light["sun_energy"]), maxf(float(fx_light_night["sun_energy"]), NIGHT_SUN_MIN), t)
+	environment.ambient_light_energy = lerpf(float(fx_light["ambient_energy"]), maxf(float(fx_light_night["ambient_energy"]), NIGHT_AMBIENT_MIN), t)
 
 
 func _build_world() -> void:
