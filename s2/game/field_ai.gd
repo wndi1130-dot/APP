@@ -144,8 +144,10 @@ func _use_kit(giver, who) -> void:
 
 
 func _use_bandage(giver, who, n: int) -> void:
-	if giver.take_item("bandage", n):
+	if int(giver.items.get("bandage", 0)) >= n:
 		who.body.bandage(n)
+		if who.body.last_bandages_used > 0:
+			giver.take_item("bandage", who.body.last_bandages_used)
 
 
 # ---------------------------------------------------------------- companions
