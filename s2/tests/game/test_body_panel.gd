@@ -268,3 +268,89 @@ func test_the_ally_menu_leads_to_the_body_picture() -> void:
 	found.pressed.emit()
 	assert_eq(hud.body_shown, comp)
 	assert_almost_eq(game.slow, 0.3, 0.001)
+
+
+# ---------------------------------------------------------------- state icons
+
+func _toast_texts() -> Array:
+	return game.hud.toasts.map(func(t): return String(t["l"].text))
+
+
+func test_state_icons_show_the_most_urgent_first_two_of_them_big() -> void:
+	var p = game.player
+	var hud = game.hud
+	hud.tick(0.02)
+	for pad in hud.status_pads:
+		assert_false(pad.visible, "nothing wrong: no icons")
+	p.body.add_wound("torso", "deep", 0.0)
+	p.body.add_wound("arm_left", "fracture", 0.0)
+	p.body.exhaustion = 0.6
+	hud.tick(0.02)
+	assert_eq(hud.status_rows.size(), 3)
+	assert_eq(hud.status_pads[0].text, "출혈", "the severe one leads")
+	assert_true(hud.status_pads[2].visible)
+	assert_false(hud.status_pads[3].visible)
+	assert_gt(hud.status_pads[0].size.x, hud.status_pads[2].size.x, "two big, the rest small")
+	await wait_frames(2)
+	var home: Vector2 = hud.stick_home()
+	for pad in hud.status_pads:
+		var rect: Rect2 = pad.get_global_rect()
+		var near := Vector2(clampf(home.x, rect.position.x, rect.end.x), clampf(home.y, rect.position.y, rect.end.y))
+		assert_gt(near.distance_to(home), hud.STICK_R * hud.STICK_CATCH)
+		assert_false(rect.intersects(hud.portrait.get_global_rect()))
+		assert_false(rect.intersects(hud.blood_button.get_global_rect()))
+
+
+func test_pressing_a_state_icon_says_the_noun_phrase_and_good_or_bad() -> void:
+	var p = game.player
+	var hud = game.hud
+	p.body.add_wound("torso", "deep", 0.0)
+	hud.tick(0.02)
+	await wait_frames(2)
+	var at: Vector2 = hud.status_pads[0].get_global_rect().get_center()
+	hud.finger_down(1, at)
+	hud.finger_up(1, at)
+	var said: String = _toast_texts()[-1]
+	assert_true(said.begins_with("심한 출혈 (나쁨): "), said)
+	assert_eq(p.action, "", "an icon only tells")
+	assert_false(hud.modal_open)
+
+
+func test_every_state_has_words() -> void:
+	var Body = preload("res://game/sim/body_state.gd")
+	var b = Body.new()
+	b.add_wound("torso", "deep", 0.0)
+	b.add_wound("leg_left", "fracture", 0.0)
+	b.apply_bite(RandomNumberGenerator.new(), "arm", 0.0)
+	b.exhaustion = 0.9
+	b.cold_level = 1
+	var rows: Array = b.status_notes()
+	assert_eq(rows.size(), 5)
+	assert_eq(rows[0]["id"], "infection", "the bite leads")
+	for row: Dictionary in rows:
+		assert_ne(row["short"], "", row["id"])
+		assert_ne(row["title"], "", row["id"])
+		assert_ne(row["text"], "", row["id"])
+		assert_false(row["good"])
+	assert_true(String(rows[0]["text"]).contains("8분 00초"))
+	b.splint()
+	var leg: Dictionary = b.status_notes().filter(func(r): return r["id"] == "fracture")[0]
+	assert_eq(leg["title"], "부목 댄 다리 골절")
+	assert_eq(Body.new().status_notes().size(), 0)
+
+
+func test_the_blood_key_is_pointed_at_once_and_says_what_it_binds() -> void:
+	var p = game.player
+	var hud = game.hud
+	p.add_item("bandage", 2)
+	p.body.add_wound("arm_left", "laceration", 0.0)
+	hud.tick(0.02)
+	hud.tick(0.02)
+	var hints: Array = _toast_texts().filter(func(t): return t.contains("'지혈'"))
+	assert_eq(hints.size(), 1, "one line, once")
+	await wait_frames(2)
+	var at: Vector2 = hud.blood_button.get_global_rect().get_center()
+	hud.finger_down(1, at)
+	hud.finger_up(1, at)
+	assert_true(_toast_texts().has("지혈한다: 왼팔 찢김 · 피 보통."))
+	assert_ne(p.action, "", "and it starts")

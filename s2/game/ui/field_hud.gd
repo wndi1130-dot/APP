@@ -36,6 +36,12 @@ const BODY_SLOW: float = 0.3
 ## The portrait sits top left under the pause key and the clock.
 const PORTRAIT_AT := Vector2(16.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
 const PORTRAIT_W: float = 290.0
+## State icons sit in a row right of the blood key: the two most urgent big,
+## the rest small (body_injury 4 '둘까지만 크게').
+const STATUS_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 10.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+const STATUS_BIG := Vector2(76.0, 56.0)
+const STATUS_SMALL := Vector2(60.0, 44.0)
+const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
 ## Where the six parts sit in the body picture (your left on the left, like a mirror).
 const BODY_LAYOUT: Dictionary = {
@@ -122,6 +128,9 @@ var modal: Control
 var modal_paused_before: bool = false
 var modal_open: bool = false
 var modal_slows: bool = false      # the panel up slows the field instead of stopping it
+var status_pads: Array = []        # the state icons, most urgent first
+var status_rows: Array = []        # what each shows now (body.status_notes())
+var bleed_hint_done: bool = false  # the one-time line that points at the blood key
 var body_shown = null              # whose body picture is (or was last) up
 var body_part: String = ""
 var body_parts: Dictionary = {}    # part -> its button in the picture
@@ -372,6 +381,14 @@ func _build_thumbs() -> void:
 	blood_button = _pad("지혈", PORTRAIT_AT + Vector2(PORTRAIT_W + 8.0, 0), Vector2(84, 64), 24, Control.PRESET_TOP_LEFT)
 	blood_button.add_theme_color_override("font_color", WARN)
 	blood_button.visible = false
+	# State icons (user, build 47): press one and it says what it does to you.
+	var sx := 0.0
+	for i in STATUS_SLOTS:
+		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
+		var pad := _pad("", STATUS_AT + Vector2(sx, 0), size, 20 if i < 2 else 16, Control.PRESET_TOP_LEFT)
+		pad.visible = false
+		status_pads.append(pad)
+		sx += size.x + 6.0
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
 		b.toggle_mode = true
 	# The bag sits on the left, above the fixed stick's catch ring. There is no
@@ -391,9 +408,9 @@ func _build_thumbs() -> void:
 
 func _build_toasts() -> void:
 	toast_box = VBoxContainer.new()
-	# Right of the portrait and the blood key, under the clock.
+	# Right of the portrait and the blood key, under the state icons.
 	toast_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	toast_box.position = PORTRAIT_AT + Vector2(PORTRAIT_W + 8.0 + 84.0 + 10.0, 0)
+	toast_box.position = STATUS_AT + Vector2(0, STATUS_BIG.y + 8.0)
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast_box)
 
@@ -485,6 +502,11 @@ func tick(delta: float) -> void:
 	attack_button.button_pressed = fighting(p)
 	_tick_primary(p)
 	blood_button.visible = p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
+	# The first time it shows, one line points at it (build 47: it was never found).
+	if blood_button.visible and not bleed_hint_done:
+		bleed_hint_done = true
+		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
+	_tick_status(p)
 	pause_button.text = "계속" if game.paused else "멈춤"
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
@@ -500,6 +522,22 @@ func _drop_stale_person() -> void:
 		melee_holding = false
 	if aim_target != null and not (aim_target is Dictionary) and not game.combat.hostile(aim_target):
 		aim_target = null
+
+
+func _tick_status(p) -> void:
+	status_rows = p.body.status_notes()
+	for i in status_pads.size():
+		var pad: Button = status_pads[i]
+		pad.visible = i < status_rows.size()
+		if pad.visible:
+			var row: Dictionary = status_rows[i]
+			pad.text = String(row["short"])
+			pad.add_theme_color_override("font_color", BRASS if row["good"] else (WARN if row["severe"] else INK))
+
+
+## What a state icon says when pressed: the noun phrase, good or bad, and what it does.
+func status_line(row: Dictionary) -> String:
+	return "%s (%s): %s." % [row["title"], "좋음" if row["good"] else "나쁨", row["text"]]
 
 
 func _tick_portrait(p) -> void:
@@ -1480,7 +1518,16 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 	var p = game.player
 	if b == aim_button and primary_melee(p):
 		b = attack_button
+	if status_pads.has(b):
+		var slot: int = status_pads.find(b)
+		if slot < status_rows.size():
+			toast(status_line(status_rows[slot]))
+		return
 	if b == blood_button:
+		# Say what the press does: it was pressed without knowing (build 47).
+		var worst: int = p.body._top_bleeder()
+		if worst >= 0 and p.action == "" and p.can_act():
+			toast("지혈한다: %s." % Treatment.wound_text(p.body.wounds[worst]))
 		game.actions.self_bandage(p)
 	elif b == aim_button:
 		aim_button.button_pressed = true
