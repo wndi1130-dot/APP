@@ -31,6 +31,7 @@ const Actions = preload("res://game/field_actions.gd")
 const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
+const StormLook = preload("res://fx/storm_look.gd")
 
 const AMBIENT_C: float = -14.0
 const SIGHT_RADIUS: int = 18
@@ -91,6 +92,12 @@ var camera: Camera3D
 var environment: Environment
 var sun: DirectionalLight3D
 var snow: GPUParticles3D
+## Storm stop (weather_fx 14장, opts["storm"]: before, during, after): its look,
+## the snow layers with their place relative to the view, and the screen layer
+## under the HUD that carries the dark bank, the snow-fog and the edge frost.
+var storm: Dictionary = {}
+var storm_layers: Array = []
+var storm_screen: ColorRect
 var clock := FieldClock.new()
 var ledger := NoiseLedger.new()
 var director: HordeDirector
@@ -188,10 +195,13 @@ var fx_light_night: Dictionary = {}
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
-	weather = Weather.new(opts.get("weather", ["fog", "snow"]), AMBIENT_C, Vector2(1, 0.2), 0.4)
+	# A storm stop plays by its stage's weather (clear, blizzard, clear) and
+	# looks like the stage; without one the stop is as before.
+	storm = StormLook.look(String(opts.get("storm", "")))
+	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), AMBIENT_C, Vector2(1, 0.2), 0.4)
 	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
-	look_kinds = opts.get("look", weather.kinds)
-	snow_cover = SnowCover.new(SnowCover.DEFAULT_SEASON, false, float(opts.get("storm_cm", 0.0)))
+	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
+	snow_cover = SnowCover.new(SnowCover.DEFAULT_SEASON, false, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))))
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
@@ -242,6 +252,12 @@ func _apply_fx() -> void:
 	FxState.apply(fx_params)
 	fx_light = FxState.lighting_for(look_kinds, hour)
 	fx_light_night = FxState.lighting_for(look_kinds, 0.0)
+	if not storm.is_empty():
+		# The stage sets how strong and what colour the daylight is.
+		var clear_sky := FxState.lighting_for(["clear"], hour)
+		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
+		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
+		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -394,7 +410,8 @@ func _build_world() -> void:
 	sun.rotation_degrees = Vector3(-50, -30, 0)
 	sun.light_energy = fx_light["sun_energy"]
 	sun.light_color = fx_light["sun_color"]
-	sun.shadow_enabled = bool(opts.get("shadows", true))
+	sun.shadow_enabled = bool(opts.get("shadows", true)) and bool(storm.get("shadows", true))
+	sun.rotation_degrees.x = float(storm.get("sun_pitch", -50.0))
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
@@ -437,6 +454,81 @@ func _build_world() -> void:
 	snow.draw_pass_1 = flake
 	snow.emitting = bool(opts.get("snow", true)) and weather.particles() > 0
 	add_child(snow)
+	_build_storm()
+
+
+## Snow layers and the screen layer of a storm stop; nothing on other stops.
+func _build_storm() -> void:
+	if storm.is_empty():
+		return
+	# The stage's layers stand in for the plain snowfall.
+	snow.emitting = false
+	if bool(opts.get("snow", true)):
+		for spec in storm["layers"]:
+			var p := StormLook.new_layer()
+			var at := StormLook.aim_layer(p, spec, weather.wind_dir)
+			add_child(p)
+			storm_layers.append([p, at])
+	var layer := CanvasLayer.new()
+	layer.layer = 5   # over the world, under the HUD (10)
+	add_child(layer)
+	storm_screen = ColorRect.new()
+	storm_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	storm_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var m := ShaderMaterial.new()
+	m.shader = load("res://fx/shaders/screen_overlay.gdshader")
+	m.set_shader_parameter("vignette", 0.0)
+	m.set_shader_parameter("grain", 0.0)
+	m.set_shader_parameter("front", float(storm["front"]))
+	m.set_shader_parameter("whiteout", float(storm["whiteout"]))
+	m.set_shader_parameter("edge_frost", float(storm["edge_frost"]))
+	# The camera looks north from above: world z runs down the screen.
+	m.set_shader_parameter("storm_dir", Vector2(weather.wind_dir.x, weather.wind_dir.y * 0.7))
+	storm_screen.material = m
+	layer.add_child(storm_screen)
+
+
+## Lamps that are on, nearest the middle of the view first (at most 8): where
+## each is on the screen (0..1), its reach as a share of the screen height and
+## its strength. The snow-fog thins round them (screen_overlay glow).
+func storm_glows() -> Array:
+	var out: Array = []
+	if storm_screen == null or float(storm["whiteout"]) <= 0.0:
+		return out
+	var now := clock.game_minutes()
+	var fire := _tower_fire()
+	var raid := _raiders_in()
+	var spots: Array = []
+	for l in data["lights"]:
+		if LampLight.is_on(l, now, fire, raid):
+			spots.append([FieldGrid.center(l["cell"]) + Vector3(0, 1.2, 0), float(l.get("reach", 3.0)), float(l.get("strength", 0.6))])
+	var dark := clock.is_dark()
+	for p in people:
+		if p.is_alive() and p.lamp_lit(dark, level_of(p.position) < 0):
+			spots.append([p.position + Vector3(0, 1.2, 0), float(p.lamp["reach"]), float(p.lamp["strength"])])
+	spots.sort_custom(func(a, b): return a[0].distance_squared_to(cam_focus) < b[0].distance_squared_to(cam_focus))
+	var size := get_viewport().get_visible_rect().size
+	for spot in spots:
+		if out.size() >= 8:
+			break
+		var uv: Vector2 = camera.unproject_position(spot[0]) / size
+		if uv.x < -0.1 or uv.x > 1.1 or uv.y < -0.1 or uv.y > 1.1:
+			continue
+		out.append(Vector4(uv.x, uv.y, spot[1] / maxf(camera.size, 0.01), clampf(spot[2], 0.0, 1.0)))
+	return out
+
+
+func _update_storm() -> void:
+	for row in storm_layers:
+		row[0].position = cam_focus + row[1]
+	if storm_screen == null:
+		return
+	var glows := storm_glows()
+	var m := storm_screen.material as ShaderMaterial
+	m.set_shader_parameter("glow_count", glows.size())
+	while glows.size() < 8:
+		glows.append(Vector4.ZERO)
+	m.set_shader_parameter("glow", glows)
 
 
 func _spawn_people() -> void:
@@ -1471,6 +1563,7 @@ func _update_camera(delta: float) -> void:
 	camera.position = cam_focus + back
 	camera.look_at(cam_focus, Vector3.UP)
 	snow.position = cam_focus + Vector3(0, 9, 0)
+	_update_storm()
 	_update_light()
 
 

@@ -269,39 +269,10 @@ func _storm_layer(spec: Dictionary, wind_dir: Vector2) -> GPUParticles3D:
 	var key := String(spec["name"])
 	var p: GPUParticles3D = storm_fx.get(key)
 	if p == null:
-		p = GPUParticles3D.new()
-		p.process_material = ParticleProcessMaterial.new()
-		var q := QuadMesh.new()
-		q.material = _mat("precip.gdshader")
-		p.draw_pass_1 = q
-		p.visibility_aabb = AABB(Vector3(-60, -14, -40), Vector3(120, 30, 80))
+		p = StormLook.new_layer()
 		add_child(p)
 		storm_fx[key] = p
-	var dir := StormLook.fall_dir(wind_dir, float(spec["lean"]))
-	var fast := float(spec["speed"])
-	var high := float(spec["height"])
-	# Long enough to cross the yard, whichever way it flies.
-	var life := clampf(maxf(high / maxf(-dir.y * fast, 0.01), 0.0) if dir.y < -0.3 else 44.0 / fast, 1.2, 12.0)
-	p.amount = int(spec["amount"])
-	p.lifetime = life
-	p.preprocess = life
-	# Start upwind so the layer fills the view as it flies.
-	p.position = Vector3(0, high, 0) - Vector3(dir.x, 0, dir.z) * fast * life * 0.5
-	var pm := p.process_material as ParticleProcessMaterial
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(30, minf(high * 0.4, 3.0), 20)
-	pm.direction = dir
-	pm.spread = 4.0
-	pm.initial_velocity_min = fast * 0.75
-	pm.initial_velocity_max = fast
-	pm.gravity = Vector3.ZERO
-	var q := p.draw_pass_1 as QuadMesh
-	q.size = spec["size"]
-	var m := q.material as ShaderMaterial
-	m.set_shader_parameter("shape", int(spec["shape"]))
-	m.set_shader_parameter("opacity", float(spec["opacity"]))
-	m.set_shader_parameter("axis", dir)
-	m.set_shader_parameter("twinkle", float(spec.get("twinkle", 0.0)))
+	p.position = StormLook.aim_layer(p, spec, wind_dir)
 	return p
 
 
