@@ -17,6 +17,8 @@ function fresh(seed: string): Game {
 }
 
 let n = 0;
+/** 기록이 생긴 다음 구간의 정산(생긴 구간에는 날을 안 깎는다). */
+const tick = (g: Game, notes: string[], mult?: number): void => { g.seg += 1; woundTick(g, notes, mult); };
 const make = (g: Game, grade: WoundGrade, extra: Partial<WoundInput> = {}): Wound =>
   addWound(g, { who: `사람${(n += 1)}`, comm: 'tail', from: 'stop', where: '시험', grade, part: 'torso', septic: false, ...extra });
 
@@ -101,18 +103,33 @@ describe('addWound: 등급별 값', () => {
 });
 
 describe('woundTick', () => {
+  it('생긴 구간의 정산에서는 날을 안 깎고, 다음 구간에 깎는다(가벼운 상처는 다음 정차까지 남는다)', () => {
+    const g = fresh('t-same-seg');
+    g.med = 10;
+    const light = make(g, 'light');
+    const deep = make(g, 'deep');
+    woundTick(g, []);
+    expect([light.state, light.daysLeft, deep.daysLeft, deep.bedDays]).toEqual(['light', 1, deep.days0, 2]);
+    expect(g.med).toBe(9.5); // 의약품은 생긴 구간에도 든다
+    expect(g.injured).toBe(2);
+    g.seg += 1;
+    woundTick(g, []);
+    expect(light.state).toBe('healed');
+    expect([deep.daysLeft, deep.bedDays]).toEqual([deep.days0 - 1, 1]);
+  });
+
   it('깊은 상처는 의약품 0.5/일을 쓰고, 침상 2일 뒤 제 칸으로 내려오며, 날이 다하면 낫는다', () => {
     const g = fresh('t-deep');
     g.med = 10;
     const w = make(g, 'deep');
     const notes: string[] = [];
-    woundTick(g, notes);
+    tick(g, notes);
     expect(g.med).toBe(9.5);
     expect([w.state, w.daysLeft, w.bedDays]).toEqual(['bed', w.days0 - 1, 1]);
-    woundTick(g, notes);
+    tick(g, notes);
     expect(w.state).toBe('light');
     expect(g.injured).toBe(1);
-    for (let i = 0; i < 4 && w.state === 'light'; i += 1) woundTick(g, notes);
+    for (let i = 0; i < 4 && w.state === 'light'; i += 1) tick(g, notes);
     expect(w.state).toBe('healed');
     expect(g.injured).toBe(0);
   });
@@ -131,11 +148,11 @@ describe('woundTick', () => {
     const g = fresh('t-mult');
     g.med = 10;
     const rng = JSON.stringify(g.rng);
-    woundTick(g, []);
+    tick(g, []);
     expect(g.med).toBe(10);
     expect(JSON.stringify(g.rng)).toBe(rng);
     make(g, 'deep');
-    woundTick(g, [], 1.6);
+    tick(g, [], 1.6);
     expect(g.med).toBeCloseTo(10 - 0.5 * 1.6, 6);
   });
 
@@ -143,14 +160,14 @@ describe('woundTick', () => {
     const g = fresh('t-amp');
     g.med = 20;
     const a = make(g, 'amputation', { part: 'armL' });
-    for (let i = 0; i < 3; i += 1) woundTick(g, []);
+    for (let i = 0; i < 3; i += 1) tick(g, []);
     expect(a.state).toBe('bed');
-    woundTick(g, []);
+    tick(g, []);
     expect(a.state).toBe('permanent');
     expect(g.injured).toBe(0); // 영구는 셈에서 빠진다
     expect(activeWounds(g)).toHaveLength(0);
     const before = g.med;
-    woundTick(g, []);
+    tick(g, []);
     expect(g.med).toBe(before); // 영구는 의약품을 안 쓴다
   });
 
@@ -159,7 +176,7 @@ describe('woundTick', () => {
     g.med = 5;
     const w = make(g, 'deep');
     w.daysLeft = 1; w.bedDays = 1;
-    woundTick(g, []);
+    tick(g, []);
     expect(w.state).toBe('healed');
   });
 
@@ -169,7 +186,7 @@ describe('woundTick', () => {
     const ws = Array.from({ length: 60 }, () => make(g, 'deep'));
     const days = ws.map(w => w.daysLeft);
     const notes: string[] = [];
-    woundTick(g, notes);
+    tick(g, notes);
     expect(notes).toContain('의약품이 떨어졌다.');
     const left = activeWounds(g);
     expect(left.length).toBeLessThan(60);
@@ -186,12 +203,12 @@ describe('woundTick', () => {
     g.comms.medtech.fervor = 1;
     g.comms.medtech.rel = -50;
     const notes: string[] = [];
-    woundTick(g, notes);
+    tick(g, notes);
     expect(notes).toContain('의무진이 진료를 거부했다.');
     expect(g.med).toBe(2.5);
     expect(w.daysLeft).toBe(w.days0);
     g.med = 0;
-    woundTick(g, []);
+    tick(g, []);
     expect(g.deaths).toHaveLength(0);
     expect(w.state).toBe('bed');
   });
@@ -204,7 +221,7 @@ describe('woundTick', () => {
     const bed = make(g, 'deep');
     const home = make(g, 'deep');
     home.state = 'home';
-    woundTick(g, []);
+    tick(g, []);
     expect(bed.daysLeft).toBe(bed.days0);
     expect(bed.bedDays).toBe(2);
     expect(home.daysLeft).toBe(home.days0 - 1);
@@ -217,7 +234,7 @@ describe('woundTick', () => {
     w.state = 'light'; w.bedDays = 0;
     let max = w.daysLeft;
     for (let i = 0; i < 25 && isWounded(g, w.who); i += 1) {
-      woundTick(g, []);
+      tick(g, []);
       max = Math.max(max, w.daysLeft);
     }
     expect(max).toBeLessThanOrEqual(w.days0 * 2);

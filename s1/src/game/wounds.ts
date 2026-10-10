@@ -203,7 +203,7 @@ function bayBusy(g: Game): boolean {
 }
 
 /**
- * 하루 정산(2.1). medicineTick을 바꿀 자리. medMult는 lawMult(g,'medMult')를 부르는 쪽이 넘긴다(turn.ts 비공개 함수).
+ * 하루 정산(2.1). medicineTick을 바꿀 자리. 이번 구간에 생긴 기록은 의약품은 들어도 날은 안 깎는다. medMult는 lawMult(g,'medMult')를 부르는 쪽이 넘긴다(turn.ts 비공개 함수).
  * 의약품이 모자랄 때 기록마다 하루 한 번 굴린다(활성 기록이 없으면 난수도 의약품도 쓰지 않는다).
  */
 export function woundTick(g: Game, notes: string[], medMult = 1): void {
@@ -234,6 +234,8 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
   g.med -= need;
   const frozen = bayBusy(g);
   for (const w of act) {
+    // 생긴 구간의 정산에서는 날을 깎지 않는다(코디네이터 10-11): 가벼운 상처도 다음 정차 한 번은 못 나간다는 뜻이 닿게 한다.
+    if (w.at === g.seg) continue;
     if (w.state === 'bed' && frozen) continue;
     w.daysLeft -= 1;
     if (w.state === 'bed' || w.state === 'home') w.bedDays -= 1;
