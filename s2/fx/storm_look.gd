@@ -13,6 +13,8 @@ const MAX_PARTICLES: int = 900
 ## sun throws long shadows). front: dark bank on the edge the wind comes from.
 ## whiteout: snow-fog over the whole view. edge_frost: frost creeping in.
 ## fall_cm_h: how fast lying snow and snow caps grow.
+## windows_lit: window lights that wait for dusk are on all day. lamp_gain:
+## how much of the night's lamp glow shows on the ground by day (0..1).
 ## rules: the weather kinds the stop plays by (weather.gd); kinds: what it is
 ## drawn as. Colours stay grey, grey-blue and grey-yellow: no red, no sky blue.
 const STAGES: Dictionary = {
@@ -30,6 +32,7 @@ const STAGES: Dictionary = {
 		"rules": ["blizzard"], "kinds": ["blizzard"], "sun": 0.5, "sun_pitch": -50.0, "shadows": false,
 		"sun_color": Color(0.72, 0.74, 0.78), "ambient_color": Color(0.55, 0.57, 0.61),
 		"front": 0.0, "whiteout": 0.75, "edge_frost": 0.3, "fall_cm_h": 3.0,
+		"windows_lit": true, "lamp_gain": 0.7,
 		"layers": [
 			# Far: fine and many. Middle: short streaks. Near: fat streaks lying on the wind.
 			{"name": "far", "amount": 400, "shape": 1, "size": Vector2(0.07, 0.07), "speed": 9.0, "lean": 0.8, "height": 9.0, "opacity": 0.8},

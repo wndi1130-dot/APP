@@ -303,11 +303,17 @@ func _raiders_in() -> bool:
 	return false
 
 
+## The hour the fixed lights go by. Inside a storm it is dark enough at noon
+## that the windows are lit all day: they show where the train is.
+func _light_minutes() -> float:
+	return 1440.0 if bool(storm.get("windows_lit", false)) else clock.game_minutes()
+
+
 ## Warm light for the sight mask: fixed lights (stamped again only when one
 ## comes on or goes out) plus every lit lantern. sight: the chief's own sight
 ## cells, so their lantern does not shine through walls.
 func lamp_cells(sight: Dictionary = {}) -> Dictionary:
-	var now := clock.game_minutes()
+	var now := _light_minutes()
 	var fire := _tower_fire()
 	var raid := _raiders_in()
 	var lights: Array = data["lights"]
@@ -338,7 +344,7 @@ func _update_lantern(delta: float) -> void:
 	lantern.visible = player.lamp_lit(clock.is_dark(), level_of(player.position) < 0)
 	lantern.position = player.position + Vector3(0, 1.4, 0)
 	lantern.light_energy = float(player.lamp.get("strength", 1.0)) * (1.0 - 0.3 * lamp_pulse)
-	var night := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	var night := maxf(clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0), float(storm.get("lamp_gain", 0.0)))
 	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night))
 
 
@@ -495,7 +501,7 @@ func storm_glows() -> Array:
 	var out: Array = []
 	if storm_screen == null or float(storm["whiteout"]) <= 0.0:
 		return out
-	var now := clock.game_minutes()
+	var now := _light_minutes()
 	var fire := _tower_fire()
 	var raid := _raiders_in()
 	var spots: Array = []
