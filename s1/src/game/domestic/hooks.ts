@@ -17,7 +17,7 @@ import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strike
 import { bedTick, domesticHeal } from './medbay';
 import { refreshSit } from './sit';
 import { domCard, living, personById, techMult, topSkill, variantMult } from './state';
-import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, rollBreakdown, runWorkshop, upkeepCoal } from './workshop';
+import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, rollBreakdown, runWorkshop, upkeepCoal } from './workshop';
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.
 
@@ -237,11 +237,13 @@ export function domesticPromise(g: Game, c: Comm, p: PromiseState): boolean | nu
     return !since.some(a => a.other);
   }
   if (p.cond.kind === 'research_pick') {
-    // 기술·의무진이 고른 복원을 다음 회기까지 시작했나.
-    const since = d.log.restores.filter(r => r.seg >= p.due - P.promiseSegments);
-    const ok = since.some(r => TECHS[r.id].like.includes(c) || (TECHS[r.id].variants && Object.values(TECHS[r.id].variants!).some(v => v.like.includes(c))));
+    // 기술·의무진이 고른 복원(그들이 지정한 그 기술)을 다음 회기까지 시작했나. 다른 복원은 아무리 좋아하는 것이어도 치지 않는다(A01).
+    // 지정한 기술이 없던 약속(후보가 없었거나 옛 저장)은 지킬 일이 없어 지킨 것으로 본다.
+    const target = d.researchPick;
     d.researchPick = null;
-    return ok;
+    if (!target) return true;
+    if (D.pickFulfil === 'complete') return d.techs[target]?.stage === 'done';
+    return d.log.restores.some(r => r.id === target && r.seg >= p.due - P.promiseSegments);
   }
   return null;
 }
@@ -253,14 +255,16 @@ export function domesticPromiseMade(g: Game): void {
   const e = g.comms.engine.promise;
   d.enginePick = e?.cond.kind === 'apprentice_pick';
   const m = g.comms.medtech.promise;
-  if (m?.cond.kind === 'research_pick' && !d.researchPick) d.researchPick = researchChoice(g);
+  // 시작해도 지정은 약속을 판정할 때까지 남는다. 약속이 없어졌으면 낡은 지정도 같이 지운다.
+  if (m?.cond.kind !== 'research_pick') d.researchPick = null;
+  else if (!d.researchPick) d.researchPick = researchChoice(g);
 }
 
-/** 기술·의무진이 고르는 다음 복원 대상: 그들이 원하는 것 중 조건이 맞는 것. */
+/** 기술·의무진이 고르는 다음 복원 대상: 그들이 원하는 것 중 이 열차에서 실제로 시작할 수 있는 것(A02: 잠긴 R3나 선행·숙련이 모자란 것은 고르지 않는다). */
 export function researchChoice(g: Game): TechId | null {
   const d = g.dom;
   if (!d) return null;
-  const ids = (Object.keys(TECHS) as TechId[]).filter(id => !d.techs[id] && TECHS[id].like.includes('medtech'));
+  const ids = (Object.keys(TECHS) as TechId[]).filter(id => TECHS[id].like.includes('medtech') && !restoreBlock(g, id));
   return ids.sort((a, b) => TECHS[a].tier - TECHS[b].tier)[0] ?? null;
 }
 

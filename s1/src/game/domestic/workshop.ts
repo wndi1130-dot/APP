@@ -66,22 +66,31 @@ export function restoreCost(id: TechId): { parts: number; frags: number; defectF
 /** 효과를 아직 못 넣은 기술(J10 3번): 부품을 받고 아무것도 안 주지 않게 복원을 막는다. R3(다음 정차 미리 보기·세 번 바꾸기)은 다음 정차 미리 보기 화면이 들어오면 연다. */
 export const NOT_YET: TechId[] = ['r3'];
 
+/** 지금 이 기술의 복원을 시작할 수 없게 막는 까닭(재료·조각·공방 사정은 빼고, 조건 자체를 본다). 막힌 데가 없으면 undefined. */
+export function restoreBlock(g: Game, id: TechId): string | undefined {
+  const d = dom(g);
+  const def = TECHS[id];
+  if (d.techs[id]) return '이미 손댔다';
+  if (NOT_YET.includes(id)) return '아직 이 열차에서 못 쓴다';
+  const pre = prereqs(id);
+  if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return `${TECHS[pre[0]].name}부터`;
+  if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {
+    return `${['', '견습', '숙련', '장인'][skillNeed(id)]} 이상이 없다${def.tier === 3 ? '(숙련 + 공작 장인이어도 된다)' : ''}`;
+  }
+  if (restoreCost(id).core > d.cores) return '코어가 없다';
+  return undefined;
+}
+
 export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   const d = dom(g);
   const def = TECHS[id];
   const cost = restoreCost(id);
   const out: RestoreCheck = { offer: false, fragsNeed: cost.frags, defectNeed: cost.defectFrags, parts: cost.parts, core: cost.core, wood: cost.wood };
   const fail = (why: string) => { out.full = why; out.defect = why; return out; };
-  if (d.techs[id]) return fail('이미 손댔다');
-  if (NOT_YET.includes(id)) return fail('아직 이 열차에서 못 쓴다');
-  const pre = prereqs(id);
-  if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return fail(`${TECHS[pre[0]].name}부터`);
-  if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {
-    return fail(`${['', '견습', '숙련', '장인'][skillNeed(id)]} 이상이 없다${def.tier === 3 ? '(숙련 + 공작 장인이어도 된다)' : ''}`);
-  }
+  const blocked = restoreBlock(g, id);
+  if (blocked) return fail(blocked);
   const frags = d.frags[def.branch];
   const hasDefect = cost.defectFrags < cost.frags;
-  if (cost.core > d.cores) return fail('코어가 없다');
   out.offer = frags >= (hasDefect ? cost.defectFrags : cost.frags);
   const common = d.restoring ? '공방이 다른 복원 중' : d.parts < cost.parts ? '부품이 모자라다' : d.wood < cost.wood ? '목재가 모자라다' : undefined;
   out.full = frags < cost.frags ? '설계도 조각이 모자라다' : common;
@@ -123,7 +132,6 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   const delta = relDelta(g, id, variant);
   d.log.restores.push({ seg: g.seg, id, ...(variant ? { v: variant } : {}) });
   if (!relApplied) for (const [c, n] of Object.entries(delta) as [Comm, number][]) g.comms[c].rel = clamp(g.comms[c].rel + n, -100, 100);
-  if (d.researchPick === id) d.researchPick = null;
   journal(g, `공방이 ${techTitle(g, id)} 복원을 시작했다${mode === 'defect' ? '(결함판)' : ''}.${asked ? ' 다음 회기에 배관 추인을 받아야 끝난다.' : ''}`);
   return true;
 }
