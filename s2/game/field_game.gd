@@ -407,7 +407,7 @@ func default_squad(pipe_quality: String) -> Array:
 	return [
 		{"id": "p_chief", "name": "열차장", "role": "chief", "skills": {"strength": 5, "melee": 3, "shooting": 2, "stealth": 2, "search": 2}, "hands": [["axe", "factory", 0.9], ["pistol", "factory", 0.8]], "items": {"bandage": 2, "cloth": 1}},
 		{"id": "p_guard_marek", "name": "마레크", "role": "companion", "skills": {"strength": 6, "melee": 2, "shooting": 4, "stealth": 1, "search": 1}, "hands": [["pipe_shotgun", pipe_quality, 0.9], ["knife", "factory", 0.8]], "items": {"bandage": 1}},
-		{"id": "p_med_joanna", "name": "요안나", "role": "companion", "medical": "skilled", "skills": {"strength": 4, "melee": 1, "shooting": 4, "stealth": 3, "search": 3}, "hands": [["bow", "factory", 0.9], ["crowbar", "factory", 0.9]], "items": {"bandage": 3, "medkit": 1}},
+		{"id": "p_med_joanna", "name": "요안나", "role": "companion", "medical": "skilled", "skills": {"strength": 4, "melee": 1, "shooting": 4, "stealth": 3, "search": 3}, "hands": [["bow", "factory", 0.9], ["crowbar", "factory", 0.9]], "items": {"bandage": 3, "medkit": 1, "tweezers": 1, "needle_thread": 3}},
 		{"id": "p_tail_tomasz", "name": "토마시", "role": "companion", "skills": {"strength": 7, "melee": 3, "shooting": 1, "stealth": 1, "search": 2}, "hands": [["crowbar", "factory", 0.8], ["knife", "factory", 0.7]], "items": {"bandage": 1}, "bag": "big_pack"},
 	]
 

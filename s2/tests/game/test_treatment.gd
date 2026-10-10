@@ -73,7 +73,7 @@ func test_stage_two_steps_read_as_missing_tools() -> void:
 	assert_eq(_ids(Treatment.plan(b.wounds[torso], {})), ["suture", "bandage"], "no tourniquet on the torso")
 	var shot: int = b.add_wound("torso", "embedded", 0.0)
 	var pull: Array = Treatment.plan(b.wounds[shot], {"bandage": 5, "bottle_spirit": 2})
-	assert_eq(_ids(pull), ["pull", "disinfect", "bandage"])
+	assert_eq(_ids(pull), ["pull", "disinfect", "bandage"], "what is stuck is not known to be a bullet: glass")
 	assert_eq(pull[0]["need"], "핀셋 없음")
 	# First aid still stops the blood of both.
 	assert_eq(_states(Treatment.plan(b.wounds[deep], {"bandage": 2}, Treatment.FIRST_AID)), [Treatment.DO])
@@ -141,3 +141,80 @@ func test_a_medic_is_quicker() -> void:
 	var step: Dictionary = Treatment.plan({"part": "torso", "kind": "bite", "blood": 0.4, "disinfected": false, "bandaged": false, "splinted": false, "festering": false}, {"bandage": 1})[0]
 	assert_almost_eq(Treatment.seconds(step, "none"), 4.0, 0.001)
 	assert_lt(Treatment.seconds(step, "skilled"), 4.0)
+
+
+# ---------------------------------------------------------------- stage 2
+
+func test_a_tourniquet_is_made_on_the_spot_from_cloth_and_a_plank() -> void:
+	var b := Body.new()
+	var i: int = b.add_wound("leg_right", "deep", 0.0)
+	var steps: Array = Treatment.plan(b.wounds[i], {"cloth": 1, "wood": 1, "bandage": 1})
+	assert_eq(_states(steps), [Treatment.DO, Treatment.MISSING, Treatment.BLOCKED], "then it stops at the needle")
+	assert_eq(steps[0]["uses"], {"cloth": 1, "wood": 1})
+	assert_eq(steps[1]["need"], "바늘과 실 없음")
+	assert_eq(Treatment.apply(b, i, "tourniquet"), 1)
+	assert_almost_eq(float(b.wounds[i]["blood"]), Body.SEEP_BLOOD, 0.001, "the flow drops, the wound stays open")
+	assert_eq(b.bleed_level(), 1)
+	assert_eq(Treatment.apply(b, i, "tourniquet"), 0, "not twice")
+	assert_eq(_states(Treatment.plan(b.wounds[i], {"cloth": 1, "wood": 1}))[0], Treatment.DONE)
+	# No cloth: it cannot be made.
+	var bare: int = b.add_wound("arm_left", "deep", 0.0)
+	assert_eq(Treatment.plan(b.wounds[bare], {"plank": 2})[0]["state"], Treatment.MISSING)
+	var torso: int = b.add_wound("torso", "deep", 0.0)
+	assert_false(b.tourniquet_wound(torso), "only on a limb")
+
+
+func test_stitching_closes_a_deep_wound_for_good() -> void:
+	var b := Body.new()
+	var i: int = b.add_wound("arm_left", "deep", 0.0)
+	var have := {"cloth": 1, "plank": 1, "needle_thread": 3, "bandage": 2}
+	var steps: Array = Treatment.plan(b.wounds[i], have)
+	assert_eq(_ids(steps), ["tourniquet", "suture", "bandage"])
+	assert_eq(_states(steps), [Treatment.DO, Treatment.DO, Treatment.DO])
+	assert_eq(steps[1]["uses"], {"needle_thread": 1}, "one length of thread")
+	for step: Dictionary in steps:
+		assert_gt(Treatment.apply(b, i, step["id"]), 0, step["id"])
+	assert_eq(float(b.wounds[i]["blood"]), 0.0, "no seeping on")
+	assert_true(b.wounds[i]["sutured"])
+	assert_eq(_states(Treatment.plan(b.wounds[i], {})), [Treatment.DONE, Treatment.DONE, Treatment.DONE])
+	assert_eq(Treatment.wound_text(b.wounds[i]), "왼팔 깊은 상처 · 피 멎음 · 붕대 감음 · 꿰맴")
+	# Bound first with no needle, stitched later: the seep stops then.
+	var late: int = b.add_wound("torso", "deep", 0.0)
+	b.bandage_wound(late)
+	assert_gt(float(b.wounds[late]["blood"]), 0.0)
+	assert_eq(_states(Treatment.plan(b.wounds[late], {"needle_thread": 1})), [Treatment.DO, Treatment.DONE])
+	assert_eq(Treatment.apply(b, late, "suture"), 1)
+	assert_eq(b.bleed_level(), 0)
+
+
+func test_tweezers_pull_and_are_kept() -> void:
+	var b := Body.new()
+	b.apply_gunshot(RandomNumberGenerator.new(), 0.0, "head")
+	var i: int = 0
+	assert_eq(b.wounds[i]["what"], "bullet")
+	assert_false(b.suture_wound(i), "not with the round still in")
+	var steps: Array = Treatment.plan(b.wounds[i], {"tweezers": 1, "bottle_spirit": 1, "bandage": 2})
+	assert_eq(_ids(steps), ["pull", "disinfect", "suture", "bandage"], "a bullet hole is stitched too (user 2026-10-10)")
+	assert_eq(_states(steps), [Treatment.DO, Treatment.DO, Treatment.MISSING, Treatment.BLOCKED], "and with no needle it stays open")
+	assert_eq(steps[2]["need"], "바늘과 실 없음")
+	assert_eq(steps[0]["tool"], "tweezers")
+	assert_true(steps[0]["uses"].is_empty(), "tweezers are not used up")
+	assert_eq(Treatment.apply(b, i, "pull"), 1)
+	assert_eq(Treatment.apply(b, i, "pull"), 0)
+	assert_true(Treatment.wound_text(b.wounds[i]).contains("뺌"))
+	assert_true(b.suture_wound(i), "pulled: now it can be stitched")
+	# Glass is never stitched.
+	var glass: int = b.add_wound("arm_left", "embedded", 0.0)
+	assert_eq(_ids(Treatment.plan(b.wounds[glass], {})), ["pull", "disinfect", "bandage"])
+
+
+func test_a_medkit_is_not_a_needle_and_every_stage_two_step_has_a_tool() -> void:
+	assert_false(Treatment.KIT_STANDS_IN)
+	assert_true(Treatment.BULLET_NEEDS_SUTURE)
+	for id: String in Treatment.STAGE_TWO:
+		assert_false(Treatment.tools_of(id).is_empty(), id)
+		assert_false(Treatment.tools_of(id).has("medkit"), id)
+	var b := Body.new()
+	var i: int = b.add_wound("torso", "deep", 0.0)
+	assert_eq(Treatment.plan(b.wounds[i], {"medkit": 1, "bandage": 2})[0]["state"], Treatment.MISSING, "a medkit is not a needle")
+

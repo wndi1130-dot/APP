@@ -44,6 +44,7 @@ const STATUS_BIG := Vector2(60.0, 56.0)
 const STATUS_SMALL := Vector2(48.0, 44.0)
 const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
+const FESTER_RIM := Color(0.74, 0.7, 0.3)           # a festering part: a sallow rim, never red
 ## Where the six parts sit in the body picture (your left on the left, like a mirror).
 const BODY_LAYOUT: Dictionary = {
 	"head_neck": Rect2(109, 0, 100, 76),
@@ -852,7 +853,7 @@ func body_panel(o = null, part: String = "") -> void:
 	body_part = part
 	v.add_child(_label("%s · %s" % [o.display_name, o.body.status_words()], 24))
 	var have: Dictionary = game.actions.care_tools(p, o)
-	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0))], 18, DIM))
+	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))], 18, DIM))
 	var near: bool = game.actions.in_care_reach(p, o)
 	if not near:
 		v.add_child(_label("가까이 가야 처치할 수 있다.", 18, WARN))
@@ -909,9 +910,11 @@ func _body_figure(o, chosen: String) -> Control:
 		var r: Rect2 = BODY_LAYOUT[part]
 		var kinds: Array = []
 		var blood := 0.0
+		var festering := false
 		for w: Dictionary in o.body.wounds:
 			if w["part"] == part:
 				blood += float(w["blood"])
+				festering = festering or bool(w["festering"])
 				var k: String = Treatment.KIND_NAMES[w["kind"]]
 				if not kinds.has(k):
 					kinds.append(k)
@@ -924,8 +927,12 @@ func _body_figure(o, chosen: String) -> Control:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95))
 		sb.set_corner_radius_all(6)
-		sb.set_border_width_all(4 if part == chosen else 0)
-		sb.border_color = BRASS
+		# The chosen part wears brass; a festering one a sallow rim (inside the brass when both).
+		sb.set_border_width_all(4 if part == chosen else (3 if festering else 0))
+		sb.border_color = BRASS if part == chosen else FESTER_RIM
+		if festering:
+			text += "\n곪음"
+			b.text = text
 		for state in ["normal", "hover", "pressed"]:
 			b.add_theme_stylebox_override(state, sb)
 		fig.add_child(b)
