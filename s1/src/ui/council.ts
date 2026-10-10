@@ -26,7 +26,7 @@ function withTech(changes: string[], tech: string[]): string[] {
 const SEATS = layoutHemicycle(DEFAULT_HEMICYCLE);
 const BOUNDS = hemicycleBounds(DEFAULT_HEMICYCLE);
 
-type SeatState = 'yes' | 'no' | 'und' | 'pool' | 'absent' | 'hidden' | 'promised';
+type SeatState = 'yes' | 'no' | 'hard' | 'und' | 'pool' | 'absent' | 'hidden' | 'promised';
 
 const TOOLS: { tool: DealTool; name: string; icon: IconName }[] = [
   { tool: 'open', name: '공개 협상', icon: 'open' },
@@ -62,7 +62,8 @@ export function seatStates(g: Game, map: Record<Comm, Bloc>, result: VoteResult 
       for (let i = 0; i < b.yes; i += 1) list.push('yes');
       for (let i = 0; i < b.pool; i += 1) list.push('pool');
       for (let i = 0; i < b.und; i += 1) list.push('und');
-      for (let i = 0; i < b.no; i += 1) list.push('no');
+      for (let i = 0; i < b.no - b.hard; i += 1) list.push('no');
+      for (let i = 0; i < b.hard; i += 1) list.push('hard');
     }
     for (let i = 0; i < b.absent; i += 1) list.push('absent');
     out[c] = list;
@@ -322,6 +323,8 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
     h('span', null, '결속도 ', bar(st.coh * 100, '--ink-2')),
     st.fervor > 0 ? h('span', { class: 'is-red' }, `열기 ${st.fervor}`) : null,
     grudge ? h('span', { class: 'is-red' }, grudge) : null,
+    // 꿈쩍 않는 반대(사용자 2026-10-09): 어떤 거래로도 안 넘어온다. 비밀 투표면 칸의 표를 흘리지 않게 숨긴다.
+    b.hard > 0 && !council.result && !ballotSecret(g) ? h('span', { class: 'is-red' }, `꿈쩍 않는 반대 ${b.hard}석`) : null,
     st.promise ? h('span', null, `약속: ${st.promise.label} (${st.promise.due}구간까지)`) : null,
     st.debt && !st.sick ? h('span', { class: 'is-blue' }, '받을 빚 1') : null,
     st.sick ? h('span', null, '측근과는 빚도 뇌물도 안 통한다') : null,
@@ -412,6 +415,7 @@ export function councilScreen(view: View): HTMLElement {
         h('li', null, h('i', { class: 'seat-key seat--yes' }), '찬성'),
         h('li', null, h('i', { class: 'seat-key seat--und' }), '미정'),
         h('li', null, h('i', { class: 'seat-key seat--no' }), '반대'),
+        h('li', null, h('i', { class: 'seat-key seat--hard' }), '꿈쩍 않음'),
         h('li', null, h('i', { class: 'seat-key seat--pool' }), '대표 몫'),
         h('li', null, h('i', { class: 'seat-key seat--absent' }), '부재'))),
     commPanel(view, map));

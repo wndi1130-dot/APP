@@ -38,6 +38,9 @@ export const P = Object.freeze({
   spaceStep: 10, spaceMax: 2, spacePullRel: -3, spaceHoldRel: -1,
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').
   supportRel: 10, supportRepeatRel: 5, supportGap: 3,
+  // 꿈쩍 않는 반대(사용자 2026-10-09 '매수 딸깍으로 전부 넘어오면 너무 쉽다'. 숫자는 제안). 출석의 15%에서 시작해
+  // 이념이 부딪는 한 점마다 +7%p, 관계가 회의 이하면 +10%p, 호의 이상이면 −5%p, 앙금이 있으면 +5%p. 5~45%. 그 칸 반대표보다 많을 순 없다.
+  hardNoBase: 0.15, hardNoIdeo: 0.07, hardNoCold: 0.1, hardNoWarm: 0.05, hardNoGrudge: 0.05, hardNoMin: 0.05, hardNoMax: 0.45,
 });
 /** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
 export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };

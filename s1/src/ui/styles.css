@@ -575,6 +575,7 @@ small { font-size: 12px; }
 .seat { stroke: none; transition: fill .2s; }
 .seat--yes { fill: var(--support); }
 .seat--no { fill: var(--discontent); }
+.seat--hard { fill: #7a2a2a; stroke: var(--discontent); stroke-width: 1; }
 .seat--und { fill: #8a9097; }
 .seat--pool { fill: #9cc3f2; }
 .seat--promised { fill: var(--support); }
@@ -621,6 +622,7 @@ small { font-size: 12px; }
 .seat-key { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .seat-key.seat--yes { background: var(--support); }
 .seat-key.seat--no { background: var(--discontent); }
+.seat-key.seat--hard { background: #7a2a2a; border: 1px solid var(--discontent); }
 .seat-key.seat--und { background: #8a9097; }
 .seat-key.seat--pool { background: #9cc3f2; }
 .seat-key.seat--absent { border: 1px solid #5a6068; }
