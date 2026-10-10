@@ -18,6 +18,13 @@ const WIDTH: int = 170
 const HEIGHT: int = 100
 const LEVEL_H: float = 3.0
 const PLACE_ID: String = "first_leg_01_sulechow"
+## Lights (weather_fx 12.1).
+const CAR_COUNT: int = 4
+const CAR_LEN: int = 16
+const CAR_WINDOWS: int = 4
+const DUSK_MIN: int = 890              # 14:50, the dusk band
+const HIDEOUT_BUILDING: int = 3
+const HIDEOUT_WINDOW := Vector2i(34, 38)
 
 const BUILDING_NAMES: Array[String] = ["역사", "신호소", "가게", "약국", "주택", "주택", "공동주택", "화물 창고", "남쪽 주택", "남쪽 주택", "남쪽 주택"]
 const ZONE_NAMES: Dictionary = {"platform": "승강장", "A": "역사", "B": "화물 측선", "C": "급수탑", "D": "역 앞 거리", "E": "신호소", "F": "공동주택", "G": "화물 창고", "H": "남쪽 주택가", "": "바깥"}
@@ -37,6 +44,7 @@ static func build() -> Dictionary:
 		"containers": {}, "spots": {}, "stoves": [], "entries": {},
 		"buildings": [], "wagons": [], "train": Rect2i(16, 1, 80, 3), "platform": Rect2i(16, 4, 82, 6),
 		"spawns": {}, "labels": [], "trees": [], "low_blocks": [], "upper_rects": [],
+		"train_cars": [], "lights": [],
 	}
 	_fill_floor(g, Rect2i(0, 0, WIDTH, HEIGHT), F.SNOW)
 	# Main track and the train.
@@ -137,6 +145,7 @@ static func build() -> Dictionary:
 		[Vector2i(26, 90), 0], [Vector2i(126, 89), 1],
 	]
 	data["unload"] = Rect2i(16, 4, 82, 3)
+	_lights(data)
 	for lv in data["levels"]:
 		var lg: FieldGrid = data["levels"][lv]
 		if lv != 0:
@@ -146,6 +155,30 @@ static func build() -> Dictionary:
 
 
 ## An upper level: open air everywhere until a building puts a floor in.
+## Where warm light is (weather_fx 12.1): only where people are. Data only: who
+## draws it and when is the view's work. Each row: id, kind, cell, side (the way
+## it throws, zero for all round), strength (0..1), falls (what reaches the floor
+## in front), reach (m), when (dusk | always | tower_fire | raiders_dusk),
+## from_min (the game minute a dusk light comes on).
+static func _lights(data: Dictionary) -> void:
+	var train: Rect2i = data["train"]
+	var south: int = train.position.y + train.size.y - 1
+	# Four cars people live in and the engine at the east end.
+	for k in range(CAR_COUNT + 1):
+		var rect := Rect2i(train.position.x + k * CAR_LEN, train.position.y, CAR_LEN, train.size.y)
+		data["train_cars"].append({"rect": rect, "kind": "car" if k < CAR_COUNT else "engine"})
+		if k == CAR_COUNT:
+			# The firebox, on the floor by the cab.
+			data["lights"].append({"id": "firebox", "kind": "firebox", "cell": Vector2i(rect.position.x + 2, south), "side": Vector2i(0, 1), "strength": 0.8, "falls": 0.8, "reach": 4.0, "when": "always", "from_min": 0})
+			continue
+		for w in range(CAR_WINDOWS):
+			data["lights"].append({"id": "car%d_window%d" % [k + 1, w + 1], "kind": "car_window", "cell": Vector2i(rect.position.x + 3 + w * 3, south), "side": Vector2i(0, 1), "strength": 1.0, "falls": 0.6, "reach": 3.0, "when": "dusk", "from_min": DUSK_MIN})
+	# The coal fire under the water tower, only while it burns.
+	data["lights"].append({"id": "tower_fire", "kind": "tower_fire", "cell": data["spots"]["water_tower"]["cell"], "side": Vector2i.ZERO, "strength": 0.7, "falls": 0.7, "reach": 5.0, "when": "tower_fire", "from_min": 0})
+	# A gap in the boards of a pharmacy window, only while someone hides there.
+	data["lights"].append({"id": "hideout", "kind": "hideout", "cell": HIDEOUT_WINDOW, "side": Vector2i(0, -1), "strength": 0.35, "falls": 0.35, "reach": 1.5, "when": "raiders_dusk", "from_min": DUSK_MIN, "building": HIDEOUT_BUILDING})
+
+
 static func _air_level() -> FieldGrid:
 	var lg := FieldGrid.new(WIDTH, HEIGHT)
 	lg.solid.fill(S.AIR)
