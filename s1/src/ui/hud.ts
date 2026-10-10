@@ -1,10 +1,11 @@
 import { COMM_NAME, P, PHASES, PHASE_NAME, emergencyStatus, forecast, isSessionSeg, primaryAction, standings } from '../game';
 import { cx, h, pct } from './dom';
 import { icon } from './icons';
-import { fmt, signed } from './common';
+import { TIP, fmt, signed } from './common';
 import type { View } from './common';
 import { fxText, fxTone } from './fx';
 import { departLever } from './depart';
+import { tip } from './widgets';
 import type { Fx, FxKey } from './fx';
 import type { Comm } from '../game';
 import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
@@ -80,6 +81,27 @@ function seatTag(fx: Fx | null | undefined, which: 'unrest' | 'support'): HTMLEl
   return h('span', { class: cx('fx fx-seat num', tone), 'data-anim': `fx-${fx.id}-seat-${which}`, 'aria-hidden': 'true' }, fxText(v));
 }
 
+/** 띠에서 칸이 불만·지지로 넘어가는 관계 선. game/turn.ts standings()와 같은 값이어야 한다(tests/ui/band.test.ts가 견준다). */
+export const SIDE_LINE = 15;
+
+/** 중립 칸의 띠 조각 안 채움: 관계가 불만 선(−15)이나 지지 선(+15)까지 얼마나 갔나(0~1). 이미 넘어간 칸은 조각 색이 말하니 채움이 없다(side 0, ratio 0).
+ *  석수는 선을 넘을 때만 바뀌므로, 그 사이의 움직임은 이 채움으로 보인다(사용자 2026-10-10 '불만이 반영이 안 된다'). */
+export function segFill(rel: number): { side: -1 | 0 | 1; ratio: number } {
+  if (rel <= -SIDE_LINE || rel >= SIDE_LINE || Math.round(rel) === 0) return { side: 0, ratio: 0 };
+  return { side: rel < 0 ? -1 : 1, ratio: Math.min(1, Math.abs(rel) / SIDE_LINE) };
+}
+
+function bandSeg(g: View['g'], x: { c: Comm; seats: number; side: -1 | 0 | 1 }, fx: Fx | null | undefined): HTMLElement {
+  const rel = g.comms[x.c].rel;
+  const fill = segFill(rel);
+  const moved = fx?.rel[x.c];
+  return h('i', {
+    class: cx('band__seg', x.side < 0 && 'is-unrest', x.side > 0 && 'is-support', !!moved && 'fx-seg'),
+    style: `flex:${x.seats}`, title: `${COMM_NAME[x.c]} ${x.seats}석 · 관계 ${fmt(rel)}`,
+    ...(fx && moved ? { 'data-anim': `fx-${fx.id}-seg-${x.c}` } : {}),
+  }, fill.side ? h('b', { class: cx('band__fill', fill.side < 0 ? 'is-neg' : 'is-pos'), style: `width:${pct(fill.ratio * 100)}` }) : null);
+}
+
 export function topBar(view: View): HTMLElement {
   const { g, ui } = view;
   const st = standings(g);
@@ -95,13 +117,10 @@ export function topBar(view: View): HTMLElement {
       h('button', { class: cx('band__btn band__btn--unrest', ui.panel === 'unrest' && 'is-on'), 'data-action': 'panel', 'data-panel': 'unrest', 'aria-label': '불만 쪽 집단 펼치기' }, icon('fist')),
       h('div', { class: 'band__track' },
         h('div', { class: 'band__nums' },
-          h('span', { class: 'is-unrest' }, `불만 ${st.unrest}`, seatTag(fx, 'unrest')),
-          h('span', null, `중립 ${st.neutral}`),
-          h('span', { class: 'is-support' }, `지지 ${st.support}`, seatTag(fx, 'support'))),
-        h('div', { class: 'band__bar' }, order.map(x => h('i', {
-          class: cx('band__seg', x.side < 0 && 'is-unrest', x.side > 0 && 'is-support'),
-          style: `flex:${x.seats}`, title: `${COMM_NAME[x.c]} ${x.seats}석`,
-        })))),
+          h('span', { class: 'is-unrest' }, tip('불만', TIP.unrest), ` ${st.unrest}`, seatTag(fx, 'unrest')),
+          h('span', null, tip('중립', TIP.neutral), ` ${st.neutral}`),
+          h('span', { class: 'is-support' }, tip('지지', TIP.support), ` ${st.support}`, seatTag(fx, 'support'))),
+        h('div', { class: 'band__bar' }, order.map(x => bandSeg(g, x, fx)))),
       h('button', { class: cx('band__btn band__btn--support', ui.panel === 'support' && 'is-on'), 'data-action': 'panel', 'data-panel': 'support', 'aria-label': '지지 쪽 집단 펼치기' }, icon('hand')),
       // 관계가 바뀐 칸: 띠 밑에 칸 이름과 숫자가 떠오른다.
       rels.length && fx ? h('div', { class: 'fx fx-rels', 'data-anim': `fx-${fx.id}-rel`, 'aria-hidden': 'true' }, rels.map(c => {
