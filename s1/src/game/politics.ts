@@ -8,7 +8,7 @@ import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
 import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
-import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
+import { achieve, addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, VoteFlip, VoteResult } from './state';
 
 // 의회: 입장 점수, 찬성·반대·미정, 거래 다섯, 개표, 폐지(브리프 1.3, 3장, 8.4).
@@ -775,6 +775,7 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
   if (CORPSE_LAWS.includes(law)) g.corpseIssue = false;
   refreshSit(g); // 기술이 덜어 주는 법의 벌(7.3)
   g.stats.lawsPassed += 1;
+  achieve(g);
 }
 
 export function repealLaw(g: Game, law: LawId): void {

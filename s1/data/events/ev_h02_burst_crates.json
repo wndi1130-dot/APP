@@ -21,6 +21,11 @@
         {
           "type": "food",
           "amount": -9
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],
@@ -29,7 +34,7 @@
     {
       "id": "c_boil_mix",
       "label": "끓여서 배급에 섞는다",
-      "say": "푹 끓여 섞어라. 한 알도 허투루 못 쓴다.",
+      "say": "푹 끓여 섞어라. 한 통도 그냥은 못 버린다.",
       "effects": [
         {
           "type": "food",

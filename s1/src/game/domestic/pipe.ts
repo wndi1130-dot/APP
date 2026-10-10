@@ -2,7 +2,7 @@ import { COMM_NAME } from '../data';
 import type { Comm } from '../data';
 import { MOTION_SOURCES, MOTIONS } from '../motions';
 import type { MotionDef } from '../motions';
-import { clamp, journal } from '../state';
+import { achieve, clamp, journal } from '../state';
 import type { Game, MotionAgenda } from '../state';
 import { D, TECHS } from './data';
 import type { Variant } from './data';
@@ -47,6 +47,7 @@ export function ratifyPipe(g: Game, passed: boolean): void {
   if (!passed) d.pipeFlip = result;
   if (d.pipeMoved !== result) moveRel(g, result);
   d.pipeMoved = result;
+  if (passed) achieve(g);
   const sides = techRelSides('e3', result);
   const who = [
     sides.like.length ? `${sides.like.map(c => COMM_NAME[c]).join('·')}이(가) 반긴다` : '',

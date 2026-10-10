@@ -2,7 +2,7 @@ import { LAWS, LAW_IDS } from './data';
 import type { LawId } from './data';
 import { COMMS } from './data';
 import type { Comm } from './data';
-import { addCard, clamp, isGone, journal, lawActive, PROFILES } from './state';
+import { achieve, addCard, clamp, isGone, journal, lawActive, PROFILES } from './state';
 import type { Game } from './state';
 
 // 법 요구(2026-10-07 사용자 후기, 프로스트펑크 2식): 문제가 생겼는데 그 문제를 다루는 법이 없으면
@@ -150,6 +150,7 @@ export function needTick(g: Game, notes: string[]): void {
       if (state && settled && state.promised && state.hits === 0) {
         g.trust = clamp(g.trust + 3, 0, 100);
         journal(g, '열차장이 약속을 지켰다.', 'good');
+        achieve(g);
       }
       delete g.needs[id];
       continue;

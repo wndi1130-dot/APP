@@ -28,7 +28,7 @@
     {
       "id": "c_use_all",
       "label": "상자를 다 쓴다",
-      "say": "상자째 써라. 둘 다 살려야 한다.",
+      "say": "상자째 써라. 둘 다 살린다, 다음 일은 다음에 본다.",
       "requires": [
         {
           "type": "resource",
@@ -41,6 +41,11 @@
         {
           "type": "medicine",
           "amount": -8
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],

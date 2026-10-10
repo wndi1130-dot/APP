@@ -25,6 +25,11 @@
         {
           "type": "food",
           "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
         }
       ],
       "followups": [],
@@ -64,7 +69,7 @@
     {
       "id": "c_leave_it",
       "label": "다음 정차까지 둔다",
-      "say": "다음 정차까지 둔다. 뒤쪽 난로를 아껴라.",
+      "say": "다음 정차까지 둔다. 새는 자리에 헝겊이라도 감아 둬라.",
       "effects": [
         {
           "type": "community.warmth",
