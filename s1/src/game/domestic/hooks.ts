@@ -16,7 +16,7 @@ import './pipe';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick, domesticHeal } from './medbay';
 import { refreshSit } from './sit';
-import { domCard, living, personById, techAdopted, techMult, topSkill, variantMult } from './state';
+import { domCard, living, noteFind, personById, techAdopted, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, restoreCheck, rollBreakdown, runWorkshop, techTitle, upkeepCoal } from './workshop';
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -173,10 +173,12 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
       const pool: Field[] = bp.branches === 'any' ? [...FIELDS] : bp.branches;
       const f = pool[Math.floor(rnd(g) * pool.length)];
       d.frags[f] += 1;
+      noteFind(d, { seg: g.seg, place: stop.place, what: 'frag', field: f, via: 'stop' });
       notes.push(`${fieldLabel(f)} 설계도 조각을 찾았다.`);
     }
     if (bp.core > 0 && stop.stay === 'long' && rnd(g) < bp.core * (esc?.field === 'engine' ? D.escortCore : 1)) {
       d.cores += 1;
+      noteFind(d, { seg: g.seg, place: stop.place, what: 'core', via: 'stop' });
       notes.push('기계 코어 하나를 떼어 왔다.');
     }
     if (scrap + wood > 0) notes.push(`자재: 고철 ${scrap}, 목재 ${wood}.`);
