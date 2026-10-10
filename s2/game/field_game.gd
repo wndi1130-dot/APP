@@ -98,6 +98,16 @@ var snow: GPUParticles3D
 var storm: Dictionary = {}
 var storm_layers: Array = []
 var storm_screen: ColorRect
+## The screen layer is drawn small and stretched over the view: at full size its
+## noise cost 9~12 ms a frame on the phone (S22, 2026-10-11: 35 fps with a horde
+## about, 55 with this layer off). Snow-fog and frost are soft; they bear it.
+const STORM_SCREEN_SCALE: float = 0.35
+var storm_port: SubViewport
+var storm_view: TextureRect
+## Test key (D panel): which storm layers are drawn, to see on the phone what
+## each costs. 0 all, 1 no screen layer, 2 no falling snow, 3 neither.
+const STORM_CUTS: Array[String] = ["다 켬", "화면 층 끔", "눈발 끔", "둘 다 끔"]
+var storm_cut: int = 0
 var clock := FieldClock.new()
 var ledger := NoiseLedger.new()
 var director: HordeDirector
@@ -478,9 +488,26 @@ func _build_storm() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 5   # over the world, under the HUD (10)
 	add_child(layer)
+	storm_port = SubViewport.new()
+	storm_port.transparent_bg = true
+	storm_port.disable_3d = true
+	storm_port.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(storm_port)
+	storm_view = TextureRect.new()
+	storm_view.set_anchors_preset(Control.PRESET_FULL_RECT)
+	storm_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	storm_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	storm_view.stretch_mode = TextureRect.STRETCH_SCALE
+	storm_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	storm_view.texture = storm_port.get_texture()
+	# What a see-through viewport holds is already weighted by its alpha.
+	var blend := CanvasItemMaterial.new()
+	blend.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
+	storm_view.material = blend
+	layer.add_child(storm_view)
 	storm_screen = ColorRect.new()
-	storm_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
 	storm_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fit_storm_port()
 	var m := ShaderMaterial.new()
 	m.shader = load("res://fx/shaders/screen_overlay.gdshader")
 	m.set_shader_parameter("vignette", 0.0)
@@ -491,7 +518,15 @@ func _build_storm() -> void:
 	# The camera looks north from above: world z runs down the screen.
 	m.set_shader_parameter("storm_dir", Vector2(weather.wind_dir.x, weather.wind_dir.y * 0.7))
 	storm_screen.material = m
-	layer.add_child(storm_screen)
+	storm_port.add_child(storm_screen)
+
+
+func _fit_storm_port() -> void:
+	var want := Vector2i((Vector2(get_viewport().get_visible_rect().size) * STORM_SCREEN_SCALE).ceil()).max(Vector2i(8, 8))
+	if storm_port.size != want:
+		storm_port.size = want
+		storm_screen.position = Vector2.ZERO
+		storm_screen.size = Vector2(want)
 
 
 ## Lamps that are on, nearest the middle of the view first (at most 8): where
@@ -524,11 +559,24 @@ func storm_glows() -> Array:
 	return out
 
 
+func set_storm_cut(n: int) -> void:
+	storm_cut = posmod(n, STORM_CUTS.size())
+	for row in storm_layers:
+		row[0].visible = storm_cut < 2
+		row[0].emitting = storm_cut < 2
+	if storm_screen != null:
+		var on := storm_cut == 0 or storm_cut == 2
+		storm_screen.visible = on
+		storm_view.visible = on
+		storm_port.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+
+
 func _update_storm() -> void:
 	for row in storm_layers:
 		row[0].position = cam_focus + row[1]
 	if storm_screen == null:
 		return
+	_fit_storm_port()
 	var glows := storm_glows()
 	var m := storm_screen.material as ShaderMaterial
 	m.set_shader_parameter("glow_count", glows.size())

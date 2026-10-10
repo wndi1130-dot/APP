@@ -475,6 +475,7 @@ func _build_debug() -> void:
 	var h2 := HBoxContainer.new()
 	v.add_child(h2)
 	h2.add_child(_button("해 질 녘으로", _debug_dusk, Vector2(140, 48), 16))
+	h2.add_child(_button("폭풍 층", _debug_storm, Vector2(96, 48), 16))
 	debug_panel.visible = false
 	root.add_child(debug_panel)
 
@@ -489,6 +490,15 @@ func _debug_fps() -> void:
 
 func _debug_mask() -> void:
 	game.mask_on = not game.mask_on
+
+
+## Test key: what a storm stop draws, one layer off at a time (phone frames).
+func _debug_storm() -> void:
+	if game.storm.is_empty():
+		toast("폭풍 정차가 아니다.")
+		return
+	game.set_storm_cut(game.storm_cut + 1)
+	toast("시험: 폭풍 층 " + String(game.STORM_CUTS[game.storm_cut]))
 
 
 func _debug_horde() -> void:
