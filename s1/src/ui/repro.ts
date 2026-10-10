@@ -32,6 +32,8 @@ export function plainData(d: Record<string, string | undefined>): Record<string,
 
 /** 까닭 기록에 남기는 줄 수 */
 export const METER_LOG_MAX = 12;
+/** 자원 까닭 기록에 남기는 줄 수(자원은 더 자주 바뀐다) */
+export const RES_LOG_MAX = 24;
 
 /** 이 행동을 까닭 목록에 뭐라고 적을까(행동하기 전의 판으로 정한다). 서류는 '제목: 고른 말', 나머지는 한 일의 이름. */
 export function stepLabel(g: Game, s: Step): string {
@@ -63,12 +65,18 @@ export function stepLabel(g: Game, s: Step): string {
 export function applyStep(g: Game, s: Step): string | null {
   const label = stepLabel(g, s);
   const before = { seg: g.seg, trust: Math.round(g.trust), tension: Math.round(g.tension), settle: g.lastSettle };
+  const res = { coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux) };
   const text = runStep(g, s);
+  const why = g.lastSettle && g.lastSettle !== before.settle ? '구간 정산' : label;
   const trust = Math.round(g.trust) - before.trust;
   const tension = Math.round(g.tension) - before.tension;
   if (trust !== 0 || tension !== 0) {
-    const row = { seg: before.seg, label: g.lastSettle && g.lastSettle !== before.settle ? '구간 정산' : label, trust, tension };
+    const row = { seg: before.seg, label: why, trust, tension };
     g.meterLog = [...(g.meterLog ?? []), row].slice(-METER_LOG_MAX);
+  }
+  const d = { coal: Math.round(g.coal) - res.coal, food: Math.round(g.food) - res.food, med: Math.round(g.med) - res.med, lux: Math.round(g.lux) - res.lux };
+  if (d.coal !== 0 || d.food !== 0 || d.med !== 0 || d.lux !== 0) {
+    g.resLog = [...(g.resLog ?? []), { seg: before.seg, label: why, ...d }].slice(-RES_LOG_MAX);
   }
   return text;
 }

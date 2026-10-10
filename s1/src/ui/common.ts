@@ -5,7 +5,7 @@ import type { ToastKind } from './notice';
 // 화면끼리 나눠 쓰는 형식과 열차 칸 배치.
 
 export type Screen = 'home' | 'overview' | 'council' | 'end';
-export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' | 'settle' | 'dom' | 'why-trust' | 'why-tension';
+export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' | 'settle' | 'dom' | 'why-trust' | 'why-tension' | 'why-coal' | 'why-food' | 'why-med' | 'why-lux';
 
 /** S1c 내정 창의 화면 상태(ui/domestic.ts). S1a 판에선 쓰지 않는다. */
 export interface DomUi { tab: 'workshop' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean }

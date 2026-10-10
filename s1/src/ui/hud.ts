@@ -52,7 +52,9 @@ function meter(name: 'trust' | 'tension', label: string, value: number, tone: st
 }
 
 function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: number, delta?: number, fx?: Fx | null) {
-  return h('div', { class: cx('res', ...fxCls(fx, name)), 'data-fx-cell': name, ...(fx?.heavy === name ? { 'data-anim': `fx-${fx.id}-${name}-cross` } : {}), 'aria-label': `${label} ${fmt(value)}` },
+  // 누르면 어디에 얼마 드는지와 최근에 늘고 준 까닭이 뜬다(panels.ts resPanel, 사용자 2026-10-11).
+  return h('div', { class: cx('res', ...fxCls(fx, name)), 'data-fx-cell': name, ...(fx?.heavy === name ? { 'data-anim': `fx-${fx.id}-${name}-cross` } : {}),
+    role: 'button', tabindex: 0, 'data-action': 'panel', 'data-panel': `why-${name}`, 'aria-label': `${label} ${fmt(value)}, 드는 곳과 바뀐 까닭 보기` },
     fxBits(fx, name),
     icon(name, `res__icon res__icon--${name}`),
     h('div', { class: 'res__body' },
