@@ -38,9 +38,10 @@ const PORTRAIT_AT := Vector2(16.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
 const PORTRAIT_W: float = 290.0
 ## State icons sit in a row right of the blood key: the two most urgent big,
 ## the rest small (body_injury 4 '둘까지만 크게').
-const STATUS_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 10.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
-const STATUS_BIG := Vector2(76.0, 56.0)
-const STATUS_SMALL := Vector2(60.0, 44.0)
+## Narrow enough that all five stay on the left half of a 1280-wide screen.
+const STATUS_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+const STATUS_BIG := Vector2(60.0, 56.0)
+const STATUS_SMALL := Vector2(48.0, 44.0)
 const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
 ## Where the six parts sit in the body picture (your left on the left, like a mirror).
@@ -385,10 +386,10 @@ func _build_thumbs() -> void:
 	var sx := 0.0
 	for i in STATUS_SLOTS:
 		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
-		var pad := _pad("", STATUS_AT + Vector2(sx, 0), size, 20 if i < 2 else 16, Control.PRESET_TOP_LEFT)
+		var pad := _pad("", STATUS_AT + Vector2(sx, 0), size, 20 if i < 2 else 15, Control.PRESET_TOP_LEFT)
 		pad.visible = false
 		status_pads.append(pad)
-		sx += size.x + 6.0
+		sx += size.x + 4.0
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button]:
 		b.toggle_mode = true
 	# The bag sits on the left, above the fixed stick's catch ring. There is no
