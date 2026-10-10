@@ -60,10 +60,6 @@
       "say": "자루 밑에 상자를 대라. 봉제선은 뒤에 보자.",
       "effects": [
         {
-          "type": "food",
-          "amount": -2
-        },
-        {
           "type": "flag",
           "id": "b01_sack_pending",
           "value": true

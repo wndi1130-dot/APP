@@ -6,7 +6,8 @@ import { REACH_NOTES, reachReport } from '../../tools/reach_check';
 describe('닿음 검사', () => {
   it('까닭 없이 안 나오는 사건·카드가 없다', () => {
     // 신임 위기(trust_crisis)는 봇 판에서 수백 판에 한 번꼴이라 80판씩 돈다. 열병 '그 칸을 닫는다'(관계 −15)를 뺀 뒤 더 드물어졌다(16.5).
-    const r = reachReport(80);
+    // 깬 말(ev_h07_broken_word)은 조용한 제안을 받고 앞칸 솥을 건드려야 해서 봇 판에선 드물다(200판×5설정에서 4번). 80판으론 안 나와 200판을 돈다.
+    const r = reachReport(200);
     expect(r.unexpected).toEqual([]);
   }, 60_000);
 

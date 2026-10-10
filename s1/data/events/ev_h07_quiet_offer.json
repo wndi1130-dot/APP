@@ -7,14 +7,13 @@
     {
       "type": "segment",
       "min": 6,
-      "max": 22
+      "max": 16
     },
     {
-      "type": "community",
-      "community": "tail",
-      "metric": "ration",
+      "type": "resource",
+      "resource": "food",
       "operator": "lte",
-      "value": 50
+      "value": 80
     }
   ],
   "speaker": "rep",
