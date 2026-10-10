@@ -231,7 +231,9 @@ func find_path(from: Vector3, to: Vector3, for_dead: bool = false) -> PackedVect
 		i = j + 1
 	for p in smoothed:
 		result.append(center(p))
-	if result.size() > 0 and cell_of(to) == b:
+	# Only a path that gets there ends on the exact spot: one that stops short
+	# (the goal is walled off) ends in the middle of its last cell, not at the wall.
+	if result.size() > 0 and cell_of(to) == b and smoothed[smoothed.size() - 1] == b:
 		result[result.size() - 1] = Vector3(to.x, 0, to.z)
 	return result
 

@@ -24,6 +24,7 @@ const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go
 const STICK_R: float = 72.0         # thumb travel to full push (the rim runs, if set)
 const STICK_DEAD: float = 10.0
 const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
+const AIM_PAD_EDGE: float = 24.0    # this far past the pad's edge still counts as on it
 const STICK_STOPS_FIGHT: float = 0.3  # a push this hard away from the target calls off a fight
 const DOUBLE_TAP_MS: int = 300
 ## The fixed stick (the default; build 47: a floating one made the thumb re-set
@@ -119,6 +120,7 @@ var stick_at := Vector2.ZERO
 var auto_aim: bool = false             # the aim pad is held: the gun picks its target
 var auto_t: float = 0.0
 var auto_skip: int = 0                 # thumb slid along the pad: next target
+var auto_free: bool = false            # thumb dragged off the pad: the aim follows it, enemy or bare ground
 var stick_dash: bool = false           # double-tap run (a setting): this hold runs
 var stick_push: float = 0.0
 var rim_t: float = 0.0
@@ -1592,6 +1594,22 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 	var over := _over_player(pos)
 	aim_armed = aim_armed or not over
 	aim_cancel = aim_armed and over
+	# Dragged off the pad onto the field: the aim goes where the thumb is, an
+	# enemy under it or the bare ground (build 89: no shot at empty ground).
+	# Back on the pad the gun picks for itself again.
+	var on_pad: bool = b.get_global_rect().grow(AIM_PAD_EDGE).has_point(pos)
+	if not on_pad:
+		auto_free = true
+		if not aim_cancel:
+			var world: Vector3 = game.screen_to_ground(pos)
+			aim_target = _pick_enemy(world)
+			aim_point = _on_target_floor(world, aim_target)
+			game.player.face_point(aim_point)
+		return
+	if auto_free:
+		auto_free = false
+		aim_target = null
+		f["slide_x"] = pos.x
 	# Slide along the pad: the next target (or back).
 	var dx: float = pos.x - float(f.get("slide_x", f["start"].x))
 	if absf(dx) >= AIM_SLIDE_PX:
@@ -1632,6 +1650,7 @@ func _auto_aim_start() -> void:
 	aim_cancel = false
 	auto_t = 0.0
 	auto_skip = 0
+	auto_free = false
 	aim_target = null
 	aim_point = p.position + Vector3(sin(p.facing), 0, cos(p.facing)) * 4.0
 	game.combat.drop_target(p)
@@ -1644,11 +1663,12 @@ func _auto_aim_end(pos: Vector2) -> void:
 	auto_aim = false
 	aiming = false
 	if p.aim.active:
-		if aim_target != null and not aim_cancel:
+		if (aim_target != null or auto_free) and not aim_cancel:
 			game.combat.fire(p, aim_point, aim_target)
 		elif aim_target == null and not aim_cancel:
-			toast("겨눌 것을 못 잡았다.")
+			toast("겨눌 것을 못 잡았다. 누른 채 쏠 곳으로 끌면 빈 땅에도 쏜다.")
 		p.aim.stop()
+	auto_free = false
 	aim_cancel = false
 	aim_target = null
 
@@ -1664,6 +1684,12 @@ func _tick_auto_aim(delta: float) -> void:
 	auto_t += delta
 	if aim_target != null and not _target_ok(aim_target):
 		aim_target = null
+	if auto_free:
+		# The thumb is aiming: follow the one under it, pick nothing else.
+		if aim_target != null:
+			aim_point = aim_target["pos"] if aim_target is Dictionary else aim_target.position
+		p.face_point(aim_point)
+		return
 	if aim_target == null and auto_t >= game.combat.acquire_time(p):
 		var list: Array = game.combat.aim_candidates(p)
 		if not list.is_empty():
@@ -1760,6 +1786,7 @@ func drop_touch() -> void:
 	fingers.clear()
 	stick_index = -1
 	auto_aim = false
+	auto_free = false
 	stick_dash = false
 	if run_button != null and run_hold():
 		run_button.button_pressed = false

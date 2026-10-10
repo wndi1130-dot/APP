@@ -219,3 +219,21 @@ func test_no_manhole_tip_when_the_next_wave_comes_elsewhere_or_it_is_shut() -> v
 	game.director.next_entry = "manhole"
 	game.director.block("manhole")
 	assert_eq(game.lid_tip(), "", "already shut")
+
+
+# Build 89 (user): upstairs the walls could not be seen, yet they stopped you.
+# Cutting them down scaled them about the ground, so they sank under the floor.
+func test_cut_down_walls_upstairs_stay_on_their_own_floor() -> void:
+	for spot in [[4, 1], [6, 1], [6, 2], [6, -1]]:
+		var lv: int = spot[1]
+		var node: MeshInstance3D = game.view.wall_nodes[Vector2i(spot[0], lv)]
+		var y0: float = lv * SulehufMap.LEVEL_H
+		game.view.cut_away(-1, 0)
+		var whole: AABB = node.global_transform * node.get_aabb()
+		assert_almost_eq(whole.position.y, y0, 0.01, "whole wall stands on its floor")
+		game.view.cut_away(spot[0], lv)
+		var cut: AABB = node.global_transform * node.get_aabb()
+		assert_almost_eq(cut.position.y, y0, 0.01, "cut wall still stands on its floor")
+		assert_gt(cut.end.y, y0 + 0.2, "and shows above it")
+		assert_lt(cut.end.y, whole.end.y - 1.0, "and is lower than whole")
+

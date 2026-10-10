@@ -978,3 +978,58 @@ func test_nothing_is_fired_or_shoved_while_paused() -> void:
 	game.paused = false
 	game.combat.shove(p)
 	assert_ne(z["pos"], at, "control: unpaused it lands")
+
+
+# Build 89 (user): there was no way to shoot at bare ground without the manual switch.
+func test_dragging_off_the_aim_pad_shoots_where_the_thumb_is_even_bare_ground() -> void:
+	_gun()
+	var p = game.player
+	p.facing = PI * 0.5
+	var hud = game.hud
+	var pad: Vector2 = hud.aim_button.get_global_rect().get_center()
+	var spot: Vector3 = p.position + Vector3(0, 0, 6)
+	var f := {"start": pad}
+	hud._auto_aim_start()
+	hud._pad_move(hud.aim_button, hud._project(spot), f)
+	assert_true(hud.auto_free)
+	assert_null(hud.aim_target, "nobody there")
+	assert_lt(hud.aim_point.distance_to(spot), 1.0, "the aim is on that ground")
+	hud._tick_auto_aim(2.0)
+	assert_null(hud.aim_target, "and the gun picks no one for itself meanwhile")
+	hud._auto_aim_end(hud._project(spot))
+	assert_true(_tried(), "it fires at the ground")
+	assert_false(hud.auto_free)
+
+
+func test_dragging_off_the_aim_pad_onto_an_enemy_takes_that_one() -> void:
+	_gun()
+	var p = game.player
+	p.facing = PI * 0.5
+	var ahead: Dictionary = game.zombies.spawn("dead", p.position + Vector3(7, 0, 0))
+	var side: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 5))   # further, off to one side
+	game._refresh_vision()
+	assert_true(game.cell_seen(side["pos"]))
+	var hud = game.hud
+	var pad: Vector2 = hud.aim_button.get_global_rect().get_center()
+	var f := {"start": pad}
+	hud._auto_aim_start()
+	hud._tick_auto_aim(1.0)
+	assert_eq(hud.aim_target, ahead)
+	hud._pad_move(hud.aim_button, hud._project(side["pos"]), f)
+	assert_eq(hud.aim_target, side, "the one under the thumb, not the one ahead")
+	# Back on the pad the gun picks for itself again.
+	hud._pad_move(hud.aim_button, pad, f)
+	assert_false(hud.auto_free)
+	hud._tick_auto_aim(0.05)
+	assert_eq(hud.aim_target, ahead)
+	hud._auto_aim_end(pad)
+
+
+func test_holding_the_aim_pad_with_no_one_about_still_fires_nothing() -> void:
+	_gun()
+	var hud = game.hud
+	hud._auto_aim_start()
+	hud._tick_auto_aim(2.0)
+	hud._auto_aim_end(hud.aim_button.get_global_rect().get_center())
+	assert_false(_tried())
+

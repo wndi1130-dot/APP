@@ -492,7 +492,9 @@ func _build_lights() -> void:
 
 
 ## An upper floor or the cellar: a floor where there is one, walls by building
-## (so the player's own can be cut down), window frames.
+## (so the player's own can be cut down), window frames. The walls are built
+## from their own floor up and the node is lifted, so cutting them down
+## (a scale in y) leaves them standing on that floor, not sunk under it.
 func _build_level(lv: int) -> void:
 	var lg: FieldGrid = levels[lv]
 	var y0 := lv * LEVEL_H
@@ -518,21 +520,22 @@ func _build_level(lv: int) -> void:
 			if kind == S.WALL:
 				if not tools.has(b):
 					tools[b] = _begin()
-				box(tools[b], Vector3(1, WALL_H, 1), Vector3(x + 0.5, y0 + WALL_H * 0.5, y + 0.5), Color(0.55, 0.53, 0.5))
+				box(tools[b], Vector3(1, WALL_H, 1), Vector3(x + 0.5, WALL_H * 0.5, y + 0.5), Color(0.55, 0.53, 0.5))
 			elif kind == S.WINDOW:
 				if not tools.has(b):
 					tools[b] = _begin()
 				var horizontal := lg.solid_at(c + Vector2i(1, 0)) == S.WALL or lg.solid_at(c + Vector2i(-1, 0)) == S.WALL
 				var size := Vector3(1.0, 0.85, 0.25) if horizontal else Vector3(0.25, 0.85, 1.0)
-				box(tools[b], size, Vector3(x + 0.5, y0 + 0.43, y + 0.5), Color(0.4, 0.4, 0.42))
-				box(tools[b], Vector3(1.0, 0.9, 0.08) if horizontal else Vector3(0.08, 0.9, 1.0), Vector3(x + 0.5, y0 + 1.3, y + 0.5), Color(0.62, 0.72, 0.78))
-				box(tools[b], size * Vector3(1, 0.12, 1), Vector3(x + 0.5, y0 + WALL_H - 0.05, y + 0.5), Color(0.4, 0.4, 0.42))
+				box(tools[b], size, Vector3(x + 0.5, 0.43, y + 0.5), Color(0.4, 0.4, 0.42))
+				box(tools[b], Vector3(1.0, 0.9, 0.08) if horizontal else Vector3(0.08, 0.9, 1.0), Vector3(x + 0.5, 1.3, y + 0.5), Color(0.62, 0.72, 0.78))
+				box(tools[b], size * Vector3(1, 0.12, 1), Vector3(x + 0.5, WALL_H - 0.05, y + 0.5), Color(0.4, 0.4, 0.42))
 	var floor_node := _mesh_node(lv)
 	floor_node.mesh = floor_st.commit()
 	floor_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for b in tools:
 		var node := _mesh_node(lv)
 		node.mesh = tools[b].commit()
+		node.position.y = y0
 		wall_nodes[Vector2i(b, lv)] = node
 
 
