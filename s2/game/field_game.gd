@@ -58,6 +58,15 @@ const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid",
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
+# The radio (user 2026-10-11, decisions 032): it can be turned down, and when
+# it crackles the dead near you hear it. More talk is more to know and more rings.
+const RADIO_MODES: Array[String] = ["urgent", "often", "off"]
+const RADIO_NAMES: Dictionary = {"urgent": "급한 것만", "often": "자주", "off": "끔"}
+const RADIO_GAP: Dictionary = {"urgent": 90.0, "often": 20.0, "off": 0.0}   # least seconds between two calls
+const RADIO_RING: float = 8.0          # how far a call is heard, from the one who carries the set
+const RADIO_RING_URGENT: float = 14.0  # a horde coming in, time to leave: louder
+const RADIO_HISS: float = 1.0          # the set hisses this long before it speaks (the dead do not hear the hiss)
+const RADIO_NEAR_M: float = 60.0
 const LAMP_OFF_SIGHT: float = 0.42     # how far the eye reaches at night with the lanterns out (0.55 with them; 0.3 was too blind, build 89)
 const NIGHT_AMBIENT_MIN: float = 0.2
 const LAMP_GAIN_DAY: float = 0.25       # how much of the lamp light shows on the ground by day
@@ -115,6 +124,14 @@ var deaf_t: float = 0.0                # player can't hear sound cues (indoor gu
 var casings: int = 0
 var last_gun_t: float = -INF
 var radio: String = ""
+var radio_wait: Dictionary = {}        # the call the set is hissing before: {text, ring}
+var radio_wait_t: float = 0.0
+var radio_last: float = -INF           # field time of the last call that rang
+var radio_rings: Array = []            # [{t, r}] calls that rang (tests, the receipt)
+## What "only what is near" means (decisions 032, still to be confirmed):
+## "horde" = a horde whose way in is far from you is not called at all;
+## "train" = far from the train the set only hisses, nothing can be made out.
+var radio_near: String = "horde"
 var radio_t: float = 0.0
 var ammo: Dictionary = {"pistol": 8, "shell": 4, "craft": 8}
 var ammo_start: Dictionary = {}
@@ -209,7 +226,7 @@ func _ready() -> void:
 	audio = FieldAudio.new()
 	add_child(audio)
 	audio.setup(self)
-	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip())
+	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()
@@ -727,6 +744,7 @@ func _step(delta: float) -> void:
 	clock.advance(delta)
 	var now := clock.elapsed
 	radio_t -= delta
+	_tick_radio(delta)
 	for p in people:
 		_update_person(p, delta)
 	zombies.update(delta)
@@ -1024,7 +1042,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % HordeDirector.ENTRY_NAMES[hole])
+			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % HordeDirector.ENTRY_NAMES[hole], "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
 	zombies.hear(at, level, radius)
 	_score(level, tag)
@@ -1238,9 +1256,9 @@ func _start_horde(h: Dictionary) -> void:
 	for i in range(int(h["size"])):
 		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": target, "entry": key})
 	if HordeDirector.is_sewer(key):
-		set_radio("기관사: %s이 덜컹거린다. 올라온다." % HordeDirector.ENTRY_NAMES[key] if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % HordeDirector.ENTRY_NAMES[key])
+		set_radio("기관사: %s이 덜컹거린다. 올라온다." % HordeDirector.ENTRY_NAMES[key] if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % HordeDirector.ENTRY_NAMES[key], "urgent", entry_pos(key))
 	else:
-		set_radio("기관사: %s, 저것들이 들어온다." % HordeDirector.ENTRY_NAMES[key])
+		set_radio("기관사: %s, 저것들이 들어온다." % HordeDirector.ENTRY_NAMES[key], "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
 	if int(h["index"]) == 0:
 		for z in zombies.list:
@@ -1335,7 +1353,55 @@ func _free_sewer(not_this: String) -> String:
 	return ""
 
 
-func set_radio(text: String) -> void:
+func radio_mode() -> String:
+	var m := String(opts.get("radio", "urgent"))
+	return m if RADIO_MODES.has(m) else "urgent"
+
+
+## A line on the radio. kind: "say" is said to your face (the briefing on the
+## platform, the one up the signal box): no set, no ring. "must" (time to
+## leave) always comes through. "reply" answers something you just did.
+## "urgent" is a horde coming in; "info" is the rest (forecasts, one gone by).
+## at: where it is about (a way in), for the near rule.
+func set_radio(text: String, kind: String = "info", at = null) -> void:
+	if kind == "say":
+		_radio_show(text)
+		return
+	var mode := radio_mode()
+	var now := clock.elapsed
+	if kind != "must":
+		if mode == "off" or (mode == "urgent" and kind == "info"):
+			return
+		if kind != "reply" and now - radio_last < float(RADIO_GAP[mode]):
+			return
+		if radio_near == "horde" and at != null and player != null and player.position.distance_to(at) > RADIO_NEAR_M:
+			return
+	var ring := RADIO_RING_URGENT if kind == "urgent" or kind == "must" else RADIO_RING
+	if radio_near == "train" and kind != "must" and player != null and player.position.distance_to(FieldGrid.center(HORDE_HOME)) > RADIO_NEAR_M:
+		text = "…치직… (멀어서 알아들을 수 없다)"
+		ring = RADIO_RING
+	radio_last = now
+	radio_wait = {"text": text, "ring": ring}
+	radio_wait_t = RADIO_HISS
+	hud.radio("…치직")
+
+
+func _tick_radio(delta: float) -> void:
+	if radio_wait.is_empty():
+		return
+	radio_wait_t -= delta
+	if radio_wait_t > 0.0:
+		return
+	var call: Dictionary = radio_wait
+	radio_wait = {}
+	_radio_show(String(call["text"]))
+	# The set is on the chief: the dead within the ring hear it, crouched or not.
+	if player != null and player.is_alive():
+		radio_rings.append({"t": clock.elapsed, "r": float(call["ring"])})
+		zombies.hear(player.position, SimNoise.Level.NORMAL, float(call["ring"]))
+
+
+func _radio_show(text: String) -> void:
 	radio = text
 	radio_t = 8.0
 	hud.radio(text)
@@ -1474,7 +1540,7 @@ func _check_end() -> void:
 		return
 	if clock.past_safe() and not safe_warned:
 		safe_warned = true
-		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.")
+		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.", "must")
 
 
 ## Walking dead on the main track (rows 1-3, ground level) west and east of

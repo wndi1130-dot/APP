@@ -18,6 +18,7 @@ const CHOICES: Array = [
 	["melee_chain", "근접 이어 치기", [[true, "2m 안 다음 놈까지"], [false, "한 놈만"]]],
 	["stick_float", "스틱", [[false, "고정 (왼쪽 아래)"], [true, "스틱 따라오기"]]],
 	["run_mode", "뛰기 키", [["toggle", "토글"], ["hold", "누르는 동안"]]],
+	["radio", "무전", [["urgent", "급한 것만"], ["often", "자주 (많이 알고 자주 울림)"], ["off", "끔"]]],
 	["stick_rim_run", "스틱 끝 뛰기", [[false, "끔"], [true, "켬"]]],
 	["double_tap_run", "두 번 톡 뛰기", [[false, "끔"], [true, "켬"]]],
 	["primary_one", "주 행동 하나로", [[false, "끔 (조준·공격 따로)"], [true, "켬 (시험)"]]],
