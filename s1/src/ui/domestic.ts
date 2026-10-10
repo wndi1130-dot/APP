@@ -41,7 +41,7 @@ const PROLOGUE_KEY = 's1.prologueDone';
 export function prologueDone(): boolean {
   try { return globalThis.localStorage?.getItem(PROLOGUE_KEY) === '1'; } catch { return false; }
 }
-/** 서막을 지나 2구간에 들어선 판이면 서막 클리어를 남긴다. 그 뒤 메뉴에 '서막 없이 새 판'이 보인다. */
+/** 서막을 지나 2구간에 들어선 판이면 서막 클리어를 남긴다. 그 뒤 메뉴에 '차고 장면 건너뛰기'가 보인다. */
 export function notePrologue(g: Game): void {
   if (g.seg < 2 || !g.story?.flags.depot_promise || prologueDone()) return;
   try { globalThis.localStorage?.setItem(PROLOGUE_KEY, '1'); } catch { /* 저장이 막혀도 판은 그대로 */ }

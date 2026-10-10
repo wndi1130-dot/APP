@@ -91,7 +91,8 @@ describe('J09 1. 진범을 벌하면 임박은 \'오지 않은 일\'로 끝난�
 
 describe('J09 3. 이름 거름: 이름 풀 언어가 pl·de·cz인 사람만 군중 순위에 오른다', () => {
   const g = darkGame('names');
-  const suspect = (id: string) => ({ id, culprit: false, facts: ['access' as const], clues: [], acq: false });
+  // 닿은 사실은 단서로 센다(칸 단위 드나듦 access는 후보 표시를 켜지 못한다, K05). 이름 거름만 갈리도록 단서 하나를 붙인다.
+  const suspect = (id: string) => ({ id, culprit: false, facts: ['access' as const], clues: [{ kind: 'foot' as const, truth: false, line: '발자국.', seg: 1 }], acq: false });
   const adult = (pred: (lang: string | undefined) => boolean) => PROFILES.find(p => p.age >= 16 && pred(p.name_lang))!;
   it('같은 사실이면 pl·de·cz는 표시되고 다른 풀은 언제나 빠진다', () => {
     for (const lang of ['pl', 'de', 'cz']) expect(flagged(g, suspect(adult(l => l === lang).id))).toBe(true);

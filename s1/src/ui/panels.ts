@@ -75,7 +75,7 @@ function menuPanel(view: View): HTMLElement {
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 처음부터'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'new-seed' }, '새 판(새 시드)'),
       // 서막을 한 번 끝낸 브라우저에만 보인다(first_leg_story 5장 '서막 건너뛰기', 제안).
-      prologueDone() ? h('button', { class: 'btn btn--ghost', 'data-action': 'new-skip' }, '서막 없이 새 판') : null,
+      prologueDone() ? h('button', { class: 'btn btn--ghost', 'data-action': 'new-skip' }, '차고 장면 건너뛰기') : null,
       domesticMenu(view),
       // 진동(5b.6): 나쁜 쪽 선 넘음과 죽음에만 40ms. 동작 감소 설정과 따로 끈다. 아이폰 브라우저는 원래 안 떤다.
       h('button', { class: cx('btn btn--ghost', vibrateOn() && 'is-on'), 'data-action': 'toggle-vibrate', 'aria-pressed': vibrateOn() ? 'true' : 'false' }, vibrateOn() ? '진동 켬' : '진동 끔'),

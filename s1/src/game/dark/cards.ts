@@ -96,7 +96,7 @@ function view(g: Game, card: Card): CardView | null {
       const cs = caseById(g, card.n);
       if (!cs || cs.status === 'closed') return { title: '닫힌 수사', body: '이 일은 이미 끝났다.', required: true, choices: [ok('알았다')] };
       const live = eligible(g, cs);
-      const lines = live.map(s => `${nameOf(g, s.id)}(${boardingText(g, s.id)}) · ${LEVEL_WORD[level(s)]}${s.clues.length ? `: ${s.clues[s.clues.length - 1].line}` : ''}`);
+      const lines = live.map(s => `${nameOf(g, s.id)} · ${LEVEL_WORD[level(s)]}${s.clues.length ? `: ${s.clues[s.clues.length - 1].line}` : ''}`);
       const top = topByClues(g, cs);
       const canTrial = !!top && level(top) >= 1;
       const martial = !!d.martial;
@@ -306,7 +306,7 @@ function view(g: Game, card: Card): CardView | null {
       const lv = level(top);
       const pre = d.precedent[cs.kind];
       const lines = [
-        `${name}(${boardingText(g, top.id)}) · ${crimeTitle(g, cs)}`,
+        `${name} · ${crimeTitle(g, cs)}`,
         `증거 단계: ${LEVEL_WORD[lv]}${top.clues.length ? `. ${top.clues[top.clues.length - 1].line}` : ''}`,
         `피고의 말: "${defenseLine(g, { kind: 'motion', motion: 'trial', person: top.id, ref: cs.id })}"`,
         ...(pre ? [`지난번엔 ${LEVEL_WORD[pre.level]}만으로 ${pre.guilty ? '유죄' : '무죄'}를 냈다.`] : []),

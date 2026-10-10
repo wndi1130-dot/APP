@@ -1,6 +1,6 @@
 import {
   COMMS, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDomestic, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
+  migrateDark, migrateDomestic, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
@@ -156,6 +156,8 @@ function fillDefaults(g: Game): void {
     for (const k of ['gtrials', 'gexec', 'martialSegs', 'lifted', 'ratifyPassed', 'ratifyFailed']) st[k] ??= 0;
   }
   migrateDomestic(g);
+  // 후보 표시 규칙이 바뀌었다(칸 단위 드나듦은 더 안 센다). 그 전에 저장한 판의 후보 목록을 다시 센다.
+  migrateDark(g);
 }
 
 /** 저장한 판을 읽는다: 판 번호 확인, 판 번호별 옮기기, 뼈대 검사, 나중에 더한 칸 채우기. 못 읽으면 까닭을 돌려준다. */

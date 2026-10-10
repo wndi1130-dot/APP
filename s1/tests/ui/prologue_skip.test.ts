@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { newGame, notePrologue, prologueDone } from '../../src/ui/domestic';
 
-// 서막 건너뛰기(first_leg_story 5장, 제안): 서막을 한 번 끝낸 브라우저에만 '서막 없이 새 판'이 보인다.
+// 서막 건너뛰기(first_leg_story 5장, 제안): 서막을 한 번 끝낸 브라우저에만 '차고 장면 건너뛰기'가 보인다.
 
 const store = new Map<string, string>();
 const fake = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
