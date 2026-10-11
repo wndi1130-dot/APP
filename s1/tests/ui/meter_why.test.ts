@@ -21,19 +21,23 @@ describe('신임·긴장의 까닭 기록', () => {
     const g = createS1cGame('why-1');
     let rows = 0;
     for (let n = 0; n < 60 && g.phase !== 'end' && g.phase !== 'council'; n += 1) {
-      const before = { trust: Math.round(g.trust), tension: Math.round(g.tension), len: g.meterLog?.length ?? 0, seg: g.seg };
+      const before = { trust: Math.round(g.trust), tension: Math.round(g.tension), old: new Set(g.meterLog ?? []), seg: g.seg };
       const step = act(g);
       const label = stepLabel(g, step);
       applyStep(g, step);
       const dt = Math.round(g.trust) - before.trust;
       const dn = Math.round(g.tension) - before.tension;
-      const log = g.meterLog ?? [];
-      if (dt === 0 && dn === 0) { expect(log.length).toBe(before.len); continue; }
+      const added = (g.meterLog ?? []).filter(r => !before.old.has(r));
+      if (dt === 0 && dn === 0) { expect(added).toEqual([]); continue; }
       rows += 1;
-      const last = log[log.length - 1];
-      expect([last.trust, last.tension, last.seg]).toEqual([dt, dn, before.seg]);
-      expect([label, '구간 정산']).toContain(last.label);
-      expect(last.label.length).toBeGreaterThan(0);
+      // 열차가 굴러간 걸음은 규칙이 적은 까닭 이름별로 여러 줄이 남을 수 있다. 줄의 합이 보이는 차이와 같다.
+      expect(added.length).toBeGreaterThan(0);
+      expect([added.reduce((s, r) => s + r.trust, 0), added.reduce((s, r) => s + r.tension, 0)]).toEqual([dt, dn]);
+      for (const r of added) {
+        expect(r.seg).toBe(before.seg);
+        expect(r.label.length).toBeGreaterThan(0);
+        if (!r.sys) expect(r.label).toBe(label);
+      }
     }
     expect(rows).toBeGreaterThan(0);
   });
