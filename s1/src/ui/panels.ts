@@ -17,6 +17,7 @@ import { nameBtn, shortText } from './names';
 import { domesticEnd, domesticMenu, domesticPanel, eventsMenu, prologueDone } from './domestic'; // S1c 내정 훅
 import { darkEndSection, darkMenu, darkSupportWhy } from './dark'; // S1b 어두운 길 훅
 import { reproError, reproText } from './repro';
+import { soundLabel, soundOn } from '../audio/settings';
 import { vibrateOn } from './fx';
 import { departTapOn } from './depart';
 
@@ -104,6 +105,8 @@ function menuPanel(view: View): HTMLElement {
       eventsMenu(view),
       // 진동(5b.6): 나쁜 쪽 선 넘음과 죽음에만 40ms. 동작 감소 설정과 따로 끈다. 아이폰 브라우저는 원래 안 떤다.
       h('button', { class: cx('btn btn--ghost', vibrateOn() && 'is-on'), 'data-action': 'toggle-vibrate', 'aria-pressed': vibrateOn() ? 'true' : 'false' }, vibrateOn() ? '진동 켬' : '진동 끔'),
+      // 소리(sound_music 8b.1): 단추·서류·레버를 만질 때 나는 손끝 소리. 누를 때마다 끔 → 작게 → 보통 → 크게로 돈다. 꺼도 놓치는 정보는 없다.
+      h('button', { class: cx('btn btn--ghost', soundOn() && 'is-on'), 'data-action': 'sound-vol', 'aria-pressed': soundOn() ? 'true' : 'false' }, soundLabel()),
       // 출발 레버(5b.5)를 끌기 어려우면 두 번 눌러 출발한다.
       h('button', { class: cx('btn btn--ghost', departTapOn() && 'is-on'), 'data-action': 'toggle-depart-tap', 'aria-pressed': departTapOn() ? 'true' : 'false' }, departTapOn() ? '출발: 두 번 눌러' : '출발: 레버 당겨'),
       darkMenu(view),

@@ -1,4 +1,5 @@
 import './ui/styles.css';
+import { installSound } from './audio/sound';
 import { registerContentDeals, registerContentEvents, registerContentSecrets } from './game';
 import { startApp } from './ui/app';
 import { showCrash } from './ui/crash';
@@ -26,6 +27,7 @@ if (root) {
     registerContentSecrets(flat(import.meta.glob('../data/secrets/*.json', { eager: true, import: 'default' })));
     registerContentDeals(flat(import.meta.glob('../data/deals/*.json', { eager: true, import: 'default' })));
     startApp(root);
+    installSound(root); // 손끝 소리(src/audio). 화면보다 뒤에 걸어야 화면이 누름을 처리한 다음에 듣는다.
     window.removeEventListener('error', onError);
     window.removeEventListener('unhandledrejection', onRejection);
   } catch (e) {
