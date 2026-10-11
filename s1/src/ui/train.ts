@@ -10,7 +10,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 import { nameBtn } from './names';
 import { carPopover, spaceLever, spaceTab, stackCount, warmthTone } from './home';
-import { domesticCarTag, domesticEngineCol, domesticWhyLine, gear, trainCars } from './domestic';
+import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, trainCars } from './domestic';
 
 // 열차 관리 화면(S1c, 사용자 2026-10-11): 칸을 누르면 작은 창이 아니라 화면 전체가 바뀐다.
 // 위에 열차 전체 띠, 가운데에 누른 칸의 판(상태·조절·공방 세 덩이), 아래에 단추 여섯.
@@ -98,7 +98,10 @@ function commBoard(view: View, car: CarDef): HTMLElement {
       blk('공방',
         pct !== null && job
           ? h('div', { class: 'tblk__row' }, gear('work'), h('span', null, jobTitle(job.kind, job.car).replace(`${car.name} `, '')), h('b', { class: 'num' }, `${pct}%`))
-          : h('div', { class: 'tblk__row sub' }, '개조 없음'))));
+          : h('div', { class: 'tblk__row' },
+            carMods(g, car.id).map(m => h('span', { class: 'stage' }, icon('check'), m)),
+            // 공방의 개조 화면으로 바로 간다(사용자 2026-10-11).
+            h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'modify' }, '공방에서 개조하기')))));
 }
 
 const CARE_NAME: Record<WoundRow['care'], string> = { bed: '침상', home: '제 칸', up: '일어남' };
@@ -150,7 +153,7 @@ export function trainButtons(view: View, sel: CarDef): Btn[] {
   const tab = ui.panel === 'dom' ? ui.dom?.tab : null;
   return [
     { id: 'research', label: '연구', icon: 'papers', data: { 'data-action': 'dom-tab', 'data-tab': 'plan' }, on: tab === 'plan', badge: rp !== null ? `${rp}%` : null },
-    { id: 'modify', label: '개조', icon: 'lever', data: { 'data-action': 'dom-tab', 'data-tab': 'workshop' }, on: tab === 'workshop', badge: g.dom?.job ? `${jobPct(g, g.dom.job.car)}%` : null },
+    { id: 'modify', label: '개조', icon: 'lever', data: { 'data-action': 'dom-tab', 'data-tab': 'modify' }, on: tab === 'modify', badge: g.dom?.job ? `${jobPct(g, g.dom.job.car)}%` : null },
     { id: 'workshop', label: '공방', icon: 'gear', data: { 'data-action': 'car', 'data-car': 'workshop', 'data-keep': '1' }, on: !tab && !ui.dom?.med && sel.id === 'workshop' },
     { id: 'people', label: '사람·매뉴얼', icon: 'people', data: { 'data-action': 'dom-tab', 'data-tab': 'board' }, on: tab === 'board' },
     { id: 'politics', label: '정치', icon: 'scale', data: { 'data-action': 'go', 'data-screen': 'council' }, off: !inCouncil, badge: inCouncil ? null : left === 0 ? '이번 구간' : `${left}구간 뒤` },
