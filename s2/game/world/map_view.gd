@@ -22,7 +22,7 @@ const LIGHT_FACES: Dictionary = {
 }
 const FLOOR_COLORS: Array[Color] = [
 	Color(0.66, 0.68, 0.71), Color(0.36, 0.36, 0.37), Color(0.48, 0.47, 0.45), Color(0.40, 0.34, 0.29),
-	Color(0.30, 0.28, 0.27), Color(0.74, 0.76, 0.79), Color(0.58, 0.66, 0.72), Color(0.45, 0.44, 0.42),
+	Color(0.30, 0.28, 0.27), Color(0.74, 0.76, 0.79), Color(0.40, 0.54, 0.66), Color(0.45, 0.44, 0.42),
 ]
 
 var grid: FieldGrid
