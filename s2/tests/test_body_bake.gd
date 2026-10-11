@@ -1,0 +1,92 @@
+extends "res://addons/gut/test.gd"
+## The body baker's tables and its save / read-back. The bake itself needs a
+## body and a motion set, which are not in the repository.
+
+const BodyBake = preload("res://scripts/body_bake.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
+
+
+func _two_bone_assets() -> Dictionary:
+	var source: Array = []
+	source.resize(Mesh.ARRAY_MAX)
+	source[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(0, 0.5, 0)])
+	source[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK])
+	source[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	source[Mesh.ARRAY_BONES] = PackedInt32Array([0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0])
+	source[Mesh.ARRAY_WEIGHTS] = PackedFloat32Array([1, 0, 0, 0, 1, 0, 0, 0, 0.5, 0.5, 0, 0])
+	var still := [Transform3D(), Transform3D()]
+	var lifted := [Transform3D(), Transform3D(Basis(), Vector3(0, 2.25, 0))]
+	return VatBaker.build_skinned(source, [{"name": "walk", "length": 1.5, "frames": [still, lifted, still]}, {"name": "fall", "loop": false, "length": 2.5, "frames": [still, lifted]}])
+
+
+func test_every_motion_names_a_layer_that_exists_and_layers_only_name_body_bones() -> void:
+	for clip in BodyBake.CLIPS:
+		assert_true(clip[4] == "" or BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
+	for pose in BodyBake.POSES:
+		assert_true(pose[2] == "" or BodyBake.OVERLAYS.has(pose[2]), "addition %s" % pose[2])
+	for layer_name in BodyBake.LAYERS:
+		var layer: Dictionary = BodyBake.LAYERS[layer_name]
+		for bone in layer.get("damp", {}):
+			assert_true(BodyBake.MAP.has(bone), "%s damp %s" % [layer_name, bone])
+		for step in layer["steps"]:
+			assert_true(BodyBake.MAP.has(step[1]), "%s step %s" % [layer_name, step[1]])
+			if step[0] == "turn":
+				assert_true(BodyBake.AXES.has(step[2]))
+			else:
+				assert_true(BodyBake.MAP.has(step[2]), "%s aims at %s" % [layer_name, step[2]])
+
+
+func test_the_three_walks_differ_and_the_motion_numbers_fit_the_shader_table() -> void:
+	var names: Array = []
+	for clip in BodyBake.CLIPS:
+		names.append(clip[0])
+	assert_eq(names.slice(0, 5), ["walk_a", "walk_b", "walk_c", "stand", "lunge"], "the numbers the drawing side uses")
+	assert_true(BodyBake.CLIPS.size() + 1 <= VatBaker.TABLE_SIZE, "with the still poses")
+	assert_ne(BodyBake.LAYERS["walk"]["damp"], BodyBake.LAYERS["walk_c"]["damp"], "a different leg drags")
+
+
+func test_a_layer_value_is_a_number_or_a_swing_about_it() -> void:
+	assert_eq(BodyBake._value(0.3, 1.0), 0.3)
+	assert_almost_eq(BodyBake._value([0.2, 0.1, 0.0], PI * 0.5), 0.3, 0.0001)
+	assert_almost_eq(BodyBake._value([0.2, 0.1, PI * 0.5], PI * 0.5), 0.2, 0.0001, "lagging a quarter turn")
+	assert_almost_eq(BodyBake._value([0.2, 0.1, 0.0, 2.0], PI * 0.25), 0.3, 0.0001, "two beats to a turn")
+
+
+func test_turn_and_aim_move_a_bone_and_what_hangs_on_it() -> void:
+	var body := Skeleton3D.new()
+	add_child_autofree(body)
+	body.add_bone("upper")
+	body.add_bone("lower")
+	body.add_bone("tip")
+	body.set_bone_parent(1, 0)
+	body.set_bone_parent(2, 1)
+	body.set_bone_rest(1, Transform3D(Basis(), Vector3(0, 1, 0)))
+	body.set_bone_rest(2, Transform3D(Basis(), Vector3(0, 1, 0)))
+	body.reset_bone_poses()
+	BodyBake.aim(body, "upper", "lower", Vector3(0, 0, 3))
+	assert_true(body.get_bone_global_pose(1).origin.is_equal_approx(Vector3(0, 0, 1)), "points where it was told")
+	assert_true(body.get_bone_global_pose(2).origin.is_equal_approx(Vector3(0, 0, 2)), "what hangs on it follows")
+	BodyBake.turn(body, "lower", PI * 0.5)
+	assert_true(body.get_bone_global_pose(2).origin.is_equal_approx(Vector3(0, -1, 1)), "bent forward about the left-right axis")
+
+
+func test_a_bake_is_written_and_read_back_the_same() -> void:
+	var assets := _two_bone_assets()
+	var dir := "user://test_body_bake"
+	BodyBake.save(assets, dir)
+	var back: Dictionary = BodyBake.load_baked(dir)
+	assert_false(back.is_empty())
+	assert_eq(int(back["vertices"]), 3)
+	assert_eq(int(back["height"]), 5)
+	assert_eq((back["clips"] as Array).size(), 2)
+	assert_eq(String(back["clips"][1]["name"]), "fall")
+	assert_false(bool(back["clips"][1]["loop"]))
+	assert_almost_eq((back["image"] as Image).get_pixel(1, 1).g, 2.25, 0.001, "metres past the 8 bit range survive the file")
+	assert_eq(VatBaker.shader_tables(back)["clip_start"][1], 3.0)
+	for file in ["vat.exr", "mesh.res", "clips.json"]:
+		DirAccess.remove_absolute(dir.path_join(file))
+	DirAccess.remove_absolute(dir)
+
+
+func test_reading_a_folder_with_no_bake_gives_nothing() -> void:
+	assert_true(BodyBake.load_baked("user://no_such_bake_folder").is_empty())
