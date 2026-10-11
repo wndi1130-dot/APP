@@ -94,6 +94,12 @@ const TOAST_WARN_S: float = 6.0
 const TOAST_MAX: int = 4
 const SAY_S: float = 2.6            # a line over a companion's head stays this long
 const SAY_FONT: int = 20
+# A held train leaves: the field stands still and darkens, two lines come up,
+# then the end card (user decision 142).
+const LEAVE_BEAT_S: float = 3.5
+const LEAVE_DARK_S: float = 1.5
+const LEAVE_DARK: float = 0.62
+const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whistle
 # A line a companion shouts (ally_lines.gd): bigger and a little longer than
 # the note of what happened, which goes small under it.
 const LINE_S: float = 3.2
@@ -189,6 +195,7 @@ var modal_paused_before: bool = false
 var modal_open: bool = false
 var modal_slows: bool = false      # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
+var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
 var body_look: Dictionary = {}     # what the body picture shows of each part (body_looks())
 var status_rows: Array = []        # what each shows now (body.status_notes())
 var bleed_hint_done: bool = false  # the one-time line that points at the blood key
@@ -618,6 +625,7 @@ func _debug_dusk() -> void:
 func tick(delta: float) -> void:
 	if game == null or game.player == null:
 		return
+	_tick_leave(delta)
 	fps_t -= delta
 	frame_ms = lerpf(frame_ms, delta * 1000.0, 0.1)
 	var p = game.player
@@ -1509,6 +1517,44 @@ func _depart_pick(choice: String) -> void:
 	game.audio.hold(false)
 	if choice == "go":
 		game.depart()
+
+
+## The whistle has gone and the stage is over: the screen darkens over the
+## still field, the two lines come up, and after LEAVE_BEAT_S the end card.
+func leave_beat(result: Dictionary, lines: Array) -> void:
+	_close_modal()
+	context_rows = []
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(veil)
+	var words := VBoxContainer.new()
+	words.set_anchors_preset(Control.PRESET_FULL_RECT)
+	words.alignment = BoxContainer.ALIGNMENT_CENTER
+	words.add_theme_constant_override("separation", 14)
+	words.modulate.a = 0.0
+	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	veil.add_child(words)
+	for i in lines.size():
+		var l := _label(String(lines[i]), 48 if i == 0 else 24, INK if i == 0 else DIM)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		words.add_child(l)
+	leaving = {"result": result, "t": LEAVE_BEAT_S, "veil": veil, "words": words}
+
+
+func _tick_leave(delta: float) -> void:
+	if leaving.is_empty():
+		return
+	leaving["t"] = float(leaving["t"]) - delta
+	var gone: float = LEAVE_BEAT_S - float(leaving["t"])
+	leaving["veil"].color.a = LEAVE_DARK * clampf(gone / LEAVE_DARK_S, 0.0, 1.0)
+	leaving["words"].modulate.a = clampf((gone - LEAVE_WORDS_AT) / 0.6, 0.0, 1.0)
+	if float(leaving["t"]) <= 0.0:
+		var result: Dictionary = leaving["result"]
+		leaving["veil"].queue_free()
+		leaving = {}
+		show_end(result)
 
 
 func show_end(result: Dictionary) -> void:

@@ -2023,7 +2023,11 @@ func finish(reason: String) -> void:
 	telemetry.end(reason, now)
 	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines()}
 	_save(result)
-	hud.show_end(result)
+	# A held train leaving is the stage's full stop: a beat before the card.
+	if reason == "departed" and holdout.opened:
+		hud.leave_beat(result, holdout.leave_lines())
+	else:
+		hud.show_end(result)
 	finished.emit(result)
 
 
