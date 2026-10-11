@@ -83,6 +83,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 			var tables := VatBaker.shader_tables(vat)
 			for key in tables:
 				mat.set_shader_parameter(key, tables[key])
+			mat.set_shader_parameter("mixes", true)
 		var t: Color = TINTS[look]
 		mat.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
 		node.material_override = mat

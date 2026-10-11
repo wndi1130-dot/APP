@@ -32,6 +32,10 @@ const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds 
 const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61}
 const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
 static var rounds: Dictionary = {}             # what the baked folder in use measured (see assets)
+static var table: Array = []                   # its motions: [first frame, frames, loops] each
+
+const MIX_TIME: float = 0.2                   # a body changing motion keeps something of the frame it was in this long
+const MIX_STEPS: float = 63.0                 # how finely the shader is told how much (see dead_vat.gdshader)
 
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
@@ -41,7 +45,16 @@ static func assets() -> Dictionary:
 	var dir := OS.get_environment(FOLDER_ENV)
 	var got := BodyBake.load_baked(dir if dir != "" else FOLDER)
 	rounds = rounds_of(got)
+	table = table_of(got)
 	return got
+
+
+## Where each motion of a baked folder lies in its picture.
+static func table_of(vat: Dictionary) -> Array:
+	var out := []
+	for clip: Dictionary in vat.get("clips", []):
+		out.append([int(clip["start"]), int(clip["frames"]), bool(clip["loop"])])
+	return out
 
 
 ## Motion number -> its round, for the motions the baked folder gives one.
@@ -92,7 +105,54 @@ static func walk_of(phase: float) -> int:
 
 ## What one drawn body tells the shader: r = its own number (or how far through
 ## a motion that plays once), g = the motion, b = 1 holds it still, a = shade.
+## A baked body that has just changed motion also says what frame it was in
+## (see mixed).
 static func custom(z: Dictionary, down: float, still: float, shade: float, baked: bool) -> Color:
+	var plain := picked(z, down, still, shade, baked)
+	return mixed(z, plain) if baked else plain
+
+
+## The frame of the picture a motion is at for r (for a motion the shader's
+## clock runs, where the body's own number starts it: near enough).
+static func frame_of(motion: int, r: float) -> int:
+	if motion < 0 or motion >= table.size():
+		return 0
+	var first: int = table[motion][0]
+	var frames: int = table[motion][1]
+	if table[motion][2]:
+		return first + int(fposmod(r, 1.0) * float(frames)) % frames
+	return first + int(roundf(clampf(r, 0.0, 1.0) * float(frames - 1)))
+
+
+## Eases a body from the motion it was in to the one it is in now: for
+## MIX_TIME after the change, g also carries the frame it was last drawn in
+## and how much of that it still keeps (g = motion + 16 * frame + 65536 *
+## share, share 0..MIX_STEPS). Nothing is added once it has settled, or when
+## no baked folder's table is known. What it was last drawn as is noted on the
+## body itself, under names the rules do not use.
+static func mixed(z: Dictionary, plain: Color) -> Color:
+	if table.is_empty():
+		return plain
+	var motion := int(plain.g)
+	var age: float = z["age"]
+	if z.has("body_motion") and int(z["body_motion"]) != motion:
+		z["body_from"] = frame_of(int(z["body_motion"]), float(z["body_r"]))
+		z["body_changed"] = age
+	z["body_motion"] = motion
+	z["body_r"] = plain.r
+	if not z.has("body_changed"):
+		return plain
+	var left := 1.0 - (age - float(z["body_changed"])) / MIX_TIME
+	if left <= 0.0:
+		return plain
+	var share := roundf(left * left * (3.0 - 2.0 * left) * MIX_STEPS)
+	if share <= 0.0:
+		return plain
+	return Color(plain.r, plain.g + 16.0 * float(z["body_from"]) + 65536.0 * share, plain.b, plain.a)
+
+
+## The motion one body is in and how far through it, before any easing.
+static func picked(z: Dictionary, down: float, still: float, shade: float, baked: bool) -> Color:
 	var state: String = z["state"]
 	if not baked:
 		var clip := 1.0 if state == "chase" or state == "attack" or state == "grab" else 0.0
