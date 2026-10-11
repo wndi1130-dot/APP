@@ -30,6 +30,9 @@ const CHOICES: Array = [
 	# which stop on is counted in S3; here it is on or off. zombies.gd reads it.
 	["lungers", "달려드는 자", [[false, "끔"], [true, "켬"]]],
 	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"], ["roll", "굴려서 (장소 확률대로, 조용하면 안 뜬다)"]]],
+	# The radio operator's forecast of a held train (user decision 150); who is
+	# on watch is the train's to say, here it is on or off.
+	["radio_watch", "무전수 당직 (「굴려서」의 예보)", [[false, "없음"], [true, "있음 (뜰 판 열에 여덟을 알림)"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
 
