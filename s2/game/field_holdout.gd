@@ -138,7 +138,8 @@ func enabled() -> bool:
 
 ## How likely this kind of stop is to be one that can have it, in a hundred.
 func chance() -> int:
-	if game.opts.has("holdout_chance"):
+	# Below nought is "as the place has it" (the start screen's first choice).
+	if int(game.opts.get("holdout_chance", -1)) >= 0:
 		return int(game.opts["holdout_chance"])
 	return int(CHANCE.get(String(game.data.get("place_kind", "")), CHANCE_OTHER))
 

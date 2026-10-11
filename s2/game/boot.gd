@@ -33,6 +33,11 @@ const CHOICES: Array = [
 	# The radio operator's forecast of a held train (user decision 150); who is
 	# on watch is the train's to say, here it is on or off.
 	["radio_watch", "무전수 당직 (「굴려서」의 예보)", [[false, "없음"], [true, "있음 (뜰 판 열에 여덟을 알림)"]]],
+	# Switches for looking at a thing on the phone: with one on, what is rare is
+	# sure to come. All off unless picked; they are not values of the game.
+	["holdout_chance", "시험: 「굴려서」의 굴림", [[-1, "장소 확률대로"], [100, "늘 뜬다"]]],
+	["holdout_forecast_heard", "시험: 무전수가 듣는 판", [[80, "열에 여덟"], [100, "늘 듣는다"]]],
+	["lungers_many", "시험: 달려드는 자의 수", [[false, "열에 하나"], [true, "서 있는 망자는 모두"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
 

@@ -55,6 +55,27 @@ func test_it_is_voiced_once_and_marked_while_it_stays_low() -> void:
 	assert_eq(game.audio.played.count(game.audio.TELL_GROUP), 1)
 
 
+# The start screen's switch for looking at them: all that stand, of those put
+# at the stop; nothing without the lungers on.
+func test_the_switch_makes_every_one_that_stands_a_lunger() -> void:
+	var many = FieldGame.new()
+	many.opts = {"seed": 11, "raiders": false, "auto_pause": false, LungerRules.OPTION: true, "lungers_many": true}
+	add_child_autofree(many)
+	many.set_process(false)
+	var standing := 0
+	for z in many.zombies.list:
+		if z["kind"] != "frozen" and z["stander"]:
+			standing += 1
+			assert_true(z["lunger"])
+	assert_gt(standing, 0)
+	var off = FieldGame.new()
+	off.opts = {"seed": 11, "raiders": false, "auto_pause": false, "lungers_many": true}
+	add_child_autofree(off)
+	off.set_process(false)
+	for z in off.zombies.list:
+		assert_false(z.get("lunger", false))
+
+
 func test_out_of_sight_it_is_not_marked() -> void:
 	var z := _lunger(6.0)
 	_run(0.3)

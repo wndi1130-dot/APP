@@ -502,6 +502,17 @@ func test_the_radio_operator_hears_of_most_stops_that_can_have_it() -> void:
 	assert_between(said, 19, 28, "about eight in ten, and not all of them")
 
 
+# The start screen hands every setting over, so "as the place has it" is a
+# number below nought and must not be read as a chance.
+func test_the_start_screens_unset_chance_is_the_places() -> void:
+	var plain = _game({"holdout": "roll"})
+	var unset = _game({"holdout": "roll", "holdout_chance": -1})
+	assert_eq(unset.holdout.chance(), plain.holdout.chance())
+	assert_eq(unset.holdout.rolled, plain.holdout.rolled)
+	var sure = _game({"holdout": "roll", "holdout_chance": 100})
+	assert_true(sure.holdout.rolled)
+
+
 func test_the_roll_is_the_same_for_a_seed_and_does_not_move_the_stops_dice() -> void:
 	var plain = _game({"seed": 11})
 	var a = _game({"seed": 11, "holdout": "roll"})
