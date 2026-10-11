@@ -20,6 +20,7 @@ const FALL_FRONT: int = 9                     # on its face
 const CRAWL: int = 10
 const RISE: int = 11                          # getting up off its back
 const CLIMB: int = 12                         # hauling itself up out of a hole
+const RISE_FRONT: int = 13                    # getting up off its face
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
@@ -76,13 +77,13 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 	if state == "climb":
 		if String(z.get("climb_way", "lid")) != "culvert":
 			return Color(DeadPose.climb_k(z), float(CLIMB), 1.0, shade)
-		# Out of a culvert it crawls, then gets up off its face (that fall, backwards).
+		# Out of a culvert it crawls, then gets up off its face.
 		# Nothing steps its walk while it climbs, so the crawl is read off the same clock.
 		var row := DeadPose.climb_row(z)
 		if DeadPose.in_hole(z):
 			return Color(fposmod(DeadPose.climb_k(z) * float(row["len"]) / CRAWL_LEN, 1.0), float(CRAWL), 0.0, shade)
 		var open := float(row["open"]) / float(row["len"])
-		return Color(1.0 - (DeadPose.climb_k(z) - open) / (1.0 - open), float(FALL_FRONT), 1.0, shade)
+		return Color((DeadPose.climb_k(z) - open) / (1.0 - open), float(RISE_FRONT), 1.0, shade)
 	if z["crawl"]:
 		# A crawler drags itself along on its face; knocked down it lies as it crawled, and dead it lies as one fallen forward.
 		if state == "dead":
@@ -91,8 +92,8 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 	if down > 0.0:
 		# Struck from behind it goes over on its face, otherwise on its back.
 		var front := DeadPose.fall_side(z) > 0.0
-		if not front and coming_up(z, down):
-			return Color(1.0 - down, float(RISE), 1.0, shade)
+		if coming_up(z, down):
+			return Color(1.0 - down, float(RISE_FRONT if front else RISE), 1.0, shade)
 		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
 		return Color(phase, float(LUNGE), still, shade)
@@ -111,8 +112,8 @@ static func coming_up(z: Dictionary, down: float) -> bool:
 
 
 ## How far through the fall a body on the ground is drawn. Going over, it is the
-## time since it fell. A body on its back has its own motion for coming up; one
-## on its face has none yet, so its fall runs backwards as far as it has come up.
+## time since it fell. Coming up has its own motions (see custom), so past the
+## fall this is only how far down a body that is not coming up lies.
 static func fall_progress(z: Dictionary, down: float) -> float:
 	if z.has("fell_at") and z["state"] != "rising":
 		var u := clampf((float(z["age"]) - float(z["fell_at"])) / float(Motion.row("dead_fall")["len"]), 0.0, 1.0)
