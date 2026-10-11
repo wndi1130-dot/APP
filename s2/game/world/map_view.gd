@@ -569,6 +569,22 @@ func _build_blocks() -> void:
 	# Doors where people step down, on each side of the train that has them.
 	for face in door_faces(data):
 		box(st, Vector3(1.0, 2.0, 0.1), Vector3(face["cell"].x + 0.5, 1.4, face["z"]), Color(0.42, 0.38, 0.33))
+	# A way over the train: a plank across the gap between two cars and rungs
+	# up to it on each side (over the roof if the way is not at a gap).
+	var wood := Color(0.62, 0.5, 0.34)
+	for crossing in data.get("crossings", []):
+		var cx: int = crossing["cells"][0].x
+		var at_x: float = cx + 0.5
+		var top: float = 3.06
+		for car in data["train_cars"]:
+			var edge: int = car["rect"].position.x
+			if edge > train.position.x and (edge == cx or edge == cx + 1):
+				at_x = float(edge)
+				top = 1.1
+		box(st, Vector3(0.9, 0.12, train.size.y), Vector3(at_x, top, train.position.y + train.size.y * 0.5), wood)
+		for z: float in [train.position.y - 0.02, train.end.y + 0.02]:
+			for k in int(top / 0.3):
+				box(st, Vector3(0.8, 0.07, 0.1), Vector3(at_x, 0.3 + 0.3 * k, z), wood)
 	_build_lights()
 	for w in data["wagons"]:
 		var r: Rect2i = w["rect"]

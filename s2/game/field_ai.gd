@@ -197,6 +197,22 @@ func _companion(p) -> void:
 				return
 	if p.action != "":
 		return
+	# Coming over the train after the chief (field_actions.cross_train).
+	if p.brain.has("cross"):
+		if p.command != "follow" or not threat.is_empty() or raider != null:
+			p.brain.erase("cross")
+		else:
+			var way: Dictionary = p.brain["cross"]
+			var foot := FieldGrid.center(way["from"])
+			if p.position.distance_to(foot) > 1.0:
+				_walk(p, foot)
+			elif game.actions.cross_refused(p, way) == "":
+				game.actions.cross_train(p, way)
+			elif game.actions.too_hurt_to_cross(p) or p.carrying_wounded != null:
+				p.brain.erase("cross")   # goes round the train's end as before
+			else:
+				p.stop()                 # waits for the one ahead
+			return
 	match p.command:
 		"retreat":
 			var door := FieldGrid.center(game.data["spawns"]["train_door"][0])
