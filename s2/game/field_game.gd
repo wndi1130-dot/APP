@@ -1954,6 +1954,15 @@ func aboard(p) -> bool:
 	return FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
 
 
+## How many would stay if the train left now (the chief aside).
+func outside() -> int:
+	var n := 0
+	for p in squad + crew:
+		if p != player and p.is_alive() and not aboard(p):
+			n += 1
+	return n
+
+
 ## Departure: whistle (very loud), people on the platform board, the rest stay.
 func finish(reason: String) -> void:
 	if ended:
@@ -2028,6 +2037,7 @@ func finish(reason: String) -> void:
 	mission_play.finish(reason)
 	holdout.on = false
 	if holdout.opened:
+		holdout.note_leaving()
 		receipt.place_note("holdout", holdout.result())
 		telemetry.holdout = holdout.result()
 	receipt.set_end(reason)

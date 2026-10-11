@@ -1499,9 +1499,16 @@ func depart_card() -> void:
 	if game.holdout.opens_on_leaving():
 		text += "\n떠날 채비에 시간이 걸린다. 그동안 문을 지켜야 한다."
 	elif game.holdout.on:
+		# Both prices side by side, before the choice (user decisions 143, 146, 147).
 		var cost: Dictionary = game.holdout.early_cost()
-		text += "\n채비가 %d초 남았다. 지금 떠나면 덜 된 채로 떠난다: 석탄 %d, 쟁기 부품 %d이 더 든다." % [int(ceil(game.holdout.left)), int(cost["coal"]), int(cost["plow_part"])]
+		var push: Dictionary = game.holdout.plough(game.holdout.track_now())
+		text += "\n채비가 %d초 남았다. 선로 위: %s." % [int(ceil(game.holdout.left)), push["word"]]
+		text += "\n지금 떠나면: 석탄 +%d, 부품 %d (쟁기 %d · 덜 된 채비 %d)." % [int(cost["coal"]), int(push["parts"]) + int(cost["plow_part"]), int(push["parts"]), int(cost["plow_part"])]
+		text += "\n끝까지 버티면: 덜 된 채비 값이 없다. 그때 선로에 선 만큼 쟁기 값만 든다."
 		text += "\n셋을 센 뒤 떠난다. 그때 열차에 닿지 못한 사람은 남는다."
+		var out: int = game.outside()
+		if out > 0:
+			text += "\n지금 밖에 있는 사람 %d. 남기면 신임 −%d." % [out, game.holdout.trust_drop(out)]
 	card("depart", text, [
 		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
 		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
