@@ -26,6 +26,7 @@ export function workPower(g: Game): number {
   if (d.people.some(p => p.alive && !p.gone && p.field === 'craft' && p.pupil && !p.resting)) w *= D.teachWork;
   // 조리 담당을 둔 동안 손 하나가 솥으로 빠진다(시제품)
   if (D.potCook && d.pot?.cook && d.people.some(p => p.id === d.pot?.cook && p.alive && !p.gone)) w *= D.potCookWork;
+  if (d.pot?.sick && (d.pot.sickUntil ?? 0) >= g.seg) w *= Math.max(0, 1 - D.potSickWork * d.pot.sick);
   return w;
 }
 

@@ -21,7 +21,10 @@ function woundBedNeed(g: Game): number {
 /** 눕힐 사람. '다친 사람 먼저'면 병자는 제 칸에서 앓아 침상을 쓰지 않는다. */
 export function bedNeed(g: Game): number {
   const sick = g.dom?.bedOrder === 'workers' ? 0 : typhusInBeds(g);
-  return woundBedNeed(g) + sick;
+  // 섞은 빵에 탈이 난 사람도 눕는다(pot.ts potSick과 같은 셈. 순환을 피해 여기서 바로 읽는다).
+  const pot = g.dom?.pot;
+  const potSick = pot?.sick && (pot.sickUntil ?? 0) >= g.seg ? pot.sick : 0;
+  return woundBedNeed(g) + sick + potSick;
 }
 
 export function bedOverflow(g: Game): number {

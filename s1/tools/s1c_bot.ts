@@ -23,7 +23,7 @@ const isTyrant = (p: DarkPolicy | undefined): boolean => p === 'tyrant' || p ===
 /** engaged: 내정 카드에서 일을 벌이는 쪽을 고르고 견습·매뉴얼을 청한다. idle: 늘 '나중에/안 한다'. */
 export type DomPolicy = 'engaged' | 'idle';
 /** 솥 정책. thin·mixed: 늘 그 방식. thin_low·mixed_low: 식량이 POT_LOW 아래일 때만(아니면 그대로). mixed_once: mixed_low와 같되 한 번 들키면 다시 섞지 않는다. */
-export type PotPolicy = 'thin' | 'mixed' | 'thin_low' | 'mixed_low' | 'mixed_once';
+export type PotPolicy = 'thin' | 'mixed' | 'thin_low' | 'mixed_low' | 'mixed_once' | 'thin_pulse';
 export const POT_LOW = 50;
 
 /** 측정용 훅(tools/tension_probe.ts). 판의 결과를 바꾸지 않고 읽기만 한다. */
@@ -442,7 +442,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         if (best) setPotCook(g, best.id);
       }
       if (opts.pot) {
-        const rest = (opts.pot !== 'thin' && opts.pot !== 'mixed' && g.food >= POT_LOW) || (opts.pot === 'mixed_once' && potOf(g).caught > 0);
+        // thin_pulse: 두 구간 묽게, 한 구간 쉼(묽은 죽 불만을 피하는 요령)
+        const rest = opts.pot === 'thin_pulse' ? g.seg % 3 === 0
+          : (opts.pot !== 'thin' && opts.pot !== 'mixed' && g.food >= POT_LOW) || (opts.pot === 'mixed_once' && potOf(g).caught > 0);
         setPot(g, rest ? 'plain' : opts.pot.startsWith('thin') ? 'thin' : 'mixed');
       }
       continue;
