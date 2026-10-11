@@ -629,9 +629,9 @@ func test_state_icons_sit_in_a_column_at_the_right_edge_big_enough_to_see() -> v
 	assert_almost_eq(a.end.x, b.end.x, 0.5, "one column, right-aligned")
 	assert_gt(b.position.y, a.end.y - 0.5, "one under the other")
 	# Build 116 (user): at 58x38 with 15pt words they were not seen at all.
-	# User 2026-10-12: pictures on round plates, 80 across.
+	# User 2026-10-12: pictures on round plates, 72 across.
 	for i in hud.STATUS_SLOTS:
-		assert_eq(hud.status_pads[i].size, Vector2(80, 80), "a round plate, big enough to see")
+		assert_eq(hud.status_pads[i].size, Vector2(72, 72), "a round plate, big enough to see")
 	for i in 2:
 		assert_not_null(hud.status_pads[i].icon, "a picture")
 		assert_eq(hud.status_pads[i].text, "", "and no words on it")
@@ -657,14 +657,16 @@ func test_every_state_has_a_picture_and_the_worse_one_differs() -> void:
 
 func test_the_state_icons_can_be_made_smaller_from_the_settings() -> void:
 	var hud = game.hud
-	assert_eq(hud.status_diameter(), 80)
+	assert_eq(hud.status_diameter(), 72)
 	hud._set_status_size()
 	assert_eq(hud.status_diameter(), 64)
 	assert_eq(hud.status_pads[0].size, Vector2(64, 64))
 	assert_true(_modal_texts(hud).has("상태 아이콘: 작게"))
-	hud._close_modal()
 	hud._set_status_size()
 	assert_eq(hud.status_pads[3].size, Vector2(80, 80))
+	assert_true(_modal_texts(hud).has("상태 아이콘: 크게"))
+	hud._set_status_size()
+	assert_eq(hud.status_diameter(), 72, "and round to where it began")
 	hud._close_modal()
 
 

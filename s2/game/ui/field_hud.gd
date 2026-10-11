@@ -45,9 +45,12 @@ const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_
 # State icons: a column down the right edge, under the zoom keys, as in Project
 # Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
 # saw them. User 2026-10-12: pictures, not words: a round plate each
-# (status_art.gd), 80 across, or 64 from the settings.
+# (status_art.gd), 72 across ('a little smaller' than the 80 first tried), or
+# 64 or 80 from the settings.
 const STATUS_AT := Vector2(-16.0, 84.0)
-const STATUS_SIZES: Array[int] = [80, 64]
+const STATUS_SIZES: Array[int] = [72, 64, 80]
+const STATUS_SIZE_NAMES: Dictionary = {72: "보통", 64: "작게", 80: "크게"}
+const STATUS_ART_SIZE: int = 80   # the pictures are drawn once, for the biggest
 const STATUS_GAP: float = 6.0
 # A column holds four, so it ends above the shove key; a fifth starts a second
 # column to the left.
@@ -497,7 +500,7 @@ func _build_grab() -> void:
 func _build_debug() -> void:
 	debug_panel = _panel(Color(0, 0, 0, 0.72))
 	debug_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	debug_panel.position = Vector2(-430 - 16 - (STATUS_SIZES[0] + STATUS_GAP) * 2.0, 84)   # left of the state icons' columns
+	debug_panel.position = Vector2(-430 - 16 - (STATUS_ART_SIZE + STATUS_GAP) * 2.0, 84)   # left of the state icons' columns
 	debug_panel.custom_minimum_size = Vector2(410, 0)
 	var v := VBoxContainer.new()
 	debug_panel.add_child(v)
@@ -665,13 +668,13 @@ func _tick_status(p) -> void:
 		pad.visible = i < status_rows.size()
 		if pad.visible:
 			var row: Dictionary = status_rows[i]
-			var art: Texture2D = StatusArt.texture(String(row["id"]), bool(row["severe"]), bool(row.get("faint", false)), STATUS_SIZES[0])
+			var art: Texture2D = StatusArt.texture(String(row["id"]), bool(row["severe"]), bool(row.get("faint", false)), STATUS_ART_SIZE)
 			pad.icon = art
 			# No picture for it yet: its short name, so nothing goes unseen.
 			pad.text = "" if art != null else String(row["short"])
 
 
-## How wide a state icon is: 80, or 64 from the settings.
+## How wide a state icon is: 72, or 64 or 80 from the settings.
 func status_diameter() -> int:
 	var d: int = int(game.opts.get("status_size", STATUS_SIZES[0]))
 	return d if STATUS_SIZES.has(d) else STATUS_SIZES[0]
@@ -1026,7 +1029,7 @@ func settings_panel() -> void:
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip.custom_minimum_size = Vector2(500, 0)
 	v.add_child(tip)
-	v.add_child(_button("상태 아이콘: 크게" if status_diameter() == STATUS_SIZES[0] else "상태 아이콘: 작게", _set_status_size, Vector2(420, 64), 22))
+	v.add_child(_button("상태 아이콘: " + String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size, Vector2(420, 64), 22))
 	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
 
 
