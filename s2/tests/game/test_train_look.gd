@@ -870,3 +870,93 @@ func test_the_two_who_come_down_hug_their_knees() -> void:
 	assert_eq(rows.size(), 2)
 	for row in rows:
 		assert_eq(row["name"], Gesture.HUG_KNEES)
+
+# ---------------------------------------------------------------- the gestures of hunger
+
+## A community with only its warmth and ration set.
+func _sunk_comm(warm: float, food: float) -> Dictionary:
+	return {"rel": 0, "sit": [warm, food, 0, 0]}
+
+
+func test_the_ration_is_the_second_sit_value_and_sixty_without_one() -> void:
+	assert_eq(Look.ration({"sit": [35, 40, 75, 60]}), 40.0)
+	assert_eq(Look.ration({}), 60.0)
+
+
+func test_a_car_with_no_low_value_shows_neither_hunger_nor_cold() -> void:
+	assert_eq(Look.low_value({}), "")
+	assert_eq(Look.low_value(_sunk_comm(45.0, 45.0)), "")
+
+
+func test_the_lower_value_of_a_sunk_car_is_the_one_shown() -> void:
+	assert_eq(Look.low_value(_sunk_comm(35.0, 40.0)), "cold")
+	assert_eq(Look.low_value(_sunk_comm(35.0, 20.0)), "hunger")
+	assert_eq(Look.low_value(_sunk_comm(55.0, 30.0)), "hunger")
+	assert_eq(Look.low_value(_sunk_comm(30.0, 55.0)), "cold")
+
+
+func test_hunger_wins_when_cold_and_hunger_are_level() -> void:
+	assert_eq(Look.low_value(_sunk_comm(40.0, 40.0)), "hunger")
+
+
+func test_a_value_that_is_not_below_forty_five_is_not_shown() -> void:
+	assert_eq(Look.low_value(_sunk_comm(50.0, 44.9)), "hunger")
+	assert_eq(Look.low_value(_sunk_comm(44.9, 50.0)), "cold")
+
+
+func test_a_sunk_car_gestures_by_its_lower_value() -> void:
+	assert_eq(Look.gesture_for("low", {}, _sunk_comm(55.0, 30.0)), "hunger")
+	assert_eq(Look.gesture_for("low", {}, _sunk_comm(35.0, 40.0)), "cold")
+	assert_eq(Look.gesture_for("low", {}), "")
+
+
+func test_a_mood_that_is_not_sunk_keeps_its_own_value_whatever_the_ration() -> void:
+	var hungry := _sunk_comm(55.0, 30.0)
+	assert_eq(Look.gesture_for("calm", {}, hungry), "")
+	assert_eq(Look.gesture_for("stir", {"tension": 70.0}, hungry), "tension")
+	assert_eq(Look.gesture_for("frozen", {}, hungry), "fear")
+
+
+func test_a_car_with_a_low_ration_is_sunk() -> void:
+	assert_eq(Look.mood({"rel": 0, "sit": [55, 30, 0, 0]}, {}), "low")
+
+
+func test_the_first_two_on_the_bench_hold_a_bowl_each_on_a_beat_of_their_own() -> void:
+	var rows := Look.bench_gestures("hunger", 5)
+	assert_eq(rows.size(), 5)
+	assert_eq(_col(rows, "name"), [Gesture.BOWL_SIT, Gesture.BOWL_SIT, "", "", ""])
+	assert_eq(_col(rows, "role"), [0, 1, 0, 0, 0])
+
+
+func test_a_bench_of_one_has_one_bowl_and_no_bench_has_none() -> void:
+	var one := Look.bench_gestures("hunger", 1)
+	assert_eq(one.size(), 1)
+	assert_eq(one[0]["name"], Gesture.BOWL_SIT)
+	assert_eq(Look.bench_gestures("hunger", 0), [])
+
+
+func test_the_first_two_on_the_floor_lie_back_in_hunger() -> void:
+	var rows := Look.floor_gestures("hunger", 4)
+	assert_eq(rows.size(), 4)
+	assert_eq(_col(rows, "name"), [Gesture.SLUMP, Gesture.SLUMP, "", ""])
+
+
+func test_no_other_value_gives_the_bench_anything() -> void:
+	for value in ["fear", "tension", "resent", "cold", "", "nonsense"]:
+		assert_eq(_col(Look.bench_gestures(value, 4), "name"), ["", "", "", ""], "'%s'" % value)
+
+
+func test_hunger_gives_those_standing_about_nothing() -> void:
+	for car_index in range(3):
+		for row in Look.knot_gestures("hunger", 5, car_index):
+			assert_eq(row["name"], "", "car %d" % car_index)
+
+
+func test_one_hunched_by_the_cold_keeps_to_it_unless_the_gesture_hunches_too() -> void:
+	assert_false(Look.takes("", false))
+	assert_true(Look.takes(Gesture.BOWL_SIT, false))
+	assert_true(Look.takes(Gesture.SLUMP, false))
+	assert_false(Look.takes(Gesture.BOWL_SIT, true))
+	assert_false(Look.takes(Gesture.SLUMP, true))
+	assert_true(Look.takes(Gesture.HUG_KNEES, true))
+	assert_true(Look.takes(Gesture.HUG_KNEES, false))

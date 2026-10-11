@@ -57,11 +57,14 @@ const MOOD_LOOK: Dictionary = {
 ## car stirred by its own standing with the captain: arms folded, and one
 ## with its back turned. In a frightened car nobody stands about: a couple
 ## come down off the bench, roomy car or not, and the first few of those on
-## the floor hug their knees. For show only.
+## the floor hug their knees. In a car sunk by hunger the first two on the
+## bench hold an empty bowl and look into it, and the first two on the floor
+## lie back against the wall. Cold has no gestures yet. For show only.
 const GESTURES: Dictionary = {
 	"tension": {"pairs": [Gesture.ARGUE, Gesture.WHISPER], "one": Gesture.TURN_ABOUT},
 	"resent": {"each": [Gesture.ARMS_CROSSED, Gesture.BACK_TURNED, Gesture.ARMS_CROSSED]},
 	"fear": {"floor": [Gesture.HUG_KNEES, Gesture.HUG_KNEES, Gesture.HUG_KNEES]},
+	"hunger": {"bench": [Gesture.BOWL_SIT, Gesture.BOWL_SIT], "floor": [Gesture.SLUMP, Gesture.SLUMP]},
 }
 const GESTURE_PAIR: int = 2             # a quarrel takes two: in a tense car one stander alone keeps still
 const SLOT_STRIDE: int = 4
@@ -121,6 +124,10 @@ static func warmth(comm: Dictionary) -> float:
 	return _sit(comm, 0, 60.0)
 
 
+static func ration(comm: Dictionary) -> float:
+	return _sit(comm, 1, 60.0)
+
+
 static func crowding(comm: Dictionary) -> float:
 	return _sit(comm, 2, 0.0)
 
@@ -156,7 +163,7 @@ static func mood(comm: Dictionary, train: Dictionary) -> String:
 		return "calm"
 	if resents(comm):
 		return "stir"
-	if warmth(comm) < LOW_BELOW or _sit(comm, 1, 60.0) < LOW_BELOW:
+	if warmth(comm) < LOW_BELOW or ration(comm) < LOW_BELOW:
 		return "low"
 	return "calm"
 
@@ -171,16 +178,30 @@ static func mood_look(m: String) -> Dictionary:
 
 
 ## The bad value whose gestures a car of mood `m` shows first: "fear",
-## "tension", "resent" or "". Fear comes first, as it does in mood(). A car
-## is stirred by the train's tension or by its own standing with the
-## captain: on a tense train the tension comes first, and gesture_also()
-## says whether the car's own resentment shows beside it.
-static func gesture_for(m: String, train: Dictionary) -> String:
+## "tension", "resent", "hunger", "cold" or "". Fear comes first, as it
+## does in mood(). A car is stirred by the train's tension or by its own
+## standing with the captain: on a tense train the tension comes first, and
+## gesture_also() says whether the car's own resentment shows beside it. A
+## sunk car shows the lower of its two low values (low_value()).
+static func gesture_for(m: String, train: Dictionary, comm: Dictionary = {}) -> String:
 	if m == "frozen":
 		return "fear"
+	if m == "low":
+		return low_value(comm)
 	if m != "stir":
 		return ""
 	return "tension" if float(train.get("tension", 0)) >= TENSION_STIR else "resent"
+
+
+## Which of the two values that sink a car shows: "hunger" or "cold". One
+## value a car (2026-10-12): the lower of ration and warmth, hunger when they
+## are level, "" when neither is low.
+static func low_value(comm: Dictionary) -> String:
+	var food := ration(comm)
+	var heat := warmth(comm)
+	if food < LOW_BELOW and food <= heat:
+		return "hunger"
+	return "cold" if heat < LOW_BELOW else ""
 
 
 ## A second bad value a car shows beside the first (decision 137: one or
@@ -223,9 +244,24 @@ static func knot_gestures(value: String, standing: int, car_index: int, also: St
 ## [{"name", "role"}], name "" for sitting as they were. Only the first few
 ## act, each on a beat of its own (role).
 static func floor_gestures(value: String, on_floor: int) -> Array:
+	return _seated_gestures(value, "floor", on_floor)
+
+
+## The same for those on its bench, in bench order.
+static func bench_gestures(value: String, on_bench: int) -> Array:
+	return _seated_gestures(value, "bench", on_bench)
+
+
+## Whether one who sits takes a gesture: one the cold has hunched up keeps
+## to that, unless the gesture sits hunched itself.
+static func takes(name: String, huddled: bool) -> bool:
+	return name != "" and (not huddled or bool(Gesture.base_of(name)["huddled"]))
+
+
+static func _seated_gestures(value: String, where: String, seated: int) -> Array:
 	var out: Array = []
-	var each: Array = (GESTURES.get(value, {}) as Dictionary).get("floor", [])
-	for k in on_floor:
+	var each: Array = (GESTURES.get(value, {}) as Dictionary).get(where, [])
+	for k in seated:
 		var acts: bool = k < each.size()
 		out.append({"name": each[k] if acts else "", "role": k if acts else 0})
 	return out
