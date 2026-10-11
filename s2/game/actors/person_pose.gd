@@ -14,6 +14,7 @@ const MODE: String = "pose_mode"      # what the swing being drawn is: "swing", 
 const FOOT_SIZE: Vector3 = Vector3(0.18, 0.16, 0.4)
 const FOOT_REST: Vector3 = Vector3(0.12, 0.08, 0.1)
 const SWING: String = "pose_swing"    # the way back of the swing being drawn: how long it is in all
+const Protest = preload("res://game/actors/person_protest.gd")
 
 
 static func apply(p, lying: bool) -> void:
@@ -33,6 +34,11 @@ static func apply(p, lying: bool) -> void:
 		arms[i].rotation = t["rot"]
 	var sw: Array = swing_state(p)
 	if sw.is_empty():
+		# Left on the platform and shouting after the train (person_protest.gd); a blow or a shove is drawn first.
+		if p.shove_t <= 0.0 and p.lunge_t <= 0.0:
+			var mark: Dictionary = Protest.mark_of(p, Time.get_ticks_msec())
+			if not mark.is_empty():
+				_protest(p, arms, mark)
 		return
 	var mode: String = p.get_meta(MODE, "swing")
 	if mode == "stomp":
@@ -53,6 +59,18 @@ static func apply(p, lying: bool) -> void:
 	# The weapon hand goes with the weapon.
 	arms[1].position = (SHOULDER + w["pos"]) * 0.5
 	arms[1].rotation = Vector3(0.2, 0, 0)
+
+
+static func _protest(p, arms: Array, mark: Dictionary) -> void:
+	var d: Dictionary = Protest.at(int(mark.get("kind", 0)), float(mark.get("t", 0.0)))
+	var lean: float = d["lean"]
+	var lift: float = d["lift"]
+	for i in 2:
+		arms[i].position = d["arms"][i]["pos"] + Vector3(0, lift, 0)
+		arms[i].rotation = d["arms"][i]["rot"]
+	p.body_mesh.rotation.x += lean
+	p.body_mesh.position.y += lift - lean * 0.25
+	p.head_mesh.position += Vector3(0, lift - lean * 0.5, lean * 0.4)
 
 
 ## Where a melee swing is: [windup 0..1, way back 0..1, landed], or [] with no
