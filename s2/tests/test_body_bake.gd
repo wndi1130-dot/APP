@@ -83,7 +83,7 @@ func test_a_bake_is_written_and_read_back_the_same() -> void:
 	assert_false(bool(back["clips"][1]["loop"]))
 	assert_almost_eq((back["image"] as Image).get_pixel(1, 1).g, 2.25, 0.001, "metres past the 8 bit range survive the file")
 	assert_eq(VatBaker.shader_tables(back)["clip_start"][1], 3.0)
-	for file in ["vat.exr", "mesh.res", "clips.json"]:
+	for file in ["vat.bin", "mesh.res", "clips.json"]:
 		DirAccess.remove_absolute(dir.path_join(file))
 	DirAccess.remove_absolute(dir)
 

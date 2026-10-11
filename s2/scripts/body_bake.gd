@@ -446,17 +446,21 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	return VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips)
 
 
-## Writes vat.exr (half floats), mesh.res and clips.json into `dir`.
+## Writes vat.bin (the picture's half floats as they are: an exported game
+## cannot read EXR), mesh.res and clips.json into `dir`.
 static func save(assets: Dictionary, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	var image: Image = assets["image"]
-	var err := image.save_exr(dir.path_join("vat.exr"))
-	if err != OK:
-		push_error("body_bake: could not save vat.exr (" + error_string(err) + ")")
-	err = ResourceSaver.save(assets["mesh"], dir.path_join("mesh.res"))
+	var raw := FileAccess.open(dir.path_join("vat.bin"), FileAccess.WRITE)
+	if raw == null:
+		push_error("body_bake: could not save vat.bin")
+		return
+	raw.store_buffer(image.get_data())
+	raw.close()
+	var err := ResourceSaver.save(assets["mesh"], dir.path_join("mesh.res"))
 	if err != OK:
 		push_error("body_bake: could not save mesh.res (" + error_string(err) + ")")
-	var info := {"vertices": assets["vertices"], "rows_per_frame": assets["rows_per_frame"], "clips": assets["clips"]}
+	var info := {"vertices": assets["vertices"], "width": image.get_width(), "height": image.get_height(), "rows_per_frame": assets["rows_per_frame"], "clips": assets["clips"]}
 	var file := FileAccess.open(dir.path_join("clips.json"), FileAccess.WRITE)
 	if file == null:
 		push_error("body_bake: could not save clips.json")
@@ -464,21 +468,26 @@ static func save(assets: Dictionary, dir: String) -> void:
 	file.store_string(JSON.stringify(info, "\t"))
 
 
-## Reads what save wrote, in the shape build_skinned returns; {} if any of the three is missing.
+## Reads what save wrote, in the shape build_skinned returns; {} if any of the
+## three is missing or the picture is not the size clips.json says.
 static func load_baked(dir: String) -> Dictionary:
-	var image_path := dir.path_join("vat.exr")
+	var image_path := dir.path_join("vat.bin")
 	var mesh_path := dir.path_join("mesh.res")
 	var info_path := dir.path_join("clips.json")
 	for path in [image_path, mesh_path, info_path]:
 		if not FileAccess.file_exists(path):
 			return {}
-	var image := Image.load_from_file(image_path)
 	var mesh := ResourceLoader.load(mesh_path, "", ResourceLoader.CACHE_MODE_IGNORE) as Mesh
 	var info: Variant = JSON.parse_string(FileAccess.get_file_as_string(info_path))
-	if image == null or mesh == null or not info is Dictionary:
+	if mesh == null or not info is Dictionary:
 		return {}
-	if image.get_format() != Image.FORMAT_RGBH:
-		image.convert(Image.FORMAT_RGBH)
+	var width := int(info.get("width", 0))
+	var height := int(info.get("height", 0))
+	var data := FileAccess.get_file_as_bytes(image_path)
+	# Three half floats a texel.
+	if width <= 0 or height <= 0 or data.size() != width * height * 6:
+		return {}
+	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGBH, data)
 	var clips := []
 	for clip: Dictionary in info["clips"]:
 		clips.append({"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"])})
