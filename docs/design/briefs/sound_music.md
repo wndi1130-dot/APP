@@ -39,7 +39,7 @@
 | 젖은 발소리(열 쫓는 자) | 보일러로 간다 | 아니다 | [zombies.md:34](zombies.md) |
 | 크게 들이쉬는 소리(부르는 자) | 1~2초 안에 끊지 않으면 다음 무리가 앞당겨진다 | 울부짖음은 무리를 부른다 | [zombies.md:35](zombies.md) |
 | 비명, 피 냄새(1분마다 보통 소리 하나로 셈) | 지금 여기서 자를지 | 그렇다 | [field_system.md:72](field_system.md), [field_unified.md:146](field_unified.md) |
-| 망보는 사람·무전칸의 무리 예보 | 방향, 시각, 규모, 종류(투자할수록 정밀) | 아니다 | [zombies.md:97](zombies.md), [field_system.md:118](field_system.md) |
+| 망보는 사람·무전 자리의 무리 예보 | 방향, 시각, 규모, 종류(투자할수록 정밀) | 아니다 | [zombies.md:97](zombies.md), [field_system.md:118](field_system.md) |
 | 기관사의 석탄 무전("석탄 세 시간분 남았습니다") | 정차 시계 | 아니다 | [field_system.md:54](field_system.md) |
 | 열차장의 "출발" 무전 | 남은 인원이 열차로 모인다 | 아니다 | [field_system.md:59](field_system.md) |
 | 무리 끝 신호, '이제 떠나야 할 단계'의 기적 | 무리 결산, 떠날 때 | 기적은 세계 소음이어야 자연스럽다(5장) | [zombies.md:98](zombies.md) |

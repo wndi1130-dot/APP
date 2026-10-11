@@ -5,11 +5,13 @@
 //   --paired: 그 판에서 처음 나온 새 사건 카드마다, 같은 시드·같은 앞부분으로 다른 칸을 강제로 골라 다시 돌린다(rows[].forced).
 //   --stock: 낮아진 불(H01)·흰 바람(H08)이 처음 나온 순간 석탄·식량을 30씩 얹어(개입) 다시 돌린다(rows[].stock).
 //   --off: 새 사건 묶음을 끈 판(필수 조작 수 비교용).
+//   --inject=<사건 id>: 그 사건이 짝 비교에 잘 안 걸릴 때(조건이 드문 카드) 쓴다. 판이 정해진 구간에 닿으면 그 사건의 조건을 채우는 최소한의 상태(공동체 값·표식)를 얹고 카드를 맨 앞에 올린다.
+//     측정용 개입이지 게임 규칙이 아니다. 조건 밖에서 고르는 효과를 재는 것이라 실제 빈도와는 무관하다.
 // --reader는 새 사건 카드만 상태를 읽고 고르고 나머지 카드는 기준 봇 규칙을 따른다.
 // --stock의 얹기는 측정용 가정이지 게임의 새 규칙이 아니다. 뽑기 난수는 앞부분이 같아도 개입 뒤에는 달라질 수 있다.
 
 import { writeFileSync } from 'node:fs';
-import { COMMS, CONTENT_CARD_KIND, situation } from '../src/game';
+import { addContentCard, COMMS, CONTENT_CARD_KIND, situation } from '../src/game';
 import type { Game } from '../src/game';
 import { playGame, scoreChoice } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
@@ -26,6 +28,17 @@ const off = flags.includes('--off');
 const reader = flags.includes('--reader');
 
 const BASE: BotOptions = { s1c: true, policy: 'caretaker', dom: 'engaged', ...(off ? {} : { eventPack: true }) };
+const injectId = flags.find(f => f.startsWith('--inject='))?.slice('--inject='.length);
+/** 조건이 드문 카드: 이 구간부터 조건을 채우는 상태를 얹고 카드를 올린다(--inject). 값은 각 카드 trigger의 문턱을 겨우 넘기는 정도로만 잡았다. */
+const INJECT: Record<string, { seg: number; seed: (g: Game) => void }> = {
+  ev_b01_full_infirmary: { seg: 6, seed: g => { g.comms.medtech.base[2] = Math.max(g.comms.medtech.base[2], 72); } },
+  ev_b01_stoker_burn: { seg: 6, seed: g => { g.comms.engine.base[2] = Math.max(g.comms.engine.base[2], 62); } },
+  ev_b01_window_ice: { seg: 6, seed: g => { g.comms.front.base[0] = Math.min(g.comms.front.base[0], 40); } },
+  ev_h05_slow_fire: { seg: 6, seed: g => { (g.contentFlags ??= {}).h05_pending = true; } },
+  ev_h07_broken_word: { seg: 8, seed: g => { const f = (g.contentFlags ??= {}); f.h07_promise = true; f.front_pot_touched = true; } },
+  ev_h07_kept_word: { seg: 20, seed: g => { const f = (g.contentFlags ??= {}); f.h07_promise = true; f.front_pot_touched = false; } },
+};
+if (injectId && !INJECT[injectId]) throw new Error(`--inject 를 모르는 사건: ${injectId}`);
 const isPack = (id: string) => id.startsWith('ev_b01_') || /^ev_h\d\d_/u.test(id);
 
 interface Snap {
@@ -69,11 +82,16 @@ function run(seed: string, ro: RunOpts = {}): GameRow {
   const stops: StopRow[] = [];
   const pending: PickRow[] = [];
   const seenForce = new Set<string>();
+  let injected = false;
   const seenBump = new Set<string>();
   let cur: Omit<PickRow, 'after' | 'later'> | null = null;
   const { g, m } = playGame(seed, {
     ...BASE,
     forcePick: (gg, card, _view, open) => {
+      if (injectId && !injected && gg.seg >= INJECT[injectId].seg) {
+        INJECT[injectId].seed(gg);
+        injected = addContentCard(gg, injectId, true);
+      }
       if (card.kind !== CONTENT_CARD_KIND || !card.text) return undefined;
       if (ro.bump && ro.bump.ids.includes(card.text) && !seenBump.has(card.text)) {
         seenBump.add(card.text);
@@ -137,7 +155,7 @@ for (let i = FROM; i < TO; i += 1) {
     row.forced = {};
     const seen = new Set<string>();
     for (const p of base.picks) {
-      if (seen.has(p.id)) continue;
+      if (seen.has(p.id) || (injectId && p.id !== injectId)) continue; // --inject 판은 띄운 카드 하나만 짝 비교한다
       seen.add(p.id);
       const byIdx: Record<number, GameRow> = {};
       // 기준 판이 고른 칸은 base 기록을 그대로 쓰고, 나머지 열린 칸만 다시 돌린다.

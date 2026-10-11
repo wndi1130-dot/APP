@@ -764,10 +764,11 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
   const def = LAWS[law];
   // 개정(7.3): 변형이 서면 원래 법은 내려간다. 폐지가 아니라 고쳐 쓴 것이라 지지 칸 반발·약속 배신은 없다.
   const base = LAW_VARIANT_OF[law];
+  let carried: { comms: Comm[]; session: number } | undefined;
   if (base && g.passed[base] !== undefined) {
     delete g.passed[base];
-    // 빈틈(내정 스레드 2026-10-07): 표를 사서 세운 원래 법을 개정하면 boughtBy가 지워져 약속 배신 셈을 피한다.
-    // 변형을 여는 기술이 셋(M3 가, X1, M2)뿐이라 두지만, S3에서 거래가 늘면 boughtBy를 변형 법으로 넘긴다(추천).
+    // 표를 사서 세운 원래 법을 개정하면 그 거래는 변형 법이 이어받는다(시스템 통합 보고서 A23): 변형을 3회기 안에 뒤집으면 배신이다.
+    carried = g.boughtBy[base];
     delete g.boughtBy[base];
     g.repealedAt[base] = g.session;
     for (const c of COMMS) {
@@ -777,7 +778,8 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
     journal(g, `${LAWS[base].title}을(를) ${def.title}(으)로 고쳤다.`);
   }
   g.passed[law] = g.session;
-  if (boughtFrom.length > 0) g.boughtBy[law] = { comms: boughtFrom, session: g.session };
+  if (boughtFrom.length > 0) g.boughtBy[law] = { comms: [...new Set([...(carried?.comms ?? []), ...boughtFrom])], session: g.session };
+  else if (carried) g.boughtBy[law] = carried;
   for (const c of COMMS) {
     const m = def.mats[c];
     if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] += m[i];
