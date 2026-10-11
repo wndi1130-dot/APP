@@ -66,10 +66,13 @@
 .btn--small { min-height: 30px; padding: 0 12px; font-size: 12px; }
 .dom-order .nav, .dom-move .nav { height: 28px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface-3); color: var(--ink-1); }
 .dom-order .nav:disabled, .dom-move .nav:disabled { opacity: .35; }
-.dom-mats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 12px; color: var(--ink-2); }
-.dom-mat { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 4px; }
-.dom-mat .mini-bar { grid-column: 1 / -1; }
-.dom-mat b { color: var(--ink-1); }
+/* 창고의 자원 네모 넷: 이름, 큰 숫자, 상한이 있으면 막대. */
+.dom-mats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.dom-box { min-width: 0; display: grid; gap: 2px; align-content: start; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.dom-box__label { font-size: 12px; color: var(--ink-2); }
+.dom-box b { font-size: 16px; line-height: 1.2; color: var(--ink-1); }
+.dom-box b small { font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.dom-box.is-over b { color: var(--discontent); }
 .dom-tag { display: inline-flex; gap: 6px; font-size: 11px; color: var(--ink-3); margin-left: auto; white-space: nowrap; }
 .dom-tag + .x { margin-left: 0; }
 .dom-tag .chip { min-height: 22px; padding: 0 6px; font-size: 11px; }
