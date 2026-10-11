@@ -303,6 +303,7 @@ func _crew(p, delta: float, think: bool) -> void:
 			_walk(p, drop, false)
 			return
 		game.actions.coal_delivered += float(p.brain.get("load", 0.0))
+		game.telemetry.trip()
 		p.brain["load"] = 0.0
 		p.brain["job"] = "dig"
 

@@ -17,6 +17,11 @@ var carry_seconds: float = 0.0
 var track_dead: Dictionary = {"west": 0, "east": 0}
 var end_reason: String = ""
 var end_t: float = -1.0
+## For comparing kinds of stop (content_variety_first_build 5.5): what being
+## quiet bought, and how much of the stay was hauling back and forth.
+var rests: Array[Array] = []    # [from, until]: the breather after a horde was cleared
+var lost: Array[float] = []     # when the squad shook the dead off
+var trips: int = 0              # loads put down at the train (crew and squad)
 ## What the stop was for (field_game MISSIONS); "" writes no key at all.
 var mission: String = ""
 ## Each goal of the stop: {"id", "state", "t"} (sim/mission.gd), written with the kind.
@@ -66,6 +71,21 @@ func carry_time(delta: float) -> void:
 		carry_seconds += delta
 
 
+## A horde was cleared at field second t; the next one is held until `until`.
+func rest(t: float, until: float) -> void:
+	if until > t:
+		rests.append([t, until])
+
+
+func lost_at(t: float) -> void:
+	lost.append(t)
+
+
+## One load put down at the train.
+func trip() -> void:
+	trips += 1
+
+
 func track(west: int, east: int) -> void:
 	track_dead = {"west": maxi(west, 0), "east": maxi(east, 0)}
 
@@ -96,6 +116,12 @@ func to_dict() -> Dictionary:
 	var injury_out: Array = []
 	for i: Dictionary in injuries:
 		injury_out.append({"t": _r(i["t"]), "who": i["who"], "kind": i["kind"]})
+	var rest_out: Array = []
+	for r: Array in rests:
+		rest_out.append([_r(r[0]), _r(r[1])])
+	var lost_out: Array = []
+	for t: float in lost:
+		lost_out.append(_r(t))
 	var out := {
 		"v": VERSION,
 		"run": run_id,
@@ -108,6 +134,9 @@ func to_dict() -> Dictionary:
 		"injuries": injury_out,
 		"ammo": ammo_used.duplicate(),
 		"trackDead": track_dead.duplicate(),
+		"rests": rest_out,
+		"lost": lost_out,
+		"trips": trips,
 	}
 	if mission != "":
 		out["mission"] = mission

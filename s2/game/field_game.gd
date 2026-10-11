@@ -1392,6 +1392,7 @@ func _update_hordes(delta: float) -> void:
 	if _squad_hunted():
 		director.noticed(now)
 	elif director.update_lost(now):
+		telemetry.lost_at(now)
 		set_radio("기관사: 놓친 것 같다. 다음 것들이 늦어진다. 숨 돌려라.")
 	var h := director.update(now)
 	if not h.is_empty():
@@ -1415,6 +1416,7 @@ func _update_hordes(delta: float) -> void:
 				if now - float(t) < 60.0:
 					recent += 1
 			director.horde_cleared(now, recent)
+			telemetry.rest(now, director.rest_until)
 			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
 
 

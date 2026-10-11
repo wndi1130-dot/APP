@@ -869,4 +869,5 @@ func _auto_unload() -> void:
 			put.append("%s %d" % [game.item_name(id), n])
 			p.items.erase(id)
 		if not put.is_empty():
+			game.telemetry.trip()
 			game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])

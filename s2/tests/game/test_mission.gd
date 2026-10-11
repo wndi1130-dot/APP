@@ -207,3 +207,34 @@ func test_how_the_goals_stood_goes_on_the_receipt_and_the_run_log() -> void:
 	assert_eq(rows[0]["id"], "outside")
 	assert_eq(rows[0]["state"], "part")
 
+
+# ---------------------------------------------------------------- the run log in the field
+
+func test_a_cleared_horde_logs_its_breather_and_a_shaken_off_chase_its_time() -> void:
+	var game = _game({})
+	game.zombies.list.clear()
+	game.pending_spawn.clear()
+	game.hordes[1] = {"t": 0.0, "ids": [], "cleared": false, "entry": "east_track"}
+	game._update_hordes(0.1)
+	var rests: Array = game.telemetry.rests
+	assert_eq(rests.size(), 1)
+	assert_almost_eq(float(rests[0][1]) - float(rests[0][0]), game.director.REST_BASE, 0.001)
+	assert_almost_eq(float(rests[0][1]), game.director.rest_until, 0.001, "read from the director, not worked out again")
+	game.director.noticed(game.clock.elapsed - game.director.LOST_QUIET - 1.0)
+	game._update_hordes(0.1)
+	assert_eq(game.telemetry.lost.size(), 1)
+	game._update_hordes(0.1)
+	assert_eq(game.telemetry.lost.size(), 1, "once for one escape")
+
+
+func test_loads_put_down_at_the_train_are_counted() -> void:
+	var game = _game({})
+	var p = game.player
+	p.add_item("scrap", 2)
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.actions._auto_unload()
+	assert_eq(game.telemetry.trips, 1)
+	game.actions._auto_unload()
+	assert_eq(game.telemetry.trips, 1, "empty hands are not a load")
+
