@@ -25,7 +25,7 @@ function makeContext(): AudioContext | null {
 
 export function installSound(root: HTMLElement): void {
   const clips = clipTable(FILES);
-  const engine = createEngine({ makeContext, clips, tracks: trackTable(STALL_FILES), load: url => fetch(url).then(r => r.arrayBuffer()), onReady: () => onBeat() });
+  const engine = createEngine({ makeContext, clips, tracks: trackTable(STALL_FILES), load: url => fetch(url).then(r => r.arrayBuffer()) });
   const plan = createPlanner(Object.fromEntries(CUES.map(c => [c, clips[c].length])) as Record<Cue, number>);
   const fire = (cue: Cue) => {
     const shot = plan(cue, performance.now());
@@ -69,24 +69,18 @@ export function installSound(root: HTMLElement): void {
     if (el?.tagName === 'INPUT' && el.type === 'range') fire('lever.notch');
   });
 
-  // 멈춘 열차의 소리(결정 101): 화면이 홈 뿌리에 붙이는 data-beat와 data-stranded가 바뀌는 것만 지켜본다(stall.ts).
+  // 멈춘 열차로 들어가는 연출(결정 101): 화면이 홈 뿌리에 붙이는 data-beat가 바뀌는 것만 지켜본다(stall.ts).
   // 화면이 다시 그려져 홈이 새로 만들어져도 값이 같으면 같은 박이다.
   const stall = createStallPlan();
-  function onBeat(): void {
+  const onBeat = () => {
     const beat = root.querySelector<HTMLElement>('[data-beat]')?.dataset.beat ?? null;
-    // 서 있는가. 홈이 안 보이는 화면(열차 관리, 의회)에서는 모른다(null): 바람을 그대로 둔다.
-    // 판이 끝난 화면과 멈춘 화면에서는 서 있는 것이 아니다.
-    const home = root.querySelector('section.home');
-    const stranded = home ? home.hasAttribute('data-stranded') : root.querySelector('section.end, section.crash') ? false : null;
-    for (const act of stall(beat, soundOn(), stranded)) {
-      if (act.do === 'hold') {
-        if (!engine.hold(act.track, act)) stall.missed(act.track);
-      } else if (act.do === 'bend') engine.bend(act.track, act.rate, act.gain, act.ms);
+    for (const act of stall(beat, soundOn())) {
+      if (act.do === 'hold') engine.hold(act.track, act);
+      else if (act.do === 'bend') engine.bend(act.track, act.rate, act.gain, act.ms);
       else engine.release(act.track, act.ms);
     }
-  }
+  };
   if (typeof MutationObserver !== 'undefined') {
-    new MutationObserver(onBeat).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-beat', 'data-stranded'] });
+    new MutationObserver(onBeat).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-beat'] });
   }
-  onBeat(); // 서 있는 채로 연 판이면 표식이 이미 붙어 있다
 }

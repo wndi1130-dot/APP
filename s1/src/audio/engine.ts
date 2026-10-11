@@ -16,8 +16,6 @@ export interface EngineDeps {
   load: (url: string) => Promise<ArrayBuffer>;
   /** 긴 소리(되풀이하거나 한 번 길게 나는 것)의 이름 → 파일 주소. 없으면 긴 소리는 쓰지 않는다 */
   tracks?: Record<string, string | undefined>;
-  /** 장치가 깨었거나 파일이 하나 풀릴 때마다 부른다. 그때까지 못 켠 되풀이를 다시 켤 기회다 */
-  onReady?: () => void;
   /** 지금 시각(ms). 시험에서 바꿔 넣는다 */
   now?: () => number;
 }
@@ -67,7 +65,7 @@ export function createEngine(deps: EngineDeps): Engine {
     for (const [url, data] of raw) {
       raw.delete(url);
       // 못 푼 파일은 그 소리만 안 난다.
-      decode(c, data).then(buffer => { buffers.set(url, buffer); ready(); }, () => {});
+      decode(c, data).then(buffer => { buffers.set(url, buffer); flush(); }, () => {});
     }
   }
 
@@ -85,13 +83,7 @@ export function createEngine(deps: EngineDeps): Engine {
       master.connect(ctx.destination);
       decodeAll();
     }
-    if (ctx.state !== 'running') ctx.resume().then(ready, () => {});
-  }
-
-  /** 장치가 깨었거나 파일이 하나 풀렸다 */
-  function ready(): void {
-    flush();
-    deps.onReady?.();
+    if (ctx.state !== 'running') ctx.resume().then(flush, () => {});
   }
 
   /** 기다리던 소리가 있으면 낸다. 너무 늦었으면 버린다 */
