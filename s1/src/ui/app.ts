@@ -678,6 +678,12 @@ export function startApp(root: HTMLElement): void {
       case 'tip': // 폰엔 title 툴팁이 없어, 설명 글자를 탭하면 쪽지로 띄운다(내정 시간 측정은 domesticOp가 세지 않는다)
         if (data.tip) toast(data.tip, 'info', 5000);
         return render();
+      case 'log-more': {
+        const seg = Number(data.seg);
+        const open = ui.logOpen ?? [];
+        ui.logOpen = open.includes(seg) ? open.filter(x => x !== seg) : [...open, seg];
+        return render();
+      }
       case 'slip-close':
         ui.slipOff = ui.fx?.id;
         return render();
