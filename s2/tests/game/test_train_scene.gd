@@ -94,6 +94,16 @@ func _stray(s, limit: int) -> Array:
 	return bad
 
 
+## The bodies of the whole train that are out on a call at a friendly car.
+func _callers(s) -> Array:
+	var rows: Array = []
+	for c in s.cars:
+		for b in c["bodies"]:
+			if (b.state == "out" or b.state == "visit" or b.state == "back") and String(b.errand.get("id", "")) == "call":
+				rows.append(b)
+	return rows
+
+
 func _tripping(s) -> bool:
 	for c in s.cars:
 		for b in c["bodies"]:
@@ -305,6 +315,7 @@ func test_when_no_new_trips_start_everyone_comes_home() -> void:
 	for i in 600:
 		s.step(0.1)
 	s.rules["errands"] = []
+	s.rules.erase("calls")
 	# A low car walks at 0.6: two cars there and back with a stay is two and a half minutes.
 	for i in 2500:
 		s.step(0.1)
@@ -317,6 +328,65 @@ func test_when_no_new_trips_start_everyone_comes_home() -> void:
 			if b.state != "seat" and (x < x0 or x > x0 + Scene.CAR_LENGTH):
 				strays.append("%s: x %s" % [c["id"], x])
 	assert_eq(strays.slice(0, 3), [], "walkers are back in their own car")
+
+
+# ---------------------------------------------------------------- calls between friendly cars
+
+func test_friendly_cars_call_on_each_other_and_the_tail_calls_on_nobody() -> void:
+	var s = _scene()
+	s.rules["errands"] = []
+	var called: Dictionary = {}
+	var bad: Array = []
+	for i in 1500:
+		s.step(0.1)
+		for b in _callers(s):
+			called[String(b.visit_car)] = true
+			if b.state != "visit":
+				continue
+			var x0: float = s.car(String(b.visit_car))["x0"]
+			var from_door: float = minf(absf(b.position.x - x0), absf(b.position.x - x0 - Scene.CAR_LENGTH))
+			if absf(from_door - Scene.CALL_INSIDE) > 0.05 or not is_equal_approx(b.position.z, Scene.AISLE_Z):
+				bad.append("a caller stands at %s" % b.position)
+		if int(s.car("tail1")["out"]) != 0:
+			bad.append("the tail sent someone")
+	assert_true(called.has("front") or called.has("medtech"), "the infirmary and the front car are on calling terms")
+	assert_eq(called.keys().filter(func(id) -> bool: return id != "front" and id != "medtech"), [], "nobody calls anywhere else")
+	assert_eq(bad.slice(0, 3), [], "a caller stops just inside the doorway, on the aisle")
+
+
+func test_someone_of_the_car_comes_over_to_a_caller() -> void:
+	var s = _scene()
+	var caller = s.car("medtech")["bodies"][0]
+	var host: Dictionary = s.car("front")
+	caller.visit_car = "front"
+	caller.position.x = float(host["x0"]) + Scene.CALL_INSIDE
+	assert_true(s._greet(caller))
+	var came := 0
+	for h in host["bodies"]:
+		if h.state == "pace":
+			came += 1
+			assert_almost_eq(float(h.goal_x), caller.position.x + Scene.CALL_APART, 0.001, "beside the caller, further in")
+	assert_eq(came, 1, "one comes over, the others stay as they were")
+	for h in host["bodies"]:
+		if h.state == "wait":
+			h.state = "pace"
+	assert_false(s._greet(caller), "with everyone walking the caller waits for the first who is free")
+
+
+func test_nobody_calls_in_a_frightened_train_during_the_session_or_without_the_rule() -> void:
+	for setting in [["fear", 70.0], ["phase", "council"], ["", null]]:
+		var s = _scene()
+		s.rules["errands"] = []
+		if String(setting[0]) == "":
+			s.rules.erase("calls")
+		else:
+			s.set_train(setting[0], setting[1])
+		var out := 0
+		for i in 1200:
+			s.step(0.1)
+			for c in s.cars:
+				out += int(c["out"])
+		assert_eq(out, 0, "nobody left a car: %s" % str(setting[0]))
 
 
 # ---------------------------------------------------------------- bad rules

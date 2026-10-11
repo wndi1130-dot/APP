@@ -319,6 +319,51 @@ func test_frost_grows_as_the_car_cools_and_the_stove_dies() -> void:
 		assert_lte(Look.stove(colder), Look.stove(warmer), "stove at %s and %s" % [colder, warmer])
 
 
+# ---------------------------------------------------------------- calls between friendly cars
+
+func test_the_gap_between_two_communities_sums_the_three_axes() -> void:
+	assert_eq(Look.ideo_gap([1, -1, -1], [1, -1, -1]), 0.0)
+	assert_eq(Look.ideo_gap([1, -1, -1], [-1, 1, 1]), 6.0)
+	assert_eq(Look.ideo_gap([0, -1, 1], [-1, -1, 1]), 1.0)
+
+
+func test_friends_are_the_communities_close_on_the_axes_and_both_ways() -> void:
+	var ideo: Dictionary = rules["ideo"]
+	assert_eq(Look.friends("medtech", ideo, 1.0), ["front"])
+	assert_eq(Look.friends("front", ideo, 1.0), ["medtech"])
+	assert_eq(Look.friends("engine", ideo, 1.0), ["guard"])
+	assert_eq(Look.friends("guard", ideo, 1.0), ["engine"])
+	assert_eq(Look.friends("tail", ideo, 1.0), [], "the tail stands far from everyone")
+	for a in ideo:
+		for b in Look.friends(String(a), ideo, 2.0):
+			assert_true(Look.friends(b, ideo, 2.0).has(String(a)), "%s and %s" % [a, b])
+		assert_false(Look.friends(String(a), ideo, 6.0).has(String(a)), "nobody calls on themselves")
+
+
+func test_without_axes_nobody_is_a_friend() -> void:
+	assert_eq(Look.friends("medtech", {}, 1.0), [])
+	assert_eq(Look.friends("strangers", rules["ideo"], 6.0), [])
+
+
+func test_a_car_calls_at_the_cars_of_its_friends_only() -> void:
+	var cars: Array = rules["cars"]
+	var ideo: Dictionary = rules["ideo"]
+	assert_eq(Look.calls_for(_car("medtech"), cars, ideo, 1.0), ["front"])
+	assert_eq(Look.calls_for(_car("front"), cars, ideo, 1.0), ["medtech"])
+	assert_eq(Look.calls_for(_car("tail1"), cars, ideo, 1.0), [])
+	assert_eq(Look.calls_for(_car("dining"), cars, ideo, 6.0), [], "no community, no calls")
+	var two_tails: Array = cars.duplicate(true)
+	two_tails.append({"id": "tail2", "kind": "comm", "comm": "tail"})
+	assert_false(Look.calls_for(_car("tail1"), two_tails, ideo, 6.0).has("tail2"), "its own people's other car is not a call")
+	assert_false(Look.calls_for(_car("tail1"), two_tails, ideo, 6.0).has("dining"))
+
+
+func test_nobody_calls_in_a_frightened_car_or_during_the_session() -> void:
+	for m in MOODS:
+		assert_eq(Look.calls_open(m, "travel"), m != "frozen", m)
+		assert_false(Look.calls_open(m, "council"), m)
+
+
 # ---------------------------------------------------------------- trips
 
 func test_a_car_without_a_community_sends_nobody() -> void:

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Stand-in for the rule values until the politics port feeds the same shape. Names follow s1/src/game: comms.<id>.sit is situation(g, c) = [warmth, ration, crowding, exposure], train.tension / train.fear / train.phase are Game fields, cars are s1/src/ui/common.ts CARS. The numbers are the S1 start values.",
+  "note": "Stand-in for the rule values until the politics port feeds the same shape. Names follow s1/src/game: comms.<id>.sit is situation(g, c) = [warmth, ration, crowding, exposure], train.tension / train.fear / train.phase are Game fields, cars are s1/src/ui/common.ts CARS, ideo is data.ts IDEO. The numbers are the S1 start values; errands and calls are first values.",
   "train": { "phase": "travel", "tension": 20, "fear": 0, "trust": 50 },
   "comms": {
     "tail": { "name": "꼬리칸", "pop": 90, "away": 0, "rel": -20, "grudge": 0, "sit": [35, 40, 75, 60] },
@@ -20,5 +20,9 @@
     { "id": "council", "to": "dining", "phase": "council", "every": 6.0, "stay": 20.0 },
     { "id": "meal", "to": "dining", "phase": "", "every": 16.0, "stay": 7.0 },
     { "id": "sick", "to": "medtech", "phase": "", "every": 40.0, "stay": 9.0 }
-  ]
+  ],
+  "ideo": {
+    "tail": [1, -1, -1], "medtech": [0, -1, 1], "guard": [-1, 1, 0], "front": [-1, -1, 1], "engine": [-1, 1, 1]
+  },
+  "calls": { "within": 1, "every": 40.0, "stay": 10.0 }
 }

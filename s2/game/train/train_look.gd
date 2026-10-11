@@ -1,7 +1,8 @@
 extends RefCounted
 ## What a car shows for the state it is in: how many people are in it, how
-## many of them move, where each one sits and who may walk to another car. It
-## reads the rules' numbers and changes none of them.
+## many of them move, where each one sits, who may walk to another car and
+## which cars are on calling terms. It reads the rules' numbers and changes
+## none of them.
 ##
 ## Head counts are s1/src/ui/home.ts figures(); the warmth and crowding steps
 ## are S1's (warmthTone, P.crowdFrom). The shares below are first values: the
@@ -198,6 +199,46 @@ static func errands_for(car: Dictionary, phase: String, errands: Array) -> Array
 		if only == "" or only == phase:
 			rows.append(e)
 	return rows
+
+
+## How far apart two communities stand on S1's three axes (IDEO), summed.
+static func ideo_gap(a: Array, b: Array) -> float:
+	var gap := 0.0
+	for i in mini(a.size(), b.size()):
+		gap += absf(float(a[i]) - float(b[i]))
+	return gap
+
+
+## The communities this one is on calling terms with. S1 keeps no number for
+## how two communities get on, so for now it is those that stand within
+## `within` of it on the three axes (2026-10-12: a first reading, for show only).
+static func friends(comm_id: String, ideo: Dictionary, within: float) -> Array:
+	var rows: Array = []
+	if not ideo.has(comm_id):
+		return rows
+	for other in ideo:
+		if String(other) != comm_id and ideo_gap(ideo[comm_id], ideo[other]) <= within:
+			rows.append(String(other))
+	rows.sort()
+	return rows
+
+
+## The cars this car's people may call at, by id: the cars of the communities
+## it is on calling terms with. A car without a community calls nowhere.
+static func calls_for(car: Dictionary, cars: Array, ideo: Dictionary, within: float) -> Array:
+	var rows: Array = []
+	if not car.has("comm"):
+		return rows
+	var near := friends(String(car["comm"]), ideo, within)
+	for other in cars:
+		if other.has("comm") and near.has(String(other["comm"])):
+			rows.append(String(other["id"]))
+	return rows
+
+
+## Nobody goes calling in a frightened car or during the session.
+static func calls_open(m: String, phase: String) -> bool:
+	return m != "frozen" and phase != "council"
 
 
 static func _sit(comm: Dictionary, i: int, fallback: float) -> float:
