@@ -32,8 +32,10 @@ const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds 
 const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61}
 const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
 static var rounds: Dictionary = {}             # what the baked folder in use measured (see assets)
-static var table: Array = []                   # its motions: [first frame, frames, loops] each
+static var table: Array = []                   # its motions: [first frame, frames, loops, seconds] each
 
+const SECONDS: Dictionary = {STAND: 3.0, LUNGE: 1.0}   # a round of each, for a folder that does not say
+const SWAY_CAP: float = 0.1                   # a longer gap between two drawings is not played through
 const MIX_TIME: float = 0.2                   # a body changing motion keeps something of the frame it was in this long
 const MIX_STEPS: float = 63.0                 # how finely the shader is told how much (see dead_vat.gdshader)
 
@@ -61,7 +63,7 @@ static func can_mix() -> bool:
 static func table_of(vat: Dictionary) -> Array:
 	var out := []
 	for clip: Dictionary in vat.get("clips", []):
-		out.append([int(clip["start"]), int(clip["frames"]), bool(clip["loop"])])
+		out.append([int(clip["start"]), int(clip["frames"]), bool(clip["loop"]), float(clip["length"])])
 	return out
 
 
@@ -120,8 +122,7 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 	return mixed(z, plain) if baked else plain
 
 
-## The frame of the picture a motion is at for r (for a motion the shader's
-## clock runs, where the body's own number starts it: near enough).
+## The frame of the picture a motion is at for r.
 static func frame_of(motion: int, r: float) -> int:
 	if motion < 0 or motion >= table.size():
 		return 0
@@ -190,15 +191,15 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 			return Color(1.0 - down, float(RISE_FRONT if front else RISE), 1.0, shade)
 		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
-		return Color(phase, float(LUNGE), still, shade)
+		return Color(swayed(z, LUNGE, still), float(LUNGE), 1.0, shade)
 	if state == "frozen" or state == "waking":
-		return Color(phase, float(STAND), still, shade)
+		return Color(swayed(z, STAND, still), float(STAND), 1.0, shade)
 	# Its feet go by the ground it has covered, not by the clock: a wanderer
 	# plods and one hurrying steps quicker, on the same walk.
 	var gait := gait_of(z)
 	var at := step(z, gait)
 	if kept_still(z):
-		return Color(phase, float(STAND), still, shade)
+		return Color(swayed(z, STAND, still), float(STAND), 1.0, shade)
 	return Color(at, float(gait), 1.0, shade)
 
 
@@ -237,6 +238,23 @@ static func moved(z: Dictionary) -> float:
 		z["body_since"] = z["age"]
 	z["body_at"] = at
 	return gone
+
+
+## Where in a round of a motion that goes by the clock (standing, lunging) a
+## body is, 0..1. The drawing side keeps that clock itself, off the body's
+## age, so that it knows the frame (the shader's own clock is not used for a
+## baked body). It starts from the body's own number and each body goes at its
+## own pace (0.82..1.18, as the shader had it); `still` 1 holds it.
+static func swayed(z: Dictionary, motion: int, still: float) -> float:
+	var age: float = z["age"]
+	var gone := clampf(age - float(z.get("body_age", age)), 0.0, SWAY_CAP)
+	z["body_age"] = age
+	var at: float = z.get("body_sway", z["phase"])
+	var seconds: float = table[motion][3] if motion < table.size() and table[motion].size() > 3 else float(SECONDS[motion])
+	var pace := lerpf(0.82, 1.18, fposmod(float(z["phase"]) * 7.31, 1.0))
+	at = fposmod(at + gone * pace * (1.0 - still) / maxf(seconds, 0.001), 1.0)
+	z["body_sway"] = at
+	return at
 
 
 ## Where in a round of its walk (or run, or crawl) a body is, 0..1: it goes on
