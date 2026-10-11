@@ -95,16 +95,16 @@ func test_depart_note_holds_the_mix_and_leave_plays_its_beats_in_order() -> void
 	assert_eq(a.played, ["impact", "pen", "whistle"])
 
 
-func test_the_shipped_files_load_and_the_two_not_found_yet_stay_silent() -> void:
+func test_the_shipped_files_load() -> void:
 	var a = game.audio
-	for g in ["moan", "horde_bed", "gather", "impact", "gun", "step_snow", "wind", "train_idle", "whistle"]:
+	for g in ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen"]:
 		var list: Array = a._load_group(g)
 		assert_gt(list.size(), 0, g)
 		for s in list:
 			assert_gt(s.get_length(), 0.1, g)
 	assert_eq(a._load_group("moan").size(), 8)
-	for g in ["birds", "pen"]:
-		assert_eq(a._load_group(g).size(), 0, g)
+	assert_eq(a._load_group("birds").size(), 1)
+	assert_eq(a._load_group("pen").size(), 3)
 
 
 func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> void:
