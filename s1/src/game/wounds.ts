@@ -89,6 +89,47 @@ export function syncInjured(g: Game): void {
   g.injured = book(g).filter(isActive).length;
 }
 
+// ---- 화면에 넘기는 읽기 전용 값 ----
+export const GRADE_NAME: Record<WoundGrade, string> = { light: '가벼운 상처', deep: '깊은 상처', fracture: '골절', amputation: '절단' };
+
+/** 치료 자리: 침상에서 치료 중(bed), 침상이 모자라 제 칸에서 버팀(home), 일어났지만 아직 낫지 않음(up). */
+export type WoundCare = 'bed' | 'home' | 'up';
+
+export interface WoundRow {
+  id: number;
+  who: string;
+  personId?: string;
+  comm: Comm;
+  part: WoundPart;
+  partName: string;
+  grade: WoundGrade;
+  gradeName: string;
+  /** 낫기까지 남은 구간 */
+  daysLeft: number;
+  care: WoundCare;
+  septic: boolean;
+  /** 하루 의약품(곪음 포함) */
+  medPerDay: number;
+}
+
+/**
+ * 의료 화면용 한 줄 묶음. 활성 기록만, 생긴 순서(구간, id)로 준다. 상태·난수·장부를 건드리지 않는다.
+ * 누구를 먼저 볼지의 순서는 규칙이라 여기서 정하지 않는다.
+ */
+export function woundView(g: Game, comm?: Comm): WoundRow[] {
+  return [...activeWounds(g, comm)].sort((a, b) => a.at - b.at || a.id - b.id).map(w => ({
+    id: w.id, who: w.who, ...(w.personId ? { personId: w.personId } : {}), comm: w.comm,
+    part: w.part, partName: PART_NAME[w.part], grade: w.grade, gradeName: GRADE_NAME[w.grade],
+    daysLeft: w.daysLeft, care: w.state === 'bed' ? 'bed' : w.state === 'home' ? 'home' : 'up',
+    septic: w.septic, medPerDay: medPerDay(w),
+  }));
+}
+
+/** 수만 세어 둔 부상자(명부에 이름이 없는 몫). 규칙이 명부를 채우기 전에는 g.injured 전부가 여기 든다. */
+export function unnamedInjured(g: Game): number {
+  return Math.max(0, Math.floor(g.injured) - activeWounds(g).length);
+}
+
 // ---- 값 ----
 function baseDays(grade: WoundGrade, part: WoundPart, coin: number): number {
   if (grade === 'light') return 1;
