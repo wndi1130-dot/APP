@@ -10,7 +10,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 import { nameBtn } from './names';
 import { carPopover, spaceLever, spaceTab, stackCount, warmthTone } from './home';
-import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, potDot, trainCars } from './domestic';
+import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, hungMark, potDot, trainCars, wallPeg, wallRow } from './domestic';
 
 // 열차 관리 화면(S1c, 사용자 2026-10-11): 칸을 누르면 작은 창이 아니라 화면 전체가 바뀐다.
 // 위에 열차 전체 띠, 가운데에 누른 칸의 판(상태·조절·공방 세 덩이), 아래에 단추 여섯.
@@ -58,6 +58,7 @@ function stripCar(g: Game, car: CarDef, sel: CarDef): HTMLElement {
     name,
     h('span', { class: 'tcar__marks' },
       car.comm ? h('i', { class: `tcar__dot is-${relTone(g, car.comm)}` }) : null,
+      hungMark(g, car),
       car.id === 'workshop' ? gear(workshopState(g).mode) : null,
       pct !== null ? h('small', { class: 'num' }, `${pct}%`) : null));
 }
@@ -77,7 +78,9 @@ function commBoard(view: View, car: CarDef): HTMLElement {
   return h('div', { class: 'carpop tpop', role: 'region', 'aria-label': `${car.name} 판` },
     h('div', { class: 'tpop__head' },
       h('b', { class: 'tpop__name' }, car.name),
+      wallPeg(view, car),
       h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
+    wallRow(view, car),
     h('div', { class: 'tpop__body' },
       blk('상태',
         h('div', { class: 'tblk__row' },
@@ -89,7 +92,7 @@ function commBoard(view: View, car: CarDef): HTMLElement {
           h('span', null, tip('배급', TIP.ration), h('b', { class: 'num' }, fmt(r)), bar(r, r < 45 ? '--discontent' : '--ink-3')),
           h('span', null, tip('과밀', TIP.crowding), h('b', { class: 'num' }, fmt(cr)), bar(cr, cr > 60 ? '--discontent' : '--ink-3')),
           h('span', null, tip('노출', TIP.exposure), h('b', { class: 'num' }, fmt(ex)), bar(ex, ex > 50 ? '--discontent' : '--ink-3'))),
-        domesticCarTag(view, car),
+        domesticCarTag(view, car, true),
         domesticWhyLine(view, car)),
       blk('조절',
         c === 'tail' ? h('div', { class: 'tblk__row' }, h('span', { class: 'sub' }, '꼬리칸 셋 공통'), spaceTab(view)) : null,

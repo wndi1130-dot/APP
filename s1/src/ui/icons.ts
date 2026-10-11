@@ -6,7 +6,7 @@ import { s } from './dom';
 export type IconName =
   | 'coal' | 'food' | 'med' | 'lux' | 'trust' | 'tension' | 'fist' | 'hand' | 'book' | 'menu' | 'overview'
   | 'arrow' | 'back' | 'eye' | 'eyeOff' | 'secret' | 'symbol' | 'heat' | 'ration' | 'people' | 'witness'
-  | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed' | 'gear' | 'wrench' | 'radio' | 'compass' | 'check' | 'lock' | 'alert' | 'skull' | 'dot';
+  | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed' | 'gear' | 'wrench' | 'radio' | 'compass' | 'check' | 'lock' | 'alert' | 'skull' | 'dot' | 'peg' | 'cloth';
 
 const P: Record<IconName, string> = {
   coal: 'M3 9h18l-2 8H5z M6 9l2-3 3 2 3-3 3 2 2 2 M7 20a1.5 1.5 0 1 0 0.01 0 M17 20a1.5 1.5 0 1 0 0.01 0',
@@ -48,6 +48,8 @@ const P: Record<IconName, string> = {
   alert: 'M12 4l9 16H3z M12 10v5 M12 17.4v.2',
   skull: 'M6 15v-4a6 6 0 0 1 12 0v4h-3v4H9v-4z M9.5 11a1 1 0 1 0 0.01 0 M14.5 11a1 1 0 1 0 0.01 0 M12 19v-2',
   dot: 'M12 11a1 1 0 1 0 0.01 0',
+  peg: 'M8 6h8 M12 6v7',
+  cloth: 'M8 4h8 M12 4v3 M7 7h10v9l-2.5 3-2.5-3-2.5 3-2.5-3z',
   lever: 'M6 20h12 M12 20V8 M12 8l5-5 M17 3a1.5 1.5 0 1 0 0.01 0',
 };
 
