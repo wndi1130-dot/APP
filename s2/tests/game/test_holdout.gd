@@ -405,7 +405,7 @@ func test_a_rolled_stop_opens_on_leaving_only_if_it_can_and_was_not_quiet() -> v
 	assert_true(quiet.telemetry.to_dict()["holdout"]["slipped"])
 	var loud = _game({"holdout": "roll", "holdout_chance": 100})
 	for i in range(FieldHoldout.QUIET_NOISE / 6 + 1):
-		loud.ledger.add(SimNoise.Level.VERY_LOUD, 0.0, "shot")
+		loud.ledger.add(SimNoise.Level.VERY_LOUD, 0.0, "whistle")
 	assert_true(loud.holdout.opens_on_leaving())
 	loud.depart()
 	assert_false(loud.ended, "loud, where it can: the train has to be held")
@@ -416,6 +416,61 @@ func test_a_rolled_stop_opens_on_leaving_only_if_it_can_and_was_not_quiet() -> v
 		crowded.zombies.spawn("dead", FieldGrid.center(Vector2i(train.end.x + 2 + i, train.position.y)))
 	assert_false(crowded.holdout.quiet_and_clear(), "quiet, but they stand on the track")
 	assert_true(crowded.holdout.opens_on_leaving())
+
+
+# What the dead do to a door is in the stop's score, but it is not the
+# people's noise: a quiet stop stays quiet however they beat on it.
+func test_quiet_is_counted_of_what_the_people_did() -> void:
+	var game = _game({"holdout": "roll", "holdout_chance": 100})
+	for i in range(40):
+		game.ledger.add(SimNoise.Level.NORMAL, 0.0, "bang")
+	assert_gt(game.ledger.total, FieldHoldout.QUIET_NOISE)
+	assert_eq(game.holdout.people_noise(), 0)
+	assert_true(game.holdout.quiet_and_clear())
+	# User decision 157: a stop where they only ran is a quiet one.
+	for i in range(40):
+		game.ledger.add(SimNoise.Level.NORMAL, 0.0, "run")
+	assert_eq(game.holdout.people_noise(), 0)
+	assert_true(game.holdout.quiet_and_clear())
+	for i in range(FieldHoldout.QUIET_NOISE):
+		game.ledger.add(SimNoise.Level.NORMAL, 0.0, "pry")
+	assert_true(game.holdout.quiet_and_clear(), "twelve is still quiet")
+	game.ledger.add(SimNoise.Level.NORMAL, 0.0, "pry")
+	assert_false(game.holdout.quiet_and_clear())
+
+
+# User decision 150: whoever was left at the train says when the quiet way
+# out closes; nobody there, or a stop that cannot have it, and nothing is said.
+func test_the_lookout_says_when_the_quiet_way_out_closes() -> void:
+	var game = _game({"holdout": "roll", "holdout_chance": 100})
+	var h = game.holdout
+	assert_not_null(h.lookout(), "the squad starts by the train")
+	h.watch(1.1)
+	assert_false(h.told_noise, "quiet so far: nothing to say")
+	for i in range(5):
+		game.ledger.add(SimNoise.Level.LOUD, 0.0, "gun")
+	h.watch(1.1)
+	assert_true(h.told_noise)
+	assert_string_contains(String(game.radio_wait["text"]), "떠날 때 붙들린다")
+	assert_true(h.opens_on_leaving(), "and what it said is true")
+	var train: Rect2i = game.data["train"]
+	for i in range(FieldHoldout.CLEAR_TRACK + 1):
+		game.zombies.spawn("dead", FieldGrid.center(Vector2i(train.end.x + 2 + i, train.position.y)))
+	h.watch(1.1)
+	assert_string_contains(String(game.radio_wait["text"]), "선로에 섰다")
+	var alone = _game({"holdout": "roll", "holdout_chance": 100})
+	for p in alone.squad + alone.crew:
+		if p != alone.player:
+			p.position += Vector3(0, 0, 40)
+	for i in range(5):
+		alone.ledger.add(SimNoise.Level.LOUD, 0.0, "gun")
+	alone.holdout.watch(1.1)
+	assert_false(alone.holdout.told_noise, "nobody left at the train: nobody to see it")
+	var never = _game({"holdout": "roll", "holdout_chance": 0})
+	for i in range(5):
+		never.ledger.add(SimNoise.Level.LOUD, 0.0, "gun")
+	never.holdout.watch(1.1)
+	assert_false(never.holdout.told_noise, "a stop that cannot have it hears nothing")
 
 
 func test_the_roll_is_the_same_for_a_seed_and_does_not_move_the_stops_dice() -> void:

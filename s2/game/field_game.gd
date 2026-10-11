@@ -989,6 +989,7 @@ func _step(delta: float) -> void:
 	_update_zone(delta)
 	actions.update(delta)
 	holdout.tick(delta)
+	holdout.watch(delta)
 	_check_end()
 	var keep: Array = []
 	for s in sounds:
