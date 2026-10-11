@@ -4,6 +4,7 @@ import { LAWS } from '../../src/game/data';
 import { bedNeed, bedOverflow } from '../../src/game/domestic/medbay';
 import { enableDomestic } from '../../src/game/domestic/state';
 import { D } from '../../src/game/domestic/data';
+import { onDeath } from '../../src/game/death';
 import { addWound, healCuts, liveWounds } from '../../src/game/wounds';
 import { playGame } from '../../tools/s1c_bot';
 
@@ -38,11 +39,25 @@ describe('침상 셈이 명부를 읽는다', () => {
   });
 });
 
+describe('다친 사람이 죽으면', () => {
+  it('부상자 수에서도 빠지고, 다음 정산이 산 사람을 대신 다치게 채우지 않는다', () => {
+    const g = fresh('ws-3');
+    addWound(g, { who: '가', comm: 'tail', from: 'stop', where: '시험', grade: 'deep', part: 'torso', septic: false });
+    addWound(g, { who: '나', comm: 'tail', from: 'stop', where: '시험', grade: 'deep', part: 'torso', septic: false });
+    expect(g.injured).toBe(2);
+    onDeath(g, 'tail', ['가']);
+    expect(g.injured).toBe(1);
+    expect(liveWounds(g).map(w => w.who)).toEqual(['나']);
+    onDeath(g, 'tail', ['다']); // 다치지 않은 사람의 죽음은 부상자 수를 건드리지 않는다
+    expect(g.injured).toBe(1);
+  });
+});
+
 describe('판을 끝까지 돌리면', () => {
   it('정산을 마친 시점마다 g.injured는 명부의 활성 기록 수와 같다', () => {
     let bad = 0; let n = 0;
     const probe = { onSettle: (g: ReturnType<typeof createGame>) => { n += 1; if (liveWounds(g).length !== g.injured) bad += 1; } };
-    for (const seed of ['ws-bot-1', 'ws-bot-2', 'ws-bot-3']) playGame(seed, { s1c: true, s1b: 'cruel', policy: 'caretaker', dom: 'engaged', probe } as never);
+    for (const seed of ['ws-bot-1', 'ws-bot-2', 'ws-bot-3', 'ws-x-0']) playGame(seed, { s1c: true, s1b: 'cruel', policy: 'caretaker', dom: 'engaged', probe } as never);
     expect(n).toBeGreaterThan(30);
     expect(bad).toBe(0);
   }, 120000);
