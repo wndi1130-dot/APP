@@ -23,7 +23,7 @@ describe('서는 지점 셈', () => {
     expect(p).not.toBeNull();
     expect(p!.atKm + p!.toNextKm).toBe(p!.segKm);
     expect(p!.segKm).toBe(P.segKmDefault);
-    g.stranded = { since: 1, turns: 0, segKm: 30, atKm: 5, toNextKm: 25, seen: [] };
+    g.stranded = { since: 1, turns: 0, segKm: 30, atKm: 5, toNextKm: 25, seen: [], trip: null, captainAway: false, deputy: null, lostTrips: 0, snow: null, lamp: false };
     expect(predictStall(g)).toBeNull();
   });
 });
@@ -72,13 +72,13 @@ describe('멈춤', () => {
     advance(g);
     expect(g.phase).toBe('travel');
     expect(g.lostSegments).toBe(lost + 1);
-    expect(g.cards).toHaveLength(1);
+    expect(g.cards.map(c => c.kind)).toEqual(['content', 'trip_depart']); // 멈춘 열차 사건 하나와 수동차를 보낼지 묻는 카드
     expect(g.cards[0].text).toBe('ev_str_lamp');
     expect(g.stranded!.seen).toEqual(['ev_str_lamp']);
     g.cards = [];
     g.phase = 'prep';
     advance(g);
-    expect(g.cards.map(c => c.text)).toEqual(['ev_str_snow']);
+    expect(g.cards.filter(c => c.kind === 'content').map(c => c.text)).toEqual(['ev_str_snow']);
   });
 
   it('식량이 30 아래면 「반 그릇」이 앞당겨 뜬다', () => {
@@ -87,7 +87,7 @@ describe('멈춤', () => {
     g.food = 25;
     g.phase = 'prep';
     advance(g);
-    expect(g.cards.map(c => c.text)).toEqual(['ev_str_half_bowl']);
+    expect(g.cards.filter(c => c.kind === 'content').map(c => c.text)).toEqual(['ev_str_half_bowl']);
   });
 
   it('구간 수를 넘겨도 완주하지 않고 seg가 계속 오른다', () => {
@@ -106,20 +106,22 @@ describe('판을 돌리면', () => {
   it('석탄이 0이 되어도 좌초로 끝나지 않고, 선 뒤로 정산마다 멈춘 턴이 하나씩 센다', () => {
     let dropped = false;
     const turns: number[] = [];
+    const sinces: number[] = [];
     let endedStrandedEarly = false;
     const { g } = playGame('st-bot-1', {
       s1c: false, policy: 'caretaker', dom: 'idle',
       probe: {
         beforePick: (gg: Game) => { if (!dropped && gg.seg >= 3) { dropped = true; gg.coal = 1; } },
-        onSettle: (gg: Game) => { if (gg.stranded) turns.push(gg.stranded.turns); if (gg.end === 'stranded') endedStrandedEarly = true; },
+        onSettle: (gg: Game) => { if (gg.stranded) { turns.push(gg.stranded.turns); sinces.push(gg.stranded.since); } if (gg.end === 'stranded') endedStrandedEarly = true; },
       },
     } as never);
     expect(dropped).toBe(true);
-    expect(g.stranded).toBeTruthy();
+    expect(turns.length).toBeGreaterThan(0);
     expect(endedStrandedEarly).toBe(false);
     expect(g.end === null || g.end !== 'stranded').toBe(true);
     expect(turns.length).toBeGreaterThanOrEqual(2);
-    for (let i = 1; i < turns.length; i += 1) expect(turns[i]).toBeGreaterThanOrEqual(turns[i - 1]);
+    // 수동차가 석탄을 들고 돌아와 다시 달리다 또 서면 새 멈춤이다(since가 다르다). 같은 멈춤 안에서만 턴이 줄지 않는다.
+    for (let i = 1; i < turns.length; i += 1) if (sinces[i] === sinces[i - 1]) expect(turns[i]).toBeGreaterThanOrEqual(turns[i - 1]);
     expect(turns[turns.length - 1]).toBeGreaterThanOrEqual(1);
   }, 120000);
 });

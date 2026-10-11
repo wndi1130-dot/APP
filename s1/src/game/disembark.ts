@@ -1,5 +1,4 @@
-import { COMMS } from './data';
-import { stageOf, totalPop } from './state';
+import { stageOf, supportShare } from './state';
 import type { Comm } from './data';
 import type { Game, StopResult } from './state';
 import { resolveStop } from './turn';
@@ -17,11 +16,6 @@ export const DISEMBARK_LINES: Record<DisembarkMood, string> = {
   warm: '수색대가 서로 장비를 챙겨 주며 내린다. 조장이 열차장에게 고개를 끄덕인다.',
   plain: '문이 열리고 찬 공기가 들어온다. 수색대가 하나씩 내린다.',
 };
-
-function supportShare(g: Game): number {
-  const pop = totalPop(g) || 1;
-  return COMMS.reduce((sum, c) => sum + (g.comms[c].rel >= 15 ? g.comms[c].pop : 0), 0) / pop;
-}
 
 /** 내리는 장면의 분위기. 불신임 직전이 가장 먼저, 그다음 열차장이 고른 죽음(죄책감, 목격자가 있으면 3구간),
  * 그 밖의 이름 있는 죽음(애도), 크게 지지받음, 보낸 집단의 마음 순이다. 둘이 겹치면 죄책감이 앞선다. */

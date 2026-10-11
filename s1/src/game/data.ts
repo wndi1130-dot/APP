@@ -46,6 +46,13 @@ export const P = Object.freeze({
   // 멈춘 열차(구현명세 가, 결정 034·035·037): 석탄이 0이 되면 판이 끝나지 않고 선다. 선 열차는 구간마다 긴장 +3, 모든 칸 온기 −5(바닥 10).
   // segKmDefault는 구간 길이를 모르는 노선의 기본값(km). 예고 「이대로 가면 ○km 지점에서 멈춘다」의 눈금이다.
   strandedTension: 3, strandedWarmDrop: 5, strandedWarmFloor: 10, segKmDefault: 30,
+  // 수동차 원정(구현명세 가 3.4~3.9, 결정 034·035·037). 거리 15km/턴 가고 10km/턴 오며, 한 턴은 역에서 뒤진다.
+  supportLine: 0.5, tripSize: 4, tripGoKm: 15, tripBackKm: 10, tripSearchTurns: 1, tripFoodPer: 0.5, tripCoal: 30, extendKm: 15, tripFoodMult: 2,
+  // 역마다 갈래(못 돌아옴·이어 감, 나머지는 석탄). 첫 역 5%·30%, 둘째 15%·5%, 셋째 25%·0%.
+  tripLostFirst: 0.05, tripLostStep: 0.10, tripExtendFirst: 0.30, tripExtendNext: 0.05,
+  // 식량이 모자라 덜 가져가면 2마다 못 돌아옴 +5%p(최대 +20%p). 값: 돌아오면 신임·관계, 못 돌아오면 칸 관계·긴장·공포.
+  tripShortLost: 0.05, tripShortMax: 0.20, tripTrustForced: 5, tripRelCrew: 4, tripRelDeputy: 3, tripWaitTension: 2,
+  tripLostRel: -8, tripLostTension: 8, tripLostFear: 5, promiseLux: 2, promiseRel: 4, promiseSkipRel: -2, promiseBrokenTrust: -8,
   // 공간 레버 0~2단: 한 단에 꼬리칸 과밀 −10, 내주는 칸 +10. 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1.
   spaceStep: 10, spaceMax: 2, spacePullRel: -3, spaceHoldRel: -1,
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').

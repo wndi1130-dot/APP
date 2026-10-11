@@ -6,7 +6,7 @@ import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from '
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
-import { enterStranded, segKmOf, stallKm, strandedDepart, strandedSettle } from './stranded';
+import { enterStranded, reapplyAway, segKmOf, stallKm, strandedDepart, strandedSettle } from './stranded';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { josa } from './josa';
@@ -660,7 +660,14 @@ export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label
 
 function afterStop(g: Game): void {
   strangerCorpse(g);
-  if (isSessionSeg(g.seg)) {
+  const due = isSessionSeg(g.seg) || !!g.councilOwed;
+  if (due && g.stranded?.captainAway) {
+    // 열차장이 수동차에 올라 있으면 회기를 못 연다. 돌아온 뒤 다음 정차 뒤에 한 번 연다.
+    if (!g.councilOwed) journal(g, '열차장이 돌아오면 회기를 연다.');
+    g.councilOwed = true;
+    settle(g);
+  } else if (due) {
+    g.councilOwed = false;
     openCouncil(g);
     g.phase = 'council';
   } else {
@@ -705,6 +712,7 @@ function settle(g: Game): void {
   darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
+  reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
   g.lastSettle = {
@@ -1057,7 +1065,7 @@ function finish(g: Game, end: Game['end']): void {
   if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
-  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];
+  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   for (const line of raisedLines(g)) journal(g, line);
   darkFinish(g);

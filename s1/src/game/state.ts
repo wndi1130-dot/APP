@@ -14,7 +14,6 @@ import profilesJson from '../../data/profiles.json';
 // S1a 한 판의 상태. 저장할 수 있게 함수 없는 평범한 값만 담는다.
 
 export type Phase = 'prep' | 'travel' | 'stop' | 'council' | 'settle' | 'end';
-/** coup: S1b 계엄 중 경비대 충성이 무너져 경비대장이 열차를 잡았다(s1b_dark_path 5.3, 둘째 묶음). */
 /** 노선 한 구간. 길이만 안다. 없으면 P.segKmDefault */
 export interface RouteSeg { seg: number; km: number }
 
@@ -26,9 +25,38 @@ export interface StrandedState {
   atKm: number;             // 출발역에서 멈춘 지점까지(km)
   toNextKm: number;         // 다음 역까지 남은 길 = segKm - atKm
   seen: string[];           // 이미 뜬 멈춘 열차 사건 id
+  trip: TripState | null;   // 나가 있는 수동차 원정. 없으면 아직 안 보냈거나 끝났다
+  captainAway: boolean;     // 열차장이 원정에 탔다(회기·거래가 닫힌다)
+  deputy: Comm | null;      // 열차장 대신 맡은 칸
+  lostTrips: number;        // 못 돌아온 원정 수
+  snow: 'all' | 'guard' | 'none' | null; // 「선로의 눈」 선택
+  lamp: boolean;            // 「기다리는 밤」 등불을 걸었다
 }
 
-export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup';
+/** 수동차 원정 하나. 화면은 phase·turn·posKm으로 선 도면을 그린다. */
+export interface TripState {
+  leaderGoes: boolean;      // 열차장이 탔나
+  forced: boolean;          // 지지가 낮아 떠밀려 나갔나(돌아오면 신임 +5)
+  comm: Comm;               // 지원자를 낸 칸
+  names: string[];          // 지원자 이름(열차장 제외)
+  size: number;             // 탄 사람 수(열차장 포함)
+  distKm: number;           // 지금 목표 역까지 거리(이어 가면 +15씩)
+  extends: number;          // 이어 간 횟수
+  goTurns: number; searchTurns: number; backTurns: number;
+  plannedTurns: number;     // 떠날 때 열차가 아는 총 턴(이어 감을 모르는 동안 「때가 됐다」의 기준)
+  turn: number;             // 떠난 뒤 지난 정산 수
+  phase: 'go' | 'search' | 'back';
+  posKm: number;            // 도면용. 멈춘 열차에서 잰 수동차 자리
+  baseFood: number;         // 떠날 때 가져간 식량(이어 갈 때 곱절 몫의 기준)
+  foodShort: number;        // 모자라서 못 가져간 식량
+  foodOwed: number;         // 이어 간 몫으로 열차가 아직 내지 않은 식량
+  outcome: 'coal' | 'lost' | null; // 역에서 정해진다. 열차는 돌아올 때 알고, 무전이 있으면 바로 안다
+  known: boolean;           // 열차가 결과(이어 감·못 돌아옴)를 아는가
+  promise: 'yes' | 'no' | null; // 「돌아올 사람의 몫」
+}
+
+/** coup: S1b 계엄 중 경비대 충성이 무너져 경비대장이 열차를 잡았다(s1b_dark_path 5.3, 둘째 묶음). lost_captain: 수동차에 탄 열차장이 돌아오지 않았다. */
+export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup' | 'lost_captain';
 /** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
 /** 정차 작업조 명단에 더 붙는 사람(이름). S1b 정차 암살의 실행자와 대상이 여기서 붙는다(dark/order.ts). */
 export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
@@ -245,6 +273,8 @@ export interface Game {
   inStrike: boolean;
   /** 석탄 0으로 선 열차(멈춘 열차). null·없음이면 달리는 중 */
   stranded?: StrandedState | null;
+  /** 열차장이 나가 있어 미뤄 둔 회기(돌아온 뒤 다음 정차 뒤에 한 번 연다) */
+  councilOwed?: boolean;
   /** 노선 구간 길이(km). 없는 구간은 P.segKmDefault */
   route?: RouteSeg[];
   strikeWarned: number;
@@ -462,6 +492,12 @@ export function storyOf(g: Game): StoryState {
 
 export function totalPop(g: Game): number {
   return COMMS.reduce((sum, c) => sum + g.comms[c].pop, 0);
+}
+
+/** 관계 15 이상인 칸이 인구의 몇 할인가(하차 장면의 「크게 지지」, 멈춘 열차의 원정 문턱). */
+export function supportShare(g: Game): number {
+  const pop = totalPop(g) || 1;
+  return COMMS.reduce((sum, c) => sum + (g.comms[c].rel >= 15 ? g.comms[c].pop : 0), 0) / pop;
 }
 
 /** 최대 잔여 방식으로 100석을 인원 비례로 나눈다(아이도 인구로 센다). */
