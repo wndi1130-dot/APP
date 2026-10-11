@@ -17,6 +17,8 @@ export function refreshSit(g: Game): void {
   lawTechSit(g, sit);
   for (const c of COMMS) if ((d.bedding[c] ?? -1) >= g.seg) sit[c][0] -= D.beddingWarm;
   if (d.armored.includes('guard') && techUsable(g, 'w3')) sit.guard[3] -= D.armorExposure;
+  // 묽은 솥: 모든 칸 배급 처지가 레버 반 칸만큼 내려간다(pot.ts).
+  if (d.pot?.mode === 'thin') for (const c of COMMS) sit[c][1] -= D.potThinSit;
   const beds = bedCrowd(g);
   sit.medtech[2] += beds.medtech;
   sit.tail[2] += beds.tail;

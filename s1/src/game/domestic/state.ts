@@ -5,6 +5,7 @@ import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
 import type { Field, TechId, Variant, Zone } from './data';
+import type { PotState } from './pot';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.
 // 저장할 수 있게 함수 없는 평범한 값만 담는다.
@@ -120,6 +121,8 @@ export interface DomState {
   /** 마지막 사람을 잃은 분야의 남은 구간. 0이면 고장(8.5) */
   countdown: Partial<Record<Field, number>>;
   hotWater: number;
+  /** 식당칸 솥의 불리기(pot.ts). 고른 적 없는 판과 옛 저장 판엔 없다(그대로) */
+  pot?: PotState;
   lice: Partial<Record<Comm, { at: number; endureDue?: number }>>;
   /** 이가 사라진 칸: 이 구간 전까지 이 판정을 건너뛴다(16.9). */
   liceFree?: Partial<Record<Comm, number>>;
