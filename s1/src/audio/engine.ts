@@ -14,9 +14,13 @@ export interface EngineDeps {
   /** 박자마다 변형 파일 주소 */
   clips: Record<Cue, string[]>;
   load: (url: string) => Promise<ArrayBuffer>;
+  /** 긴 소리(되풀이하거나 한 번 길게 나는 것)의 이름 → 파일 주소. 없으면 긴 소리는 쓰지 않는다 */
+  tracks?: Record<string, string | undefined>;
   /** 지금 시각(ms). 시험에서 바꿔 넣는다 */
   now?: () => number;
 }
+
+export interface HoldOpts { loop: boolean; gain: number; fadeMs?: number }
 
 export interface Engine {
   /** 파일을 받아 둔다. 손짓 전에도 된다(소리 장치는 열지 않는다) */
@@ -25,6 +29,12 @@ export interface Engine {
   unlock(): void;
   /** 소리를 냈으면 true */
   play(shot: Shot): boolean;
+  /** 이름 붙은 긴 소리를 켠다. 되풀이하는 것이 이미 돌고 있으면 그대로 둔다. 냈거나 돌고 있으면 true */
+  hold(name: string, opts: HoldOpts): boolean;
+  /** 돌고 있는 긴 소리의 빠르기와 크기를 ms에 걸쳐 바꾼다(느려지며 잦아든다) */
+  bend(name: string, rate: number, gain: number, ms: number): void;
+  /** 긴 소리를 ms에 걸쳐 줄이고 끈다 */
+  release(name: string, ms: number): void;
 }
 
 function decode(ctx: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
@@ -36,10 +46,12 @@ function decode(ctx: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
 }
 
 export function createEngine(deps: EngineDeps): Engine {
-  const urls = [...new Set(Object.values(deps.clips).flat())];
+  const trackUrls = Object.values(deps.tracks ?? {}).filter((u): u is string => !!u);
+  const urls = [...new Set([...Object.values(deps.clips).flat(), ...trackUrls])];
   const raw = new Map<string, ArrayBuffer>();
   const buffers = new Map<string, AudioBuffer>();
   const voices = new Map<Cue, { src: AudioBufferSourceNode; gain: GainNode }>();
+  const held = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
   let loading: Promise<void> | null = null;
@@ -118,5 +130,64 @@ export function createEngine(deps: EngineDeps): Engine {
     return true;
   }
 
-  return { preload, unlock, play };
+  // 긴 소리는 기다렸다 내지 않는다: 준비가 덜 됐으면 그 한 번은 조용하다(늦게 따라 나오는 되풀이가 더 나쁘다).
+  function hold(name: string, opts: HoldOpts): boolean {
+    if (!ctx || !master || ctx.state !== 'running') return false;
+    const url = deps.tracks?.[name];
+    const buffer = url ? buffers.get(url) : undefined;
+    if (!buffer) return false;
+    if (held.has(name)) {
+      if (opts.loop) return true;
+      release(name, 40);
+    }
+    const t = ctx.currentTime;
+    master.gain.value = SOUND_VOL_GAIN[soundVol()];
+    const src = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    src.buffer = buffer;
+    src.loop = opts.loop;
+    const fade = (opts.fadeMs ?? 0) / 1000;
+    if (fade > 0) {
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(opts.gain, t + fade);
+    } else {
+      gain.gain.value = opts.gain;
+    }
+    src.connect(gain);
+    gain.connect(master);
+    src.onended = () => {
+      if (held.get(name)?.src === src) held.delete(name);
+      src.disconnect();
+      gain.disconnect();
+    };
+    src.start(t);
+    held.set(name, { src, gain });
+    return true;
+  }
+
+  function bend(name: string, rate: number, gain: number, ms: number): void {
+    const v = held.get(name);
+    if (!ctx || !v) return;
+    const t = ctx.currentTime;
+    const end = t + ms / 1000;
+    v.src.playbackRate.setValueAtTime(v.src.playbackRate.value, t);
+    v.src.playbackRate.linearRampToValueAtTime(rate, end);
+    v.gain.gain.cancelScheduledValues(t);
+    v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+    v.gain.gain.linearRampToValueAtTime(gain, end);
+  }
+
+  function release(name: string, ms: number): void {
+    const v = held.get(name);
+    if (!ctx || !v) return;
+    held.delete(name);
+    const t = ctx.currentTime;
+    const end = t + ms / 1000;
+    v.gain.gain.cancelScheduledValues(t);
+    v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+    v.gain.gain.linearRampToValueAtTime(0, end);
+    v.src.stop(end + 0.02);
+  }
+
+  return { preload, unlock, play, hold, bend, release };
 }
