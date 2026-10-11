@@ -99,3 +99,55 @@ static func build(target_vertices: int = 144, max_width: int = MAX_WIDTH) -> Dic
 	material.set_shader_parameter("rows_per_frame", float(rows_per_frame))
 	mesh.surface_set_material(0, material)
 	return {"mesh": mesh, "texture": texture, "vertices": total, "target": target_vertices, "subdivide": subdivide, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image}
+
+## A skinned body instead of the six boxes: any surface with bone weights, any
+## number of clips, each with its own frame count. `source` is one surface's
+## arrays. `clips` is [{"name", "loop", "length", "frames"}]; a frame is one
+## Transform3D per bone (pose * inverse bind, mesh space). Clips stack downward
+## in the order given, so "start" is a clip's first frame row. Offsets are
+## metres in half floats: a fall moves a vertex well past the +-0.5 of RGBA8.
+static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDTH) -> Dictionary:
+	var positions: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
+	var bones = source[Mesh.ARRAY_BONES]
+	var weights = source[Mesh.ARRAY_WEIGHTS]
+	var total := positions.size()
+	var per: int = bones.size() / total
+	var width := mini(total, max_width)
+	var rows_per_frame := ceili(float(total) / width)
+	var lookup := PackedVector2Array()
+	for id in range(total):
+		lookup.append(Vector2((float(id % width) + 0.5) / width, float(id / width)))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_COLOR, Mesh.ARRAY_INDEX]:
+		arrays[slot] = source[slot]
+	arrays[Mesh.ARRAY_TEX_UV2] = lookup
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var frame_total: int = 0
+	for clip in clips:
+		frame_total += (clip["frames"] as Array).size()
+	var image := Image.create(width, frame_total * rows_per_frame, false, Image.FORMAT_RGBH)
+	var table: Array = []
+	var start: int = 0
+	for clip in clips:
+		var frames: Array = clip["frames"]
+		for frame in range(frames.size()):
+			var skin: Array = frames[frame]
+			var row := (start + frame) * rows_per_frame
+			for vertex in range(total):
+				var rest := positions[vertex]
+				var moved := Vector3.ZERO
+				var weight_sum: float = 0.0
+				for slot in range(per):
+					var weight: float = weights[vertex * per + slot]
+					if weight > 0.0:
+						var bone: Transform3D = skin[bones[vertex * per + slot]]
+						moved += (bone * rest) * weight
+						weight_sum += weight
+				# A vertex no bone holds stays where it rests.
+				var offset := moved / weight_sum - rest if weight_sum > 0.0 else Vector3.ZERO
+				image.set_pixel(vertex % width, row + vertex / width, Color(offset.x, offset.y, offset.z, 1.0))
+		table.append({"name": clip.get("name", ""), "start": start, "frames": frames.size(), "loop": bool(clip.get("loop", true)), "length": float(clip.get("length", 1.0))})
+		start += frames.size()
+	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
