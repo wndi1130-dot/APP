@@ -10,6 +10,7 @@ import { GROUPS, type Panel, type Screen, type Ui, type View } from './common';
 import { bottomBar, topBar } from './hud';
 import { homeScreen, stackCount } from './home';
 import { overviewScreen } from './overview';
+import { trainScreen } from './train';
 import { councilScreen, voteLever } from './council';
 import { countSchedule, noiseStage } from './count_pace';
 import { cardSheet } from './card';
@@ -138,8 +139,9 @@ export function renderApp(view: View): HTMLElement {
   if (screen === 'end') main = endScreen(view);
   else if (screen === 'council') main = councilScreen(view);
   else if (screen === 'overview') main = overviewScreen(view);
+  else if (screen === 'train' && g.dom) main = trainScreen(view); // S1c 열차 관리 화면
   else main = homeScreen(view);
-  const sheet = (screen === 'home' || screen === 'overview') && !ui.braking ? cardSheet(view) : null;
+  const sheet = (screen === 'home' || screen === 'overview' || screen === 'train') && !ui.braking ? cardSheet(view) : null;
   const panel = overlay(view);
   return h('div', { class: cx('app', `app--${screen}`, sheet && 'has-sheet') },
     topBar(view),
@@ -393,12 +395,25 @@ export function startApp(root: HTMLElement): void {
     if (focus) focusCar = focus === 'tail' ? 'tail1' : focus;
   }
 
+  /** 열차 관리 화면으로 들어간다. 뒤로 가기(브라우저·안드로이드)로 나올 수 있게 방문 기록에 한 칸 넣는다. */
+  function enterTrain(): void {
+    if (ui.screen === 'train') return;
+    ui.screen = 'train';
+    try { history.pushState({ s1train: 1 }, ''); } catch { /* 기록을 못 쓰는 곳에선 ×와 Esc로 나온다 */ }
+  }
+  function leaveTrain(): void {
+    ui.carPop = null;
+    if (ui.screen !== 'train') return;
+    ui.screen = 'home';
+    try { if ((history.state as { s1train?: number } | null)?.s1train) history.back(); } catch { /* 위와 같다 */ }
+  }
+
   function openStack(): void {
     if (stackCount(g, ui) === 0) return;
     ui.cardOpen = true;
     ui.panel = null;
-    ui.carPop = null;
-    if (ui.screen !== 'home' && ui.screen !== 'overview') ui.screen = 'home';
+    if (ui.screen !== 'train') ui.carPop = null;
+    if (ui.screen !== 'home' && ui.screen !== 'overview' && ui.screen !== 'train') ui.screen = 'home';
     focusForTopCard();
   }
 
@@ -526,9 +541,15 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'car': {
         const id = data.car ?? null;
-        ui.carPop = ui.carPop === id ? null : id;
         ui.panel = null;
         ui.spaceOpen = false;
+        if (g.dom) {
+          // S1c: 칸을 누르면 화면 전체가 열차 관리 화면으로 바뀐다. 같은 칸을 다시 누르거나 ×를 누르면 홈으로.
+          if (ui.carPop === id && !data.keep) leaveTrain();
+          else { ui.carPop = id; enterTrain(); }
+          return render();
+        }
+        ui.carPop = ui.carPop === id ? null : id;
         render();
         // 화살표로 옆 칸에 넘어갔으면 그 칸이 보이게 열차를 민다.
         if (data.nav) root.querySelector('.carpop')?.closest('.slot')?.scrollIntoView({ inline: 'center', block: 'nearest' });
@@ -548,7 +569,7 @@ export function startApp(root: HTMLElement): void {
       case 'panel': {
         const panel = (data.panel || null) as Panel;
         ui.panel = ui.panel === panel ? null : panel;
-        ui.carPop = null;
+        if (ui.screen !== 'train') ui.carPop = null;
         return render();
       }
       case 'ov-sel':
@@ -771,11 +792,18 @@ export function startApp(root: HTMLElement): void {
     else if (ui.person) ui.person = null;
     else if (ui.panel) ui.panel = null;
     else if (ui.cardOpen) ui.cardOpen = false;
+    else if (ui.screen === 'train') leaveTrain();
     else if (ui.carPop) ui.carPop = null;
     else if (ui.screen !== 'home' && g.phase !== 'council') ui.screen = 'home';
     render();
   });
 
+  window.addEventListener('popstate', () => {
+    if (ui.screen !== 'train') return;
+    ui.screen = 'home';
+    ui.carPop = null;
+    render();
+  });
   window.addEventListener('error', event => noteError(event.error ?? event.message));
   window.addEventListener('unhandledrejection', event => noteError(event.reason));
   window.addEventListener('resize', () => drawLinks(root));

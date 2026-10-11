@@ -4,7 +4,7 @@ import type { ToastKind } from './notice';
 
 // 화면끼리 나눠 쓰는 형식과 열차 칸 배치.
 
-export type Screen = 'home' | 'overview' | 'council' | 'end';
+export type Screen = 'home' | 'overview' | 'council' | 'end' | 'train';
 export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' | 'settle' | 'dom' | 'why-trust' | 'why-tension' | 'why-coal' | 'why-food' | 'why-med' | 'why-lux';
 
 /** S1c 내정 창의 화면 상태(ui/domestic.ts). S1a 판에선 쓰지 않는다. */
@@ -13,7 +13,7 @@ export interface DomUi { tab: 'workshop' | 'plan' | 'board' | 'move'; node: stri
 export interface Ui {
   screen: Screen;
   panel: Panel;
-  /** 홈에서 누른 칸의 작은 창 */
+  /** 홈에서 누른 칸의 작은 창. 내정을 켠 판에선 열차 관리 화면(screen 'train')이 보일 칸이다(train.ts) */
   carPop: string | null;
   /** 꼬리칸 창에서 레버 대신 공간 레버(6.4)를 펼쳤나 */
   spaceOpen?: boolean;
