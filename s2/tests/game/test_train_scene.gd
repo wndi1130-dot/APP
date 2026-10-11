@@ -1031,10 +1031,11 @@ func test_a_crowd_on_the_floor_stops_at_three_hugging() -> void:
 	assert_eq(_gesturing(s, "tail1").size(), 3)
 
 
-func test_a_roomy_car_has_nobody_hugging() -> void:
+func test_a_roomy_car_brings_two_down_off_the_bench_to_hug() -> void:
+	assert_eq(_floor_seated(_scene(), "front"), 0, "calm: nobody sits on the floor of a roomy car")
 	var s = _frightened()
-	assert_eq(_floor_seated(s, "front"), 0)
-	assert_eq(_gesturing(s, "front").size(), 0)
+	assert_eq(_floor_seated(s, "front"), 2)
+	assert_eq(_gesturing(s, "front").size(), 2)
 
 
 func test_only_those_on_the_floor_hug_in_a_frightened_train() -> void:
@@ -1244,3 +1245,71 @@ func test_two_values_move_nobody_along_the_car() -> void:
 	for b in before:
 		assert_eq(b.position.x, before[b].x, "it stays where it stood")
 		assert_eq(b.position.z, before[b].y, "it stays where it stood")
+
+# ---------------------------------------------------------------- fright brings a couple down to the floor
+
+func test_the_medical_car_also_brings_two_down_to_hug() -> void:
+	assert_eq(_floor_seated(_scene(), "medtech"), 0)
+	var s = _frightened()
+	assert_eq(_floor_seated(s, "medtech"), 2)
+	assert_eq(_doing(s, "medtech", Gesture.HUG_KNEES).size(), 2)
+
+
+func test_the_cars_with_a_table_or_a_desk_keep_everyone_off_the_floor() -> void:
+	var s = _frightened()
+	for id in ["dining", "captain"]:
+		assert_eq(_floor_seated(s, id), 0, id)
+		assert_eq(_gesturing(s, id).size(), 0, id)
+
+
+func test_those_who_come_down_sit_in_the_floor_row_and_huddle() -> void:
+	var s = _frightened()
+	var rows := _gesturing(s, "front")
+	assert_eq(rows.size(), 2)
+	for b in rows:
+		assert_almost_eq(float(b.position.z), float(s.FLOOR_Z), 0.001)
+		assert_eq(b.pose, "floor")
+		assert_eq(b.state, "seat")
+		assert_true(b.huddled)
+
+
+func test_coming_down_off_the_bench_adds_and_removes_nobody() -> void:
+	var s = _scene()
+	var front := _count(s, "front")
+	var medtech := _count(s, "medtech")
+	s.set_train("fear", 70.0)
+	assert_eq(_count(s, "front"), front)
+	assert_eq(_count(s, "medtech"), medtech)
+
+
+func test_a_fear_that_lifts_puts_the_two_back_on_the_bench() -> void:
+	var s = _frightened()
+	s.set_train("fear", 0.0)
+	for id in ["front", "medtech"]:
+		assert_eq(_floor_seated(s, id), 0, id)
+		assert_eq(_gesturing(s, id).size(), 0, id)
+
+
+func test_a_crowded_tail_sits_on_the_floor_as_it_did_before() -> void:
+	assert_eq(_floor_seated(_frightened(), "tail1"), _floor_seated(_scene(), "tail1"))
+
+
+func test_a_roomy_car_that_fills_up_follows_its_crowding() -> void:
+	var s = _frightened()
+	s.set_sit("front", 2, 100.0)
+	assert_gt(_floor_seated(s, "front"), 3)
+	assert_eq(_gesturing(s, "front").size(), 3)
+
+
+func test_the_two_who_came_down_stay_where_they_sat() -> void:
+	var s = _frightened()
+	var before: Dictionary = {}
+	for b in _gesturing(s, "front"):
+		before[b] = Vector2(b.position.x, b.position.z)
+	assert_eq(before.size(), 2)
+	for i in 60:
+		s.step(0.1)
+	assert_eq(_gesturing(s, "front").size(), 2)
+	for b in before:
+		assert_eq(b.position.x, before[b].x, "it stays where it sat")
+		assert_eq(b.position.z, before[b].y, "it stays where it sat")

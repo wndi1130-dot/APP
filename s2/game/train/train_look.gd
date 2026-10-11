@@ -37,16 +37,17 @@ const GRUDGE_STIR: int = 2              # the brief: set against the captain fro
 const LOW_BELOW: float = 45.0           # s1 reads warmth and ration under 45 as low (ui/home.ts, turn.ts)
 const MOOD_NAMES: Dictionary = {"calm": "평온", "low": "가라앉음", "stir": "술렁임", "frozen": "얼어붙음"}
 ## What a mood changes: how many walk and how fast, how long they stand between
-## walks, the share of the others who stand about in knots, whether the seated
-## gather round the stove, whether heads are bowed, and the lamp. First values.
+## walks, the share of the others who stand about in knots, the fewest of the
+## seated who sit on the floor, whether the seated gather round the stove,
+## whether heads are bowed, and the lamp. First values.
 const MOOD_LOOK: Dictionary = {
-	"calm": {"movers": [2, 4], "speed": 1.0, "wait": 1.0, "stand": 0.0, "gather": false, "bowed": false,
+	"calm": {"movers": [2, 4], "speed": 1.0, "wait": 1.0, "stand": 0.0, "floor": 0, "gather": false, "bowed": false,
 		"lamp": Color(1.0, 0.72, 0.42), "energy": 1.3, "sway": 1.0},
-	"low": {"movers": [1, 2], "speed": 0.6, "wait": 1.6, "stand": 0.0, "gather": true, "bowed": false,
+	"low": {"movers": [1, 2], "speed": 0.6, "wait": 1.6, "stand": 0.0, "floor": 0, "gather": true, "bowed": false,
 		"lamp": Color(0.92, 0.68, 0.46), "energy": 0.8, "sway": 1.0},
-	"stir": {"movers": [3, 4], "speed": 1.4, "wait": 0.4, "stand": 0.3, "gather": false, "bowed": false,
+	"stir": {"movers": [3, 4], "speed": 1.4, "wait": 0.4, "stand": 0.3, "floor": 0, "gather": false, "bowed": false,
 		"lamp": Color(1.0, 0.72, 0.42), "energy": 1.3, "sway": 2.0},
-	"frozen": {"movers": [0, 1], "speed": 0.7, "wait": 3.0, "stand": 0.0, "gather": false, "bowed": true,
+	"frozen": {"movers": [0, 1], "speed": 0.7, "wait": 3.0, "stand": 0.0, "floor": 2, "gather": false, "bowed": true,
 		"lamp": Color(0.72, 0.77, 0.88), "energy": 0.6, "sway": 0.5},
 }
 ## The gestures laid over a mood, one bad value a car (2026-10-12: tension
@@ -54,8 +55,9 @@ const MOOD_LOOK: Dictionary = {
 ## them. In a car the train's tension stirs: two at each other (a quarrel in
 ## one car, heads together in the next) and the third looking about. In a
 ## car stirred by its own standing with the captain: arms folded, and one
-## with its back turned. In a frightened car nobody stands about: the
-## first few of those on the floor hug their knees. For show only.
+## with its back turned. In a frightened car nobody stands about: a couple
+## come down off the bench, roomy car or not, and the first few of those on
+## the floor hug their knees. For show only.
 const GESTURES: Dictionary = {
 	"tension": {"pairs": [Gesture.ARGUE, Gesture.WHISPER], "one": Gesture.TURN_ABOUT},
 	"resent": {"each": [Gesture.ARMS_CROSSED, Gesture.BACK_TURNED, Gesture.ARMS_CROSSED]},
@@ -239,13 +241,17 @@ static func movers(count: int, m: String = "calm") -> int:
 ## How the people of a car split: {"walk", "stand", "bench", "floor",
 ## "huddled"}. walk + stand + bench + floor = count; huddled counts those of
 ## bench and floor who sit hunched. The mood picks who moves and who stands
-## about, crowding picks the place, cold the posture.
-static func split(count: int, w: float, crowd: float, m: String = "calm") -> Dictionary:
+## about, crowding picks the place, cold the posture. Fright puts a couple
+## on the floor of a roomy car too, never more than half of the seated, and
+## only where the floor is open (a car with a table has none to come down to).
+static func split(count: int, w: float, crowd: float, m: String = "calm", open_floor: bool = true) -> Dictionary:
 	var walk := movers(count, m)
 	var still := maxi(count - walk, 0)
 	var stand := roundi(still * float(mood_look(m)["stand"]))
 	var seated := still - stand
 	var on_floor := roundi(seated * float(FLOOR_SHARE[crowd_level(crowd)]))
+	if open_floor:
+		on_floor = maxi(on_floor, mini(int(mood_look(m)["floor"]), seated / 2))
 	var huddled := roundi(seated * float(HUDDLE_SHARE[warmth_tone(w)]))
 	return {"walk": walk, "stand": stand, "bench": seated - on_floor, "floor": on_floor, "huddled": huddled}
 
@@ -253,8 +259,8 @@ static func split(count: int, w: float, crowd: float, m: String = "calm") -> Dic
 ## One row a person, movers first: [{"pose": "walk" | "stand" | "sit" |
 ## "floor", "huddled": bool, "bowed": bool}]. The floor hunches first, then the
 ## bench from its far end. In a frightened car everyone seated bows the head.
-static func seating(count: int, w: float, crowd: float, m: String = "calm") -> Array:
-	var s := split(count, w, crowd, m)
+static func seating(count: int, w: float, crowd: float, m: String = "calm", open_floor: bool = true) -> Array:
+	var s := split(count, w, crowd, m, open_floor)
 	var bowed: bool = mood_look(m)["bowed"]
 	var rows: Array = []
 	var walk := int(s["walk"])

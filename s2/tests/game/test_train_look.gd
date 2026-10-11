@@ -805,3 +805,68 @@ func test_two_values_never_turn_a_back_or_look_about() -> void:
 		for car_index in range(4):
 			for name in _col(Look.knot_gestures("tension", standing, car_index, "resent"), "name"):
 				assert_false([Gesture.BACK_TURNED, Gesture.TURN_ABOUT].has(name), "%d standing, car %d: %s" % [standing, car_index, name])
+
+# ---------------------------------------------------------------- fright brings a couple down to the floor
+
+func test_only_a_frozen_mood_asks_for_people_on_the_floor() -> void:
+	assert_eq(Look.mood_look("frozen")["floor"], 2)
+	for m in ["calm", "low", "stir"]:
+		assert_eq(Look.mood_look(m)["floor"], 0, m)
+
+
+func test_a_roomy_car_puts_two_on_the_floor_only_when_frozen() -> void:
+	assert_eq(Look.split(10, 50.0, 0.0, "frozen")["floor"], 2)
+	for m in ["calm", "low", "stir"]:
+		assert_eq(Look.split(10, 50.0, 0.0, m)["floor"], 0, m)
+
+
+func test_a_small_frozen_car_brings_down_fewer() -> void:
+	var want := {0: 0, 1: 0, 2: 0, 3: 1, 4: 1, 5: 2}
+	for count in want:
+		assert_eq(Look.split(count, 50.0, 0.0, "frozen")["floor"], want[count], "%d people" % count)
+
+
+func test_those_who_come_down_never_pass_half_of_the_seated() -> void:
+	for count in range(17):
+		var s := Look.split(count, 50.0, 0.0, "frozen")
+		assert_lte(int(s["floor"]), 2, "%d people" % count)
+		assert_lte(int(s["floor"]) * 2, int(s["bench"]) + int(s["floor"]), "%d people" % count)
+
+
+func test_coming_down_still_adds_up_to_the_head_count() -> void:
+	for count in range(17):
+		for crowd in [0.0, 70.0, 100.0]:
+			for open_floor in [true, false]:
+				var s := Look.split(count, 50.0, crowd, "frozen", open_floor)
+				assert_eq(int(s["walk"]) + int(s["stand"]) + int(s["bench"]) + int(s["floor"]), count, "%d people, crowd %s, open %s" % [count, crowd, open_floor])
+
+
+func test_a_crowd_that_seats_more_on_the_floor_is_followed() -> void:
+	var crowded: int = Look.split(16, 50.0, 100.0, "frozen")["floor"]
+	assert_gt(crowded, 2)
+	assert_eq(crowded, Look.split(16, 50.0, 100.0, "frozen", false)["floor"])
+
+
+func test_a_car_with_a_table_brings_nobody_down_but_crowding_still_does() -> void:
+	assert_eq(Look.split(10, 50.0, 0.0, "frozen", false)["floor"], 0)
+	assert_eq(Look.split(16, 50.0, 100.0, "calm", false)["floor"], Look.split(16, 50.0, 100.0, "calm")["floor"])
+
+
+func test_the_last_two_rows_of_a_frozen_roomy_car_are_on_the_floor_bowed() -> void:
+	var rows := Look.seating(10, 50.0, 0.0, "frozen")
+	var down: Array = []
+	for k in rows.size():
+		if rows[k]["pose"] == "floor":
+			down.append(k)
+	assert_eq(down, [rows.size() - 2, rows.size() - 1])
+	for k in down:
+		assert_true(rows[k]["bowed"], "row %d" % k)
+	for row in Look.seating(10, 50.0, 0.0, "frozen", false):
+		assert_ne(row["pose"], "floor")
+
+
+func test_the_two_who_come_down_hug_their_knees() -> void:
+	var rows := Look.floor_gestures("fear", int(Look.split(10, 50.0, 0.0, "frozen")["floor"]))
+	assert_eq(rows.size(), 2)
+	for row in rows:
+		assert_eq(row["name"], Gesture.HUG_KNEES)
