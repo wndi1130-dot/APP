@@ -74,7 +74,7 @@ function upkeepText(u: Upkeep): string {
 }
 
 /** 톱니(공방 상태). 일하면 꽉 찬 톱니, 쉬면 빈 톱니, 재료가 모자라면 경고. */
-function gear(mode: 'work' | 'idle' | 'short'): SVGSVGElement {
+export function gear(mode: 'work' | 'idle' | 'short'): SVGSVGElement {
   if (mode === 'short') {
     return s('svg', { class: 'dom-gear is-short', viewBox: '0 0 16 16', 'aria-hidden': 'true' },
       s('path', { d: 'M8 2l6.5 12h-13z', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6, 'stroke-linejoin': 'round' }),
@@ -277,8 +277,8 @@ export function domesticWhyLine(view: View, car: CarDef): HTMLElement | null {
   return h('small', { class: 'carpop__why' }, why, sick.length ? h('span', { class: 'is-red' }, ` · 열병: ${sick.join(', ')}`) : null);
 }
 
-/** 기관실 칸 창의 셋째 줄: 더운물 레버(16.2, 열차 전체 하나)와 지식 현황판 단추(11.4). */
-export function domesticEngineCol(view: View, car: CarDef): HTMLElement | null {
+/** 기관실 칸 창의 셋째 줄: 더운물 레버(16.2, 열차 전체 하나)와 지식 현황판 단추(11.4). bare면 단추를 뺀다(열차 관리 화면은 아래 단추 줄에 있다). */
+export function domesticEngineCol(view: View, car: CarDef, bare = false): HTMLElement | null {
   const g = view.g;
   const d = g.dom;
   if (!d || car.comm !== 'engine') return null;
@@ -291,7 +291,7 @@ export function domesticEngineCol(view: View, car: CarDef): HTMLElement | null {
       h('button', { class: 'nav', 'data-action': 'dom-hot', 'data-value': d.hotWater + 1, disabled: d.hotWater >= 3, 'aria-label': '더운물 더' }, '+')),
     h('small', { class: 'sub num' }, `석탄 ${hotWaterCoal(g).toFixed(1)}/구간`),
     floor > 0 ? h('small', { class: 'sub' }, '법으로 드물게 이상') : null,
-    h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'board' }, '사람 키우기'));
+    bare ? null : h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'board' }, '사람 키우기'));
 }
 
 // ---- 위 자원 줄: 자재 ----
@@ -679,7 +679,7 @@ export interface H6Clock {
   hidden?: boolean;
 }
 
-/** 내정 시간으로 세는 화면이 열려 있나(12.1): 칸 창, 한눈에 보기, 내정 창, 내정 카드. 의회·정차 카드·정치 카드는 빼다. */
+/** 내정 시간으로 세는 화면이 열려 있나(12.1): 칸 창, 열차 관리 화면, 한눈에 보기, 내정 창, 내정 카드. 의회·정차 카드·정치 카드는 빼다. */
 export function domesticActive(g: Game, ui: Ui): boolean {
   if (!g.dom || g.phase === 'end') return false;
   if (ui.screen === 'council') return false;
@@ -688,7 +688,7 @@ export function domesticActive(g: Game, ui: Ui): boolean {
     if (g.phase === 'stop' && g.stop && (!g.stop.done || !ui.stopSeen)) return false;
     return !!g.cards[0]?.kind.startsWith('dom:');
   }
-  return ui.carPop !== null || ui.screen === 'overview';
+  return ui.carPop !== null || ui.screen === 'overview' || ui.screen === 'train';
 }
 
 /** 내정 조작인가(12.1): 레버 한 칸, 순서 바꾸기, 내정 카드 선택, 내정 단추. */
@@ -844,7 +844,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   switch (action) {
     case 'dom-tab':
       ui.panel = 'dom';
-      ui.carPop = null;
+      if (ui.screen !== 'train') ui.carPop = null; // 열차 관리 화면에선 보던 칸을 닫지 않는다
       du.tab = (data.tab as DomUi['tab']) ?? 'plan';
       if (du.tab === 'move') du.order = [...d0.cars];
       break;

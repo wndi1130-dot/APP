@@ -12,7 +12,7 @@ import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, domesticW
 // 홈: 옆에서 본 열차 단면. 화면보다 길어서 좌우로 스크롤한다. 칸 문 위 명판으로 칸을 구별한다.
 // 칸의 수치와 조절은 칸을 누르면 뜨는 작은 창에만 있다. 그림은 회색 상자 수준의 자리표시다.
 
-function warmthTone(w: number): string {
+export function warmthTone(w: number): string {
   if (w < 30) return 'is-freezing';
   if (w < 45) return 'is-cold';
   if (w > 70) return 'is-warm';
@@ -54,14 +54,14 @@ function carEl(view: View, car: CarDef): HTMLElement {
 }
 
 /** 꼬리칸 창 머리의 공간 단추: 지금 단을 보이고, 누르면 레버 자리에 공간 레버가 펼쳐진다(창 높이를 늘리지 않는다). */
-function spaceTab(view: View): HTMLElement {
+export function spaceTab(view: View): HTMLElement {
   const sp = view.g.space;
   const on = sp && sp.step > 0 && sp.giver ? `자리 ${sp.step}단·${COMM_SHORT[sp.giver]}` : '자리';
   return h('button', { class: cx('chip', 'space-tab', view.ui.spaceOpen && 'is-on'), 'data-action': 'space-tab', 'aria-expanded': view.ui.spaceOpen ? 'true' : 'false' }, on);
 }
 
 /** 꼬리칸 창의 공간 레버(first_leg_story 6.4): 다른 한 칸이 자리를 내준다. 0~2단. 내주는 칸은 0단일 때만 바꾼다. */
-function spaceLever(g: Game): HTMLElement {
+export function spaceLever(g: Game): HTMLElement {
   const sp = g.space ?? { step: 0, giver: null };
   const givers = COMMS.filter(c => c !== 'tail');
   const who = sp.giver ? COMM_SHORT[sp.giver] : null;
@@ -81,7 +81,7 @@ function spaceLever(g: Game): HTMLElement {
       : who ? `한 단 당기면 ${who} 관계 −${-P.spacePullRel}` : '내줄 칸을 고른다'));
 }
 
-function carPopover(view: View, car: CarDef): HTMLElement | null {
+export function carPopover(view: View, car: CarDef): HTMLElement | null {
   const { g } = view;
   const dom = domesticPopover(view, car); // S1c 내정 훅
   if (dom) return dom;
