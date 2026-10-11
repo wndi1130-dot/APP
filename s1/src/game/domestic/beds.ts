@@ -9,10 +9,19 @@ export function typhusInBeds(g: Game): number {
   return (g.dom?.typhus ?? []).filter(t => !t.apart).reduce((s, t) => s + t.patients.length, 0);
 }
 
+/** 침상이 필요한 부상자: 명부에서 침상·제 칸 상태인 사람 + 명부 밖에 오른 부상자(hub.ts 등). 가벼운 상처는 침상을 쓰지 않는다. */
+function woundBedNeed(g: Game): number {
+  const ws = (g as { wounds?: { who: string; state: string }[] }).wounds ?? [];
+  const alive = (w: { who: string }): boolean => !g.deaths.includes(w.who) && !(g.left ?? []).includes(w.who);
+  const live = ws.filter(w => alive(w) && (w.state === 'bed' || w.state === 'home' || w.state === 'light'));
+  const needBed = live.filter(w => w.state !== 'light').length;
+  return needBed + Math.max(0, Math.floor(g.injured) - live.length);
+}
+
 /** 눕힐 사람. '다친 사람 먼저'면 병자는 제 칸에서 앓아 침상을 쓰지 않는다. */
 export function bedNeed(g: Game): number {
   const sick = g.dom?.bedOrder === 'workers' ? 0 : typhusInBeds(g);
-  return Math.max(0, g.injured) + sick;
+  return woundBedNeed(g) + sick;
 }
 
 export function bedOverflow(g: Game): number {

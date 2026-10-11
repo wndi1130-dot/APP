@@ -5,6 +5,7 @@ import { D } from './domestic/data';
 import { typhusInBeds } from './domestic/beds';
 import { living, techMult } from './domestic/state';
 import { pickVictims } from './people';
+import { bump, put } from './ledger';
 import { isGone, journal, lawActive, PROFILES, rnd } from './state';
 import type { Game } from './state';
 
@@ -92,7 +93,7 @@ export function bedCount(g: Game): number {
 
 /** g.injured는 명부에서 다시 센 값이다. addWound·woundTick·의수 완성·사망 처리 뒤에 부른다. */
 export function syncInjured(g: Game): void {
-  g.injured = book(g).filter(isActive).length;
+  g.injured = liveWounds(g).length;
 }
 
 // ---- 화면에 넘기는 읽기 전용 값 ----
@@ -313,18 +314,20 @@ function bayBusy(g: Game): boolean {
  * 의약품이 모자랄 때 기록마다 하루 한 번 굴린다(활성 기록이 없으면 난수도 의약품도 쓰지 않는다).
  */
 export function woundTick(g: Game, notes: string[], medMult = 1): void {
-  const act = activeWounds(g);
+  for (const w of activeWounds(g)) if (isGone(g, w.who)) w.state = 'healed';
+  const act = liveWounds(g);
   if (act.length === 0) { syncInjured(g); return; }
+  rebalanceBeds(g);
   const need = act.reduce((s, w) => s + medPerDay(w), 0) * medMult;
   const med = g.comms.medtech;
   if (med.fervor >= 1 && med.rel <= -40) {
-    g.med = Math.max(0, g.med - need);
+    bump(g, 'med', -Math.min(need, g.med), 'sick');
     notes.push('의무진이 진료를 거부했다.');
     syncInjured(g);
     return;
   }
   if (g.med < need) {
-    g.med = 0;
+    put(g, 'med', 0, 'sick');
     notes.push('의약품이 떨어졌다.');
     for (const w of act) {
       const p = deathPerDay(w);
@@ -334,10 +337,11 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
         onDeath(g, w.comm, [w.who]);
       }
     }
+    rebalanceBeds(g);
     syncInjured(g);
     return;
   }
-  g.med -= need;
+  bump(g, 'med', -need, 'sick');
   const frozen = bayBusy(g);
   for (const w of act) {
     // 생긴 구간의 정산에서는 날을 깎지 않는다(코디네이터 10-11): 가벼운 상처도 다음 정차 한 번은 못 나간다는 뜻이 닿게 한다.
@@ -361,7 +365,16 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
   for (const w of act) {
     if (isActive(w) && w.septic && w.daysLeft < w.days0 * 2 && rnd(g) < WOUND_ROLL.septicGrow) w.daysLeft += 1;
   }
+  rebalanceBeds(g);
   syncInjured(g);
+}
+
+/** 옛 칸(명부 밖에서 오른 g.injured, 예: hub.ts)과 명부를 맞춘다. 모자란 만큼 기록을 만들고(로컬 난수), 남는 만큼 거둔다. */
+export function reconcileRoster(g: Game): void {
+  const live = liveWounds(g).length;
+  const n = Math.floor(g.injured);
+  if (n > live) noteInjury(g, n - live, 'stop', '기록 밖');
+  else if (n < live) noteRelief(g, live - n);
 }
 
 // ---- 침상 넘침(2.2) ----
