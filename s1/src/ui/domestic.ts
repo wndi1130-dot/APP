@@ -135,60 +135,80 @@ function matRow(label: string, value: number, cap?: number): HTMLElement {
     cap !== undefined ? bar(value, value > cap ? '--discontent' : '--warm', Math.max(1, cap)) : null);
 }
 
-function workshopPop(view: View, car: CarDef): HTMLElement {
+/** 공방 창 「지금」 줄: 복원 중이면 「복원: 이름 63% · 1구간」. 부품이 앞 차례를 먹으면 「부품 뒤」, 추인 전이면 「추인 기다림」. */
+export function workshopNow(g: Game): string {
+  const d = g.dom!;
+  const id = d.restoring;
+  const st = id ? d.techs[id] : null;
+  if (!id || !st) return workshopState(g).now;
+  const head = `${st.finishing ? '마무리' : '복원'}: ${techTitle(g, id)}`;
+  if (st.pending && st.progress >= st.need - 1e-9) return `${head} · 추인 기다림`;
+  const pct = Math.round((st.progress / Math.max(1, st.need)) * 100);
+  const partsFirst = d.order.indexOf('parts') < d.order.indexOf('restore') && d.parts < d.target;
+  const left = Math.max(1, Math.ceil((st.need - st.progress) / Math.max(0.01, workPower(g))));
+  return `${head} ${pct}% · ${partsFirst ? '부품 뒤' : `${left}구간`}`;
+}
+
+/** 공방에 올릴 수 있는 개조(단열, 장갑). 온실은 '칸을 내줄 곳' 카드로 간다.
+ * 단열(E5)은 규칙·맡기기(공방장)엔 이미 있었는데 화면만 막혀 있었다(K01 중간). 문서 4.4·7.3 E5 줄대로 연다. */
+function jobItems(g: Game): { k: ModKind; c: string }[] {
+  if (g.dom!.job) return [];
+  const kinds: ModKind[] = ['insulate', 'armor'];
+  return kinds.flatMap(k => Object.keys(CAR_COMM).filter(c => c !== 'engine' && jobCheck(g, k, c).ok).map(c => ({ k, c })));
+}
+
+// 공방 창(사용자 2026-10-11 「꽉 차 있다」): 한눈에 보이는 것은 지금·부품·차례·개조 넷으로 줄이고,
+// 맡기기 고르기, 차례 바꾸기, 개조 목록은 칩을 눌렀을 때만 그 아래 한 줄로 펼친다. 세운 기술을 다시 돌리는 단추는 기술 화면의 타일 설명에 있다.
+function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
   const g = view.g;
   const d = g.dom!;
   const st = workshopState(g);
   const chief = workshopChief(g);
   const ds = delegateStatus(g);
   const tier = delegateTier(g);
-  const restoring = d.restoring ? d.techs[d.restoring] : null;
-  const taskName = (t: Task) => t === 'parts' ? '부품'
-    : t === 'restore' ? `복원: ${d.restoring ? techTitle(g, d.restoring) : '비어 있음'}`
-      : `개조: ${d.job ? jobTitle(d.job.kind, d.job.car) : '비어 있음'}`;
+  const open = domUi(view.ui).ws ?? null;
+  const empty = (t: Task) => (t === 'restore' && !d.restoring) || (t === 'modify' && !d.job);
+  const taskName = (t: Task) => t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
   const lockTarget = d.delegate.on;
   const lockOrder = d.delegate.on && tier >= 2;
-  const off = TECH_IDS.filter(id => d.techs[id]?.off);
+  const jobs = jobItems(g);
+  const fold = (which: NonNullable<DomUi['ws']>, ...kids: (Node | string | null)[]) => h('button', {
+    class: cx('chip', open === which && 'is-on'), 'data-action': 'dom-ws', 'data-which': which, 'aria-expanded': open === which ? 'true' : 'false',
+  }, ...kids);
   return h('div', { class: 'carpop dom-pop', role: 'dialog', 'aria-label': '공방칸 창' },
     popHead(car,
       chief ? h('span', { class: 'dom-chief' }, portrait(chief.name, chief.comm), nameBtn(chief.name)) : null,
-      d.delegate.on || !ds.ok ? h('button', {
-        class: cx('chip', d.delegate.on && 'is-on'), 'data-action': 'dom-delegate', 'data-on': '0', disabled: !d.delegate.on, title: ds.why ?? '',
-      }, d.delegate.on ? '맡김 · 거둔다' : '맡기기') : null,
-      h('button', { class: 'btn btn--dark btn--small', 'data-action': 'dom-tab', 'data-tab': 'plan' }, '기술 되살리기 →')),
-    !d.delegate.on && ds.ok ? h('div', { class: 'dom-row' },
+      d.delegate.on ? h('button', {
+        class: 'chip is-on', 'data-action': 'dom-delegate', 'data-on': '0',
+        title: `공방장이 ${['', '목표치만', '목표치와 순서를', '복원 대상까지'][tier]} 정한다(${d.delegate.policy === 'ours' ? '우리 편 먼저' : '중립'}).`,
+      }, '맡김 · 거둔다')
+        : ds.ok ? fold('delegate', '맡기기')
+          : h('button', { class: 'chip', disabled: true, title: ds.why ?? '' }, '맡기기'),
+      inPanel ? null : h('button', { class: 'btn btn--dark btn--small', 'data-action': 'dom-tab', 'data-tab': 'plan' }, '기술 되살리기 →')),
+    open === 'delegate' && !d.delegate.on && ds.ok ? h('div', { class: 'dom-row dom-fold' },
       h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'neutral' }, '중립으로', h('small', null, ' 가장 추운 칸부터')),
       h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'ours' }, '우리 편 먼저', h('small', null, ' 호의 +1 · 나머지 −1/구간'))) : null,
-    h('div', { class: 'dom-ws' },
-      h('div', { class: 'dom-ws__left' },
-        h('div', { class: 'dom-now' },
-          gear(st.mode), h('span', null, '지금: ', h('b', null, st.now)),
-          restoring ? bar(restoring.progress, '--warm', restoring.need) : null),
-        h('div', { class: 'dom-target' },
-          h('span', null, '부품 유지 ', h('b', { class: 'num' }, d.target), h('small', { class: 'sub' }, ` 있음 ${d.parts} · 작업 ${workPower(g).toFixed(1)}/구간`)),
-          h('input', {
-            class: 'lever__input', type: 'range', min: 0, max: D.targetMax, step: 1, value: d.target, disabled: lockTarget,
-            'data-input': 'dom', 'data-which': 'target', 'aria-label': '부품 유지 목표치',
-          }),
-          !d.delegate.on && ds.why ? h('small', { class: 'dom-why' }, ds.why) : null,
-          d.delegate.on ? h('small', { class: 'dom-why' }, `공방장이 ${['', '목표치만', '목표치와 순서를', '복원 대상까지'][tier]} 정한다(${d.delegate.policy === 'ours' ? '우리 편 먼저' : '중립'}).`) : null)),
-      h('ol', { class: 'dom-order' }, d.order.map((t, i) => h('li', null,
-        h('span', { class: 'num' }, i + 1), h('span', { class: 'dom-order__name' }, taskName(t)),
-        h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑'))))),
-    off.length ? h('div', { class: 'dom-row' }, off.map(id => h('button', { class: 'chip', 'data-action': 'dom-restart', 'data-id': id, disabled: !!restartWhy(g, id), title: restartWhy(g, id) ?? '' }, `${TECHS[id].name} 다시 돌린다`))) : null,
-    jobRow(g));
-}
-
-/** 공방에 올릴 수 있는 개조(단열, 장갑). 온실은 '칸을 내줄 곳' 카드로 간다.
- * 단열(E5)은 규칙·맡기기(공방장)엔 이미 있었는데 화면만 막혀 있었다(K01 중간). 문서 4.4·7.3 E5 줄대로 연다. */
-function jobRow(g: Game): HTMLElement | null {
-  const d = g.dom!;
-  if (d.job) return null;
-  const kinds: ModKind[] = ['insulate', 'armor'];
-  const items = kinds.flatMap(k => Object.keys(CAR_COMM).filter(c => c !== 'engine' && jobCheck(g, k, c).ok).map(c => ({ k, c })));
-  if (items.length === 0) return null;
-  return h('div', { class: 'dom-row' }, h('span', { class: 'sub' }, '개조'),
-    items.map(x => h('button', { class: 'chip', 'data-action': 'dom-job', 'data-kind': x.k, 'data-car': x.c }, jobTitle(x.k, x.c))));
+    h('div', { class: 'dom-now' },
+      gear(st.mode), h('span', null, '지금: ', h('b', null, d.restoring ? workshopNow(g) : st.now)),
+      h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+    h('div', { class: 'dom-target' },
+      h('span', null, '부품 ', h('b', { class: 'num' }, d.parts), ' / 유지 ', h('b', { class: 'num' }, d.target)),
+      h('input', {
+        class: 'lever__input', type: 'range', min: 0, max: D.targetMax, step: 1, value: d.target, disabled: lockTarget,
+        'data-input': 'dom', 'data-which': 'target', 'aria-label': '부품 유지 목표치',
+      }),
+      !d.delegate.on && ds.why ? h('small', { class: 'dom-why' }, ds.why) : null),
+    h('div', { class: 'dom-row' },
+      fold('order', h('span', { class: 'sub' }, '차례 '),
+        ...d.order.flatMap((t, i) => [i ? ' › ' : null, h('span', { class: cx(empty(t) && 'is-dim') }, taskName(t))])),
+      jobs.length ? fold('jobs', '개조…', h('small', { class: 'num' }, ` ${jobs.length}`)) : null),
+    open === 'order' ? h('ol', { class: 'dom-order dom-fold' }, d.order.map((t, i) => h('li', null,
+      h('span', { class: 'num' }, i + 1),
+      h('span', { class: cx('dom-order__name', empty(t) && 'is-dim') },
+        t === 'restore' && d.restoring ? `복원: ${techTitle(g, d.restoring)}` : t === 'modify' && d.job ? `개조: ${jobTitle(d.job.kind, d.job.car)}` : taskName(t)),
+      h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null,
+    open === 'jobs' && jobs.length ? h('div', { class: 'dom-row dom-fold' },
+      jobs.map(x => h('button', { class: 'chip', 'data-action': 'dom-job', 'data-kind': x.k, 'data-car': x.c }, jobTitle(x.k, x.c)))) : null);
 }
 
 function storePop(view: View, car: CarDef): HTMLElement {
@@ -692,7 +712,7 @@ export function domesticPanel(view: View): HTMLElement | null {
   ];
   const tab = tabs.find(t => t.id === du.tab && t.show) ? du.tab : 'plan';
   const body = tab === 'plan' ? planView(view) : tab === 'board' ? boardView(view) : tab === 'move' ? moveView(view)
-    : workshopPop(view, CARS.find(c => c.id === 'workshop')!);
+    : workshopPop(view, CARS.find(c => c.id === 'workshop')!, true);
   return h('div', { class: cx('side', 'dom-side', tab === 'plan' && 'dom-side--plan'), role: 'dialog', 'aria-label': '내정 창', 'data-keep-scroll': 'dom-side' },
     h('div', { class: 'drop__head' },
       h('b', null, '내정'),
@@ -747,7 +767,7 @@ export function domesticActive(g: Game, ui: Ui): boolean {
 
 /** 내정 조작인가(12.1): 레버 한 칸, 순서 바꾸기, 내정 카드 선택, 내정 단추. */
 export function domesticOp(g: Game, action: string): boolean {
-  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats') return true;
+  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats' && action !== 'dom-ws') return true;
   if (action === 'lever') return true;
   return action === 'choose' && !!g.cards[0]?.kind.startsWith('dom:');
 }
@@ -920,6 +940,11 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-restore':
     case 'dom-cancel':
     case 'dom-finish':
+    case 'dom-ws': {
+      const which = data.which as DomUi['ws'];
+      du.ws = du.ws === which ? null : which;
+      break;
+    }
     case 'dom-restart':
     case 'dom-order':
     case 'dom-delegate':
@@ -931,6 +956,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-escort':
     case 'dom-bury':
     case 'dom-hang':
+      if (action === 'dom-delegate' || action === 'dom-job') du.ws = null; // 골랐으면 펼친 줄은 접는다
       why = ctx.step({ a: action, d: plainData(data) });
       break;
     case 'dom-move': {
