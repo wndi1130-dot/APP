@@ -21,7 +21,7 @@ static func apply(p, lying: bool) -> void:
 	p.weapon_mesh.rotation = Vector3.ZERO
 	if lying:
 		return
-	var push := shove_push(p.shove_t, p.lunge_t, SHOVE_WINDUP)
+	var push := shove_push(p.shove_t, p.lunge_t, SHOVE_WINDUP / float(p.mults()["swing"]))
 	for i in arms.size():
 		var side := -1.0 if i == 0 else 1.0
 		var t: Dictionary = arm_at(push, side)
