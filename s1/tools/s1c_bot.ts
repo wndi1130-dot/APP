@@ -420,6 +420,12 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         idx = 0;
         view.choices.forEach((c, i) => { if (c.disabled) return; const s = scoreChoice(g, c); if (s > best) { best = s; idx = i; } });
       }
+      // 멈춘 열차(구현명세 가 7절): 수색대가 열려 있으면 수색대, 없으면 열차장이 직접 간다. 안 보내는 길은 둘 다 막혔을 때만.
+      if (card.kind === 'trip_depart' || card.kind === 'trip_lost') {
+        const at = (sp: string) => view.choices.findIndex(c => c.special === sp && !c.disabled);
+        const go = [at('trip_go_crew'), at('trip_go_captain'), at('trip_stay')].find(i => i >= 0);
+        if (go !== undefined) idx = go;
+      }
       if (opts.forcePick) {
         const f = opts.forcePick(g, card, view, view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled).map(x => x.i));
         if (f !== undefined) idx = f;
