@@ -42,6 +42,9 @@ const KNOT_APART: float = 2.4
 const KNOT_Z: float = 0.15
 const KNOT_DEPTH: float = 0.45
 const GESTURE_OFFSET: float = 1.3        # seconds between one car's gestures and the next car's
+const PROP_META: String = "gesture_prop"
+const BOWL_SIZE := Vector3(0.24, 0.08, 0.2)   # the empty bowl of a hungry car: small and pale, in the lap
+const BOWL_COLOR := Color(0.8, 0.78, 0.7)
 const RESENT_TURN: float = 0.6           # rad: those who resent stand half turned to the captain's car
 ## The stove stands in front of the bench, between two floor places; a car with
 ## a table has it by the end wall.
@@ -274,15 +277,19 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 	var on_floor: int = 0
 	var x0: float = c["x0"]
 	var standers: int = 0
+	var bench_rows: int = 0
 	var floor_rows: int = 0
 	for row in rows:
 		standers += 1 if row["pose"] == "stand" else 0
+		bench_rows += 1 if row["pose"] == "sit" else 0
 		floor_rows += 1 if row["pose"] == "floor" else 0
-	var value := Look.gesture_for(c["mood"], rules.get("train", {}))
-	var also := Look.gesture_also(value, Rules.comm_of(rules, c["def"]))
+	var comm := Rules.comm_of(rules, c["def"])
+	var value := Look.gesture_for(c["mood"], rules.get("train", {}), comm)
+	var also := Look.gesture_also(value, comm)
 	var gestures := Look.knot_gestures(value, standers, int(c["index"]), also)
 	# Resentment has somewhere to look: up or down the train, at the captain's car.
 	var toward_captain: float = _captain_side(c) * RESENT_TURN
+	var sat := Look.bench_gestures(value, bench_rows)
 	var low := Look.floor_gestures(value, floor_rows)
 	for i in bodies.size():
 		var b: Node3D = bodies[i]
@@ -309,6 +316,8 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 			"sit":
 				var seat := Vector3(SLOT_FIRST + Look.seat_slot(bench, BENCH_SLOTS, gather) * SLOT_STEP, 0, BENCH_Z)
 				_sit_down(c, b, x0, seat, "sit", bool(row["huddled"]), bool(row["bowed"]))
+				# In a hungry car the first two on the bench hold an empty bowl.
+				_seat_gesture(c, b, sat[bench], bool(row["huddled"]))
 				bench += 1
 			_:
 				# The stove stands between two floor places: gathered, the floor fills on both sides of it.
@@ -317,12 +326,8 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 					slot = maxi(Look.seat_slot(on_floor, BENCH_SLOTS, true) - 1, 0)
 				var place := Vector3(SLOT_FIRST + SLOT_STEP * 0.5 + slot * SLOT_STEP, 0, FLOOR_Z)
 				_sit_down(c, b, x0, place, "floor", bool(row["huddled"]), bool(row["bowed"]))
-				# In a frightened car the first few on the floor hug their knees.
-				b.gesture = low[on_floor]["name"]
-				b.gesture_role = int(low[on_floor]["role"])
-				b.gesture_facing = 0.0
-				if b.gesture != "":
-					_show_gesture(c, b)
+				# In a frightened car the first few on the floor hug their knees; in a hungry one two lie back.
+				_seat_gesture(c, b, low[on_floor], bool(row["huddled"]))
 				on_floor += 1
 
 
@@ -402,6 +407,7 @@ func _plain(b: Node3D) -> void:
 	b.act = ""
 	if b.gesture != "":
 		Gesture.show(b, "", 0.0)
+		_show_prop(b, {})
 		b.gesture = ""
 		b.gesture_facing = 0.0
 
@@ -409,7 +415,32 @@ func _plain(b: Node3D) -> void:
 ## Draw the gesture a body is in, at the car's own beat. The gesture turns
 ## the body itself, from where it was set to face.
 func _show_gesture(c: Dictionary, b: Node3D) -> void:
-	Gesture.show(b, b.gesture, clock + float(c["index"]) * GESTURE_OFFSET, b.gesture_role, b.gesture_facing)
+	var t: float = clock + float(c["index"]) * GESTURE_OFFSET
+	Gesture.show(b, b.gesture, t, b.gesture_role, b.gesture_facing)
+	_show_prop(b, Gesture.at(b.gesture, t, b.gesture_role).get("prop", {}))
+
+
+## Put one who sits in its gesture, unless the cold has hunched it up first.
+func _seat_gesture(c: Dictionary, b: Node3D, g: Dictionary, huddled: bool) -> void:
+	b.gesture = String(g["name"]) if Look.takes(String(g["name"]), huddled) else ""
+	b.gesture_role = int(g["role"])
+	b.gesture_facing = 0.0
+	if b.gesture != "":
+		_show_gesture(c, b)
+
+
+## What a gesture has in its hands (the empty bowl of the hungry). The
+## gesture says only where it is held: the small box is made here the first
+## time and kept. {} puts it away.
+func _show_prop(b: Node3D, prop: Dictionary) -> void:
+	if not b.has_meta(PROP_META):
+		if prop.is_empty():
+			return
+		b.set_meta(PROP_META, _box(b, BOWL_SIZE, Vector3.ZERO, BOWL_COLOR))
+	var held: MeshInstance3D = b.get_meta(PROP_META)
+	held.visible = not prop.is_empty()
+	if held.visible:
+		held.position = prop["pos"]
 
 
 ## Which way along the train the captain's car lies from this one: 1 ahead,

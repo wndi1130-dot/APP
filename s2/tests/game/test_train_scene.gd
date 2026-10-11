@@ -1313,3 +1313,146 @@ func test_the_two_who_came_down_stay_where_they_sat() -> void:
 	for b in before:
 		assert_eq(b.position.x, before[b].x, "it stays where it sat")
 		assert_eq(b.position.z, before[b].y, "it stays where it sat")
+
+# ---------------------------------------------------------------- the gestures of a hungry car
+
+## A scene whose infirmary is short of food: warm enough, and no one on the floor.
+func _hungry() -> Node3D:
+	var s = _scene()
+	s.set_sit("medtech", 1, 30.0)
+	return s
+
+
+## Those of a car who hold an empty bowl that can be seen.
+func _bowls(s, car_id: String) -> int:
+	var n := 0
+	for b in s.car(car_id)["bodies"]:
+		if b.has_meta(s.PROP_META) and (b.get_meta(s.PROP_META) as Node3D).visible:
+			n += 1
+	return n
+
+
+func test_a_hungry_infirmary_has_two_on_the_bench_looking_into_a_bowl() -> void:
+	var s = _hungry()
+	var rows := _doing(s, "medtech", Gesture.BOWL_SIT)
+	assert_eq(rows.size(), 2)
+	var roles: Array = []
+	for b in rows:
+		assert_eq(b.pose, "sit")
+		assert_eq(b.state, "seat")
+		assert_false(b.huddled)
+		assert_eq(b.gesture_facing, 0.0)
+		roles.append(int(b.gesture_role))
+	roles.sort()
+	assert_eq(roles, [0, 1])
+	assert_eq(_gesturing(s, "medtech").size(), 2, "nobody else gestures")
+
+
+func test_both_hold_their_bowl_where_the_gesture_says() -> void:
+	var s = _hungry()
+	assert_eq(_bowls(s, "medtech"), 2)
+	var want: Vector3 = Gesture.at(Gesture.BOWL_SIT, 0.0, 0)["prop"]["pos"]
+	for b in _doing(s, "medtech", Gesture.BOWL_SIT):
+		var held: Node3D = b.get_meta(s.PROP_META)
+		assert_true(held.visible)
+		assert_almost_eq(float(held.position.x), want.x, 0.001)
+		assert_almost_eq(float(held.position.y), want.y, 0.001)
+		assert_almost_eq(float(held.position.z), want.z, 0.001)
+
+
+func test_the_default_scene_holds_no_bowl_and_no_gesture() -> void:
+	var s = _scene()
+	for c in s.cars:
+		assert_eq(_bowls(s, String(c["id"])), 0, String(c["id"]))
+	assert_eq(_gesturing_anywhere(s), 0)
+
+
+func test_a_car_that_is_not_hungry_holds_no_bowl() -> void:
+	var s = _hungry()
+	for id in ["tail1", "dining", "captain", "front"]:
+		assert_eq(_bowls(s, id), 0, id)
+		assert_eq(_doing(s, id, Gesture.BOWL_SIT).size(), 0, id)
+
+
+func test_a_tail_hungrier_than_cold_holds_bowls_and_the_huddled_floor_keeps_to_the_cold() -> void:
+	var s = _scene()
+	s.set_sit("tail", 1, 20.0)
+	assert_eq(_doing(s, "tail1", Gesture.BOWL_SIT).size(), 2)
+	assert_eq(_doing(s, "tail1", Gesture.SLUMP).size(), 0)
+	assert_gt(_floor_seated(s, "tail1"), 0)
+
+
+func test_a_warm_crowded_hungry_front_has_two_with_bowls_and_two_lying_back() -> void:
+	var s = _scene()
+	s.set_sit("front", 1, 30.0)
+	s.set_sit("front", 2, 100.0)
+	assert_eq(_doing(s, "front", Gesture.BOWL_SIT).size(), 2)
+	var lying := _doing(s, "front", Gesture.SLUMP)
+	assert_eq(lying.size(), 2)
+	for b in lying:
+		assert_eq(b.pose, "floor")
+		assert_eq(b.state, "seat")
+		assert_false(b.huddled)
+
+
+func test_a_ration_that_rises_puts_the_bowls_down() -> void:
+	var s = _hungry()
+	s.set_sit("medtech", 1, 60.0)
+	assert_eq(_gesturing(s, "medtech").size(), 0)
+	assert_eq(_bowls(s, "medtech"), 0)
+
+
+func test_a_colder_car_does_not_hold_bowls() -> void:
+	var s = _hungry()
+	s.set_sit("medtech", 0, 20.0)
+	assert_eq(_doing(s, "medtech", Gesture.BOWL_SIT).size(), 0)
+	assert_eq(_bowls(s, "medtech"), 0)
+
+
+func test_tension_fear_or_resentment_covers_the_hunger() -> void:
+	var tense = _hungry()
+	tense.set_train("tension", 70.0)
+	assert_eq(_doing(tense, "medtech", Gesture.BOWL_SIT).size(), 0, "tension")
+	assert_eq(_bowls(tense, "medtech"), 0, "tension")
+	var afraid = _hungry()
+	afraid.set_train("fear", 70.0)
+	assert_eq(_doing(afraid, "medtech", Gesture.BOWL_SIT).size(), 0, "fear")
+	assert_eq(_bowls(afraid, "medtech"), 0, "fear")
+	var resentful = _hungry()
+	resentful.set_comm("medtech", "rel", -50)
+	assert_eq(_doing(resentful, "medtech", Gesture.BOWL_SIT).size(), 0, "resentment")
+	assert_eq(_bowls(resentful, "medtech"), 0, "resentment")
+
+
+func test_those_with_bowls_stay_where_they_sat() -> void:
+	var s = _hungry()
+	var before: Dictionary = {}
+	for b in _doing(s, "medtech", Gesture.BOWL_SIT):
+		before[b] = Vector2(b.position.x, b.position.z)
+	assert_eq(before.size(), 2)
+	for i in 60:
+		s.step(0.1)
+	assert_eq(_doing(s, "medtech", Gesture.BOWL_SIT).size(), 2)
+	assert_eq(_bowls(s, "medtech"), 2)
+	for b in before:
+		assert_eq(b.position.x, before[b].x, "it stays where it sat")
+		assert_eq(b.position.z, before[b].y, "it stays where it sat")
+
+
+func test_hunger_adds_and_removes_nobody() -> void:
+	var s = _scene()
+	var before := _count(s, "medtech")
+	s.set_sit("medtech", 1, 30.0)
+	assert_eq(_count(s, "medtech"), before)
+
+
+func test_a_body_with_a_bowl_shows_both_its_arm_boxes() -> void:
+	var s = _hungry()
+	var rows := _doing(s, "medtech", Gesture.BOWL_SIT)
+	assert_gt(rows.size(), 0)
+	for b in rows:
+		assert_true(b.has_meta(Gesture.ARMS_META))
+		var arms: Array = b.get_meta(Gesture.ARMS_META)
+		assert_eq(arms.size(), 2)
+		for arm in arms:
+			assert_true(arm.visible)
