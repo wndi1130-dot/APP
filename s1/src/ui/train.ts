@@ -10,7 +10,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 import { nameBtn } from './names';
 import { carPopover, spaceLever, spaceTab, stackCount, warmthTone } from './home';
-import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, hungMark, potDot, trainCars, wallPeg, wallRow, workshopBoard } from './domestic';
+import { carModChips, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, hungMark, potDot, trainCars, wallPeg, wallRow, workshopBoard } from './domestic';
 
 // 열차 관리 화면(S1c, 사용자 2026-10-11): 칸을 누르면 작은 창이 아니라 화면 전체가 바뀐다.
 // 위에 열차 전체 띠, 가운데에 누른 칸의 판(상태·조절·공방 세 덩이), 아래에 단추 여섯.
@@ -75,6 +75,9 @@ function commBoard(view: View, car: CarDef): HTMLElement {
   const s = g.comms[c];
   const pct = jobPct(g, car.id);
   const job = g.dom?.job;
+  const mods = carModChips(g, car.id);
+  // 못 올리는 까닭은 줄 아래에 한 번만 적는다(이 칸의 일이 줄에 서 있으면 그 줄이 말해 준다).
+  const modWhy = pct === null ? mods.find(m => !m.done && !m.ok)?.why : undefined;
   return h('div', { class: 'carpop tpop', role: 'region', 'aria-label': `${car.name} 판` },
     h('div', { class: 'tpop__head' },
       h('b', { class: 'tpop__name' }, car.name),
@@ -99,13 +102,16 @@ function commBoard(view: View, car: CarDef): HTMLElement {
         c === 'tail' && view.ui.spaceOpen ? spaceLever(g)
           : h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car, true)),
         potDot(view)),
-      blk('공방',
+      // 이 칸에 올릴 수 있는 개조가 둘뿐이라 칩을 바로 깐다(설계 4부 5-5). 고르면 공방 줄에 선다. 종류가 늘면 단추 하나로 접는다.
+      blk('개조',
         pct !== null && job
           ? h('div', { class: 'tblk__row' }, gear('work'), h('span', null, jobTitle(job.kind, job.car).replace(`${car.name} `, '')), h('b', { class: 'num' }, `${pct}%`))
-          : h('div', { class: 'tblk__row' },
-            carMods(g, car.id).map(m => h('span', { class: 'stage' }, icon('check'), m)),
-            // 공방의 개조 화면으로 바로 간다(사용자 2026-10-11).
-            h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'modify' }, '공방에서 개조하기')))));
+          : null,
+        mods.length ? h('div', { class: 'tblk__row tmods' }, mods.map(m => m.done
+          ? h('span', { class: 'stage' }, icon('check'), m.name)
+          : h('button', { class: 'chip', 'data-action': 'dom-job', 'data-kind': m.k, 'data-car': car.id, disabled: !m.ok, title: m.why ?? '' },
+            m.name, h('small', { class: 'num' }, ` ${m.cost}`)))) : null,
+        modWhy ? h('small', { class: 'sub' }, modWhy) : null)));
 }
 
 const CARE_NAME: Record<WoundRow['care'], string> = { bed: '침상', home: '제 칸', up: '일어남' };

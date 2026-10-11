@@ -408,3 +408,6 @@
 .wsb__foot .wsb__mod { margin-left: auto; min-height: 28px; }
 .wsb .is-dim { color: var(--ink-3); }
 .wsb .dom-fold { margin-top: 4px; }
+
+/* 칸 판 「개조」 덩이의 칩: 이름과 드는 값. */
+.tmods .chip { min-height: 28px; padding: 0 10px; }

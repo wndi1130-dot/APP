@@ -336,6 +336,17 @@ const MOD_KINDS: { k: ModKind; name: string; cost: string }[] = [
   { k: 'armor', name: '장갑', cost: `고철 ${D.armorScrap}` },
 ];
 
+/** 칸 판 「개조」 덩이의 칩(설계 4부 5-5): 그 칸에 올릴 수 있는 개조와 드는 값. 끝난 것은 done, 못 올리면 까닭이 붙는다. 기관차에는 없다. */
+export function carModChips(g: Game, car: string): { k: ModKind; name: string; cost: string; done: boolean; ok: boolean; why?: string }[] {
+  const d = g.dom;
+  if (!d || !CAR_COMM[car] || car === 'engine') return [];
+  return MOD_KINDS.map(({ k, name, cost }) => {
+    const done = (k === 'insulate' ? d.insulated : d.armored).includes(car);
+    const chk = jobCheck(g, k, car);
+    return { k, name, cost, done, ok: !done && chk.ok, why: done ? undefined : chk.why };
+  });
+}
+
 /** 그 칸에 이미 한 개조 이름들(단열, 장갑). */
 export function carMods(g: Game, car: string): string[] {
   const d = g.dom!;
