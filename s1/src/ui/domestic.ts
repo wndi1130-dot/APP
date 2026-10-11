@@ -8,6 +8,8 @@ import {
 import { copyText } from './clip';
 import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
 import { cx, h, raw, s } from './dom';
+import { icon } from './icons';
+import type { IconName } from './icons';
 import { CARS, fmt, signed } from './common';
 import type { CarDef, DomUi, Ui, View } from './common';
 import { bar, portrait, tip } from './widgets';
@@ -427,22 +429,65 @@ const NODE_TAG: Record<NodeState, string> = {
   unknown: '', collect: '', defect: '결함판 가능', ready: '복원 가능', restoring: '복원 중', done: '', faded: '×0.7', rust: '고장', off: '세움',
 };
 
-function techNode(g: Game, id: TechId, sel: boolean): HTMLElement {
+const BRANCH_ICON: Record<Field, IconName> = { engine: 'gear', med: 'med', craft: 'wrench', radio: 'radio', expedition: 'compass' };
+/** 가지 탭과 줄 머리에 적는 두 글자 이름. */
+export const BRANCH_SHORT: Record<Field, string> = { engine: '기관', med: '의료', craft: '공작', radio: '통신', expedition: '원정' };
+
+/** 타일 아래 줄: 잠김이면 조각 핍, 되살리는 중이면 퍼센트, 끝났으면 ✓. 글은 네 자까지. */
+function nodeFoot(g: Game, id: TechId, ns: NodeState): (Node | string | null)[] {
+  const d = g.dom!;
+  const st = d.techs[id];
+  const need = restoreCost(id).frags;
+  const have = Math.min(need, d.frags[TECHS[id].branch]);
+  if (ns === 'restoring' && st) return [`${st.finishing ? '마무리 ' : ''}${Math.round((st.progress / Math.max(1, st.need)) * 100)}%`];
+  if (ns === 'done') return [icon('check')];
+  if (ns === 'faded') return [icon('check'), st?.stage === 'defective' ? '½' : '×0.7'];
+  if (ns === 'rust') return ['고장'];
+  if (ns === 'off') return ['세움'];
+  const blocked = (ns === 'unknown' || ns === 'collect') && have >= need;
+  return [need > 0 ? '●'.repeat(have) + '○'.repeat(need - have) : null, blocked ? icon('lock') : null];
+}
+
+function techNode(g: Game, id: TechId, sel: boolean, first: boolean): HTMLElement {
   const d = g.dom!;
   const def = TECHS[id];
   const ns = nodeState(g, id);
   const st = d.techs[id];
-  const cost = restoreCost(id);
   const tag = ns === 'faded' && st?.stage === 'defective' ? '결함판' : NODE_TAG[ns];
+  const promise = researchPromise(g)?.tech === id;
   return h('button', {
-    class: cx('dom-node', `is-${ns}`, def.tier === 0 && 'is-adapt', sel && 'is-sel'), 'data-action': 'dom-node', 'data-id': id,
-    'aria-label': `${def.name} ${tag}`,
+    class: cx('dom-node', 'tnode', `is-${ns}`, def.tier === 0 && 'is-adapt', sel && 'is-sel'), 'data-action': 'dom-node', 'data-id': id,
+    'aria-label': `${def.name} ${tag}${promise ? ' 약속' : ''}${first ? ' 먼저' : ''}`,
   },
-    h('span', { class: 'dom-node__name' }, techTitle(g, id), def.variants && !st?.variant ? ' ◇' : ''),
-    ns === 'collect' || ns === 'unknown' ? h('span', { class: 'dom-node__frag num' }, `${d.frags[def.branch]}/${cost.frags}`) : null,
-    ns === 'restoring' && st ? bar(st.progress, '--warm', st.need) : null,
-    tag && ns !== 'ready' ? h('small', { class: 'dom-node__tag' }, tag) : null, // '복원 가능'은 테두리 색으로만 보인다
-    researchPromise(g)?.tech === id ? h('small', { class: 'dom-node__promise' }, `약속 · 남은 ${researchPromise(g)!.left}구간`) : null);
+    first ? h('small', { class: 'tnode__first' }, '먼저') : promise ? h('i', { class: 'tnode__ribbon' }) : null,
+    h('span', { class: 'tnode__icon' }, icon(BRANCH_ICON[def.branch]), def.variants && !st?.variant ? h('i', { class: 'tnode__var' }, '◆') : null),
+    h('span', { class: 'dom-node__name' }, techTitle(g, id)),
+    h('span', { class: 'tnode__foot num' }, ...nodeFoot(g, id, ns)));
+}
+
+/** 처음 하는 사람에게 권할 기술 하나와 까닭 한 줄(「먼저」 리본). 약속 > 「설계도가 맞았다」 서류 > 지금 되는 것 > 조각이 가장 모인 가지.
+ * 복원 중이거나 이미 셋을 되살렸으면 권하지 않는다. 상태는 읽기만 한다. */
+export function recommendTech(g: Game): { id: TechId; why: string } | null {
+  const d = g.dom;
+  if (!d || d.restoring) return null;
+  const promise = researchPromise(g);
+  if (promise && !d.techs[promise.tech]) return { id: promise.tech, why: `약속한 기술이다. 남은 ${promise.left}구간.` };
+  const fit = g.cards.find(c => c.kind === 'dom:fit' && !!c.text && !!TECHS[c.text as TechId] && !d.techs[c.text as TechId]);
+  if (fit) return { id: fit.text as TechId, why: '설계도가 맞았다는 서류가 와 있다.' };
+  if (TECH_IDS.filter(id => d.techs[id]).length >= 3) return null;
+  const open = TECH_IDS.filter(id => !d.techs[id]);
+  const quiet = (id: TechId) => techRelSides(id).dislike.length === 0;
+  const lawless = (id: TechId) => { const laws = techLaws(id); return laws.length > 0 && !laws.some(l => g.passed[l] !== undefined); };
+  const rank = (id: TechId) => (quiet(id) ? 0 : 100) + (lawless(id) ? 50 : 0) + (TECHS[id].tier === 0 ? 15 : TECHS[id].tier * 10) + (TECHS[id].branch === 'craft' ? 0 : 1);
+  const now = open.filter(id => !restoreCheck(g, id).full).sort((a, b) => rank(a) - rank(b))[0];
+  if (now) return { id: now, why: quiet(now) ? '지금 바로 된다. 싫어하는 칸이 없다.' : '지금 바로 된다.' };
+  const f = [...FIELDS].sort((a, b) => d.frags[b] - d.frags[a])[0];
+  const next = d.frags[f] > 0 ? open.filter(id => TECHS[id].branch === f && TECHS[id].tier > 0).sort((a, b) => TECHS[a].tier - TECHS[b].tier)[0] : undefined;
+  if (next) {
+    const more = restoreCost(next).frags - d.frags[f];
+    return { id: next, why: more > 0 ? `${BRANCH_SHORT[f]} 조각 ${more}개 더 모으면 된다.` : '조각은 찼다. 다른 조건이 남았다.' };
+  }
+  return open.includes('w1') ? { id: 'w1', why: '공작 조각 하나면 된다. 공방이 빨라진다.' } : null;
 }
 
 function sideLine(sides: { like: Comm[]; dislike: Comm[] }): string {
@@ -535,20 +580,29 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
     buttons.length ? h('div', { class: 'dom-buttons' }, buttons) : null);
 }
 
+/** 기술 화면: 가지 탭, 고른 가지 한 줄이 왼쪽에서 오른쪽으로 단계별로 뻗고(넓은 화면은 다섯 줄 다), 설명은 아래 고정 카드. */
 function planView(view: View): HTMLElement {
   const g = view.g;
-  const sel = domUi(view.ui).node as TechId | null;
+  const d = g.dom!;
+  const rec = recommendTech(g);
+  const picked = domUi(view.ui).node as TechId | null;
+  const sel: TechId = picked && TECHS[picked] ? picked : rec?.id ?? d.restoring ?? 'w1';
+  const branch = TECHS[sel].branch;
+  const now = d.restoring ? d.techs[d.restoring] : null;
   const tiers = [1, 2, 3, 0] as const;
-  return h('div', { class: 'dom-plan' },
-    h('div', { class: 'dom-plan__grid' },
-      h('span', null), ['응급 복원', '구시대 표준', '잃어버린 기술', '적응'].map(t => h('span', { class: 'dom-plan__col sub' }, t)),
-      FIELDS.map(f => [
-        h('span', { class: 'dom-plan__row' }, BRANCH_NAME[f]),
-        tiers.map(t => h('div', { class: 'dom-plan__cell' },
-          TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t).map(id => techNode(g, id, sel === id)))),
-      ])),
-    h('p', { class: 'sub' }, '◇ 변형 둘 중 하나'),
-    sel && TECHS[sel] ? nodeDetail(g, sel) : null);
+  return h('div', { class: 'tplan' },
+    h('div', { class: 'tplan__tabs' },
+      FIELDS.map(f => h('button', {
+        class: cx('chip', f === branch && 'is-on'), 'data-action': 'dom-branch', 'data-branch': f, 'aria-pressed': f === branch ? 'true' : 'false',
+      }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f])),
+      now && d.restoring ? h('span', { class: 'tplan__now num' }, gear('work'), `${Math.round((now.progress / Math.max(1, now.need)) * 100)}%`) : null),
+    h('div', { class: 'tplan__tree' }, FIELDS.map(f => h('div', { class: cx('tplan__row', f === branch && 'is-on') },
+      h('span', { class: 'tplan__label' }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f]),
+      tiers.map(t => h('div', { class: cx('tplan__cell', t === 0 && 'is-adapt') },
+        TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t).map(id => techNode(g, id, sel === id, rec?.id === id))))))),
+    h('div', { class: 'tplan__detail', 'data-keep-scroll': 'tplan-detail' },
+      rec?.id === sel ? h('p', { class: 'tplan__why' }, h('b', null, '먼저'), ` ${rec.why}`) : null,
+      nodeDetail(g, sel)));
 }
 
 function dots(skill: number): string {
@@ -639,7 +693,7 @@ export function domesticPanel(view: View): HTMLElement | null {
   const tab = tabs.find(t => t.id === du.tab && t.show) ? du.tab : 'plan';
   const body = tab === 'plan' ? planView(view) : tab === 'board' ? boardView(view) : tab === 'move' ? moveView(view)
     : workshopPop(view, CARS.find(c => c.id === 'workshop')!);
-  return h('div', { class: 'side dom-side', role: 'dialog', 'aria-label': '내정 창', 'data-keep-scroll': 'dom-side' },
+  return h('div', { class: cx('side', 'dom-side', tab === 'plan' && 'dom-side--plan'), role: 'dialog', 'aria-label': '내정 창', 'data-keep-scroll': 'dom-side' },
     h('div', { class: 'drop__head' },
       h('b', null, '내정'),
       h('span', { class: 'dom-tabs' }, tabs.filter(t => t.show).map(t => h('button', {
@@ -693,7 +747,7 @@ export function domesticActive(g: Game, ui: Ui): boolean {
 
 /** 내정 조작인가(12.1): 레버 한 칸, 순서 바꾸기, 내정 카드 선택, 내정 단추. */
 export function domesticOp(g: Game, action: string): boolean {
-  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-mats') return true;
+  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats') return true;
   if (action === 'lever') return true;
   return action === 'choose' && !!g.cards[0]?.kind.startsWith('dom:');
 }
@@ -851,6 +905,12 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-node':
       du.node = du.node === data.id ? null : data.id ?? null;
       break;
+    case 'dom-branch': {
+      // 가지를 바꾸면 그 가지에서 아직 안 되살린 첫 기술을 고른다.
+      const ids = TECH_IDS.filter(id => TECHS[id].branch === data.branch);
+      du.node = ids.find(id => !d0.techs[id]) ?? ids[0] ?? null;
+      break;
+    }
     case 'dom-mats':
       du.mats = !du.mats;
       break;

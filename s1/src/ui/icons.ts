@@ -6,7 +6,7 @@ import { s } from './dom';
 export type IconName =
   | 'coal' | 'food' | 'med' | 'lux' | 'trust' | 'tension' | 'fist' | 'hand' | 'book' | 'menu' | 'overview'
   | 'arrow' | 'back' | 'eye' | 'eyeOff' | 'secret' | 'symbol' | 'heat' | 'ration' | 'people' | 'witness'
-  | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed';
+  | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed' | 'gear' | 'wrench' | 'radio' | 'compass' | 'check' | 'lock';
 
 const P: Record<IconName, string> = {
   coal: 'M3 9h18l-2 8H5z M6 9l2-3 3 2 3-3 3 2 2 2 M7 20a1.5 1.5 0 1 0 0.01 0 M17 20a1.5 1.5 0 1 0 0.01 0',
@@ -39,6 +39,12 @@ const P: Record<IconName, string> = {
   numbers: 'M4 20V10 M10 20V4 M16 20v-7 M22 20H2',
   scale: 'M12 4v16 M7 20h10 M5 7h14 M5 7l-3 7a3 3 0 0 0 6 0z M19 7l-3 7a3 3 0 0 0 6 0z',
   bed: 'M3 18V7 M3 14h18v4 M21 14v-2a3 3 0 0 0-3-3h-7v5 M7 11.5a1.5 1.5 0 1 0 0.01 0',
+  gear: 'M12 8.5a3.5 3.5 0 1 0 0.01 0 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2',
+  wrench: 'M15 4a4.5 4.5 0 0 0-4 6.5L4 17.5 6.5 20l7-7A4.5 4.5 0 0 0 20 9l-3 3-3-3 3-3a4.5 4.5 0 0 0-2-2z',
+  radio: 'M12 21V11 M12 11a1.5 1.5 0 1 0 0.01 0 M8 15a6 6 0 0 1 0-8 M16 7a6 6 0 0 1 0 8 M5 18a10 10 0 0 1 0-14 M19 4a10 10 0 0 1 0 14',
+  compass: 'M12 3a9 9 0 1 0 0.01 0 M15.5 8.5l-2 5-5 2 2-5z',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  lock: 'M7 11h10v9H7z M9 11V8a3 3 0 0 1 6 0v3',
   lever: 'M6 20h12 M12 20V8 M12 8l5-5 M17 3a1.5 1.5 0 1 0 0.01 0',
 };
 
