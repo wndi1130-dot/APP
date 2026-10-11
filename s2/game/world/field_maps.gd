@@ -35,6 +35,12 @@ const BY_TRAIN: int = 3
 const CAR_LEN: int = 16
 
 
+## A sewer hole with a lid can be shut; the others (a culvert, a drain) cannot.
+## A map names its lids "manhole", "manhole_01", ...
+static func lid(hole: String) -> bool:
+	return hole.begins_with("manhole")
+
+
 static func path_of(place_id: String) -> String:
 	if BUILT_IN.has(place_id):
 		return BUILT_IN[place_id]

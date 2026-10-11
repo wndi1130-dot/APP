@@ -1419,7 +1419,7 @@ func _update_hordes(delta: float) -> void:
 			rattle[s["entry"]] = maxf(float(rattle.get(s["entry"], 0.0)), 0.5)
 	for key in rattle.keys():
 		rattle[key] -= delta
-		if key == "manhole":
+		if FieldMaps.lid(key) and view.manhole_nodes.has(key):
 			var node: MeshInstance3D = view.manhole_nodes[key]
 			node.position.y = absf(sin(now * 31.0)) * 0.08 if rattle[key] > 0.0 else 0.0
 		if rattle[key] <= 0.0:
@@ -1508,7 +1508,7 @@ func _start_horde(h: Dictionary) -> void:
 		# While the train is held the horde walks to its doors, each body to one.
 		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": holdout.target(i) if holdout.on else target, "entry": key})
 	if director.sewer(key):
-		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
+		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if FieldMaps.lid(key) else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
 		set_radio("기관사: %s, 저것들이 들어온다." % director.name_of(key), "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
@@ -1591,7 +1591,7 @@ func _someone_near(at: Vector3, r: float) -> bool:
 ## Once per field, when the next wave comes up the open street manhole: how to
 ## shut it (H3 2026-10-09: the player never found that it can be shut).
 func lid_tip() -> String:
-	if lid_tip_told or director.next_entry != "manhole" or not director.is_open("manhole") or director.is_exhausted():
+	if lid_tip_told or not FieldMaps.lid(director.next_entry) or not director.is_open(director.next_entry) or director.is_exhausted():
 		return ""
 	lid_tip_told = true
 	return " 맨홀은 판자나 고철로 누르면 막힌다."
@@ -1599,7 +1599,11 @@ func lid_tip() -> String:
 
 ## Another open sewer mouth with nobody near it, culvert first, or "".
 func _free_sewer(not_this: String) -> String:
-	for key in ["culvert", "manhole", "cellar"]:
+	var order: Array = ["culvert", "manhole", "cellar"]
+	for key in data["manholes"]:
+		if not order.has(key):
+			order.append(key)
+	for key in order:
 		if key != not_this and data["manholes"].has(key) and director.is_open(key) and not _someone_near(entry_pos(key), SEWER_CLEAR):
 			return key
 	return ""

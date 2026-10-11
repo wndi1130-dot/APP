@@ -646,9 +646,9 @@ func coal_left() -> float:
 ## Put something heavy on the street manhole: one plank or scrap, 8 s, a
 ## normal sound. The culvert can't be closed (field_unified 6 하수도).
 func block_lid(p, key: String) -> void:
-	if key != "manhole":
+	if not game.FieldMaps.lid(key):
 		if p == game.player:
-			game.hud.toast("암거는 막을 수 없다.")
+			game.hud.toast("%s는 막을 수 없다." % ("암거" if key == "culvert" else "이 구멍"))
 		return
 	if not game.director.is_open(key):
 		return
@@ -671,7 +671,7 @@ func _lid_blocked(p, key: String, mat: String) -> void:
 	game.director.block(key)
 	game.view.update_manhole(key, true)
 	game.receipt.place_note("manholeBlocked", true)
-	game.hud.toast("맨홀을 막았다. 그 몫은 암거로 나온다.")
+	game.hud.toast("맨홀을 막았다. 그 몫은 %s 나온다." % ("암거로" if game.data["manholes"].has("culvert") else "다른 길로"))
 
 
 # ---------------------------------------------------------------- treatment, crafting
@@ -819,7 +819,7 @@ func context(p) -> Array:
 	if p.items.has("cloth") and int(p.items.get("bandage", 0)) < 2:
 		out.append({"label": "붕대 만들기", "call": tear_bandage.bind(p)})
 	for key in game.data["manholes"]:
-		if key == "manhole" and game.director.is_open(key) and p.position.distance_to(FieldGrid.center(game.data["manholes"][key])) < 2.5:
+		if game.FieldMaps.lid(key) and game.director.is_open(key) and p.position.distance_to(FieldGrid.center(game.data["manholes"][key])) < 2.5:
 			out.append({"label": "맨홀 막기", "call": block_lid.bind(p, key)})
 	var wall: Dictionary = game.holdout.wall_row(p)
 	if not wall.is_empty():
