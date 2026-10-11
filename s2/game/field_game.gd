@@ -7,7 +7,7 @@ signal finished(result: Dictionary)
 signal restart_requested
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
-const SulehufMap = preload("res://game/world/sulehuf_map.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const Person = preload("res://game/actors/person.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -90,6 +90,7 @@ const MISSIONS: Array[String] = ["", "survey", "depot"]
 var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var rng := RandomNumberGenerator.new()
+var place: String = ""                 # which map this stop is played on (FieldMaps)
 var data: Dictionary
 var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
@@ -229,15 +230,15 @@ func _ready() -> void:
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
-	data = SulehufMap.build()
-	grid = data["grid"]
-	levels = data["levels"]
-	stairs = data["stairs"]
-	seen_memory.resize(grid.width * grid.height * 4)
+	place = FieldMaps.resolve(String(opts.get("place", "")))
+	_take_map(FieldMaps.build(place))
 	director = HordeDirector.new(rng)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
-	receipt = Receipt.new(SulehufMap.PLACE_ID, "freight", "small_station_siding")
+	# The receipt knows six kinds of place (the S1 contract); a kind it does not
+	# know yet is written as the freight stop it was drawn from.
+	var kind: String = data["place_kind"]
+	receipt = Receipt.new(data["place_id"], kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
 	receipt.set_source("direct")
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
@@ -723,9 +724,19 @@ func allies_alive() -> Array:
 
 # ---------------------------------------------------------------- levels
 
+## The map the field stands on. Everything that reads the ground goes through
+## these four, so a stop of several joined maps can hand over a new one here.
+func _take_map(d: Dictionary) -> void:
+	data = d
+	grid = data["grid"]
+	levels = data["levels"]
+	stairs = data["stairs"]
+	seen_memory.resize(grid.width * grid.height * 4)
+
+
 ## Floors are stacked LEVEL_H apart; position.y says which one a body is on.
 func level_of(at: Vector3) -> int:
-	return clampi(roundi(at.y / SulehufMap.LEVEL_H), -1, 2)
+	return clampi(roundi(at.y / FieldMaps.LEVEL_H), -1, 2)
 
 
 func grid_at(at: Vector3) -> FieldGrid:
@@ -733,12 +744,12 @@ func grid_at(at: Vector3) -> FieldGrid:
 
 
 func level_y(lv: int) -> float:
-	return lv * SulehufMap.LEVEL_H
+	return lv * FieldMaps.LEVEL_H
 
 
 ## Centre of cell c on level lv.
 func lift(c: Vector2i, lv: int) -> Vector3:
-	return FieldGrid.center(c) + Vector3(0, lv * SulehufMap.LEVEL_H, 0)
+	return FieldGrid.center(c) + Vector3(0, lv * FieldMaps.LEVEL_H, 0)
 
 
 ## Sight and memory keys: one slice of the map per level, cellar first.
@@ -877,7 +888,7 @@ static func _label_rooms(lg: FieldGrid) -> PackedInt32Array:
 
 func _append_level(out: PackedVector3Array, leg: PackedVector3Array, lv: int) -> void:
 	for q in leg:
-		out.append(Vector3(q.x, lv * SulehufMap.LEVEL_H, q.z))
+		out.append(Vector3(q.x, lv * FieldMaps.LEVEL_H, q.z))
 
 
 ## The straight line on the screen through a point, moved to height y
@@ -1692,7 +1703,7 @@ func screen_to_ground(screen: Vector2) -> Vector3:
 	if absf(dir.y) < 0.0001:
 		return Vector3.ZERO
 	# The floor the player stands on is the plane a finger lands on.
-	var t := (level_of(player.position) * SulehufMap.LEVEL_H - origin.y) / dir.y
+	var t := (level_of(player.position) * FieldMaps.LEVEL_H - origin.y) / dir.y
 	return origin + dir * t
 
 
