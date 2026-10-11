@@ -35,6 +35,7 @@ const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
+const AllyLines = preload("res://game/sim/ally_lines.gd")
 
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
@@ -133,6 +134,7 @@ var ledger := NoiseLedger.new()
 var director: HordeDirector
 var receipt: Receipt
 var telemetry: Telemetry
+var lines := AllyLines.new()
 var combat: Combat
 var ai: AI
 var actions: Actions
@@ -978,6 +980,7 @@ func _step(delta: float) -> void:
 		_update_person(p, delta)
 	zombies.update(delta)
 	ai.update(delta)
+	_left_behind()
 	combat.update(delta)
 	_update_hordes(delta)
 	_update_spawns(delta)
@@ -1248,6 +1251,8 @@ func on_person_died(p: Person) -> void:
 	if p.team != "raider":
 		receipt.person("dead", p.pid)
 		say(p, "%s 죽었다." % p.display_name)
+		if squad.has(p):
+			shout_near(p, "rage")
 	# Everyone is already infected: the body stands up again (zombies.md).
 	var z := zombies.add_rising(p.position, p.display_name)
 	p.brain["rising_id"] = z["id"]
@@ -1725,10 +1730,47 @@ func _radio_show(text: String) -> void:
 
 
 ## What happened to p, in a few words. `hurt`: it is a wound (the hud shows
-## those of the chief at the screen's edges, not as a note).
-func say(p, text: String, hurt: bool = false) -> void:
+## those of the chief at the screen's edges, not as a note). `event`: what a
+## companion shouts about it (ally_lines.gd), if anything.
+func say(p, text: String, hurt: bool = false, event: String = "") -> void:
 	if hud != null:
 		hud.say(p, text, hurt)
+	if event != "":
+		shout(p, event)
+
+
+## A companion shouts a line over their head (words only). The chief, the
+## raiders and the dead keep quiet.
+func shout(p, event: String) -> void:
+	if hud == null or p == player or not squad.has(p) or p.body.dead:
+		return
+	var line: String = lines.pick(String(p.pid), event, clock.elapsed)
+	if line != "":
+		hud.shout(p, line)
+
+
+## One of the squad fell: the companion nearest to them, if near, rages.
+func shout_near(fallen, event: String) -> void:
+	var best = null
+	var best_d: float = AllyLines.RAGE_NEAR
+	for o in squad:
+		if o == fallen or o == player or not o.is_alive() or o.body.downed:
+			continue
+		var d: float = o.position.distance_to(fallen.position)
+		if d < best_d:
+			best_d = d
+			best = o
+	if best != null:
+		shout(best, event)
+
+
+## Lying hurt or held while the chief walks off.
+func _left_behind() -> void:
+	for o in squad:
+		if o == player or o.body.dead or not (o.body.downed or not o.grabbers.is_empty()):
+			continue
+		if o.position.distance_to(player.position) > AllyLines.LEFT_BEHIND_M:
+			shout(o, "left_behind")
 
 
 # ---------------------------------------------------------------- vision & camera
