@@ -21,6 +21,12 @@ const FIRE_BURN: float = 120.0
 const SNOW_TIME: float = 240.0
 const CLIMB_FAST: float = 3.0
 const CLIMB_CAREFUL: float = 6.0
+# Over the train at a coupling (a map's "crossings"), one at a time, like a
+# ladder: first values, to be tuned by play (user 2026-10-12).
+const CROSS_TIME: float = 3.0
+const CROSS_LOADED: float = 5.0
+const CROSS_NEAR: float = 1.6
+const CROSS_FOLLOW: float = 8.0     # companions this near the way come over after the chief
 const BLOCK_LID_TIME: float = 8.0
 const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
@@ -50,6 +56,7 @@ func update(delta: float) -> void:
 	_tower(delta)
 	_dig_noise(delta)
 	_ladder_falls()
+	_crossing_falls()
 	_player_goal()
 	unload_t -= delta
 	if unload_t <= 0.0:
@@ -568,6 +575,93 @@ func _ladder_falls() -> void:
 				game.combat.fall(p, "사다리에서 떨어졌다", 1.0, true)
 
 
+# ---------------------------------------------------------------- over the train
+
+## The two ends of a way over the train: the ground cell above its first cell
+## and the one below its last.
+static func crossing_ends(crossing: Dictionary) -> Array:
+	var cells: Array = crossing["cells"].duplicate()
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y)
+	return [cells[0] + Vector2i(0, -1), cells[cells.size() - 1] + Vector2i(0, 1)]
+
+
+## The way over the train p stands at: {"i", "from", "to"}, or {} if none.
+func crossing_at(p) -> Dictionary:
+	if game.level_of(p.position) != 0:
+		return {}
+	var ways: Array = game.data["crossings"]
+	for i in ways.size():
+		var ends: Array = crossing_ends(ways[i])
+		for k in 2:
+			if FieldGrid.center(ends[k]).distance_to(p.position) < CROSS_NEAR:
+				return {"i": i, "from": ends[k], "to": ends[1 - k]}
+	return {}
+
+
+## Hurt enough that the climb is beyond them (as the end of a stop counts the hurt).
+func too_hurt_to_cross(p) -> bool:
+	return p.body.bleed >= 2 or p.body.leg_fracture or p.body.arm_fracture or p.body.downed
+
+
+## Why p cannot go over there now ("" if they can): the way is for people on
+## foot, one at a time; the hurt and whoever carries someone go round.
+func cross_refused(p, way: Dictionary) -> String:
+	var who: Dictionary = game.data["crossings"][int(way["i"])].get("who", {})
+	if not bool(who.get("person", true)):
+		return "여기로는 못 넘는다."
+	if too_hurt_to_cross(p) and not bool(who.get("wounded", false)):
+		return "다친 몸으로는 못 넘는다. 열차 끝으로 돌아야 한다."
+	if p.carrying_wounded != null:
+		return "사람을 업고는 못 넘는다."
+	if p.carry_state() >= 1 and not bool(who.get("carrying", true)):
+		return "짐을 들고는 못 넘는다."
+	for o in game.people_alive():
+		if o != p and o.action == "climb" and int(o.brain.get("crossing", -1)) == int(way["i"]):
+			return "앞사람이 넘는 중이다."
+	return ""
+
+
+func cross_seconds(p) -> float:
+	return CROSS_LOADED if p.carry_state() >= 1 else CROSS_TIME
+
+
+## Over the train: hands full of the climb for its seconds, then down on the
+## other side. The companions who follow come over after, one by one.
+func cross_train(p, way: Dictionary) -> bool:
+	var no: String = cross_refused(p, way)
+	if no != "":
+		if p == game.player:
+			game.hud.toast(no)
+		return false
+	p.aim.stop()
+	p.brain["crossing"] = int(way["i"])
+	p.start_action("climb", "넘는 중", cross_seconds(p), _crossed.bind(p, way))
+	game.make_sound(p.position, SimNoise.Level.QUIET, "ladder", p)
+	return true
+
+
+func _crossed(p, way: Dictionary) -> void:
+	p.brain.erase("crossing")
+	p.brain.erase("cross")
+	p.position = FieldGrid.center(way["to"])
+	p.stop()
+	if p != game.player:
+		return
+	for o in game.squad:
+		if o != p and o.is_alive() and o.command == "follow" and o.position.distance_to(FieldGrid.center(way["from"])) < CROSS_FOLLOW:
+			o.brain["cross"] = way
+
+
+## Grabbed half way over: down they come, on the side they started from.
+func _crossing_falls() -> void:
+	for p in game.people_alive():
+		if p.brain.has("crossing") and (p.action != "climb" or not p.grabbers.is_empty()):
+			var held: bool = not p.grabbers.is_empty()
+			p.brain.erase("crossing")
+			if held:
+				game.combat.fall(p, "넘다가 떨어졌다", 0.05, true)
+
+
 # ---------------------------------------------------------------- work site
 
 ## The crew comes down only when nothing awake stands near the wagons
@@ -826,6 +920,9 @@ func context(p) -> Array:
 		out.append(wall)
 	if on_signal_top(p):
 		out.append({"label": "내려가기", "call": ladder.bind(p, "fast")})
+	var way: Dictionary = crossing_at(p)
+	if not way.is_empty():
+		out.append({"label": "열차 넘기 %d초" % int(cross_seconds(p)), "call": cross_train.bind(p, way)})
 	for o in game.allies_alive():
 		if o != p and o.body.bleed > 0 and o.position.distance_to(p.position) < 1.8:
 			out.append({"label": "%s 치료" % o.display_name, "call": treat.bind(p, o)})
