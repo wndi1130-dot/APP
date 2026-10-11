@@ -646,7 +646,7 @@ func knock_down(z: Dictionary) -> void:
 	# Knocked off its victim: the victim is let go, or the grab still bites.
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
-	DeadPose.mark_fall(z)
+	DeadPose.mark_fall(z, _people)
 	z["state"] = "downed"
 	z["t"] = game.rng.randf_range(GET_UP.x, GET_UP.y)
 	z["victim"] = null
@@ -655,7 +655,7 @@ func knock_down(z: Dictionary) -> void:
 func kill(z: Dictionary) -> void:
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
-	DeadPose.mark_fall(z)
+	DeadPose.mark_fall(z, _people)
 	z["state"] = "dead"
 	z["victim"] = null
 	game.on_zombie_killed(z)
@@ -684,12 +684,14 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			look = "corpse"
 		var down := DeadPose.down_k(z)
 		if down > 0.0:
-			basis = basis * Basis(Vector3.RIGHT, -PI * 0.5 * down)
+			basis = basis * Basis(Vector3.RIGHT, DeadPose.fall_side(z) * PI * 0.5 * down)
 			pos.y = pos.y + DeadPose.LIFT * down
 			# Flat on the ground it is still (a crawler drags itself); going over or coming up, the limbs move.
 			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
+		elif state != "frozen" and state != "waking":
+			basis = basis * DeadPose.gait_basis(z)
 		if state == "frozen":
 			look = "frozen"
 			frozen_anim = 1.0
