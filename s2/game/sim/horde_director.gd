@@ -47,6 +47,14 @@ var index: int = 0
 var last_arrival: float = -INF
 var budget_left: int = BUDGET
 var next_entry: String = FIRST_ENTRY
+## Where hordes come in on this map. The first stop's are the constants above;
+## another map gives its own (use_map).
+var entries: Array = ENTRIES
+var weights: Dictionary = ENTRY_WEIGHTS
+var sewers: Array = SEWERS
+var names: Dictionary = ENTRY_NAMES
+var phrases: Dictionary = ENTRY_PHRASES
+var first_entry: String = FIRST_ENTRY
 ## Total seconds pulled forward by noise (for logs).
 var pulled_seconds: float = 0.0
 var rest_until: float = -INF
@@ -157,6 +165,47 @@ func pressure(now: float) -> float:
 
 
 ## Calling range grows with time on the field: 1.0 -> 1.6 at 1800 s.
+## Take the ways in from a map's data: "entries" (name -> cells) with, where
+## the map gives them, "entry_weights", "entry_names" and "first_entry"; the
+## holes of "manholes" are its sewers. Left out: every way weighs the same and
+## is called by its key. The first stop gives none of these and keeps the
+## constants (and so its dice).
+func use_map(d: Dictionary) -> void:
+	var keys: Array = d.get("entries", {}).keys()
+	if keys.is_empty():
+		return
+	var same: bool = keys.size() == ENTRIES.size()
+	for k in keys:
+		same = same and ENTRIES.has(k)
+	if same and not (d.has("entry_weights") or d.has("entry_names") or d.has("first_entry")):
+		return
+	entries = keys
+	weights = {}
+	names = {}
+	phrases = {}
+	var given_w: Dictionary = d.get("entry_weights", {})
+	var given_n: Dictionary = d.get("entry_names", {})
+	for k in keys:
+		weights[k] = maxf(float(given_w.get(k, 1.0)), 0.0)
+		names[k] = String(given_n.get(k, k))
+	sewers = []
+	for k in d.get("manholes", {}):
+		if keys.has(k):
+			sewers.append(k)
+	first_entry = String(d.get("first_entry", keys[0]))
+	if not keys.has(first_entry):
+		first_entry = keys[0]
+	next_entry = first_entry
+
+
+func name_of(entry: String) -> String:
+	return String(names.get(entry, entry))
+
+
+func sewer(entry: String) -> bool:
+	return sewers.has(entry)
+
+
 func call_range_mult(now: float) -> float:
 	return 1.0 + CALL_RANGE_GROWTH * clampf(now / FieldClock.LIMIT_SEC, 0.0, 1.0)
 
@@ -165,7 +214,7 @@ func call_range_mult(now: float) -> float:
 func forecast(now: float, precision: int, clock) -> String:
 	if is_exhausted():
 		return "더 오는 기척은 없다."
-	var where: String = ENTRY_NAMES.get(next_entry, next_entry)
+	var where: String = name_of(next_entry)
 	if precision <= 0:
 		var left_min: float = maxf(seconds_to_next(now), 0.0) * FieldClock.GAME_PER_REAL / 60.0
 		var when: String = "곧"
@@ -173,7 +222,7 @@ func forecast(now: float, precision: int, clock) -> String:
 			when = "한 시간쯤"
 		elif left_min >= HALF_MIN:
 			when = "반 시간쯤"
-		return "%s, %s." % [ENTRY_PHRASES.get(next_entry, where), when]
+		return "%s, %s." % [phrases.get(next_entry, where + " 쪽에서 온다"), when]
 	var at_min: float = _arrival_minutes(maxf(next_arrival, now), clock)
 	var rounded: int = roundi(at_min / 15.0) * 15
 	var hh: int = floori(rounded / 60.0) % 24
@@ -209,12 +258,12 @@ func block(entry: String) -> void:
 
 
 func is_open(entry: String) -> bool:
-	return ENTRIES.has(entry) and not blocked.has(entry)
+	return entries.has(entry) and not blocked.has(entry)
 
 
 ## A loud sound next to a sewer hole wakes that hole: the next horde climbs out there.
 func call_from(entry: String) -> bool:
-	if not SEWERS.has(entry) or not is_open(entry) or is_exhausted():
+	if not sewers.has(entry) or not is_open(entry) or is_exhausted():
 		return false
 	next_entry = entry
 	return true
@@ -232,15 +281,15 @@ func _pick_entry() -> String:
 		banned = entry_history[n - 1]
 	var total: float = 0.0
 	var choices: Array[String] = []
-	for e: String in ENTRIES:
+	for e: String in entries:
 		if e != banned and not blocked.has(e):
 			choices.append(e)
-			total += float(ENTRY_WEIGHTS[e])
+			total += float(weights[e])
 	if choices.is_empty():
-		return FIRST_ENTRY
+		return first_entry
 	var r: float = _rng.randf() * total
 	for e: String in choices:
-		r -= float(ENTRY_WEIGHTS[e])
+		r -= float(weights[e])
 		if r <= 0.0:
 			return e
 	return choices[choices.size() - 1]

@@ -30,7 +30,7 @@ const TABLE: Dictionary = {
 	# A dead body goes over (0.25 s in it meets the ground) and, at the end of its
 	# time down, comes up again. For the rules it is down or up at once; these
 	# are what is seen (dead_pose.gd).
-	"dead_fall": {"len": 0.45, "hit": -1.0, "feet": Vector2(0.0, 0.45), "open": -1.0, "sound": 0.25, "upper": false, "loop": false},
+	"dead_fall": {"len": 0.75, "hit": -1.0, "feet": Vector2(0.0, 0.75), "open": -1.0, "sound": 0.63, "upper": false, "loop": false},
 	"dead_rise": {"len": 1.2, "hit": -1.0, "feet": Vector2(0.0, 1.2), "open": 0.0, "sound": -1.0, "upper": false, "loop": false},
 	"fall": {"len": 1.5, "hit": -1.0, "feet": Vector2(0.0, 1.5), "open": -1.0, "sound": 0.2, "upper": false, "loop": false},
 }

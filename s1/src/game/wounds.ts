@@ -1,5 +1,5 @@
 import { crowdSepticP } from './crowd';
-import { onDeath } from './death';
+import { DEATH_HOOKS, onDeath } from './death';
 import { COMMS } from './data';
 import type { Comm, LawId } from './data';
 import { lawTechRes } from './domestic/lawtech';
@@ -317,6 +317,12 @@ export function noteDrop(g: Game, who: string): void {
     if (wounds[i].who === who && isActive(wounds[i])) { wounds.splice(i, 1); return; }
   }
 }
+
+// 다쳐 있던 사람이 죽으면 부상자 수에서도 뺀다. 명부는 죽은 사람의 기록을 세지 않으니, 안 빼면 g.injured만 남아 다음 정산(reconcileRoster)이 엉뚱한 산 사람을 다치게 채운다.
+DEATH_HOOKS.push((g, _c, names) => {
+  const lost = activeWounds(g).filter(w => names.includes(w.who)).length;
+  if (lost > 0) g.injured = Math.max(0, g.injured - lost);
+});
 
 // ---- 정산 ----
 function bayBusy(g: Game): boolean {

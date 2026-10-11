@@ -111,7 +111,7 @@ func test_near_only_a_horde_far_from_you_is_not_called() -> void:
 func test_near_the_other_meaning_far_from_the_train_only_a_hiss() -> void:
 	var p = game.player
 	game.radio_near = "train"
-	var train: Vector3 = FieldGrid.center(game.HORDE_HOME)
+	var train: Vector3 = FieldGrid.center(game.horde_home())
 	p.position = train + Vector3(game.RADIO_NEAR_M - 10.0, 0, 0)
 	assert_true(_call("들어온다", "urgent", train + Vector3(200, 0, 0)), "where the horde is does not matter")
 	assert_eq(game.radio, "들어온다")
@@ -146,7 +146,7 @@ func test_paused_the_radio_key_goes_round_the_three_settings() -> void:
 func test_a_horde_coming_in_near_you_is_called_and_rings_loud() -> void:
 	game.clock.elapsed = 300.0
 	game.radio_near = "train"   # so the way in it picks does not matter here
-	game.player.position = FieldGrid.center(game.HORDE_HOME)
+	game.player.position = FieldGrid.center(game.horde_home())
 	game._start_horde({"index": 0, "size": 3, "entry": "north_road"})
 	assert_false(game.radio_wait.is_empty(), "the horde is called")
 	game._tick_radio(game.RADIO_HISS + 0.01)

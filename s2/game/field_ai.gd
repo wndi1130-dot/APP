@@ -15,7 +15,6 @@ const THREAT_R: float = 3.0
 const COVER_R: float = 11.0
 const RAIDER_SIGHT: float = 22.0
 const NOTICE_TIME: float = 1.5
-const SOUTH_EXIT := Vector2i(60, 99)
 const DIG_TIME: float = 45.0
 const TRIP_COAL: float = 0.25
 
@@ -258,7 +257,8 @@ func _search_near(p, around: Vector3) -> bool:
 
 func _crew(p, delta: float, think: bool) -> void:
 	if crew_recalled or p.brain.get("job", "") == "home":
-		var door := FieldGrid.center(game.data["spawns"]["train_door"][1])
+		var doors: Array = game.data["spawns"]["train_door"]
+		var door := FieldGrid.center(doors[mini(1, doors.size() - 1)])
 		if p.position.distance_to(door) > 1.5:
 			if think:
 				_walk(p, door, true)
@@ -382,7 +382,7 @@ func _raider(r, delta: float, think: bool) -> void:
 		return
 	if state == "flee":
 		if think:
-			var exit := FieldGrid.center(SOUTH_EXIT)
+			var exit := FieldGrid.center(game.data["anchors"]["flee_exit"])
 			if r.position.distance_to(exit) < 2.0:
 				b["state"] = "gone"
 				fled += 1

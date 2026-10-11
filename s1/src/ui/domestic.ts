@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy,
+  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
 } from '../game';
 import { copyText } from './clip';
 import type { Comm, DomPerson, Field, Game, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
@@ -214,10 +214,138 @@ function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
       h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null);
 }
 
+// ---- 열차 관리 화면의 공방 판(결정 053, 설계 4부 1절): 만들기 / 지금 / 사람 세 덩이와 오른쪽 개량 자리 셋 ----
+// 내정 창의 「만들기」 탭은 폭이 좁아 위의 workshopPop을 그대로 쓴다. 여기는 값을 읽어 옮겨 심기만 하고 규칙은 건드리지 않는다.
+
+/** 「지금」 덩이의 세로 계기에 올릴 일 하나: 복원과 개조 가운데 차례가 앞인 것. 부품은 퍼센트가 없어 계기에 안 올린다. */
+export function workshopGauge(g: Game): { head: string; pct: number; left: number; wait: string | null } | null {
+  const d = g.dom!;
+  const power = Math.max(0.01, workPower(g));
+  const partsFirst = (t: Task) => d.order.indexOf('parts') < d.order.indexOf(t) && d.parts < d.target;
+  for (const t of d.order) {
+    const st = t === 'restore' && d.restoring ? d.techs[d.restoring] : null;
+    if (st && d.restoring) {
+      const pending = !!st.pending && st.progress >= st.need - 1e-9;
+      return {
+        head: `${st.finishing ? '마무리' : '복원'}: ${techTitle(g, d.restoring)}`, pct: Math.round((st.progress / Math.max(1, st.need)) * 100),
+        left: Math.max(1, Math.ceil((st.need - st.progress) / power)), wait: pending ? '추인 기다림' : partsFirst('restore') ? '부품 뒤' : null,
+      };
+    }
+    if (t === 'modify' && d.job) {
+      return {
+        head: `개조: ${jobTitle(d.job.kind, d.job.car)}`, pct: Math.round((d.job.progress / Math.max(1, d.job.need)) * 100),
+        left: Math.max(1, Math.ceil((d.job.need - d.job.progress) / power)), wait: partsFirst('modify') ? '부품 뒤' : null,
+      };
+    }
+  }
+  return null;
+}
+
+/** 「사람」 덩이: 공방장, 그가 가르치는 견습, 가르치느라 느려지는 중인가, 손(살아서 열차에 있는 공작 분야 사람 수). */
+export function workshopHands(g: Game): { chief?: DomPerson; pupil?: DomPerson; teaching: boolean; hands: number } {
+  const craft = g.dom!.people.filter(p => p.alive && !p.gone && p.field === 'craft');
+  const chief = workshopChief(g);
+  const pupil = chief?.pupil ? craft.find(p => p.id === chief.pupil) : undefined;
+  return { chief, pupil, teaching: craft.some(p => p.pupil && !p.resting), hands: craft.length };
+}
+
+/** 개량 자리 셋. 첫 자리는 공구 수리(w1): 돌면 켜짐, 복원을 올릴 수 있으면 열림. 둘째·셋째는 코드에 없어 비워 둔다. */
+export function workshopSlots(g: Game): { name: string; from: string; state: 'on' | 'open' | 'none' }[] {
+  const w1 = techMult(g, 'w1') > 0 ? 'on' : !restoreCheck(g, 'w1').full || g.dom!.restoring === 'w1' ? 'open' : 'none';
+  return [{ name: '공구', from: '기술', state: w1 }, { name: '—', from: '', state: 'none' }, { name: '—', from: '', state: 'none' }];
+}
+
+/** 판 머리의 호박색 테에 적을 글: 고장을 못 고친 서류가 있으면 「멈춤 · 부품 n」, 부품 재료가 모자라면 「재료 모자람」. */
+export function workshopHalt(g: Game): string | null {
+  if (g.cards.some(c => c.kind === 'dom:short' && c.text === 'break')) return `멈춤 · 부품 ${Math.floor(g.dom!.parts)}`;
+  return workshopState(g).mode === 'short' ? '재료 모자람' : null;
+}
+
+/** 아직 코드에 없는 품목. 자리만 흐리게 보인다. */
+const WS_LATER = ['땔감', '붕대'];
+
+export function workshopBoard(view: View, car: CarDef): HTMLElement {
+  const g = view.g;
+  const d = g.dom!;
+  const st = workshopState(g);
+  const gauge = workshopGauge(g);
+  const who = workshopHands(g);
+  const halt = workshopHalt(g);
+  const ds = delegateStatus(g);
+  const tier = delegateTier(g);
+  const open = domUi(view.ui).ws ?? null;
+  const empty = (t: Task) => (t === 'restore' && !d.restoring) || (t === 'modify' && !d.job);
+  const taskName = (t: Task) => t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
+  const lockOrder = d.delegate.on && tier >= 2;
+  const blk = (title: string, mod: string, ...kids: (Node | null)[]) => h('div', { class: `tblk wsb__${mod}` }, h('span', { class: 'tblk__title' }, title), ...kids);
+  const fold = (which: NonNullable<DomUi['ws']>, ...kids: (Node | string | null)[]) => h('button', {
+    class: cx('chip', open === which && 'is-on'), 'data-action': 'dom-ws', 'data-which': which, 'aria-expanded': open === which ? 'true' : 'false',
+  }, ...kids);
+  return h('div', { class: 'carpop tpop wsb', role: 'region', 'aria-label': `${car.name} 판` },
+    h('div', { class: 'tpop__head' },
+      h('b', { class: cx('tpop__name', halt && 'is-halt') }, car.name, halt ? h('small', { class: 'num' }, ` ${halt}`) : null),
+      h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
+    h('div', { class: 'tpop__body wsb__body' },
+      blk('만들기', 'make',
+        h('div', { class: 'tblk__row' },
+          h('span', { class: 'chip is-on' }, '부품'),
+          ...WS_LATER.map(n => h('span', { class: 'chip wsb__later', 'aria-disabled': 'true' }, n))),
+        h('div', { class: 'tblk__row num sub' }, `고철 ${D.partScrap} + 목재 ${D.partWood} → 부품 1`),
+        h('div', { class: 'wsb__target' },
+          h('span', null, '유지 ', h('b', { class: 'num' }, d.target), ' / 가진 ', h('b', { class: 'num' }, Math.floor(d.parts))),
+          h('input', {
+            class: 'lever__input', type: 'range', min: 0, max: D.targetMax, step: 1, value: d.target, disabled: d.delegate.on,
+            'data-input': 'dom', 'data-which': 'target', 'aria-label': '부품 유지 목표치',
+          }))),
+      blk('지금', 'now',
+        h('div', { class: 'tblk__row sub' }, gear(st.mode), gauge ? gauge.head : st.now),
+        gauge ? h('div', { class: 'wsb__gauge' },
+          h('i', { class: 'wsb__tube', 'aria-hidden': 'true' }, h('i', { style: `height:${Math.max(0, Math.min(100, gauge.pct))}%` })),
+          h('b', { class: 'wsb__pct num' }, `${gauge.pct}%`),
+          h('span', { class: 'sub num' }, gauge.wait ?? `남은 ${gauge.left}구간`)) : null,
+        h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+      blk('사람', 'who',
+        who.chief ? h('div', { class: 'tblk__row' }, portrait(who.chief.name, who.chief.comm), nameBtn(who.chief.name),
+          h('small', { class: 'sub' }, `공작 ${dots(who.chief.skill)}`)) : h('div', { class: 'tblk__row sub' }, '공방장 없음'),
+        who.pupil ? h('div', { class: 'tblk__row' }, portrait(who.pupil.name, who.pupil.comm), nameBtn(who.pupil.name),
+          h('small', { class: 'sub num' }, who.teaching ? `견습 ×${D.teachWork}` : '견습')) : null,
+        h('div', { class: 'tblk__row' }, icon('people'), '손 ', h('b', { class: 'num' }, who.hands))),
+      blk('개량', 'slots',
+        ...workshopSlots(g).map(sl => h(sl.state === 'none' ? 'span' : 'button', {
+          class: cx('wsb__slot', `is-${sl.state}`), ...(sl.state === 'none' ? {} : { 'data-action': 'dom-tab', 'data-tab': 'plan' }),
+        }, h('i', { class: 'wsb__sq', 'aria-hidden': 'true' }), h('span', null, sl.name), sl.from ? h('small', null, sl.from) : null)))),
+    h('div', { class: 'wsb__foot' },
+      fold('order', h('span', { class: 'sub' }, '차례 '),
+        ...d.order.flatMap((t, i) => [i ? ' › ' : null, h('span', { class: cx(empty(t) && 'is-dim') }, taskName(t))])),
+      d.delegate.on ? h('button', { class: 'chip is-on', 'data-action': 'dom-delegate', 'data-on': '0' }, '맡김 · 거둔다')
+        : ds.ok ? fold('delegate', '맡기기')
+          : h('button', { class: 'chip', disabled: true, title: ds.why ?? '' }, '맡기기'),
+      h('button', { class: 'btn btn--dark btn--small wsb__mod', 'data-action': 'dom-tab', 'data-tab': 'modify' }, '개조 →')),
+    open === 'delegate' && !d.delegate.on && ds.ok ? h('div', { class: 'dom-row dom-fold' },
+      h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'neutral' }, '중립으로', h('small', null, ' 가장 추운 칸부터')),
+      h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'ours' }, '우리 편 먼저', h('small', null, ' 호의 +1 · 나머지 −1/구간'))) : null,
+    open === 'order' ? h('ol', { class: 'dom-order dom-fold' }, d.order.map((t, i) => h('li', null,
+      h('span', { class: 'num' }, i + 1),
+      h('span', { class: cx('dom-order__name', empty(t) && 'is-dim') },
+        t === 'restore' && d.restoring ? `복원: ${techTitle(g, d.restoring)}` : t === 'modify' && d.job ? `개조: ${jobTitle(d.job.kind, d.job.car)}` : taskName(t)),
+      h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null);
+}
+
 const MOD_KINDS: { k: ModKind; name: string; cost: string }[] = [
   { k: 'insulate', name: '단열', cost: `목재 ${D.insulateWood}` },
   { k: 'armor', name: '장갑', cost: `고철 ${D.armorScrap}` },
 ];
+
+/** 칸 판 「개조」 덩이의 칩(설계 4부 5-5): 그 칸에 올릴 수 있는 개조와 드는 값. 끝난 것은 done, 못 올리면 까닭이 붙는다. 기관차에는 없다. */
+export function carModChips(g: Game, car: string): { k: ModKind; name: string; cost: string; done: boolean; ok: boolean; why?: string }[] {
+  const d = g.dom;
+  if (!d || !CAR_COMM[car] || car === 'engine') return [];
+  return MOD_KINDS.map(({ k, name, cost }) => {
+    const done = (k === 'insulate' ? d.insulated : d.armored).includes(car);
+    const chk = jobCheck(g, k, car);
+    return { k, name, cost, done, ok: !done && chk.ok, why: done ? undefined : chk.why };
+  });
+}
 
 /** 그 칸에 이미 한 개조 이름들(단열, 장갑). */
 export function carMods(g: Game, car: string): string[] {
@@ -366,7 +494,7 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
 
 /** 사람이 사는 칸 창 머리의 작은 표(S1c): 씻을 물, 빨랫줄·열병, 의무칸 침상(16.3, 4.1). 칸 창 높이를 늘리지 않는다.
  * 사람 상태가 아니라 물 사정을 띄운다. 이가 도는 동안엔 솥·빨랫줄이 붙고, 벌레 그림이나 긁는 사람은 그리지 않는다(16.1 라). 대야를 누르면 까닭 한 줄. */
-export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
+export function domesticCarTag(view: View, car: CarDef, peg = false): HTMLElement | null {
   const g = view.g;
   const d = g.dom;
   const c = car.comm;
@@ -380,8 +508,51 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
       h('i', { class: 'dom-basin', 'aria-hidden': 'true' }), `씻을 물 ${WASH_NAME[hy]}`),
     lice ? h('span', { class: 'dom-wash' }, '솥·빨랫줄') : null,
     sick ? h('span', { class: 'is-red' }, `열병 ${sick}`) : null,
-    hangBtn(g, c),
+    peg ? null : hangBtn(g, c), // 열차 관리 화면은 판 머리의 벽 못으로 건다(wallPeg)
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
+}
+
+/** 벽 못에 적는 값(결정 053의 3번). 결속은 0~1 척도라 화면에는 100을 곱해 적는다(소수를 보이지 않는다). */
+export function wallFacts(g: Game, c: Comm): { on: boolean; left: number; why: string | null; gain: string; loss: string } {
+  const d = g.dom;
+  const on = !!d?.hung.includes(c);
+  return {
+    on, left: Math.max(0, g.symbols - (d?.hung.length ?? 0)), why: on ? null : hangWhy(g, c),
+    gain: `결속 +${Math.round(SYM.cohPerSeg * 100)}/구간`, loss: `결속 −${Math.round(SYM.lossCoh * 100)} · 관계 −${SYM.lossRel}`,
+  };
+}
+
+/** 칸 판 머리의 벽 못: 비면 못 하나, 걸리면 못에서 접힌 천이 내려와 걸린다. 누르면 판 아래에 걸기·내리기 한 줄이 뜬다. */
+export function wallPeg(view: View, car: CarDef): HTMLElement | null {
+  const c = car.comm;
+  if (!view.g.dom || !c) return null;
+  const f = wallFacts(view.g, c);
+  const open = domUi(view.ui).wall === c;
+  return h('button', {
+    class: cx('dom-peg', f.on && 'is-on', open && 'is-open', !f.on && f.left === 0 && 'is-none'),
+    'data-action': 'dom-wall', 'data-comm': c, 'aria-expanded': open ? 'true' : 'false',
+    'aria-label': f.on ? '상징물이 걸려 있다. 내리기 보기' : `벽 못. 걸 수 있는 상징물 ${f.left}`,
+  },
+    icon('peg'),
+    f.on ? h('span', { class: 'dom-peg__cloth', 'data-anim': `peg-${c}-on` }, icon('cloth')) : null,
+    f.on ? h('small', { class: 'num' }, f.gain) : null);
+}
+
+/** 벽 못을 눌렀을 때의 한 줄: 「걸기 · 남은 n」 또는 「내리기 · 결속 −8 · 관계 −4」. 문장 없음. */
+export function wallRow(view: View, car: CarDef): HTMLElement | null {
+  const c = car.comm;
+  if (!view.g.dom || !c || domUi(view.ui).wall !== c) return null;
+  const f = wallFacts(view.g, c);
+  return h('div', { class: 'dom-wall num' },
+    h('button', { class: cx('chip', f.on && 'is-on'), 'data-action': 'dom-hang', 'data-comm': c, 'data-on': f.on ? '0' : '1', disabled: !!f.why, title: f.why ?? '' },
+      f.on ? '내리기' : '걸기'),
+    f.on ? h('span', { class: 'is-red' }, f.loss) : h('span', null, `남은 ${f.left}`),
+    f.on ? null : h('span', { class: 'sub' }, f.gain));
+}
+
+/** 띠의 칸에 다는 작은 표시: 상징물이 걸린 칸. */
+export function hungMark(g: Game, car: CarDef): HTMLElement | null {
+  return car.comm && g.dom?.hung.includes(car.comm) ? h('i', { class: 'tcar__hung', 'aria-label': '상징물 걸림' }, icon('cloth')) : null;
 }
 
 /** 상징물 걸기 단추(제안). 건 칸은 '내린다'(내리면 크게 깎인다), 아닌 칸은 못 거는 까닭이 있으면 막고 까닭을 title로. */
@@ -1095,6 +1266,9 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-restore':
     case 'dom-cancel':
     case 'dom-finish':
+    case 'dom-wall':
+      du.wall = du.wall === data.comm ? null : data.comm ?? null;
+      break;
     case 'dom-med':
       du.med = !du.med;
       if (du.med) ui.panel = null;

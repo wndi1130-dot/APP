@@ -14,6 +14,8 @@ export interface DomUi {
   ws?: 'delegate' | 'order' | null;
   /** 열차 관리 화면에서 부상 명부 판을 펼쳤나 */
   med?: boolean;
+  /** 칸 판 머리의 벽 못을 눌러 걸기·내리기 줄을 펼친 칸 */
+  wall?: string | null;
   /** 기술 카드에서 「더」를 눌러 긴 글을 펼쳤나 */
   more?: boolean;
 }

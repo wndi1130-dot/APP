@@ -117,9 +117,9 @@ func test_dead_far_from_the_player_still_notice_a_companion_beside_them() -> voi
 
 func test_a_horde_walks_to_the_last_loud_sound_not_to_the_player() -> void:
 	game.player.position = Vector3(120.5, 0, 60.5)
-	assert_eq(game.horde_target(), game.FieldGrid.center(game.HORDE_HOME), "no sound yet: the platform")
+	assert_eq(game.horde_target(), game.FieldGrid.center(game.horde_home()), "no sound yet: the platform")
 	game.make_sound(Vector3(30.5, 0, 33.5), SimNoise.Level.NORMAL, "step")
-	assert_eq(game.horde_target(), game.FieldGrid.center(game.HORDE_HOME), "a normal sound is not followed")
+	assert_eq(game.horde_target(), game.FieldGrid.center(game.horde_home()), "a normal sound is not followed")
 	var bang := Vector3(80.5, 0, 33.5)
 	game.make_sound(bang, SimNoise.Level.LOUD, "glass")
 	game.zombies.list.clear()

@@ -396,3 +396,41 @@ func test_an_overdue_horde_is_put_back_from_now() -> void:
 	h.add_noise(100, 290.0)
 	assert_almost_eq(h.next_arrival, 290.0, 0.0001)
 
+
+
+func test_another_map_gives_its_own_ways_in() -> void:
+	var h = _make()
+	h.use_map({
+		"entries": {"adit": [Vector2i(1, 1)], "road": [Vector2i(2, 2)], "drain": [Vector2i(3, 3)]},
+		"entry_names": {"adit": "갱도 입구", "road": "진입 도로"},
+		"entry_weights": {"adit": 3.0, "road": 1.0, "drain": 0.0},
+		"first_entry": "adit", "manholes": {"drain": Vector2i(3, 3)},
+	})
+	assert_eq(h.next_entry, "adit")
+	assert_eq(h.name_of("adit"), "갱도 입구")
+	assert_eq(h.name_of("drain"), "drain", "no name given: its key")
+	assert_true(h.sewer("drain"))
+	assert_false(h.sewer("adit"))
+	assert_false(h.is_open("culvert"), "the first stop's ways are not this map's")
+	assert_string_contains(h.forecast(0.0, 0, null), "갱도 입구 쪽에서 온다")
+	var seen: Dictionary = {}
+	for i in range(60):
+		var got: Dictionary = h.update(h.next_arrival)
+		seen[got["entry"]] = int(seen.get(got["entry"], 0)) + 1
+	assert_false(seen.has("drain"), "a way that weighs nothing is never picked")
+	assert_gt(int(seen["adit"]), int(seen["road"]), "the heavier way comes more often")
+
+
+func test_weights_left_out_are_even_and_the_first_stop_keeps_its_own() -> void:
+	var h = _make()
+	h.use_map({"entries": {"a": [Vector2i(1, 1)], "b": [Vector2i(2, 2)]}})
+	assert_eq(h.weights, {"a": 1.0, "b": 1.0})
+	assert_eq(h.first_entry, "a")
+	var old = _make()
+	var same: Dictionary = {}
+	for e in HordeDirector.ENTRIES:
+		same[e] = [Vector2i(0, 0)]
+	old.use_map({"entries": same})
+	assert_eq(old.entries, HordeDirector.ENTRIES)
+	assert_eq(old.weights, HordeDirector.ENTRY_WEIGHTS)
+	assert_eq(old.next_entry, HordeDirector.FIRST_ENTRY)

@@ -7,7 +7,7 @@ signal finished(result: Dictionary)
 signal restart_requested
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
-const SulehufMap = preload("res://game/world/sulehuf_map.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const Person = preload("res://game/actors/person.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -37,7 +37,6 @@ const StormLook = preload("res://fx/storm_look.gd")
 const AMBIENT_C: float = -14.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
-const HORDE_HOME := Vector2i(50, 10)   # the platform by the train: where a horde walks with no sound to follow
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
 const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
@@ -90,6 +89,7 @@ const MISSIONS: Array[String] = ["", "survey", "depot"]
 var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var rng := RandomNumberGenerator.new()
+var place: String = ""                 # which map this stop is played on (FieldMaps)
 var data: Dictionary
 var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
@@ -229,16 +229,19 @@ func _ready() -> void:
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
-	data = SulehufMap.build()
-	grid = data["grid"]
-	levels = data["levels"]
-	stairs = data["stairs"]
-	seen_memory.resize(grid.width * grid.height * 4)
+	place = FieldMaps.resolve(String(opts.get("place", "")))
+	_take_map(FieldMaps.build(place))
 	director = HordeDirector.new(rng)
+	director.use_map(data)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
-	receipt = Receipt.new(SulehufMap.PLACE_ID, "freight", "small_station_siding")
+	# The receipt knows six kinds of place (the S1 contract); a kind it does not
+	# know yet is written as the freight stop it was drawn from.
+	var kind: String = data["place_kind"]
+	receipt = Receipt.new(data["place_id"], kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
 	receipt.set_source("direct")
+	if not Receipt.PLACE_TYPES.has(kind):
+		receipt.place_note("placeKind", kind)   # what it really is, beside the type the contract knows
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
 	if not MISSIONS.has(mission):
@@ -653,8 +656,9 @@ func _spawn_people() -> void:
 			{"id": "npc_raider_2", "name": "약탈자", "role": "raider", "skills": {"strength": 5, "melee": 2, "shooting": 2, "stealth": 2, "search": 1}, "hands": [["pistol", "crude", 0.7]], "brain": "advancer"},
 			{"id": "npc_raider_3", "name": "약탈자", "role": "raider", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 2, "search": 1}, "hands": [["axe", "factory", 0.8]], "brain": "flanker"},
 		]
-		var rs: Array = data["spawns"]["raiders"]
-		for i in range(rows.size()):
+		# A map with no place for them has none.
+		var rs: Array = data["spawns"].get("raiders", [])
+		for i in range(mini(rows.size(), rs.size())):
 			var r := make_person(rows[i], FieldGrid.center(rs[i]))
 			r.brain = {"role": rows[i]["brain"], "state": "idle", "aware": 0.0, "morale": 1.0, "seen_t": 0.0, "last_seen": Vector3.ZERO, "home": r.position, "aim_t": 0.0, "target": null, "fight_t": 0.0}
 			r.add_item("med_box", 1)
@@ -692,7 +696,10 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 
 func _spawn_dead() -> void:
 	var s: Dictionary = data["spawns"]
-	for key in ["dead_street", "dead_platform", "dead_siding_end"]:
+	# Every "dead_..." list of cells is a group standing about out of doors.
+	for key: String in s:
+		if not key.begins_with("dead_") or key == "dead_levels":
+			continue
 		for c in s[key]:
 			zombies.spawn("dead", FieldGrid.center(c))
 	for key in ["clothed_station", "clothed_shed"]:
@@ -701,7 +708,7 @@ func _spawn_dead() -> void:
 	# The dead indoors, on every floor and in the cellar.
 	for row in s.get("dead_levels", []):
 		zombies.spawn("dead", lift(row[0], int(row[1])))
-	for c in s["frozen_siding"]:
+	for c in s.get("frozen_siding", []):
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
 
 
@@ -723,9 +730,19 @@ func allies_alive() -> Array:
 
 # ---------------------------------------------------------------- levels
 
+## The map the field stands on. Everything that reads the ground goes through
+## these four, so a stop of several joined maps can hand over a new one here.
+func _take_map(d: Dictionary) -> void:
+	data = d
+	grid = data["grid"]
+	levels = data["levels"]
+	stairs = data["stairs"]
+	seen_memory.resize(grid.width * grid.height * 4)
+
+
 ## Floors are stacked LEVEL_H apart; position.y says which one a body is on.
 func level_of(at: Vector3) -> int:
-	return clampi(roundi(at.y / SulehufMap.LEVEL_H), -1, 2)
+	return clampi(roundi(at.y / FieldMaps.LEVEL_H), -1, 2)
 
 
 func grid_at(at: Vector3) -> FieldGrid:
@@ -733,12 +750,12 @@ func grid_at(at: Vector3) -> FieldGrid:
 
 
 func level_y(lv: int) -> float:
-	return lv * SulehufMap.LEVEL_H
+	return lv * FieldMaps.LEVEL_H
 
 
 ## Centre of cell c on level lv.
 func lift(c: Vector2i, lv: int) -> Vector3:
-	return FieldGrid.center(c) + Vector3(0, lv * SulehufMap.LEVEL_H, 0)
+	return FieldGrid.center(c) + Vector3(0, lv * FieldMaps.LEVEL_H, 0)
 
 
 ## Sight and memory keys: one slice of the map per level, cellar first.
@@ -877,7 +894,7 @@ static func _label_rooms(lg: FieldGrid) -> PackedInt32Array:
 
 func _append_level(out: PackedVector3Array, leg: PackedVector3Array, lv: int) -> void:
 	for q in leg:
-		out.append(Vector3(q.x, lv * SulehufMap.LEVEL_H, q.z))
+		out.append(Vector3(q.x, lv * FieldMaps.LEVEL_H, q.z))
 
 
 ## The straight line on the screen through a point, moved to height y
@@ -1251,7 +1268,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % HordeDirector.ENTRY_NAMES[hole], "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
 	zombies.hear(at, level, radius)
 	_score(level, tag)
@@ -1387,10 +1404,10 @@ func _update_hordes(delta: float) -> void:
 	# Telegraph: a sewer lid rattles 3 s before anything climbs out, and keeps
 	# rattling while bodies come through (field_unified 6 '예고 있는 입장').
 	var next_key := director.next_entry
-	if director.seconds_to_next(now) < 3.0 and HordeDirector.is_sewer(next_key):
+	if director.seconds_to_next(now) < 3.0 and director.sewer(next_key):
 		rattle[next_key] = maxf(float(rattle.get(next_key, 0.0)), 0.5)
 	for s in pending_spawn:
-		if HordeDirector.is_sewer(s["entry"]) and float(s["t"]) - now < 3.0:
+		if director.sewer(s["entry"]) and float(s["t"]) - now < 3.0:
 			rattle[s["entry"]] = maxf(float(rattle.get(s["entry"], 0.0)), 0.5)
 	for key in rattle.keys():
 		rattle[key] -= delta
@@ -1445,7 +1462,22 @@ func _squad_hunted() -> bool:
 func horde_target() -> Vector3:
 	if last_loud != null:
 		return last_loud
-	return FieldGrid.center(HORDE_HOME)
+	return FieldGrid.center(horde_home())
+
+
+## The cell by the train a horde walks to with no sound to follow; the radio's
+## "near the train" is measured from it too.
+func horde_home() -> Vector2i:
+	return data["anchors"]["horde_home"]
+
+
+## Ways in that are not sewers, in the order the fair spawn tries them.
+func road_entries() -> Array:
+	var out: Array = []
+	for key in director.entries:
+		if not director.sewer(key):
+			out.append(key)
+	return out
 
 
 func _start_horde(h: Dictionary) -> void:
@@ -1453,8 +1485,8 @@ func _start_horde(h: Dictionary) -> void:
 	var key: String = h["entry"]
 	# Fair spawn: roads and the track end never let anything in on screen; pick
 	# another road out of sight. Sewer mouths may be on screen: they rattle first.
-	if not HordeDirector.is_sewer(key) and _entry_on_screen(key):
-		for other in ["east_track", "north_road", "south_road", "east_road"]:
+	if not director.sewer(key) and _entry_on_screen(key):
+		for other in road_entries():
 			if not _entry_on_screen(other):
 				key = other
 				break
@@ -1463,19 +1495,19 @@ func _start_horde(h: Dictionary) -> void:
 	audio.horde_started()
 	var target := horde_target()
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
-	var lead := 3.0 if HordeDirector.is_sewer(key) else 0.0
+	var lead := 3.0 if director.sewer(key) else 0.0
 	for i in range(int(h["size"])):
 		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": target, "entry": key})
-	if HordeDirector.is_sewer(key):
-		set_radio("기관사: %s이 덜컹거린다. 올라온다." % HordeDirector.ENTRY_NAMES[key] if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % HordeDirector.ENTRY_NAMES[key], "urgent", entry_pos(key))
+	if director.sewer(key):
+		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
-		set_radio("기관사: %s, 저것들이 들어온다." % HordeDirector.ENTRY_NAMES[key], "urgent", entry_pos(key))
+		set_radio("기관사: %s, 저것들이 들어온다." % director.name_of(key), "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
 	if int(h["index"]) == 0:
 		for z in zombies.list:
 			if z["state"] == "wander" and grid.zone_at(FieldGrid.cell_of(z["pos"])) == "D":
 				z["state"] = "investigate"
-				z["target"] = FieldGrid.center(Vector2i(50, 10))
+				z["target"] = FieldGrid.center(horde_home())
 				z["linger"] = 30.0
 				z["speed"] = Zombies.SPEED_SHAMBLE
 	forecast_t = 6.0
@@ -1502,7 +1534,7 @@ func _update_spawns(delta: float) -> void:
 	for s in pending_spawn:
 		var key: String = s["entry"]
 		# A manhole closed mid-horde sends the rest out of the culvert.
-		if HordeDirector.is_sewer(key) and not director.is_open(key):
+		if director.sewer(key) and not director.is_open(key):
 			key = "culvert"
 			s["entry"] = key
 			s["pos"] = entry_pos(key)
@@ -1516,7 +1548,7 @@ func _update_spawns(delta: float) -> void:
 			continue
 		# Nobody climbs out right under someone's feet: that exit passes its
 		# share to the other open one (field_unified 6). Pressure stays the same.
-		if HordeDirector.is_sewer(key) and _someone_near(s["pos"], SEWER_CLEAR):
+		if director.sewer(key) and _someone_near(s["pos"], SEWER_CLEAR):
 			var other := _free_sewer(key)
 			if other != "":
 				var other_pos := entry_pos(other)
@@ -1588,7 +1620,7 @@ func set_radio(text: String, kind: String = "info", at = null) -> void:
 		if radio_near == "horde" and at != null and player != null and player.position.distance_to(at) > RADIO_NEAR_M:
 			return
 	var ring := RADIO_RING_URGENT if kind == "urgent" or kind == "must" else RADIO_RING
-	if radio_near == "train" and kind != "must" and player != null and player.position.distance_to(FieldGrid.center(HORDE_HOME)) > RADIO_NEAR_M:
+	if radio_near == "train" and kind != "must" and player != null and player.position.distance_to(FieldGrid.center(horde_home())) > RADIO_NEAR_M:
 		text = "…치직… (멀어서 알아들을 수 없다)"
 		ring = RADIO_RING
 	radio_last = now
@@ -1692,7 +1724,7 @@ func screen_to_ground(screen: Vector2) -> Vector3:
 	if absf(dir.y) < 0.0001:
 		return Vector3.ZERO
 	# The floor the player stands on is the plane a finger lands on.
-	var t := (level_of(player.position) * SulehufMap.LEVEL_H - origin.y) / dir.y
+	var t := (level_of(player.position) * FieldMaps.LEVEL_H - origin.y) / dir.y
 	return origin + dir * t
 
 
@@ -1784,7 +1816,7 @@ func finish(reason: String) -> void:
 	var now := clock.elapsed
 	var platform: Rect2i = data["platform"]
 	if reason == "departed":
-		make_sound(FieldGrid.center(Vector2i(90, 4)), SimNoise.Level.VERY_LOUD, "whistle")
+		make_sound(FieldGrid.center(data["anchors"]["whistle"]), SimNoise.Level.VERY_LOUD, "whistle")
 	var boarded: Array = []
 	for p in squad + crew:
 		if not p.is_alive():
