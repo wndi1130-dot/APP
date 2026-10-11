@@ -405,7 +405,8 @@ export function coldLine(g: Game): { text: string; law: boolean; more: string } 
   const waiting = g.pyre ?? 0;
   const law = lawActive(g, 'corpse_store') || lawActive(g, 'corpse_burn') || g.stored + waiting > 0;
   const ice = `얼음 0/${ICE_CAP_SHOWN}`;
-  if (!law) return { text: `${ice} · 안치 —`, law, more: '난방을 끊은 낡은 객차다. 창마다 성에가 두껍다. 무엇을 둘지는 법으로 정한다.' };
+  // 법이 서기 전에는 「안치」 낱말을 판에 올리지 않는다(사용자 053: 법이 없는데 안치 칸이라 뜬다).
+  if (!law) return { text: ice, law, more: '난방을 끊은 낡은 객차다. 창마다 성에가 두껍다. 무엇을 둘지는 법으로 정한다.' };
   return {
     text: `${ice} · 안치 ${g.stored + waiting}/${coldCap(g)}${waiting ? ` · 장작불 기다림 ${waiting}` : ''}`, law,
     more: `뒤쪽은 죽은 사람을 모셔 두는 자리다. ${coldCap(g)}구를 넘으면 녹는 사고가 두 배다. 길게 머무는 정차에서 묻고 갈 수 있다.`,

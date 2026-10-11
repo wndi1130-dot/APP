@@ -25,6 +25,8 @@ var trips: int = 0              # loads put down at the train (crew and squad)
 var bodies: Dictionary = {"tried": 0, "found": 0}   # pockets gone through, and how many had something
 ## What the stop was for (field_game MISSIONS); "" writes no key at all.
 var mission: String = ""
+## What holding the train came to (field_holdout.result()); empty on a plain stop.
+var holdout: Dictionary = {}
 ## Each goal of the stop: {"id", "state", "t"} (sim/mission.gd), written with the kind.
 var goals: Array = []
 
@@ -149,6 +151,8 @@ func to_dict() -> Dictionary:
 	if mission != "":
 		out["mission"] = mission
 		out["goals"] = goals.duplicate(true)
+	if not holdout.is_empty():
+		out["holdout"] = holdout.duplicate(true)
 	return out
 
 

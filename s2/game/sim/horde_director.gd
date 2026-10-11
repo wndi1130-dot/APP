@@ -64,6 +64,10 @@ var lost_armed: bool = false
 var losses_used: int = 0
 ## Scheduled gap of the current wait; base for pressure().
 var interval: float = FIRST_INTERVAL
+## The pace of the waves. A stage of its own (holding the train) gives its own.
+var first_interval: float = FIRST_INTERVAL
+var ratio: float = RATIO
+var min_gap: float = MIN_GAP
 var entry_history: Array[String] = []
 ## Sewer holes closed for this stop (a manhole with something heavy on it).
 var blocked: Array[String] = []
@@ -91,7 +95,7 @@ func add_noise(points: int, now: float) -> void:
 	var pull: float = float(points) * PULL_PER_POINT
 	if now < rest_until:
 		pull *= 0.5
-	var floor_t: float = maxf(last_arrival + MIN_GAP, now)
+	var floor_t: float = maxf(last_arrival + min_gap, now)
 	var target: float = maxf(next_arrival - pull, floor_t)
 	if target < next_arrival:
 		pulled_seconds += next_arrival - target
@@ -113,11 +117,26 @@ func update(now: float) -> Dictionary:
 		interval = 0.0
 		next_arrival = INF
 	else:
-		var gap: float = maxf(FIRST_INTERVAL * pow(RATIO, k + 1), MIN_GAP)
+		var gap: float = maxf(first_interval * pow(ratio, k + 1), min_gap)
 		interval = gap
 		next_arrival = now + gap
 		next_entry = _pick_entry()
 	return {"index": k, "size": n, "entry": e}
+
+
+## A stage with its own pace begins now: the count of hordes so far is kept
+## (a loud stop starts it on bigger ones), the next one is never later than
+## the new pace would have it.
+func set_pace(first: float, by: float, least: float, now: float) -> void:
+	first_interval = first
+	ratio = by
+	min_gap = least
+	if is_exhausted():
+		return
+	var gap: float = maxf(first_interval * pow(ratio, index), min_gap)
+	if now + gap < next_arrival:
+		interval = gap
+		next_arrival = now + gap
 
 
 ## The dead see the squad, or something loud was heard: the quiet count starts over.

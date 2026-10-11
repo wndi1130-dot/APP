@@ -3,17 +3,18 @@ import { createS1cGame } from '../../src/game';
 import { coldLine } from '../../src/ui/domestic';
 import { CARS } from '../../src/ui/common';
 
-// 찬 칸 판(결정 054·066): 이름은 「찬 칸」, 법이 서기 전에는 「얼음 n/20 · 안치 —」이고 죽은 사람 이야기는 법이 선 뒤에만 뜬다.
+// 찬 칸 판(결정 054·066): 이름은 「찬 칸」, 법이 서기 전에는 「얼음 n/20」뿐이고 죽은 사람 이야기는 법이 선 뒤에만 뜬다.
 
 describe('찬 칸 판', () => {
   it('칸 이름은 「찬 칸」이다', () => {
     expect(CARS.find(c => c.id === 'cold')?.name).toBe('찬 칸');
   });
 
-  it('시신 법이 없으면 안치 자리는 줄표이고 죽은 사람 글이 없다', () => {
+  it('시신 법이 없으면 안치 낱말도 죽은 사람 글도 없다', () => {
     const g = createS1cGame('cold');
     const line = coldLine(g);
-    expect(line.text).toBe('얼음 0/20 · 안치 —');
+    expect(line.text).toBe('얼음 0/20');
+    expect(line.text).not.toContain('안치');
     expect(line.text + line.more).not.toMatch(/죽은|시신|구/);
   });
 
