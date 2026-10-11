@@ -1,5 +1,5 @@
 import { addCard, END_LINK } from './state';
-import { noteDrop, noteInjury, noteRelief } from './wounds';
+import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
@@ -22,7 +22,7 @@ import {
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
 import {
-  domesticBroadcast, domesticDepart, domesticForecast, domesticPyreWood, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
+  domesticBroadcast, domesticDepart, domesticForecast, domesticPyreWood, domesticHaulMult, domesticPromise, domesticRiskMult, domesticSettle,
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
@@ -764,33 +764,11 @@ export function callEmergency(g: Game): boolean {
 }
 
 function medicineTick(g: Game, notes: string[]): void {
-  const need = g.injured * P.medPerInjured * lawMult(g, 'medMult');
-  const med = g.comms.medtech;
-  const refusing = med.fervor >= 1 && med.rel <= -40;
-  if (g.med >= need) {
-    bump(g, 'med', -need, 'sick');
-    if (refusing) {
-      notes.push('의무진이 진료를 거부했다.');
-    } else {
-      let heal = 0.4;
-      for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) heal = Math.max(heal, lawTechRes(g, law).heal ?? 0);
-      heal = domesticHealRate(g, heal); // S1c 내정 훅
-      let healed = 0;
-      for (let i = 0; i < g.injured; i += 1) if (rnd(g) < heal) healed += 1;
-      g.injured -= healed;
-      noteRelief(g, healed);
-    }
-  } else {
-    put(g, 'med', 0, 'sick');
-    let dead = 0;
-    for (let i = 0; i < g.injured; i += 1) if (rnd(g) < 0.1) dead += 1;
-    g.injured -= dead;
-    noteRelief(g, dead);
-    if (dead > 0) {
-      for (const p of pickVictims(g, dead, 'wound', () => rnd(g))) onDeath(g, p.community, [p.name]);
-    }
-    notes.push('의약품이 떨어졌다.');
-  }
+  // 부상 정산은 명부가 한다(wounds.ts woundTick, 명세 1 2.1). 명부 밖에서 오른 g.injured는 먼저 기록으로 맞춘다.
+  reconcileRoster(g);
+  rebalanceBeds(g);
+  woundTick(g, notes, lawMult(g, 'medMult'));
+  rebalanceBeds(g);
   // 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 따뜻해서 두 배(s1c_domestic 4.1).
   const kinBodies = pyreCount(g) - (g.pyre ?? 0);
   // S1b: 머리를 확인한 시신은 일어나지 않는다(dark/corpses.ts). 칸마다 몫을 나눠 받는다. S1a 판이면 그대로.

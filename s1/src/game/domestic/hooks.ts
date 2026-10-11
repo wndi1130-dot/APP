@@ -15,7 +15,7 @@ import { elderTick } from './elder';
 import { symbolTick } from './symbols';
 import './pipe';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
-import { bedTick, domesticHeal } from './medbay';
+import { bedTick } from './medbay';
 import { refreshSit } from './sit';
 import { domCard, living, noteFind, personById, techAdopted, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, restoreCheck, rollBreakdown, runWorkshop, techTitle, upkeepCoal } from './workshop';
@@ -197,10 +197,6 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
 }
 
 // ---- 정산 ----
-export function domesticHealRate(g: Game, heal: number): number {
-  return domesticHeal(g, heal);
-}
-
 export function domesticThawMult(g: Game): number {
   return thawMult(g);
 }

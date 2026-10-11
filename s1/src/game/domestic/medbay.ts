@@ -1,9 +1,9 @@
 import { journal } from '../state';
 import type { Game } from '../state';
 import { D } from './data';
-import { bedNeed, bedOverflow } from './beds';
+import { bedNeed } from './beds';
 import { refreshSit } from './sit';
-import { domCard, techMult } from './state';
+import { domCard } from './state';
 
 export { bedCrowd, bedNeed, bedOverflow } from './beds';
 
@@ -29,15 +29,3 @@ export function setBedOrder(g: Game, order: BedOrder): void {
   journal(g, `의무칸 침상 순서: ${order === 'workers' ? '일할 손 먼저' : order === 'sick' ? '가장 아픈 사람 먼저' : '순번'}.`);
   refreshSit(g);
 }
-
-/** 부상 회복 확률(S1a 0.4 또는 법으로 오른 값)에 S1c가 더하는 것: M1 +0.1, 의무칸을 병자에게 내줬으면 멈춤,
- * '병자 먼저'로 침상이 넘치면 부상 회복 50% → 40%(10장 11번). */
-export function domesticHeal(g: Game, heal: number): number {
-  const d = g.dom;
-  if (!d) return heal;
-  if (d.typhus.some(t => t.bay && t.patients.length > 0)) return 0;
-  let h = heal + 0.1 * techMult(g, 'm1');
-  if (d.bedOrder === 'sick' && bedOverflow(g) > 0) h = Math.min(h, D.bedSickHeal);
-  return h;
-}
-
