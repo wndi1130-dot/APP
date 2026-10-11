@@ -15,6 +15,8 @@ const LINES: Dictionary = {
 	"grabbed": ["살려줘 살려줘!!"],
 	"rage": ["이 개새끼들"],
 	"left_behind": ["제발... 두고가지마"],
+	# Left on the platform as the train goes (user 2026-10-12, in these words).
+	"left_platform": ["나도 데리고가 시발새끼들아!!"],
 }
 ## An event with no lines of its own borrows another's.
 const FALLBACK: Dictionary = {"bite": "hurt"}
@@ -44,11 +46,13 @@ static func lines_for(event: String) -> Array:
 
 ## The line `pid` shouts for `event` at `now`, or "" if they keep quiet (no
 ## such line, or someone has only just spoken).
-func pick(pid: String, event: String, now: float) -> String:
+## `always`: this one is shouted whoever spoke just before (everyone left on
+## the platform shouts at once).
+func pick(pid: String, event: String, now: float, always: bool = false) -> String:
 	var bank: Array = lines_for(event)
 	if bank.is_empty():
 		return ""
-	if now - float(_last_self.get(pid, -1000.0)) < GAP_SELF or now - _last_any < GAP_SQUAD:
+	if not always and (now - float(_last_self.get(pid, -1000.0)) < GAP_SELF or now - _last_any < GAP_SQUAD):
 		return ""
 	var key: String = pid + "/" + event
 	if event == "left_behind" and now - float(_last_event.get(key, -1000.0)) < LEFT_BEHIND_GAP:

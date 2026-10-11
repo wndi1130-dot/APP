@@ -100,6 +100,8 @@ const LEAVE_BEAT_S: float = 3.5
 const LEAVE_DARK_S: float = 1.5
 const LEAVE_DARK: float = 0.62
 const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whistle
+const LAST_CALL_FONT: int = 96
+const LEAVE_WORDS_TOP: float = 96.0
 # A line a companion shouts (ally_lines.gd): bigger and a little longer than
 # the note of what happened, which goes small under it.
 const LINE_S: float = 3.2
@@ -1497,7 +1499,9 @@ func depart_card() -> void:
 	if game.holdout.opens_on_leaving():
 		text += "\n떠날 채비에 시간이 걸린다. 그동안 문을 지켜야 한다."
 	elif game.holdout.on:
-		text += "\n채비가 %d초 남았다. 지금 떠나면 덜 된 채로 떠난다." % int(ceil(game.holdout.left))
+		var cost: Dictionary = game.holdout.early_cost()
+		text += "\n채비가 %d초 남았다. 지금 떠나면 덜 된 채로 떠난다: 석탄 %d, 쟁기 부품 %d이 더 든다." % [int(ceil(game.holdout.left)), int(cost["coal"]), int(cost["plow_part"])]
+		text += "\n셋을 센 뒤 떠난다. 그때 열차에 닿지 못한 사람은 남는다."
 	card("depart", text, [
 		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
 		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
@@ -1529,9 +1533,14 @@ func leave_beat(result: Dictionary, lines: Array) -> void:
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(veil)
+	# Under the overlay, so what those left behind shout stays readable.
+	root.move_child(veil, overlay.get_index())
 	var words := VBoxContainer.new()
 	words.set_anchors_preset(Control.PRESET_FULL_RECT)
-	words.alignment = BoxContainer.ALIGNMENT_CENTER
+	# In the upper part of the screen: the middle is where the people are, and
+	# those left behind shout over their heads there.
+	words.alignment = BoxContainer.ALIGNMENT_BEGIN
+	words.offset_top = LEAVE_WORDS_TOP
 	words.add_theme_constant_override("separation", 14)
 	words.modulate.a = 0.0
 	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2381,6 +2390,14 @@ func _draw_overlay() -> void:
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
 	_draw_says(view_size)
+	# The last call: the count, big, where nobody can miss it.
+	if game.holdout.calling:
+		var count: String = str(int(ceil(maxf(game.holdout.call_left, 0.0))))
+		var f: Font = theme.default_font
+		var w: float = f.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, LAST_CALL_FONT).x
+		var at := Vector2((view_size.x - w) * 0.5, view_size.y * 0.3)
+		overlay.draw_string_outline(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, LAST_CALL_FONT, 10, Color(0, 0, 0, 0.85))
+		overlay.draw_string(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, LAST_CALL_FONT, AMBER)
 	# Pressure at the edges: no numbers, just a darker rim as the next horde nears.
 	var pressure: float = game.director.pressure(now)
 	if pressure > 0.5 and game.deaf_t <= 0.0:
