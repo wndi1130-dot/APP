@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const SimNoise = preload("res://game/sim/noise.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
@@ -352,6 +353,61 @@ func test_the_last_call_is_lost_if_the_chief_is_not_at_the_train() -> void:
 	assert_false(h.calling)
 	assert_true(h.on, "and the doors are still to be held")
 	assert_string_contains(String(game.radio_wait["text"]), "열차장이 안 탔다", "the driver says why")
+
+
+# User decision 148: whether a stop can have it is rolled once as the train
+# stops and kept; where it can, it opens on leaving unless the stop was quiet
+# and the track beside the train is clear.
+func test_a_rolled_stop_opens_on_leaving_only_if_it_can_and_was_not_quiet() -> void:
+	var never = _game({"holdout": "roll", "holdout_chance": 0})
+	assert_false(never.holdout.rolled)
+	never.ledger.add(SimNoise.Level.VERY_LOUD, 0.0, "shot")
+	never.ledger.add(SimNoise.Level.VERY_LOUD, 0.0, "shot")
+	never.ledger.add(SimNoise.Level.VERY_LOUD, 0.0, "shot")
+	never.depart()
+	assert_true(never.ended, "a stop that cannot have it just leaves, however loud")
+	assert_false(never.holdout.opened)
+	assert_false(never.telemetry.to_dict()["holdout"]["rolled"], "the roll is kept for the play check")
+	var quiet = _game({"holdout": "roll", "holdout_chance": 100})
+	assert_true(quiet.holdout.rolled)
+	assert_true(quiet.holdout.quiet_and_clear())
+	quiet.depart()
+	assert_true(quiet.ended, "quiet, and the track clear: it gets away")
+	assert_true(quiet.telemetry.to_dict()["holdout"]["slipped"])
+	var loud = _game({"holdout": "roll", "holdout_chance": 100})
+	for i in range(FieldHoldout.QUIET_NOISE / 6 + 1):
+		loud.ledger.add(SimNoise.Level.VERY_LOUD, 0.0, "shot")
+	assert_true(loud.holdout.opens_on_leaving())
+	loud.depart()
+	assert_false(loud.ended, "loud, where it can: the train has to be held")
+	assert_true(loud.holdout.on)
+	var crowded = _game({"holdout": "roll", "holdout_chance": 100})
+	var train: Rect2i = crowded.data["train"]
+	for i in range(FieldHoldout.CLEAR_TRACK + 1):
+		crowded.zombies.spawn("dead", FieldGrid.center(Vector2i(train.end.x + 2 + i, train.position.y)))
+	assert_false(crowded.holdout.quiet_and_clear(), "quiet, but they stand on the track")
+	assert_true(crowded.holdout.opens_on_leaving())
+
+
+func test_the_roll_is_the_same_for_a_seed_and_does_not_move_the_stops_dice() -> void:
+	var plain = _game({"seed": 11})
+	var a = _game({"seed": 11, "holdout": "roll"})
+	var b = _game({"seed": 11, "holdout": "roll"})
+	assert_eq(a.holdout.rolled, b.holdout.rolled)
+	assert_eq(a.rng.state, plain.rng.state, "the stop's own dice are where they would be")
+
+
+# User decision 150: one line anybody sees, from the kind of place, not the roll.
+func test_the_risk_line_goes_by_the_kind_of_place() -> void:
+	var game = _game({"holdout": "roll"})
+	assert_eq(game.holdout.chance(), FieldHoldout.CHANCE_TOWN, "a town stop: low")
+	assert_string_contains(game.goal_text(), "버티기 위험: 낮다")
+	game.data["place_kind"] = "lodge"
+	assert_eq(game.holdout.risk_word(), "있다")
+	game.data["place_kind"] = "mine"
+	assert_eq(game.holdout.risk_word(), "높다")
+	game.holdout.rolled = not game.holdout.rolled
+	assert_eq(game.holdout.risk_word(), "높다", "whatever the roll was")
 
 
 func test_a_map_with_doors_on_the_upper_side_only_or_none_still_holds() -> void:
