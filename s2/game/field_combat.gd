@@ -39,6 +39,14 @@ const FALL_TIME: float = 1.5
 const BEHIND_COS: float = -0.3
 const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon's reach
 const RAIDER_AMMO: int = 6
+## A companion breathes after a blow that landed, and again when it picks the
+## next one out of the crowd (user 2026-10-12: they cut everything down in a blink).
+const ALLY_REST_MIN: float = 0.35
+const ALLY_REST_MAX: float = 0.55
+const ALLY_SWITCH_MIN: float = 0.5
+const ALLY_SWITCH_MAX: float = 0.8
+## How far a companion must have turned toward the target before it swings.
+const ALLY_TURN_DEG: float = 35.0
 
 var game
 var tracers: Array = []                 # {"from", "to", "t"} for the view
@@ -46,10 +54,21 @@ var kills: int = 0
 # Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
 var _wound_rng := RandomNumberGenerator.new()
 var _wound_seeded: bool = false
+# Companion pauses. A stream of its own with a fixed seed, so game.rng rolls stay as they were.
+var _pace_rng := RandomNumberGenerator.new()
+
+
+func _is_ally(p) -> bool:
+	return p.team == "squad" and p != game.player
+
+
+func _pace(lo: float, hi: float) -> float:
+	return _pace_rng.randf_range(lo, hi)
 
 
 func _init(field_game) -> void:
 	game = field_game
+	_pace_rng.seed = 0x7ace
 
 
 ## Seeds the wound stream on first use, from the game seed.
@@ -219,6 +238,8 @@ func _pursue_zombie(p, delta: float) -> void:
 				p.hold_attack = false
 			else:
 				p.target_zombie = next
+				if _is_ally(p):
+					p.swing_t = maxf(p.swing_t, _pace(ALLY_SWITCH_MIN, ALLY_SWITCH_MAX))
 		else:
 			p.hold_attack = false
 		return
@@ -237,6 +258,9 @@ func _pursue_zombie(p, delta: float) -> void:
 		return
 	p.stop()
 	p.face_point(z["pos"])
+	# A body turns at a pace; swing only once it faces the target.
+	if p != game.player and not p.turned_to(deg_to_rad(ALLY_TURN_DEG)):
+		return
 	if p.swing_t > 0.0:
 		return
 	if W.is_ranged(wid) and not stomps(p, z):
@@ -442,6 +466,8 @@ func _land_strike(p) -> void:
 		_strike(p, at)
 	# The draw-back was the front of the swing time, not extra.
 	p.swing_t = maxf(p.swing_t - windup, WHIFF_RECOVER)
+	if _is_ally(p):
+		p.swing_t += _pace(ALLY_REST_MIN, ALLY_REST_MAX)
 
 
 func _strike_reaches(p, at) -> bool:

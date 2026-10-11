@@ -37,6 +37,8 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 
 const AMBIENT_C: float = -14.0
+## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
+const TURN_DEG_PER_S: float = 400.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
@@ -958,6 +960,9 @@ func _process(delta: float) -> void:
 		_refresh_vision()
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
+		if p != player and p.turn_rate <= 0.0:
+			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
+			p.look = p.facing
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p)
 		p.refresh_view(p.visible)
 	hud.tick(delta)
