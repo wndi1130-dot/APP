@@ -140,12 +140,12 @@ func setup(map_data: Dictionary) -> void:
 func update_manhole(key: String, blocked: bool) -> void:
 	var node: MeshInstance3D = manhole_nodes[key]
 	var st := _begin()
-	if key == "cellar":
-		# A drain grate in the cellar floor.
+	if not key.begins_with("manhole") and not key.begins_with("culvert"):
+		# A drain grate in the floor (the cellar's, or any hole a map names otherwise).
 		box(st, Vector3(0.9, 0.05, 0.9), Vector3(0, 0.03, 0), Color(0.12, 0.12, 0.13))
 		for k in range(4):
 			box(st, Vector3(0.08, 0.07, 0.8), Vector3(-0.3 + k * 0.2, 0.05, 0), Color(0.3, 0.3, 0.32))
-	elif key == "culvert":
+	elif key.begins_with("culvert"):
 		box(st, Vector3(2.0, 0.9, 0.5), Vector3(0, 0.45, -0.4), Color(0.32, 0.31, 0.3))
 		box(st, Vector3(1.4, 0.7, 0.2), Vector3(0, 0.35, -0.12), Color(0.05, 0.05, 0.06))
 	else:

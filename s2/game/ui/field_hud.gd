@@ -2081,9 +2081,11 @@ func _tap_thing(p, world: Vector3) -> bool:
 		if FieldGrid.center(spot["cell"]).distance_to(world) < 1.3:
 			game.actions.go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
 			return true
-	if game.data["manholes"].has("manhole") and FieldGrid.center(game.data["manholes"]["manhole"]).distance_to(world) < 1.0:
-		game.actions.go_and_do(p, "manhole", "manhole", FieldGrid.center(game.data["manholes"]["manhole"]))
-		return true
+	for key: String in game.data["manholes"]:
+		var lid_at: Vector3 = FieldGrid.center(game.data["manholes"][key])
+		if game.FieldMaps.lid(key) and lid_at.distance_to(world) < 1.0:
+			game.actions.go_and_do(p, "manhole", key, lid_at)
+			return true
 	for c in [cell, cell + Vector2i(1, 0), cell + Vector2i(-1, 0), cell + Vector2i(0, 1), cell + Vector2i(0, -1)]:
 		if game.grid.doors.has(c) and FieldGrid.center(c).distance_to(world) < 0.9:
 			var door: Dictionary = game.grid.doors[c]
