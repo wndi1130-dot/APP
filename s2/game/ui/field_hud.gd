@@ -65,13 +65,27 @@ const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
 const FESTER_RIM := Color(0.74, 0.7, 0.3)           # a festering part: a sallow rim, never red
 ## Where the six parts sit in the body picture (your left on the left, like a mirror).
+# The body picture (user 2026-10-12: one figure cut into its parts, not six
+# boxes). Drawn 300 x 440; BODY_SHAPES are the outlines, BODY_LAYOUT where a
+# press lands (wider than the picture, and never two parts at once).
+const BODY_SIZE := Vector2(300.0, 440.0)
+const BODY_SCALE: float = 0.75
+const BODY_WORD_FONT: int = 14
+const BODY_SHAPES: Dictionary = {
+	"head_neck": [Vector2(137, 94), Vector2(137, 72), Vector2(127.2, 65.8), Vector2(120, 56.6), Vector2(116.4, 45.6), Vector2(116.7, 34), Vector2(120.8, 23.1), Vector2(128.4, 14.3), Vector2(138.5, 8.6), Vector2(150, 6.6), Vector2(161.5, 8.6), Vector2(171.6, 14.3), Vector2(179.2, 23.1), Vector2(183.3, 34), Vector2(183.6, 45.6), Vector2(180, 56.6), Vector2(172.8, 65.8), Vector2(163, 72), Vector2(163, 94)],
+	"torso": [Vector2(98, 98), Vector2(202, 98), Vector2(194, 200), Vector2(200, 240), Vector2(100, 240), Vector2(106, 200)],
+	"arm_left": [Vector2(94, 98), Vector2(72, 104), Vector2(58, 170), Vector2(44, 232), Vector2(42, 262), Vector2(60, 268), Vector2(72, 240), Vector2(82, 178), Vector2(94, 136)],
+	"arm_right": [Vector2(206, 136), Vector2(218, 178), Vector2(228, 240), Vector2(240, 268), Vector2(258, 262), Vector2(256, 232), Vector2(242, 170), Vector2(228, 104), Vector2(206, 98)],
+	"leg_left": [Vector2(102, 244), Vector2(147, 244), Vector2(146, 330), Vector2(142, 404), Vector2(150, 428), Vector2(108, 428), Vector2(116, 404), Vector2(108, 330)],
+	"leg_right": [Vector2(192, 330), Vector2(184, 404), Vector2(192, 428), Vector2(150, 428), Vector2(158, 404), Vector2(154, 330), Vector2(153, 244), Vector2(198, 244)],
+}
 const BODY_LAYOUT: Dictionary = {
-	"head_neck": Rect2(109, 0, 100, 76),
-	"arm_left": Rect2(0, 84, 100, 128),
-	"torso": Rect2(109, 84, 100, 128),
-	"arm_right": Rect2(218, 84, 100, 128),
-	"leg_left": Rect2(56, 220, 100, 110),
-	"leg_right": Rect2(162, 220, 100, 110),
+	"head_neck": Rect2(60, 0, 180, 96),
+	"arm_left": Rect2(0, 96, 90, 180),
+	"torso": Rect2(90, 96, 120, 146),
+	"arm_right": Rect2(210, 96, 90, 180),
+	"leg_left": Rect2(90, 242, 60, 198),
+	"leg_right": Rect2(150, 242, 60, 198),
 }
 const TOAST_NORMAL := "normal"      # play and block notes (ui_states N1)
 const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap to close (N2)
@@ -170,6 +184,7 @@ var modal_paused_before: bool = false
 var modal_open: bool = false
 var modal_slows: bool = false      # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
+var body_look: Dictionary = {}     # what the body picture shows of each part (body_looks())
 var status_rows: Array = []        # what each shows now (body.status_notes())
 var bleed_hint_done: bool = false  # the one-time line that points at the blood key
 var body_shown = null              # whose body picture is (or was last) up
@@ -1159,44 +1174,85 @@ func body_rows(o, part: String) -> Array:
 	return rows.map(func(r): return r[2])
 
 
-## Six parts laid out like a body. A part that bleeds is dark brown (no red,
-## nothing gory); the chosen one has a brass rim.
-func _body_figure(o, chosen: String) -> Control:
-	var fig := Control.new()
-	fig.custom_minimum_size = Vector2(318, 330)
-	body_parts = {}
+## What the body picture shows of each part: {"fill", "rim", "rim_w",
+## "cracked", "kinds", "festering"}. A part that bleeds is dark brown (no red,
+## nothing gory); the chosen one wears brass, a festering one a sallow rim (the
+## brass wins when both), a broken one a crack.
+func body_looks(o, chosen: String) -> Dictionary:
+	var out: Dictionary = {}
 	for part: String in BODY_LAYOUT:
-		var r: Rect2 = BODY_LAYOUT[part]
 		var kinds: Array = []
 		var blood := 0.0
 		var festering := false
+		var cracked := false
 		for w: Dictionary in o.body.wounds:
 			if w["part"] == part:
 				blood += float(w["blood"])
 				festering = festering or bool(w["festering"])
+				cracked = cracked or String(w["kind"]) == "fracture"
 				var k: String = Treatment.KIND_NAMES[w["kind"]]
 				if not kinds.has(k):
 					kinds.append(k)
-		var text: String = Treatment.PART_NAMES[part]
-		if not kinds.is_empty():
-			text += "\n" + "\n".join(kinds.slice(0, 2)) + ("…" if kinds.size() > 2 else "")
-		var b := _button(text, body_panel.bind(o, part), r.size, 16)
-		b.position = r.position
-		b.size = r.size
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95))
-		sb.set_corner_radius_all(6)
-		# The chosen part wears brass; a festering one a sallow rim (inside the brass when both).
-		sb.set_border_width_all(4 if part == chosen else (3 if festering else 0))
-		sb.border_color = BRASS if part == chosen else FESTER_RIM
-		if festering:
-			text += "\n곪음"
-			b.text = text
-		for state in ["normal", "hover", "pressed"]:
-			b.add_theme_stylebox_override(state, sb)
+		out[part] = {
+			"fill": BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95)),
+			"rim": BRASS if part == chosen else (FESTER_RIM if festering else Color(INK, 0.55)),
+			"rim_w": 4.0 if part == chosen else (3.0 if festering else 1.5),
+			"cracked": cracked, "kinds": kinds, "festering": festering,
+		}
+	return out
+
+
+## One figure cut into six parts. Each part is a key as wide as BODY_LAYOUT
+## says (it draws nothing itself); the picture is drawn under them.
+func _body_figure(o, chosen: String) -> Control:
+	var fig := Control.new()
+	fig.custom_minimum_size = BODY_SIZE * BODY_SCALE
+	body_parts = {}
+	body_look = body_looks(o, chosen)
+	fig.draw.connect(_draw_body.bind(fig, chosen))
+	for part: String in BODY_LAYOUT:
+		var r: Rect2 = BODY_LAYOUT[part]
+		var b := _button("", body_panel.bind(o, part), r.size * BODY_SCALE, 16)
+		b.position = r.position * BODY_SCALE
+		b.size = r.size * BODY_SCALE
+		for state in ["normal", "hover", "pressed", "focus"]:
+			b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 		fig.add_child(b)
 		body_parts[part] = b
 	return fig
+
+
+func _draw_body(fig: Control, chosen: String) -> void:
+	# The chosen part last, so its brass is not drawn over by a neighbour.
+	var order: Array = BODY_SHAPES.keys()
+	if order.has(chosen):
+		order.erase(chosen)
+		order.append(chosen)
+	for part: String in order:
+		var look: Dictionary = body_look[part]
+		var pts := PackedVector2Array()
+		for v: Vector2 in BODY_SHAPES[part]:
+			pts.append(v * BODY_SCALE)
+		fig.draw_colored_polygon(pts, look["fill"])
+		pts.append(pts[0])
+		fig.draw_polyline(pts, look["rim"], float(look["rim_w"]), true)
+		var r: Rect2 = Rect2(pts[0], Vector2.ZERO)
+		for v in pts:
+			r = r.expand(v)
+		var c: Vector2 = r.get_center()
+		if look["cracked"]:
+			# A broken bone: a crack across the part, above its word.
+			var half: float = minf(r.size.x, 40.0) * 0.3
+			var at: Vector2 = c + Vector2(0, -22)
+			fig.draw_polyline(PackedVector2Array([at + Vector2(-half, -5), at + Vector2(-half * 0.3, 4), at + Vector2(half * 0.3, -4), at + Vector2(half, 5)]), INK, 2.0, true)
+		# The worst kind of wound there, in a word (the rest is in the list).
+		var lines: Array = look["kinds"].slice(0, 1)
+		if look["festering"]:
+			lines.append("곪음")
+		var font: Font = fig.get_theme_default_font()
+		for i in lines.size():
+			var w: float = font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_WORD_FONT).x
+			fig.draw_string(font, c + Vector2(-w * 0.5, 4.0 + i * (BODY_WORD_FONT + 2.0)), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_WORD_FONT, INK)
 
 
 func _care(o, wound: Dictionary, mode: String) -> void:
