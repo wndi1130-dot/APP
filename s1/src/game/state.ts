@@ -308,6 +308,8 @@ export interface Game {
   meterLog?: MeterWhy[];
   /** 석탄·식량·의약품·사치품이 최근 무엇 때문에 바뀌었나. meterLog와 같은 길로 남는다. */
   resLog?: ResWhy[];
+  /** 사치품 이름표(결정 071). 화면이 붙이고 떼며 규칙은 읽지 않는다(봇·시뮬 판엔 없다). 앞이 먼저 나간다. 없으면 「그 밖」으로 읽는다. */
+  luxTags?: string[];
   /** 집단 관계가 최근 무엇 때문에 바뀌었나(바뀐 집단만). meterLog와 같은 길로 남는다. */
   relLog?: { seg: number; label: string; rel: Partial<Record<Comm, number>>; sys?: WhySys }[];
   journal: JournalEntry[];

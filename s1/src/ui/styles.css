@@ -720,6 +720,7 @@ small { font-size: 12px; }
 .tool:first-child { grid-column: 1 / -1; }
 .tool__icon { grid-area: icon; }
 .tool__name { grid-area: name; font-weight: 600; font-size: 13px; }
+.why__lux { margin: 0 0 6px; font-size: 13px; color: var(--ink-1); }
 .tool__cost { grid-area: cost; color: var(--ink-3); font-size: 12px; line-height: 1.25; }
 .tool.is-off { opacity: .5; }
 .conds { display: flex; flex-direction: column; gap: 6px; }
