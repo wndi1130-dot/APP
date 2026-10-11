@@ -197,3 +197,46 @@ func test_a_limping_body_rocks_only_while_it_walks() -> void:
 	var z2 := _one()
 	z2["phase"] = z["phase"] + 0.37
 	assert_false(DeadPose.gait_basis(z2).is_equal_approx(still), "another body stands another way")
+
+
+func test_a_body_comes_up_out_of_a_manhole_and_then_wanders() -> void:
+	var z := _one()
+	var length: float = float(Motion.row("dead_climb_lid")["len"])
+	var open: float = float(Motion.row("dead_climb_lid")["open"])
+	game.zombies.start_climb(z)
+	assert_eq(z["state"], "climb")
+	assert_almost_eq(DeadPose.climbing(z).origin.y, -DeadPose.HOLE_DEPTH, 0.001, "it starts under the ground")
+	assert_true(DeadPose.in_hole(z))
+	z["age"] += open * 0.9
+	assert_true(DeadPose.in_hole(z), "only its head and arms are out")
+	assert_almost_eq(DeadPose.climbing(z).origin.y, -DeadPose.HOLE_HANG, 0.001, "hanging on the rim")
+	z["age"] += open * 0.2
+	assert_false(DeadPose.in_hole(z))
+	var at: Vector3 = z["pos"]
+	game.zombies.update(0.05)
+	assert_eq(z["state"], "climb", "it does nothing else until it is out")
+	assert_eq(z["pos"], at)
+	z["age"] += length
+	game.zombies.update(0.05)
+	assert_eq(z["state"], "wander")
+	assert_eq(DeadPose.climbing(z), Transform3D.IDENTITY)
+
+
+func test_out_of_a_culvert_it_crawls_out_flat_and_gets_up_sooner() -> void:
+	var z := _one()
+	game.zombies.start_climb(z, "culvert")
+	assert_lt(float(Motion.row("dead_climb_culvert")["len"]), float(Motion.row("dead_climb_lid")["len"]))
+	z["age"] += float(Motion.row("dead_climb_culvert")["open"]) * 0.5
+	var flat := DeadPose.climbing(z)
+	assert_almost_eq(flat.basis.y.z, 1.0, 0.001, "flat on its face")
+	assert_lt(flat.origin.z, 0.0, "still partly back in the culvert's mouth")
+	assert_almost_eq(flat.origin.y, DeadPose.LIFT, 0.001, "on the ground, not under it")
+	z["age"] += float(Motion.row("dead_climb_culvert")["len"])
+	assert_eq(DeadPose.climb_k(z), 1.0)
+
+
+func test_a_climbing_body_does_not_turn_to_a_sound() -> void:
+	var z := _one()
+	game.zombies.start_climb(z)
+	assert_eq(game.zombies.hear(z["pos"] + Vector3(1, 0, 0), 2, 20.0), 0)
+	assert_eq(z["state"], "climb")
