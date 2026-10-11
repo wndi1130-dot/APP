@@ -29,6 +29,7 @@ export const WHY_NAME: Record<string, string> = {
   'stop.loot': '정차 수색',
   'stop.stay': '정차하며 땐 석탄',
   run: '기관 운행',
+  idle: '꼬리칸이 손을 놓음',
   heat: '칸 난방',
   ration: '배급',
   short: '석탄이나 식량이 바닥남',

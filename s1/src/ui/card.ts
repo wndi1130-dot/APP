@@ -112,6 +112,7 @@ function crewCost(view: View): HTMLElement {
     h('span', null, `${COMM_SHORT[c]} `, tip('노출', TIP.exposure), ' ', h('b', { class: 'num' }, `${pv.from} → ${pv.to}`)),
     pv.rel ? h('span', null, ` · 관계 −${-pv.rel}`) : null,
     pv.haul < 1 ? h('span', null, ` · 손에 안 익어 산출 −${Math.round((1 - pv.haul) * 100)}%`) : null,
+    pv.risk > 1 ? h('span', null, ` · 지쳐서 다칠 위험 ×${pv.risk.toFixed(1)}`) : null,
     pv.rest.length ? h('small', null, ` · 쉬는 칸 ${pv.rest.map(o => COMM_SHORT[o]).join('·')} 노출 −${P.crewRest}`) : null);
 }
 

@@ -169,9 +169,16 @@ function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'
   return m;
 }
 
+/** 꼬리칸이 작업을 거부 중인가(열기 1 이상, 관계 −40 이하). 누구를 보내도 산출이 깎이고 기관이 더 먹는다(결정 059). */
+export function tailIdle(g: Game): boolean {
+  const tail = g.comms.tail;
+  return tail.fervor >= 1 && tail.rel <= -40;
+}
+const tailIdleCoal = (g: Game): number => (tailIdle(g) ? P.tailIdleCoal : 0);
+
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + disasterCoal(g);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -183,6 +190,7 @@ function forecastWeights(g: Game): { coal: [string, number][]; food: [string, nu
   return {
     coal: [
       ['run', (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0)],
+      ['idle', tailIdleCoal(g)],
       ['heat', heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd')],
       ['calm.pot', calmCoal(g)],
       ['disaster', disasterCoal(g)],
@@ -389,6 +397,11 @@ function fateRoll(g: Game, name: string, kind: 'd' | 'h' | 'sd' | 'sh'): number 
   return hash(`${g.seed}|${g.seg}|${g.stop?.place ?? ''}|${name}|${kind}`) / 4294967296;
 }
 
+/** 작업조로 내보낼 칸의 노출이 정차에서 다칠·죽을 확률에 곱하는 값. 노출 50까지는 1이고 그 위로 점마다 +1%. */
+export function exposeMult(g: Game, c: Comm): number {
+  return 1 + Math.max(0, situation(g, c)[3] - P.exposeFrom) * P.exposeHurt;
+}
+
 /** 정차 위험. 장소 위험도, 체류, 인원, 던진 시신이 키운 무리, 경비대의 경계 거부와 호위로 정해진다.
  * 준비(무엇을·얼마나·누구를·몇 명)를 바꾸면 바로 다시 계산되고, 결과는 이 줄이 약속한 범위를 벗어나지 않는다. */
 
@@ -405,8 +418,10 @@ export function stopRisk(g: Game): StopRisk {
   // 장작불의 불빛과 연기가 무리를 끈다(s1c_domestic 4.1). 태울 시신이 있으면 내리는 정차에 붙는다.
   const threat = (stop?.threat ?? 1) * (pyreCount(g) > 0 ? P.pyreLight : 1);
   const dm = domesticRiskMult(g); // S1c 내정 훅
-  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury;
-  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death;
+  // 내보낸 칸이 지쳐 있을수록 다치고 죽기 쉽다(결정 060 가).
+  const tired = stop ? exposeMult(g, stop.crewComm) : 1;
+  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury * tired;
+  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death * tired;
   // 결과는 사람마다 정해 둔 난수로 먼저 정한다. 정찰은 이 결과를 드러내기만 해서 정찰 여부가 피해를 바꾸지 않는다
   // (07_outside_eye_triage N2). 준비를 바꾸면 같은 난수로 다시 계산하니 다시 굴리는 길도 없다.
   // 사람 하나의 죽을 확률은 pDeath/4(4명 기준 기대 사망 pDeath), 크게 다칠 확률은 lam/인원(기대 중상 lam).
@@ -466,11 +481,11 @@ export function crewRest(g: Game, busy: Comm | null): void {
 export const CREW_COMMS: readonly Comm[] = COMMS.filter(c => CREW_HAUL[c] !== undefined);
 
 /** 정차 카드에 미리 적는 작업조 값(6.4): 이 칸을 내면 노출이 얼마가 되고, 무엇을 잃고, 누가 쉬나. */
-export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: number; haul: number; rest: Comm[] } {
+export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: number; haul: number; rest: Comm[]; risk: number } {
   const from = Math.round(situation(g, c)[3]);
   const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(P.crewCap, g.comms[c].base[3] + P.crewGain) - g.comms[c].base[3]));
   const rest = COMMS.filter(o => o !== c && REST_FLOOR[o] !== undefined && g.comms[o].base[3] > REST_FLOOR[o]!);
-  return { from, to, rel: CHORE_COMMS.includes(c) ? P.choreRel : 0, haul: CREW_HAUL[c] ?? 1, rest };
+  return { from, to, rel: CHORE_COMMS.includes(c) ? P.choreRel : 0, haul: CREW_HAUL[c] ?? 1, rest, risk: exposeMult(g, c) };
 }
 
 export function resolveStop(g: Game, go: boolean): StopResult | null {
@@ -508,9 +523,12 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     * (CREW_HAUL[stop.crewComm] ?? 1);
   // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).
   const notes: string[] = [...darkNotes];
-  const tail = g.comms.tail;
-  // 꼬리칸 작업 거부는 꼬리칸이 작업조로 나갈 때만(J11). 다른 칸을 보내면 쉬는 꼬리칸의 거부가 운반량을 깎지 않는다.
-  if (stop.crewComm === 'tail' && tail.fervor >= 1 && tail.rel <= -40) { haul *= 0.7; notes.push('꼬리칸이 작업을 거부했다(−30%).'); }
+  // 꼬리칸 작업 거부: 꼬리칸을 보내면 −30%, 다른 칸을 보내도 손이 빠진 만큼 더디다(결정 059).
+  if (tailIdle(g)) {
+    const own = stop.crewComm === 'tail';
+    haul *= own ? 0.7 : P.tailIdleHaul;
+    notes.push(own ? '꼬리칸이 작업을 거부했다(−30%).' : `꼬리칸이 손을 놓아 일이 더디다(−${Math.round((1 - P.tailIdleHaul) * 100)}%).`);
+  }
   // 상중인 사람은 손이 느리다(사람의 무게 A1).
   const grieving = names.filter(n => !isGone(g, n) && mourners(g).includes(n));
   if (grieving.length > 0) { haul *= 1 - 0.1 * grieving.length; notes.push(`${grieving.join(', ')}은(는) 상중이라 손이 느렸다.`); }
@@ -966,7 +984,9 @@ function meters(g: Game): void {
     bump(g, 'tension', -2, 'drift');
   } else {
     const potT = potRunning(g) ? CALM.potTension : 0;
-    bumpParts(g, 'tension', Math.max(0, inc - cast.tensionCut) * (1 - g.fear / 200), [
+    // 경비대를 푼 적이 있으면 공포가 긴장 오름을 늦추지 않는다: 눌러서 번 시간이 거저 쌓이지 않게(결정 059 나).
+    const calmed = g.tensionCrisisUsed > 0 ? 1 : 1 - g.fear / 200;
+    bumpParts(g, 'tension', Math.max(0, inc - cast.tensionCut) * calmed, [
       ['mood', moodInc], ['short', foodInc], ['law', lawSum(g, 'tensionAdd')], ['calm.pot', potT], ['calm.ledger', calmTension(g) - potT], ['cast', -cast.tensionCut],
     ]);
   }

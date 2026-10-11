@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, P, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, forecast, promiseWhen, relStage, relationLine, seats, situation,
+  COMMS, COMM_NAME, P, PROTEST, REP_ROLE, TRAIT_NAME, UNIQUE_ACTION, forecast, promiseWhen, relStage, relationLine, seats, situation, tailIdle,
 } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, raw } from './dom';
@@ -241,6 +241,7 @@ export function resUse(g: Game, key: 'coal' | 'food'): { total: number; rows: { 
     v: key === 'coal' ? ((g.comms[c].heat * g.comms[c].pop) / 40) * P.coalHeatPerLever : g.comms[c].pop * g.comms[c].ration * P.foodPerPersonLever,
   }));
   if (key === 'coal') rows.push({ label: g.inStrike ? '서 있는 기관' : '기관 운행', v: g.inStrike ? P.coalStrike : P.coalRun });
+  if (key === 'coal' && tailIdle(g)) rows.push({ label: '꼬리칸이 손을 놓음', v: P.tailIdleCoal });
   const rest = total - rows.reduce((sum, r) => sum + r.v, 0);
   const shown = rows.filter(r => Math.round(r.v * 10) !== 0).sort((a, b) => b.v - a.v);
   if (Math.round(rest * 10) !== 0) shown.push({ label: '그 밖(법, 기술, 재난, 내정)', v: rest });
