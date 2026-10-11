@@ -17,6 +17,7 @@ const DOOR_HP: int = 24           # three of the dead through one in about ten s
 const WALL_HP: int = 12
 const BANG_EVERY: float = 1.3     # one of the dead, one blow: as on a house door
 const REACH: float = 1.6
+const HURT_REACH: float = 3.0     # a door that gives way reaches whoever stands this near it
 const BUILD_TIME: float = 8.0     # as the manhole lid: one heavy thing, a normal sound
 const MATERIALS: Array[String] = ["plank", "scrap", "wood"]
 ## Hordes while it lasts: the director is the same one, with the stage's pace.
@@ -34,6 +35,8 @@ var left: float = READY_TIME
 var total: float = READY_TIME
 var doors: Array = []             # {cell, hp, max, wall, bang_t, entered: {zombie id: true}, node}
 var walls_built: int = 0
+var reached: int = 0              # people in front of a door as it gave way
+var hurt: int = 0                 # and how many of them it scratched
 var first_wave: int = 0
 var opened_at: float = 0.0
 
@@ -124,8 +127,22 @@ func _bang(door: Dictionary) -> void:
 	var before := state_of(door)
 	door["hp"] = int(door["hp"]) - 1
 	var now := state_of(door)
+	if now == "breached":
+		_reach_through(door)
 	if now != before:
 		game.set_radio("기관사: 문이 뚫렸다!" if now == "breached" else "기관사: 문이 상했다. 오래 못 버틴다.", "must", FieldGrid.center(door["cell"]))
+
+
+## A door gives way: everyone of the train's in front of it gets the one roll
+## a dead hand gets (decision 075: those who fought at a breached door).
+func _reach_through(door: Dictionary) -> void:
+	var at: Vector3 = FieldGrid.center(door["cell"])
+	for p in game.squad + game.crew:
+		if not p.is_alive() or game.level_of(p.position) != 0 or p.position.distance_to(at) > HURT_REACH:
+			continue
+		reached += 1
+		if game.combat.breach_reaches(p) == "scratch":
+			hurt += 1
 
 
 ## whole, damaged (under half) or breached (decision 075's three words).
@@ -223,7 +240,7 @@ func result() -> Dictionary:
 	return {
 		"ready": ready, "early": early, "leftSec": int(ceil(maxf(left, 0.0))), "doors": states,
 		"damaged": count("damaged"), "breached": count("breached"), "entered": entered,
-		"walls": walls_built, "waves": waves(),
+		"walls": walls_built, "waves": waves(), "reached": reached, "hurt": hurt,
 	}
 
 
@@ -235,4 +252,5 @@ func end_lines() -> Array:
 	return [
 		"버티기 판: %s · 물결 %d번" % [how, int(r["waves"])],
 		"상한 문 %d · 뚫린 문 %d · 뚫린 문으로 든 것 %d · 세운 방벽 %d" % [int(r["damaged"]), int(r["breached"]), int(r["entered"]), int(r["walls"])],
+		"문이 뚫릴 때 그 앞에 있던 사람 %d · 그 가운데 긁힌 사람 %d" % [reached, hurt],
 	]

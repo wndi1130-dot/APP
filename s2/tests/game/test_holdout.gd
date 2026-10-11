@@ -124,6 +124,29 @@ func test_a_door_is_whole_then_damaged_then_breached() -> void:
 	assert_eq(int(r["entered"]), 1, "each of the dead that goes in by a breached door is counted once")
 
 
+func test_a_door_that_gives_way_reaches_whoever_stands_in_front_of_it_once() -> void:
+	var scratched := 0
+	for seed in range(1, 9):
+		var game = _game({"holdout": "start", "holdout_door_hp": 2, "seed": seed})
+		var h = game.holdout
+		var door: Dictionary = h.doors[0]
+		for p in game.squad:
+			p.position = FieldGrid.center(door["cell"] + Vector2i(40, 3))
+		game.player.position = FieldGrid.center(door["cell"] + Vector2i(1, 1))
+		var wounds: int = game.player.body.wounds.size()
+		_dead_at(game, door)
+		h.tick(FieldHoldout.BANG_EVERY * 2)
+		assert_eq(h.state_of(door), "breached")
+		assert_eq(h.reached, 1, "the one in front of it, not those along the platform")
+		assert_eq(game.player.body.wounds.size() - wounds, h.hurt, "a scratch or the coat, nothing else")
+		assert_true(game.player.grabbers.is_empty(), "nothing has hold of them")
+		h.tick(FieldHoldout.BANG_EVERY * 4)
+		assert_eq(h.reached, 1, "once, as it gives way")
+		assert_eq(int(h.result()["hurt"]), h.hurt)
+		scratched += h.hurt
+	assert_between(scratched, 1, 8, "over eight stops the coat does not stop every hand")
+
+
 func test_the_train_leaves_when_it_is_ready_and_says_what_it_cost() -> void:
 	var game = _game({"holdout": "start", "holdout_time": 20.0})
 	var h = game.holdout

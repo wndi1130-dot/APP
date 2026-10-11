@@ -670,6 +670,24 @@ func zombie_reaches(z: Dictionary, p) -> String:
 	return outcome
 
 
+## A door of the held train gives way with someone in front of it: the hands
+## that come through reach them once. The coat may stop it; if not it is a
+## scratch (nothing has hold of them yet, so no grab comes of this).
+func breach_reaches(p) -> String:
+	var now: float = game.clock.elapsed
+	var block: float = float(p.coat.get("block", 0.0)) * (1.0 - float(p.coat.get("wear", 0.0)))
+	if GrabRules.attack_outcome(game.rng, block) == "blocked":
+		p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.05)
+		_toast(p, "외투가 손톱을 막았다.")
+		return "blocked"
+	p.body.apply_scratch(game.rng, now, BodyState.pick_scratch_part(wound_rng()))
+	p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
+	p.panic = minf(1.0, p.panic + 0.3)
+	game.telemetry.injury(now, p.pid, "scratch")
+	game.say(p, "%s 긁혔다." % p.display_name)
+	return "scratch"
+
+
 ## The window ran out: the bite lands (body_injury 2). Witnesses go on the receipt.
 func bite(p) -> void:
 	var rng: RandomNumberGenerator = game.rng
