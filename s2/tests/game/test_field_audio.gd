@@ -105,6 +105,10 @@ func test_the_shipped_files_load() -> void:
 	assert_eq(a._load_group("moan").size(), 8)
 	assert_eq(a._load_group("birds").size(), 1)
 	assert_eq(a._load_group("pen").size(), 3)
+	for g in ["door_bang", "door_wall", "door_break"]:
+		assert_eq(a._load_group(g).size(), 2, g)
+		for s in a._load_group(g):
+			assert_gt(s.get_length(), 0.1, g)
 
 
 func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> void:
