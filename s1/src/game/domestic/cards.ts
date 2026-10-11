@@ -226,7 +226,7 @@ export function domView(g: Game, card: Card): CardView | null {
         body: `의무칸 침상은 ${D.beds}개인데 눕힐 사람이 ${card.n ?? D.beds + 1}명이다. 정한 순서가 뒤로도 의무칸 규칙이 된다.`,
         choices: [
           { label: '일할 손 먼저', say: '내일 삽을 들 손부터 눕혀라!', effs: [rel('engine', D.bedWorkersRel), rel('guard', D.bedWorkersRel), rel('tail', -D.bedWorkersRel)], special: 'dom:bed:workers', extra: ['병자는 제 칸에서 앓는다'] },
-          { label: '아픈 사람 먼저', say: '가장 아픈 사람이 먼저다.', effs: [rel('medtech', D.bedWorkersRel)], special: 'dom:bed:sick', extra: ['넘치면 부상 회복 40%'] },
+          { label: '아픈 사람 먼저', say: '가장 아픈 사람이 먼저다.', effs: [rel('medtech', D.bedWorkersRel)], special: 'dom:bed:sick', extra: ['넘친 사람은 제 칸에서 하루 더 앓는다'] },
           { label: '순번으로', say: '침상은 순번이다. 넘치는 사람은 제 칸이 돌봐라.', effs: [], special: 'dom:bed:rota', extra: ['넘치면 그 칸 과밀 +5'] },
         ],
       };

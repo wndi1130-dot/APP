@@ -13,7 +13,7 @@ describe('woundView', () => {
     addWound(g, { who: '나', comm: 'guard', from: 'stop', where: '시험', grade: 'light', part: 'armR', septic: false, cuts: 0 });
     const rows = woundView(g);
     expect(rows.map(r => r.who)).toEqual(['가', '나']);
-    expect(rows[0]).toMatchObject({ partName: '왼다리', grade: 'fracture', gradeName: '골절', daysLeft: 8, care: 'bed', septic: false, medPerDay: 0.5 });
+    expect(rows[0]).toMatchObject({ where: '시험', partName: '왼다리', grade: 'fracture', gradeName: '골절', daysLeft: 8, care: 'bed', septic: false, medPerDay: 0.5 });
     expect(rows[1]).toMatchObject({ partName: '오른팔', gradeName: GRADE_NAME.light, daysLeft: 1, care: 'up', medPerDay: 0 });
     expect(woundView(g, 'guard').map(r => r.who)).toEqual(['나']);
   });

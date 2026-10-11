@@ -17,7 +17,7 @@ export const P = Object.freeze({
   coal0: 100, food0: 100, med0: 20, lux0: 8, trust0: 50, tension0: 20,
   coalRun: 6, coalStrike: 4, coalHeatPerLever: 0.25, foodPerPersonLever: 0.025,
   haulTotal: 36, targetBoost: 3, leverStep: 12, winterEvery: 6, winterDrop: 5,
-  injuryRate: 0.25, deathRate: 0.03, medPerInjured: 0.5,
+  injuryRate: 0.25, deathRate: 0.03,
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
   engineFatigue: 2, shiftRelief: 10, shiftCoal: 3,
   strikeRel: -15, refuseRel: 5, rescueRate: 0.2, crisisLine: 30,
@@ -91,7 +91,7 @@ export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 export interface LawRes {
   rationFloor?: number; heatFloor?: number; tensionAdd?: number; foodAdd?: number; coalAdd?: number;
   foodOnce?: number; fearOnce?: number; fearAdd?: number; trustOnce?: number;
-  heatMult?: number; haulMult?: number; medMult?: number; heal?: number; deathMult?: number;
+  heatMult?: number; haulMult?: number; medMult?: number; healDays?: number; deathMult?: number;
   noRescue?: boolean; corpse?: 'throw' | 'store' | 'burn';
 }
 
@@ -176,8 +176,8 @@ export const LAWS: Record<LawId, LawDef> = {
   }),
   treat_all: L({
     id: 'treat_all', title: '모두를 치료', group: '의료', tag: '이상', kind: 'normal', axes: [1, 0, 1],
-    like: { tail: 1, medtech: 1, guard: 1, front: 1, engine: 1 }, res: { medMult: 1.6, heal: 0.7 },
-    changes: ['부상 회복 40% → 70%', '의약품 소모 ×1.6'], opensWhen: '처음부터',
+    like: { tail: 1, medtech: 1, guard: 1, front: 1, engine: 1 }, res: { medMult: 1.6, healDays: -1 },
+    changes: ['새 부상이 하루 빨리 낫는다', '의약품 소모 ×1.6'], opensWhen: '처음부터',
   }),
   triage: L({
     id: 'triage', title: '중환자 분류', group: '의료', tag: '가혹', kind: 'normal', axes: [0, -1, -1],

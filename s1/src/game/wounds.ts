@@ -1,12 +1,13 @@
 import { onDeath } from './death';
 import { COMMS } from './data';
-import type { Comm } from './data';
+import type { Comm, LawId } from './data';
+import { lawTechRes } from './domestic/lawtech';
 import { D } from './domestic/data';
 import { typhusInBeds } from './domestic/beds';
 import { living, techMult } from './domestic/state';
 import { pickVictims } from './people';
 import { bump, put } from './ledger';
-import { isGone, journal, lawActive, PROFILES, rnd } from './state';
+import { isGone, journal, PROFILES, rnd } from './state';
 import type { Game } from './state';
 
 // 부상 명부(정치_열차_명세_1_부상.md 1~3절). 사람에 붙은 Wound 기록이 g.wounds에 쌓이고, g.injured는 거기서 다시 센 파생값이다.
@@ -111,6 +112,8 @@ export interface WoundRow {
   partName: string;
   grade: WoundGrade;
   gradeName: string;
+  /** 어디서 다쳤나(정차한 곳, 칸 이름 등). 명부 밖에서 오른 몫을 맞춘 기록은 빈 글 */
+  where: string;
   /** 낫기까지 남은 구간 */
   daysLeft: number;
   care: WoundCare;
@@ -126,7 +129,7 @@ export interface WoundRow {
 export function woundView(g: Game, comm?: Comm): WoundRow[] {
   return [...liveWounds(g, comm)].sort((a, b) => a.at - b.at || a.id - b.id).map(w => ({
     id: w.id, who: w.who, ...(w.personId ? { personId: w.personId } : {}), comm: w.comm,
-    part: w.part, partName: PART_NAME[w.part], grade: w.grade, gradeName: GRADE_NAME[w.grade],
+    part: w.part, partName: PART_NAME[w.part], grade: w.grade, gradeName: GRADE_NAME[w.grade], where: w.where,
     daysLeft: w.daysLeft, care: w.state === 'bed' ? 'bed' : w.state === 'home' ? 'home' : 'up',
     septic: w.septic, medPerDay: medPerDay(w),
   }));
@@ -156,9 +159,10 @@ function bedDaysOf(grade: WoundGrade): number {
   return grade === 'light' ? 0 : grade === 'amputation' ? 4 : 2;
 }
 
-/** 새 기록의 날 수를 줄이는 몫(2절): 모두를 치료 −1, M1 응급 처치 −1, 둘째 의무칸 의료 견습 −1(증축 명세 2가 열기 전엔 0). */
+/** 새 기록의 날 수를 줄이는 몫(2절·4절): 선 법들의 healDays 합(모두를 치료 −1), M1 응급 처치 −1, 둘째 의무칸 의료 견습 −1(증축 명세 2가 열기 전엔 0). */
 export function healCuts(g: Game): number {
-  return (lawActive(g, 'treat_all') ? 1 : 0) + (techMult(g, 'm1') > 0 ? 1 : 0);
+  const laws = (Object.keys(g.passed) as LawId[]).reduce((s, law) => s - (lawTechRes(g, law).healDays ?? 0), 0);
+  return laws + (techMult(g, 'm1') > 0 ? 1 : 0);
 }
 
 /** 하루 의약품. fracture는 침상에 있는 동안만, 곪음은 +0.5. */
@@ -317,7 +321,6 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
   for (const w of activeWounds(g)) if (isGone(g, w.who)) w.state = 'healed';
   const act = liveWounds(g);
   if (act.length === 0) { syncInjured(g); return; }
-  rebalanceBeds(g);
   const need = act.reduce((s, w) => s + medPerDay(w), 0) * medMult;
   const med = g.comms.medtech;
   if (med.fervor >= 1 && med.rel <= -40) {
@@ -337,7 +340,6 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
         onDeath(g, w.comm, [w.who]);
       }
     }
-    rebalanceBeds(g);
     syncInjured(g);
     return;
   }
@@ -365,7 +367,6 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
   for (const w of act) {
     if (isActive(w) && w.septic && w.daysLeft < w.days0 * 2 && rnd(g) < WOUND_ROLL.septicGrow) w.daysLeft += 1;
   }
-  rebalanceBeds(g);
   syncInjured(g);
 }
 
@@ -373,7 +374,7 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
 export function reconcileRoster(g: Game): void {
   const live = liveWounds(g).length;
   const n = Math.floor(g.injured);
-  if (n > live) noteInjury(g, n - live, 'stop', '기록 밖');
+  if (n > live) noteInjury(g, n - live, 'stop', '');
   else if (n < live) noteRelief(g, live - n);
 }
 

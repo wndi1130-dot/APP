@@ -1,5 +1,5 @@
 import { addCard, END_LINK } from './state';
-import { noteDrop, noteInjury, noteRelief, reconcileRoster, woundTick } from './wounds';
+import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
@@ -22,7 +22,7 @@ import {
 import type { Game, StopResult, StopState } from './state';
 // S1c 내정 훅(domestic/hooks.ts). g.dom이 없으면 모두 S1a 그대로 돌려준다.
 import {
-  domesticBroadcast, domesticDepart, domesticForecast, domesticPyreWood, domesticHaulMult, domesticHealRate, domesticPromise, domesticRiskMult, domesticSettle,
+  domesticBroadcast, domesticDepart, domesticForecast, domesticPyreWood, domesticHaulMult, domesticPromise, domesticRiskMult, domesticSettle,
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
@@ -766,7 +766,9 @@ export function callEmergency(g: Game): boolean {
 function medicineTick(g: Game, notes: string[]): void {
   // 부상 정산은 명부가 한다(wounds.ts woundTick, 명세 1 2.1). 명부 밖에서 오른 g.injured는 먼저 기록으로 맞춘다.
   reconcileRoster(g);
+  rebalanceBeds(g);
   woundTick(g, notes, lawMult(g, 'medMult'));
+  rebalanceBeds(g);
   // 장작불을 기다리는 시신도 일어난다. 냉동칸은 안치와 같은 확률, 살던 칸은 따뜻해서 두 배(s1c_domestic 4.1).
   const kinBodies = pyreCount(g) - (g.pyre ?? 0);
   // S1b: 머리를 확인한 시신은 일어나지 않는다(dark/corpses.ts). 칸마다 몫을 나눠 받는다. S1a 판이면 그대로.
