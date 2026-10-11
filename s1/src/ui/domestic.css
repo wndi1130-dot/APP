@@ -382,3 +382,29 @@
 .tcar__hung { display: inline-flex; color: var(--brass); }
 .tcar__hung .icon { width: 12px; height: 12px; }
 @media (prefers-reduced-motion: reduce) { .dom-peg__cloth { animation: none; } }
+
+/* 공방 판(결정 053, 설계 4부 1절): 만들기 / 지금 / 사람 세 덩이와 오른쪽 개량 자리 셋, 판 아래 작은 단추 줄. */
+.wsb__body { grid-template-columns: minmax(0, 11fr) minmax(0, 11fr) minmax(0, 9fr) minmax(0, 5fr); }
+.wsb .tpop__name.is-halt { border-color: var(--warning); }
+.wsb .tpop__name small { color: var(--warning); font-weight: 400; font-size: 12px; }
+.wsb .chip { min-height: 24px; padding: 0 10px; }
+.wsb__later { border-style: dashed; opacity: .55; }
+.wsb__target { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; }
+.wsb__make .lever__input { grid-area: auto; width: 100%; min-width: 0; }
+.wsb__make input:disabled { opacity: .45; }
+.wsb__gauge { display: grid; grid-template-columns: 18px auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; justify-content: start; }
+.wsb__tube { grid-row: 1 / 3; position: relative; width: 18px; height: 36px; border: 1px solid var(--line-strong); background: var(--surface-3); }
+.wsb__tube > i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--brass); }
+.wsb__pct { font-size: 22px; line-height: 1; }
+.wsb__who .portrait { width: 22px; height: 22px; }
+.wsb__slots { gap: 4px; }
+.wsb__slot { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: center; min-height: 22px; padding: 0; border: 0; background: none; color: var(--ink-1); font-size: 13px; text-align: left; }
+.wsb__slot small { color: var(--ink-3); font-size: 12px; }
+.wsb__sq { flex: none; width: 18px; height: 18px; border: 1.5px solid var(--ink-2); }
+.wsb__slot.is-on .wsb__sq { background: var(--brass); border-color: var(--brass); }
+.wsb__slot.is-none { color: var(--ink-3); }
+.wsb__slot.is-none .wsb__sq { border: 1px dashed var(--line-strong); }
+.wsb__foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.wsb__foot .wsb__mod { margin-left: auto; min-height: 28px; }
+.wsb .is-dim { color: var(--ink-3); }
+.wsb .dom-fold { margin-top: 4px; }

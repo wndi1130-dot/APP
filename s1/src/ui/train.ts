@@ -10,7 +10,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 import { nameBtn } from './names';
 import { carPopover, spaceLever, spaceTab, stackCount, warmthTone } from './home';
-import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, hungMark, potDot, trainCars, wallPeg, wallRow } from './domestic';
+import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, hungMark, potDot, trainCars, wallPeg, wallRow, workshopBoard } from './domestic';
 
 // 열차 관리 화면(S1c, 사용자 2026-10-11): 칸을 누르면 작은 창이 아니라 화면 전체가 바뀐다.
 // 위에 열차 전체 띠, 가운데에 누른 칸의 판(상태·조절·공방 세 덩이), 아래에 단추 여섯.
@@ -143,6 +143,7 @@ function medBoard(view: View, car: CarDef): HTMLElement {
 function board(view: View, car: CarDef): HTMLElement {
   if (view.ui.dom?.med) return medBoard(view, car);
   if (car.kind === 'comm' || car.kind === 'engine') return commBoard(view, car);
+  if (car.id === 'workshop' && view.g.dom) return workshopBoard(view, car);
   return carPopover(view, car) ?? h('div', { class: 'carpop tpop' }, h('div', { class: 'tpop__head' }, h('b', { class: 'tpop__name' }, car.name)));
 }
 
