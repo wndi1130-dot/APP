@@ -8,10 +8,10 @@ import type { IconName } from './icons';
 import { isKeyLine, logGroups } from './journal';
 import { TIP, fmt, signed } from './common';
 import { bar, tip } from './widgets';
-import { sharePcts } from './share';
+import { scalePos } from './share';
 import { runway } from './hud';
 import type { View } from './common';
-import { grudgeText } from './council';
+import { grudgeText, standingsBar } from './council';
 import { nameBtn, shortText } from './names';
 import { domesticEnd, domesticMenu, domesticPanel, eventsMenu, prologueDone } from './domestic'; // S1c 내정 훅
 import { darkEndSection, darkMenu, darkSupportWhy } from './dark'; // S1b 어두운 길 훅
@@ -21,20 +21,25 @@ import { departTapOn } from './depart';
 
 // 겹쳐 뜨는 창: 불만·지지 집단 창, 일지, 메뉴, 정산 요약, 디버그, 끝.
 
+/** 가운데가 0인 관계 막대: −쪽은 불만 색으로 왼쪽으로, +쪽은 지지 색으로 오른쪽으로 찬다. */
+function relBar(rel: number): HTMLElement {
+  return h('span', { class: 'relbar', 'aria-hidden': 'true' },
+    Math.round(rel) !== 0 ? h('b', { class: rel < 0 ? 'is-neg' : 'is-pos', style: `width:${Math.abs(scalePos(rel) - 50).toFixed(1)}%` }) : null,
+    h('i', null));
+}
+
 function factionRow(g: Game, c: Comm): HTMLElement {
   const s = g.comms[c];
-  const map = seats(g);
-  const seatN = map[c];
-  const total = COMMS.reduce((sum, x) => sum + map[x], 0);
-  const share = sharePcts(COMMS.map(x => map[x]))[COMMS.indexOf(c)];
+  const seatN = seats(g)[c];
   const acted = g.actedSeg === g.seg;
   const grudge = grudgeText(s.grudge);
   const supportWhy = darkSupportWhy(g, c); // S1b 계엄 중 경비대 지지
   return h('li', { class: cx('frow', `c-${c}`) },
     h('div', { class: 'frow__head' },
       h('i', { class: 'dot' }), h('b', null, COMM_NAME[c]),
-      // 의석은 비율로, 막대와 함께. 석수는 누르면 뜬다(사용자 2026-10-11).
-      h('span', { class: 'frow__share' }, bar(share, '--ink-3'), tip(`${share}%`, `${COMM_NAME[c]}: 의회 ${seatN}석(전체 ${total}석).`)),
+      // 관계 값을 막대로(결정 058): 얼마나 불만이고 얼마나 지지하는지. 집단 크기(의석)는 작은 숫자로 곁에 둔다.
+      h('span', { class: 'frow__rel' }, relBar(s.rel), h('b', { class: cx('num', s.rel >= 15 ? 'is-blue' : s.rel <= -15 ? 'is-red' : '') }, signed(s.rel))),
+      h('small', { class: 'frow__seats num' }, `${seatN}석`),
       h('span', { class: cx('stage', `stage--${s.rel >= 15 ? 'up' : s.rel <= -15 ? 'down' : 'mid'}`) }, relStage(g, c))),
     h('div', { class: 'frow__facts' },
       h('span', null, `${REP_ROLE[c]} `, nameBtn(s.leader.name)),
@@ -51,15 +56,15 @@ function factionRow(g: Game, c: Comm): HTMLElement {
 function factionPanel(view: View): HTMLElement {
   const { g, ui } = view;
   const side = ui.panel === 'unrest' ? -1 : 1;
-  const list = [...COMMS]
-    .filter(c => (side < 0 ? g.comms[c].rel < 15 : g.comms[c].rel > -15))
-    .sort((a, b) => (side < 0 ? g.comms[a].rel - g.comms[b].rel : g.comms[b].rel - g.comms[a].rel));
+  // 한 목록에 다섯 집단 모두(결정 058). 불만 단추로 열면 사이가 나쁜 집단부터, 지지 단추로 열면 좋은 집단부터.
+  const list = [...COMMS].sort((a, b) => (side < 0 ? g.comms[a].rel - g.comms[b].rel : g.comms[b].rel - g.comms[a].rel));
   return h('div', { class: cx('drop', side < 0 ? 'drop--unrest' : 'drop--support'), role: 'dialog' },
     h('div', { class: 'drop__head' },
-      icon(side < 0 ? 'fist' : 'hand'), h('b', null, side < 0 ? '불만 쪽' : '지지 쪽'),
+      icon(side < 0 ? 'fist' : 'hand'), h('b', null, '집단 관계'),
       h('span', { class: 'sub' }, g.actedSeg === g.seg ? '이번 구간 행동을 했다' : '구간마다 행동 하나'),
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
-    list.length ? h('ul', { class: 'frows' }, list.map(c => factionRow(g, c))) : h('p', { class: 'sub' }, '이쪽엔 아무도 없다.'));
+    standingsBar(g),
+    h('ul', { class: 'frows' }, list.map(c => factionRow(g, c))));
 }
 
 const LOG_ICON: Record<string, IconName> = { deal: 'trust', bad: 'alert', dark: 'skull', good: 'heat', none: 'dot' };

@@ -1,16 +1,16 @@
 import {
   COMMS, COMM_NAME, LAWS, P, REP_ROLE, TRAIT_NAME, agendaTitle, blocs, dealHolds, bribePrice, currentAgenda, expected, lawActive,
-  openConditions, preVote, promiseWhen, relStage, relationLine, toolStatus,
+  openConditions, preVote, promiseWhen, relStage, relationLine, standings, toolStatus,
   needOf, canDecree, agendaNeed, isLawAgenda, lawTechLines, MOTIONS, calmRepealLines, calmStateLine,
 } from '../game';
 import type { Bloc, Comm, DealTool, Game, LawId, VoteResult } from '../game';
 import { cx, h, s } from './dom';
 import { icon } from './icons';
 import type { IconName } from './icons';
-import { WEDGE_ORDER, fmt } from './common';
+import { TIP, WEDGE_ORDER, fmt } from './common';
 import type { View } from './common';
 import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle, wedgeBoundaries } from './seats';
-import { bar, portrait } from './widgets';
+import { bar, portrait, tip } from './widgets';
 import { agendaLine, nameBtn } from './names';
 import { darkBillFoot, darkClosedNote, darkCloseButton, darkDecreeNote, darkNoDeals } from './dark'; // S1b 계엄 회기 훅
 
@@ -385,6 +385,19 @@ function tally(est: { mean: number; min: number; max: number }, need: number, se
       h('i', { class: 'tally__need', style: `left:${need}%` })));
 }
 
+/** 표결 판세(결정 058): 불만 쪽·중립·지지 쪽 의석을 세 토막 막대로. 위 띠가 정도를 보이게 되면서 의석 판세는 여기와 집단 창에 둔다. */
+export function standingsBar(g: Game): HTMLElement {
+  const st = standings(g);
+  return h('div', { class: 'stand' },
+    tip('표결 판세', TIP.standings),
+    h('span', { class: 'stand__bar' },
+      st.unrest ? h('i', { class: 'is-unrest', style: `flex:${st.unrest}` }) : null,
+      st.neutral ? h('i', { style: `flex:${st.neutral}` }) : null,
+      st.support ? h('i', { class: 'is-support', style: `flex:${st.support}` }) : null),
+    h('span', { class: 'stand__nums num' },
+      h('span', { class: 'is-unrest' }, `불만 쪽 ${st.unrest}`), h('span', null, `중립 ${st.neutral}`), h('span', { class: 'is-support' }, `지지 쪽 ${st.support}`)));
+}
+
 export function councilScreen(view: View): HTMLElement {
   const { g, ui } = view;
   const council = g.council;
@@ -412,6 +425,7 @@ export function councilScreen(view: View): HTMLElement {
   return h('section', { class: 'council' },
     billPanel(view),
     h('div', { class: 'hemi-wrap' },
+      standingsBar(g),
       hemicycle(view, map, need, est, shownYes),
       result && !counting ? verdict(result, need) : big,
       counting ? h('button', { class: 'skip', 'data-action': 'skip-count' }, '건너뛰기') : null,
