@@ -1,5 +1,5 @@
 extends RefCounted
-## Which map a stop is played on (user 2026-10-11: five to seven maps a kind).
+## Which map a stop is played on (user 2026-10-11: up to nine maps a kind).
 ## A map is one script with `static func build() -> Dictionary` and a
 ## `PLACE_ID`; this is the one place that knows where they live. The game asks
 ## for a place id and gets the map's data, with the keys newer maps add (bands
@@ -18,7 +18,7 @@ const BUILT_IN: Dictionary = {"first_leg_01_sulechow": "res://game/world/sulehuf
 ## Maps named <kind>_<two digits> live here.
 const MAP_DIR: String = "res://game/world/maps/"
 const KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "houses", "hospital", "factory", "church", "office"]
-const MOST_PER_KIND: int = 7
+const MOST_PER_KIND: int = 9
 ## Keys a map may leave out, and what they read as then.
 const OPTIONAL: Dictionary = {
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
