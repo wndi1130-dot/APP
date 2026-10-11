@@ -26,6 +26,10 @@ const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
 const UNLOAD_KEEP: Array = ["bandage", "cloth", "plank", "medkit", "bottle_spirit", "arrow", "flare", "tweezers", "needle_thread"]
+## Going through the pockets of one that lies there: three seconds with the
+## hands busy (a grab stops it, as any work). First value, to be set on the phone.
+const BODY_SEARCH_TIME: float = 3.0
+const ROUND_NAMES: Dictionary = {"pistol": "권총탄", "shell": "산탄"}
 const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
 
 var game
@@ -118,6 +122,8 @@ func _do_goal(p) -> void:
 			spot_default(p, g["key"], g["verb"])
 		"item":
 			pick_up(p, g["key"])
+		"body":
+			search_body(p, g["key"])
 		"manhole":
 			block_lid(p, g["key"])
 
@@ -341,6 +347,43 @@ func _receive(p, item: String, n: int) -> void:
 		game.ammo[row[0]] = int(game.ammo.get(row[0], 0)) + int(row[1]) * n
 		return
 	p.add_item(item, n)
+
+
+## Through the pockets of a fallen one (the dead now and then have a small
+## thing; a raider has what it carried). Most have nothing: the three seconds
+## are the price. If it gets up meanwhile the hands come away empty.
+func search_body(p, zid: int) -> void:
+	var z: Dictionary = game.zombies.find(zid)
+	if p.action != "" or not game.zombies.lootable(z):
+		return
+	p.start_action("loot", "품 뒤지기", BODY_SEARCH_TIME, _body_searched.bind(p, zid))
+
+
+func _body_searched(p, zid: int) -> void:
+	var z: Dictionary = game.zombies.find(zid)
+	if not game.zombies.lootable(z):
+		if p == game.player:
+			game.hud.toast("일어났다. 손을 뗐다.")
+		return
+	z["searched"] = true
+	var loot: Array = z["loot"]
+	z["loot"] = []
+	game.telemetry.body(not loot.is_empty())
+	var names: Array = []
+	for row in loot:
+		var n: int = int(row["n"])
+		if row.has("ammo"):
+			game.ammo[row["ammo"]] = int(game.ammo.get(row["ammo"], 0)) + n
+			names.append("%s %d발" % [ROUND_NAMES.get(row["ammo"], row["ammo"]), n])
+		elif row.has("weapon"):
+			names.append(String(W.get_data(row["id"]).get("name", row["id"])))
+			game.ground_items.append({"pos": p.position, "id": row["id"], "n": 1, "weapon": row["weapon"]})
+			pick_up(p, game.ground_items.size() - 1)
+		else:
+			names.append(game.item_name(row["id"]) + (" %d" % n if n > 1 else ""))
+			_receive(p, row["id"], n)
+	if p == game.player:
+		game.hud.toast("찾았다: %s." % ", ".join(names) if not names.is_empty() else "아무것도 없다.")
 
 
 func pick_up(p, idx: int) -> void:
@@ -817,6 +860,17 @@ func _near_things(p) -> Array:
 		var d: float = g["pos"].distance_to(p.position)
 		if d < NEAR_USE:
 			rows.append([d, "줍기", go_and_do.bind(p, "item", i, g["pos"])])
+	# The nearest one lying there whose pockets nobody has been through.
+	var body: Dictionary = {}
+	var body_d: float = NEAR_USE
+	for z in game.zombies.list:
+		if game.zombies.lootable(z) and game.level_of(z["pos"]) == lv:
+			var d: float = z["pos"].distance_to(p.position)
+			if d < body_d:
+				body_d = d
+				body = z
+	if not body.is_empty():
+		rows.append([body_d, "품 뒤지기", go_and_do.bind(p, "body", int(body["id"]), body["pos"])])
 	if lv == 0:
 		var cell := FieldGrid.cell_of(p.position)
 		for dy in range(-1, 2):
