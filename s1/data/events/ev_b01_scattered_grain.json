@@ -55,12 +55,12 @@
         {
           "type": "community.ration",
           "target": "tail",
-          "amount": -6
+          "amount": -4
         },
         {
           "type": "relation",
           "target": "tail",
-          "amount": -4
+          "amount": -2
         },
         {
           "type": "flag",
