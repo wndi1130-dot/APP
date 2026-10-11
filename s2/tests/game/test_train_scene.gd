@@ -681,9 +681,22 @@ func _gesturing_anywhere(s) -> int:
 	return n
 
 
+## Those in a gesture other than the cold's: in a cold car (the tail, as the
+## rules come) those who walk rub their hands between walks whatever else goes on.
+func _gesturing_but_cold(s, car_id: String) -> Array:
+	return _gesturing(s, car_id).filter(func(b) -> bool: return b.gesture != Gesture.RUB_STAMP)
+
+
+func _gesturing_anywhere_but_cold(s) -> int:
+	var n := 0
+	for c in s.cars:
+		n += _gesturing_but_cold(s, String(c["id"])).size()
+	return n
+
+
 func test_a_tense_tails_first_knot_gestures_and_only_those_standing_still() -> void:
 	var s = _scene()
-	assert_eq(_gesturing(s, "tail1").size(), 0)
+	assert_eq(_gesturing_but_cold(s, "tail1").size(), 0)
 	s.set_train("tension", 70.0)
 	var rows := _gesturing(s, "tail1")
 	assert_eq(rows.size(), 3)
@@ -746,11 +759,11 @@ func test_calm_again_nobody_gestures_and_every_arm_is_hidden() -> void:
 	s.set_train("tension", 70.0)
 	assert_gt(_gesturing_anywhere(s), 0)
 	s.set_train("tension", 20.0)
-	assert_eq(_gesturing_anywhere(s), 0)
+	assert_eq(_gesturing_anywhere_but_cold(s), 0)
 	var seen := 0
 	for c in s.cars:
 		for b in c["bodies"]:
-			if b.has_meta(Gesture.ARMS_META):
+			if b.has_meta(Gesture.ARMS_META) and b.gesture != Gesture.RUB_STAMP:
 				seen += 1
 				for arm in b.get_meta(Gesture.ARMS_META):
 					assert_false(arm.visible, String(c["id"]))
@@ -769,7 +782,7 @@ func test_a_frightened_train_does_not_quarrel() -> void:
 func test_the_gestures_begin_at_sixty_tension() -> void:
 	var s = _scene()
 	s.set_train("tension", 59.0)
-	assert_eq(_gesturing(s, "tail1").size(), 0)
+	assert_eq(_gesturing_but_cold(s, "tail1").size(), 0)
 	s.set_train("tension", 60.0)
 	assert_eq(_gesturing(s, "tail1").size(), 3)
 
@@ -939,13 +952,13 @@ func test_a_mended_standing_ends_the_resentment() -> void:
 	var s = _resentful()
 	assert_gt(_gesturing_anywhere(s), 0)
 	s.set_comm("tail", "rel", 0)
-	assert_eq(_gesturing_anywhere(s), 0)
+	assert_eq(_gesturing_anywhere_but_cold(s), 0)
 	for b in s.car("tail1")["bodies"]:
 		assert_eq(b.gesture_facing, 0.0)
 	var seen := 0
 	for c in s.cars:
 		for b in c["bodies"]:
-			if b.has_meta(Gesture.ARMS_META):
+			if b.has_meta(Gesture.ARMS_META) and b.gesture != Gesture.RUB_STAMP:
 				seen += 1
 				for arm in b.get_meta(Gesture.ARMS_META):
 					assert_false(arm.visible, String(c["id"]))
@@ -1082,11 +1095,11 @@ func test_a_fear_that_lifts_ends_the_hugging() -> void:
 	var s = _frightened()
 	assert_gt(_gesturing_anywhere(s), 0)
 	s.set_train("fear", 0.0)
-	assert_eq(_gesturing_anywhere(s), 0)
+	assert_eq(_gesturing_anywhere_but_cold(s), 0)
 	var seen := 0
 	for c in s.cars:
 		for b in c["bodies"]:
-			if b.has_meta(Gesture.ARMS_META):
+			if b.has_meta(Gesture.ARMS_META) and b.gesture != Gesture.RUB_STAMP:
 				seen += 1
 				for arm in b.get_meta(Gesture.ARMS_META):
 					assert_false(arm.visible, String(c["id"]))
@@ -1360,11 +1373,11 @@ func test_both_hold_their_bowl_where_the_gesture_says() -> void:
 		assert_almost_eq(float(held.position.z), want.z, 0.001)
 
 
-func test_the_default_scene_holds_no_bowl_and_no_gesture() -> void:
+func test_the_default_scene_holds_no_bowl_and_no_gesture_but_the_colds() -> void:
 	var s = _scene()
 	for c in s.cars:
 		assert_eq(_bowls(s, String(c["id"])), 0, String(c["id"]))
-	assert_eq(_gesturing_anywhere(s), 0)
+	assert_eq(_gesturing_anywhere_but_cold(s), 0)
 
 
 func test_a_car_that_is_not_hungry_holds_no_bowl() -> void:
@@ -1456,3 +1469,152 @@ func test_a_body_with_a_bowl_shows_both_its_arm_boxes() -> void:
 		assert_eq(arms.size(), 2)
 		for arm in arms:
 			assert_true(arm.visible)
+
+# ---------------------------------------------------------------- the gestures of a cold car
+
+## Those of a car who stand between two walks.
+func _waiting(s, car_id: String) -> Array:
+	return (s.car(car_id)["bodies"] as Array).filter(func(b) -> bool: return b.state == "wait")
+
+
+## How many of a body's two arm boxes can be seen.
+func _arms_shown(b) -> int:
+	var n := 0
+	if b.has_meta(Gesture.ARMS_META):
+		for arm in b.get_meta(Gesture.ARMS_META):
+			n += 1 if arm.visible else 0
+	return n
+
+
+func test_the_two_who_walk_in_a_cold_tail_rub_their_hands_while_they_stand() -> void:
+	var s = _scene()
+	var rows := _doing(s, "tail1", Gesture.RUB_STAMP)
+	assert_eq(rows.size(), 2)
+	var roles: Array = []
+	for b in rows:
+		assert_eq(b.state, "wait")
+		assert_eq(b.pose, "stand")
+		assert_false(b.huddled)
+		assert_eq(b.gesture_facing, 0.0)
+		assert_eq(b.idle_gesture, Gesture.RUB_STAMP)
+		roles.append(int(b.gesture_role))
+	roles.sort()
+	assert_eq(roles, [0, 1])
+	assert_eq(_gesturing_but_cold(s, "tail1").size(), 0, "nobody else gestures")
+
+
+func test_a_body_that_rubs_its_hands_shows_both_its_arm_boxes() -> void:
+	var s = _scene()
+	var rows := _doing(s, "tail1", Gesture.RUB_STAMP)
+	assert_gt(rows.size(), 0)
+	for b in rows:
+		assert_true(b.has_meta(Gesture.ARMS_META))
+		var arms: Array = b.get_meta(Gesture.ARMS_META)
+		assert_eq(arms.size(), 2)
+		for arm in arms:
+			assert_true(arm.visible)
+
+
+func test_no_other_car_rubs_its_hands_at_the_start() -> void:
+	var s = _scene()
+	for id in ["medtech", "dining", "captain", "front"]:
+		assert_eq(_doing(s, id, Gesture.RUB_STAMP).size(), 0, id)
+
+
+func test_hands_are_rubbed_only_while_standing_between_walks() -> void:
+	var s = _scene()
+	var wrong := 0
+	var walking := 0
+	for i in 300:
+		s.step(0.1)
+		for b in s.car("tail1")["bodies"]:
+			var should: bool = b.idle_gesture == Gesture.RUB_STAMP and b.state == "wait"
+			wrong += 0 if (b.gesture == Gesture.RUB_STAMP) == should else 1
+			walking += 1 if b.idle_gesture == Gesture.RUB_STAMP and b.state != "wait" else 0
+	assert_eq(wrong, 0)
+	assert_gt(walking, 0, "it did let go to walk")
+
+
+func test_one_who_sets_off_puts_its_arms_down() -> void:
+	var s = _scene()
+	var seen := 0
+	for i in 300:
+		s.step(0.1)
+		for b in s.car("tail1")["bodies"]:
+			if b.idle_gesture == Gesture.RUB_STAMP and b.state != "wait":
+				seen += 1
+				assert_eq(b.gesture, "")
+				assert_eq(_arms_shown(b), 0)
+	assert_gt(seen, 0, "someone set off")
+
+
+func test_one_who_walks_in_a_cold_tail_still_turns_the_way_it_goes() -> void:
+	var s = _scene()
+	var seen := 0
+	for i in 300:
+		s.step(0.1)
+		for b in s.car("tail1")["bodies"]:
+			if b.pose == "walk":
+				seen += 1
+				assert_almost_eq(absf(float(b.rotation.y)), PI * 0.5, 0.01)
+	assert_gt(seen, 0, "someone walked")
+
+
+func test_a_warmth_that_rises_ends_the_rubbing() -> void:
+	var s = _scene()
+	s.set_sit("tail", 0, 60.0)
+	assert_eq(_doing(s, "tail1", Gesture.RUB_STAMP).size(), 0)
+	for b in s.car("tail1")["bodies"]:
+		assert_ne(b.idle_gesture, Gesture.RUB_STAMP)
+	assert_eq(_doing(s, "tail1", Gesture.BOWL_SIT).size(), 2, "the hunger shows instead")
+
+
+func test_a_tail_hungrier_than_cold_does_not_rub_its_hands() -> void:
+	var s = _scene()
+	s.set_sit("tail", 1, 20.0)
+	assert_eq(_doing(s, "tail1", Gesture.RUB_STAMP).size(), 0)
+	assert_eq(_doing(s, "tail1", Gesture.BOWL_SIT).size(), 2)
+
+
+func test_tension_fear_or_resentment_covers_the_cold() -> void:
+	var tense = _scene()
+	tense.set_train("tension", 70.0)
+	var afraid = _scene()
+	afraid.set_train("fear", 70.0)
+	var resentful = _scene()
+	resentful.set_comm("tail", "rel", -50)
+	var scenes := {"tension": tense, "fear": afraid, "resentment": resentful}
+	for name in scenes:
+		assert_eq(_doing(scenes[name], "tail1", Gesture.RUB_STAMP).size(), 0, name)
+		for i in 100:
+			scenes[name].step(0.1)
+		assert_eq(_doing(scenes[name], "tail1", Gesture.RUB_STAMP).size(), 0, "%s, later" % name)
+
+
+func test_a_cooled_infirmary_rubs_its_hands_too() -> void:
+	var s = _scene()
+	s.set_sit("medtech", 0, 30.0)
+	var waiting := _waiting(s, "medtech").size()
+	assert_gt(waiting, 0)
+	assert_eq(_doing(s, "medtech", Gesture.RUB_STAMP).size(), waiting)
+
+
+func test_cold_adds_and_removes_nobody() -> void:
+	var s = _scene()
+	var before := _count(s, "tail1")
+	s.set_sit("tail", 0, 60.0)
+	assert_eq(_count(s, "tail1"), before)
+
+
+func test_those_who_rub_their_hands_keep_their_place() -> void:
+	var s = _scene()
+	var before: Dictionary = {}
+	for b in _doing(s, "tail1", Gesture.RUB_STAMP):
+		before[b] = b.position.x
+	assert_eq(before.size(), 2)
+	for i in 5:
+		s.step(0.1)
+	assert_eq(_doing(s, "tail1", Gesture.RUB_STAMP).size(), 2)
+	for b in before:
+		assert_eq(b.gesture, Gesture.RUB_STAMP)
+		assert_eq(b.position.x, before[b], "it stays where it stood")
