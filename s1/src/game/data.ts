@@ -19,6 +19,9 @@ export const P = Object.freeze({
   haulTotal: 36, targetBoost: 3, leverStep: 12, winterEvery: 6, winterDrop: 5,
   injuryRate: 0.25, deathRate: 0.03,
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
+  // 결정 080(후보 5): 꼬리칸 관계가 backBelow 아래인데 열기·식량 레버를 2 이상으로 backSegs 구간 이어 지키면
+  // 구간 회복에 backBonus가 더 붙고 열기가 구간마다 1씩 내린다. 돌려주는 길이 막히지 않게 한다.
+  backBelow: -40, backSegs: 3, backBonus: 3,
   engineFatigue: 2, shiftRelief: 10, shiftCoal: 3,
   strikeRel: -15, refuseRel: 5, rescueRate: 0.2, crisisLine: 30,
   thrownHorde: 0.05, storeRisk: 0.03, coldCap: 6, pyreCoal: 1, pyreKinCrowd: 2, pyreLight: 1.05,

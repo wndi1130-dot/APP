@@ -814,7 +814,7 @@ function medicineTick(g: Game, notes: string[]): void {
 }
 
 /** 처지가 관계를 움직인다(브리프 1.2). 열기도 여기서 오른다(1.6). */
-function drift(g: Game): void {
+export function drift(g: Game): void {
   for (const c of COMMS) {
     const s = g.comms[c];
     const [w, r, cr, ex] = situation(g, c);
@@ -826,7 +826,16 @@ function drift(g: Game): void {
     }
     if (g.food <= 0) dr -= 5;
     if (c === 'front' && g.lux <= 0) dr -= 1;
+    // 결정 080(후보 5): 바닥까지 떨어진 꼬리칸에 레버를 돌려주고 이어 지키면 관계가 빨리 오르고 열기가 내린다.
+    if (c === 'tail' && s.rel < P.backBelow && s.heat >= 2 && s.ration >= 2) s.backStreak += 1;
+    else if (c === 'tail') s.backStreak = 0;
+    const back = c === 'tail' && s.backStreak >= P.backSegs;
     bumpRel(g, c, clamp(dr, -6, P.recoverCap), 'situation');
+    if (back) {
+      bumpRel(g, c, P.backBonus, 'back');
+      if (s.fervor > 0) s.fervor -= 1;
+      s.badStreak = 0;
+    }
     if (s.rel <= -40) {
       s.badStreak += 1;
       if (s.badStreak >= 3) {
