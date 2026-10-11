@@ -749,6 +749,16 @@ small { font-size: 12px; }
 .log__item.is-deal { color: #9cc3f2; }
 .log__item.is-bad, .log__item.is-dark { color: #f0a0a0; }
 .log__item.is-good { color: var(--ink-1); }
+/* 일지 창: 구간별 묶음. 묶음 머리에 구간 번호와 「외 N」 칩, 줄마다 종류 아이콘. 접힌 줄은 한 줄로 줄인다. */
+.log--journal { gap: 10px; font-size: 13px; }
+.log__group { display: grid; gap: 4px; }
+.log__head { display: flex; align-items: center; gap: 8px; min-height: 26px; border-bottom: 1px solid var(--line); color: var(--ink-3); font-size: 12px; }
+.log__head b { font-weight: 600; }
+.log__more { margin-left: auto; min-height: 24px; padding: 0 8px; font-size: 12px; }
+.log__lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.log--journal .log__item { grid-template-columns: 16px minmax(0, 1fr); align-items: start; line-height: 1.45; }
+.log--journal .log__item .icon { width: 14px; height: 14px; margin-top: 2px; }
+.log__group:not(.is-open) .log__item > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .dbg { border-collapse: collapse; font-size: 12px; margin: 8px 0; width: 100%; }
 .dbg th, .dbg td { padding: 2px 4px; border-bottom: 1px solid var(--line); text-align: right; }
