@@ -1,4 +1,5 @@
 import { addCard, END_LINK } from './state';
+import { noteDrop, noteInjury, noteRelief } from './wounds';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
@@ -357,6 +358,7 @@ export function sendScouts(g: Game): StopState['scoutReport'] | null {
   stop.scout = dead.length < pool.length;
   if (stop.scout && stop.omen) markSeen(g, stop.omen);
   g.injured += hurt.length;
+  noteInjury(g, hurt.length, 'stop', '정찰', { names: hurt, comm: c });
   if (dead.length > 0) onDeath(g, c, dead, 'other');
   journal(g, `${place.name}에 정찰조(${pool.join(', ')})를 먼저 보냈다.${stop.scout ? ' 돌아왔다.' : ' 아무도 돌아오지 않았다.'}${hurt.length ? ` ${hurt.join(', ')}이(가) 크게 다쳤다.` : ''}${dead.length && stop.scout ? ` ${dead.join(', ')}은(는) 돌아오지 못했다.` : ''}`, dead.length || hurt.length ? 'bad' : undefined);
   return stop.scoutReport;
@@ -546,8 +548,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (!hurt.length && !dead.length && risk.lam >= 0.2) notes.push('몇이 긁히고 삐었다. 크게 다친 사람은 없다.');
   const injuredOnly = hurt.filter(n => !dead.includes(n));
   g.injured += injuredOnly.length;
+  noteInjury(g, injuredOnly.length, 'stop', place.name, { names: injuredOnly, comm: stop.crewComm });
   // 명령에 다친 대상이 약속대로 죽으면 runOrder가 센 부상을 되돌린다.
-  if (orderHit && dead.includes(orderHit)) g.injured = Math.max(0, g.injured - 1);
+  if (orderHit && dead.includes(orderHit)) { g.injured = Math.max(0, g.injured - 1); noteDrop(g, orderHit); }
   // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
   if (injuredOnly.length > 0) bumpRel(g, stop.crewComm, P.hurtRel * injuredOnly.length, 'stop.loot');
   // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
@@ -687,6 +690,7 @@ function biteTick(g: Game): void {
         // 숨긴 물림, 또는 드러났는데 아무도 처리하지 않은 채 기한이 온 물림(K02 1 보험: 무기한으로 남지 않는다).
         const bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
         g.injured += bitten;
+        noteInjury(g, bitten, 'rise', '물림', { names: [b.who], comm: b.comm });
         bump(g, 'tension', 8, 'corpse');
         g.fear = clamp(g.fear + 5, 0, 100);
         journal(g, `${b.who}이(가) ${COMM_NAME[b.comm]} 안에서 일어났다. ${bitten}명이 물렸다.`, 'bad');
@@ -774,12 +778,14 @@ function medicineTick(g: Game, notes: string[]): void {
       let healed = 0;
       for (let i = 0; i < g.injured; i += 1) if (rnd(g) < heal) healed += 1;
       g.injured -= healed;
+      noteRelief(g, healed);
     }
   } else {
     put(g, 'med', 0, 'sick');
     let dead = 0;
     for (let i = 0; i < g.injured; i += 1) if (rnd(g) < 0.1) dead += 1;
     g.injured -= dead;
+    noteRelief(g, dead);
     if (dead > 0) {
       for (const p of pickVictims(g, dead, 'wound', () => rnd(g))) onDeath(g, p.community, [p.name]);
     }
@@ -795,6 +801,7 @@ function medicineTick(g: Game, notes: string[]): void {
     if (inKin) takeKinBody(g);
     else g.pyre = (g.pyre ?? 0) - 1;
     g.injured += 1;
+    noteInjury(g, 1, 'rise', inKin ? '살던 칸' : '냉동칸');
     bump(g, 'tension', 5, 'corpse');
     journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
@@ -802,6 +809,7 @@ function medicineTick(g: Game, notes: string[]): void {
   const storedWeight = darkStoredWeight(g, g.stored);
   if (storedWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * storedWeight) * domesticThawMult(g)) {
     g.injured += 2;
+    noteInjury(g, 2, 'thaw', '냉동칸');
     bump(g, 'tension', 8, 'corpse');
     g.stored = 0;
     darkStoredWeight(g, 0);

@@ -1,5 +1,6 @@
 import { COMM_NAME, COMMS } from '../data';
 import { bump, bumpRel } from '../ledger';
+import { noteInjury } from '../wounds';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { offend } from '../politics';
@@ -471,6 +472,7 @@ export function protect(g: Game, c: Case): string {
   let hurt = '';
   if (c.protects >= 1 && dr(g) < B.protectHurt) {
     g.injured += 1;
+    noteInjury(g, 1, 'brawl', '경비', { comm: 'guard' });
     d.harm += 1;
     hurt = ' 밀치는 사이 경비 하나가 다쳤다.';
   }
@@ -492,7 +494,7 @@ export function scapegoat(g: Game, c: Case, s: Suspect, allowed: boolean): strin
   else { d.stats.scapegoats += 1; cross(g, 'scapegoats'); }
   const died = dr(g) < B.scapegoatDeath;
   if (died) { d.stats.violentDeaths += 1; onDeath(g, comm, [name], 'chosen'); }
-  else g.injured += 1;
+  else { g.injured += 1; noteInjury(g, 1, 'assault', '속죄양', { names: [name], comm }); }
   bumpRel(g, comm, -10, 'case');
   offend(g, comm);
   c.status = 'closed';

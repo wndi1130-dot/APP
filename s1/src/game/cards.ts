@@ -1,4 +1,6 @@
 import { bump, bumpRel, put } from './ledger';
+import { noteInjury, noteRelief } from './wounds';
+import type { WoundFrom } from './wounds';
 import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
 import { logDeath, onDeath } from './death';
@@ -795,7 +797,10 @@ function eul(word: string): string {
 }
 
 // ---- 고르기 ----
-export function applyEffs(g: Game, effs: readonly Eff[]): void {
+/** 카드 선택지 id로 본 부상의 까닭(명부 기록용). 없으면 정차. */
+const INJURY_FROM: Record<string, WoundFrom> = { let_be: 'brawl', hold_post: 'guard_post', take_in: 'rescue', cut: 'bite_cut' };
+
+export function applyEffs(g: Game, effs: readonly Eff[], from: WoundFrom = 'stop', comm?: Comm): void {
   for (const e of effs) {
     switch (e.t) {
       case 'coal': bump(g, 'coal', e.v, 'card'); break;
@@ -805,7 +810,13 @@ export function applyEffs(g: Game, effs: readonly Eff[]): void {
       case 'trust': bump(g, 'trust', e.v, 'card'); break;
       case 'tension': bump(g, 'tension', e.v, 'card'); break;
       case 'fear': g.fear = clamp(g.fear + e.v, 0, 100); break;
-      case 'injured': g.injured = Math.max(0, g.injured + e.v); break;
+      case 'injured': {
+        const before = g.injured;
+        g.injured = Math.max(0, g.injured + e.v);
+        if (g.injured > before) noteInjury(g, g.injured - before, from, '카드', { comm });
+        else noteRelief(g, before - g.injured);
+        break;
+      }
       case 'rel': bumpRel(g, e.c, e.v, 'card'); break;
       case 'fervor': g.comms[e.c].fervor = clamp(g.comms[e.c].fervor + e.v, 0, 3); break;
       case 'pop': g.comms[e.c].pop = Math.max(1, g.comms[e.c].pop + e.v); break;
@@ -829,12 +840,12 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
   if (!choice || choice.disabled) return false;
   g.cards = g.cards.filter(x => x.uid !== uid);
   budgetPick(g); // 구간 예산(budget.ts): 고른 수를 센다. 꺼진 판은 아무 일도 안 한다
-  applyEffs(g, choice.effs);
+  applyEffs(g, choice.effs, (choice.id && INJURY_FROM[choice.id]) || (choice.special === 'bite_cut' ? 'bite_cut' : 'stop'), card.comm);
   const c = card.comm ?? 'tail';
   switch (choice.special) {
     case 'risk_injury':
       // 탄수차를 뒤질 때마다 위험이 커진다.
-      if (rnd(g) < 0.3 + 0.15 * Math.min(memo(g, 'abandoned_tender')?.n ?? 0, 3)) { g.injured += 1; journal(g, '탄수차 그늘에서 무언가가 튀어나왔다. 한 사람이 다쳤다.', 'bad'); }
+      if (rnd(g) < 0.3 + 0.15 * Math.min(memo(g, 'abandoned_tender')?.n ?? 0, 3)) { g.injured += 1; noteInjury(g, 1, 'tender', '탄수차', { comm: c }); journal(g, '탄수차 그늘에서 무언가가 튀어나왔다. 한 사람이 다쳤다.', 'bad'); }
       break;
     case 'favor_risk':
       g.comms[c].favorCool = 4;
