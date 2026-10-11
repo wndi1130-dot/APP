@@ -160,6 +160,7 @@ var ally_buttons: Array = []
 var crew_button: Button
 var all_aboard_button: Button         # every companion back to the train at one press
 var context_button: Button
+var depart_button: Button              # leaving: its own pad, there whenever the leader is by the train
 var context_rows: Array = []
 var context_t: float = 0.0
 var offer_box: HBoxContainer
@@ -451,6 +452,8 @@ func _build_thumbs() -> void:
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 20)
 	shove_button = _pad("밀치기", Vector2(-176, -268), Vector2(140, 84))
 	context_button = _pad("상황", Vector2(-344, -204), Vector2(140, 84), 20)
+	depart_button = _pad("출발", Vector2(-344, -296), Vector2(140, 84), 20)
+	depart_button.visible = false
 	# Every companion back to the train at one press (user 2026-10-11): under
 	# the companions' row, at its right end (tick puts it there).
 	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
@@ -963,6 +966,7 @@ func _tick_debug() -> void:
 ## lays out the rest (open, pick up, door, stairs, bandage, depart...).
 func _rebuild_context(p) -> void:
 	context_rows = [] if game.ended else game.actions.context(p)
+	depart_button.visible = not game.ended and game.actions.on_platform(p)
 	# It rises only when there is something to do; otherwise the spot is empty.
 	context_button.visible = not context_rows.is_empty()
 	if context_rows.is_empty():
@@ -1855,7 +1859,7 @@ func finger_cancel(index: int) -> bool:
 			if auto_aim:
 				aim_cancel = true
 				_auto_aim_end(Vector2.ZERO)
-			for b in [aim_button, context_button, shove_button]:
+			for b in [aim_button, context_button, depart_button, shove_button]:
 				if f["pad"] == b:
 					b.button_pressed = false
 			if f["pad"] == run_button and run_hold():
@@ -2007,6 +2011,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		attack_button.button_pressed = true
 	elif b == context_button:
 		context_button.button_pressed = true
+	elif b == depart_button:
+		depart_button.button_pressed = true
 	elif b == pause_button:
 		_toggle_pause()
 	elif b == all_aboard_button:
@@ -2073,6 +2079,10 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		context_button.button_pressed = false
 		if not f.get("opened", false) and b.get_global_rect().has_point(pos):
 			_context_tap()
+	elif b == depart_button:
+		depart_button.button_pressed = false
+		if b.get_global_rect().has_point(pos) and not game.ended:
+			depart_card()
 	elif b == shove_button:
 		shove_button.button_pressed = false
 	elif b == run_button and run_hold():
@@ -2236,7 +2246,7 @@ func drop_touch() -> void:
 		run_button.button_pressed = false
 	if game.player != null:
 		_stick_release()
-	for b in [aim_button, shove_button, context_button]:
+	for b in [aim_button, shove_button, context_button, depart_button]:
 		if b != null:
 			b.button_pressed = false
 	pressing = false

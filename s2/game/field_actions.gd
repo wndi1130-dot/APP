@@ -927,8 +927,8 @@ func context(p) -> Array:
 		if o != p and o.body.bleed > 0 and o.position.distance_to(p.position) < 1.8:
 			out.append({"label": "%s 치료" % o.display_name, "call": treat.bind(p, o)})
 			break
-	if on_platform(p):
-		out.append({"label": "출발", "call": game.hud.depart_card})
+	# Leaving is not in this list: it has a pad of its own (hud.depart_button),
+	# so that whatever lies next to the leader it is one press away.
 	return out
 
 
