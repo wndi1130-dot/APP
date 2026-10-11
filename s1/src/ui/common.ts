@@ -1,7 +1,7 @@
 import type { Fx } from './fx';
 import type { Comm, Game } from '../game';
 import type { ToastKind } from './notice';
-import type { StallBeat } from './stall_beats';
+import type { ResumeBeat, StallBeat } from './stall_beats';
 
 // 화면끼리 나눠 쓰는 형식과 열차 칸 배치.
 
@@ -30,6 +30,8 @@ export interface Ui {
   strTrain?: boolean;
   /** 멈춘 열차로 들어가는 연출 중(결정 101). beat는 지금 박, goMs는 열차가 서기까지의 길이. app.ts가 채우고 비운다 */
   stall?: { beat: StallBeat; goMs: number } | null;
+  /** 수동차가 석탄을 가져와 불을 넣은 직후의 짧은 떠남 연출 중(app.ts) */
+  resume?: { beat: ResumeBeat } | null;
   /** 꼬리칸 창에서 레버 대신 공간 레버(6.4)를 펼쳤나 */
   spaceOpen?: boolean;
   /** 서류(결정 카드)가 펼쳐졌나 */
