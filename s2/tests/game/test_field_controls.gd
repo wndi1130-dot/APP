@@ -620,9 +620,9 @@ func test_state_icons_sit_in_a_column_at_the_right_edge_big_enough_to_see() -> v
 	assert_gt(b.position.y, a.end.y - 0.5, "one under the other")
 	# Build 116 (user): at 58x38 with 15pt words they were not seen at all.
 	for i in hud.STATUS_SLOTS:
-		assert_gte(hud.status_pads[i].size.x, 90.0, "wide enough to see")
-		assert_gte(hud.status_pads[i].size.y, 48.0)
-		assert_gte(hud.status_pads[i].get_theme_font_size("font_size"), 20)
+		assert_gte(hud.status_pads[i].size.x, 100.0 if i < 2 else 84.0, "wide enough to see")
+		assert_gte(hud.status_pads[i].size.y, 52.0 if i < 2 else 44.0)
+		assert_gte(hud.status_pads[i].get_theme_font_size("font_size"), 22 if i < 2 else 18)
 	var plate: StyleBoxFlat = hud.status_pads[0].get_theme_stylebox("normal")
 	assert_gte(plate.border_width_left, 3, "a rim in the state's colour")
 	assert_gt(plate.bg_color.a, 0.8, "a plate, not loose words")

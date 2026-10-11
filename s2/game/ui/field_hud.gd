@@ -45,9 +45,11 @@ const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_
 # Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
 # saw them. Each is a plate with a rim in its colour; pictures come with the art.
 const STATUS_AT := Vector2(-16.0, 84.0)
-const STATUS_BIG := Vector2(96.0, 52.0)
-const STATUS_SMALL := Vector2(96.0, 52.0)
-const STATUS_FONT: int = 22
+# The two most urgent are bigger (body_injury 4 '둘까지만 크게').
+const STATUS_BIG := Vector2(104.0, 56.0)
+const STATUS_SMALL := Vector2(88.0, 46.0)
+const STATUS_FONT_BIG: int = 24
+const STATUS_FONT_SMALL: int = 19
 const RADIO_TIPS: Dictionary = {
 	"urgent": "무전: 무리가 들어올 때만 부른다. 울리면 가까운 망자가 듣는다.",
 	"often": "무전: 무리가 지나가면 다음 예보도 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
@@ -408,7 +410,7 @@ func _build_thumbs() -> void:
 	var sy := 0.0
 	for i in STATUS_SLOTS:
 		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
-		var pad := _pad("", STATUS_AT + Vector2(-size.x, sy), size, STATUS_FONT, Control.PRESET_TOP_RIGHT)
+		var pad := _pad("", STATUS_AT + Vector2(-size.x, sy), size, STATUS_FONT_BIG if i < 2 else STATUS_FONT_SMALL, Control.PRESET_TOP_RIGHT)
 		pad.visible = false
 		status_pads.append(pad)
 		sy += size.y + 6.0
