@@ -1,3 +1,4 @@
+import { crowdSepticP } from './crowd';
 import { onDeath } from './death';
 import { COMMS } from './data';
 import type { Comm, LawId } from './data';
@@ -229,7 +230,7 @@ function pushWound(g: Game, input: WoundInput, rand: () => number): Wound {
   let part = input.part ?? weightedPick(rand, WOUND_ROLL.part);
   if (grade === 'fracture' && !LIMBS.includes(part)) part = LIMBS[Math.floor(rand() * LIMBS.length)];
   const coin = grade === 'deep' ? rand() : 0;
-  const septic = input.septic ?? rand() < (input.septicP ?? WOUND_ROLL.septicP);
+  const septic = input.septic ?? rand() < (input.septicP ?? WOUND_ROLL.septicP) + crowdSepticP(g, input.comm);
   const cuts = input.cuts ?? healCuts(g);
   let days = baseDays(grade, part, coin);
   if (cuts > 0) days = Math.max(floorDays(grade, part), days - cuts);
