@@ -40,7 +40,7 @@ func test_the_three_walks_differ_and_the_motion_numbers_fit_the_shader_table() -
 	var names: Array = []
 	for clip in BodyBake.CLIPS:
 		names.append(clip[0])
-	assert_eq(names, ["walk_a", "walk_b", "walk_c", "stand", "lunge", "hit", "fall", "run", "tell", "fall_front", "crawl", "rise", "climb", "rise_front"], "the numbers the drawing side uses")
+	assert_eq(names, ["walk_a", "walk_b", "walk_c", "stand", "lunge", "hit", "fall", "run", "tell", "fall_front", "crawl", "rise", "climb", "rise_front", "stagger"], "the numbers the drawing side uses")
 	assert_true(BodyBake.CLIPS.size() + 1 <= VatBaker.TABLE_SIZE, "with the still poses")
 	assert_ne(BodyBake.LAYERS["walk"]["damp"], BodyBake.LAYERS["walk_c"]["damp"], "a different leg drags")
 

@@ -33,6 +33,7 @@ const CLIPS: Array = [
 	["rise", "", 32, false, "own_rise", 1.2],
 	["climb", "", 32, false, "own_climb", 2.4],
 	["rise_front", "", 32, false, "own_rise_front", 1.3],
+	["stagger", "", 32, true, "own_stagger", 1.3],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -52,6 +53,7 @@ const OWN_CLIPS: Array = [
 	["rise", "", 32, false, "own_rise", 1.2],
 	["climb", "", 32, false, "own_climb", 2.4],
 	["rise_front", "", 32, false, "own_rise_front", 1.3],
+	["stagger", "", 32, true, "own_stagger", 1.3],
 ]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
@@ -443,6 +445,29 @@ const LAYERS: Dictionary = {
 		],
 		"sink": [0.09, 0.015, 0.4, 2.0],
 	},
+	# Spent after a dash: bent double and heaving, lurching from foot to foot
+	# on a wide stance, head and arms hanging loose.
+	"own_stagger": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.17, 0.4]],
+			["turn", "hips", "y", [0.0, 0.2, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.2, -1.0, [[0.06, 0.26, 0.0], [0.0, -0.029, 0.0, 3.0], [0.0, 0.01, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.14, -1.0, [[-0.235, 0.26, 0.0], [0.0, -0.029, 0.0, 3.0], [0.0, 0.01, 0.0, 5.0], [0.0, -0.15, -1.5708], [0.0, -0.064, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.2, -1.0, [[0.06, 0.26, 3.14], [0.0, -0.029, 9.42, 3.0], [0.0, 0.01, 15.7, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.14, -1.0, [[-0.235, 0.26, 3.14], [0.0, -0.029, 9.42, 3.0], [0.0, 0.01, 15.7, 5.0], [0.0, -0.15, 1.5692], [0.0, -0.064, 4.7092, 2.0]]]],
+			["turn", "spine", "x", [0.62, 0.1, 0.0, 2.0]],
+			["turn", "spine", "z", [0.0, -0.14, 0.4]],
+			["turn", "chest", "x", [0.42, 0.08, 0.5, 2.0]],
+			["turn", "chest", "y", [0.0, 0.16, 0.6]],
+			["turn", "neck", "x", [0.5, 0.12, 1.2, 2.0]],
+			["turn", "head", "z", [0.0, 0.34, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [[0.16, 0.12, 0.8], -1.0, [0.5, 0.2, 1.2]]],
+			["aim", "forearm.L", "hand.L", [[0.04, 0.14, 1.4], -1.0, [0.55, 0.26, 1.9]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.16, 0.12, 0.8], -1.0, [0.5, 0.2, 4.3]]],
+			["aim", "forearm.R", "hand.R", [[-0.04, 0.14, 1.4], -1.0, [0.55, 0.26, 5.0]]],
+		],
+		"sink": [0.13, 0.03, 0.4, 2.0],
+	},
 	# Still: both hands and the face up against a pane.
 	"own_press": {
 		"steps": [
@@ -480,15 +505,16 @@ const LAYERS: Dictionary = {
 		],
 		"sink": 0.8,
 	},
-	# The half beat before it runs, standing on its own legs (see "tell").
+	# The beat before it runs, standing on its own legs (see "tell"): it drops
+	# low over bent knees, arms drawn back, face up at what it has seen.
 	"own_tell": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.1, -1.0, [0.03, 0.2, 0.0, 0.25]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [-0.08, -0.25, 0.0, 0.25]]],
-			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [0.0, 0.2, 0.0, 0.25]]],
-			["aim", "shin.R", "foot.R", [-0.08, -1.0, [-0.05, -0.25, 0.0, 0.25]]],
+			["aim", "thigh.L", "shin.L", [0.14, -1.0, [0.03, 0.5, 0.0, 0.25]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [-0.08, -0.62, 0.0, 0.25]]],
+			["aim", "thigh.R", "shin.R", [-0.16, -1.0, [0.0, 0.42, 0.0, 0.25]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [-0.05, -0.7, 0.0, 0.25]]],
 			["turn", "hips", "y", [0.0, 0.22, 0.0, 0.25]],
-			["turn", "spine", "x", [0.2, 0.4, 0.0, 0.25]],
+			["turn", "spine", "x", [0.2, 0.62, 0.0, 0.25]],
 			["turn", "chest", "x", [0.27, 0.16, 0.0, 0.25]],
 			["turn", "chest", "y", [0.0, -0.3, 0.0, 0.25]],
 			["turn", "neck", "x", [0.35, -0.95, 0.0, 0.25]],
@@ -498,7 +524,7 @@ const LAYERS: Dictionary = {
 			["aim", "upper_arm.R", "forearm.R", [[-0.22, -0.5, 0.0, 0.25], -1.0, [0.14, -0.8, 0.0, 0.25]]],
 			["aim", "forearm.R", "hand.R", [[-0.1, -0.45, 0.0, 0.25], -1.0, [0.3, -0.6, 0.0, 0.25]]],
 		],
-		"sink": [0.03, 0.12, 0.0, 0.25],
+		"sink": [0.03, 0.27, 0.0, 0.25],
 	},
 	# Run: pitched far forward as if about to fall, face up, arms trailing behind and flapping.
 	"run": {
