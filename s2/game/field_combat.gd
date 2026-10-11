@@ -566,7 +566,7 @@ func swing_person(p, o) -> void:
 		if o.team == "raider":
 			game.ai.raider_hit(o, p)
 		elif o == game.player or o.team == "squad":
-			game.say(o, "%s 베였다." % o.display_name, true)
+			game.say(o, "%s 베였다." % o.display_name, true, "hurt")
 
 
 func _kill(p, z: Dictionary, msg: String) -> void:
@@ -669,6 +669,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			var front: bool = to_z.length() < 0.01 or forward.dot(to_z.normalized()) > 0.0
 			if not p.grabbers.has(z):
 				p.grabbers.append(z)
+				game.shout(p, "grabbed")
 			var window: float = GrabRules.window(front, p.grabbers.size(), int(p.skills["melee"]), int(p.skills["strength"]), float(p.mults()["shove_window"]))
 			if p.grabbers.size() == 1:
 				p.grab_left = window
@@ -689,7 +690,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
 			if p.team != "raider":
-				game.say(p, "%s 긁혔다." % p.display_name, true)
+				game.say(p, "%s 긁혔다." % p.display_name, true, "hurt")
 		"blocked":
 			p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.05)
 			_toast(p, "외투가 손톱을 막았다.")
@@ -710,7 +711,7 @@ func breach_reaches(p) -> String:
 	p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
 	p.panic = minf(1.0, p.panic + 0.3)
 	game.telemetry.injury(now, p.pid, "scratch")
-	game.say(p, "%s 긁혔다." % p.display_name, true)
+	game.say(p, "%s 긁혔다." % p.display_name, true, "hurt")
 	return "scratch"
 
 
@@ -732,7 +733,7 @@ func bite(p) -> void:
 	if p.team == "raider":
 		return
 	var part_word: String = {"arm": "팔", "torso": "몸통", "leg": "다리"}.get(part, part)
-	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word], true)
+	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word], true, "bite_leg" if part == "leg" else "bite")
 	var seen: Array = []
 	for o in game.allies_alive():
 		if o != p and o.position.distance_to(p.position) < 12.0 and game.sight_clear(o.position, p.position):
@@ -757,9 +758,9 @@ func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> v
 	if game.rng.randf() < fracture_chance:
 		p.body.fracture(not leg, wound_side("leg" if leg else "arm"), game.clock.elapsed)
 		game.telemetry.injury(game.clock.elapsed, p.pid, "fracture")
-		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true)
+		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true, "hurt")
 	elif p.team != "raider":
-		game.say(p, "%s %s." % [p.display_name, msg], true)
+		game.say(p, "%s %s." % [p.display_name, msg], true, "hurt")
 
 
 # ---------------------------------------------------------------- guns and bows
@@ -966,7 +967,7 @@ func _shoot_person(p, o, radius: float) -> bool:
 	if o.team == "raider":
 		game.ai.raider_hit(o, p)
 	else:
-		game.say(o, "%s 총에 맞았다%s." % [o.display_name, " (다리)" if part == "leg" else ""], true)
+		game.say(o, "%s 총에 맞았다%s." % [o.display_name, " (다리)" if part == "leg" else ""], true, "hurt")
 	return true
 
 

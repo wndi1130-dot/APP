@@ -266,7 +266,7 @@ func vault_window(p, c: Vector2i) -> void:
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
 		if p.team != "raider":
-			game.say(p, "%s 유리에 베였다." % p.display_name, true)
+			game.say(p, "%s 유리에 베였다." % p.display_name, true, "hurt")
 
 
 # ---------------------------------------------------------------- searching

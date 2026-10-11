@@ -94,6 +94,11 @@ const TOAST_WARN_S: float = 6.0
 const TOAST_MAX: int = 4
 const SAY_S: float = 2.6            # a line over a companion's head stays this long
 const SAY_FONT: int = 20
+# A line a companion shouts (ally_lines.gd): bigger and a little longer than
+# the note of what happened, which goes small under it.
+const LINE_S: float = 3.2
+const LINE_FONT: int = 24
+const SAY_UNDER_FONT: int = 16
 const HURT_FLASH_S: float = 0.7
 # Right thumb (bottom right): attack big in the corner, aim small beside it.
 const ATTACK_AT := Vector2(-192.0, -172.0)
@@ -849,7 +854,18 @@ func say(p, text: String, hurt: bool = false) -> void:
 	for s in says.duplicate():
 		if s["p"] == p:
 			says.erase(s)
-	says.append({"p": p, "text": line, "t": SAY_S, "hurt": hurt})
+	says.append({"p": p, "text": line, "t": SAY_S, "hurt": hurt, "line": ""})
+
+
+## A companion shouts: the line goes over their head, above the note of what
+## happened if one is up.
+func shout(p, line: String) -> void:
+	for s in says:
+		if s["p"] == p:
+			s["line"] = line
+			s["t"] = maxf(float(s["t"]), LINE_S)
+			return
+	says.append({"p": p, "text": "", "t": LINE_S, "hurt": false, "line": line})
 
 
 func _tick_says(delta: float) -> void:
@@ -871,9 +887,17 @@ func _draw_says(view_size: Vector2) -> void:
 	for s in says:
 		var at: Vector2 = _project(s["p"].position + Vector3(0, 2.3, 0))
 		var a: float = clampf(float(s["t"]) / 0.6, 0.0, 1.0)
-		var w: float = font.get_string_size(s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT).x
-		var from := at - Vector2(w * 0.5, 0)
-		var box := Rect2(from - Vector2(0, SAY_FONT), Vector2(w, SAY_FONT + 4.0))
+		# Rows, top to bottom: the shouted line, then what happened (small when under a line).
+		var rows: Array = []
+		if String(s["line"]) != "":
+			rows.append([String(s["line"]), LINE_FONT, INK])
+		if String(s["text"]) != "":
+			rows.append([String(s["text"]), SAY_UNDER_FONT if not rows.is_empty() else SAY_FONT, AMBER if s["hurt"] else INK])
+		var size := Vector2.ZERO
+		for row in rows:
+			size.x = maxf(size.x, font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1]).x)
+			size.y += float(row[1]) + 4.0
+		var box := Rect2(at - Vector2(size.x * 0.5, size.y), size)
 		var again := true
 		while again:
 			again = false
@@ -882,10 +906,15 @@ func _draw_says(view_size: Vector2) -> void:
 					box.position.y = r.position.y - box.size.y
 					again = true
 		taken.append(box)
-		from.y = box.position.y + SAY_FONT
-		overlay.draw_string_outline(font, from, s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT, 6, Color(0, 0, 0, 0.85 * a))
-		var ink: Color = AMBER if s["hurt"] else INK
-		overlay.draw_string(font, from, s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT, Color(ink.r, ink.g, ink.b, a))
+		var y: float = box.position.y
+		for row in rows:
+			y += float(row[1])
+			var w: float = font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1]).x
+			var from := Vector2(at.x - w * 0.5, y)
+			var ink: Color = row[2]
+			overlay.draw_string_outline(font, from, row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], 6, Color(0, 0, 0, 0.85 * a))
+			overlay.draw_string(font, from, row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], Color(ink.r, ink.g, ink.b, a))
+			y += 4.0
 
 
 func _tick_toasts(delta: float) -> void:
