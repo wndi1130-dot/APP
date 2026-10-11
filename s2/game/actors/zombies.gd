@@ -9,6 +9,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const DeadPose = preload("res://game/actors/dead_pose.gd")
 
 const MAX_DRAW: int = 160
 const SIGHT: float = 9.0
@@ -645,6 +646,7 @@ func knock_down(z: Dictionary) -> void:
 	# Knocked off its victim: the victim is let go, or the grab still bites.
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
+	DeadPose.mark_fall(z)
 	z["state"] = "downed"
 	z["t"] = game.rng.randf_range(GET_UP.x, GET_UP.y)
 	z["victim"] = null
@@ -653,6 +655,7 @@ func knock_down(z: Dictionary) -> void:
 func kill(z: Dictionary) -> void:
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
+	DeadPose.mark_fall(z)
 	z["state"] = "dead"
 	z["victim"] = null
 	game.on_zombie_killed(z)
@@ -679,10 +682,12 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		var shade := 1.0
 		if state == "dead":
 			look = "corpse"
-		if state == "dead" or state == "downed" or state == "rising" or z["crawl"]:
-			basis = basis * Basis(Vector3.RIGHT, -PI * 0.5)
-			pos.y = pos.y + 0.18
-			frozen_anim = 1.0 if state != "downed" or not z["crawl"] else 0.0
+		var down := DeadPose.down_k(z)
+		if down > 0.0:
+			basis = basis * Basis(Vector3.RIGHT, -PI * 0.5 * down)
+			pos.y = pos.y + DeadPose.LIFT * down
+			# Flat on the ground it is still (a crawler drags itself); going over or coming up, the limbs move.
+			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
 		if state == "frozen":
