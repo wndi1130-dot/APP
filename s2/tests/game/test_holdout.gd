@@ -502,6 +502,19 @@ func test_the_radio_operator_hears_of_most_stops_that_can_have_it() -> void:
 	assert_between(said, 19, 28, "about eight in ten, and not all of them")
 
 
+# What the screen says of sound is what counts for a quiet stop: the people's,
+# next to the threshold. The dead banging on doors is in the record only.
+func test_the_screen_says_the_sound_the_people_made() -> void:
+	var game = _game({"holdout": "roll"})
+	var at: Vector3 = game.player.position
+	for n in 5:
+		game.make_sound(at, SimNoise.Level.NORMAL, "bang")
+	assert_gt(game.ledger.total, 0)
+	assert_eq(game.hud.noise_line(), "사람이 낸 소리 0 (조용함은 %d까지)" % FieldHoldout.QUIET_NOISE)
+	game.make_sound(at, SimNoise.Level.LOUD, "gun")
+	assert_eq(game.hud.noise_line(), "사람이 낸 소리 %d (조용함은 %d까지)" % [SimNoise.score(SimNoise.Level.LOUD), FieldHoldout.QUIET_NOISE])
+
+
 # The start screen hands every setting over, so "as the place has it" is a
 # number below nought and must not be read as a chance.
 func test_the_start_screens_unset_chance_is_the_places() -> void:
