@@ -656,7 +656,7 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
     buttons.length ? h('div', { class: 'dom-buttons' }, buttons) : null);
 }
 
-/** 기술 화면: 가지 탭, 고른 가지 한 줄이 왼쪽에서 오른쪽으로 단계별로 뻗고(넓은 화면은 다섯 줄 다), 설명은 아래 고정 카드. */
+/** 기술 화면: 가지 탭, 고른 가지가 위에서 아래로 단계별로 내려오고(넓은 화면은 기둥 다섯), 설명은 늘 아래 고정 카드. */
 function planView(view: View): HTMLElement {
   const g = view.g;
   const d = g.dom!;
@@ -672,10 +672,13 @@ function planView(view: View): HTMLElement {
         class: cx('chip', f === branch && 'is-on'), 'data-action': 'dom-branch', 'data-branch': f, 'aria-pressed': f === branch ? 'true' : 'false',
       }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f])),
       now && d.restoring ? h('span', { class: 'tplan__now num' }, gear('work'), `${Math.round((now.progress / Math.max(1, now.need)) * 100)}%`) : null),
-    h('div', { class: 'tplan__tree' }, FIELDS.map(f => h('div', { class: cx('tplan__row', f === branch && 'is-on') },
-      h('span', { class: 'tplan__label' }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f]),
-      tiers.map(t => h('div', { class: cx('tplan__cell', t === 0 && 'is-adapt') },
-        TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t).map(id => techNode(g, id, sel === id, rec?.id === id))))))),
+    // 가지 하나가 위에서 아래로 내려온다(사용자 2026-10-11): 단계마다 한 띠, 띠 안에서 타일이 옆으로 늘어서다 넘치면 다음 줄로 간다.
+    // 가지마다 기술이 열다섯을 넘어도 띠가 아래로 길어질 뿐이다. 넓은 화면은 다섯 가지를 기둥 다섯으로 나란히 세운다.
+    h('div', { class: 'tplan__tree', 'data-keep-scroll': 'tplan-tree' }, FIELDS.map(f => h('div', { class: cx('tplan__col', f === branch && 'is-on') },
+      h('button', { class: 'tplan__label', 'data-action': 'dom-branch', 'data-branch': f }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f]),
+      tiers.map(t => ({ t, ids: TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t) })).filter(x => x.ids.length > 0)
+        .map(({ t, ids }) => h('div', { class: cx('tplan__tier', t === 0 && 'is-adapt') },
+          ids.map(id => techNode(g, id, sel === id, rec?.id === id))))))),
     h('div', { class: 'tplan__detail', 'data-keep-scroll': 'tplan-detail' },
       rec?.id === sel ? h('p', { class: 'tplan__why' }, h('b', null, '먼저'), ` ${rec.why}`) : null,
       nodeDetail(g, sel, !!domUi(view.ui).more)));
