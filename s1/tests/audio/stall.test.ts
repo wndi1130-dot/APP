@@ -3,11 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createEngine } from '../../src/audio/engine';
 import { setSound, setSoundVol } from '../../src/audio/settings';
-import { SKIP_MS, SLOW_TO, STALL_GAIN, STALL_TRACKS, createStallPlan, trackTable } from '../../src/audio/stall';
+import { EDGE_MS, SKIP_MS, SLOW_TO, STALL_GAIN, STALL_TRACKS, createStallPlan, trackTable } from '../../src/audio/stall';
 import type { StallAct } from '../../src/audio/stall';
-import { STALL_BEATS, stallBeats } from '../../src/ui/stall_beats';
+import { RESUME_MS, STALL_BEATS, stallBeats } from '../../src/ui/stall_beats';
 
-// 멈춘 열차로 들어가는 연출의 소리(결정 101). 화면이 붙이는 data-beat만 보고 무엇을 켜고 끌지 정하는 층과,
+// 멈춘 열차의 소리(결정 101). 화면이 붙이는 data-beat와 data-stranded만 보고 무엇을 켜고 끌지 정하는 층과,
 // 긴 소리를 내는 장치(가짜 소리 장치로)를 시험한다. 어떻게 들리는지는 시험하지 못한다: 파일은 꼴과 길이만 잰다.
 
 const STALL_DIR = fileURLToPath(new URL('../../src/audio/stall/', import.meta.url));
@@ -17,34 +17,44 @@ beforeEach(() => {
   setSoundVol(1);
 });
 
+/** 박 하나, 또는 [박, 홈에 data-stranded가 있는가(홈이 안 보이면 null)] */
+type Step = string | null | [string | null, boolean | null];
+
 /** 박을 차례대로 넣고 박마다 나온 일을 '무엇 소리' 꼴로 적는다 */
-function run(beats: (string | null)[], on = true): string[][] {
+function run(steps: Step[], on = true): string[][] {
   const plan = createStallPlan();
-  return beats.map(b => plan(b, on).map(a => `${a.do} ${a.track}`));
+  return steps.map(s => {
+    const [beat, stranded] = Array.isArray(s) ? s : [s, null];
+    return plan(beat, on, stranded).map(a => `${a.do} ${a.track}`);
+  });
 }
 
 describe('박자와 소리', () => {
-  it('달림에서 켜고, 느려지며 잦아들고, 급제동에서 끄고 끼익, 고요에서 김이 빠진다', () => {
+  it('달림에서 켜고, 느려지며 잦아들고, 급제동에서 끄고 끼익, 고요에서 김이 빠지며 바람이 든다', () => {
     expect(run(['run', 'slow', 'brake', 'hush', 'open', null])).toEqual([
       ['hold run'],
       ['bend run'],
       ['release run', 'hold brake'],
-      ['hold steam'],
+      ['hold steam', 'hold wind'],
       [],
       [],
     ]);
   });
 
-  it('달림은 되풀이로 켜고 나머지 둘은 한 번만 낸다. 크기는 표대로다', () => {
+  it('달림과 바람은 되풀이로 켜고 나머지는 한 번만 낸다. 크기는 표대로다', () => {
     const plan = createStallPlan();
-    const acts = ['run', 'slow', 'brake', 'hush'].flatMap(b => plan(b, true));
+    const acts = ['run', 'slow', 'brake', 'hush', 'open', null, 'fire', 'whistle'].flatMap(b => plan(b, true));
     const holds = acts.filter((a): a is Extract<StallAct, { do: 'hold' }> => a.do === 'hold');
     expect(holds.map(a => [a.track, a.loop, a.gain])).toEqual([
       ['run', true, STALL_GAIN.run],
       ['brake', false, STALL_GAIN.brake],
       ['steam', false, STALL_GAIN.steam],
+      ['wind', true, STALL_GAIN.wind],
+      ['whistle', false, STALL_GAIN.whistle],
     ]);
     expect(holds[0].fadeMs).toBeGreaterThan(0); // 되풀이는 딱 소리 없이 열린다
+    expect(holds[3].fadeMs).toBe(EDGE_MS.wind);
+    expect(STALL_GAIN.wind).toBeLessThan(Math.min(STALL_GAIN.run, STALL_GAIN.brake, STALL_GAIN.steam, STALL_GAIN.whistle)); // 오래 깔리는 소리가 가장 작다
   });
 
   it('느려지는 박의 길이는 화면의 박자 표와 같고, 그동안 빠르기와 크기가 같이 내려간다', () => {
@@ -67,11 +77,12 @@ describe('박자와 소리', () => {
     expect(plan('open', true)).toEqual([
       { do: 'release', track: 'run', ms: SKIP_MS },
       { do: 'hold', track: 'steam', loop: false, gain: STALL_GAIN.steam, fadeMs: 0 },
+      { do: 'hold', track: 'wind', loop: true, gain: STALL_GAIN.wind, fadeMs: EDGE_MS.wind },
     ]);
   });
 
   it('급제동 중에 건너뛰면 끼익도 짧게 줄인다. 고요를 거쳐 왔으면 끼익의 끝을 자르지 않는다', () => {
-    expect(run(['run', 'slow', 'brake', 'open'])[3]).toEqual(['release brake', 'hold steam']);
+    expect(run(['run', 'slow', 'brake', 'open'])[3]).toEqual(['release brake', 'hold steam', 'hold wind']);
     expect(run(['run', 'slow', 'brake', 'hush', 'open'])[4]).toEqual([]);
   });
 
@@ -79,13 +90,13 @@ describe('박자와 소리', () => {
     expect(run(['slow', 'brake'])).toEqual([['hold run', 'bend run'], ['release run', 'hold brake']]);
   });
 
-  it('연출이 끝난 뒤 다음에 또 서면 처음부터 다시 낸다', () => {
-    const all = run(['run', 'slow', 'brake', 'hush', 'open', null, 'run', 'slow', 'brake', 'hush']);
-    expect(all.slice(6)).toEqual([['hold run'], ['bend run'], ['release run', 'hold brake'], ['hold steam']]);
+  it('다시 달린 뒤 또 서면 처음부터 다시 낸다', () => {
+    const all = run(['run', 'slow', 'brake', 'hush', 'open', [null, true], 'fire', 'whistle', [null, false], 'run', 'slow', 'brake', 'hush']);
+    expect(all.slice(9)).toEqual([['hold run'], ['bend run'], ['release run', 'hold brake'], ['hold steam', 'hold wind']]);
   });
 
   it('소리를 꺼 두면 아무것도 내지 않는다. 달리는 도중에 끄면 돌던 것만 줄인다', () => {
-    expect(run(['run', 'slow', 'brake', 'hush', 'open', null], false).flat()).toEqual([]);
+    expect(run(['run', 'slow', 'brake', 'hush', 'open', [null, true], 'fire', 'whistle', [null, false]], false).flat()).toEqual([]);
     const plan = createStallPlan();
     plan('run', true);
     expect(plan('slow', false)).toEqual([{ do: 'release', track: 'run', ms: SKIP_MS }]);
@@ -95,6 +106,69 @@ describe('박자와 소리', () => {
   it('모르는 값은 연출이 없는 것으로 친다. 박 이름은 화면의 것과 같다', () => {
     expect(run(['wave', 'run'])).toEqual([[], ['hold run']]);
     expect([...STALL_BEATS]).toEqual(['run', 'slow', 'brake', 'hush', 'open']);
+    expect(Object.keys(RESUME_MS)).toEqual(['fire', 'whistle']);
+  });
+});
+
+describe('서 있는 동안과 다시 달릴 때', () => {
+  it('선 순간부터 바람이 깔려 서 있는 동안 이어지고, 불을 넣는 박 동안 잦아든 뒤 기적이 한 번 운다', () => {
+    // 화면이 붙이는 대로: 들어가는 연출의 run~hush에는 data-stranded가 없고 open부터 붙는다. 불을 넣는 때에는 이미 없다.
+    expect(run([
+      ['run', false], ['slow', false], ['brake', false], ['hush', false], ['open', true], [null, true], [null, true],
+      ['fire', false], ['whistle', false], ['whistle', false], [null, false],
+    ])).toEqual([
+      ['hold run'], ['bend run'], ['release run', 'hold brake'], ['hold steam', 'hold wind'], [], [], [],
+      ['release wind'], ['hold whistle'], [], [],
+    ]);
+  });
+
+  it('바람은 불을 넣는 박의 길이에 걸쳐 줄인다', () => {
+    const plan = createStallPlan();
+    plan(null, true, true);
+    expect(plan('fire', true, false)).toEqual([{ do: 'release', track: 'wind', ms: RESUME_MS.fire }]);
+  });
+
+  it('연출 없이 서 있는 화면이 열려도(새로 열기, 움직임 줄이기) 바람을 켠다. 연출 없이 다시 달리면 끈다', () => {
+    const plan = createStallPlan();
+    expect(plan(null, true, true)).toEqual([{ do: 'hold', track: 'wind', loop: true, gain: STALL_GAIN.wind, fadeMs: EDGE_MS.wind }]);
+    expect(plan(null, true, true)).toEqual([]);
+    expect(plan(null, true, false)).toEqual([{ do: 'release', track: 'wind', ms: SKIP_MS }]);
+  });
+
+  it('홈이 안 보이는 화면(열차 관리, 의회)에 가 있는 동안은 바람을 끄지 않는다. 홈이 다시 보였는데 표식이 없으면 끈다', () => {
+    expect(run([[null, true], [null, null], [null, null], [null, true], [null, null], [null, false]])).toEqual([
+      ['hold wind'], [], [], [], [], ['release wind'],
+    ]);
+  });
+
+  it('홈이 안 보이는 화면에서 시작하면 서 있는지 모르니 바람을 켜지 않는다', () => {
+    expect(run([[null, null], [null, null]])).toEqual([[], []]);
+  });
+
+  it('서 있는 동안 소리를 끄면 바람도 줄이고, 다시 켜면 다시 깐다', () => {
+    const plan = createStallPlan();
+    plan(null, true, true);
+    expect(plan(null, false, true)).toEqual([{ do: 'release', track: 'wind', ms: SKIP_MS }]);
+    expect(plan(null, false, true)).toEqual([]);
+    expect(plan(null, true, true).map(a => `${a.do} ${a.track}`)).toEqual(['hold wind']);
+  });
+
+  it('장치가 못 켠 바람은 다음에 부를 때 다시 켠다. 때가 정해진 소리는 다시 내지 않는다', () => {
+    const plan = createStallPlan();
+    expect(plan('run', true, false).map(a => a.track)).toEqual(['run']);
+    plan.missed('run');
+    expect(plan('run', true, false)).toEqual([]);
+    plan('slow', true, false);
+    plan('brake', true, false);
+    plan('hush', true, false);
+    plan.missed('wind');
+    plan.missed('steam');
+    expect(plan('hush', true, false).map(a => `${a.do} ${a.track}`)).toEqual(['hold wind']);
+    expect(plan('hush', true, false)).toEqual([]);
+  });
+
+  it('달리는 박에는 바람이 없다(표식을 놓쳐 바람이 남아 있어도 끈다)', () => {
+    expect(run([[null, true], ['run', false]])).toEqual([['hold wind'], ['hold run', 'release wind']]);
   });
 });
 
@@ -136,13 +210,14 @@ function fakeAudio() {
   return { ctx, nodes };
 }
 
-async function ready(tracks: Record<string, string> = { run: 'stall/run', brake: 'stall/brake', steam: 'stall/steam' }) {
+async function ready(tracks: Record<string, string> = { run: 'stall/run', brake: 'stall/brake', steam: 'stall/steam' }, onReady?: () => void) {
   const fake = fakeAudio();
   const engine = createEngine({
     makeContext: () => fake.ctx as unknown as AudioContext,
     clips: { 'enamel.press': [], 'enamel.confirm': [], 'paper.press': [], 'paper.confirm': [], 'lever.notch': [], denied: [] },
     tracks,
     load: async url => new ArrayBuffer(url.length),
+    onReady,
   });
   await engine.preload();
   return { fake, engine };
@@ -203,6 +278,19 @@ describe('긴 소리 장치', () => {
     expect(fake.nodes[1].stopAt).toBeNull();
   });
 
+  it('장치가 깨고 파일이 풀리면 알린다: 그때 못 켠 되풀이를 다시 켤 수 있다', async () => {
+    const calls: boolean[] = [];
+    const { engine } = await ready({ wind: 'stall/wind' }, () => {
+      calls.push(engine.hold('wind', { loop: true, gain: 0.3, fadeMs: 600 }));
+    });
+    expect(engine.hold('wind', { loop: true, gain: 0.3, fadeMs: 600 })).toBe(false); // 첫 손짓 전
+    expect(calls).toEqual([]);
+    engine.unlock();
+    await Promise.resolve();
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1]).toBe(true);
+  });
+
   it('파일이 없는 이름이나 돌지 않는 소리는 조용히 넘어간다', async () => {
     const { fake, engine } = await ready({ run: 'stall/run' });
     engine.unlock();
@@ -249,20 +337,20 @@ describe('든 긴 소리 파일', () => {
   const names = readdirSync(STALL_DIR).filter(n => n.endsWith('.wav'));
   const wav = (name: string) => readWav(STALL_DIR + name);
 
-  it('소리 셋에 파일이 하나씩 있고, 이름이 안 맞아 버려지는 파일이 없다', () => {
+  it('소리 다섯에 파일이 하나씩 있고, 이름이 안 맞아 버려지는 파일이 없다', () => {
     const table = trackTable(Object.fromEntries(names.map(n => [`./stall/${n}`, n])));
     expect(Object.keys(table).sort()).toEqual([...STALL_TRACKS].sort());
     expect(names).toHaveLength(STALL_TRACKS.length);
   });
 
-  it('모두 모노 16비트 22050Hz이고, 합쳐 260KB를 넘지 않는다(폰 용량)', () => {
+  it('모두 모노 16비트 22050Hz이고, 합쳐 520KB를 넘지 않는다(폰 용량)', () => {
     let total = 0;
     for (const n of names) {
       const w = wav(n);
       expect([n, w.channels, w.bits, w.rate]).toEqual([n, 1, 16, 22050]);
       total += w.bytes;
     }
-    expect(total).toBeLessThan(260 * 1024);
+    expect(total).toBeLessThan(520 * 1024);
   });
 
   it('달림은 2초 안팎의 되풀이이고 처음과 끝이 이어진다(이음매에서 딱 소리가 나지 않는다)', () => {
@@ -279,5 +367,16 @@ describe('든 긴 소리 파일', () => {
     expect(brake.seconds).toBeGreaterThan(brakeBeat - 0.2);
     expect(brake.seconds).toBeLessThan(brakeBeat + 0.4);
     expect(wav('steam.wav').seconds).toBeLessThan(2);
+  });
+
+  it('바람은 몇 초짜리 되풀이이고 처음과 끝이 이어진다. 기적은 바로 시작하고 3초 안에 끝난다', () => {
+    const wind = wav('wind.wav');
+    expect(wind.seconds).toBeGreaterThan(3);
+    expect(wind.seconds).toBeLessThan(6);
+    expect(Math.abs(wind.first - wind.last)).toBeLessThan(0.02);
+    const whistle = wav('whistle.wav');
+    expect(whistle.leadMs).toBeLessThan(30);
+    expect(whistle.seconds).toBeGreaterThan(RESUME_MS.whistle / 1000 - 0.2);
+    expect(whistle.seconds).toBeLessThan(3);
   });
 });
