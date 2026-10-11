@@ -9,6 +9,8 @@ extends RefCounted
 ## briefs only say that cold makes people huddle and crowding seats them on
 ## the floor (presentation_motion 7).
 
+const Gesture = preload("res://game/train/train_gesture.gd")
+
 const FIGURES_MIN: int = 2
 const FIGURES_MAX: int = 16
 const TAIL_SHARE: int = 3               # the tail's people are spread over three cars
@@ -47,6 +49,14 @@ const MOOD_LOOK: Dictionary = {
 	"frozen": {"movers": [0, 1], "speed": 0.7, "wait": 3.0, "stand": 0.0, "gather": false, "bowed": true,
 		"lamp": Color(0.72, 0.77, 0.88), "energy": 0.6, "sway": 0.5},
 }
+## The gestures laid over a mood, one bad value at a time (2026-10-12: tension
+## first). In a car the train's tension stirs, the first knot of those
+## standing about takes them: two at each other (a quarrel in one car, heads
+## together in the next) and the third looking about. For show only.
+const GESTURES: Dictionary = {
+	"tension": {"pairs": [Gesture.ARGUE, Gesture.WHISPER], "one": Gesture.TURN_ABOUT},
+}
+const GESTURE_PAIR: int = 2             # a quarrel takes two: one stander alone keeps still
 const SLOT_STRIDE: int = 4
 const STOVE_STEAM_FROM: float = 0.4
 ## The council in the dining car (presentation_motion 3 and 7). The unrest
@@ -146,6 +156,31 @@ static func mood(comm: Dictionary, train: Dictionary) -> String:
 
 static func mood_look(m: String) -> Dictionary:
 	return MOOD_LOOK.get(m, MOOD_LOOK["calm"])
+
+
+## The bad value whose gestures a car of mood `m` shows: "tension" or "".
+## A frightened car shows none (its mood is not "stir"), and a car stirred
+## only by its own grudges has none yet.
+static func gesture_for(m: String, train: Dictionary) -> String:
+	return "tension" if m == "stir" and float(train.get("tension", 0)) >= TENSION_STIR else ""
+
+
+## What each of a car's standers does, in knot order: [{"name", "role"}],
+## name "" for standing still. Only the first knot acts: its first two as a
+## pair (role 0 and 1), its third alone.
+static func knot_gestures(value: String, standing: int, car_index: int) -> Array:
+	var out: Array = []
+	var set: Dictionary = GESTURES.get(value, {})
+	var acts: bool = not set.is_empty() and standing >= GESTURE_PAIR
+	for k in standing:
+		var name := ""
+		if acts and k < GESTURE_PAIR:
+			var pairs: Array = set["pairs"]
+			name = pairs[posmod(car_index, pairs.size())]
+		elif acts and k == GESTURE_PAIR:
+			name = set["one"]
+		out.append({"name": name, "role": k if k < GESTURE_PAIR else 0})
+	return out
 
 
 static func movers(count: int, m: String = "calm") -> int:

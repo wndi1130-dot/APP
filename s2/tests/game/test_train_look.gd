@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const Look = preload("res://game/train/train_look.gd")
 const Rules = preload("res://game/train/train_rules.gd")
+const Gesture = preload("res://game/train/train_gesture.gd")
 
 const WARMTHS: Array = [0.0, 29.9, 30.0, 44.9, 45.0, 60.0, 70.0, 70.1, 100.0]
 const CROWDS: Array = [0.0, 45.0, 59.9, 60.0, 79.9, 80.0, 94.9, 95.0, 100.0]
@@ -491,3 +492,90 @@ func test_only_trips_of_the_phase_remain() -> void:
 	assert_true(travel.has("meal"))
 	assert_true(council.has("council"), "the session calls people")
 	assert_true(council.has("meal"))
+
+
+# ---------------------------------------------------------------- the gestures of a bad value
+
+func test_a_stirred_car_gestures_for_tension_from_sixty() -> void:
+	assert_eq(Look.gesture_for("stir", {"tension": 60.0}), "tension")
+	assert_eq(Look.gesture_for("stir", {"tension": 59.0}), "")
+
+
+func test_a_car_that_is_not_stirred_has_no_gesture_even_at_ninety() -> void:
+	for m in ["calm", "low", "frozen"]:
+		assert_eq(Look.gesture_for(m, {"tension": 90.0}), "", m)
+
+
+func test_a_train_without_tension_has_no_gesture() -> void:
+	assert_eq(Look.gesture_for("stir", {}), "")
+
+
+func test_fear_comes_before_the_gestures() -> void:
+	var train := {"tension": 90.0, "fear": 60.0}
+	var m := Look.mood({}, train)
+	assert_eq(m, "frozen")
+	assert_eq(Look.gesture_for(m, train), "")
+
+
+func test_a_car_stirred_only_by_its_own_grudge_has_no_gesture_yet() -> void:
+	var train := {"tension": 20.0, "fear": 0.0}
+	var m := Look.mood({"rel": -50, "sit": [60, 60, 40, 40]}, train)
+	assert_eq(m, "stir")
+	assert_eq(Look.gesture_for(m, train), "")
+
+
+func test_the_first_knot_quarrels_two_and_the_third_looks_about() -> void:
+	var rows := Look.knot_gestures("tension", 3, 0)
+	assert_eq(rows.size(), 3)
+	assert_eq(rows[0]["name"], Gesture.ARGUE)
+	assert_eq(rows[1]["name"], Gesture.ARGUE)
+	assert_eq(rows[0]["role"], 0)
+	assert_eq(rows[1]["role"], 1)
+	assert_eq(rows[2]["name"], Gesture.TURN_ABOUT)
+
+
+func test_an_odd_car_whispers_where_an_even_one_quarrels() -> void:
+	var odd := Look.knot_gestures("tension", 3, 1)
+	assert_eq(odd[0]["name"], Gesture.WHISPER)
+	assert_eq(odd[1]["name"], Gesture.WHISPER)
+	assert_eq(Look.knot_gestures("tension", 3, 2)[0]["name"], Gesture.ARGUE)
+
+
+func test_two_standers_are_a_pair_and_one_alone_keeps_still() -> void:
+	var two := Look.knot_gestures("tension", 2, 0)
+	assert_eq(two.size(), 2)
+	assert_eq(two[0]["name"], Gesture.ARGUE)
+	assert_eq(two[1]["name"], Gesture.ARGUE)
+	var one := Look.knot_gestures("tension", 1, 0)
+	assert_eq(one.size(), 1)
+	assert_eq(one[0]["name"], "", "nobody quarrels alone")
+	assert_eq(Look.knot_gestures("tension", 0, 0), [])
+
+
+func test_only_the_first_knot_acts() -> void:
+	var rows := Look.knot_gestures("tension", 5, 0)
+	assert_eq(rows[3]["name"], "")
+	assert_eq(rows[4]["name"], "")
+
+
+func test_there_is_a_row_a_stander() -> void:
+	for standing in range(8):
+		assert_eq(Look.knot_gestures("tension", standing, 0).size(), standing, "%d standing" % standing)
+
+
+func test_no_value_or_an_unknown_one_gives_no_gesture() -> void:
+	for value in ["", "nonsense"]:
+		for row in Look.knot_gestures(value, 5, 0):
+			assert_eq(row["name"], "", "value '%s'" % value)
+
+
+func test_a_pair_is_never_made_by_halves() -> void:
+	for standing in range(8):
+		for car_index in range(4):
+			var roles: Array = []
+			for row in Look.knot_gestures("tension", standing, car_index):
+				if row["name"] == Gesture.ARGUE or row["name"] == Gesture.WHISPER:
+					roles.append(row["role"])
+			var label := "%d standing, car %d" % [standing, car_index]
+			if not roles.is_empty():
+				assert_eq(roles, [0, 1], label)
