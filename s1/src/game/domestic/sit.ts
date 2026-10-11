@@ -18,7 +18,9 @@ export function refreshSit(g: Game): void {
   for (const c of COMMS) if ((d.bedding[c] ?? -1) >= g.seg) sit[c][0] -= D.beddingWarm;
   if (d.armored.includes('guard') && techUsable(g, 'w3')) sit.guard[3] -= D.armorExposure;
   // 묽은 솥: 모든 칸 배급 처지가 레버 반 칸만큼 내려간다(pot.ts).
-  if (d.pot?.mode === 'thin') for (const c of COMMS) sit[c][1] -= D.potThinSit;
+  // 섞은 솥의 처지 벌은 기본 0이다(바로 오는 값이 없다). 측정에서 값을 바꿔 볼 수 있게 자리만 둔다.
+  const potSit = d.pot?.mode === 'thin' ? D.potThinSit : d.pot?.mode === 'mixed' ? D.potMixSit : 0;
+  if (potSit !== 0) for (const c of COMMS) sit[c][1] -= potSit;
   const beds = bedCrowd(g);
   sit.medtech[2] += beds.medtech;
   sit.tail[2] += beds.tail;

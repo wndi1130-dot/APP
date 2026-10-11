@@ -81,7 +81,7 @@ export const D = {
   hotWater0: 1, hotWaterCoal: 0.1, bathRotaCoal: 1.2, bathRotaFlat: 0.25, handsFirstCoal: 0.8,
   // 식당칸 솥 불리기(food_cooking 4.5·5장, 모두 제안): 묽게 식량 ×0.85·모든 칸 배급 처지 −6(레버 반 칸), 섞어서 식량 ×0.75·목재 0.5/구간,
   // 들킬 확률 15%에서 섞은 구간마다 +5%p·쉬면 −5%p, 들키면 신임 −8(공동 식당 법이 서 있으면 곱절)·모든 칸 관계 −5·긴장 +5
-  potThinFood: 0.85, potThinSit: 6, potMixFood: 0.75, potMixWood: 0.5, potRisk0: 0.15, potRiskUp: 0.05, potRiskDown: 0.05,
+  potThinFood: 0.85, potThinSit: 6, potMixFood: 0.75, potMixSit: 0, potMixWood: 0.5, potRisk0: 0.15, potRiskUp: 0.05, potRiskDown: 0.05,
   potCaughtTrust: 8, potCaughtLaw: 2, potCaughtRel: 5, potCaughtTension: 5,
   // 16.3 이 확률
   // 불결 관계 벌은 이가 도는 칸만, 이가 사라진 칸은 3구간 면역(16.9)
