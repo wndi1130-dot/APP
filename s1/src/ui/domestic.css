@@ -129,10 +129,10 @@
 }
 .dom-detail__head { display: flex; align-items: center; gap: 8px; }
 .dom-detail__head .x { margin-left: auto; }
+.dom-detail__head .chip { margin-left: auto; min-height: 26px; }
+.dom-detail__head .chip + .x { margin-left: 0; }
+.dom-common .is-red { color: var(--discontent); }
 .dom-detail p { margin: 0; }
-.dom-variants, .dom-checks { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
-.dom-checks li { color: var(--discontent); }
-.dom-checks li.is-ok { color: var(--ink-2); }
 .dom-sides { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
 .dom-face { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; color: var(--ink-2); }
 .dom-face .portrait { width: 22px; height: 22px; }

@@ -536,7 +536,19 @@ function useKey(g: Game, id: TechId, v?: Variant): string {
   return laws.length === 0 ? '' : laws.some(l => g.passed[l] !== undefined) ? 'on' : 'off';
 }
 
-function nodeDetail(g: Game, id: TechId): HTMLElement {
+/** 효과 글의 첫 마디(쉼표나 마침표 앞, 그래도 길면 괄호 앞). 카드는 이것만 적고 나머지는 「더」로 편다(설계 2-3: 효과 한 줄 서른 자 안). */
+export function shortEffect(text: string): string {
+  if (text.length <= 30) return text;
+  const cut = text.search(/, |\. /);
+  const head = cut > 0 ? text.slice(0, cut) : text;
+  // 첫 마디도 길면 괄호 앞에서 끊는다(괄호 안은 덧붙인 풀이다).
+  const paren = head.indexOf('(');
+  return head.length > 30 && paren > 0 ? head.slice(0, paren) : head;
+}
+
+// 기술 카드(사용자 2026-10-11 「글이 많다」): 이름, 효과 첫 마디, 드는 것 한 줄, 단추만 보인다.
+// 긴 효과 글과 쓸 법 풀이는 「더」를 눌렀을 때만 편다. 가지와 단계는 탭과 타일 자리가 이미 말한다. 값과 규칙은 그대로다.
+function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
   const d = g.dom!;
   const def = TECHS[id];
   const st = d.techs[id];
@@ -544,22 +556,34 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
   const cost = restoreCost(id);
   const frags = d.frags[def.branch];
   const variants: (Variant | undefined)[] = def.variants && !st ? ['a', 'b'] : [undefined];
+  const eff = (text: string) => (more ? text : shortEffect(text));
+  const picked = def.variants && st?.variant ? def.variants[st.variant] : null;
+  const mainEffect = picked ? picked.effect : def.effect;
+  const texts = def.variants && !st ? [def.variants.a.effect, def.variants.b.effect] : [mainEffect];
+  const canMore = texts.some(t => shortEffect(t) !== t) || variants.some(v => !!techUseLine(g, id, v ?? st?.variant));
   const buttons: HTMLElement[] = [];
   if (!st) {
-    // 값, 막힌 까닭, 쓸 법처럼 단추마다 같은 말은 위에 한 번만 적는다(사용자 2026-10-11: 글이 많다).
     const canDefect = check.defect !== '없다' && check.defect !== '완성판으로 된다';
     const sameUse = variants.every(v => useKey(g, id, v) === useKey(g, id, variants[0]));
+    const skillShort = check.full === `${['', '견습', '숙련', '장인'][def.tier]} 이상이 없다`;
+    // 드는 것 한 줄: 모자란 것만 붉다. 막힌 까닭과 쓸 법 표는 단추마다 같으니 여기 한 번만 적는다.
     buttons.push(h('div', { class: 'dom-common' },
       h('span', { class: 'cost num' }, `부품 −${cost.parts}`), cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null,
+      h('span', { class: cx('cost num', frags < cost.frags && 'is-red') }, tip('조각', FRAG_FROM + findsLine(g, 'frag', def.branch)), ` ${frags}/${cost.frags}`),
+      cost.core ? h('span', { class: cx('cost num', d.cores < cost.core && 'is-red') }, tip('코어', CORE_FROM + findsLine(g, 'core')), ` ${d.cores}/${cost.core}`) : null,
+      def.tier > 0 ? h('span', { class: cx('cost', skillShort && 'is-red') }, `${FIELD_NAME[def.branch]} ${SKILL_NAME[def.tier]}↑`) : null,
       sameUse ? useTag(g, id, variants[0]) : null,
-      check.full ? h('span', { class: 'pol pol--gray' }, check.full) : null,
-      canDefect ? h('span', { class: 'sub' }, `결함판: 효과 절반, 고장 +${Math.round(D.defectBreak * 100)}%p${check.defect ? ` · ${check.defect}` : ''}`) : null));
+      check.full && !skillShort ? h('span', { class: 'pol pol--gray' }, check.full) : null,
+      canDefect ? h('span', { class: 'sub' }, `결함판 ½ · 조각 ${cost.defectFrags} · 고장 +${Math.round(D.defectBreak * 100)}%${check.defect && check.defect !== check.full ? ` · ${check.defect}` : ''}`) : null));
     for (const v of variants) {
       const rel = sideLine(techRelSides(id, v));
+      const use = more ? techUseLine(g, id, v) : null;
       buttons.push(h('div', { class: 'dom-vrow' },
         v && def.variants ? h('b', { class: 'dom-vrow__name' }, def.variants[v].name) : null,
-        rel ? h('span', { class: 'pol pol--gray' }, rel) : null,
+        v && def.variants ? h('span', null, eff(def.variants[v].effect), more ? h('span', { class: 'sub' }, ` · ${upkeepText(def.variants[v].upkeep)}`) : null) : null,
+        h('span', { class: 'pol pol--gray' }, rel || '관계 안 움직임'),
         sameUse ? null : useTag(g, id, v),
+        use ? h('span', { class: 'dom-use' }, use) : null,
         h('span', { class: 'dom-vrow__acts' },
           h('button', {
             class: 'btn btn--dark btn--small', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'full', 'data-variant': v ?? '', disabled: !!check.full, title: check.full ?? '',
@@ -569,32 +593,26 @@ function nodeDetail(g: Game, id: TechId): HTMLElement {
           }, '결함판으로') : null)));
     }
   }
-  if (st && d.restoring === id) buttons.push(h('button', { class: 'btn btn--ghost', 'data-action': 'dom-cancel' }, '복원을 멈춘다(부품은 안 돌아온다)'));
+  if (st && d.restoring === id) buttons.push(h('button', { class: 'btn btn--ghost', 'data-action': 'dom-cancel' }, '멈춘다(부품 안 돌아옴)'));
   if (st?.stage === 'defective' && !st.finishing) {
     const why = finishCheck(g, id);
     buttons.push(h('button', { class: 'btn btn--dark', 'data-action': 'dom-finish', 'data-id': id, disabled: !!why, title: why ?? '' },
-      `완성판으로 고친다(조각 ${cost.frags - cost.defectFrags})`));
+      `완성판으로(조각 ${cost.frags - cost.defectFrags})`));
   }
   if (st?.off) buttons.push(h('button', { class: 'btn btn--dark', 'data-action': 'dom-restart', 'data-id': id, disabled: !!restartWhy(g, id), title: restartWhy(g, id) ?? '' }, st.refund ? '다시 돌린다(부품 1)' : '다시 돌린다'));
-  const sides = { like: def.variants && st?.variant ? def.variants[st.variant].like : def.like, dislike: def.variants && st?.variant ? def.variants[st.variant].dislike : def.dislike };
+  const sides = { like: picked ? picked.like : def.like, dislike: picked ? picked.dislike : def.dislike };
+  const promise = researchPromise(g);
   return h('div', { class: 'dom-detail' },
     h('div', { class: 'dom-detail__head' },
-      h('span', { class: 'kicker' }, `${BRANCH_NAME[def.branch]} · ${def.tier === 0 ? '적응' : ['', '응급 복원', '구시대 표준', '잃어버린 기술'][def.tier]}`),
       h('b', null, techTitle(g, id)),
+      promise?.tech === id ? h('span', { class: 'dom-promise' }, `약속 · 남은 ${promise.left}구간`) : null,
+      canMore ? h('button', { class: cx('chip', more && 'is-on'), 'data-action': 'dom-more', 'aria-expanded': more ? 'true' : 'false' }, more ? '접기' : '더') : null,
       close('dom-node', { 'data-id': id })),
-    def.variants && !st?.variant
-      ? h('ul', { class: 'dom-variants' }, (['a', 'b'] as Variant[]).map(v => h('li', null,
-        h('b', null, `${v === 'a' ? '가' : '나'}. ${def.variants![v].name}`), ` ${def.variants![v].effect} · ${upkeepText(def.variants![v].upkeep)}`,
-        techUseLine(g, id, v) ? h('span', { class: 'dom-use' }, ` · ${techUseLine(g, id, v)}`) : null)))
-      : h('p', null, def.variants && st?.variant ? def.variants[st.variant].effect : def.effect, h('span', { class: 'sub' }, ` · ${upkeepText(upkeepOf(g, id))}`)),
-    def.variants && !st?.variant ? null : useLine(g, id, st?.variant),
-    researchPromise(g)?.tech === id ? h('p', { class: 'dom-promise' }, `${COMM_NAME.medtech}에게 건 약속이다. 남은 ${researchPromise(g)!.left}구간.`) : null,
-    !st ? h('ul', { class: 'dom-checks' },
-      h('li', { class: frags >= cost.frags ? 'is-ok' : '' }, tip('설계도 조각', FRAG_FROM + findsLine(g, 'frag', def.branch)), ` ${frags}/${cost.frags}${cost.defectFrags < cost.frags ? ` (결함판 ${cost.defectFrags})` : ''}`),
-      cost.core ? h('li', { class: d.cores >= cost.core ? 'is-ok' : '' }, tip('코어', CORE_FROM + findsLine(g, 'core')), ` ${d.cores}/${cost.core}`) : null,
-      h('li', { class: check.full === `${['', '견습', '숙련', '장인'][def.tier]} 이상이 없다` ? '' : 'is-ok' },
-        def.tier === 0 ? '사람 조건 없음' : `${FIELD_NAME[def.branch]} ${SKILL_NAME[def.tier]} 이상`)) : null,
-    sides.like.length || sides.dislike.length ? h('div', { class: 'dom-sides' },
+    def.variants && !st?.variant ? null
+      : h('p', null, eff(mainEffect), h('span', { class: 'sub' }, ` · ${upkeepText(upkeepOf(g, id))}`)),
+    more && !(def.variants && !st?.variant) ? useLine(g, id, st?.variant) : null,
+    // 되살린 뒤에만 얼굴을 보인다. 되살리기 전에는 변형 줄의 관계 글이 같은 것을 말한다.
+    st && (sides.like.length || sides.dislike.length) ? h('div', { class: 'dom-sides' },
       sides.like.length ? h('span', { class: 'is-blue' }, '반김 ', faces(sides.like, g)) : null,
       sides.dislike.length ? h('span', { class: 'is-red' }, '못마땅 ', faces(sides.dislike, g)) : null) : null,
     buttons.length ? h('div', { class: 'dom-buttons' }, buttons) : null);
@@ -622,7 +640,7 @@ function planView(view: View): HTMLElement {
         TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t).map(id => techNode(g, id, sel === id, rec?.id === id))))))),
     h('div', { class: 'tplan__detail', 'data-keep-scroll': 'tplan-detail' },
       rec?.id === sel ? h('p', { class: 'tplan__why' }, h('b', null, '먼저'), ` ${rec.why}`) : null,
-      nodeDetail(g, sel)));
+      nodeDetail(g, sel, !!domUi(view.ui).more)));
 }
 
 function dots(skill: number): string {
@@ -767,7 +785,7 @@ export function domesticActive(g: Game, ui: Ui): boolean {
 
 /** 내정 조작인가(12.1): 레버 한 칸, 순서 바꾸기, 내정 카드 선택, 내정 단추. */
 export function domesticOp(g: Game, action: string): boolean {
-  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats' && action !== 'dom-ws' && action !== 'dom-med') return true;
+  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats' && action !== 'dom-ws' && action !== 'dom-med' && action !== 'dom-more') return true;
   if (action === 'lever') return true;
   return action === 'choose' && !!g.cards[0]?.kind.startsWith('dom:');
 }
@@ -924,11 +942,16 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
       break;
     case 'dom-node':
       du.node = du.node === data.id ? null : data.id ?? null;
+      du.more = false;
+      break;
+    case 'dom-more':
+      du.more = !du.more;
       break;
     case 'dom-branch': {
       // 가지를 바꾸면 그 가지에서 아직 안 되살린 첫 기술을 고른다.
       const ids = TECH_IDS.filter(id => TECHS[id].branch === data.branch);
       du.node = ids.find(id => !d0.techs[id]) ?? ids[0] ?? null;
+      du.more = false;
       break;
     }
     case 'dom-mats':
