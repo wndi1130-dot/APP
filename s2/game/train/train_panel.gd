@@ -13,7 +13,7 @@ const KNOBS: Array = [
 ]
 const TRAIN_KEYS: Array = ["tension", "fear"]
 const BOOT_SCENE := "res://scenes/boot.tscn"
-const READS := "지금 장면이 읽는 값: 온기(웅크림), 과밀(사람 수와 바닥에 앉음), 회기(식당칸 사람 수와 오가는 길). 배급·노출·관계·긴장·공포는 아직 글자만 바뀐다."
+const READS := "지금 장면이 읽는 값: 온기(웅크림, 창 성에, 난로), 과밀(사람 수와 바닥에 앉음), 회기(식당칸 사람 수와 오가는 길). 온기·배급·관계·긴장·공포에서 칸의 기색 하나를 뽑아 모이는 자리, 걷는 사람과 빠르기, 등불을 바꾼다. 노출은 아직 글자만 바뀐다."
 
 var scene: Node3D
 var car_i: int = 0

@@ -1,7 +1,9 @@
 extends "res://addons/gut/test.gd"
 ## The train scene shows the rule values it is given: head counts, huddling and
-## floor sleepers follow the numbers, and the walkers stay inside the car, the
-## train and the one-at-a-time limit while a few take trips and come home.
+## floor sleepers follow the numbers, each car takes on the mood the look picks
+## (who stands about, where they sit, the lamp, the stove, the frost), and the
+## walkers stay inside the car, the train and the one-at-a-time limit while a
+## few take trips and come home.
 
 const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
@@ -35,6 +37,42 @@ func _on_floor(s, id: String) -> int:
 	for b in s.car(id)["bodies"]:
 		n += 1 if b.pose == "floor" else 0
 	return n
+
+
+## The bodies of a car that keep a place: seated, on the floor or standing about.
+func _placed(s, id: String) -> Array:
+	var rows: Array = []
+	for b in s.car(id)["bodies"]:
+		if b.state == "seat":
+			rows.append(b)
+	return rows
+
+
+func _standing_about(s, id: String) -> int:
+	var n := 0
+	for b in _placed(s, id):
+		n += 1 if b.pose == "stand" else 0
+	return n
+
+
+## How far along the car its seated people reach, first to last.
+func _seated_span(s, id: String) -> float:
+	var low: float = INF
+	var high: float = -INF
+	for b in _placed(s, id):
+		low = minf(low, b.slot.x)
+		high = maxf(high, b.slot.x)
+	return high - low
+
+
+## The closest two of a car's placed bodies stand this far apart.
+func _closest(s, id: String) -> float:
+	var rows := _placed(s, id)
+	var best: float = INF
+	for i in rows.size():
+		for j in range(i + 1, rows.size()):
+			best = minf(best, (rows[i].slot as Vector3).distance_to(rows[j].slot))
+	return best
 
 
 ## One tick's worth of what must never be seen; empty when all is well.
@@ -80,7 +118,7 @@ func test_every_car_holds_as_many_bodies_as_the_look_says() -> void:
 func test_a_cold_tail_huddles_as_the_split_says_and_a_warm_one_does_not() -> void:
 	var s = _scene()
 	s.set_sit("tail", 0, 10.0)
-	var expected: int = int(Look.split(_count(s, "tail1"), 10.0, 75.0)["huddled"])
+	var expected: int = int(Look.split(_count(s, "tail1"), 10.0, 75.0, s.car("tail1")["mood"])["huddled"])
 	assert_eq(_huddled(s, "tail1"), expected)
 	assert_gt(_huddled(s, "tail1"), 0)
 	s.set_sit("tail", 0, 80.0)
@@ -110,23 +148,29 @@ func test_the_dining_car_holds_twelve_in_session_and_four_otherwise() -> void:
 	assert_eq(_count(s, "dining"), 4)
 
 
-func test_no_two_seated_bodies_share_a_place() -> void:
+func test_no_two_placed_bodies_share_a_place_in_any_mood() -> void:
 	var s = _scene()
 	s.set_sit("tail", 2, 100.0)
-	var places: Dictionary = {}
-	for b in s.car("tail1")["bodies"]:
-		if b.state == "seat":
-			places[b.slot] = true
-	assert_eq(places.size(), 12, "sixteen people: four walk, twelve sit apart")
+	# [tension, fear, the tail's warmth]: low and gathered, calm and spread, stirred with knots, frozen.
+	for row in [[20.0, 0.0, 35.0], [20.0, 0.0, 60.0], [70.0, 0.0, 60.0], [20.0, 70.0, 60.0]]:
+		s.rules["comms"]["tail"]["sit"][1] = 60.0 if float(row[2]) >= 45.0 else 40.0
+		s.rules["train"]["tension"] = row[0]
+		s.rules["train"]["fear"] = row[1]
+		s.set_sit("tail", 0, row[2])
+		var mood: String = s.car("tail1")["mood"]
+		var split: Dictionary = Look.split(16, float(row[2]), 100.0, mood)
+		assert_eq(_placed(s, "tail1").size(), 16 - int(split["walk"]), mood)
+		assert_gt(_closest(s, "tail1"), Body.RADIUS * 1.5, "%s: nobody sits or stands inside another" % mood)
 
 
-func test_the_line_over_a_car_reads_its_numbers_and_heads() -> void:
+func test_the_line_over_a_car_reads_its_numbers_heads_and_mood() -> void:
 	var s = _scene()
 	s.set_sit("tail", 0, 10.0)
 	var line: String = s.car("tail1")["values"].text
 	assert_string_contains(line, "온기 10")
 	assert_string_contains(line, "16명")
-	assert_eq(String(s.car("dining")["values"].text), "4명")
+	assert_string_contains(line, "가라앉음")
+	assert_eq(String(s.car("dining")["values"].text), "4명 · 평온")
 
 
 func test_a_seated_body_is_lower_than_a_standing_one_and_a_huddled_one_lower_still() -> void:
@@ -142,6 +186,104 @@ func test_a_seated_body_is_lower_than_a_standing_one_and_a_huddled_one_lower_sti
 func test_the_doorway_between_cars_is_on_the_aisle_and_taller_than_a_person() -> void:
 	assert_between(Scene.AISLE_Z, Scene.DOOR_FROM + Body.RADIUS, Scene.DOOR_TO - Body.RADIUS)
 	assert_gt(Scene.DOOR_HEIGHT, Body.HEIGHT + Body.HEAD_RADIUS * 2.0)
+
+
+# ---------------------------------------------------------------- the mood of a car
+
+func test_each_car_takes_the_mood_the_look_picks_and_names_it() -> void:
+	var s = _scene()
+	assert_eq(s.car("tail1")["mood"], "low")
+	assert_eq(s.car("medtech")["mood"], "calm")
+	s.set_train("tension", 70.0)
+	for c in s.cars:
+		assert_eq(c["mood"], "stir", String(c["id"]))
+		assert_string_contains(String(c["values"].text), "술렁임")
+	s.set_train("fear", 70.0)
+	for c in s.cars:
+		assert_eq(c["mood"], "frozen", String(c["id"]))
+		assert_string_contains(String(c["values"].text), "얼어붙음")
+	s.set_train("fear", 0.0)
+	s.set_train("tension", 20.0)
+	assert_eq(s.car("tail1")["mood"], "low")
+	assert_eq(s.car("front")["mood"], "calm")
+	s.set_comm("front", "rel", -40)
+	assert_eq(s.car("front")["mood"], "stir", "its own car only")
+	assert_eq(s.car("medtech")["mood"], "calm")
+
+
+func test_a_stirred_car_stands_about_in_knots_and_walks_faster() -> void:
+	var s = _scene()
+	assert_eq(_standing_about(s, "medtech"), 0)
+	s.set_train("tension", 70.0)
+	var split: Dictionary = Look.split(_count(s, "medtech"), 55.0, 45.0, "stir")
+	assert_eq(_standing_about(s, "medtech"), int(split["stand"]))
+	assert_gt(_standing_about(s, "medtech"), 0)
+	var walkers := 0
+	for b in s.car("medtech")["bodies"]:
+		assert_almost_eq(float(b.speed), Body.WALK_SPEED * 1.4, 0.001)
+		walkers += 1 if b.state != "seat" else 0
+	assert_eq(walkers, int(split["walk"]))
+	s.set_train("tension", 20.0)
+	assert_eq(_standing_about(s, "medtech"), 0, "calm again: everyone who stood about sits")
+	for b in s.car("medtech")["bodies"]:
+		assert_almost_eq(float(b.speed), Body.WALK_SPEED, 0.001)
+
+
+func test_a_frightened_car_bows_its_seated_heads_and_a_calm_one_does_not() -> void:
+	var s = _scene()
+	s.set_train("fear", 70.0)
+	for b in s.car("medtech")["bodies"]:
+		assert_eq(bool(b.bowed), b.state == "seat", "the seated bow, the one who walks does not")
+	assert_eq(_placed(s, "medtech").size(), _count(s, "medtech") - Look.movers(_count(s, "medtech"), "frozen"))
+	s.set_train("fear", 0.0)
+	for b in s.car("medtech")["bodies"]:
+		assert_false(bool(b.bowed))
+
+
+func test_a_low_car_draws_in_round_the_stove_and_fewer_walk() -> void:
+	var s = _scene()
+	var calm_span := _seated_span(s, "front")
+	var calm_walkers: int = _count(s, "front") - _placed(s, "front").size()
+	s.set_sit("front", 1, 40.0)
+	assert_eq(s.car("front")["mood"], "low")
+	assert_lt(_seated_span(s, "front"), calm_span, "the seated sit closer together")
+	assert_lt(_count(s, "front") - _placed(s, "front").size(), calm_walkers)
+	var stove_x: float = float(s.car("front")["x0"]) + Scene.STOVE_AT.x
+	var nearest: float = INF
+	for b in _placed(s, "front"):
+		nearest = minf(nearest, absf(b.slot.x - stove_x))
+	assert_lt(nearest, Scene.SLOT_STEP, "someone sits by the stove")
+
+
+func test_the_lamp_eases_to_the_moods_light_and_sways_within_its_reach() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("medtech")
+	var lamp: OmniLight3D = c["lamp"]
+	var calm: Dictionary = Look.mood_look("calm")
+	var frozen: Dictionary = Look.mood_look("frozen")
+	s.set_train("fear", 70.0)
+	assert_almost_eq(lamp.light_energy, float(calm["energy"]), 0.001, "not at once")
+	for i in 100:
+		s.step(0.1)
+		assert_lte(absf(lamp.position.x - Scene.CAR_LENGTH * 0.5), Scene.LAMP_SWAY * float(frozen["sway"]) + 0.001)
+	assert_almost_eq(lamp.light_energy, float(frozen["energy"]), 0.01)
+	assert_almost_eq(lamp.light_color.b, (frozen["lamp"] as Color).b, 0.01, "a colder light")
+	assert_lt(lamp.light_color.r, (calm["lamp"] as Color).r)
+
+
+func test_the_stove_burns_with_the_cars_warmth_and_frost_takes_the_glass() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("front")
+	s.set_sit("front", 0, 90.0)
+	assert_almost_eq(float(c["stove_light"].light_energy), Scene.STOVE_ENERGY, 0.001)
+	assert_true(bool(c["steam"].emitting), "a warm stove steams faintly")
+	assert_almost_eq(float(c["glass"].get_shader_parameter("cold_car")), 0.0, 0.001)
+	s.set_sit("front", 0, 10.0)
+	assert_almost_eq(float(c["stove_light"].light_energy), 0.0, 0.001)
+	assert_false(bool(c["steam"].emitting), "a dead stove does not")
+	assert_almost_eq(float(c["glass"].get_shader_parameter("cold_car")), 1.0, 0.001)
+	assert_true(s.car("dining").has("stove_light"), "the dining car has a stove of its own")
+	assert_almost_eq(float(s.car("tail1")["glass"].get_shader_parameter("cold_car")), Look.frost(35.0), 0.001)
 
 
 # ---------------------------------------------------------------- time passing
@@ -163,7 +305,8 @@ func test_when_no_new_trips_start_everyone_comes_home() -> void:
 	for i in 600:
 		s.step(0.1)
 	s.rules["errands"] = []
-	for i in 1500:
+	# A low car walks at 0.6: two cars there and back with a stay is two and a half minutes.
+	for i in 2500:
 		s.step(0.1)
 	var strays: Array = []
 	for c in s.cars:

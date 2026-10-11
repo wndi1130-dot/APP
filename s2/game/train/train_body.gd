@@ -12,6 +12,7 @@ const SEAT_HEIGHT: float = 0.45
 const SEATED_SCALE: float = 0.62        # the trunk alone: the legs fold away
 const HUDDLE_SCALE: float = 0.78
 const HUDDLE_LEAN: float = 0.45         # rad, forward over the knees
+const BOW_DROP: float = 0.13            # a bowed head, the trunk upright
 const BOB: float = 0.03
 const BOB_RATE: float = 9.0
 ## Worn winter coats, no two cars alike and none a uniform.
@@ -27,6 +28,8 @@ static var _coats: Array = []
 var home_car: String = ""
 var pose: String = "sit"                 # walk | stand | sit | floor
 var huddled: bool = false
+var bowed: bool = false
+var speed: float = WALK_SPEED
 var state: String = "seat"               # seat | wait | pace | out | visit | back
 var timer: float = 0.0
 var goal_x: float = 0.0
@@ -53,8 +56,9 @@ func setup(car_id: String, coat: int) -> void:
 
 
 ## Where the trunk and the head sit for a pose: {"body_pos", "body_scale",
-## "body_lean", "head_pos"}. `t` only bobs a walk.
-static func pose_at(p_pose: String, p_huddled: bool, t: float = 0.0) -> Dictionary:
+## "body_lean", "head_pos"}. `t` only bobs a walk. A bowed head is the quiet of
+## a frightened car; a huddle is the cold.
+static func pose_at(p_pose: String, p_huddled: bool, t: float = 0.0, p_bowed: bool = false) -> Dictionary:
 	var base: float = 0.0
 	var scale: float = 1.0
 	match p_pose:
@@ -71,6 +75,9 @@ static func pose_at(p_pose: String, p_huddled: bool, t: float = 0.0) -> Dictiona
 		lean = HUDDLE_LEAN
 		head_drop = 0.22
 		head_out = 0.22
+	elif p_bowed and p_pose != "walk":
+		head_drop = BOW_DROP
+		head_out = 0.14
 	var bob: float = absf(sin(t * BOB_RATE)) * BOB if p_pose == "walk" else 0.0
 	var half: float = HEIGHT * scale * 0.5
 	return {
@@ -81,16 +88,17 @@ static func pose_at(p_pose: String, p_huddled: bool, t: float = 0.0) -> Dictiona
 	}
 
 
-func set_pose(p_pose: String, p_huddled: bool) -> void:
+func set_pose(p_pose: String, p_huddled: bool, p_bowed: bool = false) -> void:
 	pose = p_pose
 	huddled = p_huddled
+	bowed = p_bowed
 	show_pose()
 
 
 func show_pose() -> void:
 	if body_mesh == null:
 		return
-	var at := pose_at(pose, huddled, clock)
+	var at := pose_at(pose, huddled, clock, bowed)
 	body_mesh.position = at["body_pos"]
 	body_mesh.scale = at["body_scale"]
 	body_mesh.rotation.x = float(at["body_lean"])
@@ -101,7 +109,7 @@ func show_pose() -> void:
 func walk(delta: float) -> bool:
 	clock += delta
 	var left: float = goal_x - position.x
-	var stride: float = WALK_SPEED * delta
+	var stride: float = speed * delta
 	if absf(left) <= stride:
 		position.x = goal_x
 		rotation.y = 0.0

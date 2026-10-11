@@ -11,6 +11,8 @@ const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
+const Smoke = preload("res://fx/smoke.gd")
+const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
 
 const CAR_LENGTH: float = 16.0          # the field's car (16 x 2.8 x 3)
 const CAR_WIDTH: float = 2.8
@@ -28,10 +30,23 @@ const DOOR_HEIGHT: float = 2.0
 const SLOT_FIRST: float = 1.2
 const SLOT_STEP: float = 0.95
 const BENCH_SLOTS: int = 15
-## Seats fill in steps of four of the fifteen, so a few people sit spread out
-## along the car and nobody changes seat when one more comes in.
-const SLOT_STRIDE: int = 4
-const FLOOR_SHIFT: int = 2
+const FLOOR_SHIFT: int = 2              # the floor fills between the bench's pairs
+## People standing about gather in threes by the two doorways, beside the
+## aisle: two along its edge and the third toward the bench, so the way stays open.
+const KNOT_SIZE: int = 3
+const KNOT_FROM: float = 1.6
+const KNOT_STEP: float = 0.55
+const KNOT_APART: float = 2.4
+const KNOT_Z: float = 0.15
+const KNOT_DEPTH: float = 0.45
+## The stove stands in front of the bench, between two floor places; a car with
+## a table has it by the end wall.
+const STOVE_AT := Vector3(7.85, 0.0, -0.4)
+const STOVE_AT_END := Vector3(0.45, 0.0, -0.9)
+const STOVE_COLOR := Color(1.0, 0.55, 0.3)
+const STOVE_ENERGY: float = 1.1
+const LAMP_SWAY: float = 0.05           # metres, with the train's rocking
+const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
 const AISLE_MARGIN: float = 1.0
 const PACE_WAIT := Vector2(2.0, 6.0)    # a mover stands this long between walks
 const VISIT_SPREAD: float = 3.0
@@ -42,7 +57,6 @@ const CAM_FAR: float = 24.0
 const CAM_PITCH: float = -8.0
 const CAM_BACK: float = 30.0
 const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the bottom
-const LAMP_COLOR := Color(1.0, 0.72, 0.42)
 
 var rules: Dictionary = {}
 var opts: Dictionary = {}               # seed: int, panel: bool
@@ -55,6 +69,7 @@ var people: Node3D
 var panel: CanvasLayer
 var cam_x: float = CAR_LENGTH * 0.5
 var zoomed_out: bool = false
+var clock: float = 0.0
 var _mats: Dictionary = {}
 var _font: SystemFont
 
@@ -116,7 +131,9 @@ func set_train(key: String, value) -> void:
 ## One tick of the people: movers pace their own aisle, and now and then one
 ## takes a trip with a use to another car, stays and comes back.
 func step(delta: float) -> void:
+	clock += delta
 	for c in cars:
+		_step_lamp(c, delta)
 		_step_errand(c, delta)
 		for b in c["bodies"]:
 			_step_body(c, b, delta)
@@ -147,7 +164,7 @@ func train_length() -> float:
 ## The line under a car's name: its numbers and its head count.
 func values_text(c: Dictionary) -> String:
 	var comm := Rules.comm_of(rules, c["def"])
-	var heads := "%d명" % (c["bodies"] as Array).size()
+	var heads := "%d명 · %s" % [(c["bodies"] as Array).size(), Look.MOOD_NAMES[c["mood"]]]
 	if comm.is_empty():
 		return heads
 	var sit: Array = comm["sit"]
@@ -175,7 +192,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _seat_car(c: Dictionary) -> void:
 	var comm := Rules.comm_of(rules, c["def"])
 	var n := Look.figures(c["def"], comm, phase())
-	var rows := Look.seating(n, Look.warmth(comm), Look.crowding(comm))
+	var w := Look.warmth(comm)
+	var m := Look.mood(comm, rules.get("train", {}))
+	var look := Look.mood_look(m)
+	c["mood"] = m
+	var rows := Look.seating(n, w, Look.crowding(comm), m)
 	var bodies: Array = c["bodies"]
 	while bodies.size() > n:
 		var gone: Node3D = bodies.pop_back()
@@ -190,12 +211,15 @@ func _seat_car(c: Dictionary) -> void:
 	var walkers: int = 0
 	for row in rows:
 		walkers += 1 if row["pose"] == "walk" else 0
+	var gather: bool = look["gather"]
+	var standing: int = 0
 	var bench: int = 0
 	var on_floor: int = 0
+	var x0: float = c["x0"]
 	for i in n:
 		var b: Node3D = bodies[i]
 		var row: Dictionary = rows[i]
-		var x0: float = c["x0"]
+		b.speed = Body.WALK_SPEED * float(look["speed"])
 		match String(row["pose"]):
 			"walk":
 				b.slot = Vector3(x0 + AISLE_MARGIN + (CAR_LENGTH - 2.0 * AISLE_MARGIN) * (i + 0.5) / maxi(walkers, 1), 0, AISLE_Z)
@@ -203,24 +227,78 @@ func _seat_car(c: Dictionary) -> void:
 					b.position = b.slot
 					b.rotation.y = 0.0
 					b.set_pose("stand", false)
-					b.state = "wait"
-					b.timer = rng.randf_range(PACE_WAIT.x, PACE_WAIT.y)
+					_wait(c, b)
+			"stand":
+				_sit_down(c, b, x0, _knot_place(standing), "stand", false, false)
+				b.rotation.y = _knot_facing(standing)
+				standing += 1
 			"sit":
-				_sit_down(c, b, Vector3(x0 + SLOT_FIRST + ((bench * SLOT_STRIDE) % BENCH_SLOTS) * SLOT_STEP, 0, BENCH_Z), "sit", bool(row["huddled"]))
+				var seat := Vector3(SLOT_FIRST + Look.seat_slot(bench, BENCH_SLOTS, gather) * SLOT_STEP, 0, BENCH_Z)
+				_sit_down(c, b, x0, seat, "sit", bool(row["huddled"]), bool(row["bowed"]))
 				bench += 1
 			_:
-				_sit_down(c, b, Vector3(x0 + SLOT_FIRST + SLOT_STEP * 0.5 + ((on_floor * SLOT_STRIDE + FLOOR_SHIFT) % BENCH_SLOTS) * SLOT_STEP, 0, FLOOR_Z), "floor", bool(row["huddled"]))
+				# The stove stands between two floor places: gathered, the floor fills on both sides of it.
+				var slot: int = (on_floor * Look.SLOT_STRIDE + FLOOR_SHIFT) % BENCH_SLOTS
+				if gather:
+					slot = maxi(Look.seat_slot(on_floor, BENCH_SLOTS, true) - 1, 0)
+				var place := Vector3(SLOT_FIRST + SLOT_STEP * 0.5 + slot * SLOT_STEP, 0, FLOOR_Z)
+				_sit_down(c, b, x0, place, "floor", bool(row["huddled"]), bool(row["bowed"]))
 				on_floor += 1
+	_dress_car(c, w, look)
 	(c["values"] as Label3D).text = values_text(c)
 
 
-func _sit_down(c: Dictionary, b: Node3D, at: Vector3, pose: String, huddled: bool) -> void:
+## Where in the car the k-th of those standing about stands: knots of three,
+## by the tail-end doorway and the front-end one in turn.
+func _knot_place(k: int) -> Vector3:
+	var knot: int = k / KNOT_SIZE
+	var member: int = k % KNOT_SIZE
+	var along: float = KNOT_FROM + (knot / 2) * KNOT_APART
+	if member == 1:
+		along += KNOT_STEP
+	elif member == 2:
+		along += KNOT_STEP * 0.5
+	var x: float = along if knot % 2 == 0 else CAR_LENGTH - along
+	return Vector3(x, 0, KNOT_Z - (KNOT_DEPTH if member == 2 else 0.0))
+
+
+## The three of a knot face one another.
+func _knot_facing(k: int) -> float:
+	var knot: int = k / KNOT_SIZE
+	var member: int = k % KNOT_SIZE
+	if member == 2:
+		return 0.0
+	var toward_front: bool = (member == 0) == (knot % 2 == 0)
+	return PI * 0.5 if toward_front else -PI * 0.5
+
+
+## The lamp, the stove and the window frost follow the car's mood and warmth.
+func _dress_car(c: Dictionary, w: float, look: Dictionary) -> void:
+	c["lamp_color"] = look["lamp"]
+	c["lamp_energy"] = float(look["energy"])
+	c["lamp_sway"] = float(look["sway"])
+	(c["glass"] as ShaderMaterial).set_shader_parameter("cold_car", Look.frost(w))
+	if c.has("stove_light"):
+		var burn := Look.stove(w)
+		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn
+		(c["steam"] as GPUParticles3D).emitting = burn >= Look.STOVE_STEAM_FROM
+
+
+func _step_lamp(c: Dictionary, delta: float) -> void:
+	var lamp: OmniLight3D = c["lamp"]
+	var ease_by := minf(1.0, delta * LAMP_EASE)
+	lamp.light_color = lamp.light_color.lerp(c["lamp_color"], ease_by)
+	lamp.light_energy = lerpf(lamp.light_energy, float(c["lamp_energy"]), ease_by)
+	lamp.position.x = CAR_LENGTH * 0.5 + sin(clock * 1.3 + float(c["index"])) * LAMP_SWAY * float(c["lamp_sway"])
+
+
+func _sit_down(c: Dictionary, b: Node3D, x0: float, at: Vector3, pose: String, huddled: bool, bowed: bool) -> void:
 	_end_trip(c, b)
 	b.state = "seat"
-	b.slot = at
-	b.position = at
+	b.slot = at + Vector3(x0, 0, 0)
+	b.position = b.slot
 	b.rotation.y = 0.0
-	b.set_pose(pose, huddled)
+	b.set_pose(pose, huddled, bowed)
 
 
 func _end_trip(c: Dictionary, b: Node3D) -> void:
@@ -238,7 +316,7 @@ func _step_body(c: Dictionary, b: Node3D, delta: float) -> void:
 				b.state = "pace"
 		"pace":
 			if b.walk(delta):
-				_wait(b)
+				_wait(c, b)
 		"out":
 			if b.walk(delta):
 				b.state = "visit"
@@ -251,12 +329,13 @@ func _step_body(c: Dictionary, b: Node3D, delta: float) -> void:
 		"back":
 			if b.walk(delta):
 				_end_trip(c, b)
-				_wait(b)
+				_wait(c, b)
 
 
-func _wait(b: Node3D) -> void:
+## A calm mover stands a few seconds between walks; a stirred one hardly stops.
+func _wait(c: Dictionary, b: Node3D) -> void:
 	b.state = "wait"
-	b.timer = rng.randf_range(PACE_WAIT.x, PACE_WAIT.y)
+	b.timer = rng.randf_range(PACE_WAIT.x, PACE_WAIT.y) * float(Look.mood_look(c["mood"])["wait"])
 
 
 func _step_errand(c: Dictionary, delta: float) -> void:
@@ -268,7 +347,7 @@ func _step_errand(c: Dictionary, delta: float) -> void:
 		return
 	var row: Dictionary = rows[int(c["errand_i"]) % rows.size()]
 	c["errand_i"] = int(c["errand_i"]) + 1
-	c["errand_t"] = float(row["every"]) * rng.randf_range(0.8, 1.2)
+	c["errand_t"] = float(row["every"]) * rng.randf_range(0.8, 1.2) * float(Look.mood_look(c["mood"])["wait"])
 	if int(c["out"]) >= (OUT_IN_SESSION if phase() == "council" else OUT_AT_ONCE):
 		return
 	var to := car(String(row["to"]))
@@ -336,7 +415,7 @@ func _build_train() -> void:
 		train.add_child(node)
 		var c := {
 			"def": def, "id": String(def["id"]), "index": i, "x0": node.position.x, "node": node,
-			"bodies": [], "out": 0, "errand_t": rng.randf_range(2.0, 8.0), "errand_i": 0,
+			"bodies": [], "out": 0, "errand_t": rng.randf_range(2.0, 8.0), "errand_i": 0, "mood": "calm",
 		}
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)
@@ -360,8 +439,20 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		_box(node, Vector3(WALL, h, DOOR_FROM + w * 0.5), Vector3(x, h * 0.5, (DOOR_FROM - w * 0.5) * 0.5), wood.darkened(0.3))
 		_box(node, Vector3(WALL, h, w * 0.5 - DOOR_TO), Vector3(x, h * 0.5, (DOOR_TO + w * 0.5) * 0.5), wood.darkened(0.3))
 		_box(node, Vector3(WALL, h - DOOR_HEIGHT, DOOR_TO - DOOR_FROM), Vector3(x, DOOR_HEIGHT + (h - DOOR_HEIGHT) * 0.5, (DOOR_FROM + DOOR_TO) * 0.5), wood.darkened(0.3))
+	# Windows: the field's glass, so frost grows in from the frame as the car cools.
+	var glass := ShaderMaterial.new()
+	glass.shader = GlassShader
+	c["glass"] = glass
 	for k in 4:
-		_box(node, Vector3(1.6, 0.9, 0.02), Vector3(l * (k + 0.5) / 4.0, 1.75, -w * 0.5 + WALL), Color(0.16, 0.2, 0.26))
+		var at := Vector3(l * (k + 0.5) / 4.0, 1.75, -w * 0.5 + WALL)
+		_box(node, Vector3(1.6, 0.9, 0.02), at, Color(0.07, 0.09, 0.13))
+		var pane := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(1.6, 0.9)
+		pane.mesh = quad
+		pane.material_override = glass
+		pane.position = at + Vector3(0, 0, 0.02)
+		node.add_child(pane)
 	_box(node, Vector3(l, 0.45, w - 0.4), Vector3(l * 0.5, -0.45, 0), steel.darkened(0.2))
 	for x in [2.2, 3.6, l - 3.6, l - 2.2]:
 		_box(node, Vector3(0.9, 0.9, 0.15), Vector3(x, -1.0, w * 0.5 - 0.3), steel.darkened(0.4))
@@ -373,14 +464,44 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		_box(node, Vector3(l - 4.0, 0.75, 0.6), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
 	elif kind == "captain":
 		_box(node, Vector3(1.6, 0.75, 0.7), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
+	if kind == "comm" or kind == "engine":
+		_build_stove(c, STOVE_AT)
+	elif kind == "dining" or kind == "captain":
+		_build_stove(c, STOVE_AT_END)
+	var calm := Look.mood_look("calm")
 	var lamp := OmniLight3D.new()
-	lamp.light_color = LAMP_COLOR
-	lamp.light_energy = 1.3
+	lamp.light_color = calm["lamp"]
+	lamp.light_energy = float(calm["energy"])
 	lamp.omni_range = 9.0
 	lamp.position = Vector3(l * 0.5, h - 0.5, 0.3)
 	node.add_child(lamp)
+	c["lamp"] = lamp
+	c["lamp_color"] = lamp.light_color
+	c["lamp_energy"] = lamp.light_energy
+	c["lamp_sway"] = 1.0
 	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
 	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
+
+
+## An iron stove with its pipe, an ember glow and the faint steam a car stove
+## may make (fx/smoke.gd "stove").
+func _build_stove(c: Dictionary, at: Vector3) -> void:
+	var node: Node3D = c["node"]
+	var iron := Color(0.12, 0.12, 0.13)
+	_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
+	_box(node, Vector3(0.1, CAR_HEIGHT - 0.7, 0.1), at + Vector3(0, 0.7 + (CAR_HEIGHT - 0.7) * 0.5, -0.1), iron)
+	var glow := OmniLight3D.new()
+	glow.light_color = STOVE_COLOR
+	glow.light_energy = 0.0
+	glow.omni_range = 3.0
+	glow.position = at + Vector3(0, 0.5, 0.35)
+	node.add_child(glow)
+	c["stove_light"] = glow
+	var steam: GPUParticles3D = Smoke.build("stove")
+	steam.position = at + Vector3(0, 0.75, 0)
+	steam.emitting = false
+	node.add_child(steam)
+	c["steam"] = steam
 
 
 func _box(parent: Node3D, size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
