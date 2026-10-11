@@ -145,6 +145,18 @@ function cartBlock(g: Game, st: StrandedState, tv: TripView | null): HTMLElement
 }
 
 /** 홈 화면 자리에 서는 멈춘 열차 판. */
+/** 들어가는 연출(결정 101) 동안 평소 홈 위에 얹는 것: 하늘 자리의 선 도면과 박마다 뜨는 글. 어느 것이 보일지는 홈 뿌리의 data-beat가 가른다.
+ *  글은 설 때 일지에 남는 한 줄을 세 박에 나눈 것이다. goMs는 열차 표식이 떠난 역에서 선 자리까지 가는 길이. */
+export function stallScene(g: Game, goMs: number): HTMLElement | null {
+  const st = g.stranded;
+  if (!st) return null;
+  return h('div', { class: 'stallrun', role: 'status', style: `--go:${Math.round(goMs)}ms` },
+    h('div', { class: 'stallrun__track' }, track(st, null, false, true)),
+    h('p', { class: 'stallcap stallcap--slow' }, '불이 꺼졌다.'),
+    h('p', { class: 'stallcap stallcap--brake' }, h('b', null, '끼이이익'), h('span', { class: 'num' }, `열차가 ${fmt(st.atKm)}km 지점에서 섰다.`)),
+    h('p', { class: 'stallcap stallcap--hush num' }, `${STR_WORD.next}까지 ${fmt(st.toNextKm)}km. 창마다 입김이 서린다.`));
+}
+
 export function strandedBoard(view: View): HTMLElement | null {
   const { g } = view;
   const st = g.stranded;
