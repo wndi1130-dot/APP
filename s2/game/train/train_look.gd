@@ -49,14 +49,17 @@ const MOOD_LOOK: Dictionary = {
 	"frozen": {"movers": [0, 1], "speed": 0.7, "wait": 3.0, "stand": 0.0, "gather": false, "bowed": true,
 		"lamp": Color(0.72, 0.77, 0.88), "energy": 0.6, "sway": 0.5},
 }
-## The gestures laid over a mood, one bad value at a time (2026-10-12: tension
-## first). In a car the train's tension stirs, the first knot of those
-## standing about takes them: two at each other (a quarrel in one car, heads
-## together in the next) and the third looking about. For show only.
+## The gestures laid over a mood, one bad value a car (2026-10-12: tension
+## first, then resentment). The first knot of those standing about takes
+## them. In a car the train's tension stirs: two at each other (a quarrel in
+## one car, heads together in the next) and the third looking about. In a
+## car stirred by its own standing with the captain: arms folded, and one
+## with its back turned. For show only.
 const GESTURES: Dictionary = {
 	"tension": {"pairs": [Gesture.ARGUE, Gesture.WHISPER], "one": Gesture.TURN_ABOUT},
+	"resent": {"each": [Gesture.ARMS_CROSSED, Gesture.BACK_TURNED, Gesture.ARMS_CROSSED]},
 }
-const GESTURE_PAIR: int = 2             # a quarrel takes two: one stander alone keeps still
+const GESTURE_PAIR: int = 2             # a quarrel takes two: in a tense car one stander alone keeps still
 const SLOT_STRIDE: int = 4
 const STOVE_STEAM_FROM: float = 0.4
 ## The council in the dining car (presentation_motion 3 and 7). The unrest
@@ -158,28 +161,36 @@ static func mood_look(m: String) -> Dictionary:
 	return MOOD_LOOK.get(m, MOOD_LOOK["calm"])
 
 
-## The bad value whose gestures a car of mood `m` shows: "tension" or "".
-## A frightened car shows none (its mood is not "stir"), and a car stirred
-## only by its own grudges has none yet.
+## The bad value whose gestures a car of mood `m` shows: "tension",
+## "resent" or "". A frightened car shows none (its mood is not "stir"). A
+## car is stirred by the train's tension or by its own standing with the
+## captain (see mood()): on a tense train the tension is what shows, and a
+## car's own resentment shows only on a train that is not.
 static func gesture_for(m: String, train: Dictionary) -> String:
-	return "tension" if m == "stir" and float(train.get("tension", 0)) >= TENSION_STIR else ""
+	if m != "stir":
+		return ""
+	return "tension" if float(train.get("tension", 0)) >= TENSION_STIR else "resent"
 
 
 ## What each of a car's standers does, in knot order: [{"name", "role"}],
-## name "" for standing still. Only the first knot acts: its first two as a
-## pair (role 0 and 1), its third alone.
+## name "" for standing still. Only the first knot acts. For tension its
+## first two are a pair (role 0 and 1) and its third is alone; for
+## resentment each has a gesture of its own, so one stander is enough.
 static func knot_gestures(value: String, standing: int, car_index: int) -> Array:
 	var out: Array = []
 	var set: Dictionary = GESTURES.get(value, {})
-	var acts: bool = not set.is_empty() and standing >= GESTURE_PAIR
+	var each: Array = set.get("each", [])
+	var pairs: Array = set.get("pairs", [])
+	var paired: bool = not pairs.is_empty() and standing >= GESTURE_PAIR
 	for k in standing:
 		var name := ""
-		if acts and k < GESTURE_PAIR:
-			var pairs: Array = set["pairs"]
+		if k < each.size():
+			name = each[k]
+		elif paired and k < GESTURE_PAIR:
 			name = pairs[posmod(car_index, pairs.size())]
-		elif acts and k == GESTURE_PAIR:
+		elif paired and k == GESTURE_PAIR:
 			name = set["one"]
-		out.append({"name": name, "role": k if k < GESTURE_PAIR else 0})
+		out.append({"name": name, "role": k if k < maxi(GESTURE_PAIR, each.size()) else 0})
 	return out
 
 

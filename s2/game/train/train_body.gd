@@ -37,6 +37,7 @@ var act: String = ""                     # the council gesture it is in: "" | le
 var act_t: float = 0.0
 var gesture: String = ""                 # the gesture of train_gesture.gd it is in, "" for none
 var gesture_role: int = 0                # which of a pair it is
+var gesture_facing: float = 0.0          # where it faces before the gesture turns it
 var speed: float = WALK_SPEED
 var state: String = "seat"               # seat | wait | pace | out | visit | back
 var timer: float = 0.0

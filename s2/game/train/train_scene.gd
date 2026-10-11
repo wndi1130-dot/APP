@@ -42,6 +42,7 @@ const KNOT_APART: float = 2.4
 const KNOT_Z: float = 0.15
 const KNOT_DEPTH: float = 0.45
 const GESTURE_OFFSET: float = 1.3        # seconds between one car's gestures and the next car's
+const RESENT_TURN: float = 0.6           # rad: those who resent stand half turned to the captain's car
 ## The stove stands in front of the bench, between two floor places; a car with
 ## a table has it by the end wall.
 const STOVE_AT := Vector3(7.85, 0.0, -0.4)
@@ -272,7 +273,10 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 	var standers: int = 0
 	for row in rows:
 		standers += 1 if row["pose"] == "stand" else 0
-	var gestures := Look.knot_gestures(Look.gesture_for(c["mood"], rules.get("train", {})), standers, int(c["index"]))
+	var value := Look.gesture_for(c["mood"], rules.get("train", {}))
+	var gestures := Look.knot_gestures(value, standers, int(c["index"]))
+	# Resentment has somewhere to look: up or down the train, at the captain's car.
+	var facing: float = _captain_side(c) * RESENT_TURN if value == "resent" else 0.0
 	for i in bodies.size():
 		var b: Node3D = bodies[i]
 		var row: Dictionary = rows[i]
@@ -288,6 +292,7 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 				b.rotation.y = _knot_facing(standing)
 				b.gesture = g["name"]
 				b.gesture_role = int(g["role"])
+				b.gesture_facing = facing if b.gesture != "" else 0.0
 				if b.gesture != "":
 					_show_gesture(c, b)
 				standing += 1
@@ -382,12 +387,22 @@ func _plain(b: Node3D) -> void:
 	if b.gesture != "":
 		Gesture.show(b, "", 0.0)
 		b.gesture = ""
+		b.gesture_facing = 0.0
 
 
 ## Draw the gesture a stander is in, at the car's own beat. The gesture turns
-## the body itself, so it starts from facing the open side.
+## the body itself, from where it was set to face.
 func _show_gesture(c: Dictionary, b: Node3D) -> void:
-	Gesture.show(b, b.gesture, clock + float(c["index"]) * GESTURE_OFFSET, b.gesture_role, 0.0)
+	Gesture.show(b, b.gesture, clock + float(c["index"]) * GESTURE_OFFSET, b.gesture_role, b.gesture_facing)
+
+
+## Which way along the train the captain's car lies from this one: 1 ahead,
+## -1 behind, 0 when this is it or there is none.
+func _captain_side(c: Dictionary) -> float:
+	for other in cars:
+		if String((other["def"] as Dictionary).get("kind", "")) == "captain":
+			return signf(float(other["x0"]) - float(c["x0"]))
+	return 0.0
 
 
 ## The gesture a seated member of the council is in: up on their feet, leaning

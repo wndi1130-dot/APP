@@ -772,13 +772,16 @@ func test_the_gestures_begin_at_sixty_tension() -> void:
 	assert_eq(_gesturing(s, "tail1").size(), 3)
 
 
-func test_a_car_stirred_only_by_its_own_grudge_stands_about_without_gestures() -> void:
+func test_a_car_stirred_only_by_its_own_grudge_does_not_quarrel() -> void:
 	var s = _scene()
 	s.set_train("tension", 20.0)
 	s.set_comm("tail", "rel", -50)
 	assert_eq(s.car("tail1")["mood"], "stir")
 	assert_gt(_standing_about(s, "tail1"), 0)
-	assert_eq(_gesturing(s, "tail1").size(), 0)
+	var rows := _gesturing(s, "tail1")
+	assert_gt(rows.size(), 0)
+	for b in rows:
+		assert_false([Gesture.ARGUE, Gesture.WHISPER, Gesture.TURN_ABOUT].has(b.gesture), b.gesture)
 
 
 func test_the_dining_car_in_session_does_not_gesture() -> void:
@@ -812,3 +815,175 @@ func test_gestures_make_and_remove_nobody() -> void:
 	for c in s.cars:
 		tense += _count(s, String(c["id"]))
 	assert_eq(tense, calm)
+
+
+# ---------------------------------------------------------------- the gestures of a resentful car
+
+## A scene whose tail resents the captain on a train that is not tense.
+func _resentful() -> Node3D:
+	var s = _scene()
+	s.set_train("tension", 20.0)
+	s.set_comm("tail", "rel", -50)
+	return s
+
+
+## The folded arms of a car, in knot order.
+func _folded(s, car_id: String) -> Array:
+	return _gesturing(s, car_id).filter(func(b) -> bool: return b.gesture == Gesture.ARMS_CROSSED)
+
+
+## Which way along the train the captain's car lies from a car: 1 ahead, -1 behind.
+func _toward_captain(s, car_id: String) -> float:
+	return signf(float(s.car("captain")["x0"]) - float(s.car(car_id)["x0"]))
+
+
+func test_a_resentful_tail_folds_two_pairs_of_arms_and_turns_one_back() -> void:
+	var s = _resentful()
+	var rows := _gesturing(s, "tail1")
+	assert_eq(rows.size(), 3)
+	assert_eq(_folded(s, "tail1").size(), 2)
+	assert_eq(rows.filter(func(b) -> bool: return b.gesture == Gesture.BACK_TURNED).size(), 1)
+	for b in rows:
+		assert_eq(b.pose, "stand")
+		assert_eq(b.state, "seat")
+	for b in s.car("tail1")["bodies"]:
+		if b.state != "seat":
+			assert_eq(b.gesture, "", "a walker does not gesture")
+
+
+func test_cars_with_a_good_standing_do_not_resent() -> void:
+	var s = _resentful()
+	assert_eq(_gesturing(s, "medtech").size(), 0)
+	assert_eq(_gesturing(s, "front").size(), 0)
+
+
+func test_those_with_folded_arms_half_turn_to_the_captains_car() -> void:
+	var s = _resentful()
+	var side := _toward_captain(s, "tail1")
+	assert_ne(side, 0.0)
+	s.step(0.1)
+	var folded := _folded(s, "tail1")
+	assert_eq(folded.size(), 2)
+	for b in folded:
+		assert_almost_eq(float(b.rotation.y), side * s.RESENT_TURN, 0.01)
+
+
+func test_a_car_ahead_of_the_captain_turns_the_other_way() -> void:
+	var s = _resentful()
+	s.set_comm("front", "rel", -50)
+	s.step(0.1)
+	var tail_side := _toward_captain(s, "tail1")
+	var front_side := _toward_captain(s, "front")
+	assert_ne(front_side, 0.0)
+	assert_eq(front_side, -tail_side)
+	var folded := _folded(s, "front")
+	assert_gt(folded.size(), 0)
+	for b in folded:
+		assert_eq(signf(float(b.rotation.y)), front_side)
+
+
+func test_the_one_with_its_back_turned_has_its_back_to_the_captains_car() -> void:
+	var s = _resentful()
+	var side := _toward_captain(s, "tail1")
+	s.step(0.1)
+	var backs := _gesturing(s, "tail1").filter(func(b) -> bool: return b.gesture == Gesture.BACK_TURNED)
+	assert_eq(backs.size(), 1)
+	for b in backs:
+		# It looks over its shoulder now and then, so the angle is not compared exactly.
+		assert_lt(cos(float(b.rotation.y) - side * s.RESENT_TURN), 0.0)
+
+
+func test_each_gesturing_body_keeps_where_it_was_told_to_face() -> void:
+	var s = _resentful()
+	var side := _toward_captain(s, "tail1")
+	var rows := _gesturing(s, "tail1")
+	assert_eq(rows.size(), 3)
+	for b in rows:
+		assert_almost_eq(float(b.gesture_facing), side * s.RESENT_TURN, 0.0001)
+
+
+func test_a_resentful_body_shows_both_its_arm_boxes() -> void:
+	var s = _resentful()
+	var rows := _gesturing(s, "tail1")
+	assert_eq(rows.size(), 3)
+	for b in rows:
+		assert_true(b.has_meta(Gesture.ARMS_META))
+		var arms: Array = b.get_meta(Gesture.ARMS_META)
+		assert_eq(arms.size(), 2)
+		for arm in arms:
+			assert_true(arm.visible)
+
+
+func test_the_resentful_do_not_stand_wider_apart() -> void:
+	var s = _resentful()
+	var rows := _gesturing(s, "tail1")
+	var first = rows.filter(func(b) -> bool: return b.gesture_role == 0)[0]
+	var second = rows.filter(func(b) -> bool: return b.gesture_role == 1)[0]
+	assert_almost_eq(absf(float(second.position.x) - float(first.position.x)), float(s.KNOT_STEP), 0.01)
+
+
+func test_rising_tension_swaps_resentment_for_a_quarrel() -> void:
+	var s = _resentful()
+	s.set_train("tension", 70.0)
+	var rows := _gesturing(s, "tail1")
+	for b in rows:
+		assert_false([Gesture.ARMS_CROSSED, Gesture.BACK_TURNED].has(b.gesture), b.gesture)
+		assert_eq(b.gesture_facing, 0.0)
+	assert_eq(rows.filter(func(b) -> bool: return b.gesture == Gesture.ARGUE).size(), 2)
+
+
+func test_a_mended_standing_ends_the_resentment() -> void:
+	var s = _resentful()
+	assert_gt(_gesturing_anywhere(s), 0)
+	s.set_comm("tail", "rel", 0)
+	assert_eq(_gesturing_anywhere(s), 0)
+	for b in s.car("tail1")["bodies"]:
+		assert_eq(b.gesture_facing, 0.0)
+	var seen := 0
+	for c in s.cars:
+		for b in c["bodies"]:
+			if b.has_meta(Gesture.ARMS_META):
+				seen += 1
+				for arm in b.get_meta(Gesture.ARMS_META):
+					assert_false(arm.visible, String(c["id"]))
+	assert_gt(seen, 0, "the arms were made when the gestures began")
+
+
+func test_a_grudge_alone_folds_arms() -> void:
+	var s = _scene()
+	s.set_train("tension", 20.0)
+	s.set_comm("tail", "grudge", 2)
+	assert_eq(s.car("tail1")["mood"], "stir")
+	assert_gt(_folded(s, "tail1").size(), 0)
+
+
+func test_a_frightened_train_does_not_resent() -> void:
+	var s = _resentful()
+	s.set_train("fear", 60.0)
+	assert_eq(_gesturing_anywhere(s), 0)
+
+
+func test_resentment_moves_nobody_along_the_car() -> void:
+	var s = _resentful()
+	var before: Dictionary = {}
+	for b in _gesturing(s, "tail1"):
+		before[b] = b.position.x
+	assert_eq(before.size(), 3)
+	for i in 60:
+		s.step(0.1)
+	assert_eq(_gesturing(s, "tail1").size(), 3)
+	for b in before:
+		assert_eq(b.position.x, before[b], "it stays where it stood")
+
+
+func test_resentment_makes_and_removes_nobody() -> void:
+	var s = _scene()
+	s.set_train("tension", 20.0)
+	var before := 0
+	for c in s.cars:
+		before += _count(s, String(c["id"]))
+	s.set_comm("tail", "rel", -50)
+	var after := 0
+	for c in s.cars:
+		after += _count(s, String(c["id"]))
+	assert_eq(after, before)

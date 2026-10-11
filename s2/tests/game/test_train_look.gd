@@ -498,7 +498,7 @@ func test_only_trips_of_the_phase_remain() -> void:
 
 func test_a_stirred_car_gestures_for_tension_from_sixty() -> void:
 	assert_eq(Look.gesture_for("stir", {"tension": 60.0}), "tension")
-	assert_eq(Look.gesture_for("stir", {"tension": 59.0}), "")
+	assert_eq(Look.gesture_for("stir", {"tension": 59.0}), "resent")
 
 
 func test_a_car_that_is_not_stirred_has_no_gesture_even_at_ninety() -> void:
@@ -506,8 +506,8 @@ func test_a_car_that_is_not_stirred_has_no_gesture_even_at_ninety() -> void:
 		assert_eq(Look.gesture_for(m, {"tension": 90.0}), "", m)
 
 
-func test_a_train_without_tension_has_no_gesture() -> void:
-	assert_eq(Look.gesture_for("stir", {}), "")
+func test_a_stirred_car_on_a_train_without_tension_resents() -> void:
+	assert_eq(Look.gesture_for("stir", {}), "resent")
 
 
 func test_fear_comes_before_the_gestures() -> void:
@@ -517,11 +517,11 @@ func test_fear_comes_before_the_gestures() -> void:
 	assert_eq(Look.gesture_for(m, train), "")
 
 
-func test_a_car_stirred_only_by_its_own_grudge_has_no_gesture_yet() -> void:
+func test_a_car_stirred_only_by_its_own_grudge_resents() -> void:
 	var train := {"tension": 20.0, "fear": 0.0}
 	var m := Look.mood({"rel": -50, "sit": [60, 60, 40, 40]}, train)
 	assert_eq(m, "stir")
-	assert_eq(Look.gesture_for(m, train), "")
+	assert_eq(Look.gesture_for(m, train), "resent")
 
 
 func test_the_first_knot_quarrels_two_and_the_third_looks_about() -> void:
@@ -579,3 +579,83 @@ func test_a_pair_is_never_made_by_halves() -> void:
 			var label := "%d standing, car %d" % [standing, car_index]
 			if not roles.is_empty():
 				assert_eq(roles, [0, 1], label)
+
+
+# ---------------------------------------------------------------- the gestures of resentment
+
+func _resent_names(standing: int, car_index: int = 0) -> Array:
+	var names: Array = []
+	for row in Look.knot_gestures("resent", standing, car_index):
+		names.append(row["name"])
+	return names
+
+
+func test_tension_comes_before_resentment_in_a_car_stirred_by_both() -> void:
+	var train := {"tension": 70.0, "fear": 0.0}
+	var m := Look.mood({"rel": -50, "sit": [60, 60, 40, 40]}, train)
+	assert_eq(m, "stir")
+	assert_eq(Look.gesture_for(m, train), "tension")
+
+
+func test_a_grudge_alone_is_resentment() -> void:
+	var train := {"tension": 20.0, "fear": 0.0}
+	var m := Look.mood({"rel": 0, "grudge": 2, "sit": [60, 60, 40, 40]}, train)
+	assert_eq(m, "stir")
+	assert_eq(Look.gesture_for(m, train), "resent")
+
+
+func test_fear_comes_before_resentment() -> void:
+	var train := {"tension": 20.0, "fear": 60.0}
+	var m := Look.mood({"rel": -50, "sit": [60, 60, 40, 40]}, train)
+	assert_eq(m, "frozen")
+	assert_eq(Look.gesture_for(m, train), "")
+
+
+func test_three_resentful_standers_fold_their_arms_but_the_second_turns_its_back() -> void:
+	var rows := Look.knot_gestures("resent", 3, 0)
+	assert_eq(rows.size(), 3)
+	assert_eq(rows[0]["name"], Gesture.ARMS_CROSSED)
+	assert_eq(rows[1]["name"], Gesture.BACK_TURNED)
+	assert_eq(rows[2]["name"], Gesture.ARMS_CROSSED)
+	assert_eq(rows[0]["role"], 0)
+	assert_eq(rows[1]["role"], 1)
+	assert_eq(rows[2]["role"], 2)
+
+
+func test_one_resentful_stander_alone_still_folds_its_arms() -> void:
+	var one := Look.knot_gestures("resent", 1, 0)
+	assert_eq(one.size(), 1)
+	assert_eq(one[0]["name"], Gesture.ARMS_CROSSED)
+	assert_eq(one[0]["role"], 0)
+	assert_eq(_resent_names(2), [Gesture.ARMS_CROSSED, Gesture.BACK_TURNED])
+	assert_eq(Look.knot_gestures("resent", 0, 0), [])
+
+
+func test_only_the_first_knot_resents() -> void:
+	var rows := Look.knot_gestures("resent", 5, 0)
+	for k in [3, 4]:
+		assert_eq(rows[k]["name"], "", "stander %d" % k)
+		assert_eq(rows[k]["role"], 0, "stander %d" % k)
+
+
+func test_there_is_a_row_a_stander_in_resentment_too() -> void:
+	for standing in range(8):
+		assert_eq(Look.knot_gestures("resent", standing, 0).size(), standing, "%d standing" % standing)
+
+
+func test_resentment_does_not_depend_on_the_car() -> void:
+	var first := _resent_names(3, 0)
+	for car_index in range(4):
+		assert_eq(_resent_names(3, car_index), first, "car %d" % car_index)
+
+
+func test_resentment_gives_none_of_the_gestures_of_tension() -> void:
+	for standing in range(8):
+		for name in _resent_names(standing):
+			assert_false([Gesture.ARGUE, Gesture.WHISPER, Gesture.TURN_ABOUT].has(name), "%d standing: %s" % [standing, name])
+
+
+func test_at_most_one_turns_its_back() -> void:
+	for standing in range(8):
+		var backs := _resent_names(standing).filter(func(n) -> bool: return n == Gesture.BACK_TURNED)
+		assert_lte(backs.size(), 1, "%d standing" % standing)
