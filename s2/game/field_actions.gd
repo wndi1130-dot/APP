@@ -265,6 +265,11 @@ func search_time(p, c: Dictionary) -> float:
 func search(p, id: String) -> void:
 	var c: Dictionary = game.data["containers"][id]
 	if c["locked"]:
+		if c.has("pick"):
+			# A record box of this stop's goal: quiet and slow, or quick and loud.
+			if p == game.player:
+				game.mission_play.lock_card(p, id)
+			return
 		if has_pry(p):
 			game.make_sound(FieldGrid.center(c["cell"]), SimNoise.Level.NORMAL, "pry", p)
 			p.start_action("pry", "금고 따기", PRY_TIME + 1.0, _unlock.bind(id))
@@ -290,6 +295,7 @@ func _searched(p, id: String) -> void:
 	c["searched"] = true
 	c["busy"] = false
 	game.view.update_container(id)
+	game.mission_play.searched(id)
 	if p == game.player:
 		game.hud.loot(id)
 		return
@@ -376,6 +382,8 @@ func spot_default(p, id: String, verb: String) -> void:
 			water_tower_card(p)
 		"ladder":
 			ladder(p, verb)
+		"inspect", "deep":
+			game.mission_play.spot(p, id)
 		"work_site":
 			if work_started:
 				game.hud.work_panel()
@@ -529,6 +537,9 @@ func site_clear() -> bool:
 
 ## Coal work site: four carriers and two escorts come down from the train.
 func start_work(p) -> void:
+	if not game.mission_play.crew_allowed():
+		game.hud.toast("이번 정차는 살피러 왔다. 작업조는 부르지 않는다.")
+		return
 	if not site_clear():
 		game.hud.toast("측선에 아직 저것들이 서 있다. 치우고 불러야 한다.")
 		return
@@ -817,7 +828,7 @@ func _near_things(p) -> Array:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])
 			var d: float = at.distance_to(p.position)
-			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage"]:
+			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep"]:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []

@@ -19,6 +19,8 @@ var end_reason: String = ""
 var end_t: float = -1.0
 ## What the stop was for (field_game MISSIONS); "" writes no key at all.
 var mission: String = ""
+## Each goal of the stop: {"id", "state", "t"} (sim/mission.gd), written with the kind.
+var goals: Array = []
 
 
 func _init(p_run_id: String = "") -> void:
@@ -109,6 +111,7 @@ func to_dict() -> Dictionary:
 	}
 	if mission != "":
 		out["mission"] = mission
+		out["goals"] = goals.duplicate(true)
 	return out
 
 
