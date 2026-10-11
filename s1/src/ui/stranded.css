@@ -77,3 +77,10 @@
 .home--stranded[data-beat="open"] .strs__top { animation: stall-top .6s ease-out both; }
 @keyframes stall-open { from { opacity: 0; transform: translateY(28px); } }
 @keyframes stall-top { from { opacity: .4; } }
+
+/* 다시 달릴 때의 짧은 떠남: 멈춘 판이 내려가고(fire) 굴뚝 연기가 뒤로 흐르기 시작한다(whistle). 박은 홈 뿌리의 data-beat. */
+.strs--leaving { z-index: 3; pointer-events: none; background: var(--surface-1, #14181c); animation: resume-drop .8s ease-in both; }
+@keyframes resume-drop { to { opacity: 0; transform: translateY(40px); } }
+.home.is-resuming .smoke { animation: resume-smoke .8s ease-out both; }
+.home.is-resuming[data-beat="whistle"] .smoke { animation: smoke 1.8s ease-out infinite; }
+@keyframes resume-smoke { from { opacity: 0; transform: scale(.3); } }

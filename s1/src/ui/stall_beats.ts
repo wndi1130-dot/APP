@@ -34,6 +34,10 @@ export function beatAt(spans: BeatSpan[], ms: number): StallBeat | null {
   return null;
 }
 
+/** 다시 달릴 때의 짧은 떠남(ms): 불을 넣는 박(fire) 뒤에 기적이 우는 박(whistle). 멈춘 판이 내려가고 굴뚝에 연기가 돈다. */
+export const RESUME_MS = { fire: 800, whistle: 1200 };
+export type ResumeBeat = keyof typeof RESUME_MS;
+
 /** 이 판에서 열차가 선 횟수. 설 때마다 일지에 남는 줄을 센다(저장에 남아 새로 열어도 같다). */
 export function stallCount(g: Game): number {
   return g.journal.filter(j => j.text.startsWith('불이 꺼졌다. 열차가 ')).length;
