@@ -271,12 +271,15 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 	var on_floor: int = 0
 	var x0: float = c["x0"]
 	var standers: int = 0
+	var floor_rows: int = 0
 	for row in rows:
 		standers += 1 if row["pose"] == "stand" else 0
+		floor_rows += 1 if row["pose"] == "floor" else 0
 	var value := Look.gesture_for(c["mood"], rules.get("train", {}))
 	var gestures := Look.knot_gestures(value, standers, int(c["index"]))
 	# Resentment has somewhere to look: up or down the train, at the captain's car.
 	var facing: float = _captain_side(c) * RESENT_TURN if value == "resent" else 0.0
+	var low := Look.floor_gestures(value, floor_rows)
 	for i in bodies.size():
 		var b: Node3D = bodies[i]
 		var row: Dictionary = rows[i]
@@ -307,6 +310,12 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 					slot = maxi(Look.seat_slot(on_floor, BENCH_SLOTS, true) - 1, 0)
 				var place := Vector3(SLOT_FIRST + SLOT_STEP * 0.5 + slot * SLOT_STEP, 0, FLOOR_Z)
 				_sit_down(c, b, x0, place, "floor", bool(row["huddled"]), bool(row["bowed"]))
+				# In a frightened car the first few on the floor hug their knees.
+				b.gesture = low[on_floor]["name"]
+				b.gesture_role = int(low[on_floor]["role"])
+				b.gesture_facing = 0.0
+				if b.gesture != "":
+					_show_gesture(c, b)
 				on_floor += 1
 
 
@@ -390,7 +399,7 @@ func _plain(b: Node3D) -> void:
 		b.gesture_facing = 0.0
 
 
-## Draw the gesture a stander is in, at the car's own beat. The gesture turns
+## Draw the gesture a body is in, at the car's own beat. The gesture turns
 ## the body itself, from where it was set to face.
 func _show_gesture(c: Dictionary, b: Node3D) -> void:
 	Gesture.show(b, b.gesture, clock + float(c["index"]) * GESTURE_OFFSET, b.gesture_role, b.gesture_facing)

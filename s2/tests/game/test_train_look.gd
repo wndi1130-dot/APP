@@ -501,8 +501,8 @@ func test_a_stirred_car_gestures_for_tension_from_sixty() -> void:
 	assert_eq(Look.gesture_for("stir", {"tension": 59.0}), "resent")
 
 
-func test_a_car_that_is_not_stirred_has_no_gesture_even_at_ninety() -> void:
-	for m in ["calm", "low", "frozen"]:
+func test_a_calm_or_low_car_has_no_gesture_even_at_ninety() -> void:
+	for m in ["calm", "low"]:
 		assert_eq(Look.gesture_for(m, {"tension": 90.0}), "", m)
 
 
@@ -510,11 +510,11 @@ func test_a_stirred_car_on_a_train_without_tension_resents() -> void:
 	assert_eq(Look.gesture_for("stir", {}), "resent")
 
 
-func test_fear_comes_before_the_gestures() -> void:
+func test_fear_comes_before_the_gestures_of_tension() -> void:
 	var train := {"tension": 90.0, "fear": 60.0}
 	var m := Look.mood({}, train)
 	assert_eq(m, "frozen")
-	assert_eq(Look.gesture_for(m, train), "")
+	assert_eq(Look.gesture_for(m, train), "fear")
 
 
 func test_a_car_stirred_only_by_its_own_grudge_resents() -> void:
@@ -608,7 +608,7 @@ func test_fear_comes_before_resentment() -> void:
 	var train := {"tension": 20.0, "fear": 60.0}
 	var m := Look.mood({"rel": -50, "sit": [60, 60, 40, 40]}, train)
 	assert_eq(m, "frozen")
-	assert_eq(Look.gesture_for(m, train), "")
+	assert_eq(Look.gesture_for(m, train), "fear")
 
 
 func test_three_resentful_standers_fold_their_arms_but_the_second_turns_its_back() -> void:
@@ -659,3 +659,66 @@ func test_at_most_one_turns_its_back() -> void:
 	for standing in range(8):
 		var backs := _resent_names(standing).filter(func(n) -> bool: return n == Gesture.BACK_TURNED)
 		assert_lte(backs.size(), 1, "%d standing" % standing)
+
+
+# ---------------------------------------------------------------- the gestures of fear
+
+func _floor_names(value: String, on_floor: int) -> Array:
+	var names: Array = []
+	for row in Look.floor_gestures(value, on_floor):
+		names.append(row["name"])
+	return names
+
+
+func test_a_frozen_car_gestures_for_fear_whatever_the_tension() -> void:
+	assert_eq(Look.gesture_for("frozen", {}), "fear")
+	assert_eq(Look.gesture_for("frozen", {"tension": 0.0}), "fear")
+	assert_eq(Look.gesture_for("frozen", {"tension": 90.0}), "fear")
+
+
+func test_fear_begins_at_sixty() -> void:
+	var at := Look.mood({}, {"fear": 60.0})
+	assert_eq(Look.gesture_for(at, {"fear": 60.0}), "fear")
+	var under := Look.mood({}, {"fear": 59.0})
+	assert_ne(Look.gesture_for(under, {"fear": 59.0}), "fear")
+
+
+func test_three_on_the_floor_all_hug_their_knees_each_on_a_beat_of_its_own() -> void:
+	var rows := Look.floor_gestures("fear", 3)
+	assert_eq(rows.size(), 3)
+	for k in rows.size():
+		assert_eq(rows[k]["name"], Gesture.HUG_KNEES, "row %d" % k)
+		assert_eq(rows[k]["role"], k, "row %d" % k)
+
+
+func test_one_alone_on_the_floor_still_hugs_and_none_gives_nothing() -> void:
+	var rows := Look.floor_gestures("fear", 1)
+	assert_eq(rows.size(), 1)
+	assert_eq(rows[0]["name"], Gesture.HUG_KNEES)
+	assert_eq(rows[0]["role"], 0)
+	assert_eq(Look.floor_gestures("fear", 0).size(), 0)
+
+
+func test_only_the_first_three_on_the_floor_hug() -> void:
+	var rows := Look.floor_gestures("fear", 5)
+	assert_eq(rows.size(), 5)
+	for k in [3, 4]:
+		assert_eq(rows[k]["name"], "", "row %d" % k)
+		assert_eq(rows[k]["role"], 0, "row %d" % k)
+
+
+func test_there_is_a_row_a_sitter_on_the_floor() -> void:
+	for on_floor in range(8):
+		assert_eq(Look.floor_gestures("fear", on_floor).size(), on_floor, "%d on the floor" % on_floor)
+
+
+func test_no_other_value_gives_the_floor_anything() -> void:
+	for value in ["tension", "resent", "", "nonsense"]:
+		for name in _floor_names(value, 5):
+			assert_eq(name, "", "'%s'" % value)
+
+
+func test_fear_gives_those_standing_about_nothing() -> void:
+	for car_index in range(3):
+		for row in Look.knot_gestures("fear", 5, car_index):
+			assert_eq(row["name"], "", "car %d" % car_index)

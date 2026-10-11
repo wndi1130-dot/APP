@@ -757,11 +757,13 @@ func test_calm_again_nobody_gestures_and_every_arm_is_hidden() -> void:
 	assert_gt(seen, 0, "the arms were made when the gestures began")
 
 
-func test_a_frightened_train_does_not_gesture() -> void:
+func test_a_frightened_train_does_not_quarrel() -> void:
 	var s = _scene()
 	s.set_train("tension", 70.0)
 	s.set_train("fear", 60.0)
-	assert_eq(_gesturing_anywhere(s), 0)
+	for c in s.cars:
+		for b in _gesturing(s, String(c["id"])):
+			assert_eq(b.gesture, Gesture.HUG_KNEES, String(c["id"]))
 
 
 func test_the_gestures_begin_at_sixty_tension() -> void:
@@ -960,7 +962,9 @@ func test_a_grudge_alone_folds_arms() -> void:
 func test_a_frightened_train_does_not_resent() -> void:
 	var s = _resentful()
 	s.set_train("fear", 60.0)
-	assert_eq(_gesturing_anywhere(s), 0)
+	for c in s.cars:
+		for b in _gesturing(s, String(c["id"])):
+			assert_eq(b.gesture, Gesture.HUG_KNEES, String(c["id"]))
 
 
 func test_resentment_moves_nobody_along_the_car() -> void:
@@ -983,6 +987,146 @@ func test_resentment_makes_and_removes_nobody() -> void:
 	for c in s.cars:
 		before += _count(s, String(c["id"]))
 	s.set_comm("tail", "rel", -50)
+	var after := 0
+	for c in s.cars:
+		after += _count(s, String(c["id"]))
+	assert_eq(after, before)
+
+
+# ---------------------------------------------------------------- the gestures of a frightened train
+
+## A scene whose train is frightened, with the tail crowded onto the floor.
+func _frightened() -> Node3D:
+	var s = _scene()
+	s.set_train("fear", 70.0)
+	return s
+
+
+## Those of a car who sit on the floor.
+func _floor_seated(s, car_id: String) -> int:
+	var n := 0
+	for b in s.car(car_id)["bodies"]:
+		n += 1 if b.state == "seat" and b.pose == "floor" else 0
+	return n
+
+
+func test_a_frightened_tails_first_three_on_the_floor_hug_their_knees() -> void:
+	var s = _frightened()
+	var low := _floor_seated(s, "tail1")
+	assert_gt(low, 0)
+	var rows := _gesturing(s, "tail1")
+	assert_eq(rows.size(), mini(3, low))
+	for b in rows:
+		assert_eq(b.gesture, Gesture.HUG_KNEES)
+		assert_eq(b.pose, "floor")
+		assert_eq(b.state, "seat")
+		assert_true(b.huddled)
+
+
+func test_a_crowd_on_the_floor_stops_at_three_hugging() -> void:
+	var s = _frightened()
+	s.set_sit("tail", 2, 100.0)
+	assert_gt(_floor_seated(s, "tail1"), 3)
+	assert_eq(_gesturing(s, "tail1").size(), 3)
+
+
+func test_a_roomy_car_has_nobody_hugging() -> void:
+	var s = _frightened()
+	assert_eq(_floor_seated(s, "front"), 0)
+	assert_eq(_gesturing(s, "front").size(), 0)
+
+
+func test_only_those_on_the_floor_hug_in_a_frightened_train() -> void:
+	var s = _frightened()
+	assert_gt(_gesturing_anywhere(s), 0)
+	for c in s.cars:
+		for b in _gesturing(s, String(c["id"])):
+			assert_eq(b.pose, "floor", String(c["id"]))
+
+
+func test_the_three_who_hug_each_have_a_beat_of_their_own() -> void:
+	var s = _frightened()
+	s.set_sit("tail", 2, 100.0)
+	var roles: Array = []
+	for b in _gesturing(s, "tail1"):
+		roles.append(int(b.gesture_role))
+	roles.sort()
+	assert_eq(roles, [0, 1, 2])
+
+
+func test_a_hugging_body_shows_both_its_arm_boxes() -> void:
+	var s = _frightened()
+	var rows := _gesturing(s, "tail1")
+	assert_gt(rows.size(), 0)
+	for b in rows:
+		assert_true(b.has_meta(Gesture.ARMS_META))
+		var arms: Array = b.get_meta(Gesture.ARMS_META)
+		assert_eq(arms.size(), 2)
+		for arm in arms:
+			assert_true(arm.visible)
+
+
+func test_those_who_hug_their_knees_are_not_turned() -> void:
+	var s = _frightened()
+	s.step(0.1)
+	var rows := _gesturing(s, "tail1")
+	assert_gt(rows.size(), 0)
+	for b in rows:
+		assert_eq(b.gesture_facing, 0.0)
+		assert_almost_eq(float(b.rotation.y), 0.0, 0.01)
+
+
+func test_a_fear_that_lifts_ends_the_hugging() -> void:
+	var s = _frightened()
+	assert_gt(_gesturing_anywhere(s), 0)
+	s.set_train("fear", 0.0)
+	assert_eq(_gesturing_anywhere(s), 0)
+	var seen := 0
+	for c in s.cars:
+		for b in c["bodies"]:
+			if b.has_meta(Gesture.ARMS_META):
+				seen += 1
+				for arm in b.get_meta(Gesture.ARMS_META):
+					assert_false(arm.visible, String(c["id"]))
+	assert_gt(seen, 0, "the arms were made when the hugging began")
+
+
+func test_a_fear_that_lifts_leaves_a_tense_train_quarrelling() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	s.set_train("fear", 70.0)
+	s.set_train("fear", 0.0)
+	var rows := _gesturing(s, "tail1")
+	assert_eq(rows.filter(func(b) -> bool: return b.gesture == Gesture.ARGUE).size(), 2)
+	assert_eq(rows.filter(func(b) -> bool: return b.gesture == Gesture.HUG_KNEES).size(), 0)
+
+
+func test_the_council_room_does_not_hug_in_fear() -> void:
+	var s = _council()
+	s.set_train("fear", 70.0)
+	assert_eq(_gesturing(s, "dining").size(), 0)
+
+
+func test_hugging_moves_nobody_along_the_car() -> void:
+	var s = _frightened()
+	var before: Dictionary = {}
+	for b in _gesturing(s, "tail1"):
+		before[b] = Vector2(b.position.x, b.position.z)
+	assert_gt(before.size(), 0)
+	for i in 60:
+		s.step(0.1)
+	assert_eq(_gesturing(s, "tail1").size(), before.size())
+	for b in before:
+		assert_eq(b.position.x, before[b].x, "it stays where it sat")
+		assert_eq(b.position.z, before[b].y, "it stays where it sat")
+
+
+func test_fear_makes_and_removes_nobody_by_hugging() -> void:
+	var s = _scene()
+	var before := 0
+	for c in s.cars:
+		before += _count(s, String(c["id"]))
+	s.set_train("fear", 70.0)
 	var after := 0
 	for c in s.cars:
 		after += _count(s, String(c["id"]))
