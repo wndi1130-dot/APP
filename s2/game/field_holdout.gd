@@ -41,6 +41,12 @@ const NOT_OURS: Array[String] = ["bang", "blood", "run"]
 # decision 150): looked at this often, and of the track no more often than this.
 const WATCH_EVERY: float = 1.0
 const WATCH_TRACK_GAP: float = 60.0
+# The radio operator on watch hears of it for this stop (user decision 150):
+# of the stops that can have it, this many in a hundred, said this long after
+# the train stops. The rest are missed; nothing false is said, and never
+# "quiet". PROPOSED values.
+const FORECAST_HEARD: int = 80
+const FORECAST_AT: float = 20.0
 const READY_TIME: float = 300.0   # the train is ready this long after it opens
 const DOOR_HP: int = 24           # three of the dead through one in about ten seconds
 const WALL_HP: int = 12
@@ -105,6 +111,8 @@ var slipped: bool = false         # it could, and the train got away quietly
 var watch_t: float = 0.0
 var told_noise: bool = false      # the lookout has said the stop was heard
 var told_track_t: float = -INF    # and when it last said they stand on the track
+var forecast: bool = false        # the radio operator heard of it (hidden till said)
+var forecast_said: bool = false
 var opened_at: float = 0.0
 
 
@@ -120,6 +128,8 @@ func _init(field_game) -> void:
 		var dice := RandomNumberGenerator.new()
 		dice.seed = hash([int(game.opts.get("seed", 0)), game.place, "holdout"])
 		rolled = dice.randi_range(1, 100) <= chance()
+		var heard: int = int(game.opts.get("holdout_forecast_heard", FORECAST_HEARD))
+		forecast = rolled and bool(game.opts.get("radio_watch", false)) and dice.randi_range(1, 100) <= heard
 
 
 func enabled() -> bool:
@@ -170,6 +180,10 @@ func lookout():
 func watch(delta: float) -> void:
 	if mode != "roll" or not rolled or opened or game.ended:
 		return
+	# What it says is so of this stop whatever is done next: it can have it.
+	if forecast and not forecast_said and game.clock.elapsed >= FORECAST_AT:
+		forecast_said = true
+		game.set_radio("무전수: 이 근처에 무리가 돈다. 소리를 내면 열차로 몰려 떠날 때 붙들린다.", "must")
 	watch_t -= delta
 	if watch_t > 0.0:
 		return
@@ -411,7 +425,8 @@ func waves() -> int:
 func goal_line() -> String:
 	if not opened:
 		if mode == "roll":
-			return "버티기 위험: " + risk_word()
+			# Of places like this, not of this one: what it holds is not known yet.
+			return "이런 곳의 버티기 위험: " + risk_word()
 		return "버티기 판: 「떠난다」를 부르면 채비가 시작된다" if mode == "depart" else ""
 	if ready:
 		return "채비 끝 · 「떠난다」를 부르면 떠난다 · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [count("whole"), count("damaged"), count("breached"), waves()]
@@ -482,7 +497,7 @@ func leaving_early() -> void:
 ## A rolled stop that never opened: what the roll was and why it did not, for
 ## the telemetry (the player is not told).
 func roll_note() -> Dictionary:
-	return {"rolled": rolled, "opened": false, "slipped": slipped, "chance": chance(), "noise": game.ledger.total, "peopleNoise": people_noise(), "trackDead": maxi(track_at_leave, 0)}
+	return {"rolled": rolled, "opened": false, "slipped": slipped, "forecast": forecast, "chance": chance(), "noise": game.ledger.total, "peopleNoise": people_noise(), "trackDead": maxi(track_at_leave, 0)}
 
 
 ## What the stage came to, for the receipt's note, the telemetry and the end screen.

@@ -473,6 +473,35 @@ func test_the_lookout_says_when_the_quiet_way_out_closes() -> void:
 	assert_false(never.holdout.told_noise, "a stop that cannot have it hears nothing")
 
 
+# User decision 150: with the radio operator on watch the stop's forecast is
+# heard, but not of every stop that can have it; nothing is said of one that
+# cannot, and nothing without the operator.
+func test_the_radio_operator_hears_of_most_stops_that_can_have_it() -> void:
+	var heard = _game({"holdout": "roll", "holdout_chance": 100, "radio_watch": true, "holdout_forecast_heard": 100})
+	assert_true(heard.holdout.forecast)
+	heard.holdout.watch(1.1)
+	assert_false(heard.holdout.forecast_said, "not in the first seconds")
+	heard.clock.elapsed = FieldHoldout.FORECAST_AT + 1.0
+	heard.holdout.watch(1.1)
+	assert_true(heard.holdout.forecast_said)
+	assert_string_contains(String(heard.radio_wait["text"]), "무전수:")
+	assert_false(String(heard.radio_wait["text"]).contains("조용"), "it never says quiet")
+	var missed = _game({"holdout": "roll", "holdout_chance": 100, "radio_watch": true, "holdout_forecast_heard": 0})
+	assert_true(missed.holdout.rolled)
+	assert_false(missed.holdout.forecast, "a stop it missed")
+	var off = _game({"holdout": "roll", "holdout_chance": 100, "holdout_forecast_heard": 100})
+	assert_false(off.holdout.forecast, "nobody on watch")
+	var never = _game({"holdout": "roll", "holdout_chance": 0, "radio_watch": true, "holdout_forecast_heard": 100})
+	assert_false(never.holdout.forecast, "nothing false: a stop that cannot have it is not spoken of")
+	var said := 0
+	for s in range(30):
+		var g = _game({"seed": s, "holdout": "roll", "holdout_chance": 100, "radio_watch": true})
+		if g.holdout.forecast:
+			said += 1
+		g.free()
+	assert_between(said, 19, 28, "about eight in ten, and not all of them")
+
+
 func test_the_roll_is_the_same_for_a_seed_and_does_not_move_the_stops_dice() -> void:
 	var plain = _game({"seed": 11})
 	var a = _game({"seed": 11, "holdout": "roll"})
