@@ -767,7 +767,7 @@ export function domesticActive(g: Game, ui: Ui): boolean {
 
 /** 내정 조작인가(12.1): 레버 한 칸, 순서 바꾸기, 내정 카드 선택, 내정 단추. */
 export function domesticOp(g: Game, action: string): boolean {
-  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats' && action !== 'dom-ws') return true;
+  if (action.startsWith('dom-') && action !== 'dom-tab' && action !== 'dom-node' && action !== 'dom-branch' && action !== 'dom-mats' && action !== 'dom-ws' && action !== 'dom-med') return true;
   if (action === 'lever') return true;
   return action === 'choose' && !!g.cards[0]?.kind.startsWith('dom:');
 }
@@ -940,6 +940,10 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-restore':
     case 'dom-cancel':
     case 'dom-finish':
+    case 'dom-med':
+      du.med = !du.med;
+      if (du.med) ui.panel = null;
+      break;
     case 'dom-ws': {
       const which = data.which as DomUi['ws'];
       du.ws = du.ws === which ? null : which;
