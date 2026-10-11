@@ -159,7 +159,7 @@ func test_double_tap_run_only_when_set() -> void:
 	assert_false(game.player.running, "the dash ends with the hold")
 
 
-func test_run_crouch_and_pause_on_the_left_five_on_the_right() -> void:
+func test_run_crouch_and_pause_on_the_left_the_fighting_keys_on_the_right() -> void:
 	var hud = game.hud
 	var half: float = hud._view_size().x * 0.5
 	assert_lt(hud.run_button.get_global_rect().end.x, half)
@@ -170,7 +170,11 @@ func test_run_crouch_and_pause_on_the_left_five_on_the_right() -> void:
 		# The state icons moved to the right edge (build 89); they tell, they are not keys to fight with.
 		if b.get_global_rect().position.x > half and b != hud.manual_button and not hud.status_pads.has(b):
 			right.append(b)
-	assert_eq(right.size(), 5, "aim, attack, shove, situation, all to the train")
+	# Leaving got a pad of its own, over the situation pad and only by the train
+	# (it was a row of the situation list, hidden behind a hold when a body lay near).
+	assert_eq(right.size(), 6, "aim, attack, shove, situation, leaving, all to the train")
+	assert_false(hud.depart_button.get_global_rect().intersects(hud.context_button.get_global_rect()))
+	assert_false(hud.depart_button.get_global_rect().intersects(hud.shove_button.get_global_rect()))
 	var top_left: Rect2 = hud.pause_button.get_global_rect()
 	assert_lt(top_left.position.x, 40.0, "pause at the left end of the gauge row")
 	assert_lt(top_left.position.y, 40.0)
@@ -387,6 +391,7 @@ func test_situation_pad_does_the_nearest_thing_and_a_hold_lists_the_rest() -> vo
 	p.body.bleed = 1
 	p.add_item("bandage", 1)
 	p.add_item("cloth", 1)
+	p.blood_soaked = true
 	hud._rebuild_context(p)
 	assert_gt(hud.context_rows.size(), 1)
 	assert_true(hud.context_button.text.begins_with(String(hud.context_rows[0]["label"])))
@@ -473,6 +478,30 @@ func test_pistol_rounds_go_through_a_thick_coat() -> void:
 				stopped += 1
 	assert_gt(landed, 0)
 	assert_eq(stopped, 0, "coats stop blades and bites only (user 17:34)")
+
+
+# Leaving is one press away whatever lies next to the leader: it has its own
+# pad by the train and is not a row of the situation list.
+func test_leaving_has_its_own_pad_by_the_train() -> void:
+	var hud = game.hud
+	var p = game.player
+	assert_true(game.actions.on_platform(p))
+	p.body.bleed = 1
+	p.add_item("bandage", 1)
+	hud._rebuild_context(p)
+	assert_true(hud.depart_button.visible)
+	assert_ne(String(hud.context_rows[0]["label"]), "출발", "something else is the nearest thing to do")
+	for row in hud.context_rows:
+		assert_ne(String(row["label"]), "출발", "and it is not listed twice")
+	var at: Vector2 = hud.depart_button.get_global_rect().get_center()
+	hud.finger_down(1, at)
+	hud.finger_up(1, at)
+	assert_true(hud.modal_open, "one press and the note is up")
+	assert_true(game.paused)
+	hud._close_modal()
+	p.position = game.lift(Vector2i(165, 95), 0)   # an empty snow corner
+	hud._rebuild_context(p)
+	assert_false(hud.depart_button.visible, "away from the train there is nothing to press")
 
 
 func test_depart_note_says_the_horde_is_close_and_holds_time() -> void:
