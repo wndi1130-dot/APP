@@ -276,7 +276,7 @@ func _toast_texts() -> Array:
 	return game.hud.toasts.map(func(t): return String(t["l"].text))
 
 
-func test_state_icons_show_the_most_urgent_first_two_of_them_big() -> void:
+func test_state_icons_show_the_most_urgent_first_as_pictures() -> void:
 	var p = game.player
 	var hud = game.hud
 	hud.tick(0.02)
@@ -287,10 +287,11 @@ func test_state_icons_show_the_most_urgent_first_two_of_them_big() -> void:
 	p.body.exhaustion = 0.6
 	hud.tick(0.02)
 	assert_eq(hud.status_rows.size(), 3)
-	assert_eq(hud.status_pads[0].text, "출혈", "the severe one leads")
+	assert_eq(String(hud.status_rows[0]["id"]), "bleed", "the severe one leads")
+	assert_eq(hud.status_pads[0].icon, hud.StatusArt.texture("bleed", true, false, 80), "its picture, the worse one")
+	assert_eq(hud.status_pads[0].text, "", "a picture, not a word")
 	assert_true(hud.status_pads[2].visible)
 	assert_false(hud.status_pads[3].visible)
-	assert_gt(hud.status_pads[0].size.x, hud.status_pads[2].size.x, "two big, the rest small")
 	await wait_frames(2)
 	var home: Vector2 = hud.stick_home()
 	for pad in hud.status_pads:

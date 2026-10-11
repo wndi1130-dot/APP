@@ -10,6 +10,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const StatusArt = preload("res://game/ui/status_art.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 
@@ -43,13 +44,14 @@ const PORTRAIT_W: float = 290.0
 const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
 # State icons: a column down the right edge, under the zoom keys, as in Project
 # Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
-# saw them. Each is a plate with a rim in its colour; pictures come with the art.
+# saw them. User 2026-10-12: pictures, not words: a round plate each
+# (status_art.gd), 80 across, or 64 from the settings.
 const STATUS_AT := Vector2(-16.0, 84.0)
-# The two most urgent are bigger (body_injury 4 '둘까지만 크게').
-const STATUS_BIG := Vector2(104.0, 56.0)
-const STATUS_SMALL := Vector2(88.0, 46.0)
-const STATUS_FONT_BIG: int = 24
-const STATUS_FONT_SMALL: int = 19
+const STATUS_SIZES: Array[int] = [80, 64]
+const STATUS_GAP: float = 6.0
+# A column holds four, so it ends above the shove key; a fifth starts a second
+# column to the left.
+const STATUS_PER_COLUMN: int = 4
 const RADIO_TIPS: Dictionary = {
 	"urgent": "무전: 무리가 들어올 때만 부른다. 울리면 가까운 망자가 듣는다.",
 	"often": "무전: 무리가 지나가면 다음 예보도 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
@@ -435,13 +437,16 @@ func _build_thumbs() -> void:
 	blood_button.add_theme_color_override("font_color", WARN)
 	blood_button.visible = false
 	# State icons (user, build 47): press one and it says what it does to you.
-	var sy := 0.0
 	for i in STATUS_SLOTS:
-		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
-		var pad := _pad("", STATUS_AT + Vector2(-size.x, sy), size, STATUS_FONT_BIG if i < 2 else STATUS_FONT_SMALL, Control.PRESET_TOP_RIGHT)
+		var pad := _pad("", STATUS_AT, Vector2.ONE * status_diameter(), 18, Control.PRESET_TOP_RIGHT)
 		pad.visible = false
+		pad.expand_icon = true
+		pad.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# The picture brings its own plate; the key under it draws nothing.
+		for state in ["normal", "hover", "pressed", "disabled"]:
+			pad.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 		status_pads.append(pad)
-		sy += size.y + 6.0
+	_place_status()
 	# Paused: the settings (stick, radio) open from one key; they are not on
 	# the playing screen themselves (user 2026-10-12).
 	settings_button = _pad("설정", Vector2(-70, 64), Vector2(140, 56), 20, Control.PRESET_CENTER_TOP)
@@ -492,7 +497,7 @@ func _build_grab() -> void:
 func _build_debug() -> void:
 	debug_panel = _panel(Color(0, 0, 0, 0.72))
 	debug_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	debug_panel.position = Vector2(-430 - 16 - STATUS_BIG.x, 84)   # left of the state icons' column
+	debug_panel.position = Vector2(-430 - 16 - (STATUS_SIZES[0] + STATUS_GAP) * 2.0, 84)   # left of the state icons' columns
 	debug_panel.custom_minimum_size = Vector2(410, 0)
 	var v := VBoxContainer.new()
 	debug_panel.add_child(v)
@@ -660,25 +665,32 @@ func _tick_status(p) -> void:
 		pad.visible = i < status_rows.size()
 		if pad.visible:
 			var row: Dictionary = status_rows[i]
-			pad.text = String(row["short"])
-			var tone: Color = BRASS if row["good"] else (WARN if row["severe"] else INK)
-			pad.add_theme_color_override("font_color", tone)
-			_status_plate(pad, tone)
+			var art: Texture2D = StatusArt.texture(String(row["id"]), bool(row["severe"]), bool(row.get("faint", false)), STATUS_SIZES[0])
+			pad.icon = art
+			# No picture for it yet: its short name, so nothing goes unseen.
+			pad.text = "" if art != null else String(row["short"])
 
 
-## A state icon's plate: dark, with a rim in the state's colour, so it reads
-## as a thing on the screen edge and not as loose words.
-func _status_plate(pad: Button, rim: Color) -> void:
-	if pad.has_meta("rim") and pad.get_meta("rim") == rim:
-		return
-	pad.set_meta("rim", rim)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.1, 0.1, 0.11, 0.92)
-	sb.border_color = rim
-	sb.set_border_width_all(3)
-	sb.set_corner_radius_all(6)
-	for state in ["normal", "hover", "pressed", "disabled"]:
-		pad.add_theme_stylebox_override(state, sb)
+## How wide a state icon is: 80, or 64 from the settings.
+func status_diameter() -> int:
+	var d: int = int(game.opts.get("status_size", STATUS_SIZES[0]))
+	return d if STATUS_SIZES.has(d) else STATUS_SIZES[0]
+
+
+## The state icons down the right edge, most urgent at the top.
+func _place_status() -> void:
+	var d: float = status_diameter()
+	for i in status_pads.size():
+		var pad: Button = status_pads[i]
+		var column: int = i / STATUS_PER_COLUMN
+		var slot: int = i % STATUS_PER_COLUMN
+		# Offsets from the top right corner the pad is anchored to.
+		var at: Vector2 = STATUS_AT + Vector2(-d - column * (d + STATUS_GAP), slot * (d + STATUS_GAP))
+		pad.custom_minimum_size = Vector2(d, d)
+		pad.offset_left = at.x
+		pad.offset_top = at.y
+		pad.offset_right = at.x + d
+		pad.offset_bottom = at.y + d
 
 
 ## What a state icon says when pressed: the noun phrase, good or bad, and what it does.
@@ -1014,7 +1026,14 @@ func settings_panel() -> void:
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip.custom_minimum_size = Vector2(500, 0)
 	v.add_child(tip)
+	v.add_child(_button("상태 아이콘: 크게" if status_diameter() == STATUS_SIZES[0] else "상태 아이콘: 작게", _set_status_size, Vector2(420, 64), 22))
 	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+
+
+func _set_status_size() -> void:
+	game.opts["status_size"] = STATUS_SIZES[(STATUS_SIZES.find(status_diameter()) + 1) % STATUS_SIZES.size()]
+	_place_status()
+	settings_panel()
 
 
 func _set_stick() -> void:
