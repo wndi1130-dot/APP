@@ -5,6 +5,7 @@ extends CanvasLayer
 
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Rules = preload("res://game/train/train_rules.gd")
+const CaptainBoard = preload("res://game/train/train_captain.gd")
 
 ## [key, name, low, high]. sit0..sit3 are the car's situation, in S1's order.
 const KNOBS: Array = [
@@ -13,7 +14,19 @@ const KNOBS: Array = [
 ]
 const TRAIN_KEYS: Array = ["tension", "fear"]
 const BOOT_SCENE := "res://scenes/boot.tscn"
-const READS := "지금 장면이 읽는 값: 온기(웅크림, 창 성에, 난로), 과밀(사람 수와 바닥에 앉음). 온기·배급·관계·긴장·공포에서 칸의 기색 하나를 뽑아 모이는 자리, 걷는 사람과 빠르기, 등불을 바꾼다. 이념 세 축이 가까운 칸끼리는 가끔 마실을 간다. 회기에는 식당칸이 의회가 된다: 긴장과 칸마다의 관계·원한을 더한 소란 다섯 단이 일어서는 사람과 몸을 기울이는 사람을 늘리고, 공포 60부터는 조용하며, 표결을 걸면 모두 멈춘다. 노출은 아직 글자만 바뀐다."
+## Captains to look at in turn, after the rules' own (a test key like the
+## sliders: the real captain will come from the rules).
+const CAPTAIN_SHOWS: Array = [
+	{"at": "captain", "doing": "", "hands": {"weapon": "crowbar", "tool": "flare"}, "wounds": [{"part": "arm_left", "kind": "scratch"}]},
+	{"at": "medtech", "doing": "bed", "left": 3, "hands": {"weapon": "", "tool": ""}, "wounds": [
+		{"part": "arm_left", "kind": "deep", "blood": 0.0, "bandaged": true, "disinfected": true},
+		{"part": "leg_right", "kind": "fracture", "splinted": true},
+		{"part": "torso", "kind": "laceration", "festering": true}]},
+	{"at": "captain", "doing": "rest", "left": 1, "hands": {"weapon": "axe", "tool": ""}, "wounds": []},
+	{"at": "out", "doing": "", "hands": {"weapon": "axe", "tool": "crowbar"}, "wounds": []},
+]
+const CAPTAIN_AT := Vector2(16, 16)
+const READS := "지금 장면이 읽는 값: 온기(웅크림, 창 성에, 난로), 과밀(사람 수와 바닥에 앉음). 온기·배급·관계·긴장·공포에서 칸의 기색 하나를 뽑아 모이는 자리, 걷는 사람과 빠르기, 등불을 바꾼다. 이념 세 축이 가까운 칸끼리는 가끔 마실을 간다. 회기에는 식당칸이 의회가 된다: 긴장과 칸마다의 관계·원한을 더한 소란 다섯 단이 일어서는 사람과 몸을 기울이는 사람을 늘리고, 공포 60부터는 조용하며, 표결을 걸면 모두 멈춘다. 노출은 아직 글자만 바뀐다. 「열차장」 판은 규칙 값의 열차장 칸(있는 곳과 하는 일, 든 것, 상처)을 그대로 보인다."
 
 var scene: Node3D
 var car_i: int = 0
@@ -24,6 +37,9 @@ var note: Label
 var fps: Label
 var phase_button: Button
 var vote_button: Button
+var captain_board: PanelContainer
+var captain_i: int = 0             # 0: the rules' own captain, then CAPTAIN_SHOWS in turn
+var _captain_own = null
 var sliders: Dictionary = {}
 var readouts: Dictionary = {}
 var _filling: bool = false
@@ -56,6 +72,7 @@ func _ready() -> void:
 	_button(top, "›", func() -> void: pick(car_i + 1))
 	phase_button = _button(top, "", _flip_phase)
 	vote_button = _button(top, "", _flip_vote)
+	_button(top, "열차장", _flip_captain)
 	_button(top, "멀리·가까이", func() -> void: scene.toggle_zoom())
 	_button(top, "판 접기", _fold)
 	_button(top, "나가기", func() -> void: get_tree().change_scene_to_file(BOOT_SCENE))
@@ -74,6 +91,11 @@ func _ready() -> void:
 	note.add_theme_font_size_override("font_size", 16)
 	note.add_theme_color_override("font_color", Color(0.7, 0.7, 0.68))
 	v.add_child(note)
+	captain_board = CaptainBoard.new()
+	captain_board.position = CAPTAIN_AT
+	captain_board.visible = false
+	add_child(captain_board)
+	_button(captain_board.foot, "다른 보기", next_captain)
 	if scene != null:
 		scene.rules_applied.connect(fill)
 	fill()
@@ -134,6 +156,7 @@ func fill() -> void:
 		(readouts[key] as Label).text = "–" if value == null else str(roundi(float(value)))
 	note.text = READS
 	_filling = false
+	captain_board.show_captain(_captain(), scene.rules["cars"])
 
 
 func _changed(value: float, key: String) -> void:
@@ -156,6 +179,32 @@ func _flip_phase() -> void:
 
 func _flip_vote() -> void:
 	scene.set_train("voting", not bool(scene.rules["train"].get("voting", false)))
+
+
+func _flip_captain() -> void:
+	captain_board.visible = not captain_board.visible
+
+
+## Put the next captain to look at into the rules: their own first, then
+## CAPTAIN_SHOWS, and round again. Nothing in the cars reads it.
+func next_captain() -> void:
+	if scene == null or not scene.problems.is_empty():
+		return
+	if captain_i == 0:
+		_captain_own = scene.rules.get("captain")
+	captain_i = (captain_i + 1) % (CAPTAIN_SHOWS.size() + 1)
+	if captain_i > 0:
+		scene.rules["captain"] = (CAPTAIN_SHOWS[captain_i - 1] as Dictionary).duplicate(true)
+	elif _captain_own == null:
+		scene.rules.erase("captain")
+	else:
+		scene.rules["captain"] = _captain_own
+	fill()
+
+
+func _captain() -> Dictionary:
+	var c = scene.rules.get("captain", {})
+	return c if c is Dictionary else {}
 
 
 func _fold() -> void:

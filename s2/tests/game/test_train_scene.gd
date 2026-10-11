@@ -584,3 +584,79 @@ func test_the_dining_car_has_no_warmth_to_set() -> void:
 	s.panel.pick(2)
 	assert_eq(s.panel.comm_id(), "")
 	assert_false(s.panel.sliders["sit0"].editable)
+
+
+# ---------------------------------------------------------------- the captain's board
+
+## Turn the board's views until the one at `at` shows (CAPTAIN_SHOWS, in turn).
+func _show_captain_at(s, at: String) -> void:
+	for i in HandPanel.CAPTAIN_SHOWS.size():
+		if HandPanel.CAPTAIN_SHOWS[i]["at"] == at:
+			while s.panel.captain_i != i + 1:
+				s.panel.next_captain()
+			return
+
+
+func test_the_panel_has_a_captain_board_that_starts_hidden_and_flips() -> void:
+	var s = _scene(true)
+	assert_not_null(s.panel.captain_board)
+	assert_false(s.panel.captain_board.visible)
+	s.panel._flip_captain()
+	assert_true(s.panel.captain_board.visible)
+	s.panel._flip_captain()
+	assert_false(s.panel.captain_board.visible)
+
+
+func test_the_board_first_shows_the_rules_captain() -> void:
+	var s = _scene(true)
+	assert_eq(s.panel.captain_board.line_label.text, "열차장실 · 멀쩡함")
+
+
+func test_every_captain_to_look_at_passes_the_rules_check() -> void:
+	for show in HandPanel.CAPTAIN_SHOWS:
+		var d := Rules.load_default()
+		d["captain"] = (show as Dictionary).duplicate(true)
+		assert_eq(Rules.check(d), PackedStringArray(), str(show["at"]))
+
+
+func test_the_next_captain_goes_into_the_rules_and_the_line_changes() -> void:
+	var s = _scene(true)
+	var before: String = s.panel.captain_board.line_label.text
+	s.panel.next_captain()
+	assert_eq(s.rules["captain"], HandPanel.CAPTAIN_SHOWS[0])
+	assert_ne(s.panel.captain_board.line_label.text, before)
+
+
+func test_after_a_round_the_rules_own_captain_is_back() -> void:
+	var s = _scene(true)
+	var own = s.rules["captain"]
+	for i in HandPanel.CAPTAIN_SHOWS.size() + 1:
+		s.panel.next_captain()
+	assert_eq(s.rules["captain"], own)
+	assert_eq(s.panel.captain_i, 0)
+
+
+func test_a_captain_who_is_out_reads_so_on_the_line() -> void:
+	var s = _scene(true)
+	_show_captain_at(s, "out")
+	assert_eq(s.panel.captain_board.line_label.text, "밖에 나감 · 멀쩡함")
+
+
+func test_changing_the_captain_leaves_the_people_of_the_cars_as_they_are() -> void:
+	var s = _scene(true)
+	var in_captain: int = s.car("captain")["bodies"].size()
+	var in_medtech: int = s.car("medtech")["bodies"].size()
+	s.panel.next_captain()
+	assert_eq(s.car("captain")["bodies"].size(), in_captain)
+	assert_eq(s.car("medtech")["bodies"].size(), in_medtech)
+
+
+func test_rules_without_a_captain_have_none_again_after_a_round() -> void:
+	var s := Scene.new()
+	s.rules = Rules.load_default()
+	s.rules.erase("captain")
+	s.opts = {"seed": 7, "panel": true}
+	add_child_autofree(s)
+	for i in HandPanel.CAPTAIN_SHOWS.size() + 1:
+		s.panel.next_captain()
+	assert_false(s.rules.has("captain"))
