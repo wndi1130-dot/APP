@@ -29,6 +29,8 @@ func test_the_motion_numbers_are_the_ones_the_bake_writes() -> void:
 	assert_eq(names[DeadBody.STAND], "stand")
 	assert_eq(names[DeadBody.LUNGE], "lunge")
 	assert_eq(names[DeadBody.FALL], "fall")
+	assert_eq(names[DeadBody.FALL_FRONT], "fall_front")
+	assert_eq(names[DeadBody.CRAWL], "crawl")
 
 
 func test_a_baked_body_walks_its_own_walk_and_stands_once_it_keeps_its_place() -> void:
@@ -61,8 +63,34 @@ func test_a_baked_body_goes_over_by_the_fall_and_comes_up_through_it_backwards()
 	assert_almost_eq(DeadBody.custom(corpse, 1.0, 1.0, 1.0, true).r, 1.0, 0.001, "a body that was never seen to fall lies")
 
 
-func test_a_crawler_is_still_laid_down_whole() -> void:
+func test_struck_from_behind_it_goes_over_on_its_face() -> void:
 	var z := _body("downed")
+	z["fell_at"] = 9.9
+	z["fell_fwd"] = true
+	assert_eq(DeadBody.custom(z, 0.4, 0.0, 1.0, true).g, float(DeadBody.FALL_FRONT))
+	z["fell_fwd"] = false
+	assert_eq(DeadBody.custom(z, 0.4, 0.0, 1.0, true).g, float(DeadBody.FALL))
+
+
+func test_a_crawler_drags_itself_lies_still_when_knocked_down_and_dies_on_its_face() -> void:
+	var z := _body("chase")
 	z["crawl"] = true
-	assert_false(DeadBody.falls_by_motion(z, true))
-	assert_ne(DeadBody.custom(z, 1.0, 0.0, 1.0, true).g, float(DeadBody.FALL))
+	assert_true(DeadBody.falls_by_motion(z, true), "the crawl is on the ground already")
+	var moving := DeadBody.custom(z, 1.0, 1.0, 1.0, true)
+	assert_eq(moving.g, float(DeadBody.CRAWL))
+	assert_eq(moving.b, 0.0, "it moves")
+	z["state"] = "downed"
+	assert_eq(DeadBody.custom(z, 1.0, 0.0, 1.0, true).b, 1.0, "held still")
+	z["state"] = "dead"
+	var dead := DeadBody.custom(z, 1.0, 1.0, 1.0, true)
+	assert_eq(dead.g, float(DeadBody.FALL_FRONT))
+	assert_eq(dead.r, 1.0)
+	assert_eq(DeadBody.ground_turn(z, 1.0), 0.0, "a crawler keeps to its line")
+
+
+func test_baked_bodies_do_not_all_lie_along_the_same_line() -> void:
+	var a := _body("dead")
+	var b := _body("dead")
+	b["phase"] = 0.81
+	assert_ne(DeadBody.ground_turn(a, 1.0), DeadBody.ground_turn(b, 1.0))
+	assert_eq(DeadBody.ground_turn(a, 0.0), 0.0, "upright it is not turned")

@@ -27,6 +27,9 @@ const CLIPS: Array = [
 	["fall", "Death01", 48, false, ""],
 	["run", "Jog_Fwd_Loop", 24, true, "run"],
 	["tell", "Idle_Loop", 12, false, "tell"],
+	# Written here whichever way it is baked (no source motion; the last number is its length).
+	["fall_front", "", 32, false, "own_fall_front", 0.75],
+	["crawl", "", 32, true, "own_crawl", 1.8],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -41,6 +44,8 @@ const OWN_CLIPS: Array = [
 	["fall", "", 32, false, "own_fall", 0.75],
 	["run", "", 24, true, "own_run", 0.7],
 	["tell", "", 12, false, "own_tell", 0.5],
+	["fall_front", "", 32, false, "own_fall_front", 0.75],
+	["crawl", "", 32, true, "own_crawl", 1.8],
 ]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
@@ -62,7 +67,8 @@ const POSES_CLIP: String = "poses"
 #       ["aim", bone, child, [x, y, z]]   point a bone at a direction in the body's space
 #   "sink": value             lower the hips by that many metres, applied last
 # A value is a number, or [base, size, lag] for base + size * sin(w - lag),
-# or [base, size, lag, beats] for base + size * sin(beats * w - lag).
+# or [base, size, lag, beats] for base + size * sin(beats * w - lag),
+# or a list of such lists, added up.
 const LAYERS: Dictionary = {
 	# Right leg dragged and turned out, head hangs to the left, one hand half raised.
 	"walk": {
@@ -236,6 +242,48 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [[-0.6, -0.58, 1.5708, 0.25], [0.0, 0.8, 1.5708, 0.25], [0.9, 0.4, 1.5708, 0.25]]],
 		],
 		"sink": [0.0, 0.84, 0.0, 0.25],
+	},
+	# Going over on its face (played once): the knees go and it kneels, then it
+	# pitches forward with its arms out in front and lies with its face turned.
+	"own_fall_front": {
+		"steps": [
+			["turn", "hips", "x", [1.5, 1.5, 1.5708, 0.25]],
+			["turn", "hips", "y", [-0.2, -0.2, 1.5708, 0.25]],
+			["aim", "thigh.L", "shin.L", [0.12, [0.0, 1.0, 1.5708, 0.25], [[0.0, 0.35, 0.0, 0.5], [-1.0, -1.0, 1.5708, 0.25]]]],
+			["aim", "shin.L", "foot.L", [0.08, [-1.0, 1.04, 0.0, 0.25], [0.0, -1.0, 0.0, 0.25]]],
+			["aim", "thigh.R", "shin.R", [-0.2, [0.0, 1.0, 1.5708, 0.25], [[0.0, 0.3, 0.0, 0.5], [-1.0, -1.0, 1.5708, 0.25]]]],
+			["aim", "shin.R", "foot.R", [-0.3, [-1.0, 1.04, 0.0, 0.25], [0.0, -0.8, 0.0, 0.25]]],
+			["turn", "spine", "x", [0.0, -0.2, 1.5708, 0.25]],
+			["turn", "neck", "x", [-0.2, -0.5, 1.5708, 0.25]],
+			["turn", "head", "y", [0.9, 0.9, 1.5708, 0.25]],
+			["aim", "upper_arm.L", "forearm.L", [[0.6, 0.4, 1.5708, 0.25], [0.0, 1.0, 1.5708, 0.25], [0.0, 0.8, 0.0, 0.25]]],
+			["aim", "forearm.L", "hand.L", [[-0.3, -0.4, 1.5708, 0.25], [0.0, 1.0, 1.5708, 0.25], [0.2, 0.8, 0.0, 0.25]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.9, -0.75, 1.5708, 0.25], [0.0, 1.0, 1.5708, 0.25], [0.0, 0.3, 0.0, 0.25]]],
+			["aim", "forearm.R", "hand.R", [[-0.2, -0.2, 1.5708, 0.25], [0.0, 0.7, 1.5708, 0.25], [-0.7, -1.1, 1.5708, 0.25]]],
+		],
+		"sink": [[0.0, 0.42, 0.0, 0.25], [0.5, 0.5, 1.5708, 0.25]],
+	},
+	# Dragging itself along on its face: one arm reaches and pulls, then the
+	# other; the hips roll after them and the legs trail.
+	"own_crawl": {
+		"steps": [
+			["turn", "hips", "x", 1.5],
+			["turn", "hips", "z", [0.0, 0.16, 0.6]],
+			["turn", "hips", "y", [0.0, 0.14, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.14, 0.0, -1.0]],
+			["aim", "shin.L", "foot.L", [[0.1, 0.06, 0.4], 0.04, -1.0]],
+			["aim", "thigh.R", "shin.R", [-0.24, 0.0, -1.0]],
+			["aim", "shin.R", "foot.R", [-0.34, 0.03, -0.7]],
+			["turn", "spine", "x", -0.25],
+			["turn", "chest", "y", [0.0, 0.22, 0.3]],
+			["turn", "neck", "x", -0.55],
+			["turn", "head", "z", [0.2, 0.1, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.5, [0.12, 0.1, 0.0], [0.55, 0.45, 0.0]]],
+			["aim", "forearm.L", "hand.L", [-0.25, [-0.2, 0.1, 0.0], [0.8, 0.5, 0.5]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.5, [0.12, 0.1, 3.14], [0.55, 0.45, 3.14]]],
+			["aim", "forearm.R", "hand.R", [0.25, [-0.2, 0.1, 3.14], [0.8, 0.5, 3.64]]],
+		],
+		"sink": 0.92,
 	},
 	"own_run": {
 		"steps": [
@@ -535,6 +583,11 @@ static func _value(spec: Variant, w: float) -> float:
 	if typeof(spec) != TYPE_ARRAY:
 		return float(spec)
 	var parts: Array = spec
+	if typeof(parts[0]) == TYPE_ARRAY:
+		var total := 0.0
+		for part in parts:
+			total += _value(part, w)
+		return total
 	var beats: float = parts[3] if parts.size() > 3 else 1.0
 	return float(parts[0]) + float(parts[1]) * sin(beats * w - float(parts[2]))
 
@@ -620,7 +673,7 @@ static func prepare(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 		push_error("body_bake: need a skeleton and animation player in the motions, and a skeleton and skinned mesh in the body")
 		return {}
 	for entry: Array in CLIPS:
-		if not player.has_animation(entry[1]):
+		if entry[1] != "" and not player.has_animation(entry[1]):
 			push_error("body_bake: motion not found: " + str(entry[1]))
 			return {}
 		if entry[4] != "" and not LAYERS.has(entry[4]):
@@ -709,7 +762,7 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
 			pose(ctx, entry[1], entry[4], u)
 			frames.append(_skin_frame(ctx))
-		clips.append({"name": entry[0], "loop": looped, "length": player.get_animation(entry[1]).length, "frames": frames})
+		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length, "frames": frames})
 	var still := []
 	for entry: Array in POSES:
 		_pose_at(ctx, entry[0], entry[1], {})
