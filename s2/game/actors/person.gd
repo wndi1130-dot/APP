@@ -64,6 +64,7 @@ var lunge_t: float = 0.0                # the shove just landed: arms out
 var strike_t: float = 0.0               # a melee blow is drawn back (field_combat.start_swing)
 var strike_total: float = 0.0           # how long this draw-back is in all (for the motion)
 var strike_at = null                    # what it will land on: a zombie's Dictionary or a person
+var strike_kind: String = "swing"       # "swing" a weapon comes round | "stomp" the boot comes down (kept after it lands, for the motion)
 var reload_t: float = 0.0
 var jam_t: float = 0.0
 var target_zombie: Dictionary = {}

@@ -5,6 +5,7 @@ import {
 } from '../game';
 import type { Comm, Field, Game, LedgerRow, LootKey, ModKind, StayId, Task, TechId, Variant, WhySys } from '../game';
 import { WHY_NAME } from './why_names';
+import { syncLuxTags } from './lux_tags';
 
 // 오류 재현 묶음(r8 출시 실무 3): 시드, 최근 행동, 직전 저장, 지금 저장, 오류를 한 덩어리 JSON으로.
 // 판을 바꾸는 행동은 모두 applyStep을 거친다. 그래서 직전 저장에 마지막 행동을 다시 하면 같은 판(같은 오류)이 나온다.
@@ -89,7 +90,7 @@ export function namedSums(rows: LedgerRow[]): Map<string, Sums> {
  *  장부가 아직 모르는 몫은 '구간 정산'이나 단계 이름 한 줄로 남긴다. 줄의 합은 늘 보이는 값의 차이와 같다. */
 export function applyStep(g: Game, s: Step): string | null {
   const label = stepLabel(g, s);
-  const before = { seg: g.seg, settle: g.lastSettle };
+  const before = { seg: g.seg, settle: g.lastSettle, stopResult: g.stop?.result ?? null };
   const seen = (): Sums => ({
     trust: Math.round(g.trust), tension: Math.round(g.tension), coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux),
     rel: Object.fromEntries(COMMS.map(c => [c, Math.round(g.comms[c].rel)])),
@@ -99,6 +100,9 @@ export function applyStep(g: Game, s: Step): string | null {
   const text = runStep(g, s);
   const ledger = drain(g);
   const now = seen();
+  // 사치품 이름표(결정 071): 정차 수확이 방금 났으면 그 장소의 이름을 붙인다. 규칙 값은 안 건드린다.
+  const looted = g.stop?.result && g.stop.result !== before.stopResult ? { place: g.stop.place, n: g.stop.result.gains.luxury ?? 0 } : null;
+  syncLuxTags(g, was.lux, now.lux, looted);
   const settled = !!g.lastSettle && g.lastSettle !== before.settle;
   const sys: WhySys | undefined = settled ? 'settle' : s.a === 'advance' ? 'auto' : undefined;
   // 남는 몫: 보이는 차이에서 이름 붙은 줄들을 뺀 것
