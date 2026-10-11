@@ -383,6 +383,7 @@ func _begin() -> SurfaceTool:
 ## Vertex alpha the world shader reads as "open to the sky": 1 outdoors, 0 under
 ## a roof, so snow and wet stay off floors inside buildings.
 const OUTDOOR_BLOCK_H: float = 2.4
+const TILE: int = 30   # cells a side of one piece of ground
 
 
 ## Where the train's doors are drawn: {"cell", "z"}. A map with doors on both
@@ -426,6 +427,45 @@ static func outdoor_block_runs(g: FieldGrid, d: Dictionary) -> Array[Rect2i]:
 			elif not mine and start >= 0:
 				out.append(Rect2i(start, y, x - start, 1))
 				start = -1
+	return out
+
+
+## The wall cells of one floor as few boxes as they make, by building:
+## building id -> [Rect2i]. A row of wall cells is one box, and what is left
+## standing alone in its row joins the cells under it. A big map is drawn (and
+## throws its shadow) far faster so than a box a cell.
+static func wall_runs(g: FieldGrid) -> Dictionary:
+	var out: Dictionary = {}
+	var single: Dictionary = {}   # cell -> building, the cells that made no row
+	for y in range(g.height):
+		var start := -1
+		var of := 0
+		for x in range(g.width + 1):
+			var c := Vector2i(x, y)
+			var wall: bool = x < g.width and g.solid_at(c) == S.WALL
+			var b: int = g.building_at(c) if wall else 0
+			if start >= 0 and (not wall or b != of):
+				if x - start == 1:
+					single[Vector2i(start, y)] = of
+				else:
+					if not out.has(of):
+						out[of] = []
+					out[of].append(Rect2i(start, y, x - start, 1))
+				start = -1
+			if wall and start < 0:
+				start = x
+				of = b
+	for c: Vector2i in single.keys():
+		if not single.has(c):
+			continue
+		var b: int = single[c]
+		var n := 0
+		while single.get(c + Vector2i(0, n), b - 1) == b:
+			single.erase(c + Vector2i(0, n))
+			n += 1
+		if not out.has(b):
+			out[b] = []
+		out[b].append(Rect2i(c.x, c.y, 1, n))
 	return out
 
 
@@ -473,7 +513,8 @@ static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> vo
 
 
 func _build_ground() -> void:
-	var st := _begin()
+	# The ground is laid in tiles, so what is off the screen is not drawn.
+	var tools: Dictionary = {}
 	# One answer a corner, shared by the cells that meet there.
 	var banks := PackedVector2Array()
 	for y in range(grid.height + 1):
@@ -482,6 +523,10 @@ func _build_ground() -> void:
 	for y in range(grid.height):
 		for x in range(grid.width):
 			var c := Vector2i(x, y)
+			var tile := c / TILE
+			if not tools.has(tile):
+				tools[tile] = _begin()
+			var st: SurfaceTool = tools[tile]
 			var f := grid.floor_at(c)
 			var color := FLOOR_COLORS[f]
 			# Small checker noise so distance reads on a flat colour.
@@ -497,25 +542,20 @@ func _build_ground() -> void:
 				st.set_normal(Vector3.UP)
 				st.set_uv(banks[int(quad[idx].z) * (grid.width + 1) + int(quad[idx].x)])
 				st.add_vertex(quad[idx])
-	var node := _mesh_node()
-	node.mesh = st.commit()
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for tile in tools:
+		var node := _mesh_node()
+		node.mesh = tools[tile].commit()
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _build_walls() -> void:
-	var tools: Dictionary = {}
-	for y in range(grid.height):
-		for x in range(grid.width):
-			var c := Vector2i(x, y)
-			if grid.solid_at(c) != S.WALL:
-				continue
-			var b := grid.building_at(c)
-			if not tools.has(b):
-				tools[b] = _begin()
-			box(tools[b], Vector3(1, WALL_H, 1), Vector3(x + 0.5, WALL_H * 0.5, y + 0.5), Color(0.55, 0.53, 0.5))
-	for b in tools:
+	var runs: Dictionary = wall_runs(grid)
+	for b in runs:
+		var st := _begin()
+		for r: Rect2i in runs[b]:
+			box(st, Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
 		var node := _mesh_node()
-		node.mesh = tools[b].commit()
+		node.mesh = st.commit()
 		wall_nodes[Vector2i(b, 0)] = node
 
 
@@ -544,20 +584,33 @@ func _build_blocks() -> void:
 				var c := Vector2i(x, y)
 				if grid.solid_at(c) == S.BLOCK and grid.building_at(c) < 0:
 					box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
-	else:
+	var node := _mesh_node()
+	node.mesh = st.commit()
+	# What stands about the map goes by tile, as the ground does: a tree or a
+	# stack far off is neither drawn nor made to throw a shadow.
+	var tools: Dictionary = {}
+	if not data["spots"].has("water_tower"):
 		# Other maps: blocked ground out of doors (rock, a bank, a stack) is drawn
 		# as it lies, a run of cells a box, so nothing that stops you is unseen.
 		for r in outdoor_block_runs(grid, data):
-			box(st, Vector3(r.size.x, OUTDOOR_BLOCK_H, 1), Vector3(r.position.x + r.size.x * 0.5, OUTDOOR_BLOCK_H * 0.5, r.position.y + 0.5), Color(0.44, 0.43, 0.42))
+			box(_tile_tool(tools, r.position), Vector3(r.size.x, OUTDOOR_BLOCK_H, 1), Vector3(r.position.x + r.size.x * 0.5, OUTDOOR_BLOCK_H * 0.5, r.position.y + 0.5), Color(0.44, 0.43, 0.42))
 	for c in data["trees"]:
-		box(st, Vector3(0.5, 2.5, 0.5), FieldGrid.center(c) + Vector3(0, 1.25, 0), Color(0.3, 0.26, 0.22))
-		box(st, Vector3(2.2, 1.8, 2.2), FieldGrid.center(c) + Vector3(0, 3.0, 0), Color(0.62, 0.66, 0.66))
+		box(_tile_tool(tools, c), Vector3(0.5, 2.5, 0.5), FieldGrid.center(c) + Vector3(0, 1.25, 0), Color(0.3, 0.26, 0.22))
+		box(_tile_tool(tools, c), Vector3(2.2, 1.8, 2.2), FieldGrid.center(c) + Vector3(0, 3.0, 0), Color(0.62, 0.66, 0.66))
 	for r in data["low_blocks"]:
 		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
 		var tall := 1.2 if r.size.x > 1 and r.size.y > 1 else 0.9
-		box(st, Vector3(r.size.x - 0.1, tall, r.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
-	var node := _mesh_node()
-	node.mesh = st.commit()
+		box(_tile_tool(tools, r.position), Vector3(r.size.x - 0.1, tall, r.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
+	for tile in tools:
+		var part := _mesh_node()
+		part.mesh = tools[tile].commit()
+
+
+func _tile_tool(tools: Dictionary, c: Vector2i) -> SurfaceTool:
+	var tile := c / TILE
+	if not tools.has(tile):
+		tools[tile] = _begin()
+	return tools[tile]
 
 
 ## The faces that glow (weather_fx 12.1): one mesh per kind, unshaded, so they
@@ -597,14 +650,20 @@ func _build_lights() -> void:
 func _build_level(lv: int) -> void:
 	var lg: FieldGrid = levels[lv]
 	var y0 := lv * LEVEL_H
-	var floor_st := _begin()
+	var floors: Dictionary = {}
 	var tools: Dictionary = {}
+	var runs: Dictionary = wall_runs(lg)
+	for b in runs:
+		tools[b] = _begin()
+		for r: Rect2i in runs[b]:
+			box(tools[b], Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
 	for y in range(lg.height):
 		for x in range(lg.width):
 			var c := Vector2i(x, y)
 			var kind := lg.solid_at(c)
 			if kind == S.AIR or (kind == S.BLOCK and lg.building_at(c) < 0):
 				continue
+			var floor_st: SurfaceTool = _tile_tool(floors, c)
 			var color := FLOOR_COLORS[lg.floor_at(c)]
 			var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
 			color = Color(color.r + n, color.g + n, color.b + n)
@@ -616,11 +675,7 @@ func _build_level(lv: int) -> void:
 				floor_st.set_normal(Vector3.UP)
 				floor_st.add_vertex(quad[idx])
 			var b := lg.building_at(c)
-			if kind == S.WALL:
-				if not tools.has(b):
-					tools[b] = _begin()
-				box(tools[b], Vector3(1, WALL_H, 1), Vector3(x + 0.5, WALL_H * 0.5, y + 0.5), Color(0.55, 0.53, 0.5))
-			elif kind == S.WINDOW:
+			if kind == S.WINDOW:
 				if not tools.has(b):
 					tools[b] = _begin()
 				var horizontal := lg.solid_at(c + Vector2i(1, 0)) == S.WALL or lg.solid_at(c + Vector2i(-1, 0)) == S.WALL
@@ -628,9 +683,10 @@ func _build_level(lv: int) -> void:
 				box(tools[b], size, Vector3(x + 0.5, 0.43, y + 0.5), Color(0.4, 0.4, 0.42))
 				box(tools[b], Vector3(1.0, 0.9, 0.08) if horizontal else Vector3(0.08, 0.9, 1.0), Vector3(x + 0.5, 1.3, y + 0.5), Color(0.62, 0.72, 0.78))
 				box(tools[b], size * Vector3(1, 0.12, 1), Vector3(x + 0.5, WALL_H - 0.05, y + 0.5), Color(0.4, 0.4, 0.42))
-	var floor_node := _mesh_node(lv)
-	floor_node.mesh = floor_st.commit()
-	floor_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for tile in floors:
+		var floor_node := _mesh_node(lv)
+		floor_node.mesh = floors[tile].commit()
+		floor_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for b in tools:
 		var node := _mesh_node(lv)
 		node.mesh = tools[b].commit()
