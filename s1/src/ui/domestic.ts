@@ -130,8 +130,11 @@ function popHead(car: CarDef, ...rest: (Node | null)[]): HTMLElement {
   return h('div', { class: 'carpop__head' }, h('b', null, car.name), ...rest, close('car', { 'data-car': car.id }));
 }
 
-function matRow(label: string, value: number, cap?: number): HTMLElement {
-  return h('span', { class: 'dom-mat' }, label, ' ', h('b', { class: 'num' }, fmt(value)),
+/** 창고의 자원 네모 하나(사용자 2026-10-11: 자재·목재·고철·부품을 네모 넷으로 가른다). 상한이 있는 것만 막대를 단다. */
+function matBox(label: string, value: number, cap?: number): HTMLElement {
+  return h('div', { class: cx('dom-box', cap !== undefined && value > cap && 'is-over') },
+    h('span', { class: 'dom-box__label' }, label),
+    h('b', { class: 'num' }, fmt(value), cap !== undefined ? h('small', null, `/${cap}`) : null),
     cap !== undefined ? bar(value, value > cap ? '--discontent' : '--warm', Math.max(1, cap)) : null);
 }
 
@@ -256,7 +259,7 @@ function storePop(view: View, car: CarDef): HTMLElement {
   return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
     popHead(car),
     h('div', { class: 'dom-mats' },
-      matRow('자재', materials(g), cap), matRow('고철', d.scrap), matRow('목재', d.wood), matRow('부품', d.parts)),
+      matBox('자재', materials(g), cap), matBox('목재', d.wood), matBox('고철', d.scrap), matBox('부품', d.parts)),
     h('p', { class: 'carpop__text' }, `식량 ${fmt(g.food)} · 의약품 ${fmt(g.med)} · 사치품 ${fmt(g.lux)}.`),
     techMult(g, 'm3') > 0 && d.techs.m3?.variant === 'b' ? h('p', { class: 'sub' }, `얼음 상자가 자리 ${D.iceBoxCap}을 차지한다. 남는 음식을 묵힌다.`) : null,
     d.fullRule ? h('div', { class: 'dom-row' }, rules.map(r => h('button', {
