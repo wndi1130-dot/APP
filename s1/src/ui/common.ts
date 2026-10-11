@@ -12,6 +12,8 @@ export interface DomUi {
   tab: 'workshop' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean;
   /** 공방 창에서 펼쳐 둔 접힌 줄(맡기기 고르기, 차례 바꾸기, 개조 목록). 한 번에 하나만 */
   ws?: 'delegate' | 'order' | 'jobs' | null;
+  /** 열차 관리 화면에서 부상 명부 판을 펼쳤나 */
+  med?: boolean;
 }
 
 export interface Ui {
