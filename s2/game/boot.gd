@@ -6,6 +6,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
+const TRAIN_SCENE := "res://game/train/train.tscn"
 
 const CHOICES: Array = [
 	["raiders", "약탈자", [[true, "있음"], [false, "없음"]]],
@@ -98,6 +99,12 @@ func _show_menu() -> void:
 	gallery.custom_minimum_size = Vector2(240, 64)
 	gallery.pressed.connect(func() -> void: get_tree().change_scene_to_file(GALLERY_SCENE))
 	go.add_child(gallery)
+	var train := Button.new()
+	train.name = "TrainButton"
+	train.text = "열차 안 보기"
+	train.custom_minimum_size = Vector2(240, 64)
+	train.pressed.connect(func() -> void: get_tree().change_scene_to_file(TRAIN_SCENE))
+	go.add_child(train)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
