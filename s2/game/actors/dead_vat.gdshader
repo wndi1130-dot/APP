@@ -12,7 +12,9 @@ varying float shade;
 
 void vertex() {
 	float clip = step(0.5, INSTANCE_CUSTOM.g);
-	float speed = mix(7.0, 11.0, clip) * (1.0 - INSTANCE_CUSTOM.b);
+	// Each body walks at its own pace (0.82..1.18), from its own number.
+	float pace = mix(0.82, 1.18, fract(INSTANCE_CUSTOM.r * 7.31));
+	float speed = mix(7.0, 11.0, clip) * pace * (1.0 - INSTANCE_CUSTOM.b);
 	float frame = mod(TIME * speed + INSTANCE_CUSTOM.r * FRAMES, FRAMES);
 	float current = floor(frame);
 	float next = mod(current + 1.0, FRAMES);
