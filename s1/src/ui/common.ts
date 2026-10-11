@@ -8,7 +8,11 @@ export type Screen = 'home' | 'overview' | 'council' | 'end' | 'train';
 export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' | 'settle' | 'dom' | 'why-trust' | 'why-tension' | 'why-coal' | 'why-food' | 'why-med' | 'why-lux';
 
 /** S1c 내정 창의 화면 상태(ui/domestic.ts). S1a 판에선 쓰지 않는다. */
-export interface DomUi { tab: 'workshop' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean }
+export interface DomUi {
+  tab: 'workshop' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean;
+  /** 공방 창에서 펼쳐 둔 접힌 줄(맡기기 고르기, 차례 바꾸기, 개조 목록). 한 번에 하나만 */
+  ws?: 'delegate' | 'order' | 'jobs' | null;
+}
 
 export interface Ui {
   screen: Screen;
