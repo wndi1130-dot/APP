@@ -17,6 +17,8 @@ var carry_seconds: float = 0.0
 var track_dead: Dictionary = {"west": 0, "east": 0}
 var end_reason: String = ""
 var end_t: float = -1.0
+## What the stop was for (field_game MISSIONS); "" writes no key at all.
+var mission: String = ""
 
 
 func _init(p_run_id: String = "") -> void:
@@ -92,7 +94,7 @@ func to_dict() -> Dictionary:
 	var injury_out: Array = []
 	for i: Dictionary in injuries:
 		injury_out.append({"t": _r(i["t"]), "who": i["who"], "kind": i["kind"]})
-	return {
+	var out := {
 		"v": VERSION,
 		"run": run_id,
 		"end": end_reason,
@@ -105,6 +107,9 @@ func to_dict() -> Dictionary:
 		"ammo": ammo_used.duplicate(),
 		"trackDead": track_dead.duplicate(),
 	}
+	if mission != "":
+		out["mission"] = mission
+	return out
 
 
 ## Compact single-line JSON (append to a .jsonl log).
