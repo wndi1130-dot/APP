@@ -41,11 +41,15 @@ const PORTRAIT_W: float = 290.0
 ## the rest small (body_injury 4 '둘까지만 크게').
 ## Narrow enough that all five stay on the left half of a 1280-wide screen.
 const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
-# State icons: a small column down the right edge, under the zoom keys (build 89:
-# the words were too big and sat in the way; pictures come with the art).
+# State icons: a column down the right edge, under the zoom keys, as in Project
+# Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
+# saw them. Each is a plate with a rim in its colour; pictures come with the art.
 const STATUS_AT := Vector2(-16.0, 84.0)
-const STATUS_BIG := Vector2(58.0, 38.0)
-const STATUS_SMALL := Vector2(50.0, 32.0)
+# The two most urgent are bigger (body_injury 4 '둘까지만 크게').
+const STATUS_BIG := Vector2(104.0, 56.0)
+const STATUS_SMALL := Vector2(88.0, 46.0)
+const STATUS_FONT_BIG: int = 24
+const STATUS_FONT_SMALL: int = 19
 const RADIO_TIPS: Dictionary = {
 	"urgent": "무전: 무리가 들어올 때만 부른다. 울리면 가까운 망자가 듣는다.",
 	"often": "무전: 무리가 지나가면 다음 예보도 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
@@ -406,10 +410,10 @@ func _build_thumbs() -> void:
 	var sy := 0.0
 	for i in STATUS_SLOTS:
 		var size: Vector2 = STATUS_BIG if i < 2 else STATUS_SMALL
-		var pad := _pad("", STATUS_AT + Vector2(-size.x, sy), size, 15 if i < 2 else 12, Control.PRESET_TOP_RIGHT)
+		var pad := _pad("", STATUS_AT + Vector2(-size.x, sy), size, STATUS_FONT_BIG if i < 2 else STATUS_FONT_SMALL, Control.PRESET_TOP_RIGHT)
 		pad.visible = false
 		status_pads.append(pad)
-		sy += size.y + 4.0
+		sy += size.y + 6.0
 	# Paused: the stick can be changed here, not only on the start screen (build 89).
 	stick_opt_button = _pad("", Vector2(-250, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
 	stick_opt_button.visible = false
@@ -594,7 +598,24 @@ func _tick_status(p) -> void:
 		if pad.visible:
 			var row: Dictionary = status_rows[i]
 			pad.text = String(row["short"])
-			pad.add_theme_color_override("font_color", BRASS if row["good"] else (WARN if row["severe"] else INK))
+			var tone: Color = BRASS if row["good"] else (WARN if row["severe"] else INK)
+			pad.add_theme_color_override("font_color", tone)
+			_status_plate(pad, tone)
+
+
+## A state icon's plate: dark, with a rim in the state's colour, so it reads
+## as a thing on the screen edge and not as loose words.
+func _status_plate(pad: Button, rim: Color) -> void:
+	if pad.has_meta("rim") and pad.get_meta("rim") == rim:
+		return
+	pad.set_meta("rim", rim)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.1, 0.1, 0.11, 0.92)
+	sb.border_color = rim
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(6)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		pad.add_theme_stylebox_override(state, sb)
 
 
 ## What a state icon says when pressed: the noun phrase, good or bad, and what it does.
