@@ -3,6 +3,7 @@ import {
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { calmEnact, calmRepeal } from './calm';
+import { bump, bumpRel } from './ledger';
 import { josa } from './josa';
 import { needOf } from './needs';
 import { mourners } from './people';
@@ -521,7 +522,7 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
     journal(g, `${s.leader.name}에게 빚을 받았다. 대표가 표를 끌고 온다.`, 'deal');
   } else if (tool === 'bribe') {
     const price = bribePrice(g, c);
-    g.lux -= price;
+    bump(g, 'lux', -price, 'deal');
     label = `뇌물(사치품 ${price})`;
     g.stats.bribes += 1;
     revealTrait(g, c);
@@ -556,17 +557,17 @@ function payNow(g: Game, c: Comm, kind: string, cutTarget?: Comm): void {
   if (kind === 'relocate') {
     g.comms.tail.base[2] -= 15;
     g.comms.front.base[2] += 10;
-    g.comms.front.rel = clamp(g.comms.front.rel - 5, -100, 100);
+    bumpRel(g, 'front', -5, 'deal');
   } else if (kind === 'front_levy') {
-    g.lux += 3;
-    g.comms.front.rel = clamp(g.comms.front.rel - 8, -100, 100);
-    g.comms[c].rel = clamp(g.comms[c].rel + 3, -100, 100);
+    bump(g, 'lux', 3, 'deal');
+    bumpRel(g, 'front', -8, 'deal');
+    bumpRel(g, c, 3, 'deal');
   } else if (kind === 'shift') {
-    g.coal -= P.shiftCoal;
+    bump(g, 'coal', -P.shiftCoal, 'deal');
     g.comms.engine.base[3] -= P.shiftRelief;
   } else if (kind === 'agenda') {
     g.agendaHolder = c;
-    g.trust = clamp(g.trust + 2, 0, 100);
+    bump(g, 'trust', 2, 'deal');
   } else if (kind === 'cut' && cutTarget) {
     cutComm(g, cutTarget, false);
   }
@@ -587,7 +588,7 @@ export function exposeBribe(g: Game, c: Comm): void {
   const s = g.comms[c];
   s.coh = clamp(s.coh - 0.2, 0, 1);
   s.disgraced = true;
-  g.trust = clamp(g.trust - 10, 0, 100);
+  bump(g, 'trust', -10, 'leak');
   offend(g, c);
   journal(g, `뇌물이 드러났다. ${s.leader.name}의 정당성이 무너지고 열차장도 신임을 잃었다.`, 'bad');
 }
@@ -697,14 +698,14 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   council.result = result;
   if (!lawActive(g, 'secret_ballot') && !decree) g.fear = clamp(g.fear + 1, 0, 100);
   if (lawActive(g, 'guided_voting') && g.guidedLeft > 0 && !pre) {
-    for (const c of COMMS) g.comms[c].rel = clamp(g.comms[c].rel - 3, -100, 100);
+    for (const c of COMMS) bumpRel(g, c, -3, 'vote');
     g.fear = clamp(g.fear + 3, 0, 100);
     g.guidedLeft -= 1;
   }
   // AI 발의를 무시했으면 발의한 쪽이 서운해한다. 비상 소집은 다음 정기 회기의 발의를 건드리지 않는다.
   if (!pre && !council.emergency) {
     for (const p of g.proposals) {
-      if (p.by && !sameAgenda(p, agenda)) g.comms[p.by].rel = clamp(g.comms[p.by].rel - 3, -100, 100);
+      if (p.by && !sameAgenda(p, agenda)) bumpRel(g, p.by, -3, 'vote');
     }
     g.proposals = [];
   } else if (!pre && passed) {
@@ -732,8 +733,8 @@ function vote(g: Game, decree: boolean): VoteResult | null {
       else (g.decreed ??= []).push(agenda.law);
     }
     // 대권을 쥐는 값(R3 카드 3): 포고마다 긴장 +5, 그 포고를 싫어하는 칸과 관계 −3.
-    g.tension = clamp(g.tension + 5, 0, 100);
-    for (const c of COMMS) if (stance(g, c, agenda, false).score <= -3) g.comms[c].rel = clamp(g.comms[c].rel - DECREE_REL, -100, 100);
+    bump(g, 'tension', 5, 'decree');
+    for (const c of COMMS) if (stance(g, c, agenda, false).score <= -3) bumpRel(g, c, -DECREE_REL, 'decree');
     journal(g, council.martial ? `계엄 포고로 ${title}을(를) 정했다.` : `비상대권으로 ${title}을(를) 포고했다.`, 'dark');
   } else {
     journal(g, `${title}: 찬성 ${yes}, 반대 ${no}${absent ? `, 부재 ${absent}` : ''}. ${passed ? '가결' : '부결'}.`, passed ? 'good' : 'bad');
@@ -781,16 +782,16 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
     const m = def.mats[c];
     if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] += m[i];
     const r = def.rels[c];
-    if (r !== undefined) g.comms[c].rel = clamp(g.comms[c].rel + r, -100, 100);
+    if (r !== undefined) bumpRel(g, c, r, 'vote');
   }
   // 1회 효과는 법마다 한 판에 한 번(R3 카드 1, 2026-10-07): 폐지했다 다시 통과시켜 또 받지 못한다. 관계 반응은 통과마다 그대로.
   // 변형 법(종자곡 반만 풀기 등)은 원래 법과 한 묶음으로 센다.
   const res = def.res;
   const once = LAW_VARIANT_OF[law] ?? law;
   if (!(g.onceTaken ??= []).includes(once)) {
-    if (res.trustOnce) g.trust = clamp(g.trust + res.trustOnce, 0, 100);
+    if (res.trustOnce) bump(g, 'trust', res.trustOnce, 'vote');
     if (res.fearOnce) g.fear = clamp(g.fear + res.fearOnce, 0, 100);
-    if (res.foodOnce) g.food += res.foodOnce;
+    if (res.foodOnce) bump(g, 'food', res.foodOnce, 'vote');
     if (res.trustOnce || res.fearOnce || res.foodOnce) g.onceTaken.push(once);
   }
   calmEnact(g, law);
@@ -811,7 +812,7 @@ export function repealLaw(g: Game, law: LawId): void {
     const m = def.mats[c];
     if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] -= m[i];
   }
-  for (const c of supporters) g.comms[c].rel = clamp(g.comms[c].rel - P.repealRel, -100, 100);
+  for (const c of supporters) bumpRel(g, c, -P.repealRel, 'vote');
   const bought = g.boughtBy[law];
   delete g.boughtBy[law];
   if (bought && g.session - bought.session <= 3) {
@@ -832,13 +833,13 @@ export function supportComm(g: Game, c: Comm): string | null {
   if (g.actedSeg === g.seg) return '이번 구간엔 이미 했다';
   if (g.lux < 2) return '사치품 2가 필요하다';
   const s = g.comms[c];
-  g.lux -= 2;
+  bump(g, 'lux', -2, 'comm');
   // 같은 칸을 3구간 안에 또 챙기면 덜 오른다: 지지 하나가 정답이 되지 않게(first_leg_story 7.7, 제안).
   const again = g.seg - s.supportedAt < P.supportGap;
-  s.rel = clamp(s.rel + (again ? P.supportRepeatRel : P.supportRel), -100, 100);
+  bumpRel(g, c, again ? P.supportRepeatRel : P.supportRel, 'comm');
   s.fervor = Math.max(0, s.fervor - 1);
   const other = OPPOSITE[c];
-  g.comms[other].rel = clamp(g.comms[other].rel - 3, -100, 100);
+  bumpRel(g, other, -3, 'comm');
   if (s.cutAt.some(at => g.seg - at <= 3)) {
     offend(g, c);
     journal(g, `${COMM_NAME[c]}을(를) 깎았다가 다시 챙겼다. 번복으로 기억된다.`, 'bad');
@@ -861,7 +862,7 @@ export function setSpace(g: Game, step: number, giver?: Comm): string | null {
   const to = clamp(Math.round(step), 0, P.spaceMax);
   if (to > 0 && !sp.giver) return '공간을 내줄 칸을 먼저 골라라';
   if (to > sp.step && sp.giver) {
-    g.comms[sp.giver].rel = clamp(g.comms[sp.giver].rel + P.spacePullRel * (to - sp.step), -100, 100);
+    bumpRel(g, sp.giver, P.spacePullRel * (to - sp.step), 'comm');
     journal(g, `${COMM_NAME[sp.giver]}${josa(COMM_NAME[sp.giver], '이/가')} 꼬리칸에 자리를 내줬다(${to}단).`, 'bad');
   } else if (to < sp.step) {
     journal(g, to === 0 ? '꼬리칸에 내준 자리를 거뒀다.' : `꼬리칸에 내준 자리를 ${to}단으로 줄였다.`);
@@ -873,11 +874,11 @@ export function setSpace(g: Game, step: number, giver?: Comm): string | null {
 export function cutComm(g: Game, c: Comm, asAction = true): string | null {
   if (asAction && g.actedSeg === g.seg) return '이번 구간엔 이미 했다';
   const s = g.comms[c];
-  s.rel = clamp(s.rel - 15, -100, 100);
+  bumpRel(g, c, -15, 'comm');
   s.fervor = Math.min(3, s.fervor + 1);
-  g.food += 4;
+  bump(g, 'food', 4, 'comm');
   const other = OPPOSITE[c];
-  g.comms[other].rel = clamp(g.comms[other].rel + 5, -100, 100);
+  bumpRel(g, other, 5, 'comm');
   if (s.cutAt.some(at => g.seg - at <= 3) || g.seg - s.supportedAt <= 3) offend(g, c);
   s.cutAt.push(g.seg);
   if (asAction) g.actedSeg = g.seg;
@@ -888,11 +889,11 @@ export function cutComm(g: Game, c: Comm, asAction = true): string | null {
 export function uniqueAction(g: Game, c: Comm): string | null {
   if (g.actedSeg === g.seg) return '이번 구간엔 이미 했다';
   if (g.comms[c].rel < 15) return '호의 이상이어야 한다';
-  if (c === 'tail') g.coal += 3;
+  if (c === 'tail') bump(g, 'coal', 3, 'comm');
   else if (c === 'engine') g.forcedRun = true;
   else if (c === 'guard') g.guardEscort = true;
   else if (c === 'medtech') g.injured = Math.max(0, g.injured - 2);
-  else g.lux += 2;
+  else bump(g, 'lux', 2, 'comm');
   g.actedSeg = g.seg;
   journal(g, `${COMM_NAME[c]}이(가) 나섰다.`, 'good');
   return null;
