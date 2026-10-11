@@ -47,7 +47,7 @@ function stripCar(g: Game, car: CarDef, sel: CarDef): HTMLElement {
   const name = h('span', { class: 'tcar__name' }, stripName(car));
   if (car.kind === 'loco') return h('span', { class: 'tcar tcar--loco', 'aria-hidden': 'true' }, name);
   const sit = car.comm ? situation(g, car.comm) : null;
-  const pct = jobPct(g, car.id);
+  const pct = jobPct(g, car.id) ?? (car.id === 'workshop' ? restorePct(g) : null);
   return h('button', {
     class: cx('tcar', sit && warmthTone(sit[0]), car.id === sel.id && 'is-open'),
     'data-action': 'car', 'data-car': car.id, 'aria-label': car.name, 'aria-pressed': car.id === sel.id ? 'true' : 'false',

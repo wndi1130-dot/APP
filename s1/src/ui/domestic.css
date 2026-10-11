@@ -102,17 +102,6 @@
 .dom-side > .dom-pop { position: static; transform: none; width: auto; box-shadow: none; }
 .dom-side > .dom-pop .carpop__head .x { display: none; }
 
-/* 설계도(11.3): 가지 5줄, 단계는 왼쪽에서 오른쪽 */
-.dom-plan { display: flex; flex-direction: column; gap: 8px; }
-.dom-plan__grid {
-  display: grid; grid-template-columns: 72px repeat(3, minmax(0, 1fr)) minmax(0, .8fr); gap: 4px 6px; align-items: stretch;
-  padding: 8px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line-strong);
-  background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px);
-  background-size: 16px 16px;
-}
-.dom-plan__col { font-size: 11px; text-align: center; }
-.dom-plan__row { font-size: 12px; color: var(--ink-2); align-self: center; }
-.dom-plan__cell { display: flex; flex-direction: column; gap: 4px; }
 .dom-node {
   display: grid; gap: 2px; min-height: 40px; padding: 4px 6px; text-align: left; font-size: 12px;
   border: 1px dashed var(--line-strong); border-radius: 4px; background: transparent; color: var(--ink-3);
@@ -182,7 +171,6 @@
 .dom-end__list { margin: 0; padding-left: 16px; }
 
 @media (max-width: 700px) {
-  .dom-plan__grid { grid-template-columns: 56px repeat(4, minmax(0, 1fr)); }
   .dom-board__row { grid-template-columns: 34px 1fr; grid-template-areas: "f people" "f relies" "f acts"; }
 }
 .dom-pass { color: var(--ink-1); }
@@ -190,8 +178,6 @@
 .dom-export summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
 .dom-export__text { width: 100%; margin-top: 6px; font: 11px/1.4 ui-monospace, monospace; background: #15181b; color: var(--ink-1); border: 1px solid var(--line-strong); }
 
-/* 기술 되살리기: 마디 설명은 표 아래로 늘어뜨리지 않고 창 바닥에 붙는 판으로 띄운다. 같은 말은 한 줄에 한 번. */
-.dom-plan .dom-detail { position: sticky; bottom: 0; z-index: 2; max-height: 64vh; overflow-y: auto; box-shadow: 0 -10px 18px #000b; }
 .dom-common { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .dom-vrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 4px; border-top: 1px solid var(--line); }
 .dom-vrow__acts { display: flex; gap: 6px; margin-left: auto; }
@@ -262,4 +248,43 @@
   .tbtns { gap: 16px; padding-top: 10px; padding-bottom: 10px; }
   .tbtn { min-height: 56px; font-size: 16px; }
   .tstack { top: 96px; }
+}
+
+/* ---- 기술 화면(planView): 가지 탭, 가지 한 줄, 아래 고정 카드. 넓은 화면은 다섯 줄을 다 보이고 카드는 오른쪽. ---- */
+.dom-side--plan { width: 100%; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; padding-top: 6px; padding-bottom: 6px; }
+.dom-side--plan .drop__head { margin-bottom: 0; }
+.tplan { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 6px; }
+.tplan__tabs { display: flex; align-items: center; gap: 4px; }
+.tplan__tabs .chip { min-height: 30px; padding: 0 8px; }
+.tplan__tabs .chip.is-on { border-color: var(--ink-1); background: var(--surface-3); color: var(--ink-1); }
+.tplan__tabs .icon, .tplan__label .icon { width: 14px; height: 14px; }
+.tplan__now { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--brass); font-size: 13px; }
+.tplan__row { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, .9fr); gap: 0 18px; align-items: start; }
+.tplan__row.is-on { display: grid; }
+.tplan__label { display: none; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.tplan__cell { position: relative; display: flex; gap: 6px; min-height: 66px; }
+.tplan__cell:nth-child(2)::after, .tplan__cell:nth-child(3)::after { content: "›"; position: absolute; right: -13px; top: 22px; color: var(--ink-3); }
+.tplan__cell.is-adapt { padding-left: 12px; border-left: 1px dashed var(--line-strong); }
+.tnode { position: relative; flex: 1 1 0; min-width: 0; min-height: 66px; padding: 4px 4px 3px; text-align: center; justify-items: center; align-content: start; gap: 1px; }
+.tnode__icon { position: relative; display: inline-flex; }
+.tnode__icon .icon { width: 16px; height: 16px; }
+.tnode__var { position: absolute; right: -13px; top: -4px; font-size: 12px; font-style: normal; color: var(--brass); }
+.tnode .dom-node__name { font-size: 12px; line-height: 1.2; }
+.tnode__foot { display: inline-flex; align-items: center; gap: 2px; min-height: 14px; font-size: 12px; letter-spacing: 1px; }
+.tnode__foot .icon { width: 13px; height: 13px; }
+.tnode.is-ready .tnode__foot, .tnode.is-restoring .tnode__foot { color: var(--brass); }
+.tnode__first { position: absolute; left: -1px; top: -7px; padding: 0 5px; font-size: 12px; line-height: 15px; color: var(--on-light); background: var(--brass); border-radius: 2px; }
+.tnode__ribbon { position: absolute; right: 3px; top: -1px; width: 7px; height: 12px; background: var(--brass); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
+.tplan__detail { min-height: 0; overflow-y: auto; display: grid; gap: 4px; align-content: start; }
+.tplan__detail .dom-detail { padding: 6px 10px; gap: 4px; }
+.tplan__detail .dom-detail__head .x { display: none; }
+.tplan__why { margin: 0; font-size: 12px; color: var(--ink-2); }
+.tplan__why b { color: var(--brass); }
+@media (min-width: 1024px) and (min-height: 600px) {
+  .tplan { grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr); gap: 14px; }
+  .tplan__tabs { display: none; }
+  .tplan__tree { display: grid; gap: 8px; align-content: start; overflow-y: auto; }
+  .tplan__row { display: grid; grid-template-columns: 56px repeat(3, minmax(0, 1fr)) minmax(0, .9fr); }
+  .tplan__label { display: inline-flex; align-self: center; }
+  .tnode { min-height: 76px; }
 }
