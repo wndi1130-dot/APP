@@ -124,3 +124,39 @@ func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> voi
 	game.set_radio("신호소 위: 동쪽", "say")
 	assert_eq(a.played, [], "what is said to your face makes no radio sound")
 
+
+# Far moans are lower and duller than near ones (user 2026-10-11).
+func test_a_far_moan_is_lower_and_duller_than_a_near_one() -> void:
+	var a = game.audio
+	a.lib["moan"] = [_tone()]
+	for dull in a.DULL_BUSES:
+		var bus := AudioServer.get_bus_index(dull)
+		assert_true(bus >= 0, dull + " bus made")
+		assert_eq(AudioServer.get_bus_send(bus), &"SFX", "ducked with the rest")
+		var low: AudioEffectLowPassFilter = AudioServer.get_bus_effect(bus, 0)
+		assert_eq(low.cutoff_hz, float(a.DULL_BUSES[dull]))
+	assert_lt(float(a.DULL_BUSES["SFX_FAR"]), float(a.DULL_BUSES["SFX_MID"]), "the farthest is the dullest")
+	var heard: Dictionary = {}
+	for d in [3.0, 12.0, 22.0]:
+		var z: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(d, 0, 0))
+		z["state"] = "chase"
+		heard[d] = z
+	a.pick_t = 0.0
+	for s in a.slots:
+		s["wait"] = 0.0
+	a.tick(0.1)
+	var by: Dictionary = {}
+	for s in a.slots:
+		for d in heard:
+			if s["z"] == heard[d]:
+				by[d] = s["player"]
+	assert_eq(by.size(), 3)
+	assert_eq(String(by[3.0].bus), "SFX")
+	assert_eq(String(by[12.0].bus), "SFX_MID")
+	assert_eq(String(by[22.0].bus), "SFX_FAR")
+	# The bands do not overlap: the lowest near moan is above the highest far one.
+	assert_gt(0.85 * float(a.moan_band(3.0)[1]), 1.1 * float(a.moan_band(22.0)[1]))
+	assert_gte(by[3.0].pitch_scale, 0.85)
+	assert_lte(by[22.0].pitch_scale, 1.1 * 0.75 + 0.001)
+	assert_lt(by[22.0].volume_db, by[3.0].volume_db, "and quieter, as before")
+

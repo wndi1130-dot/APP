@@ -2,7 +2,8 @@ extends Node3D
 ## Graybox sound (sound_music 12.1): the least that makes a horde felt.
 ## Files are dropped into res://audio/<group>/ (CC0 only, rights_ledger);
 ## a missing group is simply silent, so the field runs with no files at all.
-##   moan       single moans, the nearest few dead get their own (max 6)
+##   moan       single moans, the nearest few dead get their own (max 6);
+##              farther ones are lower and duller (MOAN_BANDS)
 ##   horde_bed  one loop for the mass, louder with more and nearer dead
 ##   gather     far moans gathering, raised when a horde sets off
 ##   birds      a flock taking off, once when a horde sets off
@@ -24,6 +25,11 @@ const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact",
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
+## How far a moan is, by ear (user 2026-10-11: far ones lower and duller).
+## Each row: from this many metres on, the pitch is times this and the voice
+## goes through this bus. The two far buses are SFX with a low-pass on them.
+const MOAN_BANDS: Array = [[0.0, 1.0, "SFX"], [8.0, 0.9, "SFX_MID"], [16.0, 0.75, "SFX_FAR"]]
+const DULL_BUSES: Dictionary = {"SFX_MID": 2400.0, "SFX_FAR": 900.0}   # low-pass cutoff, Hz
 const BED_RANGE: float = 40.0
 const BED_FULL: float = 12.0          # this much weighted crowd is a full bed
 const GATHER_TIME: float = 14.0
@@ -90,6 +96,23 @@ static func _ensure_bus() -> void:
 	var i := AudioServer.bus_count - 1
 	AudioServer.set_bus_name(i, "SFX")
 	AudioServer.set_bus_send(i, "Master")
+	for dull in DULL_BUSES:
+		AudioServer.add_bus()
+		var d := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(d, dull)
+		AudioServer.set_bus_send(d, "SFX")
+		var low := AudioEffectLowPassFilter.new()
+		low.cutoff_hz = float(DULL_BUSES[dull])
+		AudioServer.add_bus_effect(d, low)
+
+
+## The band a moan this far away is heard in: [from, pitch, bus].
+static func moan_band(d: float) -> Array:
+	var band: Array = MOAN_BANDS[0]
+	for b in MOAN_BANDS:
+		if d >= float(b[0]):
+			band = b
+	return band
 
 
 func _load_group(group: String) -> Array:
@@ -204,8 +227,10 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 	s["wait"] = float(s["wait"]) - delta
 	if s["wait"] <= 0.0 and has("moan"):
 		s["wait"] = randf_range(2.5, 6.0) if z["state"] != "chase" else randf_range(1.5, 3.5)
+		var band: Array = moan_band(d)
 		p.stream = _pick("moan")
-		p.pitch_scale = randf_range(0.85, 1.1)
+		p.pitch_scale = randf_range(0.85, 1.1) * float(band[1])
+		p.bus = String(band[2])
 		p.play()
 
 
