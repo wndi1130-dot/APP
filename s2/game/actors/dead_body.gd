@@ -18,6 +18,7 @@ const LUNGE: int = 4
 const FALL: int = 6                           # on its back
 const FALL_FRONT: int = 9                     # on its face
 const CRAWL: int = 10
+const RISE: int = 11                          # getting up off its back
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
 
@@ -66,7 +67,10 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 		return Color(phase, float(CRAWL), 1.0 if state == "downed" else 0.0, shade)
 	if down > 0.0:
 		# Struck from behind it goes over on its face, otherwise on its back.
-		return Color(fall_progress(z, down), float(FALL_FRONT if DeadPose.fall_side(z) > 0.0 else FALL), 1.0, shade)
+		var front := DeadPose.fall_side(z) > 0.0
+		if not front and coming_up(z, down):
+			return Color(1.0 - down, float(RISE), 1.0, shade)
+		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
 		return Color(phase, float(LUNGE), still, shade)
 	if state == "frozen" or state == "waking" or stands(z):
@@ -74,9 +78,18 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 	return Color(phase, float(walk_of(phase)), still, shade)
 
 
+## True when a body that is partly down is on its way up, not on its way down.
+static func coming_up(z: Dictionary, down: float) -> bool:
+	if z["state"] == "rising":
+		return true
+	if down >= 1.0 or not z.has("fell_at"):
+		return down < 1.0
+	return float(z["age"]) - float(z["fell_at"]) >= float(Motion.row("dead_fall")["len"])
+
+
 ## How far through the fall a body on the ground is drawn. Going over, it is the
-## time since it fell. Coming up there is no motion of its own yet, so the fall
-## runs backwards as far as the body has come up.
+## time since it fell. A body on its back has its own motion for coming up; one
+## on its face has none yet, so its fall runs backwards as far as it has come up.
 static func fall_progress(z: Dictionary, down: float) -> float:
 	if z.has("fell_at") and z["state"] != "rising":
 		var u := clampf((float(z["age"]) - float(z["fell_at"])) / float(Motion.row("dead_fall")["len"]), 0.0, 1.0)
