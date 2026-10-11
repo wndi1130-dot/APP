@@ -33,8 +33,10 @@ const QUIET_NOISE: int = 12
 const CLEAR_TRACK: int = 2
 # Sounds in the stop's score that the people did not make: the dead beating on
 # a door, blood they scent. "Quiet" is counted without them (a chief standing
-# still passes twelve in four minutes with them, measured 2026-10-12).
-const NOT_OURS: Array[String] = ["bang", "blood"]
+# still passes twelve in four minutes with them, measured 2026-10-12). Running
+# is left out too (user decision 157): a point every few seconds that nothing
+# on the screen tells of. It still calls the dead, as every sound does.
+const NOT_OURS: Array[String] = ["bang", "blood", "run"]
 # Whoever was left at the train says when the quiet way out closes (user
 # decision 150): looked at this often, and of the track no more often than this.
 const WATCH_EVERY: float = 1.0

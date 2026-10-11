@@ -427,6 +427,11 @@ func test_quiet_is_counted_of_what_the_people_did() -> void:
 	assert_gt(game.ledger.total, FieldHoldout.QUIET_NOISE)
 	assert_eq(game.holdout.people_noise(), 0)
 	assert_true(game.holdout.quiet_and_clear())
+	# User decision 157: a stop where they only ran is a quiet one.
+	for i in range(40):
+		game.ledger.add(SimNoise.Level.NORMAL, 0.0, "run")
+	assert_eq(game.holdout.people_noise(), 0)
+	assert_true(game.holdout.quiet_and_clear())
 	for i in range(FieldHoldout.QUIET_NOISE):
 		game.ledger.add(SimNoise.Level.NORMAL, 0.0, "pry")
 	assert_true(game.holdout.quiet_and_clear(), "twelve is still quiet")
