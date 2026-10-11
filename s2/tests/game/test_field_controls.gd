@@ -577,20 +577,30 @@ func test_a_shove_winds_up_and_the_body_is_seen_going_back() -> void:
 	assert_eq(game.zombies.shoved_k(z), 1.0, "then it is drawn where the rules have it")
 
 
-func test_paused_the_stick_can_be_switched_between_fixed_and_following() -> void:
+func test_paused_the_stick_can_be_switched_in_the_settings() -> void:
 	var hud = game.hud
 	hud.tick(0.02)
-	assert_false(hud.stick_opt_button.visible, "only while paused")
+	assert_false(hud.settings_button.visible, "only while paused")
 	game.paused = true
 	hud.tick(0.02)
-	assert_true(hud.stick_opt_button.visible)
+	assert_true(hud.settings_button.visible)
 	assert_false(hud.stick_floats())
-	hud._pad_down(hud.stick_opt_button, Vector2.ZERO)
+	hud._pad_down(hud.settings_button, Vector2.ZERO)
+	assert_true(hud.modal_open, "the settings are a panel of their own, not keys on the playing screen")
+	hud._set_stick()
 	assert_true(hud.stick_floats())
-	hud.tick(0.02)
-	assert_eq(hud.stick_opt_button.text, "스틱: 따라오기")
-	hud._pad_down(hud.stick_opt_button, Vector2.ZERO)
+	assert_true(_modal_texts(hud).has("스틱: 따라오기"))
+	hud._set_stick()
 	assert_false(hud.stick_floats())
+	hud._close_modal()
+	assert_true(game.paused, "closing them leaves the pause as it was")
+
+
+func _modal_texts(hud) -> Array:
+	var out: Array = []
+	for b in hud.modal.find_children("*", "Button", true, false):
+		out.append(String(b.text))
+	return out
 
 
 func test_the_dusk_test_key_jumps_to_1540_and_keeps_the_next_horde_as_far_off() -> void:

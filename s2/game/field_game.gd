@@ -1719,9 +1719,11 @@ func _radio_show(text: String) -> void:
 	hud.radio(text)
 
 
-func say(p, text: String) -> void:
+## What happened to p, in a few words. `hurt`: it is a wound (the hud shows
+## those of the chief at the screen's edges, not as a note).
+func say(p, text: String, hurt: bool = false) -> void:
 	if hud != null:
-		hud.toast(text)
+		hud.say(p, text, hurt)
 
 
 # ---------------------------------------------------------------- vision & camera

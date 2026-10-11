@@ -82,6 +82,8 @@ func test_the_pad_sits_clear_of_every_other_key() -> void:
 		pad.visible = true
 	await get_tree().process_frame
 	await get_tree().process_frame
+	hud.tick(0.02)
+	await get_tree().process_frame
 	var r: Rect2 = hud.all_aboard_button.get_global_rect()
 	var view: Vector2 = hud._view_size()
 	assert_true(Rect2(Vector2.ZERO, view).encloses(r), "on the screen")
@@ -91,10 +93,12 @@ func test_the_pad_sits_clear_of_every_other_key() -> void:
 			assert_false(r.intersects(b.get_global_rect()), "clear of " + b.text)
 	assert_false(r.intersects(hud.allies_box.get_global_rect()), "clear of the companions' row")
 	assert_false(r.intersects(hud.portrait.get_global_rect()))
-	# A column away from attack and shove; the situation pad lies between it and aim.
+	# Under the companions' row, at its right end, left of the thumb pads.
+	var row: Rect2 = hud.allies_box.get_global_rect()
+	assert_gt(r.position.y, row.end.y)
+	assert_almost_eq(r.end.x, row.end.x, 1.0)
+	assert_lt(r.end.x, hud.manual_button.get_global_rect().position.x)
 	assert_lt(r.end.x, hud.attack_button.get_global_rect().position.x)
-	assert_lt(r.end.x, hud.shove_button.get_global_rect().position.x)
-	assert_lt(r.end.y, hud.aim_button.get_global_rect().position.y - 84.0)
 
 
 func test_the_one_by_one_order_can_be_shown_as_to_the_train() -> void:
