@@ -14,6 +14,8 @@ export interface DomUi {
   ws?: 'delegate' | 'order' | 'jobs' | null;
   /** 열차 관리 화면에서 부상 명부 판을 펼쳤나 */
   med?: boolean;
+  /** 기술 카드에서 「더」를 눌러 긴 글을 펼쳤나 */
+  more?: boolean;
 }
 
 export interface Ui {
