@@ -45,6 +45,9 @@ var path := PackedVector3Array()
 var running: bool = false
 var crouched: bool = false
 var facing: float = 0.0
+## Body turn: turn_rate in rad/s (0 = the view follows facing at once), look is the angle shown.
+var turn_rate: float = 0.0
+var look: float = 0.0
 var moving: bool = false
 var stick := Vector2.ZERO               # player's left thumb: world x/z direction, length 0..1
 var drive_speed: float = 0.0            # body speed under the stick (eases in and out)
@@ -286,6 +289,18 @@ func stop() -> void:
 	moving = false
 
 
+## A stable 0..1 value from the name, so each person keeps their own pace.
+func name_unit(salt: String = "") -> float:
+	return float((salt + display_name).hash() % 1000) / 1000.0
+
+
+## The shown body is within `limit` radians of where it is meant to face.
+func turned_to(limit: float) -> bool:
+	if turn_rate <= 0.0:
+		return true
+	return absf(angle_difference(look, facing)) <= limit
+
+
 func face_point(p: Vector3) -> void:
 	var d := p - position
 	if d.length() > 0.01:
@@ -336,7 +351,11 @@ func _refresh_weapon_mesh() -> void:
 
 ## Per-frame visuals: facing, posture, tag text.
 func refresh_view(show_tag: bool) -> void:
-	rotation.y = facing
+	if turn_rate <= 0.0:
+		rotation.y = facing
+	else:
+		look = wrapf(rotate_toward(look, look + angle_difference(look, facing), turn_rate * get_process_delta_time()), -PI, PI)
+		rotation.y = look
 	var lying := body.downed or body.dead or fallen_t > 0.0
 	if lying:
 		body_mesh.rotation = Vector3(PI * 0.5, 0, 0)

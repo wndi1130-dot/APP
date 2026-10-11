@@ -17,6 +17,14 @@ const RAIDER_SIGHT: float = 22.0
 const NOTICE_TIME: float = 1.5
 const DIG_TIME: float = 45.0
 const TRIP_COAL: float = 0.25
+## Something behind a person (outside +-BEHIND_DEG of facing) and farther than
+## BEHIND_NEAR is noticed only after it has stayed there BEHIND_NOTICE (0.5..1.0 s per person).
+const BEHIND_DEG: float = 100.0
+const BEHIND_NEAR: float = 1.2
+const BEHIND_NOTICE_MIN: float = 0.5
+const BEHIND_NOTICE_MAX: float = 1.0
+## A companion waits this long after a shot before the next one.
+const ALLY_REFIRE: float = 0.9
 
 var game
 var think_t: float = 0.0
@@ -68,17 +76,35 @@ func _grab_reflex(p, delta: float) -> void:
 		game.combat.break_grab(p)
 
 
+## Called once per think (THINK) for a person, so brain["behind_t"] counts real time.
 func _threat_near(p, r: float) -> Dictionary:
 	var best: Dictionary = {}
 	var best_d := r
+	var back: Dictionary = {}
+	var back_d := r
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var cos_front := cos(deg_to_rad(BEHIND_DEG))
 	for z in game.zombies.in_radius(p.position, r):
 		if not game.zombies.active(z) or z["state"] == "downed":
 			continue
 		var d: float = p.position.distance_to(z["pos"])
-		if d < best_d and game.sight_clear(p.position, z["pos"]):
+		if not (d < best_d or d < back_d) or not game.sight_clear(p.position, z["pos"]):
+			continue
+		var to_z: Vector3 = z["pos"] - p.position
+		to_z.y = 0
+		var behind: bool = d > BEHIND_NEAR and to_z.length() > 0.01 and fwd.dot(to_z.normalized()) < cos_front
+		if not behind and d < best_d:
 			best_d = d
 			best = z
-	return best
+		elif behind and d < back_d:
+			back_d = d
+			back = z
+	if not best.is_empty() or back.is_empty():
+		p.brain["behind_t"] = 0.0
+		return best
+	p.brain["behind_t"] = float(p.brain.get("behind_t", 0.0)) + THINK
+	var notice: float = lerpf(BEHIND_NOTICE_MIN, BEHIND_NOTICE_MAX, p.name_unit("b"))
+	return back if float(p.brain["behind_t"]) >= notice else {}
 
 
 func _hostile_raider_near(p, r: float):
@@ -122,6 +148,8 @@ func _shoot_or_aim(p, at: Vector3, target) -> void:
 	p.brain["aim_wait"] = float(p.brain.get("aim_wait", 0.0)) - THINK
 	if p.brain["aim_wait"] <= 0.0 or p.aim.deg <= p.aim.floor_deg * 1.05:
 		game.combat.fire(p, at, target)
+		if p.team == "squad":
+			p.brain["aim_wait"] = ALLY_REFIRE
 
 
 func _treat_self(p) -> bool:
