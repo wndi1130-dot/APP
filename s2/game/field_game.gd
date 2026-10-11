@@ -19,6 +19,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
+const Motion = preload("res://game/sim/motion.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
@@ -178,6 +179,7 @@ var hordes: Dictionary = {}            # index -> {"t": arrival, "ids": [], "cle
 var pending_spawn: Array = []          # {"t", "pos", "horde", "target"}
 var last_loud = null                   # where the last loud sound was (Vector3): hordes walk there
 var rattle: Dictionary = {}            # manhole key -> seconds of rattling left
+var lid_open: Dictionary = {}          # manhole key -> seconds the lid stays pushed aside (a body is coming up)
 var ground_items: Array = []           # {pos, id, n}
 var decisions: Array = []
 var cam_focus := Vector3.ZERO
@@ -1424,6 +1426,11 @@ func _update_hordes(delta: float) -> void:
 			node.position.y = absf(sin(now * 31.0)) * 0.08 if rattle[key] > 0.0 else 0.0
 		if rattle[key] <= 0.0:
 			rattle.erase(key)
+	for key in lid_open.keys():
+		lid_open[key] -= delta
+		if lid_open[key] <= 0.0:
+			lid_open.erase(key)
+			view.update_manhole(key, false)
 	if _squad_hunted():
 		director.noticed(now)
 	elif director.update_lost(now):
@@ -1544,7 +1551,7 @@ func _update_spawns(delta: float) -> void:
 		var key: String = s["entry"]
 		# A manhole closed mid-horde sends the rest out of the culvert.
 		if director.sewer(key) and not director.is_open(key):
-			key = "culvert"
+			key = _other_way(key)
 			s["entry"] = key
 			s["pos"] = entry_pos(key)
 		if now < float(s["t"]):
@@ -1571,6 +1578,8 @@ func _update_spawns(delta: float) -> void:
 			continue
 		var z := zombies.spawn("dead", s["pos"] + Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4)), {"horde": s["horde"], "target": s["target"]})
 		z["stander"] = false
+		if director.sewer(key):
+			_climb_out(z, key, s)
 		alive += 1
 		gate[key] = int(gate.get(key, 0)) + 1
 	pending_spawn = keep
@@ -1595,6 +1604,40 @@ func lid_tip() -> String:
 		return ""
 	lid_tip_told = true
 	return " 맨홀은 판자나 고철로 누르면 막힌다."
+
+
+## Out of a sewer hole a body climbs: straight up out of a lid or a drain,
+## flat out of a culvert the way its mouth opens. While one comes up a lid,
+## the lid lies pushed aside. What can be done to it meanwhile is as it was.
+func _climb_out(z: Dictionary, key: String, s: Dictionary) -> void:
+	var way := "culvert" if key.begins_with("culvert") else "lid"
+	if way == "lid":
+		z["pos"] = zombies._floor_y(s["pos"])
+	var to: Vector3 = s["target"] - z["pos"]
+	to.y = 0.0
+	if way == "culvert" and data["hole_faces"].has(key):
+		var face: Vector2i = data["hole_faces"][key]
+		to = Vector3(face.x, 0, face.y)
+	if to.length() > 0.01:
+		z["angle"] = atan2(to.x, to.z)
+	zombies.start_climb(z, way)
+	if FieldMaps.lid(key) and view.manhole_nodes.has(key):
+		if not lid_open.has(key):
+			view.update_manhole(key, false, true)
+		lid_open[key] = float(Motion.row("dead_climb_lid")["len"])
+
+
+## Where the rest of a horde comes when its lid is shut under it: the culvert
+## if the map has one open, else another open hole, else the next way in.
+func _other_way(shut: String) -> String:
+	var order: Array = ["culvert"]
+	for key in data["manholes"]:
+		if not order.has(key):
+			order.append(key)
+	for key in order:
+		if key != shut and data["manholes"].has(key) and director.is_open(key):
+			return key
+	return director.next_entry
 
 
 ## Another open sewer mouth with nobody near it, culvert first, or "".
