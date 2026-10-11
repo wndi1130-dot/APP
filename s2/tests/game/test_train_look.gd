@@ -960,3 +960,38 @@ func test_one_hunched_by_the_cold_keeps_to_it_unless_the_gesture_hunches_too() -
 	assert_false(Look.takes(Gesture.SLUMP, true))
 	assert_true(Look.takes(Gesture.HUG_KNEES, true))
 	assert_true(Look.takes(Gesture.HUG_KNEES, false))
+
+# ---------------------------------------------------------------- the gestures of cold
+
+func test_the_first_two_who_walk_rub_and_stamp_each_on_a_beat_of_their_own() -> void:
+	var rows := Look.idle_gestures("cold", 2)
+	assert_eq(rows.size(), 2)
+	assert_eq(_col(rows, "name"), [Gesture.RUB_STAMP, Gesture.RUB_STAMP])
+	assert_eq(_col(rows, "role"), [0, 1])
+
+
+func test_a_third_who_walks_has_nothing_to_do_and_no_walker_has_none() -> void:
+	var rows := Look.idle_gestures("cold", 3)
+	assert_eq(rows.size(), 3)
+	assert_eq(rows[2]["name"], "")
+	assert_eq(rows[2]["role"], 0)
+	assert_eq(Look.idle_gestures("cold", 0), [])
+
+
+func test_no_other_value_gives_those_who_walk_anything() -> void:
+	for value in ["hunger", "fear", "tension", "resent", "", "nonsense"]:
+		assert_eq(_col(Look.idle_gestures(value, 3), "name"), ["", "", ""], "'%s'" % value)
+
+
+func test_cold_gives_the_seated_and_those_standing_about_nothing() -> void:
+	assert_eq(_col(Look.bench_gestures("cold", 4), "name"), ["", "", "", ""])
+	assert_eq(_col(Look.floor_gestures("cold", 4), "name"), ["", "", "", ""])
+	for car_index in range(3):
+		for row in Look.knot_gestures("cold", 5, car_index):
+			assert_eq(row["name"], "", "car %d" % car_index)
+
+
+func test_rubbing_the_hands_is_done_standing_and_not_hunched() -> void:
+	var base := Gesture.base_of(Gesture.RUB_STAMP)
+	assert_eq(base["base"], "stand")
+	assert_false(base["huddled"])

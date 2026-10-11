@@ -59,12 +59,14 @@ const MOOD_LOOK: Dictionary = {
 ## come down off the bench, roomy car or not, and the first few of those on
 ## the floor hug their knees. In a car sunk by hunger the first two on the
 ## bench hold an empty bowl and look into it, and the first two on the floor
-## lie back against the wall. Cold has no gestures yet. For show only.
+## lie back against the wall. In a car sunk by cold those who walk rub their
+## hands and stamp their feet while they stand between walks. For show only.
 const GESTURES: Dictionary = {
 	"tension": {"pairs": [Gesture.ARGUE, Gesture.WHISPER], "one": Gesture.TURN_ABOUT},
 	"resent": {"each": [Gesture.ARMS_CROSSED, Gesture.BACK_TURNED, Gesture.ARMS_CROSSED]},
 	"fear": {"floor": [Gesture.HUG_KNEES, Gesture.HUG_KNEES, Gesture.HUG_KNEES]},
 	"hunger": {"bench": [Gesture.BOWL_SIT, Gesture.BOWL_SIT], "floor": [Gesture.SLUMP, Gesture.SLUMP]},
+	"cold": {"idle": [Gesture.RUB_STAMP, Gesture.RUB_STAMP]},
 }
 const GESTURE_PAIR: int = 2             # a quarrel takes two: in a tense car one stander alone keeps still
 const SLOT_STRIDE: int = 4
@@ -244,12 +246,18 @@ static func knot_gestures(value: String, standing: int, car_index: int, also: St
 ## [{"name", "role"}], name "" for sitting as they were. Only the first few
 ## act, each on a beat of its own (role).
 static func floor_gestures(value: String, on_floor: int) -> Array:
-	return _seated_gestures(value, "floor", on_floor)
+	return _gestures_of(value, "floor", on_floor)
 
 
 ## The same for those on its bench, in bench order.
 static func bench_gestures(value: String, on_bench: int) -> Array:
-	return _seated_gestures(value, "bench", on_bench)
+	return _gestures_of(value, "bench", on_bench)
+
+
+## The same for those who walk, in walking order: what each falls into
+## while it stands between two walks, and drops to walk on.
+static func idle_gestures(value: String, walkers: int) -> Array:
+	return _gestures_of(value, "idle", walkers)
 
 
 ## Whether one who sits takes a gesture: one the cold has hunched up keeps
@@ -258,10 +266,10 @@ static func takes(name: String, huddled: bool) -> bool:
 	return name != "" and (not huddled or bool(Gesture.base_of(name)["huddled"]))
 
 
-static func _seated_gestures(value: String, where: String, seated: int) -> Array:
+static func _gestures_of(value: String, who: String, people: int) -> Array:
 	var out: Array = []
-	var each: Array = (GESTURES.get(value, {}) as Dictionary).get(where, [])
-	for k in seated:
+	var each: Array = (GESTURES.get(value, {}) as Dictionary).get(who, [])
+	for k in people:
 		var acts: bool = k < each.size()
 		out.append({"name": each[k] if acts else "", "role": k if acts else 0})
 	return out

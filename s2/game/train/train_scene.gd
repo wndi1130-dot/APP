@@ -170,6 +170,7 @@ func step(delta: float) -> void:
 			_step_council(c, delta)
 		for b in c["bodies"]:
 			_step_body(c, b, delta)
+			_idle(c, b)
 			if b.gesture != "":
 				_show_gesture(c, b)
 
@@ -289,6 +290,8 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 	var gestures := Look.knot_gestures(value, standers, int(c["index"]), also)
 	# Resentment has somewhere to look: up or down the train, at the captain's car.
 	var toward_captain: float = _captain_side(c) * RESENT_TURN
+	var idle := Look.idle_gestures(value, walkers)
+	var walked: int = 0
 	var sat := Look.bench_gestures(value, bench_rows)
 	var low := Look.floor_gestures(value, floor_rows)
 	for i in bodies.size():
@@ -297,6 +300,11 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 		match String(row["pose"]):
 			"walk":
 				_walk_from(c, b, _aisle_place(x0, i, walkers))
+				# In a cold car one who walks rubs its hands while it stands between walks.
+				b.idle_gesture = idle[walked]["name"]
+				b.gesture_role = int(idle[walked]["role"])
+				_idle(c, b)
+				walked += 1
 			"stand":
 				# A pair in a gesture stands as far apart as the gesture has them.
 				var g: Dictionary = gestures[standing]
@@ -405,6 +413,7 @@ func _plain(b: Node3D) -> void:
 	b.side = 0.0
 	b.seat = -1
 	b.act = ""
+	b.idle_gesture = ""
 	if b.gesture != "":
 		Gesture.show(b, "", 0.0)
 		_show_prop(b, {})
@@ -418,6 +427,22 @@ func _show_gesture(c: Dictionary, b: Node3D) -> void:
 	var t: float = clock + float(c["index"]) * GESTURE_OFFSET
 	Gesture.show(b, b.gesture, t, b.gesture_role, b.gesture_facing)
 	_show_prop(b, Gesture.at(b.gesture, t, b.gesture_role).get("prop", {}))
+
+
+## One who walks falls into its idle gesture while it stands between walks
+## (in a cold car: hands rubbed, feet stamped) and drops it to walk on.
+func _idle(c: Dictionary, b: Node3D) -> void:
+	if b.idle_gesture == "":
+		return
+	if b.state == "wait" and b.gesture == "":
+		b.gesture = b.idle_gesture
+		b.gesture_facing = 0.0
+		_show_gesture(c, b)
+	elif b.state != "wait" and b.gesture == b.idle_gesture:
+		# One sent off on a trip has already turned to walk this step: it keeps that facing.
+		Gesture.show(b, "", 0.0, 0, b.rotation.y)
+		_show_prop(b, {})
+		b.gesture = ""
 
 
 ## Put one who sits in its gesture, unless the cold has hunched it up first.
