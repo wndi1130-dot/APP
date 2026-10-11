@@ -27,6 +27,8 @@ import { darkPickMs, darkPickReset, darkVisibility, liftAsk, noteScene, sceneRes
 import { showCrash } from './crash';
 import { CONFIRM_MS, confirmed, replacesToast, toastMs } from './notice';
 import type { ToastKind } from './notice';
+import { RESUME_MS, stallBeats, stallCount, stallSecs } from './stall_beats';
+import type { StallBeat } from './stall_beats';
 import { TRAIL_MAX, applyStep, makeBundle, plainData, readSave, reviveSave, reproText, setReproSource } from './repro';
 import type { ReproError, SaveRead, Step, TrailEntry } from './repro';
 
@@ -142,7 +144,7 @@ export function renderApp(view: View): HTMLElement {
   else if (screen === 'overview') main = overviewScreen(view);
   else if (screen === 'train' && g.dom) main = trainScreen(view); // S1c 열차 관리 화면
   else main = homeScreen(view);
-  const sheet = (screen === 'home' || screen === 'overview' || screen === 'train') && !ui.braking ? cardSheet(view) : null;
+  const sheet = (screen === 'home' || screen === 'overview' || screen === 'train') && !ui.braking && !ui.stall ? cardSheet(view) : null;
   const panel = overlay(view);
   return h('div', { class: cx('app', `app--${screen}`, sheet && 'has-sheet') },
     topBar(view),
@@ -421,6 +423,65 @@ export function startApp(root: HTMLElement): void {
     ui.screen = 'home'; // 방문 기록에 넣은 한 칸은 render가 거둔다
   }
 
+  // 멈춘 열차로 들어가는 연출(결정 101). 박이 바뀔 때는 홈 뿌리의 data-beat만 바꾼다(다시 그리면 배경 흐름과 선 도면이 처음부터 돈다).
+  // 판이 열리는 박에서만 다시 그리고, 끝나면 미뤄 둔 정산 창을 연다. 소리는 여기서 부르지 않는다(data-beat를 듣는 쪽이 건다).
+  let stallTimers: ReturnType<typeof setTimeout>[] = [];
+  function setBeat(beat: StallBeat): void {
+    if (!ui.stall) return;
+    ui.stall.beat = beat;
+    if (beat === 'open') return render();
+    const home = root.querySelector<HTMLElement>('.home');
+    if (!home) return;
+    home.dataset.beat = beat;
+    home.classList.toggle('is-moving', beat === 'run' || beat === 'slow');
+    home.classList.toggle('is-braking', beat === 'brake');
+  }
+  function endStall(): void {
+    stallTimers.forEach(clearTimeout);
+    stallTimers = [];
+    if (!ui.stall) return;
+    ui.stall = null;
+    if (g.phase === 'settle') ui.panel = 'settle';
+    render();
+  }
+  function startStall(): void {
+    const spans = stallBeats(stallSecs(stallCount(g)));
+    const open = spans[spans.length - 1];
+    ui.stall = { beat: spans[0].beat, goMs: spans.find(s => s.beat === 'hush')?.at ?? 0 };
+    ui.screen = 'home';
+    ui.panel = null;
+    ui.carPop = null;
+    ui.strTrain = false;
+    stallTimers = [...spans.slice(1).map(s => setTimeout(() => setBeat(s.beat), s.at)), setTimeout(endStall, open.at + open.ms)];
+    render();
+  }
+  /** 연출 중 어디든 누르면 판이 열리는 박으로 건너뛴다. */
+  function skipStall(): void {
+    if (!ui.stall || ui.stall.beat === 'open') return;
+    stallTimers.forEach(clearTimeout);
+    stallTimers = [setTimeout(endStall, 600)];
+    setBeat('open');
+  }
+
+  // 다시 달릴 때의 짧은 떠남: 멈춘 판(고르기 전에 떠 둔 것)이 내려가고, 굴뚝에 연기가 돌고, 기적 박이 온다. 누르는 것은 막지 않는다.
+  let resumeTimers: ReturnType<typeof setTimeout>[] = [];
+  function startResume(board: HTMLElement | null): void {
+    resumeTimers.forEach(clearTimeout);
+    ui.resume = { beat: 'fire' };
+    render();
+    const home = root.querySelector<HTMLElement>('.home');
+    if (board && home) { board.classList.add('strs--leaving'); board.setAttribute('aria-hidden', 'true'); home.append(board); }
+    resumeTimers = [
+      setTimeout(() => {
+        if (!ui.resume) return;
+        ui.resume.beat = 'whistle';
+        const now = root.querySelector<HTMLElement>('.home.is-resuming');
+        if (now) now.dataset.beat = 'whistle';
+      }, RESUME_MS.fire),
+      setTimeout(() => { ui.resume = null; render(); }, RESUME_MS.fire + RESUME_MS.whistle),
+    ];
+  }
+
   function openStack(): void {
     if (stackCount(g, ui) === 0) return;
     ui.cardOpen = true;
@@ -469,10 +530,13 @@ export function startApp(root: HTMLElement): void {
     switch (action) {
       case 'advance': {
         const wasSettle = g.phase === 'settle';
+        const wasStranded = !!g.stranded;
         // 정기 신임 표결 뒤 '다음 안건': 개표 중이었으면 멈추고 이번 회기 안건으로 넘어간다.
         if (g.phase === 'council') { ui.count = null; clearTimeout(countTimer); }
         step({ a: 'advance', d: {} });
         if (g.phase === 'settle' && !wasSettle) { ui.panel = 'settle'; ui.screen = 'home'; ui.selComm = null; ui.dealOpen = null; }
+        // 이 누름에서 열차가 처음 섰다: 달리다 급제동으로 서는 연출을 먼저 돌리고 정산 창은 그 뒤에 연다. 동작 줄이기 설정이면 판만 뜬다.
+        if (!wasStranded && g.stranded && g.phase !== 'end' && !matchMedia('(prefers-reduced-motion: reduce)').matches) return startStall();
         if (g.phase === 'stop' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
           // 정차: 브레이크 소리와 함께 열차가 서고 나서 정차 서류가 펼쳐진다(나중엔 정차 장면으로 넘어가는 자리).
           ui.stopSeen = false;
@@ -536,6 +600,8 @@ export function startApp(root: HTMLElement): void {
         const kind = picked?.kind;
         const why = picked ? viewCard(g, picked).choices[Number(data.index)]?.why : undefined; // 고르면 카드가 사라지니 미리 읽어 둔다
         const ms = darkPickMs(g, Number(data.uid)); // S1b H7: 고르기까지 걸린 시간
+        const board = g.stranded ? root.querySelector<HTMLElement>('.strs')?.cloneNode(true) as HTMLElement | undefined : undefined; // 다시 달리면 내려갈 멈춘 판
+        const wasStranded = !!g.stranded;
         step({ a: 'choose', d: { ...plainData(data), ...(ms ? { ms } : {}) } });
         const fx = fxDiff(before, g);
         if (fx && why) fx.why = why;
@@ -543,6 +609,8 @@ export function startApp(root: HTMLElement): void {
         if (stackCount(g, ui) > 0) focusForTopCard();
         // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
         else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; if (g.dom) enterTrain(); }
+        // 수동차가 가져온 석탄으로 불을 넣었다: 열차가 다시 달린다(동작 줄이기 설정이면 연출 없이).
+        if (wasStranded && !g.stranded && g.phase !== 'end' && !matchMedia('(prefers-reduced-motion: reduce)').matches) return startResume(board ?? null);
         return render();
       }
       case 'stop-set':
@@ -780,6 +848,7 @@ export function startApp(root: HTMLElement): void {
 
   const lever = departInput(root, () => handle('depart-pull', {}), text => { toast(text); render(); });
   root.addEventListener('click', event => {
+    if (ui.stall) return skipStall(); // 멈춘 열차 연출 중에는 어디를 눌러도 건너뛰기 하나만 받는다
     const target = (event.target as Element | null)?.closest<HTMLElement | SVGElement>('[data-action]');
     if (!target || !root.contains(target)) return;
     if (ui.braking) return; // 브레이크 연출(1.1초)이 도는 동안은 받지 않는다(타이머가 풀어 준다)
@@ -799,7 +868,7 @@ export function startApp(root: HTMLElement): void {
     const btn = (event.target as Element | null)?.closest<HTMLButtonElement>('button:disabled');
     const moved = !downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 10;
     downAt = null;
-    if (!btn || !root.contains(btn) || moved || ui.braking) return;
+    if (!btn || !root.contains(btn) || moved || ui.braking || ui.stall) return;
     const why = btn.title.trim();
     const key = deniedKey(btn);
     if (why) toast(why);

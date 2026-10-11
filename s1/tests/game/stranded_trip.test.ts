@@ -83,7 +83,7 @@ describe('출발 카드', () => {
     rels(h, 30);
     advance(h);
     expect(choices(h)).toEqual(['수색대를 보낸다', '내가 간다', '아직 안 보낸다']);
-    expect(viewCard(h, lastCard(h, 'trip_depart')!).body).toMatch(/지지하는 칸의 사람 \d+%\. 50%를 넘어 수색대를 보낼 수 있다/);
+    expect(viewCard(h, lastCard(h, 'trip_depart')!).body).toMatch(/따르는 사람 \d+%\. 50%를 넘어 수색대를 보낼 수 있다/);
   });
 
   it('「아직 안 보낸다」는 긴장 +2이고 다음 턴 같은 카드가 또 뜬다', () => {

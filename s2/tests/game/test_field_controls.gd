@@ -577,20 +577,30 @@ func test_a_shove_winds_up_and_the_body_is_seen_going_back() -> void:
 	assert_eq(game.zombies.shoved_k(z), 1.0, "then it is drawn where the rules have it")
 
 
-func test_paused_the_stick_can_be_switched_between_fixed_and_following() -> void:
+func test_paused_the_stick_can_be_switched_in_the_settings() -> void:
 	var hud = game.hud
 	hud.tick(0.02)
-	assert_false(hud.stick_opt_button.visible, "only while paused")
+	assert_false(hud.settings_button.visible, "only while paused")
 	game.paused = true
 	hud.tick(0.02)
-	assert_true(hud.stick_opt_button.visible)
+	assert_true(hud.settings_button.visible)
 	assert_false(hud.stick_floats())
-	hud._pad_down(hud.stick_opt_button, Vector2.ZERO)
+	hud._pad_down(hud.settings_button, Vector2.ZERO)
+	assert_true(hud.modal_open, "the settings are a panel of their own, not keys on the playing screen")
+	hud._set_stick()
 	assert_true(hud.stick_floats())
-	hud.tick(0.02)
-	assert_eq(hud.stick_opt_button.text, "스틱: 따라오기")
-	hud._pad_down(hud.stick_opt_button, Vector2.ZERO)
+	assert_true(_modal_texts(hud).has("스틱: 따라오기"))
+	hud._set_stick()
 	assert_false(hud.stick_floats())
+	hud._close_modal()
+	assert_true(game.paused, "closing them leaves the pause as it was")
+
+
+func _modal_texts(hud) -> Array:
+	var out: Array = []
+	for b in hud.modal.find_children("*", "Button", true, false):
+		out.append(String(b.text))
+	return out
 
 
 func test_the_dusk_test_key_jumps_to_1540_and_keeps_the_next_horde_as_far_off() -> void:
@@ -619,16 +629,45 @@ func test_state_icons_sit_in_a_column_at_the_right_edge_big_enough_to_see() -> v
 	assert_almost_eq(a.end.x, b.end.x, 0.5, "one column, right-aligned")
 	assert_gt(b.position.y, a.end.y - 0.5, "one under the other")
 	# Build 116 (user): at 58x38 with 15pt words they were not seen at all.
+	# User 2026-10-12: pictures on round plates, 72 across.
 	for i in hud.STATUS_SLOTS:
-		assert_gte(hud.status_pads[i].size.x, 100.0 if i < 2 else 84.0, "wide enough to see")
-		assert_gte(hud.status_pads[i].size.y, 52.0 if i < 2 else 44.0)
-		assert_gte(hud.status_pads[i].get_theme_font_size("font_size"), 22 if i < 2 else 18)
-	var plate: StyleBoxFlat = hud.status_pads[0].get_theme_stylebox("normal")
-	assert_gte(plate.border_width_left, 3, "a rim in the state's colour")
-	assert_gt(plate.bg_color.a, 0.8, "a plate, not loose words")
+		assert_eq(hud.status_pads[i].size, Vector2(72, 72), "a round plate, big enough to see")
+	for i in 2:
+		assert_not_null(hud.status_pads[i].icon, "a picture")
+		assert_eq(hud.status_pads[i].text, "", "and no words on it")
 	for pad in [hud.shove_button, hud.manual_button, hud.aim_button, hud.context_button]:
-		assert_false(hud.status_pads[4].get_global_rect().intersects(pad.get_global_rect()))
-		assert_false(hud.status_pads[0].get_global_rect().intersects(pad.get_global_rect()))
+		for i in hud.STATUS_SLOTS:
+			assert_false(hud.status_pads[i].get_global_rect().intersects(pad.get_global_rect()), "icon %d is clear of the keys" % i)
+	for i in hud.STATUS_SLOTS:
+		for k in range(i + 1, hud.STATUS_SLOTS):
+			assert_false(hud.status_pads[i].get_global_rect().intersects(hud.status_pads[k].get_global_rect()), "icons %d and %d do not overlap" % [i, k])
+
+
+func test_every_state_has_a_picture_and_the_worse_one_differs() -> void:
+	const StatusArt = preload("res://game/ui/status_art.gd")
+	for id in ["infection", "bleed", "fracture", "fester", "cold", "exhaustion"]:
+		assert_not_null(StatusArt.texture(id, false, false, 80), id)
+	for id in ["infection", "bleed", "fracture", "cold", "exhaustion"]:
+		assert_ne(StatusArt.key(id, true, false), StatusArt.key(id, false, false), id + " has a severe picture")
+	assert_eq(StatusArt.key("cold", false, true), "cold_faint")
+	assert_eq(StatusArt.key("fester", true, false), "fester", "falls back to the one there is")
+	assert_eq(StatusArt.texture("bleed", false, false, 80).get_size(), Vector2(160, 160), "drawn at twice the size")
+	assert_null(StatusArt.texture("no_such_state", false, false, 80))
+
+
+func test_the_state_icons_can_be_made_smaller_from_the_settings() -> void:
+	var hud = game.hud
+	assert_eq(hud.status_diameter(), 72)
+	hud._set_status_size()
+	assert_eq(hud.status_diameter(), 64)
+	assert_eq(hud.status_pads[0].size, Vector2(64, 64))
+	assert_true(_modal_texts(hud).has("상태 아이콘: 작게"))
+	hud._set_status_size()
+	assert_eq(hud.status_pads[3].size, Vector2(80, 80))
+	assert_true(_modal_texts(hud).has("상태 아이콘: 크게"))
+	hud._set_status_size()
+	assert_eq(hud.status_diameter(), 72, "and round to where it began")
+	hud._close_modal()
 
 
 # decisions 2026-10-11 '근접 타수': a spent hand needs about twice the blows.

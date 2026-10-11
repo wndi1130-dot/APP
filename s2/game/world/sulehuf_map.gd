@@ -110,6 +110,7 @@ static func build() -> Dictionary:
 	data["manholes"] = {"manhole": Vector2i(54, 33), "culvert": Vector2i(3, 14), "cellar": Vector2i(110, 50)}
 	data["labels"].append({"text": "맨홀", "cell": Vector2i(54, 32)})
 	data["manhole_levels"] = {"cellar": -1}
+	data["hole_faces"] = {"culvert": Vector2i(0, 1)}
 	data["sewer_names"] = {"manhole": "거리 맨홀", "culvert": "급수탑 밑 암거", "cellar": "지하실 배수구"}
 	data["entries"] = {
 		"manhole": [Vector2i(54, 33)],

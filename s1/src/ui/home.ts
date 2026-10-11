@@ -8,7 +8,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 // S1c 내정 훅(ui/domestic.ts). S1a 판이면 모두 null이나 CARS를 돌려준다.
 import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, domesticWhyLine, trainCars } from './domestic';
-import { stallWarn, strandedBack, strandedBoard } from './stranded';
+import { stallScene, stallWarn, strandedBack, strandedBoard } from './stranded';
 
 // 홈: 옆에서 본 열차 단면. 화면보다 길어서 좌우로 스크롤한다. 칸 문 위 명판으로 칸을 구별한다.
 // 칸의 수치와 조절은 칸을 누르면 뜨는 작은 창에만 있다. 그림은 회색 상자 수준의 자리표시다.
@@ -50,7 +50,7 @@ function carEl(view: View, car: CarDef): HTMLElement {
     domPlate(g, car) ?? (car.plate ? h('span', { class: 'car__plate' }, car.plate) : null),
     car.kind === 'freight' ? h('span', { class: 'car__door' }) : h('span', { class: 'car__windows' }, h('i'), h('i'), h('i')),
     figures(g, car),
-    car.kind === 'loco' ? h('span', { class: 'loco__stack' }, striking ? null : h('i', { class: 'smoke' })) : null,
+    car.kind === 'loco' ? h('span', { class: 'loco__stack' }, striking || (g.stranded && !ui.stall) ? null : h('i', { class: 'smoke' })) : null,
     h('span', { class: 'car__wheels' }, h('i'), h('i')));
 }
 
@@ -170,13 +170,21 @@ function withNav(pop: HTMLElement | null, prev?: CarDef, next?: CarDef): HTMLEle
 
 export function homeScreen(view: View): HTMLElement {
   const { g, ui } = view;
-  const moving = g.phase === 'travel' && !g.inStrike;
+  // 멈춘 열차로 들어가는 연출(결정 101): 서기 전까지는 평소 홈이 달리고, 판이 열리는 박에서 멈춘 판으로 바뀐다.
+  const stall = g.stranded ? ui.stall ?? null : null;
+  const moving = stall ? stall.beat === 'run' || stall.beat === 'slow' : g.phase === 'travel' && !g.inStrike;
+  const resume = !g.stranded ? ui.resume ?? null : null; // 불을 넣은 직후: 굴뚝에 연기가 돌고 기적이 운다
+  // data-stranded: 열차가 서 있는 동안 멈춘 판과 열차 단면 두 꼴 모두에 붙는다(선 뒤 소리가 이것을 듣는다). 들어가는 연출 중에는 판이 열리는 박부터.
+  const beat = {
+    ...(stall ? { 'data-beat': stall.beat } : resume ? { 'data-beat': resume.beat } : {}),
+    ...(g.stranded && (!stall || stall.beat === 'open') ? { 'data-stranded': '' } : {}),
+  };
   const cars = trainCars(g); // S1c 내정 훅: 칸 순서와 덧붙인 칸
   const open = cars.find(c => c.id === ui.carPop);
   // 석탄 0으로 선 동안에는 단면 자리에 멈춘 열차 판이 선다(결정 094). 「열차 단면」을 누르면 평소 꼴로 본다.
   if (!g.stranded) ui.strTrain = false;
-  else if (!ui.strTrain) return h('section', { class: 'home home--stranded' }, strandedBoard(view), paperStack(view));
-  return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike', ui.braking && 'is-braking') },
+  else if (stall ? stall.beat === 'open' : !ui.strTrain) return h('section', { class: 'home home--stranded', ...beat }, strandedBoard(view), stall ? null : paperStack(view));
+  return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike', (ui.braking || stall?.beat === 'brake') && 'is-braking', stall && 'is-stalling', resume && 'is-resuming'), ...beat },
     backdropEl(g, moving), // 달리는 배경(backdrop.ts)
     h('div', { class: 'scroller', 'data-keep-scroll': 'train' },
       h('div', { class: 'train' },
@@ -185,8 +193,8 @@ export function homeScreen(view: View): HTMLElement {
           carEl(view, car)))),
       h('div', { class: 'rails' })),
     h('i', { class: 'layer layer--near' }),
-    ui.braking ? h('div', { class: 'brake', role: 'status' }, h('b', null, '끼이이익'), h('span', null, '열차가 선다')) : paperStack(view),
+    ui.braking ? h('div', { class: 'brake', role: 'status' }, h('b', null, '끼이이익'), h('span', null, '열차가 선다')) : stall ? stallScene(g, stall.goMs) : paperStack(view),
     g.phase === 'stop' && g.stop ? h('div', { class: 'platform-tag' }, icon('symbol'), '정차 중') : null,
-    strandedBack(g),
-    open ? null : stallWarn(g)); // 예고는 하늘 자리에 선다. 칸 창이 뜨면 비킨다
+    stall ? null : strandedBack(g),
+    open || stall ? null : stallWarn(g)); // 예고는 하늘 자리에 선다. 칸 창이 뜨면 비킨다
 }

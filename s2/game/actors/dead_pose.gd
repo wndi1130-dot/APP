@@ -23,6 +23,11 @@ const SINK: float = 0.3              # how far the body drops as the knees go
 const REBOUND: float = 0.08          # how far it comes back off the ground as it lands
 const SPRAWL_TURN: float = 0.55      # a lying body is turned at most this far off the line it fell on (radians)
 const SPRAWL_ROLL: float = 0.32      # and rolled at most this far onto one shoulder
+# Coming up out of a hole (the lengths are motion.gd's dead_climb rows).
+const HOLE_DEPTH: float = 1.5        # a body at the bottom of the climb is this far under the ground
+const HOLE_HANG: float = 0.95        # with its head and arms out it still hangs this far down
+const HOLE_LEAN: float = 0.5         # it lies this far forward over the rim as it hauls itself up (radians)
+const CRAWL_BACK: float = 1.3       # a body crawling out of a culvert's mouth starts this far back in it
 
 
 ## Called as a standing body goes down (knocked down or killed): from here the
@@ -152,3 +157,47 @@ static func rise_k(left: float) -> float:
 	if u < 0.5:
 		return lerpf(1.0, SIT, smoothstep(0.0, 0.5, u))
 	return lerpf(SIT, 0.0, smoothstep(0.5, 1.0, u))
+
+
+## The row of the hole a climbing body is coming out of.
+static func climb_row(z: Dictionary) -> Dictionary:
+	return Motion.row("dead_climb_" + String(z.get("climb_way", "lid")))
+
+
+## 0..1: how far through its climb a body is (1 when it is not climbing).
+static func climb_k(z: Dictionary) -> float:
+	if z["state"] != "climb" or not z.has("climb_at"):
+		return 1.0
+	return clampf((float(z["age"]) - float(z["climb_at"])) / float(climb_row(z)["len"]), 0.0, 1.0)
+
+
+## True while only the head and arms of a climbing body are out of the hole.
+static func in_hole(z: Dictionary) -> bool:
+	var row := climb_row(z)
+	return z["state"] == "climb" and climb_k(z) * float(row["len"]) < float(row["open"])
+
+
+## What to draw on top of a climbing body's standing place. Out of a manhole:
+## the head and arms come up and hang on the rim, then it heaves itself up
+## lying forward over the rim and straightens. Out of a culvert: it comes out
+## flat on its face, head first along the way it faces, and gets up. The
+## origin is in the body's own frame (z is the way it faces). A body that is
+## not climbing is left as it is.
+static func climbing(z: Dictionary) -> Transform3D:
+	var u := climb_k(z)
+	if u >= 1.0:
+		return Transform3D.IDENTITY
+	var row := climb_row(z)
+	var open := float(row["open"]) / float(row["len"])
+	if String(z.get("climb_way", "lid")) == "culvert":
+		if u < open:
+			return Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, LIFT, -CRAWL_BACK * (1.0 - smoothstep(0.0, open, u))))
+		var up := smoothstep(open, 1.0, u)
+		return Transform3D(Basis(Vector3.RIGHT, PI * 0.5 * (1.0 - up)), Vector3(0, LIFT * (1.0 - up), 0))
+	if u < open:
+		# Slow at first, then a hold on the rim.
+		var reach := smoothstep(0.0, open * 0.7, u)
+		return Transform3D(Basis(Vector3.RIGHT, HOLE_LEAN * 0.4 * reach), Vector3(0, lerpf(-HOLE_DEPTH, -HOLE_HANG, reach), 0))
+	var heave := (u - open) / (1.0 - open)
+	var lean := lerpf(HOLE_LEAN * 0.4, HOLE_LEAN, sin(minf(heave * 2.0, 1.0) * PI * 0.5)) if heave < 0.5 else lerpf(HOLE_LEAN, 0.0, smoothstep(0.5, 1.0, heave))
+	return Transform3D(Basis(Vector3.RIGHT, lean), Vector3(0, -HOLE_HANG * (1.0 - smoothstep(0.0, 0.7, heave)), 0))
