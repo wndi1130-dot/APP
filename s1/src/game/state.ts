@@ -56,6 +56,8 @@ export interface CommState {
   coh: number;
   fervor: number;
   badStreak: number;
+  /** 관계가 바닥인데 레버를 돌려준 연속 구간 수(결정 080: 돌려주면 관계가 빨리 오른다) */
+  backStreak: number;
   grudge: number;
   lastOffense: number;
   demandCool: number;
@@ -521,7 +523,7 @@ export function createGame(seed = 's1a'): Game {
     const banned = TRAIT_BAN[c];
     const traits = TRAITS.filter(t => t !== banned);
     g.comms[c] = {
-      base: [...START[c]], heat: 2, ration: 2, rel: REL0[c], coh: COH0[c], fervor: 0, badStreak: 0, grudge: 0,
+      base: [...START[c]], heat: 2, ration: 2, rel: REL0[c], coh: COH0[c], fervor: 0, badStreak: 0, backStreak: 0, grudge: 0,
       lastOffense: 0, demandCool: 1, favorCool: 2, agitateCool: 2, pop: POP0[c], away: 0, debt: false,
       leader: { personId: person.id, name: person.name, age: person.age, trait: pick(g, traits), traitShown: 0 },
       promise: null, supportedAt: -99, cutAt: [], disgraced: false,
