@@ -88,7 +88,10 @@ func test_a_crawler_drags_itself_lies_still_when_knocked_down_and_dies_on_its_fa
 	assert_true(DeadBody.falls_by_motion(z, true), "the crawl is on the ground already")
 	var moving := DeadBody.custom(z, 1.0, 1.0, 1.0, true)
 	assert_eq(moving.g, float(DeadBody.CRAWL))
-	assert_eq(moving.b, 0.0, "it moves")
+	assert_eq(moving.b, 1.0, "the clock does not move it")
+	z["pos"] += Vector3(0, 0, 0.09)
+	var pulled := DeadBody.custom(z, 1.0, 1.0, 1.0, true)
+	assert_almost_eq(fposmod(pulled.r - moving.r, 1.0), 0.09 / float(DeadBody.STRIDE[DeadBody.CRAWL]), 0.001, "the ground it covers does")
 	z["state"] = "downed"
 	assert_eq(DeadBody.custom(z, 1.0, 0.0, 1.0, true).b, 1.0, "held still")
 	z["state"] = "dead"
@@ -132,4 +135,38 @@ func test_out_of_a_culvert_a_baked_body_crawls_then_gets_up_and_is_not_turned_ov
 	var up := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
 	assert_eq(up.g, float(DeadBody.RISE_FRONT))
 	assert_gt(up.r, 0.95, "nearly on its feet")
+
+
+func test_a_baked_bodys_feet_go_by_the_ground_it_covers() -> void:
+	var z := _body("wander")
+	var walk := DeadBody.walk_of(z["phase"])
+	var first := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(first.g, float(walk))
+	assert_eq(first.b, 1.0, "the clock does not step it")
+	assert_almost_eq(first.r, 0.37, 0.001, "it starts from the body's own number")
+	z["age"] += 0.05
+	z["pos"] += Vector3(0.11, 0, 0)
+	var second := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_almost_eq(fposmod(second.r - first.r, 1.0), 0.11 / float(DeadBody.STRIDE[walk]), 0.001)
+	z["age"] += 0.05
+	z["pos"] += Vector3(6, 0, 0)
+	var put := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_almost_eq(put.r, second.r, 0.001, "put somewhere else, it has not walked there")
+	z["age"] += DeadBody.STILL_AFTER + 0.1
+	assert_eq(DeadBody.custom(z, 0.0, 0.0, 1.0, true).g, float(DeadBody.STAND), "and where it stops it stands")
+
+
+func test_the_fresh_dead_run_after_someone_and_the_others_do_not() -> void:
+	var fresh := _body("chase")
+	fresh["kind"] = "fresh"
+	assert_eq(DeadBody.custom(fresh, 0.0, 0.0, 1.0, true).g, float(DeadBody.RUN))
+	fresh["state"] = "wander"
+	assert_lt(DeadBody.custom(fresh, 0.0, 0.0, 1.0, true).g, float(DeadBody.WALKS), "not after anyone, it walks")
+	var old := _body("chase")
+	old["kind"] = "dead"
+	assert_lt(DeadBody.custom(old, 0.0, 0.0, 1.0, true).g, float(DeadBody.WALKS))
+	var names: Array = []
+	for clip: Array in BodyBake.OWN_CLIPS:
+		names.append(clip[0])
+	assert_eq(names[DeadBody.RUN], "run")
 
