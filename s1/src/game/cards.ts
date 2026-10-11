@@ -40,6 +40,9 @@ export interface Choice {
   extra?: string[];
   /** 선을 넘는 선택(S1b 10.1). 있으면 단추에 검은 띠를 두르고 이 반응 한 줄을 대사 밑에 붙인다. 빈 문자열이면 띠만(무뎌짐) */
   cross?: string;
+  /** 사건 데이터의 사정 한 줄(값이 왜 그렇게 나오는지)과 나중에 돌아올 것 한 줄. 화면이 선택지 밑에 적는다. 글은 데이터에서만 온다 */
+  why?: string;
+  later?: string;
 }
 
 export interface CardView {

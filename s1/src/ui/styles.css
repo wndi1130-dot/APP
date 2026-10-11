@@ -983,6 +983,11 @@ small { font-size: 12px; }
   background: #0a0b0c; border-color: #000; box-shadow: inset 6px 0 0 #000;
 }
 .choice.is-cross .choice__n { background: #000; color: var(--ink-2); }
+/* 선택지 밑 사정 한 줄(까닭)과 나중에 돌아올 것. 숫자 줄보다 한 단 흐리게, 꼬리표는 작은 글씨 대신 색으로만 가른다. */
+.choice__why { grid-column: 2; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.choice__why i, .slip__why i { font-style: normal; color: var(--ink-2); margin-right: 6px; }
+.choice__later i { color: var(--warm); }
+.slip__why { flex-basis: 100%; text-align: center; font-size: 12px; line-height: 1.4; color: var(--ink-3); white-space: normal; }
 .choice__cross { grid-area: cross; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
 .end__right { grid-column: 2; grid-row: 1 / span 2; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
 .end__right .log { overflow: visible; }
