@@ -159,7 +159,7 @@ func test_double_tap_run_only_when_set() -> void:
 	assert_false(game.player.running, "the dash ends with the hold")
 
 
-func test_run_crouch_and_pause_on_the_left_four_on_the_right() -> void:
+func test_run_crouch_and_pause_on_the_left_five_on_the_right() -> void:
 	var hud = game.hud
 	var half: float = hud._view_size().x * 0.5
 	assert_lt(hud.run_button.get_global_rect().end.x, half)
@@ -171,7 +171,7 @@ func test_run_crouch_and_pause_on_the_left_four_on_the_right() -> void:
 		# The two settings keys under the radio line show only while paused.
 		if b.get_global_rect().position.x > half and b != hud.manual_button and not hud.status_pads.has(b) and b != hud.stick_opt_button and b != hud.radio_opt_button:
 			right.append(b)
-	assert_eq(right.size(), 4, "aim, attack, shove, situation")
+	assert_eq(right.size(), 5, "aim, attack, shove, situation, all to the train")
 	var top_left: Rect2 = hud.pause_button.get_global_rect()
 	assert_lt(top_left.position.x, 40.0, "pause at the left end of the gauge row")
 	assert_lt(top_left.position.y, 40.0)

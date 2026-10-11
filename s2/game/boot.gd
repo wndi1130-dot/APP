@@ -23,6 +23,7 @@ const CHOICES: Array = [
 	["stick_rim_run", "스틱 끝 뛰기", [[false, "끔"], [true, "켬"]]],
 	["double_tap_run", "두 번 톡 뛰기", [[false, "끔"], [true, "켬"]]],
 	["primary_one", "주 행동 하나로", [[false, "끔 (조준·공격 따로)"], [true, "켬 (시험)"]]],
+	["retreat_name", "동료 한 명을 물릴 때 이름", [["", "후퇴"], ["train", "열차로"]]],
 	["melee_break", "근접 겨눔 끊김", [["grab", "잡히면 끊긴다"], ["none", "안 끊긴다"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
