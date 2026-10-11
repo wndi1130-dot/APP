@@ -350,3 +350,29 @@ func test_leaving_mid_repair_keeps_the_coal_and_the_half_mended_belt() -> void:
 	assert_false((d["stock"] as Dictionary).has("scrap"), "the scrap used does not come back")
 	assert_eq(game.receipt.check(d).size(), 0)
 
+
+# ---------------------------------------------------------------- the goals on screen
+
+func test_the_goals_stay_on_screen_under_the_clock_and_a_plain_stop_shows_none() -> void:
+	var plain = _game({})
+	assert_null(plain.hud.goal_label)
+	assert_eq(plain.mission_play.goal_line(), "")
+	var game = _game({"mission": "survey"})
+	assert_not_null(game.hud.goal_label)
+	assert_eq(game.mission_play.goal_line(), "바깥 설비 0/2 · 선로 기록 0/1", "the extra is not listed until someone goes")
+	game.mission_play._seen(game.player, "sv_switch")
+	game.mission_play._seen(game.player, "sv_signal")
+	game.mission_play._seen(game.player, "sv_store")
+	assert_eq(game.mission_play.goal_line(), "바깥 설비 2/2 ✓ · 선로 기록 0/1 · 지하 보관실 1/1 ✓")
+	game.hud.tick(0.1)
+	assert_eq(game.hud.goal_label.text, game.mission_play.goal_line())
+	# The longest line: the clock box grows sideways, not down into the leader's plate.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var box: Control = game.hud.goal_label.get_parent().get_parent()
+	assert_gt(box.get_global_rect().size.y, 60.0, "the box is laid out")
+	assert_false(box.get_global_rect().intersects(game.hud.portrait.get_global_rect()), "clear of the leader's plate")
+	assert_eq(game.hud.goal_label.get_line_count(), 1, "one line")
+	var depot = _game({"mission": "depot"})
+	assert_eq(depot.mission_play.goal_line(), "석탄 싣기 0.0/12")
+

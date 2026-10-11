@@ -84,6 +84,18 @@ func opening_line() -> String:
 	return ""
 
 
+## The goals as one short line for the clock box: each goal that must be done,
+## and an extra one only once someone has started on it. "" on a plain stop.
+func goal_line() -> String:
+	var bits: Array = []
+	for g: Dictionary in mission.goals:
+		var touched: bool = not (g["got"] as Array).is_empty() or float(g["have"]) > 0.0
+		if g["extra"] and not touched:
+			continue
+		bits.append(mission.progress_line(g["id"]) + (" ✓" if mission.is_done(g["id"]) else ""))
+	return " · ".join(bits)
+
+
 ## The work crew is not called on a stop that is not for hauling.
 func crew_allowed() -> bool:
 	return mission.kind != "survey"
