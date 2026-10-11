@@ -45,8 +45,16 @@ static func assets() -> Dictionary:
 	var dir := OS.get_environment(FOLDER_ENV)
 	var got := BodyBake.load_baked(dir if dir != "" else FOLDER)
 	rounds = rounds_of(got)
-	table = table_of(got)
+	table = table_of(got) if can_mix() else []
 	return got
+
+
+## False where the instance values reach the shader too coarse to carry a
+## frame and a share in g (the compatibility renderer: a large g does not come
+## back from the instance buffer as it went in). There a body changes motion
+## at once, as it did.
+static func can_mix() -> bool:
+	return RenderingServer.get_current_rendering_method() != "gl_compatibility"
 
 
 ## Where each motion of a baked folder lies in its picture.
