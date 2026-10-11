@@ -25,6 +25,8 @@ const MATERIALS: Array[String] = ["plank", "scrap", "wood"]
 # Leaving before the train is ready (user decision 143): a last call of this
 # many seconds, and whoever is not at the train when it ends stays.
 const LAST_CALL_S: float = 3.0
+# The train is ready: the words stand big on the screen this long.
+const READY_SHOWN_S: float = 4.0
 # What going unready costs, on top of the plough's price: [share of the
 # getting-ready still left (below this), coal, plough parts]. Starting values
 # from the play check, not settled.
@@ -59,6 +61,8 @@ var call_left: float = 0.0
 var left_people: int = 0          # who stayed on the platform as it left
 var cost_paid: Dictionary = {"coal": 0, "plow_part": 0}   # what going unready cost
 var track_at_leave: int = -1      # the dead on the track as it left
+var ready_shown: float = 0.0      # the "ready" words are still up this long
+var over: float = 0.0             # how long it stayed after it was ready
 var opened_at: float = 0.0
 
 
@@ -176,7 +180,10 @@ func tick(delta: float) -> void:
 				game.audio.depart()
 				game.finish("departed")
 				return
-	left -= delta
+	left = maxf(left - delta, 0.0)
+	ready_shown = maxf(ready_shown - delta, 0.0)
+	if ready:
+		over += delta
 	for door: Dictionary in doors:
 		var at: Vector3 = FieldGrid.center(door["cell"])
 		var hands := 0
@@ -194,11 +201,12 @@ func tick(delta: float) -> void:
 		while float(door["bang_t"]) <= 0.0:
 			door["bang_t"] = float(door["bang_t"]) + BANG_EVERY
 			_bang(door)
-	if left <= 0.0:
+	# Ready, and it waits: the chief says when (user decision 149). The doors
+	# are still to be held and the waves keep coming.
+	if left <= 0.0 and not ready:
 		ready = true
-		on = false
-		game.audio.depart()
-		game.finish("departed")
+		ready_shown = READY_SHOWN_S
+		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
 
 
 func _bang(door: Dictionary) -> void:
@@ -274,6 +282,8 @@ func waves() -> int:
 func goal_line() -> String:
 	if not opened:
 		return "버티기 판: 「떠난다」를 부르면 채비가 시작된다" if mode == "depart" else ""
+	if ready:
+		return "채비 끝 · 「떠난다」를 부르면 떠난다 · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [count("whole"), count("damaged"), count("breached"), waves()]
 	var s: int = int(ceil(maxf(left, 0.0)))
 	return "채비 %d:%02d · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [s / 60, s % 60, count("whole"), count("damaged"), count("breached"), waves()]
 
@@ -334,7 +344,7 @@ func _show_wall(door: Dictionary) -> void:
 func leaving_early() -> void:
 	if on:
 		cost_paid = early_cost()
-		early = true
+		early = not ready
 		on = false
 
 
@@ -350,6 +360,7 @@ func result() -> Dictionary:
 		"damaged": count("damaged"), "breached": count("breached"), "entered": entered,
 		"walls": walls_built, "waves": waves(), "reached": reached, "hurt": hurt,
 		"leftPeople": left_people, "earlyCost": cost_paid,
+		"overSec": int(over),
 		"leftShare": snappedf(clampf(left / total, 0.0, 1.0), 0.01) if total > 0.0 else 0.0,
 		"trustDrop": trust_drop(left_people),
 		"trackDead": maxi(track_at_leave, 0), "ploughParts": int(plough(maxi(track_at_leave, 0))["parts"]),
