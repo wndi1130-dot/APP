@@ -33,7 +33,7 @@
         },
         {
           "type": "coal",
-          "amount": -6
+          "amount": -9
         },
         {
           "type": "flag",
@@ -57,7 +57,7 @@
       "effects": [
         {
           "type": "coal",
-          "amount": -9
+          "amount": -6
         },
         {
           "type": "community.warmth",
@@ -67,7 +67,7 @@
         {
           "type": "relation",
           "target": "front",
-          "amount": -3
+          "amount": -2
         },
         {
           "type": "flag",
