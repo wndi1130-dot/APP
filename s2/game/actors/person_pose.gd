@@ -35,8 +35,10 @@ static func apply(p, lying: bool) -> void:
 	var sw: Array = swing_state(p)
 	if sw.is_empty():
 		# Left on the platform and shouting after the train (person_protest.gd); a blow or a shove is drawn first.
-		if p.has_meta(Protest.META) and p.shove_t <= 0.0 and p.lunge_t <= 0.0:
-			_protest(p, arms)
+		if p.shove_t <= 0.0 and p.lunge_t <= 0.0:
+			var mark: Dictionary = Protest.mark_of(p, Time.get_ticks_msec())
+			if not mark.is_empty():
+				_protest(p, arms, mark)
 		return
 	var mode: String = p.get_meta(MODE, "swing")
 	if mode == "stomp":
@@ -59,8 +61,7 @@ static func apply(p, lying: bool) -> void:
 	arms[1].rotation = Vector3(0.2, 0, 0)
 
 
-static func _protest(p, arms: Array) -> void:
-	var mark: Dictionary = p.get_meta(Protest.META)
+static func _protest(p, arms: Array, mark: Dictionary) -> void:
 	var d: Dictionary = Protest.at(int(mark.get("kind", 0)), float(mark.get("t", 0.0)))
 	var lean: float = d["lean"]
 	var lift: float = d["lift"]

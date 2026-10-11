@@ -207,8 +207,12 @@ func test_the_three_protests_are_three_different_pictures() -> void:
 	var wide: Dictionary = Protest.at(Protest.SINKS, 0.8)
 	assert_gt(wide["arms"][1]["pos"].x - wide["arms"][0]["pos"].x, 1.0)
 	assert_almost_eq(wide["lift"], 0.0, 0.001)
-	for t in [3.0, 8.0, 60.0]:
+	for t in [2.0, 8.0, 60.0]:
 		assert_almost_eq(Protest.at(Protest.SINKS, t)["lift"], -Protest.KNEEL, 0.001, "down at %s s" % t)
+	# Each is plain well inside the three and a half seconds it is seen for.
+	assert_gt(float(Protest.at(Protest.FISTS, 0.5)["arms"][0]["pos"].y), 1.4)
+	assert_gt(Protest.loud(2.0), 0.99)
+	assert_lt(Protest.FLING + Protest.DROP, 2.0)
 	# Any number picks one of the three.
 	assert_eq(Protest.at(5, 1.0), Protest.at(Protest.SINKS, 1.0))
 	# Nothing leans past what a body on its feet can.
@@ -235,6 +239,25 @@ func test_someone_marked_as_protesting_is_drawn_so_and_a_shove_comes_first() -> 
 	p.refresh_view(false)
 	assert_almost_eq(arms[0].position.z, 0.5, 0.01)
 	p.lunge_t = 0.0
+	# Left behind as the train goes (the field notes it): they protest in their own way, on the wall clock.
+	p.remove_meta(Protest.META)
+	p.brain[Protest.LEFT] = true
+	var first: Dictionary = Protest.mark_of(p, 5000)
+	assert_eq(first, {"kind": Protest.kind_of(String(p.pid)), "t": 0.0})
+	assert_almost_eq(float(Protest.mark_of(p, 7500)["t"]), 2.5, 0.001)
+	p.set_meta(Protest.SINCE, Time.get_ticks_msec() - 2500)
+	p.refresh_view(false)
+	var drawn: Dictionary = Protest.at(first["kind"], 2.5)
+	assert_almost_eq(arms[1].position.x, float(drawn["arms"][1]["pos"].x), 0.1, "drawn so")
+	assert_ne(arms[0].position, hung)
+	p.brain.erase(Protest.LEFT)
+	assert_true(Protest.mark_of(p, 9000).is_empty())
+	assert_false(p.has_meta(Protest.SINCE))
+	var kinds: Dictionary = {}
+	for name in ["a", "b", "c", "ally_1", "ally_2", "crew_3"]:
+		kinds[Protest.kind_of(name)] = true
+	assert_eq(kinds.size(), Protest.KINDS, "not everyone the same way")
+	p.set_meta(Protest.META, {"kind": Protest.SINKS, "t": 5.0})
 	# The mark taken off, they stand as they stood.
 	p.remove_meta(Protest.META)
 	p.refresh_view(false)

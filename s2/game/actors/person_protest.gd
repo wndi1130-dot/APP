@@ -5,11 +5,17 @@ extends RefCounted
 ## it decides nothing, and it does not move the person (running a few steps
 ## after the train is the rules').
 ##
-## The field marks who protests: p.set_meta(META, {"kind": 0..2, "t": seconds
-## since they began}) and adds to "t" as time passes; remove_meta ends it.
+## Who protests: the field notes p.brain[LEFT] = true on whoever is left as
+## the train goes. The field has stopped by then, so the motion keeps its own
+## time (the clock on the wall, from when it is first drawn so) and picks its
+## way from the person's own name. It is seen for the few seconds before the
+## result card, so each way is plain within three. A mark set by hand,
+## p.set_meta(META, {"kind": 0..2, "t": seconds}), is drawn as it says.
 ## The words over the head and the shout are not here.
 
 const META: String = "protest"
+const LEFT: String = "left_behind"   # p.brain key (field_game.gd)
+const SINCE: String = "protest_since"
 const KINDS: int = 3
 const FISTS: int = 0     # both fists up over the head in a V, pumping, up on the toes
 const POINTS: int = 1    # one arm jabbed at the train again and again, the other fist held back
@@ -18,9 +24,30 @@ const SINKS: int = 2     # arms flung wide, then down on the knees, beating the 
 const ARM_SIDE: float = 0.33
 const ROUND: float = 3.2          # a burst of shouting and the breath after it, seconds
 const BREATH: float = 0.8         # of that, the arms come down this long
-const FLING: float = 1.4          # SINKS: arms wide this long
-const DROP: float = 0.7           # then this long going down
+const FLING: float = 1.0          # SINKS: arms wide this long
+const DROP: float = 0.6           # then this long going down
 const KNEEL: float = 0.42         # how far down the body ends
+
+
+## The mark to draw a person by, or {} when they do not protest.
+static func mark_of(p, now_msec: int) -> Dictionary:
+	if p.has_meta(META):
+		return p.get_meta(META)
+	if not bool(p.brain.get(LEFT, false)):
+		if p.has_meta(SINCE):
+			p.remove_meta(SINCE)
+		return {}
+	if not p.has_meta(SINCE):
+		p.set_meta(SINCE, now_msec)
+	return {"kind": kind_of(String(p.pid)), "t": float(now_msec - int(p.get_meta(SINCE))) / 1000.0}
+
+
+## Which of the ways someone protests: always the same for the same person.
+static func kind_of(pid: String) -> int:
+	var sum := 0
+	for c in pid.to_utf8_buffer():
+		sum += int(c)
+	return sum % KINDS
 
 
 ## What to draw at time t: "arms" [left, right] each {"pos", "rot"}, "lean"
