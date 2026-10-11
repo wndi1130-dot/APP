@@ -5,6 +5,7 @@ export * from './sit';
 export * from './workshop';
 export * from './knowledge';
 export * from './hygiene';
+export * from './pot';
 export * from './medbay';
 export * from './cars';
 export * from './delegate';
