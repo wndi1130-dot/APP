@@ -31,6 +31,7 @@ const CLIPS: Array = [
 	["fall_front", "", 32, false, "own_fall_front", 0.75],
 	["crawl", "", 32, true, "own_crawl", 1.8],
 	["rise", "", 32, false, "own_rise", 1.2],
+	["climb", "", 32, false, "own_climb", 2.4],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -48,6 +49,7 @@ const OWN_CLIPS: Array = [
 	["fall_front", "", 32, false, "own_fall_front", 0.75],
 	["crawl", "", 32, true, "own_crawl", 1.8],
 	["rise", "", 32, false, "own_rise", 1.2],
+	["climb", "", 32, false, "own_climb", 2.4],
 ]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
@@ -285,6 +287,27 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [[-0.6, 0.58, 0.0, 0.25], [0.0, -0.8, 0.0, 0.25], [0.9, -0.4, 0.0, 0.25]]],
 		],
 		"sink": [0.03, -0.81, 1.5708, 0.25],
+	},
+	# Hauling itself up out of a hole in the ground (played once; the drawing
+	# side lifts the whole body): the arms come up over the rim and hold, then
+	# press down past its sides as the body comes up, and it ends as it stands.
+	"own_climb": {
+		"steps": [
+			["turn", "hips", "y", [0.0, 0.12, 0.0, 1.5]],
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, [0.03, 0.25, 0.0, 0.5]]],
+			["aim", "shin.L", "foot.L", [0.04, -1.0, [-0.08, -0.3, 0.0, 0.5]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [0.0, 0.1, 0.0, 0.5]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [-0.05, -0.2, 0.0, 0.5]]],
+			["turn", "spine", "x", [0.2, 0.25, 0.0, 0.5]],
+			["turn", "chest", "x", 0.27],
+			["turn", "neck", "x", [0.35, 0.95, 1.5708, 0.25]],
+			["turn", "head", "z", [0.22, 0.2, 0.0, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [[0.16, -0.2, 1.5708, 0.25], [-1.0, -1.95, 1.5708, 0.25], [0.06, -0.3, 1.5708, 0.25]]],
+			["aim", "forearm.L", "hand.L", [0.06, [-1.0, -1.9, 1.5708, 0.25], [0.16, -0.5, 1.5708, 0.25]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.12, 0.3, 1.5708, 0.25], [-1.0, -1.8, 1.5708, 0.25], [0.14, -0.35, 1.5708, 0.25]]],
+			["aim", "forearm.R", "hand.R", [-0.02, [-0.8, -1.6, 1.5708, 0.25], [0.5, -0.2, 1.5708, 0.25]]],
+		],
+		"sink": 0.03,
 	},
 	# Dragging itself along on its face: one arm reaches and pulls, then the
 	# other; the hips roll after them and the legs trail.

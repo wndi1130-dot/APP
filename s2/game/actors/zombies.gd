@@ -766,7 +766,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
 		elif state == "climb":
-			var out := DeadPose.climbing(z)
+			var out := DeadBody.climbing(z, baked)
 			pos = pos + basis * out.origin
 			basis = basis * out.basis
 		elif state != "frozen" and state != "waking" and not baked:
