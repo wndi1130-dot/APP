@@ -13,8 +13,14 @@ uniform float lamp_gain = 0.0;
 
 varying vec3 world_pos;
 varying vec3 world_nrm;
+varying float bank;
 
 void vertex() {
+	// Snow banked against the walls the wind blows at. Only the ground mesh
+	// carries UV (map_view.drift_uv: which way the wall stands from the vertex).
+	bank = (max(0.0, UV.x * fx_wind.x) + max(0.0, UV.y * fx_wind.y)) * COLOR.a;
+	bank *= smoothstep(0.2, 0.9, fx_snow) * (0.4 + 0.6 * fx_wind.z);
+	VERTEX.y += 0.35 * bank;
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
@@ -38,6 +44,7 @@ void fragment() {
 	float cover = smoothstep(0.6, 0.9, up) * clamp(fx_snow * (0.6 + 0.8 * drift), 0.0, 1.0);
 	cover *= 0.55 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	base *= 1.0 - 0.35 * wet;
+	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet), cover);
@@ -53,6 +60,10 @@ void fragment() {
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
+	if (bank > 0.002) {
+		// The bank's own slope, so the light picks it out.
+		NORMAL = normalize(cross(dFdy(VERTEX), dFdx(VERTEX)));
+	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
 	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
 	EMISSION = lamp_color * (0.25 + 0.75 * grey) * lamp;
