@@ -16,12 +16,20 @@ const WALKS: int = 3                          # 0, 1, 2: three ways of walking
 const STAND: int = 3
 const LUNGE: int = 4
 const FALL: int = 6                           # on its back
+const RUN: int = 7
 const FALL_FRONT: int = 9                     # on its face
 const CRAWL: int = 10
 const RISE: int = 11                          # getting up off its back
 const CLIMB: int = 12                         # hauling itself up out of a hole
 const RISE_FRONT: int = 13                    # getting up off its face
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
+# How far one round of a motion carries the body, metres, so that the foot
+# going backwards stays on its spot: measured on the hand-written motions as
+# baked (how far a foot goes back in a frame, times the frames). The feet keep
+# that pace to within a quarter. The crawl's hands keep no steady pace, and
+# its number is only their middle.
+const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61}
+const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
 
@@ -88,7 +96,9 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 		# A crawler drags itself along on its face; knocked down it lies as it crawled, and dead it lies as one fallen forward.
 		if state == "dead":
 			return Color(1.0, float(FALL_FRONT), 1.0, shade)
-		return Color(phase, float(CRAWL), 1.0 if state == "downed" else 0.0, shade)
+		if state == "downed":
+			return Color(float(z.get("body_step", phase)), float(CRAWL), 1.0, shade)
+		return Color(step(z, CRAWL), float(CRAWL), 1.0, shade)
 	if down > 0.0:
 		# Struck from behind it goes over on its face, otherwise on its back.
 		var front := DeadPose.fall_side(z) > 0.0
@@ -97,9 +107,15 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
 		return Color(phase, float(LUNGE), still, shade)
-	if state == "frozen" or state == "waking" or stands(z):
+	if state == "frozen" or state == "waking":
 		return Color(phase, float(STAND), still, shade)
-	return Color(phase, float(walk_of(phase)), still, shade)
+	# Its feet go by the ground it has covered, not by the clock: a wanderer
+	# plods and one hurrying steps quicker, on the same walk.
+	var gait := gait_of(z)
+	var at := step(z, gait)
+	if kept_still(z):
+		return Color(phase, float(STAND), still, shade)
+	return Color(at, float(gait), 1.0, shade)
 
 
 ## True when a body that is partly down is on its way up, not on its way down.
@@ -122,12 +138,38 @@ static func fall_progress(z: Dictionary, down: float) -> float:
 	return clampf(down, 0.0, 1.0)
 
 
-## True once a body has kept its place for a while. It notes where it was last
-## drawn on the body itself, under names the rules do not use.
-static func stands(z: Dictionary) -> bool:
+## True once a body has kept its place for a while (moved keeps the note of
+## that on the body itself, under names the rules do not use).
+static func kept_still(z: Dictionary) -> bool:
+	return float(z["age"]) - float(z.get("body_since", z["age"])) >= STILL_AFTER
+
+
+## How far a body has come since it was last drawn; notes the place, and when
+## it last left one.
+static func moved(z: Dictionary) -> float:
 	var at: Vector3 = z["pos"]
-	var age: float = z["age"]
-	if at.distance_squared_to(z.get("body_at", at)) > 0.000001 or not z.has("body_since"):
-		z["body_since"] = age
+	var gone := at.distance_to(z.get("body_at", at))
+	if gone > 0.001 or not z.has("body_since"):
+		z["body_since"] = z["age"]
 	z["body_at"] = at
-	return age - float(z["body_since"]) >= STILL_AFTER
+	return gone
+
+
+## Where in a round of its walk (or run, or crawl) a body is, 0..1: it goes on
+## by the ground covered since it was last drawn, and starts from the body's
+## own number so that no two step together.
+static func step(z: Dictionary, motion: int) -> float:
+	var gone := moved(z)
+	var at: float = z.get("body_step", z["phase"])
+	if gone <= STRIDE_CAP:
+		at = fposmod(at + gone / float(STRIDE[motion]), 1.0)
+	z["body_step"] = at
+	return at
+
+
+## The walk a body goes by: one of its three, or the run when it is one of the
+## fresh dead coming after someone (the rules give those their speed).
+static func gait_of(z: Dictionary) -> int:
+	if z["state"] == "chase" and z.get("kind", "") == "fresh":
+		return RUN
+	return walk_of(z["phase"])
