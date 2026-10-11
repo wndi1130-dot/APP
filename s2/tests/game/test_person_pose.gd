@@ -1,0 +1,106 @@
+extends "res://addons/gut/test.gd"
+## The picture of a shove and of a melee swing (arms, weapon) only reads the
+## rules' clocks: drawn back while the blow is drawn back, out as it lands,
+## home again by the end of the swing time.
+
+const FieldGame = preload("res://game/field_game.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
+
+var game
+
+
+func before_each() -> void:
+	game = FieldGame.new()
+	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	game.zombies.list.clear()
+	game.pending_spawn.clear()
+	game.player.position = game.lift(Vector2i(60, 7), 0)
+	for q in game.squad:
+		if q != game.player:
+			q.position = game.lift(Vector2i(30, 7), 0)
+
+
+func _hold(wid: String) -> void:
+	game.player.hands = [{"id": wid, "quality": "factory", "condition": 1.0, "loaded": 0}]
+
+
+## A body that any landed blow finishes (zombies.md 갓 일어난 자), so the dice stay out of it.
+func _rising() -> Dictionary:
+	var p = game.player
+	p.facing = PI * 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+	z["state"] = "rising"
+	return z
+
+
+# ---------------------------------------------------------------- picture
+
+func test_shove_arms_come_back_then_go_out_then_hang() -> void:
+	assert_eq(Pose.shove_push(0.0, 0.0, 0.15), 0.0)
+	assert_almost_eq(Pose.shove_push(0.15, 0.0, 0.15), 0.0, 0.001, "just pressed")
+	assert_lt(Pose.shove_push(0.01, 0.0, 0.15), -0.9, "pulled right back before it lands")
+	assert_almost_eq(Pose.shove_push(0.0, Pose.LUNGE, 0.15), 1.0, 0.001, "thrown out as it lands")
+	assert_lt(Pose.shove_push(0.0, 0.01, 0.15), 0.4, "and coming home")
+	var out: Dictionary = Pose.arm_at(1.0, 1.0)
+	var hang: Dictionary = Pose.arm_at(0.0, 1.0)
+	assert_gt((out["pos"] as Vector3).z, (hang["pos"] as Vector3).z + 0.3, "forward of the body")
+	assert_lt((Pose.arm_at(1.0, -1.0)["pos"] as Vector3).x, 0.0, "the left arm stays left")
+
+
+func test_each_weapon_goes_back_before_it_goes_forward() -> void:
+	for wid in ["knife", "crowbar", "axe"]:
+		var rest: Dictionary = Pose.weapon_at(wid, 0.0, 0.0, false)
+		var back: Dictionary = Pose.weapon_at(wid, Pose.DRAW, 0.0, false)
+		var struck: Dictionary = Pose.weapon_at(wid, 1.0, 0.0, true)
+		var home: Dictionary = Pose.weapon_at(wid, 1.0, 1.0, true)
+		assert_ne(back["pos"], struck["pos"], wid)
+		var arriving: Dictionary = Pose.weapon_at(wid, 1.0, 0.0, false)
+		assert_almost_eq((arriving["pos"] as Vector3).distance_to(struck["pos"]), 0.0, 0.001, "%s: it is there as the blow lands" % wid)
+		assert_lt(float(back["lean"]), 0.0, "%s: the body goes back with it" % wid)
+		assert_gt(float(struck["lean"]), 0.0, "%s: and in behind the blow" % wid)
+		assert_almost_eq((home["pos"] as Vector3).distance_to(rest["pos"]), 0.0, 0.001, "%s: it ends where it began" % wid)
+		assert_almost_eq(float(home["lean"]), 0.0, 0.001, wid)
+	assert_gt((Pose.weapon_at("knife", 1.0, 0.0, true)["pos"] as Vector3).z, Pose.WEAPON_REST.z + 0.3, "a knife stabs forward")
+	assert_lt((Pose.weapon_at("axe", Pose.DRAW, 0.0, false)["rot"] as Vector3).x, -1.0, "an axe comes up")
+
+
+func test_the_view_follows_the_swing_and_puts_the_weapon_back() -> void:
+	var p = game.player
+	_hold("knife")
+	var z := _rising()
+	p.refresh_view(false)
+	assert_eq(p.weapon_mesh.position, Pose.WEAPON_REST)
+	var parts: int = p.get_child_count()
+	game.combat.start_swing(p, z)
+	game.combat.update(0.05)
+	p.refresh_view(false)
+	assert_lt(p.weapon_mesh.position.z, Pose.WEAPON_REST.z, "drawn back")
+	game.combat.update(0.07)
+	assert_eq(z["state"], "dead", "the blow")
+	p.refresh_view(false)
+	assert_gt(p.weapon_mesh.position.z, Pose.WEAPON_REST.z, "out with the blow")
+	game.combat.update(2.0)
+	p.refresh_view(false)
+	assert_eq(p.weapon_mesh.position, Pose.WEAPON_REST)
+	assert_eq(p.get_child_count(), parts, "the arms are made once")
+	p.fallen_t = 1.0
+	p.refresh_view(false)
+	for arm in p.get_meta(Pose.META):
+		assert_false(arm.visible, "no arms sticking out of a body on the ground")
+
+
+func test_a_shove_after_a_swing_is_not_drawn_as_a_swing() -> void:
+	var p = game.player
+	_hold("crowbar")
+	var z := _rising()
+	z["pos"] = p.position + Vector3(6.0, 0, 0)
+	game.combat.start_swing(p, z)
+	game.combat.update(0.3)
+	game.combat.update(1.0)
+	p.refresh_view(false)
+	game.combat.start_shove(p)
+	p.refresh_view(false)
+	assert_true(Pose.swing_state(p).is_empty())
+	assert_eq(p.weapon_mesh.position, Pose.WEAPON_REST)

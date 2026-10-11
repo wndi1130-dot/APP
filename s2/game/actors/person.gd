@@ -8,6 +8,7 @@ const BodyHeat = preload("res://game/sim/body_heat.gd")
 const AimModel = preload("res://game/sim/aim_model.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const W = preload("res://game/sim/weapons.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
 
 const WALK: float = 2.1
 const RUN: float = 3.9
@@ -352,6 +353,7 @@ func refresh_view(show_tag: bool) -> void:
 		body_mesh.position = Vector3(0, 0.75 - bend * 0.25, 0)
 		head_mesh.position = Vector3(0, 1.6 - bend * 0.5, 0.04 + bend * 0.4)
 	weapon_mesh.visible = not lying and weapon_id() != ""
+	Pose.apply(self, lying)
 	if body.dead:
 		(body_mesh.mesh.material as StandardMaterial3D).albedo_color = Color(0.3, 0.28, 0.27)
 	var text := ""
