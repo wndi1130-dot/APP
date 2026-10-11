@@ -17,6 +17,7 @@ const DOOR_HP: int = 24           # three of the dead through one in about ten s
 const WALL_HP: int = 12
 const BANG_EVERY: float = 1.3     # one of the dead, one blow: as on a house door
 const REACH: float = 1.6
+const HEARD_DOORS: int = 2        # blows are heard from this many doors, the nearest
 const HURT_REACH: float = 3.0     # a door that gives way reaches whoever stands this near it
 const BUILD_TIME: float = 8.0     # as the manhole lid: one heavy thing, a normal sound
 const MATERIALS: Array[String] = ["plank", "scrap", "wood"]
@@ -115,22 +116,42 @@ func tick(delta: float) -> void:
 
 
 func _bang(door: Dictionary) -> void:
+	# The dead hear it as they did; the ear gets the door's own sound below.
+	game.audio.quiet = true
 	game.make_sound(FieldGrid.center(door["cell"]), SimNoise.Level.NORMAL, "bang")
+	game.audio.quiet = false
 	if int(door["wall"]) > 0:
 		door["wall"] = int(door["wall"]) - 1
 		if int(door["wall"]) == 0:
 			_show_wall(door)
 			game.hud.toast("방벽이 무너졌다.")
+		_voice(door, "wall_down" if int(door["wall"]) == 0 else "wall")
 		return
 	if int(door["hp"]) <= 0:
 		return
 	var before := state_of(door)
 	door["hp"] = int(door["hp"]) - 1
 	var now := state_of(door)
+	_voice(door, "break" if now == "breached" else ("low" if now == "damaged" else "door"))
 	if now == "breached":
 		_reach_through(door)
 	if now != before:
 		game.set_radio("기관사: 문이 뚫렸다!" if now == "breached" else "기관사: 문이 상했다. 오래 못 버틴다.", "must", FieldGrid.center(door["cell"]))
+
+
+## What the player hears of a door. A wall going down and a door giving way
+## are always heard; blows only from the doors nearest the player.
+func _voice(door: Dictionary, kind: String) -> void:
+	var at: Vector3 = FieldGrid.center(door["cell"])
+	if game.audio.DOOR_BLOWS.has(kind):
+		var mine: float = at.distance_to(game.player.position)
+		var nearer := 0
+		for other: Dictionary in doors:
+			if FieldGrid.center(other["cell"]).distance_to(game.player.position) < mine:
+				nearer += 1
+		if nearer >= HEARD_DOORS:
+			return
+	game.audio.door(kind, at, SimNoise.Level.NORMAL)
 
 
 ## A door gives way: everyone of the train's in front of it gets the one roll

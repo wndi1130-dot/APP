@@ -18,6 +18,11 @@ func _game(extra: Dictionary = {}):
 	return game
 
 
+## What the doors were heard to do (the radio speaks of them too).
+func _door_sounds(game) -> Array:
+	return game.audio.played.filter(func(g: String) -> bool: return g.begins_with("door_"))
+
+
 func _dead_at(game, door: Dictionary) -> Dictionary:
 	return game.zombies.spawn("dead", FieldGrid.center(door["cell"]))
 
@@ -145,6 +150,43 @@ func test_a_door_that_gives_way_reaches_whoever_stands_in_front_of_it_once() -> 
 		assert_eq(int(h.result()["hurt"]), h.hurt)
 		scratched += h.hurt
 	assert_between(scratched, 1, 8, "over eight stops the coat does not stop every hand")
+
+
+func test_a_door_has_its_own_sounds_and_only_the_near_doors_are_heard_knocking() -> void:
+	var game = _game({"holdout": "start", "holdout_door_hp": 4})
+	var h = game.holdout
+	var a = game.audio
+	var door: Dictionary = h.doors[0]
+	game.player.position = FieldGrid.center(door["cell"]) + Vector3(0.5, 0, 2)
+	_dead_at(game, door)
+	a.played.clear()
+	a.last_tag_group = ""
+	h.tick(FieldHoldout.BANG_EVERY)
+	assert_eq(_door_sounds(game), ["door_bang"])
+	assert_eq(a.last_tag_group, "", "the knock is not also played as any impact")
+	assert_eq(game.sounds[-1]["tag"], "bang", "the dead hear what they heard")
+	h.tick(FieldHoldout.BANG_EVERY * 3)
+	assert_eq(_door_sounds(game), ["door_bang", "door_bang", "door_bang", "door_break"], "the blow that breaks it is the break alone")
+	h.tick(FieldHoldout.BANG_EVERY * 3)
+	assert_eq(_door_sounds(game).size(), 4, "a breached door is not heard knocking")
+	a.played.clear()
+	h.doors[0]["hp"] = 4
+	h.doors[0]["wall"] = 2
+	h.tick(FieldHoldout.BANG_EVERY * 2)
+	assert_eq(_door_sounds(game), ["door_bang", "door_wall"], "a wall is knocked on, then goes down")
+	var far: Dictionary = h.doors[0]
+	for other: Dictionary in h.doors:
+		if FieldGrid.center(other["cell"]).distance_to(game.player.position) > FieldGrid.center(far["cell"]).distance_to(game.player.position):
+			far = other
+	for z in game.zombies.list:
+		z["state"] = "downed"
+	_dead_at(game, far)
+	a.played.clear()
+	h.tick(FieldHoldout.BANG_EVERY)
+	assert_eq(int(far["hp"]), 3)
+	assert_eq(_door_sounds(game), [], "the third door away is not heard knocking")
+	h.tick(FieldHoldout.BANG_EVERY * 3)
+	assert_eq(_door_sounds(game), ["door_break"], "but it is heard giving way")
 
 
 func test_the_train_leaves_when_it_is_ready_and_says_what_it_cost() -> void:
