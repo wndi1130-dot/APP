@@ -24,7 +24,15 @@ const OPTIONAL: Dictionary = {
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
 	"bands": {}, "train_doors": {}, "crossings": [], "barricade_slots": [], "interior_kind_slots": [],
 	"zone_names": {},
+	# What a stop on open line has none of.
+	"labels": [], "lights": [], "wagons": [], "stoves": [], "low_blocks": [], "trees": [],
+	"train_cars": [], "buildings": [], "upper_rects": [], "containers": {}, "spots": {},
 }
+## How far from the train's side counts as by it, where there is no platform.
+const BY_TRAIN: int = 3
+## A train whose map does not list its cars is drawn in cars this long, the
+## engine last (the east end, where the whistle is).
+const CAR_LEN: int = 16
 
 
 static func path_of(place_id: String) -> String:
@@ -79,6 +87,15 @@ static func build_from(script: Script) -> Dictionary:
 	# The old map has doors on one side only: they are the lower side's.
 	if data["train_doors"].is_empty() and data.get("spawns", {}).has("train_door"):
 		data["train_doors"] = {"lower": data["spawns"]["train_door"].duplicate()}
+	# No platform: people board, and loads are put down, by the train on
+	# either side of it.
+	if data.has("train"):
+		if not data.has("platform"):
+			data["platform"] = data["train"].grow(BY_TRAIN)
+		if not data.has("unload"):
+			data["unload"] = data["platform"]
+		if data["train_cars"].is_empty():
+			data["train_cars"] = cars_of(data["train"])
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
@@ -87,10 +104,23 @@ static func build_from(script: Script) -> Dictionary:
 	return data
 
 
+static func cars_of(train: Rect2i) -> Array:
+	var out: Array = []
+	var x: int = train.position.x
+	while x < train.end.x:
+		var length: int = mini(CAR_LEN, train.end.x - x)
+		out.append({"rect": Rect2i(x, train.position.y, length, train.size.y), "kind": "car"})
+		x += length
+	if not out.is_empty():
+		out[out.size() - 1]["kind"] = "engine"
+	return out
+
+
 ## Where things head when a map does not say: "horde_home" (a horde with no
 ## sound to follow: the middle door of the train's lower side, or the upper
 ## side's), "whistle" (the engine end of the train) and "flee_exit" (the cell
-## on the map's edge farthest from the train that people can walk).
+## on the map's edge farthest from the train that people can walk); "engine"
+## is where the idling engine is heard from.
 static func anchors(d: Dictionary) -> Dictionary:
 	var g = d["grid"]
 	var doors: Array = d.get("train_doors", {}).get("lower", [])
@@ -118,4 +148,8 @@ static func anchors(d: Dictionary) -> Dictionary:
 			if dist > far and g.people_can_walk(c):
 				far = dist
 				exit = c
-	return {"horde_home": home, "whistle": whistle, "flee_exit": exit}
+	# The engine is heard from the cab, a little in from the whistle's end.
+	var engine: Vector2i = whistle
+	if d.has("train"):
+		engine = Vector2i(clampi(d["train"].end.x - 4, 0, g.width - 1), clampi(d["train"].position.y + 1, 0, g.height - 1))
+	return {"horde_home": home, "whistle": whistle, "flee_exit": exit, "engine": engine}

@@ -92,6 +92,7 @@ var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
+var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
 var data: Dictionary
 var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
@@ -232,7 +233,7 @@ func _ready() -> void:
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	place = FieldMaps.resolve(String(opts.get("place", "")))
-	_take_map(FieldMaps.build(place))
+	_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	director = HordeDirector.new(rng)
 	director.use_map(data)
 	if opts.has("budget"):
@@ -328,7 +329,7 @@ func _warm_light(reach: float, strength: float) -> OmniLight3D:
 
 
 func _tower_fire() -> bool:
-	return String(data["spots"]["water_tower"].get("state", "")) == "fire"
+	return String(data["spots"].get("water_tower", {}).get("state", "")) == "fire"
 
 
 ## Is a living raider still inside the hideout (the building its light names)?
@@ -1193,8 +1194,9 @@ func near_stove(at: Vector3) -> bool:
 			var b: int = s["building"]
 			if b < 0 or not building_open(b):
 				return true
-	var tower: Dictionary = data["spots"]["water_tower"]
-	if tower["state"] == "fire" and FieldGrid.center(tower["cell"]).distance_to(at) < 3.5:
+	# The first stop's water tower, while its fire burns.
+	var tower: Dictionary = data["spots"].get("water_tower", {})
+	if tower.get("state", "") == "fire" and FieldGrid.center(tower["cell"]).distance_to(at) < 3.5:
 		return true
 	return false
 
@@ -1896,8 +1898,10 @@ func finish(reason: String) -> void:
 	for id in data["containers"]:
 		if data["containers"][id]["searched"]:
 			searched += 1
-	receipt.set_place_state(snappedf(float(searched) / data["containers"].size(), 0.01), clampi(zombies.alive_count() / 10, 0, 5))
-	receipt.place_note("waterTower", data["spots"]["water_tower"]["state"])
+	# A map with nothing to search has had nothing searched.
+	receipt.set_place_state(snappedf(float(searched) / maxi(data["containers"].size(), 1), 0.01), clampi(zombies.alive_count() / 10, 0, 5))
+	if data["spots"].has("water_tower"):
+		receipt.place_note("waterTower", data["spots"]["water_tower"]["state"])
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)

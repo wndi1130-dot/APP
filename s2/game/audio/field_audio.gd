@@ -49,7 +49,6 @@ const BED_RANGE: float = 40.0
 const BED_FULL: float = 12.0          # this much weighted crowd is a full bed
 const GATHER_TIME: float = 14.0
 const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell"]
-const ENGINE_CELL := Vector2i(92, 2)
 
 var game
 var lib: Dictionary = {}               # group -> Array[AudioStream]
@@ -90,7 +89,7 @@ func setup(field_game) -> void:
 	engine.bus = "SFX"
 	engine.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 	add_child(engine)
-	engine.position = game.FieldGrid.center(ENGINE_CELL)
+	engine.position = game.FieldGrid.center(game.data["anchors"]["engine"])
 	if has("train_idle"):
 		engine.stream = lib["train_idle"][0]
 		engine.finished.connect(engine.play)

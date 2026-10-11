@@ -147,7 +147,7 @@ static func build() -> Dictionary:
 	data["unload"] = Rect2i(16, 4, 82, 3)
 	# Cells the field steers by: the platform by the train (a horde with no sound
 	# to follow), the engine end (the whistle), the south road (where raiders run).
-	data["anchors"] = {"horde_home": Vector2i(50, 10), "whistle": Vector2i(90, 4), "flee_exit": Vector2i(60, HEIGHT - 1)}
+	data["anchors"] = {"horde_home": Vector2i(50, 10), "whistle": Vector2i(90, 4), "flee_exit": Vector2i(60, HEIGHT - 1), "engine": Vector2i(92, 2)}
 	# Zone letters as the receipt names them ("": anywhere else).
 	data["zone_names"] = {"A": "station_building", "B": "freight_siding", "C": "water_tower", "D": "station_street", "E": "signal_box", "F": "tenement", "G": "goods_shed", "H": "south_street", "platform": "platform", "": "sulechow"}
 	_lights(data)
