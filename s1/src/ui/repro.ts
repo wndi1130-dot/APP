@@ -1,9 +1,10 @@
 import {
   COMMS, COMM_NAME, PHASE_NAME, viewCard, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
-  migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
+  drain, migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
   setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
-import type { Comm, Field, Game, LootKey, ModKind, StayId, Task, TechId, Variant } from '../game';
+import type { Comm, Field, Game, LedgerRow, LootKey, ModKind, StayId, Task, TechId, Variant, WhySys } from '../game';
+import { WHY_NAME } from './why_names';
 
 // 오류 재현 묶음(r8 출시 실무 3): 시드, 최근 행동, 직전 저장, 지금 저장, 오류를 한 덩어리 JSON으로.
 // 판을 바꾸는 행동은 모두 applyStep을 거친다. 그래서 직전 저장에 마지막 행동을 다시 하면 같은 판(같은 오류)이 나온다.
@@ -60,28 +61,69 @@ export function stepLabel(g: Game, s: Step): string {
   }
 }
 
+const STATS = ['trust', 'tension', 'coal', 'food', 'med', 'lux'] as const;
+type Sums = Record<(typeof STATS)[number], number> & { rel: Partial<Record<Comm, number>> };
+const zero = (): Sums => ({ trust: 0, tension: 0, coal: 0, food: 0, med: 0, lux: 0, rel: {} });
+
+/** 장부 줄을 화면 이름별로 모은다(이름이 있는 까닭만). 값은 반올림한 정수다. */
+export function namedSums(rows: LedgerRow[]): Map<string, Sums> {
+  const raw = new Map<string, Sums>();
+  for (const r of rows) {
+    const name = WHY_NAME[r.why];
+    if (!name) continue;
+    const sum = raw.get(name) ?? zero();
+    if (r.k.startsWith('rel:')) { const c = r.k.slice(4) as Comm; sum.rel[c] = (sum.rel[c] ?? 0) + r.d; }
+    else sum[r.k as (typeof STATS)[number]] += r.d;
+    raw.set(name, sum);
+  }
+  for (const sum of raw.values()) {
+    for (const k of STATS) sum[k] = Math.round(sum[k]);
+    for (const c of COMMS) if (sum.rel[c] !== undefined) sum.rel[c] = Math.round(sum.rel[c]!);
+  }
+  return raw;
+}
+
 /** 판을 바꾸는 행동을 한다. 띄울 알림 글이 있으면 돌려준다. 모르는 행동이면 던진다.
- *  신임·긴장의 보이는 값이 바뀌었으면 까닭 한 줄을 g.meterLog에 남긴다(정산이 돈 행동은 '구간 정산'으로 적는다). */
+ *  신임·긴장·자원·집단 관계의 보이는 값이 바뀌었으면 까닭 줄을 남긴다(meterLog, resLog, relLog).
+ *  내가 고른 행동은 그 행동 이름 한 줄로 적는다. 열차가 굴러가는 행동(다음 단계, 구간 정산)은 규칙이 장부(ledger.ts)에 적은 까닭 이름별로 가르고,
+ *  장부가 아직 모르는 몫은 '구간 정산'이나 단계 이름 한 줄로 남긴다. 줄의 합은 늘 보이는 값의 차이와 같다. */
 export function applyStep(g: Game, s: Step): string | null {
   const label = stepLabel(g, s);
-  const before = { seg: g.seg, trust: Math.round(g.trust), tension: Math.round(g.tension), settle: g.lastSettle };
-  const res = { coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux) };
-  const rel0 = COMMS.map(c => Math.round(g.comms[c].rel));
+  const before = { seg: g.seg, settle: g.lastSettle };
+  const seen = (): Sums => ({
+    trust: Math.round(g.trust), tension: Math.round(g.tension), coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux),
+    rel: Object.fromEntries(COMMS.map(c => [c, Math.round(g.comms[c].rel)])),
+  });
+  const was = seen();
+  drain(g);
   const text = runStep(g, s);
-  const why = g.lastSettle && g.lastSettle !== before.settle ? '구간 정산' : label;
-  const trust = Math.round(g.trust) - before.trust;
-  const tension = Math.round(g.tension) - before.tension;
-  if (trust !== 0 || tension !== 0) {
-    const row = { seg: before.seg, label: why, trust, tension };
-    g.meterLog = [...(g.meterLog ?? []), row].slice(-METER_LOG_MAX);
+  const ledger = drain(g);
+  const now = seen();
+  const settled = !!g.lastSettle && g.lastSettle !== before.settle;
+  const sys: WhySys | undefined = settled ? 'settle' : s.a === 'advance' ? 'auto' : undefined;
+  // 남는 몫: 보이는 차이에서 이름 붙은 줄들을 뺀 것
+  const rest = zero();
+  for (const k of STATS) rest[k] = now[k] - was[k];
+  for (const c of COMMS) rest.rel[c] = now.rel[c]! - was.rel[c]!;
+  const lines: [string, Sums, WhySys | undefined][] = [];
+  if (s.a === 'advance') {
+    for (const [name, sum] of namedSums(ledger)) {
+      for (const k of STATS) rest[k] -= sum[k];
+      for (const c of COMMS) rest.rel[c]! -= sum.rel[c] ?? 0;
+      lines.push([name, sum, sys]);
+    }
   }
-  const d = { coal: Math.round(g.coal) - res.coal, food: Math.round(g.food) - res.food, med: Math.round(g.med) - res.med, lux: Math.round(g.lux) - res.lux };
-  if (d.coal !== 0 || d.food !== 0 || d.med !== 0 || d.lux !== 0) {
-    g.resLog = [...(g.resLog ?? []), { seg: before.seg, label: why, ...d }].slice(-RES_LOG_MAX);
+  lines.push([settled ? '구간 정산' : label, rest, settled ? 'settle' : undefined]);
+  for (const [name, sum, mark] of lines) {
+    const tag = mark ? { sys: mark } : {};
+    if (sum.trust !== 0 || sum.tension !== 0) g.meterLog = [...(g.meterLog ?? []), { seg: before.seg, label: name, trust: sum.trust, tension: sum.tension, ...tag }].slice(-METER_LOG_MAX);
+    if (sum.coal !== 0 || sum.food !== 0 || sum.med !== 0 || sum.lux !== 0) {
+      g.resLog = [...(g.resLog ?? []), { seg: before.seg, label: name, coal: sum.coal, food: sum.food, med: sum.med, lux: sum.lux, ...tag }].slice(-RES_LOG_MAX);
+    }
+    const rel: Partial<Record<Comm, number>> = {};
+    for (const c of COMMS) if (sum.rel[c]) rel[c] = sum.rel[c];
+    if (Object.keys(rel).length > 0) g.relLog = [...(g.relLog ?? []), { seg: before.seg, label: name, rel, ...tag }].slice(-RES_LOG_MAX);
   }
-  const rel: Partial<Record<Comm, number>> = {};
-  COMMS.forEach((c, i) => { const v = Math.round(g.comms[c].rel) - rel0[i]; if (v !== 0) rel[c] = v; });
-  if (Object.keys(rel).length > 0) g.relLog = [...(g.relLog ?? []), { seg: before.seg, label: why, rel }].slice(-RES_LOG_MAX);
   return text;
 }
 

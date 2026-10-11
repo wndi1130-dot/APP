@@ -1,3 +1,4 @@
+import { bump, bumpRel, put } from '../ledger';
 import { COMMS, COMM_NAME, P } from '../data';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
@@ -99,7 +100,7 @@ export function hygieneTick(g: Game, notes: string[]): void {
     const lice = d.lice[c];
     // 불결한 칸은 이가 돌 때만 관계를 깎는다(16.9).
     if (h === 'dirty' && lice) {
-      g.comms[c].rel = clamp(g.comms[c].rel - D.dirtyRel, -100, 100);
+      bumpRel(g, c, -D.dirtyRel, 'wash');
       notes.push(`${COMM_NAME[c]} 관계 −${D.dirtyRel}: 씻을 물이 모자라 불만.`);
     }
     if (lice) {
@@ -185,7 +186,7 @@ function typhusTick(g: Game, notes: string[]): void {
     const dead: string[] = [];
     const kept: string[] = [];
     const hasMed = g.med >= need;
-    if (hasMed) g.med -= need; else g.med = 0;
+    if (hasMed) bump(g, 'med', -need, 'sick'); else put(g, 'med', 0, 'sick');
     // 의약품을 받으면 구간마다 40%(따로 눕혔으면 25%)로 낫는다. 없으면 낫지 않고 15%(응급 처치면 10%)로 죽는다(16.5, triage N12).
     const recover = t.apart ? D.typhusRecoverApart : D.typhusRecover;
     for (const who of t.patients) {

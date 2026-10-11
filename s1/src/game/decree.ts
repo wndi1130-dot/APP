@@ -1,3 +1,4 @@
+import { bumpRel } from './ledger';
 import { COMM_NAME, COMMS, CORPSE_LAWS, LAWS } from './data';
 import type { LawId } from './data';
 import { CARD_EXTENSIONS, VIEW_FILTERS } from './cards';
@@ -5,7 +6,7 @@ import type { Choice } from './cards';
 import { needLaws, NEEDS } from './needs';
 import type { NeedId } from './needs';
 import { canDecree, DECREE_REL, enactLaw, lawOpen, stance } from './politics';
-import { clamp, journal, lawActive } from './state';
+import { journal, lawActive } from './state';
 import type { Game } from './state';
 
 // '포고로 정한다'(S1a R3 대조 7번, 2026-10-07 17:33 사용자 결정 '붙인다', s1b_dark_path 5.3). 비상대권은 S1a 규칙이라 모든 판에 붙는다.
@@ -60,7 +61,7 @@ CARD_EXTENSIONS.push({
       const law = sp.slice('dark:decree:law:'.length) as LawId;
       // castVote의 포고와 같은 장부: 대권이 끝나면 추인 안건이 되고, 싫어하는 칸과 관계 −3.
       (g.decreed ??= []).push(law);
-      for (const c of COMMS) if (stance(g, c, { law, repeal: false }, false).score <= -3) g.comms[c].rel = clamp(g.comms[c].rel - DECREE_REL, -100, 100);
+      for (const c of COMMS) if (stance(g, c, { law, repeal: false }, false).score <= -3) bumpRel(g, c, -DECREE_REL, 'decree');
       enactLaw(g, law, []);
       journal(g, `비상대권으로 ${LAWS[law].title}을(를) 포고했다.`, 'dark');
       return;

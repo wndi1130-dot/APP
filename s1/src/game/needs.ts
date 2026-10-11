@@ -1,8 +1,9 @@
+import { bump, bumpRel } from './ledger';
 import { LAWS, LAW_IDS } from './data';
 import type { LawId } from './data';
 import { COMMS } from './data';
 import type { Comm } from './data';
-import { addCard, clamp, isGone, journal, lawActive, PROFILES } from './state';
+import { addCard, isGone, journal, lawActive, PROFILES } from './state';
 import type { Game } from './state';
 
 // 법 요구(2026-10-07 사용자 후기, 프로스트펑크 2식): 문제가 생겼는데 그 문제를 다루는 법이 없으면
@@ -56,7 +57,7 @@ export const NEEDS: Record<NeedId, NeedDef> = {
       rep => `${rep}이(가) 난방 순번을 다음 회기 거래 조건으로 들고 오겠다고 한다.`,
       '정한 사람이 없으니 석탄은 목소리 큰 칸으로 간다.',
     ],
-    apply: (g, n) => { g.coal -= 3 + n; g.tension = clamp(g.tension + 3, 0, 100); },
+    apply: (g, n) => { bump(g, 'coal', -(3 + n), 'need'); bump(g, 'tension', 3, 'need'); },
   },
   food: {
     group: '식량', title: '배급을 정하는 법', open: g => g.food <= 50, hurtComm: 'tail',
@@ -71,7 +72,7 @@ export const NEEDS: Record<NeedId, NeedDef> = {
       rep => `${rep}이(가) 사라진 상자 목록을 들고 왔다. 다음 회기에 따지겠다고 한다.`,
       '정해진 몫이 없으니 줄 앞에 선 사람이 많이 가져간다.',
     ],
-    apply: (g, n) => { g.food = Math.max(0, g.food - (3 + n)); g.tension = clamp(g.tension + 3, 0, 100); },
+    apply: (g, n) => { bump(g, 'food', -(3 + n), 'need', { floor0: true }); bump(g, 'tension', 3, 'need'); },
   },
   corpse: {
     group: '시신', title: '시신을 다루는 법', open: g => g.corpseIssue, hurtComm: 'guard',
@@ -86,7 +87,7 @@ export const NEEDS: Record<NeedId, NeedDef> = {
       '덮어 둔 시신이 또 한 구간을 넘겼다. 경비들이 교대를 미룬다.',
     ],
     // 던진 시신 수는 실제 죽음(death.ts)에서만 오른다. 법 공백의 값은 치우는 일을 떠안은 경비대가 낸다(triage N1).
-    apply: (g, n) => { g.comms.guard.rel = clamp(g.comms.guard.rel - (3 + n), -100, 100); g.tension = clamp(g.tension + 3, 0, 100); },
+    apply: (g, n) => { bumpRel(g, 'guard', -(3 + n), 'need'); bump(g, 'tension', 3, 'need'); },
   },
   med: {
     group: '의료', title: '치료 순서를 정하는 법', open: g => g.injured >= 4, hurtComm: 'medtech',
@@ -100,7 +101,7 @@ export const NEEDS: Record<NeedId, NeedDef> = {
       rep => `${rep}이(가) 이대로는 손을 놓겠다고 한다. 다음 회기에 답을 달라고 한다.`,
       '순서가 없으니 목소리 큰 쪽이 먼저 침상에 눕는다.',
     ],
-    apply: (g, n) => { g.comms.medtech.rel = clamp(g.comms.medtech.rel - (3 + n), -100, 100); g.tension = clamp(g.tension + 2, 0, 100); },
+    apply: (g, n) => { bumpRel(g, 'medtech', -(3 + n), 'need'); bump(g, 'tension', 2, 'need'); },
   },
 };
 
@@ -148,7 +149,7 @@ export function needTick(g: Game, notes: string[]): void {
     if (settled || !def.open(g)) {
       if (state && settled) journal(g, `${def.title}이 정해지자 요구가 잦아들었다.`, 'good');
       if (state && settled && state.promised && state.hits === 0) {
-        g.trust = clamp(g.trust + 3, 0, 100);
+        bump(g, 'trust', 3, 'promise');
         journal(g, '열차장이 약속을 지켰다.', 'good');
       }
       delete g.needs[id];
@@ -163,8 +164,8 @@ export function needTick(g: Game, notes: string[]): void {
     }
     if (g.seg < state.due) continue;
     if (state.promised && state.hits === 0) {
-      g.trust = clamp(g.trust - NEED_PROMISE.trust, 0, 100);
-      g.tension = clamp(g.tension + NEED_PROMISE.tension, 0, 100);
+      bump(g, 'trust', -NEED_PROMISE.trust, 'promise');
+      bump(g, 'tension', NEED_PROMISE.tension, 'promise');
       notes.push('열차장이 약속을 어겼다.');
       journal(g, `${def.title}을 정하겠다던 열차장의 약속은 지켜지지 않았다.`, 'bad');
     }
@@ -172,7 +173,7 @@ export function needTick(g: Game, notes: string[]): void {
     const hit = needHit(g, id, state.hits);
     if (state.hits === 0) addCard(g, { kind: 'info', who: '기한이 지났다', text: `${hit} 법을 정할 때까지 손해가 이어진다.` });
     state.hits += 1;
-    g.trust = clamp(g.trust - 2, 0, 100);
+    bump(g, 'trust', -2, 'need');
     notes.push(hit);
     journal(g, hit, 'bad');
   }

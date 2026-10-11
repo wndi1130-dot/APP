@@ -1,3 +1,4 @@
+import { bump } from './ledger';
 import { CONDITIONS, COMMS, COMM_NAME, LOOT_NAME, P, REP_AGE, TRAIT_BAN, TRAITS } from './data';
 import type { Comm } from './data';
 import { CARD_EXTENSIONS } from './cards';
@@ -137,8 +138,8 @@ export function hubLeakTick(g: Game, notes: string[]): void {
     const food = Math.max(0, Math.round(g.food * k * 10) / 10);
     const med = Math.max(0, Math.round(g.med * k * 10) / 10);
     if (food + med <= 0) continue;
-    g.food -= food;
-    g.med -= med;
+    bump(g, 'food', -food, 'hub.stash');
+    bump(g, 'med', -med, 'hub.stash');
     const st = (hub.stash[c] ??= { food: 0, med: 0 });
     st.food += food;
     st.med += med;
@@ -293,10 +294,10 @@ export function arriveHub(g: Game): void {
 }
 
 function applyRes(g: Game, e: Eff): void {
-  if (e.t === 'food') g.food += e.v;
-  else if (e.t === 'coal') g.coal += e.v;
-  else if (e.t === 'med') g.med = Math.max(0, g.med + e.v);
-  else if (e.t === 'lux') g.lux = Math.max(0, g.lux + e.v);
+  if (e.t === 'food') bump(g, 'food', e.v, 'hub');
+  else if (e.t === 'coal') bump(g, 'coal', e.v, 'hub');
+  else if (e.t === 'med') bump(g, 'med', e.v, 'hub', { floor0: true });
+  else if (e.t === 'lux') bump(g, 'lux', e.v, 'hub', { floor0: true });
 }
 
 // ---- 허브 고르기 ----
@@ -446,7 +447,7 @@ function hubChoose(g: Game, card: Card, choice: Choice): void {
       // 내린 사람 수는 카드가 이미 깎은 인구 그대로(K01 5). 신임을 먼저 치른 뒤 다시 세면 문턱을 넘나들어 명단과 어긋난다.
       const pn = choice.effs.reduce((n, e) => n + (e.t === 'pop' && e.c === c ? -e.v : 0), 0);
       const st = hub.stash[c];
-      if (st) { g.food += st.food; g.med += st.med; delete hub.stash[c]; }
+      if (st) { bump(g, 'food', st.food, 'hub.back'); bump(g, 'med', st.med, 'hub.back'); delete hub.stash[c]; }
       const promise = promiseFor(c);
       lines.push(`${COMM_NAME[c]}을(를) 설득했다. 약속: ${promise}.${pn > 0 ? ` 그래도 ${pn}명은 내렸다.` : ' 아무도 내리지 않았다.'}`);
       for (const name of plan.names.filter(x => x !== g.comms[c].leader.name).slice(0, pn)) (g.left ??= []).push(name);
@@ -457,7 +458,7 @@ function hubChoose(g: Game, card: Card, choice: Choice): void {
     case 'hub_force': {
       if (!plan) return;
       const st = hub.stash[c];
-      if (st) { g.food += st.food; g.med += st.med; delete hub.stash[c]; }
+      if (st) { bump(g, 'food', st.food, 'hub.back'); bump(g, 'med', st.med, 'hub.back'); delete hub.stash[c]; }
       const fr = forceRange(plan.n);
       const roll = (key: string, [lo, hi]: [number, number]) => lo + Math.floor(u(g, key) * (hi - lo + 1));
       const hurt = roll(`fh|${c}`, fr.hurt);

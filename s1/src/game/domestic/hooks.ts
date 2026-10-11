@@ -1,3 +1,4 @@
+import { bump } from '../ledger';
 import { COMM_NAME, LAWS, LOOT_NAME, P, STAY } from '../data';
 import type { Comm, LawId } from '../data';
 import type { PromiseState } from '../state';
@@ -16,7 +17,7 @@ import './pipe';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick, domesticHeal } from './medbay';
 import { refreshSit } from './sit';
-import { domCard, living, personById, techAdopted, techMult, topSkill, variantMult } from './state';
+import { domCard, living, noteFind, personById, techAdopted, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, restoreCheck, rollBreakdown, runWorkshop, techTitle, upkeepCoal } from './workshop';
 
 // S1a 차례(turn.ts)에 S1c를 잇는 훅. turn.ts는 '// S1c 내정 훅' 줄에서 이 함수들만 부른다. dom이 없으면 모두 S1a 그대로 돌려준다.
@@ -144,14 +145,14 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
     // 바꾸는 비율은 정차 산출과 같다: 사치품은 3분의 1, 상징물·비밀은 10에 하나(최대 2). 여기선 주사위를 굴리지 않는다.
     const m = techMult(g, 'x3');
     if (m > 0 && stop.target) {
-      g.coal -= 1;
+      bump(g, 'coal', -1, 'haul');
       const raw = P.haulTotal * STAY.short.mult * 0.5 * m;
       const t = stop.target;
       const amt = t === 'luxury' ? Math.round(raw / 3) : t === 'symbol' || t === 'secret' ? Math.min(2, Math.floor(raw / 10)) : Math.round(raw);
-      if (t === 'coal') g.coal += amt;
-      else if (t === 'food') g.food += amt;
-      else if (t === 'medicine') g.med += amt;
-      else if (t === 'luxury') g.lux += amt;
+      if (t === 'coal') bump(g, 'coal', amt, 'haul');
+      else if (t === 'food') bump(g, 'food', amt, 'haul');
+      else if (t === 'medicine') bump(g, 'med', amt, 'haul');
+      else if (t === 'luxury') bump(g, 'lux', amt, 'haul');
       else if (t === 'symbol') g.symbols += amt;
       else for (let i = 0; i < amt; i += 1) addSecret(g);
       if (amt > 0) notes.push(`궤도 모터카가 ${LOOT_NAME[t]} ${amt}을(를) 실어 왔다.`);
@@ -173,10 +174,12 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
       const pool: Field[] = bp.branches === 'any' ? [...FIELDS] : bp.branches;
       const f = pool[Math.floor(rnd(g) * pool.length)];
       d.frags[f] += 1;
+      noteFind(d, { seg: g.seg, place: stop.place, what: 'frag', field: f, via: 'stop' });
       notes.push(`${fieldLabel(f)} 설계도 조각을 찾았다.`);
     }
     if (bp.core > 0 && stop.stay === 'long' && rnd(g) < bp.core * (esc?.field === 'engine' ? D.escortCore : 1)) {
       d.cores += 1;
+      noteFind(d, { seg: g.seg, place: stop.place, what: 'core', via: 'stop' });
       notes.push('기계 코어 하나를 떼어 왔다.');
     }
     if (scrap + wood > 0) notes.push(`자재: 고철 ${scrap}, 목재 ${wood}.`);

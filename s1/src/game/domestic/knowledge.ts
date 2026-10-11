@@ -1,6 +1,7 @@
+import { bumpRel } from '../ledger';
 import { COMMS } from '../data';
 import type { Comm } from '../data';
-import { clamp, drawPerson, journal, lawActive, rnd } from '../state';
+import { drawPerson, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { D, FIELDS, TECHS, TECH_IDS } from './data';
 import type { Field } from './data';
@@ -51,7 +52,7 @@ export function attachApprentice(g: Game, f: Field, from: 'guild' | 'other', qui
   d.people.push(person);
   if (teacher !== 'manual') teacher.pupil = person.id;
   // quiet: 카드 효과 줄이 관계를 이미 움직였거나(견습생 후보), 법이 자동으로 배정했다(법 20).
-  if (!quiet) g.comms[owner].rel = clamp(g.comms[owner].rel + (from === 'guild' ? D.guildRel : D.distributeRel), -100, 100);
+  if (!quiet) bumpRel(g, owner, from === 'guild' ? D.guildRel : D.distributeRel, 'knowhow');
   if (from === 'other' && f === 'engine' && g.comms.engine.rel <= -15) g.comms.engine.fervor = Math.min(3, g.comms.engine.fervor + 1);
   if (comm !== owner) d.flags.otherApprentice = true;
   d.log.apprentices.push({ seg: g.seg, field: f, other: comm !== owner });
@@ -143,7 +144,7 @@ export function knowledgeTick(g: Game): void {
     delete p.writing;
     d.manuals[p.field] = true;
     d.stats.manuals += 1;
-    if (p.field === 'engine') g.comms.engine.rel = clamp(g.comms.engine.rel + D.engineManualRel, -100, 100);
+    if (p.field === 'engine') bumpRel(g, 'engine', D.engineManualRel, 'knowhow');
     journal(g, `${p.name}이(가) ${FIELD_LABEL[p.field]} 매뉴얼을 다 썼다.`, 'good');
   }
   // 카운트다운(8.5)
@@ -206,7 +207,7 @@ export function strikeRuns(g: Game): boolean {
   }
   const s = g.comms[d.stoker];
   s.base[3] += D.stokerExposure;
-  g.comms.engine.rel = clamp(g.comms.engine.rel + D.stokerEngineRel, -100, 100);
+  bumpRel(g, 'engine', D.stokerEngineRel, 'knowhow');
   stokingSeg(g);
   journal(g, `기관실이 불을 껐지만 대체 기관사와 ${d.stoker === 'tail' ? '꼬리칸' : '다른 칸'} 화부로 열차가 간다.`, 'dark');
   return true;
