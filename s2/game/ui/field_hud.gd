@@ -13,6 +13,7 @@ const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -128,6 +129,11 @@ const RIM_OUT: float = 0.75
 const RIM_DWELL: float = 0.15
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
+# The mark over one of the dead that has dropped low and will run: a ring that
+# closes on it as the beat runs out, in pixels. First values.
+const TELL_RING_IN: float = 12.0
+const TELL_RING_OUT: float = 40.0
+const TELL_FONT: int = 28
 const MOAN_R: float = 20.0
 const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search", "수색"], ["cover", "엄호"], ["retreat", "후퇴"]]
 
@@ -2401,6 +2407,7 @@ func _draw_overlay() -> void:
 	var p = game.player
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
+	_draw_tells()
 	_draw_says(view_size)
 	# The last call: the count, big, where nobody can miss it. The same place
 	# says, for a few seconds, that the train is ready.
@@ -2517,6 +2524,26 @@ func _draw_edges(view_size: Vector2) -> void:
 
 
 ## Heard, not seen (body_injury 8.3): the dead moving within MOAN_R of the
+## The dead that have dropped low and will run, of those in sight.
+func tells() -> Array:
+	var out: Array = []
+	for z in game.zombies.list:
+		if z["state"] == "tell" and game.cell_seen(z["pos"]):
+			out.append(z)
+	return out
+
+
+## Over each of them, a ring that closes as its beat runs out, and a mark.
+func _draw_tells() -> void:
+	for z in tells():
+		var left: float = clampf(float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
+		var at: Vector2 = _project(z["pos"] + Vector3(0, 1.0, 0))
+		overlay.draw_arc(at, lerpf(TELL_RING_IN, TELL_RING_OUT, left), 0, TAU, 32, AMBER, 3.0)
+		var head: Vector2 = _project(z["pos"] + Vector3(0, 2.3, 0))
+		var w: float = theme.default_font.get_string_size("!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT).x
+		overlay.draw_string(theme.default_font, head - Vector2(w * 0.5, 0), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT, AMBER)
+
+
 ## leader but outside sight show as a faint tick around the leader, one per
 ## eighth of the compass. No count, no exact spot.
 func _draw_moans() -> void:
