@@ -366,8 +366,13 @@ func test_the_goals_stay_on_screen_under_the_clock_and_a_plain_stop_shows_none()
 	assert_eq(game.mission_play.goal_line(), "바깥 설비 2/2 ✓ · 선로 기록 0/1 · 지하 보관실 1/1 ✓")
 	game.hud.tick(0.1)
 	assert_eq(game.hud.goal_label.text, game.mission_play.goal_line())
-	var body: Control = game.hud.status_pads[0]
-	assert_false(game.hud.goal_label.get_global_rect().intersects(body.get_global_rect()))
+	# The longest line: the clock box grows sideways, not down into the leader's plate.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var box: Control = game.hud.goal_label.get_parent().get_parent()
+	assert_gt(box.get_global_rect().size.y, 60.0, "the box is laid out")
+	assert_false(box.get_global_rect().intersects(game.hud.portrait.get_global_rect()), "clear of the leader's plate")
+	assert_eq(game.hud.goal_label.get_line_count(), 1, "one line")
 	var depot = _game({"mission": "depot"})
 	assert_eq(depot.mission_play.goal_line(), "석탄 싣기 0.0/12")
 
