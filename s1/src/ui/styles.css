@@ -205,17 +205,36 @@ small { font-size: 12px; }
 .band__nums { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); line-height: 16px; }
 .band__nums .is-unrest { color: var(--discontent); }
 .band__nums .is-support { color: var(--support); }
-.band__bar { display: flex; gap: 2px; height: 8px; margin-top: 2px; }
-.band__seg { display: block; min-width: 2px; border-radius: 2px; background: var(--neutral); }
-.band__seg.is-unrest { background: var(--discontent); }
-.band__seg.is-support { background: var(--support); }
-/* 중립 칸이 불만 선(왼쪽에서 붉게)·지지 선(오른쪽에서 푸르게)까지 간 만큼 조각 안을 채운다(hud.ts segFill). */
-.band__seg { position: relative; overflow: hidden; }
-.band__fill { position: absolute; top: 0; bottom: 0; opacity: .6; }
-.band__fill.is-neg { left: 0; background: var(--discontent); }
-.band__fill.is-pos { right: 0; background: var(--support); }
-/* 관계가 방금 바뀐 칸의 조각이 두 번 깜빡인다. */
-.band__seg.fx-seg { animation: fx-seg 700ms ease-in-out 2; }
+/* 여론 눈금(결정 058): 가운데가 0. 평균만큼 가운데에서 한쪽으로 차고, 집단 다섯은 제 관계 자리에 금으로 선다. */
+.band__mood { color: var(--ink-2); }
+.band__mood b { color: inherit; }
+.band__scale { position: relative; height: 8px; margin-top: 2px; border-radius: 2px; background: var(--neutral); }
+.band__mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--ink-2); }
+.band__lean { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.band__lean.is-neg { right: 50%; background: var(--discontent); }
+.band__lean.is-pos { left: 50%; background: var(--support); }
+.band__tick { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1px; border-radius: 1px; background: var(--ink-1); }
+.band__tick.is-unrest { background: var(--discontent); box-shadow: 0 0 0 1px var(--surface-1); }
+.band__tick.is-support { background: var(--support); box-shadow: 0 0 0 1px var(--surface-1); }
+.band__tick.fx-seg { animation: fx-seg 700ms ease-in-out 2; }
+/* 표결 판세: 불만 쪽·중립·지지 쪽 의석 세 토막. */
+.stand { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.stand__bar { flex: 1; min-width: 60px; display: flex; gap: 2px; height: 6px; }
+.stand__bar i { display: block; min-width: 2px; border-radius: 2px; background: var(--neutral); }
+.stand__bar i.is-unrest { background: var(--discontent); }
+.stand__bar i.is-support { background: var(--support); }
+.stand__nums { display: inline-flex; gap: 8px; white-space: nowrap; }
+.stand__nums .is-unrest { color: var(--discontent); }
+.stand__nums .is-support { color: var(--support); }
+.drop > .stand { margin-bottom: 6px; }
+/* 집단 줄의 관계 막대: 가운데 0에서 왼쪽(불만)이나 오른쪽(지지)으로 찬다. */
+.frow__rel { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.relbar { position: relative; width: 84px; height: 6px; border-radius: 2px; background: var(--neutral); }
+.relbar i { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--ink-2); }
+.relbar b { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.relbar b.is-neg { right: 50%; background: var(--discontent); }
+.relbar b.is-pos { left: 50%; background: var(--support); }
+.frow__seats { color: var(--ink-3); font-size: 12px; }
 @keyframes fx-seg { 50% { filter: brightness(2.2); transform: scaleY(1.9); } }
 
 .top__res { display: flex; gap: 10px; flex: none; }
@@ -970,7 +989,7 @@ small { font-size: 12px; }
 .fx-rel { font-size: 12px; line-height: 18px; }
 @keyframes fx-rels { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .band__seg.fx-seg { animation: none; outline: 1px solid var(--ink-1); }
+  .band__tick.fx-seg { animation: none; outline: 1px solid var(--ink-1); }
   .fx-hit b, .fx-cross, .top.fx-band, .fx-down.fx-hit .meter__body, .fx-down.fx-hit .res__body { animation: none; }
   .fx-tag, .fx-tag.is-late { animation: fx-rels 2s linear forwards; animation-delay: 0s; transform: translateX(-50%); }
   .fx-word { animation: fx-rels 2.2s linear forwards; }
@@ -1087,8 +1106,6 @@ small { font-size: 12px; }
 .martial-lift.is-armed { background: var(--warning); color: var(--on-light); border-color: var(--warning); }
 
 /* 집단 창의 의석 비율: 작은 막대와 %(석수는 누르면 쪽지). */
-.frow__share { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-3); }
-.frow__share .mini-bar { width: 36px; }
 /* 신임·긴장이 바뀐 까닭 목록(panels.ts meterPanel): 구간, 일의 이름, ±값. */
 .meter[data-action] { cursor: pointer; }
 .drop--why { width: min(420px, calc(100% - 24px)); }
