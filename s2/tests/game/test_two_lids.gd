@@ -65,7 +65,7 @@ func test_the_dead_climb_out_of_a_hole_and_the_lid_lies_aside_meanwhile() -> voi
 	assert_eq(game.zombies.list[1]["state"], "climb")
 	assert_false(game.lid_open.has("drain"))
 	game.director.block(key)
-	assert_eq(game._other_way(key), "manhole_01")
+	assert_eq(game._other_way(key), "manhole_01", "no culvert here: another open hole")
 
 
 func test_the_driver_tells_of_any_lid_and_a_horde_comes_up_one() -> void:

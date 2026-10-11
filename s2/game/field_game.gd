@@ -44,7 +44,7 @@ const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
 const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a person (field_unified 6)
 const BLOOD_SCENT_R: float = 12.0       # excessive blood smell event radius (body_injury 8.1)
-const EXIT_WIDTH: Dictionary = {"culvert": 2}   # dead out at once per exit; others one
+const CULVERT_WIDTH: int = 2            # dead out of a culvert at once; every other way lets one out
 const ALLY_CAP: int = 12
 ## Stick body weight (field_unified 10, numbers are S2 starting values).
 const DRIVE_START: float = 0.2          # seconds to get up to speed
@@ -1557,7 +1557,7 @@ func _update_spawns(delta: float) -> void:
 		if now < float(s["t"]):
 			keep.append(s)
 			continue
-		if alive >= cap or int(gate.get(key, 0)) >= int(EXIT_WIDTH.get(key, 1)):
+		if alive >= cap or int(gate.get(key, 0)) >= (CULVERT_WIDTH if key.begins_with("culvert") else 1):
 			waiting += 1
 			s["t"] = now + 0.5
 			keep.append(s)
@@ -1630,13 +1630,10 @@ func _climb_out(z: Dictionary, key: String, s: Dictionary) -> void:
 ## Where the rest of a horde comes when its lid is shut under it: the culvert
 ## if the map has one open, else another open hole, else the next way in.
 func _other_way(shut: String) -> String:
-	var order: Array = ["culvert"]
-	for key in data["manholes"]:
-		if not order.has(key):
-			order.append(key)
-	for key in order:
-		if key != shut and data["manholes"].has(key) and director.is_open(key):
-			return key
+	for wide in [true, false]:
+		for key: String in data["manholes"]:
+			if key != shut and key.begins_with("culvert") == wide and director.is_open(key):
+				return key
 	return director.next_entry
 
 
