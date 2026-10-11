@@ -9,6 +9,7 @@ const W = preload("res://game/sim/weapons.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
+const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
@@ -953,13 +954,20 @@ func _tick_debug() -> void:
 			alive += 1
 	var next: float = game.director.seconds_to_next(now)
 	var track: Dictionary = game.track_dead()
-	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n소음 점수 %d · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n선로 위 망자 서 %d · 동 %d · %s" % [
+	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n%s · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n선로 위 망자 서 %d · 동 %d · %s" % [
 		Engine.get_frames_per_second(), frame_ms, Engine.max_fps,
 		game.zombies.drawn_count, alive, game.cap, game.waiting,
-		game.ledger.total, "-" if is_inf(next) else str(roundi(next)), game.director.name_of(game.director.next_entry),
+		noise_line(), "-" if is_inf(next) else str(roundi(next)), game.director.name_of(game.director.next_entry),
 		game.director.call_range_mult(now), game.hordes.size(), game.clock.speed, roundi(now),
 		track["west"], track["east"], "시야 가림 켬" if game.mask_on else "시야 가림 끔",
 	]
+
+
+## The sound the people made, next to how much of it still counts as a quiet
+## stop (field_holdout). What the dead added by banging on doors is not in it:
+## that total is kept in the record only. The words are a first wording.
+func noise_line() -> String:
+	return "사람이 낸 소리 %d (조용함은 %d까지)" % [game.holdout.people_noise(), FieldHoldout.QUIET_NOISE]
 
 
 ## The situation pad shows the nearest thing to do; a tap does it, a hold
@@ -1598,7 +1606,7 @@ func show_end(result: Dictionary) -> void:
 	var r: Dictionary = result["receipt"]
 	var lines: Array = []
 	lines.append("머문 시간: 게임 %d분 (실제 %d분 %d초)" % [int(result["stay"]), int(result["real_seconds"]) / 60, int(result["real_seconds"]) % 60])
-	lines.append("탄 사람: %d명 · 무리 %d번 · 소음 점수 %d" % [int(result["boarded"]), int(result["hordes"]), int(result["noise"])])
+	lines.append("탄 사람: %d명 · 무리 %d번 · %s" % [int(result["boarded"]), int(result["hordes"]), noise_line()])
 	var stock: Dictionary = r.get("stock", {})
 	var parts: Array = []
 	var names := {"coal": "석탄", "food": "식량", "medicine": "의약품", "luxury": "사치품", "symbol": "상징물", "info": "정보", "scrap": "고철", "wood": "목재", "ammo_pistol": "권총탄", "ammo_shell": "산탄", "ammo_craft": "공방탄"}
