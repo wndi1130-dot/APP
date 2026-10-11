@@ -585,12 +585,23 @@ static func crossing_ends(crossing: Dictionary) -> Array:
 	return [cells[0] + Vector2i(0, -1), cells[cells.size() - 1] + Vector2i(0, 1)]
 
 
+## A way written over ground one walks (the wayside maps mark the way round
+## the train's ends so) is no climb: there is nothing to go over.
+func walked_round(crossing: Dictionary) -> bool:
+	for c: Vector2i in crossing["cells"]:
+		if game.grid.people_can_walk(c):
+			return true
+	return false
+
+
 ## The way over the train p stands at: {"i", "from", "to"}, or {} if none.
 func crossing_at(p) -> Dictionary:
 	if game.level_of(p.position) != 0:
 		return {}
 	var ways: Array = game.data.get("crossings", [])
 	for i in ways.size():
+		if walked_round(ways[i]):
+			continue
 		var ends: Array = crossing_ends(ways[i])
 		for k in 2:
 			if FieldGrid.center(ends[k]).distance_to(p.position) < CROSS_NEAR:
