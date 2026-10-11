@@ -1,9 +1,10 @@
 import {
   COMMS, COMM_NAME, PHASE_NAME, viewCard, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   drain, migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
+  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LedgerRow, LootKey, ModKind, StayId, Task, TechId, Variant, WhySys } from '../game';
+import type { PotMode } from '../game';
 import { WHY_NAME } from './why_names';
 import { syncLuxTags } from './lux_tags';
 
@@ -187,6 +188,7 @@ function runStep(g: Game, s: Step): string | null {
     case 'dom-apprentice': return requestApprentice(g, d.field as Field) ? '견습생 후보 서류가 쌓였다.' : '가르칠 사람이 없거나 서류가 이미 있다.';
     case 'dom-manual': return requestManual(g, d.field as Field) ? '매뉴얼 요청 서류가 쌓였다.' : '써 줄 사람이 없거나 서류가 이미 있다.';
     case 'dom-hot': setHotWater(g, Number(d.value)); return null;
+    case 'dom-pot': setPot(g, d.mode as PotMode); return null;
     case 'dom-target': setTarget(g, Number(d.value)); return null;
     case 'dom-full': setFullRule(g, d.rule as 'parts' | 'dump' | 'aisle'); return null;
     case 'dom-job': return startJob(g, d.kind as ModKind, d.car ?? '') ? null : '개조를 올릴 수 없다';

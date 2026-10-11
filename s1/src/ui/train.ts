@@ -10,7 +10,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 import { nameBtn } from './names';
 import { carPopover, spaceLever, spaceTab, stackCount, warmthTone } from './home';
-import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, trainCars } from './domestic';
+import { carMods, domesticCarTag, domesticEngineCol, domesticWhyLine, gear, potDot, trainCars } from './domestic';
 
 // 열차 관리 화면(S1c, 사용자 2026-10-11): 칸을 누르면 작은 창이 아니라 화면 전체가 바뀐다.
 // 위에 열차 전체 띠, 가운데에 누른 칸의 판(상태·조절·공방 세 덩이), 아래에 단추 여섯.
@@ -94,7 +94,8 @@ function commBoard(view: View, car: CarDef): HTMLElement {
       blk('조절',
         c === 'tail' ? h('div', { class: 'tblk__row' }, h('span', { class: 'sub' }, '꼬리칸 셋 공통'), spaceTab(view)) : null,
         c === 'tail' && view.ui.spaceOpen ? spaceLever(g)
-          : h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car, true))),
+          : h('div', { class: 'carpop__levers' }, lever(g, c, 'heat'), lever(g, c, 'ration'), domesticEngineCol(view, car, true)),
+        potDot(view)),
       blk('공방',
         pct !== null && job
           ? h('div', { class: 'tblk__row' }, gear('work'), h('span', null, jobTitle(job.kind, job.car).replace(`${car.name} `, '')), h('b', { class: 'num' }, `${pct}%`))

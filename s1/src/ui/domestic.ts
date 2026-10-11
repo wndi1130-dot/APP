@@ -6,7 +6,8 @@ import {
   workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy,
 } from '../game';
 import { copyText } from './clip';
-import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
+import type { Comm, DomPerson, Field, Game, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
+import { P, isSessionSeg, potMult, potView } from '../game';
 import { cx, h, raw, s } from './dom';
 import { icon } from './icons';
 import type { IconName } from './icons';
@@ -289,6 +290,60 @@ function coldPop(view: View, car: CarDef): HTMLElement {
     h('p', { class: 'carpop__text num' }, `${line.text} `, tip('더 보기', line.more)));
 }
 
+export const POT_NAME: Record<PotMode, string> = { plain: '그대로', thin: '묽게', mixed: '섞어서' };
+
+/** 솥 덩이에 적는 숫자(결정 067). 문장 없이 낱말과 수만: 곱, 구간 식량, 목재, 들킬 확률. 누르기 전에 바뀔 값이 먼저 보인다. */
+export function potFacts(g: Game, mode: PotMode): { mult: string; food: string; wood: string; risk: number; cells: number } {
+  const pv = potView(g);
+  const ch = pv.choices.find(x => x.mode === mode) ?? pv.choices[0]!;
+  const one = (n: number) => (Math.round(n * 10) / 10).toString();
+  return {
+    mult: `×${potMult(mode).toFixed(2)}`, food: `식량 ${one(ch.food)}/구간`, wood: ch.wood > 0 ? `목재 ${one(ch.wood)}/구간` : '',
+    risk: Math.round(ch.risk * 100), cells: ch.risk > 0 ? Math.max(1, Math.min(5, Math.round(ch.risk * 5))) : 0,
+  };
+}
+
+/** 식당칸 판의 「솥」 덩이: 조리 담당 얼굴, 방식 칩 셋, 숫자 한 줄. 열차 전체에 하나라 식당칸에서만 고른다. */
+function potBlock(view: View): HTMLElement {
+  const g = view.g;
+  const pv = potView(g);
+  const who = pv.cook.name ?? COMM_NAME[pv.cook.comm];
+  const f = potFacts(g, pv.mode);
+  return h('div', { class: 'dom-pot' },
+    h('div', { class: 'dom-pot__head' },
+      portrait(who, pv.cook.comm), h('span', { class: 'sub' }, '조리 담당'), pv.cook.name ? nameBtn(pv.cook.name) : h('b', null, who),
+      h('span', { class: 'dom-pot__chips' }, pv.choices.map(ch => h('button', {
+        class: cx('chip', pv.mode === ch.mode && 'is-on'), 'data-action': 'dom-pot', 'data-mode': ch.mode,
+        disabled: !ch.ok, title: ch.why ?? '', 'aria-pressed': pv.mode === ch.mode ? 'true' : 'false',
+      }, POT_NAME[ch.mode], !ch.ok && ch.why ? h('small', null, ` ${ch.why}`) : null)))),
+    h('div', { class: 'dom-pot__nums num' },
+      h('b', null, f.mult), h('span', null, f.food), f.wood ? h('span', null, f.wood) : null,
+      h('span', { class: cx('dom-pot__risk', f.risk > 0 && 'is-red') }, '들킴 ',
+        f.risk > 0 ? h('span', { class: 'dom-pot__cells', 'aria-hidden': 'true' }, [0, 1, 2, 3, 4].map(i => h('i', { class: cx(i < f.cells && 'is-on') }))) : null,
+        f.risk > 0 ? ` ${f.risk}%` : '—'),
+      f.risk > 0 && pv.lawDouble ? h('span', { class: 'is-red' }, '들키면 벌 ×2') : null,
+      pv.active !== pv.mode ? h('span', { class: 'is-red' }, `목재가 없어 ${POT_NAME[pv.active]}`) : null));
+}
+
+/** 식당칸 판(결정 067): 솥 덩이와, 지금까지 있던 의회 문. */
+function diningPop(view: View, car: CarDef): HTMLElement {
+  const g = view.g;
+  const left = isSessionSeg(g.seg) ? 0 : P.sessionEvery - (g.seg % P.sessionEvery);
+  return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
+    popHead(car),
+    potBlock(view),
+    h('p', { class: 'carpop__text' }, g.phase === 'council' ? '회기가 열렸다. ' : left === 0 ? '이번 구간에 회기가 열린다.' : `다음 회기까지 ${left}구간.`,
+      g.phase === 'council' ? h('button', { class: 'btn', 'data-action': 'go', 'data-screen': 'council' }, '의회로') : null));
+}
+
+/** 사람 사는 칸 판의 배급 레버 곁에 뜨는 점(결정 067): 솥이 불리는 중이면 「불린 식량」. 누르면 식당칸 판으로 간다. */
+export function potDot(view: View): HTMLElement | null {
+  const pv = potView(view.g);
+  if (!pv.on || pv.active === 'plain') return null;
+  return h('button', { class: 'chip dom-potdot', 'data-action': 'car', 'data-car': 'dining', 'aria-label': `불린 식량: ${POT_NAME[pv.active]}. 식당칸 판 열기` },
+    h('i', { class: 'dot' }), '불린 식량');
+}
+
 function extraPop(view: View, car: CarDef): HTMLElement {
   return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog' },
     popHead(car),
@@ -303,6 +358,7 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
   if (car.id === 'workshop') return workshopPop(view, car);
   if (car.id === 'store') return storePop(view, car);
   if (car.id === 'cold') return coldPop(view, car);
+  if (car.id === 'dining') return diningPop(view, car);
   if (view.g.dom.extraCars.some((k, i) => car.id === `${k}${i + 1}`)) return extraPop(view, car);
   return null;
 }
@@ -1031,6 +1087,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-apprentice':
     case 'dom-manual':
     case 'dom-hot':
+    case 'dom-pot':
     case 'dom-full':
     case 'dom-job':
     case 'dom-escort':
