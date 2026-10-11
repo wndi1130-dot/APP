@@ -731,8 +731,9 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			look = "corpse"
 		var down := DeadPose.down_k(z)
 		if down > 0.0:
-			basis = basis * Basis(Vector3.RIGHT, DeadPose.fall_side(z) * PI * 0.5 * down)
-			pos.y = pos.y + DeadPose.LIFT * down
+			var lie := DeadPose.lying(z, down)
+			basis = basis * lie.basis
+			pos.y = pos.y + lie.origin.y
 			# Flat on the ground it is still (a crawler drags itself); going over or coming up, the limbs move.
 			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
