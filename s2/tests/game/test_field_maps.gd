@@ -152,3 +152,27 @@ func test_blocked_ground_out_of_doors_is_drawn_as_runs() -> void:
 	assert_eq(MapView.outdoor_block_runs(g, d), [Rect2i(2, 1, 5, 1), Rect2i(9, 1, 1, 1)] as Array[Rect2i])
 	# The first stop draws its own (the water tower): nothing of it changes.
 	assert_true(SulehufMap.build()["spots"].has("water_tower"))
+
+
+func test_walls_are_drawn_as_few_boxes_that_cover_each_wall_cell_once() -> void:
+	var g: FieldGrid = SulehufMap.build()["grid"]
+	var runs: Dictionary = MapView.wall_runs(g)
+	var covered: Dictionary = {}
+	var boxes := 0
+	for b in runs:
+		for r: Rect2i in runs[b]:
+			boxes += 1
+			for y in range(r.position.y, r.end.y):
+				for x in range(r.position.x, r.end.x):
+					var c := Vector2i(x, y)
+					assert_false(covered.has(c), "no cell twice")
+					covered[c] = true
+					assert_eq(g.building_at(c), b, "a box stays in its own building")
+	var walls := 0
+	for y in range(g.height):
+		for x in range(g.width):
+			if g.solid_at(Vector2i(x, y)) == FieldGrid.Solid.WALL:
+				walls += 1
+				assert_true(covered.has(Vector2i(x, y)), "every wall cell is in a box")
+	assert_eq(covered.size(), walls)
+	assert_lt(boxes * 3, walls, "far fewer boxes than cells")

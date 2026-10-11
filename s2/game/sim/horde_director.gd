@@ -58,6 +58,8 @@ var first_entry: String = FIRST_ENTRY
 ## Total seconds pulled forward by noise (for logs).
 var pulled_seconds: float = 0.0
 var rest_until: float = -INF
+## No horde arrives before this, whatever is heard (a held train's quiet while).
+var quiet_until: float = -INF
 ## When the dead last saw the squad or heard a loud sound; armed once that has happened.
 var noticed_t: float = -INF
 var lost_armed: bool = false
@@ -95,7 +97,7 @@ func add_noise(points: int, now: float) -> void:
 	var pull: float = float(points) * PULL_PER_POINT
 	if now < rest_until:
 		pull *= 0.5
-	var floor_t: float = maxf(last_arrival + min_gap, now)
+	var floor_t: float = maxf(maxf(last_arrival + min_gap, now), quiet_until)
 	var target: float = maxf(next_arrival - pull, floor_t)
 	if target < next_arrival:
 		pulled_seconds += next_arrival - target

@@ -19,6 +19,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
+const Motion = preload("res://game/sim/motion.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
@@ -34,8 +35,11 @@ const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
+const AllyLines = preload("res://game/sim/ally_lines.gd")
 
 const AMBIENT_C: float = -14.0
+## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
+const TURN_DEG_PER_S: float = 400.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
@@ -43,7 +47,7 @@ const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
 const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a person (field_unified 6)
 const BLOOD_SCENT_R: float = 12.0       # excessive blood smell event radius (body_injury 8.1)
-const EXIT_WIDTH: Dictionary = {"culvert": 2}   # dead out at once per exit; others one
+const CULVERT_WIDTH: int = 2            # dead out of a culvert at once; every other way lets one out
 const ALLY_CAP: int = 12
 ## Stick body weight (field_unified 10, numbers are S2 starting values).
 const DRIVE_START: float = 0.2          # seconds to get up to speed
@@ -130,6 +134,7 @@ var ledger := NoiseLedger.new()
 var director: HordeDirector
 var receipt: Receipt
 var telemetry: Telemetry
+var lines := AllyLines.new()
 var combat: Combat
 var ai: AI
 var actions: Actions
@@ -178,6 +183,7 @@ var hordes: Dictionary = {}            # index -> {"t": arrival, "ids": [], "cle
 var pending_spawn: Array = []          # {"t", "pos", "horde", "target"}
 var last_loud = null                   # where the last loud sound was (Vector3): hordes walk there
 var rattle: Dictionary = {}            # manhole key -> seconds of rattling left
+var lid_open: Dictionary = {}          # manhole key -> seconds the lid stays pushed aside (a body is coming up)
 var ground_items: Array = []           # {pos, id, n}
 var decisions: Array = []
 var cam_focus := Vector3.ZERO
@@ -956,6 +962,9 @@ func _process(delta: float) -> void:
 		_refresh_vision()
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
+		if p != player and p.turn_rate <= 0.0:
+			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
+			p.look = p.facing
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p)
 		p.refresh_view(p.visible)
 	hud.tick(delta)
@@ -971,6 +980,7 @@ func _step(delta: float) -> void:
 		_update_person(p, delta)
 	zombies.update(delta)
 	ai.update(delta)
+	_left_behind()
 	combat.update(delta)
 	_update_hordes(delta)
 	_update_spawns(delta)
@@ -979,6 +989,7 @@ func _step(delta: float) -> void:
 	_update_zone(delta)
 	actions.update(delta)
 	holdout.tick(delta)
+	holdout.watch(delta)
 	_check_end()
 	var keep: Array = []
 	for s in sounds:
@@ -1241,6 +1252,8 @@ func on_person_died(p: Person) -> void:
 	if p.team != "raider":
 		receipt.person("dead", p.pid)
 		say(p, "%s 죽었다." % p.display_name)
+		if squad.has(p):
+			shout_near(p, "rage")
 	# Everyone is already infected: the body stands up again (zombies.md).
 	var z := zombies.add_rising(p.position, p.display_name)
 	p.brain["rising_id"] = z["id"]
@@ -1419,11 +1432,16 @@ func _update_hordes(delta: float) -> void:
 			rattle[s["entry"]] = maxf(float(rattle.get(s["entry"], 0.0)), 0.5)
 	for key in rattle.keys():
 		rattle[key] -= delta
-		if key == "manhole":
+		if FieldMaps.lid(key) and view.manhole_nodes.has(key):
 			var node: MeshInstance3D = view.manhole_nodes[key]
 			node.position.y = absf(sin(now * 31.0)) * 0.08 if rattle[key] > 0.0 else 0.0
 		if rattle[key] <= 0.0:
 			rattle.erase(key)
+	for key in lid_open.keys():
+		lid_open[key] -= delta
+		if lid_open[key] <= 0.0:
+			lid_open.erase(key)
+			view.update_manhole(key, false)
 	if _squad_hunted():
 		director.noticed(now)
 	elif director.update_lost(now):
@@ -1479,6 +1497,20 @@ func horde_home() -> Vector2i:
 	return data["anchors"]["horde_home"]
 
 
+## Is this place above the train (the side of its upper doors)?
+func above_train(at: Vector3) -> bool:
+	return at.z < data["train"].position.y + data["train"].size.y * 0.5
+
+
+## Where what comes in at `from` heads with no sound to follow: the train's
+## own side of it, where the train has doors on both.
+func horde_home_from(from: Vector3) -> Vector3:
+	var anchors: Dictionary = data["anchors"]
+	if anchors.has("horde_home_upper") and above_train(from):
+		return FieldGrid.center(anchors["horde_home_upper"])
+	return FieldGrid.center(horde_home())
+
+
 ## Ways in that are not sewers, in the order the fair spawn tries them.
 func road_entries() -> Array:
 	var out: Array = []
@@ -1501,14 +1533,14 @@ func _start_horde(h: Dictionary) -> void:
 	hordes[h["index"]] = {"t": now, "cleared": false, "entry": key, "size": h["size"]}
 	telemetry.horde(now, int(h["index"]), int(h["size"]), key)
 	audio.horde_started()
-	var target := horde_target()
+	var target: Vector3 = last_loud if last_loud != null else horde_home_from(entry_pos(key))
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
 	var lead := 3.0 if director.sewer(key) else 0.0
 	for i in range(int(h["size"])):
 		# While the train is held the horde walks to its doors, each body to one.
-		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": holdout.target(i) if holdout.on else target, "entry": key})
+		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": holdout.target(i, entry_pos(key, i)) if holdout.on else target, "entry": key})
 	if director.sewer(key):
-		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
+		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if FieldMaps.lid(key) else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
 		set_radio("기관사: %s, 저것들이 들어온다." % director.name_of(key), "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
@@ -1544,13 +1576,13 @@ func _update_spawns(delta: float) -> void:
 		var key: String = s["entry"]
 		# A manhole closed mid-horde sends the rest out of the culvert.
 		if director.sewer(key) and not director.is_open(key):
-			key = "culvert"
+			key = _other_way(key)
 			s["entry"] = key
 			s["pos"] = entry_pos(key)
 		if now < float(s["t"]):
 			keep.append(s)
 			continue
-		if alive >= cap or int(gate.get(key, 0)) >= int(EXIT_WIDTH.get(key, 1)):
+		if alive >= cap or int(gate.get(key, 0)) >= (CULVERT_WIDTH if key.begins_with("culvert") else 1):
 			waiting += 1
 			s["t"] = now + 0.5
 			keep.append(s)
@@ -1571,6 +1603,8 @@ func _update_spawns(delta: float) -> void:
 			continue
 		var z := zombies.spawn("dead", s["pos"] + Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4)), {"horde": s["horde"], "target": s["target"]})
 		z["stander"] = false
+		if director.sewer(key):
+			_climb_out(z, key, s)
 		alive += 1
 		gate[key] = int(gate.get(key, 0)) + 1
 	pending_spawn = keep
@@ -1591,15 +1625,50 @@ func _someone_near(at: Vector3, r: float) -> bool:
 ## Once per field, when the next wave comes up the open street manhole: how to
 ## shut it (H3 2026-10-09: the player never found that it can be shut).
 func lid_tip() -> String:
-	if lid_tip_told or director.next_entry != "manhole" or not director.is_open("manhole") or director.is_exhausted():
+	if lid_tip_told or not FieldMaps.lid(director.next_entry) or not director.is_open(director.next_entry) or director.is_exhausted():
 		return ""
 	lid_tip_told = true
 	return " 맨홀은 판자나 고철로 누르면 막힌다."
 
 
+## Out of a sewer hole a body climbs: straight up out of a lid or a drain,
+## flat out of a culvert the way its mouth opens. While one comes up a lid,
+## the lid lies pushed aside. What can be done to it meanwhile is as it was.
+func _climb_out(z: Dictionary, key: String, s: Dictionary) -> void:
+	var way := "culvert" if key.begins_with("culvert") else "lid"
+	if way == "lid":
+		z["pos"] = zombies._floor_y(s["pos"])
+	var to: Vector3 = s["target"] - z["pos"]
+	to.y = 0.0
+	if way == "culvert" and data["hole_faces"].has(key):
+		var face: Vector2i = data["hole_faces"][key]
+		to = Vector3(face.x, 0, face.y)
+	if to.length() > 0.01:
+		z["angle"] = atan2(to.x, to.z)
+	zombies.start_climb(z, way)
+	if FieldMaps.lid(key) and view.manhole_nodes.has(key):
+		if not lid_open.has(key):
+			view.update_manhole(key, false, true)
+		lid_open[key] = float(Motion.row("dead_climb_lid")["len"])
+
+
+## Where the rest of a horde comes when its lid is shut under it: the culvert
+## if the map has one open, else another open hole, else the next way in.
+func _other_way(shut: String) -> String:
+	for wide in [true, false]:
+		for key: String in data["manholes"]:
+			if key != shut and key.begins_with("culvert") == wide and director.is_open(key):
+				return key
+	return director.next_entry
+
+
 ## Another open sewer mouth with nobody near it, culvert first, or "".
 func _free_sewer(not_this: String) -> String:
-	for key in ["culvert", "manhole", "cellar"]:
+	var order: Array = ["culvert", "manhole", "cellar"]
+	for key in data["manholes"]:
+		if not order.has(key):
+			order.append(key)
+	for key in order:
 		if key != not_this and data["manholes"].has(key) and director.is_open(key) and not _someone_near(entry_pos(key), SEWER_CLEAR):
 			return key
 	return ""
@@ -1661,9 +1730,48 @@ func _radio_show(text: String) -> void:
 	hud.radio(text)
 
 
-func say(p, text: String) -> void:
+## What happened to p, in a few words. `hurt`: it is a wound (the hud shows
+## those of the chief at the screen's edges, not as a note). `event`: what a
+## companion shouts about it (ally_lines.gd), if anything.
+func say(p, text: String, hurt: bool = false, event: String = "") -> void:
 	if hud != null:
-		hud.toast(text)
+		hud.say(p, text, hurt)
+	if event != "":
+		shout(p, event)
+
+
+## A companion shouts a line over their head (words only). The chief, the
+## raiders and the dead keep quiet.
+func shout(p, event: String, always: bool = false) -> void:
+	if hud == null or p == player or p.body.dead or not (squad.has(p) or always and crew.has(p)):
+		return
+	var line: String = lines.pick(String(p.pid), event, clock.elapsed, always)
+	if line != "":
+		hud.shout(p, line)
+
+
+## One of the squad fell: the companion nearest to them, if near, rages.
+func shout_near(fallen, event: String) -> void:
+	var best = null
+	var best_d: float = AllyLines.RAGE_NEAR
+	for o in squad:
+		if o == fallen or o == player or not o.is_alive() or o.body.downed:
+			continue
+		var d: float = o.position.distance_to(fallen.position)
+		if d < best_d:
+			best_d = d
+			best = o
+	if best != null:
+		shout(best, event)
+
+
+## Lying hurt or held while the chief walks off.
+func _left_behind() -> void:
+	for o in squad:
+		if o == player or o.body.dead or not (o.body.downed or not o.grabbers.is_empty()):
+			continue
+		if o.position.distance_to(player.position) > AllyLines.LEFT_BEHIND_M:
+			shout(o, "left_behind")
 
 
 # ---------------------------------------------------------------- vision & camera
@@ -1749,6 +1857,13 @@ func on_frozen_wake(z: Dictionary) -> void:
 		hud.toast("눈 속에서 얼음이 갈라진다.")
 
 
+## One of the dead has dropped low and will run (zombies.gd, the tell). The
+## HUD marks it for as long as it stays low; here it is voiced. No rule hears
+## this and nothing is scored: the tell itself calls the dead near it.
+func on_lunge_tell(z: Dictionary) -> void:
+	audio.lunge_tell(z["pos"])
+
+
 func on_risen(z: Dictionary) -> void:
 	if z["name"] != "":
 		hud.toast("%s 일어났다." % z["name"])
@@ -1824,6 +1939,11 @@ func depart() -> void:
 	if holdout.opens_on_leaving():
 		holdout.begin()
 		return
+	# A held train: a last call first, and whoever misses it stays.
+	if holdout.on:
+		holdout.last_call()
+		return
+	holdout.slipped = holdout.mode == "roll" and holdout.rolled and not holdout.opened
 	holdout.leaving_early()
 	audio.depart()
 	finish("departed")
@@ -1833,7 +1953,26 @@ func depart() -> void:
 func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
+	# A rolled stop says its risk beside the stop's goals.
+	if holdout.mode == "roll":
+		return holdout.goal_line() + " · " + mission_play.goal_line()
 	return mission_play.goal_line() if mission_play.active() else ""
+
+
+## At the train (or already in it) and on their feet: goes with it when it leaves.
+func aboard(p) -> bool:
+	if p.brain.get("boarded", false):
+		return true
+	return FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
+
+
+## How many would stay if the train left now (the chief aside).
+func outside() -> int:
+	var n := 0
+	for p in squad + crew:
+		if p != player and p.is_alive() and not aboard(p):
+			n += 1
+	return n
 
 
 ## Departure: whistle (very loud), people on the platform board, the rest stay.
@@ -1842,22 +1981,25 @@ func finish(reason: String) -> void:
 		return
 	ended = true
 	var now := clock.elapsed
-	var platform: Rect2i = data["platform"]
 	if reason == "departed":
 		make_sound(FieldGrid.center(data["anchors"]["whistle"]), SimNoise.Level.VERY_LOUD, "whistle")
 	var boarded: Array = []
 	for p in squad + crew:
 		if not p.is_alive():
 			continue
-		var on_board: bool = platform.grow(1).has_point(FieldGrid.cell_of(p.position)) and not p.body.downed
-		if p.brain.get("boarded", false):
-			on_board = true
+		var on_board: bool = aboard(p)
 		if on_board or reason == "wiped" and false:
 			boarded.append(p)
 			for id in p.items:
 				unloaded[id] = int(unloaded.get(id, 0)) + int(p.items[id])
 		else:
 			receipt.person("leftBehind", p.pid)
+			# A held train going without them: they shout after it (user decision
+			# 143). "left_behind" in the brain is for the protest motion to read.
+			if reason == "departed" and holdout.opened and p != player:
+				holdout.left_people += 1
+				p.brain["left_behind"] = true
+				shout(p, "left_platform", true)
 		# A confirmed infection from a scratch goes back as a bite would (body_injury 2.1).
 		if p.body.infection == "bite" or p.body.infected:
 			receipt.person("bitten", p.pid)
@@ -1873,7 +2015,7 @@ func finish(reason: String) -> void:
 			stock[row[0]] = float(stock.get(row[0], 0.0)) + float(row[1]) * int(unloaded[id])
 		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
-	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent
+	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
@@ -1907,8 +2049,12 @@ func finish(reason: String) -> void:
 	mission_play.finish(reason)
 	holdout.on = false
 	if holdout.opened:
+		holdout.note_leaving()
 		receipt.place_note("holdout", holdout.result())
 		telemetry.holdout = holdout.result()
+	elif holdout.mode == "roll":
+		holdout.note_leaving()
+		telemetry.holdout = holdout.roll_note()
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -1917,7 +2063,11 @@ func finish(reason: String) -> void:
 	telemetry.end(reason, now)
 	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines()}
 	_save(result)
-	hud.show_end(result)
+	# A held train leaving is the stage's full stop: a beat before the card.
+	if reason == "departed" and holdout.opened:
+		hud.leave_beat(result, holdout.leave_lines())
+	else:
+		hud.show_end(result)
 	finished.emit(result)
 
 

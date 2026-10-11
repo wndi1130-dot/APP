@@ -39,6 +39,14 @@ const FALL_TIME: float = 1.5
 const BEHIND_COS: float = -0.3
 const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon's reach
 const RAIDER_AMMO: int = 6
+## A companion breathes after a blow that landed, and again when it picks the
+## next one out of the crowd (user 2026-10-12: they cut everything down in a blink).
+const ALLY_REST_MIN: float = 0.35
+const ALLY_REST_MAX: float = 0.55
+const ALLY_SWITCH_MIN: float = 0.5
+const ALLY_SWITCH_MAX: float = 0.8
+## How far a companion must have turned toward the target before it swings.
+const ALLY_TURN_DEG: float = 35.0
 
 var game
 var tracers: Array = []                 # {"from", "to", "t"} for the view
@@ -46,10 +54,21 @@ var kills: int = 0
 # Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
 var _wound_rng := RandomNumberGenerator.new()
 var _wound_seeded: bool = false
+# Companion pauses. A stream of its own with a fixed seed, so game.rng rolls stay as they were.
+var _pace_rng := RandomNumberGenerator.new()
+
+
+func _is_ally(p) -> bool:
+	return p.team == "squad" and p != game.player
+
+
+func _pace(lo: float, hi: float) -> float:
+	return _pace_rng.randf_range(lo, hi)
 
 
 func _init(field_game) -> void:
 	game = field_game
+	_pace_rng.seed = 0x7ace
 
 
 ## Seeds the wound stream on first use, from the game seed.
@@ -219,6 +238,8 @@ func _pursue_zombie(p, delta: float) -> void:
 				p.hold_attack = false
 			else:
 				p.target_zombie = next
+				if _is_ally(p):
+					p.swing_t = maxf(p.swing_t, _pace(ALLY_SWITCH_MIN, ALLY_SWITCH_MAX))
 		else:
 			p.hold_attack = false
 		return
@@ -237,6 +258,9 @@ func _pursue_zombie(p, delta: float) -> void:
 		return
 	p.stop()
 	p.face_point(z["pos"])
+	# A body turns at a pace; swing only once it faces the target.
+	if p != game.player and not p.turned_to(deg_to_rad(ALLY_TURN_DEG)):
+		return
 	if p.swing_t > 0.0:
 		return
 	if W.is_ranged(wid) and not stomps(p, z):
@@ -442,6 +466,8 @@ func _land_strike(p) -> void:
 		_strike(p, at)
 	# The draw-back was the front of the swing time, not extra.
 	p.swing_t = maxf(p.swing_t - windup, WHIFF_RECOVER)
+	if _is_ally(p):
+		p.swing_t += _pace(ALLY_REST_MIN, ALLY_REST_MAX)
 
 
 func _strike_reaches(p, at) -> bool:
@@ -540,7 +566,7 @@ func swing_person(p, o) -> void:
 		if o.team == "raider":
 			game.ai.raider_hit(o, p)
 		elif o == game.player or o.team == "squad":
-			game.say(o, "%s 베였다." % o.display_name)
+			game.say(o, "%s 베였다." % o.display_name, true, "hurt")
 
 
 func _kill(p, z: Dictionary, msg: String) -> void:
@@ -643,6 +669,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			var front: bool = to_z.length() < 0.01 or forward.dot(to_z.normalized()) > 0.0
 			if not p.grabbers.has(z):
 				p.grabbers.append(z)
+				game.shout(p, "grabbed")
 			var window: float = GrabRules.window(front, p.grabbers.size(), int(p.skills["melee"]), int(p.skills["strength"]), float(p.mults()["shove_window"]))
 			if p.grabbers.size() == 1:
 				p.grab_left = window
@@ -663,7 +690,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
 			if p.team != "raider":
-				game.say(p, "%s 긁혔다." % p.display_name)
+				game.say(p, "%s 긁혔다." % p.display_name, true, "hurt")
 		"blocked":
 			p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.05)
 			_toast(p, "외투가 손톱을 막았다.")
@@ -684,7 +711,7 @@ func breach_reaches(p) -> String:
 	p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
 	p.panic = minf(1.0, p.panic + 0.3)
 	game.telemetry.injury(now, p.pid, "scratch")
-	game.say(p, "%s 긁혔다." % p.display_name)
+	game.say(p, "%s 긁혔다." % p.display_name, true, "hurt")
 	return "scratch"
 
 
@@ -706,7 +733,7 @@ func bite(p) -> void:
 	if p.team == "raider":
 		return
 	var part_word: String = {"arm": "팔", "torso": "몸통", "leg": "다리"}.get(part, part)
-	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word])
+	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word], true, "bite_leg" if part == "leg" else "bite")
 	var seen: Array = []
 	for o in game.allies_alive():
 		if o != p and o.position.distance_to(p.position) < 12.0 and game.sight_clear(o.position, p.position):
@@ -731,9 +758,9 @@ func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> v
 	if game.rng.randf() < fracture_chance:
 		p.body.fracture(not leg, wound_side("leg" if leg else "arm"), game.clock.elapsed)
 		game.telemetry.injury(game.clock.elapsed, p.pid, "fracture")
-		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"])
+		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true, "hurt")
 	elif p.team != "raider":
-		game.say(p, "%s %s." % [p.display_name, msg])
+		game.say(p, "%s %s." % [p.display_name, msg], true, "hurt")
 
 
 # ---------------------------------------------------------------- guns and bows
@@ -940,7 +967,7 @@ func _shoot_person(p, o, radius: float) -> bool:
 	if o.team == "raider":
 		game.ai.raider_hit(o, p)
 	else:
-		game.say(o, "%s 총에 맞았다%s." % [o.display_name, " (다리)" if part == "leg" else ""])
+		game.say(o, "%s 총에 맞았다%s." % [o.display_name, " (다리)" if part == "leg" else ""], true, "hurt")
 	return true
 
 

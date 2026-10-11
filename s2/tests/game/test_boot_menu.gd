@@ -22,4 +22,5 @@ func test_the_kind_of_stop_is_the_last_setting_and_starts_plain() -> void:
 	add_child_autofree(boot)
 	assert_eq(boot.CHOICES[boot.CHOICES.size() - 1][0], "mission")
 	assert_eq(boot.settings["mission"], "")
+	assert_eq(boot.settings["lungers"], false, "the lungers are off until picked")
 

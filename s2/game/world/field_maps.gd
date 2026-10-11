@@ -24,6 +24,9 @@ const OPTIONAL: Dictionary = {
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
 	"bands": {}, "train_doors": {}, "crossings": [], "barricade_slots": [], "interior_kind_slots": [],
 	"zone_names": {},
+	# Which way a hole that is not straight down opens (key -> Vector2i): the
+	# dead come out of a culvert that way. Left out: toward where they are going.
+	"hole_faces": {},
 	# What a stop on open line has none of.
 	"labels": [], "lights": [], "wagons": [], "stoves": [], "low_blocks": [], "trees": [],
 	"train_cars": [], "buildings": [], "upper_rects": [], "containers": {}, "spots": {},
@@ -33,6 +36,12 @@ const BY_TRAIN: int = 3
 ## A train whose map does not list its cars is drawn in cars this long, the
 ## engine last (the east end, where the whistle is).
 const CAR_LEN: int = 16
+
+
+## A sewer hole with a lid can be shut; the others (a culvert, a drain) cannot.
+## A map names its lids "manhole", "manhole_01", ...
+static func lid(hole: String) -> bool:
+	return hole.begins_with("manhole")
 
 
 static func path_of(place_id: String) -> String:
@@ -96,12 +105,39 @@ static func build_from(script: Script) -> Dictionary:
 			data["unload"] = data["platform"]
 		if data["train_cars"].is_empty():
 			data["train_cars"] = cars_of(data["train"])
+		# A train with doors on a side the platform does not reach is boarded,
+		# and loaded, from the ground by it on that side as well.
+		data["boarding"] = [data["platform"]] + side_strips(data, data["platform"])
+		data["unloading"] = [data["unload"]] + side_strips(data, data["unload"])
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
 	worked.merge(data.get("anchors", {}), true)
 	data["anchors"] = worked
 	return data
+
+
+## The ground by the train on each side that has doors, where `covered` does
+## not already lie.
+static func side_strips(d: Dictionary, covered: Rect2i) -> Array:
+	var train: Rect2i = d["train"]
+	var out: Array = []
+	for side: String in ["upper", "lower"]:
+		if d["train_doors"].get(side, []).is_empty():
+			continue
+		var y: int = train.position.y - BY_TRAIN if side == "upper" else train.end.y
+		var strip := Rect2i(train.position.x, y, train.size.x, BY_TRAIN)
+		if not strip.intersects(covered):
+			out.append(strip)
+	return out
+
+
+## Is this cell where people board (or, with "unloading", put loads down)?
+static func by_train(d: Dictionary, c: Vector2i, what: String = "boarding") -> bool:
+	for rect: Rect2i in d[what]:
+		if rect.grow(1).has_point(c):
+			return true
+	return false
 
 
 static func cars_of(train: Rect2i) -> Array:
@@ -120,7 +156,8 @@ static func cars_of(train: Rect2i) -> Array:
 ## sound to follow: the middle door of the train's lower side, or the upper
 ## side's), "whistle" (the engine end of the train) and "flee_exit" (the cell
 ## on the map's edge farthest from the train that people can walk); "engine"
-## is where the idling engine is heard from.
+## is where the idling engine is heard from. A train with doors on both sides
+## has "horde_home_upper" too: what comes from above the train heads there.
 static func anchors(d: Dictionary) -> Dictionary:
 	var g = d["grid"]
 	var doors: Array = d.get("train_doors", {}).get("lower", [])
@@ -152,4 +189,8 @@ static func anchors(d: Dictionary) -> Dictionary:
 	var engine: Vector2i = whistle
 	if d.has("train"):
 		engine = Vector2i(clampi(d["train"].end.x - 4, 0, g.width - 1), clampi(d["train"].position.y + 1, 0, g.height - 1))
-	return {"horde_home": home, "whistle": whistle, "flee_exit": exit, "engine": engine}
+	var out := {"horde_home": home, "whistle": whistle, "flee_exit": exit, "engine": engine}
+	var both: Dictionary = d.get("train_doors", {})
+	if not both.get("lower", []).is_empty() and not both.get("upper", []).is_empty():
+		out["horde_home_upper"] = both["upper"][both["upper"].size() / 2]
+	return out

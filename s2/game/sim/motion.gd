@@ -32,6 +32,11 @@ const TABLE: Dictionary = {
 	# are what is seen (dead_pose.gd).
 	"dead_fall": {"len": 0.75, "hit": -1.0, "feet": Vector2(0.0, 0.75), "open": -1.0, "sound": 0.63, "upper": false, "loop": false},
 	"dead_rise": {"len": 1.2, "hit": -1.0, "feet": Vector2(0.0, 1.2), "open": 0.0, "sound": -1.0, "upper": false, "loop": false},
+	# A dead body comes up out of a hole: through a street manhole it hauls
+	# itself up by its arms, from a culvert's mouth it crawls out and stands.
+	# Until "open" only its head and arms are out. The sound is the heave.
+	"dead_climb_lid": {"len": 2.4, "hit": -1.0, "feet": Vector2(0.0, 2.4), "open": 0.96, "sound": 0.96, "upper": false, "loop": false},
+	"dead_climb_culvert": {"len": 1.6, "hit": -1.0, "feet": Vector2(0.0, 1.6), "open": 0.64, "sound": 0.64, "upper": false, "loop": false},
 	"fall": {"len": 1.5, "hit": -1.0, "feet": Vector2(0.0, 1.5), "open": -1.0, "sound": 0.2, "upper": false, "loop": false},
 }
 

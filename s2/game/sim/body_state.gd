@@ -697,7 +697,7 @@ func status_notes() -> Array:
 	var out: Array = []
 	for icon: Dictionary in icons():
 		var severe: bool = bool(icon["severe"])
-		var row := {"id": icon["id"], "short": "", "title": "", "good": false, "severe": severe, "text": ""}
+		var row := {"id": icon["id"], "short": "", "title": "", "good": false, "severe": severe, "faint": bool(icon.get("faint", false)), "text": ""}
 		match String(icon["id"]):
 			"infection":
 				row["short"] = "감염"

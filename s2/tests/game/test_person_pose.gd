@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
+const Protest = preload("res://game/actors/person_protest.gd")
 
 var game
 
@@ -177,3 +178,89 @@ func test_bare_hands_at_a_downed_body_are_drawn_as_a_stomp() -> void:
 	game.combat.update(2.0)
 	p.refresh_view(false)
 	assert_false(foot.visible, "the foot is put away")
+
+
+# ---------------------------------------------------------------- left on the platform
+
+func test_the_three_protests_are_three_different_pictures() -> void:
+	# Fists: both hands above the head while it shouts, down in the breath between.
+	var high := 0
+	for n in 40:
+		var d: Dictionary = Protest.at(Protest.FISTS, float(n) * 0.05 + 0.3)
+		if d["arms"][0]["pos"].y > 1.4 and d["arms"][1]["pos"].y > 1.4:
+			high += 1
+	assert_gt(high, 25, "the fists are up for most of a burst")
+	var rest: Dictionary = Protest.at(Protest.FISTS, Protest.ROUND - 0.2)
+	assert_almost_eq(rest["arms"][0]["pos"].y, 1.0, 0.05, "and hang in the breath after it")
+	assert_almost_eq(Protest.loud(Protest.ROUND - 0.2), 0.0, 0.01)
+	# Pointing: the right arm goes out in front again and again, the left stays back.
+	var far := 0.0
+	var near := 9.0
+	for n in 40:
+		var d: Dictionary = Protest.at(Protest.POINTS, float(n) * 0.031 + 0.4)
+		far = maxf(far, d["arms"][1]["pos"].z)
+		near = minf(near, d["arms"][1]["pos"].z)
+		assert_lt(d["arms"][0]["pos"].z, 0.1, "the other fist is held back")
+	assert_gt(far, 0.45)
+	assert_lt(near, 0.2)
+	# Sinking: arms wide first, then down on the knees, and it stays down.
+	var wide: Dictionary = Protest.at(Protest.SINKS, 0.8)
+	assert_gt(wide["arms"][1]["pos"].x - wide["arms"][0]["pos"].x, 1.0)
+	assert_almost_eq(wide["lift"], 0.0, 0.001)
+	for t in [2.0, 8.0, 60.0]:
+		assert_almost_eq(Protest.at(Protest.SINKS, t)["lift"], -Protest.KNEEL, 0.001, "down at %s s" % t)
+	# Each is plain well inside the three and a half seconds it is seen for.
+	assert_gt(float(Protest.at(Protest.FISTS, 0.5)["arms"][0]["pos"].y), 1.4)
+	assert_gt(Protest.loud(2.0), 0.99)
+	assert_lt(Protest.FLING + Protest.DROP, 2.0)
+	# Any number picks one of the three.
+	assert_eq(Protest.at(5, 1.0), Protest.at(Protest.SINKS, 1.0))
+	# Nothing leans past what a body on its feet can.
+	for kind in Protest.KINDS:
+		for n in 200:
+			var d: Dictionary = Protest.at(kind, float(n) * 0.07)
+			assert_between(float(d["lean"]), -0.2, 0.55)
+
+
+func test_someone_marked_as_protesting_is_drawn_so_and_a_shove_comes_first() -> void:
+	var p = game.player
+	p.hands = []
+	p.refresh_view(false)
+	var arms: Array = p.get_meta(Pose.META)
+	var hung: Vector3 = arms[0].position
+	var stood: float = p.body_mesh.position.y
+	p.set_meta(Protest.META, {"kind": Protest.SINKS, "t": 5.0})
+	p.refresh_view(false)
+	assert_almost_eq(p.body_mesh.position.y, stood - Protest.KNEEL - 0.5 * 0.25, 0.001, "on the knees, bent over")
+	assert_lt(arms[0].position.y, hung.y, "hands down by the ground")
+	assert_true(arms[0].visible)
+	# A shove is the rules' and is drawn as a shove.
+	p.lunge_t = Pose.LUNGE
+	p.refresh_view(false)
+	assert_almost_eq(arms[0].position.z, 0.5, 0.01)
+	p.lunge_t = 0.0
+	# Left behind as the train goes (the field notes it): they protest in their own way, on the wall clock.
+	p.remove_meta(Protest.META)
+	p.brain[Protest.LEFT] = true
+	var first: Dictionary = Protest.mark_of(p, 5000)
+	assert_eq(first, {"kind": Protest.kind_of(String(p.pid)), "t": 0.0})
+	assert_almost_eq(float(Protest.mark_of(p, 7500)["t"]), 2.5, 0.001)
+	p.set_meta(Protest.SINCE, Time.get_ticks_msec() - 2500)
+	p.refresh_view(false)
+	var drawn: Dictionary = Protest.at(first["kind"], 2.5)
+	assert_almost_eq(arms[1].position.x, float(drawn["arms"][1]["pos"].x), 0.1, "drawn so")
+	assert_ne(arms[0].position, hung)
+	p.brain.erase(Protest.LEFT)
+	assert_true(Protest.mark_of(p, 9000).is_empty())
+	assert_false(p.has_meta(Protest.SINCE))
+	var kinds: Dictionary = {}
+	for name in ["a", "b", "c", "ally_1", "ally_2", "crew_3"]:
+		kinds[Protest.kind_of(name)] = true
+	assert_eq(kinds.size(), Protest.KINDS, "not everyone the same way")
+	p.set_meta(Protest.META, {"kind": Protest.SINKS, "t": 5.0})
+	# The mark taken off, they stand as they stood.
+	p.remove_meta(Protest.META)
+	p.refresh_view(false)
+	assert_eq(arms[0].position, hung)
+	assert_almost_eq(p.body_mesh.position.y, stood, 0.001)
+
