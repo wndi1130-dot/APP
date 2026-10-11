@@ -328,3 +328,22 @@
   .tplan__tier { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
   .tplan__detail { max-height: 34vh; }
 }
+
+/* 식당칸 판의 솥 덩이(결정 067): 조리 담당 얼굴, 방식 칩 셋, 숫자 한 줄. */
+.dom-pot { display: grid; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.dom-pot__head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; font-size: 13px; }
+.dom-pot__chips { margin-left: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.dom-pot__chips .chip { min-height: 32px; padding: 0 12px; }
+.dom-pot__chips .chip.is-on { border-color: var(--ink-1); background: var(--surface-3); color: var(--ink-1); }
+.dom-pot__chips .chip small { color: var(--ink-3); font-size: 12px; }
+.dom-pot__nums { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); }
+.dom-pot__nums b { color: var(--ink-1); }
+.dom-pot__risk { display: inline-flex; align-items: center; gap: 4px; }
+.dom-pot__cells { display: inline-flex; gap: 2px; }
+.dom-pot__cells i { width: 8px; height: 8px; border-radius: 1px; background: var(--neutral); }
+.dom-pot__cells i.is-on { background: var(--discontent); }
+.dom-pot + .carpop__text { margin-top: 6px; }
+/* 판 높이를 늘리지 않게 「조절」 덩이 머리 오른쪽에 얹는다. */
+.tblk { position: relative; }
+.tblk > .dom-potdot { position: absolute; top: 2px; right: 8px; min-height: 20px; padding: 0 8px; font-size: 12px; }
+.dom-potdot .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); display: inline-block; margin-right: 4px; }

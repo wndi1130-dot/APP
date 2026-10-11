@@ -10,6 +10,7 @@ import { TIP, fmt, signed } from './common';
 import { bar, tip } from './widgets';
 import { scalePos } from './share';
 import { runway } from './hud';
+import { luxBreakdown } from './lux_tags';
 import type { View } from './common';
 import { grudgeText, standingsBar } from './council';
 import { nameBtn, shortText } from './names';
@@ -272,6 +273,8 @@ function resPanel(view: View, key: ResKey): HTMLElement {
       icon(key), h('b', null, `${name} ${fmt(g[key])}`),
       use ? h('span', { class: 'sub num' }, `이번 구간 −${one(use.total)}${left === null ? '' : left === 0 ? ' · 이번 구간에 바닥' : ` · ${left}구간 뒤 바닥`}`) : null,
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
+    // 사치품은 얻은 곳에 따라 이름표로 갈라 보인다(결정 071). 숫자는 하나 그대로다.
+    key === 'lux' && luxBreakdown(g) ? h('p', { class: 'why__lux num' }, `${fmt(g.lux)} = ${luxBreakdown(g)}`) : null,
     use ? h('p', { class: 'why__title sub' }, '이번 구간에 드는 곳') : null,
     use ? h('ol', { class: 'why why--use' }, use.rows.map(r => h('li', { class: 'why__row' },
       h('span', { class: 'why__label' }, r.label), bar(Math.max(0, (r.v / Math.max(1, use.total)) * 100), '--ink-3'),

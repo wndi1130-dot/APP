@@ -124,7 +124,7 @@ export function carPopover(view: View, car: CarDef): HTMLElement | null {
   if (car.kind === 'freight' || car.kind === 'cold') {
     const waiting = g.pyre ?? 0;
     const text = car.id === 'cold'
-      ? (g.stored + waiting > 0 ? `천에 싸인 시신 ${g.stored + waiting}구가 긴 의자에 누워 있다.${waiting ? ` ${waiting}구는 다음 정차 장작불을 기다린다.` : ''}` : '비어 있다. 창마다 성에가 두껍다.')
+      ? (g.stored + waiting > 0 ? `안치 ${g.stored + waiting}/${P.coldCap}${waiting ? ` · 장작불 기다림 ${waiting}` : ''}` : '비어 있다. 창마다 성에가 두껍다.')
       : car.id === 'store'
         ? `식량 ${fmt(g.food)} · 의약품 ${fmt(g.med)} · 사치품 ${fmt(g.lux)}.`
         : '차고 공방을 통째로 실은 칸이다. 공구가 벽에 걸려 있다.';
