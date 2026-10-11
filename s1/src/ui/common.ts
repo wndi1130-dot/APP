@@ -71,8 +71,8 @@ export const CARS: CarDef[] = [
   { id: 'tail3', comm: 'tail', name: '꼬리칸 3', plate: '꼬리', kind: 'comm' },
   { id: 'tail2', comm: 'tail', name: '꼬리칸 2', plate: '꼬리', kind: 'comm' },
   { id: 'tail1', comm: 'tail', name: '꼬리칸 1', plate: '꼬리', kind: 'comm' },
-  // 냉동칸은 화차가 아니라 난방을 끊은 낡은 객차다(사용자 카드 '찬 객차로', s1c_domestic 4.1).
-  { id: 'cold', name: '냉동칸', plate: '냉동', kind: 'cold' },
+  // 화차가 아니라 난방을 끊은 낡은 객차다(사용자 카드 '찬 객차로', s1c_domestic 4.1). 이름은 「찬 칸」(결정 054·066).
+  { id: 'cold', name: '찬 칸', plate: '찬칸', kind: 'cold' },
   { id: 'store', name: '창고칸', plate: '창고', kind: 'freight' },
   { id: 'medtech', comm: 'medtech', name: '의무칸', plate: '의무', kind: 'comm' },
   { id: 'dining', name: '식당칸', plate: '의회', kind: 'dining' },
