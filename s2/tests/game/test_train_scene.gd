@@ -7,6 +7,7 @@ extends "res://addons/gut/test.gd"
 
 const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
+const Gesture = preload("res://game/train/train_gesture.gd")
 const Look = preload("res://game/train/train_look.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
@@ -660,3 +661,154 @@ func test_rules_without_a_captain_have_none_again_after_a_round() -> void:
 	for i in HandPanel.CAPTAIN_SHOWS.size() + 1:
 		s.panel.next_captain()
 	assert_false(s.rules.has("captain"))
+
+
+# ---------------------------------------------------------------- the gestures of a tense train
+
+## The people of a car who are in a gesture.
+func _gesturing(s, car_id: String) -> Array:
+	var rows: Array = []
+	for b in s.car(car_id)["bodies"]:
+		if b.gesture != "":
+			rows.append(b)
+	return rows
+
+
+func _gesturing_anywhere(s) -> int:
+	var n := 0
+	for c in s.cars:
+		n += _gesturing(s, String(c["id"])).size()
+	return n
+
+
+func test_a_tense_tails_first_knot_gestures_and_only_those_standing_still() -> void:
+	var s = _scene()
+	assert_eq(_gesturing(s, "tail1").size(), 0)
+	s.set_train("tension", 70.0)
+	var rows := _gesturing(s, "tail1")
+	assert_eq(rows.size(), 3)
+	for b in rows:
+		assert_eq(b.pose, "stand")
+		assert_eq(b.state, "seat")
+	for b in s.car("tail1")["bodies"]:
+		if b.state != "seat":
+			assert_eq(b.gesture, "", "a walker does not gesture")
+
+
+func test_two_quarrel_a_quarrel_apart_and_the_third_looks_about() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	var rows := _gesturing(s, "tail1")
+	var pair := rows.filter(func(b) -> bool: return b.gesture == Gesture.ARGUE)
+	var about := rows.filter(func(b) -> bool: return b.gesture == Gesture.TURN_ABOUT)
+	assert_eq(pair.size(), 2)
+	assert_eq(about.size(), 1)
+	assert_eq(pair[0].gesture_role, 0)
+	assert_eq(pair[1].gesture_role, 1)
+	assert_lt(pair[0].position.x, pair[1].position.x)
+	assert_almost_eq(pair[1].position.x - pair[0].position.x, float(Gesture.PAIR_GAP[Gesture.ARGUE]), 0.01)
+
+
+func test_those_who_quarrel_face_each_other() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	s.step(0.1)
+	var pair := _gesturing(s, "tail1").filter(func(b) -> bool: return b.gesture == Gesture.ARGUE)
+	assert_eq(pair.size(), 2)
+	assert_eq(pair[0].gesture_role, 0)
+	assert_almost_eq(float(pair[0].rotation.y), PI * 0.5, 0.01)
+	assert_almost_eq(float(pair[1].rotation.y), -PI * 0.5, 0.01)
+
+
+func test_the_infirmary_whispers_with_its_heads_closer() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	var pair := _gesturing(s, "medtech").filter(func(b) -> bool: return b.gesture == Gesture.WHISPER)
+	assert_eq(pair.size(), 2)
+	assert_eq(pair[0].gesture_role, 0)
+	assert_eq(pair[1].gesture_role, 1)
+	assert_almost_eq(pair[1].position.x - pair[0].position.x, float(Gesture.PAIR_GAP[Gesture.WHISPER]), 0.01)
+
+
+func test_a_gesturing_body_shows_both_its_arm_boxes() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	for b in _gesturing(s, "tail1"):
+		assert_true(b.has_meta(Gesture.ARMS_META))
+		var arms: Array = b.get_meta(Gesture.ARMS_META)
+		assert_eq(arms.size(), 2)
+		for arm in arms:
+			assert_true(arm.visible)
+
+
+func test_calm_again_nobody_gestures_and_every_arm_is_hidden() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	assert_gt(_gesturing_anywhere(s), 0)
+	s.set_train("tension", 20.0)
+	assert_eq(_gesturing_anywhere(s), 0)
+	var seen := 0
+	for c in s.cars:
+		for b in c["bodies"]:
+			if b.has_meta(Gesture.ARMS_META):
+				seen += 1
+				for arm in b.get_meta(Gesture.ARMS_META):
+					assert_false(arm.visible, String(c["id"]))
+	assert_gt(seen, 0, "the arms were made when the gestures began")
+
+
+func test_a_frightened_train_does_not_gesture() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	s.set_train("fear", 60.0)
+	assert_eq(_gesturing_anywhere(s), 0)
+
+
+func test_the_gestures_begin_at_sixty_tension() -> void:
+	var s = _scene()
+	s.set_train("tension", 59.0)
+	assert_eq(_gesturing(s, "tail1").size(), 0)
+	s.set_train("tension", 60.0)
+	assert_eq(_gesturing(s, "tail1").size(), 3)
+
+
+func test_a_car_stirred_only_by_its_own_grudge_stands_about_without_gestures() -> void:
+	var s = _scene()
+	s.set_train("tension", 20.0)
+	s.set_comm("tail", "rel", -50)
+	assert_eq(s.car("tail1")["mood"], "stir")
+	assert_gt(_standing_about(s, "tail1"), 0)
+	assert_eq(_gesturing(s, "tail1").size(), 0)
+
+
+func test_the_dining_car_in_session_does_not_gesture() -> void:
+	var s = _council()
+	s.set_train("tension", 70.0)
+	assert_eq(_gesturing(s, "dining").size(), 0)
+
+
+func test_gestures_move_nobody_along_the_car() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	var before: Dictionary = {}
+	for b in _gesturing(s, "tail1"):
+		before[b] = b.position.x
+	assert_eq(before.size(), 3)
+	for i in 60:
+		s.step(0.1)
+	assert_eq(_gesturing(s, "tail1").size(), 3)
+	for b in before:
+		assert_eq(b.position.x, before[b], "it stays where it stood")
+
+
+func test_gestures_make_and_remove_nobody() -> void:
+	var s = _scene()
+	s.set_train("tension", 20.0)
+	var calm := 0
+	for c in s.cars:
+		calm += _count(s, String(c["id"]))
+	s.set_train("tension", 70.0)
+	var tense := 0
+	for c in s.cars:
+		tense += _count(s, String(c["id"]))
+	assert_eq(tense, calm)

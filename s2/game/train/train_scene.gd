@@ -12,6 +12,7 @@ const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
+const Gesture = preload("res://game/train/train_gesture.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
 
@@ -40,6 +41,7 @@ const KNOT_STEP: float = 0.55
 const KNOT_APART: float = 2.4
 const KNOT_Z: float = 0.15
 const KNOT_DEPTH: float = 0.45
+const GESTURE_OFFSET: float = 1.3        # seconds between one car's gestures and the next car's
 ## The stove stands in front of the bench, between two floor places; a car with
 ## a table has it by the end wall.
 const STOVE_AT := Vector3(7.85, 0.0, -0.4)
@@ -163,6 +165,8 @@ func step(delta: float) -> void:
 			_step_council(c, delta)
 		for b in c["bodies"]:
 			_step_body(c, b, delta)
+			if b.gesture != "":
+				_show_gesture(c, b)
 
 
 func scroll(metres: float) -> void:
@@ -265,6 +269,10 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 	var bench: int = 0
 	var on_floor: int = 0
 	var x0: float = c["x0"]
+	var standers: int = 0
+	for row in rows:
+		standers += 1 if row["pose"] == "stand" else 0
+	var gestures := Look.knot_gestures(Look.gesture_for(c["mood"], rules.get("train", {})), standers, int(c["index"]))
 	for i in bodies.size():
 		var b: Node3D = bodies[i]
 		var row: Dictionary = rows[i]
@@ -272,8 +280,16 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 			"walk":
 				_walk_from(c, b, _aisle_place(x0, i, walkers))
 			"stand":
-				_sit_down(c, b, x0, _knot_place(standing), "stand", false, false)
+				# A pair in a gesture stands as far apart as the gesture has them.
+				var g: Dictionary = gestures[standing]
+				var pair_of: String = String(gestures[0]["name"])
+				var wide: float = float(Gesture.PAIR_GAP.get(pair_of, KNOT_STEP)) - KNOT_STEP if standing < KNOT_SIZE else 0.0
+				_sit_down(c, b, x0, _knot_place(standing, wide), "stand", false, false)
 				b.rotation.y = _knot_facing(standing)
+				b.gesture = g["name"]
+				b.gesture_role = int(g["role"])
+				if b.gesture != "":
+					_show_gesture(c, b)
 				standing += 1
 			"sit":
 				var seat := Vector3(SLOT_FIRST + Look.seat_slot(bench, BENCH_SLOTS, gather) * SLOT_STEP, 0, BENCH_Z)
@@ -358,11 +374,20 @@ func _walk_from(c: Dictionary, b: Node3D, at: Vector3) -> void:
 		_wait(c, b)
 
 
-## Out of the council's gestures.
+## Out of the council's gestures and of any gesture of a bad value.
 func _plain(b: Node3D) -> void:
 	b.side = 0.0
 	b.seat = -1
 	b.act = ""
+	if b.gesture != "":
+		Gesture.show(b, "", 0.0)
+		b.gesture = ""
+
+
+## Draw the gesture a stander is in, at the car's own beat. The gesture turns
+## the body itself, so it starts from facing the open side.
+func _show_gesture(c: Dictionary, b: Node3D) -> void:
+	Gesture.show(b, b.gesture, clock + float(c["index"]) * GESTURE_OFFSET, b.gesture_role, 0.0)
 
 
 ## The gesture a seated member of the council is in: up on their feet, leaning
@@ -406,15 +431,16 @@ func _step_council(c: Dictionary, delta: float) -> void:
 
 
 ## Where in the car the k-th of those standing about stands: knots of three,
-## by the tail-end doorway and the front-end one in turn.
-func _knot_place(k: int) -> Vector3:
+## by the tail-end doorway and the front-end one in turn. `wide` sets the
+## first two of a knot that much further apart.
+func _knot_place(k: int, wide: float = 0.0) -> Vector3:
 	var knot: int = k / KNOT_SIZE
 	var member: int = k % KNOT_SIZE
 	var along: float = KNOT_FROM + (knot / 2) * KNOT_APART
 	if member == 1:
-		along += KNOT_STEP
+		along += KNOT_STEP + wide
 	elif member == 2:
-		along += KNOT_STEP * 0.5
+		along += (KNOT_STEP + wide) * 0.5
 	var x: float = along if knot % 2 == 0 else CAR_LENGTH - along
 	return Vector3(x, 0, KNOT_Z - (KNOT_DEPTH if member == 2 else 0.0))
 
