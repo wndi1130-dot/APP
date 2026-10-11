@@ -25,6 +25,8 @@ var lines: Array = []
 
 
 func _ready() -> void:
+	# Measured without sound: the phone sits by the person while it runs.
+	AudioServer.set_bus_mute(0, true)
 	_run.call_deferred()
 
 
@@ -38,7 +40,7 @@ func _say(text: String) -> void:
 
 
 func _run() -> void:
-	_say("start model=%s screen=%s refresh=%.0f" % [OS.get_model_name(), str(DisplayServer.screen_get_size()), DisplayServer.screen_get_refresh_rate()])
+	_say("start sound=muted model=%s screen=%s refresh=%.0f" % [OS.get_model_name(), str(DisplayServer.screen_get_size()), DisplayServer.screen_get_refresh_rate()])
 	for row: Array in CASES:
 		await _one(row)
 	_say("done")
