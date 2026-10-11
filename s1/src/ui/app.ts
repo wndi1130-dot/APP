@@ -27,7 +27,7 @@ import { darkPickMs, darkPickReset, darkVisibility, liftAsk, noteScene, sceneRes
 import { showCrash } from './crash';
 import { CONFIRM_MS, confirmed, replacesToast, toastMs } from './notice';
 import type { ToastKind } from './notice';
-import { stallBeats, stallCount, stallSecs } from './stall_beats';
+import { RESUME_MS, stallBeats, stallCount, stallSecs } from './stall_beats';
 import type { StallBeat } from './stall_beats';
 import { TRAIL_MAX, applyStep, makeBundle, plainData, readSave, reviveSave, reproText, setReproSource } from './repro';
 import type { ReproError, SaveRead, Step, TrailEntry } from './repro';
@@ -463,6 +463,25 @@ export function startApp(root: HTMLElement): void {
     setBeat('open');
   }
 
+  // 다시 달릴 때의 짧은 떠남: 멈춘 판(고르기 전에 떠 둔 것)이 내려가고, 굴뚝에 연기가 돌고, 기적 박이 온다. 누르는 것은 막지 않는다.
+  let resumeTimers: ReturnType<typeof setTimeout>[] = [];
+  function startResume(board: HTMLElement | null): void {
+    resumeTimers.forEach(clearTimeout);
+    ui.resume = { beat: 'fire' };
+    render();
+    const home = root.querySelector<HTMLElement>('.home');
+    if (board && home) { board.classList.add('strs--leaving'); board.setAttribute('aria-hidden', 'true'); home.append(board); }
+    resumeTimers = [
+      setTimeout(() => {
+        if (!ui.resume) return;
+        ui.resume.beat = 'whistle';
+        const now = root.querySelector<HTMLElement>('.home.is-resuming');
+        if (now) now.dataset.beat = 'whistle';
+      }, RESUME_MS.fire),
+      setTimeout(() => { ui.resume = null; render(); }, RESUME_MS.fire + RESUME_MS.whistle),
+    ];
+  }
+
   function openStack(): void {
     if (stackCount(g, ui) === 0) return;
     ui.cardOpen = true;
@@ -581,6 +600,8 @@ export function startApp(root: HTMLElement): void {
         const kind = picked?.kind;
         const why = picked ? viewCard(g, picked).choices[Number(data.index)]?.why : undefined; // 고르면 카드가 사라지니 미리 읽어 둔다
         const ms = darkPickMs(g, Number(data.uid)); // S1b H7: 고르기까지 걸린 시간
+        const board = g.stranded ? root.querySelector<HTMLElement>('.strs')?.cloneNode(true) as HTMLElement | undefined : undefined; // 다시 달리면 내려갈 멈춘 판
+        const wasStranded = !!g.stranded;
         step({ a: 'choose', d: { ...plainData(data), ...(ms ? { ms } : {}) } });
         const fx = fxDiff(before, g);
         if (fx && why) fx.why = why;
@@ -588,6 +609,8 @@ export function startApp(root: HTMLElement): void {
         if (stackCount(g, ui) > 0) focusForTopCard();
         // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
         else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; if (g.dom) enterTrain(); }
+        // 수동차가 가져온 석탄으로 불을 넣었다: 열차가 다시 달린다(동작 줄이기 설정이면 연출 없이).
+        if (wasStranded && !g.stranded && g.phase !== 'end' && !matchMedia('(prefers-reduced-motion: reduce)').matches) return startResume(board ?? null);
         return render();
       }
       case 'stop-set':
