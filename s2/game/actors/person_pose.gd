@@ -11,8 +11,8 @@ const SHOVE_WINDUP: float = 0.15     # field_combat.SHOVE_WINDUP: the arms come 
 const LUNGE: float = 0.15            # field_combat.SHOVE_LUNGE: the arms stay out this long
 const META: String = "pose_arms"
 const MODE: String = "pose_mode"      # what the swing being drawn is: "swing", "floor" (down at a body on the ground) or "stomp"
-const FOOT_SIZE: Vector3 = Vector3(0.14, 0.12, 0.3)
-const FOOT_REST: Vector3 = Vector3(0.12, 0.06, 0.1)
+const FOOT_SIZE: Vector3 = Vector3(0.18, 0.16, 0.4)
+const FOOT_REST: Vector3 = Vector3(0.12, 0.08, 0.1)
 const SWING: String = "pose_swing"    # the way back of the swing being drawn: how long it is in all
 
 
@@ -39,6 +39,11 @@ static func apply(p, lying: bool) -> void:
 		var st: Dictionary = stomp_at(sw[0], sw[1], sw[2])
 		arms[2].visible = true
 		arms[2].position = st["pos"]
+		# The arms come out for balance while the knee is up.
+		for i in 2:
+			var t: Dictionary = arm_at(float(st["arms"]), -1.0 if i == 0 else 1.0)
+			arms[i].position = t["pos"]
+			arms[i].rotation = t["rot"]
 		p.body_mesh.rotation.x += float(st["lean"])
 		return
 	var w: Dictionary = floor_strike_at(sw[0], sw[1], sw[2]) if mode == "floor" else weapon_at(p.weapon_id(), sw[0], sw[1], sw[2])
@@ -145,8 +150,8 @@ static func stomp_at(windup: float, recover: float, landed: bool) -> Dictionary:
 	var back := 1.0 if landed else clampf(windup / DRAW, 0.0, 1.0)
 	var strike := 1.0 if landed else clampf((windup - DRAW) / (1.0 - DRAW), 0.0, 1.0)
 	var keep := 1.0 - (ease(clampf(recover, 0.0, 1.0), -2.0) if landed else 0.0)
-	var pos := FOOT_REST + (Vector3(0, 0.55, 0.2) * back).lerp(Vector3(0, 0.0, 0.4), strike) * keep
-	return {"pos": pos, "lean": lerpf(-0.2 * back, 0.35, strike) * keep}
+	var pos := FOOT_REST + (Vector3(0, 0.6, 0.3) * back).lerp(Vector3(0, 0.0, 0.55), strike) * keep
+	return {"pos": pos, "lean": lerpf(-0.3 * back, 0.45, strike) * keep, "arms": lerpf(0.5 * back, 0.15, strike) * keep}
 
 
 ## The two arms and, last, the stomping foot.
