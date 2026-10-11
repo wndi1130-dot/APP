@@ -98,3 +98,70 @@ func test_a_layer_value_can_swing_and_the_tell_runs_a_quarter_turn() -> void:
 	assert_almost_eq(BodyBake._value([0.2, 0.4, 0.0, 0.25], TAU), 0.6, 0.0001, "and ends at its far end, without coming back")
 	assert_false(bool(BodyBake.CLIPS[8][3]), "the tell plays once")
 	assert_true(bool(BodyBake.CLIPS[7][3]), "the run loops")
+
+
+## A stick body with the bones the baker asks for, standing with its arms out, and three skinned vertices.
+func _stick_body() -> Node3D:
+	var root := Node3D.new()
+	var body := Skeleton3D.new()
+	root.add_child(body)
+	# bone, parent, where it starts from its parent
+	var bones := [
+		["hips", "", Vector3(0, 1, 0)], ["spine", "hips", Vector3(0, 0.2, 0)], ["chest", "spine", Vector3(0, 0.2, 0)],
+		["neck", "chest", Vector3(0, 0.2, 0)], ["head", "neck", Vector3(0, 0.1, 0)],
+		["upper_arm.L", "chest", Vector3(0.2, 0.1, 0)], ["forearm.L", "upper_arm.L", Vector3(0.3, 0, 0)], ["hand.L", "forearm.L", Vector3(0.3, 0, 0)],
+		["upper_arm.R", "chest", Vector3(-0.2, 0.1, 0)], ["forearm.R", "upper_arm.R", Vector3(-0.3, 0, 0)], ["hand.R", "forearm.R", Vector3(-0.3, 0, 0)],
+		["thigh.L", "hips", Vector3(0.1, 0, 0)], ["shin.L", "thigh.L", Vector3(0, -0.5, 0)], ["foot.L", "shin.L", Vector3(0, -0.5, 0)],
+		["thigh.R", "hips", Vector3(-0.1, 0, 0)], ["shin.R", "thigh.R", Vector3(0, -0.5, 0)], ["foot.R", "shin.R", Vector3(0, -0.5, 0)],
+	]
+	var skin := Skin.new()
+	for bone: Array in bones:
+		var id := body.add_bone(bone[0])
+		if bone[1] != "":
+			body.set_bone_parent(id, body.find_bone(bone[1]))
+		body.set_bone_rest(id, Transform3D(Basis(), bone[2]))
+	body.reset_bone_poses()
+	for id in body.get_bone_count():
+		skin.add_bind(id, body.get_bone_global_rest(id).affine_inverse())
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	var foot := body.find_bone("foot.L")
+	var head := body.find_bone("head")
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(0.1, 0, 0), Vector3(0, 1.7, 0), Vector3(0, 1, 0)])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	arrays[Mesh.ARRAY_BONES] = PackedInt32Array([foot, 0, 0, 0, head, 0, 0, 0, 0, 0, 0, 0])
+	arrays[Mesh.ARRAY_WEIGHTS] = PackedFloat32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var mesh_node := MeshInstance3D.new()
+	mesh_node.mesh = mesh
+	mesh_node.skin = skin
+	root.add_child(mesh_node)
+	return root
+
+
+func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_motion_set() -> void:
+	var names: Array = []
+	for clip in BodyBake.CLIPS:
+		names.append(clip[0])
+	var own_names: Array = []
+	for clip in BodyBake.OWN_CLIPS:
+		own_names.append(clip[0])
+		assert_eq(clip[1], "", "%s takes nothing from a motion set" % clip[0])
+		assert_true(BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
+	assert_eq(own_names, names, "the drawing side's numbers hold either way")
+	assert_eq(BodyBake.OWN_POSES.size(), BodyBake.POSES.size())
+	var root := _stick_body()
+	add_child_autofree(root)
+	var assets: Dictionary = BodyBake.bake_own(root)
+	assert_false(assets.is_empty())
+	assert_eq((assets["clips"] as Array).size(), BodyBake.OWN_CLIPS.size() + 1)
+	assert_eq(String(assets["clips"][6]["name"]), "fall")
+	assert_false(bool(assets["clips"][6]["loop"]))
+	# The head's vertex: up at the start of the fall, near the ground at its end.
+	var image: Image = assets["image"]
+	var first: int = int(assets["clips"][6]["start"])
+	var last: int = first + int(assets["clips"][6]["frames"]) - 1
+	assert_gt(1.7 + image.get_pixel(1, first).g, 1.3, "standing as it starts to go over")
+	assert_lt(1.7 + image.get_pixel(1, last).g, 0.6, "its head is down on the ground at the end")
