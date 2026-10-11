@@ -58,12 +58,12 @@
         {
           "type": "community.exposure",
           "target": "engine",
-          "amount": 10
+          "amount": 12
         },
         {
           "type": "relation",
           "target": "engine",
-          "amount": -7
+          "amount": -9
         },
         {
           "type": "flag",

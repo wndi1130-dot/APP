@@ -53,11 +53,11 @@
       "effects": [
         {
           "type": "coal",
-          "amount": -6
+          "amount": -3
         },
         {
           "type": "food",
-          "amount": -3
+          "amount": -1
         },
         {
           "type": "relation",
