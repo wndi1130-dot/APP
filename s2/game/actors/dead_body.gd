@@ -19,6 +19,8 @@ const FALL: int = 6                           # on its back
 const FALL_FRONT: int = 9                     # on its face
 const CRAWL: int = 10
 const RISE: int = 11                          # getting up off its back
+const CLIMB: int = 12                         # hauling itself up out of a hole
+const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
 
@@ -47,6 +49,17 @@ static func ground_turn(z: Dictionary, down: float) -> float:
 	return float(DeadPose.sprawl(float(z["phase"]))["turn"]) * down
 
 
+## Where a climbing body is drawn from its standing place. Out of a manhole it
+## is what the boxes get (lifted out of the ground, leaning on the rim). Out of
+## a culvert the baked crawl and fall already lie flat, so the body is only
+## slid out along the way it faces, not turned over as well.
+static func climbing(z: Dictionary, baked: bool) -> Transform3D:
+	var whole := DeadPose.climbing(z)
+	if baked and String(z.get("climb_way", "lid")) == "culvert":
+		return Transform3D(Basis(), Vector3(0, 0, whole.origin.z))
+	return whole
+
+
 ## Which of the three walks a body has: its own, from its number.
 static func walk_of(phase: float) -> int:
 	return int(fposmod(phase * 9.13, 1.0) * float(WALKS)) % WALKS
@@ -60,6 +73,16 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 		var clip := 1.0 if state == "chase" or state == "attack" or state == "grab" else 0.0
 		return Color(z["phase"], clip, still, shade)
 	var phase: float = z["phase"]
+	if state == "climb":
+		if String(z.get("climb_way", "lid")) != "culvert":
+			return Color(DeadPose.climb_k(z), float(CLIMB), 1.0, shade)
+		# Out of a culvert it crawls, then gets up off its face (that fall, backwards).
+		# Nothing steps its walk while it climbs, so the crawl is read off the same clock.
+		var row := DeadPose.climb_row(z)
+		if DeadPose.in_hole(z):
+			return Color(fposmod(DeadPose.climb_k(z) * float(row["len"]) / CRAWL_LEN, 1.0), float(CRAWL), 0.0, shade)
+		var open := float(row["open"]) / float(row["len"])
+		return Color(1.0 - (DeadPose.climb_k(z) - open) / (1.0 - open), float(FALL_FRONT), 1.0, shade)
 	if z["crawl"]:
 		# A crawler drags itself along on its face; knocked down it lies as it crawled, and dead it lies as one fallen forward.
 		if state == "dead":

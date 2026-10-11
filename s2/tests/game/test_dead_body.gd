@@ -3,6 +3,7 @@ extends GutTest
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const Motion = preload("res://game/sim/motion.gd")
+const DeadPose = preload("res://game/actors/dead_pose.gd")
 
 
 func _body(state: String = "wander") -> Dictionary:
@@ -13,7 +14,7 @@ func test_with_no_baked_folder_there_is_no_body_and_the_boxes_are_told_what_they
 	OS.set_environment(DeadBody.FOLDER_ENV, "user://no_such_dead_body")
 	assert_true(DeadBody.assets().is_empty())
 	OS.set_environment(DeadBody.FOLDER_ENV, "")
-	for state in ["wander", "investigate", "chase", "attack", "grab", "downed", "rising", "dead", "frozen", "waking"]:
+	for state in ["wander", "investigate", "chase", "attack", "grab", "downed", "rising", "dead", "frozen", "waking", "climb"]:
 		var z := _body(state)
 		var clip := 1.0 if state in ["chase", "attack", "grab"] else 0.0
 		assert_eq(DeadBody.custom(z, 0.6, 1.0, 0.8, false), Color(0.37, clip, 1.0, 0.8), state)
@@ -32,6 +33,7 @@ func test_the_motion_numbers_are_the_ones_the_bake_writes() -> void:
 	assert_eq(names[DeadBody.FALL_FRONT], "fall_front")
 	assert_eq(names[DeadBody.CRAWL], "crawl")
 	assert_eq(names[DeadBody.RISE], "rise")
+	assert_eq(names[DeadBody.CLIMB], "climb")
 
 
 func test_a_baked_body_walks_its_own_walk_and_stands_once_it_keeps_its_place() -> void:
@@ -101,3 +103,32 @@ func test_baked_bodies_do_not_all_lie_along_the_same_line() -> void:
 	b["phase"] = 0.81
 	assert_ne(DeadBody.ground_turn(a, 1.0), DeadBody.ground_turn(b, 1.0))
 	assert_eq(DeadBody.ground_turn(a, 0.0), 0.0, "upright it is not turned")
+
+
+func test_out_of_a_manhole_a_baked_body_hauls_itself_up_by_the_rules_clock() -> void:
+	var z := _body("climb")
+	z["climb_at"] = 10.0 - float(Motion.row("dead_climb_lid")["len"]) * 0.25
+	var c := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(c.g, float(DeadBody.CLIMB))
+	assert_almost_eq(c.r, 0.25, 0.001)
+	assert_eq(DeadBody.climbing(z, true), DeadPose.climbing(z), "lifted out of the ground as the boxes are")
+	assert_eq(DeadBody.climbing(z, false), DeadPose.climbing(z))
+
+
+func test_out_of_a_culvert_a_baked_body_crawls_then_gets_up_and_is_not_turned_over_twice() -> void:
+	var z := _body("climb")
+	z["climb_way"] = "culvert"
+	var row: Dictionary = Motion.row("dead_climb_culvert")
+	z["climb_at"] = 10.0 - float(row["open"]) * 0.5
+	var crawl := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(crawl.g, float(DeadBody.CRAWL))
+	assert_almost_eq(crawl.r, float(row["open"]) * 0.5 / DeadBody.CRAWL_LEN, 0.001, "its arms keep pulling: the crawl runs on the rules clock")
+	assert_eq(crawl.b, 0.0, "not held still")
+	var slid := DeadBody.climbing(z, true)
+	assert_eq(slid.basis, Basis(), "the crawl lies flat by itself")
+	assert_lt(slid.origin.z, 0.0, "still partly back in the mouth")
+	z["climb_at"] = 10.0 - float(row["len"]) * 0.99
+	var up := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(up.g, float(DeadBody.FALL_FRONT))
+	assert_lt(up.r, 0.05, "nearly on its feet")
+
