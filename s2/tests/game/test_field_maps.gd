@@ -113,6 +113,8 @@ func test_the_first_stop_steers_by_the_cells_it_always_did() -> void:
 	assert_eq(game.horde_home(), Vector2i(50, 10), "the platform by the train")
 	assert_eq(game.data["anchors"]["whistle"], Vector2i(90, 4))
 	assert_eq(game.data["anchors"]["flee_exit"], Vector2i(60, 99))
+	assert_eq(game.data["anchors"]["engine"], Vector2i(92, 2), "where the engine idles")
+	assert_eq(game.data["platform"], Rect2i(16, 4, 82, 6), "its own platform, not one worked out")
 	assert_eq(game.road_entries(), ["east_track", "north_road", "south_road", "east_road"], "the fair spawn tries them in this order")
 	assert_eq(game.combat._where(FieldGrid.center(Vector2i(50, 8))), "platform")
 	assert_eq(game.data["zone_names"][""], "sulechow", "anywhere unnamed")
