@@ -589,7 +589,7 @@ static func crossing_ends(crossing: Dictionary) -> Array:
 func crossing_at(p) -> Dictionary:
 	if game.level_of(p.position) != 0:
 		return {}
-	var ways: Array = game.data["crossings"]
+	var ways: Array = game.data.get("crossings", [])
 	for i in ways.size():
 		var ends: Array = crossing_ends(ways[i])
 		for k in 2:

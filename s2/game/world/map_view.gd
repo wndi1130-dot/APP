@@ -572,7 +572,7 @@ func _build_blocks() -> void:
 	# A way over the train: a plank across the gap between two cars and rungs
 	# up to it on each side (over the roof if the way is not at a gap).
 	var wood := Color(0.62, 0.5, 0.34)
-	for crossing in data["crossings"]:
+	for crossing in data.get("crossings", []):
 		var cx: int = crossing["cells"][0].x
 		var at_x: float = cx + 0.5
 		var top: float = 3.06
