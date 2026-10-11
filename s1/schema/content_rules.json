@@ -27,6 +27,8 @@
       "/body",
       "/choices/*/label",
       "/choices/*/say",
+      "/choices/*/why",
+      "/choices/*/later",
       "/choices/*/witnesses/*/text"
     ],
     "law": [
@@ -82,6 +84,14 @@
       {
         "path": "/choices/*/say",
         "max": 2
+      },
+      {
+        "path": "/choices/*/why",
+        "max": 3
+      },
+      {
+        "path": "/choices/*/later",
+        "max": 3
       }
     ],
     "chronicle": [
