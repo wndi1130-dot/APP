@@ -19,6 +19,29 @@ func _game(extra: Dictionary = {}):
 	return game
 
 
+func test_a_train_in_the_middle_is_boarded_and_held_from_both_sides() -> void:
+	var game = _game({"holdout": "start"})
+	var train: Rect2i = game.data["train"]
+	var p = game.player
+	p.position = FieldGrid.center(Vector2i(30, train.position.y - 2))
+	assert_true(game.actions.on_platform(p), "by the train above it")
+	p.position = FieldGrid.center(Vector2i(30, train.end.y + 1))
+	assert_true(game.actions.on_platform(p), "and below it")
+	p.position = FieldGrid.center(Vector2i(30, train.position.y - 8))
+	assert_false(game.actions.on_platform(p), "not out in the field")
+	# What comes from above heads for the upper doors, from below for the lower.
+	var up: Vector3 = game.entry_pos("track_west") + Vector3(0, 0, -6)
+	var down: Vector3 = game.entry_pos("field_south")
+	assert_eq(FieldGrid.cell_of(game.horde_home_from(up)).y, train.position.y - 1)
+	assert_eq(FieldGrid.cell_of(game.horde_home_from(down)).y, train.end.y)
+	var h = game.holdout
+	assert_eq(h.doors.size(), 4, "all four doors are held")
+	for n in range(4):
+		assert_eq(FieldGrid.cell_of(h.target(n, up)).y, train.position.y - 1, "bodies from above go to the upper doors")
+		assert_eq(FieldGrid.cell_of(h.target(n, down)).y, train.end.y)
+	assert_ne(h.target(0, up), h.target(1, up), "in turn")
+
+
 func test_the_field_starts_and_runs_on_it() -> void:
 	var game = _game()
 	assert_eq(game.data["place_id"], "mine_98")
@@ -61,7 +84,7 @@ func test_people_board_from_either_side_of_the_train() -> void:
 
 func test_the_train_can_be_held_on_it() -> void:
 	var game = _game({"holdout": "start", "holdout_time": 30.0})
-	assert_eq(game.holdout.doors.size(), 2, "the lower side's doors")
+	assert_eq(game.holdout.doors.size(), 4, "the doors of both sides")
 	for i in range(320):
 		if game.ended:
 			break

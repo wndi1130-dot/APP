@@ -1486,6 +1486,20 @@ func horde_home() -> Vector2i:
 	return data["anchors"]["horde_home"]
 
 
+## Is this place above the train (the side of its upper doors)?
+func above_train(at: Vector3) -> bool:
+	return at.z < data["train"].position.y + data["train"].size.y * 0.5
+
+
+## Where what comes in at `from` heads with no sound to follow: the train's
+## own side of it, where the train has doors on both.
+func horde_home_from(from: Vector3) -> Vector3:
+	var anchors: Dictionary = data["anchors"]
+	if anchors.has("horde_home_upper") and above_train(from):
+		return FieldGrid.center(anchors["horde_home_upper"])
+	return FieldGrid.center(horde_home())
+
+
 ## Ways in that are not sewers, in the order the fair spawn tries them.
 func road_entries() -> Array:
 	var out: Array = []
@@ -1508,12 +1522,12 @@ func _start_horde(h: Dictionary) -> void:
 	hordes[h["index"]] = {"t": now, "cleared": false, "entry": key, "size": h["size"]}
 	telemetry.horde(now, int(h["index"]), int(h["size"]), key)
 	audio.horde_started()
-	var target := horde_target()
+	var target: Vector3 = last_loud if last_loud != null else horde_home_from(entry_pos(key))
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
 	var lead := 3.0 if director.sewer(key) else 0.0
 	for i in range(int(h["size"])):
 		# While the train is held the horde walks to its doors, each body to one.
-		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": holdout.target(i) if holdout.on else target, "entry": key})
+		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": holdout.target(i, entry_pos(key, i)) if holdout.on else target, "entry": key})
 	if director.sewer(key):
 		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if FieldMaps.lid(key) else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
@@ -1886,14 +1900,13 @@ func finish(reason: String) -> void:
 		return
 	ended = true
 	var now := clock.elapsed
-	var platform: Rect2i = data["platform"]
 	if reason == "departed":
 		make_sound(FieldGrid.center(data["anchors"]["whistle"]), SimNoise.Level.VERY_LOUD, "whistle")
 	var boarded: Array = []
 	for p in squad + crew:
 		if not p.is_alive():
 			continue
-		var on_board: bool = platform.grow(1).has_point(FieldGrid.cell_of(p.position)) and not p.body.downed
+		var on_board: bool = FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
 		if p.brain.get("boarded", false):
 			on_board = true
 		if on_board or reason == "wiped" and false:

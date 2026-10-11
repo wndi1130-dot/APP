@@ -914,14 +914,13 @@ func take_stairs(p, s: Dictionary) -> void:
 # ---------------------------------------------------------------- platform
 
 func on_platform(p) -> bool:
-	return game.data["platform"].grow(1).has_point(FieldGrid.cell_of(p.position))
+	return game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position))
 
 
 ## Anything put down on the platform counts as loaded (s2_station 2.4).
 func _auto_unload() -> void:
-	var rect: Rect2i = game.data["unload"]
 	for p in game.squad:
-		if not p.is_alive() or not rect.grow(1).has_point(FieldGrid.cell_of(p.position)):
+		if not p.is_alive() or not game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading"):
 			continue
 		var put: Array = []
 		for id in p.items.keys():

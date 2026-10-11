@@ -620,7 +620,7 @@ func _follow_as_prisoner(r) -> void:
 	var p = game.player
 	if r.position.distance_to(p.position) > 2.5:
 		_walk(r, p.position - Vector3(sin(p.facing), 0, cos(p.facing)) * 1.8, false)
-	if game.data["platform"].grow(1).has_point(FieldGrid.cell_of(r.position)):
+	if game.FieldMaps.by_train(game.data, FieldGrid.cell_of(r.position)):
 		r.brain["boarded"] = true
 
 

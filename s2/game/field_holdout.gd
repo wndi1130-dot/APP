@@ -69,22 +69,27 @@ func begin() -> void:
 	opened_at = game.clock.elapsed
 	first_wave = game.director.index
 	var hp: int = int(game.opts.get("holdout_door_hp", DOOR_HP))
-	# The doors held are one side's: the lower, or the upper where that is all there is.
+	# Every door the train has is held: the lower side's, then the upper's.
 	var sides: Dictionary = game.data["train_doors"]
-	var cells: Array = sides.get("lower", [])
-	if cells.is_empty():
-		cells = sides.get("upper", [])
-	for c in cells:
-		doors.append({"cell": c, "hp": hp, "max": hp, "wall": 0, "bang_t": BANG_EVERY, "entered": {}, "node": null})
+	for side: String in ["lower", "upper"]:
+		for c in sides.get(side, []):
+			doors.append({"cell": c, "hp": hp, "max": hp, "wall": 0, "bang_t": BANG_EVERY, "entered": {}, "node": null, "upper": side == "upper"})
 	game.director.set_pace(FIRST_GAP, RATIO, MIN_GAP, opened_at)
 	game.set_radio("기관사: 불을 올린다. %d분만 문을 지켜라." % int(ceil(total / 60.0)), "must")
 
 
-## Where the n-th body of a horde walks: the doors in turn.
-func target(n: int) -> Vector3:
+## Where the n-th body of a horde walks: the doors in turn, of the side it
+## comes in on where the train has doors on both.
+func target(n: int, from = null) -> Vector3:
 	if doors.is_empty():
 		return FieldGrid.center(game.horde_home())
-	return FieldGrid.center(doors[n % doors.size()]["cell"])
+	var mine: Array = doors
+	if from != null:
+		var up: bool = game.above_train(from)
+		mine = doors.filter(func(door: Dictionary) -> bool: return bool(door["upper"]) == up)
+		if mine.is_empty():
+			mine = doors
+	return FieldGrid.center(mine[n % mine.size()]["cell"])
 
 
 func tick(delta: float) -> void:
@@ -239,7 +244,7 @@ func _show_wall(door: Dictionary) -> void:
 		mat.albedo_color = Color(0.42, 0.36, 0.29)
 		node.material_override = mat
 		var at: Vector3 = FieldGrid.center(door["cell"])
-		node.position = Vector3(at.x, 0.45, at.z + 0.6)
+		node.position = Vector3(at.x, 0.45, at.z + (-0.6 if door["upper"] else 0.6))
 		game.add_child(node)
 		door["node"] = node
 	door["node"].visible = int(door["wall"]) > 0
