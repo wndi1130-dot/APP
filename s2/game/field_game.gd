@@ -100,10 +100,16 @@ var storm_layers: Array = []
 var storm_screen: ColorRect
 ## The screen layer is drawn small and stretched over the view: at full size its
 ## noise cost 9~12 ms a frame on the phone (S22, 2026-10-11: 35 fps with a horde
-## about, 55 with this layer off). Snow-fog and frost are soft; they bear it.
+## about, 55 with this layer off). Snow-fog and the dark bank are soft; they
+## bear it. Frost has fine veins, so it is drawn at full size, but only on four
+## strips along the edges: as far in as frost can reach (FROST_REACH of the
+## view's height at edge_frost 1, plus the noise's margin).
 const STORM_SCREEN_SCALE: float = 0.35
 var storm_port: SubViewport
 var storm_view: TextureRect
+const FROST_REACH: float = 0.22
+const FROST_MARGIN: float = 0.07
+var storm_frost: Control
 ## Test key (D panel): which storm layers are drawn, to see on the phone what
 ## each costs. 0 all, 1 no screen layer, 2 no falling snow, 3 neither.
 const STORM_CUTS: Array[String] = ["다 켬", "화면 층 끔", "눈발 끔", "둘 다 끔"]
@@ -505,6 +511,21 @@ func _build_storm() -> void:
 	blend.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
 	storm_view.material = blend
 	layer.add_child(storm_view)
+	if float(storm["edge_frost"]) > 0.0:
+		storm_frost = Control.new()
+		storm_frost.set_anchors_preset(Control.PRESET_FULL_RECT)
+		storm_frost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var fm := ShaderMaterial.new()
+		fm.shader = load("res://fx/shaders/screen_overlay.gdshader")
+		fm.set_shader_parameter("vignette", 0.0)
+		fm.set_shader_parameter("grain", 0.0)
+		fm.set_shader_parameter("edge_frost", float(storm["edge_frost"]))
+		for _i in range(4):
+			var strip := ColorRect.new()
+			strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			strip.material = fm
+			storm_frost.add_child(strip)
+		layer.add_child(storm_frost)
 	storm_screen = ColorRect.new()
 	storm_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fit_storm_port()
@@ -514,7 +535,8 @@ func _build_storm() -> void:
 	m.set_shader_parameter("grain", 0.0)
 	m.set_shader_parameter("front", float(storm["front"]))
 	m.set_shader_parameter("whiteout", float(storm["whiteout"]))
-	m.set_shader_parameter("edge_frost", float(storm["edge_frost"]))
+	# Frost is the full-size strips' (storm_frost); here it would only blur.
+	m.set_shader_parameter("edge_frost", 0.0)
 	# The camera looks north from above: world z runs down the screen.
 	m.set_shader_parameter("storm_dir", Vector2(weather.wind_dir.x, weather.wind_dir.y * 0.7))
 	storm_screen.material = m
@@ -527,6 +549,19 @@ func _fit_storm_port() -> void:
 		storm_port.size = want
 		storm_screen.position = Vector2.ZERO
 		storm_screen.size = Vector2(want)
+	if storm_frost == null:
+		return
+	# Top and bottom run the whole width; left and right fill in between.
+	var view := Vector2(get_viewport().get_visible_rect().size)
+	var deep := minf(ceilf((float(storm["edge_frost"]) * FROST_REACH + FROST_MARGIN) * view.y), view.y * 0.5)
+	if storm_frost.get_child(0).size == Vector2(view.x, deep):
+		return
+	var rects := [Rect2(0, 0, view.x, deep), Rect2(0, view.y - deep, view.x, deep),
+			Rect2(0, deep, deep, view.y - deep * 2.0), Rect2(view.x - deep, deep, deep, view.y - deep * 2.0)]
+	for i in range(4):
+		var strip: ColorRect = storm_frost.get_child(i)
+		strip.position = rects[i].position
+		strip.size = rects[i].size
 
 
 ## Lamps that are on, nearest the middle of the view first (at most 8): where
@@ -568,6 +603,8 @@ func set_storm_cut(n: int) -> void:
 		var on := storm_cut == 0 or storm_cut == 2
 		storm_screen.visible = on
 		storm_view.visible = on
+		if storm_frost != null:
+			storm_frost.visible = on
 		storm_port.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 
 
