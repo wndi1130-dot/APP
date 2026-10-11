@@ -1,4 +1,5 @@
 import { COMM_NAME, REP_ROLE } from '../data';
+import { bump } from '../ledger';
 import type { Comm } from '../data';
 import { CARD_EXTENSIONS, VIEW_FILTERS } from '../cards';
 import type { CardView, Choice } from '../cards';
@@ -520,7 +521,7 @@ export function theftTick(g: Game): void {
     if (!pool.length) continue;
     const thief = dpick(g, pool);
     const lost = 4 + Math.round(dr(g) * 2);
-    g.food = Math.max(0, g.food - lost);
+    bump(g, 'food', -lost, 'theft', { floor0: true });
     g.comms[c].base[1] += 5;
     revertLater(g, c, 1, 5, 2);
     d.stats.theft += 1;

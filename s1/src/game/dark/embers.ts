@@ -1,4 +1,5 @@
 import { COMM_NAME, COMMS } from '../data';
+import { bump, bumpRel } from '../ledger';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { pickFresh, markSeen } from '../omens';
@@ -220,7 +221,7 @@ export function postGuard(g: Game, e: Ember): boolean {
   g.fear = clamp(g.fear + B.guardFear, 0, 100);
   g.comms.guard.base[3] += B.guardExpo;
   // 연결기를 보는 경비는 창고칸 승강대에 선다. 꼬리칸이 싫어한다(4.3).
-  if (e.imm === 2 && e.sab === 'coupling') g.comms.tail.rel = clamp(g.comms.tail.rel - 3, -100, 100);
+  if (e.imm === 2 && e.sab === 'coupling') bumpRel(g, 'tail', -3, 'embers');
   return true;
 }
 
@@ -271,9 +272,9 @@ function act(g: Game, e: Ember): void {
   }
   e.stage = st;
   if (st === 1) {
-    g.tension = clamp(g.tension + B.threatTension, 0, 100);
+    bump(g, 'tension', B.threatTension, 'embers');
     g.fear = clamp(g.fear + B.threatFear, 0, 100);
-    g.comms[v].rel = clamp(g.comms[v].rel - B.threatRel, -100, 100);
+    bumpRel(g, v, -B.threatRel, 'embers');
     darkCard(g, { kind: 'dark:act', comm: e.who, n: e.id, text: actLine(g, e, st, false) });
     return;
   }
@@ -296,7 +297,7 @@ function act(g: Game, e: Ember): void {
     const hurt = adults(g, v, { noRep: true, except: [e.actor] });
     const victim = hurt.length ? dpick(g, hurt) : null;
     const n = isGuarded ? 1 : dr(g) < 0.5 ? 1 : 2;
-    g.tension = clamp(g.tension + B.assaultTension, 0, 100);
+    bump(g, 'tension', B.assaultTension, 'embers');
     const pd = (d.armory ? B.assaultDeathArmory : B.assaultDeath) * (isGuarded ? 0.5 : 1);
     const dead = !!victim && dr(g) < pd;
     g.injured += n - (dead ? 1 : 0);
@@ -312,7 +313,7 @@ function act(g: Game, e: Ember): void {
     return;
   }
   // 4 암살 시도
-  g.tension = clamp(g.tension + B.assnTension, 0, 100);
+  bump(g, 'tension', B.assnTension, 'embers');
   killEmber(g, e);
   const markName = nameOf(g, e.mark);
   if (e.mark === 'chief') {
@@ -345,16 +346,16 @@ function sabotage(g: Game, e: Ember, v: Comm): number {
   const d = g.dark!;
   switch (e.sab) {
     case 'boiler':
-      g.coal -= B.boilerCoal;
+      bump(g, 'coal', -B.boilerCoal, 'embers');
       if (dr(g) < B.boilerBreak) { d.haul *= 0.5; journal(g, '보일러가 상했다. 이번 정차는 반만 일한다.', 'bad'); }
       break;
     case 'coupling':
-      g.coal -= B.couplingCoal;
+      bump(g, 'coal', -B.couplingCoal, 'embers');
       d.haul *= B.couplingHaul;
       g.fear = clamp(g.fear + B.couplingFear, 0, 100);
       break;
     case 'poison':
-      g.food -= B.poisonFood;
+      bump(g, 'food', -B.poisonFood, 'embers');
       if (dr(g) < B.poisonSick) { const n = dr(g) < 0.5 ? 1 : 2; g.injured += n; d.harm += 1; return n; }
       break;
     case 'heating': {

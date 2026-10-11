@@ -1,4 +1,5 @@
 import { COMM_NAME, COMMS } from '../data';
+import { bump, bumpRel } from '../ledger';
 import type { Comm } from '../data';
 import { takeKinBody } from '../death';
 import { familyOf } from '../people';
@@ -39,12 +40,12 @@ function placeOf(g: Game): 'cold' | 'out' {
 function practiceCost(g: Game, p: Practice, c: Comm): void {
   if (p === 'guard') {
     g.comms.guard.base[3] += 1;
-    g.comms.guard.rel = clamp(g.comms.guard.rel - 2, -100, 100);
+    bumpRel(g, 'guard', -2, 'corpse');
   } else if (p === 'medtech') {
-    g.comms.medtech.rel = clamp(g.comms.medtech.rel - 3, -100, 100);
+    bumpRel(g, 'medtech', -3, 'corpse');
     g.comms.medtech.coh = clamp(g.comms.medtech.coh - 0.02, 0, 1);
   } else {
-    g.comms[c].rel = clamp(g.comms[c].rel - 1, -100, 100);
+    bumpRel(g, c, -1, 'corpse');
     g.fear = clamp(g.fear + 2, 0, 100);
   }
 }
@@ -101,7 +102,7 @@ export function corpseTick(g: Game): void {
     else if (x.cold && x.burn && Object.values(g.pyreKin ?? {}).some(v => (v ?? 0) > 0)) { takeKinBody(g); d.checkedPyre = Math.max(0, d.checkedPyre - 1); }
     else if (x.cold && !x.burn && g.stored > 0) { g.stored -= 1; d.checkedStored = Math.max(0, d.checkedStored - 1); }
     const hit = victimNear(g, x.comm, x.name);
-    g.tension = clamp(g.tension + 3, 0, 100);
+    bump(g, 'tension', 3, 'corpse');
     if (hit) {
       (g.hiddenBites ??= []).push({ who: hit, comm: x.comm, at: g.seg, due: g.seg + 2, found: true });
       // 모두가 본 물림이라 바로 의무장이 묻는다(K02 1). 숨긴 물림 카드의 문장·벌점은 쓰지 않는다.
@@ -154,14 +155,14 @@ export function ruleChosen(g: Game, p: Practice): void {
 /** 밤샘의 답(9.2) */
 export function vigil(g: Game, x: { comm: Comm; name: string }, how: 'allow' | 'guard' | 'refuse'): void {
   if (how === 'allow') {
-    g.comms[x.comm].rel = clamp(g.comms[x.comm].rel + 4, -100, 100);
+    bumpRel(g, x.comm, 4, 'corpse');
     leaveUnchecked(g, x, B.corpseRise, true);
   } else if (how === 'guard') {
-    g.comms[x.comm].rel = clamp(g.comms[x.comm].rel + 2, -100, 100);
+    bumpRel(g, x.comm, 2, 'corpse');
     g.comms.guard.base[3] += 1;
     leaveUnchecked(g, x, B.vigilGuarded, true);
   } else {
-    g.comms[x.comm].rel = clamp(g.comms[x.comm].rel - 3, -100, 100);
+    bumpRel(g, x.comm, -3, 'corpse');
     checkBody(g, x, true);
   }
 }
