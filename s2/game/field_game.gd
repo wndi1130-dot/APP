@@ -17,6 +17,7 @@ const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
+const FieldMission = preload("res://game/field_mission.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
@@ -87,6 +88,7 @@ var opts: Dictionary = {}
 ## was not written before.
 const MISSIONS: Array[String] = ["", "survey", "depot"]
 var mission: String = ""
+var mission_play: FieldMission      # the goals of this stop, in the field
 var rng := RandomNumberGenerator.new()
 var data: Dictionary
 var grid: FieldGrid                    # the ground level
@@ -242,6 +244,8 @@ func _ready() -> void:
 	if not MISSIONS.has(mission):
 		mission = ""
 	telemetry.mission = mission
+	mission_play = FieldMission.new(self)
+	mission_play.place()
 	_build_world()
 	view = MapView.new()
 	add_child(view)
@@ -263,6 +267,8 @@ func _ready() -> void:
 	add_child(audio)
 	audio.setup(self)
 	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
+	if mission_play.active():
+		hud.toast(mission_play.opening_line())
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()
@@ -1824,6 +1830,7 @@ func finish(reason: String) -> void:
 	receipt.place_note("waterTower", data["spots"]["water_tower"]["state"])
 	if mission != "":
 		receipt.place_note("mission", mission)
+	mission_play.finish(reason)
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])

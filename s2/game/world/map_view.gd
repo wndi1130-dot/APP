@@ -342,6 +342,13 @@ func update_spot(id: String) -> void:
 		"work_site":
 			var color := Color(0.45, 0.45, 0.45) if spot["state"] == "closed" else Color(0.8, 0.7, 0.35)
 			box(st, Vector3(1.2, 0.05, 1.2), at + Vector3(0, 0.03, 0), color)
+		"inspect":
+			# A thing to look at for this stop's goal: a post, paler once seen.
+			var post := Color(0.42, 0.42, 0.44) if spot["state"] != "seen" else Color(0.7, 0.7, 0.66)
+			box(st, Vector3(0.12, 1.6, 0.12), at + Vector3(0, 0.8, 0), post)
+			box(st, Vector3(0.5, 0.3, 0.1), at + Vector3(0, 1.5, 0), post)
+		"deep":
+			box(st, Vector3(1.0, 0.06, 1.0), at + Vector3(0, 0.03, 0), Color(0.3, 0.28, 0.26) if spot["state"] != "seen" else Color(0.6, 0.58, 0.52))
 		"salvage":
 			if spot["state"] == "intact":
 				box(st, Vector3(0.8, 0.3, 0.5), at + Vector3(0, 0.15, 0), Color(0.5, 0.48, 0.45) if spot["material"] == "scrap" else Color(0.55, 0.42, 0.28))
