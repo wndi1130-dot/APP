@@ -1,6 +1,6 @@
 extends Node3D
 ## All the dead on one stop. Data lives in plain dictionaries; drawing is one
-## VAT MultiMesh per look. States: wander, investigate, chase, attack, grab,
+## VAT MultiMesh per look. States: wander, investigate, chase, attack, grab, climb,
 ## downed, dead, frozen, waking, rising (corpse about to stand up), horde.
 ## Kinds (zombies.md): "dead" 망자, "clothed" 껴입은 자, "fresh" 갓 일어난 자,
 ## "frozen" 얼어붙은 자 (becomes "dead" when it wakes).
@@ -11,6 +11,7 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
+const Motion = preload("res://game/sim/motion.gd")
 
 const MAX_DRAW: int = 160
 const SIGHT: float = 9.0
@@ -233,7 +234,7 @@ func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 	var reacted := 0
 	for z in list:
 		var state: String = z["state"]
-		if state == "dead" or state == "rising" or state == "downed" or state == "grab" or state == "attack":
+		if state == "dead" or state == "rising" or state == "downed" or state == "grab" or state == "attack" or state == "climb":
 			continue
 		var d: float = at.distance_to(z["pos"])
 		var reach := radius
@@ -278,7 +279,7 @@ func smell(at: Vector3, radius: float) -> int:
 	var reacted := 0
 	for z in list:
 		var state: String = z["state"]
-		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase"]:
+		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase", "climb"]:
 			continue
 		var reach := radius * float(game.weather.scent_mult(at, z["pos"]))
 		if at.distance_to(z["pos"]) > reach:
@@ -295,6 +296,15 @@ func smell(at: Vector3, radius: float) -> int:
 		z["path_t"] = 0.0
 		reacted += 1
 	return reacted
+
+
+## It comes up out of a hole where it stands: "lid" a street manhole, "culvert"
+## a culvert's mouth. Until the motion's time is over it does nothing else (it
+## does not walk, hear or bite); then it is an ordinary wanderer.
+func start_climb(z: Dictionary, way: String = "lid") -> void:
+	z["state"] = "climb"
+	z["climb_at"] = z["age"]
+	z["climb_way"] = way
 
 
 func wake(z: Dictionary) -> void:
@@ -329,6 +339,11 @@ func update(delta: float) -> void:
 				if z["t"] <= 0.0:
 					z["kind"] = "dead"
 					z["state"] = "wander"
+				continue
+			"climb":
+				if DeadPose.climb_k(z) >= 1.0:
+					z["state"] = "wander"
+					z["home"] = z["pos"]
 				continue
 			"downed":
 				z["t"] -= delta
@@ -455,7 +470,7 @@ func _begin_search(z: Dictionary, around: Vector3) -> void:
 ## Herd behaviour: dead that see a neighbour lurch after something follow it.
 func _call_neighbours(z: Dictionary, toward: Vector3) -> void:
 	for o in list:
-		if o == z or o["state"] in ["dead", "rising", "frozen", "waking", "downed", "chase", "attack", "grab"]:
+		if o == z or o["state"] in ["dead", "rising", "frozen", "waking", "downed", "chase", "attack", "grab", "climb"]:
 			continue
 		if o["pos"].distance_to(z["pos"]) > HERD:
 			continue
@@ -748,6 +763,10 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
+		elif state == "climb":
+			var out := DeadPose.climbing(z)
+			pos = pos + basis * out.origin
+			basis = basis * out.basis
 		elif state != "frozen" and state != "waking" and not baked:
 			basis = basis * DeadPose.gait_basis(z)
 		if state == "frozen":
