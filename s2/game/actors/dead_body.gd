@@ -24,19 +24,35 @@ const CLIMB: int = 12                         # hauling itself up out of a hole
 const RISE_FRONT: int = 13                    # getting up off its face
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 # How far one round of a motion carries the body, metres, so that the foot
-# going backwards stays on its spot: measured on the hand-written motions as
-# baked (how far a foot goes back in a frame, times the frames). The feet keep
-# that pace to within a quarter. The crawl's hands keep no steady pace, and
-# its number is only their middle.
+# going backwards stays on its spot. The bake measures it on the body it bakes
+# (body_bake.gd, round_of) and assets() reads that; these are for a folder
+# baked before it did, measured the same way on one body. The feet keep that
+# pace to within a quarter. The crawl's hands keep no steady pace, and its
+# number is only their middle.
 const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61}
 const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
+static var rounds: Dictionary = {}             # what the baked folder in use measured (see assets)
+
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
 
 ## The baked body, or {} when there is none.
 static func assets() -> Dictionary:
 	var dir := OS.get_environment(FOLDER_ENV)
-	return BodyBake.load_baked(dir if dir != "" else FOLDER)
+	var got := BodyBake.load_baked(dir if dir != "" else FOLDER)
+	rounds = rounds_of(got)
+	return got
+
+
+## Motion number -> its round, for the motions the baked folder gives one.
+static func rounds_of(vat: Dictionary) -> Dictionary:
+	var out := {}
+	var clips: Array = vat.get("clips", [])
+	for n in clips.size():
+		var size := float(clips[n].get("round", 0.0))
+		if size > 0.0:
+			out[n] = size
+	return out
 
 
 static func is_baked(vat: Dictionary) -> bool:
@@ -162,7 +178,7 @@ static func step(z: Dictionary, motion: int) -> float:
 	var gone := moved(z)
 	var at: float = z.get("body_step", z["phase"])
 	if gone <= STRIDE_CAP:
-		at = fposmod(at + gone / float(STRIDE[motion]), 1.0)
+		at = fposmod(at + gone / float(rounds.get(motion, STRIDE[motion])), 1.0)
 	z["body_step"] = at
 	return at
 

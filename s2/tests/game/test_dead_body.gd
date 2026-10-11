@@ -6,6 +6,10 @@ const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 
 
+func before_each() -> void:
+	DeadBody.rounds = {}
+
+
 func _body(state: String = "wander") -> Dictionary:
 	return {"state": state, "phase": 0.37, "crawl": false, "age": 10.0, "pos": Vector3(3, 0, 4), "t": 0.0}
 
@@ -169,4 +173,24 @@ func test_the_fresh_dead_run_after_someone_and_the_others_do_not() -> void:
 	for clip: Array in BodyBake.OWN_CLIPS:
 		names.append(clip[0])
 	assert_eq(names[DeadBody.RUN], "run")
+
+
+func test_the_baked_folders_own_rounds_are_used_where_it_gives_them() -> void:
+	var walk := DeadBody.walk_of(0.37)
+	var clips: Array = []
+	for n in 12:
+		clips.append({"name": "m%d" % n, "round": 2.0 if n == walk else 0.0})
+	DeadBody.rounds = DeadBody.rounds_of({"clips": clips})
+	assert_eq(DeadBody.rounds, {walk: 2.0}, "only the motions that cover ground")
+	var z := _body("wander")
+	var first := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	z["pos"] += Vector3(0.2, 0, 0)
+	assert_almost_eq(fposmod(DeadBody.custom(z, 0.0, 0.0, 1.0, true).r - first.r, 1.0), 0.1, 0.001)
+	var crawler := _body("chase")
+	crawler["crawl"] = true
+	var before := DeadBody.custom(crawler, 0.0, 0.0, 1.0, true)
+	crawler["pos"] += Vector3(0.1, 0, 0)
+	assert_almost_eq(fposmod(DeadBody.custom(crawler, 0.0, 0.0, 1.0, true).r - before.r, 1.0), 0.1 / float(DeadBody.STRIDE[DeadBody.CRAWL]), 0.001, "the others fall back on the written ones")
+	DeadBody.rounds = {}
+	assert_eq(DeadBody.rounds_of({}), {})
 

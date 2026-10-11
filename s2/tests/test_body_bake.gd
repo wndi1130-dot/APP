@@ -82,6 +82,7 @@ func test_a_bake_is_written_and_read_back_the_same() -> void:
 	assert_eq((back["clips"] as Array).size(), 2)
 	assert_eq(String(back["clips"][1]["name"]), "fall")
 	assert_false(bool(back["clips"][1]["loop"]))
+	assert_eq(float(back["clips"][0]["round"]), 0.0, "a folder baked before rounds were measured reads as none")
 	assert_almost_eq((back["image"] as Image).get_pixel(1, 1).g, 2.25, 0.001, "metres past the 8 bit range survive the file")
 	assert_eq(VatBaker.shader_tables(back)["clip_start"][1], 3.0)
 	for file in ["vat.bin", "mesh.res", "clips.json"]:
@@ -167,3 +168,22 @@ func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_
 	var last: int = first + int(assets["clips"][6]["frames"]) - 1
 	assert_gt(1.7 + image.get_pixel(1, first).g, 1.3, "standing as it starts to go over")
 	assert_lt(1.7 + image.get_pixel(1, last).g, 0.6, "its head is down on the ground at the end")
+	# The bake says how far a round of each walk carries the body, off this body's own feet.
+	assert_gt(float(assets["clips"][0]["round"]), 0.5, "a walk covers ground")
+	assert_gt(float(assets["clips"][7]["round"]), float(assets["clips"][0]["round"]), "the run more")
+	assert_eq(float(assets["clips"][3]["round"]), 0.0, "standing covers none")
+	assert_eq(float(assets["clips"][6]["round"]), 0.0, "nor does a motion played once")
+
+
+func test_a_round_is_what_a_foot_goes_back_in_a_frame_times_the_frames() -> void:
+	# Forward for 16 frames and back for 16 at one pace, 0.6 m each way.
+	var zs: Array = []
+	for f in 32:
+		zs.append(-0.3 + 0.6 * float(f) / 16.0 if f < 16 else 0.3 - 0.6 * float(f - 16) / 16.0)
+	assert_almost_eq(BodyBake.round_of(zs), 1.2, 0.001)
+	# The same foot, slowing where it turns round: the ends are left out.
+	zs[16] = 0.29
+	zs[0] = -0.29
+	assert_almost_eq(BodyBake.round_of(zs), 1.2, 0.001)
+	assert_eq(BodyBake.round_of([0.1, 0.1, 0.1, 0.1]), 0.0, "a foot that stays covers none")
+
