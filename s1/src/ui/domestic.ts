@@ -214,6 +214,123 @@ function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
       h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null);
 }
 
+// ---- 열차 관리 화면의 공방 판(결정 053, 설계 4부 1절): 만들기 / 지금 / 사람 세 덩이와 오른쪽 개량 자리 셋 ----
+// 내정 창의 「만들기」 탭은 폭이 좁아 위의 workshopPop을 그대로 쓴다. 여기는 값을 읽어 옮겨 심기만 하고 규칙은 건드리지 않는다.
+
+/** 「지금」 덩이의 세로 계기에 올릴 일 하나: 복원과 개조 가운데 차례가 앞인 것. 부품은 퍼센트가 없어 계기에 안 올린다. */
+export function workshopGauge(g: Game): { head: string; pct: number; left: number; wait: string | null } | null {
+  const d = g.dom!;
+  const power = Math.max(0.01, workPower(g));
+  const partsFirst = (t: Task) => d.order.indexOf('parts') < d.order.indexOf(t) && d.parts < d.target;
+  for (const t of d.order) {
+    const st = t === 'restore' && d.restoring ? d.techs[d.restoring] : null;
+    if (st && d.restoring) {
+      const pending = !!st.pending && st.progress >= st.need - 1e-9;
+      return {
+        head: `${st.finishing ? '마무리' : '복원'}: ${techTitle(g, d.restoring)}`, pct: Math.round((st.progress / Math.max(1, st.need)) * 100),
+        left: Math.max(1, Math.ceil((st.need - st.progress) / power)), wait: pending ? '추인 기다림' : partsFirst('restore') ? '부품 뒤' : null,
+      };
+    }
+    if (t === 'modify' && d.job) {
+      return {
+        head: `개조: ${jobTitle(d.job.kind, d.job.car)}`, pct: Math.round((d.job.progress / Math.max(1, d.job.need)) * 100),
+        left: Math.max(1, Math.ceil((d.job.need - d.job.progress) / power)), wait: partsFirst('modify') ? '부품 뒤' : null,
+      };
+    }
+  }
+  return null;
+}
+
+/** 「사람」 덩이: 공방장, 그가 가르치는 견습, 가르치느라 느려지는 중인가, 손(살아서 열차에 있는 공작 분야 사람 수). */
+export function workshopHands(g: Game): { chief?: DomPerson; pupil?: DomPerson; teaching: boolean; hands: number } {
+  const craft = g.dom!.people.filter(p => p.alive && !p.gone && p.field === 'craft');
+  const chief = workshopChief(g);
+  const pupil = chief?.pupil ? craft.find(p => p.id === chief.pupil) : undefined;
+  return { chief, pupil, teaching: craft.some(p => p.pupil && !p.resting), hands: craft.length };
+}
+
+/** 개량 자리 셋. 첫 자리는 공구 수리(w1): 돌면 켜짐, 복원을 올릴 수 있으면 열림. 둘째·셋째는 코드에 없어 비워 둔다. */
+export function workshopSlots(g: Game): { name: string; from: string; state: 'on' | 'open' | 'none' }[] {
+  const w1 = techMult(g, 'w1') > 0 ? 'on' : !restoreCheck(g, 'w1').full || g.dom!.restoring === 'w1' ? 'open' : 'none';
+  return [{ name: '공구', from: '기술', state: w1 }, { name: '—', from: '', state: 'none' }, { name: '—', from: '', state: 'none' }];
+}
+
+/** 판 머리의 호박색 테에 적을 글: 고장을 못 고친 서류가 있으면 「멈춤 · 부품 n」, 부품 재료가 모자라면 「재료 모자람」. */
+export function workshopHalt(g: Game): string | null {
+  if (g.cards.some(c => c.kind === 'dom:short' && c.text === 'break')) return `멈춤 · 부품 ${Math.floor(g.dom!.parts)}`;
+  return workshopState(g).mode === 'short' ? '재료 모자람' : null;
+}
+
+/** 아직 코드에 없는 품목. 자리만 흐리게 보인다. */
+const WS_LATER = ['땔감', '붕대'];
+
+export function workshopBoard(view: View, car: CarDef): HTMLElement {
+  const g = view.g;
+  const d = g.dom!;
+  const st = workshopState(g);
+  const gauge = workshopGauge(g);
+  const who = workshopHands(g);
+  const halt = workshopHalt(g);
+  const ds = delegateStatus(g);
+  const tier = delegateTier(g);
+  const open = domUi(view.ui).ws ?? null;
+  const empty = (t: Task) => (t === 'restore' && !d.restoring) || (t === 'modify' && !d.job);
+  const taskName = (t: Task) => t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
+  const lockOrder = d.delegate.on && tier >= 2;
+  const blk = (title: string, mod: string, ...kids: (Node | null)[]) => h('div', { class: `tblk wsb__${mod}` }, h('span', { class: 'tblk__title' }, title), ...kids);
+  const fold = (which: NonNullable<DomUi['ws']>, ...kids: (Node | string | null)[]) => h('button', {
+    class: cx('chip', open === which && 'is-on'), 'data-action': 'dom-ws', 'data-which': which, 'aria-expanded': open === which ? 'true' : 'false',
+  }, ...kids);
+  return h('div', { class: 'carpop tpop wsb', role: 'region', 'aria-label': `${car.name} 판` },
+    h('div', { class: 'tpop__head' },
+      h('b', { class: cx('tpop__name', halt && 'is-halt') }, car.name, halt ? h('small', { class: 'num' }, ` ${halt}`) : null),
+      h('button', { class: 'x', 'data-action': 'car', 'data-car': car.id, 'aria-label': '닫기' }, '×')),
+    h('div', { class: 'tpop__body wsb__body' },
+      blk('만들기', 'make',
+        h('div', { class: 'tblk__row' },
+          h('span', { class: 'chip is-on' }, '부품'),
+          ...WS_LATER.map(n => h('span', { class: 'chip wsb__later', 'aria-disabled': 'true' }, n))),
+        h('div', { class: 'tblk__row num sub' }, `고철 ${D.partScrap} + 목재 ${D.partWood} → 부품 1`),
+        h('div', { class: 'wsb__target' },
+          h('span', null, '유지 ', h('b', { class: 'num' }, d.target), ' / 가진 ', h('b', { class: 'num' }, Math.floor(d.parts))),
+          h('input', {
+            class: 'lever__input', type: 'range', min: 0, max: D.targetMax, step: 1, value: d.target, disabled: d.delegate.on,
+            'data-input': 'dom', 'data-which': 'target', 'aria-label': '부품 유지 목표치',
+          }))),
+      blk('지금', 'now',
+        h('div', { class: 'tblk__row sub' }, gear(st.mode), gauge ? gauge.head : st.now),
+        gauge ? h('div', { class: 'wsb__gauge' },
+          h('i', { class: 'wsb__tube', 'aria-hidden': 'true' }, h('i', { style: `height:${Math.max(0, Math.min(100, gauge.pct))}%` })),
+          h('b', { class: 'wsb__pct num' }, `${gauge.pct}%`),
+          h('span', { class: 'sub num' }, gauge.wait ?? `남은 ${gauge.left}구간`)) : null,
+        h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+      blk('사람', 'who',
+        who.chief ? h('div', { class: 'tblk__row' }, portrait(who.chief.name, who.chief.comm), nameBtn(who.chief.name),
+          h('small', { class: 'sub' }, `공작 ${dots(who.chief.skill)}`)) : h('div', { class: 'tblk__row sub' }, '공방장 없음'),
+        who.pupil ? h('div', { class: 'tblk__row' }, portrait(who.pupil.name, who.pupil.comm), nameBtn(who.pupil.name),
+          h('small', { class: 'sub num' }, who.teaching ? `견습 ×${D.teachWork}` : '견습')) : null,
+        h('div', { class: 'tblk__row' }, icon('people'), '손 ', h('b', { class: 'num' }, who.hands))),
+      blk('개량', 'slots',
+        ...workshopSlots(g).map(sl => h(sl.state === 'none' ? 'span' : 'button', {
+          class: cx('wsb__slot', `is-${sl.state}`), ...(sl.state === 'none' ? {} : { 'data-action': 'dom-tab', 'data-tab': 'plan' }),
+        }, h('i', { class: 'wsb__sq', 'aria-hidden': 'true' }), h('span', null, sl.name), sl.from ? h('small', null, sl.from) : null)))),
+    h('div', { class: 'wsb__foot' },
+      fold('order', h('span', { class: 'sub' }, '차례 '),
+        ...d.order.flatMap((t, i) => [i ? ' › ' : null, h('span', { class: cx(empty(t) && 'is-dim') }, taskName(t))])),
+      d.delegate.on ? h('button', { class: 'chip is-on', 'data-action': 'dom-delegate', 'data-on': '0' }, '맡김 · 거둔다')
+        : ds.ok ? fold('delegate', '맡기기')
+          : h('button', { class: 'chip', disabled: true, title: ds.why ?? '' }, '맡기기'),
+      h('button', { class: 'btn btn--dark btn--small wsb__mod', 'data-action': 'dom-tab', 'data-tab': 'modify' }, '개조 →')),
+    open === 'delegate' && !d.delegate.on && ds.ok ? h('div', { class: 'dom-row dom-fold' },
+      h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'neutral' }, '중립으로', h('small', null, ' 가장 추운 칸부터')),
+      h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'ours' }, '우리 편 먼저', h('small', null, ' 호의 +1 · 나머지 −1/구간'))) : null,
+    open === 'order' ? h('ol', { class: 'dom-order dom-fold' }, d.order.map((t, i) => h('li', null,
+      h('span', { class: 'num' }, i + 1),
+      h('span', { class: cx('dom-order__name', empty(t) && 'is-dim') },
+        t === 'restore' && d.restoring ? `복원: ${techTitle(g, d.restoring)}` : t === 'modify' && d.job ? `개조: ${jobTitle(d.job.kind, d.job.car)}` : taskName(t)),
+      h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null);
+}
+
 const MOD_KINDS: { k: ModKind; name: string; cost: string }[] = [
   { k: 'insulate', name: '단열', cost: `목재 ${D.insulateWood}` },
   { k: 'armor', name: '장갑', cost: `고철 ${D.armorScrap}` },
