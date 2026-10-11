@@ -295,8 +295,8 @@ func _build_top() -> void:
 	v.add_child(sun_bar)
 	weather_label = _label(game.weather.label() + " · 영하 14도", 16, DIM)
 	v.add_child(weather_label)
-	if game.mission_play != null and game.mission_play.active():
-		goal_label = _label(game.mission_play.goal_line(), 16, BRASS)
+	if game.mission_play != null and (game.mission_play.active() or game.holdout.enabled()):
+		goal_label = _label(game.goal_text(), 16, BRASS)
 		v.add_child(goal_label)
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tl)
@@ -576,7 +576,7 @@ func tick(delta: float) -> void:
 	var p = game.player
 	clock_label.text = game.clock.label()
 	if goal_label != null:
-		goal_label.text = game.mission_play.goal_line()
+		goal_label.text = game.goal_text()
 	sun_bar.value = game.clock.sun_fraction()
 	radio_left -= delta
 	radio_label.modulate.a = clampf(radio_left / 1.5, 0.0, 1.0)
@@ -1258,6 +1258,10 @@ func depart_card() -> void:
 	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
 	if horde_close():
 		text += "\n무리가 가깝다."
+	if game.holdout.opens_on_leaving():
+		text += "\n떠날 채비에 시간이 걸린다. 그동안 문을 지켜야 한다."
+	elif game.holdout.on:
+		text += "\n채비가 %d초 남았다. 지금 떠나면 덜 된 채로 떠난다." % int(ceil(game.holdout.left))
 	card("depart", text, [
 		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
 		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
@@ -1276,8 +1280,7 @@ func horde_close() -> bool:
 func _depart_pick(choice: String) -> void:
 	game.audio.hold(false)
 	if choice == "go":
-		game.audio.depart()
-		game.finish("departed")
+		game.depart()
 
 
 func show_end(result: Dictionary) -> void:
@@ -1302,6 +1305,8 @@ func show_end(result: Dictionary) -> void:
 		var ids: Array = people.get(key[0], [])
 		if not ids.is_empty():
 			lines.append("%s: %s" % [key[1], ", ".join(_names(ids))])
+	for line in result.get("holdout_lines", []):
+		lines.append(line)
 	for d in game.decisions:
 		lines.append("결정: %s → %s" % [d["id"], d["choice"]])
 	var body := _label("\n".join(lines), 20)

@@ -821,6 +821,9 @@ func context(p) -> Array:
 	for key in game.data["manholes"]:
 		if key == "manhole" and game.director.is_open(key) and p.position.distance_to(FieldGrid.center(game.data["manholes"][key])) < 2.5:
 			out.append({"label": "맨홀 막기", "call": block_lid.bind(p, key)})
+	var wall: Dictionary = game.holdout.wall_row(p)
+	if not wall.is_empty():
+		out.append(wall)
 	if on_signal_top(p):
 		out.append({"label": "내려가기", "call": ladder.bind(p, "fast")})
 	for o in game.allies_alive():

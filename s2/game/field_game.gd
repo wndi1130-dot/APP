@@ -18,6 +18,7 @@ const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
+const FieldHoldout = preload("res://game/field_holdout.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
@@ -88,6 +89,7 @@ var opts: Dictionary = {}
 const MISSIONS: Array[String] = ["", "survey", "depot"]
 var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
+var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var data: Dictionary
@@ -249,6 +251,7 @@ func _ready() -> void:
 	telemetry.mission = mission
 	mission_play = FieldMission.new(self)
 	mission_play.place()
+	holdout = FieldHoldout.new(self)
 	_build_world()
 	view = MapView.new()
 	add_child(view)
@@ -272,6 +275,8 @@ func _ready() -> void:
 	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
 	if mission_play.active():
 		hud.toast(mission_play.opening_line())
+	if holdout.mode == "start":
+		holdout.begin()
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()
@@ -972,6 +977,7 @@ func _step(delta: float) -> void:
 	_update_night(delta)
 	_update_zone(delta)
 	actions.update(delta)
+	holdout.tick(delta)
 	_check_end()
 	var keep: Array = []
 	for s in sounds:
@@ -1497,7 +1503,8 @@ func _start_horde(h: Dictionary) -> void:
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
 	var lead := 3.0 if director.sewer(key) else 0.0
 	for i in range(int(h["size"])):
-		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": target, "entry": key})
+		# While the train is held the horde walks to its doors, each body to one.
+		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": holdout.target(i) if holdout.on else target, "entry": key})
 	if director.sewer(key):
 		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
@@ -1781,7 +1788,8 @@ func _check_end() -> void:
 	if squad_up == 0:
 		finish("wiped")
 		return
-	if clock.past_limit():
+	# Held, the train's own clock is the limit.
+	if clock.past_limit() and not holdout.on:
 		finish("limit")
 		return
 	if clock.past_safe() and not safe_warned:
@@ -1806,6 +1814,24 @@ func track_dead() -> Dictionary:
 		elif c.x >= train.end.x:
 			out["east"] += 1
 	return out
+
+
+## Leaving is called. Where the train has to be held first, that opens; called
+## again while it is held, the train goes before it is ready.
+func depart() -> void:
+	if holdout.opens_on_leaving():
+		holdout.begin()
+		return
+	holdout.leaving_early()
+	audio.depart()
+	finish("departed")
+
+
+## The line under the weather: the held train's clock and doors, or the stop's goals.
+func goal_text() -> String:
+	if holdout.enabled() and (holdout.opened or not mission_play.active()):
+		return holdout.goal_line()
+	return mission_play.goal_line() if mission_play.active() else ""
 
 
 ## Departure: whistle (very loud), people on the platform board, the rest stay.
@@ -1875,13 +1901,17 @@ func finish(reason: String) -> void:
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)
+	holdout.on = false
+	if holdout.opened:
+		receipt.place_note("holdout", holdout.result())
+		telemetry.holdout = holdout.result()
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
 	var on_track := track_dead()
 	telemetry.track(on_track["west"], on_track["east"])
 	telemetry.end(reason, now)
-	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size()}
+	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines()}
 	_save(result)
 	hud.show_end(result)
 	finished.emit(result)
