@@ -1,4 +1,5 @@
 // 소리 설정(sound_music 8b.1): 켬·끔과 크기 세 단계. 진동(ui/fx.ts)처럼 브라우저에만 남는 개인 설정이다.
+// 메뉴에는 단추 하나로 보인다: 누를 때마다 끔 → 작게 → 보통 → 크게 → 끔.
 // 소리는 손끝 반응일 뿐이라 꺼도 놓치는 정보가 없다(원칙 1). 규칙과 저장에는 닿지 않는다.
 const SOUND_KEY = 's1a.sound';
 const VOL_KEY = 's1a.soundvol';
@@ -45,9 +46,24 @@ export function soundVol(): SoundVol {
   return vol;
 }
 
-/** 작게 → 보통 → 크게 → 작게. 바뀐 단계를 돌려준다 */
-export function cycleSoundVol(): SoundVol {
-  vol = ((soundVol() + 1) % 3) as SoundVol;
-  write(VOL_KEY, String(vol));
-  return vol;
+export function setSoundVol(next: SoundVol): void {
+  vol = next;
+  write(VOL_KEY, String(next));
+}
+
+/** 메뉴 단추가 도는 차례: 끔 → 작게 → 보통 → 크게 → 끔 */
+export function cycleSound(): void {
+  if (!soundOn()) {
+    setSoundVol(0);
+    setSound(true);
+  } else if (soundVol() < 2) {
+    setSoundVol((soundVol() + 1) as SoundVol);
+  } else {
+    setSound(false);
+  }
+}
+
+/** 메뉴 단추 글: '소리 끔', '소리: 작게' */
+export function soundLabel(): string {
+  return soundOn() ? `소리: ${SOUND_VOL_NAME[soundVol()]}` : '소리 끔';
 }

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CUES, CUE_GAP, PITCH, clipTable, createPlanner, cueForAction } from '../../src/audio/cues';
 import type { Cue } from '../../src/audio/cues';
 import { LATE_MS, createEngine } from '../../src/audio/engine';
-import { SOUND_VOL_GAIN, cycleSoundVol, setSound, soundOn, soundVol } from '../../src/audio/settings';
+import { SOUND_VOL_GAIN, cycleSound, setSound, setSoundVol, soundLabel, soundOn, soundVol } from '../../src/audio/settings';
 
 // 손끝 소리(sound_music 8b.1): 어느 단추가 어느 박자인지, 연타로 쌓지 않는지, 끄면 안 나는지, 첫 손짓 전에 안 나는지.
 // 소리가 어떻게 들리는지는 시험하지 못한다. 파일은 꼴(모노 16비트 44100Hz)과 길이, 첫머리만 잰다.
@@ -20,16 +20,21 @@ function seq(...values: number[]): () => number {
 
 beforeEach(() => {
   setSound(true);
-  while (soundVol() !== 1) cycleSoundVol();
+  setSoundVol(1);
 });
 
 describe('소리 설정', () => {
-  it('기본은 켬이고 크기는 보통이다. 크기는 작게 → 보통 → 크게로 돈다', () => {
+  it('기본은 켬이고 크기는 보통이다. 메뉴 단추 하나가 끔 → 작게 → 보통 → 크게 → 끔으로 돈다', () => {
     expect(soundOn()).toBe(true);
     expect(soundVol()).toBe(1);
-    expect(cycleSoundVol()).toBe(2);
-    expect(cycleSoundVol()).toBe(0);
-    expect(cycleSoundVol()).toBe(1);
+    expect(soundLabel()).toBe('소리: 보통');
+    const seen: string[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      cycleSound();
+      seen.push(soundLabel());
+    }
+    expect(seen).toEqual(['소리: 크게', '소리 끔', '소리: 작게', '소리: 보통']);
+    expect(soundOn()).toBe(true);
     expect(SOUND_VOL_GAIN[0]).toBeLessThan(SOUND_VOL_GAIN[1]);
     expect(SOUND_VOL_GAIN[1]).toBeLessThan(SOUND_VOL_GAIN[2]);
   });
@@ -39,7 +44,7 @@ describe('소리 설정', () => {
     vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); } });
     try {
       setSound(false);
-      cycleSoundVol();
+      setSoundVol(2);
       expect(store.get('s1a.sound')).toBe('0');
       expect(store.get('s1a.soundvol')).toBe('2');
       vi.resetModules();
@@ -168,7 +173,7 @@ describe('소리 장치', () => {
     engine.unlock();
     await Promise.resolve();
     expect(made.n).toBe(1);
-    cycleSoundVol(); // 크게
+    setSoundVol(2); // 크게
     expect(engine.play({ cue: 'paper.confirm', variant: 2, rate: 1.03 })).toBe(true);
     expect(fake.sources).toHaveLength(1);
     expect(fake.sources[0]).toMatchObject({ started: true, stopped: false, rate: 1.03 });

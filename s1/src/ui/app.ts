@@ -2,6 +2,7 @@ import { installTrainScroll } from './train_scroll';
 import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
+import { cycleSound, soundOn } from '../audio/settings';
 import { FX_MS, buzz, fxDiff, fxSnap, fxWhy, setVibrate, slipItems, vibrateOn } from './fx';
 import { fxPlay } from './fxplay';
 import { departInput, platformSheet, setDepartTap, departTapOn } from './depart';
@@ -736,6 +737,12 @@ export function startApp(root: HTMLElement): void {
         setVibrate(!vibrateOn());
         toast(vibrateOn() ? '진동을 켰다. 나쁜 쪽으로 선을 넘거나 사람이 죽을 때만 짧게 떤다.' : '진동을 껐다.');
         return render();
+      case 'sound-vol': {
+        const was = soundOn();
+        cycleSound();
+        if (was !== soundOn()) toast(soundOn() ? '소리를 켰다. 단추와 서류를 누를 때 짧게 난다.' : '소리를 껐다.');
+        return render();
+      }
       case 'toggle-debug':
         ui.debug = !ui.debug;
         ui.panel = null;
