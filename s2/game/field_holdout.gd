@@ -16,10 +16,14 @@ const SimNoise = preload("res://game/sim/noise.gd")
 
 const MODES: Array[String] = ["start", "depart", "roll"]
 # How likely a stop of each kind is to be one that can have it, in a hundred
-# (user decisions 074, 087). A kind not here is a town stop: low (decision
-# 151), the number a placeholder until the play check gives one.
-const CHANCE: Dictionary = {"mine": 60, "sawmill": 30, "lodge": 25, "lake": 10}
-const CHANCE_TOWN: int = 10
+# (user decisions 074, 087; the town stops low, decisions 151, 153). A kind
+# not here is taken as the lowest of the town stops.
+const CHANCE: Dictionary = {
+	"mine": 60, "sawmill": 30, "lodge": 25, "lake": 10,
+	"freight": 10, "hospital": 10, "factory": 10,
+	"houses": 5, "church": 5, "office": 5,
+}
+const CHANCE_OTHER: int = 5
 # The one line shown to anybody before it (user decision 150): the kind's
 # chance in words, never the roll. [up to this chance, the word].
 const RISK_WORDS: Array = [[15, "낮다"], [40, "있다"], [100, "높다"]]
@@ -105,7 +109,7 @@ func enabled() -> bool:
 func chance() -> int:
 	if game.opts.has("holdout_chance"):
 		return int(game.opts["holdout_chance"])
-	return int(CHANCE.get(String(game.data.get("place_kind", "")), CHANCE_TOWN))
+	return int(CHANCE.get(String(game.data.get("place_kind", "")), CHANCE_OTHER))
 
 
 ## The kind's chance in a word, for the line anybody sees.

@@ -400,7 +400,11 @@ func test_the_roll_is_the_same_for_a_seed_and_does_not_move_the_stops_dice() -> 
 # User decision 150: one line anybody sees, from the kind of place, not the roll.
 func test_the_risk_line_goes_by_the_kind_of_place() -> void:
 	var game = _game({"holdout": "roll"})
-	assert_eq(game.holdout.chance(), FieldHoldout.CHANCE_TOWN, "a town stop: low")
+	assert_eq(game.holdout.chance(), 10, "a freight yard: low")
+	game.data["place_kind"] = "church"
+	assert_eq(game.holdout.chance(), 5, "lower still")
+	assert_eq(game.holdout.risk_word(), "낮다")
+	game.data["place_kind"] = "freight"
 	assert_string_contains(game.goal_text(), "버티기 위험: 낮다")
 	game.data["place_kind"] = "lodge"
 	assert_eq(game.holdout.risk_word(), "있다")
