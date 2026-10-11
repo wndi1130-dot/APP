@@ -425,7 +425,8 @@ func waves() -> int:
 func goal_line() -> String:
 	if not opened:
 		if mode == "roll":
-			return "버티기 위험: " + risk_word()
+			# Of places like this, not of this one: what it holds is not known yet.
+			return "이런 곳의 버티기 위험: " + risk_word()
 		return "버티기 판: 「떠난다」를 부르면 채비가 시작된다" if mode == "depart" else ""
 	if ready:
 		return "채비 끝 · 「떠난다」를 부르면 떠난다 · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [count("whole"), count("damaged"), count("breached"), waves()]
