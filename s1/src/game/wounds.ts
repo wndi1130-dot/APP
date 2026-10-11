@@ -1,10 +1,11 @@
 import { onDeath } from './death';
+import { COMMS } from './data';
 import type { Comm } from './data';
 import { D } from './domestic/data';
 import { typhusInBeds } from './domestic/beds';
 import { living, techMult } from './domestic/state';
 import { pickVictims } from './people';
-import { journal, lawActive, PROFILES, rnd } from './state';
+import { isGone, journal, lawActive, PROFILES, rnd } from './state';
 import type { Game } from './state';
 
 // 부상 명부(정치_열차_명세_1_부상.md 1~3절). 사람에 붙은 Wound 기록이 g.wounds에 쌓이고, g.injured는 거기서 다시 센 파생값이다.
@@ -75,6 +76,11 @@ export function activeWounds(g: Game, comm?: Comm): Wound[] {
   return book(g).filter(w => isActive(w) && (comm === undefined || w.comm === comm));
 }
 
+/** 열차에 있는 사람의 활성 기록(죽었거나 내린 사람의 기록은 뺀다). 화면과 noteRelief가 읽는다. */
+export function liveWounds(g: Game, comm?: Comm): Wound[] {
+  return activeWounds(g, comm).filter(w => !isGone(g, w.who));
+}
+
 /** 이 이름이 지금 활성 부상이 있나(전문가·대표 셈이 이름으로 읽는다). */
 export function isWounded(g: Game, who: string): boolean {
   return book(g).some(w => w.who === who && isActive(w));
@@ -117,7 +123,7 @@ export interface WoundRow {
  * 누구를 먼저 볼지의 순서는 규칙이라 여기서 정하지 않는다.
  */
 export function woundView(g: Game, comm?: Comm): WoundRow[] {
-  return [...activeWounds(g, comm)].sort((a, b) => a.at - b.at || a.id - b.id).map(w => ({
+  return [...liveWounds(g, comm)].sort((a, b) => a.at - b.at || a.id - b.id).map(w => ({
     id: w.id, who: w.who, ...(w.personId ? { personId: w.personId } : {}), comm: w.comm,
     part: w.part, partName: PART_NAME[w.part], grade: w.grade, gradeName: GRADE_NAME[w.grade],
     daysLeft: w.daysLeft, care: w.state === 'bed' ? 'bed' : w.state === 'home' ? 'home' : 'up',
@@ -127,7 +133,7 @@ export function woundView(g: Game, comm?: Comm): WoundRow[] {
 
 /** 수만 세어 둔 부상자(명부에 이름이 없는 몫). 규칙이 명부를 채우기 전에는 g.injured 전부가 여기 든다. */
 export function unnamedInjured(g: Game): number {
-  return Math.max(0, Math.floor(g.injured) - activeWounds(g).length);
+  return Math.max(0, Math.floor(g.injured) - liveWounds(g).length);
 }
 
 // ---- 값 ----
@@ -176,10 +182,10 @@ export function stopSepticP(g: Game, longStay: boolean): number {
   return (techMult(g, 'm1') > 0 ? WOUND_ROLL.septicM1 : WOUND_ROLL.septicP) + (longStay ? WOUND_ROLL.septicLongStay : 0);
 }
 
-function weightedPick<K extends string>(g: Game, table: Record<K, number>): K {
+function weightedPick<K extends string>(rand: () => number, table: Record<K, number>): K {
   const keys = Object.keys(table) as K[];
   const total = keys.reduce((s, k) => s + table[k], 0);
-  let r = rnd(g) * total;
+  let r = rand() * total;
   for (const k of keys) {
     if (r < table[k]) return k;
     r -= table[k];
@@ -208,16 +214,13 @@ export interface WoundInput {
 
 const GRADE_LINE: Record<WoundGrade, string> = { light: '에 가벼운 상처가 났다.', deep: '에 깊은 상처가 났다.', fracture: '이(가) 부러졌다.', amputation: '을(를) 잃었다.' };
 
-/**
- * 부상을 명부에 올리는 유일한 진입점. 굴리는 순서는 등급, 부위(, 골절이 머리·몸통이면 팔다리), 깊은 상처의 3일/4일, 곪음이다.
- * 값을 정해 준 칸은 굴리지 않는다(난수를 쓰지 않는다).
- */
-export function addWound(g: Game, input: WoundInput): Wound {
-  const grade = input.grade ?? weightedPick(g, WOUND_ROLL.grade);
-  let part = input.part ?? weightedPick(g, WOUND_ROLL.part);
-  if (grade === 'fracture' && !LIMBS.includes(part)) part = LIMBS[Math.floor(rnd(g) * LIMBS.length)];
-  const coin = grade === 'deep' ? rnd(g) : 0;
-  const septic = input.septic ?? rnd(g) < (input.septicP ?? WOUND_ROLL.septicP);
+/** 기록 하나를 만들어 명부에 넣는다(저널·부상자 수는 부르는 쪽 몫). 굴리는 순서는 등급, 부위(, 골절이 머리·몸통이면 팔다리), 깊은 상처의 3일/4일, 곪음이다. */
+function pushWound(g: Game, input: WoundInput, rand: () => number): Wound {
+  const grade = input.grade ?? weightedPick(rand, WOUND_ROLL.grade);
+  let part = input.part ?? weightedPick(rand, WOUND_ROLL.part);
+  if (grade === 'fracture' && !LIMBS.includes(part)) part = LIMBS[Math.floor(rand() * LIMBS.length)];
+  const coin = grade === 'deep' ? rand() : 0;
+  const septic = input.septic ?? rand() < (input.septicP ?? WOUND_ROLL.septicP);
   const cuts = input.cuts ?? healCuts(g);
   let days = baseDays(grade, part, coin);
   if (cuts > 0) days = Math.max(floorDays(grade, part), days - cuts);
@@ -233,9 +236,71 @@ export function addWound(g: Game, input: WoundInput): Wound {
   };
   (g as G).nextWoundId = w.id + 1;
   book(g).push(w);
-  journal(g, `${w.who}의 ${PART_NAME[part]}${GRADE_LINE[grade]}${septic ? ' 상처가 곪기 시작했다.' : ''}`, grade === 'light' ? undefined : 'bad');
+  return w;
+}
+
+/**
+ * 부상을 명부에 올리는 진입점. 값을 정해 준 칸은 굴리지 않는다(난수를 쓰지 않는다). g.injured는 명부에서 다시 센다.
+ * 옛 규칙이 g.injured를 직접 올리는 자리는 아직 noteInjury로 곁에 기록만 남긴다(정산을 명세 표로 바꾸는 PR에서 이 함수로 합친다).
+ */
+export function addWound(g: Game, input: WoundInput): Wound {
+  const w = pushWound(g, input, () => rnd(g));
+  journal(g, `${w.who}의 ${PART_NAME[w.part]}${GRADE_LINE[w.grade]}${w.septic ? ' 상처가 곪기 시작했다.' : ''}`, w.grade === 'light' ? undefined : 'bad');
   syncInjured(g);
   return w;
+}
+
+// ---- 옛 규칙 곁의 기록(잇기 ①: 숫자를 바꾸지 않는다) ----
+/** 판 난수를 건드리지 않는 로컬 난수(시드·자리·구간으로 정해진다). */
+function hashRng(key: string): () => number {
+  let h = 2166136261;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return () => { h = (h + 0x6d2b79f5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+export interface NoteOpt {
+  /** 다친 사람의 이름. 모자라거나 없으면 판 난수 없이 사람을 골라 채운다 */
+  names?: readonly string[];
+  /** 다친 사람이 속한 칸. 이름이 없으면 이 칸 사람 가운데서 고르고(없으면 전체), 이름이 프로필에 없을 때는 이 칸으로 적는다 */
+  comm?: Comm;
+  why?: string;
+}
+
+const commOfName = (g: Game, name: string): Comm | undefined =>
+  PROFILES.find(p => p.name === name)?.community ?? COMMS.find(c => g.comms[c].leader.name === name);
+
+/**
+ * 옛 규칙이 방금 g.injured를 n만큼 올렸을 때, 그 곁에 명부 기록 n개를 남긴다. 저널·g.injured·판 난수·정산은 건드리지 않는다.
+ * 등급·부위·곪음은 명세 표의 확률로 로컬 난수가 뽑지만 아직 아무 규칙도 읽지 않는다(옛 정산이 그대로 돈다).
+ */
+export function noteInjury(g: Game, n: number, from: WoundFrom, where: string, opt: NoteOpt = {}): void {
+  if (n <= 0) return;
+  const names = [...(opt.names ?? [])].slice(0, n);
+  if (names.length < n) {
+    const seed = hashRng(`${g.seed}:note:${g.seg}:${(g as G).nextWoundId ?? 1}:${from}:${n}`);
+    const known = new Set(names);
+    const all = pickVictims(g, PROFILES.length, 'wound', seed).filter(p => !known.has(p.name) && !isWounded(g, p.name));
+    const mine = opt.comm ? all.filter(p => p.community === opt.comm) : [];
+    const pool = mine.length >= n - names.length ? mine : all;
+    for (const p of pool) { if (names.length >= n) break; names.push(p.name); }
+  }
+  for (const who of names) {
+    const comm = commOfName(g, who) ?? opt.comm ?? 'tail';
+    pushWound(g, { who, comm, from, where, ...(opt.why ? { why: opt.why } : {}) }, hashRng(`${g.seed}:wound:${g.seg}:${(g as G).nextWoundId ?? 1}:${who}`));
+  }
+}
+
+/** 옛 규칙이 g.injured를 n만큼 내렸을 때(나음·죽음·의무진 고유 행동) 가장 오래된 활성 기록 n개를 거둔다. 누가 나았는지는 정하지 않는다(먼저 볼 사람 고르기는 사용자 답을 기다린다). */
+export function noteRelief(g: Game, n: number): void {
+  for (const w of liveWounds(g).slice(0, Math.max(0, n))) w.state = 'healed';
+}
+
+/** 옛 규칙이 이름 붙은 한 사람의 부상을 되돌릴 때(명령에 다친 대상이 죽음): 그 사람의 가장 새 활성 기록을 지운다. */
+export function noteDrop(g: Game, who: string): void {
+  const wounds = book(g);
+  for (let i = wounds.length - 1; i >= 0; i -= 1) {
+    if (wounds[i].who === who && isActive(wounds[i])) { wounds.splice(i, 1); return; }
+  }
 }
 
 // ---- 정산 ----
@@ -339,9 +404,7 @@ export function migrateWounds(g: Game): void {
   (g as G).wounds = [];
   (g as G).nextWoundId = 1;
   const n = Math.max(0, Math.floor(g.injured));
-  let h = 2166136261;
-  for (const ch of `${g.seed}:wounds:${g.seg}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  const local = (): number => { h = (h + 0x6d2b79f5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const local = hashRng(`${g.seed}:wounds:${g.seg}`);
   for (const p of pickVictims(g, n, 'wound', local)) {
     const w: Wound = {
       id: (g as G).nextWoundId!, who: p.name, comm: p.community, grade: 'deep', part: 'torso', from: 'stop', where: '옛 기록',

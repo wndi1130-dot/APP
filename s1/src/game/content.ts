@@ -1,4 +1,5 @@
 import { COMMS, COMM_NAME, LAWS, P, PLACES, REP_ROLE } from './data';
+import { noteInjury } from './wounds';
 import type { Comm, LawId } from './data';
 import { affordable, applyEffs, CARD_EXTENSIONS, costLines, DRAW, DRAW_HOOKS, EVENT_CHAIN_MAX, EVENT_COOLDOWN, memo, politicsLines, withAfford } from './cards';
 import type { CardView, Choice, Eff } from './cards';
@@ -435,7 +436,7 @@ function setPerson(g: Game, id: string, state: 'alive' | 'injured' | 'dead' | 'a
   const p = PROFILES.find(x => x.id === id);
   if (!p) return;
   if (state === 'dead' && !g.deaths.includes(p.name)) onDeath(g, p.community, [p.name], 'other');
-  else if (state === 'injured') { if (!(g.contentInjured ??= []).includes(id)) { g.contentInjured.push(id); g.injured += 1; } }
+  else if (state === 'injured') { if (!(g.contentInjured ??= []).includes(id)) { g.contentInjured.push(id); g.injured += 1; noteInjury(g, 1, 'stop', '사건', { names: [p.name], comm: p.community }); } }
   else if (state === 'away') (g.contentAway ??= {})[id] = AWAY_FOREVER;
   else if (state === 'alive') { g.contentInjured = (g.contentInjured ?? []).filter(x => x !== id); delete (g.contentAway ?? {})[id]; }
 }

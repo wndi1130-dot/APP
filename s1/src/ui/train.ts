@@ -1,4 +1,6 @@
-import { COMM_NAME, P, isSessionSeg, jobTitle, relStage, situation, workshopState } from '../game';
+import { COMM_NAME, D, P, bedNeed, isSessionSeg, jobTitle, relStage, situation, workshopState } from '../game';
+import { unnamedInjured, woundView } from '../game/wounds';
+import type { WoundRow } from '../game/wounds';
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
 import { icon } from './icons';
@@ -6,6 +8,7 @@ import type { IconName } from './icons';
 import { TIP, fmt } from './common';
 import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
+import { nameBtn } from './names';
 import { carPopover, spaceLever, spaceTab, stackCount, warmthTone } from './home';
 import { domesticCarTag, domesticEngineCol, domesticWhyLine, gear, trainCars } from './domestic';
 
@@ -98,7 +101,40 @@ function commBoard(view: View, car: CarDef): HTMLElement {
           : h('div', { class: 'tblk__row sub' }, '개조 없음'))));
 }
 
+const CARE_NAME: Record<WoundRow['care'], string> = { bed: '침상', home: '제 칸', up: '일어남' };
+
+/** 명부에 적을 줄: 누른 칸 사람을 위로 올리고, 나머지는 받은 순서(생긴 순) 그대로 둔다. 화면이 따로 셈하지 않는다. */
+export function woundRows(view: View, car: CarDef): WoundRow[] {
+  const rows = woundView(view.g);
+  if (!car.comm || car.comm === 'medtech') return rows;
+  return [...rows.filter(r => r.comm === car.comm), ...rows.filter(r => r.comm !== car.comm)];
+}
+
+/** 의료 단추의 판(결정 042): 다친 사람 한 줄에 이름, 다친 곳, 등급, 남은 구간, 누운 자리. 이름이 없는 몫은 수만 적는다. */
+function medBoard(view: View, car: CarDef): HTMLElement {
+  const { g } = view;
+  const rows = woundRows(view, car);
+  const unnamed = unnamedInjured(g);
+  const beds = bedNeed(g);
+  return h('div', { class: 'carpop tpop tmed', role: 'region', 'aria-label': '부상 명부' },
+    h('div', { class: 'tpop__head' },
+      h('span', { class: 'tblk__row tmed__foot' }, icon('bed'), h('span', { class: cx('num', beds > D.beds && 'is-red') }, `침상 ${beds}/${D.beds}`)),
+      h('b', { class: 'tpop__name' }, '부상 명부'),
+      h('button', { class: 'x', 'data-action': 'dom-med', 'aria-label': '닫기' }, '×')),
+    h('ul', { class: 'tmed__list' },
+      rows.map(r => h('li', { class: cx('tmed__row', r.comm === car.comm && 'is-here') },
+        h('b', { class: 'tmed__who' }, nameBtn(r.who)),
+        h('span', { class: 'sub' }, COMM_NAME[r.comm]),
+        h('span', null, r.partName),
+        h('span', { class: cx(r.grade === 'fracture' || r.grade === 'amputation' ? 'is-red' : '') }, r.gradeName, r.septic ? ' · 곪음' : ''),
+        h('span', { class: 'num' }, `${fmt(r.daysLeft)}구간`),
+        h('span', { class: cx('tmed__care', r.care === 'home' && 'is-red') }, r.care === 'bed' ? icon('bed') : null, CARE_NAME[r.care]))),
+      unnamed > 0 ? h('li', { class: 'tmed__row tmed__row--unnamed' }, `누군지 모르는 ${fmt(unnamed)}명`) : null,
+      rows.length === 0 && unnamed === 0 ? h('li', { class: 'tmed__row sub' }, '다친 사람 없음') : null));
+}
+
 function board(view: View, car: CarDef): HTMLElement {
+  if (view.ui.dom?.med) return medBoard(view, car);
   if (car.kind === 'comm' || car.kind === 'engine') return commBoard(view, car);
   return carPopover(view, car) ?? h('div', { class: 'carpop tpop' }, h('div', { class: 'tpop__head' }, h('b', { class: 'tpop__name' }, car.name)));
 }
@@ -115,10 +151,10 @@ export function trainButtons(view: View, sel: CarDef): Btn[] {
   return [
     { id: 'research', label: '연구', icon: 'papers', data: { 'data-action': 'dom-tab', 'data-tab': 'plan' }, on: tab === 'plan', badge: rp !== null ? `${rp}%` : null },
     { id: 'modify', label: '개조', icon: 'lever', data: { 'data-action': 'dom-tab', 'data-tab': 'workshop' }, on: tab === 'workshop', badge: g.dom?.job ? `${jobPct(g, g.dom.job.car)}%` : null },
-    { id: 'workshop', label: '공방', icon: 'gear', data: { 'data-action': 'car', 'data-car': 'workshop', 'data-keep': '1' }, on: !tab && sel.id === 'workshop' },
+    { id: 'workshop', label: '공방', icon: 'gear', data: { 'data-action': 'car', 'data-car': 'workshop', 'data-keep': '1' }, on: !tab && !ui.dom?.med && sel.id === 'workshop' },
     { id: 'people', label: '사람·매뉴얼', icon: 'people', data: { 'data-action': 'dom-tab', 'data-tab': 'board' }, on: tab === 'board' },
     { id: 'politics', label: '정치', icon: 'scale', data: { 'data-action': 'go', 'data-screen': 'council' }, off: !inCouncil, badge: inCouncil ? null : left === 0 ? '이번 구간' : `${left}구간 뒤` },
-    { id: 'medical', label: '의료', icon: 'bed', data: { 'data-action': 'car', 'data-car': 'medtech', 'data-keep': '1' }, on: !tab && sel.id === 'medtech', badge: g.injured > 0 ? fmt(g.injured) : null },
+    { id: 'medical', label: '의료', icon: 'bed', data: { 'data-action': 'dom-med' }, on: !tab && !!ui.dom?.med, badge: g.injured > 0 ? fmt(g.injured) : null },
   ];
 }
 

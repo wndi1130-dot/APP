@@ -51,11 +51,12 @@ describe('열차 관리 화면', () => {
     expect(on.data).toMatchObject({ 'data-action': 'go', 'data-screen': 'council' });
   });
 
-  it('공방·의료 단추는 그 칸의 판을 열고, 그 칸을 보고 있으면 눌린 채로 보인다', () => {
+  it('공방 단추는 그 칸의 판을 열고, 그 칸을 보고 있으면 눌린 채로 보인다(의료 단추는 칸이 아니라 부상 명부를 연다)', () => {
     const g = createS1cGame('train-on');
     const at = (carPop: string) => trainButtons({ g, ui: mkUi({ carPop }) }, trainSel(g, carPop));
     expect(at('workshop').find(b => b.id === 'workshop')!.on).toBe(true);
-    expect(at('medtech').find(b => b.id === 'medical')!.on).toBe(true);
+    expect(at('medtech').find(b => b.id === 'medical')!.on).toBe(false);
+    expect(at('medtech').find(b => b.id === 'medical')!.data).toMatchObject({ 'data-action': 'dom-med' });
     expect(at('tail2').filter(b => b.on)).toHaveLength(0);
     expect(at('tail2').find(b => b.id === 'workshop')!.data).toMatchObject({ 'data-car': 'workshop', 'data-keep': '1' });
   });

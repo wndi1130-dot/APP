@@ -415,6 +415,7 @@ export function startApp(root: HTMLElement): void {
   }
   function leaveTrain(): void {
     ui.carPop = null;
+    if (ui.dom) { ui.dom.med = false; ui.dom.ws = null; }
     if (ui.screen !== 'train') return;
     ui.screen = 'home'; // 방문 기록에 넣은 한 칸은 render가 거둔다
   }
@@ -560,7 +561,10 @@ export function startApp(root: HTMLElement): void {
         ui.spaceOpen = false;
         if (g.dom) {
           // S1c: 칸을 누르면 화면 전체가 열차 관리 화면으로 바뀐다. 같은 칸을 다시 누르거나 ×를 누르면 홈으로.
-          if (ui.carPop === id && !data.keep) leaveTrain();
+          // 부상 명부가 펼쳐져 있으면 칸을 누를 때 그 칸의 판으로 돌아간다. 펼쳐 둔 공방 줄도 칸을 떠나면 접는다.
+          const med = !!ui.dom?.med;
+          if (ui.dom) { ui.dom.med = false; ui.dom.ws = null; }
+          if (ui.carPop === id && !data.keep && !med) leaveTrain();
           else { ui.carPop = id; enterTrain(); }
           return render();
         }
@@ -584,6 +588,7 @@ export function startApp(root: HTMLElement): void {
       case 'panel': {
         const panel = (data.panel || null) as Panel;
         ui.panel = ui.panel === panel ? null : panel;
+        if (ui.dom) ui.dom.ws = null; // 창을 닫았다 열면 공방의 펼친 줄은 접힌 채로 시작한다
         if (ui.screen !== 'train') ui.carPop = null;
         return render();
       }
