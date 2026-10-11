@@ -24,4 +24,5 @@ export * from './disaster_cards';
 export * from './budget';
 export * from './event_pack';
 export * from './stranded';
+export * from './loco';
 import './stranded_cards';

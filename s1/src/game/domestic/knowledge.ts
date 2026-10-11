@@ -5,6 +5,7 @@ import { drawPerson, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { D, FIELDS, TECHS, TECH_IDS } from './data';
 import type { Field } from './data';
+import { locoOf } from '../loco';
 import { domCard, knowers, living, techUsable, topSkill } from './state';
 import type { DomPerson, DomState } from './state';
 
@@ -200,6 +201,7 @@ export function substituteDriver(g: Game): DomPerson | undefined {
 export function strikeRuns(g: Game): boolean {
   const d = g.dom;
   if (!d) return false;
+  if (locoOf(g).anyoneDrives) { journal(g, '기관실이 불을 껐지만 옛 보일러는 누구나 몬다. 열차가 간다.', 'dark'); return true; }
   if (!substituteDriver(g)) return false;
   if (!d.stoker) {
     if (!g.cards.some(c => c.kind === 'dom:stoker')) domCard(g, { kind: 'dom:stoker' });
@@ -224,7 +226,7 @@ export function stokingNow(g: Game): boolean {
 export function engineStall(g: Game): 'end' | 'stall' | null {
   const d = g.dom;
   if (!d) return null;
-  if (topSkill(g, 'engine') > 0) { d.stalled = false; return null; }
+  if (topSkill(g, 'engine') > 0 || locoOf(g).anyoneDrives) { d.stalled = false; return null; } // 옛 보일러는 누구나 몬다
   if (!d.manuals.engine) return 'end';
   if (!living(g).some(p => p.field === 'engine' && p.learn)) attachApprentice(g, 'engine', 'guild', true);
   d.stalled = true;

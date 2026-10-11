@@ -7,6 +7,7 @@ import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREEN_BODY, TECHS, TECH_IDS, ZONE_
 import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
+import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
 import { domCard, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
@@ -526,7 +527,7 @@ export function upkeepCoal(g: Game): number {
 export function breakChance(g: Game): number {
   const d = dom(g);
   const defects = TECH_IDS.filter(id => d.techs[id]?.stage === 'defective').length;
-  return D.breakChance + D.breakPerDefect * defects;
+  return (D.breakChance + D.breakPerDefect * defects) * locoOf(g).breakMult;
 }
 
 export const BREAK_LINES = ['보일러 밸브가 샜다', '연결기 핀이 부러졌다', '꼬리칸 증기관이 얼었다'] as const;
@@ -537,11 +538,11 @@ export function rollBreakdown(g: Game): void {
   const d = dom(g);
   d.stats.breakdowns += 1;
   const n = Math.floor(rnd(g) * 3);
-  if (d.parts >= D.autoRepairParts) {
-    d.parts -= D.repairParts;
+  if (d.parts >= locoAutoRepairParts(g)) {
+    d.parts -= locoRepairParts(g);
     d.workDebt += D.repairWork;
     d.stats.repairs += 1;
-    journal(g, `${BREAK_LINES[n]}. 공방이 부품 ${D.repairParts}로 막았다.`);
+    journal(g, `${BREAK_LINES[n]}. 공방이 부품 ${locoRepairParts(g)}로 막았다.`);
     return;
   }
   domCard(g, { kind: 'dom:short', n, text: 'break' });

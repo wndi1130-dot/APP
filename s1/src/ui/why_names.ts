@@ -55,5 +55,6 @@ export const WHY_NAME: Record<string, string> = {
   law: '법이 낳는 긴장',
   cast: '열차 방송',
   upkeep: '열차 살림',
+  loco: '기관차',
   disaster: '재난',
 };

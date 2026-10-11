@@ -78,6 +78,7 @@ describe('기술', () => {
 
   it('고장: 부품이 2 이상이면 저절로 고치고 일지 한 줄, 모자라면 카드', () => {
     const g = fresh();
+    g.loco = 'c2'; // 기본 기관차(c3)는 고장이 없다
     D.breakChance = 1;
     try {
       g.dom!.parts = 4;

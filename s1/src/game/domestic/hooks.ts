@@ -18,6 +18,7 @@ import { potFoodMult, potTick } from './pot';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick } from './medbay';
 import { refreshSit } from './sit';
+import { locoPressureChance } from '../loco';
 import { domCard, living, noteFind, personById, techAdopted, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, restoreCheck, rollBreakdown, runWorkshop, techTitle, upkeepCoal } from './workshop';
 
@@ -56,7 +57,8 @@ export function domesticDepart(g: Game): 'end' | 'stall' | null {
   const stall = engineStall(g);
   if (stall) return stall;
   rollBreakdown(g);
-  if (topSkill(g, 'engine') === 1 && rnd(g) < D.pressureChance && !g.cards.some(c => c.kind === 'dom:pressure')) domCard(g, { kind: 'dom:pressure' });
+  const pc = locoPressureChance(g, topSkill(g, 'engine'));
+  if (pc !== null && rnd(g) < pc && !g.cards.some(c => c.kind === 'dom:pressure')) domCard(g, { kind: 'dom:pressure' });
   return null;
 }
 
