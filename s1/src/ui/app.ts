@@ -442,6 +442,7 @@ export function startApp(root: HTMLElement): void {
     if (!ui.stall) return;
     ui.stall = null;
     if (g.phase === 'settle') ui.panel = 'settle';
+    if (g.phase === 'council') { ui.screen = 'council'; ui.selComm = null; } // 회기 구간에 섰으면 연출 뒤에 식당칸으로
     render();
   }
   function startStall(): void {
@@ -535,7 +536,8 @@ export function startApp(root: HTMLElement): void {
         if (g.phase === 'council') { ui.count = null; clearTimeout(countTimer); }
         step({ a: 'advance', d: {} });
         if (g.phase === 'settle' && !wasSettle) { ui.panel = 'settle'; ui.screen = 'home'; ui.selComm = null; ui.dealOpen = null; }
-        // 이 누름에서 열차가 처음 섰다: 달리다 급제동으로 서는 연출을 먼저 돌리고 정산 창은 그 뒤에 연다. 동작 줄이기 설정이면 판만 뜬다.
+        // 이 누름에서 열차가 섰다(달리던 구간 도중에 석탄이 다했다, 역은 들르지 않는다): 달리다 급제동으로 서는 연출을 먼저 돌리고
+        // 정산 창이나 회기는 그 뒤에 연다. 동작 줄이기 설정이면 판만 뜬다.
         if (!wasStranded && g.stranded && g.phase !== 'end' && !matchMedia('(prefers-reduced-motion: reduce)').matches) return startStall();
         if (g.phase === 'stop' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
           // 정차: 브레이크 소리와 함께 열차가 서고 나서 정차 서류가 펼쳐진다(나중엔 정차 장면으로 넘어가는 자리).
