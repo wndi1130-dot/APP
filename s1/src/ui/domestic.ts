@@ -16,6 +16,7 @@ import type { CarDef, DomUi, Ui, View } from './common';
 import { bar, portrait, tip } from './widgets';
 import { nameBtn, shownName } from './names';
 import { plainData } from './repro';
+import { duoStates, tierCells } from './tech_pairs';
 import type { Step } from './repro';
 import './domestic.css';
 
@@ -581,7 +582,7 @@ export function pairHalves(g: Game, id: TechId): { v: Variant; name: string; sta
   return (['a', 'b'] as const).map(v => ({ v, name: def.variants![v].name, state: !picked ? 'open' : picked === v ? 'on' : 'shut' }));
 }
 
-function techNode(g: Game, id: TechId, sel: boolean, first: boolean): HTMLElement {
+function techNode(g: Game, id: TechId, sel: boolean, first: boolean, shut = false): HTMLElement {
   const d = g.dom!;
   const def = TECHS[id];
   const ns = nodeState(g, id);
@@ -590,7 +591,7 @@ function techNode(g: Game, id: TechId, sel: boolean, first: boolean): HTMLElemen
   const promise = researchPromise(g)?.tech === id;
   const halves = pairHalves(g, id);
   return h('button', {
-    class: cx('dom-node', 'tnode', `is-${ns}`, def.tier === 0 && 'is-adapt', sel && 'is-sel', halves && 'tnode--pair'), 'data-action': 'dom-node', 'data-id': id,
+    class: cx('dom-node', 'tnode', `is-${ns}`, def.tier === 0 && 'is-adapt', sel && 'is-sel', halves && 'tnode--pair', shut && 'is-shut'), 'data-action': 'dom-node', 'data-id': id,
     'aria-label': `${def.name} ${tag}${halves ? ' 둘 중 하나' : ''}${promise ? ' 약속' : ''}${first ? ' 먼저' : ''}`,
   },
     first ? h('small', { class: 'tnode__first' }, '먼저') : promise ? h('i', { class: 'tnode__ribbon' }) : null,
@@ -759,7 +760,15 @@ function planView(view: View): HTMLElement {
       h('button', { class: 'tplan__label', 'data-action': 'dom-branch', 'data-branch': f }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f]),
       tiers.map(t => ({ t, ids: TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t) })).filter(x => x.ids.length > 0)
         .map(({ t, ids }) => h('div', { class: cx('tplan__tier', t === 0 && 'is-adapt') },
-          ids.map(id => techNode(g, id, sel === id, rec?.id === id))))))),
+          // 기술 둘을 한 틀로 묶는 「둘 중 하나」 칸(결정 068, tech_pairs.ts). 이은 선 틀에 가운데 「또는」, 한쪽을 얻으면 다른 쪽은 흐려진다.
+          tierCells(ids).map(cell => {
+            if (cell.kind === 'one') return techNode(g, cell.id, sel === cell.id, rec?.id === cell.id);
+            const states = duoStates(cell.ids, id => !!d.techs[id]);
+            return h('div', { class: 'tplan__duo', role: 'group', 'aria-label': `둘 중 하나: ${TECHS[cell.ids[0]].name} 또는 ${TECHS[cell.ids[1]].name}` },
+              techNode(g, cell.ids[0], sel === cell.ids[0], rec?.id === cell.ids[0], states[0] === 'shut'),
+              h('i', { class: 'tplan__or' }, '또는'),
+              techNode(g, cell.ids[1], sel === cell.ids[1], rec?.id === cell.ids[1], states[1] === 'shut'));
+          })))))),
     h('div', { class: 'tplan__detail', 'data-keep-scroll': 'tplan-detail' },
       rec?.id === sel ? h('p', { class: 'tplan__why' }, h('b', null, '먼저'), ` ${rec.why}`) : null,
       nodeDetail(g, sel, !!domUi(view.ui).more)));
