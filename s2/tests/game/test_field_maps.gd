@@ -84,3 +84,40 @@ func test_a_new_map_can_be_handed_over_in_the_same_stop() -> void:
 	assert_eq(game.clock.elapsed, t, "the clock is the stop's, not the map's")
 	game._take_map(first)
 	assert_eq(game.grid.width, SulehufMap.WIDTH, "and back: the first map is as it was left")
+
+
+func test_a_place_the_receipt_does_not_know_is_written_beside_its_type() -> void:
+	var game = _game({"seed": 3, "raiders": false, "auto_pause": false})
+	assert_false(game.receipt.to_dict()["place"].has("placeKind"), "the old stop's receipt is as it was")
+	var Receipt = preload("res://game/sim/receipt.gd")
+	assert_false(Receipt.PLACE_TYPES.has("mine"), "when the contract learns it, this note goes")
+
+
+func test_the_train_has_doors_drawn_on_each_side_the_map_gives() -> void:
+	var old: Dictionary = SulehufMap.build()
+	var faces: Array = MapView.door_faces(old)
+	assert_eq(faces.size(), old["spawns"]["train_door"].size())
+	var train: Rect2i = old["train"]
+	for face in faces:
+		assert_almost_eq(float(face["z"]), train.position.y + train.size.y - 0.05, 0.001, "the platform side")
+	var both := {"train": Rect2i(10, 20, 80, 3), "train_doors": {"upper": [Vector2i(30, 19), Vector2i(60, 19)], "lower": [Vector2i(40, 23)]}}
+	faces = MapView.door_faces(both)
+	assert_eq(faces.size(), 3)
+	assert_almost_eq(float(faces[0]["z"]), 20.05, 0.001, "the upper side is the train's north face")
+	assert_almost_eq(float(faces[2]["z"]), 22.95, 0.001)
+
+
+func test_blocked_ground_out_of_doors_is_drawn_as_runs() -> void:
+	var FieldGrid = preload("res://game/world/field_grid.gd")
+	var g = FieldGrid.new(12, 6)
+	for x in range(2, 7):
+		g.set_solid(Vector2i(x, 1), FieldGrid.Solid.BLOCK)
+	g.set_solid(Vector2i(9, 1), FieldGrid.Solid.BLOCK)
+	for x in range(0, 12):
+		g.set_solid(Vector2i(x, 3), FieldGrid.Solid.BLOCK)   # the train
+	g.set_solid(Vector2i(4, 5), FieldGrid.Solid.BLOCK)        # a tree
+	g.set_solid(Vector2i(8, 5), FieldGrid.Solid.LOW)          # water: floor only
+	var d := {"train": Rect2i(0, 3, 12, 1), "wagons": [], "trees": [Vector2i(4, 5)]}
+	assert_eq(MapView.outdoor_block_runs(g, d), [Rect2i(2, 1, 5, 1), Rect2i(9, 1, 1, 1)] as Array[Rect2i])
+	# The first stop draws its own (the water tower): nothing of it changes.
+	assert_true(SulehufMap.build()["spots"].has("water_tower"))

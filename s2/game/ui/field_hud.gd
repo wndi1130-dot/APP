@@ -782,7 +782,7 @@ func _tick_debug() -> void:
 	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n소음 점수 %d · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n선로 위 망자 서 %d · 동 %d · %s" % [
 		Engine.get_frames_per_second(), frame_ms, Engine.max_fps,
 		game.zombies.drawn_count, alive, game.cap, game.waiting,
-		game.ledger.total, "-" if is_inf(next) else str(roundi(next)), HordeDirector.ENTRY_NAMES.get(game.director.next_entry, ""),
+		game.ledger.total, "-" if is_inf(next) else str(roundi(next)), game.director.name_of(game.director.next_entry),
 		game.director.call_range_mult(now), game.hordes.size(), game.clock.speed, roundi(now),
 		track["west"], track["east"], "시야 가림 켬" if game.mask_on else "시야 가림 끔",
 	]

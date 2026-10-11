@@ -233,6 +233,7 @@ func _ready() -> void:
 	place = FieldMaps.resolve(String(opts.get("place", "")))
 	_take_map(FieldMaps.build(place))
 	director = HordeDirector.new(rng)
+	director.use_map(data)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
 	# The receipt knows six kinds of place (the S1 contract); a kind it does not
@@ -240,6 +241,8 @@ func _ready() -> void:
 	var kind: String = data["place_kind"]
 	receipt = Receipt.new(data["place_id"], kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
 	receipt.set_source("direct")
+	if not Receipt.PLACE_TYPES.has(kind):
+		receipt.place_note("placeKind", kind)   # what it really is, beside the type the contract knows
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
 	if not MISSIONS.has(mission):
@@ -1262,7 +1265,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % HordeDirector.ENTRY_NAMES[hole], "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
 	zombies.hear(at, level, radius)
 	_score(level, tag)
@@ -1398,10 +1401,10 @@ func _update_hordes(delta: float) -> void:
 	# Telegraph: a sewer lid rattles 3 s before anything climbs out, and keeps
 	# rattling while bodies come through (field_unified 6 '예고 있는 입장').
 	var next_key := director.next_entry
-	if director.seconds_to_next(now) < 3.0 and HordeDirector.is_sewer(next_key):
+	if director.seconds_to_next(now) < 3.0 and director.sewer(next_key):
 		rattle[next_key] = maxf(float(rattle.get(next_key, 0.0)), 0.5)
 	for s in pending_spawn:
-		if HordeDirector.is_sewer(s["entry"]) and float(s["t"]) - now < 3.0:
+		if director.sewer(s["entry"]) and float(s["t"]) - now < 3.0:
 			rattle[s["entry"]] = maxf(float(rattle.get(s["entry"], 0.0)), 0.5)
 	for key in rattle.keys():
 		rattle[key] -= delta
@@ -1464,7 +1467,7 @@ func _start_horde(h: Dictionary) -> void:
 	var key: String = h["entry"]
 	# Fair spawn: roads and the track end never let anything in on screen; pick
 	# another road out of sight. Sewer mouths may be on screen: they rattle first.
-	if not HordeDirector.is_sewer(key) and _entry_on_screen(key):
+	if not director.sewer(key) and _entry_on_screen(key):
 		for other in ["east_track", "north_road", "south_road", "east_road"]:
 			if not _entry_on_screen(other):
 				key = other
@@ -1474,13 +1477,13 @@ func _start_horde(h: Dictionary) -> void:
 	audio.horde_started()
 	var target := horde_target()
 	var gap: float = float(data["entry_gap"].get(key, 0.6))
-	var lead := 3.0 if HordeDirector.is_sewer(key) else 0.0
+	var lead := 3.0 if director.sewer(key) else 0.0
 	for i in range(int(h["size"])):
 		pending_spawn.append({"t": now + lead + i * gap, "pos": entry_pos(key, i), "horde": h["index"], "target": target, "entry": key})
-	if HordeDirector.is_sewer(key):
-		set_radio("기관사: %s이 덜컹거린다. 올라온다." % HordeDirector.ENTRY_NAMES[key] if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % HordeDirector.ENTRY_NAMES[key], "urgent", entry_pos(key))
+	if director.sewer(key):
+		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if key == "manhole" else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
-		set_radio("기관사: %s, 저것들이 들어온다." % HordeDirector.ENTRY_NAMES[key], "urgent", entry_pos(key))
+		set_radio("기관사: %s, 저것들이 들어온다." % director.name_of(key), "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
 	if int(h["index"]) == 0:
 		for z in zombies.list:
@@ -1513,7 +1516,7 @@ func _update_spawns(delta: float) -> void:
 	for s in pending_spawn:
 		var key: String = s["entry"]
 		# A manhole closed mid-horde sends the rest out of the culvert.
-		if HordeDirector.is_sewer(key) and not director.is_open(key):
+		if director.sewer(key) and not director.is_open(key):
 			key = "culvert"
 			s["entry"] = key
 			s["pos"] = entry_pos(key)
@@ -1527,7 +1530,7 @@ func _update_spawns(delta: float) -> void:
 			continue
 		# Nobody climbs out right under someone's feet: that exit passes its
 		# share to the other open one (field_unified 6). Pressure stays the same.
-		if HordeDirector.is_sewer(key) and _someone_near(s["pos"], SEWER_CLEAR):
+		if director.sewer(key) and _someone_near(s["pos"], SEWER_CLEAR):
 			var other := _free_sewer(key)
 			if other != "":
 				var other_pos := entry_pos(other)

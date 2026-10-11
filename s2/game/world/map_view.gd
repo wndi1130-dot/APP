@@ -377,6 +377,53 @@ func _begin() -> SurfaceTool:
 ## Append an axis-aligned box with a flat vertex colour.
 ## Vertex alpha the world shader reads as "open to the sky": 1 outdoors, 0 under
 ## a roof, so snow and wet stay off floors inside buildings.
+const OUTDOOR_BLOCK_H: float = 2.4
+
+
+## Where the train's doors are drawn: {"cell", "z"}. A map with doors on both
+## sides says so in "train_doors" (upper: the north face, lower: the south);
+## the first stop has them on the platform side only.
+static func door_faces(d: Dictionary) -> Array:
+	var train: Rect2i = d["train"]
+	var sides: Dictionary = d.get("train_doors", {})
+	if sides.is_empty():
+		sides = {"lower": d["spawns"]["train_door"]}
+	var out: Array = []
+	for c in sides.get("upper", []):
+		out.append({"cell": c, "z": train.position.y + 0.05})
+	for c in sides.get("lower", []):
+		out.append({"cell": c, "z": train.position.y + train.size.y - 0.05})
+	return out
+
+
+## Blocked cells out of doors that nothing else draws (not the train, not a
+## wagon, not a tree), as runs along a row: [Rect2i(x, y, length, 1)].
+static func outdoor_block_runs(g: FieldGrid, d: Dictionary) -> Array[Rect2i]:
+	var skip: Array[Rect2i] = [d["train"]]
+	for w in d.get("wagons", []):
+		skip.append(w["rect"])
+	var trees: Dictionary = {}
+	for c in d.get("trees", []):
+		trees[c] = true
+	var out: Array[Rect2i] = []
+	for y in range(g.height):
+		var start := -1
+		for x in range(g.width + 1):
+			var c := Vector2i(x, y)
+			var mine: bool = x < g.width and g.solid_at(c) == S.BLOCK and g.building_at(c) < 0 and not trees.has(c)
+			if mine:
+				for r in skip:
+					if r.has_point(c):
+						mine = false
+						break
+			if mine and start < 0:
+				start = x
+			elif not mine and start >= 0:
+				out.append(Rect2i(start, y, x - start, 1))
+				start = -1
+	return out
+
+
 static func sky_alpha(g: FieldGrid, c: Vector2i) -> float:
 	return 0.0 if g.indoor(c) else 1.0
 
@@ -474,9 +521,9 @@ func _build_blocks() -> void:
 	for car in data["train_cars"]:
 		var r: Rect2i = car["rect"]
 		box(st, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
-	# Doors where people step down to the platform.
-	for c in data["spawns"]["train_door"]:
-		box(st, Vector3(1.0, 2.0, 0.1), Vector3(c.x + 0.5, 1.4, train.position.y + 2.95), Color(0.42, 0.38, 0.33))
+	# Doors where people step down, on each side of the train that has them.
+	for face in door_faces(data):
+		box(st, Vector3(1.0, 2.0, 0.1), Vector3(face["cell"].x + 0.5, 1.4, face["z"]), Color(0.42, 0.38, 0.33))
 	_build_lights()
 	for w in data["wagons"]:
 		var r: Rect2i = w["rect"]
@@ -485,11 +532,18 @@ func _build_blocks() -> void:
 		if w["coal"] > 0.0:
 			box(st, Vector3(r.size.x - 0.8, 0.5, r.size.y - 0.8), mid + Vector3(0, 2.05, 0), Color(0.12, 0.12, 0.13))
 			box(st, Vector3(r.size.x - 1.2, 0.12, r.size.y - 1.2), mid + Vector3(0, 2.35, 0), Color(0.9, 0.92, 0.95))
-	for y in range(grid.height):
-		for x in range(grid.width):
-			var c := Vector2i(x, y)
-			if grid.solid_at(c) == S.BLOCK and grid.building_at(c) < 0 and x < 14 and y < 14:
-				box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
+	if data["spots"].has("water_tower"):
+		# The first stop: the blocked cells in its north-west corner are the water tower.
+		for y in range(mini(14, grid.height)):
+			for x in range(mini(14, grid.width)):
+				var c := Vector2i(x, y)
+				if grid.solid_at(c) == S.BLOCK and grid.building_at(c) < 0:
+					box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
+	else:
+		# Other maps: blocked ground out of doors (rock, a bank, a stack) is drawn
+		# as it lies, a run of cells a box, so nothing that stops you is unseen.
+		for r in outdoor_block_runs(grid, data):
+			box(st, Vector3(r.size.x, OUTDOOR_BLOCK_H, 1), Vector3(r.position.x + r.size.x * 0.5, OUTDOOR_BLOCK_H * 0.5, r.position.y + 0.5), Color(0.44, 0.43, 0.42))
 	for c in data["trees"]:
 		box(st, Vector3(0.5, 2.5, 0.5), FieldGrid.center(c) + Vector3(0, 1.25, 0), Color(0.3, 0.26, 0.22))
 		box(st, Vector3(2.2, 1.8, 2.2), FieldGrid.center(c) + Vector3(0, 3.0, 0), Color(0.62, 0.66, 0.66))
