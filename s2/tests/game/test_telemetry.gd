@@ -9,7 +9,7 @@ func test_empty_log_is_one_valid_line() -> void:
 	assert_false(line.contains("\n"))
 	var parsed: Variant = JSON.parse_string(line)
 	assert_true(parsed is Dictionary)
-	assert_eq((parsed as Dictionary).keys(), ["v", "run", "end", "staySec", "carrySec", "zones", "noise", "hordes", "injuries", "ammo", "trackDead"])
+	assert_eq((parsed as Dictionary).keys(), ["v", "run", "end", "staySec", "carrySec", "zones", "noise", "hordes", "injuries", "ammo", "trackDead", "rests", "lost", "trips"])
 	assert_eq(parsed["run"], "run_0")
 	assert_eq(parsed["end"], "")
 	assert_eq(parsed["staySec"], -1.0)
@@ -125,3 +125,19 @@ func test_track_dead_is_logged() -> void:
 	var tm := Telemetry.new("t")
 	tm.track(3, -1)
 	assert_eq(tm.to_dict()["trackDead"], {"west": 3, "east": 0})
+
+
+# For comparing kinds of stop: breathers, shaking them off, loads hauled.
+func test_breathers_escapes_and_loads_are_logged() -> void:
+	var tm := Telemetry.new("r")
+	tm.rest(300.04, 345.04)
+	tm.rest(400.0, 400.0)
+	tm.lost_at(512.26)
+	tm.trip()
+	tm.trip()
+	var d := tm.to_dict()
+	assert_eq(d["rests"], [[300.0, 345.0]], "a breather of no length is not one")
+	assert_eq((d["lost"] as Array).size(), 1)
+	assert_almost_eq(float(d["lost"][0]), 512.3, 0.001)
+	assert_eq(d["trips"], 2)
+

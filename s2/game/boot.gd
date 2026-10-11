@@ -23,7 +23,7 @@ const CHOICES: Array = [
 	["stick_rim_run", "스틱 끝 뛰기", [[false, "끔"], [true, "켬"]]],
 	["double_tap_run", "두 번 톡 뛰기", [[false, "끔"], [true, "켬"]]],
 	["primary_one", "주 행동 하나로", [[false, "끔 (조준·공격 따로)"], [true, "켬 (시험)"]]],
-	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"]]],
+	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
 
 var settings: Dictionary = {}

@@ -384,6 +384,8 @@ func spot_default(p, id: String, verb: String) -> void:
 			ladder(p, verb)
 		"inspect", "deep":
 			game.mission_play.spot(p, id)
+		"conveyor":
+			game.mission_play.conveyor_card(p)
 		"work_site":
 			if work_started:
 				game.hud.work_panel()
@@ -566,12 +568,16 @@ func start_work(p) -> void:
 		game.crew.append(q)
 		game.receipt.person("sent", q.pid)
 	game.set_radio("기관사: 작업조 내려간다. 석탄을 퍼 오게 지켜라.", "reply")
+	if game.mission_play.crew_down(p):
+		return
 	game.hud.work_panel()
 
 
 ## Pickaxes ring once a minute while anyone is digging (wakes the frozen ones).
 func _dig_noise(delta: float) -> void:
 	if not work_started:
+		return
+	if game.mission_play.belt_noise(delta):
 		return
 	var digging := false
 	for p in game.crew:
@@ -828,7 +834,7 @@ func _near_things(p) -> Array:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])
 			var d: float = at.distance_to(p.position)
-			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep"]:
+			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"]:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []
@@ -869,4 +875,5 @@ func _auto_unload() -> void:
 			put.append("%s %d" % [game.item_name(id), n])
 			p.items.erase(id)
 		if not put.is_empty():
+			game.telemetry.trip()
 			game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])

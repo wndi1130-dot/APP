@@ -7,6 +7,13 @@ extends RefCounted
 ## (silent), find the track log in the station office or up the signal box
 ## (a locked box: picked quietly it takes time, broken it is loud), and a
 ## cellar store that may be left alone. No work crew comes down.
+##
+## Loading yard ("depot"): the work crew loads coal as on the plain stop, and
+## once they are down one card asks whether two of them mend the conveyor
+## first (scrap, minutes of two pairs of hands; then the belt loads twice as
+## fast, the pickaxes stop and the belt is what is heard). One decision, no
+## button to keep pressing. What was mended stays as the place's note; it is
+## not a supply for a later visit (user decision, first build).
 ## All numbers here are first guesses, to be set on the phone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -30,10 +37,19 @@ const SURVEY_LOGS: Array = [
 	["sv_log_signal", "신호소 선로 기록함", Vector2i(105, 8), 1, 1],
 ]
 const LOG_FACTS: Array[String] = ["switch_east_frozen", "water_next_alive"]
+const CONVEYOR_CELL := Vector2i(67, 21)
+const REPAIR_SCRAP: int = 2
+const REPAIR_HANDS: int = 2
+const REPAIR_WORK: float = 360.0   # person-seconds: two people, three minutes
+const REPAIR_STEP: float = 10.0
+const BELT_MULT: float = 2.0       # coal per trip once the belt runs
+const BELT_NOISE: float = 40.0     # the running belt is heard this often (normal)
 
 var game
 var mission: Mission
 var opened: Array[String] = []    # record boxes opened this stop
+var repair_done: float = 0.0      # person-seconds put into the conveyor
+var belt_noise_t: float = 0.0
 
 
 func _init(field_game) -> void:
@@ -47,6 +63,9 @@ func active() -> bool:
 
 ## Called once the map is built and before it is drawn.
 func place() -> void:
+	if mission.kind == "depot":
+		game.data["spots"]["dp_conveyor"] = {"kind": "conveyor", "cell": CONVEYOR_CELL, "name": "적재 컨베이어", "state": "stopped"}
+		game.data["labels"].append({"text": "적재 컨베이어", "cell": CONVEYOR_CELL + Vector2i(0, 1)})
 	if mission.kind != "survey":
 		return
 	for row: Array in SURVEY_SPOTS:
@@ -60,6 +79,8 @@ func opening_line() -> String:
 	match mission.kind:
 		"survey":
 			return "이번 일: 분기기와 신호기를 살피고, 역무실이나 신호소에서 선로 기록을 찾는다. 작업조는 부르지 않는다."
+		"depot":
+			return "이번 일: 측선의 석탄을 %d 싣는다. 작업조를 부르면 적재 컨베이어를 고칠지 정한다." % int(mission.goal("load")["amount"])
 	return ""
 
 
@@ -69,7 +90,7 @@ func crew_allowed() -> bool:
 
 
 func is_mission_spot(id: String) -> bool:
-	return String(game.data["spots"][id].get("kind", "")) in ["inspect", "deep"]
+	return String(game.data["spots"][id].get("kind", "")) in ["inspect", "deep", "conveyor"]
 
 
 func spot(p, id: String) -> void:
@@ -142,6 +163,123 @@ func _mark(goal: String, part: String) -> void:
 		game.set_radio("기관사: 볼 것은 다 본 모양이군. 떠날 때는 자네가 정하게.", "reply")
 
 
+# ---------------------------------------------------------------- loading yard
+
+func conveyor() -> Dictionary:
+	return game.data["spots"].get("dp_conveyor", {})
+
+
+func belt_running() -> bool:
+	return String(conveyor().get("state", "")) == "running"
+
+
+## Coal a carrier takes per trip: more off a running belt.
+func load_mult() -> float:
+	return BELT_MULT if belt_running() else 1.0
+
+
+func scrap_at_hand() -> int:
+	var n := 0
+	for p in game.squad:
+		if p.is_alive():
+			n += int(p.items.get("scrap", 0))
+	return n
+
+
+## The crew is down: on a loading-yard stop the one card comes up. True if it did.
+func crew_down(p) -> bool:
+	if mission.kind != "depot":
+		return false
+	conveyor_card(p)
+	return true
+
+
+func conveyor_card(p) -> void:
+	var c := conveyor()
+	if c.is_empty():
+		return
+	if c["state"] != "stopped":
+		game.hud.toast("적재 컨베이어: %s" % {"part": "고치는 중", "running": "돌고 있다"}.get(c["state"], c["state"]))
+		return
+	if not game.actions.work_started:
+		game.hud.toast("적재 컨베이어가 서 있다. 작업조가 내려와야 손댈 수 있다.")
+		return
+	var have := scrap_at_hand()
+	game.hud.card("depot_conveyor", "적재 컨베이어가 서 있다. 고치면 빨리 싣지만 손 둘이 한동안 빠진다.", [
+		{"id": "load", "label": "바로 싣는다", "say": "\"손은 다 삽으로. 실을 수 있는 만큼 싣는다.\"", "cost": "지금 속도 · 곡괭이 소리"},
+		{"id": "repair", "label": "고치고 싣는다", "say": "\"둘은 설비를 봐. 돌기만 하면 금방이다.\"", "cost": "고철 %d (가진 것 %d) · 둘이 %d분 · 고치면 %d배, 설비 도는 소리" % [REPAIR_SCRAP, have, int(REPAIR_WORK / REPAIR_HANDS / 60.0), int(BELT_MULT)]},
+	], Callable(self, "_conveyor_choice").bind(p))
+
+
+func _conveyor_choice(choice: String, _p) -> void:
+	if choice != "repair":
+		game.decisions.append({"id": "depot_conveyor", "choice": "load"})
+		return
+	if scrap_at_hand() < REPAIR_SCRAP:
+		game.hud.toast("고철이 모자란다. 구해 오면 컨베이어를 눌러 다시 정한다.")
+		return
+	var left := REPAIR_SCRAP
+	for q in game.squad:
+		var n: int = mini(left, int(q.items.get("scrap", 0))) if q.is_alive() else 0
+		if n > 0:
+			q.take_item("scrap", n)
+			left -= n
+	var hands := 0
+	for q in game.crew:
+		if hands < REPAIR_HANDS and q.is_alive() and q.role == "worker":
+			q.brain["job"] = "repair"
+			hands += 1
+	game.decisions.append({"id": "depot_conveyor", "choice": "repair"})
+	conveyor()["state"] = "part"
+	game.view.update_spot("dp_conveyor")
+	mission.mark("repair", "begun", game.clock.elapsed)
+
+
+## A carrier told to mend the conveyor: walk there, then work in short steps.
+## Returns the point to walk to, or null when the step was started here.
+func repair_step(p):
+	var at := FieldGrid.center(CONVEYOR_CELL) + Vector3(0.9 if int(p.brain.get("side", 0)) == 0 else -0.9, 0, 0)
+	if p.position.distance_to(at) > 1.6:
+		return at
+	p.start_action("repair", "설비 고치기", REPAIR_STEP, _repaired.bind(p))
+	return null
+
+
+func _repaired(_p) -> void:
+	if belt_running():
+		return
+	repair_done += REPAIR_STEP
+	if repair_done < REPAIR_WORK:
+		return
+	conveyor()["state"] = "running"
+	game.view.update_spot("dp_conveyor")
+	for q in game.crew:
+		if q.brain.get("job", "") == "repair":
+			q.brain["job"] = "dig"
+	mission.mark("repair", "running", game.clock.elapsed)
+	belt_noise_t = 0.0
+	game.set_radio("기관사: 컨베이어가 돈다. 이제 빨리 실린다.", "reply")
+
+
+## The running belt is heard in place of the pickaxes. True while it runs.
+func belt_noise(delta: float) -> bool:
+	if not belt_running():
+		return false
+	belt_noise_t -= delta
+	if belt_noise_t <= 0.0:
+		belt_noise_t = BELT_NOISE
+		game.make_sound(FieldGrid.center(CONVEYOR_CELL), SimNoise.Level.NORMAL, "bang")
+	return true
+
+
+## Coal was put down at the train.
+func loaded() -> void:
+	if mission.kind != "depot":
+		return
+	if mission.fill("load", game.actions.coal_delivered, game.clock.elapsed):
+		game.set_radio("기관사: 실을 만큼 실었다. 떠날 때는 자네가 정하게.", "reply")
+
+
 ## The train leaves (or the stop is lost): how each goal stood goes on record.
 func finish(reason: String) -> void:
 	if not active():
@@ -149,4 +287,6 @@ func finish(reason: String) -> void:
 	game.receipt.place_note("goals", mission.states(reason))
 	game.receipt.place_note("facts", mission.facts.duplicate())
 	game.receipt.place_note("opened", opened.duplicate())
+	if not conveyor().is_empty():
+		game.receipt.place_note("conveyor", String(conveyor()["state"]))
 	game.telemetry.goals = mission.log_rows(reason)
