@@ -1,5 +1,6 @@
 import { COMM_NAME, COMMS } from '../data';
 import { bump, bumpRel } from '../ledger';
+import { noteInjury } from '../wounds';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { familyOf } from '../people';
@@ -176,6 +177,7 @@ export function runOrder(g: Game, where: 'travel' | 'stop', crew: string[] = [])
   }
   // 실패: 대상이 다치고 수사가 열린다. 실행자 50%로 붙잡히고, 붙잡히면 70%로 열차장을 댄다.
   g.injured += 1;
+  noteInjury(g, 1, 'order', o.method === 'stop' ? '정차' : '통로', { names: [name], comm: tc });
   d.harm += 1;
   const c = openCase(g, { kind: 'order', culprit: exe, victimComm: tc, victim: o.target, dead: false, clock: B.clockInjury, where: o.method === 'stop' ? '정차' : '통로', own: true });
   let line = `${name}이(가) 다쳤다. 살아남았다. 수사가 열린다.`;

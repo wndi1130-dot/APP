@@ -1,5 +1,6 @@
 import { COMM_NAME, COMMS } from '../data';
 import { bump, bumpRel } from '../ledger';
+import { noteInjury } from '../wounds';
 import type { Comm } from '../data';
 import { takeKinBody } from '../death';
 import { familyOf } from '../people';
@@ -110,6 +111,7 @@ export function corpseTick(g: Game): void {
       journal(g, `${COMM_NAME[x.comm]}에 두었던 ${x.name}이(가) 일어났다. ${hit}이(가) 물렸다.`, 'bad');
     } else {
       g.injured += 1;
+      noteInjury(g, 1, 'rise', COMM_NAME[x.comm], { comm: x.comm });
       journal(g, `${COMM_NAME[x.comm]}에 두었던 ${x.name}이(가) 일어났다. 하나가 다쳤다.`, 'bad');
     }
   }

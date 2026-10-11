@@ -1,5 +1,6 @@
 import { COMM_NAME, COMMS } from '../data';
 import { bump, bumpRel } from '../ledger';
+import { noteInjury } from '../wounds';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { pickFresh, markSeen } from '../omens';
@@ -301,6 +302,7 @@ function act(g: Game, e: Ember): void {
     const pd = (d.armory ? B.assaultDeathArmory : B.assaultDeath) * (isGuarded ? 0.5 : 1);
     const dead = !!victim && dr(g) < pd;
     g.injured += n - (dead ? 1 : 0);
+    noteInjury(g, n - (dead ? 1 : 0), 'assault', '통로', { comm: v });
     const line = actLine(g, e, st, false);
     if (dead && victim) {
       d.stats.violentDeaths += 1;
@@ -335,6 +337,7 @@ function act(g: Game, e: Ember): void {
     onDeath(g, v, [markName], 'other'); // 대표였으면 죽음 훅(hooks.ts)이 승계한다
   } else {
     g.injured += 1;
+    noteInjury(g, 1, 'assault', '통로', { names: [markName], comm: v });
   }
   const c = openCase(g, { kind: 'assn', culprit: e.actor, victimComm: v, victim: e.mark, dead: killed, clock: killed ? B.clockDeath : B.clockInjury, ember: e.id, where: '통로' });
   if (isGuarded) caught(g, c);
@@ -356,7 +359,7 @@ function sabotage(g: Game, e: Ember, v: Comm): number {
       break;
     case 'poison':
       bump(g, 'food', -B.poisonFood, 'embers');
-      if (dr(g) < B.poisonSick) { const n = dr(g) < 0.5 ? 1 : 2; g.injured += n; d.harm += 1; return n; }
+      if (dr(g) < B.poisonSick) { const n = dr(g) < 0.5 ? 1 : 2; g.injured += n; noteInjury(g, n, 'poison', '식량', { comm: v }); d.harm += 1; return n; }
       break;
     case 'heating': {
       const c = COMMS.includes(e.target as Comm) ? (e.target as Comm) : v;

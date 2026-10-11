@@ -1,4 +1,5 @@
 import { bump, bumpRel } from './ledger';
+import { noteInjury } from './wounds';
 import { LAWS, LAW_IDS } from './data';
 import type { LawId } from './data';
 import { COMMS } from './data';
@@ -114,6 +115,7 @@ function needHit(g: Game, id: NeedId, hits: number): string {
       && (hashName(`${g.seed}:${id}`) + p.name.length) % 3 === 0)
       ?? PROFILES.find(p => p.community === def.hurtComm && !isGone(g, p.name) && p.age >= 16);
     g.injured += 1;
+    noteInjury(g, 1, 'brawl', def.title, { names: who ? [who.name] : [], comm: def.hurtComm });
     return def.hit[1](who?.name ?? '한 사람');
   }
   if (hits === 2) return def.hit[2](g.comms[def.hurtComm].leader.name);

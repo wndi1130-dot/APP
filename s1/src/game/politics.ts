@@ -3,6 +3,7 @@ import {
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { calmEnact, calmRepeal } from './calm';
+import { noteRelief } from './wounds';
 import { bump, bumpRel } from './ledger';
 import { josa } from './josa';
 import { needOf } from './needs';
@@ -894,7 +895,7 @@ export function uniqueAction(g: Game, c: Comm): string | null {
   if (c === 'tail') bump(g, 'coal', 3, 'comm');
   else if (c === 'engine') g.forcedRun = true;
   else if (c === 'guard') g.guardEscort = true;
-  else if (c === 'medtech') g.injured = Math.max(0, g.injured - 2);
+  else if (c === 'medtech') { const before = g.injured; g.injured = Math.max(0, g.injured - 2); noteRelief(g, before - g.injured); }
   else bump(g, 'lux', 2, 'comm');
   g.actedSeg = g.seg;
   journal(g, `${COMM_NAME[c]}이(가) 나섰다.`, 'good');
