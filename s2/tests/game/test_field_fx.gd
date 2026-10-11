@@ -321,3 +321,25 @@ func test_snow_banks_against_walls_the_wind_blows_at() -> void:
 			if MapView.drift_uv(game.grid, Vector2i(x, y)) != Vector2.ZERO:
 				banked += 1
 	assert_gt(banked, 50)
+
+
+# Test key for the phone: what drawing a crowd costs (2026-10-11).
+func test_the_stand_test_key_stands_the_dead_where_the_chief_sees() -> void:
+	var game = _stop(["clear"])
+	game.zombies.list.clear()
+	game.pending_spawn.clear()
+	game._refresh_vision()
+	var hud = game.hud
+	hud._debug_stand()
+	assert_eq(hud.stood.size(), 10)
+	assert_eq(game.zombies.list.size(), 10)
+	for z in hud.stood:
+		assert_true(game.seen_now.has(game.seen_key(z["pos"])), "in sight")
+		assert_gt(z["pos"].distance_to(game.player.position), 2.0, "not on top of the chief")
+	hud._debug_stand()
+	assert_eq(game.zombies.list.size(), 20, "the last lot is cleared first")
+	hud._debug_stand()
+	assert_gte(game.zombies.list.size(), 30, "forty where there is room in sight")
+	hud._debug_stand()
+	assert_eq(game.zombies.list.size(), 10, "and round again")
+
