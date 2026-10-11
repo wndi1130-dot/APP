@@ -71,6 +71,21 @@ func test_skinned_bake_folds_rows_past_the_width() -> void:
 	# Vertex 2 folds to the second row of each frame.
 	assert_almost_eq((assets["image"] as Image).get_pixel(0, 3).g, 1.0, 0.001)
 
+func test_shader_tables_follow_the_clips_and_fill_eight_slots() -> void:
+	var still := [Transform3D(), Transform3D()]
+	var clips := [{"name": "walk", "length": 1.5, "frames": [still, still, still]}, {"name": "fall", "loop": false, "length": 2.5, "frames": [still, still, still, still, still]}]
+	var tables := VatBaker.shader_tables(VatBaker.build_skinned(_two_bone_source(), clips, 2))
+	assert_eq((tables["clip_start"] as PackedFloat32Array).size(), VatBaker.TABLE_SIZE)
+	assert_eq(tables["clip_start"][1], 3.0)
+	assert_eq(tables["clip_frames"][1], 5.0)
+	assert_eq(tables["clip_rate"][0], 2.0, "frames per second")
+	assert_eq(tables["clip_loop"][0], 1.0)
+	assert_eq(tables["clip_loop"][1], 0.0)
+	assert_eq(tables["clip_frames"][2], 0.0, "an empty slot")
+	assert_eq(tables["frame_rows"], 8.0, "frames, not texture rows")
+	assert_eq(tables["rows_per_frame"], 2.0)
+	assert_eq(tables["bias"], 0.0)
+
 func test_device_levels_fit_without_folding() -> void:
 	var assets := VatBaker.build(3000)
 	assert_true(int(assets["vertices"]) >= 3000)
