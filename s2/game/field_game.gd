@@ -1935,6 +1935,7 @@ func depart() -> void:
 	if holdout.on:
 		holdout.last_call()
 		return
+	holdout.slipped = holdout.mode == "roll" and holdout.rolled and not holdout.opened
 	holdout.leaving_early()
 	audio.depart()
 	finish("departed")
@@ -1944,6 +1945,9 @@ func depart() -> void:
 func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
+	# A rolled stop says its risk beside the stop's goals.
+	if holdout.mode == "roll":
+		return holdout.goal_line() + " · " + mission_play.goal_line()
 	return mission_play.goal_line() if mission_play.active() else ""
 
 
@@ -2040,6 +2044,9 @@ func finish(reason: String) -> void:
 		holdout.note_leaving()
 		receipt.place_note("holdout", holdout.result())
 		telemetry.holdout = holdout.result()
+	elif holdout.mode == "roll":
+		holdout.note_leaving()
+		telemetry.holdout = holdout.roll_note()
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])

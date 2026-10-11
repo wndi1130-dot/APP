@@ -29,7 +29,7 @@ const CHOICES: Array = [
 	# One in ten of the standing dead lunges after a tell (user 2026-10-12). From
 	# which stop on is counted in S3; here it is on or off. zombies.gd reads it.
 	["lungers", "달려드는 자", [[false, "끔"], [true, "켬"]]],
-	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"]]],
+	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"], ["roll", "굴려서 (장소 확률대로, 조용하면 안 뜬다)"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
 

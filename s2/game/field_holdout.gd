@@ -5,13 +5,32 @@ extends RefCounted
 ## clock runs down, hordes come faster and walk to the doors. It is a stage to
 ## measure with: every number here is a first value, none of them settled.
 ##
-## Off unless opts["holdout"] says so: "start" (from the first second) or
-## "depart" (it opens when leaving is called, and leaving again goes early).
+## Off unless opts["holdout"] says so: "start" (from the first second),
+## "depart" (it opens when leaving is called, and leaving again goes early) or
+## "roll" (user decision 148: whether this stop can have it is rolled once as
+## the train stops and kept hidden; where it can, it opens on leaving unless
+## the stop was quiet and the track is clear).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 
-const MODES: Array[String] = ["start", "depart"]
+const MODES: Array[String] = ["start", "depart", "roll"]
+# How likely a stop of each kind is to be one that can have it, in a hundred
+# (user decisions 074, 087; the town stops low, decisions 151, 153). A kind
+# not here is taken as the lowest of the town stops.
+const CHANCE: Dictionary = {
+	"mine": 60, "sawmill": 30, "lodge": 25, "lake": 10,
+	"freight": 10, "hospital": 10, "factory": 10,
+	"houses": 5, "church": 5, "office": 5,
+}
+const CHANCE_OTHER: int = 5
+# The one line shown to anybody before it (user decision 150): the kind's
+# chance in words, never the roll. [up to this chance, the word].
+const RISK_WORDS: Array = [[15, "낮다"], [40, "있다"], [100, "높다"]]
+# "Quiet, and the track beside the train clear": the stop's noise score at
+# most this, and at most this many dead on the track. PLACEHOLDERS.
+const QUIET_NOISE: int = 12
+const CLEAR_TRACK: int = 2
 const READY_TIME: float = 300.0   # the train is ready this long after it opens
 const DOOR_HP: int = 24           # three of the dead through one in about ten seconds
 const WALL_HP: int = 12
@@ -63,6 +82,8 @@ var cost_paid: Dictionary = {"coal": 0, "plow_part": 0}   # what going unready c
 var track_at_leave: int = -1      # the dead on the track as it left
 var ready_shown: float = 0.0      # the "ready" words are still up this long
 var over: float = 0.0             # how long it stayed after it was ready
+var rolled: bool = false          # "roll": this stop can have it (hidden)
+var slipped: bool = false         # it could, and the train got away quietly
 var opened_at: float = 0.0
 
 
@@ -73,15 +94,45 @@ func _init(field_game) -> void:
 		mode = ""
 	total = float(game.opts.get("holdout_time", READY_TIME))
 	left = total
+	if mode == "roll":
+		# Its own dice, so the stop's are not moved on by it.
+		var dice := RandomNumberGenerator.new()
+		dice.seed = hash([int(game.opts.get("seed", 0)), game.place, "holdout"])
+		rolled = dice.randi_range(1, 100) <= chance()
 
 
 func enabled() -> bool:
 	return mode != ""
 
 
+## How likely this kind of stop is to be one that can have it, in a hundred.
+func chance() -> int:
+	if game.opts.has("holdout_chance"):
+		return int(game.opts["holdout_chance"])
+	return int(CHANCE.get(String(game.data.get("place_kind", "")), CHANCE_OTHER))
+
+
+## The kind's chance in a word, for the line anybody sees.
+func risk_word() -> String:
+	var c: int = chance()
+	for row: Array in RISK_WORDS:
+		if c <= int(row[0]):
+			return String(row[1])
+	return String(RISK_WORDS[-1][1])
+
+
+## A quiet stop with the track beside the train clear: the train gets away.
+func quiet_and_clear() -> bool:
+	return game.ledger.total <= QUIET_NOISE and track_now() <= CLEAR_TRACK
+
+
 ## Leaving is called and the stage has not opened yet: it opens instead.
 func opens_on_leaving() -> bool:
-	return mode == "depart" and not opened
+	if opened:
+		return false
+	if mode == "roll":
+		return rolled and not quiet_and_clear()
+	return mode == "depart"
 
 
 func begin() -> void:
@@ -281,6 +332,8 @@ func waves() -> int:
 
 func goal_line() -> String:
 	if not opened:
+		if mode == "roll":
+			return "버티기 위험: " + risk_word()
 		return "버티기 판: 「떠난다」를 부르면 채비가 시작된다" if mode == "depart" else ""
 	if ready:
 		return "채비 끝 · 「떠난다」를 부르면 떠난다 · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [count("whole"), count("damaged"), count("breached"), waves()]
@@ -346,6 +399,12 @@ func leaving_early() -> void:
 		cost_paid = early_cost()
 		early = not ready
 		on = false
+
+
+## A rolled stop that never opened: what the roll was and why it did not, for
+## the telemetry (the player is not told).
+func roll_note() -> Dictionary:
+	return {"rolled": rolled, "opened": false, "slipped": slipped, "chance": chance(), "noise": game.ledger.total, "trackDead": maxi(track_at_leave, 0)}
 
 
 ## What the stage came to, for the receipt's note, the telemetry and the end screen.
