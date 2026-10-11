@@ -43,6 +43,16 @@ export const P = Object.freeze({
   // 결정 059 나: 마지막 기회로 긴장을 되돌리는 값은 처음 80, 쓸 때마다 이만큼 더 높다(80, 90). 쓴 뒤로는 공포가 긴장 오름을 늦추지 않는다.
   // 65에서는 평소 긴장(80쯤)보다 낮아 누를수록 이득이라, 쌓아 눌러도 값이 안 붙었다(측정).
   crisisBase: 80, crisisStep: 10,
+  // 멈춘 열차(구현명세 가, 결정 034·035·037): 석탄이 0이 되면 판이 끝나지 않고 선다. 선 열차는 구간마다 긴장 +3, 모든 칸 온기 −5(바닥 10).
+  // segKmDefault는 구간 길이를 모르는 노선의 기본값(km). 예고 「이대로 가면 ○km 지점에서 멈춘다」의 눈금이다.
+  strandedTension: 3, strandedWarmDrop: 5, strandedWarmFloor: 10, segKmDefault: 30,
+  // 수동차 원정(구현명세 가 3.4~3.9, 결정 034·035·037). 거리 15km/턴 가고 10km/턴 오며, 한 턴은 역에서 뒤진다.
+  supportLine: 0.5, tripSize: 4, tripGoKm: 15, tripBackKm: 10, tripSearchTurns: 1, tripFoodPer: 0.5, tripCoal: 30, extendKm: 15, tripFoodMult: 2,
+  // 역마다 갈래(못 돌아옴·이어 감, 나머지는 석탄). 첫 역 5%·30%, 둘째 15%·5%, 셋째 25%·0%.
+  tripLostFirst: 0.05, tripLostStep: 0.10, tripExtendFirst: 0.30, tripExtendNext: 0.05,
+  // 식량이 모자라 덜 가져가면 2마다 못 돌아옴 +5%p(최대 +20%p). 값: 돌아오면 신임·관계, 못 돌아오면 칸 관계·긴장·공포.
+  tripShortLost: 0.05, tripShortMax: 0.20, tripTrustForced: 5, tripRelCrew: 4, tripRelDeputy: 3, tripWaitTension: 2,
+  tripLostRel: -8, tripLostTension: 8, tripLostFear: 5, promiseLux: 2, promiseRel: 4, promiseSkipRel: -2, promiseBrokenTrust: -8,
   // 과밀이 병으로 이어지는 고리(결정 060 덧붙임, 숫자는 제안): 과밀 문턱 60·80·95의 병 위험 배수(낮음 0, 보통 1, 높음 1.25, 매우 높음 1.5)에
   // 구간마다 열병이 시작될 확률 crowdFever와 다쳤을 때 곪을 확률 crowdSeptic을 곱한다.
   crowdFrom: [60, 80, 95], crowdMult: [0, 1, 1.25, 1.5], crowdFever: 0.06, crowdSeptic: 0.15,

@@ -302,7 +302,7 @@ export function debugOverlay(view: View): HTMLElement | null {
 }
 
 const END_TITLE: Record<string, string> = {
-  complete: '라이프치히 중앙역', stranded: '좌초', ousted: '축출', revolt: '반란', coup: '쿠데타',
+  complete: '라이프치히 중앙역', stranded: '좌초', ousted: '축출', revolt: '반란', coup: '쿠데타', lost_captain: '열차장 실종',
 };
 
 export function endScreen(view: View): HTMLElement {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, LAWS, makeDeal, PLACES,
+  advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, enterStranded, LAWS, makeDeal, PLACES,
   elderCandidate, fallSick, FAMILIES, PLACE_LOOK, PLACE_OMENS, PROFILES, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS,
   primaryAction, resolveStop, SECRET_POOL, toolStatus, TRAVEL_EVENTS, viewCard,
 } from '../../src/game';
@@ -72,6 +72,12 @@ function everyCardView() {
   const views = kinds.map((k, i) => viewCard(g, { uid: i + 1, ...k }));
   g.passed.no_outsiders = g.seg;
   views.push(viewCard(g, { uid: 99, kind: 'rescue', who: '수색대' }));
+  // 멈춘 열차의 수동차 카드 넷(지지가 문턱을 넘고 원정이 나가 있는 판)
+  const h = createGame('every-card-stranded');
+  for (const c of COMMS) h.comms[c].rel = 30;
+  enterStranded(h, 4, 10);
+  h.stranded!.trip = { leaderGoes: false, forced: false, comm: 'tail', names: ['가', '나'], size: 2, distKm: 15, extends: 0, goTurns: 1, searchTurns: 1, backTurns: 2, plannedTurns: 4, turn: 4, phase: 'back', posKm: 0, baseFood: 4, foodShort: 0, foodOwed: 0, outcome: 'coal', known: false, promise: null };
+  for (const k of ['trip_depart', 'trip_return', 'trip_lost', 'trip_extend']) views.push(viewCard(h, { uid: 100, kind: k, comm: 'tail', who: '가,나', n: 4 }));
   return views;
 }
 

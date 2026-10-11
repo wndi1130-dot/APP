@@ -105,6 +105,10 @@ export const CARD_GRADE: Record<string, KindRule> = {
   hub_split: R(2, false, '라이프치히 도착 결정'),
   hub_few: R(2, false, '라이프치히 도착 결정'),
   hub_end: R(2, false, '라이프치히 도착 끝 카드'),
+  trip_depart: R(2, false, '멈춘 열차: 수동차를 보낼지(석탄 0으로 선 턴마다)'),
+  trip_return: R(2, false, '멈춘 열차: 수동차가 석탄을 들고 돌아왔다'),
+  trip_lost: R(2, false, '멈춘 열차: 수동차가 돌아오지 않았다'),
+  trip_extend: R(2, false, '멈춘 열차: 무전으로 온 이어 감 소식'),
   'content-deal': R(2, false, '방금 고른 JSON 사건 선택의 이어지는 제안(unshift로 맨 앞에 붙는다)'),
 };
 

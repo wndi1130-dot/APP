@@ -39,6 +39,8 @@ export const WHY_NAME: Record<string, string> = {
   situation: '칸의 처지',
   drift: '쌓인 불만과 두려움',
   strike: '일손을 놓음',
+  stranded: '열차가 섬',
+  cart: '수동차 원정',
   trip: '기관 고장',
   deal: '거래',
   vote: '의회 표결',

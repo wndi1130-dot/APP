@@ -1,0 +1,53 @@
+{
+  "id": "ev_str_half_bowl",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "stranded",
+      "value": true
+    }
+  ],
+  "speaker": "medtech",
+  "body": "솥이 반만 찬다. 돌아올 때까지 반 그릇으로 가자는 말과, 그러면 꼬리칸이 먼저 쓰러진다는 말이 같이 나온다.",
+  "choices": [
+    {
+      "id": "c_lever_down",
+      "label": "레버만 내린다",
+      "say": "법 없이 내린다. 책임은 내가 진다.",
+      "why": "모든 칸 솥이 줄어 식량이 아껴진다. 의무진은 쓰러지는 사람이 늘 것을 안다.",
+      "later": "모든 칸 배급 레버가 1로 내려간다.",
+      "effects": [
+        {
+          "type": "relation",
+          "target": "medtech",
+          "amount": -3
+        },
+        {
+          "type": "flag",
+          "id": "ration_down_asked",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_eat_on",
+      "label": "그대로 먹는다",
+      "say": "(열차장은 솥을 본다.)",
+      "why": "배급은 그대로다. 줄어드는 솥을 보는 눈들이 거칠다.",
+      "effects": [
+        {
+          "type": "tension",
+          "amount": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
