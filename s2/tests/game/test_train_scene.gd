@@ -7,6 +7,8 @@ const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
 const Body = preload("res://game/train/train_body.gd")
+const HandPanel = preload("res://game/train/train_panel.gd")
+const Boot = preload("res://game/boot.gd")
 
 
 func _scene(panel: bool = false) -> Node3D:
@@ -197,6 +199,14 @@ func test_the_panel_picks_a_car_and_its_slider_sets_that_communitys_warmth() -> 
 	assert_eq(s.panel.title.text, String(s.rules["cars"][1]["name"]))
 	s.panel.sliders["sit0"].value = 10
 	assert_almost_eq(float(s.rules["comms"]["medtech"]["sit"][0]), 10.0, 0.001)
+
+
+func test_the_start_menu_has_a_way_into_the_train_and_the_panel_a_way_back() -> void:
+	var boot = Boot.new()
+	add_child_autofree(boot)
+	assert_not_null(boot.find_child("TrainButton", true, false))
+	assert_true(ResourceLoader.exists(Boot.TRAIN_SCENE), Boot.TRAIN_SCENE)
+	assert_true(ResourceLoader.exists(HandPanel.BOOT_SCENE), HandPanel.BOOT_SCENE)
 
 
 func test_the_dining_car_has_no_warmth_to_set() -> void:

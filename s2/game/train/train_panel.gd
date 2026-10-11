@@ -12,6 +12,7 @@ const KNOBS: Array = [
 	["rel", "관계", -100, 100], ["tension", "긴장", 0, 100], ["fear", "공포", 0, 100],
 ]
 const TRAIN_KEYS: Array = ["tension", "fear"]
+const BOOT_SCENE := "res://scenes/boot.tscn"
 const READS := "지금 장면이 읽는 값: 온기(웅크림), 과밀(사람 수와 바닥에 앉음), 회기(식당칸 사람 수와 오가는 길). 배급·노출·관계·긴장·공포는 아직 글자만 바뀐다."
 
 var scene: Node3D
@@ -55,6 +56,7 @@ func _ready() -> void:
 	phase_button = _button(top, "", _flip_phase)
 	_button(top, "멀리·가까이", func() -> void: scene.toggle_zoom())
 	_button(top, "판 접기", _fold)
+	_button(top, "나가기", func() -> void: get_tree().change_scene_to_file(BOOT_SCENE))
 	fps = Label.new()
 	fps.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fps.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
