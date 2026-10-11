@@ -9,7 +9,7 @@ func test_empty_log_is_one_valid_line() -> void:
 	assert_false(line.contains("\n"))
 	var parsed: Variant = JSON.parse_string(line)
 	assert_true(parsed is Dictionary)
-	assert_eq((parsed as Dictionary).keys(), ["v", "run", "end", "staySec", "carrySec", "zones", "noise", "hordes", "injuries", "ammo", "trackDead", "rests", "lost", "trips"])
+	assert_eq((parsed as Dictionary).keys(), ["v", "run", "end", "staySec", "carrySec", "zones", "noise", "hordes", "injuries", "ammo", "trackDead", "rests", "lost", "trips", "bodies"])
 	assert_eq(parsed["run"], "run_0")
 	assert_eq(parsed["end"], "")
 	assert_eq(parsed["staySec"], -1.0)

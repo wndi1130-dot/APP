@@ -24,6 +24,15 @@ const SHOVE_LUNGE: float = 0.15
 ## shove), "none" nothing does. The time is spent either way.
 const WINDUP_BREAKS: Array[String] = ["grab", "none"]
 const WHIFF_RECOVER: float = 0.2        # the least a missed or stopped blow still costs
+## One lying there and no melee weapon in the hand: the boot comes down (user
+## 2026-10-11). Slow on purpose, so a weapon stays worth carrying: it lands
+## later than the heaviest weapon and takes several to end it, where a weapon
+## ends a fallen one in one blow. First values, to be set on the phone.
+const STOMP_WINDUP: float = 0.45
+const STOMP_TIME: float = 1.0           # one whole stomp, the lift included
+const STOMPS_TO_END: int = 3
+const STOMP_REACH: float = 0.9
+const STOMP_FATIGUE: float = 0.004
 const CLOSE: float = 1.8
 const JAM_CLEAR: float = 2.5
 const FALL_TIME: float = 1.5
@@ -230,7 +239,7 @@ func _pursue_zombie(p, delta: float) -> void:
 	p.face_point(z["pos"])
 	if p.swing_t > 0.0:
 		return
-	if W.is_ranged(wid):
+	if W.is_ranged(wid) and not stomps(p, z):
 		shove(p)
 	else:
 		start_swing(p, z)
@@ -368,7 +377,9 @@ static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
 func start_swing(p, at) -> void:
 	if p.swing_t > 0.0 or p.strike_t > 0.0:
 		return
-	var windup: float = W.melee_windup(p.weapon_id()) / float(p.mults()["swing"])
+	var stomp_it: bool = stomps(p, at)
+	p.strike_kind = "stomp" if stomp_it else "swing"
+	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
 	if windup <= 0.0:
 		_strike(p, at)
 		return
@@ -376,6 +387,30 @@ func start_swing(p, at) -> void:
 	p.strike_t = windup
 	p.strike_total = windup
 	p.swing_t = windup
+
+
+## No melee weapon in the hand (bare, or a gun) and the one aimed at lies there.
+func stomps(p, at) -> bool:
+	if not (at is Dictionary) or at.is_empty() or String(at["state"]) != "downed":
+		return false
+	return W.get_data(p.weapon_id()).get("kind", "") != "melee"
+
+
+## One stomp lands on a fallen one. It takes STOMPS_TO_END of them; what it
+## has taken stays with it if it gets up meanwhile.
+func stomp(p, z: Dictionary) -> void:
+	p.swing_t = STOMP_TIME / float(p.mults()["swing"])
+	p.body.add_fatigue(STOMP_FATIGUE)
+	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
+	z["stomped"] = int(z.get("stomped", 0)) + 1
+	if int(z["stomped"]) >= STOMPS_TO_END:
+		_kill(p, z, "")
+
+
+func _stomp_reaches(p, z: Dictionary) -> bool:
+	if not game.zombies.list.has(z) or String(z["state"]) != "downed":
+		return false
+	return p.position.distance_to(z["pos"]) <= STOMP_REACH + MELEE_SLACK + 0.3 and not melee_blocked(p, z["pos"])
 
 
 func _strike(p, at) -> void:
@@ -397,10 +432,14 @@ func _land_strike(p) -> void:
 	var stopped: bool = p.body.dead or p.body.downed or p.fallen_t > 0.0
 	if String(game.opts.get("melee_break", "grab")) == "grab" and not p.grabbers.is_empty():
 		stopped = true
-	if stopped or not _strike_reaches(p, at):
+	var stomp_it: bool = p.strike_kind == "stomp"
+	if stopped or not (_stomp_reaches(p, at) if stomp_it else _strike_reaches(p, at)):
 		p.swing_t = WHIFF_RECOVER
 		return
-	_strike(p, at)
+	if stomp_it:
+		stomp(p, at)
+	else:
+		_strike(p, at)
 	# The draw-back was the front of the swing time, not extra.
 	p.swing_t = maxf(p.swing_t - windup, WHIFF_RECOVER)
 
