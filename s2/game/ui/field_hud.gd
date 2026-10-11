@@ -73,6 +73,17 @@ const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap t
 const TOAST_S: float = 3.5
 const TOAST_WARN_S: float = 6.0
 const TOAST_MAX: int = 4
+const SAY_S: float = 2.6            # a line over a companion's head stays this long
+const SAY_FONT: int = 20
+const HURT_FLASH_S: float = 0.7
+# Right thumb (bottom right): attack big in the corner, aim small beside it.
+const ATTACK_AT := Vector2(-192.0, -172.0)
+const ATTACK_SIZE := Vector2(176.0, 156.0)
+const AIM_AT := Vector2(-312.0, -104.0)
+const AIM_SIZE := Vector2(108.0, 88.0)
+const MANUAL_SIZE := Vector2(92.0, 88.0)
+const ALL_ABOARD_SIZE := Vector2(150.0, 44.0)
+const ALLIES_UP: float = 140.0      # the companions' row's top, from the screen's bottom
 ## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
 const PX_PER_MM: float = 10.3
 const BRASS := Color(0.86, 0.72, 0.42)
@@ -143,8 +154,10 @@ var rim_run: bool = false
 var stick_tap_ms: int = -10000
 var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
-var radio_opt_button: Button         # shown while paused: how much the driver calls (each call rings)
-var stick_opt_button: Button         # shown while paused: fixed stick or one that follows
+var settings_button: Button          # shown while paused: opens the settings (stick, radio)
+var bag_box: HBoxContainer           # the bag key, right under the portrait
+var says: Array = []                 # [{p, text, t, hurt}] short lines over companions' heads
+var hurt_flash: float = 0.0          # the screen's side edges glow amber when the chief is hurt
 var debug_panel: PanelContainer
 var debug_label: Label
 var modal: Control
@@ -363,14 +376,16 @@ func _build_portrait() -> void:
 
 func _build_allies() -> void:
 	allies_box = HBoxContainer.new()
-	allies_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	allies_box.position = Vector2(-300, -92)
+	# Raised a row: 'all aboard' sits under its right end (user 2026-10-12).
+	# The row belongs to the right hand's side: _place_allies keeps its right
+	# end just left of the thumb pads, clear of where the left thumb comes down.
+	allies_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	allies_box.add_theme_constant_override("separation", 10)
 	root.add_child(allies_box)
 	for p in game.squad:
 		if p == game.player:
 			continue
-		var b := _button(_ally_text(p, ""), _ally_menu.bind(p), Vector2(150, 76), 18)
+		var b := _button(_ally_text(p, ""), _ally_menu.bind(p), Vector2(140, 76), 18)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		allies_box.add_child(b)
 		ally_buttons.append({"p": p, "b": b})
@@ -386,15 +401,19 @@ func _build_allies() -> void:
 ## on the stick, so the other is a second finger, which Godot buttons do not
 ## take. The HUD hit-tests them itself.
 func _build_thumbs() -> void:
-	attack_button = _pad("공격", Vector2(-160, -144), Vector2(140, 124), 26)
-	aim_button = _pad("조준", Vector2(-312, -144), Vector2(140, 124), 26)
-	manual_button = _pad("수동", Vector2(-312, -200), Vector2(92, 48), 18)
-	shove_button = _pad("밀치기", Vector2(-160, -238), Vector2(140, 84))
-	context_button = _pad("상황", Vector2(-312, -292), Vector2(140, 84), 20)
-	# Every companion back to the train at one press (user 2026-10-11). On top
-	# of the aim column: a stretch for the right thumb, with the situation pad
-	# between it and aim, and a column away from attack and shove.
-	all_aboard_button = _pad("모두\n열차로", Vector2(-312, -366), Vector2(140, 64), 20)
+	# Attack is the big one in the corner; aim is small beside it and 'manual'
+	# is in aim's row (user 2026-10-12). With 'one main action' the aim pad is
+	# the only one, so it takes the big place.
+	var one: bool = bool(game.opts.get("primary_one", false))
+	attack_button = _pad("공격", ATTACK_AT, ATTACK_SIZE, 30)
+	aim_button = _pad("조준", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 30 if one else 22)
+	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 20)
+	shove_button = _pad("밀치기", Vector2(-176, -268), Vector2(140, 84))
+	context_button = _pad("상황", Vector2(-344, -204), Vector2(140, 84), 20)
+	# Every companion back to the train at one press (user 2026-10-11): under
+	# the companions' row, at its right end (tick puts it there).
+	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
+	_place_allies()
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
 	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
@@ -423,21 +442,21 @@ func _build_thumbs() -> void:
 		pad.visible = false
 		status_pads.append(pad)
 		sy += size.y + 6.0
-	# Paused: the stick can be changed here, not only on the start screen (build 89).
-	stick_opt_button = _pad("", Vector2(-250, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
-	stick_opt_button.visible = false
-	radio_opt_button = _pad("", Vector2(10, 64), Vector2(240, 56), 20, Control.PRESET_CENTER_TOP)
-	radio_opt_button.visible = false
+	# Paused: the settings (stick, radio) open from one key; they are not on
+	# the playing screen themselves (user 2026-10-12).
+	settings_button = _pad("설정", Vector2(-70, 64), Vector2(140, 56), 20, Control.PRESET_CENTER_TOP)
+	settings_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
-	# The bag sits on the left, above the fixed stick's catch ring. There is no
-	# swap button here any more: swapping is inside the bag panel (build 47).
-	var left := HBoxContainer.new()
-	left.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	left.position = Vector2(16, -340)
-	left.add_theme_constant_override("separation", 8)
-	root.add_child(left)
-	left.add_child(_button("가방", bag_panel, Vector2(110, 60), 20))
+	# The bag is right under the chief's portrait (user 2026-10-12; tick keeps
+	# it there as the portrait grows). There is no swap button here any more:
+	# swapping is inside the bag panel (build 47).
+	bag_box = HBoxContainer.new()
+	bag_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	bag_box.position = PORTRAIT_AT + Vector2(0, 96)
+	bag_box.add_theme_constant_override("separation", 8)
+	root.add_child(bag_box)
+	bag_box.add_child(_button("가방", bag_panel, Vector2(110, 52), 20))
 	offer_box = HBoxContainer.new()
 	offer_box.set_anchors_preset(Control.PRESET_CENTER)
 	offer_box.position = Vector2(-260, 90)
@@ -584,6 +603,8 @@ func tick(delta: float) -> void:
 	_tick_allies()
 	_tick_grab(p, delta)
 	_tick_toasts(delta)
+	_tick_says(delta)
+	bag_box.position = portrait.position + Vector2(0, portrait.size.y + 6.0)
 	context_t -= delta
 	if context_t <= 0.0:
 		context_t = 0.4
@@ -615,10 +636,7 @@ func tick(delta: float) -> void:
 		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
 	_tick_status(p)
 	pause_button.text = "계속" if game.paused else "멈춤"
-	stick_opt_button.visible = game.paused and not modal_open
-	stick_opt_button.text = "스틱: 따라오기" if stick_floats() else "스틱: 고정"
-	radio_opt_button.visible = stick_opt_button.visible
-	radio_opt_button.text = "무전: " + String(game.RADIO_NAMES[game.radio_mode()])
+	settings_button.visible = game.paused and not modal_open
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
@@ -723,6 +741,17 @@ func _ally_text(p, second: String) -> String:
 	return first if second == "" else first + "\n" + second
 
 
+## The companions' row ends just left of the right thumb's pads, and 'all
+## aboard' lies under its right end.
+func _place_allies() -> void:
+	var view: Vector2 = _view_size()
+	var one: bool = bool(game.opts.get("primary_one", false))
+	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
+	var row: Vector2 = allies_box.get_combined_minimum_size()
+	allies_box.position = Vector2(right - row.x, view.y - ALLIES_UP)
+	all_aboard_button.position = Vector2(right - ALL_ABOARD_SIZE.x, allies_box.position.y + maxf(row.y, 76.0) + 6.0)
+
+
 func _tick_allies() -> void:
 	for row in ally_buttons:
 		var p = row["p"]
@@ -741,6 +770,7 @@ func _tick_allies() -> void:
 		b.text = _ally_text(p, "%s · %s" % [cmd, word])
 		b.modulate = Color(1, 0.6, 0.55) if not p.grabbers.is_empty() or p.body.downed else (Color(0.6, 0.6, 0.6) if not p.is_alive() else Color.WHITE)
 	all_aboard_button.visible = not ally_buttons.is_empty()
+	_place_allies()
 	crew_button.visible = game.actions.work_started
 	if crew_button.visible:
 		var alive := 0
@@ -758,9 +788,74 @@ func _tick_grab(p, delta: float) -> void:
 		grab_bar.value = clampf(p.grab_left / maxf(grab_total, 0.01), 0.0, 1.0)
 
 
+## Nothing is written across the screen for it: the shove key itself comes up
+## and says where from (user 2026-10-12).
 func grab_alert(front: bool) -> void:
 	grab_total = maxf(game.player.grab_left, 0.01)
-	toast("잡혔다! 밀쳐라." if front else "뒤에서 잡혔다! 밀쳐라.")
+	grab_button.text = "밀쳐!" if front else "뒤에서! 밀쳐!"
+	hurt_flash = HURT_FLASH_S
+
+
+## What happens to someone is said over their own head, briefly, not written
+## in the middle of the screen (user 2026-10-12). One line a person; a new
+## one takes the old one's place. The chief stands in the middle, so what
+## hurts him shows at the screen's edges and in the state icons instead, and
+## his plain notes stay notes.
+func say(p, text: String, hurt: bool = false) -> void:
+	if p == game.player:
+		if hurt:
+			hurt_flash = HURT_FLASH_S
+		else:
+			toast(text)
+		return
+	if not game.squad.has(p):
+		toast(text)
+		return
+	var line: String = text
+	for lead: String in [p.display_name + ": ", p.display_name + " "]:
+		if line.begins_with(lead):
+			line = line.substr(lead.length())
+			break
+	for s in says.duplicate():
+		if s["p"] == p:
+			says.erase(s)
+	says.append({"p": p, "text": line, "t": SAY_S, "hurt": hurt})
+
+
+func _tick_says(delta: float) -> void:
+	hurt_flash = maxf(hurt_flash - delta, 0.0)
+	for s in says.duplicate():
+		s["t"] -= delta
+		if s["t"] <= 0.0 or not is_instance_valid(s["p"]):
+			says.erase(s)
+
+
+func _draw_says(view_size: Vector2) -> void:
+	if hurt_flash > 0.0:
+		var a: float = 0.45 * hurt_flash / HURT_FLASH_S
+		var edge := Color(AMBER.r, AMBER.g, AMBER.b, a)
+		overlay.draw_rect(Rect2(Vector2.ZERO, Vector2(14, view_size.y)), edge)
+		overlay.draw_rect(Rect2(Vector2(view_size.x - 14, 0), Vector2(14, view_size.y)), edge)
+	var font: Font = theme.default_font
+	var taken: Array = []   # people standing together: the lines go one above another
+	for s in says:
+		var at: Vector2 = _project(s["p"].position + Vector3(0, 2.3, 0))
+		var a: float = clampf(float(s["t"]) / 0.6, 0.0, 1.0)
+		var w: float = font.get_string_size(s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT).x
+		var from := at - Vector2(w * 0.5, 0)
+		var box := Rect2(from - Vector2(0, SAY_FONT), Vector2(w, SAY_FONT + 4.0))
+		var again := true
+		while again:
+			again = false
+			for r: Rect2 in taken:
+				if r.intersects(box):
+					box.position.y = r.position.y - box.size.y
+					again = true
+		taken.append(box)
+		from.y = box.position.y + SAY_FONT
+		overlay.draw_string_outline(font, from, s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT, 6, Color(0, 0, 0, 0.85 * a))
+		var ink: Color = AMBER if s["hurt"] else INK
+		overlay.draw_string(font, from, s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT, Color(ink.r, ink.g, ink.b, a))
 
 
 func _tick_toasts(delta: float) -> void:
@@ -906,6 +1001,32 @@ func _offer_pick(cb: Callable) -> void:
 
 
 # ---------------------------------------------------------------- modal panels
+
+## The settings that can be changed in the middle of a stop: the stick and
+## how much the driver calls. Opened from the pause screen.
+func settings_panel() -> void:
+	var v := _open_modal(560.0)
+	v.add_child(_label("설정", 28))
+	v.add_child(_button("스틱: 따라오기" if stick_floats() else "스틱: 고정", _set_stick, Vector2(420, 64), 22))
+	v.add_child(_label("스틱이 엄지 댄 자리로 따라온다." if stick_floats() else "스틱이 왼쪽 아래 제자리에 있다.", 18, DIM))
+	v.add_child(_button("무전: " + String(game.RADIO_NAMES[game.radio_mode()]), _set_radio, Vector2(420, 64), 22))
+	var tip := _label(RADIO_TIPS[game.radio_mode()], 18, DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.custom_minimum_size = Vector2(500, 0)
+	v.add_child(tip)
+	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+
+
+func _set_stick() -> void:
+	game.opts["stick_float"] = not stick_floats()
+	settings_panel()
+
+
+func _set_radio() -> void:
+	var modes: Array = game.RADIO_MODES
+	game.opts["radio"] = modes[(modes.find(game.radio_mode()) + 1) % modes.size()]
+	settings_panel()
+
 
 ## pauses false: the field goes on at BODY_SLOW under the panel (the body picture).
 func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
@@ -1710,14 +1831,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		_toggle_pause()
 	elif b == all_aboard_button:
 		_all_aboard()
-	elif b == radio_opt_button:
-		var modes: Array = game.RADIO_MODES
-		var next: String = modes[(modes.find(game.radio_mode()) + 1) % modes.size()]
-		game.opts["radio"] = next
-		toast(RADIO_TIPS[next])
-	elif b == stick_opt_button:
-		game.opts["stick_float"] = not stick_floats()
-		toast("스틱이 엄지 댄 자리로 따라온다." if stick_floats() else "스틱이 왼쪽 아래 제자리에 있다.")
+	elif b == settings_button:
+		settings_panel()
 	elif b == lamp_button:
 		game.set_lamps(not game.lamps_on())
 		lamp_button.button_pressed = game.lamps_on()
@@ -2112,6 +2227,7 @@ func _draw_overlay() -> void:
 	var p = game.player
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
+	_draw_says(view_size)
 	# Pressure at the edges: no numbers, just a darker rim as the next horde nears.
 	var pressure: float = game.director.pressure(now)
 	if pressure > 0.5 and game.deaf_t <= 0.0:

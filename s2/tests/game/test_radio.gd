@@ -128,18 +128,20 @@ func test_near_the_other_meaning_far_from_the_train_only_a_hiss() -> void:
 func test_paused_the_radio_key_goes_round_the_three_settings() -> void:
 	var hud = game.hud
 	hud.tick(0.02)
-	assert_false(hud.radio_opt_button.visible)
+	assert_false(hud.settings_button.visible)
 	game.paused = true
 	hud.tick(0.02)
-	assert_true(hud.radio_opt_button.visible)
-	assert_eq(hud.radio_opt_button.text, "무전: 급한 것만")
-	await wait_frames(2)
-	assert_false(hud.radio_opt_button.get_global_rect().intersects(hud.stick_opt_button.get_global_rect()))
-	hud._pad_down(hud.radio_opt_button, Vector2.ZERO)
+	assert_true(hud.settings_button.visible)
+	hud._pad_down(hud.settings_button, Vector2.ZERO)
+	var texts: Array = []
+	for b in hud.modal.find_children("*", "Button", true, false):
+		texts.append(String(b.text))
+	assert_true(texts.has("무전: 급한 것만"))
+	hud._set_radio()
 	assert_eq(game.radio_mode(), "often")
-	hud._pad_down(hud.radio_opt_button, Vector2.ZERO)
+	hud._set_radio()
 	assert_eq(game.radio_mode(), "off")
-	hud._pad_down(hud.radio_opt_button, Vector2.ZERO)
+	hud._set_radio()
 	assert_eq(game.radio_mode(), "urgent")
 
 

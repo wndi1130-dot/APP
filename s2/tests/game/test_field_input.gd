@@ -243,11 +243,41 @@ func test_only_one_warn_toast_shows_and_the_newer_one_wins() -> void:
 	assert_eq(_toast_texts(), ["둘째 경고다."] as Array[String])
 
 
-func test_a_cry_in_the_scene_stays_a_plain_toast() -> void:
+func test_being_grabbed_writes_nothing_across_the_screen() -> void:
 	_clear_toasts()
 	game.hud.grab_alert(true)
-	assert_eq(game.hud.toasts[0]["kind"], FieldHud.TOAST_NORMAL)
-	assert_eq(_toast_texts(), ["잡혔다! 밀쳐라."] as Array[String])
+	assert_eq(game.hud.toasts.size(), 0, "the shove key itself says it")
+	assert_eq(game.hud.grab_button.text, "밀쳐!")
+	game.hud.grab_alert(false)
+	assert_eq(game.hud.grab_button.text, "뒤에서! 밀쳐!")
+	assert_gt(game.hud.hurt_flash, 0.0, "and the screen's edges glow")
+
+
+func test_what_happens_to_a_companion_is_said_over_their_head() -> void:
+	_clear_toasts()
+	var hud = game.hud
+	var mate = null
+	for p in game.squad:
+		if p != game.player:
+			mate = p
+			break
+	game.say(mate, "%s 다리를 물렸다." % mate.display_name, true)
+	assert_eq(hud.toasts.size(), 0, "not a note on the screen")
+	assert_eq(hud.says.size(), 1)
+	assert_eq(hud.says[0]["p"], mate)
+	assert_eq(hud.says[0]["text"], "다리를 물렸다.", "the name is not repeated over their own head")
+	game.say(mate, "%s 긁혔다." % mate.display_name, true)
+	assert_eq(hud.says.size(), 1, "one line a person")
+	hud._tick_says(FieldHud.SAY_S + 0.1)
+	assert_eq(hud.says.size(), 0, "and it goes away")
+	# The chief stands in the middle of the screen: no words there.
+	hud.hurt_flash = 0.0
+	game.say(game.player, "%s 팔을 물렸다." % game.player.display_name, true)
+	assert_eq(hud.toasts.size(), 0)
+	assert_eq(hud.says.size(), 0)
+	assert_gt(hud.hurt_flash, 0.0, "the edges of the screen show it")
+	game.say(game.player, "붕대가 없다.")
+	assert_eq(_toast_texts(), ["붕대가 없다."] as Array[String], "his plain notes stay notes")
 
 
 func test_coming_back_says_the_field_was_held_once() -> void:
