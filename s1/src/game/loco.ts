@@ -31,3 +31,6 @@ export function locoPressureChance(g: Game, engineSkill: number): number | null 
   if (l.pressureAlways) return l.pressureChance ?? D.pressureChance;
   return engineSkill === 1 ? D.pressureChance : null;
 }
+
+/** 첫 화면 「열차를 고른다」를 띄울 때인가: 아직 안 골랐고 첫 구간 출발 전이다. 옛 저장(이미 달리는 판)은 c3으로 읽고 묻지 않는다. */
+export const locoUnchosen = (g: Game): boolean => g.loco === undefined && g.seg <= 1 && g.phase === 'prep';
