@@ -946,7 +946,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       for (const o of COMMS) g.comms[o].coh = clamp(g.comms[o].coh + 0.02, 0, 1);
       break;
     case 'tension_reset':
-      put(g, 'tension', 65 + P.crisisStep * g.tensionCrisisUsed, 'card');
+      put(g, 'tension', P.crisisBase + P.crisisStep * g.tensionCrisisUsed, 'card');
       g.tensionCrisisUsed += 1;
       break;
     case 'revolt':
