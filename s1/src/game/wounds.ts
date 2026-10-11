@@ -67,6 +67,10 @@ export const PART_NAME: Record<WoundPart, string> = { head: '머리', torso: '�
 export const isArm = (p: WoundPart): boolean => p === 'armL' || p === 'armR';
 export const isLeg = (p: WoundPart): boolean => p === 'legL' || p === 'legR';
 
+/** 열차장도 같은 부상 기록에 오른다(결정 072 다). 열차장은 앞칸에서 지내는 것으로 적고, 침상은 다른 부상자와 다툰다. */
+export const CAPTAIN = '열차장';
+const CAPTAIN_COMM: Comm = 'front';
+
 const book = (g: Game): Wound[] => ((g as G).wounds ??= []);
 
 /** 활성 기록: 침상, 제 칸, 가벼운 상처. healed·permanent는 세지 않는다. */
@@ -272,7 +276,12 @@ export interface NoteOpt {
 }
 
 const commOfName = (g: Game, name: string): Comm | undefined =>
-  PROFILES.find(p => p.name === name)?.community ?? COMMS.find(c => g.comms[c].leader.name === name);
+  name === CAPTAIN ? CAPTAIN_COMM : PROFILES.find(p => p.name === name)?.community ?? COMMS.find(c => g.comms[c].leader.name === name);
+
+/** 열차장이 다쳤다. 침상 여섯을 다른 부상자와 다투고, 나을 때까지 부상 기록에 남는다. 등급·부위를 안 주면 명세 표로 뽑는다. */
+export function hurtCaptain(g: Game, from: WoundFrom, where: string, opt: Partial<Pick<WoundInput, 'grade' | 'part' | 'septic' | 'why'>> = {}): Wound {
+  return addWound(g, { who: CAPTAIN, comm: CAPTAIN_COMM, from, where, ...opt });
+}
 
 /**
  * 옛 규칙이 방금 g.injured를 n만큼 올렸을 때, 그 곁에 명부 기록 n개를 남긴다. 저널·g.injured·판 난수·정산은 건드리지 않는다.
@@ -334,7 +343,8 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
     notes.push('의약품이 떨어졌다.');
     for (const w of act) {
       const p = deathPerDay(w);
-      if (p > 0 && rnd(g) < p) {
+      // 열차장이 약이 없어 죽는 길은 S1에 없다(죽으면 판이 끝나는 자리는 따로 정한다).
+      if (w.who !== CAPTAIN && p > 0 && rnd(g) < p) {
         const wounds = book(g);
         wounds.splice(wounds.indexOf(w), 1);
         onDeath(g, w.comm, [w.who]);
@@ -381,6 +391,7 @@ export function reconcileRoster(g: Game): void {
 // ---- 침상 넘침(2.2) ----
 /** 일할 손 값: 전문가 2, 어른 1, 그 밖 0. 높을수록 침상에 남는다('workers'). */
 function workerRank(g: Game, w: Wound): number {
+  if (w.who === CAPTAIN) return 2;
   if (living(g).some(p => p.name === w.who && p.skill >= 1)) return 2;
   const pr = PROFILES.find(p => p.name === w.who);
   return pr && pr.age >= 16 ? 1 : 0;
