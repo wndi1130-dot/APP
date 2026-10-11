@@ -152,11 +152,11 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 		start += frames.size()
 	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
 
-const TABLE_SIZE: int = 8
+const TABLE_SIZE: int = 16
 
 ## The clip table of a skinned bake as the shader parameters of
 ## game/actors/dead_vat.gdshader: where each clip starts, its frame count, its
-## frames per second and whether it loops, padded to the shader's eight slots.
+## frames per second and whether it loops, padded to the shader's sixteen slots.
 static func shader_tables(assets: Dictionary) -> Dictionary:
 	var starts := PackedFloat32Array()
 	var counts := PackedFloat32Array()

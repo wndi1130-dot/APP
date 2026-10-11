@@ -71,7 +71,7 @@ func test_skinned_bake_folds_rows_past_the_width() -> void:
 	# Vertex 2 folds to the second row of each frame.
 	assert_almost_eq((assets["image"] as Image).get_pixel(0, 3).g, 1.0, 0.001)
 
-func test_shader_tables_follow_the_clips_and_fill_eight_slots() -> void:
+func test_shader_tables_follow_the_clips_and_fill_every_slot() -> void:
 	var still := [Transform3D(), Transform3D()]
 	var clips := [{"name": "walk", "length": 1.5, "frames": [still, still, still]}, {"name": "fall", "loop": false, "length": 2.5, "frames": [still, still, still, still, still]}]
 	var tables := VatBaker.shader_tables(VatBaker.build_skinned(_two_bone_source(), clips, 2))

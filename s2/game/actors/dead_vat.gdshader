@@ -11,10 +11,10 @@ render_mode cull_back;
 uniform sampler2D vat : filter_nearest, repeat_disable;
 uniform float rows_per_frame = 1.0;
 uniform float frame_rows = 64.0;
-uniform float clip_start[8];
-uniform float clip_frames[8];
-uniform float clip_rate[8];
-uniform float clip_loop[8];
+uniform float clip_start[16];
+uniform float clip_frames[16];
+uniform float clip_rate[16];
+uniform float clip_loop[16];
 // Box bake stores offset + 0.5 in 8 bits; a skinned bake stores metres (bias 0).
 uniform float bias = 0.5;
 uniform vec3 tint = vec3(0.5);
