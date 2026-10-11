@@ -10,6 +10,9 @@ const SHOULDER: Vector3 = Vector3(0.3, 1.0, 0.0)
 const SHOVE_WINDUP: float = 0.15     # field_combat.SHOVE_WINDUP: the arms come back this long
 const LUNGE: float = 0.15            # field_combat.SHOVE_LUNGE: the arms stay out this long
 const META: String = "pose_arms"
+const MODE: String = "pose_mode"      # what the swing being drawn is: "swing", "floor" (down at a body on the ground) or "stomp"
+const FOOT_SIZE: Vector3 = Vector3(0.14, 0.12, 0.3)
+const FOOT_REST: Vector3 = Vector3(0.12, 0.06, 0.1)
 const SWING: String = "pose_swing"    # the way back of the swing being drawn: how long it is in all
 
 
@@ -17,12 +20,13 @@ static func apply(p, lying: bool) -> void:
 	var arms: Array = _arms(p)
 	for arm in arms:
 		arm.visible = not lying
+	arms[2].visible = false          # the foot shows only while it stomps
 	p.weapon_mesh.position = WEAPON_REST
 	p.weapon_mesh.rotation = Vector3.ZERO
 	if lying:
 		return
 	var push := shove_push(p.shove_t, p.lunge_t, SHOVE_WINDUP / float(p.mults()["swing"]))
-	for i in arms.size():
+	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
 		var t: Dictionary = arm_at(push, side)
 		arms[i].position = t["pos"]
@@ -30,7 +34,14 @@ static func apply(p, lying: bool) -> void:
 	var sw: Array = swing_state(p)
 	if sw.is_empty():
 		return
-	var w: Dictionary = weapon_at(p.weapon_id(), sw[0], sw[1], sw[2])
+	var mode: String = p.get_meta(MODE, "swing")
+	if mode == "stomp":
+		var st: Dictionary = stomp_at(sw[0], sw[1], sw[2])
+		arms[2].visible = true
+		arms[2].position = st["pos"]
+		p.body_mesh.rotation.x += float(st["lean"])
+		return
+	var w: Dictionary = floor_strike_at(sw[0], sw[1], sw[2]) if mode == "floor" else weapon_at(p.weapon_id(), sw[0], sw[1], sw[2])
 	p.weapon_mesh.position = w["pos"]
 	p.weapon_mesh.rotation = w["rot"]
 	p.body_mesh.rotation.x += float(w["lean"])
@@ -45,15 +56,27 @@ static func apply(p, lying: bool) -> void:
 static func swing_state(p) -> Array:
 	if p.strike_t > 0.0:
 		p.set_meta(SWING, -1.0)
+		p.set_meta(MODE, strike_mode(p.get("strike_kind"), p.strike_at))
 		return [1.0 - clampf(p.strike_t / maxf(0.01, p.strike_total), 0.0, 1.0), 0.0, false]
 	if not p.has_meta(SWING) or p.swing_t <= 0.0 or p.shove_t > 0.0:
 		p.remove_meta(SWING)
+		p.remove_meta(MODE)
 		return []
 	var rest: float = p.get_meta(SWING)
 	if rest < p.swing_t:
 		rest = p.swing_t
 		p.set_meta(SWING, rest)
 	return [1.0, 1.0 - clampf(p.swing_t / rest, 0.0, 1.0), true]
+
+
+## What kind of blow is being drawn back. The rules say whether it is a stomp
+## (strike_kind); a weapon aimed at a body on the ground comes straight down.
+static func strike_mode(kind, at) -> String:
+	if kind is String and kind == "stomp":
+		return "stomp"
+	if at is Dictionary and at.get("state", "") == "downed":
+		return "floor"
+	return "swing"
 
 
 ## -1 arms pulled back to the chest, 0 hanging, 1 thrown straight out.
@@ -105,6 +128,28 @@ static func weapon_at(wid: String, windup: float, recover: float, landed: bool) 
 	return {"pos": pos, "rot": rot, "lean": lean}
 
 
+## Any weapon brought down on a body on the ground: up over the shoulder, then
+## straight down in front of the feet, the back bent over it.
+static func floor_strike_at(windup: float, recover: float, landed: bool) -> Dictionary:
+	var back := 1.0 if landed else clampf(windup / DRAW, 0.0, 1.0)
+	var strike := 1.0 if landed else clampf((windup - DRAW) / (1.0 - DRAW), 0.0, 1.0)
+	var keep := 1.0 - (ease(clampf(recover, 0.0, 1.0), -2.0) if landed else 0.0)
+	var rot := Vector3(lerpf(-1.3 * back, 1.1, strike) * keep, 0, 0)
+	var pos := WEAPON_REST + (Vector3(0, 0.45, -0.1) * back).lerp(Vector3(0, -0.55, 0.2), strike) * keep
+	return {"pos": pos, "rot": rot, "lean": lerpf(-0.15 * back, 0.6, strike) * keep}
+
+
+## A stomp: the knee comes up as the body leans back, then the foot goes down
+## hard in front. "pos" is the foot.
+static func stomp_at(windup: float, recover: float, landed: bool) -> Dictionary:
+	var back := 1.0 if landed else clampf(windup / DRAW, 0.0, 1.0)
+	var strike := 1.0 if landed else clampf((windup - DRAW) / (1.0 - DRAW), 0.0, 1.0)
+	var keep := 1.0 - (ease(clampf(recover, 0.0, 1.0), -2.0) if landed else 0.0)
+	var pos := FOOT_REST + (Vector3(0, 0.55, 0.2) * back).lerp(Vector3(0, 0.0, 0.4), strike) * keep
+	return {"pos": pos, "lean": lerpf(-0.2 * back, 0.35, strike) * keep}
+
+
+## The two arms and, last, the stomping foot.
 static func _arms(p) -> Array:
 	if p.has_meta(META):
 		return p.get_meta(META)
@@ -121,5 +166,13 @@ static func _arms(p) -> Array:
 		arm.mesh = box
 		p.add_child(arm)
 		arms.append(arm)
+	var foot := MeshInstance3D.new()
+	var shoe := BoxMesh.new()
+	shoe.size = FOOT_SIZE
+	shoe.material = (arms[0].mesh as BoxMesh).material
+	foot.mesh = shoe
+	foot.visible = false
+	p.add_child(foot)
+	arms.append(foot)
 	p.set_meta(META, arms)
 	return arms
