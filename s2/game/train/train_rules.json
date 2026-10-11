@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "note": "Stand-in for the rule values until the politics port feeds the same shape. Names follow s1/src/game: comms.<id>.sit is situation(g, c) = [warmth, ration, crowding, exposure], train.tension / train.fear / train.phase are Game fields, cars are s1/src/ui/common.ts CARS, ideo is data.ts IDEO. The numbers are the S1 start values; errands and calls are first values.",
-  "train": { "phase": "travel", "tension": 20, "fear": 0, "trust": 50 },
+  "note": "Stand-in for the rule values until the politics port feeds the same shape. Names follow s1/src/game: comms.<id>.sit is situation(g, c) = [warmth, ration, crowding, exposure], train.tension / train.fear / train.phase are Game fields, cars are s1/src/ui/common.ts CARS, ideo is data.ts IDEO. The numbers are the S1 start values; errands and calls are first values. train.voting stands in for the moment the vote is called (S1 keeps that in its council screen).",
+  "train": { "phase": "travel", "tension": 20, "fear": 0, "trust": 50, "voting": false },
   "comms": {
     "tail": { "name": "꼬리칸", "pop": 90, "away": 0, "rel": -20, "grudge": 0, "sit": [35, 40, 75, 60] },
     "medtech": { "name": "기술·의무진", "pop": 30, "away": 0, "rel": 5, "grudge": 0, "sit": [55, 50, 45, 25] },

@@ -13,7 +13,7 @@ const KNOBS: Array = [
 ]
 const TRAIN_KEYS: Array = ["tension", "fear"]
 const BOOT_SCENE := "res://scenes/boot.tscn"
-const READS := "지금 장면이 읽는 값: 온기(웅크림, 창 성에, 난로), 과밀(사람 수와 바닥에 앉음), 회기(식당칸 사람 수와 오가는 길). 온기·배급·관계·긴장·공포에서 칸의 기색 하나를 뽑아 모이는 자리, 걷는 사람과 빠르기, 등불을 바꾼다. 이념 세 축이 가까운 칸끼리는 가끔 마실을 간다(회기와 얼어붙은 열차에서는 쉰다). 노출은 아직 글자만 바뀐다."
+const READS := "지금 장면이 읽는 값: 온기(웅크림, 창 성에, 난로), 과밀(사람 수와 바닥에 앉음). 온기·배급·관계·긴장·공포에서 칸의 기색 하나를 뽑아 모이는 자리, 걷는 사람과 빠르기, 등불을 바꾼다. 이념 세 축이 가까운 칸끼리는 가끔 마실을 간다. 회기에는 식당칸이 의회가 된다: 긴장과 칸마다의 관계·원한을 더한 소란 다섯 단이 일어서는 사람과 몸을 기울이는 사람을 늘리고, 공포 60부터는 조용하며, 표결을 걸면 모두 멈춘다. 노출은 아직 글자만 바뀐다."
 
 var scene: Node3D
 var car_i: int = 0
@@ -23,6 +23,7 @@ var grid: GridContainer
 var note: Label
 var fps: Label
 var phase_button: Button
+var vote_button: Button
 var sliders: Dictionary = {}
 var readouts: Dictionary = {}
 var _filling: bool = false
@@ -54,6 +55,7 @@ func _ready() -> void:
 	top.add_child(title)
 	_button(top, "›", func() -> void: pick(car_i + 1))
 	phase_button = _button(top, "", _flip_phase)
+	vote_button = _button(top, "", _flip_vote)
 	_button(top, "멀리·가까이", func() -> void: scene.toggle_zoom())
 	_button(top, "판 접기", _fold)
 	_button(top, "나가기", func() -> void: get_tree().change_scene_to_file(BOOT_SCENE))
@@ -113,6 +115,9 @@ func fill() -> void:
 	var train: Dictionary = scene.rules["train"]
 	title.text = String((c["def"] as Dictionary).get("name", c["id"]))
 	phase_button.text = "회기 중" if scene.phase() == "council" else "이동 중"
+	# The vote is called only in session; outside it the button waits, dimmed.
+	vote_button.text = "표결 중" if bool(train.get("voting", false)) else "표결"
+	vote_button.disabled = scene.phase() != "council"
 	for knob in KNOBS:
 		var key: String = knob[0]
 		var slider: HSlider = sliders[key]
@@ -145,7 +150,12 @@ func _changed(value: float, key: String) -> void:
 
 
 func _flip_phase() -> void:
+	scene.rules["train"]["voting"] = false
 	scene.set_train("phase", "travel" if scene.phase() == "council" else "council")
+
+
+func _flip_vote() -> void:
+	scene.set_train("voting", not bool(scene.rules["train"].get("voting", false)))
 
 
 func _fold() -> void:

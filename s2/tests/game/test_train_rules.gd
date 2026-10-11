@@ -117,6 +117,15 @@ func test_axes_of_two_numbers_or_of_nobody_are_caught() -> void:
 	_assert_caught(d, "an axis of 3")
 
 
+func test_a_vote_flag_that_is_not_yes_or_no_is_caught_and_none_at_all_is_fine() -> void:
+	var d := _rules()
+	d["train"]["voting"] = "soon"
+	_assert_caught(d, "voting soon")
+	d = _rules()
+	d["train"].erase("voting")
+	assert_eq(Rules.check(d), PackedStringArray())
+
+
 func test_calls_that_repeat_every_zero_seconds_are_caught() -> void:
 	var d := _rules()
 	d["calls"]["every"] = 0.0

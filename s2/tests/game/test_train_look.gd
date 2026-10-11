@@ -92,7 +92,7 @@ func test_the_tails_away_leave_from_its_first_car_only() -> void:
 
 func test_the_dining_car_fills_for_the_session() -> void:
 	var dining := _car("dining")
-	assert_eq(Look.figures(dining, {}, "council"), 12)
+	assert_eq(Look.figures(dining, {}, "council"), 32, "the council: thirty to forty")
 	for phase in ["prep", "travel", "stop", "settle", "end"]:
 		assert_eq(Look.figures(dining, {}, phase), 4, phase)
 
@@ -362,6 +362,110 @@ func test_nobody_calls_in_a_frightened_car_or_during_the_session() -> void:
 	for m in MOODS:
 		assert_eq(Look.calls_open(m, "travel"), m != "frozen", m)
 		assert_false(Look.calls_open(m, "council"), m)
+
+
+# ---------------------------------------------------------------- the council
+
+func test_the_unrest_score_adds_tension_the_opposed_and_those_set_against_the_captain() -> void:
+	assert_eq(Look.unrest_score(rules["train"], rules["comms"]), 20.0, "the start: tension alone")
+	var comms: Dictionary = rules["comms"].duplicate(true)
+	comms["tail"]["rel"] = -40
+	comms["guard"]["rel"] = -39
+	assert_eq(Look.unrest_score(_train(20.0, 0.0), comms), 30.0, "one community opposed")
+	comms["front"]["grudge"] = 2
+	comms["engine"]["grudge"] = 1
+	assert_eq(Look.unrest_score(_train(20.0, 0.0), comms), 45.0, "and one with two grudges")
+	comms["tail"]["grudge"] = 3
+	assert_eq(Look.unrest_score(_train(20.0, 0.0), comms), 60.0, "opposed and set against: both count")
+	assert_eq(Look.unrest_score(_train(20.0, 90.0), comms), 60.0, "fear is not in the score")
+	assert_eq(Look.unrest_score({}, {}), 0.0)
+
+
+func test_unrest_climbs_a_step_at_each_threshold() -> void:
+	var edges: Array = [[0.0, 0], [19.9, 0], [20.0, 1], [39.9, 1], [40.0, 2], [59.9, 2], [60.0, 3], [79.9, 3], [80.0, 4], [250.0, 4]]
+	for edge in edges:
+		assert_eq(Look.unrest_level(float(edge[0])), int(edge[1]), "score %s" % edge[0])
+		assert_eq(Look.unrest_level(float(edge[0]), 0), int(edge[1]), "from the lowest step, score %s" % edge[0])
+	assert_eq(Look.UNREST_NAMES.size(), 5)
+	assert_eq(Look.UNREST_LOOK.size(), 5)
+
+
+func test_unrest_settles_only_five_under_a_threshold() -> void:
+	assert_eq(Look.unrest_level(15.0, 1), 1, "15 holds the second step")
+	assert_eq(Look.unrest_level(14.9, 1), 0)
+	assert_eq(Look.unrest_level(75.0, 4), 4)
+	assert_eq(Look.unrest_level(74.9, 4), 3)
+	assert_eq(Look.unrest_level(36.0, 3), 2, "falls past a step it is well under and holds the next")
+	assert_eq(Look.unrest_level(10.0, 4), 0)
+	assert_eq(Look.unrest_level(17.0, 0), 0, "holding is for the way down only")
+	assert_eq(Look.unrest_level(90.0, 9), 4, "a step nobody knows")
+
+
+func test_the_called_vote_and_fear_quiet_the_council() -> void:
+	assert_eq(Look.council_quiet(_train(90.0, 0.0)), "")
+	assert_eq(Look.council_quiet(_train(90.0, 59.9)), "")
+	assert_eq(Look.council_quiet(_train(90.0, 60.0)), "hush")
+	var voting := _train(90.0, 0.0)
+	voting["voting"] = true
+	assert_eq(Look.council_quiet(voting), "vote")
+	voting["fear"] = 80.0
+	assert_eq(Look.council_quiet(voting), "vote")
+	for quiet in ["vote", "hush"]:
+		assert_true(Look.QUIET_NAMES.has(quiet), quiet)
+
+
+func test_the_council_room_has_a_place_for_everyone() -> void:
+	var places: Array = Look.council_places(Look.DINING_SESSION)
+	assert_eq(places.size(), 32)
+	assert_eq(places.count("chair"), 2)
+	assert_eq(places.count("walk"), 2)
+	assert_eq(places.count("door"), 2)
+	assert_eq(places.count("bench"), Look.COUNCIL_BENCH)
+	assert_eq(places.count("table"), Look.COUNCIL_TABLE)
+	for count in range(45):
+		var rows: Array = Look.council_places(count)
+		assert_eq(rows.size(), count)
+		assert_lte(rows.count("bench"), Look.COUNCIL_BENCH, "%d people" % count)
+		assert_lte(rows.count("table"), Look.COUNCIL_TABLE, "%d people" % count)
+		if count > 0 and count <= 32:
+			assert_eq(Look.council_places(count - 1), rows.slice(0, count - 1), "one more person moves nobody")
+
+
+func test_more_of_the_seated_act_and_rise_as_unrest_climbs() -> void:
+	var seats: int = Look.COUNCIL_BENCH + Look.COUNCIL_TABLE
+	var before := {"lean": 0, "rise": 0}
+	for level in 5:
+		var now := {"": 0, "lean": 0, "rise": 0}
+		for seat in seats:
+			var role: String = Look.council_role(seat, seats, level)
+			now[role] += 1
+			if level > 0 and Look.council_role(seat, seats, level - 1) != "":
+				assert_ne(role, "", "seat %d keeps acting at step %d" % [seat, level])
+		var look: Dictionary = Look.UNREST_LOOK[level]
+		assert_eq(now["rise"], int(look["rise"]), "step %d" % level)
+		assert_eq(now["lean"] + now["rise"], int(look["act"]), "step %d" % level)
+		assert_gte(int(now["rise"]), int(before["rise"]))
+		assert_gt(now["lean"] + now["rise"], before["lean"] + before["rise"])
+		# With the two who walk and the two by the door: the brief's eight to twelve.
+		assert_between(now["lean"] + now["rise"] + 4, 8, 12, "step %d" % level)
+		before = now
+	assert_eq(Look.council_role(0, seats, 0), "lean")
+	assert_eq(Look.council_role(-1, seats, 4), "", "not a seat")
+
+
+func test_every_seat_has_its_own_rank_whatever_the_number_of_seats() -> void:
+	for seats in range(1, 41):
+		var acting := 0
+		for seat in seats:
+			acting += 1 if Look.council_role(seat, seats, 4) != "" else 0
+		assert_eq(acting, mini(seats, int(Look.UNREST_LOOK[4]["act"])), "%d seats" % seats)
+
+
+func test_nobody_rises_in_the_two_quiet_steps() -> void:
+	var seats: int = Look.COUNCIL_BENCH + Look.COUNCIL_TABLE
+	for level in [0, 1]:
+		for seat in seats:
+			assert_ne(Look.council_role(seat, seats, level), "rise", "step %d, seat %d" % [level, seat])
 
 
 # ---------------------------------------------------------------- trips

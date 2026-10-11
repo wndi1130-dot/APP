@@ -1,7 +1,8 @@
 extends Node3D
 ## The inside of the train, seen from the side with the near wall off: boxes
-## for cars, stand-in bodies that sit, huddle and walk the aisle, and a few who
-## walk to another car and back. It only shows the rule values it is given
+## for cars, stand-in bodies that sit, huddle and walk the aisle, a few who
+## walk to another car and back, and the council in the dining car while the
+## session lasts. It only shows the rule values it is given
 ## (train_rules.gd) and changes none of them. Everything is built in code,
 ## like the field; the car bodies and the people's clips swap in later.
 
@@ -47,6 +48,15 @@ const STOVE_COLOR := Color(1.0, 0.55, 0.3)
 const STOVE_ENERGY: float = 1.1
 const LAMP_SWAY: float = 0.05           # metres, with the train's rocking
 const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
+## The council sits on both sides of the dining table: the far side on the
+## bench, the near side with their backs to the open side. The chair and the
+## clerk stand by the table's head.
+const TABLE_Z: float = 0.15
+const TABLE_FIRST: float = 2.9
+const TABLE_STEP: float = 0.92
+const CHAIR_AT: Array = [Vector3(14.7, 0.0, -0.5), Vector3(15.2, 0.0, -0.05)]
+const RISE_SWAY: float = 3.0            # rad a second: someone on their feet rocks from side to side
+const RISE_REACH: float = 0.8
 const AISLE_MARGIN: float = 1.0
 const PACE_WAIT := Vector2(2.0, 6.0)    # a mover stands this long between walks
 const VISIT_SPREAD: float = 3.0
@@ -66,7 +76,7 @@ const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the 
 var rules: Dictionary = {}
 var opts: Dictionary = {}               # seed: int, panel: bool
 var problems := PackedStringArray()
-var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, call_t, call_i, mood, values}]
+var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, call_t, call_i, mood, unrest, quiet, seats, values}]
 var rng := RandomNumberGenerator.new()
 var camera: Camera3D
 var train: Node3D
@@ -75,6 +85,8 @@ var panel: CanvasLayer
 var cam_x: float = CAR_LENGTH * 0.5
 var zoomed_out: bool = false
 var clock: float = 0.0
+var _hold_from: float = 0.0             # the council room along the train while the vote is called
+var _hold_to: float = 0.0
 var _mats: Dictionary = {}
 var _font: SystemFont
 
@@ -113,8 +125,13 @@ func car(id: String) -> Dictionary:
 
 ## Seat every car again from the rules as they are now.
 func apply_rules() -> void:
+	_hold_from = 0.0
+	_hold_to = 0.0
 	for c in cars:
 		_seat_car(c)
+		if _in_session(c) and String(c["quiet"]) == "vote":
+			_hold_from = float(c["x0"])
+			_hold_to = _hold_from + CAR_LENGTH
 	rules_applied.emit()
 
 
@@ -142,6 +159,8 @@ func step(delta: float) -> void:
 		_step_lamp(c, delta)
 		_step_errand(c, delta)
 		_step_call(c, delta)
+		if _in_session(c):
+			_step_council(c, delta)
 		for b in c["bodies"]:
 			_step_body(c, b, delta)
 
@@ -168,10 +187,15 @@ func train_length() -> float:
 	return cars.size() * (CAR_LENGTH + CAR_GAP) - CAR_GAP
 
 
-## The line under a car's name: its numbers and its head count.
+## The line under a car's name: its numbers, its head count and its mood, or
+## for the council its step of unrest.
 func values_text(c: Dictionary) -> String:
 	var comm := Rules.comm_of(rules, c["def"])
-	var heads := "%d명 · %s" % [(c["bodies"] as Array).size(), Look.MOOD_NAMES[c["mood"]]]
+	var state: String = Look.MOOD_NAMES[c["mood"]]
+	if _in_session(c):
+		var level: int = c["unrest"]
+		state = Look.QUIET_NAMES.get(c["quiet"], "소란 %d %s" % [level, Look.UNREST_NAMES[level]])
+	var heads := "%d명 · %s" % [(c["bodies"] as Array).size(), state]
 	if comm.is_empty():
 		return heads
 	var sit: Array = comm["sit"]
@@ -203,7 +227,6 @@ func _seat_car(c: Dictionary) -> void:
 	var m := Look.mood(comm, rules.get("train", {}))
 	var look := Look.mood_look(m)
 	c["mood"] = m
-	var rows := Look.seating(n, w, Look.crowding(comm), m)
 	var bodies: Array = c["bodies"]
 	while bodies.size() > n:
 		var gone: Node3D = bodies.pop_back()
@@ -215,26 +238,39 @@ func _seat_car(c: Dictionary) -> void:
 		people.add_child(b)
 		b.setup(c["id"], bodies.size() + int(c["index"]) * 5)
 		bodies.append(b)
+	for b in bodies:
+		b.speed = Body.WALK_SPEED * float(look["speed"])
+	if _in_session(c):
+		_seat_council(c)
+	else:
+		c["unrest"] = -1
+		c["quiet"] = ""
+		_seat_rows(c, Look.seating(n, w, Look.crowding(comm), m), bool(look["gather"]))
+	_dress_car(c, w, look)
+	(c["values"] as Label3D).text = values_text(c)
+
+
+## The dining car while the council sits.
+func _in_session(c: Dictionary) -> bool:
+	return String((c["def"] as Dictionary).get("kind", "")) == "dining" and phase() == "council"
+
+
+## Seat a car as its mood, its warmth and its crowding have it.
+func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
+	var bodies: Array = c["bodies"]
 	var walkers: int = 0
 	for row in rows:
 		walkers += 1 if row["pose"] == "walk" else 0
-	var gather: bool = look["gather"]
 	var standing: int = 0
 	var bench: int = 0
 	var on_floor: int = 0
 	var x0: float = c["x0"]
-	for i in n:
+	for i in bodies.size():
 		var b: Node3D = bodies[i]
 		var row: Dictionary = rows[i]
-		b.speed = Body.WALK_SPEED * float(look["speed"])
 		match String(row["pose"]):
 			"walk":
-				b.slot = Vector3(x0 + AISLE_MARGIN + (CAR_LENGTH - 2.0 * AISLE_MARGIN) * (i + 0.5) / maxi(walkers, 1), 0, AISLE_Z)
-				if b.state == "seat":
-					b.position = b.slot
-					b.rotation.y = 0.0
-					b.set_pose("stand", false)
-					_wait(c, b)
+				_walk_from(c, b, _aisle_place(x0, i, walkers))
 			"stand":
 				_sit_down(c, b, x0, _knot_place(standing), "stand", false, false)
 				b.rotation.y = _knot_facing(standing)
@@ -251,8 +287,122 @@ func _seat_car(c: Dictionary) -> void:
 				var place := Vector3(SLOT_FIRST + SLOT_STEP * 0.5 + slot * SLOT_STEP, 0, FLOOR_Z)
 				_sit_down(c, b, x0, place, "floor", bool(row["huddled"]), bool(row["bowed"]))
 				on_floor += 1
-	_dress_car(c, w, look)
-	(c["values"] as Label3D).text = values_text(c)
+
+
+## Seat the dining car as the council: everyone keeps the same place whatever
+## the unrest, and only the step, the hush of fear and the called vote change
+## what the room does. No community's own numbers reach a seat.
+func _seat_council(c: Dictionary) -> void:
+	var train: Dictionary = rules.get("train", {})
+	var level := Look.unrest_level(Look.unrest_score(train, rules.get("comms", {})), int(c["unrest"]))
+	var quiet := Look.council_quiet(train)
+	var hushed: bool = quiet == "hush"
+	c["unrest"] = level
+	c["quiet"] = quiet
+	var bodies: Array = c["bodies"]
+	var places := Look.council_places(bodies.size())
+	var walkers: int = places.count("walk")
+	var hold: Array = Look.UNREST_LOOK[level]["hold"]
+	var x0: float = c["x0"]
+	var taken: Dictionary = {}
+	var seat: int = 0
+	for i in bodies.size():
+		var b: Node3D = bodies[i]
+		var place: String = places[i]
+		var k: int = int(taken.get(place, 0))
+		taken[place] = k + 1
+		match place:
+			"walk":
+				# In a frightened room those who walked stand where they were.
+				if hushed:
+					_sit_down(c, b, 0.0, _aisle_place(x0, k, walkers), "stand", false, true)
+				else:
+					_walk_from(c, b, _aisle_place(x0, k, walkers))
+			"chair":
+				_sit_down(c, b, x0, CHAIR_AT[k % CHAIR_AT.size()], "stand", false, hushed)
+				b.rotation.y = -PI * 0.5
+			"door":
+				_sit_down(c, b, x0, _knot_place(k), "stand", false, hushed)
+				b.rotation.y = _knot_facing(k)
+			_:
+				var at := Vector3(SLOT_FIRST + k * SLOT_STEP, 0, BENCH_Z)
+				if place == "table":
+					at = Vector3(TABLE_FIRST + k * TABLE_STEP, 0, TABLE_Z)
+				# A gesture under way carries on when a number changes; a quiet room drops it at once.
+				var same: bool = b.seat == seat
+				var act: String = b.act if same and quiet == "" else ""
+				_sit_down(c, b, x0, at, "sit", false, hushed)
+				b.rotation.y = PI if place == "table" else 0.0
+				b.seat = seat
+				b.act = act
+				if not same:
+					b.act_t = rng.randf_range(float(hold[0]), float(hold[1]))
+				_show_act(b)
+				seat += 1
+	c["seats"] = seat
+
+
+## Where along the aisle the k-th of a car's walkers belongs.
+func _aisle_place(x0: float, k: int, walkers: int) -> Vector3:
+	return Vector3(x0 + AISLE_MARGIN + (CAR_LENGTH - 2.0 * AISLE_MARGIN) * (k + 0.5) / maxi(walkers, 1), 0, AISLE_Z)
+
+
+## A body that walks: it keeps on with what it was doing, or gets up if it sat.
+func _walk_from(c: Dictionary, b: Node3D, at: Vector3) -> void:
+	b.slot = at
+	_plain(b)
+	if b.state == "seat":
+		b.position = b.slot
+		b.rotation.y = 0.0
+		b.set_pose("stand", false)
+		_wait(c, b)
+
+
+## Out of the council's gestures.
+func _plain(b: Node3D) -> void:
+	b.side = 0.0
+	b.seat = -1
+	b.act = ""
+
+
+## The gesture a seated member of the council is in: up on their feet, leaning
+## over to a neighbour, or sitting still.
+func _show_act(b: Node3D) -> void:
+	b.side = 0.0
+	match String(b.act):
+		"rise":
+			b.set_pose("stand", false, b.bowed)
+		"lean":
+			b.side = 1.0 if b.seat % 2 == 0 else -1.0
+			b.set_pose("sit", false, b.bowed)
+		_:
+			b.set_pose("sit", false, b.bowed)
+
+
+## The seated who act take turns: a gesture, a rest, a gesture. A higher step
+## brings more of them in as their rests run out, and they finish what they
+## were doing when the room cools.
+func _step_council(c: Dictionary, delta: float) -> void:
+	if String(c["quiet"]) != "":
+		return
+	var level: int = c["unrest"]
+	var hold: Array = Look.UNREST_LOOK[level]["hold"]
+	for b in c["bodies"]:
+		if b.seat < 0:
+			continue
+		var role := Look.council_role(b.seat, int(c["seats"]), level)
+		if role == "" and String(b.act) == "":
+			continue
+		if String(b.act) == "rise":
+			# Whoever is on their feet does not stand still.
+			b.side = sin(clock * RISE_SWAY + float(b.seat)) * RISE_REACH
+			b.show_pose()
+		b.act_t -= delta
+		if b.act_t <= 0.0:
+			b.act = role if String(b.act) == "" else ""
+			b.act_t = rng.randf_range(float(hold[0]), float(hold[1]))
+			_show_act(b)
+
 
 
 ## Where in the car the k-th of those standing about stands: knots of three,
@@ -305,6 +455,7 @@ func _sit_down(c: Dictionary, b: Node3D, x0: float, at: Vector3, pose: String, h
 	b.slot = at + Vector3(x0, 0, 0)
 	b.position = b.slot
 	b.rotation.y = 0.0
+	_plain(b)
 	b.set_pose(pose, huddled, bowed)
 
 
@@ -315,6 +466,11 @@ func _end_trip(c: Dictionary, b: Node3D) -> void:
 
 
 func _step_body(c: Dictionary, b: Node3D, delta: float) -> void:
+	# While the vote is called nobody on their feet in the council room moves.
+	if _hold_to > _hold_from and b.state != "seat" and b.position.x >= _hold_from and b.position.x <= _hold_to:
+		if b.pose == "walk":
+			b.set_pose("stand", false)
+		return
 	match b.state:
 		"wait":
 			b.timer -= delta
@@ -350,8 +506,8 @@ func _wait(c: Dictionary, b: Node3D) -> void:
 
 func _step_errand(c: Dictionary, delta: float) -> void:
 	var rows := Look.errands_for(c["def"], phase(), rules.get("errands", []))
-	if rows.is_empty():
-		return
+	if rows.is_empty() or _hold_to > _hold_from:
+		return                      # nobody sets out while the vote is called
 	c["errand_t"] = float(c["errand_t"]) - delta
 	if float(c["errand_t"]) > 0.0:
 		return
@@ -471,6 +627,7 @@ func _build_train() -> void:
 			"def": def, "id": String(def["id"]), "index": i, "x0": node.position.x, "node": node,
 			"bodies": [], "out": 0, "errand_t": rng.randf_range(2.0, 8.0), "errand_i": 0, "mood": "calm",
 			"call_t": rng.randf_range(CALL_FIRST.x, CALL_FIRST.y), "call_i": 0,
+			"unrest": -1, "quiet": "", "seats": 0,
 		}
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)
@@ -517,6 +674,9 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		_box(node, Vector3(l - 1.6, Body.SEAT_HEIGHT, 0.5), Vector3(l * 0.5, Body.SEAT_HEIGHT * 0.5, -1.0), wood.lightened(0.08))
 	if kind == "dining":
 		_box(node, Vector3(l - 4.0, 0.75, 0.6), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
+		# The near side's bench: empty at meals, the council's second row.
+		var near: float = TABLE_STEP * (Look.COUNCIL_TABLE - 1)
+		_box(node, Vector3(near + 0.7, Body.SEAT_HEIGHT, 0.3), Vector3(TABLE_FIRST + near * 0.5, Body.SEAT_HEIGHT * 0.5, TABLE_Z + 0.1), wood.lightened(0.08))
 	elif kind == "captain":
 		_box(node, Vector3(1.6, 0.75, 0.7), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
 	if kind == "comm" or kind == "engine":

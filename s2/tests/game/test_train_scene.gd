@@ -21,6 +21,37 @@ func _scene(panel: bool = false) -> Node3D:
 	return s
 
 
+## The scene in session, with no trips so only the council's own people are in the room.
+func _council() -> Node3D:
+	var s = _scene()
+	s.rules["errands"] = []
+	s.set_train("phase", "council")
+	return s
+
+
+## The seated of the council who are on their feet now.
+func _up(s) -> int:
+	var n := 0
+	for b in s.car("dining")["bodies"]:
+		n += 1 if int(b.seat) >= 0 and b.pose == "stand" else 0
+	return n
+
+
+func _leaning(s) -> int:
+	var n := 0
+	for b in s.car("dining")["bodies"]:
+		n += 1 if float(b.side) != 0.0 else 0
+	return n
+
+
+## Where everyone of the council is and what they are doing, a row a person.
+func _seats_of(s) -> Array:
+	var rows: Array = []
+	for b in s.car("dining")["bodies"]:
+		rows.append([b.slot, b.state, b.pose, b.side, b.seat, b.act, b.bowed])
+	return rows
+
+
 func _count(s, id: String) -> int:
 	return (s.car(id)["bodies"] as Array).size()
 
@@ -149,11 +180,11 @@ func test_a_crowded_front_gains_bodies_and_floor_sleepers_and_loses_them_again()
 	assert_gte(int(s.car("front")["out"]), 0)
 
 
-func test_the_dining_car_holds_twelve_in_session_and_four_otherwise() -> void:
+func test_the_dining_car_holds_the_council_in_session_and_four_otherwise() -> void:
 	var s = _scene()
 	assert_eq(_count(s, "dining"), 4)
 	s.set_train("phase", "council")
-	assert_eq(_count(s, "dining"), 12)
+	assert_eq(_count(s, "dining"), 32)
 	s.set_train("phase", "travel")
 	assert_eq(_count(s, "dining"), 4)
 
@@ -387,6 +418,132 @@ func test_nobody_calls_in_a_frightened_train_during_the_session_or_without_the_r
 			for c in s.cars:
 				out += int(c["out"])
 		assert_eq(out, 0, "nobody left a car: %s" % str(setting[0]))
+
+
+# ---------------------------------------------------------------- the council
+
+func test_the_council_seats_both_sides_of_the_table_and_nobody_inside_another() -> void:
+	var s = _council()
+	var seated := 0
+	var standing := 0
+	for b in _placed(s, "dining"):
+		seated += 1 if b.pose == "sit" else 0
+		standing += 1 if b.pose == "stand" else 0
+	assert_eq(seated, Look.COUNCIL_BENCH + Look.COUNCIL_TABLE)
+	assert_eq(standing, 4, "the chair, the clerk and two by the door")
+	assert_eq(_count(s, "dining") - _placed(s, "dining").size(), 2, "two walk the aisle")
+	assert_gt(_closest(s, "dining"), Body.RADIUS * 1.5)
+	assert_eq(_up(s), 0, "at first everyone seated sits")
+
+
+func test_the_line_over_the_council_names_its_step_of_unrest() -> void:
+	var s = _council()
+	assert_eq(String(s.car("dining")["values"].text), "32명 · 소란 1 웅성")
+	s.set_train("tension", 85.0)
+	assert_string_contains(String(s.car("dining")["values"].text), "소란 4 개판")
+	s.set_train("tension", 76.0)
+	assert_string_contains(String(s.car("dining")["values"].text), "소란 4 개판", "five under the threshold holds")
+	s.set_train("tension", 74.0)
+	assert_string_contains(String(s.car("dining")["values"].text), "소란 3 고함·야유")
+	s.set_train("phase", "travel")
+	assert_string_contains(String(s.car("dining")["values"].text), "4명")
+	s.set_train("tension", 76.0)
+	s.set_train("phase", "council")
+	assert_string_contains(String(s.car("dining")["values"].text), "소란 3", "a new session starts from the score, with nothing to hold")
+
+
+func test_a_communitys_own_numbers_move_no_seat_in_the_council() -> void:
+	var s = _council()
+	for i in 200:
+		s.step(0.1)
+	assert_gt(_leaning(s), 0, "the room is in the middle of its gestures")
+	var before: Array = _seats_of(s)
+	s.set_comm("tail", "rel", -80)
+	s.set_comm("tail", "grudge", 2)
+	s.set_sit("front", 0, 5.0)
+	assert_string_contains(String(s.car("dining")["values"].text), "소란 2 언쟁", "only the step changes: 20 + 10 + 15")
+	assert_eq(_seats_of(s), before, "nobody moved, rose or leaned because of one community")
+
+
+func test_nobody_rises_while_the_council_whispers_and_some_do_when_it_shouts() -> void:
+	var s = _council()
+	s.set_train("tension", 0.0)
+	var up := 0
+	var leaning := 0
+	for i in 400:
+		s.step(0.1)
+		up = maxi(up, _up(s))
+		leaning = maxi(leaning, _leaning(s))
+	assert_eq(up, 0, "step 0: seated, heads together")
+	assert_between(leaning, 1, int(Look.UNREST_LOOK[0]["act"]))
+	s.set_train("tension", 90.0)
+	var strays: Array = []
+	for i in 400:
+		s.step(0.1)
+		up = maxi(up, _up(s))
+		strays.append_array(_stray(s, Scene.OUT_IN_SESSION))
+	assert_between(up, 1, int(Look.UNREST_LOOK[4]["rise"]), "step 4: several on their feet, never more than the look allows")
+	assert_eq(strays.slice(0, 3), [], "those who rise stay at their seats")
+
+
+func test_when_the_vote_is_called_everyone_sits_still_and_nobody_moves() -> void:
+	var s = _council()
+	s.set_train("tension", 90.0)
+	for i in 300:
+		s.step(0.1)
+	s.set_train("voting", true)
+	assert_string_contains(String(s.car("dining")["values"].text), "표결")
+	assert_eq(_up(s), 0, "at once")
+	assert_eq(_leaning(s), 0)
+	var x0: float = s.car("dining")["x0"]
+	var before: Dictionary = {}
+	for c in s.cars:
+		for b in c["bodies"]:
+			if b.position.x >= x0 and b.position.x <= x0 + Scene.CAR_LENGTH:
+				before[b] = b.position
+	assert_gte(before.size(), 32)
+	for i in 200:
+		s.step(0.1)
+	for b in before:
+		assert_eq(b.position, before[b], "nobody in the room moves")
+	assert_eq(_up(s), 0)
+	s.set_train("voting", false)
+	var up := 0
+	for i in 200:
+		s.step(0.1)
+		up = maxi(up, _up(s))
+	assert_gt(up, 0, "the room takes up again when the vote is done")
+
+
+func test_a_frightened_council_bows_its_heads_whatever_the_unrest() -> void:
+	var s = _council()
+	s.set_train("tension", 90.0)
+	s.set_train("fear", 70.0)
+	assert_string_contains(String(s.car("dining")["values"].text), "무서운 조용함")
+	assert_eq(_placed(s, "dining").size(), 32, "those who walked stand still")
+	var up := 0
+	for i in 300:
+		s.step(0.1)
+		up = maxi(up, _up(s))
+	assert_eq(up, 0)
+	for b in s.car("dining")["bodies"]:
+		assert_true(bool(b.bowed))
+	s.set_train("fear", 0.0)
+	for b in s.car("dining")["bodies"]:
+		assert_false(bool(b.bowed))
+	assert_eq(_count(s, "dining") - _placed(s, "dining").size(), 2, "and two walk again")
+
+
+func test_after_the_session_nobody_in_the_dining_car_keeps_a_council_gesture() -> void:
+	var s = _council()
+	s.set_train("tension", 90.0)
+	for i in 300:
+		s.step(0.1)
+	s.set_train("phase", "travel")
+	for b in s.car("dining")["bodies"]:
+		assert_eq(int(b.seat), -1)
+		assert_eq(String(b.act), "")
+		assert_eq(float(b.side), 0.0)
 
 
 # ---------------------------------------------------------------- bad rules
