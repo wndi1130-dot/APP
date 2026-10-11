@@ -4,7 +4,7 @@ import type { CardView, Choice, Eff } from './cards';
 import { COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
 import { josa } from './josa';
-import { crewAllowed, deputyOf, returnTrip, startTrip, tripPlan } from './stranded';
+import { crewAllowed, deputyOf, returnTrip, startTrip, supportLineText, tripPlan } from './stranded';
 import type { Card, Game } from './state';
 
 const who = (c: Comm): string => `${COMM_NAME[c]}${josa(COMM_NAME[c], '이/가')}`;
@@ -42,8 +42,8 @@ function departView(g: Game): CardView {
   const crew = crewAllowed(g) ? tripPlan(g, 'crew') : null;
   const c = crew?.comm ?? deputyOf(g);
   const body = crew
-    ? `다음 역까지 ${km}km다. ${COMM_NAME[crew.comm]}에서 ${crew.names.length}명이 손을 들었다. 자루 둘과 나무 상자 하나를 수동차에 싣는다.`
-    : `다음 역까지 ${km}km다. 수동차 하나, 자루 둘. 아무도 열차장 대신 가겠다고 나서지 않는다.`;
+    ? `다음 역까지 ${km}km다. ${COMM_NAME[crew.comm]}에서 ${crew.names.length}명이 손을 들었다. 자루 둘과 나무 상자 하나를 수동차에 싣는다. ${supportLineText(g)}`
+    : `다음 역까지 ${km}km다. 수동차 하나, 자루 둘. 아무도 열차장 대신 가겠다고 나서지 않는다. ${supportLineText(g)}`;
   return {
     title: '수동차', speaker: speaker(g, c), body, focus: c, required: true,
     choices: sendChoices(g, '수색대를 보낸다', '아직 안 보낸다', '하루만 더 본다.', P.tripWaitTension),
@@ -75,7 +75,7 @@ function lostView(g: Game, card: Card): CardView {
   const n = (card.who ?? '').split(',').filter(Boolean).length;
   return {
     title: '돌아오지 않았다', speaker: speaker(g, c), focus: c, required: true,
-    body: `돌아올 날이 지났다. 선로 끝에 아무것도 없다. ${COMM_NAME[c]} 대표가 종이에 적어 둔 이름 ${n}개를 일지에 옮긴다.`,
+    body: `돌아올 날이 지났다. 선로 끝에 아무것도 없다. ${COMM_NAME[c]} 대표가 종이에 적어 둔 이름 ${n}개를 일지에 옮긴다. ${supportLineText(g)}`,
     choices: sendChoices(g, '다시 보낸다', '기다린다', '(열차장은 종이의 이름을 본다.)', 0),
   };
 }

@@ -115,6 +115,15 @@ export function tripPlan(g: Game, mode: 'crew' | 'captain'): TripPlan | null {
 /** 지지가 문턱을 넘었나(수색대를 보낼 수 있나). */
 export const crewAllowed = (g: Game): boolean => supportShare(g) >= P.supportLine;
 
+/** 원정을 고르는 자리에 보이는 문턱 글(결정 037). 위 띠의 여론 ±N과 다른 셈이라 숫자와 까닭을 따로 보인다. */
+export function supportLineText(g: Game): string {
+  const pct = Math.round(supportShare(g) * 100);
+  const line = Math.round(P.supportLine * 100);
+  return crewAllowed(g)
+    ? `지지하는 칸의 사람 ${pct}%. ${line}%를 넘어 수색대를 보낼 수 있다.`
+    : `지지하는 칸의 사람 ${pct}%. ${line}%가 안 돼 열차장이 직접 간다.`;
+}
+
 /** 원정을 보낸다. 식량은 있는 만큼만 가져가고 모자란 몫은 foodShort에 남긴다. */
 export function startTrip(g: Game, mode: 'crew' | 'captain'): boolean {
   const st = g.stranded;

@@ -77,11 +77,13 @@ describe('출발 카드', () => {
     rels(g, -20);
     advance(g);
     expect(choices(g)).toEqual(['내가 간다', '아직 안 보낸다']);
+    expect(viewCard(g, lastCard(g, 'trip_depart')!).body).toContain('50%가 안 돼 열차장이 직접 간다');
     const h = stranded('trip-card-2');
     h.phase = 'prep';
     rels(h, 30);
     advance(h);
     expect(choices(h)).toEqual(['수색대를 보낸다', '내가 간다', '아직 안 보낸다']);
+    expect(viewCard(h, lastCard(h, 'trip_depart')!).body).toMatch(/지지하는 칸의 사람 \d+%\. 50%를 넘어 수색대를 보낼 수 있다/);
   });
 
   it('「아직 안 보낸다」는 긴장 +2이고 다음 턴 같은 카드가 또 뜬다', () => {
