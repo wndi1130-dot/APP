@@ -81,6 +81,12 @@ const EXTRA_ITEMS: Dictionary = {
 const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0]}
 
 var opts: Dictionary = {}
+## What this stop is for (opts["mission"]; content_variety_first_build 2부):
+## "" is the stop as it always was, "survey" the track office, "depot" the
+## loading yard. Anything else is read as "". With "" nothing is written that
+## was not written before.
+const MISSIONS: Array[String] = ["", "survey", "depot"]
+var mission: String = ""
 var rng := RandomNumberGenerator.new()
 var data: Dictionary
 var grid: FieldGrid                    # the ground level
@@ -232,6 +238,10 @@ func _ready() -> void:
 	receipt = Receipt.new(SulehufMap.PLACE_ID, "freight", "small_station_siding")
 	receipt.set_source("direct")
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
+	mission = String(opts.get("mission", ""))
+	if not MISSIONS.has(mission):
+		mission = ""
+	telemetry.mission = mission
 	_build_world()
 	view = MapView.new()
 	add_child(view)
@@ -1812,6 +1822,8 @@ func finish(reason: String) -> void:
 			searched += 1
 	receipt.set_place_state(snappedf(float(searched) / data["containers"].size(), 0.01), clampi(zombies.alive_count() / 10, 0, 5))
 	receipt.place_note("waterTower", data["spots"]["water_tower"]["state"])
+	if mission != "":
+		receipt.place_note("mission", mission)
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
