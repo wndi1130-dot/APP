@@ -1857,6 +1857,13 @@ func on_frozen_wake(z: Dictionary) -> void:
 		hud.toast("눈 속에서 얼음이 갈라진다.")
 
 
+## One of the dead has dropped low and will run (zombies.gd, the tell). The
+## HUD marks it for as long as it stays low; here it is voiced. No rule hears
+## this and nothing is scored: the tell itself calls the dead near it.
+func on_lunge_tell(z: Dictionary) -> void:
+	audio.lunge_tell(z["pos"])
+
+
 func on_risen(z: Dictionary) -> void:
 	if z["name"] != "":
 		hud.toast("%s 일어났다." % z["name"])
