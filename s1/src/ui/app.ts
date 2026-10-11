@@ -2,7 +2,7 @@ import { installTrainScroll } from './train_scroll';
 import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
-import { FX_MS, buzz, fxDiff, fxSnap, setVibrate, slipItems, vibrateOn } from './fx';
+import { FX_MS, buzz, fxDiff, fxSnap, fxWhy, setVibrate, slipItems, vibrateOn } from './fx';
 import { fxPlay } from './fxplay';
 import { departInput, platformSheet, setDepartTap, departTapOn } from './depart';
 import type { Fx, FxSnap } from './fx';
@@ -163,10 +163,11 @@ export function renderApp(view: View): HTMLElement {
  *  서류나 창이 떠 있으면 아래쪽 단추를 가리지 않게 위 띠 바로 아래에 뜬다. */
 function slipEl(fx: Fx, top: boolean): HTMLElement | null {
   const { items, more } = slipItems(fx);
-  if (items.length === 0) return null;
+  if (items.length === 0 && !fx.why) return null;
   return h('div', { class: cx('slip', top && 'slip--top'), role: 'status', 'data-action': 'slip-close', 'data-anim': `slip-${fx.id}` },
     items.map(it => h('span', { class: cx('slip__item', it.up ? 'is-up' : 'is-down') }, it.label, h('b', { class: 'num' }, it.text))),
-    more ? h('span', { class: 'slip__more' }, `외 ${more}`) : null);
+    more ? h('span', { class: 'slip__more' }, `외 ${more}`) : null,
+    fx.why ? h('span', { class: 'slip__why' }, h('i', null, '까닭'), fx.why) : null);
 }
 
 /** 알림 쪽지. 경고는 호박색이고 눌러 닫는다(notice.ts). */
@@ -529,10 +530,14 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'choose': {
         const before = fxSnap(g);
-        const kind = g.cards.find(x => x.uid === Number(data.uid))?.kind;
+        const picked = g.cards.find(x => x.uid === Number(data.uid));
+        const kind = picked?.kind;
+        const why = picked ? viewCard(g, picked).choices[Number(data.index)]?.why : undefined; // 고르면 카드가 사라지니 미리 읽어 둔다
         const ms = darkPickMs(g, Number(data.uid)); // S1b H7: 고르기까지 걸린 시간
         step({ a: 'choose', d: { ...plainData(data), ...(ms ? { ms } : {}) } });
-        showFx(fxDiff(before, g));
+        const fx = fxDiff(before, g);
+        if (fx && why) fx.why = why;
+        showFx(fx ?? (why ? fxWhy(why) : null));
         if (stackCount(g, ui) > 0) focusForTopCard();
         // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
         else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; if (g.dom) enterTrain(); }

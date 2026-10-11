@@ -43,6 +43,8 @@ export interface Fx {
   band: boolean;
   /** 진동할 일(나쁜 쪽 선 넘음, 죽음) */
   buzz: boolean;
+  /** 방금 고른 선택지의 사정 한 줄. 바뀐 것 쪽지 밑에 한 번 더 보인다 */
+  why?: string;
   /** 날아가는 꼬리표 순서(최대 셋): 선 넘는 칸 → 나머지 */
   fly: FxKey[];
 }
@@ -112,6 +114,11 @@ export function fxDiff(before: FxSnap, g: Game): Fx | null {
   const band = died || changed.some(k => d[k]!.big && (k === 'tension' ? d[k]!.v > 0 : d[k]!.v < 0));
   const fly = [...changed.filter(k => d[k]!.word || d[k]!.red), ...changed.filter(k => !d[k]!.word && !d[k]!.red)].slice(0, 3);
   return { id: nextId++, d, rel, seats, heavy, band, buzz: !!heavy || died, fly };
+}
+
+/** 보이는 값이 하나도 안 바뀐 선택에도 사정 한 줄은 남긴다(쪽지에 까닭만 적힌다). */
+export function fxWhy(why: string): Fx {
+  return { id: nextId++, d: {}, rel: {}, seats: { unrest: 0, support: 0 }, heavy: null, band: false, buzz: false, fly: [], why };
 }
 
 /** 꼬리표 글: 부호와 정수 */
