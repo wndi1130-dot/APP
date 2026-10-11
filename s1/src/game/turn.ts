@@ -702,13 +702,12 @@ function biteTick(g: Game): void {
   const keep: typeof g.hiddenBites = [];
   for (const b of g.hiddenBites ?? []) {
     if (g.seg >= b.due) {
+      let bitten = 0;
       if (b.isolated) {
         journal(g, `격리된 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
       } else if (!b.found || !g.cards.some(k => k.kind === 'bite_found' && k.who === b.who)) {
         // 숨긴 물림, 또는 드러났는데 아무도 처리하지 않은 채 기한이 온 물림(K02 1 보험: 무기한으로 남지 않는다).
-        const bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
-        g.injured += bitten;
-        noteInjury(g, bitten, 'rise', '물림', { names: [b.who], comm: b.comm });
+        bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
         bump(g, 'tension', 8, 'corpse');
         g.fear = clamp(g.fear + 5, 0, 100);
         journal(g, `${b.who}이(가) ${COMM_NAME[b.comm]} 안에서 일어났다. ${bitten}명이 물렸다.`, 'bad');
@@ -717,6 +716,11 @@ function biteTick(g: Game): void {
         continue;
       }
       onDeath(g, b.comm, [b.who], 'chosen');
+      // 물린 사람은 일어난 사람이 아니라 그 칸의 산 사람이다. 일어난 이는 방금 죽었으니(기록도 같이 빠졌으니) 죽은 뒤에 뽑는다.
+      if (bitten > 0) {
+        g.injured += bitten;
+        noteInjury(g, bitten, 'rise', '물림', { comm: b.comm });
+      }
       continue;
     }
     if (!b.found && (lawActive(g, 'patrol') || rnd(g) < 0.5)) {
