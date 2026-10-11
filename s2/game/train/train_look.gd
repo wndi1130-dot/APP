@@ -54,10 +54,12 @@ const MOOD_LOOK: Dictionary = {
 ## them. In a car the train's tension stirs: two at each other (a quarrel in
 ## one car, heads together in the next) and the third looking about. In a
 ## car stirred by its own standing with the captain: arms folded, and one
-## with its back turned. For show only.
+## with its back turned. In a frightened car nobody stands about: the
+## first few of those on the floor hug their knees. For show only.
 const GESTURES: Dictionary = {
 	"tension": {"pairs": [Gesture.ARGUE, Gesture.WHISPER], "one": Gesture.TURN_ABOUT},
 	"resent": {"each": [Gesture.ARMS_CROSSED, Gesture.BACK_TURNED, Gesture.ARMS_CROSSED]},
+	"fear": {"floor": [Gesture.HUG_KNEES, Gesture.HUG_KNEES, Gesture.HUG_KNEES]},
 }
 const GESTURE_PAIR: int = 2             # a quarrel takes two: in a tense car one stander alone keeps still
 const SLOT_STRIDE: int = 4
@@ -161,12 +163,14 @@ static func mood_look(m: String) -> Dictionary:
 	return MOOD_LOOK.get(m, MOOD_LOOK["calm"])
 
 
-## The bad value whose gestures a car of mood `m` shows: "tension",
-## "resent" or "". A frightened car shows none (its mood is not "stir"). A
-## car is stirred by the train's tension or by its own standing with the
-## captain (see mood()): on a tense train the tension is what shows, and a
-## car's own resentment shows only on a train that is not.
+## The bad value whose gestures a car of mood `m` shows: "fear", "tension",
+## "resent" or "", one a car. Fear comes first, as it does in mood(). A car
+## is stirred by the train's tension or by its own standing with the
+## captain: on a tense train the tension is what shows, and a car's own
+## resentment shows only on a train that is not.
 static func gesture_for(m: String, train: Dictionary) -> String:
+	if m == "frozen":
+		return "fear"
 	if m != "stir":
 		return ""
 	return "tension" if float(train.get("tension", 0)) >= TENSION_STIR else "resent"
@@ -191,6 +195,18 @@ static func knot_gestures(value: String, standing: int, car_index: int) -> Array
 		elif paired and k == GESTURE_PAIR:
 			name = set["one"]
 		out.append({"name": name, "role": k if k < maxi(GESTURE_PAIR, each.size()) else 0})
+	return out
+
+
+## What each of those a car has on its floor does, in floor order:
+## [{"name", "role"}], name "" for sitting as they were. Only the first few
+## act, each on a beat of its own (role).
+static func floor_gestures(value: String, on_floor: int) -> Array:
+	var out: Array = []
+	var each: Array = (GESTURES.get(value, {}) as Dictionary).get("floor", [])
+	for k in on_floor:
+		var acts: bool = k < each.size()
+		out.append({"name": each[k] if acts else "", "role": k if acts else 0})
 	return out
 
 
