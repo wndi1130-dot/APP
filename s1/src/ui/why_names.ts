@@ -46,4 +46,8 @@ export const WHY_NAME: Record<string, string> = {
   embers: '숨은 불씨',
   order: '질서 잡기',
   case: '사건 처리',
+  law: '법이 낳는 긴장',
+  cast: '열차 방송',
+  upkeep: '열차 살림',
+  disaster: '재난',
 };

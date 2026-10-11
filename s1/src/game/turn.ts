@@ -1,7 +1,8 @@
 import { addCard, END_LINK } from './state';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
-import { calmCoal, calmNight, calmSettle, calmTension } from './calm';
+import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
+import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
@@ -175,6 +176,21 @@ export function forecast(g: Game): { coal: number; food: number } {
   return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
 }
 
+/** 구간 정산이 한꺼번에 빼는 석탄·식량을 까닭별 무게로 나눈다. forecast의 항을 그대로 풀어 쓴 것이고, 비율로만 쓰므로 합은 forecast와 달라도 된다. */
+function forecastWeights(g: Game): { coal: [string, number][]; food: [string, number][] } {
+  const dom = domesticForecast(g);
+  return {
+    coal: [
+      ['run', (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0)],
+      ['heat', heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd')],
+      ['calm.pot', calmCoal(g)],
+      ['disaster', disasterCoal(g)],
+      ['upkeep', dom.coal],
+    ],
+    food: [['ration', (foodCost(g) + lawSum(g, 'foodAdd')) * dom.foodMult], ['upkeep', dom.food]],
+  };
+}
+
 function depart(g: Game): void {
   delete g.platform; // 승강장에 남은 사람은 떠나면서 일지에 그어졌다(5b.5)
   if (g.seg % P.winterEvery === 0) {
@@ -196,7 +212,7 @@ function depart(g: Game): void {
   const striking = engine.fervor >= 1 && engine.rel <= domesticStrikeLine(g, P.strikeRel);
   if (striking && lawActive(g, 'strike_ban')) {
     engine.fervor = 0;
-    engine.rel = clamp(engine.rel - 10, -100, 100);
+    bumpRel(g, 'engine', -10, 'strike');
     g.fear = clamp(g.fear + 10, 0, 100);
     journal(g, '파업 금지법에 따라 경비대가 기관실 문을 열었다. 화부들이 불 앞으로 끌려갔다.', 'dark');
   } else if (striking && !domesticStrikeRuns(g)) {
@@ -234,7 +250,7 @@ export function burnPyre(g: Game): void {
   const n = pyreCount(g);
   if (n <= 0) return;
   const byWood = domesticPyreWood(g, n); // S1c 내정 훅: 목재 먼저(4.1)
-  g.coal -= Math.min(Math.max(0, g.coal), P.pyreCoal * (n - byWood));
+  bump(g, 'coal', -Math.min(Math.max(0, g.coal), P.pyreCoal * (n - byWood)), 'pyre');
   g.pyre = 0;
   darkPyreWeights(g, 0, 0); // S1b: 태운 시신의 확인 수도 비운다
   while (pyreCount(g) > 0) takeKinBody(g);
@@ -430,7 +446,7 @@ export function crewWork(g: Game, c: Comm, gain: number): string | null {
   // 이미 한계 위면 그대로 두고, 아래면 한계까지만 오른다.
   s.base[3] = Math.max(s.base[3], Math.min(P.crewCap, s.base[3] + gain));
   if (!CHORE_COMMS.includes(c)) return null;
-  s.rel = clamp(s.rel + P.choreRel, -100, 100);
+  bumpRel(g, c, P.choreRel, 'stop.loot');
   return `${COMM_NAME[c]}${josa(COMM_NAME[c], '은/는')} 손에 안 익은 짐을 날랐다. 불만이 나온다.`;
 }
 
@@ -482,7 +498,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   }
   // 위험은 위에서 정차 상태를 바꾸기 전에 정했다(K01 4). 장작불이 시신을 태우면 불빛 배수가 빠져 예고한 피해와 달라진다.
   const stay = STAY[stop.stay];
-  g.coal -= stay.coal;
+  bump(g, 'coal', -stay.coal, 'stop.stay');
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
@@ -510,10 +526,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
       if (v > 0) gains[k] = v;
     }
   }
-  g.coal += gains.coal ?? 0;
-  g.food += gains.food ?? 0;
-  g.med += gains.medicine ?? 0;
-  g.lux += gains.luxury ?? 0;
+  bump(g, 'coal', gains.coal ?? 0, 'stop.loot');
+  bump(g, 'food', gains.food ?? 0, 'stop.loot');
+  bump(g, 'med', gains.medicine ?? 0, 'stop.loot');
+  bump(g, 'lux', gains.luxury ?? 0, 'stop.loot');
   g.symbols += gains.symbol ?? 0;
   for (let i = 0; i < (gains.secret ?? 0); i += 1) {
     const s = addSecret(g);
@@ -533,7 +549,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 명령에 다친 대상이 약속대로 죽으면 runOrder가 센 부상을 되돌린다.
   if (orderHit && dead.includes(orderHit)) g.injured = Math.max(0, g.injured - 1);
   // 열차장 명령으로 나갔다가 크게 다쳤다(body_injury 4.3, 제안).
-  if (injuredOnly.length > 0) g.comms[stop.crewComm].rel = clamp(g.comms[stop.crewComm].rel + P.hurtRel * injuredOnly.length, -100, 100);
+  if (injuredOnly.length > 0) bumpRel(g, stop.crewComm, P.hurtRel * injuredOnly.length, 'stop.loot');
   // '매우 불길하다'를 보고도 보냈으면 열차장이 고른 죽음이다.
   if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = scoutsBack;
@@ -564,7 +580,7 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
       const want = FETCH_WANT[c];
       if ((gains[want.target] ?? 0) >= want.amount) {
         keepPromise(g, c);
-        g.comms[c].rel = clamp(g.comms[c].rel + 10, -100, 100);
+        bumpRel(g, c, 10, 'promise');
       } else {
         breakPromise(g, c);
       }
@@ -583,8 +599,8 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
 export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
   s.promise = null;
-  g.trust = clamp(g.trust + 4, 0, 100);
-  s.rel = clamp(s.rel + 5, -100, 100);
+  bump(g, 'trust', 4, 'promise');
+  bumpRel(g, c, 5, 'promise');
   if (s.grudge === 1) s.grudge = 0;
   g.stats.promisesKept += 1;
   if (g.dark) g.dark.kept[c] += 1; // S1b 신임 입장(5.3): 칸마다 지킨 약속
@@ -595,10 +611,10 @@ export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label 
 export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
   s.promise = null;
-  g.trust = clamp(g.trust - (seats(g)[c] >= 30 ? 12 : 8), 0, 100);
-  s.rel = clamp(s.rel - 20, -100, 100);
+  bump(g, 'trust', -(seats(g)[c] >= 30 ? 12 : 8), 'promise');
+  bumpRel(g, c, -20, 'promise');
   s.fervor = Math.min(3, s.fervor + 1);
-  g.tension = clamp(g.tension + 3, 0, 100);
+  bump(g, 'tension', 3, 'promise');
   g.stats.promisesBroken += 1;
   if (g.dark) g.dark.broken[c] += 1;
   offend(g, c);
@@ -620,14 +636,14 @@ function settle(g: Game): void {
   const before = { coal: g.coal, food: g.food, med: g.med, trust: g.trust, tension: g.tension, rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number> };
   const notes: string[] = [];
   const f = forecast(g);
-  g.coal -= f.coal;
-  g.food -= f.food;
+  const w = forecastWeights(g);
+  bumpParts(g, 'coal', -f.coal, w.coal);
+  bumpParts(g, 'food', -f.food, w.food);
   if (!g.inStrike) g.comms.engine.base[3] += P.engineFatigue;
-  else g.tension = clamp(g.tension + 3, 0, 100);
+  else bump(g, 'tension', 3, 'strike');
   // 공간을 내준 칸은 당겨 둔 동안 구간마다 단당 관계 −1(first_leg_story 6.4).
   if (g.space?.giver && g.space.step > 0) {
-    const giver = g.comms[g.space.giver];
-    giver.rel = clamp(giver.rel + P.spaceHoldRel * g.space.step, -100, 100);
+    bumpRel(g, g.space.giver, P.spaceHoldRel * g.space.step, 'situation');
   }
   g.forcedRun = false;
   g.guardEscort = false;
@@ -671,7 +687,7 @@ function biteTick(g: Game): void {
         // 숨긴 물림, 또는 드러났는데 아무도 처리하지 않은 채 기한이 온 물림(K02 1 보험: 무기한으로 남지 않는다).
         const bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
         g.injured += bitten;
-        g.tension = clamp(g.tension + 8, 0, 100);
+        bump(g, 'tension', 8, 'corpse');
         g.fear = clamp(g.fear + 5, 0, 100);
         journal(g, `${b.who}이(가) ${COMM_NAME[b.comm]} 안에서 일어났다. ${bitten}명이 물렸다.`, 'bad');
       } else {
@@ -734,7 +750,7 @@ export function emergencyStatus(g: Game): { show: boolean; ok: boolean; cost: nu
 export function callEmergency(g: Game): boolean {
   const st = emergencyStatus(g);
   if (!st.ok) return false;
-  g.trust = clamp(g.trust - st.cost, 0, 100);
+  bump(g, 'trust', -st.cost, 'emergency');
   (g.emergencyCalls ??= []).push(g.seg);
   openCouncil(g, true);
   g.phase = 'council';
@@ -748,7 +764,7 @@ function medicineTick(g: Game, notes: string[]): void {
   const med = g.comms.medtech;
   const refusing = med.fervor >= 1 && med.rel <= -40;
   if (g.med >= need) {
-    g.med -= need;
+    bump(g, 'med', -need, 'sick');
     if (refusing) {
       notes.push('의무진이 진료를 거부했다.');
     } else {
@@ -760,7 +776,7 @@ function medicineTick(g: Game, notes: string[]): void {
       g.injured -= healed;
     }
   } else {
-    g.med = 0;
+    put(g, 'med', 0, 'sick');
     let dead = 0;
     for (let i = 0; i < g.injured; i += 1) if (rnd(g) < 0.1) dead += 1;
     g.injured -= dead;
@@ -779,14 +795,14 @@ function medicineTick(g: Game, notes: string[]): void {
     if (inKin) takeKinBody(g);
     else g.pyre = (g.pyre ?? 0) - 1;
     g.injured += 1;
-    g.tension = clamp(g.tension + 5, 0, 100);
+    bump(g, 'tension', 5, 'corpse');
     journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
   // S1b: 무게를 늘 먼저 셈해 냉동칸이 비면 확인 수도 0으로 돌린다. S1a 판이면 무게가 곧 시신 수다.
   const storedWeight = darkStoredWeight(g, g.stored);
   if (storedWeight > 0 && rnd(g) < Math.min(0.3, P.storeRisk * storedWeight) * domesticThawMult(g)) {
     g.injured += 2;
-    g.tension = clamp(g.tension + 8, 0, 100);
+    bump(g, 'tension', 8, 'corpse');
     g.stored = 0;
     darkStoredWeight(g, 0);
     journal(g, '냉동칸의 시신이 녹아 일어났다. 둘이 다쳤다.', 'bad');
@@ -806,7 +822,7 @@ function drift(g: Game): void {
     }
     if (g.food <= 0) dr -= 5;
     if (c === 'front' && g.lux <= 0) dr -= 1;
-    s.rel = clamp(s.rel + clamp(dr, -6, P.recoverCap), -100, 100);
+    bumpRel(g, c, clamp(dr, -6, P.recoverCap), 'situation');
     if (s.rel <= -40) {
       s.badStreak += 1;
       if (s.badStreak >= 3) {
@@ -837,8 +853,8 @@ function checkDuePromises(g: Game): void {
     if (p.cond.kind === 'heat') ok = s.heat >= (p.baseline ?? 0) + 1;
     else if (p.cond.kind === 'ration') ok = s.ration >= (p.baseline ?? 0) + 1;
     else if (p.cond.kind === 'keep_ration') ok = s.ration >= (p.baseline ?? 0);
-    else if (p.cond.kind === 'give_med') { ok = g.med >= (p.cond.amount ?? 0); if (ok) g.med -= p.cond.amount ?? 0; }
-    else if (p.cond.kind === 'give_lux') { ok = g.lux >= (p.cond.amount ?? 0); if (ok) g.lux -= p.cond.amount ?? 0; }
+    else if (p.cond.kind === 'give_med') { ok = g.med >= (p.cond.amount ?? 0); if (ok) bump(g, 'med', -(p.cond.amount ?? 0), 'promise'); }
+    else if (p.cond.kind === 'give_lux') { ok = g.lux >= (p.cond.amount ?? 0); if (ok) bump(g, 'lux', -(p.cond.amount ?? 0), 'promise'); }
     if (ok) keepPromise(g, c); else breakPromise(g, c);
   }
 }
@@ -849,7 +865,7 @@ function bribeDetection(g: Game): void {
       const s = g.comms[deal.comm];
       if (rnd(g) < BRIBE_EXPOSE[s.leader.trait]) exposeBribe(g, deal.comm);
     } else if (deal.tool === 'favor' && rnd(g) < 0.15) {
-      for (const o of COMMS) if (o !== deal.comm) g.comms[o].rel = clamp(g.comms[o].rel - 5, -100, 100);
+      for (const o of COMMS) if (o !== deal.comm) bumpRel(g, o, -5, 'deal');
       journal(g, `${g.comms[deal.comm].leader.name}의 표가 빚 때문이었다는 말이 돈다. 공정성 시비가 붙었다.`, 'bad');
     }
   }
@@ -861,8 +877,8 @@ function leashTick(g: Game): void {
   for (const leash of g.leashes) {
     const s = g.comms[leash.comm];
     if (rnd(g) < s.grudge * leash.weight * 0.04) {
-      s.rel = clamp(s.rel - (g.seg - leash.since) * 3, -100, 100);
-      g.trust = clamp(g.trust - 5, 0, 100);
+      bumpRel(g, leash.comm, -(g.seg - leash.since) * 3, 'deal');
+      bump(g, 'trust', -5, 'deal');
       offend(g, leash.comm);
       addCard(g, { kind: 'leash', comm: leash.comm });
       journal(g, `${s.leader.name}이(가) 목줄을 끊었다. 협박이 드러났다.`, 'bad');
@@ -918,9 +934,9 @@ function aiLeaders(g: Game): void {
     const s = g.comms[c];
     if (s.agitateCool > 0) { s.agitateCool -= 1; continue; }
     if (s.rel <= -15 && rnd(g) < 0.25) {
-      g.tension = clamp(g.tension + 3, 0, 100);
+      bump(g, 'tension', 3, 'mood');
       const n = COMMS[(COMMS.indexOf(c) + 1) % COMMS.length];
-      g.comms[n].rel = clamp(g.comms[n].rel - 3, -100, 100);
+      bumpRel(g, n, -3, 'mood');
       s.agitateCool = 3;
       journal(g, `밤중에 ${COMM_NAME[c]}에서 수상한 모임이 있었다.`, 'dark');
     }
@@ -945,7 +961,7 @@ function aiLeaders(g: Game): void {
 function meters(g: Game): void {
   const seatMap = seats(g);
   const avg = COMMS.reduce((sum, c) => sum + g.comms[c].rel * seatMap[c], 0) / 100;
-  g.trust = clamp(g.trust + clamp(avg / 40, -2.5, 2.5), 0, 100);
+  bump(g, 'trust', clamp(avg / 40, -2.5, 2.5), 'mood');
   let inc = 0;
   for (const c of COMMS) {
     const s = g.comms[c];
@@ -954,28 +970,35 @@ function meters(g: Game): void {
     const [w, r] = situation(g, c);
     if (w <= 25 || r <= 25) inc += 2;
   }
-  if (g.food <= 0) inc += 8;
+  const moodInc = inc;
+  const foodInc = g.food <= 0 ? 8 : 0;
+  inc += foodInc;
   inc += lawSum(g, 'tensionAdd') + calmTension(g);
   const cast = domesticBroadcast(g); // S1c 내정 훅: R2 나 열차 방송
   g.fear = clamp(g.fear + lawSum(g, 'fearAdd') + cast.fear, 0, 100);
-  if (inc <= 0) g.tension -= 2;
-  else g.tension += Math.max(0, inc - cast.tensionCut) * (1 - g.fear / 200);
+  if (inc <= 0) {
+    bump(g, 'tension', -2, 'drift');
+  } else {
+    const potT = potRunning(g) ? CALM.potTension : 0;
+    bumpParts(g, 'tension', Math.max(0, inc - cast.tensionCut) * (1 - g.fear / 200), [
+      ['mood', moodInc], ['short', foodInc], ['law', lawSum(g, 'tensionAdd')], ['calm.pot', potT], ['calm.ledger', calmTension(g) - potT], ['cast', -cast.tensionCut],
+    ]);
+  }
   g.fear = clamp(g.fear - 1, 0, 100);
-  g.tension = clamp(g.tension, 0, 100);
 }
 
 function checkEnd(g: Game): void {
   if (g.coal <= 0) {
     if (!g.emergencyUsed) {
       g.emergencyUsed = true;
-      g.coal += 15;
-      g.tension = clamp(g.tension + 10, 0, 100);
+      bump(g, 'coal', 15, 'short');
+      bump(g, 'tension', 10, 'short');
       journal(g, '석탄이 바닥났다. 가구와 책, 빈 객차 판자를 뜯어 보일러에 넣었다(석탄 +15).', 'dark');
     } else {
       return finish(g, 'stranded');
     }
   }
-  if (g.food < 0) g.food = 0;
+  if (g.food < 0) put(g, 'food', 0, 'short');
   // S1b 계엄 중엔 신임 대신 경비대의 충성을 쥔다. 신임 위기로 축출되지 않는다(5.3).
   const martial = !!g.dark?.martial;
   if (!martial && g.trust <= 0 && g.trustCrisis === null) {
