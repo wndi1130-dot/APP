@@ -150,7 +150,7 @@ export function bottomBar(view: View): HTMLElement {
   const { g, ui } = view;
   const primary = primaryAction(g);
   const inCouncil = ui.screen === 'council';
-  const left = inCouncil || ui.screen === 'overview'
+  const left = inCouncil || ui.screen === 'overview' || ui.screen === 'train'
     ? [h('button', { class: 'round', 'data-action': 'go', 'data-screen': 'home', 'aria-label': '열차로' }, icon('back'))]
     : [
       h('button', { class: cx('round', ui.panel === 'menu' && 'is-on'), 'data-action': 'panel', 'data-panel': 'menu', 'aria-label': '메뉴' }, icon('menu')),

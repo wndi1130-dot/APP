@@ -34,15 +34,22 @@ describe('자원 까닭 창', () => {
     const g = createS1cGame('res-2');
     let rows = 0;
     for (let n = 0; n < 60 && g.phase !== 'end' && g.phase !== 'council'; n += 1) {
-      const before = { coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux), len: g.resLog?.length ?? 0, seg: g.seg };
+      const before = { coal: Math.round(g.coal), food: Math.round(g.food), med: Math.round(g.med), lux: Math.round(g.lux), old: new Set(g.resLog ?? []), seg: g.seg };
       applyStep(g, act(g));
       const d = [Math.round(g.coal) - before.coal, Math.round(g.food) - before.food, Math.round(g.med) - before.med, Math.round(g.lux) - before.lux];
-      const log = g.resLog ?? [];
-      if (d.every(v => v === 0)) { expect(log.length).toBe(before.len); continue; }
+      const added = (g.resLog ?? []).filter(r => !before.old.has(r));
+      if (d.every(v => v === 0)) { expect(added).toEqual([]); continue; }
       rows += 1;
-      const last = log[log.length - 1];
-      expect([last.coal, last.food, last.med, last.lux, last.seg]).toEqual([...d, before.seg]);
-      expect(last.label.length).toBeGreaterThan(0);
+      // 열차가 굴러간 걸음은 까닭 이름별로 여러 줄이 남을 수 있다. 줄의 합이 보이는 차이와 같다.
+      expect(added.length).toBeGreaterThan(0);
+      expect([
+        added.reduce((s, r) => s + r.coal, 0), added.reduce((s, r) => s + r.food, 0),
+        added.reduce((s, r) => s + r.med, 0), added.reduce((s, r) => s + r.lux, 0),
+      ]).toEqual(d);
+      for (const r of added) {
+        expect(r.seg).toBe(before.seg);
+        expect(r.label.length).toBeGreaterThan(0);
+      }
     }
     expect(rows).toBeGreaterThan(0);
   });

@@ -196,3 +196,70 @@
 .dom-vrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-top: 4px; border-top: 1px solid var(--line); }
 .dom-vrow__acts { display: flex; gap: 6px; margin-left: auto; }
 .dom-board__acts { align-items: center; }
+
+/* ---- 열차 관리 화면(train.ts): 위 띠, 가운데 칸 판, 아래 단추 여섯. 색·테두리는 칸 창 것을 그대로 쓴다. ---- */
+.tscreen { position: absolute; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #121518; }
+.tstrip { display: flex; gap: 2px; padding: 4px var(--gutter-r) 4px var(--gutter-l); border-bottom: 1px solid var(--line); }
+.tcar {
+  flex: 1 1 0; min-width: 0; min-height: 44px; padding: 2px 0; display: grid; align-content: center; justify-items: center; gap: 2px;
+  border: 1px solid var(--line-strong); border-top-width: 3px; border-radius: 4px; background: var(--surface-1); color: var(--ink-2); font-size: 12px;
+}
+.tcar.is-warm { border-top-color: var(--warm); }
+.tcar.is-cold { border-top-color: var(--cold); }
+.tcar.is-freezing { border-top-color: #e7eef3; }
+.tcar.is-open { background: var(--surface-3); color: var(--ink-1); border-color: var(--ink-1); }
+.tcar--loco { border-style: dashed; color: var(--ink-3); }
+.tcar__name { white-space: nowrap; overflow: hidden; max-width: 100%; }
+.tcar__marks { display: flex; align-items: center; gap: 3px; min-height: 12px; font-size: 12px; }
+.tcar__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neutral); }
+.tcar__dot.is-up { background: var(--support); }
+.tcar__dot.is-down { background: var(--discontent); }
+.tcar .dom-gear { width: 12px; height: 12px; }
+
+.tboard { min-height: 0; overflow-y: auto; padding: 4px var(--gutter-r) 4px var(--gutter-l); }
+.tboard .carpop {
+  position: static; transform: none; width: auto; max-width: 1100px; margin: 0 auto; z-index: auto;
+  box-shadow: none; border: 0; background: transparent; padding: 0;
+}
+.tboard .dom-pop:not(.carpop--small) { width: auto; }
+.tboard .carpop__nav { display: none; }
+.tpop__head { position: relative; display: flex; justify-content: center; align-items: center; min-height: 28px; }
+.tpop__name { padding: 1px 14px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-2); }
+.tpop__head .x { position: absolute; right: 0; top: 0; width: 28px; height: 28px; }
+.tpop__body { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 16fr) minmax(0, 8fr); gap: 8px; margin-top: 4px; }
+.tblk { min-width: 0; padding: 4px 8px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); display: grid; gap: 4px; align-content: start; }
+.tblk__title { color: var(--ink-3); font-size: 12px; }
+.tblk__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.tblk__row .icon { width: 14px; height: 14px; }
+.tblk .carpop__stats { margin-bottom: 0; }
+.tblk .dom-tag { flex-wrap: wrap; }
+.tblk .carpop__levers { grid-template-columns: 1fr 1fr; }
+.tblk .dom-engine { grid-column: 1 / -1; display: flex; flex-direction: row; padding-left: 0; border-left: 0; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+
+.tbtns { display: flex; gap: 6px; padding: 4px var(--gutter-r) 4px var(--gutter-l); border-top: 1px solid var(--line); }
+.tbtn {
+  flex: 1 1 0; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface-2); color: var(--ink-1); font-size: 13px;
+}
+.tbtn.is-on { border-color: var(--ink-1); background: var(--surface-3); }
+.tbtn:disabled { color: var(--ink-3); }
+.tbtn .dom-gear { width: 16px; height: 16px; }
+.tbtn__label { white-space: nowrap; }
+.tbtn__badge { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.tstack { position: absolute; left: var(--gutter-l); top: 58px; min-height: 28px; z-index: 2; color: var(--warning); }
+.tstack .icon { width: 14px; height: 14px; }
+@media (max-width: 900px) {
+  .tblk .carpop__stats { grid-template-columns: repeat(2, 1fr); gap: 4px 8px; }
+  .tbtn { gap: 3px; font-size: 12px; }
+}
+.tscreen:has(.tstack) .tboard .carpop__head { padding-left: 52px; }
+/* 노트북처럼 넓고 높은 화면: 띠와 단추를 키우고 판을 통째로 키운다(도면 2-5). */
+@media (min-width: 1400px) and (min-height: 700px) {
+  .tstrip { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
+  .tcar { min-height: 72px; font-size: 15px; }
+  .tboard { padding-top: 16px; }
+  .tboard .carpop { zoom: 1.45; }
+  .tbtns { gap: 16px; padding-top: 10px; padding-bottom: 10px; }
+  .tbtn { min-height: 56px; font-size: 16px; }
+  .tstack { top: 96px; }
+}
