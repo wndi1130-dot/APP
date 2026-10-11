@@ -51,7 +51,7 @@ function meter(name: 'trust' | 'tension', label: string, value: number, tone: st
       h('div', { class: 'meter__bar' }, h('i', { style: `width:${pct(value)};background:var(${tone})` }))));
 }
 
-function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: number, delta?: number, fx?: Fx | null) {
+function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: number, delta?: number, fx?: Fx | null, halt?: string) {
   // 누르면 어디에 얼마 드는지와 최근에 늘고 준 까닭이 뜬다(panels.ts resPanel, 사용자 2026-10-11).
   return h('div', { class: cx('res', ...fxCls(fx, name)), 'data-fx-cell': name, ...(fx?.heavy === name ? { 'data-anim': `fx-${fx.id}-${name}-cross` } : {}),
     role: 'button', tabindex: 0, 'data-action': 'panel', 'data-panel': `why-${name}`, 'aria-label': `${label} ${fmt(value)}, 드는 곳과 바뀐 까닭 보기` },
@@ -59,7 +59,8 @@ function resource(name: 'coal' | 'food' | 'med' | 'lux', label: string, value: n
     icon(name, `res__icon res__icon--${name}`),
     h('div', { class: 'res__body' },
       h('b', { class: cx('num', value < P.crisisLine && name !== 'lux' && name !== 'med' && 'is-low'), ...rollAttr(fx, name) }, fmt(value)),
-      delta !== undefined ? deltaLine(value, delta) : h('span', { class: 'res__delta' }, label)));
+      halt ? h('span', { class: 'res__delta res__halt num' }, halt)
+        : delta !== undefined ? deltaLine(value, delta) : h('span', { class: 'res__delta' }, label)));
 }
 
 /** 이번 구간 증감과, 줄어드는 중이면 정차에서 못 채울 때 몇 구간 뒤 바닥나는지(사용자 2026-10-09). */
@@ -131,7 +132,8 @@ export function topBar(view: View): HTMLElement {
         return h('span', { class: cx('fx-rel num', v > 0 ? 'fx-up' : 'fx-down') }, `${COMM_NAME[c].slice(0, 2)} ${fxText(v)}`);
       })) : null),
     h('div', { class: 'top__res' },
-      resource('coal', '석탄', g.coal, -f.coal, fx),
+      // 석탄 0으로 선 동안에는 「몇 구간 버틴다」 자리에 멈춘 턴을 적는다(결정 094).
+      resource('coal', '석탄', g.coal, -f.coal, fx, g.stranded ? `멈춤 ${g.stranded.turns + 1}턴째` : undefined),
       resource('food', '식량', g.food, -f.food, fx),
       resource('med', '의약품', g.med, undefined, fx),
       resource('lux', '사치품', g.lux, undefined, fx),
@@ -150,18 +152,21 @@ export function bottomBar(view: View): HTMLElement {
     ];
   const phaseIndex = PHASES.indexOf(g.phase as typeof PHASES[number]);
   const session = isSessionSeg(g.seg);
-  const steps = PHASES.map((p, i) => h('li', {
+  // 선 열차는 정차하지 않는다. 단계 줄에서 정차를 빼고 이름을 멈춘 턴의 것으로 바꾼다.
+  const halted = !!g.stranded;
+  const stepName = (p: typeof PHASES[number]) => (halted && p === 'prep' ? '멈춤' : halted && p === 'travel' ? '사건' : PHASE_NAME[p]);
+  const steps = PHASES.map((p, i) => halted && p === 'stop' ? null : h('li', {
     class: cx('steps__item', i < phaseIndex && 'is-done', i === phaseIndex && 'is-now', p === 'council' && !session && 'is-skip'),
-  }, h('i', { class: 'steps__dot' }), h('span', null, p === 'council' && !session ? `${3 - (g.seg % 3)}구간 뒤` : PHASE_NAME[p])));
+  }, h('i', { class: 'steps__dot' }), h('span', null, p === 'council' && !session ? `${3 - (g.seg % 3)}구간 뒤` : stepName(p))));
   const showOverview = ui.screen === 'home' || ui.screen === 'overview';
   const primaryBtn = inCouncil && g.council && !g.council.result && g.council.options.length > 0
     ? null
-    : g.phase === 'prep' && primary.ok ? departLever() // 출발은 당겨 내리는 놋쇠 레버(5b.5)
+    : g.phase === 'prep' && primary.ok && !halted ? departLever() // 출발은 당겨 내리는 놋쇠 레버(5b.5). 선 열차는 레버 대신 「턴 넘김」
     : h('button', {
       class: cx('primary', !primary.ok && 'is-blocked'),
       'data-action': primary.ok ? 'advance' : 'open-stack',
       'aria-label': primary.why ?? primary.label,
-    }, h('span', null, primary.label), icon(primary.ok ? 'arrow' : 'papers'));
+    }, h('span', null, halted && g.phase === 'prep' && primary.ok ? '턴 넘김' : primary.label), icon(primary.ok ? 'arrow' : 'papers'));
   // 비상 소집: 회기가 아닌 구간에 정차를 마치면 신임을 써서 의회를 부를 수 있다.
   const em = emergencyStatus(g);
   const emergencyBtn = em.show && ui.screen === 'home' ? h('button', {

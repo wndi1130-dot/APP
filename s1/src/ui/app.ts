@@ -733,6 +733,10 @@ export function startApp(root: HTMLElement): void {
         });
         return;
       }
+      case 'str-train':
+        ui.strTrain = !ui.strTrain;
+        ui.carPop = null;
+        return render();
       case 'toggle-vibrate':
         setVibrate(!vibrateOn());
         toast(vibrateOn() ? '진동을 켰다. 나쁜 쪽으로 선을 넘거나 사람이 죽을 때만 짧게 떤다.' : '진동을 껐다.');

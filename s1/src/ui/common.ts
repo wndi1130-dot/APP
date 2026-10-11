@@ -25,6 +25,8 @@ export interface Ui {
   panel: Panel;
   /** 홈에서 누른 칸의 작은 창. 내정을 켠 판에선 열차 관리 화면(screen 'train')이 보일 칸이다(train.ts) */
   carPop: string | null;
+  /** 멈춘 열차 동안 멈춘 판 대신 열차 단면을 보는 중(stranded.ts) */
+  strTrain?: boolean;
   /** 꼬리칸 창에서 레버 대신 공간 레버(6.4)를 펼쳤나 */
   spaceOpen?: boolean;
   /** 서류(결정 카드)가 펼쳐졌나 */
