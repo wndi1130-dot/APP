@@ -40,6 +40,12 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	# Measuring build only: on the phone (or with S2_MEASURE set) the sizes play by themselves.
+	if OS.has_feature("android") or OS.get_environment("S2_MEASURE") != "":
+		var run: Node = load("res://zz_measure/run.gd").new()
+		run.boot = self
+		add_child(run)
+		return
 	var auto: String = OS.get_environment("S2_AUTOSTART")
 	if auto != "":
 		_start()
