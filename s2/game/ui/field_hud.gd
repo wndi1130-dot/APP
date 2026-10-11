@@ -108,6 +108,7 @@ var weapon_label: Label
 var allies_box: HBoxContainer
 var ally_buttons: Array = []
 var crew_button: Button
+var all_aboard_button: Button         # every companion back to the train at one press
 var context_button: Button
 var context_rows: Array = []
 var context_t: float = 0.0
@@ -390,6 +391,10 @@ func _build_thumbs() -> void:
 	manual_button = _pad("수동", Vector2(-312, -200), Vector2(92, 48), 18)
 	shove_button = _pad("밀치기", Vector2(-160, -238), Vector2(140, 84))
 	context_button = _pad("상황", Vector2(-312, -292), Vector2(140, 84), 20)
+	# Every companion back to the train at one press (user 2026-10-11). On top
+	# of the aim column: a stretch for the right thumb, with the situation pad
+	# between it and aim, and a column away from attack and shove.
+	all_aboard_button = _pad("모두\n열차로", Vector2(-312, -366), Vector2(140, 64), 20)
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
 	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
@@ -725,7 +730,7 @@ func _tick_allies() -> void:
 		var cmd := ""
 		for c in COMMANDS:
 			if c[0] == p.command:
-				cmd = c[1]
+				cmd = command_word(c)
 		var word: String = p.body.status_words()
 		if not p.grabbers.is_empty():
 			word = "잡힘!"
@@ -735,6 +740,7 @@ func _tick_allies() -> void:
 			word = p.action_label
 		b.text = _ally_text(p, "%s · %s" % [cmd, word])
 		b.modulate = Color(1, 0.6, 0.55) if not p.grabbers.is_empty() or p.body.downed else (Color(0.6, 0.6, 0.6) if not p.is_alive() else Color.WHITE)
+	all_aboard_button.visible = not ally_buttons.is_empty()
 	crew_button.visible = game.actions.work_started
 	if crew_button.visible:
 		var alive := 0
@@ -1162,7 +1168,7 @@ func _ally_menu(p) -> void:
 	g.columns = 3
 	v.add_child(g)
 	for c in COMMANDS:
-		g.add_child(_button(c[1], _command.bind(p, c[0]), Vector2(150, 64)))
+		g.add_child(_button(command_word(c), _command.bind(p, c[0]), Vector2(150, 64)))
 	var foot := HBoxContainer.new()
 	foot.add_theme_constant_override("separation", 10)
 	v.add_child(foot)
@@ -1170,7 +1176,26 @@ func _ally_menu(p) -> void:
 	foot.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
 
 
-func _command(p, cmd: String) -> void:
+## The word for an order. The one-by-one 'retreat' may be shown as '열차로'
+## (opts["retreat_name"] = "train"), to be chosen on the phone.
+func command_word(c: Array) -> String:
+	if c[0] == "retreat" and String(game.opts.get("retreat_name", "")) == "train":
+		return "열차로"
+	return c[1]
+
+
+## Every living companion gets the 'retreat' order at once. The work crew is
+## not in it: it has its own recall on its card.
+func _all_aboard() -> void:
+	var sent := 0
+	for row in ally_buttons:
+		if row["p"].is_alive():
+			_command(row["p"], "retreat", false)
+			sent += 1
+	toast("모두 열차로 돌아간다." if sent > 0 else "보낼 동료가 없다.")
+
+
+func _command(p, cmd: String, close: bool = true) -> void:
 	p.command = cmd
 	p.brain["boarded"] = false
 	p.target_zombie = {}
@@ -1180,7 +1205,8 @@ func _command(p, cmd: String) -> void:
 			p.command_target = p.position
 		"search":
 			p.command_target = game.player.position
-	_close_modal()
+	if close:
+		_close_modal()
 
 
 ## Work crew settings: attitude and fire permission per crew (s2_station 2.4).
@@ -1677,6 +1703,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		context_button.button_pressed = true
 	elif b == pause_button:
 		_toggle_pause()
+	elif b == all_aboard_button:
+		_all_aboard()
 	elif b == radio_opt_button:
 		var modes: Array = game.RADIO_MODES
 		var next: String = modes[(modes.find(game.radio_mode()) + 1) % modes.size()]

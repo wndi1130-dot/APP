@@ -51,7 +51,7 @@ export const D = {
   // 6.5 고장: 부품이 이만큼 있으면 저절로 고친다
   autoRepairParts: 2,
   // 4.1 의무칸 침상, 넘치면 한 명마다 기술·의무진 과밀 +5. 10장 11번 '누가 침상에 눕나'
-  beds: 6, bedCrowd: 5, bedWorkersRel: 2, bedSickHeal: 0.4, bedRotaCrowd: 5,
+  beds: 6, bedCrowd: 5, bedWorkersRel: 2, bedRotaCrowd: 5,
   // 4.1 냉동칸 '묻고 간다'(길게 머무는 정차): 산출 ×0.85, 한 번에 3구, 의무진·앞칸·꼬리칸 +1
   buryHaul: 0.85, buryMax: 3, buryRel: 1,
   // 4.5 칸 순서 바꾸기: 칸마다 석탄 0.5, 한 번에 셋, 앞으로 한 구역 +5, 뒤로 −8
@@ -157,7 +157,7 @@ export const TECHS: Record<TechId, TechDef> = {
   }),
   e4: T({ id: 'e4', branch: 'engine', tier: 3, name: '과열 증기', effect: '눈 녹이기 당번: 노출 벌 없음. 대체 화부의 석탄 벌 없음', upkeep: { parts: 0.5 }, like: ['engine'] }),
   e5: T({ id: 'e5', branch: 'engine', tier: 0, name: '단열 개조', effect: '단열 개조가 열린다(칸마다 목재 8). 단열한 객차는 난방 배당의 온기 벌이 없다', like: ['tail'], dislike: ['engine'], adapt: { parts: 1, wood: 4 } }),
-  m1: T({ id: 'm1', branch: 'med', tier: 1, name: '응급 처치', effect: '부상 회복 40% → 50%, 발진티푸스 사망 15% → 10%', like: ['medtech'] }),
+  m1: T({ id: 'm1', branch: 'med', tier: 1, name: '응급 처치', effect: '새 부상이 하루 빨리 낫는다, 발진티푸스 사망 15% → 10%', like: ['medtech'] }),
   m2: T({ id: 'm2', branch: 'med', tier: 2, name: '환자 분류 기준', effect: '중환자 분류(기준) 법이 열린다', like: ['medtech'], dislike: ['tail'] }),
   m3: T({
     id: 'm3', branch: 'med', tier: 2, name: '식량 보존', effect: '변형 둘 중 하나',

@@ -9,6 +9,7 @@ import { hash, markSeen, pickFresh } from './omens';
 import { offend } from './politics';
 import { addCard, clamp, drawPerson, isGone, journal, PROFILES, storyOf, totalPop } from './state';
 import type { Card, Game, HubPlan, HubState, MotionAgenda } from './state';
+import { noteInjury } from './wounds';
 
 // 라이프치히 이탈(first_leg_story 7.7, 2026-10-07 사용자 결정). 불만이 높은 칸은 라이프치히에서 몫을 들고 내린다.
 // 두 구간 전에 짐 싸는 징후와 창고 유출이 오고, 마지막 회기에 '우리 몫을 내놔라'가 오르고, 도착하면 칸마다
@@ -465,6 +466,7 @@ function hubChoose(g: Game, card: Card, choice: Choice): void {
       const dead = roll(`fd|${c}`, fr.dead);
       const guardHurt = 1 + (u(g, `fg|${c}`) < 0.5 ? 1 : 0);
       g.injured += hurt + guardHurt;
+      noteInjury(g, hurt + guardHurt, 'guard_post', '지붕', { comm: 'guard' }); // 명부에 이름을 남긴다(숫자와 판 난수는 그대로)
       const esc = Math.round(plan.n * HUB.escape);
       const names: string[] = [];
       for (let i = 0; i < dead; i += 1) {

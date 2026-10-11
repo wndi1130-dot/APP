@@ -4,6 +4,8 @@ import {
 import type { Comm, Game } from '../game';
 import { cx, h, raw } from './dom';
 import { icon } from './icons';
+import type { IconName } from './icons';
+import { isKeyLine, logGroups } from './journal';
 import { TIP, fmt, signed } from './common';
 import { bar, tip } from './widgets';
 import { sharePcts } from './share';
@@ -60,15 +62,24 @@ function factionPanel(view: View): HTMLElement {
     list.length ? h('ul', { class: 'frows' }, list.map(c => factionRow(g, c))) : h('p', { class: 'sub' }, '이쪽엔 아무도 없다.'));
 }
 
+const LOG_ICON: Record<string, IconName> = { deal: 'trust', bad: 'alert', dark: 'skull', good: 'heat', none: 'dot' };
+
 function journalPanel(view: View): HTMLElement {
   const { g } = view;
-  const entries = [...g.journal].reverse().slice(0, 80);
+  // 구간별 묶음(사용자 2026-10-11 「글이 너무 많다」): 묶음마다 중요한 줄만 보이고 나머지는 「외 N」으로 접는다. 문장은 그대로다.
+  const groups = logGroups(g.journal, view.ui.logOpen ?? []);
   return h('div', { class: 'side', role: 'dialog' },
     h('div', { class: 'drop__head' }, icon('book'), h('b', null, '일지'),
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
-    entries.length === 0 ? h('p', { class: 'empty' }, '아직 적힌 일이 없다.')
-      : h('ol', { class: 'log' }, entries.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) },
-        h('span', { class: 'log__seg num' }, `${e.seg}`), h('span', null, shortText(e.text))))));
+    groups.length === 0 ? h('p', { class: 'empty' }, '아직 적힌 일이 없다.')
+      : h('div', { class: 'log log--journal' }, groups.map(gr => h('section', { class: cx('log__group', gr.open && 'is-open') },
+        h('div', { class: 'log__head' },
+          h('b', { class: 'num' }, `${gr.seg}구간`),
+          gr.more > 0 || gr.open ? h('button', {
+            class: 'chip log__more', 'data-action': 'log-more', 'data-seg': gr.seg, 'aria-expanded': gr.open ? 'true' : 'false',
+          }, gr.open ? '접기' : `외 ${gr.more}`) : null),
+        gr.lines.length ? h('ol', { class: 'log__lines' }, gr.lines.map(e => h('li', { class: cx('log__item', e.tone && `is-${e.tone}`) },
+          icon(LOG_ICON[e.tone ?? 'none']), h('span', null, shortText(e.text))))) : null))));
 }
 
 function menuPanel(view: View): HTMLElement {
@@ -288,7 +299,7 @@ const END_TITLE: Record<string, string> = {
 export function endScreen(view: View): HTMLElement {
   const { g } = view;
   const st = g.stats;
-  const highlights = g.journal.filter(e => e.tone === 'deal' || e.tone === 'dark' || e.tone === 'bad').slice(-10);
+  const highlights = g.journal.filter(isKeyLine).slice(-10);
   return h('section', { class: 'end' },
     h('div', { class: 'end__head' },
       h('span', { class: 'kicker' }, `${g.seg}구간`),
