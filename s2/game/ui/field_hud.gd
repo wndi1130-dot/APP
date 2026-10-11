@@ -480,6 +480,7 @@ func _build_debug() -> void:
 	v.add_child(h2)
 	h2.add_child(_button("해 질 녘으로", _debug_dusk, Vector2(140, 48), 16))
 	h2.add_child(_button("폭풍 층", _debug_storm, Vector2(96, 48), 16))
+	h2.add_child(_button("망자 세우기", _debug_stand, Vector2(110, 48), 16))
 	debug_panel.visible = false
 	root.add_child(debug_panel)
 
@@ -494,6 +495,39 @@ func _debug_fps() -> void:
 
 func _debug_mask() -> void:
 	game.mask_on = not game.mask_on
+
+
+## Test key: stand 10, then 20, then 40 of the dead where the chief can see
+## them, to measure what drawing a crowd costs on the phone. They are ordinary
+## dead (the rules are not changed); each press clears the last lot first.
+const STAND_COUNTS: Array[int] = [10, 20, 40]
+var stand_step: int = -1
+var stood: Array = []
+
+
+func _debug_stand() -> void:
+	for z in stood:
+		game.zombies.list.erase(z)
+	stood.clear()
+	stand_step = (stand_step + 1) % STAND_COUNTS.size()
+	var want: int = STAND_COUNTS[stand_step]
+	var at: Vector3 = game.player.position
+	# The cells the chief sees now, nearest first; a second body to a cell if they run out.
+	var here: Vector2i = FieldGrid.cell_of(at)
+	var cells: Array = []
+	for dx in range(-14, 15):
+		for dy in range(-14, 15):
+			var c := here + Vector2i(dx, dy)
+			var spot := FieldGrid.center(c)
+			spot.y = at.y
+			if dx * dx + dy * dy >= 6 and game.grid.inside(c) and game.grid.dead_can_walk(c) and game.seen_now.has(game.seen_key(spot)):
+				cells.append([dx * dx + dy * dy, spot])
+	cells.sort_custom(func(a, b): return a[0] < b[0])
+	for round in 2:
+		for row in cells:
+			if stood.size() < want:
+				stood.append(game.zombies.spawn("dead", row[1] + Vector3(0.3, 0, 0.3) * float(round)))
+	toast("시험: 보이는 곳에 망자 %d을 세웠다(바란 수 %d)." % [stood.size(), want])
 
 
 ## Test key: what a storm stop draws, one layer off at a time (phone frames).

@@ -1,4 +1,5 @@
 import { COMM_NAME, COMMS } from '../data';
+import { bump, bumpRel } from '../ledger';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { offend } from '../politics';
@@ -273,7 +274,7 @@ export function guardTrial(g: Game, cs: Case): void {
   const comm = commOf(g, top.id);
   const guilty = dr(g) < B.gtrialP[lv];
   const pre = d.precedent[cs.kind];
-  if (pre && pre.level === lv && pre.guilty !== guilty) g.comms[pre.comm].rel = clamp(g.comms[pre.comm].rel - 2, -100, 100);
+  if (pre && pre.level === lv && pre.guilty !== guilty) bumpRel(g, pre.comm, -2, 'case');
   d.precedent[cs.kind] = { level: lv, guilty, comm };
   if (guilty) {
     d.stats.guilty += 1;
@@ -294,7 +295,7 @@ export function guardFree(g: Game, cs: Case): void {
   const top = topByClues(g, cs);
   if (!top) return;
   top.acq = true;
-  g.comms[commOf(g, top.id)].rel = clamp(g.comms[commOf(g, top.id)].rel + 3, -100, 100);
+  bumpRel(g, commOf(g, top.id), 3, 'case');
   cs.status = 'open';
   if (cs.clock !== null) cs.clock = 2;
   journal(g, `${nameOf(g, top.id)}이(가) 풀려났다. 사람들은 다음 이름을 찾는다.`, 'dark');
@@ -314,7 +315,7 @@ export function summary(g: Game, c: Case): Suspect | undefined {
     person = c.sus.find(s => s.culprit && alive(g, s.id)) ?? top;
   }
   g.fear = clamp(g.fear + B.summaryFear, 0, 100);
-  for (const k of COMMS) if (k !== 'guard') g.comms[k].rel = clamp(g.comms[k].rel - B.summaryRel, -100, 100);
+  for (const k of COMMS) if (k !== 'guard') bumpRel(g, k, -B.summaryRel, 'case');
   cross(g, 'summary');
   return person;
 }
@@ -368,7 +369,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   d.punished.push(s.id);
   switch (how) {
     case 'ration':
-      g.comms[comm].rel = clamp(g.comms[comm].rel - relLoss(3), -100, 100);
+      bumpRel(g, comm, -relLoss(3), 'case');
       lines.push(`${name}의 배급을 사흘 끊었다. 그 몫은 피해 칸에 갔다.`);
       break;
     case 'confine':
@@ -377,7 +378,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
       break;
     case 'exile':
       d.exile.push({ id: s.id, comm });
-      g.comms[comm].rel = clamp(g.comms[comm].rel - relLoss(8), -100, 100);
+      bumpRel(g, comm, -relLoss(8), 'case');
       g.fear = clamp(g.fear + 5, 0, 100);
       cross(g, 'exiles');
       lines.push(`${name}에게 짐 하나와 사흘 치 빵을 줬다. 다음 역에서 내린다.`);
@@ -397,7 +398,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
   }
   lines.push(basisLine(s, lv));
   // 증거로 벌하면 피해 칸은 됐다고 본다(피고가 같은 칸 사람이어도 그렇다, 문서 4.4에 예외가 없다). 소문으로 벌하면 피고 칸 대표가 억울하다는 줄을 남긴다.
-  if (lv === 2) g.comms[c.victimComm].rel = clamp(g.comms[c.victimComm].rel + PUNISH_PROOF_REL, -100, 100);
+  if (lv === 2) bumpRel(g, c.victimComm, PUNISH_PROOF_REL, 'case');
   if (lv === 0) {
     const rep = g.comms[comm].leader;
     const who = rep.personId === s.id ? `${COMM_NAME[comm]} 사람들` : rep.name;
@@ -438,7 +439,7 @@ export function punish(g: Game, c: Case, s: Suspect, how: Punish, via: 'trial' |
 export function exposeOrderLines(g: Game, c: Case): string[] {
   if (c.exposed) return [];
   c.exposed = true;
-  g.trust = clamp(g.trust - 20, 0, 100);
+  bump(g, 'trust', -20, 'case');
   for (const k of COMMS) offend(g, k);
   offend(g, c.victimComm);
   offend(g, c.victimComm);
@@ -477,7 +478,7 @@ export function protect(g: Game, c: Case): string {
   c.clock = 1;
   g.comms.guard.base[3] += 5;
   g.fear = clamp(g.fear + 3, 0, 100);
-  g.comms[c.victimComm].rel = clamp(g.comms[c.victimComm].rel - 5, -100, 100);
+  bumpRel(g, c.victimComm, -5, 'case');
   return `경비대가 앞에 섰다. 군중이 물러났지만 흩어지지는 않았다.${hurt}`;
 }
 
@@ -492,7 +493,7 @@ export function scapegoat(g: Game, c: Case, s: Suspect, allowed: boolean): strin
   const died = dr(g) < B.scapegoatDeath;
   if (died) { d.stats.violentDeaths += 1; onDeath(g, comm, [name], 'chosen'); }
   else g.injured += 1;
-  g.comms[comm].rel = clamp(g.comms[comm].rel - 10, -100, 100);
+  bumpRel(g, comm, -10, 'case');
   offend(g, comm);
   c.status = 'closed';
   d.punished.push(s.id);
@@ -543,7 +544,7 @@ export function settleTruth(g: Game, id: string, reveals: boolean): string {
 export function reveal(g: Game, id: string, comm: Comm, seg?: number): string {
   const d = g.dark!;
   d.stats.revealed += 1;
-  g.trust = clamp(g.trust - 10, 0, 100);
+  bump(g, 'trust', -10, 'case');
   offend(g, comm);
   const name = nameOf(g, id);
   dropScene(g, 'misjudged', id, seg); // 드러났으니 '끝내 안 드러난 오판' 장면은 거둔다(아래 장면이 대신한다)

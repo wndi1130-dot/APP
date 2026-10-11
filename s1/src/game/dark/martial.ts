@@ -1,4 +1,5 @@
 import { COMMS } from '../data';
+import { bump, bumpRel, put } from '../ledger';
 import type { Comm } from '../data';
 import { endEmergencyPowers, enactLaw, offend } from '../politics';
 import { clamp, END_LINK, journal, lawActive, stageOf } from '../state';
@@ -73,10 +74,10 @@ export function enterMartial(g: Game, door: MartialDoor, opts: { against?: Comm;
   switch (door) {
     case 'extend':
       for (const c of COMMS) if (c !== 'guard') offend(g, c);
-      g.tension = clamp(g.tension + B.mlEnterTension, 0, 100);
+      bump(g, 'tension', B.mlEnterTension, 'martial');
       break;
     case 'council':
-      g.tension = clamp(g.tension + B.mlCouncilTension, 0, 100);
+      bump(g, 'tension', B.mlCouncilTension, 'martial');
       break;
     default: {
       // brink·captain: 맞선 두 집단 적의 +1, 끼지 않은 칸 관계 +5(질서를 바랐다). sided: 누른 쪽 적의 +2, 끼지 않은 칸 관계 −3(제 원수를 누르는 걸 봤다).
@@ -89,10 +90,10 @@ export function enterMartial(g: Game, door: MartialDoor, opts: { against?: Comm;
       for (const c of COMMS) {
         if (involved.has(c)) continue;
         const dRel = door === 'sided' ? -B.mlSidedRel : B.mlBrinkRel;
-        g.comms[c].rel = clamp(g.comms[c].rel + dRel, -100, 100);
+        bumpRel(g, c, dRel, 'martial');
       }
-      g.tension = clamp(g.tension + B.mlBrinkTension, 0, 100);
-      if (door === 'captain') g.trust = clamp(g.trust - B.mlCaptainTrust, 0, 100);
+      bump(g, 'tension', B.mlBrinkTension, 'martial');
+      if (door === 'captain') bump(g, 'trust', -B.mlCaptainTrust, 'martial');
     }
   }
 
@@ -108,7 +109,7 @@ export function liftMartial(g: Game, _why: 'self' = 'self'): void {
   const d = g.dark;
   const m = d?.martial;
   if (!d || !m) return;
-  g.trust = clamp(m.trustBefore - B.mlLiftTrust, 0, 100);
+  put(g, 'trust', clamp(m.trustBefore - B.mlLiftTrust, 0, 100), 'martial');
   // 앞선 계엄의 포고 추인이 아직 안 열렸으면 한 묶음으로 잇는다.
   const prev = d.martialLifted;
   d.martialLifted = { seg: g.seg, bonus: !m.warned, decreed: [...(prev?.decreed ?? []), ...m.decreed], repealed: [...(prev?.repealed ?? []), ...m.repealed] };
@@ -128,7 +129,7 @@ export function martialSettle(g: Game): void {
   if (!d || !m || g.phase === 'end') return;
   d.stats.martialSegs += 1;
   g.comms.guard.base[3] += B.mlExpo;
-  g.tension = clamp(g.tension + B.mlTension, 0, 100);
+  bump(g, 'tension', B.mlTension, 'martial');
   g.fear = clamp(g.fear + B.mlFear, 0, 100);
   // 문턱: 경비대 관계 단계가 회의 이하(band -1)면 경고. 경비대장의 계엄이면 한 단계 높아 중립 이하(band 0).
   // 경고는 호의 이상(단계 번호 2 이하)으로 되돌려야 풀린다. 문턱 바로 위(중립)로만 올라오면 경고가 그대로 돈다(PC 리뷰: 문턱 언저리에서 깜빡이지 않게).
@@ -175,7 +176,7 @@ export function darkPowersEnd(g: Game): boolean {
   if (plan === 'ask') {
     d.extendAsk = true;
   } else {
-    g.trust = clamp(g.trust + B.powersReturnTrust, 0, 100);
+    bump(g, 'trust', B.powersReturnTrust, 'decree');
   }
   return true;
 }

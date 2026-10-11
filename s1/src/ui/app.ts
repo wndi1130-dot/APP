@@ -252,6 +252,10 @@ export function startApp(root: HTMLElement): void {
   }
 
   function render(): void {
+    // 열차 관리 화면을 다른 길(다음 구간, 의회, 아래 뒤로 단추)로 나갔으면 방문 기록에 넣어 둔 한 칸을 거둔다(폰 뒤로 가기가 헛눌리지 않게).
+    try {
+      if (!backing && ui.screen !== 'train' && (history.state as { s1train?: number } | null)?.s1train) { backing = true; history.back(); }
+    } catch { /* 기록을 못 쓰는 곳 */ }
     try {
       draw();
     } catch (e) {
@@ -396,16 +400,22 @@ export function startApp(root: HTMLElement): void {
   }
 
   /** 열차 관리 화면으로 들어간다. 뒤로 가기(브라우저·안드로이드)로 나올 수 있게 방문 기록에 한 칸 넣는다. */
+  /** 방문 기록 한 칸을 우리가 거두는 중(history.back은 늦게 끝난다). */
+  let backing = false;
   function enterTrain(): void {
     if (ui.screen === 'train') return;
     ui.screen = 'train';
     try { history.pushState({ s1train: 1 }, ''); } catch { /* 기록을 못 쓰는 곳에선 ×와 Esc로 나온다 */ }
   }
+  /** 한눈에 보기의 칸 묶음이 가리키는 칸(기관차는 판이 없어 기관실로). */
+  function groupCar(group: string): string {
+    const cars = GROUPS.find(x => x.id === group)?.cars ?? [];
+    return cars.find(id => id !== 'loco') ?? 'engine';
+  }
   function leaveTrain(): void {
     ui.carPop = null;
     if (ui.screen !== 'train') return;
-    ui.screen = 'home';
-    try { if ((history.state as { s1train?: number } | null)?.s1train) history.back(); } catch { /* 위와 같다 */ }
+    ui.screen = 'home'; // 방문 기록에 넣은 한 칸은 render가 거둔다
   }
 
   function openStack(): void {
@@ -525,7 +535,7 @@ export function startApp(root: HTMLElement): void {
         showFx(fxDiff(before, g));
         if (stackCount(g, ui) > 0) focusForTopCard();
         // 서막 첫 거래를 들어주면 꼬리칸 창을 열어 막 당긴 레버를 보인다(first_leg_story 5장 6번 '레버를 처음 당긴다').
-        else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; }
+        else if (kind === 'pro_deal' && data.index === '0') { ui.carPop = 'tail1'; ui.spaceOpen = false; focusCar = 'tail1'; if (g.dom) enterTrain(); }
         return render();
       }
       case 'stop-set':
@@ -575,6 +585,12 @@ export function startApp(root: HTMLElement): void {
       case 'ov-sel':
         ui.overviewSel = data.group ?? 'tail';
         if (data.numbersOff) ui.numbersOnly = false;
+        if (g.dom) {
+          // S1c: 한눈에 보기에서 칸을 눌러도 옛 칸 판 대신 열차 관리 화면으로 간다.
+          ui.carPop = groupCar(ui.overviewSel);
+          ui.panel = null;
+          enterTrain();
+        }
         return render();
       case 'numbers':
         ui.numbersOnly = !ui.numbersOnly;
@@ -799,7 +815,11 @@ export function startApp(root: HTMLElement): void {
   });
 
   window.addEventListener('popstate', () => {
+    const mine = backing;
+    backing = false;
     if (ui.screen !== 'train') return;
+    // 우리가 거두는 사이에 다시 들어왔으면 나가지 않고 기록 한 칸만 다시 넣는다.
+    if (mine) { try { history.pushState({ s1train: 1 }, ''); } catch { /* 기록을 못 쓰는 곳 */ } return; }
     ui.screen = 'home';
     ui.carPop = null;
     render();
