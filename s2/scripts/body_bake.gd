@@ -63,6 +63,8 @@ const OWN_POSES: Array = [
 	["own_fall", 1.0, ""], ["own_stand", 0.0, ""], ["own_press", 0.0, ""], ["own_sit", 0.0, ""],
 ]
 const POSES_CLIP: String = "poses"
+const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
+const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
 
 # Layers: a hand-made addition on top of a motion. For a frame at progress u
 # (0..1), w = TAU * u, and a layer holds:
@@ -176,10 +178,10 @@ const LAYERS: Dictionary = {
 		"steps": [
 			["turn", "hips", "z", [0.05, 0.09, 0.3]],
 			["turn", "hips", "y", [0.0, 0.1, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.06, -1.0, [[0.02, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0]]]],
-			["aim", "shin.L", "foot.L", [0.03, -1.0, [[-0.243, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0], [0.0, -0.225, -1.5708], [0.0, -0.095, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [[-0.02, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0]]]],
-			["aim", "shin.R", "foot.R", [-0.12, -1.0, [[-0.158, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0], [0.0, -0.06, 1.5692], [0.0, -0.025, 4.7092, 2.0]]]],
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, [[0.02, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0], [0.0, 0.012, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, [[-0.243, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0], [0.0, 0.012, 0.0, 5.0], [0.0, -0.225, -1.5708], [0.0, -0.095, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [[-0.02, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0], [0.0, 0.012, 15.7, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.12, -1.0, [[-0.158, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0], [0.0, 0.012, 15.7, 5.0], [0.0, -0.06, 1.5692], [0.0, -0.025, 4.7092, 2.0]]]],
 			["turn", "foot.R", "y", -0.4],
 			["turn", "spine", "x", [0.22, 0.03, 0.0, 2.0]],
 			["turn", "spine", "z", [-0.07, 0.05, 0.6]],
@@ -362,10 +364,10 @@ const LAYERS: Dictionary = {
 	"own_run": {
 		"steps": [
 			["turn", "hips", "z", [0.0, 0.1, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.06, -1.0, [[0.1, 0.5, 0.0], [0.0, -0.056, 0.0, 3.0]]]],
-			["aim", "shin.L", "foot.L", [0.03, -1.0, [[-0.404, 0.5, 0.0], [0.0, -0.056, 0.0, 3.0], [0.0, -0.4, -1.5708], [0.0, -0.17, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.08, -1.0, [[0.1, 0.5, 3.14], [0.0, -0.056, 9.42, 3.0]]]],
-			["aim", "shin.R", "foot.R", [-0.06, -1.0, [[-0.404, 0.5, 3.14], [0.0, -0.056, 9.42, 3.0], [0.0, -0.4, 1.5692], [0.0, -0.17, 4.7092, 2.0]]]],
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, [[0.1, 0.5, 0.0], [0.0, -0.056, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, [[-0.404, 0.5, 0.0], [0.0, -0.056, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.4, -1.5708], [0.0, -0.17, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, [[0.1, 0.5, 3.14], [0.0, -0.056, 9.42, 3.0], [0.0, 0.02, 15.7, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, [[-0.404, 0.5, 3.14], [0.0, -0.056, 9.42, 3.0], [0.0, 0.02, 15.7, 5.0], [0.0, -0.4, 1.5692], [0.0, -0.17, 4.7092, 2.0]]]],
 			["turn", "spine", "x", 0.42],
 			["turn", "spine", "z", [0.0, 0.08, 0.5]],
 			["turn", "chest", "x", 0.3],
@@ -404,10 +406,10 @@ const LAYERS: Dictionary = {
 		"steps": [
 			["turn", "hips", "z", [-0.05, 0.09, 3.44]],
 			["turn", "hips", "y", [0.0, 0.1, 3.14]],
-			["aim", "thigh.R", "shin.R", [-0.06, -1.0, [[0.02, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0]]]],
-			["aim", "shin.R", "foot.R", [-0.03, -1.0, [[-0.243, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0], [0.0, -0.225, 1.5692], [0.0, -0.095, 4.7092, 2.0]]]],
-			["aim", "thigh.L", "shin.L", [0.1, -1.0, [[-0.02, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0]]]],
-			["aim", "shin.L", "foot.L", [0.12, -1.0, [[-0.158, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0], [0.0, -0.06, -1.5708], [0.0, -0.025, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.06, -1.0, [[0.02, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0], [0.0, 0.012, 15.7, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.03, -1.0, [[-0.243, 0.3, 3.14], [0.0, -0.033, 9.42, 3.0], [0.0, 0.012, 15.7, 5.0], [0.0, -0.225, 1.5692], [0.0, -0.095, 4.7092, 2.0]]]],
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, [[-0.02, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0], [0.0, 0.012, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.12, -1.0, [[-0.158, 0.3, 0.0], [0.0, -0.033, 0.0, 3.0], [0.0, 0.012, 0.0, 5.0], [0.0, -0.06, -1.5708], [0.0, -0.025, -1.5708, 2.0]]]],
 			["turn", "foot.L", "y", 0.4],
 			["turn", "spine", "x", [0.16, 0.03, 0.0, 2.0]],
 			["turn", "spine", "z", [0.08, 0.05, 3.7]],
@@ -425,10 +427,10 @@ const LAYERS: Dictionary = {
 	"own_walk_c": {
 		"steps": [
 			["turn", "hips", "z", [0.0, 0.06, 0.3]],
-			["aim", "thigh.L", "shin.L", [0.1, -1.0, [[0.08, 0.2, 0.0], [0.0, -0.022, 0.0, 3.0]]]],
-			["aim", "shin.L", "foot.L", [0.06, -1.0, [[-0.224, 0.2, 0.0], [0.0, -0.022, 0.0, 3.0], [0.0, -0.1, -1.5708], [0.0, -0.042, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [[0.08, 0.2, 3.14], [0.0, -0.022, 9.42, 3.0]]]],
-			["aim", "shin.R", "foot.R", [-0.06, -1.0, [[-0.224, 0.2, 3.14], [0.0, -0.022, 9.42, 3.0], [0.0, -0.1, 1.5692], [0.0, -0.042, 4.7092, 2.0]]]],
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, [[0.08, 0.2, 0.0], [0.0, -0.022, 0.0, 3.0], [0.0, 0.008, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, [[-0.224, 0.2, 0.0], [0.0, -0.022, 0.0, 3.0], [0.0, 0.008, 0.0, 5.0], [0.0, -0.1, -1.5708], [0.0, -0.042, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [[0.08, 0.2, 3.14], [0.0, -0.022, 9.42, 3.0], [0.0, 0.008, 15.7, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, [[-0.224, 0.2, 3.14], [0.0, -0.022, 9.42, 3.0], [0.0, 0.008, 15.7, 5.0], [0.0, -0.1, 1.5692], [0.0, -0.042, 4.7092, 2.0]]]],
 			["turn", "spine", "x", [0.34, 0.04, 0.0, 2.0]],
 			["turn", "chest", "x", 0.34],
 			["turn", "chest", "y", [0.0, 0.08, 0.6]],
@@ -831,19 +833,21 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
+		var reach := [[], []]
 		for f in count:
 			# A loop's last frame stops one step short of the first; a one-shot ends on its end.
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
 			pose(ctx, entry[1], entry[4], u)
 			frames.append(_skin_frame(ctx))
-		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length, "frames": frames})
+			_note_reach(ctx, entry[0], reach)
+		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length, "frames": frames, "round": _round(reach) if looped else 0.0})
 	var still := []
 	for entry: Array in POSES:
 		_pose_at(ctx, entry[0], entry[1], {})
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
 	clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
-	return VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips)
+	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
 
 
 ## Bakes the body in `body_root` (in the scene tree) with the motions written
@@ -859,18 +863,85 @@ static func bake_own(body_root: Node3D) -> Dictionary:
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
+		var reach := [[], []]
 		for f in count:
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
 			pose(ctx, "", entry[4], u)
 			frames.append(_skin_frame(ctx))
-		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames})
+			_note_reach(ctx, entry[0], reach)
+		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames, "round": _round(reach) if looped else 0.0})
 	var still := []
 	for entry: Array in OWN_POSES:
 		pose(ctx, "", entry[0], entry[1])
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
 	clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
-	return VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips)
+	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+
+
+## Notes where the two feet are (front to back) in the pose the body is in
+## now: the spot of each sole that is under its ankle when the body stands at
+## rest (the body's ground is y 0), carried by the foot bone. For the crawl it
+## is the two hands, which are what pull it along.
+static func _note_reach(ctx: Dictionary, clip: String, reach: Array) -> void:
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	var crawls := clip == CRAWL_CLIP
+	var ends: Array = ["hand.L", "hand.R"] if crawls else ["foot.L", "foot.R"]
+	for n in 2:
+		var bone := _bone(body, ends[n])
+		if bone < 0:
+			continue
+		var spot := Vector3.ZERO
+		if not crawls:
+			var rest := to_mesh * body.get_bone_global_rest(bone)
+			spot = rest.affine_inverse() * Vector3(rest.origin.x, 0.0, rest.origin.z)
+		reach[n].append((to_mesh * body.get_bone_global_pose(bone) * spot).z)
+
+
+## How far one round of a looping motion should carry the body so that a foot
+## going backwards stays on its spot: the middle of the two feet's rounds.
+static func _round(reach: Array) -> float:
+	var total := 0.0
+	var sides := 0
+	for side: Array in reach:
+		var got := round_of(side)
+		if got > ROUND_LEAST:
+			total += got
+			sides += 1
+	return total / float(sides) if sides > 0 else 0.0
+
+
+## The same for one foot, from where it is in each frame of the loop: its
+## longest run going backwards, without the first and last sixth where it
+## turns round; what it goes back in a frame there, times the frames. 0 if it
+## never goes back.
+static func round_of(zs: Array) -> float:
+	var frames := zs.size()
+	var best_from := 0
+	var best_len := 0
+	for from in frames:
+		var n := 0
+		while n < frames and float(zs[(from + n + 1) % frames]) < float(zs[(from + n) % frames]):
+			n += 1
+		if n > best_len:
+			best_len = n
+			best_from = from
+	var skip := int(best_len / 6.0)
+	var steps := best_len - skip * 2
+	if steps <= 0:
+		return 0.0
+	var back := float(zs[(best_from + skip) % frames]) - float(zs[(best_from + best_len - skip) % frames])
+	return back / float(steps) * float(frames)
+
+
+## Puts each clip's round on what build_skinned returns (same order).
+static func _with_rounds(out: Dictionary, clips: Array) -> Dictionary:
+	if out.is_empty():
+		return out
+	for n in clips.size():
+		out["clips"][n]["round"] = float(clips[n].get("round", 0.0))
+	return out
 
 
 ## Writes vat.bin (the picture's half floats as they are: an exported game
@@ -917,5 +988,5 @@ static func load_baked(dir: String) -> Dictionary:
 	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGBH, data)
 	var clips := []
 	for clip: Dictionary in info["clips"]:
-		clips.append({"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"])})
+		clips.append({"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"]), "round": float(clip.get("round", 0.0))})
 	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": int(info["vertices"]), "width": image.get_width(), "rows_per_frame": int(info["rows_per_frame"]), "height": image.get_height(), "image": image, "clips": clips}
