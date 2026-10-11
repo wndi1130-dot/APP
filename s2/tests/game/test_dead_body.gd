@@ -8,6 +8,7 @@ const DeadPose = preload("res://game/actors/dead_pose.gd")
 
 func before_each() -> void:
 	DeadBody.rounds = {}
+	DeadBody.table = []
 
 
 func _body(state: String = "wander") -> Dictionary:
@@ -24,6 +25,13 @@ func test_with_no_baked_folder_there_is_no_body_and_the_boxes_are_told_what_they
 		assert_eq(DeadBody.custom(z, 0.6, 1.0, 0.8, false), Color(0.37, clip, 1.0, 0.8), state)
 		assert_false(DeadBody.falls_by_motion(z, false), "the boxes are laid down whole")
 		assert_false(z.has("body_at"), "and nothing is noted on the body")
+	# A box changing what it does is told nothing more, even with a baked table about.
+	DeadBody.table = [[0, 32, true], [32, 32, true]]
+	var box := _body("wander")
+	DeadBody.custom(box, 0.0, 0.0, 0.8, false)
+	box["state"] = "chase"
+	assert_eq(DeadBody.custom(box, 0.0, 0.0, 0.8, false), Color(0.37, 1.0, 0.0, 0.8))
+	assert_false(box.has("body_motion"), "and nothing is noted on it either")
 
 
 func test_the_motion_numbers_are_the_ones_the_bake_writes() -> void:
@@ -193,4 +201,32 @@ func test_the_baked_folders_own_rounds_are_used_where_it_gives_them() -> void:
 	assert_almost_eq(fposmod(DeadBody.custom(crawler, 0.0, 0.0, 1.0, true).r - before.r, 1.0), 0.1 / float(DeadBody.STRIDE[DeadBody.CRAWL]), 0.001, "the others fall back on the written ones")
 	DeadBody.rounds = {}
 	assert_eq(DeadBody.rounds_of({}), {})
+
+
+func test_a_baked_body_changing_motion_keeps_the_frame_it_was_in_for_a_moment() -> void:
+	# Twelve motions of 32 frames each, all looping but the fall (6).
+	for n in 12:
+		DeadBody.table.append([n * 32, 32, n != DeadBody.FALL])
+	var z := _body("wander")
+	var walk := DeadBody.walk_of(z["phase"])
+	var walking := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(walking.g, float(walk), "nothing to ease from at first")
+	var was := DeadBody.frame_of(walk, walking.r)
+	assert_eq(was, walk * 32 + int(0.37 * 32.0))
+	# Struck down: the fall starts from the walk frame it was in, and lets go of it.
+	z["state"] = "downed"
+	z["fell_at"] = z["age"]
+	var struck := DeadBody.custom(z, 0.01, 0.0, 1.0, true)
+	var share := floorf(struck.g / 65536.0)
+	var frame := floorf((struck.g - share * 65536.0) / 16.0)
+	assert_eq(share, DeadBody.MIX_STEPS, "all of the old frame at the change")
+	assert_eq(frame, float(was))
+	assert_eq(struck.g - share * 65536.0 - frame * 16.0, float(DeadBody.FALL), "under it, the motion it is in now")
+	z["age"] += DeadBody.MIX_TIME * 0.5
+	var half := floorf(DeadBody.custom(z, 0.3, 0.0, 1.0, true).g / 65536.0)
+	assert_almost_eq(half, DeadBody.MIX_STEPS * 0.5, 1.0, "half of it half way")
+	z["age"] += DeadBody.MIX_TIME
+	assert_eq(DeadBody.custom(z, 0.9, 0.0, 1.0, true).g, float(DeadBody.FALL), "then the motion alone")
+	assert_eq(DeadBody.frame_of(DeadBody.FALL, 1.0), DeadBody.FALL * 32 + 31, "a motion played once ends on its last frame")
+	assert_eq(DeadBody.frame_of(99, 0.5), 0, "an unknown motion has none")
 
