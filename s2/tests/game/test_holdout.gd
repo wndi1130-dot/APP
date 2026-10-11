@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
+const FieldHud = preload("res://game/ui/field_hud.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 
 
@@ -39,8 +40,32 @@ func test_a_plain_stop_is_as_it_was() -> void:
 	game.holdout.tick(1.0)
 	game.depart()
 	assert_true(game.ended, "leaving leaves")
+	assert_true(game.hud.leaving.is_empty(), "no beat on a plain stop")
+	assert_true(game.hud.modal_open, "the end card at once")
 	assert_false(game.receipt.to_dict()["placeState"].has("holdout"))
 	assert_false(game.telemetry.to_dict().has("holdout"))
+
+
+# User decision 142: no wave is the last one, so leaving is the full stop.
+func test_a_held_train_leaving_gets_a_beat_before_the_end_card() -> void:
+	var game = _game({"holdout": "start"})
+	var hud = game.hud
+	assert_eq(game.holdout.leave_lines()[0], "물결이 닿기 전에 떠났다")
+	game.holdout.first_wave = game.director.index - 3
+	assert_eq(game.holdout.leave_lines()[0], "셋째 물결에서 떠났다")
+	game.holdout.first_wave = game.director.index - 12
+	assert_eq(game.holdout.leave_lines()[0], "12번째 물결에서 떠났다")
+	assert_true(String(game.holdout.leave_lines()[1]).begins_with("채비 %d초를 남겼다" % int(ceil(game.holdout.left))))
+	game.depart()
+	assert_true(game.ended)
+	assert_false(hud.leaving.is_empty(), "the beat is on")
+	assert_false(hud.modal_open, "the end card waits")
+	hud.tick(FieldHud.LEAVE_DARK_S)
+	assert_almost_eq(hud.leaving["veil"].color.a, FieldHud.LEAVE_DARK, 0.01, "dark by now")
+	assert_almost_eq(hud.leaving["words"].modulate.a, 1.0, 0.01, "and the lines are up")
+	hud.tick(FieldHud.LEAVE_BEAT_S)
+	assert_true(hud.leaving.is_empty())
+	assert_true(hud.modal_open, "then the end card")
 
 
 func test_it_opens_with_a_clock_three_doors_and_its_own_pace() -> void:

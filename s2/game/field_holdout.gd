@@ -270,6 +270,21 @@ func result() -> Dictionary:
 	}
 
 
+const ORDINALS: Array[String] = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째", "일곱째", "여덟째", "아홉째", "열째"]
+
+
+## The two lines shown as the train leaves (user decision 142: no wave is the
+## last, so leaving is the full stop): which wave it left in, then how ready
+## it was and how the doors stood.
+func leave_lines() -> Array:
+	var n: int = waves()
+	var head: String = "물결이 닿기 전에 떠났다"
+	if n > 0:
+		head = "%s 물결에서 떠났다" % (ORDINALS[n - 1] if n <= ORDINALS.size() else "%d번째" % n)
+	var how: String = "채비를 다 채웠다" if ready else "채비 %d초를 남겼다" % int(ceil(maxf(left, 0.0)))
+	return [head, "%s · 문 멀쩡 %d · 상함 %d · 뚫림 %d" % [how, count("whole"), count("damaged"), count("breached")]]
+
+
 func end_lines() -> Array:
 	if not opened:
 		return []
