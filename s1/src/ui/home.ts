@@ -8,6 +8,7 @@ import type { CarDef, View } from './common';
 import { bar, lever, tip } from './widgets';
 // S1c 내정 훅(ui/domestic.ts). S1a 판이면 모두 null이나 CARS를 돌려준다.
 import { domPlate, domesticCarTag, domesticEngineCol, domesticPopover, domesticWhyLine, trainCars } from './domestic';
+import { stallWarn, strandedBack, strandedBoard } from './stranded';
 
 // 홈: 옆에서 본 열차 단면. 화면보다 길어서 좌우로 스크롤한다. 칸 문 위 명판으로 칸을 구별한다.
 // 칸의 수치와 조절은 칸을 누르면 뜨는 작은 창에만 있다. 그림은 회색 상자 수준의 자리표시다.
@@ -172,6 +173,9 @@ export function homeScreen(view: View): HTMLElement {
   const moving = g.phase === 'travel' && !g.inStrike;
   const cars = trainCars(g); // S1c 내정 훅: 칸 순서와 덧붙인 칸
   const open = cars.find(c => c.id === ui.carPop);
+  // 석탄 0으로 선 동안에는 단면 자리에 멈춘 열차 판이 선다(결정 094). 「열차 단면」을 누르면 평소 꼴로 본다.
+  if (!g.stranded) ui.strTrain = false;
+  else if (!ui.strTrain) return h('section', { class: 'home home--stranded' }, strandedBoard(view), paperStack(view));
   return h('section', { class: cx('home', moving && 'is-moving', g.phase === 'stop' && 'is-stopped', g.inStrike && 'is-strike', ui.braking && 'is-braking') },
     backdropEl(g, moving), // 달리는 배경(backdrop.ts)
     h('div', { class: 'scroller', 'data-keep-scroll': 'train' },
@@ -182,5 +186,7 @@ export function homeScreen(view: View): HTMLElement {
       h('div', { class: 'rails' })),
     h('i', { class: 'layer layer--near' }),
     ui.braking ? h('div', { class: 'brake', role: 'status' }, h('b', null, '끼이이익'), h('span', null, '열차가 선다')) : paperStack(view),
-    g.phase === 'stop' && g.stop ? h('div', { class: 'platform-tag' }, icon('symbol'), '정차 중') : null);
+    g.phase === 'stop' && g.stop ? h('div', { class: 'platform-tag' }, icon('symbol'), '정차 중') : null,
+    strandedBack(g),
+    open ? null : stallWarn(g)); // 예고는 하늘 자리에 선다. 칸 창이 뜨면 비킨다
 }
