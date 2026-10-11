@@ -276,9 +276,10 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 		standers += 1 if row["pose"] == "stand" else 0
 		floor_rows += 1 if row["pose"] == "floor" else 0
 	var value := Look.gesture_for(c["mood"], rules.get("train", {}))
-	var gestures := Look.knot_gestures(value, standers, int(c["index"]))
+	var also := Look.gesture_also(value, Rules.comm_of(rules, c["def"]))
+	var gestures := Look.knot_gestures(value, standers, int(c["index"]), also)
 	# Resentment has somewhere to look: up or down the train, at the captain's car.
-	var facing: float = _captain_side(c) * RESENT_TURN if value == "resent" else 0.0
+	var toward_captain: float = _captain_side(c) * RESENT_TURN
 	var low := Look.floor_gestures(value, floor_rows)
 	for i in bodies.size():
 		var b: Node3D = bodies[i]
@@ -291,11 +292,14 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 				var g: Dictionary = gestures[standing]
 				var pair_of: String = String(gestures[0]["name"])
 				var wide: float = float(Gesture.PAIR_GAP.get(pair_of, KNOT_STEP)) - KNOT_STEP if standing < KNOT_SIZE else 0.0
-				_sit_down(c, b, x0, _knot_place(standing, wide), "stand", false, false)
+				# One who shows a second value comes out from behind the pair and stands beside it.
+				var whose: String = String(g["of"])
+				var aside: bool = whose != "" and whose != value
+				_sit_down(c, b, x0, _knot_place(standing, wide, aside), "stand", false, false)
 				b.rotation.y = _knot_facing(standing)
 				b.gesture = g["name"]
 				b.gesture_role = int(g["role"])
-				b.gesture_facing = facing if b.gesture != "" else 0.0
+				b.gesture_facing = toward_captain if whose == "resent" else 0.0
 				if b.gesture != "":
 					_show_gesture(c, b)
 				standing += 1
@@ -456,17 +460,21 @@ func _step_council(c: Dictionary, delta: float) -> void:
 
 ## Where in the car the k-th of those standing about stands: knots of three,
 ## by the tail-end doorway and the front-end one in turn. `wide` sets the
-## first two of a knot that much further apart.
-func _knot_place(k: int, wide: float = 0.0) -> Vector3:
+## first two of a knot that much further apart. `aside` brings the third out
+## from behind them: a step beyond the second, on the same line.
+func _knot_place(k: int, wide: float = 0.0, aside: bool = false) -> Vector3:
 	var knot: int = k / KNOT_SIZE
 	var member: int = k % KNOT_SIZE
 	var along: float = KNOT_FROM + (knot / 2) * KNOT_APART
+	var behind: bool = member == 2 and not aside
 	if member == 1:
 		along += KNOT_STEP + wide
-	elif member == 2:
+	elif behind:
 		along += (KNOT_STEP + wide) * 0.5
+	elif member == 2:
+		along += KNOT_STEP + wide + KNOT_STEP
 	var x: float = along if knot % 2 == 0 else CAR_LENGTH - along
-	return Vector3(x, 0, KNOT_Z - (KNOT_DEPTH if member == 2 else 0.0))
+	return Vector3(x, 0, KNOT_Z - (KNOT_DEPTH if behind else 0.0))
 
 
 ## The three of a knot face one another.

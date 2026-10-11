@@ -722,3 +722,86 @@ func test_fear_gives_those_standing_about_nothing() -> void:
 	for car_index in range(3):
 		for row in Look.knot_gestures("fear", 5, car_index):
 			assert_eq(row["name"], "", "car %d" % car_index)
+
+# ---------------------------------------------------------------- two values in one car
+
+func _col(rows: Array, key: String) -> Array:
+	var out: Array = []
+	for row in rows:
+		out.append(row[key])
+	return out
+
+
+func test_a_standing_or_grudge_against_the_captain_is_resentment() -> void:
+	assert_true(Look.resents({"rel": -40}))
+	assert_false(Look.resents({"rel": -39}))
+	assert_true(Look.resents({"rel": 0, "grudge": 2}))
+	assert_false(Look.resents({"rel": 0, "grudge": 1}))
+	assert_false(Look.resents({}))
+
+
+func test_a_tense_train_shows_resentment_beside_tension_in_a_resentful_car() -> void:
+	assert_eq(Look.gesture_also("tension", {"rel": -50}), "resent")
+	assert_eq(Look.gesture_also("tension", {"rel": 0, "grudge": 2}), "resent")
+	assert_eq(Look.gesture_also("tension", {"rel": 0}), "")
+	assert_eq(Look.gesture_also("tension", {}), "")
+
+
+func test_a_second_value_is_only_ever_beside_tension() -> void:
+	for value in ["resent", "fear", ""]:
+		assert_eq(Look.gesture_also(value, {"rel": -50}), "", "'%s'" % value)
+
+
+func test_the_pair_argues_and_the_third_folds_its_arms_in_two_values() -> void:
+	var rows := Look.knot_gestures("tension", 3, 0, "resent")
+	assert_eq(rows.size(), 3)
+	assert_eq(_col(rows, "name"), [Gesture.ARGUE, Gesture.ARGUE, Gesture.ARMS_CROSSED])
+	assert_eq(_col(rows, "of"), ["tension", "tension", "resent"])
+	assert_eq(rows[0]["role"], 0)
+	assert_eq(rows[1]["role"], 1)
+
+
+func test_the_pair_whispers_in_the_next_car_and_the_third_still_folds_its_arms() -> void:
+	var rows := Look.knot_gestures("tension", 3, 1, "resent")
+	assert_eq(_col(rows, "name"), [Gesture.WHISPER, Gesture.WHISPER, Gesture.ARMS_CROSSED])
+	assert_eq(_col(rows, "of"), ["tension", "tension", "resent"])
+
+
+func test_without_a_second_value_the_third_looks_about_as_before() -> void:
+	var plain := Look.knot_gestures("tension", 3, 0)
+	var empty := Look.knot_gestures("tension", 3, 0, "")
+	var odd := Look.knot_gestures("tension", 3, 0, "nonsense")
+	for rows in [plain, empty, odd]:
+		assert_eq(rows[2]["name"], Gesture.TURN_ABOUT)
+		assert_eq(_col(rows, "of"), ["tension", "tension", "tension"])
+	assert_eq(_col(empty, "name"), _col(plain, "name"))
+	assert_eq(_col(odd, "name"), _col(plain, "name"))
+
+
+func test_with_no_third_stander_the_second_value_is_not_seen() -> void:
+	var rows := Look.knot_gestures("tension", 2, 0, "resent")
+	assert_eq(rows.size(), 2)
+	assert_eq(_col(rows, "name"), [Gesture.ARGUE, Gesture.ARGUE])
+	var one := Look.knot_gestures("tension", 1, 0, "resent")
+	assert_eq(one.size(), 1)
+	assert_eq(one[0]["name"], "")
+
+
+func test_a_stander_with_no_gesture_has_no_value_either() -> void:
+	var rows := Look.knot_gestures("tension", 5, 0, "resent")
+	for k in [3, 4]:
+		assert_eq(rows[k]["name"], "", "stander %d" % k)
+		assert_eq(rows[k]["of"], "", "stander %d" % k)
+
+
+func test_resentment_alone_is_of_resentment_all_through() -> void:
+	var rows := Look.knot_gestures("resent", 3, 0)
+	assert_eq(rows.size(), 3)
+	assert_eq(_col(rows, "of"), ["resent", "resent", "resent"])
+
+
+func test_two_values_never_turn_a_back_or_look_about() -> void:
+	for standing in range(8):
+		for car_index in range(4):
+			for name in _col(Look.knot_gestures("tension", standing, car_index, "resent"), "name"):
+				assert_false([Gesture.BACK_TURNED, Gesture.TURN_ABOUT].has(name), "%d standing, car %d: %s" % [standing, car_index, name])

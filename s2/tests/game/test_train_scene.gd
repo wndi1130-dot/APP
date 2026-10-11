@@ -924,14 +924,15 @@ func test_the_resentful_do_not_stand_wider_apart() -> void:
 	assert_almost_eq(absf(float(second.position.x) - float(first.position.x)), float(s.KNOT_STEP), 0.01)
 
 
-func test_rising_tension_swaps_resentment_for_a_quarrel() -> void:
+func test_rising_tension_leaves_one_of_a_resentful_car_with_folded_arms() -> void:
 	var s = _resentful()
 	s.set_train("tension", 70.0)
 	var rows := _gesturing(s, "tail1")
-	for b in rows:
-		assert_false([Gesture.ARMS_CROSSED, Gesture.BACK_TURNED].has(b.gesture), b.gesture)
-		assert_eq(b.gesture_facing, 0.0)
+	assert_eq(rows.size(), 3)
 	assert_eq(rows.filter(func(b) -> bool: return b.gesture == Gesture.ARGUE).size(), 2)
+	assert_eq(rows.filter(func(b) -> bool: return b.gesture == Gesture.ARMS_CROSSED).size(), 1)
+	for b in rows:
+		assert_false([Gesture.BACK_TURNED, Gesture.TURN_ABOUT].has(b.gesture), b.gesture)
 
 
 func test_a_mended_standing_ends_the_resentment() -> void:
@@ -1131,3 +1132,115 @@ func test_fear_makes_and_removes_nobody_by_hugging() -> void:
 	for c in s.cars:
 		after += _count(s, String(c["id"]))
 	assert_eq(after, before)
+
+
+# ---------------------------------------------------------------- two values in one car
+
+## A scene whose tail is tense and resents the captain too.
+func _tense_and_resentful() -> Node3D:
+	var s = _resentful()
+	s.set_train("tension", 70.0)
+	return s
+
+
+## Those of a car in a gesture of a given name.
+func _doing(s, car_id: String, gesture_name: String) -> Array:
+	return _gesturing(s, car_id).filter(func(b) -> bool: return b.gesture == gesture_name)
+
+
+func test_the_one_with_folded_arms_half_turns_to_the_captains_car_and_the_pair_does_not() -> void:
+	var s = _tense_and_resentful()
+	var side := _toward_captain(s, "tail1")
+	assert_ne(side, 0.0)
+	var folded := _doing(s, "tail1", Gesture.ARMS_CROSSED)
+	assert_eq(folded.size(), 1)
+	assert_almost_eq(float(folded[0].gesture_facing), side * s.RESENT_TURN, 0.0001)
+	var pair := _doing(s, "tail1", Gesture.ARGUE)
+	assert_eq(pair.size(), 2)
+	for b in pair:
+		assert_eq(b.gesture_facing, 0.0)
+	s.step(0.1)
+	assert_almost_eq(float(folded[0].rotation.y), side * s.RESENT_TURN, 0.01)
+
+
+func test_the_one_with_folded_arms_stands_beside_the_pair_not_behind_it() -> void:
+	var s = _tense_and_resentful()
+	var folded := _doing(s, "tail1", Gesture.ARMS_CROSSED)
+	var pair := _doing(s, "tail1", Gesture.ARGUE)
+	assert_eq(folded.size(), 1)
+	assert_eq(pair.size(), 2)
+	var second = pair.filter(func(b) -> bool: return b.gesture_role == 1)[0]
+	for b in pair:
+		assert_almost_eq(float(folded[0].position.z), float(b.position.z), 0.001)
+	assert_almost_eq(float(folded[0].position.x) - float(second.position.x), float(s.KNOT_STEP), 0.01)
+
+
+func test_without_resentment_the_third_still_stands_behind_the_pair() -> void:
+	var s = _scene()
+	s.set_train("tension", 70.0)
+	var about := _doing(s, "tail1", Gesture.TURN_ABOUT)
+	var pair := _doing(s, "tail1", Gesture.ARGUE)
+	assert_eq(about.size(), 1)
+	assert_eq(pair.size(), 2)
+	for b in pair:
+		assert_almost_eq(float(about[0].position.z), float(b.position.z) - float(s.KNOT_DEPTH), 0.001)
+	var low := minf(float(pair[0].position.x), float(pair[1].position.x))
+	var high := maxf(float(pair[0].position.x), float(pair[1].position.x))
+	assert_gt(float(about[0].position.x), low)
+	assert_lt(float(about[0].position.x), high)
+
+
+func test_a_car_in_good_standing_does_not_fold_its_arms_on_a_tense_train() -> void:
+	var s = _tense_and_resentful()
+	assert_eq(_doing(s, "medtech", Gesture.ARMS_CROSSED).size(), 0)
+	assert_eq(_doing(s, "medtech", Gesture.TURN_ABOUT).size(), 1)
+
+
+func test_a_mended_standing_sends_the_third_back_to_look_about() -> void:
+	var s = _tense_and_resentful()
+	s.set_comm("tail", "rel", 0)
+	assert_eq(_doing(s, "tail1", Gesture.ARMS_CROSSED).size(), 0)
+	var about := _doing(s, "tail1", Gesture.TURN_ABOUT)
+	assert_eq(about.size(), 1)
+	assert_eq(about[0].gesture_facing, 0.0)
+	for b in _doing(s, "tail1", Gesture.ARGUE):
+		assert_almost_eq(float(about[0].position.z), float(b.position.z) - float(s.KNOT_DEPTH), 0.001)
+
+
+func test_a_tension_that_subsides_leaves_only_the_gestures_of_resentment() -> void:
+	var s = _tense_and_resentful()
+	s.set_train("tension", 20.0)
+	assert_eq(_doing(s, "tail1", Gesture.ARGUE).size(), 0)
+	assert_eq(_doing(s, "tail1", Gesture.ARMS_CROSSED).size(), 2)
+	assert_eq(_doing(s, "tail1", Gesture.BACK_TURNED).size(), 1)
+
+
+func test_a_grudge_alone_is_enough_to_fold_a_thirds_arms_on_a_tense_train() -> void:
+	var s = _scene()
+	s.set_comm("tail", "grudge", 2)
+	s.set_train("tension", 70.0)
+	assert_eq(_doing(s, "tail1", Gesture.ARGUE).size(), 2)
+	assert_eq(_doing(s, "tail1", Gesture.ARMS_CROSSED).size(), 1)
+
+
+func test_fear_covers_both_tension_and_resentment() -> void:
+	var s = _tense_and_resentful()
+	s.set_train("fear", 60.0)
+	assert_gt(_gesturing_anywhere(s), 0)
+	for c in s.cars:
+		for b in _gesturing(s, String(c["id"])):
+			assert_eq(b.gesture, Gesture.HUG_KNEES, String(c["id"]))
+
+
+func test_two_values_move_nobody_along_the_car() -> void:
+	var s = _tense_and_resentful()
+	var before: Dictionary = {}
+	for b in _gesturing(s, "tail1"):
+		before[b] = Vector2(b.position.x, b.position.z)
+	assert_eq(before.size(), 3)
+	for i in 60:
+		s.step(0.1)
+	assert_eq(_gesturing(s, "tail1").size(), 3)
+	for b in before:
+		assert_eq(b.position.x, before[b].x, "it stays where it stood")
+		assert_eq(b.position.z, before[b].y, "it stays where it stood")

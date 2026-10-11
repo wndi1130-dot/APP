@@ -152,22 +152,27 @@ static func mood(comm: Dictionary, train: Dictionary) -> String:
 		return "stir"
 	if comm.is_empty():
 		return "calm"
-	if float(comm.get("rel", 0)) <= REL_STIR or int(comm.get("grudge", 0)) >= GRUDGE_STIR:
+	if resents(comm):
 		return "stir"
 	if warmth(comm) < LOW_BELOW or _sit(comm, 1, 60.0) < LOW_BELOW:
 		return "low"
 	return "calm"
 
 
+## Set against the captain, by its standing or by its grudges.
+static func resents(comm: Dictionary) -> bool:
+	return float(comm.get("rel", 0)) <= REL_STIR or int(comm.get("grudge", 0)) >= GRUDGE_STIR
+
+
 static func mood_look(m: String) -> Dictionary:
 	return MOOD_LOOK.get(m, MOOD_LOOK["calm"])
 
 
-## The bad value whose gestures a car of mood `m` shows: "fear", "tension",
-## "resent" or "", one a car. Fear comes first, as it does in mood(). A car
+## The bad value whose gestures a car of mood `m` shows first: "fear",
+## "tension", "resent" or "". Fear comes first, as it does in mood(). A car
 ## is stirred by the train's tension or by its own standing with the
-## captain: on a tense train the tension is what shows, and a car's own
-## resentment shows only on a train that is not.
+## captain: on a tense train the tension comes first, and gesture_also()
+## says whether the car's own resentment shows beside it.
 static func gesture_for(m: String, train: Dictionary) -> String:
 	if m == "frozen":
 		return "fear"
@@ -176,25 +181,39 @@ static func gesture_for(m: String, train: Dictionary) -> String:
 	return "tension" if float(train.get("tension", 0)) >= TENSION_STIR else "resent"
 
 
-## What each of a car's standers does, in knot order: [{"name", "role"}],
-## name "" for standing still. Only the first knot acts. For tension its
-## first two are a pair (role 0 and 1) and its third is alone; for
-## resentment each has a gesture of its own, so one stander is enough.
-static func knot_gestures(value: String, standing: int, car_index: int) -> Array:
+## A second bad value a car shows beside the first (decision 137: one or
+## two): on a tense train, a car that is also set against the captain.
+static func gesture_also(value: String, comm: Dictionary) -> String:
+	return "resent" if value == "tension" and not comm.is_empty() and resents(comm) else ""
+
+
+## What each of a car's standers does, in knot order: [{"name", "role",
+## "of"}], name "" for standing still and "of" the value the gesture is
+## of. Only the first knot acts. For tension its first two are a pair (role
+## 0 and 1) and its third is alone; for resentment each has a gesture of
+## its own, so one stander is enough. With a second value `also`, the pair
+## stays the first value's and the third takes the second's.
+static func knot_gestures(value: String, standing: int, car_index: int, also: String = "") -> Array:
 	var out: Array = []
 	var set: Dictionary = GESTURES.get(value, {})
 	var each: Array = set.get("each", [])
 	var pairs: Array = set.get("pairs", [])
 	var paired: bool = not pairs.is_empty() and standing >= GESTURE_PAIR
+	var other: Array = (GESTURES.get(also, {}) as Dictionary).get("each", [])
 	for k in standing:
 		var name := ""
+		var whose := value
 		if k < each.size():
 			name = each[k]
 		elif paired and k < GESTURE_PAIR:
 			name = pairs[posmod(car_index, pairs.size())]
+		elif paired and k == GESTURE_PAIR and not other.is_empty():
+			name = other[0]
+			whose = also
 		elif paired and k == GESTURE_PAIR:
 			name = set["one"]
-		out.append({"name": name, "role": k if k < maxi(GESTURE_PAIR, each.size()) else 0})
+		out.append({"name": name, "role": k if k < maxi(GESTURE_PAIR, each.size()) else 0,
+			"of": whose if name != "" else ""})
 	return out
 
 
