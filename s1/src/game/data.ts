@@ -19,6 +19,9 @@ export const P = Object.freeze({
   haulTotal: 36, targetBoost: 3, leverStep: 12, winterEvery: 6, winterDrop: 5,
   injuryRate: 0.25, deathRate: 0.03,
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
+  // 결정 080(후보 5): 꼬리칸 관계가 backBelow 아래인데 열기·식량 레버를 2 이상으로 backSegs 구간 이어 지키면
+  // 구간 회복에 backBonus가 더 붙고 열기가 구간마다 1씩 내린다. 돌려주는 길이 막히지 않게 한다.
+  backBelow: -40, backSegs: 3, backBonus: 3,
   engineFatigue: 2, shiftRelief: 10, shiftCoal: 3,
   strikeRel: -15, refuseRel: 5, rescueRate: 0.2, crisisLine: 30,
   thrownHorde: 0.05, storeRisk: 0.03, coldCap: 6, pyreCoal: 1, pyreKinCrowd: 2, pyreLight: 1.05,
@@ -33,7 +36,13 @@ export const P = Object.freeze({
   crewGain: 5, crewRest: 10, choreRel: -3, hurtRel: -2, snowExposure: 10,
   // 작업조 노동으로는 노출이 60 위로 안 오른다: 꼬리칸의 시작 노출 60이 '늘 먼저 불려 나간' 값이다(6.4 첫 줄).
   // 한계가 없으면 꼬리칸만 보내는 판이 노출 100에 닿아 완주가 42→24%로 무너졌다(4000판, 제안). 법·눈 녹이기는 이 위로도 올린다.
-  crewCap: 60,
+  // 결정 060 가: 꼬리칸만 보내면 노출이 실제로 오르게 상한을 60→70으로 올리고, 노출이 50을 넘으면 점마다 다칠·죽을 확률에 +0.5%를 곱한다(숫자는 제안, 측정으로 정한다).
+  crewCap: 70, exposeFrom: 50, exposeHurt: 0.005,
+  // 결정 059 가: 꼬리칸이 작업을 거부 중이면 누구를 보내도 정차 산출이 ×0.85, 구간마다 운행 석탄이 +1(숫자는 제안, 측정으로 정함).
+  tailIdleHaul: 0.85, tailIdleCoal: 1.0,
+  // 결정 059 나: 마지막 기회로 긴장을 되돌리는 값은 처음 80, 쓸 때마다 이만큼 더 높다(80, 90). 쓴 뒤로는 공포가 긴장 오름을 늦추지 않는다.
+  // 65에서는 평소 긴장(80쯤)보다 낮아 누를수록 이득이라, 쌓아 눌러도 값이 안 붙었다(측정).
+  crisisBase: 80, crisisStep: 10,
   // 공간 레버 0~2단: 한 단에 꼬리칸 과밀 −10, 내주는 칸 +10. 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1.
   spaceStep: 10, spaceMax: 2, spacePullRel: -3, spaceHoldRel: -1,
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').

@@ -27,9 +27,11 @@ describe('작업조 칸', () => {
     expect(g.comms.guard.base[3]).toBe(70); // 경비대는 쉼 표에 없다
   });
 
-  it('작업조 노동만으로는 노출이 한계(꼬리칸 시작값 60) 위로 안 오르고, 이미 위면 그대로다', () => {
+  it('작업조 노동만으로는 노출이 한계 위로 안 오르고, 이미 위면 그대로다(꼬리칸 시작값 60은 한계 아래라 늘 보내면 오른다)', () => {
     const g = createGame('tm-cap');
-    expect(P.crewCap).toBe(g.comms.tail.base[3]);
+    expect(g.comms.tail.base[3]).toBeLessThan(P.crewCap);
+    crewWork(g, 'tail', P.crewGain);
+    expect(g.comms.tail.base[3]).toBe(60 + P.crewGain);
     g.comms.tail.base[3] = P.crewCap - 2;
     crewWork(g, 'tail', P.crewGain);
     expect(g.comms.tail.base[3]).toBe(P.crewCap);
