@@ -1,4 +1,5 @@
 import { COMM_NAME, COMMS } from '../data';
+import { bump, bumpRel } from '../ledger';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { familyOf } from '../people';
@@ -152,7 +153,7 @@ export function runOrder(g: Game, where: 'travel' | 'stop', crew: string[] = [])
     if (rep) {
       // 순교자 효과(4.6): 대상 칸 관계 −10, 열기 +1. 승계자는 대개 더 과격하다.
       const s = g.comms[tc];
-      s.rel = clamp(s.rel - 10, -100, 100);
+      bumpRel(g, tc, -10, 'order');
       s.fervor = Math.min(3, s.fervor + 1);
     }
     // 수사는 늘 열린다(4.6, J09 2번). 사고·정차로 꾸며 들키지 않으면 '사고라고 적혔다'로 시작하고 실행자 단서 없이 연다.
@@ -245,21 +246,21 @@ export function answerThreat(g: Game, id: string, how: 'give' | 'stand' | 'confe
   const c = commOf(g, id);
   const name = nameOf(g, id);
   if (how === 'give') {
-    g.lux = Math.max(0, g.lux - 3);
-    g.comms[c].rel = clamp(g.comms[c].rel + 5, -100, 100);
+    bump(g, 'lux', -3, 'order', { floor0: true });
+    bumpRel(g, c, 5, 'order');
     return `${name}이(가) 받아 갔다. 이번 한 번이라고 했다.`;
   }
   if (how === 'confess') {
-    g.trust = clamp(g.trust - 10, 0, 100);
+    bump(g, 'trust', -10, 'order');
     d.executors = d.executors.filter(x => x.id !== id);
-    for (const k of COMMS) if (g.comms[k].leader.trait === 'ideal') g.comms[k].rel = clamp(g.comms[k].rel + 5, -100, 100);
+    for (const k of COMMS) if (g.comms[k].leader.trait === 'ideal') bumpRel(g, k, 5, 'order');
     scene(g, 'confess', 3, `${g.seg}구간, 열차장이 식당칸에서 자기가 시킨 죽음을 털어놓았다.`, []);
     return '식당칸이 조용해졌다. 털어놓은 말은 거둘 수 없다.';
   }
   // 버틴다: 겁 많은 사람이면 70%, 아니면 40%로 물러선다. 아니면 폭로(신임 −15, 무게만큼 적의).
   const fearful = COMMS.some(k => g.comms[k].leader.personId === id && g.comms[k].leader.trait === 'fear');
   if (dr(g) < (fearful ? 0.7 : 0.4)) return `${name}이(가) 눈을 피했다. 이번엔 물러섰다.`;
-  g.trust = clamp(g.trust - 15, 0, 100);
+  bump(g, 'trust', -15, 'order');
   for (let i = 0; i < 3; i += 1) offend(g, c);
   d.executors = d.executors.filter(x => x.id !== id);
   scene(g, 'exposed', 4, `${g.seg}구간, ${name}이(가) 열차장이 시킨 일을 식당칸에서 말했다.`, [id]);
