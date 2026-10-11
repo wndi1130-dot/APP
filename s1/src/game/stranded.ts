@@ -202,8 +202,8 @@ function resolveLost(g: Game, st: StrandedState, t: TripState): void {
   addCard(g, { kind: 'trip_lost', comm: t.comm, who: t.names.join(','), n: t.turn });
 }
 
-/** 선 채로 지난 정산마다 원정을 한 턴 굴린다(strandedSettle 끝). */
-function tripTick(g: Game): void {
+/** 선 채로 지난 정산마다 원정을 한 턴 굴린다. settle이 다른 죽음 틱이 끝난 뒤에 부른다(열차장이 못 돌아와 판이 끝나도 그 뒤 틱이 끝난 판 위에서 돌지 않게). */
+export function tripTick(g: Game): void {
   const st = g.stranded;
   const t = st?.trip;
   if (!st || !t) return;
@@ -303,5 +303,4 @@ export function strandedSettle(g: Game): void {
       base[0] = Math.min(base[0], Math.max(P.strandedWarmFloor, base[0] - P.strandedWarmDrop));
     }
   }
-  tripTick(g);
 }

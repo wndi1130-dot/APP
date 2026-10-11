@@ -6,7 +6,7 @@ import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from '
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
-import { enterStranded, reapplyAway, segKmOf, stallKm, strandedDepart, strandedSettle } from './stranded';
+import { enterStranded, reapplyAway, segKmOf, stallKm, strandedDepart, strandedSettle, tripTick } from './stranded';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { josa } from './josa';
@@ -712,6 +712,7 @@ function settle(g: Game): void {
   darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
   for (const c of COMMS) g.comms[c].away = 0;
+  if (wasStranded) tripTick(g); // 수동차 원정: 못 돌아온 열차장은 여기서 판을 끝낸다(앞의 정산 틱들이 끝난 판 위에서 돌지 않게 뒤에 둔다)
   reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);

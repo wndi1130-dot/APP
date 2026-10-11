@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advance, chooseCard, COMMS, createGame, enterStranded, isSessionSeg, P, startTrip, strandedSettle, supportShare, tripPlan, viewCard,
+  advance, chooseCard, COMMS, createGame, enterStranded, isSessionSeg, P, startTrip, strandedSettle, supportShare, tripPlan, tripTick, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -16,7 +16,8 @@ const stranded = (seed: string): Game => {
 /** 칸마다 관계를 정한다. 지지 문턱(관계 15 이상인 칸의 인구 비율)을 맞추려고 쓴다. */
 const rels = (g: Game, v: number) => { for (const c of COMMS) g.comms[c].rel = v; };
 const lastCard = (g: Game, kind: string) => g.cards.find(c => c.kind === kind);
-const turnsTill = (g: Game, n: number) => { for (let i = 0; i < n && g.stranded?.trip; i += 1) strandedSettle(g); };
+/** settle이 하는 순서대로 한 정산: 멈춘 정산, 그 뒤에 원정 한 턴. */
+const step = (g: Game) => { strandedSettle(g); tripTick(g); };
 
 /** 시드를 훑어 첫 역의 갈래가 원하는 쪽으로 난 판을 찾는다. */
 function seedFor(want: 'lost' | 'extend' | 'coal'): string {
@@ -27,7 +28,7 @@ function seedFor(want: 'lost' | 'extend' | 'coal'): string {
     g.stranded!.toNextKm = 15;
     startTrip(g, 'crew');
     const t = g.stranded!.trip!;
-    strandedSettle(g); // 첫 역에 닿는 턴
+    step(g); // 첫 역에 닿는 턴
     const got = t.outcome === 'lost' ? 'lost' : t.outcome === 'coal' ? 'coal' : t.extends > 0 ? 'extend' : null;
     if (got === want) return seed;
   }
@@ -115,7 +116,7 @@ describe('갈래(첫 역)', () => {
     const t = g.stranded!.trip!;
     const taken = food0 - g.food;
     expect(taken).toBe(8);
-    strandedSettle(g);
+    step(g);
     expect(t.distKm).toBe(30);
     expect(t.goTurns).toBe(2);
     expect(t.foodOwed).toBe(taken); // 총 식량이 ×2가 되도록 기본 몫만큼 더
@@ -125,7 +126,7 @@ describe('갈래(첫 역)', () => {
       rels(h, 30);
       startTrip(h, 'crew');
       const tt = h.stranded!.trip!;
-      for (let k = 0; k < 40 && h.stranded?.trip === tt && tt.outcome === null; k += 1) strandedSettle(h);
+      for (let k = 0; k < 40 && h.stranded?.trip === tt && tt.outcome === null; k += 1) step(h);
       mostExtends = Math.max(mostExtends, tt.extends);
     }
     expect(mostExtends).toBeLessThanOrEqual(2);
@@ -138,7 +139,7 @@ describe('갈래(첫 역)', () => {
     g.dom = { techs: { r3: { stage: 'done' } } } as never;
     startTrip(g, 'crew');
     const food = g.food;
-    strandedSettle(g);
+    step(g);
     expect(lastCard(g, 'trip_extend')).toBeTruthy();
     expect(g.stranded!.trip!.known).toBe(true);
     expect(g.food).toBeLessThan(food);
@@ -153,7 +154,7 @@ describe('돌아왔을 때', () => {
       rels(g, rel);
       g.stranded!.toNextKm = 15;
       startTrip(g, mode);
-      for (let k = 0; k < 30 && g.stranded?.trip && !lastCard(g, 'trip_return') && !g.end; k += 1) strandedSettle(g);
+      for (let k = 0; k < 30 && g.stranded?.trip && !lastCard(g, 'trip_return') && !g.end; k += 1) step(g);
       if (lastCard(g, 'trip_return') && g.stranded!.trip!.extends === 0) return g;
     }
     throw new Error('석탄 갈래를 못 찾았다');
@@ -217,7 +218,7 @@ describe('못 돌아옴', () => {
     const { comm, names } = t;
     for (let k = 0; k < 30 && g.stranded?.trip; k += 1) {
       const before = { pop: g.comms[comm].pop, rel: g.comms[comm].rel, tension: g.tension, fear: g.fear, deaths: g.deathLog?.length ?? 0 };
-      strandedSettle(g);
+      step(g);
       if (!g.stranded?.trip) {
         expect(g.comms[comm].pop).toBe(Math.max(1, before.pop - names.length));
         expect(g.comms[comm].rel).toBe(before.rel + P.tripLostRel);
@@ -238,10 +239,29 @@ describe('못 돌아옴', () => {
     rels(g, 30);
     g.stranded!.toNextKm = 15;
     startTrip(g, 'captain');
-    for (let k = 0; k < 30 && g.stranded?.trip; k += 1) strandedSettle(g);
+    for (let k = 0; k < 30 && g.stranded?.trip; k += 1) step(g);
     expect(g.end).toBe('lost_captain');
     expect(g.phase).toBe('end');
     expect(g.journal.some(j => j.text.includes('수동차 자국만 남았다'))).toBe(true);
+  });
+
+  it('정산 안에서 끝나면 끝 글이 일지 마지막이고 그 뒤 틱이 돌지 않는다', () => {
+    const g = stranded(seedFor('lost'));
+    rels(g, 30);
+    g.stranded!.toNextKm = 15;
+    startTrip(g, 'captain');
+    for (let k = 0; k < 40 && !g.end; k += 1) {
+      g.cards = [];
+      g.phase = 'travel';
+      advance(g);
+    }
+    expect(g.end).toBe('lost_captain');
+    expect(g.journal[g.journal.length - 1].text).toContain('수동차 자국만 남았다');
+    const turn = g.stranded!.trip?.turn;
+    const len = g.journal.length;
+    strandedSettle(g);
+    expect(g.stranded!.trip?.turn).toBe(turn);
+    expect(g.journal.length).toBeGreaterThanOrEqual(len);
   });
 });
 
