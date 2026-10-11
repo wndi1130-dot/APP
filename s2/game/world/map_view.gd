@@ -347,6 +347,12 @@ func update_spot(id: String) -> void:
 			var post := Color(0.42, 0.42, 0.44) if spot["state"] != "seen" else Color(0.7, 0.7, 0.66)
 			box(st, Vector3(0.12, 1.6, 0.12), at + Vector3(0, 0.8, 0), post)
 			box(st, Vector3(0.5, 0.3, 0.1), at + Vector3(0, 1.5, 0), post)
+		"conveyor":
+			# A belt on legs; paler while it is being mended, warm grey once it runs.
+			var belt: Color = {"stopped": Color(0.36, 0.36, 0.38), "part": Color(0.5, 0.5, 0.5), "running": Color(0.72, 0.66, 0.5)}.get(spot["state"], Color(0.36, 0.36, 0.38))
+			box(st, Vector3(2.6, 0.18, 0.7), at + Vector3(0, 0.75, 0), belt)
+			box(st, Vector3(0.14, 0.7, 0.14), at + Vector3(-1.1, 0.35, 0), belt)
+			box(st, Vector3(0.14, 0.7, 0.14), at + Vector3(1.1, 0.35, 0), belt)
 		"deep":
 			box(st, Vector3(1.0, 0.06, 1.0), at + Vector3(0, 0.03, 0), Color(0.3, 0.28, 0.26) if spot["state"] != "seen" else Color(0.6, 0.58, 0.52))
 		"salvage":

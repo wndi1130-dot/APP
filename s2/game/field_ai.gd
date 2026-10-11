@@ -286,6 +286,11 @@ func _crew(p, delta: float, think: bool) -> void:
 	if p.action != "":
 		return
 	var job: String = p.brain.get("job", "dig")
+	if job == "repair":
+		var to = game.mission_play.repair_step(p)
+		if to != null:
+			_walk(p, to, false)
+		return
 	if job == "dig":
 		var wagon: Dictionary = _wagon_with_coal()
 		if wagon.is_empty():
@@ -304,6 +309,7 @@ func _crew(p, delta: float, think: bool) -> void:
 			return
 		game.actions.coal_delivered += float(p.brain.get("load", 0.0))
 		game.telemetry.trip()
+		game.mission_play.loaded()
 		p.brain["load"] = 0.0
 		p.brain["job"] = "dig"
 
@@ -312,7 +318,7 @@ func _dug(p) -> void:
 	var w: Dictionary = _wagon_with_coal()
 	if w.is_empty():
 		return
-	var take := minf(TRIP_COAL, float(w["coal"]))
+	var take := minf(TRIP_COAL * game.mission_play.load_mult(), float(w["coal"]))
 	w["coal"] = float(w["coal"]) - take
 	p.brain["load"] = take
 	p.brain["job"] = "carry"
