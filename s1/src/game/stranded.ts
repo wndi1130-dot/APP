@@ -35,7 +35,7 @@ export function enterStranded(g: Game, coalBefore: number, need: number): void {
   const atKm = stallKm(segKm, coalBefore, need);
   const st: StrandedState = {
     since: g.seg, turns: 0, segKm, atKm, toNextKm: segKm - atKm, seen: [],
-    trip: null, captainAway: false, deputy: null, lostTrips: 0, snow: null, lamp: false,
+    trip: null, captainAway: false, deputy: null, lostTrips: 0, snow: null, lamp: false, burned: Math.max(0, coalBefore),
   };
   g.stranded = st;
   flagsOf(g).stranded = true;

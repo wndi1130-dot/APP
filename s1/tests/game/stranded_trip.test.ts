@@ -255,6 +255,7 @@ describe('못 돌아옴', () => {
     for (let k = 0; k < 40 && !g.end; k += 1) {
       g.cards = [];
       g.phase = 'travel';
+      g.seg += 1; // 실제 판은 구간마다 올라간다(이번 구간에 선 열차는 아직 멈춘 정산을 안 받는다)
       advance(g);
     }
     expect(g.end).toBe('lost_captain');
