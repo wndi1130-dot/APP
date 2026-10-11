@@ -1,0 +1,65 @@
+{
+  "id": "ev_str_lamp",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "stranded",
+      "value": true
+    }
+  ],
+  "speaker": "tail",
+  "body": "선로 끝에 등불 하나를 걸자는 말이 나온다. 돌아오는 수동차가 밤에 열차를 지나칠까 꼬리칸이 걱정한다.",
+  "choices": [
+    {
+      "id": "c_hang_lamp",
+      "label": "등불을 건다",
+      "say": "걸어라. 기름 한 통이면 된다.",
+      "why": "기름은 사치품 상자에서 나간다. 불빛 하나로 꼬리칸 사람들이 창에서 조금 물러난다.",
+      "later": "수동차가 밤에 돌아오는 길이 한 턴 짧아진다.",
+      "requires": [
+        {
+          "type": "resource",
+          "resource": "luxury",
+          "operator": "gte",
+          "value": 1
+        }
+      ],
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -1
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": 3
+        },
+        {
+          "type": "flag",
+          "id": "stranded_lamp",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_save_oil",
+      "label": "아낀다",
+      "say": "기름은 아껴 둔다. 소리로 부른다.",
+      "why": "기름은 그대로지만 밤새 창을 지키는 사람들의 입이 거칠어진다.",
+      "effects": [
+        {
+          "type": "tension",
+          "amount": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

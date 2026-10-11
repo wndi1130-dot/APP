@@ -43,6 +43,9 @@ export const P = Object.freeze({
   // 결정 059 나: 마지막 기회로 긴장을 되돌리는 값은 처음 80, 쓸 때마다 이만큼 더 높다(80, 90). 쓴 뒤로는 공포가 긴장 오름을 늦추지 않는다.
   // 65에서는 평소 긴장(80쯤)보다 낮아 누를수록 이득이라, 쌓아 눌러도 값이 안 붙었다(측정).
   crisisBase: 80, crisisStep: 10,
+  // 멈춘 열차(구현명세 가, 결정 034·035·037): 석탄이 0이 되면 판이 끝나지 않고 선다. 선 열차는 구간마다 긴장 +3, 모든 칸 온기 −5(바닥 10).
+  // segKmDefault는 구간 길이를 모르는 노선의 기본값(km). 예고 「이대로 가면 ○km 지점에서 멈춘다」의 눈금이다.
+  strandedTension: 3, strandedWarmDrop: 5, strandedWarmFloor: 10, segKmDefault: 30,
   // 공간 레버 0~2단: 한 단에 꼬리칸 과밀 −10, 내주는 칸 +10. 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1.
   spaceStep: 10, spaceMax: 2, spacePullRel: -3, spaceHoldRel: -1,
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').

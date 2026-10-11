@@ -6,6 +6,7 @@ import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from '
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
+import { enterStranded, segKmOf, stallKm, strandedDepart, strandedSettle } from './stranded';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { josa } from './josa';
@@ -50,7 +51,7 @@ export function primaryAction(g: Game): Primary {
   if (g.cards.length > 0) return { label: `서류 ${g.cards.length}장`, ok: false, why: '먼저 서류를 처리한다' };
   switch (g.phase) {
     case 'prep': return { label: '출발', ok: true };
-    case 'travel': return g.inStrike ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차', ok: true };
+    case 'travel': return g.inStrike || g.stranded ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차', ok: true };
     case 'stop': return g.stop?.done ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차 결정', ok: false, why: '정차 카드를 고른다' };
     case 'council': {
       const council = g.council;
@@ -58,7 +59,7 @@ export function primaryAction(g: Game): Primary {
       if (council && !council.martial && (council.options.length > 0 || preVote(g)) && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
       return { label: '정산으로', ok: true };
     }
-    case 'settle': return { label: g.seg >= P.segments ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
+    case 'settle': return { label: g.seg >= P.segments && !g.stranded ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
     default: return { label: '', ok: false };
   }
 }
@@ -71,7 +72,7 @@ export function advance(g: Game): void {
       depart(g);
       if ((g.phase as Game['phase']) === 'travel') darkTravel(g);
       return;
-    case 'travel': return g.inStrike ? afterStop(g) : arriveStop(g);
+    case 'travel': return g.inStrike || g.stranded ? afterStop(g) : arriveStop(g);
     case 'stop': return afterStop(g);
     case 'council': return preVote(g) ? finishPreVote(g) : settle(g);
     case 'settle': return nextSegment(g);
@@ -181,7 +182,21 @@ export function forecast(g: Game): { coal: number; food: number } {
   const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
-  return { coal: coal + dom.coal, food: food * dom.foodMult + dom.food };
+  // 선 열차는 탈 석탄이 없다(난방도 난로에 든 것만). 식량은 평소대로 든다.
+  return { coal: g.stranded ? 0 : coal + dom.coal, food: food * dom.foodMult + dom.food };
+}
+
+/**
+ * 출발 전 예고(멈춘 열차 3.3): 이대로 가면 석탄이 모자라 어디서 서는지. 재난 석탄은 빼고 셈하니(예고는 늘 더 늦게 서는 쪽으로만 틀린다),
+ * 실제로는 재난이 끼면 예고보다 앞에서 선다. 서지 않거나 이미 선 열차면 null.
+ */
+export function predictStall(g: Game): { atKm: number; toNextKm: number; segKm: number } | null {
+  if (g.stranded) return null;
+  const need = forecast(g).coal - disasterCoal(g);
+  if (need <= 0 || g.coal > need) return null;
+  const segKm = segKmOf(g);
+  const atKm = stallKm(segKm, g.coal, need);
+  return { atKm, toNextKm: segKm - atKm, segKm };
 }
 
 /** 구간 정산이 한꺼번에 빼는 석탄·식량을 까닭별 무게로 나눈다. forecast의 항을 그대로 풀어 쓴 것이고, 비율로만 쓰므로 합은 forecast와 달라도 된다. */
@@ -202,6 +217,7 @@ function forecastWeights(g: Game): { coal: [string, number][]; food: [string, nu
 
 function depart(g: Game): void {
   delete g.platform; // 승강장에 남은 사람은 떠나면서 일지에 그어졌다(5b.5)
+  if (g.stranded) return strandedDepart(g); // 선 열차: 달리지 않는다. 겨울 하락은 멈춘 정산의 온기 하락이 대신한다
   if (g.seg % P.winterEvery === 0) {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
@@ -654,14 +670,17 @@ function afterStop(g: Game): void {
 
 // ---- 정산 ----
 function settle(g: Game): void {
+  const wasStranded = !!g.stranded; // 이 정산 전부터 서 있던 열차만 멈춘 정산(긴장·온기)을 받는다
   const before = { coal: g.coal, food: g.food, med: g.med, trust: g.trust, tension: g.tension, rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number> };
   const notes: string[] = [];
   const f = forecast(g);
   const w = forecastWeights(g);
   bumpParts(g, 'coal', -f.coal, w.coal);
   bumpParts(g, 'food', -f.food, w.food);
-  if (!g.inStrike) g.comms.engine.base[3] += P.engineFatigue;
-  else bump(g, 'tension', 3, 'strike');
+  if (g.coal <= 0 && !g.stranded) enterStranded(g, before.coal, f.coal); // 처음 석탄 0: 판이 끝나지 않고 선다
+  if (g.inStrike) bump(g, 'tension', 3, 'strike');
+  else if (wasStranded) { bump(g, 'tension', P.strandedTension, 'stranded'); strandedSettle(g); }
+  else g.comms.engine.base[3] += P.engineFatigue;
   // 공간을 내준 칸은 당겨 둔 동안 구간마다 단당 관계 −1(first_leg_story 6.4).
   if (g.space?.giver && g.space.step > 0) {
     bumpRel(g, g.space.giver, P.spaceHoldRel * g.space.step, 'situation');
@@ -1007,16 +1026,6 @@ function meters(g: Game): void {
 }
 
 function checkEnd(g: Game): void {
-  if (g.coal <= 0) {
-    if (!g.emergencyUsed) {
-      g.emergencyUsed = true;
-      bump(g, 'coal', 15, 'short');
-      bump(g, 'tension', 10, 'short');
-      journal(g, '석탄이 바닥났다. 가구와 책, 빈 객차 판자를 뜯어 보일러에 넣었다(석탄 +15).', 'dark');
-    } else {
-      return finish(g, 'stranded');
-    }
-  }
   if (g.food < 0) put(g, 'food', 0, 'short');
   // S1b 계엄 중엔 신임 대신 경비대의 충성을 쥔다. 신임 위기로 축출되지 않는다(5.3).
   const martial = !!g.dark?.martial;
@@ -1048,14 +1057,15 @@ function finish(g: Game, end: Game['end']): void {
   if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
-  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: '반란이 일어났다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];
+  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   for (const line of raisedLines(g)) journal(g, line);
   darkFinish(g);
 }
 
 function nextSegment(g: Game): void {
-  if (g.seg >= P.segments) {
+  // 선 열차는 라이프치히에 닿지 못한다. 구간 수를 넘겨도 완주하지 않고 서 있는다(seg는 계속 올라 회기 구간 판정이 그대로 돈다).
+  if (g.seg >= P.segments && !g.stranded) {
     // 라이프치히 도착: 먼저 누가 내리는지 고르고(hub.ts), 다 고르면 판을 닫는다.
     if (!g.hub?.plan) {
       arriveHub(g);

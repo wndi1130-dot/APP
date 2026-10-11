@@ -15,6 +15,19 @@ import profilesJson from '../../data/profiles.json';
 
 export type Phase = 'prep' | 'travel' | 'stop' | 'council' | 'settle' | 'end';
 /** coup: S1b 계엄 중 경비대 충성이 무너져 경비대장이 열차를 잡았다(s1b_dark_path 5.3, 둘째 묶음). */
+/** 노선 한 구간. 길이만 안다. 없으면 P.segKmDefault */
+export interface RouteSeg { seg: number; km: number }
+
+/** 석탄 0으로 선 열차. 화면은 이 값을 읽어 선 도면·예고·띠를 그린다. */
+export interface StrandedState {
+  since: number;            // 멈춘 구간(g.seg)
+  turns: number;            // 멈춘 뒤 지난 정산 수
+  segKm: number;            // 이 구간 길이(km)
+  atKm: number;             // 출발역에서 멈춘 지점까지(km)
+  toNextKm: number;         // 다음 역까지 남은 길 = segKm - atKm
+  seen: string[];           // 이미 뜬 멈춘 열차 사건 id
+}
+
 export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup';
 /** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
 /** 정차 작업조 명단에 더 붙는 사람(이름). S1b 정차 암살의 실행자와 대상이 여기서 붙는다(dark/order.ts). */
@@ -230,6 +243,10 @@ export interface Game {
   deaths: string[];
   strikes: number;
   inStrike: boolean;
+  /** 석탄 0으로 선 열차(멈춘 열차). null·없음이면 달리는 중 */
+  stranded?: StrandedState | null;
+  /** 노선 구간 길이(km). 없는 구간은 P.segKmDefault */
+  route?: RouteSeg[];
   strikeWarned: number;
   lostSegments: number;
   trustCrisis: number | null;

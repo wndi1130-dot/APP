@@ -1,0 +1,101 @@
+{
+  "id": "ev_str_snow",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "stranded",
+      "value": true
+    }
+  ],
+  "speaker": "engine",
+  "body": "멈춘 사이 선로에 눈이 쌓인다. 그냥 두면 수동차도 열차도 바로 못 간다.",
+  "choices": [
+    {
+      "id": "c_all_shovel",
+      "label": "칸을 돌아가며 치운다",
+      "say": "칸마다 한 시간씩이다. 나도 삽을 든다.",
+      "why": "다섯 칸이 한 시간씩 바깥에 선다. 모두 조금씩 얼지만 나중에 석탄이 덜 든다.",
+      "later": "다시 달릴 때 눈 때문에 드는 석탄이 없다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "tail",
+          "amount": 3
+        },
+        {
+          "type": "community.exposure",
+          "target": "medtech",
+          "amount": 3
+        },
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 3
+        },
+        {
+          "type": "community.exposure",
+          "target": "front",
+          "amount": 3
+        },
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 3
+        },
+        {
+          "type": "flag",
+          "id": "stranded_snow",
+          "value": "all"
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_guard_only",
+      "label": "경비대만",
+      "say": "경비대가 한다. 다른 칸은 들어가 있어라.",
+      "why": "경비대 몇이 한참을 바깥에서 떤다. 다른 칸은 따뜻하지만 경비대가 열차장을 바라보는 눈이 식는다.",
+      "later": "다시 달릴 때 눈 때문에 드는 석탄이 없다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 6
+        },
+        {
+          "type": "relation",
+          "target": "guard",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "stranded_snow",
+          "value": "guard"
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_leave_snow",
+      "label": "둔다",
+      "say": "(열차장은 창밖을 본다.)",
+      "why": "손은 편하다. 눈은 쌓인 채 남는다.",
+      "later": "다시 달릴 때 석탄이 더 든다.",
+      "effects": [
+        {
+          "type": "flag",
+          "id": "stranded_snow",
+          "value": "none"
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
