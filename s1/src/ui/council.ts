@@ -12,6 +12,7 @@ import type { View } from './common';
 import { DEFAULT_HEMICYCLE, hemicycleBounds, layoutHemicycle, wedgeBoundaries } from './seats';
 import { bar, portrait, tip } from './widgets';
 import { agendaLine, nameBtn } from './names';
+import { luxFront } from './lux_tags';
 import { darkBillFoot, darkClosedNote, darkCloseButton, darkDecreeNote, darkNoDeals } from './dark'; // S1b 계엄 회기 훅
 
 /** 법 미리보기 줄 끝에 기술이 바꾼 것(7.3)을 붙인다. 다섯 줄 안에 들도록 법 줄을 줄인다(셋까지는 남긴다). */
@@ -345,6 +346,8 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
             h('b', { class: 'num' }, i + 1), h('span', null, cond.label), h('small', null, cond.now ? '지금 치른다' : cond.kind === 'target' || cond.kind === 'skip_dispatch' ? '다음 정차' : '다음 회기까지'))))),
       h('button', { class: 'btn btn--ghost', 'data-action': 'deal-close' }, '돌아가기'));
   }
+  // 매수는 무엇이 나가는지도 보인다(결정 071): 「뇌물 값 3 = 술 2 · 담배 1」. 단추가 좁아 단추 밑 한 줄로 둔다.
+  const out = !council.martial && toolStatus(g, c, 'bribe').ok ? luxFront(g, bribePrice(g, c)) : '';
   return h('div', { class: 'cpanel', 'data-link': 'to' }, head, facts,
     council.martial ? darkNoDeals() : h('div', { class: 'tools' }, TOOLS.map(t => {
       const status = toolStatus(g, c, t.tool);
@@ -352,7 +355,8 @@ function commPanel(view: View, map: Record<Comm, Bloc>): HTMLElement {
       return h('button', { class: cx('tool', !status.ok && 'is-off'), 'data-action': 'deal', 'data-comm': c, 'data-tool': t.tool, disabled: !status.ok },
         icon(t.icon, 'tool__icon'), h('span', { class: 'tool__name' }, t.name),
         h('small', { class: 'tool__cost' }, status.ok ? cost : status.why ?? cost));
-    })));
+    })),
+    out ? h('p', { class: 'tools__out sub num' }, `뇌물 값 ${bribePrice(g, c)} = ${out}`) : null);
 }
 
 /** 개표가 끝나면 가운데 큰 숫자 자리에 결과를 낸다. 집단별 찬반은 오른쪽 목록이 보여 준다. */
