@@ -44,6 +44,14 @@ const MATERIALS: Array[String] = ["plank", "scrap", "wood"]
 # Leaving before the train is ready (user decision 143): a last call of this
 # many seconds, and whoever is not at the train when it ends stays.
 const LAST_CALL_S: float = 3.0
+# Ready, and a quiet while (user decision 146): the next wave is put off by
+# this long whatever is heard, those the cap still held at the ways in turn
+# back, and of the waves after it every so-many-th body walks to the track
+# ahead of the train or behind it instead of a door, so that staying on makes
+# the plough's price climb again (decision 149). PROPOSED values.
+const QUIET_GAP_S: float = 40.0
+const TRACK_EVERY: int = 3
+const TRACK_SPREAD: int = 6       # they stand over this many cells of track
 # The train is ready: the words stand big on the screen this long.
 const READY_SHOWN_S: float = 4.0
 # What going unready costs, on top of the plough's price: [share of the
@@ -156,6 +164,8 @@ func begin() -> void:
 ## Where the n-th body of a horde walks: the doors in turn, of the side it
 ## comes in on where the train has doors on both.
 func target(n: int, from = null) -> Vector3:
+	if ready and n % TRACK_EVERY == TRACK_EVERY - 1:
+		return track_spot(n / TRACK_EVERY, from)
 	if doors.is_empty():
 		return FieldGrid.center(game.horde_home())
 	var mine: Array = doors
@@ -165,6 +175,15 @@ func target(n: int, from = null) -> Vector3:
 		if mine.is_empty():
 			mine = doors
 	return FieldGrid.center(mine[n % mine.size()]["cell"])
+
+
+## A place on the track beside the train, on the end nearer to `from`.
+func track_spot(k: int, from = null) -> Vector3:
+	var train: Rect2i = game.data["train"]
+	var row: int = train.position.y + (k % maxi(train.size.y, 1))
+	var step: int = 2 + k % TRACK_SPREAD
+	var east: bool = from == null or from.x >= FieldGrid.center(train.get_center()).x
+	return FieldGrid.center(Vector2i(train.end.x + step if east else train.position.x - 1 - step, row))
 
 
 ## "We leave now": the count starts. It cannot be called off.
@@ -257,6 +276,12 @@ func tick(delta: float) -> void:
 	if left <= 0.0 and not ready:
 		ready = true
 		ready_shown = READY_SHOWN_S
+		# The quiet while: what was coming comes that much later.
+		var now: float = game.clock.elapsed
+		game.director.quiet_until = now + QUIET_GAP_S
+		# Those still held at the ways in by the cap turn back with it.
+		game.pending_spawn.clear()
+		game.director.next_arrival = maxf(game.director.next_arrival, game.director.quiet_until)
 		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
 
 

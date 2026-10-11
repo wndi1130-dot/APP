@@ -355,6 +355,35 @@ func test_the_last_call_is_lost_if_the_chief_is_not_at_the_train() -> void:
 	assert_string_contains(String(game.radio_wait["text"]), "열차장이 안 탔다", "the driver says why")
 
 
+# User decision 146: ready, a quiet while; after it part of every wave stands
+# on the track, so the price of leaving climbs again (decision 149).
+func test_a_ready_train_gets_a_quiet_while_and_then_the_track_fills() -> void:
+	var game = _game({"holdout": "start", "holdout_time": 20.0})
+	var h = game.holdout
+	var door_cells: Array = h.doors.map(func(d: Dictionary) -> Vector3: return FieldGrid.center(d["cell"]))
+	for n in range(6):
+		assert_true(door_cells.has(h.target(n)), "before it is ready every body walks to a door")
+	game.pending_spawn.append({"t": 0.0, "pos": Vector3.ZERO, "horde": 0, "target": Vector3.ZERO, "entry": "east"})
+	game.clock.elapsed = 20.5
+	h.tick(20.5)
+	assert_true(h.ready)
+	assert_true(game.pending_spawn.is_empty(), "those still held at the ways in turn back")
+	assert_gte(game.director.next_arrival, 20.5 + FieldHoldout.QUIET_GAP_S, "the next wave is put off")
+	game.director.add_noise(200, 21.0)
+	assert_gte(game.director.next_arrival, 20.5 + FieldHoldout.QUIET_GAP_S, "and the blows on the doors do not call it back")
+	var train: Rect2i = game.data["train"]
+	var on_track := 0
+	for n in range(9):
+		var c: Vector2i = FieldGrid.cell_of(h.target(n, Vector3(1000, 0, 0)))
+		if door_cells.has(h.target(n, Vector3(1000, 0, 0))):
+			continue
+		on_track += 1
+		assert_true(c.y >= train.position.y and c.y < train.end.y and c.x >= train.end.x, "on the track, on the end they come from: where the plough's price is counted")
+	assert_eq(on_track, 3, "one in three")
+	var west: Vector2i = FieldGrid.cell_of(h.target(2, Vector3(-1000, 0, 0)))
+	assert_lt(west.x, train.position.x)
+
+
 # User decision 148: whether a stop can have it is rolled once as the train
 # stops and kept; where it can, it opens on leaving unless the stop was quiet
 # and the track beside the train is clear.
