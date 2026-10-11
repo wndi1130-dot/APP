@@ -32,6 +32,7 @@ const CLIPS: Array = [
 	["crawl", "", 32, true, "own_crawl", 1.8],
 	["rise", "", 32, false, "own_rise", 1.2],
 	["climb", "", 32, false, "own_climb", 2.4],
+	["rise_front", "", 32, false, "own_rise_front", 1.3],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -50,6 +51,7 @@ const OWN_CLIPS: Array = [
 	["crawl", "", 32, true, "own_crawl", 1.8],
 	["rise", "", 32, false, "own_rise", 1.2],
 	["climb", "", 32, false, "own_climb", 2.4],
+	["rise_front", "", 32, false, "own_rise_front", 1.3],
 ]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
@@ -287,6 +289,28 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [[-0.6, 0.58, 0.0, 0.25], [0.0, -0.8, 0.0, 0.25], [0.9, -0.4, 0.0, 0.25]]],
 		],
 		"sink": [0.03, -0.81, 1.5708, 0.25],
+	},
+	# Getting up off its face (played once): it pushes its chest up off the
+	# ground, draws its knees under it (the right foot first), and stands.
+	"own_rise_front": {
+		"steps": [
+			["turn", "hips", "x", [0.0, -1.5, 1.5708, 0.25]],
+			["turn", "hips", "y", [0.0, 0.2, 1.5708, 0.25]],
+			["aim", "thigh.L", "shin.L", [0.1, [0.0, -1.0, 0.0, 0.25], [[-1.0, 1.03, 0.0, 0.25], [0.0, 0.87, 0.0, 0.5]]]],
+			["aim", "shin.L", "foot.L", [0.06, [-1.0, -1.04, 1.5708, 0.25], [-0.08, 0.92, 1.5708, 0.25]]],
+			["aim", "thigh.R", "shin.R", [-0.15, [0.0, -1.0, 0.0, 0.25], [[-1.0, 1.0, 0.0, 0.25], [0.0, 1.0, 0.0, 0.5]]]],
+			["aim", "shin.R", "foot.R", [[-0.08, 0.22, 1.5708, 0.25], [0.04, -1.04, 0.0, 0.25], [-0.8, 0.75, 0.0, 0.25]]],
+			["turn", "spine", "x", [[0.2, 0.2, 1.5708, 0.25], [0.0, -0.3, 0.0, 0.5]]],
+			["turn", "chest", "x", [0.27, 0.27, 1.5708, 0.25]],
+			["turn", "neck", "x", [0.35, 0.55, 1.5708, 0.25]],
+			["turn", "head", "y", [0.0, -0.9, 1.5708, 0.25]],
+			["turn", "head", "z", [0.22, 0.22, 1.5708, 0.25]],
+			["aim", "upper_arm.L", "forearm.L", [[0.6, -0.44, 0.0, 0.25], [0.0, -1.0, 0.0, 0.25], [0.8, -0.74, 0.0, 0.25]]],
+			["aim", "forearm.L", "hand.L", [[-0.3, 0.36, 0.0, 0.25], [0.0, -1.0, 0.0, 0.25], [1.0, -0.84, 0.0, 0.25]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.9, 0.78, 0.0, 0.25], [0.0, -1.0, 0.0, 0.25], [0.3, -0.16, 0.0, 0.25]]],
+			["aim", "forearm.R", "hand.R", [[-0.2, 0.18, 0.0, 0.25], [0.0, -0.8, 0.0, 0.25], [-0.7, 1.2, 0.0, 0.25]]],
+		],
+		"sink": [[0.03, -0.89, 1.5708, 0.25], [0.0, -0.15, 0.0, 0.5]],
 	},
 	# Hauling itself up out of a hole in the ground (played once; the drawing
 	# side lifts the whole body): the arms come up over the rim and hold, then
