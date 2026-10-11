@@ -28,10 +28,28 @@ const CLIPS: Array = [
 	["run", "Jog_Fwd_Loop", 24, true, "run"],
 	["tell", "Idle_Loop", 12, false, "tell"],
 ]
+# The same motions with nothing from a motion set (the legs are written here
+# too): name, "", frames, loops, layer name, length in seconds. Same names in
+# the same order as CLIPS, so the motion numbers are the same either way.
+const OWN_CLIPS: Array = [
+	["walk_a", "", 32, true, "own_walk", 1.4],
+	["walk_b", "", 32, true, "own_walk_b", 1.5],
+	["walk_c", "", 32, true, "own_walk_c", 1.2],
+	["stand", "", 32, true, "own_stand", 3.0],
+	["lunge", "", 24, true, "own_lunge", 1.0],
+	["hit", "", 12, false, "own_hit", 0.4],
+	["fall", "", 32, false, "own_fall", 0.75],
+	["run", "", 24, true, "own_run", 0.7],
+	["tell", "", 12, false, "own_tell", 0.5],
+]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
 const POSES: Array = [
 	["Death01", 1.0, ""], ["Idle_Loop", 0.0, ""], ["Idle_Loop", 0.0, "press"], ["Sitting_Idle_Loop", 0.0, "slump"],
+]
+# The same four with nothing from a motion set: layer name, where in it, addition.
+const OWN_POSES: Array = [
+	["own_fall", 1.0, ""], ["own_stand", 0.0, ""], ["own_press", 0.0, ""], ["own_sit", 0.0, ""],
 ]
 const POSES_CLIP: String = "poses"
 
@@ -135,6 +153,228 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [0.06, 0.05, 1.0]],
 		],
 		"sink": 0.04,
+	},
+	# A walk with nothing from the motion set: the legs are written here too.
+	# The left leg steps, the right is dragged after it (a shorter, stiffer swing).
+	"own_walk": {
+		"steps": [
+			["turn", "hips", "z", [0.05, 0.09, 0.3]],
+			["turn", "hips", "y", [0.0, 0.1, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, [0.02, 0.36, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, [-0.24, 0.4, 0.7]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [-0.04, 0.2, 3.14]]],
+			["aim", "shin.R", "foot.R", [-0.12, -1.0, [-0.16, 0.16, 3.6]]],
+			["turn", "foot.R", "y", -0.4],
+			["turn", "spine", "x", [0.22, 0.03, 0.0, 2.0]],
+			["turn", "spine", "z", [-0.07, 0.05, 0.6]],
+			["turn", "chest", "x", 0.26],
+			["turn", "chest", "y", [0.0, 0.12, 0.6]],
+			["turn", "neck", "x", 0.32],
+			["turn", "head", "z", [0.3, 0.06, 1.2]],
+			["turn", "head", "y", [0.0, 0.14, 1.3]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.02, 0.14, 1.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.2, 0.1, 1.6]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.12, -1.0, [0.28, 0.08, -2.0]]],
+			["aim", "forearm.R", "hand.R", [-0.02, -0.55, 0.85]],
+		],
+		"sink": [0.05, 0.02, 0.4, 2.0],
+	},
+	"own_lunge": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.07, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, [0.04, 0.4, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, [-0.26, 0.44, 0.7]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, [0.0, 0.3, 3.14]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [-0.22, 0.3, 3.7]]],
+			["turn", "spine", "x", 0.3],
+			["turn", "chest", "x", 0.22],
+			["turn", "chest", "y", [0.0, 0.12, 0.5]],
+			["turn", "neck", "x", -0.3],
+			["turn", "head", "z", 0.18],
+			["aim", "upper_arm.L", "forearm.L", [0.14, [0.08, 0.07, 0.0], 1.0]],
+			["aim", "forearm.L", "hand.L", [-0.05, 0.18, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.18, [-0.22, 0.07, -2.4], 1.0]],
+			["aim", "forearm.R", "hand.R", [0.06, 0.05, 1.0]],
+		],
+		"sink": [0.06, 0.02, 0.4, 2.0],
+	},
+	# Struck: thrown back from the chest and coming forward again (w runs half a turn).
+	"own_hit": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, [0.03, 0.12, 0.0, 0.5]]],
+			["aim", "shin.L", "foot.L", [0.04, -1.0, [-0.08, -0.2, 0.0, 0.5]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [0.0, -0.1, 0.0, 0.5]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [-0.05, -0.15, 0.0, 0.5]]],
+			["turn", "spine", "x", [0.2, -0.4, 0.0, 0.5]],
+			["turn", "chest", "x", [0.27, -0.35, 0.0, 0.5]],
+			["turn", "chest", "y", [0.0, 0.3, 0.0, 0.5]],
+			["turn", "neck", "x", [0.35, -0.6, 0.3, 0.5]],
+			["turn", "head", "z", 0.22],
+			["aim", "upper_arm.L", "forearm.L", [[0.16, 0.4, 0.0, 0.5], -1.0, [0.06, 0.3, 0.0, 0.5]]],
+			["aim", "forearm.L", "hand.L", [[0.06, 0.3, 0.0, 0.5], -1.0, [0.16, 0.4, 0.0, 0.5]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.12, -0.4, 0.0, 0.5], -1.0, [0.14, 0.3, 0.0, 0.5]]],
+			["aim", "forearm.R", "hand.R", [[-0.02, -0.3, 0.0, 0.5], -0.8, [0.5, 0.3, 0.0, 0.5]]],
+		],
+		"sink": [0.03, 0.05, 0.0, 0.5],
+	},
+	# Going over on its back (played once; these values start slow and end fast):
+	# the hips drop and tip back, the legs come up level, the arms fall wide.
+	"own_fall": {
+		"steps": [
+			["turn", "hips", "x", [-1.5, -1.62, 1.5708, 0.25]],
+			["turn", "spine", "x", [0.0, -0.45, 1.5708, 0.25]],
+			["turn", "hips", "y", [0.25, 0.25, 1.5708, 0.25]],
+			["aim", "thigh.L", "shin.L", [0.14, [-1.0, 0.92, 0.0, 0.25], [0.0, 1.0, 0.0, 0.25]]],
+			["aim", "shin.L", "foot.L", [0.1, [-0.02, 0.98, 1.5708, 0.25], [1.0, 1.2, 1.5708, 0.25]]],
+			["aim", "thigh.R", "shin.R", [-0.3, [-1.0, 1.15, 0.0, 0.25], [0.0, 1.0, 0.0, 0.25]]],
+			["aim", "shin.R", "foot.R", [-0.1, [-0.35, 0.65, 1.5708, 0.25], [0.6, 0.7, 1.5708, 0.25]]],
+			["turn", "neck", "x", [-0.25, -0.6, 1.5708, 0.25]],
+			["turn", "head", "z", 0.3],
+			["aim", "upper_arm.L", "forearm.L", [[1.0, 0.8, 1.5708, 0.25], [0.02, 1.02, 1.5708, 0.25], [-0.5, -0.52, 1.5708, 0.25]]],
+			["aim", "forearm.L", "hand.L", [[0.7, 0.62, 1.5708, 0.25], [0.0, 1.0, 1.5708, 0.25], [-0.8, -1.0, 1.5708, 0.25]]],
+			["aim", "upper_arm.R", "forearm.R", [[-1.0, -0.88, 1.5708, 0.25], [0.02, 1.02, 1.5708, 0.25], [0.2, -0.08, 1.5708, 0.25]]],
+			["aim", "forearm.R", "hand.R", [[-0.6, -0.58, 1.5708, 0.25], [0.0, 0.8, 1.5708, 0.25], [0.9, 0.4, 1.5708, 0.25]]],
+		],
+		"sink": [0.0, 0.84, 0.0, 0.25],
+	},
+	"own_run": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.1, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, [0.1, 0.75, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, [-0.6, 0.8, 0.8]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, [0.1, 0.65, 3.14]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, [-0.55, 0.7, 3.94]]],
+			["turn", "spine", "x", 0.42],
+			["turn", "spine", "z", [0.0, 0.08, 0.5]],
+			["turn", "chest", "x", 0.3],
+			["turn", "chest", "y", [0.0, 0.16, 0.6]],
+			["turn", "neck", "x", -0.4],
+			["turn", "head", "z", [0.18, 0.12, 1.4]],
+			["aim", "upper_arm.L", "forearm.L", [0.3, -0.8, [-0.45, 0.35, 0.9]]],
+			["aim", "forearm.L", "hand.L", [0.12, -1.0, [-0.25, 0.4, 1.7]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.3, -0.8, [-0.45, 0.35, -2.2]]],
+			["aim", "forearm.R", "hand.R", [-0.12, -1.0, [-0.25, 0.4, -1.4]]],
+		],
+		"sink": [0.1, 0.04, 0.4, 2.0],
+	},
+	"own_stand": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.05, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.03]],
+			["aim", "shin.L", "foot.L", [0.04, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, -0.05]],
+			["turn", "spine", "x", [0.2, 0.03, 0.0, 2.0]],
+			["turn", "spine", "z", [-0.06, -0.05, 0.0]],
+			["turn", "chest", "x", 0.27],
+			["turn", "neck", "x", [0.35, 0.05, 0.8]],
+			["turn", "head", "z", [0.22, 0.14, 1.2]],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.06, 0.05, 1.0]]],
+			["aim", "forearm.L", "hand.L", [0.06, -1.0, 0.16]],
+			["aim", "upper_arm.R", "forearm.R", [-0.12, -1.0, [0.14, 0.05, 1.5]]],
+			["aim", "forearm.R", "hand.R", [-0.02, -0.8, 0.5]],
+		],
+		"sink": 0.03,
+	},
+	# The other two walks: the left leg is the one dragged; and a short shuffle,
+	# both feet barely leaving the ground, bent further over.
+	"own_walk_b": {
+		"steps": [
+			["turn", "hips", "z", [-0.05, 0.09, 3.44]],
+			["turn", "hips", "y", [0.0, 0.1, 3.14]],
+			["aim", "thigh.R", "shin.R", [-0.06, -1.0, [0.02, 0.36, 3.14]]],
+			["aim", "shin.R", "foot.R", [-0.03, -1.0, [-0.24, 0.4, 3.84]]],
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, [-0.04, 0.2, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.12, -1.0, [-0.16, 0.16, 0.46]]],
+			["turn", "foot.L", "y", 0.4],
+			["turn", "spine", "x", [0.16, 0.03, 0.0, 2.0]],
+			["turn", "spine", "z", [0.08, 0.05, 3.7]],
+			["turn", "chest", "x", 0.2],
+			["turn", "chest", "y", [0.0, 0.12, 3.7]],
+			["turn", "neck", "x", 0.4],
+			["turn", "head", "z", [-0.28, 0.06, 4.3]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.02, 0.14, 4.1]]],
+			["aim", "forearm.R", "hand.R", [-0.08, -1.0, [0.2, 0.1, 4.7]]],
+			["aim", "upper_arm.L", "forearm.L", [0.3, -1.0, [0.1, 0.1, 1.1]]],
+			["aim", "forearm.L", "hand.L", [0.2, -1.0, [0.05, 0.12, 1.7]]],
+		],
+		"sink": [0.05, 0.02, 3.5, 2.0],
+	},
+	"own_walk_c": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.06, 0.3]],
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, [0.08, 0.18, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, [-0.22, 0.2, 0.6]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, [0.08, 0.18, 3.14]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, [-0.22, 0.2, 3.74]]],
+			["turn", "spine", "x", [0.34, 0.04, 0.0, 2.0]],
+			["turn", "chest", "x", 0.34],
+			["turn", "chest", "y", [0.0, 0.08, 0.6]],
+			["turn", "neck", "x", 0.2],
+			["turn", "head", "z", [0.0, 0.2, 0.9]],
+			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, [0.3, 0.06, 1.0]]],
+			["aim", "forearm.L", "hand.L", [0.02, -0.7, [0.7, 0.08, 1.6]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.14, -1.0, [0.3, 0.06, 4.1]]],
+			["aim", "forearm.R", "hand.R", [-0.02, -0.7, [0.7, 0.08, 4.7]]],
+		],
+		"sink": [0.09, 0.015, 0.4, 2.0],
+	},
+	# Still: both hands and the face up against a pane.
+	"own_press": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, 0.06]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, 0.02]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.06]],
+			["turn", "spine", "x", 0.14],
+			["turn", "chest", "x", 0.1],
+			["turn", "neck", "x", -0.12],
+			["turn", "head", "z", 0.2],
+			["aim", "upper_arm.L", "forearm.L", [0.3, 0.12, 1.0]],
+			["aim", "forearm.L", "hand.L", [-0.12, 0.55, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.34, -0.1, 1.0]],
+			["aim", "forearm.R", "hand.R", [0.1, 0.7, 1.0]],
+		],
+		"sink": 0.02,
+	},
+	# Still: sat on the ground, legs out in front, the back and head gone slack.
+	"own_sit": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.2, -0.02, 1.0]],
+			["aim", "shin.L", "foot.L", [0.12, -0.12, 1.0]],
+			["aim", "thigh.R", "shin.R", [-0.14, 0.3, 1.0]],
+			["aim", "shin.R", "foot.R", [-0.05, -0.75, 0.6]],
+			["turn", "spine", "x", 0.3],
+			["turn", "spine", "z", 0.1],
+			["turn", "chest", "x", 0.28],
+			["turn", "neck", "x", 0.5],
+			["turn", "head", "z", 0.28],
+			["aim", "upper_arm.L", "forearm.L", [0.3, -1.0, 0.25]],
+			["aim", "forearm.L", "hand.L", [0.25, -0.6, 0.7]],
+			["aim", "upper_arm.R", "forearm.R", [-0.3, -1.0, 0.2]],
+			["aim", "forearm.R", "hand.R", [-0.1, -0.5, 0.8]],
+		],
+		"sink": 0.8,
+	},
+	# The half beat before it runs, standing on its own legs (see "tell").
+	"own_tell": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, [0.03, 0.2, 0.0, 0.25]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [-0.08, -0.25, 0.0, 0.25]]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [0.0, 0.2, 0.0, 0.25]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [-0.05, -0.25, 0.0, 0.25]]],
+			["turn", "hips", "y", [0.0, 0.22, 0.0, 0.25]],
+			["turn", "spine", "x", [0.2, 0.4, 0.0, 0.25]],
+			["turn", "chest", "x", [0.27, 0.16, 0.0, 0.25]],
+			["turn", "chest", "y", [0.0, -0.3, 0.0, 0.25]],
+			["turn", "neck", "x", [0.35, -0.95, 0.0, 0.25]],
+			["turn", "head", "z", [0.22, -0.2, 0.0, 0.25]],
+			["aim", "upper_arm.L", "forearm.L", [[0.22, 0.5, 0.0, 0.25], -1.0, [0.06, -0.75, 0.0, 0.25]]],
+			["aim", "forearm.L", "hand.L", [[0.1, 0.45, 0.0, 0.25], -1.0, [0.16, -0.5, 0.0, 0.25]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.22, -0.5, 0.0, 0.25], -1.0, [0.14, -0.8, 0.0, 0.25]]],
+			["aim", "forearm.R", "hand.R", [[-0.1, -0.45, 0.0, 0.25], -1.0, [0.3, -0.6, 0.0, 0.25]]],
+		],
+		"sink": [0.03, 0.12, 0.0, 0.25],
 	},
 	# Run: pitched far forward as if about to fall, face up, arms trailing behind and flapping.
 	"run": {
@@ -337,6 +577,10 @@ static func apply_overlay(body: Skeleton3D, kind: String) -> void:
 
 ## Plays `clip` of the motion set at `at` (0..1 of its length) and poses the body like it.
 static func _pose_at(ctx: Dictionary, clip: String, at: float, damp: Dictionary) -> void:
+	if clip == "":
+		# Nothing from a motion set: the body's own rest pose, and the layer does the rest.
+		(ctx["body"] as Skeleton3D).reset_bone_poses()
+		return
 	var player: AnimationPlayer = ctx["player"]
 	player.play(clip)
 	player.seek(player.get_animation(clip).length * at, true)
@@ -403,6 +647,36 @@ static func prepare(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	ctx["hip_start"] = _world(body, _bone(body, "hips")).origin
 	# The body's hips sit this much higher or lower than the motion set's.
 	ctx["hip_ratio"] = ((ctx["hip_start"] as Vector3).y - body_root.global_position.y) / ((ctx["hip0"] as Vector3).y - motion_root.global_position.y)
+	_bind_skin(ctx)
+	return ctx
+
+
+## Collects what posing needs from the body alone, for the motions written
+## here with nothing from a motion set (OWN_CLIPS); {} if something is missing.
+static func prepare_own(body_root: Node3D) -> Dictionary:
+	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	if body == null or mesh_node == null or mesh_node.skin == null:
+		push_error("body_bake: need a skeleton and skinned mesh in the body")
+		return {}
+	for body_bone: String in MAP:
+		if _bone(body, body_bone) < 0:
+			push_error("body_bake: bone not found: " + body_bone)
+			return {}
+	for entry: Array in OWN_CLIPS + OWN_POSES:
+		var layer: String = entry[4] if entry.size() > 4 else entry[0]
+		if not LAYERS.has(layer):
+			push_error("body_bake: layer not found: " + layer)
+			return {}
+	body.reset_bone_poses()
+	var ctx := {"body": body, "mesh_node": mesh_node}
+	_bind_skin(ctx)
+	return ctx
+
+
+static func _bind_skin(ctx: Dictionary) -> void:
+	var body: Skeleton3D = ctx["body"]
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var skin := mesh_node.skin
 	var bind_bone := []
 	for j in skin.get_bind_count():
@@ -414,7 +688,6 @@ static func prepare(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	ctx["bind_bone"] = bind_bone
 	# Mesh space is the mesh node's own space; the skeleton may sit elsewhere.
 	ctx["to_mesh"] = mesh_node.global_transform.affine_inverse() * body.global_transform
-	return ctx
 
 
 ## Bakes the body in `body_root` with the motions in `motion_root`; both must be
@@ -440,6 +713,33 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	var still := []
 	for entry: Array in POSES:
 		_pose_at(ctx, entry[0], entry[1], {})
+		apply_overlay(ctx["body"], entry[2])
+		still.append(_skin_frame(ctx))
+	clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
+	return VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips)
+
+
+## Bakes the body in `body_root` (in the scene tree) with the motions written
+## here alone: OWN_CLIPS in order, then one POSES_CLIP of OWN_POSES. Nothing
+## in the result comes from a motion set. {} if something is missing.
+static func bake_own(body_root: Node3D) -> Dictionary:
+	var ctx := prepare_own(body_root)
+	if ctx.is_empty():
+		return {}
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	var clips := []
+	for entry: Array in OWN_CLIPS:
+		var count: int = entry[2]
+		var looped: bool = entry[3]
+		var frames := []
+		for f in count:
+			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
+			pose(ctx, "", entry[4], u)
+			frames.append(_skin_frame(ctx))
+		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames})
+	var still := []
+	for entry: Array in OWN_POSES:
+		pose(ctx, "", entry[0], entry[1])
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
 	clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
