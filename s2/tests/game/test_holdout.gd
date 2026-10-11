@@ -215,16 +215,32 @@ func test_a_door_has_its_own_sounds_and_only_the_near_doors_are_heard_knocking()
 	assert_eq(_door_sounds(game), ["door_break"], "but it is heard giving way")
 
 
-func test_the_train_leaves_when_it_is_ready_and_says_what_it_cost() -> void:
+# User decision 149: ready, the train waits for the word; going costs nothing
+# for being unready then, and the same count of three is gone through.
+func test_a_ready_train_waits_for_the_word_and_says_what_it_cost() -> void:
 	var game = _game({"holdout": "start", "holdout_time": 20.0})
 	var h = game.holdout
 	h.tick(19.0)
-	assert_false(game.ended)
+	assert_false(h.ready)
 	h.tick(1.5)
+	assert_true(h.ready)
+	assert_false(game.ended, "it does not go by itself")
+	assert_true(h.on, "the doors are still to be held")
+	assert_string_contains(String(game.radio_wait["text"]), "채비 끝났다", "the driver says so")
+	assert_gt(h.ready_shown, 0.0, "and it stands on the screen")
+	assert_string_contains(game.goal_text(), "채비 끝")
+	assert_eq(int(h.early_cost()["coal"]), 0)
+	h.tick(10.0)
+	assert_false(game.ended, "however long")
+	game.depart()
+	assert_true(h.calling, "the same count")
+	h.tick(FieldHoldout.LAST_CALL_S + 0.1)
 	assert_true(game.ended)
 	var note: Dictionary = game.receipt.to_dict()["placeState"]["holdout"]
 	assert_true(note["ready"])
 	assert_false(note["early"])
+	assert_eq(int(note["overSec"]), 10, "how long it stayed on is kept")
+	assert_eq(int(note["earlyCost"]["coal"]), 0)
 	assert_eq(game.receipt.to_dict()["endReason"], "departed", "the receipt's reasons are the contract's")
 	assert_true(game.telemetry.to_dict()["holdout"]["ready"])
 
@@ -319,6 +335,8 @@ func test_the_plough_price_goes_by_the_dead_on_the_track() -> void:
 	var game = _game({"holdout": "start"})
 	var h = game.holdout
 	h.tick(h.total + 1.0)
+	game.depart()
+	h.tick(FieldHoldout.LAST_CALL_S + 0.1)
 	assert_true(game.ended)
 	assert_true(h.end_lines().has("끝까지 버텼다 · 선로 비었다 · 떠나는 값: 쟁기 부품 0"))
 

@@ -101,6 +101,7 @@ const LEAVE_DARK_S: float = 1.5
 const LEAVE_DARK: float = 0.62
 const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whistle
 const LAST_CALL_FONT: int = 96
+const READY_FONT: int = 52
 const LEAVE_WORDS_TOP: float = 96.0
 # A line a companion shouts (ally_lines.gd): bigger and a little longer than
 # the note of what happened, which goes small under it.
@@ -1502,9 +1503,13 @@ func depart_card() -> void:
 		# Both prices side by side, before the choice (user decisions 143, 146, 147).
 		var cost: Dictionary = game.holdout.early_cost()
 		var push: Dictionary = game.holdout.plough(game.holdout.track_now())
-		text += "\n채비가 %d초 남았다. 선로 위: %s." % [int(ceil(game.holdout.left)), push["word"]]
-		text += "\n지금 떠나면: 석탄 +%d, 부품 %d (쟁기 %d · 덜 된 채비 %d)." % [int(cost["coal"]), int(push["parts"]) + int(cost["plow_part"]), int(push["parts"]), int(cost["plow_part"])]
-		text += "\n끝까지 버티면: 덜 된 채비 값이 없다. 그때 선로에 선 만큼 쟁기 값만 든다."
+		if game.holdout.ready:
+			text += "\n채비가 끝났다. 선로 위: %s." % push["word"]
+			text += "\n지금 떠나면: 부품 %d (쟁기 값뿐). 더 머물면 선로에 서는 만큼 오른다." % int(push["parts"])
+		else:
+			text += "\n채비가 %d초 남았다. 선로 위: %s." % [int(ceil(game.holdout.left)), push["word"]]
+			text += "\n지금 떠나면: 석탄 +%d, 부품 %d (쟁기 %d · 덜 된 채비 %d)." % [int(cost["coal"]), int(push["parts"]) + int(cost["plow_part"]), int(push["parts"]), int(cost["plow_part"])]
+			text += "\n끝까지 버티면: 덜 된 채비 값이 없다. 그때 선로에 선 만큼 쟁기 값만 든다."
 		text += "\n셋을 센 뒤 떠난다. 그때 열차에 닿지 못한 사람은 남는다."
 		var out: int = game.outside()
 		if out > 0:
@@ -2397,14 +2402,17 @@ func _draw_overlay() -> void:
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
 	_draw_says(view_size)
-	# The last call: the count, big, where nobody can miss it.
-	if game.holdout.calling:
-		var count: String = str(int(ceil(maxf(game.holdout.call_left, 0.0))))
+	# The last call: the count, big, where nobody can miss it. The same place
+	# says, for a few seconds, that the train is ready.
+	var big: String = "채비 끝 · 떠날 수 있다" if game.holdout.on and game.holdout.ready_shown > 0.0 else ""
+	if game.holdout.calling or big != "":
+		var count: String = str(int(ceil(maxf(game.holdout.call_left, 0.0)))) if game.holdout.calling else big
+		var size: int = LAST_CALL_FONT if game.holdout.calling else READY_FONT
 		var f: Font = theme.default_font
-		var w: float = f.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, LAST_CALL_FONT).x
+		var w: float = f.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 		var at := Vector2((view_size.x - w) * 0.5, view_size.y * 0.3)
-		overlay.draw_string_outline(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, LAST_CALL_FONT, 10, Color(0, 0, 0, 0.85))
-		overlay.draw_string(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, LAST_CALL_FONT, AMBER)
+		overlay.draw_string_outline(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 10, Color(0, 0, 0, 0.85))
+		overlay.draw_string(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, size, AMBER)
 	# Pressure at the edges: no numbers, just a darker rim as the next horde nears.
 	var pressure: float = game.director.pressure(now)
 	if pressure > 0.5 and game.deaf_t <= 0.0:
