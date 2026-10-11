@@ -174,7 +174,10 @@ export function cardSheet(view: View): HTMLElement | null {
           costs.map(x => h('span', { class: 'cost num' }, x)),
           pol.map(p => h('span', { class: `pol pol--${p.tone}` }, p.text)),
           ch.disabled ? h('span', { class: 'pol pol--gray' }, ch.disabled) : null),
-        ch.cross ? h('span', { class: 'choice__cross' }, shortText(ch.cross)) : null));
+        ch.cross ? h('span', { class: 'choice__cross' }, shortText(ch.cross)) : null,
+        // 그 칸의 사정 한 줄과 나중에 돌아올 것(결정 037). 글은 사건 데이터에서 읽기만 한다. 비어 있으면 줄을 안 그린다.
+        ch.why ? h('span', { class: 'choice__why' }, h('i', null, '까닭'), ch.why) : null,
+        ch.later ? h('span', { class: 'choice__why choice__later' }, h('i', null, '나중에'), ch.later) : null));
     })));
 }
 

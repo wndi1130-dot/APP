@@ -21,11 +21,11 @@
       "effects": [
         {
           "type": "food",
-          "amount": -8
+          "amount": -5
         },
         {
           "type": "coal",
-          "amount": -5
+          "amount": -4
         },
         {
           "type": "flag",
