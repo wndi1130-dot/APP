@@ -31,6 +31,14 @@ const RISK_WORDS: Array = [[15, "낮다"], [40, "있다"], [100, "높다"]]
 # most this, and at most this many dead on the track. PLACEHOLDERS.
 const QUIET_NOISE: int = 12
 const CLEAR_TRACK: int = 2
+# Sounds in the stop's score that the people did not make: the dead beating on
+# a door, blood they scent. "Quiet" is counted without them (a chief standing
+# still passes twelve in four minutes with them, measured 2026-10-12).
+const NOT_OURS: Array[String] = ["bang", "blood"]
+# Whoever was left at the train says when the quiet way out closes (user
+# decision 150): looked at this often, and of the track no more often than this.
+const WATCH_EVERY: float = 1.0
+const WATCH_TRACK_GAP: float = 60.0
 const READY_TIME: float = 300.0   # the train is ready this long after it opens
 const DOOR_HP: int = 24           # three of the dead through one in about ten seconds
 const WALL_HP: int = 12
@@ -92,6 +100,9 @@ var ready_shown: float = 0.0      # the "ready" words are still up this long
 var over: float = 0.0             # how long it stayed after it was ready
 var rolled: bool = false          # "roll": this stop can have it (hidden)
 var slipped: bool = false         # it could, and the train got away quietly
+var watch_t: float = 0.0
+var told_noise: bool = false      # the lookout has said the stop was heard
+var told_track_t: float = -INF    # and when it last said they stand on the track
 var opened_at: float = 0.0
 
 
@@ -131,7 +142,47 @@ func risk_word() -> String:
 
 ## A quiet stop with the track beside the train clear: the train gets away.
 func quiet_and_clear() -> bool:
-	return game.ledger.total <= QUIET_NOISE and track_now() <= CLEAR_TRACK
+	return people_noise() <= QUIET_NOISE and track_now() <= CLEAR_TRACK
+
+
+## The stop's noise score, of the sounds the people made.
+func people_noise() -> int:
+	var sum := 0
+	for e: Dictionary in game.ledger.history:
+		if not NOT_OURS.has(String(e["tag"])):
+			sum += SimNoise.score(int(e["level"]))
+	return sum
+
+
+## Somebody left at the train (not the chief), to keep watch from it.
+func lookout():
+	for p in game.squad + game.crew:
+		if p != game.player and p.is_alive() and game.aboard(p):
+			return p
+	return null
+
+
+## Where the stop can have it and has not yet: whoever watches from the train
+## says so the moment the quiet way out closes. What is said is true when it is
+## said; a stop that cannot have it hears nothing.
+func watch(delta: float) -> void:
+	if mode != "roll" or not rolled or opened or game.ended:
+		return
+	watch_t -= delta
+	if watch_t > 0.0:
+		return
+	watch_t = WATCH_EVERY
+	var who = lookout()
+	if who == null:
+		return
+	var now: float = game.clock.elapsed
+	# The score only climbs: once over, leaving is held from then on.
+	if not told_noise and people_noise() > QUIET_NOISE:
+		told_noise = true
+		game.set_radio("%s: 소리를 듣고 모여든다. 떠날 때 붙들린다." % who.display_name, "must")
+	elif track_now() > CLEAR_TRACK and now - told_track_t >= WATCH_TRACK_GAP:
+		told_track_t = now
+		game.set_radio("%s: 선로에 섰다. 치우지 않으면 붙들린다." % who.display_name, "must")
 
 
 ## Leaving is called and the stage has not opened yet: it opens instead.
@@ -429,7 +480,7 @@ func leaving_early() -> void:
 ## A rolled stop that never opened: what the roll was and why it did not, for
 ## the telemetry (the player is not told).
 func roll_note() -> Dictionary:
-	return {"rolled": rolled, "opened": false, "slipped": slipped, "chance": chance(), "noise": game.ledger.total, "trackDead": maxi(track_at_leave, 0)}
+	return {"rolled": rolled, "opened": false, "slipped": slipped, "chance": chance(), "noise": game.ledger.total, "peopleNoise": people_noise(), "trackDead": maxi(track_at_leave, 0)}
 
 
 ## What the stage came to, for the receipt's note, the telemetry and the end screen.
