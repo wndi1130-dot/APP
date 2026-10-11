@@ -48,6 +48,13 @@ const DOOR_VOICES: Dictionary = {
 	"break": ["door_break", 1.0, 0.95, 1.05],
 }
 const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
+## The rasp of one of the dead that is about to run (lunger_rules): the group
+## its file goes in, how loud, heard to this many metres, and the pitch of the
+## moan that stands in for it. First values.
+const TELL_GROUP: String = "lunge_tell"
+const TELL_LOUD: float = 0.9
+const TELL_RANGE: float = 40.0
+const TELL_STANDIN_PITCH: float = 1.5
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -382,6 +389,15 @@ func door(kind: String, at: Vector3, level: int) -> void:
 		loud *= clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var d: float = at.distance_to(game.player.position)
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])))
+
+
+## One of the dead drops low before it runs: its rasp, for the player's ear
+## only. Until the file is in, it is a moan pitched up.
+func lunge_tell(at: Vector3) -> void:
+	played.append(TELL_GROUP)
+	var own: bool = has(TELL_GROUP)
+	var d: float = at.distance_to(game.player.position)
+	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH)
 
 
 ## A sound the dead can hear is also one the player hears (field make_sound).

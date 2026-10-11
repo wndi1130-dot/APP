@@ -13,6 +13,7 @@ const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -100,6 +101,9 @@ const LEAVE_BEAT_S: float = 3.5
 const LEAVE_DARK_S: float = 1.5
 const LEAVE_DARK: float = 0.62
 const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whistle
+const LAST_CALL_FONT: int = 96
+const READY_FONT: int = 52
+const LEAVE_WORDS_TOP: float = 96.0
 # A line a companion shouts (ally_lines.gd): bigger and a little longer than
 # the note of what happened, which goes small under it.
 const LINE_S: float = 3.2
@@ -125,6 +129,11 @@ const RIM_OUT: float = 0.75
 const RIM_DWELL: float = 0.15
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
+# The mark over one of the dead that has dropped low and will run: a ring that
+# closes on it as the beat runs out, in pixels. First values.
+const TELL_RING_IN: float = 12.0
+const TELL_RING_OUT: float = 40.0
+const TELL_FONT: int = 28
 const MOAN_R: float = 20.0
 const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search", "수색"], ["cover", "엄호"], ["retreat", "후퇴"]]
 
@@ -1497,7 +1506,20 @@ func depart_card() -> void:
 	if game.holdout.opens_on_leaving():
 		text += "\n떠날 채비에 시간이 걸린다. 그동안 문을 지켜야 한다."
 	elif game.holdout.on:
-		text += "\n채비가 %d초 남았다. 지금 떠나면 덜 된 채로 떠난다." % int(ceil(game.holdout.left))
+		# Both prices side by side, before the choice (user decisions 143, 146, 147).
+		var cost: Dictionary = game.holdout.early_cost()
+		var push: Dictionary = game.holdout.plough(game.holdout.track_now())
+		if game.holdout.ready:
+			text += "\n채비가 끝났다. 선로 위: %s." % push["word"]
+			text += "\n지금 떠나면: 부품 %d (쟁기 값뿐). 더 머물면 선로에 서는 만큼 오른다." % int(push["parts"])
+		else:
+			text += "\n채비가 %d초 남았다. 선로 위: %s." % [int(ceil(game.holdout.left)), push["word"]]
+			text += "\n지금 떠나면: 석탄 +%d, 부품 %d (쟁기 %d · 덜 된 채비 %d)." % [int(cost["coal"]), int(push["parts"]) + int(cost["plow_part"]), int(push["parts"]), int(cost["plow_part"])]
+			text += "\n끝까지 버티면: 덜 된 채비 값이 없다. 그때 선로에 선 만큼 쟁기 값만 든다."
+		text += "\n셋을 센 뒤 떠난다. 그때 열차에 닿지 못한 사람은 남는다."
+		var out: int = game.outside()
+		if out > 0:
+			text += "\n지금 밖에 있는 사람 %d. 남기면 신임 −%d." % [out, game.holdout.trust_drop(out)]
 	card("depart", text, [
 		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
 		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
@@ -1529,9 +1551,14 @@ func leave_beat(result: Dictionary, lines: Array) -> void:
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(veil)
+	# Under the overlay, so what those left behind shout stays readable.
+	root.move_child(veil, overlay.get_index())
 	var words := VBoxContainer.new()
 	words.set_anchors_preset(Control.PRESET_FULL_RECT)
-	words.alignment = BoxContainer.ALIGNMENT_CENTER
+	# In the upper part of the screen: the middle is where the people are, and
+	# those left behind shout over their heads there.
+	words.alignment = BoxContainer.ALIGNMENT_BEGIN
+	words.offset_top = LEAVE_WORDS_TOP
 	words.add_theme_constant_override("separation", 14)
 	words.modulate.a = 0.0
 	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2380,7 +2407,19 @@ func _draw_overlay() -> void:
 	var p = game.player
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
+	_draw_tells()
 	_draw_says(view_size)
+	# The last call: the count, big, where nobody can miss it. The same place
+	# says, for a few seconds, that the train is ready.
+	var big: String = "채비 끝 · 떠날 수 있다" if game.holdout.on and game.holdout.ready_shown > 0.0 else ""
+	if game.holdout.calling or big != "":
+		var count: String = str(int(ceil(maxf(game.holdout.call_left, 0.0)))) if game.holdout.calling else big
+		var size: int = LAST_CALL_FONT if game.holdout.calling else READY_FONT
+		var f: Font = theme.default_font
+		var w: float = f.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		var at := Vector2((view_size.x - w) * 0.5, view_size.y * 0.3)
+		overlay.draw_string_outline(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 10, Color(0, 0, 0, 0.85))
+		overlay.draw_string(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, size, AMBER)
 	# Pressure at the edges: no numbers, just a darker rim as the next horde nears.
 	var pressure: float = game.director.pressure(now)
 	if pressure > 0.5 and game.deaf_t <= 0.0:
@@ -2485,6 +2524,26 @@ func _draw_edges(view_size: Vector2) -> void:
 
 
 ## Heard, not seen (body_injury 8.3): the dead moving within MOAN_R of the
+## The dead that have dropped low and will run, of those in sight.
+func tells() -> Array:
+	var out: Array = []
+	for z in game.zombies.list:
+		if z["state"] == "tell" and game.cell_seen(z["pos"]):
+			out.append(z)
+	return out
+
+
+## Over each of them, a ring that closes as its beat runs out, and a mark.
+func _draw_tells() -> void:
+	for z in tells():
+		var left: float = clampf(float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
+		var at: Vector2 = _project(z["pos"] + Vector3(0, 1.0, 0))
+		overlay.draw_arc(at, lerpf(TELL_RING_IN, TELL_RING_OUT, left), 0, TAU, 32, AMBER, 3.0)
+		var head: Vector2 = _project(z["pos"] + Vector3(0, 2.3, 0))
+		var w: float = theme.default_font.get_string_size("!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT).x
+		overlay.draw_string(theme.default_font, head - Vector2(w * 0.5, 0), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT, AMBER)
+
+
 ## leader but outside sight show as a faint tick around the leader, one per
 ## eighth of the compass. No count, no exact spot.
 func _draw_moans() -> void:

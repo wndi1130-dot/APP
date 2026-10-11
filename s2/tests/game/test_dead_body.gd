@@ -4,6 +4,7 @@ const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 
 func before_each() -> void:
@@ -253,3 +254,30 @@ func test_a_standing_baked_body_sways_by_a_clock_the_drawing_side_keeps() -> voi
 	grabbing["age"] += 0.03
 	assert_almost_eq(DeadBody.custom(grabbing, 0.0, 0.0, 1.0, true).r - a.r, 0.03 * pace / 1.5, 0.0001)
 
+
+
+func test_one_that_lunges_drops_low_runs_and_then_reels() -> void:
+	var names: Array = []
+	for clip: Array in BodyBake.OWN_CLIPS:
+		names.append(clip[0])
+	assert_eq(names[DeadBody.TELL], "tell")
+	assert_eq(names[DeadBody.STAGGER], "stagger")
+	# The tell is read off the rules' clock: 0 as it starts, 1 as it runs.
+	var low := _body("tell")
+	low["t"] = LungerRules.TELL * 0.25
+	var told := DeadBody.custom(low, 0.0, 0.0, 1.0, true)
+	assert_eq(told.g, float(DeadBody.TELL))
+	assert_almost_eq(told.r, 0.75, 0.001)
+	assert_eq(DeadBody.custom(_body("tell"), 0.0, 0.0, 0.8, false), Color(0.37, 0.0, 0.0, 0.8), "a box is told nothing new")
+	# One of the old dead runs while its run lasts, and reels after it.
+	var runner := _body("chase")
+	runner["kind"] = "dead"
+	runner["dash_t"] = 1.0
+	runner["spent_t"] = 0.0
+	assert_eq(DeadBody.custom(runner, 0.0, 0.0, 1.0, true).g, float(DeadBody.RUN))
+	var spent := _body("chase")
+	spent["kind"] = "fresh"
+	spent["dash_t"] = 0.0
+	spent["spent_t"] = 2.0
+	assert_eq(DeadBody.custom(spent, 0.0, 0.0, 1.0, true).g, float(DeadBody.STAGGER), "even one that would run")
+	assert_true(DeadBody.STRIDE.has(DeadBody.STAGGER))

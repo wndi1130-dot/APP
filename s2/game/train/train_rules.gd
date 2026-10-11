@@ -3,10 +3,16 @@ extends RefCounted
 ## (train_rules.json). Until the politics port feeds it, the JSON file stands
 ## in; this only loads and checks the shape and decides nothing.
 
+const BodyState = preload("res://game/sim/body_state.gd")
+const W = preload("res://game/sim/weapons.gd")
+const Carry = preload("res://game/sim/carry.gd")
+
 const PATH := "res://game/train/train_rules.json"
 const KINDS: Array = ["comm", "dining", "captain", "engine", "loco", "freight", "cold"]
 const PHASES: Array = ["prep", "travel", "stop", "council", "settle", "end"]
 const SIT_NAMES: Array = ["온기", "배급", "과밀", "노출"]
+const CAPTAIN_OUT := "out"
+const CAPTAIN_DOINGS: Array = ["", "rest", "bed"]
 
 
 static func load_default() -> Dictionary:
@@ -33,6 +39,8 @@ static func check(d: Dictionary) -> PackedStringArray:
 		for key in ["tension", "fear"]:
 			if not _in_range(train.get(key), 0.0, 100.0):
 				bad.append("train.%s: %s" % [key, str(train.get(key))])
+		if not (train.get("voting", false) is bool):
+			bad.append("train.voting: %s" % str(train.get("voting")))
 	var comms = d.get("comms")
 	if not (comms is Dictionary):
 		bad.append("comms: missing")
@@ -79,6 +87,64 @@ static func check(d: Dictionary) -> PackedStringArray:
 			bad.append("errands: goes to no car (%s)" % str(e.get("to") if e is Dictionary else e))
 		elif float(e.get("every", 0.0)) <= 0.0 or float(e.get("stay", 0.0)) <= 0.0:
 			bad.append("errands.%s: every and stay above 0" % str(e.get("id")))
+	# Both are optional: without them nobody calls at another car.
+	var ideo = d.get("ideo", {})
+	if not (ideo is Dictionary):
+		bad.append("ideo: not an object")
+		ideo = {}
+	for id in ideo:
+		var axes = ideo[id]
+		if not comms.has(id):
+			bad.append("ideo.%s: no such community" % id)
+		elif not (axes is Array) or axes.size() != 3 or axes.any(func(v) -> bool: return not _in_range(v, -1.0, 1.0)):
+			bad.append("ideo.%s: three numbers from -1 to 1" % id)
+	var calls = d.get("calls", {})
+	if not (calls is Dictionary):
+		bad.append("calls: not an object")
+	elif not calls.is_empty():
+		if not _in_range(calls.get("within"), 0.0, 6.0):
+			bad.append("calls.within: %s" % str(calls.get("within")))
+		if not _in_range(calls.get("every"), 0.001, 100000.0) or not _in_range(calls.get("stay"), 0.001, 100000.0):
+			bad.append("calls: every and stay above 0")
+	# Optional too: without a captain the board shows a sound one, nowhere.
+	if d.has("captain"):
+		bad.append_array(_check_captain(d["captain"], ids))
+	return bad
+
+
+## The captain: on a car that exists or out, doing a thing the board knows,
+## holding things the field can name, with wounds the field body can carry.
+static func _check_captain(captain, car_ids: Array) -> PackedStringArray:
+	var bad := PackedStringArray()
+	if not (captain is Dictionary):
+		bad.append("captain: not an object")
+		return bad
+	var at = captain.get("at")
+	if not (at is String) or (at != CAPTAIN_OUT and not car_ids.has(at)):
+		bad.append("captain.at: %s" % str(at))
+	if not CAPTAIN_DOINGS.has(captain.get("doing", "")):
+		bad.append("captain.doing: %s" % str(captain.get("doing")))
+	if not _in_range(captain.get("left", 0), 0.0, 1000.0):
+		bad.append("captain.left: %s" % str(captain.get("left")))
+	var hands = captain.get("hands", {})
+	if not (hands is Dictionary):
+		bad.append("captain.hands: not an object")
+		hands = {}
+	var weapon = hands.get("weapon", "")
+	if not (weapon is String) or (weapon != "" and not W.DATA.has(weapon)):
+		bad.append("captain.hands.weapon: %s" % str(weapon))
+	var held_tool = hands.get("tool", "")
+	if not (held_tool is String) or (held_tool != "" and not Carry.ITEM_NAMES.has(held_tool) and not W.DATA.has(held_tool)):
+		bad.append("captain.hands.tool: %s" % str(held_tool))
+	var wounds = captain.get("wounds", [])
+	if not (wounds is Array):
+		bad.append("captain.wounds: not a list")
+		wounds = []
+	for w in wounds:
+		if not (w is Dictionary) or not BodyState.PARTS.has(w.get("part")) or not BodyState.KINDS.has(w.get("kind")):
+			bad.append("captain.wounds: no such part or kind (%s)" % str(w))
+		elif w.has("blood") and not _in_range(w["blood"], 0.0, 100.0):
+			bad.append("captain.wounds: blood %s" % str(w["blood"]))
 	return bad
 
 

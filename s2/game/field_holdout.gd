@@ -5,13 +5,48 @@ extends RefCounted
 ## clock runs down, hordes come faster and walk to the doors. It is a stage to
 ## measure with: every number here is a first value, none of them settled.
 ##
-## Off unless opts["holdout"] says so: "start" (from the first second) or
-## "depart" (it opens when leaving is called, and leaving again goes early).
+## Off unless opts["holdout"] says so: "start" (from the first second),
+## "depart" (it opens when leaving is called, and leaving again goes early) or
+## "roll" (user decision 148: whether this stop can have it is rolled once as
+## the train stops and kept hidden; where it can, it opens on leaving unless
+## the stop was quiet and the track is clear).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 
-const MODES: Array[String] = ["start", "depart"]
+const MODES: Array[String] = ["start", "depart", "roll"]
+# How likely a stop of each kind is to be one that can have it, in a hundred
+# (user decisions 074, 087; the town stops low, decisions 151, 153). A kind
+# not here is taken as the lowest of the town stops.
+const CHANCE: Dictionary = {
+	"mine": 60, "sawmill": 30, "lodge": 25, "lake": 10,
+	"freight": 10, "hospital": 10, "factory": 10,
+	"houses": 5, "church": 5, "office": 5,
+}
+const CHANCE_OTHER: int = 5
+# The one line shown to anybody before it (user decision 150): the kind's
+# chance in words, never the roll. [up to this chance, the word].
+const RISK_WORDS: Array = [[15, "낮다"], [40, "있다"], [100, "높다"]]
+# "Quiet, and the track beside the train clear": the stop's noise score at
+# most this, and at most this many dead on the track. PLACEHOLDERS.
+const QUIET_NOISE: int = 12
+const CLEAR_TRACK: int = 2
+# Sounds in the stop's score that the people did not make: the dead beating on
+# a door, blood they scent. "Quiet" is counted without them (a chief standing
+# still passes twelve in four minutes with them, measured 2026-10-12). Running
+# is left out too (user decision 157): a point every few seconds that nothing
+# on the screen tells of. It still calls the dead, as every sound does.
+const NOT_OURS: Array[String] = ["bang", "blood", "run"]
+# Whoever was left at the train says when the quiet way out closes (user
+# decision 150): looked at this often, and of the track no more often than this.
+const WATCH_EVERY: float = 1.0
+const WATCH_TRACK_GAP: float = 60.0
+# The radio operator on watch hears of it for this stop (user decision 150):
+# of the stops that can have it, this many in a hundred, said this long after
+# the train stops. The rest are missed; nothing false is said, and never
+# "quiet". PROPOSED values.
+const FORECAST_HEARD: int = 80
+const FORECAST_AT: float = 20.0
 const READY_TIME: float = 300.0   # the train is ready this long after it opens
 const DOOR_HP: int = 24           # three of the dead through one in about ten seconds
 const WALL_HP: int = 12
@@ -22,6 +57,31 @@ const HURT_REACH: float = 3.0     # a door that gives way reaches whoever stands
 const BUILD_TIME: float = 8.0     # as the manhole lid: one heavy thing, a normal sound
 const MATERIALS: Array[String] = ["plank", "scrap", "wood"]
 ## Hordes while it lasts: the director is the same one, with the stage's pace.
+# Leaving before the train is ready (user decision 143): a last call of this
+# many seconds, and whoever is not at the train when it ends stays.
+const LAST_CALL_S: float = 3.0
+# Ready, and a quiet while (user decision 146): the next wave is put off by
+# this long whatever is heard, those the cap still held at the ways in turn
+# back, and of the waves after it every so-many-th body walks to the track
+# ahead of the train or behind it instead of a door, so that staying on makes
+# the plough's price climb again (decision 149). PROPOSED values.
+const QUIET_GAP_S: float = 40.0
+const TRACK_EVERY: int = 3
+const TRACK_SPREAD: int = 6       # they stand over this many cells of track
+# The train is ready: the words stand big on the screen this long.
+const READY_SHOWN_S: float = 4.0
+# What going unready costs, on top of the plough's price: [share of the
+# getting-ready still left (below this), coal, plough parts]. Starting values
+# from the play check, not settled.
+const EARLY_STEPS: Array = [[0.25, 2, 0], [0.5, 4, 1], [0.75, 7, 1], [2.0, 10, 2]]
+# The plough's price by the dead on the track as it leaves (s1c_domestic 6.6,
+# numbers proposed there): [up to this many, parts, the word on screen].
+const PLOUGH_STEPS: Array = [[0, 0, "선로 비었다"], [10, 1, "망자 몇"], [30, 2, "무리"], [1 << 30, 3, "큰 무리"]]
+# Leaving people behind (user decision 147): this much trust for the first,
+# this much for each one more, and no more than the most. Things left cost none.
+const TRUST_FIRST: int = 12
+const TRUST_EACH_MORE: int = 4
+const TRUST_MOST: int = 24
 const FIRST_GAP: float = 45.0
 const RATIO: float = 0.9
 const MIN_GAP: float = 35.0
@@ -39,6 +99,20 @@ var walls_built: int = 0
 var reached: int = 0              # people in front of a door as it gave way
 var hurt: int = 0                 # and how many of them it scratched
 var first_wave: int = 0
+var calling: bool = false         # the last call is being counted
+var call_left: float = 0.0
+var left_people: int = 0          # who stayed on the platform as it left
+var cost_paid: Dictionary = {"coal": 0, "plow_part": 0}   # what going unready cost
+var track_at_leave: int = -1      # the dead on the track as it left
+var ready_shown: float = 0.0      # the "ready" words are still up this long
+var over: float = 0.0             # how long it stayed after it was ready
+var rolled: bool = false          # "roll": this stop can have it (hidden)
+var slipped: bool = false         # it could, and the train got away quietly
+var watch_t: float = 0.0
+var told_noise: bool = false      # the lookout has said the stop was heard
+var told_track_t: float = -INF    # and when it last said they stand on the track
+var forecast: bool = false        # the radio operator heard of it (hidden till said)
+var forecast_said: bool = false
 var opened_at: float = 0.0
 
 
@@ -49,15 +123,91 @@ func _init(field_game) -> void:
 		mode = ""
 	total = float(game.opts.get("holdout_time", READY_TIME))
 	left = total
+	if mode == "roll":
+		# Its own dice, so the stop's are not moved on by it.
+		var dice := RandomNumberGenerator.new()
+		dice.seed = hash([int(game.opts.get("seed", 0)), game.place, "holdout"])
+		rolled = dice.randi_range(1, 100) <= chance()
+		var heard: int = int(game.opts.get("holdout_forecast_heard", FORECAST_HEARD))
+		forecast = rolled and bool(game.opts.get("radio_watch", false)) and dice.randi_range(1, 100) <= heard
 
 
 func enabled() -> bool:
 	return mode != ""
 
 
+## How likely this kind of stop is to be one that can have it, in a hundred.
+func chance() -> int:
+	if game.opts.has("holdout_chance"):
+		return int(game.opts["holdout_chance"])
+	return int(CHANCE.get(String(game.data.get("place_kind", "")), CHANCE_OTHER))
+
+
+## The kind's chance in a word, for the line anybody sees.
+func risk_word() -> String:
+	var c: int = chance()
+	for row: Array in RISK_WORDS:
+		if c <= int(row[0]):
+			return String(row[1])
+	return String(RISK_WORDS[-1][1])
+
+
+## A quiet stop with the track beside the train clear: the train gets away.
+func quiet_and_clear() -> bool:
+	return people_noise() <= QUIET_NOISE and track_now() <= CLEAR_TRACK
+
+
+## The stop's noise score, of the sounds the people made.
+func people_noise() -> int:
+	var sum := 0
+	for e: Dictionary in game.ledger.history:
+		if not NOT_OURS.has(String(e["tag"])):
+			sum += SimNoise.score(int(e["level"]))
+	return sum
+
+
+## Somebody left at the train (not the chief), to keep watch from it.
+func lookout():
+	for p in game.squad + game.crew:
+		if p != game.player and p.is_alive() and game.aboard(p):
+			return p
+	return null
+
+
+## Where the stop can have it and has not yet: whoever watches from the train
+## says so the moment the quiet way out closes. What is said is true when it is
+## said; a stop that cannot have it hears nothing.
+func watch(delta: float) -> void:
+	if mode != "roll" or not rolled or opened or game.ended:
+		return
+	# What it says is so of this stop whatever is done next: it can have it.
+	if forecast and not forecast_said and game.clock.elapsed >= FORECAST_AT:
+		forecast_said = true
+		game.set_radio("무전수: 이 근처에 무리가 돈다. 소리를 내면 열차로 몰려 떠날 때 붙들린다.", "must")
+	watch_t -= delta
+	if watch_t > 0.0:
+		return
+	watch_t = WATCH_EVERY
+	var who = lookout()
+	if who == null:
+		return
+	var now: float = game.clock.elapsed
+	# The score only climbs: once over, leaving is held from then on.
+	if not told_noise and people_noise() > QUIET_NOISE:
+		told_noise = true
+		game.set_radio("%s: 소리를 듣고 모여든다. 떠날 때 붙들린다." % who.display_name, "must")
+	elif track_now() > CLEAR_TRACK and now - told_track_t >= WATCH_TRACK_GAP:
+		told_track_t = now
+		game.set_radio("%s: 선로에 섰다. 치우지 않으면 붙들린다." % who.display_name, "must")
+
+
 ## Leaving is called and the stage has not opened yet: it opens instead.
 func opens_on_leaving() -> bool:
-	return mode == "depart" and not opened
+	if opened:
+		return false
+	if mode == "roll":
+		return rolled and not quiet_and_clear()
+	return mode == "depart"
 
 
 func begin() -> void:
@@ -81,6 +231,8 @@ func begin() -> void:
 ## Where the n-th body of a horde walks: the doors in turn, of the side it
 ## comes in on where the train has doors on both.
 func target(n: int, from = null) -> Vector3:
+	if ready and n % TRACK_EVERY == TRACK_EVERY - 1:
+		return track_spot(n / TRACK_EVERY, from)
 	if doors.is_empty():
 		return FieldGrid.center(game.horde_home())
 	var mine: Array = doors
@@ -92,10 +244,83 @@ func target(n: int, from = null) -> Vector3:
 	return FieldGrid.center(mine[n % mine.size()]["cell"])
 
 
+## A place on the track beside the train, on the end nearer to `from`.
+func track_spot(k: int, from = null) -> Vector3:
+	var train: Rect2i = game.data["train"]
+	var row: int = train.position.y + (k % maxi(train.size.y, 1))
+	var step: int = 2 + k % TRACK_SPREAD
+	var east: bool = from == null or from.x >= FieldGrid.center(train.get_center()).x
+	return FieldGrid.center(Vector2i(train.end.x + step if east else train.position.x - 1 - step, row))
+
+
+## "We leave now": the count starts. It cannot be called off.
+func last_call() -> void:
+	if not on or calling:
+		return
+	calling = true
+	call_left = LAST_CALL_S
+	game.set_radio("기관사: 셋을 센다. 탈 사람은 타라!", "must")
+
+
+## Coal and plough parts that going now would cost for being unready, on top
+## of the plough's price: {"coal", "plow_part"}.
+func early_cost() -> Dictionary:
+	if ready or total <= 0.0:
+		return {"coal": 0, "plow_part": 0}
+	var short: float = clampf(left / total, 0.0, 1.0)
+	for step: Array in EARLY_STEPS:
+		if short < float(step[0]):
+			return {"coal": int(step[1]), "plow_part": int(step[2])}
+	return {"coal": 0, "plow_part": 0}
+
+
+## The dead the plough would push through, going now. Which way the train
+## leaves is not S2's to say: the fuller side of the track.
+func track_now() -> int:
+	var t: Dictionary = game.track_dead()
+	return maxi(int(t["west"]), int(t["east"]))
+
+
+## The plough's price for that many dead on the track: {"parts", "word"}.
+static func plough(dead: int) -> Dictionary:
+	for step: Array in PLOUGH_STEPS:
+		if dead <= int(step[0]):
+			return {"parts": int(step[1]), "word": String(step[2])}
+	return {"parts": 0, "word": ""}
+
+
+## The trust that leaving this many people behind costs.
+static func trust_drop(people: int) -> int:
+	if people <= 0:
+		return 0
+	return mini(TRUST_FIRST + TRUST_EACH_MORE * (people - 1), TRUST_MOST)
+
+
+## The train is going: what stood on the track is kept for the end lines.
+func note_leaving() -> void:
+	if track_at_leave < 0:
+		track_at_leave = track_now()
+
+
 func tick(delta: float) -> void:
 	if not on:
 		return
-	left -= delta
+	if calling:
+		call_left -= delta
+		if call_left <= 0.0:
+			calling = false
+			# The train does not go without its chief: the call is lost.
+			if not game.aboard(game.player):
+				game.set_radio("기관사: 열차장이 안 탔다. 못 떠난다.", "must")
+			else:
+				leaving_early()
+				game.audio.depart()
+				game.finish("departed")
+				return
+	left = maxf(left - delta, 0.0)
+	ready_shown = maxf(ready_shown - delta, 0.0)
+	if ready:
+		over += delta
 	for door: Dictionary in doors:
 		var at: Vector3 = FieldGrid.center(door["cell"])
 		var hands := 0
@@ -113,11 +338,18 @@ func tick(delta: float) -> void:
 		while float(door["bang_t"]) <= 0.0:
 			door["bang_t"] = float(door["bang_t"]) + BANG_EVERY
 			_bang(door)
-	if left <= 0.0:
+	# Ready, and it waits: the chief says when (user decision 149). The doors
+	# are still to be held and the waves keep coming.
+	if left <= 0.0 and not ready:
 		ready = true
-		on = false
-		game.audio.depart()
-		game.finish("departed")
+		ready_shown = READY_SHOWN_S
+		# The quiet while: what was coming comes that much later.
+		var now: float = game.clock.elapsed
+		game.director.quiet_until = now + QUIET_GAP_S
+		# Those still held at the ways in by the cap turn back with it.
+		game.pending_spawn.clear()
+		game.director.next_arrival = maxf(game.director.next_arrival, game.director.quiet_until)
+		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
 
 
 func _bang(door: Dictionary) -> void:
@@ -192,7 +424,12 @@ func waves() -> int:
 
 func goal_line() -> String:
 	if not opened:
+		if mode == "roll":
+			# Of places like this, not of this one: what it holds is not known yet.
+			return "이런 곳의 버티기 위험: " + risk_word()
 		return "버티기 판: 「떠난다」를 부르면 채비가 시작된다" if mode == "depart" else ""
+	if ready:
+		return "채비 끝 · 「떠난다」를 부르면 떠난다 · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [count("whole"), count("damaged"), count("breached"), waves()]
 	var s: int = int(ceil(maxf(left, 0.0)))
 	return "채비 %d:%02d · 문 멀쩡 %d · 상함 %d · 뚫림 %d · 물결 %d" % [s / 60, s % 60, count("whole"), count("damaged"), count("breached"), waves()]
 
@@ -252,8 +489,15 @@ func _show_wall(door: Dictionary) -> void:
 
 func leaving_early() -> void:
 	if on:
-		early = true
+		cost_paid = early_cost()
+		early = not ready
 		on = false
+
+
+## A rolled stop that never opened: what the roll was and why it did not, for
+## the telemetry (the player is not told).
+func roll_note() -> Dictionary:
+	return {"rolled": rolled, "opened": false, "slipped": slipped, "forecast": forecast, "chance": chance(), "noise": game.ledger.total, "peopleNoise": people_noise(), "trackDead": maxi(track_at_leave, 0)}
 
 
 ## What the stage came to, for the receipt's note, the telemetry and the end screen.
@@ -267,6 +511,11 @@ func result() -> Dictionary:
 		"ready": ready, "early": early, "leftSec": int(ceil(maxf(left, 0.0))), "doors": states,
 		"damaged": count("damaged"), "breached": count("breached"), "entered": entered,
 		"walls": walls_built, "waves": waves(), "reached": reached, "hurt": hurt,
+		"leftPeople": left_people, "earlyCost": cost_paid,
+		"overSec": int(over),
+		"leftShare": snappedf(clampf(left / total, 0.0, 1.0), 0.01) if total > 0.0 else 0.0,
+		"trustDrop": trust_drop(left_people),
+		"trackDead": maxi(track_at_leave, 0), "ploughParts": int(plough(maxi(track_at_leave, 0))["parts"]),
 	}
 
 
@@ -282,7 +531,10 @@ func leave_lines() -> Array:
 	if n > 0:
 		head = "%s 물결에서 떠났다" % (ORDINALS[n - 1] if n <= ORDINALS.size() else "%d번째" % n)
 	var how: String = "채비를 다 채웠다" if ready else "채비 %d초를 남겼다" % int(ceil(maxf(left, 0.0)))
-	return [head, "%s · 문 멀쩡 %d · 상함 %d · 뚫림 %d" % [how, count("whole"), count("damaged"), count("breached")]]
+	var out: Array = [head, "%s · 문 멀쩡 %d · 상함 %d · 뚫림 %d" % [how, count("whole"), count("damaged"), count("breached")]]
+	if left_people > 0:
+		out.append("남기고 온 사람 %d" % left_people)
+	return out
 
 
 func end_lines() -> Array:
@@ -290,8 +542,20 @@ func end_lines() -> Array:
 		return []
 	var r := result()
 	var how := "채비를 다 채우고 떠났다" if ready else ("채비 %d초를 남기고 떠났다" % int(r["leftSec"]) if early else "채비 중에 끝났다")
-	return [
+	var out: Array = [
 		"버티기 판: %s · 물결 %d번" % [how, int(r["waves"])],
 		"상한 문 %d · 뚫린 문 %d · 뚫린 문으로 든 것 %d · 세운 방벽 %d" % [int(r["damaged"]), int(r["breached"]), int(r["entered"]), int(r["walls"])],
 		"문이 뚫릴 때 그 앞에 있던 사람 %d · 그 가운데 긁힌 사람 %d" % [reached, hurt],
 	]
+	if ready or early:
+		var push: Dictionary = plough(int(r["trackDead"]))
+		var cost: String = "%s · 떠나는 값: 쟁기 부품 %d" % [push["word"], int(push["parts"])]
+		if ready:
+			cost = "끝까지 버텼다 · " + cost
+		if int(cost_paid["coal"]) > 0 or int(cost_paid["plow_part"]) > 0:
+			cost += " · 덜 된 채비로 석탄 +%d, 부품 +%d" % [int(cost_paid["coal"]), int(cost_paid["plow_part"])]
+		out.append(cost)
+	# A number, never a name (user decision 147).
+	if left_people > 0:
+		out.append("남기고 온 사람 %d · 신임 −%d" % [left_people, trust_drop(left_people)])
+	return out

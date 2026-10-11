@@ -86,8 +86,13 @@ func test_the_train_can_be_held_on_it() -> void:
 	var game = _game({"holdout": "start", "holdout_time": 30.0})
 	assert_eq(game.holdout.doors.size(), 4, "the doors of both sides")
 	for i in range(320):
+		game._step(0.1)
+	assert_true(game.holdout.ready)
+	assert_false(game.ended, "ready, and it waits for the word")
+	game.depart()
+	for i in range(40):
 		if game.ended:
 			break
 		game._step(0.1)
-	assert_true(game.ended, "ready, and gone")
+	assert_true(game.ended, "and gone")
 	assert_true(game.receipt.to_dict()["placeState"]["holdout"]["ready"])
