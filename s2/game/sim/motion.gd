@@ -27,6 +27,11 @@ const END: String = "end"
 ## shove winds up 0.15 s, lands, and the next one comes 0.35 s after that.
 const TABLE: Dictionary = {
 	"shove": {"len": 0.5, "hit": 0.15, "feet": Vector2(0.0, 0.15), "open": 0.3, "sound": 0.15, "upper": true, "loop": false},
+	# A dead body goes over (0.25 s in it meets the ground) and, at the end of its
+	# time down, comes up again. For the rules it is down or up at once; these
+	# are what is seen (dead_pose.gd).
+	"dead_fall": {"len": 0.45, "hit": -1.0, "feet": Vector2(0.0, 0.45), "open": -1.0, "sound": 0.25, "upper": false, "loop": false},
+	"dead_rise": {"len": 1.2, "hit": -1.0, "feet": Vector2(0.0, 1.2), "open": 0.0, "sound": -1.0, "upper": false, "loop": false},
 	"fall": {"len": 1.5, "hit": -1.0, "feet": Vector2(0.0, 1.5), "open": -1.0, "sound": 0.2, "upper": false, "loop": false},
 }
 
