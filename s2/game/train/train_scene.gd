@@ -45,6 +45,7 @@ const GESTURE_OFFSET: float = 1.3        # seconds between one car's gestures an
 const RESENT_TURN: float = 0.6           # rad: those who resent stand half turned to the captain's car
 ## The stove stands in front of the bench, between two floor places; a car with
 ## a table has it by the end wall.
+const TABLED: Array = ["dining", "captain"]   # the kinds of car with a table or a desk on the floor places
 const STOVE_AT := Vector3(7.85, 0.0, -0.4)
 const STOVE_AT_END := Vector3(0.45, 0.0, -0.9)
 const STOVE_COLOR := Color(1.0, 0.55, 0.3)
@@ -250,7 +251,9 @@ func _seat_car(c: Dictionary) -> void:
 	else:
 		c["unrest"] = -1
 		c["quiet"] = ""
-		_seat_rows(c, Look.seating(n, w, Look.crowding(comm), m), bool(look["gather"]))
+		# The dining table and the captain's desk stand where the floor places are.
+		var open_floor: bool = not TABLED.has(String((c["def"] as Dictionary).get("kind", "")))
+		_seat_rows(c, Look.seating(n, w, Look.crowding(comm), m, open_floor), bool(look["gather"]))
 	_dress_car(c, w, look)
 	(c["values"] as Label3D).text = values_text(c)
 
@@ -739,7 +742,7 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		_box(node, Vector3(1.6, 0.75, 0.7), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
 	if kind == "comm" or kind == "engine":
 		_build_stove(c, STOVE_AT)
-	elif kind == "dining" or kind == "captain":
+	elif TABLED.has(kind):
 		_build_stove(c, STOVE_AT_END)
 	var calm := Look.mood_look("calm")
 	var lamp := OmniLight3D.new()
