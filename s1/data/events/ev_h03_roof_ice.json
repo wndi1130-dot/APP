@@ -74,11 +74,11 @@
         },
         {
           "type": "trust",
-          "amount": 2
+          "amount": 0
         },
         {
           "type": "tension",
-          "amount": 2
+          "amount": 0
         },
         {
           "type": "votes",
