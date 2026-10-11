@@ -31,6 +31,7 @@ func test_the_motion_numbers_are_the_ones_the_bake_writes() -> void:
 	assert_eq(names[DeadBody.FALL], "fall")
 	assert_eq(names[DeadBody.FALL_FRONT], "fall_front")
 	assert_eq(names[DeadBody.CRAWL], "crawl")
+	assert_eq(names[DeadBody.RISE], "rise")
 
 
 func test_a_baked_body_walks_its_own_walk_and_stands_once_it_keeps_its_place() -> void:
@@ -58,7 +59,13 @@ func test_a_baked_body_goes_over_by_the_fall_and_comes_up_through_it_backwards()
 	assert_almost_eq(mid.r, 0.5, 0.001, "half the fall's time, half the motion (not how far over the boxes would be)")
 	z["fell_at"] = 10.0 - length * 3.0
 	assert_almost_eq(DeadBody.custom(z, 1.0, 1.0, 1.0, true).r, 1.0, 0.001, "it lies at the motion's end")
-	assert_almost_eq(DeadBody.custom(z, 0.3, 0.0, 1.0, true).r, 0.3, 0.001, "coming up, as far back as it has come up")
+	var up := DeadBody.custom(z, 0.3, 0.0, 1.0, true)
+	assert_eq(up.g, float(DeadBody.RISE), "off its back it gets up by its own motion")
+	assert_almost_eq(up.r, 0.7, 0.001, "as far through it as it has come up")
+	z["fell_fwd"] = true
+	var up_front := DeadBody.custom(z, 0.3, 0.0, 1.0, true)
+	assert_eq(up_front.g, float(DeadBody.FALL_FRONT), "off its face the fall runs backwards")
+	assert_almost_eq(up_front.r, 0.3, 0.001)
 	var corpse := _body("dead")
 	assert_almost_eq(DeadBody.custom(corpse, 1.0, 1.0, 1.0, true).r, 1.0, 0.001, "a body that was never seen to fall lies")
 
