@@ -20,11 +20,34 @@ const WARM_COLD: float = 45.0
 const WARM_WARM: float = 70.0
 const CROWD_FROM: Array = [60.0, 80.0, 95.0]
 ## Of the people in a car only a few move (presentation_motion 7: two to four).
-const MOVERS_MIN: int = 2
-const MOVERS_MAX: int = 4
 const MOVERS_ONE_IN: float = 4.0
 const HUDDLE_SHARE: Dictionary = {"freezing": 0.7, "cold": 0.35, "": 0.0, "warm": 0.0}
 const FLOOR_SHARE: Array = [0.0, 0.15, 0.3, 0.45]
+## The mood of a car: one of four, picked from its numbers and the train's
+## (2026-10-12: one mood a car, with gestures for single values laid over it
+## later). It is for show only; no rule reads it. Fear quiets a car before
+## unrest stirs it, and unrest shows before cold or hunger weigh it down.
+const FEAR_FROZEN: float = 60.0         # first value: the council draft's frightened quiet
+const TENSION_STIR: float = 60.0        # first value: from the council draft
+const REL_STIR: float = -40.0           # s1 STAGES: "opposed" and below
+const GRUDGE_STIR: int = 2              # s1: hostile from two grudges
+const LOW_BELOW: float = 45.0           # s1 reads warmth and ration under 45 as low (ui/home.ts, turn.ts)
+const MOOD_NAMES: Dictionary = {"calm": "평온", "low": "가라앉음", "stir": "술렁임", "frozen": "얼어붙음"}
+## What a mood changes: how many walk and how fast, how long they stand between
+## walks, the share of the others who stand about in knots, whether the seated
+## gather round the stove, whether heads are bowed, and the lamp. First values.
+const MOOD_LOOK: Dictionary = {
+	"calm": {"movers": [2, 4], "speed": 1.0, "wait": 1.0, "stand": 0.0, "gather": false, "bowed": false,
+		"lamp": Color(1.0, 0.72, 0.42), "energy": 1.3, "sway": 1.0},
+	"low": {"movers": [1, 2], "speed": 0.6, "wait": 1.6, "stand": 0.0, "gather": true, "bowed": false,
+		"lamp": Color(0.92, 0.68, 0.46), "energy": 0.8, "sway": 1.0},
+	"stir": {"movers": [3, 4], "speed": 1.4, "wait": 0.4, "stand": 0.3, "gather": false, "bowed": false,
+		"lamp": Color(1.0, 0.72, 0.42), "energy": 1.3, "sway": 2.0},
+	"frozen": {"movers": [0, 1], "speed": 0.7, "wait": 3.0, "stand": 0.0, "gather": false, "bowed": true,
+		"lamp": Color(0.72, 0.77, 0.88), "energy": 0.6, "sway": 0.5},
+}
+const SLOT_STRIDE: int = 4
+const STOVE_STEAM_FROM: float = 0.4
 
 
 ## People standing in this car. `comm` is the car's community ({} for a car
@@ -77,33 +100,88 @@ static func crowd_level(crowd: float) -> int:
 	return 1 if crowd >= float(CROWD_FROM[0]) else 0
 
 
-static func movers(count: int) -> int:
+## "calm", "low", "stir" or "frozen". `comm` is {} for a car without a
+## community; such a car follows the train's fear and tension only.
+static func mood(comm: Dictionary, train: Dictionary) -> String:
+	if float(train.get("fear", 0)) >= FEAR_FROZEN:
+		return "frozen"
+	if float(train.get("tension", 0)) >= TENSION_STIR:
+		return "stir"
+	if comm.is_empty():
+		return "calm"
+	if float(comm.get("rel", 0)) <= REL_STIR or int(comm.get("grudge", 0)) >= GRUDGE_STIR:
+		return "stir"
+	if warmth(comm) < LOW_BELOW or _sit(comm, 1, 60.0) < LOW_BELOW:
+		return "low"
+	return "calm"
+
+
+static func mood_look(m: String) -> Dictionary:
+	return MOOD_LOOK.get(m, MOOD_LOOK["calm"])
+
+
+static func movers(count: int, m: String = "calm") -> int:
 	if count <= 0:
 		return 0
-	return mini(count, clampi(roundi(count / MOVERS_ONE_IN), MOVERS_MIN, MOVERS_MAX))
+	var few: Array = mood_look(m)["movers"]
+	return mini(count, clampi(roundi(count / MOVERS_ONE_IN), int(few[0]), int(few[1])))
 
 
-## How the people of a car split: {"walk", "bench", "floor", "huddled"}.
-## walk + bench + floor = count; huddled counts those of bench and floor who
-## sit hunched. Crowding picks the place, cold the posture, so a colder car
-## moves nobody and a fuller one hunches nobody.
-static func split(count: int, w: float, crowd: float) -> Dictionary:
-	var walk := movers(count)
-	var seated := maxi(count - walk, 0)
+## How the people of a car split: {"walk", "stand", "bench", "floor",
+## "huddled"}. walk + stand + bench + floor = count; huddled counts those of
+## bench and floor who sit hunched. The mood picks who moves and who stands
+## about, crowding picks the place, cold the posture.
+static func split(count: int, w: float, crowd: float, m: String = "calm") -> Dictionary:
+	var walk := movers(count, m)
+	var still := maxi(count - walk, 0)
+	var stand := roundi(still * float(mood_look(m)["stand"]))
+	var seated := still - stand
 	var on_floor := roundi(seated * float(FLOOR_SHARE[crowd_level(crowd)]))
 	var huddled := roundi(seated * float(HUDDLE_SHARE[warmth_tone(w)]))
-	return {"walk": walk, "bench": seated - on_floor, "floor": on_floor, "huddled": huddled}
+	return {"walk": walk, "stand": stand, "bench": seated - on_floor, "floor": on_floor, "huddled": huddled}
 
 
-## One row a person, movers first: [{"pose": "walk" | "sit" | "floor",
-## "huddled": bool}]. The floor hunches first, then the bench from its far end.
-static func seating(count: int, w: float, crowd: float) -> Array:
-	var s := split(count, w, crowd)
+## One row a person, movers first: [{"pose": "walk" | "stand" | "sit" |
+## "floor", "huddled": bool, "bowed": bool}]. The floor hunches first, then the
+## bench from its far end. In a frightened car everyone seated bows the head.
+static func seating(count: int, w: float, crowd: float, m: String = "calm") -> Array:
+	var s := split(count, w, crowd, m)
+	var bowed: bool = mood_look(m)["bowed"]
 	var rows: Array = []
+	var walk := int(s["walk"])
+	var stand := int(s["stand"])
 	for i in count:
-		var pose := "walk" if i < int(s["walk"]) else ("sit" if i < int(s["walk"]) + int(s["bench"]) else "floor")
-		rows.append({"pose": pose, "huddled": i >= count - int(s["huddled"])})
+		var pose := "floor"
+		if i < walk:
+			pose = "walk"
+		elif i < walk + stand:
+			pose = "stand"
+		elif i < walk + stand + int(s["bench"]):
+			pose = "sit"
+		var seated := pose == "sit" or pose == "floor"
+		rows.append({"pose": pose, "huddled": i >= count - int(s["huddled"]), "bowed": bowed and seated})
 	return rows
+
+
+## Which of `slots` places along the car the k-th seated person takes. Spread:
+## in steps of four, so a few sit apart and nobody moves when one more comes.
+## Gathered: from the middle outward, round the stove and the lamp.
+static func seat_slot(k: int, slots: int, gather: bool) -> int:
+	if not gather:
+		return (k * SLOT_STRIDE) % slots
+	var off := (k % slots + 1) / 2
+	return clampi(slots / 2 + (off if k % 2 == 1 else -off), 0, slots - 1)
+
+
+## How much frost the windows carry, 0 to 1: none from "cold" up, thick well
+## below "freezing".
+static func frost(w: float) -> float:
+	return clampf((WARM_COLD - w) / WARM_FREEZING, 0.0, 1.0)
+
+
+## How bright the stove burns, 0 to 1: out in a freezing car, full in a warm one.
+static func stove(w: float) -> float:
+	return clampf((w - WARM_FREEZING) / (WARM_WARM - WARM_FREEZING), 0.0, 1.0)
 
 
 ## The trips this car's people may take now: only ones with a use (a meal, the

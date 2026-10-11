@@ -1,13 +1,14 @@
 extends "res://addons/gut/test.gd"
 ## What a train car shows for its numbers: the head count (the web prototype's
-## figures()), the warmth and crowding steps, who walks, sits, hunches, and which
-## trips a car may send.
+## figures()), the warmth and crowding steps, the one mood a car is in, who
+## walks, stands about, sits, hunches, and which trips a car may send.
 
 const Look = preload("res://game/train/train_look.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 
 const WARMTHS: Array = [0.0, 29.9, 30.0, 44.9, 45.0, 60.0, 70.0, 70.1, 100.0]
 const CROWDS: Array = [0.0, 45.0, 59.9, 60.0, 79.9, 80.0, 94.9, 95.0, 100.0]
+const MOODS: Array = ["calm", "low", "stir", "frozen"]
 
 var rules: Dictionary
 
@@ -32,6 +33,20 @@ func _ids(rows: Array) -> Array:
 	for e in rows:
 		ids.append(e["id"])
 	return ids
+
+
+## A community with nothing wrong, then one number changed.
+func _plain(key: String = "", value = null) -> Dictionary:
+	var comm := {"rel": 0, "grudge": 0, "sit": [60.0, 60.0, 40.0, 30.0]}
+	if key.begins_with("sit"):
+		comm["sit"][int(key.substr(3))] = value
+	elif key != "":
+		comm[key] = value
+	return comm
+
+
+func _train(tension: float, fear: float) -> Dictionary:
+	return {"phase": "travel", "tension": tension, "fear": fear}
 
 
 # ---------------------------------------------------------------- head count
@@ -117,16 +132,106 @@ func test_movers_are_a_few_of_the_car() -> void:
 	assert_eq(Look.movers(16), 4)
 
 
+# ---------------------------------------------------------------- the mood of a car
+
+func test_a_car_with_nothing_wrong_is_calm() -> void:
+	assert_eq(Look.mood(_plain(), _train(20.0, 0.0)), "calm")
+	assert_eq(Look.mood(_plain(), {}), "calm", "a train without numbers")
+
+
+func test_fear_freezes_every_car_from_sixty_and_before_anything_else() -> void:
+	assert_eq(Look.mood(_plain(), _train(0.0, 59.9)), "calm")
+	assert_eq(Look.mood(_plain(), _train(0.0, 60.0)), "frozen")
+	assert_eq(Look.mood(_plain(), _train(100.0, 60.0)), "frozen", "fear quiets unrest")
+	var angry := _plain("rel", -100)
+	angry["sit"][0] = 0.0
+	assert_eq(Look.mood(angry, _train(100.0, 60.0)), "frozen", "and anger, and cold")
+
+
+func test_tension_stirs_every_car_from_sixty_and_before_cold_or_hunger() -> void:
+	assert_eq(Look.mood(_plain(), _train(59.9, 0.0)), "calm")
+	assert_eq(Look.mood(_plain(), _train(60.0, 0.0)), "stir")
+	assert_eq(Look.mood(_plain("sit0", 10.0), _train(60.0, 0.0)), "stir", "unrest shows before cold")
+
+
+func test_a_community_opposed_or_with_two_grudges_stirs_its_own_car() -> void:
+	var train := _train(20.0, 0.0)
+	assert_eq(Look.mood(_plain("rel", -39), train), "calm")
+	assert_eq(Look.mood(_plain("rel", -40), train), "stir")
+	assert_eq(Look.mood(_plain("grudge", 1), train), "calm")
+	assert_eq(Look.mood(_plain("grudge", 2), train), "stir")
+	var cold_and_angry := _plain("rel", -40)
+	cold_and_angry["sit"][0] = 10.0
+	assert_eq(Look.mood(cold_and_angry, train), "stir")
+
+
+func test_cold_or_hunger_weighs_a_car_down_below_forty_five() -> void:
+	var train := _train(20.0, 0.0)
+	assert_eq(Look.mood(_plain("sit0", 45.0), train), "calm")
+	assert_eq(Look.mood(_plain("sit0", 44.9), train), "low", "warmth")
+	assert_eq(Look.mood(_plain("sit1", 45.0), train), "calm")
+	assert_eq(Look.mood(_plain("sit1", 44.9), train), "low", "ration")
+	assert_eq(Look.mood(_plain("sit2", 100.0), train), "calm", "crowding alone picks places, not the mood")
+
+
+func test_a_car_without_a_community_follows_the_train_only() -> void:
+	assert_eq(Look.mood({}, _train(20.0, 0.0)), "calm")
+	assert_eq(Look.mood({}, _train(60.0, 0.0)), "stir")
+	assert_eq(Look.mood({}, _train(60.0, 60.0)), "frozen")
+
+
+func test_the_default_rules_start_with_a_low_tail_and_calm_cars_ahead() -> void:
+	var train: Dictionary = rules["train"]
+	assert_eq(Look.mood(_comm("tail"), train), "low")
+	for id in ["medtech", "guard", "front", "engine"]:
+		assert_eq(Look.mood(_comm(id), train), "calm", id)
+
+
+func test_every_mood_has_a_name_and_a_whole_look() -> void:
+	var keys: Array = (Look.MOOD_LOOK["calm"] as Dictionary).keys()
+	for m in MOODS:
+		assert_true(Look.MOOD_NAMES.has(m), m)
+		var look: Dictionary = Look.mood_look(m)
+		assert_eq(look.keys(), keys, m)
+		assert_lte(int(look["movers"][0]), int(look["movers"][1]), m)
+		assert_gt(float(look["speed"]), 0.0, m)
+		assert_between(float(look["stand"]), 0.0, 1.0, m)
+	assert_eq(Look.mood_look("nonsense"), Look.mood_look("calm"), "a mood nobody knows looks calm")
+
+
+func test_the_mood_sets_how_many_walk() -> void:
+	assert_eq(Look.movers(16, "calm"), 4)
+	assert_eq(Look.movers(16, "low"), 2)
+	assert_eq(Look.movers(4, "low"), 1)
+	assert_eq(Look.movers(16, "stir"), 4)
+	assert_eq(Look.movers(8, "stir"), 3, "more than a calm car of eight")
+	assert_eq(Look.movers(2, "stir"), 2, "never more than the car holds")
+	assert_eq(Look.movers(16, "frozen"), 1)
+	assert_eq(Look.movers(1, "frozen"), 0)
+	for m in MOODS:
+		assert_eq(Look.movers(0, m), 0, m)
+
+
 # ---------------------------------------------------------------- places and postures
 
 func test_split_adds_up_and_hunches_only_the_seated() -> void:
+	for m in MOODS:
+		for count in range(17):
+			for w in WARMTHS:
+				for crowd in CROWDS:
+					var s: Dictionary = Look.split(count, float(w), float(crowd), m)
+					var label := "%s, %d people, warmth %s, crowding %s" % [m, count, w, crowd]
+					assert_eq(int(s["walk"]) + int(s["stand"]) + int(s["bench"]) + int(s["floor"]), count, label)
+					assert_lte(int(s["huddled"]), int(s["bench"]) + int(s["floor"]), label)
+					assert_gte(int(s["bench"]), 0, label)
+
+
+func test_only_a_stirred_car_stands_about() -> void:
 	for count in range(17):
-		for w in WARMTHS:
-			for crowd in CROWDS:
-				var s: Dictionary = Look.split(count, float(w), float(crowd))
-				var label := "%d people, warmth %s, crowding %s" % [count, w, crowd]
-				assert_eq(int(s["walk"]) + int(s["bench"]) + int(s["floor"]), count, label)
-				assert_lte(int(s["huddled"]), int(s["bench"]) + int(s["floor"]), label)
+		for m in ["calm", "low", "frozen"]:
+			assert_eq(Look.split(count, 50.0, 50.0, m)["stand"], 0, "%s, %d people" % [m, count])
+	assert_eq(Look.split(16, 50.0, 50.0, "stir")["stand"], 4, "sixteen: four walk, four of the twelve stand")
+	assert_eq(Look.split(13, 50.0, 50.0, "stir")["stand"], 3)
 
 
 func test_cold_huddles_the_seated_and_warmth_does_not() -> void:
@@ -144,37 +249,74 @@ func test_nobody_sits_on_the_floor_below_sixty_crowding() -> void:
 
 
 func test_seating_has_a_row_a_person_in_the_split_postures() -> void:
-	for count in range(17):
-		for w in WARMTHS:
-			for crowd in CROWDS:
-				var rows: Array = Look.seating(count, float(w), float(crowd))
-				var s: Dictionary = Look.split(count, float(w), float(crowd))
-				var walk := 0
-				var bench := 0
-				var on_floor := 0
-				var huddled := 0
-				for r in rows:
-					match String(r["pose"]):
-						"walk":
-							walk += 1
-						"sit":
-							bench += 1
-						"floor":
-							on_floor += 1
-					huddled += 1 if bool(r["huddled"]) else 0
-				var label := "%d people, warmth %s, crowding %s" % [count, w, crowd]
-				assert_eq(rows.size(), count, label)
-				assert_eq(walk, int(s["walk"]), label)
-				assert_eq(bench, int(s["bench"]), label)
-				assert_eq(on_floor, int(s["floor"]), label)
-				assert_eq(huddled, int(s["huddled"]), label)
+	for m in MOODS:
+		for count in range(17):
+			for w in WARMTHS:
+				for crowd in CROWDS:
+					var rows: Array = Look.seating(count, float(w), float(crowd), m)
+					var s: Dictionary = Look.split(count, float(w), float(crowd), m)
+					var seen := {"walk": 0, "stand": 0, "sit": 0, "floor": 0}
+					var huddled := 0
+					for r in rows:
+						seen[String(r["pose"])] += 1
+						huddled += 1 if bool(r["huddled"]) else 0
+					var label := "%s, %d people, warmth %s, crowding %s" % [m, count, w, crowd]
+					assert_eq(rows.size(), count, label)
+					assert_eq(seen, {"walk": s["walk"], "stand": s["stand"], "sit": s["bench"], "floor": s["floor"]}, label)
+					assert_eq(huddled, int(s["huddled"]), label)
 
 
-func test_those_who_walk_do_not_huddle() -> void:
-	for count in range(17):
-		for r in Look.seating(count, 5.0, 100.0):
-			if r["pose"] == "walk":
-				assert_false(bool(r["huddled"]), "%d people" % count)
+func test_those_who_walk_or_stand_about_do_not_huddle() -> void:
+	for m in MOODS:
+		for count in range(17):
+			for r in Look.seating(count, 5.0, 100.0, m):
+				if r["pose"] == "walk" or r["pose"] == "stand":
+					assert_false(bool(r["huddled"]), "%s, %d people" % [m, count])
+
+
+func test_only_a_frightened_car_bows_its_head_and_only_the_seated() -> void:
+	for m in MOODS:
+		for r in Look.seating(16, 50.0, 100.0, m):
+			var seated: bool = r["pose"] == "sit" or r["pose"] == "floor"
+			assert_eq(bool(r["bowed"]), m == "frozen" and seated, "%s, %s" % [m, r["pose"]])
+
+
+func test_seat_places_do_not_repeat_spread_or_gathered() -> void:
+	for gather in [false, true]:
+		var seen: Dictionary = {}
+		for k in 15:
+			var slot: int = Look.seat_slot(k, 15, gather)
+			assert_between(slot, 0, 14, "place %d" % k)
+			seen[slot] = true
+		assert_eq(seen.size(), 15, "gathered" if gather else "spread")
+
+
+func test_the_spread_sit_apart_and_the_gathered_fill_from_the_middle() -> void:
+	var spread: Array = []
+	var gathered: Array = []
+	for k in 5:
+		spread.append(Look.seat_slot(k, 15, false))
+		gathered.append(Look.seat_slot(k, 15, true))
+	assert_eq(spread, [0, 4, 8, 12, 1])
+	assert_eq(gathered, [7, 8, 6, 9, 5])
+
+
+func test_frost_grows_as_the_car_cools_and_the_stove_dies() -> void:
+	assert_eq(Look.frost(100.0), 0.0)
+	assert_eq(Look.frost(45.0), 0.0, "no frost from the cold step up")
+	assert_almost_eq(Look.frost(30.0), 0.5, 0.001)
+	assert_eq(Look.frost(15.0), 1.0)
+	assert_eq(Look.frost(0.0), 1.0)
+	assert_eq(Look.stove(0.0), 0.0)
+	assert_eq(Look.stove(30.0), 0.0, "out in a freezing car")
+	assert_almost_eq(Look.stove(50.0), 0.5, 0.001)
+	assert_eq(Look.stove(70.0), 1.0)
+	assert_eq(Look.stove(100.0), 1.0)
+	for i in range(1, WARMTHS.size()):
+		var colder: float = WARMTHS[i - 1]
+		var warmer: float = WARMTHS[i]
+		assert_gte(Look.frost(colder), Look.frost(warmer), "frost at %s and %s" % [colder, warmer])
+		assert_lte(Look.stove(colder), Look.stove(warmer), "stove at %s and %s" % [colder, warmer])
 
 
 # ---------------------------------------------------------------- trips
