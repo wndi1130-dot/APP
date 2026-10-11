@@ -230,3 +230,26 @@ func test_a_baked_body_changing_motion_keeps_the_frame_it_was_in_for_a_moment() 
 	assert_eq(DeadBody.frame_of(DeadBody.FALL, 1.0), DeadBody.FALL * 32 + 31, "a motion played once ends on its last frame")
 	assert_eq(DeadBody.frame_of(99, 0.5), 0, "an unknown motion has none")
 
+
+func test_a_standing_baked_body_sways_by_a_clock_the_drawing_side_keeps() -> void:
+	var z := _body("frozen")
+	var first := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(first.g, float(DeadBody.STAND))
+	assert_eq(first.b, 1.0, "the shader's clock is not used")
+	assert_almost_eq(first.r, 0.37, 0.001, "from the body's own number")
+	z["age"] += 0.05
+	var pace := lerpf(0.82, 1.18, fposmod(0.37 * 7.31, 1.0))
+	var second := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_almost_eq(second.r - first.r, 0.05 * pace / float(DeadBody.SECONDS[DeadBody.STAND]), 0.0001, "at its own pace")
+	z["age"] += 0.05
+	assert_almost_eq(DeadBody.custom(z, 0.0, 1.0, 1.0, true).r, second.r, 0.0001, "held still it stays in its frame")
+	z["age"] += 30.0
+	assert_almost_eq(DeadBody.custom(z, 0.0, 0.0, 1.0, true).r - second.r, DeadBody.SWAY_CAP * pace / float(DeadBody.SECONDS[DeadBody.STAND]), 0.0001, "a long gap is not played through")
+	# A folder's own length is used where it gives one.
+	for n in 5:
+		DeadBody.table.append([n * 32, 32, true, 1.5])
+	var grabbing := _body("grab")
+	var a := DeadBody.custom(grabbing, 0.0, 0.0, 1.0, true)
+	grabbing["age"] += 0.03
+	assert_almost_eq(DeadBody.custom(grabbing, 0.0, 0.0, 1.0, true).r - a.r, 0.03 * pace / 1.5, 0.0001)
+
