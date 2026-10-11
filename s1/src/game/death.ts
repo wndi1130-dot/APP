@@ -1,7 +1,8 @@
+import { bump } from './ledger';
 import { COMM_NAME, COMMS, P } from './data';
 import type { Comm } from './data';
 import { CORPSE_LAWS } from './data';
-import { clamp, journal, lawActive, storyOf } from './state';
+import { journal, lawActive, storyOf } from './state';
 import type { Game } from './state';
 import { afterDeath } from './people';
 
@@ -58,7 +59,7 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
       if (!flags.first_corpse_agenda || flags.first_corpse_agenda === 'none') flags.first_corpse_agenda = 'own';
     }
     g.corpseIssue = true;
-    g.tension = clamp(g.tension + 3 * n, 0, 100);
+    bump(g, 'tension', 3 * n, 'corpse');
     g.thrown += n;
   }
   journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad');

@@ -1,3 +1,4 @@
+import { bump, bumpRel } from '../ledger';
 import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
@@ -131,7 +132,7 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   d.restoring = id;
   const delta = relDelta(g, id, variant);
   d.log.restores.push({ seg: g.seg, id, ...(variant ? { v: variant } : {}) });
-  if (!relApplied) for (const [c, n] of Object.entries(delta) as [Comm, number][]) g.comms[c].rel = clamp(g.comms[c].rel + n, -100, 100);
+  if (!relApplied) for (const [c, n] of Object.entries(delta) as [Comm, number][]) bumpRel(g, c, n, 'tech');
   journal(g, `공방이 ${techTitle(g, id)} 복원을 시작했다${mode === 'defect' ? '(결함판)' : ''}.${asked ? ' 다음 회기에 배관 추인을 받아야 끝난다.' : ''}`);
   return true;
 }
@@ -336,8 +337,8 @@ function convertGreenhouse(g: Game, car: string): void {
     if (g.stored > 0) {
       g.thrown += g.stored;
       if (lawActive(g, 'corpse_store')) {
-        g.tension = clamp(g.tension + 5, 0, 100);
-        g.trust = clamp(g.trust - 3, 0, 100);
+        bump(g, 'tension', 5, 'corpse');
+        bump(g, 'trust', -3, 'corpse');
         journal(g, `냉동칸 안치법을 지킬 수 없게 됐다. 시신 ${g.stored}구를 선로에 내놓았다.`, 'bad');
       }
       g.stored = 0;

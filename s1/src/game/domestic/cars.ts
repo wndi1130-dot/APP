@@ -1,6 +1,7 @@
+import { bump, bumpRel } from '../ledger';
 import { COMMS } from '../data';
 import type { Comm } from '../data';
-import { clamp, journal, lawActive, rnd } from '../state';
+import { journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
 import { offend } from '../politics';
 import { CAR_COMM, COMM_CARS, D, GREENHOUSE_CARS, ZONE_WARM } from './data';
@@ -68,10 +69,10 @@ export function applyMove(g: Game, order: string[]): boolean {
   const pv = previewMove(g, order);
   if (pv.why || pv.moved.length === 0) return false;
   const d = dom(g);
-  g.coal -= pv.coal;
+  bump(g, 'coal', -pv.coal, 'refit');
   for (const c of COMMS) {
     if (pv.warm[c]) g.comms[c].base[0] += pv.warm[c]!;
-    if (pv.rel[c]) g.comms[c].rel = clamp(g.comms[c].rel + pv.rel[c]!, -100, 100);
+    if (pv.rel[c]) bumpRel(g, c, pv.rel[c]!, 'refit');
   }
   if (pv.frontPushed) offend(g, 'front');
   d.cars = [...order];
@@ -151,7 +152,7 @@ export function doBury(g: Game): void {
   g.stored -= n;
   d.stats.buried += n;
   if (lawActive(g, 'corpse_store')) {
-    for (const c of ['medtech', 'front', 'tail'] as Comm[]) g.comms[c].rel = clamp(g.comms[c].rel + D.buryRel, -100, 100);
+    for (const c of ['medtech', 'front', 'tail'] as Comm[]) bumpRel(g, c, D.buryRel, 'bury');
   }
   journal(g, `언 땅을 파 냉동칸의 시신 ${n}구를 묻었다.`, 'good');
 }

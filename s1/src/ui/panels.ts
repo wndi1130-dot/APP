@@ -112,14 +112,16 @@ const RECAP_KEYS = [['trust', '신임'], ['tension', '긴장'], ['coal', '석탄
 /** 방금 정산한 구간에 내가 한 일과 그 결과(사용자 2026-10-11: "내가 이렇게 선택해서 열차가 이렇게 바뀌었구나").
  *  까닭 기록(meterLog, resLog)에서 그 구간의 줄을 일의 이름으로 묶는다. 정산 자체는 뺀다. 최근 RECAP_ROWS개. */
 export function segRecap(g: Game): { label: string; parts: string[] }[] {
-  const logs: ({ seg: number; label: string } & Partial<Record<(typeof RECAP_KEYS)[number][0], number>>)[] = [...(g.meterLog ?? []), ...(g.resLog ?? [])];
+  const logs: ({ seg: number; label: string; sys?: string } & Partial<Record<(typeof RECAP_KEYS)[number][0], number>>)[] = [...(g.meterLog ?? []), ...(g.resLog ?? [])];
   const rels = g.relLog ?? [];
-  const settled = [...logs, ...rels].filter(r => r.label === '구간 정산').map(r => r.seg);
+  // 열차가 굴러가며 생긴 줄(sys)은 내가 한 일이 아니다. 옛 저장은 '구간 정산'이라는 이름으로만 가린다.
+  const mine = (r: { label: string; sys?: string }): boolean => !r.sys && r.label !== '구간 정산';
+  const settled = [...logs, ...rels].filter(r => r.sys === 'settle' || r.label === '구간 정산').map(r => r.seg);
   if (settled.length === 0) return [];
   const seg = Math.max(...settled);
   const sums = new Map<string, Record<string, number>>();
   for (const r of logs) {
-    if (r.seg !== seg || r.label === '구간 정산') continue;
+    if (r.seg !== seg || !mine(r)) continue;
     const sum = sums.get(r.label) ?? {};
     for (const [k] of RECAP_KEYS) sum[k] = (sum[k] ?? 0) + (r[k] ?? 0);
     sums.set(r.label, sum);
@@ -127,7 +129,7 @@ export function segRecap(g: Game): { label: string; parts: string[] }[] {
   // 집단 관계는 수치 뒤에, 크게 바뀐 것부터 적는다.
   const relSums = new Map<string, Partial<Record<Comm, number>>>();
   for (const r of rels) {
-    if (r.seg !== seg || r.label === '구간 정산') continue;
+    if (r.seg !== seg || !mine(r)) continue;
     const sum = relSums.get(r.label) ?? {};
     for (const c of COMMS) if (r.rel[c]) sum[c] = (sum[c] ?? 0) + r.rel[c]!;
     relSums.set(r.label, sum);

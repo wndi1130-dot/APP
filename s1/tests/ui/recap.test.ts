@@ -36,6 +36,16 @@ describe('구간 끝에 내가 한 일', () => {
     ]);
   });
 
+  it('열차가 굴러가며 생긴 줄(sys)은 내가 한 일에 넣지 않고, 정산한 구간은 그 줄로도 알아본다', () => {
+    const g = createS1cGame('recap-3');
+    g.meterLog = [{ seg: 4, label: '물렸다: 팔을 자른다', trust: 2, tension: 0 }];
+    g.resLog = [
+      { seg: 4, label: '아픈 사람 돌봄', coal: 0, food: 0, med: -2, lux: 0, sys: 'settle' },
+      { seg: 4, label: '정차에서 더 실어 온 것', coal: 3, food: 0, med: 0, lux: 0, sys: 'auto' },
+    ];
+    expect(segRecap(g)).toEqual([{ label: '물렸다: 팔을 자른다', parts: ['신임 +2'] }]);
+  });
+
   it('정산 기록이 없으면(옛 저장, 첫 구간 도중) 비어 있고, 줄 수는 상한까지만이다', () => {
     const g = createS1cGame('recap-2');
     expect(segRecap(g)).toEqual([]);

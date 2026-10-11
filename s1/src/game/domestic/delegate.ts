@@ -1,6 +1,7 @@
+import { bumpRel } from '../ledger';
 import { COMMS } from '../data';
 import type { Comm } from '../data';
-import { clamp, journal, rnd, situation } from '../state';
+import { journal, rnd, situation } from '../state';
 import type { Game } from '../state';
 import { CAR_COMM, D, TECHS, TECH_IDS } from './data';
 import type { TechId } from './data';
@@ -113,15 +114,15 @@ export function delegateTick(g: Game): void {
     const tails = d.cars.filter(id => CAR_COMM[id] === 'tail');
     const car = tails.some(id => d.insulated.includes(id)) ? undefined : tails.find(id => jobCheck(g, 'insulate', id).ok);
     if (car && startJob(g, 'insulate', car)) {
-      g.comms.tail.rel = clamp(g.comms.tail.rel + D.idealTailRel, -100, 100);
+      bumpRel(g, 'tail', D.idealTailRel, 'delegate');
       journal(g, `${chief.name}이(가) 우선 일 사이에 꼬리칸 단열을 끼워 넣었다.`);
     }
   }
   if (d.delegate.policy === 'ours') {
     const fr = friendly(g);
-    for (const c of COMMS) g.comms[c].rel = clamp(g.comms[c].rel + (fr.includes(c) ? (g.comms[c].rel < 35 ? 1 : 0) : -1), -100, 100);
+    for (const c of COMMS) bumpRel(g, c, fr.includes(c) ? (g.comms[c].rel < 35 ? 1 : 0) : -1, 'delegate');
     if (g.seg % 3 === 0 && rnd(g) < 0.3) {
-      for (const c of COMMS) if (!fr.includes(c)) g.comms[c].rel = clamp(g.comms[c].rel - 3, -100, 100);
+      for (const c of COMMS) if (!fr.includes(c)) bumpRel(g, c, -3, 'delegate');
       journal(g, '공방이 늘 같은 칸 일부터 한다는 말이 돈다. 공정성 시비가 붙었다.', 'bad');
     }
   }

@@ -1,6 +1,7 @@
+import { bump, bumpRel } from './ledger';
 import { COMMS, COMM_NAME, TRAIT_BAN, TRAITS } from './data';
 import type { Comm, Trait } from './data';
-import { addCard, clamp, drawPerson, isGone, journal, lawActive, PROFILES, situation } from './state';
+import { addCard, drawPerson, isGone, journal, lawActive, PROFILES, situation } from './state';
 import type { Game, Leader, Profile } from './state';
 import { domesticAide } from './domestic/state';
 import familiesJson from '../../generated/profile_families.json';
@@ -190,7 +191,7 @@ function elderNightTick(g: Game, rnd: () => number): void {
   if (rnd() >= ELDER_NIGHT.chance) return;
   g.elderHeld = null;
   g.comms[h.comm].pop = Math.max(1, g.comms[h.comm].pop - 1);
-  g.comms[h.comm].rel = clamp(g.comms[h.comm].rel + ELDER_NIGHT.rel, -100, 100);
+  bumpRel(g, h.comm, ELDER_NIGHT.rel, 'elder');
   (g.left ??= []).push(h.who);
   journal(g, `${h.who}이(가) 밤에 혼자 내렸다.`, 'dark');
 }
@@ -242,7 +243,7 @@ function weakTick(g: Game): void {
   const b = g.born;
   if (!b || !b.weak || b.left <= 0) return;
   if (g.med >= 1) {
-    g.med -= 1;
+    bump(g, 'med', -1, 'sick');
     b.left -= 1;
     if (b.left === 0) {
       b.weak = false;
