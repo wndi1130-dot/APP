@@ -53,6 +53,9 @@ export const P = Object.freeze({
   // 식량이 모자라 덜 가져가면 2마다 못 돌아옴 +5%p(최대 +20%p). 값: 돌아오면 신임·관계, 못 돌아오면 칸 관계·긴장·공포.
   tripShortLost: 0.05, tripShortMax: 0.20, tripTrustForced: 5, tripRelCrew: 4, tripRelDeputy: 3, tripWaitTension: 2,
   tripLostRel: -8, tripLostTension: 8, tripLostFear: 5, promiseLux: 2, promiseRel: 4, promiseSkipRel: -2, promiseBrokenTrust: -8,
+  // 과밀이 병으로 이어지는 고리(결정 060 덧붙임, 숫자는 제안): 과밀 문턱 60·80·95의 병 위험 배수(낮음 0, 보통 1, 높음 1.25, 매우 높음 1.5)에
+  // 구간마다 열병이 시작될 확률 crowdFever와 다쳤을 때 곪을 확률 crowdSeptic을 곱한다.
+  crowdFrom: [60, 80, 95], crowdMult: [0, 1, 1.25, 1.5], crowdFever: 0.06, crowdSeptic: 0.15,
   // 공간 레버 0~2단: 한 단에 꼬리칸 과밀 −10, 내주는 칸 +10. 당길 때 내주는 칸 관계 −3, 당겨 둔 동안 구간마다 단당 −1.
   spaceStep: 10, spaceMax: 2, spacePullRel: -3, spaceHoldRel: -1,
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').

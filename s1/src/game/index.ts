@@ -1,5 +1,6 @@
 export * from './data';
 export * from './state';
+export * from './crowd';
 export * from './ledger';
 export * from './politics';
 export * from './motions';
