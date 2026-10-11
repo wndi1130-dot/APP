@@ -24,7 +24,7 @@ extends Node3D
 const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -37,6 +37,17 @@ const FALL_RANGE: float = 40.0
 const FALL_FAR: float = 25.0          # farther than this only the ground is heard
 const FALL_AT_ONCE: int = 3           # this many falls are followed, the nearest
 const FALL_SAME: float = 0.06         # one beat is not played twice within this
+## The doors of a held train (field_holdout): group, loudness, pitch low and
+## high. A blow is as loud as any knock of its level, times the number here;
+## a wall going down and a door giving way have their own loudness.
+const DOOR_VOICES: Dictionary = {
+	"door": ["door_bang", 1.0, 0.9, 1.1],
+	"low": ["door_bang", 1.0, 0.8, 0.95],        # a damaged door sounds lower
+	"wall": ["door_bang", 0.8, 1.1, 1.25],       # thin planks
+	"wall_down": ["door_wall", 0.9, 0.95, 1.05],
+	"break": ["door_break", 1.0, 0.95, 1.05],
+}
+const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -66,6 +77,7 @@ var last_tag_group: String = ""        # what the last make_sound played (tests)
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
+var quiet: bool = false                # the caller voices this sound itself
 var falls: Array = []                  # falls being followed: {"z", "i": next beat, "gun"}
 var fall_heard: Dictionary = {}        # zombie id -> the fall of its that was taken up
 var fall_last: Dictionary = {}         # group -> field time it last played
@@ -359,8 +371,23 @@ func radio(kind: String) -> void:
 	_one_shot(group, game.player.position, float(RADIO_LOUD.get(kind, 0.6)), 1.0)
 
 
+## A door of the held train, for the player's ear only: no rule hears it.
+## Until the files are in, it is the knock there was.
+func door(kind: String, at: Vector3, level: int) -> void:
+	var v: Array = DOOR_VOICES[kind]
+	var group: String = v[0]
+	played.append(group)
+	var loud: float = float(v[1])
+	if DOOR_BLOWS.has(kind):
+		loud *= clampf(0.35 + 0.2 * level, 0.3, 1.0)
+	var d: float = at.distance_to(game.player.position)
+	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])))
+
+
 ## A sound the dead can hear is also one the player hears (field make_sound).
 func on_sound(at: Vector3, level: int, tag: String) -> void:
+	if quiet:
+		return
 	var group := ""
 	if tag == "whistle":
 		if departing:
