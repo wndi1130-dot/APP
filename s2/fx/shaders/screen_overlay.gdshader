@@ -50,11 +50,16 @@ void fragment() {
 		edge = half_ext - dot(d, dir);
 		side = smoothstep(0.0, 0.5, dot(normalize(d + 1e-4), dir) + 0.3);
 	}
-	float n = fx_fbm2(uv * vec2(aspect, 1.0) * 14.0);
-	float fern = fx_crystal(uv * vec2(aspect, 1.0) * 26.0);
 	float reach = edge_frost * side * 0.22;
-	float frost = edge_frost > 0.001 ? 1.0 - smoothstep(reach - 0.02, reach + 0.03, edge + (n - 0.5) * 0.06) : 0.0;
-	frost *= 0.55 + 0.45 * fern;
+	float frost = 0.0;
+	// Past reach + 0.06 the frost is nothing whatever the noise says, so the
+	// middle of the screen skips its noise (ten of the sixteen lookups).
+	if (edge_frost > 0.001 && edge < reach + 0.07) {
+		float n = fx_fbm2(uv * vec2(aspect, 1.0) * 14.0);
+		float fern = fx_crystal(uv * vec2(aspect, 1.0) * 26.0);
+		frost = 1.0 - smoothstep(reach - 0.02, reach + 0.03, edge + (n - 0.5) * 0.06);
+		frost *= 0.55 + 0.45 * fern;
+	}
 
 	// Storm layers. Skipped (no noise cost) on an ordinary stop.
 	float bank = 0.0;

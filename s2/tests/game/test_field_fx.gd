@@ -321,3 +321,25 @@ func test_snow_banks_against_walls_the_wind_blows_at() -> void:
 			if MapView.drift_uv(game.grid, Vector2i(x, y)) != Vector2.ZERO:
 				banked += 1
 	assert_gt(banked, 50)
+
+
+# Drawn small, the frost's veins went soft: it is drawn at full size again, on the edges only.
+func test_storm_frost_is_full_size_strips_along_the_edges() -> void:
+	var game = _storm_stop("during")
+	game._update_storm()
+	var view: Vector2 = game.get_viewport().get_visible_rect().size
+	assert_eq(float(game.storm_screen.material.get_shader_parameter("edge_frost")), 0.0, "not in the small page")
+	assert_eq(game.storm_frost.get_child_count(), 4)
+	var covered := 0.0
+	for strip in game.storm_frost.get_children():
+		assert_eq(strip.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+		assert_gt(float(strip.material.get_shader_parameter("edge_frost")), 0.0)
+		covered += strip.size.x * strip.size.y
+	assert_lt(covered, view.x * view.y * 0.6, "the middle of the view is left alone")
+	var deep: float = game.storm_frost.get_child(0).size.y
+	assert_gte(deep, (float(game.storm["edge_frost"]) * game.FROST_REACH + 0.06) * view.y, "as far in as frost can reach")
+	assert_eq(game.storm_frost.get_child(2).position, Vector2(0, deep), "no strip overlaps another")
+	game.hud._debug_storm()
+	assert_false(game.storm_frost.visible, "the test key takes it off with the screen layer")
+	var code := FileAccess.get_file_as_string("res://fx/shaders/screen_overlay.gdshader")
+	assert_true(code.contains("edge < reach + 0.07"), "the shader skips frost noise away from the edge")
