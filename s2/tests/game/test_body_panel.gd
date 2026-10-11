@@ -123,9 +123,29 @@ func test_the_most_urgent_wound_comes_chosen() -> void:
 	assert_eq(hud.body_part, "leg_right", "the part that bleeds most")
 	assert_eq(hud.body_buttons.size(), 1)
 	assert_true(is_same(hud.body_buttons[0]["wound"], p.body.wounds[worst]))
-	assert_true(String(hud.body_parts["leg_right"].text).contains("찢김"))
-	assert_true(String(hud.body_parts["arm_right"].text).contains("골절"))
-	assert_eq(String(hud.body_parts["torso"].text), "몸통", "a whole part shows its name only")
+	assert_true(hud.body_look["leg_right"]["kinds"].has("찢김"))
+	assert_true(hud.body_look["arm_right"]["kinds"].has("골절"))
+	assert_true(hud.body_look["arm_right"]["cracked"], "a broken part shows a crack")
+	assert_true(hud.body_look["torso"]["kinds"].is_empty(), "a whole part says nothing")
+	assert_ne(hud.body_look["leg_right"]["fill"], hud.body_look["torso"]["fill"], "and is not the colour of a bleeding one")
+
+
+func test_the_body_is_one_figure_and_a_press_lands_on_one_part_only() -> void:
+	var hud = game.hud
+	hud.body_panel()
+	assert_eq(hud.body_parts.size(), 6)
+	var parts: Array = hud.body_parts.keys()
+	for i in parts.size():
+		var a: Rect2 = hud.body_parts[parts[i]].get_rect()
+		assert_gte(a.size.x, 44.0, parts[i] + " is wide enough for a thumb")
+		assert_gte(a.size.y, 60.0)
+		for k in range(i + 1, parts.size()):
+			assert_false(a.grow(-0.5).intersects(hud.body_parts[parts[k]].get_rect()), "%s and %s do not share a press" % [parts[i], parts[k]])
+		# The picture of a part lies inside where its press lands.
+		for v: Vector2 in hud.BODY_SHAPES[parts[i]]:
+			assert_true(hud.BODY_LAYOUT[parts[i]].grow(5.0).has_point(v), "%s is drawn where it is pressed" % parts[i])
+	hud.body_parts["arm_left"].pressed.emit()
+	assert_eq(hud.body_part, "arm_left", "pressing a part chooses it")
 
 
 func test_no_wounds_opens_on_the_torso_with_nothing_to_do() -> void:
@@ -405,11 +425,10 @@ func test_a_festering_part_wears_a_sallow_rim_and_says_so() -> void:
 	p.body.set_festering(p.body.add_wound("arm_left", "laceration", 0.0, 0.0), true)
 	p.body.add_wound("leg_right", "laceration", 0.0)
 	hud.body_panel(p, "leg_right")
-	var arm: Button = hud.body_parts["arm_left"]
-	assert_true(String(arm.text).contains("곪음"))
-	var sb: StyleBoxFlat = arm.get_theme_stylebox("normal")
-	assert_eq(sb.border_color, hud.FESTER_RIM)
-	assert_gt(sb.border_width_left, 0)
-	assert_lt(sb.border_color.r - sb.border_color.g, 0.1, "not red")
-	assert_eq(hud.body_parts["leg_right"].get_theme_stylebox("normal").border_color, hud.BRASS, "the chosen one keeps its brass")
+	var arm: Dictionary = hud.body_look["arm_left"]
+	assert_true(arm["festering"], "and its word is drawn on it")
+	assert_eq(arm["rim"], hud.FESTER_RIM)
+	assert_gt(float(arm["rim_w"]), 2.0)
+	assert_lt(arm["rim"].r - arm["rim"].g, 0.1, "not red")
+	assert_eq(hud.body_look["leg_right"]["rim"], hud.BRASS, "the chosen one keeps its brass")
 
