@@ -252,6 +252,9 @@ function eventBindDiagnostics(value: Record<string, unknown>, add: (path: string
   if (speaker !== 'faction_leader' && value.faction !== undefined) add('/faction', 'warning', 'event.faction', 'faction은 말하는 이가 faction_leader일 때만 읽는다.');
 }
 
+/** why·later 한 줄의 길이 상한(구현명세 라: 40~60자 권장, 70자 이하) */
+const WHY_MAX = 70;
+
 function textSpecDiagnostics(kind: ContentKind, value: Record<string, unknown>, add: (path: string, severity: Severity, code: string, message: string) => void): void {
   if (kind === 'event' && Array.isArray(value.choices)) {
     const seen = new Map<string, number>();
@@ -259,6 +262,10 @@ function textSpecDiagnostics(kind: ContentKind, value: Record<string, unknown>, 
       if (!isRecord(choice) || typeof choice.id !== 'string') return;
       if (seen.has(choice.id)) add(`/choices/${index}/id`, 'error', 'text.choice_id', `선택지 id ${choice.id}이(가) ${seen.get(choice.id)}번 선택지와 겹친다. 번역 키가 같아진다.`);
       else seen.set(choice.id, index);
+      // 그 칸의 사정 한 줄(why): 없으면 경고, 70자를 넘겨도 경고. 오류로 막지 않는다.
+      if (typeof choice.why !== 'string' || choice.why.trim() === '') add(`/choices/${index}/why`, 'warning', 'text.why_missing', `선택지 ${choice.id}에 why(그 칸의 사정 한 줄)가 없다.`);
+      else if (choice.why.length > WHY_MAX) add(`/choices/${index}/why`, 'warning', 'text.why_long', `why가 ${choice.why.length}자다. ${WHY_MAX}자 이하로 줄인다.`);
+      if (typeof choice.later === 'string' && choice.later.length > WHY_MAX) add(`/choices/${index}/later`, 'warning', 'text.why_long', `later가 ${choice.later.length}자다. ${WHY_MAX}자 이하로 줄인다.`);
     });
   }
   const texts = rules.text_fields[kind].flatMap(pattern => selectPaths(value, pattern))

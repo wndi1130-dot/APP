@@ -43,6 +43,8 @@ export type ContentEffect =
   | { type: 'deal' | 'chronicle'; id: string };
 export interface ContentChoice {
   id: string; label: string; say?: string;
+  /** 그 칸의 사정 한 줄(값이 왜 그렇게 나오는지), 나중에 돌아올 것 한 줄. 화면은 아직 안 읽는다 */
+  why?: string; later?: string;
   /** 모두 참일 때만 카드에 보인다. 자원이 모자라면 회색이 아니라 숨긴다 */
   requires?: ResourceCondition[]; effects: ContentEffect[]; followups: string[];
   witnesses: (string | { person: string; text: string })[];
