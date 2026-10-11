@@ -9,9 +9,9 @@ export type Panel = null | 'unrest' | 'support' | 'journal' | 'menu' | 'debug' |
 
 /** S1c 내정 창의 화면 상태(ui/domestic.ts). S1a 판에선 쓰지 않는다. */
 export interface DomUi {
-  tab: 'workshop' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean;
-  /** 공방 창에서 펼쳐 둔 접힌 줄(맡기기 고르기, 차례 바꾸기, 개조 목록). 한 번에 하나만 */
-  ws?: 'delegate' | 'order' | 'jobs' | null;
+  tab: 'workshop' | 'modify' | 'plan' | 'board' | 'move'; node: string | null; order: string[] | null; mats: boolean;
+  /** 공방 창에서 펼쳐 둔 접힌 줄(맡기기 고르기, 차례 바꾸기). 한 번에 하나만 */
+  ws?: 'delegate' | 'order' | null;
   /** 열차 관리 화면에서 부상 명부 판을 펼쳤나 */
   med?: boolean;
   /** 기술 카드에서 「더」를 눌러 긴 글을 펼쳤나 */

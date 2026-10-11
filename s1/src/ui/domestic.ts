@@ -201,14 +201,49 @@ function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
     h('div', { class: 'dom-row' },
       fold('order', h('span', { class: 'sub' }, '차례 '),
         ...d.order.flatMap((t, i) => [i ? ' › ' : null, h('span', { class: cx(empty(t) && 'is-dim') }, taskName(t))])),
-      jobs.length ? fold('jobs', '개조…', h('small', { class: 'num' }, ` ${jobs.length}`)) : null),
+      jobs.length ? h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'modify' }, '개조…', h('small', { class: 'num' }, ` ${jobs.length}`)) : null),
     open === 'order' ? h('ol', { class: 'dom-order dom-fold' }, d.order.map((t, i) => h('li', null,
       h('span', { class: 'num' }, i + 1),
       h('span', { class: cx('dom-order__name', empty(t) && 'is-dim') },
         t === 'restore' && d.restoring ? `복원: ${techTitle(g, d.restoring)}` : t === 'modify' && d.job ? `개조: ${jobTitle(d.job.kind, d.job.car)}` : taskName(t)),
-      h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null,
-    open === 'jobs' && jobs.length ? h('div', { class: 'dom-row dom-fold' },
-      jobs.map(x => h('button', { class: 'chip', 'data-action': 'dom-job', 'data-kind': x.k, 'data-car': x.c }, jobTitle(x.k, x.c)))) : null);
+      h('button', { class: 'nav', 'data-action': 'dom-order', 'data-task': t, 'data-step': '-1', disabled: lockOrder || i === 0, 'aria-label': '앞으로' }, '↑')))) : null);
+}
+
+const MOD_KINDS: { k: ModKind; name: string; cost: string }[] = [
+  { k: 'insulate', name: '단열', cost: `목재 ${D.insulateWood}` },
+  { k: 'armor', name: '장갑', cost: `고철 ${D.armorScrap}` },
+];
+
+/** 그 칸에 이미 한 개조 이름들(단열, 장갑). */
+export function carMods(g: Game, car: string): string[] {
+  const d = g.dom!;
+  return [...(d.insulated.includes(car) ? ['단열'] : []), ...(d.armored.includes(car) ? ['장갑'] : [])];
+}
+
+/** 개조 화면(사용자 2026-10-11 「개조를 누르니 만들기가 뜬다」): 개조 종류마다 한 줄, 칸마다 칩 하나. 한 것은 ✓, 못 하는 까닭은 줄에 한 번만 적는다. */
+function modifyView(view: View): HTMLElement {
+  const g = view.g;
+  const d = g.dom!;
+  const cars = Object.keys(CAR_COMM).filter(c => c !== 'engine');
+  const here = view.ui.carPop;
+  const job = d.job;
+  return h('div', { class: 'dom-mod' },
+    h('div', { class: 'dom-now' },
+      gear(job ? 'work' : 'idle'),
+      h('span', null, job ? h('b', null, `${jobTitle(job.kind, job.car)} ${Math.round((job.progress / Math.max(1, job.need)) * 100)}%`) : '줄에 올린 개조 없음'),
+      h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+    MOD_KINDS.map(({ k, name, cost }) => {
+      const done = (c: string) => (k === 'insulate' ? d.insulated : d.armored).includes(c);
+      // 칸마다 같은 까닭(아직 모른다, 재료가 모자라다, 줄이 찼다)은 줄 머리에 한 번만 적는다.
+      const open = cars.filter(c => !done(c));
+      const why = open.length ? jobCheck(g, k, open[0]).why : undefined;
+      return h('div', { class: 'dom-mod__row' },
+        h('span', { class: 'dom-mod__kind' }, h('b', null, name), h('span', { class: 'cost num' }, cost), why ? h('span', { class: 'pol pol--gray' }, why) : null),
+        h('span', { class: 'dom-mod__cars' }, cars.map(c => h('button', {
+          class: cx('chip', done(c) && 'is-done', c === here && 'is-here'), 'data-action': 'dom-job', 'data-kind': k, 'data-car': c,
+          disabled: done(c) || !jobCheck(g, k, c).ok, 'aria-label': `${jobTitle(k, c)}${done(c) ? ' 끝남' : ''}`,
+        }, done(c) ? icon('check') : null, CAR_NAME[c] ?? c))));
+    }));
 }
 
 function storePop(view: View, car: CarDef): HTMLElement {
@@ -724,12 +759,13 @@ export function domesticPanel(view: View): HTMLElement | null {
   const tabs: { id: DomUi['tab']; label: string; show: boolean }[] = [
     // 이름은 화면 종류가 아니라 하려는 일로 부른다(사용자 2026-10-11).
     { id: 'workshop', label: '만들기', show: true },
+    { id: 'modify', label: '개조', show: true },
     { id: 'plan', label: '기술 되살리기', show: true },
     { id: 'board', label: '사람 키우기', show: true },
     { id: 'move', label: '칸 순서', show: moveOpen(g).ok },
   ];
   const tab = tabs.find(t => t.id === du.tab && t.show) ? du.tab : 'plan';
-  const body = tab === 'plan' ? planView(view) : tab === 'board' ? boardView(view) : tab === 'move' ? moveView(view)
+  const body = tab === 'plan' ? planView(view) : tab === 'board' ? boardView(view) : tab === 'move' ? moveView(view) : tab === 'modify' ? modifyView(view)
     : workshopPop(view, CARS.find(c => c.id === 'workshop')!, true);
   return h('div', { class: cx('side', 'dom-side', tab === 'plan' && 'dom-side--plan'), role: 'dialog', 'aria-label': '내정 창', 'data-keep-scroll': 'dom-side' },
     h('div', { class: 'drop__head' },
