@@ -4,17 +4,17 @@ extends RefCounted
 const DATA: Dictionary = {
 	"knife": {
 		"name": "칼", "kind": "melee", "hands": 1, "weight": 1.0, "sound": 0,
-		"reach": 1.0, "swing": 0.45, "head_base": 0.30, "head_kill": 0.85, "knockdown": 0.1,
+		"reach": 1.0, "swing": 0.45, "windup": 0.10, "head_base": 0.30, "head_kill": 0.85, "knockdown": 0.1,
 		"blade": true, "fatigue": 0.004, "wear": 0.01, "pry": false,
 	},
 	"crowbar": {
 		"name": "쇠지렛대", "kind": "melee", "hands": 1, "weight": 2.0, "sound": 0,
-		"reach": 1.15, "swing": 0.6, "head_base": 0.28, "head_kill": 0.6, "knockdown": 0.5,
+		"reach": 1.15, "swing": 0.6, "windup": 0.18, "head_base": 0.28, "head_kill": 0.6, "knockdown": 0.5,
 		"blade": false, "fatigue": 0.006, "wear": 0.004, "pry": true,
 	},
 	"axe": {
 		"name": "손도끼", "kind": "melee", "hands": 1, "weight": 3.0, "sound": 0,
-		"reach": 1.6, "swing": 0.9, "head_base": 0.32, "head_kill": 0.9, "knockdown": 0.6,
+		"reach": 1.6, "swing": 0.9, "windup": 0.30, "head_base": 0.32, "head_kill": 0.9, "knockdown": 0.6,
 		"blade": true, "fatigue": 0.012, "wear": 0.006, "pry": false,
 	},
 	"pistol": {
@@ -132,6 +132,18 @@ static func min_deg(id: String, quality: String, shooting_skill: int) -> float:
 static func wear_per_use(id: String, quality: String) -> float:
 	var d: Dictionary = get_data(id)
 	return float(d.get("wear", 0.0)) * float(quality_row(id, quality)["wear_mult"])
+
+
+## How long a melee weapon is drawn back before the blow lands (user 2026-10-11:
+## by the weapon's weight; first values knife 0.10, crowbar 0.18, hatchet 0.30 s,
+## to be set on the phone). It is the front part of the swing time, not added
+## to it. A melee weapon with no value of its own goes by its weight.
+static func melee_windup(id: String) -> float:
+	var d: Dictionary = get_data(id)
+	if d.is_empty() or d.get("kind", "") != "melee":
+		return 0.0
+	var w: float = float(d.get("windup", 0.1 * float(d.get("weight", 1.0))))
+	return minf(w, float(d.get("swing", w)) * 0.5)
 
 
 ## Strength against the weight in the hand (decisions 2026-10-11 '근접 타수'):

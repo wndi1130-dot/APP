@@ -19,6 +19,11 @@ const SHOVE_KNOCK: float = 0.35
 const SHOVE_TIME: float = 0.35
 const SHOVE_WINDUP: float = 0.15     # the arms come back first; then the shove lands (build 89: it was instant)
 const SHOVE_LUNGE: float = 0.15
+## What stops a melee blow while it is drawn back (opts["melee_break"], to be
+## shown on the phone): "grab" a grab on the one swinging stops it (as with the
+## shove), "none" nothing does. The time is spent either way.
+const WINDUP_BREAKS: Array[String] = ["grab", "none"]
+const WHIFF_RECOVER: float = 0.2        # the least a missed or stopped blow still costs
 const CLOSE: float = 1.8
 const JAM_CLEAR: float = 2.5
 const FALL_TIME: float = 1.5
@@ -64,6 +69,10 @@ func update(delta: float) -> void:
 					p.swing_t = 0.0
 					p.lunge_t = SHOVE_LUNGE
 					shove(p)
+		if p.strike_t > 0.0:
+			p.strike_t -= delta
+			if p.strike_t <= 0.0:
+				_land_strike(p)
 		if p.jam_t > 0.0:
 			p.jam_t -= delta * float(m["hands"])
 			if p.jam_t <= 0.0 and p == game.player:
@@ -224,7 +233,7 @@ func _pursue_zombie(p, delta: float) -> void:
 	if W.is_ranged(wid):
 		shove(p)
 	else:
-		swing(p, z)
+		start_swing(p, z)
 	if not p.hold_attack:
 		p.target_zombie = {}
 
@@ -341,7 +350,7 @@ func _pursue_person(p, delta: float) -> void:
 	p.stop()
 	p.face_point(o.position)
 	if p.swing_t <= 0.0:
-		swing_person(p, o)
+		start_swing(p, o)
 
 
 static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
@@ -351,6 +360,67 @@ static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
 	if to_a.length() < 0.01:
 		return false
 	return forward.dot(to_a.normalized()) < BEHIND_COS
+
+
+## A melee blow starts: the weapon is drawn back for its weight's time, then
+## it lands (swing, swing_person). `at` is a zombie's Dictionary or a person.
+## With no melee weapon in the hand it is the old shove, at once.
+func start_swing(p, at) -> void:
+	if p.swing_t > 0.0 or p.strike_t > 0.0:
+		return
+	var windup: float = W.melee_windup(p.weapon_id()) / float(p.mults()["swing"])
+	if windup <= 0.0:
+		_strike(p, at)
+		return
+	p.strike_at = at
+	p.strike_t = windup
+	p.strike_total = windup
+	p.swing_t = windup
+
+
+func _strike(p, at) -> void:
+	if at is Dictionary:
+		swing(p, at)
+	else:
+		swing_person(p, at)
+
+
+## The draw-back is over: the blow lands if the one swinging still can and
+## the target is still there to be hit; otherwise it is a miss that cost time.
+func _land_strike(p) -> void:
+	var at = p.strike_at
+	var windup: float = p.strike_total
+	p.strike_t = 0.0
+	p.strike_total = 0.0
+	p.strike_at = null
+	p.swing_t = 0.0
+	var stopped: bool = p.body.dead or p.body.downed or p.fallen_t > 0.0
+	if String(game.opts.get("melee_break", "grab")) == "grab" and not p.grabbers.is_empty():
+		stopped = true
+	if stopped or not _strike_reaches(p, at):
+		p.swing_t = WHIFF_RECOVER
+		return
+	_strike(p, at)
+	# The draw-back was the front of the swing time, not extra.
+	p.swing_t = maxf(p.swing_t - windup, WHIFF_RECOVER)
+
+
+func _strike_reaches(p, at) -> bool:
+	var d: Dictionary = W.get_data(p.weapon_id())
+	if d.is_empty() or d.get("kind", "") != "melee":
+		return false
+	var reach: float = float(d.get("reach", 0.9)) + MELEE_SLACK
+	var pos: Vector3
+	if at is Dictionary:
+		if not game.zombies.list.has(at) or String(at["state"]) == "dead":
+			return false
+		pos = at["pos"]
+	else:
+		if at == null or not is_instance_valid(at) or not at.is_alive():
+			return false
+		pos = at.position
+	# It may have stepped back a little while the weapon came round.
+	return p.position.distance_to(pos) <= reach + 0.3 and not melee_blocked(p, pos)
 
 
 ## One melee swing at a zombie (weapons.md S2 rows, zombies.md kinds).
