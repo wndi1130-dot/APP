@@ -136,8 +136,9 @@ func setup(map_data: Dictionary) -> void:
 		label_nodes.append([text, label["cell"], lv])
 
 
-## Manhole lid, or the culvert mouth; blocked shows a heavy plank stack on the lid.
-func update_manhole(key: String, blocked: bool) -> void:
+## Manhole lid, or the culvert mouth; blocked shows a heavy plank stack on the
+## lid, open shows the lid pushed aside and the dark of the hole.
+func update_manhole(key: String, blocked: bool, open: bool = false) -> void:
 	var node: MeshInstance3D = manhole_nodes[key]
 	var st := _begin()
 	if not key.begins_with("manhole") and not key.begins_with("culvert"):
@@ -148,6 +149,10 @@ func update_manhole(key: String, blocked: bool) -> void:
 	elif key.begins_with("culvert"):
 		box(st, Vector3(2.0, 0.9, 0.5), Vector3(0, 0.45, -0.4), Color(0.32, 0.31, 0.3))
 		box(st, Vector3(1.4, 0.7, 0.2), Vector3(0, 0.35, -0.12), Color(0.05, 0.05, 0.06))
+	elif open:
+		box(st, Vector3(1.0, 0.02, 1.0), Vector3(0, 0.01, 0), Color(0.03, 0.03, 0.04))
+		box(st, Vector3(1.1, 0.06, 1.1), Vector3(1.0, 0.05, 0.25), Color(0.18, 0.18, 0.2))
+		box(st, Vector3(0.9, 0.02, 0.15), Vector3(1.0, 0.09, 0.25), Color(0.3, 0.3, 0.32))
 	else:
 		box(st, Vector3(1.1, 0.06, 1.1), Vector3(0, 0.03, 0), Color(0.18, 0.18, 0.2))
 		box(st, Vector3(0.9, 0.02, 0.15), Vector3(0, 0.07, 0), Color(0.3, 0.3, 0.32))

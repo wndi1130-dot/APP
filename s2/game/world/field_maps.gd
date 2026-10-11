@@ -24,6 +24,9 @@ const OPTIONAL: Dictionary = {
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
 	"bands": {}, "train_doors": {}, "crossings": [], "barricade_slots": [], "interior_kind_slots": [],
 	"zone_names": {},
+	# Which way a hole that is not straight down opens (key -> Vector2i): the
+	# dead come out of a culvert that way. Left out: toward where they are going.
+	"hole_faces": {},
 	# What a stop on open line has none of.
 	"labels": [], "lights": [], "wagons": [], "stoves": [], "low_blocks": [], "trees": [],
 	"train_cars": [], "buildings": [], "upper_rects": [], "containers": {}, "spots": {},
