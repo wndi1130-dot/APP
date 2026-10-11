@@ -515,6 +515,17 @@ func test_the_screen_says_the_sound_the_people_made() -> void:
 	assert_eq(game.hud.noise_line(), "사람이 낸 소리 %d (조용함은 %d까지)" % [SimNoise.score(SimNoise.Level.LOUD), FieldHoldout.QUIET_NOISE])
 
 
+# The start screen hands every setting over, so "as the place has it" is a
+# number below nought and must not be read as a chance.
+func test_the_start_screens_unset_chance_is_the_places() -> void:
+	var plain = _game({"holdout": "roll"})
+	var unset = _game({"holdout": "roll", "holdout_chance": -1})
+	assert_eq(unset.holdout.chance(), plain.holdout.chance())
+	assert_eq(unset.holdout.rolled, plain.holdout.rolled)
+	var sure = _game({"holdout": "roll", "holdout_chance": 100})
+	assert_true(sure.holdout.rolled)
+
+
 func test_the_roll_is_the_same_for_a_seed_and_does_not_move_the_stops_dice() -> void:
 	var plain = _game({"seed": 11})
 	var a = _game({"seed": 11, "holdout": "roll"})

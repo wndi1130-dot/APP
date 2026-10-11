@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## The start menu keeps one layer however many settings are picked.
 
 const Boot = preload("res://game/boot.gd")
+const FieldHoldout = preload("res://game/field_holdout.gd")
 
 
 func test_picking_settings_does_not_pile_up_menu_layers() -> void:
@@ -23,4 +24,8 @@ func test_the_kind_of_stop_is_the_last_setting_and_starts_plain() -> void:
 	assert_eq(boot.CHOICES[boot.CHOICES.size() - 1][0], "mission")
 	assert_eq(boot.settings["mission"], "")
 	assert_eq(boot.settings["lungers"], false, "the lungers are off until picked")
+	# The switches for looking at a rare thing start at what the game has.
+	assert_eq(boot.settings["holdout_chance"], -1)
+	assert_eq(boot.settings["holdout_forecast_heard"], FieldHoldout.FORECAST_HEARD)
+	assert_eq(boot.settings["lungers_many"], false)
 

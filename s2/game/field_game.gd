@@ -722,6 +722,12 @@ func _spawn_dead() -> void:
 		zombies.spawn("dead", lift(row[0], int(row[1])))
 	for c in s.get("frozen_siding", []):
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
+	# A switch of the start screen, for looking at them: with the lungers on,
+	# every one of the dead put here that stands is one.
+	if bool(opts.get("lungers", false)) and bool(opts.get("lungers_many", false)):
+		for z in zombies.list:
+			if z["kind"] != "frozen" and z["stander"]:
+				z["lunger"] = true
 
 
 func people_alive() -> Array:
