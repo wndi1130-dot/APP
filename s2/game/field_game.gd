@@ -37,7 +37,6 @@ const StormLook = preload("res://fx/storm_look.gd")
 const AMBIENT_C: float = -14.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
-const HORDE_HOME := Vector2i(50, 10)   # the platform by the train: where a horde walks with no sound to follow
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
 const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
 const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
@@ -657,8 +656,9 @@ func _spawn_people() -> void:
 			{"id": "npc_raider_2", "name": "약탈자", "role": "raider", "skills": {"strength": 5, "melee": 2, "shooting": 2, "stealth": 2, "search": 1}, "hands": [["pistol", "crude", 0.7]], "brain": "advancer"},
 			{"id": "npc_raider_3", "name": "약탈자", "role": "raider", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 2, "search": 1}, "hands": [["axe", "factory", 0.8]], "brain": "flanker"},
 		]
-		var rs: Array = data["spawns"]["raiders"]
-		for i in range(rows.size()):
+		# A map with no place for them has none.
+		var rs: Array = data["spawns"].get("raiders", [])
+		for i in range(mini(rows.size(), rs.size())):
 			var r := make_person(rows[i], FieldGrid.center(rs[i]))
 			r.brain = {"role": rows[i]["brain"], "state": "idle", "aware": 0.0, "morale": 1.0, "seen_t": 0.0, "last_seen": Vector3.ZERO, "home": r.position, "aim_t": 0.0, "target": null, "fight_t": 0.0}
 			r.add_item("med_box", 1)
@@ -696,7 +696,10 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 
 func _spawn_dead() -> void:
 	var s: Dictionary = data["spawns"]
-	for key in ["dead_street", "dead_platform", "dead_siding_end"]:
+	# Every "dead_..." list of cells is a group standing about out of doors.
+	for key: String in s:
+		if not key.begins_with("dead_") or key == "dead_levels":
+			continue
 		for c in s[key]:
 			zombies.spawn("dead", FieldGrid.center(c))
 	for key in ["clothed_station", "clothed_shed"]:
@@ -705,7 +708,7 @@ func _spawn_dead() -> void:
 	# The dead indoors, on every floor and in the cellar.
 	for row in s.get("dead_levels", []):
 		zombies.spawn("dead", lift(row[0], int(row[1])))
-	for c in s["frozen_siding"]:
+	for c in s.get("frozen_siding", []):
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
 
 
@@ -1459,7 +1462,22 @@ func _squad_hunted() -> bool:
 func horde_target() -> Vector3:
 	if last_loud != null:
 		return last_loud
-	return FieldGrid.center(HORDE_HOME)
+	return FieldGrid.center(horde_home())
+
+
+## The cell by the train a horde walks to with no sound to follow; the radio's
+## "near the train" is measured from it too.
+func horde_home() -> Vector2i:
+	return data["anchors"]["horde_home"]
+
+
+## Ways in that are not sewers, in the order the fair spawn tries them.
+func road_entries() -> Array:
+	var out: Array = []
+	for key in director.entries:
+		if not director.sewer(key):
+			out.append(key)
+	return out
 
 
 func _start_horde(h: Dictionary) -> void:
@@ -1468,7 +1486,7 @@ func _start_horde(h: Dictionary) -> void:
 	# Fair spawn: roads and the track end never let anything in on screen; pick
 	# another road out of sight. Sewer mouths may be on screen: they rattle first.
 	if not director.sewer(key) and _entry_on_screen(key):
-		for other in ["east_track", "north_road", "south_road", "east_road"]:
+		for other in road_entries():
 			if not _entry_on_screen(other):
 				key = other
 				break
@@ -1489,7 +1507,7 @@ func _start_horde(h: Dictionary) -> void:
 		for z in zombies.list:
 			if z["state"] == "wander" and grid.zone_at(FieldGrid.cell_of(z["pos"])) == "D":
 				z["state"] = "investigate"
-				z["target"] = FieldGrid.center(Vector2i(50, 10))
+				z["target"] = FieldGrid.center(horde_home())
 				z["linger"] = 30.0
 				z["speed"] = Zombies.SPEED_SHAMBLE
 	forecast_t = 6.0
@@ -1602,7 +1620,7 @@ func set_radio(text: String, kind: String = "info", at = null) -> void:
 		if radio_near == "horde" and at != null and player != null and player.position.distance_to(at) > RADIO_NEAR_M:
 			return
 	var ring := RADIO_RING_URGENT if kind == "urgent" or kind == "must" else RADIO_RING
-	if radio_near == "train" and kind != "must" and player != null and player.position.distance_to(FieldGrid.center(HORDE_HOME)) > RADIO_NEAR_M:
+	if radio_near == "train" and kind != "must" and player != null and player.position.distance_to(FieldGrid.center(horde_home())) > RADIO_NEAR_M:
 		text = "…치직… (멀어서 알아들을 수 없다)"
 		ring = RADIO_RING
 	radio_last = now
@@ -1798,7 +1816,7 @@ func finish(reason: String) -> void:
 	var now := clock.elapsed
 	var platform: Rect2i = data["platform"]
 	if reason == "departed":
-		make_sound(FieldGrid.center(Vector2i(90, 4)), SimNoise.Level.VERY_LOUD, "whistle")
+		make_sound(FieldGrid.center(data["anchors"]["whistle"]), SimNoise.Level.VERY_LOUD, "whistle")
 	var boarded: Array = []
 	for p in squad + crew:
 		if not p.is_alive():

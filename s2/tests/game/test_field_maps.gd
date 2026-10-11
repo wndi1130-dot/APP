@@ -7,6 +7,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const SulehufMap = preload("res://game/world/sulehuf_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const TinyMap = preload("res://tests/game/fixtures/tiny_map.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 
 func _game(opts: Dictionary):
@@ -107,8 +108,36 @@ func test_the_train_has_doors_drawn_on_each_side_the_map_gives() -> void:
 	assert_almost_eq(float(faces[2]["z"]), 22.95, 0.001)
 
 
+func test_the_first_stop_steers_by_the_cells_it_always_did() -> void:
+	var game = _game({"seed": 3, "raiders": false, "auto_pause": false})
+	assert_eq(game.horde_home(), Vector2i(50, 10), "the platform by the train")
+	assert_eq(game.data["anchors"]["whistle"], Vector2i(90, 4))
+	assert_eq(game.data["anchors"]["flee_exit"], Vector2i(60, 99))
+	assert_eq(game.road_entries(), ["east_track", "north_road", "south_road", "east_road"], "the fair spawn tries them in this order")
+	assert_eq(game.combat._where(FieldGrid.center(Vector2i(50, 8))), "platform")
+	assert_eq(game.data["zone_names"][""], "sulechow", "anywhere unnamed")
+	assert_ne(FieldMaps.anchors(game.data)["horde_home"], Vector2i(50, 10), "the map's own cell is kept over the worked-out one")
+
+
+func test_a_map_that_names_no_cells_has_them_worked_out() -> void:
+	var tiny: Dictionary = FieldMaps.build_from(TinyMap)
+	var a: Dictionary = tiny["anchors"]
+	assert_eq(a["horde_home"], Vector2i(4, 2), "the train's door")
+	assert_eq(a["whistle"], Vector2i(1, 2), "the engine end, kept on the map")
+	assert_eq(a["flee_exit"], Vector2i(0, 5), "the far edge from the train")
+	assert_eq(tiny["zone_names"], {})
+
+
+func test_every_group_of_the_dead_a_map_lists_is_put_out() -> void:
+	var game = _game({"seed": 3, "raiders": false, "auto_pause": false})
+	game._take_map(FieldMaps.build_from(TinyMap))
+	game.zombies.list.clear()
+	game._spawn_dead()
+	assert_eq(game.zombies.list.size(), 2, "dead_yard's two, and no list this map leaves out is asked for")
+	assert_eq(game.combat._where(FieldGrid.center(Vector2i(2, 2))), "mine_99", "no zone names: the place itself")
+
+
 func test_blocked_ground_out_of_doors_is_drawn_as_runs() -> void:
-	var FieldGrid = preload("res://game/world/field_grid.gd")
 	var g = FieldGrid.new(12, 6)
 	for x in range(2, 7):
 		g.set_solid(Vector2i(x, 1), FieldGrid.Solid.BLOCK)
