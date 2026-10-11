@@ -50,7 +50,12 @@ const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
 const AISLE_MARGIN: float = 1.0
 const PACE_WAIT := Vector2(2.0, 6.0)    # a mover stands this long between walks
 const VISIT_SPREAD: float = 3.0
-const OUT_AT_ONCE: int = 1              # of one car, on a trip to another
+## A caller stops just inside the other car's doorway, on the aisle, and one of
+## that car's people on their feet comes over.
+const CALL_INSIDE: float = 1.0
+const CALL_APART: float = 0.7
+const CALL_FIRST := Vector2(10.0, 30.0)
+const OUT_AT_ONCE: int = 1              # of one car, on a trip or a call to another
 const OUT_IN_SESSION: int = 2
 const CAM_NEAR: float = 11.0            # metres of height on screen
 const CAM_FAR: float = 24.0
@@ -61,7 +66,7 @@ const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the 
 var rules: Dictionary = {}
 var opts: Dictionary = {}               # seed: int, panel: bool
 var problems := PackedStringArray()
-var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, values}]
+var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, call_t, call_i, mood, values}]
 var rng := RandomNumberGenerator.new()
 var camera: Camera3D
 var train: Node3D
@@ -129,12 +134,14 @@ func set_train(key: String, value) -> void:
 
 
 ## One tick of the people: movers pace their own aisle, and now and then one
-## takes a trip with a use to another car, stays and comes back.
+## takes a trip with a use to another car or calls at a friendly one, stays
+## and comes back.
 func step(delta: float) -> void:
 	clock += delta
 	for c in cars:
 		_step_lamp(c, delta)
 		_step_errand(c, delta)
+		_step_call(c, delta)
 		for b in c["bodies"]:
 			_step_body(c, b, delta)
 
@@ -322,6 +329,9 @@ func _step_body(c: Dictionary, b: Node3D, delta: float) -> void:
 				b.state = "visit"
 				b.timer = float(b.errand.get("stay", 5.0))
 		"visit":
+			# A caller waits for the first of the car who is free to come over.
+			if String(b.errand.get("id", "")) == "call" and not bool(b.errand.get("met", false)):
+				b.errand["met"] = _greet(b)
 			b.timer -= delta
 			if b.timer <= 0.0:
 				b.goal_x = b.slot.x
@@ -353,14 +363,58 @@ func _step_errand(c: Dictionary, delta: float) -> void:
 	var to := car(String(row["to"]))
 	if to.is_empty():
 		return
+	_send(c, to, row, float(to["x0"]) + CAR_LENGTH * 0.5 + rng.randf_range(-VISIT_SPREAD, VISIT_SPREAD))
+
+
+## Now and then one mover calls at a car its own is on good terms with: stops
+## in the doorway, has a word with whoever is about and walks home (2026-10-12:
+## calls between friendly cars, on top of the trips with a use). For show only.
+func _step_call(c: Dictionary, delta: float) -> void:
+	var calls: Dictionary = rules.get("calls", {})
+	if calls.is_empty() or not Look.calls_open(c["mood"], phase()):
+		return
+	c["call_t"] = float(c["call_t"]) - delta
+	if float(c["call_t"]) > 0.0:
+		return
+	c["call_t"] = float(calls["every"]) * rng.randf_range(0.8, 1.2) * float(Look.mood_look(c["mood"])["wait"])
+	var doors := Look.calls_for(c["def"], rules["cars"], rules.get("ideo", {}), float(calls.get("within", 0.0)))
+	if doors.is_empty() or int(c["out"]) >= OUT_AT_ONCE:
+		return
+	var to := car(String(doors[int(c["call_i"]) % doors.size()]))
+	c["call_i"] = int(c["call_i"]) + 1
+	if to.is_empty() or not Look.calls_open(to["mood"], phase()):
+		return
+	var ahead: bool = float(to["x0"]) > float(c["x0"])
+	var door: float = float(to["x0"]) + (CALL_INSIDE if ahead else CAR_LENGTH - CALL_INSIDE)
+	_send(c, to, {"id": "call", "to": to["id"], "stay": float(calls["stay"])}, door)
+
+
+## Send one of the car's movers who stands waiting to `to`; nobody goes when
+## all of them are walking.
+func _send(c: Dictionary, to: Dictionary, row: Dictionary, goal_x: float) -> void:
 	for b in c["bodies"]:
 		if b.state == "wait":
 			b.errand = row
 			b.visit_car = to["id"]
-			b.goal_x = float(to["x0"]) + CAR_LENGTH * 0.5 + rng.randf_range(-VISIT_SPREAD, VISIT_SPREAD)
+			b.goal_x = goal_x
 			b.state = "out"
 			c["out"] = int(c["out"]) + 1
 			return
+
+
+## One of the car's people who stands waiting comes over to the caller; false
+## while all of them are walking.
+func _greet(caller: Node3D) -> bool:
+	var host := car(String(caller.visit_car))
+	if host.is_empty():
+		return true
+	var inward: float = 1.0 if caller.position.x < float(host["x0"]) + CAR_LENGTH * 0.5 else -1.0
+	for h in host["bodies"]:
+		if h.state == "wait":
+			h.goal_x = caller.position.x + inward * CALL_APART
+			h.state = "pace"
+			return true
+	return false
 
 
 func _build_world() -> void:
@@ -416,6 +470,7 @@ func _build_train() -> void:
 		var c := {
 			"def": def, "id": String(def["id"]), "index": i, "x0": node.position.x, "node": node,
 			"bodies": [], "out": 0, "errand_t": rng.randf_range(2.0, 8.0), "errand_i": 0, "mood": "calm",
+			"call_t": rng.randf_range(CALL_FIRST.x, CALL_FIRST.y), "call_i": 0,
 		}
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)

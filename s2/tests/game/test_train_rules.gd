@@ -91,6 +91,41 @@ func test_an_errand_that_repeats_every_zero_seconds_is_caught() -> void:
 	_assert_caught(d, "every 0")
 
 
+func test_the_default_rules_give_every_community_its_three_axes() -> void:
+	var d := _rules()
+	for id in d["comms"]:
+		assert_eq((d["ideo"][id] as Array).size(), 3, String(id))
+	assert_gt(float(d["calls"]["every"]), 0.0)
+
+
+func test_rules_without_axes_or_calls_still_pass() -> void:
+	var d := _rules()
+	d.erase("ideo")
+	d.erase("calls")
+	assert_eq(Rules.check(d), PackedStringArray())
+
+
+func test_axes_of_two_numbers_or_of_nobody_are_caught() -> void:
+	var d := _rules()
+	d["ideo"]["tail"] = [1, -1]
+	_assert_caught(d, "two axes")
+	d = _rules()
+	d["ideo"]["ghosts"] = [0, 0, 0]
+	_assert_caught(d, "axes of no community")
+	d = _rules()
+	d["ideo"]["tail"] = [1, -1, 3]
+	_assert_caught(d, "an axis of 3")
+
+
+func test_calls_that_repeat_every_zero_seconds_are_caught() -> void:
+	var d := _rules()
+	d["calls"]["every"] = 0.0
+	_assert_caught(d, "calls every 0")
+	d = _rules()
+	d["calls"].erase("stay")
+	_assert_caught(d, "calls without a stay")
+
+
 # ---------------------------------------------------------------- the community of a car
 
 func test_a_community_car_gives_its_community_and_the_dining_car_none() -> void:

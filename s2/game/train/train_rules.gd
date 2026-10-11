@@ -79,6 +79,25 @@ static func check(d: Dictionary) -> PackedStringArray:
 			bad.append("errands: goes to no car (%s)" % str(e.get("to") if e is Dictionary else e))
 		elif float(e.get("every", 0.0)) <= 0.0 or float(e.get("stay", 0.0)) <= 0.0:
 			bad.append("errands.%s: every and stay above 0" % str(e.get("id")))
+	# Both are optional: without them nobody calls at another car.
+	var ideo = d.get("ideo", {})
+	if not (ideo is Dictionary):
+		bad.append("ideo: not an object")
+		ideo = {}
+	for id in ideo:
+		var axes = ideo[id]
+		if not comms.has(id):
+			bad.append("ideo.%s: no such community" % id)
+		elif not (axes is Array) or axes.size() != 3 or axes.any(func(v) -> bool: return not _in_range(v, -1.0, 1.0)):
+			bad.append("ideo.%s: three numbers from -1 to 1" % id)
+	var calls = d.get("calls", {})
+	if not (calls is Dictionary):
+		bad.append("calls: not an object")
+	elif not calls.is_empty():
+		if not _in_range(calls.get("within"), 0.0, 6.0):
+			bad.append("calls.within: %s" % str(calls.get("within")))
+		if not _in_range(calls.get("every"), 0.001, 100000.0) or not _in_range(calls.get("stay"), 0.001, 100000.0):
+			bad.append("calls: every and stay above 0")
 	return bad
 
 
