@@ -240,6 +240,8 @@ func _ready() -> void:
 	var kind: String = data["place_kind"]
 	receipt = Receipt.new(data["place_id"], kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
 	receipt.set_source("direct")
+	if not Receipt.PLACE_TYPES.has(kind):
+		receipt.place_note("placeKind", kind)   # what it really is, beside the type the contract knows
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
 	if not MISSIONS.has(mission):
