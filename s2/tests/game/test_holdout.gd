@@ -155,6 +155,21 @@ func test_called_on_leaving_it_opens_first_and_leaving_again_goes_early() -> voi
 	assert_eq(int(note["leftSec"]), 270)
 
 
+func test_a_map_with_doors_on_the_upper_side_only_or_none_still_holds() -> void:
+	var game = _game({"holdout": "depart"})
+	game.data["train_doors"] = {"upper": [Vector2i(40, 0), Vector2i(60, 0)]}
+	game.depart()
+	assert_eq(game.holdout.doors.size(), 2, "the upper side's")
+	assert_eq(game.holdout.target(3), FieldGrid.center(Vector2i(60, 0)))
+	var bare = _game({"holdout": "depart"})
+	bare.data["train_doors"] = {}
+	bare.depart()
+	assert_true(bare.holdout.on, "the clock still runs")
+	assert_eq(bare.holdout.target(0), FieldGrid.center(bare.horde_home()), "no door to walk to: where a horde always went")
+	bare.holdout.tick(1.0)
+	assert_string_contains(bare.goal_text(), "문 멀쩡 0")
+
+
 func test_the_stops_time_limit_waits_for_a_held_train() -> void:
 	var game = _game({"holdout": "start"})
 	game.clock.elapsed = game.clock.LIMIT_SEC + 1.0

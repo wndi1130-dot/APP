@@ -65,7 +65,12 @@ func begin() -> void:
 	opened_at = game.clock.elapsed
 	first_wave = game.director.index
 	var hp: int = int(game.opts.get("holdout_door_hp", DOOR_HP))
-	for c in game.data["train_doors"].get("lower", []):
+	# The doors held are one side's: the lower, or the upper where that is all there is.
+	var sides: Dictionary = game.data["train_doors"]
+	var cells: Array = sides.get("lower", [])
+	if cells.is_empty():
+		cells = sides.get("upper", [])
+	for c in cells:
 		doors.append({"cell": c, "hp": hp, "max": hp, "wall": 0, "bang_t": BANG_EVERY, "entered": {}, "node": null})
 	game.director.set_pace(FIRST_GAP, RATIO, MIN_GAP, opened_at)
 	game.set_radio("기관사: 불을 올린다. %d분만 문을 지켜라." % int(ceil(total / 60.0)), "must")
@@ -73,6 +78,8 @@ func begin() -> void:
 
 ## Where the n-th body of a horde walks: the doors in turn.
 func target(n: int) -> Vector3:
+	if doors.is_empty():
+		return FieldGrid.center(game.horde_home())
 	return FieldGrid.center(doors[n % doors.size()]["cell"])
 
 
