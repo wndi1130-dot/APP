@@ -153,3 +153,27 @@ func test_a_weapon_at_a_downed_body_is_drawn_coming_down() -> void:
 	game.combat.update(2.0)
 	p.refresh_view(false)
 	assert_false(p.has_meta(Pose.MODE))
+
+
+func test_bare_hands_at_a_downed_body_are_drawn_as_a_stomp() -> void:
+	var p = game.player
+	p.hands = []
+	var z := _rising()
+	z["state"] = "downed"
+	z["t"] = 20.0
+	game.combat.start_swing(p, z)
+	assert_eq(p.strike_kind, "stomp")
+	game.combat.update(0.25)
+	p.refresh_view(false)
+	var foot = p.get_meta(Pose.META)[2]
+	assert_true(foot.visible)
+	assert_gt(foot.position.y, 0.3, "the knee is up")
+	game.combat.update(0.25)
+	assert_eq(int(z.get("stomped", 0)), 1, "the boot has come down")
+	p.refresh_view(false)
+	assert_almost_eq(foot.position.y, Pose.FOOT_REST.y, 0.02, "on the ground as the rules land it")
+	assert_gt(foot.position.z, Pose.FOOT_REST.z + 0.3)
+	game.combat.update(0.3)
+	game.combat.update(2.0)
+	p.refresh_view(false)
+	assert_false(foot.visible, "the foot is put away")
