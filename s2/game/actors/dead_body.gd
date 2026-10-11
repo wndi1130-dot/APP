@@ -15,7 +15,9 @@ const FOLDER: String = "user://dead_body"
 const WALKS: int = 3                          # 0, 1, 2: three ways of walking
 const STAND: int = 3
 const LUNGE: int = 4
-const FALL: int = 6
+const FALL: int = 6                           # on its back
+const FALL_FRONT: int = 9                     # on its face
+const CRAWL: int = 10
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 
 
@@ -29,11 +31,19 @@ static func is_baked(vat: Dictionary) -> bool:
 	return vat.has("clips")
 
 
-## True when the baked fall puts this body on the ground by itself, so the whole
-## body is not turned over on top of it. A crawler has no motion of its own yet
-## and is still laid down whole.
-static func falls_by_motion(z: Dictionary, baked: bool) -> bool:
-	return baked and not z["crawl"]
+## True when the baked motions put this body on the ground by themselves (the
+## falls, the crawl), so the whole body is not turned over on top of them.
+static func falls_by_motion(_z: Dictionary, baked: bool) -> bool:
+	return baked
+
+
+## How far a baked body turns off the line it fell on as it goes down, so no
+## two lie alike (the same turn the boxes get; the roll onto a shoulder is left
+## to the motion). A crawler keeps to its line.
+static func ground_turn(z: Dictionary, down: float) -> float:
+	if z["crawl"]:
+		return 0.0
+	return float(DeadPose.sprawl(float(z["phase"]))["turn"]) * down
 
 
 ## Which of the three walks a body has: its own, from its number.
@@ -49,8 +59,14 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 		var clip := 1.0 if state == "chase" or state == "attack" or state == "grab" else 0.0
 		return Color(z["phase"], clip, still, shade)
 	var phase: float = z["phase"]
-	if down > 0.0 and not z["crawl"]:
-		return Color(fall_progress(z, down), float(FALL), 1.0, shade)
+	if z["crawl"]:
+		# A crawler drags itself along on its face; knocked down it lies as it crawled, and dead it lies as one fallen forward.
+		if state == "dead":
+			return Color(1.0, float(FALL_FRONT), 1.0, shade)
+		return Color(phase, float(CRAWL), 1.0 if state == "downed" else 0.0, shade)
+	if down > 0.0:
+		# Struck from behind it goes over on its face, otherwise on its back.
+		return Color(fall_progress(z, down), float(FALL_FRONT if DeadPose.fall_side(z) > 0.0 else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
 		return Color(phase, float(LUNGE), still, shade)
 	if state == "frozen" or state == "waking" or stands(z):

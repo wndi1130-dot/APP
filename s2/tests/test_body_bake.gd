@@ -40,7 +40,7 @@ func test_the_three_walks_differ_and_the_motion_numbers_fit_the_shader_table() -
 	var names: Array = []
 	for clip in BodyBake.CLIPS:
 		names.append(clip[0])
-	assert_eq(names, ["walk_a", "walk_b", "walk_c", "stand", "lunge", "hit", "fall", "run", "tell"], "the numbers the drawing side uses")
+	assert_eq(names, ["walk_a", "walk_b", "walk_c", "stand", "lunge", "hit", "fall", "run", "tell", "fall_front", "crawl"], "the numbers the drawing side uses")
 	assert_true(BodyBake.CLIPS.size() + 1 <= VatBaker.TABLE_SIZE, "with the still poses")
 	assert_ne(BodyBake.LAYERS["walk"]["damp"], BodyBake.LAYERS["walk_c"]["damp"], "a different leg drags")
 
@@ -50,6 +50,7 @@ func test_a_layer_value_is_a_number_or_a_swing_about_it() -> void:
 	assert_almost_eq(BodyBake._value([0.2, 0.1, 0.0], PI * 0.5), 0.3, 0.0001)
 	assert_almost_eq(BodyBake._value([0.2, 0.1, PI * 0.5], PI * 0.5), 0.2, 0.0001, "lagging a quarter turn")
 	assert_almost_eq(BodyBake._value([0.2, 0.1, 0.0, 2.0], PI * 0.25), 0.3, 0.0001, "two beats to a turn")
+	assert_almost_eq(BodyBake._value([[0.2, 0.1, 0.0], [0.5, 0.0, 0.0]], PI * 0.5), 0.8, 0.0001, "a list of them adds up")
 
 
 func test_turn_and_aim_move_a_bone_and_what_hangs_on_it() -> void:
@@ -149,6 +150,7 @@ func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_
 	for clip in BodyBake.OWN_CLIPS:
 		own_names.append(clip[0])
 		assert_eq(clip[1], "", "%s takes nothing from a motion set" % clip[0])
+		assert_gt(float(clip[5]), 0.0, "and says how long it is")
 		assert_true(BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
 	assert_eq(own_names, names, "the drawing side's numbers hold either way")
 	assert_eq(BodyBake.OWN_POSES.size(), BodyBake.POSES.size())
