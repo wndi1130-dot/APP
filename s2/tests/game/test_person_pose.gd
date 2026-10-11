@@ -104,3 +104,76 @@ func test_a_shove_after_a_swing_is_not_drawn_as_a_swing() -> void:
 	p.refresh_view(false)
 	assert_true(Pose.swing_state(p).is_empty())
 	assert_eq(p.weapon_mesh.position, Pose.WEAPON_REST)
+
+
+# ---------------------------------------------------------------- a body on the ground
+
+func test_what_is_drawn_follows_the_rules_kind_and_the_target() -> void:
+	assert_eq(Pose.strike_mode(null, {"state": "chase"}), "swing")
+	assert_eq(Pose.strike_mode("swing", {"state": "downed"}), "floor", "a weapon at a body on the ground comes down")
+	assert_eq(Pose.strike_mode("stomp", {"state": "downed"}), "stomp")
+	assert_eq(Pose.strike_mode("swing", null), "swing")
+
+
+func test_a_floor_blow_goes_up_then_down_in_front_of_the_feet() -> void:
+	var up: Dictionary = Pose.floor_strike_at(Pose.DRAW, 0.0, false)
+	var hit: Dictionary = Pose.floor_strike_at(1.0, 0.0, true)
+	var home: Dictionary = Pose.floor_strike_at(1.0, 1.0, true)
+	assert_gt((up["pos"] as Vector3).y, Pose.WEAPON_REST.y + 0.3)
+	assert_lt((hit["pos"] as Vector3).y, Pose.WEAPON_REST.y - 0.4, "down at the ground")
+	assert_gt(float(hit["lean"]), 0.5, "bent over it")
+	assert_almost_eq((home["pos"] as Vector3).distance_to(Pose.WEAPON_REST), 0.0, 0.001)
+
+
+func test_a_stomp_lifts_the_foot_then_puts_it_down_ahead() -> void:
+	var up: Dictionary = Pose.stomp_at(Pose.DRAW, 0.0, false)
+	var hit: Dictionary = Pose.stomp_at(1.0, 0.0, true)
+	var home: Dictionary = Pose.stomp_at(1.0, 1.0, true)
+	assert_gt((up["pos"] as Vector3).y, 0.5, "knee up")
+	assert_lt(float(up["lean"]), 0.0)
+	assert_almost_eq((hit["pos"] as Vector3).y, Pose.FOOT_REST.y, 0.001, "on the ground")
+	assert_gt((hit["pos"] as Vector3).z, Pose.FOOT_REST.z + 0.3, "ahead of the body")
+	assert_almost_eq((home["pos"] as Vector3).distance_to(Pose.FOOT_REST), 0.0, 0.001)
+
+
+func test_a_weapon_at_a_downed_body_is_drawn_coming_down() -> void:
+	var p = game.player
+	_hold("crowbar")
+	var z := _rising()
+	z["state"] = "downed"
+	z["t"] = 8.0
+	game.combat.start_swing(p, z)
+	game.combat.update(0.1)
+	p.refresh_view(false)
+	assert_eq(p.get_meta(Pose.MODE), "floor")
+	assert_gt(p.weapon_mesh.position.y, Pose.WEAPON_REST.y, "going up first")
+	assert_false(p.get_meta(Pose.META)[2].visible, "no foot for a weapon blow")
+	game.combat.update(0.2)
+	assert_eq(z["state"], "dead", "one blow ends it, as before")
+	game.combat.update(2.0)
+	p.refresh_view(false)
+	assert_false(p.has_meta(Pose.MODE))
+
+
+func test_bare_hands_at_a_downed_body_are_drawn_as_a_stomp() -> void:
+	var p = game.player
+	p.hands = []
+	var z := _rising()
+	z["state"] = "downed"
+	z["t"] = 20.0
+	game.combat.start_swing(p, z)
+	assert_eq(p.strike_kind, "stomp")
+	game.combat.update(0.25)
+	p.refresh_view(false)
+	var foot = p.get_meta(Pose.META)[2]
+	assert_true(foot.visible)
+	assert_gt(foot.position.y, 0.3, "the knee is up")
+	game.combat.update(0.25)
+	assert_eq(int(z.get("stomped", 0)), 1, "the boot has come down")
+	p.refresh_view(false)
+	assert_almost_eq(foot.position.y, Pose.FOOT_REST.y, 0.02, "on the ground as the rules land it")
+	assert_gt(foot.position.z, Pose.FOOT_REST.z + 0.3)
+	game.combat.update(0.3)
+	game.combat.update(2.0)
+	p.refresh_view(false)
+	assert_false(foot.visible, "the foot is put away")
