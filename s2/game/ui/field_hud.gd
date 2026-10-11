@@ -95,6 +95,7 @@ var overlay: Control
 var clock_label: Label
 var sun_bar: ProgressBar
 var weather_label: Label
+var goal_label: Label                 # this stop's goals, under the weather (none on a plain stop)
 var radio_label: Label
 var radio_left: float = 0.0
 var portrait: PanelContainer
@@ -293,6 +294,9 @@ func _build_top() -> void:
 	v.add_child(sun_bar)
 	weather_label = _label(game.weather.label() + " · 영하 14도", 16, DIM)
 	v.add_child(weather_label)
+	if game.mission_play != null and game.mission_play.active():
+		goal_label = _label(game.mission_play.goal_line(), 16, BRASS)
+		v.add_child(goal_label)
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tl)
 	radio_label = _label("", 22, INK)
@@ -566,6 +570,8 @@ func tick(delta: float) -> void:
 	frame_ms = lerpf(frame_ms, delta * 1000.0, 0.1)
 	var p = game.player
 	clock_label.text = game.clock.label()
+	if goal_label != null:
+		goal_label.text = game.mission_play.goal_line()
 	sun_bar.value = game.clock.sun_fraction()
 	radio_left -= delta
 	radio_label.modulate.a = clampf(radio_left / 1.5, 0.0, 1.0)
