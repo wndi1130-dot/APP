@@ -6,7 +6,8 @@ import {
   workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy,
 } from '../game';
 import { copyText } from './clip';
-import type { Comm, DomPerson, Field, Game, ModKind, Task, TechId, Upkeep, Variant } from '../game';
+import type { Comm, DomPerson, Field, Game, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
+import { P, isSessionSeg, potMult, potView } from '../game';
 import { cx, h, raw, s } from './dom';
 import { icon } from './icons';
 import type { IconName } from './icons';
@@ -267,15 +268,80 @@ function storePop(view: View, car: CarDef): HTMLElement {
     }, r.label))) : null);
 }
 
+/** 찬 칸 앞쪽(얼음)에 드는 식량 상한. 결정 054·066의 값을 판에 찍기만 한다. 규칙 값이 코드에 오면 그쪽에서 읽는다. */
+const ICE_CAP_SHOWN = 20;
+
+/** 찬 칸 판의 낱말 둘(결정 054·066): 「얼음 n/20 · 안치 n/6」. 시신 법이 서기 전에는 「안치 —」이고, 죽은 사람 이야기는 법이 선 뒤에만 뜬다. */
+export function coldLine(g: Game): { text: string; law: boolean; more: string } {
+  const waiting = g.pyre ?? 0;
+  const law = lawActive(g, 'corpse_store') || lawActive(g, 'corpse_burn') || g.stored + waiting > 0;
+  const ice = `얼음 0/${ICE_CAP_SHOWN}`;
+  if (!law) return { text: `${ice} · 안치 —`, law, more: '난방을 끊은 낡은 객차다. 창마다 성에가 두껍다. 무엇을 둘지는 법으로 정한다.' };
+  return {
+    text: `${ice} · 안치 ${g.stored + waiting}/${coldCap(g)}${waiting ? ` · 장작불 기다림 ${waiting}` : ''}`, law,
+    more: `뒤쪽은 죽은 사람을 모셔 두는 자리다. ${coldCap(g)}구를 넘으면 녹는 사고가 두 배다. 길게 머무는 정차에서 묻고 갈 수 있다.`,
+  };
+}
+
 function coldPop(view: View, car: CarDef): HTMLElement {
-  const g = view.g;
-  const d = g.dom!;
-  const store = lawActive(g, 'corpse_store');
+  const line = coldLine(view.g);
   return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
     popHead(car),
-    // 구실 한 줄(사용자 2026-10-11: 왜 있는 칸인지 모르겠다). 규칙 그대로: 시신만 둔다, 식량은 창고칸에 둔다.
-    h('p', { class: 'carpop__text' }, `죽은 사람을 모셔 두는 칸이다. 지금 ${g.stored + (g.pyre ?? 0)}/${coldCap(g)}구. `,
-      tip('더 보기', `식량은 여기 두지 않는다(창고칸에 둔다). ${coldCap(g)}구를 넘으면 녹는 사고가 두 배다.${g.pyre ? ` ${g.pyre}구는 다음 정차 장작불을 기다린다.` : ''}${store ? '' : ' 시신을 어떻게 할지는 법으로 정한다.'} 길게 머무는 정차에서 묻고 갈 수 있다.`)));
+    h('p', { class: 'carpop__text num' }, `${line.text} `, tip('더 보기', line.more)));
+}
+
+export const POT_NAME: Record<PotMode, string> = { plain: '그대로', thin: '묽게', mixed: '섞어서' };
+
+/** 솥 덩이에 적는 숫자(결정 067). 문장 없이 낱말과 수만: 곱, 구간 식량, 목재, 들킬 확률. 누르기 전에 바뀔 값이 먼저 보인다. */
+export function potFacts(g: Game, mode: PotMode): { mult: string; food: string; wood: string; risk: number; cells: number } {
+  const pv = potView(g);
+  const ch = pv.choices.find(x => x.mode === mode) ?? pv.choices[0]!;
+  const one = (n: number) => (Math.round(n * 10) / 10).toString();
+  return {
+    mult: `×${potMult(mode).toFixed(2)}`, food: `식량 ${one(ch.food)}/구간`, wood: ch.wood > 0 ? `목재 ${one(ch.wood)}/구간` : '',
+    risk: Math.round(ch.risk * 100), cells: ch.risk > 0 ? Math.max(1, Math.min(5, Math.round(ch.risk * 5))) : 0,
+  };
+}
+
+/** 식당칸 판의 「솥」 덩이: 조리 담당 얼굴, 방식 칩 셋, 숫자 한 줄. 열차 전체에 하나라 식당칸에서만 고른다. */
+function potBlock(view: View): HTMLElement {
+  const g = view.g;
+  const pv = potView(g);
+  const who = pv.cook.name ?? COMM_NAME[pv.cook.comm];
+  const f = potFacts(g, pv.mode);
+  return h('div', { class: 'dom-pot' },
+    h('div', { class: 'dom-pot__head' },
+      portrait(who, pv.cook.comm), h('span', { class: 'sub' }, '조리 담당'), pv.cook.name ? nameBtn(pv.cook.name) : h('b', null, who),
+      h('span', { class: 'dom-pot__chips' }, pv.choices.map(ch => h('button', {
+        class: cx('chip', pv.mode === ch.mode && 'is-on'), 'data-action': 'dom-pot', 'data-mode': ch.mode,
+        disabled: !ch.ok, title: ch.why ?? '', 'aria-pressed': pv.mode === ch.mode ? 'true' : 'false',
+      }, POT_NAME[ch.mode], !ch.ok && ch.why ? h('small', null, ` ${ch.why}`) : null)))),
+    h('div', { class: 'dom-pot__nums num' },
+      h('b', null, f.mult), h('span', null, f.food), f.wood ? h('span', null, f.wood) : null,
+      h('span', { class: cx('dom-pot__risk', f.risk > 0 && 'is-red') }, '들킴 ',
+        f.risk > 0 ? h('span', { class: 'dom-pot__cells', 'aria-hidden': 'true' }, [0, 1, 2, 3, 4].map(i => h('i', { class: cx(i < f.cells && 'is-on') }))) : null,
+        f.risk > 0 ? ` ${f.risk}%` : '—'),
+      f.risk > 0 && pv.lawDouble ? h('span', { class: 'is-red' }, '들키면 벌 ×2') : null,
+      pv.active !== pv.mode ? h('span', { class: 'is-red' }, `목재가 없어 ${POT_NAME[pv.active]}`) : null));
+}
+
+/** 식당칸 판(결정 067): 솥 덩이와, 지금까지 있던 의회 문. */
+function diningPop(view: View, car: CarDef): HTMLElement {
+  const g = view.g;
+  const left = isSessionSeg(g.seg) ? 0 : P.sessionEvery - (g.seg % P.sessionEvery);
+  return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
+    popHead(car),
+    potBlock(view),
+    h('p', { class: 'carpop__text' }, g.phase === 'council' ? '회기가 열렸다. ' : left === 0 ? '이번 구간에 회기가 열린다.' : `다음 회기까지 ${left}구간.`,
+      g.phase === 'council' ? h('button', { class: 'btn', 'data-action': 'go', 'data-screen': 'council' }, '의회로') : null));
+}
+
+/** 사람 사는 칸 판의 배급 레버 곁에 뜨는 점(결정 067): 솥이 불리는 중이면 「불린 식량」. 누르면 식당칸 판으로 간다. */
+export function potDot(view: View): HTMLElement | null {
+  const pv = potView(view.g);
+  if (!pv.on || pv.active === 'plain') return null;
+  return h('button', { class: 'chip dom-potdot', 'data-action': 'car', 'data-car': 'dining', 'aria-label': `불린 식량: ${POT_NAME[pv.active]}. 식당칸 판 열기` },
+    h('i', { class: 'dot' }), '불린 식량');
 }
 
 function extraPop(view: View, car: CarDef): HTMLElement {
@@ -292,6 +358,7 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
   if (car.id === 'workshop') return workshopPop(view, car);
   if (car.id === 'store') return storePop(view, car);
   if (car.id === 'cold') return coldPop(view, car);
+  if (car.id === 'dining') return diningPop(view, car);
   if (view.g.dom.extraCars.some((k, i) => car.id === `${k}${i + 1}`)) return extraPop(view, car);
   return null;
 }
@@ -412,7 +479,7 @@ export function domesticStopRows(view: View): HTMLElement | null {
   if (g.stored > 0) {
     const b = buryOpen(g);
     rows.push(h('div', { class: 'field field--row' },
-      h('span', { class: 'field__label' }, '냉동칸'),
+      h('span', { class: 'field__label' }, '찬 칸'),
       h('button', { class: cx('chip', d.bury && 'is-on'), 'data-action': 'dom-bury', 'data-on': d.bury ? '0' : '1', disabled: !b.ok && !d.bury, title: b.why ?? '' },
         `묻고 간다(${Math.min(D.buryMax, g.stored)}구)`, h('small', null, ` 산출 ×${D.buryHaul}`)),
       !b.ok ? h('small', { class: 'sub' }, b.why) : null));
@@ -1020,6 +1087,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-apprentice':
     case 'dom-manual':
     case 'dom-hot':
+    case 'dom-pot':
     case 'dom-full':
     case 'dom-job':
     case 'dom-escort':

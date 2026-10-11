@@ -1219,8 +1219,18 @@ func on_person_died(p: Person) -> void:
 	# Everyone is already infected: the body stands up again (zombies.md).
 	var z := zombies.add_rising(p.position, p.display_name)
 	p.brain["rising_id"] = z["id"]
-	for item in p.items:
-		ground_items.append({"pos": p.position, "id": item, "n": p.items[item]})
+	if p.team == "raider":
+		# What a raider had stays on it until someone goes through it (user 2026-10-11).
+		var loot: Array = []
+		for h in p.hands:
+			loot.append({"id": h["id"], "n": 1, "weapon": h.duplicate()})
+		for item in p.items:
+			loot.append({"id": item, "n": p.items[item]})
+		p.set_weapon_slots([])
+		zombies.set_loot(z, loot)
+	else:
+		for item in p.items:
+			ground_items.append({"pos": p.position, "id": item, "n": p.items[item]})
 	p.items.clear()
 	if p == player:
 		_check_end()

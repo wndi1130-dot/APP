@@ -22,6 +22,16 @@ const ATTACK_RANGE: float = 0.85
 const WINDUP: float = 0.8
 const GET_UP: Vector2 = Vector2(5.0, 9.0)
 const RISE_TIME: float = 30.0
+## What a fallen one may have on it (user 2026-10-11: now and then, small
+## things). First values, to be set on the phone: one in ten; a bandage, or one
+## or two rounds. Rolled once, the first time it goes down; knocking the same
+## one down again rolls nothing. Rows are [weight, entry, most].
+const LOOT_CHANCE: float = 0.1
+const LOOT_TABLE: Array = [
+	[4, {"id": "bandage"}, 1],
+	[3, {"ammo": "pistol"}, 2],
+	[3, {"ammo": "shell"}, 2],
+]
 const FRESH_STIFFEN: float = 240.0
 const WAKE_TIME: float = 2.0
 const NEAR: float = 32.0
@@ -38,6 +48,7 @@ const TINTS: Dictionary = {"dead": Color(0.5, 0.52, 0.47), "clothed": Color(0.36
 var game  # field_game.gd
 var list: Array[Dictionary] = []
 var next_id: int = 1
+var loot_rng := RandomNumberGenerator.new()   # its own, so a body's pockets do not shift the fight's dice
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D
 var drawn_count: int = 0
 var vat: Dictionary
@@ -47,6 +58,7 @@ var _people: Array = []
 
 func setup(field_game, vat_assets: Dictionary) -> void:
 	game = field_game
+	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
 	vat = vat_assets
 	for look in ["dead", "clothed", "fresh", "frozen", "corpse"]:
 		var node := MultiMeshInstance3D.new()
@@ -114,7 +126,40 @@ func add_rising(at: Vector3, who_name: String) -> Dictionary:
 	var z := spawn("fresh", at, {"name": who_name})
 	z["state"] = "rising"
 	z["rise_t"] = RISE_TIME
+	# A person's things fall to the ground; a raider's are put on it (set_loot).
+	z["loot"] = []
+	z["searched"] = true
 	return z
+
+
+## Lying there with pockets nobody has been through yet. Standing ones and
+## those already searched are not.
+func lootable(z: Dictionary) -> bool:
+	return not z.is_empty() and z["state"] in ["dead", "downed", "rising"] and z.has("loot") and not z.get("searched", false)
+
+
+func set_loot(z: Dictionary, loot: Array) -> void:
+	z["loot"] = loot
+	z["searched"] = false
+
+
+func _roll_loot(z: Dictionary) -> void:
+	if z.has("loot"):
+		return
+	var loot: Array = []
+	if loot_rng.randf() < LOOT_CHANCE:
+		var total := 0
+		for row in LOOT_TABLE:
+			total += int(row[0])
+		var pick: int = loot_rng.randi_range(1, total)
+		for row in LOOT_TABLE:
+			pick -= int(row[0])
+			if pick <= 0:
+				var entry: Dictionary = row[1].duplicate()
+				entry["n"] = loot_rng.randi_range(1, int(row[2]))
+				loot.append(entry)
+				break
+	z["loot"] = loot
 
 
 func alive_count() -> int:
@@ -648,6 +693,7 @@ func knock_down(z: Dictionary) -> void:
 		z["victim"].release_grab(z)
 	DeadPose.mark_fall(z)
 	z["state"] = "downed"
+	_roll_loot(z)
 	z["t"] = game.rng.randf_range(GET_UP.x, GET_UP.y)
 	z["victim"] = null
 
@@ -658,6 +704,7 @@ func kill(z: Dictionary) -> void:
 	DeadPose.mark_fall(z)
 	z["state"] = "dead"
 	z["victim"] = null
+	_roll_loot(z)
 	game.on_zombie_killed(z)
 
 

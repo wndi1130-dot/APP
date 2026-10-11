@@ -22,6 +22,7 @@ var end_t: float = -1.0
 var rests: Array[Array] = []    # [from, until]: the breather after a horde was cleared
 var lost: Array[float] = []     # when the squad shook the dead off
 var trips: int = 0              # loads put down at the train (crew and squad)
+var bodies: Dictionary = {"tried": 0, "found": 0}   # pockets gone through, and how many had something
 ## What the stop was for (field_game MISSIONS); "" writes no key at all.
 var mission: String = ""
 ## Each goal of the stop: {"id", "state", "t"} (sim/mission.gd), written with the kind.
@@ -86,6 +87,12 @@ func trip() -> void:
 	trips += 1
 
 
+func body(found: bool) -> void:
+	bodies["tried"] = int(bodies["tried"]) + 1
+	if found:
+		bodies["found"] = int(bodies["found"]) + 1
+
+
 func track(west: int, east: int) -> void:
 	track_dead = {"west": maxi(west, 0), "east": maxi(east, 0)}
 
@@ -137,6 +144,7 @@ func to_dict() -> Dictionary:
 		"rests": rest_out,
 		"lost": lost_out,
 		"trips": trips,
+		"bodies": bodies.duplicate(),
 	}
 	if mission != "":
 		out["mission"] = mission
