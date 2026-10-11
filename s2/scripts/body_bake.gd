@@ -25,6 +25,8 @@ const CLIPS: Array = [
 	["lunge", "Walk_Loop", 24, true, "lunge"],
 	["hit", "Hit_Chest", 12, false, ""],
 	["fall", "Death01", 48, false, ""],
+	["run", "Jog_Fwd_Loop", 24, true, "run"],
+	["tell", "Idle_Loop", 12, false, "tell"],
 ]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
@@ -40,7 +42,7 @@ const POSES_CLIP: String = "poses"
 #   "steps": [...]            applied in order after the bones are matched:
 #       ["turn", bone, axis, value]       bend a bone about "x" (forward), "y" (twist) or "z" (sideways)
 #       ["aim", bone, child, [x, y, z]]   point a bone at a direction in the body's space
-#   "sink": metres            lower the hips, applied last
+#   "sink": value             lower the hips by that many metres, applied last
 # A value is a number, or [base, size, lag] for base + size * sin(w - lag),
 # or [base, size, lag, beats] for base + size * sin(beats * w - lag).
 const LAYERS: Dictionary = {
@@ -133,6 +135,41 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [0.06, 0.05, 1.0]],
 		],
 		"sink": 0.04,
+	},
+	# Run: pitched far forward as if about to fall, face up, arms trailing behind and flapping.
+	"run": {
+		"warp": [0.06, 0.0],
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.1, 0.0]],
+			["turn", "spine", "x", 0.42],
+			["turn", "spine", "z", [0.0, 0.08, 0.5]],
+			["turn", "chest", "x", 0.3],
+			["turn", "chest", "y", [0.0, 0.16, 0.6]],
+			["turn", "neck", "x", -0.4],
+			["turn", "head", "z", [0.18, 0.12, 1.4]],
+			["aim", "upper_arm.L", "forearm.L", [0.3, -0.8, [-0.45, 0.35, 0.9]]],
+			["aim", "forearm.L", "hand.L", [0.12, -1.0, [-0.25, 0.4, 1.7]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.3, -0.8, [-0.45, 0.35, -2.2]]],
+			["aim", "forearm.R", "hand.R", [-0.12, -1.0, [-0.25, 0.4, -1.4]]],
+		],
+		"sink": 0.06,
+	},
+	# The half beat before it runs (played once, w runs a quarter turn so sin goes 0..1):
+	# it stops, the head comes up, the body dips and the arms draw back.
+	"tell": {
+		"steps": [
+			["turn", "hips", "y", [0.0, 0.22, 0.0, 0.25]],
+			["turn", "spine", "x", [0.2, 0.4, 0.0, 0.25]],
+			["turn", "chest", "x", [0.27, 0.16, 0.0, 0.25]],
+			["turn", "chest", "y", [0.0, -0.3, 0.0, 0.25]],
+			["turn", "neck", "x", [0.35, -0.95, 0.0, 0.25]],
+			["turn", "head", "z", [0.22, -0.2, 0.0, 0.25]],
+			["aim", "upper_arm.L", "forearm.L", [[0.22, 0.5, 0.0, 0.25], -1.0, [0.06, -0.75, 0.0, 0.25]]],
+			["aim", "forearm.L", "hand.L", [[0.1, 0.45, 0.0, 0.25], -1.0, [0.16, -0.5, 0.0, 0.25]]],
+			["aim", "upper_arm.R", "forearm.R", [[-0.22, -0.5, 0.0, 0.25], -1.0, [0.14, -0.8, 0.0, 0.25]]],
+			["aim", "forearm.R", "hand.R", [[-0.1, -0.45, 0.0, 0.25], -1.0, [0.3, -0.6, 0.0, 0.25]]],
+		],
+		"sink": [0.03, 0.09, 0.0, 0.25],
 	},
 }
 const AXES: Dictionary = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
@@ -273,7 +310,7 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float) -> void:
 				var dir: Array = step[3]
 				aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
 	if layer.has("sink"):
-		sink(body, layer["sink"])
+		sink(body, _value(layer["sink"], w))
 
 
 static func apply_overlay(body: Skeleton3D, kind: String) -> void:

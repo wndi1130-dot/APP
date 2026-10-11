@@ -40,7 +40,7 @@ func test_the_three_walks_differ_and_the_motion_numbers_fit_the_shader_table() -
 	var names: Array = []
 	for clip in BodyBake.CLIPS:
 		names.append(clip[0])
-	assert_eq(names.slice(0, 5), ["walk_a", "walk_b", "walk_c", "stand", "lunge"], "the numbers the drawing side uses")
+	assert_eq(names, ["walk_a", "walk_b", "walk_c", "stand", "lunge", "hit", "fall", "run", "tell"], "the numbers the drawing side uses")
 	assert_true(BodyBake.CLIPS.size() + 1 <= VatBaker.TABLE_SIZE, "with the still poses")
 	assert_ne(BodyBake.LAYERS["walk"]["damp"], BodyBake.LAYERS["walk_c"]["damp"], "a different leg drags")
 
@@ -90,3 +90,11 @@ func test_a_bake_is_written_and_read_back_the_same() -> void:
 
 func test_reading_a_folder_with_no_bake_gives_nothing() -> void:
 	assert_true(BodyBake.load_baked("user://no_such_bake_folder").is_empty())
+
+
+func test_a_layer_value_can_swing_and_the_tell_runs_a_quarter_turn() -> void:
+	assert_almost_eq(BodyBake._value(0.3, 2.0), 0.3, 0.0001, "a plain number stays")
+	assert_almost_eq(BodyBake._value([0.2, 0.4, 0.0, 0.25], 0.0), 0.2, 0.0001, "the tell starts from the slump")
+	assert_almost_eq(BodyBake._value([0.2, 0.4, 0.0, 0.25], TAU), 0.6, 0.0001, "and ends at its far end, without coming back")
+	assert_false(bool(BodyBake.CLIPS[8][3]), "the tell plays once")
+	assert_true(bool(BodyBake.CLIPS[7][3]), "the run loops")
