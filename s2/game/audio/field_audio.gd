@@ -21,7 +21,22 @@ extends Node3D
 ## comes back in 0.3 s; '떠난다' is impact, pen, a gap, then the whistle.
 ## Buses: Master and SFX. Indoor gunfire's deafness (field 8.2) ducks SFX.
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen", "radio_hiss", "radio"]
+const Motion = preload("res://game/sim/motion.gd")
+const DeadPose = preload("res://game/actors/dead_pose.gd")
+
+const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land"]
+## One of the dead going down is heard in four beats, as it is drawn (the
+## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
+## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
+const FALL_BEATS: Array = [["fall_hit", 0.7, 0.92, 1.08], ["fall_reel", 0.4, 0.92, 1.08], ["fall_knee", 0.5, 0.92, 1.08], ["fall_land", 0.8, 0.9, 1.05]]
+const FALL_REEL_AT: float = 0.05
+const FALL_AFTER_BLOW: float = 0.03   # a hand weapon's own sound comes first
+const FALL_GUN_HIT: float = 0.4       # shot down: the gun is the loud one
+const FALL_GUN_WINDOW: float = 0.15
+const FALL_RANGE: float = 40.0
+const FALL_FAR: float = 25.0          # farther than this only the ground is heard
+const FALL_AT_ONCE: int = 3           # this many falls are followed, the nearest
+const FALL_SAME: float = 0.06         # one beat is not played twice within this
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -52,6 +67,9 @@ var last_tag_group: String = ""        # what the last make_sound played (tests)
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
+var falls: Array = []                  # falls being followed: {"z", "i": next beat, "gun"}
+var fall_heard: Dictionary = {}        # zombie id -> the fall of its that was taken up
+var fall_last: Dictionary = {}         # group -> field time it last played
 
 
 func setup(field_game) -> void:
@@ -172,6 +190,7 @@ func tick(delta: float) -> void:
 		_assign_moans(at)
 	for s in slots:
 		_tick_slot(s, at, delta)
+	_tick_falls(at)
 	# The mass: one bed scaled by how many dead are near and how near.
 	bed.volume_db = lerpf(bed.volume_db, _db(clampf(crowd / BED_FULL, 0.0, 1.0) * 0.8), minf(1.0, delta * 2.0))
 	gather_t = maxf(0.0, gather_t - delta)
@@ -245,6 +264,64 @@ func hold(on: bool) -> void:
 	else:
 		bed.volume_db += 9.0
 		gather.volume_db += 9.0
+
+
+## When each beat of a fall comes, in seconds from its start.
+static func fall_times(gun: bool) -> Array:
+	var length: float = float(Motion.row("dead_fall")["len"])
+	return [0.0 if gun else FALL_AFTER_BLOW, FALL_REEL_AT, DeadPose.BUCKLE * length, DeadPose.LAND * length]
+
+
+## Take up the falls that have just begun (the nearest few) and play the beats
+## of those being followed as their time comes.
+func _tick_falls(at: Vector3) -> void:
+	var now: float = game.clock.elapsed
+	for z in game.zombies.list:
+		if not z.has("fell_at") or fall_heard.get(z["id"], -1.0) == z["fell_at"]:
+			continue
+		fall_heard[z["id"]] = z["fell_at"]
+		var d: float = at.distance_to(z["pos"])
+		if d > FALL_RANGE:
+			continue
+		var row := {"z": z, "i": 0, "gun": now - float(game.last_gun_t) < FALL_GUN_WINDOW}
+		if falls.size() < FALL_AT_ONCE:
+			falls.append(row)
+			continue
+		var far := 0
+		for k in range(falls.size()):
+			if at.distance_to(falls[k]["z"]["pos"]) > at.distance_to(falls[far]["z"]["pos"]):
+				far = k
+		if d < at.distance_to(falls[far]["z"]["pos"]):
+			falls[far] = row
+	if fall_heard.size() > 400:
+		fall_heard.clear()
+	var keep: Array = []
+	for f: Dictionary in falls:
+		var z: Dictionary = f["z"]
+		if not z.has("fell_at"):
+			continue
+		var since: float = float(z["age"]) - float(z["fell_at"])
+		var times: Array = fall_times(bool(f["gun"]))
+		while int(f["i"]) < FALL_BEATS.size() and since >= float(times[int(f["i"])]):
+			_fall_beat(int(f["i"]), z["pos"], at, bool(f["gun"]), now)
+			f["i"] = int(f["i"]) + 1
+		if int(f["i"]) < FALL_BEATS.size():
+			keep.append(f)
+	falls = keep
+
+
+func _fall_beat(i: int, where: Vector3, at: Vector3, gun: bool, now: float) -> void:
+	var beat: Array = FALL_BEATS[i]
+	var group: String = beat[0]
+	var d: float = at.distance_to(where)
+	if d > FALL_FAR and group != "fall_land":
+		return
+	if now - float(fall_last.get(group, -INF)) < FALL_SAME:
+		return
+	fall_last[group] = now
+	played.append(group)
+	var loud: float = FALL_GUN_HIT if gun and i == 0 else float(beat[1])
+	_one_shot(group, where, loud * clampf(1.0 - d / FALL_RANGE, 0.0, 1.0), randf_range(float(beat[2]), float(beat[3])))
 
 
 ## '떠난다': impact, pen stroke, a gap, the whistle.
