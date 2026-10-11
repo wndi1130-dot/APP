@@ -174,7 +174,11 @@ export function homeScreen(view: View): HTMLElement {
   const stall = g.stranded ? ui.stall ?? null : null;
   const moving = stall ? stall.beat === 'run' || stall.beat === 'slow' : g.phase === 'travel' && !g.inStrike;
   const resume = !g.stranded ? ui.resume ?? null : null; // 불을 넣은 직후: 굴뚝에 연기가 돌고 기적이 운다
-  const beat = stall ? { 'data-beat': stall.beat } : resume ? { 'data-beat': resume.beat } : {};
+  // data-stranded: 열차가 서 있는 동안 멈춘 판과 열차 단면 두 꼴 모두에 붙는다(선 뒤 소리가 이것을 듣는다). 들어가는 연출 중에는 판이 열리는 박부터.
+  const beat = {
+    ...(stall ? { 'data-beat': stall.beat } : resume ? { 'data-beat': resume.beat } : {}),
+    ...(g.stranded && (!stall || stall.beat === 'open') ? { 'data-stranded': '' } : {}),
+  };
   const cars = trainCars(g); // S1c 내정 훅: 칸 순서와 덧붙인 칸
   const open = cars.find(c => c.id === ui.carPop);
   // 석탄 0으로 선 동안에는 단면 자리에 멈춘 열차 판이 선다(결정 094). 「열차 단면」을 누르면 평소 꼴로 본다.
