@@ -699,7 +699,8 @@ func bite(p) -> void:
 
 func _where(at: Vector3) -> String:
 	var z: String = game.grid.zone_at(FieldGrid.cell_of(at))
-	return {"A": "station_building", "B": "freight_siding", "C": "water_tower", "D": "station_street", "E": "signal_box", "F": "tenement", "G": "goods_shed", "H": "south_street", "platform": "platform"}.get(z, "sulechow")
+	var names: Dictionary = game.data["zone_names"]
+	return String(names.get(z, names.get("", game.data["place_id"])))
 
 
 ## Falls on ice, under a load or off the ladder (body_injury 3.2).

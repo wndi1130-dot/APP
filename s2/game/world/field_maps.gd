@@ -23,6 +23,7 @@ const MOST_PER_KIND: int = 7
 const OPTIONAL: Dictionary = {
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
 	"bands": {}, "train_doors": {}, "crossings": [], "barricade_slots": [], "interior_kind_slots": [],
+	"zone_names": {},
 }
 
 
@@ -78,4 +79,43 @@ static func build_from(script: Script) -> Dictionary:
 	# The old map has doors on one side only: they are the lower side's.
 	if data["train_doors"].is_empty() and data.get("spawns", {}).has("train_door"):
 		data["train_doors"] = {"lower": data["spawns"]["train_door"].duplicate()}
+	# Cells the field steers by. What the map names is kept; the rest is worked
+	# out from its train and its edges.
+	var worked: Dictionary = anchors(data)
+	worked.merge(data.get("anchors", {}), true)
+	data["anchors"] = worked
 	return data
+
+
+## Where things head when a map does not say: "horde_home" (a horde with no
+## sound to follow: the middle door of the train's lower side, or the upper
+## side's), "whistle" (the engine end of the train) and "flee_exit" (the cell
+## on the map's edge farthest from the train that people can walk).
+static func anchors(d: Dictionary) -> Dictionary:
+	var g = d["grid"]
+	var doors: Array = d.get("train_doors", {}).get("lower", [])
+	if doors.is_empty():
+		doors = d.get("train_doors", {}).get("upper", [])
+	if doors.is_empty():
+		doors = d.get("spawns", {}).get("train_door", [])
+	if doors.is_empty():
+		doors = d.get("spawns", {}).get("squad", [])
+	var home := Vector2i(g.width / 2, g.height / 2)
+	if not doors.is_empty():
+		home = doors[doors.size() / 2]
+	var whistle: Vector2i = home
+	if d.has("train"):
+		var train: Rect2i = d["train"]
+		whistle = Vector2i(clampi(train.end.x - 6, 0, g.width - 1), clampi(train.end.y, 0, g.height - 1))
+	var exit: Vector2i = home
+	var far := -1
+	for y in range(g.height):
+		for x in range(g.width):
+			if x > 0 and x < g.width - 1 and y > 0 and y < g.height - 1:
+				continue
+			var c := Vector2i(x, y)
+			var dist: int = (c - home).length_squared()
+			if dist > far and g.people_can_walk(c):
+				far = dist
+				exit = c
+	return {"horde_home": home, "whistle": whistle, "flee_exit": exit}
