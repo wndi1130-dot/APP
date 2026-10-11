@@ -10,6 +10,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const DeadBody = preload("res://game/actors/dead_body.gd")
 
 const MAX_DRAW: int = 160
 const SIGHT: float = 9.0
@@ -52,6 +53,7 @@ var loot_rng := RandomNumberGenerator.new()   # its own, so a body's pockets do 
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D
 var drawn_count: int = 0
 var vat: Dictionary
+var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
 var markers: MultiMeshInstance3D
 var _people: Array = []
 
@@ -59,7 +61,9 @@ var _people: Array = []
 func setup(field_game, vat_assets: Dictionary) -> void:
 	game = field_game
 	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
-	vat = vat_assets
+	var body := DeadBody.assets()
+	baked = not body.is_empty()
+	vat = body if baked else vat_assets
 	for look in ["dead", "clothed", "fresh", "frozen", "corpse"]:
 		var node := MultiMeshInstance3D.new()
 		var mm := MultiMesh.new()
@@ -74,6 +78,10 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 		mat.shader = preload("res://game/actors/dead_vat.gdshader")
 		mat.set_shader_parameter("vat", vat["texture"])
 		mat.set_shader_parameter("rows_per_frame", float(vat["rows_per_frame"]))
+		if baked:
+			var tables := VatBaker.shader_tables(vat)
+			for key in tables:
+				mat.set_shader_parameter(key, tables[key])
 		var t: Color = TINTS[look]
 		mat.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
 		node.material_override = mat
@@ -731,14 +739,16 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			look = "corpse"
 		var down := DeadPose.down_k(z)
 		if down > 0.0:
-			var lie := DeadPose.lying(z, down)
-			basis = basis * lie.basis
-			pos.y = pos.y + lie.origin.y
+			# A baked body goes over by its own motion; the boxes are laid down whole.
+			if not DeadBody.falls_by_motion(z, baked):
+				var lie := DeadPose.lying(z, down)
+				basis = basis * lie.basis
+				pos.y = pos.y + lie.origin.y
 			# Flat on the ground it is still (a crawler drags itself); going over or coming up, the limbs move.
 			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
-		elif state != "frozen" and state != "waking":
+		elif state != "frozen" and state != "waking" and not baked:
 			basis = basis * DeadPose.gait_basis(z)
 		if state == "frozen":
 			look = "frozen"
@@ -760,8 +770,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			continue
 		var mm: MultiMesh = draw[look].multimesh
 		mm.set_instance_transform(n, Transform3D(basis, pos))
-		var clip := 1.0 if state == "chase" or state == "attack" or state == "grab" else 0.0
-		mm.set_instance_custom_data(n, Color(z["phase"], clip, frozen_anim, shade))
+		mm.set_instance_custom_data(n, DeadBody.custom(z, down, frozen_anim, shade, baked))
 		counts[look] = n + 1
 	drawn_count = 0
 	for look in counts:
