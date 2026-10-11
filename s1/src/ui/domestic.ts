@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy,
+  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
 } from '../game';
 import { copyText } from './clip';
 import type { Comm, DomPerson, Field, Game, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
@@ -366,7 +366,7 @@ export function domesticPopover(view: View, car: CarDef): HTMLElement | null {
 
 /** 사람이 사는 칸 창 머리의 작은 표(S1c): 씻을 물, 빨랫줄·열병, 의무칸 침상(16.3, 4.1). 칸 창 높이를 늘리지 않는다.
  * 사람 상태가 아니라 물 사정을 띄운다. 이가 도는 동안엔 솥·빨랫줄이 붙고, 벌레 그림이나 긁는 사람은 그리지 않는다(16.1 라). 대야를 누르면 까닭 한 줄. */
-export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
+export function domesticCarTag(view: View, car: CarDef, peg = false): HTMLElement | null {
   const g = view.g;
   const d = g.dom;
   const c = car.comm;
@@ -380,8 +380,51 @@ export function domesticCarTag(view: View, car: CarDef): HTMLElement | null {
       h('i', { class: 'dom-basin', 'aria-hidden': 'true' }), `씻을 물 ${WASH_NAME[hy]}`),
     lice ? h('span', { class: 'dom-wash' }, '솥·빨랫줄') : null,
     sick ? h('span', { class: 'is-red' }, `열병 ${sick}`) : null,
-    hangBtn(g, c),
+    peg ? null : hangBtn(g, c), // 열차 관리 화면은 판 머리의 벽 못으로 건다(wallPeg)
     c === 'medtech' ? h('span', { class: beds > D.beds ? 'is-red' : '' }, `침상 ${beds}/${D.beds}`) : null);
+}
+
+/** 벽 못에 적는 값(결정 053의 3번). 결속은 0~1 척도라 화면에는 100을 곱해 적는다(소수를 보이지 않는다). */
+export function wallFacts(g: Game, c: Comm): { on: boolean; left: number; why: string | null; gain: string; loss: string } {
+  const d = g.dom;
+  const on = !!d?.hung.includes(c);
+  return {
+    on, left: Math.max(0, g.symbols - (d?.hung.length ?? 0)), why: on ? null : hangWhy(g, c),
+    gain: `결속 +${Math.round(SYM.cohPerSeg * 100)}/구간`, loss: `결속 −${Math.round(SYM.lossCoh * 100)} · 관계 −${SYM.lossRel}`,
+  };
+}
+
+/** 칸 판 머리의 벽 못: 비면 못 하나, 걸리면 못에서 접힌 천이 내려와 걸린다. 누르면 판 아래에 걸기·내리기 한 줄이 뜬다. */
+export function wallPeg(view: View, car: CarDef): HTMLElement | null {
+  const c = car.comm;
+  if (!view.g.dom || !c) return null;
+  const f = wallFacts(view.g, c);
+  const open = domUi(view.ui).wall === c;
+  return h('button', {
+    class: cx('dom-peg', f.on && 'is-on', open && 'is-open', !f.on && f.left === 0 && 'is-none'),
+    'data-action': 'dom-wall', 'data-comm': c, 'aria-expanded': open ? 'true' : 'false',
+    'aria-label': f.on ? '상징물이 걸려 있다. 내리기 보기' : `벽 못. 걸 수 있는 상징물 ${f.left}`,
+  },
+    icon('peg'),
+    f.on ? h('span', { class: 'dom-peg__cloth', 'data-anim': `peg-${c}-on` }, icon('cloth')) : null,
+    f.on ? h('small', { class: 'num' }, f.gain) : null);
+}
+
+/** 벽 못을 눌렀을 때의 한 줄: 「걸기 · 남은 n」 또는 「내리기 · 결속 −8 · 관계 −4」. 문장 없음. */
+export function wallRow(view: View, car: CarDef): HTMLElement | null {
+  const c = car.comm;
+  if (!view.g.dom || !c || domUi(view.ui).wall !== c) return null;
+  const f = wallFacts(view.g, c);
+  return h('div', { class: 'dom-wall num' },
+    h('button', { class: cx('chip', f.on && 'is-on'), 'data-action': 'dom-hang', 'data-comm': c, 'data-on': f.on ? '0' : '1', disabled: !!f.why, title: f.why ?? '' },
+      f.on ? '내리기' : '걸기'),
+    f.on ? h('span', { class: 'is-red' }, f.loss) : h('span', null, `남은 ${f.left}`),
+    f.on ? null : h('span', { class: 'sub' }, f.gain));
+}
+
+/** 띠의 칸에 다는 작은 표시: 상징물이 걸린 칸. */
+export function hungMark(g: Game, car: CarDef): HTMLElement | null {
+  return car.comm && g.dom?.hung.includes(car.comm) ? h('i', { class: 'tcar__hung', 'aria-label': '상징물 걸림' }, icon('cloth')) : null;
 }
 
 /** 상징물 걸기 단추(제안). 건 칸은 '내린다'(내리면 크게 깎인다), 아닌 칸은 못 거는 까닭이 있으면 막고 까닭을 title로. */
@@ -1095,6 +1138,9 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-restore':
     case 'dom-cancel':
     case 'dom-finish':
+    case 'dom-wall':
+      du.wall = du.wall === data.comm ? null : data.comm ?? null;
+      break;
     case 'dom-med':
       du.med = !du.med;
       if (du.med) ui.panel = null;

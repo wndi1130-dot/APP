@@ -365,3 +365,20 @@
 @media (min-width: 1024px) and (max-width: 1400px) and (min-height: 600px) {
   .tnode__pair { grid-template-columns: minmax(0, 1fr); justify-items: stretch; gap: 2px; }
 }
+
+/* 상징물을 거는 벽 못(결정 053의 3번): 칸 판 머리 오른쪽. 비면 못 하나, 걸리면 접힌 천이 못에서 내려온다. */
+.dom-peg { position: absolute; right: 36px; top: 0; height: 28px; min-width: 28px; padding: 0 6px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: none; color: var(--ink-3); }
+.dom-peg .icon { width: 16px; height: 16px; }
+.dom-peg.is-open { border-color: var(--ink-1); color: var(--ink-1); }
+.dom-peg.is-on { color: var(--brass); }
+.dom-peg.is-on > .icon { display: none; }
+.dom-peg.is-none { opacity: .5; }
+.dom-peg small { font-size: 12px; color: var(--ink-2); }
+.dom-peg__cloth { display: inline-flex; transform-origin: top center; animation: peg-drop .3s ease-out; }
+.dom-peg__cloth.is-still { animation: none; }
+@keyframes peg-drop { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+.dom-wall { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; font-size: 13px; }
+.dom-wall .chip { min-height: 30px; padding: 0 12px; }
+.tcar__hung { display: inline-flex; color: var(--brass); }
+.tcar__hung .icon { width: 12px; height: 12px; }
+@media (prefers-reduced-motion: reduce) { .dom-peg__cloth { animation: none; } }
