@@ -14,6 +14,7 @@ import { lawTechCoal, lawTechFood, lawTechRes } from './lawtech';
 import { elderTick } from './elder';
 import { symbolTick } from './symbols';
 import './pipe';
+import { potFoodMult, potTick } from './pot';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick } from './medbay';
 import { refreshSit } from './sit';
@@ -34,7 +35,7 @@ export function domesticForecast(g: Game): DomForecast {
   if (stokingNow(g) && techMult(g, 'e4') <= 0) coal += D.stokerCoal;
   if (!g.inStrike && topSkill(g, 'engine') === 1) coal += D.slowCoal;
   const grants = d.grants.filter(until => until >= g.seg).length * D.grantFood;
-  return { coal, food: grants - greenhouseFood(g) - lawTechFood(g), foodMult: 1 };
+  return { coal, food: grants - greenhouseFood(g) - lawTechFood(g), foodMult: potFoodMult(g) };
 }
 
 // ---- 출발(이동 단계) ----
@@ -208,6 +209,7 @@ export function domesticSettle(g: Game, notes: string[]): void {
   domesticPromiseMade(g);
   d.stats.hotCoal += hotWaterCoal(g);
   d.stats.techCoal += lawTechCoal(g);
+  potTick(g, notes); // 솥: 공방이 목재를 쓰기 전에
   delegateTick(g);
   payUpkeep(g);
   const ws = runWorkshop(g);

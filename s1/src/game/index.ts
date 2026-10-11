@@ -16,6 +16,7 @@ export * from './needs';
 export * from './omens';
 export * from './people';
 export * from './domestic';
+export * from './pot_view';
 export * from './dark';
 export * from './disaster';
 export * from './disaster_cards';

@@ -267,15 +267,26 @@ function storePop(view: View, car: CarDef): HTMLElement {
     }, r.label))) : null);
 }
 
+/** 찬 칸 앞쪽(얼음)에 드는 식량 상한. 결정 054·066의 값을 판에 찍기만 한다. 규칙 값이 코드에 오면 그쪽에서 읽는다. */
+const ICE_CAP_SHOWN = 20;
+
+/** 찬 칸 판의 낱말 둘(결정 054·066): 「얼음 n/20 · 안치 n/6」. 시신 법이 서기 전에는 「안치 —」이고, 죽은 사람 이야기는 법이 선 뒤에만 뜬다. */
+export function coldLine(g: Game): { text: string; law: boolean; more: string } {
+  const waiting = g.pyre ?? 0;
+  const law = lawActive(g, 'corpse_store') || lawActive(g, 'corpse_burn') || g.stored + waiting > 0;
+  const ice = `얼음 0/${ICE_CAP_SHOWN}`;
+  if (!law) return { text: `${ice} · 안치 —`, law, more: '난방을 끊은 낡은 객차다. 창마다 성에가 두껍다. 무엇을 둘지는 법으로 정한다.' };
+  return {
+    text: `${ice} · 안치 ${g.stored + waiting}/${coldCap(g)}${waiting ? ` · 장작불 기다림 ${waiting}` : ''}`, law,
+    more: `뒤쪽은 죽은 사람을 모셔 두는 자리다. ${coldCap(g)}구를 넘으면 녹는 사고가 두 배다. 길게 머무는 정차에서 묻고 갈 수 있다.`,
+  };
+}
+
 function coldPop(view: View, car: CarDef): HTMLElement {
-  const g = view.g;
-  const d = g.dom!;
-  const store = lawActive(g, 'corpse_store');
+  const line = coldLine(view.g);
   return h('div', { class: 'carpop carpop--small dom-pop', role: 'dialog', 'aria-label': `${car.name} 창` },
     popHead(car),
-    // 구실 한 줄(사용자 2026-10-11: 왜 있는 칸인지 모르겠다). 규칙 그대로: 시신만 둔다, 식량은 창고칸에 둔다.
-    h('p', { class: 'carpop__text' }, `죽은 사람을 모셔 두는 칸이다. 지금 ${g.stored + (g.pyre ?? 0)}/${coldCap(g)}구. `,
-      tip('더 보기', `식량은 여기 두지 않는다(창고칸에 둔다). ${coldCap(g)}구를 넘으면 녹는 사고가 두 배다.${g.pyre ? ` ${g.pyre}구는 다음 정차 장작불을 기다린다.` : ''}${store ? '' : ' 시신을 어떻게 할지는 법으로 정한다.'} 길게 머무는 정차에서 묻고 갈 수 있다.`)));
+    h('p', { class: 'carpop__text num' }, `${line.text} `, tip('더 보기', line.more)));
 }
 
 function extraPop(view: View, car: CarDef): HTMLElement {
@@ -412,7 +423,7 @@ export function domesticStopRows(view: View): HTMLElement | null {
   if (g.stored > 0) {
     const b = buryOpen(g);
     rows.push(h('div', { class: 'field field--row' },
-      h('span', { class: 'field__label' }, '냉동칸'),
+      h('span', { class: 'field__label' }, '찬 칸'),
       h('button', { class: cx('chip', d.bury && 'is-on'), 'data-action': 'dom-bury', 'data-on': d.bury ? '0' : '1', disabled: !b.ok && !d.bury, title: b.why ?? '' },
         `묻고 간다(${Math.min(D.buryMax, g.stored)}구)`, h('small', null, ` 산출 ×${D.buryHaul}`)),
       !b.ok ? h('small', { class: 'sub' }, b.why) : null));

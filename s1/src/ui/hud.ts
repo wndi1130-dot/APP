@@ -6,7 +6,7 @@ import type { View } from './common';
 import { fxText, fxTone } from './fx';
 import { departLever } from './depart';
 import { tip } from './widgets';
-import { seatLine, sharePcts } from './share';
+import { moodMean, scalePos } from './share';
 import type { Fx, FxKey } from './fx';
 import type { Comm } from '../game';
 import { domesticResource } from './domestic'; // S1c 내정 훅: 자재
@@ -78,15 +78,6 @@ function deltaLine(value: number, delta: number): HTMLElement {
     `${signed(delta)}·${n === 0 ? '바닥' : `${n}구간`}`);
 }
 
-/** 의석 꼬리표(띠 숫자처럼 %p로): 불만 의석이 늘면 빨강(이때만), 나머지는 재질대로 */
-function seatTag(fx: Fx | null | undefined, which: 'unrest' | 'support', total: number): HTMLElement | null {
-  const moved = fx?.seats[which];
-  const v = moved && total > 0 ? Math.round((moved * 100) / total) || Math.sign(moved) : 0;
-  if (!fx || !v) return null;
-  const tone = which === 'unrest' && v > 0 ? 'fx-red' : v > 0 ? 'fx-up' : 'fx-down';
-  return h('span', { class: cx('fx fx-seat num', tone), 'data-anim': `fx-${fx.id}-seat-${which}`, 'aria-hidden': 'true' }, fxText(v));
-}
-
 /** 띠에서 칸이 불만·지지로 넘어가는 관계 선. game/turn.ts standings()와 같은 값이어야 한다(tests/ui/band.test.ts가 견준다). */
 export const SIDE_LINE = 15;
 
@@ -97,15 +88,15 @@ export function segFill(rel: number): { side: -1 | 0 | 1; ratio: number } {
   return { side: rel < 0 ? -1 : 1, ratio: Math.min(1, Math.abs(rel) / SIDE_LINE) };
 }
 
-function bandSeg(g: View['g'], x: { c: Comm; seats: number; side: -1 | 0 | 1 }, fx: Fx | null | undefined): HTMLElement {
+/** 눈금 위의 집단 금 하나: 그 집단의 관계 값 자리에 선다. */
+function bandTick(g: View['g'], x: { c: Comm; seats: number; side: -1 | 0 | 1 }, fx: Fx | null | undefined): HTMLElement {
   const rel = g.comms[x.c].rel;
-  const fill = segFill(rel);
   const moved = fx?.rel[x.c];
   return h('i', {
-    class: cx('band__seg', x.side < 0 && 'is-unrest', x.side > 0 && 'is-support', !!moved && 'fx-seg'),
-    style: `flex:${x.seats}`, title: `${COMM_NAME[x.c]} · 관계 ${fmt(rel)}`,
+    class: cx('band__tick', x.side < 0 && 'is-unrest', x.side > 0 && 'is-support', !!moved && 'fx-seg'),
+    style: `left:${pct(scalePos(rel))}`, title: `${COMM_NAME[x.c]} · 관계 ${fmt(rel)}`,
     ...(fx && moved ? { 'data-anim': `fx-${fx.id}-seg-${x.c}` } : {}),
-  }, fill.side ? h('b', { class: cx('band__fill', fill.side < 0 ? 'is-neg' : 'is-pos'), style: `width:${pct(fill.ratio * 100)}` }) : null);
+  });
 }
 
 export function topBar(view: View): HTMLElement {
@@ -115,11 +106,9 @@ export function topBar(view: View): HTMLElement {
   const f = forecast(g);
   const fx = ui.fx;
   const rels = fx ? (Object.keys(fx.rel) as Comm[]) : [];
-  // 띠 숫자는 비율(%)이다. 조각 너비와 같은 것을 말한다. 석수는 글자를 누르면 뜨는 쪽지에 있다(사용자 2026-10-11).
-  const total = st.unrest + st.neutral + st.support;
-  const [pu, pn, ps] = sharePcts([st.unrest, st.neutral, st.support]);
-  const who = (side: -1 | 0 | 1) => seatLine(order.filter(x => x.side === side).map(x => ({ name: COMM_NAME[x.c], seats: x.seats })));
-  const note = (text: string, seatsN: number, side: -1 | 0 | 1) => `${text} 지금 ${seatsN}석(전체 ${total}석): ${who(side)}.`;
+  // 위 띠는 「정도」를 보인다(결정 058): 의석으로 무게를 준 관계 평균 하나와, 눈금 위 집단 금 다섯. 의석 판세는 집단 창과 의회에 있다.
+  const mood = moodMean(st.byComm.map(x => ({ seats: x.seats, rel: g.comms[x.c].rel })));
+  const lean = Math.abs(scalePos(mood) - 50);
   return h('header', { class: cx('top', fx?.band && 'fx-band'), ...(fx?.band ? { 'data-anim': `fx-${fx.id}-band` } : {}) },
     h('div', { class: 'top__meters' },
       darkTrustMeter(view) ?? meter('trust', '신임', g.trust, '--support', fx),
@@ -128,10 +117,13 @@ export function topBar(view: View): HTMLElement {
       h('button', { class: cx('band__btn band__btn--unrest', ui.panel === 'unrest' && 'is-on'), 'data-action': 'panel', 'data-panel': 'unrest', 'aria-label': '불만 쪽 집단 펼치기' }, icon('fist')),
       h('div', { class: 'band__track' },
         h('div', { class: 'band__nums' },
-          h('span', { class: 'is-unrest' }, tip('불만', note(TIP.unrest, st.unrest, -1)), h('b', { class: 'num' }, ` ${pu}%`), seatTag(fx, 'unrest', total)),
-          h('span', null, tip('중립', note(TIP.neutral, st.neutral, 0)), h('b', { class: 'num' }, ` ${pn}%`)),
-          h('span', { class: 'is-support' }, tip('지지', note(TIP.support, st.support, 1)), h('b', { class: 'num' }, ` ${ps}%`), seatTag(fx, 'support', total))),
-        h('div', { class: 'band__bar' }, order.map(x => bandSeg(g, x, fx)))),
+          h('span', { class: 'is-unrest' }, '불만'),
+          h('span', { class: cx('band__mood', mood < 0 && 'is-unrest', mood > 0 && 'is-support') }, tip('여론', TIP.mood), h('b', { class: 'num' }, ` ${signed(mood)}`)),
+          h('span', { class: 'is-support' }, '지지')),
+        h('div', { class: 'band__scale' },
+          mood !== 0 ? h('b', { class: cx('band__lean', mood < 0 ? 'is-neg' : 'is-pos'), style: `width:${pct(lean)}` }) : null,
+          h('i', { class: 'band__mid' }),
+          order.map(x => bandTick(g, x, fx)))),
       h('button', { class: cx('band__btn band__btn--support', ui.panel === 'support' && 'is-on'), 'data-action': 'panel', 'data-panel': 'support', 'aria-label': '지지 쪽 집단 펼치기' }, icon('hand')),
       // 관계가 바뀐 칸: 띠 밑에 칸 이름과 숫자가 떠오른다.
       rels.length && fx ? h('div', { class: 'fx fx-rels', 'data-anim': `fx-${fx.id}-rel`, 'aria-hidden': 'true' }, rels.map(c => {

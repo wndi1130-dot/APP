@@ -21,6 +21,7 @@ export const WHY_NAME: Record<string, string> = {
   birth: '아이가 태어남',
   leak: '들통난 거래',
   decree: '포고',
+  pot: '식당칸 솥',
   'calm.pot': '저녁 솥불',
   'calm.ledger': '벽 장부',
   'calm.night': '떠난 사람의 밤',
