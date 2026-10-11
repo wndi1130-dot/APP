@@ -1,6 +1,7 @@
 import { bump, bumpRel, put } from '../ledger';
 import { COMMS, COMM_NAME, P } from '../data';
 import type { Comm } from '../data';
+import { crowdFeverP } from '../crowd';
 import { onDeath } from '../death';
 import { clamp, drawPerson, journal, lawActive, rnd, situation, totalPop } from '../state';
 import type { Game } from '../state';
@@ -125,6 +126,14 @@ export function hygieneTick(g: Game, notes: string[]): void {
       d.stats.lice += 1;
       domCard(g, { kind: 'dom:lice', comm: c });
       journal(g, `${COMM_NAME[c]}에 이가 돈다. (${hygieneWhy(g, c)})`, 'bad');
+    }
+  }
+  // 과밀이 열병을 부른다: 이가 없어도 붐비는 칸은 구간마다 작은 확률로 열병이 시작된다(crowd.ts).
+  if (g.seg >= D.liceFromSeg) {
+    for (const c of COMMS) {
+      if (d.typhus.some(t => t.comm === c)) continue;
+      const p = crowdFeverP(g, c);
+      if (p > 0 && rnd(g) < p) startTyphus(g, c, 2);
     }
   }
   typhusTick(g, notes);
