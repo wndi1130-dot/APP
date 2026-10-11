@@ -12,7 +12,7 @@ extends RefCounted
 const FIGURES_MIN: int = 2
 const FIGURES_MAX: int = 16
 const TAIL_SHARE: int = 3               # the tail's people are spread over three cars
-const DINING_SESSION: int = 12
+const DINING_SESSION: int = 32          # the council: the brief's 30 to 40 (the web's side view draws 12)
 const DINING_IDLE: int = 4
 const CAPTAIN_ROOM: int = 2
 const OTHER_CAR: int = 3
@@ -31,7 +31,7 @@ const FLOOR_SHARE: Array = [0.0, 0.15, 0.3, 0.45]
 const FEAR_FROZEN: float = 60.0         # first value: the council draft's frightened quiet
 const TENSION_STIR: float = 60.0        # first value: from the council draft
 const REL_STIR: float = -40.0           # s1 STAGES: "opposed" and below
-const GRUDGE_STIR: int = 2              # s1: hostile from two grudges
+const GRUDGE_STIR: int = 2              # the brief: set against the captain from two grudges
 const LOW_BELOW: float = 45.0           # s1 reads warmth and ration under 45 as low (ui/home.ts, turn.ts)
 const MOOD_NAMES: Dictionary = {"calm": "평온", "low": "가라앉음", "stir": "술렁임", "frozen": "얼어붙음"}
 ## What a mood changes: how many walk and how fast, how long they stand between
@@ -49,6 +49,33 @@ const MOOD_LOOK: Dictionary = {
 }
 const SLOT_STRIDE: int = 4
 const STOVE_STEAM_FROM: float = 0.4
+## The council in the dining car (presentation_motion 3 and 7). The unrest
+## score and its five steps are the brief's: tension, 10 more a community
+## "opposed" or worse, 15 more a community set against the captain; up at
+## 20/40/60/80 and down only 5 under. Fear from 60 hushes the room whatever
+## the score, and when the vote is called everyone stops. Who gets up and who
+## leans over is picked by seat number alone: no community's own numbers move
+## a seat, so the room cannot give a secret vote away.
+const UNREST_FROM: Array = [20.0, 40.0, 60.0, 80.0]
+const UNREST_DOWN: float = 5.0
+const UNREST_NAMES: Array = ["속닥", "웅성", "언쟁", "고함·야유", "개판"]
+const QUIET_NAMES: Dictionary = {"vote": "표결", "hush": "무서운 조용함"}
+## The room: the chair and the clerk by the table's head, two who walk, two who
+## stand talking by a doorway, the rest seated on both sides of the table.
+## With the seated who act that is the brief's 8 to 12 moving. First values.
+const COUNCIL_ROOM: Array = [["chair", 2], ["walk", 2], ["door", 2]]
+const COUNCIL_BENCH: int = 14
+const COUNCIL_TABLE: int = 12
+const COUNCIL_STRIDE: int = 7           # spreads the seated who act over both rows
+## By step: how many of the seated act, how many of those get to their feet
+## rather than lean over to a neighbour, and how long a gesture or a rest lasts.
+const UNREST_LOOK: Array = [
+	{"act": 4, "rise": 0, "hold": [4.0, 8.0]},
+	{"act": 5, "rise": 0, "hold": [3.0, 6.0]},
+	{"act": 6, "rise": 1, "hold": [3.0, 5.0]},
+	{"act": 7, "rise": 3, "hold": [2.0, 4.0]},
+	{"act": 8, "rise": 5, "hold": [1.5, 3.0]},
+]
 
 
 ## People standing in this car. `comm` is the car's community ({} for a car
@@ -185,6 +212,77 @@ static func stove(w: float) -> float:
 	return clampf((w - WARM_FREEZING) / (WARM_WARM - WARM_FREEZING), 0.0, 1.0)
 
 
+## The council's unrest score. Only what everyone can see goes in: the train's
+## tension and each community's standing with the captain.
+static func unrest_score(train: Dictionary, comms: Dictionary) -> float:
+	var score := float(train.get("tension", 0))
+	for id in comms:
+		var comm: Dictionary = comms[id]
+		if float(comm.get("rel", 0)) <= REL_STIR:
+			score += 10.0
+		if int(comm.get("grudge", 0)) >= GRUDGE_STIR:
+			score += 15.0
+	return score
+
+
+## The step of unrest, 0 to 4. `was` is the step the room was in (-1 at first):
+## it climbs at a threshold and settles only once the score is 5 under it.
+static func unrest_level(score: float, was: int = -1) -> int:
+	var level := 0
+	for from in UNREST_FROM:
+		level += 1 if score >= float(from) else 0
+	while level < mini(was, UNREST_FROM.size()) and score >= float(UNREST_FROM[level]) - UNREST_DOWN:
+		level += 1
+	return level
+
+
+## "vote" while the vote is called, "hush" in a frightened room, "" otherwise.
+static func council_quiet(train: Dictionary) -> String:
+	if bool(train.get("voting", false)):
+		return "vote"
+	return "hush" if float(train.get("fear", 0)) >= FEAR_FROZEN else ""
+
+
+## One place a person: "chair", "walk", "door", "bench" or "table". The same
+## for every step of unrest, so nobody changes seats when the room heats up.
+## Seats fill the two sides of the table in turn; beyond them people stand.
+static func council_places(count: int) -> Array:
+	var rows: Array = []
+	for group in COUNCIL_ROOM:
+		for i in int(group[1]):
+			if rows.size() < count:
+				rows.append(String(group[0]))
+	var bench := 0
+	var table := 0
+	while rows.size() < count:
+		if bench < COUNCIL_BENCH and (bench <= table or table >= COUNCIL_TABLE):
+			rows.append("bench")
+			bench += 1
+		elif table < COUNCIL_TABLE:
+			rows.append("table")
+			table += 1
+		else:
+			rows.append("door")
+	return rows
+
+
+## What the seated person number `seat` (of `seats`) does at a step of unrest:
+## "rise", "lean" or "" for sitting still. Someone who acts at one step acts at
+## every higher one.
+static func council_role(seat: int, seats: int, level: int) -> String:
+	if seat < 0 or seats <= 0:
+		return ""
+	var look: Dictionary = UNREST_LOOK[clampi(level, 0, UNREST_LOOK.size() - 1)]
+	# A stride that shares no factor with the seats gives every seat its own rank.
+	var stride := COUNCIL_STRIDE
+	while seats > 1 and _gcd(stride, seats) != 1:
+		stride += 1
+	var rank := (seat * stride) % seats
+	if rank < int(look["rise"]):
+		return "rise"
+	return "lean" if rank < int(look["act"]) else ""
+
+
 ## The trips this car's people may take now: only ones with a use (a meal, the
 ## infirmary, the session), never to their own car. A car without a community
 ## sends nobody.
@@ -239,6 +337,10 @@ static func calls_for(car: Dictionary, cars: Array, ideo: Dictionary, within: fl
 ## Nobody goes calling in a frightened car or during the session.
 static func calls_open(m: String, phase: String) -> bool:
 	return m != "frozen" and phase != "council"
+
+
+static func _gcd(a: int, b: int) -> int:
+	return a if b == 0 else _gcd(b, a % b)
 
 
 static func _sit(comm: Dictionary, i: int, fallback: float) -> float:

@@ -33,6 +33,8 @@ static func check(d: Dictionary) -> PackedStringArray:
 		for key in ["tension", "fear"]:
 			if not _in_range(train.get(key), 0.0, 100.0):
 				bad.append("train.%s: %s" % [key, str(train.get(key))])
+		if not (train.get("voting", false) is bool):
+			bad.append("train.voting: %s" % str(train.get("voting")))
 	var comms = d.get("comms")
 	if not (comms is Dictionary):
 		bad.append("comms: missing")
