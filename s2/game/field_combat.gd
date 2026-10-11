@@ -387,7 +387,9 @@ func swing(p, z: Dictionary) -> void:
 		_kill(p, z, "뒤에서 조용히 끝냈다")
 		return
 	var downed: bool = state == "downed"
-	var head: float = W.melee_head_chance(wid, int(p.skills["melee"]), downed, from_back)
+	# The state of the hand and its strength against the weapon's weight (decisions '근접 타수').
+	var odds: Dictionary = W.melee_odds(wid, int(p.skills["melee"]), downed, from_back, float(m.get("melee_hit", 1.0)), int(p.skills.get("strength", 5)))
+	var head: float = odds["head"]
 	if z["kind"] == "clothed" and blade and not downed:
 		head *= 0.5
 	if rng.randf() < head:
@@ -401,7 +403,7 @@ func swing(p, z: Dictionary) -> void:
 		z["stun"] = 0.3
 		_toast(p, "두꺼운 옷에 날이 막혔다.")
 		return
-	if rng.randf() < float(d["knockdown"]):
+	if rng.randf() < float(odds["knockdown"]):
 		game.zombies.knock_down(z)
 	else:
 		z["stun"] = 0.6

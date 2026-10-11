@@ -134,6 +134,44 @@ static func wear_per_use(id: String, quality: String) -> float:
 	return float(d.get("wear", 0.0)) * float(quality_row(id, quality)["wear_mult"])
 
 
+## Strength against the weight in the hand (decisions 2026-10-11 '근접 타수'):
+## a weapon asks for strength 2 x weight + 1 (knife 3, crowbar 5, hatchet 7).
+## Short of it the blow knocks down less; with strength to spare a little more.
+static func melee_weight_mult(id: String, strength: int) -> float:
+	var need: float = 2.0 * float(get_data(id).get("weight", 1.0)) + 1.0
+	return clampf(1.0 - 0.15 * (need - float(strength)), 0.4, 1.15)
+
+
+## The head is the smaller target, so the state of the hand cannot take the
+## chance to find it below this share (a knife, which rarely knocks down,
+## would otherwise need seventeen blows at the worst).
+const MELEE_HEAD_FLOOR: float = 0.3
+
+
+## One blow on a standing or downed body: chance to hit the head, to kill on
+## a head hit, and to knock down on a body hit. hit_mult is the state of the
+## one who strikes (body_state multipliers "melee_hit", 0.15..1).
+static func melee_odds(id: String, melee_skill: int, target_downed: bool, from_behind: bool, hit_mult: float = 1.0, strength: int = 5) -> Dictionary:
+	var d: Dictionary = get_data(id)
+	var head: float = melee_head_chance(id, melee_skill, target_downed, from_behind)
+	if not target_downed:
+		head *= clampf(hit_mult, MELEE_HEAD_FLOOR, 1.0)
+	var knock: float = float(d.get("knockdown", 0.0)) * clampf(hit_mult, 0.0, 1.0) * melee_weight_mult(id, strength)
+	return {"head": head, "kill": float(d.get("head_kill", 0.0)), "knockdown": clampf(knock, 0.0, 0.95)}
+
+
+## Blows it takes on average to end a standing body that stays down once it
+## is knocked down (one more blow ends it there). For tests and tuning.
+static func melee_mean_swings(odds: Dictionary) -> float:
+	var h: float = odds["head"]
+	var k: float = odds["kill"]
+	var q: float = odds["knockdown"]
+	var stays_up: float = (1.0 - h) * (1.0 - q)
+	if stays_up >= 1.0:
+		return INF
+	return (1.0 + h * (1.0 - k) + (1.0 - h) * q) / (1.0 - stays_up)
+
+
 static func melee_head_chance(id: String, melee_skill: int, target_downed: bool, from_behind: bool) -> float:
 	if target_downed:
 		return 1.0
