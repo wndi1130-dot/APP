@@ -1741,10 +1741,10 @@ func say(p, text: String, hurt: bool = false, event: String = "") -> void:
 
 ## A companion shouts a line over their head (words only). The chief, the
 ## raiders and the dead keep quiet.
-func shout(p, event: String) -> void:
-	if hud == null or p == player or not squad.has(p) or p.body.dead:
+func shout(p, event: String, always: bool = false) -> void:
+	if hud == null or p == player or p.body.dead or not (squad.has(p) or always and crew.has(p)):
 		return
-	var line: String = lines.pick(String(p.pid), event, clock.elapsed)
+	var line: String = lines.pick(String(p.pid), event, clock.elapsed, always)
 	if line != "":
 		hud.shout(p, line)
 
@@ -1931,6 +1931,10 @@ func depart() -> void:
 	if holdout.opens_on_leaving():
 		holdout.begin()
 		return
+	# A held train: a last call first, and whoever misses it stays.
+	if holdout.on:
+		holdout.last_call()
+		return
 	holdout.leaving_early()
 	audio.depart()
 	finish("departed")
@@ -1941,6 +1945,22 @@ func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
 	return mission_play.goal_line() if mission_play.active() else ""
+
+
+## At the train (or already in it) and on their feet: goes with it when it leaves.
+func aboard(p) -> bool:
+	if p.brain.get("boarded", false):
+		return true
+	return FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
+
+
+## How many would stay if the train left now (the chief aside).
+func outside() -> int:
+	var n := 0
+	for p in squad + crew:
+		if p != player and p.is_alive() and not aboard(p):
+			n += 1
+	return n
 
 
 ## Departure: whistle (very loud), people on the platform board, the rest stay.
@@ -1955,15 +1975,19 @@ func finish(reason: String) -> void:
 	for p in squad + crew:
 		if not p.is_alive():
 			continue
-		var on_board: bool = FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
-		if p.brain.get("boarded", false):
-			on_board = true
+		var on_board: bool = aboard(p)
 		if on_board or reason == "wiped" and false:
 			boarded.append(p)
 			for id in p.items:
 				unloaded[id] = int(unloaded.get(id, 0)) + int(p.items[id])
 		else:
 			receipt.person("leftBehind", p.pid)
+			# A held train going without them: they shout after it (user decision
+			# 143). "left_behind" in the brain is for the protest motion to read.
+			if reason == "departed" and holdout.opened and p != player:
+				holdout.left_people += 1
+				p.brain["left_behind"] = true
+				shout(p, "left_platform", true)
 		# A confirmed infection from a scratch goes back as a bite would (body_injury 2.1).
 		if p.body.infection == "bite" or p.body.infected:
 			receipt.person("bitten", p.pid)
@@ -1979,7 +2003,7 @@ func finish(reason: String) -> void:
 			stock[row[0]] = float(stock.get(row[0], 0.0)) + float(row[1]) * int(unloaded[id])
 		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
-	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent
+	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
@@ -2013,6 +2037,7 @@ func finish(reason: String) -> void:
 	mission_play.finish(reason)
 	holdout.on = false
 	if holdout.opened:
+		holdout.note_leaving()
 		receipt.place_note("holdout", holdout.result())
 		telemetry.holdout = holdout.result()
 	receipt.set_end(reason)

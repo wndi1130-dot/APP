@@ -22,6 +22,21 @@ const HURT_REACH: float = 3.0     # a door that gives way reaches whoever stands
 const BUILD_TIME: float = 8.0     # as the manhole lid: one heavy thing, a normal sound
 const MATERIALS: Array[String] = ["plank", "scrap", "wood"]
 ## Hordes while it lasts: the director is the same one, with the stage's pace.
+# Leaving before the train is ready (user decision 143): a last call of this
+# many seconds, and whoever is not at the train when it ends stays.
+const LAST_CALL_S: float = 3.0
+# What going unready costs, on top of the plough's price: [share of the
+# getting-ready still left (below this), coal, plough parts]. Starting values
+# from the play check, not settled.
+const EARLY_STEPS: Array = [[0.25, 2, 0], [0.5, 4, 1], [0.75, 7, 1], [2.0, 10, 2]]
+# The plough's price by the dead on the track as it leaves (s1c_domestic 6.6,
+# numbers proposed there): [up to this many, parts, the word on screen].
+const PLOUGH_STEPS: Array = [[0, 0, "선로 비었다"], [10, 1, "망자 몇"], [30, 2, "무리"], [1 << 30, 3, "큰 무리"]]
+# Leaving people behind (user decision 147): this much trust for the first,
+# this much for each one more, and no more than the most. Things left cost none.
+const TRUST_FIRST: int = 12
+const TRUST_EACH_MORE: int = 4
+const TRUST_MOST: int = 24
 const FIRST_GAP: float = 45.0
 const RATIO: float = 0.9
 const MIN_GAP: float = 35.0
@@ -39,6 +54,11 @@ var walls_built: int = 0
 var reached: int = 0              # people in front of a door as it gave way
 var hurt: int = 0                 # and how many of them it scratched
 var first_wave: int = 0
+var calling: bool = false         # the last call is being counted
+var call_left: float = 0.0
+var left_people: int = 0          # who stayed on the platform as it left
+var cost_paid: Dictionary = {"coal": 0, "plow_part": 0}   # what going unready cost
+var track_at_leave: int = -1      # the dead on the track as it left
 var opened_at: float = 0.0
 
 
@@ -92,9 +112,70 @@ func target(n: int, from = null) -> Vector3:
 	return FieldGrid.center(mine[n % mine.size()]["cell"])
 
 
+## "We leave now": the count starts. It cannot be called off.
+func last_call() -> void:
+	if not on or calling:
+		return
+	calling = true
+	call_left = LAST_CALL_S
+	game.set_radio("기관사: 셋을 센다. 탈 사람은 타라!", "must")
+
+
+## Coal and plough parts that going now would cost for being unready, on top
+## of the plough's price: {"coal", "plow_part"}.
+func early_cost() -> Dictionary:
+	if ready or total <= 0.0:
+		return {"coal": 0, "plow_part": 0}
+	var short: float = clampf(left / total, 0.0, 1.0)
+	for step: Array in EARLY_STEPS:
+		if short < float(step[0]):
+			return {"coal": int(step[1]), "plow_part": int(step[2])}
+	return {"coal": 0, "plow_part": 0}
+
+
+## The dead the plough would push through, going now. Which way the train
+## leaves is not S2's to say: the fuller side of the track.
+func track_now() -> int:
+	var t: Dictionary = game.track_dead()
+	return maxi(int(t["west"]), int(t["east"]))
+
+
+## The plough's price for that many dead on the track: {"parts", "word"}.
+static func plough(dead: int) -> Dictionary:
+	for step: Array in PLOUGH_STEPS:
+		if dead <= int(step[0]):
+			return {"parts": int(step[1]), "word": String(step[2])}
+	return {"parts": 0, "word": ""}
+
+
+## The trust that leaving this many people behind costs.
+static func trust_drop(people: int) -> int:
+	if people <= 0:
+		return 0
+	return mini(TRUST_FIRST + TRUST_EACH_MORE * (people - 1), TRUST_MOST)
+
+
+## The train is going: what stood on the track is kept for the end lines.
+func note_leaving() -> void:
+	if track_at_leave < 0:
+		track_at_leave = track_now()
+
+
 func tick(delta: float) -> void:
 	if not on:
 		return
+	if calling:
+		call_left -= delta
+		if call_left <= 0.0:
+			calling = false
+			# The train does not go without its chief: the call is lost.
+			if not game.aboard(game.player):
+				game.set_radio("기관사: 열차장이 안 탔다. 못 떠난다.", "must")
+			else:
+				leaving_early()
+				game.audio.depart()
+				game.finish("departed")
+				return
 	left -= delta
 	for door: Dictionary in doors:
 		var at: Vector3 = FieldGrid.center(door["cell"])
@@ -252,6 +333,7 @@ func _show_wall(door: Dictionary) -> void:
 
 func leaving_early() -> void:
 	if on:
+		cost_paid = early_cost()
 		early = true
 		on = false
 
@@ -267,6 +349,10 @@ func result() -> Dictionary:
 		"ready": ready, "early": early, "leftSec": int(ceil(maxf(left, 0.0))), "doors": states,
 		"damaged": count("damaged"), "breached": count("breached"), "entered": entered,
 		"walls": walls_built, "waves": waves(), "reached": reached, "hurt": hurt,
+		"leftPeople": left_people, "earlyCost": cost_paid,
+		"leftShare": snappedf(clampf(left / total, 0.0, 1.0), 0.01) if total > 0.0 else 0.0,
+		"trustDrop": trust_drop(left_people),
+		"trackDead": maxi(track_at_leave, 0), "ploughParts": int(plough(maxi(track_at_leave, 0))["parts"]),
 	}
 
 
@@ -282,7 +368,10 @@ func leave_lines() -> Array:
 	if n > 0:
 		head = "%s 물결에서 떠났다" % (ORDINALS[n - 1] if n <= ORDINALS.size() else "%d번째" % n)
 	var how: String = "채비를 다 채웠다" if ready else "채비 %d초를 남겼다" % int(ceil(maxf(left, 0.0)))
-	return [head, "%s · 문 멀쩡 %d · 상함 %d · 뚫림 %d" % [how, count("whole"), count("damaged"), count("breached")]]
+	var out: Array = [head, "%s · 문 멀쩡 %d · 상함 %d · 뚫림 %d" % [how, count("whole"), count("damaged"), count("breached")]]
+	if left_people > 0:
+		out.append("남기고 온 사람 %d" % left_people)
+	return out
 
 
 func end_lines() -> Array:
@@ -290,8 +379,20 @@ func end_lines() -> Array:
 		return []
 	var r := result()
 	var how := "채비를 다 채우고 떠났다" if ready else ("채비 %d초를 남기고 떠났다" % int(r["leftSec"]) if early else "채비 중에 끝났다")
-	return [
+	var out: Array = [
 		"버티기 판: %s · 물결 %d번" % [how, int(r["waves"])],
 		"상한 문 %d · 뚫린 문 %d · 뚫린 문으로 든 것 %d · 세운 방벽 %d" % [int(r["damaged"]), int(r["breached"]), int(r["entered"]), int(r["walls"])],
 		"문이 뚫릴 때 그 앞에 있던 사람 %d · 그 가운데 긁힌 사람 %d" % [reached, hurt],
 	]
+	if ready or early:
+		var push: Dictionary = plough(int(r["trackDead"]))
+		var cost: String = "%s · 떠나는 값: 쟁기 부품 %d" % [push["word"], int(push["parts"])]
+		if ready:
+			cost = "끝까지 버텼다 · " + cost
+		if int(cost_paid["coal"]) > 0 or int(cost_paid["plow_part"]) > 0:
+			cost += " · 덜 된 채비로 석탄 +%d, 부품 +%d" % [int(cost_paid["coal"]), int(cost_paid["plow_part"])]
+		out.append(cost)
+	# A number, never a name (user decision 147).
+	if left_people > 0:
+		out.append("남기고 온 사람 %d · 신임 −%d" % [left_people, trust_drop(left_people)])
+	return out

@@ -57,6 +57,7 @@ func test_a_held_train_leaving_gets_a_beat_before_the_end_card() -> void:
 	assert_eq(game.holdout.leave_lines()[0], "12번째 물결에서 떠났다")
 	assert_true(String(game.holdout.leave_lines()[1]).begins_with("채비 %d초를 남겼다" % int(ceil(game.holdout.left))))
 	game.depart()
+	game.holdout.tick(FieldHoldout.LAST_CALL_S + 0.1)
 	assert_true(game.ended)
 	assert_false(hud.leaving.is_empty(), "the beat is on")
 	assert_false(hud.modal_open, "the end card waits")
@@ -238,11 +239,101 @@ func test_called_on_leaving_it_opens_first_and_leaving_again_goes_early() -> voi
 	assert_true(h.on)
 	h.tick(30.0)
 	game.depart()
+	assert_false(game.ended, "a last call first")
+	h.tick(FieldHoldout.LAST_CALL_S)
 	assert_true(game.ended)
 	var note: Dictionary = game.receipt.to_dict()["placeState"]["holdout"]
 	assert_false(note["ready"])
 	assert_true(note["early"])
 	assert_eq(int(note["leftSec"]), 270)
+
+
+# User decision 143: leaving can be called at any time; a count of three, and
+# whoever is not at the train when it ends stays on the platform, shouting.
+func test_the_last_call_counts_three_and_leaves_behind_whoever_missed_it() -> void:
+	var game = _game({"holdout": "start"})
+	var h = game.holdout
+	var mates: Array = game.squad.filter(func(p): return p != game.player)
+	var late = mates[0]
+	late.position = game.player.position + Vector3(0, 0, 40)
+	assert_false(game.aboard(late))
+	assert_true(game.aboard(game.player))
+	var coal_before: Dictionary = h.early_cost()
+	assert_eq(int(coal_before["coal"]), 10, "nothing is ready yet: the most it can cost")
+	assert_eq(game.outside(), 1, "the card can say who would stay")
+	game.depart()
+	assert_true(h.calling)
+	assert_false(game.ended)
+	h.tick(1.0)
+	assert_almost_eq(h.call_left, FieldHoldout.LAST_CALL_S - 1.0, 0.01)
+	game.depart()
+	assert_almost_eq(h.call_left, FieldHoldout.LAST_CALL_S - 1.0, 0.01, "calling again does not start it over")
+	h.tick(2.1)
+	assert_true(game.ended)
+	assert_eq(h.left_people, 1)
+	assert_true(late.brain.get("left_behind", false), "for the protest motion to read")
+	var shouted: Array = game.hud.says.filter(func(s): return s["p"] == late)
+	assert_eq(shouted.size(), 1)
+	assert_eq(String(shouted[0]["line"]), "나도 데리고가 시발새끼들아!!")
+	assert_true(game.receipt.to_dict()["people"]["leftBehind"].has(late.pid))
+	assert_true(h.end_lines().has("남기고 온 사람 1 · 신임 −12"))
+	assert_true(h.end_lines().has("선로 비었다 · 떠나는 값: 쟁기 부품 0 · 덜 된 채비로 석탄 +10, 부품 +2"))
+	assert_true(h.leave_lines().has("남기고 온 사람 1"))
+	var note: Dictionary = game.receipt.to_dict()["placeState"]["holdout"]
+	assert_eq(int(note["leftPeople"]), 1)
+	assert_eq(int(note["earlyCost"]["coal"]), 10)
+	assert_eq(int(note["earlyCost"]["plow_part"]), 2)
+	assert_eq(int(note["trustDrop"]), 12)
+	assert_eq(int(note["trackDead"]), 0)
+	assert_almost_eq(float(note["leftShare"]), 1.0, 0.011, "one second of three hundred gone")
+
+
+func test_going_unready_costs_less_the_readier_the_train_is() -> void:
+	var game = _game({"holdout": "start"})
+	var h = game.holdout
+	# The play check's four steps (starting values): [share left, coal, parts].
+	for row: Array in [[0.9, 10, 2], [0.6, 7, 1], [0.4, 4, 1], [0.1, 2, 0]]:
+		h.left = h.total * float(row[0])
+		assert_eq(int(h.early_cost()["coal"]), int(row[1]), "coal with %s left" % row[0])
+		assert_eq(int(h.early_cost()["plow_part"]), int(row[2]), "parts with %s left" % row[0])
+	h.ready = true
+	assert_eq(int(h.early_cost()["coal"]), 0)
+
+
+# User decision 147: 12 for the first, 4 for each one more, 24 at the most.
+func test_leaving_people_costs_trust_by_how_many() -> void:
+	assert_eq(FieldHoldout.trust_drop(0), 0, "things left behind cost none")
+	assert_eq(FieldHoldout.trust_drop(1), 12)
+	assert_eq(FieldHoldout.trust_drop(2), 16)
+	assert_eq(FieldHoldout.trust_drop(4), 24)
+	assert_eq(FieldHoldout.trust_drop(9), 24)
+
+
+# User decision 146: holding to the end gives no goods; the price of leaving
+# is the plough's alone, by the dead on the track (s1c_domestic 6.6).
+func test_the_plough_price_goes_by_the_dead_on_the_track() -> void:
+	for row: Array in [[0, 0, "선로 비었다"], [10, 1, "망자 몇"], [11, 2, "무리"], [30, 2, "무리"], [31, 3, "큰 무리"]]:
+		var push: Dictionary = FieldHoldout.plough(int(row[0]))
+		assert_eq(int(push["parts"]), int(row[1]), "%d on the track" % row[0])
+		assert_eq(String(push["word"]), String(row[2]))
+	var game = _game({"holdout": "start"})
+	var h = game.holdout
+	h.tick(h.total + 1.0)
+	assert_true(game.ended)
+	assert_true(h.end_lines().has("끝까지 버텼다 · 선로 비었다 · 떠나는 값: 쟁기 부품 0"))
+
+
+# Proposed, not decided: the train does not go without its chief.
+func test_the_last_call_is_lost_if_the_chief_is_not_at_the_train() -> void:
+	var game = _game({"holdout": "start"})
+	var h = game.holdout
+	game.player.position += Vector3(0, 0, 40)
+	game.depart()
+	h.tick(FieldHoldout.LAST_CALL_S + 0.1)
+	assert_false(game.ended, "it waits")
+	assert_false(h.calling)
+	assert_true(h.on, "and the doors are still to be held")
+	assert_string_contains(String(game.radio_wait["text"]), "열차장이 안 탔다", "the driver says why")
 
 
 func test_a_map_with_doors_on_the_upper_side_only_or_none_still_holds() -> void:
