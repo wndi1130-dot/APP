@@ -296,7 +296,13 @@
 .tnode { position: relative; min-width: 0; min-height: 76px; padding: 8px 6px 6px; text-align: center; justify-items: center; align-content: start; gap: 4px; }
 .tnode__icon { position: relative; display: inline-flex; }
 .tnode__icon .icon { width: 16px; height: 16px; }
-.tnode__var { position: absolute; right: -13px; top: -4px; font-size: 12px; font-style: normal; color: var(--brass); }
+/* 「둘 중 하나」 칸(결정 068): 두 칸 너비를 쓴다(점선 테두리는 모르는 기술의 표시라 쓰지 않는다). 두 쪽 사이에 「또는」, 고르면 다른 쪽은 닫힌다. */
+.tnode--pair { grid-column: span 2; }
+.tnode__pair { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 4px; font-size: 12px; line-height: 1.3; }
+.tnode__half { min-width: 0; word-break: keep-all; padding: 2px 4px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--ink-2); }
+.tnode__half.is-on { border-color: var(--brass); color: var(--ink-1); }
+.tnode__half.is-shut { opacity: .35; border-style: dashed; }
+.tnode__or { font-style: normal; font-size: 12px; color: var(--ink-3); }
 .tnode .dom-node__name { font-size: 13px; line-height: 1.35; }
 .tnode__foot { display: inline-flex; align-items: center; gap: 2px; min-height: 14px; font-size: 12px; letter-spacing: 1px; }
 .tnode__foot .icon { width: 13px; height: 13px; }
@@ -326,6 +332,8 @@
   .tplan__label { display: inline-flex; justify-self: start; min-height: 28px; }
   .tplan__col.is-on .tplan__label { color: var(--ink-1); font-weight: 700; }
   .tplan__tier { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .tnode--pair { grid-column: 1 / -1; }
+
   .tplan__detail { max-height: 34vh; }
 }
 
@@ -347,3 +355,7 @@
 .tblk { position: relative; }
 .tblk > .dom-potdot { position: absolute; top: 2px; right: 8px; min-height: 20px; padding: 0 8px; font-size: 12px; }
 .dom-potdot .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brass); display: inline-block; margin-right: 4px; }
+/* 기둥이 좁은 너비에서는 「둘 중 하나」의 두 쪽을 위아래로 쌓는다(낱말이 중간에 끊기지 않게). */
+@media (min-width: 1024px) and (max-width: 1400px) and (min-height: 600px) {
+  .tnode__pair { grid-template-columns: minmax(0, 1fr); justify-items: stretch; gap: 2px; }
+}

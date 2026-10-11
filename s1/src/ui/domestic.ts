@@ -573,6 +573,14 @@ function nodeFoot(g: Game, id: TechId, ns: NodeState): (Node | string | null)[] 
   return [need > 0 ? '●'.repeat(have) + '○'.repeat(need - have) : null, blocked ? icon('lock') : null];
 }
 
+/** 「둘 중 하나」 칸의 두 쪽(결정 068): 고르기 전에는 둘 다 열려 있고, 한쪽을 고르면 다른 쪽은 닫힌다. 변형이 없는 기술이면 null. */
+export function pairHalves(g: Game, id: TechId): { v: Variant; name: string; state: 'open' | 'on' | 'shut' }[] | null {
+  const def = TECHS[id];
+  if (!def.variants) return null;
+  const picked = g.dom?.techs[id]?.variant;
+  return (['a', 'b'] as const).map(v => ({ v, name: def.variants![v].name, state: !picked ? 'open' : picked === v ? 'on' : 'shut' }));
+}
+
 function techNode(g: Game, id: TechId, sel: boolean, first: boolean): HTMLElement {
   const d = g.dom!;
   const def = TECHS[id];
@@ -580,13 +588,19 @@ function techNode(g: Game, id: TechId, sel: boolean, first: boolean): HTMLElemen
   const st = d.techs[id];
   const tag = ns === 'faded' && st?.stage === 'defective' ? '결함판' : NODE_TAG[ns];
   const promise = researchPromise(g)?.tech === id;
+  const halves = pairHalves(g, id);
   return h('button', {
-    class: cx('dom-node', 'tnode', `is-${ns}`, def.tier === 0 && 'is-adapt', sel && 'is-sel'), 'data-action': 'dom-node', 'data-id': id,
-    'aria-label': `${def.name} ${tag}${promise ? ' 약속' : ''}${first ? ' 먼저' : ''}`,
+    class: cx('dom-node', 'tnode', `is-${ns}`, def.tier === 0 && 'is-adapt', sel && 'is-sel', halves && 'tnode--pair'), 'data-action': 'dom-node', 'data-id': id,
+    'aria-label': `${def.name} ${tag}${halves ? ' 둘 중 하나' : ''}${promise ? ' 약속' : ''}${first ? ' 먼저' : ''}`,
   },
     first ? h('small', { class: 'tnode__first' }, '먼저') : promise ? h('i', { class: 'tnode__ribbon' }) : null,
-    h('span', { class: 'tnode__icon' }, icon(BRANCH_ICON[def.branch]), def.variants && !st?.variant ? h('i', { class: 'tnode__var' }, '◆') : null),
-    h('span', { class: 'dom-node__name' }, techTitle(g, id)),
+    h('span', { class: 'tnode__icon' }, icon(BRANCH_ICON[def.branch])),
+    h('span', { class: 'dom-node__name' }, halves ? def.name : techTitle(g, id)),
+    // 둘 중 하나만 고르는 칸(결정 068): 두 쪽을 나란히 두고 사이에 「또는」. 고른 쪽만 남고 다른 쪽은 닫힌다.
+    halves ? h('span', { class: 'tnode__pair' },
+      h('span', { class: cx('tnode__half', `is-${halves[0]!.state}`) }, halves[0]!.name),
+      h('i', { class: 'tnode__or' }, '또는'),
+      h('span', { class: cx('tnode__half', `is-${halves[1]!.state}`) }, halves[1]!.name)) : null,
     h('span', { class: 'tnode__foot num' }, ...nodeFoot(g, id, ns)));
 }
 
