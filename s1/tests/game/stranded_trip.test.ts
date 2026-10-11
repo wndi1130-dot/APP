@@ -321,7 +321,9 @@ describe('판을 돌리면', () => {
     const { g } = playGame('trip-bot-1', {
       s1c: true, policy: 'caretaker', dom: 'engaged',
       probe: {
-        beforePick: (gg: Game) => { if (!dropped && gg.seg >= 3) { dropped = true; gg.coal = 1; } for (const c of gg.cards) kinds.add(c.kind); },
+        // 석탄은 카드를 고른 뒤에 떨군다(고르기 직전에 떨구면 석탄을 쓰는 카드의 고른 칸이 막힌다)
+        beforePick: (gg: Game) => { for (const c of gg.cards) kinds.add(c.kind); },
+        afterPick: (gg: Game) => { if (!dropped && gg.seg >= 3) { dropped = true; gg.coal = 1; } },
       },
     } as never);
     expect(dropped).toBe(true);

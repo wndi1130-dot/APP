@@ -860,7 +860,7 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
     const skillShort = check.full === `${['', '견습', '숙련', '장인'][def.tier]} 이상이 없다`;
     // 드는 것 한 줄: 모자란 것만 붉다. 막힌 까닭과 쓸 법 표는 단추마다 같으니 여기 한 번만 적는다.
     buttons.push(h('div', { class: 'dom-common' },
-      h('span', { class: 'cost num' }, `부품 −${cost.parts}`), cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null,
+      cost.parts ? h('span', { class: 'cost num' }, `부품 −${cost.parts}`) : null, cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null, cost.scrap ? h('span', { class: 'cost num' }, `고철 −${cost.scrap}`) : null,
       h('span', { class: cx('cost num', frags < cost.frags && 'is-red') }, tip('조각', FRAG_FROM + findsLine(g, 'frag', def.branch)), ` ${frags}/${cost.frags}`),
       cost.core ? h('span', { class: cx('cost num', d.cores < cost.core && 'is-red') }, tip('코어', CORE_FROM + findsLine(g, 'core')), ` ${d.cores}/${cost.core}`) : null,
       def.tier > 0 ? h('span', { class: cx('cost', skillShort && 'is-red') }, `${FIELD_NAME[def.branch]} ${SKILL_NAME[def.tier]}↑`) : null,

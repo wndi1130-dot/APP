@@ -378,7 +378,7 @@ function pipeGame(seed = 'pipe', variant: Variant = 'a'): Game {
   const d = g.dom!;
   d.techs.e1 = { stage: 'done', defect: false, progress: 3, need: 3 };
   d.frags.engine = 5;
-  d.parts = 6;
+  d.parts = 6; d.wood = 200; d.scrap = 200;
   expect(startRestore(g, 'e3', 'full', variant)).toBe(true);
   return g;
 }
@@ -411,7 +411,7 @@ describe('E3 배관 추인(7.3)', () => {
     const d = g.dom!;
     d.techs.e1 = { stage: 'done', defect: false, progress: 3, need: 3 };
     d.frags.engine = 10;
-    d.parts = 20;
+    d.parts = 20; d.wood = 200; d.scrap = 200;
     const tail0 = g.comms.tail.rel;
     for (let i = 0; i < 3; i += 1) {
       expect(startRestore(g, 'e3', 'full', 'a')).toBe(true);
@@ -426,7 +426,7 @@ describe('E3 배관 추인(7.3)', () => {
     const d = g.dom!;
     d.techs.e1 = { stage: 'done', defect: false, progress: 3, need: 3 };
     d.frags.engine = 5;
-    d.parts = 6;
+    d.parts = 6; d.wood = 200; d.scrap = 200;
     const before = relSnap(g);
     expect(startRestore(g, 'e3', 'full', 'a')).toBe(true);
     expect(relSnap(g)).toEqual(before);
@@ -448,7 +448,7 @@ describe('E3 배관 추인(7.3)', () => {
     const d = g.dom!;
     d.techs.e1 = { stage: 'done', defect: false, progress: 3, need: 3 };
     d.frags.engine = 5;
-    d.parts = 6;
+    d.parts = 6; d.wood = 200; d.scrap = 200;
     addCard(g, { kind: 'dom:fork', text: 'e3', n: 0 });
     const card = g.cards[g.cards.length - 1];
     const view = viewCard(g, card);
@@ -687,7 +687,7 @@ describe('E3 배관 추인(7.3)', () => {
     openAndVote(g, -100);
     expect(g.dom!.pipeFlip).toBe('b');
     cancelRestore(g);
-    g.dom!.parts = 6;
+    g.dom!.parts = 6; g.dom!.wood = 200; g.dom!.scrap = 200;
     const before = relSnap(g);
     expect(startRestore(g, 'e3', 'full', 'a')).toBe(true);
     const st = g.dom!.techs.e3!;
@@ -729,7 +729,7 @@ describe('E3 배관 추인(7.3)', () => {
     const d = g.dom!;
     d.techs.w1 = { stage: 'done', defect: false, progress: 3, need: 3 };
     d.frags.craft = 5;
-    d.parts = 6;
+    d.parts = 6; d.wood = 200; d.scrap = 200;
     const before = relSnap(g);
     expect(startRestore(g, 'w2', 'full', 'b')).toBe(true);
     expect(d.techs.w2!.pending).toBeFalsy();

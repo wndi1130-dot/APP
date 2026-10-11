@@ -38,6 +38,7 @@ function atFreight(): Game {
   for (let n = 0; n < 20 && g.phase !== 'stop'; n += 1) {
     if (g.cards.length) chooseCard(g, g.cards[0].uid, 0); else advance(g);
   }
+  g.stop!.place = 'freight'; // 첫 묶음의 노선(결정 136)엔 화물역이 없어 장소를 정한다
   return g;
 }
 

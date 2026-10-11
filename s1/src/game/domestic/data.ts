@@ -19,7 +19,8 @@ export const D = {
   work: 4, workSkill: [0.5, 0.75, 1, 1.25], w1Work: 1.25, teachWork: 0.85,
   // 6.2 일 목록
   partWork: 1, partScrap: 2, partWood: 1,
-  restoreWork: [3, 3, 6, 12], restoreParts: [0, 2, 4, 8], restoreFrags: [0, 1, 2, 3], defectFrags: [0, 1, 1, 2],
+  restoreWork: [3, 3, 6, 12], restoreParts: [0, 0, 0, 4], restoreWood: [0, 4, 10, 0], restoreScrap: [0, 0, 4, 10], // 결정 136·144: 단 1까지 목재만, 단 2는 목재와 고철, 단 3은 고철과 부품과 코어(숫자는 제안, 구현 명세 3-3·3-4절)
+  restoreFrags: [0, 1, 2, 3], defectFrags: [0, 1, 1, 2],
   adaptWork: 3, finishWork: 2,
   insulateWork: 3, insulateWood: 8,
   armorWork: 4, armorScrap: 12, armorExposure: 10,
@@ -160,7 +161,7 @@ export const TECHS: Record<TechId, TechDef> = {
     },
   }),
   e4: T({ id: 'e4', branch: 'engine', tier: 3, name: '과열 증기', effect: '눈 녹이기 당번: 노출 벌 없음. 대체 화부의 석탄 벌 없음', upkeep: { parts: 0.5 }, like: ['engine'] }),
-  e5: T({ id: 'e5', branch: 'engine', tier: 0, name: '단열 개조', effect: '단열 개조가 열린다(칸마다 목재 8). 단열한 객차는 난방 배당의 온기 벌이 없다', like: ['tail'], dislike: ['engine'], adapt: { parts: 1, wood: 4 } }),
+  e5: T({ id: 'e5', branch: 'engine', tier: 0, name: '단열 개조', effect: '단열 개조가 열린다(칸마다 목재 8). 단열한 객차는 난방 배당의 온기 벌이 없다', like: ['tail'], dislike: ['engine'], adapt: { parts: 0, wood: 6 } }),
   m1: T({ id: 'm1', branch: 'med', tier: 1, name: '응급 처치', effect: '새 부상이 하루 빨리 낫는다, 발진티푸스 사망 15% → 10%', like: ['medtech'] }),
   m2: T({ id: 'm2', branch: 'med', tier: 2, name: '환자 분류 기준', effect: '중환자 분류(기준) 법이 열린다', like: ['medtech'], dislike: ['tail'] }),
   m3: T({
