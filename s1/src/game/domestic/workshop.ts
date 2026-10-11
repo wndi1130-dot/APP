@@ -24,6 +24,8 @@ export function workPower(g: Game): number {
   const craft = topSkill(g, 'craft');
   let w = D.work * D.workSkill[craft] * ZONE_WORK[zoneOf(g, 'workshop')] * (1 + (D.w1Work - 1) * techMult(g, 'w1'));
   if (d.people.some(p => p.alive && !p.gone && p.field === 'craft' && p.pupil && !p.resting)) w *= D.teachWork;
+  // 조리 담당을 둔 동안 손 하나가 솥으로 빠진다(시제품)
+  if (D.potCook && d.pot?.cook && d.people.some(p => p.id === d.pot?.cook && p.alive && !p.gone)) w *= D.potCookWork;
   return w;
 }
 

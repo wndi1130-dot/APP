@@ -2,6 +2,7 @@ import { bump, bumpRel } from '../ledger';
 import { COMMS } from '../data';
 import { addCard, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
+import type { DomPerson } from './state';
 import { D } from './data';
 import { refreshSit } from './sit';
 
@@ -26,6 +27,8 @@ export interface PotState {
   caught: number;
   /** 마지막으로 들킨 구간 */
   caughtAt?: number;
+  /** 조리 담당(내정 사람 id). 시제품 */
+  cook?: string;
 }
 
 const NONE: Readonly<PotState> = { mode: 'plain', heat: 0, thinRun: 0, thinSegs: 0, mixedSegs: 0, caught: 0 };
@@ -40,9 +43,24 @@ export function potUsable(g: Game, mode: PotMode): { ok: boolean; why?: string }
   const d = g.dom;
   if (mode === 'plain') return { ok: true };
   if (!d) return { ok: false, why: '내정을 켠 판에서만 고른다' };
+  if (D.potCook && !potCook(g)) return { ok: false, why: '담당 없음' };
   if (g.food <= 0) return { ok: false, why: '불릴 식량이 없다' };
   if (mode === 'mixed' && d.wood < D.potMixWood) return { ok: false, why: '섞을 목재가 없다' };
   return { ok: true };
+}
+
+/** 조리 담당(살아서 열차에 있는 사람만). 시제품 */
+export function potCook(g: Game): DomPerson | undefined {
+  const id = g.dom?.pot?.cook;
+  return id ? g.dom?.people.find(p => p.id === id && p.alive && !p.gone) : undefined;
+}
+
+/** 조리 담당을 세우거나(id) 내린다(null). 시제품 */
+export function setPotCook(g: Game, id: string | null): void {
+  const d = g.dom;
+  if (!d) return;
+  if (id && !d.people.some(p => p.id === id && p.alive && !p.gone)) return;
+  d.pot = { ...potOf(g), cook: id ?? undefined };
 }
 
 /** 솥의 방식을 고른다(열차 전체에 하나). 못 고르는 방식이면 그대로 둔다. */
@@ -73,7 +91,9 @@ export function potFoodMult(g: Game): number {
 
 /** 이번 구간에 섞으면 들킬 확률(0~1). */
 export function potRisk(g: Game): number {
-  return Math.min(1, D.potRisk0 + potOf(g).heat);
+  const cook = D.potCook ? potCook(g) : undefined;
+  const sour = cook && g.comms[cook.comm].rel < 0 ? D.potCookRisk : 0;
+  return Math.min(1, D.potRisk0 + potOf(g).heat + sour);
 }
 
 /** 정산 때 솥 한 구간. 공방이 목재를 쓰기 전에 부른다(예고와 같은 목재를 본다). '그대로'면 아무것도 하지 않고 난수도 굴리지 않는다. */
@@ -81,6 +101,10 @@ export function potTick(g: Game, notes: string[]): void {
   const d = g.dom;
   const pot = d?.pot;
   if (!d || !pot) return;
+  if (D.potCook && pot.mode !== 'plain' && !potCook(g)) {
+    pot.mode = 'plain';
+    notes.push('솥을 맡은 사람이 없어 솥이 그대로로 돌아갔다.');
+  }
   const mode = potActive(g);
   if (pot.mode === 'mixed' && mode !== 'mixed') {
     pot.mode = 'plain';

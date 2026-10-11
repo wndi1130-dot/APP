@@ -5,7 +5,7 @@ import {
   advance, canLift, enterMartial, liftMartial, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
-  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableBudget, enableEventPack, potOf, setPot,
+  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableBudget, enableEventPack, potOf, setPot, potCook, setPotCook, D,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -436,6 +436,11 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       if (opts.policy === 'caretaker' && !opts.noLevers) { autoLevers(g); spacePolicy(g); }
       if ((g.space?.step ?? 0) > 0) m.spaceSegs += 1;
       if (opts.s1c && opts.dom === 'engaged') domesticPrep(g);
+      if (opts.pot && D.potCook && g.dom && !potCook(g)) {
+        // 담당은 열차장과 사이가 가장 좋은 칸의 사람으로 세운다(사람이 고를 법한 쪽)
+        const best = g.dom.people.filter(p => p.alive && !p.gone).sort((a, b) => g.comms[b.comm].rel - g.comms[a.comm].rel)[0];
+        if (best) setPotCook(g, best.id);
+      }
       if (opts.pot) {
         const rest = (opts.pot !== 'thin' && opts.pot !== 'mixed' && g.food >= POT_LOW) || (opts.pot === 'mixed_once' && potOf(g).caught > 0);
         setPot(g, rest ? 'plain' : opts.pot.startsWith('thin') ? 'thin' : 'mixed');
