@@ -2,6 +2,7 @@ import { CUES, clipTable, createPlanner, cueForAction } from './cues';
 import type { Cue } from './cues';
 import { createEngine } from './engine';
 import { soundOn } from './settings';
+import { createStallPlan, trackTable } from './stall';
 
 // 손끝 소리(sound_music 8b.1). 화면 파일을 고치지 않고 root 한 자리에서 듣는다:
 // - 단추를 누름(click의 data-action) → 재질과 무게에 맞는 박자(cues.ts의 표)
@@ -10,6 +11,7 @@ import { soundOn } from './settings';
 // 소리만 낸다. 화면을 바꾸지 않고 규칙에도 닿지 않는다. 메뉴의 '소리'로 끄면 아무것도 하지 않는다.
 
 const FILES = import.meta.glob('./clips/*.wav', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const STALL_FILES = import.meta.glob('./stall/*.wav', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
 function makeContext(): AudioContext | null {
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -23,7 +25,7 @@ function makeContext(): AudioContext | null {
 
 export function installSound(root: HTMLElement): void {
   const clips = clipTable(FILES);
-  const engine = createEngine({ makeContext, clips, load: url => fetch(url).then(r => r.arrayBuffer()) });
+  const engine = createEngine({ makeContext, clips, tracks: trackTable(STALL_FILES), load: url => fetch(url).then(r => r.arrayBuffer()) });
   const plan = createPlanner(Object.fromEntries(CUES.map(c => [c, clips[c].length])) as Record<Cue, number>);
   const fire = (cue: Cue) => {
     const shot = plan(cue, performance.now());
@@ -66,4 +68,19 @@ export function installSound(root: HTMLElement): void {
     const el = event.target as HTMLInputElement | null;
     if (el?.tagName === 'INPUT' && el.type === 'range') fire('lever.notch');
   });
+
+  // 멈춘 열차로 들어가는 연출(결정 101): 화면이 홈 뿌리에 붙이는 data-beat가 바뀌는 것만 지켜본다(stall.ts).
+  // 화면이 다시 그려져 홈이 새로 만들어져도 값이 같으면 같은 박이다.
+  const stall = createStallPlan();
+  const onBeat = () => {
+    const beat = root.querySelector<HTMLElement>('[data-beat]')?.dataset.beat ?? null;
+    for (const act of stall(beat, soundOn())) {
+      if (act.do === 'hold') engine.hold(act.track, act);
+      else if (act.do === 'bend') engine.bend(act.track, act.rate, act.gain, act.ms);
+      else engine.release(act.track, act.ms);
+    }
+  };
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(onBeat).observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-beat'] });
+  }
 }
