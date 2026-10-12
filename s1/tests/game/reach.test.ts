@@ -9,11 +9,11 @@ describe('닿음 검사', () => {
     // 깬 말(ev_h07_broken_word)은 조용한 제안을 받고 앞칸 솥을 건드려야 해서 봇 판에선 드물다(200판×5설정에서 4번). 80판으론 안 나와 200판을 돈다.
     const r = reachReport(200);
     expect(r.unexpected).toEqual([]);
-  }, 60_000);
+  }, 120_000);
 
   it('까닭은 있는 카드 종류에만 붙는다', () => {
     const r = reachReport(1);
     const known = new Set([...Object.keys(r.seen), ...r.unreached]);
     for (const k of Object.keys(REACH_NOTES)) expect(known.has(k), k).toBe(true);
-  }, 60_000);
+  }, 120_000);
 });

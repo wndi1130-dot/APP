@@ -14,8 +14,8 @@ import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, STAY } from './data';
-import type { Comm, LootKey, StayId } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
+import type { Comm, LootKey, PlaceDef, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, CREW_BUSY, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
@@ -332,8 +332,24 @@ function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
   return loot.coal / (g.coal + 1) > loot.food / (g.food + 1) ? 'coal' : 'food';
 }
 
+/** 이 구간의 정차 장소를 뽑는다(결정 136). 묶음의 무게로 뽑고, 풀어 주는 구간이면 그 목록에서 뽑는다. 주사위는 한 번만 굴린다(뒤의 주사위 순서가 안 밀리게).
+ * exclude: 핸드카 후보는 지금 장소를 뺀다. 풀어 주는 구간에선 목록의 다른 곳이 있으면 그것, 없으면 무게로 뽑는다. */
+export function pickPlace(g: Game, exclude?: string): PlaceDef {
+  const r = rnd(g);
+  const band = ROUTE.find(b => g.seg <= b.to) ?? ROUTE[ROUTE.length - 1];
+  if (g.seg === band.relief.seg) {
+    const ids = band.relief.places.filter(id => id !== exclude);
+    if (ids.length > 0) return PLACES.find(p => p.id === ids[Math.floor(r * ids.length)]) ?? PLACES[0];
+  }
+  const cands = PLACES.filter(p => p.id !== exclude && (band.w[p.id] ?? 0) > 0);
+  const sum = cands.reduce((a, p) => a + band.w[p.id], 0);
+  let acc = 0;
+  for (const p of cands) { acc += band.w[p.id]; if (r * sum < acc) return p; }
+  return cands[cands.length - 1] ?? PLACES[0];
+}
+
 function arriveStop(g: Game): void {
-  const place = PLACES[Math.floor(rnd(g) * PLACES.length)];
+  const place = pickPlace(g);
   const tail = g.comms.tail.promise?.cond.kind === 'skip_dispatch';
   // 같은 장소라도 정차마다 바깥 기척이 다르다. 무리 흔적이 있으면 기본 준비로도 죽음 줄이 뜰 수 있다.
   const roll = rnd(g);
@@ -347,8 +363,7 @@ function arriveStop(g: Game): void {
   if (g.dom) {
     g.dom.altPlace = null;
     if (techMult(g, 'x2') > 0) {
-      const others = PLACES.filter(p => p.id !== place.id);
-      g.dom.altPlace = others[Math.floor(rnd(g) * others.length)].id;
+      g.dom.altPlace = pickPlace(g, place.id).id;
     }
   }
   g.phase = 'stop';
