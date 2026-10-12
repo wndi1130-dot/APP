@@ -1016,6 +1016,7 @@ func _process(delta: float) -> void:
 
 func _step(delta: float) -> void:
 	clock.advance(delta)
+	weather.dusk = clock.dusk_share()
 	var now := clock.elapsed
 	radio_t -= delta
 	_tick_radio(delta)
@@ -1458,6 +1459,7 @@ func set_lamps(on: bool) -> void:
 ## dark, and the dark with no lantern.
 func eye_mult() -> float:
 	var dark: bool = clock.is_dark()
+	weather.dusk = clock.dusk_share()
 	var mult: float = weather.sight_mult(dark)
 	return minf(mult, LAMP_OFF_SIGHT) if dark and not lamps_on() else mult
 

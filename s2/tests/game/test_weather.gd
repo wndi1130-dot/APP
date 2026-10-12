@@ -68,3 +68,25 @@ func test_scent_wind_and_cold() -> void:
 	assert_almost_eq(w.scent_mult(at, at + Vector3(0, 0, 5)), 0.6 * 0.9, 0.0001, "sideways")
 	var thaw = Weather.new(["sleet"], 1.0, Vector2(1, 0), 0.0)
 	assert_almost_eq(thaw.scent_mult(at, at + Vector3(5, 0, 0)), 1.0, 0.0001, "no wind, above zero")
+
+
+func test_sight_falls_evenly_from_1450_to_sunset() -> void:
+	var FieldClock = load("res://game/sim/field_clock.gd")
+	var clock = FieldClock.new()
+	var plain = Weather.new(["sleet"], 0.0)
+	plain.kinds = [] as Array[String]
+	var foggy = Weather.new()
+	var clear = Weather.new(["clear"])
+	# Game minute -> the share of a plain day's sight that is left.
+	var rows := {880: 1.0, 890: 1.0, 901: 0.91, 912: 0.82, 923: 0.73, 934: 0.64, 945: 0.55}
+	for minute: int in rows:
+		clock.elapsed = (minute - FieldClock.ARRIVE_MIN) * 60.0 / FieldClock.GAME_PER_REAL
+		for w in [plain, foggy, clear]:
+			w.dusk = clock.dusk_share()
+		assert_almost_eq(plain.sight_mult(clock.is_dark()), float(rows[minute]), 0.0001, str(minute))
+		assert_almost_eq(foggy.sight_mult(clock.is_dark()), minf(0.72, float(rows[minute])), 0.0001, "the shorter holds")
+	clock.elapsed = (917.5 - FieldClock.ARRIVE_MIN) * 60.0 / FieldClock.GAME_PER_REAL
+	clear.dusk = clock.dusk_share()
+	assert_almost_eq(clear.sight_mult(), 0.9, 0.0001, "a clear day falls from its own 1.25, with no step at 14:50")
+	plain.dusk = 0.3
+	assert_almost_eq(plain.sight_mult(true), 0.55, 0.0001, "after sunset it is the night value")

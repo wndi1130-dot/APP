@@ -4,6 +4,8 @@ extends RefCounted
 const GAME_PER_REAL := 15.0
 const ARRIVE_MIN := 630
 const SUNSET_MIN := 945
+## The light starts to go at 14:50 (user decision 210).
+const DUSK_MIN := 890
 const SAFE_SEC := 1200.0
 const LIMIT_SEC := 1800.0
 
@@ -35,6 +37,11 @@ func label() -> String:
 
 func is_dark() -> bool:
 	return game_minutes() >= float(SUNSET_MIN)
+
+
+## How far the light has gone: 0 until 14:50, evenly up to 1 at sunset.
+func dusk_share() -> float:
+	return clampf((game_minutes() - float(DUSK_MIN)) / float(SUNSET_MIN - DUSK_MIN), 0.0, 1.0)
 
 
 func sun_fraction() -> float:
