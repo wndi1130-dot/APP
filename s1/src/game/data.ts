@@ -441,3 +441,26 @@ export const UNIQUE_ACTION: Record<Comm, string> = {
 export const PROTEST: Record<Comm, string> = {
   engine: '파업', tail: '작업 거부', guard: '경계 거부', medtech: '진료 거부', front: '거래 거부',
 };
+
+// ---- 기관차 넷(결정 125·126·132, 벌 가 「연료와 칸」. 숫자와 이름은 설계 줄기의 처음 값·가안) ----
+export const LOCO_IDS = ['c1', 'c2', 'c3', 'c4'] as const;
+export type LocoId = typeof LOCO_IDS[number];
+export interface LocoSpec {
+  name: string; gain: string; loss: string; // 이름은 가안. 얻는 것·잃는 것은 숫자 없는 말
+  coal: number;               // 구간마다 드는 석탄에 더하는 몫
+  extraCarCoal: number | null; // 붙인 칸 하나당 석탄. null이면 내정 기본값
+  carChanceMult: number;      // 화물역 「쓸 만한 칸」 확률 곱(0이면 칸이 안 붙는다)
+  breakMult: number;          // 고장 확률 곱(0이면 고장이 없다)
+  repairParts: number | null; // 고장을 막는 데 드는 부품. null이면 내정 기본값
+  pressureAlways: boolean;    // 압력 경고가 숙련과 상관없이 뜬다
+  pressureChance: number | null; // pressureAlways일 때의 확률. null이면 내정 기본값
+  ventCoal: number | null;    // 김 빼기 석탄. null이면 내정 기본값
+  anyoneDrives: boolean;      // 기관 숙련이 없어도 서지 않고 파업 때도 간다
+}
+export const LOCO: Record<LocoId, LocoSpec> = {
+  c1: { name: '묵직한 놈', gain: '끄는 힘: 붙인 칸이 석탄을 안 먹고, 쓸 만한 칸이 더 자주 걸린다', loss: '늘 석탄을 더 먹는다', coal: 0.5, extraCarCoal: 0, carChanceMult: 2, breakMult: 1, repairParts: null, pressureAlways: false, pressureChance: null, ventCoal: null, anyoneDrives: false },
+  c2: { name: '긴 굴뚝', gain: '통풍이 좋아 석탄을 덜 먹는다', loss: '압력 경고가 숙련과 상관없이 자주 뜬다', coal: -1, extraCarCoal: null, carChanceMult: 1, breakMult: 1, repairParts: null, pressureAlways: true, pressureChance: 0.4, ventCoal: 2, anyoneDrives: false },
+  c3: { name: '고른 놈', gain: '고장이 없다', loss: '칸이 안 붙는다. 열차가 자라지 않는다', coal: 0, extraCarCoal: null, carChanceMult: 0, breakMult: 0, repairParts: null, pressureAlways: false, pressureChance: null, ventCoal: null, anyoneDrives: false },
+  c4: { name: '옛 보일러', gain: '누구나 몬다: 기관 숙련이 없어도 서지 않고 파업 때도 간다', loss: '고장이 잦고 고치는 데 부품이 배로 든다', coal: 0, extraCarCoal: null, carChanceMult: 1, breakMult: 2, repairParts: 4, pressureAlways: false, pressureChance: null, ventCoal: null, anyoneDrives: true },
+};
+export const LOCO_DEFAULT: LocoId = 'c3';

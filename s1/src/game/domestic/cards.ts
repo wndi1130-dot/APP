@@ -1,3 +1,4 @@
+import { locoRepairParts, locoVentCoal } from '../loco';
 import { COMM_NAME } from '../data';
 import { josa } from '../josa';
 import type { Comm } from '../data';
@@ -317,7 +318,7 @@ export function domView(g: Game, card: Card): CardView | null {
           ? '이음매에서 김이 샌다. 바늘이 붉은 칸을 넘었다. 이번엔 기관실 누구도 웃지 않는다.'
           : '견습이 모는 보일러 바늘이 붉은 칸에서 떨린다. 김을 빼면 석탄이 더 든다.',
         choices: [
-          { label: '김을 뺀다', say: '김을 빼라. 보일러보다 귀한 건 없다!', effs: [{ t: 'coal', v: -D.ventCoal }], special: 'dom:pressure:vent' },
+          { label: '김을 뺀다', say: '김을 빼라. 보일러보다 귀한 건 없다!', effs: [{ t: 'coal', v: -locoVentCoal(g) }], special: 'dom:pressure:vent' },
           last
             ? { label: '그대로 간다', say: '멈추면 다 얼어 죽는다. 그대로 간다!', effs: [], special: 'dom:pressure:go', extra: ['보일러가 터진다(판 끝)'] }
             : { label: '그대로 간다', say: '바늘은 늘 떤다. 그대로 간다!', effs: [], special: 'dom:pressure:go', extra: ['다음 경고가 마지막이다'] },
@@ -349,7 +350,7 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
     case 'short':
       if (arg === 'stand') {
         standDown(g);
-        if (card.text === 'break' && d.parts >= D.repairParts) { d.parts -= D.repairParts; d.stats.repairs += 1; }
+        if (card.text === 'break' && d.parts >= locoRepairParts(g)) { d.parts -= locoRepairParts(g); d.stats.repairs += 1; }
         else if (card.text === 'break') breakPenalty(g, card.n ?? 0);
       } else if (arg === 'go') {
         if (card.text === 'break') breakPenalty(g, card.n ?? 0);

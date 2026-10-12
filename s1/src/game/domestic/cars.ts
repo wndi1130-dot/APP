@@ -8,6 +8,7 @@ import { CAR_COMM, COMM_CARS, D, GREENHOUSE_CARS, ZONE_WARM } from './data';
 import type { Zone } from './data';
 import { CAR_NAME, startJob } from './workshop';
 import { refreshSit } from './sit';
+import { locoCarCoal, locoOf } from '../loco';
 import { domCard, zoneAt } from './state';
 import type { DomState } from './state';
 
@@ -93,8 +94,9 @@ export function movedThisStop(g: Game): boolean {
 export function rollUsefulCar(g: Game): void {
   if (!g.dom || g.stop?.place !== 'freight') return;
   const r = rnd(g);
-  if (r < D.wagonChance) domCard(g, { kind: 'dom:car', n: 0 });
-  else if (r < D.wagonChance + D.coachChance) domCard(g, { kind: 'dom:car', n: 1 });
+  const m = locoOf(g).carChanceMult; // 기관차가 칸 걸림을 바꾼다(0이면 안 붙는다)
+  if (r < D.wagonChance * m) domCard(g, { kind: 'dom:car', n: 0 });
+  else if (r < (D.wagonChance + D.coachChance) * m) domCard(g, { kind: 'dom:car', n: 1 });
 }
 
 /** 꼬리 끝에 칸을 붙인다. 14번째 칸부터 달리기 석탄 +0.4/구간(4.2). */
@@ -112,7 +114,7 @@ export function attachCar(g: Game, kind: 'store' | 'coach'): void {
 }
 
 export function extraCarCoal(g: Game): number {
-  return (g.dom?.extraCars.length ?? 0) * D.extraCarCoal;
+  return (g.dom?.extraCars.length ?? 0) * locoCarCoal(g);
 }
 
 // ---- 칸을 내줄 곳(10장 8번) ----

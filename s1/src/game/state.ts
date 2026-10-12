@@ -8,7 +8,7 @@ import type { RngState } from '../core/rng';
 import {
   COH0, COMMS, IDEO, P, POP0, REL0, REP_AGE, SECRET_POOL, START, STAGES, TRAIT_BAN, TRAITS,
 } from './data';
-import type { Comm, ConditionDef, LawId, LootKey, StayId, Trait } from './data';
+import type { Comm, ConditionDef, LawId, LocoId, LootKey, StayId, Trait } from './data';
 import profilesJson from '../../data/profiles.json';
 
 // S1a 한 판의 상태. 저장할 수 있게 함수 없는 평범한 값만 담는다.
@@ -372,6 +372,8 @@ export interface Game {
   lastCrew?: Comm;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
+  /** 고른 기관차(결정 125). 없으면 c3(옛 저장과 안 고른 판). 게임 시작 때 setLoco(loco.ts)로 정한다. */
+  loco?: LocoId;
   /** 이야기 진행도(first_leg_story 9장). S1a는 표식 몇 개만 쓴다. */
   story?: StoryState;
   /** 라이프치히 이탈(first_leg_story 7.7, hub.ts) */

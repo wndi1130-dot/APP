@@ -6,6 +6,7 @@ import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from '
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
+import { locoCoal } from './loco';
 import { enterStranded, reapplyAway, segKmOf, stallKm, strandedDepart, strandedSettle, tripTick } from './stranded';
 import { onDeath, strangerCorpse, takeKinBody } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
@@ -179,7 +180,7 @@ const tailIdleCoal = (g: Game): number => (tailIdle(g) ? P.tailIdleCoal : 0);
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g);
   const food = foodCost(g) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   // 선 열차는 탈 석탄이 없다(난방도 난로에 든 것만). 식량은 평소대로 든다.
@@ -228,6 +229,7 @@ function forecastWeights(g: Game): { coal: [string, number][]; food: [string, nu
       ['heat', heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd')],
       ['calm.pot', calmCoal(g)],
       ['disaster', disasterCoal(g)],
+      ['loco', locoCoal(g)],
       ['upkeep', dom.coal],
     ],
     food: [['ration', (foodCost(g) + lawSum(g, 'foodAdd')) * dom.foodMult], ['upkeep', dom.food]],

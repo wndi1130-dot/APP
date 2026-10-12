@@ -2,7 +2,7 @@
 // 사용: npx tsx tools/reach_check.ts [판 수=300]. 봇이 안 하는 행동이 있어야 나오는 카드는 REACH_NOTES에 까닭을 적는다.
 // 까닭 없이 안 나온 것이 있으면 종료 코드 1. 끊어진 후속(그리는 곳 없는 카드, 고를 수 없는 카드)은 봇이 바로 멈춘다.
 
-import { CONTENT_EVENTS, DOM_CARD_KINDS, HUB_CARD_KINDS, PEOPLE_KINDS, PROLOGUE_CARD_KINDS, S1A_CARD_KINDS, STRANDED_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
+import { CONTENT_EVENTS, DOM_CARD_KINDS, LOCO_IDS, HUB_CARD_KINDS, PEOPLE_KINDS, PROLOGUE_CARD_KINDS, S1A_CARD_KINDS, STRANDED_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
 
@@ -55,7 +55,8 @@ export function reachReport(n: number): ReachReport {
   const seen: Record<string, number> = {};
   for (const [, opts] of CONFIGS) {
     for (let i = 0; i < n; i += 1) {
-      const { g, m } = playGame(`reach-${i}`, opts);
+      // 내정을 켠 판은 기관차 넷을 돌려 가며 쓴다(수레 확률·고장·압력 카드가 기관차마다 달라서, 기본 c3만으론 수레 카드가 안 닿는다)
+      const { g, m } = playGame(`reach-${i}`, opts.s1c ? { ...opts, loco: LOCO_IDS[i % LOCO_IDS.length] } : opts);
       for (const [k, v] of Object.entries(m.cards)) if (k !== 'travel') seen[k] = (seen[k] ?? 0) + v;
       for (const id of Object.keys(g.eventLog ?? {})) {
         if (TRAVEL_EVENTS.some(e => e.id === id)) seen[`travel:${id}`] = (seen[`travel:${id}`] ?? 0) + 1;
