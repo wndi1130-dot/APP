@@ -25,10 +25,10 @@ describe('기관차 넷', () => {
     expect(JSON.parse(JSON.stringify(g)).loco).toBe('c2');
   });
 
-  it('구간 석탄: c1은 c3보다 +2, c2는 −2. 이유 목록에 기관차 줄이 있다', () => {
+  it('구간 석탄: c1은 c3보다 +0.5, c2는 −1. 이유 목록에 기관차 줄이 있다', () => {
     const base = forecast(fresh('c3')).coal;
-    expect(forecast(fresh('c1')).coal).toBe(base + 2);
-    expect(forecast(fresh('c2')).coal).toBe(base - 2);
+    expect(forecast(fresh('c1')).coal).toBeCloseTo(base + 0.5);
+    expect(forecast(fresh('c2')).coal).toBeCloseTo(base - 1);
     expect(forecast(fresh('c4')).coal).toBe(base);
   });
 

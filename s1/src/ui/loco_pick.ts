@@ -51,7 +51,8 @@ export function locoScreen(view: View): HTMLElement {
             outline(id),
             h('b', { class: 'lococ__name' }, l.name),
             h('span', { class: 'lococ__gain' }, h('i', null, '얻는 것'), l.gain),
-            h('span', { class: 'lococ__loss' }, h('i', null, '잃는 것'), l.loss)),
+            h('span', { class: 'lococ__loss' }, h('i', null, '잃는 것'), l.loss),
+            l.note ? h('span', { class: 'lococ__note' }, l.note) : null),
           h('button', { class: 'lococ__more', type: 'button', 'data-action': 'loco-more', 'data-id': id, 'aria-expanded': ui.locoMore === id ? 'true' : 'false' }, ui.locoMore === id ? '접기' : '자세히'),
           ui.locoMore === id ? h('ul', { class: 'lococ__nums num' }, locoDetailLines(id).map(t => h('li', null, t))) : null);
       })),
