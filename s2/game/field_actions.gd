@@ -20,6 +20,7 @@ const GLASS_TIME: float = 3.0
 const DRIVE_PREFIX: String = "plow_drive_"
 const CORE_ITEM: String = "plow_core"
 const CORE_SCRAP: int = 10
+const CORE_HEAP: String = "plow_core_heap"
 const SALVAGE_TIME: float = 6.0
 const FIRE_LIGHT_TIME: float = 10.0
 const FIRE_BURN: float = 120.0
@@ -456,10 +457,15 @@ func _salvaged(p, id: String) -> void:
 	game.view.update_spot(id)
 	game.say(p, "%s %d 얻었다." % [game.item_name(spot["material"]), int(spot["amount"])])
 	if id.begins_with(DRIVE_PREFIX) and drives_left() == 0:
-		# The last drive off: the core comes away, and the scrap that held it.
+		# The last drive off: the core comes away, and the scrap that held it
+		# lies there in a heap, to be taken as any box's things are.
 		p.add_item(CORE_ITEM)
-		p.add_item("scrap", CORE_SCRAP)
-		game.say(p, "%s를 떼어 냈다. 고철 %d 더 얻었다." % [game.item_name(CORE_ITEM), CORE_SCRAP])
+		var heap: Array = []
+		heap.resize(CORE_SCRAP)
+		heap.fill("scrap")
+		game.data["containers"][CORE_HEAP] = {"id": CORE_HEAP, "name": "뜯어낸 고철 더미", "cell": spot["cell"], "level": 0, "building": game.grid.building_at(spot["cell"]), "search": 5, "items": heap, "locked": false, "searched": false}
+		game.view.add_container(CORE_HEAP)
+		game.say(p, "%s를 떼어 냈다. 고철 더미가 나왔다." % game.item_name(CORE_ITEM))
 
 
 ## Taking a plough's drive apart is loud work, start and end (user decision

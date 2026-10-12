@@ -60,12 +60,22 @@ func test_the_core_comes_with_the_last_of_the_four_drives() -> void:
 	assert_eq(int(p.items.get("scrap", 0)) - before, 6)
 	game.actions._salvaged(p, DRIVES[3])
 	assert_eq(int(p.items.get("plow_core", 0)), 1)
-	assert_eq(int(p.items.get("scrap", 0)) - before, 18, "two a drive and ten with the core")
+	assert_eq(int(p.items.get("scrap", 0)) - before, 8, "two a drive: the ten are not put in anybody's pack")
+	var heap: Dictionary = game.data["containers"]["plow_core_heap"]
+	assert_eq(heap["items"].size(), 10, "they lie there in a heap")
+	assert_eq(heap["items"].count("scrap"), 10)
+	assert_eq(heap["cell"], game.data["spots"][DRIVES[3]]["cell"], "where the last drive came off")
+	assert_true(game.view.container_nodes.has("plow_core_heap"), "and it is drawn")
+	game.actions._searched(p, "plow_core_heap")
+	game.actions.take(p, "plow_core_heap", 0)
+	assert_eq(int(p.items.get("scrap", 0)) - before, 9, "taken one at a time, like any box")
+	assert_eq(heap["items"].size(), 9)
 	assert_eq(game.item_name("plow_core"), "제설기 코어")
 	var rails: Dictionary = game.data["spots"]["shallow_rails"]
 	assert_eq([rails["material"], int(rails["amount"])], ["scrap", 2], "the pass holds twenty in all")
 	for box: Dictionary in game.data["containers"].values():
-		assert_false(box["items"].has("scrap"), "no scrap in a box: " + box["id"])
+		if box["id"] != "plow_core_heap":
+			assert_false(box["items"].has("scrap"), "no scrap in a box: " + box["id"])
 	p.position = FieldGrid.center(game.data["spawns"]["train_door"][0])
 	game.finish("departed")
 	assert_has(game.receipt.to_dict()["items"]["gained"], "plow_core")

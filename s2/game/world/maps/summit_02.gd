@@ -1358,7 +1358,7 @@ const PLAN: Dictionary = {
 			"name": "안쪽 부품함",
 			"cell": [5,78],
 			"level": 0,
-			"items": ["plank","flare"]
+			"items": ["plank","cloth"]
 		},
 		{
 			"id": "shed_fuel",

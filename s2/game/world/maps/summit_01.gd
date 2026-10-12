@@ -1272,7 +1272,7 @@ const PLAN: Dictionary = {
 			"name": "정비 공구함",
 			"cell": [99,67],
 			"level": 0,
-			"items": ["flare","bandage"]
+			"items": ["cloth","bandage"]
 		},
 		{
 			"id": "shed_food",
@@ -1286,7 +1286,7 @@ const PLAN: Dictionary = {
 			"name": "지하 부품함",
 			"cell": [91,67],
 			"level": -1,
-			"items": ["plank","flare"]
+			"items": ["plank","cloth"]
 		},
 		{
 			"id": "below_supply",

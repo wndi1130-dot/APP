@@ -1364,7 +1364,7 @@ const PLAN: Dictionary = {
 			"name": "지하 부품함",
 			"cell": [145,69],
 			"level": -1,
-			"items": ["flare","plank"]
+			"items": ["cloth","plank"]
 		},
 		{
 			"id": "below_supply",
@@ -1399,7 +1399,7 @@ const PLAN: Dictionary = {
 			"name": "헛간 연장함",
 			"cell": [75,80],
 			"level": 0,
-			"items": ["flare"]
+			"items": ["cloth"]
 		},
 		{
 			"id": "outbuilding_wood",
