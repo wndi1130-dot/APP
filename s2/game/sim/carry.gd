@@ -15,12 +15,14 @@ const ITEM_WEIGHTS: Dictionary = {
 	"scrap": 1.0, "wood": 1.0, "info_telegraph": 0.5, "info_timetable": 0.5, "flare": 0.5,
 	"ammo_pistol": 0.1, "ammo_shell": 0.2, "arrow": 0.05,
 	"tweezers": 0.05, "needle_thread": 0.05,
+	# The core of the pass's plough (user decision 194): half a pack by itself.
+	"plow_core": 4.0,
 }
 
 const ITEM_NAMES: Dictionary = {
 	"food_pack": "식량 꾸러미", "med_box": "약 상자", "ammo_box": "탄 상자", "luxury_pack": "사치품 꾸러미",
 	"document": "문서", "symbol_bell": "출발 종", "bandage": "붕대", "cloth": "천", "plank": "판자",
-	"bottle_spirit": "술 한 병", "medkit": "구급함",
+	"bottle_spirit": "술 한 병", "medkit": "구급함", "plow_core": "제설기 코어",
 	"scrap": "고철", "wood": "목재", "info_telegraph": "전신 기록", "info_timetable": "시간표", "flare": "철도 섬광",
 	"ammo_pistol": "권총탄 한 줌", "ammo_shell": "산탄 한 줌", "arrow": "화살",
 	"tweezers": "핀셋", "needle_thread": "바늘과 실",
