@@ -51,8 +51,15 @@ const DARK_SIGHT: float = 0.55
 const PAIRS: Dictionary = {"fog+snow": 0.72}
 
 
+## How far the light has gone before sunset, 0 to 1 (the field sets it from
+## its clock). Sight does not drop at sunset: it falls evenly from the day's
+## to the night's as this rises (user decision 210).
+var dusk: float = 0.0
+
+
 ## Sight range multiplier for people and the dead alike (body_injury 8.3).
 func sight_mult(dark: bool = false) -> float:
+	var gone: float = 1.0 if dark else clampf(dusk, 0.0, 1.0)
 	var cuts: Array[float] = []
 	var best := 1.0
 	var names := kinds.duplicate()
@@ -60,15 +67,15 @@ func sight_mult(dark: bool = false) -> float:
 	var pair := "+".join(names)
 	if PAIRS.has(pair):
 		var v: float = PAIRS[pair]
-		return minf(v, DARK_SIGHT) if dark else v
+		return minf(v, lerpf(maxf(v, 1.0), DARK_SIGHT, gone)) if gone > 0.0 else v
 	for k in kinds:
 		var v := float(ROWS[k]["sight"])
 		if v < 1.0:
 			cuts.append(v)
 		else:
 			best = maxf(best, v)
-	if dark:
-		cuts.append(DARK_SIGHT)
+	if gone > 0.0:
+		cuts.append(lerpf(best, DARK_SIGHT, gone))
 	if cuts.is_empty():
 		return best
 	return float(cuts.min())
