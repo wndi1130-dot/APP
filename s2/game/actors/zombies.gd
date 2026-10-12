@@ -144,8 +144,10 @@ func add_rising(at: Vector3, who_name: String) -> Dictionary:
 	var z := spawn("fresh", at, {"name": who_name})
 	z["state"] = "rising"
 	z["rise_t"] = RISE_TIME
-	# Whoever died at this stop gets up as one that lunges.
-	z["lunger"] = lungers_on
+	# One in ten of those who died at this stop gets up as one that lunges, the
+	# same share as the dead that stand (a risen person stands, so true goes in
+	# for the stander). The roll is lunge_rng's, so the game's dice stay as they were.
+	z["lunger"] = lungers_on and LungerRules.picks(lunge_rng.randf(), true)
 	# A person's things fall to the ground; a raider's are put on it (set_loot).
 	z["loot"] = []
 	z["searched"] = true

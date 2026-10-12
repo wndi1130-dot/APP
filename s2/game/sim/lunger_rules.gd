@@ -1,6 +1,6 @@
 extends RefCounted
-## The dead that lunge. One in ten of the dead that stand, and anyone who died
-## at this stop and gets up again, is a lunger: seeing a person close by it
+## The dead that lunge. One in ten of the dead that stand, and one in ten of
+## those who died at this stop and get up again, is a lunger: seeing a person close by it
 ## drops low for a beat (the tell), runs at where that person was in a straight
 ## line, and is then spent for a while. It does this once. Few do it at a time.
 ##

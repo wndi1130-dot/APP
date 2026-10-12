@@ -1,6 +1,6 @@
 extends "res://addons/gut/test.gd"
 ## The dead that lunge (user 2026-10-12): one in ten of those that stand, and
-## whoever died at this stop. Seeing a person within 8 m it drops low for 1.2 s,
+## one in ten of whoever died at this stop. Seeing a person within 8 m it drops low for 1.2 s,
 ## runs straight for 3 s and is spent for 6 s. Once. Two at a time. Off unless
 ## the field is started with opts["lungers"].
 
@@ -67,7 +67,7 @@ func test_left_off_nobody_lunges_and_the_fights_dice_are_not_touched() -> void:
 	assert_eq(game.rng.state, off_state, "picking who lunges takes nothing from the game's dice")
 
 
-func test_one_in_ten_of_those_that_stand_and_whoever_died_here() -> void:
+func test_one_in_ten_of_those_that_stand_and_one_in_ten_of_whoever_died_here() -> void:
 	_start(true)
 	var lungers := 0
 	var standers := 0
@@ -81,7 +81,11 @@ func test_one_in_ten_of_those_that_stand_and_whoever_died_here() -> void:
 	assert_false(game.zombies.spawn("frozen", game.player.position + Vector3(20, 0, 0)).has("lunger"), "not the frozen")
 	for n in 60:
 		assert_false(game.zombies.spawn("dead", game.player.position + Vector3(20, 0, 0), {"target": game.player.position}).has("lunger"), "nor one sent in with a horde")
-	assert_true(game.zombies.add_rising(game.player.position + Vector3(20, 0, 0), "")["lunger"])
+	var risen := 0
+	for n in 2000:
+		if game.zombies.add_rising(game.player.position + Vector3(20, 0, 0), "")["lunger"]:
+			risen += 1
+	assert_between(float(risen) / 2000.0, 0.06, 0.14, "one in ten of those that died here and got up, not all of them")
 
 
 func test_it_drops_low_runs_straight_and_is_spent_once() -> void:
