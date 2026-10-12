@@ -9,10 +9,12 @@ const W = preload("res://game/sim/weapons.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
+const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -65,13 +67,27 @@ const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
 const FESTER_RIM := Color(0.74, 0.7, 0.3)           # a festering part: a sallow rim, never red
 ## Where the six parts sit in the body picture (your left on the left, like a mirror).
+# The body picture (user 2026-10-12: one figure cut into its parts, not six
+# boxes). Drawn 300 x 440; BODY_SHAPES are the outlines, BODY_LAYOUT where a
+# press lands (wider than the picture, and never two parts at once).
+const BODY_SIZE := Vector2(300.0, 440.0)
+const BODY_SCALE: float = 0.75
+const BODY_WORD_FONT: int = 14
+const BODY_SHAPES: Dictionary = {
+	"head_neck": [Vector2(137, 94), Vector2(137, 72), Vector2(127.2, 65.8), Vector2(120, 56.6), Vector2(116.4, 45.6), Vector2(116.7, 34), Vector2(120.8, 23.1), Vector2(128.4, 14.3), Vector2(138.5, 8.6), Vector2(150, 6.6), Vector2(161.5, 8.6), Vector2(171.6, 14.3), Vector2(179.2, 23.1), Vector2(183.3, 34), Vector2(183.6, 45.6), Vector2(180, 56.6), Vector2(172.8, 65.8), Vector2(163, 72), Vector2(163, 94)],
+	"torso": [Vector2(98, 98), Vector2(202, 98), Vector2(194, 200), Vector2(200, 240), Vector2(100, 240), Vector2(106, 200)],
+	"arm_left": [Vector2(94, 98), Vector2(72, 104), Vector2(58, 170), Vector2(44, 232), Vector2(42, 262), Vector2(60, 268), Vector2(72, 240), Vector2(82, 178), Vector2(94, 136)],
+	"arm_right": [Vector2(206, 136), Vector2(218, 178), Vector2(228, 240), Vector2(240, 268), Vector2(258, 262), Vector2(256, 232), Vector2(242, 170), Vector2(228, 104), Vector2(206, 98)],
+	"leg_left": [Vector2(102, 244), Vector2(147, 244), Vector2(146, 330), Vector2(142, 404), Vector2(150, 428), Vector2(108, 428), Vector2(116, 404), Vector2(108, 330)],
+	"leg_right": [Vector2(192, 330), Vector2(184, 404), Vector2(192, 428), Vector2(150, 428), Vector2(158, 404), Vector2(154, 330), Vector2(153, 244), Vector2(198, 244)],
+}
 const BODY_LAYOUT: Dictionary = {
-	"head_neck": Rect2(109, 0, 100, 76),
-	"arm_left": Rect2(0, 84, 100, 128),
-	"torso": Rect2(109, 84, 100, 128),
-	"arm_right": Rect2(218, 84, 100, 128),
-	"leg_left": Rect2(56, 220, 100, 110),
-	"leg_right": Rect2(162, 220, 100, 110),
+	"head_neck": Rect2(60, 0, 180, 96),
+	"arm_left": Rect2(0, 96, 90, 180),
+	"torso": Rect2(90, 96, 120, 146),
+	"arm_right": Rect2(210, 96, 90, 180),
+	"leg_left": Rect2(90, 242, 60, 198),
+	"leg_right": Rect2(150, 242, 60, 198),
 }
 const TOAST_NORMAL := "normal"      # play and block notes (ui_states N1)
 const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap to close (N2)
@@ -80,6 +96,20 @@ const TOAST_WARN_S: float = 6.0
 const TOAST_MAX: int = 4
 const SAY_S: float = 2.6            # a line over a companion's head stays this long
 const SAY_FONT: int = 20
+# A held train leaves: the field stands still and darkens, two lines come up,
+# then the end card (user decision 142).
+const LEAVE_BEAT_S: float = 3.5
+const LEAVE_DARK_S: float = 1.5
+const LEAVE_DARK: float = 0.62
+const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whistle
+const LAST_CALL_FONT: int = 96
+const READY_FONT: int = 52
+const LEAVE_WORDS_TOP: float = 96.0
+# A line a companion shouts (ally_lines.gd): bigger and a little longer than
+# the note of what happened, which goes small under it.
+const LINE_S: float = 3.2
+const LINE_FONT: int = 24
+const SAY_UNDER_FONT: int = 16
 const HURT_FLASH_S: float = 0.7
 # Right thumb (bottom right): attack big in the corner, aim small beside it.
 const ATTACK_AT := Vector2(-192.0, -172.0)
@@ -100,6 +130,11 @@ const RIM_OUT: float = 0.75
 const RIM_DWELL: float = 0.15
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
+# The mark over one of the dead that has dropped low and will run: a ring that
+# closes on it as the beat runs out, in pixels. First values.
+const TELL_RING_IN: float = 12.0
+const TELL_RING_OUT: float = 40.0
+const TELL_FONT: int = 28
 const MOAN_R: float = 20.0
 const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search", "수색"], ["cover", "엄호"], ["retreat", "후퇴"]]
 
@@ -126,6 +161,7 @@ var ally_buttons: Array = []
 var crew_button: Button
 var all_aboard_button: Button         # every companion back to the train at one press
 var context_button: Button
+var depart_button: Button              # leaving: its own pad, there whenever the leader is by the train
 var context_rows: Array = []
 var context_t: float = 0.0
 var offer_box: HBoxContainer
@@ -170,6 +206,8 @@ var modal_paused_before: bool = false
 var modal_open: bool = false
 var modal_slows: bool = false      # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
+var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
+var body_look: Dictionary = {}     # what the body picture shows of each part (body_looks())
 var status_rows: Array = []        # what each shows now (body.status_notes())
 var bleed_hint_done: bool = false  # the one-time line that points at the blood key
 var body_shown = null              # whose body picture is (or was last) up
@@ -415,6 +453,8 @@ func _build_thumbs() -> void:
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 20)
 	shove_button = _pad("밀치기", Vector2(-176, -268), Vector2(140, 84))
 	context_button = _pad("상황", Vector2(-344, -204), Vector2(140, 84), 20)
+	depart_button = _pad("출발", Vector2(-344, -296), Vector2(140, 84), 20)
+	depart_button.visible = false
 	# Every companion back to the train at one press (user 2026-10-11): under
 	# the companions' row, at its right end (tick puts it there).
 	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
@@ -598,6 +638,7 @@ func _debug_dusk() -> void:
 func tick(delta: float) -> void:
 	if game == null or game.player == null:
 		return
+	_tick_leave(delta)
 	fps_t -= delta
 	frame_ms = lerpf(frame_ms, delta * 1000.0, 0.1)
 	var p = game.player
@@ -834,7 +875,18 @@ func say(p, text: String, hurt: bool = false) -> void:
 	for s in says.duplicate():
 		if s["p"] == p:
 			says.erase(s)
-	says.append({"p": p, "text": line, "t": SAY_S, "hurt": hurt})
+	says.append({"p": p, "text": line, "t": SAY_S, "hurt": hurt, "line": ""})
+
+
+## A companion shouts: the line goes over their head, above the note of what
+## happened if one is up.
+func shout(p, line: String) -> void:
+	for s in says:
+		if s["p"] == p:
+			s["line"] = line
+			s["t"] = maxf(float(s["t"]), LINE_S)
+			return
+	says.append({"p": p, "text": "", "t": LINE_S, "hurt": false, "line": line})
 
 
 func _tick_says(delta: float) -> void:
@@ -856,9 +908,17 @@ func _draw_says(view_size: Vector2) -> void:
 	for s in says:
 		var at: Vector2 = _project(s["p"].position + Vector3(0, 2.3, 0))
 		var a: float = clampf(float(s["t"]) / 0.6, 0.0, 1.0)
-		var w: float = font.get_string_size(s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT).x
-		var from := at - Vector2(w * 0.5, 0)
-		var box := Rect2(from - Vector2(0, SAY_FONT), Vector2(w, SAY_FONT + 4.0))
+		# Rows, top to bottom: the shouted line, then what happened (small when under a line).
+		var rows: Array = []
+		if String(s["line"]) != "":
+			rows.append([String(s["line"]), LINE_FONT, INK])
+		if String(s["text"]) != "":
+			rows.append([String(s["text"]), SAY_UNDER_FONT if not rows.is_empty() else SAY_FONT, AMBER if s["hurt"] else INK])
+		var size := Vector2.ZERO
+		for row in rows:
+			size.x = maxf(size.x, font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1]).x)
+			size.y += float(row[1]) + 4.0
+		var box := Rect2(at - Vector2(size.x * 0.5, size.y), size)
 		var again := true
 		while again:
 			again = false
@@ -867,10 +927,15 @@ func _draw_says(view_size: Vector2) -> void:
 					box.position.y = r.position.y - box.size.y
 					again = true
 		taken.append(box)
-		from.y = box.position.y + SAY_FONT
-		overlay.draw_string_outline(font, from, s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT, 6, Color(0, 0, 0, 0.85 * a))
-		var ink: Color = AMBER if s["hurt"] else INK
-		overlay.draw_string(font, from, s["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, SAY_FONT, Color(ink.r, ink.g, ink.b, a))
+		var y: float = box.position.y
+		for row in rows:
+			y += float(row[1])
+			var w: float = font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1]).x
+			var from := Vector2(at.x - w * 0.5, y)
+			var ink: Color = row[2]
+			overlay.draw_string_outline(font, from, row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], 6, Color(0, 0, 0, 0.85 * a))
+			overlay.draw_string(font, from, row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], Color(ink.r, ink.g, ink.b, a))
+			y += 4.0
 
 
 func _tick_toasts(delta: float) -> void:
@@ -889,19 +954,27 @@ func _tick_debug() -> void:
 			alive += 1
 	var next: float = game.director.seconds_to_next(now)
 	var track: Dictionary = game.track_dead()
-	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n소음 점수 %d · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n선로 위 망자 서 %d · 동 %d · %s" % [
+	debug_label.text = "FPS %d · 프레임 %.1fms · 상한 %d\n좀비 화면 %d · 살아 있음 %d / 동시 상한 %d · 대기 %d\n%s · 다음 무리 %s초 (%s)\n부르는 범위 ×%.2f · 무리 %d · 시계 ×%.0f · 필드 %d초\n선로 위 망자 서 %d · 동 %d · %s" % [
 		Engine.get_frames_per_second(), frame_ms, Engine.max_fps,
 		game.zombies.drawn_count, alive, game.cap, game.waiting,
-		game.ledger.total, "-" if is_inf(next) else str(roundi(next)), game.director.name_of(game.director.next_entry),
+		noise_line(), "-" if is_inf(next) else str(roundi(next)), game.director.name_of(game.director.next_entry),
 		game.director.call_range_mult(now), game.hordes.size(), game.clock.speed, roundi(now),
 		track["west"], track["east"], "시야 가림 켬" if game.mask_on else "시야 가림 끔",
 	]
+
+
+## The sound the people made, next to how much of it still counts as a quiet
+## stop (field_holdout). What the dead added by banging on doors is not in it:
+## that total is kept in the record only. The words are a first wording.
+func noise_line() -> String:
+	return "사람이 낸 소리 %d (조용함은 %d까지)" % [game.holdout.people_noise(), FieldHoldout.QUIET_NOISE]
 
 
 ## The situation pad shows the nearest thing to do; a tap does it, a hold
 ## lays out the rest (open, pick up, door, stairs, bandage, depart...).
 func _rebuild_context(p) -> void:
 	context_rows = [] if game.ended else game.actions.context(p)
+	depart_button.visible = not game.ended and game.actions.on_platform(p)
 	# It rises only when there is something to do; otherwise the spot is empty.
 	context_button.visible = not context_rows.is_empty()
 	if context_rows.is_empty():
@@ -1159,44 +1232,85 @@ func body_rows(o, part: String) -> Array:
 	return rows.map(func(r): return r[2])
 
 
-## Six parts laid out like a body. A part that bleeds is dark brown (no red,
-## nothing gory); the chosen one has a brass rim.
-func _body_figure(o, chosen: String) -> Control:
-	var fig := Control.new()
-	fig.custom_minimum_size = Vector2(318, 330)
-	body_parts = {}
+## What the body picture shows of each part: {"fill", "rim", "rim_w",
+## "cracked", "kinds", "festering"}. A part that bleeds is dark brown (no red,
+## nothing gory); the chosen one wears brass, a festering one a sallow rim (the
+## brass wins when both), a broken one a crack.
+func body_looks(o, chosen: String) -> Dictionary:
+	var out: Dictionary = {}
 	for part: String in BODY_LAYOUT:
-		var r: Rect2 = BODY_LAYOUT[part]
 		var kinds: Array = []
 		var blood := 0.0
 		var festering := false
+		var cracked := false
 		for w: Dictionary in o.body.wounds:
 			if w["part"] == part:
 				blood += float(w["blood"])
 				festering = festering or bool(w["festering"])
+				cracked = cracked or String(w["kind"]) == "fracture"
 				var k: String = Treatment.KIND_NAMES[w["kind"]]
 				if not kinds.has(k):
 					kinds.append(k)
-		var text: String = Treatment.PART_NAMES[part]
-		if not kinds.is_empty():
-			text += "\n" + "\n".join(kinds.slice(0, 2)) + ("…" if kinds.size() > 2 else "")
-		var b := _button(text, body_panel.bind(o, part), r.size, 16)
-		b.position = r.position
-		b.size = r.size
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95))
-		sb.set_corner_radius_all(6)
-		# The chosen part wears brass; a festering one a sallow rim (inside the brass when both).
-		sb.set_border_width_all(4 if part == chosen else (3 if festering else 0))
-		sb.border_color = BRASS if part == chosen else FESTER_RIM
-		if festering:
-			text += "\n곪음"
-			b.text = text
-		for state in ["normal", "hover", "pressed"]:
-			b.add_theme_stylebox_override(state, sb)
+		out[part] = {
+			"fill": BLOOD_BROWN if blood > 0.0 else (Color(0.2, 0.2, 0.2, 0.95) if kinds.is_empty() else Color(0.3, 0.29, 0.26, 0.95)),
+			"rim": BRASS if part == chosen else (FESTER_RIM if festering else Color(INK, 0.55)),
+			"rim_w": 4.0 if part == chosen else (3.0 if festering else 1.5),
+			"cracked": cracked, "kinds": kinds, "festering": festering,
+		}
+	return out
+
+
+## One figure cut into six parts. Each part is a key as wide as BODY_LAYOUT
+## says (it draws nothing itself); the picture is drawn under them.
+func _body_figure(o, chosen: String) -> Control:
+	var fig := Control.new()
+	fig.custom_minimum_size = BODY_SIZE * BODY_SCALE
+	body_parts = {}
+	body_look = body_looks(o, chosen)
+	fig.draw.connect(_draw_body.bind(fig, chosen))
+	for part: String in BODY_LAYOUT:
+		var r: Rect2 = BODY_LAYOUT[part]
+		var b := _button("", body_panel.bind(o, part), r.size * BODY_SCALE, 16)
+		b.position = r.position * BODY_SCALE
+		b.size = r.size * BODY_SCALE
+		for state in ["normal", "hover", "pressed", "focus"]:
+			b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 		fig.add_child(b)
 		body_parts[part] = b
 	return fig
+
+
+func _draw_body(fig: Control, chosen: String) -> void:
+	# The chosen part last, so its brass is not drawn over by a neighbour.
+	var order: Array = BODY_SHAPES.keys()
+	if order.has(chosen):
+		order.erase(chosen)
+		order.append(chosen)
+	for part: String in order:
+		var look: Dictionary = body_look[part]
+		var pts := PackedVector2Array()
+		for v: Vector2 in BODY_SHAPES[part]:
+			pts.append(v * BODY_SCALE)
+		fig.draw_colored_polygon(pts, look["fill"])
+		pts.append(pts[0])
+		fig.draw_polyline(pts, look["rim"], float(look["rim_w"]), true)
+		var r: Rect2 = Rect2(pts[0], Vector2.ZERO)
+		for v in pts:
+			r = r.expand(v)
+		var c: Vector2 = r.get_center()
+		if look["cracked"]:
+			# A broken bone: a crack across the part, above its word.
+			var half: float = minf(r.size.x, 40.0) * 0.3
+			var at: Vector2 = c + Vector2(0, -22)
+			fig.draw_polyline(PackedVector2Array([at + Vector2(-half, -5), at + Vector2(-half * 0.3, 4), at + Vector2(half * 0.3, -4), at + Vector2(half, 5)]), INK, 2.0, true)
+		# The worst kind of wound there, in a word (the rest is in the list).
+		var lines: Array = look["kinds"].slice(0, 1)
+		if look["festering"]:
+			lines.append("곪음")
+		var font: Font = fig.get_theme_default_font()
+		for i in lines.size():
+			var w: float = font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_WORD_FONT).x
+			fig.draw_string(font, c + Vector2(-w * 0.5, 4.0 + i * (BODY_WORD_FONT + 2.0)), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_WORD_FONT, INK)
 
 
 func _care(o, wound: Dictionary, mode: String) -> void:
@@ -1404,7 +1518,20 @@ func depart_card() -> void:
 	if game.holdout.opens_on_leaving():
 		text += "\n떠날 채비에 시간이 걸린다. 그동안 문을 지켜야 한다."
 	elif game.holdout.on:
-		text += "\n채비가 %d초 남았다. 지금 떠나면 덜 된 채로 떠난다." % int(ceil(game.holdout.left))
+		# Both prices side by side, before the choice (user decisions 143, 146, 147).
+		var cost: Dictionary = game.holdout.early_cost()
+		var push: Dictionary = game.holdout.plough(game.holdout.track_now())
+		if game.holdout.ready:
+			text += "\n채비가 끝났다. 선로 위: %s." % push["word"]
+			text += "\n지금 떠나면: 부품 %d (쟁기 값뿐). 더 머물면 선로에 서는 만큼 오른다." % int(push["parts"])
+		else:
+			text += "\n채비가 %d초 남았다. 선로 위: %s." % [int(ceil(game.holdout.left)), push["word"]]
+			text += "\n지금 떠나면: 석탄 +%d, 부품 %d (쟁기 %d · 덜 된 채비 %d)." % [int(cost["coal"]), int(push["parts"]) + int(cost["plow_part"]), int(push["parts"]), int(cost["plow_part"])]
+			text += "\n끝까지 버티면: 덜 된 채비 값이 없다. 그때 선로에 선 만큼 쟁기 값만 든다."
+		text += "\n셋을 센 뒤 떠난다. 그때 열차에 닿지 못한 사람은 남는다."
+		var out: int = game.outside()
+		if out > 0:
+			text += "\n지금 밖에 있는 사람 %d. 남기면 신임 −%d." % [out, game.holdout.trust_drop(out)]
 	card("depart", text, [
 		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
 		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
@@ -1426,6 +1553,49 @@ func _depart_pick(choice: String) -> void:
 		game.depart()
 
 
+## The whistle has gone and the stage is over: the screen darkens over the
+## still field, the two lines come up, and after LEAVE_BEAT_S the end card.
+func leave_beat(result: Dictionary, lines: Array) -> void:
+	_close_modal()
+	context_rows = []
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(veil)
+	# Under the overlay, so what those left behind shout stays readable.
+	root.move_child(veil, overlay.get_index())
+	var words := VBoxContainer.new()
+	words.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# In the upper part of the screen: the middle is where the people are, and
+	# those left behind shout over their heads there.
+	words.alignment = BoxContainer.ALIGNMENT_BEGIN
+	words.offset_top = LEAVE_WORDS_TOP
+	words.add_theme_constant_override("separation", 14)
+	words.modulate.a = 0.0
+	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	veil.add_child(words)
+	for i in lines.size():
+		var l := _label(String(lines[i]), 48 if i == 0 else 24, INK if i == 0 else DIM)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		words.add_child(l)
+	leaving = {"result": result, "t": LEAVE_BEAT_S, "veil": veil, "words": words}
+
+
+func _tick_leave(delta: float) -> void:
+	if leaving.is_empty():
+		return
+	leaving["t"] = float(leaving["t"]) - delta
+	var gone: float = LEAVE_BEAT_S - float(leaving["t"])
+	leaving["veil"].color.a = LEAVE_DARK * clampf(gone / LEAVE_DARK_S, 0.0, 1.0)
+	leaving["words"].modulate.a = clampf((gone - LEAVE_WORDS_AT) / 0.6, 0.0, 1.0)
+	if float(leaving["t"]) <= 0.0:
+		var result: Dictionary = leaving["result"]
+		leaving["veil"].queue_free()
+		leaving = {}
+		show_end(result)
+
+
 func show_end(result: Dictionary) -> void:
 	_close_modal()
 	context_rows = []
@@ -1436,7 +1606,7 @@ func show_end(result: Dictionary) -> void:
 	var r: Dictionary = result["receipt"]
 	var lines: Array = []
 	lines.append("머문 시간: 게임 %d분 (실제 %d분 %d초)" % [int(result["stay"]), int(result["real_seconds"]) / 60, int(result["real_seconds"]) % 60])
-	lines.append("탄 사람: %d명 · 무리 %d번 · 소음 점수 %d" % [int(result["boarded"]), int(result["hordes"]), int(result["noise"])])
+	lines.append("탄 사람: %d명 · 무리 %d번 · %s" % [int(result["boarded"]), int(result["hordes"]), noise_line()])
 	var stock: Dictionary = r.get("stock", {})
 	var parts: Array = []
 	var names := {"coal": "석탄", "food": "식량", "medicine": "의약품", "luxury": "사치품", "symbol": "상징물", "info": "정보", "scrap": "고철", "wood": "목재", "ammo_pistol": "권총탄", "ammo_shell": "산탄", "ammo_craft": "공방탄"}
@@ -1697,7 +1867,7 @@ func finger_cancel(index: int) -> bool:
 			if auto_aim:
 				aim_cancel = true
 				_auto_aim_end(Vector2.ZERO)
-			for b in [aim_button, context_button, shove_button]:
+			for b in [aim_button, context_button, depart_button, shove_button]:
 				if f["pad"] == b:
 					b.button_pressed = false
 			if f["pad"] == run_button and run_hold():
@@ -1849,6 +2019,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		attack_button.button_pressed = true
 	elif b == context_button:
 		context_button.button_pressed = true
+	elif b == depart_button:
+		depart_button.button_pressed = true
 	elif b == pause_button:
 		_toggle_pause()
 	elif b == all_aboard_button:
@@ -1915,6 +2087,10 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		context_button.button_pressed = false
 		if not f.get("opened", false) and b.get_global_rect().has_point(pos):
 			_context_tap()
+	elif b == depart_button:
+		depart_button.button_pressed = false
+		if b.get_global_rect().has_point(pos) and not game.ended:
+			depart_card()
 	elif b == shove_button:
 		shove_button.button_pressed = false
 	elif b == run_button and run_hold():
@@ -2078,7 +2254,7 @@ func drop_touch() -> void:
 		run_button.button_pressed = false
 	if game.player != null:
 		_stick_release()
-	for b in [aim_button, shove_button, context_button]:
+	for b in [aim_button, shove_button, context_button, depart_button]:
 		if b != null:
 			b.button_pressed = false
 	pressing = false
@@ -2249,7 +2425,19 @@ func _draw_overlay() -> void:
 	var p = game.player
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
+	_draw_tells()
 	_draw_says(view_size)
+	# The last call: the count, big, where nobody can miss it. The same place
+	# says, for a few seconds, that the train is ready.
+	var big: String = "채비 끝 · 떠날 수 있다" if game.holdout.on and game.holdout.ready_shown > 0.0 else ""
+	if game.holdout.calling or big != "":
+		var count: String = str(int(ceil(maxf(game.holdout.call_left, 0.0)))) if game.holdout.calling else big
+		var size: int = LAST_CALL_FONT if game.holdout.calling else READY_FONT
+		var f: Font = theme.default_font
+		var w: float = f.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		var at := Vector2((view_size.x - w) * 0.5, view_size.y * 0.3)
+		overlay.draw_string_outline(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 10, Color(0, 0, 0, 0.85))
+		overlay.draw_string(f, at, count, HORIZONTAL_ALIGNMENT_LEFT, -1, size, AMBER)
 	# Pressure at the edges: no numbers, just a darker rim as the next horde nears.
 	var pressure: float = game.director.pressure(now)
 	if pressure > 0.5 and game.deaf_t <= 0.0:
@@ -2354,6 +2542,26 @@ func _draw_edges(view_size: Vector2) -> void:
 
 
 ## Heard, not seen (body_injury 8.3): the dead moving within MOAN_R of the
+## The dead that have dropped low and will run, of those in sight.
+func tells() -> Array:
+	var out: Array = []
+	for z in game.zombies.list:
+		if z["state"] == "tell" and game.cell_seen(z["pos"]):
+			out.append(z)
+	return out
+
+
+## Over each of them, a ring that closes as its beat runs out, and a mark.
+func _draw_tells() -> void:
+	for z in tells():
+		var left: float = clampf(float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
+		var at: Vector2 = _project(z["pos"] + Vector3(0, 1.0, 0))
+		overlay.draw_arc(at, lerpf(TELL_RING_IN, TELL_RING_OUT, left), 0, TAU, 32, AMBER, 3.0)
+		var head: Vector2 = _project(z["pos"] + Vector3(0, 2.3, 0))
+		var w: float = theme.default_font.get_string_size("!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT).x
+		overlay.draw_string(theme.default_font, head - Vector2(w * 0.5, 0), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT, AMBER)
+
+
 ## leader but outside sight show as a faint tick around the leader, one per
 ## eighth of the compass. No count, no exact spot.
 func _draw_moans() -> void:

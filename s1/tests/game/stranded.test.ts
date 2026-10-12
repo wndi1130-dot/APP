@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, createGame, enterStranded, forecast, P, predictStall, stallKm, strandedSettle } from '../../src/game';
+import { advance, createGame, enterStranded, forecast, P, predictStall, primaryAction, stallKm, stallsEnRoute, strandedSettle } from '../../src/game';
 import type { Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
 
@@ -124,4 +124,50 @@ describe('판을 돌리면', () => {
     for (let i = 1; i < turns.length; i += 1) if (sinces[i] === sinces[i - 1]) expect(turns[i]).toBeGreaterThanOrEqual(turns[i - 1]);
     expect(turns[turns.length - 1]).toBeGreaterThanOrEqual(1);
   }, 120000);
+});
+
+describe('구간 도중에 서기', () => {
+  const travelling = (seed: string, coal: number): Game => { const g = fresh(seed); g.coal = coal; g.phase = 'travel'; return g; };
+
+  it('달리는 순간 석탄이 모자라면 역에 들르지 않고 그 자리에서 선다', () => {
+    const g = travelling('en-route', 3);
+    expect(stallsEnRoute(g)).toBe(true);
+    const need = forecast(g).coal;
+    expect(primaryAction(g).label).toMatch(/정산으로|식당칸으로/);
+    advance(g);
+    expect(g.stranded).toMatchObject({ since: g.seg, turns: 0, burned: 3 });
+    expect(g.stranded!.atKm).toBe(stallKm(g.stranded!.segKm, 3, need));
+    expect(g.stop).toBeNull();
+    expect(g.phase).not.toBe('stop');
+    expect(g.end).toBeNull();
+  });
+
+  it('이번 구간에 선 열차는 아직 멈춘 정산을 안 받고, 정산 보고는 태운 석탄만큼 줄었다고 적는다', () => {
+    const g = travelling('en-route-settle', 3);
+    const tension = g.tension;
+    advance(g);
+    if (g.phase === 'council') advance(g);
+    expect(g.phase).toBe('settle');
+    expect(g.stranded!.turns).toBe(0);
+    expect(g.lastSettle!.coal).toBe(-3);
+    expect(g.tension).toBeLessThan(tension + P.strandedTension + 1);
+  });
+
+  it('이동 사건이 석탄을 주면 서지 않고 역에 닿는다', () => {
+    const g = travelling('en-route-fed', 3);
+    g.coal += 200;
+    expect(stallsEnRoute(g)).toBe(false);
+    advance(g);
+    expect(g.phase).toBe('stop');
+    expect(g.stranded).toBeFalsy();
+  });
+
+  it('이미 선 열차와 파업 구간은 다시 서지 않는다', () => {
+    const g = travelling('en-route-twice', 3);
+    enterStranded(g, 3, forecast(g).coal);
+    expect(stallsEnRoute(g)).toBe(false);
+    const h = travelling('en-route-strike', 0);
+    h.inStrike = true;
+    expect(stallsEnRoute(h)).toBe(false);
+  });
 });

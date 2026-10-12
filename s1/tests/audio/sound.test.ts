@@ -275,9 +275,9 @@ describe('든 소리 파일', () => {
   const names = readdirSync(CLIPS_DIR).filter(n => n.endsWith('.wav'));
   const table = clipTable(Object.fromEntries(names.map(n => [`./clips/${n}`, n])));
 
-  it('박자 여섯에 변형이 셋씩 있고, 이름이 안 맞아 버려지는 파일이 없다', () => {
-    for (const cue of CUES) expect(table[cue], cue).toHaveLength(3);
-    expect(names).toHaveLength(18);
+  it('박자 다섯에 변형이 셋씩 있고 막힘은 사용자가 고른 하나이며, 이름이 안 맞아 버려지는 파일이 없다', () => {
+    for (const cue of CUES) expect(table[cue], cue).toHaveLength(cue === 'denied' ? 1 : 3);
+    expect(names).toHaveLength(16);
   });
 
   it('모두 모노 16비트 44100Hz이고, 합쳐 300KB를 넘지 않는다(폰 용량)', () => {

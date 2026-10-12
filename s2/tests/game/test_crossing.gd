@@ -57,6 +57,30 @@ func test_the_chief_goes_over_in_three_seconds() -> void:
 	assert_true(_labels(p).has("열차 넘기 3초"), "and back the same way")
 
 
+# The wayside maps write the way round the train's ends as a crossing: walkable
+# cells, open to everyone. That is walked, not climbed; the coupling stays a climb.
+func test_a_way_over_walkable_ground_is_not_a_climb() -> void:
+	var p = game.player
+	var train: Rect2i = game.data["train"]
+	var x: int = train.position.x - 2
+	var cells: Array = []
+	for y in range(train.position.y - 3, train.end.y + 3):
+		cells.append(Vector2i(x, y))
+		assert_true(game.grid.people_can_walk(Vector2i(x, y)))
+	var round_the_end := {"cells": cells, "who": {"person": true, "zombie": true, "carrying": true, "wounded": true, "sled": true}}
+	game.data["crossings"].push_front(round_the_end)
+	assert_true(game.actions.walked_round(round_the_end))
+	for end: Vector2i in FieldActions.crossing_ends(round_the_end):
+		p.position = FieldGrid.center(end)
+		assert_eq(game.actions.crossing_at(p), {}, "nothing to go over at the train's end")
+		assert_false(_labels(p).has("열차 넘기 3초"))
+	p.position = FieldGrid.center(below)
+	var way: Dictionary = game.actions.crossing_at(p)
+	assert_eq(int(way["i"]), 1, "the coupling is still a way, under its own number")
+	assert_eq(way["to"], above)
+	assert_true(game.actions.cross_train(p, way))
+
+
 func test_a_load_makes_it_five() -> void:
 	var p = game.player
 	p.position = FieldGrid.center(below)

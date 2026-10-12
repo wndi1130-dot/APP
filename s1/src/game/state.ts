@@ -31,6 +31,7 @@ export interface StrandedState {
   lostTrips: number;        // 못 돌아온 원정 수
   snow: 'all' | 'guard' | 'none' | null; // 「선로의 눈」 선택
   lamp: boolean;            // 「기다리는 밤」 등불을 걸었다
+  burned?: number;          // 서기까지 길에서 태운 석탄(서는 순간의 석탄). 서는 구간의 정산 보고가 이만큼 줄었다고 적는다
 }
 
 /** 수동차 원정 하나. 화면은 phase·turn·posKm으로 선 도면을 그린다. */

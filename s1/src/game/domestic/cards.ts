@@ -83,7 +83,7 @@ export function domView(g: Game, card: Card): CardView | null {
       const ch = restoreCheck(g, id);
       const half = d.frags[def.branch] < ch.fragsNeed;
       const later = { label: '나중에', say: '아직은 아니다. 부품을 아껴라.', effs: [], special: 'dom:none' };
-      const parts = (n: number) => [`부품 −${n}`, ...(ch.core ? [`코어 −${ch.core}`] : []), ...(ch.wood ? [`목재 −${ch.wood}`] : [])];
+      const parts = (n: number) => [...(n ? [`부품 −${n}`] : []), ...(ch.wood ? [`목재 −${ch.wood}`] : []), ...(ch.scrap ? [`고철 −${ch.scrap}`] : []), ...(ch.core ? [`코어 −${ch.core}`] : [])];
       return {
         title: '설계도가 맞았다', speaker: sp(chief(g, 'craft')), required: false,
         body: `${BRANCH_NAME[def.branch]}의 ${def.name}. ${half ? '조각이 반만 맞는다. 금 간 채로라도 돌릴 수는 있다.' : '조각이 다 맞았다.'} ${def.effect}.${useText(g, id)}`,

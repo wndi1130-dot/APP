@@ -71,7 +71,7 @@ describe('7.5 취소 악용: 같은 기술을 다시 시작해도 관계가 또 
 function r2Game(seed: string): Game {
   const g = createS1cGame(seed);
   const d = g.dom!;
-  d.parts = 80; d.frags.radio = 10;
+  d.parts = 80; d.wood = 200; d.scrap = 200; d.frags.radio = 10;
   d.techs.r1 = { stage: 'done' } as NonNullable<typeof d.techs.r1>;
   return g;
 }

@@ -266,7 +266,7 @@ func vault_window(p, c: Vector2i) -> void:
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
 		if p.team != "raider":
-			game.say(p, "%s 유리에 베였다." % p.display_name, true)
+			game.say(p, "%s 유리에 베였다." % p.display_name, true, "hurt")
 
 
 # ---------------------------------------------------------------- searching
@@ -585,12 +585,23 @@ static func crossing_ends(crossing: Dictionary) -> Array:
 	return [cells[0] + Vector2i(0, -1), cells[cells.size() - 1] + Vector2i(0, 1)]
 
 
+## A way written over ground one walks (the wayside maps mark the way round
+## the train's ends so) is no climb: there is nothing to go over.
+func walked_round(crossing: Dictionary) -> bool:
+	for c: Vector2i in crossing["cells"]:
+		if game.grid.people_can_walk(c):
+			return true
+	return false
+
+
 ## The way over the train p stands at: {"i", "from", "to"}, or {} if none.
 func crossing_at(p) -> Dictionary:
 	if game.level_of(p.position) != 0:
 		return {}
 	var ways: Array = game.data.get("crossings", [])
 	for i in ways.size():
+		if walked_round(ways[i]):
+			continue
 		var ends: Array = crossing_ends(ways[i])
 		for k in 2:
 			if FieldGrid.center(ends[k]).distance_to(p.position) < CROSS_NEAR:
@@ -927,8 +938,8 @@ func context(p) -> Array:
 		if o != p and o.body.bleed > 0 and o.position.distance_to(p.position) < 1.8:
 			out.append({"label": "%s 치료" % o.display_name, "call": treat.bind(p, o)})
 			break
-	if on_platform(p):
-		out.append({"label": "출발", "call": game.hud.depart_card})
+	# Leaving is not in this list: it has a pad of its own (hud.depart_button),
+	# so that whatever lies next to the leader it is one press away.
 	return out
 
 

@@ -83,7 +83,7 @@ describe('출발 카드', () => {
     rels(h, 30);
     advance(h);
     expect(choices(h)).toEqual(['수색대를 보낸다', '내가 간다', '아직 안 보낸다']);
-    expect(viewCard(h, lastCard(h, 'trip_depart')!).body).toMatch(/지지하는 칸의 사람 \d+%\. 50%를 넘어 수색대를 보낼 수 있다/);
+    expect(viewCard(h, lastCard(h, 'trip_depart')!).body).toMatch(/따르는 사람 \d+%\. 50%를 넘어 수색대를 보낼 수 있다/);
   });
 
   it('「아직 안 보낸다」는 긴장 +2이고 다음 턴 같은 카드가 또 뜬다', () => {
@@ -255,6 +255,7 @@ describe('못 돌아옴', () => {
     for (let k = 0; k < 40 && !g.end; k += 1) {
       g.cards = [];
       g.phase = 'travel';
+      g.seg += 1; // 실제 판은 구간마다 올라간다(이번 구간에 선 열차는 아직 멈춘 정산을 안 받는다)
       advance(g);
     }
     expect(g.end).toBe('lost_captain');
@@ -321,7 +322,9 @@ describe('판을 돌리면', () => {
     const { g } = playGame('trip-bot-1', {
       s1c: true, policy: 'caretaker', dom: 'engaged',
       probe: {
-        beforePick: (gg: Game) => { if (!dropped && gg.seg >= 3) { dropped = true; gg.coal = 1; } for (const c of gg.cards) kinds.add(c.kind); },
+        // 석탄은 카드를 고른 뒤에 떨군다(고르기 직전에 떨구면 석탄을 쓰는 카드의 고른 칸이 막힌다)
+        beforePick: (gg: Game) => { for (const c of gg.cards) kinds.add(c.kind); },
+        afterPick: (gg: Game) => { if (!dropped && gg.seg >= 3) { dropped = true; gg.coal = 1; } },
       },
     } as never);
     expect(dropped).toBe(true);

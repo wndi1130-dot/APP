@@ -6,6 +6,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
+const TRAIN_SCENE := "res://game/train/train.tscn"
 
 const CHOICES: Array = [
 	["raiders", "약탈자", [[true, "있음"], [false, "없음"]]],
@@ -25,7 +26,18 @@ const CHOICES: Array = [
 	["primary_one", "주 행동 하나로", [[false, "끔 (조준·공격 따로)"], [true, "켬 (시험)"]]],
 	["retreat_name", "동료 한 명을 물릴 때 이름", [["", "후퇴"], ["train", "열차로"]]],
 	["melee_break", "근접 겨눔 끊김", [["grab", "잡히면 끊긴다"], ["none", "안 끊긴다"]]],
-	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"]]],
+	# One in ten of the standing dead lunges after a tell (user 2026-10-12). From
+	# which stop on is counted in S3; here it is on or off. zombies.gd reads it.
+	["lungers", "달려드는 자", [[false, "끔"], [true, "켬"]]],
+	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"], ["roll", "굴려서 (장소 확률대로, 조용하면 안 뜬다)"]]],
+	# The radio operator's forecast of a held train (user decision 150); who is
+	# on watch is the train's to say, here it is on or off.
+	["radio_watch", "무전수 당직 (「굴려서」의 예보)", [[false, "없음"], [true, "있음 (뜰 판 열에 여덟을 알림)"]]],
+	# Switches for looking at a thing on the phone: with one on, what is rare is
+	# sure to come. All off unless picked; they are not values of the game.
+	["holdout_chance", "시험: 「굴려서」의 굴림", [[-1, "장소 확률대로"], [100, "늘 뜬다"]]],
+	["holdout_forecast_heard", "시험: 무전수가 듣는 판", [[80, "열에 여덟"], [100, "늘 듣는다"]]],
+	["lungers_many", "시험: 달려드는 자의 수", [[false, "열에 하나"], [true, "서 있는 망자는 모두"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
 
@@ -94,6 +106,12 @@ func _show_menu() -> void:
 	gallery.custom_minimum_size = Vector2(240, 64)
 	gallery.pressed.connect(func() -> void: get_tree().change_scene_to_file(GALLERY_SCENE))
 	go.add_child(gallery)
+	var train := Button.new()
+	train.name = "TrainButton"
+	train.text = "열차 안 보기"
+	train.custom_minimum_size = Vector2(240, 64)
+	train.pressed.connect(func() -> void: get_tree().change_scene_to_file(TRAIN_SCENE))
+	go.add_child(train)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

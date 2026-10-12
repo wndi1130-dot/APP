@@ -35,7 +35,7 @@ export function enterStranded(g: Game, coalBefore: number, need: number): void {
   const atKm = stallKm(segKm, coalBefore, need);
   const st: StrandedState = {
     since: g.seg, turns: 0, segKm, atKm, toNextKm: segKm - atKm, seen: [],
-    trip: null, captainAway: false, deputy: null, lostTrips: 0, snow: null, lamp: false,
+    trip: null, captainAway: false, deputy: null, lostTrips: 0, snow: null, lamp: false, burned: Math.max(0, coalBefore),
   };
   g.stranded = st;
   flagsOf(g).stranded = true;
@@ -120,8 +120,8 @@ export function supportLineText(g: Game): string {
   const pct = Math.round(supportShare(g) * 100);
   const line = Math.round(P.supportLine * 100);
   return crewAllowed(g)
-    ? `지지하는 칸의 사람 ${pct}%. ${line}%를 넘어 수색대를 보낼 수 있다.`
-    : `지지하는 칸의 사람 ${pct}%. ${line}%가 안 돼 열차장이 직접 간다.`;
+    ? `따르는 사람 ${pct}%. ${line}%를 넘어 수색대를 보낼 수 있다.`
+    : `따르는 사람 ${pct}%. ${line}%가 안 돼 열차장이 직접 간다.`;
 }
 
 /** 원정을 보낸다. 식량은 있는 만큼만 가져가고 모자란 몫은 foodShort에 남긴다. */

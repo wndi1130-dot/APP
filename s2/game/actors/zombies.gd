@@ -12,6 +12,7 @@ const GrabRules = preload("res://game/sim/grab_rules.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const Motion = preload("res://game/sim/motion.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 const MAX_DRAW: int = 160
 const SIGHT: float = 9.0
@@ -51,6 +52,8 @@ var game  # field_game.gd
 var list: Array[Dictionary] = []
 var next_id: int = 1
 var loot_rng := RandomNumberGenerator.new()   # its own, so a body's pockets do not shift the fight's dice
+var lunge_rng := RandomNumberGenerator.new()  # its own, so who lunges does not shift them either
+var lungers_on: bool = false  # opts["lungers"]: some of the dead lunge (lunger_rules.gd)
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D
 var drawn_count: int = 0
 var vat: Dictionary
@@ -62,6 +65,8 @@ var _people: Array = []
 func setup(field_game, vat_assets: Dictionary) -> void:
 	game = field_game
 	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
+	lunge_rng.seed = hash(int(game.opts.get("seed", 0))) + 63
+	lungers_on = bool(game.opts.get(LungerRules.OPTION, false))
 	var body := DeadBody.assets()
 	baked = not body.is_empty()
 	vat = body if baked else vat_assets
@@ -119,6 +124,9 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 		"stun": 0.0, "speed": 0.0, "stander": game.rng.randf() < 0.55, "search_left": 0, "sense_t": 0.0, "smell_lock": 0.0,
 	}
 	next_id += 1
+	# Not the frozen, and not those sent in with a horde (a horde's runners are another rule).
+	if lungers_on and kind != "frozen" and not opts.has("target"):
+		z["lunger"] = LungerRules.picks(lunge_rng.randf(), z["stander"])
 	if opts.has("target"):
 		z["state"] = "horde"
 		z["target"] = opts["target"]
@@ -136,6 +144,8 @@ func add_rising(at: Vector3, who_name: String) -> Dictionary:
 	var z := spawn("fresh", at, {"name": who_name})
 	z["state"] = "rising"
 	z["rise_t"] = RISE_TIME
+	# Whoever died at this stop gets up as one that lunges.
+	z["lunger"] = lungers_on
 	# A person's things fall to the ground; a raider's are put on it (set_loot).
 	z["loot"] = []
 	z["searched"] = true
@@ -235,7 +245,7 @@ func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 	var reacted := 0
 	for z in list:
 		var state: String = z["state"]
-		if state == "dead" or state == "rising" or state == "downed" or state == "grab" or state == "attack" or state == "climb":
+		if state == "dead" or state == "rising" or state == "downed" or state == "grab" or state == "attack" or state == "climb" or state == "tell":
 			continue
 		var d: float = at.distance_to(z["pos"])
 		var reach := radius
@@ -280,7 +290,7 @@ func smell(at: Vector3, radius: float) -> int:
 	var reacted := 0
 	for z in list:
 		var state: String = z["state"]
-		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase", "climb"]:
+		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase", "climb", "tell"]:
 			continue
 		var reach := radius * float(game.weather.scent_mult(at, z["pos"]))
 		if at.distance_to(z["pos"]) > reach:
@@ -325,6 +335,8 @@ func update(delta: float) -> void:
 		z["stun"] = maxf(0.0, z["stun"] - delta)
 		if z.has("shoved_t"):
 			z["shoved_t"] = maxf(0.0, float(z["shoved_t"]) - delta)
+		if z.has("dash_t"):
+			_run_down(z, delta)
 		match z["state"]:
 			"dead", "frozen":
 				continue
@@ -358,11 +370,16 @@ func update(delta: float) -> void:
 			"attack":
 				_update_attack(z, delta)
 				continue
+			"tell":
+				_update_tell(z, delta)
+				continue
 		if z["kind"] == "fresh" and z["age"] > FRESH_STIFFEN:
 			z["kind"] = "dead"
 		if z["stun"] > 0.0:
 			continue
 		_sense(z, people, delta)
+		if z["state"] == "tell":
+			continue   # it has just dropped into it: it stands
 		_move(z, delta)
 
 
@@ -410,6 +427,9 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		best = p
 		best_d = d
 	if best != null:
+		if _lunges(z, best_d):
+			_begin_tell(z, best)
+			return
 		if z["state"] != "chase":
 			z["path_t"] = 0.0
 			_call_neighbours(z, best.position)
@@ -424,6 +444,8 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			z["windup"] = WINDUP
 			z["angle"] = atan2(best.position.x - z["pos"].x, best.position.z - z["pos"].z)
 		return
+	if float(z.get("dash_t", 0.0)) > 0.0:
+		return   # in its run it does not look for what it lost: it runs on
 	if z["state"] == "chase":
 		# Memory holds only the spot it saw; it never reads where the target is now,
 		# except up or down a stair it just watched them take: it hears the steps.
@@ -471,7 +493,7 @@ func _begin_search(z: Dictionary, around: Vector3) -> void:
 ## Herd behaviour: dead that see a neighbour lurch after something follow it.
 func _call_neighbours(z: Dictionary, toward: Vector3) -> void:
 	for o in list:
-		if o == z or o["state"] in ["dead", "rising", "frozen", "waking", "downed", "chase", "attack", "grab", "climb"]:
+		if o == z or o["state"] in ["dead", "rising", "frozen", "waking", "downed", "chase", "attack", "grab", "climb", "tell"]:
 			continue
 		if o["pos"].distance_to(z["pos"]) > HERD:
 			continue
@@ -482,13 +504,112 @@ func _call_neighbours(z: Dictionary, toward: Vector3) -> void:
 		o["path_t"] = game.rng.randf() * 0.6
 
 
+## True when this one, seeing a person that far off, drops into its tell now.
+func _lunges(z: Dictionary, far: float) -> bool:
+	if not z.get("lunger", false) or z.get("lunged", false) or z["crawl"] or far > LungerRules.SEES:
+		return false
+	var busy := 0
+	for o in list:
+		if o["state"] == "tell" or (float(o.get("dash_t", 0.0)) > 0.0 and o["state"] != "dead"):
+			busy += 1
+	return busy < LungerRules.AT_ONCE
+
+
+## The beat before it runs: it stands where it is, low, facing the one it saw.
+## The field is told (on_lunge_tell), so that it can show and sound it.
+func _begin_tell(z: Dictionary, victim) -> void:
+	if z["state"] != "chase":
+		_call_neighbours(z, victim.position)
+	z["lunged"] = true
+	z["state"] = "tell"
+	z["t"] = LungerRules.TELL
+	z["turn_t"] = 0.0
+	z["victim"] = victim
+	z["seen_t"] = 0.0
+	z["last_seen"] = victim.position
+	z["target"] = victim.position
+	z["dash_t"] = 0.0
+	z["spent_t"] = 0.0
+	z["angle"] = atan2(victim.position.x - z["pos"].x, victim.position.z - z["pos"].z)
+	if game.has_method("on_lunge_tell"):
+		game.on_lunge_tell(z)
+
+
+## It turns with the one it saw until the beat is over, then runs at where they
+## are at that moment, in a straight line. Struck in the beat, it does not run.
+func _update_tell(z: Dictionary, delta: float) -> void:
+	var victim = z["victim"]
+	# For this one beat it keeps its eyes on them, wherever they step (a chase only remembers a spot).
+	if victim != null and victim.is_alive() and game.level_of(victim.position) == game.level_of(z["pos"]):
+		z["last_seen"] = victim.position
+		z["target"] = victim.position
+	var to: Vector3 = z["last_seen"] - z["pos"]
+	to.y = 0
+	if to.length() > 0.01:
+		z["angle"] = lerp_angle(float(z["angle"]), atan2(to.x, to.z), minf(1.0, delta * 6.0))
+	if z["stun"] > 0.0:
+		z["state"] = "chase"
+		z["spent_t"] = LungerRules.SPENT
+		return
+	z["t"] -= delta
+	if z["t"] > 0.0:
+		return
+	z["state"] = "chase"
+	z["path_t"] = 0.0
+	z["dash_dir"] = to.normalized() if to.length() > 0.01 else Vector3(sin(z["angle"]), 0, cos(z["angle"]))
+	z["dash_t"] = LungerRules.DASH
+
+
+## The clocks of the run and of the staggering after it. They go on while it
+## bites, is held off or lies on the ground.
+func _run_down(z: Dictionary, delta: float) -> void:
+	if z["dash_t"] > 0.0:
+		z["dash_t"] -= delta
+		if z["dash_t"] <= 0.0:
+			_end_dash(z)
+	elif z["spent_t"] > 0.0:
+		z["spent_t"] = maxf(0.0, z["spent_t"] - delta)
+
+
+func _end_dash(z: Dictionary) -> void:
+	z["dash_t"] = 0.0
+	z["spent_t"] = LungerRules.SPENT
+	z["path_t"] = 0.0
+
+
+## The run goes where it was aimed, not after the person: no path, no turning.
+## A wall it cannot get along ends it; a door is banged on, as in a walk.
+func _dash(z: Dictionary, delta: float) -> void:
+	var at: Vector3 = z["pos"]
+	var dir: Vector3 = z["dash_dir"]
+	var step := dir * _speed(z) * delta
+	var dest := at + step
+	var dc := FieldGrid.cell_of(dest)
+	var lg = game.grid_at(at)
+	if lg.blocks_body(dc):
+		if lg == game.grid and game.grid.doors.has(dc):
+			_bang(z, dc, delta)
+			dest = at
+		else:
+			dest = _slide(at, step)
+			if dest.distance_to(at) < step.length() * 0.2:
+				_end_dash(z)
+	z["angle"] = atan2(dir.x, dir.z)
+	z["pos"] = _avoid_people(z, dest)
+
+
 func _speed(z: Dictionary) -> float:
 	if z["crawl"]:
 		return SPEED_CRAWL
 	var s := SPEED_WANDER
 	match z["state"]:
 		"chase":
-			s = SPEED_FRESH if z["kind"] == "fresh" else SPEED_HURRY
+			if float(z.get("dash_t", 0.0)) > 0.0:
+				s = LungerRules.DASH_SPEED
+			elif float(z.get("spent_t", 0.0)) > 0.0:
+				s = LungerRules.SPENT_SPEED
+			else:
+				s = SPEED_FRESH if z["kind"] == "fresh" else SPEED_HURRY
 		"investigate":
 			s = maxf(float(z["speed"]), SPEED_SHAMBLE)
 		"search":
@@ -499,6 +620,9 @@ func _speed(z: Dictionary) -> float:
 
 
 func _move(z: Dictionary, delta: float) -> void:
+	if z["state"] == "chase" and float(z.get("dash_t", 0.0)) > 0.0 and not z["crawl"]:
+		_dash(z, delta)
+		return
 	var state: String = z["state"]
 	var target: Vector3 = z["target"]
 	var at: Vector3 = z["pos"]
@@ -689,6 +813,8 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	if knock:
 		knock_down(z)
 	else:
+		if z["state"] == "tell":
+			z["spent_t"] = LungerRules.SPENT   # shoved out of its tell, it does not run
 		z["state"] = "chase"
 		z["stun"] = 1.0
 
@@ -716,6 +842,8 @@ func knock_down(z: Dictionary) -> void:
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
 	DeadPose.mark_fall(z, _people)
+	if float(z.get("dash_t", 0.0)) > 0.0:
+		_end_dash(z)
 	z["state"] = "downed"
 	_roll_loot(z)
 	z["t"] = game.rng.randf_range(GET_UP.x, GET_UP.y)
@@ -770,6 +898,12 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			var out := DeadBody.climbing(z, baked)
 			pos = pos + basis * out.origin
 			basis = basis * out.basis
+		elif state == "tell":
+			# The boxes have no motion for it: they bend forward and sink. A baked body has its own.
+			if not baked:
+				var low := DeadBody.tell_k(z)
+				basis = basis * Basis(Vector3.RIGHT, 0.45 * low)
+				pos.y -= 0.18 * low
 		elif state != "frozen" and state != "waking" and not baked:
 			basis = basis * DeadPose.gait_basis(z)
 		if state == "frozen":
