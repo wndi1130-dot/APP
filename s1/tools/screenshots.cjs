@@ -237,7 +237,10 @@ async function main() {
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
     page.on('console', message => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
+    // 고르는 화면(결정 133)이 맨 첫 화면으로 뜨는지만 본다(낮은 가로 화면에서는 세로로 밀려서 배치 검사 대상이 아니다). 아래 장면은 ?loco=c3으로 건너뛴다.
     await page.goto(`${url}?seed=${SEED}`);
+    await page.locator('.locopick').waitFor();
+    await page.goto(`${url}?seed=${SEED}&loco=c3`);
     await page.locator('.home').waitFor();
 
     // 홈: 열차 단면, 칸 작은 창
@@ -334,7 +337,7 @@ async function main() {
     });
     const leftPage = await left.newPage();
     leftPage.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
-    await leftPage.goto(`${url}?seed=${SEED}-left`);
+    await leftPage.goto(`${url}?seed=${SEED}-left&loco=c3`);
     await leftPage.locator('.home').waitFor();
     await click(leftPage, '.bottom [data-action="open-stack"]');
     await click(leftPage, '.choice:not([disabled])'); // 약속한다
