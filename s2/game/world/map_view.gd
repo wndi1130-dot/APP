@@ -570,6 +570,10 @@ func _build_walls() -> void:
 ## (the stop's closing scene). Its doors go as they are drawn: open.
 func slide_train(metres: float) -> void:
 	train_node.position.x = metres * train_heading(data)
+	# Its window glass and the firebox door are drawn apart: they go with it.
+	for kind: String in ["car_window", "firebox"]:
+		if light_nodes.has(kind):
+			light_nodes[kind].position.x = train_node.position.x
 
 
 ## +1 if the engine is at the train's east end, -1 at its west.

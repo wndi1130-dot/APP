@@ -24,7 +24,7 @@ extends Node3D
 const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "gather", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -54,6 +54,7 @@ const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
 const TELL_GROUP: String = "lunge_tell"
 const TELL_LOUD: float = 0.9
 const FEEL_GROUP: String = "chief_feel_%02d"
+const BRAKE_LOUD: float = 0.8
 const FEEL_LOUD: float = 0.25
 const TELL_RANGE: float = 40.0
 const TELL_STANDIN_PITCH: float = 1.5
@@ -391,6 +392,13 @@ func door(kind: String, at: Vector3, level: int) -> void:
 		loud *= clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var d: float = at.distance_to(game.player.position)
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])))
+
+
+## The brakes as the train comes to its stand on open line (user decision
+## 141's file). Part of the opening scene: nothing in the field hears it.
+func train_brake() -> void:
+	played.append("train_brake")
+	_one_shot("train_brake", game.player.position, BRAKE_LOUD, 1.0)
 
 
 ## The chief's aside beside the risk line, muttered very low (user decision

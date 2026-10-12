@@ -45,6 +45,14 @@ const TURN_DEG_PER_S: float = 400.0
 # (m/s2) for this long, then holds that pace. Looks only; nothing reads it.
 const TRAIN_PULL: float = 1.0
 const TRAIN_UP_S: float = 6.0
+# A train that stopped on open line is seen coming to its stand (user decision
+# 200; only where it halts, 204): it rolls in from off the screen, slowing, the
+# brakes cry for the last of it, and then it is quiet a moment. A touch skips
+# it. Looks and one sound; the clock does not run and nothing hears it.
+const ARRIVE_KINDS: Array[String] = ["bare_line"]
+const ARRIVE_ROLL_S: float = 3.0
+const ARRIVE_BRAKE_S: float = 1.1
+const ARRIVE_HUSH_S: float = 0.8
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
@@ -158,6 +166,7 @@ var slow: float = 1.0                    # the body picture up: the field runs a
 var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
+var arrive_t: float = -1.0         # since the train came into sight (-1: it stands)
 var rode_off: Array = []           # who went with it: not drawn on the platform any more
 var seen_now: Dictionary = {}
 var seen_memory := PackedByteArray()
@@ -295,6 +304,10 @@ func _ready() -> void:
 		hud.toast(mission_play.opening_line())
 	if holdout.mode == "start":
 		holdout.begin()
+	if ARRIVE_KINDS.has(kind) and bool(opts.get("arrive", true)):
+		arrive_t = 0.0
+		hud.visible = false
+		view.slide_train(-train_in(0.0, arrive_far()))
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()
@@ -975,7 +988,9 @@ func welcome_back() -> void:
 
 func _process(delta: float) -> void:
 	delta = minf(delta, 0.1)
-	if not ended and not paused:
+	if arrive_t >= 0.0:
+		_arrive(delta)
+	elif not ended and not paused:
 		_step(delta * slow)
 		_update_snow()
 	_update_fade(delta)
@@ -993,7 +1008,7 @@ func _process(delta: float) -> void:
 		if p != player and p.turn_rate <= 0.0:
 			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
 			p.look = p.facing
-		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p)
+		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -1989,6 +2004,37 @@ func goal_text() -> String:
 
 
 ## At the train (or already in it) and on their feet: goes with it when it leaves.
+## How far short of its stand the train still is this long after it came into
+## sight, from `far` metres out: fast at first, slowing all the way to a stop.
+static func train_in(t: float, far: float) -> float:
+	var left: float = 1.0 - clampf(t / ARRIVE_ROLL_S, 0.0, 1.0)
+	return far * left * left
+
+
+## From its own length away: none of it is on the screen at first.
+func arrive_far() -> float:
+	return float((data["train"] as Rect2i).size.x)
+
+
+func _arrive(delta: float) -> void:
+	var cry_at: float = ARRIVE_ROLL_S - ARRIVE_BRAKE_S
+	if arrive_t < cry_at and arrive_t + delta >= cry_at:
+		audio.train_brake()
+	arrive_t += delta
+	view.slide_train(-train_in(arrive_t, arrive_far()))
+	if arrive_t >= ARRIVE_ROLL_S + ARRIVE_HUSH_S:
+		skip_arrival()
+
+
+## The train stands, and the stop begins (the scene over, or a touch).
+func skip_arrival() -> void:
+	if arrive_t < 0.0:
+		return
+	arrive_t = -1.0
+	view.slide_train(0.0)
+	hud.visible = true
+
+
 ## How far the train has rolled this long after the whistle: slowly from a
 ## stand, then steadily.
 static func train_roll(t: float) -> float:
