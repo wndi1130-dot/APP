@@ -176,3 +176,23 @@ func test_walls_are_drawn_as_few_boxes_that_cover_each_wall_cell_once() -> void:
 				assert_true(covered.has(Vector2i(x, y)), "every wall cell is in a box")
 	assert_eq(covered.size(), walls)
 	assert_lt(boxes * 3, walls, "far fewer boxes than cells")
+
+
+func test_a_ditch_on_open_line_is_deep_snow_to_walk_in() -> void:
+	var seen := 0
+	for n in range(1, 4):
+		var id := "bare_line_%02d" % n
+		assert_true(FieldMaps.has(id), id)
+		var d: Dictionary = FieldMaps.build(id)
+		var g: FieldGrid = d["grid"]
+		assert_gte(d["slow_rects"].size(), 4)
+		for r: Rect2i in d["slow_rects"]:
+			for y in range(r.position.y, r.end.y):
+				for x in range(r.position.x, r.end.x):
+					var c := Vector2i(x, y)
+					seen += 1
+					assert_eq(g.floor_at(c), FieldGrid.Floor.DEEP_SNOW)
+					assert_true(g.people_can_walk(c), "slow, not shut")
+	assert_gt(seen, 0)
+	assert_eq(FieldGrid.FLOOR_SPEED[FieldGrid.Floor.DEEP_SNOW], 0.7)
+	assert_eq(FieldMaps.build("first_leg_01_sulechow")["slow_rects"], [], "no other map has one")
