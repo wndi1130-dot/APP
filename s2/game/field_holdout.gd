@@ -563,8 +563,9 @@ func end_lines() -> Array:
 	# A number, never a name (user decision 147).
 	if left_people > 0:
 		out.append("남기고 온 사람 %d · 신임 −%d" % [left_people, trust_drop(left_people)])
+	# Only of a train that went: where it did not, nothing here was a choice.
 	var mine: Array = chosen()
-	if not mine.is_empty():
+	if went and not mine.is_empty():
 		out.append("고른 일: " + " · ".join(mine))
 	return out
 

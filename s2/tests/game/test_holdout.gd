@@ -589,7 +589,8 @@ func test_the_end_card_says_what_was_chosen_in_words() -> void:
 	assert_eq(String(early.holdout.chosen()[0]), "채비를 기다리지 않고 떠났다")
 	var out = _game({"holdout": "start"})
 	out.finish("limit")
-	assert_false(out.holdout.chosen().has("선로를 비워 두고 떠났다"), "a train that did not go chose no leaving")
+	for line in out.holdout.end_lines():
+		assert_false(String(line).begins_with("고른 일"), "a train that did not go chose no leaving")
 
 
 func test_a_map_with_doors_on_the_upper_side_only_or_none_still_holds() -> void:

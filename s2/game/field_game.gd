@@ -2068,7 +2068,7 @@ func finish(reason: String) -> void:
 	var on_track := track_dead()
 	telemetry.track(on_track["west"], on_track["east"])
 	telemetry.end(reason, now)
-	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines()}
+	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines(), "places": data["containers"].size(), "dead_about": zombies.alive_count()}
 	_save(result)
 	# The train going is the stop's full stop: a beat before the card, with
 	# what the stop came to side by side (user decision 183). A held train

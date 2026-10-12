@@ -81,15 +81,16 @@ static func columns(result: Dictionary) -> Array:
 	if stayed > 0:
 		left.append("사람 %d" % stayed)
 	var place: Dictionary = r.get("placeState", {})
-	var looted: float = float(place.get("looted", 1.0))
+	# A map with nothing to search has nothing unsearched.
+	var looted: float = float(place.get("looted", 1.0)) if int(result.get("places", 1)) > 0 else 1.0
 	if looted < 0.5:
 		left.append("뒤지지 않은 곳이 많다")
 	elif looted < 1.0:
 		left.append("뒤지지 못한 곳이 있다")
 	if String(place.get("waterTower", "")) == "frozen":
 		left.append("얼어 있는 급수탑")
-	if int(place.get("remainingRisk", 0)) > 0:
-		left.append("서성이는 망자")
+	if int(result.get("dead_about", 0)) > 0:
+		left.append("망자")
 	var out: Array = [["실은 것", goods], ["탄 사람", aboard], ["다친 사람", harmed], ["남긴 것", left]]
 	for column: Array in out:
 		if column[1].is_empty():
