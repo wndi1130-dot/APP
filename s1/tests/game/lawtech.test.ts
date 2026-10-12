@@ -42,7 +42,19 @@ describe('가혹한 법의 벌을 줄인다', () => {
     refreshSit(g);
     expect(m4).toBeGreaterThan(0);
     expect(expo(g, 'front')).toBeCloseTo(base + 15 - Math.min(15, 7 * m1 + 15 * m4));
-    expect(warm(g, 'front')).toBeCloseTo(warm(createS1cGame('lt-e14'), 'front') - 5 + 5 * m1);
+    expect(warm(g, 'front')).toBeCloseTo(warm(createS1cGame('lt-e14'), 'front') - 10 + 10 * m1);
+  });
+
+  it('E1: 눈 녹이기 당번이 서면 앞칸·꼬리칸·의무진 온기가 10씩 내려가고, 완성판을 얻으면 셋 다 법 앞의 값으로 돌아온다', () => {
+    const g = createS1cGame('lt-e1w');
+    const cars = ['front', 'tail', 'medtech'] as const;
+    const before = cars.map(c => warm(g, c));
+    enactLaw(g, 'snow_duty', []);
+    cars.forEach((c, i) => expect(warm(g, c)).toBeCloseTo(before[i]! - 10));
+    const m = done(g, 'e1');
+    refreshSit(g);
+    expect(m).toBe(1);
+    cars.forEach((c, i) => expect(warm(g, c)).toBeCloseTo(before[i]!));
   });
 
   it('E3 나: 난방 배당 아래 앞칸 온기 +5', () => {
