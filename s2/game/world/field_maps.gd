@@ -17,7 +17,7 @@ const DEFAULT_PLACE: String = "first_leg_01_sulechow"
 const BUILT_IN: Dictionary = {"first_leg_01_sulechow": "res://game/world/sulehuf_map.gd"}
 ## Maps named <kind>_<two digits> live here.
 const MAP_DIR: String = "res://game/world/maps/"
-const KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "houses", "hospital", "factory", "church", "office"]
+const KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "houses", "hospital", "factory", "church", "office", "summit"]
 const MOST_PER_KIND: int = 9
 ## Keys a map may leave out, and what they read as then.
 const OPTIONAL: Dictionary = {

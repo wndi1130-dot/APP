@@ -15,6 +15,11 @@ const DOOR_TIME: float = 0.5
 const PRY_TIME: float = 4.0
 const KICK_TIME: float = 1.0
 const GLASS_TIME: float = 3.0
+# The pass's snow plough (user decisions 176, 188): its drives are the salvage
+# spots named so, and with the last of them off comes the core and this much scrap.
+const DRIVE_PREFIX: String = "plow_drive_"
+const CORE_ITEM: String = "plow_core"
+const CORE_SCRAP: int = 10
 const SALVAGE_TIME: float = 6.0
 const FIRE_LIGHT_TIME: float = 10.0
 const FIRE_BURN: float = 120.0
@@ -426,7 +431,7 @@ func spot_default(p, id: String, verb: String) -> void:
 	match spot["kind"]:
 		"salvage":
 			if spot["state"] == "intact":
-				game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+				game.make_sound(FieldGrid.center(spot["cell"]), salvage_level(id), "salvage", p)
 				p.start_action("salvage", "뜯어내기", SALVAGE_TIME, _salvaged.bind(p, id))
 		"water_tower":
 			water_tower_card(p)
@@ -446,10 +451,30 @@ func spot_default(p, id: String, verb: String) -> void:
 func _salvaged(p, id: String) -> void:
 	var spot: Dictionary = game.data["spots"][id]
 	spot["state"] = "taken"
-	game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+	game.make_sound(FieldGrid.center(spot["cell"]), salvage_level(id), "salvage", p)
 	p.add_item(spot["material"], int(spot["amount"]))
 	game.view.update_spot(id)
 	game.say(p, "%s %d 얻었다." % [game.item_name(spot["material"]), int(spot["amount"])])
+	if id.begins_with(DRIVE_PREFIX) and drives_left() == 0:
+		# The last drive off: the core comes away, and the scrap that held it.
+		p.add_item(CORE_ITEM)
+		p.add_item("scrap", CORE_SCRAP)
+		game.say(p, "%s를 떼어 냈다. 고철 %d 더 얻었다." % [game.item_name(CORE_ITEM), CORE_SCRAP])
+
+
+## Taking a plough's drive apart is loud work, start and end (user decision
+## 176: six points a drive, so two are still quiet and the third is not).
+static func salvage_level(id: String) -> int:
+	return SimNoise.Level.LOUD if id.begins_with(DRIVE_PREFIX) else SimNoise.Level.NORMAL
+
+
+## How many of the plough's drives are still on it.
+func drives_left() -> int:
+	var n := 0
+	for id: String in game.data["spots"]:
+		if id.begins_with(DRIVE_PREFIX) and game.data["spots"][id]["state"] == "intact":
+			n += 1
+	return n
 
 
 # ---------------------------------------------------------------- water tower

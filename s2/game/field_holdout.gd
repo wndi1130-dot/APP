@@ -22,8 +22,15 @@ const CHANCE: Dictionary = {
 	"mine": 60, "sawmill": 30, "lodge": 25, "lake": 10,
 	"freight": 10, "hospital": 10, "factory": 10,
 	"houses": 5, "church": 5, "office": 5,
+	"summit": 60,
 }
+# Waking what sleeps inside the place makes it likelier by this much, once
+# (user decisions 177, 180: the pass goes from 60 to 80). Only the kinds here;
+# "woke" itself is measured wherever a map names an inside.
+const WOKEN_MORE: Dictionary = {"summit": 20}
 const CHANCE_OTHER: int = 5
+# The states of one of the dead that has somebody to go for.
+const AFTER_SOMEBODY: Array[String] = ["tell", "chase", "attack", "grab"]
 # The one line shown to anybody before it (user decision 150): the kind's
 # chance in words, never the roll. [up to this chance, the word].
 const RISK_WORDS: Array = [[15, "낮다"], [40, "있다"], [100, "높다"]]
@@ -110,6 +117,8 @@ var ready_shown: float = 0.0      # the "ready" words are still up this long
 var over: float = 0.0             # how long it stayed after it was ready
 var rolled: bool = false          # "roll": this stop can have it (hidden)
 var slipped: bool = false         # it could, and the train got away quietly
+var die: int = 0                  # "roll": what the stop's die showed (hidden)
+var woke: bool = false            # one of the dead first put inside took after somebody
 var watch_t: float = 0.0
 var told_noise: bool = false      # the lookout has said the stop was heard
 var told_track_t: float = -INF    # and when it last said they stand on the track
@@ -129,7 +138,8 @@ func _init(field_game) -> void:
 		# Its own dice, so the stop's are not moved on by it.
 		var dice := RandomNumberGenerator.new()
 		dice.seed = hash([int(game.opts.get("seed", 0)), game.place, "holdout"])
-		rolled = dice.randi_range(1, 100) <= chance()
+		die = dice.randi_range(1, 100)
+		rolled = die <= chance()
 		var heard: int = int(game.opts.get("holdout_forecast_heard", FORECAST_HEARD))
 		forecast = rolled and bool(game.opts.get("radio_watch", false)) and dice.randi_range(1, 100) <= heard
 
@@ -143,12 +153,35 @@ func chance() -> int:
 	# Below nought is "as the place has it" (the start screen's first choice).
 	if int(game.opts.get("holdout_chance", -1)) >= 0:
 		return int(game.opts["holdout_chance"])
+	var kind := String(game.data.get("place_kind", ""))
+	return mini(kind_chance() + (int(WOKEN_MORE.get(kind, 0)) if woke else 0), 100)
+
+
+## What the kind of place has by itself, whatever was done at this stop.
+func kind_chance() -> int:
 	return int(CHANCE.get(String(game.data.get("place_kind", "")), CHANCE_OTHER))
 
 
-## The kind's chance in a word, for the line anybody sees.
+## "Woke" (user decision 177): one of the dead first put inside the place has
+## noticed somebody and is after them. A sound alone, or an opened door, is
+## not it. Once a stop, and the same die is read again against the new chance:
+## a stop that could have it still can. What the radio operator heard was
+## heard before anybody woke anything, and stays as it was.
+func den_watch() -> void:
+	if woke or game.ended:
+		return
+	for z: Dictionary in game.zombies.list:
+		if bool(z.get("interior", false)) and String(z["state"]) in AFTER_SOMEBODY:
+			woke = true
+			if mode == "roll" and not opened:
+				rolled = rolled or die <= chance()
+			return
+
+
+## The kind's chance in a word, for the line anybody sees: of the kind, so it
+## says nothing of what was woken here.
 func risk_word() -> String:
-	var c: int = chance()
+	var c: int = kind_chance() if int(game.opts.get("holdout_chance", -1)) < 0 else chance()
 	for row: Array in RISK_WORDS:
 		if c <= int(row[0]):
 			return String(row[1])
@@ -502,7 +535,7 @@ func leaving_early() -> void:
 ## A rolled stop that never opened: what the roll was and why it did not, for
 ## the telemetry (the player is not told).
 func roll_note() -> Dictionary:
-	return {"rolled": rolled, "opened": false, "slipped": slipped, "forecast": forecast, "chance": chance(), "noise": game.ledger.total, "peopleNoise": people_noise(), "trackDead": maxi(track_at_leave, 0)}
+	return {"rolled": rolled, "opened": false, "slipped": slipped, "forecast": forecast, "chance": chance(), "woke": woke, "noise": game.ledger.total, "peopleNoise": people_noise(), "trackDead": maxi(track_at_leave, 0)}
 
 
 ## What the stage came to, for the receipt's note, the telemetry and the end screen.
@@ -519,7 +552,7 @@ func result() -> Dictionary:
 		"leftPeople": left_people, "earlyCost": cost_paid,
 		"overSec": int(over),
 		"leftShare": snappedf(clampf(left / total, 0.0, 1.0), 0.01) if total > 0.0 else 0.0,
-		"trustDrop": trust_drop(left_people),
+		"trustDrop": trust_drop(left_people), "woke": woke,
 		"trackDead": maxi(track_at_leave, 0), "ploughParts": int(plough(maxi(track_at_leave, 0))["parts"]),
 	}
 

@@ -85,6 +85,8 @@ const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
 	"flare": {"name": "철도 섬광", "weight": 0.5, "stock": ""},
+	# What the four drives of the pass's plough give up together (user decision 188).
+	"plow_core": {"name": "제설기 코어", "weight": 2.0, "stock": ""},
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
@@ -729,6 +731,14 @@ func _spawn_dead() -> void:
 		zombies.spawn("dead", lift(row[0], int(row[1])))
 	for c in s.get("frozen_siding", []):
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
+	# Those first put inside the place (the zones a map names in
+	# "interior_kind_slots"): waking one of them is counted (user decision 177).
+	var inside: Array = []
+	for slot: Dictionary in data.get("interior_kind_slots", []):
+		inside.append(String(slot.get("zone", "")))
+	for z in zombies.list:
+		if inside.has(grid_at(z["pos"]).zone_at(FieldGrid.cell_of(z["pos"]))):
+			z["interior"] = true
 	# A switch of the start screen, for looking at them: with the lungers on,
 	# every one of the dead put here that stands is one.
 	if bool(opts.get("lungers", false)) and bool(opts.get("lungers_many", false)):
@@ -1006,6 +1016,7 @@ func _step(delta: float) -> void:
 	actions.update(delta)
 	holdout.tick(delta)
 	holdout.watch(delta)
+	holdout.den_watch()
 	_check_end()
 	var keep: Array = []
 	for s in sounds:
@@ -2036,7 +2047,7 @@ func finish(reason: String) -> void:
 		if STOCK_OF.has(id):
 			var row: Array = STOCK_OF[id]
 			stock[row[0]] = float(stock.get(row[0], 0.0)) + float(row[1]) * int(unloaded[id])
-		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
+		if id in ["symbol_bell", "info_telegraph", "info_timetable", "plow_core"]:
 			receipt.gain_item(id)
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
