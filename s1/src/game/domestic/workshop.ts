@@ -54,14 +54,15 @@ export interface RestoreCheck {
   parts: number;
   core: number;
   wood: number;
+  scrap: number;
 }
 
-export function restoreCost(id: TechId): { parts: number; frags: number; defectFrags: number; core: number; wood: number; work: number } {
+export function restoreCost(id: TechId): { parts: number; frags: number; defectFrags: number; core: number; wood: number; scrap: number; work: number } {
   const def = TECHS[id];
-  if (def.tier === 0) return { parts: def.adapt?.parts ?? 0, frags: 0, defectFrags: 0, core: 0, wood: def.adapt?.wood ?? 0, work: D.adaptWork };
+  if (def.tier === 0) return { parts: def.adapt?.parts ?? 0, frags: 0, defectFrags: 0, core: 0, wood: def.adapt?.wood ?? 0, scrap: 0, work: D.adaptWork };
   return {
     parts: D.restoreParts[def.tier], frags: D.restoreFrags[def.tier], defectFrags: D.defectFrags[def.tier],
-    core: def.tier === 3 ? 1 : 0, wood: 0, work: D.restoreWork[def.tier],
+    core: def.tier === 3 ? 1 : 0, wood: D.restoreWood[def.tier], scrap: D.restoreScrap[def.tier], work: D.restoreWork[def.tier],
   };
 }
 
@@ -87,14 +88,14 @@ export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   const d = dom(g);
   const def = TECHS[id];
   const cost = restoreCost(id);
-  const out: RestoreCheck = { offer: false, fragsNeed: cost.frags, defectNeed: cost.defectFrags, parts: cost.parts, core: cost.core, wood: cost.wood };
+  const out: RestoreCheck = { offer: false, fragsNeed: cost.frags, defectNeed: cost.defectFrags, parts: cost.parts, core: cost.core, wood: cost.wood, scrap: cost.scrap };
   const fail = (why: string) => { out.full = why; out.defect = why; return out; };
   const blocked = restoreBlock(g, id);
   if (blocked) return fail(blocked);
   const frags = d.frags[def.branch];
   const hasDefect = cost.defectFrags < cost.frags;
   out.offer = frags >= (hasDefect ? cost.defectFrags : cost.frags);
-  const common = d.restoring ? '공방이 다른 복원 중' : d.parts < cost.parts ? '부품이 모자라다' : d.wood < cost.wood ? '목재가 모자라다' : undefined;
+  const common = d.restoring ? '공방이 다른 복원 중' : d.parts < cost.parts ? '부품이 모자라다' : d.wood < cost.wood ? '목재가 모자라다' : d.scrap < cost.scrap ? '고철이 모자라다' : undefined;
   out.full = frags < cost.frags ? '설계도 조각이 모자라다' : common;
   out.defect = !hasDefect ? '없다' : frags < cost.defectFrags ? '설계도 조각이 모자라다' : frags >= cost.frags ? '완성판으로 된다' : common;
   return out;
@@ -126,6 +127,7 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   const cost = restoreCost(id);
   d.parts -= cost.parts;
   d.wood -= cost.wood;
+  d.scrap -= cost.scrap;
   d.frags[def.branch] -= mode === 'full' ? cost.frags : cost.defectFrags;
   d.cores -= cost.core;
   const asked = pipe && !d.pipeFlip;
@@ -182,7 +184,7 @@ function dropPipeAgenda(g: Game): void {
   if (i === c.idx) { c.idx = 0; c.deals = []; } else if (i < c.idx) c.idx -= 1;
 }
 
-/** 복원 취소: 쓴 부품은 돌아오지 않는다(7.5, 반응을 다시 굴리는 악용을 막는다). 조각은 돌아온다. */
+/** 복원 취소: 쓴 자재(부품·목재·고철)는 돌아오지 않는다(7.5, 반응을 다시 굴리는 악용을 막는다). 조각은 돌아온다. */
 export function cancelRestore(g: Game): void {
   const d = dom(g);
   const id = d.restoring;
@@ -200,7 +202,7 @@ export function cancelRestore(g: Game): void {
     if (id === 'e3') dropPipeAgenda(g);
   }
   d.restoring = null;
-  journal(g, `${TECHS[id].name} 복원을 멈췄다. 쓴 부품은 돌아오지 않는다.`, 'bad');
+  journal(g, `${TECHS[id].name} 복원을 멈췄다. 쓴 자재는 돌아오지 않는다.`, 'bad');
 }
 
 export function techTitle(g: Game, id: TechId): string {

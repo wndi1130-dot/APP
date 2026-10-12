@@ -195,8 +195,8 @@ describe('프펑2식 제안: 의무진은 완성판을 지금 시작할 수 있�
     }
   });
 
-  it('부품이 모자라거나 공방이 차 있어도 후보가 아니다', () => {
-    const g = council('offer-parts', x => { x.dom!.parts = 0; });
+  it('자재가 모자라거나 공방이 차 있어도 후보가 아니다', () => {
+    const g = council('offer-parts', x => { x.dom!.wood = 0; x.dom!.scrap = 0; });
     expect(researchChoice(g)).toBeNull();
     const h = council('offer-busy', x => { x.dom!.restoring = 'm1' as TechId; });
     expect(researchChoice(h)).toBeNull();

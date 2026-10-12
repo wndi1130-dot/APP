@@ -322,6 +322,15 @@ export const PLACES: PlaceDef[] = [
   { id: 'office', name: '관청', risk: 2, loot: { coal: 0, food: 5, medicine: 0, luxury: 10, symbol: 25, secret: 60 } },
 ];
 
+/** 결정 136·140: 노선이 큰 차례(석탄 → 목재 → 식량 → 고철)를 만든다. 묶음마다 장소를 뽑는 무게와 끝에 오는 풀어 주는 곳.
+ * 큰 차례와 풀어 주는 곳의 자리는 판마다 같고, 묶음 안의 정차는 무게로 뽑아 판마다 다르다. 숫자는 제안(구현 명세 3-3절). 구간 24를 넘는 판은 마지막 묶음. */
+export const ROUTE: { to: number; w: Record<string, number>; relief: { seg: number; places: string[] } }[] = [
+  { to: 6, w: { freight: 0, houses: 30, hospital: 20, factory: 0, church: 25, office: 25 }, relief: { seg: 6, places: ['freight', 'factory'] } },
+  { to: 12, w: { freight: 20, houses: 10, hospital: 30, factory: 20, church: 10, office: 10 }, relief: { seg: 12, places: ['houses'] } },
+  { to: 18, w: { freight: 5, houses: 0, hospital: 25, factory: 30, church: 20, office: 20 }, relief: { seg: 18, places: ['houses', 'freight'] } },
+  { to: 24, w: { freight: 20, houses: 30, hospital: 10, factory: 0, church: 20, office: 20 }, relief: { seg: 22, places: ['factory'] } },
+];
+
 /** 정찰조가 당한 자리(파밍 스레드 17:16 제안). 위험이 장소 안쪽 한 자리에 묶여 있다고 읽히게 해서,
  * 짧게·적게 보내면 그 자리를 비켜 간다는 '이 준비라면' 해석과 맞물린다. 숫자는 안 바꾼다. */
 export const SCOUT_DEEP: Record<string, string> = {

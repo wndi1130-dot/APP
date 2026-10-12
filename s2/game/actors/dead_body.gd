@@ -8,6 +8,7 @@ extends RefCounted
 const BodyBake = preload("res://scripts/body_bake.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const Motion = preload("res://game/sim/motion.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 const FOLDER_ENV: String = "S2_DEAD_BODY"    # a folder to read instead of the usual one
 const FOLDER: String = "user://dead_body"
@@ -17,11 +18,13 @@ const STAND: int = 3
 const LUNGE: int = 4
 const FALL: int = 6                           # on its back
 const RUN: int = 7
+const TELL: int = 8                           # dropping low before it runs
 const FALL_FRONT: int = 9                     # on its face
 const CRAWL: int = 10
 const RISE: int = 11                          # getting up off its back
 const CLIMB: int = 12                         # hauling itself up out of a hole
 const RISE_FRONT: int = 13                    # getting up off its face
+const STAGGER: int = 14                       # spent after a run: bent over, reeling on wide legs
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 # How far one round of a motion carries the body, metres, so that the foot
 # going backwards stays on its spot. The bake measures it on the body it bakes
@@ -29,7 +32,7 @@ const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds 
 # baked before it did, measured the same way on one body. The feet keep that
 # pace to within a quarter. The crawl's hands keep no steady pace, and its
 # number is only their middle.
-const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61}
+const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61, STAGGER: 1.01}
 const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
 static var rounds: Dictionary = {}             # what the baked folder in use measured (see assets)
 static var table: Array = []                   # its motions: [first frame, frames, loops, seconds] each
@@ -192,6 +195,8 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
 		return Color(swayed(z, LUNGE, still), float(LUNGE), 1.0, shade)
+	if state == "tell":
+		return Color(tell_k(z), float(TELL), 1.0, shade)
 	if state == "frozen" or state == "waking":
 		return Color(swayed(z, STAND, still), float(STAND), 1.0, shade)
 	# Its feet go by the ground it has covered, not by the clock: a wanderer
@@ -201,6 +206,11 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 	if kept_still(z):
 		return Color(swayed(z, STAND, still), float(STAND), 1.0, shade)
 	return Color(at, float(gait), 1.0, shade)
+
+
+## How far into its tell one of the dead is: 0 as it starts to drop, 1 as it runs.
+static func tell_k(z: Dictionary) -> float:
+	return clampf(1.0 - float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
 
 
 ## True when a body that is partly down is on its way up, not on its way down.
@@ -270,8 +280,14 @@ static func step(z: Dictionary, motion: int) -> float:
 
 
 ## The walk a body goes by: one of its three, or the run when it is one of the
-## fresh dead coming after someone (the rules give those their speed).
+## fresh dead coming after someone (the rules give those their speed). One
+## that lunges runs while its run lasts and reels while it is spent.
 static func gait_of(z: Dictionary) -> int:
+	if z["state"] == "chase":
+		if float(z.get("dash_t", 0.0)) > 0.0:
+			return RUN
+		if float(z.get("spent_t", 0.0)) > 0.0:
+			return STAGGER
 	if z["state"] == "chase" and z.get("kind", "") == "fresh":
 		return RUN
 	return walk_of(z["phase"])

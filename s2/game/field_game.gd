@@ -35,6 +35,7 @@ const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
+const AllyLines = preload("res://game/sim/ally_lines.gd")
 
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
@@ -133,6 +134,7 @@ var ledger := NoiseLedger.new()
 var director: HordeDirector
 var receipt: Receipt
 var telemetry: Telemetry
+var lines := AllyLines.new()
 var combat: Combat
 var ai: AI
 var actions: Actions
@@ -720,6 +722,12 @@ func _spawn_dead() -> void:
 		zombies.spawn("dead", lift(row[0], int(row[1])))
 	for c in s.get("frozen_siding", []):
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
+	# A switch of the start screen, for looking at them: with the lungers on,
+	# every one of the dead put here that stands is one.
+	if bool(opts.get("lungers", false)) and bool(opts.get("lungers_many", false)):
+		for z in zombies.list:
+			if z["kind"] != "frozen" and z["stander"]:
+				z["lunger"] = true
 
 
 func people_alive() -> Array:
@@ -978,6 +986,7 @@ func _step(delta: float) -> void:
 		_update_person(p, delta)
 	zombies.update(delta)
 	ai.update(delta)
+	_left_behind()
 	combat.update(delta)
 	_update_hordes(delta)
 	_update_spawns(delta)
@@ -986,6 +995,7 @@ func _step(delta: float) -> void:
 	_update_zone(delta)
 	actions.update(delta)
 	holdout.tick(delta)
+	holdout.watch(delta)
 	_check_end()
 	var keep: Array = []
 	for s in sounds:
@@ -1248,6 +1258,8 @@ func on_person_died(p: Person) -> void:
 	if p.team != "raider":
 		receipt.person("dead", p.pid)
 		say(p, "%s 죽었다." % p.display_name)
+		if squad.has(p):
+			shout_near(p, "rage")
 	# Everyone is already infected: the body stands up again (zombies.md).
 	var z := zombies.add_rising(p.position, p.display_name)
 	p.brain["rising_id"] = z["id"]
@@ -1725,10 +1737,47 @@ func _radio_show(text: String) -> void:
 
 
 ## What happened to p, in a few words. `hurt`: it is a wound (the hud shows
-## those of the chief at the screen's edges, not as a note).
-func say(p, text: String, hurt: bool = false) -> void:
+## those of the chief at the screen's edges, not as a note). `event`: what a
+## companion shouts about it (ally_lines.gd), if anything.
+func say(p, text: String, hurt: bool = false, event: String = "") -> void:
 	if hud != null:
 		hud.say(p, text, hurt)
+	if event != "":
+		shout(p, event)
+
+
+## A companion shouts a line over their head (words only). The chief, the
+## raiders and the dead keep quiet.
+func shout(p, event: String, always: bool = false) -> void:
+	if hud == null or p == player or p.body.dead or not (squad.has(p) or always and crew.has(p)):
+		return
+	var line: String = lines.pick(String(p.pid), event, clock.elapsed, always)
+	if line != "":
+		hud.shout(p, line)
+
+
+## One of the squad fell: the companion nearest to them, if near, rages.
+func shout_near(fallen, event: String) -> void:
+	var best = null
+	var best_d: float = AllyLines.RAGE_NEAR
+	for o in squad:
+		if o == fallen or o == player or not o.is_alive() or o.body.downed:
+			continue
+		var d: float = o.position.distance_to(fallen.position)
+		if d < best_d:
+			best_d = d
+			best = o
+	if best != null:
+		shout(best, event)
+
+
+## Lying hurt or held while the chief walks off.
+func _left_behind() -> void:
+	for o in squad:
+		if o == player or o.body.dead or not (o.body.downed or not o.grabbers.is_empty()):
+			continue
+		if o.position.distance_to(player.position) > AllyLines.LEFT_BEHIND_M:
+			shout(o, "left_behind")
 
 
 # ---------------------------------------------------------------- vision & camera
@@ -1814,6 +1863,13 @@ func on_frozen_wake(z: Dictionary) -> void:
 		hud.toast("눈 속에서 얼음이 갈라진다.")
 
 
+## One of the dead has dropped low and will run (zombies.gd, the tell). The
+## HUD marks it for as long as it stays low; here it is voiced. No rule hears
+## this and nothing is scored: the tell itself calls the dead near it.
+func on_lunge_tell(z: Dictionary) -> void:
+	audio.lunge_tell(z["pos"])
+
+
 func on_risen(z: Dictionary) -> void:
 	if z["name"] != "":
 		hud.toast("%s 일어났다." % z["name"])
@@ -1889,6 +1945,11 @@ func depart() -> void:
 	if holdout.opens_on_leaving():
 		holdout.begin()
 		return
+	# A held train: a last call first, and whoever misses it stays.
+	if holdout.on:
+		holdout.last_call()
+		return
+	holdout.slipped = holdout.mode == "roll" and holdout.rolled and not holdout.opened
 	holdout.leaving_early()
 	audio.depart()
 	finish("departed")
@@ -1898,7 +1959,26 @@ func depart() -> void:
 func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
+	# A rolled stop says its risk beside the stop's goals.
+	if holdout.mode == "roll":
+		return holdout.goal_line() + " · " + mission_play.goal_line()
 	return mission_play.goal_line() if mission_play.active() else ""
+
+
+## At the train (or already in it) and on their feet: goes with it when it leaves.
+func aboard(p) -> bool:
+	if p.brain.get("boarded", false):
+		return true
+	return FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
+
+
+## How many would stay if the train left now (the chief aside).
+func outside() -> int:
+	var n := 0
+	for p in squad + crew:
+		if p != player and p.is_alive() and not aboard(p):
+			n += 1
+	return n
 
 
 ## Departure: whistle (very loud), people on the platform board, the rest stay.
@@ -1913,15 +1993,19 @@ func finish(reason: String) -> void:
 	for p in squad + crew:
 		if not p.is_alive():
 			continue
-		var on_board: bool = FieldMaps.by_train(data, FieldGrid.cell_of(p.position)) and not p.body.downed
-		if p.brain.get("boarded", false):
-			on_board = true
+		var on_board: bool = aboard(p)
 		if on_board or reason == "wiped" and false:
 			boarded.append(p)
 			for id in p.items:
 				unloaded[id] = int(unloaded.get(id, 0)) + int(p.items[id])
 		else:
 			receipt.person("leftBehind", p.pid)
+			# A held train going without them: they shout after it (user decision
+			# 143). "left_behind" in the brain is for the protest motion to read.
+			if reason == "departed" and holdout.opened and p != player:
+				holdout.left_people += 1
+				p.brain["left_behind"] = true
+				shout(p, "left_platform", true)
 		# A confirmed infection from a scratch goes back as a bite would (body_injury 2.1).
 		if p.body.infection == "bite" or p.body.infected:
 			receipt.person("bitten", p.pid)
@@ -1937,7 +2021,7 @@ func finish(reason: String) -> void:
 			stock[row[0]] = float(stock.get(row[0], 0.0)) + float(row[1]) * int(unloaded[id])
 		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
-	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent
+	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
@@ -1971,8 +2055,12 @@ func finish(reason: String) -> void:
 	mission_play.finish(reason)
 	holdout.on = false
 	if holdout.opened:
+		holdout.note_leaving()
 		receipt.place_note("holdout", holdout.result())
 		telemetry.holdout = holdout.result()
+	elif holdout.mode == "roll":
+		holdout.note_leaving()
+		telemetry.holdout = holdout.roll_note()
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -1981,7 +2069,11 @@ func finish(reason: String) -> void:
 	telemetry.end(reason, now)
 	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines()}
 	_save(result)
-	hud.show_end(result)
+	# A held train leaving is the stage's full stop: a beat before the card.
+	if reason == "departed" and holdout.opened:
+		hud.leave_beat(result, holdout.leave_lines())
+	else:
+		hud.show_end(result)
 	finished.emit(result)
 
 

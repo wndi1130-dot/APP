@@ -346,7 +346,8 @@ func test_gd_sample_fixture_matches_builder() -> void:
 			f.store_string(text + "\n")
 			f.close()
 	assert_true(FileAccess.file_exists(SAMPLE_PATH), SAMPLE_PATH)
-	var stored := FileAccess.get_file_as_string(SAMPLE_PATH)
+	# A Windows checkout (core.autocrlf) turns the fixture's LF into CRLF; the builder writes LF.
+	var stored := FileAccess.get_file_as_string(SAMPLE_PATH).replace("\r\n", "\n")
 	assert_eq(stored, text + "\n", "fixture is stale; regenerate (see header)")
 	var parsed: Variant = JSON.parse_string(stored)
 	assert_true(parsed is Dictionary)

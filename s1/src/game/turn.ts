@@ -15,8 +15,8 @@ import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, STAY } from './data';
-import type { Comm, LootKey, StayId } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
+import type { Comm, LootKey, PlaceDef, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, CREW_BUSY, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
@@ -52,7 +52,7 @@ export function primaryAction(g: Game): Primary {
   if (g.cards.length > 0) return { label: `서류 ${g.cards.length}장`, ok: false, why: '먼저 서류를 처리한다' };
   switch (g.phase) {
     case 'prep': return { label: '출발', ok: true };
-    case 'travel': return g.inStrike || g.stranded ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차', ok: true };
+    case 'travel': return g.inStrike || g.stranded || stallsEnRoute(g) ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차', ok: true };
     case 'stop': return g.stop?.done ? { label: isSessionSeg(g.seg) ? '식당칸으로' : '정산으로', ok: true } : { label: '정차 결정', ok: false, why: '정차 카드를 고른다' };
     case 'council': {
       const council = g.council;
@@ -73,7 +73,7 @@ export function advance(g: Game): void {
       depart(g);
       if ((g.phase as Game['phase']) === 'travel') darkTravel(g);
       return;
-    case 'travel': return g.inStrike || g.stranded ? afterStop(g) : arriveStop(g);
+    case 'travel': return runTravel(g);
     case 'stop': return afterStop(g);
     case 'council': return preVote(g) ? finishPreVote(g) : settle(g);
     case 'settle': return nextSegment(g);
@@ -200,6 +200,25 @@ export function predictStall(g: Game): { atKm: number; toNextKm: number; segKm: 
   return { atKm, toNextKm: segKm - atKm, segKm };
 }
 
+/**
+ * 이 구간 도중에 석탄이 다하는가(멈춘 열차 3.3). 이동 사건이 석탄을 주고 뺀 뒤, 달리는 순간의 실제 석탄과 이 구간 전체 셈(재난 포함)으로 가른다.
+ * 서면 역은 들르지 않는다. 그 구간의 역은 다시 떠나 닿은 뒤에 치른다(선 동안 구간은 역 없이 흐른다).
+ */
+export function stallsEnRoute(g: Game): boolean {
+  if (g.stranded || g.inStrike) return false;
+  return g.coal - forecast(g).coal <= 0;
+}
+
+/** 이동 단계에서 달린다: 석탄이 다하면 역 사이 선로에서 서고(enterStranded) 정차를 건너뛰며, 아니면 역에 닿는다. */
+function runTravel(g: Game): void {
+  if (g.inStrike || g.stranded) return afterStop(g);
+  if (stallsEnRoute(g)) {
+    enterStranded(g, g.coal, forecast(g).coal);
+    return afterStop(g);
+  }
+  return arriveStop(g);
+}
+
 /** 구간 정산이 한꺼번에 빼는 석탄·식량을 까닭별 무게로 나눈다. forecast의 항을 그대로 풀어 쓴 것이고, 비율로만 쓰므로 합은 forecast와 달라도 된다. */
 function forecastWeights(g: Game): { coal: [string, number][]; food: [string, number][] } {
   const dom = domesticForecast(g);
@@ -315,8 +334,24 @@ function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
   return loot.coal / (g.coal + 1) > loot.food / (g.food + 1) ? 'coal' : 'food';
 }
 
+/** 이 구간의 정차 장소를 뽑는다(결정 136). 묶음의 무게로 뽑고, 풀어 주는 구간이면 그 목록에서 뽑는다. 주사위는 한 번만 굴린다(뒤의 주사위 순서가 안 밀리게).
+ * exclude: 핸드카 후보는 지금 장소를 뺀다. 풀어 주는 구간에선 목록의 다른 곳이 있으면 그것, 없으면 무게로 뽑는다. */
+export function pickPlace(g: Game, exclude?: string): PlaceDef {
+  const r = rnd(g);
+  const band = ROUTE.find(b => g.seg <= b.to) ?? ROUTE[ROUTE.length - 1];
+  if (g.seg === band.relief.seg) {
+    const ids = band.relief.places.filter(id => id !== exclude);
+    if (ids.length > 0) return PLACES.find(p => p.id === ids[Math.floor(r * ids.length)]) ?? PLACES[0];
+  }
+  const cands = PLACES.filter(p => p.id !== exclude && (band.w[p.id] ?? 0) > 0);
+  const sum = cands.reduce((a, p) => a + band.w[p.id], 0);
+  let acc = 0;
+  for (const p of cands) { acc += band.w[p.id]; if (r * sum < acc) return p; }
+  return cands[cands.length - 1] ?? PLACES[0];
+}
+
 function arriveStop(g: Game): void {
-  const place = PLACES[Math.floor(rnd(g) * PLACES.length)];
+  const place = pickPlace(g);
   const tail = g.comms.tail.promise?.cond.kind === 'skip_dispatch';
   // 같은 장소라도 정차마다 바깥 기척이 다르다. 무리 흔적이 있으면 기본 준비로도 죽음 줄이 뜰 수 있다.
   const roll = rnd(g);
@@ -330,8 +365,7 @@ function arriveStop(g: Game): void {
   if (g.dom) {
     g.dom.altPlace = null;
     if (techMult(g, 'x2') > 0) {
-      const others = PLACES.filter(p => p.id !== place.id);
-      g.dom.altPlace = others[Math.floor(rnd(g) * others.length)].id;
+      g.dom.altPlace = pickPlace(g, place.id).id;
     }
   }
   g.phase = 'stop';
@@ -679,8 +713,8 @@ function afterStop(g: Game): void {
 
 // ---- 정산 ----
 function settle(g: Game): void {
-  const wasStranded = !!g.stranded; // 이 정산 전부터 서 있던 열차만 멈춘 정산(긴장·온기)을 받는다
-  const before = { coal: g.coal, food: g.food, med: g.med, trust: g.trust, tension: g.tension, rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number> };
+  const wasStranded = !!g.stranded && g.stranded.since < g.seg; // 이 정산 전부터 서 있던 열차만 멈춘 정산(긴장·온기)을 받는다. 이번 구간에 선 열차는 아직
+  const before = { coal: g.coal + (g.stranded && g.stranded.since === g.seg ? g.stranded.burned ?? 0 : 0), food: g.food, med: g.med, trust: g.trust, tension: g.tension, rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number> };
   const notes: string[] = [];
   const f = forecast(g);
   const w = forecastWeights(g);
