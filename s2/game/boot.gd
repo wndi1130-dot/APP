@@ -41,7 +41,7 @@ const CHOICES: Array = [
 	# Which map the stop is played on, for looking at one on the phone: a kind
 	# and its number. Left as it is, the stop is the one it always was. A
 	# number the kind has no map for is the usual stop too.
-	["place_kind", "시험: 지도 종류", [["", "지금 그대로"], ["mine", "탄광"], ["lodge", "산장"], ["sawmill", "목재소"], ["lake", "호수"], ["freight", "화물역"], ["houses", "주택가"], ["hospital", "병원"], ["factory", "공장"], ["church", "교회"], ["office", "관청"], ["summit", "고개"]]],
+	["place_kind", "시험: 지도 종류", [["", "지금 그대로"], ["mine", "탄광"], ["lodge", "산장"], ["sawmill", "목재소"], ["lake", "호수"], ["freight", "화물역"], ["houses", "주택가"], ["hospital", "병원"], ["factory", "공장"], ["church", "교회"], ["office", "관청"], ["summit", "고개"], ["bare_line", "빈 땅"]]],
 	["place_no", "시험: 지도 장", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [6, "6"], [7, "7"], [8, "8"], [9, "9"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]

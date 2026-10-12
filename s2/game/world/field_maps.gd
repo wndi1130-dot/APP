@@ -10,6 +10,8 @@ extends RefCounted
 ## mine goes on underground): `build` can be called again in the same stop,
 ## and nothing here keeps state.
 
+const FieldGrid = preload("res://game/world/field_grid.gd")
+
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
 const DEFAULT_PLACE: String = "first_leg_01_sulechow"
@@ -17,13 +19,15 @@ const DEFAULT_PLACE: String = "first_leg_01_sulechow"
 const BUILT_IN: Dictionary = {"first_leg_01_sulechow": "res://game/world/sulehuf_map.gd"}
 ## Maps named <kind>_<two digits> live here.
 const MAP_DIR: String = "res://game/world/maps/"
-const KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "houses", "hospital", "factory", "church", "office", "summit"]
+const KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "houses", "hospital", "factory", "church", "office", "summit", "bare_line"]
 const MOST_PER_KIND: int = 9
 ## Keys a map may leave out, and what they read as then.
 const OPTIONAL: Dictionary = {
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
 	"bands": {}, "train_doors": {}, "crossings": [], "barricade_slots": [], "interior_kind_slots": [],
 	"zone_names": {},
+	# Ditches (Rect2i, ground level): walkable, and slow to cross.
+	"slow_rects": [],
 	# Which way a hole that is not straight down opens (key -> Vector2i): the
 	# dead come out of a culvert that way. Left out: toward where they are going.
 	"hole_faces": {},
@@ -109,6 +113,13 @@ static func build_from(script: Script) -> Dictionary:
 		# and loaded, from the ground by it on that side as well.
 		data["boarding"] = [data["platform"]] + side_strips(data, data["platform"])
 		data["unloading"] = [data["unload"]] + side_strips(data, data["unload"])
+	# A ditch is deep snow to walk in: the living and the dead both read how
+	# fast they go from the floor under them. The map's own file keeps it snow.
+	var ground: FieldGrid = data["grid"]
+	for r: Rect2i in data["slow_rects"]:
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				ground.floor[ground.index(Vector2i(x, y))] = FieldGrid.Floor.DEEP_SNOW
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
