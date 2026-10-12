@@ -105,6 +105,8 @@ const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whis
 const LAST_CALL_FONT: int = 96
 const READY_FONT: int = 52
 const LEAVE_WORDS_TOP: float = 96.0
+const LEAVE_COLUMN_W: float = 216.0
+const LEAVE_COLUMN_GAP: int = 24
 # A line a companion shouts (ally_lines.gd): bigger and a little longer than
 # the note of what happened, which goes small under it.
 const LINE_S: float = 3.2
@@ -685,7 +687,7 @@ func tick(delta: float) -> void:
 		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
 	_tick_status(p)
 	pause_button.text = "계속" if game.paused else "멈춤"
-	settings_button.visible = game.paused and not modal_open
+	settings_button.visible = game.paused and not modal_open and leaving.is_empty()
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
@@ -1554,8 +1556,9 @@ func _depart_pick(choice: String) -> void:
 
 
 ## The whistle has gone and the stage is over: the screen darkens over the
-## still field, the two lines come up, and after LEAVE_BEAT_S the end card.
-func leave_beat(result: Dictionary, lines: Array) -> void:
+## still field, the lines come up with what the stop came to side by side
+## under them ([title, [rows]] columns), and after LEAVE_BEAT_S the end card.
+func leave_beat(result: Dictionary, lines: Array, columns: Array = []) -> void:
 	_close_modal()
 	context_rows = []
 	var veil := ColorRect.new()
@@ -1579,6 +1582,24 @@ func leave_beat(result: Dictionary, lines: Array) -> void:
 		var l := _label(String(lines[i]), 48 if i == 0 else 24, INK if i == 0 else DIM)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		words.add_child(l)
+	if not columns.is_empty():
+		# The stage is over: the thumb pads go, so the columns are not under them.
+		for b in pads:
+			b.visible = false
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", LEAVE_COLUMN_GAP)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		words.add_child(row)
+		for column: Array in columns:
+			var box := VBoxContainer.new()
+			box.custom_minimum_size.x = LEAVE_COLUMN_W
+			box.add_theme_constant_override("separation", 4)
+			box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(box)
+			box.add_child(_label(String(column[0]), 20, DIM))
+			for line in column[1]:
+				box.add_child(_label(String(line), 24))
 	leaving = {"result": result, "t": LEAVE_BEAT_S, "veil": veil, "words": words}
 
 
@@ -1614,7 +1635,10 @@ func show_end(result: Dictionary) -> void:
 		parts.append("%s %+d" % [names.get(k, k), int(stock[k])])
 	lines.append("영수증: " + (", ".join(parts) if not parts.is_empty() else "변화 없음"))
 	var people: Dictionary = r.get("people", {})
-	for key in [["leftBehind", "남은 사람"], ["bitten", "물린 사람"], ["injured", "다친 사람"], ["dead", "죽은 사람"]]:
+	# Who stayed on the platform is a number here, never a name.
+	if not (people.get("leftBehind", []) as Array).is_empty():
+		lines.append("남은 사람: %d명" % (people["leftBehind"] as Array).size())
+	for key in [["bitten", "물린 사람"], ["injured", "다친 사람"], ["dead", "죽은 사람"]]:
 		var ids: Array = people.get(key[0], [])
 		if not ids.is_empty():
 			lines.append("%s: %s" % [key[1], ", ".join(_names(ids))])

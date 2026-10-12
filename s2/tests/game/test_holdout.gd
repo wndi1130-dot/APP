@@ -41,8 +41,11 @@ func test_a_plain_stop_is_as_it_was() -> void:
 	game.holdout.tick(1.0)
 	game.depart()
 	assert_true(game.ended, "leaving leaves")
-	assert_true(game.hud.leaving.is_empty(), "no beat on a plain stop")
-	assert_true(game.hud.modal_open, "the end card at once")
+	# User decision 183: every stop closes on the beat, a plain one with its own lines.
+	assert_false(game.hud.leaving.is_empty(), "the stop closes on its beat")
+	assert_false(game.hud.modal_open, "the end card waits")
+	game.hud.tick(FieldHud.LEAVE_BEAT_S + 0.1)
+	assert_true(game.hud.modal_open, "then the end card")
 	assert_false(game.receipt.to_dict()["placeState"].has("holdout"))
 	assert_false(game.telemetry.to_dict().has("holdout"))
 
@@ -549,6 +552,45 @@ func test_the_risk_line_goes_by_the_kind_of_place() -> void:
 	assert_eq(game.holdout.risk_word(), "높다")
 	game.holdout.rolled = not game.holdout.rolled
 	assert_eq(game.holdout.risk_word(), "높다", "whatever the roll was")
+
+
+# User decision 183: what the player chose, as facts in words after the lines
+# that count the losses. Never a number, never a "because".
+func test_the_end_card_says_what_was_chosen_in_words() -> void:
+	var game = _game({"holdout": "start"})
+	var h = game.holdout
+	h.tick(h.total + 1.0)
+	game.depart()
+	h.tick(FieldHoldout.LAST_CALL_S + 0.1)
+	assert_true(game.ended)
+	var lines: Array = h.end_lines()
+	assert_eq(String(lines[lines.size() - 1]), "고른 일: 채비가 끝난 조용한 틈에 떠났다 · 문은 모두 멀쩡했다 · 선로를 비워 두고 떠났다")
+	var late = _game({"holdout": "start"})
+	h = late.holdout
+	h.tick(h.total + 1.0)
+	late.clock.elapsed += FieldHoldout.QUIET_GAP_S + 1.0
+	for i in h.doors.size():
+		h.doors[i]["upper"] = i == 0
+	h.doors[0]["hp"] = 0
+	late.depart()
+	h.tick(FieldHoldout.LAST_CALL_S + 0.1)
+	assert_true(late.ended)
+	h.left_people = 1
+	assert_eq(h.chosen(), ["채비가 끝난 뒤에도 더 머물렀다", "아래쪽 문은 버텼고 위쪽 문이 뚫렸다", "방벽은 세우지 않았다", "선로를 비워 두고 떠났다", "못 탄 사람을 기다리지 않았다"])
+	h.walls_built = 1
+	h.track_at_leave = 3
+	assert_true(h.chosen().has("방벽을 세웠다"))
+	assert_true(h.chosen().has("선로에 망자를 둔 채 떠났다"))
+	var digits := RegEx.create_from_string("[0-9]")
+	assert_null(digits.search(" ".join(h.chosen())), "words, not sums")
+	var early = _game({"holdout": "start"})
+	early.depart()
+	early.holdout.tick(FieldHoldout.LAST_CALL_S + 0.1)
+	assert_eq(String(early.holdout.chosen()[0]), "채비를 기다리지 않고 떠났다")
+	var out = _game({"holdout": "start"})
+	out.finish("limit")
+	for line in out.holdout.end_lines():
+		assert_false(String(line).begins_with("고른 일"), "a train that did not go chose no leaving")
 
 
 func test_a_map_with_doors_on_the_upper_side_only_or_none_still_holds() -> void:

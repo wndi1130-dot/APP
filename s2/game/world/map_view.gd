@@ -37,6 +37,7 @@ var track_wait: Dictionary = {}      # snow marks handed over, written at the ne
 var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
 var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
+var train_node: MeshInstance3D    # the train, its doors and the way over it
 var cut_building: int = -2
 var cut_level: int = 0
 var levels: Dictionary = {}       # level -> FieldGrid
@@ -559,16 +560,34 @@ func _build_walls() -> void:
 		wall_nodes[Vector2i(b, 0)] = node
 
 
+## The train rolls this far along the track from where it stood, engine first
+## (the stop's closing scene). Its doors go as they are drawn: open.
+func slide_train(metres: float) -> void:
+	train_node.position.x = metres * train_heading(data)
+
+
+## +1 if the engine is at the train's east end, -1 at its west.
+static func train_heading(d: Dictionary) -> float:
+	var train: Rect2i = d["train"]
+	for car in d["train_cars"]:
+		if car["kind"] == "engine":
+			var r: Rect2i = car["rect"]
+			return 1.0 if r.position.x + r.size.x * 0.5 >= train.position.x + train.size.x * 0.5 else -1.0
+	return 1.0
+
+
 func _build_blocks() -> void:
 	var st := _begin()
 	# Train: four cars and the engine at the east end; dark so the platform reads.
+	# A node of its own, with its doors and the way over it, so it can roll away.
+	var tt := _begin()
 	var train: Rect2i = data["train"]
 	for car in data["train_cars"]:
 		var r: Rect2i = car["rect"]
-		box(st, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
+		box(tt, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
 	# Doors where people step down, on each side of the train that has them.
 	for face in door_faces(data):
-		box(st, Vector3(1.0, 2.0, 0.1), Vector3(face["cell"].x + 0.5, 1.4, face["z"]), Color(0.42, 0.38, 0.33))
+		box(tt, Vector3(1.0, 2.0, 0.1), Vector3(face["cell"].x + 0.5, 1.4, face["z"]), Color(0.42, 0.38, 0.33))
 	# A way over the train: a plank across the gap between two cars and rungs
 	# up to it on each side (over the roof if the way is not at a gap).
 	var wood := Color(0.62, 0.5, 0.34)
@@ -581,10 +600,12 @@ func _build_blocks() -> void:
 			if edge > train.position.x and (edge == cx or edge == cx + 1):
 				at_x = float(edge)
 				top = 1.1
-		box(st, Vector3(0.9, 0.12, train.size.y), Vector3(at_x, top, train.position.y + train.size.y * 0.5), wood)
+		box(tt, Vector3(0.9, 0.12, train.size.y), Vector3(at_x, top, train.position.y + train.size.y * 0.5), wood)
 		for z: float in [train.position.y - 0.02, train.end.y + 0.02]:
 			for k in int(top / 0.3):
-				box(st, Vector3(0.8, 0.07, 0.1), Vector3(at_x, 0.3 + 0.3 * k, z), wood)
+				box(tt, Vector3(0.8, 0.07, 0.1), Vector3(at_x, 0.3 + 0.3 * k, z), wood)
+	train_node = _mesh_node()
+	train_node.mesh = tt.commit()
 	_build_lights()
 	for w in data["wagons"]:
 		var r: Rect2i = w["rect"]
