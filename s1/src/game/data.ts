@@ -95,7 +95,7 @@ export const STAGES = [
   { min: -100, name: '적대', band: -2 },
 ] as const;
 
-// ---- 법 18개(브리프 8.3) ----
+// ---- 법 31개(브리프 8.3) ----
 export type Axes = [number, number, number];
 export type Mats = Partial<Record<Comm, [number, number, number, number]>>;
 export type LawId =
