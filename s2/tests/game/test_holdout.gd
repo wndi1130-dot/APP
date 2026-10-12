@@ -593,6 +593,41 @@ func test_the_end_card_says_what_was_chosen_in_words() -> void:
 		assert_false(String(line).begins_with("고른 일"), "a train that did not go chose no leaving")
 
 
+# User decisions 178, 187: the chief's aside beside the risk line. It goes by
+# the word alone, so nothing of this stop can be read off it.
+func test_the_chief_mutters_beside_the_risk_line_by_the_word_alone() -> void:
+	for word: String in ["낮다", "있다", "높다"]:
+		assert_eq((FieldHoldout.RISK_FEEL[word] as Array).size(), 5, word)
+	FieldHoldout.last_feel = {}
+	var game = _game({"holdout": "roll"})
+	var h = game.holdout
+	var low: Array = FieldHoldout.RISK_FEEL["낮다"]
+	var said: String = h.feel_line()
+	assert_true(said.begins_with("\"") and said.ends_with("\""), "in quotes, no name on it")
+	assert_has(low, said.trim_prefix("\"").trim_suffix("\""), "a freight yard: one of the low ones")
+	assert_string_contains(game.goal_text(), "버티기 위험: 낮다")
+	game.hud.tick(0.1)
+	assert_true(game.hud.feel_label.visible)
+	assert_eq(game.hud.feel_label.text, said)
+	assert_eq(h.feel_number(), h.feel + 1, "the low lines are the first five")
+	assert_eq(game.audio.played.filter(func(g: String) -> bool: return g.begins_with("chief_feel")), [], "no voice file yet: no sound")
+	for flip in ["rolled", "forecast", "woke"]:
+		h.set(flip, not h.get(flip))
+		assert_eq(h.feel_line(), said, "whatever the %s" % flip)
+	var again = _game({"holdout": "roll"})
+	assert_ne(again.holdout.feel_line(), said, "not the same line two stops running")
+	assert_has(low, again.holdout.feel_line().trim_prefix("\"").trim_suffix("\""))
+	again.data["place_kind"] = "mine"
+	assert_eq(FieldHoldout.RISK_FEEL["높다"][again.holdout.feel], again.holdout.feel_line().trim_prefix("\"").trim_suffix("\""), "the word alone picks the bin")
+	assert_eq(again.holdout.feel_number(), 10 + again.holdout.feel + 1)
+	h.begin()
+	assert_eq(h.feel_line(), "", "the stage opened: the aside goes with the risk line")
+	game.hud.tick(0.1)
+	assert_false(game.hud.feel_label.visible)
+	var fixed = _game({"holdout": "start"})
+	assert_eq(fixed.holdout.feel_line(), "", "no risk line, no aside")
+
+
 func test_a_map_with_doors_on_the_upper_side_only_or_none_still_holds() -> void:
 	var game = _game({"holdout": "depart"})
 	game.data["train_doors"] = {"upper": [Vector2i(40, 0), Vector2i(60, 0)]}
