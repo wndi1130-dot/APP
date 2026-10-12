@@ -1,7 +1,8 @@
 import { installTrainScroll } from './train_scroll';
-import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard } from '../game';
+import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard, LOCO_IDS, locoUnchosen, setLoco } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
+import { locoScreen } from './loco_pick';
 import { cycleSound, soundOn } from '../audio/settings';
 import { FX_MS, buzz, fxDiff, fxSnap, fxWhy, setVibrate, slipItems, vibrateOn } from './fx';
 import { fxPlay } from './fxplay';
@@ -137,6 +138,10 @@ function keepPopInside(root: HTMLElement): void {
 
 export function renderApp(view: View): HTMLElement {
   const { g, ui } = view;
+  // 첫 화면 「열차를 고른다」(결정 133): 열차장을 만들기 전, 아무것도 안 본 때. 위아래 띠 없이 이것만 보인다.
+  if (locoUnchosen(g)) {
+    return h('div', { class: 'app app--loco' }, h('main', { class: 'main' }, locoScreen(view)), ui.toast ? toastEl(ui.toast, ui.toastKind ?? 'info') : null);
+  }
   const screen = g.phase === 'end' ? 'end' : ui.screen;
   let main: HTMLElement;
   if (screen === 'end') main = endScreen(view);
@@ -235,6 +240,9 @@ export function startApp(root: HTMLElement): void {
   let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) && (!wantS1b || saved.dark) && sceneResumes(scene, saved)
     ? saved : newGame(urlSeed || randomSeed(), wantS1c, wantS1b);
   if (g !== saved && scene && g.dark && devScene(g, scene)) { noteScene(scene, g); save(g); }
+  // 주소에 ?loco=c1..c4가 있으면 고르는 화면을 건너뛴다(스크린샷, 같은 판 다시 보기).
+  const urlLoco = new URLSearchParams(globalThis.location?.search ?? '').get('loco');
+  if (g !== saved && urlLoco && (LOCO_IDS as readonly string[]).includes(urlLoco)) setLoco(g, urlLoco as (typeof LOCO_IDS)[number]);
   let ui: Ui = freshUi();
   if (g.phase === 'council') ui.screen = 'council';
   const scroll: Record<string, number> = {};
@@ -753,6 +761,23 @@ export function startApp(root: HTMLElement): void {
         const seg = Number(data.seg);
         const open = ui.logOpen ?? [];
         ui.logOpen = open.includes(seg) ? open.filter(x => x !== seg) : [...open, seg];
+        return render();
+      }
+      case 'loco-sel':
+        ui.locoSel = (data.id as typeof LOCO_IDS[number] | undefined) ?? null;
+        return render();
+      case 'loco-more':
+        ui.locoMore = ui.locoMore === data.id ? null : (data.id as typeof LOCO_IDS[number] | undefined) ?? null;
+        return render();
+      case 'loco-go': {
+        const id = ui.locoSel;
+        if (!id || !locoUnchosen(g)) return render();
+        const next = cloneGame(g);
+        setLoco(next, id);
+        g = next;
+        ui.locoSel = null;
+        ui.locoMore = null;
+        persist(g);
         return render();
       }
       case 'slip-close':

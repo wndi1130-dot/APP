@@ -1,5 +1,5 @@
 import type { Fx } from './fx';
-import type { Comm, Game } from '../game';
+import type { Comm, Game, LocoId } from '../game';
 import type { ToastKind } from './notice';
 import type { ResumeBeat, StallBeat } from './stall_beats';
 
@@ -34,6 +34,9 @@ export interface Ui {
   resume?: { beat: ResumeBeat } | null;
   /** 꼬리칸 창에서 레버 대신 공간 레버(6.4)를 펼쳤나 */
   spaceOpen?: boolean;
+  /** 첫 화면 「열차를 고른다」(loco_pick.ts)에서 눌러 둔 기관차와 「자세히」를 펼친 기관차 */
+  locoSel?: LocoId | null;
+  locoMore?: LocoId | null;
   /** 서류(결정 카드)가 펼쳐졌나 */
   cardOpen: boolean;
   /** 정차 결과를 읽고 덮었나 */

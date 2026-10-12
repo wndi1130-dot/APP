@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  attachCar, createS1cGame, D, extraCarCoal, forecast, LOCO, LOCO_DEFAULT, LOCO_IDS, locoIdOf, locoPressureChance, rollBreakdown, rollUsefulCar, setLoco,
+  attachCar, createS1cGame, D, extraCarCoal, forecast, LOCO, LOCO_DEFAULT, LOCO_IDS, locoIdOf, locoPressureChance, locoUnchosen, rollBreakdown, rollUsefulCar, setLoco,
 } from '../../src/game';
 import type { Game, LocoId } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -94,5 +94,17 @@ describe('기관차 넷', () => {
       expect(a.loco).toBe(id);
       expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     }
+  });
+});
+
+describe('첫 화면 「열차를 고른다」', () => {
+  it('안 고른 새 판만 묻고, 고르면 묻지 않으며, 달리는 옛 저장은 묻지 않는다', () => {
+    const g = createS1cGame('pick');
+    expect(locoUnchosen(g)).toBe(true);
+    setLoco(g, 'c1');
+    expect(locoUnchosen(g)).toBe(false);
+    const old = createS1cGame('pick-old');
+    old.seg = 5;
+    expect(locoUnchosen(old)).toBe(false);
   });
 });
