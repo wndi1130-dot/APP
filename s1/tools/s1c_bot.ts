@@ -5,7 +5,7 @@ import {
   advance, canLift, enterMartial, liftMartial, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
-  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableBudget, enableEventPack, potOf, setPot, setLoco,
+  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableBudget, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, LocoId, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -201,23 +201,46 @@ function domPick(g: Game, card: Card, view: CardView, policy: DomPolicy): number
   }
 }
 
+/** 법 요구(needs.ts)가 떠 있는 묶음의 법(폐지 안건 아님) 가운데 점수(예상 표 − 필요한 표, 가혹 법은 −1.5)가 가장 높은 안건의 번호. 떠 있는 요구가 없거나 목록에 그 묶음의 법이 없으면 -1. */
+function needGroupPick(g: Game, options: NonNullable<Game['council']>['options']): number {
+  const groups = NEED_IDS.filter(id => g.needs?.[id]).map(id => NEEDS[id].group);
+  if (groups.length === 0) return -1;
+  let best = -Infinity;
+  let at = -1;
+  options.forEach((o, i) => {
+    if (!isLawAgenda(o) || o.repeal || !groups.includes(LAWS[o.law].group)) return;
+    const sc = expected(blocs(g, o, g.council!.deals)).mean - agendaNeed(o) + (LAWS[o.law].tag === '가혹' ? -1.5 : 0);
+    if (sc > best) { best = sc; at = i; }
+  });
+  return at;
+}
+
+/** 돌보는 정책이 의회에서 고르는 안건 번호: 통과 가능성이 가장 높은 안건, 법 요구가 떠 있으면 그 묶음의 법, 재판·배관 추인이 있으면 그것이 먼저. */
+export function caretakerAgendaIdx(g: Game, opts: BotOptions): number {
+  const c = g.council!;
+  let best = -99;
+  let idx = 0;
+  c.options.forEach((o, i) => {
+    const ex = expected(blocs(g, o, c.deals)).mean - agendaNeed(o);
+    const harsh = isLawAgenda(o) && LAWS[o.law].tag === '가혹' ? -1.5 : 0;
+    const sc = ex + harsh + (isLawAgenda(o) && o.repeal ? -3 : 0) + (o.forced ? 5 : 0);
+    if (sc > best) { best = sc; idx = i; }
+  });
+  // 법 요구가 떠 있으면 그 묶음의 법(폐지 아님) 가운데 점수가 가장 높은 것으로 바꾼다. 강제 회기도 같다. 재판·배관 추인은 아래에서 그대로 앞선다.
+  const need = needGroupPick(g, c.options);
+  if (need >= 0) idx = need;
+  // S1b: 재판에 넘긴 사건이 있으면 그 안건을 고른다(재판 약속을 지킨다). 강제 위기 안건이 있으면 그쪽.
+  const trial = opts.s1b && !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'trial') : -1;
+  // E3 배관 추인이 올라와 있으면 그 안건을 고른다(추인 전엔 복원이 끝나지 않는다, 7.3). 강제 위기 안건이 있으면 그쪽.
+  const pipe = !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'pipe') : -1;
+  return trial >= 0 ? trial : pipe >= 0 ? pipe : idx;
+}
+
 /** 의회: 위기면 강제 안건 중, 아니면 통과 가능성이 가장 높은 안건. 돌보는 정책은 공개 협상을 건다. */
-function council(g: Game, opts: BotOptions, tally?: Record<string, number>): void {
+export function council(g: Game, opts: BotOptions, tally?: Record<string, number>): ReturnType<typeof currentAgenda> {
   const c = g.council!;
   if (!c.locked && opts.policy === 'caretaker') {
-    let best = -99;
-    let idx = 0;
-    c.options.forEach((o, i) => {
-      const ex = expected(blocs(g, o, c.deals)).mean - agendaNeed(o);
-      const harsh = isLawAgenda(o) && LAWS[o.law].tag === '가혹' ? -1.5 : 0;
-      const sc = ex + harsh + (isLawAgenda(o) && o.repeal ? -3 : 0) + (o.forced ? 5 : 0);
-      if (sc > best) { best = sc; idx = i; }
-    });
-    // S1b: 재판에 넘긴 사건이 있으면 그 안건을 고른다(재판 약속을 지킨다). 강제 위기 안건이 있으면 그쪽.
-    const trial = opts.s1b && !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'trial') : -1;
-    // E3 배관 추인이 올라와 있으면 그 안건을 고른다(추인 전엔 복원이 끝나지 않는다, 7.3). 강제 위기 안건이 있으면 그쪽.
-    const pipe = !c.options[0]?.forced ? c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'pipe') : -1;
-    setAgenda(g, trial >= 0 ? trial : pipe >= 0 ? pipe : idx);
+    setAgenda(g, caretakerAgendaIdx(g, opts));
     // tyrant: 거둔 계엄의 포고 추인 안건이 오르면 먼저 고른다(안 고르면 표결 없이 쌓여 추인 통과·부결을 잴 수 없다).
     if (isTyrant(opts.s1b)) {
       const r = c.options.findIndex(o => !isLawAgenda(o) && o.motion === 'ratify_decrees');
@@ -246,6 +269,7 @@ function council(g: Game, opts: BotOptions, tally?: Record<string, number>): voi
     tally.emgVoted = (tally.emgVoted ?? 0) + 1;
     if (r.passed) tally.emgPassed = (tally.emgPassed ?? 0) + 1;
   }
+  return a;
 }
 
 /** 내정 쪽 손: 대체 불가나 한 명뿐인 분야에 견습생을 청하고, 기관 매뉴얼을 청하고, 공방장 맡기기를 켠다. */
