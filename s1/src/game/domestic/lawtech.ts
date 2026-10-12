@@ -19,8 +19,8 @@ const mult = (g: Game, p: Pick): number => (p.variant ? variantMult(g, p.tech, p
 
 /** 법의 처지 벌을 덜어 주는 몫. i는 처지 칸(0 온기, 3 노출), by는 칸마다 덜어 주는 크기(완성판). 한 칸의 덜어 줌은 법의 벌을 넘지 않는다. */
 const RELIEF: (Pick & { law: LawId; i: 0 | 3; by: Partial<Record<Comm, number>> })[] = [
-  // E1 누설 막기: 눈 녹이기 당번의 온기 −5가 없어지고 노출 벌이 절반(앞칸 +15 → +8, 꼬리칸·의무진 +5 → +2).
-  { tech: 'e1', law: 'snow_duty', i: 0, by: { tail: 5, front: 5, medtech: 5 } },
+  // E1 누설 막기: 눈 녹이기 당번의 온기 −10이 없어지고 노출 벌이 절반(앞칸 +15 → +8, 꼬리칸·의무진 +5 → +2).
+  { tech: 'e1', law: 'snow_duty', i: 0, by: { tail: 10, front: 10, medtech: 10 } },
   { tech: 'e1', law: 'snow_duty', i: 3, by: { front: 7, tail: 3, medtech: 3 } },
   // E4 과열 증기: 눈 녹이기 당번의 노출 벌이 없어진다.
   { tech: 'e4', law: 'snow_duty', i: 3, by: { front: 15, tail: 5, medtech: 5 } },

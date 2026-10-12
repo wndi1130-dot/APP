@@ -173,8 +173,9 @@ export const LAWS: Record<LawId, LawDef> = {
   }),
   snow_duty: L({
     id: 'snow_duty', title: '눈 녹이기 당번', group: '추위', tag: '가혹', kind: 'normal', axes: [1, 1, -1],
-    mats: { tail: [-5, 0, 0, 5], front: [-5, 0, 0, 15], medtech: [-5, 0, 0, 5] }, res: { coalAdd: -1 }, crisis: ['coal'],
-    changes: ['석탄 +1/구간 절약', '앞칸 노출 +15', '꼬리칸·의무진 노출 +5', '세 칸 온기 −5'], opensWhen: '처음부터',
+    mats: { tail: [-10, 0, 0, 5], front: [-10, 0, 0, 15], medtech: [-10, 0, 0, 5] }, res: { coalAdd: -1 }, crisis: ['coal'],
+    why: '눈을 녹이러 나간 칸은 그만큼 춥다.',
+    changes: ['석탄 +1/구간 절약', '앞칸 노출 +15', '꼬리칸·의무진 노출 +5', '세 칸 온기 −10'], opensWhen: '처음부터',
   }),
   child_labor: L({
     id: 'child_labor', title: '아동 노동', group: '노동', tag: '가혹', kind: 'normal', axes: [-1, -1, 0],
