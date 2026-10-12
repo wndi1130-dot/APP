@@ -41,6 +41,10 @@ const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
+# The train rolling away in the stop's closing scene: it pulls at this much
+# (m/s2) for this long, then holds that pace. Looks only; nothing reads it.
+const TRAIN_PULL: float = 1.0
+const TRAIN_UP_S: float = 6.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
@@ -151,6 +155,8 @@ var paused: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
+var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
+var rode_off: Array = []           # who went with it: not drawn on the platform any more
 var seen_now: Dictionary = {}
 var seen_memory := PackedByteArray()
 var vis_t: float = 0.0
@@ -961,6 +967,9 @@ func _process(delta: float) -> void:
 		_step(delta * slow)
 		_update_snow()
 	_update_fade(delta)
+	if leave_t >= 0.0:
+		leave_t += delta
+		view.slide_train(train_roll(leave_t))
 	_update_lantern(delta)
 	_update_camera(delta)
 	vis_t -= delta
@@ -972,7 +981,7 @@ func _process(delta: float) -> void:
 		if p != player and p.turn_rate <= 0.0:
 			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
 			p.look = p.facing
-		p.visible = level_shown(level_of(p.position)) and _person_visible(p)
+		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p)
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -1967,6 +1976,13 @@ func goal_text() -> String:
 
 
 ## At the train (or already in it) and on their feet: goes with it when it leaves.
+## How far the train has rolled this long after the whistle: slowly from a
+## stand, then steadily.
+static func train_roll(t: float) -> float:
+	var up: float = minf(t, TRAIN_UP_S)
+	return 0.5 * TRAIN_PULL * up * up + TRAIN_PULL * TRAIN_UP_S * maxf(t - TRAIN_UP_S, 0.0)
+
+
 func aboard(p) -> bool:
 	if p.brain.get("boarded", false):
 		return true
@@ -2074,6 +2090,9 @@ func finish(reason: String) -> void:
 	# what the stop came to side by side (user decision 183). A held train
 	# keeps its own lines over it.
 	if reason == "departed":
+		# The train rolls away with whoever boarded; who stayed stands where they are.
+		rode_off = boarded
+		leave_t = 0.0
 		hud.leave_beat(result, holdout.leave_lines() if holdout.opened else LeaveScene.head(result), LeaveScene.columns(result))
 	else:
 		hud.show_end(result)

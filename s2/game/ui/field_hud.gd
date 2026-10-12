@@ -687,7 +687,7 @@ func tick(delta: float) -> void:
 		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
 	_tick_status(p)
 	pause_button.text = "계속" if game.paused else "멈춤"
-	settings_button.visible = game.paused and not modal_open
+	settings_button.visible = game.paused and not modal_open and leaving.is_empty()
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
@@ -1635,7 +1635,10 @@ func show_end(result: Dictionary) -> void:
 		parts.append("%s %+d" % [names.get(k, k), int(stock[k])])
 	lines.append("영수증: " + (", ".join(parts) if not parts.is_empty() else "변화 없음"))
 	var people: Dictionary = r.get("people", {})
-	for key in [["leftBehind", "남은 사람"], ["bitten", "물린 사람"], ["injured", "다친 사람"], ["dead", "죽은 사람"]]:
+	# Who stayed on the platform is a number here, never a name.
+	if not (people.get("leftBehind", []) as Array).is_empty():
+		lines.append("남은 사람: %d명" % (people["leftBehind"] as Array).size())
+	for key in [["bitten", "물린 사람"], ["injured", "다친 사람"], ["dead", "죽은 사람"]]:
 		var ids: Array = people.get(key[0], [])
 		if not ids.is_empty():
 			lines.append("%s: %s" % [key[1], ", ".join(_names(ids))])

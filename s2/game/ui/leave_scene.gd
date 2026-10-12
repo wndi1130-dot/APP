@@ -79,7 +79,7 @@ static func columns(result: Dictionary) -> Array:
 			harmed.append(pair[1] % _count(result, pair[0]))
 	var left: Array = []
 	if stayed > 0:
-		left.append("사람 %d" % stayed)
+		left.append("못 탄 사람 %d" % stayed)
 	var place: Dictionary = r.get("placeState", {})
 	# A map with nothing to search has nothing unsearched.
 	var looted: float = float(place.get("looted", 1.0)) if int(result.get("places", 1)) > 0 else 1.0

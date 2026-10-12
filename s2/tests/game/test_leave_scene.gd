@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 
 func _result(stock: Dictionary = {}, people: Dictionary = {}, place: Dictionary = {}, gained: Array = []) -> Dictionary:
@@ -38,7 +39,7 @@ func test_the_four_columns_stand_side_by_side_and_say_nothing_when_empty() -> vo
 	assert_eq(full[0], ["실은 것", ["식량 7", "의약품 5", "고철 3", "석탄 2"]], "most first, four at the most, nothing that went down")
 	assert_eq(full[1], ["탄 사람", ["4명"]])
 	assert_eq(full[2], ["다친 사람", ["물린 사람 1", "다친 사람 2", "죽은 사람 1"]])
-	assert_eq(full[3], ["남긴 것", ["사람 2", "뒤지지 않은 곳이 많다", "얼어 있는 급수탑", "망자"]], "one of the dead still about is said")
+	assert_eq(full[3], ["남긴 것", ["못 탄 사람 2", "뒤지지 않은 곳이 많다", "얼어 있는 급수탑", "망자"]], "one of the dead still about is said")
 	var nothing_to_search := _result({}, {}, {"looted": 0.0})
 	nothing_to_search["places"] = 0
 	assert_eq(LeaveScene.columns(nothing_to_search)[3], ["남긴 것", ["없다"]], "a map with nothing to search left nothing unsearched")
@@ -62,3 +63,32 @@ func test_a_plain_stop_closes_on_the_scene_with_no_name_in_it() -> void:
 	for p in game.people:
 		for line in said:
 			assert_false(String(line).contains(p.display_name), "a number, never a name")
+
+
+# The train rolls away with whoever boarded; who stayed is still drawn where
+# they stand, and the end card gives them as a number.
+func test_the_train_rolls_away_and_who_stayed_stands_there() -> void:
+	var game = FieldGame.new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	var late = game.squad[2]
+	late.position = FieldGrid.center(Vector2i(2, 2))
+	assert_eq(game.view.train_node.position.x, 0.0, "it stands")
+	game.depart()
+	assert_true(game.ended)
+	assert_true(game.rode_off.has(game.player))
+	assert_false(game.rode_off.has(late))
+	game._process(0.1)
+	game._process(0.1)
+	assert_almost_eq(absf(game.view.train_node.position.x), FieldGame.train_roll(0.2), 0.001)
+	assert_gt(FieldGame.train_roll(FieldHud.LEAVE_BEAT_S), 3.0, "seen to move within the beat")
+	assert_false(game.player.visible, "aboard: gone with it")
+	assert_true(late.visible, "still on the platform")
+	game.hud.tick(FieldHud.LEAVE_BEAT_S + 0.1)
+	var card: Array = []
+	for l in game.hud.modal.find_children("*", "Label", true, false):
+		card.append(l.text)
+	var text: String = "\n".join(card)
+	assert_string_contains(text, "남은 사람: 1명")
+	assert_false(text.contains(late.display_name), "a number, never a name")
