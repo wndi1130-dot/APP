@@ -104,6 +104,8 @@ var call_left: float = 0.0
 var left_people: int = 0          # who stayed on the platform as it left
 var cost_paid: Dictionary = {"coal": 0, "plow_part": 0}   # what going unready cost
 var track_at_leave: int = -1      # the dead on the track as it left
+var went: bool = false            # the stop ended with the train going
+var went_in_gap: bool = false     # and it went inside the quiet while after "ready"
 var ready_shown: float = 0.0      # the "ready" words are still up this long
 var over: float = 0.0             # how long it stayed after it was ready
 var rolled: bool = false          # "roll": this stop can have it (hidden)
@@ -298,9 +300,11 @@ static func trust_drop(people: int) -> int:
 
 
 ## The train is going: what stood on the track is kept for the end lines.
-func note_leaving() -> void:
+func note_leaving(departed: bool = false) -> void:
 	if track_at_leave < 0:
 		track_at_leave = track_now()
+		went = departed
+		went_in_gap = departed and ready and game.clock.elapsed < game.director.quiet_until
 
 
 func tick(delta: float) -> void:
@@ -559,4 +563,52 @@ func end_lines() -> Array:
 	# A number, never a name (user decision 147).
 	if left_people > 0:
 		out.append("남기고 온 사람 %d · 신임 −%d" % [left_people, trust_drop(left_people)])
+	var mine: Array = chosen()
+	if not mine.is_empty():
+		out.append("고른 일: " + " · ".join(mine))
+	return out
+
+
+## What the player chose, as it turned out (user decision 183): facts side by
+## side, in words and never a number, and no "because" (what a wall did for a
+## door is not measured). The lines that count the losses stay as they are.
+func chosen() -> Array:
+	var out: Array = []
+	if went:
+		if not ready:
+			out.append("채비를 기다리지 않고 떠났다")
+		elif went_in_gap:
+			out.append("채비가 끝난 조용한 틈에 떠났다")
+		else:
+			out.append("채비가 끝난 뒤에도 더 머물렀다")
+	var broken := {true: 0, false: 0}
+	var held := {true: 0, false: 0}
+	for door: Dictionary in doors:
+		var side: bool = bool(door["upper"])
+		if state_of(door) == "breached":
+			broken[side] += 1
+		else:
+			held[side] += 1
+	var both: bool = broken[true] + held[true] > 0 and broken[false] + held[false] > 0
+	if not doors.is_empty():
+		if count("breached") == 0:
+			out.append("문은 모두 멀쩡했다" if count("damaged") == 0 else "문은 상했지만 모두 버텼다")
+		elif count("breached") == doors.size():
+			out.append("문이 모두 뚫렸다")
+		elif both and broken[true] == 0:
+			out.append("위쪽 문은 버텼고 아래쪽 문이 뚫렸다")
+		elif both and broken[false] == 0:
+			out.append("아래쪽 문은 버텼고 위쪽 문이 뚫렸다")
+		elif both:
+			out.append("양쪽 문이 뚫렸다")
+		else:
+			out.append("뚫린 문이 있고 버틴 문이 있다")
+	if walls_built > 0:
+		out.append("방벽을 세웠다")
+	elif count("breached") > 0:
+		out.append("방벽은 세우지 않았다")
+	if went:
+		out.append("선로를 비워 두고 떠났다" if track_at_leave <= 0 else "선로에 망자를 둔 채 떠났다")
+	if left_people > 0:
+		out.append("못 탄 사람을 기다리지 않았다")
 	return out

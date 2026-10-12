@@ -36,6 +36,7 @@ const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
+const LeaveScene = preload("res://game/ui/leave_scene.gd")
 
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
@@ -2055,7 +2056,7 @@ func finish(reason: String) -> void:
 	mission_play.finish(reason)
 	holdout.on = false
 	if holdout.opened:
-		holdout.note_leaving()
+		holdout.note_leaving(reason == "departed")
 		receipt.place_note("holdout", holdout.result())
 		telemetry.holdout = holdout.result()
 	elif holdout.mode == "roll":
@@ -2069,9 +2070,11 @@ func finish(reason: String) -> void:
 	telemetry.end(reason, now)
 	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines()}
 	_save(result)
-	# A held train leaving is the stage's full stop: a beat before the card.
-	if reason == "departed" and holdout.opened:
-		hud.leave_beat(result, holdout.leave_lines())
+	# The train going is the stop's full stop: a beat before the card, with
+	# what the stop came to side by side (user decision 183). A held train
+	# keeps its own lines over it.
+	if reason == "departed":
+		hud.leave_beat(result, holdout.leave_lines() if holdout.opened else LeaveScene.head(result), LeaveScene.columns(result))
 	else:
 		hud.show_end(result)
 	finished.emit(result)
