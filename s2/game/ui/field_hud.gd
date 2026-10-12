@@ -1746,6 +1746,12 @@ func _shove() -> void:
 func _input(event: InputEvent) -> void:
 	if game == null or game.ended:
 		return
+	if game.arrive_t >= 0.0:
+		# The train is still coming in: a touch only brings it to its stand.
+		if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed:
+			game.skip_arrival()
+			get_viewport().set_input_as_handled()
+		return
 	if modal_open:
 		# A panel is up: its buttons get the touch, but a lift or cancel still
 		# clears any finger the field held (never fires, never taps).
