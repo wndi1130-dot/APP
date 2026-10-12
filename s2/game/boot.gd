@@ -38,6 +38,11 @@ const CHOICES: Array = [
 	["holdout_chance", "시험: 「굴려서」의 굴림", [[-1, "장소 확률대로"], [100, "늘 뜬다"]]],
 	["holdout_forecast_heard", "시험: 무전수가 듣는 판", [[80, "열에 여덟"], [100, "늘 듣는다"]]],
 	["lungers_many", "시험: 달려드는 자의 수", [[false, "열에 하나"], [true, "서 있는 망자는 모두"]]],
+	# Which map the stop is played on, for looking at one on the phone: a kind
+	# and its number. Left as it is, the stop is the one it always was. A
+	# number the kind has no map for is the usual stop too.
+	["place_kind", "시험: 지도 종류", [["", "지금 그대로"], ["mine", "탄광"], ["lodge", "산장"], ["sawmill", "목재소"], ["lake", "호수"], ["freight", "화물역"], ["houses", "주택가"], ["hospital", "병원"], ["factory", "공장"], ["church", "교회"], ["office", "관청"], ["summit", "고개"]]],
+	["place_no", "시험: 지도 장", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"], [6, "6"], [7, "7"], [8, "8"], [9, "9"]]],
 	["mission", "이번 정차의 일", [["", "지금 원정"], ["survey", "관리소 조사 (작업조 없음)"], ["depot", "적재장 복구 (석탄 12)"]]],
 ]
 
@@ -129,7 +134,8 @@ func _show_menu() -> void:
 		for opt in row[2]:
 			var b := Button.new()
 			b.text = opt[1] + (" ●" if settings[row[0]] == opt[0] else "")
-			b.custom_minimum_size = Vector2(150, 50)
+			# A long row (the map kinds) keeps to the screen with narrower buttons.
+			b.custom_minimum_size = Vector2(150 if row[2].size() <= 8 else 92, 50)
 			b.focus_mode = Control.FOCUS_NONE
 			b.pressed.connect(_pick.bind(row[0], opt[0]))
 			h.add_child(b)
@@ -151,12 +157,20 @@ func _start() -> void:
 	field = FieldGame.new()
 	var opts := settings.duplicate(true)
 	opts["squad"] = field.default_squad(String(settings["pipe_quality"]))
+	if place_picked() != "":
+		opts["place"] = place_picked()
 	var seed_env: String = OS.get_environment("S2_SEED")
 	if seed_env != "":
 		opts["seed"] = int(seed_env)
 	field.opts = opts
 	field.restart_requested.connect(_on_restart)
 	add_child(field)
+
+
+## The map picked on the start screen ("mine_03"), or "" for the usual stop.
+func place_picked() -> String:
+	var kind := String(settings.get("place_kind", ""))
+	return "" if kind == "" else "%s_%02d" % [kind, int(settings.get("place_no", 1))]
 
 
 func _on_restart() -> void:

@@ -10,6 +10,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldActions = preload("res://game/field_actions.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const Carry = preload("res://game/sim/carry.gd")
 
 const DRIVES: Array[String] = ["plow_drive_1", "plow_drive_2", "plow_drive_3", "plow_drive_4"]
 
@@ -75,6 +76,8 @@ func test_the_core_comes_with_the_last_of_the_four_drives() -> void:
 	assert_eq(int(p.items.get("scrap", 0)) - before, 9, "taken one at a time, like any box")
 	assert_eq(heap["items"].size(), 9)
 	assert_eq(game.item_name("plow_core"), "제설기 코어")
+	# User decision 194: the core is four, half of a pack of eight.
+	assert_eq(Carry.item_weight("plow_core"), 4.0)
 	var rails: Dictionary = game.data["spots"]["shallow_rails"]
 	assert_eq([rails["material"], int(rails["amount"])], ["scrap", 2], "the pass holds twenty in all")
 	for box: Dictionary in game.data["containers"].values():

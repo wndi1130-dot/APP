@@ -15,6 +15,8 @@ const ITEM_WEIGHTS: Dictionary = {
 	"scrap": 1.0, "wood": 1.0, "info_telegraph": 0.5, "info_timetable": 0.5, "flare": 0.5,
 	"ammo_pistol": 0.1, "ammo_shell": 0.2, "arrow": 0.05,
 	"tweezers": 0.05, "needle_thread": 0.05,
+	# The core of the pass's plough (user decision 194): half a pack by itself.
+	"plow_core": 4.0,
 }
 
 const ITEM_NAMES: Dictionary = {

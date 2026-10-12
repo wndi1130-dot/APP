@@ -86,7 +86,7 @@ const EXTRA_ITEMS: Dictionary = {
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
 	"flare": {"name": "철도 섬광", "weight": 0.5, "stock": ""},
 	# What the four drives of the pass's plough give up together (user decision 188).
-	"plow_core": {"name": "제설기 코어", "weight": 2.0, "stock": ""},
+	"plow_core": {"name": "제설기 코어", "weight": 4.0, "stock": ""},
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
