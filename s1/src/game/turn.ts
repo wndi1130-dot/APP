@@ -601,7 +601,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   for (const k of LOOT_KEYS) {
     const amt = (haul * weights[k]) / tot;
     if (k === 'coal' || k === 'food' || k === 'medicine') {
-      const v = Math.round(amt);
+      const v = Math.round(amt * (k === 'coal' ? P.coalHaul : 1)); // 결정 257: 석탄만 곱한 뒤 한 번 반올림해 영수증과 장부가 같은 정수가 된다
       if (v > 0) gains[k] = v;
     } else if (k === 'luxury') {
       const v = Math.round(amt / 3);

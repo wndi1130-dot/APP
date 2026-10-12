@@ -17,6 +17,8 @@ export const P = Object.freeze({
   coal0: 100, food0: 100, med0: 20, lux0: 8, trust0: 50, tension0: 20,
   coalRun: 6, coalStrike: 4, coalHeatPerLever: 0.25, foodPerPersonLever: 0.025,
   haulTotal: 36, targetBoost: 3, leverStep: 12, winterEvery: 6, winterDrop: 5,
+  // 결정 257: 정차에서 얻는 석탄만 이 배수를 곱한 뒤 반올림한다(식량·의약품·사치품·상징물·정보는 그대로).
+  coalHaul: 0.85,
   injuryRate: 0.25, deathRate: 0.03,
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
   // 결정 080(후보 5): 꼬리칸 관계가 backBelow 아래인데 열기·식량 레버를 2 이상으로 backSegs 구간 이어 지키면
