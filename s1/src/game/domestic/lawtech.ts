@@ -35,11 +35,16 @@ const BONUS: (Pick & { law: LawId; i: 0 | 3; by: Partial<Record<Comm, number>> }
   { tech: 'e3', variant: 'b', law: 'heat_quota', i: 0, by: { front: 5 } },
 ];
 
-/** 단열한 객차의 몫(E5): 그 칸이 사는 객차 중 단열한 비율만큼 난방 배당의 온기 벌을 받지 않는다. */
-function insulatedShare(g: Game, c: Comm): number {
+/** 단열한 객차의 몫(E5): 그 공동체가 사는 객차 중 단열한 비율. 난방 배당의 온기 벌을 그만큼 받지 않고, 단열의 이득(온기·난방 석탄)과 이가 돌 확률의 배수가 이 몫에 걸린다(결정 217·225). */
+export function insulatedShare(g: Game, c: Comm): number {
   const d = g.dom;
   if (!d) return 0;
-  return Math.min(1, d.insulated.filter(car => CAR_COMM[car] === c).length / COMM_CARS[c]);
+  return Math.min(1, insulatedCount(g, c) / COMM_CARS[c]);
+}
+
+/** 그 공동체의 단열한 객차 수. 과밀은 몫이 아니라 칸마다 오른다. */
+function insulatedCount(g: Game, c: Comm): number {
+  return g.dom ? g.dom.insulated.filter(car => CAR_COMM[car] === c).length : 0;
 }
 
 /** 처지 보정(refreshSit)에 법·기술 몫을 더한다. */
@@ -65,6 +70,45 @@ export function lawTechSit(g: Game, sit: Record<Comm, [number, number, number, n
     if (!lawActive(g, b.law)) continue;
     for (const c of COMMS) if (b.by[c]) sit[c][b.i] += (b.by[c] ?? 0) * mult(g, b) * (b.i === 0 ? 1 : -1);
   }
+  // 단열의 이득과 값(결정 217·225): 법이 없어도 든다. 위 반복의 벌 걷힘(법이 서 있을 때만) 위에 겹쳐 쌓는다. 온기는 몫만큼, 과밀은 단열한 칸마다.
+  // 난방 석탄은 turn.ts heatCost, 이가 돌 확률은 hygiene.ts liceChance가 같은 몫을 읽는다.
+  const half = D.insulateQuotaHalf && lawActive(g, 'heat_quota') ? 0.5 : 1;
+  for (const c of COMMS) {
+    const n = insulatedCount(g, c);
+    if (n === 0) continue;
+    sit[c][0] += D.insulateWarm * insulatedShare(g, c) * half;
+    sit[c][2] += D.insulateCrowd * n;
+  }
+}
+
+/** 한 칸을 단열하면 그 칸이 더하는 값(그 공동체 칸 수로 나눈 몫). 보이는 숫자라 정수로 맞춘다. */
+function insulateGain(car: string): { warm: number; heat: number; crowd: number } {
+  const c = CAR_COMM[car];
+  const share = c ? 1 / COMM_CARS[c] : 1;
+  return { warm: Math.round(D.insulateWarm * share), heat: Math.round(D.insulateHeat * share * 10), crowd: Math.round(D.insulateCrowd) };
+}
+
+/** 「온기 +2, 난방 −1할, 과밀 +2」. 값 줄이 0인 항은 뺀다. */
+export function insulateNumbers(car: string): string {
+  const v = insulateGain(car);
+  return [v.warm > 0 ? `온기 +${v.warm}` : '', v.heat > 0 ? `난방 −${v.heat}할` : '', v.crowd > 0 ? `과밀 +${v.crowd}` : ''].filter(Boolean).join(', ');
+}
+
+/** 개조 고르는 창의 단열 글: 고르기 전에 얻는 것과 치르는 것이 숫자로 보인다. 까닭은 틈과 추위로만 적는다. */
+export function insulatePickLine(): string {
+  const tail = insulateNumbers('tail1');
+  const alone = insulateNumbers('medtech');
+  if (!tail) return '벽 틈을 메운다. 「난방 배당」이 서 있으면 이 칸은 온기 벌을 받지 않는다.';
+  return `벽 틈을 메운다. 이 칸은 덜 춥고 석탄이 덜 든다. 대신 공기가 무거워진다. (칸이 여럿인 곳은 칸마다 ${tail}, 혼자 사는 칸은 ${alone})`;
+}
+
+/** 칸 창의 단열 줄: 그 칸이 지금 듣는 값. 단열하지 않은 칸이나 값 줄이 0이면 빈 글이다. */
+export function insulateCarNote(g: Game, car: string): string {
+  if (!g.dom?.insulated.includes(car)) return '';
+  const v = insulateGain(car);
+  const gain = [v.warm > 0 ? `온기 +${v.warm}` : '', v.heat > 0 ? `난방 −${v.heat}할` : ''].filter(Boolean).join(', ');
+  const parts = [gain ? `바람이 덜 든다(${gain})` : '', v.crowd > 0 ? `공기가 무겁다(과밀 +${v.crowd})` : ''].filter(Boolean);
+  return parts.length ? `단열: ${parts.join('. ')}.` : '';
 }
 
 /** 기술로 바뀐 법의 수치(res). 지금은 M5: 모두를 치료의 의약품 소모 ×1.6 → ×1.3. */

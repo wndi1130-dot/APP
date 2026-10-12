@@ -314,8 +314,8 @@ function completeJob(g: Game): void {
   d.job = null;
   if (job.kind === 'insulate') {
     d.insulated.push(job.car);
-    // 단열은 공짜 온기가 아니라 난방 배당의 벌을 막는다(7.3 E5, lawtech.ts).
-    journal(g, `${CAR_NAME[job.car]} 벽에 판자와 펠트를 댔다. 난방을 줄여도 이 객차는 덜 춥다.`, 'good');
+    // 단열은 법이 없어도 든다: 온기와 난방 석탄은 몫만큼 얻고 과밀과 이로 값을 치른다(결정 217·225, lawtech.ts).
+    journal(g, `${CAR_NAME[job.car]} 벽의 틈을 메웠다. 밤바람이 덜 들고, 아침 창에 김이 서렸다.`, 'good');
   } else if (job.kind === 'armor') {
     d.armored.push(job.car);
     journal(g, `${CAR_NAME[job.car]}에 철판을 댔다.`, 'good');

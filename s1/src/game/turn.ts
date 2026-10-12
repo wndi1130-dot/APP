@@ -27,7 +27,8 @@ import {
   domesticBroadcast, domesticDepart, domesticForecast, domesticPyreWood, domesticHaulMult, domesticPromise, domesticRiskMult, domesticSettle,
   domesticStop, domesticStrikeLine, domesticStrikeRuns, domesticThawMult,
 } from './domestic/hooks';
-import { lawTechRes } from './domestic/lawtech';
+import { D } from './domestic/data';
+import { insulatedShare, lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
@@ -156,8 +157,9 @@ export function setAutoLevers(g: Game, on: boolean): void {
   }
 }
 
+/** 난방 석탄. 단열한 칸이 있는 공동체는 몫만큼 덜 든다(결정 217·225). 예고와 정산이 같이 부른다. */
 export function heatCost(g: Game): number {
-  return COMMS.reduce((sum, c) => sum + (g.comms[c].heat * g.comms[c].pop) / 40, 0) * P.coalHeatPerLever;
+  return COMMS.reduce((sum, c) => sum + ((g.comms[c].heat * g.comms[c].pop) / 40) * (1 - D.insulateHeat * insulatedShare(g, c)), 0) * P.coalHeatPerLever;
 }
 export function foodCost(g: Game): number {
   return COMMS.reduce((sum, c) => sum + g.comms[c].pop * g.comms[c].ration, 0) * P.foodPerPersonLever;
