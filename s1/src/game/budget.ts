@@ -1,7 +1,8 @@
-import { BUDGET_HOOK, isGone, journal, situation } from './state';
+import { BUDGET_HOOK, isGone, journal, lawActive, situation } from './state';
 import type { Card, Game } from './state';
 import { familyOf } from './people';
 import { personById } from './domestic/state';
+import { EDU_LAWS } from './domestic/classroom';
 
 // 카드 구간 예산(docs/design/briefs/events_disasters.md 3.1, 제안). 기본 꺼짐: enableBudget(g)를 부른 판에서만 돈다.
 // 한 구간에 플레이어가 고르는 카드는 BUDGET.perSeg(3)장까지. 이미 고른 수 + 대기 중 카드가 넘치면 등급이 낮은(숫자가 큰) 것부터 g.deferred로 뺀다.
@@ -54,6 +55,7 @@ export const CARD_GRADE: Record<string, KindRule> = {
   'dom:short': R(4, true, '부품이 모자란 상태 그 자체. 고르기 전엔 벌도 없다'),
   'dom:demand': R(4, true, '대체 불가 인력의 요구. 그 사람이 없으면 버린다'),
   'dom:box': R(4, true, '기관 매뉴얼이 사라진 사실. 고르기 전엔 변화가 없다'),
+  'dom:side': R(4, true, '수업의 곁 고르기. 고르기 전엔 곁의 이득이 없을 뿐이다. 교육 법이 내려갔으면 버린다'),
   'dom:full': R(4, true, '창고 넘침 규칙. 넘침이 이어지면 같은 서류를 새로 만들지 않고 합친다'),
   'dom:bed': R(4, true, '침상 순서 규칙. 정하기 전엔 기본 규칙이다'),
   'dom:officer': R(4, true, '간부가 대신 정한 일. 그 간부가 없으면 버린다'),
@@ -219,6 +221,7 @@ export function gone(g: Game, c: Card): boolean {
       const p = personById(g, c.who);
       return !p || !p.alive || !!p.gone;
     }
+    case 'dom:side': return !EDU_LAWS.some(l => lawActive(g, l)) || !!g.edu?.side;
     case 'dom:fit': case 'dom:fork': return !!(g.dom?.techs as Record<string, unknown> | undefined)?.[c.text ?? ''];
     default: return false;
   }

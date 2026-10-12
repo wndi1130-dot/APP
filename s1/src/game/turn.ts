@@ -29,6 +29,7 @@ import {
 } from './domestic/hooks';
 import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
+import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { voiceKept } from './promise_voice';
@@ -169,7 +170,10 @@ function lawSum(g: Game, key: 'tensionAdd' | 'foodAdd' | 'coalAdd' | 'fearAdd'):
 }
 function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'): number {
   let m = 1;
-  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) m *= lawTechRes(g, law)[key] ?? 1;
+  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) {
+    const v = lawTechRes(g, law)[key] ?? 1;
+    m *= key === 'haulMult' ? childHaul(g, law, v) : v; // 수업과 같이 서면 아동 노동의 덤은 반이다(결정 205)
+  }
   return m;
 }
 
@@ -589,6 +593,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 상중인 사람은 손이 느리다(사람의 무게 A1).
   const grieving = names.filter(n => !isGone(g, n) && mourners(g).includes(n));
   if (grieving.length > 0) { haul *= 1 - 0.1 * grieving.length; notes.push(`${grieving.join(', ')}은(는) 상중이라 손이 느렸다.`); }
+  // 아이 손이 보탠 몫(결정 205): 수업만 서 있으면 +0%, 아동 노동만이면 +15%, 같이 서면 반반.
+  const hands = handsNote(g);
+  if (hands) notes.push(hands);
+  countHands(g);
   const gains: Partial<Record<LootKey, number>> = {};
   for (const k of LOOT_KEYS) {
     const amt = (haul * weights[k]) / tot;
@@ -737,6 +745,7 @@ function settle(g: Game): void {
   g.forcedRun = false;
   g.guardEscort = false;
   medicineTick(g, notes);
+  childSettle(g, notes); // 아동 노동이 서 있는 동안 의무진 관계 정산마다 −1(결정 214)
   domesticSettle(g, notes); // S1c 내정 훅
   hubLeakTick(g, notes); // 라이프치히 두 구간 전부터 창고 유출
   drift(g);

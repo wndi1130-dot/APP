@@ -107,7 +107,9 @@ export type LawId =
   // 기술이 여는 덜 잔혹한 변형(s1c_domestic 7.3): 원래 법과 하나만 설 수 있다(domestic/laws.ts).
   | 'seed_half' | 'child_pack'
   // 불만을 낮추는 법 셋(coordinator 결정 035, calm.ts). 구간마다 천천히 깎이는 꼴이라 효과는 res가 아니라 calm.ts가 셈한다.
-  | 'evening_pot' | 'wall_ledger' | 'night_of_names';
+  | 'evening_pot' | 'wall_ledger' | 'night_of_names'
+  // 교육 법 셋(결정 205·207, classroom_radio 2.1): 무엇을 가르치나에 답 셋, 하나만 선다. 효과는 domestic/classroom.ts가 읽는다. S1c를 켠 판에서만 열린다.
+  | 'edu_letters' | 'edu_trade' | 'edu_engine';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -176,8 +178,9 @@ export const LAWS: Record<LawId, LawDef> = {
   }),
   child_labor: L({
     id: 'child_labor', title: '아동 노동', group: '노동', tag: '가혹', kind: 'normal', axes: [-1, -1, 0],
-    mats: { tail: [0, 0, 0, 10] }, rels: { tail: -5, medtech: -10 }, res: { haulMult: 1.2, fearOnce: 5 }, crisis: ['coal', 'food'],
-    changes: ['정차 산출 +20%', '아이들은 열차 옆 승강장에서 짐만 받는다(필드 안엔 안 감)', '꼬리칸 노출 +10', '꼬리칸 관계 −5', '의무진 관계 −10', '공포 +5'], opensWhen: '석탄이나 식량 40 이하',
+    // 결정 214: 산출 +20% → +15%, 의무진 관계는 세울 때 한 번(−10)이 아니라 서 있는 동안 정산마다 −1(classroom.ts childSettle).
+    mats: { tail: [0, 0, 0, 10] }, rels: { tail: -5 }, res: { haulMult: 1.15, fearOnce: 5 }, crisis: ['coal', 'food'],
+    changes: ['정차 산출 +15%', '아이들은 열차 옆 승강장에서 짐만 받는다(필드 안엔 안 감)', '꼬리칸 노출 +10', '꼬리칸 관계 −5', '의무진 관계: 서 있는 동안 정산마다 −1', '공포 +5'], opensWhen: '석탄이나 식량 40 이하',
   }),
   corpse_throw: L({
     id: 'corpse_throw', title: '선로에 버리기', group: '시신', tag: '싼 답', kind: 'normal', axes: [0, -1, -1],
@@ -298,9 +301,35 @@ export const LAWS: Record<LawId, LawDef> = {
     changes: ['사람이 죽은 구간의 밤: 공포 −2, 긴장 −2, 그 사람의 칸 관계 +3', '그 밤 석탄 −1, 사치품 −1(사치품이 없으면 효과 반)', '세 번째 밤부터 효과가 반이다', '열차장이 고른 죽음이면 신임 −2가 같이 온다'],
     opensWhen: '판에서 첫 죽음이 난 뒤',
   }),
+  // ---- 교육 법 셋(결정 205·207·208·209, 숫자는 classroom_radio 4장의 제안과 구현 명세). 통과 때 관계 반응은 재지 않아 넣지 않았다. 아이 이름과 목소리는 없다. ----
+  edu_letters: L({
+    id: 'edu_letters', title: '글과 셈', group: '교육', tag: '이상', kind: 'normal', axes: [0, 0, 1],
+    like: { medtech: 1, front: 1, engine: -1 },
+    why: '낮 동안 식당칸 한쪽에서 옛 책으로 읽기와 셈을 가르친다. 아이들은 열차에 남아 난로 곁에 앉는다.',
+    whyNot: '기관실: 책장을 넘기는 시간에 보일러 앞은 비어 있다.',
+    changes: ['아이들이 열차에 남아 배운다(승강장의 손이 준다)', '식당칸 낮 난방 석탄 0.25/구간', '법이 서면 어디 곁에서 배울지 고른다', '공방 곁: 공방의 일 +1, 복원 목재·고철 넷에 하나 덜', '의무칸 곁: 깊은 상처·골절이 하루 먼저 낫는다', '다른 교육 법이 닫힌다'],
+    opensWhen: '아동 노동이 오를 때나 서 있을 때',
+  }),
+  edu_trade: L({
+    id: 'edu_trade', title: '일 배우기', group: '교육', tag: '이상', kind: 'normal', axes: [-1, 0, -1],
+    like: { tail: 1, engine: 1, medtech: -1 },
+    why: '아이가 어른 곁에서 그 칸의 일을 눈으로 배운다. 물 긷기와 연장 정리처럼 손에 맞는 일만 한다.',
+    whyNot: '의무진: 배운다는 이름으로 일을 시킨다고 읽는다.',
+    changes: ['아이들이 열차에 남아 배운다(승강장의 손이 준다)', '법이 서면 어디 곁에서 배울지 고른다', '공방 곁: 공방의 일 +1, 복원 목재·고철 넷에 하나 덜', '의무칸 곁: 깊은 상처·골절이 하루 먼저 낫는다', '다른 교육 법이 닫힌다'],
+    opensWhen: '아동 노동이 오를 때나 서 있을 때',
+  }),
+  edu_engine: L({
+    id: 'edu_engine', title: '엔진의 가르침', group: '교육', tag: '질서', kind: 'normal', axes: [0, 1, 0],
+    like: { engine: 1, guard: 1, medtech: -1, tail: -1 },
+    res: { tensionAdd: -0.5 },
+    why: '보일러와 열차가 지나가는 순서를 낮은 목소리로 가르친다. 아이들의 차림도 앉는 자리도 제각각이다.',
+    whyNot: '의무진·꼬리칸: 가르치는 말이 윗사람의 말로만 들린다.',
+    changes: ['아이들이 열차에 남아 배운다(승강장의 손이 준다)', '긴장 −0.5/구간', '기관 견습이 한 단계 오르는 데 한 구간 덜(바닥 2구간)', '법이 서면 어디 곁에서 배울지 고른다', '공방 곁: 공방의 일 +1, 복원 목재·고철 넷에 하나 덜', '의무칸 곁: 깊은 상처·골절이 하루 먼저 낫는다', '다른 교육 법이 닫힌다'],
+    opensWhen: '아동 노동이 오를 때나 서 있을 때',
+  }),
 };
 /** S1c 법. S1a 판에선 열리지 않는다. */
-export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack'];
+export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack', 'edu_letters', 'edu_trade', 'edu_engine'];
 /** 변형 법 → 원래 법. 1회 효과는 둘을 합쳐 판에 한 번이다(R3 카드 1). */
 export const LAW_VARIANT_OF: Partial<Record<LawId, LawId>> = { seed_half: 'seed_grain', child_pack: 'child_labor', triage_std: 'triage' };
 export const LAW_IDS = Object.keys(LAWS) as LawId[];

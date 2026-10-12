@@ -8,6 +8,7 @@ import type { TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
 import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
+import { saveRestore, workBonus } from './classroom';
 import { domCard, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
@@ -25,7 +26,7 @@ export function workPower(g: Game): number {
   const craft = topSkill(g, 'craft');
   let w = D.work * D.workSkill[craft] * ZONE_WORK[zoneOf(g, 'workshop')] * (1 + (D.w1Work - 1) * techMult(g, 'w1'));
   if (d.people.some(p => p.alive && !p.gone && p.field === 'craft' && p.pupil && !p.resting)) w *= D.teachWork;
-  return w;
+  return w + workBonus(g); // 공방 곁에서 배우는 수업의 몫(결정 207·208)
 }
 
 export function materials(g: Game): number {
@@ -57,12 +58,14 @@ export interface RestoreCheck {
   scrap: number;
 }
 
-export function restoreCost(id: TechId): { parts: number; frags: number; defectFrags: number; core: number; wood: number; scrap: number; work: number } {
+/** g를 주면 공방 곁 수업이 덜어 주는 목재와 고철을 뺀다(결정 223). 부품·조각·코어·일은 그대로다. 개조와 단 0 적응의 자재에는 닿지 않는다. */
+export function restoreCost(id: TechId, g?: Game): { parts: number; frags: number; defectFrags: number; core: number; wood: number; scrap: number; work: number } {
   const def = TECHS[id];
   if (def.tier === 0) return { parts: def.adapt?.parts ?? 0, frags: 0, defectFrags: 0, core: 0, wood: def.adapt?.wood ?? 0, scrap: 0, work: D.adaptWork };
   return {
     parts: D.restoreParts[def.tier], frags: D.restoreFrags[def.tier], defectFrags: D.defectFrags[def.tier],
-    core: def.tier === 3 ? 1 : 0, wood: D.restoreWood[def.tier], scrap: D.restoreScrap[def.tier], work: D.restoreWork[def.tier],
+    core: def.tier === 3 ? 1 : 0, wood: g ? saveRestore(g, D.restoreWood[def.tier]) : D.restoreWood[def.tier],
+    scrap: g ? saveRestore(g, D.restoreScrap[def.tier]) : D.restoreScrap[def.tier], work: D.restoreWork[def.tier],
   };
 }
 
@@ -87,7 +90,7 @@ export function restoreBlock(g: Game, id: TechId): string | undefined {
 export function restoreCheck(g: Game, id: TechId): RestoreCheck {
   const d = dom(g);
   const def = TECHS[id];
-  const cost = restoreCost(id);
+  const cost = restoreCost(id, g);
   const out: RestoreCheck = { offer: false, fragsNeed: cost.frags, defectNeed: cost.defectFrags, parts: cost.parts, core: cost.core, wood: cost.wood, scrap: cost.scrap };
   const fail = (why: string) => { out.full = why; out.defect = why; return out; };
   const blocked = restoreBlock(g, id);
@@ -124,7 +127,7 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   const pipe = id === 'e3';
   if (pipe && d.pipeFlip) variant = d.pipeFlip;
   if (def.variants && !variant) return false;
-  const cost = restoreCost(id);
+  const cost = restoreCost(id, g);
   d.parts -= cost.parts;
   d.wood -= cost.wood;
   d.scrap -= cost.scrap;

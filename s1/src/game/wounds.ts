@@ -5,6 +5,7 @@ import type { Comm, LawId } from './data';
 import { lawTechRes } from './domestic/lawtech';
 import { D } from './domestic/data';
 import { typhusInBeds } from './domestic/beds';
+import { eduOf, healCut, healNote } from './domestic/classroom';
 import { living, techMult } from './domestic/state';
 import { pickVictims } from './people';
 import { bump, put } from './ledger';
@@ -45,6 +46,8 @@ export interface Wound {
   at: number;
   prosthesis?: 'hook' | 'joint' | 'custom';
   reSent?: number;
+  /** 수업 덕에 낫는 날이 하루 줄었다(domestic/classroom.ts). 나으면 끝 장면의 수에 센다 */
+  edu?: true;
 }
 
 /** Game에 붙을 두 칸. state.ts에 들어가기 전까지는 이 꼴로 읽는다. */
@@ -125,6 +128,8 @@ export interface WoundRow {
   septic: boolean;
   /** 하루 의약품(곪음 포함) */
   medPerDay: number;
+  /** 수업 덕에 하루 줄어든 상처 */
+  edu?: true;
 }
 
 /**
@@ -136,7 +141,7 @@ export function woundView(g: Game, comm?: Comm): WoundRow[] {
     id: w.id, who: w.who, ...(w.personId ? { personId: w.personId } : {}), comm: w.comm,
     part: w.part, partName: PART_NAME[w.part], grade: w.grade, gradeName: GRADE_NAME[w.grade], where: w.where,
     daysLeft: w.daysLeft, care: w.state === 'bed' ? 'bed' : w.state === 'home' ? 'home' : 'up',
-    septic: w.septic, medPerDay: medPerDay(w),
+    septic: w.septic, medPerDay: medPerDay(w), ...(w.edu ? { edu: true as const } : {}),
   }));
 }
 
@@ -232,20 +237,25 @@ function pushWound(g: Game, input: WoundInput, rand: () => number): Wound {
   const coin = grade === 'deep' ? rand() : 0;
   const septic = input.septic ?? rand() < (input.septicP ?? WOUND_ROLL.septicP) + crowdSepticP(g, input.comm);
   const cuts = input.cuts ?? healCuts(g);
+  const id = (g as G).nextWoundId ?? 1;
+  const edu = healCut(g, grade, id); // 의무칸 곁 수업: 깊은 상처와 골절만 하루 더. 바닥 아래로는 안 내려간다(결정 208)
   let days = baseDays(grade, part, coin);
-  if (cuts > 0) days = Math.max(floorDays(grade, part), days - cuts);
+  const without = cuts > 0 ? Math.max(floorDays(grade, part), days - cuts) : days;
+  if (cuts + edu > 0) days = Math.max(floorDays(grade, part), days - cuts - edu);
+  const quick = days < without;
   if (septic) days = Math.ceil(days * 1.5);
   const state: WoundState = grade === 'light' ? 'light' : 'bed';
   // 간호 손: 의무진에 활성 기록이 있으면 다른 칸의 침상 기록이 한 번 하루 늦게 낫는다(5절).
   if (state === 'bed' && input.comm !== 'medtech' && activeWounds(g, 'medtech').length > 0) days += 1;
   const leader = g.comms[input.comm].leader;
   const w: Wound = {
-    id: (g as G).nextWoundId ?? 1, who: input.who, ...(leader.name === input.who ? { personId: leader.personId } : {}),
+    id, who: input.who, ...(leader.name === input.who ? { personId: leader.personId } : {}),
     comm: input.comm, grade, part, from: input.from, where: input.where, ...(input.why ? { why: input.why } : {}),
-    septic, daysLeft: days, days0: days, bedDays: bedDaysOf(grade), state, at: g.seg,
+    septic, daysLeft: days, days0: days, bedDays: bedDaysOf(grade), state, at: g.seg, ...(quick ? { edu: true as const } : {}),
   };
   (g as G).nextWoundId = w.id + 1;
   book(g).push(w);
+  if (quick) healNote(g, w.id);
   return w;
 }
 
@@ -375,6 +385,7 @@ export function woundTick(g: Game, notes: string[], medMult = 1): void {
       journal(g, `${w.who}의 ${PART_NAME[w.part]}은(는) 돌아오지 않는다.`);
     } else if (w.daysLeft <= 0) {
       w.state = 'healed';
+      if (w.edu) eduOf(g).early += 1;
       journal(g, `${w.who}의 ${PART_NAME[w.part]}이(가) 다 나았다.`, 'good');
     } else if (w.bedDays <= 0 && (w.state === 'bed' || w.state === 'home')) {
       w.state = 'light';

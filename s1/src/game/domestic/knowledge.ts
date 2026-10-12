@@ -6,6 +6,7 @@ import type { Game } from '../state';
 import { D, FIELDS, TECHS, TECH_IDS } from './data';
 import type { Field } from './data';
 import { locoOf } from '../loco';
+import { engineLearn } from './classroom';
 import { domCard, knowers, living, techUsable, topSkill } from './state';
 import type { DomPerson, DomState } from './state';
 
@@ -47,7 +48,7 @@ export function attachApprentice(g: Game, f: Field, from: 'guild' | 'other', qui
   const cap = teacher === 'manual' ? 2 : teacher.skill;
   const person: DomPerson = {
     id: `sp${d.nextPersonId}`, name: prof.name, age: prof.age, comm, field: f, skill: 0, role: '견습생', alive: true,
-    learn: { by: teacher === 'manual' ? 'manual' : teacher.id, left: teacher === 'manual' ? D.readSegs[0] : D.learnSegs[0], cap },
+    learn: { by: teacher === 'manual' ? 'manual' : teacher.id, left: engineLearn(g, f, teacher === 'manual' ? D.readSegs[0] : D.learnSegs[0], d.nextPersonId), cap },
   };
   d.nextPersonId += 1;
   d.people.push(person);
@@ -130,7 +131,7 @@ export function knowledgeTick(g: Game): void {
     if (p.skill === 1) d.stats.apprentices += 1;
     journal(g, `${p.name}이(가) ${FIELD_LABEL[p.field]} ${['', '견습', '숙련', '장인'][p.skill]}이 됐다.`, 'good');
     if (p.skill < l.cap) {
-      l.left = l.by === 'manual' ? D.readSegs[p.skill] : D.learnSegs[p.skill];
+      l.left = engineLearn(g, p.field, l.by === 'manual' ? D.readSegs[p.skill] : D.learnSegs[p.skill], Number(p.id.slice(2)) + p.skill);
     } else {
       delete p.learn;
       if (teacher) delete teacher.pupil;
