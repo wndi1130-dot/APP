@@ -31,6 +31,7 @@ import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
+import { voiceKept } from './promise_voice';
 import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
@@ -682,6 +683,7 @@ export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label 
   g.stats.promisesKept += 1;
   if (g.dark) g.dark.kept[c] += 1; // S1b 신임 입장(5.3): 칸마다 지킨 약속
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 지켰다: ${label}.`, 'good');
+  voiceKept(g, c);
 }
 
 /** 약속을 어겼다(S1a 3.7). label을 주면 거래창 밖의 약속(서막)이다. */

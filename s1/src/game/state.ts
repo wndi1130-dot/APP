@@ -352,6 +352,8 @@ export interface Game {
   stop: StopState | null;
   council: CouncilState | null;
   lastSettle: Settlement | null;
+  /** 칸마다 이 판에서 지킨 약속 수(약속 지킴의 말 한 줄을 고르는 데만 쓴다, promise_voice.ts). 옛 저장엔 없다. */
+  keptVoice?: Partial<Record<Comm, number>>;
   /** 끝 화면 「돌이켜 보면」 줄을 위한 기록(lookback.ts). 정산에서 읽어 적기만 하고 규칙은 읽지 않는다. 옛 저장엔 없다. */
   look?: {
     low: Partial<Record<'coal' | 'food' | 'wood' | 'scrap', number>>;
