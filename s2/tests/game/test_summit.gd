@@ -33,6 +33,10 @@ func test_the_pass_is_a_kind_of_stop_and_as_likely_as_the_mine() -> void:
 	assert_eq(game.holdout.chance(), 60)
 	assert_eq(FieldHoldout.CHANCE["summit"], FieldHoldout.CHANCE["mine"])
 	assert_eq(game.holdout.risk_word(), "높다")
+	# A way in whose name ends in "쪽" is not given the word twice.
+	var said: String = game.director.forecast(0.0, 0, game.clock)
+	assert_string_contains(said, "쪽에서 온다")
+	assert_false(said.contains("쪽 쪽"), said)
 
 
 func test_a_drive_is_six_points_so_the_third_is_heard() -> void:
