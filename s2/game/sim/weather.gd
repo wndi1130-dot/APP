@@ -52,30 +52,33 @@ const PAIRS: Dictionary = {"fog+snow": 0.72}
 
 
 ## How far the light has gone before sunset, 0 to 1 (the field sets it from
-## its clock). Sight does not drop at sunset: it falls evenly from the day's
-## to the night's as this rises (user decision 210).
+## its clock). Sight does not drop at sunset: it falls evenly from what the
+## weather leaves to the night's as this rises (user decision 210). Weather
+## that already sees no farther than the night is not helped by the dusk.
 var dusk: float = 0.0
 
 
 ## Sight range multiplier for people and the dead alike (body_injury 8.3).
 func sight_mult(dark: bool = false) -> float:
 	var gone: float = 1.0 if dark else clampf(dusk, 0.0, 1.0)
+	var day: float = _day_sight()
+	return lerpf(day, DARK_SIGHT, gone) if day > DARK_SIGHT else day
+
+
+func _day_sight() -> float:
 	var cuts: Array[float] = []
 	var best := 1.0
 	var names := kinds.duplicate()
 	names.sort()
 	var pair := "+".join(names)
 	if PAIRS.has(pair):
-		var v: float = PAIRS[pair]
-		return minf(v, lerpf(maxf(v, 1.0), DARK_SIGHT, gone)) if gone > 0.0 else v
+		return PAIRS[pair]
 	for k in kinds:
 		var v := float(ROWS[k]["sight"])
 		if v < 1.0:
 			cuts.append(v)
 		else:
 			best = maxf(best, v)
-	if gone > 0.0:
-		cuts.append(lerpf(best, DARK_SIGHT, gone))
 	if cuts.is_empty():
 		return best
 	return float(cuts.min())

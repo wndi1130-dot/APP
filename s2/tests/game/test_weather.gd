@@ -84,9 +84,14 @@ func test_sight_falls_evenly_from_1450_to_sunset() -> void:
 		for w in [plain, foggy, clear]:
 			w.dusk = clock.dusk_share()
 		assert_almost_eq(plain.sight_mult(clock.is_dark()), float(rows[minute]), 0.0001, str(minute))
-		assert_almost_eq(foggy.sight_mult(clock.is_dark()), minf(0.72, float(rows[minute])), 0.0001, "the shorter holds")
+		var gone: float = clampf((minute - 890) / 55.0, 0.0, 1.0)
+		assert_almost_eq(foggy.sight_mult(clock.is_dark()), 0.72 - 0.17 * gone, 0.0001, "from the weather's own, evenly")
 	clock.elapsed = (917.5 - FieldClock.ARRIVE_MIN) * 60.0 / FieldClock.GAME_PER_REAL
 	clear.dusk = clock.dusk_share()
 	assert_almost_eq(clear.sight_mult(), 0.9, 0.0001, "a clear day falls from its own 1.25, with no step at 14:50")
+	var storm = Weather.new(["blizzard"])
+	storm.dusk = 0.5
+	assert_almost_eq(storm.sight_mult(), 0.4, 0.0001, "what sees no farther than the night is left as it is")
+	assert_almost_eq(storm.sight_mult(true), 0.4, 0.0001)
 	plain.dusk = 0.3
 	assert_almost_eq(plain.sight_mult(true), 0.55, 0.0001, "after sunset it is the night value")
