@@ -26,4 +26,5 @@ export * from './event_pack';
 export * from './stranded';
 export * from './loco';
 export * from './lookback';
+export * from './promise_voice';
 import './stranded_cards';
