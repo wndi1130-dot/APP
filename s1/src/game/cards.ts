@@ -5,6 +5,7 @@ import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
 import type { Comm } from './data';
 import { logDeath, onDeath } from './death';
 import { josa } from './josa';
+import { writeLookback } from './lookback';
 import { offend } from './politics';
 import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './state';
 import { BIRTH, ELDER_NIGHT, familyOf, recover, revertLater } from './people';
@@ -952,6 +953,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     case 'revolt':
       g.end = 'revolt';
       g.phase = 'end';
+      writeLookback(g);
       break;
     default:
       break;

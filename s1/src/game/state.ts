@@ -352,6 +352,12 @@ export interface Game {
   stop: StopState | null;
   council: CouncilState | null;
   lastSettle: Settlement | null;
+  /** 끝 화면 「돌이켜 보면」 줄을 위한 기록(lookback.ts). 정산에서 읽어 적기만 하고 규칙은 읽지 않는다. 옛 저장엔 없다. */
+  look?: {
+    low: Partial<Record<'coal' | 'food' | 'wood' | 'scrap', number>>;
+    skip: Partial<Record<'tailHeat' | 'heatQuota' | 'noInsulate' | 'tailRation' | 'contribution' | 'noOutsiders' | 'breakdown', number>>;
+    coalStops: number;
+  };
   /** 까닭 장부(ledger.ts). 규칙이 쌓고 화면이 행동마다 비운다. 저장에는 남지 않는다. */
   ledger?: { k: string; d: number; why: string }[];
   /** 신임·긴장이 최근 무엇 때문에 바뀌었나(사용자 2026-10-11). 화면에서 한 행동만 남는다(봇·시뮬 판엔 없다). 최근 것이 뒤. */
