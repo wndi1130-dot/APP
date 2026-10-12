@@ -3,9 +3,16 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
+  workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
 } from '../game';
 import { copyText } from './clip';
+
+/** 작업 줄: 공방장의 몫 + 공방 곁 수업의 몫을 가르고 합을 보인다. */
+function workText(g: Game): string {
+  const total = workPower(g);
+  const bonus = workBonus(g);
+  return bonus > 0 ? `작업 ${total.toFixed(1)}/구간 (공방장 ${(total - bonus).toFixed(1)}, 수업 +${bonus})` : `작업 ${total.toFixed(1)}/구간`;
+}
 import type { Comm, DomPerson, Field, Game, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
 import { P, isSessionSeg, potMult, potView } from '../game';
 import { cx, h, raw, s } from './dom';
@@ -195,7 +202,7 @@ function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
       h('button', { class: 'chip', 'data-action': 'dom-delegate', 'data-on': '1', 'data-policy': 'ours' }, '우리 편 먼저', h('small', null, ' 호의 +1 · 나머지 −1/구간'))) : null,
     h('div', { class: 'dom-now' },
       gear(st.mode), h('span', null, '지금: ', h('b', null, d.restoring ? workshopNow(g) : st.now)),
-      h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+      h('small', { class: 'sub num' }, workText(g))),
     h('div', { class: 'dom-target' },
       h('span', null, '부품 ', h('b', { class: 'num' }, d.parts), ' / 유지 ', h('b', { class: 'num' }, d.target)),
       h('input', {
@@ -303,7 +310,7 @@ export function workshopBoard(view: View, car: CarDef): HTMLElement {
           h('i', { class: 'wsb__tube', 'aria-hidden': 'true' }, h('i', { style: `height:${Math.max(0, Math.min(100, gauge.pct))}%` })),
           h('b', { class: 'wsb__pct num' }, `${gauge.pct}%`),
           h('span', { class: 'sub num' }, gauge.wait ?? `남은 ${gauge.left}구간`)) : null,
-        h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+        h('small', { class: 'sub num' }, workText(g))),
       blk('사람', 'who',
         who.chief ? h('div', { class: 'tblk__row' }, portrait(who.chief.name, who.chief.comm), nameBtn(who.chief.name),
           h('small', { class: 'sub' }, `공작 ${dots(who.chief.skill)}`)) : h('div', { class: 'tblk__row sub' }, '공방장 없음'),
@@ -364,7 +371,7 @@ function modifyView(view: View): HTMLElement {
     h('div', { class: 'dom-now' },
       gear(job ? 'work' : 'idle'),
       h('span', null, job ? h('b', null, `${jobTitle(job.kind, job.car)} ${Math.round((job.progress / Math.max(1, job.need)) * 100)}%`) : '줄에 올린 개조 없음'),
-      h('small', { class: 'sub num' }, `작업 ${workPower(g).toFixed(1)}/구간`)),
+      h('small', { class: 'sub num' }, workText(g))),
     MOD_KINDS.map(({ k, name, cost }) => {
       const done = (c: string) => (k === 'insulate' ? d.insulated : d.armored).includes(c);
       // 칸마다 같은 까닭(아직 모른다, 재료가 모자라다, 줄이 찼다)은 줄 머리에 한 번만 적는다.
@@ -845,7 +852,8 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
   const def = TECHS[id];
   const st = d.techs[id];
   const check = restoreCheck(g, id);
-  const cost = restoreCost(id);
+  const cost = restoreCost(id, g);
+  const raw = restoreCost(id);
   const frags = d.frags[def.branch];
   const variants: (Variant | undefined)[] = def.variants && !st ? ['a', 'b'] : [undefined];
   const eff = (text: string) => (more ? text : shortEffect(text));
@@ -860,10 +868,11 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
     const skillShort = check.full === `${['', '견습', '숙련', '장인'][def.tier]} 이상이 없다`;
     // 드는 것 한 줄: 모자란 것만 붉다. 막힌 까닭과 쓸 법 표는 단추마다 같으니 여기 한 번만 적는다.
     buttons.push(h('div', { class: 'dom-common' },
-      cost.parts ? h('span', { class: 'cost num' }, `부품 −${cost.parts}`) : null, cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`) : null, cost.scrap ? h('span', { class: 'cost num' }, `고철 −${cost.scrap}`) : null,
+      cost.parts ? h('span', { class: 'cost num' }, `부품 −${cost.parts}`) : null, cost.wood ? h('span', { class: 'cost num' }, `목재 −${cost.wood}`, raw.wood > cost.wood ? ` (${raw.wood})` : '') : null, cost.scrap ? h('span', { class: 'cost num' }, `고철 −${cost.scrap}`, raw.scrap > cost.scrap ? ` (${raw.scrap})` : '') : null,
       h('span', { class: cx('cost num', frags < cost.frags && 'is-red') }, tip('조각', FRAG_FROM + findsLine(g, 'frag', def.branch)), ` ${frags}/${cost.frags}`),
       cost.core ? h('span', { class: cx('cost num', d.cores < cost.core && 'is-red') }, tip('코어', CORE_FROM + findsLine(g, 'core')), ` ${d.cores}/${cost.core}`) : null,
       def.tier > 0 ? h('span', { class: cx('cost', skillShort && 'is-red') }, `${FIELD_NAME[def.branch]} ${SKILL_NAME[def.tier]}↑`) : null,
+      raw.wood > cost.wood || raw.scrap > cost.scrap ? h('span', { class: 'sub' }, '공방 곁에서 배우는 아이들이 못과 줄을 골라 줘서 덜 든다.') : null,
       sameUse ? useTag(g, id, variants[0]) : null,
       check.full && !skillShort ? h('span', { class: 'pol pol--gray' }, check.full) : null,
       canDefect ? h('span', { class: 'sub' }, `결함판 ½ · 조각 ${cost.defectFrags} · 고장 +${Math.round(D.defectBreak * 100)}%${check.defect && check.defect !== check.full ? ` · ${check.defect}` : ''}`) : null));
@@ -980,6 +989,7 @@ function boardView(view: View): HTMLElement {
         relies.length ? h('span', { class: 'dom-relies sub' }, relies.join('·')) : null,
         h('span', { class: 'dom-board__acts' },
           h('button', { class: 'chip', 'data-action': 'dom-apprentice', 'data-field': f, disabled: !teacher, title: teacher ? '' : '가르칠 사람이 없다' }, '견습생 붙이기'),
+          f === 'engine' && lawActive(g, 'edu_engine') ? h('span', { class: 'sub' }, '보일러의 순서를 이미 안다. 한 구간 먼저.') : null,
           // 매뉴얼이 있으면 표시, 없으면 단추 하나로만 말한다.
           d.manuals[f] ? h('span', { class: 'dom-manual is-on' }, '매뉴얼 ✓')
             : h('button', { class: 'chip', 'data-action': 'dom-manual', 'data-field': f, disabled: !writer.who || !!writer.why, title: writer.why ?? '' }, '매뉴얼 쓰게 하기')));

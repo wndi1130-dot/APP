@@ -18,6 +18,7 @@ import { potFoodMult, potTick } from './pot';
 import { engineStall, knowledgeTick, leaveAtStop, stokingNow, strikeLine, strikeRuns } from './knowledge';
 import { bedTick } from './medbay';
 import { refreshSit } from './sit';
+import { childHaul, dayCoal, eduSettle } from './classroom';
 import { locoPressureChance } from '../loco';
 import { domCard, living, noteFind, personById, techAdopted, techMult, topSkill, variantMult } from './state';
 import { addMaterials, greenhouseFood, offerRestores, payUpkeep, penaltyActive, restoreBlock, restoreCheck, rollBreakdown, runWorkshop, techTitle, upkeepCoal } from './workshop';
@@ -31,7 +32,7 @@ export interface DomForecast { coal: number; food: number; foodMult: number }
 export function domesticForecast(g: Game): DomForecast {
   const d = g.dom;
   if (!d) return { coal: 0, food: 0, foodMult: 1 };
-  let coal = hotWaterCoal(g) + upkeepCoal(g) + extraCarCoal(g) - lawTechCoal(g);
+  let coal = hotWaterCoal(g) + upkeepCoal(g) + extraCarCoal(g) - lawTechCoal(g) + dayCoal(g);
   if (penaltyActive(g, 'coal')) coal += 1;
   if (stokingNow(g) && techMult(g, 'e4') <= 0) coal += D.stokerCoal;
   if (!g.inStrike && topSkill(g, 'engine') === 1) coal += D.slowCoal;
@@ -166,7 +167,7 @@ export function domesticStop(g: Game, passed: boolean, crewDead: number): string
   if (bp) {
     const stay = stop.stay === 'short' ? 0.6 : stop.stay === 'long' ? 1.4 : 1;
     // 부산물은 체류와 S1a 산출 보정(아동 노동 등), 고장 벌, 묻기를 같이 받는다(5.2).
-    const lawHaul = (Object.keys(g.passed) as LawId[]).reduce((m, law) => m * (lawTechRes(g, law).haulMult ?? 1), 1);
+    const lawHaul = (Object.keys(g.passed) as LawId[]).reduce((m, law) => m * childHaul(g, law, lawTechRes(g, law).haulMult ?? 1), 1);
     const mult = stay * lawHaul * (esc?.field === 'craft' ? D.escortMaterials : 1) * domesticHaulMult(g);
     const scrap = Math.round(bp.scrap * mult);
     const wood = Math.round(bp.wood * mult);
@@ -211,6 +212,7 @@ export function domesticSettle(g: Game, notes: string[]): void {
   domesticPromiseMade(g);
   d.stats.hotCoal += hotWaterCoal(g);
   d.stats.techCoal += lawTechCoal(g);
+  eduSettle(g, notes);
   potTick(g, notes); // 솥: 공방이 목재를 쓰기 전에
   delegateTick(g);
   payUpkeep(g);

@@ -9,6 +9,7 @@ import { josa } from './josa';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
+import { eduEnacted, enactScale, repealScale } from './domestic/classroom';
 import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
 import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
@@ -772,20 +773,23 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
     carried = g.boughtBy[base];
     delete g.boughtBy[base];
     g.repealedAt[base] = g.session;
+    const baseScale = repealScale(g, base);
     for (const c of COMMS) {
       const m = LAWS[base].mats[c];
-      if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] -= m[i];
+      if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] -= m[i] * baseScale;
     }
     journal(g, `${LAWS[base].title}을(를) ${def.title}(으)로 고쳤다.`);
   }
   g.passed[law] = g.session;
   if (boughtFrom.length > 0) g.boughtBy[law] = { comms: [...new Set([...(carried?.comms ?? []), ...boughtFrom])], session: g.session };
   else if (carried) g.boughtBy[law] = carried;
+  // 반반(결정 205): 수업이 이미 서 있는 판에서 아동 노동을 세우면 한 번짜리 벌을 반으로 센다.
+  const scale = enactScale(g, law);
   for (const c of COMMS) {
     const m = def.mats[c];
-    if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] += m[i];
+    if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] += m[i] * scale;
     const r = def.rels[c];
-    if (r !== undefined) bumpRel(g, c, r, 'vote');
+    if (r !== undefined) bumpRel(g, c, r * scale, 'vote');
   }
   // 1회 효과는 법마다 한 판에 한 번(R3 카드 1, 2026-10-07): 폐지했다 다시 통과시켜 또 받지 못한다. 관계 반응은 통과마다 그대로.
   // 변형 법(종자곡 반만 풀기 등)은 원래 법과 한 묶음으로 센다.
@@ -793,11 +797,12 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
   const once = LAW_VARIANT_OF[law] ?? law;
   if (!(g.onceTaken ??= []).includes(once)) {
     if (res.trustOnce) bump(g, 'trust', res.trustOnce, 'vote');
-    if (res.fearOnce) g.fear = clamp(g.fear + res.fearOnce, 0, 100);
+    if (res.fearOnce) g.fear = clamp(g.fear + res.fearOnce * scale, 0, 100);
     if (res.foodOnce) bump(g, 'food', res.foodOnce, 'vote');
     if (res.trustOnce || res.fearOnce || res.foodOnce) g.onceTaken.push(once);
   }
   calmEnact(g, law);
+  eduEnacted(g, law);
   if (law === 'guided_voting') g.guidedLeft = 3;
   // 3구간짜리 대권(numbers 8장 법 16). 통과한 구간은 이미 표결이 끝났으니 다음 세 구간을 센다(nextSegment가 하나씩 줄인다).
   if (law === 'emergency_powers') { g.decreeLeft = DECREE_SEGS + 1; g.decreed = []; }
@@ -811,9 +816,10 @@ export function repealLaw(g: Game, law: LawId): void {
   const supporters = COMMS.filter(c => stance(g, c, { law, repeal: false }, false).score >= 3);
   delete g.passed[law];
   g.repealedAt[law] = g.session;
+  const matScale = repealScale(g, law);
   for (const c of COMMS) {
     const m = def.mats[c];
-    if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] -= m[i];
+    if (m) for (let i = 0; i < 4; i += 1) g.comms[c].base[i] -= m[i] * matScale;
   }
   for (const c of supporters) bumpRel(g, c, -P.repealRel, 'vote');
   const bought = g.boughtBy[law];

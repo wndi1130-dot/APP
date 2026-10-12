@@ -13,6 +13,8 @@ import { resolvePressure } from './hooks';
 import { techUseLine } from './lawtech';
 import { chooseElder, elderPerson, elderPupil, elderSign, elderSpan, elderWhy } from './elder';
 import { hygieneWhy, resolveLice, resolveTyphus } from './hygiene';
+import { chooseSide, eduLaw, halved, SIDE_NAME } from './classroom';
+import type { EduSide } from './classroom';
 import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
 import { domCard, personById, techMult } from './state';
@@ -310,6 +312,18 @@ export function domView(g: Game, card: Card): CardView | null {
         ],
       };
     }
+    case 'dom:side': {
+      // 교육 법이 섰다(결정 207): 어디 곁에서 배우나. 아이는 물 긷기, 천 삶기, 약병 닦기, 못과 줄 고르기 같은 손에 맞는 일만 하고 다친 사람 곁에는 앉지 않는다.
+      const half = halved(g);
+      return {
+        title: '어디 곁에서 배우나', required: true,
+        body: `아이들은 열차에 남아 낮 동안 배운다.${half ? ' 짐도 반나절은 받으니 곁에서 얻는 것도 절반이다.' : ''} 어른 곁에서 손에 맞는 일을 거들며 배우는 자리를 정한다.`,
+        choices: [
+          { label: SIDE_NAME.workshop, say: '연장 곁에 앉혀라. 못과 줄을 가르는 것부터 배워라.', effs: [], special: 'dom:side:workshop', extra: [`공방의 일 +${half ? '0.5' : '1'}`, `복원에 드는 목재·고철 ${half ? '여덟' : '넷'}에 하나 덜`] },
+          { label: SIDE_NAME.med, say: '물과 천을 나르는 일을 맡겨라. 다친 사람 곁에는 앉히지 마라.', effs: [], special: 'dom:side:med', extra: [half ? '깊은 상처·골절이 둘에 하나만 하루 먼저 낫는다' : '깊은 상처·골절이 하루 먼저 낫는다'] },
+        ],
+      };
+    }
     case 'dom:pressure': {
       const last = (g.dom?.pressureStage ?? 0) >= 1;
       return {
@@ -417,6 +431,9 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
     case 'elder':
       chooseElder(g, arg as 'pupil' | 'manual' | 'rest');
       break;
+    case 'side':
+      if (eduLaw(g)) chooseSide(g, arg as EduSide);
+      break;
     case 'pressure':
       if (resolvePressure(g, arg === 'vent')) { g.end = 'stranded'; g.phase = 'end'; }
       break;
@@ -436,5 +453,5 @@ registerDomesticCards();
 
 export const DOM_CARD_KINDS = [
   'dom:fit', 'dom:fork', 'dom:short', 'dom:pupil', 'dom:manual', 'dom:demand', 'dom:car', 'dom:give', 'dom:box', 'dom:full', 'dom:bed', 'dom:officer',
-  'dom:lice', 'dom:typhus', 'dom:stoker', 'dom:pressure', 'dom:elder',
+  'dom:lice', 'dom:typhus', 'dom:stoker', 'dom:pressure', 'dom:elder', 'dom:side',
 ] as const;

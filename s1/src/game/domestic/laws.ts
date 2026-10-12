@@ -3,6 +3,7 @@ import type { LawId } from '../data';
 import { lawActive } from '../state';
 import type { Game } from '../state';
 import { techMult, techUsable, variantMult } from './state';
+import { childLaw, EDU_LAWS } from './classroom';
 
 // S1c 법 다섯이 열리는 때(s1a_politics_numbers 8.5, 숫자는 제안). 19와 20, 21가와 21나는 같은 문제의 두 답이라
 // 하나를 통과시키면 다른 하나는 닫힌다. 12b는 환자 분류 기준(M2)을 복원한 판에서 12 대신 오른다.
@@ -29,6 +30,9 @@ export function domesticLawOpen(g: Game, law: LawId): boolean | null {
     case 'seed_grain': return lawActive(g, 'seed_half') ? false : null;
     case 'child_pack': return techMult(g, 'x1') > 0 && (lawActive(g, 'child_labor') || g.coal <= 40 || g.food <= 40);
     case 'child_labor': return lawActive(g, 'child_pack') ? false : null;
+    // 교육 법 셋(결정 205·207): 아동 노동이 오를 때(석탄이나 식량 40 이하)나 서 있을 때 같이 오른다. 하나가 서면 다른 둘은 닫힌다.
+    case 'edu_letters': case 'edu_trade': case 'edu_engine':
+      return !EDU_LAWS.some(l => l !== law && lawActive(g, l)) && (!!childLaw(g) || g.coal <= 40 || g.food <= 40);
     // 위생 두 법은 판 시작부터 연다(J10 W2). 이가 돌기 전에 물을 나눌 수 있어야 막을 시간이 있다.
     case 'bath_rota': return !lawActive(g, 'hands_first');
     case 'hands_first': return !lawActive(g, 'bath_rota');

@@ -15,4 +15,5 @@ export * from './lawtech';
 export * from './pipe';
 export * from './elder';
 export * from './symbols';
+export * from './classroom';
 export * from './cards';

@@ -1,5 +1,6 @@
 import { COMM_NAME, D, P, bedNeed, isSessionSeg, jobTitle, relStage, situation, workshopState } from '../game';
 import { unnamedInjured, woundView } from '../game/wounds';
+import { healLine } from '../game/domestic/classroom';
 import type { WoundRow } from '../game/wounds';
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
@@ -141,6 +142,7 @@ function medBoard(view: View, car: CarDef): HTMLElement {
         h('span', null, r.partName),
         h('span', { class: cx(r.grade === 'fracture' || r.grade === 'amputation' ? 'is-red' : '') }, r.gradeName, r.septic ? ' · 곪음' : ''),
         h('span', { class: 'num' }, `${fmt(r.daysLeft)}구간`),
+        r.edu ? h('span', { class: 'sub' }, healLine(r.id)) : null,
         h('span', { class: cx('tmed__care', r.care === 'home' && 'is-red') }, r.care === 'bed' ? icon('bed') : null, CARE_NAME[r.care]))),
       unnamed > 0 ? h('li', { class: 'tmed__row tmed__row--unnamed' }, `누군지 모르는 ${fmt(unnamed)}명`) : null,
       rows.length === 0 && unnamed === 0 ? h('li', { class: 'tmed__row sub' }, '다친 사람 없음') : null));

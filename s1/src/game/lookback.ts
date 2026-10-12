@@ -3,6 +3,7 @@
 // 글에 든 숫자는 정산 번호뿐이고, 사람 이름·지명·판단하는 말은 쓰지 않는다.
 import { ROUTE } from './data';
 import { D } from './domestic/data';
+import { eduLookLines } from './domestic/classroom';
 import { josa } from './josa';
 import { journal, lawActive } from './state';
 import type { Game } from './state';
@@ -164,4 +165,5 @@ export function lookbackLines(g: Game): string[] {
 export function writeLookback(g: Game): void {
   trackLookback(g);
   for (const line of lookbackLines(g)) journal(g, line, 'dark');
+  for (const line of eduLookLines(g)) journal(g, line);
 }
