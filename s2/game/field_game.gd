@@ -289,6 +289,8 @@ func _ready() -> void:
 	add_child(audio)
 	audio.setup(self)
 	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
+	if holdout.feel_line() != "":
+		audio.chief_feel(holdout.feel_number())
 	if mission_play.active():
 		hud.toast(mission_play.opening_line())
 	if holdout.mode == "start":

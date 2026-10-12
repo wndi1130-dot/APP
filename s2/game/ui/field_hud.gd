@@ -148,6 +148,8 @@ var overlay: Control
 var clock_label: Label
 var sun_bar: ProgressBar
 var weather_label: Label
+var top_panel: Control                # the clock's box, top left
+var feel_label: Label                 # the chief's aside beside the risk line
 var goal_label: Label                 # this stop's goals, under the weather (none on a plain stop)
 var radio_label: Label
 var radio_left: float = 0.0
@@ -358,6 +360,14 @@ func _build_top() -> void:
 		v.add_child(goal_label)
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tl)
+	top_panel = tl
+	if goal_label != null:
+		# The chief's aside beside the risk line: there while that line is, to
+		# the right of the box (under it is the chief's own panel).
+		feel_label = _label(game.holdout.feel_line(), 16, DIM)
+		feel_label.visible = feel_label.text != ""
+		feel_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(feel_label)
 	radio_label = _label("", 22, INK)
 	radio_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	radio_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -647,6 +657,9 @@ func tick(delta: float) -> void:
 	clock_label.text = game.clock.label()
 	if goal_label != null:
 		goal_label.text = game.goal_text()
+		feel_label.text = game.holdout.feel_line()
+		feel_label.visible = feel_label.text != ""
+		feel_label.position = top_panel.position + Vector2(top_panel.size.x + 10.0, goal_label.position.y + 8.0)
 	sun_bar.value = game.clock.sun_fraction()
 	radio_left -= delta
 	radio_label.modulate.a = clampf(radio_left / 1.5, 0.0, 1.0)

@@ -5,7 +5,9 @@ extends RefCounted
 ## stream. Until it does, LINES holds the user's own examples.
 ##
 ## Who speaks: the one it happened to (or, for "rage", the companion nearest
-## to one who fell). The chief does not speak.
+## to one who fell). The chief does not speak. The one place he does is not
+## here: his aside beside the stop's risk line (user decision 187, the lines
+## are FieldHoldout.RISK_FEEL). Nowhere else is he given words.
 ## How often: one person at most once in GAP_SELF seconds, the squad at most
 ## once in GAP_SQUAD, so four people hurt at once do not all shout at once.
 

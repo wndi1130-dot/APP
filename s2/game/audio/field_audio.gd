@@ -53,6 +53,8 @@ const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
 ## moan that stands in for it. First values.
 const TELL_GROUP: String = "lunge_tell"
 const TELL_LOUD: float = 0.9
+const FEEL_GROUP: String = "chief_feel_%02d"
+const FEEL_LOUD: float = 0.25
 const TELL_RANGE: float = 40.0
 const TELL_STANDIN_PITCH: float = 1.5
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
@@ -389,6 +391,21 @@ func door(kind: String, at: Vector3, level: int) -> void:
 		loud *= clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var d: float = at.distance_to(game.player.position)
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])))
+
+
+## The chief's aside beside the risk line, muttered very low (user decision
+## 187). The voice file is found by the line's number ("chief_feel_07"); with
+## no file there is no sound. Not a sound of the field: nothing hears it.
+func chief_feel(number: int) -> void:
+	if number <= 0:
+		return
+	var group: String = FEEL_GROUP % number
+	if not lib.has(group):
+		lib[group] = _load_group(group)
+	if not has(group):
+		return
+	played.append(group)
+	_one_shot(group, game.player.position, FEEL_LOUD, 1.0)
 
 
 ## One of the dead drops low before it runs: its rasp, for the player's ear

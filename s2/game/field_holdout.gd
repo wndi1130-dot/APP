@@ -34,6 +34,34 @@ const AFTER_SOMEBODY: Array[String] = ["tell", "chase", "attack", "grab"]
 # The one line shown to anybody before it (user decision 150): the kind's
 # chance in words, never the roll. [up to this chance, the word].
 const RISK_WORDS: Array = [[15, "낮다"], [40, "있다"], [100, "높다"]]
+# What the chief mutters to himself beside that line (user decisions 178, 187):
+# of places like this or a feeling, never of this stop. Picked by the word
+# alone: not by the roll, what is inside, or what the radio operator heard.
+const RISK_FEEL: Dictionary = {
+	"낮다": [
+		"이런 곳은 대개 조용했어",
+		"이런 데선 거의 별일 없었어",
+		"이런 곳은 탈 나는 일이 드물어",
+		"이런 곳은 대개 곱게 떠났어",
+		"이런 곳도 소리는 조심하자",
+	],
+	"있다": [
+		"느낌이 이상해",
+		"이런 곳은 가끔 일이 터져",
+		"이런 데선 마음이 안 놓여",
+		"어쩐지 뒷목이 서늘해",
+		"이런 곳은 조용히 다니자",
+	],
+	"높다": [
+		"이런 곳은 정차하기 적합하지 않아",
+		"이런 곳은 뒤탈이 잦아",
+		"느낌이 아주 안 좋아",
+		"이런 데선 곱게 못 떠날 때가 많아",
+		"이런 곳은 오래 있을 데가 아니야",
+	],
+}
+# The line the stop before this one had, by word: not the same twice running.
+static var last_feel: Dictionary = {}
 # "Quiet, and the track beside the train clear": the stop's noise score at
 # most this, and at most this many dead on the track. PLACEHOLDERS.
 const QUIET_NOISE: int = 12
@@ -118,6 +146,7 @@ var over: float = 0.0             # how long it stayed after it was ready
 var rolled: bool = false          # "roll": this stop can have it (hidden)
 var slipped: bool = false         # it could, and the train got away quietly
 var die: int = 0                  # "roll": what the stop's die showed (hidden)
+var feel: int = -1                # "roll": which of the word's lines the chief mutters
 var woke: bool = false            # one of the dead first put inside took after somebody
 var watch_t: float = 0.0
 var told_noise: bool = false      # the lookout has said the stop was heard
@@ -140,6 +169,7 @@ func _init(field_game) -> void:
 		dice.seed = hash([int(game.opts.get("seed", 0)), game.place, "holdout"])
 		die = dice.randi_range(1, 100)
 		rolled = die <= chance()
+		feel = pick_feel(risk_word(), hash([int(game.opts.get("seed", 0)), game.place, "risk_feel"]))
 		var heard: int = int(game.opts.get("holdout_forecast_heard", FORECAST_HEARD))
 		forecast = rolled and bool(game.opts.get("radio_watch", false)) and dice.randi_range(1, 100) <= heard
 
@@ -176,6 +206,39 @@ func den_watch() -> void:
 			if mode == "roll" and not opened:
 				rolled = rolled or die <= chance()
 			return
+
+
+## Which of the word's lines this stop has: by the word and a number that has
+## nothing to do with the roll, and never the one the stop before it had.
+static func pick_feel(word: String, n: int) -> int:
+	var lines: Array = RISK_FEEL.get(word, [])
+	if lines.is_empty():
+		return -1
+	var i: int = absi(n) % lines.size()
+	if int(last_feel.get(word, -1)) == i:
+		i = (i + 1) % lines.size()
+	last_feel[word] = i
+	return i
+
+
+## The chief's aside beside the risk line, in quotes and with no name on it;
+## "" when that line is not up (the stage opened, or the stop has none).
+func feel_line() -> String:
+	if mode != "roll" or opened or feel < 0:
+		return ""
+	return "\"%s\"" % RISK_FEEL[risk_word()][feel]
+
+
+## The aside's number among all of them, from 1: the voice file is found by it.
+func feel_number() -> int:
+	if feel < 0:
+		return 0
+	var n := 0
+	for row: Array in RISK_WORDS:
+		if String(row[1]) == risk_word():
+			return n + feel + 1
+		n += (RISK_FEEL.get(String(row[1]), []) as Array).size()
+	return 0
 
 
 ## The kind's chance in a word, for the line anybody sees: of the kind, so it
