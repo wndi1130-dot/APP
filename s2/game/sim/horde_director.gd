@@ -243,7 +243,7 @@ func forecast(now: float, precision: int, clock) -> String:
 			when = "한 시간쯤"
 		elif left_min >= HALF_MIN:
 			when = "반 시간쯤"
-		return "%s, %s." % [phrases.get(next_entry, where + " 쪽에서 온다"), when]
+		return "%s, %s." % [phrases.get(next_entry, where + ("에서 온다" if where.ends_with("쪽") else " 쪽에서 온다")), when]
 	var at_min: float = _arrival_minutes(maxf(next_arrival, now), clock)
 	var rounded: int = roundi(at_min / 15.0) * 15
 	var hh: int = floori(rounded / 60.0) % 24

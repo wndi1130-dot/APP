@@ -313,6 +313,12 @@ func update_window(c: Vector2i) -> void:
 	node.mesh = st.commit()
 
 
+## A container that was not there when the map was drawn (a heap left by work).
+func add_container(id: String) -> void:
+	container_nodes[id] = _mesh_node(int(data["containers"][id].get("level", 0)))
+	update_container(id)
+
+
 func update_container(id: String) -> void:
 	var box_data: Dictionary = data["containers"][id]
 	var node: MeshInstance3D = container_nodes[id]
