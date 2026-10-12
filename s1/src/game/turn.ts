@@ -31,6 +31,7 @@ import { lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
+import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
 
@@ -360,6 +361,7 @@ function arriveStop(g: Game): void {
     place: place.id, target: suggestTarget(g, place.loot), stay: 'normal',
     crewComm: tail ? 'guard' : 'tail', crewSize: 4, threat, done: false, result: null,
   };
+  countCoalStop(g, place.id);
   rollStopView(g, g.stop, 1 + P.thrownHorde * g.thrown > 1.2);
   // 핸드카 정찰(X2): 장소 후보가 하나 더 있다(7.3, J10 3번). X2가 없으면 주사위를 더 굴리지 않는다.
   if (g.dom) {
@@ -379,7 +381,9 @@ export function takeAltPlace(g: Game): void {
   const place = PLACES.find(p => p.id === alt);
   if (!place) return;
   g.dom!.altPlace = null;
+  countCoalStop(g, stop.place, -1);
   stop.place = place.id;
+  countCoalStop(g, place.id);
   stop.target = suggestTarget(g, place.loot);
   rollStopView(g, stop, 1 + P.thrownHorde * g.thrown > 1.2);
   journal(g, `핸드카가 본 ${place.name}에 섰다.`);
@@ -752,6 +756,7 @@ function settle(g: Game): void {
   reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
+  trackLookback(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
     trust: g.trust - before.trust, tension: g.tension - before.tension,
@@ -1104,6 +1109,7 @@ function finish(g: Game, end: Game['end']): void {
   g.phase = 'end';
   const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
+  writeLookback(g);
   for (const line of raisedLines(g)) journal(g, line);
   darkFinish(g);
 }

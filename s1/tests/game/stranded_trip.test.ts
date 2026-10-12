@@ -259,7 +259,8 @@ describe('못 돌아옴', () => {
       advance(g);
     }
     expect(g.end).toBe('lost_captain');
-    expect(g.journal[g.journal.length - 1].text).toContain('수동차 자국만 남았다');
+    // 끝 글 바로 뒤에는 「돌이켜 보면」 줄이 붙을 수 있다(lookback.ts). 그 줄을 빼고 보면 끝 글이 마지막이다.
+    expect(g.journal.filter(j => !j.text.startsWith('돌이켜 보면')).at(-1)?.text).toContain('수동차 자국만 남았다');
     const turn = g.stranded!.trip?.turn;
     const len = g.journal.length;
     strandedSettle(g);
