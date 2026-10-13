@@ -27,7 +27,8 @@ export function logDeath(g: Game, names: readonly string[], cause: DeathCause, w
 /** 죽음 뒤에 부를 다른 묶음의 훅(S1b 칸 안의 시신, dark/hooks.ts가 등록한다). */
 export const DEATH_HOOKS: ((g: Game, c: Comm, names: readonly string[], cause: DeathCause) => void)[] = [];
 
-export function onDeath(g: Game, c: Comm, names: readonly string[], cause: DeathCause = 'other', witness = false): void {
+/** quiet: 이 죽음의 일지 줄(이름과 칸 이름)을 쓰지 않는다. 부른 쪽이 수로 적는다(난방 배당, 결정 240·276). */
+export function onDeath(g: Game, c: Comm, names: readonly string[], cause: DeathCause = 'other', witness = false, quiet = false): void {
   const n = names.length;
   if (n <= 0) return;
   g.comms[c].pop = Math.max(1, g.comms[c].pop - n);
@@ -62,7 +63,7 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
     bump(g, 'tension', 3 * n, 'corpse');
     g.thrown += n;
   }
-  journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad');
+  if (!quiet) journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad');
   afterDeath(g, c, names);
   for (const hook of DEATH_HOOKS) hook(g, c, names, cause);
 }

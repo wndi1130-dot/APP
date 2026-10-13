@@ -27,6 +27,8 @@ export const D = {
    * Warm: 다 단열했을 때 온기 +, Heat: 다 단열했을 때 덜 드는 난방 석탄의 비율, Crowd: 단열한 칸마다 오르는 과밀, Lice: 이가 돌 확률에 붙는 배수(1 + Lice × 몫),
    * QuotaHalf: 켜면 「난방 배당」이 서 있는 동안 새 온기 이득이 반이다(지금은 꺼 둔다. 겹쳐 쌓아도 지나치지 않다). 폰으로 해 보고 이 줄만 고친다. */
   insulateWarm: 6, insulateHeat: 0.3, insulateCrowd: 2, insulateLice: 1, insulateQuotaHalf: false,
+  /** 「난방 배당」이 서 있는 동안(결정 230·231·240·276, domestic/heat_alloc.ts): 정산마다 꼬리칸·의무진 관계 −Rel, 온기가 Warm 아래인 칸(꼬리칸·의무진·경비대)마다 Death의 확률로 어른 한 사람이 죽는다. Rel·Death가 0이면 옛 동작. */
+  heatAllocRel: 2, heatAllocWarm: 45, heatAllocDeath: 0.10,
   armorWork: 4, armorScrap: 12, armorExposure: 10,
   convertWork: 6, convertMaterials: 20,
   repairWork: 1, repairParts: 2,
