@@ -112,6 +112,8 @@ function commBoard(view: View, car: CarDef): HTMLElement {
           ? h('span', { class: 'stage' }, icon('check'), m.name)
           : h('button', { class: 'chip', 'data-action': 'dom-job', 'data-kind': m.k, 'data-car': car.id, disabled: !m.ok, title: m.why ?? '' },
             m.name, h('small', { class: 'num' }, ` ${m.cost}`)))) : null,
+        // 단열한 칸은 지금 듣는 값(온기, 난방, 과밀)을 한 줄로 적는다(결정 217·225).
+        mods.some(m => m.done && m.note) ? h('small', { class: 'sub' }, mods.filter(m => m.done && m.note).map(m => m.note).join(' ')) : null,
         modWhy ? h('small', { class: 'sub' }, modWhy) : null)));
 }
 

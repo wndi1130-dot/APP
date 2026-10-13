@@ -7,6 +7,7 @@ import { clamp, drawPerson, journal, lawActive, rnd, situation, totalPop } from 
 import type { Game } from '../state';
 import { CARS0, CAR_COMM, D, ZONE0 } from './data';
 import type { Hygiene } from './data';
+import { insulatedShare } from './lawtech';
 import { domCard, techMult, zoneAt } from './state';
 import type { DomState } from './state';
 
@@ -84,7 +85,9 @@ export function hygieneWhy(g: Game, c: Comm): string {
     : b > 0 ? '보일러에서 먼 칸이 있음'
     : '보일러에서 중간';
   const share = c === 'front' ? Math.max(1, hotWaterShare(g, c)) : hotWaterShare(g, c);
-  return `${place} · 과밀 ${crowd} · 온기 ${Math.round(warm)} · 몫 ${Math.round(share)}`;
+  // 틈을 메운 칸이 있으면 김이 차는 것도 까닭이다(결정 217·225). 사람이 아니라 처지의 이야기로만 적는다.
+  const damp = insulatedShare(g, c) > 0 && D.insulateLice > 0 ? ` · ${COMMS.indexOf(c) % 2 === 0 ? '창에 김이 서려 침구가 잘 안 마른다' : '공기가 무거워 옷이 눅눅하다'}` : '';
+  return `${place} · 과밀 ${crowd} · 온기 ${Math.round(warm)} · 몫 ${Math.round(share)}${damp}`;
 }
 
 export function hygiene(g: Game, c: Comm): Hygiene {
@@ -92,10 +95,15 @@ export function hygiene(g: Game, c: Comm): Hygiene {
   return s >= 2 ? 'clean' : s >= 0 ? 'normal' : 'dirty';
 }
 
+/** 이 카드가 오는 확률(구간마다 한 번). 불결하면 높고 겨울엔 곱한다. 단열한 몫만큼 김이 차서 오른다: × (1 + insulateLice × 몫)(결정 217·225). */
+export function liceChance(g: Game, c: Comm, h: Hygiene = hygiene(g, c)): number {
+  const winter = g.seg % P.winterEvery === 0;
+  return (h === 'dirty' ? D.liceDirty : D.liceNormal) * (winter ? D.liceWinter : 1) * (1 + D.insulateLice * insulatedShare(g, c));
+}
+
 /** 정산 때 위생 한 구간: 불결한 칸 관계 −1, 이 판정, '버틴다'의 기한, 발진티푸스. */
 export function hygieneTick(g: Game, notes: string[]): void {
   const d = dom(g);
-  const winter = g.seg % P.winterEvery === 0;
   for (const c of COMMS) {
     const h = hygiene(g, c);
     const lice = d.lice[c];
@@ -119,8 +127,7 @@ export function hygieneTick(g: Game, notes: string[]): void {
     if (h === 'clean' || g.cards.some(x => x.kind === 'dom:lice' && x.comm === c)) continue;
     if (d.typhus.some(t => t.comm === c)) continue;
     if (g.seg < (d.liceFree?.[c] ?? 0)) continue;
-    const chance = (h === 'dirty' ? D.liceDirty : D.liceNormal) * (winter ? D.liceWinter : 1);
-    if (rnd(g) < chance) {
+    if (rnd(g) < liceChance(g, c, h)) {
       d.lice[c] = { at: g.seg };
       d.flags.lice = true;
       d.stats.lice += 1;

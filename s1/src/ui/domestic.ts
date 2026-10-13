@@ -1,7 +1,7 @@
 import {
   BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
-  COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
+  COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
 } from '../game';
@@ -344,13 +344,15 @@ const MOD_KINDS: { k: ModKind; name: string; cost: string }[] = [
 ];
 
 /** 칸 판 「개조」 덩이의 칩(설계 4부 5-5): 그 칸에 올릴 수 있는 개조와 드는 값. 끝난 것은 done, 못 올리면 까닭이 붙는다. 기관차에는 없다. */
-export function carModChips(g: Game, car: string): { k: ModKind; name: string; cost: string; done: boolean; ok: boolean; why?: string }[] {
+export function carModChips(g: Game, car: string): { k: ModKind; name: string; cost: string; done: boolean; ok: boolean; why?: string; note?: string }[] {
   const d = g.dom;
   if (!d || !CAR_COMM[car] || car === 'engine') return [];
   return MOD_KINDS.map(({ k, name, cost }) => {
     const done = (k === 'insulate' ? d.insulated : d.armored).includes(car);
     const chk = jobCheck(g, k, car);
-    return { k, name, cost, done, ok: !done && chk.ok, why: done ? undefined : chk.why };
+    // 단열은 얻는 것과 치르는 것을 숫자로 보인다: 하기 전엔 이 칸에 들 값(고르는 칩의 풍선), 한 뒤엔 지금 듣는 값(칸 창 줄)(결정 217·225).
+    const note = k !== 'insulate' ? undefined : done ? insulateCarNote(g, car) : insulateNumbers(car);
+    return { k, name, cost, done, ok: !done && chk.ok, why: done ? undefined : chk.why, note: note || undefined };
   });
 }
 
@@ -379,9 +381,11 @@ function modifyView(view: View): HTMLElement {
       const why = open.length ? jobCheck(g, k, open[0]).why : undefined;
       return h('div', { class: 'dom-mod__row' },
         h('span', { class: 'dom-mod__kind' }, h('b', null, name), h('span', { class: 'cost num' }, cost), why ? h('span', { class: 'pol pol--gray' }, why) : null),
+        k === 'insulate' ? h('small', { class: 'sub dom-mod__note' }, insulatePickLine()) : null,
         h('span', { class: 'dom-mod__cars' }, cars.map(c => h('button', {
           class: cx('chip', done(c) && 'is-done', c === here && 'is-here'), 'data-action': 'dom-job', 'data-kind': k, 'data-car': c,
           disabled: done(c) || !jobCheck(g, k, c).ok, 'aria-label': `${jobTitle(k, c)}${done(c) ? ' 끝남' : ''}`,
+          title: k === 'insulate' ? (done(c) ? insulateCarNote(g, c) : insulateNumbers(c)) : '',
         }, done(c) ? icon('check') : null, CAR_NAME[c] ?? c))));
     }));
 }

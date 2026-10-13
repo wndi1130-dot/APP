@@ -71,7 +71,8 @@ describe('가혹한 법의 벌을 줄인다', () => {
     const cold = warm(g, 'medtech');
     g.dom!.insulated.push('medtech');
     refreshSit(g);
-    expect(warm(g, 'medtech') - cold).toBeCloseTo(10);
+    // 벌이 걷힌 10 위에 단열의 새 온기(결정 217·225)가 겹쳐 쌓인다. 값 줄이 0이면 옛 규칙대로 10이다(insulate_gain.test.ts).
+    expect(warm(g, 'medtech') - cold).toBeCloseTo(10 + D.insulateWarm);
   });
 });
 
