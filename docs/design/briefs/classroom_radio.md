@@ -4,6 +4,8 @@
 
 기획서에 있는데 주인도 코드도 없던 묶음 가운데 여섯째다. decisions.md '열차 사회'의 교실칸 한 줄과 [production_research.md](production_research.md) 칸 표의 교실칸·무전칸 두 줄을 규칙으로 옮긴다. 두 칸은 서로 닿는 곳이 거의 없어 1부와 2부로 나눠 적는다.
 
+지금은 `s1/src/game/domestic/classroom.ts`에 코드가 있다(2026-10-13 확인).
+
 ## 0. 근거 줄
 
 | 어디 | 무엇 | 상태 |
