@@ -37,7 +37,7 @@ export interface BotProbe {
   afterStop?: (g: Game) => void;
 }
 
-export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId }
+export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean }
 
 export interface GameMetrics {
   end: string;
@@ -334,6 +334,14 @@ function seedRand(seed: string): () => number {
   };
 }
 
+/** 항의·난장판 카드: 들어준다, 여유가 없으면 경비대를 푼다(항의 꼴은 물리친다). 아무것도 안 한다는 재기 옵션일 때 난장판 꼴에서만 고른다. */
+function protestPick(card: Card, view: CardView, none: boolean): number {
+  const ok = view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled);
+  const by = (label: string) => ok.find(x => x.c.label === label)?.i;
+  if (none && card.text === 'riot') return by('아무것도 안 한다') ?? ok[0].i;
+  return by('들어준다') ?? by('경비대를 푼다') ?? by('물리친다') ?? ok[0].i;
+}
+
 export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetrics } {
   const pickRand = seedRand(seed);
   const g = opts.s1c ? createS1cGame(seed) : createGame(seed);
@@ -435,6 +443,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         idx = opts.prep === 'never' ? 2 : opts.policy === 'caretaker' ? (g.coal >= 30 ? 0 : 1) : view.choices.findIndex(c => !c.disabled);
         m.prep[(['coal', 'huddle', 'none'] as const)[idx]] += 1;
       }
+      else if (card.kind === 'protest') idx = protestPick(card, view, !!opts.riotNone);
       else if (opts.pickRule && (card.kind === 'travel' || card.kind === CONTENT_CARD_KIND)) {
         const open = view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled).map(x => x.i);
         idx = opts.pickRule === 'second' ? (open[1] ?? open[0]) : open[Math.floor(pickRand() * open.length)];

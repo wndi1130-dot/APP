@@ -45,6 +45,9 @@ export const P = Object.freeze({
   // 결정 059 나: 마지막 기회로 긴장을 되돌리는 값은 처음 80, 쓸 때마다 이만큼 더 높다(80, 90). 쓴 뒤로는 공포가 긴장 오름을 늦추지 않는다.
   // 65에서는 평소 긴장(80쯤)보다 낮아 누를수록 이득이라, 쌓아 눌러도 값이 안 붙었다(측정).
   crisisBase: 80, crisisStep: 10,
+  // 폭동(riot.ts, 결정 276). riotFrom은 난장판이 켜지는 긴장(상향 교차), protestFrom은 항의 카드가 뜨는 긴장. 0이면 폭동 규칙 전체가 꺼진다.
+  // riotHands는 불을 끄는 일손(정산마다 끄는 칸 수), riotFall은 정산마다 쓰러지는 어른 수, riotDeath는 쓰러진 사람이 죽는 확률. seat*은 불이 지나간 칸의 집단이 잃는 처지.
+  riotFrom: 70, protestFrom: 50, riotHands: 2, riotFall: 2, riotDeath: 0.5, seatWarm: 10, seatCrowd: 10, seatFood: 6,
   // 멈춘 열차(구현명세 가, 결정 034·035·037): 석탄이 0이 되면 판이 끝나지 않고 선다. 선 열차는 구간마다 긴장 +3, 모든 칸 온기 −5(바닥 10).
   // segKmDefault는 구간 길이를 모르는 노선의 기본값(km). 예고 「이대로 가면 ○km 지점에서 멈춘다」의 눈금이다.
   strandedTension: 3, strandedWarmDrop: 5, strandedWarmFloor: 10, segKmDefault: 30,

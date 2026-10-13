@@ -117,7 +117,7 @@ VIEW_FILTERS.push((g, card, v) => {
     const choices = v.choices.filter(c => !shut(c));
     return choices.length > 0 ? { ...v, choices } : v;
   };
-  if (card.kind === 'tension_crisis') return drop(c => c.label === '경비대를 푼다');
+  if (card.kind === 'tension_crisis' || card.kind === 'protest') return drop(c => c.label === '경비대를 푼다');
   if (card.kind === 'content' && card.text === 'ev_str_snow') return drop(c => c.special === 'content:c_guard_only');
   return v;
 });

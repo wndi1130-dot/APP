@@ -34,6 +34,7 @@ export const CARD_GRADE: Record<string, KindRule> = {
   disaster_prep: R(1, false, '예고 구간에만 뜻이 있다. 출발하면 disaster.ts가 카드를 지운다'),
   // 2 시계 달린 위기
   tension_crisis: R(2, false, '긴장 100, 마지막 기회'),
+  protest: R(2, false, '항의·난장판. 긴장이 문턱을 넘은 정산에 뜨고, 미루면 폭동의 끊김이 어긋난다'),
   trust_crisis: R(2, false, '신임 바닥, 3구간 기한'),
   need_warn: R(2, false, '법 요구 기한(needs.ts)'),
   strike_warn: R(2, false, '다음 역까지의 파업 경고'),
