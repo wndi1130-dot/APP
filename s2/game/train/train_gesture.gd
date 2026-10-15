@@ -17,6 +17,10 @@ extends RefCounted
 ## is the one on the left (smaller x), role 1 the one on the right. Give both the
 ## same t. The scene faces nobody: "turn" does it.
 
+const Body = preload("res://game/train/train_body.gd")
+const Rest = preload("res://game/train/train_gesture_rest.gd")
+const Riot = preload("res://game/train/train_gesture_riot.gd")
+
 const ARGUE: String = "argue"            # two at a door, one at a time at the other's face
 const WHISPER: String = "whisper"        # two with their heads together, a look over the shoulder now and then
 const TURN_ABOUT: String = "turn_about"  # stands, turns to look the other way, turns back
@@ -35,7 +39,26 @@ const ABOUT_TURN: float = 0.7     # of that, each turning
 const ABOUT_HOLD: float = 1.8     # and the looking
 
 
+## A name is ready only when its stand-in clip exists, not because the contract lists it.
+static func knows(name: String) -> bool:
+	return name in NAMES or name in MORE or Rest.knows(name) or Riot.knows(name)
+
+
+static func spec(name: String) -> Dictionary:
+	if Rest.knows(name):
+		return Rest.spec(name)
+	if Riot.knows(name):
+		return Riot.spec(name)
+	return {}
+
+
 static func at(name: String, t: float, role: int = 0) -> Dictionary:
+	var row: Dictionary = spec(name)
+	if not row.is_empty():
+		if row["kind"] == "three":
+			var enter: float = row["length"]["enter"]
+			return phase_at(name, "enter", maxf(t, 0.0), role) if t < enter else phase_at(name, "loop", t - enter, role)
+		return phase_at(name, "once", t, role)
 	match name:
 		ARGUE:
 			return _argue(t, role)
@@ -199,6 +222,9 @@ const BLOW: float = 1.1
 
 ## The pose a gesture sits on: {"base", "huddled"}. The first five stand.
 static func base_of(name: String) -> Dictionary:
+	var row: Dictionary = spec(name)
+	if not row.is_empty():
+		return {"base": row["base"], "huddled": false}
 	match name:
 		HUG_KNEES:
 			return {"base": "floor", "huddled": true}
@@ -274,6 +300,214 @@ static func more(name: String, t: float, role: int = 0) -> Dictionary:
 	return d
 
 
+## First-value (가안) pose keys, with the current rig's bone names and local
+## seconds. No bone angles are assumed before the real body's rest is checked.
+static func keyframes(name: String, part: String, role: int = 0) -> Array:
+	var row: Dictionary = spec(name)
+	if row.is_empty() or not row["stages"].has(part):
+		return []
+	var stage: Dictionary = row["stages"][part]
+	var visuals: Array = stage["visual"]
+	var times: Dictionary = stage.get("times", {})
+	var tracks: Dictionary = stage.get("bones_b", stage["bones"]) if role == 1 else stage["bones"]
+	var length: float = float(row["length"][part])
+	var out: Array = []
+	for i in visuals.size():
+		var seconds: float = float(times.get(i, length * float(i) / float(visuals.size() - 1)))
+		var bones: Dictionary = {}
+		for bone in tracks:
+			bones[bone] = tracks[bone][i]
+		out.append({"time": seconds, "visual": visuals[i], "bones": bones})
+	return out
+
+
+## Local time in one segment: three-part names use enter, loop or exit;
+## one-off names use once. Their visual contacts do not execute game events.
+static func phase_at(name: String, part: String, t: float, role: int = 0, confirmed: bool = false, from_pose: String = "sit") -> Dictionary:
+	var row: Dictionary = spec(name)
+	var frames: Array = keyframes(name, part, role)
+	if row.is_empty() or frames.is_empty():
+		return _still()
+	var duration: float = float(row["length"][part])
+	var seconds: float = fposmod(maxf(t, 0.0), duration) if part == "loop" and duration > 0.0 else clampf(t, 0.0, duration)
+	for i in range(frames.size() - 1):
+		var first: float = float(frames[i]["time"])
+		var last: float = float(frames[i + 1]["time"])
+		if seconds <= last:
+			var k: float = smoothstep(first, last, seconds)
+			return _blend_new(
+				_visual(name, String(frames[i]["visual"]), role, confirmed, from_pose),
+				_visual(name, String(frames[i + 1]["visual"]), role, confirmed, from_pose), k)
+	return _visual(name, String(frames.back()["visual"]), role, confirmed, from_pose)
+
+
+## The keyed visual words have a single stand-in reading. Real arm and leg
+## joints use keyframes() later; these capsules and arm boxes have none.
+static func _visual(name: String, visual: String, role: int, confirmed: bool, from_pose: String) -> Dictionary:
+	var d: Dictionary = _still()
+	var row: Dictionary = spec(name)
+	var low: String = "sit" if name in ["sit_bench", "lie_bunk", "sleep_lean_wall", "spring_up"] else "floor"
+	if name == "spring_up" and from_pose == "floor":
+		low = "floor"
+	var ground: Dictionary = Body.pose_at("stand", false)
+	var down: Dictionary = Body.pose_at(low, false)
+	var pose: Dictionary = ground
+	var base: String = "stand"
+	match visual:
+		"lower":
+			pose = {"body_pos": (ground["body_pos"] as Vector3).lerp(down["body_pos"], 0.5),
+				"body_scale": (ground["body_scale"] as Vector3).lerp(down["body_scale"], 0.5),
+				"head_pos": (ground["head_pos"] as Vector3).lerp(down["head_pos"], 0.5)}
+			base = low
+		"seat", "seat_breathe", "spring_brace", "bunk", "bunk_turn", "bunk_breathe":
+			pose = down
+			base = low
+		"floor", "floor_breathe", "floor_brace", "kneel", "kneel_breathe", "crouch", "crouch_warm", "crouch_warm_roll":
+			pose = Body.pose_at("floor", false)
+			base = "floor"
+		"wall", "wall_nod":
+			pose = down
+			base = low
+	d["pose"] = base
+	d["body_pos"] = pose["body_pos"]
+	d["body_scale"] = pose["body_scale"]
+	d["head_pos"] = pose["head_pos"]
+	d["upper"] = bool(row.get("upper", false))
+	d["held"] = row.get("prop", {})
+
+	var arms: Array = [hang(-1.0), hang(1.0)]
+	match visual:
+		"seat", "seat_breathe", "spring_brace", "lower":
+			arms = _hands_at(Body.SEAT_HEIGHT + Body.RADIUS, ARM_SIDE)
+		"floor", "floor_breathe", "kneel", "kneel_breathe", "wall", "wall_nod", "crouch":
+			arms = _hands_at(Body.SEAT_HEIGHT, ARM_SIDE)
+		"floor_brace":
+			arms = _hands_at(Body.SEAT_HEIGHT, ARM_SIDE)
+			arms[1] = {"pos": Vector3(ARM_SIDE, Body.RADIUS, ARM_SIDE), "rot": Vector3(PI * 0.5, 0, 0)}
+		"bunk", "bunk_breathe", "bunk_turn":
+			arms = _hands_at(Body.SEAT_HEIGHT, ARM_SIDE)
+		"crouch_warm", "crouch_warm_roll":
+			arms = _hands_at(Body.SEAT_HEIGHT + Body.RADIUS, ARM_SIZE.z)
+		"stand_warm", "stand_warm_roll":
+			arms = _hands_at(1.12, ARM_SIZE.z)
+		"fist", "fist_pump":
+			arms[1] = {"pos": Vector3(ARM_SIDE, 1.5, ARM_SIZE.z), "rot": Vector3(-PI * 0.5, 0, 0)}
+		"shove_ready", "shove_recover", "shove_contact":
+			arms = _hands_at(1.12, ARM_SIZE.z if visual == "shove_contact" and role == 0 else ARM_SIDE)
+		"bang_ready", "bang_up", "bang_contact":
+			var height: float = 1.42 if visual == "bang_up" else (1.0 if visual == "bang_contact" else 1.12)
+			arms[1] = {"pos": Vector3(ARM_SIDE, height, ARM_SIZE.z), "rot": Vector3(-PI * 0.5, 0, 0)}
+		"stomp_lift", "stomp_contact":
+			arms = _hands_at(1.12, ARM_SIDE)
+	d["arms"] = arms
+
+	match visual:
+		"seat_breathe", "floor_breathe", "kneel_breathe", "bunk_breathe":
+			d["head"] = Vector3(0, Body.BOB, 0)
+		"bunk", "bunk_breathe", "bunk_turn":
+			var turn: float = 0.5 if visual == "bunk_turn" else 1.0
+			d["lean"] = -PI * 0.5 * turn
+			d["turn"] = PI * 0.5 * turn
+			d["head_pos"] = (pose["head_pos"] as Vector3).lerp(
+				Vector3(0, Body.SEAT_HEIGHT + Body.HEAD_RADIUS, Body.HEIGHT * Body.SEATED_SCALE), turn)
+		"wall", "wall_nod":
+			d["lean"] = -Body.SIDE_LEAN
+			d["head"] = Vector3(0, -Body.BOW_DROP if visual == "wall_nod" else 0.0, 0)
+		"crouch", "crouch_warm", "crouch_warm_roll":
+			d["lean"] = Body.HUDDLE_LEAN
+		"stand_warm", "stand_warm_roll":
+			d["lean"] = Body.SIDE_LEAN
+			d["head"] = Vector3(0, -Body.BOB, Body.RADIUS)
+		"fist_pump":
+			d["lift"] = Body.BOB
+		"shove_ready":
+			d["lean"] = -Body.SIDE_LEAN if role == 0 else Body.SIDE_LEAN
+		"shove_contact":
+			d["lean"] = Body.SIDE_LEAN if role == 0 else (-Body.SIDE_LEAN if confirmed else Body.SIDE_LEAN)
+		"shove_recover":
+			d["lean"] = -Body.SIDE_LEAN if role == 1 and confirmed else 0.0
+		"bang_contact":
+			d["lean"] = Body.SIDE_LEAN
+		"spring_brace":
+			d["lean"] = Body.HUDDLE_LEAN
+		"spring_rise":
+			d["lift"] = Body.BOB
+		"stomp_lift":
+			d["lift"] = Body.BOB
+			d["sway"] = Body.SIDE_LEAN
+		"stomp_contact":
+			d["sway"] = -Body.SIDE_LEAN
+	if visual == "crouch_warm_roll" or visual == "stand_warm_roll":
+		for i in 2:
+			arms[i]["rot"] = Vector3(PI * 0.5, PI * 0.5 if i == 0 else -PI * 0.5, 0)
+	return d
+
+
+static func _hands_at(height: float, depth: float) -> Array:
+	return [
+		{"pos": Vector3(-ARM_SIDE, height, depth), "rot": Vector3(PI * 0.5, 0, 0)},
+		{"pos": Vector3(ARM_SIDE, height, depth), "rot": Vector3(PI * 0.5, 0, 0)},
+	]
+
+
+static func _blend_new(a: Dictionary, b: Dictionary, k: float) -> Dictionary:
+	var d: Dictionary = _still()
+	for key in ["turn", "lean", "sway", "lift"]:
+		d[key] = lerpf(float(a[key]), float(b[key]), k)
+	for key in ["head", "body_pos", "body_scale", "head_pos"]:
+		d[key] = (a[key] as Vector3).lerp(b[key], k)
+	d["arms"] = [_mix(a["arms"][0], b["arms"][0], k), _mix(a["arms"][1], b["arms"][1], k)]
+	d["pose"] = a["pose"] if k < 0.5 else b["pose"]
+	d["upper"] = b["upper"]
+	d["held"] = b["held"]
+	return d
+
+
+## The stand-in reads the same keyed sample used by the future rig. An upper
+## clip leaves the caller's walking/seated legs and body scale in place.
+static func show_phase(body: Node3D, name: String, part: String, t: float, role: int = 0, facing: float = 0.0, confirmed: bool = false, from_pose: String = "sit") -> void:
+	show_sample(body, phase_at(name, part, t, role, confirmed, from_pose), facing)
+
+
+static func show_sample(body: Node3D, d: Dictionary, facing: float = 0.0) -> void:
+	if not d.has("body_pos"):
+		return
+	if not bool(d["upper"]):
+		body.pose = d["pose"]
+		body.huddled = false
+	body.show_pose()
+	if not bool(d["upper"]):
+		body.body_mesh.position = d["body_pos"]
+		body.body_mesh.scale = d["body_scale"]
+		body.head_mesh.position = d["head_pos"]
+	body.rotation.y = facing + float(d["turn"])
+	var lift := Vector3(0, float(d["lift"]), 0)
+	body.body_mesh.position += lift
+	body.body_mesh.rotation.x += float(d["lean"])
+	body.body_mesh.rotation.z -= float(d["sway"])
+	body.head_mesh.position += lift + (d["head"] as Vector3)
+	var arms: Array = _arm_boxes(body)
+	for i in 2:
+		arms[i].visible = true
+		arms[i].position = (d["arms"][i]["pos"] as Vector3) + lift
+		arms[i].rotation = d["arms"][i]["rot"]
+
+
+## The caller supplies both real positions and one local clock; no pair gap,
+## displacement, contact outcome or damage is chosen by the gesture. (가안)
+static func shove_pair(anchor_a: Vector3, anchor_b: Vector3, t: float, confirmed: bool = false, run_id: int = 0) -> Dictionary:
+	if anchor_a.is_equal_approx(anchor_b):
+		return {}
+	var row: Dictionary = Riot.spec("shove_body")
+	var contact: float = row["pair"]["contact"]
+	var a: Dictionary = phase_at("shove_body", "once", t, 0, confirmed)
+	var b: Dictionary = phase_at("shove_body", "once", t, 1, confirmed)
+	var across: Vector3 = anchor_b - anchor_a
+	return {"run_id": run_id, "time": t, "contact": contact,
+		"anchors": [anchor_a, anchor_b], "roles": [a, b],
+		"facings": [atan2(across.x, across.z), atan2(-across.x, -across.z)]}
+
+
 # ---------------------------------------------------------------- putting it on a body
 const ARMS_META: String = "gesture_arms"
 
@@ -290,6 +524,9 @@ static func show(body: Node3D, name: String, t: float, role: int = 0, facing: fl
 		body.rotation.y = facing
 		body.body_mesh.rotation.z = 0.0
 		body.show_pose()
+		return
+	if not spec(name).is_empty():
+		show_sample(body, at(name, t, role), facing)
 		return
 	var base: Dictionary = base_of(name)
 	body.pose = base["base"]
@@ -328,3 +565,179 @@ static func _arm_boxes(body: Node3D) -> Array:
 		arms.append(arm)
 	body.set_meta(ARMS_META, arms)
 	return arms
+
+
+# ---------------------------------------------------------------- one display run
+## The display clock is separate from sim/motion.gd: it owns no hit, step,
+## inventory or interruption permission. Every end belongs to one run id.
+var clip: String = ""
+var segment: String = ""
+var seconds: float = 0.0
+var role: int = 0
+var run_id: int = 0
+var from_pose: String = "stand"
+var pair_anchors: Array = []
+var _exit_from: Dictionary = {}
+var _exit_base: String = "stand"
+var _shown: Dictionary = {}
+
+
+func active() -> bool:
+	return segment != "" and segment != "done"
+
+
+## Two-person clips require both places in the same caller-owned scene.
+## The scene uses shove_pair() with its common time for both bodies.
+func begin(name: String, p_role: int = 0, p_run_id: int = 0, p_from_pose: String = "stand", context: Dictionary = {}) -> bool:
+	var row: Dictionary = spec(name)
+	if row.is_empty() or active():
+		return false
+	if p_role < 0 or p_role >= int(row["people"]):
+		return false
+	if not p_from_pose in ["stand", "sit", "floor", "walk"]:
+		return false
+	# Prepared hands, support and clearance are facts from the caller, not
+	# new weapon, stove, crowding or collision rules.
+	if not bool(context.get("hands_ready", false)):
+		return false
+	if name in ["sit_bench", "lie_bunk", "sleep_lean_wall", "warm_hands_stand", "warm_hands_crouch"]:
+		var support = context.get("support")
+		if not (support is Vector3 or support is Node3D):
+			return false
+	if name in ["sit_floor", "kneel", "stomp"] and not bool(context.get("floor_clear", false)):
+		return false
+	if name == "bang_object":
+		var prop = context.get("prop")
+		var target = context.get("target")
+		if not (prop is Node3D) or not (target is Vector3 or target is Node3D):
+			return false
+	if name in ["warm_hands_stand", "fist_raise", "shove_body", "bang_object", "stomp"] and p_from_pose != "stand":
+		return false
+	if name == "spring_up" and not p_from_pose in ["sit", "floor"]:
+		return false
+	if name == "shove_body" and not bool(context.get("adult", false)):
+		return false
+	var anchors: Array = context.get("anchors", [])
+	if int(row["people"]) == 2:
+		if anchors.size() != 2 or not (anchors[0] is Vector3) or not (anchors[1] is Vector3):
+			return false
+		if (anchors[0] as Vector3).is_equal_approx(anchors[1]):
+			return false
+	clip = name
+	segment = "enter" if row["kind"] == "three" else "once"
+	seconds = 0.0
+	role = p_role
+	run_id = p_run_id
+	from_pose = p_from_pose
+	pair_anchors = anchors.duplicate()
+	_exit_from = {}
+	_exit_base = "stand"
+	_shown = {}
+	# A body already in the required sitting support need not stand up to sit again.
+	if name in ["sit_bench", "sit_floor"] and p_from_pose == row["base"]:
+		segment = "loop"
+	return true
+
+
+func advance(delta: float) -> void:
+	var left: float = maxf(delta, 0.0)
+	while active() and left > 0.0:
+		var total: float = duration()
+		if total <= 0.0:
+			segment = "done"
+			return
+		if segment == "loop":
+			seconds = fposmod(seconds + left, total)
+			return
+		var until_end: float = maxf(total - seconds, 0.0)
+		if left < until_end:
+			seconds += left
+			return
+		left -= until_end
+		if segment == "enter":
+			segment = "loop"
+			seconds = 0.0
+		else:
+			segment = "done"
+			seconds = 0.0
+
+
+func duration() -> float:
+	var row: Dictionary = spec(clip)
+	if row.is_empty() or not active():
+		return 0.0
+	if segment == "exit" and row["kind"] == "once":
+		# First values (가안): upper recover 0.34, full-body recovery 0.7.
+		return 0.34 if bool(row["upper"]) else 0.7
+	return float(row["length"][segment])
+
+
+## Keep the actual rendered pose. In a paired motion the caller's common
+## scene clock can move without two independent advance() calls.
+func observed(sample: Dictionary, scene_time: float = -1.0) -> void:
+	if not active():
+		return
+	if scene_time >= 0.0 and segment == "once":
+		seconds = clampf(scene_time, 0.0, duration())
+	_shown = sample.duplicate(true)
+
+
+## A run is cancelled exactly once. The old run cannot end a new run.
+func cancel(p_run_id: int, next_pose: String = "stand", confirmed: bool = false) -> bool:
+	if not active() or p_run_id != run_id or segment == "exit":
+		return false
+	if not next_pose in ["stand", "sit", "floor", "walk"]:
+		return false
+	_exit_from = _shown.duplicate(true) if not _shown.is_empty() else frame(confirmed)
+	_exit_base = next_pose
+	segment = "exit"
+	seconds = 0.0
+	return true
+
+
+func frame(confirmed: bool = false) -> Dictionary:
+	if clip == "":
+		return {}
+	if segment == "done":
+		return _neutral_new(clip, _exit_base, from_pose)
+	if segment == "exit":
+		var target: Dictionary
+		var row: Dictionary = spec(clip)
+		if row["kind"] == "once":
+			target = _neutral_new(clip, _exit_base, from_pose)
+		else:
+			target = phase_at(clip, "exit", seconds, role, confirmed, from_pose)
+			if _exit_base != "stand":
+				target = _blend_new(target, _neutral_new(clip, _exit_base, from_pose), clampf(seconds / duration(), 0.0, 1.0))
+		return _blend_new(_exit_from, target, clampf(seconds / duration(), 0.0, 1.0))
+	return phase_at(clip, segment, seconds, role, confirmed, from_pose)
+
+
+static func _neutral_new(name: String, base: String, original: String) -> Dictionary:
+	var visual: String = "stand"
+	if base == "sit":
+		visual = "seat"
+	elif base == "floor":
+		visual = "floor"
+	return _visual(name, visual, 0, false, original)
+
+
+## An invisible or removed body finishes its display bookkeeping once,
+## without replaying an old object contact or keeping a seat reserved.
+func finish_offscreen(p_run_id: int) -> bool:
+	if not active() or p_run_id != run_id:
+		return false
+	segment = "done"
+	seconds = 0.0
+	_exit_from = {}
+	_shown = {}
+	return true
+
+
+## One signal cancels both actors. If one was removed, the survivor still exits.
+static func cancel_pair(first, second, p_run_id: int, next_pose: String = "stand") -> bool:
+	var ended := false
+	for actor in [first, second]:
+		if actor != null and actor.has_method("cancel"):
+			ended = bool(actor.call("cancel", p_run_id, next_pose)) or ended
+	return ended

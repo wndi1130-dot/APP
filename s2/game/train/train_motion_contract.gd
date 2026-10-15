@@ -31,12 +31,147 @@ static func resolve(requested: String, script: Script = Backend) -> Dictionary:
 
 static func show(body: Node3D, requested: String, time: float, role: int = 0, phase: String = "loop") -> Dictionary:
 	var resolved := resolve(requested)
+	var before: Dictionary = body.get_meta("life_motion", {})
+	if String(before.get("gesture", "")) != String(resolved["gesture"]):
+		body.set_meta("life_facing", body.rotation.y)
 	body.set_meta("life_motion", resolved)
 	body.set_meta("life_phase", phase)
 	var facing: float = body.rotation.y
 	if String(resolved["gesture"]) != "":
-		Backend.show(body, resolved["gesture"], time, role, facing)
+		var name: String = resolved["gesture"]
+		if bool(resolved["native"]) and not Backend.spec(name).is_empty():
+			var row: Dictionary = Backend.spec(name)
+			var part: String = phase if row["stages"].has(phase) else ("once" if row["kind"] == "once" else "loop")
+			Backend.show_phase(body, name, part, time, role, float(body.get_meta("life_facing", facing)), false, String(body.pose))
+		else:
+			Backend.show(body, name, time, role, facing)
 	else:
 		Backend.show(body, "", 0.0, 0, facing)
 		body.set_pose(resolved["pose"], false, requested in ["head_down", "mourn_stand", "hat_off"])
 	return resolved
+
+
+## A caller-owned display run. The game chooses when a motion may start or stop;
+## the display keeps its own segment and run id so old exits cannot end a new act.
+static func start(body: Node3D, requested: String, run_id: int, role: int = 0, context: Dictionary = {}) -> bool:
+	var resolved: Dictionary = resolve(requested)
+	var name: String = resolved["gesture"]
+	if not bool(resolved["native"]) or Backend.spec(name).is_empty():
+		return false
+	if name == "shove_body":
+		return false
+	if body.has_meta("life_player") and bool(body.get_meta("life_player").call("active")):
+		return false
+	var player = Backend.new()
+	if not player.begin(name, role, run_id, String(body.pose), context):
+		return false
+	body.set_meta("life_player", player)
+	body.set_meta("life_facing", body.rotation.y)
+	body.set_meta("life_motion", resolved)
+	body.set_meta("life_phase", player.segment)
+	return true
+
+
+## Both sides are admitted together, using actual positions and readiness facts
+## supplied by the scene. A rejected second role cannot leave A running alone.
+static func start_shove_pair(a: Node3D, b: Node3D, run_id: int, ready_a: Dictionary, ready_b: Dictionary) -> bool:
+	if a == null or b == null or a == b or a.get_parent() != b.get_parent():
+		return false
+	if a.position.is_equal_approx(b.position):
+		return false
+	if a.has_meta("life_player") or b.has_meta("life_player"):
+		return false
+	var anchors: Array = [a.position, b.position]
+	var a_context: Dictionary = ready_a.duplicate(true)
+	var b_context: Dictionary = ready_b.duplicate(true)
+	a_context["anchors"] = anchors
+	b_context["anchors"] = anchors
+	var first = Backend.new()
+	var second = Backend.new()
+	if not first.begin("shove_body", 0, run_id, String(a.pose), a_context):
+		return false
+	if not second.begin("shove_body", 1, run_id, String(b.pose), b_context):
+		return false
+	for actor in [a, b]:
+		actor.set_meta("life_facing", actor.rotation.y)
+		actor.set_meta("life_motion", resolve("shove_body"))
+		actor.set_meta("life_phase", "once")
+	a.set_meta("life_player", first)
+	b.set_meta("life_player", second)
+	return true
+
+
+static func step(body: Node3D, delta: float, confirmed: bool = false) -> Dictionary:
+	if not body.has_meta("life_player"):
+		return {}
+	var player = body.get_meta("life_player")
+	player.advance(delta)
+	var phase: String = player.segment
+	body.set_meta("life_phase", phase)
+	if not player.active():
+		var pose: String = player._exit_base
+		body.set_pose(pose, false)
+		Backend.show(body, "", 0.0, 0, float(body.get_meta("life_facing", body.rotation.y)))
+		body.remove_meta("life_player")
+		return {"phase": "done", "run_id": player.run_id}
+	var rendered: Dictionary = player.frame(confirmed)
+	Backend.show_sample(body, rendered, float(body.get_meta("life_facing", body.rotation.y)))
+	player.observed(rendered)
+	return {"phase": phase, "run_id": player.run_id}
+
+
+static func cancel(body: Node3D, run_id: int, next_pose: String = "stand") -> bool:
+	if not body.has_meta("life_player"):
+		return false
+	var player = body.get_meta("life_player")
+	var ended: bool = player.cancel(run_id, next_pose)
+	if ended:
+		body.set_meta("life_phase", "exit")
+	return ended
+
+
+## Both bodies are sampled at one time from their real, distinct places.
+## The caller owns the contact result and does not move the two here.
+static func show_shove_pair(a: Node3D, b: Node3D, time: float, confirmed: bool = false, run_id: int = 0) -> bool:
+	if a == null or b == null or a == b or a.get_parent() != b.get_parent():
+		return false
+	for body in [a, b]:
+		if not body.has_meta("life_player"):
+			return false
+		var player = body.get_meta("life_player")
+		if player.run_id != run_id or player.clip != "shove_body" or player.segment != "once":
+			return false
+		if player.role != (0 if body == a else 1):
+			return false
+		if player.pair_anchors.size() != 2:
+			return false
+		if not (player.pair_anchors[0] as Vector3).is_equal_approx(a.position):
+			return false
+		if not (player.pair_anchors[1] as Vector3).is_equal_approx(b.position):
+			return false
+	var joined: Dictionary = Backend.shove_pair(a.position, b.position, time, confirmed, run_id)
+	if joined.is_empty():
+		return false
+	a.set_meta("life_facing", float(joined["facings"][0]))
+	b.set_meta("life_facing", float(joined["facings"][1]))
+	Backend.show_sample(a, joined["roles"][0], joined["facings"][0])
+	Backend.show_sample(b, joined["roles"][1], joined["facings"][1])
+	a.get_meta("life_player").observed(joined["roles"][0], time)
+	b.get_meta("life_player").observed(joined["roles"][1], time)
+	return true
+
+
+static func cancel_shove_pair(a: Node3D, b: Node3D, run_id: int, next_pose: String = "stand") -> bool:
+	var first = a.get_meta("life_player") if a != null and a.has_meta("life_player") else null
+	var second = b.get_meta("life_player") if b != null and b.has_meta("life_player") else null
+	return Backend.cancel_pair(first, second, run_id, next_pose)
+
+
+static func finish_removed(body: Node3D, run_id: int) -> bool:
+	if not body.has_meta("life_player"):
+		return false
+	var player = body.get_meta("life_player")
+	if not player.finish_offscreen(run_id):
+		return false
+	body.remove_meta("life_player")
+	return true
