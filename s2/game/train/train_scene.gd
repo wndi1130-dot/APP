@@ -13,6 +13,8 @@ const Look = preload("res://game/train/train_look.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
+const Life = preload("res://game/train/train_life.gd")
+const Catalog = preload("res://game/train/train_catalog.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
 
@@ -96,16 +98,19 @@ var _hold_from: float = 0.0             # the council room along the train while
 var _hold_to: float = 0.0
 var _mats: Dictionary = {}
 var _font: SystemFont
+var life = Life.new()
 
 
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", 1))
+	life.setup(self)
 	if rules.is_empty():
 		rules = Rules.load_default()
 	problems = Rules.check(rules)
 	_build_world()
 	if problems.is_empty():
 		_build_train()
+		life.build_outside()
 		apply_rules()
 	else:
 		push_warning("train rules: %s" % ", ".join(problems))
@@ -131,7 +136,19 @@ func car(id: String) -> Dictionary:
 
 
 ## Seat every car again from the rules as they are now.
-func apply_rules() -> void:
+func apply_rules(event: String = "rules") -> void:
+	life.before_refresh()
+	var definitions: Array = Rules.display_cars(rules)
+	var rebuild: bool = definitions.size() != cars.size()
+	if not rebuild:
+		for i in definitions.size():
+			if definitions[i]["id"] != cars[i]["id"] or Catalog.layout_id(definitions[i]) != Catalog.layout_id(cars[i]["def"]):
+				rebuild = true
+				break
+	if rebuild:
+		_rebuild_layout()
+	for i in cars.size():
+		cars[i]["def"] = definitions[i]
 	_hold_from = 0.0
 	_hold_to = 0.0
 	for c in cars:
@@ -139,7 +156,28 @@ func apply_rules() -> void:
 		if _in_session(c) and String(c["quiet"]) == "vote":
 			_hold_from = float(c["x0"])
 			_hold_to = _hold_from + CAR_LENGTH
+	life.refresh(event)
 	rules_applied.emit()
+
+
+func _rebuild_layout() -> void:
+	var traces: Dictionary = {}
+	for id in life.rooms:
+		traces[id] = life.rooms[id].traces.duplicate(true)
+	if is_instance_valid(life.outside):
+		life.outside.free()
+	if is_instance_valid(train):
+		train.free()
+	cars.clear()
+	life = Life.new()
+	life.setup(self)
+	_build_train()
+	life.build_outside()
+	for id in life.rooms:
+		for prop in life.rooms[id].traces:
+			if traces.get(id, {}).has(prop):
+				life.rooms[id].traces[prop] = traces[id][prop]
+	_place_camera()
 
 
 func set_sit(comm_id: String, i: int, value: float) -> void:
@@ -154,7 +192,22 @@ func set_comm(comm_id: String, key: String, value) -> void:
 
 func set_train(key: String, value) -> void:
 	rules["train"][key] = value
-	apply_rules()
+	apply_rules(key)
+
+
+## The test panel and a future port submit the same snapshot fields.
+func set_value(path: String, value) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	Catalog.assign_value(proposed, path, value)
+	if not Rules.check(proposed).is_empty():
+		return false
+	rules = proposed
+	apply_rules(path)
+	return true
+
+
+func life_signal(cue: String, car_id: String = "") -> void:
+	life.send_signal(cue, car_id)
 
 
 ## One tick of the people: movers pace their own aisle, and now and then one
@@ -162,6 +215,7 @@ func set_train(key: String, value) -> void:
 ## and comes back.
 func step(delta: float) -> void:
 	clock += delta
+	life.advance(delta)
 	for c in cars:
 		_step_lamp(c, delta)
 		_step_errand(c, delta)
@@ -173,6 +227,7 @@ func step(delta: float) -> void:
 			_idle(c, b)
 			if b.gesture != "":
 				_show_gesture(c, b)
+			life.show_body(c, b)
 
 
 func scroll(metres: float) -> void:
@@ -233,6 +288,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _seat_car(c: Dictionary) -> void:
 	var comm := Rules.comm_of(rules, c["def"])
 	var n := Look.figures(c["def"], comm, phase())
+	if bool(Catalog.layout(c["def"]).get("storage_only", false)):
+		n = 0
 	var w := Look.warmth(comm)
 	var m := Look.mood(comm, rules.get("train", {}))
 	var look := Look.mood_look(m)
@@ -580,9 +637,12 @@ func _end_trip(c: Dictionary, b: Node3D) -> void:
 	if b.state == "out" or b.state == "visit" or b.state == "back":
 		c["out"] = int(c["out"]) - 1
 	b.visit_car = ""
+	life.end_trip(b)
 
 
 func _step_body(c: Dictionary, b: Node3D, delta: float) -> void:
+	if life.contexts.get(c["id"], {}).get("fire", false) and not life.actors.get(b.get_instance_id(), {}).get("evacuating", false):
+		return
 	# While the vote is called nobody on their feet in the council room moves.
 	if _hold_to > _hold_from and b.state != "seat" and b.position.x >= _hold_from and b.position.x <= _hold_to:
 		if b.pose == "walk":
@@ -590,27 +650,35 @@ func _step_body(c: Dictionary, b: Node3D, delta: float) -> void:
 		return
 	match b.state:
 		"wait":
+			if life.held(b):
+				return
 			b.timer -= delta
 			if b.timer <= 0.0:
-				b.goal_x = rng.randf_range(float(c["x0"]) + AISLE_MARGIN, float(c["x0"]) + CAR_LENGTH - AISLE_MARGIN)
-				b.state = "pace"
+				if not life.choose_local(c, b):
+					b.goal_x = rng.randf_range(float(c["x0"]) + AISLE_MARGIN, float(c["x0"]) + CAR_LENGTH - AISLE_MARGIN)
+					b.state = "pace"
 		"pace":
-			if b.walk(delta):
+			if life.walk(b, delta):
 				_wait(c, b)
+				life.arrived(b)
 		"out":
-			if b.walk(delta):
+			if life.walk(b, delta):
 				b.state = "visit"
 				b.timer = float(b.errand.get("stay", 5.0))
+				life.arrived(b)
 		"visit":
 			# A caller waits for the first of the car who is free to come over.
 			if String(b.errand.get("id", "")) == "call" and not bool(b.errand.get("met", false)):
 				b.errand["met"] = _greet(b)
+			if life.held(b):
+				return
 			b.timer -= delta
 			if b.timer <= 0.0:
 				b.goal_x = b.slot.x
 				b.state = "back"
+				life.return_route(b)
 		"back":
-			if b.walk(delta):
+			if life.walk(b, delta):
 				_end_trip(c, b)
 				_wait(c, b)
 
@@ -622,11 +690,14 @@ func _wait(c: Dictionary, b: Node3D) -> void:
 
 
 func _step_errand(c: Dictionary, delta: float) -> void:
-	var rows := Look.errands_for(c["def"], phase(), rules.get("errands", []))
-	if rows.is_empty() or _hold_to > _hold_from:
+	if _hold_to > _hold_from or life.contexts.get(c["id"], {}).get("fire", false):
 		return                      # nobody sets out while the vote is called
 	c["errand_t"] = float(c["errand_t"]) - delta
 	if float(c["errand_t"]) > 0.0:
+		return
+	var rows := Look.errands_for(c["def"], phase(), rules.get("errands", []))
+	if rows.is_empty():
+		c["errand_t"] = PACE_WAIT.y
 		return
 	var row: Dictionary = rows[int(c["errand_i"]) % rows.size()]
 	c["errand_i"] = int(c["errand_i"]) + 1
@@ -644,7 +715,7 @@ func _step_errand(c: Dictionary, delta: float) -> void:
 ## calls between friendly cars, on top of the trips with a use). For show only.
 func _step_call(c: Dictionary, delta: float) -> void:
 	var calls: Dictionary = rules.get("calls", {})
-	if calls.is_empty() or not Look.calls_open(c["mood"], phase()):
+	if calls.is_empty() or not Look.calls_open(c["mood"], phase()) or life.contexts.get(c["id"], {}).get("fire", false):
 		return
 	c["call_t"] = float(c["call_t"]) - delta
 	if float(c["call_t"]) > 0.0:
@@ -667,6 +738,8 @@ func _step_call(c: Dictionary, delta: float) -> void:
 func _send(c: Dictionary, to: Dictionary, row: Dictionary, goal_x: float) -> void:
 	for b in c["bodies"]:
 		if b.state == "wait":
+			if not life.reserve_trip(b, to, row, goal_x):
+				continue
 			b.errand = row
 			b.visit_car = to["id"]
 			b.goal_x = goal_x
@@ -684,6 +757,8 @@ func _greet(caller: Node3D) -> bool:
 	var inward: float = 1.0 if caller.position.x < float(host["x0"]) + CAR_LENGTH * 0.5 else -1.0
 	for h in host["bodies"]:
 		if h.state == "wait":
+			if not life.greet(caller, h):
+				continue
 			h.goal_x = caller.position.x + inward * CALL_APART
 			h.state = "pace"
 			return true
@@ -733,7 +808,7 @@ func _build_train() -> void:
 	people = Node3D.new()
 	people.name = "People"
 	train.add_child(people)
-	var defs: Array = rules["cars"]
+	var defs: Array = Rules.display_cars(rules)
 	for i in defs.size():
 		var def: Dictionary = defs[i]
 		var node := Node3D.new()
@@ -787,19 +862,7 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		_box(node, Vector3(0.9, 0.9, 0.15), Vector3(x, -1.0, w * 0.5 - 0.3), steel.darkened(0.4))
 	if gangway:
 		_box(node, Vector3(CAR_GAP, 0.1, DOOR_TO - DOOR_FROM + 0.2), Vector3(l + CAR_GAP * 0.5, -0.05, (DOOR_FROM + DOOR_TO) * 0.5), steel)
-	if kind == "comm" or kind == "engine" or kind == "dining" or kind == "captain":
-		_box(node, Vector3(l - 1.6, Body.SEAT_HEIGHT, 0.5), Vector3(l * 0.5, Body.SEAT_HEIGHT * 0.5, -1.0), wood.lightened(0.08))
-	if kind == "dining":
-		_box(node, Vector3(l - 4.0, 0.75, 0.6), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
-		# The near side's bench: empty at meals, the council's second row.
-		var near: float = TABLE_STEP * (Look.COUNCIL_TABLE - 1)
-		_box(node, Vector3(near + 0.7, Body.SEAT_HEIGHT, 0.3), Vector3(TABLE_FIRST + near * 0.5, Body.SEAT_HEIGHT * 0.5, TABLE_Z + 0.1), wood.lightened(0.08))
-	elif kind == "captain":
-		_box(node, Vector3(1.6, 0.75, 0.7), Vector3(l * 0.5, 0.375, -0.2), wood.lightened(0.15))
-	if kind == "comm" or kind == "engine":
-		_build_stove(c, STOVE_AT)
-	elif TABLED.has(kind):
-		_build_stove(c, STOVE_AT_END)
+	life.add_car(c)
 	var calm := Look.mood_look("calm")
 	var lamp := OmniLight3D.new()
 	lamp.light_color = calm["lamp"]

@@ -6,6 +6,7 @@ extends CanvasLayer
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const CaptainBoard = preload("res://game/train/train_captain.gd")
+const LifePanel = preload("res://game/train/train_life_panel.gd")
 
 ## [key, name, low, high]. sit0..sit3 are the car's situation, in S1's order.
 const KNOBS: Array = [
@@ -44,6 +45,7 @@ var sliders: Dictionary = {}
 var readouts: Dictionary = {}
 var _filling: bool = false
 var _fps_t: float = 0.0
+var life_panel: PanelContainer
 
 
 func _ready() -> void:
@@ -73,6 +75,7 @@ func _ready() -> void:
 	phase_button = _button(top, "", _flip_phase)
 	vote_button = _button(top, "", _flip_vote)
 	_button(top, "열차장", _flip_captain)
+	_button(top, "생활 값", _flip_life)
 	_button(top, "멀리·가까이", func() -> void: scene.toggle_zoom())
 	_button(top, "판 접기", _fold)
 	_button(top, "나가기", func() -> void: get_tree().change_scene_to_file(BOOT_SCENE))
@@ -96,6 +99,11 @@ func _ready() -> void:
 	captain_board.visible = false
 	add_child(captain_board)
 	_button(captain_board.foot, "다른 보기", next_captain)
+	life_panel = LifePanel.new()
+	life_panel.hand = self
+	life_panel.scene = scene
+	life_panel.visible = false
+	add_child(life_panel)
 	if scene != null:
 		scene.rules_applied.connect(fill)
 	fill()
@@ -114,6 +122,8 @@ func pick(i: int) -> void:
 	car_i = posmod(i, scene.cars.size())
 	scene.focus_car(scene.cars[car_i]["id"])
 	fill()
+	if life_panel != null:
+		life_panel.fill()
 
 
 ## The community of the car picked ("" for a car without one).
@@ -132,6 +142,7 @@ func fill() -> void:
 		note.text = "\n".join(scene.problems)
 		return
 	_filling = true
+	car_i = clampi(car_i, 0, scene.cars.size() - 1)
 	var c: Dictionary = scene.cars[car_i]
 	var comm := Rules.comm_of(scene.rules, c["def"])
 	var train: Dictionary = scene.rules["train"]
@@ -183,6 +194,12 @@ func _flip_vote() -> void:
 
 func _flip_captain() -> void:
 	captain_board.visible = not captain_board.visible
+
+
+func _flip_life() -> void:
+	life_panel.visible = not life_panel.visible
+	if life_panel.visible:
+		life_panel.fill()
 
 
 ## Put the next captain to look at into the rules: their own first, then
