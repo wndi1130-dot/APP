@@ -20,6 +20,13 @@ func _advance(s, seconds: float) -> void:
 		s.step(.1)
 
 
+func _start_fire(s, car_id: String = "tail1") -> Array:
+	s.rules["view"]["fire_cars"] = [car_id]
+	s.life.refresh("fire")
+	s.life._evacuate(s.car(car_id))
+	return s.life.actors.values().filter(func(a): return a["home"] == car_id and a.get("evacuating", false))
+
+
 func test_time_does_not_poll_big_states_or_mutate_input_values() -> void:
 	var s = _scene()
 	var events: int = s.life.event_count
@@ -308,3 +315,388 @@ func test_placeholder_node_budget_adds_no_new_lights() -> void:
 		nodes.append_array(node.get_children())
 	assert_eq(lights, 11, "sun plus the existing five lamps and five stoves")
 	print("TRAIN_NODE_BUDGET=" + JSON.stringify({"nodes": count, "lights": lights, "people": s.people.get_child_count(), "furniture_roots": s.life.rooms.size(), "outside_nodes": 4}))
+
+
+func test_refresh_rejects_a_late_bad_sit_without_changing_the_snapshot() -> void:
+	var s = _scene()
+	s.rules["view"]["outside"] = {"passing": false}
+	s.life.refresh("baseline")
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var contexts: Dictionary = s.life.contexts.duplicate(true)
+	var actors: Dictionary = s.life.actors.duplicate(true)
+	var bookings: Dictionary = s.life.places.bookings.duplicate(true)
+	var pair = s.life.interactions["medtech"]
+	var lamp: float = s.car("front")["lamp_energy"]
+	var goods: bool = s.life.rooms["front"].props["goods"].visible
+	var events: int = s.life.event_count
+	var event: String = s.life.last_event
+	var route: Dictionary = s.life.outside.get_meta("route").duplicate(true)
+	var sit: Array = s.rules["comms"]["tail"]["sit"].duplicate()
+	s.rules["view"]["daytime"] = "night"
+	s.rules["view"]["outside"]["passing"] = true
+	s.rules["train"]["lux"] = 0
+	s.rules["comms"]["tail"]["sit"] = [70]
+	s.life.refresh("bad_snapshot")
+	assert_eq(s.life.contexts, contexts)
+	assert_eq(s.life.actors, actors)
+	assert_eq(s.life.places.bookings, bookings)
+	assert_eq(s.life.interactions["medtech"], pair)
+	assert_eq(float(s.car("front")["lamp_energy"]), lamp)
+	assert_eq(s.life.rooms["front"].props["goods"].visible, goods)
+	assert_eq(s.life.event_count, events)
+	assert_eq(s.life.last_event, event)
+	assert_eq(s.life.outside.get_meta("route"), route)
+	assert_ne(s.life.last_failure, "")
+	s.rules["comms"]["tail"]["sit"] = sit
+	s.life.refresh("valid_snapshot")
+	assert_eq(s.life.event_count, events + 1)
+	assert_eq(s.life.last_event, "valid_snapshot")
+	for context in s.life.contexts.values():
+		assert_true(context["night"])
+	assert_false(s.life.rooms["front"].props["goods"].visible)
+
+
+func test_refresh_prepares_every_body_before_applying_the_first_car() -> void:
+	var s = _scene()
+	var contexts: Dictionary = s.life.contexts.duplicate(true)
+	var actors: Dictionary = s.life.actors.duplicate(true)
+	var lamp: float = s.car("front")["lamp_energy"]
+	var events: int = s.life.event_count
+	var last: Dictionary = s.cars.back()
+	last["bodies"].append(s.car("front")["bodies"][0])
+	s.rules["view"]["daytime"] = "night"
+	s.life.refresh("duplicate_body")
+	last["bodies"].pop_back()
+	assert_eq(s.life.contexts, contexts)
+	assert_eq(s.life.actors, actors)
+	assert_eq(float(s.car("front")["lamp_energy"]), lamp)
+	assert_eq(s.life.event_count, events)
+	assert_ne(s.life.last_failure, "")
+
+
+func test_cancelled_evacuees_release_their_count_and_can_leave_again() -> void:
+	var s = _scene()
+	var movers := _start_fire(s)
+	assert_gt(movers.size(), 0)
+	for a in movers:
+		var b: Node3D = a["body"]
+		var id: int = b.get_instance_id()
+		var at: Vector3 = b.position.lerp(s.life.places.target(id), .5)
+		b.position = at
+		s.life.cancel(id, "closed")
+		assert_false(a.get("evacuating", false))
+		assert_false(a["safe_arrival"])
+		assert_false(s.life.places.bookings.has(id))
+		assert_eq(b.position, at)
+		assert_eq(b.state, "wait")
+		assert_eq(a["waypoints"], [])
+	s.life._evacuate(s.car("tail1"))
+	for a in movers:
+		assert_true(a.get("evacuating", false))
+		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))
+		assert_false(a.has("restore"))
+
+
+func test_ending_an_evacuation_trip_allows_a_new_reservation() -> void:
+	var s = _scene()
+	var movers := _start_fire(s)
+	assert_gt(movers.size(), 0)
+	for a in movers:
+		s.life.end_trip(a["body"])
+		assert_false(a.get("evacuating", false))
+		assert_false(a["safe_arrival"])
+		assert_false(s.life.places.bookings.has(a["body"].get_instance_id()))
+	s.life._evacuate(s.car("tail1"))
+	for a in movers:
+		assert_true(a.get("evacuating", false))
+		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))
+
+
+func test_a_closed_refuge_clears_evacuation_before_it_reopens() -> void:
+	var s = _scene()
+	var movers := _start_fire(s)
+	assert_gt(movers.size(), 0)
+	var fires: Array = ["tail1"]
+	for a in movers:
+		var spot: String = s.life.places.bookings[a["body"].get_instance_id()]
+		var car_id: String = s.life.places.spots[spot]["car"]
+		if not fires.has(car_id):
+			fires.append(car_id)
+	s.rules["view"]["fire_cars"] = fires
+	s.life.refresh("refuge_closed")
+	for a in movers:
+		assert_false(a.get("evacuating", false))
+		assert_false(s.life.places.bookings.has(a["body"].get_instance_id()))
+	s.rules["view"]["fire_cars"] = ["tail1"]
+	s.life.refresh("refuge_opened")
+	s.life._evacuate(s.car("tail1"))
+	for a in movers:
+		assert_true(a.get("evacuating", false))
+		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))
+
+
+func test_late_interaction_exit_does_not_release_evacuation_bookings() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	if not s.life.interactions.has("medtech"):
+		return
+	var pair = s.life.interactions["medtech"]
+	var ids: Array = pair.members.map(func(m): return m["actor"])
+	_start_fire(s, "medtech")
+	var bookings: Dictionary = s.life.places.bookings.duplicate(true)
+	var routes: Dictionary = {}
+	for id in ids:
+		assert_true(s.life.actors[id].get("evacuating", false))
+		assert_true(bookings.has(id))
+		routes[id] = s.life.actors[id]["waypoints"].duplicate()
+	pair.interrupt("accident")
+	pair.advance(float(pair.spec["exit"]))
+	s.life._finish("medtech")
+	assert_false(s.life.interactions.has("medtech"))
+	for id in ids:
+		assert_eq(s.life.places.bookings.get(id, ""), bookings.get(id, ""))
+		assert_eq(s.life.actors[id]["waypoints"], routes[id])
+		assert_true(s.life.actors[id].get("evacuating", false))
+		assert_eq(s.life.actors[id]["interaction"], "")
+
+
+func test_evacuation_discards_an_interaction_return_before_arrival() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	if not s.life.interactions.has("medtech"):
+		return
+	var pair = s.life.interactions["medtech"]
+	var id: int = pair.members[0]["actor"]
+	var a: Dictionary = s.life.actors[id]
+	var b: Node3D = a["body"]
+	a["before_interaction"]["state"] = "seat"  # only a seated member walks back with a restore
+	b.position = a["before_interaction"]["position"] + Vector3.RIGHT
+	pair.interrupt("interrupt")
+	s.life._finish("medtech")
+	assert_true(a.has("restore"))
+	_start_fire(s, "medtech")
+	assert_true(a.get("evacuating", false))
+	assert_false(a.has("restore"))
+	assert_true(s.life.places.bookings.has(id))
+	if not s.life.places.bookings.has(id):
+		return
+	var target: Vector3 = s.life.places.target(id)
+	b.position = target
+	s.life.arrived(b)
+	assert_eq(b.position, target)
+	assert_true(a["safe_arrival"])
+	assert_false(a.get("evacuating", false))
+	assert_false(b.visible)
+	assert_false(s.life.places.bookings.has(id))
+
+
+func test_late_scene_finish_preserves_a_new_route_to_the_same_spot() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	if not s.life.interactions.has("medtech"):
+		return
+	var id: int = s.life.interactions["medtech"].members[0]["actor"]
+	var a: Dictionary = s.life.actors[id]
+	var spot: String = s.life.places.bookings[id]
+	assert_true(s.life.places.transfer(id, spot))
+	s.life._route(a["body"], s.life.places.target(id))
+	var route: Array = a["waypoints"].duplicate()
+	s.life._finish("medtech")
+	assert_eq(s.life.places.bookings.get(id, ""), spot)
+	assert_eq(a["waypoints"], route)
+	assert_eq(a["interaction"], "")
+
+
+func test_stage_recovery_returns_an_incoming_evacuee_without_hiding() -> void:
+	for stage in [0, 6]:
+		var s = _scene()
+		var movers := _start_fire(s)
+		assert_gt(movers.size(), 0)
+		if movers.is_empty():
+			return
+		var a: Dictionary = movers[0]
+		var b: Node3D = a["body"]
+		var id: int = b.get_instance_id()
+		var slot: Vector3 = b.slot
+		b.position = b.position.lerp(s.life.places.target(id), .5)
+		s.rules["view"]["fire_cars"] = []
+		s.rules["view"]["collapse_by_car"] = {"tail1": stage}
+		s.life.refresh("recovery")
+		assert_false(a.get("evacuating", false))
+		assert_false(s.life.places.bookings.has(id))
+		assert_true(b.visible)
+		assert_true(a.has("restore"))
+		if not a.has("restore"):
+			return
+		assert_eq(a["waypoints"].back(), slot)
+		for i in 400:
+			if s.life.walk(b, .1):
+				break
+		assert_eq(b.position, slot)
+		assert_eq(a["waypoints"], [])
+		s.life.arrived(b)
+		assert_true(b.visible)
+		assert_eq(b.position, slot)
+		assert_eq(b.slot, slot)
+		assert_eq(b.state, "seat")
+		assert_false(a["safe_arrival"])
+		assert_false(a.has("restore"))
+
+
+func test_stage_recovery_restores_separate_seats_before_showing_safe_arrivals() -> void:
+	for stage in [0, 6]:
+		var s = _scene()
+		var movers := _start_fire(s)
+		assert_gte(movers.size(), 2)
+		if movers.size() < 2:
+			return
+		var first: Node3D = movers[0]["body"]
+		var second: Node3D = movers[1]["body"]
+		var first_id: int = first.get_instance_id()
+		var second_id: int = second.get_instance_id()
+		var first_slot: Vector3 = first.slot
+		var second_slot: Vector3 = second.slot
+		assert_ne(first_slot, second_slot)
+		var spot: String = s.life.places.bookings[first_id]
+		var target: Vector3 = s.life.places.target(first_id)
+		first.position = target
+		s.life.arrived(first)
+		assert_true(s.life.places.transfer(second_id, spot))
+		s.life._route(second, s.life.places.target(second_id))
+		second.position = s.life.places.target(second_id)
+		s.life.arrived(second)
+		assert_false(first.visible)
+		assert_false(second.visible)
+		assert_eq(first.position, second.position, "hidden proxies can reuse a refuge anchor")
+		s.rules["view"]["fire_cars"] = []
+		s.rules["view"]["collapse_by_car"] = {"tail1": stage}
+		s.life.refresh("recovery")
+		assert_true(first.visible)
+		assert_true(second.visible)
+		assert_eq(first.position, first_slot)
+		assert_eq(second.position, second_slot)
+		assert_eq(first.slot, first_slot)
+		assert_eq(second.slot, second_slot)
+		assert_ne(first.position, second.position)
+		assert_false(movers[0]["safe_arrival"])
+		assert_false(movers[1]["safe_arrival"])
+		assert_false(s.life.places.bookings.has(first_id))
+		assert_false(s.life.places.bookings.has(second_id))
+
+
+func test_refresh_rebinds_a_reused_body_with_or_without_its_old_car() -> void:
+	for remove_old in [false, true]:
+		var s = _scene()
+		assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+		if not s.life.interactions.has("medtech"):
+			return
+		var id: int = s.life.interactions["medtech"].members[0]["actor"]
+		var a: Dictionary = s.life.actors[id]
+		var b: Node3D = a["body"]
+		var source: Dictionary = s.car("medtech")
+		var destination: Dictionary = s.car("dining")
+		var replaced: Node3D = destination["bodies"][0]
+		var slot: Vector3 = replaced.slot
+		source["bodies"].erase(b)
+		destination["bodies"][0] = b
+		b.slot = slot
+		b.position = replaced.position
+		b.set_pose(replaced.pose, replaced.huddled, replaced.bowed)
+		if remove_old:
+			s.cars.erase(source)
+		s.rules["view"]["collapse_override"] = 0
+		s.rules["train"]["phase"] = "council"
+		s.rules["train"]["voting"] = false
+		s.life.refresh("formation")
+		assert_eq(a["home"], "dining")
+		assert_eq(a["state"], "session")
+		assert_eq(a["interaction"], "")
+		assert_eq(a["waypoints"], [])
+		assert_false(a.has("restore"))
+		assert_false(a.has("before_interaction"))
+		assert_false(s.life.places.bookings.has(id))
+		assert_eq(b.slot, slot)
+		assert_eq(b.position, slot)
+		assert_eq(b.get_meta("life")["home"], "dining")
+		if s.life.interactions.has("medtech"):
+			s.life._finish("medtech")
+		assert_eq(a["state"], "session", "the old room cannot overwrite the new purpose")
+		b.state = "wait"
+		a["distraction_due"] = 0.0
+		s.life.advance(float(Catalog.tuning("tick")))
+		assert_ne(a["distraction"], "")
+		assert_eq(a["home"], "dining")
+		if remove_old:
+			assert_false(s.life.contexts.has("medtech"))
+			assert_false(s.life.rooms.has("medtech"))
+			assert_false(s.life.interactions.has("medtech"))
+
+
+func test_refresh_rehomes_a_hidden_evacuee_without_restoring_the_old_seat() -> void:
+	var s = _scene()
+	var movers := _start_fire(s)
+	assert_gt(movers.size(), 0)
+	if movers.is_empty():
+		return
+	var a: Dictionary = movers[0]
+	var b: Node3D = a["body"]
+	var id: int = b.get_instance_id()
+	b.position = s.life.places.target(id)
+	s.life.arrived(b)
+	assert_false(b.visible)
+	var destination: Dictionary = s.car("medtech")
+	var replaced: Node3D = destination["bodies"][0]
+	var slot: Vector3 = replaced.slot
+	s.car("tail1")["bodies"].erase(b)
+	destination["bodies"][0] = b
+	b.slot = slot
+	b.position = replaced.position
+	b.set_pose(replaced.pose, replaced.huddled, replaced.bowed)
+	s.rules["view"]["fire_cars"] = []
+	s.life.refresh("formation")
+	assert_eq(a["home"], "medtech")
+	assert_eq(b.position, slot)
+	assert_eq(b.slot, slot)
+	assert_true(b.visible)
+	assert_false(a.get("evacuating", false))
+	assert_false(a["safe_arrival"])
+	assert_false(a.has("before_evacuation"))
+	assert_false(a.has("restore"))
+	assert_false(s.life.places.bookings.has(id))
+
+
+func test_finishing_a_scene_tolerates_a_missing_home_context() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	if not s.life.interactions.has("medtech"):
+		return
+	var ids: Array = s.life.interactions["medtech"].members.map(func(m): return m["actor"])
+	s.life.contexts.erase("medtech")
+	s.life._finish("medtech", true)
+	assert_false(s.life.interactions.has("medtech"))
+	for id in ids:
+		assert_eq(s.life.actors[id]["state"], "idle")
+		assert_eq(s.life.actors[id]["interaction"], "")
+		assert_false(s.life.places.bookings.has(id))
+
+
+func test_reregistering_a_refuge_cancels_its_incoming_evacuation() -> void:
+	var s = _scene()
+	var movers := _start_fire(s)
+	assert_gt(movers.size(), 0)
+	var destinations: Array = []
+	for a in movers:
+		var spot: String = s.life.places.bookings[a["body"].get_instance_id()]
+		var car_id: String = s.life.places.spots[spot]["car"]
+		if not destinations.has(car_id):
+			destinations.append(car_id)
+	for car_id in destinations:
+		s.life.add_car(s.car(car_id))
+	for a in movers:
+		assert_false(a.get("evacuating", false))
+		assert_false(s.life.places.bookings.has(a["body"].get_instance_id()))
+	s.life.refresh("reregistered")
+	s.life._evacuate(s.car("tail1"))
+	for a in movers:
+		assert_true(a.get("evacuating", false))
+		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))

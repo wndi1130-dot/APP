@@ -8,6 +8,7 @@ var bookings: Dictionary = {}  # actor id -> spot id
 
 
 func add_car(car: Dictionary, x0: float) -> void:
+	var replacement: Dictionary = {}
 	for source in Catalog.layout(car)["spots"]:
 		var row: Dictionary = source.duplicate(true)
 		var id := "%s/%s" % [car["id"], row["id"]]
@@ -20,7 +21,18 @@ func add_car(car: Dictionary, x0: float) -> void:
 		row["open"] = true
 		row["cycle_open"] = true
 		row["remaining"] = float(row["cycle"][0])
-		spots[id] = row
+		replacement[id] = row
+	# New anchors replace every old place in this car, including removed spots.
+	var old_spots: Array = []
+	for id in spots:
+		if spots[id]["car"] == String(car["id"]):
+			old_spots.append(id)
+	for actor in bookings.keys():
+		if old_spots.has(bookings[actor]):
+			release(int(actor))
+	for id in old_spots:
+		spots.erase(id)
+	spots.merge(replacement, true)
 
 
 func refresh(contexts: Dictionary) -> Array:
@@ -33,7 +45,7 @@ func refresh(contexts: Dictionary) -> Array:
 			if int(s["members"][actor]["anchor"]) >= int(s["capacity"]):
 				released.append(actor)
 				release(actor)
-		s["enabled"] = Context.is_open(String(s["when"]), c)
+		s["enabled"] = contexts.has(s["car"]) and Context.is_open(String(s["when"]), c)
 		s["open"] = s["enabled"] and s["cycle_open"]
 		if not bool(s["open"]):
 			released.append_array(close_members(id))

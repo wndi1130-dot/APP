@@ -4,6 +4,7 @@ extends RefCounted
 
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Context = preload("res://game/train/train_context.gd")
+const LifeInput = preload("res://game/train/train_life_input.gd")
 const Places = preload("res://game/train/train_places.gd")
 const Schedule = preload("res://game/train/train_schedule.gd")
 const Interaction = preload("res://game/train/train_interaction.gd")
@@ -56,6 +57,10 @@ func before_refresh() -> void:
 
 
 func add_car(c: Dictionary) -> void:
+	for id in places.bookings.keys():
+		var spot: Dictionary = places.spots.get(places.bookings[id], {})
+		if spot.get("car", "") == c["id"]:
+			cancel(int(id), "closed")
 	places.add_car(c["def"], float(c["x0"]))
 	var room = Interior.new()
 	room.build(c["node"], c["def"], func(at: Vector3) -> void: host._build_stove(c, at))
@@ -73,59 +78,111 @@ func build_outside() -> void:
 
 
 func refresh(event: String = "rules") -> void:
-	event_count += 1
-	last_event = event
-	contexts.clear()
-	var alive: Dictionary = {}
+	var car_ids: Array = host.cars.map(func(c): return c["id"])
+	var bad := LifeInput.check(host.rules, car_ids)
+	if not bad.is_empty():
+		last_failure = "; ".join(bad)
+		return
+	# Prepare every car and person before changing the visible snapshot.
+	var next_contexts: Dictionary = {}
+	var next_people: Dictionary = {}
 	for c in host.cars:
-		var context := Context.read(host.rules, c["def"])
-		contexts[c["id"]] = context
-		rooms[c["id"]].apply(context)
-		_apply_light(c, context)
+		if not rooms.has(c["id"]):
+			last_failure = "room_missing: " + String(c["id"])
+			return
+		var context := Context.read(host.rules, c["def"]).duplicate(true)
+		next_contexts[c["id"]] = context
 		var supplied: Dictionary = host.rules.get("view", {}).get("actors", {}).get(c["id"], {})
 		for i in c["bodies"].size():
 			var body: Node3D = c["bodies"][i]
+			if not is_instance_valid(body):
+				last_failure = "body_missing: " + String(c["id"])
+				return
 			var id := body.get_instance_id()
-			alive[id] = true
-			if not actors.has(id):
-				actors[id] = {"body": body, "home": c["id"], "activity": "", "state": "idle", "waypoints": [],
-					"turn": i, "interaction": "", "distraction": "", "distraction_left": 0.0,
-					"distraction_due": float(Catalog.tuning("distraction_every")[0]) + i,
-					"requested": "", "traits": {}, "safe_arrival": false}
-			var a: Dictionary = actors[id]
-			a["traits"] = (supplied.get(str(i), {}) as Dictionary).duplicate(true)
+			if next_people.has(id):
+				last_failure = "body_in_multiple_cars"
+				return
+			var traits: Dictionary = (supplied.get(str(i), {}) as Dictionary).duplicate(true)
 			if context["layout"] == "medical" and i < mini(int(context["patient_count"]), int(Catalog.tuning("medical_beds"))) and not supplied.has(str(i)):
-				a["traits"]["injured"] = true
-				a["traits"]["aggregate_patient"] = true
-			if not a["traits"].has("role"):
+				traits["injured"] = true
+				traits["aggregate_patient"] = true
+			if not traits.has("role"):
 				if context["layout"] == "technical":
-					a["traits"]["role"] = "worker"
-				elif context["layout"] == "medical" and not a["traits"].get("injured", false) and not a["traits"].get("sick", false):
-					a["traits"]["role"] = "carer"
-				elif context["layout"] == "dining" and not a["traits"].get("child", false):
-					a["traits"]["role"] = "cook"
-			a["preferred"] = Schedule.preferences(context, a["traits"])
-			a["distractions"] = Schedule.distractions(context, a["traits"])
-			a["state"] = Schedule.main_state(context, a["traits"])
-			a["event"] = event_count
-			body.set_meta("life", a)
-			if not context["fire"]:
-				body.visible = true
-				a["safe_arrival"] = false
-			if context["voting"]:
-				a["distraction"] = ""
-				Motion.Backend.show(body, "", 0.0)
+					traits["role"] = "worker"
+				elif context["layout"] == "medical" and not traits.get("injured", false) and not traits.get("sick", false):
+					traits["role"] = "carer"
+				elif context["layout"] == "dining" and not traits.get("child", false):
+					traits["role"] = "cook"
+			next_people[id] = {"body": body, "home": c["id"], "turn": i, "traits": traits,
+				"preferred": Schedule.preferences(context, traits), "distractions": Schedule.distractions(context, traits),
+				"state": Schedule.main_state(context, traits)}
+	contexts = next_contexts
+	event_count += 1
+	last_event = event
+	last_failure = ""
+	for id in next_people:
+		var row: Dictionary = next_people[id]
+		var body: Node3D = row["body"]
+		if not actors.has(id):
+			actors[id] = {"body": body, "home": row["home"], "activity": "", "state": "idle", "waypoints": [],
+				"turn": row["turn"], "interaction": "", "distraction": "", "distraction_left": 0.0,
+				"distraction_due": float(Catalog.tuning("distraction_every")[0]) + int(row["turn"]),
+				"requested": "", "traits": {}, "safe_arrival": false}
+		var a: Dictionary = actors[id]
+		if a["home"] != row["home"]:
+			for c in host.cars:
+				if c["id"] == a["home"] and body.state in ["out", "visit", "back"]:
+					c["out"] = maxi(0, int(c["out"]) - 1)
+			_leave_interaction(a, "rules")
+			_end_evacuation(int(id), false)
+			places.release(int(id))
+			a["waypoints"] = []
+			a["activity"] = ""
+			a["requested"] = ""
+			a["distraction"] = ""
+			a.erase("restore")
+			body.visit_car = ""
+			body.errand = {}
+			body.position = body.slot
+			body.state = "seat"
+			body.visible = true
+		for key in ["home", "traits", "preferred", "distractions", "state"]:
+			a[key] = row[key]
+		a["event"] = event_count
+		body.set_meta("life", a)
+		var context: Dictionary = contexts[a["home"]]
+		if not context["fire"]:
+			_end_evacuation(int(id))
+			body.visible = true
+			a["safe_arrival"] = false
+		if context["voting"]:
+			a["distraction"] = ""
+			Motion.Backend.show(body, "", 0.0)
+	for c in host.cars:
+		var context: Dictionary = contexts[c["id"]]
+		rooms[c["id"]].apply(context)
+		_apply_light(c, context)
 		if context["voting"]:
 			send_signal("vote", c["id"])
 		elif context["accident"]:
 			send_signal("accident", c["id"])
 	for id in actors.keys():
-		if not alive.has(id):
+		if not next_people.has(id):
 			places.release(int(id))
 			for scene in interactions.values():
 				if scene.members.any(func(m): return int(m["actor"]) == int(id)):
 					scene.interrupt("actor_removed")
+			var body: Node3D = actors[id]["body"]
+			if is_instance_valid(body):
+				body.remove_meta("life")
 			actors.erase(id)
+	for car_id in interactions.keys():
+		if not contexts.has(car_id):
+			interactions[car_id].interrupt("actor_removed")
+			_finish(car_id, true)
+	for car_id in rooms.keys():
+		if not contexts.has(car_id):
+			rooms.erase(car_id)
 	for id in places.refresh(contexts):
 		cancel(int(id), "closed")
 	if outside != null:
@@ -135,14 +192,14 @@ func refresh(event: String = "rules") -> void:
 			"country": host.rules.get("view", {}).get("country", "country_a"),
 			"season": host.rules.get("view", {}).get("season", "deep_winter"),
 			"weather": host.rules.get("stop", {}).get("weather", "overcast"),
-			"layers": host.rules.get("view", {}).get("outside", {}),
+			"layers": host.rules.get("view", {}).get("outside", {}).duplicate(true),
 		}
 		outside.set_meta("route", route)
 
 
 func choose_local(c: Dictionary, body: Node3D) -> bool:
 	var id := body.get_instance_id()
-	if not actors.has(id):
+	if not actors.has(id) or not contexts.has(c["id"]):
 		return false
 	var a: Dictionary = actors[id]
 	if String(a["interaction"]) != "" or contexts[c["id"]]["voting"]:
@@ -178,6 +235,8 @@ func choose_local(c: Dictionary, body: Node3D) -> bool:
 func reserve_trip(body: Node3D, to: Dictionary, row: Dictionary, goal_x: float) -> bool:
 	var id := body.get_instance_id()
 	if not actors.has(id) or String(actors[id]["interaction"]) != "":
+		return false
+	if not contexts.has(actors[id]["home"]) or not contexts.has(to.get("id", "")):
 		return false
 	var kind := String(row.get("id", ""))
 	var purpose: String = actors[id]["state"]
@@ -239,14 +298,23 @@ func arrived(body: Node3D) -> void:
 	if not actors.has(id):
 		return
 	var a: Dictionary = actors[id]
+	if a.get("evacuating", false) and not contexts.get(a["home"], {}).get("fire", false):
+		_end_evacuation(id, contexts.has(a["home"]))
+		return
 	if a.has("restore"):
 		var previous: Dictionary = a["restore"]
 		body.state = "seat"
 		body.position = previous["position"]
 		body.slot = previous["slot"]
 		body.set_pose(previous["pose"], body.huddled, body.bowed)
+		a["waypoints"] = []
 		a.erase("restore")
 		return
+	if places.bookings.has(id):
+		var spot: Dictionary = places.spots.get(places.bookings[id], {})
+		if not contexts.has(spot.get("car", "")):
+			cancel(id, "closed")
+			return
 	if places.arrive(id):
 		var s: Dictionary = places.spots[places.bookings[id]]
 		body.timer = host.rng.randf_range(float(s["hold"][0]), float(s["hold"][1]))
@@ -272,13 +340,15 @@ func arrived(body: Node3D) -> void:
 
 func end_trip(body: Node3D) -> void:
 	var id := body.get_instance_id()
+	var returning := _end_evacuation(id)
 	places.release(id)
 	if actors.has(id):
 		var a: Dictionary = actors[id]
-		a["waypoints"] = []
+		if not returning:
+			a["waypoints"] = []
+			a.erase("restore")
 		a["requested"] = ""
 		a["activity"] = ""
-		a.erase("restore")
 		a["state"] = Schedule.main_state(contexts.get(a["home"], {}), a["traits"]) if contexts.has(a["home"]) else "idle"
 		a["event"] = "returned"
 
@@ -292,6 +362,8 @@ func return_route(body: Node3D) -> void:
 
 func cancel(id: int, why: String) -> void:
 	if not actors.has(id):
+		return
+	if _end_evacuation(id):
 		return
 	var a: Dictionary = actors[id]
 	var b: Node3D = a["body"]
@@ -328,7 +400,10 @@ func advance(delta: float) -> void:
 		var b: Node3D = a["body"]
 		if not is_instance_valid(b) or b.state not in ["wait", "visit"] or String(a["interaction"]) != "":
 			continue
-		if a["activity"] not in ["sleep", "heal", "mourn"] and not a["distractions"].is_empty() and not contexts[a["home"]]["voting"]:
+		var context: Dictionary = contexts.get(a["home"], {})
+		if context.is_empty():
+			continue
+		if a["activity"] not in ["sleep", "heal", "mourn"] and not a["distractions"].is_empty() and not context["voting"]:
 			a["distraction_due"] = float(a["distraction_due"]) - dt
 			a["distraction_left"] = maxf(0, float(a["distraction_left"]) - dt)
 			if float(a["distraction_left"]) <= 0:
@@ -339,13 +414,13 @@ func advance(delta: float) -> void:
 				var range_s: Array = Catalog.tuning("distraction_every")
 				a["distraction_due"] = host.rng.randf_range(float(range_s[0]), float(range_s[1]))
 	for c in host.cars:
-		if contexts[c["id"]]["fire"]:
+		if contexts.get(c["id"], {}).get("fire", false):
 			_evacuate(c)
 
 
 func show_body(c: Dictionary, body: Node3D) -> void:
 	var id := body.get_instance_id()
-	if not actors.has(id) or not body.visible:
+	if not actors.has(id) or not body.visible or not contexts.has(c["id"]):
 		return
 	var a: Dictionary = actors[id]
 	if contexts[c["id"]]["voting"] or (host._hold_to > host._hold_from and body.position.x >= host._hold_from and body.position.x <= host._hold_to):
@@ -447,10 +522,14 @@ func start_interaction(kind: String, car_id: String) -> bool:
 		a["state"] = _interaction_state(kind)
 		a["event"] = "invited"
 		a["before_interaction"] = {"state": b.state, "slot": b.slot, "pose": b.pose, "position": b.position}
-		scene.invite(id, i)
 		if not fixed:
 			_route(b, places.target(id))
 			b.state = "pace"
+		else:
+			_serial += 1
+			a["movement"] = _serial
+		scene.invite(id, i)
+		scene.members[i]["movement"] = a["movement"]
 	for id in picked:
 		if fixed:
 			scene.arrive(id)
@@ -470,21 +549,31 @@ func send_signal(cue: String, car_id: String = "") -> void:
 
 
 func _finish(car_id: String, instant: bool = false) -> void:
+	if not interactions.has(car_id):
+		return
 	var scene = interactions[car_id]
 	for m in scene.members:
 		var id: int = m["actor"]
-		places.release(id)
 		if not actors.has(id):
+			places.release(id)
 			continue
 		var a: Dictionary = actors[id]
+		if a["interaction"] != car_id:
+			continue
+		if int(a.get("movement", 0)) != int(m.get("movement", -1)):
+			a["interaction"] = ""
+			a.erase("before_interaction")
+			continue
+		places.release(id)
 		var b: Node3D = a["body"]
 		a["interaction"] = ""
-		a["state"] = Schedule.main_state(contexts[a["home"]], a["traits"])
+		a["state"] = Schedule.main_state(contexts[a["home"]], a["traits"]) if contexts.has(a["home"]) else "idle"
 		a["event"] = "scene_finished"
 		a["requested"] = ""
 		a["waypoints"] = []
 		Motion.Backend.show(b, "", 0.0, 0, b.rotation.y)
 		var previous: Dictionary = a.get("before_interaction", {})
+		a.erase("before_interaction")
 		if previous.get("state", "wait") == "seat":
 			if instant or b.position.is_equal_approx(previous["position"]):
 				b.state = "seat"
@@ -499,7 +588,7 @@ func _finish(car_id: String, instant: bool = false) -> void:
 			b.state = "visit" if previous.get("state") == "visit" else "wait"
 			b.timer = float(Catalog.tuning("slot_return_delay"))
 	if _cleanup.has(car_id):
-		if scene.reason == "":
+		if scene.reason == "" and rooms.has(car_id):
 			rooms[car_id].cleanup()
 		_cleanup.erase(car_id)
 	interactions.erase(car_id)
@@ -508,7 +597,7 @@ func _finish(car_id: String, instant: bool = false) -> void:
 func _pair_ready(spot_id: String) -> void:
 	var spot: Dictionary = places.spots[spot_id]
 	var car_id: String = spot["car"]
-	if interactions.has(car_id):
+	if interactions.has(car_id) or not contexts.has(car_id):
 		return
 	var kind: String = {"chat": "chat", "care": "care", "carry": "handoff", "work": "teach", "gather": "push"}.get(spot["activity"], "")
 	if kind == "" or (kind == "push" and int(contexts[car_id]["stage"]) != 4):
@@ -533,13 +622,18 @@ func _pair_ready(spot_id: String) -> void:
 		a["state"] = "call" if b.state == "visit" and b.errand.get("id", "") == "call" else _interaction_state(kind)
 		a["event"] = "partners_arrived"
 		a["before_interaction"] = {"state": b.state, "slot": b.slot, "pose": b.pose, "position": b.position}
+		_serial += 1
+		a["movement"] = _serial
 		scene.invite(id, i)
+		scene.members[i]["movement"] = a["movement"]
 	for id in members.slice(0, spec["roles"].size()):
 		scene.arrive(id)
 
 
 func _route(body: Node3D, target: Vector3) -> void:
 	var a: Dictionary = actors[body.get_instance_id()]
+	_serial += 1
+	a["movement"] = _serial
 	a["waypoints"] = [Vector3(body.position.x, 0, host.AISLE_Z), Vector3(target.x, 0, host.AISLE_Z), target]
 	body.goal_x = target.x
 	Motion.Backend.show(body, "", 0.0, 0, body.rotation.y)
@@ -556,7 +650,8 @@ func _interaction_state(kind: String) -> String:
 
 func moving_count(car_id: String) -> int:
 	var c: Dictionary = host.car(car_id)
-	return c["bodies"].filter(func(b): return b.visible and b.state in ["pace", "out", "back"]).size()
+	var bodies: Array = c.get("bodies", [])
+	return bodies.filter(func(b): return b.visible and b.state in ["pace", "out", "back"]).size()
 
 
 func _blocked(c: Dictionary, except: Array) -> Array:
@@ -579,14 +674,62 @@ func _apply_light(c: Dictionary, context: Dictionary) -> void:
 		c["steam"].emitting = false
 
 
+func _leave_interaction(a: Dictionary, why: String) -> void:
+	var car_id: String = a["interaction"]
+	if interactions.has(car_id):
+		interactions[car_id].interrupt(why)
+	a["interaction"] = ""
+	a.erase("before_interaction")
+
+
+func _end_evacuation(id: int, restore_home: bool = true) -> bool:
+	if not actors.has(id):
+		return false
+	var a: Dictionary = actors[id]
+	if not a.get("evacuating", false) and not a["safe_arrival"] and not a.has("before_evacuation"):
+		return false
+	var b: Node3D = a["body"]
+	var previous: Dictionary = a.get("before_evacuation", {})
+	var hidden: bool = not b.visible
+	places.release(id)
+	a["evacuating"] = false
+	a["safe_arrival"] = false
+	a["waypoints"] = []
+	a["requested"] = ""
+	a["activity"] = ""
+	a["distraction"] = ""
+	a.erase("restore")
+	a.erase("before_evacuation")
+	var recover: bool = restore_home and not previous.is_empty() and contexts.has(a["home"])
+	if recover:
+		b.slot = previous["slot"]
+	if recover and (hidden or not contexts[a["home"]]["fire"]):
+		if hidden or b.position.is_equal_approx(previous["position"]):
+			b.position = previous["position"]
+			b.state = "seat"
+			b.set_pose(previous["pose"], b.huddled, b.bowed)
+		else:
+			a["restore"] = previous
+			_route(b, previous["position"])
+			b.state = "pace"
+	else:
+		b.state = "wait"
+		b.timer = float(Catalog.tuning("slot_return_delay"))
+	b.visible = true
+	a["state"] = Schedule.main_state(contexts[a["home"]], a["traits"]) if contexts.has(a["home"]) else "idle"
+	return true
+
+
 func _evacuate(c: Dictionary) -> void:
 	var moving: int = 0
 	for b in c["bodies"]:
-		if actors[b.get_instance_id()].get("evacuating", false):
+		if actors.get(b.get_instance_id(), {}).get("evacuating", false):
 			moving += 1
 	for b in c["bodies"]:
 		if moving >= int(Catalog.tuning("max_movers")):
 			return
+		if not actors.has(b.get_instance_id()):
+			continue
 		var a: Dictionary = actors[b.get_instance_id()]
 		if a["safe_arrival"] or a.get("evacuating", false):
 			continue
@@ -595,17 +738,31 @@ func _evacuate(c: Dictionary) -> void:
 			if n < 0 or n >= host.cars.size():
 				continue
 			var target_car: Dictionary = host.cars[n]
-			if not contexts[target_car["id"]]["safe"]:
+			if not contexts.get(target_car["id"], {}).get("safe", false):
 				continue
 			var choices := places.candidates(target_car["id"], ["refuge"])
 			if choices.is_empty():
 				continue
+			var previous: Dictionary = a.get("restore", a.get("before_interaction", {}))
+			var home: Dictionary = {"state": "seat", "position": b.slot, "slot": b.slot, "pose": b.pose}
+			if previous.get("state", "") == "seat":
+				home = previous.duplicate(true)
+			_leave_interaction(a, "accident")
+			a.erase("restore")
 			places.release(b.get_instance_id())
+			a["waypoints"] = []
+			a["requested"] = ""
+			a["distraction"] = ""
+			a["activity"] = ""
+			# A fire interrupts a trip without leaving its old departure counter.
+			if b.state in ["out", "visit", "back"]:
+				c["out"] = maxi(0, int(c["out"]) - 1)
+				b.visit_car = ""
+				b.errand = {}
+			b.state = "wait"
+			b.timer = float(Catalog.tuning("slot_return_delay"))
 			if places.reserve(b.get_instance_id(), choices[0]):
-				# A fire interrupts a trip without leaving its old departure counter.
-				if b.state in ["out", "visit", "back"]:
-					c["out"] = maxi(0, int(c["out"]) - 1)
-					b.visit_car = ""
+				a["before_evacuation"] = home
 				a["evacuating"] = true
 				a["activity"] = "refuge"
 				_route(b, places.target(b.get_instance_id()))

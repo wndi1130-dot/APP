@@ -5,6 +5,7 @@ const Places = preload("res://game/train/train_places.gd")
 const Context = preload("res://game/train/train_context.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Schedule = preload("res://game/train/train_schedule.gd")
+const LifeInput = preload("res://game/train/train_life_input.gd")
 
 
 func _pool():
@@ -71,6 +72,75 @@ func test_two_different_activities_cannot_reserve_the_same_physical_anchor() -> 
 	p.spots["home/door_front"]["capacity"] = 1
 	assert_true(p.reserve(1, "home/door_tail"))
 	assert_false(p.reserve(2, "home/door_front"))
+
+
+func test_registering_a_car_again_releases_only_its_old_bookings() -> void:
+	var p = _pool()
+	p.add_car({"id": "away", "kind": "comm", "comm": "tail"}, 32.0)
+	p.refresh({"home": {"social": true}, "away": {"social": true}})
+	assert_true(p.reserve(1, "home/door_tail"))
+	assert_true(p.reserve(2, "home/door_tail"))
+	assert_true(p.reserve(3, "away/door_tail"))
+	p.arrive(1)
+	p.arrive(3)
+	var before: Vector3 = p.target(1)
+	var other: Dictionary = p.spots["away/door_tail"]["members"].duplicate(true)
+	p.add_car({"id": "home", "kind": "comm", "comm": "tail"}, 16.0)
+	assert_eq(p.bookings, {3: "away/door_tail"})
+	assert_eq(p.spots["away/door_tail"]["members"], other)
+	for spot in p.spots.values():
+		if spot["car"] == "home":
+			assert_true(spot["members"].is_empty(), spot["id"])
+	if p.bookings.has(1) or p.bookings.has(2):
+		return
+	assert_true(p.reserve(1, "home/door_tail"))
+	assert_eq(p.target(1), before + Vector3(16, 0, 0))
+	assert_true(p.arrive(1))
+	assert_eq(p.present("home/door_tail"), 1)
+
+
+func test_registering_another_layout_removes_old_spots_and_their_bookings() -> void:
+	var p = _pool()
+	p.add_car({"id": "away", "kind": "comm", "comm": "tail"}, 32.0)
+	p.refresh({"home": {"social": true}, "away": {"social": true}})
+	assert_true(p.reserve(1, "home/door_tail"))
+	assert_true(p.reserve(3, "away/door_tail"))
+	p.arrive(1)
+	p.arrive(3)
+	var old_spots: Array = p.spots.keys().filter(func(id): return p.spots[id]["car"] == "home")
+	var other: Dictionary = p.spots["away/door_tail"]["members"].duplicate(true)
+	p.add_car({"id": "home", "kind": "comm", "interior": "freight"}, 0.0)
+	for id in old_spots:
+		assert_false(p.spots.has(id), id)
+	assert_eq(p.bookings, {3: "away/door_tail"})
+	assert_eq(p.spots["away/door_tail"]["members"], other)
+	assert_false(p.reserve(1, "home/door_tail"))
+
+
+func test_refresh_releases_bookings_for_a_removed_car_even_when_always_open() -> void:
+	var p = _pool()
+	p.add_car({"id": "away", "kind": "comm", "comm": "tail"}, 32.0)
+	p.spots["home/door_tail"]["when"] = "always"
+	p.refresh({"home": {"social": true}, "away": {"social": true}})
+	assert_true(p.reserve(1, "home/door_tail"))
+	assert_true(p.reserve(2, "home/door_tail"))
+	assert_true(p.reserve(3, "away/door_tail"))
+	p.arrive(1)
+	p.arrive(3)
+	var other: Dictionary = p.spots["away/door_tail"]["members"].duplicate(true)
+	var released: Array = p.refresh({"away": {"social": true}})
+	released.sort()
+	assert_eq(released, [1, 2])
+	assert_eq(p.bookings, {3: "away/door_tail"})
+	assert_eq(p.spots["away/door_tail"]["members"], other)
+	for spot in p.spots.values():
+		if spot["car"] == "home":
+			assert_false(spot["enabled"], spot["id"])
+			assert_false(spot["open"], spot["id"])
+			assert_true(spot["members"].is_empty(), spot["id"])
+	p.advance(float(p.spots["home/stove_side"]["cycle"][0]))
+	assert_false(p.spots["home/door_tail"]["open"])
+	assert_false(p.reserve(4, "home/door_tail"))
 
 
 func test_all_layouts_have_unique_names_bounded_props_and_valid_activities() -> void:
@@ -165,3 +235,81 @@ func test_invalid_optional_input_is_rejected_before_it_reaches_a_scene() -> void
 		var r := Rules.load_default()
 		Catalog.assign_value(r, path_value[0], path_value[1])
 		assert_false(Rules.check(r).is_empty(), path_value[0])
+
+
+func test_life_input_checks_context_objects_without_requiring_optional_fields() -> void:
+	assert_true(LifeInput.check({}, []).is_empty())
+	assert_true(LifeInput.check({"train": {}, "comms": {"tail": {}}, "view": {}, "dom": {}, "stop": {}}, []).is_empty())
+	var defaults := Rules.load_default()
+	var car_ids: Array = defaults["cars"].map(func(car): return car["id"])
+	assert_true(LifeInput.check(defaults, car_ids).is_empty())
+	for value in [null, false, 1, "invalid", []]:
+		for path in ["train", "comms", "view", "dom", "stop"]:
+			var r: Dictionary = {}
+			r[path] = value
+			assert_false(LifeInput.check(r, []).is_empty(), path)
+		assert_false(LifeInput.check({"comms": {"tail": value}}, []).is_empty(), "comms.tail")
+
+
+func test_life_input_rejects_nonfinite_and_wrongly_typed_context_numbers() -> void:
+	for value in [null, false, true, "1", [], {}, INF, -INF, NAN]:
+		for key in ["coal", "food", "med", "lux", "hunger", "injured", "sickCount", "stored", "decreeLeft", "seg", "fear", "tension", "trust"]:
+			var train: Dictionary = {}
+			train[key] = value
+			assert_false(LifeInput.check({"train": train}, []).is_empty(), "train." + key)
+		for key in ["rel", "grudge"]:
+			var comm: Dictionary = {}
+			comm[key] = value
+			assert_false(LifeInput.check({"comms": {"tail": comm}}, []).is_empty(), "comms.tail." + key)
+	assert_true(LifeInput.check({"train": {"fear": -1.0, "tension": 1000001.0, "trust": 0.5},
+		"comms": {"tail": {"rel": -90.0, "grudge": 0.5}}}, []).is_empty(), "finite values add no new display bands")
+
+
+func test_life_input_requires_at_least_four_finite_situation_values() -> void:
+	for value in [null, false, 1, "cold", {}, [], [70], [70, 70], [70, 70, 0]]:
+		assert_false(LifeInput.check({"comms": {"tail": {"sit": value}}}, []).is_empty(), "comms.tail.sit")
+	for i in 4:
+		for value in [null, false, "70", [], {}, INF, -INF, NAN]:
+			var sit: Array = [70, 70, 0, 0]
+			sit[i] = value
+			assert_false(LifeInput.check({"comms": {"tail": {"sit": sit}}}, []).is_empty(), "sit[%d]" % i)
+	for sit in [[70, 70, 0, 0], [-1.0, 1000001.0, 0.5, -0.5, 7]]:
+		assert_true(LifeInput.check({"comms": {"tail": {"sit": sit}}}, []).is_empty(), "no new range or exact length")
+
+
+func test_life_input_checks_context_flags_and_labels() -> void:
+	var source := {"train": {"phase": "", "voting": false, "council": {"martial": false}, "edu": {"side": ""}},
+		"view": {"region": "", "country": ""}, "dom": {"insulated": []}, "stop": {"weather": ""}}
+	assert_true(LifeInput.check(source, ["home"]).is_empty())
+	for path_value in [["train.phase", 1], ["train.voting", "false"], ["train.council.martial", 0],
+		["train.edu.side", []], ["view.region", {}], ["view.country", null],
+		["dom.insulated", [false]], ["stop.weather", 0]]:
+		var r: Dictionary = source.duplicate(true)
+		Catalog.assign_value(r, path_value[0], path_value[1])
+		assert_false(LifeInput.check(r, ["home"]).is_empty(), path_value[0])
+
+
+func test_life_input_checks_actor_trait_types_and_string_indices() -> void:
+	assert_true(LifeInput.check({"view": {"actors": {"home": {"0": {}}}}}, ["home"]).is_empty())
+	for key in ["child", "injured", "sick", "mourning"]:
+		for value in [null, 0, "false", [], {}]:
+			var traits: Dictionary = {}
+			traits[key] = value
+			assert_false(LifeInput.check({"view": {"actors": {"home": {"0": traits}}}}, ["home"]).is_empty(), key)
+	for value in [null, false, 1, [], {}]:
+		assert_false(LifeInput.check({"view": {"actors": {"home": {"0": {"role": value}}}}}, ["home"]).is_empty(), "role")
+	assert_false(LifeInput.check({"view": {"actors": {"home": {0: {}}}}}, ["home"]).is_empty(), "Life reads str(i) keys")
+	assert_true(LifeInput.check({"view": {"actors": {"home": {"0": {"child": false, "injured": true,
+		"sick": false, "mourning": true, "role": "teacher"}}}}}, ["home"]).is_empty())
+
+
+func test_life_input_checks_car_context_field_types() -> void:
+	assert_true(LifeInput.check({"cars": [{"id": "home"}]}, ["home"]).is_empty())
+	for value in [null, false, 1, "car", {}]:
+		assert_false(LifeInput.check({"cars": value}, ["home"]).is_empty(), "cars")
+	for value in [null, false, 1, "car", []]:
+		assert_false(LifeInput.check({"cars": [value]}, ["home"]).is_empty(), "car object")
+	for key_value in [["id", 1], ["kind", false], ["comm", []], ["expanded", "false"], ["interior", {}]]:
+		var car: Dictionary = {"id": "home", "kind": "comm", "comm": "tail"}
+		car[key_value[0]] = key_value[1]
+		assert_false(LifeInput.check({"cars": [car]}, ["home"]).is_empty(), key_value[0])
