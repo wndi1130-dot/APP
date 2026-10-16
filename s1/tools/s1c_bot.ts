@@ -37,7 +37,7 @@ export interface BotProbe {
   afterStop?: (g: Game) => void;
 }
 
-export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다 */ prep?: 'auto' | 'never'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean }
+export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean }
 
 export interface GameMetrics {
   end: string;
@@ -58,7 +58,7 @@ export interface GameMetrics {
   disasters: { blizzard: number; cold: number };
   /** 재난으로 죽은 사람 수, 대비 카드에서 고른 것(석탄/모아 잠/그냥 감) */
   disasterDeaths: number;
-  prep: { coal: number; huddle: number; none: number };
+  prep: { coal: number; huddle: number; wait: number; none: number };
   tensionMax: number;
   tensionEnd: number;
   warmEnd: number;
@@ -355,7 +355,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   const cards: Record<string, number> = {};
   const m: GameMetrics = {
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
-    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, cards, s1aCards: 0, domCards: 0,
+    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, cards, s1aCards: 0, domCards: 0,
     tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, spaceSegs: 0,
     travelById: {}, travelRepeats: 0, contentById: {}, contentRepeats: 0, titleRepeats: 0, titleTotal: 0,
     segsTotal: 0, segsWithTravel: 0, segsNoTravel: { rest: 0, empty: 0, other: 0 }, cardsPerSeg: [0, 0, 0, 0, 0], cardsPerSegMax: 0,
@@ -440,8 +440,13 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       else if (card.kind.startsWith('dom:')) idx = domPick(g, card, view, opts.dom);
       else if (card.kind.startsWith('dark:')) idx = darkPick(card, view, opts.s1b ?? 'kind');
       else if (card.kind === 'disaster_prep') {
-        idx = opts.prep === 'never' ? 2 : opts.policy === 'caretaker' ? (g.coal >= 30 ? 0 : 1) : view.choices.findIndex(c => !c.disabled);
-        m.prep[(['coal', 'huddle', 'none'] as const)[idx]] += 1;
+        // 선택지 순서가 스위치(DZ.wait)로 바뀌니 번호 말고 special로 고른다.
+        const at = (s: string) => view.choices.findIndex(c => c.special === s && !c.disabled);
+        const auto = opts.policy === 'caretaker' ? at(g.coal >= 30 ? 'dz_coal' : 'dz_huddle') : view.choices.findIndex(c => !c.disabled);
+        const waitIdx = (opts.prep === 'wait' || (opts.prep === 'read' && card.text !== 'cold')) ? at('dz_wait') : -1;
+        idx = opts.prep === 'never' ? at('dz_none') : waitIdx >= 0 ? waitIdx : auto >= 0 ? auto : at('dz_none');
+        const key = ({ dz_coal: 'coal', dz_huddle: 'huddle', dz_wait: 'wait', dz_none: 'none' } as const)[view.choices[idx].special as 'dz_coal'];
+        m.prep[key] += 1;
       }
       else if (card.kind === 'protest') idx = protestPick(card, view, !!opts.riotNone);
       else if (opts.pickRule && (card.kind === 'travel' || card.kind === CONTENT_CARD_KIND)) {

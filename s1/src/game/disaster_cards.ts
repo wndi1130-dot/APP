@@ -4,6 +4,7 @@ import type { CardView, Choice } from './cards';
 import { DISASTER_NAME, DZ, coalOf, lenOf, warmOf } from './disaster';
 import type { DisasterKind } from './disaster';
 import { revertLater } from './people';
+import { foodCost } from './turn';
 import type { Card, Game } from './state';
 
 // 재난 대비 카드(events_disasters 4.1, 사용자 2026-10-09 20:23 '드물게 직접 죽임'). 예고 구간에 한 번, 재난을 켠 판에서만 온다.
@@ -28,6 +29,13 @@ function prepView(g: Game, card: Card): CardView | null {
       effs: [...HUDDLE_COMMS.map(c => ({ t: 'base' as const, c, i: 2 as const, v: DZ.huddleCrowd })), { t: 'tension', v: DZ.huddleTension }],
       special: 'dz_huddle', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '과밀은 재난이 끝나면 돌아온다'],
     },
+    // 출발 미루기(날씨 명세 4장 추천안, DZ.wait로 끈다): 하루치 배급과 석탄, 긴장을 치르고 첫 구간을 선 채로 넘긴다.
+    // 눈보라(2구간)에는 절반이 비지만 한파(3구간)에는 덜 남아 늘 미루기가 답이 되지 않게 한다.
+    ...(DZ.wait ? [{
+      label: '출발을 하루 미룬다', say: '하루 서서 기다린다. 첫날은 선 채로 넘긴다.',
+      effs: [{ t: 'food' as const, v: -Math.round(foodCost(g)) }, { t: 'coal' as const, v: -DZ.waitCoal }, { t: 'tension' as const, v: DZ.waitTension }],
+      special: 'dz_wait', extra: [`${DISASTER_NAME[kind]} 첫 구간을 선 채로 넘긴다(${Math.max(1, lenOf(kind) - 1)}구간만 맞는다)`, `온기 −${half}로 줄어든다`],
+    }] : []),
     { label: '그냥 간다', say: '예고일 뿐이다. 평소대로 간다.', effs: [], special: 'dz_none', extra: ['대비 없음'] },
   ];
   return {
@@ -45,7 +53,8 @@ function prepChoose(g: Game, card: Card, choice: Choice): void {
     d.prep = 'huddle';
     // 과밀은 효과로 이미 올렸다. 재난이 끝나는 정산(예고 구간 + 이어지는 구간 수)에 되돌린다.
     for (const c of HUDDLE_COMMS) revertLater(g, c, 2, DZ.huddleCrowd, lenOf(d.kind));
-  } else if (choice.special === 'dz_none') d.unprepared = true;
+  } else if (choice.special === 'dz_wait') d.prep = 'wait';
+  else if (choice.special === 'dz_none') d.unprepared = true;
 }
 
 CARD_EXTENSIONS.push({ view: prepView, choose: prepChoose });

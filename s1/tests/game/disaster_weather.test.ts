@@ -8,7 +8,7 @@ import { backdrop } from '../../src/ui/backdrop';
 
 const stopAt = (place = 'freight'): StopState => ({ place, target: 'food', stay: 'normal', crewComm: 'tail', crewSize: 4, threat: 1, scout: true, done: false, result: null });
 
-function withDisaster(seed: string, seg: number, kind: 'blizzard' | 'cold', stage: 'warn' | 'active', on = true): Game {
+function withDisaster(seed: string, seg: number, kind: 'blizzard' | 'cold', stage: 'brewing' | 'warn' | 'active', on = true): Game {
   const g = createGame(seed);
   if (on) enableDisasters(g);
   g.seg = seg;
