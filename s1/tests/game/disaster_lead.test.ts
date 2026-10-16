@@ -25,8 +25,8 @@ function brewing(seed: string, kind: 'blizzard' | 'cold'): Game {
 }
 
 describe('두 구간 앞 예고', () => {
-  it('기본값은 지금 규칙이다(추천안은 lead 2, wait 1로 켠다)', () => {
-    expect([DZ0.lead, DZ0.wait]).toEqual([1, 0]);
+  it('기본값: 예고 두 단계는 켜고(결정 312), 출발 미루기는 꺼 둔다(결정 313)', () => {
+    expect([DZ0.lead, DZ0.wait]).toEqual([2, 0]);
   });
 
   it('두 구간 앞은 종류를 말하지 않고 카드도 없다, 한 구간 앞에 종류와 대비 카드가 온다', () => {
