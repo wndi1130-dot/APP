@@ -700,3 +700,26 @@ func test_reregistering_a_refuge_cancels_its_incoming_evacuation() -> void:
 	for a in movers:
 		assert_true(a.get("evacuating", false))
 		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))
+
+
+func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> void:
+	var s = _scene()
+	assert_true(s.set_value("view.work_time", true))
+	assert_true(s.set_value("view.fire_cars", ["tail1"]))
+	assert_true(s.set_value("view.collapse_by_car", {"tail1": 0}))
+	var c: Dictionary = s.life.contexts["tail1"]
+	assert_eq(int(c["stage"]), 0)
+	assert_true(c["fire"])
+	assert_false(c["safe"])
+	for key in ["meal", "work", "social", "gather", "memorial", "classroom", "stove"]:
+		assert_false(c[key], "불난 칸에서 열린 조건: " + String(key))
+	var checked: int = 0
+	for spot in s.life.places.spots.values():
+		if spot["car"] == "tail1" and String(spot["when"]) in ["meal", "work", "social", "stove", "gather"]:
+			assert_false(spot["open"], "불난 칸의 자리: " + String(spot["id"]))
+			checked += 1
+	assert_gt(checked, 0)
+	assert_true(s.set_value("view.collapse_by_car", {"tail1": 6}))
+	assert_true(s.life.contexts["tail1"]["fire"])
+	assert_false(s.life.contexts["tail1"]["recovery"], "불이 난 채로 회복 표시를 켜지 않는다")
+	assert_false(s.life.contexts["tail1"]["social"])

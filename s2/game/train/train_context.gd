@@ -28,7 +28,9 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 	var car_stage: int = int(view.get("collapse_by_car", {}).get(car.get("id", ""), -1))
 	if car_stage >= 0:
 		stage = clampi(car_stage, 0, 6)
-	var peaceful: bool = stage < 3 or stage == 6
+	# 불난 칸은 화면 단계를 어떻게 덮어써도 일상 자리를 열지 않는다.
+	var burning: bool = fire or stage == 5
+	var peaceful: bool = (stage < 3 or stage == 6) and not burning
 	var c := {
 		"car_id": String(car.get("id", "")), "layout": Catalog.layout_id(car),
 		"warmth": warm, "ration": ration, "crowding": float(sit[2]), "exposure": float(sit[3]),
@@ -37,16 +39,16 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 		"rel": float(comm.get("rel", 0)), "grudge": int(comm.get("grudge", 0)),
 		"council": council, "voting": council and bool(train.get("voting", false)),
 		"night": night, "motion": motion, "stopped": motion == "stopped", "stage": stage,
-		"fire": fire or stage == 5, "safe": not fire and stage != 5,
-		"recovery": stage == 6,
+		"fire": burning, "safe": not burning,
+		"recovery": stage == 6 and not burning,
 		"food": food, "coal": fuel, "medicine": float(train.get("med", 20)) > 0,
 		"goods": float(train.get("lux", 0)) > 0,
 		"patients": patients > 0, "patient_count": patients,
-		"stove": fuel and warm >= Look.WARM_FREEZING and stage < 4,
+		"stove": fuel and warm >= Look.WARM_FREEZING and stage < 4 and not burning,
 		"meal": food and not council and bool(view.get("meal_time", true)) and peaceful,
 		"work": bool(view.get("work_time", false)) and not night and not council and peaceful,
 		"social": not council and float(train.get("fear", 0)) < Look.FEAR_FROZEN and peaceful,
-		"gather": stage >= 2 and stage <= 4 and not council,
+		"gather": stage >= 2 and stage <= 4 and not council and not burning,
 		"memorial": (bool(view.get("memorial", false)) or (laws.has("night_of_names") and night)) and not council and peaceful,
 		"classroom": educational and not night and not council and peaceful and bool(view.get("teacher_present", true)),
 		"education": String(train.get("edu", {}).get("side", "")),
