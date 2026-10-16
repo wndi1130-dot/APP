@@ -763,3 +763,18 @@ func test_evacuation_secures_a_refuge_first_and_falls_back_to_the_next_one() -> 
 			moved += 1
 			assert_eq(places.bookings.get(id, ""), "dining/refuge", "첫 피난처가 막히면 다음 피난처로 간다")
 	assert_gt(moved, 0)
+
+
+func test_the_life_panel_follows_a_shortened_train_without_reading_past_its_end() -> void:
+	var s = _scene(true)
+	assert_true(s.set_value("dom.extraCars", ["coach", "store"]))
+	assert_eq(s.cars.size(), 7)
+	s.panel._flip_life()
+	s.panel.pick(6)
+	var panel = s.panel.life_panel
+	assert_eq(panel._car_id(), String(s.cars[6]["id"]))
+	assert_true(s.set_value("dom.extraCars", []))
+	assert_eq(s.cars.size(), 5)
+	assert_eq(s.panel.car_i, 4, "칸이 줄면 고른 칸 번호부터 고친다")
+	assert_eq(panel._car_id(), String(s.cars[4]["id"]))
+	assert_true(panel.status.text.begins_with(String(s.cars[4]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
