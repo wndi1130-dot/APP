@@ -58,6 +58,29 @@ const SNOW_LEVELS: Array[float] = [0.0, 0.38, 0.9]
 ## Lamp light inside cars and houses: amber, the one warm colour outside.
 const LAMP := Color(1.0, 0.64, 0.30)
 
+## Model colour grade, the defaults of weathered.gdshader (user, 2026-10-17):
+## models are pressed darker and colder so they do not stand out on white snow,
+## and are not repainted. Roughness 0.9 is weathered's roughness_base default.
+const MODEL_GRADE: Dictionary = {
+	"grade_saturation": 0.45,
+	"grade_value": 0.82,
+	"grade_cool": Color(0.78, 0.85, 0.95),
+	"grade_cool_mix": 0.35,
+}
+const MODEL_ROUGHNESS := 0.9
+
+
+## The same sum as fx_model_grade in fx_common.gdshaderinc, for tests and tools.
+static func grade_color(c: Color, g: Dictionary = MODEL_GRADE) -> Color:
+	var v := maxf(c.r, maxf(c.g, c.b))
+	var sat := float(g["grade_saturation"])
+	var val := float(g["grade_value"])
+	var cool: Color = g["grade_cool"]
+	var k := float(g["grade_cool_mix"])
+	var out := Color(lerpf(v, c.r, sat), lerpf(v, c.g, sat), lerpf(v, c.b, sat)) * val
+	out = Color(lerpf(out.r, out.r * cool.r, k), lerpf(out.g, out.g * cool.g, k), lerpf(out.b, out.b * cool.b, k))
+	return Color(out.r, out.g, out.b, c.a)
+
 
 static func snow_for_level(level: int) -> float:
 	return SNOW_LEVELS[clampi(level, 0, SNOW_LEVELS.size() - 1)]

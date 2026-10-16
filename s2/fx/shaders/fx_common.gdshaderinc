@@ -36,6 +36,18 @@ const vec3 FX_RIME = vec3(0.70, 0.715, 0.73);
 // Coal black for ink and soot; red and sky blue stay out (decisions.md UI 연출).
 const vec3 FX_COAL = vec3(0.07, 0.065, 0.06);
 
+// Model colour grade (decisions.md 셰이더 줄, 2026-10-17): painted models must
+// not stand out on white snow, so their own colour is pressed darker and colder
+// before any weather layer. sat scales HSV saturation (mix toward the brightest
+// channel, like a hue/saturation node), val scales HSV value, then the colour is
+// multiplied by a cold grey-blue at cool_mix strength. Snow and rime colours are
+// added after this and stay as they are.
+vec3 fx_model_grade(vec3 c, float sat, float val, vec3 cool, float cool_mix) {
+	float v = max(c.r, max(c.g, c.b));
+	vec3 g = mix(vec3(v), c, sat) * val;
+	return mix(g, g * cool, cool_mix);
+}
+
 // Grey-brown photo fade with lifted blacks; amount 0 returns c unchanged.
 // Frost: warped ridged noise gives thin branching veins over a soft bloom.
 // Placeholder until a mask from real frost photos exists (presentation_motion.md
