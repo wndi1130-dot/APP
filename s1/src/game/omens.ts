@@ -7,12 +7,13 @@ import type { Game, StopState } from './state';
 // 금지선: 사람이나 무리가 화차·닫힌 칸 안에 갇힌 장면은 쓰지 않는다(강제 이송 열차로 읽힌다). 화차는 빈 풍경으로만.
 // 해석 말(매우 불길하다 / 불길하다 / …)은 일부러 고정한다. 플레이어가 약속을 읽는 말이라 매번 바뀌면 못 읽는다.
 
-export type Weather = 'snow' | 'fog' | 'sleet' | 'overcast' | 'clear';
+/** 정차 날씨. 평상 다섯은 씨앗 해시로 뽑고, 눈보라·한파는 재난을 켠 판에서 재난이 닥친 구간에만 온다(pickWeather). */
+export type Weather = 'snow' | 'fog' | 'sleet' | 'overcast' | 'clear' | 'blizzard' | 'cold';
 /** 바깥 기척. 정차마다 정해지고 준비를 바꿔도 안 바뀐다. many 무리가 많다, some 보통, few 거의 없다. */
 export type SignTier = 'many' | 'some' | 'few';
 
-export const WEATHER_NAME: Record<Weather, string> = { snow: '눈', fog: '안개', sleet: '진눈깨비', overcast: '흐림', clear: '맑은 추위' };
-/** 어둡고 칙칙한 날이 8할(아트 방향). 갠 날은 드물다. */
+export const WEATHER_NAME: Record<Weather, string> = { snow: '눈', fog: '안개', sleet: '진눈깨비', overcast: '흐림', clear: '맑은 추위', blizzard: '눈보라', cold: '한파' };
+/** 어둡고 칙칙한 날이 8할(아트 방향). 갠 날은 드물다. 재난 날씨(눈보라·한파)는 여기서 뽑지 않는다. */
 const WEATHER_WEIGHT: [Weather, number][] = [['snow', 30], ['fog', 20], ['sleet', 15], ['overcast', 20], ['clear', 15]];
 
 /** 열차 창으로 보이는 날씨. 위험은 알려 주지 않는다. */
@@ -22,6 +23,8 @@ export const WEATHER_LOOK: Record<Weather, string[]> = {
   sleet: ['진눈깨비가 창을 때린다.', '진눈깨비가 내린다. 옷이 금세 젖겠다.', '젖은 눈이 선로 위에서 녹았다 언다.', '처마마다 진눈깨비 물이 떨어진다.', '진눈깨비에 플랫폼이 번들거린다.'],
   overcast: ['하늘이 낮고 잿빛이다.', '구름이 두껍다. 한낮인데 어둑하다.', '바람이 구름을 낮게 몰고 간다.', '흐린 빛에 모든 것이 납빛이다.', '해가 구름 뒤에서 희미하게 비친다.'],
   clear: ['오랜만에 하늘이 갰다. 추위가 살을 벤다.', '볕은 드는데 숨이 얼 만큼 춥다.', '하늘이 맑다. 눈밭이 눈부시다.', '맑은 하늘 아래 성에가 반짝인다.', '바람 한 점 없이 쨍하게 춥다.'],
+  blizzard: ['눈보라가 몰아친다. 승강장 끝이 안 보인다.', '바람이 눈을 옆으로 몰아 창을 때린다.', '흰 벽 같은 눈발 속에 전신주 하나가 흔들린다.', '눈이 바람에 실려 땅에 닿지를 않는다.', '바람 소리에 기관차 소리마저 묻힌다.'],
+  cold: ['숨을 들이쉬면 콧속이 언다.', '창 안쪽까지 성에가 두껍게 꼈다.', '빛이 희고 날카롭다. 그림자가 길다.', '레일이 추위에 쩡 하고 운다.', '눈이 발밑에서 마른 소리를 내며 부서진다.'],
 };
 
 /** 열차 창으로 보이는 장소 겉모습. 위험은 알려 주지 않는다. */
@@ -95,6 +98,16 @@ export const WEATHER_OMENS: Record<Weather, Record<SignTier, string[]>> = {
     some: ['쨍한 추위에 먼 데 문 닫히는 소리가 또렷하다.', '눈부신 눈밭 너머로 무언가 움직였다.'],
     few: ['볕이 쨍하고 바람이 없다. 새소리만 들린다.', '맑은 하늘에 참새 떼가 시끄럽다.'],
   },
+  blizzard: {
+    many: ['바람에 섞여 여럿이 우는 소리가 실려 온다.', '눈 위에 끌린 자국이 덮이자마자 또 생긴다.'],
+    some: ['바람 사이로 무언가 넘어지는 소리가 한 번 난다.', '눈발 속에 그림자 하나가 섰다가 지워진다.'],
+    few: ['까마귀들이 처마 밑에 웅크려 눈을 피한다.', '들개 한 마리가 처마 밑에서 바람을 피한다.'],
+  },
+  cold: {
+    many: ['얼어붙은 그림자들이 길가에 흩어져 서 있다.', '언 눈 위에 맨발 자국이 새로 났다. 다 얼지는 않았다.'],
+    some: ['언 그림자 하나가 서 있다. 손가락이 조금 움직였다.', '먼 데서 얼음 깨지는 소리가 쩡 하고 난다.'],
+    few: ['추위에 까마귀들도 지붕 위에서 꼼짝 않는다.', '볕 드는 담 밑에 참새들이 몸을 부풀리고 모였다.'],
+  },
 };
 
 /** 해석 말. 준비(얼마나·몇 명·호위)에 따라 바뀌고, 이 말이 약속이다. */
@@ -144,6 +157,10 @@ export function markSeen(g: Game, text: string): void {
 }
 
 export function pickWeather(g: Game): Weather {
+  // 재난을 켠 판에서 눈보라·한파가 닥친 구간이면 정차 날씨는 그 재난이다(창밖 글·조짐이 재난과 어긋나지 않게).
+  // 꺼진 판과 재난이 없는 구간은 아래 해시 그대로라 지금까지의 판이 같은 날씨를 본다.
+  const d = g.disasters ? g.disaster : undefined;
+  if (d?.stage === 'active') return d.kind;
   const total = WEATHER_WEIGHT.reduce((s, [, w]) => s + w, 0);
   let x = hash(`${g.seed}:w:${g.seg}`) % total;
   for (const [w, n] of WEATHER_WEIGHT) { if (x < n) return w; x -= n; }
