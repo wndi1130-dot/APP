@@ -778,3 +778,24 @@ func test_the_life_panel_follows_a_shortened_train_without_reading_past_its_end(
 	assert_eq(s.panel.car_i, 4, "칸이 줄면 고른 칸 번호부터 고친다")
 	assert_eq(panel._car_id(), String(s.cars[4]["id"]))
 	assert_true(panel.status.text.begins_with(String(s.cars[4]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
+
+
+func test_old_setters_check_the_whole_snapshot_before_touching_the_cars() -> void:
+	var s = _scene()
+	var rules: Dictionary = s.rules.duplicate(true)
+	var slots: Array = s.car("tail1")["bodies"].map(func(b): return b.slot)
+	var text: String = s.car("tail1")["values"].text
+	var events: int = s.life.event_count
+	var contexts: Dictionary = s.life.contexts.duplicate(true)
+	assert_false(s.set_comm("tail", "sit", [70]), "넷이 아닌 sit 배열은 받지 않는다")
+	assert_false(s.set_comm("tail", "rel", "low"))
+	assert_false(s.set_comm("nobody", "rel", 0))
+	assert_false(s.set_train("tension", 150.0))
+	assert_false(s.set_sit("tail", 9, 50.0))
+	assert_eq(s.rules, rules)
+	assert_eq(s.car("tail1")["bodies"].map(func(b): return b.slot), slots)
+	assert_eq(s.car("tail1")["values"].text, text)
+	assert_eq(s.life.event_count, events)
+	assert_eq(s.life.contexts, contexts)
+	assert_true(s.set_comm("tail", "rel", -10))
+	assert_eq(s.life.event_count, events + 1)

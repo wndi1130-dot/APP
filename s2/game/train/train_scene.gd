@@ -180,30 +180,55 @@ func _rebuild_layout() -> void:
 	_place_camera()
 
 
-func set_sit(comm_id: String, i: int, value: float) -> void:
-	rules["comms"][comm_id]["sit"][i] = clampf(value, 0.0, 100.0)
-	apply_rules()
+## 아래 세 손잡이도 set_value와 같은 길을 쓴다. 사본에 값을 넣어 전체를 검사하고,
+## 통과한 사본만 장면에 올린다. 틀린 값은 아무것도 바꾸지 않고 false를 돌려준다.
+func set_sit(comm_id: String, i: int, value: float) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	var sit = _comm_in(proposed, comm_id).get("sit")
+	if not (sit is Array) or i < 0 or i >= sit.size():
+		return false
+	sit[i] = clampf(value, 0.0, 100.0)
+	return _accept(proposed, "rules")
 
 
-func set_comm(comm_id: String, key: String, value) -> void:
-	rules["comms"][comm_id][key] = value
-	apply_rules()
+func set_comm(comm_id: String, key: String, value) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	var comm := _comm_in(proposed, comm_id)
+	if comm.is_empty():
+		return false
+	comm[key] = value
+	return _accept(proposed, "rules")
 
 
-func set_train(key: String, value) -> void:
-	rules["train"][key] = value
-	apply_rules(key)
+func set_train(key: String, value) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	if not (proposed.get("train") is Dictionary):
+		return false
+	proposed["train"][key] = value
+	return _accept(proposed, key)
 
 
 ## The test panel and a future port submit the same snapshot fields.
 func set_value(path: String, value) -> bool:
 	var proposed: Dictionary = rules.duplicate(true)
 	Catalog.assign_value(proposed, path, value)
+	return _accept(proposed, path)
+
+
+## 검사를 통과한 사본만 규칙 값이 되어 장면에 놓인다.
+func _accept(proposed: Dictionary, event: String) -> bool:
 	if not Rules.check(proposed).is_empty():
 		return false
 	rules = proposed
-	apply_rules(path)
+	apply_rules(event)
 	return true
+
+
+func _comm_in(source: Dictionary, comm_id: String) -> Dictionary:
+	var comms = source.get("comms")
+	if not (comms is Dictionary) or not (comms.get(comm_id) is Dictionary):
+		return {}
+	return comms[comm_id]
 
 
 func life_signal(cue: String, car_id: String = "") -> void:
