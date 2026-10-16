@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   chooseCard, COMMS, createGame, disasterDepart, disasterSettle, DZ, enableDisasters, foodCost, forecast, pickWeather, viewCard,
 } from '../../src/game';
@@ -11,6 +11,7 @@ import { playGame } from '../../tools/s1c_bot';
 
 const DZ0 = { ...DZ };
 afterEach(() => { Object.assign(DZ, DZ0); });
+beforeEach(() => { DZ.lead = 2; DZ.wait = 1; });
 
 const warmth = (g: Game) => COMMS.map(c => g.comms[c].base[0]);
 
@@ -24,8 +25,8 @@ function brewing(seed: string, kind: 'blizzard' | 'cold'): Game {
 }
 
 describe('두 구간 앞 예고', () => {
-  it('기본값이 추천안이다(되돌리려면 lead 1, wait 0)', () => {
-    expect([DZ.lead, DZ.wait]).toEqual([2, 1]);
+  it('기본값은 지금 규칙이다(추천안은 lead 2, wait 1로 켠다)', () => {
+    expect([DZ0.lead, DZ0.wait]).toEqual([1, 0]);
   });
 
   it('두 구간 앞은 종류를 말하지 않고 카드도 없다, 한 구간 앞에 종류와 대비 카드가 온다', () => {
