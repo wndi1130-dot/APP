@@ -127,6 +127,15 @@ export interface Secret { id: number; text: string; weight: number; about: Comm;
 export interface Leash { comm: Comm; since: number; weight: number }
 
 export interface HiddenBite { who: string; comm: Comm; at: number; due: number; found?: boolean; isolated?: boolean }
+/** 폭동(riot.ts)의 상태. prev는 직전 정산의 긴장, stage는 0 평온·1 항의·2 난장판, fire는 지금 불붙은 칸(오래된 순),
+ *  scorched는 한 정산이라도 불이 붙었던 칸(그을음·부서진 선반), spilled는 엎어진 물건(치우면 0으로 돌아간다). 나머지는 재기용 셈이다. */
+export interface RiotState {
+  prev: number; stage: 0 | 1 | 2; fire: string[]; scorched: string[]; spilled: number;
+  riots: number; protests: number; riotCards: number; fell: number; died: number;
+}
+export function riotStart(): RiotState {
+  return { prev: P.tension0, stage: 0, fire: [], scorched: [], spilled: 0, riots: 0, protests: 0, riotCards: 0, fell: 0, died: 0 };
+}
 export interface Card {
   uid: number; kind: string; comm?: Comm; n?: number; who?: string; text?: string;
   /** 콘텐츠 사건의 자리표시자 값. 올릴 때 정해 얼려 둔다(content.ts). '@aide'는 말하는 측근 */
@@ -284,6 +293,8 @@ export interface Game {
   trustCrisis: number | null;
   tensionWarned: boolean;
   tensionCrisisUsed: number;
+  /** 폭동(난장판) 상태 */
+  riot: RiotState;
   emergencyUsed: boolean;
   guidedLeft: number;
   decreeLeft: number;
@@ -580,7 +591,7 @@ export function createGame(seed = 's1a'): Game {
     injured: 0, symbols: 0, comms: {} as Record<Comm, CommState>, passed: {}, repealedAt: {}, boughtBy: {},
     secrets: [], nextSecretId: 1, leashes: [], blackmails: 0, corpseIssue: false, thrown: 0, stored: 0, deaths: [],
     strikes: 0, inStrike: false, strikeWarned: -99, lostSegments: 0, trustCrisis: null, tensionWarned: false,
-    tensionCrisisUsed: 0, emergencyUsed: false, guidedLeft: 0, decreeLeft: 0, guardEscort: false, forcedRun: false,
+    tensionCrisisUsed: 0, riot: riotStart(), emergencyUsed: false, guidedLeft: 0, decreeLeft: 0, guardEscort: false, forcedRun: false,
     autoLevers: false, actedSeg: 0, proposals: [], agendaHolder: null, cards: [], recentEvents: [], eventLog: {}, needs: {}, emergencyCalls: [], hunger: 0, linesSeen: [], hiddenBites: [], nextCardUid: 1, stop: null,
     council: null, lastSettle: null, journal: [], usedProfiles: [], end: null,
     stats: { dealsMade: 0, promisesKept: 0, promisesBroken: 0, lawsPassed: 0, lawsFailed: 0, repeals: 0, bribes: 0, blackmails: 0 },

@@ -1,3 +1,4 @@
+import { riotTick } from './riot';
 import { addCard, END_LINK } from './state';
 import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
@@ -766,6 +767,7 @@ function settle(g: Game): void {
   aiLeaders(g);
   darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
+  if (g.phase !== 'end') riotTick(g, notes); // 폭동(riot.ts): 긴장이 문턱을 위로 넘은 정산에 켜진다
   for (const c of COMMS) g.comms[c].away = 0;
   if (wasStranded) tripTick(g); // 수동차 원정: 못 돌아온 열차장은 여기서 판을 끝낸다(앞의 정산 틱들이 끝난 판 위에서 돌지 않게 뒤에 둔다)
   reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다

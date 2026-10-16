@@ -8,6 +8,7 @@ import type { BotOptions } from './s1c_bot';
 
 /** 자동 플레이로는 안 나오는 카드와 그 까닭. 봇이 쓰게 되거나 규칙이 들어오면 지운다. */
 export const REACH_NOTES: Record<string, string> = {
+'content:ev_h07_broken_word': '조용한 제안을 받고 앞칸 솥을 건드려야 해서 봇 판에선 드물다. 난수 흐름이 바뀌면 200판 표본에서 안 나올 수 있다.',
   'dom:officer': '의도된 미도달. 열차장 침상은 필드 중상·폐렴 때만이고 S3부터 생긴다(내정 스레드 c491d50). 코드엔 훅(overreachTick)만 둔다',
   leash: '협박 거래 뒤에 온다. 봇은 협박을 안 쓴다',
   'dom:give': '기술 m4 복원 뒤에 온다. 봇은 m4를 거의 안 고른다',

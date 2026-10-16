@@ -1,7 +1,7 @@
-import { COMMS } from '../data';
+import { COMMS, P } from '../data';
 import type { Game } from '../state';
 import { bedCrowd } from './beds';
-import { D } from './data';
+import { CAR_COMM, D } from './data';
 import { lawTechSit } from './lawtech';
 import { techUsable, zeroSit } from './state';
 
@@ -24,5 +24,13 @@ export function refreshSit(g: Game): void {
   const beds = bedCrowd(g);
   sit.medtech[2] += beds.medtech;
   sit.tail[2] += beds.tail;
+  // 폭동의 불이 지나간 칸: 그 칸이 이어진 집단이 자리를 잃는다. 판 끝까지 간다(riot.ts). 집단이 없는 칸은 그을음만 남는다.
+  for (const car of g.riot?.scorched ?? []) {
+    const c = CAR_COMM[car];
+    if (!c) continue;
+    sit[c][0] -= P.seatWarm;
+    sit[c][1] -= P.seatFood;
+    sit[c][2] += P.seatCrowd;
+  }
   d.sit = sit;
 }
