@@ -168,7 +168,7 @@ func test_a_plain_stop_has_no_storm_layers() -> void:
 	assert_eq(game.storm_layers.size(), 0)
 	assert_null(game.storm_screen)
 	assert_true(game.snow.emitting, "plain snowfall as before")
-	assert_almost_eq(game.sun.rotation_degrees.x, -50.0, 0.001)
+	assert_almost_eq(game.sun.rotation_degrees.x, FxState.SUN_PITCH, 0.001)
 	assert_eq(game.storm_glows().size(), 0)
 
 

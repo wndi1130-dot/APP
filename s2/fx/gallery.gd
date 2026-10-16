@@ -139,7 +139,7 @@ func _build_world() -> void:
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, -30, 0)
+	sun.rotation_degrees = Vector3(FxState.SUN_PITCH, -30, 0)
 	sun.shadow_enabled = true
 	add_child(sun)
 	var cam := Camera3D.new()
@@ -295,7 +295,7 @@ func _apply_storm(stage: String, wind_dir: Vector2, base_sun: float) -> void:
 	om.set_shader_parameter("whiteout", float(look.get("whiteout", 0.0)))
 	# The camera looks down the -Z axis from above: world z runs down the screen.
 	om.set_shader_parameter("storm_dir", Vector2(wind_dir.x, wind_dir.y * 0.7))
-	sun.rotation_degrees.x = float(look.get("sun_pitch", -50.0))
+	sun.rotation_degrees.x = float(look.get("sun_pitch", FxState.SUN_PITCH))
 	if look.is_empty():
 		return
 	sun.light_color = look["sun_color"]

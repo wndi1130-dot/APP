@@ -87,7 +87,7 @@ func _build_stage() -> void:
 	world.environment = environment
 	viewport.add_child(world)
 	sun = DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, -30, 0)
+	sun.rotation_degrees = Vector3(FxState.SUN_PITCH, -30, 0)
 	sun.light_energy = float(light.get("sun_energy", 1.0))
 	sun.light_color = light.get("sun_color", Color.WHITE)
 	sun.shadow_enabled = true

@@ -29,9 +29,14 @@ const KIND_TINT: Dictionary = {
 const BAND_LOOK: Dictionary = {
 	"night": {"name": "night", "sun": Color(0.58, 0.6, 0.64), "sun_energy": 0.05, "ambient": Color(0.31, 0.32, 0.345), "ambient_energy": 0.16, "tint": Color(0.33, 0.34, 0.36)},
 	"dawn": {"name": "dawn", "sun": Color(0.76, 0.77, 0.79), "sun_energy": 0.32, "ambient": Color(0.53, 0.55, 0.58), "ambient_energy": 0.36, "tint": Color(0.62, 0.64, 0.67)},
-	"day": {"name": "day", "sun": Color(0.84, 0.84, 0.85), "sun_energy": 0.55, "ambient": Color(0.60, 0.61, 0.63), "ambient_energy": 0.45, "tint": Color(0.76, 0.76, 0.77)},
+	"day": {"name": "day", "sun": Color(0.80, 0.85, 0.92), "sun_energy": 0.55, "ambient": Color(0.60, 0.61, 0.63), "ambient_energy": 0.45, "tint": Color(0.76, 0.76, 0.77)},
 	"dusk": {"name": "dusk", "sun": Color(0.80, 0.70, 0.58), "sun_energy": 0.32, "ambient": Color(0.46, 0.46, 0.48), "ambient_energy": 0.32, "tint": Color(0.60, 0.58, 0.56)},
 }
+
+## Low cold winter sun (user, 2026-10-17): degrees below level for the sun
+## in every scene (field, stop, home, gallery). Storm stages set their own.
+## The day sun colour above is the cold one of the same decision.
+const SUN_PITCH := -35.0
 
 ## Where each band starts (hours) per season state, from sunrise and sunset
 ## (seasons_regions.md 7장): dawn 1 h before sunrise, day 30 min after it,

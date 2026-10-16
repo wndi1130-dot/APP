@@ -208,7 +208,7 @@ func test_gallery_shows_the_three_storm_stops() -> void:
 	gallery.apply_preset(0)
 	assert_true(gallery.sun.shadow_enabled, "other presets keep shadows")
 	assert_eq(float(gallery.overlay.material.get_shader_parameter("whiteout")), 0.0, "and no storm on the screen")
-	assert_almost_eq(gallery.sun.rotation_degrees.x, -50.0, 0.001)
+	assert_almost_eq(gallery.sun.rotation_degrees.x, FxState.SUN_PITCH, 0.001)
 	for key in gallery.storm_fx:
 		assert_false(gallery.storm_fx[key].emitting, key)
 
@@ -335,3 +335,21 @@ func test_model_grade_presses_loud_colours() -> void:
 	assert_false(_sky_blue(grey))
 	# Black stays black; alpha is kept.
 	assert_eq(FxState.grade_color(Color(0, 0, 0, 0.5)), Color(0, 0, 0, 0.5))
+
+
+func test_low_cold_sun() -> void:
+	# User, 2026-10-17: a low, cold sun. The day colour leans cold but stays
+	# under the sky-blue line, and every scene uses the one height.
+	var day: Color = FxState.BAND_LOOK["day"]["sun"]
+	assert_almost_eq(day.r, 0.80, 0.001)
+	assert_almost_eq(day.g, 0.85, 0.001)
+	assert_almost_eq(day.b, 0.92, 0.001)
+	assert_gt(day.b, day.r, "cold")
+	assert_false(_sky_blue(day))
+	assert_almost_eq(FxState.SUN_PITCH, -35.0, 0.001)
+	var StormLook = load("res://fx/storm_look.gd")
+	for stage in ["before", "during"]:
+		assert_almost_eq(float(StormLook.look(stage)["sun_pitch"]), FxState.SUN_PITCH, 0.001, stage)
+	for path in ["res://game/field_game.gd", "res://fx/gallery.gd", "res://tools/map_preview.gd", "res://scripts/graybox.gd"]:
+		var code := FileAccess.get_file_as_string(path)
+		assert_true(code.contains("FxState.SUN_PITCH"), path)
