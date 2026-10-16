@@ -15,10 +15,11 @@ import type { Game, Profile } from './state';
 export type DisasterKind = 'blizzard' | 'cold';
 export interface DisasterState {
   kind: DisasterKind;
-  stage: 'warn' | 'active';
+  /** brewing 두 구간 앞(방향만 알림, DZ.lead 2일 때만), warn 한 구간 앞(종류와 대비 카드), active 닥침 */
+  stage: 'brewing' | 'warn' | 'active';
   left: number;
-  /** 대비 카드에서 고른 것. 절반으로 덜 깎인다 */
-  prep?: 'coal' | 'huddle';
+  /** 대비 카드에서 고른 것. 절반으로 덜 깎인다. wait는 출발을 하루 미뤄 첫 구간을 선 채로 넘긴다 */
+  prep?: 'coal' | 'huddle' | 'wait';
   /** 대비하지 않고 갔다(그냥 간다를 골랐거나 카드를 안 골랐다). 이어지는 동안 사람이 죽을 수 있다 */
   unprepared?: boolean;
   /** 시작할 때 모든 칸 온기에서 뺀 양. 끝날 때 같은 양을 돌려준다 */
@@ -44,6 +45,13 @@ export const DZ = {
   deathP: 0.25, deathCap: 2,
   /** 이 나이 미만은 고르지 않는다 */
   deathMinAge: 12,
+  // 날씨 명세(구현명세_날씨_v1 2·4장)의 추천안. 사용자 답 전이라 스위치로 둔다. lead 1, wait 0이면 예전 그대로다.
+  /** 예고를 몇 구간 앞에서 시작하나. 2면 두 구간 앞에 「나빠진다」만, 한 구간 앞에 종류·대비 카드, 끝나기 한 구간 앞에도 알린다. 1이면 한 구간 앞만 */
+  lead: 2,
+  /** 1이면 대비 카드에 「출발을 하루 미룬다」가 있다. 0이면 없다 */
+  wait: 1,
+  /** 출발을 하루 미루는 값: 석탄, 긴장(식량은 하루치 배급 foodCost를 그대로 쓴다) */
+  waitCoal: 2, waitTension: 1,
 };
 
 export const DISASTER_NAME: Record<DisasterKind, string> = { blizzard: '눈보라', cold: '한파' };
@@ -52,6 +60,10 @@ const WARN_LINE: Record<DisasterKind, string> = {
   cold: '무전: 북쪽에서 찬 공기가 내려온다.',
 };
 const END_LINE: Record<DisasterKind, string> = { blizzard: '눈보라가 그쳤다.', cold: '한파가 물러났다.' };
+/** 두 구간 앞: 종류는 말하지 않는다(하늘을 읽는 플레이어만 먼저 안다) */
+const BREW_LINE = '기관장: 지평선이 무겁다. 날이 나빠지겠다.';
+/** 끝나기 한 구간 앞(lead 2) */
+const EASE_LINE: Record<DisasterKind, string> = { blizzard: '바람이 잦아든다. 하루면 그친다.', cold: '추위가 한고비를 넘겼다. 하루만 더 버티면 된다.' };
 
 export const lenOf = (k: DisasterKind): number => (k === 'blizzard' ? DZ.blizzardLen : DZ.coldLen);
 export const warmOf = (k: DisasterKind): number => (k === 'blizzard' ? DZ.blizzardWarm : DZ.coldWarm);
@@ -73,9 +85,10 @@ export function blizzardActive(g: Game): boolean {
   return g.disaster?.kind === 'blizzard' && g.disaster.stage === 'active';
 }
 
-/** 이번 구간에 재난이 더 얹는 석탄(forecast가 읽는다). 출발 때 active가 되니 예고 상태도 센다. 재난이 없거나 석탄을 쌓아 뒀으면 0 */
+/** 이번 구간에 재난이 더 얹는 석탄(forecast가 읽는다). 출발 때 active가 되니 예고 상태도 센다. 재난이 없거나 두 구간 앞이거나 석탄을 쌓아 뒀으면 0 */
 export function disasterCoal(g: Game): number {
-  return g.disasters && g.disaster && g.disaster.prep !== 'coal' ? coalOf(g.disaster.kind) : 0;
+  const d = g.disasters ? g.disaster : undefined;
+  return d && d.stage !== 'brewing' && d.prep !== 'coal' ? coalOf(d.kind) : 0;
 }
 
 /** 출발 때: 예고 상태면 대비를 가려 active로 넘기고 모든 칸 온기를 깎는다(끝나면 돌려준다). 꺼진 판에선 아무 일도 안 한다. */
@@ -86,11 +99,13 @@ export function disasterDepart(g: Game): void {
   if (!d.prep && !d.unprepared) d.unprepared = true;
   g.cards = g.cards.filter(c => c.kind !== 'disaster_prep');
   d.stage = 'active';
-  d.left = lenOf(d.kind);
+  // 출발을 하루 미뤘으면 첫 구간은 선 채로 넘겼다(그 구간의 석탄과 사고가 없다).
+  d.left = Math.max(1, lenOf(d.kind) - (d.prep === 'wait' ? 1 : 0));
   const drop = warmOf(d.kind) * (d.prep ? DZ.prepWarmMult : 1);
   d.warmDrop = drop;
   for (const c of COMMS) g.comms[c].base[0] -= drop;
   const name = DISASTER_NAME[d.kind];
+  if (d.prep === 'wait') journal(g, `출발을 하루 미뤘다. ${name}의 첫날을 선 채로 넘겼다.`);
   journal(g, `${name}${josa(name, '이/가')} 시작됐다. 모든 칸 온기 −${drop}${d.prep === 'coal' ? '.' : `, ${d.left}구간 동안 구간마다 석탄 +${coalOf(d.kind)}.`}`, 'bad');
 }
 
@@ -128,16 +143,27 @@ export function disasterSettle(g: Game): void {
       journal(g, END_LINE[d.kind], 'good');
       g.disasterEnd = g.seg;
       delete g.disaster;
-    }
+    } else if (d.left === 1 && DZ.lead >= 2) journal(g, EASE_LINE[d.kind]);
     return;
   }
+  if (d?.stage === 'brewing') return warn(g, d.kind); // 두 구간 앞 -> 한 구간 앞: 이제 종류를 알린다
   if (d) return; // 예고 중
   if (g.seg < DZ.fromSeg || g.seg - (g.disasterEnd ?? -99) < DZ.gap) return;
   const r = hash(`${g.seed}|${g.seg}|disaster`) / 4294967296;
   const kind: DisasterKind | null = r < DZ.blizzardP ? 'blizzard' : r < DZ.blizzardP + DZ.coldP ? 'cold' : null;
   if (!kind) return;
-  g.disaster = { kind, stage: 'warn', left: 0 };
   (g.disasterStats ??= { blizzard: 0, cold: 0 })[kind] += 1;
+  if (DZ.lead >= 2) {
+    g.disaster = { kind, stage: 'brewing', left: 0 };
+    journal(g, BREW_LINE, 'bad');
+    return;
+  }
+  warn(g, kind);
+}
+
+/** 한 구간 앞 예고: 종류를 알리고 대비 카드를 놓는다 */
+function warn(g: Game, kind: DisasterKind): void {
+  g.disaster = { kind, stage: 'warn', left: 0 };
   journal(g, WARN_LINE[kind], 'bad');
   addCard(g, { kind: 'disaster_prep', text: kind });
 }

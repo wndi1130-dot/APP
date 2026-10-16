@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   advance, chooseCard, cloneGame, COMMS, createGame, disasterDepart, disasterSettle, DZ, enableDisasters, forecast, P, PROFILES, riskView, viewCard,
 } from '../../src/game';
@@ -11,6 +11,9 @@ import { playGame } from '../../tools/s1c_bot';
 
 const DZ0 = { ...DZ };
 afterEach(() => { Object.assign(DZ, DZ0); });
+// 이 파일은 한 구간 앞 예고만 있던 동작을 지킨다. 두 구간 앞 예고·출발 미루기(날씨 명세 추천안)를 끄면 이 동작으로 돌아가야 한다.
+// 켠 동작은 disaster_lead.test.ts가 본다.
+beforeEach(() => { DZ.lead = 1; DZ.wait = 0; });
 
 const warmth = (g: Game) => COMMS.map(c => g.comms[c].base[0]);
 const crowd = (g: Game) => COMMS.map(c => g.comms[c].base[2]);

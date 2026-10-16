@@ -1,5 +1,5 @@
 // S1a 판과 S1a+S1c 판을 같은 시드로 돌려 비교한다(s1c_domestic 14.1의 2번).
-// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D·BUDGET·DRAW키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never] [--budget] [--events] [--pick=second|random]
+// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D·BUDGET·DRAW키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never|wait|read] [--budget] [--events] [--pick=second|random]
 // --pick: 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸이나 안 막힌 칸 아무거나를 고르는 봇(첫 칸 치우침을 가르는 측정용)
 // --budget: 카드 구간 예산(src/game/budget.ts, events_disasters 3.1)을 켠다. 상한은 --set=perSeg:4 처럼 바꾼다(D에 없고 BUDGET에 있는 키는 BUDGET을 바꾼다).
 // --events: 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(src/game/event_pack.ts)를 켠다. 가중치 상수는 --set=pressMax:4 처럼 DRAW 키로 바꾼다.
@@ -37,7 +37,7 @@ const disasters = flags.includes('--disasters');
 const budget = flags.includes('--budget');
 const events = flags.includes('--events');
 const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
-if (prepFlag && prepFlag !== 'auto' && prepFlag !== 'never') throw new Error(`--prep는 auto나 never: ${prepFlag}`);
+if (prepFlag && !['auto', 'never', 'wait', 'read'].includes(prepFlag)) throw new Error(`--prep는 auto·never·wait·read: ${prepFlag}`);
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 const pickRule = flags.find(x => x.startsWith('--pick='))?.slice(7);
 if (pickRule && pickRule !== 'second' && pickRule !== 'random') throw new Error(`--pick는 second나 random: ${pickRule}`);
@@ -113,7 +113,7 @@ function summarize(ms: GameMetrics[]) {
     deaths: +mean(ms.map(m => m.deaths)).toFixed(2),
     disasters: { blizzard: +mean(ms.map(m => m.disasters.blizzard)).toFixed(3), cold: +mean(ms.map(m => m.disasters.cold)).toFixed(3) },
     disasterDeaths: +mean(ms.map(m => m.disasterDeaths)).toFixed(3),
-    prep: Object.fromEntries((['coal', 'huddle', 'none'] as const).map(k => [k, +mean(ms.map(m => m.prep[k])).toFixed(3)])),
+    prep: Object.fromEntries((['coal', 'huddle', 'wait', 'none'] as const).map(k => [k, +mean(ms.map(m => m.prep[k])).toFixed(3)])),
     tensionMax: +mean(ms.map(m => m.tensionMax)).toFixed(1),
     tensionEnd: +mean(ms.map(m => m.tensionEnd)).toFixed(1),
     warmEnd: +mean(ms.map(m => m.warmEnd)).toFixed(1),
@@ -144,7 +144,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
   const ms: GameMetrics[] = [];
   const opts: BotOptions = {
     ...run.opts,
-    ...(disasters ? { disasters: true, prep: prepFlag as 'auto' | 'never' | undefined } : {}),
+    ...(disasters ? { disasters: true, prep: prepFlag as 'auto' | 'never' | 'wait' | 'read' | undefined } : {}),
     ...(budget ? { budget: true } : {}),
     ...(events ? { eventPack: true } : {}),
     ...(pickRule ? { pickRule: pickRule as 'second' | 'random' } : {}),
@@ -155,7 +155,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
   console.log(`${run.name.padEnd(28)} 완주 ${(100 * (s.ends.complete ?? 0)).toFixed(0)}% 좌초 ${(100 * (s.ends.stranded ?? 0)).toFixed(0)}% `
     + `위기안건 ${s.forcedPerGame} 가혹법 ${s.harshPassed} 법 ${s.lawsPassed} 석탄최저 ${s.coalMin} 식량최저 ${s.foodMin} `
     + `석탄<30 ${s.coalUnder30} 식량<30 ${s.foodUnder30} 죽음 ${s.deaths} S1a카드 ${s.s1aCards} 내정카드 ${s.domCards}(${s.domCardsP10}~${s.domCardsP90})`);
-  console.log(`${''.padEnd(28)} 재난(판당) 눈보라 ${s.disasters.blizzard} 한파 ${s.disasters.cold} · 재난사망 ${s.disasterDeaths} · 대비(석탄/모아잠/그냥) ${s.prep.coal}/${s.prep.huddle}/${s.prep.none} · 긴장 최고 ${s.tensionMax} 끝 ${s.tensionEnd} · 끝 온기 ${s.warmEnd}`);
+  console.log(`${''.padEnd(28)} 재난(판당) 눈보라 ${s.disasters.blizzard} 한파 ${s.disasters.cold} · 재난사망 ${s.disasterDeaths} · 대비(석탄/모아잠/미룸/그냥) ${s.prep.coal}/${s.prep.huddle}/${s.prep.wait}/${s.prep.none} · 긴장 최고 ${s.tensionMax} 끝 ${s.tensionEnd} · 끝 온기 ${s.warmEnd}`);
   const r = s.repeat;
   if (s.budget) console.log(`${''.padEnd(28)} 예산(판당, 등급 3/4/5/6/7) 미룸 ${Object.values(s.budget.deferredByGrade).join('/')} 흐지부지 ${Object.values(s.budget.fadedByGrade).join('/')} 대상 없어 버림 ${Object.values(s.budget.droppedByGrade).join('/')}`);
   console.log(`${''.padEnd(28)} 이동사건 ${r.travelCards}(반복 ${r.travelRepeats}) 콘텐츠사건 ${r.contentCards}(반복 ${r.contentRepeats}) 제목반복 ${r.titleRepeats}/${r.titleTotal}(${(100 * r.titleRepeatRate).toFixed(1)}%) `

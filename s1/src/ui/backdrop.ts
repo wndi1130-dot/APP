@@ -9,17 +9,19 @@ import { cx, h } from './dom';
 // - 눈보라 속에서는 열차가 기듯이 간다(겹이 느려진다). 규칙에는 속도가 없어 보이는 것만 그렇다.
 // - 서면 그 자리에서 멎는다. 다시 그려도 겹이 제자리로 튀지 않게 달린 시간만 센다.
 
-export type Sky = Exclude<Weather, 'blizzard'> | 'storm';
+export type Sky = Exclude<Weather, 'blizzard' | 'cold_front'> | 'storm';
 
-/** 재난 날씨는 재난이 닥친 동안만 그 하늘이다. 끝난 뒤 남은 정차 날씨가 눈보라·한파면 갠 하늘(폭풍이 지나간 뒤)로 본다. */
-const calm = (w: Weather): Sky => (w === 'blizzard' || w === 'cold' ? 'clear' : w);
+/** 재난 날씨는 재난이 닥친 동안만 그 하늘이다. 끝난 뒤 남은 정차 날씨가 눈보라·한파면 갠 하늘(폭풍이 지나간 뒤)로 본다.
+ *  한파 전조는 겉으로는 갠 하늘이다(바람이 멎은 것만 다르다). */
+const calm = (w: Weather): Sky => (w === 'blizzard' || w === 'cold' || w === 'cold_front' ? 'clear' : w);
 
 /** 지금 창밖: 하늘 종류, 눈보라 예고(서쪽 하늘이 낮다), 겹이 흐르는 빠르기(1이 보통, 클수록 느림).
  *  last는 마지막 정차에서 본 날씨다(달리는 동안은 판에 날씨가 없다). */
 export function backdrop(g: Game, last?: Weather): { sky: Sky; omen: boolean; pace: number } {
   const d = g.disasters ? g.disaster : undefined;
   const sky: Sky = d?.stage === 'active' ? (d.kind === 'blizzard' ? 'storm' : 'cold') : calm(g.stop?.weather ?? last ?? 'snow');
-  return { sky, omen: d?.stage === 'warn' && d.kind === 'blizzard', pace: sky === 'storm' ? 2.2 : sky === 'fog' ? 1.3 : 1 };
+  // 두 구간 앞(어느 재난이든)과 눈보라 한 구간 앞은 바람 쪽 하늘이 내려앉는다. 한파 한 구간 앞은 오히려 갠다.
+  return { sky, omen: d?.stage === 'brewing' || (d?.stage === 'warn' && d.kind === 'blizzard'), pace: sky === 'storm' ? 2.2 : sky === 'fog' ? 1.3 : 1 };
 }
 
 export interface Clock { t: number; last: number; moving: boolean }
