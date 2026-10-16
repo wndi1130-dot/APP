@@ -6,6 +6,7 @@ extends Node3D
 ## player climbs to them, and the cellar shows alone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const TrainModels = preload("res://game/world/train_model_kit.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
@@ -592,7 +593,11 @@ func _build_blocks() -> void:
 	# A node of its own, with its doors and the way over it, so it can roll away.
 	var tt := _begin()
 	var train: Rect2i = data["train"]
-	for car in data["train_cars"]:
+	train_node = _mesh_node()
+	# 모델을 먼저 붙이고, 모델로 바꾸지 못했다고 돌려받은 칸만 상자로 그린다.
+	var models := TrainModels.attach_field(train_node, data)
+	for index: int in models.get_meta("fallback_cars", []):
+		var car: Dictionary = data["train_cars"][index]
 		var r: Rect2i = car["rect"]
 		box(tt, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
 	# Doors where people step down, on each side of the train that has them.
@@ -614,7 +619,6 @@ func _build_blocks() -> void:
 		for z: float in [train.position.y - 0.02, train.end.y + 0.02]:
 			for k in int(top / 0.3):
 				box(tt, Vector3(0.8, 0.07, 0.1), Vector3(at_x, 0.3 + 0.3 * k, z), wood)
-	train_node = _mesh_node()
 	train_node.mesh = tt.commit()
 	_build_lights()
 	for w in data["wagons"]:

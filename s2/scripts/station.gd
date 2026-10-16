@@ -2,6 +2,7 @@ extends Node3D
 
 signal sequence_finished
 const Graybox = preload("res://scripts/graybox.gd")
+const TrainModels = preload("res://game/world/train_model_kit.gd")
 var camera: Camera3D
 var actor: Node3D
 var torso: Node3D
@@ -20,7 +21,7 @@ var end_camera_transform: Transform3D
 func _ready() -> void:
 	environment = Graybox.environment_for(self, true)
 	Graybox.box(self, Vector3(60, 0.2, 38), Vector3(0, -0.2, 0), 0.3)
-	Graybox.train(self)
+	TrainModels.create_stage(self)
 	Graybox.box(self, Vector3(28, 0.4, 4), Vector3(0, 0, 4), 0.45)
 	for index in range(4):
 		Graybox.box(self, Vector3(3, 3 + index % 2, 3), Vector3(index * 5 - 8, 1.5, -7), 0.37)
