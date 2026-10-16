@@ -799,3 +799,41 @@ func test_old_setters_check_the_whole_snapshot_before_touching_the_cars() -> voi
 	assert_eq(s.life.contexts, contexts)
 	assert_true(s.set_comm("tail", "rel", -10))
 	assert_eq(s.life.event_count, events + 1)
+
+
+func test_a_display_only_change_keeps_a_running_chat() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var pair = s.life.interactions["medtech"]
+	var ids: Array = pair.members.map(func(m): return m["actor"])
+	_advance(s, 1)
+	assert_eq(s.life.interactions.get("medtech"), pair)
+	var bookings: Dictionary = {}
+	for id in ids:
+		bookings[id] = s.life.places.bookings.get(id, "")
+	assert_true(s.set_value("train.lux", float(s.rules["train"].get("lux", 0)) + 5.0))
+	assert_eq(s.life.interactions.get("medtech"), pair, "물품 값만 바뀌면 대화가 이어진다")
+	assert_eq(pair.reason, "")
+	for id in ids:
+		assert_eq(s.life.actors[id]["interaction"], "medtech")
+		assert_eq(s.life.places.bookings.get(id, ""), bookings[id])
+	# 앉는 모양이 바뀌는 칸이면 그 칸의 장면은 여전히 끝난다.
+	var sit: Array = s.rules["comms"]["medtech"]["sit"]
+	assert_true(s.set_sit("medtech", 2, 0.0 if float(sit[2]) >= 50.0 else 100.0))
+	assert_false(s.life.interactions.has("medtech"))
+
+
+func test_a_display_only_change_lets_a_cleanup_finish_and_clear_the_props() -> void:
+	var s = _scene()
+	s.set_value("view.collapse_by_car", {"tail1": 5})
+	s.set_value("view.collapse_by_car", {"tail1": 6})
+	var room = s.life.rooms["tail1"]
+	assert_true(room.traces["sacks"]["overturned"])
+	s.life_signal("cleanup", "tail1")
+	var job = s.life.interactions.get("tail1")
+	assert_not_null(job, s.life.last_failure)
+	_advance(s, 2)
+	assert_true(s.set_value("train.lux", float(s.rules["train"].get("lux", 0)) + 5.0))
+	assert_eq(s.life.interactions.get("tail1"), job, "물품 값만 바뀌면 치우기가 이어진다")
+	_advance(s, 50)
+	assert_false(room.traces["sacks"]["overturned"], "끝까지 치우면 넘어진 짐이 정리된다")

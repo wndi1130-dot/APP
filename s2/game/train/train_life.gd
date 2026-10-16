@@ -51,9 +51,20 @@ func setup(scene: Node3D) -> void:
 func before_refresh() -> void:
 	# A new seating snapshot supersedes old place coordinates. Explicit scene
 	# signals still use the timed exit; this resets a replaced snapshot safely.
+	before_reseat(interactions.keys())
+
+
+## 다시 앉는 칸에서 벌어지는 장면과, 그 칸 사람이 낀 다른 칸의 장면만 끝낸다.
+## 나머지 장면(치우기 포함)은 이어 가서 제때 끝나야 뒷정리까지 된다.
+func before_reseat(car_ids: Array) -> void:
 	for car_id in interactions.keys():
-		interactions[car_id].interrupt("rules")
-		_finish(car_id, true)
+		var scene = interactions[car_id]
+		var touched: bool = car_ids.has(car_id)
+		for m in scene.members:
+			touched = touched or car_ids.has(actors.get(int(m["actor"]), {}).get("home", ""))
+		if touched:
+			scene.interrupt("rules")
+			_finish(car_id, true)
 
 
 func add_car(c: Dictionary) -> void:
