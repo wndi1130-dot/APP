@@ -104,15 +104,21 @@ func fill() -> void:
 			node.select(maxi(0, (node.get_meta("values") as Array).find(value)))
 		elif node is LineEdit and not node.has_focus():
 			node.text = str(value if value != null else "")
-	var c: Dictionary = scene.life.contexts[_car_id()]
-	var stage: int = int(scene.rules.get("view", {}).get("collapse_by_car", {}).get(_car_id(), -1))
-	stage_picker.select(stage + 1)
-	status.text = "%s · %s · 화면용 첫 값" % [scene.car(_car_id())["def"]["name"], Catalog.data()["collapse"][int(c["stage"])]["name"]]
+	var id := _car_id()
+	var c: Dictionary = scene.life.contexts.get(id, {})
+	if not c.is_empty():
+		var stage: int = int(scene.rules.get("view", {}).get("collapse_by_car", {}).get(id, -1))
+		stage_picker.select(stage + 1)
+		status.text = "%s · %s · 화면용 첫 값" % [scene.car(id)["def"]["name"], Catalog.data()["collapse"][int(c["stage"])]["name"]]
 	_filling = false
 
 
+## 부모 판의 번호가 아직 옛 편성을 가리켜도 칸 목록 밖을 읽지 않는다.
 func _car_id() -> String:
-	return String(scene.cars[hand.car_i]["id"])
+	if scene == null or scene.cars.is_empty():
+		return ""
+	var i: int = hand.car_i if hand != null else 0
+	return String(scene.cars[clampi(i, 0, scene.cars.size() - 1)]["id"])
 
 
 func _changed(value, path: String) -> void:

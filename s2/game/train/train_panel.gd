@@ -99,13 +99,14 @@ func _ready() -> void:
 	captain_board.visible = false
 	add_child(captain_board)
 	_button(captain_board.foot, "다른 보기", next_captain)
+	# 편성이 바뀌면 이 판이 고른 칸 번호부터 고친다. 생활 판보다 먼저 이어 두어야 그 판이 옛 번호를 읽지 않는다.
+	if scene != null:
+		scene.rules_applied.connect(fill)
 	life_panel = LifePanel.new()
 	life_panel.hand = self
 	life_panel.scene = scene
 	life_panel.visible = false
 	add_child(life_panel)
-	if scene != null:
-		scene.rules_applied.connect(fill)
 	fill()
 
 

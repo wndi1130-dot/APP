@@ -700,3 +700,140 @@ func test_reregistering_a_refuge_cancels_its_incoming_evacuation() -> void:
 	for a in movers:
 		assert_true(a.get("evacuating", false))
 		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))
+
+
+func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> void:
+	var s = _scene()
+	assert_true(s.set_value("view.work_time", true))
+	assert_true(s.set_value("view.fire_cars", ["tail1"]))
+	assert_true(s.set_value("view.collapse_by_car", {"tail1": 0}))
+	var c: Dictionary = s.life.contexts["tail1"]
+	assert_eq(int(c["stage"]), 0)
+	assert_true(c["fire"])
+	assert_false(c["safe"])
+	for key in ["meal", "work", "social", "gather", "memorial", "classroom", "stove"]:
+		assert_false(c[key], "불난 칸에서 열린 조건: " + String(key))
+	var checked: int = 0
+	for spot in s.life.places.spots.values():
+		if spot["car"] == "tail1" and String(spot["when"]) in ["meal", "work", "social", "stove", "gather"]:
+			assert_false(spot["open"], "불난 칸의 자리: " + String(spot["id"]))
+			checked += 1
+	assert_gt(checked, 0)
+	assert_true(s.set_value("view.collapse_by_car", {"tail1": 6}))
+	assert_true(s.life.contexts["tail1"]["fire"])
+	assert_false(s.life.contexts["tail1"]["recovery"], "불이 난 채로 회복 표시를 켜지 않는다")
+	assert_false(s.life.contexts["tail1"]["social"])
+
+
+func test_evacuation_secures_a_refuge_first_and_falls_back_to_the_next_one() -> void:
+	var s = _scene()
+	s.rules["view"]["fire_cars"] = ["medtech"]
+	s.life.refresh("fire")
+	var places = s.life.places
+	# 꼬리 칸 한 사람이 선 자리에 두 피난처의 앵커를 모두 겹쳐 둔다. 정원으로는 빈자리가 남는다.
+	var blocker: int = s.car("tail1")["bodies"][0].get_instance_id()
+	places.release(blocker)
+	var rest: Array = places.candidates("tail1", ["rest", "watch"])
+	assert_false(rest.is_empty())
+	assert_true(places.reserve(blocker, rest[0]))
+	var at: Vector3 = places.target(blocker)
+	var first: Dictionary = places.spots["tail1/refuge"]
+	var second: Dictionary = places.spots["dining/refuge"]
+	var second_anchors: Array = second["anchors"].duplicate(true)
+	for spot in [first, second]:
+		var x0: float = float(spot["x0"])
+		spot["anchors"] = spot["anchors"].map(func(_v): return [at.x - x0, at.y, at.z])
+	assert_true(places.candidates("tail1", ["refuge"]).has("tail1/refuge"), "정원으로는 아직 빈자리가 있다")
+	var before: Dictionary = {}
+	for b in s.car("medtech")["bodies"]:
+		var id: int = b.get_instance_id()
+		before[id] = [b.state, b.position, places.bookings.get(id, ""), s.life.actors[id]["activity"]]
+	assert_false(before.is_empty())
+	s.life._evacuate(s.car("medtech"))
+	for b in s.car("medtech")["bodies"]:
+		var id: int = b.get_instance_id()
+		assert_false(s.life.actors[id].get("evacuating", false))
+		assert_eq([b.state, b.position, places.bookings.get(id, ""), s.life.actors[id]["activity"]], before[id], "피난처를 못 잡으면 하던 일을 그대로 둔다")
+	second["anchors"] = second_anchors
+	s.life._evacuate(s.car("medtech"))
+	var moved: int = 0
+	for b in s.car("medtech")["bodies"]:
+		var id: int = b.get_instance_id()
+		if s.life.actors[id].get("evacuating", false):
+			moved += 1
+			assert_eq(places.bookings.get(id, ""), "dining/refuge", "첫 피난처가 막히면 다음 피난처로 간다")
+	assert_gt(moved, 0)
+
+
+func test_the_life_panel_follows_a_shortened_train_without_reading_past_its_end() -> void:
+	var s = _scene(true)
+	assert_true(s.set_value("dom.extraCars", ["coach", "store"]))
+	assert_eq(s.cars.size(), 7)
+	s.panel._flip_life()
+	s.panel.pick(6)
+	var panel = s.panel.life_panel
+	assert_eq(panel._car_id(), String(s.cars[6]["id"]))
+	assert_true(s.set_value("dom.extraCars", []))
+	assert_eq(s.cars.size(), 5)
+	assert_eq(s.panel.car_i, 4, "칸이 줄면 고른 칸 번호부터 고친다")
+	assert_eq(panel._car_id(), String(s.cars[4]["id"]))
+	assert_true(panel.status.text.begins_with(String(s.cars[4]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
+
+
+func test_old_setters_check_the_whole_snapshot_before_touching_the_cars() -> void:
+	var s = _scene()
+	var rules: Dictionary = s.rules.duplicate(true)
+	var slots: Array = s.car("tail1")["bodies"].map(func(b): return b.slot)
+	var text: String = s.car("tail1")["values"].text
+	var events: int = s.life.event_count
+	var contexts: Dictionary = s.life.contexts.duplicate(true)
+	assert_false(s.set_comm("tail", "sit", [70]), "넷이 아닌 sit 배열은 받지 않는다")
+	assert_false(s.set_comm("tail", "rel", "low"))
+	assert_false(s.set_comm("nobody", "rel", 0))
+	assert_false(s.set_train("tension", 150.0))
+	assert_false(s.set_sit("tail", 9, 50.0))
+	assert_eq(s.rules, rules)
+	assert_eq(s.car("tail1")["bodies"].map(func(b): return b.slot), slots)
+	assert_eq(s.car("tail1")["values"].text, text)
+	assert_eq(s.life.event_count, events)
+	assert_eq(s.life.contexts, contexts)
+	assert_true(s.set_comm("tail", "rel", -10))
+	assert_eq(s.life.event_count, events + 1)
+
+
+func test_a_display_only_change_keeps_a_running_chat() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var pair = s.life.interactions["medtech"]
+	var ids: Array = pair.members.map(func(m): return m["actor"])
+	_advance(s, 1)
+	assert_eq(s.life.interactions.get("medtech"), pair)
+	var bookings: Dictionary = {}
+	for id in ids:
+		bookings[id] = s.life.places.bookings.get(id, "")
+	assert_true(s.set_value("train.lux", float(s.rules["train"].get("lux", 0)) + 5.0))
+	assert_eq(s.life.interactions.get("medtech"), pair, "물품 값만 바뀌면 대화가 이어진다")
+	assert_eq(pair.reason, "")
+	for id in ids:
+		assert_eq(s.life.actors[id]["interaction"], "medtech")
+		assert_eq(s.life.places.bookings.get(id, ""), bookings[id])
+	# 앉는 모양이 바뀌는 칸이면 그 칸의 장면은 여전히 끝난다.
+	var sit: Array = s.rules["comms"]["medtech"]["sit"]
+	assert_true(s.set_sit("medtech", 2, 0.0 if float(sit[2]) >= 50.0 else 100.0))
+	assert_false(s.life.interactions.has("medtech"))
+
+
+func test_a_display_only_change_lets_a_cleanup_finish_and_clear_the_props() -> void:
+	var s = _scene()
+	s.set_value("view.collapse_by_car", {"tail1": 5})
+	s.set_value("view.collapse_by_car", {"tail1": 6})
+	var room = s.life.rooms["tail1"]
+	assert_true(room.traces["sacks"]["overturned"])
+	s.life_signal("cleanup", "tail1")
+	var job = s.life.interactions.get("tail1")
+	assert_not_null(job, s.life.last_failure)
+	_advance(s, 2)
+	assert_true(s.set_value("train.lux", float(s.rules["train"].get("lux", 0)) + 5.0))
+	assert_eq(s.life.interactions.get("tail1"), job, "물품 값만 바뀌면 치우기가 이어진다")
+	_advance(s, 50)
+	assert_false(room.traces["sacks"]["overturned"], "끝까지 치우면 넘어진 짐이 정리된다")

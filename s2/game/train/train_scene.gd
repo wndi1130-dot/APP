@@ -136,8 +136,9 @@ func car(id: String) -> Dictionary:
 
 
 ## Seat every car again from the rules as they are now.
+## 다시 앉히는 것은 앉는 모양이 실제로 달라지는 칸뿐이다. 그 칸이 걸린 장면만 먼저 끝내고,
+## 물품·석탄처럼 보이는 값만 바뀐 칸의 사람과 장면은 그대로 둔다.
 func apply_rules(event: String = "rules") -> void:
-	life.before_refresh()
 	var definitions: Array = Rules.display_cars(rules)
 	var rebuild: bool = definitions.size() != cars.size()
 	if not rebuild:
@@ -146,13 +147,21 @@ func apply_rules(event: String = "rules") -> void:
 				rebuild = true
 				break
 	if rebuild:
+		life.before_refresh()
 		_rebuild_layout()
 	for i in cars.size():
 		cars[i]["def"] = definitions[i]
+	var reseat: Array = []
+	for c in cars:
+		var key := _seat_key(c)
+		if key != String(c.get("seat_key", "")):
+			reseat.append(c["id"])
+			c["seat_key"] = key
+	life.before_reseat(reseat)
 	_hold_from = 0.0
 	_hold_to = 0.0
 	for c in cars:
-		_seat_car(c)
+		_seat_car(c, reseat.has(c["id"]))
 		if _in_session(c) and String(c["quiet"]) == "vote":
 			_hold_from = float(c["x0"])
 			_hold_to = _hold_from + CAR_LENGTH
@@ -180,30 +189,55 @@ func _rebuild_layout() -> void:
 	_place_camera()
 
 
-func set_sit(comm_id: String, i: int, value: float) -> void:
-	rules["comms"][comm_id]["sit"][i] = clampf(value, 0.0, 100.0)
-	apply_rules()
+## 아래 세 손잡이도 set_value와 같은 길을 쓴다. 사본에 값을 넣어 전체를 검사하고,
+## 통과한 사본만 장면에 올린다. 틀린 값은 아무것도 바꾸지 않고 false를 돌려준다.
+func set_sit(comm_id: String, i: int, value: float) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	var sit = _comm_in(proposed, comm_id).get("sit")
+	if not (sit is Array) or i < 0 or i >= sit.size():
+		return false
+	sit[i] = clampf(value, 0.0, 100.0)
+	return _accept(proposed, "rules")
 
 
-func set_comm(comm_id: String, key: String, value) -> void:
-	rules["comms"][comm_id][key] = value
-	apply_rules()
+func set_comm(comm_id: String, key: String, value) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	var comm := _comm_in(proposed, comm_id)
+	if comm.is_empty():
+		return false
+	comm[key] = value
+	return _accept(proposed, "rules")
 
 
-func set_train(key: String, value) -> void:
-	rules["train"][key] = value
-	apply_rules(key)
+func set_train(key: String, value) -> bool:
+	var proposed: Dictionary = rules.duplicate(true)
+	if not (proposed.get("train") is Dictionary):
+		return false
+	proposed["train"][key] = value
+	return _accept(proposed, key)
 
 
 ## The test panel and a future port submit the same snapshot fields.
 func set_value(path: String, value) -> bool:
 	var proposed: Dictionary = rules.duplicate(true)
 	Catalog.assign_value(proposed, path, value)
+	return _accept(proposed, path)
+
+
+## 검사를 통과한 사본만 규칙 값이 되어 장면에 놓인다.
+func _accept(proposed: Dictionary, event: String) -> bool:
 	if not Rules.check(proposed).is_empty():
 		return false
 	rules = proposed
-	apply_rules(path)
+	apply_rules(event)
 	return true
+
+
+func _comm_in(source: Dictionary, comm_id: String) -> Dictionary:
+	var comms = source.get("comms")
+	if not (comms is Dictionary) or not (comms.get(comm_id) is Dictionary):
+		return {}
+	return comms[comm_id]
 
 
 func life_signal(cue: String, car_id: String = "") -> void:
@@ -285,7 +319,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		scroll(-dx * camera.size / maxf(get_viewport().get_visible_rect().size.y, 1.0))
 
 
-func _seat_car(c: Dictionary) -> void:
+## 칸이 앉는 모양을 정하는 값을 한 줄로 묶는다. 이 줄이 같으면 다시 앉혀도 같은 모양이라 사람을 움직이지 않는다.
+func _seat_key(c: Dictionary) -> String:
+	var comm := Rules.comm_of(rules, c["def"])
+	var train: Dictionary = rules.get("train", {})
+	var m := Look.mood(comm, train)
+	var row: Array = [c["def"], phase(), c["x0"], _captain_side(c), m, Look.figures(c["def"], comm, phase())]
+	if _in_session(c):
+		row.append_array([Look.unrest_score(train, rules.get("comms", {})), Look.council_quiet(train)])
+	else:
+		var value := Look.gesture_for(m, train, comm)
+		row.append_array([Look.warmth(comm), Look.crowding(comm), value, Look.gesture_also(value, comm)])
+	return var_to_str(row)
+
+
+func _seat_car(c: Dictionary, reseat: bool = true) -> void:
 	var comm := Rules.comm_of(rules, c["def"])
 	var n := Look.figures(c["def"], comm, phase())
 	if bool(Catalog.layout(c["def"]).get("storage_only", false)):
@@ -294,6 +342,14 @@ func _seat_car(c: Dictionary) -> void:
 	var m := Look.mood(comm, rules.get("train", {}))
 	var look := Look.mood_look(m)
 	c["mood"] = m
+	if reseat:
+		_seat_bodies(c, comm, n, w, m, look)
+	# 등불은 생활 쪽이 밤·정차에 맞춰 곱하므로 다시 앉히지 않는 칸도 매번 바탕값부터 칠한다.
+	_dress_car(c, w, look)
+	(c["values"] as Label3D).text = values_text(c)
+
+
+func _seat_bodies(c: Dictionary, comm: Dictionary, n: int, w: float, m: String, look: Dictionary) -> void:
 	var bodies: Array = c["bodies"]
 	while bodies.size() > n:
 		var gone: Node3D = bodies.pop_back()
@@ -315,8 +371,6 @@ func _seat_car(c: Dictionary) -> void:
 		# The dining table and the captain's desk stand where the floor places are.
 		var open_floor: bool = not TABLED.has(String((c["def"] as Dictionary).get("kind", "")))
 		_seat_rows(c, Look.seating(n, w, Look.crowding(comm), m, open_floor), bool(look["gather"]))
-	_dress_car(c, w, look)
-	(c["values"] as Label3D).text = values_text(c)
 
 
 ## The dining car while the council sits.
