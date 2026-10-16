@@ -1,0 +1,719 @@
+{
+  "version": 1,
+  "mode_setting": "visuals/train_models_enabled",
+  "near_distance_m": 32,
+  "far_distance_m": 120,
+  "assets": {
+    "coach_worn": {
+      "status": "held",
+      "path": "",
+      "category": "exterior",
+      "lod0_tris": 7760,
+      "lod1_tris": 3761,
+      "triangle_limit": 8000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1427944,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        16,
+        4.90083,
+        3.33757
+      ],
+      "sha256": "6e17aee622204b34de4cb4d091a352a094f61d06b0740304d293fc9f133d86e7"
+    },
+    "coach_clean": {
+      "status": "held",
+      "path": "",
+      "category": "exterior",
+      "lod0_tris": 7759,
+      "lod1_tris": 3752,
+      "triangle_limit": 8000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1450212,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        16,
+        4.158591,
+        3.187472
+      ],
+      "sha256": "699f7955c266f851db8dae3aa6b8bd51cead8f13528774ff3c5630c5d1313382"
+    },
+    "freight_open": {
+      "status": "ready",
+      "path": "res://models/train_exterior/freight_open.glb",
+      "category": "exterior",
+      "lod0_tris": 5819,
+      "lod1_tris": 2820,
+      "triangle_limit": 6000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1194832,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        16,
+        7.839137,
+        7.07469
+      ],
+      "sha256": "e7fb26236fc427786441f9257e81edf40cbffb8c4522dede4a523acbec0342a0"
+    },
+    "tender": {
+      "status": "ready",
+      "path": "res://models/train_exterior/tender.glb",
+      "category": "exterior",
+      "lod0_tris": 3879,
+      "lod1_tris": 1869,
+      "triangle_limit": 4000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1270216,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        5.2,
+        2.559335,
+        1.508295
+      ],
+      "sha256": "7e3df5897ade8e4158fda7204a0d260ad61047825d8453bd87b2f54b8f0bd7d3"
+    },
+    "locomotive": {
+      "status": "ready",
+      "path": "res://models/train_exterior/locomotive.glb",
+      "category": "exterior",
+      "lod0_tris": 9698,
+      "lod1_tris": 4698,
+      "triangle_limit": 10000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1632928,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        10.4,
+        4.385171,
+        3.104681
+      ],
+      "sha256": "305a2550aad32ce030b30ee521240203fbd94e5dd03e28c9e0c3d01c33f3b142"
+    },
+    "coach_glass": {
+      "status": "held",
+      "path": "",
+      "category": "exterior",
+      "lod0_tris": 7759,
+      "lod1_tris": 3751,
+      "triangle_limit": 8000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1528864,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        16,
+        6.261213,
+        4.510262
+      ],
+      "sha256": "2654224db4220b721d02bc3e13aef7b7ac7327542cc54bb49be485d441d1f1d0"
+    },
+    "coach_chief": {
+      "status": "held",
+      "path": "",
+      "category": "exterior",
+      "lod0_tris": 7759,
+      "lod1_tris": 3756,
+      "triangle_limit": 8000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1478484,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        16,
+        6.370298,
+        2.806058
+      ],
+      "sha256": "3e12538884858b2d18a91a715e3af873fb06a58a078e0089242b3537743dd73c"
+    },
+    "coach_medic": {
+      "status": "ready",
+      "path": "res://models/train_exterior/coach_medic.glb",
+      "category": "exterior",
+      "lod0_tris": 6298,
+      "lod1_tris": 3020,
+      "triangle_limit": 8000,
+      "texture_limit": 1024,
+      "texture_size": [
+        768,
+        768
+      ],
+      "materials": 1,
+      "bytes": 1350936,
+      "byte_limit": 1800000,
+      "dimensions_m": [
+        16,
+        5.140098,
+        4.541282
+      ],
+      "sha256": "d1c55fe2940de6ccfe77567d47fd33349f048f97adcdebb14327d6b4b9fe04c6",
+      "attachment_sites": {
+        "roof_clear": {
+          "zone": "roof",
+          "position": [
+            0,
+            5.140098,
+            0
+          ],
+          "clearance_m": [
+            0.5,
+            1,
+            0.5
+          ],
+          "open_windows": true,
+          "roof_clear": true,
+          "flue_missing": true,
+          "blocks_window": false,
+          "blocks_passage": false,
+          "duplicate": false
+        }
+      }
+    },
+    "coach_window_frame": {
+      "status": "ready",
+      "path": "res://models/train_parts/coach_window_frame.glb",
+      "category": "parts",
+      "lod0_tris": 1454,
+      "lod1_tris": 705,
+      "triangle_limit": 1500,
+      "texture_limit": 512,
+      "texture_size": [
+        512,
+        512
+      ],
+      "materials": 1,
+      "bytes": 278312,
+      "byte_limit": 750000,
+      "dimensions_m": [
+        0.932233,
+        1.2,
+        0.405457
+      ],
+      "sha256": "cd7781ec2f100045dee0619da24e2ee725e100abb0bcb1afae02f70f78b087ed"
+    },
+    "cab_window_frame": {
+      "status": "held",
+      "path": "",
+      "category": "parts",
+      "lod0_tris": 386,
+      "lod1_tris": 0,
+      "triangle_limit": 400,
+      "texture_limit": 256,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 94148,
+      "byte_limit": 250000,
+      "dimensions_m": [
+        0.8,
+        0.797301,
+        0.261554
+      ],
+      "sha256": "5c174c0849ddc52e8290555264905567f5229ba6bc0c24bfeb86abde91666521"
+    },
+    "headlamp": {
+      "status": "held",
+      "path": "",
+      "category": "parts",
+      "lod0_tris": 387,
+      "lod1_tris": 0,
+      "triangle_limit": 400,
+      "texture_limit": 256,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 109832,
+      "byte_limit": 250000,
+      "dimensions_m": [
+        0.322839,
+        0.45,
+        0.365339
+      ],
+      "sha256": "7cdf8f9d652d7f64e366329bf4cd7fdf042368caea7bda06cf325cc91fe42866"
+    },
+    "plank_band": {
+      "status": "ready",
+      "path": "res://models/train_parts/plank_band.glb",
+      "category": "parts",
+      "lod0_tris": 1455,
+      "lod1_tris": 704,
+      "triangle_limit": 1500,
+      "texture_limit": 512,
+      "texture_size": [
+        512,
+        512
+      ],
+      "materials": 1,
+      "bytes": 316608,
+      "byte_limit": 750000,
+      "dimensions_m": [
+        3,
+        2.453969,
+        0.582734
+      ],
+      "sha256": "00581aa94c4675502f991bdecf6a9dd561fa414486ed9a06aa1667e71368ccd6"
+    },
+    "plank_patches": {
+      "status": "ready",
+      "path": "res://models/train_parts/plank_patches.glb",
+      "category": "parts",
+      "lod0_tris": 1453,
+      "lod1_tris": 698,
+      "triangle_limit": 1500,
+      "texture_limit": 512,
+      "texture_size": [
+        512,
+        512
+      ],
+      "materials": 1,
+      "bytes": 472652,
+      "byte_limit": 750000,
+      "dimensions_m": [
+        1.6,
+        0.801604,
+        0.178611
+      ],
+      "sha256": "d15de0fc7c598f980087d81bd77d466f8b3874bb8fbef3b2e5d9275ddf6d537f"
+    },
+    "steel_patches": {
+      "status": "held",
+      "path": "",
+      "category": "parts",
+      "lod0_tris": 1454,
+      "lod1_tris": 701,
+      "triangle_limit": 1500,
+      "texture_limit": 512,
+      "texture_size": [
+        512,
+        512
+      ],
+      "materials": 1,
+      "bytes": 376100,
+      "byte_limit": 750000,
+      "dimensions_m": [
+        1.4,
+        0.819771,
+        0.572582
+      ],
+      "sha256": "80556a2f39f7dca1f1a296fca9baab335d99412363754b43bd37fa02731bb618"
+    },
+    "coach_flue": {
+      "status": "ready",
+      "path": "res://models/train_parts/coach_flue.glb",
+      "category": "parts",
+      "lod0_tris": 1454,
+      "lod1_tris": 704,
+      "triangle_limit": 1500,
+      "texture_limit": 512,
+      "texture_size": [
+        512,
+        512
+      ],
+      "materials": 1,
+      "bytes": 305476,
+      "byte_limit": 750000,
+      "dimensions_m": [
+        0.409647,
+        0.9,
+        0.390863
+      ],
+      "sha256": "2d332863b866154cf436a7ec28a1cc5a654bd87790f62905e7c392233642103b"
+    },
+    "side_step": {
+      "status": "ready",
+      "path": "res://models/train_parts/side_step.glb",
+      "category": "parts",
+      "lod0_tris": 1454,
+      "lod1_tris": 702,
+      "triangle_limit": 1500,
+      "texture_limit": 512,
+      "texture_size": [
+        512,
+        512
+      ],
+      "materials": 1,
+      "bytes": 305688,
+      "byte_limit": 750000,
+      "dimensions_m": [
+        1.070589,
+        1.2,
+        0.796621
+      ],
+      "sha256": "ad76a1a2508f19e7b5e9451c93bdd130a8559a23dc2cef36fcb5e4d057010dd8"
+    }
+  },
+  "kinds": {
+    "car": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "tail1": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "tail2": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "tail3": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "cold": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "medtech": {
+      "assets": [
+        "coach_medic"
+      ],
+      "people": true,
+      "parts": [
+        {
+          "asset": "coach_flue",
+          "site": "roof_clear"
+        }
+      ]
+    },
+    "dining": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "guard": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "captain": {
+      "assets": [
+        "coach_chief"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "front": {
+      "assets": [
+        "coach_clean"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "workshop": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "engine_room": {
+      "assets": [
+        "coach_worn"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "greenhouse": {
+      "assets": [
+        "coach_glass"
+      ],
+      "people": true,
+      "parts": []
+    },
+    "freight": {
+      "assets": [
+        "freight_open"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "store": {
+      "assets": [
+        "freight_open"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "tender": {
+      "assets": [
+        "tender"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "locomotive": {
+      "assets": [
+        "locomotive"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "engine": {
+      "assets": [
+        "tender",
+        "locomotive"
+      ],
+      "people": false,
+      "parts": []
+    }
+  },
+  "part_rules": {
+    "coach_window_frame": {
+      "kinds": [
+        "car",
+        "tail1",
+        "tail2",
+        "tail3",
+        "cold",
+        "medtech",
+        "dining",
+        "guard",
+        "captain",
+        "front",
+        "workshop",
+        "engine_room",
+        "greenhouse"
+      ],
+      "site": "window",
+      "requires": [
+        "opening_clear",
+        "frame_missing"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    },
+    "cab_window_frame": {
+      "kinds": [
+        "locomotive",
+        "engine"
+      ],
+      "site": "cab_window",
+      "requires": [
+        "opening_clear",
+        "frame_missing"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    },
+    "headlamp": {
+      "kinds": [
+        "locomotive",
+        "engine"
+      ],
+      "site": "nose",
+      "requires": [
+        "lamp_missing"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    },
+    "plank_band": {
+      "kinds": [
+        "car",
+        "tail1",
+        "tail2",
+        "tail3",
+        "cold",
+        "medtech",
+        "dining",
+        "guard",
+        "captain",
+        "front",
+        "workshop",
+        "engine_room"
+      ],
+      "site": "lower_wall",
+      "requires": [
+        "below_windows",
+        "outside_passage"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    },
+    "plank_patches": {
+      "kinds": [
+        "car",
+        "tail1",
+        "tail2",
+        "tail3",
+        "cold",
+        "medtech",
+        "dining",
+        "guard",
+        "captain",
+        "front",
+        "workshop",
+        "engine_room"
+      ],
+      "site": "lower_wall",
+      "requires": [
+        "below_windows",
+        "outside_passage"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    },
+    "steel_patches": {
+      "kinds": [
+        "car",
+        "tail1",
+        "tail2",
+        "tail3",
+        "cold",
+        "medtech",
+        "dining",
+        "guard",
+        "captain",
+        "front",
+        "workshop",
+        "engine_room"
+      ],
+      "site": "lower_wall",
+      "requires": [
+        "below_windows",
+        "outside_passage"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate",
+        "barrier"
+      ]
+    },
+    "coach_flue": {
+      "kinds": [
+        "car",
+        "tail1",
+        "tail2",
+        "tail3",
+        "medtech",
+        "dining",
+        "guard",
+        "captain",
+        "front",
+        "workshop",
+        "engine_room",
+        "greenhouse"
+      ],
+      "site": "roof",
+      "requires": [
+        "open_windows",
+        "roof_clear",
+        "flue_missing"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    },
+    "side_step": {
+      "kinds": [
+        "car",
+        "tail1",
+        "tail2",
+        "tail3",
+        "cold",
+        "medtech",
+        "dining",
+        "guard",
+        "captain",
+        "front",
+        "workshop",
+        "engine_room",
+        "greenhouse",
+        "locomotive",
+        "engine"
+      ],
+      "site": "step",
+      "requires": [
+        "door_swing_clear",
+        "boarding_clear",
+        "step_missing"
+      ],
+      "forbids": [
+        "blocks_window",
+        "blocks_passage",
+        "duplicate"
+      ]
+    }
+  },
+  "stage_kinds": [
+    "tail1",
+    "front",
+    "captain",
+    "medtech",
+    "engine"
+  ],
+  "attachment_note": "기존 부품 중복과 문·창 봉쇄를 피하려고 기본 장착은 비워 둔다. 실측된 자리의 여유 부피와 안전 조건이 함께 주어진 부품만 붙인다."
+}

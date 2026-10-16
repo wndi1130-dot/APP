@@ -19,7 +19,11 @@ What it does, in order:
   7. With --snowcap, pulls a snow cap off the faces that look up
      (NAME_snowcap, same origin, see snowcap() below).
   8. Exports one .glb holding NAME_LOD0 (and NAME_LOD1, NAME_snowcap), and
-     a JSON report with triangle counts and texture sizes.
+     a JSON report with exported GLB triangle counts and texture sizes.
+
+Optional integration arguments (the original arguments retain their defaults):
+  --yaw-deg, --lod1-ratio, --texture-size, --report-dir, --max-bytes,
+  --max-materials. Rotation is around Blender Z before bottom-centre placement.
 
 Budgets follow docs/art/tripo_pipeline.md section 3 (proposal values).
 
@@ -33,9 +37,11 @@ Measured on real Tripo files (Blender 4.5.10, 2026-10-10):
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
+import struct
 import sys
 
 import bmesh
@@ -73,6 +79,14 @@ def parse_args():
     p.add_argument("--longest", type=float,
                    help="target length of the longest side in metres")
     p.add_argument("--desat", type=float, default=0.0, help="0 keeps colour, 1 grey")
+    p.add_argument("--yaw-deg", type=float, default=0.0,
+                   help="rotate around Blender up before placing (glTF +Y up)")
+    p.add_argument("--lod1-ratio", type=float,
+                   help="override the size class LOD1 ratio, in (0, 0.5]")
+    p.add_argument("--texture-size", type=int, help="override texture edge limit")
+    p.add_argument("--report-dir", help="write JSON here instead of beside GLB")
+    p.add_argument("--max-bytes", type=int, help="optional exported GLB byte limit")
+    p.add_argument("--max-materials", type=int, help="optional material limit")
     p.add_argument("--snowcap", action="store_true",
                    help="add NAME_snowcap pulled from the faces that look up")
     p.add_argument("--snow-angle", type=float, default=40.0,
@@ -87,6 +101,21 @@ def parse_args():
 
 def tri_count(obj):
     return sum(len(poly.vertices) - 2 for poly in obj.data.polygons)
+
+
+def exported_triangles(payload):
+    """Count the GLB accessors: the exporter can drop collapsed mesh faces."""
+    length = struct.unpack_from("<I", payload, 12)[0]
+    document = json.loads(payload[20:20 + length])
+    result = {}
+    for node in document.get("nodes", []):
+        if "mesh" not in node:
+            continue
+        for lod in (0, 1):
+            if node.get("name", "").endswith(f"_LOD{lod}"):
+                result[lod] = sum(document["accessors"][p["indices"]]["count"] // 3
+                                  for p in document["meshes"][node["mesh"]]["primitives"])
+    return result
 
 
 def reset_scene():
@@ -381,30 +410,62 @@ def snowcap(obj, name, size, angle_deg, depth, edge):
 
 def main():
     a = parse_args()
+    if a.lod1_ratio is not None and not 0 < a.lod1_ratio <= 0.5:
+        raise SystemExit("--lod1-ratio must be in (0, 0.5]")
     name = a.name or os.path.splitext(os.path.basename(a.src))[0]
     lod0_max, lod1_ratio, tex_px = BUDGETS[a.size]
     lod0_max = a.tris or lod0_max
+    lod1_ratio = a.lod1_ratio if a.lod1_ratio is not None else lod1_ratio
+    tex_px = a.texture_size or tex_px
     os.makedirs(a.out, exist_ok=True)
 
     reset_scene()
     obj = import_and_join(a.src)
     raw_tris = tri_count(obj)
+    raw_dimensions = list(obj.dimensions)
     clean(obj)
+    obj.rotation_mode = "XYZ"
+    obj.rotation_euler.z += math.radians(a.yaw_deg)
+    bpy.ops.object.transform_apply(rotation=True)
     place(obj, a.height, a.longest)
     decimate(obj, lod0_max)
     # Collapse can pull the bounding box in, so set the size again.
     place(obj, a.height, a.longest)
     tex = flatten_materials(obj, tex_px, a.desat)
     obj.name = f"{name}_LOD0"
+    obj.data.name = f"{name}_mesh"
+    # Do not carry source service node identifiers or source image paths out.
+    for i, slot in enumerate(obj.material_slots):
+        if slot.material:
+            slot.material.name = f"{name}_material_{i}"
+    for i, img in enumerate(bpy.data.images):
+        img.name = f"{name}_image_{i}"
 
     report = {
         "name": name,
         "size_class": a.size,
         "raw_tris": raw_tris,
+        "raw_dimensions_blender": raw_dimensions,
         "lod0_tris": tri_count(obj),
         "lod0_budget": lod0_max,
         "textures": tex,
         "dimensions_m": [round(d, 3) for d in obj.dimensions],
+        "dimensions_gltf_m": [round(obj.dimensions.x, 6), round(obj.dimensions.z, 6),
+                               round(obj.dimensions.y, 6)],
+        "orientation": {"up": "+Y", "length_axis": max(
+            (("+X", obj.dimensions.x), ("+Y", obj.dimensions.z),
+             ("+Z", obj.dimensions.y)), key=lambda item: item[1])[0],
+            "yaw_degrees": a.yaw_deg},
+        "origin": "bottom_center",
+        "bounds_gltf": {
+            "min": [min(v.co.x for v in obj.data.vertices),
+                    min(v.co.z for v in obj.data.vertices),
+                    -max(v.co.y for v in obj.data.vertices)],
+            "max": [max(v.co.x for v in obj.data.vertices),
+                    max(v.co.z for v in obj.data.vertices),
+                    -min(v.co.y for v in obj.data.vertices)]},
+        "materials": len(obj.material_slots),
+        "texture_limit": tex_px,
     }
     if lod1_ratio:
         lod1 = obj.copy()
@@ -419,17 +480,27 @@ def main():
         _cap, report["snowcap"] = snowcap(obj, name, a.size, a.snow_angle,
                                           a.snow_depth, a.snow_edge)
         # The cap carries its depth share in vertex colour R.
-        extra = {"export_vertex_color": "ACTIVE",
-                 "export_all_vertex_colors": False,
-                 "export_active_vertex_color_when_no_material": True}
+        extra.update(export_vertex_color="ACTIVE", export_all_vertex_colors=False,
+                     export_active_vertex_color_when_no_material=True)
 
     out_glb = os.path.join(a.out, f"{name}.glb")
     bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB",
                               export_yup=True, export_apply=True, **extra)
     report["glb_bytes"] = os.path.getsize(out_glb)
+    with open(out_glb, "rb") as f:
+        payload = f.read()
+    report["sha256"] = hashlib.sha256(payload).hexdigest()
+    actual_tris = exported_triangles(payload)
+    for lod, count in actual_tris.items():
+        report[f"mesh_lod{lod}_tris_before_export"] = report[f"lod{lod}_tris"]
+        report[f"lod{lod}_tris"] = count
     over = report["lod0_tris"] > lod0_max
     report["ok"] = not over and report.get("snowcap", {"ok": True})["ok"]
-    with open(os.path.join(a.out, f"{name}.json"), "w", encoding="utf-8") as f:
+    report["ok"] = report["ok"] and (a.max_bytes is None or report["glb_bytes"] <= a.max_bytes)
+    report["ok"] = report["ok"] and (a.max_materials is None or report["materials"] <= a.max_materials)
+    report_dir = a.report_dir or a.out
+    os.makedirs(report_dir, exist_ok=True)
+    with open(os.path.join(report_dir, f"{name}.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
     print(json.dumps(report, ensure_ascii=False))
 
