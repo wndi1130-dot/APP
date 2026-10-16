@@ -636,7 +636,7 @@ function baseView(g: Game, card: Card): CardView {
       };
     }
     case 'protest': {
-      // 항의(긴장이 50을 위로 넘은 정산)와 난장판(70을 위로 넘은 정산과 이어지는 정산마다). 꼴은 카드에 얼려 둔다(riot.ts). 효과는 마지막 기회보다 작다(추정).
+      // 항의(긴장이 50을 위로 넘은 정산)와 난장판(80을 위로 넘은 정산과 이어지는 정산마다). 꼴은 카드에 얼려 둔다(riot.ts). 효과는 마지막 기회보다 작다(추정).
       if (card.text !== 'riot') {
         return {
           title: '항의', speaker: leader(g, 'tail'), focus: 'tail', required: true,

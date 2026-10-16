@@ -21,8 +21,8 @@ const ageOf = (name: string): number => PROFILES.find(p => p.name === name)!.age
 describe('켜지는 조건', () => {
   it('난장판은 긴장이 문턱을 위로 넘는 정산에만 켜지고 되돌림 직후엔 켜지지 않는다', () => {
     const g = fresh('rt-1');
-    riotOf(g).prev = 69;
-    tick(g, 70);
+    riotOf(g).prev = P.riotFrom - 1;
+    tick(g, P.riotFrom);
     expect(riotOf(g).stage).toBe(2);
     expect(riotOf(g).riots).toBe(1);
     expect(protests(g).map(c => c.text)).toEqual(['riot']);
@@ -56,13 +56,13 @@ describe('불과 일손', () => {
   it('난장판이 이어지는 동안 정산마다 이웃 한 칸씩 번지고 일손은 끄지 못하며 칸 수는 그대로다', () => {
     const g = fresh('rt-4');
     const r = riotOf(g);
-    r.prev = 69;
-    tick(g, 70);
+    r.prev = P.riotFrom - 1;
+    tick(g, P.riotFrom);
     g.cards = [];
     expect(r.fire).toHaveLength(1);
     for (let k = 2; k <= 11; k += 1) {
       const before = [...r.fire];
-      tick(g, 72);
+      tick(g, P.riotFrom + 2);
       g.cards = [];
       expect(r.fire).toHaveLength(before.length + 1);
       const added = r.fire.find(c => !before.includes(c))!;
@@ -77,10 +77,10 @@ describe('불과 일손', () => {
   it('난장판이 끊기면 새 불 없이 번짐 뒤 일손 둘이 끄고 엎어진 물건은 치운다', () => {
     const g = fresh('rt-5');
     const r = riotOf(g);
-    r.prev = 69;
-    tick(g, 70);
-    tick(g, 72);
-    tick(g, 72);
+    r.prev = P.riotFrom - 1;
+    tick(g, P.riotFrom);
+    tick(g, P.riotFrom + 2);
+    tick(g, P.riotFrom + 2);
     expect(r.fire).toHaveLength(3);
     answer(g, '들어준다');
     expect(r.stage).not.toBe(2);
@@ -102,9 +102,9 @@ describe('불과 일손', () => {
   it('쓰러지는 사람은 어른이고 죽는 사람은 불이 아니라 싸움에서 나오며 일지에 이름이 없다', () => {
     const g = fresh('rt-6');
     const r = riotOf(g);
-    r.prev = 69;
-    tick(g, 70);
-    for (let k = 0; k < 4; k += 1) { g.cards = []; tick(g, 72); }
+    r.prev = P.riotFrom - 1;
+    tick(g, P.riotFrom);
+    for (let k = 0; k < 4; k += 1) { g.cards = []; tick(g, P.riotFrom + 2); }
     expect(r.fell).toBeGreaterThan(0);
     expect(r.fell).toBeLessThanOrEqual(10);
     expect(g.deaths).toHaveLength(r.died);
@@ -117,8 +117,8 @@ describe('불과 일손', () => {
 
   it('내정이 없는 판에서도 틱이 돌고 불만 없다', () => {
     const g = fresh('rt-10', false);
-    riotOf(g).prev = 69;
-    tick(g, 70);
+    riotOf(g).prev = P.riotFrom - 1;
+    tick(g, P.riotFrom);
     expect(riotOf(g).fire).toHaveLength(0);
     expect(riotOf(g).fell).toBeGreaterThan(0);
   });
@@ -159,11 +159,11 @@ describe('끄는 틈과 카드 답', () => {
   });
 
   it('난장판 카드: 들어준다와 경비대를 푼다는 끊고 아무것도 안 한다는 끊지 않는다', () => {
-    const open = (seed: string): Game => { const g = fresh(seed); riotOf(g).prev = 69; tick(g, 70); return g; };
+    const open = (seed: string): Game => { const g = fresh(seed); riotOf(g).prev = P.riotFrom - 1; tick(g, P.riotFrom); return g; };
     const a = open('rt-9a');
     answer(a, '아무것도 안 한다');
     expect(riotOf(a).stage).toBe(2);
-    tick(a, 70);
+    tick(a, P.riotFrom);
     expect(protests(a)).toHaveLength(1);
     const b = open('rt-9b');
     const fell = riotOf(b).fell;
@@ -173,7 +173,7 @@ describe('끄는 틈과 카드 답', () => {
     const c = open('rt-9c');
     answer(c, '들어준다');
     expect(riotOf(c).stage).not.toBe(2);
-    expect(c.tension).toBeLessThan(70);
+    expect(c.tension).toBeLessThan(P.riotFrom);
   });
 
   it('항의 카드: 들어준다는 긴장을 낮추고 물리친다는 꼬리칸 관계를 깎는다', () => {
