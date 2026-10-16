@@ -723,3 +723,43 @@ func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> v
 	assert_true(s.life.contexts["tail1"]["fire"])
 	assert_false(s.life.contexts["tail1"]["recovery"], "불이 난 채로 회복 표시를 켜지 않는다")
 	assert_false(s.life.contexts["tail1"]["social"])
+
+
+func test_evacuation_secures_a_refuge_first_and_falls_back_to_the_next_one() -> void:
+	var s = _scene()
+	s.rules["view"]["fire_cars"] = ["medtech"]
+	s.life.refresh("fire")
+	var places = s.life.places
+	# 꼬리 칸 한 사람이 선 자리에 두 피난처의 앵커를 모두 겹쳐 둔다. 정원으로는 빈자리가 남는다.
+	var blocker: int = s.car("tail1")["bodies"][0].get_instance_id()
+	places.release(blocker)
+	var rest: Array = places.candidates("tail1", ["rest", "watch"])
+	assert_false(rest.is_empty())
+	assert_true(places.reserve(blocker, rest[0]))
+	var at: Vector3 = places.target(blocker)
+	var first: Dictionary = places.spots["tail1/refuge"]
+	var second: Dictionary = places.spots["dining/refuge"]
+	var second_anchors: Array = second["anchors"].duplicate(true)
+	for spot in [first, second]:
+		var x0: float = float(spot["x0"])
+		spot["anchors"] = spot["anchors"].map(func(_v): return [at.x - x0, at.y, at.z])
+	assert_true(places.candidates("tail1", ["refuge"]).has("tail1/refuge"), "정원으로는 아직 빈자리가 있다")
+	var before: Dictionary = {}
+	for b in s.car("medtech")["bodies"]:
+		var id: int = b.get_instance_id()
+		before[id] = [b.state, b.position, places.bookings.get(id, ""), s.life.actors[id]["activity"]]
+	assert_false(before.is_empty())
+	s.life._evacuate(s.car("medtech"))
+	for b in s.car("medtech")["bodies"]:
+		var id: int = b.get_instance_id()
+		assert_false(s.life.actors[id].get("evacuating", false))
+		assert_eq([b.state, b.position, places.bookings.get(id, ""), s.life.actors[id]["activity"]], before[id], "피난처를 못 잡으면 하던 일을 그대로 둔다")
+	second["anchors"] = second_anchors
+	s.life._evacuate(s.car("medtech"))
+	var moved: int = 0
+	for b in s.car("medtech")["bodies"]:
+		var id: int = b.get_instance_id()
+		if s.life.actors[id].get("evacuating", false):
+			moved += 1
+			assert_eq(places.bookings.get(id, ""), "dining/refuge", "첫 피난처가 막히면 다음 피난처로 간다")
+	assert_gt(moved, 0)

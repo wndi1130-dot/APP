@@ -733,39 +733,43 @@ func _evacuate(c: Dictionary) -> void:
 		var a: Dictionary = actors[b.get_instance_id()]
 		if a["safe_arrival"] or a.get("evacuating", false):
 			continue
-		for direction in [-1, 1]:
-			var n: int = int(c["index"]) + direction
-			if n < 0 or n >= host.cars.size():
-				continue
-			var target_car: Dictionary = host.cars[n]
-			if not contexts.get(target_car["id"], {}).get("safe", false):
-				continue
-			var choices := places.candidates(target_car["id"], ["refuge"])
-			if choices.is_empty():
-				continue
-			var previous: Dictionary = a.get("restore", a.get("before_interaction", {}))
-			var home: Dictionary = {"state": "seat", "position": b.slot, "slot": b.slot, "pose": b.pose}
-			if previous.get("state", "") == "seat":
-				home = previous.duplicate(true)
-			_leave_interaction(a, "accident")
-			a.erase("restore")
-			places.release(b.get_instance_id())
-			a["waypoints"] = []
-			a["requested"] = ""
-			a["distraction"] = ""
-			a["activity"] = ""
-			# A fire interrupts a trip without leaving its old departure counter.
-			if b.state in ["out", "visit", "back"]:
-				c["out"] = maxi(0, int(c["out"]) - 1)
-				b.visit_car = ""
-				b.errand = {}
-			b.state = "wait"
-			b.timer = float(Catalog.tuning("slot_return_delay"))
-			if places.reserve(b.get_instance_id(), choices[0]):
-				a["before_evacuation"] = home
-				a["evacuating"] = true
-				a["activity"] = "refuge"
-				_route(b, places.target(b.get_instance_id()))
-				b.state = "pace"
-				moving += 1
-				break
+		var id: int = b.get_instance_id()
+		var previous: Dictionary = a.get("restore", a.get("before_interaction", {}))
+		var home: Dictionary = {"state": "seat", "position": b.slot, "slot": b.slot, "pose": b.pose}
+		if previous.get("state", "") == "seat":
+			home = previous.duplicate(true)
+		# 피난처를 먼저 잡는다. 어느 곳도 못 잡으면 하던 일과 예약을 그대로 두고 다음 틱에 다시 본다.
+		if not _secure_refuge(c, id):
+			continue
+		_leave_interaction(a, "accident")
+		a.erase("restore")
+		a["waypoints"] = []
+		a["requested"] = ""
+		a["distraction"] = ""
+		# A fire interrupts a trip without leaving its old departure counter.
+		if b.state in ["out", "visit", "back"]:
+			c["out"] = maxi(0, int(c["out"]) - 1)
+			b.visit_car = ""
+			b.errand = {}
+		b.timer = float(Catalog.tuning("slot_return_delay"))
+		a["before_evacuation"] = home
+		a["evacuating"] = true
+		a["activity"] = "refuge"
+		_route(b, places.target(id))
+		b.state = "pace"
+		moving += 1
+
+
+## 가까운 칸부터 피난처 후보를 하나씩 잡아 본다. transfer()는 실패하면 옛 예약을 그대로 되돌린다.
+func _secure_refuge(c: Dictionary, id: int) -> bool:
+	for direction in [-1, 1]:
+		var n: int = int(c["index"]) + direction
+		if n < 0 or n >= host.cars.size():
+			continue
+		var target_car: Dictionary = host.cars[n]
+		if not contexts.get(target_car["id"], {}).get("safe", false):
+			continue
+		for spot in places.candidates(target_car["id"], ["refuge"]):
+			if places.transfer(id, spot):
+				return true
+	return false
