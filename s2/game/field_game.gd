@@ -484,11 +484,11 @@ func _build_world() -> void:
 	world.environment = environment
 	add_child(world)
 	sun = DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, -30, 0)
+	sun.rotation_degrees = Vector3(FxState.SUN_PITCH, -30, 0)
 	sun.light_energy = fx_light["sun_energy"]
 	sun.light_color = fx_light["sun_color"]
 	sun.shadow_enabled = bool(opts.get("shadows", true)) and bool(storm.get("shadows", true))
-	sun.rotation_degrees.x = float(storm.get("sun_pitch", -50.0))
+	sun.rotation_degrees.x = float(storm.get("sun_pitch", FxState.SUN_PITCH))
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.

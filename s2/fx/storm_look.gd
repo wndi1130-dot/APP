@@ -19,7 +19,7 @@ const MAX_PARTICLES: int = 900
 ## drawn as. Colours stay grey, grey-blue and grey-yellow: no red, no sky blue.
 const STAGES: Dictionary = {
 	"before": {
-		"rules": ["clear"], "kinds": ["overcast"], "sun": 0.7, "sun_pitch": -50.0, "shadows": true,
+		"rules": ["clear"], "kinds": ["overcast"], "sun": 0.7, "sun_pitch": -35.0, "shadows": true,
 		"sun_color": Color(0.80, 0.76, 0.67), "ambient_color": Color(0.57, 0.56, 0.53),
 		"front": 0.75, "whiteout": 0.0, "edge_frost": 0.05, "fall_cm_h": 0.0,
 		"layers": [
@@ -29,7 +29,7 @@ const STAGES: Dictionary = {
 		],
 	},
 	"during": {
-		"rules": ["blizzard"], "kinds": ["blizzard"], "sun": 0.5, "sun_pitch": -50.0, "shadows": false,
+		"rules": ["blizzard"], "kinds": ["blizzard"], "sun": 0.5, "sun_pitch": -35.0, "shadows": false,
 		"sun_color": Color(0.72, 0.74, 0.78), "ambient_color": Color(0.55, 0.57, 0.61),
 		"front": 0.0, "whiteout": 0.75, "edge_frost": 0.3, "fall_cm_h": 3.0,
 		"windows_lit": true, "lamp_gain": 0.7,

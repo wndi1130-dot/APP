@@ -1,5 +1,7 @@
 extends RefCounted
 
+const FxState = preload("res://fx/fx_state.gd")
+
 static func box(parent: Node3D, size: Vector3, at: Vector3, shade: float = 0.5) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
@@ -29,7 +31,9 @@ static func environment_for(parent: Node3D, fog: bool, shadows: bool = false) ->
 	parent.add_child(world)
 	var light := DirectionalLight3D.new()
 	light.name = "Sun"
-	light.rotation_degrees = Vector3(-55, -25, 0)
+	# Low cold sun (FxState): same height and day colour as the field.
+	light.rotation_degrees = Vector3(FxState.SUN_PITCH, -25, 0)
+	light.light_color = FxState.BAND_LOOK["day"]["sun"]
 	light.light_energy = 0.8
 	# One sun shadow; the distance covers the oblique top-view field.
 	light.shadow_enabled = shadows
