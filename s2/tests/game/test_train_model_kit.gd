@@ -3,6 +3,9 @@ extends "res://addons/gut/test.gd"
 const Kit = preload("res://game/world/train_model_kit.gd")
 const FieldMap = preload("res://game/world/sulehuf_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const FieldGame = preload("res://game/field_game.gd")
+## 지금 대응표에서 모델로 바뀌어야 하는 종류. 대응표의 나머지 종류는 모두 상자로 떨어져야 한다.
+const MODEL_KINDS := ["medtech", "freight", "store", "tender", "locomotive", "engine"]
 var _previous_setting: bool
 
 
@@ -16,6 +19,8 @@ func before_each() -> void:
 
 func after_each() -> void:
 	ProjectSettings.set_setting(Kit.MODE_SETTING, _previous_setting)
+	# 대응표를 바꿔 끼운 시험이 다음 시험에 새지 않게 다음 접근에서 원래 파일을 다시 읽힌다.
+	Kit._catalog = {}
 
 
 func _triangles(mesh: Mesh) -> int:
@@ -240,3 +245,185 @@ func test_field_uses_models_only_for_ready_kinds_and_rolls_with_train_parent() -
 	var boxes := Kit.attach_field(parent, data)
 	assert_eq(boxes.get_child_count(), 0)
 	assert_false(Kit.can_replace("engine"))
+
+
+func _one_car(kind: String, slot: Rect2i = Rect2i(0, 0, 16, 3), train: Rect2i = Rect2i(0, 0, 16, 3)) -> Dictionary:
+	return {"train": train, "train_cars": [{"rect": slot, "kind": kind}]}
+
+
+func _model_ends(root: Node3D, kind: String) -> Vector2:
+	var ends := Vector2(INF, -INF)
+	for id: String in Kit.model_plan(kind):
+		for key: String in root._batches:
+			if not key.begins_with(id + ":0:"):
+				continue
+			var row: Dictionary = root._batches[key]
+			for placed: Transform3D in row["transforms"]:
+				var bounds: AABB = placed * (row["mesh"] as Mesh).get_aabb()
+				ends = Vector2(minf(ends.x, bounds.position.x), maxf(ends.y, bounds.end.x))
+	return ends
+
+
+func _write(path: String, text: String) -> String:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(text)
+	file.close()
+	return path
+
+
+func _stage_roots() -> Array:
+	var roots := []
+	for scene_path: String in ["res://scenes/station.tscn", "res://scenes/home.tscn"]:
+		var instance := (load(scene_path) as PackedScene).instantiate()
+		add_child_autofree(instance)
+		roots.append(instance.get_node("TrainModels"))
+	return roots
+
+
+func _field_view() -> Dictionary:
+	var game = FieldGame.new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"]}
+	add_child_autofree(game)
+	game.set_process(false)
+	var train: MeshInstance3D = game.view.train_node
+	var cars: Array = game.view.data["train_cars"]
+	var engines := 0
+	for car in cars:
+		engines += 1 if car["kind"] == "engine" else 0
+	return {"cars": cars.size(), "engines": engines, "kit": train.get_node("TrainModels"), "vertices": train.mesh.surface_get_array_len(0)}
+
+
+func test_field_models_fill_the_logical_slot_length_within_0_6m() -> void:
+	for kind: String in ["medtech", "freight", "engine"]:
+		for length: int in [12, 16, 20]:
+			var slot := Rect2i(4, 0, length, 3)
+			var root := Kit.attach_field(autofree(Node3D.new()), _one_car(kind, slot, Rect2i(0, 0, 60, 3)))
+			var label := "%s %dm" % [kind, length]
+			assert_eq(root.get_meta("model_count", 0), 1, label)
+			var ends := _model_ends(root, kind)
+			assert_between(ends.x - slot.position.x, 0.0, 0.6, label + " start")
+			assert_between(slot.end.x - ends.y, 0.0, 0.6, label + " end")
+
+
+func test_field_records_measured_height_beyond_the_box_envelope() -> void:
+	var root := Kit.attach_field(autofree(Node3D.new()), _one_car("engine"))
+	var overflow: Array = root.get_meta("envelope_overflow", [])
+	assert_eq(overflow.size(), 1)
+	if overflow.size() == 1:
+		var dims: Array = Kit.catalog()["assets"]["locomotive"]["dimensions_m"]
+		assert_eq(overflow[0]["kind"], "engine")
+		assert_almost_eq(float(overflow[0]["height_m"]), float(dims[1]) * 15.4 / 16.0, 0.001)
+	var stage := Kit.create_stage(autofree(Node3D.new()))
+	assert_false(stage.has_meta("envelope_overflow"), "stage models stay inside the stage envelope")
+
+
+func test_unreadable_catalog_becomes_empty_and_every_entry_point_draws_boxes() -> void:
+	var text := FileAccess.get_file_as_string(Kit.CATALOG_PATH)
+	var no_kinds: Dictionary = JSON.parse_string(text)
+	no_kinds.erase("kinds")
+	var field := FieldMap.build()
+	var paths := [
+		"res://game/world/no_such_train_catalog.json",
+		_write("user://train_catalog_syntax.json", text.substr(0, 200)),
+		_write("user://train_catalog_top.json", "[]"),
+		_write("user://train_catalog_schema.json", JSON.stringify(no_kinds)),
+	]
+	for path: String in paths:
+		var book := Kit.load_catalog(path)
+		assert_true(book["kinds"].is_empty() and book["assets"].is_empty() and book["stage_kinds"].is_empty(), path)
+		Kit._catalog = book
+		assert_false(Kit.can_replace("medtech"), path)
+		assert_eq(Kit.create_stage(autofree(Node3D.new())).get_meta("fallback_count"), 6, path)
+		var models := Kit.attach_field(autofree(Node3D.new()), field)
+		assert_eq((models.get_meta("fallback_cars") as Array).size(), (field["train_cars"] as Array).size(), path)
+		assert_eq(models.get_child_count(), 0, path)
+	for stage in _stage_roots():
+		assert_eq(stage.get_meta("fallback_count"), 6, "scene with an unreadable catalog")
+	var view := _field_view()
+	assert_eq(view["kit"].get_meta("fallback_cars").size(), view["cars"], "field view with an unreadable catalog")
+
+
+func test_missing_part_file_is_recorded_and_skipped_while_the_body_stays() -> void:
+	var book := Kit.catalog().duplicate(true)
+	book["assets"]["coach_flue"]["path"] = "res://models/train_parts/missing_flue.glb"
+	Kit._catalog = book
+	var root := Kit.attach_field(autofree(Node3D.new()), _one_car("medtech"))
+	assert_eq(root.get_meta("model_count", 0), 1)
+	assert_true((root.get_meta("fallback_cars") as Array).is_empty())
+	var skipped: Array = root.get_meta("skipped_parts", [])
+	assert_eq(skipped.size(), 1)
+	if skipped.size() == 1:
+		assert_eq(skipped[0]["asset"], "coach_flue")
+		assert_eq(skipped[0]["reason"], "파일 없음")
+	assert_true(root._batches.has("coach_medic:0:false:0"), "the body is still drawn")
+	for key: String in root._batches:
+		assert_false(key.begins_with("coach_flue"), key)
+	Kit._catalog = {}
+	assert_false(Kit.attach_field(autofree(Node3D.new()), _one_car("medtech")).has_meta("skipped_parts"))
+
+
+func test_two_body_engine_parts_name_the_body_they_attach_to() -> void:
+	var site := {"zone": "step", "position": [0.0, 0.0, 1.5], "clearance_m": [2.0, 2.0, 2.0], "door_swing_clear": true, "boarding_clear": true, "step_missing": true}
+	assert_true(Kit.part_allowed("engine", "side_step", site, 0, "locomotive"))
+	assert_false(Kit.part_allowed("engine", "side_step", site, 0), "two bodies and none named")
+	assert_false(Kit.part_allowed("engine", "side_step", site, 0, "coach_medic"), "a body outside the car's plan")
+	assert_true(Kit.part_allowed("locomotive", "side_step", site, 0))
+	var book := Kit.catalog().duplicate(true)
+	book["assets"]["locomotive"]["attachment_sites"] = {"step_check": site}
+	book["assets"]["locomotive"]["triangle_limit"] = 20000
+	book["kinds"]["engine"]["parts"] = [{"asset": "side_step", "site": "step_check", "body": "locomotive"}, {"asset": "side_step", "site": "step_check"}]
+	Kit._catalog = book
+	var root := Kit.attach_field(autofree(Node3D.new()), _one_car("engine"))
+	var key := "side_step:0:false:0"
+	assert_true(root._batches.has(key))
+	if root._batches.has(key):
+		var placed: Array = root._batches[key]["transforms"]
+		assert_eq(placed.size(), 1, "only the request that names its body is placed")
+		# 탄수차 5.2m, 틈 0.4m, 기관차 10.4m: 기관차 중심은 쌍의 중심에서 2.8m.
+		assert_almost_eq((placed[0] as Transform3D).origin.x, 8.0 + 2.8 * 15.4 / 16.0, 0.001)
+
+
+func test_every_kind_maps_to_its_expected_model_or_box() -> void:
+	for kind: String in Kit.catalog()["kinds"]:
+		var expected: bool = kind in MODEL_KINDS
+		var ready := true
+		for id: String in Kit.catalog()["kinds"][kind]["assets"]:
+			ready = ready and Kit.catalog()["assets"][id]["status"] == "ready"
+		assert_eq(ready, expected, "%s ready status" % kind)
+		assert_eq(Kit.can_replace(kind), expected, kind)
+		var root := Kit.attach_field(autofree(Node3D.new()), _one_car(kind))
+		assert_eq(root.get_meta("model_count", 0), 1 if expected else 0, kind)
+		assert_eq((root.get_meta("fallback_cars") as Array).size(), 0 if expected else 1, kind)
+	var stage := Kit.create_stage(autofree(Node3D.new()))
+	var stage_models := 0
+	for kind: String in Kit.catalog()["stage_kinds"]:
+		stage_models += 1 if kind in MODEL_KINDS else 0
+	assert_eq(stage.get_meta("model_count", 0), stage_models)
+	assert_eq(stage.get_meta("fallback_count", 0), Kit.catalog()["stage_kinds"].size() - stage_models)
+
+
+func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> void:
+	var on := _field_view()
+	var models: int = on["kit"].get_meta("model_count", 0)
+	assert_gt(models, 0, "the field engine is a model with the switch on")
+	assert_eq(on["kit"].get_meta("fallback_cars").size(), on["cars"] - models)
+	for stage in _stage_roots():
+		assert_eq(stage.get_meta("model_count"), 2)
+	ProjectSettings.set_setting(Kit.MODE_SETTING, false)
+	var off := _field_view()
+	assert_eq(off["kit"].get_meta("fallback_cars").size(), off["cars"], "switch off: every field car is a box")
+	assert_eq(off["kit"].get_child_count(), 0)
+	assert_eq(off["vertices"] - on["vertices"], 30 * models, "one more 30-vertex box per car the model had replaced")
+	for stage in _stage_roots():
+		assert_eq(stage.get_meta("fallback_count"), 6)
+		assert_eq(stage.find_children("*", "MultiMeshInstance3D", true, false).size(), 0)
+	ProjectSettings.set_setting(Kit.MODE_SETTING, true)
+	var book := Kit.catalog().duplicate(true)
+	book["assets"]["locomotive"]["path"] = "res://models/train_exterior/missing_locomotive.glb"
+	Kit._catalog = book
+	var lost := _field_view()
+	assert_eq(lost["kit"].get_meta("model_count", 0), models - lost["engines"], "missing locomotive: engine slots fall back")
+	assert_eq(lost["vertices"] - on["vertices"], 30 * lost["engines"])
+	for stage in _stage_roots():
+		assert_eq(stage.get_meta("model_count"), 1)
+		assert_eq(stage.get_meta("fallback_count"), 4)
