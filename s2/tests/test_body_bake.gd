@@ -102,8 +102,9 @@ func test_a_layer_value_can_swing_and_the_tell_runs_a_quarter_turn() -> void:
 	assert_true(bool(BodyBake.CLIPS[7][3]), "the run loops")
 
 
-## A stick body with the bones the baker asks for, standing with its arms out, and three skinned vertices.
-func _stick_body() -> Node3D:
+## A stick body with the bones the baker asks for, standing with its arms out,
+## and three skinned vertices (foot, head, hips). `size` scales it (hips 1 m up at 1).
+func _stick_body(size: float = 1.0) -> Node3D:
 	var root := Node3D.new()
 	var body := Skeleton3D.new()
 	root.add_child(body)
@@ -121,7 +122,7 @@ func _stick_body() -> Node3D:
 		var id := body.add_bone(bone[0])
 		if bone[1] != "":
 			body.set_bone_parent(id, body.find_bone(bone[1]))
-		body.set_bone_rest(id, Transform3D(Basis(), bone[2]))
+		body.set_bone_rest(id, Transform3D(Basis(), bone[2] * size))
 	body.reset_bone_poses()
 	for id in body.get_bone_count():
 		skin.add_bind(id, body.get_bone_global_rest(id).affine_inverse())
@@ -129,7 +130,7 @@ func _stick_body() -> Node3D:
 	arrays.resize(Mesh.ARRAY_MAX)
 	var foot := body.find_bone("foot.L")
 	var head := body.find_bone("head")
-	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(0.1, 0, 0), Vector3(0, 1.7, 0), Vector3(0, 1, 0)])
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(0.1, 0, 0) * size, Vector3(0, 1.7, 0) * size, Vector3(0, 1, 0) * size])
 	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK])
 	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
 	arrays[Mesh.ARRAY_BONES] = PackedInt32Array([foot, 0, 0, 0, head, 0, 0, 0, 0, 0, 0, 0])
@@ -173,6 +174,20 @@ func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_
 	assert_gt(float(assets["clips"][7]["round"]), float(assets["clips"][0]["round"]), "the run more")
 	assert_eq(float(assets["clips"][3]["round"]), 0.0, "standing covers none")
 	assert_eq(float(assets["clips"][6]["round"]), 0.0, "nor does a motion played once")
+
+
+func test_a_shorter_body_lies_on_the_ground_not_in_it() -> void:
+	# Hips 0.85 m up, like a person 1.7 m tall: lowered as far in proportion
+	# as the 1 m body, its hips end the fall above the ground.
+	var root := _stick_body(0.85)
+	add_child_autofree(root)
+	var assets: Dictionary = BodyBake.bake_own(root)
+	var image: Image = assets["image"]
+	var fall: Dictionary = assets["clips"][6]
+	var last: int = int(fall["start"]) + int(fall["frames"]) - 1
+	var hips_y := 0.85 + image.get_pixel(2, last).g
+	assert_almost_eq(hips_y, 0.85 * (1.0 - 0.84), 0.02, "the hips sink 0.84 of their height, as on the 1 m body")
+	assert_gt(hips_y, 0.1, "not into the ground")
 
 
 func test_a_round_is_what_a_foot_goes_back_in_a_frame_times_the_frames() -> void:

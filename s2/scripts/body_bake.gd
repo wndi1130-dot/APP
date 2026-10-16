@@ -67,6 +67,7 @@ const OWN_POSES: Array = [
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
+const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were written for, metres
 
 # Layers: a hand-made addition on top of a motion. For a frame at progress u
 # (0..1), w = TAU * u, and a layer holds:
@@ -694,8 +695,10 @@ static func _value(spec: Variant, w: float) -> float:
 	return float(parts[0]) + float(parts[1]) * sin(beats * w - float(parts[2]))
 
 
-## Hangs a layer on the body (after retarget), for progress u (0..1).
-static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float) -> void:
+## Hangs a layer on the body (after retarget), for progress u (0..1). The
+## layers' sinks are metres for hips 1 m up; `sink_scale` is this body's hip
+## height over that, so a shorter body is lowered as far in proportion.
+static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scale: float = 1.0) -> void:
 	var w := TAU * u
 	for step: Array in layer.get("steps", []):
 		match step[0]:
@@ -705,7 +708,7 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float) -> void:
 				var dir: Array = step[3]
 				aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
 	if layer.has("sink"):
-		sink(body, _value(layer["sink"], w))
+		sink(body, _value(layer["sink"], w) * sink_scale)
 
 
 static func apply_overlay(body: Skeleton3D, kind: String) -> void:
@@ -751,7 +754,7 @@ static func pose(ctx: Dictionary, clip: String, layer: String, u: float) -> void
 		var warp: Array = spec["warp"]
 		at = fposmod(u + float(warp[0]) * sin(TAU * u - float(warp[1])), 1.0)
 	_pose_at(ctx, clip, at, spec.get("damp", {}))
-	apply_layer(ctx["body"], spec, u)
+	apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
 
 
 ## One skin matrix per bone the mesh binds: pose * inverse bind, in mesh space.
@@ -825,6 +828,9 @@ static func prepare_own(body_root: Node3D) -> Dictionary:
 			return {}
 	body.reset_bone_poses()
 	var ctx := {"body": body, "mesh_node": mesh_node}
+	# The layers' sinks were written for hips 1 m up (see apply_layer).
+	var hips := body.global_transform * body.get_bone_global_rest(_bone(body, "hips"))
+	ctx["sink_scale"] = (hips.origin.y - body_root.global_position.y) / HIP_HEIGHT
 	_bind_skin(ctx)
 	return ctx
 
