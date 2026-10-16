@@ -31,6 +31,7 @@ import { D } from './domestic/data';
 import { insulatedShare, lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
+import { heatAllocSettle } from './domestic/heat_alloc';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { voiceKept } from './promise_voice';
@@ -748,6 +749,7 @@ function settle(g: Game): void {
   g.guardEscort = false;
   medicineTick(g, notes);
   childSettle(g, notes); // 아동 노동이 서 있는 동안 의무진 관계 정산마다 −1(결정 214)
+  heatAllocSettle(g, notes); // 난방 배당이 서 있는 동안 관계 −2와 추운 칸의 밤사이 죽음(결정 230~240·276)
   domesticSettle(g, notes); // S1c 내정 훅
   hubLeakTick(g, notes); // 라이프치히 두 구간 전부터 창고 유출
   drift(g);
