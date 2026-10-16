@@ -8,7 +8,8 @@ var braking: bool = false
 var background: Array[MeshInstance3D] = []
 
 func _ready() -> void:
-	Graybox.environment_for(self, false)
+	# The low sun casts shadows here too (decision 323).
+	Graybox.environment_for(self, false, true)
 	Graybox.box(self, Vector3(80, 0.2, 25), Vector3(0, -0.2, 0), 0.23)
 	TrainModels.create_stage(self, true)
 	for index in range(12):

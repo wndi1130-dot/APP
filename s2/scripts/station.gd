@@ -19,7 +19,8 @@ var start_camera_transform: Transform3D
 var end_camera_transform: Transform3D
 
 func _ready() -> void:
-	environment = Graybox.environment_for(self, true)
+	# The low sun casts shadows here too (decision 323).
+	environment = Graybox.environment_for(self, true, true)
 	Graybox.box(self, Vector3(60, 0.2, 38), Vector3(0, -0.2, 0), 0.3)
 	TrainModels.create_stage(self)
 	Graybox.box(self, Vector3(28, 0.4, 4), Vector3(0, 0, 4), 0.45)
