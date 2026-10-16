@@ -6,9 +6,10 @@ extends RefCounted
 const BodyState = preload("res://game/sim/body_state.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const LifeInput = preload("res://game/train/train_life_input.gd")
 
 const PATH := "res://game/train/train_rules.json"
-const KINDS: Array = ["comm", "dining", "captain", "engine", "loco", "freight", "cold"]
+const KINDS: Array = ["comm", "dining", "captain", "engine", "loco", "freight", "cold", "technical", "tender"]
 const PHASES: Array = ["prep", "travel", "stop", "council", "settle", "end"]
 const SIT_NAMES: Array = ["온기", "배급", "과밀", "노출"]
 const CAPTAIN_OUT := "out"
@@ -66,6 +67,8 @@ static func check(d: Dictionary) -> PackedStringArray:
 	if not (cars is Array) or cars.is_empty():
 		bad.append("cars: missing")
 		cars = []
+	else:
+		cars = display_cars(d)
 	for car in cars:
 		if not (car is Dictionary) or String(car.get("id", "")) == "":
 			bad.append("cars: a car without an id")
@@ -109,6 +112,7 @@ static func check(d: Dictionary) -> PackedStringArray:
 	# Optional too: without a captain the board shows a sound one, nowhere.
 	if d.has("captain"):
 		bad.append_array(_check_captain(d["captain"], ids))
+	bad.append_array(LifeInput.check(d, ids))
 	return bad
 
 
@@ -151,6 +155,39 @@ static func _check_captain(captain, car_ids: Array) -> PackedStringArray:
 static func comm_of(d: Dictionary, car: Dictionary) -> Dictionary:
 	var comms: Dictionary = d.get("comms", {})
 	return comms.get(car.get("comm", ""), {})
+
+
+## S1 domestic extraDefs names added cars by kind and insertion number.
+## This projects an existing expansion; it never attaches or buys a rule car.
+static func display_cars(d: Dictionary) -> Array:
+	var rows: Array = d.get("cars", []).duplicate(true)
+	var dom = d.get("dom", {})
+	if not dom is Dictionary or not dom.get("extraCars", []) is Array:
+		return rows
+	var extra: Array = dom.get("extraCars", [])
+	for i in extra.size():
+		if not extra[i] in ["coach", "store"]:
+			continue
+		var id := "%s%d" % [extra[i], i + 1]
+		if rows.any(func(car): return car is Dictionary and car.get("id", "") == id):
+			continue
+		if extra[i] == "coach":
+			rows.append({"id": id, "kind": "comm", "comm": "tail", "name": "덧붙인 객차", "plate": "객차", "expanded": true})
+		else:
+			rows.append({"id": id, "kind": "freight", "name": "덧붙인 창고칸", "plate": "창고"})
+	# If a port supplies the existing order, keep it. Unlisted display cars stay
+	# in their prior order rather than guessing a new formation.
+	if dom.get("cars") is Array:
+		var ordered: Array = []
+		for id in dom["cars"]:
+			for car in rows:
+				if car is Dictionary and car.get("id", "") == id and not ordered.has(car):
+					ordered.append(car)
+		for car in rows:
+			if not ordered.has(car):
+				ordered.append(car)
+		return ordered
+	return rows
 
 
 static func _in_range(v, lo: float, hi: float) -> bool:

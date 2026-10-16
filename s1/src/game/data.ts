@@ -174,7 +174,7 @@ export const LAWS: Record<LawId, LawDef> = {
   heat_quota: L({
     id: 'heat_quota', title: '난방 배당', group: '추위', tag: '가혹', kind: 'normal', axes: [-1, 1, 0],
     mats: { tail: [-10, 0, 0, 0], medtech: [-10, 0, 0, 0], guard: [-5, 0, 0, 0] }, res: { heatMult: 0.5 }, crisis: ['coal'],
-    changes: ['난방 석탄 절반', '꼬리칸·의무진 온기 −10', '경비대 온기 −5'], opensWhen: '석탄 50 이하',
+    changes: ['난방 석탄 절반', '꼬리칸·의무진 온기 −10', '경비대 온기 −5', '서 있는 동안 정산마다 꼬리칸·의무진 관계 −2', '온기 45 아래인 칸은 정산마다 1할로 한 사람을 잃는다'], opensWhen: '석탄 50 이하',
   }),
   snow_duty: L({
     id: 'snow_duty', title: '눈 녹이기 당번', group: '추위', tag: '가혹', kind: 'normal', axes: [1, 1, -1],

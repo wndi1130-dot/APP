@@ -27,6 +27,11 @@ export function logDeath(g: Game, names: readonly string[], cause: DeathCause, w
 /** 죽음 뒤에 부를 다른 묶음의 훅(S1b 칸 안의 시신, dark/hooks.ts가 등록한다). */
 export const DEATH_HOOKS: ((g: Game, c: Comm, names: readonly string[], cause: DeathCause) => void)[] = [];
 
+/**
+ * quiet: 이 죽음의 일지 줄(이름과 칸 이름)을 쓰지 않는다. 부른 쪽이 수로 적는다(결정 240·276).
+ * 부르는 곳: 난방 배당의 밤사이 죽음(domestic/heat_alloc.ts), 폭동의 쓰러짐(riot.ts).
+ * 호출마다 넘기는 값이라 두 규칙이 서로의 일지 줄을 덮지 않는다. 일지 밖의 처리(관계, 시신, 훅)는 quiet와 상관없이 같다.
+ */
 export function onDeath(g: Game, c: Comm, names: readonly string[], cause: DeathCause = 'other', witness = false, quiet = false): void {
   const n = names.length;
   if (n <= 0) return;
@@ -62,7 +67,7 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
     bump(g, 'tension', 3 * n, 'corpse');
     g.thrown += n;
   }
-  if (!quiet) journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad'); // quiet: 일지에 수로만 적는 호출(폭동)이 따로 적는다
+  if (!quiet) journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad'); // quiet: 수로만 적는 호출(난방 배당, 폭동)이 따로 적는다
   afterDeath(g, c, names);
   for (const hook of DEATH_HOOKS) hook(g, c, names, cause);
 }
