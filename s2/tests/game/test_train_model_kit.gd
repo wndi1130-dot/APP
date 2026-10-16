@@ -301,8 +301,8 @@ func test_field_models_fill_the_logical_slot_length_within_0_6m() -> void:
 			var label := "%s %dm" % [kind, length]
 			assert_eq(root.get_meta("model_count", 0), 1, label)
 			var ends := _model_ends(root, kind)
-			assert_between(ends.x - slot.position.x, 0.0, 0.6, label + " start")
-			assert_between(slot.end.x - ends.y, 0.0, 0.6, label + " end")
+			assert_between(ends.x - slot.position.x, 0.0, 0.6, label + " 앞쪽 끝")
+			assert_between(slot.end.x - ends.y, 0.0, 0.6, label + " 뒤쪽 끝")
 
 
 func test_field_records_measured_height_beyond_the_box_envelope() -> void:
@@ -314,7 +314,7 @@ func test_field_records_measured_height_beyond_the_box_envelope() -> void:
 		assert_eq(overflow[0]["kind"], "engine")
 		assert_almost_eq(float(overflow[0]["height_m"]), float(dims[1]) * 15.4 / 16.0, 0.001)
 	var stage := Kit.create_stage(autofree(Node3D.new()))
-	assert_false(stage.has_meta("envelope_overflow"), "stage models stay inside the stage envelope")
+	assert_false(stage.has_meta("envelope_overflow"), "정차 모델은 정차 봉투 안에 든다")
 
 
 func test_unreadable_catalog_becomes_empty_and_every_entry_point_draws_boxes() -> void:
@@ -338,9 +338,9 @@ func test_unreadable_catalog_becomes_empty_and_every_entry_point_draws_boxes() -
 		assert_eq((models.get_meta("fallback_cars") as Array).size(), (field["train_cars"] as Array).size(), path)
 		assert_eq(models.get_child_count(), 0, path)
 	for stage in _stage_roots():
-		assert_eq(stage.get_meta("fallback_count"), 6, "scene with an unreadable catalog")
+		assert_eq(stage.get_meta("fallback_count"), 6, "대응표를 못 읽은 정차·홈 장면")
 	var view := _field_view()
-	assert_eq(view["kit"].get_meta("fallback_cars").size(), view["cars"], "field view with an unreadable catalog")
+	assert_eq(view["kit"].get_meta("fallback_cars").size(), view["cars"], "대응표를 못 읽은 필드 화면")
 
 
 func test_missing_part_file_is_recorded_and_skipped_while_the_body_stays() -> void:
@@ -355,7 +355,7 @@ func test_missing_part_file_is_recorded_and_skipped_while_the_body_stays() -> vo
 	if skipped.size() == 1:
 		assert_eq(skipped[0]["asset"], "coach_flue")
 		assert_eq(skipped[0]["reason"], "파일 없음")
-	assert_true(root._batches.has("coach_medic:0:false:0"), "the body is still drawn")
+	assert_true(root._batches.has("coach_medic:0:false:0"), "부품이 빠져도 본체는 그린다")
 	for key: String in root._batches:
 		assert_false(key.begins_with("coach_flue"), key)
 	Kit._catalog = {}
@@ -365,8 +365,8 @@ func test_missing_part_file_is_recorded_and_skipped_while_the_body_stays() -> vo
 func test_two_body_engine_parts_name_the_body_they_attach_to() -> void:
 	var site := {"zone": "step", "position": [0.0, 0.0, 1.5], "clearance_m": [2.0, 2.0, 2.0], "door_swing_clear": true, "boarding_clear": true, "step_missing": true}
 	assert_true(Kit.part_allowed("engine", "side_step", site, 0, "locomotive"))
-	assert_false(Kit.part_allowed("engine", "side_step", site, 0), "two bodies and none named")
-	assert_false(Kit.part_allowed("engine", "side_step", site, 0, "coach_medic"), "a body outside the car's plan")
+	assert_false(Kit.part_allowed("engine", "side_step", site, 0), "본체가 둘인데 지정하지 않음")
+	assert_false(Kit.part_allowed("engine", "side_step", site, 0, "coach_medic"), "칸 계획에 없는 본체")
 	assert_true(Kit.part_allowed("locomotive", "side_step", site, 0))
 	var book := Kit.catalog().duplicate(true)
 	book["assets"]["locomotive"]["attachment_sites"] = {"step_check": site}
@@ -378,7 +378,7 @@ func test_two_body_engine_parts_name_the_body_they_attach_to() -> void:
 	assert_true(root._batches.has(key))
 	if root._batches.has(key):
 		var placed: Array = root._batches[key]["transforms"]
-		assert_eq(placed.size(), 1, "only the request that names its body is placed")
+		assert_eq(placed.size(), 1, "본체를 지정한 요청만 붙는다")
 		# 탄수차 5.2m, 틈 0.4m, 기관차 10.4m: 기관차 중심은 쌍의 중심에서 2.8m.
 		assert_almost_eq((placed[0] as Transform3D).origin.x, 8.0 + 2.8 * 15.4 / 16.0, 0.001)
 
@@ -389,7 +389,7 @@ func test_every_kind_maps_to_its_expected_model_or_box() -> void:
 		var ready := true
 		for id: String in Kit.catalog()["kinds"][kind]["assets"]:
 			ready = ready and Kit.catalog()["assets"][id]["status"] == "ready"
-		assert_eq(ready, expected, "%s ready status" % kind)
+		assert_eq(ready, expected, "%s 준비 상태" % kind)
 		assert_eq(Kit.can_replace(kind), expected, kind)
 		var root := Kit.attach_field(autofree(Node3D.new()), _one_car(kind))
 		assert_eq(root.get_meta("model_count", 0), 1 if expected else 0, kind)
@@ -405,15 +405,15 @@ func test_every_kind_maps_to_its_expected_model_or_box() -> void:
 func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> void:
 	var on := _field_view()
 	var models: int = on["kit"].get_meta("model_count", 0)
-	assert_gt(models, 0, "the field engine is a model with the switch on")
+	assert_gt(models, 0, "손잡이를 켜면 필드 기관차는 모델")
 	assert_eq(on["kit"].get_meta("fallback_cars").size(), on["cars"] - models)
 	for stage in _stage_roots():
 		assert_eq(stage.get_meta("model_count"), 2)
 	ProjectSettings.set_setting(Kit.MODE_SETTING, false)
 	var off := _field_view()
-	assert_eq(off["kit"].get_meta("fallback_cars").size(), off["cars"], "switch off: every field car is a box")
+	assert_eq(off["kit"].get_meta("fallback_cars").size(), off["cars"], "손잡이 끔: 필드 칸이 모두 상자")
 	assert_eq(off["kit"].get_child_count(), 0)
-	assert_eq(off["vertices"] - on["vertices"], 30 * models, "one more 30-vertex box per car the model had replaced")
+	assert_eq(off["vertices"] - on["vertices"], 30 * models, "모델이 맡던 칸마다 꼭짓점 30개짜리 상자가 하나씩 는다")
 	for stage in _stage_roots():
 		assert_eq(stage.get_meta("fallback_count"), 6)
 		assert_eq(stage.find_children("*", "MultiMeshInstance3D", true, false).size(), 0)
@@ -422,7 +422,7 @@ func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> v
 	book["assets"]["locomotive"]["path"] = "res://models/train_exterior/missing_locomotive.glb"
 	Kit._catalog = book
 	var lost := _field_view()
-	assert_eq(lost["kit"].get_meta("model_count", 0), models - lost["engines"], "missing locomotive: engine slots fall back")
+	assert_eq(lost["kit"].get_meta("model_count", 0), models - lost["engines"], "기관차 파일 누락: 기관차 칸은 상자로")
 	assert_eq(lost["vertices"] - on["vertices"], 30 * lost["engines"])
 	for stage in _stage_roots():
 		assert_eq(stage.get_meta("model_count"), 1)
