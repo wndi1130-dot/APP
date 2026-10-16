@@ -22,6 +22,13 @@ uniform float grime_height = 0.8;
 uniform float puddles : hint_range(0.0, 1.0) = 0.0;
 // 1 indoors: no rain, snow or puddles reach it.
 uniform float sheltered : hint_range(0.0, 1.0) = 0.0;
+// Model colour grade (fx_model_grade). Defaults are the user's values of
+// 2026-10-17; models are not repainted, this presses them instead.
+// FxState.MODEL_GRADE mirrors these numbers.
+uniform float grade_saturation : hint_range(0.0, 1.0) = 0.45;
+uniform float grade_value : hint_range(0.0, 1.0) = 0.82;
+uniform vec3 grade_cool : source_color = vec3(0.78, 0.85, 0.95);
+uniform float grade_cool_mix : hint_range(0.0, 1.0) = 0.35;
 
 varying vec3 w_pos;
 varying vec3 w_nrm;
@@ -36,6 +43,7 @@ void fragment() {
 	if (use_vertex_color) {
 		base *= COLOR.rgb;
 	}
+	base = fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix);
 	float open = 1.0 - sheltered;
 	float up = clamp(w_nrm.y, 0.0, 1.0);
 	float n = fx_fbm2(w_pos.xz * 0.9 + w_pos.y * 0.37);

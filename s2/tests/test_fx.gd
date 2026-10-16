@@ -270,3 +270,68 @@ func test_storm_stages_look_different_and_fit_the_phone() -> void:
 	# Snow flies flat on the wind at lean 1 and falls at lean 0.
 	assert_almost_eq(StormLook.fall_dir(Vector2(1, 0), 1.0).x, 1.0, 0.01)
 	assert_lt(StormLook.fall_dir(Vector2(1, 0), 0.0).y, -0.99)
+
+
+func _uniform_default(code: String, uniform: String) -> PackedFloat64Array:
+	# Headless runs have no renderer to ask, so read the default from the text.
+	var re := RegEx.new()
+	re.compile("uniform\\s+\\w+\\s+" + uniform + "\\b[^=;]*=\\s*([^;]+);")
+	var m := re.search(code)
+	var out := PackedFloat64Array()
+	if m == null:
+		return out
+	var nums := RegEx.new()
+	nums.compile("-?\\d+(\\.\\d+)?")
+	for n in nums.search_all(m.get_string(1)):
+		out.append(float(n.get_string()))
+	return out
+
+
+func test_model_grade_defaults_are_the_user_values() -> void:
+	# Weathered's uniform defaults and FxState.MODEL_GRADE are one set of numbers.
+	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshader")
+	for key in FxState.MODEL_GRADE:
+		var want = FxState.MODEL_GRADE[key]
+		var got := _uniform_default(code, key)
+		if want is Color:
+			var c: Color = want
+			# vec3(r, g, b): the 3 of vec3 comes first.
+			assert_eq(got.size(), 4, key)
+			if got.size() == 4:
+				assert_almost_eq(got[1], c.r, 0.001, key)
+				assert_almost_eq(got[2], c.g, 0.001, key)
+				assert_almost_eq(got[3], c.b, 0.001, key)
+		else:
+			# hint_range(0.0, 1.0) then the default.
+			assert_gt(got.size(), 0, key)
+			if got.size() > 0:
+				assert_almost_eq(got[got.size() - 1], float(want), 0.001, key)
+	var rough := _uniform_default(code, "roughness_base")
+	assert_almost_eq(rough[rough.size() - 1], FxState.MODEL_ROUGHNESS, 0.001)
+	assert_almost_eq(float(FxState.MODEL_GRADE["grade_saturation"]), 0.45, 0.001)
+	assert_almost_eq(float(FxState.MODEL_GRADE["grade_value"]), 0.82, 0.001)
+	assert_almost_eq(float(FxState.MODEL_GRADE["grade_cool_mix"]), 0.35, 0.001)
+
+
+func test_model_grade_runs_before_the_weather_layers() -> void:
+	# Snow and rime are laid after the grade, so they keep their own grey-white.
+	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshader")
+	var at := code.find("fx_model_grade(")
+	assert_gt(at, 0)
+	assert_lt(at, code.find("float wet ="))
+	assert_lt(at, code.find("FX_SNOW"))
+	assert_lt(at, code.find("FX_RIME"))
+
+
+func test_model_grade_presses_loud_colours() -> void:
+	var loud := Color(0.8, 0.2, 0.15)
+	var pressed := FxState.grade_color(loud)
+	assert_lt(pressed.s, loud.s * 0.6, "saturation drops")
+	assert_lt(pressed.v, loud.v, "darker")
+	# Grey stays grey but darker and a touch colder, never sky blue.
+	var grey := FxState.grade_color(Color(0.6, 0.6, 0.6))
+	assert_lt(grey.v, 0.6)
+	assert_gte(grey.b, grey.r)
+	assert_false(_sky_blue(grey))
+	# Black stays black; alpha is kept.
+	assert_eq(FxState.grade_color(Color(0, 0, 0, 0.5)), Color(0, 0, 0, 0.5))
