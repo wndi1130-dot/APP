@@ -354,15 +354,23 @@ static func _visual(name: String, visual: String, role: int, confirmed: bool, fr
 	var pose: Dictionary = ground
 	var base: String = "stand"
 	match visual:
-		"lower":
+		"lower", "drop", "heave":
 			pose = {"body_pos": (ground["body_pos"] as Vector3).lerp(down["body_pos"], 0.5),
 				"body_scale": (ground["body_scale"] as Vector3).lerp(down["body_scale"], 0.5),
 				"head_pos": (ground["head_pos"] as Vector3).lerp(down["head_pos"], 0.5)}
 			base = low
+		"bend_offer", "hand_grip", "pull_up":
+			# Helping up: only B, who starts on the floor, is low; pull_up is B halfway.
+			if role == 1:
+				var k: float = 0.5 if visual == "pull_up" else 1.0
+				pose = {"body_pos": (ground["body_pos"] as Vector3).lerp(down["body_pos"], k),
+					"body_scale": (ground["body_scale"] as Vector3).lerp(down["body_scale"], k),
+					"head_pos": (ground["head_pos"] as Vector3).lerp(down["head_pos"], k)}
+				base = low
 		"seat", "seat_breathe", "spring_brace", "bunk", "bunk_turn", "bunk_breathe":
 			pose = down
 			base = low
-		"floor", "floor_breathe", "floor_brace", "kneel", "kneel_breathe", "crouch", "crouch_warm", "crouch_warm_roll":
+		"floor", "floor_breathe", "floor_brace", "kneel", "kneel_breathe", "crouch", "crouch_warm", "crouch_warm_roll", "floor_land", "floor_prop", "crouch_grip":
 			pose = Body.pose_at("floor", false)
 			base = "floor"
 		"wall", "wall_nod":
@@ -440,7 +448,121 @@ static func _visual(name: String, visual: String, role: int, confirmed: bool, fr
 	if visual == "crouch_warm_roll" or visual == "stand_warm_roll":
 		for i in 2:
 			arms[i]["rot"] = Vector3(PI * 0.5, PI * 0.5 if i == 0 else -PI * 0.5, 0)
+	_unrest_more(d, visual, role, confirmed)
 	return d
+
+
+## Stand-in reading of the twelve later unrest rows: arm boxes and trunk tilt
+## only. B's reactions to a grab or a swing show only when confirmed. (가안)
+static func _unrest_more(d: Dictionary, visual: String, role: int, confirmed: bool) -> void:
+	var arms: Array = d["arms"]
+	var reach: float = ARM_SIZE.z
+	var up := Vector3(-PI * 0.5, 0, 0)
+	var ahead := Vector3.ZERO
+	match visual:
+		"reach":
+			d["arms"] = _hands_at(1.2, reach if role == 0 else ARM_SIDE)
+			d["lean"] = Body.SIDE_LEAN * 0.5 if role == 0 else 0.0
+		"collar_grip", "collar_pull":
+			d["arms"] = _hands_at(1.3, reach)
+			var pull: float = 1.0 if visual == "collar_grip" else -1.0
+			if role == 0:
+				d["lean"] = Body.SIDE_LEAN * pull
+			elif confirmed:
+				d["lean"] = -Body.SIDE_LEAN * 0.5 * pull
+		"wind_up", "punch_contact", "punch_follow":
+			if role == 0:
+				var depth: float = -0.1 if visual == "wind_up" else (reach + 0.2 if visual == "punch_contact" else ARM_SIDE)
+				arms[1] = {"pos": Vector3(ARM_SIDE, 1.35 if visual != "punch_follow" else 1.2, depth),
+					"rot": ahead if visual == "punch_contact" else up}
+				arms[0] = {"pos": Vector3(-ARM_SIDE, 1.3, ARM_SIDE), "rot": up}
+				d["turn"] = -0.3 if visual == "wind_up" else (0.2 if visual == "punch_contact" else 0.0)
+				d["lean"] = Body.SIDE_LEAN if visual == "punch_contact" else 0.0
+			else:
+				d["arms"] = _hands_at(1.3, ARM_SIDE)
+				if confirmed and visual == "punch_contact":
+					d["turn"] = 0.4
+					d["head"] = Vector3(Body.SIDE_HEAD, 0, 0)
+				elif confirmed and visual == "punch_follow":
+					d["lean"] = -Body.SIDE_LEAN
+		"stagger":
+			for i in 2:
+				var side: float = -1.0 if i == 0 else 1.0
+				arms[i] = {"pos": Vector3(side * (ARM_SIDE + 0.12), 1.15, -0.05), "rot": Vector3(PI * 0.5, 0, side * 0.6)}
+			d["lean"] = -Body.SIDE_LEAN
+			d["sway"] = Body.SIDE_LEAN * 0.5
+		"drop":
+			d["arms"] = _hands_at(Body.RADIUS + 0.2, -0.1)
+			d["lean"] = -Body.SIDE_LEAN
+		"floor_land", "floor_prop":
+			# Sitting on the floor, hands planted behind: never lying flat.
+			d["arms"] = _hands_at(Body.RADIUS, -ARM_SIDE)
+			d["lean"] = -Body.SIDE_LEAN if visual == "floor_land" else -Body.SIDE_LEAN * 0.5
+			if visual == "floor_land":
+				d["head"] = Vector3(0, -Body.BOB, 0)
+		"bend_offer", "hand_grip":
+			if role == 0:
+				arms[1] = {"pos": Vector3(ARM_SIDE, 0.9, reach), "rot": ahead}
+				d["lean"] = Body.HUDDLE_LEAN * 0.5
+			else:
+				arms[1] = {"pos": Vector3(ARM_SIDE, 0.8, ARM_SIDE), "rot": ahead}
+		"pull_up":
+			arms[1] = {"pos": Vector3(ARM_SIDE, 1.0, ARM_SIDE), "rot": ahead}
+			if role == 0:
+				d["lean"] = -Body.SIDE_LEAN * 0.5
+		"throw_cock":
+			arms[1] = {"pos": Vector3(ARM_SIDE, 1.55, -0.15), "rot": up}
+			arms[0] = {"pos": Vector3(-ARM_SIDE, 1.2, reach), "rot": ahead}
+			d["turn"] = -0.35
+		"throw_release":
+			arms[1] = {"pos": Vector3(ARM_SIDE, 1.5, reach), "rot": Vector3(-PI * 0.25, 0, 0)}
+			d["turn"] = 0.2
+			d["lean"] = Body.SIDE_LEAN
+		"throw_follow":
+			arms[1] = {"pos": Vector3(0.0, 1.0, ARM_SIDE), "rot": ahead}
+			d["lean"] = Body.SIDE_LEAN * 0.5
+		"hands_up", "lean_back":
+			d["arms"] = _hands_at(1.3, reach)
+			if visual == "lean_back":
+				d["lean"] = -Body.SIDE_LEAN
+		"flinch":
+			d["arms"] = _hands_at(1.2, 0.15)
+			d["lift"] = -Body.BOB
+			d["head"] = Vector3(0, -Body.BOW_DROP, 0)
+		"crouch_grip":
+			d["arms"] = _hands_at(Body.SEAT_HEIGHT, reach)
+			d["lean"] = Body.HUDDLE_LEAN
+		"heave":
+			d["arms"] = _hands_at(0.9, reach)
+			d["lean"] = Body.HUDDLE_LEAN * 0.5
+		"tip_over":
+			d["arms"] = _hands_at(1.1, reach + 0.15)
+			d["lean"] = Body.SIDE_LEAN
+		"torch_lift", "torch_high", "torch_sway":
+			arms[1] = {"pos": Vector3(ARM_SIDE, 1.25 if visual == "torch_lift" else 1.5, ARM_SIDE), "rot": up}
+			if visual == "torch_sway":
+				d["turn"] = 0.25
+		"torch_front", "torch_bob":
+			arms[1] = {"pos": Vector3(ARM_SIDE, 1.3, reach + 0.1), "rot": Vector3(-PI / 3.0, 0, 0)}
+			if visual == "torch_bob":
+				d["lift"] = Body.BOB
+		"hold_both":
+			d["arms"] = _hands_at(1.0, ARM_SIDE)
+		"bring_together", "catch":
+			arms[0] = {"pos": Vector3(-0.12, 1.1, reach), "rot": ahead}
+			arms[1] = {"pos": Vector3(0.12, 1.1, reach), "rot": ahead}
+			d["lean"] = -Body.SIDE_LEAN * 0.5
+			if visual == "catch":
+				d["turn"] = -0.3
+		"cloth_up":
+			arms[0] = {"pos": Vector3(-ARM_SIDE, 1.5, ARM_SIDE), "rot": up}
+		"arm_to_mouth":
+			arms[1] = {"pos": Vector3(0.1, 1.2, 0.2), "rot": Vector3(0, PI * 0.5, 0)}
+		"covered", "cough":
+			arms[1] = {"pos": Vector3(0.0, 1.3, 0.22), "rot": Vector3(0, PI * 0.5, 0)}
+			arms[0] = {"pos": Vector3(-ARM_SIDE, 1.0, reach), "rot": ahead}
+			d["lean"] = Body.HUDDLE_LEAN * (0.6 if visual == "cough" else 0.4)
+			d["head"] = Vector3(0, -Body.BOW_DROP, 0)
 
 
 static func _hands_at(height: float, depth: float) -> Array:
@@ -496,12 +618,20 @@ static func show_sample(body: Node3D, d: Dictionary, facing: float = 0.0) -> voi
 ## The caller supplies both real positions and one local clock; no pair gap,
 ## displacement, contact outcome or damage is chosen by the gesture. (가안)
 static func shove_pair(anchor_a: Vector3, anchor_b: Vector3, t: float, confirmed: bool = false, run_id: int = 0) -> Dictionary:
+	return pair_at("shove_body", anchor_a, anchor_b, t, confirmed, run_id)
+
+
+## Any two-person one-off row (shove_body, grab_collar, punch_swing, help_up)
+## sampled for both roles at one common time.
+static func pair_at(name: String, anchor_a: Vector3, anchor_b: Vector3, t: float, confirmed: bool = false, run_id: int = 0) -> Dictionary:
+	var row: Dictionary = Riot.spec(name)
+	if row.is_empty() or int(row["people"]) != 2 or row["kind"] != "once":
+		return {}
 	if anchor_a.is_equal_approx(anchor_b):
 		return {}
-	var row: Dictionary = Riot.spec("shove_body")
 	var contact: float = row["pair"]["contact"]
-	var a: Dictionary = phase_at("shove_body", "once", t, 0, confirmed)
-	var b: Dictionary = phase_at("shove_body", "once", t, 1, confirmed)
+	var a: Dictionary = phase_at(name, "once", t, 0, confirmed)
+	var b: Dictionary = phase_at(name, "once", t, 1, confirmed, "floor" if name == "help_up" else "sit")
 	var across: Vector3 = anchor_b - anchor_a
 	return {"run_id": run_id, "time": t, "contact": contact,
 		"anchors": [anchor_a, anchor_b], "roles": [a, b],
@@ -617,6 +747,23 @@ func begin(name: String, p_role: int = 0, p_run_id: int = 0, p_from_pose: String
 		return false
 	if name == "shove_body" and not bool(context.get("adult", false)):
 		return false
+	var rule: Dictionary = Riot.BEGIN_RULES.get(name, {})
+	if not rule.is_empty():
+		var from_ok: Array = rule.get("role_b_from", rule["from"]) if p_role == 1 else rule["from"]
+		if not p_from_pose in from_ok:
+			return false
+		for key in rule["context"]:
+			match key:
+				"adult", "floor_clear":
+					if not bool(context.get(key, false)):
+						return false
+				"prop":
+					if not (context.get("prop") is Node3D):
+						return false
+				"target":
+					var aim = context.get("target")
+					if not (aim is Vector3 or aim is Node3D):
+						return false
 	var anchors: Array = context.get("anchors", [])
 	if int(row["people"]) == 2:
 		if anchors.size() != 2 or not (anchors[0] is Vector3) or not (anchors[1] is Vector3):
@@ -631,7 +778,8 @@ func begin(name: String, p_role: int = 0, p_run_id: int = 0, p_from_pose: String
 	from_pose = p_from_pose
 	pair_anchors = anchors.duplicate()
 	_exit_from = {}
-	_exit_base = "stand"
+	# A fall ends on the floor so the next clip (spring_up, help_up B) starts there.
+	_exit_base = "floor" if name == "fall_down" else "stand"
 	_shown = {}
 	# A body already in the required sitting support need not stand up to sit again.
 	if name in ["sit_bench", "sit_floor"] and p_from_pose == row["base"]:

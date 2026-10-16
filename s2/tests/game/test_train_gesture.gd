@@ -10,6 +10,8 @@ const TrainBody = preload("res://game/train/train_body.gd")
 const FIRST_REST: Array = ["sit_bench", "sit_floor", "lie_bunk", "warm_hands_stand",
 	"warm_hands_crouch", "sleep_lean_wall", "kneel"]
 const FIRST_RIOT: Array = ["fist_raise", "shove_body", "bang_object", "spring_up", "stomp"]
+const MORE_RIOT: Array = ["grab_collar", "punch_swing", "fall_down", "help_up", "throw_object",
+	"back_away", "watch_flinch", "tip_crate", "torch_hold", "torch_carry", "light_cloth", "walk_out_smoke"]
 const BONES: Array = ["hips", "spine", "chest", "neck", "head", "upper_arm.L",
 	"upper_arm.R", "forearm.L", "forearm.R", "hand.L", "hand.R", "thigh.L", "thigh.R",
 	"shin.L", "shin.R", "foot.L", "foot.R"]
@@ -196,12 +198,13 @@ func test_knows_only_the_original_ten_and_the_first_twelve() -> void:
 	names.append_array(Gesture.MORE)
 	names.append_array(FIRST_REST)
 	names.append_array(FIRST_RIOT)
-	assert_eq(names.size(), 22)
+	names.append_array(MORE_RIOT)
+	assert_eq(names.size(), 34)
 	for name in names:
 		assert_true(Gesture.knows(name), name)
 		assert_true(bool(MotionContract.resolve(name)["native"]), name)
 	for name in ["", "chat_talk", "chat_listen", "give_item", "push_pair", "strike_pair",
-		"set_fire", "collapse_fall", "drag_feet", "mourn_kneel", "nonsense"]:
+		"set_fire", "collapse_fall", "drag_feet", "mourn_kneel", "light_luggage", "nonsense"]:
 		assert_false(Gesture.knows(name), name)
 		assert_false(bool(MotionContract.resolve(name)["native"]), name)
 
@@ -503,3 +506,145 @@ func test_legacy_ten_keep_the_same_names_pair_gap_base_and_prop() -> void:
 	assert_eq(Gesture.at(Gesture.BOWL_SIT, 1.0)["prop"]["name"], "bowl")
 	assert_eq(Gesture.at(Gesture.ARGUE, 0.0, 0)["turn"], PI * 0.5)
 	assert_eq(Gesture.at(Gesture.ARGUE, 0.0, 1)["turn"], -PI * 0.5)
+
+
+# ---------------------------------------------------------------- the twelve later unrest gestures
+
+func test_later_unrest_three_part_lengths_and_keys() -> void:
+	# [enter, loop, exit, enter keys, loop keys, exit keys]; first values (가안).
+	var expected: Dictionary = {
+		"back_away": [0.4, 0.9, 0.5, 3, 4, 3],
+		"watch_flinch": [0.5, 3.0, 0.5, 3, 4, 3],
+		"torch_hold": [0.6, 2.4, 0.6, 3, 3, 3],
+		"torch_carry": [0.5, 1.0, 0.5, 3, 3, 3],
+		"walk_out_smoke": [0.5, 1.1, 0.6, 3, 3, 3],
+	}
+	for name in expected:
+		var row: Dictionary = Gesture.spec(name)
+		assert_eq(row["kind"], "three", name)
+		assert_true(bool(row["upper"]), "%s keeps the caller's legs" % name)
+		var first: Array = expected[name]
+		for i in 3:
+			var part: String = ["enter", "loop", "exit"][i]
+			var frames: Array = Gesture.keyframes(name, part)
+			assert_eq(frames.size(), int(first[i + 3]), "%s %s keys" % [name, part])
+			assert_almost_eq(float(row["length"][part]), float(first[i]), 0.001, "%s %s seconds" % [name, part])
+			assert_almost_eq(float(frames.back()["time"]), float(first[i]), 0.001)
+			for k in frames.size():
+				if k > 0:
+					assert_gt(float(frames[k]["time"]), float(frames[k - 1]["time"]), "%s %s key %d" % [name, part, k])
+				for bone in frames[k]["bones"]:
+					assert_true(BONES.has(String(bone)), "%s %s: real bone %s" % [name, part, bone])
+					assert_false(bone in ["hips", "thigh.L", "thigh.R", "shin.L", "shin.R", "foot.L", "foot.R"],
+						"%s upper motion keeps leg %s" % [name, bone])
+		var after: Dictionary = Gesture.phase_at(name, "enter", float(row["length"]["enter"]))
+		var repeat: Dictionary = Gesture.phase_at(name, "loop", 0.0)
+		for i in 2:
+			assert_eq(after["arms"][i]["pos"], repeat["arms"][i]["pos"], "%s enters its loop without a jump" % name)
+
+
+func test_later_unrest_one_off_lengths_keys_and_contacts() -> void:
+	# [seconds, keys, {key: contact seconds}]; the contacts are display marks, not hits.
+	var expected: Dictionary = {
+		"grab_collar": [1.6, 6, {2: 0.5, 3: 0.9}],
+		"punch_swing": [1.2, 5, {2: 0.46}],
+		"fall_down": [1.3, 5, {3: 0.78}],
+		"help_up": [2.0, 5, {2: 0.7}],
+		"throw_object": [1.0, 5, {2: 0.48}],
+		"tip_crate": [1.5, 5, {3: 1.05}],
+		"light_cloth": [1.8, 5, {2: 0.9}],
+	}
+	for name in expected:
+		var row: Dictionary = Gesture.spec(name)
+		assert_eq(row["kind"], "once", name)
+		assert_false(bool(row["two_hand_weapon"]), name)
+		var frames: Array = Gesture.keyframes(name, "once")
+		assert_eq(frames.size(), int(expected[name][1]), name)
+		assert_almost_eq(float(frames.back()["time"]), float(expected[name][0]), 0.001, name)
+		for k in expected[name][2]:
+			assert_almost_eq(float(frames[k]["time"]), float(expected[name][2][k]), 0.001, "%s key %d" % [name, k])
+		for k in range(1, frames.size()):
+			assert_gt(float(frames[k]["time"]), float(frames[k - 1]["time"]), "%s key %d" % [name, k])
+		for role in int(row["people"]):
+			for frame in Gesture.keyframes(name, "once", role):
+				for bone in frame["bones"]:
+					assert_true(BONES.has(String(bone)), "%s real bone %s" % [name, bone])
+	for name in ["grab_collar", "punch_swing", "help_up"]:
+		assert_eq(int(Gesture.spec(name)["people"]), 2, name)
+		assert_eq(Gesture.spec(name)["pair"]["clock"], "shared", name)
+
+
+func test_later_unrest_is_for_adults_except_walking_out_of_smoke() -> void:
+	var prop := Node3D.new()
+	add_child_autofree(prop)
+	var pair: Array = [Vector3.ZERO, Vector3.RIGHT]
+	var facts: Dictionary = {"hands_ready": true, "prop": prop, "target": Vector3.FORWARD,
+		"floor_clear": true, "anchors": pair}
+	var start: Dictionary = {"torch_carry": "walk"}
+	for name in MORE_RIOT:
+		var from: String = start.get(name, "stand")
+		var child = Gesture.new()
+		assert_eq(child.begin(name, 0, 1, from, facts), name == "walk_out_smoke", "%s without an adult" % name)
+		var grown: Dictionary = facts.duplicate()
+		grown["adult"] = true
+		var adult = Gesture.new()
+		assert_true(adult.begin(name, 0, 2, from, grown), "%s with an adult" % name)
+
+
+func test_help_up_b_starts_on_the_floor_and_a_fall_ends_there() -> void:
+	var facts: Dictionary = {"hands_ready": true, "adult": true, "anchors": [Vector3.ZERO, Vector3.RIGHT]}
+	assert_false(Gesture.new().begin("help_up", 1, 1, "stand", facts))
+	assert_true(Gesture.new().begin("help_up", 1, 1, "floor", facts))
+	assert_false(Gesture.new().begin("help_up", 0, 1, "floor", facts))
+	assert_true(Gesture.new().begin("help_up", 0, 1, "stand", facts))
+	var fall = Gesture.new()
+	assert_false(fall.begin("fall_down", 0, 3, "stand", {"hands_ready": true, "adult": true}), "the floor must be clear")
+	assert_true(fall.begin("fall_down", 0, 3, "stand", {"hands_ready": true, "adult": true, "floor_clear": true}))
+	assert_eq(Gesture.keyframes("fall_down", "once").back()["visual"], "floor_prop")
+	assert_eq(Gesture.phase_at("fall_down", "once", 1.3)["pose"], "floor")
+	fall.advance(2.0)
+	assert_false(fall.active())
+	assert_eq(fall._exit_base, "floor", "a fallen body stays down until it gets up")
+	for name in MORE_RIOT:
+		for frame in Gesture.keyframes(name, "once" if Gesture.spec(name)["kind"] == "once" else "loop"):
+			assert_false(String(frame["visual"]) in ["bunk", "bunk_turn", "bunk_breathe"], "%s never lies flat" % name)
+
+
+func test_later_pairs_share_one_clock_and_cannot_start_one_sided() -> void:
+	var a = TrainBody.new()
+	var b = TrainBody.new()
+	add_child_autofree(a)
+	add_child_autofree(b)
+	a.setup("c1", 2)
+	b.setup("c1", 3)
+	a.set_pose("stand", false)
+	b.set_pose("stand", false)
+	a.position = Vector3.ZERO
+	b.position = Vector3.RIGHT
+	var ready := {"hands_ready": true, "adult": true}
+	for name in ["grab_collar", "punch_swing", "help_up"]:
+		assert_false(MotionContract.start(a, name, 201, 0, ready), "%s goes through the pair entry" % name)
+		var joined: Dictionary = Gesture.pair_at(name, Vector3.ZERO, Vector3.RIGHT, 0.5, true, 201)
+		assert_eq(joined["roles"].size(), 2, name)
+		assert_almost_eq(float(joined["contact"]), float(Gesture.spec(name)["pair"]["contact"]), 0.001, name)
+		assert_eq(Gesture.pair_at(name, Vector3.ZERO, Vector3.ZERO, 0.5), {}, name)
+	assert_eq(Gesture.pair_at("throw_object", Vector3.ZERO, Vector3.RIGHT, 0.5), {}, "a one-person row has no pair")
+	assert_true(MotionContract.start_shove_pair(a, b, 202, ready, ready, "punch_swing"))
+	assert_true(MotionContract.show_shove_pair(a, b, 0.46, true, 202, "punch_swing"))
+	assert_false(MotionContract.show_shove_pair(a, b, 0.46, true, 202), "the run is a punch, not a shove")
+	assert_true(MotionContract.cancel_shove_pair(a, b, 202))
+	assert_false(MotionContract.start_shove_pair(a, b, 203, ready, ready, "throw_object"))
+
+
+func test_old_names_are_offered_only_while_the_backend_draws_them() -> void:
+	for name in MotionContract.LEGACY:
+		assert_true(Gesture.knows(name), "legacy %s is still drawn" % name)
+	for name in MotionContract.FALLBACK:
+		assert_true(Gesture.knows(String(MotionContract.FALLBACK[name])), "fallback for %s is drawn" % name)
+	var feet: Dictionary = MotionContract.resolve("drag_feet")
+	assert_false(feet["native"])
+	assert_true(feet["fallback"])
+	assert_eq(feet["gesture"], "drag_walk")
+	var walk: Dictionary = MotionContract.resolve("drag_walk")
+	assert_true(walk["native"])
+	assert_eq(walk["gesture"], "drag_walk")
