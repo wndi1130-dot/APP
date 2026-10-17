@@ -10,6 +10,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const Person = preload("res://game/actors/person.gd")
+const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
@@ -157,6 +158,7 @@ var hud: Hud
 var audio: FieldAudio
 
 var people: Array = []
+var people_look  # person_visual.gd: the baked body the people wear
 var squad: Array = []
 var crew: Array = []
 var raiders: Array = []
@@ -288,6 +290,9 @@ func _ready() -> void:
 	ai = AI.new(self)
 	actions = Actions.new(self)
 	_spawn_people()
+	people_look = PersonVisual.new()
+	add_child(people_look)
+	people_look.setup(self)
 	_spawn_dead()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
