@@ -172,6 +172,21 @@ describe('난방 배당 사망(결정 354)', () => {
     expect(body).toContain('난로가 식었다');
   });
 
+  it('식은 난로에서 올리겠다고 하면 다음 회기 안건에 난방 배당 폐지가 폐지 냉각 없이 오른다', () => {
+    const g = fresh('heat-agenda');
+    g.passed.heat_quota = g.session;
+    const a = lone(g, 'tail', x => x >= 16 && x < 65);
+    onDeath(g, 'tail', [a.name], 'other', false, true);
+    noteHeatDeath(g, 'tail');
+    peopleTick(g, () => 1);
+    const card = g.cards.find(c => c.kind === 'heat_after')!;
+    g.corpseIssue = false; // 시신 안건이 위기로 먼저 서지 않게
+    const isRepeal = (o: object) => 'law' in o && (o as unknown as { law: string }).law === 'heat_quota' && (o as unknown as { repeal: boolean }).repeal;
+    expect(agendaOptions(g).options.some(isRepeal)).toBe(false);
+    expect(chooseCard(g, card.uid, viewCard(g, card).choices.findIndex(c => c.special === 'dw_heat_agenda'))).toBe(true);
+    expect(agendaOptions(g).options.some(isRepeal)).toBe(true);
+  });
+
   it('법이 그새 내려졌으면 식은 난로가 안 뜬다', () => {
     const g = fresh('heat-gone');
     g.passed.heat_quota = 0;
