@@ -5,11 +5,11 @@
   "far_distance_m": 120,
   "assets": {
     "coach_worn": {
-      "status": "held",
-      "path": "",
+      "status": "ready",
+      "path": "res://models/train_exterior/coach_worn.glb",
       "category": "exterior",
-      "lod0_tris": 7760,
-      "lod1_tris": 3761,
+      "lod0_tris": 3634,
+      "lod1_tris": 1750,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
@@ -17,21 +17,21 @@
         768
       ],
       "materials": 1,
-      "bytes": 1427944,
+      "bytes": 871380,
       "byte_limit": 1800000,
       "dimensions_m": [
-        16,
-        4.90083,
-        3.33757
+        16.0,
+        4.2,
+        3.0
       ],
-      "sha256": "6e17aee622204b34de4cb4d091a352a094f61d06b0740304d293fc9f133d86e7"
+      "sha256": "9d016661e7d2fed067a5c55552d97205f35f9336570119d9bb91ec289f00b4a6"
     },
     "coach_clean": {
-      "status": "held",
-      "path": "",
+      "status": "ready",
+      "path": "res://models/train_exterior/coach_clean.glb",
       "category": "exterior",
-      "lod0_tris": 7759,
-      "lod1_tris": 3752,
+      "lod0_tris": 3323,
+      "lod1_tris": 1604,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
@@ -39,14 +39,14 @@
         768
       ],
       "materials": 1,
-      "bytes": 1450212,
+      "bytes": 853456,
       "byte_limit": 1800000,
       "dimensions_m": [
-        16,
-        4.158591,
-        3.187472
+        16.0,
+        4.2,
+        3.0
       ],
-      "sha256": "699f7955c266f851db8dae3aa6b8bd51cead8f13528774ff3c5630c5d1313382"
+      "sha256": "496d159f1f57ce63c7e0c83bb49470f65515300736dfe7451b86975d45e761de"
     },
     "freight_open": {
       "status": "ready",
@@ -115,11 +115,11 @@
       "sha256": "305a2550aad32ce030b30ee521240203fbd94e5dd03e28c9e0c3d01c33f3b142"
     },
     "coach_glass": {
-      "status": "held",
-      "path": "",
+      "status": "ready",
+      "path": "res://models/train_exterior/coach_glass.glb",
       "category": "exterior",
-      "lod0_tris": 7759,
-      "lod1_tris": 3751,
+      "lod0_tris": 3369,
+      "lod1_tris": 1627,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
@@ -127,21 +127,21 @@
         768
       ],
       "materials": 1,
-      "bytes": 1528864,
+      "bytes": 769796,
       "byte_limit": 1800000,
       "dimensions_m": [
-        16,
-        6.261213,
-        4.510262
+        16.0,
+        4.2,
+        3.0
       ],
-      "sha256": "2654224db4220b721d02bc3e13aef7b7ac7327542cc54bb49be485d441d1f1d0"
+      "sha256": "628d3ff267d9037e97d177ba1ee980b933d6cb9892d5a61c88edea196dd7d71d"
     },
     "coach_chief": {
-      "status": "held",
-      "path": "",
+      "status": "ready",
+      "path": "res://models/train_exterior/coach_chief.glb",
       "category": "exterior",
-      "lod0_tris": 7759,
-      "lod1_tris": 3756,
+      "lod0_tris": 3772,
+      "lod1_tris": 1825,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
@@ -149,14 +149,14 @@
         768
       ],
       "materials": 1,
-      "bytes": 1478484,
+      "bytes": 772740,
       "byte_limit": 1800000,
       "dimensions_m": [
-        16,
-        6.370298,
-        2.806058
+        16.0,
+        4.2,
+        3.0
       ],
-      "sha256": "3e12538884858b2d18a91a715e3af873fb06a58a078e0089242b3537743dd73c"
+      "sha256": "6afcc60d5a4665ffbb03677e0b144414257e59b223a0fb40202cb919a922df25"
     },
     "coach_medic": {
       "status": "ready",
