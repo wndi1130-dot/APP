@@ -4,13 +4,15 @@ extends Node3D
 ## only reads the people (where they are, which way they face, what their body
 ## and hands are doing) and decides nothing.
 ## Two multimeshes wear the same body: one with the living's own motions
-## (OWN_FOLDER: walking, running, standing, crouched, held, bitten, the shove),
-## one with the dead's folder for what the living have no motion of their own
-## for yet (the falls, the crawl, getting up, reeling spent). Each person is in
-## one of them at a time; a change between the two is not eased.
+## (OWN_FOLDER: walking, running, standing, crouched, held, bitten, the shove,
+## the blows, the hands' jobs, aiming, the falls, the crawl, getting up and
+## reeling spent), one with the dead's folder for a build whose people folder
+## has no such motion (and the struck pose). Each person is in one of them at a
+## time; a change between the two is not eased.
 ## The weapon in the hand is put in the worn body's right hand (found in the
-## baked motions), save while a gun is aimed, loaded or cleared, where
-## person_pose.gd still holds it.
+## baked motions); a gun aimed standing still is held out in that hand, kicking
+## back as person_pose.gd has it. Being loaded or cleared, or aimed on the
+## move, person_pose.gd still holds it.
 ## The capsule, the ball and the arm boxes are hidden while a body is worn; the
 ## weapon box stays, since the blows are still drawn with it (person_pose.gd).
 ## With the switch off, or no baked folder in the build, nothing is drawn here
@@ -64,9 +66,40 @@ const OWN_CROUCH_STAND: String = "p_crouch_idle"
 const OWN_HELD: String = "p_held"
 const OWN_BITTEN: String = "p_bitten"
 const OWN_SHOVE: String = "p_shove"
+# Down, crawling, getting up and reeling spent in the living's own (people
+# folder 16-21; VatBaker.pack_motion carries them to the shader).
+const OWN_FALL: String = "p_fall"
+const OWN_FALL_FRONT: String = "p_fall_front"
+const OWN_CRAWL: String = "p_crawl"
+const OWN_RISE: String = "p_rise"
+const OWN_RISE_FRONT: String = "p_rise_front"
+const OWN_SPENT: String = "p_spent"
 const OWN_BASE: int = 100
-# Easing into each own motion (Project Zomboid: walking, running 0.35; struck 0.10).
-const OWN_MIX: Dictionary = {"p_bitten": 0.1, "p_shove": 0.1, "p_swing_one": 0.1, "p_swing_axe": 0.1, "p_stab": 0.1}
+# Easing into each own motion: Project Zomboid's own (its AnimSets m_BlendTime):
+# walk, stand 0.2, run 0.35, sneak walk 0.5 and low 0.4, bitten 0.2, shove
+# 0.2, a melee blow 0.15, rummaging low 0.5, a bandage 0.2, aiming 0.3, falling and
+# getting up 0.2. Rummaging at chest height has none of its own: its commonest, 0.2.
+const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5, "p_crouch_idle": 0.4,
+	"p_bitten": 0.2, "p_shove": 0.2, "p_swing_one": 0.15, "p_swing_axe": 0.15, "p_stab": 0.15,
+	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3,
+	"p_fall": 0.2, "p_fall_front": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2}
+# Aiming a gun standing still (Project Zomboid: aim_handgun, aim_rifle): one hand
+# out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
+const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
+# A timed job of the hands (Project Zomboid: the hands' own motions over the
+# standing, by how high the work is; swapping a weapon is its rummaging at 0.8):
+# the own motion and how fast it goes round. 0 plays it once over the job: a
+# window is broken with one blow. Kicking a door and climbing have none yet.
+const OWN_WORK: Dictionary = {
+	"search": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
+	"pry": ["p_search_mid", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
+	"salvage": ["p_search_mid", 1.0], "repair": ["p_search_mid", 1.0], "wall": ["p_search_mid", 1.0],
+	"craft": ["p_search_mid", 1.0], "swap": ["p_search_mid", 0.8],
+	"loot": ["p_search_low", 1.0], "fire": ["p_search_low", 1.0], "snow": ["p_search_low", 1.0],
+	"lid": ["p_search_low", 1.0],
+	"treat": ["p_treat", 1.0], "splint": ["p_treat", 1.0], "rub": ["p_treat", 1.0],
+	"dig": ["p_swing_axe", 0.8], "window": ["p_swing_one", 0.0],
+}
 # A melee blow in the living's own motions: which, and where in it the blow
 # lands (body_bake.gd keys). A knife stabs, an axe and any blow at a body on the
 # ground come down from overhead, the rest swing across. A stomp has none yet.
@@ -201,6 +234,15 @@ func _process(delta: float) -> void:
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
+		elif baked.has("arm") and own and aiming(note, own_vat.get("clips", [])):
+			# The gun in the hand held out, the muzzle ahead, kicking back as it fires
+			# as person_pose.gd has it (its aim less where it would hold it still).
+			var hand := arm_at(baked["arm"], own_frames, drawn)
+			var hold := Pose.hold_of(p.weapon_id())
+			var still: Vector3 = Pose.aim_at(hold)["weapon"]["pos"]
+			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, Time.get_ticks_msec()))["weapon"]
+			var lean := lean_of(p, note)
+			p.weapon_mesh.transform = Transform3D(lean * Basis.from_euler(shot["rot"]), lean * (hand[0] + shot["pos"] - still))
 	mm.visible_instance_count = n
 	if own_mm != null:
 		own_mm.visible_instance_count = k
@@ -209,9 +251,10 @@ func _process(delta: float) -> void:
 func _hide_boxes(p) -> void:
 	p.body_mesh.visible = false
 	p.head_mesh.visible = false
-	var arms: Array = p.get_meta(Pose.META, [])
-	for i in mini(arms.size(), 2):
-		arms[i].visible = false
+	# The arm boxes, and the foot box a door kick shows (it would hang in the air
+	# by a worn body that has no kick of its own yet).
+	for box in p.get_meta(Pose.META, []):
+		box.visible = false
 
 
 ## The motion one person is in (y) and how far through it (x), from what the
@@ -229,17 +272,38 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
 		# (or slipped) it lies on its face, where it can still drag itself.
-		var fall := FALL if p.body.dead else FALL_FRONT
+		var own_crawl := clip_named(own, OWN_CRAWL, -1)
 		if p.body.downed and not p.body.dead and gone > 0.01:
+			if own_crawl >= 0:
+				note["motion"] = OWN_BASE + own_crawl
+				return Vector2(_round(note, "crawl", gone, _round_of(own, own_crawl, 0.41)), own_crawl)
 			return Vector2(_round(note, "crawl", gone, _round_of(clips, CRAWL, 0.61)), CRAWL)
+		var own_down := clip_named(own, OWN_FALL if p.body.dead else OWN_FALL_FRONT, -1)
+		if own_down >= 0:
+			if int(note.get("motion", -1)) == OWN_BASE + own_crawl:
+				# Stopped dragging itself: still down, not falling again.
+				note["motion"] = OWN_BASE + own_down
+				note["since"] = t - _length(own, own_down, 1.0)
+			return Vector2(_own_once(note, OWN_BASE + own_down, t, _length(own, own_down, 1.0)), own_down)
+		var fall := FALL if p.body.dead else FALL_FRONT
 		return Vector2(_once(note, fall, t, clips), fall)
-	# Up again off the face it fell on, or off its back.
-	if note.get("motion", -1) == FALL or note.get("motion", -1) == FALL_FRONT:
-		note["motion"] = RISE_FRONT if note["motion"] == FALL_FRONT else RISE
+	# Up again off the face it fell on (or crawled on), or off its back.
+	var was: int = int(note.get("motion", -1))
+	if was == FALL or was == FALL_FRONT:
+		note["motion"] = RISE_FRONT if was == FALL_FRONT else RISE
 		note["since"] = t
+	elif was >= OWN_BASE and was - OWN_BASE < own.size():
+		var down := String(own[was - OWN_BASE].get("name", ""))
+		if down == OWN_FALL or down == OWN_FALL_FRONT or down == OWN_CRAWL:
+			note["motion"] = OWN_BASE + clip_named(own, OWN_RISE if down == OWN_FALL else OWN_RISE_FRONT, -1)
+			note["since"] = t
 	var rise: int = int(note.get("motion", -1))
 	if (rise == RISE or rise == RISE_FRONT) and t - float(note["since"]) < _length(clips, rise, 1.0):
 		return Vector2((t - float(note["since"])) / _length(clips, rise, 1.0), rise)
+	var own_rise := rise - OWN_BASE
+	if own_rise >= 0 and own_rise < own.size() and (String(own[own_rise].get("name", "")) == OWN_RISE or String(own[own_rise].get("name", "")) == OWN_RISE_FRONT):
+		if t - float(note["since"]) < _length(own, own_rise, 1.0):
+			return Vector2((t - float(note["since"])) / _length(own, own_rise, 1.0), own_rise)
 	var bitten := clip_named(own, OWN_BITTEN, -1)
 	if bitten >= 0 and note.has("hurt_at") and t - float(note["hurt_at"]) < _length(own, bitten, 0.6):
 		# Flinching, shoulders up and the head thrown back, then bracing.
@@ -270,13 +334,22 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 				r = SHOVE_OUT.x * (1.0 - clampf(p.shove_t / maxf(wind, 0.01), 0.0, 1.0))
 			return Vector2(r, shove)
 		return Vector2(_cycle(note, LUNGE, t, clips), LUNGE)
+	var work := work_of(p, note, t, own)
+	if work.y >= 0.0:
+		return work
 	if gone > 0.001:
 		note["moved"] = t
+	var aim := aim_of(p, own)
+	if aim >= 0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		return Vector2(_own_cycle(note, OWN_BASE + aim, t, _length(own, aim, 1.0), p.name_unit("aim")), aim)
 	var unit: float = p.name_unit("stand")
 	# Spent, it reels as the dead do (the living have no such motion of their own
 	# yet), still reeling where it stops for breath.
 	var spent: bool = not p.running and not p.crouched and p.body.exhaustion_level() >= 2
+	var own_spent := clip_named(own, OWN_SPENT, -1) if spent else -1
 	if spent and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		if own_spent >= 0:
+			return Vector2(_own_cycle(note, OWN_BASE + own_spent, t, _length(own, own_spent, 1.0) * 2.0, unit), own_spent)
 		return Vector2(_own_cycle(note, STAGGER, t, _length(clips, STAGGER, 1.0) * 2.0, unit), STAGGER)
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
 		var own_stand := clip_named(own, OWN_CROUCH_STAND if p.crouched else OWN_STAND, -1)
@@ -287,7 +360,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 			var breath := 0.5 + 0.5 * sin(TAU * (t / 3.5 + unit))
 			return Vector2(lerpf(CROUCH_LOW.x, CROUCH_LOW.y, breath), TELL)
 		return Vector2(_own_cycle(note, STAND, t, _length(clips, STAND, 1.0), unit), STAND)
-	var own_gait := -1
+	var own_gait := own_spent if spent else -1
 	if not spent:
 		own_gait = clip_named(own, OWN_RUN if p.running else (OWN_CROUCH_WALK if p.crouched else OWN_WALK), -1)
 	if own_gait >= 0:
@@ -327,6 +400,39 @@ static func blow_of(p, own: Array) -> Vector2:
 	var lands: float = OWN_BLOWS[kind][1]
 	var r: float = lands + (1.0 - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
 	return Vector2(r, clip)
+
+
+## A timed job of the hands in the living's own motions (y) and how far through
+## it (x); y is -1 with no job, or none of its own (kicking, climbing).
+static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
+	if p.action == "" or p.action_t <= 0.0 or p.action_total <= 0.0 or not OWN_WORK.has(p.action):
+		return Vector2(0.0, -1.0)
+	var work_name := String(OWN_WORK[p.action][0])
+	# Crouched it keeps low (Project Zomboid's sneaking jobs): chest-high work done low.
+	if p.crouched and work_name == "p_search_mid":
+		work_name = "p_search_low"
+	var clip := clip_named(own, work_name, -1)
+	if clip < 0:
+		return Vector2(0.0, -1.0)
+	var pace: float = OWN_WORK[p.action][1]
+	if pace <= 0.0:
+		note["motion"] = OWN_BASE + clip
+		return Vector2(clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0), clip)
+	return Vector2(_own_cycle(note, OWN_BASE + clip, t * pace, _length(own, clip, 1.0), p.name_unit("work")), clip)
+
+
+## The own aiming motion for the gun in the hand while it is aimed, or -1.
+## Crouched it stays low (the aiming motions are standing ones).
+static func aim_of(p, own: Array) -> int:
+	if not p.aim.active or p.crouched:
+		return -1
+	return clip_named(own, String(OWN_AIMS.get(Pose.hold_of(p.weapon_id()), "")), -1)
+
+
+## Drawn in an own aiming motion (note as motion_of left it).
+static func aiming(note: Dictionary, own: Array) -> bool:
+	var m := int(note.get("motion", -1)) - OWN_BASE
+	return m >= 0 and m < own.size() and OWN_AIMS.values().has(String(own[m].get("name", "")))
 
 
 ## A gun being aimed, loaded or cleared: person_pose.gd holds it there.
@@ -412,9 +518,11 @@ static func arm_table(baked: Dictionary, hand: PackedInt32Array, elbow: PackedIn
 ## is easing out of), [hand, elbow] in the body's own space.
 static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
 	var packed := floorf(drawn.g + 0.5)
+	var motion := DeadBody.motion_in(drawn.g)
+	if packed >= VatBaker.UPPER:
+		packed -= VatBaker.UPPER
 	var share := floorf(packed / 65536.0)
 	var kept := floorf((packed - share * 65536.0) / 16.0)
-	var motion := int(packed - share * 65536.0 - kept * 16.0 + 0.5)
 	if motion >= tab.size():
 		return [arm[0], arm[1]]
 	var first: int = tab[motion][0]
@@ -498,6 +606,15 @@ static func lean_of(p, note: Dictionary) -> Basis:
 	if pitch == 0.0 and roll == 0.0 and turn == 0.0:
 		return Basis()
 	return Basis(Vector3.UP, turn) * Basis(Vector3.RIGHT, pitch) * Basis(Vector3.BACK, roll)
+
+
+## An own motion that plays once, from the frame it was started in; `key` is
+## what the note keeps it as.
+static func _own_once(note: Dictionary, key: int, t: float, length: float) -> float:
+	if int(note.get("motion", -1)) != key:
+		note["motion"] = key
+		note["since"] = t
+	return clampf((t - float(note["since"])) / maxf(length, 0.01), 0.0, 1.0)
 
 
 ## A motion that plays once, from the frame it was started in.

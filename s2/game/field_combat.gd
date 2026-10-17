@@ -272,6 +272,23 @@ func _pursue_zombie(p, delta: float) -> void:
 
 
 const CHAIN_R := 2.0
+## User decision 330: with one of the dead this near, a tap on a thing no longer
+## walks over to do it (only the stick and the pads). Draft value, to be set by hand play.
+const TAP_ASSIST_OFF_R := 4.0
+
+
+## The tap helper is off: one of the dead on its feet (or getting up), seen,
+## on this floor and within TAP_ASSIST_OFF_R (decision 330).
+func tap_assist_off(p) -> bool:
+	var lv: int = game.level_of(p.position)
+	for z in game.zombies.list:
+		if String(z["state"]) in ["dead", "frozen", "downed"]:
+			continue
+		if game.level_of(z["pos"]) != lv or not game.cell_seen(z["pos"]):
+			continue
+		if p.position.distance_to(z["pos"]) <= TAP_ASSIST_OFF_R:
+			return true
+	return false
 
 
 func _next_close_zombie(p) -> Dictionary:

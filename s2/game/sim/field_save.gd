@@ -13,9 +13,17 @@ extends RefCounted
 const VERSION := 1
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
+## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
+const TRAIN_PATH := "user://s1a_game_v2.json"
+const DeadPose = preload("res://game/actors/dead_pose.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos"]
+## Start options that are not the world: the switch itself and what goes in its own keys.
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id"]
+## What a body may be doing when it comes back: anything mid-act (a grab, a lunge,
+## a horde on the march) wakes up wandering, since who it was after is not saved.
+const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
@@ -54,7 +62,18 @@ static func capture(game) -> Dictionary:
 		# The return's id, the same as the receipt's receiptId: the train side applies it once.
 		"receipt_id": String(said.get("receiptId", game.opts.get("receipt_id", ""))),
 		"departure": departure,
+		# The same seed builds the same stop only with the same start options.
+		"start_opts": _start_opts(game.opts),
+		# What the receipt has gathered so far (deaths, who saw what, notes): its own fields as they are.
+		"receipt_state": _receipt_state(game.receipt) if game.receipt != null else {},
 	}
+
+
+static func _start_opts(opts: Dictionary) -> Dictionary:
+	var out := opts.duplicate(true)
+	for key in NOT_START:
+		out.erase(key)
+	return out
 
 
 static func _person(game, p) -> Dictionary:
@@ -96,7 +115,176 @@ static func from_json(text: String) -> Dictionary:
 		p["level"] = int(p["level"])
 		for id in p["items"]:
 			p["items"][id] = int(p["items"][id])
+		for h in p["hands"]:
+			if h.has("loaded"):
+				h["loaded"] = int(h["loaded"])
 	return d
+
+
+## Whether the field is where play goes on when the app starts again: a stop still
+## being played whose return the train has not taken in yet. `applied` is the train
+## save's fieldReturns.applied (receipt ids; a Dictionary there, a list is read too).
+static func should_resume(save: Dictionary, applied = {}) -> bool:
+	if save.is_empty() or String(save.get("phase", "")) != "field":
+		return false
+	var id := String(save.get("receipt_id", ""))
+	if id == "":
+		return true
+	if applied is Dictionary:
+		return not (applied as Dictionary).has(id)
+	return not (applied as Array).has(id)
+
+
+## Where the app starts (S3 spec 4, user decision 296): the field save and the
+## train save are read, and a stop still being played whose return the train has
+## not taken in comes back. Returns the start options for it, or {} to start fresh.
+static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH) -> Dictionary:
+	var save := read(field_path)
+	if not should_resume(save, train_applied(train_path)):
+		return {}
+	var opts := resume_opts(save)
+	opts["field_save_path"] = field_path
+	return opts
+
+
+## The receipt ids the train save has taken in (its fieldReturns.applied), {} when none.
+static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
+	if not FileAccess.file_exists(train_path):
+		return {}
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(train_path)) != OK or not json.data is Dictionary:
+		return {}
+	var returns = (json.data as Dictionary).get("fieldReturns")
+	if not returns is Dictionary or not returns.get("applied") is Dictionary:
+		return {}
+	return returns["applied"]
+
+
+## The options that build the same stop again and then put the save on it.
+static func resume_opts(save: Dictionary) -> Dictionary:
+	var opts: Dictionary = (save.get("start_opts", {}) as Dictionary).duplicate(true)
+	opts["seed"] = int(save.get("seed", 0))
+	opts["place"] = String(save.get("place", ""))
+	opts["mission"] = String(save.get("mission", ""))
+	if not (save.get("departure", {}) as Dictionary).is_empty():
+		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
+	if String(save.get("receipt_id", "")) != "":
+		opts["receipt_id"] = String(save["receipt_id"])
+	opts["field_resume"] = save
+	return opts
+
+
+## Puts a save on a field just built from resume_opts(save). Not brought back:
+## hordes on their way and the director's budget, the goals' and the held train's
+## progress, what each companion was told to do. They start again from the stop's start.
+static func apply(game, save: Dictionary) -> void:
+	game.skip_arrival()
+	game.clock.elapsed = float(save["clock"]["elapsed"])
+	game.clock.speed = float(save["clock"]["speed"])
+	for row: Dictionary in save.get("people", []):
+		for p in game.people:
+			if p.pid == String(row["pid"]):
+				_put_person(p, row)
+	_put_counts(game.ammo, save.get("ammo", {}))
+	game.unloaded.clear()
+	_put_counts(game.unloaded, save.get("unloaded", {}))
+	game.actions.coal_delivered = float(save["coal"]["delivered"])
+	game.actions.coal_spent = float(save["coal"]["spent"])
+	var boxes: Dictionary = game.data.get("containers", {})
+	for id in save.get("containers", {}):
+		if boxes.has(id):  # a heap pulled together during the stop is not on the map yet
+			var row: Dictionary = save["containers"][id]
+			boxes[id]["searched"] = bool(row["searched"])
+			boxes[id]["locked"] = bool(row["locked"])
+			boxes[id]["items"] = (row["items"] as Array).duplicate(true)
+	for id in save.get("spots", {}):
+		if game.data["spots"].has(id):
+			game.data["spots"][id]["state"] = String(save["spots"][id])
+	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)
+	game.decisions = (save.get("decisions", []) as Array).duplicate(true)
+	_put_zombies(game, save.get("zombies", []))
+	if game.receipt != null:
+		_put_receipt(game.receipt, save.get("receipt_state", {}))
+	game.cam_focus = game.player.position
+	game._update_camera(1.0)
+	game._refresh_vision()
+
+
+static func _put_person(p, row: Dictionary) -> void:
+	p.cancel_action()
+	p.stop()
+	p.position = row["pos"]
+	p.bag = String(row["bag"])
+	p.items = (row["items"] as Dictionary).duplicate(true)
+	p.set_weapon_slots((row["hands"] as Array).duplicate(true))
+	var b = p.body
+	var body: Dictionary = row["body"]
+	b.wounds.assign(body["wounds"])
+	b.infection = String(body["infection"])
+	b.infected = bool(body["infected"])
+	b.exhaustion = float(body["exhaustion"])
+	b.downed = bool(body["downed"])
+	b.dead = bool(body["dead"])
+
+
+static func _put_counts(into: Dictionary, counts: Dictionary) -> void:
+	for id in counts:
+		into[id] = int(counts[id])
+
+
+static func _put_zombies(game, rows: Array) -> void:
+	var all = game.zombies
+	all.list.clear()
+	var top := 0
+	for row: Dictionary in rows:
+		var z: Dictionary = all.spawn(String(row["kind"]), row["pos"], {"horde": int(row["horde"]), "name": String(row["name"])})
+		var state := String(row["state"])
+		if state in ["downed", "dead"]:
+			DeadPose.mark_fall(z, game.people)  # lies as it fell, not standing
+		z["id"] = int(row["id"])
+		z["state"] = state if state in RESUME_STATES else "wander"
+		z["loot"] = (row["loot"] as Array).duplicate(true)
+		z["searched"] = bool(row["searched"])
+		top = maxi(top, int(row["id"]))
+	all.next_id = top + 1
+
+
+## The receipt's own fields, read and written back as they are (it has no loader of
+## its own). Typed lists keep their type: they are filled, not replaced.
+static func _receipt_state(r) -> Dictionary:
+	var out := {}
+	for prop in r.get_property_list():
+		var name := String(prop["name"])
+		if int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE and name.begins_with("_"):
+			var v = r.get(name)
+			out[name] = v.duplicate(true) if (v is Array or v is Dictionary) else v
+	return out
+
+
+static func _put_receipt(r, state: Dictionary) -> void:
+	for name in state:
+		var now = r.get(name)
+		var v = state[name]
+		if now is Array:
+			(now as Array).assign(v)
+		elif now is Dictionary:
+			var into: Dictionary = now
+			for key in into.keys():
+				if not (v as Dictionary).has(key):
+					into.erase(key)
+			for key in v:
+				if into.get(key) is Array:
+					(into[key] as Array).assign(v[key])  # the people lists are typed
+				else:
+					into[key] = v[key]
+		elif now is int:
+			r.set(name, int(v))
+		elif now is float:
+			r.set(name, float(v))
+		elif now is bool:
+			r.set(name, bool(v))
+		elif now is String:
+			r.set(name, String(v))
 
 
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
