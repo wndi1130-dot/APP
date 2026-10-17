@@ -9,8 +9,12 @@
 import argparse, re, subprocess, sys
 
 DECISIONS = "docs/design/decisions.md"
-CITE = re.compile(r"결정 (\d{3})")
+CITE = re.compile(r"결정 (\d{3}(?:[·、]\d{3})*)")  # 「결정 352·364·369」처럼 나열한 번호도 하나씩 본다
 TEST_COUNT = re.compile(r"(시험|테스트)(은|는|이|가)? *[0-9][0-9,]{2,} *개")
+
+
+def ids(text):
+    return [n for group in CITE.findall(text) for n in re.findall(r"\d{3}", group)]
 
 
 def git(*args):
@@ -35,10 +39,10 @@ def main():
     p.add_argument("--base", required=True)
     p.add_argument("--head", default="HEAD")
     a = p.parse_args()
-    known = set(CITE.findall(git("show", f"{a.head}:{DECISIONS}")))
+    known = set(ids(git("show", f"{a.head}:{DECISIONS}")))
     errors = []
     for path, text in added_lines(a.base, a.head):
-        for n in CITE.findall(text):
+        for n in ids(text):
             if n not in known:
                 errors.append(f"{path}: 결정 {n} 이 {DECISIONS} 에 없다. 확정 사항이나 검토 중인 제안 절에 「(… 사용자 결정, 결정 {n})」 줄을 같이 더한다.")
         if path.endswith(".md") and TEST_COUNT.search(text):
