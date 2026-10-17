@@ -121,7 +121,7 @@ export function coupLeft(g: Game): number | null {
   return Math.max(1, m.coupWarnAt - g.seg + 1);
 }
 
-/** 계엄 중 위 막대의 신임 자리: '경비대의 충성'. 경비대 관계(−100~100)를 0~100 칸에 옮겨 그리고, 쿠데타가 나는 문턱(회의 이하, 경비대장의 계엄이면 중립 이하)을
+/** 계엄 중 위 막대의 신임 자리: '경비대의 충성'. 경비대 관계(−100~100)를 0~100 칸에 옮겨 그리고, 쿠데타가 나는 문턱(의심 이하, 경비대장의 계엄이면 중립 이하)을
  * 눈금으로 보인다. 계엄 중이 아니거나 S1a 판이면 null(신임 계기가 그대로 선다). */
 export function darkTrustMeter(view: View): HTMLElement | null {
   const g = view.g;
@@ -131,7 +131,7 @@ export function darkTrustMeter(view: View): HTMLElement | null {
   const stage = stageOf(rel);
   const line = m.door === 'captain' ? 0 : -1;
   const below = stage.band <= line;
-  // 경고가 풀리는 선: 문이 무엇이든 호의(15) 이상으로 되돌아와야 한다(martialSettle). 문턱(경고가 서는 선)은 회의·중립으로 문마다 다르다.
+  // 경고가 풀리는 선: 문이 무엇이든 호의(15) 이상으로 되돌아와야 한다(martialSettle). 문턱(경고가 서는 선)은 의심·중립으로 문마다 다르다.
   const need = 15;
   const left = coupLeft(g);
   const needName = '호의';

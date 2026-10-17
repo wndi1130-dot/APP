@@ -3,9 +3,9 @@
 
 import {
   advance, canLift, enterMartial, liftMartial, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
-  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
+  irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P, PLACES, sendScouts, stopRisk, crewEnoughCount,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
-  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableArrivals, arrivedIn, setLever, enableBudget, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS,
+  peopleCardRecent, CONTENT_CARD_KIND, enableClimate, enableDisasters, enableDeathWeight, enableArrivals, arrivedIn, setLever, enableBudget, heatCost, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, LocoId, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -40,7 +40,24 @@ export interface BotProbe {
   afterPrep?: (g: Game) => void;
 }
 
-export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 사람이 들어오는 사건(arrivals.ts, 결정 352·369)을 켠다 */ arrivals?: boolean; /** 재기용(결정 369 2차): 돌봄 봇이 사람을 받은 칸의 레버를 사건에 맞춰 고른다(arrivalLevers) */ arrivalLevers?: boolean; /** 재기용(결정 369 3차): 봇이 당긴 공간 레버의 관계 깎임(당김·유지)을 되돌린다 */ freeSpace?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean }
+export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 죽음의 무게(death_weight.ts, 결정 353~355·367)를 켠다 */ deathWeight?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 사람이 들어오는 사건(arrivals.ts, 결정 352·369)을 켠다 */ arrivals?: boolean; /** 재기용(결정 369 2차): 돌봄 봇이 사람을 받은 칸의 레버를 사건에 맞춰 고른다(arrivalLevers) */ arrivalLevers?: boolean; /** 재기용(결정 369 3차): 봇이 당긴 공간 레버의 관계 깎임(당김·유지)을 되돌린다 */ freeSpace?: boolean; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean; /** 재기용(결정 341): 정차 인원 정책. 없으면 인원을 건드리지 않는다 */ crew?: CrewPolicy; /** 바깥 기온·결빙(climate.ts, 결정 370)을 켠다 */ climate?: boolean }
+
+/** 정차 인원 정책(결정 341 재기, 명세 5장). P2·P4·P6·P8은 인원 고정(P4가 지금 봇과 같다), PN은 정찰 먼저 보내고 ceil(1.5×알맞은 인원)명(2~8,
+ * 기척을 모르면 4명), PN1(표의 PN′, 결정 372 2차)은 정찰 먼저 보내고 ceil(알맞은 인원)명(2~8, 기척을 모르면 4명), PS4는 정찰 먼저 보내고 4명.
+ * 없으면 지금처럼 인원을 건드리지 않는다. */
+export type CrewPolicy = 'P2' | 'P4' | 'P6' | 'P8' | 'PN' | 'PN1' | 'PS4';
+type CrewCell = { n: number; hurt: number; dead: number; deadStops: number };
+export interface CrewStat { stops: number; crewSum: number; crew8: number; band: Record<'short' | 'tight' | 'enough', CrewCell>; byRiskCrew: Record<string, CrewCell> }
+const crewCell = (): CrewCell => ({ n: 0, hurt: 0, dead: 0, deadStops: 0 });
+
+function pickCrewSize(g: Game, policy: CrewPolicy): void {
+  if (policy === 'PN' || policy === 'PN1' || policy === 'PS4') sendScouts(g);
+  const fixed = { P2: 2, P4: 4, P6: 6, P8: 8, PS4: 4 } as Record<string, number>;
+  const r = stopRisk(g);
+  const size = policy === 'PN' ? (r.known ? Math.min(8, Math.max(2, crewEnoughCount(r.need))) : 4)
+    : policy === 'PN1' ? (r.known ? Math.min(8, Math.max(2, Math.ceil(r.need))) : 4) : fixed[policy];
+  setStop(g, { crewSize: size });
+}
 
 export interface GameMetrics {
   end: string;
@@ -65,6 +82,8 @@ export interface GameMetrics {
   tensionMax: number;
   tensionEnd: number;
   warmEnd: number;
+  /** 바깥 기온(결정 370): 단계가 내려간 횟수, 결빙 횟수, 하강 뒤 두 구간 안에 난방 레버가 바뀐 출발 수, 석탄이 0에 닿았나(0·1), 단계별 구간당 난방 석탄 합·구간 수 */
+  climate: { drops: number; freezes: number; leverAfterDrop: number; coalZero: number; heatByStage: number[]; segsByStage: number[] };
   /** 서류 뭉치에 쌓인 카드(종류별) */
   cards: Record<string, number>;
   s1aCards: number;
@@ -73,6 +92,8 @@ export interface GameMetrics {
   tailExpoMax: number;
   tailExpoEnd: number;
   crews: Record<string, number>;
+  /** 정차 작업조 인원과 결과(결정 341 재기). band는 보내기 직전 stopRisk의 밴드, byRiskCrew는 「장소위험:인원」별 */
+  crewStat: CrewStat;
   spaceSegs: number;
   dom?: {
     restored: number; tier3: number; defective: number; breakdowns: number; repairs: number; lice: number; typhus: number;
@@ -377,6 +398,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (opts.s1b) enableDark(g);
   if (opts.disasters) enableDisasters(g);
   if (opts.arrivals) enableArrivals(g);
+  if (opts.deathWeight) enableDeathWeight(g);
+  if (opts.climate) enableClimate(g);
   if (opts.budget) enableBudget(g);
   if (opts.eventPack) enableEventPack(g);
   if (!opts.noPrologue) startPrologue(g);
@@ -385,8 +408,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   const lastH: Partial<Record<Comm, number>> = {};
   const m: GameMetrics = {
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
-    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, cards, s1aCards: 0, domCards: 0,
-    tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, spaceSegs: 0,
+    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, climate: { drops: 0, freezes: 0, leverAfterDrop: 0, coalZero: 0, heatByStage: [0, 0, 0, 0, 0], segsByStage: [0, 0, 0, 0, 0] }, cards, s1aCards: 0, domCards: 0,
+    tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, crewStat: { stops: 0, crewSum: 0, crew8: 0, band: { short: crewCell(), tight: crewCell(), enough: crewCell() }, byRiskCrew: {} }, spaceSegs: 0,
     travelById: {}, travelRepeats: 0, contentById: {}, contentRepeats: 0, titleRepeats: 0, titleTotal: 0,
     segsTotal: 0, segsWithTravel: 0, segsNoTravel: { rest: 0, empty: 0, other: 0 }, cardsPerSeg: [0, 0, 0, 0, 0], cardsPerSegMax: 0,
   };
@@ -397,6 +420,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   let lastSeg = -1;
   let lastCouncil = -1;
   let prepSeg = -1;
+  let heatSeen: Game['lastSettle'] = g.lastSettle;
   // S1b 봇 쪽 계수: 비상대권 안건(emg*), 위기(열린 군중 시계) 길이, 한 계엄 안에서 센 계엄 회기 수.
   const tally: Record<string, number> = {};
   const watch = new Map<number, { opened: number; martial: boolean; closed: number | null }>();
@@ -406,6 +430,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   let martialSince = -1;
   let settleSeen: unknown = null;
   for (let guard = 0; guard < 5000 && g.phase !== 'end'; guard += 1) {
+    // 바깥 기온(결정 370 재기): 막 끝난 구간의 적용 단계와 그 구간에 든 난방 석탄(레버는 출발 전 그대로)
+    if (g.climate && g.lastSettle && g.lastSettle !== heatSeen) { heatSeen = g.lastSettle; const st = g.outside ?? 1; m.climate.heatByStage[st] += heatCost(g); m.climate.segsByStage[st] += 1; }
     if (opts.probe?.onSettle && g.lastSettle !== settleSeen) { settleSeen = g.lastSettle; if (g.lastSettle) opts.probe.onSettle(g); }
     if (g.seg !== lastSeg && g.phase === 'prep') {
       lastSeg = g.seg;
@@ -509,6 +535,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     if (g.phase === 'prep' && prepSeg !== g.seg) {
       prepSeg = g.seg;
       opts.probe?.beforePrep?.(g);
+      const heat0 = COMMS.map(c => g.comms[c].heat);
       if (opts.policy === 'caretaker' && !opts.noLevers) {
         autoLevers(g);
         const sp0 = g.space, held = sp0?.giver && sp0.step > 0 ? sp0.giver : null;
@@ -518,6 +545,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         if (opts.arrivalLevers) arrivalLevers(g, lastH);
         if (opts.freeSpace) COMMS.forEach((c, i) => { g.comms[c].rel = rels[i]; });
       }
+      // 바깥 기온(결정 370 재기): 하강 뒤 두 구간 안에 난방 레버를 다시 만졌나, 단계별 구간당 난방 석탄
+      const ch = g.climateChange;
+      if (ch && ch.to > ch.from && g.seg - ch.seg >= 1 && g.seg - ch.seg <= 2 && COMMS.some((c, i) => g.comms[c].heat !== heat0[i])) m.climate.leverAfterDrop += 1;
       opts.probe?.afterPrep?.(g);
       if ((g.space?.step ?? 0) > 0) m.spaceSegs += 1;
       if (opts.s1c && opts.dom === 'engaged') domesticPrep(g);
@@ -529,8 +559,21 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     }
     if (g.phase === 'stop' && g.stop && !g.stop.done) {
       if (opts.policy === 'caretaker') setStop(g, { crewComm: pickCrew(g) });
+      if (opts.crew) pickCrewSize(g, opts.crew);
       m.crews[g.stop.crewComm] = (m.crews[g.stop.crewComm] ?? 0) + 1;
+      const before = stopRisk(g);
+      const size = g.stop.crewSize;
+      const risk = (PLACES.find(p => p.id === g.stop!.place) ?? PLACES[0]).risk;
       resolveStop(g, true);
+      const res = g.stop.result;
+      if (res && !res.passed) {
+        const cs = m.crewStat;
+        cs.stops += 1; cs.crewSum += size; if (size >= 8) cs.crew8 += 1;
+        const key = `${risk}:${size}`;
+        for (const cell of [cs.band[before.band], cs.byRiskCrew[key] ??= crewCell()]) {
+          cell.n += 1; cell.hurt += res.injured.length; cell.dead += res.dead.length; if (res.dead.length > 0) cell.deadStops += 1;
+        }
+      }
       opts.probe?.afterStop?.(g);
       m.tailExpoMax = Math.max(m.tailExpoMax, situation(g, 'tail')[3]);
       continue;
@@ -590,6 +633,9 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   m.endFood = g.food;
   m.disasters = { blizzard: g.disasterStats?.blizzard ?? 0, cold: g.disasterStats?.cold ?? 0 };
   m.disasterDeaths = g.disasterDeaths ?? 0;
+  m.climate.drops = g.climateStats?.drops ?? 0;
+  m.climate.freezes = g.climateStats?.freezes ?? 0;
+  m.climate.coalZero = m.coalMin <= 0 ? 1 : 0;
   m.tensionEnd = g.tension;
   m.warmEnd = COMMS.reduce((sum, c) => sum + situation(g, c)[0], 0) / COMMS.length;
   const d = g.dom;

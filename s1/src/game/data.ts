@@ -20,6 +20,11 @@ export const P = Object.freeze({
   // 결정 257: 정차에서 얻는 석탄만 이 배수를 곱한 뒤 반올림한다(식량·의약품·사치품·상징물·정보는 그대로).
   coalHaul: 0.85,
   injuryRate: 0.25, deathRate: 0.03,
+  // 정차 작업조 인원과 위험(결정 341, 값은 가안). 알맞은 인원 = max(crewNeedMin, crewNeed × 장소 위험 × 체류 × 기척 × 경계 거부 × 무리 × 호위).
+  // 인원/알맞은 인원 r이 crewBandShort 아래면 모자람, crewBandEnough 이상이면 충분이다. 한 사람당 위험에 곡선 m(r)을 곱한다(CREW.curve).
+  // 후보 A: r^-crewAPow를 [crewAFloor, crewACeil]로 자름. 후보 B: r 0.5 이하 crewBCeil, 1에서 1, 2 이상 crewBFloor, 사이는 직선.
+  crewNeed: 1.5, crewNeedMin: 1.6, crewBandShort: 0.8, crewBandEnough: 1.5,
+  crewAPow: 1.5, crewAFloor: 0.25, crewACeil: 2.5, crewBCeil: 1.8, crewBFloor: 0.35,
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
   // 결정 080(후보 5): 꼬리칸 관계가 backBelow 아래인데 열기·식량 레버를 2 이상으로 backSegs 구간 이어 지키면
   // 구간 회복에 backBonus가 더 붙고 열기가 구간마다 1씩 내린다. 돌려주는 길이 막히지 않게 한다.
@@ -66,9 +71,25 @@ export const P = Object.freeze({
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').
   supportRel: 10, supportRepeatRel: 5, supportGap: 3,
   // 꿈쩍 않는 반대(사용자 2026-10-09 '매수 딸깍으로 전부 넘어오면 너무 쉽다'. 숫자는 제안). 출석의 15%에서 시작해
-  // 이념이 부딪는 한 점마다 +7%p, 관계가 회의 이하면 +10%p, 호의 이상이면 −5%p, 앙금이 있으면 +5%p. 5~45%. 그 칸 반대표보다 많을 순 없다.
+  // 이념이 부딪는 한 점마다 +7%p, 관계가 의심 이하면 +10%p, 호의 이상이면 −5%p, 앙금이 있으면 +5%p. 5~45%. 그 칸 반대표보다 많을 순 없다.
   hardNoBase: 0.15, hardNoIdeo: 0.07, hardNoCold: 0.1, hardNoWarm: 0.05, hardNoGrudge: 0.05, hardNoMin: 0.05, hardNoMax: 0.45,
 });
+/** 정차 인원 곡선(결정 341). off는 옛 식(한 사람당 위험이 인원과 무관), A·B는 명세 2-2의 두 후보. 사용자가 500판 숫자를 본 뒤 하나로 정한다. */
+export type CrewCurve = 'off' | 'A' | 'B';
+/** 작업조 대가(결정 359, 값은 가안). off는 옛 식(노출 +crewGain, 살아 돌아온 사람 수만큼 표결 빠짐).
+ * 후보 X는 노출 상승 = crewGain × 인원 / ref, 노출 상한은 기본 상승을 넘는 만큼 crewCap 위로 열린다. 표결 빠짐 = 돌아온 사람 × away(반올림).
+ * 정찰조의 표결 빠짐은 그대로다(결정 360). 제곱 후보 Y는 두 번의 500판에서 가장 나빠 뺐다. */
+export type CrewCost = 'off' | 'X';
+export const CREW_COST: Record<CrewCost, { pow: number; away: number }> = {
+  off: { pow: 0, away: 1 },
+  X: { pow: 1, away: 1.5 },
+};
+export const CREW_COST_REF = 4;
+/** 정차 산출의 인원 항(결정 372, 기본 none은 결정 375). flat은 옛 식 0.7 + 0.075×인원. half·none은 알맞은 인원까지 0.075씩 온전히 보태고,
+ * 넘는 사람은 그 몫에 CREW_HAUL_OVER를 곱해 보탠다(half 절반, none 안 보탬). */
+export type CrewHaul = 'flat' | 'half' | 'none';
+export const CREW_HAUL_OVER: Record<Exclude<CrewHaul, 'flat'>, number> = { half: 0.5, none: 0 };
+export const CREW: { curve: CrewCurve; cost: CrewCost; haul: CrewHaul } = { curve: 'A', cost: 'off', haul: 'none' };
 /** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
 export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };
 /** 운반 솜씨(손에 익었나). 기관실은 화부가 빠지면 열차가 못 가서 못 낸다. */
@@ -96,7 +117,7 @@ export const LEVER_NAMES = ['끊음', '낮음', '보통', '높음', '최대'] as
 // ---- 관계 7단계(브리프 1.1) ----
 export const STAGES = [
   { min: 70, name: '헌신', band: 2 }, { min: 40, name: '지지', band: 1 }, { min: 15, name: '호의', band: 1 },
-  { min: -14, name: '중립', band: 0 }, { min: -39, name: '회의', band: -1 }, { min: -69, name: '반대', band: -1 },
+  { min: -14, name: '중립', band: 0 }, { min: -39, name: '의심', band: -1 }, { min: -69, name: '반대', band: -1 },
   { min: -100, name: '적대', band: -2 },
 ] as const;
 
@@ -114,7 +135,9 @@ export type LawId =
   // 불만을 낮추는 법 셋(coordinator 결정 035, calm.ts). 구간마다 천천히 깎이는 꼴이라 효과는 res가 아니라 calm.ts가 셈한다.
   | 'evening_pot' | 'wall_ledger' | 'night_of_names'
   // 교육 법 셋(결정 205·207, classroom_radio 2.1): 무엇을 가르치나에 답 셋, 하나만 선다. 효과는 domestic/classroom.ts가 읽는다. S1c를 켠 판에서만 열린다.
-  | 'edu_letters' | 'edu_trade' | 'edu_engine';
+  | 'edu_letters' | 'edu_trade' | 'edu_engine'
+  // 「배웅」 한 쌍(결정 355·367, death_weight.ts): 남은 사람이 죽음을 어떻게 치르나. 죽음의 무게를 켠 판에서만 열리고, 하나를 세우면 다른 하나는 닫히며 거두지 않는다.
+  | 'farewell_rite' | 'farewell_hands';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -333,6 +356,23 @@ export const LAWS: Record<LawId, LawDef> = {
     changes: ['아이들이 열차에 남아 배운다(승강장의 손이 준다)', '긴장 −0.5/구간', '기관 견습이 한 단계 오르는 데 한 구간 덜(바닥 2구간)', '법이 서면 어디 곁에서 배울지 고른다', '공방 곁: 공방의 일 +1, 복원 목재·고철 넷에 하나 덜', '의무칸 곁: 깊은 상처·골절이 하루 먼저 낫는다', '다른 교육 법이 닫힌다'],
     opensWhen: '아동 노동이 오를 때나 서 있을 때',
   }),
+  // ---- 「배웅」 한 쌍(결정 355·367). 시신 법(몸을 어디 두나)과 다른 층이다. 효과는 death_weight.ts가 lawActive로 셈한다. ----
+  farewell_rite: L({
+    id: 'farewell_rite', title: '함께 보낸다', group: '배웅', tag: '이상', kind: 'normal', axes: [0, 0, 0],
+    like: { tail: 1, medtech: 1, guard: -1 },
+    why: '사람이 죽으면 그 칸 난로 곁에 모두 모여 그를 보낸다. 함께 운 칸은 덜 흔들린다.',
+    whyNot: '경비대: 모일 때마다 통로가 비고 석탄이 탄다.',
+    changes: ['죽음이 올리는 긴장이 절반', '죽음마다 석탄 −1(난로 곁 모임)', '상중이 3구간(회기 결석이 길어진다)', '손을 보내 배웅한다가 닫힌다', '한 번 정하면 거두지 않는다'],
+    opensWhen: '첫 죽음 뒤, 시신 법이 선 뒤',
+  }),
+  farewell_hands: L({
+    id: 'farewell_hands', title: '손을 보내 배웅한다', group: '배웅', tag: '질서', kind: 'normal', axes: [0, 0, 0],
+    like: { engine: 1, guard: 1, tail: -1 },
+    why: '정차 때 죽은 이의 칸 사람 몇이 선로 옆에서 그를 보낸다. 열차장이 손을 내줬으니 칸은 서운해하지 않는다.',
+    whyNot: '꼬리칸: 보내는 손은 늘 일하는 칸에서 나온다.',
+    changes: ['죽음마다 신임 깎임 절반', '죽은 이의 칸 관계 벌이 없다', '죽음마다 다음 정차 작업조 −1(숙련 일손이면 −2)', '함께 보낸다가 닫힌다', '한 번 정하면 거두지 않는다'],
+    opensWhen: '첫 죽음 뒤, 시신 법이 선 뒤',
+  }),
 };
 /** S1c 법. S1a 판에선 열리지 않는다. */
 export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack', 'edu_letters', 'edu_trade', 'edu_engine'];
@@ -340,6 +380,8 @@ export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std
 export const LAW_VARIANT_OF: Partial<Record<LawId, LawId>> = { seed_half: 'seed_grain', child_pack: 'child_labor', triage_std: 'triage' };
 export const LAW_IDS = Object.keys(LAWS) as LawId[];
 export const CORPSE_LAWS: LawId[] = ['corpse_throw', 'corpse_store', 'corpse_burn'];
+/** 「배웅」 한 쌍. 서로 막고, 폐지 안건이 없다(politics.ts agendaOptions). */
+export const FAREWELL_LAWS: LawId[] = ['farewell_rite', 'farewell_hands'];
 
 // ---- 장소(ref/places_loot_draft.json의 가중치) ----
 export const LOOT_KEYS = ['coal', 'food', 'medicine', 'luxury', 'symbol', 'secret'] as const;

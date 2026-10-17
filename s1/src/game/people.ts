@@ -15,14 +15,23 @@ export const FAMILIES = (familiesJson as unknown as { families: Family[] }).fami
 const byId = (id: string): Profile | undefined => PROFILES.find(p => p.id === id);
 const byName = (name: string): Profile | undefined => PROFILES.find(p => p.name === name);
 
-export const PEOPLE_KINDS = ['orphan', 'keepsake', 'rep_sick', 'elder', 'birth', 'naming'] as const;
+// 죽음의 무게 카드(death_weight.ts, 결정 353~355)도 사람 카드라 이동 사건을 쉬게 한다.
+export const PEOPLE_KINDS = ['orphan', 'keepsake', 'rep_sick', 'elder', 'birth', 'naming', 'loss_rep', 'loss_child', 'loss_hand', 'chain_push', 'chain_fix', 'heat_after'] as const;
 
 /** 사람 카드가 이번 구간이나 바로 앞 정산에 왔으면 이동 사건을 쉰다. 카드 수를 늘리지 않으려는 것이다. */
 export function peopleCardRecent(g: Game): boolean {
   return (g.peopleSeg ?? -99) >= g.seg - 1 || g.cards.some(c => (PEOPLE_KINDS as readonly string[]).includes(c.kind));
 }
 
-function addPeopleCard(g: Game, card: Parameters<typeof addCard>[1]): void {
+/** 죽음의 무게(death_weight.ts)가 붙는 자리. 그 파일을 불러오면 채워진다(실행 시 import 순환을 피한다). 꺼진 판은 어느 것도 부르지 않는다. */
+export const DEATH_WEIGHT_HOOK: {
+  after?: (g: Game, c: Comm, names: readonly string[], quiet: boolean) => void;
+  mournExtra?: (g: Game) => number;
+  succeeded?: (g: Game, c: Comm, old: string) => void;
+  tick?: (g: Game) => void;
+} = {};
+
+export function addPeopleCard(g: Game, card: Parameters<typeof addCard>[1]): void {
   addCard(g, card);
   g.peopleSeg = g.seg;
 }
@@ -77,13 +86,16 @@ export function pickVictims(g: Game, n: number, cause: VictimCause, rnd: () => n
 }
 
 // ---- A1 유품과 남은 사람 ----
-/** 죽음이 나면 그 구간에 카드 하나(죽은 사람이 여럿이면 아이를 남긴 부모가 먼저). 대표가 죽으면 승계 몫이라 안 띄운다. */
-export function afterDeath(g: Game, c: Comm, names: readonly string[]): void {
+/** 죽음이 나면 그 구간에 카드 하나(죽은 사람이 여럿이면 아이를 남긴 부모가 먼저). 대표가 죽으면 승계 몫이라 안 띄운다.
+ * quiet: 수로만 적는 죽음(난방 배당, 폭동). 죽음의 무게를 켠 판이면 상중만 하고 이름 카드를 띄우지 않는다(결정 354).
+ * 켠 판의 카드는 자리별 뒷사건(death_weight.ts)이 맡는다. 꺼진 판은 옛 동작 그대로다. */
+export function afterDeath(g: Game, c: Comm, names: readonly string[], quiet = false): void {
   const known = names.filter(n => byName(n) && !COMMS.some(k => g.comms[k].leader.name === n));
   for (const n of known) {
     const f = familyOf(g, n);
     if (f) for (const o of f.others) mourn(g, o.name, o.community);
   }
+  if (g.deathWeight) { DEATH_WEIGHT_HOOK.after?.(g, c, names, quiet); return; }
   if (known.length === 0 || g.cards.some(x => x.kind === 'orphan')) return;
   const parent = known.find(n => { const f = familyOf(g, n); return f && f.isParent && f.kids.length > 0; });
   // 남은 아이가 먼저다: 유품 카드가 기다리는 중에 부모가 죽으면 그 카드를 남은 아이 카드로 바꾼다.
@@ -100,7 +112,7 @@ export function afterDeath(g: Game, c: Comm, names: readonly string[]): void {
 /** 상중: 2구간. 게이지가 아니라 인물 상태다. 파견에 넣으면 사기가 낮고 회기엔 결석한다. */
 export const MOURN_SEGS = 2;
 function mourn(g: Game, name: string, comm: Comm): void {
-  g.mourning = [...(g.mourning ?? []).filter(m => m.name !== name), { name, comm, until: g.seg + MOURN_SEGS }];
+  g.mourning = [...(g.mourning ?? []).filter(m => m.name !== name), { name, comm, until: g.seg + MOURN_SEGS + (g.deathWeight ? DEATH_WEIGHT_HOOK.mournExtra?.(g) ?? 0 : 0) }];
 }
 export function mourners(g: Game, c?: Comm): string[] {
   return (g.mourning ?? []).filter(m => m.until >= g.seg && (!c || m.comm === c)).map(m => m.name);
@@ -141,6 +153,7 @@ export function recover(g: Game, c: Comm, why: string): void {
   // 앓던 대표가 그사이 죽었으면 되돌릴 사람이 없다. 대신 나오던 측근이 자리를 잇는다.
   if (isGone(g, s.sick.rep.name)) {
     journal(g, `${s.leader.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
+    if (g.deathWeight) DEATH_WEIGHT_HOOK.succeeded?.(g, c, s.sick.rep.name);
     s.sick = undefined;
     s.debt = false;
     return;
@@ -161,6 +174,7 @@ function sickTick(g: Game, rnd: () => number): void {
       else if (!low) recover(g, c, '처지가 나아지자');
       else if (g.seg - s.sick.since >= SICK.succeed) {
         journal(g, `${s.sick.rep.name}은(는) 끝내 일어나지 못했다. ${s.leader.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
+        if (g.deathWeight) DEATH_WEIGHT_HOOK.succeeded?.(g, c, s.sick.rep.name);
         s.sick = undefined;
         s.debt = false;
       }
@@ -267,6 +281,7 @@ export function peopleTick(g: Game, rnd: () => number): void {
   });
   weakTick(g);
   sickTick(g, rnd);
+  if (g.deathWeight) DEATH_WEIGHT_HOOK.tick?.(g); // 죽음의 무게(켠 판만): 난방 배당 밤사이 죽음 다음의 뒷사건, 사건 줄의 다음 단계
   elderNightTick(g, rnd);
   elderTick(g);
   birthTick(g);

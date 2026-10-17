@@ -153,6 +153,11 @@ export interface BudgetState { seg: number; picked: number; stats: BudgetStats }
 /** st: 그때의 상태 키(eventStateKey). 상태가 그대로면 같은 사건을 다시 열지 않는다. */
 export interface EventMemo { n: number; seg: number; pick: string; st?: string }
 
+/** 죽은 사람의 자리(death_weight.ts). heat는 난방 배당 밤사이 죽음 */
+export type DeathSlot = 'rep' | 'parent' | 'child' | 'hand' | 'heat';
+/** 사건 줄 하나. step 0 원인 카드 → 1 반발 → 2 고칠 길. last는 마지막으로 단계가 움직인 구간 */
+export interface DeathChain { comm: Comm; slot: DeathSlot; step: 0 | 1 | 2; seg: number; refused: boolean; rel0: number; heat0: number; last: number; bumped?: boolean }
+
 export interface StopState {
   place: string;
   /** 출발을 미룬 날 같은 정차를 한 번 더 뒤지는 중(결정 332). 위험을 따로 굴린다 */
@@ -347,6 +352,19 @@ export interface Game {
   mourning?: { name: string; comm: Comm; until: number }[];
   /** 잠깐 오른 처지 */
   tempBase?: { c: Comm; i: 0 | 1 | 2 | 3; v: number; until: number }[];
+  // ---- 죽음의 무게(death_weight.ts, 결정 353~355·367). 켜지 않은 판엔 모두 없다 ----
+  /** enableDeathWeight를 부른 판 */
+  deathWeight?: boolean;
+  /** 칸마다 하나, 판에 둘까지 이어지는 사건 줄(원인 → 반발 → 고칠 길) */
+  deathChains?: DeathChain[];
+  /** 한 구간의 죽음 신임 깎임 합(상한을 셈) */
+  deathTrustAt?: { seg: number; sum: number };
+  /** 난방 배당 밤사이 죽음(같은 정산의 뒷사건 카드 하나) */
+  heatAfter?: { seg: number; lost: Partial<Record<Comm, number>> };
+  /** 다음 정차 작업조에서 빠지는 사람 수(음수면 더해지는 수) */
+  crewShort?: number;
+  /** 시뮬 재기용 셈 */
+  deathStats?: { opened: number; fixed: number; unfixed: number; broken: number; maxOpen: number; cards: number };
   sickCount?: number;
   elderAsked?: boolean;
   /** 붙잡은 노인(사람의 무게 A3). 붙잡은 뒤 2구간 동안 식량이 바닥이면 밤에 혼자 내릴 수 있다. 내렸거나 기한이 지나면 지운다. */
@@ -434,6 +452,18 @@ export interface Game {
   disasterEnd?: number;
   /** 판 전체 재난 사망 수(상한 DZ.deathCap) */
   disasterDeaths?: number;
+  /** 바깥 기온(climate.ts)이 켜진 판. 없으면 꺼진 판이고 아래 칸들도 없다 */
+  climate?: boolean;
+  /** 적용된 기온 단계 0~4(출발 때만 계절표를 따라 바뀐다) */
+  outside?: number;
+  /** 남은 결빙 구간 */
+  freeze?: number;
+  /** 마지막으로 단계가 바뀐 출발(구간, 떠난 단계, 새 단계) */
+  climateChange?: { seg: number; from: number; to: number };
+  /** 날씨 글의 마지막 인칭(0 1인칭, 1 3인칭) */
+  climateVoice?: number;
+  /** 판 통계: 단계가 내려간 횟수, 결빙 횟수 */
+  climateStats?: { drops: number; freezes: number };
   /** 카드 구간 예산(budget.ts)이 켜진 판. 없으면 꺼진 판이고 아래 deferred도 없다 */
   budget?: BudgetState;
   /** 예산 때문에 미뤄 둔 카드. 다음 구간 처음에 맨 앞으로 돌아온다 */

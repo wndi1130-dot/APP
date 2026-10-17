@@ -50,6 +50,8 @@ export const CONFIGS: [string, BotOptions][] = [
   ['S1c 돌봄 묶음 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', eventPack: true }],
   // 사람이 들어오는 사건(arrivals.ts)도 기본 꺼짐이라 켠 판을 따로 돌린다
   ['S1c 돌봄 들어옴 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', arrivals: true }],
+  // 죽음의 무게(death_weight.ts)도 기본 꺼짐이라 켠 판을 따로 돌린다
+  ['S1c 돌봄 죽음 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', deathWeight: true }],
 ];
 
 export interface ReachReport { games: number; seen: Record<string, number>; unreached: string[]; unexpected: string[]; noted: string[]; notes: Record<string, string> }

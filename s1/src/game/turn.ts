@@ -4,6 +4,8 @@ import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, wound
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { AR, arrivalsAfterStop, arrivalsArrive, arrivalsAway, arrivalsSettle, arrivalsTravel } from './arrivals';
+import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
+import { climateDepart, climateSettle, freezeCoal, freezeDepart, freezeFood, tempMult } from './climate';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
@@ -17,8 +19,8 @@ import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
-import type { Comm, LootKey, PlaceDef, StayId } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
+import type { Comm, CrewCurve, LootKey, PlaceDef, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, CREW_BUSY, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
@@ -160,9 +162,9 @@ export function setAutoLevers(g: Game, on: boolean): void {
   }
 }
 
-/** 난방 석탄. 단열한 칸이 있는 공동체는 몫만큼 덜 든다(결정 217·225). 예고와 정산이 같이 부른다. */
+/** 난방 석탄. 단열한 칸이 있는 공동체는 몫만큼 덜 든다(결정 217·225). 바깥 기온을 켠 판은 단계 곱이 붙는다(climate.ts). 예고와 정산이 같이 부른다. */
 export function heatCost(g: Game): number {
-  return COMMS.reduce((sum, c) => sum + ((g.comms[c].heat * g.comms[c].pop) / 40) * (1 - D.insulateHeat * insulatedShare(g, c)), 0) * P.coalHeatPerLever;
+  return COMMS.reduce((sum, c) => sum + ((g.comms[c].heat * g.comms[c].pop) / 40) * (1 - D.insulateHeat * insulatedShare(g, c)), 0) * P.coalHeatPerLever * tempMult(g);
 }
 export function foodCost(g: Game): number {
   return COMMS.reduce((sum, c) => sum + g.comms[c].pop * g.comms[c].ration, 0) * P.foodPerPersonLever;
@@ -191,8 +193,8 @@ const tailIdleCoal = (g: Game): number => (tailIdle(g) ? P.tailIdleCoal : 0);
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g);
-  const food = foodCost(g) + lawSum(g, 'foodAdd');
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g) + freezeCoal(g);
+  const food = foodCost(g) * (1 + freezeFood(g)) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   // 선 열차는 탈 석탄이 없다(난방도 난로에 든 것만). 식량은 평소대로 든다.
   return { coal: g.stranded ? 0 : coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -241,20 +243,30 @@ function forecastWeights(g: Game): { coal: [string, number][]; food: [string, nu
       ['calm.pot', calmCoal(g)],
       ['disaster', disasterCoal(g)],
       ['loco', locoCoal(g)],
+      // 결빙(climate.ts)은 켠 판의 결빙 구간에만 줄이 생긴다(꺼진 판의 장부는 그대로)
+      ...(freezeCoal(g) ? [['freeze', freezeCoal(g)] as [string, number]] : []),
       ['upkeep', dom.coal],
     ],
-    food: [['ration', (foodCost(g) + lawSum(g, 'foodAdd')) * dom.foodMult], ['upkeep', dom.food]],
+    food: [
+      ['ration', (foodCost(g) + lawSum(g, 'foodAdd')) * dom.foodMult],
+      ...(freezeFood(g) ? [['freeze', foodCost(g) * freezeFood(g) * dom.foodMult] as [string, number]] : []),
+      ['upkeep', dom.food],
+    ],
   };
 }
 
 function depart(g: Game): void {
   delete g.platform; // 승강장에 남은 사람은 떠나면서 일지에 그어졌다(5b.5)
   if (g.stranded) return strandedDepart(g); // 선 열차: 달리지 않는다. 겨울 하락은 멈춘 정산의 온기 하락이 대신한다
-  if (g.seg % P.winterEvery === 0) {
+  // 바깥 기온을 켠 판은 계절표가 정기 한파를 대신한다(climate.ts, 결정 370 1). 결빙은 재난 한파가 이번 출발에 닥치는지도 본다.
+  const coldStart = !!g.disasters && g.disaster?.kind === 'cold' && g.disaster.stage === 'warn';
+  const shift = climateDepart(g);
+  if (!g.climate && g.seg % P.winterEvery === 0) {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
   }
   disasterDepart(g);
+  freezeDepart(g, shift, coldStart);
   // S1c 내정 훅: 기관 숙련자가 없으면 선다(매뉴얼도 없으면 끝), 고장 판정.
   const domStall = domesticDepart(g);
   if (domStall === 'end') return finish(g, 'stranded');
@@ -458,6 +470,33 @@ export interface StopRisk {
   pyre: boolean;
   /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고, 결과는 정찰했을 때와 같다. */
   known: boolean;
+  /** 알맞은 인원(결정 341). 화면에는 정찰 뒤에만 쓴다 */
+  need: number;
+  /** 인원 / 알맞은 인원 */
+  ratio: number;
+  band: CrewBand;
+}
+
+/** 인원 밴드(결정 341): 모자람·빠듯·충분 */
+export type CrewBand = 'short' | 'tight' | 'enough';
+
+/** 한 사람당 위험에 곱하는 인원 곡선 m(r). m(1)=1이고 r에 대해 늘지 않는다(결정 341, 명세 2-2). off면 늘 1이다. */
+export function crewMult(r: number, curve: CrewCurve = CREW.curve): number {
+  if (curve === 'off') return 1;
+  if (curve === 'A') return clamp(Math.pow(Math.max(r, 1e-6), -P.crewAPow), P.crewAFloor, P.crewACeil);
+  if (r <= 0.5) return P.crewBCeil;
+  if (r <= 1) return P.crewBCeil + (1 - P.crewBCeil) * (r - 0.5) / 0.5;
+  if (r < 2) return 1 + (P.crewBFloor - 1) * (r - 1);
+  return P.crewBFloor;
+}
+
+export function crewBand(r: number): CrewBand {
+  return r < P.crewBandShort ? 'short' : r < P.crewBandEnough ? 'tight' : 'enough';
+}
+
+/** 알맞은 인원. 정찰 뒤 화면에 보이는 것(장소 위험·체류·기척·경계 거부·무리·호위)만 넣는다. 장작불·내정·지침·칸 피로는 넣지 않는다. */
+export function crewNeed(g: Game): number {
+  return stopRisk(g).need;
 }
 
 /** 이 정차에서 이 사람에게 정해 둔 난수(0~1). 난수 흐름을 건드리지 않게 판 씨앗으로 만든다. */
@@ -488,8 +527,12 @@ export function stopRisk(g: Game): StopRisk {
   const dm = domesticRiskMult(g); // S1c 내정 훅
   // 내보낸 칸이 지쳐 있을수록 다치고 죽기 쉽다(결정 060 가).
   const tired = stop ? exposeMult(g, stop.crewComm) : 1;
-  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury * tired;
-  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death * tired;
+  // 인원이 알맞은 인원보다 많을수록 한 사람당 위험이 준다(결정 341). 부하에는 정찰 뒤 화면에 보이는 것만 넣는다.
+  const need = Math.max(P.crewNeedMin, P.crewNeed * place.risk * stay.risk * (stop?.threat ?? 1) * guardMult * horde * escort);
+  const ratio = crew / need;
+  const m = crewMult(ratio);
+  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury * tired * m;
+  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death * tired * m;
   // 결과는 사람마다 정해 둔 난수로 먼저 정한다. 정찰은 이 결과를 드러내기만 해서 정찰 여부가 피해를 바꾸지 않는다
   // (07_outside_eye_triage N2). 준비를 바꾸면 같은 난수로 다시 계산하니 다시 굴리는 길도 없다.
   // 사람 하나의 죽을 확률은 pDeath/4(4명 기준 기대 사망 pDeath), 크게 다칠 확률은 lam/인원(기대 중상 lam).
@@ -505,6 +548,7 @@ export function stopRisk(g: Game): StopRisk {
   return {
     lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
     guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout && !blizzardActive(g), pyre: pyreCount(g) > 0,
+    need, ratio, band: crewBand(ratio),
   };
 }
 
@@ -525,11 +569,29 @@ export function riskWhy(r: StopRisk): string[] {
   return why;
 }
 
+/** 작업조 인원이 올리는 노출과 그 상한(결정 359). 옛 식(off)은 +crewGain, 상한 crewCap. */
+export function crewGainOf(size: number): { gain: number; cap: number } {
+  const k = CREW_COST[CREW.cost];
+  const gain = P.crewGain * (k.pow ? (size / CREW_COST_REF) ** k.pow : 1);
+  return { gain, cap: P.crewCap + Math.max(0, gain - P.crewGain) };
+}
+
+/** 정차 산출의 인원 항(결정 372). 옛 식(flat)은 0.7 + 0.075×인원, half·none은 알맞은 인원을 넘는 사람이 절반만·안 보탠다. 알맞은 인원이 8 이상이면 세 식이 같다. */
+export function crewHaulMult(size: number, need: number): number {
+  if (CREW.haul === 'flat') return 0.7 + 0.075 * size;
+  return 0.7 + 0.075 * Math.min(size, need) + 0.075 * CREW_HAUL_OVER[CREW.haul] * Math.max(0, size - need);
+}
+
+/** 살아 돌아온 작업조가 이번 회기 표결에서 빠지는 사람 수(결정 359). 옛 식(off)은 돌아온 사람 수 그대로. */
+export function crewAwayOf(returned: number): number {
+  return Math.round(returned * CREW_COST[CREW.cost].away);
+}
+
 /** 작업조를 낸 칸이 지친다: 노출 +gain, 늘 하던 일이 아닌 칸(의무진·앞칸)은 관계 −3(first_leg_story 6.4). 반감 줄을 돌려준다. */
-export function crewWork(g: Game, c: Comm, gain: number): string | null {
+export function crewWork(g: Game, c: Comm, gain: number, cap: number = P.crewCap): string | null {
   const s = g.comms[c];
   // 이미 한계 위면 그대로 두고, 아래면 한계까지만 오른다.
-  s.base[3] = Math.max(s.base[3], Math.min(P.crewCap, s.base[3] + gain));
+  s.base[3] = Math.max(s.base[3], Math.min(cap, s.base[3] + gain));
   if (!CHORE_COMMS.includes(c)) return null;
   bumpRel(g, c, P.choreRel, 'stop.loot');
   return `${COMM_NAME[c]}${josa(COMM_NAME[c], '은/는')} 손에 안 익은 짐을 날랐다. 불만이 나온다.`;
@@ -551,7 +613,8 @@ export const CREW_COMMS: readonly Comm[] = COMMS.filter(c => CREW_HAUL[c] !== un
 /** 정차 카드에 미리 적는 작업조 값(6.4): 이 칸을 내면 노출이 얼마가 되고, 무엇을 잃고, 누가 쉬나. */
 export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: number; haul: number; rest: Comm[]; risk: number } {
   const from = Math.round(situation(g, c)[3]);
-  const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(P.crewCap, g.comms[c].base[3] + P.crewGain) - g.comms[c].base[3]));
+  const { gain, cap } = crewGainOf(g.stop?.crewSize ?? CREW_COST_REF);
+  const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(cap, g.comms[c].base[3] + gain) - g.comms[c].base[3]));
   const rest = COMMS.filter(o => o !== c && REST_FLOOR[o] !== undefined && g.comms[o].base[3] > REST_FLOOR[o]!);
   return { from, to, rel: CHORE_COMMS.includes(c) ? P.choreRel : 0, haul: CREW_HAUL[c] ?? 1, rest, risk: exposeMult(g, c) };
 }
@@ -587,8 +650,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(Math.max(1, stop.crewSize - crewShortNow(g)), risk.need) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
+  crewShortSpent(g); // 죽음의 무게: 이번 정차가 작업조 증감을 썼다
   // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).
   const notes: string[] = [...darkNotes];
   // 꼬리칸 작업 거부: 꼬리칸을 보내면 −30%, 다른 칸을 보내도 손이 빠진 만큼 더디다(결정 059).
@@ -647,8 +711,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = scoutsBack;
   const returned = names.filter(n => !isGone(g, n)); // 살아 돌아온 작업조(명령으로 죽은 사람도 뺀다)
-  g.comms[stop.crewComm].away += returned.length;
-  const chore = crewWork(g, stop.crewComm, P.crewGain);
+  g.comms[stop.crewComm].away += crewAwayOf(returned.length);
+  const cost = crewGainOf(stop.crewSize);
+  const chore = crewWork(g, stop.crewComm, cost.gain, cost.cap);
   if (chore) notes.push(chore);
   crewRest(g, stop.crewComm);
   g.lastCrew = stop.crewComm;
@@ -780,6 +845,7 @@ function settle(g: Game): void {
   arrivalsAway(g); // 데리러 나간 수색대도 돌아올 때까지 자리비움으로 센다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
+  if (g.phase !== 'end') climateSettle(g);
   trackLookback(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
@@ -852,7 +918,7 @@ export function emergencyCost(g: Game): number {
   // 대권 중엔 열차장이 바로 부른다(포고하려고). 그 밖엔 신임을 쓴다.
   if (canDecree(g)) return 0;
   const recent = (g.emergencyCalls ?? []).filter(at => g.seg - at < 6).length;
-  return 6 + 4 * recent;
+  return 6 + 4 * recent + deathEmergCost(g); // 죽음의 무게(켠 판만): 최근 6구간 죽음 한 명마다 +DW.emerg
 }
 
 export function emergencyStatus(g: Game): { show: boolean; ok: boolean; cost: number; why?: string } {

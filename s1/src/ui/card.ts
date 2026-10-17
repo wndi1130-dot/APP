@@ -86,6 +86,8 @@ function stopCard(view: View): HTMLElement | null {
         h('button', { class: 'nav', 'data-action': 'stop-set', 'data-key': 'crewSize', 'data-value': stop.crewSize + 1, 'aria-label': '한 명 더' }, '+'))),
     crewCost(view),
     h('p', { class: 'crew' }, icon('people'), h('span', null, nameList(names), ' ', tip('표결 빠짐', '정차에 나간 사람은 돌아오면 지쳐 쓰러져서 이번 회기 표결에 빠진다.'))),
+    // 몇 명이 알맞은지 까닭 한 줄(결정 339·341). 숫자는 정찰 뒤에만 나온다.
+    h('p', { class: 'crew-why' }, h('small', null, risk.crewWhy)),
     domesticStopRows(view),
     stopPromises.length || research ? h('ul', { class: 'promises' }, stopPromises.map(x => h('li', null,
       icon(x.p.kind === 'fetch' ? 'fetch' : 'open'), `${COMM_NAME[x.c]}: ${x.p.kind === 'fetch' ? `${FETCH_WANT[x.c].label} 가져오기` : x.p.label} (${promiseWhen(g, x.p)})`)), researchRow(g)) : null,
@@ -93,6 +95,8 @@ function stopCard(view: View): HTMLElement | null {
       // 정찰조가 본 조짐과 해석. 해석은 준비를 바꿀 때마다 다시 계산되고, 불길하다고 하면 반드시 일어난다.
       h('div', { class: cx('danger', (risk.level === 'dead' || risk.level === 'hurt') && 'is-on'), 'aria-live': 'polite' },
         scoutReport(view),
+        // 인원이 충분한지(결정 341). 정찰로 기척을 알 때만 뜬다.
+        risk.crew ? h('p', { class: cx('danger__crew', `is-${risk.crew.band}`) }, risk.crew.text) : null,
         risk.omen ? h('p', { class: 'danger__omen' }, risk.omen, ' ', h('b', { class: cx('danger__verdict', risk.level && `is-${risk.level}`) }, risk.verdict)) : null,
         risk.unknown ? h('p', { class: 'danger__calm' }, risk.unknown) : null,
         risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),

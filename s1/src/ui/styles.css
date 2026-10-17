@@ -559,6 +559,10 @@ small { font-size: 12px; }
 .danger__verdict { font-weight: 700; white-space: nowrap; }
 .danger__verdict.is-dead, .danger__verdict.is-hurt { color: var(--discontent); }
 .danger__calm { margin: 0; }
+.danger__crew { margin: 0; font-size: 12px; color: var(--ink-2); }
+.danger__crew.is-short { color: var(--discontent); }
+.danger__crew.is-tight { color: var(--warning); }
+.crew-why { margin: -2px 0 4px 22px; font-size: 12px; color: var(--ink-3); }
 .danger__why { margin: 0; font-size: 12px; color: var(--ink-3); }
 .promises { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--support); }
 .promises li { display: flex; align-items: center; gap: 6px; }

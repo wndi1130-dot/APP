@@ -349,7 +349,7 @@ export function startApp(root: HTMLElement): void {
 
   /** 새 시드로 새 판을 연다(저장, 재현 묶음 초기화 포함). 그리지는 않는다. */
   function newSeedGame(): void {
-    g = newGame(randomSeed(), !!g.dom, !!g.dark, true, !!g.eventPack);
+    g = newGame(randomSeed(), !!g.dom, !!g.dark, true, !!g.eventPack, !!g.deathWeight);
     ui = freshUi();
     persist(g);
     resetRepro();
@@ -790,7 +790,7 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'restart':
         if (!confirmDiscard(action)) return;
-        g = newGame(g.seed, !!g.dom, !!g.dark, true, !!g.eventPack);
+        g = newGame(g.seed, !!g.dom, !!g.dark, true, !!g.eventPack, !!g.deathWeight);
         ui = freshUi();
         persist(g);
         resetRepro();
@@ -803,7 +803,7 @@ export function startApp(root: HTMLElement): void {
         return render();
       case 'new-skip':
         if (!confirmDiscard(action)) return;
-        g = newGame(randomSeed(), !!g.dom, !!g.dark, false, !!g.eventPack);
+        g = newGame(randomSeed(), !!g.dom, !!g.dark, false, !!g.eventPack, !!g.deathWeight);
         ui = freshUi();
         persist(g);
         resetRepro();
@@ -856,7 +856,7 @@ export function startApp(root: HTMLElement): void {
         return render();
       }
       case 'dark-new': // S1b 어두운 길 훅: 켠(끈) 새 판, 내정 켬/끔은 그대로
-        g = newGame(g.seed, !!g.dom, data.on === '1', true, !!g.eventPack);
+        g = newGame(g.seed, !!g.dom, data.on === '1', true, !!g.eventPack, !!g.deathWeight);
         ui = freshUi();
         persist(g);
         resetRepro();

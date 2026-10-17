@@ -66,7 +66,10 @@ describe('정차 영수증 준비', () => {
       const duplicate = consumeStopReceipt(reopened, reordered, request());
       expect(duplicate.status).toBe('duplicate');
       expect(duplicate.ledger).toBe(reopened);
-      expect(consumeStopReceipt(reopened, { ...input, receiptId: 'receipt_again' }, request()).ledger).toBe(reopened);
+      // 같은 정차에 다른 키가 오면 중복으로 삼키지 않고 오류로 알리며 장부는 그대로다.
+      const reopenedBefore = JSON.stringify(reopened);
+      expect(() => consumeStopReceipt(reopened, { ...input, receiptId: 'receipt_again' }, request())).toThrow('다른 영수증');
+      expect(JSON.stringify(reopened)).toBe(reopenedBefore);
       expect(consumeStopReceipt(reopened, input, { ...request(), stopId: 'stop_next' }).status).toBe('duplicate');
     }
     const next = receipt();
@@ -94,6 +97,33 @@ describe('정차 영수증 준비', () => {
       if (version === 2) expect(applied.result.receipt.people.wounds).toHaveLength(1);
       expect(consumeStopReceipt(applied.ledger, old, oldRequest).status).toBe('duplicate');
     }
+  });
+
+  it('같은 정차에 다른 영수증이 오면 충돌로 알리고 장부를 바꾸지 않는다', () => {
+    const first = applyStopResult(ledger(), receipt('auto'), request());
+    const before = JSON.stringify(first.ledger);
+    // 같은 키·같은 내용은 그대로 중복이다.
+    expect(applyStopResult(first.ledger, receipt('auto'), request()).status).toBe('duplicate');
+    // 같은 정차에 직접 영수증이 나중에 와도 조용히 무시하지 않는다.
+    expect(() => applyStopResult(first.ledger, receipt('direct'), request())).toThrow('다른 영수증');
+    expect(JSON.stringify(first.ledger)).toBe(before);
+    const oldRequest = { ...request(), legacyReceiptId: 'receipt_old' };
+    const old = applyStopResult(ledger(), legacy(), oldRequest);
+    expect(applyStopResult(old.ledger, legacy(), oldRequest).status).toBe('duplicate');
+    expect(() => applyStopResult(old.ledger, legacy(), { ...oldRequest, legacyReceiptId: 'receipt_old_2' })).toThrow('다른 영수증');
+  });
+
+  it('이미 반영된 정차에서는 자동 풀이 함수를 부르지 않는다', () => {
+    let calls = 0;
+    const generate = () => { calls += 1; return receipt('auto'); };
+    const first = consumeStopReceipt(ledger(), generate, request());
+    expect(first.status).toBe('applied');
+    expect(calls).toBe(1);
+    const again = consumeStopReceipt(first.ledger, generate, request());
+    expect(again.status).toBe('duplicate');
+    expect(again.ledger).toBe(first.ledger);
+    expect(again.result).toBe(first.result);
+    expect(calls).toBe(1);
   });
 
   it('나쁜 영수증은 장부를 바꾸지 않는다', () => {
