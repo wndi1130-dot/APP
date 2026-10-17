@@ -373,7 +373,7 @@ func test_the_blood_key_is_pointed_at_once_and_says_what_it_binds() -> void:
 	var at: Vector2 = hud.blood_button.get_global_rect().get_center()
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
-	assert_true(_toast_texts().has("지혈한다: 왼팔 찢김 · 피 보통."))
+	assert_true(_toast_texts().has("지혈 중: 왼팔 찢김 · 피 보통"))
 	assert_ne(p.action, "", "and it starts")
 
 
@@ -432,3 +432,27 @@ func test_a_festering_part_wears_a_sallow_rim_and_says_so() -> void:
 	assert_lt(arm["rim"].r - arm["rim"].g, 0.1, "not red")
 	assert_eq(hud.body_look["leg_right"]["rim"], hud.BRASS, "the chosen one keeps its brass")
 
+
+
+# ---------------------------------------------------------------- the face (decision 293 ①)
+
+func test_the_face_shows_the_most_urgent_of_the_body_and_frost_while_cold() -> void:
+	const PortraitFace = preload("res://game/ui/portrait_face.gd")
+	var p = game.player
+	var face = game.hud.face
+	game.hud.tick(0.02)
+	assert_eq(face.look, "", "a whole body, a plain face")
+	assert_eq(face.cold, 0)
+	p.body.add_wound("leg_left", "fracture", 0.0)
+	game.hud.tick(0.02)
+	assert_eq(face.look, "fracture")
+	p.body.add_wound("arm_left", "deep", 0.0)
+	game.hud.tick(0.02)
+	assert_eq(face.look, "bleed", "bleeding goes before a break")
+	p.body.infection = "bite"
+	assert_eq(PortraitFace.look_of(p), "infect", "a bite before all")
+	p.body.infection = ""
+	p.heat.heat = 0.0
+	game.hud.tick(0.02)
+	assert_eq(face.look, "bleed", "the cold does not take the look")
+	assert_gt(face.cold, 0, "but frosts the rim")

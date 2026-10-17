@@ -6,10 +6,10 @@ extends RefCounted
 ## writes to the journal or the card pile are appended to the copy's "journal" and "cards" in the
 ## same words. tests/train/test_train_turn.gd checks them against the S1 answers.
 ##
-## hungerTick and checkEnd are not exported by turn.ts either; they are checked against whole S1
-## settles instead (the fixture's "settle" cases), as nothing later in an S1a settle touches what
-## they read or write. Not here: meters (it reads values the ticks after it change, so it waits for
-## an export), the rest of settle, and depart and arriveStop, which draw events and places.
+## meters is checked at every sampled state; hungerTick and checkEnd against whole S1 settles (the
+## fixture's "settle" cases, made before turn.ts exported them), as nothing later in an S1a settle
+## touches what they read or write. Not here: the rest of settle, and depart and arriveStop, which
+## draw events and places.
 
 const St = preload("res://game/train/train_state.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
@@ -193,6 +193,40 @@ static func drift(g0: Dictionary, t: Dictionary) -> Dictionary:
 			s["badStreak"] = 0
 		if float(s["rel"]) >= 15.0 and int(s["fervor"]) > 0:
 			s["fervor"] = int(s["fervor"]) - 1
+	return g
+
+
+## Trust and tension at settle (meters). Trust follows the seat-weighted relation; tension climbs
+## with angry cars, cold or hungry cars, an empty larder, laws and the evening pot, and fear slows
+## the climb unless the guard was ever let loose. The S1a game has no train broadcast, so its share
+## is 0. The reason lines S1 keeps for the screen are not ported.
+static func meters(g0: Dictionary, t: Dictionary) -> Dictionary:
+	var g := g0.duplicate(true)
+	var seat_map := St.seats(g, t)
+	var avg := 0.0
+	for c: String in St.comms(t):
+		avg += float(g["comms"][c]["rel"]) * float(seat_map[c])
+	avg /= 100.0
+	g["trust"] = St.clampv(float(g["trust"]) + St.clampv(avg / 40.0, -2.5, 2.5), 0.0, 100.0)
+	var inc := 0.0
+	for c: String in St.comms(t):
+		var rel := float(g["comms"][c]["rel"])
+		if rel <= -40.0:
+			inc += 3.0 if c == "tail" else 2.0
+		elif rel <= -15.0:
+			inc += 1.0
+		var sit := St.situation(g, t, c)
+		if sit[0] <= 25.0 or sit[1] <= 25.0:
+			inc += 2.0
+	inc += 8.0 if float(g["food"]) <= 0.0 else 0.0
+	inc += St.law_sum(g, t, "tensionAdd") + St.calm_tension(g, t)
+	g["fear"] = St.clampv(float(g["fear"]) + St.law_sum(g, t, "fearAdd"), 0.0, 100.0)
+	if inc <= 0.0:
+		g["tension"] = St.clampv(float(g["tension"]) - 2.0, 0.0, 100.0)
+	else:
+		var calmed := 1.0 if int(g.get("tensionCrisisUsed", 0)) > 0 else 1.0 - float(g["fear"]) / 200.0
+		g["tension"] = St.clampv(float(g["tension"]) + maxf(0.0, inc) * calmed, 0.0, 100.0)
+	g["fear"] = St.clampv(float(g["fear"]) - 1.0, 0.0, 100.0)
 	return g
 
 

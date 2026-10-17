@@ -87,6 +87,11 @@ const DOOR_HP: int = 24           # three of the dead through one in about ten s
 const WALL_HP: int = 12
 const BANG_EVERY: float = 1.3     # one of the dead, one blow: as on a house door
 const REACH: float = 1.6
+## User decision 314 (as in Zomboid build 42): a blow wears the door (or its
+## wall) only when the one striking has another of the dead this near, itself
+## counted; one alone just knocks (the sound stays). Draft values: 1.5 cells, 2.
+const CROWD_R: float = 1.5
+const CROWD_MIN: int = 2
 const HEARD_DOORS: int = 2        # blows are heard from this many doors, the nearest
 const HURT_REACH: float = 3.0     # a door that gives way reaches whoever stands this near it
 const BUILD_TIME: float = 8.0     # as the manhole lid: one heavy thing, a normal sound
@@ -425,10 +430,12 @@ func tick(delta: float) -> void:
 	for door: Dictionary in doors:
 		var at: Vector3 = FieldGrid.center(door["cell"])
 		var hands := 0
+		var there: Array = []
 		for z in game.zombies.in_radius(at, REACH):
 			if not game.zombies.active(z) or z["state"] == "downed" or game.level_of(z["pos"]) != 0:
 				continue
 			hands += 1
+			there.append(z["pos"])
 			# Through a breached door each of them goes in once.
 			if int(door["hp"]) <= 0 and int(door["wall"]) == 0:
 				door["entered"][z["id"]] = true
@@ -438,7 +445,7 @@ func tick(delta: float) -> void:
 		door["bang_t"] = float(door["bang_t"]) - delta * hands
 		while float(door["bang_t"]) <= 0.0:
 			door["bang_t"] = float(door["bang_t"]) + BANG_EVERY
-			_bang(door)
+			_bang(door, _crowd(there) >= CROWD_MIN)
 	# Ready, and it waits: the chief says when (user decision 149). The doors
 	# are still to be held and the waves keep coming.
 	if left <= 0.0 and not ready:
@@ -453,11 +460,32 @@ func tick(delta: float) -> void:
 		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
 
 
-func _bang(door: Dictionary) -> void:
+## The most of the dead at a door that stand within CROWD_R of one of them,
+## that one counted (decision 314).
+static func _crowd(there: Array) -> int:
+	var most := 0
+	for a: Vector3 in there:
+		var n := 0
+		for b: Vector3 in there:
+			if Vector2(a.x - b.x, a.z - b.z).length() <= CROWD_R:
+				n += 1
+		most = maxi(most, n)
+	return most
+
+
+## One blow on a door. `wears`: enough of the dead are at it for the blow to
+## take something off (decision 314); otherwise it is a knock and no more.
+func _bang(door: Dictionary, wears: bool = true) -> void:
 	# The dead hear it as they did; the ear gets the door's own sound below.
 	game.audio.quiet = true
 	game.make_sound(FieldGrid.center(door["cell"]), SimNoise.Level.NORMAL, "bang")
 	game.audio.quiet = false
+	if not wears:
+		if int(door["wall"]) > 0:
+			_voice(door, "wall")
+		elif int(door["hp"]) > 0:
+			_voice(door, "door")
+		return
 	if int(door["wall"]) > 0:
 		door["wall"] = int(door["wall"]) - 1
 		if int(door["wall"]) == 0:
