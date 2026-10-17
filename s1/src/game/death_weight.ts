@@ -13,7 +13,7 @@ import type { Card, DeathChain, DeathSlot, Game } from './state';
 
 /** 값(결정 367). 안 얼려 둬서 시뮬이 0으로 끈 판과 견줄 수 있다. 0이면 그 몫은 옛 동작이다. */
 export const DW = {
-  /** 죽음 한 명당 신임 깎임, 한 구간 합계 상한 */
+  /** 죽음 한 명당 신임 깎임(결정 376: 난이도에 따라 쉬움 1·보통 2·어려움 3, 기본은 보통. 난이도 고르기는 뒤 줄기 몫이라 아직 TRUST_BY_LEVEL을 읽는 곳이 없다), 한 구간 합계 상한(난이도로 가르지 않는다) */
   trust: 2, trustCap: 6,
   /** 최근 6구간 죽음 한 명마다 비상 소집 비용 +이만큼 */
   emerg: 1,
@@ -26,6 +26,9 @@ export const DW = {
   /** 원인 카드에서 들어줬고 그 칸 관계가 줄 시작 때보다 이만큼 오르면 반발을 건너뛴다 */
   chainSkipRel: 6,
 };
+
+/** 죽음 한 명당 신임 깎임의 난이도별 값(결정 376). DW.trust가 보통 값이다 */
+export const TRUST_BY_LEVEL = { easy: 1, normal: 2, hard: 3 } as const;
 
 export const DEATH_CARD_KINDS = ['loss_rep', 'loss_child', 'loss_hand', 'chain_push', 'chain_fix', 'heat_after'] as const;
 

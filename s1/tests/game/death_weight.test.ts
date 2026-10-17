@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   agendaOptions, chooseCard, COMM_NAME, COMMS, createGame, createS1cGame, deathSlot, DW, emergencyCost, enableDark, enableDeathWeight, fallSick, FAMILIES,
-  lawOpen, mourners, noteHeatDeath, onDeath, peopleTick, PROFILES, viewCard,
+  lawOpen, mourners, noteHeatDeath, onDeath, peopleTick, PROFILES, TRUST_BY_LEVEL, viewCard,
 } from '../../src/game';
 import type { Comm, Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -326,6 +326,11 @@ describe('「배웅」 법 한 쌍', () => {
 });
 
 describe('신임과 비상 소집', () => {
+  it('신임 깎임 기본값은 보통 난이도 값이고, 쉬움 1·보통 2·어려움 3이 같은 자리에 있다(결정 376)', () => {
+    expect(TRUST_BY_LEVEL).toEqual({ easy: 1, normal: 2, hard: 3 });
+    expect(DW.trust).toBe(TRUST_BY_LEVEL.normal);
+  });
+
   it('죽음마다 신임 −2, 한 구간 상한 6, 다음 구간엔 새로 센다', () => {
     const g = fresh('trust');
     const t0 = g.trust;
