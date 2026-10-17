@@ -4,8 +4,8 @@ const Flow = preload("res://scripts/scene_flow.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
-# Test branch only: two compacted people as extra vertex levels (-1, -2).
-const TEST_BODIES: Dictionary = {-1: "res://models/people/n5-crew_scout-m", -2: "res://models/people/n10-body_denim-m"}
+# Test branch only: two compacted people, halved (-1, -2) and mixed (-3, -4), as extra vertex levels.
+const TEST_BODIES: Dictionary = {-1: "res://models/people/n5-crew_scout-m", -2: "res://models/people/n10-body_denim-m", -3: "res://models/people_mix/n5-crew_scout-m", -4: "res://models/people_mix/n10-body_denim-m"}
 const HOME_SCENE = preload("res://scenes/home.tscn")
 const STATION_SCENE = preload("res://scenes/station.tscn")
 const FIELD_SCENE = preload("res://scenes/field.tscn")
@@ -135,11 +135,11 @@ func _vat_for(target: int) -> Dictionary:
 	return vat_cache[target]
 
 func _cycle_vertices() -> void:
-	var levels: Array[int] = [144, 1500, 3000, -1, -2]
+	var levels: Array[int] = [144, 1500, 3000, -1, -2, -3, -4]
 	var index := levels.find(int(settings["vertices"]))
 	settings["vertices"] = levels[(index + 1) % levels.size()]
 	vat_assets = _vat_for(int(settings["vertices"]))
-	vertex_button.text = "정점: %d" % int(vat_assets["vertices"])
+	vertex_button.text = "정점: %d%s" % [int(vat_assets["vertices"]), " 섞음" if int(settings["vertices"]) <= -3 else (" 절반" if int(settings["vertices"]) < 0 else "")]
 	if flow.stage == Flow.Stage.FIELD:
 		active_scene.call("set_vat_assets", vat_assets)
 
