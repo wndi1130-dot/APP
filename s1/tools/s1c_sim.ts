@@ -42,6 +42,9 @@ const disasters = flags.includes('--disasters');
 // 시작에 완성판으로 박는다. none은 켜기만 하고 박지 않는다. natural은 켜기만 하고 봇이 연구로 얻는다(none과 같은 판이다).
 // X0은 대조: 장비는 끈 채 원래 수동차(x2)만 박는다. C·D에서 수동차 자체 몫(장소 후보 둘)을 떼어 보려는 것이다.
 const climate = flags.includes('--climate');
+// --death: 죽음의 무게(death_weight.ts)를 켠다. --arrivals: 사람 들어오는 사건(arrivals.ts)을 켠다. 앱의 새 판과 같은 조합을 재려고 둔다(결정 407 E2).
+const deathW = flags.includes('--death');
+const arrivals = flags.includes('--arrivals');
 const noLevers = flags.includes('--nolevers');
 // --climate-levers: 돌봄 봇이 기온을 읽는 레버 규칙을 쓴다(결정 384 재기, s1c_bot.ts climateLevers).
 const climateLevers = flags.includes('--climate-levers');
@@ -228,6 +231,8 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(pickRule ? { pickRule: pickRule as 'second' | 'random' } : {}),
     ...(crewFlag ? { crew: crewFlag } : {}),
     ...(climate ? { climate: true } : {}),
+    ...(deathW ? { deathWeight: true } : {}),
+    ...(arrivals ? { arrivals: true } : {}),
     ...(noLevers ? { noLevers: true } : {}),
     ...(climateLevers ? { climateLevers: true } : {}),
     ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
