@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  CREW, CREW_LINE, createGame, crewBand, crewEnoughCount, crewLineText, crewMult, crewNames, crewPreview, crewWhyText,
+  CREW, CREW_COST, CREW_LINE, createGame, crewAwayOf, crewBand, crewEnoughCount, crewGainOf, crewLineText, crewMult, crewNames, crewPreview, crewWhyText,
   P, PLACES, resolveStop, riskLevel, riskView, sendScouts, setStop, situation, STAY, stopRisk,
 } from '../../src/game';
-import type { CrewCurve, Game, StayId } from '../../src/game';
+import type { CrewCost, CrewCurve, Game, StayId } from '../../src/game';
 
 // 정차 작업조 인원과 위험(결정 341, 구현 명세 6장 1~10). 곡선 A·B는 가안이라 둘 다 본다.
-// 시험 안에서 CREW.curve를 바꾸면 끝날 때 A로 되돌린다.
-afterEach(() => { CREW.curve = 'A'; });
+// 시험 안에서 CREW.curve·CREW.cost를 바꾸면 끝날 때 기본값으로 되돌린다.
+const COST0 = CREW.cost;
+afterEach(() => { CREW.curve = 'A'; CREW.cost = COST0; });
 
 const STAY_RISK: Record<StayId, number> = { short: 0.6, normal: 1, long: 1.5 };
 const place = (id: string) => PLACES.find(p => p.id === id)!;
@@ -376,6 +377,7 @@ describe('stop_crew', () => {
   });
 
   it('10 crew_cost_unchanged: 노출·관계·산출·표결 빠짐이 곡선과 무관하게 식 전과 같다', () => {
+    CREW.cost = 'off'; // 옛 대가 식에서 곡선만 바꿔 본다(결정 359의 새 대가는 시험 11)
     let rises = 0;
     let clean = 0;
     for (let k = 0; k < 30; k += 1) {
@@ -415,5 +417,65 @@ describe('stop_crew', () => {
     expect(haul(8)).toBeGreaterThan(haul(2));
     expect(P.crewGain).toBe(5);
     expect(P.haulTotal).toBeGreaterThan(0);
+  });
+
+  it('11 crew_cost_scales (결정 359): 노출 상승과 표결 빠짐이 인원에 비례하고, 4명은 노출이 옛 식과 같다', () => {
+    // 옛 식: 인원과 무관하게 +5, 상한 70, 돌아온 사람 수만큼 빠짐
+    CREW.cost = 'off';
+    for (const n of [2, 4, 8]) expect(crewGainOf(n)).toEqual({ gain: P.crewGain, cap: P.crewCap });
+    expect(crewAwayOf(8)).toBe(8);
+    // 후보 X: 인원 비례, 8명이면 +10에 상한 75. 후보 Y: 제곱, 8명이면 +20에 상한 85. 둘 다 4명은 +5, 상한 70.
+    CREW.cost = 'X';
+    expect(crewGainOf(4)).toEqual({ gain: 5, cap: 70 });
+    expect(crewGainOf(8)).toEqual({ gain: 10, cap: 75 });
+    expect(crewGainOf(2)).toEqual({ gain: 2.5, cap: 70 });
+    expect(crewAwayOf(8)).toBe(12);
+    CREW.cost = 'Y';
+    expect(crewGainOf(4)).toEqual({ gain: 5, cap: 70 });
+    expect(crewGainOf(8)).toEqual({ gain: 20, cap: 85 });
+    expect(crewGainOf(2)).toEqual({ gain: 1.25, cap: 70 });
+    expect(crewAwayOf(8)).toBe(16);
+    for (const cost of ['X', 'Y'] as CrewCost[]) {
+      CREW.cost = cost;
+      let checked = 0;
+      for (let k = 0; k < 20; k += 1) {
+        const rise: Record<number, number> = {};
+        for (const size of [2, 4, 8]) {
+          // 사람이 죽지 않는 설정에서 잰다. 미리보기가 실제 상승과 같아야 한다(카드가 거짓말하지 않는다).
+          const g = mk(`scale-${cost}-${k}`, { place: 'houses', stay: 'short', size, threat: 0.8, escort: true, scout: false });
+          g.comms.tail.base[3] = 40;
+          const preview = crewPreview(g, 'tail');
+          const before = situation(g, 'tail')[3];
+          const awayBefore = g.comms.tail.away;
+          const names = crewNames(g, 'tail', size);
+          const r = resolveStop(g, true)!;
+          if (r.dead.length) break;
+          rise[size] = situation(g, 'tail')[3] - before;
+          expect(Math.round(before + rise[size]), `${cost} preview ${size} #${k}`).toBe(preview.to);
+          expect(g.comms.tail.away - awayBefore, `${cost} away ${size}`).toBe(Math.round(names.length * CREW_COST[cost].away));
+        }
+        if (Object.keys(rise).length < 3) continue;
+        expect(rise[4]).toBeCloseTo(P.crewGain, 9);
+        expect(rise[8]).toBeGreaterThan(rise[4]);
+        expect(rise[2]).toBeLessThan(rise[4]);
+        checked += 1;
+      }
+      expect(checked, cost).toBeGreaterThan(10);
+    }
+    // 정찰조의 표결 빠짐은 그대로다(결정 360): 정찰조는 돌아온 사람 수만, 작업조는 새 무게로 빠진다.
+    CREW.cost = 'Y';
+    let scouted = 0;
+    for (let k = 0; k < 20 && scouted < 5; k += 1) {
+      const g = mk(`scout-away-${k}`, { place: 'houses', stay: 'short', size: 4, threat: 0.8, escort: true });
+      const sr = sendScouts(g);
+      if (!sr || sr.comm !== 'tail') continue;
+      const before = g.comms.tail.away;
+      const names = crewNames(g, 'tail', 4);
+      const r = resolveStop(g, true)!;
+      if (r.dead.length || sr.dead.length) continue;
+      expect(g.comms.tail.away - before).toBe(sr.names.length + crewAwayOf(names.length));
+      scouted += 1;
+    }
+    expect(scouted).toBeGreaterThan(0);
   });
 });

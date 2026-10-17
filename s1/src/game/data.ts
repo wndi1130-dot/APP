@@ -76,7 +76,17 @@ export const P = Object.freeze({
 });
 /** 정차 인원 곡선(결정 341). off는 옛 식(한 사람당 위험이 인원과 무관), A·B는 명세 2-2의 두 후보. 사용자가 500판 숫자를 본 뒤 하나로 정한다. */
 export type CrewCurve = 'off' | 'A' | 'B';
-export const CREW: { curve: CrewCurve } = { curve: 'A' };
+/** 작업조 대가(결정 359, 값은 가안). off는 옛 식(노출 +crewGain, 살아 돌아온 사람 수만큼 표결 빠짐).
+ * 후보는 노출 상승 = crewGain × (인원 / ref)^pow, 노출 상한은 기본 상승을 넘는 만큼 crewCap 위로 열린다. 표결 빠짐 = 돌아온 사람 × away(반올림).
+ * 정찰조의 표결 빠짐은 그대로다(결정 360). */
+export type CrewCost = 'off' | 'X' | 'Y';
+export const CREW_COST: Record<CrewCost, { pow: number; away: number }> = {
+  off: { pow: 0, away: 1 },
+  X: { pow: 1, away: 1.5 },
+  Y: { pow: 2, away: 2 },
+};
+export const CREW_COST_REF = 4;
+export const CREW: { curve: CrewCurve; cost: CrewCost } = { curve: 'A', cost: 'off' };
 /** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
 export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };
 /** 운반 솜씨(손에 익었나). 기관실은 화부가 빠지면 열차가 못 가서 못 낸다. */

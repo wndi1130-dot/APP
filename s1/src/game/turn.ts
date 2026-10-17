@@ -16,7 +16,7 @@ import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_COST, CREW_COST_REF, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
 import type { Comm, CrewCurve, LootKey, PlaceDef, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
@@ -554,11 +554,23 @@ export function riskWhy(r: StopRisk): string[] {
   return why;
 }
 
+/** 작업조 인원이 올리는 노출과 그 상한(결정 359). 옛 식(off)은 +crewGain, 상한 crewCap. */
+export function crewGainOf(size: number): { gain: number; cap: number } {
+  const k = CREW_COST[CREW.cost];
+  const gain = P.crewGain * (k.pow ? (size / CREW_COST_REF) ** k.pow : 1);
+  return { gain, cap: P.crewCap + Math.max(0, gain - P.crewGain) };
+}
+
+/** 살아 돌아온 작업조가 이번 회기 표결에서 빠지는 사람 수(결정 359). 옛 식(off)은 돌아온 사람 수 그대로. */
+export function crewAwayOf(returned: number): number {
+  return Math.round(returned * CREW_COST[CREW.cost].away);
+}
+
 /** 작업조를 낸 칸이 지친다: 노출 +gain, 늘 하던 일이 아닌 칸(의무진·앞칸)은 관계 −3(first_leg_story 6.4). 반감 줄을 돌려준다. */
-export function crewWork(g: Game, c: Comm, gain: number): string | null {
+export function crewWork(g: Game, c: Comm, gain: number, cap: number = P.crewCap): string | null {
   const s = g.comms[c];
   // 이미 한계 위면 그대로 두고, 아래면 한계까지만 오른다.
-  s.base[3] = Math.max(s.base[3], Math.min(P.crewCap, s.base[3] + gain));
+  s.base[3] = Math.max(s.base[3], Math.min(cap, s.base[3] + gain));
   if (!CHORE_COMMS.includes(c)) return null;
   bumpRel(g, c, P.choreRel, 'stop.loot');
   return `${COMM_NAME[c]}${josa(COMM_NAME[c], '은/는')} 손에 안 익은 짐을 날랐다. 불만이 나온다.`;
@@ -580,7 +592,8 @@ export const CREW_COMMS: readonly Comm[] = COMMS.filter(c => CREW_HAUL[c] !== un
 /** 정차 카드에 미리 적는 작업조 값(6.4): 이 칸을 내면 노출이 얼마가 되고, 무엇을 잃고, 누가 쉬나. */
 export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: number; haul: number; rest: Comm[]; risk: number } {
   const from = Math.round(situation(g, c)[3]);
-  const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(P.crewCap, g.comms[c].base[3] + P.crewGain) - g.comms[c].base[3]));
+  const { gain, cap } = crewGainOf(g.stop?.crewSize ?? CREW_COST_REF);
+  const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(cap, g.comms[c].base[3] + gain) - g.comms[c].base[3]));
   const rest = COMMS.filter(o => o !== c && REST_FLOOR[o] !== undefined && g.comms[o].base[3] > REST_FLOOR[o]!);
   return { from, to, rel: CHORE_COMMS.includes(c) ? P.choreRel : 0, haul: CREW_HAUL[c] ?? 1, rest, risk: exposeMult(g, c) };
 }
@@ -676,8 +689,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (dead.length > 0) onDeath(g, stop.crewComm, dead, risk.known && risk.maxDead > 0 ? 'warned' : 'other');
   const scouts = scoutsBack;
   const returned = names.filter(n => !isGone(g, n)); // 살아 돌아온 작업조(명령으로 죽은 사람도 뺀다)
-  g.comms[stop.crewComm].away += returned.length;
-  const chore = crewWork(g, stop.crewComm, P.crewGain);
+  g.comms[stop.crewComm].away += crewAwayOf(returned.length);
+  const cost = crewGainOf(stop.crewSize);
+  const chore = crewWork(g, stop.crewComm, cost.gain, cost.cap);
   if (chore) notes.push(chore);
   crewRest(g, stop.crewComm);
   g.lastCrew = stop.crewComm;
