@@ -89,3 +89,32 @@ func test_lying_hurt_with_the_chief_far_off_they_beg_not_to_be_left() -> void:
 	game.clock.elapsed += AllyLines.LEFT_BEHIND_GAP
 	game._left_behind()
 	assert_eq(_line_of(mate), "제발... 두고가지마")
+
+
+func test_a_person_keeps_one_voice_and_a_name_is_put_in() -> void:
+	assert_eq(AllyLines.voice_of("a7"), AllyLines.voice_of("a7"))
+	var lines := AllyLines.new()
+	for i in 20:
+		var line: String = lines.pick("p%d" % i, "ally_down", 10.0 * i, true, "민수")
+		assert_false(line.contains("{이름}"), line)
+	var nameless := AllyLines.new()
+	for i in 20:
+		assert_false(nameless.pick("q%d" % i, "ally_down", 10.0 * i, true).contains("{이름}"))
+
+
+func test_kills_are_said_seldom_and_a_horde_by_one_only() -> void:
+	var lines := AllyLines.new()
+	assert_ne(lines.pick("a", "kill", 10.0), "")
+	assert_eq(lines.pick("a", "kill", 20.0), "", "the same one, ten seconds on")
+	assert_ne(lines.pick("a", "kill", 41.0), "")
+	assert_ne(lines.pick("b", "horde_near", 50.0), "")
+	assert_eq(lines.pick("c", "horde_near", 60.0), "", "someone already said it")
+
+
+func test_not_the_same_line_twice_running() -> void:
+	var lines := AllyLines.new()
+	var last := ""
+	for i in 30:
+		var line: String = lines.pick("a", "retreat", 10.0 * i)
+		assert_ne(line, last)
+		last = line

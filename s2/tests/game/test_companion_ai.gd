@@ -325,3 +325,86 @@ func test_one_down_is_stood_over() -> void:
 			q.position = ally.position + Vector3(-9.0, 0, 0)
 	assert_true(game.ai._guard_downed(ally))
 	assert_eq(ally.brain["guard"], down)
+
+
+# ---------------------------------------------------------------- bundle 4: words and looking round
+
+func _line_of(p) -> String:
+	for s in game.hud.says:
+		if s["p"] == p:
+			return String(s["line"])
+	return ""
+
+
+func test_told_back_to_the_train_they_answer() -> void:
+	_start()
+	game.ai._notice(ally)
+	ally.command = "retreat"
+	game.ai._notice(ally)
+	assert_ne(_line_of(ally), "")
+
+
+func test_one_of_us_down_the_nearest_who_sees_it_calls_their_name() -> void:
+	_start()
+	var down = null
+	for q in game.squad:
+		if q != game.player and q != ally:
+			down = q
+			break
+	down.position = ally.position + Vector3(3.0, 0, 0)
+	for q in game.squad:
+		if q != game.player and q != ally and q != down:
+			q.position = ally.position + Vector3(-30.0, 0, 0)
+	game.player.position = ally.position + Vector3(0, 0, -30.0)
+	down.body.downed = true
+	game.ai._call_down()
+	assert_ne(_line_of(ally), "", "the nearest calls out")
+	assert_false(_line_of(ally).contains("{이름}"))
+	game.hud.says.clear()
+	game.ai._call_down()
+	assert_eq(_line_of(ally), "", "once, not every think")
+
+
+func test_a_kill_a_let_go_and_a_dry_gun_are_said() -> void:
+	_start()
+	game.ai._notice(ally)
+	ally.close_kills.append(game.clock.elapsed + 1.0)
+	game.ai._notice(ally)
+	assert_ne(_line_of(ally), "", "a kill")
+	var mate = null
+	for q in game.squad:
+		if q != game.player and q != ally:
+			mate = q
+			break
+	mate.grabbers.append({"pos": mate.position})
+	game.ai._notice(mate)
+	mate.grabbers.clear()
+	game.clock.elapsed += 10.0
+	game.ai._notice(mate)
+	assert_ne(_line_of(mate), "", "let go")
+	var third = null
+	for q in game.squad:
+		if q != game.player and q != ally and q != mate:
+			third = q
+	third.hands = [_hand("pistol", 1)]
+	game.ai._notice(third)
+	third.hands = [_hand("pistol", 0)]
+	game.ammo["pistol"] = 0
+	game.ammo["ammo_pistol"] = 0
+	game.clock.elapsed += 10.0
+	game.ai._notice(third)
+	assert_ne(_line_of(third), "", "the gun ran dry")
+
+
+func test_the_chief_stopped_each_looks_its_own_way() -> void:
+	_start()
+	var fwd := Vector3(1, 0, 0)
+	var right := Vector3(0, 0, -1)
+	var a: Vector3 = game.ai._look_out(ally, "point", fwd, right)
+	var b: Vector3 = game.ai._look_out(ally, "rear", fwd, right)
+	var c: Vector3 = game.ai._look_out(ally, "aside", fwd, right)
+	assert_gt(rad_to_deg(a.angle_to(b)), 90.0)
+	assert_gt(rad_to_deg(a.angle_to(c)), 40.0)
+	var then: Vector3 = a
+	game.clock.elapsed += 3.0
+	assert_gt(rad_to_deg(then.angle_to(game.ai._look_out(ally, "point", fwd, right))), 5.0, "and sweeps")
