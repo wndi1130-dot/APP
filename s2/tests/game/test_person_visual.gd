@@ -190,3 +190,63 @@ func test_people_stand_each_at_their_own_place_and_pace() -> void:
 		PersonVisual.motion_of(a, na, 0.2, [])
 		PersonVisual.motion_of(b, nb, 0.2, [])
 	assert_ne(PersonVisual.motion_of(a, na, 0.1, []).x, PersonVisual.motion_of(b, nb, 0.1, []).x)
+
+
+# A melee blow is the living's own: a knife stabs, an axe (and any blow at a
+# body on the ground) comes down, the rest swing across; drawn back to where
+# the blow lands over the wind-up, the rest on the way back. A stomp has none.
+func test_a_blow_is_the_living_own_swing() -> void:
+	var own := _own()
+	var p := _person()
+	for want in [["knife", "p_stab", 0.35], ["axe", "p_swing_axe", 0.45], ["crowbar", "p_swing_one", 0.45]]:
+		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.strike_kind = "swing"
+		p.strike_at = {"state": "chase"}
+		p.strike_total = 0.4
+		p.strike_t = 0.4
+		var start := PersonVisual.blow_of(p, own)
+		assert_eq(String(own[int(start.y)]["name"]), want[1], want[0])
+		assert_almost_eq(start.x, 0.0, 0.001, "drawn back from the start")
+		p.strike_t = 0.1
+		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]) * 0.75, 0.001)
+		p.strike_t = 0.0
+		p.swing_t = 0.3
+		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]), 0.001, "the blow lands")
+		p.swing_t = 0.15
+		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]) + (1.0 - float(want[2])) * 0.5, 0.001, "half way back")
+		p.swing_t = 0.0
+		PersonVisual.blow_of(p, own)
+	p.strike_at = {"state": "downed"}
+	p.strike_t = 0.4
+	assert_eq(String(own[int(PersonVisual.blow_of(p, own).y)]["name"]), "p_swing_axe", "down at a body on the ground")
+	p.strike_kind = "stomp"
+	p.strike_t = 0.4
+	assert_eq(PersonVisual.blow_of(p, own).y, -1.0, "no stomp of its own yet")
+	p.strike_kind = "swing"
+	p.strike_at = {}
+	var note := {}
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), "p_swing_one", "a swing at the air too")
+	assert_true(PersonVisual.is_own(note))
+
+
+# The weapon goes in the worn body's right hand: hanging at the side the head
+# points forward; with the arms thrust out (the shove) the head points up.
+func test_the_weapon_sits_in_the_baked_right_hand() -> void:
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var arm := PersonVisual.hand_of(baked)
+	assert_gt((arm["hand"] as PackedInt32Array).size(), 5, "the hand")
+	assert_gt((arm["elbow"] as PackedInt32Array).size(), 3, "the elbow")
+	var table := PersonVisual.arm_table(baked, arm["hand"], arm["elbow"])
+	var frames := DeadBody.table_of(baked)
+	var clips: Array = baked["clips"]
+	var stand := Color(0.0, PersonVisual.clip_named(clips, PersonVisual.OWN_STAND, -1), 1.0, 1.0)
+	var at := PersonVisual.arm_at(table, frames, stand)
+	assert_gt(at[0].x, 0.2, "on the right")
+	assert_between(at[0].y, 0.5, 1.0, "at the hip")
+	assert_lt(at[0].y, at[1].y, "hanging below the elbow")
+	assert_gt(PersonVisual.grip_of(at[0], at[1], Basis()).z.z, 0.8, "hanging, the head forward")
+	var out := PersonVisual.arm_at(table, frames, Color(0.4, PersonVisual.clip_named(clips, PersonVisual.OWN_SHOVE, -1), 1.0, 1.0))
+	assert_gt(out[0].z, 0.5, "thrust out")
+	assert_gt(PersonVisual.grip_of(out[0], out[1], Basis()).z.y, 0.8, "the head up")
+	var turned := PersonVisual.grip_of(out[0], out[1], PersonVisual.grip_of(at[0], at[1], Basis()))
+	assert_between(turned.z.y, 0.1, 0.95, "it turns part way in one frame, not all at once")
