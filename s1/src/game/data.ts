@@ -71,7 +71,7 @@ export const P = Object.freeze({
   // 같은 칸을 3구간 안에 또 지지하면 +10 대신 +5(first_leg_story 7.7 'S1a 몫 제안').
   supportRel: 10, supportRepeatRel: 5, supportGap: 3,
   // 꿈쩍 않는 반대(사용자 2026-10-09 '매수 딸깍으로 전부 넘어오면 너무 쉽다'. 숫자는 제안). 출석의 15%에서 시작해
-  // 이념이 부딪는 한 점마다 +7%p, 관계가 회의 이하면 +10%p, 호의 이상이면 −5%p, 앙금이 있으면 +5%p. 5~45%. 그 칸 반대표보다 많을 순 없다.
+  // 이념이 부딪는 한 점마다 +7%p, 관계가 의심 이하면 +10%p, 호의 이상이면 −5%p, 앙금이 있으면 +5%p. 5~45%. 그 칸 반대표보다 많을 순 없다.
   hardNoBase: 0.15, hardNoIdeo: 0.07, hardNoCold: 0.1, hardNoWarm: 0.05, hardNoGrudge: 0.05, hardNoMin: 0.05, hardNoMax: 0.45,
 });
 /** 정차 인원 곡선(결정 341). off는 옛 식(한 사람당 위험이 인원과 무관), A·B는 명세 2-2의 두 후보. 사용자가 500판 숫자를 본 뒤 하나로 정한다. */
@@ -117,7 +117,7 @@ export const LEVER_NAMES = ['끊음', '낮음', '보통', '높음', '최대'] as
 // ---- 관계 7단계(브리프 1.1) ----
 export const STAGES = [
   { min: 70, name: '헌신', band: 2 }, { min: 40, name: '지지', band: 1 }, { min: 15, name: '호의', band: 1 },
-  { min: -14, name: '중립', band: 0 }, { min: -39, name: '회의', band: -1 }, { min: -69, name: '반대', band: -1 },
+  { min: -14, name: '중립', band: 0 }, { min: -39, name: '의심', band: -1 }, { min: -69, name: '반대', band: -1 },
   { min: -100, name: '적대', band: -2 },
 ] as const;
 
