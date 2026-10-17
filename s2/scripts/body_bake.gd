@@ -976,8 +976,87 @@ static func _with_rounds(out: Dictionary, clips: Array) -> Dictionary:
 	return out
 
 
+const SMALL_FORMAT: String = "rgb8q"           # clips.json "format" of a compacted bake
+const SMALL_DROPS: Array = ["hit"]             # the field never picks it: kept one frame so the numbers after it stay
+
+
+## A smaller bake of the same motions for the phone (about a quarter): the
+## still poses left out, a motion the field never picks cut to one frame, every
+## other motion at half its frames (taken evenly, a one-shot keeping its last
+## frame; the shader blends between frames anyway), and each clip's offsets in
+## 8 bits a channel inside that clip's own box, which clips.json carries as
+## "lo" and "hi". The shader takes the box back (dead_vat.gdshader, quantized).
+static func compact(assets: Dictionary) -> Dictionary:
+	var image: Image = assets["image"]
+	var width := image.get_width()
+	var rows: int = int(assets["rows_per_frame"])
+	var per_frame := width * rows
+	var picked: Array = []
+	var table: Array = []
+	var start := 0
+	for clip: Dictionary in assets["clips"]:
+		if str(clip["name"]) == POSES_CLIP:
+			continue
+		var n: int = int(clip["frames"])
+		var looped: bool = bool(clip["loop"])
+		var spots := []
+		if SMALL_DROPS.has(str(clip["name"])) or n < 2:
+			spots = [0.0]
+		elif looped:
+			var m := maxi(1, n / 2)
+			for k in m:
+				spots.append(float(k) * float(n) / float(m))
+		else:
+			var m := ceili(float(n - 1) / 2.0) + 1
+			for k in m:
+				spots.append(float(k) * float(n - 1) / float(m - 1))
+		var values := PackedVector3Array()
+		var lo := Vector3(INF, INF, INF)
+		var hi := Vector3(-INF, -INF, -INF)
+		for at: float in spots:
+			var a := int(floor(at))
+			var t := at - float(a)
+			var b := (a + 1) % n if looped else mini(a + 1, n - 1)
+			for i in per_frame:
+				var x := i % width
+				var y := i / width
+				var ca := image.get_pixel(x, (int(clip["start"]) + a) * rows + y)
+				var cb := image.get_pixel(x, (int(clip["start"]) + b) * rows + y)
+				var v := Vector3(ca.r, ca.g, ca.b).lerp(Vector3(cb.r, cb.g, cb.b), t)
+				values.append(v)
+				lo = lo.min(v)
+				hi = hi.max(v)
+		picked.append([values, lo, hi])
+		var row := clip.duplicate()
+		row["start"] = start
+		row["frames"] = spots.size()
+		row["lo"] = [lo.x, lo.y, lo.z]
+		row["hi"] = [hi.x, hi.y, hi.z]
+		table.append(row)
+		start += spots.size()
+	var bytes := PackedByteArray()
+	bytes.resize(start * per_frame * 3)
+	var at_byte := 0
+	for got: Array in picked:
+		var lo: Vector3 = got[1]
+		var span: Vector3 = (got[2] as Vector3) - lo
+		for v: Vector3 in got[0]:
+			for axis in 3:
+				var s: float = span[axis]
+				bytes[at_byte] = 0 if s <= 0.0 else clampi(roundi((v[axis] - lo[axis]) / s * 255.0), 0, 255)
+				at_byte += 1
+	var small := Image.create_from_data(width, start * rows, false, Image.FORMAT_RGB8, bytes)
+	var out := assets.duplicate()
+	out["image"] = small
+	out["texture"] = ImageTexture.create_from_image(small)
+	out["height"] = small.get_height()
+	out["clips"] = table
+	out["format"] = SMALL_FORMAT
+	return out
+
+
 ## Writes vat.bin (the picture's half floats as they are: an exported game
-## cannot read EXR), mesh.res and clips.json into `dir`.
+## cannot read EXR; a compacted bake's bytes), mesh.res and clips.json into `dir`.
 static func save(assets: Dictionary, dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	var image: Image = assets["image"]
@@ -991,6 +1070,8 @@ static func save(assets: Dictionary, dir: String) -> void:
 	if err != OK:
 		push_error("body_bake: could not save mesh.res (" + error_string(err) + ")")
 	var info := {"vertices": assets["vertices"], "width": image.get_width(), "height": image.get_height(), "rows_per_frame": assets["rows_per_frame"], "clips": assets["clips"]}
+	if assets.has("format"):
+		info["format"] = assets["format"]
 	var file := FileAccess.open(dir.path_join("clips.json"), FileAccess.WRITE)
 	if file == null:
 		push_error("body_bake: could not save clips.json")
@@ -1014,11 +1095,19 @@ static func load_baked(dir: String) -> Dictionary:
 	var width := int(info.get("width", 0))
 	var height := int(info.get("height", 0))
 	var data := FileAccess.get_file_as_bytes(image_path)
-	# Three half floats a texel.
-	if width <= 0 or height <= 0 or data.size() != width * height * 6:
+	# Three half floats a texel, or three bytes in a compacted bake.
+	var small: bool = str(info.get("format", "")) == SMALL_FORMAT
+	if width <= 0 or height <= 0 or data.size() != width * height * (3 if small else 6):
 		return {}
-	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGBH, data)
+	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGB8 if small else Image.FORMAT_RGBH, data)
 	var clips := []
 	for clip: Dictionary in info["clips"]:
-		clips.append({"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"]), "round": float(clip.get("round", 0.0))})
-	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": int(info["vertices"]), "width": image.get_width(), "rows_per_frame": int(info["rows_per_frame"]), "height": image.get_height(), "image": image, "clips": clips}
+		var row := {"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"]), "round": float(clip.get("round", 0.0))}
+		if small:
+			row["lo"] = clip.get("lo", [0.0, 0.0, 0.0])
+			row["hi"] = clip.get("hi", [0.0, 0.0, 0.0])
+		clips.append(row)
+	var out := {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": int(info["vertices"]), "width": image.get_width(), "rows_per_frame": int(info["rows_per_frame"]), "height": image.get_height(), "image": image, "clips": clips}
+	if small:
+		out["format"] = SMALL_FORMAT
+	return out

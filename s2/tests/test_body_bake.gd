@@ -90,6 +90,54 @@ func test_a_bake_is_written_and_read_back_the_same() -> void:
 	DirAccess.remove_absolute(dir)
 
 
+func test_a_compacted_bake_reads_back_within_a_centimetre() -> void:
+	var source: Array = []
+	source.resize(Mesh.ARRAY_MAX)
+	source[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(0, 0.5, 0)])
+	source[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK])
+	source[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	source[Mesh.ARRAY_BONES] = PackedInt32Array([0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0])
+	source[Mesh.ARRAY_WEIGHTS] = PackedFloat32Array([1, 0, 0, 0, 1, 0, 0, 0, 0.5, 0.5, 0, 0])
+	var moves := func(count: int, reach: float) -> Array:
+		var frames := []
+		for f in count:
+			frames.append([Transform3D(), Transform3D(Basis(), Vector3(0.1 * f, reach * f / float(count - 1), -0.3 * f))])
+		return frames
+	var clips := [{"name": "walk", "length": 1.0, "frames": moves.call(8, 0.4)}, {"name": "hit", "loop": false, "length": 0.4, "frames": moves.call(4, 0.2)},
+		{"name": "fall", "loop": false, "length": 1.0, "frames": moves.call(5, 2.25)}, {"name": BodyBake.POSES_CLIP, "loop": false, "length": 1.0, "frames": moves.call(2, 1.0)}]
+	var full := VatBaker.build_skinned(source, clips)
+	var small := BodyBake.compact(full)
+	var names := []
+	for clip in small["clips"]:
+		names.append(clip["name"])
+	assert_eq(names, ["walk", "hit", "fall"], "the still poses are left out")
+	assert_eq(int(small["clips"][0]["frames"]), 4, "a loop keeps every other frame")
+	assert_eq(int(small["clips"][1]["frames"]), 1, "a motion the field never picks keeps one frame")
+	assert_eq(int(small["clips"][2]["frames"]), 3, "a one-shot keeps its first and last")
+	var dir := "user://test_body_bake_small"
+	BodyBake.save(small, dir)
+	var back: Dictionary = BodyBake.load_baked(dir)
+	assert_eq(str(back.get("format", "")), BodyBake.SMALL_FORMAT)
+	assert_true(bool(VatBaker.shader_tables(back)["quantized"]))
+	var worst := 0.0
+	# walk frames 0, 2, 4, 6 and fall frames 0 and 4 land on stored frames
+	for pair in [[0, 0, 0], [0, 1, 2], [0, 2, 4], [0, 3, 6], [2, 0, 0], [2, 2, 4]]:
+		var got: Dictionary = back["clips"][pair[0]]
+		var was: Dictionary = full["clips"][pair[0]]
+		var lo: Array = got["lo"]
+		var hi: Array = got["hi"]
+		for vertex in 3:
+			var c := (back["image"] as Image).get_pixel(vertex, int(got["start"]) + pair[1])
+			var decoded := Vector3(lo[0] + c.r * (hi[0] - lo[0]), lo[1] + c.g * (hi[1] - lo[1]), lo[2] + c.b * (hi[2] - lo[2]))
+			var o := (full["image"] as Image).get_pixel(vertex, int(was["start"]) + pair[2])
+			worst = maxf(worst, decoded.distance_to(Vector3(o.r, o.g, o.b)))
+	assert_lt(worst, 0.01, "8 bits inside each clip's box stay within a centimetre")
+	assert_eq(VatBaker.shader_tables(BodyBake.load_baked(dir))["clip_start"][2], 5.0)
+	for file in ["vat.bin", "mesh.res", "clips.json"]:
+		DirAccess.remove_absolute(dir.path_join(file))
+	DirAccess.remove_absolute(dir)
+
+
 func test_reading_a_folder_with_no_bake_gives_nothing() -> void:
 	assert_true(BodyBake.load_baked("user://no_such_bake_folder").is_empty())
 

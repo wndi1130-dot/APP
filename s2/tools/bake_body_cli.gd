@@ -1,17 +1,21 @@
 extends SceneTree
 ## Bakes a rigged body with a motion set into a folder.
-## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check]
+## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small]
+## --small writes the compacted bake (BodyBake.compact) the phone build carries.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
-const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check]"
+const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small]"
 
 
 func _init() -> void:
 	var paths: Array[String] = []
 	var check := false
+	var small := false
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--check":
 			check = true
+		elif arg == "--small":
+			small = true
 		else:
 			paths.append(arg)
 	if paths.size() < 3:
@@ -34,6 +38,8 @@ func _init() -> void:
 	if assets.is_empty():
 		quit(1)
 		return
+	if small:
+		assets = BodyBake.compact(assets)
 	BodyBake.save(assets, paths[2])
 	var image: Image = assets["image"]
 	print("vertices ", assets["vertices"], " image ", image.get_width(), " x ", image.get_height(), " bytes ", image.get_data().size())
