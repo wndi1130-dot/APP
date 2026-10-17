@@ -16,7 +16,7 @@ import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_COST, CREW_COST_REF, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
 import type { Comm, CrewCurve, LootKey, PlaceDef, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
@@ -561,6 +561,12 @@ export function crewGainOf(size: number): { gain: number; cap: number } {
   return { gain, cap: P.crewCap + Math.max(0, gain - P.crewGain) };
 }
 
+/** 정차 산출의 인원 항(결정 372). 옛 식(flat)은 0.7 + 0.075×인원, need는 알맞은 인원을 넘는 사람이 절반만 보탠다. 알맞은 인원이 8 이상이면 두 식이 같다. */
+export function crewHaulMult(size: number, need: number): number {
+  if (CREW.haul === 'flat') return 0.7 + 0.075 * size;
+  return 0.7 + 0.075 * Math.min(size, need) + 0.075 * CREW_HAUL_OVER * Math.max(0, size - need);
+}
+
 /** 살아 돌아온 작업조가 이번 회기 표결에서 빠지는 사람 수(결정 359). 옛 식(off)은 돌아온 사람 수 그대로. */
 export function crewAwayOf(returned: number): number {
   return Math.round(returned * CREW_COST[CREW.cost].away);
@@ -629,7 +635,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * (0.7 + 0.075 * stop.crewSize) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(stop.crewSize, risk.need) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
   // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).
   const notes: string[] = [...darkNotes];
