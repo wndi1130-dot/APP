@@ -72,7 +72,17 @@ const PERSON_CLIPS: Array = [
 	["p_walk", "", 32, true, "p_walk", 0.85],
 	["p_run", "", 24, true, "p_run", 0.62],
 	["p_stand", "", 32, true, "p_stand", 4.0],
+	["p_held", "", 24, true, "p_held", 1.0],
+	["p_bitten", "", 24, false, "p_bitten", 0.6],
+	["p_swing_one", "", 24, false, "p_swing_one", 0.6],
+	["p_swing_axe", "", 32, false, "p_swing_axe", 0.9],
+	["p_stab", "", 20, false, "p_stab", 0.45],
+	["p_shove", "", 20, false, "p_shove", 0.5],
+	["p_crouch_walk", "", 32, true, "p_crouch_walk", 1.2],
+	["p_crouch_idle", "", 24, true, "p_crouch_idle", 3.0],
 ]
+# Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -630,6 +640,152 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [-0.08, -1.0, 0.1]],
 		],
 		"sink": [0.0, 0.004, 0.0, 4.0],
+	},
+	# Held by a dead one: both arms out at its shoulders, leaning back from it,
+	# twisting side to side to get loose, feet braced apart.
+	"p_held": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.18, -1.0, [0.1, 0.06, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.12, -1.0, -0.15]],
+			["aim", "thigh.R", "shin.R", [-0.18, -1.0, [-0.2, 0.06, 3.1416]]],
+			["aim", "shin.R", "foot.R", [-0.12, -1.0, -0.3]],
+			["turn", "spine", "x", -0.2],
+			["turn", "chest", "y", [0.0, 0.25, 0.0]],
+			["turn", "spine", "z", [0.0, 0.06, 0.0]],
+			["turn", "neck", "x", [-0.1, 0.08, 0.0, 2.0]],
+			["turn", "head", "y", [0.0, -0.3, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.15, 1.0]],
+			["aim", "forearm.L", "hand.L", [[0.0, 0.1, 0.0], 0.0, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -0.15, 1.0]],
+			["aim", "forearm.R", "hand.R", [[0.0, 0.1, 0.0], 0.0, 1.0]],
+		],
+		"sink": [0.06, 0.02, 0.0, 2.0],
+	},
+	# Bitten on the right: shoulders up, body jerks over to the bitten side and
+	# the head goes back, then it braces.
+	"p_bitten": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "z", ["keys", [[0, 0], [0.25, 0.35], [1, 0.08]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.25, 0.25], [1, 0.12]]]],
+			["turn", "chest", "y", ["keys", [[0, 0], [0.25, -0.2], [1, -0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.0], [0.25, -0.5], [1, -0.05]]]],
+			["turn", "head", "z", ["keys", [[0, 0.0], [0.25, -0.25], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.3, ["keys", [[0, -1.0], [0.25, -0.55], [1, -0.8]]], 0.25]],
+			["aim", "forearm.L", "hand.L", [-0.1, ["keys", [[0, -0.6], [0.25, 0.1], [1, -0.2]]], 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.35, ["keys", [[0, -1.0], [0.25, -0.55], [1, -0.8]]], 0.15]],
+			["aim", "forearm.R", "hand.R", [0.4, ["keys", [[0, -0.6], [0.25, 0.6], [1, 0.2]]], 0.6]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.25, 0.08], [1, 0.04]]],
+	},
+	# One-handed swing (crowbar, pipe): the right hand back past the shoulder
+	# with the body twisted right, across in front to the left, back again.
+	"p_swing_one": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0, 0.0], [0.45, -0.15], [1, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.05]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.45, 0.3], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.45, 0.05], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, 0.0], [0.45, 0.25], [1, 0.05]]]],
+			["turn", "chest", "y", ["keys", [[0, 0.0], [0.3, -0.6], [0.45, 0.5], [1, 0.0]]]],
+			["turn", "head", "y", ["keys", [[0, 0.0], [0.3, 0.3], [0.45, -0.25], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.25, -0.8, 0.4]],
+			["aim", "forearm.L", "hand.L", [-0.1, -0.2, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.3, -0.7], [0.45, 0.35], [1, -0.16]]], ["keys", [[0, -1.0], [0.3, 0.35], [0.45, -0.1], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.5], [0.45, 0.9], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, -0.3], [0.45, 0.7], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.9], [0.45, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, -0.3], [0.45, 0.7], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.45, 0.06], [1, 0.0]]],
+	},
+	# Two-handed axe: both hands up over and behind the head, chopped down in
+	# front with the knees giving, lifted back.
+	"p_swing_axe": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.33, -0.2], [0.45, 0.45], [1, 0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.0], [0.33, -0.2], [0.45, 0.15], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
+			["aim", "forearm.L", "hand.L", [-0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
+			["aim", "forearm.R", "hand.R", [0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.12], [1, 0.0]]],
+	},
+	# Knife: the right hand drawn back to the hip, thrust straight out with the
+	# body behind it, the left hand up in front.
+	"p_stab": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, -0.05]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.22, 0.0], [0.35, 0.25], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, 0.0]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.22, 0.0], [0.35, 0.25], [1, 0.05]]]],
+			["turn", "chest", "y", ["keys", [[0, 0.0], [0.22, -0.3], [0.35, 0.2], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.7, 0.6]],
+			["aim", "forearm.L", "hand.L", [-0.3, 0.3, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.3, ["keys", [[0, -1.0], [0.22, -0.7], [0.35, -0.15], [1, -1.0]]], ["keys", [[0, 0.04], [0.22, -0.6], [0.35, 1.0], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.22, 0.05], [0.35, 0.1], [1, -0.08]]], ["keys", [[0, -1.0], [0.22, -0.1], [0.35, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.22, 1.0], [0.35, 1.0], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.35, 0.05], [1, 0.0]]],
+	},
+	# Shove: hands drawn to the chest leaning back, then both arms straight out
+	# with a step and the body thrown forward, back again.
+	"p_shove": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, -0.05]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.4, 0.35], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.4, 0.1], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, -0.2], [0.4, 0.35], [1, 0.05]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.25, ["keys", [[0, -1.0], [0.3, -0.35], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.25], [0.4, 1.0], [1, 0.04]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0, 0.08], [0.3, -0.8], [0.4, 0.0], [1, 0.08]]], ["keys", [[0, -1.0], [0.3, 0.45], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, 0.3], [0.4, 1.0], [1, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.25, ["keys", [[0, -1.0], [0.3, -0.35], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.25], [0.4, 1.0], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, 0.8], [0.4, 0.0], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.45], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, 0.3], [0.4, 1.0], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.4, 0.05], [1, 0.0]]],
+	},
+	# Crouched walk: hips low, knees well bent, back forward, feet kept low,
+	# head up to see ahead, arms low in front.
+	"p_crouch_walk": {
+		"steps": [
+			["turn", "hips", "y", [0.0, -0.06, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, [[1.3, 0.65, 0.0], [0.0, -0.05, 0.0, 3.0]]]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, [[-0.75, 0.5, 0.0], [0.0, -0.22, -1.5708]]]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [[1.3, 0.65, 3.1416], [0.0, -0.05, 9.4248, 3.0]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [[-0.75, 0.5, 3.1416], [0.0, -0.22, 1.5708]]]],
+			["turn", "spine", "x", 0.5],
+			["turn", "chest", "x", 0.1],
+			["turn", "chest", "y", [0.0, 0.08, 0.0]],
+			["turn", "neck", "x", -0.4],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.5, -0.15, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.0, -0.6, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.5, 0.15, 0.0]]],
+			["aim", "forearm.R", "hand.R", [0.0, -0.6, 1.0]],
+		],
+		"sink": [0.22, 0.015, -1.5708, 2.0],
+	},
+	# The same low crouch kept still, breathing.
+	"p_crouch_idle": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.15, -1.0, 1.45]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.75]],
+			["aim", "thigh.R", "shin.R", [-0.15, -1.0, 1.35]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.8]],
+			["turn", "spine", "x", [0.5, 0.02, 0.0]],
+			["turn", "chest", "x", [0.1, 0.02, 0.0]],
+			["turn", "neck", "x", -0.4],
+			["turn", "head", "y", [0.0, 0.2, 0.5]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, 0.45]],
+			["aim", "forearm.L", "hand.L", [0.0, -0.7, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, 0.45]],
+			["aim", "forearm.R", "hand.R", [0.0, -0.7, 1.0]],
+		],
+		"sink": [0.23, 0.006, 0.0],
 	},
 }
 const AXES: Dictionary = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
