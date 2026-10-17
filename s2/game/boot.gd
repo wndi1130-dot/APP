@@ -3,6 +3,7 @@ extends Node
 ## at Sulechów. The old phone performance test stays one tap away.
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
@@ -48,6 +49,9 @@ const CHOICES: Array = [
 ]
 
 var settings: Dictionary = {}
+## The two save slots read at start (tests point them elsewhere before adding the boot).
+var field_save_path: String = FieldSave.PATH
+var train_save_path: String = FieldSave.TRAIN_PATH
 var menu_scroll: int = 0
 var menu: Control
 var field: Node3D
@@ -58,6 +62,11 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	# A stop the app was shut in the middle of comes back where it was (user decision 296).
+	var resume := FieldSave.pick_start(field_save_path, train_save_path)
+	if not resume.is_empty():
+		_start(resume)
+		return
 	var auto: String = OS.get_environment("S2_AUTOSTART")
 	if auto != "":
 		_start()
@@ -158,18 +167,24 @@ func _pick(key: String, value) -> void:
 	_show_menu()
 
 
-func _start() -> void:
+## `resume` is the start options of a stop coming back (FieldSave.pick_start); none starts a new one.
+func _start(resume: Dictionary = {}) -> void:
 	if menu != null:
 		menu.get_parent().queue_free()
 		menu = null
 	field = FieldGame.new()
-	var opts := settings.duplicate(true)
-	opts["squad"] = field.default_squad(String(settings["pipe_quality"]))
-	if place_picked() != "":
-		opts["place"] = place_picked()
-	var seed_env: String = OS.get_environment("S2_SEED")
-	if seed_env != "":
-		opts["seed"] = int(seed_env)
+	var opts := resume.duplicate()
+	if resume.is_empty():
+		opts = settings.duplicate(true)
+		opts["squad"] = field.default_squad(String(settings["pipe_quality"]))
+		if place_picked() != "":
+			opts["place"] = place_picked()
+		var seed_env: String = OS.get_environment("S2_SEED")
+		if seed_env != "":
+			opts["seed"] = int(seed_env)
+	# The one save slot: written when the app is pushed away and when the stop ends.
+	opts["field_save"] = true
+	opts["field_save_path"] = field_save_path
 	field.opts = opts
 	field.restart_requested.connect(_on_restart)
 	add_child(field)

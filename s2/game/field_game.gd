@@ -2161,6 +2161,9 @@ func finish(reason: String) -> void:
 	telemetry.end(reason, now)
 	var result := {"reason": reason, "receipt": receipt.to_dict(), "receipt_json": receipt.to_json(), "telemetry": telemetry.to_json_line(), "boarded": boarded.size(), "stay": clock.stay_game_minutes(), "real_seconds": now, "unloaded": unloaded.duplicate(), "noise": ledger.total, "hordes": hordes.size(), "holdout_lines": holdout.end_lines(), "places": data["containers"].size(), "dead_about": zombies.alive_count()}
 	_save(result)
+	if bool(opts.get("field_save", false)):
+		# The stop is over: the slot says so, and the next start does not come back to it.
+		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	# The train going is the stop's full stop: a beat before the card, with
 	# what the stop came to side by side (user decision 183). A held train
 	# keeps its own lines over it.
