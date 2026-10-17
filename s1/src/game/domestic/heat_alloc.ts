@@ -1,6 +1,7 @@
 import { bumpRel } from '../ledger';
 import type { Comm } from '../data';
 import { onDeath } from '../death';
+import { noteHeatDeath } from '../death_weight';
 import { isGone, journal, lawActive, PROFILES, rnd, situation } from '../state';
 import type { Game, Profile } from '../state';
 import { D } from './data';
@@ -56,6 +57,7 @@ export function heatAllocSettle(g: Game, notes: string[]): void {
     if (people.length === 0) continue;
     const who = people[Math.floor(rnd(g) * people.length)];
     onDeath(g, c, [who.name], 'other', false, true);
+    noteHeatDeath(g, c); // 죽음의 무게(켠 판만): 같은 정산에 이름 없는 뒷사건 하나(결정 354)
     lost += 1;
   }
   if (lost > 0) {

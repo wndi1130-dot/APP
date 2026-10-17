@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableDisasters, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
+  workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableDeathWeight, enableDisasters, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
 } from '../game';
 import { copyText } from './clip';
 
@@ -42,11 +42,13 @@ export function urlWantsS1c(): boolean {
 /** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. s1b: S1b 어두운 길도 켠다(ui/dark.ts).
  * prologue=false: 서막 카드 없이 볼슈틴에서 바로 출발한다(서막 건너뛰기, 5장. depot_promise가 비어 '서막을 거치지 않은 판'이 된다).
  * events: 새 이동 사건 묶음(game/event_pack.ts)을 켠다. 내정을 켠 새 판은 켠 채 시작한다(사용자 2026-10-10). 끈 판은 메뉴의 '사건 끈 새 판'으로 비교한다.
- * 재난(game/disaster.ts)은 어느 새 판이든 켠다(결정 350). */
-export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c): Game {
+ * 재난(game/disaster.ts)은 어느 새 판이든 켠다(결정 350).
+ * death: 죽음의 무게(game/death_weight.ts)를 켠다. 기본은 켬이고, 끈 판은 메뉴의 '죽음의 무게 끈 새 판'으로 비교한다(결정 376). */
+export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c, death = true): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
   if (s1b) enableDark(g);
   enableDisasters(g);
+  if (death) enableDeathWeight(g);
   if (events) enableEventPack(g);
   if (prologue) startPrologue(g);
   return g;
@@ -1074,6 +1076,12 @@ export function eventsMenu(view: View): HTMLElement | null {
   return h('button', { class: 'btn btn--ghost', 'data-action': 'dom-events', 'data-on': on ? '0' : '1' }, on ? '사건 끈 새 판(비교용)' : '사건 켠 새 판');
 }
 
+/** 메뉴의 단추: 죽음의 무게(game/death_weight.ts)를 끈(켠) 새 판(비교용, 결정 376). 어느 판에든 보인다. 내정·어두운 길·사건 묶음 켬/끔은 그대로 둔다. */
+export function deathMenu(view: View): HTMLElement {
+  const on = !!view.g.deathWeight;
+  return h('button', { class: 'btn btn--ghost', 'data-action': 'dom-death', 'data-on': on ? '0' : '1' }, on ? '죽음의 무게 끈 새 판(비교용)' : '죽음의 무게 켠 새 판');
+}
+
 // ---- H6 재기(12장) ----
 
 // 입력 없이 읽거나 고민하는 시간도 센다. 앱이 뒤로 가거나 화면이 꺼진 시간만 뺀다(12.1, 옛 30초 무입력 컷은 없앰, K01).
@@ -1233,7 +1241,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   const du = domUi(ui);
   const g0 = ctx.game();
   if (action === 'dom-new') {
-    ctx.reset(newGame(g0.seed, data.on === '1', !!g0.dark));
+    ctx.reset(newGame(g0.seed, data.on === '1', !!g0.dark, true, data.on === '1', !!g0.deathWeight));
     ctx.toast(data.on === '1' ? `내정 켠 새 판: 시드 ${g0.seed}.` : `내정 끈 새 판: 시드 ${g0.seed}.`);
     return true;
   }
@@ -1245,8 +1253,13 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     return true;
   }
   if (action === 'dom-events') {
-    ctx.reset(newGame(g0.seed, !!g0.dom, !!g0.dark, true, data.on === '1'));
+    ctx.reset(newGame(g0.seed, !!g0.dom, !!g0.dark, true, data.on === '1', !!g0.deathWeight));
     ctx.toast(data.on === '1' ? `사건 켠 새 판: 시드 ${g0.seed}.` : `사건 끈 새 판: 시드 ${g0.seed}.`);
+    return true;
+  }
+  if (action === 'dom-death') {
+    ctx.reset(newGame(g0.seed, !!g0.dom, !!g0.dark, true, !!g0.eventPack, data.on === '1'));
+    ctx.toast(data.on === '1' ? `죽음의 무게 켠 새 판: 시드 ${g0.seed}.` : `죽음의 무게 끈 새 판: 시드 ${g0.seed}.`);
     return true;
   }
   if (!g0.dom) return true;

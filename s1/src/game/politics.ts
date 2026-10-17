@@ -1,5 +1,5 @@
 import {
-  COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FETCH_WANT, IDEO, LAWS, LAW_IDS, LAW_VARIANT_OF, OPPOSITE, P,
+  COMMON_CONDITIONS, CONDITIONS, CORPSE_LAWS, COMMS, COMM_NAME, FAREWELL_LAWS, FETCH_WANT, IDEO, LAWS, LAW_IDS, LAW_VARIANT_OF, OPPOSITE, P,
 } from './data';
 import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { calmEnact, calmRepeal } from './calm';
@@ -9,6 +9,7 @@ import { josa } from './josa';
 import { needOf } from './needs';
 import { mourners } from './people';
 import { domesticLawOpen } from './domestic/laws';
+import { deathLawOpen } from './death_weight';
 import { eduEnacted, enactScale, repealScale } from './domestic/classroom';
 import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
@@ -220,6 +221,8 @@ export function lawOpen(g: Game, law: LawId): boolean {
   // S1c 법과 S1c가 바꾸는 법(중환자 분류)은 domestic/laws.ts가 정한다. S1a 판에선 S1c 법이 닫혀 있다.
   const dom = domesticLawOpen(g, law);
   if (dom !== null) return dom;
+  const dw = deathLawOpen(g, law); // 「배웅」 한 쌍(death_weight.ts). 죽음의 무게가 꺼진 판엔 닫혀 있다
+  if (dw !== null) return dw;
   const sit = (c: Comm) => situation(g, c);
   switch (law) {
     case 'seed_grain': return g.food <= 50;
@@ -260,7 +263,7 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   }
   for (const law of LAW_IDS) {
     const at = g.passed[law];
-    if (at !== undefined && g.session - at >= P.repealCool) options.push({ law, repeal: true });
+    if (at !== undefined && g.session - at >= P.repealCool && !FAREWELL_LAWS.includes(law)) options.push({ law, repeal: true });
   }
   // 대권이 끝난 포고의 추인을 가장 먼저 둔다(법 16: 추인하지 않은 포고는 사라진다).
   const motions = motionsNow(g);
@@ -274,8 +277,9 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   // 법이 아닌 안건은 순서 자리(s1b_dark_path 12.3: crisis > ratify > confidence > ai > player)에 끼운다.
   merged.push(...ranked('ratify').filter(m => !lead.includes(m)), ...ranked('confidence'));
   // AI 지도자가 올린 안건(4장)은 그다음에 둔다.
+  // 발의한 칸이 없는 폐지 안건(죽음의 무게 카드에서 열차장이 올리겠다고 한 것, death_cards.ts)은 폐지 냉각을 기다리지 않고 바로 오른다(결정 376 해석 마).
   for (const p of g.proposals) {
-    if (!isLawAgenda(p) || options.some(o => sameAgenda(o, p))) merged.push(p);
+    if (!isLawAgenda(p) || options.some(o => sameAgenda(o, p)) || (p.repeal && !p.by && lawActive(g, p.law))) merged.push(p);
   }
   merged.push(...ranked('ai'));
   // 법 요구가 걸린 안건을 그다음에 둔다.
