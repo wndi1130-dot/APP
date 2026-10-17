@@ -6,6 +6,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const FieldCombat = preload("res://game/field_combat.gd")
 
 const FOLLOW_OFFSETS: Array = [Vector2(-1.3, -1.2), Vector2(1.3, -1.2), Vector2(0.0, -2.4)]
 const THINK: float = 0.25
@@ -60,6 +61,11 @@ const GIVE_R: float = 12.0
 const HELP_GIVE_UP: float = 12.0
 ## What is worth stooping for: light, and of use to everyone.
 const PICK_IDS: Array = ["arrow", "ammo_pistol", "ammo_shell", "bandage", "cloth"]
+## One of us held by the dead this near: the nearest free companion runs over
+## and shoves it off (decision 406, bundle 3). Only one goes.
+const RESCUE_R: float = 9.0
+## One of us down this near: the nearest free companion stands over them.
+const GUARD_DOWN_R: float = 15.0
 
 var game
 var think_t: float = 0.0
@@ -319,15 +325,19 @@ func _companion(p) -> void:
 	# Self-care first when nothing is close.
 	if threat.is_empty() and raider == null and p.action == "" and _treat_self(p):
 		return
-	# The medic patches up a bleeding ally nearby.
-	if p.medical != "none" and threat.is_empty() and raider == null and p.action == "":
+	# The medic patches up a bleeding ally nearby; anyone with a bandage does
+	# for one bleeding hard (a light bleed gets a bandage handed over instead).
+	var carer: bool = p.medical != "none" or int(p.items.get("bandage", 0)) > 0 or p.items.has("medkit")
+	if carer and threat.is_empty() and raider == null and p.action == "":
 		for o in game.allies_alive():
-			if o != p and o.body.bleed > 0 and o.position.distance_to(p.position) < 15.0 and o.grabbers.is_empty():
+			if o != p and o.body.bleed > 0 and o.position.distance_to(p.position) < 15.0 and o.grabbers.is_empty() and (p.medical != "none" or o.body.bleed >= 2) and not _cared_by_other(p, o):
+				p.brain["care"] = o
 				if o.position.distance_to(p.position) > 1.4:
 					_walk(p, o.position, o.body.bleed >= 2)
 				else:
 					game.actions.treat(p, o)
 				return
+	p.brain.erase("care")
 	if p.action != "":
 		return
 	# Coming over the train after the chief (field_actions.cross_train).
@@ -374,6 +384,12 @@ func _companion(p) -> void:
 			_prefer(p, false)
 			game.combat.melee_person(p, raider)
 			return
+	# One of us held: pull the dead off them, unless one is already at my throat.
+	if p.command != "retreat" and (threat.is_empty() or threat["pos"].distance_to(p.position) > 1.5):
+		var held = _held_mate(p)
+		if held != null:
+			_rescue(p, held)
+			return
 	# Not on me: the dead after one of us, or right by the chief.
 	if threat.is_empty() and (p.command == "follow" or p.command == "cover"):
 		threat = _squad_threat(p)
@@ -398,7 +414,7 @@ func _companion(p) -> void:
 			return
 	match p.command:
 		"follow", "cover":
-			if _hand_over(p) or _pick_ground(p) or _help_search(p):
+			if _guard_downed(p) or _hand_over(p) or _pick_ground(p) or _help_search(p):
 				return
 			_keep_formation(p)
 		"wait":
@@ -427,7 +443,8 @@ func _squad_threat(p) -> Dictionary:
 		# Sneaking, nobody starts a fight the dead have not started.
 		if not after_us and (to_chief > GUARD_R or player.crouched):
 			continue
-		if to_chief > LEASH_R:
+		# Saving one who is down goes past the leash.
+		if to_chief > LEASH_R and not (after_us and v.body.downed):
 			continue
 		var d: float = p.position.distance_to(z["pos"])
 		var to_z: Vector3 = z["pos"] - p.position
@@ -669,6 +686,86 @@ func _track_door() -> void:
 	if out.length() < 0.1:
 		return
 	held_door = {"cell": best, "out": out.normalized(), "building": game.grid.building_at(c)}
+
+
+## Someone else is already seeing to o's bleeding.
+func _cared_by_other(p, o) -> bool:
+	for q in game.squad:
+		if q != p and q.is_alive() and q.brain.get("care") == o:
+			return true
+	return false
+
+
+## The nearest of us held by the dead within RESCUE_R, seen, that no nearer
+## companion is already going to.
+func _held_mate(p):
+	var best = null
+	var best_d := RESCUE_R
+	for o in game.squad:
+		if o == p or not o.is_alive() or o.grabbers.is_empty():
+			continue
+		var d: float = p.position.distance_to(o.position)
+		if d >= best_d or not game.sight_clear(p.position, o.position):
+			continue
+		var taken := false
+		for q in game.squad:
+			if q != p and q != o and q.brain.get("rescue") == o and q.position.distance_to(o.position) < d:
+				taken = true
+		if not taken:
+			best_d = d
+			best = o
+	if best == null:
+		p.brain.erase("rescue")
+	return best
+
+
+## Run to the one held and shove the dead off them; then it is a fight like
+## any other. The shove is the combat's own (its reach and knock-down chance).
+func _rescue(p, o) -> void:
+	p.brain["rescue"] = o
+	var z: Dictionary = o.grabbers[0]
+	var d: float = p.position.distance_to(z["pos"])
+	if p.aim.active:
+		p.aim.stop()
+	if d > 1.2:
+		p.target_zombie = {}
+		_walk(p, z["pos"], true)
+		return
+	p.stop()
+	p.face_point(z["pos"])
+	if p.turned_to(deg_to_rad(FieldCombat.ALLY_TURN_DEG)) and p.swing_t <= 0.0:
+		game.combat.shove(p)
+		if o.grabbers.is_empty():
+			game.shout(p, "pulled_off")
+			game.combat.melee_target(p, z, true)
+
+
+## One of us down: the nearest companion that is free stands over them until
+## they are up or carried (the dead after them are its fight, past the leash).
+func _guard_downed(p) -> bool:
+	var best = null
+	var best_d := GUARD_DOWN_R
+	for o in game.squad:
+		if o == p or o == game.player or not o.is_alive() or not o.body.downed or o.carrying_wounded != null:
+			continue
+		var d: float = p.position.distance_to(o.position)
+		if d < best_d:
+			var nearer := false
+			for q in game.squad:
+				if q != p and q != o and q != game.player and q.is_alive() and not q.body.downed and q.brain.get("guard") == o and q.position.distance_to(o.position) < d:
+					nearer = true
+			if not nearer:
+				best_d = d
+				best = o
+	if best == null:
+		p.brain.erase("guard")
+		return false
+	p.brain["guard"] = best
+	if best_d > 1.4:
+		_walk(p, best.position, best_d > 4.0)
+	elif p.path.is_empty():
+		p.face_point(p.position + (p.position - best.position))
+	return true
 
 
 ## The chief stands by to search: the companions not on watch take the

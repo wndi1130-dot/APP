@@ -252,3 +252,76 @@ func test_a_bandage_is_brought_to_the_chief_bleeding_without_one() -> void:
 	assert_true(game.ai._hand_over(ally))
 	assert_eq(int(game.player.items.get("bandage", 0)), 1)
 	assert_eq(int(ally.items.get("bandage", 0)), 1)
+
+
+# ---------------------------------------------------------------- bundle 3: pulling off, caring, standing over
+
+func test_one_of_us_held_the_nearest_companion_runs_over_and_shoves_it_off() -> void:
+	_start()
+	var held = game.player
+	var z: Dictionary = game.zombies.spawn("dead", held.position + Vector3(0.6, 0, 0))
+	z["state"] = "grab"
+	z["victim"] = held
+	held.grabbers.append(z)
+	held.grab_left = 2.0
+	ally.position = held.position + Vector3(4.0, 0, 1.0)
+	assert_eq(game.ai._held_mate(ally), held)
+	game.ai._companion(ally)
+	assert_false(ally.path.is_empty(), "runs over")
+	# At arm's length, turned to it: the shove lets go of the one held.
+	ally.path = PackedVector3Array()
+	ally.position = z["pos"] + Vector3(0.8, 0, 0)
+	ally.face_point(z["pos"])
+	ally.look = ally.facing
+	ally.swing_t = 0.0
+	game.ai._rescue(ally, held)
+	assert_true(held.grabbers.is_empty(), "let go")
+
+
+func test_only_the_nearest_goes_to_pull_one_off() -> void:
+	_start()
+	var held = game.player
+	var z: Dictionary = game.zombies.spawn("dead", held.position + Vector3(0.6, 0, 0))
+	z["state"] = "grab"
+	z["victim"] = held
+	held.grabbers.append(z)
+	var mates: Array = []
+	for q in game.squad:
+		if q != game.player:
+			mates.append(q)
+	mates[0].position = held.position + Vector3(2.0, 0, 0)
+	mates[1].position = held.position + Vector3(5.0, 0, 0)
+	game.ai._rescue(mates[0], held)
+	assert_null(game.ai._held_mate(mates[1]), "a nearer one is already going")
+
+
+func test_anyone_with_a_bandage_sees_to_one_bleeding_hard() -> void:
+	_start()
+	var hurt = null
+	for q in game.squad:
+		if q != game.player and q != ally:
+			hurt = q
+			break
+	ally.medical = "none"
+	ally.items = {"bandage": 2}
+	hurt.position = ally.position + Vector3(1.0, 0, 0)
+	hurt.body.bleed = 2
+	hurt.items = {}
+	game.ai._companion(ally)
+	assert_eq(ally.action, "treat", "a light hand, but it binds the wound")
+
+
+func test_one_down_is_stood_over() -> void:
+	_start()
+	var down = null
+	for q in game.squad:
+		if q != game.player and q != ally:
+			down = q
+			break
+	down.body.downed = true
+	down.position = ally.position + Vector3(5.0, 0, 0)
+	for q in game.squad:
+		if q != game.player and q != ally and q != down:
+			q.position = ally.position + Vector3(-9.0, 0, 0)
+	assert_true(game.ai._guard_downed(ally))
+	assert_eq(ally.brain["guard"], down)
