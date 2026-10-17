@@ -38,6 +38,15 @@ const TABLE: Dictionary = {
 	"dead_climb_lid": {"len": 2.4, "hit": -1.0, "feet": Vector2(0.0, 2.4), "open": 0.96, "sound": 0.96, "upper": false, "loop": false},
 	"dead_climb_culvert": {"len": 1.6, "hit": -1.0, "feet": Vector2(0.0, 1.6), "open": 0.64, "sound": 0.64, "upper": false, "loop": false},
 	"fall": {"len": 1.5, "hit": -1.0, "feet": Vector2(0.0, 1.5), "open": -1.0, "sound": 0.2, "upper": false, "loop": false},
+	# One stomp on a body on the ground: the knee comes up for STOMP_WINDUP,
+	# the boot lands, and the next can start at STOMP_TIME (field_combat.gd).
+	"stomp": {"len": 1.0, "hit": 0.45, "feet": Vector2(0.0, 1.0), "open": -1.0, "sound": -1.0, "upper": false, "loop": false},
+	# A jammed gun is worked at for JAM_CLEAR (field_combat.gd); the feet are free.
+	"jam_clear": {"len": 2.5, "hit": -1.0, "feet": Vector2(0.0, 0.0), "open": -1.0, "sound": -1.0, "upper": true, "loop": false},
+	# A crowbar in a door for PRY_TIME, a door kicked for KICK_TIME
+	# (field_actions.gd). A step cuts either short (Person.go_to).
+	"pry": {"len": 4.0, "hit": -1.0, "feet": Vector2(0.0, 4.0), "open": 0.0, "sound": 0.0, "upper": false, "loop": false},
+	"kick": {"len": 1.0, "hit": -1.0, "feet": Vector2(0.0, 1.0), "open": 0.0, "sound": -1.0, "upper": false, "loop": false},
 }
 
 var id: String = ""
@@ -65,6 +74,15 @@ static func swing_row(weapon_id: String) -> Dictionary:
 	var seconds: float = float(d["swing"])
 	var windup: float = W.melee_windup(weapon_id)
 	return {"len": seconds, "hit": windup, "feet": Vector2(0.0, 0.0), "open": -1.0, "sound": 0.0, "upper": true, "loop": false}
+
+
+## Loading a gun or a bow as a row: the weapon's reload time (one shell of a
+## pump gun, the whole magazine of a pistol). The feet are free.
+static func reload_row(weapon_id: String) -> Dictionary:
+	var d: Dictionary = W.get_data(weapon_id)
+	if not W.is_ranged(weapon_id):
+		return {}
+	return {"len": float(d["reload"]), "hit": -1.0, "feet": Vector2(0.0, 0.0), "open": -1.0, "sound": -1.0, "upper": true, "loop": false}
 
 
 ## Starts a motion. speed is the body's own multiplier (a tired arm swings
