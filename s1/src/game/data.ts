@@ -20,6 +20,11 @@ export const P = Object.freeze({
   // 결정 257: 정차에서 얻는 석탄만 이 배수를 곱한 뒤 반올림한다(식량·의약품·사치품·상징물·정보는 그대로).
   coalHaul: 0.85,
   injuryRate: 0.25, deathRate: 0.03,
+  // 정차 작업조 인원과 위험(결정 341, 값은 가안). 알맞은 인원 = max(crewNeedMin, crewNeed × 장소 위험 × 체류 × 기척 × 경계 거부 × 무리 × 호위).
+  // 인원/알맞은 인원 r이 crewBandShort 아래면 모자람, crewBandEnough 이상이면 충분이다. 한 사람당 위험에 곡선 m(r)을 곱한다(CREW.curve).
+  // 후보 A: r^-crewAPow를 [crewAFloor, crewACeil]로 자름. 후보 B: r 0.5 이하 crewBCeil, 1에서 1, 2 이상 crewBFloor, 사이는 직선.
+  crewNeed: 1.5, crewNeedMin: 1.6, crewBandShort: 0.8, crewBandEnough: 1.5,
+  crewAPow: 1.5, crewAFloor: 0.25, crewACeil: 2.5, crewBCeil: 1.8, crewBFloor: 0.35,
   recoverBase: 1, recoverCap: 3, naturalCeiling: 15,
   // 결정 080(후보 5): 꼬리칸 관계가 backBelow 아래인데 열기·식량 레버를 2 이상으로 backSegs 구간 이어 지키면
   // 구간 회복에 backBonus가 더 붙고 열기가 구간마다 1씩 내린다. 돌려주는 길이 막히지 않게 한다.
@@ -69,6 +74,22 @@ export const P = Object.freeze({
   // 이념이 부딪는 한 점마다 +7%p, 관계가 회의 이하면 +10%p, 호의 이상이면 −5%p, 앙금이 있으면 +5%p. 5~45%. 그 칸 반대표보다 많을 순 없다.
   hardNoBase: 0.15, hardNoIdeo: 0.07, hardNoCold: 0.1, hardNoWarm: 0.05, hardNoGrudge: 0.05, hardNoMin: 0.05, hardNoMax: 0.45,
 });
+/** 정차 인원 곡선(결정 341). off는 옛 식(한 사람당 위험이 인원과 무관), A·B는 명세 2-2의 두 후보. 사용자가 500판 숫자를 본 뒤 하나로 정한다. */
+export type CrewCurve = 'off' | 'A' | 'B';
+/** 작업조 대가(결정 359, 값은 가안). off는 옛 식(노출 +crewGain, 살아 돌아온 사람 수만큼 표결 빠짐).
+ * 후보 X는 노출 상승 = crewGain × 인원 / ref, 노출 상한은 기본 상승을 넘는 만큼 crewCap 위로 열린다. 표결 빠짐 = 돌아온 사람 × away(반올림).
+ * 정찰조의 표결 빠짐은 그대로다(결정 360). 제곱 후보 Y는 두 번의 500판에서 가장 나빠 뺐다. */
+export type CrewCost = 'off' | 'X';
+export const CREW_COST: Record<CrewCost, { pow: number; away: number }> = {
+  off: { pow: 0, away: 1 },
+  X: { pow: 1, away: 1.5 },
+};
+export const CREW_COST_REF = 4;
+/** 정차 산출의 인원 항(결정 372, 기본 none은 결정 375). flat은 옛 식 0.7 + 0.075×인원. half·none은 알맞은 인원까지 0.075씩 온전히 보태고,
+ * 넘는 사람은 그 몫에 CREW_HAUL_OVER를 곱해 보탠다(half 절반, none 안 보탬). */
+export type CrewHaul = 'flat' | 'half' | 'none';
+export const CREW_HAUL_OVER: Record<Exclude<CrewHaul, 'flat'>, number> = { half: 0.5, none: 0 };
+export const CREW: { curve: CrewCurve; cost: CrewCost; haul: CrewHaul } = { curve: 'A', cost: 'off', haul: 'none' };
 /** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
 export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };
 /** 운반 솜씨(손에 익었나). 기관실은 화부가 빠지면 열차가 못 가서 못 낸다. */

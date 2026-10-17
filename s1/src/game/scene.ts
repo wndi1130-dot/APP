@@ -1,9 +1,11 @@
 import { stageOf } from './state';
 import type { Game } from './state';
-import { stopView, verdictText } from './omens';
+import { crewLineText, crewWhyText, stopView, verdictText } from './omens';
 import type { RiskLevel } from './omens';
 import { blizzardActive } from './disaster';
+import { PLACES, STAY } from './data';
 import { riskLevel, riskWhy, stopRisk } from './turn';
+import type { CrewBand } from './turn';
 
 // 정차 장면 글(자리표시). 나중엔 브레이크 소리와 함께 옆 앞쪽에서 본 정차 장면, 수색대와 열차장이 내리는 모습으로
 // 그린다(decisions.md 2026-10-07). 지금은 그 장면을 한두 문장으로 대신한다.
@@ -27,16 +29,22 @@ export interface RiskView {
   verdict: string | null;
   why: string[];
   unknown: string | null;
+  /** 인원 줄(결정 341). 정찰로 기척을 알 때만 있다. need는 알맞은 인원 */
+  crew: { band: CrewBand; need: number; text: string } | null;
+  /** 인원 선택지 밑 까닭 한 줄. 정찰 전에는 숫자 없이 말한다 */
+  crewWhy: string;
 }
 
 /** 정차 화면의 위험 글: 정찰조가 본 조짐과 해석(2026-10-07 사용자). 준비를 바꾸면 해석만 다시 계산되고 조짐은 그대로다. */
 export function riskView(g: Game): RiskView {
   const r = stopRisk(g);
   const why = riskWhy(r);
-  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.' };
+  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.', crew: null, crewWhy: crewWhyText(null) };
   const v = stopView(g, g.stop, r.horde);
   const level = riskLevel(r);
-  return { level, omen: v.omen, verdict: verdictText(level, v.sign), why, unknown: null };
+  const place = PLACES.find(p => p.id === g.stop!.place) ?? PLACES[0];
+  const crewWhy = crewWhyText({ place: place.name, risk: place.risk, stay: STAY[g.stop.stay].name, need: r.need, crew: g.stop.crewSize, band: r.band });
+  return { level, omen: v.omen, verdict: verdictText(level, v.sign), why, unknown: null, crew: { band: r.band, need: r.need, text: crewLineText(r.band, r.need, level) }, crewWhy };
 }
 
 /** 관계 단계를 사람 말로. 열차장(플레이어)을 어떻게 보는지. */

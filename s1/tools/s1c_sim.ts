@@ -3,12 +3,14 @@
 // --pick: 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸이나 안 막힌 칸 아무거나를 고르는 봇(첫 칸 치우침을 가르는 측정용)
 // --budget: 카드 구간 예산(src/game/budget.ts, events_disasters 3.1)을 켠다. 상한은 --set=perSeg:4 처럼 바꾼다(D에 없고 BUDGET에 있는 키는 BUDGET을 바꾼다).
 // --events: 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(src/game/event_pack.ts)를 켠다. 가중치 상수는 --set=pressMax:4 처럼 DRAW 키로 바꾼다.
+// --crew=P2|P4|P6|P8|PN|PN1|PS4: 정차 인원 정책(결정 341). --curve=off|A|B: 인원 곡선(off는 옛 식). --cost=off|X: 작업조 대가(결정 359). --haul=flat|half|none: 산출 인원 항(결정 372). 결과에 crewStat(정차당 인원·밴드별 중상·죽음)을 적는다.
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { BUDGET, D, DRAW, DZ, TRAVEL_EVENTS } from '../src/game';
+import { BUDGET, CREW, D, DRAW, DZ, TRAVEL_EVENTS } from '../src/game';
+import type { CrewCost, CrewCurve, CrewHaul } from '../src/game';
 import { playGame } from './s1c_bot';
-import type { BotOptions, GameMetrics } from './s1c_bot';
+import type { BotOptions, CrewPolicy, GameMetrics } from './s1c_bot';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const flags = process.argv.slice(2).filter(a => a.startsWith('--'));
@@ -38,6 +40,19 @@ const budget = flags.includes('--budget');
 const events = flags.includes('--events');
 const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
 if (prepFlag && !['auto', 'never', 'wait', 'read'].includes(prepFlag)) throw new Error(`--prep는 auto·never·wait·read: ${prepFlag}`);
+const crewFlag = flags.find(x => x.startsWith('--crew='))?.slice(7) as CrewPolicy | undefined;
+if (crewFlag && !['P2', 'P4', 'P6', 'P8', 'PN', 'PN1', 'PS4'].includes(crewFlag)) throw new Error(`--crew는 P2·P4·P6·P8·PN·PN1·PS4: ${crewFlag}`);
+const curveFlag = flags.find(x => x.startsWith('--curve='))?.slice(8) as CrewCurve | undefined;
+if (curveFlag && !['off', 'A', 'B'].includes(curveFlag)) throw new Error(`--curve는 off·A·B: ${curveFlag}`);
+if (curveFlag) CREW.curve = curveFlag;
+// --cost=off|X: 작업조 대가(결정 359). off는 옛 식.
+const costFlag = flags.find(x => x.startsWith('--cost='))?.slice(7) as CrewCost | undefined;
+if (costFlag && !['off', 'X'].includes(costFlag)) throw new Error(`--cost는 off·X: ${costFlag}`);
+if (costFlag) CREW.cost = costFlag;
+// --haul=flat|half|none: 정차 산출 인원 항(결정 372). flat은 옛 식.
+const haulFlag = flags.find(x => x.startsWith('--haul='))?.slice(7) as CrewHaul | undefined;
+if (haulFlag && !['flat', 'half', 'none'].includes(haulFlag)) throw new Error(`--haul은 flat·half·none: ${haulFlag}`);
+if (haulFlag) CREW.haul = haulFlag;
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 const pickRule = flags.find(x => x.startsWith('--pick='))?.slice(7);
 if (pickRule && pickRule !== 'second' && pickRule !== 'random') throw new Error(`--pick는 second나 random: ${pickRule}`);
@@ -90,6 +105,24 @@ function summarizeBudget(ms: GameMetrics[]) {
   return { deferredByGrade: per('deferred'), fadedByGrade: per('faded'), droppedByGrade: per('dropped') };
 }
 
+/** 정차 인원(결정 341): 정차당 평균 인원, 8명 비율, 밴드별·「위험:인원」별 정차 수와 정차당 중상·죽음, 죽음이 난 정차 비율 */
+function summarizeCrew(ms: GameMetrics[]) {
+  const stops = ms.reduce((a, m) => a + m.crewStat.stops, 0);
+  const cell = (pick: (m: GameMetrics) => { n: number; hurt: number; dead: number; deadStops: number } | undefined) => {
+    const t = ms.reduce((a, m) => { const c = pick(m); return c ? { n: a.n + c.n, hurt: a.hurt + c.hurt, dead: a.dead + c.dead, deadStops: a.deadStops + c.deadStops } : a; }, { n: 0, hurt: 0, dead: 0, deadStops: 0 });
+    return { share: +(t.n / Math.max(1, stops)).toFixed(3), n: t.n, hurt: +(t.hurt / Math.max(1, t.n)).toFixed(3), dead: +(t.dead / Math.max(1, t.n)).toFixed(4), deadStopRate: +(t.deadStops / Math.max(1, t.n)).toFixed(4) };
+  };
+  const keys = [...new Set(ms.flatMap(m => Object.keys(m.crewStat.byRiskCrew)))].sort();
+  return {
+    stopsPerGame: +(stops / ms.length).toFixed(2),
+    crewMean: +(ms.reduce((a, m) => a + m.crewStat.crewSum, 0) / Math.max(1, stops)).toFixed(2),
+    crew8Share: +(ms.reduce((a, m) => a + m.crewStat.crew8, 0) / Math.max(1, stops)).toFixed(3),
+    hurtPerStop: +(ms.reduce((a, m) => a + Object.values(m.crewStat.band).reduce((b, c) => b + c.hurt, 0), 0) / Math.max(1, stops)).toFixed(3),
+    band: Object.fromEntries((['short', 'tight', 'enough'] as const).map(b => [b, cell(m => m.crewStat.band[b])])),
+    byRiskCrew: Object.fromEntries(keys.map(k => [k, cell(m => m.crewStat.byRiskCrew[k])])),
+  };
+}
+
 function summarize(ms: GameMetrics[]) {
   const ends: Record<string, number> = {};
   for (const m of ms) ends[m.end] = (ends[m.end] ?? 0) + 1;
@@ -134,6 +167,7 @@ function summarize(ms: GameMetrics[]) {
     // 사건 반복·카드 밀도(2026-10-09). 판당 평균. travelById는 TRAVEL_EVENTS 전체 id를 넣어 0회 사건도 보인다.
     repeat: summarizeRepeat(ms),
     budget: ms[0]?.budget ? summarizeBudget(ms) : undefined,
+    crewStat: summarizeCrew(ms),
     techFreq: Object.fromEntries(Object.entries(techFreq).sort().map(([k, v]) => [k, +(v / ms.length).toFixed(3)])),
   };
 }
@@ -148,6 +182,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(budget ? { budget: true } : {}),
     ...(events ? { eventPack: true } : {}),
     ...(pickRule ? { pickRule: pickRule as 'second' | 'random' } : {}),
+    ...(crewFlag ? { crew: crewFlag } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);
@@ -162,4 +197,4 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     + `이동사건없는구간 ${r.segsNoTravel}/${r.segs}(쉼 ${r.segsNoTravelRest} 빔 ${r.segsNoTravelEmpty} 그외 ${r.segsNoTravelOther}) 구간별카드[0,1,2,3,4+] ${r.cardsPerSegDist.join('/')} 최대 ${r.cardsPerSegMax}`);
 }
 console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''}${budget ? `, 카드 예산 켬 ${JSON.stringify(BUDGET)}` : ''}${events ? `, 새 이동 사건 묶음·가중 뽑기 켬 ${JSON.stringify(DRAW)}` : ''})`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), ...(events ? { events: true, draw: DRAW } : {}), runs: out }, null, 2));
+if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, crew: crewFlag, curve: CREW.curve, cost: CREW.cost, haul: CREW.haul, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), ...(events ? { events: true, draw: DRAW } : {}), runs: out }, null, 2));

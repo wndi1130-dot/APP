@@ -124,6 +124,36 @@ export const VERDICT: Record<RiskLevel, string> = {
   light: '긁히는 정도로 끝날 것 같다.',
   calm: '괜찮을 것 같다.',
 };
+/** 인원 줄(결정 341, 문구는 가안). 정찰 뒤에만 뜬다. N은 충분해지는 인원 ceil(1.5 × 알맞은 인원)이다. */
+export type CrewBandName = 'short' | 'tight' | 'enough';
+export const CREW_LINE = {
+  enough: '이 인원이면 충분하다. 큰일 없이 돌아올 가능성이 높다.',
+  enoughUnlucky: '이 인원이면 충분하다. 그래도 이번엔 운이 나쁘게 읽힌다.',
+  tight: (n: number) => `인원이 빠듯하다. 누군가 크게 다칠 수 있다. 충분하려면 ${n}명쯤.`,
+  short: (n: number) => `인원이 모자란다. 사람을 잃을 수 있다. 충분하려면 ${n}명쯤.`,
+  over: '8명으로도 빠듯하다. 체류를 줄이거나 호위를 붙이면 낮아진다.',
+} as const;
+const CREW_BAND_SAY: Record<CrewBandName, string> = { short: '모자란다', tight: '빠듯하다', enough: '충분하다' };
+
+/** 충분해지는 인원 N. 넘으면 8명으로도 모자란 정차다 */
+export function crewEnoughCount(need: number): number {
+  return Math.ceil(1.5 * need);
+}
+
+/** 인원 줄 글. 충분인데 해석이 불길(hurt·dead)이면 약속(해석 말)을 그대로 두고 운이 나쁘다고만 덧붙인다. */
+export function crewLineText(band: CrewBandName, need: number, level: RiskLevel): string {
+  if (band === 'enough') return level === 'hurt' || level === 'dead' ? CREW_LINE.enoughUnlucky : CREW_LINE.enough;
+  const n = crewEnoughCount(need);
+  if (n > 8) return CREW_LINE.over;
+  return band === 'tight' ? CREW_LINE.tight(n) : CREW_LINE.short(n);
+}
+
+/** 선택지 밑 까닭 한 줄(결정 339 「왜」). 알맞은 인원 숫자는 정찰 뒤에만 쓴다. */
+export function crewWhyText(known: { place: string; risk: number; stay: string; need: number; crew: number; band: CrewBandName } | null): string {
+  if (!known) return '몇 명이 알맞은지는 정찰로 위험을 알아야 말할 수 있다. 많이 보내면 산출은 늘지만 낸 칸이 지치고 표결에서 빠진다.';
+  const need = Math.round(known.need * 10) / 10;
+  return `${known.place} 위험 ${known.risk}에 ${known.stay} 체류라 ${need}명쯤이 알맞다. 지금 ${known.crew}명이면 ${CREW_BAND_SAY[known.band]}. 많이 보낼수록 낸 칸이 지치고 이번 회기 표결에서 빠진다.`;
+}
 const RANK: Record<RiskLevel, number> = { calm: 0, light: 1, hurt: 2, dead: 3 };
 /** 조짐이 보통 가리키는 해석 범위. 준비가 이 범위를 벗어나게 하면 '이 준비로는/이 준비라면'을 붙여 조짐과 해석이 어긋나 보이지 않게 한다. */
 const SIGN_RANGE: Record<SignTier, [number, number]> = { few: [0, 1], some: [1, 2], many: [2, 3] };
