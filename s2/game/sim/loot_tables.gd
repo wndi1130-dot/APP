@@ -19,26 +19,26 @@ const BODY: Dictionary = {
 		[3, {"ammo": "shell"}, 2],
 	]},
 	# Frozen pockets: the same small things and a rag, and twice the time.
-	"frozen": {"chance": 0.10, "rolls": 1, "search": 6.0, "table": [
+	"frozen": {"chance": 0.10, "rolls": 1, "search": 5.0, "table": [
 		[4, {"id": "bandage"}, 1],
 		[3, {"ammo": "pistol"}, 2],
 		[3, {"ammo": "shell"}, 2],
 		[2, {"id": "cloth"}, 1],
 	]},
 	# The padded ones: where they worked shows in what they carry, by place.
-	"clothed": {"chance": 0.35, "rolls": 2, "search": 4.5, "table": [
+	"clothed": {"chance": 0.35, "rolls": 2, "search": 4.0, "table": [
 		[2, {"id": "cloth"}, 1],
 		[2, {"ammo": "pistol"}, 2],
 		[1, {"id": "document"}, 1],
 	]},
-	"clothed_station": {"chance": 0.35, "rolls": 2, "search": 4.5, "table": [
+	"clothed_station": {"chance": 0.35, "rolls": 2, "search": 4.0, "table": [
 		[3, {"id": "flare"}, 1],
 		[2, {"id": "document"}, 1],
 		[2, {"ammo": "pistol"}, 2],
 		[1, {"id": "info_timetable"}, 1],
 		[1, {"id": "luxury_pack"}, 1],
 	]},
-	"clothed_shed": {"chance": 0.35, "rolls": 2, "search": 4.5, "table": [
+	"clothed_shed": {"chance": 0.35, "rolls": 2, "search": 4.0, "table": [
 		[3, {"id": "scrap"}, 1],
 		[2, {"ammo": "shell"}, 2],
 		[2, {"id": "cloth"}, 1],

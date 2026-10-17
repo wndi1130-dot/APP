@@ -93,8 +93,8 @@ func test_a_padded_one_has_two_pockets_and_what_it_carries_says_where_it_worked(
 
 func test_frozen_pockets_take_twice_as_long_and_padded_ones_longer_than_the_dead() -> void:
 	assert_almost_eq(R.body_search_time("dead"), 3.0, 0.001)
-	assert_almost_eq(R.body_search_time("frozen"), 6.0, 0.001)
-	assert_almost_eq(R.body_search_time("clothed", "shed"), 4.5, 0.001)
+	assert_almost_eq(R.body_search_time("frozen"), 5.0, 0.001)
+	assert_almost_eq(R.body_search_time("clothed", "shed"), 4.0, 0.001)
 	var rng := _rng(3)
 	var cloth := 0
 	for i in range(3000):
