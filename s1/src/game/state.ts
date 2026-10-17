@@ -7,6 +7,7 @@ import type { DarkState } from './dark/state';
 import type { DisasterKind, DisasterState } from './disaster';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
+import type { FieldReturns } from './field_receipt';
 import {
   COH0, COMMS, IDEO, P, POP0, REL0, REP_AGE, SECRET_POOL, START, STAGES, TRAIT_BAN, TRAITS,
 } from './data';
@@ -428,6 +429,8 @@ export interface Game {
   lastCrew?: Comm;
   /** 지난 구간의 정차. 출발을 미룬 날 이번 정차가 없으면 이걸 한 번 더 뒤진다(결정 332) */
   lastStop?: StopState | null;
+  /** 필드(S2)에서 직접 뛰고 돌아온 귀환 기록(field_receipt.ts). 직접 영수증이 들어온 판에만 있고, 주사위 정차만 도는 판엔 없다 */
+  fieldReturns?: FieldReturns;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
   /** 고른 기관차(결정 125). 없으면 c3(옛 저장과 안 고른 판). 게임 시작 때 setLoco(loco.ts)로 정한다. */
@@ -534,7 +537,7 @@ export interface StoryState {
     /** 서막에서 운반조를 두고 떠났나(9.2) */
     depot_left_behind?: boolean;
     /** 서막 꼬리칸 대표의 약속(9.2). 없으면 서막을 거치지 않은 판이다 */
-    depot_promise?: 'kept' | 'broken' | 'refused';
+    depot_promise?: 'kept' | 'broken' | 'refused' | 'unknown';
     /** 첫 시신 안건이 무엇으로 열렸나 */
     first_corpse_agenda?: 'none' | 'own' | 'stranger';
     signal_heard?: boolean;

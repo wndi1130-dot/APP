@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "departureId": "dep_sulechow_01",
+  "stopId": "stop_sulechow",
+  "placeId": "sulechow_station",
+  "segment": 1,
+  "roster": [
+    {
+      "id": "p_151",
+      "comm": "guard"
+    },
+    {
+      "id": "p_152",
+      "comm": "guard"
+    },
+    {
+      "id": "p_153",
+      "comm": "guard"
+    },
+    {
+      "id": "p_122",
+      "comm": "medtech"
+    }
+  ],
+  "promises": [
+    {
+      "id": "promise_prologue",
+      "kind": "prologue",
+      "madeTo": "tail",
+      "label": "저탄장 운반조를 다 데려온다",
+      "subjects": [
+        "p_004",
+        "p_005"
+      ]
+    }
+  ],
+  "domestic": true
+}

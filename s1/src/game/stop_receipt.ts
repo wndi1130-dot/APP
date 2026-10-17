@@ -92,7 +92,7 @@ const documents = {
   ] },
 };
 // 판 3의 추가 꼴은 이 모듈에만 둔다. 구형 계약과 참조 스키마는 읽어서 재사용한다.
-const v3Schema = {
+export const v3Schema = {
   ...receiptSchema, $id: 'urn:s1:prep:stop-receipt-v3',
   properties: {
     ...receiptSchema.properties, version: { const: 3 }, receiptId: id, stopId: id,
@@ -108,7 +108,7 @@ for (const schema of [commonSchema, placeSchema, chronicleSchema, receiptSchema]
 const legacyValidator = ajv.getSchema('urn:s1:schema:receipt')!;
 const v3Validator = ajv.compile(v3Schema);
 
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>;
