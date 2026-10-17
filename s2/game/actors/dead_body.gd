@@ -12,6 +12,11 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 
 const FOLDER_ENV: String = "S2_DEAD_BODY"    # a folder to read instead of the usual one
 const FOLDER: String = "user://dead_body"
+## The body the dead wear when neither of the above is there: the one carried in
+## the build. The switch turns it off and the dead are the boxes again.
+const BUILT_IN: String = "res://models/people/n3-body_tracksuit"
+const BUILT_IN_SETTING: String = "visuals/baked_dead_enabled"
+const ALBEDO_FILE: String = "albedo.png"     # a baked folder's colour picture, when it has one
 # Motion numbers, in the order body_bake.gd bakes them.
 const WALKS: int = 3                          # 0, 1, 2: three ways of walking
 const STAND: int = 3
@@ -48,9 +53,25 @@ const STILL_AFTER: float = 0.3               # it stands (not walks) once it has
 ## The baked body, or {} when there is none.
 static func assets() -> Dictionary:
 	var dir := OS.get_environment(FOLDER_ENV)
-	var got := BodyBake.load_baked(dir if dir != "" else FOLDER)
+	if dir == "":
+		dir = FOLDER if DirAccess.dir_exists_absolute(FOLDER) else built_in()
+	var got := with_albedo(BodyBake.load_baked(dir), dir) if dir != "" else {}
 	rounds = rounds_of(got)
 	table = table_of(got) if can_mix() else []
+	return got
+
+
+## The folder carried in the build, or "" when the switch is off.
+static func built_in() -> String:
+	return BUILT_IN if bool(ProjectSettings.get_setting(BUILT_IN_SETTING, true)) else ""
+
+
+## A loaded bake with its folder's colour picture added as "albedo", when the
+## folder has one (vat_baker.gd shader_tables hands it to the shader).
+static func with_albedo(got: Dictionary, dir: String) -> Dictionary:
+	var path := dir.path_join(ALBEDO_FILE)
+	if not got.is_empty() and ResourceLoader.exists(path):
+		got["albedo"] = load(path)
 	return got
 
 

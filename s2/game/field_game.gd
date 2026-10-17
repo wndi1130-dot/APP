@@ -10,6 +10,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const Person = preload("res://game/actors/person.gd")
+const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
@@ -37,6 +38,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
 
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
@@ -157,6 +159,7 @@ var hud: Hud
 var audio: FieldAudio
 
 var people: Array = []
+var people_look  # person_visual.gd: the baked body the people wear
 var squad: Array = []
 var crew: Array = []
 var raiders: Array = []
@@ -288,6 +291,9 @@ func _ready() -> void:
 	ai = AI.new(self)
 	actions = Actions.new(self)
 	_spawn_people()
+	people_look = PersonVisual.new()
+	add_child(people_look)
+	people_look.setup(self)
 	_spawn_dead()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
@@ -970,6 +976,9 @@ func interrupt() -> void:
 	# Fingers down when the app goes away never come back up, paused or not.
 	if hud != null:
 		hud.drop_touch()
+	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
+	if bool(opts.get("field_save", false)):
+		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	if ended or paused:
 		return
 	paused = true

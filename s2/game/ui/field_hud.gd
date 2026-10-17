@@ -15,6 +15,7 @@ const StatusArt = preload("res://game/ui/status_art.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const GrabRules = preload("res://game/sim/grab_rules.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -569,6 +570,9 @@ func _build_debug() -> void:
 	h2.add_child(_button("해 질 녘으로", _debug_dusk, Vector2(140, 48), 16))
 	h2.add_child(_button("폭풍 층", _debug_storm, Vector2(96, 48), 16))
 	h2.add_child(_button("망자 세우기", _debug_stand, Vector2(110, 48), 16))
+	var h3 := HBoxContainer.new()
+	v.add_child(h3)
+	h3.add_child(_button("동작 시험", _debug_motion, Vector2(110, 48), 16))
 	debug_panel.visible = false
 	root.add_child(debug_panel)
 
@@ -616,6 +620,64 @@ func _debug_stand() -> void:
 			if stood.size() < want:
 				stood.append(game.zombies.spawn("dead", row[1] + Vector3(0.3, 0, 0.3) * float(round)))
 	toast("시험: 보이는 곳에 망자 %d을 세웠다(바란 수 %d)." % [stood.size(), want])
+
+
+## Test key: sets up one scene of motion at a time in front of the chief, so
+## the same moment can be filmed on the phone before and after a change to how
+## bodies move. Each press clears the last scene's dead and sets up the next.
+## The rules then run as ever (a held chief is bitten unless they shove free).
+const MOTION_SCENES: Array[String] = ["잡힘", "덤빔", "밀칠 망자 둘", "뒤지기", "치료", "넘어짐"]
+var motion_step: int = -1
+var motion_dead: Array = []
+
+
+func _debug_motion() -> void:
+	var p = game.player
+	for z in motion_dead:
+		if p.grabbers.has(z):
+			p.release_grab(z)
+		game.zombies.list.erase(z)
+	motion_dead.clear()
+	motion_step = (motion_step + 1) % MOTION_SCENES.size()
+	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
+	var side := Vector3(forward.z, 0, -forward.x)
+	match MOTION_SCENES[motion_step]:
+		"잡힘":
+			var z: Dictionary = _motion_dead(p.position + forward * 0.5, p)
+			z["state"] = "grab"
+			z["victim"] = p
+			z["cooldown"] = 1.6
+			p.grabbers.append(z)
+			p.grab_front = true
+			p.grab_left = GrabRules.window(true, 1, int(p.skills["melee"]), int(p.skills["strength"]), float(p.mults()["shove_window"]))
+			p.cancel_action()
+			p.stop()
+			p.aim.stop()
+			grab_alert(true)
+		"덤빔":
+			var z: Dictionary = _motion_dead(p.position + forward * 3.0, p)
+			z["state"] = "chase"
+			z["victim"] = p
+		"밀칠 망자 둘":
+			for s in [-0.5, 0.5]:
+				var z: Dictionary = _motion_dead(p.position + forward * 1.0 + side * s, p)
+				z["state"] = "chase"
+				z["victim"] = p
+		"뒤지기":
+			p.start_action("search", "뒤지기", 5.0, func() -> void: pass)
+		"치료":
+			p.start_action("treat", "붕대", 5.0, func() -> void: pass)
+		"넘어짐":
+			game.combat.fall(p, "시험으로 넘어졌다", 0.0)
+	toast("시험 동작: " + MOTION_SCENES[motion_step])
+
+
+func _motion_dead(at: Vector3, facing_who) -> Dictionary:
+	var z: Dictionary = game.zombies.spawn("dead", at)
+	z["angle"] = atan2(facing_who.position.x - at.x, facing_who.position.z - at.z)
+	z["seen_t"] = 1.0
+	motion_dead.append(z)
+	return z
 
 
 ## Test key: what a storm stop draws, one layer off at a time (phone frames).

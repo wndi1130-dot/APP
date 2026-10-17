@@ -1,0 +1,77 @@
+{
+  "version": 4,
+  "receiptId": "ret_sulechow_01",
+  "departureId": "dep_sulechow_01",
+  "stopId": "stop_sulechow",
+  "source": "direct",
+  "endReason": "departed",
+  "place": {
+    "id": "sulechow_station",
+    "type": "freight",
+    "variant": "small_station_siding"
+  },
+  "time": {
+    "arrive": "D1 10:30",
+    "depart": "D1 13:10",
+    "stayGameMinutes": 160
+  },
+  "stock": {
+    "coal": 6,
+    "food": 3
+  },
+  "items": {
+    "gained": [],
+    "lost": []
+  },
+  "people": {
+    "sent": [
+      "p_151",
+      "p_152",
+      "p_153",
+      "p_122"
+    ],
+    "injured": [
+      "p_153"
+    ],
+    "bitten": [],
+    "dead": [],
+    "missing": [],
+    "leftBehind": [],
+    "rescued": [
+      "p_004",
+      "p_005"
+    ]
+  },
+  "witnessed": [],
+  "placeState": {
+    "looted": 0.4,
+    "remainingRisk": 2
+  },
+  "promises": [],
+  "goal": {
+    "kind": "coal",
+    "required": 4,
+    "earned": 6,
+    "status": "done"
+  },
+  "extras": {
+    "documents": [],
+    "symbolCount": 0,
+    "fragments": [],
+    "coreCount": 0
+  },
+  "symbol": null,
+  "fieldPromises": [
+    {
+      "id": "promise_prologue",
+      "kind": "prologue",
+      "witnesses": [
+        "p_151",
+        "p_122"
+      ],
+      "heardBy": [
+        "tail"
+      ]
+    }
+  ]
+}

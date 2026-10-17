@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_back;
+#include "res://fx/shaders/fx_common.gdshaderinc"
 
 // VAT layout from scripts/vat_baker.gd. INSTANCE_CUSTOM:
 // r = phase, g = clip number, b = 1 stops the animation, a = shade.
@@ -34,6 +35,16 @@ uniform bool mixes = false;
 uniform bool quantized = false;
 uniform vec3 clip_lo[16];
 uniform vec3 clip_hi[16];
+// A baked body that brings its own colour picture (models/people/<body>/albedo.png)
+// is drawn with it, pressed like every other model (fx_model_grade, the user's
+// values of 2026-10-17); tint then only shifts it (tint / 0.5, so 0.5 leaves it).
+// Without one the body is tint alone, as before.
+uniform bool has_albedo = false;
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable, hint_default_white;
+uniform float grade_saturation : hint_range(0.0, 1.0) = 0.45;
+uniform float grade_value : hint_range(0.0, 1.0) = 0.82;
+uniform vec3 grade_cool : source_color = vec3(0.78, 0.85, 0.95);
+uniform float grade_cool_mix : hint_range(0.0, 1.0) = 0.35;
 
 varying float shade;
 varying vec3 view_pos;
@@ -98,6 +109,11 @@ void fragment() {
 	if (flat_normals) {
 		NORMAL = normalize(cross(dFdy(view_pos), dFdx(view_pos)));
 	}
-	ALBEDO = tint * shade;
+	vec3 base = tint;
+	if (has_albedo) {
+		vec3 c = fx_model_grade(texture(albedo_tex, UV).rgb, grade_saturation, grade_value, grade_cool, grade_cool_mix);
+		base = c * (tint / 0.5);
+	}
+	ALBEDO = base * shade;
 	ROUGHNESS = 1.0;
 }
