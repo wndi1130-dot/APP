@@ -5,10 +5,10 @@ import { journal, rnd, situation } from '../state';
 import type { Game } from '../state';
 import { CAR_COMM, D, TECHS, TECH_IDS } from './data';
 import type { TechId } from './data';
-import { domCard, living } from './state';
+import { domCard, living, techVariants } from './state';
 import type { DomPerson, DomState } from './state';
 import { LAW_ONLY_TECHS, usefulVariant } from './lawtech';
-import { jobCheck, restoreCheck, startJob, startRestore, techSides } from './workshop';
+import { jobCheck, restoreCheck, restoreCost, startJob, startRestore, techSides, variantParts } from './workshop';
 
 // 간부에게 맡기기(6.4). S1c에서 새로 여는 것은 공방장 하나다(의무장·기관장·경비대장은 S1c 이후).
 // 열리는 조건: 정차 6번을 지남 + 공방장이 사는 공동체(기술·의무진)가 호의 이상이고 적의가 없음. 인구 조건은 S1에서 뺐다(6.4 짚을 점).
@@ -104,8 +104,10 @@ export function delegateTick(g: Game): void {
     const id = chiefPick(g);
     if (id) {
       // 법에 걸린 기술은 서 있는 법 쪽 변형, 법과 무관한 변형(W2·R2)은 지금처럼 방침으로 고른다.
-      const v = LAW_ONLY_TECHS.includes(id) ? usefulVariant(g, id) ?? undefined
-        : TECHS[id].variants ? (d.delegate.policy === 'ours' && friendly(g).includes('front') ? 'b' : 'a') : undefined;
+      let v = LAW_ONLY_TECHS.includes(id) ? usefulVariant(g, id) ?? undefined
+        : techVariants(g, id) ? (d.delegate.policy === 'ours' && friendly(g).includes('front') ? 'b' : 'a') : undefined;
+      // 망원경(r4 가)은 부품이 더 든다. 모자라면 수신호(나)로 간다.
+      if (v === 'a' && variantParts(id, v) && d.parts < restoreCost(id, g).parts + variantParts(id, v)) v = 'b';
       if (startRestore(g, id, 'full', v)) journal(g, `공방장이 ${TECHS[id].name}을(를) 골랐다.`);
     }
   }

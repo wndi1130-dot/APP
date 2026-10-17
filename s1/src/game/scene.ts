@@ -1,6 +1,7 @@
 import { stageOf } from './state';
 import type { Game } from './state';
-import { crewLineText, crewWhyText, stopView, verdictText } from './omens';
+import { crewLineText, crewWhyText, signTier, stopView, verdictText } from './omens';
+import { effThreat, scoutNowText } from './domestic/scout_gear';
 import type { RiskLevel } from './omens';
 import { blizzardActive } from './disaster';
 import { PLACES, STAY } from './data';
@@ -33,18 +34,22 @@ export interface RiskView {
   crew: { band: CrewBand; need: number; text: string } | null;
   /** 인원 선택지 밑 까닭 한 줄. 정찰 전에는 숫자 없이 말한다 */
   crewWhy: string;
+  /** 정찰 장비 소리나 미끼로 기척이 옮겨 간 뒤의 「지금」 줄(결정 371). 정찰조가 본 조짐(omen)은 그대로 둔다 */
+  now: string | null;
 }
 
 /** 정차 화면의 위험 글: 정찰조가 본 조짐과 해석(2026-10-07 사용자). 준비를 바꾸면 해석만 다시 계산되고 조짐은 그대로다. */
 export function riskView(g: Game): RiskView {
   const r = stopRisk(g);
   const why = riskWhy(r);
-  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.', crew: null, crewWhy: crewWhyText(null) };
+  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.', crew: null, crewWhy: crewWhyText(null), now: null };
   const v = stopView(g, g.stop, r.horde);
   const level = riskLevel(r);
   const place = PLACES.find(p => p.id === g.stop!.place) ?? PLACES[0];
   const crewWhy = crewWhyText({ place: place.name, risk: place.risk, stay: STAY[g.stop.stay].name, need: r.need, crew: g.stop.crewSize, band: r.band });
-  return { level, omen: v.omen, verdict: verdictText(level, v.sign), why, unknown: null, crew: { band: r.band, need: r.need, text: crewLineText(r.band, r.need, level) }, crewWhy };
+  // 해석 말은 지금 기척을 따른다. 소음이 없으면 도착할 때 본 조짐 단계 그대로다.
+  const sign = g.stop.noise ? signTier(effThreat(g.stop), r.horde) : v.sign;
+  return { level, omen: v.omen, verdict: verdictText(level, sign), why, unknown: null, crew: { band: r.band, need: r.need, text: crewLineText(r.band, r.need, level) }, crewWhy, now: scoutNowText(g.stop) };
 }
 
 /** 관계 단계를 사람 말로. 열차장(플레이어)을 어떻게 보는지. */

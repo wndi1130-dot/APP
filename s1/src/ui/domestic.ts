@@ -4,6 +4,7 @@ import {
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableDeathWeight, enableDisasters, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
+  gearOwned, gearTaken, lureBlock, techShown, techVariants,
 } from '../game';
 import { copyText } from './clip';
 
@@ -13,7 +14,7 @@ function workText(g: Game): string {
   const bonus = workBonus(g);
   return bonus > 0 ? `작업 ${total.toFixed(1)}/구간 (공방장 ${(total - bonus).toFixed(1)}, 수업 +${bonus})` : `작업 ${total.toFixed(1)}/구간`;
 }
-import type { Comm, DomPerson, Field, Game, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
+import type { Comm, DomPerson, Field, Game, GearKey, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
 import { P, isSessionSeg, potMult, potView } from '../game';
 import { cx, h, raw, s } from './dom';
 import { icon } from './icons';
@@ -679,7 +680,37 @@ export function domesticStopRows(view: View): HTMLElement | null {
       h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'move' }, movedThisStop(g) ? '칸 순서를 바꿨다' : '칸 순서 바꾸기'),
       h('small', { class: 'sub' }, movedThisStop(g) ? '이번엔 짧게 못 머문다' : `칸마다 석탄 ${D.moveCoal}, 짧게 못 머문다`)));
   }
+  const gear = scoutGearRow(g);
+  if (gear) rows.push(gear);
   return rows.length ? h('div', { class: 'dom-stoprows' }, rows) : null;
+}
+
+/** 정찰 장비 줄(결정 371·373). 정찰 전엔 가진 장비마다 가져갈지 고르고(이름과 성질 한 마디만, 결과 예고 없음), 정찰 뒤엔 미끼 단추. */
+function scoutGearRow(g: Game): HTMLElement | null {
+  const stop = g.stop!;
+  const own = gearOwned(g);
+  if (!stop.scoutReport) {
+    const taken = gearTaken(g, stop);
+    const chips: [GearKey, number, number, string, string][] = [
+      ['glass', own.glass, taken.glass, '기관사 망원경', '흐리면 멀리 안 보인다'],
+      ['signal', own.signal, taken.signal, '한 명만 보낸다', '혼자 들어간다'],
+      ['cart', own.pedal, taken.pedal, '페달 핸드카', '덜컹이는 소리가 난다'],
+      ['cart', own.motor, taken.motor, '발동기 핸드카', '소리가 난다'],
+    ];
+    const shown = chips.filter(c => c[1] > 0);
+    if (!shown.length) return null;
+    return h('div', { class: 'field field--row' },
+      h('span', { class: 'field__label' }, '장비'),
+      shown.map(([key, , on, name, note]) => h('button', { class: cx('chip', on > 0 && 'is-on'), 'data-action': 'stop-set', 'data-key': 'gear', 'data-value': key, title: on > 0 ? '누르면 두고 간다' : '누르면 가져간다' },
+        name, h('small', null, ` ${note}`))));
+  }
+  if (own.lure <= 0) return null;
+  const why = lureBlock(g);
+  return h('div', { class: 'field field--row' },
+    h('span', { class: 'field__label' }, '미끼'),
+    h('button', { class: cx('chip', stop.lured && 'is-on'), 'data-action': 'stop-set', 'data-key': 'lure', 'data-value': '1', disabled: !!why, title: why ?? '' },
+      '태엽 깡통을 건다', h('small', null, ` 부품 −${D.lureParts}`)),
+    why && !stop.lured ? h('small', { class: 'sub' }, why) : null);
 }
 
 /** 데려갈 전문가 단추 글: 이름(겹치면 성 첫 글자)과 분야·숙련 점. */
@@ -764,7 +795,7 @@ function nodeFoot(g: Game, id: TechId, ns: NodeState): (Node | string | null)[] 
 /** 「둘 중 하나」 칸의 두 쪽(결정 068): 고르기 전에는 둘 다 열려 있고, 한쪽을 고르면 다른 쪽은 닫힌다. 변형이 없는 기술이면 null. */
 export function pairHalves(g: Game, id: TechId): { v: Variant; name: string; state: 'open' | 'on' | 'shut' }[] | null {
   const def = TECHS[id];
-  if (!def.variants) return null;
+  if (!techVariants(g, id)) return null;
   const picked = g.dom?.techs[id]?.variant;
   return (['a', 'b'] as const).map(v => ({ v, name: def.variants![v].name, state: !picked ? 'open' : picked === v ? 'on' : 'shut' }));
 }
@@ -802,7 +833,7 @@ export function recommendTech(g: Game): { id: TechId; why: string } | null {
   const fit = g.cards.find(c => c.kind === 'dom:fit' && !!c.text && !!TECHS[c.text as TechId] && !d.techs[c.text as TechId]);
   if (fit) return { id: fit.text as TechId, why: '설계도가 맞았다는 서류가 와 있다.' };
   if (TECH_IDS.filter(id => d.techs[id]).length >= 3) return null;
-  const open = TECH_IDS.filter(id => !d.techs[id]);
+  const open = TECH_IDS.filter(id => !d.techs[id] && techShown(g, id));
   const quiet = (id: TechId) => techRelSides(id).dislike.length === 0;
   const lawless = (id: TechId) => { const laws = techLaws(id); return laws.length > 0 && !laws.some(l => g.passed[l] !== undefined); };
   const rank = (id: TechId) => (quiet(id) ? 0 : 100) + (lawless(id) ? 50 : 0) + (TECHS[id].tier === 0 ? 15 : TECHS[id].tier * 10) + (TECHS[id].branch === 'craft' ? 0 : 1);
@@ -863,11 +894,11 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
   const cost = restoreCost(id, g);
   const raw = restoreCost(id);
   const frags = d.frags[def.branch];
-  const variants: (Variant | undefined)[] = def.variants && !st ? ['a', 'b'] : [undefined];
+  const variants: (Variant | undefined)[] = techVariants(g, id) && !st ? ['a', 'b'] : [undefined];
   const eff = (text: string) => (more ? text : shortEffect(text));
-  const picked = def.variants && st?.variant ? def.variants[st.variant] : null;
+  const picked = techVariants(g, id) && st?.variant ? def.variants![st.variant] : null;
   const mainEffect = picked ? picked.effect : def.effect;
-  const texts = def.variants && !st ? [def.variants.a.effect, def.variants.b.effect] : [mainEffect];
+  const texts = techVariants(g, id) && !st ? [def.variants!.a.effect, def.variants!.b.effect] : [mainEffect];
   const canMore = texts.some(t => shortEffect(t) !== t) || variants.some(v => !!techUseLine(g, id, v ?? st?.variant));
   const buttons: HTMLElement[] = [];
   if (!st) {
@@ -917,9 +948,9 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
       promise?.tech === id ? h('span', { class: 'dom-promise' }, `약속 · 남은 ${promise.left}구간`) : null,
       canMore ? h('button', { class: cx('chip', more && 'is-on'), 'data-action': 'dom-more', 'aria-expanded': more ? 'true' : 'false' }, more ? '접기' : '더') : null,
       close('dom-node', { 'data-id': id })),
-    def.variants && !st?.variant ? null
+    techVariants(g, id) && !st?.variant ? null
       : h('p', null, eff(mainEffect), h('span', { class: 'sub' }, ` · ${upkeepText(upkeepOf(g, id))}`)),
-    more && !(def.variants && !st?.variant) ? useLine(g, id, st?.variant) : null,
+    more && !(techVariants(g, id) && !st?.variant) ? useLine(g, id, st?.variant) : null,
     // 되살린 뒤에만 얼굴을 보인다. 되살리기 전에는 변형 줄의 관계 글이 같은 것을 말한다.
     st && (sides.like.length || sides.dislike.length) ? h('div', { class: 'dom-sides' },
       sides.like.length ? h('span', { class: 'is-blue' }, '반김 ', faces(sides.like, g)) : null,
@@ -947,7 +978,7 @@ function planView(view: View): HTMLElement {
     // 가지마다 기술이 열다섯을 넘어도 띠가 아래로 길어질 뿐이다. 넓은 화면은 다섯 가지를 기둥 다섯으로 나란히 세운다.
     h('div', { class: 'tplan__tree', 'data-keep-scroll': 'tplan-tree' }, FIELDS.map(f => h('div', { class: cx('tplan__col', f === branch && 'is-on') },
       h('button', { class: 'tplan__label', 'data-action': 'dom-branch', 'data-branch': f }, icon(BRANCH_ICON[f]), BRANCH_SHORT[f]),
-      tiers.map(t => ({ t, ids: TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t) })).filter(x => x.ids.length > 0)
+      tiers.map(t => ({ t, ids: TECH_IDS.filter(id => TECHS[id].branch === f && TECHS[id].tier === t && techShown(g, id)) })).filter(x => x.ids.length > 0)
         .map(({ t, ids }) => h('div', { class: cx('tplan__tier', t === 0 && 'is-adapt') },
           // 기술 둘을 한 틀로 묶는 「둘 중 하나」 칸(결정 068, tech_pairs.ts). 이은 선 틀에 가운데 「또는」, 한쪽을 얻으면 다른 쪽은 흐려진다.
           tierCells(ids).map(cell => {
@@ -1282,7 +1313,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
       break;
     case 'dom-branch': {
       // 가지를 바꾸면 그 가지에서 아직 안 되살린 첫 기술을 고른다.
-      const ids = TECH_IDS.filter(id => TECHS[id].branch === data.branch);
+      const ids = TECH_IDS.filter(id => TECHS[id].branch === data.branch && techShown(g0, id));
       du.node = ids.find(id => !d0.techs[id]) ?? ids[0] ?? null;
       du.more = false;
       break;

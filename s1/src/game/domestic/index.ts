@@ -17,3 +17,4 @@ export * from './elder';
 export * from './symbols';
 export * from './classroom';
 export * from './cards';
+export * from './scout_gear';

@@ -9,7 +9,7 @@ import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
 import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
 import { saveRestore, workBonus } from './classroom';
-import { domCard, secondPath, techMult, techUsable, topSkill, variantMult, zoneOf } from './state';
+import { domCard, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
 // 공방(6장): 작업량, 일 목록, 목표치와 우선순위, 복원(7장), 유지비(7.4), 고장(6.5), 개조(4.4).
@@ -69,15 +69,27 @@ export function restoreCost(id: TechId, g?: Game): { parts: number; frags: numbe
   };
 }
 
+/** 변형을 고를 때 더 드는 부품(결정 373: 기관사 망원경은 만들 때 부품 2). 다른 기술·변형은 0이다. */
+export function variantParts(id: TechId, variant?: Variant): number {
+  return id === 'r4' && variant === 'a' ? D.glassParts : 0;
+}
+
 /** 효과를 아직 못 넣은 기술(J10 3번): 부품을 받고 아무것도 안 주지 않게 복원을 막는다. R3(다음 정차 미리 보기·세 번 바꾸기)은 다음 정차 미리 보기 화면이 들어오면 연다. */
 export const NOT_YET: TechId[] = ['r3'];
+/** 정찰 장비 기술(결정 371). 정찰 장비를 켠 판(enableScoutGear)에서만 복원한다 */
+export const GEAR_TECHS: TechId[] = ['r4', 'w4'];
+
+/** 이 판의 기술 화면에 보이는 기술. 정찰 장비를 켜지 않은 판에는 r4·w4가 없다 */
+export function techShown(g: Game, id: TechId): boolean {
+  return !GEAR_TECHS.includes(id) || !!g.gearOn;
+}
 
 /** 지금 이 기술의 복원을 시작할 수 없게 막는 까닭(재료·조각·공방 사정은 빼고, 조건 자체를 본다). 막힌 데가 없으면 undefined. */
 export function restoreBlock(g: Game, id: TechId): string | undefined {
   const d = dom(g);
   const def = TECHS[id];
   if (d.techs[id]) return '이미 손댔다';
-  if (NOT_YET.includes(id)) return '아직 이 열차에서 못 쓴다';
+  if (NOT_YET.includes(id) || (GEAR_TECHS.includes(id) && !g.gearOn)) return '아직 이 열차에서 못 쓴다';
   const pre = prereqs(id);
   if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return `${TECHS[pre[0]].name}부터`;
   if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {
@@ -126,9 +138,11 @@ export function startRestore(g: Game, id: TechId, mode: 'full' | 'defect', varia
   const def = TECHS[id];
   const pipe = id === 'e3';
   if (pipe && d.pipeFlip) variant = d.pipeFlip;
-  if (def.variants && !variant) return false;
+  if (techVariants(g, id) && !variant) return false;
   const cost = restoreCost(id, g);
-  d.parts -= cost.parts;
+  const extra = variantParts(id, variant);
+  if (d.parts < cost.parts + extra) return false;
+  d.parts -= cost.parts + extra;
   d.wood -= cost.wood;
   d.scrap -= cost.scrap;
   d.frags[def.branch] -= mode === 'full' ? cost.frags : cost.defectFrags;
@@ -150,7 +164,7 @@ export function relDelta(g: Game, id: TechId, variant?: Variant): Partial<Record
   const out: Partial<Record<Comm, number>> = {};
   if (id === 'e3') return out;
   const last = [...dom(g).log.restores].reverse().find(r => r.id === id);
-  if (last && (last.v === variant || (TECHS[id].variants && !last.v))) return out;
+  if (last && (last.v === variant || (techVariants(g, id) && !last.v))) return out;
   const add = (v: Variant | undefined, sign: number) => {
     const sides = techRelSides(id, v);
     for (const c of sides.like) out[c] = (out[c] ?? 0) + sign * D.techRel;
@@ -605,7 +619,7 @@ export function fitHasChoice(g: Game, id: TechId): boolean {
   const def = TECHS[id];
   const ch = restoreCheck(g, id);
   if (dom(g).frags[def.branch] < ch.fragsNeed) return true;
-  return !def.variants && techRelSides(id).dislike.length > 0;
+  return !techVariants(g, id) && techRelSides(id).dislike.length > 0;
 }
 
 /** '조각이 맞았다': 처음으로 복원 조건을 채운 기술마다 한 번(10장 1·2번). 고를 게 있으면 카드, 없으면 일지 한 줄. */

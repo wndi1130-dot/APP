@@ -17,9 +17,9 @@ import { chooseSide, eduLaw, halved, SIDE_NAME } from './classroom';
 import type { EduSide } from './classroom';
 import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
-import { domCard, personById, techMult } from './state';
+import { domCard, personById, techMult, techVariants } from './state';
 import type { DomPerson } from './state';
-import { breakPenalty, BREAK_LINES, CAR_NAME, greenhouseBase, jobCheck, relDelta, restoreCheck, setFullRule, setTarget, standDown, startRestore, techRelSides, techTitle } from './workshop';
+import { breakPenalty, BREAK_LINES, CAR_NAME, greenhouseBase, jobCheck, relDelta, restoreCheck, setFullRule, setTarget, standDown, startRestore, variantParts, techRelSides, techTitle } from './workshop';
 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
@@ -70,7 +70,7 @@ function giveExtra(g: Game, car: string): string[] {
 
 /** 복원 확인 본문 끝의 쓸모 줄(7.3). 변형이 있으면 갈래 카드가 변형마다 붙인다. */
 function useText(g: Game, id: TechId): string {
-  if (TECHS[id].variants) return '';
+  if (techVariants(g, id)) return '';
   const line = techUseLine(g, id);
   return line ? ` ${line}.` : '';
 }
@@ -90,8 +90,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '설계도가 맞았다', speaker: sp(chief(g, 'craft')), required: false,
         body: `${BRANCH_NAME[def.branch]}의 ${def.name}. ${half ? '조각이 반만 맞는다. 금 간 채로라도 돌릴 수는 있다.' : '조각이 다 맞았다.'} ${def.effect}.${useText(g, id)}`,
         choices: [
-          { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', effs: def.variants ? [] : sidesEffs(g, id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
-          ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', effs: def.variants ? [] : sidesEffs(g, id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
+          { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', effs: techVariants(g, id) ? [] : sidesEffs(g, id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
+          ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', effs: techVariants(g, id) ? [] : sidesEffs(g, id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
           later,
         ],
       };
@@ -108,7 +108,7 @@ export function domView(g: Game, card: Card): CardView | null {
         body: `${def.name}은(는) 두 갈래로만 맞출 수 있다. 한 번 고르면 이 길에선 못 바꾼다.`,
         choices: (['a', 'b'] as Variant[]).map(v => ({
           label: vs[v].label, say: vs[v].say, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`,
-          disabled: why,
+          disabled: why ?? (variantParts(id, v) && d.parts < ch.parts + variantParts(id, v) ? '부품이 모자라다' : undefined),
           extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : []), ...(id === 'e3' ? ['다음 회기 추인 표결 뒤에 관계가 움직인다'] : [])],
         } as Choice)).concat(why ? [{ label: '나중에', say: '공방이 비면 다시 보자.', effs: [], special: 'dom:none' }] : []),
       };
@@ -354,7 +354,7 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
     case 'restore': {
       const id = card.text as TechId;
       // 추인이 부결된 E3은 변형이 고정돼 있어 갈래를 다시 묻지 않는다(7.3).
-      if (TECHS[id].variants && !(id === 'e3' && d.pipeFlip)) domCard(g, { kind: 'dom:fork', text: id, n: arg === 'defect' ? 1 : 0 });
+      if (techVariants(g, id) && !(id === 'e3' && d.pipeFlip)) domCard(g, { kind: 'dom:fork', text: id, n: arg === 'defect' ? 1 : 0 });
       else startRestore(g, id, arg as 'full' | 'defect', id === 'e3' ? d.pipeFlip : undefined, true);
       break;
     }
