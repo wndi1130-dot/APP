@@ -239,6 +239,29 @@ func test_loads_put_down_at_the_train_are_counted() -> void:
 	assert_eq(game.telemetry.trips, 1, "empty hands are not a load")
 
 
+func test_planks_and_spirits_go_on_the_train_and_cloth_stays() -> void:
+	# User decision 407 B1: a plank is wood 1, a bottle of spirit luxury 0.5; cloth and bandages are field stores.
+	var game = _game({})
+	var p = game.player
+	p.add_item("plank", 2)
+	p.add_item("bottle_spirit", 2)
+	var cloth: int = int(p.items.get("cloth", 0)) + 1
+	var bands: int = int(p.items.get("bandage", 0)) + 1
+	p.add_item("cloth", 1)
+	p.add_item("bandage", 1)
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.actions._auto_unload()
+	assert_eq(int(game.unloaded.get("plank", 0)), 2)
+	assert_eq(int(game.unloaded.get("bottle_spirit", 0)), 2)
+	assert_eq(int(p.items.get("cloth", 0)), cloth, "cloth stays on the body")
+	assert_eq(int(p.items.get("bandage", 0)), bands, "and so do bandages")
+	game.finish("departed")
+	var stock: Dictionary = game.receipt.to_dict()["stock"]
+	assert_almost_eq(float(stock.get("wood", 0.0)), 2.0, 0.001)
+	assert_almost_eq(float(stock.get("luxury", 0.0)), 1.0, 0.001)
+
+
 # ---------------------------------------------------------------- the loading yard
 
 func test_an_amount_goal_fills_and_the_repair_is_its_own_goal() -> void:
@@ -353,12 +376,27 @@ func test_leaving_mid_repair_keeps_the_coal_and_the_half_mended_belt() -> void:
 
 # ---------------------------------------------------------------- the goals on screen
 
-func test_the_goals_stay_on_screen_under_the_clock_and_a_plain_stop_shows_none() -> void:
+func test_the_goals_wait_in_the_journal_until_the_line_under_the_clock_is_opened() -> void:
 	var plain = _game({})
 	assert_null(plain.hud.goal_label)
 	assert_eq(plain.mission_play.goal_line(), "")
-	var game = _game({"mission": "survey"})
+	# Decision 293 ②: no goal line on the field by default; the bag panel's
+	# journal lists them.
+	var shut = _game({"mission": "survey"})
+	shut.hud.tick(0.1)
+	assert_false(shut.hud.goal_label.get_parent().visible, "not under the clock")
+	shut.hud.bag_panel()
+	var words: Array = []
+	for c in shut.hud.modal.find_children("*", "Label", true, false):
+		words.append((c as Label).text)
+	assert_has(words, "일지")
+	assert_has(words, "· 바깥 설비 0/2")
+	assert_has(words, "· 선로 기록 0/1")
+	shut.hud._close_modal()
+	# Opened by the technology: one line under the clock.
+	var game = _game({"mission": "survey", "goal_line": true})
 	assert_not_null(game.hud.goal_label)
+	assert_true(game.hud.goal_label.get_parent().visible)
 	assert_eq(game.mission_play.goal_line(), "바깥 설비 0/2 · 선로 기록 0/1", "the extra is not listed until someone goes")
 	game.mission_play._seen(game.player, "sv_switch")
 	game.mission_play._seen(game.player, "sv_signal")

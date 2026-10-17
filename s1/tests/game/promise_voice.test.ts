@@ -24,11 +24,11 @@ describe('약속 지킴의 말은 지킨 수로 차례로 고른다', () => {
 });
 
 describe('keepPromise는 값을 그대로 두고 말 한 줄을 잇는다', () => {
-  it('신임 +4·관계 +5·지킨 수 +1은 그대로이고, 일지에 사실 줄 다음 말 줄이 붙는다', () => {
+  it('신임 +2(결정 407 A1)·관계 +5·지킨 수 +1은 그대로이고, 일지에 사실 줄 다음 말 줄이 붙는다', () => {
     const g = createGame('voice-1');
     const before = { trust: g.trust, rel: g.comms.tail.rel, kept: g.stats.promisesKept, rng: g.rng, len: g.journal.length };
     keepPromise(g, 'tail', '시험');
-    expect(g.trust - before.trust).toBe(4);
+    expect(g.trust - before.trust).toBe(2);
     expect(g.comms.tail.rel - before.rel).toBe(5);
     expect(g.stats.promisesKept).toBe(before.kept + 1);
     expect(g.rng).toEqual(before.rng); // 주사위를 굴리지 않는다

@@ -9,7 +9,7 @@ import type { Comm } from './data';
 import { onDeath } from './death';
 import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
-import { journal, PROFILES, storyOf } from './state';
+import { journal, PROFILES, situation, storyOf } from './state';
 import type { Game, Phase } from './state';
 import { breakPromise, keepPromise } from './turn';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
@@ -28,17 +28,19 @@ export type PromiseVerdict = 'kept' | 'broken' | 'unknown';
 export const SYMBOL_USES = ['hang_before_session', 'hang_in_car'] as const;
 export type SymbolUse = typeof SYMBOL_USES[number];
 
-/** 값 자리(가안). 결정 302의 내걸기 관계 폭은 저장소에 없다. 0이면 효과가 없고, 값은 500판·시험 숫자와 함께 사용자에게 보인 뒤 값 PR로 정한다. */
-export const FIELD = Object.freeze({
+/** 값 자리(가안, 사용자 확인 전). 결정 407 A4(사용자): 네 사례가 더 갈리게 다시 잡았다. 내걸기 +10이면 지킴 판의 꼬리칸이 의심 띠를 벗어난다. 네 사례 표는 tools/field_slice_table.ts. */
+export const FIELD: Readonly<Record<'hangRel' | 'symbolLean' | 'symbolRel' | 'promiseLean' | 'pressLean' | 'promiseTrust' | 'promiseRel', number>> = Object.freeze({
   /** 특별 회기 앞에 내건 상징물이 그 집단 관계를 한 번 바꾸는 폭(hang_relation_delta) */
-  hangRel: 0,
+  hangRel: 10,
   /** 특별 회기 상징물 안건(field_council.ts): 상징물 주인 칸의 물질 입장, 가결·부결 때 그 칸 관계 ± */
-  symbolLean: 0,
-  symbolRel: 0,
+  symbolLean: 3,
+  symbolRel: 5,
   /** 특별 회기 약속 안건: 약속받은 칸의 물질 입장, 가결 때 신임 ±(지킴이면 +, 어김 추궁이면 −), 어김 추궁의 가결·부결 때 그 칸 관계 ± */
-  promiseLean: 0,
-  promiseTrust: 0,
-  promiseRel: 0,
+  promiseLean: 2,
+  /** 어김 추궁 안건에서 약속받은 칸의 물질 입장(따지는 쪽이라 지킴 기록보다 세게 민다) */
+  pressLean: 4,
+  promiseTrust: 3,
+  promiseRel: 5,
 });
 
 /** 열차가 필드에 넘기는 약속 하나. subjects는 서막 약속이 데려오기로 한 사람(프로필 id)이다. */
@@ -67,6 +69,8 @@ export interface FieldVerdict { id: string; kind: FieldPromiseKind; madeTo: Comm
 export interface FieldSnapshot {
   trust: number; tension: number; coal: number; food: number; med: number; lux: number; symbols: number; injured: number;
   rel: Record<Comm, number>; pop: Record<Comm, number>;
+  /** 칸마다 처지의 온기(situation 첫 값, 0~100 반올림). 도착 화면의 「온기」 */
+  warm: Record<Comm, number>;
 }
 /** 반영의 까닭 한 줄. 도착 화면과 회기 전망이 이 줄을 그대로 읽는다(화면은 상태를 바꾸지 않는다). */
 export interface FieldLine { k: 'stock' | 'people' | 'promise' | 'symbol'; comm?: Comm; text: string }
@@ -90,6 +94,8 @@ export interface FieldReturns {
   records: FieldReturnRecord[];
   /** 첫 귀환 뒤의 특별 회기 한 번(결정 290·303, field_council.ts). 있으면 다시 열지 않는다 */
   special?: SpecialCouncilRecord;
+  /** 둘째 역에 닿아 끝 카드로 닫은 구간(field_arrival.ts finishSlice) */
+  arrived?: { seg: number };
 }
 /** 특별 회기 기록: 어느 귀환 뒤에 열렸고, 무엇이 후보였고, 무엇을 골라 어떻게 됐나. 도착 화면이 이 기록을 읽는다. */
 export interface SpecialCouncilRecord {
@@ -203,6 +209,7 @@ export function snapshot(g: Game): FieldSnapshot {
     trust: g.trust, tension: g.tension, coal: g.coal, food: g.food, med: g.med, lux: g.lux, symbols: g.symbols, injured: g.injured,
     rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number>,
     pop: Object.fromEntries(COMMS.map(c => [c, g.comms[c].pop])) as Record<Comm, number>,
+    warm: Object.fromEntries(COMMS.map(c => [c, Math.round(situation(g, c)[0])])) as Record<Comm, number>,
   };
 }
 
@@ -244,7 +251,11 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   const before = snapshot(g);
   const lines: FieldLine[] = [];
   // 물자: 영수증 장부 증감을 그대로 더한다. 석탄은 쓴 몫을 이미 뺀 값이다.
+  // 잔액보다 큰 음수는 0에서 멈추고(시작 + 순증감 = 잔액, 모자라면 0과 부족분) 귀환 줄에 부족분을 적는다.
   const s = r.stock;
+  const have: Partial<Record<keyof typeof s, number>> = {
+    coal: g.coal, food: g.food, medicine: g.med, luxury: g.lux, ...(g.dom ? { wood: g.dom.wood, scrap: g.dom.scrap } : {}),
+  };
   if (s.coal) bump(g, 'coal', s.coal, 'field.loot', { floor0: true });
   if (s.food) bump(g, 'food', s.food, 'field.loot', { floor0: true });
   if (s.medicine) bump(g, 'med', s.medicine, 'field.loot', { floor0: true });
@@ -255,7 +266,10 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
     if (s.scrap) g.dom.scrap = Math.max(0, g.dom.scrap + s.scrap);
   }
   const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['wood', '목재'], ['scrap', '고철']] as const)
-    .filter(([k]) => s[k]).map(([k, name]) => `${name} ${s[k]! > 0 ? '+' : ''}${s[k]}`);
+    .filter(([k]) => s[k]).map(([k, name]) => {
+      const lack = have[k] === undefined ? 0 : Math.max(0, -(have[k]! + s[k]!));
+      return `${name} ${s[k]! > 0 ? '+' : ''}${s[k]}${lack > 0 ? ` (모자라 0, 부족 ${lack})` : ''}`;
+    });
   if (got.length) lines.push({ k: 'stock', text: got.join(', ') });
 
   // 사람: 죽음은 그 칸의 죽음으로, 크게 다친 사람은 부상으로, 남겨지거나 사라진 사람은 그 칸에서 빠진다.

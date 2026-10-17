@@ -13,14 +13,14 @@ function fresh(seed: string): Game {
 const rowsOf = (g: Game, why: string) => drain(g).filter(r => r.why === why);
 
 describe('turn.ts 장부: 골든 판이 안 밟는 자리', () => {
-  it('약속을 지키면 신임 +4와 그 칸 관계 +5, 어기면 신임 −8(큰 칸 −12)·관계 −20·긴장 +3이 「약속」으로 적힌다', () => {
+  it('약속을 지키면 신임 +2(결정 407 A1)와 그 칸 관계 +5, 어기면 신임 −8(큰 칸 −12)·관계 −20·긴장 +3이 「약속」으로 적힌다', () => {
     const g = fresh('lt-promise');
     g.trust = 50; g.tension = 20; g.comms.tail.rel = 0; g.comms.front.rel = 0;
     keepPromise(g, 'front', '시험');
-    expect([g.trust, g.comms.front.rel]).toEqual([54, 5]);
-    expect(drain(g)).toEqual([{ k: 'trust', d: 4, why: 'promise' }, { k: 'rel:front', d: 5, why: 'promise' }]);
+    expect([g.trust, g.comms.front.rel]).toEqual([52, 5]);
+    expect(drain(g)).toEqual([{ k: 'trust', d: 2, why: 'promise' }, { k: 'rel:front', d: 5, why: 'promise' }]);
     breakPromise(g, 'front', '시험'); // 앞칸은 의석 30 미만이라 −8
-    expect([g.trust, g.comms.front.rel, g.tension]).toEqual([46, -15, 23]);
+    expect([g.trust, g.comms.front.rel, g.tension]).toEqual([44, -15, 23]);
     const rows = drain(g);
     expect(rows.map(r => [r.k, r.d, r.why])).toEqual([['trust', -8, 'promise'], ['rel:front', -20, 'promise'], ['tension', 3, 'promise']]);
   });

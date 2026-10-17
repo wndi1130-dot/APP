@@ -13,5 +13,6 @@ function gitHead(): string {
 export default defineConfig({
   base: './',
   define: { __BUILD__: JSON.stringify(gitHead()) },
-  test: { include: ['tests/**/*.test.ts'] },
+  // 로컬 PC는 다른 작업과 함께 돌아 느리므로 시험 한 개 한도를 30초로 둔다. CI는 vitest 기본 5초 그대로.
+  test: { include: ['tests/**/*.test.ts'], testTimeout: process.env.CI ? 5000 : 30000 },
 });

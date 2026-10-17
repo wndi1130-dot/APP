@@ -178,6 +178,8 @@ func set_source(source: String) -> bool:
 	return true
 
 
+## Receipts v1-v3 only: there the field itself said whether a promise was kept. A v4 receipt
+## carries observations only (see_promise) and writes an empty promises list; S1 judges.
 func promise(leader: String, condition: String, kept: bool) -> bool:
 	if not _id_ok(leader) or not _id_ok(condition):
 		return false
@@ -287,7 +289,7 @@ func to_dict() -> Dictionary:
 		"people": people,
 		"witnessed": _witnessed.duplicate(true),
 		"placeState": place_state,
-		"promises": _promises.duplicate(true),
+		"promises": [] if _has_v4 else _promises.duplicate(true),  # v4: no field-side verdicts
 	})
 	if _has_v3 or _has_v4:
 		if not _decisions.is_empty():

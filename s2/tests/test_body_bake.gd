@@ -228,6 +228,31 @@ func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_
 	assert_eq(float(assets["clips"][6]["round"]), 0.0, "nor does a motion played once")
 
 
+func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
+	assert_lte(BodyBake.PERSON_CLIPS.size(), VatBaker.TABLE_SIZE, "the shader's clip tables")
+	for clip in BodyBake.PERSON_CLIPS:
+		assert_true(String(clip[0]).begins_with("p_"), clip[0])
+		assert_eq(clip[1], "", "%s takes nothing from a motion set" % clip[0])
+		assert_gt(float(clip[5]), 0.0, "and says how long it is")
+		assert_true(BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
+	var root := _stick_body()
+	add_child_autofree(root)
+	var assets: Dictionary = BodyBake.bake_own(root, BodyBake.PERSON_CLIPS, [])
+	assert_false(assets.is_empty())
+	assert_eq((assets["clips"] as Array).size(), BodyBake.PERSON_CLIPS.size(), "no still poses after them")
+	assert_eq(String(assets["clips"][0]["name"]), "p_walk")
+	assert_gt(float(assets["clips"][0]["round"]), 0.5, "a walk covers ground")
+	assert_gt(float(assets["clips"][1]["round"]), float(assets["clips"][0]["round"]), "the run more")
+	assert_eq(float(assets["clips"][2]["round"]), 0.0, "standing covers none")
+
+
+func test_a_keyed_value_eases_from_key_to_key_and_holds_past_the_ends() -> void:
+	var keys := ["keys", [[0.2, 1.0], [0.6, 3.0]]]
+	assert_eq(BodyBake._value(keys, 0.0), 1.0)
+	assert_almost_eq(BodyBake._value(keys, TAU * 0.4), 2.0, 0.001, "half way")
+	assert_eq(BodyBake._value(keys, TAU * 0.9), 3.0)
+
+
 func test_a_shorter_body_lies_on_the_ground_not_in_it() -> void:
 	# Hips 0.85 m up, like a person 1.7 m tall: lowered as far in proportion
 	# as the 1 m body, its hips end the fall above the ground.

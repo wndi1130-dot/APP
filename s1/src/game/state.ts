@@ -60,7 +60,7 @@ export interface TripState {
 }
 
 /** coup: S1b 계엄 중 경비대 충성이 무너져 경비대장이 열차를 잡았다(s1b_dark_path 5.3, 둘째 묶음). lost_captain: 수동차에 탄 열차장이 돌아오지 않았다. */
-export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup' | 'lost_captain';
+export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup' | 'lost_captain' | 'slice';
 /** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
 /** 정차 작업조 명단에 더 붙는 사람(이름). S1b 정차 암살의 실행자와 대상이 여기서 붙는다(dark/order.ts). */
 export const CREW_EXTRAS: ((g: Game) => string[])[] = [];

@@ -14,6 +14,7 @@ const WALL_H: float = 2.1
 const LEVEL_H: float = 3.0
 const CUT_H: float = 0.35
 const FxState = preload("res://fx/fx_state.gd")
+const BuildingView = preload("res://game/world/building_view.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
 ## Size (along the wall, up, thickness) and height of each glowing face.
@@ -39,6 +40,7 @@ var track_wait: Dictionary = {}      # snow marks handed over, written at the ne
 var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
 var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
+var buildings: Node3D             # the building kit (building_view.gd); null draws grey boxes
 var train_node: MeshInstance3D    # the train, its doors and the way over it
 var cut_building: int = -2
 var cut_level: int = 0
@@ -73,6 +75,14 @@ func setup(map_data: Dictionary) -> void:
 	material.set_shader_parameter("vis", vis_texture)
 	material.set_shader_parameter("map_size", Vector2(grid.width, grid.height))
 	material.set_shader_parameter("lamp_color", FxState.LAMP)
+	if BuildingView.can_draw():
+		buildings = BuildingView.new()
+		buildings.name = "Buildings"
+		add_child(buildings)
+		buildings.setup(data, material)
+		for key: Vector2i in buildings.shells:
+			if buildings.cut_node(key.x, key.y):
+				wall_nodes[key] = buildings.cut_node(key.x, key.y)
 	_build_ground()
 	_build_walls()
 	_build_blocks()
@@ -80,11 +90,11 @@ func setup(map_data: Dictionary) -> void:
 		if lv != 0:
 			_build_level(lv)
 	_build_stairs()
-	for c in grid.doors:
+	for c in grid.doors if buildings == null else {}:
 		var node := _mesh_node()
 		door_nodes[c] = node
 		update_door(c)
-	for c in grid.windows:
+	for c in grid.windows if buildings == null else {}:
 		var node := _mesh_node()
 		window_nodes[c] = node
 		update_window(c)
@@ -208,6 +218,8 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary 
 		lamp_lit.append(int(i))
 	vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RGBA8, vis_bytes)
 	vis_texture.update(vis_image)
+	if buildings:
+		buildings.update_seen(vis_bytes)
 
 
 ## Snow marks (SnowTracks.take_changed: cell index -> byte, 255 untouched) for
@@ -247,6 +259,8 @@ func show_levels(player_level: int) -> void:
 	if player_level == shown_level:
 		return
 	shown_level = player_level
+	if buildings:
+		buildings.show_levels(player_level)
 	for lv in level_roots:
 		level_roots[lv].visible = lv == -1 if player_level < 0 else lv >= 0 and lv <= player_level
 
@@ -257,7 +271,11 @@ func cut_away(building_id: int, level: int = 0) -> void:
 		return
 	cut_building = building_id
 	cut_level = level
+	if buildings:
+		buildings.cut_away(building_id, level)
 	for key in wall_nodes:
+		if buildings and key.x >= 0:
+			continue
 		var node: MeshInstance3D = wall_nodes[key]
 		var cut: bool = key.x == building_id and key.y == level
 		node.scale = Vector3(1, CUT_H / WALL_H if cut else 1.0, 1)
@@ -268,6 +286,9 @@ func cut_away(building_id: int, level: int = 0) -> void:
 
 
 func update_door(c: Vector2i) -> void:
+	if buildings:
+		buildings.update_door(c)
+		return
 	var door: Dictionary = grid.doors[c]
 	var node: MeshInstance3D = door_nodes[c]
 	var st := _begin()
@@ -292,6 +313,9 @@ func update_door(c: Vector2i) -> void:
 
 
 func update_window(c: Vector2i) -> void:
+	if buildings:
+		buildings.update_window(c)
+		return
 	var win: Dictionary = grid.windows[c]
 	var node: MeshInstance3D = window_nodes[c]
 	var st := _begin()
@@ -563,6 +587,8 @@ func _build_ground() -> void:
 func _build_walls() -> void:
 	var runs: Dictionary = wall_runs(grid)
 	for b in runs:
+		if buildings and b >= 0:
+			continue
 		var st := _begin()
 		for r: Rect2i in runs[b]:
 			box(st, Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
@@ -709,6 +735,8 @@ func _build_level(lv: int) -> void:
 	var tools: Dictionary = {}
 	var runs: Dictionary = wall_runs(lg)
 	for b in runs:
+		if buildings and b >= 0:
+			continue
 		tools[b] = _begin()
 		for r: Rect2i in runs[b]:
 			box(tools[b], Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
@@ -730,7 +758,7 @@ func _build_level(lv: int) -> void:
 				floor_st.set_normal(Vector3.UP)
 				floor_st.add_vertex(quad[idx])
 			var b := lg.building_at(c)
-			if kind == S.WINDOW:
+			if kind == S.WINDOW and buildings == null:
 				if not tools.has(b):
 					tools[b] = _begin()
 				var horizontal := lg.solid_at(c + Vector2i(1, 0)) == S.WALL or lg.solid_at(c + Vector2i(-1, 0)) == S.WALL
@@ -757,6 +785,11 @@ func _build_stairs() -> void:
 		var c: Vector2i = s["cell"]
 		var low: int = s["low"]
 		var high: int = s["high"]
+		# Named on both floors so the way up or down is found (H3 2026-10-09: never seen).
+		_floor_label(LEVEL_WAYS.get(high, ""), c, low)
+		_floor_label(LEVEL_WAYS.get(low, ""), c, high)
+		if buildings:
+			continue
 		var st := _begin()
 		var base := Vector3(c.x + 0.5, low * LEVEL_H, c.y + 0.5)
 		for k in range(4):
@@ -767,9 +800,6 @@ func _build_stairs() -> void:
 		box(up, Vector3(0.95, 0.03, 0.95), top + Vector3(0, 0.02, 0), Color(0.16, 0.15, 0.15))
 		box(up, Vector3(0.06, 0.9, 0.95), top + Vector3(0.47, 0.45, 0), Color(0.48, 0.4, 0.32))
 		_mesh_node(high).mesh = up.commit()
-		# Named on both floors so the way up or down is found (H3 2026-10-09: never seen).
-		_floor_label(LEVEL_WAYS.get(high, ""), c, low)
-		_floor_label(LEVEL_WAYS.get(low, ""), c, high)
 
 
 ## A word on the floor, shown once its cell has been seen (as room names are).

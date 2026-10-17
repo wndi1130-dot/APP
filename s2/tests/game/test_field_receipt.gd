@@ -82,6 +82,15 @@ func test_builder_matches_case1_values_and_key_order() -> void:
 	assert_eq(_norm(JSON.parse_string(receipt.to_json())), _norm(expected))
 
 
+func test_v4_output_has_no_field_side_kept() -> void:
+	var receipt := _sample()
+	receipt.promise("tail_rep", "bring_back", true)
+	var d: Dictionary = receipt.to_dict()
+	assert_eq(d["version"], 4)
+	assert_eq(d["promises"], [], "판 4 출력에는 필드가 정한 kept가 없다")
+	assert_eq(Receipt.check(d), [] as Array[String])
+
+
 func test_v4_requires_each_new_contract_key() -> void:
 	for key: String in Receipt.V3_REQUIRED + Receipt.V4_REQUIRED:
 		var receipt: Dictionary = _read()
