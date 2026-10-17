@@ -43,6 +43,7 @@ import { voiceKept } from './promise_voice';
 import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
+import { leaveSpecialCouncil } from './field_council';
 
 // 한 구간의 다섯 단계: 출발 전 운영 → 이동 → 정차 → 의회(회기일 때) → 정산(S1 기획서 3장).
 
@@ -68,7 +69,7 @@ export function primaryAction(g: Game): Primary {
       const council = g.council;
       if (council?.pre && !council.pre.result && council.result) return { label: '다음 안건', ok: true };
       if (council && !council.martial && (council.options.length > 0 || preVote(g)) && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
-      return { label: '정산으로', ok: true };
+      return { label: council?.special ? '회기를 닫는다' : '정산으로', ok: true };
     }
     case 'settle': return { label: g.seg >= P.segments && !g.stranded ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
     default: return { label: '', ok: false };
@@ -85,7 +86,8 @@ export function advance(g: Game): void {
       return;
     case 'travel': return runTravel(g);
     case 'stop': return afterStop(g);
-    case 'council': return preVote(g) ? finishPreVote(g) : settle(g);
+    // 특별 회기(field_council.ts)는 구간 정산으로 가지 않고 연 단계로 돌아간다. 정규 회기 규칙은 그 뒤에 평소대로 돈다.
+    case 'council': return preVote(g) ? finishPreVote(g) : g.council?.special ? void leaveSpecialCouncil(g) : settle(g);
     case 'settle': return nextSegment(g);
     default: return;
   }
