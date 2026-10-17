@@ -155,6 +155,8 @@ export interface EventMemo { n: number; seg: number; pick: string; st?: string }
 
 export interface StopState {
   place: string;
+  /** 출발을 미룬 날 같은 정차를 한 번 더 뒤지는 중(결정 332). 위험을 따로 굴린다 */
+  again?: boolean;
   target: LootKey | null;
   stay: StayId;
   crewComm: Comm;
@@ -392,6 +394,8 @@ export interface Game {
   space?: { step: number; giver: Comm | null };
   /** 마지막으로 작업조를 낸 칸(급수탑 눈 녹이기의 기본 칸) */
   lastCrew?: Comm;
+  /** 지난 구간의 정차. 출발을 미룬 날 이번 정차가 없으면 이걸 한 번 더 뒤진다(결정 332) */
+  lastStop?: StopState | null;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
   /** 고른 기관차(결정 125). 없으면 c3(옛 저장과 안 고른 판). 게임 시작 때 setLoco(loco.ts)로 정한다. */
