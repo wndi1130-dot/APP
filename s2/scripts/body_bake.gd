@@ -94,9 +94,13 @@ const PERSON_CLIPS: Array = [
 	["p_rise", "", 32, false, "own_rise", 1.2],
 	["p_rise_front", "", 32, false, "own_rise_front", 1.2],
 	["p_spent", "", 32, true, "own_stagger", 1.3],
+	["p_floor_strike", "", 24, false, "p_floor_strike", 0.8],
+	["p_stomp", "", 20, false, "p_stomp", 0.6],
+	["p_pry", "", 24, true, "p_pry", 1.6],
+	["p_kick", "", 20, false, "p_kick", 0.6],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove"]
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -893,6 +897,76 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.L", "hand.L", [-0.25, [0.05, 0.01, 0.0], 1.0]],
 		],
 		"sink": [0.05, 0.003, 0.0],
+	},
+	# Striking down at something on the ground: both hands raised over the head,
+	# bent right over with the knees giving as the blow lands in front of the feet.
+	"p_floor_strike": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, ["keys", [[0, 0.05], [0.35, 0.05], [0.5, 0.55], [1, 0.05]]]]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, ["keys", [[0, -0.05], [0.35, -0.05], [0.5, -0.45], [1, -0.05]]]]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, ["keys", [[0, -0.1], [0.35, -0.1], [0.5, 0.35], [1, -0.1]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0, -0.1], [0.35, -0.1], [0.5, -0.4], [1, -0.1]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.1], [0.35, -0.15], [0.5, 0.8], [1, 0.1]]]],
+			["turn", "chest", "x", ["keys", [[0, 0.0], [0.5, 0.25], [1, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.2], [0.35, 0.0], [0.5, 0.35], [1, 0.2]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -0.7], [0.35, 1.0], [0.5, -0.6], [1, -0.7]]], ["keys", [[0, 0.4], [0.35, -0.25], [0.5, 0.8], [1, 0.4]]]]],
+			["aim", "forearm.L", "hand.L", [-0.12, ["keys", [[0, -0.5], [0.35, 0.8], [0.5, -0.9], [1, -0.5]]], ["keys", [[0, 0.6], [0.35, -0.6], [0.5, 0.45], [1, 0.6]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.05, ["keys", [[0, -0.7], [0.35, 1.0], [0.5, -0.6], [1, -0.7]]], ["keys", [[0, 0.4], [0.35, -0.25], [0.5, 0.8], [1, 0.4]]]]],
+			["aim", "forearm.R", "hand.R", [0.12, ["keys", [[0, -0.5], [0.35, 0.8], [0.5, -0.9], [1, -0.5]]], ["keys", [[0, 0.6], [0.35, -0.6], [0.5, 0.45], [1, 0.6]]]]],
+		],
+		"sink": ["keys", [[0, 0.03], [0.35, 0.0], [0.5, 0.2], [1, 0.03]]],
+	},
+	# Stamping down: the right knee drawn high, the foot driven into the ground
+	# in front, looking down at it, the arms out a little for balance.
+	"p_stomp": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, -0.05]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.1, ["keys", [[0, -1.0], [0.35, -0.35], [0.5, -0.85], [1, -1.0]]], ["keys", [[0, 0.0], [0.35, 1.0], [0.5, 0.45], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.35, -0.3], [0.5, 0.1], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.35, 0.3], [0.5, 0.4], [1, 0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.1], [0.35, 0.45], [0.5, 0.5], [1, 0.1]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.16], [0.35, 0.5], [1, 0.16]]], -1.0, 0.1]],
+			["aim", "forearm.L", "hand.L", [0.1, -0.8, 0.3]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.35, -0.5], [1, -0.16]]], -1.0, 0.1]],
+			["aim", "forearm.R", "hand.R", [-0.1, -0.8, 0.3]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.35, -0.03], [0.5, 0.06], [1, 0.0]]],
+	},
+	# Prying a door or lid: both hands on a bar in front at the chest, the body
+	# thrown back against it and coming forward to set it again.
+	"p_pry": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, 0.25]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [-0.15, 0.08, 0.0]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, -0.15]],
+			["turn", "spine", "x", [0.05, 0.25, 0.0]],
+			["turn", "chest", "y", [0.0, 0.08, 0.5]],
+			["turn", "neck", "x", [0.15, -0.1, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.15, [-0.45, 0.15, 0.0], 0.75]],
+			["aim", "forearm.L", "hand.L", [-0.35, [0.05, 0.1, 0.0], 0.8]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, [-0.45, 0.15, 0.0], 0.75]],
+			["aim", "forearm.R", "hand.R", [0.35, [0.05, 0.1, 0.0], 0.8]],
+		],
+		"sink": [0.08, 0.04, 0.0],
+	},
+	# Front kick: the weight back on the left leg, the right swung up straight
+	# to hip height and back down, the arms thrown out.
+	"p_kick": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, ["keys", [[0, -0.02], [0.4, -0.15], [1, -0.02]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.1, ["keys", [[0, -1.0], [0.25, -0.6], [0.4, -0.1], [1, -1.0]]], ["keys", [[0, 0.0], [0.25, 0.6], [0.4, 1.0], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, ["keys", [[0, -1.0], [0.25, -1.0], [0.4, 0.0], [1, -1.0]]], ["keys", [[0, -0.02], [0.25, -0.2], [0.4, 1.0], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.4, -0.3], [1, 0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.0], [0.4, 0.3], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.16], [0.4, 0.7], [1, 0.16]]], ["keys", [[0, -1.0], [0.4, -0.3], [1, -1.0]]], 0.15]],
+			["aim", "forearm.L", "hand.L", [0.2, -0.6, 0.4]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.4, -0.7], [1, -0.16]]], ["keys", [[0, -1.0], [0.4, -0.3], [1, -1.0]]], -0.1]],
+			["aim", "forearm.R", "hand.R", [-0.2, -0.6, 0.2]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.4, 0.04], [1, 0.0]]],
 	},
 }
 const AXES: Dictionary = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
