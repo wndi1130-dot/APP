@@ -61,6 +61,14 @@ var crew_recalled: bool = false
 var held_door: Dictionary = {}
 var _chief_was_out: bool = true
 var _chief_out_at := Vector3.ZERO
+## The dead still up, gathered once per think while the companions think, so
+## three of them do not each walk the whole list (empty outside update()).
+var _live: Array = []
+var _live_on: bool = false
+var _roles: Dictionary = {}
+## The dead within ENGAGE_R of the companion thinking now (_companion fills it).
+var _near: Array = []
+var _near_of = null
 
 
 func _init(field_game) -> void:
@@ -77,10 +85,30 @@ func update(delta: float) -> void:
 	if think:
 		think_t = THINK
 		_track_door()
+	# Each companion thinks every THINK, but not all on the same frame: the
+	# three are spread over the THINK so no one frame carries all of them.
+	var k := 0
 	for p in game.squad:
-		if p != game.player and p.is_alive() and p.can_act():
-			if think:
-				_companion(p)
+		if p == game.player:
+			continue
+		k += 1
+		if not p.brain.has("think_t"):
+			p.brain["think_t"] = THINK * float(k - 1) / 3.0
+		p.brain["think_t"] = float(p.brain["think_t"]) - delta
+		if p.brain["think_t"] > 0.0:
+			continue
+		p.brain["think_t"] = float(p.brain["think_t"]) + THINK
+		if float(p.brain["think_t"]) <= 0.0:
+			p.brain["think_t"] = THINK
+		if p.is_alive() and p.can_act():
+			if not _live_on:
+				_gather_live()
+			_companion(p)
+	_live_on = false
+	_live = []
+	_roles = {}
+	_near = []
+	_near_of = null
 	for p in game.crew:
 		if p.is_alive() and p.can_act() and not p.brain.get("boarded", false):
 			_crew(p, delta, think)
@@ -90,6 +118,30 @@ func update(delta: float) -> void:
 
 
 # ---------------------------------------------------------------- shared
+
+func _gather_live() -> void:
+	_live = []
+	for z in game.zombies.list:
+		var st: String = z["state"]
+		if st != "dead" and st != "rising":
+			_live.append(z)
+	_live_on = true
+
+
+## Like zombies.in_radius, from the list gathered this think when there is one
+## (and from the companion's own near list when it is about that companion).
+func _dead_near(at: Vector3, r: float) -> Array:
+	if not _live_on:
+		return game.zombies.in_radius(at, r)
+	var from: Array = _live
+	if _near_of != null and r <= ENGAGE_R and at == _near_of.position:
+		from = _near
+	var out: Array = []
+	var rr := r * r
+	for z in from:
+		if at.distance_squared_to(z["pos"]) <= rr:
+			out.append(z)
+	return out
 
 ## A grabbed companion shoves back after a human reaction time; if that is
 ## longer than the window, the bite lands first (body_injury 2).
@@ -113,7 +165,7 @@ func _threat_near(p, r: float) -> Dictionary:
 	var back_d := r
 	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
 	var cos_front := cos(deg_to_rad(BEHIND_DEG))
-	for z in game.zombies.in_radius(p.position, r):
+	for z in _dead_near(p.position, r):
 		if not game.zombies.active(z) or z["state"] == "downed":
 			continue
 		var d: float = p.position.distance_to(z["pos"])
@@ -233,6 +285,10 @@ func _use_bandage(giver, who, n: int) -> void:
 ## (zomboid mod lesson: workers that let themselves be eaten mid-task).
 func _companion(p) -> void:
 	var player = game.player
+	if _live_on:
+		_near_of = null
+		_near = _dead_near(p.position, ENGAGE_R)
+		_near_of = p
 	var threat := _threat_near(p, THREAT_R)
 	var raider = _hostile_raider_near(p, 20.0)
 	_watch_stuck(p)
@@ -305,7 +361,7 @@ func _companion(p) -> void:
 		return
 	if p.command == "cover" and _gun_slot(p) >= 0:
 		# Shoot the dead going for the player within cover range.
-		for z in game.zombies.in_radius(player.position, COVER_R):
+		for z in _dead_near(player.position, COVER_R):
 			if game.zombies.active(z) and (z["state"] == "chase" or z["state"] == "attack") and z["victim"] == player:
 				_prefer(p, true)
 				if W.is_ranged(p.weapon_id()):
@@ -338,9 +394,8 @@ func _squad_threat(p) -> Dictionary:
 	var notice: float = lerpf(BEHIND_NOTICE_MIN, BEHIND_NOTICE_MAX, p.name_unit("b"))
 	var seen_before: Dictionary = p.brain.get("seen_t", {})
 	var seen_now := {}
-	var best: Dictionary = {}
-	var best_s := INF
-	for z in game.zombies.in_radius(p.position, ENGAGE_R):
+	var rows: Array = []
+	for z in _dead_near(p.position, ENGAGE_R):
 		if not game.zombies.active(z) or z["state"] == "downed" or z["state"] == "grab":
 			continue
 		var v = z.get("victim")
@@ -349,7 +404,7 @@ func _squad_threat(p) -> Dictionary:
 		# Sneaking, nobody starts a fight the dead have not started.
 		if not after_us and (to_chief > GUARD_R or player.crouched):
 			continue
-		if to_chief > LEASH_R or not game.sight_clear(p.position, z["pos"]):
+		if to_chief > LEASH_R:
 			continue
 		var d: float = p.position.distance_to(z["pos"])
 		var to_z: Vector3 = z["pos"] - p.position
@@ -363,11 +418,14 @@ func _squad_threat(p) -> Dictionary:
 		for o in game.squad:
 			if o != p and o.target_zombie == z:
 				s += 4.0
-		if s < best_s:
-			best_s = s
-			best = z
+		rows.append([s, z])
 	p.brain["seen_t"] = seen_now
-	return best
+	# The sight line is the dear part: test the best first and stop at the first seen.
+	rows.sort_custom(func(a, b): return a[0] < b[0])
+	for row in rows:
+		if game.sight_clear(p.position, row[1]["pos"]):
+			return row[1]
+	return {}
 
 
 ## Fight z as a person would with what they carry: the bow whenever it has a
@@ -443,7 +501,7 @@ func _gun_slot(p) -> int:
 
 func _crowd(p) -> int:
 	var n := 0
-	for z in game.zombies.in_radius(p.position, CROWD_R):
+	for z in _dead_near(p.position, CROWD_R):
 		if game.zombies.active(z) and z["state"] != "downed":
 			n += 1
 	return n
@@ -453,6 +511,15 @@ func _crowd(p) -> int:
 ## blade goes in front, the third at the chief's side. With fewer left the
 ## ones there are take the front first.
 func _role(p) -> String:
+	if _live_on and _roles.has(p):
+		return _roles[p]
+	var r := _pick_role(p)
+	if _live_on:
+		_roles[p] = r
+	return r
+
+
+func _pick_role(p) -> String:
 	var mates: Array = []
 	for o in game.squad:
 		if o != game.player and o.is_alive() and not o.body.downed and o.command in ["follow", "cover"] and not o.brain.get("boarded", false):
@@ -524,6 +591,11 @@ func _keep_formation(p) -> void:
 		_:
 			spot = player.position + right * 1.4 - fwd * 1.0
 	spot = game.walkable_near(spot, false, 3)
+	# Never on the chief's own spot (a tight room pulls every spot onto him):
+	# then the old place behind him.
+	if spot.distance_to(player.position) < 0.9:
+		var off: Vector2 = FOLLOW_OFFSETS[clampi(game.squad.find(p) - 1, 0, 2)]
+		spot = game.walkable_near(player.position + right * off.x + fwd * off.y, false, 3)
 	var d: float = p.position.distance_to(spot)
 	var run: bool = player.running or d > 7.0 or (role == "point" and walking and d > 2.0)
 	if d > (0.8 if hold else 1.2):
