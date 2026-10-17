@@ -13,6 +13,8 @@ extends RefCounted
 const VERSION := 1
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
+## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
+const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
@@ -131,6 +133,31 @@ static func should_resume(save: Dictionary, applied = {}) -> bool:
 	if applied is Dictionary:
 		return not (applied as Dictionary).has(id)
 	return not (applied as Array).has(id)
+
+
+## Where the app starts (S3 spec 4, user decision 296): the field save and the
+## train save are read, and a stop still being played whose return the train has
+## not taken in comes back. Returns the start options for it, or {} to start fresh.
+static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH) -> Dictionary:
+	var save := read(field_path)
+	if not should_resume(save, train_applied(train_path)):
+		return {}
+	var opts := resume_opts(save)
+	opts["field_save_path"] = field_path
+	return opts
+
+
+## The receipt ids the train save has taken in (its fieldReturns.applied), {} when none.
+static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
+	if not FileAccess.file_exists(train_path):
+		return {}
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(train_path)) != OK or not json.data is Dictionary:
+		return {}
+	var returns = (json.data as Dictionary).get("fieldReturns")
+	if not returns is Dictionary or not returns.get("applied") is Dictionary:
+		return {}
+	return returns["applied"]
 
 
 ## The options that build the same stop again and then put the save on it.
