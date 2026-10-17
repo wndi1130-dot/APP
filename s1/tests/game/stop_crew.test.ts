@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  CREW, CREW_COST, CREW_LINE, createGame, crewAwayOf, crewBand, crewEnoughCount, crewGainOf, crewHaulMult, crewLineText, crewMult, crewNames, crewPreview, crewWhyText,
+  CHORE_COMMS, CREW, CREW_COST, CREW_LINE, createGame, crewAwayOf, crewBand, crewEnoughCount, crewGainOf, crewHaulMult, crewLineText, crewMult, crewNames, crewPreview, crewWhyText,
   P, PLACES, resolveStop, riskLevel, riskView, sendScouts, setStop, situation, STAY, stopRisk,
 } from '../../src/game';
-import type { CrewCost, CrewCurve, CrewHaul, Game, StayId } from '../../src/game';
+import type { Comm, CrewCost, CrewCurve, CrewHaul, Game, StayId } from '../../src/game';
 
 // 정차 작업조 인원과 위험(결정 341, 구현 명세 6장 1~10). 곡선 A·B는 가안이라 둘 다 본다.
 // 시험 안에서 CREW.curve·CREW.cost·CREW.haul을 바꾸면 끝날 때 기본값으로 되돌린다.
@@ -14,7 +14,7 @@ afterEach(() => { CREW.curve = 'A'; CREW.cost = COST0; CREW.haul = HAUL0; });
 const STAY_RISK: Record<StayId, number> = { short: 0.6, normal: 1, long: 1.5 };
 const place = (id: string) => PLACES.find(p => p.id === id)!;
 
-interface Opt { place?: string; stay?: StayId; size?: number; threat?: number; scout?: boolean; thrown?: number; refuse?: boolean; escort?: boolean }
+interface Opt { place?: string; stay?: StayId; size?: number; threat?: number; scout?: boolean; thrown?: number; refuse?: boolean; escort?: boolean; comm?: Comm }
 function mk(seed: string, o: Opt = {}): Game {
   const g = createGame(seed);
   g.thrown = o.thrown ?? 0;
@@ -22,7 +22,7 @@ function mk(seed: string, o: Opt = {}): Game {
   if (o.escort) g.guardEscort = true;
   g.phase = 'stop';
   g.stop = {
-    place: o.place ?? 'freight', target: 'food', stay: o.stay ?? 'normal', crewComm: 'tail', crewSize: o.size ?? 4,
+    place: o.place ?? 'freight', target: 'food', stay: o.stay ?? 'normal', crewComm: o.comm ?? 'tail', crewSize: o.size ?? 4,
     scout: o.scout ?? true, threat: o.threat ?? 1, done: false, result: null,
   };
   return g;
@@ -109,8 +109,11 @@ describe('stop_crew', () => {
     }
   });
 
-  it('3 existing_crew_never_worse: 4명에서 8명으로 늘려도 기존 4명은 새로 죽거나 다치지 않는다', () => {
+  it('3 existing_crew_never_worse: 4명에서 8명으로 늘려도 한 명당 위험은 오르지 않고, 생존 보정이 안 걸린 판에서는 기존 4명이 새로 죽거나 다치지 않는다', () => {
+    // 「한 명은 반드시 살아 돌아온다」(stopRisk의 slice)는 인원이 늘면 상한도 함께 는다. 그래서 4명 판에서 셋이 죽어 넷째가
+    // 보호된 판은 8명 판과 마지막 생존이 다를 수 있다(시험 3b). 그런 판은 사람별 비교에서 빼고, 위험 배수 비교는 모든 판에서 한다.
     let compared = 0;
+    let capped = 0;
     for (const curve of ['A', 'B'] as const) {
       CREW.curve = curve;
       for (let k = 0; k < 60; k += 1) for (const id of ['freight', 'houses', 'factory']) for (const stay of ['short', 'normal', 'long'] as const) {
@@ -120,16 +123,48 @@ describe('stop_crew', () => {
         const b = mk(seed, { ...opt, size: 8 });
         const first4 = crewNames(a, 'tail', 4);
         expect(crewNames(b, 'tail', 8).slice(0, first4.length)).toEqual(first4); // 명단 앞 4명이 같아야 비교가 된다
-        const fa = stopRisk(a).fate;
-        const fb = stopRisk(b).fate;
+        const ra = stopRisk(a);
+        const rb = stopRisk(b);
+        // 한 명당 죽을 확률(pDeath/4)과 크게 다칠 확률(lam/인원)은 인원을 늘려도 오르지 않는다.
+        const at = `${curve}/${seed}/${id}/${stay}`;
+        expect(crewMult(rb.ratio), at).toBeLessThanOrEqual(crewMult(ra.ratio));
+        expect(rb.pDeath, at).toBeLessThanOrEqual(ra.pDeath + 1e-12);
+        expect(rb.lam / 8, at).toBeLessThanOrEqual(ra.lam / 4 + 1e-12);
+        const fa = ra.fate;
+        const fb = rb.fate;
+        if (fa.dead.length === first4.length - 1) { capped += 1; continue; }
         for (const n of first4) {
-          if (fb.dead.includes(n)) expect(fa.dead, `${curve}/${seed}/${id}/${stay} 죽음 ${n}`).toContain(n);
-          if (fb.hurt.includes(n)) expect(harmed(a, [n]), `${curve}/${seed}/${id}/${stay} 부상 ${n}`).toEqual([n]);
+          if (fb.dead.includes(n)) expect(fa.dead, `${at} 죽음 ${n}`).toContain(n);
+          if (fb.hurt.includes(n)) expect(harmed(a, [n]), `${at} 부상 ${n}`).toEqual([n]);
         }
         compared += fa.dead.length + fa.hurt.length;
       }
     }
     expect(compared).toBeGreaterThan(0);
+    // 생존 보정이 걸린 판이 대부분이면 사람별 비교가 빈 시험이 된다.
+    expect(capped).toBeLessThan(compared);
+  });
+
+  it('3b 생존 보정 예외: 4명 판에서 보호된 넷째가 8명 판에서는 죽을 수 있다(지금 규칙, 검수 PR 395 보통 5)', () => {
+    // 위험 3·길게·기척 1.4·경계 거부·무리 상한이면 알맞은 인원이 21을 넘어 4명과 8명 모두 개인 배수 상한에 닿는다.
+    // 그래도 「한 명은 산다」의 상한이 4명은 3, 8명은 7이라, 앞 넷이 모두 죽음 후보면 넷째의 운명이 갈린다. 규칙을 그대로 적어 둔다.
+    const opt = { place: 'freight', stay: 'long' as const, threat: 1.4, thrown: 10, refuse: true };
+    let found = 0;
+    for (let k = 0; k < 300 && found === 0; k += 1) {
+      const a = mk(`survivor-cap-${k}`, { ...opt, size: 4 });
+      const b = mk(`survivor-cap-${k}`, { ...opt, size: 8 });
+      const ra = stopRisk(a);
+      const rb = stopRisk(b);
+      if (k === 0) {
+        expect(ra.need).toBeGreaterThan(21);
+        expect(crewMult(rb.ratio)).toBe(crewMult(ra.ratio)); // 둘 다 배수 상한
+      }
+      const first4 = crewNames(a, 'tail', 4);
+      if (ra.fate.dead.length !== 3) continue;
+      const saved = first4.find(n => !ra.fate.dead.includes(n))!;
+      if (rb.fate.dead.includes(saved)) found += 1;
+    }
+    expect(found, '300개 시드 안에서 반례를 찾지 못했다').toBeGreaterThan(0);
   });
 
   it('4 total_loss_falls_to_enough: 보통 체류에서 모자람→충분으로 가며 기대 중상이 줄어든다', () => {
@@ -205,6 +240,39 @@ describe('stop_crew', () => {
       expect([after.lam, after.pDeath, after.need, after.ratio, after.band]).toEqual([before.lam, before.pDeath, before.need, before.ratio, before.band]);
     }
     expect(checked).toBeGreaterThan(10);
+  });
+
+  it('5c 정찰을 보내면 남은 사람 가운데서 작업조를 다시 고른다(지금 규칙, 검수 PR 395 보통 3)', () => {
+    // 위 두 시험은 위험 식 값만 본다. 실제로 나가는 명단은 정찰조를 뺀 줄어든 명단에서 회전 시작점((구간×7) % 남은 수)을
+    // 다시 잡으므로, 회전이 명단 끝을 감아 도는 구간에서는 정찰조가 무사히 돌아와도 작업조가 바뀐다. 그 규칙을 그대로 적어 둔다.
+    let changed = 0;
+    for (let seg = 1; seg <= 40; seg += 1) {
+      const g = mk(`scout-names-${seg}`, { place: 'houses', size: 4, threat: 0.8, scout: false });
+      delete g.stop!.scout;
+      g.seg = seg;
+      // 정찰 전 후보 순서: 회전 시작점부터 다 뽑은 뒤 시작점만큼 되돌리면 원래 순서가 된다.
+      const rotated = crewNames(g, 'tail', 999);
+      const n = rotated.length;
+      expect(n).toBeGreaterThan(6);
+      const s0 = (seg * 7) % n;
+      const base = rotated.map((_, i) => rotated[(i - s0 + n) % n]);
+      const before = crewNames(g, 'tail', 4);
+      expect(before).toEqual(Array.from({ length: 4 }, (_, i) => base[(s0 + i) % n]));
+      const rep = sendScouts(g)!;
+      // 고요한 기척(0.8)이면 정찰조는 다치지 않는다: 명단이 바뀌는 까닭이 피해가 아니라 회전임을 분명히 한다.
+      expect(rep.dead).toEqual([]);
+      expect(rep.hurt).toEqual([]);
+      // 정찰조는 작업조 바로 뒤 두 사람이다.
+      expect(rep.names).toEqual([base[(s0 + 4) % n], base[(s0 + 5) % n]]);
+      const after = crewNames(g, 'tail', 4);
+      for (const s of rep.names) expect(after, `구간 ${seg}: 정찰조는 작업조에 다시 들지 않는다`).not.toContain(s);
+      const left = base.filter(p => !rep.names.includes(p));
+      const s1 = (seg * 7) % left.length;
+      expect(after, `구간 ${seg}`).toEqual(Array.from({ length: 4 }, (_, i) => left[(s1 + i) % left.length]));
+      if (after.join() !== before.join()) changed += 1;
+    }
+    // 바뀌는 구간이 실제로 있어야 이 시험이 규칙을 붙잡는다.
+    expect(changed).toBeGreaterThan(0);
   });
 
   it('6 one_survivor: 인원 2, 위험3·길게·경계 거부·기척 1.4에서도 죽은 사람은 한 명 이하다', () => {
@@ -403,41 +471,59 @@ describe('stop_crew', () => {
     CREW.cost = 'off'; // 옛 대가 식에서 곡선만 바꿔 본다(결정 359의 새 대가는 시험 11)
     let rises = 0;
     let clean = 0;
+    const relChecked: Partial<Record<Comm, number>> = {};
+    // 꼬리칸만 보면 궂은일 관계 깎임(의무·기술진, 앞칸)을 한 번도 지나지 않는다. 세 칸을 돌려 가며 낸다.
+    const comms: Comm[] = ['tail', ...CHORE_COMMS];
     for (let k = 0; k < 30; k += 1) {
-      const ref: { preview: unknown; gains: unknown; rise: number | null }[] = [];
+      const comm = comms[k % comms.length];
+      const ref: { preview: unknown; gains: unknown; rise: number | null; rel: number | null }[] = [];
       for (const curve of ['off', 'A', 'B'] as CrewCurve[]) {
         CREW.curve = curve;
         // 사람이 죽지 않는 설정(짧게·호위·고요한 기척)에서 비교한다. 곡선이 달라도 노출·관계·산출·빠진 사람 수가 같아야 한다.
-        const g = mk(`cost-${k}`, { place: 'houses', stay: 'short', size: 2 + (k % 7), threat: 0.8, escort: true, scout: false });
+        const g = mk(`cost-${k}`, { place: 'houses', stay: 'short', size: 2 + (k % 7), threat: 0.8, escort: true, scout: false, comm });
         const size = g.stop!.crewSize;
-        const preview = crewPreview(g, 'tail');
+        const preview = crewPreview(g, comm);
         expect(preview.to - preview.from).toBeLessThanOrEqual(P.crewGain);
-        const exposeBefore = situation(g, 'tail')[3];
-        const awayBefore = g.comms.tail.away;
-        const names = crewNames(g, 'tail', size);
+        const exposeBefore = situation(g, comm)[3];
+        const awayBefore = g.comms[comm].away;
+        const relBefore = g.comms[comm].rel;
+        const names = crewNames(g, comm, size);
         const r = resolveStop(g, true)!;
         // 표결 빠짐: 살아 돌아온 작업조만큼 away가 는다(곡선이 사람을 더 죽이든 덜 죽이든 이 식은 같다)
-        expect(g.comms.tail.away - awayBefore, `${curve} away`).toBe(names.length - r.dead.length);
-        const rise = situation(g, 'tail')[3] - exposeBefore;
+        expect(g.comms[comm].away - awayBefore, `${curve} away`).toBe(names.length - r.dead.length);
+        const rise = situation(g, comm)[3] - exposeBefore;
         rises += rise;
-        ref.push({ preview, gains: r.gains, rise: r.dead.length === 0 ? rise : null });
+        // 관계는 죽음뿐 아니라 부상으로도 따로 움직이니, 아무도 안 죽고 안 다친 판에서만 맞춘다.
+        const unharmed = r.dead.length === 0 && r.injured.length === 0;
+        const rel = unharmed ? g.comms[comm].rel - relBefore : null;
+        if (rel !== null && CHORE_COMMS.includes(comm)) {
+          // 궂은일 칸은 실제로 관계가 깎였어야 한다(깎임이 빠지면 같은 값끼리 비교해 통과해 버린다).
+          expect(rel, `${comm}/${curve} 궂은일 관계 #${k}`).toBe(preview.rel);
+          expect(rel).toBeLessThan(0);
+          relChecked[comm] = (relChecked[comm] ?? 0) + 1;
+        }
+        ref.push({ preview, gains: r.gains, rise: r.dead.length === 0 ? rise : null, rel });
         if (r.dead.length === 0) clean += 1;
       }
-      // 곡선이 달라도 미리보기와 산출은 같다. 노출 상승은 아무도 안 죽은 판에서만 맞춘다(죽음은 관계·노출을 따로 바꾼다).
+      // 곡선이 달라도 미리보기와 산출은 같다. 노출 상승은 아무도 안 죽은 판에서만, 관계는 아무도 안 다친 판에서만 맞춘다.
       for (const i of [1, 2]) {
         expect(ref[i].preview, `curve ${i} preview #${k}`).toEqual(ref[0].preview);
         expect(ref[i].gains, `curve ${i} gains #${k}`).toEqual(ref[0].gains);
         if (ref[i].rise !== null && ref[0].rise !== null) expect(ref[i].rise, `curve ${i} rise #${k}`).toBe(ref[0].rise);
+        if (ref[i].rel !== null && ref[0].rel !== null) expect(ref[i].rel, `curve ${i} rel #${k}`).toBe(ref[0].rel);
       }
     }
     expect(clean).toBeGreaterThan(10);
     expect(rises).toBeGreaterThan(0);
-    // 산출 계수는 알맞은 인원까지 인원이 키운다(결정 375): 알맞은 인원이 8을 넘는 곳(화물역·길게·불길, 9.45)에서 인원만 바꿔 비교한다
-    const haul = (size: number) => {
-      const g = mk('cost-haul', { place: 'freight', stay: 'long', size, threat: 1.4, escort: true, scout: false });
-      return Object.values(resolveStop(g, true)!.gains).reduce((x, y) => x + (y ?? 0), 0);
-    };
-    expect(haul(8)).toBeGreaterThan(haul(2));
+    for (const c of CHORE_COMMS) expect(relChecked[c] ?? 0, `${c} 관계를 실제로 맞춰 본 판`).toBeGreaterThan(0);
+    // 산출 계수는 알맞은 인원까지 인원이 키운다(결정 375): 알맞은 인원이 8을 넘는 곳(화물역·길게·불길, 9.45)에서 인원만 바꿔 비교한다.
+    // 호위를 붙이면 알맞은 인원이 반(4.725)이 되어 8명 전에 포화하므로 호위 없이 잰다.
+    const haulGame = (size: number) => mk('cost-haul', { place: 'freight', stay: 'long', size, threat: 1.4, scout: false });
+    expect(stopRisk(haulGame(8)).need).toBeGreaterThan(8);
+    const haul = (size: number) => Object.values(resolveStop(haulGame(size), true)!.gains).reduce((x, y) => x + (y ?? 0), 0);
+    // 알맞은 인원 아래에서는 인원을 늘릴수록 산출이 는다(2 → 4 → 8).
+    expect(haul(4)).toBeGreaterThan(haul(2));
+    expect(haul(8)).toBeGreaterThan(haul(4));
     expect(P.crewGain).toBe(5);
     expect(P.haulTotal).toBeGreaterThan(0);
   });

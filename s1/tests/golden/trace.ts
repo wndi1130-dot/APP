@@ -39,8 +39,8 @@ export function snap(g: Game): (number | string)[] {
   ];
 }
 
-/** 한 걸음. 판이 끝났으면 false. */
-export function stepOnce(g: Game, r: Run, n: number): boolean {
+/** 한 걸음. 판이 끝났으면 false. done은 이 판에서 내정 행동을 한 구간 번호를 기억한다(구간마다 한 번만). */
+export function stepOnce(g: Game, r: Run, n: number, done: Set<number> = new Set()): boolean {
   if (g.phase === 'end') return false;
   for (const card of r.pick === 'first' ? g.cards : [...g.cards].reverse()) {
     const choices = viewCard(g, card).choices;
@@ -58,7 +58,9 @@ export function stepOnce(g: Game, r: Run, n: number): boolean {
   if (r.busy && g.phase === 'prep') {
     const c = COMMS[(g.seg + n) % COMMS.length];
     if (g.seg % 3 === 0) supportComm(g, c); else if (g.seg % 3 === 1) cutComm(g, c);
-    if (g.dom) domestic(g, r);
+    // 같은 구간에서 내정을 다시 하지 않는다. 걸음마다 다시 하면 서류 청하기 → 「그만둔다」 → 다시 청하기를 되풀이하며
+    // 출발이 막혀 판이 한 구간에 갇힌다(cx gold-8이 1구간 준비 단계에서 상한을 다 쓴 까닭).
+    if (g.dom && !done.has(g.seg)) { done.add(g.seg); domestic(g, r); }
   }
   advance(g);
   return true;
@@ -79,16 +81,35 @@ function domestic(g: Game, r: Run): void {
   if (seg === 14) setDelegate(g, false);
 }
 
-export function trace(r: Run): (number | string)[][] {
+export const STEP_CAP = 4000;
+
+export interface TraceRun {
+  rows: (number | string)[][];
+  /** 판이 end에 닿았나. 상한을 다 쓰고도 안 끝났으면 false. */
+  ended: boolean;
+  /** 마지막 구간. */
+  seg: number;
+  /** 판 중에 재난이 실제로 발동(active)한 것을 본 적이 있나. 예고 횟수(disasterStats)는 발동했다는 뜻이 아니다. */
+  sawActive: boolean;
+}
+
+export function runTrace(r: Run): TraceRun {
   const g = start(r);
   const rows = [snap(g)];
+  const done = new Set<number>();
   let seg = g.seg;
   let phase = g.phase;
-  for (let n = 0; n < 4000 && stepOnce(g, r, n); n += 1) {
+  let sawActive = false;
+  for (let n = 0; n < STEP_CAP && stepOnce(g, r, n, done); n += 1) {
+    if (g.disaster?.stage === 'active') sawActive = true;
     if (g.seg !== seg || g.phase !== phase) { rows.push(snap(g)); seg = g.seg; phase = g.phase; }
   }
   rows.push(snap(g));
-  return rows;
+  return { rows, ended: g.phase === 'end', seg: g.seg, sawActive };
+}
+
+export function trace(r: Run): (number | string)[][] {
+  return runTrace(r).rows;
 }
 
 export const runKey = (r: Run): string => `${r.kind}:${r.seed}:${r.pick}:${r.busy ? 'busy' : 'calm'}`;
