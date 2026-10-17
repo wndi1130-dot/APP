@@ -31,7 +31,7 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 	while true:
 		seen.append(f.current())
 		phases.append(f.train.phase() if f.train != null else "")
-		assert_true(f.panel.visible, f.current() + " has its panel")
+		assert_true(f.panel.visible or f.card != null, f.current() + " has its panel or its screen")
 		if f.current() == "end":
 			break
 		f.next()
@@ -81,3 +81,19 @@ func test_the_boot_menu_has_the_slice_key() -> void:
 	var boot = Boot.new()
 	add_child_autofree(boot)
 	assert_not_null(boot.find_child("SliceButton", true, false))
+
+
+func test_choosing_the_stop_is_the_paper_card_and_its_keys_go_on() -> void:
+	var f = _flow()
+	f.next()
+	assert_eq(f.current(), "stop_pick")
+	assert_not_null(f.card, "the stop card stands in for the panel")
+	assert_false(f.panel.visible)
+	assert_eq((f.card.find_child("Place", true, false) as Label).text, "술레후프")
+	(f.card.find_child("Send", true, false) as Button).pressed.emit()
+	assert_eq(f.current(), "receipt", "sent: the field (skipped here), then its receipt")
+	assert_null(f.card, "gone with its step")
+	var g = _flow()
+	g.next()
+	(g.card.find_child("PassBy", true, false) as Button).pressed.emit()
+	assert_eq(g.current(), "travel", "passed by: on to the next stretch")
