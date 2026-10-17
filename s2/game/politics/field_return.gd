@@ -6,7 +6,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Rng = preload("res://game/politics/rng.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
-const TRAIN_STATE_PATH := "res://game/train/train_state.gd"
+const TrainState = preload("res://game/train/train_state.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
 const SYMBOL_USES := ["hang_before_session", "hang_in_car"]
@@ -85,28 +85,8 @@ static func _law_active(g: Dictionary, law: String) -> bool:
 	return (g.get("passed", {}) as Dictionary).has(law)
 
 
-static func _situation_fallback(g: Dictionary, t: Dictionary, comm: String) -> Array:
-	var state: Dictionary = g["comms"][comm]
-	var p: Dictionary = t["P"]
-	var base: Array = state["base"]
-	var room := 0.0
-	var space: Variant = g.get("space")
-	if space is Dictionary and space.get("giver") != null and float(space.get("step", 0)) > 0.0:
-		var side := -1.0 if comm == "tail" else (1.0 if comm == space["giver"] else 0.0)
-		room = side * float(p["spaceStep"]) * float(space["step"])
-	return [
-		_clamp(float(base[0]) + float(p["leverStep"]) * (float(state["heat"]) - 2.0), 0.0, 100.0),
-		_clamp(float(base[1]) + float(p["leverStep"]) * (float(state["ration"]) - 2.0), 0.0, 100.0),
-		_clamp(float(base[2]) + room, 0.0, 100.0),
-		_clamp(float(base[3]), 0.0, 100.0),
-	]
-
-
 static func _situation(g: Dictionary, t: Dictionary, comm: String) -> Array:
-	if ResourceLoader.exists(TRAIN_STATE_PATH):
-		var train_state: Variant = load(TRAIN_STATE_PATH)
-		return train_state.call("situation", g, t, comm)
-	return _situation_fallback(g, t, comm)
+	return TrainState.situation(g, t, comm)
 
 
 static func snapshot(g: Dictionary, t: Dictionary) -> Dictionary:
