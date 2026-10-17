@@ -109,6 +109,9 @@ export const D = {
   liceFromSeg: 4,
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)
   delegatePop: 5, delegateAfter: 6, delegateOff: 15, delegateOn: 20,
+  // 정찰 장비(결정 360·371·373, fun 구현명세_정찰_연구_v2 2장, 모두 가안): 망원경 정찰조 위험 ×(1 − glassRisk·m)와 만들 때 부품 glassParts,
+  // 수신호 정찰조 signalSize명·위험 ×signalRisk, 핸드카 정찰 산출 깎임 덜기 페달 +pedalHaul·m / 발동기 +motorHaul·m, 미끼 한 번에 부품 lureParts
+  glassRisk: 0.6, glassParts: 2, signalSize: 1, signalRisk: 2, pedalHaul: 0.1, motorHaul: 0.2, lureParts: 1,
 };
 
 // ---- 장소 부산물(5.2) ----
@@ -122,10 +125,10 @@ export const BYPRODUCT: Record<string, Byproduct> = {
   office: { scrap: 1, wood: 3, frag: 0.4, branches: ['radio'], core: 0 },
 };
 
-// ---- 기술 19개(7.3) ----
+// ---- 기술 21개(7.3, 정찰 장비 r4·w4는 결정 371) ----
 export type TechId =
   | 'e1' | 'e2' | 'e3' | 'e4' | 'e5' | 'm1' | 'm2' | 'm3' | 'm4' | 'm5'
-  | 'w1' | 'w2' | 'w3' | 'r1' | 'r2' | 'r3' | 'x1' | 'x2' | 'x3';
+  | 'w1' | 'w2' | 'w3' | 'w4' | 'r1' | 'r2' | 'r3' | 'r4' | 'x1' | 'x2' | 'x3';
 export type Variant = 'a' | 'b';
 export interface Upkeep { parts?: number; coal?: number; wood?: number; scrap?: number }
 export interface VariantDef {
@@ -189,6 +192,8 @@ export const TECHS: Record<TechId, TechDef> = {
     },
   }),
   w3: T({ id: 'w3', branch: 'craft', tier: 3, name: '장갑 객차', effect: '장갑 개조가 열린다(칸마다 고철 12). 경비대칸이면 노출 −10', upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['tail'] }),
+  // 정찰 장비(결정 371): 정찰조가 돌아온 정차에서 태엽 깡통을 반대편에 걸어 망자를 끈다. 걸 때마다 부품이 든다.
+  w4: T({ id: 'w4', branch: 'craft', tier: 0, name: '태엽 소리 미끼', effect: '정찰 뒤 미끼를 걸면 바깥 기척이 한 단계 내려간다(한 번에 부품 1)', like: ['tail'], adapt: { parts: 1, wood: 2 } }),
   r1: T({ id: 'r1', branch: 'radio', tier: 1, name: '단거리 무전', effect: '정차 사망 ×0.85', like: ['guard'] }),
   r2: T({
     id: 'r2', branch: 'radio', tier: 2, name: '무전의 쓰임', effect: '변형 둘 중 하나', upkeep: { parts: 0.25 },
@@ -198,8 +203,23 @@ export const TECHS: Record<TechId, TechDef> = {
     },
   }),
   r3: T({ id: 'r3', branch: 'radio', tier: 3, name: '장거리 무전', effect: '다음 정차를 미리 알고, 판에 세 번 다른 곳으로 바꾼다', upkeep: { parts: 0.5 }, like: ['medtech'] }),
+  // 정찰 장비(결정 371·373): 망원경은 정찰조를 덜 다치게, 수신호는 정찰조를 덜 뺀다. 망원경은 만들 때 부품 2가 더 들고 흐린 날엔 멀리 안 보인다.
+  r4: T({
+    id: 'r4', branch: 'radio', tier: 1, name: '선로 관측', effect: '변형 둘 중 하나',
+    variants: {
+      a: { name: '기관사 망원경', effect: '정찰조 다침·못 돌아옴 ×0.4. 안개·눈보라·진눈깨비엔 효과 없음. 만들 때 부품 2 더', upkeep: {}, like: ['guard'], dislike: [], label: '망원경을 닦는다', say: '둑 위에서 멀리 본다. 안 들어가도 보인다!' },
+      b: { name: '철도 수신호', effect: '정찰조 2명 → 1명(표결 빠짐 한 명). 혼자라 정찰조 위험 ×2', upkeep: {}, like: ['tail'], dislike: [], label: '수신호를 맞춘다', say: '한 명만 들어가라. 나머지는 깃발만 본다!' },
+    },
+  }),
   x1: T({ id: 'x1', branch: 'expedition', tier: 1, name: '짐 꾸리기·방한 장비', effect: "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다)", like: ['tail'] }),
-  x2: T({ id: 'x2', branch: 'expedition', tier: 2, name: '핸드카 정찰', effect: '정차마다 장소 후보가 둘', upkeep: { parts: 0.25 }, like: ['guard'] }),
+  // 변형(결정 371): 페달은 조용히 조금, 발동기는 시끄럽게 많이 정찰 산출 깎임을 덜어 준다. 변형이 없는 옛 저장은 페달로 읽는다(scout_gear.ts).
+  x2: T({
+    id: 'x2', branch: 'expedition', tier: 2, name: '핸드카 정찰', effect: '정차마다 장소 후보가 둘', upkeep: { parts: 0.25 }, like: ['guard'],
+    variants: {
+      a: { name: '페달 핸드카', effect: '정찰 산출 깎임 −20% → −10%. 고요한 곳에선 덜컹이는 소리에 기척 +1', upkeep: { parts: 0.25 }, like: ['tail'], dislike: [], label: '페달을 단다', say: '발로 밟아 조용히 다녀온다!' },
+      b: { name: '발동기 핸드카', effect: '정찰조 위험 없음, 정찰 산출 깎임 없음. 발동기 소리에 늘 기척 +1', upkeep: { parts: 0.25 }, like: ['guard'], dislike: ['engine'], label: '발동기를 얹는다', say: '들어갔다 바로 빠진다. 소리는 감수한다!' },
+    },
+  }),
   x3: T({ id: 'x3', branch: 'expedition', tier: 3, name: '궤도 모터카', effect: '지나쳐도 짧게의 절반을 얻는다(석탄 1)', upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['engine'] }),
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];

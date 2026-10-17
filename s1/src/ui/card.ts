@@ -1,5 +1,5 @@
 import {
-  COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, isStopPromise, promiseWhen, researchPromise, stopCrew, politicsLines, riskView, stopScene, techTitle, viewCard,
+  scoutPlan, COMMS, COMM_NAME, COMM_SHORT, CREW_COMMS, FETCH_WANT, LOOT_KEYS, LOOT_NAME, P, PLACES, SCOUT_DEEP, STAY, costLines, crewNames, crewPreview, isStopPromise, promiseWhen, researchPromise, stopCrew, politicsLines, riskView, stopScene, techTitle, viewCard,
 } from '../game';
 import type { Comm, Game, LootKey, StayId } from '../game';
 import { cx, h } from './dom';
@@ -98,6 +98,8 @@ function stopCard(view: View): HTMLElement | null {
         // 인원이 충분한지(결정 341). 정찰로 기척을 알 때만 뜬다.
         risk.crew ? h('p', { class: cx('danger__crew', `is-${risk.crew.band}`) }, risk.crew.text) : null,
         risk.omen ? h('p', { class: 'danger__omen' }, risk.omen, ' ', h('b', { class: cx('danger__verdict', risk.level && `is-${risk.level}`) }, risk.verdict)) : null,
+        // 정찰 장비 소리·미끼로 기척이 옮겨 간 뒤의 「지금」 줄(결정 371). 정찰조가 본 조짐은 위에 그대로 둔다.
+        risk.now ? h('p', { class: 'danger__now' }, risk.now) : null,
         risk.unknown ? h('p', { class: 'danger__calm' }, risk.unknown) : null,
         risk.why.length ? h('p', { class: 'danger__why' }, risk.why.join(' · ')) : null),
       // 정찰은 먼저 보내는 일이다(2026-10-07 사용자). 정찰조도 다치거나 못 돌아올 수 있고, 돌아오면 바깥 기척을 보고한다.
@@ -124,8 +126,9 @@ function crewCost(view: View): HTMLElement {
 function scoutSend(view: View): HTMLElement | null {
   const stop = view.g.stop!;
   if (stop.scoutReport) return null;
+  const plan = scoutPlan(view.g, stop);
   return h('button', { class: 'btn btn--ghost scout__send', 'data-action': 'stop-set', 'data-key': 'scout', 'data-value': '1',
-    title: `${COMM_NAME[stop.crewComm].slice(0, 2)} ${P.scoutSize}명이 먼저 들어간다. 다치거나 못 돌아올 수 있고, 작업조 산출이 ${Math.round((1 - P.scoutHaul) * 100)}% 준다.` },
+    title: `${COMM_NAME[stop.crewComm].slice(0, 2)} ${plan.size}명이 먼저 들어간다. 다치거나 못 돌아올 수 있고${plan.haul < 1 ? `, 작업조 산출이 ${Math.round((1 - plan.haul) * 100)}% 준다` : ''}.` },
   icon('eye'), '정찰 먼저');
 }
 
@@ -135,7 +138,8 @@ function scoutReport(view: View): HTMLElement {
   const stop = g.stop!;
   const rep = stop.scoutReport;
   if (!rep) {
-    return h('p', { class: 'scout-cost' }, `정찰: ${COMM_NAME[stop.crewComm].slice(0, 2)} ${P.scoutSize}명 · 다치거나 못 돌아올 수 있다 · 산출 −${Math.round((1 - P.scoutHaul) * 100)}%`);
+    const plan = scoutPlan(g, stop);
+    return h('p', { class: 'scout-cost' }, `정찰: ${COMM_NAME[stop.crewComm].slice(0, 2)} ${plan.size}명 · ${plan.risk > 0 ? '다치거나 못 돌아올 수 있다' : '정찰조는 안 다친다'}${plan.haul < 1 ? ` · 산출 −${Math.round((1 - plan.haul) * 100)}%` : ''}`);
   }
   const back = rep.names.filter(n => !rep.dead.includes(n));
   return h('p', { class: cx('scout-report', (rep.dead.length > 0 || rep.hurt.length > 0) && 'is-hurt'), 'data-anim': `scout-${g.seg}` },

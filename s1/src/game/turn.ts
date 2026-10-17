@@ -35,6 +35,7 @@ import { insulatedShare, lawTechRes } from './domestic/lawtech';
 import { techMult } from './domestic/state';
 import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
 import { heatAllocSettle } from './domestic/heat_alloc';
+import { applyScoutGear, effThreat, scoutHaulNow, scoutNowText, scoutPlan, threatStep } from './domestic/scout_gear';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { voiceKept } from './promise_voice';
@@ -429,14 +430,16 @@ export function sendScouts(g: Game): StopState['scoutReport'] | null {
   if (!stop || stop.done || stop.scoutReport) return null;
   const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
   const c = stop.crewComm;
-  const names = crewNames(g, c, stop.crewSize + P.scoutSize).slice(stop.crewSize);
-  const pool = names.length ? names : crewNames(g, c, P.scoutSize);
+  // 정찰 장비(결정 371·373): 수신호면 한 명, 망원경·발동기면 정찰조 위험이 준다. 장비가 없으면 2명·곱 1이라 지금과 같다.
+  const plan = scoutPlan(g, stop);
+  const names = crewNames(g, c, stop.crewSize + plan.size).slice(stop.crewSize);
+  const pool = names.length ? names : crewNames(g, c, plan.size);
   const guard = g.comms.guard;
   const danger = place.risk * (stop.threat ?? 1) * Math.min(1.5, 1 + P.thrownHorde * g.thrown) * (guard.fervor >= 1 && guard.rel <= -40 ? 1.5 : 1);
   // 바깥이 실제로 고요하면(기척 0.8) 정찰조도 다치지 않는다. 다쳐 돌아온 정찰조 옆에 '괜찮을 것 같다'가 뜨면 정찰한 곳의 정직이 깨진다(파밍 스레드 17:11, 제안).
   const calm = (stop.threat ?? 1) <= 0.8;
-  const qd = calm ? 0 : P.scoutDeath * danger;
-  const qh = calm ? 0 : Math.min(0.5, P.scoutHurt * danger);
+  const qd = calm ? 0 : P.scoutDeath * danger * plan.risk;
+  const qh = calm ? 0 : Math.min(0.5, P.scoutHurt * danger * plan.risk);
   const dead = pool.filter(n => fateRoll(g, n, 'sd') < qd);
   const hurt = pool.filter(n => !dead.includes(n) && fateRoll(g, n, 'sh') < qh);
   stop.scoutReport = { comm: c, names: pool, hurt, dead };
@@ -446,6 +449,9 @@ export function sendScouts(g: Game): StopState['scoutReport'] | null {
   noteInjury(g, hurt.length, 'stop', '정찰', { names: hurt, comm: c });
   if (dead.length > 0) onDeath(g, c, dead, 'other');
   journal(g, `${place.name}에 정찰조(${pool.join(', ')})를 먼저 보냈다.${stop.scout ? ' 돌아왔다.' : ' 아무도 돌아오지 않았다.'}${hurt.length ? ` ${hurt.join(', ')}이(가) 크게 다쳤다.` : ''}${dead.length && stop.scout ? ` ${dead.join(', ')}은(는) 돌아오지 못했다.` : ''}`, dead.length || hurt.length ? 'bad' : undefined);
+  applyScoutGear(g, stop, plan);
+  const now = scoutNowText(stop);
+  if (now) journal(g, now);
   return stop.scoutReport;
 }
 
@@ -465,6 +471,8 @@ export interface StopRisk {
   fresh: boolean;
   /** 태울 시신이 있어 장작불이 무리를 끈다 */
   pyre: boolean;
+  /** 정찰 장비 소리가 기척을 한 단계 이상 올렸다(결정 371) */
+  noisy: boolean;
   /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고, 결과는 정찰했을 때와 같다. */
   known: boolean;
   /** 알맞은 인원(결정 341). 화면에는 정찰 뒤에만 쓴다 */
@@ -520,12 +528,14 @@ export function stopRisk(g: Game): StopRisk {
   const horde = Math.min(1.5, 1 + P.thrownHorde * g.thrown);
   const escort = g.guardEscort ? 0.5 : 1;
   // 장작불의 불빛과 연기가 무리를 끈다(s1c_domestic 4.1). 태울 시신이 있으면 내리는 정차에 붙는다.
-  const threat = (stop?.threat ?? 1) * (pyreCount(g) > 0 ? P.pyreLight : 1);
+  // 정찰 장비 소리가 옮긴 기척(effThreat). 소음이 없으면 stop.threat 그대로다.
+  const now = effThreat(stop);
+  const threat = now * (pyreCount(g) > 0 ? P.pyreLight : 1);
   const dm = domesticRiskMult(g); // S1c 내정 훅
   // 내보낸 칸이 지쳐 있을수록 다치고 죽기 쉽다(결정 060 가).
   const tired = stop ? exposeMult(g, stop.crewComm) : 1;
   // 인원이 알맞은 인원보다 많을수록 한 사람당 위험이 준다(결정 341). 부하에는 정찰 뒤 화면에 보이는 것만 넣는다.
-  const need = Math.max(P.crewNeedMin, P.crewNeed * place.risk * stay.risk * (stop?.threat ?? 1) * guardMult * horde * escort);
+  const need = Math.max(P.crewNeedMin, P.crewNeed * place.risk * stay.risk * now * guardMult * horde * escort);
   const ratio = crew / need;
   const m = crewMult(ratio);
   const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury * tired * m;
@@ -545,6 +555,7 @@ export function stopRisk(g: Game): StopRisk {
   return {
     lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
     guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout && !blizzardActive(g), pyre: pyreCount(g) > 0,
+    noisy: threatStep(now) > threatStep(stop?.threat ?? 1),
     need, ratio, band: crewBand(ratio),
   };
 }
@@ -563,6 +574,7 @@ export function riskWhy(r: StopRisk): string[] {
   if (r.guardRefused) why.push('경비대가 경계를 서지 않는다');
   if (r.horde) why.push('던진 시신에 무리가 몰려 있다');
   if (r.pyre) why.push('장작불 불빛이 무리를 끈다');
+  if (r.noisy) why.push('정찰 장비 소리가 망자를 끌었다');
   return why;
 }
 
@@ -647,7 +659,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(Math.max(1, stop.crewSize - crewShortNow(g)), risk.need) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(Math.max(1, stop.crewSize - crewShortNow(g)), risk.need) * lawMult(g, 'haulMult') * scoutHaulNow(stop) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
   crewShortSpent(g); // 죽음의 무게: 이번 정차가 작업조 증감을 썼다
   // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).

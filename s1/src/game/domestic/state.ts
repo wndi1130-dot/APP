@@ -4,7 +4,7 @@ import { addCard, createGame, drawPerson, isGone, lawActive, pick, situation } f
 import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
-import type { Field, TechId, Variant, Zone } from './data';
+import type { Field, TechDef, TechId, Variant, Zone } from './data';
 import type { PotState } from './pot';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.
@@ -401,6 +401,11 @@ export function techMult(g: Game, id: TechId): number {
   let m = st.stage === 'defective' ? D.defectMult : 1;
   if (st.starved) m = Math.min(m, D.defectMult);
   return m * knowledgeMult(g, def.branch, def.tier) * fieldMult(g, def.branch);
+}
+
+/** 이 판에서 그 기술의 변형 둘. 정찰 장비를 켜지 않은 판의 핸드카(x2)는 옛날처럼 갈래가 없다(결정 371). */
+export function techVariants(g: Game, id: TechId): TechDef['variants'] {
+  return id === 'x2' && !g.gearOn ? undefined : TECHS[id].variants;
 }
 
 export function variantOf(g: Game, id: TechId): Variant | undefined {

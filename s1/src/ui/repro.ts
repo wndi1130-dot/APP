@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, PHASE_NAME, viewCard, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   drain, migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, takeAltPlace, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
+  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, takeAltPlace, toggleGear, hangLure, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LedgerRow, LootKey, ModKind, StayId, Task, TechId, Variant, WhySys } from '../game';
 import type { PotMode } from '../game';
@@ -149,6 +149,9 @@ function runStep(g: Game, s: Step): string | null {
       else if (d.key === 'crewSize') setStop(g, { crewSize: Number(value) });
       else if (d.key === 'scout') setStop(g, { scout: value === '1' });
       else if (d.key === 'place' && value === 'alt') takeAltPlace(g);
+      // 정찰 장비(결정 371): 두고 가기·다시 가져가기, 정찰 뒤 미끼 걸기
+      else if (d.key === 'gear' && (value === 'glass' || value === 'signal' || value === 'cart')) toggleGear(g, value);
+      else if (d.key === 'lure') hangLure(g);
       return null;
     }
     case 'stop-go': sendStop(g, d.go === '1'); return null;

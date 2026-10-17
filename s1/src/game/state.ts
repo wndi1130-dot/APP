@@ -1,6 +1,7 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
 import type { DomState } from './domestic/state';
+import type { ScoutGearUsed } from './domestic/scout_gear';
 import type { EduState } from './domestic/classroom';
 import type { DarkState } from './dark/state';
 import type { DisasterKind, DisasterState } from './disaster';
@@ -172,6 +173,14 @@ export interface StopState {
   scout?: boolean;
   /** 먼저 보낸 정찰조(2026-10-07 사용자): 누가 갔고, 누가 다치고 누가 못 돌아왔나. 한 정차에 한 번 */
   scoutReport?: { comm: Comm; names: string[]; hurt: string[]; dead: string[] };
+  /** 정찰 장비가 옮긴 기척 단계(domestic/scout_gear.ts, 결정 371). threat는 그대로 두고 effThreat로 읽는다. 정차가 끝나면 사라진다 */
+  noise?: number;
+  /** 두고 간 정찰 장비(false면 두고 감). 없으면 가진 장비를 다 가져간다 */
+  gear?: { glass?: boolean; signal?: boolean; cart?: boolean };
+  /** 정찰을 보낼 때 쓴 장비와 그 값(산출 곱 haul은 정산에서 쓴다) */
+  scoutGear?: ScoutGearUsed;
+  /** 태엽 소리 미끼를 걸었다 */
+  lured?: boolean;
   /** 정차 날씨, 창밖 겉모습, 정찰조가 본 조짐과 그 기척 단계(omens.ts). 도착할 때 정해진다. */
   weather?: Weather;
   look?: string;
@@ -454,6 +463,8 @@ export interface Game {
   disasterDeaths?: number;
   /** 바깥 기온(climate.ts)이 켜진 판. 없으면 꺼진 판이고 아래 칸들도 없다 */
   climate?: boolean;
+  /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠 판. 켜지 않은 판에는 r4·w4가 없고 핸드카에 갈래가 없다 */
+  gearOn?: boolean;
   /** 적용된 기온 단계 0~4(출발 때만 계절표를 따라 바뀐다) */
   outside?: number;
   /** 남은 결빙 구간 */
