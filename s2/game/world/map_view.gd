@@ -7,6 +7,7 @@ extends Node3D
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
@@ -88,9 +89,7 @@ func setup(map_data: Dictionary) -> void:
 		window_nodes[c] = node
 		update_window(c)
 	for id in data["containers"]:
-		var node := _mesh_node(int(data["containers"][id].get("level", 0)))
-		container_nodes[id] = node
-		update_container(id)
+		add_container(id)
 	for id in data["spots"]:
 		var node := _mesh_node()
 		spot_nodes[id] = node
@@ -316,7 +315,9 @@ func update_window(c: Vector2i) -> void:
 
 ## A container that was not there when the map was drawn (a heap left by work).
 func add_container(id: String) -> void:
-	container_nodes[id] = _mesh_node(int(data["containers"][id].get("level", 0)))
+	var box_data: Dictionary = data["containers"][id]
+	container_nodes[id] = _mesh_node(int(box_data.get("level", 0)))
+	PropModels.attach(container_nodes[id], id, FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0))
 	update_container(id)
 
 
@@ -326,7 +327,10 @@ func update_container(id: String) -> void:
 	var st := _begin()
 	var at := FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
 	var color := Color(0.62, 0.5, 0.3) if not box_data["searched"] else Color(0.35, 0.32, 0.28)
-	if box_data["id"] == "bell":
+	if node.has_node("Prop"):
+		# The furniture stands in for the box; a floor mat keeps the searched colour.
+		box(st, Vector3(0.6, 0.02, 0.6), at + Vector3(0, 0.01, 0), color)
+	elif box_data["id"] == "bell":
 		color = Color(0.75, 0.62, 0.25) if box_data["items"].size() > 0 else Color(0.3, 0.3, 0.3)
 		box(st, Vector3(0.35, 0.45, 0.35), at + Vector3(0, 1.4, 0), color)
 	else:
