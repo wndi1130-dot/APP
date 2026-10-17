@@ -3,7 +3,7 @@ import { COMMS, COMM_NAME, CORPSE_LAWS } from './data';
 import { MOTIONS } from './motions';
 import type { MotionDef } from './motions';
 import { agendaOptions, agendaTitle, isLawAgenda, sameAgenda } from './politics';
-import { journal } from './state';
+import { COUNCIL_LINK, journal } from './state';
 import type { Agenda, Game, MotionAgenda } from './state';
 import { FIELD, snapshot } from './field_receipt';
 import type { FieldLine, FieldReturnRecord, SpecialCouncilRecord } from './field_receipt';
@@ -142,6 +142,8 @@ export function leaveSpecialCouncil(g: Game): boolean {
   g.phase = sp.back;
   return true;
 }
+
+COUNCIL_LINK.leaveSpecial = leaveSpecialCouncil;
 
 export type FieldStep = 'choose_symbol' | 'council' | 'done';
 

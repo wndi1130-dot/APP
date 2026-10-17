@@ -67,6 +67,8 @@ export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
 /** 정차 작업조에 못 나가는 사람의 이름(S1b 근신·경비 근무, K02 5). */
 export const CREW_BUSY: ((g: Game) => string[])[] = [];
 export const END_LINK: { finish: (g: Game, end: EndKind) => void } = { finish: (g, end) => { g.end = end; g.phase = 'end'; } };
+/** 특별 회기를 닫는 길(field_council.ts가 채운다). turn.ts가 field_council을 바로 부르면 import 순환이 생겨 이 자리로 잇는다. */
+export const COUNCIL_LINK: { leaveSpecial: (g: Game) => boolean } = { leaveSpecial: () => false };
 
 export interface Profile { id: string; name: string; name_lang?: string; gender: 'male' | 'female'; age: number; community: Comm; like: string; dislike: string; hometown: string }
 export const PROFILES = profilesJson as unknown as Profile[];
