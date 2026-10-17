@@ -2,7 +2,7 @@ name: S2 Android field graybox
 
 on:
   push:
-    branches: [main]
+    branches: [main, s2/perf-bodies-test]
     paths: [s2/**, .github/workflows/s2-android.yml]
   pull_request:
     paths: [s2/**, .github/workflows/s2-android.yml]

@@ -111,6 +111,15 @@ func _show_menu() -> void:
 	gallery.custom_minimum_size = Vector2(240, 64)
 	gallery.pressed.connect(func() -> void: get_tree().change_scene_to_file(GALLERY_SCENE))
 	go.add_child(gallery)
+	var motions := Button.new()
+	motions.text = "동작 보기 (시험)"
+	motions.custom_minimum_size = Vector2(240, 64)
+	motions.pressed.connect(func() -> void:
+		var sheet: Node = load("res://scripts/motion_sheet.gd").new()
+		get_tree().root.add_child(sheet)
+		get_tree().current_scene.queue_free()
+		get_tree().current_scene = sheet)
+	go.add_child(motions)
 	var train := Button.new()
 	train.name = "TrainButton"
 	train.text = "열차 안 보기"
