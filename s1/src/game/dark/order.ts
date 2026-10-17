@@ -222,7 +222,7 @@ export function afterOrder(g: Game, caseId: number | undefined, how: 'cover' | '
   return '수사는 수사대로 간다.';
 }
 
-/** 실행자가 열차장을 흔든다(4.6, 6.3의 네 대응). 관계가 회의 이하로 떨어진 칸의 실행자가 정산마다 20%. */
+/** 실행자가 열차장을 흔든다(4.6, 6.3의 네 대응). 관계가 의심 이하로 떨어진 칸의 실행자가 정산마다 20%. */
 export function executorTick(g: Game): void {
   const d = g.dark!;
   // 실행자가 죽으면 비밀은 그가 털어놓은 사람 하나에게 30%로 넘어간다.

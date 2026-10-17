@@ -131,7 +131,7 @@ export function martialSettle(g: Game): void {
   g.comms.guard.base[3] += B.mlExpo;
   bump(g, 'tension', B.mlTension, 'martial');
   g.fear = clamp(g.fear + B.mlFear, 0, 100);
-  // 문턱: 경비대 관계 단계가 회의 이하(band -1)면 경고. 경비대장의 계엄이면 한 단계 높아 중립 이하(band 0).
+  // 문턱: 경비대 관계 단계가 의심 이하(band -1)면 경고. 경비대장의 계엄이면 한 단계 높아 중립 이하(band 0).
   // 경고는 호의 이상(단계 번호 2 이하)으로 되돌려야 풀린다. 문턱 바로 위(중립)로만 올라오면 경고가 그대로 돈다(PC 리뷰: 문턱 언저리에서 깜빡이지 않게).
   const line = m.door === 'captain' ? 0 : -1;
   const st = stageOf(g.comms.guard.rel);

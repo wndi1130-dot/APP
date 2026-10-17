@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   advance, castVote, chooseCard, COMMS, createGame, currentAgenda, disembarkMood, makeDeal, onDeath, primaryAction, relationLine, resolveStop,
-  toolStatus, viewCard,
+  stageOf, STAGES, toolStatus, viewCard,
 } from '../../src/game';
 import type { Game } from '../../src/game';
 
@@ -62,6 +62,12 @@ describe('S1a 한 판', () => {
 describe('정차 장면과 관계 문장', () => {
   it('관계 일곱 단계마다 문장이 있다', () => {
     for (const rel of [90, 50, 20, 0, -20, -50, -90]) expect(relationLine(rel)).not.toBe('');
+  });
+
+  it('중립 아래 단계 이름은 「의심」이다(결정 363, 의회의 「회의」와 헷갈리지 않게)', () => {
+    expect(stageOf(-20).name).toBe('의심');
+    expect(STAGES.map(st => st.name)).not.toContain('회의');
+    expect(relationLine(-20)).toBe('열차장에게 불만을 품고 있다.');
   });
 
   it('불신임 직전이면 어깨가 처진 장면, 크게 지지받으면 개선장군 장면이다', () => {
