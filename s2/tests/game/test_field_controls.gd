@@ -515,19 +515,19 @@ func test_the_ally_bar_has_no_swap_button() -> void:
 
 func test_no_weapon_button_on_the_left_but_the_bag_stays() -> void:
 	var texts: Array = []
+	var left: Array = []
 	for b in _buttons(game.hud.root):
 		if b.get_global_rect().position.x < game.hud._view_size().x * 0.5:
 			texts.append(String(b.text))
+			left.append(b)
 	assert_false(texts.has("무기"), "no weapon button on the left")
-	assert_true(texts.has("가방"), "the bag is still there")
+	# 시안 2차: the bag key is 인벤토리 and shows the weight carried on it.
+	assert_true(left.has(game.hud.bag_button), "the bag is still there")
 
 
 func test_the_bag_button_stays_off_the_fixed_stick() -> void:
 	var hud = game.hud
-	var bag: Button = null
-	for b in _buttons(hud.root):
-		if b.text == "가방":
-			bag = b
+	var bag: Button = hud.bag_button
 	assert_not_null(bag)
 	var rect: Rect2 = bag.get_global_rect()
 	var near: Vector2 = Vector2(clampf(hud.stick_home().x, rect.position.x, rect.end.x), clampf(hud.stick_home().y, rect.position.y, rect.end.y))
@@ -635,7 +635,7 @@ func test_state_icons_sit_in_a_column_at_the_right_edge_big_enough_to_see() -> v
 	for i in 2:
 		assert_not_null(hud.status_pads[i].icon, "a picture")
 		assert_eq(hud.status_pads[i].text, "", "and no words on it")
-	for pad in [hud.shove_button, hud.manual_button, hud.aim_button, hud.context_button]:
+	for pad in [hud.shove_button, hud.crouch_button, hud.manual_button, hud.aim_button, hud.context_button, hud.settings_button]:
 		for i in hud.STATUS_SLOTS:
 			assert_false(hud.status_pads[i].get_global_rect().intersects(pad.get_global_rect()), "icon %d is clear of the keys" % i)
 	for i in hud.STATUS_SLOTS:
