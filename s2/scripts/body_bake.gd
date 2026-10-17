@@ -64,6 +64,25 @@ const POSES: Array = [
 const OWN_POSES: Array = [
 	["own_fall", 1.0, ""], ["own_stand", 0.0, ""], ["own_press", 0.0, ""], ["own_sit", 0.0, ""],
 ]
+# The living people's motions (bake_body_cli --set=person, a folder of its own
+# so the dead's numbers above stay): name, "", frames, loops, layer, seconds.
+# Only appended to, so a number once baked keeps its motion. Sixteen at most:
+# the shader's clip tables have sixteen places (dead_vat.gdshader).
+const PERSON_CLIPS: Array = [
+	["p_walk", "", 32, true, "p_walk", 0.85],
+	["p_run", "", 24, true, "p_run", 0.62],
+	["p_stand", "", 32, true, "p_stand", 4.0],
+	["p_held", "", 24, true, "p_held", 1.0],
+	["p_bitten", "", 24, false, "p_bitten", 0.6],
+	["p_swing_one", "", 24, false, "p_swing_one", 0.6],
+	["p_swing_axe", "", 32, false, "p_swing_axe", 0.9],
+	["p_stab", "", 20, false, "p_stab", 0.45],
+	["p_shove", "", 20, false, "p_shove", 0.5],
+	["p_crouch_walk", "", 32, true, "p_crouch_walk", 1.2],
+	["p_crouch_idle", "", 24, true, "p_crouch_idle", 3.0],
+]
+# Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -562,6 +581,212 @@ const LAYERS: Dictionary = {
 		],
 		"sink": [0.03, 0.09, 0.0, 0.25],
 	},
+	# The living. Upright, both legs alike half a round apart, arms swinging
+	# against the legs. Left leg forward while sin(w) > 0.
+	"p_walk": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.035, 0.0]],
+			["turn", "hips", "y", [0.0, -0.09, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
+			["turn", "chest", "y", [0.0, 0.12, 0.0]],
+			["turn", "neck", "x", 0.04],
+			["turn", "head", "y", [0.0, -0.05, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.04, -0.3, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.3, -0.28, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.16, -1.0, [0.04, 0.3, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.08, -1.0, [0.3, 0.28, 0.0]]],
+		],
+		"sink": [0.025, 0.02, -1.5708, 2.0],
+	},
+	# Leaning a little into it, knees high, elbows bent and pumping.
+	"p_run": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.05, 0.0]],
+			["turn", "hips", "y", [0.0, -0.12, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
+			["turn", "spine", "x", 0.15],
+			["turn", "chest", "x", 0.05],
+			["turn", "chest", "y", [0.0, 0.16, 0.0]],
+			["turn", "neck", "x", -0.12],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.0, -0.55, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.05, [0.2, 0.25, 0.0], [0.9, -0.2, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.0, 0.55, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.05, [0.2, -0.25, 0.0], [0.9, 0.2, 0.0]]],
+		],
+		"sink": [0.07, 0.04, -1.5708, 2.0],
+	},
+	# Standing easy: breathing, the weight drifting from one foot to the other.
+	"p_stand": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.04, 0.0]],
+			["aim", "thigh.L", "shin.L", [[0.08, 0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [[0.06, 0.02, 0.0], -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [[-0.08, 0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [[-0.06, 0.02, 0.0], -1.0, -0.02]],
+			["turn", "spine", "z", [0.0, -0.03, 0.0]],
+			["turn", "spine", "x", [0.03, 0.012, 0.0, 4.0]],
+			["turn", "chest", "x", [0.02, -0.015, 0.0, 4.0]],
+			["turn", "head", "y", [0.0, 0.1, 0.8]],
+			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, 0.1]],
+			["aim", "upper_arm.R", "forearm.R", [-0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
+			["aim", "forearm.R", "hand.R", [-0.08, -1.0, 0.1]],
+		],
+		"sink": [0.0, 0.004, 0.0, 4.0],
+	},
+	# Held by a dead one: both arms out at its shoulders, leaning back from it,
+	# twisting side to side to get loose, feet braced apart.
+	"p_held": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.18, -1.0, [0.1, 0.06, 0.0]]],
+			["aim", "shin.L", "foot.L", [0.12, -1.0, -0.15]],
+			["aim", "thigh.R", "shin.R", [-0.18, -1.0, [-0.2, 0.06, 3.1416]]],
+			["aim", "shin.R", "foot.R", [-0.12, -1.0, -0.3]],
+			["turn", "spine", "x", -0.2],
+			["turn", "chest", "y", [0.0, 0.25, 0.0]],
+			["turn", "spine", "z", [0.0, 0.06, 0.0]],
+			["turn", "neck", "x", [-0.1, 0.08, 0.0, 2.0]],
+			["turn", "head", "y", [0.0, -0.3, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.15, 1.0]],
+			["aim", "forearm.L", "hand.L", [[0.0, 0.1, 0.0], 0.0, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -0.15, 1.0]],
+			["aim", "forearm.R", "hand.R", [[0.0, 0.1, 0.0], 0.0, 1.0]],
+		],
+		"sink": [0.06, 0.02, 0.0, 2.0],
+	},
+	# Bitten on the right: shoulders up, body jerks over to the bitten side and
+	# the head goes back, then it braces.
+	"p_bitten": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "z", ["keys", [[0, 0], [0.25, 0.35], [1, 0.08]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.25, 0.25], [1, 0.12]]]],
+			["turn", "chest", "y", ["keys", [[0, 0], [0.25, -0.2], [1, -0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.0], [0.25, -0.5], [1, -0.05]]]],
+			["turn", "head", "z", ["keys", [[0, 0.0], [0.25, -0.25], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.3, ["keys", [[0, -1.0], [0.25, -0.55], [1, -0.8]]], 0.25]],
+			["aim", "forearm.L", "hand.L", [-0.1, ["keys", [[0, -0.6], [0.25, 0.1], [1, -0.2]]], 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.35, ["keys", [[0, -1.0], [0.25, -0.55], [1, -0.8]]], 0.15]],
+			["aim", "forearm.R", "hand.R", [0.4, ["keys", [[0, -0.6], [0.25, 0.6], [1, 0.2]]], 0.6]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.25, 0.08], [1, 0.04]]],
+	},
+	# One-handed swing (crowbar, pipe): the right hand back past the shoulder
+	# with the body twisted right, across in front to the left, back again.
+	"p_swing_one": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0, 0.0], [0.45, -0.15], [1, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.05]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.45, 0.3], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.45, 0.05], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, 0.0], [0.45, 0.25], [1, 0.05]]]],
+			["turn", "chest", "y", ["keys", [[0, 0.0], [0.3, -0.6], [0.45, 0.5], [1, 0.0]]]],
+			["turn", "head", "y", ["keys", [[0, 0.0], [0.3, 0.3], [0.45, -0.25], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.25, -0.8, 0.4]],
+			["aim", "forearm.L", "hand.L", [-0.1, -0.2, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.3, -0.7], [0.45, 0.35], [1, -0.16]]], ["keys", [[0, -1.0], [0.3, 0.35], [0.45, -0.1], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.5], [0.45, 0.9], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, -0.3], [0.45, 0.7], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.9], [0.45, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, -0.3], [0.45, 0.7], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.45, 0.06], [1, 0.0]]],
+	},
+	# Two-handed axe: both hands up over and behind the head, chopped down in
+	# front with the knees giving, lifted back.
+	"p_swing_axe": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
+			["aim", "thigh.R", "shin.R", [-0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.33, -0.2], [0.45, 0.45], [1, 0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.0], [0.33, -0.2], [0.45, 0.15], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
+			["aim", "forearm.L", "hand.L", [-0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
+			["aim", "forearm.R", "hand.R", [0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.12], [1, 0.0]]],
+	},
+	# Knife: the right hand drawn back to the hip, thrust straight out with the
+	# body behind it, the left hand up in front.
+	"p_stab": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, -0.05]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.22, 0.0], [0.35, 0.25], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, 0.0]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.22, 0.0], [0.35, 0.25], [1, 0.05]]]],
+			["turn", "chest", "y", ["keys", [[0, 0.0], [0.22, -0.3], [0.35, 0.2], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.7, 0.6]],
+			["aim", "forearm.L", "hand.L", [-0.3, 0.3, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.3, ["keys", [[0, -1.0], [0.22, -0.7], [0.35, -0.15], [1, -1.0]]], ["keys", [[0, 0.04], [0.22, -0.6], [0.35, 1.0], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.22, 0.05], [0.35, 0.1], [1, -0.08]]], ["keys", [[0, -1.0], [0.22, -0.1], [0.35, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.22, 1.0], [0.35, 1.0], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.35, 0.05], [1, 0.0]]],
+	},
+	# Shove: hands drawn to the chest leaning back, then both arms straight out
+	# with a step and the body thrown forward, back again.
+	"p_shove": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, -0.05]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.4, 0.35], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.4, 0.1], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, -0.2], [0.4, 0.35], [1, 0.05]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.25, ["keys", [[0, -1.0], [0.3, -0.35], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.25], [0.4, 1.0], [1, 0.04]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0, 0.08], [0.3, -0.8], [0.4, 0.0], [1, 0.08]]], ["keys", [[0, -1.0], [0.3, 0.45], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, 0.3], [0.4, 1.0], [1, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.25, ["keys", [[0, -1.0], [0.3, -0.35], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.25], [0.4, 1.0], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, 0.8], [0.4, 0.0], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.45], [0.4, 0.05], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, 0.3], [0.4, 1.0], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.4, 0.05], [1, 0.0]]],
+	},
+	# Crouched walk: hips low, knees well bent, back forward, feet kept low,
+	# head up to see ahead, arms low in front.
+	"p_crouch_walk": {
+		"steps": [
+			["turn", "hips", "y", [0.0, -0.06, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, [[1.3, 0.65, 0.0], [0.0, -0.05, 0.0, 3.0]]]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, [[-0.75, 0.5, 0.0], [0.0, -0.22, -1.5708]]]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [[1.3, 0.65, 3.1416], [0.0, -0.05, 9.4248, 3.0]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, [[-0.75, 0.5, 3.1416], [0.0, -0.22, 1.5708]]]],
+			["turn", "spine", "x", 0.5],
+			["turn", "chest", "x", 0.1],
+			["turn", "chest", "y", [0.0, 0.08, 0.0]],
+			["turn", "neck", "x", -0.4],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.5, -0.15, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.0, -0.6, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.5, 0.15, 0.0]]],
+			["aim", "forearm.R", "hand.R", [0.0, -0.6, 1.0]],
+		],
+		"sink": [0.22, 0.015, -1.5708, 2.0],
+	},
+	# The same low crouch kept still, breathing.
+	"p_crouch_idle": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.15, -1.0, 1.45]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.75]],
+			["aim", "thigh.R", "shin.R", [-0.15, -1.0, 1.35]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.8]],
+			["turn", "spine", "x", [0.5, 0.02, 0.0]],
+			["turn", "chest", "x", [0.1, 0.02, 0.0]],
+			["turn", "neck", "x", -0.4],
+			["turn", "head", "y", [0.0, 0.2, 0.5]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, 0.45]],
+			["aim", "forearm.L", "hand.L", [0.0, -0.7, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, 0.45]],
+			["aim", "forearm.R", "hand.R", [0.0, -0.7, 1.0]],
+		],
+		"sink": [0.23, 0.006, 0.0],
+	},
 }
 const AXES: Dictionary = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
 
@@ -686,6 +911,8 @@ static func _value(spec: Variant, w: float) -> float:
 	if typeof(spec) != TYPE_ARRAY:
 		return float(spec)
 	var parts: Array = spec
+	if parts.size() == 2 and typeof(parts[0]) == TYPE_STRING and parts[0] == "keys":
+		return _keyed(parts[1], w / TAU)
 	if typeof(parts[0]) == TYPE_ARRAY:
 		var total := 0.0
 		for part in parts:
@@ -693,6 +920,19 @@ static func _value(spec: Variant, w: float) -> float:
 		return total
 	var beats: float = parts[3] if parts.size() > 3 else 1.0
 	return float(parts[0]) + float(parts[1]) * sin(beats * w - float(parts[2]))
+
+
+## A keyed value at progress u: eased from key to key, held past the ends.
+static func _keyed(keys: Array, u: float) -> float:
+	if u <= float(keys[0][0]):
+		return float(keys[0][1])
+	for n in range(1, keys.size()):
+		if u <= float(keys[n][0]):
+			var a: Array = keys[n - 1]
+			var b: Array = keys[n]
+			var t := (u - float(a[0])) / maxf(float(b[0]) - float(a[0]), 0.0001)
+			return lerpf(float(a[1]), float(b[1]), smoothstep(0.0, 1.0, t))
+	return float(keys[keys.size() - 1][1])
 
 
 ## Hangs a layer on the body (after retarget), for progress u (0..1). The
@@ -811,7 +1051,7 @@ static func prepare(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 
 ## Collects what posing needs from the body alone, for the motions written
 ## here with nothing from a motion set (OWN_CLIPS); {} if something is missing.
-static func prepare_own(body_root: Node3D) -> Dictionary:
+static func prepare_own(body_root: Node3D, entries: Array = OWN_CLIPS + OWN_POSES) -> Dictionary:
 	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
 	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
 	if body == null or mesh_node == null or mesh_node.skin == null:
@@ -821,7 +1061,7 @@ static func prepare_own(body_root: Node3D) -> Dictionary:
 		if _bone(body, body_bone) < 0:
 			push_error("body_bake: bone not found: " + body_bone)
 			return {}
-	for entry: Array in OWN_CLIPS + OWN_POSES:
+	for entry: Array in entries:
 		var layer: String = entry[4] if entry.size() > 4 else entry[0]
 		if not LAYERS.has(layer):
 			push_error("body_bake: layer not found: " + layer)
@@ -883,15 +1123,16 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 
 
 ## Bakes the body in `body_root` (in the scene tree) with the motions written
-## here alone: OWN_CLIPS in order, then one POSES_CLIP of OWN_POSES. Nothing
-## in the result comes from a motion set. {} if something is missing.
-static func bake_own(body_root: Node3D) -> Dictionary:
-	var ctx := prepare_own(body_root)
+## here alone: `list` in order (OWN_CLIPS, or PERSON_CLIPS for the living),
+## then one POSES_CLIP of `poses` when there are any. Nothing in the result
+## comes from a motion set. {} if something is missing.
+static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = OWN_POSES) -> Dictionary:
+	var ctx := prepare_own(body_root, list + poses)
 	if ctx.is_empty():
 		return {}
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
-	for entry: Array in OWN_CLIPS:
+	for entry: Array in list:
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
@@ -903,11 +1144,12 @@ static func bake_own(body_root: Node3D) -> Dictionary:
 			_note_reach(ctx, entry[0], reach)
 		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames, "round": _round(reach) if looped else 0.0})
 	var still := []
-	for entry: Array in OWN_POSES:
+	for entry: Array in poses:
 		pose(ctx, "", entry[0], entry[1])
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
-	clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
+	if not still.is_empty():
+		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
 	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
 
 
