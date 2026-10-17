@@ -20,6 +20,7 @@ extends Control
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
+const GlassParts = preload("res://game/ui/glass_parts.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const EDGE_TOP := preload("res://game/ui/tex/edge_top.png")
 
@@ -44,10 +45,6 @@ const DRY := Color("8a7655")
 const CRACK_TILE := Color(162 / 255.0, 140 / 255.0, 100 / 255.0, 0.8)
 const CRACK_DARK := Color(58 / 255.0, 46 / 255.0, 28 / 255.0, 0.7)
 const HEAT: Array = [[0.0, Color("6a3519")], [0.34, Color("a2491f")], [0.62, Color("e47b3c")], [1.0, Color("ffc488")]]
-const MEDAL_TOP := Color("182028")
-const MEDAL_BOT := Color("11171d")
-const RING := Color("6d5b3d")
-const MEDAL_CUT := Color("141b22")
 const SOOT_CUT := Color("10151a")
 ## 조심 구간 (k2_parts.js MT): trust is in danger low, tension high.
 const ZONES: Dictionary = {"trust": {"low": true, "warn": 45, "bad": 30}, "tension": {"low": false, "warn": 50, "bad": 70}}
@@ -179,11 +176,7 @@ func _dim(id: String) -> bool:
 
 ## A colour as a dimmed part shows it: saturate(.3), then a third of its alpha.
 static func tone(c: Color, dim: bool) -> Color:
-	if not dim:
-		return c
-	var grey: float = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
-	var out := Color(lerpf(grey, c.r, 0.3), lerpf(grey, c.g, 0.3), lerpf(grey, c.b, 0.3), c.a * 0.3)
-	return out
+	return GlassParts.tone(c, dim)
 
 
 ## The mockup's places: .hud__l at 12 with 10 between, the mood centred 8 left
@@ -213,10 +206,7 @@ func _label(text: String, kind: int, weight: int, css_px: float, color: Color, s
 
 ## Put `l` so its baseline falls at `base_css` (mockup px from the part's top).
 func _sit(l: Label, x_css: float, base_css: float) -> void:
-	var f: Font = l.get_theme_font("font")
-	var px: int = l.get_theme_font_size("font_size")
-	l.position = Vector2(x_css * UiFonts.K, base_css * UiFonts.K - f.get_ascent(px))
-	l.size = l.get_combined_minimum_size()
+	GlassParts.put_on(l, x_css * UiFonts.K, base_css * UiFonts.K)
 
 
 ## How wide `l`'s words are, in mockup px (measured off its face, so it holds
@@ -558,40 +548,10 @@ func _v_grad(ci: CanvasItem, rect: Rect2, r: float, left: bool, right: bool, top
 	ci.draw_polyline_colors(ring, ring_c, 1.0, true)
 
 
-## A matte medal (.med, 44): a disc 38 across, dark with a faint light at the
-## top, one even ring (user 2026-10-17), its mark at 22 in the 2판.
+## A matte medal (.med, 44): a disc 38 across, its mark at 22 in the 2판 (glass_parts.gd).
 func _medal(icon: String, color: Color, at_css: Vector2, dim: bool) -> Control:
-	var k: float = UiFonts.K
-	var m := Control.new()
-	m.name = "Medal_" + icon
-	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	m.position = at_css * k
-	m.size = Vector2(44, 44) * k
-	m.draw.connect(func() -> void:
-		var c: Vector2 = m.size * 0.5
-		var r: float = 19.0 * k
-		# 0 1px 3px rgba(0,0,0,.45): a soft shadow a little low.
-		for i in 3:
-			m.draw_circle(c + Vector2(0, 1.0 * k), r + float(3 - i) * k, tone(Color(0, 0, 0, 0.08 + 0.05 * i), dim))
-		var pts := PackedVector2Array()
-		var cols := PackedColorArray()
-		for i in 48:
-			var a: float = TAU * float(i) / 48.0
-			var p: Vector2 = c + Vector2(cos(a), sin(a)) * r
-			pts.append(p)
-			cols.append(tone(MEDAL_TOP.lerp(MEDAL_BOT, (p.y - (c.y - r)) / (r * 2.0)), dim))
-		m.draw_polygon(pts, cols)
-		m.draw_arc(c, r - 1.0 * k, 0.0, TAU, 64, tone(RING, dim), 2.0 * k, true))
-	var mark := TextureRect.new()
-	var px: int = int(round(22.0 * k))
-	var ic: Color = Color(color.r, color.g, color.b, 0.86)
-	mark.texture = HudIcons.texture(icon, px, tone(ic, dim), 2.0, tone(MEDAL_CUT, dim))
-	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mark.size = Vector2(px, px)
-	mark.position = (Vector2(44, 44) * k - mark.size) * 0.5
-	m.add_child(mark)
+	var m: Control = GlassParts.medal(icon, color, 44.0, 38.0, 22.0, dim)
+	m.position = at_css * UiFonts.K
 	return m
 
 

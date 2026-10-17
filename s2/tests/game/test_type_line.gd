@@ -71,3 +71,36 @@ func test_centred_parts_sit_in_the_middle_of_a_wider_line() -> void:
 	line.add_child(n)
 	await wait_frames(2)
 	assert_almost_eq(n.position.x + n.size.x * 0.5, line.size.x * 0.5, 0.6, "the count centred in its 38 (.stepper b)")
+
+
+func test_a_number_is_set_where_godot_draws_its_digits() -> void:
+	# A Label centres its line in its face's height, fallbacks and all; the
+	# number face's word fallback rises higher, so its digits draw lower than
+	# their own ascent (28 px digits ended 8 game px low before this).
+	var num := _word("35", UiFonts.NUMBER, 28.0)
+	add_child_autofree(num)
+	var f: Font = num.get_theme_font("font")
+	var s: int = num.get_theme_font_size("font_size")
+	var tl := TextLine.new()
+	tl.add_string("35", f, s)
+	var lead: float = (f.get_height(s) - tl.get_line_ascent() - tl.get_line_descent()) * 0.5
+	assert_gt(lead, 0.0, "the fallback makes the face taller than its digits")
+	assert_almost_eq(TypeLine.rise_of(num).x, lead + tl.get_line_ascent(), 0.01)
+	var word := _word("온기", UiFonts.WORD, 12.0)
+	add_child_autofree(word)
+	var wf: Font = word.get_theme_font("font")
+	assert_almost_eq(TypeLine.rise_of(word).x, wf.get_ascent(word.get_theme_font_size("font_size")), 0.01, "no fallback: its ascent")
+
+
+func test_a_number_among_words_makes_the_line_no_taller_than_its_digits() -> void:
+	var line := _line()
+	var num := _word("4", UiFonts.NUMBER, 21.0)
+	var word := _word("명", UiFonts.WORD, 14.0)
+	line.add_child(num)
+	line.add_child(word)
+	await wait_frames(2)
+	var en: Vector2 = TypeLine.extent_of(num)
+	var ew: Vector2 = TypeLine.extent_of(word)
+	assert_almost_eq(line.get_combined_minimum_size().y, maxf(en.x, ew.x) + maxf(en.y, ew.y), 0.01)
+	assert_lt(en.x + en.y, num.get_combined_minimum_size().y, "the digits' own ascent and descent, not the label's box")
+	assert_almost_eq(_base(num), _base(word), 0.6, "still one baseline")

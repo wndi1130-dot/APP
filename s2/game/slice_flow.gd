@@ -7,6 +7,12 @@ extends Node
 ## yet are plain panels over them that read what there is (the field's own
 ## receipt, or the sample one when the field is skipped), and PR 3 swaps them
 ## for the real ones in turn. It sets no game value.
+##
+## The slice holds one train state (the train sample's first stop) that the
+## gauges, the car pane and the stop card all read. On the train the carriages
+## wear name plates; a car with people of its own is picked by its plate and
+## its pane frosts in at the right with the camera moving it into the clear
+## part; its levers set that state through train_turn.gd set_lever.
 
 const FieldGame = preload("res://game/field_game.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
@@ -16,6 +22,11 @@ const LampKey = preload("res://game/ui/lamp_key.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
+const CarPane = preload("res://game/ui/car_pane.gd")
+const HomeBar = preload("res://game/ui/home_bar.gd")
+const GlassParts = preload("res://game/ui/glass_parts.gd")
+const St = preload("res://game/train/train_state.gd")
+const TrainTurn = preload("res://game/train/train_turn.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
 ## The frost grown in from the screen's corners over the world (시안 .w-frost,
@@ -42,15 +53,25 @@ const STEPS: Array = [
 ]
 ## The words on each plain panel until its real screen comes (가제).
 const NOTES: Dictionary = {
-	"train": ["열차 안 · 칸마다 사람과 기색"],
 	"council": ["식당칸 의회 · 안건과 표 자리", "귀환 영수증의 약속 판정이 여기서 쓰임"],
-	"travel": ["둘째 구간 · 열차 턴 자리"],
 	"arrive": ["둘째 역 도착 화면 자리"],
 	"end": ["끝 카드 자리 · 이번 판의 남길 만한 일"],
 }
 const PANEL_W: float = 560.0
 ## What stays lit in the gauges while a step's sheet is up (the stop is about stock).
 const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"]}
+## The steps that are the train itself: its pane and its keys over it.
+const HOME_STEPS: Array = ["train", "travel"]
+## The car picked when the train comes up (시안 01: the tail's first car).
+const FIRST_CAR := "tail1"
+## The picked car sits in the middle of what the pane leaves clear: 159 mockup
+## px left of the screen's middle (k3_views.js vHome, 844 − 318 over two).
+const PANE_SHIFT_CSS: float = 159.0
+## The picked car's corners (c1.css .car.is-sel::before): 20 long, 2 thick, lamp amber.
+const SEL_ARM: float = 20.0
+const SEL_COLOR := Color("ffc66c")
+## Cars not picked darken (.train.has-sel .car:not(.is-sel), brightness .5).
+const UNPICKED_SHADE: float = 0.42
 ## 디자인 토큰 2차: the smoked glass of a pane (B1) and its words.
 const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.84)
 const INK := Color("eee9dc")
@@ -75,6 +96,13 @@ var gauges: Control                # the train's gauges along the top, over the 
 var soot_bot: TextureRect          # the soot rising from the bottom edge under the keys
 var frost: Control                 # the corners' frost over the train (.w-frost)
 var plates: Control                # the carriages' name plates, where the train's cars are
+var marks: Control                 # the picked car's corners and the other cars' shade
+var train_g: Dictionary = {}       # the slice's train state (the sample's first stop)
+var train_t: Dictionary = {}       # its tables
+var home: Control = null           # the train's own screen on the train steps: pane and keys
+var pane: Control = null           # the picked car's pane (car_pane.gd)
+var bar: Control = null            # the keys along the bottom (home_bar.gd)
+var sel: String = ""               # the picked car's id, "" with the pane folded
 
 
 func _ready() -> void:
@@ -83,6 +111,15 @@ func _ready() -> void:
 	layer = CanvasLayer.new()
 	layer.layer = 40
 	add_child(layer)
+	var s: Array = StopPickCard.sample()
+	train_g = s[0]
+	train_t = s[1]
+	marks = Control.new()
+	marks.name = "Marks"
+	marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	marks.draw.connect(_draw_marks)
+	layer.add_child(marks)
 	plates = Control.new()
 	plates.name = "Plates"
 	plates.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -101,11 +138,10 @@ func _ready() -> void:
 	soot_bot.anchor_top = 1.0
 	soot_bot.offset_top = -UiFonts.px(104.0)
 	layer.add_child(soot_bot)
-	# The train's gauges read the train sample's first stop, as the stop card does.
+	# The train's gauges read the slice's state, as the pane and the stop card do.
 	gauges = TrainGauges.new()
-	var s: Array = StopPickCard.sample()
-	gauges.g = s[0]
-	gauges.t = s[1]
+	gauges.g = train_g
+	gauges.t = train_t
 	layer.add_child(gauges)
 	_build_panel()
 	go(0)
@@ -122,6 +158,10 @@ func go(i: int) -> void:
 	if is_instance_valid(card):
 		card.queue_free()
 	card = null
+	home = null
+	pane = null
+	bar = null
+	sel = ""
 	var row: Array = STEPS[i]
 	var id: String = row[0]
 	# Over the train, not over the field or the receipt (a slip of its own).
@@ -144,6 +184,9 @@ func go(i: int) -> void:
 	if id == "stop_pick":
 		_show_stop_pick()
 		return
+	if HOME_STEPS.has(id):
+		_show_home(String(row[4]))
+		return
 	_show_panel(String(row[3]), NOTES.get(id, []), String(row[4]))
 
 
@@ -159,9 +202,8 @@ func next() -> void:
 func _show_stop_pick() -> void:
 	panel.visible = false
 	var c = StopPickCard.new()
-	var s: Array = StopPickCard.sample()
-	c.g = s[0]
-	c.t = s[1]
+	c.g = train_g.duplicate(true)
+	c.t = train_t
 	if c.g.get("stop") is Dictionary:
 		c.g["stop"]["place"] = "freight"
 	c.stop_name = "술레후프"
@@ -202,11 +244,19 @@ func _clear_stage() -> void:
 	field = null
 
 
-## The inside of the train at `phase`, without its test panel.
+## The inside of the train at `phase`, without its test panel, its people as
+## the slice's state has them (warmth, ration, crowding and exposure, head
+## counts and relations), so the windows' frost and the pane say the same.
 func _show_train(phase: String, seg: int) -> void:
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
+	for c: String in (rules.get("comms", {}) as Dictionary).keys():
+		if (train_g.get("comms", {}) as Dictionary).has(c):
+			var sit: Array = St.situation(train_g, train_t, c)
+			rules["comms"][c]["sit"] = [sit[0], sit[1], sit[2], sit[3]]
+			rules["comms"][c]["pop"] = int(train_g["comms"][c]["pop"])
+			rules["comms"][c]["rel"] = float(train_g["comms"][c]["rel"])
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
 	train.rules = rules
@@ -222,6 +272,7 @@ func _quiet_labels() -> void:
 	if not is_instance_valid(train):
 		return
 	for c in plates.get_children():
+		plates.remove_child(c)
 		c.queue_free()
 	for l in train.find_children("*", "Label3D", true, false):
 		var label := l as Label3D
@@ -230,9 +281,59 @@ func _quiet_labels() -> void:
 			plates.add_child(_plate(label))
 
 
+## The train's car entry (train_scene.gd cars) whose node is `node`.
+func _car_of(node: Node) -> Dictionary:
+	if not is_instance_valid(train):
+		return {}
+	for c: Dictionary in train.cars:
+		if c.get("node") == node:
+			return c
+	return {}
+
+
+## Whether car `def` has people of its own in the slice's state (a pane to show).
+func _has_people(def: Dictionary) -> bool:
+	var comm: String = String(def.get("comm", ""))
+	return comm != "" and (train_g.get("comms", {}) as Dictionary).has(comm)
+
+
+## A carriage's name plate with, when the car is cold, the paper tag beside it
+## (.plate: b and .ptag, 5 apart, centred under the car). A car with people of
+## its own is picked by its plate.
+func _plate(name_label: Label3D) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", int(round(UiFonts.px(5.0))))
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var entry: Dictionary = _car_of(name_label.get_parent())
+	var def: Dictionary = entry.get("def", {})
+	var id: String = String(entry.get("id", ""))
+	row.name = "Plate_" + id
+	row.set_meta("car", name_label.get_parent())
+	row.set_meta("x", name_label.position.x)
+	row.set_meta("id", id)
+	row.add_child(_enamel(name_label))
+	if _has_people(def):
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.gui_input.connect(_plate_input.bind(id))
+		if float(St.situation(train_g, train_t, String(def["comm"]))[0]) < CarPane.COLD:
+			var tag: Control = GlassParts.paper_tag("추움", "snow", -2.5)
+			tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(tag)
+	return row
+
+
+## A tap let go on a plate picks its car.
+func _plate_input(e: InputEvent, id: String) -> void:
+	var up_click: bool = e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and not e.is_pressed()
+	var up_touch: bool = e is InputEventScreenTouch and not e.is_pressed()
+	if up_click or up_touch:
+		_select(id)
+
+
 ## A carriage's name plate (시안 .plate): a dark enamel plate, its name between
 ## two brass dots, where the car's floor meets its wheels.
-func _plate(name_label: Label3D) -> Control:
+func _enamel(name_label: Label3D) -> Control:
 	var p := PanelContainer.new()
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
@@ -256,12 +357,11 @@ func _plate(name_label: Label3D) -> Control:
 		p.draw_circle(Vector2(UiFonts.px(5.0), y), r, Color(202 / 255.0, 164 / 255.0, 92 / 255.0, 0.9))
 		p.draw_circle(Vector2(p.size.x - UiFonts.px(5.0), y), r, Color(202 / 255.0, 164 / 255.0, 92 / 255.0, 0.9))
 	p.draw.connect(dots)
-	p.set_meta("car", name_label.get_parent())
-	p.set_meta("x", name_label.position.x)
 	return p
 
 
 func _process(_delta: float) -> void:
+	marks.queue_redraw()
 	if not is_instance_valid(train) or plates.get_child_count() == 0:
 		return
 	var cam: Camera3D = train.get("camera")
@@ -272,10 +372,122 @@ func _process(_delta: float) -> void:
 		if not is_instance_valid(car):
 			continue
 		var at: Vector3 = (car as Node3D).to_global(Vector3(float(p.get_meta("x")), -0.45, 0.0))
-		p.visible = not cam.is_position_behind(at) and card == null
+		# Over another screen no plate; with a car picked only its own.
+		var shown: bool = card == null or card == home
+		if sel != "" and String(p.get_meta("id")) != sel:
+			shown = false
+		p.visible = not cam.is_position_behind(at) and shown
 		var s: Vector2 = cam.unproject_position(at)
 		p.size = p.get_combined_minimum_size()
 		p.position = s - p.size * 0.5
+
+
+## The train's own screen: the picked car's pane at the right under the
+## gauges, the keys along the bottom with `word` on the main key.
+func _show_home(word: String) -> void:
+	panel.visible = false
+	var h := Control.new()
+	h.name = "Home"
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var p = CarPane.new()
+	p.name = "CarPane"
+	p.lever_set.connect(_set_lever)
+	p.folded.connect(_select.bind(""))
+	h.add_child(p)
+	p.pin(TrainGauges.BAND_H)
+	var b = HomeBar.new()
+	b.name = "HomeBar"
+	b.g = train_g
+	b.main_word = word
+	b.main_pressed.connect(next)
+	h.add_child(b)
+	layer.add_child(h)
+	home = h
+	pane = p
+	bar = b
+	card = h
+	_select(FIRST_CAR)
+
+
+## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
+## it into the middle of what the pane leaves clear.
+func _select(id: String) -> void:
+	var was: String = sel
+	sel = ""
+	var def: Dictionary = {}
+	if id != "" and is_instance_valid(train):
+		def = (train.car(id) as Dictionary).get("def", {})
+	if _has_people(def):
+		sel = id
+	if not is_instance_valid(pane):
+		return
+	pane.visible = sel != ""
+	if sel != "":
+		pane.show_car(def, train_g, train_t)
+	if not is_instance_valid(train) or train.camera == null:
+		return
+	var at: String = sel if sel != "" else was
+	if at == "":
+		return
+	train.focus_car(at)
+	if sel != "":
+		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
+		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
+
+
+## A lever on the pane: set it in the slice's state and draw again what reads it.
+func _set_lever(comm: String, which: String, value: int) -> void:
+	train_g = TrainTurn.set_lever(train_g, train_t, comm, which, float(value))
+	gauges.refresh(train_g, train_t)
+	if is_instance_valid(pane):
+		pane.refresh(train_g, train_t)
+	if is_instance_valid(bar):
+		bar.g = train_g
+	if is_instance_valid(train):
+		var sit: Array = St.situation(train_g, train_t, comm)
+		train.set_comm(comm, "sit", [sit[0], sit[1], sit[2], sit[3]])
+		_quiet_labels()
+
+
+## The picked car's lamp-amber corners, and the shade over the cars not picked.
+func _draw_marks() -> void:
+	if sel == "" or card == null or card != home or not is_instance_valid(train) or train.camera == null:
+		return
+	var cam: Camera3D = train.camera
+	var consts: Dictionary = train.get_script().get_script_constant_map()
+	var length: float = float(consts.get("CAR_LENGTH", 16.0))
+	var height: float = float(consts.get("CAR_HEIGHT", 3.0))
+	var k: float = UiFonts.K
+	for c: Dictionary in train.cars:
+		var node: Node3D = c.get("node")
+		if not is_instance_valid(node):
+			continue
+		var a: Vector3 = node.to_global(Vector3(0.0, height + 0.2, 0.0))
+		var b: Vector3 = node.to_global(Vector3(length, -1.5, 0.0))
+		if cam.is_position_behind(a) or cam.is_position_behind(b):
+			continue
+		var r := Rect2(cam.unproject_position(a), Vector2.ZERO).expand(cam.unproject_position(b))
+		if String(c.get("id", "")) != sel:
+			marks.draw_rect(r, Color(0, 0, 0, UNPICKED_SHADE))
+			continue
+		var top: Vector2 = cam.unproject_position(node.to_global(Vector3(0.15, height, 0.0)))
+		var bot: Vector2 = cam.unproject_position(node.to_global(Vector3(length - 0.15, -0.15, 0.0)))
+		var f := Rect2(top, Vector2.ZERO).expand(bot)
+		var arm: float = SEL_ARM * k
+		var th: float = 2.0 * k
+		var corners: Array = [[f.position, 1.0, 1.0], [Vector2(f.end.x, f.position.y), -1.0, 1.0],
+				[Vector2(f.position.x, f.end.y), 1.0, -1.0], [f.end, -1.0, -1.0]]
+		# drop-shadow(0 0 5px rgba(242,166,60,.7)) under the corners, then the corners.
+		for pass_i in 2:
+			var grow: float = 3.0 * k if pass_i == 0 else 0.0
+			var col: Color = Color(242 / 255.0, 166 / 255.0, 60 / 255.0, 0.3) if pass_i == 0 else SEL_COLOR
+			for cn: Array in corners:
+				var o: Vector2 = cn[0]
+				var sx: float = float(cn[1])
+				var sy: float = float(cn[2])
+				marks.draw_rect(Rect2(o, Vector2(arm * sx, th * sy)).abs().grow(grow), col)
+				marks.draw_rect(Rect2(o, Vector2(th * sx, arm * sy)).abs().grow(grow), col)
 
 
 func _start_field() -> void:
