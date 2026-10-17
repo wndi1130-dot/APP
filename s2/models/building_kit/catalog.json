@@ -1,0 +1,1227 @@
+{
+  "version": 1,
+  "script_version": 1,
+  "blender": "4.5.10 LTS",
+  "mode_setting": "visuals/building_models_enabled",
+  "grid": {
+    "cell_m": 1.0,
+    "level_m": 3.0,
+    "cut_m": 0.35,
+    "ext_wall_m": 0.45,
+    "int_wall_m": 0.2,
+    "plinth_m": 0.3,
+    "band_m": [
+      2.8,
+      3.0
+    ],
+    "sill_m": 0.9,
+    "head_m": 2.2,
+    "window_w_m": 0.7,
+    "door_m": [
+      0.9,
+      2.1
+    ]
+  },
+  "roof": {
+    "pitch_deg": 35.0,
+    "nominal_span_m": 10.0,
+    "eave_m": 0.3,
+    "thickness_m": 0.12,
+    "rise_m": 3.501
+  },
+  "zones": {
+    "wall": 0,
+    "stone": 1,
+    "wood": 2,
+    "glass": 3,
+    "roof": 4,
+    "metal": 5
+  },
+  "colour_encoding": "r = 1자리, g = 2자리, b = 4자리 비트, a = 날씨 받음",
+  "hinge_m": [
+    -0.45,
+    0.0,
+    0.0
+  ],
+  "board_slots": {
+    "window": [
+      {
+        "height_m": 1.95,
+        "roll_deg": 4
+      },
+      {
+        "height_m": 1.55,
+        "roll_deg": -3
+      },
+      {
+        "height_m": 1.15,
+        "roll_deg": 2
+      }
+    ],
+    "door": [
+      {
+        "height_m": 1.7,
+        "roll_deg": 28
+      },
+      {
+        "height_m": 1.05,
+        "roll_deg": -24
+      },
+      {
+        "height_m": 0.45,
+        "roll_deg": 26
+      }
+    ]
+  },
+  "assets": {
+    "ext_wall": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_wall.glb",
+      "category": "wall",
+      "use": "곧은 바깥벽 1 m, 맨 위 0.2 m 층 띠",
+      "stretch": "x",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 14,
+      "dimensions_m": [
+        1.0,
+        3.0,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          3.0,
+          0.225
+        ]
+      ],
+      "zones": [
+        0,
+        1
+      ],
+      "bytes": 1512,
+      "sha256": "57d144e2649fd87ab413b385eb5c8fb72d9b7deaaa4bf0b58b328d22970dda65"
+    },
+    "ext_wall_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_wall_cut.glb",
+      "category": "wall",
+      "use": "열린 층의 바깥 턱",
+      "stretch": "x",
+      "origin": "cell_floor",
+      "height": "cut",
+      "fits_cell": true,
+      "lod0_tris": 6,
+      "triangle_limit": 8,
+      "dimensions_m": [
+        1.0,
+        0.35,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          0.35,
+          0.225
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1396,
+      "sha256": "667d4cafc3b95285229ef9c7cd5e7825da07eae7647cc83aea324b1f89e5b0c3"
+    },
+    "ext_plinth": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_plinth.glb",
+      "category": "plinth",
+      "use": "1층 바깥벽 밖 기단(문 칸에서 끊김)",
+      "stretch": "x",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 8,
+      "dimensions_m": [
+        1.0,
+        0.3,
+        0.275
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          0.225
+        ],
+        [
+          0.5,
+          0.3,
+          0.5
+        ]
+      ],
+      "zones": [
+        1
+      ],
+      "bytes": 1516,
+      "sha256": "2b64d3c293c6875d008e084ee83eb12d3eb72a975cd64f5e8bba479c9316df30"
+    },
+    "ext_plinth_corner": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_plinth_corner.glb",
+      "category": "plinth",
+      "use": "1층 바깥 모서리 기단",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 8,
+      "dimensions_m": [
+        1.0,
+        0.3,
+        1.0
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        [
+          0.5,
+          0.3,
+          0.5
+        ]
+      ],
+      "zones": [
+        1
+      ],
+      "bytes": 1516,
+      "sha256": "0c5ac32cd0fe05796f290eb7b51b389be6d5447dac9820b8d1be0b480c3d30a3"
+    },
+    "ext_plinth_corner_in": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_plinth_corner_in.glb",
+      "category": "plinth",
+      "use": "1층 안으로 꺾인 모서리 기단",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 2,
+      "triangle_limit": 4,
+      "dimensions_m": [
+        0.275,
+        0.0,
+        0.275
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.3,
+          0.225
+        ],
+        [
+          -0.225,
+          0.3,
+          0.5
+        ]
+      ],
+      "zones": [
+        1
+      ],
+      "bytes": 1144,
+      "sha256": "8740cc6894cd27221616486d05920662a21af04f6e6d0ec62a3928933802c65d"
+    },
+    "ext_corner": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_corner.glb",
+      "category": "wall",
+      "use": "바깥 모서리와 모서리돌",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 20,
+      "triangle_limit": 20,
+      "dimensions_m": [
+        0.725,
+        3.0,
+        0.725
+      ],
+      "bounds_m": [
+        [
+          -0.225,
+          0.0,
+          -0.5
+        ],
+        [
+          0.5,
+          3.0,
+          0.225
+        ]
+      ],
+      "zones": [
+        0,
+        1
+      ],
+      "bytes": 2360,
+      "sha256": "f48d9ca956f8b0112f227e9890fa1e229c014461af4d519255062c997b5c89d5"
+    },
+    "ext_corner_in": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_corner_in.glb",
+      "category": "wall",
+      "use": "안으로 꺾인 모서리(ㄱ자 건물)",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 16,
+      "triangle_limit": 16,
+      "dimensions_m": [
+        0.725,
+        3.0,
+        0.725
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.225,
+          3.0,
+          0.5
+        ]
+      ],
+      "zones": [
+        0,
+        1
+      ],
+      "bytes": 2084,
+      "sha256": "6f92892693e8980ed68a247b4fe3befaab17415320dd3727c6889199b082d108"
+    },
+    "ext_corner_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_corner_cut.glb",
+      "category": "wall",
+      "use": "열린 층 턱 줄 끝의 바깥 모서리",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "cut",
+      "fits_cell": true,
+      "lod0_tris": 16,
+      "triangle_limit": 20,
+      "dimensions_m": [
+        0.725,
+        0.35,
+        0.725
+      ],
+      "bounds_m": [
+        [
+          -0.225,
+          0.0,
+          -0.5
+        ],
+        [
+          0.5,
+          0.35,
+          0.225
+        ]
+      ],
+      "zones": [
+        0,
+        1
+      ],
+      "bytes": 2104,
+      "sha256": "a6d30323b5a54b2780c36bd6efdc4e8969c13fdfde5a38f930ff6579959e5ce7"
+    },
+    "ext_corner_in_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_corner_in_cut.glb",
+      "category": "wall",
+      "use": "열린 층 턱 줄의 안으로 꺾인 모서리",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "cut",
+      "fits_cell": true,
+      "lod0_tris": 12,
+      "triangle_limit": 16,
+      "dimensions_m": [
+        0.725,
+        0.35,
+        0.725
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.225,
+          0.35,
+          0.5
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1828,
+      "sha256": "7ed63891b32fe6078cdac07f520ac5265e7529b583a60bfbf5f6cc462662df62"
+    },
+    "wall_end_cap": {
+      "status": "ready",
+      "path": "res://models/building_kit/wall_end_cap.glb",
+      "category": "wall",
+      "use": "선 바깥벽 줄이 턱과 만나는 끝 마구리",
+      "stretch": "none",
+      "origin": "run_end",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 2,
+      "triangle_limit": 4,
+      "dimensions_m": [
+        0.0,
+        3.0,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          0.0,
+          0.0,
+          -0.225
+        ],
+        [
+          0.0,
+          3.0,
+          0.225
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1084,
+      "sha256": "7bae0a3c722a2ffc187f750fad006095f2f73289af0b118aad951b1ba467684c"
+    },
+    "ext_window": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_window.glb",
+      "category": "opening",
+      "use": "창 벽: 구멍, 창턱, 창틀, 창살(유리 빼고)",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 58,
+      "triangle_limit": 64,
+      "dimensions_m": [
+        1.0,
+        3.0,
+        0.51
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          3.0,
+          0.285
+        ]
+      ],
+      "zones": [
+        0,
+        1,
+        2
+      ],
+      "bytes": 5024,
+      "sha256": "eb40a839b0083b3e3d242a40e981e74ba28b59c5c7a8862f409319a7e61a1e27"
+    },
+    "ext_window_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_window_cut.glb",
+      "category": "opening",
+      "use": "열린 층 턱에 든 창 칸",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "cut",
+      "fits_cell": true,
+      "lod0_tris": 10,
+      "triangle_limit": 16,
+      "dimensions_m": [
+        1.0,
+        0.35,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          0.35,
+          0.225
+        ]
+      ],
+      "zones": [
+        0,
+        2
+      ],
+      "bytes": 1680,
+      "sha256": "5735dc9bc8cbd8f7d1a6f9ed65b6d666eaaff88f71c8830337464b5e1031142f"
+    },
+    "window_glass": {
+      "status": "ready",
+      "path": "res://models/building_kit/window_glass.glb",
+      "category": "state",
+      "use": "성한 유리",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 4,
+      "triangle_limit": 4,
+      "dimensions_m": [
+        0.7,
+        1.3,
+        0.0
+      ],
+      "bounds_m": [
+        [
+          -0.35,
+          0.9,
+          0.06
+        ],
+        [
+          0.35,
+          2.2,
+          0.06
+        ]
+      ],
+      "zones": [
+        3
+      ],
+      "bytes": 1296,
+      "sha256": "2fe034a3bbc6d0184902a74e0bad1091139b19aa00aa7e9b1a2c8e2630560fe7"
+    },
+    "window_glass_broken": {
+      "status": "ready",
+      "path": "res://models/building_kit/window_glass_broken.glb",
+      "category": "state",
+      "use": "틀에 남은 깨진 유리",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 24,
+      "dimensions_m": [
+        0.6,
+        1.2,
+        0.0
+      ],
+      "bounds_m": [
+        [
+          -0.3,
+          0.95,
+          0.06
+        ],
+        [
+          0.3,
+          2.15,
+          0.06
+        ]
+      ],
+      "zones": [
+        3
+      ],
+      "bytes": 1852,
+      "sha256": "8f57dee32348f42162baebf18b67c68b32552cb6ec77d0d87a0d62826edc0129"
+    },
+    "window_glass_floor": {
+      "status": "ready",
+      "path": "res://models/building_kit/window_glass_floor.glb",
+      "category": "state",
+      "use": "바닥과 창턱의 유리 조각",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 12,
+      "dimensions_m": [
+        0.68,
+        0.9,
+        0.765
+      ],
+      "bounds_m": [
+        [
+          -0.32,
+          0.004,
+          -0.49
+        ],
+        [
+          0.36,
+          0.904,
+          0.275
+        ]
+      ],
+      "zones": [
+        3
+      ],
+      "bytes": 1852,
+      "sha256": "e0e7c08c9e7c3bd8300212e5833cb4b366e834d83a1d9cec073e403df6ac480c"
+    },
+    "window_boards": {
+      "status": "ready",
+      "path": "res://models/building_kit/window_boards.glb",
+      "category": "state",
+      "use": "창 판자 한 장",
+      "stretch": "none",
+      "origin": "slot",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 12,
+      "dimensions_m": [
+        0.96,
+        0.18,
+        0.03
+      ],
+      "bounds_m": [
+        [
+          -0.48,
+          -0.09,
+          0.235
+        ],
+        [
+          0.48,
+          0.09,
+          0.265
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 1588,
+      "sha256": "a12f208a39f0ab3482c2487198b901b8f8d4f9a08ef04238af386216013635d1"
+    },
+    "ext_door": {
+      "status": "ready",
+      "path": "res://models/building_kit/ext_door.glb",
+      "category": "opening",
+      "use": "바깥 문 벽: 구멍, 인방, 문턱, 디딤돌",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 32,
+      "triangle_limit": 40,
+      "dimensions_m": [
+        1.0,
+        3.0,
+        0.725
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          3.0,
+          0.5
+        ]
+      ],
+      "zones": [
+        0,
+        1,
+        2
+      ],
+      "bytes": 3180,
+      "sha256": "c711f994235a922934c0bb99d8d7c434befc08598f7edadccf438fc1b238709d"
+    },
+    "door_leaf": {
+      "status": "ready",
+      "path": "res://models/building_kit/door_leaf.glb",
+      "category": "state",
+      "use": "문짝과 손잡이",
+      "stretch": "none",
+      "origin": "hinge",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 22,
+      "triangle_limit": 24,
+      "dimensions_m": [
+        0.9,
+        2.0,
+        0.14
+      ],
+      "bounds_m": [
+        [
+          0.0,
+          0.08,
+          -0.07
+        ],
+        [
+          0.9,
+          2.08,
+          0.07
+        ]
+      ],
+      "zones": [
+        2,
+        5
+      ],
+      "bytes": 2544,
+      "sha256": "dbe6271416b27cbd3896d19d275a7ef347e462745920e8721d2da113894e278e"
+    },
+    "door_leaf_broken": {
+      "status": "ready",
+      "path": "res://models/building_kit/door_leaf_broken.glb",
+      "category": "state",
+      "use": "부서진 문짝",
+      "stretch": "none",
+      "origin": "hinge",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 20,
+      "triangle_limit": 20,
+      "dimensions_m": [
+        0.86,
+        1.58,
+        0.525
+      ],
+      "bounds_m": [
+        [
+          0.0,
+          0.02,
+          -0.5
+        ],
+        [
+          0.86,
+          1.6,
+          0.025
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 2400,
+      "sha256": "b5063d57ab70997916da58991a9fb83173380381dbd835225ed1771d854f04c9"
+    },
+    "door_boards": {
+      "status": "ready",
+      "path": "res://models/building_kit/door_boards.glb",
+      "category": "state",
+      "use": "문 판자 한 장",
+      "stretch": "none",
+      "origin": "slot",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 8,
+      "triangle_limit": 12,
+      "dimensions_m": [
+        1.0,
+        0.16,
+        0.03
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          -0.08,
+          0.23
+        ],
+        [
+          0.5,
+          0.08,
+          0.26
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 1552,
+      "sha256": "9796fe691a056e56ae22665f49c73cbfa6f3c36e9020d229618f97920ab07da5"
+    },
+    "int_wall": {
+      "status": "ready",
+      "path": "res://models/building_kit/int_wall.glb",
+      "category": "wall",
+      "use": "안벽 0.2 m",
+      "stretch": "x",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 10,
+      "triangle_limit": 10,
+      "dimensions_m": [
+        1.0,
+        3.0,
+        0.2
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.1
+        ],
+        [
+          0.5,
+          3.0,
+          0.1
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1652,
+      "sha256": "f2c145eaeb4fb6f71896909e68e5414cfc910cba89ac002132e34c9ef2c8a8c3"
+    },
+    "int_wall_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/int_wall_cut.glb",
+      "category": "wall",
+      "use": "안벽 턱",
+      "stretch": "x",
+      "origin": "cell_floor",
+      "height": "cut",
+      "fits_cell": true,
+      "lod0_tris": 10,
+      "triangle_limit": 10,
+      "dimensions_m": [
+        1.0,
+        0.35,
+        0.2
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.1
+        ],
+        [
+          0.5,
+          0.35,
+          0.1
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1676,
+      "sha256": "6b7c7e5af66842ffe9178d87fa82ab2990429056c30c19d1935de49e292e0a97"
+    },
+    "int_door": {
+      "status": "ready",
+      "path": "res://models/building_kit/int_door.glb",
+      "category": "opening",
+      "use": "안문 틀",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 24,
+      "triangle_limit": 30,
+      "dimensions_m": [
+        1.0,
+        3.0,
+        0.2
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.1
+        ],
+        [
+          0.5,
+          3.0,
+          0.1
+        ]
+      ],
+      "zones": [
+        0,
+        2
+      ],
+      "bytes": 2636,
+      "sha256": "f104aedd5614f3159402629217915f7532b394c549c098afc9871a6cb7d2dda3"
+    },
+    "door_frame_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/door_frame_cut.glb",
+      "category": "opening",
+      "use": "턱 줄에 든 문 칸",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "cut",
+      "fits_cell": true,
+      "lod0_tris": 18,
+      "triangle_limit": 18,
+      "dimensions_m": [
+        1.0,
+        0.35,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          0.35,
+          0.225
+        ]
+      ],
+      "zones": [
+        1,
+        2
+      ],
+      "bytes": 2244,
+      "sha256": "e81b2c12bcdfc1bc0993113fdc27904adffb763ab7379b2be4341ba8f82dba5f"
+    },
+    "door_leaf_cut": {
+      "status": "ready",
+      "path": "res://models/building_kit/door_leaf_cut.glb",
+      "category": "state",
+      "use": "턱 높이 문짝",
+      "stretch": "none",
+      "origin": "hinge",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 10,
+      "triangle_limit": 12,
+      "dimensions_m": [
+        0.9,
+        0.27,
+        0.05
+      ],
+      "bounds_m": [
+        [
+          0.0,
+          0.08,
+          -0.025
+        ],
+        [
+          0.9,
+          0.35,
+          0.025
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 1708,
+      "sha256": "621d202f1744c5ab5cc13edb85272dfc20e6b70dea2194d99a32f4caf3fbe16c"
+    },
+    "roof_gable": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_gable.glb",
+      "category": "roof",
+      "use": "박공지붕(경사 둘, 처마, 용마루 덮개)",
+      "stretch": "span",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 26,
+      "triangle_limit": 28,
+      "dimensions_m": [
+        1.0,
+        3.9076,
+        10.6
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          -0.3566,
+          -5.3
+        ],
+        [
+          0.5,
+          3.551,
+          5.3
+        ]
+      ],
+      "zones": [
+        2,
+        4,
+        5
+      ],
+      "bytes": 2876,
+      "sha256": "1fb4bd32fab702863b4433590d077ecb4287cefeab22f61b2330c5effc7501b9"
+    },
+    "roof_gable_end": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_gable_end.glb",
+      "category": "roof",
+      "use": "박공 끝 삼각 벽",
+      "stretch": "span_xz",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 2,
+      "triangle_limit": 4,
+      "dimensions_m": [
+        9.5816,
+        3.3545,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -4.7908,
+          0.0,
+          -0.225
+        ],
+        [
+          4.7908,
+          3.3545,
+          0.225
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1204,
+      "sha256": "e7b78e01d40cc3dcaed3b91ac8ab6ac65dafc3dfbb444635081a9d5be4431795"
+    },
+    "roof_flat": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_flat.glb",
+      "category": "roof",
+      "use": "평지붕 면",
+      "stretch": "xy",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 2,
+      "triangle_limit": 4,
+      "dimensions_m": [
+        1.0,
+        0.0,
+        1.0
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        [
+          0.5,
+          0.0,
+          0.5
+        ]
+      ],
+      "zones": [
+        4
+      ],
+      "bytes": 1052,
+      "sha256": "7bdcb753d9b47ad1f0ed100f2f52965e02acd3e87e3f62d6f9707e81b9bdd1f8"
+    },
+    "roof_parapet": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_parapet.glb",
+      "category": "roof",
+      "use": "평지붕 둘레 낮은 벽",
+      "stretch": "x",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 6,
+      "triangle_limit": 8,
+      "dimensions_m": [
+        1.0,
+        0.5,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -0.225
+        ],
+        [
+          0.5,
+          0.5,
+          0.225
+        ]
+      ],
+      "zones": [
+        0,
+        1
+      ],
+      "bytes": 1380,
+      "sha256": "ff095d70082ad4791c1d9e9167e03abf6641f0447eb2eea296e6668223788bf1"
+    },
+    "chimney": {
+      "status": "ready",
+      "path": "res://models/building_kit/chimney.glb",
+      "category": "roof",
+      "use": "굴뚝 몸통과 덮개돌",
+      "stretch": "none",
+      "origin": "roof_base",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 20,
+      "triangle_limit": 40,
+      "dimensions_m": [
+        0.72,
+        2.05,
+        0.72
+      ],
+      "bounds_m": [
+        [
+          -0.36,
+          0.0,
+          -0.36
+        ],
+        [
+          0.36,
+          2.05,
+          0.36
+        ]
+      ],
+      "zones": [
+        0,
+        1
+      ],
+      "bytes": 2400,
+      "sha256": "ed2d9331289e727fd0c4e4eb0fd0735658a6fc107184fe2e624b3e91b691740c"
+    },
+    "stair_steep": {
+      "status": "ready",
+      "path": "res://models/building_kit/stair_steep.glb",
+      "category": "stair",
+      "use": "가파른 나무 계단(한 칸, 3 m)",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "full",
+      "fits_cell": true,
+      "lod0_tris": 104,
+      "triangle_limit": 160,
+      "dimensions_m": [
+        0.84,
+        3.0,
+        0.9
+      ],
+      "bounds_m": [
+        [
+          -0.42,
+          0.0,
+          -0.45
+        ],
+        [
+          0.42,
+          3.0,
+          0.45
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 8280,
+      "sha256": "ddb63d96fad72ae4495e5e43be24f0ecb6bfc593518414718564d224a01d79e8"
+    },
+    "stair_well": {
+      "status": "ready",
+      "path": "res://models/building_kit/stair_well.glb",
+      "category": "stair",
+      "use": "위층 계단 구멍 난간",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 56,
+      "triangle_limit": 60,
+      "dimensions_m": [
+        0.97,
+        0.92,
+        0.97
+      ],
+      "bounds_m": [
+        [
+          -0.485,
+          0.0,
+          -0.485
+        ],
+        [
+          0.485,
+          0.92,
+          0.485
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 4936,
+      "sha256": "a788d087dac62a302c52d3eefcdeddb260576bfd853549418b6f1777387ae771"
+    },
+    "ladder": {
+      "status": "ready",
+      "path": "res://models/building_kit/ladder.glb",
+      "category": "stair",
+      "use": "사다리(위층 위로 0.9 m)",
+      "stretch": "none",
+      "origin": "cell_floor",
+      "height": "free",
+      "fits_cell": true,
+      "lod0_tris": 70,
+      "triangle_limit": 72,
+      "dimensions_m": [
+        0.45,
+        3.9,
+        0.05
+      ],
+      "bounds_m": [
+        [
+          -0.225,
+          0.0,
+          -0.32
+        ],
+        [
+          0.225,
+          3.9,
+          -0.27
+        ]
+      ],
+      "zones": [
+        2
+      ],
+      "bytes": 5908,
+      "sha256": "07e2e147c430c01dfa84dbf3c7c1f229229ee20ecba6163eb637ac80dce6a9e0"
+    }
+  },
+  "sulehuf_estimate": {
+    "parts": {
+      "곧은 바깥벽": 1576,
+      "창(벽과 유리)": 5022,
+      "바깥 문(벽과 문짝)": 972,
+      "모서리": 1600,
+      "박공지붕": 390,
+      "굴뚝": 160
+    },
+    "total": 9720
+  }
+}

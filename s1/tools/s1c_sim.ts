@@ -231,6 +231,9 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);
+  // 봇이 5,000걸음 안에 끝을 못 내면 end가 'none'이 되고 완주·좌초 어느 쪽에도 안 잡힌다. 그런 판이 있으면 숨지 않게 알린다.
+  const stuck = ms.filter(m => m.end === 'none').length;
+  if (stuck) console.warn(`${run.name}: ${stuck}판이 5,000걸음 상한에 걸려 끝나지 않았다(end='none')`);
   const s = out[run.name];
   console.log(`${run.name.padEnd(28)} 완주 ${(100 * (s.ends.complete ?? 0)).toFixed(0)}% 좌초 ${(100 * (s.ends.stranded ?? 0)).toFixed(0)}% `
     + `위기안건 ${s.forcedPerGame} 가혹법 ${s.harshPassed} 법 ${s.lawsPassed} 석탄최저 ${s.coalMin} 식량최저 ${s.foodMin} `
