@@ -69,8 +69,8 @@ const OWN_POSES: Array = [
 # Only appended to, so a number once baked keeps its motion. Sixteen at most:
 # the shader's clip tables have sixteen places (dead_vat.gdshader).
 const PERSON_CLIPS: Array = [
-	["p_walk", "", 32, true, "p_walk", 0.85],
-	["p_run", "", 24, true, "p_run", 0.62],
+	["p_walk", "", 32, true, "p_walk", 0.78],
+	["p_run", "", 24, true, "p_run", 0.58],
 	["p_stand", "", 32, true, "p_stand", 4.0],
 	["p_held", "", 24, true, "p_held", 1.0],
 	["p_bitten", "", 24, false, "p_bitten", 0.6],
@@ -78,7 +78,7 @@ const PERSON_CLIPS: Array = [
 	["p_swing_axe", "", 32, false, "p_swing_axe", 0.9],
 	["p_stab", "", 20, false, "p_stab", 0.45],
 	["p_shove", "", 20, false, "p_shove", 0.5],
-	["p_crouch_walk", "", 32, true, "p_crouch_walk", 1.2],
+	["p_crouch_walk", "", 32, true, "p_crouch_walk", 1.08],
 	["p_crouch_idle", "", 24, true, "p_crouch_idle", 3.0],
 	["p_search_mid", "", 24, true, "p_search_mid", 2.0],
 	["p_search_low", "", 24, true, "p_search_low", 2.0],
