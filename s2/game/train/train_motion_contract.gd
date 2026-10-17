@@ -2,7 +2,7 @@ extends RefCounted
 ## A bridge, not an animation implementation. The gesture worker owns the backend.
 
 const Backend = preload("res://game/train/train_gesture.gd")
-const LEGACY := ["argue", "whisper", "turn_about", "arms_crossed", "back_turned", "hug_knees", "slump", "drag_feet", "bowl_sit", "rub_stamp"]
+const LEGACY := ["argue", "whisper", "turn_about", "arms_crossed", "back_turned", "hug_knees", "slump", "drag_walk", "bowl_sit", "rub_stamp"]
 const FALLBACK := {
 	"chat_talk": "whisper", "chat_listen": "whisper", "look_around": "turn_about",
 	"window_watch": "turn_about", "stand_point": "argue", "fist_raise": "argue",
@@ -10,6 +10,7 @@ const FALLBACK := {
 	"wave_hat": "arms_crossed", "wave_paper": "arms_crossed", "bang_table": "argue",
 	"eat_bowl": "bowl_sit", "drink_cup": "bowl_sit", "catch_breath": "slump",
 	"warm_hands_stand": "rub_stamp", "warm_hands_crouch": "rub_stamp",
+	"drag_feet": "drag_walk",
 }
 const SEATED := ["sit_bench", "lie_bunk", "sleep_lean_wall", "read_book", "mend_cloth", "tend_sick"]
 const FLOOR := ["sit_floor", "kneel", "mourn_kneel", "child_draw_floor"]
@@ -25,8 +26,12 @@ static func has_method_on(script: Script, method: String) -> bool:
 static func resolve(requested: String, script: Script = Backend) -> Dictionary:
 	var pose := "floor" if FLOOR.has(requested) else ("sit" if SEATED.has(requested) else "stand")
 	var native: bool = has_method_on(script, "knows") and bool(script.call("knows", requested))
-	var name: String = requested if native or LEGACY.has(requested) else String(FALLBACK.get(requested, ""))
-	return {"requested": requested, "gesture": name, "pose": pose, "native": native, "fallback": not native and not LEGACY.has(requested)}
+	# An old name counts only while the real backend still draws it.
+	var old: bool = LEGACY.has(requested) and Backend.knows(requested)
+	var name: String = requested if native or old else String(FALLBACK.get(requested, ""))
+	if name != "" and not native and not old and not Backend.knows(name):
+		name = ""
+	return {"requested": requested, "gesture": name, "pose": pose, "native": native, "fallback": not native and not old}
 
 
 static func show(body: Node3D, requested: String, time: float, role: int = 0, phase: String = "loop") -> Dictionary:
@@ -58,7 +63,7 @@ static func start(body: Node3D, requested: String, run_id: int, role: int = 0, c
 	var name: String = resolved["gesture"]
 	if not bool(resolved["native"]) or Backend.spec(name).is_empty():
 		return false
-	if name == "shove_body":
+	if int(Backend.spec(name)["people"]) == 2:
 		return false
 	if body.has_meta("life_player") and bool(body.get_meta("life_player").call("active")):
 		return false
@@ -74,7 +79,9 @@ static func start(body: Node3D, requested: String, run_id: int, role: int = 0, c
 
 ## Both sides are admitted together, using actual positions and readiness facts
 ## supplied by the scene. A rejected second role cannot leave A running alone.
-static func start_shove_pair(a: Node3D, b: Node3D, run_id: int, ready_a: Dictionary, ready_b: Dictionary) -> bool:
+static func start_shove_pair(a: Node3D, b: Node3D, run_id: int, ready_a: Dictionary, ready_b: Dictionary, name: String = "shove_body") -> bool:
+	if not _pair_clip(name):
+		return false
 	if a == null or b == null or a == b or a.get_parent() != b.get_parent():
 		return false
 	if a.position.is_equal_approx(b.position):
@@ -88,13 +95,13 @@ static func start_shove_pair(a: Node3D, b: Node3D, run_id: int, ready_a: Diction
 	b_context["anchors"] = anchors
 	var first = Backend.new()
 	var second = Backend.new()
-	if not first.begin("shove_body", 0, run_id, String(a.pose), a_context):
+	if not first.begin(name, 0, run_id, String(a.pose), a_context):
 		return false
-	if not second.begin("shove_body", 1, run_id, String(b.pose), b_context):
+	if not second.begin(name, 1, run_id, String(b.pose), b_context):
 		return false
 	for actor in [a, b]:
 		actor.set_meta("life_facing", actor.rotation.y)
-		actor.set_meta("life_motion", resolve("shove_body"))
+		actor.set_meta("life_motion", resolve(name))
 		actor.set_meta("life_phase", "once")
 	a.set_meta("life_player", first)
 	b.set_meta("life_player", second)
@@ -132,14 +139,16 @@ static func cancel(body: Node3D, run_id: int, next_pose: String = "stand") -> bo
 
 ## Both bodies are sampled at one time from their real, distinct places.
 ## The caller owns the contact result and does not move the two here.
-static func show_shove_pair(a: Node3D, b: Node3D, time: float, confirmed: bool = false, run_id: int = 0) -> bool:
+static func show_shove_pair(a: Node3D, b: Node3D, time: float, confirmed: bool = false, run_id: int = 0, name: String = "shove_body") -> bool:
+	if not _pair_clip(name):
+		return false
 	if a == null or b == null or a == b or a.get_parent() != b.get_parent():
 		return false
 	for body in [a, b]:
 		if not body.has_meta("life_player"):
 			return false
 		var player = body.get_meta("life_player")
-		if player.run_id != run_id or player.clip != "shove_body" or player.segment != "once":
+		if player.run_id != run_id or player.clip != name or player.segment != "once":
 			return false
 		if player.role != (0 if body == a else 1):
 			return false
@@ -149,7 +158,7 @@ static func show_shove_pair(a: Node3D, b: Node3D, time: float, confirmed: bool =
 			return false
 		if not (player.pair_anchors[1] as Vector3).is_equal_approx(b.position):
 			return false
-	var joined: Dictionary = Backend.shove_pair(a.position, b.position, time, confirmed, run_id)
+	var joined: Dictionary = Backend.pair_at(name, a.position, b.position, time, confirmed, run_id)
 	if joined.is_empty():
 		return false
 	a.set_meta("life_facing", float(joined["facings"][0]))
@@ -175,3 +184,9 @@ static func finish_removed(body: Node3D, run_id: int) -> bool:
 		return false
 	body.remove_meta("life_player")
 	return true
+
+
+## Two-person one-off rows go through the pair entries above, never start().
+static func _pair_clip(name: String) -> bool:
+	var row: Dictionary = Backend.spec(name)
+	return not row.is_empty() and int(row["people"]) == 2 and row["kind"] == "once"
