@@ -10,8 +10,9 @@ extends Node3D
 ## for yet (the falls, the crawl, getting up, reeling spent). Each person is in
 ## one of them at a time; a change between the two is not eased.
 ## The weapon in the hand is put in the worn body's right hand (found in the
-## baked motions), save while a gun is aimed, loaded or cleared, where
-## person_pose.gd still holds it.
+## baked motions); a gun aimed standing still is held out in that hand, kicking
+## back as person_pose.gd has it. Being loaded or cleared, or aimed on the
+## move, person_pose.gd still holds it.
 ## The capsule, the ball and the arm boxes are hidden while a body is worn; the
 ## weapon box stays, since the blows are still drawn with it (person_pose.gd).
 ## With the switch off, or no baked folder in the build, nothing is drawn here
@@ -68,7 +69,10 @@ const OWN_SHOVE: String = "p_shove"
 const OWN_BASE: int = 100
 # Easing into each own motion (Project Zomboid: walking, running 0.35; struck 0.10).
 const OWN_MIX: Dictionary = {"p_bitten": 0.1, "p_shove": 0.1, "p_swing_one": 0.1, "p_swing_axe": 0.1, "p_stab": 0.1,
-	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2}
+	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3}
+# Aiming a gun standing still (Project Zomboid: aim_handgun, aim_rifle): one hand
+# out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
+const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
 # A timed job of the hands (Project Zomboid: the hands' own motions over the
 # standing, by how high the work is; swapping a weapon is its rummaging at 0.8):
 # the own motion and how fast it goes round. 0 plays it once over the job: a
@@ -217,6 +221,15 @@ func _process(delta: float) -> void:
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
+		elif baked.has("arm") and own and aiming(note, own_vat.get("clips", [])):
+			# The gun in the hand held out, the muzzle ahead, kicking back as it fires
+			# as person_pose.gd has it (its aim less where it would hold it still).
+			var hand := arm_at(baked["arm"], own_frames, drawn)
+			var hold := Pose.hold_of(p.weapon_id())
+			var still: Vector3 = Pose.aim_at(hold)["weapon"]["pos"]
+			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, Time.get_ticks_msec()))["weapon"]
+			var lean := lean_of(p, note)
+			p.weapon_mesh.transform = Transform3D(lean * Basis.from_euler(shot["rot"]), lean * (hand[0] + shot["pos"] - still))
 	mm.visible_instance_count = n
 	if own_mm != null:
 		own_mm.visible_instance_count = k
@@ -292,6 +305,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		return work
 	if gone > 0.001:
 		note["moved"] = t
+	var aim := aim_of(p, own)
+	if aim >= 0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		return Vector2(_own_cycle(note, OWN_BASE + aim, t, _length(own, aim, 1.0), p.name_unit("aim")), aim)
 	var unit: float = p.name_unit("stand")
 	# Spent, it reels as the dead do (the living have no such motion of their own
 	# yet), still reeling where it stops for breath.
@@ -354,7 +370,11 @@ static func blow_of(p, own: Array) -> Vector2:
 static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 	if p.action == "" or p.action_t <= 0.0 or p.action_total <= 0.0 or not OWN_WORK.has(p.action):
 		return Vector2(0.0, -1.0)
-	var clip := clip_named(own, String(OWN_WORK[p.action][0]), -1)
+	var work_name := String(OWN_WORK[p.action][0])
+	# Crouched it keeps low (Project Zomboid's sneaking jobs): chest-high work done low.
+	if p.crouched and work_name == "p_search_mid":
+		work_name = "p_search_low"
+	var clip := clip_named(own, work_name, -1)
 	if clip < 0:
 		return Vector2(0.0, -1.0)
 	var pace: float = OWN_WORK[p.action][1]
@@ -362,6 +382,20 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 		note["motion"] = OWN_BASE + clip
 		return Vector2(clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0), clip)
 	return Vector2(_own_cycle(note, OWN_BASE + clip, t * pace, _length(own, clip, 1.0), p.name_unit("work")), clip)
+
+
+## The own aiming motion for the gun in the hand while it is aimed, or -1.
+## Crouched it stays low (the aiming motions are standing ones).
+static func aim_of(p, own: Array) -> int:
+	if not p.aim.active or p.crouched:
+		return -1
+	return clip_named(own, String(OWN_AIMS.get(Pose.hold_of(p.weapon_id()), "")), -1)
+
+
+## Drawn in an own aiming motion (note as motion_of left it).
+static func aiming(note: Dictionary, own: Array) -> bool:
+	var m := int(note.get("motion", -1)) - OWN_BASE
+	return m >= 0 and m < own.size() and OWN_AIMS.values().has(String(own[m].get("name", "")))
 
 
 ## A gun being aimed, loaded or cleared: person_pose.gd holds it there.
