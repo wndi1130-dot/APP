@@ -49,6 +49,17 @@ const BREAKS: Array = ["search", "treat", "loot", "salvage", "rub"]
 const STUCK_T: float = 1.5
 ## The door the chief went in by is held while he is this near it.
 const DOOR_HOLD_R: float = 16.0
+## The chief stops by things to search: the companions not on watch search the
+## others within HELP_R of him (decision 406, bundle 2).
+const HELP_R: float = 6.0
+## Arrows and dropped things this near (and this near the chief) are picked up.
+const PICK_R: float = 6.0
+## A bleeding one of us with no bandage this near gets one handed over.
+const GIVE_R: float = 12.0
+## A thing it cannot get to in this long is given up.
+const HELP_GIVE_UP: float = 12.0
+## What is worth stooping for: light, and of use to everyone.
+const PICK_IDS: Array = ["arrow", "ammo_pistol", "ammo_shell", "bandage", "cloth"]
 
 var game
 var think_t: float = 0.0
@@ -66,6 +77,11 @@ var _chief_out_at := Vector3.ZERO
 var _live: Array = []
 var _live_on: bool = false
 var _roles: Dictionary = {}
+## Containers by the chief worth a hand, nearest first ([id, d]), gathered
+## once per think for all three (_help_search); and where each one stands.
+var _help_list: Array = []
+var _help_ok: bool = false
+var _spots: Dictionary = {}
 ## The dead within ENGAGE_R of the companion thinking now (_companion fills it).
 var _near: Array = []
 var _near_of = null
@@ -107,6 +123,7 @@ func update(delta: float) -> void:
 	_live_on = false
 	_live = []
 	_roles = {}
+	_help_ok = false
 	_near = []
 	_near_of = null
 	for p in game.crew:
@@ -295,6 +312,10 @@ func _companion(p) -> void:
 	# Slow work is dropped when one of the dead gets close.
 	if BREAKS.has(p.action) and not threat.is_empty() and threat["pos"].distance_to(p.position) <= BREAK_R:
 		p.cancel_action()
+	# A search it chose itself is left when the chief walks on without it.
+	if p.action == "search" and p.brain.has("help_c") and p.position.distance_to(player.position) > LEASH_R:
+		p.cancel_action()
+		p.brain.erase("help_c")
 	# Self-care first when nothing is close.
 	if threat.is_empty() and raider == null and p.action == "" and _treat_self(p):
 		return
@@ -377,6 +398,8 @@ func _companion(p) -> void:
 			return
 	match p.command:
 		"follow", "cover":
+			if _hand_over(p) or _pick_ground(p) or _help_search(p):
+				return
 			_keep_formation(p)
 		"wait":
 			if p.position.distance_to(p.command_target) > 1.0:
@@ -646,6 +669,136 @@ func _track_door() -> void:
 	if out.length() < 0.1:
 		return
 	held_door = {"cell": best, "out": out.normalized(), "building": game.grid.building_at(c)}
+
+
+## The chief stands by to search: the companions not on watch take the
+## other things near him, one each (the rear one keeps watch). Not while
+## he walks, not while sneaking past anything, never a locked box.
+func _help_search(p) -> bool:
+	var player = game.player
+	var claim: String = String(p.brain.get("help_c", ""))
+	if claim != "":
+		var mine: Dictionary = game.data["containers"].get(claim, {})
+		p.brain["help_t"] = float(p.brain.get("help_t", 0.0)) + THINK
+		if float(p.brain["help_t"]) > HELP_GIVE_UP:
+			var skip: Dictionary = p.brain.get("help_skip", {})
+			skip[claim] = true
+			p.brain["help_skip"] = skip
+		if mine.is_empty() or mine["searched"] or mine["locked"] or player.position.distance_to(_spot_of(mine)) > HELP_R + 2.0 or float(p.brain["help_t"]) > HELP_GIVE_UP:
+			p.brain.erase("help_c")
+			claim = ""
+	if claim == "":
+		var busy_chief: bool = player.action == "search" or player.action == "loot"
+		if player.moving and not busy_chief:
+			return false
+		if _role(p) == "rear" and _mates_up() > 1:
+			return false
+		var taken := {}
+		for o in game.squad:
+			if o != p and o.brain.has("help_c"):
+				taken[o.brain["help_c"]] = true
+		var skip2: Dictionary = p.brain.get("help_skip", {})
+		for e in _help_near():
+			if not taken.has(e[0]) and not skip2.has(e[0]):
+				claim = e[0]
+				break
+		if claim == "":
+			return false
+		p.brain["help_c"] = claim
+		p.brain["help_t"] = 0.0
+	var c2: Dictionary = game.data["containers"][claim]
+	var at := _spot_of(c2)
+	if p.position.distance_to(at) > 1.3:
+		_walk(p, game.walkable_near(at, false, 2), false)
+	else:
+		p.face_point(at)
+		game.actions.search(p, claim)
+	return true
+
+
+## Containers within HELP_R of the chief on his floor, not searched, locked
+## or in hand, nearest first: once per think, whoever asks first (outside update(), every time).
+func _help_near() -> Array:
+	if _help_ok and _live_on:
+		return _help_list
+	_help_ok = _live_on
+	_help_list = []
+	var player = game.player
+	var lv: int = game.level_of(player.position)
+	for id in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][id]
+		if c["searched"] or c["locked"] or c.get("busy", false) or c.has("pick") or int(c.get("level", 0)) != lv:
+			continue
+		var d: float = _spot_of(c).distance_to(player.position)
+		if d < HELP_R:
+			_help_list.append([id, d])
+	_help_list.sort_custom(func(a, b): return a[1] < b[1])
+	return _help_list
+
+
+func _spot_of(c: Dictionary) -> Vector3:
+	var key := Vector3i(c["cell"].x, c["cell"].y, int(c.get("level", 0)))
+	if not _spots.has(key):
+		_spots[key] = game.lift(c["cell"], int(c.get("level", 0)))
+	return _spots[key]
+
+
+func _mates_up() -> int:
+	var n := 0
+	for o in game.squad:
+		if o != game.player and o.is_alive() and not o.body.downed:
+			n += 1
+	return n
+
+
+## Arrows that flew and things dropped near us are picked up on the way
+## (an archer gets her arrows back), when nothing is after us.
+func _pick_ground(p) -> bool:
+	var player = game.player
+	var best := -1
+	var best_d := PICK_R
+	for i in range(game.ground_items.size()):
+		var g: Dictionary = game.ground_items[i]
+		if g.has("weapon") or not PICK_IDS.has(String(g["id"])):
+			continue
+		var d: float = p.position.distance_to(g["pos"])
+		if d < best_d and g["pos"].distance_to(player.position) < PICK_R + 2.0:
+			best_d = d
+			best = i
+	if best < 0:
+		return false
+	if best_d > 0.9:
+		_walk(p, game.ground_items[best]["pos"], false)
+	else:
+		var g2: Dictionary = game.ground_items[best]
+		game.actions.pick_up(p, best)
+		if g2["id"] == "arrow":
+			game.say(p, "%s: 화살을 주웠다." % p.display_name)
+	return true
+
+
+## One of us bleeding with no bandage of their own: a companion with one to
+## spare brings it over (the medic treats instead, above).
+func _hand_over(p) -> bool:
+	if p.medical != "none" or int(p.items.get("bandage", 0)) <= 0:
+		return false
+	for o in game.squad:
+		if o == p or not o.is_alive() or o.body.bleed <= 0 or not o.grabbers.is_empty():
+			continue
+		if int(o.items.get("bandage", 0)) > 0 or o.items.has("medkit"):
+			continue
+		var d: float = o.position.distance_to(p.position)
+		if d > GIVE_R:
+			continue
+		if d > 1.6:
+			_walk(p, o.position, o.body.bleed >= 2)
+		else:
+			p.face_point(o.position)
+			p.take_item("bandage")
+			o.add_item("bandage")
+			game.say(p, "%s: %s에게 붕대를 건넸다." % [p.display_name, o.display_name])
+		return true
+	return false
 
 
 ## Walk to and search the nearest unsearched container near `around`.

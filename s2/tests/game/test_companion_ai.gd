@@ -186,3 +186,69 @@ func test_a_companion_stuck_on_the_way_finds_the_way_again() -> void:
 		game.ai._watch_stuck(ally)
 	assert_true(ally.path.is_empty(), "the old path is dropped")
 	assert_false(ally.brain.has("dest"))
+
+
+# ---------------------------------------------------------------- bundle 2: searching, picking up, handing over
+
+## An unlocked, unsearched ground-floor container and the chief standing beside it.
+func _by_a_box() -> String:
+	for id in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][id]
+		if c["locked"] or c["searched"] or c.has("pick") or int(c.get("level", 0)) != 0:
+			continue
+		game.player.position = game.walkable_near(game.lift(c["cell"], 0), false, 2)
+		for q in game.squad:
+			if q != game.player:
+				q.position = game.player.position + Vector3(-1.5, 0, 0)
+		return id
+	return ""
+
+
+func test_the_chief_stops_by_a_box_and_a_companion_takes_it() -> void:
+	_start()
+	var id := _by_a_box()
+	assert_ne(id, "", "the map has a box to search")
+	game.player.moving = false
+	var helpers := 0
+	for q in game.squad:
+		if q == game.player:
+			continue
+		if game.ai._help_search(q):
+			helpers += 1
+			assert_ne(game.ai._role(q), "rear", "the rear one keeps watch")
+	assert_gte(helpers, 1, "someone goes for it")
+	var claims := {}
+	for q in game.squad:
+		if q.brain.has("help_c"):
+			assert_false(claims.has(q.brain["help_c"]), "one each")
+			claims[q.brain["help_c"]] = true
+
+
+func test_nobody_stops_to_search_while_the_chief_walks_on() -> void:
+	_start()
+	_by_a_box()
+	game.player.moving = true
+	for q in game.squad:
+		if q != game.player:
+			assert_false(game.ai._help_search(q))
+
+
+func test_an_arrow_on_the_ground_is_picked_up() -> void:
+	_start()
+	var before: int = int(game.ammo.get("craft", 0))
+	game.ground_items.append({"pos": ally.position + Vector3(0.3, 0, 0), "id": "arrow", "n": 1})
+	assert_true(game.ai._pick_ground(ally))
+	assert_eq(int(game.ammo.get("craft", 0)), before + 1, "back in the quiver")
+	assert_true(game.ground_items.is_empty())
+
+
+func test_a_bandage_is_brought_to_the_chief_bleeding_without_one() -> void:
+	_start()
+	ally.medical = "none"
+	ally.items = {"bandage": 2}
+	game.player.items = {}
+	game.player.body.bleed = 1
+	game.player.position = ally.position + Vector3(1.0, 0, 0)
+	assert_true(game.ai._hand_over(ally))
+	assert_eq(int(game.player.items.get("bandage", 0)), 1)
+	assert_eq(int(ally.items.get("bandage", 0)), 1)
