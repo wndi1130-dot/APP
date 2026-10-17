@@ -6,7 +6,7 @@ import { D } from './data';
 import { techMult, variantOf } from './state';
 
 // 정찰 장비와 소음(결정 360·371·373, coord fun 구현명세_정찰_연구_v2). 장비는 정찰 한 번의 대가(산출 깎임·표결 빠짐·정찰조 사상)를 덜어 주고,
-// 소리 나는 장비(페달·발동기 핸드카)는 바깥 기척을 한 단계 올린다. 기척은 stop.threat를 그대로 두고 stop.noise로 단계만 옮긴다.
+// 소리 나는 장비는 바깥 기척을 올린다(페달 한 단계, 발동기 두 단계, 결정 396). 기척은 stop.threat를 그대로 두고 stop.noise로 단계만 옮긴다.
 // 장비 없이 하거나 소리 없는 장비(망원경·수신호)로 하는 정찰은 지금처럼 피해를 안 바꾼다(정찰은 드러내기만 한다, 결정 371 1 가).
 
 /** 바깥 기척 세 단계(turn.ts arriveStop): 고요 0.8, 보통 1, 짙음 1.4 */
@@ -74,7 +74,7 @@ export function scoutPlan(g: Game, stop: StopState): ScoutGearUsed & { size: num
   if (t.signal > 0) risk *= D.signalRisk;
   if (t.motor > 0) risk *= 1 - D.motorRisk * t.motor;
   const calm = threatStep(stop.threat ?? 1) === 0;
-  const noise = (t.pedal > 0 && calm ? 1 : 0) + (t.motor > 0 ? 1 : 0);
+  const noise = (t.pedal > 0 && calm ? 1 : 0) + (t.motor > 0 ? D.motorNoise : 0);
   const haul = Math.min(1, P.scoutHaul + D.pedalHaul * t.pedal + D.motorHaul * t.motor);
   return { size: t.signal > 0 ? D.signalSize : P.scoutSize, risk, noise, haul, blind, glass: t.glass, signal: t.signal, pedal: t.pedal, motor: t.motor };
 }
@@ -89,7 +89,8 @@ export function scoutHaulNow(stop: StopState): number {
 export function applyScoutGear(g: Game, stop: StopState, plan: ReturnType<typeof scoutPlan>): void {
   const used = (({ glass, signal, pedal, motor, blind, noise, haul }) => ({ glass, signal, pedal, motor, blind, noise, haul }))(plan);
   if (used.glass || used.signal || used.pedal || used.motor) stop.scoutGear = used;
-  if (plan.noise) stop.noise = (stop.noise ?? 0) + plan.noise;
+  // 짙음 위로 넘친 소리는 버린다(결정 371 셋째). 그래야 뒤에 건 미끼가 한 단계를 온전히 내린다.
+  if (plan.noise) stop.noise = Math.min(2, threatStep(effThreat(stop)) + plan.noise) - threatStep(stop.threat ?? 1);
   if (plan.blind) journal(g, `${BLIND_NAME[stop.weather ?? 'fog'] ?? '안개'}에 가려 망원경으로 멀리 보지 못했다.`);
 }
 
@@ -110,7 +111,7 @@ export function hangLure(g: Game): boolean {
   if (lureBlock(g)) return false;
   const stop = g.stop!;
   g.dom!.parts -= D.lureParts;
-  stop.noise = (stop.noise ?? 0) - 1;
+  stop.noise = threatStep(effThreat(stop)) - 1 - threatStep(stop.threat ?? 1);
   stop.lured = true;
   journal(g, `태엽 소리가 망자를 반대편으로 끌었다. 지금 기척: ${THREAT_STEP_NAME[threatStep(effThreat(stop))]}.`);
   return true;

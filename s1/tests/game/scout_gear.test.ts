@@ -120,17 +120,18 @@ describe('scout_gear', () => {
     expect(gearOwned(old).pedal).toBeGreaterThan(0);
   });
 
-  it('7 motor_always_noise: 발동기는 정찰조 위험 ×(1 − 0.6m)(결정 394), 산출 곱 0.8 + 0.2m, 늘 기척 +1, 짙음 위로는 안 간다', () => {
+  it('7 motor_always_noise: 발동기는 정찰조 위험 ×(1 − 0.6m)(결정 394), 산출 곱 0.8 + 0.2m, 늘 기척 +2(결정 396), 짙음 위로는 안 간다', () => {
     for (const threat of [0.8, 1, 1.4]) {
       const g = mk(`sg-7-${threat}`, [['x2', 'b']], { threat });
       const m = techMult(g, 'x2');
       const p = scoutPlan(g, g.stop!);
       expect(p.risk).toBeCloseTo(1 - D.motorRisk * m, 9);
       expect(p.haul).toBeCloseTo(Math.min(1, P.scoutHaul + D.motorHaul * m), 9);
-      expect(p.noise).toBe(1);
+      expect(p.noise).toBe(D.motorNoise);
       sendScouts(g);
-      expect(g.stop!.noise).toBe(1);
-      expect(effThreat(g.stop)).toBe(threat === 0.8 ? 1 : 1.4);
+      // 짙음 위로 넘친 소리는 버린다: 고요 +2, 보통 +1, 짙음 0
+      expect(g.stop!.noise).toBe(threat === 0.8 ? 2 : threat === 1 ? 1 : 0);
+      expect(effThreat(g.stop)).toBe(1.4);
       expect(g.stop!.threat).toBe(threat);
       expect(scoutHaulNow(g.stop!)).toBeCloseTo(p.haul, 9);
     }
@@ -191,7 +192,7 @@ describe('scout_gear', () => {
       const loud = mk(`sg-11-${i}`, [['x2', 'b']], { threat: 0.8, size: 6 });
       sendScouts(quiet);
       sendScouts(loud);
-      expect(loud.stop!.noise).toBe(1);
+      expect(loud.stop!.noise).toBe(2);
       const a = fateOf(quiet);
       const b = fateOf(loud);
       const harmedA = [...a.dead, ...a.hurt];
@@ -212,7 +213,7 @@ describe('scout_gear', () => {
     expect(riskView(g).why.join(' ')).not.toContain('소리');
     sendScouts(g);
     const v = riskView(g);
-    expect(v.now).toBe('발동기 소리에 안쪽이 술렁인다. 지금 기척: 보통(정찰조가 본 것: 고요).');
+    expect(v.now).toBe('발동기 소리에 안쪽이 술렁인다. 지금 기척: 짙음(정찰조가 본 것: 고요).');
     expect(v.omen).toBeTruthy();
     expect(v.why).toContain('정찰 장비 소리가 망자를 끌었다');
     expect(g.journal.at(-1)!.text).toBe(v.now);
@@ -231,20 +232,35 @@ describe('scout_gear', () => {
     expect(riskView(b).level).toBeNull();
   });
 
+  it('14 overflow_dropped: 짙음 위로 넘친 발동기 소리는 버려서, 뒤에 건 미끼가 한 단계를 온전히 내린다(결정 371 셋째·396)', () => {
+    let ran = 0;
+    for (const threat of [1, 1.4]) {
+      const g = mk(`sg-14-${threat}`, [['x2', 'b'], ['w4', undefined]], { threat });
+      sendScouts(g);
+      if (!g.stop!.scout) continue;
+      expect(effThreat(g.stop)).toBe(1.4);
+      g.dom!.parts = 2;
+      expect(hangLure(g)).toBe(true);
+      expect(effThreat(g.stop)).toBe(1);
+      ran += 1;
+    }
+    expect(ran).toBe(2);
+  });
+
   it('13 save_and_toggle: 장비를 두고 가면 얻는 것도 대가도 없고, 저장 불러오기 뒤 칸이 남는다', () => {
     const g = mk('sg-13', [['x2', 'b'], ['r4', 'a']], { threat: 0.8 });
     toggleGear(g, 'cart');
     expect(scoutPlan(g, g.stop!)).toMatchObject({ noise: 0, haul: P.scoutHaul });
     toggleGear(g, 'cart');
-    expect(scoutPlan(g, g.stop!).noise).toBe(1);
+    expect(scoutPlan(g, g.stop!).noise).toBe(2);
     toggleGear(g, 'glass');
     expect(scoutPlan(g, g.stop!).risk).toBeCloseTo(1 - D.motorRisk * techMult(g, 'x2'), 9);
     sendScouts(g);
     toggleGear(g, 'glass'); // 보낸 뒤엔 못 바꾼다
     expect(g.stop!.gear).toEqual({ cart: true, glass: false });
-    expect(g.stop!.scoutGear).toMatchObject({ glass: 0, motor: techMult(g, 'x2'), noise: 1 });
+    expect(g.stop!.scoutGear).toMatchObject({ glass: 0, motor: techMult(g, 'x2'), noise: 2 });
     const back = JSON.parse(JSON.stringify(g)) as Game;
-    expect([back.gearOn, back.stop!.noise, back.stop!.gear, back.stop!.scoutGear]).toEqual([true, 1, { cart: true, glass: false }, g.stop!.scoutGear]);
+    expect([back.gearOn, back.stop!.noise, back.stop!.gear, back.stop!.scoutGear]).toEqual([true, 2, { cart: true, glass: false }, g.stop!.scoutGear]);
     expect(effThreat(back.stop)).toBe(effThreat(g.stop));
     expect(scoutHaulNow(back.stop!)).toBe(scoutHaulNow(g.stop!));
   });
