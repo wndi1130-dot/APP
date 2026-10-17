@@ -66,8 +66,9 @@ const OWN_POSES: Array = [
 ]
 # The living people's motions (bake_body_cli --set=person, a folder of its own
 # so the dead's numbers above stay): name, "", frames, loops, layer, seconds.
-# Only appended to, so a number once baked keeps its motion. Sixteen at most:
-# the shader's clip tables have sixteen places (dead_vat.gdshader).
+# Only appended to, so a number once baked keeps its motion. Thirty-two at most:
+# the shader's clip tables have thirty-two places (dead_vat.gdshader); numbers
+# 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
 	["p_walk", "", 32, true, "p_walk", 0.78],
 	["p_run", "", 24, true, "p_run", 0.58],
