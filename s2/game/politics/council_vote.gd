@@ -70,8 +70,10 @@ static func _motion_lean(t: Dictionary, comm: String, agenda: Dictionary) -> Dic
 	var amount := 0.0
 	if agenda["motion"] == "field_symbol":
 		amount = float(t["FIELD"]["symbolLean"])
-	else:
+	elif agenda.get("verdict") == "kept":
 		amount = float(t["FIELD"]["promiseLean"])
+	else:
+		amount = float(t["FIELD"]["pressLean"])
 	return {"mat": amount if comm == agenda.get("subject") else 0.0, "ideo": 0.0}
 
 

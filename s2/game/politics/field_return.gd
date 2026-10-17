@@ -283,7 +283,7 @@ static func _voice_kept(g: Dictionary, t: Dictionary, comm: String) -> void:
 static func _keep_promise(g: Dictionary, t: Dictionary, comm: String, label: String) -> void:
 	var state: Dictionary = g["comms"][comm]
 	state["promise"] = null
-	_bump(g, "trust", 4.0, "promise")
+	_bump(g, "trust", 2.0, "promise")
 	_bump_rel(g, comm, 5.0, "promise")
 	if int(state["grudge"]) == 1:
 		state["grudge"] = 0
