@@ -274,3 +274,41 @@ func test_a_job_of_the_hands_is_the_living_own() -> void:
 		assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, none)
 	p.cancel_action()
 	assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, "the job is over")
+
+# Aimed standing still, a handgun is held out in one hand and a long gun up at
+# the shoulder, the gun in the hand; on the move, or with a bow, the gun is held
+# as before.
+func test_a_gun_is_aimed_in_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	for want in [["pistol", "p_aim_one"], ["shotgun", "p_aim_two"]]:
+		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 1}]
+		p.aim.active = true
+		PersonVisual.motion_of(p, note, 0.3, [], own)
+		assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), want[1], want[0])
+		assert_true(PersonVisual.aiming(note, own), want[0])
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), "p_walk", "on the move")
+	assert_false(PersonVisual.aiming(note, own))
+	p.hands = [{"id": "bow", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	assert_eq(PersonVisual.aim_of(p, own), -1, "no aim of its own with a bow")
+	p.aim.active = false
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	assert_eq(PersonVisual.aim_of(p, own), -1, "not aimed")
+
+# Crouched it keeps low: chest-high work is done low, and a gun is aimed
+# without standing up.
+func test_crouched_it_works_and_aims_low() -> void:
+	var own := _own()
+	var p := _person()
+	p.crouched = true
+	p.start_action("search", "뒤지기", 2.0, func() -> void: pass)
+	assert_eq(_named(own, PersonVisual.motion_of(p, {}, 0.1, [], own)), "p_search_low")
+	p.cancel_action()
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	p.aim.active = true
+	assert_eq(PersonVisual.aim_of(p, own), -1)
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)
