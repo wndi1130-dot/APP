@@ -318,6 +318,9 @@ func _ready() -> void:
 	_update_camera(1.0)
 	_refresh_vision()
 	telemetry.zone_enter(grid.zone_at(FieldGrid.cell_of(player.position)), 0.0)
+	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
+	if opts.get("field_resume") is Dictionary:
+		FieldSave.apply(self, opts["field_resume"])
 
 
 ## Weather is fixed for the whole stop, so the shader globals are set once;
