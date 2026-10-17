@@ -25,6 +25,8 @@ const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const CarPane = preload("res://game/ui/car_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
+const WorldWeather = preload("res://game/ui/world_weather.gd")
+const WorldFilm = preload("res://game/ui/world_film.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
@@ -77,7 +79,8 @@ const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.84)
 const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 
-var opts: Dictionary = {}          # skip_field: true goes past the field with the sample receipt
+var opts: Dictionary = {}          # skip_field: true goes past the field with the sample receipt;
+                                   # still: true holds the snow and the fog (screens for checks)
 var step: int = -1
 var stage: Node = null             # what is up behind the panel: the train or the field
 var train: Node3D = null
@@ -94,7 +97,9 @@ var panel_style: StyleBoxFlat
 var card: Control = null           # a real screen standing in for the panel (stop_pick)
 var gauges: Control                # the train's gauges along the top, over the train
 var soot_bot: TextureRect          # the soot rising from the bottom edge under the keys
+var weather: Control               # the snow, the fog and the drift over the train (world_weather.gd)
 var frost: Control                 # the corners' frost over the train (.w-frost)
+var film: Control                  # the dark edges and the grain over the frost (world_film.gd)
 var plates: Control                # the carriages' name plates, where the train's cars are
 var marks: Control                 # the picked car's corners and the other cars' shade
 var train_g: Dictionary = {}       # the slice's train state (the sample's first stop)
@@ -125,6 +130,13 @@ func _ready() -> void:
 	plates.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plates.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(plates)
+	# Over the train as the mockup stacks its world (k3_views.js world): the
+	# drift, the fog and the snow, then the frost, then the dark edges and the
+	# grain, and the keys over it all.
+	weather = WorldWeather.new()
+	weather.name = "Weather"
+	weather.still = bool(opts.get("still", false))
+	layer.add_child(weather)
 	frost = Control.new()
 	frost.name = "Frost"
 	frost.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -132,6 +144,9 @@ func _ready() -> void:
 	frost.add_child(_sheet(FROST_L, 0.0, 0.5))
 	frost.add_child(_sheet(FROST_R, 0.5, 1.0))
 	layer.add_child(frost)
+	film = WorldFilm.new()
+	film.name = "Film"
+	layer.add_child(film)
 	# The soot the keys stand on at the bottom edge (.edge--bot, 104 high; the
 	# gauges bring their own at the top).
 	soot_bot = _sheet(EDGE_BOT, 0.0, 1.0)
@@ -168,6 +183,11 @@ func go(i: int) -> void:
 	gauges.visible = String(row[1]) != "" and id != "receipt"
 	gauges.set_focus(FOCUS.get(id, []))
 	frost.visible = String(row[1]) != ""
+	weather.visible = frost.visible
+	film.visible = frost.visible
+	# The train runs between the stops; at a stop the snow falls straight down
+	# and the drift lies still (.world.run, .world.is-stop).
+	weather.moving = String(row[1]) == "travel"
 	soot_bot.visible = gauges.visible and id != "stop_pick"
 	if id == "field":
 		panel.visible = false
