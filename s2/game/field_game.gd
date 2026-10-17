@@ -37,6 +37,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
 
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
@@ -970,6 +971,9 @@ func interrupt() -> void:
 	# Fingers down when the app goes away never come back up, paused or not.
 	if hud != null:
 		hud.drop_touch()
+	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
+	if bool(opts.get("field_save", false)):
+		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	if ended or paused:
 		return
 	paused = true
