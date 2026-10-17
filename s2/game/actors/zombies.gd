@@ -26,15 +26,11 @@ const WINDUP: float = 0.8
 const GET_UP: Vector2 = Vector2(5.0, 9.0)
 const RISE_TIME: float = 30.0
 ## What a fallen one may have on it (user 2026-10-11: now and then, small
-## things). First values, to be set on the phone: one in ten; a bandage, or one
-## or two rounds. Rolled once, the first time it goes down; knocking the same
-## one down again rolls nothing. Rows are [weight, entry, most].
-const LOOT_CHANCE: float = 0.1
-const LOOT_TABLE: Array = [
-	[4, {"id": "bandage"}, 1],
-	[3, {"ammo": "pistol"}, 2],
-	[3, {"ammo": "shell"}, 2],
-]
+## things), by kind and, for the padded ones, by where they stood: the tables
+## are in loot_tables.gd (loot spec v1), the dead's the values of before.
+## Rolled once, the first time it goes down; knocking the same one down again
+## rolls nothing.
+const LootRules = preload("res://game/sim/loot_rules.gd")
 const FRESH_STIFFEN: float = 240.0
 const WAKE_TIME: float = 2.0
 const NEAR: float = 32.0
@@ -156,6 +152,13 @@ func add_rising(at: Vector3, who_name: String) -> Dictionary:
 
 ## Lying there with pockets nobody has been through yet. Standing ones and
 ## those already searched are not.
+## How long going through this one's pockets takes: its kind and where it stood
+## (loot spec v1 2.3, user decision 407 B5). A plain body three seconds.
+func search_time(z: Dictionary) -> float:
+	var place := LootRules.place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
+	return LootRules.body_search_time(String(z["kind"]), place)
+
+
 func lootable(z: Dictionary) -> bool:
 	return not z.is_empty() and z["state"] in ["dead", "downed", "rising"] and z.has("loot") and not z.get("searched", false)
 
@@ -168,19 +171,10 @@ func set_loot(z: Dictionary, loot: Array) -> void:
 func _roll_loot(z: Dictionary) -> void:
 	if z.has("loot"):
 		return
+	var place := LootRules.place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
 	var loot: Array = []
-	if loot_rng.randf() < LOOT_CHANCE:
-		var total := 0
-		for row in LOOT_TABLE:
-			total += int(row[0])
-		var pick: int = loot_rng.randi_range(1, total)
-		for row in LOOT_TABLE:
-			pick -= int(row[0])
-			if pick <= 0:
-				var entry: Dictionary = row[1].duplicate()
-				entry["n"] = loot_rng.randi_range(1, int(row[2]))
-				loot.append(entry)
-				break
+	for entry: Dictionary in LootRules.body_roll(String(z["kind"]), place, int(z.get("horde", -1)) >= 0, loot_rng):
+		loot.append(LootRules.to_pocket(entry))
 	z["loot"] = loot
 
 
@@ -862,6 +856,24 @@ func kill(z: Dictionary) -> void:
 	game.on_zombie_killed(z)
 
 
+## How a body that is going for someone leans at them (drawing only). Coming
+## in for the bite (attack) it bends further in as its windup runs out; holding
+## on (grab) it hangs on them, tugging back and forth and side to side.
+const REACH_LEAN: float = 0.25
+const HOLD_LEAN: float = 0.12                # holding on it hangs less far in than it bent to bite
+const GRAB_BACK: float = 0.15                # drawn this much further off the one it holds, metres
+const TUG: Vector2 = Vector2(0.08, 0.06)       # forward and sideways, radians
+const TUG_HZ: float = 2.2
+
+
+static func reach_basis(z: Dictionary) -> Basis:
+	if z["state"] == "attack":
+		var k := 1.0 - clampf(float(z["windup"]) / WINDUP, 0.0, 1.0)
+		return Basis(Vector3.RIGHT, REACH_LEAN * k * k)
+	var w := TAU * (TUG_HZ * float(z["age"]) + float(z["phase"]))
+	return Basis(Vector3.RIGHT, HOLD_LEAN + TUG.x * sin(w)) * Basis(Vector3.BACK, TUG.y * sin(w * 0.5 + 1.0))
+
+
 ## Visible-only drawing with CPU frustum test, one MultiMesh per look.
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 	var counts := {"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0}
@@ -896,6 +908,11 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
+		elif state == "grab" or state == "attack":
+			basis = basis * reach_basis(z)
+			if state == "grab":
+				# The rules hold it 0.5 m off; drawn there its reach goes through them.
+				pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
 		elif state == "climb":
 			var out := DeadBody.climbing(z, baked)
 			pos = pos + basis * out.origin

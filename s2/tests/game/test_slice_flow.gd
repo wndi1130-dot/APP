@@ -31,7 +31,7 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 	while true:
 		seen.append(f.current())
 		phases.append(f.train.phase() if f.train != null else "")
-		assert_true(f.panel.visible, f.current() + " has its panel")
+		assert_true(f.panel.visible or f.card != null, f.current() + " has its panel or its screen")
 		if f.current() == "end":
 			break
 		f.next()
@@ -40,16 +40,24 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 	assert_eq(f.next_button.text, "처음으로 ›")
 
 
-func test_the_receipt_panel_reads_the_sample_when_the_field_is_skipped() -> void:
+func test_the_receipt_step_is_the_paper_receipt_of_the_sample_when_the_field_is_skipped() -> void:
 	var f = _flow()
 	f.next()
 	f.next()
 	assert_eq(f.current(), "receipt")
-	assert_eq(f.title.text, "귀환 영수증")
-	var texts := _texts(f)
-	assert_true(texts[0].begins_with("first_leg_01_sulechow"), texts[0])
-	assert_true(texts.any(func(t: String) -> bool: return t.begins_with("약속:")), "the promises are listed")
-	assert_eq(SliceFlow.receipt_lines({}), ["영수증 없음"])
+	var slip: Control = f.panel.find_child("Receipt", true, false)
+	assert_not_null(slip, "the paper receipt")
+	var texts: Array = []
+	for l in slip.find_children("*", "Label", true, false):
+		texts.append((l as Label).text)
+	assert_has(texts, "약속 서막 · 본 사람 2 · 꼬리칸 들음", "the sample's promise, as seen")
+	assert_has(texts, "출발")
+	var made: Dictionary = SliceFlow.result_of(f.receipt)
+	assert_eq(made["stay"], 160)
+	assert_eq(made["boarded"], 4, "sent less the dead, missing and left")
+	f.next()
+	assert_eq(f.current(), "council")
+	assert_null(f.panel.find_child("Receipt", true, false), "gone with its step")
 
 
 func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
@@ -58,6 +66,7 @@ func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
 	f.next()
 	assert_eq(f.current(), "field")
 	assert_not_null(f.field)
+	assert_eq(f.field.hud.promise_label.text, "약속: 서막 2명 데려오기", "the field goes out with the sample departure")
 	assert_false(f.panel.visible, "nothing over the stop while it is played")
 	f.field.set_process(false)
 	f.field.finish("departed")
@@ -65,10 +74,26 @@ func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
 	f.next()
 	assert_eq(f.current(), "receipt")
 	assert_eq(f.receipt, f.result["receipt"], "the field's own receipt")
-	assert_ne(_texts(f)[0], "영수증 없음")
+	assert_not_null(f.panel.find_child("Receipt", true, false))
 
 
 func test_the_boot_menu_has_the_slice_key() -> void:
 	var boot = Boot.new()
 	add_child_autofree(boot)
 	assert_not_null(boot.find_child("SliceButton", true, false))
+
+
+func test_choosing_the_stop_is_the_paper_card_and_its_keys_go_on() -> void:
+	var f = _flow()
+	f.next()
+	assert_eq(f.current(), "stop_pick")
+	assert_not_null(f.card, "the stop card stands in for the panel")
+	assert_false(f.panel.visible)
+	assert_eq((f.card.find_child("Place", true, false) as Label).text, "술레후프")
+	(f.card.find_child("Send", true, false) as Button).pressed.emit()
+	assert_eq(f.current(), "receipt", "sent: the field (skipped here), then its receipt")
+	assert_null(f.card, "gone with its step")
+	var g = _flow()
+	g.next()
+	(g.card.find_child("PassBy", true, false) as Button).pressed.emit()
+	assert_eq(g.current(), "travel", "passed by: on to the next stretch")
