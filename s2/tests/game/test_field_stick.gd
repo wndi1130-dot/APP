@@ -387,10 +387,12 @@ func test_one_target_only_when_chaining_is_off() -> void:
 	assert_false(p.hold_attack)
 
 
-func test_nothing_in_reach_is_said_not_swung_at() -> void:
+## Decision 405: nothing in reach is one swing at the air (it was a word and no swing).
+func test_nothing_in_reach_is_one_swing_at_the_air() -> void:
 	var p = game.player
 	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}]
 	game.hud._pad_down(game.hud.attack_button, Vector2.ZERO)
+	assert_gt(p.strike_t, 0.0, "the axe comes round")
 	assert_false(p.hold_attack)
 	assert_false(game.hud.attack_button.button_pressed)
 
@@ -1065,13 +1067,15 @@ func test_dragging_off_the_aim_pad_onto_an_enemy_takes_that_one() -> void:
 	hud._auto_aim_end(pad)
 
 
-func test_holding_the_aim_pad_with_no_one_about_still_fires_nothing() -> void:
+## Decision 405 (as in Zomboid): with nothing picked the shot still goes
+## where the gun points (it was: no shot at all).
+func test_holding_the_aim_pad_with_no_one_about_fires_where_it_points() -> void:
 	_gun()
 	var hud = game.hud
 	hud._auto_aim_start()
 	hud._tick_auto_aim(2.0)
 	hud._auto_aim_end(hud.aim_button.get_global_rect().get_center())
-	assert_false(_tried())
+	assert_true(_tried())
 
 # Decision 293: with a blade, a club or bare hands in hand there is no aim and
 # no 'manual' (aim only ever takes up a gun that is in hand).

@@ -2457,7 +2457,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 			return
 		var t = game.combat.melee_pick(p)
 		if t == null:
-			toast("팔 닿는 데 아무도 없음")
+			# Nobody in reach: swing at the air all the same (decision 405).
+			game.combat.swing_air(p)
 			return
 		_melee(t, true)
 		attack_button.button_pressed = true
@@ -2569,10 +2570,9 @@ func _auto_aim_end(pos: Vector2) -> void:
 	auto_aim = false
 	aiming = false
 	if p.aim.active:
-		if (aim_target != null or auto_free) and not aim_cancel:
+		# Nothing picked: the shot goes where the gun points (decision 405).
+		if not aim_cancel:
 			game.combat.fire(p, aim_point, aim_target)
-		elif aim_target == null and not aim_cancel:
-			toast("겨눌 것 못 잡음 · 누른 채 쏠 곳으로 끌면 빈 땅에도 쏨")
 		p.aim.stop()
 	auto_free = false
 	aim_cancel = false
