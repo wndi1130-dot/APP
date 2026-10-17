@@ -5,7 +5,8 @@
 import { writeFileSync } from 'node:fs';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
-import type { Game } from '../src/game';
+import { lawOpen } from '../src/game';
+import type { Game, LawId } from '../src/game';
 
 const n = Number(process.argv[2] ?? 500);
 const out = process.argv[3];
@@ -15,11 +16,12 @@ const BUCKETS = [['0', 0, 0], ['1~2', 1, 2], ['3~5', 3, 5], ['6+', 6, 1e9]] as c
 
 interface Row { end: string; deaths: number; deathCards: number; trustCrisis: boolean; emergency: number; rite: boolean; hands: boolean; trustEnd: number; chains?: NonNullable<Game['deathStats']> }
 
-function run(on: boolean): Row[] {
+/** force: 그 「배웅」 법이 열리는 첫 정산에 세운 것으로 친다(봇이 그 안건을 안 골라 두 갈래를 견주려는 측정용 개입) */
+function run(on: boolean, force?: LawId): Row[] {
   const rows: Row[] = [];
   for (let i = 0; i < n; i += 1) {
     let crisis = false;
-    const { g, m } = playGame(`dw-${i}`, { ...BASE, ...(on ? { deathWeight: true } : {}), probe: { onSettle: x => { if (x.trustCrisis !== null) crisis = true; } } });
+    const { g, m } = playGame(`dw-${i}`, { ...BASE, ...(on ? { deathWeight: true } : {}), probe: { onSettle: x => { if (x.trustCrisis !== null) crisis = true; if (force && x.passed[force] === undefined && lawOpen(x, force)) x.passed[force] = x.session; } } });
     rows.push({
       end: g.end ?? 'none', deaths: g.deaths.length, deathCards: DEATH_CARDS.reduce((s, k) => s + (m.cards[k] ?? 0), 0), trustCrisis: crisis,
       emergency: (g.emergencyCalls ?? []).length, rite: g.passed.farewell_rite !== undefined, hands: g.passed.farewell_hands !== undefined, trustEnd: g.trust,
@@ -60,6 +62,8 @@ function summary(rows: Row[]) {
 const t0 = Date.now();
 const off = summary(run(false));
 const on = summary(run(true));
-const res = { n, bot: BASE, off, on, secs: (Date.now() - t0) / 1000 };
+const rite = summary(run(true, 'farewell_rite'));
+const hands = summary(run(true, 'farewell_hands'));
+const res = { n, bot: BASE, off, on, rite, hands, secs: (Date.now() - t0) / 1000 };
 console.log(JSON.stringify(res, null, 2));
 if (out) writeFileSync(out, JSON.stringify(res, null, 2));
