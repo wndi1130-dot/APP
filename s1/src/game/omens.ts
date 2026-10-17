@@ -152,7 +152,9 @@ export function crewLineText(band: CrewBandName, need: number, level: RiskLevel)
 }
 
 /** 선택지 밑 까닭 한 줄(결정 339 「왜」). 알맞은 인원 숫자는 정찰 뒤에만 쓴다. */
-export function crewWhyText(known: { place: string; risk: number; stay: string; need: number; crew: number; band: CrewBandName } | null): string {
+/** snow: 눈보라가 한창이라 정찰을 보내도 안쪽을 못 읽는 때. 정찰하면 인원을 알 수 있다고 말하지 않는다(검수 PR 395 낮음 11). */
+export function crewWhyText(known: { place: string; risk: number; stay: string; need: number; crew: number; band: CrewBandName } | null, snow = false): string {
+  if (!known && snow) return '눈보라 속에서는 정찰을 보내도 안쪽 기척을 읽을 수 없어 몇 명이 알맞은지 말할 수 없다. 산출은 알맞은 인원까지만 늘고, 더 보내면 위험은 낮아지지만 돌아온 이들이 이번 회기 표결에서 빠진다.';
   if (!known) return '몇 명이 알맞은지는 정찰로 위험을 알아야 말할 수 있다. 산출은 알맞은 인원까지만 늘고, 더 보내면 위험은 낮아지지만 돌아온 이들이 이번 회기 표결에서 빠진다.';
   const need = Math.round(known.need * 10) / 10;
   return `${known.place} 위험 ${known.risk}에 ${known.stay} 체류라 ${need}명쯤이 알맞다. 지금 ${known.crew}명이면 ${CREW_BAND_SAY[known.band]}. 알맞은 인원보다 더 보내면 산출은 그대로고 위험만 낮아지며, 돌아온 이들은 이번 회기 표결에서 빠진다.`;

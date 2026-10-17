@@ -42,7 +42,7 @@ export interface RiskView {
 export function riskView(g: Game): RiskView {
   const r = stopRisk(g);
   const why = riskWhy(r);
-  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.', crew: null, crewWhy: crewWhyText(null), now: null };
+  if (!r.known || !g.stop) return { level: null, omen: null, verdict: null, why, unknown: blizzardActive(g) ? '눈 때문에 안쪽을 볼 수 없다.' : g.stop?.scoutReport ? '정찰조가 돌아오지 않아 안쪽 기척은 모른다.' : '정찰을 보내지 않으면 안쪽 기척은 모른다.', crew: null, crewWhy: crewWhyText(null, blizzardActive(g)), now: null };
   const v = stopView(g, g.stop, r.horde);
   const level = riskLevel(r);
   const place = PLACES.find(p => p.id === g.stop!.place) ?? PLACES[0];
