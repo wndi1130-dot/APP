@@ -7,7 +7,7 @@
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { BUDGET, CREW, D, DRAW, DZ, TRAVEL_EVENTS } from '../src/game';
+import { BUDGET, CL, CREW, D, DRAW, DZ, TRAVEL_EVENTS } from '../src/game';
 import type { CrewCost, CrewCurve, CrewHaul } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, CrewPolicy, GameMetrics } from './s1c_bot';
@@ -36,6 +36,18 @@ for (const f of flags.filter(x => x.startsWith('--dz='))) {
   dzSets[k] = Number(v);
 }
 const disasters = flags.includes('--disasters');
+// --climate: 바깥 기온·결빙(climate.ts, 결정 370)을 켠다. --cl=키:값으로 CL 값을 바꾼다(배열은 쉼표, 예: --cl=mult:0.9,1,1.1,1.25,1.4 --cl=freezeOn:0).
+// --nolevers: 돌봄 봇이 레버를 만지지 않는다(500판 C줄).
+const climate = flags.includes('--climate');
+const noLevers = flags.includes('--nolevers');
+const clSets: Record<string, unknown> = {};
+for (const f of flags.filter(x => x.startsWith('--cl='))) {
+  const [k, v] = f.slice(5).split(':');
+  if (!(k in CL)) throw new Error(`CL에 없는 값: ${k}`);
+  const val = v.includes(',') ? v.split(',').map(Number) : Number(v);
+  (CL as unknown as Record<string, unknown>)[k] = val;
+  clSets[k] = val;
+}
 const budget = flags.includes('--budget');
 const events = flags.includes('--events');
 const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
@@ -169,6 +181,14 @@ function summarize(ms: GameMetrics[]) {
     budget: ms[0]?.budget ? summarizeBudget(ms) : undefined,
     crewStat: summarizeCrew(ms),
     techFreq: Object.fromEntries(Object.entries(techFreq).sort().map(([k, v]) => [k, +(v / ms.length).toFixed(3)])),
+    climate: {
+      drops: +mean(ms.map(m => m.climate.drops)).toFixed(3),
+      freezes: +mean(ms.map(m => m.climate.freezes)).toFixed(3),
+      noFreeze: +mean(ms.map(m => (m.climate.freezes === 0 ? 1 : 0))).toFixed(3),
+      leverAfterDrop: +mean(ms.map(m => m.climate.leverAfterDrop)).toFixed(3),
+      coalZero: +mean(ms.map(m => m.climate.coalZero)).toFixed(3),
+      heatByStage: [0, 1, 2, 3, 4].map(i => { const n = ms.reduce((a, m) => a + m.climate.segsByStage[i], 0); return n ? +(ms.reduce((a, m) => a + m.climate.heatByStage[i], 0) / n).toFixed(2) : 0; }),
+    },
   };
 }
 
@@ -183,6 +203,8 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(events ? { eventPack: true } : {}),
     ...(pickRule ? { pickRule: pickRule as 'second' | 'random' } : {}),
     ...(crewFlag ? { crew: crewFlag } : {}),
+    ...(climate ? { climate: true } : {}),
+    ...(noLevers ? { noLevers: true } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);
@@ -197,4 +219,4 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     + `이동사건없는구간 ${r.segsNoTravel}/${r.segs}(쉼 ${r.segsNoTravelRest} 빔 ${r.segsNoTravelEmpty} 그외 ${r.segsNoTravelOther}) 구간별카드[0,1,2,3,4+] ${r.cardsPerSegDist.join('/')} 최대 ${r.cardsPerSegMax}`);
 }
 console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''}${budget ? `, 카드 예산 켬 ${JSON.stringify(BUDGET)}` : ''}${events ? `, 새 이동 사건 묶음·가중 뽑기 켬 ${JSON.stringify(DRAW)}` : ''})`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, crew: crewFlag, curve: CREW.curve, cost: CREW.cost, haul: CREW.haul, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), ...(events ? { events: true, draw: DRAW } : {}), runs: out }, null, 2));
+if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, crew: crewFlag, curve: CREW.curve, cost: CREW.cost, haul: CREW.haul, climate, noLevers, cl: clSets, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), ...(events ? { events: true, draw: DRAW } : {}), runs: out }, null, 2));
