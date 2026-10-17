@@ -18,6 +18,7 @@ const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const PortraitFace = preload("res://game/ui/portrait_face.gd")
+const ReceiptCard = preload("res://game/ui/receipt_card.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
@@ -184,6 +185,7 @@ var bag_button: Button                # 인벤토리: the weight carried, opens 
 var all_aboard_styles: Array = []     # [plain, urgent] key styles
 var feel_label: Label                 # the chief's aside beside the risk line
 var goal_label: Label                 # the line under the clock (goal_shown; none on a plain stop)
+var promise_label: Label              # 「약속: 서막 ○○ / 교대 ○○」 under the clock, while there are any
 var radio_label: Label
 var radio_left: float = 0.0
 var portrait: PanelContainer
@@ -485,6 +487,19 @@ func _build_top() -> void:
 		goal_label.add_theme_stylebox_override("normal", room)
 		gp.add_child(goal_label)
 		gp.visible = goal_label.text != ""
+	# The promises this stop was sent out with (S3: the departure's promises, or
+	# the state the train sends): one glass line, there only while there are any.
+	var pp := _glass(14.0, 5.0)
+	tl.add_child(pp)
+	var seal := _icon_rect("promise", 20, HudSkin.INK2)
+	seal.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	pp.add_child(seal)
+	promise_label = _label("", 18, HudSkin.INK2)
+	var gap := StyleBoxEmpty.new()
+	gap.content_margin_left = 28
+	promise_label.add_theme_stylebox_override("normal", gap)
+	pp.add_child(promise_label)
+	set_promises(game_promises())
 	root.add_child(tl)
 	top_panel = tl
 	if goal_label != null:
@@ -1007,6 +1022,22 @@ func tick(delta: float) -> void:
 		fps_t = 0.25
 		_tick_debug()
 	overlay.queue_redraw()
+
+
+## The promises the stop goes with: what the train sent (opts promises: [{kind,
+## state}]), or else the departure's own (opts departure, S3 출발 명세).
+func game_promises() -> Array:
+	var sent = game.opts.get("promises", null)
+	if sent is Array:
+		return sent
+	var dep = game.opts.get("departure", null)
+	return (dep.get("promises", []) as Array) if dep is Dictionary else []
+
+
+## Show `promises` on the line under the clock; none hides it.
+func set_promises(promises: Array) -> void:
+	promise_label.text = ReceiptCard.promise_line(promises)
+	promise_label.get_parent().visible = promise_label.text != ""
 
 
 ## The line under the clock (decision 293 ②): the stop's goals only once the
@@ -2026,40 +2057,27 @@ func _tick_leave(delta: float) -> void:
 func show_end(result: Dictionary) -> void:
 	_close_modal()
 	context_rows = []
-	var v := _open_modal(820.0)
+	# The receipt is a paper slip on the dimmed stop (receipt_card.gd); the keys
+	# stay glass, under the slip.
+	var v := _open_modal(ReceiptCard.PAPER_W)
 	game.paused = true
-	var reason: String = {"departed": "출발했다", "limit": "기다릴 수 있는 시간이 끝났다", "wiped": "수색대가 모두 쓰러졌다"}.get(result["reason"], result["reason"])
-	v.add_child(_label("술레후프 · " + reason, 28))
-	var r: Dictionary = result["receipt"]
-	var lines: Array = []
-	lines.append("머문 시간: 게임 %d분 (실제 %d분 %d초)" % [int(result["stay"]), int(result["real_seconds"]) / 60, int(result["real_seconds"]) % 60])
-	lines.append("탄 사람: %d명 · 무리 %d번 · %s" % [int(result["boarded"]), int(result["hordes"]), noise_line()])
-	var stock: Dictionary = r.get("stock", {})
-	var parts: Array = []
-	var names := {"coal": "석탄", "food": "식량", "medicine": "의약품", "luxury": "사치품", "symbol": "상징물", "info": "정보", "scrap": "고철", "wood": "목재", "ammo_pistol": "권총탄", "ammo_shell": "산탄", "ammo_craft": "공방탄"}
-	for k in stock:
-		parts.append("%s %+d" % [names.get(k, k), int(stock[k])])
-	lines.append("영수증: " + (", ".join(parts) if not parts.is_empty() else "변화 없음"))
-	var people: Dictionary = r.get("people", {})
-	# Who stayed on the platform is a number here, never a name.
-	if not (people.get("leftBehind", []) as Array).is_empty():
-		lines.append("남은 사람: %d명" % (people["leftBehind"] as Array).size())
-	for key in [["bitten", "물린 사람"], ["injured", "다친 사람"], ["dead", "죽은 사람"]]:
-		var ids: Array = people.get(key[0], [])
-		if not ids.is_empty():
-			lines.append("%s: %s" % [key[1], ", ".join(_names(ids))])
+	v.get_parent().add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	v.add_theme_constant_override("separation", 16)
+	var notes: Array = []
+	notes.append("실제 %d분 %d초 · %s" % [int(result["real_seconds"]) / 60, int(result["real_seconds"]) % 60, noise_line()])
 	for line in result.get("holdout_lines", []):
-		lines.append(line)
+		notes.append(line)
 	for d in game.decisions:
-		lines.append("결정: %s → %s" % [d["id"], d["choice"]])
-	var body := _label("\n".join(lines), 20)
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(body)
+		notes.append("결정: %s → %s" % [d["id"], d["choice"]])
+	var slip: Control = ReceiptCard.build(result, notes)
+	slip.name = "Receipt"
+	v.add_child(slip)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)
+	h.alignment = BoxContainer.ALIGNMENT_END
 	v.add_child(h)
-	h.add_child(_button("영수증 복사", _copy.bind(result["receipt_json"], "영수증을 복사했다."), Vector2(200, 64)))
-	h.add_child(_button("기록 복사", _copy.bind(result["telemetry"], "기록을 복사했다."), Vector2(180, 64)))
+	h.add_child(_button("영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨"), Vector2(200, 64)))
+	h.add_child(_button("기록 복사", _copy.bind(result["telemetry"], "기록 복사됨"), Vector2(180, 64)))
 	h.add_child(_button("다시", _restart, Vector2(140, 64)))
 
 
@@ -2070,17 +2088,6 @@ func _copy(text: String, note: String) -> void:
 
 func _restart() -> void:
 	game.restart_requested.emit()
-
-
-func _names(ids: Array) -> Array:
-	var out: Array = []
-	for id in ids:
-		var n: String = id
-		for p in game.people:
-			if p.pid == id:
-				n = p.display_name
-		out.append(n)
-	return out
 
 
 func _swap() -> void:
