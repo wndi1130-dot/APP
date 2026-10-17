@@ -339,7 +339,8 @@ describe('카드 수', () => {
     expect(per('elder')).toBeLessThanOrEqual(1);
     expect(births / 200).toBeLessThan(0.45);
     writeFileSync(join(tmpdir(), 'people_counts.json'), JSON.stringify({ per: Object.fromEntries(Object.keys(count).map(k => [k, per(k)])), births: births / 200 }, null, 1));
-  });
+    // 판 수는 줄이지 않는다. 혼자 돌면 몇 초지만 전체 시험을 함께 돌릴 때 부하로 기본 5초를 넘기는 일이 있어 시간 제한만 늘린다.
+  }, 60_000);
 });
 
 describe('누가 죽나(기획 점검 01 2.6)', () => {
