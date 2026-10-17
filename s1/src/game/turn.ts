@@ -1,5 +1,5 @@
 import { riotTick } from './riot';
-import { addCard, END_LINK } from './state';
+import { addCard, COUNCIL_LINK, END_LINK } from './state';
 import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
@@ -68,7 +68,7 @@ export function primaryAction(g: Game): Primary {
       const council = g.council;
       if (council?.pre && !council.pre.result && council.result) return { label: '다음 안건', ok: true };
       if (council && !council.martial && (council.options.length > 0 || preVote(g)) && !council.result) return { label: '표결', ok: false, why: '표결을 한다' };
-      return { label: '정산으로', ok: true };
+      return { label: council?.special ? '회기를 닫는다' : '정산으로', ok: true };
     }
     case 'settle': return { label: g.seg >= P.segments && !g.stranded ? (g.hub?.plan ? '열차를 돌린다' : '라이프치히 도착') : '다음 구간', ok: true };
     default: return { label: '', ok: false };
@@ -85,7 +85,8 @@ export function advance(g: Game): void {
       return;
     case 'travel': return runTravel(g);
     case 'stop': return afterStop(g);
-    case 'council': return preVote(g) ? finishPreVote(g) : settle(g);
+    // 특별 회기(field_council.ts)는 구간 정산으로 가지 않고 연 단계로 돌아간다. 정규 회기 규칙은 그 뒤에 평소대로 돈다.
+    case 'council': return preVote(g) ? finishPreVote(g) : g.council?.special ? void COUNCIL_LINK.leaveSpecial(g) : settle(g);
     case 'settle': return nextSegment(g);
     default: return;
   }
@@ -907,7 +908,7 @@ function biteTick(g: Game): void {
 /** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 프로스트펑크식). */
 export const HUNGER_GRACE = 3;
 
-function hungerTick(g: Game, notes: string[]): void {
+export function hungerTick(g: Game, notes: string[]): void {
   if (g.food > 0) { g.hunger = 0; return; }
   g.hunger = (g.hunger ?? 0) + 1;
   if (g.hunger === 1) {
@@ -1150,7 +1151,7 @@ function aiLeaders(g: Game): void {
 }
 
 /** 신임과 긴장(브리프 1.4, 1.5). */
-function meters(g: Game): void {
+export function meters(g: Game): void {
   const seatMap = seats(g);
   const avg = COMMS.reduce((sum, c) => sum + g.comms[c].rel * seatMap[c], 0) / 100;
   bump(g, 'trust', clamp(avg / 40, -2.5, 2.5), 'mood');
@@ -1181,7 +1182,7 @@ function meters(g: Game): void {
   g.fear = clamp(g.fear - 1, 0, 100);
 }
 
-function checkEnd(g: Game): void {
+export function checkEnd(g: Game): void {
   if (g.food < 0) put(g, 'food', 0, 'short');
   // S1b 계엄 중엔 신임 대신 경비대의 충성을 쥔다. 신임 위기로 축출되지 않는다(5.3).
   const martial = !!g.dark?.martial;

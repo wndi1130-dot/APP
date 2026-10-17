@@ -10,7 +10,7 @@ import { onDeath } from './death';
 import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
 import { journal, PROFILES, storyOf } from './state';
-import type { Game } from './state';
+import type { Game, Phase } from './state';
 import { breakPromise, keepPromise } from './turn';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
@@ -32,6 +32,13 @@ export type SymbolUse = typeof SYMBOL_USES[number];
 export const FIELD = Object.freeze({
   /** 특별 회기 앞에 내건 상징물이 그 집단 관계를 한 번 바꾸는 폭(hang_relation_delta) */
   hangRel: 0,
+  /** 특별 회기 상징물 안건(field_council.ts): 상징물 주인 칸의 물질 입장, 가결·부결 때 그 칸 관계 ± */
+  symbolLean: 0,
+  symbolRel: 0,
+  /** 특별 회기 약속 안건: 약속받은 칸의 물질 입장, 가결 때 신임 ±(지킴이면 +, 어김 추궁이면 −), 어김 추궁의 가결·부결 때 그 칸 관계 ± */
+  promiseLean: 0,
+  promiseTrust: 0,
+  promiseRel: 0,
 });
 
 /** 열차가 필드에 넘기는 약속 하나. subjects는 서막 약속이 데려오기로 한 사람(프로필 id)이다. */
@@ -70,6 +77,8 @@ export interface FieldReturnRecord {
   stopId: string;
   seg: number;
   verdicts: FieldVerdict[];
+  /** 이 정차에서 죽은 사람(이름). 특별 회기의 시신 안건 후보를 가른다 */
+  dead: string[];
   symbol: (FieldSymbol & { use: SymbolUse | null }) | null;
   before: FieldSnapshot;
   after: FieldSnapshot;
@@ -79,6 +88,24 @@ export interface FieldReturns {
   /** 반영한 영수증 id → 정규화한 내용. 같은 id가 다시 오면 내용을 견주고 아무것도 하지 않는다(T07·T08). */
   applied: Record<string, string>;
   records: FieldReturnRecord[];
+  /** 첫 귀환 뒤의 특별 회기 한 번(결정 290·303, field_council.ts). 있으면 다시 열지 않는다 */
+  special?: SpecialCouncilRecord;
+}
+/** 특별 회기 기록: 어느 귀환 뒤에 열렸고, 무엇이 후보였고, 무엇을 골라 어떻게 됐나. 도착 화면이 이 기록을 읽는다. */
+export interface SpecialCouncilRecord {
+  receiptId: string;
+  seg: number;
+  /** 열린 회기(opened), 의회가 닫혀(계엄) 또는 올릴 안건이 없어 열지 못함(skipped) */
+  status: 'opened' | 'skipped';
+  why?: string;
+  /** 후보 안건 제목과 그 출처(receipt: 영수증에서 뽑힘, regular: 보통 안건으로 채움) */
+  candidates: { title: string; from: 'corpse' | 'symbol' | 'promise' | 'regular' }[];
+  /** 회기에서 돌아갈 단계 */
+  back: Exclude<Phase, 'council' | 'end'>;
+  picked?: string;
+  result?: { yes: number; no: number; need: number; passed: boolean };
+  before?: FieldSnapshot;
+  after?: FieldSnapshot;
 }
 
 const id = { $ref: 'urn:s1:schema:common#/$defs/id' };
@@ -171,7 +198,7 @@ export function matchDeparture(d: FieldDeparture, r: FieldReceipt): void {
   if (r.symbol && !returnedOf(r).includes(r.symbol.carriedBy)) throw new Error('상징물을 든 사람이 열차에 오르지 않았다');
 }
 
-function snapshot(g: Game): FieldSnapshot {
+export function snapshot(g: Game): FieldSnapshot {
   return {
     trust: g.trust, tension: g.tension, coal: g.coal, food: g.food, med: g.med, lux: g.lux, symbols: g.symbols, injured: g.injured,
     rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number>,
@@ -282,6 +309,7 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   }
   const record: FieldReturnRecord = {
     receiptId: r.receiptId, departureId: r.departureId, stopId: r.stopId, seg: g.seg, verdicts,
+    dead: r.people.dead.map(pid => personOf(departure, pid).name),
     symbol: r.symbol ? { ...r.symbol, use: null } : null, before, after: snapshot(g), lines,
   };
   g.fieldReturns ??= { applied: {}, records: [] };

@@ -67,6 +67,8 @@ export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
 /** 정차 작업조에 못 나가는 사람의 이름(S1b 근신·경비 근무, K02 5). */
 export const CREW_BUSY: ((g: Game) => string[])[] = [];
 export const END_LINK: { finish: (g: Game, end: EndKind) => void } = { finish: (g, end) => { g.end = end; g.phase = 'end'; } };
+/** 특별 회기를 닫는 길(field_council.ts가 채운다). turn.ts가 field_council을 바로 부르면 import 순환이 생겨 이 자리로 잇는다. */
+export const COUNCIL_LINK: { leaveSpecial: (g: Game) => boolean } = { leaveSpecial: () => false };
 
 export interface Profile { id: string; name: string; name_lang?: string; gender: 'male' | 'female'; age: number; community: Comm; like: string; dislike: string; hometown: string }
 export const PROFILES = profilesJson as unknown as Profile[];
@@ -213,9 +215,9 @@ export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Com
 /** 판 난이도(결정 376). 없으면 보통이다(옛 저장 포함). 고르는 화면은 아직 없다 */
 export type Difficulty = 'easy' | 'normal' | 'hard';
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees';
+export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees' | 'field_symbol' | 'field_promise';
 /** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
-export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
+export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number; verdict?: 'kept' | 'broken' }
 
 export interface VoteFlip { comm: Comm; yes: boolean }
 export interface VoteResult {
@@ -244,6 +246,8 @@ export interface CouncilState {
   martial?: boolean;
   /** 안건 자리를 먹지 않고 법 안건 앞에 따로 여는 표결(S1b 정기 신임, s1b_dark_path 5.3). result가 서면 끝났다 */
   pre?: { agenda: MotionAgenda; result?: VoteResult };
+  /** 첫 귀환 뒤의 특별 회기(field_council.ts). 비상 소집처럼 열리고, 닫히면 정산 대신 연 단계로 돌아간다 */
+  special?: boolean;
 }
 
 /** 저녁 솥불·벽 장부·떠난 사람의 밤이 구간마다 쌓는 값(calm.ts). 모두 선택 칸이라 옛 저장도 그대로 읽힌다. */
