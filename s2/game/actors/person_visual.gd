@@ -28,6 +28,7 @@ const RISE: int = DeadBody.RISE
 const STAGGER: int = DeadBody.STAGGER
 const HIT: int = DeadBody.HIT
 const RISE_FRONT: int = DeadBody.RISE_FRONT
+const TELL: int = DeadBody.TELL
 const SHADE: float = 1.0
 const STRIDE_CAP: float = 0.5            # more than this between two drawings is not a step
 const STILL_AFTER: float = 0.2           # stands once it has kept its place this long
@@ -41,6 +42,18 @@ const HELD_HZ: float = 2.6
 # back, easing out. A bite throws it furthest.
 const HURT_TIME: float = 0.45
 const HURT_LEAN: Dictionary = {"bite": -0.35, "": -0.2}
+# The living's own motions, by name, once the people's folder has them
+# (asked of the bake, coord fun 모션_새동작_청함); until then the dead's that
+# read closest. Crouched (Project Zomboid's sneak: its own stand and walk) it
+# stands low as the dead do before they run, and walks the bent shuffle.
+const OWN_WALK: String = "p_walk"
+const OWN_RUN: String = "p_run"
+const OWN_STAND: String = "p_stand"
+const OWN_CROUCH_WALK: String = "p_crouch_walk"
+const OWN_CROUCH_STAND: String = "p_crouch_idle"
+const CROUCH_WALK: int = 1                       # walk_b: bent over, both feet barely leaving the ground
+const CROUCH_LOW: Vector2 = Vector2(0.87, 0.97)  # where in the tell it is held, breathing between the two
+const STAND_PACE: Vector2 = Vector2(0.85, 1.15)  # each person stands at their own pace, from their own place in it
 
 var game                                 # field_game.gd
 var vat: Dictionary = {}
@@ -151,11 +164,22 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array) -> Vector
 		return Vector2(_cycle(note, LUNGE, t, clips), LUNGE)
 	if gone > 0.001:
 		note["moved"] = t
+	var unit: float = p.name_unit("stand")
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
-		return Vector2(_cycle(note, STAND, t, clips), STAND)
-	var gait := WALK
+		if p.crouched:
+			var low := clip_named(clips, OWN_CROUCH_STAND, -1)
+			if low >= 0:
+				return Vector2(_own_cycle(note, low, t, clips, unit), low)
+			note["motion"] = TELL
+			var breath := 0.5 + 0.5 * sin(TAU * (t / 3.5 + unit))
+			return Vector2(lerpf(CROUCH_LOW.x, CROUCH_LOW.y, breath), TELL)
+		var stand := clip_named(clips, OWN_STAND, STAND)
+		return Vector2(_own_cycle(note, stand, t, clips, unit), stand)
+	var gait := clip_named(clips, OWN_WALK, WALK)
 	if p.running:
-		gait = RUN
+		gait = clip_named(clips, OWN_RUN, RUN)
+	elif p.crouched:
+		gait = clip_named(clips, OWN_CROUCH_WALK, CROUCH_WALK)
 	elif p.body.exhaustion_level() >= 2:
 		gait = STAGGER
 	note["motion"] = gait
@@ -206,6 +230,23 @@ static func _once(note: Dictionary, motion: int, t: float, clips: Array) -> floa
 		note["motion"] = motion
 		note["since"] = t
 	return clampf((t - float(note["since"])) / _length(clips, motion, 1.0), 0.0, 1.0)
+
+
+## The number of a motion by its name in the folder's list, or `fallback`
+## when the folder has none of that name.
+static func clip_named(clips: Array, clip_name: String, fallback: int) -> int:
+	for n in clips.size():
+		if String(clips[n].get("name", "")) == clip_name:
+			return n
+	return fallback
+
+
+## A motion that goes round by the clock, each person from their own place
+## in it and at their own pace (Project Zomboid scatters its standing: 상태표 3.1).
+static func _own_cycle(note: Dictionary, motion: int, t: float, clips: Array, unit: float) -> float:
+	note["motion"] = motion
+	var pace := lerpf(STAND_PACE.x, STAND_PACE.y, fposmod(unit * 7.31, 1.0))
+	return fposmod(unit + t * pace / _length(clips, motion, 1.0), 1.0)
 
 
 ## A motion that goes round by the clock (standing, the shove).

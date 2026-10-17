@@ -88,3 +88,47 @@ func test_a_bite_throws_the_body_back_for_a_moment() -> void:
 	PersonVisual.motion_of(p, note, PersonVisual.HURT_TIME + 0.1, [])
 	assert_ne(int(PersonVisual.motion_of(p, note, 0.1, []).y), DeadBody.HIT, "and then it stands again")
 	assert_eq(PersonVisual.lean_of(p, note), Basis())
+
+
+# Crouched it stands low (held in the drop before a run, breathing) and walks
+# the bent shuffle; the folder's own living motions win once it has them.
+func test_crouched_it_is_low_and_the_living_motions_are_used_when_there() -> void:
+	var p := _person()
+	var note := {}
+	p.crouched = true
+	PersonVisual.motion_of(p, note, 0.1, [])
+	var low := PersonVisual.motion_of(p, note, 0.3, [])
+	assert_eq(int(low.y), DeadBody.TELL, "stands low")
+	assert_between(low.x, PersonVisual.CROUCH_LOW.x, PersonVisual.CROUCH_LOW.y)
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, []).y), PersonVisual.CROUCH_WALK, "the bent shuffle")
+	var clips: Array = []
+	for n in 15:
+		clips.append({"name": "x%d" % n, "length": 1.0})
+	for own in [PersonVisual.OWN_WALK, PersonVisual.OWN_RUN, PersonVisual.OWN_STAND, PersonVisual.OWN_CROUCH_WALK, PersonVisual.OWN_CROUCH_STAND]:
+		clips.append({"name": own, "length": 1.0, "round": 2.0})
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 18, "its own crouched walk")
+	p.crouched = false
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 15, "its own walk")
+	p.running = true
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 16, "its own run")
+	p.running = false
+	PersonVisual.motion_of(p, note, 0.3, clips)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 17, "its own stand")
+
+
+# Two people standing do not breathe together.
+func test_people_stand_each_at_their_own_place_and_pace() -> void:
+	var a := _person()
+	var b := Person.new()
+	add_child_autofree(b)
+	b.setup("p_other", "다른이", "companion", Vector3(3, 0, 0))
+	var na := {}
+	var nb := {}
+	for i in 3:
+		PersonVisual.motion_of(a, na, 0.2, [])
+		PersonVisual.motion_of(b, nb, 0.2, [])
+	assert_ne(PersonVisual.motion_of(a, na, 0.1, []).x, PersonVisual.motion_of(b, nb, 0.1, []).x)
