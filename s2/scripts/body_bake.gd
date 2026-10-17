@@ -65,8 +65,9 @@ const OWN_POSES: Array = [
 	["own_fall", 1.0, ""], ["own_stand", 0.0, ""], ["own_press", 0.0, ""], ["own_sit", 0.0, ""],
 ]
 # The living people's motions (bake_body_cli --set=person, a folder of its own
-# so the dead's numbers above stay): name, "", frames, loops, layer, seconds.
-# Only appended to, so a number once baked keeps its motion. Thirty-two at most:
+# so the dead's numbers above stay): name, source motion ("" for one written
+# here), frames, loops, layer ("" for none), seconds (a source motion's own
+# length is what is baked). Only appended to, so a number once baked keeps its motion. Thirty-two at most:
 # the shader's clip tables have thirty-two places (dead_vat.gdshader); numbers
 # 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
@@ -86,17 +87,38 @@ const PERSON_CLIPS: Array = [
 	["p_treat", "", 24, true, "p_treat", 2.0],
 	["p_aim_one", "", 16, true, "p_aim_one", 1.0],
 	["p_aim_two", "", 16, true, "p_aim_two", 1.0],
+	# Down, along and up again with the same layers the dead use, so a living
+	# body need not change folders (and lose its mix) to fall.
+	["p_fall", "", 32, false, "own_fall", 1.0],
+	["p_fall_front", "", 32, false, "own_fall_front", 1.0],
+	["p_crawl", "", 32, true, "own_crawl", 1.8],
+	["p_rise", "", 32, false, "own_rise", 1.2],
+	["p_rise_front", "", 32, false, "own_rise_front", 1.2],
+	["p_spent", "", 32, true, "own_stagger", 1.3],
+	["p_floor_strike", "", 24, false, "p_floor_strike", 0.8],
+	["p_stomp", "", 20, false, "p_stomp", 0.6],
+	["p_pry", "", 24, true, "p_pry", 1.6],
+	["p_kick", "", 20, false, "p_kick", 0.6],
+	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
+	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
+	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
+	["p_kneel_work", "Fixing_Kneeling", 32, true, "p_kneel_work", 3.12],
+	["p_open_low", "Chest_Open", 28, false, "", 1.367],
+	["p_knockback", "Hit_Knockback", 24, false, "", 0.833],
+	["p_pickup", "PickUp_Table", 24, false, "", 0.833],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove"]
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_knockback", "p_pickup"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
+const PERSON_CRAWL_CLIP: String = "p_crawl"   # the same for the living
 const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were written for, metres
 
 # Layers: a hand-made addition on top of a motion. For a frame at progress u
 # (0..1), w = TAU * u, and a layer holds:
 #   "warp": [size, lag]       read the motion at u + size * sin(w - lag) (uneven cadence)
+#   "span": [from, to]        play only that part of the motion (0..1 of its length)
 #   "damp": {bone: share}     the share (0..1) of the motion's turn that bone keeps
 #   "steps": [...]            applied in order after the bones are matched:
 #       ["turn", bone, axis, value]       bend a bone about "x" (forward), "y" (twist) or "z" (sideways)
@@ -885,6 +907,78 @@ const LAYERS: Dictionary = {
 		],
 		"sink": [0.05, 0.003, 0.0],
 	},
+	# Striking down at something on the ground: both hands raised over the head,
+	# bent right over with the knees giving as the blow lands in front of the feet.
+	"p_floor_strike": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, ["keys", [[0, 0.05], [0.35, 0.05], [0.5, 0.55], [1, 0.05]]]]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, ["keys", [[0, -0.05], [0.35, -0.05], [0.5, -0.45], [1, -0.05]]]]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, ["keys", [[0, -0.1], [0.35, -0.1], [0.5, 0.35], [1, -0.1]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0, -0.1], [0.35, -0.1], [0.5, -0.4], [1, -0.1]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.1], [0.35, -0.15], [0.5, 0.8], [1, 0.1]]]],
+			["turn", "chest", "x", ["keys", [[0, 0.0], [0.5, 0.25], [1, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.2], [0.35, 0.0], [0.5, 0.35], [1, 0.2]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -0.7], [0.35, 1.0], [0.5, -0.6], [1, -0.7]]], ["keys", [[0, 0.4], [0.35, -0.25], [0.5, 0.8], [1, 0.4]]]]],
+			["aim", "forearm.L", "hand.L", [-0.12, ["keys", [[0, -0.5], [0.35, 0.8], [0.5, -0.9], [1, -0.5]]], ["keys", [[0, 0.6], [0.35, -0.6], [0.5, 0.45], [1, 0.6]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.05, ["keys", [[0, -0.7], [0.35, 1.0], [0.5, -0.6], [1, -0.7]]], ["keys", [[0, 0.4], [0.35, -0.25], [0.5, 0.8], [1, 0.4]]]]],
+			["aim", "forearm.R", "hand.R", [0.12, ["keys", [[0, -0.5], [0.35, 0.8], [0.5, -0.9], [1, -0.5]]], ["keys", [[0, 0.6], [0.35, -0.6], [0.5, 0.45], [1, 0.6]]]]],
+		],
+		"sink": ["keys", [[0, 0.03], [0.35, 0.0], [0.5, 0.2], [1, 0.03]]],
+	},
+	# Stamping down: the right knee drawn high, the foot driven into the ground
+	# in front, looking down at it, the arms out a little for balance.
+	"p_stomp": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, -0.05]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.1, ["keys", [[0, -1.0], [0.35, -0.35], [0.5, -0.85], [1, -1.0]]], ["keys", [[0, 0.0], [0.35, 1.0], [0.5, 0.45], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.35, -0.3], [0.5, 0.1], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.35, 0.3], [0.5, 0.4], [1, 0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.1], [0.35, 0.45], [0.5, 0.5], [1, 0.1]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.16], [0.35, 0.5], [1, 0.16]]], -1.0, 0.1]],
+			["aim", "forearm.L", "hand.L", [0.1, -0.8, 0.3]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.35, -0.5], [1, -0.16]]], -1.0, 0.1]],
+			["aim", "forearm.R", "hand.R", [-0.1, -0.8, 0.3]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.35, -0.03], [0.5, 0.06], [1, 0.0]]],
+	},
+	# Prying a door or lid: both hands on a bar in front at the chest, the body
+	# thrown back against it and coming forward to set it again.
+	"p_pry": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, 0.25]],
+			["aim", "shin.L", "foot.L", [0.08, -1.0, -0.1]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [-0.15, 0.08, 0.0]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, -0.15]],
+			["turn", "spine", "x", [0.05, 0.25, 0.0]],
+			["turn", "chest", "y", [0.0, 0.08, 0.5]],
+			["turn", "neck", "x", [0.15, -0.1, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.15, [-0.45, 0.15, 0.0], 0.75]],
+			["aim", "forearm.L", "hand.L", [-0.35, [0.05, 0.1, 0.0], 0.8]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, [-0.45, 0.15, 0.0], 0.75]],
+			["aim", "forearm.R", "hand.R", [0.35, [0.05, 0.1, 0.0], 0.8]],
+		],
+		"sink": [0.08, 0.04, 0.0],
+	},
+	# Front kick: the weight back on the left leg, the right swung out straight
+	# to below the hip (higher goes through the skirt) and back down, the arms thrown out.
+	"p_kick": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.1, -1.0, ["keys", [[0, -0.02], [0.4, -0.15], [1, -0.02]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.1, ["keys", [[0, -1.0], [0.25, -0.75], [0.4, -0.55], [1, -1.0]]], ["keys", [[0, 0.0], [0.25, 0.45], [0.4, 0.8], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, ["keys", [[0, -1.0], [0.25, -1.0], [0.4, -0.45], [1, -1.0]]], ["keys", [[0, -0.02], [0.25, -0.2], [0.4, 0.9], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.4, -0.3], [1, 0.05]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.0], [0.4, 0.3], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.16], [0.4, 0.7], [1, 0.16]]], ["keys", [[0, -1.0], [0.4, -0.3], [1, -1.0]]], 0.15]],
+			["aim", "forearm.L", "hand.L", [0.2, -0.6, 0.4]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.4, -0.7], [1, -0.16]]], ["keys", [[0, -1.0], [0.4, -0.3], [1, -1.0]]], -0.1]],
+			["aim", "forearm.R", "hand.R", [-0.2, -0.6, 0.2]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.4, 0.04], [1, 0.0]]],
+	},
+	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
+	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
 }
 const AXES: Dictionary = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
 
@@ -1091,6 +1185,9 @@ static func pose(ctx: Dictionary, clip: String, layer: String, u: float) -> void
 	if spec.has("warp"):
 		var warp: Array = spec["warp"]
 		at = fposmod(u + float(warp[0]) * sin(TAU * u - float(warp[1])), 1.0)
+	if spec.has("span"):
+		var span: Array = spec["span"]
+		at = lerpf(float(span[0]), float(span[1]), at)
 	_pose_at(ctx, clip, at, spec.get("damp", {}))
 	apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
 
@@ -1106,8 +1203,9 @@ static func _skin_frame(ctx: Dictionary) -> Array:
 	return mats
 
 
-## Collects what posing needs from the two models (both in the scene tree); {} if something is missing.
-static func prepare(body_root: Node3D, motion_root: Node3D) -> Dictionary:
+## Collects what posing needs from the two models (both in the scene tree) to
+## bake `list` and `poses`; {} if something is missing.
+static func prepare(body_root: Node3D, motion_root: Node3D, list: Array = CLIPS, poses: Array = POSES) -> Dictionary:
 	var source := first_of(motion_root, "Skeleton3D") as Skeleton3D
 	var player := first_of(motion_root, "AnimationPlayer") as AnimationPlayer
 	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
@@ -1115,14 +1213,14 @@ static func prepare(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	if source == null or player == null or body == null or mesh_node == null or mesh_node.skin == null:
 		push_error("body_bake: need a skeleton and animation player in the motions, and a skeleton and skinned mesh in the body")
 		return {}
-	for entry: Array in CLIPS:
+	for entry: Array in list:
 		if entry[1] != "" and not player.has_animation(entry[1]):
 			push_error("body_bake: motion not found: " + str(entry[1]))
 			return {}
 		if entry[4] != "" and not LAYERS.has(entry[4]):
 			push_error("body_bake: layer not found: " + str(entry[4]))
 			return {}
-	for entry: Array in POSES:
+	for entry: Array in poses:
 		if not player.has_animation(entry[0]):
 			push_error("body_bake: motion not found: " + str(entry[0]))
 			return {}
@@ -1165,12 +1263,15 @@ static func prepare_own(body_root: Node3D, entries: Array = OWN_CLIPS + OWN_POSE
 			push_error("body_bake: layer not found: " + layer)
 			return {}
 	body.reset_bone_poses()
-	var ctx := {"body": body, "mesh_node": mesh_node}
-	# The layers' sinks were written for hips 1 m up (see apply_layer).
-	var hips := body.global_transform * body.get_bone_global_rest(_bone(body, "hips"))
-	ctx["sink_scale"] = (hips.origin.y - body_root.global_position.y) / HIP_HEIGHT
+	var ctx := {"body": body, "mesh_node": mesh_node, "sink_scale": _sink_scale(body_root, body)}
 	_bind_skin(ctx)
 	return ctx
+
+
+## The layers' sinks were written for hips 1 m up (see apply_layer): this body's share of that.
+static func _sink_scale(body_root: Node3D, body: Skeleton3D) -> float:
+	var hips := body.global_transform * body.get_bone_global_rest(_bone(body, "hips"))
+	return (hips.origin.y - body_root.global_position.y) / HIP_HEIGHT
 
 
 static func _bind_skin(ctx: Dictionary) -> void:
@@ -1196,10 +1297,46 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	var ctx := prepare(body_root, motion_root)
 	if ctx.is_empty():
 		return {}
+	return _bake_list(ctx, CLIPS, POSES)
+
+
+## Bakes the living people's motions (PERSON_CLIPS, no still poses) with the
+## motion set in `motion_root` for those that take one. The ones written here
+## come out as bake_own makes them, so the numbers baked before stay the same.
+static func bake_person(body_root: Node3D, motion_root: Node3D) -> Dictionary:
+	var ctx := prepare(body_root, motion_root, PERSON_CLIPS, [])
+	if ctx.is_empty():
+		return {}
+	ctx["sink_scale"] = _sink_scale(body_root, ctx["body"])
+	return _bake_list(ctx, PERSON_CLIPS, [])
+
+
+## Puts the motions of every other motion set in `roots` (same skeleton, all
+## in the scene tree) on the first one's player, so one bake can read them all.
+## Returns the first root; a motion the first already has is kept as it is.
+static func merge_motions(roots: Array) -> Node3D:
+	var first := roots[0] as Node3D
+	var player := first_of(first, "AnimationPlayer") as AnimationPlayer
+	var library := player.get_animation_library("")
+	for n in range(1, roots.size()):
+		var other := first_of(roots[n], "AnimationPlayer") as AnimationPlayer
+		for motion: StringName in other.get_animation_list():
+			if not player.has_animation(motion):
+				library.add_animation(motion, other.get_animation(motion).duplicate())
+	return first
+
+
+## The share of its source motion a layer plays (1 without a span).
+static func _span_share(layer: String) -> float:
+	var span: Array = LAYERS.get(layer, {}).get("span", [0.0, 1.0])
+	return float(span[1]) - float(span[0])
+
+
+static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary:
 	var player: AnimationPlayer = ctx["player"]
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
-	for entry: Array in CLIPS:
+	for entry: Array in list:
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
@@ -1210,18 +1347,20 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 			pose(ctx, entry[1], entry[4], u)
 			frames.append(_skin_frame(ctx))
 			_note_reach(ctx, entry[0], reach)
-		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length, "frames": frames, "round": _round(reach) if looped else 0.0})
+		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
+		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": _round(reach) if looped else 0.0})
 	var still := []
-	for entry: Array in POSES:
+	for entry: Array in poses:
 		_pose_at(ctx, entry[0], entry[1], {})
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
-	clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
+	if not still.is_empty():
+		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
 	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
 
 
 ## Bakes the body in `body_root` (in the scene tree) with the motions written
-## here alone: `list` in order (OWN_CLIPS, or PERSON_CLIPS for the living),
+## here alone: `list` in order (OWN_CLIPS, or the living's that take nothing from a motion set),
 ## then one POSES_CLIP of `poses` when there are any. Nothing in the result
 ## comes from a motion set. {} if something is missing.
 static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = OWN_POSES) -> Dictionary:
@@ -1258,7 +1397,7 @@ static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = 
 static func _note_reach(ctx: Dictionary, clip: String, reach: Array) -> void:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
-	var crawls := clip == CRAWL_CLIP
+	var crawls := clip == CRAWL_CLIP or clip == PERSON_CRAWL_CLIP
 	var ends: Array = ["hand.L", "hand.R"] if crawls else ["foot.L", "foot.R"]
 	for n in 2:
 		var bone := _bone(body, ends[n])

@@ -6,6 +6,7 @@ extends RefCounted
 ## it only reads them (state, age, fell_at) and decides nothing.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
@@ -57,6 +58,10 @@ const MIX_IN: Dictionary = {HIT: 0.1, LUNGE: 0.35, STAGGER: 0.4, RISE: 0.2, RISE
 const REACH_AT: float = 0.0
 const REACH_SHIFT: float = 0.03               # how far round the legs shift either way
 const REACH_HZ: float = 0.9
+# Project Zomboid scatters how fast each of the dead stands breathing (0.2..1.25
+# of its pace) and how long its stride is; past a tenth of the stride the feet slide.
+const STAND_PACE: Vector2 = Vector2(0.3, 1.25)
+const STRIDE_SPREAD: float = 0.1
 const REEL_PACE: float = 0.6                  # stunned after being thrown off: its reel at this pace, on the spot
 const REEL_AFTER: float = 1.0                 # that long after it was thrown off at most (zombies.gd release stuns it 1 s)
 const MIX_STEPS: float = 63.0                 # how finely the shader is told how much (see dead_vat.gdshader)
@@ -195,9 +200,9 @@ static func mixed(z: Dictionary, plain: Color) -> Color:
 ## `now` is its own clock, `tab` its folder's table, `mix_in` how long a change
 ## into each of its motions is eased (another folder numbers its motions its own way).
 static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array, mix_in: Dictionary = MIX_IN) -> Color:
-	if tab.is_empty():
-		return plain
 	var motion := int(plain.g)
+	if tab.is_empty():
+		return packed(plain, motion, 0, 0.0)
 	if note.has("body_motion") and int(note["body_motion"]) != motion:
 		note["body_from"] = frame_in(tab, int(note["body_motion"]), float(note["body_r"]))
 		note["body_changed"] = now
@@ -205,14 +210,30 @@ static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array, mix
 	note["body_motion"] = motion
 	note["body_r"] = plain.r
 	if not note.has("body_changed"):
-		return plain
+		return packed(plain, motion, 0, 0.0)
 	var left := 1.0 - (now - float(note["body_changed"])) / float(note.get("body_mix", MIX_TIME))
 	if left <= 0.0:
-		return plain
+		return packed(plain, motion, 0, 0.0)
 	var share := roundf(left * left * (3.0 - 2.0 * left) * MIX_STEPS)
 	if share <= 0.0:
-		return plain
-	return Color(plain.r, plain.g + 16.0 * float(note["body_from"]) + 65536.0 * share, plain.b, plain.a)
+		return packed(plain, motion, 0, 0.0)
+	return packed(plain, motion, int(note["body_from"]), share)
+
+
+## The colour the shader reads: the motion, from motion 16 on in its upper half
+## (VatBaker.pack_motion), and while it changes motion the frame it was in and
+## how much of that it keeps.
+static func packed(plain: Color, motion: int, from: int, share: float) -> Color:
+	return Color(plain.r, VatBaker.pack_motion(motion, from, int(share)), plain.b, plain.a)
+
+
+## The motion a packed colour is in (undoing packed()).
+static func motion_in(g: float) -> int:
+	var at := floorf(g + 0.5)
+	var upper := at >= VatBaker.UPPER
+	if upper:
+		at -= VatBaker.UPPER
+	return int(fposmod(at, 16.0)) + (16 if upper else 0)
 
 
 ## The motion one body is in and how far through it, before any easing.
@@ -315,14 +336,15 @@ static func moved(z: Dictionary) -> float:
 ## body is, 0..1. The drawing side keeps that clock itself, off the body's
 ## age, so that it knows the frame (the shader's own clock is not used for a
 ## baked body). It starts from the body's own number and each body goes at its
-## own pace (0.82..1.18, as the shader had it); `still` 1 holds it.
+## own pace (0.82..1.18, as the shader had it; standing, STAND_PACE); `still` 1 holds it.
 static func swayed(z: Dictionary, motion: int, still: float) -> float:
 	var age: float = z["age"]
 	var gone := clampf(age - float(z.get("body_age", age)), 0.0, SWAY_CAP)
 	z["body_age"] = age
 	var at: float = z.get("body_sway", z["phase"])
 	var seconds: float = table[motion][3] if motion < table.size() and table[motion].size() > 3 else float(SECONDS[motion])
-	var pace := lerpf(0.82, 1.18, fposmod(float(z["phase"]) * 7.31, 1.0))
+	var spread: Vector2 = STAND_PACE if motion == STAND else Vector2(0.82, 1.18)
+	var pace := lerpf(spread.x, spread.y, fposmod(float(z["phase"]) * 7.31, 1.0))
 	at = fposmod(at + gone * pace * (1.0 - still) / maxf(seconds, 0.001), 1.0)
 	z["body_sway"] = at
 	return at
@@ -355,12 +377,13 @@ static func reeling(z: Dictionary, still: float) -> float:
 
 ## Where in a round of its walk (or run, or crawl) a body is, 0..1: it goes on
 ## by the ground covered since it was last drawn, and starts from the body's
-## own number so that no two step together.
+## own number so that no two step together, each with its own stride (STRIDE_SPREAD).
 static func step(z: Dictionary, motion: int) -> float:
 	var gone := moved(z)
 	var at: float = z.get("body_step", z["phase"])
 	if gone <= STRIDE_CAP:
-		at = fposmod(at + gone / float(rounds.get(motion, STRIDE[motion])), 1.0)
+		var own := lerpf(1.0 - STRIDE_SPREAD, 1.0 + STRIDE_SPREAD, fposmod(float(z["phase"]) * 3.17, 1.0))
+		at = fposmod(at + gone / (float(rounds.get(motion, STRIDE[motion])) * own), 1.0)
 	z["body_step"] = at
 	return at
 
