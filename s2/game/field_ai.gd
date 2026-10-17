@@ -66,6 +66,15 @@ const PICK_IDS: Array = ["arrow", "ammo_pistol", "ammo_shell", "bandage", "cloth
 const RESCUE_R: float = 9.0
 ## One of us down this near: the nearest free companion stands over them.
 const GUARD_DOWN_R: float = 15.0
+## What they say of what they see (bundle 4; the lines and how often:
+## AllyLines). This many of the dead coming at us, near, is a horde.
+const HORDE_N: int = 5
+## One of us falls: the nearest companion this near that sees it calls out.
+const SEE_DOWN_R: float = 12.0
+## The chief stands still this long: the companions look round, each its own
+## way, sweeping this far either side.
+const LOOK_STILL_S: float = 1.5
+const LOOK_SWEEP_DEG: float = 40.0
 
 var game
 var think_t: float = 0.0
@@ -91,6 +100,10 @@ var _spots: Dictionary = {}
 ## The dead within ENGAGE_R of the companion thinking now (_companion fills it).
 var _near: Array = []
 var _near_of = null
+## How long the chief has stood still.
+var _chief_still: float = 0.0
+## Those of us lying down already called out.
+var _down_seen: Dictionary = {}
 
 
 func _init(field_game) -> void:
@@ -104,9 +117,11 @@ func update(delta: float) -> void:
 		_grab_reflex(p, delta)
 	think_t -= delta
 	var think := think_t <= 0.0
+	_chief_still = 0.0 if game.player.moving else _chief_still + delta
 	if think:
 		think_t = THINK
 		_track_door()
+		_call_down()
 	# Each companion thinks every THINK, but not all on the same frame: the
 	# three are spread over the THINK so no one frame carries all of them.
 	var k := 0
@@ -122,6 +137,8 @@ func update(delta: float) -> void:
 		p.brain["think_t"] = float(p.brain["think_t"]) + THINK
 		if float(p.brain["think_t"]) <= 0.0:
 			p.brain["think_t"] = THINK
+		if p.is_alive():
+			_notice(p)
 		if p.is_alive() and p.can_act():
 			if not _live_on:
 				_gather_live()
@@ -313,6 +330,8 @@ func _companion(p) -> void:
 		_near = _dead_near(p.position, ENGAGE_R)
 		_near_of = p
 	var threat := _threat_near(p, THREAT_R)
+	if not threat.is_empty():
+		_horde_call(p)
 	var raider = _hostile_raider_near(p, 20.0)
 	_watch_stuck(p)
 	# Slow work is dropped when one of the dead gets close.
@@ -638,10 +657,104 @@ func _keep_formation(p) -> void:
 		spot = game.walkable_near(player.position + right * off.x + fwd * off.y, false, 3)
 	var d: float = p.position.distance_to(spot)
 	var run: bool = player.running or d > 7.0 or (role == "point" and walking and d > 2.0)
+	# The chief has stopped: each looks its own way round, slowly.
+	if not hold and _chief_still >= LOOK_STILL_S:
+		look = _look_out(p, role, fwd, right)
 	if d > (0.8 if hold else 1.2):
 		_walk(p, spot, run)
 	elif p.path.is_empty():
 		p.face_point(p.position + look)
+
+
+## Where p keeps watch while the chief stands: the front one ahead, the side
+## one to its side, the back one behind, each sweeping slowly either way.
+func _look_out(p, role: String, fwd: Vector3, right: Vector3) -> Vector3:
+	var base: Vector3
+	match role:
+		"point":
+			base = fwd
+		"aside":
+			base = -right
+		"rear":
+			base = -fwd
+		_:
+			base = right
+	var k: int = maxi(game.squad.find(p), 0)
+	var sweep: float = sin(game.clock.elapsed * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
+	return base.rotated(Vector3.UP, sweep)
+
+
+# ---------------------------------------------------------------- words
+
+## Said over p's head; how often and which line: AllyLines.
+func _say(p, event: String, name: String = "") -> void:
+	if game.hud == null or p == game.player or p.body.dead:
+		return
+	var line: String = game.lines.pick(String(p.pid), event, game.clock.elapsed, false, name)
+	if line != "":
+		game.hud.shout(p, line)
+
+
+## What happened to p since it last thought: told to go back, let go by the
+## dead, put one down, the gun gone dry.
+func _notice(p) -> void:
+	var b: Dictionary = p.brain
+	if p.command == "retreat" and String(b.get("cmd_was", "")) != "retreat":
+		_say(p, "retreat")
+	b["cmd_was"] = p.command
+	var held: bool = not p.grabbers.is_empty()
+	if bool(b.get("held", false)) and not held and not p.body.downed:
+		_say(p, "freed")
+	b["held"] = held
+	var last_kill: float = float(p.close_kills[-1]) if not p.close_kills.is_empty() else -1.0
+	if b.has("kill_seen") and last_kill > float(b["kill_seen"]):
+		_say(p, "kill")
+	b["kill_seen"] = last_kill
+	var armed := _gun_slot(p) >= 0
+	if bool(b.get("armed", false)) and not armed and _has_gun(p):
+		_say(p, "ammo_out")
+	b["armed"] = armed
+
+
+func _has_gun(p) -> bool:
+	for h in p.hands:
+		if W.is_ranged(String(h["id"])) and not bool(h.get("broken", false)):
+			return true
+	return false
+
+
+## Many of the dead coming at us near p: it calls it (one of the squad does).
+func _horde_call(p) -> void:
+	var near: Array = _near if _near_of == p else _dead_near(p.position, ENGAGE_R)
+	var n := 0
+	for z in near:
+		if game.zombies.active(z) and (z["state"] == "chase" or z["state"] == "attack" or z["state"] == "grab"):
+			n += 1
+	if n >= HORDE_N:
+		_say(p, "horde_near")
+
+
+## One of us has just gone down: the nearest companion that sees it calls out
+## their name.
+func _call_down() -> void:
+	for o in _down_seen.keys():
+		if not is_instance_valid(o) or not o.is_alive() or not o.body.downed:
+			_down_seen.erase(o)
+	for o in game.squad:
+		if not o.is_alive() or not o.body.downed or _down_seen.has(o):
+			continue
+		_down_seen[o] = true
+		var best = null
+		var best_d := SEE_DOWN_R
+		for q in game.squad:
+			if q == o or q == game.player or not q.is_alive() or q.body.downed:
+				continue
+			var d: float = q.position.distance_to(o.position)
+			if d < best_d and game.sight_clear(q.position, o.position):
+				best_d = d
+				best = q
+		if best != null:
+			_say(best, "ally_down", o.display_name)
 
 
 ## The rear one holds the door while the chief is inside that building, on
@@ -736,7 +849,6 @@ func _rescue(p, o) -> void:
 	if p.turned_to(deg_to_rad(FieldCombat.ALLY_TURN_DEG)) and p.swing_t <= 0.0:
 		game.combat.shove(p)
 		if o.grabbers.is_empty():
-			game.shout(p, "pulled_off")
 			game.combat.melee_target(p, z, true)
 
 
