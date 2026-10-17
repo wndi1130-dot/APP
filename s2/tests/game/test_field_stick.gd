@@ -159,22 +159,32 @@ func test_double_tap_run_only_when_set() -> void:
 	assert_false(game.player.running, "the dash ends with the hold")
 
 
-func test_run_crouch_and_pause_on_the_left_the_fighting_keys_on_the_right() -> void:
+func test_run_and_pause_on_the_left_crouch_with_the_fighting_keys_on_the_right() -> void:
 	var hud = game.hud
-	var half: float = hud._view_size().x * 0.5
+	var view: Vector2 = hud._view_size()
+	var half: float = view.x * 0.5
 	assert_lt(hud.run_button.get_global_rect().end.x, half)
-	assert_lt(hud.crouch_button.get_global_rect().end.x, half)
+	# Decision 293 (배그처럼): crouch is the right thumb's, bottom right, over attack.
+	var crouch: Rect2 = hud.crouch_button.get_global_rect()
+	assert_gt(crouch.position.x, half)
+	assert_gt(crouch.position.y, view.y * 0.5, "in the bottom half")
+	assert_true(Rect2(Vector2.ZERO, view).encloses(crouch), "on the screen")
+	assert_lt(crouch.end.y, hud.attack_button.get_global_rect().position.y, "over attack")
 	hud.context_button.visible = true
 	var right: Array = []
 	for b in hud.pads:
 		# The state icons moved to the right edge (build 89); they tell, they are not keys to fight with.
-		if b.get_global_rect().position.x > half and b != hud.manual_button and not hud.status_pads.has(b):
+		# The settings gear sits top right too, and only while paused.
+		if b.get_global_rect().position.x > half and b != hud.manual_button and b != hud.settings_button and not hud.status_pads.has(b):
 			right.append(b)
 	# Leaving got a pad of its own, over the situation pad and only by the train
 	# (it was a row of the situation list, hidden behind a hold when a body lay near).
-	assert_eq(right.size(), 6, "aim, attack, shove, situation, leaving, all to the train")
+	assert_eq(right.size(), 7, "aim, attack, shove, crouch, situation, leaving, all to the train")
 	assert_false(hud.depart_button.get_global_rect().intersects(hud.context_button.get_global_rect()))
 	assert_false(hud.depart_button.get_global_rect().intersects(hud.shove_button.get_global_rect()))
+	for i in right.size():
+		for k in range(i + 1, right.size()):
+			assert_false(right[i].get_global_rect().intersects(right[k].get_global_rect()), "%s and %s apart" % [right[i].text, right[k].text])
 	var top_left: Rect2 = hud.pause_button.get_global_rect()
 	assert_lt(top_left.position.x, 40.0, "pause at the left end of the gauge row")
 	assert_lt(top_left.position.y, 40.0)
@@ -377,10 +387,12 @@ func test_one_target_only_when_chaining_is_off() -> void:
 	assert_false(p.hold_attack)
 
 
-func test_nothing_in_reach_is_said_not_swung_at() -> void:
+## Decision 405: nothing in reach is one swing at the air (it was a word and no swing).
+func test_nothing_in_reach_is_one_swing_at_the_air() -> void:
 	var p = game.player
 	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}]
 	game.hud._pad_down(game.hud.attack_button, Vector2.ZERO)
+	assert_gt(p.strike_t, 0.0, "the axe comes round")
 	assert_false(p.hold_attack)
 	assert_false(game.hud.attack_button.button_pressed)
 
@@ -1055,11 +1067,32 @@ func test_dragging_off_the_aim_pad_onto_an_enemy_takes_that_one() -> void:
 	hud._auto_aim_end(pad)
 
 
-func test_holding_the_aim_pad_with_no_one_about_still_fires_nothing() -> void:
+## Decision 405 (as in Zomboid): with nothing picked the shot still goes
+## where the gun points (it was: no shot at all).
+func test_holding_the_aim_pad_with_no_one_about_fires_where_it_points() -> void:
 	_gun()
 	var hud = game.hud
 	hud._auto_aim_start()
 	hud._tick_auto_aim(2.0)
 	hud._auto_aim_end(hud.aim_button.get_global_rect().get_center())
-	assert_false(_tried())
+	assert_true(_tried())
 
+# Decision 293: with a blade, a club or bare hands in hand there is no aim and
+# no 'manual' (aim only ever takes up a gun that is in hand).
+func test_aim_and_manual_show_only_with_a_gun_in_hand() -> void:
+	var hud = game.hud
+	var p = game.player
+	_gun()
+	hud.tick(0.02)
+	assert_true(hud.aim_button.visible, "a pistol in hand")
+	assert_true(hud.manual_button.visible)
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}, {"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}]
+	hud.tick(0.02)
+	assert_false(hud.aim_button.visible, "an axe in hand, the pistol at the belt")
+	assert_false(hud.manual_button.visible)
+	p.hands = []
+	hud.tick(0.02)
+	assert_false(hud.aim_button.visible, "bare hands")
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}]
+	hud.tick(0.02)
+	assert_true(hud.aim_button.visible, "back with the gun")

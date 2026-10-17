@@ -12,14 +12,16 @@ render_mode cull_back;
 // g may carry more than the clip (game/actors/dead_body.gd, mixed): the frame
 // a body was in when it changed to this clip and how much of that it still
 // keeps, g = clip + 16 * frame + 65536 * share (share 0..63). A plain clip
-// number reads as before: no frame, no share.
+// number reads as before: no frame, no share. Clips 16..31 carry 4194304 more
+// and are written as clip - 16 (scripts/vat_baker.gd pack_motion), so every
+// g below 4194304 reads exactly as it did with sixteen places.
 uniform sampler2D vat : filter_nearest, repeat_disable;
 uniform float rows_per_frame = 1.0;
 uniform float frame_rows = 64.0;
-uniform float clip_start[16];
-uniform float clip_frames[16];
-uniform float clip_rate[16];
-uniform float clip_loop[16];
+uniform float clip_start[32];
+uniform float clip_frames[32];
+uniform float clip_rate[32];
+uniform float clip_loop[32];
 // Box bake stores offset + 0.5 in 8 bits; a skinned bake stores metres (bias 0).
 uniform float bias = 0.5;
 uniform vec3 tint = vec3(0.5);
@@ -33,8 +35,8 @@ uniform bool mixes = false;
 // A compacted bake (scripts/body_bake.gd compact) keeps 8 bits a channel
 // inside each clip's own box; the picture's 0..1 goes back to lo..hi.
 uniform bool quantized = false;
-uniform vec3 clip_lo[16];
-uniform vec3 clip_hi[16];
+uniform vec3 clip_lo[32];
+uniform vec3 clip_hi[32];
 // A baked body that brings its own colour picture (models/people/<body>/albedo.png)
 // is drawn with it, pressed like every other model (fx_model_grade, the user's
 // values of 2026-10-17); tint then only shifts it (tint / 0.5, so 0.5 leaves it).
@@ -59,7 +61,7 @@ vec3 offset_at(float x, float row, int clip) {
 
 // The clip a frame row belongs to (for the frame a body keeps while it changes motion).
 int clip_of(float frame) {
-	for (int n = 0; n < 16; n++) {
+	for (int n = 0; n < 32; n++) {
 		if (frame >= clip_start[n] && frame < clip_start[n] + clip_frames[n]) {
 			return n;
 		}
@@ -69,9 +71,11 @@ int clip_of(float frame) {
 
 void vertex() {
 	float packed = floor(INSTANCE_CUSTOM.g + 0.5);
+	float upper = floor(packed / 4194304.0);
+	packed -= upper * 4194304.0;
 	float share = floor(packed / 65536.0);
 	float kept = floor((packed - share * 65536.0) / 16.0);
-	int clip = int(packed - share * 65536.0 - kept * 16.0 + 0.5);
+	int clip = int(packed - share * 65536.0 - kept * 16.0 + 0.5) + 16 * int(upper);
 	float frames = clip_frames[clip];
 	float start = clip_start[clip];
 	float rate = clip_rate[clip];

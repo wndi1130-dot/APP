@@ -11,10 +11,14 @@ extends Node
 const FieldGame = preload("res://game/field_game.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const ReceiptCard = preload("res://game/ui/receipt_card.gd")
+const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const BOOT_SCENE := "res://scenes/boot.tscn"
-## The receipt the receipt panel shows when the field was skipped (tests).
-const RECEIPT_SAMPLE := "res://tests/game/fixtures/receipt_gd_sample.json"
+## The receipt shown when the field was skipped, and the departure the field
+## goes out with, till the train sends its own (S3 영수증 판 4 표본).
+const RECEIPT_SAMPLE := "res://tests/game/fixtures/field_v4/case1_symbol_kept.json"
+const DEPARTURE_SAMPLE := "res://tests/game/fixtures/field_v4/departure_prologue.json"
 
 ## The steps in order: [id, the train's phase behind the panel ("" for none),
 ## the stretch it is on, the panel's title, the next key's word].
@@ -31,7 +35,6 @@ const STEPS: Array = [
 ## The words on each plain panel until its real screen comes (가제).
 const NOTES: Dictionary = {
 	"train": ["열차 안 · 칸마다 사람과 기색", "정차 고르기 화면 자리"],
-	"stop_pick": ["술레후프 · 얼어붙은 급수탑 옆 작은 역", "정차 카드 · 작업조 · 위험 줄 자리"],
 	"council": ["식당칸 의회 · 안건과 표 자리", "귀환 영수증의 약속 판정이 여기서 쓰임"],
 	"travel": ["둘째 구간 · 열차 턴 자리"],
 	"arrive": ["둘째 역 도착 화면 자리"],
@@ -52,6 +55,8 @@ var panel: PanelContainer
 var title: Label
 var lines: VBoxContainer
 var next_button: Button
+var panel_style: StyleBoxFlat
+var card: Control = null           # a real screen standing in for the panel (stop_pick)
 
 
 func _ready() -> void:
@@ -71,6 +76,9 @@ func current() -> String:
 func go(i: int) -> void:
 	step = i
 	_clear_stage()
+	if is_instance_valid(card):
+		card.queue_free()
+	card = null
 	var row: Array = STEPS[i]
 	var id: String = row[0]
 	if id == "field":
@@ -82,7 +90,13 @@ func go(i: int) -> void:
 		return
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(row[2]))
-	_show_panel(String(row[3]), _lines_of(id), String(row[4]))
+	if id == "receipt":
+		_show_receipt(String(row[4]))
+		return
+	if id == "stop_pick":
+		_show_stop_pick()
+		return
+	_show_panel(String(row[3]), NOTES.get(id, []), String(row[4]))
 
 
 func next() -> void:
@@ -90,6 +104,31 @@ func next() -> void:
 		get_tree().change_scene_to_file(BOOT_SCENE)
 		return
 	go(step + 1)
+
+
+## Choosing the stop: the paper card over the train at its stop. The first
+## stop is Sulechów, a freight siding; the numbers are the train sample's.
+func _show_stop_pick() -> void:
+	panel.visible = false
+	var c = StopPickCard.new()
+	var s: Array = StopPickCard.sample()
+	c.g = s[0]
+	c.t = s[1]
+	if c.g.get("stop") is Dictionary:
+		c.g["stop"]["place"] = "freight"
+	c.stop_name = "술레후프"
+	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
+	c.sent.connect(func(_g: Dictionary) -> void: next())
+	c.passed_by.connect(func() -> void: go(_index_of("travel")))
+	layer.add_child(c)
+	card = c
+
+
+func _index_of(id: String) -> int:
+	for i in STEPS.size():
+		if STEPS[i][0] == id:
+			return i
+	return 0
 
 
 func _clear_stage() -> void:
@@ -116,6 +155,9 @@ func _start_field() -> void:
 	field = FieldGame.new()
 	var o := {"seed": int(opts.get("seed", 1))}
 	o["squad"] = field.default_squad("crude")
+	var dep: Dictionary = _sample(DEPARTURE_SAMPLE)
+	if not dep.is_empty():
+		o["departure"] = dep
 	field.opts = o
 	field.finished.connect(_field_done)
 	add_child(field)
@@ -126,7 +168,7 @@ func _start_field() -> void:
 ## on to the receipt.
 func _field_done(r: Dictionary) -> void:
 	result = r
-	receipt = r.get("receipt", {}) if not r.is_empty() else _sample_receipt()
+	receipt = r.get("receipt", {}) if not r.is_empty() else _sample(RECEIPT_SAMPLE)
 	if field == null:
 		go(step + 1)
 		return
@@ -134,46 +176,27 @@ func _field_done(r: Dictionary) -> void:
 	panel.visible = true
 
 
-func _sample_receipt() -> Dictionary:
-	if not FileAccess.file_exists(RECEIPT_SAMPLE):
+func _sample(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
 		return {}
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(RECEIPT_SAMPLE))
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
 	return parsed if parsed is Dictionary else {}
 
 
-func _lines_of(id: String) -> Array:
-	if id == "receipt":
-		return receipt_lines(receipt)
-	return NOTES.get(id, [])
-
-
-## What the plain receipt panel lists: the place and the hours, the stock in
-## and out, who came back how, and the promises.
-static func receipt_lines(r: Dictionary) -> Array:
-	if r.is_empty():
-		return ["영수증 없음"]
-	var out: Array = []
-	var place: Dictionary = r.get("place", {})
-	var time: Dictionary = r.get("time", {})
-	out.append("%s · %s → %s" % [place.get("id", "?"), time.get("arrive", "?"), time.get("depart", "?")])
-	var stock: Dictionary = r.get("stock", {})
-	var parts: Array = []
-	for k in stock:
-		parts.append("%s %+d" % [k, int(stock[k])])
-	if not parts.is_empty():
-		out.append("물자: " + ", ".join(parts))
+## What the receipt card reads off a field result, made from a bare receipt
+## when the field was skipped.
+static func result_of(r: Dictionary) -> Dictionary:
 	var people: Dictionary = r.get("people", {})
-	var who: Array = []
-	for k in ["sent", "injured", "bitten", "dead", "missing", "leftBehind", "rescued"]:
-		var n: int = (people.get(k, []) as Array).size()
-		if n > 0:
-			who.append("%s %d" % [k, n])
-	if not who.is_empty():
-		out.append("사람: " + ", ".join(who))
-	for p in r.get("promises", []):
-		out.append("약속: %s · %s" % [p.get("condition", "?"), "지킴" if p.get("kept", false) else "어김"])
-	out.append("끝: %s" % r.get("endReason", "?"))
-	return out
+	var gone: int = 0
+	for k in ["dead", "missing", "leftBehind"]:
+		gone += (people.get(k, []) as Array).size()
+	return {
+		"reason": String(r.get("endReason", "departed")),
+		"receipt": r,
+		"stay": int((r.get("time", {}) as Dictionary).get("stayGameMinutes", 0)),
+		"boarded": maxi(0, (people.get("sent", []) as Array).size() - gone),
+		"hordes": 0,
+	}
 
 
 func _build_panel() -> void:
@@ -183,14 +206,12 @@ func _build_panel() -> void:
 	sb.bg_color = Color(0.05, 0.06, 0.07, 0.86)
 	sb.set_corner_radius_all(14)
 	sb.set_content_margin_all(22)
+	panel_style = sb
 	panel.add_theme_stylebox_override("panel", sb)
-	# Top right, growing to the left and down: the train's people stay in sight.
-	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	panel.offset_right = -24.0
-	panel.offset_top = 24.0
 	panel.custom_minimum_size = Vector2(PANEL_W, 0)
 	layer.add_child(panel)
+	# Wrapped lines settle their height after a layout pass: pin again then.
+	panel.minimum_size_changed.connect(_pin)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
@@ -208,10 +229,29 @@ func _build_panel() -> void:
 	v.add_child(next_button)
 
 
+## The receipt step: the paper receipt itself on clear glass, the key under it.
+func _show_receipt(go_word: String) -> void:
+	_show_panel("", [], go_word)
+	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	panel.custom_minimum_size = Vector2.ZERO
+	if receipt.is_empty():
+		var none := Label.new()
+		none.text = "영수증 없음"
+		lines.add_child(none)
+	else:
+		var slip: Control = ReceiptCard.build(result if not result.is_empty() else result_of(receipt))
+		slip.name = "Receipt"
+		lines.add_child(slip)
+	_pin()
+
+
 func _show_panel(head: String, rows: Array, go_word: String) -> void:
+	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.custom_minimum_size = Vector2(PANEL_W, 0)
 	title.text = head
 	title.visible = head != ""
 	for c in lines.get_children():
+		lines.remove_child(c)
 		c.queue_free()
 	for text in rows:
 		var l := Label.new()
@@ -222,4 +262,11 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 		lines.add_child(l)
 	next_button.text = go_word + " ›"
 	panel.visible = true
+	_pin()
+
+
+## Bottom right at its own size, growing up and to the left: the carriage's
+## name line and its people stay in sight above it.
+func _pin() -> void:
 	panel.reset_size()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 24)

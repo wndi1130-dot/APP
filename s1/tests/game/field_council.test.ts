@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { advance, agendaOptions, castVote, createGame, isLawAgenda, resolveStop, setAgenda, CORPSE_LAWS } from '../../src/game';
+import { advance, agendaOptions, agendaTitle, blocs, castVote, createGame, expected, isLawAgenda, resolveStop, setAgenda, CORPSE_LAWS } from '../../src/game';
 import type { Game } from '../../src/game';
-import { applyFieldReturn, chooseSymbolUse } from '../../src/game/field_receipt';
+import { applyFieldReturn, chooseSymbolUse, FIELD } from '../../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt, SymbolUse } from '../../src/game/field_receipt';
 import { leaveSpecialCouncil, nextFieldStep, openSpecialCouncil, specialCandidates, specialReasons } from '../../src/game/field_council';
 import { enableDomestic } from '../../src/game/domestic/state';
@@ -166,5 +166,28 @@ describe('특별 회기: 한 번, 차례(결정 290)', () => {
     const reasons = specialReasons(g);
     expect(reasons.map(l => l.k).sort()).toEqual(['promise', 'symbol', 'symbol']);
     expect(reasons.every(l => l.comm === 'tail')).toBe(true);
+  });
+});
+
+describe('특별 회기: 값 가안(확인 줄 13·17·18)', () => {
+  const forecast = (g: Game, title: string) => {
+    const a = g.council!.options.find(o => agendaTitle(o) === title)!;
+    return expected(blocs(g, a)).mean;
+  };
+  it('상징물을 내걸면 그 칸 관계가 한 번 바뀌고, 같은 안건의 전망이 달라진다(13·17)', () => {
+    const hung = returned('case1_symbol_kept', { use: 'hang_before_session' });
+    const none = returned('case3_nosymbol_kept');
+    expect(hung.comms.tail.rel - none.comms.tail.rel).toBe(FIELD.hangRel);
+    nextFieldStep(hung); nextFieldStep(none);
+    const kept = '꼬리칸과(와)의 약속을 지킨 것을 기록에 올리기';
+    expect(forecast(hung, kept)).not.toBe(forecast(none, kept));
+  });
+
+  it('어김의 깎임이 지킴의 오름보다 크다(18, 관계)', () => {
+    const base = createGame(SEED).comms.tail.rel;
+    const kept = returned('case3_nosymbol_kept').comms.tail.rel - base;
+    const broken = returned('case4_nosymbol_broken').comms.tail.rel - base;
+    expect(kept).toBeGreaterThan(0);
+    expect(-broken).toBeGreaterThan(kept);
   });
 });

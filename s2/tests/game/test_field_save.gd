@@ -40,7 +40,7 @@ func _sample() -> Dictionary:
 		"ground_items": [{"pos": Vector3(3, 0, 4), "id": "arrow", "n": 1}], "unloaded": {"food": 3},
 		"coal": {"delivered": 0.0, "spent": 0.0},
 		"zombies": [{"id": 3, "kind": "walker", "pos": Vector3(5, 0, 6), "state": "wander", "loot": [], "searched": false, "horde": -1, "name": ""}],
-		"decisions": [{"id": "d1", "choice": "a"}], "return_id": "", "promises": [{"id": "skip_dispatch", "by": "p2"}],
+		"decisions": [{"id": "d1", "choice": "a"}], "receipt_id": "ret_1", "departure": {"version": 1.0, "departureId": "dep_1", "stopId": "stop-1", "roster": [{"id": "p1", "comm": "guard"}], "promises": []},
 	}
 
 
@@ -50,7 +50,7 @@ func test_a_save_goes_to_json_and_back_whole() -> void:
 	assert_eq(back, d, "the same save, places as places and counts as whole numbers")
 	assert_true(back["people"][0]["pos"] is Vector3)
 	assert_eq(typeof(back["zombies"][0]["id"]), TYPE_INT)
-	assert_eq(back["promises"], d["promises"], "the train side's promises pass through untouched")
+	assert_eq(back["departure"], d["departure"], "the departure order passes through untouched")
 
 
 func test_what_is_not_a_whole_save_of_this_kind_reads_as_none() -> void:
@@ -104,3 +104,13 @@ func test_with_the_switch_on_an_interrupt_saves_the_field() -> void:
 	var d := FieldSave.read(AT)
 	assert_eq(d["seed"], 4)
 	assert_eq(d["people"].size(), game.people.size())
+
+
+func test_the_departure_order_is_kept_whole_and_names_the_stop() -> void:
+	var order = JSON.parse_string(FileAccess.get_file_as_string("res://tests/game/fixtures/field_v4/departure_skip_kept.json"))
+	var game = _game({"departure": order, "receipt_id": "ret_test"})
+	var d := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	assert_eq(d["departure"], order, "camelCase inside, nothing renamed or dropped")
+	assert_eq(d["stop_id"], String(order["stopId"]))
+	assert_eq(d["receipt_id"], "ret_test")
+	assert_false(d.has("promises"), "promises live inside the departure order")

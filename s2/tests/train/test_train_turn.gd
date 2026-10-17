@@ -104,6 +104,34 @@ func test_drift_matches_s1() -> void:
 	assert_eq(bad, [] as Array[String])
 
 
+func test_trust_and_tension_match_s1() -> void:
+	var bad: Array[String] = []
+	var rose := 0
+	var fell := 0
+	var unslowed := 0
+	for point: Dictionary in V.points():
+		var want: Dictionary = point["changes"]["meters"]
+		var at := V.where(point)
+		for used: int in [0, 1]:
+			var g: Dictionary = (point["state"] as Dictionary).duplicate(true)
+			g["tensionCrisisUsed"] = used
+			var got := Turn.meters(g, _t)
+			var w: Dictionary = want["used%d" % used]
+			for key: String in ["trust", "tension", "fear"]:
+				_check(bad, "%s meters used%d %s" % [at, used, key], w[key], got[key])
+		var tension := float(point["state"]["tension"])
+		if float(want["used0"]["tension"]) > tension:
+			rose += 1
+		elif float(want["used0"]["tension"]) < tension:
+			fell += 1
+		if float(want["used0"]["tension"]) != float(want["used1"]["tension"]):
+			unslowed += 1
+	assert_gt(rose, 50, "states where tension climbs")
+	assert_gt(fell, 20, "states where tension eases")
+	assert_gt(unslowed, 50, "states where letting the guard loose changes the climb")
+	assert_eq(bad, [] as Array[String])
+
+
 func test_drift_leaves_the_given_state_alone() -> void:
 	var point: Dictionary = V.points()[0]
 	var before := JSON.stringify(point["state"])

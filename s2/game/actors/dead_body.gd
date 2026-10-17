@@ -21,6 +21,7 @@ const ALBEDO_FILE: String = "albedo.png"     # a baked folder's colour picture, 
 const WALKS: int = 3                          # 0, 1, 2: three ways of walking
 const STAND: int = 3
 const LUNGE: int = 4
+const HIT: int = 5                            # struck: one held pose, thrown back from the chest
 const FALL: int = 6                           # on its back
 const RUN: int = 7
 const TELL: int = 8                           # dropping low before it runs
@@ -45,6 +46,19 @@ static var table: Array = []                   # its motions: [first frame, fram
 const SECONDS: Dictionary = {STAND: 3.0, LUNGE: 1.0}   # a round of each, for a folder that does not say
 const SWAY_CAP: float = 0.1                   # a longer gap between two drawings is not played through
 const MIX_TIME: float = 0.2                   # a body changing motion keeps something of the frame it was in this long
+# How long a change into these is eased, after the dead of Project Zomboid
+# (상태표 2.4: struck 0.10 s, the lunge 0.35, reeling back 0.40, getting up
+# 0.20; walking, running and standing 0.35, crawling 0.20). Struck shows at
+# once; a body that reels goes into it slowly.
+const MIX_IN: Dictionary = {HIT: 0.1, LUNGE: 0.35, STAGGER: 0.4, RISE: 0.2, RISE_FRONT: 0.2,
+	0: 0.35, 1: 0.35, 2: 0.35, RUN: 0.35, STAND: 0.35, CRAWL: 0.2}
+# Held on to someone (grab) or about to be (attack): the lunge's reach held at
+# one place in its round, the legs only shifting a little, not walking.
+const REACH_AT: float = 0.0
+const REACH_SHIFT: float = 0.03               # how far round the legs shift either way
+const REACH_HZ: float = 0.9
+const REEL_PACE: float = 0.6                  # stunned after being thrown off: its reel at this pace, on the spot
+const REEL_AFTER: float = 1.0                 # that long after it was thrown off at most (zombies.gd release stuns it 1 s)
 const MIX_STEPS: float = 63.0                 # how finely the shader is told how much (see dead_vat.gdshader)
 
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
@@ -148,13 +162,23 @@ static func custom(z: Dictionary, down: float, still: float, shade: float, baked
 
 ## The frame of the picture a motion is at for r.
 static func frame_of(motion: int, r: float) -> int:
-	if motion < 0 or motion >= table.size():
+	return frame_in(table, motion, r)
+
+
+## The same in a given folder's table (the living wear another body).
+static func frame_in(tab: Array, motion: int, r: float) -> int:
+	if motion < 0 or motion >= tab.size():
 		return 0
-	var first: int = table[motion][0]
-	var frames: int = table[motion][1]
-	if table[motion][2]:
+	var first: int = tab[motion][0]
+	var frames: int = tab[motion][1]
+	if tab[motion][2]:
 		return first + int(fposmod(r, 1.0) * float(frames)) % frames
 	return first + int(roundf(clampf(r, 0.0, 1.0) * float(frames - 1)))
+
+
+## How long a change into a motion is eased.
+static func mix_time(motion: int) -> float:
+	return float(MIX_IN.get(motion, MIX_TIME))
 
 
 ## Eases a body from the motion it was in to the one it is in now: for
@@ -164,24 +188,31 @@ static func frame_of(motion: int, r: float) -> int:
 ## no baked folder's table is known. What it was last drawn as is noted on the
 ## body itself, under names the rules do not use.
 static func mixed(z: Dictionary, plain: Color) -> Color:
-	if table.is_empty():
+	return mix_from(z, plain, float(z["age"]), table)
+
+
+## The easing itself, for any body: `note` keeps what it was last drawn as,
+## `now` is its own clock, `tab` its folder's table, `mix_in` how long a change
+## into each of its motions is eased (another folder numbers its motions its own way).
+static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array, mix_in: Dictionary = MIX_IN) -> Color:
+	if tab.is_empty():
 		return plain
 	var motion := int(plain.g)
-	var age: float = z["age"]
-	if z.has("body_motion") and int(z["body_motion"]) != motion:
-		z["body_from"] = frame_of(int(z["body_motion"]), float(z["body_r"]))
-		z["body_changed"] = age
-	z["body_motion"] = motion
-	z["body_r"] = plain.r
-	if not z.has("body_changed"):
+	if note.has("body_motion") and int(note["body_motion"]) != motion:
+		note["body_from"] = frame_in(tab, int(note["body_motion"]), float(note["body_r"]))
+		note["body_changed"] = now
+		note["body_mix"] = float(mix_in.get(motion, MIX_TIME))
+	note["body_motion"] = motion
+	note["body_r"] = plain.r
+	if not note.has("body_changed"):
 		return plain
-	var left := 1.0 - (age - float(z["body_changed"])) / MIX_TIME
+	var left := 1.0 - (now - float(note["body_changed"])) / float(note.get("body_mix", MIX_TIME))
 	if left <= 0.0:
 		return plain
 	var share := roundf(left * left * (3.0 - 2.0 * left) * MIX_STEPS)
 	if share <= 0.0:
 		return plain
-	return Color(plain.r, plain.g + 16.0 * float(z["body_from"]) + 65536.0 * share, plain.b, plain.a)
+	return Color(plain.r, plain.g + 16.0 * float(note["body_from"]) + 65536.0 * share, plain.b, plain.a)
 
 
 ## The motion one body is in and how far through it, before any easing.
@@ -215,7 +246,16 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 			return Color(1.0 - down, float(RISE_FRONT if front else RISE), 1.0, shade)
 		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
 	if state == "attack" or state == "grab":
-		return Color(swayed(z, LUNGE, still), float(LUNGE), 1.0, shade)
+		# It has reached them: the arms stay out at them and the legs shift
+		# under it (the body is held at their side, so a walk would slide).
+		var shift := REACH_SHIFT * sin(TAU * (REACH_HZ * float(z["age"]) + phase))
+		return Color(fposmod(REACH_AT + shift, 1.0), float(LUNGE), 1.0, shade)
+	if float(z.get("shoved_t", 0.0)) > 0.0:
+		# Thrown off: it reels back, its feet going back over the ground it is
+		# seen to cover; then, stunned, it reels on the spot until it comes on.
+		return Color(step_back(z, STAGGER), float(STAGGER), 1.0, shade)
+	if float(z.get("stun", 0.0)) > 0.0 and float(z["age"]) - float(z.get("body_reeled", -10.0)) < REEL_AFTER:
+		return Color(reeling(z, still), float(STAGGER), 1.0, shade)
 	if state == "tell":
 		return Color(tell_k(z), float(TELL), 1.0, shade)
 	if state == "frozen" or state == "waking":
@@ -285,6 +325,31 @@ static func swayed(z: Dictionary, motion: int, still: float) -> float:
 	var pace := lerpf(0.82, 1.18, fposmod(float(z["phase"]) * 7.31, 1.0))
 	at = fposmod(at + gone * pace * (1.0 - still) / maxf(seconds, 0.001), 1.0)
 	z["body_sway"] = at
+	return at
+
+
+## Where in a round of the reel a body thrown back is: the ground it is seen
+## to cover goes the other way under its feet.
+static func step_back(z: Dictionary, motion: int) -> float:
+	var gone := moved(z)
+	z["body_reeled"] = z["age"]
+	var at: float = z.get("body_step", z["phase"])
+	if gone <= STRIDE_CAP:
+		at = fposmod(at - gone / float(rounds.get(motion, STRIDE[motion])), 1.0)
+	z["body_step"] = at
+	return at
+
+
+## The reel on the spot after it, by the drawing side's own clock.
+static func reeling(z: Dictionary, still: float) -> float:
+	moved(z)
+	var age: float = z["age"]
+	var gone := clampf(age - float(z.get("body_age", age)), 0.0, SWAY_CAP)
+	z["body_age"] = age
+	var at: float = z.get("body_step", z["phase"])
+	var seconds: float = table[STAGGER][3] if STAGGER < table.size() and table[STAGGER].size() > 3 else 1.3
+	at = fposmod(at + gone * REEL_PACE * (1.0 - still) / maxf(seconds, 0.001), 1.0)
+	z["body_step"] = at
 	return at
 
 

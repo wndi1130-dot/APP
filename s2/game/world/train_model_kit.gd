@@ -16,6 +16,9 @@ const CATALOG_SHAPE := {
 	"stage_kinds": [TYPE_ARRAY],
 }
 const ASSET_KEYS := ["status", "category", "path", "dimensions_m", "lod0_tris", "triangle_limit"]
+## 자산의 고를 수 있는 키 "no_cutaway": true면 홈 단면에서도 앞벽을 자르지 않고 통째로 그린다.
+## 껍데기가 한 겹이라 앞벽을 자르면 뒷벽 안쪽이 비어 보이는 몸에 쓴다.
+const NO_CUTAWAY_KEY := "no_cutaway"
 const KIND_KEYS := ["assets", "people", "parts"]
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
@@ -233,7 +236,7 @@ func _append_slot(kind: String, at: Vector3, envelope: Vector3, heading: float, 
 	for placement in placements:
 		var id: String = placement["asset"]
 		var transform := base * Transform3D(Basis.IDENTITY, placement["at"])
-		var sliced: bool = cutaway and bool(data["kinds"][kind]["people"]) and id == plan[0]
+		var sliced: bool = cutaway and bool(data["kinds"][kind]["people"]) and id == plan[0] and not bool(data["assets"][id].get(NO_CUTAWAY_KEY, false))
 		for lod in 2:
 			for row in asset_meshes(id)[lod]:
 				var mesh: Mesh = cutaway_mesh(id, lod, row) if sliced else row["mesh"]

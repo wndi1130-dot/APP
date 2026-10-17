@@ -152,11 +152,21 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 		start += frames.size()
 	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
 
-const TABLE_SIZE: int = 16
+const TABLE_SIZE: int = 32
+## Clips 16 and up go in the shader's upper half (dead_vat.gdshader).
+const UPPER: float = 4194304.0
+
+## INSTANCE_CUSTOM.g for dead_vat.gdshader: the clip, and while a body changes
+## motion the frame row it was in and how much of that it keeps (share 0..63).
+## Below sixteen it is the same number as clip + 16 * frame + 65536 * share.
+static func pack_motion(clip: int, frame: int = 0, share: int = 0) -> float:
+	var upper := 1.0 if clip >= 16 else 0.0
+	return float(clip % 16) + 16.0 * float(frame) + 65536.0 * float(share) + UPPER * upper
+
 
 ## The clip table of a skinned bake as the shader parameters of
 ## game/actors/dead_vat.gdshader: where each clip starts, its frame count, its
-## frames per second and whether it loops, padded to the shader's sixteen slots.
+## frames per second and whether it loops, padded to the shader's thirty-two slots.
 static func shader_tables(assets: Dictionary) -> Dictionary:
 	var starts := PackedFloat32Array()
 	var counts := PackedFloat32Array()

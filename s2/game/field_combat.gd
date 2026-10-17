@@ -413,6 +413,75 @@ func start_swing(p, at) -> void:
 	p.swing_t = windup
 
 
+## The attack pad with nobody in reach (decision 405, as in Zomboid): the
+## weapon comes round all the same and lands on whatever is in its arc by then
+## (an empty Dictionary as strike_at). No melee weapon in the hand: the shove.
+func swing_air(p) -> void:
+	if game.paused or not p.can_act():
+		return
+	if W.get_data(p.weapon_id()).get("kind", "") != "melee":
+		start_shove(p)
+		return
+	start_swing(p, {})
+
+
+## Who an air swing lands on: the nearest dead (not yet dead) or hostile person
+## in reach, in the attack pad's arc ahead (melee_pick), not behind a wall.
+func _in_arc(p):
+	var reach: float = melee_range(p)
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var best = null
+	var best_d := INF
+	var rows: Array = []
+	for z in game.zombies.list:
+		if String(z["state"]) != "dead":
+			rows.append([z, z["pos"]])
+	for r in game.raiders:
+		if hostile(r):
+			rows.append([r, r.position])
+	for row in rows:
+		var pos: Vector3 = row[1]
+		var to: Vector3 = pos - p.position
+		to.y = 0
+		var d: float = to.length()
+		if d > reach or d >= best_d:
+			continue
+		if d > 0.01 and fwd.dot(to.normalized()) < 0.2:
+			continue
+		if melee_blocked(p, pos):
+			continue
+		best_d = d
+		best = row[0]
+	return best
+
+
+## An air swing that met no one: the weapon still tires the arm and swishes,
+## or meets the shut door or whole window it was swung at.
+func _swing_empty(p) -> void:
+	var wid: String = p.weapon_id()
+	var d: Dictionary = W.get_data(wid)
+	var m: Dictionary = p.mults()
+	p.swing_t = float(d["swing"]) / float(m["swing"])
+	p.body.add_fatigue(float(d["fatigue"]) * BodyState.fatigue_mult({"carry_state": p.carry_state(), "cold_level": p.cold_level()}))
+	var lg = game.grid_at(p.position)
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var reach: float = melee_range(p)
+	var step := 0.3
+	# Doors and windows are struck on the ground floor only, as _break_window does.
+	while step <= reach and lg == game.grid:
+		var c: Vector2i = FieldGrid.cell_of(p.position + fwd * step)
+		step += 0.3
+		if lg.windows.has(c) and not bool(lg.windows[c]["broken"]):
+			_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+			game.actions._break_window(p, c)
+			return
+		if lg.doors.has(c) and String(lg.doors[c]["state"]) in ["closed", "locked"]:
+			_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+			game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "melee", p)
+			return
+	game.make_sound(p.position, SimNoise.Level.QUIET, "melee", p)
+
+
 ## No melee weapon in the hand (bare, or a gun) and the one aimed at lies there.
 func stomps(p, at) -> bool:
 	if not (at is Dictionary) or at.is_empty() or String(at["state"]) != "downed":
@@ -438,6 +507,11 @@ func _stomp_reaches(p, z: Dictionary) -> bool:
 
 
 func _strike(p, at) -> void:
+	if at is Dictionary and at.is_empty():
+		at = _in_arc(p)
+		if at == null:
+			_swing_empty(p)
+			return
 	if at is Dictionary:
 		swing(p, at)
 	else:
@@ -457,7 +531,9 @@ func _land_strike(p) -> void:
 	if String(game.opts.get("melee_break", "grab")) == "grab" and not p.grabbers.is_empty():
 		stopped = true
 	var stomp_it: bool = p.strike_kind == "stomp"
-	if stopped or not (_stomp_reaches(p, at) if stomp_it else _strike_reaches(p, at)):
+	# An air swing (strike_at {}) finds what it lands on as it lands (_strike).
+	var air: bool = at is Dictionary and at.is_empty()
+	if stopped or not (air or (_stomp_reaches(p, at) if stomp_it else _strike_reaches(p, at))):
 		p.swing_t = WHIFF_RECOVER
 		return
 	if stomp_it:
@@ -501,6 +577,9 @@ func swing(p, z: Dictionary) -> void:
 	p.swing_t = float(d["swing"]) / float(m["swing"])
 	p.body.add_fatigue(float(d["fatigue"]) * BodyState.fatigue_mult({"carry_state": p.carry_state(), "cold_level": p.cold_level()}))
 	_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+	# Read before the blow's own sound: a quiet sound turns the body toward it
+	# (zombies.hear), and this one comes from where the body stands.
+	var from_back := behind(z, p.position)
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	var state: String = z["state"]
 	var blade: bool = bool(d["blade"])
@@ -516,7 +595,6 @@ func swing(p, z: Dictionary) -> void:
 		else:
 			_kill(p, z, "언 몸이 부서졌다")
 		return
-	var from_back := behind(z, p.position)
 	# Quiet kill from behind: knife, crouched, the thing has not noticed anyone.
 	if wid == "knife" and p.crouched and from_back and state != "chase" and state != "attack" and state != "grab":
 		_kill(p, z, "뒤에서 조용히 끝냈다")
