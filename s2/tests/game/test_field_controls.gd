@@ -703,3 +703,29 @@ func test_a_spent_hand_needs_more_blows_than_a_fresh_one() -> void:
 	assert_between(fresh, 1.8, 2.8, "hale with a crowbar: two or three")
 	assert_between(spent, 3.2, 5.0, "badly spent: about four")
 
+
+
+# The motion test key sets up one scene at a time in front of the chief and
+# clears the last one's dead first (filmed on the phone before and after).
+func test_motion_test_key_sets_up_each_scene_and_clears_the_last() -> void:
+	var hud = game.hud
+	var p = game.player
+	hud._debug_motion()
+	assert_eq(p.grabbers.size(), 1, "held")
+	assert_eq(p.grabbers[0]["state"], "grab")
+	assert_gt(p.grab_left, 0.0, "with time to shove free")
+	hud._debug_motion()
+	assert_true(p.grabbers.is_empty(), "the hold is let go with its dead")
+	assert_eq(game.zombies.list.size(), 1)
+	assert_eq(game.zombies.list[0]["state"], "chase")
+	hud._debug_motion()
+	assert_eq(game.zombies.list.size(), 2, "two to shove")
+	hud._debug_motion()
+	assert_eq(game.zombies.list.size(), 0)
+	assert_eq(p.action, "search")
+	hud._debug_motion()
+	assert_eq(p.action, "treat")
+	hud._debug_motion()
+	assert_gt(p.fallen_t, 0.0, "down")
+	hud._debug_motion()
+	assert_eq(p.grabbers.size(), 1, "and round again")
