@@ -459,7 +459,7 @@ export interface StopRisk {
 
 /** 이 정차에서 이 사람에게 정해 둔 난수(0~1). 난수 흐름을 건드리지 않게 판 씨앗으로 만든다. */
 function fateRoll(g: Game, name: string, kind: 'd' | 'h' | 'sd' | 'sh'): number {
-  return hash(`${g.seed}|${g.seg}|${g.stop?.place ?? ''}|${name}|${kind}`) / 4294967296;
+  return hash(`${g.seed}|${g.seg}|${g.stop?.place ?? ''}|${name}|${kind}${g.stop?.again ? '|again' : ''}`) / 4294967296;
 }
 
 /** 작업조로 내보낼 칸의 노출이 정차에서 다칠·죽을 확률에 곱하는 값. 노출 50까지는 1이고 그 위로 점마다 +1%. */
@@ -1142,6 +1142,7 @@ function nextSegment(g: Game): void {
     return finish(g, 'complete');
   }
   g.seg += 1;
+  g.lastStop = g.stop;
   g.stop = null;
   budgetNextSeg(g); // 구간 예산(budget.ts): 미뤄 둔 카드를 맨 앞으로 되돌린다. 꺼진 판은 아무 일도 안 한다
   if (g.decreeLeft > 0) {
