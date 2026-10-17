@@ -104,7 +104,7 @@ func test_a_crawler_drags_itself_lies_still_when_knocked_down_and_dies_on_its_fa
 	assert_eq(moving.b, 1.0, "the clock does not move it")
 	z["pos"] += Vector3(0, 0, 0.09)
 	var pulled := DeadBody.custom(z, 1.0, 1.0, 1.0, true)
-	assert_almost_eq(fposmod(pulled.r - moving.r, 1.0), 0.09 / float(DeadBody.STRIDE[DeadBody.CRAWL]), 0.001, "the ground it covers does")
+	assert_almost_eq(fposmod(pulled.r - moving.r, 1.0), 0.09 / (float(DeadBody.STRIDE[DeadBody.CRAWL]) * _stride(z)), 0.001, "the ground it covers does")
 	z["state"] = "downed"
 	assert_eq(DeadBody.custom(z, 1.0, 0.0, 1.0, true).b, 1.0, "held still")
 	z["state"] = "dead"
@@ -160,7 +160,7 @@ func test_a_baked_bodys_feet_go_by_the_ground_it_covers() -> void:
 	z["age"] += 0.05
 	z["pos"] += Vector3(0.11, 0, 0)
 	var second := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
-	assert_almost_eq(fposmod(second.r - first.r, 1.0), 0.11 / float(DeadBody.STRIDE[walk]), 0.001)
+	assert_almost_eq(fposmod(second.r - first.r, 1.0), 0.11 / (float(DeadBody.STRIDE[walk]) * _stride(z)), 0.001)
 	z["age"] += 0.05
 	z["pos"] += Vector3(6, 0, 0)
 	var put := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
@@ -194,12 +194,12 @@ func test_the_baked_folders_own_rounds_are_used_where_it_gives_them() -> void:
 	var z := _body("wander")
 	var first := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
 	z["pos"] += Vector3(0.2, 0, 0)
-	assert_almost_eq(fposmod(DeadBody.custom(z, 0.0, 0.0, 1.0, true).r - first.r, 1.0), 0.1, 0.001)
+	assert_almost_eq(fposmod(DeadBody.custom(z, 0.0, 0.0, 1.0, true).r - first.r, 1.0), 0.2 / (2.0 * _stride(z)), 0.001)
 	var crawler := _body("chase")
 	crawler["crawl"] = true
 	var before := DeadBody.custom(crawler, 0.0, 0.0, 1.0, true)
 	crawler["pos"] += Vector3(0.1, 0, 0)
-	assert_almost_eq(fposmod(DeadBody.custom(crawler, 0.0, 0.0, 1.0, true).r - before.r, 1.0), 0.1 / float(DeadBody.STRIDE[DeadBody.CRAWL]), 0.001, "the others fall back on the written ones")
+	assert_almost_eq(fposmod(DeadBody.custom(crawler, 0.0, 0.0, 1.0, true).r - before.r, 1.0), 0.1 / (float(DeadBody.STRIDE[DeadBody.CRAWL]) * _stride(crawler)), 0.001, "the others fall back on the written ones")
 	DeadBody.rounds = {}
 	assert_eq(DeadBody.rounds_of({}), {})
 
@@ -239,7 +239,7 @@ func test_a_standing_baked_body_sways_by_a_clock_the_drawing_side_keeps() -> voi
 	assert_eq(first.b, 1.0, "the shader's clock is not used")
 	assert_almost_eq(first.r, 0.37, 0.001, "from the body's own number")
 	z["age"] += 0.05
-	var pace := lerpf(0.82, 1.18, fposmod(0.37 * 7.31, 1.0))
+	var pace := lerpf(DeadBody.STAND_PACE.x, DeadBody.STAND_PACE.y, fposmod(0.37 * 7.31, 1.0))
 	var second := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
 	assert_almost_eq(second.r - first.r, 0.05 * pace / float(DeadBody.SECONDS[DeadBody.STAND]), 0.0001, "at its own pace")
 	z["age"] += 0.05
@@ -325,3 +325,8 @@ func test_struck_is_eased_into_fast_and_a_reel_slowly() -> void:
 	assert_eq(DeadBody.mix_time(DeadBody.HIT), 0.1)
 	assert_eq(DeadBody.mix_time(DeadBody.STAGGER), 0.4)
 	assert_eq(DeadBody.mix_time(DeadBody.FALL), DeadBody.MIX_TIME, "the rest as they were")
+
+
+# Each body's own stride, a tenth either way of the written one.
+func _stride(z: Dictionary) -> float:
+	return lerpf(1.0 - DeadBody.STRIDE_SPREAD, 1.0 + DeadBody.STRIDE_SPREAD, fposmod(float(z["phase"]) * 3.17, 1.0))

@@ -4,6 +4,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Person = preload("res://game/actors/person.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 
 
 func _person() -> Node3D:
@@ -136,13 +137,13 @@ func test_the_living_walk_run_stand_and_crouch_in_their_own_motions() -> void:
 	p.crouched = false
 	p.body.exhaustion = 0.9
 	p.position += Vector3(0.3, 0, 0)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.STAGGER, "spent, it reels as the dead do")
-	assert_false(PersonVisual.is_own(note))
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_SPENT, "spent, it reels")
+	assert_true(PersonVisual.is_own(note))
 	PersonVisual.motion_of(p, note, 0.3, [], own)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.STAGGER, "and stopping for breath it does not stand up straight")
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_SPENT, "and stopping for breath it does not stand up straight")
 	p.fallen_t = 1.0
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.FALL_FRONT, "and falls as they do")
-	assert_false(PersonVisual.is_own(note))
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL_FRONT, "and falls on its face")
+	assert_true(PersonVisual.is_own(note))
 
 
 # Held, bitten and shoving are the living's own too: the held motion twists by
@@ -190,3 +191,212 @@ func test_people_stand_each_at_their_own_place_and_pace() -> void:
 		PersonVisual.motion_of(a, na, 0.2, [])
 		PersonVisual.motion_of(b, nb, 0.2, [])
 	assert_ne(PersonVisual.motion_of(a, na, 0.1, []).x, PersonVisual.motion_of(b, nb, 0.1, []).x)
+
+
+# A melee blow is the living's own: a knife stabs, an axe (and any blow at a
+# body on the ground) comes down, the rest swing across; drawn back to where
+# the blow lands over the wind-up, the rest on the way back. A stomp has none.
+func test_a_blow_is_the_living_own_swing() -> void:
+	var own := _own()
+	var p := _person()
+	for want in [["knife", "p_stab", 0.35], ["axe", "p_swing_axe", 0.45], ["crowbar", "p_swing_one", 0.45]]:
+		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.strike_kind = "swing"
+		p.strike_at = {"state": "chase"}
+		p.strike_total = 0.4
+		p.strike_t = 0.4
+		var start := PersonVisual.blow_of(p, own)
+		assert_eq(String(own[int(start.y)]["name"]), want[1], want[0])
+		assert_almost_eq(start.x, 0.0, 0.001, "drawn back from the start")
+		p.strike_t = 0.1
+		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]) * 0.75, 0.001)
+		p.strike_t = 0.0
+		p.swing_t = 0.3
+		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]), 0.001, "the blow lands")
+		p.swing_t = 0.15
+		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]) + (1.0 - float(want[2])) * 0.5, 0.001, "half way back")
+		p.swing_t = 0.0
+		PersonVisual.blow_of(p, own)
+	p.strike_at = {"state": "downed"}
+	p.strike_t = 0.4
+	assert_eq(String(own[int(PersonVisual.blow_of(p, own).y)]["name"]), "p_floor_strike", "down at a body on the ground")
+	p.strike_t = 0.0
+	p.swing_t = 0.3
+	assert_almost_eq(PersonVisual.blow_of(p, own).x, 0.5, 0.001, "it lands in front of the feet")
+	p.swing_t = 0.0
+	PersonVisual.blow_of(p, own)
+	p.strike_kind = "stomp"
+	p.strike_t = 0.4
+	assert_eq(String(own[int(PersonVisual.blow_of(p, own).y)]["name"]), "p_stomp", "a stomp of its own")
+	p.strike_kind = "swing"
+	p.strike_at = {}
+	var note := {}
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), "p_swing_one", "a swing at the air too")
+	assert_true(PersonVisual.is_own(note))
+
+
+# The weapon goes in the worn body's right hand: hanging at the side the head
+# points forward; with the arms thrust out (the shove) the head points up.
+func test_the_weapon_sits_in_the_baked_right_hand() -> void:
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var arm := PersonVisual.hand_of(baked)
+	assert_gt((arm["hand"] as PackedInt32Array).size(), 5, "the hand")
+	assert_gt((arm["elbow"] as PackedInt32Array).size(), 3, "the elbow")
+	var table := PersonVisual.arm_table(baked, arm["hand"], arm["elbow"])
+	var frames := DeadBody.table_of(baked)
+	var clips: Array = baked["clips"]
+	var stand := Color(0.0, PersonVisual.clip_named(clips, PersonVisual.OWN_STAND, -1), 1.0, 1.0)
+	var at := PersonVisual.arm_at(table, frames, stand)
+	assert_gt(at[0].x, 0.2, "on the right")
+	assert_between(at[0].y, 0.5, 1.0, "at the hip")
+	assert_lt(at[0].y, at[1].y, "hanging below the elbow")
+	assert_gt(PersonVisual.grip_of(at[0], at[1], Basis()).z.z, 0.8, "hanging, the head forward")
+	var out := PersonVisual.arm_at(table, frames, Color(0.4, PersonVisual.clip_named(clips, PersonVisual.OWN_SHOVE, -1), 1.0, 1.0))
+	assert_gt(out[0].z, 0.5, "thrust out")
+	assert_gt(PersonVisual.grip_of(out[0], out[1], Basis()).z.y, 0.8, "the head up")
+	var turned := PersonVisual.grip_of(out[0], out[1], PersonVisual.grip_of(at[0], at[1], Basis()))
+	assert_between(turned.z.y, 0.1, 0.95, "it turns part way in one frame, not all at once")
+
+
+# A job of the hands plays the living's own: rummaging at the height of the
+# work, kneeling for work on the ground, a bandage, a bar worked at, the pickaxe
+# coming down in front of the feet over and over, a window broken with one blow
+# over the try, a door kicked with the foot landing as the try ends. Climbing
+# has none of its own.
+func test_a_job_of_the_hands_is_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_pry"], ["swap", "p_search_mid"],
+			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat"],
+			["splint", "p_kneel_work"], ["lid", "p_kneel_work"], ["dig", "p_floor_strike"], ["window", "p_swing_one"],
+			["kick", "p_kick"]]:
+		p.start_action(want[0], "시험", 2.0, func() -> void: pass)
+		var note := {}
+		var c := PersonVisual.motion_of(p, note, 0.1, [], own)
+		assert_eq(_named(own, c), want[1], want[0])
+		assert_true(PersonVisual.is_own(note), want[0])
+	p.start_action("window", "창 깨기", 1.0, func() -> void: pass)
+	p.action_t = 0.25
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.75, 0.001, "one blow over the try")
+	p.start_action("kick", "문 차기", 1.0, func() -> void: pass)
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.0, 0.001, "standing ready")
+	p.action_t = PersonVisual.KICK_WIND * 0.5
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.2, 0.001, "the leg coming up")
+	p.action_t = 0.001
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.4, 0.01, "the foot lands as the try ends")
+	p.start_action("climb", "시험", 2.0, func() -> void: pass)
+	assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, "climb")
+	p.cancel_action()
+	assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, "the job is over")
+
+# Aimed standing still, a handgun is held out in one hand and a long gun up at
+# the shoulder, the gun in the hand; on the move, or with a bow, the gun is held
+# as before.
+func test_a_gun_is_aimed_in_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	for want in [["pistol", "p_aim_one"], ["shotgun", "p_aim_two"]]:
+		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 1}]
+		p.aim.active = true
+		PersonVisual.motion_of(p, note, 0.3, [], own)
+		assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), want[1], want[0])
+		assert_true(PersonVisual.aiming(note, own), want[0])
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), "p_walk", "on the move")
+	assert_false(PersonVisual.aiming(note, own))
+	p.hands = [{"id": "bow", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	assert_eq(PersonVisual.aim_of(p, own), -1, "no aim of its own with a bow")
+	p.aim.active = false
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	assert_eq(PersonVisual.aim_of(p, own), -1, "not aimed")
+
+
+# Loading or clearing a handgun standing still is the living's own: a load once
+# over the gun's loading time, the gun in the hand; crouched, a long gun or a bow
+# is held as before.
+func test_a_gun_is_loaded_in_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var total := float(PersonVisual.Pose.W.get_data("pistol").get("reload", 1.0))
+	p.reload_t = total * 0.5
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	var c := PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, c), PersonVisual.OWN_RELOAD)
+	assert_almost_eq(c.x, 0.5, 0.001, "half way through the load")
+	assert_true(PersonVisual.loading(note, own))
+	p.reload_t = 0.0
+	p.jam_t = 1.0
+	assert_eq(_named(own, PersonVisual.reload_of(p, {}, 0.5, own)), PersonVisual.OWN_RELOAD, "a jam cleared")
+	p.jam_t = 0.0
+	p.hands = [{"id": "shotgun", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	p.reload_t = 0.35
+	assert_eq(PersonVisual.reload_of(p, {}, 0.5, own).y, -1.0, "a long gun as before")
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	p.crouched = true
+	assert_eq(PersonVisual.reload_of(p, {}, 0.5, own).y, -1.0, "crouched it stays low")
+	p.crouched = false
+	p.hands = [{"id": "bow", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	assert_eq(PersonVisual.reload_of(p, {}, 0.5, own).y, -1.0, "a bow nocks as before")
+
+
+# Crouched it keeps low: chest-high work is done low, and a gun is aimed
+# without standing up.
+func test_crouched_it_works_and_aims_low() -> void:
+	var own := _own()
+	var p := _person()
+	p.crouched = true
+	for job in ["search", "pry"]:
+		p.start_action(job, "시험", 2.0, func() -> void: pass)
+		assert_eq(_named(own, PersonVisual.motion_of(p, {}, 0.1, [], own)), "p_search_low", job)
+	p.cancel_action()
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
+	p.aim.active = true
+	assert_eq(PersonVisual.aim_of(p, own), -1)
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)
+
+
+# Down, dragging itself, getting up and dying in the living's own (people folder
+# 16 on): it lies on its face, crawls, stays down where it stops (it does not
+# fall again), gets up off its face; dead it goes over on its back.
+func test_down_crawling_and_up_again_in_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	p.body.downed = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL_FRONT)
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	p.position += Vector3(0.2, 0, 0)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CRAWL, "drags itself")
+	var still := PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, still), PersonVisual.OWN_FALL_FRONT)
+	assert_almost_eq(still.x, 1.0, 0.001, "down already, not falling again")
+	p.body.downed = false
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_RISE_FRONT, "up off its face")
+	assert_true(PersonVisual.is_own(note))
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_STAND)
+	p.body.dead = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL, "dead, on its back")
+
+
+# From motion 16 on the colour carries the shader's upper half; the easing and
+# the hand read it back as the same motion.
+func test_motions_from_sixteen_on_are_packed_for_the_shader() -> void:
+	var c := DeadBody.packed(Color(0.5, 17.0, 1.0, 1.0), 17, 300, 20.0)
+	assert_eq(c.g, VatBaker.pack_motion(17, 300, 20))
+	assert_eq(DeadBody.motion_in(c.g), 17)
+	assert_eq(DeadBody.motion_in(DeadBody.packed(Color(0, 5, 1, 1), 5, 40, 3.0).g), 5, "below sixteen as before")
+	assert_eq(DeadBody.packed(Color(0, 5, 1, 1), 5, 40, 3.0).g, 5.0 + 16.0 * 40.0 + 65536.0 * 3.0)
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var arm := PersonVisual.hand_of(baked)
+	var table := PersonVisual.arm_table(baked, arm["hand"], arm["elbow"])
+	var frames := DeadBody.table_of(baked)
+	var front := PersonVisual.clip_named(baked["clips"], PersonVisual.OWN_FALL_FRONT, -1)
+	var down := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(1.0, front, 1.0, 1.0), front, 0, 0.0))
+	assert_lt(down[0].y, 0.5, "the hand of a body lying on its face is near the ground")

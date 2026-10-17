@@ -1,12 +1,14 @@
 extends SceneTree
 ## Bakes a rigged body with a motion set into a folder.
-## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]
-## --set=person bakes the living people's motions (BodyBake.PERSON_CLIPS, no still poses) instead of the dead's.
+## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb[,motion glb...] | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]
+## Several motion files (same skeleton) are read as one set.
+## --set=person bakes the living people's motions (BodyBake.PERSON_CLIPS, no still poses) instead of the dead's;
+## those from a motion set need the motion files, so "-" is refused for it.
 ## --small writes the compacted bake (BodyBake.compact) the phone build carries;
 ## --keep names the clips that keep every frame in it.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
-const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]"
+const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb[,motion glb...] | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]"
 
 
 func _init() -> void:
@@ -32,17 +34,29 @@ func _init() -> void:
 		return
 	# "-" for the motion file: the motions written in body_bake.gd alone.
 	var own: bool = paths[1] == "-"
+	if own and person:
+		print("the living's motions take some from a motion set: give the motion files")
+		quit(1)
+		return
 	var body_root := BodyBake.load_glb(paths[0]) as Node3D
-	var motion_root: Node3D = null if own else BodyBake.load_glb(paths[1]) as Node3D
-	if body_root == null or (motion_root == null and not own):
+	var motion_roots: Array = []
+	if not own:
+		for motion_path in paths[1].split(",", false):
+			var loaded := BodyBake.load_glb(motion_path) as Node3D
+			if loaded == null:
+				motion_roots.clear()
+				break
+			motion_roots.append(loaded)
+	if body_root == null or (motion_roots.is_empty() and not own):
 		print("could not read the body or motion file")
 		quit(1)
 		return
 	root.add_child(body_root)
-	if not own:
+	for motion_root: Node3D in motion_roots:
 		root.add_child(motion_root)
 	await process_frame
-	var assets: Dictionary = (BodyBake.bake_own(body_root, BodyBake.PERSON_CLIPS, []) if person else BodyBake.bake_own(body_root)) if own else BodyBake.bake(body_root, motion_root)
+	var motion_root: Node3D = null if own else BodyBake.merge_motions(motion_roots)
+	var assets: Dictionary = BodyBake.bake_own(body_root) if own else (BodyBake.bake_person(body_root, motion_root) if person else BodyBake.bake(body_root, motion_root))
 	if assets.is_empty():
 		quit(1)
 		return
