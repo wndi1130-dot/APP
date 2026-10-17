@@ -48,8 +48,10 @@ const SWAY_CAP: float = 0.1                   # a longer gap between two drawing
 const MIX_TIME: float = 0.2                   # a body changing motion keeps something of the frame it was in this long
 # How long a change into these is eased, after the dead of Project Zomboid
 # (상태표 2.4: struck 0.10 s, the lunge 0.35, reeling back 0.40, getting up
-# 0.20). Struck shows at once; a body that reels goes into it slowly.
-const MIX_IN: Dictionary = {HIT: 0.1, LUNGE: 0.35, STAGGER: 0.4, RISE: 0.2, RISE_FRONT: 0.2}
+# 0.20; walking, running and standing 0.35, crawling 0.20). Struck shows at
+# once; a body that reels goes into it slowly.
+const MIX_IN: Dictionary = {HIT: 0.1, LUNGE: 0.35, STAGGER: 0.4, RISE: 0.2, RISE_FRONT: 0.2,
+	0: 0.35, 1: 0.35, 2: 0.35, RUN: 0.35, STAND: 0.35, CRAWL: 0.2}
 # Held on to someone (grab) or about to be (attack): the lunge's reach held at
 # one place in its round, the legs only shifting a little, not walking.
 const REACH_AT: float = 0.0
@@ -190,15 +192,16 @@ static func mixed(z: Dictionary, plain: Color) -> Color:
 
 
 ## The easing itself, for any body: `note` keeps what it was last drawn as,
-## `now` is its own clock, `tab` its folder's table.
-static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array) -> Color:
+## `now` is its own clock, `tab` its folder's table, `mix_in` how long a change
+## into each of its motions is eased (another folder numbers its motions its own way).
+static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array, mix_in: Dictionary = MIX_IN) -> Color:
 	if tab.is_empty():
 		return plain
 	var motion := int(plain.g)
 	if note.has("body_motion") and int(note["body_motion"]) != motion:
 		note["body_from"] = frame_in(tab, int(note["body_motion"]), float(note["body_r"]))
 		note["body_changed"] = now
-		note["body_mix"] = mix_time(motion)
+		note["body_mix"] = float(mix_in.get(motion, MIX_TIME))
 	note["body_motion"] = motion
 	note["body_r"] = plain.r
 	if not note.has("body_changed"):
