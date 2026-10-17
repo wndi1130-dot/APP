@@ -348,7 +348,8 @@ function pickCrew(g: Game): Comm {
  * 지금 적용된 단계(g.outside)와 이미 온 하강(g.climateChange)만 읽는다. 다음 하강은 모른다(결정 357).
  * - 풀린 단계(0)에서는 온기가 55를 넘는 칸의 난방을 석탄이 많든 적든 한 칸 내려 석탄을 아낀다.
  * - 하강 뒤 두 구간 안에는 온기 45 아래 칸의 난방을 석탄 20만 넘어도 한 칸 올린다(평소 선 50).
- * - 그 밖과 배급은 autoLevers와 같은 선이다. */
+ * - 그 밖과 배급은 autoLevers와 같은 선이다.
+ * 명세 6장 기준 ②(레버 고정이 더 낮음)·③(하강 뒤 레버 판당 2번)은 봇이 아니라 사람 손 플레이로 본다(결정 407 A5). 이 규칙은 그 판단의 참고 숫자용이다. */
 function climateLevers(g: Game): void {
   if (!g.climate) { autoLevers(g); return; }
   const hf = lawFloor(g, 'heatFloor');
