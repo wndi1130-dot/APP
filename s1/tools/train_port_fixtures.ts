@@ -15,7 +15,7 @@ import {
   advance, autoLevers, autoLeverStatus, calmCoal, calmTension, CALM, castVote, CHORE_COMMS, chooseCard, cloneGame, COMM_NAME, COMMS, createGame,
   CREW, CREW_COMMS, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, crewAwayOf, crewBand, crewGainOf, crewHaulMult, crewMult, crewNames,
   crewPreview, currentAgenda, DELEGATE_AFTER, DELEGATE_ON, DELEGATE_RE_ON, drift, effThreat, exposeMult, foodCost, forecast, hash, heatCost, HUNGER_GRACE,
-  isSessionSeg, LAWS, lawFloor, ledgerLevel, LOCO, LOCO_DEFAULT, locoCoal, P, PLACES, potRunning, predictStall, primaryAction, PROFILES, PROTEST,
+  isSessionSeg, LAWS, lawFloor, ledgerLevel, LOCO, LOCO_DEFAULT, locoCoal, meters, P, PLACES, potRunning, predictStall, primaryAction, PROFILES, PROTEST,
   rationComm, relStage, resolveStop, REST_FLOOR, riskLevel, segKmOf, setLever, setStop, situation, stageOf, stallKm, stallsEnRoute, standings, STAGES,
   STAY, stopRisk, supportShare, tailIdle, THREAT_STEPS, threatStep, totalPop, viewCard,
 } from '../src/game';
@@ -190,6 +190,16 @@ function changes(g0: Game, v: Vary): Record<string, unknown> {
     const changed = autoLevers(g);
     out.autoLevers = { changes: changed, heat: byComm(c => g.comms[c].heat), ration: byComm(c => g.comms[c].ration), journal: journalSince(g, j) };
   }
+  {
+    // 정산의 신임·긴장(meters). 경비대를 푼 적이 있는 판(tensionCrisisUsed > 0)은 공포가 긴장 오름을 늦추지 않으니 그 갈래도 한 번 더 잰다.
+    const one = (used: number): Record<string, number> => {
+      const g = cloneGame(g0);
+      g.tensionCrisisUsed = used;
+      meters(g);
+      return { trust: g.trust, tension: g.tension, fear: g.fear };
+    };
+    out.meters = { used0: one(0), used1: one(1) };
+  }
   if (g0.stop && !g0.stop.done) {
     const g = cloneGame(g0);
     const patch: Partial<{ target: LootKey; stay: StayId; crewComm: Comm; crewSize: number }> = {};
@@ -218,8 +228,8 @@ function nextSegCase(g0: Game): Record<string, unknown> {
 }
 
 // ---- 정산 한 번(settle) ----
-// meters·hungerTick·checkEnd는 turn.ts가 내보내지 않아 따로 부를 수 없다. 그래서 advance로 정산을 한 번 통째로 돌리고
-// 전/후 판을 적는다. 끝 판정(checkEnd)과 굶은 구간 수(hungerTick)는 그 뒤에 그 값을 건드리는 틱이 S1a 판에 없어 전/후로 맞댈 수 있다.
+// advance로 정산을 한 번 통째로 돌리고 전/후 판을 적는다. 끝 판정(checkEnd)과 굶은 구간 수(hungerTick)는 그 뒤에 그 값을 건드리는 틱이
+// S1a 판에 없어 전/후로 맞댈 수 있다(turn.ts가 둘을 내보내기 전에 만든 표본이다). 신임·긴장(meters)은 지점마다 바로 부른다(changes.meters).
 
 /** 정산이 읽고 쓰는 끝 판정·굶음 칸. */
 const pickSettle = (g: Game): Record<string, unknown> => ({

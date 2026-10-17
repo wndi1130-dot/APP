@@ -205,7 +205,7 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 2,
-      "description": "영수증 판. 없으면 1. 2부터 people.wounds(부위별 상처, body_injury 4.6)를 받는다. people.wounds를 쓰면 2 이상이어야 한다."
+      "description": "영수증 판. 없으면 1. 2부터 people.wounds(부위별 상처, body_injury 4.6)를 받는다. people.wounds를 쓰면 2 이상이어야 한다. 이 파일은 판 1·2 꼴이다. 판 3(receiptId·stopId·goal·extras)은 s1/src/game/stop_receipt.ts의 v3Schema, 판 4(판 3 + departureId·symbol·fieldPromises)는 s1/src/game/field_receipt.ts의 v4Schema가 이 파일을 펼쳐 version만 그 판으로 고정한다. 여기 maximum을 올리면 판 3·4의 필수 칸 없이 판 번호만 3·4인 영수증이 이 꼴을 지나므로 2로 둔다."
     },
     "source": {
       "type": "string",

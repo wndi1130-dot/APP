@@ -5,8 +5,10 @@ extends RefCounted
 ## back to the one before it (.bak).
 ##
 ## capture() only reads the field; to_json/from_json and write/read are plain
-## functions over a Dictionary. Key names live here alone, so the train side's
-## save shape (S3 PR C) is one edit away.
+## functions over a Dictionary. Only S2 reads this file (its keys are its own);
+## the train keeps its own save (user://s1a_game_v2.json). On start the field
+## save wins while its phase is "field", unless the train already applied its
+## receipt_id (S3 PR #428).
 
 const VERSION := 1
 const KIND := "s2_field"
@@ -35,22 +37,23 @@ static func capture(game) -> Dictionary:
 	var ground: Array = []
 	for g in game.ground_items:
 		ground.append(g.duplicate(true))  # {pos, id, n} and a dropped gun's own row
-	var end_reason := ""
-	if game.receipt != null:
-		end_reason = String(game.receipt.to_dict().get("endReason", ""))
+	var said: Dictionary = game.receipt.to_dict() if game.receipt != null else {}
+	# The departure order is the train side's contract (S3 spec): kept whole, inside untouched.
+	var departure: Dictionary = (game.opts.get("departure", {}) as Dictionary).duplicate(true)
+	var stop_id := String(departure.get("stopId", said.get("stopId", game.opts.get("stop_id", ""))))
 	return {
 		"version": VERSION, "kind": KIND,
-		"stop_id": String(game.opts.get("stop_id", "")), "place": game.place, "mission": game.mission,
-		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": end_reason,
+		"stop_id": stop_id, "place": game.place, "mission": game.mission,
+		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
 		"people": people, "ammo": game.ammo.duplicate(), "containers": containers, "spots": spots,
 		"ground_items": ground, "unloaded": game.unloaded.duplicate(),
 		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
 		"zombies": zombies, "decisions": game.decisions.duplicate(true),
-		"return_id": String(game.opts.get("return_id", "")),
-		# The train side's own (promises are shown and kept there): passed through untouched.
-		"promises": (game.opts.get("promises", []) as Array).duplicate(true),
+		# The return's id, the same as the receipt's receiptId: the train side applies it once.
+		"receipt_id": String(said.get("receiptId", game.opts.get("receipt_id", ""))),
+		"departure": departure,
 	}
 
 

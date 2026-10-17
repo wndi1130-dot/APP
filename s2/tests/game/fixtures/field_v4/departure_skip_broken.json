@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "departureId": "dep_sulechow_01",
+  "stopId": "stop_sulechow",
+  "placeId": "sulechow_station",
+  "segment": 1,
+  "roster": [
+    {
+      "id": "p_151",
+      "comm": "guard"
+    },
+    {
+      "id": "p_152",
+      "comm": "guard"
+    },
+    {
+      "id": "p_153",
+      "comm": "guard"
+    },
+    {
+      "id": "p_006",
+      "comm": "tail"
+    }
+  ],
+  "promises": [
+    {
+      "id": "promise_skip",
+      "kind": "skip_dispatch",
+      "madeTo": "tail",
+      "label": "다음 파견에서 제외",
+      "subjects": []
+    }
+  ],
+  "domestic": true
+}

@@ -7,6 +7,7 @@ import type { DarkState } from './dark/state';
 import type { DisasterKind, DisasterState } from './disaster';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
+import type { FieldReturns } from './field_receipt';
 import {
   COH0, COMMS, IDEO, P, POP0, REL0, REP_AGE, SECRET_POOL, START, STAGES, TRAIT_BAN, TRAITS,
 } from './data';
@@ -59,13 +60,15 @@ export interface TripState {
 }
 
 /** coup: S1b 계엄 중 경비대 충성이 무너져 경비대장이 열차를 잡았다(s1b_dark_path 5.3, 둘째 묶음). lost_captain: 수동차에 탄 열차장이 돌아오지 않았다. */
-export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup' | 'lost_captain';
+export type EndKind = 'complete' | 'stranded' | 'ousted' | 'revolt' | 'coup' | 'lost_captain' | 'slice';
 /** 판을 끝내는 길(turn.ts finish가 채운다). 의회 안건처럼 turn.ts를 부를 수 없는 곳(import 순환)이 이걸로 끝낸다. */
 /** 정차 작업조 명단에 더 붙는 사람(이름). S1b 정차 암살의 실행자와 대상이 여기서 붙는다(dark/order.ts). */
 export const CREW_EXTRAS: ((g: Game) => string[])[] = [];
 /** 정차 작업조에 못 나가는 사람의 이름(S1b 근신·경비 근무, K02 5). */
 export const CREW_BUSY: ((g: Game) => string[])[] = [];
 export const END_LINK: { finish: (g: Game, end: EndKind) => void } = { finish: (g, end) => { g.end = end; g.phase = 'end'; } };
+/** 특별 회기를 닫는 길(field_council.ts가 채운다). turn.ts가 field_council을 바로 부르면 import 순환이 생겨 이 자리로 잇는다. */
+export const COUNCIL_LINK: { leaveSpecial: (g: Game) => boolean } = { leaveSpecial: () => false };
 
 export interface Profile { id: string; name: string; name_lang?: string; gender: 'male' | 'female'; age: number; community: Comm; like: string; dislike: string; hometown: string }
 export const PROFILES = profilesJson as unknown as Profile[];
@@ -212,9 +215,9 @@ export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Com
 /** 판 난이도(결정 376). 없으면 보통이다(옛 저장 포함). 고르는 화면은 아직 없다 */
 export type Difficulty = 'easy' | 'normal' | 'hard';
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
-export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees';
+export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees' | 'field_symbol' | 'field_promise';
 /** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
-export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number }
+export interface MotionAgenda { kind: 'motion'; motion: MotionId; subject?: Comm; person?: string; by?: Comm; forced?: boolean; ref?: number; verdict?: 'kept' | 'broken' }
 
 export interface VoteFlip { comm: Comm; yes: boolean }
 export interface VoteResult {
@@ -243,6 +246,8 @@ export interface CouncilState {
   martial?: boolean;
   /** 안건 자리를 먹지 않고 법 안건 앞에 따로 여는 표결(S1b 정기 신임, s1b_dark_path 5.3). result가 서면 끝났다 */
   pre?: { agenda: MotionAgenda; result?: VoteResult };
+  /** 첫 귀환 뒤의 특별 회기(field_council.ts). 비상 소집처럼 열리고, 닫히면 정산 대신 연 단계로 돌아간다 */
+  special?: boolean;
 }
 
 /** 저녁 솥불·벽 장부·떠난 사람의 밤이 구간마다 쌓는 값(calm.ts). 모두 선택 칸이라 옛 저장도 그대로 읽힌다. */
@@ -428,6 +433,8 @@ export interface Game {
   lastCrew?: Comm;
   /** 지난 구간의 정차. 출발을 미룬 날 이번 정차가 없으면 이걸 한 번 더 뒤진다(결정 332) */
   lastStop?: StopState | null;
+  /** 필드(S2)에서 직접 뛰고 돌아온 귀환 기록(field_receipt.ts). 직접 영수증이 들어온 판에만 있고, 주사위 정차만 도는 판엔 없다 */
+  fieldReturns?: FieldReturns;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
   /** 고른 기관차(결정 125). 없으면 c3(옛 저장과 안 고른 판). 게임 시작 때 setLoco(loco.ts)로 정한다. */
@@ -534,7 +541,7 @@ export interface StoryState {
     /** 서막에서 운반조를 두고 떠났나(9.2) */
     depot_left_behind?: boolean;
     /** 서막 꼬리칸 대표의 약속(9.2). 없으면 서막을 거치지 않은 판이다 */
-    depot_promise?: 'kept' | 'broken' | 'refused';
+    depot_promise?: 'kept' | 'broken' | 'refused' | 'unknown';
     /** 첫 시신 안건이 무엇으로 열렸나 */
     first_corpse_agenda?: 'none' | 'own' | 'stranger';
     signal_heard?: boolean;
