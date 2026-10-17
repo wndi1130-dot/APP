@@ -26,14 +26,27 @@ const FALL_FRONT: int = DeadBody.FALL_FRONT
 const CRAWL: int = DeadBody.CRAWL
 const RISE: int = DeadBody.RISE
 const STAGGER: int = DeadBody.STAGGER
+const HIT: int = DeadBody.HIT
+const RISE_FRONT: int = DeadBody.RISE_FRONT
 const SHADE: float = 1.0
 const STRIDE_CAP: float = 0.5            # more than this between two drawings is not a step
 const STILL_AFTER: float = 0.2           # stands once it has kept its place this long
+# Held by the dead (after Project Zomboid's struck state, 상태표 2.3): the arms
+# out against them (the lunge's reach), leaning back from one in front and
+# bent under one behind, twisting to get free.
+const HELD_LEAN: Vector2 = Vector2(-0.2, 0.22)   # in front, behind
+const HELD_TWIST: Vector2 = Vector2(0.12, 0.2)   # sideways roll, turn about the spine
+const HELD_HZ: float = 2.6
+# Hurt (bitten, scratched, cut, shot): the struck pose and the body thrown
+# back, easing out. A bite throws it furthest.
+const HURT_TIME: float = 0.45
+const HURT_LEAN: Dictionary = {"bite": -0.35, "": -0.2}
 
 var game                                 # field_game.gd
 var vat: Dictionary = {}
 var draw: MultiMeshInstance3D
 var notes: Dictionary = {}               # person -> what it was last drawn as
+var table: Array = []                    # the worn body's motions, for easing between them (dead_body.gd mix_from)
 
 
 func setup(field_game) -> void:
@@ -60,6 +73,9 @@ func setup(field_game) -> void:
 	for key in tables:
 		mat.set_shader_parameter(key, tables[key])
 	mat.set_shader_parameter("tint", Vector3(0.5, 0.5, 0.5))
+	if DeadBody.can_mix():
+		table = DeadBody.table_of(vat)
+		mat.set_shader_parameter("mixes", true)
 	draw.material_override = mat
 	add_child(draw)
 
@@ -84,8 +100,9 @@ func _process(delta: float) -> void:
 		var note: Dictionary = notes.get(p, {})
 		notes[p] = note
 		var c := motion_of(p, note, delta, vat.get("clips", []))
-		mm.set_instance_transform(n, Transform3D(Basis(Vector3.UP, p.rotation.y), p.global_position))
-		mm.set_instance_custom_data(n, Color(c.x, c.y, 1.0, SHADE))
+		var look := Color(c.x, c.y, 1.0, SHADE)
+		mm.set_instance_transform(n, Transform3D(Basis(Vector3.UP, p.rotation.y) * lean_of(p, note), p.global_position))
+		mm.set_instance_custom_data(n, DeadBody.mix_from(note, look, float(note["t"]), table))
 		n += 1
 	mm.visible_instance_count = n
 
@@ -107,6 +124,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array) -> Vector
 	var at: Vector3 = p.global_position
 	var gone: float = at.distance_to(note.get("at", at))
 	note["at"] = at
+	_note_hurt(p, note, t)
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
@@ -115,11 +133,20 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array) -> Vector
 		if p.body.downed and not p.body.dead and gone > 0.01:
 			return Vector2(_round(note, "crawl", gone, _round_of(clips, CRAWL, 0.61)), CRAWL)
 		return Vector2(_once(note, fall, t, clips), fall)
+	# Up again off the face it fell on, or off its back.
 	if note.get("motion", -1) == FALL or note.get("motion", -1) == FALL_FRONT:
-		note["motion"] = RISE
+		note["motion"] = RISE_FRONT if note["motion"] == FALL_FRONT else RISE
 		note["since"] = t
-	if int(note.get("motion", -1)) == RISE and t - float(note["since"]) < _length(clips, RISE, 1.0):
-		return Vector2((t - float(note["since"])) / _length(clips, RISE, 1.0), RISE)
+	var rise: int = int(note.get("motion", -1))
+	if (rise == RISE or rise == RISE_FRONT) and t - float(note["since"]) < _length(clips, rise, 1.0):
+		return Vector2((t - float(note["since"])) / _length(clips, rise, 1.0), rise)
+	if not p.grabbers.is_empty():
+		# Held: the arms out against them, the legs shifting under it.
+		note["motion"] = LUNGE
+		return Vector2(fposmod(DeadBody.REACH_AT + DeadBody.REACH_SHIFT * sin(TAU * HELD_HZ * 0.5 * t), 1.0), LUNGE)
+	if hurt_k(note, t) > 0.0:
+		note["motion"] = HIT
+		return Vector2(0.0, HIT)
 	if p.shove_t > 0.0 or p.lunge_t > 0.0:
 		return Vector2(_cycle(note, LUNGE, t, clips), LUNGE)
 	if gone > 0.001:
@@ -133,6 +160,44 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array) -> Vector
 		gait = STAGGER
 	note["motion"] = gait
 	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+
+
+## Notes the moment a new wound comes, and what kind it was.
+static func _note_hurt(p, note: Dictionary, t: float) -> void:
+	var n: int = p.body.wounds.size()
+	if n > int(note.get("wounds", n)):
+		note["hurt_at"] = t
+		note["hurt_kind"] = String(p.body.wounds[-1].get("kind", ""))
+	note["wounds"] = n
+
+
+## 1 as a wound comes, down to 0 HURT_TIME after.
+static func hurt_k(note: Dictionary, t: float) -> float:
+	if not note.has("hurt_at"):
+		return 0.0
+	return clampf(1.0 - (t - float(note["hurt_at"])) / HURT_TIME, 0.0, 1.0)
+
+
+## How the whole body leans on top of the motion it is in (drawing only):
+## held, hurt. Nothing for a body on the ground.
+static func lean_of(p, note: Dictionary) -> Basis:
+	if p.body.downed or p.body.dead or p.fallen_t > 0.0:
+		return Basis()
+	var t: float = float(note.get("t", 0.0))
+	var pitch := 0.0
+	var roll := 0.0
+	var turn := 0.0
+	if not p.grabbers.is_empty():
+		var w := TAU * HELD_HZ * t
+		pitch = HELD_LEAN.x if p.grab_front else HELD_LEAN.y
+		roll = HELD_TWIST.x * sin(w)
+		turn = HELD_TWIST.y * sin(w * 0.5 + 0.7)
+	var k := hurt_k(note, t)
+	if k > 0.0:
+		pitch += float(HURT_LEAN.get(note.get("hurt_kind", ""), HURT_LEAN[""])) * k * k
+	if pitch == 0.0 and roll == 0.0 and turn == 0.0:
+		return Basis()
+	return Basis(Vector3.UP, turn) * Basis(Vector3.RIGHT, pitch) * Basis(Vector3.BACK, roll)
 
 
 ## A motion that plays once, from the frame it was started in.

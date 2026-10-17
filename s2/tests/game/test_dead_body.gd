@@ -249,10 +249,10 @@ func test_a_standing_baked_body_sways_by_a_clock_the_drawing_side_keeps() -> voi
 	# A folder's own length is used where it gives one.
 	for n in 5:
 		DeadBody.table.append([n * 32, 32, true, 1.5])
-	var grabbing := _body("grab")
-	var a := DeadBody.custom(grabbing, 0.0, 0.0, 1.0, true)
-	grabbing["age"] += 0.03
-	assert_almost_eq(DeadBody.custom(grabbing, 0.0, 0.0, 1.0, true).r - a.r, 0.03 * pace / 1.5, 0.0001)
+	var other := _body("frozen")
+	var a := DeadBody.custom(other, 0.0, 0.0, 1.0, true)
+	other["age"] += 0.03
+	assert_almost_eq(DeadBody.custom(other, 0.0, 0.0, 1.0, true).r - a.r, 0.03 * pace / 1.5, 0.0001)
 
 
 
@@ -281,3 +281,47 @@ func test_one_that_lunges_drops_low_runs_and_then_reels() -> void:
 	spent["spent_t"] = 2.0
 	assert_eq(DeadBody.custom(spent, 0.0, 0.0, 1.0, true).g, float(DeadBody.STAGGER), "even one that would run")
 	assert_true(DeadBody.STRIDE.has(DeadBody.STAGGER))
+
+
+# Holding on to someone (or about to bite), a baked body keeps its arms out at
+# them and only shifts its legs: it is held at their side, so a walk would slide.
+func test_a_baked_body_holding_on_keeps_its_reach_and_does_not_walk() -> void:
+	for state in ["grab", "attack"]:
+		var z := _body(state)
+		for i in 20:
+			z["age"] += 0.05
+			var c := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+			assert_eq(int(c.g), DeadBody.LUNGE, state)
+			assert_almost_eq(fposmod(c.r - DeadBody.REACH_AT + 0.5, 1.0) - 0.5, 0.0, DeadBody.REACH_SHIFT + 0.001, state)
+
+
+# Thrown off someone it reels back with its feet going back over the ground
+# it is seen to cover, then reels on the spot while stunned, then walks on.
+func test_a_body_thrown_off_reels_back_then_on_the_spot() -> void:
+	var z := _body("chase")
+	z["stun"] = 1.0
+	z["shoved_t"] = 0.2
+	var first := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(int(first.g), DeadBody.STAGGER)
+	z["pos"] += Vector3(0.1, 0, 0)
+	var back := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_almost_eq(fposmod(first.r - back.r, 1.0), 0.1 / float(DeadBody.STRIDE[DeadBody.STAGGER]), 0.001, "the feet go back")
+	z["shoved_t"] = 0.0
+	z["age"] += 0.05
+	var spot := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_eq(int(spot.g), DeadBody.STAGGER, "stunned, it reels on")
+	z["age"] += 0.05
+	var on := DeadBody.custom(z, 0.0, 0.0, 1.0, true)
+	assert_almost_eq(fposmod(on.r - spot.r, 1.0), 0.05 * DeadBody.REEL_PACE / 1.3, 0.001, "by its own clock")
+	z["stun"] = 0.0
+	assert_ne(int(DeadBody.custom(z, 0.0, 0.0, 1.0, true).g), DeadBody.STAGGER, "then it comes on")
+	# Stunned by a blow, not thrown off: no reel.
+	var struck := _body("chase")
+	struck["stun"] = 0.6
+	assert_ne(int(DeadBody.custom(struck, 0.0, 0.0, 1.0, true).g), DeadBody.STAGGER)
+
+
+func test_struck_is_eased_into_fast_and_a_reel_slowly() -> void:
+	assert_eq(DeadBody.mix_time(DeadBody.HIT), 0.1)
+	assert_eq(DeadBody.mix_time(DeadBody.STAGGER), 0.4)
+	assert_eq(DeadBody.mix_time(DeadBody.FALL), DeadBody.MIX_TIME, "the rest as they were")
