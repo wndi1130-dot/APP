@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advance, chooseCard, cloneGame, createGame, createS1cGame } from '../../src/game';
+import { advance, chooseCard, cloneGame, createGame, createS1cGame, restoreCheck, TECH_IDS } from '../../src/game';
 import type { Game } from '../../src/game';
 import { attachCar } from '../../src/game/domestic/cars';
 import { CARS } from '../../src/ui/common';
@@ -223,5 +223,24 @@ describe('H6 재기', () => {
     expect(domesticOp(g, 'dom-tab')).toBe(false);
     expect(domesticOp(g, 'tip')).toBe(false); // 설명 글자 탭은 내정 조작이 아니다
     expect(domesticActive(createGame('a'), ui({ carPop: 'engine' }))).toBe(false);
+  });
+});
+
+describe('공방 단추', () => {
+  it('복원 시작·멈춤 단추가 판을 실제로 바꾼다(벽 못 줄로 새지 않는다)', () => {
+    const g0 = createS1cGame('ws-1');
+    const d = g0.dom!;
+    // 자재를 넉넉히 쥐여 줘서 「모자라다」로 막히지 않게 한다.
+    d.parts = 99; d.wood = 99; d.scrap = 99;
+    const id = TECH_IDS.find(t => !restoreCheck(g0, t).full);
+    expect(id, '시작할 수 있는 복원이 하나는 있어야 한다').toBeDefined();
+    const u = ui();
+    const { box, ctx } = ctxFor(g0, u);
+    handleDomestic('dom-restore', { id: id!, mode: 'full' }, ctx);
+    expect(box.g.dom!.restoring).toBe(id);
+    expect(box.g.dom!.techs[id!]?.stage).toBe('restoring');
+    handleDomestic('dom-cancel', {}, ctx);
+    expect(box.g.dom!.restoring).toBeFalsy();
+    expect(u.dom?.wall ?? null).toBeNull();
   });
 });

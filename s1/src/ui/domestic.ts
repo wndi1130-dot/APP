@@ -1324,9 +1324,6 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-why':
       if (data.comm && (COMMS as readonly string[]).includes(data.comm)) why = hygieneWhy(g0, data.comm as Comm);
       break;
-    case 'dom-restore':
-    case 'dom-cancel':
-    case 'dom-finish':
     case 'dom-wall':
       du.wall = du.wall === data.comm ? null : data.comm ?? null;
       break;
@@ -1339,6 +1336,10 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
       du.ws = du.ws === which ? null : which;
       break;
     }
+    // 공방(복원 시작·멈춤·고치기)도 판을 바꾸는 행동이라 applyStep으로 넘긴다. 벽 못 줄 아래에 붙어 있으면 벽 못만 여닫고 끝난다.
+    case 'dom-restore':
+    case 'dom-cancel':
+    case 'dom-finish':
     case 'dom-restart':
     case 'dom-order':
     case 'dom-delegate':
