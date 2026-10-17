@@ -183,7 +183,7 @@ func _toast_texts() -> Array[String]:
 
 func test_a_plain_toast_is_a_label_that_lasts_three_and_a_half_seconds() -> void:
 	_clear_toasts()
-	game.hud.toast("겨눌 것을 못 잡았다.")
+	game.hud.toast("겨눌 것 못 잡음")
 	assert_eq(game.hud.toasts.size(), 1)
 	var t: Dictionary = game.hud.toasts[0]
 	assert_eq(t["kind"], FieldHud.TOAST_NORMAL)
