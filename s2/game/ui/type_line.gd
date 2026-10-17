@@ -46,18 +46,42 @@ static func rise_of(c: Control) -> Vector2:
 		if sb != null:
 			top = sb.get_margin(SIDE_TOP)
 			bottom = sb.get_margin(SIDE_BOTTOM)
-		var room: float = maxf(0.0, m.y - top - bottom - up - down)
-		var off: float = 0.0
+		# A Label centres its line in the height its face gives it, fallbacks
+		# and all: the number face, whose word fallback rises higher, draws its
+		# digits lower in the label than their own ascent puts them.
+		var face_h: float = f.get_height(s)
+		var room: float = maxf(0.0, m.y - top - bottom - maxf(face_h, up + down))
+		var off: float = maxf(0.0, face_h - up - down) * 0.5
 		if l.vertical_alignment == VERTICAL_ALIGNMENT_CENTER:
-			off = room * 0.5
+			off += room * 0.5
 		elif l.vertical_alignment == VERTICAL_ALIGNMENT_BOTTOM:
-			off = room
+			off += room
 		var base: float = top + off + up
 		return Vector2(base, m.y - base)
 	if c.has_method("own_baseline"):
 		var b: float = c.own_baseline()
 		return Vector2(b, m.y - b)
 	return Vector2(m.y, 0.0)
+
+
+## How far `c`'s type reaches above its baseline and below it as a line box
+## counts it: a browser takes the face's own ascent and descent, not the box
+## Godot gives the label, so a number among words makes the line no taller
+## than its digits do. A label with a box of its own (padding, a least
+## height) counts its box.
+static func extent_of(c: Control) -> Vector2:
+	if c is Label:
+		var l := c as Label
+		var sb: StyleBox = l.get_theme_stylebox("normal")
+		var pad: float = 0.0
+		if sb != null:
+			pad = sb.get_margin(SIDE_TOP) + sb.get_margin(SIDE_BOTTOM)
+		if l.custom_minimum_size.y > 0.0 or pad > 0.0:
+			return rise_of(l)
+		var tl := TextLine.new()
+		tl.add_string(l.text if l.text != "" else " ", l.get_theme_font("font"), l.get_theme_font_size("font_size"))
+		return Vector2(tl.get_line_ascent(), tl.get_line_descent())
+	return rise_of(c)
 
 
 ## Where this line's own baseline is below its top at its least size.
@@ -78,7 +102,7 @@ func _rise() -> Vector2:
 	var up: float = 0.0
 	var down: float = 0.0
 	for c: Control in _parts():
-		var r: Vector2 = rise_of(c)
+		var r: Vector2 = extent_of(c)
 		up = maxf(up, r.x)
 		down = maxf(down, r.y)
 	return Vector2(up, down)
