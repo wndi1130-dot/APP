@@ -82,28 +82,36 @@ const OWN_BASE: int = 100
 const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5, "p_crouch_idle": 0.4,
 	"p_bitten": 0.2, "p_shove": 0.2, "p_swing_one": 0.15, "p_swing_axe": 0.15, "p_stab": 0.15,
 	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3,
-	"p_fall": 0.2, "p_fall_front": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2}
+	"p_fall": 0.2, "p_fall_front": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
+	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2}
 # Aiming a gun standing still (Project Zomboid: aim_handgun, aim_rifle): one hand
 # out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
 const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
 # A timed job of the hands (Project Zomboid: the hands' own motions over the
 # standing, by how high the work is; swapping a weapon is its rummaging at 0.8):
 # the own motion and how fast it goes round. 0 plays it once over the job: a
-# window is broken with one blow. Kicking a door and climbing have none yet.
+# window is broken with one blow. A bar is worked back and forth, the pickaxe
+# comes down in front of the feet. Climbing has none yet.
 const OWN_WORK: Dictionary = {
 	"search": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
-	"pry": ["p_search_mid", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
+	"pry": ["p_pry", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
 	"salvage": ["p_search_mid", 1.0], "repair": ["p_search_mid", 1.0], "wall": ["p_search_mid", 1.0],
 	"craft": ["p_search_mid", 1.0], "swap": ["p_search_mid", 0.8],
 	"loot": ["p_search_low", 1.0], "fire": ["p_search_low", 1.0], "snow": ["p_search_low", 1.0],
 	"lid": ["p_search_low", 1.0],
 	"treat": ["p_treat", 1.0], "splint": ["p_treat", 1.0], "rub": ["p_treat", 1.0],
-	"dig": ["p_swing_axe", 0.8], "window": ["p_swing_one", 0.0],
+	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
 }
 # A melee blow in the living's own motions: which, and where in it the blow
-# lands (body_bake.gd keys). A knife stabs, an axe and any blow at a body on the
-# ground come down from overhead, the rest swing across. A stomp has none yet.
-const OWN_BLOWS: Dictionary = {"one": ["p_swing_one", 0.45], "axe": ["p_swing_axe", 0.45], "stab": ["p_stab", 0.35]}
+# lands (body_bake.gd keys). A knife stabs, an axe comes down from overhead, the
+# rest swing across; a blow at a body on the ground is struck down in front of
+# the feet, and a stomp drives the heel into it.
+const OWN_BLOWS: Dictionary = {"one": ["p_swing_one", 0.45], "axe": ["p_swing_axe", 0.45], "stab": ["p_stab", 0.35],
+	"floor": ["p_floor_strike", 0.5], "stomp": ["p_stomp", 0.5]}
+# A door kick, and where in it the foot lands (body_bake.gd p_kick at 0.4): the
+# leg comes up over the last WIND of the try so it lands as the door is struck.
+const OWN_KICK: Array = ["p_kick", 0.4]
+const KICK_WIND: float = 0.36
 # The right hand: with both arms thrown straight out (p_shove at 0.4) the
 # furthest forward vertex on the right and those within HAND_R of it; the
 # elbow those within ELBOW_R of a point FOREARM behind it.
@@ -251,8 +259,8 @@ func _process(delta: float) -> void:
 func _hide_boxes(p) -> void:
 	p.body_mesh.visible = false
 	p.head_mesh.visible = false
-	# The arm boxes, and the foot box a door kick shows (it would hang in the air
-	# by a worn body that has no kick of its own yet).
+	# The arm boxes, and the foot box a door kick shows (the worn body kicks with
+	# its own leg).
 	for box in p.get_meta(Pose.META, []):
 		box.visible = false
 
@@ -379,7 +387,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 
 ## A melee blow in the living's own motions (y) and how far through it (x):
 ## drawn back up to where the blow lands while the rules wind it up, the rest
-## on the way back. y is -1 with no blow, or none of its own (a stomp).
+## on the way back. y is -1 with no blow, or none of its own.
 static func blow_of(p, own: Array) -> Vector2:
 	if own.is_empty():
 		return Vector2(0.0, -1.0)
@@ -387,10 +395,10 @@ static func blow_of(p, own: Array) -> Vector2:
 	if sw.is_empty():
 		return Vector2(0.0, -1.0)
 	var mode: String = p.get_meta(Pose.MODE, "swing")
-	if mode == "stomp":
-		return Vector2(0.0, -1.0)
 	var kind := "one"
-	if mode == "floor" or p.weapon_id() == "axe":
+	if mode == "stomp" or mode == "floor":
+		kind = mode
+	elif p.weapon_id() == "axe":
 		kind = "axe"
 	elif p.weapon_id() == "knife":
 		kind = "stab"
@@ -403,13 +411,22 @@ static func blow_of(p, own: Array) -> Vector2:
 
 
 ## A timed job of the hands in the living's own motions (y) and how far through
-## it (x); y is -1 with no job, or none of its own (kicking, climbing).
+## it (x); y is -1 with no job, or none of its own (climbing).
 static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
-	if p.action == "" or p.action_t <= 0.0 or p.action_total <= 0.0 or not OWN_WORK.has(p.action):
+	if p.action == "" or p.action_t <= 0.0 or p.action_total <= 0.0:
+		return Vector2(0.0, -1.0)
+	if p.action == "kick":
+		var kick := clip_named(own, String(OWN_KICK[0]), -1)
+		if kick < 0:
+			return Vector2(0.0, -1.0)
+		var wind := minf(KICK_WIND, p.action_total)
+		note["motion"] = OWN_BASE + kick
+		return Vector2(float(OWN_KICK[1]) * clampf(1.0 - p.action_t / wind, 0.0, 1.0), kick)
+	if not OWN_WORK.has(p.action):
 		return Vector2(0.0, -1.0)
 	var work_name := String(OWN_WORK[p.action][0])
 	# Crouched it keeps low (Project Zomboid's sneaking jobs): chest-high work done low.
-	if p.crouched and work_name == "p_search_mid":
+	if p.crouched and (work_name == "p_search_mid" or work_name == "p_pry"):
 		work_name = "p_search_low"
 	var clip := clip_named(own, work_name, -1)
 	if clip < 0:

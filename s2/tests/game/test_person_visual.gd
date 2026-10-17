@@ -219,10 +219,15 @@ func test_a_blow_is_the_living_own_swing() -> void:
 		PersonVisual.blow_of(p, own)
 	p.strike_at = {"state": "downed"}
 	p.strike_t = 0.4
-	assert_eq(String(own[int(PersonVisual.blow_of(p, own).y)]["name"]), "p_swing_axe", "down at a body on the ground")
+	assert_eq(String(own[int(PersonVisual.blow_of(p, own).y)]["name"]), "p_floor_strike", "down at a body on the ground")
+	p.strike_t = 0.0
+	p.swing_t = 0.3
+	assert_almost_eq(PersonVisual.blow_of(p, own).x, 0.5, 0.001, "it lands in front of the feet")
+	p.swing_t = 0.0
+	PersonVisual.blow_of(p, own)
 	p.strike_kind = "stomp"
 	p.strike_t = 0.4
-	assert_eq(PersonVisual.blow_of(p, own).y, -1.0, "no stomp of its own yet")
+	assert_eq(String(own[int(PersonVisual.blow_of(p, own).y)]["name"]), "p_stomp", "a stomp of its own")
 	p.strike_kind = "swing"
 	p.strike_at = {}
 	var note := {}
@@ -254,14 +259,15 @@ func test_the_weapon_sits_in_the_baked_right_hand() -> void:
 
 
 # A job of the hands plays the living's own: rummaging at the height of the
-# work, a bandage, the pickaxe coming down over and over, a window broken with
-# one blow over the try. Kicking a door and climbing have none of their own.
+# work, a bandage, a bar worked at, the pickaxe coming down in front of the feet
+# over and over, a window broken with one blow over the try, a door kicked with
+# the foot landing as the try ends. Climbing has none of its own.
 func test_a_job_of_the_hands_is_the_living_own() -> void:
 	var own := _own()
 	var p := _person()
-	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_search_mid"], ["swap", "p_search_mid"],
+	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_pry"], ["swap", "p_search_mid"],
 			["loot", "p_search_low"], ["fire", "p_search_low"], ["treat", "p_treat"], ["splint", "p_treat"],
-			["dig", "p_swing_axe"], ["window", "p_swing_one"]]:
+			["dig", "p_floor_strike"], ["window", "p_swing_one"], ["kick", "p_kick"]]:
 		p.start_action(want[0], "시험", 2.0, func() -> void: pass)
 		var note := {}
 		var c := PersonVisual.motion_of(p, note, 0.1, [], own)
@@ -270,9 +276,14 @@ func test_a_job_of_the_hands_is_the_living_own() -> void:
 	p.start_action("window", "창 깨기", 1.0, func() -> void: pass)
 	p.action_t = 0.25
 	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.75, 0.001, "one blow over the try")
-	for none in ["kick", "climb"]:
-		p.start_action(none, "시험", 2.0, func() -> void: pass)
-		assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, none)
+	p.start_action("kick", "문 차기", 1.0, func() -> void: pass)
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.0, 0.001, "standing ready")
+	p.action_t = PersonVisual.KICK_WIND * 0.5
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.2, 0.001, "the leg coming up")
+	p.action_t = 0.001
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.4, 0.01, "the foot lands as the try ends")
+	p.start_action("climb", "시험", 2.0, func() -> void: pass)
+	assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, "climb")
 	p.cancel_action()
 	assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, "the job is over")
 
@@ -305,8 +316,9 @@ func test_crouched_it_works_and_aims_low() -> void:
 	var own := _own()
 	var p := _person()
 	p.crouched = true
-	p.start_action("search", "뒤지기", 2.0, func() -> void: pass)
-	assert_eq(_named(own, PersonVisual.motion_of(p, {}, 0.1, [], own)), "p_search_low")
+	for job in ["search", "pry"]:
+		p.start_action(job, "시험", 2.0, func() -> void: pass)
+		assert_eq(_named(own, PersonVisual.motion_of(p, {}, 0.1, [], own)), "p_search_low", job)
 	p.cancel_action()
 	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
 	p.aim.active = true
