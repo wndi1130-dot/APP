@@ -525,7 +525,9 @@ export function stopRisk(g: Game): StopRisk {
   const stop = g.stop;
   const place = PLACES.find(p => p.id === stop?.place) ?? PLACES[0];
   const stay = STAY[stop?.stay ?? 'normal'];
-  const crew = stop?.crewSize ?? 4;
+  // 고른 인원이 아니라 실제로 나갈 수 있는 명단 수로 센다(검수 PR 395 보통 1). 나갈 사람이 모자라면 고른 수보다 적다.
+  const crewList = stop ? crewNames(g, stop.crewComm, stop.crewSize) : [];
+  const crew = stop ? crewList.length : 4;
   const guard = g.comms.guard;
   const guardRefused = guard.fervor >= 1 && guard.rel <= -40;
   const guardMult = guardRefused ? 1.5 : 1;
@@ -549,7 +551,7 @@ export function stopRisk(g: Game): StopRisk {
   // 사람 하나의 죽을 확률은 pDeath/4(4명 기준 기대 사망 pDeath), 크게 다칠 확률은 lam/인원(기대 중상 lam).
   const fate = { dead: [] as string[], hurt: [] as string[] };
   if (stop) {
-    const names = crewNames(g, stop.crewComm, crew);
+    const names = crewList;
     const qd = pDeath / 4;
     const qh = Math.min(0.9, lam / Math.max(1, names.length));
     // 한 명은 반드시 살아 돌아온다.
@@ -626,7 +628,7 @@ export const CREW_COMMS: readonly Comm[] = COMMS.filter(c => CREW_HAUL[c] !== un
 /** 정차 카드에 미리 적는 작업조 값(6.4): 이 칸을 내면 노출이 얼마가 되고, 무엇을 잃고, 누가 쉬나. */
 export function crewPreview(g: Game, c: Comm): { from: number; to: number; rel: number; haul: number; rest: Comm[]; risk: number } {
   const from = Math.round(situation(g, c)[3]);
-  const { gain, cap } = crewGainOf(g.stop?.crewSize ?? CREW_COST_REF);
+  const { gain, cap } = crewGainOf(g.stop ? crewNames(g, g.stop.crewComm, g.stop.crewSize).length : CREW_COST_REF);
   const to = Math.round(situation(g, c)[3] + Math.max(0, Math.min(cap, g.comms[c].base[3] + gain) - g.comms[c].base[3]));
   const rest = COMMS.filter(o => o !== c && REST_FLOOR[o] !== undefined && g.comms[o].base[3] > REST_FLOOR[o]!);
   return { from, to, rel: CHORE_COMMS.includes(c) ? P.choreRel : 0, haul: CREW_HAUL[c] ?? 1, rest, risk: exposeMult(g, c) };
@@ -649,8 +651,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const sr = stop.scoutReport;
   const scoutsBack = sr ? sr.names.filter(n => !sr.dead.includes(n) && !isGone(g, n)).length : 0;
   if (sr) g.comms[sr.comm].away += scoutsBack;
-  if (!go || !stop.target) {
-    stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: ['정차하지 않고 지나쳤다.'] };
+  // 나갈 사람이 한 명도 없으면 파견할 수 없으니 지나친다(검수 PR 395 보통 1: 빈 명단에 산출만 남던 길).
+  const nobody = go && !!stop.target && names.length === 0;
+  if (!go || !stop.target || nobody) {
+    stop.result = { passed: true, gains: {}, injured: [], dead: [], notes: [nobody ? '나갈 수 있는 사람이 없어 정차하지 않고 지나쳤다.' : '정차하지 않고 지나쳤다.'] };
     journal(g, `${place.name}을(를) 지나쳤다.`);
     crewRest(g, null);
     stop.result.notes.push(...domesticStop(g, true, 0)); // S1c 내정 훅
@@ -663,7 +667,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(Math.max(1, stop.crewSize - crewShortNow(g)), risk.need) * lawMult(g, 'haulMult') * scoutHaulNow(stop) * domesticHaulMult(g) * darkHaulMult(g)
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(Math.max(1, names.length - crewShortNow(g)), risk.need) * lawMult(g, 'haulMult') * scoutHaulNow(stop) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
   crewShortSpent(g); // 죽음의 무게: 이번 정차가 작업조 증감을 썼다
   // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).
@@ -725,7 +729,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   const scouts = scoutsBack;
   const returned = names.filter(n => !isGone(g, n)); // 살아 돌아온 작업조(명령으로 죽은 사람도 뺀다)
   g.comms[stop.crewComm].away += crewAwayOf(returned.length);
-  const cost = crewGainOf(stop.crewSize);
+  const cost = crewGainOf(names.length);
   const chore = crewWork(g, stop.crewComm, cost.gain, cost.cap);
   if (chore) notes.push(chore);
   crewRest(g, stop.crewComm);
@@ -733,7 +737,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   notes.push(...domesticStop(g, false, dead.length)); // S1c 내정 훅
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
-  journal(g, `${place.name}에 ${stay.name} 머물렀다(${COMM_NAME[stop.crewComm]} ${stop.crewSize}명${scouts ? `, 정찰 ${scouts}명` : ''}). ${got || '빈손'}.${injuredOnly.length ? ` 부상 ${injuredOnly.length}.` : ''}`);
+  journal(g, `${place.name}에 ${stay.name} 머물렀다(${COMM_NAME[stop.crewComm]} ${names.length}명${scouts ? `, 정찰 ${scouts}명` : ''}). ${got || '빈손'}.${injuredOnly.length ? ` 부상 ${injuredOnly.length}.` : ''}`);
   // 도덕 카드: 부상자 발견, 물림.
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   CHORE_COMMS, CREW, CREW_COST, CREW_LINE, createGame, crewAwayOf, crewBand, crewEnoughCount, crewGainOf, crewHaulMult, crewLineText, crewMult, crewNames, crewPreview, crewWhyText,
-  P, PLACES, resolveStop, riskLevel, riskView, sendScouts, setStop, situation, STAY, stopRisk,
+  P, PLACES, resolveStop, riskLevel, onDeath, riskView, sendScouts, setStop, situation, STAY, stopRisk,
 } from '../../src/game';
 import type { Comm, CrewCost, CrewCurve, CrewHaul, Game, StayId } from '../../src/game';
 
@@ -632,5 +632,32 @@ describe('stop_crew', () => {
       expect(one('half')).toEqual(one('flat'));
       expect(one('none')).toEqual(one('flat'));
     }
+  });
+
+  it('13 crew_real_count (검수 PR 395 보통 1): 고른 인원보다 나갈 사람이 적으면 실제 명단 수로 위험·대가·일지를 세고, 0명이면 지나친다', () => {
+    const g = mk('real-count', { place: 'freight', size: 8, threat: 0.8, comm: 'front' });
+    // 앞칸에서 두 사람만 남기고 나머지를 떠나보낸다.
+    const all = crewNames(g, 'front', 999);
+    expect(all.length).toBeGreaterThan(2);
+    onDeath(g, 'front', all.slice(2), 'other', false, true);
+    const left = crewNames(g, 'front', 8);
+    expect(left).toHaveLength(2);
+    expect(g.stop!.crewSize).toBe(8);
+    const r = stopRisk(g);
+    expect(r.ratio).toBeCloseTo(2 / r.need, 12);
+    expect(r.band).toBe(crewBand(2 / r.need));
+    expect(crewPreview(g, 'front').to - crewPreview(g, 'front').from).toBeLessThanOrEqual(crewGainOf(2).gain);
+    const res = resolveStop(g, true)!;
+    expect(res.passed).toBe(false);
+    expect(g.journal.find(j => j.text.includes('머물렀다'))?.text).toContain('앞칸 2명');
+
+    // 아무도 못 나가면 산출 없이 지나친다.
+    const z = mk('real-zero', { place: 'freight', size: 4, threat: 0.8, comm: 'front' });
+    onDeath(z, 'front', crewNames(z, 'front', 999), 'other', false, true);
+    expect(crewNames(z, 'front', 4)).toHaveLength(0);
+    const rz = resolveStop(z, true)!;
+    expect(rz.passed).toBe(true);
+    expect(rz.gains).toEqual({});
+    expect(rz.notes[0]).toContain('나갈 수 있는 사람이 없어');
   });
 });
