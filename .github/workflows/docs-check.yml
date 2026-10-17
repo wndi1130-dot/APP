@@ -1,0 +1,22 @@
+name: Docs check
+
+# 새로 더한 줄의 「결정 NNN」이 decisions.md에 있는지, 문서에 손으로 적은 시험 수가 없는지 본다(tools/check_docs.py).
+# 문서만 바꾸는 PR에도 돌게 경로를 거르지 않는다. 로컬에서는 같은 명령을 --base main 으로 돌린다.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Decision refs and hand-written test counts
+        run: python3 tools/check_docs.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"

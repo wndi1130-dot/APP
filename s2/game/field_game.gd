@@ -1101,6 +1101,8 @@ func _update_person(p: Person, delta: float) -> void:
 	if p.action != "":
 		# Each action takes its body multiplier once, here (not also in its length).
 		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
+		if p.action == "search":
+			actions.search_noise(p, delta)
 		p.action_t -= delta * rate
 		if p.action_t <= 0.0:
 			var done := p.action_done

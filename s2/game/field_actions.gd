@@ -43,6 +43,9 @@ const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "twe
 ## busy (a grab stops it, as any work). The frozen and the padded take their
 ## own (loot_tables.gd BODY, zombies.search_time).
 const BODY_SEARCH_TIME: float = 3.0
+## Going through a container is quiet (3 m, indoors 1.5 m), once every four
+## seconds of it (loot spec v1 4, user decision 407 B4).
+const SEARCH_NOISE_EVERY: float = 4.0
 const ROUND_NAMES: Dictionary = {"pistol": "권총탄", "shell": "산탄"}
 const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
 
@@ -304,11 +307,22 @@ func search(p, id: String) -> void:
 	p.start_action("search", "뒤지기", search_time(p, c), _searched.bind(p, id))
 	c["busy"] = true
 	p.action_busy = c
+	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4).
+	p.action_noise_t = SEARCH_NOISE_EVERY
 
 
 func _unlock(id: String) -> void:
 	game.data["containers"][id]["locked"] = false
 	game.view.update_container(id)
+
+
+## Called each frame of a container search: the quiet rummage when it is due.
+func search_noise(p, delta: float) -> void:
+	p.action_noise_t += delta
+	if p.action_noise_t < SEARCH_NOISE_EVERY or p.action_busy.is_empty():
+		return
+	p.action_noise_t -= SEARCH_NOISE_EVERY
+	game.make_sound(FieldGrid.center(p.action_busy["cell"]), SimNoise.Level.QUIET, "search", p)
 
 
 func _searched(p, id: String) -> void:

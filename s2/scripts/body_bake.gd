@@ -66,8 +66,9 @@ const OWN_POSES: Array = [
 ]
 # The living people's motions (bake_body_cli --set=person, a folder of its own
 # so the dead's numbers above stay): name, "", frames, loops, layer, seconds.
-# Only appended to, so a number once baked keeps its motion. Sixteen at most:
-# the shader's clip tables have sixteen places (dead_vat.gdshader).
+# Only appended to, so a number once baked keeps its motion. Thirty-two at most:
+# the shader's clip tables have thirty-two places (dead_vat.gdshader); numbers
+# 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
 	["p_walk", "", 32, true, "p_walk", 0.78],
 	["p_run", "", 24, true, "p_run", 0.58],
@@ -85,12 +86,21 @@ const PERSON_CLIPS: Array = [
 	["p_treat", "", 24, true, "p_treat", 2.0],
 	["p_aim_one", "", 16, true, "p_aim_one", 1.0],
 	["p_aim_two", "", 16, true, "p_aim_two", 1.0],
+	# Down, along and up again with the same layers the dead use, so a living
+	# body need not change folders (and lose its mix) to fall.
+	["p_fall", "", 32, false, "own_fall", 1.0],
+	["p_fall_front", "", 32, false, "own_fall_front", 1.0],
+	["p_crawl", "", 32, true, "own_crawl", 1.8],
+	["p_rise", "", 32, false, "own_rise", 1.2],
+	["p_rise_front", "", 32, false, "own_rise_front", 1.2],
+	["p_spent", "", 32, true, "own_stagger", 1.3],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
 const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
+const PERSON_CRAWL_CLIP: String = "p_crawl"   # the same for the living
 const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were written for, metres
 
 # Layers: a hand-made addition on top of a motion. For a frame at progress u
@@ -1257,7 +1267,7 @@ static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = 
 static func _note_reach(ctx: Dictionary, clip: String, reach: Array) -> void:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
-	var crawls := clip == CRAWL_CLIP
+	var crawls := clip == CRAWL_CLIP or clip == PERSON_CRAWL_CLIP
 	var ends: Array = ["hand.L", "hand.R"] if crawls else ["foot.L", "foot.R"]
 	for n in 2:
 		var bone := _bone(body, ends[n])
