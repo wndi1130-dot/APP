@@ -3,6 +3,9 @@ extends Node3D
 const Flow = preload("res://scripts/scene_flow.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
+const BodyBake = preload("res://scripts/body_bake.gd")
+# Test branch only: four baked person bodies as extra vertex levels (-1 .. -4).
+const TEST_BODIES: Dictionary = {-1: "res://test_bodies/body_a", -2: "res://test_bodies/body_b", -3: "res://test_bodies/body_c", -4: "res://test_bodies/body_d"}
 const HOME_SCENE = preload("res://scenes/home.tscn")
 const STATION_SCENE = preload("res://scenes/station.tscn")
 const FIELD_SCENE = preload("res://scenes/field.tscn")
@@ -128,11 +131,11 @@ func _cycle_count() -> void:
 func _vat_for(target: int) -> Dictionary:
 	# Bake each vertex level once; switching back reuses the cached mesh.
 	if not vat_cache.has(target):
-		vat_cache[target] = VatBaker.build(target)
+		vat_cache[target] = BodyBake.load_baked(TEST_BODIES[target]) if TEST_BODIES.has(target) else VatBaker.build(target)
 	return vat_cache[target]
 
 func _cycle_vertices() -> void:
-	var levels: Array[int] = [144, 1500, 3000]
+	var levels: Array[int] = [144, 1500, 3000, -1, -2, -3, -4]
 	var index := levels.find(int(settings["vertices"]))
 	settings["vertices"] = levels[(index + 1) % levels.size()]
 	vat_assets = _vat_for(int(settings["vertices"]))
