@@ -132,16 +132,29 @@ jobs:
           print(f'GUT report: {len(cases)} passing test cases ({expected} test functions in s2/tests)')
           PY
 
-      - name: Make ephemeral debug signing key and Android editor settings
+      - name: Debug signing key (fixed one from secrets, else ephemeral) and Android editor settings
         shell: bash
+        env:
+          FIXED_KEYSTORE_B64: ${{ secrets.S2_DEBUG_KEYSTORE_B64 }}
+          FIXED_KEYSTORE_PASSWORD: ${{ secrets.S2_DEBUG_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           key="$RUNNER_TEMP/s2-debug.keystore"
-          password="$(openssl rand -hex 16)"
-          echo "::add-mask::$password"
-          keytool -genkeypair -keystore "$key" -storepass "$password" -keypass "$password" \
-            -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" \
-            -keyalg RSA -keysize 2048 -validity 30 -storetype JKS -noprompt
+          if [ -n "$FIXED_KEYSTORE_B64" ] && [ -n "$FIXED_KEYSTORE_PASSWORD" ]; then
+            # Same key every run, so a new APK installs over the last one on the phone.
+            printf '%s' "$FIXED_KEYSTORE_B64" | base64 -d > "$key"
+            password="$FIXED_KEYSTORE_PASSWORD"
+            echo "::add-mask::$password"
+            keytool -list -keystore "$key" -storepass "$password" -alias androiddebugkey > /dev/null
+            echo "debug key: fixed (from secrets)"
+          else
+            password="$(openssl rand -hex 16)"
+            echo "::add-mask::$password"
+            keytool -genkeypair -keystore "$key" -storepass "$password" -keypass "$password" \
+              -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 30 -storetype JKS -noprompt
+            echo "debug key: ephemeral (no secrets)"
+          fi
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$key" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=$password" >> "$GITHUB_ENV"
