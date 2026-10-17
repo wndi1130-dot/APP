@@ -88,7 +88,7 @@ func test_the_lantern_key_is_there_only_after_sunset_and_says_what_it_costs() ->
 	hud.finger_up(1, at)
 	assert_false(game.lamps_on())
 	assert_false(hud.lamp_button.button_pressed)
-	assert_true(String(hud.toasts[-1]["l"].text).contains("껐다"))
+	assert_true(String(hud.toasts[-1]["l"].text).contains("모두 끔"))
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
 	assert_true(game.lamps_on())

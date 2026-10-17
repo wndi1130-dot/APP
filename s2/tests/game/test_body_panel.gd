@@ -373,7 +373,7 @@ func test_the_blood_key_is_pointed_at_once_and_says_what_it_binds() -> void:
 	var at: Vector2 = hud.blood_button.get_global_rect().get_center()
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
-	assert_true(_toast_texts().has("지혈한다: 왼팔 찢김 · 피 보통."))
+	assert_true(_toast_texts().has("지혈 중: 왼팔 찢김 · 피 보통"))
 	assert_ne(p.action, "", "and it starts")
 
 

@@ -37,9 +37,11 @@ const BLOCK_LID_TIME: float = 8.0
 const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
-const UNLOAD_KEEP: Array = ["bandage", "cloth", "plank", "medkit", "bottle_spirit", "arrow", "flare", "tweezers", "needle_thread"]
-## Going through the pockets of one that lies there: three seconds with the
-## hands busy (a grab stops it, as any work). First value, to be set on the phone.
+# Planks and spirits go on the train as wood and luxury (user decision 407 B1); cloth and bandages stay field stores.
+const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "tweezers", "needle_thread"]
+## Going through the pockets of a plain body: three seconds with the hands
+## busy (a grab stops it, as any work). The frozen and the padded take their
+## own (loot_tables.gd BODY, zombies.search_time).
 const BODY_SEARCH_TIME: float = 3.0
 const ROUND_NAMES: Dictionary = {"pistol": "권총탄", "shell": "산탄"}
 const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
@@ -369,7 +371,7 @@ func search_body(p, zid: int) -> void:
 	var z: Dictionary = game.zombies.find(zid)
 	if p.action != "" or not game.zombies.lootable(z):
 		return
-	p.start_action("loot", "품 뒤지기", BODY_SEARCH_TIME, _body_searched.bind(p, zid))
+	p.start_action("loot", "품 뒤지기", game.zombies.search_time(z), _body_searched.bind(p, zid))
 
 
 func _body_searched(p, zid: int) -> void:

@@ -1,6 +1,7 @@
 extends "res://addons/gut/test.gd"
 ## 건물 키트 그리기(building_view.gd, 명세 건물 v1 3·4장): 지도 격자에서 조각을 놓는 규칙,
-## 닫힘·열림·지하의 보이는 규칙, 회색 상자의 벽 노드 열쇠와 맞는지를 본다.
+## 닫힘·열림·지하의 보이는 규칙, 지도 그리기(map_view)가 건물을 키트에 넘기고 설정을 끄면
+## 회색 상자로 돌아가는 것을 본다.
 
 const BuildingView = preload("res://game/world/building_view.gd")
 const MapView = preload("res://game/world/map_view.gd")
@@ -393,3 +394,31 @@ func test_a_door_redraws_when_it_opens_and_breaks() -> void:
 	g.set_door_state(c, "broken")
 	kit.update_door(c)
 	assert_lt(node.mesh.get_aabb().size.y, closed.size.y, "부서진 문짝은 낮다")
+
+
+# ---------------------------------------------------------------- 지도 그리기에 붙이기
+
+func test_map_view_hands_building_walls_doors_and_windows_to_the_kit() -> void:
+	var view := MapView.new()
+	add_child_autofree(view)
+	view.setup(SulehufMap.build())
+	assert_not_null(view.buildings, "설정이 켜져 있으면 키트")
+	for key: Vector2i in view.wall_nodes:
+		if key.x >= 0:
+			assert_eq(view.wall_nodes[key], view.buildings.cut_node(key.x, key.y), "%s 회색 상자 대신 키트 노드" % key)
+	assert_true(view.door_nodes.is_empty(), "문은 키트가 그린다")
+	assert_true(view.window_nodes.is_empty(), "창도 키트가 그린다")
+	view.show_levels(1)
+	view.cut_away(6, 1)
+	assert_eq(view.buildings.player_lv, 1, "층을 넘긴다")
+	assert_eq([view.buildings.open_b, view.buildings.open_lv], [6, 1], "든 건물을 넘긴다")
+
+
+func test_turning_the_setting_off_draws_grey_boxes() -> void:
+	ProjectSettings.set_setting(BuildingView.MODE_SETTING, false)
+	var view := MapView.new()
+	add_child_autofree(view)
+	view.setup(SulehufMap.build())
+	assert_null(view.buildings)
+	assert_false(view.door_nodes.is_empty(), "회색 상자가 문을 그린다")
+	assert_false(view.wall_nodes.is_empty())
