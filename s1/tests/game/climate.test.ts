@@ -64,8 +64,8 @@ describe('climate', () => {
     }
   });
 
-  it('3 tempMult는 단계 0~4에서 중안 곱이고, heatCost에 한 번만 들어 forecast·predictStall이 그대로 따른다', () => {
-    expect(CL.mult).toEqual([0.85, 1, 1.2, 1.45, 1.75]);
+  it('3 tempMult는 단계 0~4에서 약안 곱이고, heatCost에 한 번만 들어 forecast·predictStall이 그대로 따른다', () => {
+    expect(CL.mult).toEqual([0.9, 1, 1.1, 1.25, 1.4]);
     const g = createGame('cl-mult');
     enableClimate(g);
     const base = heatCost(g);
@@ -77,8 +77,10 @@ describe('climate', () => {
       expect(forecast(g).coal - f1).toBeCloseTo(base * (CL.mult[st] - 1), 9);
     }
     // 석탄이 모자라면 predictStall이 같은 forecast로 판단한다(곱을 두 번 넣지 않는다)
+    g.outside = 1;
+    const need1 = forecast(g).coal;
     g.outside = 4;
-    g.coal = Math.floor(forecast(g).coal) - 1;
+    g.coal = (need1 + forecast(g).coal) / 2;
     expect(predictStall(g)).not.toBeNull();
     g.outside = 1;
     expect(predictStall(g)).toBeNull();
@@ -126,11 +128,11 @@ describe('climate', () => {
     const fresh = g.journal.slice(n);
     const i = fresh.findIndex(j => CLIMATE_LINES.includes(j.text));
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(fresh[i + 1].text).toBe('바깥 −24°. 모든 칸 온기 −5, 난방 석탄 ×1.2.');
+    expect(fresh[i + 1].text).toBe('바깥 −24°. 모든 칸 온기 −5, 난방 석탄 ×1.1.');
     expect(fresh[i].tone).toBe('bad');
     const up = at('cl-lines-9', 9);
     go(up);
-    expect(texts(up)).toContain('바깥 −6°. 모든 칸 온기 +10, 난방 석탄 ×0.85.');
+    expect(texts(up)).toContain('바깥 −6°. 모든 칸 온기 +10, 난방 석탄 ×0.9.');
     // 한 판 안에서 날씨 글의 인칭이 번갈아 든다(CLIMATE_LINES는 [1인칭, 3인칭] 쌍을 이어 붙인 것)
     const { g: p } = playGame('cl-voice', { s1c: false, policy: 'caretaker', dom: 'idle', climate: true });
     const voices = p.journal.filter(j => CLIMATE_LINES.includes(j.text)).map(j => CLIMATE_LINES.indexOf(j.text) % 2);

@@ -44,7 +44,8 @@ function summary(rows: Row[]) {
 const t0 = Date.now();
 const off = summary(run(false));
 const on = summary(run(true));
-const mild = summary(run(true, [0.9, 1, 1.1, 1.25, 1.4]));
-const res = { n, bot: BASE, mult: CL.mult, off, on, mild, secs: (Date.now() - t0) / 1000 };
+// 견줌: 처음 넣었던 중안 곱(사용자가 약안으로 바꾸기 전)
+const mid = summary(run(true, [0.85, 1, 1.2, 1.45, 1.75]));
+const res = { n, bot: BASE, mult: CL.mult, off, on, mid, secs: (Date.now() - t0) / 1000 };
 console.log(JSON.stringify(res, null, 2));
 if (out) writeFileSync(out, JSON.stringify(res, null, 2));
