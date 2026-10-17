@@ -3,6 +3,7 @@ import { addCard, END_LINK } from './state';
 import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
+import { AR, arrivalsAfterStop, arrivalsArrive, arrivalsAway, arrivalsSettle, arrivalsTravel } from './arrivals';
 import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
 import { climateDepart, climateSettle, freezeCoal, freezeDepart, freezeFood, tempMult } from './climate';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
@@ -302,7 +303,8 @@ function depart(g: Game): void {
   // 사람 카드가 막 왔으면 이동 사건을 쉰다(사람의 무게 6.0: 카드 수를 늘리지 않는다).
   contentAwayTick(g);
   contentFollowupTick(g);
-  const event = peopleCardRecent(g) ? null : drawTravelEvent(g, contentPool(g).map(e => `content:${e.id}`));
+  // 사람이 들어오는 사건(arrivals.ts)은 이동 사건 하나를 대신한다(카드 수가 늘지 않는다). 꺼진 판은 굴리지 않는다.
+  const event = peopleCardRecent(g) || (g.arrivals && arrivalsTravel(g, crewNames(g, 'tail', AR.escortSize))) ? null : drawTravelEvent(g, contentPool(g).map(e => `content:${e.id}`));
   if (event?.startsWith('content:')) addContentCard(g, event.slice('content:'.length));
   else if (event) addCard(g, { kind: 'travel', text: event });
   g.phase = 'travel';
@@ -391,6 +393,7 @@ function arriveStop(g: Game): void {
       g.dom.altPlace = pickPlace(g, place.id).id;
     }
   }
+  arrivalsArrive(g); // 데리러 나갔던 수색대가 이 역에서 돌아온다(arrivals.ts). 꺼진 판은 아무 일도 안 한다
   g.phase = 'stop';
 }
 
@@ -721,7 +724,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 도덕 카드: 부상자 발견, 물림.
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);
-  if (since('rescue') >= 4 && rnd(g) < P.rescueRate) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
+  // 사람이 들어오는 사건(arrivals.ts): 피난민 무리가 뜨면 이 정차의 부상자 카드는 건너뛴다. 부상자 굴림(rnd)은 그대로 굴려 난수 흐름을 끈 판과 맞춘다.
+  const arrived = g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
+  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
   if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
   return stop.result;
@@ -821,6 +826,7 @@ function settle(g: Game): void {
   drift(g);
   calmSettle(g); // 저녁 솥불·벽 장부
   checkDuePromises(g);
+  arrivalsSettle(g, notes); // 늦게 탄 사람의 빈속 몫과 잠자리 다툼(arrivals.ts)
   hungerTick(g, notes);
   biteTick(g);
   needTick(g, notes);
@@ -836,6 +842,7 @@ function settle(g: Game): void {
   for (const c of COMMS) g.comms[c].away = 0;
   if (wasStranded) tripTick(g); // 수동차 원정: 못 돌아온 열차장은 여기서 판을 끝낸다(앞의 정산 틱들이 끝난 판 위에서 돌지 않게 뒤에 둔다)
   reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다
+  arrivalsAway(g); // 데리러 나간 수색대도 돌아올 때까지 자리비움으로 센다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
   if (g.phase !== 'end') climateSettle(g);

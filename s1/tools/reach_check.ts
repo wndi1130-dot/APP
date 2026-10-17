@@ -2,7 +2,7 @@
 // 사용: npx tsx tools/reach_check.ts [판 수=300]. 봇이 안 하는 행동이 있어야 나오는 카드는 REACH_NOTES에 까닭을 적는다.
 // 까닭 없이 안 나온 것이 있으면 종료 코드 1. 끊어진 후속(그리는 곳 없는 카드, 고를 수 없는 카드)은 봇이 바로 멈춘다.
 
-import { CONTENT_EVENTS, DOM_CARD_KINDS, LOCO_IDS, HUB_CARD_KINDS, PEOPLE_KINDS, PROLOGUE_CARD_KINDS, S1A_CARD_KINDS, STRANDED_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
+import { ARRIVAL_CARD_KINDS, CONTENT_EVENTS, DOM_CARD_KINDS, LOCO_IDS, HUB_CARD_KINDS, PEOPLE_KINDS, PROLOGUE_CARD_KINDS, S1A_CARD_KINDS, STRANDED_CARD_KINDS, TRAVEL_EVENTS } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
 
@@ -48,6 +48,8 @@ export const CONFIGS: [string, BotOptions][] = [
   ['S1c 첫 선택지', { s1c: true, policy: 'first', dom: 'idle' }],
   // 새 이동 사건 묶음(ev_b01_, event_pack.ts)은 기본 꺼짐이라 켠 판을 따로 돌려야 닿는다
   ['S1c 돌봄 묶음 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', eventPack: true }],
+  // 사람이 들어오는 사건(arrivals.ts)도 기본 꺼짐이라 켠 판을 따로 돌린다
+  ['S1c 돌봄 들어옴 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', arrivals: true }],
   // 죽음의 무게(death_weight.ts)도 기본 꺼짐이라 켠 판을 따로 돌린다
   ['S1c 돌봄 죽음 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', deathWeight: true }],
 ];
@@ -68,7 +70,7 @@ export function reachReport(n: number): ReachReport {
     }
   }
   const all = [
-    ...TRAVEL_EVENTS.map(e => `travel:${e.id}`), ...S1A_CARD_KINDS.filter(k => k !== 'travel'), ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...HUB_CARD_KINDS, ...PROLOGUE_CARD_KINDS, ...STRANDED_CARD_KINDS,
+    ...TRAVEL_EVENTS.map(e => `travel:${e.id}`), ...S1A_CARD_KINDS.filter(k => k !== 'travel'), ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...HUB_CARD_KINDS, ...PROLOGUE_CARD_KINDS, ...STRANDED_CARD_KINDS, ...ARRIVAL_CARD_KINDS,
     ...CONTENT_EVENTS.map(e => `content:${e.id}`),
   ];
   // 콘텐츠 사건 중 게임이 아직 안 뽑는 단계(s1b, 이동 밖 단계)는 까닭을 붙인다. 후속으로만 오는 사건은 단계를 안 본다.
