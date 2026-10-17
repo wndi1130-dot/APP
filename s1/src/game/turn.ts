@@ -772,7 +772,7 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
 export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
   s.promise = null;
-  bump(g, 'trust', 4, 'promise');
+  bump(g, 'trust', 2, 'promise');
   bumpRel(g, c, 5, 'promise');
   if (s.grudge === 1) s.grudge = 0;
   g.stats.promisesKept += 1;

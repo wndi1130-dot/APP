@@ -150,11 +150,11 @@ describe('필드 영수증 판 4: 판에 반영', () => {
     expect(r.case2_symbol_broken.g.story?.flags.depot_promise).toBe('broken');
   });
 
-  it('지킴의 오름이 어김의 깎임보다 작은가: 관계는 그렇고, 신임은 지금 값(+4 대 −4)이 같아 값 PR로 넘긴다(결정 184)', () => {
+  it('지킴의 오름이 어김의 깎임보다 작다: 관계 +5 대 −10, 신임 +2 대 −4(결정 184·407 A1)', () => {
     const kept = run('departure_prologue.json', 'case3_nosymbol_kept');
     const broken = run('departure_prologue.json', 'case4_nosymbol_broken');
     expect(kept.g.comms.tail.rel - kept.before.comms.tail.rel).toBeLessThan(broken.before.comms.tail.rel - broken.g.comms.tail.rel);
-    expect(kept.g.trust - kept.before.trust).toBe(broken.before.trust - broken.g.trust);
+    expect(kept.g.trust - kept.before.trust).toBeLessThan(broken.before.trust - broken.g.trust);
   });
 
   it('목격자가 한 명도 못 돌아오면 알 수 없음: 약속 몫의 신임·관계 변화 0, 일지 한 줄(확인 줄 26, 6-7)', () => {
