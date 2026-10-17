@@ -2811,13 +2811,13 @@ func _tap_thing(p, world: Vector3) -> bool:
 	for i in range(game.ground_items.size()):
 		var g: Dictionary = game.ground_items[i]
 		if world.distance_to(g["pos"]) < 0.9:
-			game.actions.go_and_do(p, "item", i, g["pos"])
+			_go_and_do(p, "item", i, g["pos"])
 			return true
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
 		var at: Vector3 = game.lift(c["cell"], int(c.get("level", 0)))
 		if at.distance_to(world) < 1.0:
-			game.actions.go_and_do(p, "container", id, at)
+			_go_and_do(p, "container", id, at)
 			return true
 	# Stairs: a tap on them goes up (or down) them.
 	var lv: int = game.level_of(p.position)
@@ -2825,6 +2825,8 @@ func _tap_thing(p, world: Vector3) -> bool:
 		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
 			continue
 		if game.lift(s["cell"], lv).distance_to(world) < 1.0:
+			if _assist_off(p):
+				return true
 			game.actions.take_stairs(p, s)
 			if not p.path.is_empty():
 				dest_marker = p.path[p.path.size() - 1]
@@ -2834,25 +2836,40 @@ func _tap_thing(p, world: Vector3) -> bool:
 	for id in game.data["spots"]:
 		var spot: Dictionary = game.data["spots"][id]
 		if FieldGrid.center(spot["cell"]).distance_to(world) < 1.3:
-			game.actions.go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
+			_go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
 			return true
 	for key: String in game.data["manholes"]:
 		var lid_at: Vector3 = FieldGrid.center(game.data["manholes"][key])
 		if game.FieldMaps.lid(key) and lid_at.distance_to(world) < 1.0:
-			game.actions.go_and_do(p, "manhole", key, lid_at)
+			_go_and_do(p, "manhole", key, lid_at)
 			return true
 	for c in [cell, cell + Vector2i(1, 0), cell + Vector2i(-1, 0), cell + Vector2i(0, 1), cell + Vector2i(0, -1)]:
 		if game.grid.doors.has(c) and FieldGrid.center(c).distance_to(world) < 0.9:
 			var door: Dictionary = game.grid.doors[c]
 			if door["state"] == "locked" and not game.actions.has_pry(p):
-				offer([{"label": "문을 찬다 (시끄러움)", "call": game.actions.go_and_do.bind(p, "door", c, FieldGrid.center(c), "kick")}])
+				offer([{"label": "문을 찬다 (시끄러움)", "call": _go_and_do.bind(p, "door", c, FieldGrid.center(c), "kick")}])
 				return true
-			game.actions.go_and_do(p, "door", c, FieldGrid.center(c))
+			_go_and_do(p, "door", c, FieldGrid.center(c))
 			return true
 		if game.grid.windows.has(c) and FieldGrid.center(c).distance_to(world) < 0.9:
-			game.actions.go_and_do(p, "window", c, FieldGrid.center(c))
+			_go_and_do(p, "window", c, FieldGrid.center(c))
 			return true
 	return false
+
+
+## A tap's walk-and-do (user decision 330): off while the dead are near;
+## then only the stick and the pads, and the tap says so.
+func _assist_off(p) -> bool:
+	if not game.combat.tap_assist_off(p):
+		return false
+	toast("망자가 가깝다. 탭으로는 안 간다. 스틱으로 가서 단추로.")
+	return true
+
+
+func _go_and_do(p, kind: String, key, at: Vector3, verb: String = "") -> void:
+	if _assist_off(p):
+		return
+	game.actions.go_and_do(p, kind, key, at, verb)
 
 
 # ---------------------------------------------------------------- overlay
