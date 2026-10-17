@@ -51,6 +51,13 @@ export const CARD_GRADE: Record<string, KindRule> = {
   elder: R(3, true, '노인이 열차에 있는 동안. 내렸거나 죽었으면 버린다'),
   birth: R(3, true, '어머니가 살아 있는 동안. 죽었으면 버린다'),
   naming: R(3, true, '어머니가 살아 있고 아이가 살았을 때. 아니면 버린다'),
+  // 죽음의 무게(death_weight.ts). 사건 줄은 구간마다 한 칸이라 미뤄도 다음 단계가 겹치지 않는다(chainTick은 떠 있는 줄 카드가 있으면 쉰다)
+  loss_rep: R(3, true, '새 대표가 자리를 잇는 이야기. 칸은 그대로 있다'),
+  loss_child: R(3, true, '빈 잠자리. 칸은 그대로 있다'),
+  loss_hand: R(3, true, '빈 손. 칸은 그대로 있다'),
+  chain_push: R(3, true, '사건 줄의 반발. 줄이 끊겼으면 버린다'),
+  chain_fix: R(3, true, '사건 줄의 고칠 길. 줄이 끊겼으면 버린다'),
+  heat_after: R(3, true, '난방 배당 밤사이 죽음 다음 이야기. 법이 내려졌으면 버린다'),
   // 4 내정의 필수 카드, 어두운 길의 미룰 수 있는 카드
   'dom:fork': R(4, true, '복원 갈래 선택. 안 고르면 복원이 시작되지 않을 뿐이다. 이미 시작했으면 버린다'),
   'dom:short': R(4, true, '부품이 모자란 상태 그 자체. 고르기 전엔 벌도 없다'),
@@ -208,6 +215,8 @@ export function gone(g: Game, c: Card): boolean {
     case 'elder': return !c.who || isGone(g, c.who);
     case 'birth': return !c.who || isGone(g, c.who) || !g.born;
     case 'naming': return !c.who || isGone(g, c.who) || !!g.born?.lost;
+    case 'chain_push': case 'chain_fix': return !(g.deathChains ?? []).some(x => x.comm === comm);
+    case 'heat_after': return !lawActive(g, 'heat_quota');
     case 'demand': {
       // 요구가 풀렸으면(turn.ts aiLeaders의 gap과 같은 식) 말이 안 된다.
       const s = g.comms[comm];

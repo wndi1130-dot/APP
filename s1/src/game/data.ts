@@ -135,7 +135,9 @@ export type LawId =
   // 불만을 낮추는 법 셋(coordinator 결정 035, calm.ts). 구간마다 천천히 깎이는 꼴이라 효과는 res가 아니라 calm.ts가 셈한다.
   | 'evening_pot' | 'wall_ledger' | 'night_of_names'
   // 교육 법 셋(결정 205·207, classroom_radio 2.1): 무엇을 가르치나에 답 셋, 하나만 선다. 효과는 domestic/classroom.ts가 읽는다. S1c를 켠 판에서만 열린다.
-  | 'edu_letters' | 'edu_trade' | 'edu_engine';
+  | 'edu_letters' | 'edu_trade' | 'edu_engine'
+  // 「배웅」 한 쌍(결정 355·367, death_weight.ts): 남은 사람이 죽음을 어떻게 치르나. 죽음의 무게를 켠 판에서만 열리고, 하나를 세우면 다른 하나는 닫히며 거두지 않는다.
+  | 'farewell_rite' | 'farewell_hands';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -354,6 +356,23 @@ export const LAWS: Record<LawId, LawDef> = {
     changes: ['아이들이 열차에 남아 배운다(승강장의 손이 준다)', '긴장 −0.5/구간', '기관 견습이 한 단계 오르는 데 한 구간 덜(바닥 2구간)', '법이 서면 어디 곁에서 배울지 고른다', '공방 곁: 공방의 일 +1, 복원 목재·고철 넷에 하나 덜', '의무칸 곁: 깊은 상처·골절이 하루 먼저 낫는다', '다른 교육 법이 닫힌다'],
     opensWhen: '아동 노동이 오를 때나 서 있을 때',
   }),
+  // ---- 「배웅」 한 쌍(결정 355·367). 시신 법(몸을 어디 두나)과 다른 층이다. 효과는 death_weight.ts가 lawActive로 셈한다. ----
+  farewell_rite: L({
+    id: 'farewell_rite', title: '함께 보낸다', group: '배웅', tag: '이상', kind: 'normal', axes: [0, 0, 0],
+    like: { tail: 1, medtech: 1, guard: -1 },
+    why: '사람이 죽으면 그 칸 난로 곁에 모두 모여 그를 보낸다. 함께 운 칸은 덜 흔들린다.',
+    whyNot: '경비대: 모일 때마다 통로가 비고 석탄이 탄다.',
+    changes: ['죽음이 올리는 긴장이 절반', '죽음마다 석탄 −1(난로 곁 모임)', '상중이 3구간(회기 결석이 길어진다)', '손을 보내 배웅한다가 닫힌다', '한 번 정하면 거두지 않는다'],
+    opensWhen: '첫 죽음 뒤, 시신 법이 선 뒤',
+  }),
+  farewell_hands: L({
+    id: 'farewell_hands', title: '손을 보내 배웅한다', group: '배웅', tag: '질서', kind: 'normal', axes: [0, 0, 0],
+    like: { engine: 1, guard: 1, tail: -1 },
+    why: '정차 때 죽은 이의 칸 사람 몇이 선로 옆에서 그를 보낸다. 열차장이 손을 내줬으니 칸은 서운해하지 않는다.',
+    whyNot: '꼬리칸: 보내는 손은 늘 일하는 칸에서 나온다.',
+    changes: ['죽음마다 신임 깎임 절반', '죽은 이의 칸 관계 벌이 없다', '죽음마다 다음 정차 작업조 −1(숙련 일손이면 −2)', '함께 보낸다가 닫힌다', '한 번 정하면 거두지 않는다'],
+    opensWhen: '첫 죽음 뒤, 시신 법이 선 뒤',
+  }),
 };
 /** S1c 법. S1a 판에선 열리지 않는다. */
 export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack', 'edu_letters', 'edu_trade', 'edu_engine'];
@@ -361,6 +380,8 @@ export const S1C_LAWS: LawId[] = ['tech_control', 'apprentice_duty', 'triage_std
 export const LAW_VARIANT_OF: Partial<Record<LawId, LawId>> = { seed_half: 'seed_grain', child_pack: 'child_labor', triage_std: 'triage' };
 export const LAW_IDS = Object.keys(LAWS) as LawId[];
 export const CORPSE_LAWS: LawId[] = ['corpse_throw', 'corpse_store', 'corpse_burn'];
+/** 「배웅」 한 쌍. 서로 막고, 폐지 안건이 없다(politics.ts agendaOptions). */
+export const FAREWELL_LAWS: LawId[] = ['farewell_rite', 'farewell_hands'];
 
 // ---- 장소(ref/places_loot_draft.json의 가중치) ----
 export const LOOT_KEYS = ['coal', 'food', 'medicine', 'luxury', 'symbol', 'secret'] as const;

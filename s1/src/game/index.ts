@@ -21,6 +21,8 @@ export * from './pot_view';
 export * from './dark';
 export * from './disaster';
 export * from './disaster_cards';
+export * from './death_weight';
+export * from './death_cards';
 export * from './budget';
 export * from './event_pack';
 export * from './stranded';

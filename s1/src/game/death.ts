@@ -5,6 +5,7 @@ import { CORPSE_LAWS } from './data';
 import { journal, lawActive, storyOf } from './state';
 import type { Game } from './state';
 import { afterDeath } from './people';
+import { corpseTension, deathWeightOnDeath, repCommOf, repSucceeded } from './death_weight';
 
 /** 죽음의 원인. chosen: 열차장이 고른 일로 죽음(사살, 버림, 숨긴 물림). warned: '매우 불길하다'를 보고도 보낸 파견.
  * other: 그 밖(추위, 굶주림, 병, 약속 밖의 사고). 하차 장면이 죄책감과 애도를 가른다(presentation_motion, 2026-10-07). */
@@ -35,6 +36,8 @@ export const DEATH_HOOKS: ((g: Game, c: Comm, names: readonly string[], cause: D
 export function onDeath(g: Game, c: Comm, names: readonly string[], cause: DeathCause = 'other', witness = false, quiet = false): void {
   const n = names.length;
   if (n <= 0) return;
+  // 죽음의 무게(켠 판만): 지금 대표인 사람을 훅 앞에서 적어 둔다. 훅(S1b 승계)이 자리를 바꾸면 빈 의석 카드가 온다.
+  const reps = g.deathWeight ? names.map(name => ({ name, comm: repCommOf(g, name) })).filter(x => x.comm && g.comms[x.comm].leader.name === x.name) : [];
   g.comms[c].pop = Math.max(1, g.comms[c].pop - n);
   g.deaths.push(...names);
   logDeath(g, names, cause, witness, c);
@@ -64,12 +67,14 @@ export function onDeath(g: Game, c: Comm, names: readonly string[], cause: Death
       if (!flags.first_corpse_agenda || flags.first_corpse_agenda === 'none') flags.first_corpse_agenda = 'own';
     }
     g.corpseIssue = true;
-    bump(g, 'tension', 3 * n, 'corpse');
+    bump(g, 'tension', g.deathWeight ? corpseTension(g, n) : 3 * n, 'corpse');
     g.thrown += n;
   }
   if (!quiet) journal(g, `${COMM_NAME[c]}의 ${names.join(', ')}이(가) 죽었다.`, 'bad'); // quiet: 수로만 적는 호출(난방 배당, 폭동)이 따로 적는다
-  afterDeath(g, c, names);
+  deathWeightOnDeath(g, c, names);
+  afterDeath(g, c, names, g.deathWeight ? quiet : false);
   for (const hook of DEATH_HOOKS) hook(g, c, names, cause);
+  for (const r of reps) if (r.comm && g.comms[r.comm].leader.name !== r.name) repSucceeded(g, r.comm, r.name);
 }
 
 /** 두 번째 정차(구벤)까지 우리 쪽 죽음이 없으면 강가에서 이미 얼어 죽은 낯선 사람을 찾는다. 보장하는 건 죽음이 아니라

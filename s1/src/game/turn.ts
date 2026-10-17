@@ -3,6 +3,7 @@ import { addCard, END_LINK } from './state';
 import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
+import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
@@ -635,8 +636,9 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   burnPyre(g);
   const weights = Object.fromEntries(LOOT_KEYS.map(k => [k, place.loot[k] * (k === stop.target ? P.targetBoost : 1)])) as Record<LootKey, number>;
   const tot = LOOT_KEYS.reduce((sum, k) => sum + weights[k], 0);
-  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(stop.crewSize, risk.need) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
+  let haul = P.haulTotal * (0.7 + rnd(g) * 0.6) * stay.mult * crewHaulMult(Math.max(1, stop.crewSize - crewShortNow(g)), risk.need) * lawMult(g, 'haulMult') * (stop.scoutReport ? P.scoutHaul : 1) * domesticHaulMult(g) * darkHaulMult(g)
     * (CREW_HAUL[stop.crewComm] ?? 1);
+  crewShortSpent(g); // 죽음의 무게: 이번 정차가 작업조 증감을 썼다
   // 정차로 정한 명령의 결과는 정찰이 약속한 위험 밖이라 영수증에 따로 한 줄로 적는다(s1b 4.7, K02 3).
   const notes: string[] = [...darkNotes];
   // 꼬리칸 작업 거부: 꼬리칸을 보내면 −30%, 다른 칸을 보내도 손이 빠진 만큼 더디다(결정 059).
@@ -897,7 +899,7 @@ export function emergencyCost(g: Game): number {
   // 대권 중엔 열차장이 바로 부른다(포고하려고). 그 밖엔 신임을 쓴다.
   if (canDecree(g)) return 0;
   const recent = (g.emergencyCalls ?? []).filter(at => g.seg - at < 6).length;
-  return 6 + 4 * recent;
+  return 6 + 4 * recent + deathEmergCost(g); // 죽음의 무게(켠 판만): 최근 6구간 죽음 한 명마다 +DW.emerg
 }
 
 export function emergencyStatus(g: Game): { show: boolean; ok: boolean; cost: number; why?: string } {
