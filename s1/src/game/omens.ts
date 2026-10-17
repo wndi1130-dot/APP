@@ -1,3 +1,4 @@
+import { P } from './data';
 import type { Game, StopState } from './state';
 
 // 정차 조짐(2026-10-07 사용자): 위험을 꼬리표로 적지 않고, 정찰조가 본 조짐과 그 해석으로 알린다.
@@ -132,6 +133,7 @@ export const CREW_LINE = {
   tight: (n: number) => `인원이 빠듯하다. 누군가 크게 다칠 수 있다. 충분하려면 ${n}명쯤.`,
   short: (n: number) => `인원이 모자란다. 사람을 잃을 수 있다. 충분하려면 ${n}명쯤.`,
   over: '8명으로도 빠듯하다. 체류를 줄이거나 호위를 붙이면 낮아진다.',
+  overShort: '8명으로도 모자란다. 체류를 줄이거나 호위를 붙이면 낮아진다.',
 } as const;
 const CREW_BAND_SAY: Record<CrewBandName, string> = { short: '모자란다', tight: '빠듯하다', enough: '충분하다' };
 
@@ -140,19 +142,20 @@ export function crewEnoughCount(need: number): number {
   return Math.ceil(1.5 * need);
 }
 
-/** 인원 줄 글. 충분인데 해석이 불길(hurt·dead)이면 약속(해석 말)을 그대로 두고 운이 나쁘다고만 덧붙인다. */
+/** 인원 줄 글. 충분인데 해석이 불길(hurt·dead)이면 약속(해석 말)을 그대로 두고 운이 나쁘다고만 덧붙인다.
+ * N이 8을 넘으면 8명을 다 보냈을 때의 밴드로 말한다: 8/need가 모자람 경계 아래(need > 10)면 「모자란다」, 아니면 「빠듯하다」. */
 export function crewLineText(band: CrewBandName, need: number, level: RiskLevel): string {
   if (band === 'enough') return level === 'hurt' || level === 'dead' ? CREW_LINE.enoughUnlucky : CREW_LINE.enough;
   const n = crewEnoughCount(need);
-  if (n > 8) return CREW_LINE.over;
+  if (n > 8) return 8 / need < P.crewBandShort ? CREW_LINE.overShort : CREW_LINE.over;
   return band === 'tight' ? CREW_LINE.tight(n) : CREW_LINE.short(n);
 }
 
 /** 선택지 밑 까닭 한 줄(결정 339 「왜」). 알맞은 인원 숫자는 정찰 뒤에만 쓴다. */
 export function crewWhyText(known: { place: string; risk: number; stay: string; need: number; crew: number; band: CrewBandName } | null): string {
-  if (!known) return '몇 명이 알맞은지는 정찰로 위험을 알아야 말할 수 있다. 많이 보내면 산출은 늘지만 낸 칸이 지치고 표결에서 빠진다.';
+  if (!known) return '몇 명이 알맞은지는 정찰로 위험을 알아야 말할 수 있다. 산출은 알맞은 인원까지만 늘고, 더 보내면 위험은 낮아지지만 돌아온 이들이 이번 회기 표결에서 빠진다.';
   const need = Math.round(known.need * 10) / 10;
-  return `${known.place} 위험 ${known.risk}에 ${known.stay} 체류라 ${need}명쯤이 알맞다. 지금 ${known.crew}명이면 ${CREW_BAND_SAY[known.band]}. 많이 보낼수록 낸 칸이 지치고 이번 회기 표결에서 빠진다.`;
+  return `${known.place} 위험 ${known.risk}에 ${known.stay} 체류라 ${need}명쯤이 알맞다. 지금 ${known.crew}명이면 ${CREW_BAND_SAY[known.band]}. 알맞은 인원보다 더 보내면 산출은 그대로고 위험만 낮아지며, 돌아온 이들은 이번 회기 표결에서 빠진다.`;
 }
 const RANK: Record<RiskLevel, number> = { calm: 0, light: 1, hurt: 2, dead: 3 };
 /** 조짐이 보통 가리키는 해석 범위. 준비가 이 범위를 벗어나게 하면 '이 준비로는/이 준비라면'을 붙여 조짐과 해석이 어긋나 보이지 않게 한다. */
