@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 ## three seconds it takes are spent with the hands busy.
 
 const FieldGame = preload("res://game/field_game.gd")
+const SimNoise = preload("res://game/sim/noise.gd")
 
 var game
 var p
@@ -218,3 +219,26 @@ func test_the_frozen_and_the_padded_take_longer_than_a_plain_body() -> void:
 		assert_eq(p.action, "loot", kind)
 		assert_almost_eq(p.action_total, float(want[kind]), 0.001, kind)
 		p.cancel_action()
+
+
+func test_searching_a_container_is_heard_once_at_once_and_every_four_seconds() -> void:
+	# User decision 407 B4: quiet (3 m, indoors 1.5 m) every four seconds of the search.
+	_start()
+	var id := ""
+	for key in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][key]
+		if not c["locked"] and not c["searched"]:
+			id = key
+			break
+	assert_ne(id, "")
+	game.data["containers"][id]["search"] = 20.0
+	game.sounds.clear()
+	game.actions.search(p, id)
+	_work(9.0)
+	var heard: Array = game.sounds.filter(func(s) -> bool: return s["tag"] == "search")
+	assert_eq(heard.size(), 3, "at the start, at four and at eight seconds")
+	assert_eq(int(heard[0]["level"]), SimNoise.Level.QUIET)
+	p.cancel_action()
+	game.sounds.clear()
+	_work(5.0)
+	assert_eq(game.sounds.filter(func(s) -> bool: return s["tag"] == "search").size(), 0, "a stopped search is silent")
