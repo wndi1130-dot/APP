@@ -43,6 +43,8 @@ const disasters = flags.includes('--disasters');
 // X0은 대조: 장비는 끈 채 원래 수동차(x2)만 박는다. C·D에서 수동차 자체 몫(장소 후보 둘)을 떼어 보려는 것이다.
 const climate = flags.includes('--climate');
 const noLevers = flags.includes('--nolevers');
+// --climate-levers: 돌봄 봇이 기온을 읽는 레버 규칙을 쓴다(결정 384 재기, s1c_bot.ts climateLevers).
+const climateLevers = flags.includes('--climate-levers');
 const gearFlag = flags.find(x => x.startsWith('--gear='))?.slice(7);
 const GEAR_SETS: Record<string, [TechId, Variant | undefined][]> = {
   none: [], natural: [], X0: [['x2', undefined]], A: [['r4', 'a']], B: [['r4', 'b']], C: [['x2', 'a']], D: [['x2', 'b']], E: [['w4', undefined]],
@@ -227,6 +229,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(crewFlag ? { crew: crewFlag } : {}),
     ...(climate ? { climate: true } : {}),
     ...(noLevers ? { noLevers: true } : {}),
+    ...(climateLevers ? { climateLevers: true } : {}),
     ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
