@@ -37,7 +37,8 @@ const BLOCK_LID_TIME: float = 8.0
 const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
-const UNLOAD_KEEP: Array = ["bandage", "cloth", "plank", "medkit", "bottle_spirit", "arrow", "flare", "tweezers", "needle_thread"]
+# Planks and spirits go on the train as wood and luxury (user decision 407 B1); cloth and bandages stay field stores.
+const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "tweezers", "needle_thread"]
 ## Going through the pockets of one that lies there: three seconds with the
 ## hands busy (a grab stops it, as any work). First value, to be set on the phone.
 const BODY_SEARCH_TIME: float = 3.0

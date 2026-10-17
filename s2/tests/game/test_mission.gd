@@ -239,6 +239,29 @@ func test_loads_put_down_at_the_train_are_counted() -> void:
 	assert_eq(game.telemetry.trips, 1, "empty hands are not a load")
 
 
+func test_planks_and_spirits_go_on_the_train_and_cloth_stays() -> void:
+	# User decision 407 B1: a plank is wood 1, a bottle of spirit luxury 0.5; cloth and bandages are field stores.
+	var game = _game({})
+	var p = game.player
+	p.add_item("plank", 2)
+	p.add_item("bottle_spirit", 2)
+	var cloth: int = int(p.items.get("cloth", 0)) + 1
+	var bands: int = int(p.items.get("bandage", 0)) + 1
+	p.add_item("cloth", 1)
+	p.add_item("bandage", 1)
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.actions._auto_unload()
+	assert_eq(int(game.unloaded.get("plank", 0)), 2)
+	assert_eq(int(game.unloaded.get("bottle_spirit", 0)), 2)
+	assert_eq(int(p.items.get("cloth", 0)), cloth, "cloth stays on the body")
+	assert_eq(int(p.items.get("bandage", 0)), bands, "and so do bandages")
+	game.finish("departed")
+	var stock: Dictionary = game.receipt.to_dict()["stock"]
+	assert_almost_eq(float(stock.get("wood", 0.0)), 2.0, 0.001)
+	assert_almost_eq(float(stock.get("luxury", 0.0)), 1.0, 0.001)
+
+
 # ---------------------------------------------------------------- the loading yard
 
 func test_an_amount_goal_fills_and_the_repair_is_its_own_goal() -> void:
