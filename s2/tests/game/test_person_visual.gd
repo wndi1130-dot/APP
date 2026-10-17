@@ -250,3 +250,27 @@ func test_the_weapon_sits_in_the_baked_right_hand() -> void:
 	assert_gt(PersonVisual.grip_of(out[0], out[1], Basis()).z.y, 0.8, "the head up")
 	var turned := PersonVisual.grip_of(out[0], out[1], PersonVisual.grip_of(at[0], at[1], Basis()))
 	assert_between(turned.z.y, 0.1, 0.95, "it turns part way in one frame, not all at once")
+
+
+# A job of the hands plays the living's own: rummaging at the height of the
+# work, a bandage, the pickaxe coming down over and over, a window broken with
+# one blow over the try. Kicking a door and climbing have none of their own.
+func test_a_job_of_the_hands_is_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_search_mid"], ["swap", "p_search_mid"],
+			["loot", "p_search_low"], ["fire", "p_search_low"], ["treat", "p_treat"], ["splint", "p_treat"],
+			["dig", "p_swing_axe"], ["window", "p_swing_one"]]:
+		p.start_action(want[0], "시험", 2.0, func() -> void: pass)
+		var note := {}
+		var c := PersonVisual.motion_of(p, note, 0.1, [], own)
+		assert_eq(_named(own, c), want[1], want[0])
+		assert_true(PersonVisual.is_own(note), want[0])
+	p.start_action("window", "창 깨기", 1.0, func() -> void: pass)
+	p.action_t = 0.25
+	assert_almost_eq(PersonVisual.work_of(p, {}, 0.0, own).x, 0.75, 0.001, "one blow over the try")
+	for none in ["kick", "climb"]:
+		p.start_action(none, "시험", 2.0, func() -> void: pass)
+		assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, none)
+	p.cancel_action()
+	assert_eq(PersonVisual.work_of(p, {}, 0.0, own).y, -1.0, "the job is over")

@@ -4,7 +4,8 @@ extends Node3D
 ## only reads the people (where they are, which way they face, what their body
 ## and hands are doing) and decides nothing.
 ## Two multimeshes wear the same body: one with the living's own motions
-## (OWN_FOLDER: walking, running, standing, crouched, held, bitten, the shove),
+## (OWN_FOLDER: walking, running, standing, crouched, held, bitten, the shove,
+## the blows and the hands' jobs),
 ## one with the dead's folder for what the living have no motion of their own
 ## for yet (the falls, the crawl, getting up, reeling spent). Each person is in
 ## one of them at a time; a change between the two is not eased.
@@ -66,7 +67,22 @@ const OWN_BITTEN: String = "p_bitten"
 const OWN_SHOVE: String = "p_shove"
 const OWN_BASE: int = 100
 # Easing into each own motion (Project Zomboid: walking, running 0.35; struck 0.10).
-const OWN_MIX: Dictionary = {"p_bitten": 0.1, "p_shove": 0.1, "p_swing_one": 0.1, "p_swing_axe": 0.1, "p_stab": 0.1}
+const OWN_MIX: Dictionary = {"p_bitten": 0.1, "p_shove": 0.1, "p_swing_one": 0.1, "p_swing_axe": 0.1, "p_stab": 0.1,
+	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2}
+# A timed job of the hands (Project Zomboid: the hands' own motions over the
+# standing, by how high the work is; swapping a weapon is its rummaging at 0.8):
+# the own motion and how fast it goes round. 0 plays it once over the job: a
+# window is broken with one blow. Kicking a door and climbing have none yet.
+const OWN_WORK: Dictionary = {
+	"search": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
+	"pry": ["p_search_mid", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
+	"salvage": ["p_search_mid", 1.0], "repair": ["p_search_mid", 1.0], "wall": ["p_search_mid", 1.0],
+	"craft": ["p_search_mid", 1.0], "swap": ["p_search_mid", 0.8],
+	"loot": ["p_search_low", 1.0], "fire": ["p_search_low", 1.0], "snow": ["p_search_low", 1.0],
+	"lid": ["p_search_low", 1.0],
+	"treat": ["p_treat", 1.0], "splint": ["p_treat", 1.0], "rub": ["p_treat", 1.0],
+	"dig": ["p_swing_axe", 0.8], "window": ["p_swing_one", 0.0],
+}
 # A melee blow in the living's own motions: which, and where in it the blow
 # lands (body_bake.gd keys). A knife stabs, an axe and any blow at a body on the
 # ground come down from overhead, the rest swing across. A stomp has none yet.
@@ -209,9 +225,10 @@ func _process(delta: float) -> void:
 func _hide_boxes(p) -> void:
 	p.body_mesh.visible = false
 	p.head_mesh.visible = false
-	var arms: Array = p.get_meta(Pose.META, [])
-	for i in mini(arms.size(), 2):
-		arms[i].visible = false
+	# The arm boxes, and the foot box a door kick shows (it would hang in the air
+	# by a worn body that has no kick of its own yet).
+	for box in p.get_meta(Pose.META, []):
+		box.visible = false
 
 
 ## The motion one person is in (y) and how far through it (x), from what the
@@ -270,6 +287,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 				r = SHOVE_OUT.x * (1.0 - clampf(p.shove_t / maxf(wind, 0.01), 0.0, 1.0))
 			return Vector2(r, shove)
 		return Vector2(_cycle(note, LUNGE, t, clips), LUNGE)
+	var work := work_of(p, note, t, own)
+	if work.y >= 0.0:
+		return work
 	if gone > 0.001:
 		note["moved"] = t
 	var unit: float = p.name_unit("stand")
@@ -327,6 +347,21 @@ static func blow_of(p, own: Array) -> Vector2:
 	var lands: float = OWN_BLOWS[kind][1]
 	var r: float = lands + (1.0 - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
 	return Vector2(r, clip)
+
+
+## A timed job of the hands in the living's own motions (y) and how far through
+## it (x); y is -1 with no job, or none of its own (kicking, climbing).
+static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
+	if p.action == "" or p.action_t <= 0.0 or p.action_total <= 0.0 or not OWN_WORK.has(p.action):
+		return Vector2(0.0, -1.0)
+	var clip := clip_named(own, String(OWN_WORK[p.action][0]), -1)
+	if clip < 0:
+		return Vector2(0.0, -1.0)
+	var pace: float = OWN_WORK[p.action][1]
+	if pace <= 0.0:
+		note["motion"] = OWN_BASE + clip
+		return Vector2(clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0), clip)
+	return Vector2(_own_cycle(note, OWN_BASE + clip, t * pace, _length(own, clip, 1.0), p.name_unit("work")), clip)
 
 
 ## A gun being aimed, loaded or cleared: person_pose.gd holds it there.
