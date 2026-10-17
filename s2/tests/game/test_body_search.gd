@@ -186,7 +186,7 @@ func test_the_padded_ones_by_the_shed_carry_its_things_and_a_crowbar_comes_to_ha
 	p.hands = []
 	p.set_weapon_slots(p.hands)
 	game.actions.search_body(p, int(z["id"]))
-	_work(3.5)
+	_work(4.5)  # a padded coat: four seconds (user decision 407 B5)
 	assert_eq(p.hands.size(), 1)
 	assert_eq(p.hands[0]["id"], "crowbar")
 	assert_true(game.actions.has_pry(p), "and the locked boxes open to it")
@@ -205,3 +205,16 @@ func test_the_sewer_ones_carry_about_half_as_often() -> void:
 		horde += mini(1, b["loot"].size())
 	assert_between(plain, 110, 200)
 	assert_between(horde, 40, 110)
+
+
+func test_the_frozen_and_the_padded_take_longer_than_a_plain_body() -> void:
+	_start()
+	var want := {"dead": 3.0, "frozen": 5.0, "clothed": 4.0}
+	for kind: String in want:
+		var z: Dictionary = game.zombies.spawn(kind, p.position + Vector3(1.0, 0, 0))
+		game.zombies.kill(z)
+		game.zombies.set_loot(z, [{"id": "bandage", "n": 1}])
+		game.actions.search_body(p, int(z["id"]))
+		assert_eq(p.action, "loot", kind)
+		assert_almost_eq(p.action_total, float(want[kind]), 0.001, kind)
+		p.cancel_action()

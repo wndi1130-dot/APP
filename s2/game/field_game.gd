@@ -100,7 +100,7 @@ const EXTRA_ITEMS: Dictionary = {
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
-const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0]}
+const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5]}
 
 var opts: Dictionary = {}
 ## What this stop is for (opts["mission"]; content_variety_first_build 2부):

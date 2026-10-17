@@ -93,8 +93,8 @@ func test_a_padded_one_has_two_pockets_and_what_it_carries_says_where_it_worked(
 
 func test_frozen_pockets_take_twice_as_long_and_padded_ones_longer_than_the_dead() -> void:
 	assert_almost_eq(R.body_search_time("dead"), 3.0, 0.001)
-	assert_almost_eq(R.body_search_time("frozen"), 6.0, 0.001)
-	assert_almost_eq(R.body_search_time("clothed", "shed"), 4.5, 0.001)
+	assert_almost_eq(R.body_search_time("frozen"), 5.0, 0.001)
+	assert_almost_eq(R.body_search_time("clothed", "shed"), 4.0, 0.001)
 	var rng := _rng(3)
 	var cloth := 0
 	for i in range(3000):
@@ -122,7 +122,7 @@ func test_every_container_of_the_first_stop_folds_as_the_building_spec_counts() 
 
 
 func test_the_expected_count_per_container_matches_the_spec_table() -> void:
-	var want := {"kitchen": 2.0, "wardrobe": 2.0, "desk": 2.0, "shop": 2.75, "storage": 2.36, "toolbox": 2.0, "pharmacy": 2.57, "attic": 2.0, "toilet": 2.0, "junk": 2.0}
+	var want := {"kitchen": 2.0, "wardrobe": 2.0, "desk": 2.0, "shop": 4.125, "storage": 2.36, "toolbox": 2.0, "pharmacy": 2.57, "attic": 2.0, "toilet": 2.0, "junk": 2.0}
 	for k: String in want:
 		var sum := 0.0
 		for v: float in R.expected_container(k).values():

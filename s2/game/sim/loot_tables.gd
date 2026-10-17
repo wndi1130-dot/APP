@@ -19,26 +19,26 @@ const BODY: Dictionary = {
 		[3, {"ammo": "shell"}, 2],
 	]},
 	# Frozen pockets: the same small things and a rag, and twice the time.
-	"frozen": {"chance": 0.10, "rolls": 1, "search": 6.0, "table": [
+	"frozen": {"chance": 0.10, "rolls": 1, "search": 5.0, "table": [
 		[4, {"id": "bandage"}, 1],
 		[3, {"ammo": "pistol"}, 2],
 		[3, {"ammo": "shell"}, 2],
 		[2, {"id": "cloth"}, 1],
 	]},
 	# The padded ones: where they worked shows in what they carry, by place.
-	"clothed": {"chance": 0.35, "rolls": 2, "search": 4.5, "table": [
+	"clothed": {"chance": 0.35, "rolls": 2, "search": 4.0, "table": [
 		[2, {"id": "cloth"}, 1],
 		[2, {"ammo": "pistol"}, 2],
 		[1, {"id": "document"}, 1],
 	]},
-	"clothed_station": {"chance": 0.35, "rolls": 2, "search": 4.5, "table": [
+	"clothed_station": {"chance": 0.35, "rolls": 2, "search": 4.0, "table": [
 		[3, {"id": "flare"}, 1],
 		[2, {"id": "document"}, 1],
 		[2, {"ammo": "pistol"}, 2],
 		[1, {"id": "info_timetable"}, 1],
 		[1, {"id": "luxury_pack"}, 1],
 	]},
-	"clothed_shed": {"chance": 0.35, "rolls": 2, "search": 4.5, "table": [
+	"clothed_shed": {"chance": 0.35, "rolls": 2, "search": 4.0, "table": [
 		[3, {"id": "scrap"}, 1],
 		[2, {"ammo": "shell"}, 2],
 		[2, {"id": "cloth"}, 1],
@@ -63,12 +63,12 @@ const HORDE_MULT: float = 0.5
 const KIND_ORDER: Array[String] = ["pharmacy", "toolbox", "attic", "toilet", "junk", "desk", "shop", "kitchen", "wardrobe", "storage"]
 const CONTAINER_KINDS: Dictionary = {
 	"kitchen": {"name": "부엌 찬장", "words": ["부엌", "찬장"], "rolls": 2, "table": [
-		[6, "food_pack", 1], [2, "bottle_spirit", 1], [1, "bandage", 1], [1, "med_box", 1], [1, "luxury_pack", 1]]},
+		[8, "food_pack", 1], [2, "bottle_spirit", 1], [1, "bandage", 1], [1, "med_box", 1], [1, "luxury_pack", 1]]},
 	"wardrobe": {"name": "옷장·서랍", "words": ["옷장", "서랍", "침실"], "rolls": 2, "table": [
 		[5, "cloth", 1], [2, "ammo_pistol", 1], [1, "ammo_shell", 1], [1, "bandage", 1], [1, "luxury_pack", 1], [1, "med_box", 1]]},
 	"desk": {"name": "책상·장부", "words": ["책상", "탁자", "장부"], "rolls": 2, "table": [
 		[5, "document", 1], [2, "info_timetable", 1], [1, "info_telegraph", 1], [1, "flare", 1], [1, "luxury_pack", 1]]},
-	"shop": {"name": "가게 선반", "words": ["가게 선반", "매점 선반"], "rolls": 2, "table": [
+	"shop": {"name": "가게 선반", "words": ["가게 선반", "매점 선반"], "rolls": 3, "table": [
 		[3, "food_pack", 2], [2, "food_pack", 1], [1, "bottle_spirit", 1], [1, "cloth", 1], [1, "luxury_pack", 1]]},
 	"storage": {"name": "창고 상자·자루", "words": ["창고", "상자", "자루", "선반"], "rolls": 2, "table": [
 		[2, "plank", 2], [2, "plank", 1], [3, "food_pack", 1], [1, "cloth", 1], [1, "bottle_spirit", 1], [1, "luxury_pack", 1], [1, "scrap", 1]]},

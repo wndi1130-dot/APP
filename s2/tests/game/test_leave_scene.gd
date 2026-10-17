@@ -90,5 +90,5 @@ func test_the_train_rolls_away_and_who_stayed_stands_there() -> void:
 	for l in game.hud.modal.find_children("*", "Label", true, false):
 		card.append(l.text)
 	var text: String = "\n".join(card)
-	assert_string_contains(text, "남은 사람: 1명")
+	assert_string_contains(text, "못 탄 사람 1", "the receipt counts who stayed")
 	assert_false(text.contains(late.display_name), "a number, never a name")
