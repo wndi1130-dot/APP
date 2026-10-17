@@ -85,11 +85,11 @@ export const CREW_COST: Record<CrewCost, { pow: number; away: number }> = {
   X: { pow: 1, away: 1.5 },
 };
 export const CREW_COST_REF = 4;
-/** 정차 산출의 인원 항(결정 372, 값은 가안). flat은 옛 식 0.7 + 0.075×인원. half·none은 알맞은 인원까지 0.075씩 온전히 보태고,
+/** 정차 산출의 인원 항(결정 372, 기본 none은 결정 375). flat은 옛 식 0.7 + 0.075×인원. half·none은 알맞은 인원까지 0.075씩 온전히 보태고,
  * 넘는 사람은 그 몫에 CREW_HAUL_OVER를 곱해 보탠다(half 절반, none 안 보탬). */
 export type CrewHaul = 'flat' | 'half' | 'none';
 export const CREW_HAUL_OVER: Record<Exclude<CrewHaul, 'flat'>, number> = { half: 0.5, none: 0 };
-export const CREW: { curve: CrewCurve; cost: CrewCost; haul: CrewHaul } = { curve: 'A', cost: 'off', haul: 'flat' };
+export const CREW: { curve: CrewCurve; cost: CrewCost; haul: CrewHaul } = { curve: 'A', cost: 'off', haul: 'none' };
 /** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
 export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };
 /** 운반 솜씨(손에 익었나). 기관실은 화부가 빠지면 열차가 못 가서 못 낸다. */

@@ -410,9 +410,9 @@ describe('stop_crew', () => {
     }
     expect(clean).toBeGreaterThan(10);
     expect(rises).toBeGreaterThan(0);
-    // 산출 계수 (0.7+0.075×인원)은 인원이 키운다: 같은 판에서 인원만 바꿔 산출을 비교한다
+    // 산출 계수는 알맞은 인원까지 인원이 키운다(결정 375): 알맞은 인원이 8을 넘는 곳(화물역·길게·불길, 9.45)에서 인원만 바꿔 비교한다
     const haul = (size: number) => {
-      const g = mk('cost-haul', { place: 'houses', stay: 'short', size, threat: 0.8, escort: true, scout: false });
+      const g = mk('cost-haul', { place: 'freight', stay: 'long', size, threat: 1.4, escort: true, scout: false });
       return Object.values(resolveStop(g, true)!.gains).reduce((x, y) => x + (y ?? 0), 0);
     };
     expect(haul(8)).toBeGreaterThan(haul(2));
