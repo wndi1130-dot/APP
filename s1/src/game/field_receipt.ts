@@ -217,7 +217,11 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   const before = snapshot(g);
   const lines: FieldLine[] = [];
   // 물자: 영수증 장부 증감을 그대로 더한다. 석탄은 쓴 몫을 이미 뺀 값이다.
+  // 잔액보다 큰 음수는 0에서 멈추고(시작 + 순증감 = 잔액, 모자라면 0과 부족분) 귀환 줄에 부족분을 적는다.
   const s = r.stock;
+  const have: Partial<Record<keyof typeof s, number>> = {
+    coal: g.coal, food: g.food, medicine: g.med, luxury: g.lux, ...(g.dom ? { wood: g.dom.wood, scrap: g.dom.scrap } : {}),
+  };
   if (s.coal) bump(g, 'coal', s.coal, 'field.loot', { floor0: true });
   if (s.food) bump(g, 'food', s.food, 'field.loot', { floor0: true });
   if (s.medicine) bump(g, 'med', s.medicine, 'field.loot', { floor0: true });
@@ -228,7 +232,10 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
     if (s.scrap) g.dom.scrap = Math.max(0, g.dom.scrap + s.scrap);
   }
   const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['wood', '목재'], ['scrap', '고철']] as const)
-    .filter(([k]) => s[k]).map(([k, name]) => `${name} ${s[k]! > 0 ? '+' : ''}${s[k]}`);
+    .filter(([k]) => s[k]).map(([k, name]) => {
+      const lack = have[k] === undefined ? 0 : Math.max(0, -(have[k]! + s[k]!));
+      return `${name} ${s[k]! > 0 ? '+' : ''}${s[k]}${lack > 0 ? ` (모자라 0, 부족 ${lack})` : ''}`;
+    });
   if (got.length) lines.push({ k: 'stock', text: got.join(', ') });
 
   // 사람: 죽음은 그 칸의 죽음으로, 크게 다친 사람은 부상으로, 남겨지거나 사라진 사람은 그 칸에서 빠진다.
