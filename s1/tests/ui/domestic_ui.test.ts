@@ -85,6 +85,13 @@ describe('홈 편성', () => {
     expect(newGame('x', false).dom).toBeUndefined();
   });
 
+  it('새 판은 내정·어두운 길·서막과 상관없이 재난을 켠 채 시작한다(결정 350)', () => {
+    for (const g of [newGame('x', true), newGame('x', false), newGame('x', false, true), newGame('x', true, false, false)]) {
+      expect(g.disasters).toBe(true);
+      expect(g.disasterStats).toEqual({ blizzard: 0, cold: 0 });
+    }
+  });
+
   it('내정 켠 새 판은 새 이동 사건 묶음을 켠 채 시작하고, 내정 끈 판에는 그 칸이 없다', () => {
     expect(newGame('x', true).eventPack).toBe(true);
     expect('eventPack' in newGame('x', false)).toBe(false);
