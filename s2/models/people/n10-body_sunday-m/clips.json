@@ -1,0 +1,136 @@
+{
+	"clips": [
+		{
+			"frames": 32,
+			"length": 1.4,
+			"loop": true,
+			"name": "walk_a",
+			"round": 1.14192199707031,
+			"start": 0
+		},
+		{
+			"frames": 32,
+			"length": 1.5,
+			"loop": true,
+			"name": "walk_b",
+			"round": 1.3060969611009,
+			"start": 32
+		},
+		{
+			"frames": 32,
+			"length": 1.2,
+			"loop": true,
+			"name": "walk_c",
+			"round": 0.825676140685876,
+			"start": 64
+		},
+		{
+			"frames": 32,
+			"length": 3.0,
+			"loop": true,
+			"name": "stand",
+			"round": 0.0,
+			"start": 96
+		},
+		{
+			"frames": 24,
+			"length": 1.0,
+			"loop": true,
+			"name": "lunge",
+			"round": 1.35891285290321,
+			"start": 128
+		},
+		{
+			"frames": 12,
+			"length": 0.4,
+			"loop": false,
+			"name": "hit",
+			"round": 0.0,
+			"start": 152
+		},
+		{
+			"frames": 32,
+			"length": 0.75,
+			"loop": false,
+			"name": "fall",
+			"round": 0.0,
+			"start": 164
+		},
+		{
+			"frames": 24,
+			"length": 0.7,
+			"loop": true,
+			"name": "run",
+			"round": 1.91106934100389,
+			"start": 196
+		},
+		{
+			"frames": 12,
+			"length": 0.5,
+			"loop": false,
+			"name": "tell",
+			"round": 0.0,
+			"start": 220
+		},
+		{
+			"frames": 32,
+			"length": 0.75,
+			"loop": false,
+			"name": "fall_front",
+			"round": 0.0,
+			"start": 232
+		},
+		{
+			"frames": 32,
+			"length": 1.8,
+			"loop": true,
+			"name": "crawl",
+			"round": 0.584330422537667,
+			"start": 264
+		},
+		{
+			"frames": 32,
+			"length": 1.2,
+			"loop": false,
+			"name": "rise",
+			"round": 0.0,
+			"start": 296
+		},
+		{
+			"frames": 32,
+			"length": 2.4,
+			"loop": false,
+			"name": "climb",
+			"round": 0.0,
+			"start": 328
+		},
+		{
+			"frames": 32,
+			"length": 1.3,
+			"loop": false,
+			"name": "rise_front",
+			"round": 0.0,
+			"start": 360
+		},
+		{
+			"frames": 32,
+			"length": 1.3,
+			"loop": true,
+			"name": "stagger",
+			"round": 0.891314695278804,
+			"start": 392
+		},
+		{
+			"frames": 4,
+			"length": 1.0,
+			"loop": false,
+			"name": "poses",
+			"round": 0.0,
+			"start": 424
+		}
+	],
+	"height": 428,
+	"rows_per_frame": 1,
+	"vertices": 1314,
+	"width": 1314
+}
