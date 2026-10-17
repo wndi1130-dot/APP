@@ -146,7 +146,7 @@ function raisedComm(g: Game, c: Comm): Comm {
 }
 
 function pushRepeal(g: Game, law: LawId): void {
-  g.proposals = [{ law, repeal: true }, ...g.proposals.filter(p => !('law' in p && p.law === law))];
+  g.proposals = [{ law, repeal: true, promise: true }, ...g.proposals.filter(p => !('law' in p && p.law === law))];
 }
 
 function lossChoose(g: Game, card: Card, choice: Choice): void {

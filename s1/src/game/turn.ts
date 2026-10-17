@@ -21,7 +21,7 @@ import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
 import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
 import type { Comm, CrewCurve, LootKey, PlaceDef, StayId } from './data';
-import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
+import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, sameAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, CREW_BUSY, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
 } from './state';
@@ -1139,7 +1139,11 @@ function aiLeaders(g: Game): void {
     const best = aiAgendaPick(g, options);
     if (best) {
       const { c, idx } = best;
-      g.proposals = [{ ...options[idx], by: c }];
+      // 열차장이 약속한 안건(promise)은 AI 발의가 와도 남긴다. 같은 안건을 AI가 고르면 하나로 합치고 약속 표시를 지킨다.
+      const promised = g.proposals.filter(p => isLawAgenda(p) && p.promise);
+      const pick = options[idx];
+      const same = promised.some(p => sameAgenda(p, pick));
+      g.proposals = [...promised.filter(p => !sameAgenda(p, pick)), { ...pick, by: c, ...(same ? { promise: true } : {}) }];
       journal(g, `${g.comms[c].leader.name}(${COMM_NAME[c]})이(가) 다음 회기 안건을 냈다: ${agendaTitle(options[idx])}.`);
     }
   }

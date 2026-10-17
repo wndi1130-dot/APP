@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   agendaOptions, chooseCard, COMM_NAME, COMMS, createGame, createS1cGame, deathSlot, DW, emergencyCost, enableDark, enableDeathWeight, fallSick, FAMILIES,
-  lawOpen, mourners, noteHeatDeath, onDeath, peopleTick, PROFILES, TRUST_BY_LEVEL, viewCard,
+  isLawAgenda, isSessionSeg, lawActive, lawOpen, mourners, noteHeatDeath, onDeath, peopleTick, PROFILES, TRUST_BY_LEVEL, viewCard,
 } from '../../src/game';
-import type { Comm, Game } from '../../src/game';
+import type { Comm, Difficulty, Game, LawAgenda } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
 
 // 죽음의 무게(결정 353·354·355, 값은 결정 367). 기본 꺼짐: enableDeathWeight(g)를 부른 판에서만 돈다.
@@ -341,6 +341,62 @@ describe('「배웅」 법 한 쌍', () => {
 });
 
 describe('신임과 비상 소집', () => {
+  it('신임 깎임은 판의 난이도(g.difficulty)를 읽는다: 쉬움 1·보통 2·어려움 3, 난이도가 없는 판(옛 저장)은 보통', () => {
+    const levels: (Difficulty | undefined)[] = ['easy', 'normal', 'hard', undefined];
+    const want = [1, 2, 3, 2];
+    levels.forEach((lv, i) => {
+      const g = fresh(`level-${lv ?? 'none'}`);
+      if (lv) g.difficulty = lv;
+      const tr = g.trust;
+      onDeath(g, 'tail', [lone(g, 'tail', x => x >= 16 && x < 65).name]);
+      expect(tr - g.trust, lv ?? 'none').toBe(want[i]);
+    });
+  });
+
+  it('「손을 보내 배웅한다」의 절반 내림은 한 명씩 와도 한꺼번에 와도 같다(쉬움 1·어려움 3에서도)', () => {
+    for (const [lv, two] of [['easy', 1], ['normal', 2], ['hard', 3]] as const) {
+      const once = fresh(`half-${lv}-a`);
+      const each = fresh(`half-${lv}-b`);
+      for (const g of [once, each]) { g.difficulty = lv; g.passed.farewell_hands = 0; }
+      const a = lone(once, 'tail', x => x >= 16 && x < 65);
+      const b = lone(once, 'tail', x => x >= 16 && x < 65, [a.name]);
+      const t1 = once.trust;
+      onDeath(once, 'tail', [a.name, b.name]);
+      const t2 = each.trust;
+      onDeath(each, 'tail', [a.name]);
+      onDeath(each, 'tail', [b.name]);
+      expect(t1 - once.trust, `${lv} 한꺼번에`).toBe(two);
+      expect(t2 - each.trust, `${lv} 한 명씩`).toBe(two);
+    }
+  });
+
+  it('식은 난로의 약속 안건은 회기 앞 정산에서 AI가 안건을 내도 남고 폐지 냉각 예외도 지킨다', () => {
+    let aiPicks = 0;
+    const lost: string[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      let law: LawAgenda['law'] | null = null;
+      playGame(`dw-promise-${i}`, {
+        s1c: true, policy: 'caretaker', dom: 'engaged', deathWeight: true,
+        probe: {
+          beforePrep: x => {
+            if (!isSessionSeg(x.seg + 1) && !isSessionSeg(x.seg + 2)) return;
+            if (!law || !lawActive(x, law)) { x.passed.heat_quota = x.session; law = 'heat_quota'; }
+            const l = law;
+            if (!x.proposals.some(p => isLawAgenda(p) && p.promise && p.law === l)) x.proposals = [{ law: l, repeal: true, promise: true }, ...x.proposals];
+          },
+          onSettle: x => {
+            const l = law;
+            if (!l || !x.proposals.some(p => p.by)) return;
+            aiPicks += 1;
+            if (!x.proposals.some(p => isLawAgenda(p) && p.law === l && p.repeal && p.promise)) lost.push(`${x.seed}:${x.seg}`);
+          },
+        },
+      });
+    }
+    expect(aiPicks).toBeGreaterThan(0);
+    expect(lost).toEqual([]);
+  });
+
   it('신임 깎임 기본값은 보통 난이도 값이고, 쉬움 1·보통 2·어려움 3이 같은 자리에 있다(결정 376)', () => {
     expect(TRUST_BY_LEVEL).toEqual({ easy: 1, normal: 2, hard: 3 });
     expect(DW.trust).toBe(TRUST_BY_LEVEL.normal);

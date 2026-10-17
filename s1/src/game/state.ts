@@ -207,7 +207,10 @@ export interface Deal { comm: Comm; tool: DealTool; label: string; refused?: boo
 export type Agenda = LawAgenda | MotionAgenda;
 /** ratify: 비상대권 포고를 의회가 추인하는 표결(통과하면 남고, 안 되면 사라진다) */
 /** amend: 변형 법(7.3)을 올리는데 원래 법이 서 있으면 개정 표결이다. 통과하면 원래 법이 내려가고 변형이 선다 */
-export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId }
+/** promise: 열차장이 카드에서 다음 회기에 올리겠다고 한 안건(죽음의 무게 「식은 난로」). AI 발의가 와도 지우지 않고, 폐지 냉각을 기다리지 않는다 */
+export interface LawAgenda { kind?: 'law'; law: LawId; repeal: boolean; by?: Comm; forced?: boolean; ratify?: boolean; amend?: LawId; promise?: boolean }
+/** 판 난이도(결정 376). 없으면 보통이다(옛 저장 포함). 고르는 화면은 아직 없다 */
+export type Difficulty = 'easy' | 'normal' | 'hard';
 /** 법이 아닌 안건. 통과하면 바로 일이 일어나고 끝난다. 폐지·추인·재상정 쿨다운이 없다. */
 export type MotionId = 'share' | 'trial' | 'no_confidence' | 'confidence' | 'pipe' | 'extend_powers' | 'ratify_decrees';
 /** ref: 안건이 가리키는 기록(재판이면 사건 번호, S1b) */
@@ -366,8 +369,10 @@ export interface Game {
   deathWeight?: boolean;
   /** 칸마다 하나, 판에 둘까지 이어지는 사건 줄(원인 → 반발 → 고칠 길) */
   deathChains?: DeathChain[];
-  /** 한 구간의 죽음 신임 깎임 합(상한을 셈) */
-  deathTrustAt?: { seg: number; sum: number };
+  /** 한 구간의 죽음 신임 깎임 합(상한을 셈). raw는 내림 전 합이라 한 명씩 와도 한꺼번에 와도 같은 값을 깎는다 */
+  deathTrustAt?: { seg: number; sum: number; raw?: number };
+  /** 판 난이도(결정 376). 없으면 보통 */
+  difficulty?: Difficulty;
   /** 난방 배당 밤사이 죽음(같은 정산의 뒷사건 카드 하나) */
   heatAfter?: { seg: number; lost: Partial<Record<Comm, number>> };
   /** 다음 정차 작업조에서 빠지는 사람 수(음수면 더해지는 수) */

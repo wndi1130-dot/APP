@@ -13,7 +13,7 @@ import type { Card, DeathChain, DeathSlot, Game } from './state';
 
 /** 값(결정 367). 안 얼려 둬서 시뮬이 0으로 끈 판과 견줄 수 있다. 0이면 그 몫은 옛 동작이다. */
 export const DW = {
-  /** 죽음 한 명당 신임 깎임(결정 376: 난이도에 따라 쉬움 1·보통 2·어려움 3, 기본은 보통. 난이도 고르기는 뒤 줄기 몫이라 아직 TRUST_BY_LEVEL을 읽는 곳이 없다), 한 구간 합계 상한(난이도로 가르지 않는다) */
+  /** 죽음 한 명당 신임 깎임의 보통 난이도 값(결정 376, 쉬움·어려움은 TRUST_BY_LEVEL 비로 늘이고 줄인다), 한 구간 합계 상한(난이도로 가르지 않는다) */
   trust: 2, trustCap: 6,
   /** 최근 6구간 죽음 한 명마다 비상 소집 비용 +이만큼 */
   emerg: 1,
@@ -27,7 +27,7 @@ export const DW = {
   chainSkipRel: 6,
 };
 
-/** 죽음 한 명당 신임 깎임의 난이도별 값(결정 376). DW.trust가 보통 값이다 */
+/** 죽음 한 명당 신임 깎임의 난이도별 값(결정 376). DW.trust가 보통 값이고, 판의 g.difficulty(없으면 보통)로 고른다 */
 export const TRUST_BY_LEVEL = { easy: 1, normal: 2, hard: 3 } as const;
 
 export const DEATH_CARD_KINDS = ['loss_rep', 'loss_child', 'loss_hand', 'chain_push', 'chain_fix', 'heat_after'] as const;
@@ -175,10 +175,13 @@ export function deathLawOpen(g: Game, law: LawId): boolean | null {
 export function deathWeightOnDeath(g: Game, c: Comm, names: readonly string[]): void {
   if (!g.deathWeight) return;
   const n = names.length;
-  // 신임: 한 명당 DW.trust, 「손을 보내 배웅한다」면 절반(내림), 한 구간 합계 DW.trustCap까지.
-  let t = DW.trust * n;
-  if (hands(g)) t = Math.floor(t / 2);
-  const at = g.deathTrustAt && g.deathTrustAt.seg === g.seg ? g.deathTrustAt : (g.deathTrustAt = { seg: g.seg, sum: 0 });
+  // 신임: 한 명당 난이도 값, 「손을 보내 배웅한다」면 절반, 한 구간 합계 DW.trustCap까지.
+  // 절반의 내림은 구간 합에서 한 번만 한다(한 명씩 와도 한꺼번에 와도 같다).
+  const per = (DW.trust * TRUST_BY_LEVEL[g.difficulty ?? 'normal']) / TRUST_BY_LEVEL.normal;
+  const at = g.deathTrustAt && g.deathTrustAt.seg === g.seg ? g.deathTrustAt : (g.deathTrustAt = { seg: g.seg, sum: 0, raw: 0 });
+  const before = at.raw ?? at.sum;
+  at.raw = before + per * n * (hands(g) ? 0.5 : 1);
+  const t = Math.floor(at.raw) - Math.floor(before);
   const take = Math.max(0, Math.min(t, DW.trustCap - at.sum));
   if (take > 0) { at.sum += take; bump(g, 'trust', -take, 'death'); }
   if (rite(g)) bump(g, 'coal', -n, 'death', { floor0: true });
