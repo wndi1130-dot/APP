@@ -25,6 +25,30 @@ const BEHIND_NOTICE_MIN: float = 0.5
 const BEHIND_NOTICE_MAX: float = 1.0
 ## A companion waits this long after a shot before the next one.
 const ALLY_REFIRE: float = 0.9
+## Companions act without an order (decision 406): they go for the dead that
+## are after one of us within ENGAGE_R, or that stand within GUARD_R of the
+## chief, but never chase farther than LEASH_R from him.
+const ENGAGE_R: float = 8.0
+const GUARD_R: float = 3.5
+const LEASH_R: float = 10.0
+## Closer than this the gun is put away for the blade.
+const SHOOT_MIN: float = 3.0
+## A loud gun only when one of the dead is this near someone and the blade is
+## farther than SAVE_FAR from it (the bow, silent, may shoot whenever in range).
+const SAVE_NEAR: float = 2.0
+const SAVE_FAR: float = 4.0
+## This many on a companion at once and it steps back toward the chief.
+const CROWD_R: float = 2.5
+const CROWD_N: int = 3
+## Walking, the one in front keeps this far ahead of the chief.
+const LEAD_AHEAD: float = 3.0
+## Slow work is dropped when one of the dead gets this near.
+const BREAK_R: float = 1.8
+const BREAKS: Array = ["search", "treat", "loot", "salvage", "rub"]
+## On the move and not getting anywhere for this long: find the way again.
+const STUCK_T: float = 1.5
+## The door the chief went in by is held while he is this near it.
+const DOOR_HOLD_R: float = 16.0
 
 var game
 var think_t: float = 0.0
@@ -33,6 +57,10 @@ var surrendered = null
 var crew_attitude: String = "defensive"     # aggressive | defensive | neutral
 var crew_fire: String = "threat"            # free | threat | melee
 var crew_recalled: bool = false
+## The door the chief last went into a building by: {"cell", "out", "building"}.
+var held_door: Dictionary = {}
+var _chief_was_out: bool = true
+var _chief_out_at := Vector3.ZERO
 
 
 func _init(field_game) -> void:
@@ -48,6 +76,7 @@ func update(delta: float) -> void:
 	var think := think_t <= 0.0
 	if think:
 		think_t = THINK
+		_track_door()
 	for p in game.squad:
 		if p != game.player and p.is_alive() and p.can_act():
 			if think:
@@ -125,6 +154,26 @@ func _walk(p, to: Vector3, run: bool = false) -> void:
 	p.go_to(game.find_path(p.position, to, false), run)
 
 
+## On the way and not getting anywhere (a wall corner, someone in the way):
+## drop the path so the next walk finds a new one (zomboid mod lesson: a
+## watchdog, not a companion running on the spot).
+func _watch_stuck(p) -> void:
+	if p.path.is_empty() or p.action != "":
+		p.brain.erase("stuck_t")
+		p.brain["last_at"] = p.position
+		return
+	var moved: float = p.position.distance_to(p.brain.get("last_at", p.position))
+	p.brain["last_at"] = p.position
+	if moved > 0.15:
+		p.brain["stuck_t"] = 0.0
+		return
+	p.brain["stuck_t"] = float(p.brain.get("stuck_t", 0.0)) + THINK
+	if p.brain["stuck_t"] >= STUCK_T:
+		p.brain["stuck_t"] = 0.0
+		p.brain.erase("dest")
+		p.stop()
+
+
 ## Use the melee slot for close work; keep the gun for when shooting is allowed.
 func _prefer(p, ranged: bool) -> void:
 	if p.hands.size() < 2 or p.action != "":
@@ -179,10 +228,17 @@ func _use_bandage(giver, who, n: int) -> void:
 
 # ---------------------------------------------------------------- companions
 
+## A companion thinks for itself (decision 406): what is after us comes first,
+## then the order, then keeping beside the chief. Threat always outranks a job
+## (zomboid mod lesson: workers that let themselves be eaten mid-task).
 func _companion(p) -> void:
 	var player = game.player
 	var threat := _threat_near(p, THREAT_R)
 	var raider = _hostile_raider_near(p, 20.0)
+	_watch_stuck(p)
+	# Slow work is dropped when one of the dead gets close.
+	if BREAKS.has(p.action) and not threat.is_empty() and threat["pos"].distance_to(p.position) <= BREAK_R:
+		p.cancel_action()
 	# Self-care first when nothing is close.
 	if threat.is_empty() and raider == null and p.action == "" and _treat_self(p):
 		return
@@ -229,23 +285,25 @@ func _companion(p) -> void:
 				if _search_near(p, p.command_target):
 					return
 				p.command = "wait"
-	# Raiders aware of us: shoot back if there is a gun, else stay near the player.
+	# Raiders aware of us: shoot back while there is something to load; with
+	# none, a raider at arm's length gets the blade, else stay by the chief.
 	if raider != null and p.command != "retreat":
-		_prefer(p, true)
-		if W.is_ranged(p.weapon_id()):
-			_shoot_or_aim(p, raider.position, raider)
-			return
-	if not threat.is_empty():
-		var cover: bool = p.command == "cover"
-		if cover and threat["pos"].distance_to(p.position) > 2.0:
+		if _gun_slot(p) >= 0:
 			_prefer(p, true)
 			if W.is_ranged(p.weapon_id()):
-				_shoot_or_aim(p, threat["pos"], threat)
+				_shoot_or_aim(p, raider.position, raider)
 				return
-		_prefer(p, false)
-		game.combat.melee_target(p, threat, true)
+		elif p.position.distance_to(raider.position) < 3.0 and game.combat.hostile(raider):
+			_prefer(p, false)
+			game.combat.melee_person(p, raider)
+			return
+	# Not on me: the dead after one of us, or right by the chief.
+	if threat.is_empty() and (p.command == "follow" or p.command == "cover"):
+		threat = _squad_threat(p)
+	if not threat.is_empty():
+		_engage(p, threat)
 		return
-	if p.command == "cover":
+	if p.command == "cover" and _gun_slot(p) >= 0:
 		# Shoot the dead going for the player within cover range.
 		for z in game.zombies.in_radius(player.position, COVER_R):
 			if game.zombies.active(z) and (z["state"] == "chase" or z["state"] == "attack") and z["victim"] == player:
@@ -256,23 +314,266 @@ func _companion(p) -> void:
 	if p.aim.active:
 		p.aim.stop()
 	p.target_zombie = {}
+	# Nothing to load for the gun in hand: the blade comes out and stays out.
+	if W.is_ranged(p.weapon_id()) and _gun_slot(p) < 0:
+		_prefer(p, false)
+		if p.action != "":
+			return
 	match p.command:
 		"follow", "cover":
-			var idx: int = game.squad.find(p) - 1
-			var off: Vector2 = FOLLOW_OFFSETS[clampi(idx, 0, 2)]
-			var fwd := Vector3(sin(player.facing), 0, cos(player.facing))
-			var right := Vector3(fwd.z, 0, -fwd.x)
-			var spot: Vector3 = player.position + right * off.x + fwd * off.y
-			spot = game.walkable_near(spot, false, 3)
-			p.crouched = player.crouched
-			var d: float = p.position.distance_to(spot)
-			if d > 1.2:
-				_walk(p, spot, player.running or d > 7.0)
-			elif p.path.is_empty():
-				p.face_point(p.position + fwd)
+			_keep_formation(p)
 		"wait":
 			if p.position.distance_to(p.command_target) > 1.0:
 				_walk(p, p.command_target, false)
+
+
+## The dead p should go for without being told: after one of us (or within
+## GUARD_R of the chief), seen, not past the leash. Ahead is seen at once; what
+## is behind p only after it has been there a moment (decision 119). Two
+## companions do not pile on the same one while another is free.
+func _squad_threat(p) -> Dictionary:
+	var player = game.player
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var cos_front := cos(deg_to_rad(BEHIND_DEG))
+	var notice: float = lerpf(BEHIND_NOTICE_MIN, BEHIND_NOTICE_MAX, p.name_unit("b"))
+	var seen_before: Dictionary = p.brain.get("seen_t", {})
+	var seen_now := {}
+	var best: Dictionary = {}
+	var best_s := INF
+	for z in game.zombies.in_radius(p.position, ENGAGE_R):
+		if not game.zombies.active(z) or z["state"] == "downed" or z["state"] == "grab":
+			continue
+		var v = z.get("victim")
+		var after_us: bool = z["state"] in ["chase", "attack", "tell"] and v != null and game.squad.has(v)
+		var to_chief: float = z["pos"].distance_to(player.position)
+		# Sneaking, nobody starts a fight the dead have not started.
+		if not after_us and (to_chief > GUARD_R or player.crouched):
+			continue
+		if to_chief > LEASH_R or not game.sight_clear(p.position, z["pos"]):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		var to_z: Vector3 = z["pos"] - p.position
+		to_z.y = 0
+		var behind: bool = d > BEHIND_NEAR and to_z.length() > 0.01 and fwd.dot(to_z.normalized()) < cos_front
+		var t: float = float(seen_before.get(z["id"], 0.0)) + THINK
+		seen_now[z["id"]] = t
+		if behind and t < notice:
+			continue
+		var s: float = d - (2.0 if v == player else 0.0)
+		for o in game.squad:
+			if o != p and o.target_zombie == z:
+				s += 4.0
+		if s < best_s:
+			best_s = s
+			best = z
+	p.brain["seen_t"] = seen_now
+	return best
+
+
+## Fight z as a person would with what they carry: the bow whenever it has a
+## clear shot in range (it makes no sound), a loud gun only to save someone the
+## blade cannot reach in time, the blade otherwise. Swarmed, step back toward
+## the chief and shove the nearest off. The pace of the blows is the combat's
+## (decision 119); this only says whom.
+func _engage(p, z: Dictionary) -> void:
+	var d: float = p.position.distance_to(z["pos"])
+	if _crowd(p) >= CROWD_N:
+		p.target_zombie = {}
+		if p.aim.active:
+			p.aim.stop()
+		var away: Vector3 = (p.position - z["pos"])
+		away.y = 0
+		var back: Vector3 = (away.normalized() + (game.player.position - p.position).normalized() * 0.5).normalized()
+		_walk(p, game.walkable_near(p.position + back * 2.5, false, 2), true)
+		if d < 1.3:
+			p.face_point(z["pos"])
+			game.combat.shove(p)
+		return
+	if _should_shoot(p, z, d):
+		_prefer(p, true)
+		if p.action != "":
+			p.target_zombie = {}
+			return
+		if W.is_ranged(p.weapon_id()):
+			p.target_zombie = {}
+			p.stop()
+			_shoot_or_aim(p, z["pos"], z)
+			return
+	if p.aim.active:
+		p.aim.stop()
+	_prefer(p, false)
+	if p.action != "":
+		# The blade is coming out: no walking at it meanwhile (a walk would cut the swap).
+		p.target_zombie = {}
+		return
+	if d > 3.0 and p.target_zombie != z:
+		p.running = true
+	game.combat.melee_target(p, z, true)
+
+
+func _should_shoot(p, z: Dictionary, d: float) -> bool:
+	var gun := _gun_slot(p)
+	if gun < 0:
+		return false
+	if p.command == "cover":
+		return d > 2.0
+	if d < SHOOT_MIN:
+		return false
+	var data: Dictionary = W.get_data(String(p.hands[gun]["id"]))
+	if d > float(data.get("range", 12.0)) * 0.8:
+		return false
+	if int(data.get("sound", 0)) == 0:
+		return true
+	var v = z.get("victim")
+	return v != null and v != p and game.squad.has(v) and z["pos"].distance_to(v.position) < SAVE_NEAR and d > SAVE_FAR
+
+
+## The hand slot of a gun that can still fire (loaded, or rounds in the pool
+## to load), or -1.
+func _gun_slot(p) -> int:
+	for i in range(p.hands.size()):
+		var h: Dictionary = p.hands[i]
+		var id: String = String(h["id"])
+		if not W.is_ranged(id) or bool(h.get("broken", false)):
+			continue
+		if int(h.get("loaded", 0)) > 0 or int(game.ammo.get(String(W.get_data(id).get("ammo", "")), 0)) > 0:
+			return i
+	return -1
+
+
+func _crowd(p) -> int:
+	var n := 0
+	for z in game.zombies.in_radius(p.position, CROWD_R):
+		if game.zombies.active(z) and z["state"] != "downed":
+			n += 1
+	return n
+
+
+## Who walks where (decision 406): the bow keeps to the back, the strongest
+## blade goes in front, the third at the chief's side. With fewer left the
+## ones there are take the front first.
+func _role(p) -> String:
+	var mates: Array = []
+	for o in game.squad:
+		if o != game.player and o.is_alive() and not o.body.downed and o.command in ["follow", "cover"] and not o.brain.get("boarded", false):
+			mates.append(o)
+	if mates.size() <= 1:
+		return "side"
+	var rear = null
+	var rear_s := -INF
+	for o in mates:
+		var s: float = float(o.skills.get("shooting", 0)) + (5.0 if _quiet_bow(o) else 0.0)
+		if s > rear_s:
+			rear_s = s
+			rear = o
+	if p == rear:
+		return "rear"
+	var point = null
+	var point_s := -INF
+	for o in mates:
+		if o == rear:
+			continue
+		var s: float = float(o.skills.get("strength", 0)) + float(o.skills.get("melee", 0))
+		if s > point_s:
+			point_s = s
+			point = o
+	return "point" if p == point else "side"
+
+
+func _quiet_bow(p) -> bool:
+	for h in p.hands:
+		var data: Dictionary = W.get_data(String(h["id"]))
+		if W.is_ranged(String(h["id"])) and int(data.get("sound", 0)) == 0:
+			return true
+	return false
+
+
+## The chief walking: the point goes ahead so doors are opened before him, the
+## side one beside, the rear behind. Inside a building the rear one holds the
+## door he came in by. Standing, they keep close round him.
+func _keep_formation(p) -> void:
+	var player = game.player
+	var role := _role(p)
+	var fwd := Vector3(sin(player.facing), 0, cos(player.facing))
+	var right := Vector3(fwd.z, 0, -fwd.x)
+	var walking: bool = player.moving
+	p.crouched = player.crouched
+	var spot: Vector3
+	var look: Vector3 = fwd
+	var hold := false
+	# The chief's gun up: nobody stands in front of it.
+	if role == "point" and player.aim.active:
+		role = "aside"
+	match role:
+		"aside":
+			spot = player.position - right * 1.4 - fwd * 0.6
+		"point":
+			spot = player.position + fwd * (LEAD_AHEAD if walking else 1.4) + right * 0.5
+			if not game.sight_clear(player.position, spot):
+				spot = player.position + fwd * 1.2
+				if not game.sight_clear(player.position, spot):
+					spot = player.position - fwd * 1.2 + right * 1.3
+		"rear":
+			if _holds_door(p):
+				var door := FieldGrid.center(held_door["cell"])
+				spot = door - held_door["out"] * 1.0
+				look = held_door["out"]
+				hold = true
+			else:
+				spot = player.position - fwd * 2.4
+		_:
+			spot = player.position + right * 1.4 - fwd * 1.0
+	spot = game.walkable_near(spot, false, 3)
+	var d: float = p.position.distance_to(spot)
+	var run: bool = player.running or d > 7.0 or (role == "point" and walking and d > 2.0)
+	if d > (0.8 if hold else 1.2):
+		_walk(p, spot, run)
+	elif p.path.is_empty():
+		p.face_point(p.position + look)
+
+
+## The rear one holds the door while the chief is inside that building, on
+## the ground floor, and not too far in.
+func _holds_door(p) -> bool:
+	if held_door.is_empty():
+		return false
+	var player = game.player
+	var door := FieldGrid.center(held_door["cell"])
+	if player.position.distance_to(door) > DOOR_HOLD_R:
+		return false
+	return p.position.distance_to(door) < DOOR_HOLD_R + 4.0
+
+
+## Notes the door the chief goes into a building by (ground floor), and
+## forgets it when he is out again.
+func _track_door() -> void:
+	var player = game.player
+	if player == null or not player.is_alive():
+		return
+	var c := FieldGrid.cell_of(player.position)
+	var outside: bool = game.level_of(player.position) == 0 and game.grid.building_at(c) < 0
+	if outside:
+		_chief_was_out = true
+		_chief_out_at = player.position
+		held_door = {}
+		return
+	if not _chief_was_out:
+		return
+	_chief_was_out = false
+	var best := Vector2i(-1, -1)
+	var best_d := 3.5
+	for dc in game.grid.doors:
+		var d: float = FieldGrid.center(dc).distance_to(player.position)
+		if d < best_d:
+			best_d = d
+			best = dc
+	if best.x < 0:
+		return
+	var out: Vector3 = _chief_out_at - FieldGrid.center(best)
+	out.y = 0
+	if out.length() < 0.1:
+		return
+	held_door = {"cell": best, "out": out.normalized(), "building": game.grid.building_at(c)}
 
 
 ## Walk to and search the nearest unsearched container near `around`.
