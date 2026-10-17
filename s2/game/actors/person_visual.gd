@@ -74,6 +74,9 @@ const OWN_CRAWL: String = "p_crawl"
 const OWN_RISE: String = "p_rise"
 const OWN_RISE_FRONT: String = "p_rise_front"
 const OWN_SPENT: String = "p_spent"
+# Loading or clearing a handgun standing still (people folder 26, from UAL). A
+# long gun turns over in the hand in it, so it is held as person_pose.gd has it.
+const OWN_RELOAD: String = "p_reload"
 const OWN_BASE: int = 100
 # Easing into each own motion: Project Zomboid's own (its AnimSets m_BlendTime):
 # walk, stand 0.2, run 0.35, sneak walk 0.5 and low 0.4, bitten 0.2, shove
@@ -83,23 +86,25 @@ const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5
 	"p_bitten": 0.2, "p_shove": 0.2, "p_swing_one": 0.15, "p_swing_axe": 0.15, "p_stab": 0.15,
 	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3,
 	"p_fall": 0.2, "p_fall_front": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
-	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2}
+	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2,
+	"p_reload": 0.2, "p_kneel_work": 0.5}
 # Aiming a gun standing still (Project Zomboid: aim_handgun, aim_rifle): one hand
 # out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
 const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
 # A timed job of the hands (Project Zomboid: the hands' own motions over the
-# standing, by how high the work is; swapping a weapon is its rummaging at 0.8):
-# the own motion and how fast it goes round. 0 plays it once over the job: a
-# window is broken with one blow. A bar is worked back and forth, the pickaxe
-# comes down in front of the feet. Climbing has none yet.
+# standing, by how high the work is): the own motion and how fast it goes
+# round. 0 plays it once over the job: a window is broken with one blow. A bar
+# is worked back and forth, the pickaxe comes down in front of the feet, work on
+# the ground is done kneeling. Climbing has none that stays on the ground (UAL's
+# p_climb lifts the feet off it in place).
 const OWN_WORK: Dictionary = {
 	"search": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
 	"pry": ["p_pry", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
 	"salvage": ["p_search_mid", 1.0], "repair": ["p_search_mid", 1.0], "wall": ["p_search_mid", 1.0],
 	"craft": ["p_search_mid", 1.0], "swap": ["p_search_mid", 0.8],
-	"loot": ["p_search_low", 1.0], "fire": ["p_search_low", 1.0], "snow": ["p_search_low", 1.0],
-	"lid": ["p_search_low", 1.0],
-	"treat": ["p_treat", 1.0], "splint": ["p_treat", 1.0], "rub": ["p_treat", 1.0],
+	"loot": ["p_kneel_work", 1.0], "fire": ["p_kneel_work", 1.0], "snow": ["p_search_low", 1.0],
+	"lid": ["p_kneel_work", 1.0],
+	"treat": ["p_treat", 1.0], "splint": ["p_kneel_work", 1.0], "rub": ["p_treat", 1.0],
 	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
 }
 # A melee blow in the living's own motions: which, and where in it the blow
@@ -236,7 +241,7 @@ func _process(delta: float) -> void:
 			mm.set_instance_custom_data(n, drawn)
 			n += 1
 		var baked: Dictionary = own_vat if own else vat
-		if baked.has("arm") and not gun_busy(p):
+		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, own_vat.get("clips", [])))):
 			var hand := arm_at(baked["arm"], own_frames if own else frames, drawn)
 			var grip := grip_of(hand[0], hand[1], note.get("grip", Basis()))
 			note["grip"] = grip
@@ -347,6 +352,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		return work
 	if gone > 0.001:
 		note["moved"] = t
+	var load := reload_of(p, note, t, own)
+	if load.y >= 0.0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		return load
 	var aim := aim_of(p, own)
 	if aim >= 0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
 		return Vector2(_own_cycle(note, OWN_BASE + aim, t, _length(own, aim, 1.0), p.name_unit("aim")), aim)
@@ -411,7 +419,7 @@ static func blow_of(p, own: Array) -> Vector2:
 
 
 ## A timed job of the hands in the living's own motions (y) and how far through
-## it (x); y is -1 with no job, or none of its own (climbing).
+## it (x); y is -1 with no job, or none of its own.
 static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 	if p.action == "" or p.action_t <= 0.0 or p.action_total <= 0.0:
 		return Vector2(0.0, -1.0)
@@ -436,6 +444,30 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 		note["motion"] = OWN_BASE + clip
 		return Vector2(clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0), clip)
 	return Vector2(_own_cycle(note, OWN_BASE + clip, t * pace, _length(own, clip, 1.0), p.name_unit("work")), clip)
+
+
+## Loading or clearing the handgun in the hand in the living's own (y), how far
+## through it (x): a load once over the gun's loading time, a jam round and
+## round. y is -1 with neither, any other gun or a bow (held as person_pose.gd
+## has it), or crouched (the motion is a standing one).
+static func reload_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
+	var hold := Pose.hold_of(p.weapon_id())
+	if hold != "one" or p.crouched or (p.reload_t <= 0.0 and p.jam_t <= 0.0):
+		return Vector2(0.0, -1.0)
+	var clip := clip_named(own, OWN_RELOAD, -1)
+	if clip < 0:
+		return Vector2(0.0, -1.0)
+	if p.jam_t > 0.0:
+		return Vector2(_own_cycle(note, OWN_BASE + clip, t, _length(own, clip, 1.0), p.name_unit("jam")), clip)
+	note["motion"] = OWN_BASE + clip
+	var total := float(Pose.W.get_data(p.weapon_id()).get("reload", 1.0))
+	return Vector2(1.0 - clampf(p.reload_t / maxf(0.01, total), 0.0, 1.0), clip)
+
+
+## Drawn loading or clearing in the own motion (note as motion_of left it).
+static func loading(note: Dictionary, own: Array) -> bool:
+	var m := int(note.get("motion", -1)) - OWN_BASE
+	return m >= 0 and m < own.size() and String(own[m].get("name", "")) == OWN_RELOAD
 
 
 ## The own aiming motion for the gun in the hand while it is aimed, or -1.

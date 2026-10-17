@@ -259,15 +259,17 @@ func test_the_weapon_sits_in_the_baked_right_hand() -> void:
 
 
 # A job of the hands plays the living's own: rummaging at the height of the
-# work, a bandage, a bar worked at, the pickaxe coming down in front of the feet
-# over and over, a window broken with one blow over the try, a door kicked with
-# the foot landing as the try ends. Climbing has none of its own.
+# work, kneeling for work on the ground, a bandage, a bar worked at, the pickaxe
+# coming down in front of the feet over and over, a window broken with one blow
+# over the try, a door kicked with the foot landing as the try ends. Climbing
+# has none of its own.
 func test_a_job_of_the_hands_is_the_living_own() -> void:
 	var own := _own()
 	var p := _person()
 	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_pry"], ["swap", "p_search_mid"],
-			["loot", "p_search_low"], ["fire", "p_search_low"], ["treat", "p_treat"], ["splint", "p_treat"],
-			["dig", "p_floor_strike"], ["window", "p_swing_one"], ["kick", "p_kick"]]:
+			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat"],
+			["splint", "p_kneel_work"], ["lid", "p_kneel_work"], ["dig", "p_floor_strike"], ["window", "p_swing_one"],
+			["kick", "p_kick"]]:
 		p.start_action(want[0], "시험", 2.0, func() -> void: pass)
 		var note := {}
 		var c := PersonVisual.motion_of(p, note, 0.1, [], own)
@@ -308,6 +310,36 @@ func test_a_gun_is_aimed_in_the_living_own() -> void:
 	p.aim.active = false
 	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
 	assert_eq(PersonVisual.aim_of(p, own), -1, "not aimed")
+
+
+# Loading or clearing a handgun standing still is the living's own: a load once
+# over the gun's loading time, the gun in the hand; crouched, a long gun or a bow
+# is held as before.
+func test_a_gun_is_loaded_in_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var total := float(PersonVisual.Pose.W.get_data("pistol").get("reload", 1.0))
+	p.reload_t = total * 0.5
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	var c := PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, c), PersonVisual.OWN_RELOAD)
+	assert_almost_eq(c.x, 0.5, 0.001, "half way through the load")
+	assert_true(PersonVisual.loading(note, own))
+	p.reload_t = 0.0
+	p.jam_t = 1.0
+	assert_eq(_named(own, PersonVisual.reload_of(p, {}, 0.5, own)), PersonVisual.OWN_RELOAD, "a jam cleared")
+	p.jam_t = 0.0
+	p.hands = [{"id": "shotgun", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	p.reload_t = 0.35
+	assert_eq(PersonVisual.reload_of(p, {}, 0.5, own).y, -1.0, "a long gun as before")
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	p.crouched = true
+	assert_eq(PersonVisual.reload_of(p, {}, 0.5, own).y, -1.0, "crouched it stays low")
+	p.crouched = false
+	p.hands = [{"id": "bow", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	assert_eq(PersonVisual.reload_of(p, {}, 0.5, own).y, -1.0, "a bow nocks as before")
 
 
 # Crouched it keeps low: chest-high work is done low, and a gun is aimed
