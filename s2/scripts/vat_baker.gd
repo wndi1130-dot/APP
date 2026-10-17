@@ -179,5 +179,9 @@ static func shader_tables(assets: Dictionary) -> Dictionary:
 		highs.append(Vector3(hi[0], hi[1], hi[2]))
 	lows.resize(TABLE_SIZE)
 	highs.resize(TABLE_SIZE)
-	return {"clip_start": starts, "clip_frames": counts, "clip_rate": rates, "clip_loop": loops, "frame_rows": float(assets["height"]) / float(assets["rows_per_frame"]), "rows_per_frame": float(assets["rows_per_frame"]), "bias": 0.0,
-		"quantized": str(assets.get("format", "")) == "rgb8q", "clip_lo": lows, "clip_hi": highs}
+	var out := {"clip_start": starts, "clip_frames": counts, "clip_rate": rates, "clip_loop": loops, "frame_rows": float(assets["height"]) / float(assets["rows_per_frame"]), "rows_per_frame": float(assets["rows_per_frame"]), "bias": 0.0,
+		"quantized": str(assets.get("format", "")) == "rgb8q", "clip_lo": lows, "clip_hi": highs, "has_albedo": assets.get("albedo") is Texture2D}
+	# A body that brings its colour picture (dead_body.gd with_albedo) is drawn with it.
+	if out["has_albedo"]:
+		out["albedo_tex"] = assets["albedo"]
+	return out
