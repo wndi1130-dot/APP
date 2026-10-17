@@ -114,3 +114,71 @@ func test_the_departure_order_is_kept_whole_and_names_the_stop() -> void:
 	assert_eq(d["stop_id"], String(order["stopId"]))
 	assert_eq(d["receipt_id"], "ret_test")
 	assert_false(d.has("promises"), "promises live inside the departure order")
+
+
+func test_the_field_is_resumed_only_while_its_return_is_not_taken_in() -> void:
+	var d := _sample()
+	assert_true(FieldSave.should_resume(d, {}), "a stop still being played")
+	assert_false(FieldSave.should_resume({}, {}), "no save")
+	assert_false(FieldSave.should_resume(d, {"ret_1": true}), "the train already took this return in")
+	assert_false(FieldSave.should_resume(d, ["ret_1"]), "a list of ids reads the same")
+	var ended := _sample()
+	ended["phase"] = "ended"
+	assert_false(FieldSave.should_resume(ended, {}), "a stop that ended goes back to the train")
+
+
+func _full_game(extra: Dictionary = {}):
+	var game = FieldGame.new()
+	var opts := {"seed": 5, "raiders": false, "auto_pause": false}
+	opts.merge(extra, true)
+	game.opts = opts
+	add_child_autofree(game)
+	game.set_process(false)
+	return game
+
+
+func test_a_stop_left_mid_play_comes_back_as_it_was() -> void:
+	var a = _full_game({"receipt_id": "ret_a"})
+	var p = a.player
+	p.position += Vector3(2.0, 0, 1.0)
+	p.add_item("bandage", 3)
+	var box_id := ""
+	for key in a.data["containers"]:
+		if not a.data["containers"][key]["locked"]:
+			box_id = key
+			break
+	assert_ne(box_id, "")
+	a.data["containers"][box_id]["searched"] = true
+	a.data["containers"][box_id]["items"] = []
+	var z: Dictionary = a.zombies.spawn("dead", p.position + Vector3(3.0, 0, 0))
+	a.zombies.kill(z)
+	a.clock.elapsed = 123.0
+	a.ammo["pistol"] = 2
+	a.receipt.place_note("manholeBlocked", true)
+	a.receipt.person("bitten", p.pid)
+	var d := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	assert_true(FieldSave.should_resume(d, {}))
+	var b = _full_game(FieldSave.resume_opts(d))
+	assert_eq(b.rng.seed, a.rng.seed)
+	assert_almost_eq(b.clock.elapsed, 123.0, 0.001)
+	assert_true(b.player.position.is_equal_approx(p.position), "where the player stood")
+	assert_eq(int(b.player.items.get("bandage", 0)), int(p.items.get("bandage", 0)))
+	assert_true(b.data["containers"][box_id]["searched"], "a searched box stays searched")
+	assert_eq(int(b.ammo["pistol"]), 2)
+	var back: Dictionary = b.zombies.find(int(z["id"]))
+	assert_false(back.is_empty(), "the same body, the same id")
+	assert_eq(back["state"], "dead")
+	assert_gt(b.zombies.next_id, int(z["id"]), "new bodies get new ids")
+	var said: Dictionary = b.receipt.to_dict()
+	assert_true(bool(said["placeState"].get("manholeBlocked", false)), "what the receipt gathered comes back")
+	assert_true((said["people"]["bitten"] as Array).has(p.pid))
+	assert_eq(b.arrive_t, -1.0, "the train is already in")
+	assert_eq(String(b.opts.get("receipt_id", "")), "ret_a")
+
+
+func test_without_a_save_handed_over_the_field_starts_fresh() -> void:
+	var a = _game()
+	a.clock.elapsed = 50.0
+	assert_true(FieldSave.write(FieldSave.capture(a), AT))
+	var b = _game({"field_save_path": AT})
+	assert_almost_eq(b.clock.elapsed, 0.0, 0.001, "a file on disk alone changes nothing")

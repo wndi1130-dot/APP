@@ -5,7 +5,10 @@ const FieldMap = preload("res://game/world/sulehuf_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGame = preload("res://game/field_game.gd")
 ## 지금 대응표에서 모델로 바뀌어야 하는 종류. 대응표의 나머지 종류는 모두 상자로 떨어져야 한다.
-const MODEL_KINDS := ["medtech", "freight", "store", "tender", "locomotive", "engine"]
+## 객차 넷이 맑은 유리창으로 다시 들어와(결정 407 G3) 지금은 모든 종류가 모델이다. 상자로 떨어지는 갈래는
+## 보류·누락·못 읽는 대응표 시험이 본다.
+const MODEL_KINDS := ["car", "tail1", "tail2", "tail3", "cold", "medtech", "dining", "guard", "captain", "front", "workshop",
+	"engine_room", "greenhouse", "freight", "store", "tender", "locomotive", "engine"]
 var _previous_setting: bool
 
 
@@ -85,9 +88,10 @@ func test_imported_geometry_texture_materials_and_bytes_meet_measured_budgets() 
 
 func test_unknown_held_and_missing_models_fall_back() -> void:
 	assert_false(Kit.can_replace("unknown"))
-	assert_false(Kit.can_replace("car"))
-	assert_false(Kit.can_replace("captain"))
 	var book := Kit.catalog().duplicate(true)
+	book["assets"]["coach_worn"]["status"] = "held"
+	assert_true(Kit.model_plan("car", book).is_empty(), "held body")
+	assert_false(Kit.model_plan("captain", book).is_empty(), "other coach bodies stay")
 	book["assets"]["coach_medic"]["path"] = "res://models/train_exterior/missing.glb"
 	assert_true(Kit.model_plan("medtech", book).is_empty())
 	book["assets"]["tender"]["path"] = "res://models/train_exterior/missing.glb"
@@ -109,10 +113,10 @@ func test_switch_rebuilds_the_original_six_open_graybox_cars() -> void:
 func test_model_stage_contains_models_and_exact_fallback_slots() -> void:
 	var parent: Node3D = autofree(Node3D.new())
 	var root := Kit.create_stage(parent)
-	assert_eq(root.get_meta("model_count"), 2)
-	assert_eq(root.get_meta("fallback_count"), 3)
+	assert_eq(root.get_meta("model_count"), 5)
+	assert_eq(root.get_meta("fallback_count", 0), 0)
 	assert_gt(root.find_children("*", "MultiMeshInstance3D", true, false).size(), 0)
-	assert_eq(root.find_children("*", "MeshInstance3D", true, false).size(), 15)
+	assert_eq(root.find_children("*", "MeshInstance3D", true, false).size(), 0)
 
 
 func test_station_and_home_call_the_same_kit() -> void:
@@ -123,7 +127,7 @@ func test_station_and_home_call_the_same_kit() -> void:
 		var root := instance.get_node_or_null("TrainModels")
 		assert_not_null(root, scene_path)
 		if root != null:
-			assert_eq(root.get_meta("model_count"), 2, scene_path)
+			assert_eq(root.get_meta("model_count"), 5, scene_path)
 
 
 func test_stage_engine_tender_and_coach_share_one_uniform_scale() -> void:
@@ -136,7 +140,7 @@ func test_stage_engine_tender_and_coach_share_one_uniform_scale() -> void:
 		var row: Dictionary = root._batches[key]
 		if row["lod"] == 0 and not key.begins_with("coach_flue"):
 			scales.append((row["transforms"][0] as Transform3D).basis.get_scale())
-	assert_eq(scales.size(), 3, "coach plus tender and locomotive")
+	assert_eq(scales.size(), 6, "four coaches plus tender and locomotive")
 	for scale in scales:
 		assert_almost_eq(scale.x, 4.5 / 16.0, 0.00001)
 		assert_almost_eq(scale.y, scale.x, 0.00001)
@@ -238,7 +242,7 @@ func test_field_uses_models_only_for_ready_kinds_and_rolls_with_train_parent() -
 	var data := FieldMap.build()
 	var root := Kit.attach_field(parent, data)
 	assert_eq(root.get_parent(), parent)
-	assert_eq(root.get_meta("model_count"), 1, "generic passenger body is held; engine pair replaces one slot")
+	assert_eq(root.get_meta("model_count"), (data["train_cars"] as Array).size(), "passenger cars and the engine pair are all models")
 	parent.position.x = 17.0
 	assert_eq(root.position.x, 0.0, "model root inherits the rolling parent's transform")
 	ProjectSettings.set_setting(Kit.MODE_SETTING, false)
@@ -408,7 +412,7 @@ func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> v
 	assert_gt(models, 0, "손잡이를 켜면 필드 기관차는 모델")
 	assert_eq(on["kit"].get_meta("fallback_cars").size(), on["cars"] - models)
 	for stage in _stage_roots():
-		assert_eq(stage.get_meta("model_count"), 2)
+		assert_eq(stage.get_meta("model_count"), 5)
 	ProjectSettings.set_setting(Kit.MODE_SETTING, false)
 	var off := _field_view()
 	assert_eq(off["kit"].get_meta("fallback_cars").size(), off["cars"], "손잡이 끔: 필드 칸이 모두 상자")
@@ -425,8 +429,8 @@ func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> v
 	assert_eq(lost["kit"].get_meta("model_count", 0), models - lost["engines"], "기관차 파일 누락: 기관차 칸은 상자로")
 	assert_eq(lost["vertices"] - on["vertices"], 30 * lost["engines"])
 	for stage in _stage_roots():
-		assert_eq(stage.get_meta("model_count"), 1)
-		assert_eq(stage.get_meta("fallback_count"), 4)
+		assert_eq(stage.get_meta("model_count"), 4)
+		assert_eq(stage.get_meta("fallback_count"), 1)
 
 
 func test_no_cutaway_body_is_drawn_whole_in_the_home_cutaway() -> void:
