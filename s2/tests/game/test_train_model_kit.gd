@@ -427,3 +427,23 @@ func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> v
 	for stage in _stage_roots():
 		assert_eq(stage.get_meta("model_count"), 1)
 		assert_eq(stage.get_meta("fallback_count"), 4)
+
+
+func test_no_cutaway_body_is_drawn_whole_in_the_home_cutaway() -> void:
+	var sliced_keys := func(root: Node3D) -> Array:
+		return root._batches.keys().filter(func(k: String) -> bool: return k.contains(":true:"))
+	var plain: Node3D = Kit.create_stage(autofree(Node3D.new()), true)
+	var bodies: Array = []
+	for key: String in sliced_keys.call(plain):
+		var id := key.get_slice(":", 0)
+		if id not in bodies:
+			bodies.append(id)
+	assert_false(bodies.is_empty(), "the home cutaway slices some coach today")
+	var book := Kit.catalog().duplicate(true)
+	book["assets"][bodies[0]][Kit.NO_CUTAWAY_KEY] = true
+	Kit._catalog = book
+	var marked: Node3D = Kit.create_stage(autofree(Node3D.new()), true)
+	for key: String in sliced_keys.call(marked):
+		assert_false(key.begins_with(bodies[0] + ":"), key)
+	assert_true(marked._batches.has(bodies[0] + ":0:false:0") or marked._batches.keys().any(func(k: String) -> bool: return k.begins_with(bodies[0] + ":0:false:")), "drawn whole")
+	assert_eq(marked.get_meta("model_count"), plain.get_meta("model_count"))
