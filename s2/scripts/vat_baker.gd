@@ -169,4 +169,15 @@ static func shader_tables(assets: Dictionary) -> Dictionary:
 		loops.append(1.0 if clip["loop"] else 0.0)
 	for table in [starts, counts, rates, loops]:
 		table.resize(TABLE_SIZE)
-	return {"clip_start": starts, "clip_frames": counts, "clip_rate": rates, "clip_loop": loops, "frame_rows": float(assets["height"]) / float(assets["rows_per_frame"]), "rows_per_frame": float(assets["rows_per_frame"]), "bias": 0.0}
+	# A compacted bake (body_bake.gd compact) keeps each clip in 8 bits inside its own box.
+	var lows := PackedVector3Array()
+	var highs := PackedVector3Array()
+	for clip in assets["clips"]:
+		var lo: Array = clip.get("lo", [0.0, 0.0, 0.0])
+		var hi: Array = clip.get("hi", [1.0, 1.0, 1.0])
+		lows.append(Vector3(lo[0], lo[1], lo[2]))
+		highs.append(Vector3(hi[0], hi[1], hi[2]))
+	lows.resize(TABLE_SIZE)
+	highs.resize(TABLE_SIZE)
+	return {"clip_start": starts, "clip_frames": counts, "clip_rate": rates, "clip_loop": loops, "frame_rows": float(assets["height"]) / float(assets["rows_per_frame"]), "rows_per_frame": float(assets["rows_per_frame"]), "bias": 0.0,
+		"quantized": str(assets.get("format", "")) == "rgb8q", "clip_lo": lows, "clip_hi": highs}
