@@ -37,7 +37,7 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 		f.next()
 	assert_eq(seen, ["train", "stop_pick", "receipt", "council", "travel", "arrive", "end"], "the field is skipped here")
 	assert_eq(phases, ["travel", "stop", "settle", "council", "travel", "stop", "end"])
-	assert_eq(f.next_button.text, "처음으로 ›")
+	assert_eq(f.next_button.text, "처음으로", "the main key draws its own arrow")
 
 
 func test_the_receipt_step_is_the_paper_receipt_of_the_sample_when_the_field_is_skipped() -> void:

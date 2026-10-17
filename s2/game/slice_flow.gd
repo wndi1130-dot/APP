@@ -11,9 +11,17 @@ extends Node
 const FieldGame = preload("res://game/field_game.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const LampKey = preload("res://game/ui/lamp_key.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
+const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
+const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
+## The frost grown in from the screen's corners over the world (시안 .w-frost,
+## its left and right halves; the middle is clear).
+const FROST_L := preload("res://game/ui/tex/frost_l.png")
+const FROST_R := preload("res://game/ui/tex/frost_r.png")
 const BOOT_SCENE := "res://scenes/boot.tscn"
 ## The receipt shown when the field was skipped, and the departure the field
 ## goes out with, till the train sends its own (S3 영수증 판 4 표본).
@@ -34,13 +42,19 @@ const STEPS: Array = [
 ]
 ## The words on each plain panel until its real screen comes (가제).
 const NOTES: Dictionary = {
-	"train": ["열차 안 · 칸마다 사람과 기색", "정차 고르기 화면 자리"],
+	"train": ["열차 안 · 칸마다 사람과 기색"],
 	"council": ["식당칸 의회 · 안건과 표 자리", "귀환 영수증의 약속 판정이 여기서 쓰임"],
 	"travel": ["둘째 구간 · 열차 턴 자리"],
 	"arrive": ["둘째 역 도착 화면 자리"],
 	"end": ["끝 카드 자리 · 이번 판의 남길 만한 일"],
 }
 const PANEL_W: float = 560.0
+## What stays lit in the gauges while a step's sheet is up (the stop is about stock).
+const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"]}
+## 디자인 토큰 2차: the smoked glass of a pane (B1) and its words.
+const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.84)
+const INK := Color("eee9dc")
+const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 
 var opts: Dictionary = {}          # skip_field: true goes past the field with the sample receipt
 var step: int = -1
@@ -54,16 +68,45 @@ var layer: CanvasLayer
 var panel: PanelContainer
 var title: Label
 var lines: VBoxContainer
-var next_button: Button
+var next_button: Button             # the main key (lamp_key.gd), its arrow drawn by itself
 var panel_style: StyleBoxFlat
 var card: Control = null           # a real screen standing in for the panel (stop_pick)
+var gauges: Control                # the train's gauges along the top, over the train
+var soot_bot: TextureRect          # the soot rising from the bottom edge under the keys
+var frost: Control                 # the corners' frost over the train (.w-frost)
+var plates: Control                # the carriages' name plates, where the train's cars are
 
 
 func _ready() -> void:
 	theme = UiTheme.make(22)
+	theme.default_font = UiFonts.face(UiFonts.WORD, 400)
 	layer = CanvasLayer.new()
 	layer.layer = 40
 	add_child(layer)
+	plates = Control.new()
+	plates.name = "Plates"
+	plates.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plates.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(plates)
+	frost = Control.new()
+	frost.name = "Frost"
+	frost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frost.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	frost.add_child(_sheet(FROST_L, 0.0, 0.5))
+	frost.add_child(_sheet(FROST_R, 0.5, 1.0))
+	layer.add_child(frost)
+	# The soot the keys stand on at the bottom edge (.edge--bot, 104 high; the
+	# gauges bring their own at the top).
+	soot_bot = _sheet(EDGE_BOT, 0.0, 1.0)
+	soot_bot.anchor_top = 1.0
+	soot_bot.offset_top = -UiFonts.px(104.0)
+	layer.add_child(soot_bot)
+	# The train's gauges read the train sample's first stop, as the stop card does.
+	gauges = TrainGauges.new()
+	var s: Array = StopPickCard.sample()
+	gauges.g = s[0]
+	gauges.t = s[1]
+	layer.add_child(gauges)
 	_build_panel()
 	go(0)
 
@@ -81,6 +124,11 @@ func go(i: int) -> void:
 	card = null
 	var row: Array = STEPS[i]
 	var id: String = row[0]
+	# Over the train, not over the field or the receipt (a slip of its own).
+	gauges.visible = String(row[1]) != "" and id != "receipt"
+	gauges.set_focus(FOCUS.get(id, []))
+	frost.visible = String(row[1]) != ""
+	soot_bot.visible = gauges.visible and id != "stop_pick"
 	if id == "field":
 		panel.visible = false
 		if bool(opts.get("skip_field", false)):
@@ -117,11 +165,26 @@ func _show_stop_pick() -> void:
 	if c.g.get("stop") is Dictionary:
 		c.g["stop"]["place"] = "freight"
 	c.stop_name = "술레후프"
+	c.top_room = TrainGauges.BAND_H
 	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
 	c.sent.connect(func(_g: Dictionary) -> void: next())
 	c.passed_by.connect(func() -> void: go(_index_of("travel")))
 	layer.add_child(c)
 	card = c
+
+
+## A picture laid over the screen from `x0` to `x1` of its width, top to bottom.
+func _sheet(tex: Texture2D, x0: float, x1: float) -> TextureRect:
+	var r := TextureRect.new()
+	r.texture = tex
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_SCALE
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.anchor_left = x0
+	r.anchor_right = x1
+	r.anchor_top = 0.0
+	r.anchor_bottom = 1.0
+	return r
 
 
 func _index_of(id: String) -> int:
@@ -149,6 +212,70 @@ func _show_train(phase: String, seg: int) -> void:
 	train.rules = rules
 	add_child(train)
 	stage = train
+	_quiet_labels()
+	_quiet_labels.call_deferred()
+
+
+## The train's own floating names and value lines are for its test bench;
+## here the carriages wear name plates instead (.plate), under their floors.
+func _quiet_labels() -> void:
+	if not is_instance_valid(train):
+		return
+	for c in plates.get_children():
+		c.queue_free()
+	for l in train.find_children("*", "Label3D", true, false):
+		var label := l as Label3D
+		label.visible = false
+		if label.font_size >= 60 and label.text != "":
+			plates.add_child(_plate(label))
+
+
+## A carriage's name plate (시안 .plate): a dark enamel plate, its name between
+## two brass dots, where the car's floor meets its wheels.
+func _plate(name_label: Label3D) -> Control:
+	var p := PanelContainer.new()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("161d24")
+	sb.set_corner_radius_all(int(round(UiFonts.px(2.0))))
+	sb.border_width_top = 1
+	sb.border_color = Color(1, 1, 1, 0.2)
+	sb.shadow_color = Color(0, 0, 0, 0.45)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2(0, 2)
+	sb.content_margin_left = UiFonts.px(12.0)
+	sb.content_margin_right = UiFonts.px(12.0)
+	p.add_theme_stylebox_override("panel", sb)
+	var word := UiFonts.label(name_label.text, UiFonts.WORD, 500, 12.0, Color("e6e1d4"), 1.44)
+	word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	word.custom_minimum_size = Vector2(0, UiFonts.px(18.0))
+	p.add_child(word)
+	var dots := func() -> void:
+		var r: float = UiFonts.px(1.2)
+		var y: float = p.size.y * 0.5
+		p.draw_circle(Vector2(UiFonts.px(5.0), y), r, Color(202 / 255.0, 164 / 255.0, 92 / 255.0, 0.9))
+		p.draw_circle(Vector2(p.size.x - UiFonts.px(5.0), y), r, Color(202 / 255.0, 164 / 255.0, 92 / 255.0, 0.9))
+	p.draw.connect(dots)
+	p.set_meta("car", name_label.get_parent())
+	p.set_meta("x", name_label.position.x)
+	return p
+
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(train) or plates.get_child_count() == 0:
+		return
+	var cam: Camera3D = train.get("camera")
+	if cam == null:
+		return
+	for p: Control in plates.get_children():
+		var car = p.get_meta("car")
+		if not is_instance_valid(car):
+			continue
+		var at: Vector3 = (car as Node3D).to_global(Vector3(float(p.get_meta("x")), -0.45, 0.0))
+		p.visible = not cam.is_position_behind(at) and card == null
+		var s: Vector2 = cam.unproject_position(at)
+		p.size = p.get_combined_minimum_size()
+		p.position = s - p.size * 0.5
 
 
 func _start_field() -> void:
@@ -202,10 +329,15 @@ static func result_of(r: Dictionary) -> Dictionary:
 func _build_panel() -> void:
 	panel = PanelContainer.new()
 	panel.theme = theme
+	# The smoked glass of a pane (B1), a faint light along its top.
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.06, 0.07, 0.86)
-	sb.set_corner_radius_all(14)
-	sb.set_content_margin_all(22)
+	sb.bg_color = PANE
+	sb.set_corner_radius_all(int(round(UiFonts.px(4.0))))
+	sb.border_width_top = 1
+	sb.border_color = Color(1, 1, 1, 0.1)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = int(round(UiFonts.px(8.0)))
+	sb.set_content_margin_all(UiFonts.px(14.0))
 	panel_style = sb
 	panel.add_theme_stylebox_override("panel", sb)
 	panel.custom_minimum_size = Vector2(PANEL_W, 0)
@@ -213,18 +345,15 @@ func _build_panel() -> void:
 	# Wrapped lines settle their height after a layout pass: pin again then.
 	panel.minimum_size_changed.connect(_pin)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", int(round(UiFonts.px(6.0))))
 	panel.add_child(v)
-	title = Label.new()
-	title.add_theme_font_size_override("font_size", 30)
+	title = UiFonts.label("", UiFonts.WORD, 600, 18.0, INK, 0.36)
 	v.add_child(title)
 	lines = VBoxContainer.new()
-	lines.add_theme_constant_override("separation", 4)
+	lines.add_theme_constant_override("separation", int(round(UiFonts.px(2.0))))
 	v.add_child(lines)
-	next_button = Button.new()
-	next_button.custom_minimum_size = Vector2(220, 64)
+	next_button = LampKey.new("")
 	next_button.size_flags_horizontal = Control.SIZE_SHRINK_END
-	next_button.focus_mode = Control.FOCUS_NONE
 	next_button.pressed.connect(next)
 	v.add_child(next_button)
 
@@ -254,13 +383,11 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 		lines.remove_child(c)
 		c.queue_free()
 	for text in rows:
-		var l := Label.new()
-		l.text = String(text)
+		var l := UiFonts.label(String(text), UiFonts.WORD, 400, 13.0, INK2)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.custom_minimum_size.x = PANEL_W - 44.0
-		l.add_theme_font_size_override("font_size", 19)
+		l.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
 		lines.add_child(l)
-	next_button.text = go_word + " ›"
+	next_button.text = go_word
 	panel.visible = true
 	_pin()
 
@@ -269,4 +396,4 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 ## name line and its people stay in sight above it.
 func _pin() -> void:
 	panel.reset_size()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 24)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, int(round(UiFonts.px(12.0))))

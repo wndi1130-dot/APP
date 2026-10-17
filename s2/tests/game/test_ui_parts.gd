@@ -1,0 +1,95 @@
+extends "res://addons/gut/test.gd"
+## The parts the 「성에 낀 계기」 screens are made of (UI 3단계 시안 2차): the
+## mockup's faces at its sizes, the lamp key, the sheet of paper and what is
+## drawn on it, and the stop card laid out on the mockup's lines.
+
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const LampKey = preload("res://game/ui/lamp_key.gd")
+const PaperSheet = preload("res://game/ui/paper_sheet.gd")
+const Paper = preload("res://game/ui/paper_parts.gd")
+const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
+
+
+func test_mockup_px_turn_into_game_px() -> void:
+	assert_almost_eq(UiFonts.K, 720.0 / 390.0, 0.0001)
+	assert_almost_eq(UiFonts.px(390.0), 720.0, 0.001, "the mockup's stage is the game's height")
+	assert_eq(UiFonts.size(12.0), 22, "a 12 px word is 22 on the phone")
+
+
+func test_the_faces_are_the_mockups_with_their_licences() -> void:
+	var word: FontVariation = UiFonts.face(UiFonts.WORD, 400)
+	assert_true(word.base_font.resource_path.ends_with("IBMPlexSansKR-Regular.ttf"))
+	assert_true((UiFonts.face(UiFonts.WORD, 600) as FontVariation).base_font.resource_path.ends_with("IBMPlexSansKR-SemiBold.ttf"))
+	var num: FontVariation = UiFonts.face(UiFonts.NUMBER, 500)
+	assert_true(num.base_font.resource_path.ends_with("BarlowCondensed-Medium.ttf"))
+	assert_eq(num.fallbacks.size(), 1, "the number face falls back to the word face for Korean")
+	var ts := TextServerManager.get_primary_interface()
+	assert_eq(int(num.opentype_features.get(ts.name_to_tag("tnum"), 0)), 1, "numbers in even columns")
+	var hand: FontVariation = UiFonts.face(UiFonts.HAND, 400)
+	assert_true(hand.base_font.resource_path.ends_with("NanumPenScript-Regular.ttf"))
+	assert_same(UiFonts.face(UiFonts.WORD, 400), word, "a face is made once")
+	for f in ["OFL_IBMPlexSansKR.txt", "OFL_BarlowCondensed.txt", "OFL_NanumPenScript.txt"]:
+		assert_true(FileAccess.file_exists(UiFonts.DIR + f), f)
+
+
+func test_the_lamp_key_is_148_by_48_and_goes_dim_when_off() -> void:
+	var k = LampKey.new("보내기")
+	add_child_autofree(k)
+	assert_eq(k.custom_minimum_size, LampKey.CSS_SIZE * UiFonts.K)
+	assert_eq(k.text, "보내기", "the arrow is drawn by the key, not written")
+	k.set_off(true)
+	assert_true(k.disabled)
+	assert_true(bool((k.face.material as ShaderMaterial).get_shader_parameter("off")))
+
+
+func test_a_sheet_leans_from_its_bottom_left_and_writes_inside_its_margins() -> void:
+	var s = PaperSheet.new()
+	add_child_autofree(s)
+	assert_eq(s.size, PaperSheet.SIZE * UiFonts.K)
+	assert_eq(s.pivot_offset, Vector2(0, s.size.y), "it leans from its bottom left corner")
+	assert_almost_eq(s.rotation, deg_to_rad(-0.45), 0.0001)
+	assert_eq(s.inner.position, Vector2(32, 12) * UiFonts.K)
+	assert_eq(s.inner.size, Vector2(386, 318) * UiFonts.K, "446 × 346 less 32 + 28 across and 12 + 16 down")
+
+
+func test_chips_are_touched_44_high_whatever_is_drawn() -> void:
+	assert_almost_eq(Paper.chip("꼬리", false).custom_minimum_size.y, UiFonts.px(44.0), 0.01, "34 drawn, 5 more above and below")
+	assert_almost_eq(Paper.target_chip("석탄", true, -1.0).custom_minimum_size.y, UiFonts.px(44.0), 0.01, "38 drawn, 3 more above and below")
+	var st: Label = Paper.stamp("고른 것과 같음")
+	assert_almost_eq(st.custom_minimum_size.y, UiFonts.px(20.0), 0.01)
+
+
+## Where `n` is inside `body`, through its parents (no turn or scale between).
+func _in(n: Control, body: Control) -> Vector2:
+	var p := Vector2.ZERO
+	var c: Node = n
+	while c != body:
+		p += (c as Control).position
+		c = c.get_parent()
+	return p
+
+
+func test_the_stop_card_falls_on_the_mockups_lines() -> void:
+	var c = StopPickCard.new()
+	c.promises = [{"kind": "prologue", "subjects": ["a", "b"]}]
+	add_child_autofree(c)
+	await wait_frames(3)
+	var body: Control = c.body
+	var k: float = UiFonts.K
+	assert_almost_eq(body.size.y, 318.0 * k, 0.6, "nothing pushes the card past its paper")
+	var at := func(name: String, up: int) -> float:
+		var n: Node = c.find_child(name, true, false)
+		for i in up:
+			n = n.get_parent()
+		return _in(n as Control, body).y / k
+	# c2.css: .sh__head 50 (its title line at 24), .scene 26, three .frow of 46,
+	# .crewline 22, .promline 24, and the keys (48) at the foot. A box row rounds
+	# its height up to a whole game px, so a line may come up to 1 mockup px late.
+	assert_almost_eq(at.call("Title", 0), 24.0, 1.0, "the title line under the stretch")
+	assert_almost_eq(at.call("Scene", 1), 50.0, 1.0, "the scene line, not pushed by the pen title")
+	assert_almost_eq(at.call("Target_coal", 1), 76.0, 1.0)
+	assert_almost_eq(at.call("Stay_short", 1), 122.0, 1.0)
+	assert_almost_eq(at.call("Crew_tail", 1), 168.0, 1.0)
+	assert_almost_eq(at.call("CrewLine", 0), 214.0, 1.0)
+	assert_almost_eq(at.call("Promises", 1), 236.0, 1.0)
+	assert_almost_eq(at.call("Send", 1), 270.0, 1.0, "the keys at the foot (margin-top auto)")
