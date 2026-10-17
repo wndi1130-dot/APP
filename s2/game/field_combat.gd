@@ -501,6 +501,9 @@ func swing(p, z: Dictionary) -> void:
 	p.swing_t = float(d["swing"]) / float(m["swing"])
 	p.body.add_fatigue(float(d["fatigue"]) * BodyState.fatigue_mult({"carry_state": p.carry_state(), "cold_level": p.cold_level()}))
 	_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+	# Read before the blow's own sound: a quiet sound turns the body toward it
+	# (zombies.hear), and this one comes from where the body stands.
+	var from_back := behind(z, p.position)
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	var state: String = z["state"]
 	var blade: bool = bool(d["blade"])
@@ -516,7 +519,6 @@ func swing(p, z: Dictionary) -> void:
 		else:
 			_kill(p, z, "언 몸이 부서졌다")
 		return
-	var from_back := behind(z, p.position)
 	# Quiet kill from behind: knife, crouched, the thing has not noticed anyone.
 	if wid == "knife" and p.crouched and from_back and state != "chase" and state != "attack" and state != "grab":
 		_kill(p, z, "뒤에서 조용히 끝냈다")
