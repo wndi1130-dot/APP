@@ -270,7 +270,7 @@ export function resumeRun(g: Game): void {
   flags.trip_out = false;
   if (st.snow === 'none') {
     bump(g, 'coal', -2, 'stranded');
-    journal(g, '선로에 쌓인 눈을 치우지 않았다. 쟁기가 눈을 밀며 석탄 2를 더 먹는다.', 'bad');
+    journal(g, '선로에 쌓인 눈을 그대로 두었다. 쟁기가 눈을 밀며 석탄 2를 더 먹는다.', 'bad');
   }
   if (g.seg > P.segments) g.seg = P.segments;
 }

@@ -565,8 +565,8 @@ export function stageOf(rel: number): { name: string; band: number; index: numbe
 }
 
 /** 처지 = 기준 + 레버 차이. [온기, 배급, 과밀, 노출] */
-/** 들어온 한 명이 처지에 주는 몫: 온기 −0.5, 배급 −0.8, 과밀 +1.5(명세 4장, 제안 값). arrivals.ts의 --ar로 바꿀 수 있게 값 칸을 둔다 */
-export const ARRIVAL_SIT: [number, number, number] = [0.5, 0.8, 1.5];
+/** 들어온 한 명이 처지에 주는 몫: 온기 −0.25, 배급 −0.4, 과밀 +0.75(명세 4장 값의 절반, 결정 385). tools/arrivals_sim.ts의 --sit로 바꿀 수 있게 값 칸을 둔다 */
+export const ARRIVAL_SIT: [number, number, number] = [0.25, 0.4, 0.75];
 
 export function situation(g: Game, c: Comm): [number, number, number, number] {
   const s = g.comms[c];

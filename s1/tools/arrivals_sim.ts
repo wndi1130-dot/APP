@@ -29,9 +29,12 @@ for (const f of args.filter(x => x.startsWith('--ar='))) {
 // --sit=온기,배급,과밀: 들어온 한 명이 처지에 주는 몫(ARRIVAL_SIT)을 바꾼다. --free-space: 봇의 공간 레버 관계 깎임을 되돌린다(재기용)
 const sitArg = flag('sit', '');
 if (sitArg) sitArg.split(',').map(Number).forEach((v, i) => { ARRIVAL_SIT[i] = v; });
-const BASE: BotOptions = { ...(args.includes('--free-space') ? { freeSpace: true } : {}), s1c: true, policy: 'caretaker', dom: 'engaged', disasters: true, ...(bot === 'nolever' ? { noLevers: true } : {}), ...(bot === 'event' ? { arrivalLevers: true } : {}), ...(rate !== 'off' ? { arrivals: true } : {}) };
+// --death: 죽음의 무게를 켠다(앱 새 판과 같게, 결정 385 4차). 죽음 카드는 tools/death_weight_sim.ts와 같은 여덟 종류를 센다
+const death = args.includes('--death');
+const DEATH_CARDS = ['orphan', 'keepsake', 'loss_rep', 'loss_child', 'loss_hand', 'chain_push', 'chain_fix', 'heat_after'];
+const BASE: BotOptions = { ...(args.includes('--free-space') ? { freeSpace: true } : {}), ...(death ? { deathWeight: true } : {}), s1c: true, policy: 'caretaker', dom: 'engaged', disasters: true, ...(bot === 'nolever' ? { noLevers: true } : {}), ...(bot === 'event' ? { arrivalLevers: true } : {}), ...(rate !== 'off' ? { arrivals: true } : {}) };
 
-interface Row { end: string; deaths: number; taken: number; turned: number; riot: boolean; fever: number; ops: number; opsAfter: number; segsAfter: number; opsQuiet: number; segsQuiet: number; cards: number; picks: Record<string, number> }
+interface Row { deathCards: number; trustCrisis: boolean; end: string; deaths: number; taken: number; turned: number; riot: boolean; fever: number; ops: number; opsAfter: number; segsAfter: number; opsQuiet: number; segsQuiet: number; cards: number; picks: Record<string, number> }
 
 type Snap = string[];
 const snap = (g: Game): Snap => [...COMMS.flatMap(c => [`${g.comms[c].heat}`, `${g.comms[c].ration}`]), `${g.space?.giver ?? ''}:${g.space?.step ?? 0}`];
@@ -52,10 +55,12 @@ function run(): Row[] {
     const entered = new Set<number>();
     let lastTaken = 0;
     const picks: Record<string, number> = {};
+    let crisis = false;
     const { g, m } = playGame(`ar-${i}`, {
       ...BASE,
       ...(pick === 'uniform' ? { forcePick: (_g, card, _v, open) => (card.kind === 'arrival' || card.kind === 'family' ? open[Math.floor(r() * open.length)] : undefined) } : {}),
       probe: {
+        onSettle: x => { if (x.trustCrisis !== null) crisis = true; },
         beforePrep: x => { before = snap(x); },
         afterPrep: x => { opsBySeg.set(x.seg, diff(before, snap(x))); },
         beforePick: (_x, card, view, idx) => { if (card.kind === 'arrival' || card.kind === 'family') { const id = view.choices[idx]?.id ?? '?'; picks[id] = (picks[id] ?? 0) + 1; } },
@@ -69,6 +74,7 @@ function run(): Row[] {
       if (after) { opsAfter += ops; segsAfter += 1; } else { opsQuiet += ops; segsQuiet += 1; }
     }
     rows.push({
+      deathCards: DEATH_CARDS.reduce((s, k) => s + (m.cards[k] ?? 0), 0), trustCrisis: crisis,
       end: g.end ?? 'none', deaths: g.deaths.length, taken: g.arrivals?.taken ?? 0, turned: g.arrivals?.turned ?? 0, riot: g.riot.riots > 0,
       fever: (g.dom?.stats as { typhus?: number } | undefined)?.typhus ?? 0, ops: [...opsBySeg.values()].reduce((a, b) => a + b, 0),
       opsAfter, segsAfter, opsQuiet, segsQuiet, cards: (m.cards.arrival ?? 0) + (m.cards.family ?? 0), picks,
@@ -87,7 +93,8 @@ for (const r of rows) for (const [k, v] of Object.entries(r.picks)) picks[k] = (
 const rateAfter = tot(r => r.opsAfter) / Math.max(1, tot(r => r.segsAfter));
 const rateQuiet = tot(r => r.opsQuiet) / Math.max(1, tot(r => r.segsQuiet));
 const res = {
-  n, rate, bot, pick, ar: { stopP: AR.stopP, travelP: AR.travelP, ...arSets }, sit: [...ARRIVAL_SIT], freeSpace: args.includes('--free-space'),
+  n, rate, bot, pick, ar: { stopP: AR.stopP, travelP: AR.travelP, ...arSets }, sit: [...ARRIVAL_SIT], freeSpace: args.includes('--free-space'), death,
+  deathCardsMean: mean(r => r.deathCards), trustCrisis: pct(rows.filter(r => r.trustCrisis).length, n),
   complete: pct(rows.filter(r => r.end === 'complete').length, n), revolt: pct(rows.filter(r => r.end === 'revolt').length, n), coup: pct(rows.filter(r => r.end === 'coup').length, n),
   riotGames: pct(rows.filter(r => r.riot).length, n), deathsMean: mean(r => r.deaths), takenMean: mean(r => r.taken), turnedMean: mean(r => r.turned),
   feverMean: mean(r => r.fever), opsMean: mean(r => r.ops), opsRateAfter: rateAfter, opsRateQuiet: rateQuiet, afterOverQuiet: rateQuiet ? rateAfter / rateQuiet : null,

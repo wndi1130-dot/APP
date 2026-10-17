@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   addCard, AR, arrivalsAfterStop, arrivalsArrive, arrivalsSettle, arrivalsTravel, arrivedIn, ARRIVAL_CARD_KINDS, chooseCard, COMMS, createGame, crewNames,
-  crowdFeverP, crowdLevel, drawGroups, enableArrivals, forecast, lawBackers, P, situation, someOf, takeIn, viewCard,
+  ARRIVAL_SIT, crowdFeverP, crowdLevel, drawGroups, enableArrivals, forecast, lawBackers, P, situation, someOf, takeIn, viewCard,
 } from '../../src/game';
 import type { Card, Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -120,7 +120,7 @@ describe('선택지', () => {
 });
 
 describe('받은 뒤의 처지', () => {
-  it('6. 모두 태우면 꼬리칸 인원 +n, 과밀 +1.5n, 배급 −0.8n, 온기 −0.5n, 부상자 +다친 수', () => {
+  it('6. 모두 태우면 꼬리칸 인원 +n, 과밀 +0.75n, 배급 −0.4n, 온기 −0.25n(결정 385), 부상자 +다친 수', () => {
     const g = on('ar-all');
     setTail(g, 60, 60, 40);
     const groups = [3, 2, 4];
@@ -132,11 +132,22 @@ describe('받은 뒤의 처지', () => {
     expect(chooseCard(g, card.uid, pickIdx(g, card, 'take_all'))).toBe(true);
     expect(g.comms.tail.pop).toBe(pop + n);
     const [w2, r2, c2] = situation(g, 'tail');
-    expect(c2 - c).toBeCloseTo(1.5 * n);
-    expect(r - r2).toBeCloseTo(0.8 * n);
-    expect(w - w2).toBeCloseTo(0.5 * n);
+    expect(ARRIVAL_SIT).toEqual([0.25, 0.4, 0.75]);
+    expect(c2 - c).toBeCloseTo(0.75 * n);
+    expect(r - r2).toBeCloseTo(0.4 * n);
+    expect(w - w2).toBeCloseTo(0.25 * n);
     expect(g.injured).toBe(inj + 2);
     expect(arrivedIn(g, 'tail')).toBe(n);
+  });
+
+  it('결정 385. 돌려보내면 신임 −1·의무진 −1·꼬리칸 −1·긴장 +1이고, 돌려보냄·못 감에는 목격자 벌이 없다', () => {
+    const g = on('ar-385');
+    const a = viewCard(g, arrivalCard(g, [3, 3]));
+    const turn = a.choices.find(c => c.id === 'turn_away')!;
+    expect(turn.effs).toEqual([{ t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: -1 }, { t: 'rel', c: 'tail', v: -1 }, { t: 'tension', v: 1 }]);
+    expect(turn.witness).toBe(false);
+    expect(a.choices.find(c => c.id === 'take_all')!.witness).toBe(true);
+    expect(viewCard(g, familyCard(g, 3)).choices.find(c => c.id === 'stay_put')!.witness).toBe(false);
   });
 
   it('7. 일부는 가족 묶음 합이고 무리 절반 이상 n 미만이다(가족이 갈리지 않는다)', () => {
@@ -175,9 +186,9 @@ describe('받은 뒤의 처지', () => {
     expect(food - g.food).toBeCloseTo(10 * AR.hunger);
   });
 
-  it('9. 꼬리칸 과밀 75에서 14명을 받으면 「겹쳐 잠」(계단 3)이고 열병 시작 확률은 0.09다', () => {
+  it('9. 꼬리칸 과밀 85에서 14명을 받으면 「겹쳐 잠」(계단 3)이고 열병 시작 확률은 0.09다', () => {
     const g = on('ar-crowd');
-    setTail(g, 60, 60, 75);
+    setTail(g, 60, 60, 85);
     const plan = takeIn(g, 'tail', [4, 4, 3, 3]);
     expect(plan).toEqual({ tail: 14 });
     expect(crowdLevel(g, 'tail')).toBe(3);
@@ -186,7 +197,7 @@ describe('받은 뒤의 처지', () => {
 
   it('4장. 꼬리칸 과밀이 95 이상이면 남는 가족은 의무진 칸으로 간다', () => {
     const g = on('ar-over');
-    setTail(g, 60, 60, 92);
+    setTail(g, 60, 60, 93);
     const plan = takeIn(g, 'tail', [3, 3, 2]);
     expect(plan.tail).toBe(3);
     expect(plan.medtech).toBe(5);
