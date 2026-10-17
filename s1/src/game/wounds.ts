@@ -9,7 +9,7 @@ import { eduOf, healCut, healNote } from './domestic/classroom';
 import { living, techMult } from './domestic/state';
 import { pickVictims } from './people';
 import { bump, put } from './ledger';
-import { isGone, journal, PROFILES, rnd } from './state';
+import { CREW_BUSY, isGone, journal, PROFILES, rnd } from './state';
 import type { Game } from './state';
 
 // 부상 명부(정치_열차_명세_1_부상.md 1~3절). 사람에 붙은 Wound 기록이 g.wounds에 쌓이고, g.injured는 거기서 다시 센 파생값이다.
@@ -85,6 +85,9 @@ export function isActive(w: Wound): boolean {
 export function activeWounds(g: Game, comm?: Comm): Wound[] {
   return book(g).filter(w => isActive(w) && (comm === undefined || w.comm === comm));
 }
+
+// 깊은 상처·골절·절단이 낫는 동안에는 정차 작업조와 정찰조에 들지 않는다. 가벼운 상처는 그대로 나간다(다친 사람 명세 4절).
+CREW_BUSY.push(g => activeWounds(g).filter(w => w.grade !== 'light').map(w => w.who));
 
 /** 열차에 있는 사람의 활성 기록(죽었거나 내린 사람의 기록은 뺀다). 화면과 noteRelief가 읽는다. */
 export function liveWounds(g: Game, comm?: Comm): Wound[] {
