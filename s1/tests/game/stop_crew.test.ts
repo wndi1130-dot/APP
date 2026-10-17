@@ -3,7 +3,7 @@ import {
   CREW, CREW_COST, CREW_LINE, createGame, crewAwayOf, crewBand, crewEnoughCount, crewGainOf, crewHaulMult, crewLineText, crewMult, crewNames, crewPreview, crewWhyText,
   P, PLACES, resolveStop, riskLevel, riskView, sendScouts, setStop, situation, STAY, stopRisk,
 } from '../../src/game';
-import type { CrewCost, CrewCurve, Game, StayId } from '../../src/game';
+import type { CrewCost, CrewCurve, CrewHaul, Game, StayId } from '../../src/game';
 
 // 정차 작업조 인원과 위험(결정 341, 구현 명세 6장 1~10). 곡선 A·B는 가안이라 둘 다 본다.
 // 시험 안에서 CREW.curve·CREW.cost·CREW.haul을 바꾸면 끝날 때 기본값으로 되돌린다.
@@ -425,18 +425,14 @@ describe('stop_crew', () => {
     CREW.cost = 'off';
     for (const n of [2, 4, 8]) expect(crewGainOf(n)).toEqual({ gain: P.crewGain, cap: P.crewCap });
     expect(crewAwayOf(8)).toBe(8);
-    // 후보 X: 인원 비례, 8명이면 +10에 상한 75. 후보 Y: 제곱, 8명이면 +20에 상한 85. 둘 다 4명은 +5, 상한 70.
+    // 후보 X: 인원 비례, 8명이면 +10에 상한 75. 4명은 +5, 상한 70.
     CREW.cost = 'X';
     expect(crewGainOf(4)).toEqual({ gain: 5, cap: 70 });
     expect(crewGainOf(8)).toEqual({ gain: 10, cap: 75 });
     expect(crewGainOf(2)).toEqual({ gain: 2.5, cap: 70 });
     expect(crewAwayOf(8)).toBe(12);
-    CREW.cost = 'Y';
-    expect(crewGainOf(4)).toEqual({ gain: 5, cap: 70 });
-    expect(crewGainOf(8)).toEqual({ gain: 20, cap: 85 });
-    expect(crewGainOf(2)).toEqual({ gain: 1.25, cap: 70 });
-    expect(crewAwayOf(8)).toBe(16);
-    for (const cost of ['X', 'Y'] as CrewCost[]) {
+    expect(Object.keys(CREW_COST)).toEqual(['off', 'X']);
+    for (const cost of ['X'] as CrewCost[]) {
       CREW.cost = cost;
       let checked = 0;
       for (let k = 0; k < 20; k += 1) {
@@ -464,7 +460,7 @@ describe('stop_crew', () => {
       expect(checked, cost).toBeGreaterThan(10);
     }
     // 정찰조의 표결 빠짐은 그대로다(결정 360): 정찰조는 돌아온 사람 수만, 작업조는 새 무게로 빠진다.
-    CREW.cost = 'Y';
+    CREW.cost = 'X';
     let scouted = 0;
     for (let k = 0; k < 20 && scouted < 5; k += 1) {
       const g = mk(`scout-away-${k}`, { place: 'houses', stay: 'short', size: 4, threat: 0.8, escort: true });
@@ -480,18 +476,23 @@ describe('stop_crew', () => {
     expect(scouted).toBeGreaterThan(0);
   });
 
-  it('12 crew_haul_need (결정 372): 산출 인원 항은 알맞은 인원까지 온전히, 넘는 사람은 절반만 보탠다', () => {
+  it('12 crew_haul_need (결정 372): 산출 인원 항은 알맞은 인원까지 온전히, 넘는 사람은 절반만(half)·안(none) 보탠다', () => {
     CREW.haul = 'flat';
     for (const n of [2, 4, 8]) expect(crewHaulMult(n, 3)).toBeCloseTo(0.7 + 0.075 * n, 12);
-    CREW.haul = 'need';
+    CREW.haul = 'half';
     // 알맞은 인원 안쪽은 옛 식과 같고, 알맞은 인원이 8이면 어떤 인원이든 옛 식과 같다
     for (const n of [2, 3, 4]) expect(crewHaulMult(n, 4.5)).toBeCloseTo(0.7 + 0.075 * n, 12);
     for (const n of [2, 4, 6, 8]) expect(crewHaulMult(n, 8)).toBeCloseTo(0.7 + 0.075 * n, 12);
     // 알맞은 인원 4에 8명: 0.7 + 0.075×4 + 0.0375×4
     expect(crewHaulMult(8, 4)).toBeCloseTo(1.15, 12);
     expect(crewHaulMult(8, 1.6)).toBeCloseTo(0.7 + 0.075 * 1.6 + 0.0375 * 6.4, 12);
+    // none: 넘는 사람은 안 보탠다. 알맞은 인원 안쪽과 8 이상은 옛 식과 같다.
+    CREW.haul = 'none';
+    expect(crewHaulMult(8, 4)).toBeCloseTo(1.0, 12);
+    expect(crewHaulMult(3, 4.5)).toBeCloseTo(0.7 + 0.075 * 3, 12);
+    expect(crewHaulMult(6, 8)).toBeCloseTo(0.7 + 0.075 * 6, 12);
     // 실제 정차: 같은 판에서 인원이 알맞은 인원 이하면 산출이 같고, 넘으면 줄거나 같다(반올림)
-    const total = (haul: 'flat' | 'need', size: number, k: number) => {
+    const total = (haul: CrewHaul, size: number, k: number) => {
       CREW.haul = haul;
       const g = mk(`haul-${k}`, { place: 'houses', stay: 'short', size, threat: 0.8, escort: true, scout: false });
       return Object.values(resolveStop(g, true)!.gains).reduce((x, y) => x + (y ?? 0), 0);
@@ -501,20 +502,23 @@ describe('stop_crew', () => {
     let less = 0;
     for (let k = 0; k < 20; k += 1) {
       const a = total('flat', 8, k);
-      const b = total('need', 8, k);
+      const b = total('half', 8, k);
+      const c = total('none', 8, k);
       expect(b, `#${k}`).toBeLessThanOrEqual(a);
+      expect(c, `#${k} none`).toBeLessThanOrEqual(b);
       if (b < a) less += 1;
     }
     expect(less).toBeGreaterThan(10);
     // 알맞은 인원이 큰 곳(화물역·길게·불길): 4명은 옛 식과 같다
     expect(stopRisk(mk('haul-big', { place: 'freight', stay: 'long', threat: 1.4 })).need).toBeGreaterThan(8);
     for (let k = 0; k < 5; k += 1) {
-      const one = (haul: 'flat' | 'need') => {
+      const one = (haul: CrewHaul) => {
         CREW.haul = haul;
         const g = mk(`haul-big-${k}`, { place: 'freight', stay: 'long', size: 4, threat: 1.4, scout: false });
         return resolveStop(g, true)!.gains;
       };
-      expect(one('need')).toEqual(one('flat'));
+      expect(one('half')).toEqual(one('flat'));
+      expect(one('none')).toEqual(one('flat'));
     }
   });
 });

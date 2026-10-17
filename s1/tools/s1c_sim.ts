@@ -3,7 +3,7 @@
 // --pick: 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸이나 안 막힌 칸 아무거나를 고르는 봇(첫 칸 치우침을 가르는 측정용)
 // --budget: 카드 구간 예산(src/game/budget.ts, events_disasters 3.1)을 켠다. 상한은 --set=perSeg:4 처럼 바꾼다(D에 없고 BUDGET에 있는 키는 BUDGET을 바꾼다).
 // --events: 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(src/game/event_pack.ts)를 켠다. 가중치 상수는 --set=pressMax:4 처럼 DRAW 키로 바꾼다.
-// --crew=P2|P4|P6|P8|PN|PS4: 정차 인원 정책(결정 341). --curve=off|A|B: 인원 곡선(off는 옛 식). --cost=off|X|Y: 작업조 대가(결정 359). --haul=flat|need: 산출 인원 항(결정 372). 결과에 crewStat(정차당 인원·밴드별 중상·죽음)을 적는다.
+// --crew=P2|P4|P6|P8|PN|PN1|PS4: 정차 인원 정책(결정 341). --curve=off|A|B: 인원 곡선(off는 옛 식). --cost=off|X: 작업조 대가(결정 359). --haul=flat|half|none: 산출 인원 항(결정 372). 결과에 crewStat(정차당 인원·밴드별 중상·죽음)을 적는다.
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
@@ -41,17 +41,17 @@ const events = flags.includes('--events');
 const prepFlag = flags.find(x => x.startsWith('--prep='))?.slice(7);
 if (prepFlag && !['auto', 'never', 'wait', 'read'].includes(prepFlag)) throw new Error(`--prep는 auto·never·wait·read: ${prepFlag}`);
 const crewFlag = flags.find(x => x.startsWith('--crew='))?.slice(7) as CrewPolicy | undefined;
-if (crewFlag && !['P2', 'P4', 'P6', 'P8', 'PN', 'PS4'].includes(crewFlag)) throw new Error(`--crew는 P2·P4·P6·P8·PN·PS4: ${crewFlag}`);
+if (crewFlag && !['P2', 'P4', 'P6', 'P8', 'PN', 'PN1', 'PS4'].includes(crewFlag)) throw new Error(`--crew는 P2·P4·P6·P8·PN·PN1·PS4: ${crewFlag}`);
 const curveFlag = flags.find(x => x.startsWith('--curve='))?.slice(8) as CrewCurve | undefined;
 if (curveFlag && !['off', 'A', 'B'].includes(curveFlag)) throw new Error(`--curve는 off·A·B: ${curveFlag}`);
 if (curveFlag) CREW.curve = curveFlag;
-// --cost=off|X|Y: 작업조 대가(결정 359). off는 옛 식.
+// --cost=off|X: 작업조 대가(결정 359). off는 옛 식.
 const costFlag = flags.find(x => x.startsWith('--cost='))?.slice(7) as CrewCost | undefined;
-if (costFlag && !['off', 'X', 'Y'].includes(costFlag)) throw new Error(`--cost는 off·X·Y: ${costFlag}`);
+if (costFlag && !['off', 'X'].includes(costFlag)) throw new Error(`--cost는 off·X: ${costFlag}`);
 if (costFlag) CREW.cost = costFlag;
-// --haul=flat|need: 정차 산출 인원 항(결정 372). flat은 옛 식.
+// --haul=flat|half|none: 정차 산출 인원 항(결정 372). flat은 옛 식.
 const haulFlag = flags.find(x => x.startsWith('--haul='))?.slice(7) as CrewHaul | undefined;
-if (haulFlag && !['flat', 'need'].includes(haulFlag)) throw new Error(`--haul은 flat·need: ${haulFlag}`);
+if (haulFlag && !['flat', 'half', 'none'].includes(haulFlag)) throw new Error(`--haul은 flat·half·none: ${haulFlag}`);
 if (haulFlag) CREW.haul = haulFlag;
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 const pickRule = flags.find(x => x.startsWith('--pick='))?.slice(7);

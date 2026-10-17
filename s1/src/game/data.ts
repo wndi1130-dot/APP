@@ -77,18 +77,18 @@ export const P = Object.freeze({
 /** 정차 인원 곡선(결정 341). off는 옛 식(한 사람당 위험이 인원과 무관), A·B는 명세 2-2의 두 후보. 사용자가 500판 숫자를 본 뒤 하나로 정한다. */
 export type CrewCurve = 'off' | 'A' | 'B';
 /** 작업조 대가(결정 359, 값은 가안). off는 옛 식(노출 +crewGain, 살아 돌아온 사람 수만큼 표결 빠짐).
- * 후보는 노출 상승 = crewGain × (인원 / ref)^pow, 노출 상한은 기본 상승을 넘는 만큼 crewCap 위로 열린다. 표결 빠짐 = 돌아온 사람 × away(반올림).
- * 정찰조의 표결 빠짐은 그대로다(결정 360). */
-export type CrewCost = 'off' | 'X' | 'Y';
+ * 후보 X는 노출 상승 = crewGain × 인원 / ref, 노출 상한은 기본 상승을 넘는 만큼 crewCap 위로 열린다. 표결 빠짐 = 돌아온 사람 × away(반올림).
+ * 정찰조의 표결 빠짐은 그대로다(결정 360). 제곱 후보 Y는 두 번의 500판에서 가장 나빠 뺐다. */
+export type CrewCost = 'off' | 'X';
 export const CREW_COST: Record<CrewCost, { pow: number; away: number }> = {
   off: { pow: 0, away: 1 },
   X: { pow: 1, away: 1.5 },
-  Y: { pow: 2, away: 2 },
 };
 export const CREW_COST_REF = 4;
-/** 정차 산출의 인원 항(결정 372, 값은 가안). flat은 옛 식 0.7 + 0.075×인원. need는 알맞은 인원까지 0.075씩 온전히, 넘는 사람은 그 절반(CREW_HAUL_OVER)만 보탠다. */
-export type CrewHaul = 'flat' | 'need';
-export const CREW_HAUL_OVER = 0.5;
+/** 정차 산출의 인원 항(결정 372, 값은 가안). flat은 옛 식 0.7 + 0.075×인원. half·none은 알맞은 인원까지 0.075씩 온전히 보태고,
+ * 넘는 사람은 그 몫에 CREW_HAUL_OVER를 곱해 보탠다(half 절반, none 안 보탬). */
+export type CrewHaul = 'flat' | 'half' | 'none';
+export const CREW_HAUL_OVER: Record<Exclude<CrewHaul, 'flat'>, number> = { half: 0.5, none: 0 };
 export const CREW: { curve: CrewCurve; cost: CrewCost; haul: CrewHaul } = { curve: 'A', cost: 'off', haul: 'flat' };
 /** 쉼 바닥: 안 나간 칸의 노출이 이 아래로는 안 내려간다(6.4). 표에 없는 칸(경비대·기관실)은 쉼으로 안 바뀐다. */
 export const REST_FLOOR: Partial<Record<Comm, number>> = { tail: 35, medtech: 25, front: 10 };

@@ -561,10 +561,10 @@ export function crewGainOf(size: number): { gain: number; cap: number } {
   return { gain, cap: P.crewCap + Math.max(0, gain - P.crewGain) };
 }
 
-/** 정차 산출의 인원 항(결정 372). 옛 식(flat)은 0.7 + 0.075×인원, need는 알맞은 인원을 넘는 사람이 절반만 보탠다. 알맞은 인원이 8 이상이면 두 식이 같다. */
+/** 정차 산출의 인원 항(결정 372). 옛 식(flat)은 0.7 + 0.075×인원, half·none은 알맞은 인원을 넘는 사람이 절반만·안 보탠다. 알맞은 인원이 8 이상이면 세 식이 같다. */
 export function crewHaulMult(size: number, need: number): number {
   if (CREW.haul === 'flat') return 0.7 + 0.075 * size;
-  return 0.7 + 0.075 * Math.min(size, need) + 0.075 * CREW_HAUL_OVER * Math.max(0, size - need);
+  return 0.7 + 0.075 * Math.min(size, need) + 0.075 * CREW_HAUL_OVER[CREW.haul] * Math.max(0, size - need);
 }
 
 /** 살아 돌아온 작업조가 이번 회기 표결에서 빠지는 사람 수(결정 359). 옛 식(off)은 돌아온 사람 수 그대로. */
