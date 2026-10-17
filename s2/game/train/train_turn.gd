@@ -6,9 +6,10 @@ extends RefCounted
 ## writes to the journal or the card pile are appended to the copy's "journal" and "cards" in the
 ## same words. tests/train/test_train_turn.gd checks them against the S1 answers.
 ##
-## Not here (see coord scope note): meters, hungerTick, checkEnd and settle as a whole are not
-## exported by turn.ts, so they cannot be checked against S1 yet; depart and arriveStop draw
-## events and places.
+## hungerTick and checkEnd are not exported by turn.ts either; they are checked against whole S1
+## settles instead (the fixture's "settle" cases), as nothing later in an S1a settle touches what
+## they read or write. Not here: meters (it reads values the ticks after it change, so it waits for
+## an export), the rest of settle, and depart and arriveStop, which draw events and places.
 
 const St = preload("res://game/train/train_state.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
@@ -192,6 +193,75 @@ static func drift(g0: Dictionary, t: Dictionary) -> Dictionary:
 			s["badStreak"] = 0
 		if float(s["rel"]) >= 15.0 and int(s["fervor"]) > 0:
 			s["fervor"] = int(s["fervor"]) - 1
+	return g
+
+
+## The hunger count at settle (hungerTick): back to 0 while there is food, else one more stretch;
+## the first empty stretch puts up a card. {state, notes, starves}: past the grace stretches
+## somebody starves, and who is drawn by the S1 victim picker, which is not ported, so the copy
+## only says that somebody does.
+static func hunger_tick(g0: Dictionary, t: Dictionary) -> Dictionary:
+	var g := g0.duplicate(true)
+	var notes: Array[String] = []
+	if float(g["food"]) > 0.0:
+		g["hunger"] = 0
+		return {"state": g, "notes": notes, "starves": false}
+	g["hunger"] = int(g.get("hunger", 0)) + 1
+	var grace := int(t["HUNGER_GRACE"])
+	if int(g["hunger"]) == 1:
+		_card(g, {"kind": "info", "comm": null, "who": "식량이 떨어졌다",
+			"text": "사람들은 허리띠를 졸라매고 버틴다. %d구간을 넘기면 굶어 죽는 사람이 나온다." % grace})
+		return {"state": g, "notes": notes, "starves": false}
+	if int(g["hunger"]) <= grace:
+		notes.append("굶은 지 %d구간째다." % int(g["hunger"]))
+		return {"state": g, "notes": notes, "starves": false}
+	return {"state": g, "notes": notes, "starves": true}
+
+
+## The end checks at the close of settle (checkEnd): the trust crisis and its three stretches,
+## the tension warning at 60 and the last chance at 100. An S1a game has no martial law.
+## Ending writes the end and its first journal line; the look-back lines after it are not ported.
+static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
+	var g := g0.duplicate(true)
+	if float(g["food"]) < 0.0:
+		g["food"] = 0
+	var trust := float(g["trust"])
+	var crisis: Variant = g.get("trustCrisis")
+	if trust <= 0.0 and crisis == null:
+		g["trustCrisis"] = int(g["seg"]) + 3
+		_card(g, {"kind": "trust_crisis", "comm": null, "who": null, "text": null})
+		_journal(g, "신임이 바닥났다. 3구간 안에 25까지 되돌려야 한다.", "bad")
+	elif crisis != null:
+		if trust >= 25.0:
+			g["trustCrisis"] = null
+			_journal(g, "불신임의 말이 잦아들었다.", "good")
+		elif int(g["seg"]) >= int(crisis):
+			return _finish(g, "ousted")
+	var tension := float(g["tension"])
+	if tension >= 60.0 and not bool(g.get("tensionWarned", false)):
+		g["tensionWarned"] = true
+		_card(g, {"kind": "info", "comm": null, "who": "긴장 경고",
+			"text": "칸 사이 문마다 사람이 서 있다. 긴장이 100에 닿으면 마지막 기회가 온다."})
+	if tension >= 100.0:
+		if int(g.get("tensionCrisisUsed", 0)) < 2:
+			_card(g, {"kind": "tension_crisis", "comm": "tail", "who": null, "text": null})
+		else:
+			return _finish(g, "revolt")
+	return g
+
+
+const END_TEXT := {
+	"complete": "라이프치히 중앙역에 닿았다.", "stranded": "석탄이 다 떨어졌다. 열차가 섰다.",
+	"ousted": "의회가 열차장을 끌어내렸다.", "revolt": "반란이 일어났다.",
+}
+
+
+static func _finish(g: Dictionary, end: String) -> Dictionary:
+	if g["phase"] == "end":
+		return g
+	g["end"] = end
+	g["phase"] = "end"
+	_journal(g, END_TEXT[end], "good" if end == "complete" else "bad")
 	return g
 
 
