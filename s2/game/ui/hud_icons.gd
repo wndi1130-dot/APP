@@ -29,6 +29,7 @@ const PATHS: Dictionary = {
 	"drop": '<path class="t" d="M12 3.5c3.5 4.8 6 7.8 6 10.8a6 6 0 0 1-12 0c0-3 2.5-6 6-10.8z"/><path d="M12 3.5c3.5 4.8 6 7.8 6 10.8a6 6 0 0 1-12 0c0-3 2.5-6 6-10.8z"/>',
 	"crew": '<circle cx="8" cy="8" r="2.5"/><circle cx="16" cy="8" r="2.5"/><path d="M3.5 19c.5-3.5 2.2-5.5 4.5-5.5s4 2 4.5 5.5M11.5 19c.5-3.5 2.2-5.5 4.5-5.5s4 2 4.5 5.5"/>',
 	"door": '<path class="t" d="M7 3h10v18H7z"/><path d="M7 3h10v18H7zM4 21h16"/><circle class="f" cx="14.5" cy="12.5" r="1.1"/>',
+	"promise": '<path class="t" d="M6 3h9l3 3v15H6z"/><path d="M6 3h9l3 3v15H6zM15 3v3h3M9 10h6M9 13.5h4"/><circle cx="14.5" cy="17.5" r="1.8"/>',
 	"stairs": '<path class="t" d="M3 21v-4h5v-4h5V9h5V5h3v16z"/><path d="M3 17h5v-4h5V9h5V5h3M3 21h18"/>',
 }
 

@@ -65,9 +65,11 @@ static func columns(result: Dictionary) -> Array:
 	for row: Array in loaded(result):
 		if goods.size() < ROWS_MOST:
 			goods.append("%s %d" % [STOCK_NAMES.get(row[0], row[0]), row[1]])
+	# A thing with no name of its own (a symbol the train named) is not spelled
+	# out as its id: its count is in the stock above.
 	for id in r.get("items", {}).get("gained", []):
-		if goods.size() < ROWS_MOST:
-			goods.append(String(Carry.ITEM_NAMES.get(id, id)))
+		if goods.size() < ROWS_MOST and Carry.ITEM_NAMES.has(id):
+			goods.append(String(Carry.ITEM_NAMES[id]))
 	var dead: int = _count(result, "dead")
 	var stayed: int = _count(result, "leftBehind")
 	var aboard: Array = ["%d명" % int(result["boarded"])]
