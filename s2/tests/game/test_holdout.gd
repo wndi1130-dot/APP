@@ -29,6 +29,12 @@ func _dead_at(game, door: Dictionary) -> Dictionary:
 	return game.zombies.spawn("dead", FieldGrid.center(door["cell"]))
 
 
+## Two of the dead at a door: enough for its blows to wear it (decision 314).
+func _two_at(game, door: Dictionary) -> void:
+	_dead_at(game, door)
+	_dead_at(game, door)
+
+
 func test_a_plain_stop_is_as_it_was() -> void:
 	var game = _game()
 	assert_false(game.holdout.enabled())
@@ -111,11 +117,10 @@ func test_the_dead_at_a_door_wear_it_down_and_a_wall_takes_it_first() -> void:
 	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP, "nobody at it")
 	_dead_at(game, door)
 	h.tick(FieldHoldout.BANG_EVERY)
-	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP - 1)
-	_dead_at(game, door)
-	_dead_at(game, door)
+	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP, "one alone only knocks (decision 314)")
+	_two_at(game, door)
 	h.tick(FieldHoldout.BANG_EVERY)
-	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP - 4, "three of them, three blows")
+	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP - 3, "three of them, three blows")
 	game.player.add_item("plank", 1)
 	game.player.position = FieldGrid.center(door["cell"])
 	assert_eq(h.wall_row(game.player)["label"], "방벽 세우기")
@@ -124,9 +129,42 @@ func test_the_dead_at_a_door_wear_it_down_and_a_wall_takes_it_first() -> void:
 	assert_eq(int(game.player.items.get("plank", 0)), 0, "it costs the one thing")
 	assert_true(h.wall_row(game.player).is_empty(), "one wall a door")
 	h.tick(FieldHoldout.BANG_EVERY)
-	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP - 4, "the wall is hit, not the door")
+	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP - 3, "the wall is hit, not the door")
 	assert_eq(int(door["wall"]), FieldHoldout.WALL_HP - 3)
 	assert_eq(int(h.doors[1]["hp"]), FieldHoldout.DOOR_HP, "the other doors are not this one")
+
+
+## User decision 314: one of the dead alone at a door knocks for as long as it
+## likes and the door holds; the knocking is still made and heard. Two wear it.
+func test_one_alone_at_a_door_only_knocks_and_two_wear_it() -> void:
+	var game = _game({"holdout": "start"})
+	var h = game.holdout
+	var door: Dictionary = h.doors[0]
+	game.player.position = FieldGrid.center(door["cell"]) + Vector3(0.5, 0, 2)
+	_dead_at(game, door)
+	game.sounds.clear()
+	game.audio.played.clear()
+	var t := 0.0
+	while t < 60.0:
+		h.tick(0.5)
+		t += 0.5
+	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP, "a minute alone: the door as it was")
+	var bangs: int = game.sounds.filter(func(s: Dictionary) -> bool: return s["tag"] == "bang").size()
+	assert_between(bangs, 45, 47, "the dead still hear a blow every %.1f s" % FieldHoldout.BANG_EVERY)
+	assert_true(_door_sounds(game).has("door_bang"), "and the knocking is heard")
+	door["wall"] = 3
+	h.tick(FieldHoldout.BANG_EVERY)
+	assert_eq(int(door["wall"]), 3, "a wall holds against one too")
+	door["wall"] = 0
+	game.zombies.spawn("dead", FieldGrid.center(door["cell"]) + Vector3(1.4, 0, 0))
+	h.tick(FieldHoldout.BANG_EVERY * 0.5)
+	assert_eq(int(door["hp"]), FieldHoldout.DOOR_HP - 1, "a second within 1.5 m: the blows wear it")
+
+
+func test_two_too_far_apart_at_a_wide_door_still_only_knock() -> void:
+	assert_eq(FieldHoldout._crowd([Vector3(0, 0, 0), Vector3(1.6, 0, 0)]), 1)
+	assert_eq(FieldHoldout._crowd([Vector3(0, 0, 0), Vector3(1.5, 0, 0)]), 2)
+	assert_eq(FieldHoldout._crowd([]), 0)
 
 
 func test_no_wall_without_something_to_build_it_of() -> void:
@@ -145,18 +183,18 @@ func test_a_door_is_whole_then_damaged_then_breached() -> void:
 	var game = _game({"holdout": "start", "holdout_door_hp": 6})
 	var h = game.holdout
 	var door: Dictionary = h.doors[1]
-	_dead_at(game, door)
+	_two_at(game, door)
 	assert_eq(h.state_of(door), "whole")
-	h.tick(FieldHoldout.BANG_EVERY * 4)
-	assert_eq(h.state_of(door), "damaged", "under half")
 	h.tick(FieldHoldout.BANG_EVERY * 2)
+	assert_eq(h.state_of(door), "damaged", "under half")
+	h.tick(FieldHoldout.BANG_EVERY)
 	assert_eq(h.state_of(door), "breached")
 	assert_false(game.ended, "a breached door is not the end of it")
 	h.tick(FieldHoldout.BANG_EVERY * 3)
 	var r: Dictionary = h.result()
 	assert_eq(r["doors"], ["whole", "breached", "whole"])
 	assert_eq(int(r["breached"]), 1)
-	assert_eq(int(r["entered"]), 1, "each of the dead that goes in by a breached door is counted once")
+	assert_eq(int(r["entered"]), 2, "each of the dead that goes in by a breached door is counted once")
 
 
 func test_a_door_that_gives_way_reaches_whoever_stands_in_front_of_it_once() -> void:
@@ -169,8 +207,8 @@ func test_a_door_that_gives_way_reaches_whoever_stands_in_front_of_it_once() -> 
 			p.position = FieldGrid.center(door["cell"] + Vector2i(40, 3))
 		game.player.position = FieldGrid.center(door["cell"] + Vector2i(1, 1))
 		var wounds: int = game.player.body.wounds.size()
-		_dead_at(game, door)
-		h.tick(FieldHoldout.BANG_EVERY * 2)
+		_two_at(game, door)
+		h.tick(FieldHoldout.BANG_EVERY)
 		assert_eq(h.state_of(door), "breached")
 		assert_eq(h.reached, 1, "the one in front of it, not those along the platform")
 		assert_eq(game.player.body.wounds.size() - wounds, h.hurt, "a scratch or the coat, nothing else")
@@ -188,21 +226,22 @@ func test_a_door_has_its_own_sounds_and_only_the_near_doors_are_heard_knocking()
 	var a = game.audio
 	var door: Dictionary = h.doors[0]
 	game.player.position = FieldGrid.center(door["cell"]) + Vector3(0.5, 0, 2)
-	_dead_at(game, door)
+	_two_at(game, door)
 	a.played.clear()
 	a.last_tag_group = ""
-	h.tick(FieldHoldout.BANG_EVERY)
+	# Two hands: a blow every half BANG_EVERY.
+	h.tick(FieldHoldout.BANG_EVERY * 0.5)
 	assert_eq(_door_sounds(game), ["door_bang"])
 	assert_eq(a.last_tag_group, "", "the knock is not also played as any impact")
 	assert_eq(game.sounds[-1]["tag"], "bang", "the dead hear what they heard")
-	h.tick(FieldHoldout.BANG_EVERY * 3)
+	h.tick(FieldHoldout.BANG_EVERY * 1.5)
 	assert_eq(_door_sounds(game), ["door_bang", "door_bang", "door_bang", "door_break"], "the blow that breaks it is the break alone")
-	h.tick(FieldHoldout.BANG_EVERY * 3)
+	h.tick(FieldHoldout.BANG_EVERY * 1.5)
 	assert_eq(_door_sounds(game).size(), 4, "a breached door is not heard knocking")
 	a.played.clear()
 	h.doors[0]["hp"] = 4
 	h.doors[0]["wall"] = 2
-	h.tick(FieldHoldout.BANG_EVERY * 2)
+	h.tick(FieldHoldout.BANG_EVERY)
 	assert_eq(_door_sounds(game), ["door_bang", "door_wall"], "a wall is knocked on, then goes down")
 	var far: Dictionary = h.doors[0]
 	for other: Dictionary in h.doors:
@@ -210,12 +249,12 @@ func test_a_door_has_its_own_sounds_and_only_the_near_doors_are_heard_knocking()
 			far = other
 	for z in game.zombies.list:
 		z["state"] = "downed"
-	_dead_at(game, far)
+	_two_at(game, far)
 	a.played.clear()
-	h.tick(FieldHoldout.BANG_EVERY)
+	h.tick(FieldHoldout.BANG_EVERY * 0.5)
 	assert_eq(int(far["hp"]), 3)
 	assert_eq(_door_sounds(game), [], "the third door away is not heard knocking")
-	h.tick(FieldHoldout.BANG_EVERY * 3)
+	h.tick(FieldHoldout.BANG_EVERY * 1.5)
 	assert_eq(_door_sounds(game), ["door_break"], "but it is heard giving way")
 
 
