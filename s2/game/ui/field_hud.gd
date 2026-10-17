@@ -3,6 +3,9 @@ extends CanvasLayer
 ## one radio line, the portrait with bag and cold, sound icons at the moment
 ## of an action). Companion portraits, thumb buttons, cards and the end
 ## screen come and go. Taps on the world become orders (field_unified 10).
+## The look is UI 3단계 시안 2차 「성에 낀 계기」 (hud_skin.gd): glass pills,
+## matte round keys drawn inside the touch rects set here, a face that shows
+## the body (portrait_face.gd), paper slips for notes.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
@@ -12,9 +15,13 @@ const HordeDirector = preload("res://game/sim/horde_director.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
+const HudSkin = preload("res://game/ui/hud_skin.gd")
+const HudIcons = preload("res://game/ui/hud_icons.gd")
+const PortraitFace = preload("res://game/ui/portrait_face.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const GrabRules = preload("res://game/sim/grab_rules.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -32,7 +39,7 @@ const STICK_STOPS_FIGHT: float = 0.3  # a push this hard away from the target ca
 const DOUBLE_TAP_MS: int = 300
 ## The fixed stick (the default; build 47: a floating one made the thumb re-set
 ## it all the time). Home is 21 mm in and 14.5 mm up from the bottom-left corner,
-## under the run and crouch keys; a touch within STICK_CATCH radii of it takes the stick.
+## under the run key; a touch within STICK_CATCH radii of it takes the stick.
 const STICK_HOME_MM := Vector2(21.0, 14.5)
 const STICK_CATCH: float = 2.0
 ## The body picture slows the field, it does not stop it (body_injury 4.6).
@@ -40,16 +47,16 @@ const BODY_SLOW: float = 0.3
 ## The portrait sits top left under the pause key and the clock.
 const PORTRAIT_AT := Vector2(16.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
 const PORTRAIT_W: float = 290.0
-## State icons sit in a row right of the blood key: the two most urgent big,
-## the rest small (body_injury 4 '둘까지만 크게').
-## Narrow enough that all five stay on the left half of a 1280-wide screen.
-const TOAST_AT := Vector2(16.0 + 290.0 + 8.0 + 84.0 + 6.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+## Notes (paper slips) start under the blood key's row and right of the keys
+## over the stick (run and the lamp end 45 mm in), so a slip covers no key.
+const TOAST_AT := Vector2(45.0 * PX_PER_MM + 12.0, 14.0 + 11.0 * PX_PER_MM + 6.0 + 64.0)
 # State icons: a column down the right edge, under the zoom keys, as in Project
 # Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
 # saw them. User 2026-10-12: pictures, not words: a round plate each
 # (status_art.gd), 72 across ('a little smaller' than the 80 first tried), or
 # 64 or 80 from the settings.
 const STATUS_AT := Vector2(-16.0, 84.0)
+const SETTINGS_KEY: float = 72.0   # the gear's touch square, top right while paused
 const STATUS_SIZES: Array[int] = [72, 64, 80]
 const STATUS_SIZE_NAMES: Dictionary = {72: "보통", 64: "작게", 80: "크게"}
 const STATUS_ART_SIZE: int = 80   # the pictures are drawn once, for the biggest
@@ -94,6 +101,8 @@ const TOAST_WARN := "warn"          # save or system trouble: amber, long, tap t
 const TOAST_S: float = 3.5
 const TOAST_WARN_S: float = 6.0
 const TOAST_MAX: int = 4
+const TOAST_W: float = 560.0        # a note wider than this wraps onto a second line
+const RADIO_W: float = 700.0        # so does a radio call (the pill stays in the top middle)
 const SAY_S: float = 2.6            # a line over a companion's head stays this long
 const SAY_FONT: int = 20
 # A held train leaves: the field stands still and darkens, two lines come up,
@@ -112,6 +121,7 @@ const LEAVE_COLUMN_GAP: int = 24
 const LINE_S: float = 3.2
 const LINE_FONT: int = 24
 const SAY_UNDER_FONT: int = 16
+const SAY_HURT_INK := Color(0.45, 0.16, 0.07)   # rust ink on the paper: a wound, never red
 const HURT_FLASH_S: float = 0.7
 # Right thumb (bottom right): attack big in the corner, aim small beside it.
 const ATTACK_AT := Vector2(-192.0, -172.0)
@@ -119,6 +129,13 @@ const ATTACK_SIZE := Vector2(176.0, 156.0)
 const AIM_AT := Vector2(-312.0, -104.0)
 const AIM_SIZE := Vector2(108.0, 88.0)
 const MANUAL_SIZE := Vector2(92.0, 88.0)
+## Crouch rides the right thumb (decision 293, 배그처럼): on the right edge just
+## over attack, where shove was; shove moved left of it, and the situation and
+## leaving pads left of shove. The touch sizes are the hand-tested ones.
+const SHOVE_AT := Vector2(-277.0, -268.0)
+const SHOVE_SIZE := Vector2(140.0, 84.0)
+const CONTEXT_AT := Vector2(-425.0, -204.0)
+const DEPART_AT := Vector2(-425.0, -296.0)
 const ALL_ABOARD_SIZE := Vector2(150.0, 44.0)
 const ALLIES_UP: float = 140.0      # the companions' row's top, from the screen's bottom
 ## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
@@ -139,6 +156,12 @@ const TELL_RING_OUT: float = 40.0
 const TELL_FONT: int = 28
 const MOAN_R: float = 20.0
 const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search", "수색"], ["cover", "엄호"], ["retreat", "후퇴"]]
+## What a key shows inside its touch rect (시안 2차 11절: keys 44, the attack
+## pad 76, about 1.85 view px to a 시안 px). The touch rects above are the
+## hand-tested ones and do not change with the look.
+const KEY_SEEN: float = 82.0
+const ATTACK_SEEN: float = 140.0
+const FACE_SIZE: float = 84.0
 
 var game
 var theme: Theme
@@ -146,19 +169,27 @@ var root: Control
 var touch: Control
 var overlay: Control
 var clock_label: Label
+var day_label: Label
 var sun_bar: ProgressBar
 var weather_label: Label
 var top_panel: Control                # the clock's box, top left
+var urgent: bool = false              # dusk has begun: the radio and 'all aboard' burn amber
+var radio_pill: PanelContainer
+var radio_styles: Array = []          # [plain, urgent]
+var face: Control                     # the chief's face (portrait_face.gd)
+var cond_label: Label                 # the weapon's state, after its name
+var ammo_label: Label
+var tag_box: HBoxContainer            # the floor and blood-soaked tags beside the weapon
+var bag_button: Button                # 인벤토리: the weight carried, opens the bag panel
+var all_aboard_styles: Array = []     # [plain, urgent] key styles
 var feel_label: Label                 # the chief's aside beside the risk line
-var goal_label: Label                 # this stop's goals, under the weather (none on a plain stop)
+var goal_label: Label                 # the line under the clock (goal_shown; none on a plain stop)
 var radio_label: Label
 var radio_left: float = 0.0
 var portrait: PanelContainer
 var portrait_style: StyleBoxFlat
 var name_label: Label
 var status_label: Label
-var bag_bar: ProgressBar
-var bag_label: Label
 var weapon_label: Label
 var allies_box: HBoxContainer
 var ally_buttons: Array = []
@@ -168,6 +199,9 @@ var context_button: Button
 var depart_button: Button              # leaving: its own pad, there whenever the leader is by the train
 var context_rows: Array = []
 var context_t: float = 0.0
+var context_icon: String = "search"     # the situation pad's picture now (HudIcons.context_icon)
+var attack_icon: String = "-"           # the attack pad's picture now (_tick_attack_icon)
+var pause_shows_play: bool = false      # the pause key shows 'play' while paused
 var offer_box: HBoxContainer
 var toast_box: VBoxContainer
 var toasts: Array = []
@@ -260,6 +294,9 @@ func setup(field_game) -> void:
 	_build_toasts()
 	_build_grab()
 	_build_debug()
+	# The bag and the blood key keep to the card as it grows with the weapon's words.
+	portrait.resized.connect(_follow_portrait)
+	_follow_portrait()
 
 
 # ---------------------------------------------------------------- building
@@ -285,6 +322,78 @@ func _label(text: String, size: int = 22, color: Color = INK) -> Label:
 	l.add_theme_color_override("font_color", color)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
+
+
+## A glass pill (시안 .fglass) that lets touches through.
+func _glass(pad_x: float = 12.0, pad_y: float = 4.0) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", HudSkin.glass(pad_x, pad_y))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return p
+
+
+## The semibold face of the theme's font, for the few words that lead a line.
+var _bold_font: Font = null
+
+
+func _bold(c: Control) -> void:
+	if _bold_font == null:
+		if theme.default_font is SystemFont:
+			var f := SystemFont.new()
+			f.font_names = (theme.default_font as SystemFont).font_names
+			f.font_weight = 600
+			_bold_font = f
+		else:
+			var v := FontVariation.new()
+			v.base_font = theme.default_font
+			v.variation_embolden = 0.6
+			_bold_font = v
+	c.add_theme_font_override("font", _bold_font)
+
+
+## A line icon as a picture, `px` across.
+func _icon_rect(id: String, px: int, color: Color) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = HudIcons.texture(id, px, color)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.custom_minimum_size = Vector2(px, px)
+	t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return t
+
+
+## Dress a key or pad in the 시안 look: a matte disc (or a pill) `seen` across
+## inside its touch rect, which stays as it is; an icon over its word. `on` is
+## how it looks while set or held; `rest` lights it even at rest (lamp pills).
+func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = HudSkin.Light.LAMP, rest: int = HudSkin.Light.NONE, icon_px: int = 32) -> void:
+	var st: Dictionary = HudSkin.key_styles(seen, round_key, on, rest)
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		b.add_theme_stylebox_override(k, st[k])
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var ink: Color = HudSkin.LAMP_INK if rest != HudSkin.Light.NONE else HudSkin.INK
+	for k in ["font_color", "font_hover_color", "font_focus_color"]:
+		b.add_theme_color_override(k, ink)
+	for k in ["font_pressed_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(k, HudSkin.LAMP_INK)
+	for k in ["icon_normal_color", "icon_hover_color", "icon_focus_color"]:
+		b.add_theme_color_override(k, ink)
+	for k in ["icon_pressed_color", "icon_hover_pressed_color"]:
+		b.add_theme_color_override(k, HudSkin.LAMP_INK)
+	b.add_theme_constant_override("h_separation", 6)
+	_set_icon(b, icon, icon_px, not round_key)
+
+
+## The icon over the word on a round key, before it on a pill, alone if no word.
+func _set_icon(b: Button, icon: String, icon_px: int, beside: bool = false) -> void:
+	b.icon = HudIcons.texture(icon, icon_px, Color.WHITE) if icon != "" else null
+	b.add_theme_constant_override("icon_max_width", icon_px)
+	if beside:
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	else:
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP if b.text != "" else VERTICAL_ALIGNMENT_CENTER
 
 
 func _button(text: String, cb: Callable, min_size := Vector2(96, 64), size: int = 22) -> Button:
@@ -313,19 +422,6 @@ func _pad(text: String, at: Vector2, size: Vector2, font: int = 22, anchor: int 
 	return b
 
 
-## A toggle that is on keeps a brass rim; running glows amber (presentation_motion 5).
-func _lit_style(b: Button, rim: Color) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.3, 0.27, 0.2, 0.98)
-	sb.border_color = rim
-	sb.set_border_width_all(4)
-	sb.set_corner_radius_all(4)
-	b.add_theme_stylebox_override("pressed", sb)
-	b.add_theme_stylebox_override("hover_pressed", sb)
-	b.add_theme_color_override("font_pressed_color", rim)
-	b.add_theme_color_override("font_hover_pressed_color", rim)
-
-
 func _bar(color: Color) -> ProgressBar:
 	var b := ProgressBar.new()
 	b.show_percentage = false
@@ -343,48 +439,100 @@ func _bar(color: Color) -> ProgressBar:
 func _build_top() -> void:
 	# Tactical pause sits at the left end of the gauge row, about 11 mm, away
 	# from the fight under the right thumb (presentation_motion 666274f).
-	pause_button = _pad("멈춤", Vector2(16, 14), Vector2(11.0 * PX_PER_MM, 11.0 * PX_PER_MM), 22, Control.PRESET_TOP_LEFT)
-	var tl := _panel()
+	pause_button = _pad("", Vector2(16, 14), Vector2(11.0 * PX_PER_MM, 11.0 * PX_PER_MM), 22, Control.PRESET_TOP_LEFT)
+	_dress(pause_button, "pause", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	pause_button.tooltip_text = "멈춤"
+	# The clock is one glass line (시안 2차 11절 「12:42 · 1일째 · −14℃」), the
+	# weather beside it; the share of daylight left runs as a hairline under it.
+	var tl := VBoxContainer.new()
 	tl.position = Vector2(16 + 11.0 * PX_PER_MM + 10, 14)
+	tl.add_theme_constant_override("separation", 6)
+	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pill := _glass(16.0, 6.0)
+	tl.add_child(pill)
 	var v := VBoxContainer.new()
-	tl.add_child(v)
-	clock_label = _label("D1 10:30", 28)
-	v.add_child(clock_label)
-	sun_bar = _bar(Color(0.92, 0.78, 0.42))
+	v.add_theme_constant_override("separation", 4)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_child(v)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 8)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(line)
+	clock_label = _label("10:30", 26)
+	_bold(clock_label)
+	line.add_child(clock_label)
+	day_label = _label("· 1일째", 20, HudSkin.INK2)
+	line.add_child(day_label)
+	weather_label = _label("· %s · −14℃" % game.weather.label(), 20, HudSkin.INK2)
+	line.add_child(weather_label)
+	for l: Label in [clock_label, day_label, weather_label]:
+		l.size_flags_vertical = Control.SIZE_SHRINK_END
+	sun_bar = _bar(Color(HudSkin.LAMP1.r, HudSkin.LAMP1.g, HudSkin.LAMP1.b, 0.8))
+	sun_bar.custom_minimum_size = Vector2(0, 3)
 	sun_bar.max_value = 1.0
 	v.add_child(sun_bar)
-	weather_label = _label(game.weather.label() + " · 영하 14도", 16, DIM)
-	v.add_child(weather_label)
 	if game.mission_play != null and (game.mission_play.active() or game.holdout.enabled()):
-		goal_label = _label(game.goal_text(), 16, BRASS)
-		v.add_child(goal_label)
-	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# A glass line of its own under the clock (시안 .fgoal): a held train's
+		# state, and the stop's goals once they are opened (goal_shown).
+		var gp := _glass(14.0, 5.0)
+		tl.add_child(gp)
+		var mark := _icon_rect("compass", 20, HudSkin.GOAL)
+		mark.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		gp.add_child(mark)
+		goal_label = _label(goal_shown(), 18, HudSkin.GOAL)
+		var room := StyleBoxEmpty.new()
+		room.content_margin_left = 28
+		goal_label.add_theme_stylebox_override("normal", room)
+		gp.add_child(goal_label)
+		gp.visible = goal_label.text != ""
 	root.add_child(tl)
 	top_panel = tl
 	if goal_label != null:
 		# The chief's aside beside the risk line: there while that line is, to
-		# the right of the box (under it is the chief's own panel).
-		feel_label = _label(game.holdout.feel_line(), 16, DIM)
-		feel_label.visible = feel_label.text != ""
+		# the right of it (under it is the chief's own card).
+		feel_label = _label(game.holdout.feel_line(), 17, HudSkin.INK2)
+		feel_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+		feel_label.add_theme_constant_override("outline_size", 5)
+		feel_label.visible = feel_label.text != "" and goal_label.get_parent().visible
 		feel_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(feel_label)
+	# The radio: one glass line in the top middle, the set's mark before the
+	# words (시안 .fradio). From dusk it burns amber like 'all aboard'.
+	radio_pill = PanelContainer.new()
+	radio_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var calm: StyleBoxFlat = HudSkin.glass(18.0, 6.0)
+	var hot: StyleBoxFlat = HudSkin.glass(18.0, 6.0)
+	hot.bg_color = Color(0.36, 0.2, 0.07, 0.78)
+	hot.shadow_color = Color(HudSkin.GLOW.r, HudSkin.GLOW.g, HudSkin.GLOW.b, 0.5)
+	hot.shadow_size = 14
+	hot.shadow_offset = Vector2.ZERO
+	radio_styles = [calm, hot]
+	radio_pill.add_theme_stylebox_override("panel", calm)
+	var rh := HBoxContainer.new()
+	rh.add_theme_constant_override("separation", 10)
+	rh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	radio_pill.add_child(rh)
+	rh.add_child(_icon_rect("radio", 28, HudSkin.INK2))
 	radio_label = _label("", 22, INK)
-	radio_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_bold(radio_label)
 	radio_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	radio_label.position = Vector2(-380, 18)
-	radio_label.size = Vector2(760, 40)
-	radio_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	radio_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	radio_label.add_theme_constant_override("outline_size", 6)
-	root.add_child(radio_label)
+	radio_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	radio_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rh.add_child(radio_label)
+	radio_pill.position = Vector2(0, 14)
+	radio_pill.visible = false
+	root.add_child(radio_pill)
+	# Test keys, top right: zoom and the measures panel (not part of the game's
+	# look), left of the corner the settings gear takes while paused.
 	var tr := HBoxContainer.new()
 	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(-238, 14)
+	tr.position = Vector2(-238.0 - SETTINGS_KEY - 8.0, 14)
 	tr.add_theme_constant_override("separation", 8)
 	root.add_child(tr)
-	tr.add_child(_button("−", _zoom.bind(4.0), Vector2(64, 56)))
-	tr.add_child(_button("+", _zoom.bind(-4.0), Vector2(64, 56)))
-	tr.add_child(_button("D", _toggle_debug, Vector2(56, 56)))
+	for row in [["−", _zoom.bind(4.0), 64.0], ["+", _zoom.bind(-4.0), 64.0], ["D", _toggle_debug, 56.0]]:
+		var k := _button(row[0], row[1], Vector2(row[2], 56), 22)
+		_dress(k, "", Vector2(52, 52), true)
+		tr.add_child(k)
 
 
 func _zoom(step: float) -> void:
@@ -396,9 +544,9 @@ func _toggle_debug() -> void:
 
 
 func _build_portrait() -> void:
-	portrait = _panel()
-	portrait_style = portrait.get_theme_stylebox("panel").duplicate()
-	portrait_style.set_border_width_all(0)
+	portrait = PanelContainer.new()
+	portrait_style = StyleBoxFlat.new()
+	portrait_style.bg_color = Color(0, 0, 0, 0)
 	portrait.add_theme_stylebox_override("panel", portrait_style)
 	# Top left, under the clock: the bottom-left corner is the fixed stick's
 	# (it sat under the thumb there). A tap on it opens the body picture; the
@@ -407,26 +555,62 @@ func _build_portrait() -> void:
 	portrait.position = PORTRAIT_AT
 	portrait.custom_minimum_size = Vector2(PORTRAIT_W, 0)
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The chief's card (시안 2차 11절): the face shows the body, so there are no
+	# state words and no state key on it; the weapon and its state beside it.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait.add_child(row)
+	face = PortraitFace.new()
+	face.custom_minimum_size = Vector2.ONE * FACE_SIZE
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(face)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 0)
-	portrait.add_child(v)
-	# Name and state share a line: the panel must end above the run and crouch keys.
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 10)
-	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(top)
-	name_label = _label("열차장", 24)
-	top.add_child(name_label)
-	status_label = _label("멀쩡함", 18, DIM)
-	top.add_child(status_label)
-	weapon_label = _label("", 18, INK)
-	v.add_child(weapon_label)
-	bag_label = _label("가방", 16, DIM)
-	v.add_child(bag_label)
-	bag_bar = _bar(Color(0.75, 0.72, 0.6))
-	bag_bar.custom_minimum_size = Vector2(260, 10)
-	v.add_child(bag_bar)
+	v.add_theme_constant_override("separation", 6)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(v)
+	var wp := _glass(16.0, 6.0)
+	wp.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	v.add_child(wp)
+	var wh := HBoxContainer.new()
+	wh.add_theme_constant_override("separation", 6)
+	wh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wp.add_child(wh)
+	weapon_label = _label("", 21, INK)
+	_bold(weapon_label)
+	wh.add_child(weapon_label)
+	cond_label = _label("", 19, HudSkin.GOOD)
+	wh.add_child(cond_label)
+	ammo_label = _label("", 19, HudSkin.INK2)
+	wh.add_child(ammo_label)
+	# The floor and a blood-soaked coat, as small tags under the weapon; the
+	# chief's name is not written (the card is the chief's).
+	tag_box = HBoxContainer.new()
+	tag_box.add_theme_constant_override("separation", 6)
+	tag_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(tag_box)
+	name_label = _tag("")
+	tag_box.add_child(name_label.get_parent())
+	status_label = _tag("피범벅", HudSkin.HEED)
+	tag_box.add_child(status_label.get_parent())
 	root.add_child(portrait)
+
+
+## The bag key right under the card, the blood key at its right end. Laid out
+## from the card's minimum size too, which is known before the first frame.
+func _follow_portrait() -> void:
+	var s: Vector2 = portrait.size.max(portrait.get_combined_minimum_size())
+	bag_box.position = portrait.position + Vector2(0, s.y + 6.0)
+	blood_button.position = portrait.position + Vector2(s.x + 8.0, (FACE_SIZE - blood_button.size.y) * 0.5)
+
+
+## A small glass tag holding one word; returns its label.
+func _tag(text: String, color: Color = HudSkin.INK2) -> Label:
+	var p := _glass(10.0, 2.0)
+	var l := _label(text, 16, color)
+	p.add_child(l)
+	return l
 
 
 func _build_allies() -> void:
@@ -437,22 +621,45 @@ func _build_allies() -> void:
 	allies_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	allies_box.add_theme_constant_override("separation", 10)
 	root.add_child(allies_box)
+	# Companion chips: glass, the name and weapon over the order and what they
+	# are at (시안 .fchip; the faces wait for the chips' own place, a morning call).
 	for p in game.squad:
 		if p == game.player:
 			continue
-		var b := _button(_ally_text(p, ""), _ally_menu.bind(p), Vector2(140, 76), 18)
+		var b := _button(_ally_text(p, ""), _ally_menu.bind(p), Vector2(140, 76), 17)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_chip(b)
 		allies_box.add_child(b)
 		ally_buttons.append({"p": p, "b": b})
-	crew_button = _button("작업조", work_panel, Vector2(110, 76), 18)
+	crew_button = _button("작업조", work_panel, Vector2(110, 76), 17)
+	_chip(crew_button)
 	crew_button.visible = false
 	allies_box.add_child(crew_button)
 
 
+## A companion chip's glass; a pressed chip glows at its foot like a lamp.
+func _chip(b: Button) -> void:
+	var rest: StyleBoxFlat = HudSkin.glass(14.0, 6.0)
+	rest.set_corner_radius_all(26)
+	var lit: StyleBoxFlat = rest.duplicate()
+	lit.bg_color = Color(0.3, 0.2, 0.09, 0.78)
+	lit.border_color = HudSkin.LAMP2
+	lit.set_border_width_all(2)
+	for k in ["normal", "hover", "focus"]:
+		b.add_theme_stylebox_override(k, rest)
+	for k in ["pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(k, lit)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(k, HudSkin.INK)
+	b.add_theme_constant_override("line_spacing", -2)
+
+
 ## Thumb pads (field_unified 10, user 17:15, coordinators 18:10-18:30). Right:
-## aim with a small 'manual' switch, attack, shove and the situation pad
-## (only when there is something to do). Left, above the stick: run and
-## crouch toggles, the two states that ride on moving; pause top left. These are pads, not Buttons: one thumb is
+## aim with a small 'manual' switch (only with a gun in hand), attack, shove,
+## crouch (decision 293) and the situation pad (only when there is something
+## to do). Left, above the stick: the run toggle and, after dark, the lamp;
+## pause top left. These are pads, not Buttons: one thumb is
 ## on the stick, so the other is a second finger, which Godot buttons do not
 ## take. The HUD hit-tests them itself.
 func _build_thumbs() -> void:
@@ -460,36 +667,55 @@ func _build_thumbs() -> void:
 	# is in aim's row (user 2026-10-12). With 'one main action' the aim pad is
 	# the only one, so it takes the big place.
 	var one: bool = bool(game.opts.get("primary_one", false))
-	attack_button = _pad("공격", ATTACK_AT, ATTACK_SIZE, 30)
-	aim_button = _pad("조준", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 30 if one else 22)
-	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 20)
-	shove_button = _pad("밀치기", Vector2(-176, -268), Vector2(140, 84))
-	context_button = _pad("상황", Vector2(-344, -204), Vector2(140, 84), 20)
-	depart_button = _pad("출발", Vector2(-344, -296), Vector2(140, 84), 20)
+	attack_button = _pad("공격", ATTACK_AT, ATTACK_SIZE, 20)
+	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 52)
+	aim_button = _pad("조준", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
+	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 48 if one else 30)
+	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 18)
+	_dress(manual_button, "", Vector2.ONE * 76.0, true)
+	shove_button = _pad("밀치기", SHOVE_AT, SHOVE_SIZE, 15)
+	_dress(shove_button, "shove", Vector2.ONE * 80.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 28)
+	# Crouch: a round key on the right edge over attack (decision 293). It lights
+	# brass from inside while on.
+	var key := 11.0 * PX_PER_MM
+	crouch_button = _pad("", Vector2(-16.0 - key, ATTACK_AT.y - 8.0 - key), Vector2(key, key), 20)
+	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 40)
+	crouch_button.tooltip_text = "웅크림"
+	# The situation pad and leaving are lamp pills with a brass rim (the lamp
+	# keys that are not round keep it, 시안 3절); dark ink on the light.
+	context_button = _pad("상황", CONTEXT_AT, Vector2(140, 84), 17)
+	_dress(context_button, "search", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 22)
+	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), 19)
+	_dress(depart_button, "train", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 24)
 	depart_button.visible = false
 	# Every companion back to the train at one press (user 2026-10-11): under
-	# the companions' row, at its right end (tick puts it there).
-	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
+	# the companions' row, at its right end (tick puts it there). Glass by day;
+	# from dusk it burns like a lamp (시안 2차 11절).
+	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 17, Control.PRESET_TOP_LEFT)
+	all_aboard_styles = [HudSkin.key_styles(ALL_ABOARD_SIZE, false), HudSkin.key_styles(ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
+	_dress(all_aboard_button, "train", ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 20)
 	_place_allies()
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
 	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
-	# up, two 11 mm keys 3 mm apart (presentation_motion 5, 57446c8).
-	var key := 11.0 * PX_PER_MM
+	# up, an 11 mm key (presentation_motion 5, 57446c8).
 	var up := -(35.0 * PX_PER_MM + key)
-	run_button = _pad("뛰기", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
-	crouch_button = _pad("웅크림", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 20, Control.PRESET_BOTTOM_LEFT)
-	# The lantern key, a third in the row; it is there only after sunset.
-	lamp_button = _pad("등불", Vector2(20.0 * PX_PER_MM + 2.0 * (key + 3.0 * PX_PER_MM), up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	# The round keys show a picture and no word (시안 2차 11절, 배그처럼); a key
+	# that is on lights from inside, running and the lamp amber, crouching brass.
+	run_button = _pad("", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	_dress(run_button, "run", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	run_button.tooltip_text = "뛰기"
+	# The lantern key, right of run 3 mm apart; it is there only after sunset.
+	lamp_button = _pad("", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	_dress(lamp_button, "lamp", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 36)
+	lamp_button.tooltip_text = "등불"
 	lamp_button.visible = false
-	_lit_style(lamp_button, AMBER)
-	_lit_style(run_button, AMBER)
-	_lit_style(crouch_button, BRASS)
 	# A blood drop on the portrait's corner while you bleed: one press stops the
 	# worst of it and binds it (body_injury 4.6, 0f95fc0). Nothing more.
-	# It sits at the portrait's right edge, clear of the stick.
-	blood_button = _pad("지혈", PORTRAIT_AT + Vector2(PORTRAIT_W + 8.0, 0), Vector2(84, 64), 24, Control.PRESET_TOP_LEFT)
-	blood_button.add_theme_color_override("font_color", WARN)
+	# It sits at the portrait's right edge, clear of the stick: a lamp pill
+	# (tick keeps it there as the card widens with the weapon's words).
+	blood_button = _pad("지혈", PORTRAIT_AT + Vector2(PORTRAIT_W + 8.0, 0), Vector2(84, 64), 19, Control.PRESET_TOP_LEFT)
+	_dress(blood_button, "bandage", Vector2(84, 52), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 18)
 	blood_button.visible = false
 	# State icons (user, build 47): press one and it says what it does to you.
 	for i in STATUS_SLOTS:
@@ -504,19 +730,26 @@ func _build_thumbs() -> void:
 	_place_status()
 	# Paused: the settings (stick, radio) open from one key; they are not on
 	# the playing screen themselves (user 2026-10-12).
-	settings_button = _pad("설정", Vector2(-70, 64), Vector2(140, 56), 20, Control.PRESET_CENTER_TOP)
+	# A round gear key in the top right corner (시안 2차 11절), over the state icons.
+	settings_button = _pad("", Vector2(-16.0 - SETTINGS_KEY, STATUS_AT.y - 4.0 - SETTINGS_KEY), Vector2.ONE * SETTINGS_KEY, 19, Control.PRESET_TOP_RIGHT)
+	settings_button.tooltip_text = "설정"
+	_dress(settings_button, "gear", Vector2.ONE * 64.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 34)
 	settings_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
 	# The bag is right under the chief's portrait (user 2026-10-12; tick keeps
 	# it there as the portrait grows). There is no swap button here any more:
-	# swapping is inside the bag panel (build 47).
+	# swapping is inside the bag panel (build 47). It is 인벤토리 now and shows
+	# the weight carried on it (시안 2차 11절 「5.5/8」).
 	bag_box = HBoxContainer.new()
 	bag_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	bag_box.position = PORTRAIT_AT + Vector2(0, 96)
 	bag_box.add_theme_constant_override("separation", 8)
 	root.add_child(bag_box)
-	bag_box.add_child(_button("가방", bag_panel, Vector2(110, 52), 20))
+	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), 20)
+	bag_button.tooltip_text = "인벤토리"
+	_dress(bag_button, "inv", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 22)
+	bag_box.add_child(bag_button)
 	offer_box = HBoxContainer.new()
 	offer_box.set_anchors_preset(Control.PRESET_CENTER)
 	offer_box.position = Vector2(-260, 90)
@@ -526,9 +759,8 @@ func _build_thumbs() -> void:
 
 func _build_toasts() -> void:
 	toast_box = VBoxContainer.new()
-	# Right of the portrait and the blood key, under the state icons.
 	toast_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	toast_box.position = TOAST_AT + Vector2(0, 64.0)
+	toast_box.position = TOAST_AT
 	toast_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(toast_box)
 
@@ -539,10 +771,10 @@ func _build_grab() -> void:
 	v.position = Vector2(-140, 40)
 	root.add_child(v)
 	grab_button = _button("밀쳐!", _shove, Vector2(280, 120), 44)
-	grab_button.add_theme_color_override("font_color", WARN)
+	_dress(grab_button, "shove", Vector2(280, 108), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 40)
 	v.add_child(grab_button)
-	grab_bar = _bar(WARN)
-	grab_bar.custom_minimum_size = Vector2(280, 14)
+	grab_bar = _bar(HudSkin.LAMP1)
+	grab_bar.custom_minimum_size = Vector2(280, 10)
 	grab_bar.max_value = 1.0
 	v.add_child(grab_bar)
 	grab_button.visible = false
@@ -569,6 +801,9 @@ func _build_debug() -> void:
 	h2.add_child(_button("해 질 녘으로", _debug_dusk, Vector2(140, 48), 16))
 	h2.add_child(_button("폭풍 층", _debug_storm, Vector2(96, 48), 16))
 	h2.add_child(_button("망자 세우기", _debug_stand, Vector2(110, 48), 16))
+	var h3 := HBoxContainer.new()
+	v.add_child(h3)
+	h3.add_child(_button("동작 시험", _debug_motion, Vector2(110, 48), 16))
 	debug_panel.visible = false
 	root.add_child(debug_panel)
 
@@ -618,6 +853,64 @@ func _debug_stand() -> void:
 	toast("시험: 보이는 곳에 망자 %d을 세웠다(바란 수 %d)." % [stood.size(), want])
 
 
+## Test key: sets up one scene of motion at a time in front of the chief, so
+## the same moment can be filmed on the phone before and after a change to how
+## bodies move. Each press clears the last scene's dead and sets up the next.
+## The rules then run as ever (a held chief is bitten unless they shove free).
+const MOTION_SCENES: Array[String] = ["잡힘", "덤빔", "밀칠 망자 둘", "뒤지기", "치료", "넘어짐"]
+var motion_step: int = -1
+var motion_dead: Array = []
+
+
+func _debug_motion() -> void:
+	var p = game.player
+	for z in motion_dead:
+		if p.grabbers.has(z):
+			p.release_grab(z)
+		game.zombies.list.erase(z)
+	motion_dead.clear()
+	motion_step = (motion_step + 1) % MOTION_SCENES.size()
+	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
+	var side := Vector3(forward.z, 0, -forward.x)
+	match MOTION_SCENES[motion_step]:
+		"잡힘":
+			var z: Dictionary = _motion_dead(p.position + forward * 0.5, p)
+			z["state"] = "grab"
+			z["victim"] = p
+			z["cooldown"] = 1.6
+			p.grabbers.append(z)
+			p.grab_front = true
+			p.grab_left = GrabRules.window(true, 1, int(p.skills["melee"]), int(p.skills["strength"]), float(p.mults()["shove_window"]))
+			p.cancel_action()
+			p.stop()
+			p.aim.stop()
+			grab_alert(true)
+		"덤빔":
+			var z: Dictionary = _motion_dead(p.position + forward * 3.0, p)
+			z["state"] = "chase"
+			z["victim"] = p
+		"밀칠 망자 둘":
+			for s in [-0.5, 0.5]:
+				var z: Dictionary = _motion_dead(p.position + forward * 1.0 + side * s, p)
+				z["state"] = "chase"
+				z["victim"] = p
+		"뒤지기":
+			p.start_action("search", "뒤지기", 5.0, func() -> void: pass)
+		"치료":
+			p.start_action("treat", "붕대", 5.0, func() -> void: pass)
+		"넘어짐":
+			game.combat.fall(p, "시험으로 넘어졌다", 0.0)
+	toast("시험 동작: " + MOTION_SCENES[motion_step])
+
+
+func _motion_dead(at: Vector3, facing_who) -> Dictionary:
+	var z: Dictionary = game.zombies.spawn("dead", at)
+	z["angle"] = atan2(facing_who.position.x - at.x, facing_who.position.z - at.z)
+	z["seen_t"] = 1.0
+	motion_dead.append(z)
+	return z
+
+
 ## Test key: what a storm stop draws, one layer off at a time (phone frames).
 func _debug_storm() -> void:
 	if game.storm.is_empty():
@@ -654,21 +947,28 @@ func tick(delta: float) -> void:
 	fps_t -= delta
 	frame_ms = lerpf(frame_ms, delta * 1000.0, 0.1)
 	var p = game.player
-	clock_label.text = game.clock.label()
+	_tick_clock()
 	if goal_label != null:
-		goal_label.text = game.goal_text()
+		goal_label.text = goal_shown()
+		var gp: Control = goal_label.get_parent()
+		gp.visible = goal_label.text != ""
 		feel_label.text = game.holdout.feel_line()
-		feel_label.visible = feel_label.text != ""
-		feel_label.position = top_panel.position + Vector2(top_panel.size.x + 10.0, goal_label.position.y + 8.0)
+		feel_label.visible = feel_label.text != "" and gp.visible
+		feel_label.position = gp.global_position + Vector2(gp.size.x + 10.0, (gp.size.y - feel_label.size.y) * 0.5)
 	sun_bar.value = game.clock.sun_fraction()
 	radio_left -= delta
 	radio_label.modulate.a = clampf(radio_left / 1.5, 0.0, 1.0)
+	_tick_urgent()
+	radio_pill.modulate.a = radio_label.modulate.a
+	radio_pill.visible = radio_label.text != "" and radio_left > 0.0
+	if radio_pill.visible:
+		radio_pill.position.x = (_view_size().x - radio_pill.size.x) * 0.5
 	_tick_portrait(p)
 	_tick_allies()
 	_tick_grab(p, delta)
 	_tick_toasts(delta)
 	_tick_says(delta)
-	bag_box.position = portrait.position + Vector2(0, portrait.size.y + 6.0)
+	_follow_portrait()
 	context_t -= delta
 	if context_t <= 0.0:
 		context_t = 0.4
@@ -699,12 +999,66 @@ func tick(delta: float) -> void:
 		bleed_hint_done = true
 		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
 	_tick_status(p)
-	pause_button.text = "계속" if game.paused else "멈춤"
+	if pause_shows_play != game.paused:
+		pause_shows_play = game.paused
+		_set_icon(pause_button, "play" if game.paused else "pause", 30)
 	settings_button.visible = game.paused and not modal_open and leaving.is_empty()
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
 	overlay.queue_redraw()
+
+
+## The line under the clock (decision 293 ②): the stop's goals only once the
+## technology opens them (opts goal_line; till then they are in the bag
+## panel's journal). A held train's clock, doors and risk show all the same:
+## they are the stop's state, not goals.
+func goal_shown() -> String:
+	if bool(game.opts.get("goal_line", false)):
+		return game.goal_text()
+	var h = game.holdout
+	if h.enabled() and (h.opened or h.mode == "roll" or not game.mission_play.active()):
+		return h.goal_line()
+	return ""
+
+
+## The clock line: the time, which day, then the weather and the cold.
+func _tick_clock() -> void:
+	var m: int = maxi(int(floor(game.clock.game_minutes())), 0)
+	var in_day: int = m % 1440
+	clock_label.text = "%02d:%02d" % [in_day / 60, in_day % 60]
+	day_label.text = "· %d일째" % (1 + m / 1440)
+	weather_label.text = "· %s · −14℃" % game.weather.label()
+
+
+## From dusk (14:50, when the light starts to go) the radio and 'all aboard'
+## burn amber (시안 2차 11절); before it they are glass.
+func _tick_urgent() -> void:
+	var now: bool = game.clock.dusk_share() > 0.0 or game.clock.is_dark()
+	if now == urgent:
+		return
+	urgent = now
+	radio_pill.add_theme_stylebox_override("panel", radio_styles[1 if urgent else 0])
+	radio_label.add_theme_color_override("font_color", HudSkin.URGENT if urgent else INK)
+	var st: Dictionary = all_aboard_styles[1 if urgent else 0]
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		all_aboard_button.add_theme_stylebox_override(k, st[k])
+	var ink: Color = HudSkin.LAMP_INK if urgent else HudSkin.INK
+	for k in ["font_color", "font_hover_color", "font_focus_color", "icon_normal_color", "icon_hover_color", "icon_focus_color"]:
+		all_aboard_button.add_theme_color_override(k, ink)
+
+
+## The attack pad shows what is in hand: an axe for a blade or a club, a gun
+## for a gun, only its word for bare hands.
+func _tick_attack_icon(p) -> void:
+	var id: String = p.weapon_id()
+	var want: String = "" if id == "" else ("gun" if W.is_ranged(id) else "axe")
+	if want == attack_icon:
+		return
+	attack_icon = want
+	_set_icon(attack_button, want, 52)
+	if bool(game.opts.get("primary_one", false)):
+		_set_icon(aim_button, "aim" if want == "gun" else want, 48)
 
 
 ## A finger still down on a raider who has just given up, ran or been taken:
@@ -758,43 +1112,52 @@ func status_line(row: Dictionary) -> String:
 
 
 func _tick_portrait(p) -> void:
+	# The face carries the body: the most urgent look, frost on its rim while
+	# cold (s2_station 2.7 '추움' tier; decision 293 ①).
+	face.show_body(p)
 	var lv: int = game.level_of(p.position)
-	name_label.text = p.display_name + (" · %d층" % (lv + 1) if lv > 0 else (" · 지하" if lv < 0 else ""))
-	var words: String = p.body.status_words()
-	if p.cold_level() >= 1 and words == "멀쩡함":
-		words = "추움"
-	if p.blood_soaked:
-		words += " · 피범벅"
-	status_label.text = words
-	status_label.add_theme_color_override("font_color", WARN if p.body.bleed >= 2 or p.body.infection == "bite" else DIM)
-	# Cold shows as frost on the portrait border (s2_station 2.7, '추움' tier).
-	var cold: bool = p.cold_level() >= 1
-	portrait_style.set_border_width_all(4 if cold else 0)
-	portrait_style.border_color = FROST
+	name_label.text = "%d층" % (lv + 1) if lv > 0 else ("지하" if lv < 0 else "")
+	name_label.get_parent().visible = name_label.text != ""
+	status_label.get_parent().visible = p.blood_soaked
+	tag_box.visible = name_label.text != "" or p.blood_soaked
+	# The weapon in hand and its state in its own colour (시안 「손도끼 (양호)」).
 	var h: Dictionary = p.weapon()
 	var wid: String = String(h.get("id", ""))
+	var cond := ""
+	var cond_ink: Color = HudSkin.GOOD
+	var extra := ""
 	var text := "맨손"
 	if wid != "":
 		var d: Dictionary = W.get_data(wid)
-		text = "%s · %s" % [d.get("name", wid), W.CONDITION_NAMES[W.condition_level(float(h["condition"]))]]
+		text = String(d.get("name", wid))
+		var level: int = W.condition_level(float(h["condition"]))
+		cond = "(%s)" % W.CONDITION_NAMES[level]
+		cond_ink = [HudSkin.GOOD, HudSkin.HEED, HudSkin.BAD][level]
 		if bool(h.get("broken", false)):
-			text = "%s · 망가짐" % d.get("name", wid)
+			cond = "(망가짐)"
+			cond_ink = HudSkin.BAD
 		elif W.is_ranged(wid):
-			text += "  %d/%d · 남은 %d" % [int(h["loaded"]), int(d["mag"]), int(game.ammo.get(d["ammo"], 0))]
+			extra = "%d/%d · 남은 %d" % [int(h["loaded"]), int(d["mag"]), int(game.ammo.get(d["ammo"], 0))]
 			if p.jam_t > 0.0:
-				text += " · 걸림"
+				extra += " · 걸림"
 			elif p.reload_t > 0.0:
-				text += " · 장전"
+				extra += " · 장전"
 	if p.hands.size() > 1:
-		text += "   (허리: %s)" % W.get_data(p.hands[1]["id"]).get("name", "")
+		extra += ("   " if extra != "" else "") + "허리: %s" % W.get_data(p.hands[1]["id"]).get("name", "")
 	weapon_label.text = text
-	var lim: float = p.carry_limit()
-	var wgt: float = p.weight()
-	bag_bar.max_value = maxf(lim, 0.1)
-	bag_bar.value = minf(wgt, lim)
+	cond_label.text = cond
+	cond_label.visible = cond != ""
+	cond_label.add_theme_color_override("font_color", cond_ink)
+	ammo_label.text = extra
+	ammo_label.visible = extra != ""
+	_tick_attack_icon(p)
+	# 인벤토리 carries the weight: amber past half, the bad colour once it spills.
 	var state: int = p.carry_state()
-	bag_label.text = "%s %.1f/%.0f · %s" % [Carry.BAGS[p.bag]["name"], wgt, lim, Carry.STATE_NAMES[state]]
-	(bag_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = WARN if state >= 2 else Color(0.75, 0.72, 0.6)
+	bag_button.text = "%.1f/%.0f" % [p.weight(), p.carry_limit()]
+	bag_button.tooltip_text = "인벤토리 · %s · %s" % [Carry.BAGS[p.bag]["name"], Carry.STATE_NAMES[state]]
+	var heavy: Color = [HudSkin.INK, HudSkin.HEED, HudSkin.BAD, HudSkin.BAD][clampi(state, 0, 3)]
+	for k in ["font_color", "font_hover_color", "font_focus_color"]:
+		bag_button.add_theme_color_override(k, heavy)
 
 
 ## Short name of the weapon in hand ("펌프식 산탄총" -> "산탄총").
@@ -919,38 +1282,44 @@ func _draw_says(view_size: Vector2) -> void:
 		overlay.draw_rect(Rect2(Vector2.ZERO, Vector2(14, view_size.y)), edge)
 		overlay.draw_rect(Rect2(Vector2(view_size.x - 14, 0), Vector2(14, view_size.y)), edge)
 	var font: Font = theme.default_font
-	var taken: Array = []   # people standing together: the lines go one above another
+	var taken: Array = []   # people standing together: the slips go one above another
+	var pad := Vector2(10, 4)
 	for s in says:
 		var at: Vector2 = _project(s["p"].position + Vector3(0, 2.3, 0))
 		var a: float = clampf(float(s["t"]) / 0.6, 0.0, 1.0)
 		# Rows, top to bottom: the shouted line, then what happened (small when under a line).
+		# Ink on a paper slip, a little askew (시안 .fsay); a wound in rust ink.
 		var rows: Array = []
 		if String(s["line"]) != "":
-			rows.append([String(s["line"]), LINE_FONT, INK])
+			rows.append([String(s["line"]), LINE_FONT, HudSkin.PAPER_INK])
 		if String(s["text"]) != "":
-			rows.append([String(s["text"]), SAY_UNDER_FONT if not rows.is_empty() else SAY_FONT, AMBER if s["hurt"] else INK])
+			rows.append([String(s["text"]), SAY_UNDER_FONT if not rows.is_empty() else SAY_FONT, SAY_HURT_INK if s["hurt"] else HudSkin.PAPER_INK])
 		var size := Vector2.ZERO
 		for row in rows:
 			size.x = maxf(size.x, font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1]).x)
 			size.y += float(row[1]) + 4.0
-		var box := Rect2(at - Vector2(size.x * 0.5, size.y), size)
+		var box := Rect2(at - Vector2(size.x * 0.5 + pad.x, size.y + pad.y * 2.0), size + pad * 2.0)
 		var again := true
 		while again:
 			again = false
 			for r: Rect2 in taken:
 				if r.intersects(box):
-					box.position.y = r.position.y - box.size.y
+					box.position.y = r.position.y - box.size.y - 2.0
 					again = true
 		taken.append(box)
-		var y: float = box.position.y
+		var mid: Vector2 = box.get_center()
+		overlay.draw_set_transform(mid, deg_to_rad(-2.0), Vector2.ONE)
+		var slip := Rect2(-box.size * 0.5, box.size)
+		overlay.draw_rect(Rect2(slip.position + Vector2(1, 2), slip.size), Color(0, 0, 0, 0.45 * a))
+		overlay.draw_rect(slip, Color(HudSkin.PAPER.r, HudSkin.PAPER.g, HudSkin.PAPER.b, a))
+		var y: float = slip.position.y + pad.y
 		for row in rows:
 			y += float(row[1])
 			var w: float = font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1]).x
-			var from := Vector2(at.x - w * 0.5, y)
 			var ink: Color = row[2]
-			overlay.draw_string_outline(font, from, row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], 6, Color(0, 0, 0, 0.85 * a))
-			overlay.draw_string(font, from, row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], Color(ink.r, ink.g, ink.b, a))
+			overlay.draw_string(font, Vector2(-w * 0.5, y - 3.0), row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, row[1], Color(ink.r, ink.g, ink.b, a))
 			y += 4.0
+		overlay.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _tick_toasts(delta: float) -> void:
@@ -996,6 +1365,10 @@ func _rebuild_context(p) -> void:
 		return
 	var more: int = context_rows.size() - 1
 	context_button.text = String(context_rows[0]["label"]) + ("\n+%d (누르고 있기)" % more if more > 0 else "")
+	var icon: String = HudIcons.context_icon(String(context_rows[0]["label"]))
+	if icon != context_icon:
+		context_icon = icon
+		_set_icon(context_button, icon, 22, true)
 
 
 func _context_tap() -> void:
@@ -1034,9 +1407,14 @@ func toast(text: String, kind: String = TOAST_NORMAL) -> void:
 	if kind == TOAST_WARN:
 		_toast_warn(text)
 		return
-	var l := _label(text, 20, INK)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	l.add_theme_constant_override("outline_size", 6)
+	# A paper slip, a little askew (시안 .ftoast); a long note wraps.
+	var l := _label(text, 19, HudSkin.PAPER_INK)
+	l.add_theme_stylebox_override("normal", HudSkin.paper(12.0, 5.0))
+	l.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	if theme.default_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x > TOAST_W:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = TOAST_W
+	l.rotation = deg_to_rad(-1.2 if toasts.size() % 2 == 0 else 0.8)
 	toast_box.add_child(l)
 	toasts.append({"l": l, "t": TOAST_S, "kind": TOAST_NORMAL})
 	while toasts.size() > TOAST_MAX:
@@ -1060,12 +1438,15 @@ func _toast_warn(text: String) -> void:
 	b.custom_minimum_size = Vector2(480, 0)
 	b.add_theme_font_size_override("font_size", 20)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.13, 0.12, 0.1, 0.94)
+	sb.bg_color = Color(0.06, 0.07, 0.08, 0.9)
 	sb.border_color = AMBER
 	sb.set_border_width_all(1)
 	sb.border_width_left = 4
 	sb.set_corner_radius_all(4)
 	sb.set_content_margin_all(10)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 8
+	sb.shadow_offset = Vector2(0, 3)
 	for state in ["normal", "hover", "pressed", "hover_pressed"]:
 		b.add_theme_stylebox_override(state, sb)
 	toast_box.add_child(b)
@@ -1084,6 +1465,11 @@ func radio(text: String) -> void:
 	if radio_label == null:
 		return
 	radio_label.text = text
+	# A long call wraps onto a second line rather than run off the screen.
+	var long: bool = theme.default_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x > RADIO_W
+	radio_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if long else TextServer.AUTOWRAP_OFF
+	radio_label.custom_minimum_size.x = RADIO_W if long else 0.0
+	radio_pill.reset_size()
 	radio_left = 8.0
 
 
@@ -1362,7 +1748,7 @@ func loot(id: String) -> void:
 	var p = game.player
 	var v := _open_modal(560.0)
 	v.add_child(_label(c["name"], 26))
-	v.add_child(_label("가방 %.1f / %.0f" % [p.weight(), p.carry_limit()], 18, DIM))
+	v.add_child(_label("인벤토리 %.1f / %.0f" % [p.weight(), p.carry_limit()], 18, DIM))
 	if c["items"].is_empty():
 		v.add_child(_label("빈 곳이다.", 20, DIM))
 	for i in range(c["items"].size()):
@@ -1409,6 +1795,13 @@ func bag_panel() -> void:
 		h.add_child(_button("내려놓기", _drop.bind(id), Vector2(120, 52), 18))
 		v.add_child(h)
 	v.add_child(_label("탄: 권총 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])], 18, DIM))
+	# 일지: this stop's goals, one to a row (decision 293 ②: the field shows
+	# them under the clock only once the technology opens that line).
+	var goals: String = game.goal_text() if game.mission_play != null else ""
+	if goals != "":
+		v.add_child(_label("일지", 22))
+		for part in goals.split(" · "):
+			v.add_child(_label("· " + part, 19, HudSkin.GOAL))
 	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
 
 
@@ -1435,7 +1828,7 @@ func _ally_menu(p) -> void:
 	var weapons: Array = []
 	for h in p.hands:
 		weapons.append(W.get_data(h["id"]).get("name", h["id"]))
-	v.add_child(_label("손: %s · 가방 %.1f/%.0f" % [", ".join(weapons), p.weight(), p.carry_limit()], 18, DIM))
+	v.add_child(_label("손: %s · 인벤토리 %.1f/%.0f" % [", ".join(weapons), p.weight(), p.carry_limit()], 18, DIM))
 	var g := GridContainer.new()
 	g.columns = 3
 	v.add_child(g)
@@ -1812,10 +2205,11 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	if portrait.get_global_rect().has_point(pos):
 		fingers[index] = {"kind": "portrait", "start": pos}
 		return true
-	# A ring 4 mm round the run and crouch keys starts nothing: setting the
-	# stick down there must not toggle them, nor plant a stick on their edge.
-	for b in [run_button, crouch_button]:
-		if b.get_global_rect().grow(4.0 * PX_PER_MM).has_point(pos):
+	# A ring 4 mm round the keys over the stick (run, and the lamp after dark)
+	# starts nothing: setting the stick down there must not toggle them, nor
+	# plant a stick on their edge.
+	for b in [run_button, lamp_button]:
+		if b.is_visible_in_tree() and b.get_global_rect().grow(4.0 * PX_PER_MM).has_point(pos):
 			return true
 	var ui := _button_at(pos)
 	if ui != null:
@@ -2326,6 +2720,11 @@ func primary_melee(p) -> bool:
 
 func _tick_primary(p) -> void:
 	if not bool(game.opts.get("primary_one", false)):
+		# A blade, a club or bare hands in hand: no aim and no 'manual' (decision
+		# 293; aim only ever takes up a gun that is in hand). A held aim stays.
+		var gun: bool = W.is_ranged(p.weapon_id()) or auto_aim
+		aim_button.visible = gun
+		manual_button.visible = gun
 		return
 	var melee := primary_melee(p)
 	attack_button.visible = false

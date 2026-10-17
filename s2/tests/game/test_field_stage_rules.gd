@@ -201,3 +201,33 @@ func test_plough_snapshot_boundaries_and_next_departure_consumption() -> void:
 	receipt.placeState.fieldStage.trackAtFightEnd = directed
 	receipt.placeState.fieldStage.ploughPartsPreview = 1
 	assert_eq(R.check_receipt(receipt).size(), 0)
+
+
+func test_a_failed_return_is_not_tried_again_the_same_night() -> void:
+	var failed_receipt: Dictionary = _return_receipt()
+	var stage: Dictionary = failed_receipt.placeState.fieldStage
+	stage.outcome = "return_failed"
+	stage.coalDelivered = 0
+	stage.coalUndelivered = 12
+	stage.erase("trackAtFightEnd")
+	stage.erase("ploughPartsPreview")
+	var applied: Array[String] = []
+	var failed: Array[String] = []
+	assert_true(R.can_depart("escort_return", 2, 3, failed).ok, "첫 출발은 연다")
+	var first: Dictionary = R.accept_receipt(failed_receipt, 2, 3, applied, failed)
+	assert_true(first.ok)
+	assert_eq(first.failed, [R.night_key(2, 3)] as Array[String])
+	assert_eq(failed.size(), 0, "사전 판정은 실패 목록을 직접 바꾸지 않는다")
+	var nights: Array[String] = first.failed
+	assert_false(R.can_depart("escort_return", 2, 3, nights).ok, "같은 밤 두 번째 출발은 거부한다")
+	assert_false(R.can_depart("defend_return", 2, 3, nights).ok, "판 종류를 바꿔도 같은 밤이다")
+	var again: Dictionary = _return_receipt()
+	again.placeState.fieldStage.kind = "defend_return"
+	var second: Dictionary = R.accept_receipt(again, 2, 3, first.applied, nights)
+	assert_false(second.ok, "그 밤의 다른 귀환 영수증도 받지 않는다")
+	assert_eq(second.applied, first.applied)
+	assert_true(R.can_depart("rest_day", 2, 3, nights).ok, "낮 판은 막지 않는다")
+	assert_true(R.can_depart("escort_return", 2, 4, nights).ok, "다음 정산의 밤에는 다시 연다")
+	assert_true(R.can_depart("escort_return", 3, 3, nights).ok, "다른 멈춤에서도 연다")
+	var arrived: Dictionary = R.accept_receipt(_return_receipt(), 2, 3, [], [])
+	assert_eq(arrived.failed.size(), 0, "도착 성공은 실패한 밤을 남기지 않는다")

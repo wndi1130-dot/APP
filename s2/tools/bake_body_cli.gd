@@ -1,11 +1,12 @@
 extends SceneTree
 ## Bakes a rigged body with a motion set into a folder.
-## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>]
+## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]
+## --set=person bakes the living people's motions (BodyBake.PERSON_CLIPS, no still poses) instead of the dead's.
 ## --small writes the compacted bake (BodyBake.compact) the phone build carries;
 ## --keep names the clips that keep every frame in it.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
-const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>]"
+const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]"
 
 
 func _init() -> void:
@@ -13,11 +14,14 @@ func _init() -> void:
 	var check := false
 	var small := false
 	var keep: Array = []
+	var person := false
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--check":
 			check = true
 		elif arg == "--small":
 			small = true
+		elif arg == "--set=person":
+			person = true
 		elif arg.begins_with("--keep="):
 			keep = Array(arg.trim_prefix("--keep=").split(",", false))
 		else:
@@ -38,7 +42,7 @@ func _init() -> void:
 	if not own:
 		root.add_child(motion_root)
 	await process_frame
-	var assets: Dictionary = BodyBake.bake_own(body_root) if own else BodyBake.bake(body_root, motion_root)
+	var assets: Dictionary = (BodyBake.bake_own(body_root, BodyBake.PERSON_CLIPS, []) if person else BodyBake.bake_own(body_root)) if own else BodyBake.bake(body_root, motion_root)
 	if assets.is_empty():
 		quit(1)
 		return

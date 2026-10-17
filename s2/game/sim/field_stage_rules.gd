@@ -196,20 +196,43 @@ static func check_field_stage(stage: Variant, expected_stop: int = -1,
 
 ## 원자적 적용을 위한 사전 판정이다. ok 뒤 실제 정산이 성공해야 applied를 보관한다.
 ## 입력 영수증과 기존 적용 목록은 바꾸지 않는다. 재고와 상처 정산은 여기서 하지 않는다.
+## failed는 귀환에 실패한 밤의 목록이다(결정 334). 그 밤의 귀환 영수증은 더 받지 않고,
+## 이번 영수증이 귀환 실패면 돌려주는 failed에 그 밤을 더한다.
 static func accept_receipt(receipt: Variant, expected_stop: int, expected_turn: int,
-		applied: Array[String]) -> Dictionary:
+		applied: Array[String], failed: Array[String] = []) -> Dictionary:
 	var errors: Array[String] = check_receipt(receipt, expected_stop, expected_turn)
 	var keys: Array[String] = applied.duplicate()
+	var nights: Array[String] = failed.duplicate()
 	var key: String = ""
 	if expected_stop < 0 or expected_turn < 0:
 		errors.append("적용할 멈춤 순번과 턴이 필요하다")
 	if errors.is_empty():
-		key = receipt_key(receipt.placeState.fieldStage)
+		var stage: Dictionary = receipt.placeState.fieldStage
+		key = receipt_key(stage)
 		if key in keys:
 			errors.append("이미 적용한 영수증이다")
+		elif not can_depart(String(stage.kind), int(stage.stopSerial), int(stage.turnIndex), failed).ok:
+			errors.append("귀환에 실패한 밤에는 다시 시도하지 않는다")
 		else:
 			keys.append(key)
-	return {"ok": errors.is_empty(), "errors": errors, "key": key, "applied": keys}
+			if stage.outcome == "return_failed":
+				nights.append(night_key(int(stage.stopSerial), int(stage.turnIndex)))
+	return {"ok": errors.is_empty(), "errors": errors, "key": key, "applied": keys, "failed": nights}
+
+
+## 결정 334: 직접 귀환에 실패하면 같은 밤에 다시 시도하지 않는다. 실패는 원정 실패와 같은
+## 흐름 하나로 다음 정산에서 다룬다. 판 종류(엄호·호송)를 바꿔도 같은 멈춤·턴이면 같은 밤이다.
+static func night_key(stop_serial: int, turn_index: int) -> String:
+	return "%d:%d" % [stop_serial, turn_index]
+
+
+## 귀환 판을 이 밤에 열 수 있는지 본다. 낮 판은 막지 않는다. failed는 바꾸지 않는다.
+static func can_depart(kind: String, stop_serial: int, turn_index: int,
+		failed: Array[String]) -> Dictionary:
+	var errors: Array[String] = []
+	if kind in ["defend_return", "escort_return"] and night_key(stop_serial, turn_index) in failed:
+		errors.append("귀환에 실패한 밤에는 다시 시도하지 않는다")
+	return {"ok": errors.is_empty(), "errors": errors}
 
 
 static func _check_day(stage: Dictionary, errors: Array[String]) -> void:

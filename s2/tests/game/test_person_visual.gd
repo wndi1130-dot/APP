@@ -43,7 +43,7 @@ func test_a_fall_plays_once_then_it_gets_up() -> void:
 	assert_gt(later.x, start.x, "the fall goes on")
 	assert_eq(PersonVisual.motion_of(p, note, 2.0, clips).x, 1.0, "and stays down at its end")
 	p.fallen_t = 0.0
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), DeadBody.RISE, "then it gets up")
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), DeadBody.RISE_FRONT, "then it gets up off its face")
 
 
 func test_the_bodies_in_the_build_load_with_their_colour() -> void:
@@ -51,3 +51,40 @@ func test_the_bodies_in_the_build_load_with_their_colour() -> void:
 		var got := DeadBody.with_albedo(BodyBake.load_baked(dir), dir)
 		assert_false(got.is_empty(), dir)
 		assert_true(got.get("albedo") is Texture2D, "%s has its colour picture" % dir)
+
+
+# Held by the dead the arms go out against them and the body leans back from
+# one in front (bent under one behind) and twists; it does not walk on the spot.
+func test_held_by_the_dead_it_pushes_back_and_twists() -> void:
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [])
+	p.grabbers.append({"state": "grab"})
+	p.grab_front = true
+	var held := PersonVisual.motion_of(p, note, 0.1, [])
+	assert_eq(int(held.y), DeadBody.LUNGE, "the arms out")
+	assert_almost_eq(fposmod(held.x - DeadBody.REACH_AT + 0.5, 1.0) - 0.5, 0.0, DeadBody.REACH_SHIFT + 0.001, "held at the reach, not walking")
+	var lean := PersonVisual.lean_of(p, note)
+	assert_lt(lean.y.z, 0.0, "leaning back from the one in front")
+	p.grab_front = false
+	assert_gt(PersonVisual.lean_of(p, note).y.z, 0.0, "bent under one behind")
+	p.grabbers.clear()
+	assert_eq(PersonVisual.lean_of(p, note), Basis(), "let go, upright")
+
+
+# A new wound throws the body back in the struck pose for a moment; a bite
+# furthest. Then it is as it was.
+func test_a_bite_throws_the_body_back_for_a_moment() -> void:
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [])
+	p.body.apply_bite(RandomNumberGenerator.new(), "arm_right", 0.0)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.0, []).y), DeadBody.HIT, "struck")
+	var bitten: float = PersonVisual.lean_of(p, note).y.z
+	assert_lt(bitten, 0.0, "thrown back")
+	p.body.apply_scratch(RandomNumberGenerator.new(), 0.0, "torso")
+	PersonVisual.motion_of(p, note, 0.0, [])
+	assert_gt(PersonVisual.lean_of(p, note).y.z, bitten, "a scratch throws it less")
+	PersonVisual.motion_of(p, note, PersonVisual.HURT_TIME + 0.1, [])
+	assert_ne(int(PersonVisual.motion_of(p, note, 0.1, []).y), DeadBody.HIT, "and then it stands again")
+	assert_eq(PersonVisual.lean_of(p, note), Basis())

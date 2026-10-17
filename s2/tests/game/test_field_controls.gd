@@ -515,19 +515,19 @@ func test_the_ally_bar_has_no_swap_button() -> void:
 
 func test_no_weapon_button_on_the_left_but_the_bag_stays() -> void:
 	var texts: Array = []
+	var left: Array = []
 	for b in _buttons(game.hud.root):
 		if b.get_global_rect().position.x < game.hud._view_size().x * 0.5:
 			texts.append(String(b.text))
+			left.append(b)
 	assert_false(texts.has("무기"), "no weapon button on the left")
-	assert_true(texts.has("가방"), "the bag is still there")
+	# 시안 2차: the bag key is 인벤토리 and shows the weight carried on it.
+	assert_true(left.has(game.hud.bag_button), "the bag is still there")
 
 
 func test_the_bag_button_stays_off_the_fixed_stick() -> void:
 	var hud = game.hud
-	var bag: Button = null
-	for b in _buttons(hud.root):
-		if b.text == "가방":
-			bag = b
+	var bag: Button = hud.bag_button
 	assert_not_null(bag)
 	var rect: Rect2 = bag.get_global_rect()
 	var near: Vector2 = Vector2(clampf(hud.stick_home().x, rect.position.x, rect.end.x), clampf(hud.stick_home().y, rect.position.y, rect.end.y))
@@ -635,7 +635,7 @@ func test_state_icons_sit_in_a_column_at_the_right_edge_big_enough_to_see() -> v
 	for i in 2:
 		assert_not_null(hud.status_pads[i].icon, "a picture")
 		assert_eq(hud.status_pads[i].text, "", "and no words on it")
-	for pad in [hud.shove_button, hud.manual_button, hud.aim_button, hud.context_button]:
+	for pad in [hud.shove_button, hud.crouch_button, hud.manual_button, hud.aim_button, hud.context_button, hud.settings_button]:
 		for i in hud.STATUS_SLOTS:
 			assert_false(hud.status_pads[i].get_global_rect().intersects(pad.get_global_rect()), "icon %d is clear of the keys" % i)
 	for i in hud.STATUS_SLOTS:
@@ -703,3 +703,29 @@ func test_a_spent_hand_needs_more_blows_than_a_fresh_one() -> void:
 	assert_between(fresh, 1.8, 2.8, "hale with a crowbar: two or three")
 	assert_between(spent, 3.2, 5.0, "badly spent: about four")
 
+
+
+# The motion test key sets up one scene at a time in front of the chief and
+# clears the last one's dead first (filmed on the phone before and after).
+func test_motion_test_key_sets_up_each_scene_and_clears_the_last() -> void:
+	var hud = game.hud
+	var p = game.player
+	hud._debug_motion()
+	assert_eq(p.grabbers.size(), 1, "held")
+	assert_eq(p.grabbers[0]["state"], "grab")
+	assert_gt(p.grab_left, 0.0, "with time to shove free")
+	hud._debug_motion()
+	assert_true(p.grabbers.is_empty(), "the hold is let go with its dead")
+	assert_eq(game.zombies.list.size(), 1)
+	assert_eq(game.zombies.list[0]["state"], "chase")
+	hud._debug_motion()
+	assert_eq(game.zombies.list.size(), 2, "two to shove")
+	hud._debug_motion()
+	assert_eq(game.zombies.list.size(), 0)
+	assert_eq(p.action, "search")
+	hud._debug_motion()
+	assert_eq(p.action, "treat")
+	hud._debug_motion()
+	assert_gt(p.fallen_t, 0.0, "down")
+	hud._debug_motion()
+	assert_eq(p.grabbers.size(), 1, "and round again")

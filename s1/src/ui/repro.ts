@@ -240,6 +240,8 @@ function shapeProblem(g: Record<string, unknown>): string | null {
   if (!isObj(g.passed)) return '통과한 법 칸이 없다';
   if (g.dom !== undefined && !isObj(g.dom)) return '내정 칸이 이상하다';
   if (g.deferred !== undefined && !Array.isArray(g.deferred)) return '미뤄 둔 카드 목록이 이상하다';
+  // 필드 귀환 기록(field_receipt.ts): 반영한 귀환 id가 남아야 같은 귀환을 다시 받아도 한 번이다(T08).
+  if (g.fieldReturns !== undefined && (!isObj(g.fieldReturns) || !isObj(g.fieldReturns.applied) || !Array.isArray(g.fieldReturns.records))) return '필드 귀환 기록이 이상하다';
   return null;
 }
 

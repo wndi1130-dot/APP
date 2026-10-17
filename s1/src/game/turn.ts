@@ -772,7 +772,7 @@ function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Recor
 export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label ?? ''): void {
   const s = g.comms[c];
   s.promise = null;
-  bump(g, 'trust', 4, 'promise');
+  bump(g, 'trust', 2, 'promise');
   bumpRel(g, c, 5, 'promise');
   if (s.grudge === 1) s.grudge = 0;
   g.stats.promisesKept += 1;
@@ -1214,7 +1214,7 @@ function finish(g: Game, end: Game['end']): void {
   if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
-  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.' }[end ?? 'complete'];
+  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   writeLookback(g);
   for (const line of raisedLines(g)) journal(g, line);
