@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
+  workBonus, workPower, workshopChief, workshopState, zoneAt, enableDark, enableDisasters, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
 } from '../game';
 import { copyText } from './clip';
 
@@ -41,10 +41,12 @@ export function urlWantsS1c(): boolean {
 
 /** 앱의 새 판은 서막(first_leg_story 5장)으로 시작한다. s1b: S1b 어두운 길도 켠다(ui/dark.ts).
  * prologue=false: 서막 카드 없이 볼슈틴에서 바로 출발한다(서막 건너뛰기, 5장. depot_promise가 비어 '서막을 거치지 않은 판'이 된다).
- * events: 새 이동 사건 묶음(game/event_pack.ts)을 켠다. 내정을 켠 새 판은 켠 채 시작한다(사용자 2026-10-10). 끈 판은 메뉴의 '사건 끈 새 판'으로 비교한다. */
+ * events: 새 이동 사건 묶음(game/event_pack.ts)을 켠다. 내정을 켠 새 판은 켠 채 시작한다(사용자 2026-10-10). 끈 판은 메뉴의 '사건 끈 새 판'으로 비교한다.
+ * 재난(game/disaster.ts)은 어느 새 판이든 켠다(결정 350). */
 export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
   if (s1b) enableDark(g);
+  enableDisasters(g);
   if (events) enableEventPack(g);
   if (prologue) startPrologue(g);
   return g;
