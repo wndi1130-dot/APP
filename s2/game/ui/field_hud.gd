@@ -66,9 +66,9 @@ const STATUS_GAP: float = 6.0
 # column to the left.
 const STATUS_PER_COLUMN: int = 4
 const RADIO_TIPS: Dictionary = {
-	"urgent": "무전: 무리가 들어올 때만 부른다. 울리면 가까운 망자가 듣는다.",
-	"often": "무전: 무리가 지나가면 다음 예보도 부른다. 아는 것이 많고, 그만큼 자주 울린다.",
-	"off": "무전을 껐다. 떠날 때 말고는 울리지 않고, 아무것도 듣지 못한다.",
+	"urgent": "무전: 무리가 들어올 때만 부름 · 울리면 가까운 망자가 들음",
+	"often": "무전: 무리가 지나가면 다음 예보까지 · 아는 것 많고 그만큼 자주 울림",
+	"off": "무전 끔 · 떠날 때만 울림 · 아무것도 못 들음",
 }
 const DUSK_TEST_MIN: float = 940.0   # the test key jumps to 15:40, five minutes before sunset
 const STATUS_SLOTS: int = 5
@@ -914,7 +914,7 @@ func _debug_motion() -> void:
 		"치료":
 			p.start_action("treat", "붕대", 5.0, func() -> void: pass)
 		"넘어짐":
-			game.combat.fall(p, "시험으로 넘어졌다", 0.0)
+			game.combat.fall(p, "시험으로 넘어짐", 0.0)
 	toast("시험 동작: " + MOTION_SCENES[motion_step])
 
 
@@ -929,7 +929,7 @@ func _motion_dead(at: Vector3, facing_who) -> Dictionary:
 ## Test key: what a storm stop draws, one layer off at a time (phone frames).
 func _debug_storm() -> void:
 	if game.storm.is_empty():
-		toast("폭풍 정차가 아니다.")
+		toast("폭풍 정차 아님")
 		return
 	game.set_storm_cut(game.storm_cut + 1)
 	toast("시험: 폭풍 층 " + String(game.STORM_CUTS[game.storm_cut]))
@@ -945,12 +945,12 @@ func _debug_dusk() -> void:
 	var to: float = (DUSK_TEST_MIN - float(game.clock.ARRIVE_MIN)) * 60.0 / game.clock.GAME_PER_REAL
 	var jump: float = to - game.clock.elapsed
 	if jump <= 0.0:
-		toast("이미 해 질 녘이다.")
+		toast("이미 해 질 녘")
 		return
 	game.clock.elapsed = to
 	if game.director.next_arrival < INF:
 		game.director.next_arrival += jump
-	toast("시험: 15:40으로 넘겼다. 20초쯤 뒤 해가 진다. 떠날 때도 가까워졌다.")
+	toast("시험: 15:40으로 넘김 · 20초쯤 뒤 해 짐 · 떠날 때도 가까움")
 
 
 # ---------------------------------------------------------------- per frame
@@ -1008,11 +1008,11 @@ func tick(delta: float) -> void:
 	lamp_button.button_pressed = game.lamps_on()
 	if lamp_button.visible and not lamp_hint_done:
 		lamp_hint_done = true
-		toast("해가 졌다. 등불은 1분마다 들킨다. '등불'을 눌러 끄면 안 들키지만 멀리 안 보인다.")
+		toast("해 짐 · 등불은 1분마다 들킴 · '등불'로 끄면 안 들키나 멀리 못 봄")
 	# The first time it shows, one line points at it (build 47: it was never found).
 	if blood_button.visible and not bleed_hint_done:
 		bleed_hint_done = true
-		toast("피가 난다. 초상 옆 '지혈'을 누르면 붕대를 감는다.")
+		toast("출혈 · 초상 옆 '지혈'로 붕대 감기")
 	_tick_status(p)
 	if pause_shows_play != game.paused:
 		pause_shows_play = game.paused
@@ -1528,7 +1528,7 @@ func settings_panel() -> void:
 	var v := _open_modal(560.0)
 	v.add_child(_label("설정", 28))
 	v.add_child(_button("스틱: 따라오기" if stick_floats() else "스틱: 고정", _set_stick, Vector2(420, 64), 22))
-	v.add_child(_label("스틱이 엄지 댄 자리로 따라온다." if stick_floats() else "스틱이 왼쪽 아래 제자리에 있다.", 18, DIM))
+	v.add_child(_label("스틱이 엄지 댄 자리로 따라옴" if stick_floats() else "스틱은 왼쪽 아래 제자리", 18, DIM))
 	v.add_child(_button("무전: " + String(game.RADIO_NAMES[game.radio_mode()]), _set_radio, Vector2(420, 64), 22))
 	var tip := _label(RADIO_TIPS[game.radio_mode()], 18, DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1620,7 +1620,7 @@ func body_panel(o = null, part: String = "") -> void:
 	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))], 18, DIM))
 	var near: bool = game.actions.in_care_reach(p, o)
 	if not near:
-		v.add_child(_label("가까이 가야 처치할 수 있다.", 18, WARN))
+		v.add_child(_label("가까이 가야 처치 가능", 18, WARN))
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 18)
 	v.add_child(h)
@@ -1632,7 +1632,7 @@ func body_panel(o = null, part: String = "") -> void:
 	right.add_child(_label(Treatment.PART_NAMES[part], 22, BRASS))
 	var rows: Array = body_rows(o, part)
 	if rows.is_empty():
-		right.add_child(_label("다친 데가 없다.", 20, DIM))
+		right.add_child(_label("다친 데 없음", 20, DIM))
 	for w: Dictionary in rows:
 		var first: bool = urgent >= 0 and is_same(w, o.body.wounds[urgent])
 		right.add_child(_label(Treatment.wound_text(w) + (" · 가장 급함" if first else ""), 20, WARN if float(w["blood"]) >= BodyState.HEAVY_BLOOD else INK))
@@ -1748,7 +1748,7 @@ func _draw_body(fig: Control, chosen: String) -> void:
 func _care(o, wound: Dictionary, mode: String) -> void:
 	_close_modal()
 	if not game.actions.treat_wound(game.player, o, wound, mode):
-		toast("지금은 처치할 수 없다.")
+		toast("지금은 처치 불가")
 
 
 ## Decision card: the line the leader shouts, and the cost under it (S1a style).
@@ -1781,7 +1781,7 @@ func loot(id: String) -> void:
 	v.add_child(_label(c["name"], 26))
 	v.add_child(_label("인벤토리 %.1f / %.0f" % [p.weight(), p.carry_limit()], 18, DIM))
 	if c["items"].is_empty():
-		v.add_child(_label("빈 곳이다.", 20, DIM))
+		v.add_child(_label("빈 곳", 20, DIM))
 	for i in range(c["items"].size()):
 		var item: String = c["items"][i]
 		v.add_child(_button("%s  (%.1f)" % [game.item_name(item), Carry.item_weight(item)], _loot_take.bind(id, i), Vector2(520, 56), 20))
@@ -1816,7 +1816,7 @@ func bag_panel() -> void:
 		hw.add_child(_button("바꾸기", _swap_from_bag, Vector2(120, 52), 18))
 		v.add_child(hw)
 	if p.items.is_empty():
-		v.add_child(_label("빈 가방이다.", 20, DIM))
+		v.add_child(_label("빈 가방", 20, DIM))
 	for id in p.items.keys():
 		var h := HBoxContainer.new()
 		h.add_child(_label("%s ×%d  (%.1f)" % [game.item_name(id), int(p.items[id]), Carry.item_weight(id) * int(p.items[id])], 20))
@@ -1888,7 +1888,7 @@ func _all_aboard() -> void:
 		if row["p"].is_alive():
 			_command(row["p"], "retreat", false)
 			sent += 1
-	toast("모두 열차로 돌아간다." if sent > 0 else "보낼 동료가 없다.")
+	toast("모두 열차로" if sent > 0 else "보낼 동료 없음")
 
 
 func _command(p, cmd: String, close: bool = true) -> void:
@@ -1972,8 +1972,8 @@ func depart_card() -> void:
 		if out > 0:
 			text += "\n지금 밖에 있는 사람 %d. 남기면 신임 −%d." % [out, game.holdout.trust_drop(out)]
 	card("depart", text, [
-		{"id": "go", "label": "떠난다", "say": "\"올라타! 기다리지 않는다!\""},
-		{"id": "wait", "label": "기다린다", "say": "\"조금만 더. 다 올 때까지.\""},
+		{"id": "go", "label": "떠나기", "say": "\"올라타! 기다리지 않는다!\""},
+		{"id": "wait", "label": "기다리기", "say": "\"조금만 더. 다 올 때까지.\""},
 	], _depart_pick)
 	game.audio.hold(true)
 
@@ -2131,7 +2131,7 @@ func _run_key_up() -> void:
 func _shove() -> void:
 	var p = game.player
 	if game.paused:
-		toast("멈춘 동안은 밀치지 못한다.")
+		toast("멈춘 동안 밀치기 불가")
 		return
 	if not p.grabbers.is_empty():
 		game.combat.break_grab(p)
@@ -2444,7 +2444,7 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		# Say what the press does: it was pressed without knowing (build 47).
 		var worst: int = p.body._top_bleeder()
 		if worst >= 0 and p.action == "" and p.can_act():
-			toast("지혈한다: %s." % Treatment.wound_text(p.body.wounds[worst]))
+			toast("지혈 중: %s" % Treatment.wound_text(p.body.wounds[worst]))
 		game.actions.self_bandage(p)
 	elif b == aim_button:
 		aim_button.button_pressed = true
@@ -2457,7 +2457,7 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 			return
 		var t = game.combat.melee_pick(p)
 		if t == null:
-			toast("팔 닿는 데에 아무도 없다.")
+			toast("팔 닿는 데 아무도 없음")
 			return
 		_melee(t, true)
 		attack_button.button_pressed = true
@@ -2474,10 +2474,10 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 	elif b == lamp_button:
 		game.set_lamps(not game.lamps_on())
 		lamp_button.button_pressed = game.lamps_on()
-		toast("등불을 켰다. 1분마다 불빛이 들킨다." if game.lamps_on() else "모두 등불을 껐다. 불빛으로는 안 들킨다. 멀리 안 보인다.")
+		toast("등불 켬 · 1분마다 불빛 들킴" if game.lamps_on() else "등불 모두 끔 · 불빛으로 안 들킴 · 멀리 못 봄")
 	elif b == manual_button:
 		manual_button.button_pressed = not manual_button.button_pressed
-		toast("수동 조준: 오른손으로 겨눌 곳을 끌어 놓고 뗀다." if manual_button.button_pressed else "자동 조준으로 돌아왔다.")
+		toast("수동 조준: 오른손으로 겨눌 곳 끌어 놓고 떼기" if manual_button.button_pressed else "자동 조준")
 	elif b == shove_button:
 		shove_button.button_pressed = true
 		_shove()
@@ -2546,7 +2546,7 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 func _auto_aim_start() -> void:
 	var p = game.player
 	if not W.is_ranged(p.weapon_id()):
-		toast("총을 든 사람만 조준한다. 무기를 바꿔라.")
+		toast("총을 든 사람만 조준 · 무기 바꾸기")
 		return
 	if not game.combat.start_aim(p):
 		return
@@ -2572,7 +2572,7 @@ func _auto_aim_end(pos: Vector2) -> void:
 		if (aim_target != null or auto_free) and not aim_cancel:
 			game.combat.fire(p, aim_point, aim_target)
 		elif aim_target == null and not aim_cancel:
-			toast("겨눌 것을 못 잡았다. 누른 채 쏠 곳으로 끌면 빈 땅에도 쏜다.")
+			toast("겨눌 것 못 잡음 · 누른 채 쏠 곳으로 끌면 빈 땅에도 쏨")
 		p.aim.stop()
 	auto_free = false
 	aim_cancel = false
@@ -2796,7 +2796,7 @@ func _tap(pos: Vector2) -> void:
 	var p = game.player
 	var world: Vector3 = game.screen_to_ground(pos)
 	if game.actions.on_signal_top(p):
-		offer([{"label": "내려간다", "call": game.actions.ladder.bind(p, "fast")}])
+		offer([{"label": "내려가기", "call": game.actions.ladder.bind(p, "fast")}])
 		return
 	if not p.can_act():
 		return
@@ -2852,7 +2852,7 @@ func _tap_thing(p, world: Vector3) -> bool:
 		if game.grid.doors.has(c) and FieldGrid.center(c).distance_to(world) < 0.9:
 			var door: Dictionary = game.grid.doors[c]
 			if door["state"] == "locked" and not game.actions.has_pry(p):
-				offer([{"label": "문을 찬다 (시끄러움)", "call": game.actions.go_and_do.bind(p, "door", c, FieldGrid.center(c), "kick")}])
+				offer([{"label": "문 차기 (시끄러움)", "call": game.actions.go_and_do.bind(p, "door", c, FieldGrid.center(c), "kick")}])
 				return true
 			game.actions.go_and_do(p, "door", c, FieldGrid.center(c))
 			return true
@@ -2878,7 +2878,7 @@ func _draw_overlay() -> void:
 	_draw_says(view_size)
 	# The last call: the count, big, where nobody can miss it. The same place
 	# says, for a few seconds, that the train is ready.
-	var big: String = "채비 끝 · 떠날 수 있다" if game.holdout.on and game.holdout.ready_shown > 0.0 else ""
+	var big: String = "채비 끝 · 출발 가능" if game.holdout.on and game.holdout.ready_shown > 0.0 else ""
 	if game.holdout.calling or big != "":
 		var count: String = str(int(ceil(maxf(game.holdout.call_left, 0.0)))) if game.holdout.calling else big
 		var size: int = LAST_CALL_FONT if game.holdout.calling else READY_FONT
@@ -2941,7 +2941,7 @@ func _draw_overlay() -> void:
 		overlay.draw_line(_project(tr["from"]), _project(tr["to"]), Color(1, 0.92, 0.6, clampf(tr["t"] / 0.12, 0, 1)), 2.0)
 	_draw_sounds(now)
 	if game.deaf_t > 0.0:
-		overlay.draw_string(theme.default_font, Vector2(view_size.x * 0.5 - 60, 92), "귀가 먹먹하다", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.8))
+		overlay.draw_string(theme.default_font, Vector2(view_size.x * 0.5 - 60, 92), "귀 먹먹함", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.8))
 		return
 	_draw_edges(view_size)
 

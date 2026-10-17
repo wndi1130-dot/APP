@@ -12,6 +12,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
+const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const BOOT_SCENE := "res://scenes/boot.tscn"
 ## The receipt shown when the field was skipped, and the departure the field
@@ -34,7 +35,6 @@ const STEPS: Array = [
 ## The words on each plain panel until its real screen comes (가제).
 const NOTES: Dictionary = {
 	"train": ["열차 안 · 칸마다 사람과 기색", "정차 고르기 화면 자리"],
-	"stop_pick": ["술레후프 · 얼어붙은 급수탑 옆 작은 역", "정차 카드 · 작업조 · 위험 줄 자리"],
 	"council": ["식당칸 의회 · 안건과 표 자리", "귀환 영수증의 약속 판정이 여기서 쓰임"],
 	"travel": ["둘째 구간 · 열차 턴 자리"],
 	"arrive": ["둘째 역 도착 화면 자리"],
@@ -56,6 +56,7 @@ var title: Label
 var lines: VBoxContainer
 var next_button: Button
 var panel_style: StyleBoxFlat
+var card: Control = null           # a real screen standing in for the panel (stop_pick)
 
 
 func _ready() -> void:
@@ -75,6 +76,9 @@ func current() -> String:
 func go(i: int) -> void:
 	step = i
 	_clear_stage()
+	if is_instance_valid(card):
+		card.queue_free()
+	card = null
 	var row: Array = STEPS[i]
 	var id: String = row[0]
 	if id == "field":
@@ -89,6 +93,9 @@ func go(i: int) -> void:
 	if id == "receipt":
 		_show_receipt(String(row[4]))
 		return
+	if id == "stop_pick":
+		_show_stop_pick()
+		return
 	_show_panel(String(row[3]), NOTES.get(id, []), String(row[4]))
 
 
@@ -97,6 +104,31 @@ func next() -> void:
 		get_tree().change_scene_to_file(BOOT_SCENE)
 		return
 	go(step + 1)
+
+
+## Choosing the stop: the paper card over the train at its stop. The first
+## stop is Sulechów, a freight siding; the numbers are the train sample's.
+func _show_stop_pick() -> void:
+	panel.visible = false
+	var c = StopPickCard.new()
+	var s: Array = StopPickCard.sample()
+	c.g = s[0]
+	c.t = s[1]
+	if c.g.get("stop") is Dictionary:
+		c.g["stop"]["place"] = "freight"
+	c.stop_name = "술레후프"
+	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
+	c.sent.connect(func(_g: Dictionary) -> void: next())
+	c.passed_by.connect(func() -> void: go(_index_of("travel")))
+	layer.add_child(c)
+	card = c
+
+
+func _index_of(id: String) -> int:
+	for i in STEPS.size():
+		if STEPS[i][0] == id:
+			return i
+	return 0
 
 
 func _clear_stage() -> void:
