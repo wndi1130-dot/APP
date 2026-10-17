@@ -1,5 +1,6 @@
 // 사람이 들어오는 사건(arrivals.ts, 결정 352·369) 재기: 같은 씨앗을 빈도·봇·선택 규칙별로 돌려 견준다(명세 7장).
-// 사용: npx tsx tools/arrivals_sim.ts [판 수=500] [결과 JSON 경로] [--rate=off|low|mid|high] [--bot=care|nolever] [--pick=bot|uniform] [--ar=AR키:값]
+// 사용: npx tsx tools/arrivals_sim.ts [판 수=500] [결과 JSON 경로] [--rate=off|low|mid|high] [--bot=care|event|nolever] [--pick=bot|uniform] [--ar=AR키:값]
+// event: 돌봄 봇 + 사람을 받은 칸의 레버를 사건에 맞춰 고르는 규칙(s1c_bot.ts arrivalLevers, 결정 369 2차)
 // 봇: 내정·재난을 켠 돌봄 봇(지금 500판 기준과 같게). 레버 조작 수는 출발 전 운영에서 봇이 바꾼 난방·배급 레버 칸 수와 공간 레버 바뀜 수다.
 
 import { writeFileSync } from 'node:fs';
@@ -25,7 +26,7 @@ for (const f of args.filter(x => x.startsWith('--ar='))) {
   (AR as unknown as Record<string, number>)[k] = Number(v);
   arSets[k] = Number(v);
 }
-const BASE: BotOptions = { s1c: true, policy: 'caretaker', dom: 'engaged', disasters: true, ...(bot === 'nolever' ? { noLevers: true } : {}), ...(rate !== 'off' ? { arrivals: true } : {}) };
+const BASE: BotOptions = { s1c: true, policy: 'caretaker', dom: 'engaged', disasters: true, ...(bot === 'nolever' ? { noLevers: true } : {}), ...(bot === 'event' ? { arrivalLevers: true } : {}), ...(rate !== 'off' ? { arrivals: true } : {}) };
 
 interface Row { end: string; deaths: number; taken: number; turned: number; riot: boolean; fever: number; ops: number; opsAfter: number; segsAfter: number; opsQuiet: number; segsQuiet: number; cards: number; picks: Record<string, number> }
 

@@ -5,7 +5,7 @@ import {
   advance, canLift, enterMartial, liftMartial, autoLevers, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
-  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableArrivals, enableBudget, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS,
+  peopleCardRecent, CONTENT_CARD_KIND, enableDisasters, enableArrivals, arrivedIn, setLever, enableBudget, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, LocoId, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -40,7 +40,7 @@ export interface BotProbe {
   afterPrep?: (g: Game) => void;
 }
 
-export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 사람이 들어오는 사건(arrivals.ts, 결정 352·369)을 켠다 */ arrivals?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean }
+export interface BotOptions { /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 사람이 들어오는 사건(arrivals.ts, 결정 352·369)을 켠다 */ arrivals?: boolean; /** 재기용(결정 369 2차): 돌봄 봇이 사람을 받은 칸의 레버를 사건에 맞춰 고른다(arrivalLevers) */ arrivalLevers?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean }
 
 export interface GameMetrics {
   end: string;
@@ -314,6 +314,31 @@ function pickCrew(g: Game): Comm {
 
 /** 돌보는 정책의 공간 레버(6.4): 꼬리칸 과밀이 75 이상이면 관계 20 이상인 칸 중 관계가 가장 좋은 칸에 한 단을 청한다.
  * 내준 칸 관계가 0 아래로 내려가거나 꼬리칸 과밀이 55 아래면 거둔다. */
+/** 재기용(결정 369 2차): 지난 출발 전 운영 뒤 사람을 받은 칸이 있으면 그 칸 배급·난방을 한 칸씩 올리고, 꼬리칸 과밀이 80 이상이면 공간 레버를 한 단 더 당기고,
+ * 식량이 빠듯하면 처지에 여유 있는 다른 칸 배급을 한 칸 내려 몫을 맞춘다. 사람을 받지 않은 구간에는 아무것도 안 한다. */
+function arrivalLevers(g: Game, lastH: Partial<Record<Comm, number>>): void {
+  for (const c of COMMS) {
+    const h = arrivedIn(g, c);
+    const prev = lastH[c] ?? 0;
+    lastH[c] = h;
+    if (h <= prev) continue;
+    const s = g.comms[c];
+    if (s.ration < 4 && g.food >= 30) setLever(g, c, 'ration', s.ration + 1);
+    if (s.heat < 4 && g.coal >= 30) setLever(g, c, 'heat', s.heat + 1);
+    if (c === 'tail' && situation(g, 'tail')[2] >= 80) {
+      const sp = g.space;
+      if (!sp || sp.step === 0) {
+        const giver = ([...CREW_COMMS, 'engine'] as Comm[]).filter(x => x !== 'tail').sort((a, b) => g.comms[b].rel - g.comms[a].rel)[0];
+        if (giver) setSpace(g, 1, giver);
+      } else if (sp.step < P.spaceMax) setSpace(g, sp.step + 1);
+    }
+    if (g.food < 60) {
+      const rich = COMMS.filter(o => o !== c && g.comms[o].ration > 2 && situation(g, o)[1] > 60).sort((a, b) => situation(g, b)[1] - situation(g, a)[1])[0];
+      if (rich) setLever(g, rich, 'ration', g.comms[rich].ration - 1);
+    }
+  }
+}
+
 function spacePolicy(g: Game): void {
   const sp = g.space;
   if (sp && sp.step > 0) {
@@ -357,6 +382,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();
   const cards: Record<string, number> = {};
+  const lastH: Partial<Record<Comm, number>> = {};
   const m: GameMetrics = {
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
     deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, cards, s1aCards: 0, domCards: 0,
@@ -483,7 +509,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
     if (g.phase === 'prep' && prepSeg !== g.seg) {
       prepSeg = g.seg;
       opts.probe?.beforePrep?.(g);
-      if (opts.policy === 'caretaker' && !opts.noLevers) { autoLevers(g); spacePolicy(g); }
+      if (opts.policy === 'caretaker' && !opts.noLevers) { autoLevers(g); spacePolicy(g); if (opts.arrivalLevers) arrivalLevers(g, lastH); }
       opts.probe?.afterPrep?.(g);
       if ((g.space?.step ?? 0) > 0) m.spaceSegs += 1;
       if (opts.s1c && opts.dom === 'engaged') domesticPrep(g);
