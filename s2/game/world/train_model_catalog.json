@@ -24,7 +24,8 @@
         3,
         2.846797
       ],
-      "sha256": "9d6552644baa194395a9079398b84575e908505c9f0121150a0f829c065df6c9"
+      "sha256": "9d6552644baa194395a9079398b84575e908505c9f0121150a0f829c065df6c9",
+      "no_cutaway": true
     },
     "coach_clean": {
       "status": "ready",
@@ -46,7 +47,8 @@
         3.016359,
         2.80135
       ],
-      "sha256": "86193b95b9b579647fc2d54aee072e1e13837c639502cbf64bce0d86d46be5a4"
+      "sha256": "86193b95b9b579647fc2d54aee072e1e13837c639502cbf64bce0d86d46be5a4",
+      "no_cutaway": true
     },
     "freight_open": {
       "status": "ready",
@@ -134,7 +136,8 @@
         3.019466,
         2.8
       ],
-      "sha256": "2d167b1fe994d130404ca573cdbac17b449752592323cc0959e1fb695a51215b"
+      "sha256": "2d167b1fe994d130404ca573cdbac17b449752592323cc0959e1fb695a51215b",
+      "no_cutaway": true
     },
     "coach_chief": {
       "status": "ready",
@@ -156,7 +159,8 @@
         3.0,
         2.8
       ],
-      "sha256": "e6592397975f3e0882f255816b64221d2c99836768d0c7ac8d1b5d1519fcf2ad"
+      "sha256": "e6592397975f3e0882f255816b64221d2c99836768d0c7ac8d1b5d1519fcf2ad",
+      "no_cutaway": true
     },
     "coach_medic": {
       "status": "ready",
