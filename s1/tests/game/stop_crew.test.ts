@@ -439,6 +439,10 @@ describe('stop_crew', () => {
     expect(vs.crew).toBeNull();
     expect(vs.unknown).toContain('눈');
     expect(vs.crewWhy).not.toMatch(/\d/);
+    // 눈보라에는 「정찰로 알 수 있다」는 미정찰 안내 대신, 정찰해도 못 읽는다고 말한다(검수 PR 395 낮음 11).
+    expect(vs.crewWhy).toBe(crewWhyText(null, true));
+    expect(vs.crewWhy).toContain('정찰을 보내도');
+    expect(vs.crewWhy).not.toBe(crewWhyText(null));
 
     // 정찰 뒤: 세 밴드 문구 (위험3 보통 기척 0.8이라 정찰조가 안 다친다, need 3.6, N=6)
     for (const [size, band, text] of [[2, 'short', CREW_LINE.short(6)], [3, 'tight', CREW_LINE.tight(6)], [6, 'enough', null]] as const) {

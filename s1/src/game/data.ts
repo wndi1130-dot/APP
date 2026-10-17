@@ -510,7 +510,7 @@ export const FETCH_WANT: Record<Comm, { target: LootKey; amount: number; label: 
 
 // 공동체 고유 행동(브리프 3.6, 호의 이상)
 export const UNIQUE_ACTION: Record<Comm, string> = {
-  tail: '눈 녹이기 자원(석탄 +3)', engine: '무리한 운행(이번 구간 석탄 −2)', guard: '정차 호위(부상 절반)',
+  tail: '눈 녹이기 자원(석탄 +3)', engine: '무리한 운행(이번 구간 석탄 −2)', guard: '정차 호위(알맞은 인원이 반, 위험은 크게 줄고 산출은 줄 수 있다)',
   medtech: '응급 치료(부상자 2명)', front: '사치품 헌납(+2)',
 };
 
