@@ -91,3 +91,11 @@ func test_device_levels_fit_without_folding() -> void:
 	assert_true(int(assets["vertices"]) >= 3000)
 	assert_true(int(assets["width"]) <= VatBaker.MAX_WIDTH)
 	gut.p("VAT 3000 target: %d vertices, rows %d" % [int(assets["vertices"]), int(assets["rows_per_frame"])])
+
+func test_pack_motion_keeps_the_sixteen_place_numbers_and_reaches_thirty_two() -> void:
+	assert_eq(VatBaker.pack_motion(3), 3.0, "a plain clip is its number")
+	assert_eq(VatBaker.pack_motion(5, 120, 40), 5.0 + 16.0 * 120.0 + 65536.0 * 40.0, "as dead_body.gd mixed writes it")
+	assert_eq(VatBaker.pack_motion(15, 4095, 63), 4194303.0, "the largest sixteen-place number stays below the upper half")
+	assert_eq(VatBaker.pack_motion(16), VatBaker.UPPER)
+	assert_eq(VatBaker.pack_motion(31, 4095, 63), 15.0 + 16.0 * 4095.0 + 65536.0 * 63.0 + VatBaker.UPPER)
+	assert_true(VatBaker.pack_motion(31, 4095, 63) < 16777216.0, "exact in a 32-bit float")

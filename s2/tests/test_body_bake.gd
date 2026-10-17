@@ -229,7 +229,7 @@ func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_
 
 
 func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
-	assert_lte(BodyBake.PERSON_CLIPS.size(), 16, "the shader's clip tables have sixteen places")
+	assert_lte(BodyBake.PERSON_CLIPS.size(), VatBaker.TABLE_SIZE, "the shader's clip tables")
 	for clip in BodyBake.PERSON_CLIPS:
 		assert_true(String(clip[0]).begins_with("p_"), clip[0])
 		assert_eq(clip[1], "", "%s takes nothing from a motion set" % clip[0])
