@@ -28,15 +28,17 @@ export type PromiseVerdict = 'kept' | 'broken' | 'unknown';
 export const SYMBOL_USES = ['hang_before_session', 'hang_in_car'] as const;
 export type SymbolUse = typeof SYMBOL_USES[number];
 
-/** 값 자리(가안, 사용자 확인 전). 결정 302의 내걸기 관계 폭은 저장소에 없어 약속 지킴의 관계 +5에 맞췄다. 네 사례 표는 tools/field_slice_table.ts. */
-export const FIELD: Readonly<Record<'hangRel' | 'symbolLean' | 'symbolRel' | 'promiseLean' | 'promiseTrust' | 'promiseRel', number>> = Object.freeze({
+/** 값 자리(가안, 사용자 확인 전). 결정 407 A4(사용자): 네 사례가 더 갈리게 다시 잡았다. 내걸기 +10이면 지킴 판의 꼬리칸이 의심 띠를 벗어난다. 네 사례 표는 tools/field_slice_table.ts. */
+export const FIELD: Readonly<Record<'hangRel' | 'symbolLean' | 'symbolRel' | 'promiseLean' | 'pressLean' | 'promiseTrust' | 'promiseRel', number>> = Object.freeze({
   /** 특별 회기 앞에 내건 상징물이 그 집단 관계를 한 번 바꾸는 폭(hang_relation_delta) */
-  hangRel: 5,
+  hangRel: 10,
   /** 특별 회기 상징물 안건(field_council.ts): 상징물 주인 칸의 물질 입장, 가결·부결 때 그 칸 관계 ± */
-  symbolLean: 2,
+  symbolLean: 3,
   symbolRel: 5,
   /** 특별 회기 약속 안건: 약속받은 칸의 물질 입장, 가결 때 신임 ±(지킴이면 +, 어김 추궁이면 −), 어김 추궁의 가결·부결 때 그 칸 관계 ± */
   promiseLean: 2,
+  /** 어김 추궁 안건에서 약속받은 칸의 물질 입장(따지는 쪽이라 지킴 기록보다 세게 민다) */
+  pressLean: 4,
   promiseTrust: 3,
   promiseRel: 5,
 });

@@ -43,7 +43,7 @@ const FIELD_SYMBOL: MotionDef = {
 /** 약속 안건: 목격된 약속이 돌아왔을 때(결정 301). 지켰으면 그 일을 기록에 올리고, 어겼으면 약속받은 칸이 따진다. */
 const FIELD_PROMISE: MotionDef = {
   need: 51,
-  lean: (_g, c, a) => ({ mat: c === a.subject ? FIELD.promiseLean : 0, ideo: 0 }),
+  lean: (_g, c, a) => ({ mat: c === a.subject ? (a.verdict === 'kept' ? FIELD.promiseLean : FIELD.pressLean) : 0, ideo: 0 }),
   title: a => (a.verdict === 'kept' ? `${nameOf(a)}과(와)의 약속을 지킨 것을 기록에 올리기` : `${nameOf(a)}과(와)의 약속 어김 추궁`),
   changes: (_g, a) => a.verdict === 'kept'
     ? [`통과: 신임 ${sign(FIELD.promiseTrust)}`, '부결: 바뀌는 것 없음']
