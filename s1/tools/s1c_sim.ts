@@ -40,14 +40,15 @@ const disasters = flags.includes('--disasters');
 // --nolevers: 돌봄 봇이 레버를 만지지 않는다(500판 C줄).
 // --gear=none|A|B|C|D|E|all1|all2|natural: 정찰 장비(결정 371)를 켠다. A 망원경, B 수신호, C 페달, D 발동기, E 미끼, all1 A+D+E, all2 B+C+E를
 // 시작에 완성판으로 박는다. none은 켜기만 하고 박지 않는다. natural은 켜기만 하고 봇이 연구로 얻는다(none과 같은 판이다).
+// X0은 대조: 장비는 끈 채 원래 수동차(x2)만 박는다. C·D에서 수동차 자체 몫(장소 후보 둘)을 떼어 보려는 것이다.
 const climate = flags.includes('--climate');
 const noLevers = flags.includes('--nolevers');
 const gearFlag = flags.find(x => x.startsWith('--gear='))?.slice(7);
 const GEAR_SETS: Record<string, [TechId, Variant | undefined][]> = {
-  none: [], natural: [], A: [['r4', 'a']], B: [['r4', 'b']], C: [['x2', 'a']], D: [['x2', 'b']], E: [['w4', undefined]],
+  none: [], natural: [], X0: [['x2', undefined]], A: [['r4', 'a']], B: [['r4', 'b']], C: [['x2', 'a']], D: [['x2', 'b']], E: [['w4', undefined]],
   all1: [['r4', 'a'], ['x2', 'b'], ['w4', undefined]], all2: [['r4', 'b'], ['x2', 'a'], ['w4', undefined]],
 };
-if (gearFlag && !GEAR_SETS[gearFlag]) throw new Error(`--gear=${gearFlag}: none|A|B|C|D|E|all1|all2|natural 중 하나`);
+if (gearFlag && !GEAR_SETS[gearFlag]) throw new Error(`--gear=${gearFlag}: none|A|B|C|D|E|all1|all2|natural|X0 중 하나`);
 const clSets: Record<string, unknown> = {};
 for (const f of flags.filter(x => x.startsWith('--cl='))) {
   const [k, v] = f.slice(5).split(':');
@@ -192,6 +193,13 @@ function summarize(ms: GameMetrics[]) {
     gear: {
       scouts: +mean(ms.map(m => m.gear.scouts)).toFixed(3),
       noiseUp: +mean(ms.map(m => m.gear.noiseUp)).toFixed(3),
+      calmUp: +mean(ms.map(m => m.gear.calmUp)).toFixed(3),
+      scoutHurt: +mean(ms.map(m => m.gear.scoutHurt)).toFixed(3),
+      scoutDead: +mean(ms.map(m => m.gear.scoutDead)).toFixed(3),
+      stops: +mean(ms.map(m => m.gear.stops)).toFixed(3),
+      stopHurt: +mean(ms.map(m => m.gear.stopHurt)).toFixed(3),
+      haul: +mean(ms.map(m => m.gear.haul)).toFixed(2),
+      threatSum: +mean(ms.map(m => m.gear.threatSum)).toFixed(3),
       lures: +mean(ms.map(m => m.gear.lures)).toFixed(3),
       blind: +mean(ms.map(m => m.gear.blind)).toFixed(3),
     },
@@ -219,7 +227,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(crewFlag ? { crew: crewFlag } : {}),
     ...(climate ? { climate: true } : {}),
     ...(noLevers ? { noLevers: true } : {}),
-    ...(gearFlag ? { scoutGear: true, gearTechs: GEAR_SETS[gearFlag] } : {}),
+    ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
   out[run.name] = summarize(ms);

@@ -84,8 +84,9 @@ export interface GameMetrics {
   tensionEnd: number;
   warmEnd: number;
   /** 바깥 기온(결정 370): 단계가 내려간 횟수, 결빙 횟수, 하강 뒤 두 구간 안에 난방 레버가 바뀐 출발 수, 석탄이 0에 닿았나(0·1), 단계별 구간당 난방 석탄 합·구간 수 */
-  /** 정찰 장비(결정 371): 정찰한 정차, 소리로 기척이 오른 정차, 미끼를 건 정차, 망원경이 날씨로 효과 없던 정찰 */
-  gear: { scouts: number; noiseUp: number; lures: number; blind: number };
+  /** 정찰 장비(결정 371): 정찰한 정차, 소리로 기척이 오른 정차(그중 고요 → 보통), 미끼를 건 정차, 망원경이 날씨로 효과 없던 정찰,
+   * 정찰조 중상·죽음, 멈춘 정차 수와 그 중상, 정차 산출 합, 멈춘 정차의 실제 기척 합 */
+  gear: { scouts: number; noiseUp: number; calmUp: number; lures: number; blind: number; scoutHurt: number; scoutDead: number; stops: number; stopHurt: number; haul: number; threatSum: number };
   climate: { drops: number; freezes: number; leverAfterDrop: number; coalZero: number; heatByStage: number[]; segsByStage: number[] };
   /** 서류 뭉치에 쌓인 카드(종류별) */
   cards: Record<string, number>;
@@ -386,7 +387,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   const cards: Record<string, number> = {};
   const m: GameMetrics = {
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
-    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, gear: { scouts: 0, noiseUp: 0, lures: 0, blind: 0 }, climate: { drops: 0, freezes: 0, leverAfterDrop: 0, coalZero: 0, heatByStage: [0, 0, 0, 0, 0], segsByStage: [0, 0, 0, 0, 0] }, cards, s1aCards: 0, domCards: 0,
+    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, gear: { scouts: 0, noiseUp: 0, calmUp: 0, lures: 0, blind: 0, scoutHurt: 0, scoutDead: 0, stops: 0, stopHurt: 0, haul: 0, threatSum: 0 }, climate: { drops: 0, freezes: 0, leverAfterDrop: 0, coalZero: 0, heatByStage: [0, 0, 0, 0, 0], segsByStage: [0, 0, 0, 0, 0] }, cards, s1aCards: 0, domCards: 0,
     tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, crewStat: { stops: 0, crewSum: 0, crew8: 0, band: { short: crewCell(), tight: crewCell(), enough: crewCell() }, byRiskCrew: {} }, spaceSegs: 0,
     travelById: {}, travelRepeats: 0, contentById: {}, contentRepeats: 0, titleRepeats: 0, titleTotal: 0,
     segsTotal: 0, segsWithTravel: 0, segsNoTravel: { rest: 0, empty: 0, other: 0 }, cardsPerSeg: [0, 0, 0, 0, 0], cardsPerSegMax: 0,
@@ -532,6 +533,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       if (g.stop.scoutReport) {
         m.gear.scouts += 1;
         if (effThreat(g.stop) > (g.stop.threat ?? 1)) m.gear.noiseUp += 1;
+        if ((g.stop.threat ?? 1) <= 0.8 && effThreat(g.stop) > 0.8) m.gear.calmUp += 1;
+        m.gear.scoutHurt += g.stop.scoutReport.hurt.length; m.gear.scoutDead += g.stop.scoutReport.dead.length;
         if (g.stop.lured) m.gear.lures += 1;
         if (g.stop.scoutGear?.blind) m.gear.blind += 1;
       }
@@ -541,6 +544,8 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       resolveStop(g, true);
       const res = g.stop.result;
       if (res && !res.passed) {
+        m.gear.stops += 1; m.gear.stopHurt += res.injured.length; m.gear.threatSum += effThreat(g.stop);
+        m.gear.haul += Object.values(res.gains).reduce((a, v) => a + Math.max(0, v ?? 0), 0);
         const cs = m.crewStat;
         cs.stops += 1; cs.crewSum += size; if (size >= 8) cs.crew8 += 1;
         const key = `${risk}:${size}`;
