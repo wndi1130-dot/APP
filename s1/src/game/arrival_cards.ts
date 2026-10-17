@@ -13,6 +13,8 @@ import type { Card, Game } from './state';
 
 const nums = (s: string | undefined): number[] => (s ? s.split(',').filter(x => x !== '').map(Number) : []);
 const names = (s: string | undefined): string[] => (s ? s.split('|').filter(x => x !== '') : []);
+/** 돌려보냄 갈래의 값(AR.turnCost를 곱한다) */
+const turned = (effs: Eff[]): Eff[] => effs.map(e => ('v' in e && typeof e.v === 'number' ? { ...e, v: Math.round(e.v * AR.turnCost) } : e)) as Eff[];
 
 /** 수색대 위험 줄(정찰 줄과 같은 꼴). 정찰로 기척을 모르면 「위험 모름」 */
 function riskLine(card: Card): string {
@@ -51,9 +53,9 @@ function arrivalView(g: Game, card: Card): CardView {
   const speaker = atStop ? { name: card.who ?? '수색대', role: '수색대' } : { name: g.comms.engine.leader.name, role: REP_ROLE.engine, comm: 'engine' as Comm };
   const inj = (k: number): Eff[] => (k > 0 ? [{ t: 'injured', v: k }] : []);
   const choices: Choice[] = ban ? [
-    { id: 'turn_away_law', label: '법대로 보낸다', say: '법은 법이다. 보내라.', effs: [{ t: 'trust', v: -1 }], special: 'arrive_turn', witness: atStop },
+    { id: 'turn_away_law', label: '법대로 보낸다', say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
   ] : [
-    { id: 'turn_away', label: '돌려보낸다', say: '자리가 없다. 갈 길을 알려 주고 보내라.', effs: [{ t: 'trust', v: -2 }, { t: 'rel', c: 'medtech', v: -3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'tension', v: 1 }], special: 'arrive_turn', witness: atStop },
+    { id: 'turn_away', label: '돌려보낸다', say: '자리가 없다. 갈 길을 알려 주고 보내라.', effs: turned([{ t: 'trust', v: -2 }, { t: 'rel', c: 'medtech', v: -3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'tension', v: 1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
     { id: 'take_some', label: `가족 ${some}무리만 태운다`, say: '자리 나는 만큼만 태운다. 가족은 나누지 마라.', effs: [...inj(hurtSome), { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: 1 }, { t: 'rel', c: 'tail', v: -1 }], special: 'arrive_take_some', extra: placeLines(g, 'tail', someGroups), log: `피난민 무리: ${someN}명을 태웠다.` },
     { id: 'take_all', label: '모두 태운다', say: '다 태워라. 자리는 만든다.', effs: [...inj(hurtIn.length), { t: 'trust', v: 1 }, { t: 'rel', c: 'medtech', v: 3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'rel', c: 'front', v: -2 }], special: 'arrive_take_all', extra: placeLines(g, 'tail', groups), witness: atStop, log: `피난민 무리: ${n}명을 모두 태웠다.` },
     { id: 'escort', label: '수색대를 붙여 데려온다', say: '수색대를 붙여라. 다음 역에서 태운다.', effs: [{ t: 'food', v: -1 }, { t: 'trust', v: 2 }, { t: 'rel', c: 'medtech', v: 2 }, { t: 'rel', c: 'tail', v: -2 }], special: 'arrive_escort',
@@ -78,7 +80,7 @@ function familyView(g: Game, card: Card): CardView {
     choices: withAfford(g, [
       { id: 'fetch', label: '데리러 보낸다', say: '셋을 붙여 보내라. 다음 역에서 기다린다.', effs: [{ t: 'food', v: -1 }, { t: 'trust', v: 1 }, { t: 'rel', c, v: 5 }, ...backers.map(b => ({ t: 'rel' as const, c: b, v: -3 }))], special: 'family_fetch',
         extra: [`수색대 ${AR.fetchSize}명 · 다음 정차까지 자리 비움`, riskLine(card)], ...(crew.length < AR.fetchSize ? { disabled: '보낼 사람이 없다' } : {}) },
-      { id: 'stay_put', label: '지금은 못 간다', say: '지금은 못 간다. 있는 곳을 적어 둬라.', effs: [{ t: 'rel', c, v: -6 }, { t: 'tension', v: 2 }], witness: true },
+      { id: 'stay_put', label: '지금은 못 간다', say: '지금은 못 간다. 있는 곳을 적어 둬라.', effs: [{ t: 'rel', c, v: -6 }, { t: 'tension', v: 2 }], witness: AR.witness > 0 },
     ]),
   };
 }

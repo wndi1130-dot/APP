@@ -6,7 +6,7 @@
 import { writeFileSync } from 'node:fs';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
-import { AR, COMMS } from '../src/game';
+import { AR, ARRIVAL_SIT, COMMS } from '../src/game';
 import type { Game } from '../src/game';
 
 const args = process.argv.slice(2);
@@ -26,7 +26,10 @@ for (const f of args.filter(x => x.startsWith('--ar='))) {
   (AR as unknown as Record<string, number>)[k] = Number(v);
   arSets[k] = Number(v);
 }
-const BASE: BotOptions = { s1c: true, policy: 'caretaker', dom: 'engaged', disasters: true, ...(bot === 'nolever' ? { noLevers: true } : {}), ...(bot === 'event' ? { arrivalLevers: true } : {}), ...(rate !== 'off' ? { arrivals: true } : {}) };
+// --sit=온기,배급,과밀: 들어온 한 명이 처지에 주는 몫(ARRIVAL_SIT)을 바꾼다. --free-space: 봇의 공간 레버 관계 깎임을 되돌린다(재기용)
+const sitArg = flag('sit', '');
+if (sitArg) sitArg.split(',').map(Number).forEach((v, i) => { ARRIVAL_SIT[i] = v; });
+const BASE: BotOptions = { ...(args.includes('--free-space') ? { freeSpace: true } : {}), s1c: true, policy: 'caretaker', dom: 'engaged', disasters: true, ...(bot === 'nolever' ? { noLevers: true } : {}), ...(bot === 'event' ? { arrivalLevers: true } : {}), ...(rate !== 'off' ? { arrivals: true } : {}) };
 
 interface Row { end: string; deaths: number; taken: number; turned: number; riot: boolean; fever: number; ops: number; opsAfter: number; segsAfter: number; opsQuiet: number; segsQuiet: number; cards: number; picks: Record<string, number> }
 
@@ -84,7 +87,7 @@ for (const r of rows) for (const [k, v] of Object.entries(r.picks)) picks[k] = (
 const rateAfter = tot(r => r.opsAfter) / Math.max(1, tot(r => r.segsAfter));
 const rateQuiet = tot(r => r.opsQuiet) / Math.max(1, tot(r => r.segsQuiet));
 const res = {
-  n, rate, bot, pick, ar: { stopP: AR.stopP, travelP: AR.travelP, ...arSets },
+  n, rate, bot, pick, ar: { stopP: AR.stopP, travelP: AR.travelP, ...arSets }, sit: [...ARRIVAL_SIT], freeSpace: args.includes('--free-space'),
   complete: pct(rows.filter(r => r.end === 'complete').length, n), revolt: pct(rows.filter(r => r.end === 'revolt').length, n), coup: pct(rows.filter(r => r.end === 'coup').length, n),
   riotGames: pct(rows.filter(r => r.riot).length, n), deathsMean: mean(r => r.deaths), takenMean: mean(r => r.taken), turnedMean: mean(r => r.turned),
   feverMean: mean(r => r.fever), opsMean: mean(r => r.ops), opsRateAfter: rateAfter, opsRateQuiet: rateQuiet, afterOverQuiet: rateQuiet ? rateAfter / rateQuiet : null,
