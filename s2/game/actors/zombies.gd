@@ -152,6 +152,13 @@ func add_rising(at: Vector3, who_name: String) -> Dictionary:
 
 ## Lying there with pockets nobody has been through yet. Standing ones and
 ## those already searched are not.
+## How long going through this one's pockets takes: its kind and where it stood
+## (loot spec v1 2.3, user decision 407 B5). A plain body three seconds.
+func search_time(z: Dictionary) -> float:
+	var place := LootRules.place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
+	return LootRules.body_search_time(String(z["kind"]), place)
+
+
 func lootable(z: Dictionary) -> bool:
 	return not z.is_empty() and z["state"] in ["dead", "downed", "rising"] and z.has("loot") and not z.get("searched", false)
 
