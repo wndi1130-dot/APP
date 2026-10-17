@@ -452,6 +452,18 @@ export interface Game {
   disasterEnd?: number;
   /** 판 전체 재난 사망 수(상한 DZ.deathCap) */
   disasterDeaths?: number;
+  /** 바깥 기온(climate.ts)이 켜진 판. 없으면 꺼진 판이고 아래 칸들도 없다 */
+  climate?: boolean;
+  /** 적용된 기온 단계 0~4(출발 때만 계절표를 따라 바뀐다) */
+  outside?: number;
+  /** 남은 결빙 구간 */
+  freeze?: number;
+  /** 마지막으로 단계가 바뀐 출발(구간, 떠난 단계, 새 단계) */
+  climateChange?: { seg: number; from: number; to: number };
+  /** 날씨 글의 마지막 인칭(0 1인칭, 1 3인칭) */
+  climateVoice?: number;
+  /** 판 통계: 단계가 내려간 횟수, 결빙 횟수 */
+  climateStats?: { drops: number; freezes: number };
   /** 카드 구간 예산(budget.ts)이 켜진 판. 없으면 꺼진 판이고 아래 deferred도 없다 */
   budget?: BudgetState;
   /** 예산 때문에 미뤄 둔 카드. 다음 구간 처음에 맨 앞으로 돌아온다 */

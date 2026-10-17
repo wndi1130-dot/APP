@@ -20,6 +20,7 @@ export * from './domestic';
 export * from './pot_view';
 export * from './dark';
 export * from './disaster';
+export * from './climate';
 export * from './disaster_cards';
 export * from './death_weight';
 export * from './death_cards';

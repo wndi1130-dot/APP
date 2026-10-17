@@ -4,6 +4,7 @@ import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, wound
 import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
+import { climateDepart, climateSettle, freezeCoal, freezeDepart, freezeFood, tempMult } from './climate';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
@@ -160,9 +161,9 @@ export function setAutoLevers(g: Game, on: boolean): void {
   }
 }
 
-/** 난방 석탄. 단열한 칸이 있는 공동체는 몫만큼 덜 든다(결정 217·225). 예고와 정산이 같이 부른다. */
+/** 난방 석탄. 단열한 칸이 있는 공동체는 몫만큼 덜 든다(결정 217·225). 바깥 기온을 켠 판은 단계 곱이 붙는다(climate.ts). 예고와 정산이 같이 부른다. */
 export function heatCost(g: Game): number {
-  return COMMS.reduce((sum, c) => sum + ((g.comms[c].heat * g.comms[c].pop) / 40) * (1 - D.insulateHeat * insulatedShare(g, c)), 0) * P.coalHeatPerLever;
+  return COMMS.reduce((sum, c) => sum + ((g.comms[c].heat * g.comms[c].pop) / 40) * (1 - D.insulateHeat * insulatedShare(g, c)), 0) * P.coalHeatPerLever * tempMult(g);
 }
 export function foodCost(g: Game): number {
   return COMMS.reduce((sum, c) => sum + g.comms[c].pop * g.comms[c].ration, 0) * P.foodPerPersonLever;
@@ -191,8 +192,8 @@ const tailIdleCoal = (g: Game): number => (tailIdle(g) ? P.tailIdleCoal : 0);
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g);
-  const food = foodCost(g) + lawSum(g, 'foodAdd');
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g) + freezeCoal(g);
+  const food = foodCost(g) * (1 + freezeFood(g)) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   // 선 열차는 탈 석탄이 없다(난방도 난로에 든 것만). 식량은 평소대로 든다.
   return { coal: g.stranded ? 0 : coal + dom.coal, food: food * dom.foodMult + dom.food };
@@ -241,20 +242,30 @@ function forecastWeights(g: Game): { coal: [string, number][]; food: [string, nu
       ['calm.pot', calmCoal(g)],
       ['disaster', disasterCoal(g)],
       ['loco', locoCoal(g)],
+      // 결빙(climate.ts)은 켠 판의 결빙 구간에만 줄이 생긴다(꺼진 판의 장부는 그대로)
+      ...(freezeCoal(g) ? [['freeze', freezeCoal(g)] as [string, number]] : []),
       ['upkeep', dom.coal],
     ],
-    food: [['ration', (foodCost(g) + lawSum(g, 'foodAdd')) * dom.foodMult], ['upkeep', dom.food]],
+    food: [
+      ['ration', (foodCost(g) + lawSum(g, 'foodAdd')) * dom.foodMult],
+      ...(freezeFood(g) ? [['freeze', foodCost(g) * freezeFood(g) * dom.foodMult] as [string, number]] : []),
+      ['upkeep', dom.food],
+    ],
   };
 }
 
 function depart(g: Game): void {
   delete g.platform; // 승강장에 남은 사람은 떠나면서 일지에 그어졌다(5b.5)
   if (g.stranded) return strandedDepart(g); // 선 열차: 달리지 않는다. 겨울 하락은 멈춘 정산의 온기 하락이 대신한다
-  if (g.seg % P.winterEvery === 0) {
+  // 바깥 기온을 켠 판은 계절표가 정기 한파를 대신한다(climate.ts, 결정 370 1). 결빙은 재난 한파가 이번 출발에 닥치는지도 본다.
+  const coldStart = !!g.disasters && g.disaster?.kind === 'cold' && g.disaster.stage === 'warn';
+  const shift = climateDepart(g);
+  if (!g.climate && g.seg % P.winterEvery === 0) {
     for (const c of COMMS) g.comms[c].base[0] -= P.winterDrop;
     journal(g, '추위가 한 단계 깊어졌다. 모든 칸 온기 −5.', 'bad');
   }
   disasterDepart(g);
+  freezeDepart(g, shift, coldStart);
   // S1c 내정 훅: 기관 숙련자가 없으면 선다(매뉴얼도 없으면 끝), 고장 판정.
   const domStall = domesticDepart(g);
   if (domStall === 'end') return finish(g, 'stranded');
@@ -827,6 +838,7 @@ function settle(g: Game): void {
   reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
+  if (g.phase !== 'end') climateSettle(g);
   trackLookback(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,
