@@ -909,7 +909,7 @@ function biteTick(g: Game): void {
 /** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 프로스트펑크식). */
 export const HUNGER_GRACE = 3;
 
-function hungerTick(g: Game, notes: string[]): void {
+export function hungerTick(g: Game, notes: string[]): void {
   if (g.food > 0) { g.hunger = 0; return; }
   g.hunger = (g.hunger ?? 0) + 1;
   if (g.hunger === 1) {
@@ -1152,7 +1152,7 @@ function aiLeaders(g: Game): void {
 }
 
 /** 신임과 긴장(브리프 1.4, 1.5). */
-function meters(g: Game): void {
+export function meters(g: Game): void {
   const seatMap = seats(g);
   const avg = COMMS.reduce((sum, c) => sum + g.comms[c].rel * seatMap[c], 0) / 100;
   bump(g, 'trust', clamp(avg / 40, -2.5, 2.5), 'mood');
@@ -1183,7 +1183,7 @@ function meters(g: Game): void {
   g.fear = clamp(g.fear - 1, 0, 100);
 }
 
-function checkEnd(g: Game): void {
+export function checkEnd(g: Game): void {
   if (g.food < 0) put(g, 'food', 0, 'short');
   // S1b 계엄 중엔 신임 대신 경비대의 충성을 쥔다. 신임 위기로 축출되지 않는다(5.3).
   const martial = !!g.dark?.martial;
