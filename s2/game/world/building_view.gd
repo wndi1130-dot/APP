@@ -40,7 +40,7 @@ const EAST := Vector2i(1, 0)
 const WEST := Vector2i(-1, 0)
 const DIRS: Array[Vector2i] = [NORTH, EAST, SOUTH, WEST]
 const DIAGS: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(-1, -1)]
-## 벽면 칠(rgb)과 지붕 갈래(a: 0 슬레이트, 1 기와). 가안이고 시안 그림을 본 뒤 정한다.
+## 벽면 칠(rgb)과 지붕 갈래(a: 0 슬레이트, 1 기와). 결정 408에서 시안 그림을 보고 정함.
 const PAINTS: Array[Color] = [
 	Color(0.60, 0.57, 0.51, 0.0), Color(0.56, 0.52, 0.44, 1.0),
 	Color(0.50, 0.53, 0.51, 0.0), Color(0.58, 0.49, 0.43, 1.0),

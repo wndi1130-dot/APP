@@ -12,7 +12,7 @@ uniform vec2 map_size = vec2(120.0, 70.0);
 uniform float mask_on = 1.0;
 uniform vec3 lamp_color : source_color = vec3(1.0, 0.64, 0.30);
 uniform float lamp_gain = 0.0;
-// 칠 표(첫 정차 가안, 시안 그림을 본 뒤 정한다). 벽면 색은 건물마다 paint로 받는다.
+// 칠 표(첫 정차, 결정 408에서 시안 그림을 보고 정함). 벽면 색은 건물마다 paint로 받는다.
 // source_color라 선형으로 바뀌어 어두워진다: 지붕이 눈 바닥(밝기 127) 옆에서 60~70쯤 되게 맞췄다.
 uniform vec3 stone_color : source_color = vec3(0.58, 0.57, 0.55);
 uniform vec3 brick_color : source_color = vec3(0.55, 0.40, 0.34);
