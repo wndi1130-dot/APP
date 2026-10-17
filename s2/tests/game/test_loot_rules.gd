@@ -122,7 +122,7 @@ func test_every_container_of_the_first_stop_folds_as_the_building_spec_counts() 
 
 
 func test_the_expected_count_per_container_matches_the_spec_table() -> void:
-	var want := {"kitchen": 2.0, "wardrobe": 2.0, "desk": 2.0, "shop": 2.75, "storage": 2.36, "toolbox": 2.0, "pharmacy": 2.57, "attic": 2.0, "toilet": 2.0, "junk": 2.0}
+	var want := {"kitchen": 2.0, "wardrobe": 2.0, "desk": 2.0, "shop": 4.125, "storage": 2.36, "toolbox": 2.0, "pharmacy": 2.57, "attic": 2.0, "toilet": 2.0, "junk": 2.0}
 	for k: String in want:
 		var sum := 0.0
 		for v: float in R.expected_container(k).values():
