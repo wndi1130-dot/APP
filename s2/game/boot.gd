@@ -3,6 +3,7 @@ extends Node
 ## at Sulechów. The old phone performance test stays one tap away.
 
 const FieldGame = preload("res://game/field_game.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
@@ -117,6 +118,13 @@ func _show_menu() -> void:
 	train.custom_minimum_size = Vector2(240, 64)
 	train.pressed.connect(func() -> void: get_tree().change_scene_to_file(TRAIN_SCENE))
 	go.add_child(train)
+	# The vertical slice end to end, its unbuilt screens as plain panels (밤 계획 2026-10-18).
+	var slice := Button.new()
+	slice.name = "SliceButton"
+	slice.text = "슬라이스 흐름(시험)"
+	slice.custom_minimum_size = Vector2(240, 64)
+	slice.pressed.connect(func() -> void: get_tree().change_scene_to_node(SliceFlow.new()))
+	go.add_child(slice)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
