@@ -15,6 +15,10 @@ const FOOT_SIZE: Vector3 = Vector3(0.18, 0.16, 0.4)
 const FOOT_REST: Vector3 = Vector3(0.12, 0.08, 0.1)
 const SWING: String = "pose_swing"    # the way back of the swing being drawn: how long it is in all
 const Protest = preload("res://game/actors/person_protest.gd")
+const W = preload("res://game/sim/weapons.gd")
+const LOADED: String = "pose_loaded"  # rounds in the hand's weapon last frame; one fewer is a shot
+const KICK_AT: String = "pose_kick_at"
+const KICK_MS: float = 180.0          # how long a shot throws the gun back, milliseconds (picture only)
 
 
 static func apply(p, lying: bool) -> void:
@@ -36,6 +40,8 @@ static func apply(p, lying: bool) -> void:
 	if sw.is_empty():
 		# Left on the platform and shouting after the train (person_protest.gd); a blow or a shove is drawn first.
 		if p.shove_t <= 0.0 and p.lunge_t <= 0.0:
+			if _hands_busy(p, arms):
+				return
 			var mark: Dictionary = Protest.mark_of(p, Time.get_ticks_msec())
 			if not mark.is_empty():
 				_protest(p, arms, mark)
@@ -170,6 +176,158 @@ static func stomp_at(windup: float, recover: float, landed: bool) -> Dictionary:
 	var keep := 1.0 - (ease(clampf(recover, 0.0, 1.0), -2.0) if landed else 0.0)
 	var pos := FOOT_REST + (Vector3(0, 0.6, 0.3) * back).lerp(Vector3(0, 0.0, 0.55), strike) * keep
 	return {"pos": pos, "lean": lerpf(-0.3 * back, 0.45, strike) * keep, "arms": lerpf(0.5 * back, 0.15, strike) * keep}
+
+
+# ---------------------------------------------------------------- hands at work
+# Held by the dead, a door kicked or prised, a jam cleared, a gun loaded or
+# aimed: each only reads the rules' clocks (grabbers, action_t, jam_t,
+# reload_t, aim). Nothing here changes a rule. A pose is
+# {"weapon": {pos, rot}, "arms": [{pos, rot}, {pos, rot}], "lean", "foot"?}.
+
+## How the hand's weapon is held: "one" (a gun in one hand), "two" (a long
+## gun), "bow", or "" (a melee weapon or nothing).
+static func hold_of(wid: String) -> String:
+	var d: Dictionary = W.get_data(wid)
+	match String(d.get("kind", "")):
+		"bow":
+			return "bow"
+		"gun":
+			return "one" if int(d.get("hands", 1)) == 1 else "two"
+	return ""
+
+
+static func _pose(wpos: Vector3, wrot: Vector3, left: Dictionary, right: Dictionary, lean: float) -> Dictionary:
+	return {"weapon": {"pos": wpos, "rot": wrot}, "arms": [left, right], "lean": lean}
+
+
+static func _arm(pos: Vector3, rot: Vector3 = Vector3.ZERO) -> Dictionary:
+	return {"pos": pos, "rot": rot}
+
+
+## Aimed: a pistol held out at the eye in the right hand, a long gun at the
+## shoulder with the left hand under the barrel, a bow out in the left hand and
+## the string drawn back to the cheek by `draw` (0..1). `kick` (0..1) is a shot
+## just fired: the muzzle comes up and the gun back.
+static func aim_at(hold: String, kick: float = 0.0, draw: float = 1.0) -> Dictionary:
+	var hang_l := arm_at(0.0, -1.0)
+	var k := clampf(kick, 0.0, 1.0)
+	match hold:
+		"one":
+			return _pose(Vector3(0.15, 1.38 + 0.05 * k, 0.72 - 0.08 * k), Vector3(-0.6 * k, 0, 0), hang_l, _arm(Vector3(0.15, 1.35, 0.42 - 0.05 * k), Vector3(-0.3 * k, 0, 0)), -0.04 * k)
+		"two":
+			return _pose(Vector3(0.12, 1.35 + 0.04 * k, 0.48 - 0.1 * k), Vector3(-0.35 * k, 0, 0), _arm(Vector3(0.05, 1.28, 0.55 - 0.08 * k)), _arm(Vector3(0.2, 1.25, 0.2 - 0.08 * k), Vector3(0.3, 0, 0)), 0.05 - 0.12 * k)
+		"bow":
+			var d := clampf(draw, 0.0, 1.0)
+			return _pose(Vector3(-0.1, 1.35, 0.7), Vector3.ZERO, _arm(Vector3(-0.1, 1.35, 0.45)), _arm(Vector3(0.0, 1.38, 0.55).lerp(Vector3(0.12, 1.42, 0.12), d)), 0.0)
+	return {}
+
+
+## Loading, u (0..1) running through it: the gun comes down to the waist, the
+## left hand goes from the belt to the gun and back; for a bow the right hand
+## goes over the shoulder for an arrow and down to the string.
+static func reload_at(hold: String, u: float) -> Dictionary:
+	var reach := 0.5 - 0.5 * cos(TAU * clampf(u, 0.0, 1.0))   # 0 at the belt, 1 at the gun, back again
+	if hold == "bow":
+		var quiver := Vector3(0.2, 1.55, -0.15)
+		return _pose(Vector3(-0.1, 1.2, 0.45), Vector3.ZERO, _arm(Vector3(-0.1, 1.2, 0.3)), _arm(quiver.lerp(Vector3(-0.02, 1.25, 0.4), reach), Vector3(0.3, 0, 0)), 0.05)
+	var gun := Vector3(0.1, 1.05, 0.35)
+	return _pose(gun, Vector3(0.5, 0, 0), _arm(Vector3(-0.25, 1.0, 0.05).lerp(gun + Vector3(-0.08, 0.05, 0.0), reach), Vector3(PI * 0.5, 0, 0).lerp(Vector3(0.6, 0, 0), reach)), _arm(Vector3(0.15, 1.1, 0.25), Vector3(0.4, 0, 0)), 0.1)
+
+
+## Clearing a jam: the gun turned on its side close to the chest, the body
+## bent over it, the left hand knocking at it three times a second.
+static func jam_at(u: float) -> Dictionary:
+	var knock := 0.05 * sin(TAU * 3.0 * u)
+	return _pose(Vector3(0.05, 1.25, 0.4), Vector3(0.2, 0.7, 0), _arm(Vector3(0.0, 1.3, 0.38 + knock)), _arm(Vector3(0.15, 1.2, 0.25), Vector3(0.3, 0, 0)), 0.15)
+
+
+## Prising a door: the bar low in the gap, both hands on it, the back bent,
+## levering twice a second.
+static func pry_at(u: float) -> Dictionary:
+	var lever := 0.25 * sin(TAU * 2.0 * u)
+	return _pose(Vector3(0.05, 0.85, 0.6), Vector3(1.0 + lever, 0, 0), _arm(Vector3(-0.08, 1.0, 0.45), Vector3(0.5, 0, 0)), _arm(Vector3(0.12, 1.0, 0.42), Vector3(0.5, 0, 0)), 0.35)
+
+
+## Kicking a door, u (0..1) through the try: the knee comes up, then the sole
+## goes straight out at the door. "foot" is the foot.
+static func kick_at(u: float) -> Dictionary:
+	var back := clampf(u / DRAW, 0.0, 1.0)
+	var strike := clampf((u - DRAW) / (1.0 - DRAW), 0.0, 1.0)
+	var foot := FOOT_REST + (Vector3(0, 0.45, 0.1) * back).lerp(Vector3(0, 0.45, 0.65), strike)
+	var pose := _pose(WEAPON_REST, Vector3.ZERO, arm_at(0.3, -1.0), arm_at(0.3, 1.0), lerpf(-0.1 * back, -0.3, strike))
+	pose["foot"] = foot
+	return pose
+
+
+## Held by the dead: both arms out against them, shaking; leaning back from
+## one in front, bent forward under one behind.
+static func held_at(front: bool, t: float) -> Dictionary:
+	var shake := 0.06 * sin(TAU * 7.0 * t)
+	var l: Dictionary = arm_at(0.75, -1.0)
+	var r: Dictionary = arm_at(0.75, 1.0)
+	l["pos"] += Vector3(0, shake, 0)
+	r["pos"] -= Vector3(0, shake, 0)
+	return _pose(WEAPON_REST, Vector3.ZERO, l, r, -0.15 if front else 0.2)
+
+
+## The kick of a shot, 0..1: watches the rounds in the hand's gun, and one
+## fewer than last frame is a shot (reloading only ever adds).
+static func _kick(p, now_ms: int) -> float:
+	var h: Dictionary = p.weapon()
+	var loaded := int(h.get("loaded", 0)) if not h.is_empty() else 0
+	# A weapon swapped into the hand starts its own count.
+	var key := "%s:%d" % [p.weapon_id(), loaded]
+	var was: String = String(p.get_meta(LOADED, key))
+	p.set_meta(LOADED, key)
+	if was.get_slice(":", 0) == p.weapon_id() and loaded < int(was.get_slice(":", 1)):
+		p.set_meta(KICK_AT, now_ms)
+	if not p.has_meta(KICK_AT):
+		return 0.0
+	return 1.0 - clampf(float(now_ms - int(p.get_meta(KICK_AT))) / KICK_MS, 0.0, 1.0)
+
+
+## How far a bow is drawn: the aim circle from its widest (0) to its floor (1).
+static func _draw(p) -> float:
+	var d: Dictionary = W.get_data(p.weapon_id())
+	var widest := float(d.get("start_deg", 0.0))
+	var span := widest - float(p.aim.floor_deg)
+	if span <= 0.0:
+		return 1.0
+	return clampf((widest - float(p.aim.deg)) / span, 0.0, 1.0)
+
+
+## Draws the first of the hands-at-work poses that applies; false if none does.
+static func _hands_busy(p, arms: Array) -> bool:
+	var now_ms := Time.get_ticks_msec()
+	var t := float(now_ms) / 1000.0
+	var hold := hold_of(p.weapon_id())
+	var kick := _kick(p, now_ms)
+	var pose: Dictionary = {}
+	if not p.grabbers.is_empty():
+		pose = held_at(p.grab_front, t)
+	elif p.action == "kick" and p.action_total > 0.0:
+		pose = kick_at(1.0 - p.action_t / p.action_total)
+	elif p.action == "pry" and p.action_total > 0.0:
+		pose = pry_at(1.0 - p.action_t / p.action_total)
+	elif hold != "" and p.jam_t > 0.0:
+		pose = jam_at(t)
+	elif hold != "" and p.reload_t > 0.0:
+		var total := float(W.get_data(p.weapon_id()).get("reload", 1.0))
+		pose = reload_at(hold, 1.0 - clampf(p.reload_t / maxf(0.01, total), 0.0, 1.0))
+	elif hold != "" and (p.aim.active or kick > 0.0):
+		pose = aim_at(hold, kick, _draw(p) if p.aim.active else 1.0)
+	if pose.is_empty():
+		return false
+	p.weapon_mesh.position = pose["weapon"]["pos"]
+	p.weapon_mesh.rotation = pose["weapon"]["rot"]
+	for i in 2:
+		arms[i].position = pose["arms"][i]["pos"]
+		arms[i].rotation = pose["arms"][i]["rot"]
+	if pose.has("foot"):
+		arms[2].visible = true
+		arms[2].position = pose["foot"]
+	p.body_mesh.rotation.x += float(pose["lean"])
+	return true
 
 
 ## The two arms and, last, the stomping foot.
