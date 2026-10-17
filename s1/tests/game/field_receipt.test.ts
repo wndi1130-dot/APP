@@ -108,6 +108,27 @@ describe('필드 영수증 판 4: 판에 반영', () => {
     expect(rec.symbol).toEqual({ id: 'sym_tail_kettle', groupId: 'tail', carriedBy: 'p_152', use: null });
   });
 
+  it('장부: 시작 + 순증감 = 잔액, 잔액보다 큰 음수는 0에서 멈추고 부족분을 적는다(T09)', () => {
+    const apply = (coal: number, delta: number) => {
+      const g = createGame(SEED);
+      g.coal = coal;
+      const r = read<Record<string, any>>('case3_nosymbol_kept.json');
+      r.stock = { coal: delta };
+      const rec = applyFieldReturn(g, dep(), r).record;
+      return { g, line: rec.lines.find(l => l.k === 'stock')!.text };
+    };
+    // T09: 10에서 배정 4, 사용 1, 획득 2, 귀환 5 → 출발 배정이 없는 영수증에선 순증감 +1(5 − 4)이라 11.
+    const t09 = apply(10, 1);
+    expect(t09.g.coal).toBe(11);
+    expect(t09.line).toBe('석탄 +1');
+    const short = apply(3, -5);
+    expect(short.g.coal).toBe(0);
+    expect(short.line).toBe('석탄 -5 (모자라 0, 부족 2)');
+    const exact = apply(5, -5);
+    expect(exact.g.coal).toBe(0);
+    expect(exact.line).toBe('석탄 -5');
+  });
+
   it('네 사례: 상징물은 상징물 칸에만, 약속은 신임·관계 방향에 나타난다(6-1)', () => {
     const r = Object.fromEntries(CASES.map(c => [c, run('departure_prologue.json', c)]));
     const d = (c: typeof CASES[number], f: (g: Game) => number) => f(r[c].g) - f(r[c].before);
