@@ -60,4 +60,5 @@ export const WHY_NAME: Record<string, string> = {
   upkeep: '열차 살림',
   loco: '기관차',
   disaster: '재난',
+  arrival: '늦게 탄 사람',
 };

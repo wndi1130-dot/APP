@@ -20,6 +20,8 @@ export * from './domestic';
 export * from './pot_view';
 export * from './dark';
 export * from './disaster';
+export * from './arrivals';
+export * from './arrival_cards';
 export * from './disaster_cards';
 export * from './budget';
 export * from './event_pack';

@@ -44,6 +44,10 @@ export const CARD_GRADE: Record<string, KindRule> = {
   // 정차 뒤 도덕: 그 정차 이야기라 미루면 말이 안 된다
   rescue: R(2, false, '지금 선 역 이야기("역사 안에")이고 witness 효과가 g.stop을 읽는다', 3),
   bitten: R(2, false, '감염 창이 닫히기 전에 자르는 카드이고 witness 효과가 g.stop을 읽는다', 3),
+  // 사람이 들어오는 사건(arrivals.ts): 지금 선 역·선로 둑 이야기이고 witness 효과가 g.stop을 읽는다
+  arrival: R(2, false, '승강장 끝·선로 둑에 무리가 선 지금의 일이고 witness 효과가 g.stop을 읽는다', 3),
+  family: R(2, false, '작업조가 막 돌아온 정차의 일이고 witness 효과가 g.stop을 읽는다', 3),
+  bed_quarrel: R(3, true, '받은 뒤 2~3구간의 잠자리 다툼. 칸은 그대로 있다'),
   // 3 사람 사건(미루기만, 사라지지 않음)
   orphan: R(3, true, '아이가 남아 있는 동안 뜻이 있다. 아이가 없어지면 버린다'),
   keepsake: R(3, true, '죽은 사람의 칸 이야기. 칸은 그대로 있다'),
