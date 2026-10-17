@@ -300,6 +300,28 @@ describe('stop_crew', () => {
     expect(overView.crew!.text).toBe(CREW_LINE.over);
   });
 
+  it('8c N이 8을 넘으면 8명을 다 보냈을 때의 밴드로 말한다(검수 PR 395 보통 2)', () => {
+    // 8 < need ≤ 10: 8명이면 빠듯하다. 위험3 길게, 기척 짙음(need 4.5 × 1.5 × 1.4 = 9.45, 8/9.45 ≈ 0.85)
+    const tight = mk('over-tight', { size: 8, stay: 'long', threat: 1.4 });
+    expect(tight.guardEscort).toBeFalsy(); // 호위가 붙으면 need가 반으로 준다
+    const tv = riskView(tight);
+    expect(tv.crew!.need).toBeCloseTo(9.45, 9);
+    expect(tv.crew!.band).toBe('tight');
+    expect(tv.crew!.text).toBe(CREW_LINE.over);
+    expect(crewLineText('short', 9.45, 'hurt')).toBe(CREW_LINE.over);
+    // need > 10: 8명으로도 모자란다. 위에 경계 거부 1.5를 더하면 need 14.175, 8/14.175 ≈ 0.56
+    const short = mk('over-short', { size: 8, stay: 'long', threat: 1.4, refuse: true });
+    expect(short.guardEscort).toBeFalsy();
+    const sv = riskView(short);
+    expect(sv.crew!.need).toBeCloseTo(14.175, 9);
+    expect(sv.crew!.band).toBe('short');
+    expect(sv.crew!.text).toBe(CREW_LINE.overShort);
+    expect(CREW_LINE.overShort).toContain('8명으로도 모자란다');
+    expect(crewLineText('tight', 14.175, 'calm')).toBe(CREW_LINE.overShort);
+    // 까닭 줄(crewWhy)과 인원 줄이 같은 말을 한다
+    expect(crewWhyText({ place: '화물역', risk: 3, stay: '길게', need: 14.175, crew: 8, band: 'short' })).toContain('모자란다');
+  });
+
   it('8b 충분 밴드에서 해석이 불길하면 운이 나쁘다는 줄로 바뀌고 해석 말은 그대로다', () => {
     let unlucky = 0;
     for (let k = 0; k < 400 && unlucky < 3; k += 1) {
