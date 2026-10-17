@@ -138,7 +138,7 @@ export function decodeReceipt(input: unknown): StopReceipt {
     const gains = goal.kind === 'materials' ? { wood: goal.earned } : goal.kind ? { [goal.kind]: goal.earned } : {};
     if ((goal.kind === null && (goal.required !== 0 || goal.earned !== 0))
       || goal.status !== goalStatus(goal.kind, goal.required, gains, receipt.endReason ?? 'departed')) {
-      throw new Error('목표 달성 판정이 획득량과 맞지 않는다');
+      throw new Error('목표 달성 여부가 획득량과 맞지 않는다');
     }
     if (new Set(receipt.extras.documents.map(document => document.id)).size !== receipt.extras.documents.length) {
       throw new Error('영수증에 중복 문서가 있다');
@@ -179,7 +179,10 @@ export function normalizeStopResult(input: unknown, request: StopRequest): Norma
   };
 }
 
-/** 직접·자동 모두 이 경로를 사용한다. 모든 검사가 끝난 뒤 새 장부만 돌려준다. */
+/**
+ * 직접·자동 모두 이 경로를 사용한다. 모든 검사가 끝난 뒤 새 장부만 돌려준다.
+ * 같은 키·같은 내용은 중복이다. 이미 반영된 정차에 다른 키의 영수증이 오면 오류로 알리고 장부는 그대로 둔다.
+ */
 export function applyStopResult(ledger: StopLedger, input: unknown, request: StopRequest): ReceiptApplication {
   const receipt = decodeReceipt(input);
   const key = receipt.version === 3 ? receipt.receiptId : request.legacyReceiptId;
@@ -189,9 +192,8 @@ export function applyStopResult(ledger: StopLedger, input: unknown, request: Sto
     return { status: 'duplicate', ledger, result: ledger.results[key] };
   }
   const result = normalizeStopResult(receipt, request);
-  if (Object.hasOwn(ledger.stops, result.stopId)) {
-    return { status: 'duplicate', ledger, result: ledger.results[ledger.stops[result.stopId]] };
-  }
+  // 여기까지 왔다면 이 키는 장부에 없다. 같은 정차를 다른 키로 반영하려는 것이므로 조용히 넘기지 않는다.
+  if (Object.hasOwn(ledger.stops, result.stopId)) throw new Error('이미 반영된 정차에 다른 영수증이 왔다');
   const next = structuredClone(ledger);
   for (const [stockKey, delta] of Object.entries(receipt.stock)) {
     const typedKey = stockKey as StockKey;
@@ -221,5 +223,9 @@ export function applyStopResult(ledger: StopLedger, input: unknown, request: Sto
 
 /** 수신 원천을 주입해도 부작용 없는 공통 적용 경로를 거친다. */
 export function consumeStopReceipt(ledger: StopLedger, input: unknown | (() => unknown), request: StopRequest): ReceiptApplication {
+  // 이미 반영된 정차면 결과 생성 함수를 부르지 않는다. 자동 풀이가 난수를 쓰지 못하게 하려는 것이다.
+  if (typeof input === 'function' && Object.hasOwn(ledger.stops, request.stopId)) {
+    return { status: 'duplicate', ledger, result: ledger.results[ledger.stops[request.stopId]] };
+  }
   return applyStopResult(ledger, typeof input === 'function' ? input() : input, request);
 }
