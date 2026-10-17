@@ -29,9 +29,32 @@ uniform bool flat_normals = false;
 // On for a baked body: one more look at the picture while a body changes
 // motion. Not timed on the phone.
 uniform bool mixes = false;
+// A compacted bake (scripts/body_bake.gd compact) keeps 8 bits a channel
+// inside each clip's own box; the picture's 0..1 goes back to lo..hi.
+uniform bool quantized = false;
+uniform vec3 clip_lo[16];
+uniform vec3 clip_hi[16];
 
 varying float shade;
 varying vec3 view_pos;
+
+vec3 offset_at(float x, float row, int clip) {
+	vec3 v = texture(vat, vec2(x, row)).rgb;
+	if (quantized) {
+		v = clip_lo[clip] + v * (clip_hi[clip] - clip_lo[clip]);
+	}
+	return v - vec3(bias);
+}
+
+// The clip a frame row belongs to (for the frame a body keeps while it changes motion).
+int clip_of(float frame) {
+	for (int n = 0; n < 16; n++) {
+		if (frame >= clip_start[n] && frame < clip_start[n] + clip_frames[n]) {
+			return n;
+		}
+	}
+	return 0;
+}
 
 void vertex() {
 	float packed = floor(INSTANCE_CUSTOM.g + 0.5);
@@ -59,12 +82,12 @@ void vertex() {
 	float height = frame_rows * rows_per_frame;
 	float row_a = ((start + current) * rows_per_frame + UV2.y + 0.5) / height;
 	float row_b = ((start + next) * rows_per_frame + UV2.y + 0.5) / height;
-	vec3 a = texture(vat, vec2(UV2.x, row_a)).rgb - vec3(bias);
-	vec3 b = texture(vat, vec2(UV2.x, row_b)).rgb - vec3(bias);
+	vec3 a = offset_at(UV2.x, row_a, clip);
+	vec3 b = offset_at(UV2.x, row_b, clip);
 	vec3 offset = mix(a, b, fract(frame));
 	if (mixes && share > 0.5) {
 		float row_c = (kept * rows_per_frame + UV2.y + 0.5) / height;
-		offset = mix(offset, texture(vat, vec2(UV2.x, row_c)).rgb - vec3(bias), share / 63.0);
+		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? clip_of(kept) : clip), share / 63.0);
 	}
 	VERTEX += offset;
 	shade = INSTANCE_CUSTOM.a;

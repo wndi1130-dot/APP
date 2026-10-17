@@ -1,17 +1,25 @@
 extends SceneTree
 ## Bakes a rigged body with a motion set into a folder.
-## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check]
+## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>]
+## --small writes the compacted bake (BodyBake.compact) the phone build carries;
+## --keep names the clips that keep every frame in it.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
-const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check]"
+const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb | -> <out dir> [--check] [--small] [--keep=<clip,clip>]"
 
 
 func _init() -> void:
 	var paths: Array[String] = []
 	var check := false
+	var small := false
+	var keep: Array = []
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--check":
 			check = true
+		elif arg == "--small":
+			small = true
+		elif arg.begins_with("--keep="):
+			keep = Array(arg.trim_prefix("--keep=").split(",", false))
 		else:
 			paths.append(arg)
 	if paths.size() < 3:
@@ -34,6 +42,8 @@ func _init() -> void:
 	if assets.is_empty():
 		quit(1)
 		return
+	if small:
+		assets = BodyBake.compact(assets, keep)
 	BodyBake.save(assets, paths[2])
 	var image: Image = assets["image"]
 	print("vertices ", assets["vertices"], " image ", image.get_width(), " x ", image.get_height(), " bytes ", image.get_data().size())
