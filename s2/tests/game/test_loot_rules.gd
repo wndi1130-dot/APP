@@ -4,7 +4,9 @@ extends "res://addons/gut/test.gd"
 
 const R = preload("res://game/sim/loot_rules.gd")
 const T = preload("res://game/sim/loot_tables.gd")
-const Zombies = preload("res://game/actors/zombies.gd")
+## The pockets of before this table (zombies.gd up to 191c653).
+const OLD_CHANCE := 0.1
+const OLD_TABLE: Array = [[4, {"id": "bandage"}, 1], [3, {"ammo": "pistol"}, 2], [3, {"ammo": "shell"}, 2]]
 const Carry = preload("res://game/sim/carry.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Sulehuf = preload("res://game/world/sulehuf_map.gd")
@@ -31,16 +33,16 @@ func _known(entry: Dictionary) -> bool:
 
 
 func test_the_dead_keep_todays_pockets_and_draw_the_same_dice() -> void:
-	assert_eq(T.BODY["dead"]["chance"], Zombies.LOOT_CHANCE)
-	assert_eq(T.BODY["dead"]["table"], Zombies.LOOT_TABLE)
+	assert_eq(T.BODY["dead"]["chance"], OLD_CHANCE)
+	assert_eq(T.BODY["dead"]["table"], OLD_TABLE)
 	# Today's roll (zombies.gd _roll_loot) done by hand on one rng, the rule on another.
 	var a := _rng(62)
 	var b := _rng(62)
 	for i in range(300):
 		var want: Array = []
-		if a.randf() < Zombies.LOOT_CHANCE:
+		if a.randf() < OLD_CHANCE:
 			var pick := a.randi_range(1, 10)
-			for row in Zombies.LOOT_TABLE:
+			for row in OLD_TABLE:
 				pick -= int(row[0])
 				if pick <= 0:
 					var e: Dictionary = row[1].duplicate()
@@ -120,7 +122,7 @@ func test_every_container_of_the_first_stop_folds_as_the_building_spec_counts() 
 
 
 func test_the_expected_count_per_container_matches_the_spec_table() -> void:
-	var want := {"kitchen": 2.0, "wardrobe": 2.0, "desk": 2.0, "shop": 2.75, "storage": 2.36, "toolbox": 2.0, "pharmacy": 2.57, "attic": 2.0, "toilet": 2.0, "junk": 2.0}
+	var want := {"kitchen": 2.0, "wardrobe": 2.0, "desk": 2.0, "shop": 4.125, "storage": 2.36, "toolbox": 2.0, "pharmacy": 2.57, "attic": 2.0, "toilet": 2.0, "junk": 2.0}
 	for k: String in want:
 		var sum := 0.0
 		for v: float in R.expected_container(k).values():
@@ -174,3 +176,16 @@ func test_the_three_sets_give_less_and_more() -> void:
 func test_what_is_left_behind_is_counted() -> void:
 	assert_eq(R.left({"items": ["plank", "plank"]}), 2)
 	assert_eq(R.left({}), 0)
+
+
+func test_a_padded_one_is_placed_by_the_building_it_stands_near_and_a_tool_comes_as_a_weapon() -> void:
+	var buildings := [{"name": "역사", "rect": Rect2i(20, 12, 20, 12)}, {"name": "화물 창고", "rect": Rect2i(126, 12, 26, 12)}, {"name": "약국", "rect": Rect2i(34, 38, 8, 10)}]
+	assert_eq(R.place_at(buildings, Vector2i(30, 22)), "station")
+	assert_eq(R.place_at(buildings, Vector2i(142, 16)), "shed")
+	assert_eq(R.place_at(buildings, Vector2i(38, 40)), "", "the pharmacy has no padded table")
+	assert_eq(R.place_at(buildings, Vector2i(90, 90)), "")
+	var p := R.to_pocket({"tool": "crowbar", "n": 1})
+	assert_eq(p["id"], "crowbar")
+	assert_eq(p["weapon"]["id"], "crowbar")
+	assert_almost_eq(float(p["weapon"]["condition"]), T.TOOL_CONDITION, 0.001)
+	assert_eq(R.to_pocket({"id": "bandage", "n": 1}), {"id": "bandage", "n": 1})
