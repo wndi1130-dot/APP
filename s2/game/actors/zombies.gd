@@ -862,6 +862,24 @@ func kill(z: Dictionary) -> void:
 	game.on_zombie_killed(z)
 
 
+## How a body that is going for someone leans at them (drawing only). Coming
+## in for the bite (attack) it bends further in as its windup runs out; holding
+## on (grab) it hangs on them, tugging back and forth and side to side.
+const REACH_LEAN: float = 0.25
+const HOLD_LEAN: float = 0.12                # holding on it hangs less far in than it bent to bite
+const GRAB_BACK: float = 0.15                # drawn this much further off the one it holds, metres
+const TUG: Vector2 = Vector2(0.08, 0.06)       # forward and sideways, radians
+const TUG_HZ: float = 2.2
+
+
+static func reach_basis(z: Dictionary) -> Basis:
+	if z["state"] == "attack":
+		var k := 1.0 - clampf(float(z["windup"]) / WINDUP, 0.0, 1.0)
+		return Basis(Vector3.RIGHT, REACH_LEAN * k * k)
+	var w := TAU * (TUG_HZ * float(z["age"]) + float(z["phase"]))
+	return Basis(Vector3.RIGHT, HOLD_LEAN + TUG.x * sin(w)) * Basis(Vector3.BACK, TUG.y * sin(w * 0.5 + 1.0))
+
+
 ## Visible-only drawing with CPU frustum test, one MultiMesh per look.
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 	var counts := {"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0}
@@ -896,6 +914,11 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
 		elif reel > 0.0:
 			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
+		elif state == "grab" or state == "attack":
+			basis = basis * reach_basis(z)
+			if state == "grab":
+				# The rules hold it 0.5 m off; drawn there its reach goes through them.
+				pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
 		elif state == "climb":
 			var out := DeadBody.climbing(z, baked)
 			pos = pos + basis * out.origin
