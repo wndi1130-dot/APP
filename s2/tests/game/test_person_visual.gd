@@ -47,7 +47,7 @@ func test_a_fall_plays_once_then_it_gets_up() -> void:
 
 
 func test_the_bodies_in_the_build_load_with_their_colour() -> void:
-	for dir in [PersonVisual.FOLDER, DeadBody.BUILT_IN]:
+	for dir in [PersonVisual.FOLDER, PersonVisual.OWN_FOLDER, DeadBody.BUILT_IN]:
 		var got := DeadBody.with_albedo(BodyBake.load_baked(dir), dir)
 		assert_false(got.is_empty(), dir)
 		assert_true(got.get("albedo") is Texture2D, "%s has its colour picture" % dir)
@@ -91,8 +91,8 @@ func test_a_bite_throws_the_body_back_for_a_moment() -> void:
 
 
 # Crouched it stands low (held in the drop before a run, breathing) and walks
-# the bent shuffle; the folder's own living motions win once it has them.
-func test_crouched_it_is_low_and_the_living_motions_are_used_when_there() -> void:
+# the bent shuffle, where the build has no living motions of its own.
+func test_crouched_it_is_low_without_the_living_motions() -> void:
 	var p := _person()
 	var note := {}
 	p.crouched = true
@@ -102,22 +102,80 @@ func test_crouched_it_is_low_and_the_living_motions_are_used_when_there() -> voi
 	assert_between(low.x, PersonVisual.CROUCH_LOW.x, PersonVisual.CROUCH_LOW.y)
 	p.position += Vector3(0.3, 0, 0)
 	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, []).y), PersonVisual.CROUCH_WALK, "the bent shuffle")
-	var clips: Array = []
-	for n in 15:
-		clips.append({"name": "x%d" % n, "length": 1.0})
-	for own in [PersonVisual.OWN_WALK, PersonVisual.OWN_RUN, PersonVisual.OWN_STAND, PersonVisual.OWN_CROUCH_WALK, PersonVisual.OWN_CROUCH_STAND]:
-		clips.append({"name": own, "length": 1.0, "round": 2.0})
+
+
+func _own() -> Array:
+	return BodyBake.load_baked(PersonVisual.OWN_FOLDER).get("clips", [])
+
+
+func _named(own: Array, c: Vector2) -> String:
+	return String(own[int(c.y)].get("name", ""))
+
+
+# With the living's own folder they walk, run, stand and crouch in their own
+# motions; what they have none of yet (reeling spent, the falls) is the dead's.
+func test_the_living_walk_run_stand_and_crouch_in_their_own_motions() -> void:
+	var own := _own()
+	assert_gt(own.size(), 10, "the living's folder is in the build")
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.3, [], own)), PersonVisual.OWN_STAND)
+	assert_true(PersonVisual.is_own(note))
 	p.position += Vector3(0.3, 0, 0)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 18, "its own crouched walk")
-	p.crouched = false
-	p.position += Vector3(0.3, 0, 0)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 15, "its own walk")
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_WALK)
 	p.running = true
 	p.position += Vector3(0.3, 0, 0)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 16, "its own run")
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_RUN)
 	p.running = false
-	PersonVisual.motion_of(p, note, 0.3, clips)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, clips).y), 17, "its own stand")
+	p.crouched = true
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_WALK)
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)
+	p.crouched = false
+	p.body.exhaustion = 0.9
+	p.position += Vector3(0.3, 0, 0)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.STAGGER, "spent, it reels as the dead do")
+	assert_false(PersonVisual.is_own(note))
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.STAGGER, "and stopping for breath it does not stand up straight")
+	p.fallen_t = 1.0
+	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.FALL_FRONT, "and falls as they do")
+	assert_false(PersonVisual.is_own(note))
+
+
+# Held, bitten and shoving are the living's own too: the held motion twists by
+# itself (only the lean is added), the bite plays once, the shove in its time.
+func test_held_bitten_and_the_shove_in_their_own_motions() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	p.grabbers.append({"state": "grab"})
+	p.grab_front = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_HELD)
+	var lean := PersonVisual.lean_of(p, note)
+	assert_lt(lean.y.z, 0.0, "leaning back from the one in front")
+	assert_almost_eq(lean.x.y, 0.0, 0.0001, "no twist added on top")
+	p.body.apply_bite(RandomNumberGenerator.new(), "arm_right", 0.0)
+	var bite := PersonVisual.motion_of(p, note, 0.0, [], own)
+	assert_eq(_named(own, bite), PersonVisual.OWN_BITTEN, "the flinch, even held")
+	assert_almost_eq(bite.x, 0.0, 0.001, "from its start")
+	assert_gt(PersonVisual.motion_of(p, note, 0.3, [], own).x, 0.4)
+	PersonVisual.motion_of(p, note, 0.4, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_HELD, "then held again")
+	p.grabbers.clear()
+	var wind: float = PersonVisual.Pose.SHOVE_WINDUP / float(p.mults()["swing"])
+	p.shove_t = wind
+	var shove := PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, shove), PersonVisual.OWN_SHOVE)
+	assert_almost_eq(shove.x, 0.0, 0.001, "drawn back from the start of the wind-up")
+	p.shove_t = wind * 0.5
+	assert_almost_eq(PersonVisual.motion_of(p, note, 0.1, [], own).x, PersonVisual.SHOVE_OUT.x * 0.5, 0.001)
+	p.shove_t = 0.0
+	p.lunge_t = PersonVisual.Pose.LUNGE
+	assert_almost_eq(PersonVisual.motion_of(p, note, 0.1, [], own).x, PersonVisual.SHOVE_OUT.x, 0.001, "out as it lands")
 
 
 # Two people standing do not breathe together.

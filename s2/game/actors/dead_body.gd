@@ -192,15 +192,16 @@ static func mixed(z: Dictionary, plain: Color) -> Color:
 
 
 ## The easing itself, for any body: `note` keeps what it was last drawn as,
-## `now` is its own clock, `tab` its folder's table.
-static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array) -> Color:
+## `now` is its own clock, `tab` its folder's table, `mix_in` how long a change
+## into each of its motions is eased (another folder numbers its motions its own way).
+static func mix_from(note: Dictionary, plain: Color, now: float, tab: Array, mix_in: Dictionary = MIX_IN) -> Color:
 	if tab.is_empty():
 		return plain
 	var motion := int(plain.g)
 	if note.has("body_motion") and int(note["body_motion"]) != motion:
 		note["body_from"] = frame_in(tab, int(note["body_motion"]), float(note["body_r"]))
 		note["body_changed"] = now
-		note["body_mix"] = mix_time(motion)
+		note["body_mix"] = float(mix_in.get(motion, MIX_TIME))
 	note["body_motion"] = motion
 	note["body_r"] = plain.r
 	if not note.has("body_changed"):
