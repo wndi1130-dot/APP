@@ -1,6 +1,7 @@
 extends Node3D
 
 const Graybox = preload("res://scripts/graybox.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 const Visibility = preload("res://scripts/grid_visibility.gd")
 const NoiseRadius = preload("res://scripts/noise_radius.gd")
 const WIDTH: int = 48
@@ -87,6 +88,7 @@ func _build_zombies() -> void:
 	instances.custom_aabb = AABB(Vector3(-25, -1, -17), Vector3(50, 5, 34))
 	crowd.multimesh = instances
 	add_child(crowd)
+	_dress_crowd(vat_assets)
 	for index in range(MAX_ZOMBIES):
 		var at := _random_free_position()
 		zombies.append({"position": at, "target": _random_free_position(), "phase": rng.randf(), "chase": 0.0, "angle": 0.0})
@@ -152,6 +154,21 @@ func set_vat_assets(assets: Dictionary) -> void:
 	# The new mesh carries its own VAT texture and row count.
 	vat_assets = assets
 	crowd.multimesh.mesh = assets["mesh"]
+	_dress_crowd(assets)
+
+
+## Test branch only: a baked body carries no material; draw it with the dead shader.
+func _dress_crowd(assets: Dictionary) -> void:
+	if not assets.has("clips"):
+		crowd.material_override = null
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://game/actors/dead_vat.gdshader")
+	mat.set_shader_parameter("vat", assets["texture"])
+	var tables := VatBaker.shader_tables(assets)
+	for key in tables:
+		mat.set_shader_parameter(key, tables[key])
+	crowd.material_override = mat
 
 func emit_noise() -> void:
 	noise_target = player.position
