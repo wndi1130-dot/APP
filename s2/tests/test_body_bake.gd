@@ -230,16 +230,22 @@ func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_
 
 func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
 	assert_lte(BodyBake.PERSON_CLIPS.size(), VatBaker.TABLE_SIZE, "the shader's clip tables")
+	var written: Array = []
 	for clip in BodyBake.PERSON_CLIPS:
 		assert_true(String(clip[0]).begins_with("p_"), clip[0])
-		assert_eq(clip[1], "", "%s takes nothing from a motion set" % clip[0])
-		assert_gt(float(clip[5]), 0.0, "and says how long it is")
-		assert_true(BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
+		assert_gt(float(clip[5]), 0.0, "%s says how long it is" % clip[0])
+		if clip[1] == "":
+			assert_true(BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
+			written.append(clip)
+		else:
+			assert_true(clip[4] == "" or BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
+	# The ones written here come first, so the bake with no motion set keeps their numbers.
+	assert_eq(BodyBake.PERSON_CLIPS.slice(0, written.size()), written, "written ones first")
 	var root := _stick_body()
 	add_child_autofree(root)
-	var assets: Dictionary = BodyBake.bake_own(root, BodyBake.PERSON_CLIPS, [])
+	var assets: Dictionary = BodyBake.bake_own(root, written, [])
 	assert_false(assets.is_empty())
-	assert_eq((assets["clips"] as Array).size(), BodyBake.PERSON_CLIPS.size(), "no still poses after them")
+	assert_eq((assets["clips"] as Array).size(), written.size(), "no still poses after them")
 	assert_eq(String(assets["clips"][0]["name"]), "p_walk")
 	assert_gt(float(assets["clips"][0]["round"]), 0.5, "a walk covers ground")
 	assert_gt(float(assets["clips"][1]["round"]), float(assets["clips"][0]["round"]), "the run more")

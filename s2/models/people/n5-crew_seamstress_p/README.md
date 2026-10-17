@@ -1,8 +1,20 @@
 # n5-crew_seamstress_p — 산 배우 전용 동작
 
 재봉 몸(`../n5-crew_seamstress/`와 같은 메시)에 산 배우 동작만 구운 폴더. 굽는 법:
-`bake_body_cli.gd -- <seamstress.glb> - <이 폴더> --check --small --set=person --keep=p_bitten,p_swing_one,p_swing_axe,p_stab,p_shove`.
+`bake_body_cli.gd -- <seamstress.glb> <UAL1_Standard.glb>,<UAL2_Standard.glb> <이 폴더> --check --small --set=person --keep=<BodyBake.PERSON_KEEP를 쉼표로>`.
 번호는 덧붙이기만 한다(이미 쓰는 번호는 그대로). 셰이더 표는 32칸이다(16번 이상은 `VatBaker.pack_motion`으로 넣는다). 16~21번은 넘어짐·기기·일어남·지침으로, 망자 폴더와 같은 층을 써서 산 배우가 폴더를 바꾸지 않게 했다. 22~25번은 바닥 내려치기·짓밟기·지렛대로 비틀기·발차기다.
+26~31번은 무료 동작 묶음 UAL 1·2(Quaternius, CC0)에서 옮겨 구웠다. 원본 glb는 저장소 밖에 두고 구운 결과만 넣는다(권리 장부 1장).
+
+| 번호 | 동작 | 원본 | 길이(초) | 되풀이 | 메모 |
+|---|---|---|---|---|---|
+| 26 | p_reload | UAL1 `Pistol_Reload` | 1.67 | 아니오 | 선 채 두 손을 가슴 앞에 모은다 |
+| 27 | p_climb | UAL2 `ClimbUp_1m` | 0.67 | 아니오 | 제자리에서 엉덩이가 0.18m 올랐다 내려온다. 높이·앞 이동은 게임이 준다 |
+| 28 | p_kneel_work | UAL1 `Fixing_Kneeling` 가운데 0.2~0.8 | 3.12 | 예 | 앉고 일어서는 앞뒤를 잘라 무릎 꿇은 손일만 되풀이한다. 무릎이 바닥에 닿고 치마 끝은 바닥 밑으로 들어간다 |
+| 29 | p_open_low | UAL2 `Chest_Open` | 1.37 | 아니오 | 허리를 숙여 낮은 뚜껑을 연다 |
+| 30 | p_knockback | UAL2 `Hit_Knockback` | 0.83 | 아니오 | 몸을 젖히며 뒤로 넘어져 등을 대고 눕는다. 엉덩이는 제자리(뒤로 0.04m)이고, 시작 자세가 조금 웅크렸다(엉덩이 0.57m) |
+| 31 | p_pickup | UAL1 `PickUp_Table` | 0.83 | 아니오 | 허리 높이에서 집어 든다 |
+
+25번 발차기는 다리를 허리 아래까지만 들게 고쳐(치마를 뚫던 살색 조각) 다시 구웠다.
 
 ## 발 박자 (한 바퀴 발이 간 거리 ÷ 길이)
 
