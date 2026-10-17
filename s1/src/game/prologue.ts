@@ -20,7 +20,7 @@ export const PROLOGUE = Object.freeze({
   /** 첫 거래를 거절하면 꼬리칸 관계(제안) */
   dealRefuseRel: -5,
   /** 서막 약속을 어기면 신임과 꼬리칸 관계만 깎는다(2026-10-08 사용자 아침 목록 9번 B '서막만 가볍게'). 3.7의 열기·긴장·적의는 안 건다 */
-  brokenTrust: -4,
+  brokenTrust: -6,
   brokenRel: -10,
 });
 
