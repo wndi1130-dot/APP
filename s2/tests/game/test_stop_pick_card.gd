@@ -34,7 +34,7 @@ func test_a_pick_goes_through_the_train_rule() -> void:
 	assert_eq(c.g["stop"]["target"], "medicine")
 	c.pick("crewSize", 12)
 	assert_eq(int(c.g["stop"]["crewSize"]), 8, "set_stop keeps the crew to 2–8")
-	assert_eq((c.find_child("CrewSize", true, false) as Label).text, "8명", "the card is drawn again")
+	assert_eq((c.find_child("CrewSize", true, false) as Label).text, "8", "the card is drawn again (명 is its own smaller word)")
 	c.pick("crewComm", "engine")
 	assert_eq(c.g["stop"]["crewComm"], "tail", "the engine car cannot be sent")
 
@@ -56,7 +56,16 @@ func test_the_promises_the_stop_goes_with_are_one_line() -> void:
 	var c = StopPickCard.new()
 	c.promises = [{"kind": "prologue", "subjects": ["a", "b"]}, {"kind": "skip_dispatch", "madeTo": "tail"}]
 	add_child_autofree(c)
-	assert_eq((c.find_child("Promises", true, false) as Label).text, "이번 정차 약속 · 서막 2명 데려오기 / 교대 꼬리칸 파견 제외")
+	assert_eq(_said(c.find_child("Promises", true, false)), "이번 정차 약속 · 서막 2명 데려오기 / 교대 꼬리칸 파견 제외", "one line, its numbers in their own face")
 	var plain = StopPickCard.new()
 	add_child_autofree(plain)
 	assert_null(plain.find_child("Promises", true, false), "no promise, no line")
+
+
+## The words of a line made of several labels, read left to right.
+func _said(line: Node) -> String:
+	var out: String = ""
+	for l in line.get_children():
+		if l is Label:
+			out += (l as Label).text
+	return out
