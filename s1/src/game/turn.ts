@@ -16,8 +16,8 @@ import { needTick } from './needs';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
-import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
-import type { Comm, LootKey, PlaceDef, StayId } from './data';
+import { BRIBE_EXPOSE, CHORE_COMMS, COMMS, COMM_NAME, CREW, CREW_HAUL, FETCH_WANT, LAWS, LOOT_KEYS, LOOT_NAME, P, PLACES, PROTEST, REST_FLOOR, ROUTE, STAY } from './data';
+import type { Comm, CrewCurve, LootKey, PlaceDef, StayId } from './data';
 import { agendaOptions, agendaTitle, canDecree, dealHolds, isLawAgenda, dropUnratified, endEmergencyPowers, exposeBribe, finishPreVote, offend, openCouncil, preVote, stance, aiAgendaPick } from './politics';
 import {
   addSecret, clamp, CREW_BUSY, CREW_EXTRAS, isGone, isSessionSeg, journal, lawActive, PROFILES, rnd, seats, situation, stageOf, storyOf,
@@ -455,6 +455,33 @@ export interface StopRisk {
   pyre: boolean;
   /** 정찰로 바깥 기척을 안다. 모르면 줄 대신 '위험 모름'이 뜨고, 결과는 정찰했을 때와 같다. */
   known: boolean;
+  /** 알맞은 인원(결정 341). 화면에는 정찰 뒤에만 쓴다 */
+  need: number;
+  /** 인원 / 알맞은 인원 */
+  ratio: number;
+  band: CrewBand;
+}
+
+/** 인원 밴드(결정 341): 모자람·빠듯·충분 */
+export type CrewBand = 'short' | 'tight' | 'enough';
+
+/** 한 사람당 위험에 곱하는 인원 곡선 m(r). m(1)=1이고 r에 대해 늘지 않는다(결정 341, 명세 2-2). off면 늘 1이다. */
+export function crewMult(r: number, curve: CrewCurve = CREW.curve): number {
+  if (curve === 'off') return 1;
+  if (curve === 'A') return clamp(Math.pow(Math.max(r, 1e-6), -P.crewAPow), P.crewAFloor, P.crewACeil);
+  if (r <= 0.5) return P.crewBCeil;
+  if (r <= 1) return P.crewBCeil + (1 - P.crewBCeil) * (r - 0.5) / 0.5;
+  if (r < 2) return 1 + (P.crewBFloor - 1) * (r - 1);
+  return P.crewBFloor;
+}
+
+export function crewBand(r: number): CrewBand {
+  return r < P.crewBandShort ? 'short' : r < P.crewBandEnough ? 'tight' : 'enough';
+}
+
+/** 알맞은 인원. 정찰 뒤 화면에 보이는 것(장소 위험·체류·기척·경계 거부·무리·호위)만 넣는다. 장작불·내정·지침·칸 피로는 넣지 않는다. */
+export function crewNeed(g: Game): number {
+  return stopRisk(g).need;
 }
 
 /** 이 정차에서 이 사람에게 정해 둔 난수(0~1). 난수 흐름을 건드리지 않게 판 씨앗으로 만든다. */
@@ -485,8 +512,12 @@ export function stopRisk(g: Game): StopRisk {
   const dm = domesticRiskMult(g); // S1c 내정 훅
   // 내보낸 칸이 지쳐 있을수록 다치고 죽기 쉽다(결정 060 가).
   const tired = stop ? exposeMult(g, stop.crewComm) : 1;
-  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury * tired;
-  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death * tired;
+  // 인원이 알맞은 인원보다 많을수록 한 사람당 위험이 준다(결정 341). 부하에는 정찰 뒤 화면에 보이는 것만 넣는다.
+  const need = Math.max(P.crewNeedMin, P.crewNeed * place.risk * stay.risk * (stop?.threat ?? 1) * guardMult * horde * escort);
+  const ratio = crew / need;
+  const m = crewMult(ratio);
+  const lam = place.risk * P.injuryRate * guardMult * horde * stay.risk * (crew / 4) * escort * threat * dm.injury * tired * m;
+  const pDeath = place.risk * P.deathRate * guardMult * horde * lawMult(g, 'deathMult') * stay.risk * escort * threat * dm.death * tired * m;
   // 결과는 사람마다 정해 둔 난수로 먼저 정한다. 정찰은 이 결과를 드러내기만 해서 정찰 여부가 피해를 바꾸지 않는다
   // (07_outside_eye_triage N2). 준비를 바꾸면 같은 난수로 다시 계산하니 다시 굴리는 길도 없다.
   // 사람 하나의 죽을 확률은 pDeath/4(4명 기준 기대 사망 pDeath), 크게 다칠 확률은 lam/인원(기대 중상 lam).
@@ -502,6 +533,7 @@ export function stopRisk(g: Game): StopRisk {
   return {
     lam, pDeath, maxHurt: fate.hurt.length, maxDead: fate.dead.length, fate,
     guardRefused, horde: horde > 1.2, fresh: (stop?.threat ?? 1) > 1, known: !!stop?.scout && !blizzardActive(g), pyre: pyreCount(g) > 0,
+    need, ratio, band: crewBand(ratio),
   };
 }
 
