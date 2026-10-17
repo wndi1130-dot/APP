@@ -77,6 +77,11 @@ var _chief_out_at := Vector3.ZERO
 var _live: Array = []
 var _live_on: bool = false
 var _roles: Dictionary = {}
+## Containers by the chief worth a hand, nearest first ([id, d]), gathered
+## once per think for all three (_help_search); and where each one stands.
+var _help_list: Array = []
+var _help_ok: bool = false
+var _spots: Dictionary = {}
 ## The dead within ENGAGE_R of the companion thinking now (_companion fills it).
 var _near: Array = []
 var _near_of = null
@@ -118,6 +123,7 @@ func update(delta: float) -> void:
 	_live_on = false
 	_live = []
 	_roles = {}
+	_help_ok = false
 	_near = []
 	_near_of = null
 	for p in game.crew:
@@ -692,18 +698,10 @@ func _help_search(p) -> bool:
 			if o != p and o.brain.has("help_c"):
 				taken[o.brain["help_c"]] = true
 		var skip2: Dictionary = p.brain.get("help_skip", {})
-		var lv: int = game.level_of(player.position)
-		var best_d := HELP_R
-		for id in game.data["containers"]:
-			var c: Dictionary = game.data["containers"][id]
-			if c["searched"] or c["locked"] or c.get("busy", false) or c.has("pick") or taken.has(id) or skip2.has(id):
-				continue
-			if int(c.get("level", 0)) != lv:
-				continue
-			var d: float = _spot_of(c).distance_to(player.position)
-			if d < best_d:
-				best_d = d
-				claim = id
+		for e in _help_near():
+			if not taken.has(e[0]) and not skip2.has(e[0]):
+				claim = e[0]
+				break
 		if claim == "":
 			return false
 		p.brain["help_c"] = claim
@@ -718,8 +716,31 @@ func _help_search(p) -> bool:
 	return true
 
 
+## Containers within HELP_R of the chief on his floor, not searched, locked
+## or in hand, nearest first: once per think, whoever asks first (outside update(), every time).
+func _help_near() -> Array:
+	if _help_ok and _live_on:
+		return _help_list
+	_help_ok = _live_on
+	_help_list = []
+	var player = game.player
+	var lv: int = game.level_of(player.position)
+	for id in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][id]
+		if c["searched"] or c["locked"] or c.get("busy", false) or c.has("pick") or int(c.get("level", 0)) != lv:
+			continue
+		var d: float = _spot_of(c).distance_to(player.position)
+		if d < HELP_R:
+			_help_list.append([id, d])
+	_help_list.sort_custom(func(a, b): return a[1] < b[1])
+	return _help_list
+
+
 func _spot_of(c: Dictionary) -> Vector3:
-	return game.lift(c["cell"], int(c.get("level", 0)))
+	var key := Vector3i(c["cell"].x, c["cell"].y, int(c.get("level", 0)))
+	if not _spots.has(key):
+		_spots[key] = game.lift(c["cell"], int(c.get("level", 0)))
+	return _spots[key]
 
 
 func _mates_up() -> int:
