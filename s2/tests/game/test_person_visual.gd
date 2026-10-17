@@ -4,6 +4,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Person = preload("res://game/actors/person.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 
 
 func _person() -> Node3D:
@@ -136,13 +137,13 @@ func test_the_living_walk_run_stand_and_crouch_in_their_own_motions() -> void:
 	p.crouched = false
 	p.body.exhaustion = 0.9
 	p.position += Vector3(0.3, 0, 0)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.STAGGER, "spent, it reels as the dead do")
-	assert_false(PersonVisual.is_own(note))
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_SPENT, "spent, it reels")
+	assert_true(PersonVisual.is_own(note))
 	PersonVisual.motion_of(p, note, 0.3, [], own)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.STAGGER, "and stopping for breath it does not stand up straight")
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_SPENT, "and stopping for breath it does not stand up straight")
 	p.fallen_t = 1.0
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, [], own).y), DeadBody.FALL_FRONT, "and falls as they do")
-	assert_false(PersonVisual.is_own(note))
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL_FRONT, "and falls on its face")
+	assert_true(PersonVisual.is_own(note))
 
 
 # Held, bitten and shoving are the living's own too: the held motion twists by
@@ -297,6 +298,7 @@ func test_a_gun_is_aimed_in_the_living_own() -> void:
 	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 1}]
 	assert_eq(PersonVisual.aim_of(p, own), -1, "not aimed")
 
+
 # Crouched it keeps low: chest-high work is done low, and a gun is aimed
 # without standing up.
 func test_crouched_it_works_and_aims_low() -> void:
@@ -312,3 +314,45 @@ func test_crouched_it_works_and_aims_low() -> void:
 	var note := {}
 	PersonVisual.motion_of(p, note, 0.3, [], own)
 	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)
+
+
+# Down, dragging itself, getting up and dying in the living's own (people folder
+# 16 on): it lies on its face, crawls, stays down where it stops (it does not
+# fall again), gets up off its face; dead it goes over on its back.
+func test_down_crawling_and_up_again_in_the_living_own() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	p.body.downed = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL_FRONT)
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	p.position += Vector3(0.2, 0, 0)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CRAWL, "drags itself")
+	var still := PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, still), PersonVisual.OWN_FALL_FRONT)
+	assert_almost_eq(still.x, 1.0, 0.001, "down already, not falling again")
+	p.body.downed = false
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_RISE_FRONT, "up off its face")
+	assert_true(PersonVisual.is_own(note))
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_STAND)
+	p.body.dead = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL, "dead, on its back")
+
+
+# From motion 16 on the colour carries the shader's upper half; the easing and
+# the hand read it back as the same motion.
+func test_motions_from_sixteen_on_are_packed_for_the_shader() -> void:
+	var c := DeadBody.packed(Color(0.5, 17.0, 1.0, 1.0), 17, 300, 20.0)
+	assert_eq(c.g, VatBaker.pack_motion(17, 300, 20))
+	assert_eq(DeadBody.motion_in(c.g), 17)
+	assert_eq(DeadBody.motion_in(DeadBody.packed(Color(0, 5, 1, 1), 5, 40, 3.0).g), 5, "below sixteen as before")
+	assert_eq(DeadBody.packed(Color(0, 5, 1, 1), 5, 40, 3.0).g, 5.0 + 16.0 * 40.0 + 65536.0 * 3.0)
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var arm := PersonVisual.hand_of(baked)
+	var table := PersonVisual.arm_table(baked, arm["hand"], arm["elbow"])
+	var frames := DeadBody.table_of(baked)
+	var front := PersonVisual.clip_named(baked["clips"], PersonVisual.OWN_FALL_FRONT, -1)
+	var down := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(1.0, front, 1.0, 1.0), front, 0, 0.0))
+	assert_lt(down[0].y, 0.5, "the hand of a body lying on its face is near the ground")
