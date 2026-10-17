@@ -8,6 +8,9 @@ extends Node3D
 ## one with the dead's folder for what the living have no motion of their own
 ## for yet (the falls, the crawl, getting up, reeling spent). Each person is in
 ## one of them at a time; a change between the two is not eased.
+## The weapon in the hand is put in the worn body's right hand (found in the
+## baked motions), save while a gun is aimed, loaded or cleared, where
+## person_pose.gd still holds it.
 ## The capsule, the ball and the arm boxes are hidden while a body is worn; the
 ## weapon box stays, since the blows are still drawn with it (person_pose.gd).
 ## With the switch off, or no baked folder in the build, nothing is drawn here
@@ -63,7 +66,18 @@ const OWN_BITTEN: String = "p_bitten"
 const OWN_SHOVE: String = "p_shove"
 const OWN_BASE: int = 100
 # Easing into each own motion (Project Zomboid: walking, running 0.35; struck 0.10).
-const OWN_MIX: Dictionary = {"p_bitten": 0.1, "p_shove": 0.1}
+const OWN_MIX: Dictionary = {"p_bitten": 0.1, "p_shove": 0.1, "p_swing_one": 0.1, "p_swing_axe": 0.1, "p_stab": 0.1}
+# A melee blow in the living's own motions: which, and where in it the blow
+# lands (body_bake.gd keys). A knife stabs, an axe and any blow at a body on the
+# ground come down from overhead, the rest swing across. A stomp has none yet.
+const OWN_BLOWS: Dictionary = {"one": ["p_swing_one", 0.45], "axe": ["p_swing_axe", 0.45], "stab": ["p_stab", 0.35]}
+# The right hand: with both arms thrown straight out (p_shove at 0.4) the
+# furthest forward vertex on the right and those within HAND_R of it; the
+# elbow those within ELBOW_R of a point FOREARM behind it.
+const HAND_R: float = 0.1
+const ELBOW_R: float = 0.05
+const FOREARM: float = 0.32
+const GRIP_FOLLOW: float = 0.5           # how far the weapon turns toward the hand's way each frame
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
 # drawn back over the rules' wind-up, out as it lands, half back by the lunge's end.
@@ -81,6 +95,8 @@ var own_vat: Dictionary = {}             # the same body with the living's own m
 var own_draw: MultiMeshInstance3D
 var own_table: Array = []
 var own_mix: Dictionary = {}             # own motion number -> how long a change into it is eased
+var own_frames: Array = []               # the own folder's table, for the hand (dead_body.gd table_of)
+var frames: Array = []                   # the dead folder's
 
 
 func setup(field_game) -> void:
@@ -103,6 +119,13 @@ func setup(field_game) -> void:
 		own_mix[n] = float(OWN_MIX.get(String(clips[n].get("name", "")), OWN_MIX_TIME))
 	if DeadBody.can_mix():
 		own_table = DeadBody.table_of(own_vat)
+	own_frames = DeadBody.table_of(own_vat)
+	var arm := hand_of(own_vat)
+	if not arm.is_empty():
+		own_vat["arm"] = arm_table(own_vat, arm["hand"], arm["elbow"])
+		if int(vat.get("vertices", 0)) == int(own_vat.get("vertices", -1)):
+			vat["arm"] = arm_table(vat, arm["hand"], arm["elbow"])
+			frames = DeadBody.table_of(vat)
 
 
 ## One multimesh wearing a baked folder.
@@ -160,14 +183,24 @@ func _process(delta: float) -> void:
 			note.erase("mix_own" if own else "mix_dead")
 		note["drawn_own"] = own
 		var mix: Dictionary = note.get_or_add("mix_own" if own else "mix_dead", {})
+		var drawn: Color
 		if own:
+			drawn = DeadBody.mix_from(mix, look, float(note["t"]), own_table, own_mix)
 			own_mm.set_instance_transform(k, at)
-			own_mm.set_instance_custom_data(k, DeadBody.mix_from(mix, look, float(note["t"]), own_table, own_mix))
+			own_mm.set_instance_custom_data(k, drawn)
 			k += 1
 		else:
+			drawn = DeadBody.mix_from(mix, look, float(note["t"]), table)
 			mm.set_instance_transform(n, at)
-			mm.set_instance_custom_data(n, DeadBody.mix_from(mix, look, float(note["t"]), table))
+			mm.set_instance_custom_data(n, drawn)
 			n += 1
+		var baked: Dictionary = own_vat if own else vat
+		if baked.has("arm") and not gun_busy(p):
+			var hand := arm_at(baked["arm"], own_frames if own else frames, drawn)
+			var grip := grip_of(hand[0], hand[1], note.get("grip", Basis()))
+			note["grip"] = grip
+			var lean := lean_of(p, note)
+			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
 	mm.visible_instance_count = n
 	if own_mm != null:
 		own_mm.visible_instance_count = k
@@ -223,6 +256,10 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if bitten < 0 and hurt_k(note, t) > 0.0:
 		note["motion"] = HIT
 		return Vector2(0.0, HIT)
+	var blow := blow_of(p, own)
+	if blow.y >= 0.0:
+		note["motion"] = OWN_BASE + int(blow.y)
+		return blow
 	if p.shove_t > 0.0 or p.lunge_t > 0.0:
 		var shove := clip_named(own, OWN_SHOVE, -1)
 		if shove >= 0:
@@ -265,6 +302,158 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		gait = STAGGER
 	note["motion"] = gait
 	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+
+
+## A melee blow in the living's own motions (y) and how far through it (x):
+## drawn back up to where the blow lands while the rules wind it up, the rest
+## on the way back. y is -1 with no blow, or none of its own (a stomp).
+static func blow_of(p, own: Array) -> Vector2:
+	if own.is_empty():
+		return Vector2(0.0, -1.0)
+	var sw: Array = Pose.swing_state(p)
+	if sw.is_empty():
+		return Vector2(0.0, -1.0)
+	var mode: String = p.get_meta(Pose.MODE, "swing")
+	if mode == "stomp":
+		return Vector2(0.0, -1.0)
+	var kind := "one"
+	if mode == "floor" or p.weapon_id() == "axe":
+		kind = "axe"
+	elif p.weapon_id() == "knife":
+		kind = "stab"
+	var clip := clip_named(own, String(OWN_BLOWS[kind][0]), -1)
+	if clip < 0:
+		return Vector2(0.0, -1.0)
+	var lands: float = OWN_BLOWS[kind][1]
+	var r: float = lands + (1.0 - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
+	return Vector2(r, clip)
+
+
+## A gun being aimed, loaded or cleared: person_pose.gd holds it there.
+static func gun_busy(p) -> bool:
+	if Pose.hold_of(p.weapon_id()) == "":
+		return false
+	return p.aim.active or p.reload_t > 0.0 or p.jam_t > 0.0
+
+
+## The worn body's right hand and elbow vertices, found with both arms thrown
+## straight out in p_shove; {} when the folder has no such motion.
+static func hand_of(baked: Dictionary) -> Dictionary:
+	var clips: Array = baked.get("clips", [])
+	var shove := clip_named(clips, OWN_SHOVE, -1)
+	if shove < 0:
+		return {}
+	var frame: int = int(clips[shove]["start"]) + int(roundf(0.4 * float(int(clips[shove]["frames"]) - 1)))
+	var arrays: Array = (baked["mesh"] as Mesh).surface_get_arrays(0)
+	var rest: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var look: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var at := PackedVector3Array()
+	at.resize(rest.size())
+	var tip := Vector3(0, 0, -99)
+	for i in rest.size():
+		at[i] = vertex_at(baked, rest, look, i, frame)
+		if at[i].x > 0.05 and at[i].z > tip.z:
+			tip = at[i]
+	var hand := PackedInt32Array()
+	var elbow := PackedInt32Array()
+	var bend := tip - Vector3(0, 0, FOREARM)
+	for i in rest.size():
+		if at[i].distance_to(tip) < HAND_R:
+			hand.append(i)
+		elif at[i].distance_to(bend) < ELBOW_R:
+			elbow.append(i)
+	if hand.is_empty() or elbow.is_empty():
+		return {}
+	return {"hand": hand, "elbow": elbow}
+
+
+## Where one vertex of a baked body is in a frame of its picture: what the
+## shader does (rest place plus the frame's offset), on the CPU.
+static func vertex_at(baked: Dictionary, rest: PackedVector3Array, look: PackedVector2Array, i: int, frame: int) -> Vector3:
+	var img: Image = baked["image"]
+	var c := img.get_pixel(int(look[i].x * float(baked["width"])), frame * int(baked["rows_per_frame"]) + int(look[i].y))
+	var v := Vector3(c.r, c.g, c.b)
+	if baked.get("format", "") != "":
+		var clip: Dictionary = _clip_at(baked["clips"], frame)
+		var lo := Vector3(clip["lo"][0], clip["lo"][1], clip["lo"][2])
+		var hi := Vector3(clip["hi"][0], clip["hi"][1], clip["hi"][2])
+		v = lo + v * (hi - lo)
+	return rest[i] + v
+
+
+static func _clip_at(clips: Array, frame: int) -> Dictionary:
+	for clip: Dictionary in clips:
+		if frame >= int(clip["start"]) and frame < int(clip["start"]) + int(clip["frames"]):
+			return clip
+	return clips[0]
+
+
+## The hand and elbow (each the middle of its vertices) for every frame of a
+## baked folder, worked out once: [hand of frame 0, elbow of frame 0, hand of 1, ...].
+static func arm_table(baked: Dictionary, hand: PackedInt32Array, elbow: PackedInt32Array) -> PackedVector3Array:
+	var arrays: Array = (baked["mesh"] as Mesh).surface_get_arrays(0)
+	var rest: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var look: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var count: int = int(baked["height"]) / maxi(1, int(baked["rows_per_frame"]))
+	var out := PackedVector3Array()
+	out.resize(count * 2)
+	for f in count:
+		for part in 2:
+			var ids: PackedInt32Array = hand if part == 0 else elbow
+			var sum := Vector3.ZERO
+			for i in ids:
+				sum += vertex_at(baked, rest, look, i, f)
+			out[f * 2 + part] = sum / float(ids.size())
+	return out
+
+
+## The hand and elbow for what one body is drawn as (the shader's frame for a
+## held body: r through the motion, the next frame eased in, and the frame it
+## is easing out of), [hand, elbow] in the body's own space.
+static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
+	var packed := floorf(drawn.g + 0.5)
+	var share := floorf(packed / 65536.0)
+	var kept := floorf((packed - share * 65536.0) / 16.0)
+	var motion := int(packed - share * 65536.0 - kept * 16.0 + 0.5)
+	if motion >= tab.size():
+		return [arm[0], arm[1]]
+	var first: int = tab[motion][0]
+	var count: int = tab[motion][1]
+	var loops: bool = tab[motion][2]
+	var at := fposmod(drawn.r * float(count), float(count)) if loops else clampf(drawn.r, 0.0, 1.0) * float(count - 1)
+	var a := int(at)
+	var b := (a + 1) % count if loops else mini(a + 1, count - 1)
+	var k := at - float(a)
+	var hand := arm[(first + a) * 2].lerp(arm[(first + b) * 2], k)
+	var elbow := arm[(first + a) * 2 + 1].lerp(arm[(first + b) * 2 + 1], k)
+	if share > 0.5 and int(kept) * 2 + 1 < arm.size():
+		hand = hand.lerp(arm[int(kept) * 2], share / DeadBody.MIX_STEPS)
+		elbow = elbow.lerp(arm[int(kept) * 2 + 1], share / DeadBody.MIX_STEPS)
+	return [hand, elbow]
+
+
+## How a weapon sits in a fist on the end of this forearm, held as a hammer is:
+## hanging, the head forward; thrust out, the head up; raised over the
+## shoulder, the head back. Where the forearm runs out sideways that reading
+## fails, so it turns toward the way the forearm points about the up axis
+## instead; and it only goes part way toward the new way each frame (from
+## `was`), so it never flips in one frame.
+static func grip_of(hand: Vector3, elbow: Vector3, was: Basis) -> Basis:
+	var f := (hand - elbow).normalized()
+	if f == Vector3.ZERO:
+		return was
+	var a := f.cross(Vector3.RIGHT)
+	var b := f.cross(Vector3.UP)
+	if a.dot(b) < 0.0:
+		b = -b
+	var z := a.lerp(b, clampf((absf(f.x) - 0.6) / 0.35, 0.0, 1.0)).normalized()
+	var x := (Vector3.RIGHT - z * Vector3.RIGHT.dot(z)).normalized()
+	if x == Vector3.ZERO:
+		x = f
+	var want := Basis(x, z.cross(x), z).orthonormalized()
+	if was == Basis() or not was.is_finite():
+		return want
+	return was.orthonormalized().slerp(want, GRIP_FOLLOW)
 
 
 ## True when the motion last picked for this person is one of the living's own.
