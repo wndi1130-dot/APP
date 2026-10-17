@@ -152,6 +152,9 @@ const PICKS = {
   grant: '들어준다', refuse: '거절한다',
   leave_law: '법대로 두고 온다', take_in: '데려온다', supplies_only: '물자만 받는다', leave: '두고 온다',
   cut: '자른다', hide: '숨겨 준다',
+  // 사람이 들어오는 사건(arrival_cards.ts). 옛 라벨이 없는 새 선택지라 라벨은 지금 글이다
+  turn_away: '돌려보낸다', turn_away_law: '법대로 보낸다', take_some: '가족 몇 무리만 태운다', take_all: '모두 태운다', escort: '수색대를 붙여 데려온다',
+  fetch: '데리러 보낸다', stay_put: '지금은 못 간다',
 } as const;
 export type PickId = keyof typeof PICKS;
 /** 옛 라벨 → id. 같은 id를 가리키던 옛 라벨이 둘 이상이면 여기 더한다(예전 급수탑은 '꼬리칸이 눈을 녹인다'였다) */
@@ -162,7 +165,7 @@ const LEGACY_PICK: Record<string, PickId> = {
 
 /** 이 사건 기억 키가 PICKS 선택지를 남기는 쪽인가(콘텐츠 사건 'content:'와 내정 카드의 라벨은 건드리지 않는다). */
 function picksKey(key: string): boolean {
-  return TRAVEL_EVENTS.some(e => e.id === key) || key.startsWith('demand:') || key.startsWith('favor:') || key === 'rescue' || key === 'bitten';
+  return TRAVEL_EVENTS.some(e => e.id === key) || key.startsWith('demand:') || key.startsWith('favor:') || key === 'rescue' || key === 'bitten' || key === 'arrival' || key === 'family';
 }
 
 /** 저장을 읽을 때: 옛 라벨로 남은 사건 기억의 pick을 id로 바꾼다. 이미 id면 그대로 둔다(되풀이해도 같다). */
@@ -824,7 +827,7 @@ function eul(word: string): string {
 
 // ---- 고르기 ----
 /** 카드 선택지 id로 본 부상의 까닭(명부 기록용). 없으면 정차. */
-const INJURY_FROM: Record<string, WoundFrom> = { let_be: 'brawl', hold_post: 'guard_post', take_in: 'rescue', cut: 'bite_cut' };
+const INJURY_FROM: Record<string, WoundFrom> = { let_be: 'brawl', hold_post: 'guard_post', take_in: 'rescue', cut: 'bite_cut', take_all: 'rescue', take_some: 'rescue' };
 
 export function applyEffs(g: Game, effs: readonly Eff[], from: WoundFrom = 'stop', comm?: Comm): void {
   for (const e of effs) {
@@ -998,7 +1001,7 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     // 목격자: 살아 돌아온 파견 인원이 자기 칸에 말한다(브리프 9장).
     const crew = g.stop?.crewComm;
     if (crew) {
-      const harsh = choice.effs.some(e => e.t === 'trust' && e.v < 0) || choice.special === 'leave_bitten' || choice.special === 'hide_bite';
+      const harsh = choice.effs.some(e => e.t === 'trust' && e.v < 0) || choice.special === 'leave_bitten' || choice.special === 'hide_bite' || choice.id === 'stay_put';
       bumpRel(g, crew, harsh ? -5 : 3, 'card');
     }
   }

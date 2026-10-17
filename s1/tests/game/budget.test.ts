@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  addCard, advance, BUDGET, budgetNextSeg, budgetPass, CARD_GRADE, chooseCard, cloneGame, createGame, createS1cGame, DARK_CARD_KINDS, DISASTER_CARD_KINDS, DOM_CARD_KINDS,
+  addCard, advance, ARRIVAL_CARD_KINDS, BUDGET, budgetNextSeg, budgetPass, CARD_GRADE, chooseCard, cloneGame, createGame, createS1cGame, DARK_CARD_KINDS, DISASTER_CARD_KINDS, DOM_CARD_KINDS,
   enableBudget, enableDark, FAMILIES, gradeOf, HUB_CARD_KINDS, onDeath, PEOPLE_KINDS, PROFILES, PROLOGUE_CARD_KINDS, S1A_CARD_KINDS, STRANDED_CARD_KINDS, TRAVEL_EVENTS, viewCard,
 } from '../../src/game';
 import { BUDGET_HOOK } from '../../src/game/state';
@@ -73,7 +73,7 @@ describe('예산 꺼짐', () => {
 describe('등급표', () => {
   it('카드 종류 목록에 있는 모든 kind가 표에 있고, 표에 남는 kind도 없다', () => {
     const known = new Set<string>([
-      ...S1A_CARD_KINDS, ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...DISASTER_CARD_KINDS, ...HUB_CARD_KINDS, ...PROLOGUE_CARD_KINDS, ...DARK_CARD_KINDS, ...STRANDED_CARD_KINDS,
+      ...S1A_CARD_KINDS, ...PEOPLE_KINDS, ...DOM_CARD_KINDS, ...DISASTER_CARD_KINDS, ...ARRIVAL_CARD_KINDS, ...HUB_CARD_KINDS, ...PROLOGUE_CARD_KINDS, ...DARK_CARD_KINDS, ...STRANDED_CARD_KINDS,
       'content', 'content-deal',
     ]);
     for (const k of known) expect(CARD_GRADE[k], `등급표에 없다: ${k}`).toBeTruthy();

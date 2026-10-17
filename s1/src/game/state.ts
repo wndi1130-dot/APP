@@ -481,6 +481,42 @@ export interface Game {
   deferred?: Card[];
   /** 새 이동 사건 묶음과 가중 뽑기(event_pack.ts)가 켜진 판. 없으면 꺼진 판 */
   eventPack?: true;
+  /** 사람이 들어오는 사건(arrivals.ts)이 켜진 판. 없으면 꺼진 판이다 */
+  arrivals?: ArrivalsState;
+}
+
+export type ArrivalKind = 'arrival' | 'family';
+/** 수색대가 나가 있는 동안의 일(arrivals.ts). 다음 정차에 닿을 때 끝난다 */
+export interface ArrivalPending {
+  kind: ArrivalKind;
+  /** 수색대가 나간 칸과 사람 */
+  comm: Comm; names: string[];
+  /** 위험 배수(정찰 식). 바깥이 고요했으면 0 */
+  danger: number;
+  /** 데려올 가족 묶음과 그 가운데 다친 사람 수 */
+  groups: number[]; hurt: number;
+  /** 아직 이번 정산 전이라 자리비움(away)에 이미 더해져 있다 */
+  awayLive: boolean;
+}
+export interface ArrivalsState {
+  /** 종류별로 뜬 횟수와 마지막으로 뜬 구간 */
+  n: Record<ArrivalKind, number>;
+  last: Record<ArrivalKind, number>;
+  /** 칸마다 받은 사람 수 합과 처음 받기 전 인원 */
+  byComm: Partial<Record<Comm, { got: number; popBefore: number }>>;
+  pending?: ArrivalPending;
+  /** 이번 구간 정산에 한 번 더 뺄 빈속 몫의 사람 수 */
+  hungry?: number;
+  /** 잠자리 다툼을 볼 칸과 구간 범위 */
+  quarrel?: { comm: Comm; from: number; to: number };
+  /** 판 통계: 받은 사람 수, 돌려보낸 사람 수 */
+  taken: number; turned: number;
+}
+
+/** 이 칸에 남은 들어온 사람 수 h(결정 369, 명세 4장). 받은 수 합과 「지금 인원 − 처음 받기 전 인원」 가운데 작은 쪽, 0 아래 없음. 꺼진 판은 0 */
+export function arrivedIn(g: Game, c: Comm): number {
+  const a = g.arrivals?.byComm[c];
+  return a ? Math.max(0, Math.min(a.got, g.comms[c].pop - a.popBefore)) : 0;
 }
 
 export type HubFate = 'stayed' | 'left' | 'persuaded' | 'forced';
@@ -540,6 +576,9 @@ export function stageOf(rel: number): { name: string; band: number; index: numbe
 }
 
 /** 처지 = 기준 + 레버 차이. [온기, 배급, 과밀, 노출] */
+/** 들어온 한 명이 처지에 주는 몫: 온기 −0.25, 배급 −0.4, 과밀 +0.75(명세 4장 값의 절반, 결정 385). tools/arrivals_sim.ts의 --sit로 바꿀 수 있게 값 칸을 둔다 */
+export const ARRIVAL_SIT: [number, number, number] = [0.25, 0.4, 0.75];
+
 export function situation(g: Game, c: Comm): [number, number, number, number] {
   const s = g.comms[c];
   // S1c: 기술·침구·장갑이 더하는 처지 보정(domestic/state.ts refreshSit). S1a 판엔 없다.
@@ -547,10 +586,12 @@ export function situation(g: Game, c: Comm): [number, number, number, number] {
   // 공간 레버: 꼬리칸 과밀을 내주는 칸으로 옮긴다(6.4).
   const sp = g.space;
   const room = sp && sp.giver && sp.step > 0 ? (c === 'tail' ? -1 : c === sp.giver ? 1 : 0) * P.spaceStep * sp.step : 0;
+  // 들어온 사람(arrivals.ts): 같은 난로·같은 솥·같은 바닥을 더 나눈다. 꺼진 판은 h가 0이라 값이 그대로다.
+  const h = g.arrivals ? arrivedIn(g, c) : 0;
   return [
-    clamp(s.base[0] + P.leverStep * (s.heat - 2) + (d?.[0] ?? 0), 0, 100),
-    clamp(s.base[1] + P.leverStep * (s.ration - 2) + (d?.[1] ?? 0), 0, 100),
-    clamp(s.base[2] + (d?.[2] ?? 0) + room, 0, 100),
+    clamp(s.base[0] + P.leverStep * (s.heat - 2) + (d?.[0] ?? 0) - ARRIVAL_SIT[0] * h, 0, 100),
+    clamp(s.base[1] + P.leverStep * (s.ration - 2) + (d?.[1] ?? 0) - ARRIVAL_SIT[1] * h, 0, 100),
+    clamp(s.base[2] + (d?.[2] ?? 0) + room + ARRIVAL_SIT[2] * h, 0, 100),
     clamp(s.base[3] + (d?.[3] ?? 0), 0, 100),
   ];
 }
