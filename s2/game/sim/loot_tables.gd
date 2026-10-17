@@ -46,6 +46,13 @@ const BODY: Dictionary = {
 	]},
 }
 
+## Where a padded one stood, read from the building it is nearest (by name).
+const PLACE_OF_BUILDING: Dictionary = {"역사": "station", "화물 창고": "shed"}
+## How near (cells) a building must be to count as where it stood.
+const PLACE_REACH: int = 4
+## A tool found in pockets comes worn.
+const TOOL_CONDITION: float = 0.7
+
 ## The dead that keep coming up the sewers and down the line come with
 ## emptier pockets: what never runs out must not pay out without end.
 const HORDE_MULT: float = 0.5

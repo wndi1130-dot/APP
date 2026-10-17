@@ -26,15 +26,11 @@ const WINDUP: float = 0.8
 const GET_UP: Vector2 = Vector2(5.0, 9.0)
 const RISE_TIME: float = 30.0
 ## What a fallen one may have on it (user 2026-10-11: now and then, small
-## things). First values, to be set on the phone: one in ten; a bandage, or one
-## or two rounds. Rolled once, the first time it goes down; knocking the same
-## one down again rolls nothing. Rows are [weight, entry, most].
-const LOOT_CHANCE: float = 0.1
-const LOOT_TABLE: Array = [
-	[4, {"id": "bandage"}, 1],
-	[3, {"ammo": "pistol"}, 2],
-	[3, {"ammo": "shell"}, 2],
-]
+## things), by kind and, for the padded ones, by where they stood: the tables
+## are in loot_tables.gd (loot spec v1), the dead's the values of before.
+## Rolled once, the first time it goes down; knocking the same one down again
+## rolls nothing.
+const LootRules = preload("res://game/sim/loot_rules.gd")
 const FRESH_STIFFEN: float = 240.0
 const WAKE_TIME: float = 2.0
 const NEAR: float = 32.0
@@ -168,19 +164,10 @@ func set_loot(z: Dictionary, loot: Array) -> void:
 func _roll_loot(z: Dictionary) -> void:
 	if z.has("loot"):
 		return
+	var place := LootRules.place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
 	var loot: Array = []
-	if loot_rng.randf() < LOOT_CHANCE:
-		var total := 0
-		for row in LOOT_TABLE:
-			total += int(row[0])
-		var pick: int = loot_rng.randi_range(1, total)
-		for row in LOOT_TABLE:
-			pick -= int(row[0])
-			if pick <= 0:
-				var entry: Dictionary = row[1].duplicate()
-				entry["n"] = loot_rng.randi_range(1, int(row[2]))
-				loot.append(entry)
-				break
+	for entry: Dictionary in LootRules.body_roll(String(z["kind"]), place, int(z.get("horde", -1)) >= 0, loot_rng):
+		loot.append(LootRules.to_pocket(entry))
 	z["loot"] = loot
 
 
