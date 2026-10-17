@@ -80,6 +80,11 @@ const PERSON_CLIPS: Array = [
 	["p_shove", "", 20, false, "p_shove", 0.5],
 	["p_crouch_walk", "", 32, true, "p_crouch_walk", 1.2],
 	["p_crouch_idle", "", 24, true, "p_crouch_idle", 3.0],
+	["p_search_mid", "", 24, true, "p_search_mid", 2.0],
+	["p_search_low", "", 24, true, "p_search_low", 2.0],
+	["p_treat", "", 24, true, "p_treat", 2.0],
+	["p_aim_one", "", 16, true, "p_aim_one", 1.0],
+	["p_aim_two", "", 16, true, "p_aim_two", 1.0],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
 const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove"]
@@ -786,6 +791,98 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [0.0, -0.7, 1.0]],
 		],
 		"sink": [0.23, 0.006, 0.0],
+	},
+	# Searching a drawer or shelf: bent a little at the waist, the two hands
+	# turning things over in front of the chest by turns, head down.
+	"p_search_mid": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.09, -1.0, 0.02]],
+			["aim", "shin.L", "foot.L", [0.07, -1.0, -0.03]],
+			["aim", "thigh.R", "shin.R", [-0.09, -1.0, 0.02]],
+			["aim", "shin.R", "foot.R", [-0.07, -1.0, -0.03]],
+			["turn", "spine", "x", 0.3],
+			["turn", "chest", "y", [0.0, 0.08, 0.0]],
+			["turn", "neck", "x", 0.35],
+			["turn", "head", "y", [0.0, 0.12, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.15, -0.7, [0.55, 0.12, 0.0]]],
+			["aim", "forearm.L", "hand.L", [-0.15, [0.1, 0.3, 0.0, 2.0], 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, -0.7, [0.55, 0.12, 3.1416]]],
+			["aim", "forearm.R", "hand.R", [0.15, [0.1, 0.3, 3.1416, 2.0], 1.0]],
+		],
+		"sink": 0.02,
+	},
+	# Down on the right knee, reaching to the ground in front with both hands by turns.
+	"p_search_low": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -0.25, 1.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, 0.1]],
+			["aim", "shin.R", "foot.R", [-0.06, -0.12, -1.0]],
+			["turn", "foot.R", "x", 0.9],
+			["turn", "spine", "x", 0.55],
+			["turn", "chest", "x", 0.15],
+			["turn", "neck", "x", 0.25],
+			["aim", "upper_arm.L", "forearm.L", [0.15, -1.0, [0.55, 0.15, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.0, -1.0, [0.6, 0.25, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, -1.0, [0.55, 0.15, 3.1416]]],
+			["aim", "forearm.R", "hand.R", [0.0, -1.0, [0.6, 0.25, 3.1416]]],
+		],
+		"sink": 0.36,
+	},
+	# On one knee binding the left forearm: the right hand goes round and round it.
+	"p_treat": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -0.25, 1.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, 0.1]],
+			["aim", "shin.R", "foot.R", [-0.06, -0.12, -1.0]],
+			["turn", "foot.R", "x", 0.9],
+			["turn", "spine", "x", 0.35],
+			["turn", "neck", "x", 0.4],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.8, 0.45]],
+			["aim", "forearm.L", "hand.L", [-0.7, 0.05, 0.7]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -0.75, [0.5, 0.08, 0.0]]],
+			["aim", "forearm.R", "hand.R", [[0.55, 0.25, 0.0], [0.1, 0.35, 1.5708], 0.7]],
+		],
+		"sink": 0.36,
+	},
+	# Pistol held out at eye height in the right hand, the left under it, half side on.
+	"p_aim_one": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.14, -1.0, 0.12]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, 0.0]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1.0, -0.12]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.1]],
+			["turn", "hips", "y", 0.25],
+			["turn", "chest", "y", [-0.3, 0.015, 0.0]],
+			["turn", "neck", "x", -0.05],
+			["turn", "head", "y", -0.2],
+			["aim", "upper_arm.R", "forearm.R", [0.02, [0.12, 0.01, 0.0], 1.0]],
+			["aim", "forearm.R", "hand.R", [0.04, [0.08, 0.01, 0.0], 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [-0.3, -0.05, 0.9]],
+			["aim", "forearm.L", "hand.L", [-0.6, 0.05, 0.75]],
+		],
+		"sink": [0.04, 0.003, 0.0],
+	},
+	# A long gun at the shoulder: the right hand at the cheek, the left out under
+	# the barrel, head down along it.
+	"p_aim_two": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.14, -1.0, 0.15]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, 0.0]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1.0, -0.12]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.1]],
+			["turn", "hips", "y", 0.35],
+			["turn", "spine", "x", 0.08],
+			["turn", "chest", "y", [-0.4, 0.015, 0.0]],
+			["turn", "neck", "x", 0.2],
+			["turn", "head", "z", -0.15],
+			["aim", "upper_arm.R", "forearm.R", [-0.65, -0.25, 0.25]],
+			["aim", "forearm.R", "hand.R", [0.55, 0.35, 0.75]],
+			["aim", "upper_arm.L", "forearm.L", [-0.05, [-0.15, 0.01, 0.0], 1.0]],
+			["aim", "forearm.L", "hand.L", [-0.25, [0.05, 0.01, 0.0], 1.0]],
+		],
+		"sink": [0.05, 0.003, 0.0],
 	},
 }
 const AXES: Dictionary = {"x": Vector3.RIGHT, "y": Vector3.UP, "z": Vector3.BACK}
