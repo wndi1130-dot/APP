@@ -19,6 +19,11 @@ const ROLE_COLORS: Dictionary = {
 }
 
 ## Lanterns (weather_fx 12.1): the chief's lights their own ring, a mate's says where they are.
+# The weapon in the hand as a model where one is in the build: the grip at the
+# origin, the blade or muzzle along +Z, Y up. Without one the box stands in.
+const WEAPON_MODEL: String = "res://models/weapons/%s.glb"
+# The hatchet comes with its edge lying sideways (+X); turned so it faces down.
+const WEAPON_TURN: Dictionary = {"axe": Vector3(0, 0, -PI * 0.5)}
 const LAMP_CHIEF: Dictionary = {"strength": 1.0, "reach": 7.0}
 const LAMP_MATE: Dictionary = {"strength": 0.6, "reach": 4.0}
 
@@ -95,6 +100,9 @@ var close_kills: Array = []             # field times of recent close kills
 var body_mesh: MeshInstance3D
 var head_mesh: MeshInstance3D
 var weapon_mesh: MeshInstance3D
+var weapon_box: BoxMesh                 # what weapon_mesh shows when there is no model
+var weapon_model: Node3D = null         # under weapon_mesh, so the poses move it too
+var weapon_model_id: String = ""
 var ring: MeshInstance3D
 var tag: Label3D
 
@@ -124,6 +132,7 @@ func setup(id: String, name_text: String, p_role: String, at: Vector3) -> void:
 	(head_mesh.mesh as SphereMesh).height = 0.34
 	head_mesh.position = Vector3(0, 1.6, 0.04)
 	weapon_mesh = _part(BoxMesh.new(), Color(0.2, 0.2, 0.2))
+	weapon_box = weapon_mesh.mesh
 	weapon_mesh.position = Vector3(0.3, 1.0, 0.35)
 	ring = _part(TorusMesh.new(), Color(0.95, 0.85, 0.4) if role == "chief" else color.darkened(0.2))
 	(ring.mesh as TorusMesh).inner_radius = 0.36
@@ -345,8 +354,32 @@ func _refresh_weapon_mesh() -> void:
 			size = Vector3(0.07, 0.07, 0.95)
 		"bow":
 			size = Vector3(0.05, 0.9, 0.05)
-	(weapon_mesh.mesh as BoxMesh).size = size
+	weapon_box.size = size
+	_fit_weapon_model(id)
+	weapon_mesh.mesh = weapon_box if weapon_model == null else null
 	weapon_mesh.visible = id != ""
+
+
+## Puts the hand's weapon model under weapon_mesh (or takes it away) when the
+## weapon in the hand changes.
+func _fit_weapon_model(id: String) -> void:
+	if id == weapon_model_id:
+		return
+	weapon_model_id = id
+	if weapon_model != null:
+		weapon_model.queue_free()
+		weapon_model = null
+	var path := WEAPON_MODEL % id
+	if id == "" or not ResourceLoader.exists(path):
+		return
+	var scene := load(path) as PackedScene
+	if scene == null:
+		return
+	weapon_model = scene.instantiate() as Node3D
+	if weapon_model == null:
+		return
+	weapon_model.rotation = WEAPON_TURN.get(id, Vector3.ZERO)
+	weapon_mesh.add_child(weapon_model)
 
 
 ## Per-frame visuals: facing, posture, tag text.
