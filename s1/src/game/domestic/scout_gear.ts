@@ -72,7 +72,7 @@ export function scoutPlan(g: Game, stop: StopState): ScoutGearUsed & { size: num
   let risk = 1;
   if (t.glass > 0 && !blind) risk *= 1 - D.glassRisk * t.glass;
   if (t.signal > 0) risk *= D.signalRisk;
-  if (t.motor > 0) risk *= 1 - t.motor;
+  if (t.motor > 0) risk *= 1 - D.motorRisk * t.motor;
   const calm = threatStep(stop.threat ?? 1) === 0;
   const noise = (t.pedal > 0 && calm ? 1 : 0) + (t.motor > 0 ? 1 : 0);
   const haul = Math.min(1, P.scoutHaul + D.pedalHaul * t.pedal + D.motorHaul * t.motor);

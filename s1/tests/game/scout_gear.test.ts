@@ -120,12 +120,12 @@ describe('scout_gear', () => {
     expect(gearOwned(old).pedal).toBeGreaterThan(0);
   });
 
-  it('7 motor_always_noise: 발동기는 정찰조 위험 ×(1 − m), 산출 곱 0.8 + 0.2m, 늘 기척 +1, 짙음 위로는 안 간다', () => {
+  it('7 motor_always_noise: 발동기는 정찰조 위험 ×(1 − 0.6m)(결정 394), 산출 곱 0.8 + 0.2m, 늘 기척 +1, 짙음 위로는 안 간다', () => {
     for (const threat of [0.8, 1, 1.4]) {
       const g = mk(`sg-7-${threat}`, [['x2', 'b']], { threat });
       const m = techMult(g, 'x2');
       const p = scoutPlan(g, g.stop!);
-      expect(p.risk).toBeCloseTo(1 - m, 9);
+      expect(p.risk).toBeCloseTo(1 - D.motorRisk * m, 9);
       expect(p.haul).toBeCloseTo(Math.min(1, P.scoutHaul + D.motorHaul * m), 9);
       expect(p.noise).toBe(1);
       sendScouts(g);
@@ -238,7 +238,7 @@ describe('scout_gear', () => {
     toggleGear(g, 'cart');
     expect(scoutPlan(g, g.stop!).noise).toBe(1);
     toggleGear(g, 'glass');
-    expect(scoutPlan(g, g.stop!).risk).toBe(1 - techMult(g, 'x2'));
+    expect(scoutPlan(g, g.stop!).risk).toBeCloseTo(1 - D.motorRisk * techMult(g, 'x2'), 9);
     sendScouts(g);
     toggleGear(g, 'glass'); // 보낸 뒤엔 못 바꾼다
     expect(g.stop!.gear).toEqual({ cart: true, glass: false });
