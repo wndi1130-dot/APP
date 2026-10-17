@@ -53,6 +53,25 @@ static func body_roll(kind: String, place: String, in_horde: bool, rng: RandomNu
 	return out
 
 
+## The place tag of a fallen one standing at cell, from the map's buildings.
+static func place_at(buildings: Array, cell: Vector2i) -> String:
+	for b: Dictionary in buildings:
+		if not T.PLACE_OF_BUILDING.has(String(b.get("name", ""))):
+			continue
+		if (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
+			return String(T.PLACE_OF_BUILDING[b["name"]])
+	return ""
+
+
+## A rolled entry in the shape the pockets hold (field_actions reads "ammo",
+## "weapon" or "id"): a tool becomes a worn weapon in hand form.
+static func to_pocket(entry: Dictionary) -> Dictionary:
+	if not entry.has("tool"):
+		return entry
+	var id := String(entry["tool"])
+	return {"id": id, "n": 1, "weapon": {"id": id, "quality": "factory", "condition": T.TOOL_CONDITION, "loaded": 0}}
+
+
 ## The kind a container is folded into by its name, "" if none.
 static func container_kind(container_name: String) -> String:
 	for kind in T.KIND_ORDER:
