@@ -14,7 +14,7 @@ import type { RngState } from '../src/core/rng';
 import {
   advance, autoLevers, autoLeverStatus, calmCoal, calmTension, CALM, castVote, CHORE_COMMS, chooseCard, cloneGame, COMM_NAME, COMMS, createGame,
   CREW, CREW_COMMS, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, crewAwayOf, crewBand, crewGainOf, crewHaulMult, crewMult, crewNames,
-  crewPreview, currentAgenda, DELEGATE_AFTER, DELEGATE_ON, DELEGATE_RE_ON, drift, effThreat, exposeMult, foodCost, forecast, hash, heatCost,
+  crewPreview, currentAgenda, DELEGATE_AFTER, DELEGATE_ON, DELEGATE_RE_ON, drift, effThreat, exposeMult, foodCost, forecast, hash, heatCost, HUNGER_GRACE,
   isSessionSeg, LAWS, lawFloor, ledgerLevel, LOCO, LOCO_DEFAULT, locoCoal, P, PLACES, potRunning, predictStall, primaryAction, PROFILES, PROTEST,
   rationComm, relStage, resolveStop, REST_FLOOR, riskLevel, segKmOf, setLever, setStop, situation, stageOf, stallKm, stallsEnRoute, standings, STAGES,
   STAY, stopRisk, supportShare, tailIdle, THREAT_STEPS, threatStep, totalPop, viewCard,
@@ -64,7 +64,8 @@ const cardsSince = (g: Game, n: number) => g.cards.slice(n).map(k => ({ kind: k.
 // ---- 흔들기(train-vary) ----
 
 class Vary {
-  rng: RngState = createRng('train-vary');
+  rng: RngState;
+  constructor(seed = 'train-vary') { this.rng = createRng(seed); }
   int(lo: number, hi: number): number {
     const next = randomInt(this.rng, lo, hi);
     this.rng = next.rng;
@@ -216,17 +217,63 @@ function nextSegCase(g0: Game): Record<string, unknown> {
   return { after: { ...pickState(g), lastStop: pickStop(g.lastStop) }, journal: journalSince(g, j), cards: cardsSince(g, k) };
 }
 
+// ---- 정산 한 번(settle) ----
+// meters·hungerTick·checkEnd는 turn.ts가 내보내지 않아 따로 부를 수 없다. 그래서 advance로 정산을 한 번 통째로 돌리고
+// 전/후 판을 적는다. 끝 판정(checkEnd)과 굶은 구간 수(hungerTick)는 그 뒤에 그 값을 건드리는 틱이 S1a 판에 없어 전/후로 맞댈 수 있다.
+
+/** 정산이 읽고 쓰는 끝 판정·굶음 칸. */
+const pickSettle = (g: Game): Record<string, unknown> => ({
+  ...pickState(g), trustCrisis: g.trustCrisis, tensionWarned: g.tensionWarned, tensionCrisisUsed: g.tensionCrisisUsed, end: g.end ?? null,
+});
+
+/** 다른 줄기의 틱이 정산에 끼지 않는 S1a 판인가. */
+const settleOk = (g: Game): boolean => g.cards.length === 0 && primaryAction(g).ok && g.phase !== 'settle' && g.phase !== 'end'
+  && !g.stranded && !g.budget && !g.dark && !g.dom && !g.disasters && !g.climate;
+
+/** 복제본에 advance를 한 번 불러 정산이 돌았으면 전/후를 적는다. */
+function settleCase(g0: Game): Record<string, unknown> | null {
+  if (!settleOk(g0)) return null;
+  const g = cloneGame(g0);
+  const last = g.lastSettle;
+  const j = g.journal.length;
+  const k = g.cards.length;
+  advance(g);
+  if (g.lastSettle === last) return null;
+  return { before: pickSettle(g0), after: pickSettle(g), journal: journalSince(g, j), cards: cardsSince(g, k), notes: [...(g.lastSettle?.notes ?? [])] };
+}
+
+/** 끝 판정·굶음 갈래를 넓히려고 정산 앞 판을 흔든다(train-vary-settle). 지점 표본의 흔들기와 난수 흐름을 나눠 그쪽 값은 그대로 둔다. */
+function shakeSettle(g0: Game, v: Vary): Game {
+  const g = cloneGame(g0);
+  if (v.chance(50)) g.trust = v.chance(30) ? 0 : v.int(0, 40);
+  if (v.chance(50)) g.tension = v.int(40, 100);
+  if (v.chance(40)) g.food = 0;
+  if (v.chance(50)) g.hunger = v.int(0, HUNGER_GRACE + 2);
+  g.trustCrisis = v.chance(50) ? null : g.seg + v.int(-1, 3);
+  g.tensionWarned = v.chance(50);
+  g.tensionCrisisUsed = v.int(0, 2);
+  return g;
+}
+
 // ---- 판 하나 ----
 
 interface Point { seed: string; step: number; act: string; vary: boolean; state: Record<string, unknown>; reads: Record<string, unknown>; changes: Record<string, unknown>; journalN: number }
 
-function playSeed(seed: string, v: Vary, points: Point[], nextSegs: unknown[]): void {
+function playSeed(seed: string, v: Vary, vs: Vary, points: Point[], nextSegs: unknown[], settles: unknown[]): void {
   const g = createGame(seed);
   let step = 0;
+  const settleAt = (): void => {
+    const plain = settleCase(g);
+    if (plain) settles.push({ seed, step, vary: false, ...plain });
+    if (!settleOk(g)) return;
+    const shaken = settleCase(shakeSettle(g, vs));
+    if (shaken) settles.push({ seed, step, vary: true, ...shaken });
+  };
   // 서류를 고르는 걸음은 거의 같은 판을 되풀이하니, 구간·단계마다 첫 걸음만 지점으로 담는다(표본 크기). 다음 구간 표본은 다 담는다.
   const seen = new Set<string>();
   const take = (act: string): void => {
     const key = `${g.seg}|${g.phase}`;
+    settleAt();
     if (nextSegOk(g) && seen.has(key)) nextSegs.push({ seed, step, vary: false, before: pickState(g), ...nextSegCase(g) });
     if (seen.has(key)) { step += 1; return; }
     seen.add(key);
@@ -297,7 +344,7 @@ function scalars(): Record<string, unknown> {
 function tables(): Record<string, unknown> {
   return {
     COMMS, P, STAGES, STAY, LOCO_DEFAULT, CREW: { ...CREW }, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, CHORE_COMMS, CREW_COMMS, REST_FLOOR,
-    COMM_NAME, PROTEST, THREAT_STEPS, CALM,
+    COMM_NAME, PROTEST, THREAT_STEPS, CALM, HUNGER_GRACE,
     DELEGATE: { after: DELEGATE_AFTER, on: DELEGATE_ON, reOn: DELEGATE_RE_ON },
     LAWS_RES: Object.fromEntries(LAW_IDS.map(id => [id, LAWS[id].res])),
     LOCO_COAL: Object.fromEntries(LOCO_IDS.map(id => [id, LOCO[id].coal])),
@@ -308,10 +355,12 @@ function tables(): Record<string, unknown> {
 
 export function trainVectors(): Record<string, unknown> {
   const v = new Vary();
+  const vs = new Vary('train-vary-settle');
   const points: Point[] = [];
   const nextSegs: unknown[] = [];
-  for (const seed of SEEDS) playSeed(seed, v, points, nextSegs);
-  return { format: FORMAT, seeds: SEEDS, tables: tables(), scalars: scalars(), points, nextSegment: nextSegs };
+  const settles: unknown[] = [];
+  for (const seed of SEEDS) playSeed(seed, v, vs, points, nextSegs, settles);
+  return { format: FORMAT, seeds: SEEDS, tables: tables(), scalars: scalars(), points, nextSegment: nextSegs, settle: settles };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
@@ -320,5 +369,5 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(data)}\n`);
   const pts = data.points as Point[];
-  console.log(`${out}: 판 ${SEEDS.length}, 지점 ${pts.length}, 다음 구간 ${(data.nextSegment as unknown[]).length}`);
+  console.log(`${out}: 판 ${SEEDS.length}, 지점 ${pts.length}, 다음 구간 ${(data.nextSegment as unknown[]).length}, 정산 ${(data.settle as unknown[]).length}`);
 }
