@@ -202,7 +202,7 @@ function resolveLost(g: Game, st: StrandedState, t: TripState): void {
   st.trip = null;
   flagsOf(g).trip_out = false;
   g.councilOwed = false;
-  journal(g, `수동차는 돌아오지 않았다. ${t.names.length > 0 ? `${t.names.join(', ')}의 이름을 일지에 옮겼다.` : ''}`.trim(), 'bad');
+  journal(g, `수동차는 돌아오지 않았다. ${t.names.length > 0 ? `${t.names.join(', ')}의 이름을 일지에 적었다.` : ''}`.trim(), 'bad');
   if (t.leaderGoes) {
     st.captainAway = false;
     END_LINK.finish(g, 'lost_captain');
