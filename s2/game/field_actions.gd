@@ -735,7 +735,7 @@ func site_clear() -> bool:
 ## Coal work site: four carriers and two escorts come down from the train.
 func start_work(p) -> void:
 	if not game.mission_play.crew_allowed():
-		game.hud.toast("이번 정차는 살피러 왔다. 작업조는 부르지 않는다.")
+		game.hud.toast("살피기만 · 작업조 안 부름")
 		return
 	if not site_clear():
 		game.hud.toast("측선에 아직 저것들이 서 있다. 치우고 불러야 한다.")
