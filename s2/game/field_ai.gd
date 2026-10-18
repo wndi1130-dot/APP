@@ -52,7 +52,7 @@ const STUCK_T: float = 1.5
 const DOOR_HOLD_R: float = 16.0
 ## The chief stops by things to search: one companion at a time searches the
 ## others within HELP_R of him, the rest keep by him (decision 406, bundle 2;
-## one at a time, the user's answer of 2026-10-18 morning).
+## one at a time, decision 409).
 const HELP_R: float = 6.0
 ## Arrows and dropped things this near (and this near the chief) are picked up.
 const PICK_R: float = 6.0
