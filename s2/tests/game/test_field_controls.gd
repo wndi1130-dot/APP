@@ -492,19 +492,37 @@ func test_each_ally_button_shows_the_name_and_the_weapon_held() -> void:
 	assert_gt(hud.ally_buttons.size(), 0)
 	for row in hud.ally_buttons:
 		var p = row["p"]
-		var b: Button = row["b"]
-		var first: String = b.text.split("\n")[0]
-		assert_true(first.contains(p.display_name), "the name")
-		assert_true(first.contains(hud.short_weapon(p)), "the weapon: " + first)
-	# A different weapon in hand changes the button.
+		# The chip's top line: the name, then the weapon in hand.
+		assert_eq(row["name"].text, p.display_name, "the name")
+		assert_eq(row["arm"].text, hud.short_weapon(p), "the weapon")
+		assert_true(row["name"].visible and row["arm"].visible)
+	# A different weapon in hand changes the chip.
 	var comp = hud.ally_buttons[0]["p"]
 	comp.hands = [{"id": "bow", "quality": "factory", "condition": 0.9, "loaded": 1}]
 	hud.tick(0.02)
 	assert_eq(hud.short_weapon(comp), "활", "short name: the last word")
-	assert_true(String(hud.ally_buttons[0]["b"].text).contains("활"))
+	assert_eq(hud.ally_buttons[0]["arm"].text, "활")
 	comp.hands = []
 	hud.tick(0.02)
-	assert_true(String(hud.ally_buttons[0]["b"].text).contains("맨손"))
+	assert_eq(hud.ally_buttons[0]["arm"].text, "맨손")
+
+
+func test_an_ally_chip_shows_a_face_and_the_order_not_the_body_words() -> void:
+	var hud = game.hud
+	hud.tick(0.02)
+	var row: Dictionary = hud.ally_buttons[0]
+	var p = row["p"]
+	assert_eq(row["face"].get_script(), preload("res://game/ui/portrait_face.gd"), "the face carries the body (decision 293)")
+	p.command = "cover"
+	hud.tick(0.02)
+	assert_eq(row["note"].text, "엄호", "the order alone while nothing else goes on")
+	p.body.downed = true
+	hud.tick(0.02)
+	assert_eq(row["note"].text, "엄호 · 쓰러짐", "what a face cannot show is written")
+	p.body.downed = false
+	p.brain["boarded"] = true
+	hud.tick(0.02)
+	assert_eq(row["note"].text, "엄호 · 열차에")
 
 
 func test_the_ally_bar_has_no_swap_button() -> void:
