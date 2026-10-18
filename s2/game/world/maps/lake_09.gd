@@ -352,7 +352,7 @@ const FLOOR_PATCHES: Array = [
 
 const BUILDING_ROWS: Array = [
 	["어장 주택", Rect2i(35, 39, 14, 12)],
-	["어장 주택", Rect2i(52, 39, 14, 12)],
+	["어장 주택", Rect2i(52, 36, 14, 12)],
 	["어장 주택", Rect2i(69, 39, 14, 12)],
 	["어장 큰 집", Rect2i(36, 9, 18, 16)],
 	["마을 회관", Rect2i(68, 9, 22, 16)],
@@ -375,7 +375,7 @@ const LEVEL_ROWS: Array = [
 
 const WALL_ROWS: Array = [
 	[0, Rect2i(42, 40, 1, 10)],
-	[0, Rect2i(59, 40, 1, 10)],
+	[0, Rect2i(59, 37, 1, 10)],
 	[0, Rect2i(76, 40, 1, 10)],
 	[0, Rect2i(45, 10, 1, 14)],
 	[0, Rect2i(79, 10, 1, 14)],
@@ -410,8 +410,8 @@ const WALL_ROWS: Array = [
 const DOOR_ROWS: Array = [
 	[0, Vector2i(42, 45), "closed", 0],
 	[0, Vector2i(41, 50), "closed", 0],
-	[0, Vector2i(59, 45), "closed", 1],
-	[0, Vector2i(58, 50), "closed", 1],
+	[0, Vector2i(59, 42), "closed", 1],
+	[0, Vector2i(58, 47), "closed", 1],
 	[0, Vector2i(76, 45), "closed", 2],
 	[0, Vector2i(75, 50), "closed", 2],
 	[0, Vector2i(45, 17), "closed", 3],
@@ -447,10 +447,10 @@ const WINDOW_ROWS: Array = [
 	[0, Vector2i(45, 50), 0],
 	[0, Vector2i(35, 42), 0],
 	[0, Vector2i(48, 47), 0],
-	[0, Vector2i(55, 39), 1],
-	[0, Vector2i(62, 50), 1],
-	[0, Vector2i(52, 42), 1],
-	[0, Vector2i(65, 47), 1],
+	[0, Vector2i(55, 36), 1],
+	[0, Vector2i(62, 47), 1],
+	[0, Vector2i(52, 39), 1],
+	[0, Vector2i(65, 44), 1],
 	[0, Vector2i(72, 39), 2],
 	[0, Vector2i(79, 50), 2],
 	[0, Vector2i(69, 42), 2],
@@ -501,16 +501,16 @@ const STOVE_ROWS: Array = [
 const CONTAINER_ROWS: Array = [
 	["supply_0", "식량 찬장", Vector2i(37, 42), 0, ["food_pack"], 0],
 	["supply_1", "목재 선반", Vector2i(46, 48), 0, ["plank"], 0],
-	["supply_2", "식량 찬장", Vector2i(54, 42), 1, ["food_pack"], 0],
-	["supply_3", "목재 선반", Vector2i(63, 48), 1, ["plank"], 0],
+	["supply_2", "식량 찬장", Vector2i(54, 39), 1, ["food_pack"], 0],
+	["supply_3", "목재 선반", Vector2i(63, 45), 1, ["plank"], 0],
 	["supply_4", "식량 찬장", Vector2i(71, 42), 2, ["food_pack"], 0],
 	["supply_5", "목재 선반", Vector2i(80, 48), 2, ["plank"], 0],
 	["supply_6", "식량 찬장", Vector2i(38, 12), 3, ["food_pack"], 0],
 	["supply_7", "목재 선반", Vector2i(51, 22), 3, ["plank"], 0],
 	["supply_8", "식량 찬장", Vector2i(70, 12), 4, ["food_pack"], 0],
 	["supply_9", "목재 선반", Vector2i(87, 22), 4, ["plank"], 0],
-	["supply_10", "저장 식량", Vector2i(123, 9), 5, ["food_pack","food_pack"], 0],
-	["supply_11", "연료 저장함", Vector2i(123, 23), 5, ["wood","wood","wood"], 0],
+	["supply_10", "저장 식량 상자", Vector2i(123, 9), 5, ["food_pack", "food_pack"], 0],
+	["supply_11", "연료 보관함", Vector2i(123, 23), 5, ["wood", "wood", "wood"], 0],
 	["supply_12", "깊은 부품 상자", Vector2i(140, 23), 5, ["scrap","scrap","food_pack","wood"], 0],
 	["supply_13", "작업 통로 선반", Vector2i(118, 5), 5, ["plank"], 0],
 	["supply_14", "움막 낚시 선반", Vector2i(16, 71), 6, ["food_pack"], 0],
@@ -520,21 +520,21 @@ const CONTAINER_ROWS: Array = [
 	["supply_18", "움막 낚시 선반", Vector2i(134, 70), 10, ["food_pack"], 0],
 	["supply_19", "식량 찬장", Vector2i(38, 12), 3, ["food_pack"], 1],
 	["supply_20", "위층 작업 선반", Vector2i(51, 22), 3, ["plank"], 1],
-	["supply_21", "저장 식량", Vector2i(75, 15), 4, ["food_pack","food_pack"], 1],
-	["supply_22", "연료 저장함", Vector2i(75, 18), 4, ["wood","wood","wood"], 1],
+	["supply_21", "저장 식량 상자", Vector2i(75, 15), 4, ["food_pack", "food_pack"], 1],
+	["supply_22", "연료 보관함", Vector2i(75, 18), 4, ["wood", "wood", "wood"], 1],
 	["supply_23", "깊은 부품 상자", Vector2i(81, 18), 4, ["scrap","scrap","food_pack","wood"], 1],
 	["supply_24", "작업 통로 선반", Vector2i(70, 11), 4, ["plank"], 1],
 	["supply_25", "지하 저장 선반", Vector2i(38, 12), 3, ["food_pack","wood"], -1],
 	["supply_26", "목재 선반", Vector2i(51, 22), 3, ["plank"], -1],
-	["supply_27", "저장 식량", Vector2i(75, 15), 4, ["food_pack","food_pack"], -1],
-	["supply_28", "연료 저장함", Vector2i(75, 18), 4, ["wood","wood","wood"], -1],
+	["supply_27", "저장 식량 상자", Vector2i(75, 15), 4, ["food_pack", "food_pack"], -1],
+	["supply_28", "연료 보관함", Vector2i(75, 18), 4, ["wood", "wood", "wood"], -1],
 	["supply_29", "깊은 부품 상자", Vector2i(81, 18), 4, ["scrap","scrap","food_pack","wood"], -1],
 	["supply_30", "작업 통로 선반", Vector2i(70, 11), 4, ["plank"], -1],
-	["supply_31", "저장 식량", Vector2i(123, 9), 5, ["food_pack","food_pack"], -1],
-	["supply_32", "연료 저장함", Vector2i(123, 23), 5, ["wood","wood","wood"], -1],
+	["supply_31", "저장 식량 상자", Vector2i(123, 9), 5, ["food_pack", "food_pack"], -1],
+	["supply_32", "연료 보관함", Vector2i(123, 23), 5, ["wood", "wood", "wood"], -1],
 	["supply_33", "깊은 부품 상자", Vector2i(140, 23), 5, ["scrap","scrap","food_pack","wood"], -1],
 	["supply_34", "작업 통로 선반", Vector2i(118, 5), 5, ["plank"], -1],
-	["supply_35", "지하 통로 수선함", Vector2i(63, 17), 3, ["scrap"], -1],
+	["supply_35", "지하 통로 공구함", Vector2i(63, 17), 3, ["scrap"], -1],
 	["pier_wood", "잔교 목재 상자", Vector2i(91, 103), -1, ["plank","wood"], 0],
 ]
 
@@ -567,12 +567,12 @@ const BARRICADE_CELLS: Array[Vector2i] = [
 ]
 
 const PROPS: Array = [
-	{"kind": "overturned_boat", "rect": Rect2i(49, 52, 4, 2), "solid": "low", "facing": 0, "note": "하역 마당 엄폐 · 뒤집힌 배"},
+	{"kind": "overturned_boat", "rect": Rect2i(48, 52, 4, 2), "solid": "low", "facing": 0, "note": "하역 마당 엄폐 · 뒤집힌 배"},
 	{"kind": "net_drying_rack", "rect": Rect2i(67, 45, 1, 4), "solid": "low", "facing": 1, "note": "하역 마당 엄폐 · 그물 건조대"},
 	{"kind": "fish_trap_stack", "rect": Rect2i(93, 43, 2, 3), "solid": "low", "facing": 1, "note": "하역 마당 엄폐 · 통발 쌓음"},
 	{"kind": "firewood_stack", "rect": Rect2i(110, 49, 3, 2), "solid": "low", "facing": 0, "note": "하역 마당 엄폐 · 장작 단"},
-	{"kind": "pier_deck", "rect": Rect2i(78, 63, 3, 30), "solid": "none", "facing": 1, "note": "잔교 통로 구간 · 잔교"},
-	{"kind": "fishing_platform", "rect": Rect2i(69, 91, 24, 14), "solid": "none", "facing": 0, "note": "어장 작업 무리 · 어장 작업대"},
+	{"kind": "pier_deck", "rect": Rect2i(76, 61, 3, 30), "solid": "none", "facing": 1, "note": "잔교 통로 구간 · 잔교"},
+	{"kind": "fishing_platform", "rect": Rect2i(40, 91, 24, 14), "solid": "none", "facing": 0, "note": "어장 작업 무리 · 어장 작업대"},
 	{"kind": "sunken_wheelhouse", "rect": Rect2i(25, 93, 4, 3), "solid": "wall", "facing": 0, "note": "가라앉은 배 1 · 조타실 윗부분"},
 	{"kind": "sunken_bow", "rect": Rect2i(33, 94, 2, 4), "solid": "wall", "facing": 1, "note": "가라앉은 배 1 · 솟은 뱃머리"},
 	{"kind": "sunken_deck_section", "rect": Rect2i(26, 99, 8, 3), "solid": "low", "facing": 0, "note": "가라앉은 배 1 · 드러난 갑판 조각"},
@@ -584,7 +584,7 @@ const PROPS: Array = [
 	{"kind": "cleaning_table", "rect": Rect2i(76, 93, 4, 2), "solid": "low", "facing": 0, "note": "작업대 1 · 손질대"},
 	{"kind": "fish_crate_stack", "rect": Rect2i(81, 95, 2, 2), "solid": "low", "facing": 0, "note": "작업대 1 · 생선 상자 더미"},
 	{"kind": "net_pile", "rect": Rect2i(72, 98, 2, 2), "solid": "low", "facing": 0, "note": "작업대 1 · 그물 더미"},
-	{"kind": "ice_saw_frame", "rect": Rect2i(88, 102, 3, 2), "solid": "low", "facing": 0, "note": "작업대 1 · 얼음 톱 틀"},
+	{"kind": "ice_saw_frame", "rect": Rect2i(87, 102, 3, 2), "solid": "low", "facing": 0, "note": "작업대 1 · 얼음 톱 틀"},
 	{"kind": "ice_cut_pool", "rect": Rect2i(64, 96, 4, 3), "solid": "none", "facing": 0, "note": "작업대 1 · 잘라 낸 얼음 자리"},
 	{"kind": "fish_drying_frame", "rect": Rect2i(22, 33, 4, 2), "solid": "low", "facing": 0, "note": "주택 마당 1 · 생선 건조 틀"},
 	{"kind": "fish_trap_stack", "rect": Rect2i(36, 33, 2, 2), "solid": "low", "facing": 0, "note": "주택 마당 1 · 통발 쌓음"},
@@ -592,7 +592,7 @@ const PROPS: Array = [
 	{"kind": "overturned_boat", "rect": Rect2i(39, 33, 4, 2), "solid": "low", "facing": 0, "note": "주택 마당 2 · 뒤집힌 배"},
 	{"kind": "net_drying_rack", "rect": Rect2i(54, 34, 4, 1), "solid": "low", "facing": 0, "note": "주택 마당 2 · 그물 건조대"},
 	{"kind": "buoy_line", "rect": Rect2i(67, 43, 2, 1), "solid": "none", "facing": 0, "note": "주택 마당 2 · 부표 줄"},
-	{"kind": "snow_drift", "rect": Rect2i(52, 52, 4, 2), "solid": "none", "facing": 0, "note": "주택 마당 2 · 눈더미"},
+	{"kind": "snow_drift", "rect": Rect2i(52, 51, 4, 2), "solid": "none", "facing": 0, "note": "주택 마당 2 · 눈더미"},
 	{"kind": "fish_drying_frame", "rect": Rect2i(59, 33, 4, 2), "solid": "low", "facing": 0, "note": "주택 마당 3 · 생선 건조 틀"},
 	{"kind": "fish_trap_stack", "rect": Rect2i(70, 33, 2, 2), "solid": "low", "facing": 0, "note": "주택 마당 3 · 통발 쌓음"},
 	{"kind": "dry_bush", "rect": Rect2i(69, 52, 2, 2), "solid": "none", "facing": 0, "note": "주택 마당 3 · 마른 덤불"},
@@ -690,9 +690,16 @@ const PROPS: Array = [
 	{"kind": "ice_cut_pool", "rect": Rect2i(149, 87, 4, 3), "solid": "none", "facing": 0, "note": "얼음 채취 흔적 · 잘라 낸 얼음 자리"},
 	{"kind": "ice_cut_pool", "rect": Rect2i(130, 91, 4, 3), "solid": "none", "facing": 0, "note": "얼음 채취 흔적 · 잘라 낸 얼음 자리"},
 	{"kind": "ice_cut_pool", "rect": Rect2i(153, 103, 4, 3), "solid": "none", "facing": 0, "note": "얼음 채취 흔적 · 잘라 낸 얼음 자리"},
-	{"kind": "buoy_line", "rect": Rect2i(90, 103, 2, 1), "solid": "none", "facing": 0, "note": "잔교 물자 표시 · 부표 줄"},
+	{"kind": "buoy_line", "rect": Rect2i(90, 102, 2, 1), "solid": "none", "facing": 0, "note": "잔교 물자 표시 · 부표 줄"},
 ]
 
+
+# 공용 지하 통로의 바깥 벽과 회관 안 벽을 실제 건물 외곽에 맞춘다.
+const WALL_BUILDING_ROWS: Array = [
+	[-1, Rect2i(54, 15, 14, 1), -1],
+	[-1, Rect2i(54, 19, 14, 1), -1],
+	[-1, Rect2i(68, 15, 3, 5), 4],
+]
 
 static func build() -> Dictionary:
 	var g := FieldGrid.new(WIDTH, HEIGHT)
@@ -742,6 +749,14 @@ static func build() -> Dictionary:
 		var c: Vector2i = row[1]
 		lg.set_solid(c, S.WINDOW)
 		lg.windows[c] = {"broken": false, "glass": true, "building": row[2], "cell": c}
+	for row in WALL_BUILDING_ROWS:
+		var lg: FieldGrid = data["levels"][row[0]]
+		var rect: Rect2i = row[1]
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				var c := Vector2i(x, y)
+				if lg.solid_at(c) == S.WALL:
+					lg.building[lg.index(c)] = row[2]
 	for prop in PROPS:
 		var r: Rect2i = prop["rect"]
 		match prop["solid"]:
