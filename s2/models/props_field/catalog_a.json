@@ -1,0 +1,2672 @@
+{
+  "schema_version": 1,
+  "generator": "tools/blender/props_field_a.py",
+  "input_sha256": "0df3eec325e46bc50be2386e7cdd7cfafaa2bfe66710b9f0f03b4c4f00d3fd65",
+  "palette_linear_rgba": {
+    "wood": [
+      0.24,
+      0.17,
+      0.11,
+      1.0
+    ],
+    "worn_wood": [
+      0.38,
+      0.29,
+      0.19,
+      1.0
+    ],
+    "iron": [
+      0.12,
+      0.15,
+      0.17,
+      1.0
+    ],
+    "worn_metal": [
+      0.28,
+      0.32,
+      0.33,
+      1.0
+    ],
+    "cloth": [
+      0.43,
+      0.41,
+      0.31,
+      1.0
+    ],
+    "enamel": [
+      0.68,
+      0.7,
+      0.66,
+      1.0
+    ],
+    "snow": [
+      0.82,
+      0.87,
+      0.88,
+      1.0
+    ],
+    "bark": [
+      0.19,
+      0.16,
+      0.13,
+      1.0
+    ],
+    "rust": [
+      0.3,
+      0.15,
+      0.075,
+      1.0
+    ],
+    "glass": [
+      0.2,
+      0.34,
+      0.38,
+      1.0
+    ],
+    "rubber": [
+      0.035,
+      0.043,
+      0.048,
+      1.0
+    ],
+    "stone": [
+      0.34,
+      0.36,
+      0.34,
+      1.0
+    ]
+  },
+  "placement": "rect 가운데 바닥; +Y 위, +Z 앞; facing 0~3은 Y축 -90도씩; 회전 후 크기 보정 없음",
+  "assets": {
+    "bare_willow": {
+      "id": "bare_willow",
+      "status": "ready",
+      "path": "res://models/props_field/bare_willow.glb",
+      "count": 225,
+      "solid": {
+        "tree": 225
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "map_rect2i_modal",
+      "height_m": 4.6,
+      "lod0_tris": 196,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          4.599999904632568,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 15188,
+      "sha256": "0f5526325832b017cc2cc5c977eafe692f213032db29c279ac016bec247bcff0",
+      "colours": [
+        "bark",
+        "worn_wood"
+      ],
+      "judgment": "잎 없는 버드나무; 가늘게 아래로 늘어진 가지, tree 높이 예외",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 225
+      }
+    },
+    "map_cabinet": {
+      "id": "map_cabinet",
+      "status": "ready",
+      "path": "res://models/props_field/map_cabinet.glb",
+      "count": 206,
+      "solid": {
+        "none": 187,
+        "low": 19
+      },
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.440000057220459,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 9416,
+      "sha256": "92edf039eaa138081c24f74c8cd568028a85f0c2254cdb685029c6e4436fe8ed",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none 우세; 지도용 얇고 넓은 서랍 네 단, 손잡이는 앞면",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x1": 201
+      }
+    },
+    "record_shelf_row": {
+      "id": "record_shelf_row",
+      "status": "ready",
+      "path": "res://models/props_field/record_shelf_row.glb",
+      "count": 206,
+      "solid": {
+        "none": 194,
+        "low": 12
+      },
+      "footprint_m": [
+        4,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.25,
+      "lod0_tris": 192,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.9199999570846558,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.9199999570846558,
+          1.25,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 14456,
+      "sha256": "3be843d80743c82ef425958f8181827722dd1e05d8eef33b0d52bbc679e0adcf",
+      "colours": [
+        "cloth",
+        "enamel",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "기록 선반의 쓰임을 우선해 none 0.5m 예외; 긴 세 칸과 문서철",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "4x1": 206
+      }
+    },
+    "street_tree": {
+      "id": "street_tree",
+      "status": "ready",
+      "path": "res://models/props_field/street_tree.glb",
+      "count": 198,
+      "solid": {
+        "tree": 198
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 4.4,
+      "lod0_tris": 208,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          4.400000095367432,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 15996,
+      "sha256": "fcc90a999fc6f0f6aaf896076056540f4180be8d8ec0bb7686256c6a877eb452",
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "judgment": "가로수 의미를 우선한 tree; 눈 얹힌 좁은 맨가지 수관",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 161
+      }
+    },
+    "firewood_pile": {
+      "id": "firewood_pile",
+      "status": "ready",
+      "path": "res://models/props_field/firewood_pile.glb",
+      "count": 197,
+      "solid": {
+        "low": 110,
+        "none": 87
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.85,
+      "lod0_tris": 132,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.8500000238418579,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 9492,
+      "sha256": "604e221d7080382b4bd92d0d04e61b78b5e4b92c87a545369243943633207e11",
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "judgment": "low 우세; 잘린 장작 여섯 토막과 위쪽 눈",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 178,
+        "1x6": 1
+      }
+    },
+    "car": {
+      "id": "car",
+      "status": "ready",
+      "path": "res://models/props_field/car.glb",
+      "count": 153,
+      "solid": {
+        "low": 103,
+        "(none)": 50
+      },
+      "footprint_m": [
+        4,
+        2
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.18,
+      "lod0_tris": 348,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.8640000224113464,
+          0,
+          -0.9599999785423279
+        ],
+        [
+          0.8640000224113464,
+          1.1799999475479126,
+          0.9599999785423279
+        ]
+      ],
+      "bytes": 23828,
+      "sha256": "6d9f5a5144ab403b464b7b08d229e55812381cfd3cc8ac801e68ba985bfb095f",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "judgment": "low 1.3m 이하; 눈 쌓인 소형 승용차, +Z 앞을 지키며 4×2m 안에서 폭을 줄임",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "4x2": 93
+      }
+    },
+    "conductor_log_chest": {
+      "id": "conductor_log_chest",
+      "status": "ready",
+      "path": "res://models/props_field/conductor_log_chest.glb",
+      "count": 153,
+      "solid": {
+        "none": 103,
+        "low": 50
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 5232,
+      "sha256": "302e343644da4f23e2672685b7d7f1779d247f965de74b02236e372ed87afc8c",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none 우세; 운행일지용 닫힌 나무 궤와 금속 손잡이",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 153
+      }
+    },
+    "shop_counter": {
+      "id": "shop_counter",
+      "status": "ready",
+      "path": "res://models/props_field/shop_counter.glb",
+      "count": 153,
+      "solid": {
+        "low": 80,
+        "none": 73
+      },
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.05,
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.440000057220459,
+          1.0499999523162842,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 7736,
+      "sha256": "05fb823902a4165b757e09a489cfe1acc0beb67ec0e6dd901269931e49d75491",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low 우세; 앞 판과 안쪽 수납칸이 구분된 낡은 판매대",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x1": 142
+      }
+    },
+    "tin_crate": {
+      "id": "tin_crate",
+      "status": "ready",
+      "path": "res://models/props_field/tin_crate.glb",
+      "count": 142,
+      "solid": {
+        "none": 120,
+        "low": 22
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 9412,
+      "sha256": "e94a7daba600a7a17eac17262c76b2a7e4dba720650490cb2400249bbd19c80a",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_metal"
+      ],
+      "judgment": "none 우세; 골진 양철 상자와 모서리 보강",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 117
+      }
+    },
+    "fuel_can_group": {
+      "id": "fuel_can_group",
+      "status": "ready",
+      "path": "res://models/props_field/fuel_can_group.glb",
+      "count": 131,
+      "solid": {
+        "low": 96,
+        "none": 35
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.62,
+      "lod0_tris": 240,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.6200000047683716,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 17444,
+      "sha256": "52c2f1e8c66bb67150a9af8da6747625381d7d2550cb4d22ce901971e5d97790",
+      "colours": [
+        "iron",
+        "rust",
+        "worn_metal"
+      ],
+      "judgment": "low 우세; 뚜껑과 열린 손잡이가 있는 연료통 세 개",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 121
+      }
+    },
+    "freezer_chest": {
+      "id": "freezer_chest",
+      "status": "ready",
+      "path": "res://models/props_field/freezer_chest.glb",
+      "count": 123,
+      "solid": {
+        "low": 66,
+        "none": 57
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.95,
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.949999988079071,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 8580,
+      "sha256": "6cafb548dfef4e96db8d569ebec1106463a59ea3fe926b3434dcc8e9f8c6b81b",
+      "colours": [
+        "enamel",
+        "iron",
+        "rubber"
+      ],
+      "judgment": "low 우세; 닫힌 위 여닫이 법랑 냉동고와 전면 통풍구",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 104
+      }
+    },
+    "tire_stack": {
+      "id": "tire_stack",
+      "status": "ready",
+      "path": "res://models/props_field/tire_stack.glb",
+      "count": 117,
+      "solid": {
+        "low": 88,
+        "none": 29
+      },
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.9,
+      "lod0_tris": 252,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.9599999785423279
+        ],
+        [
+          0.9599999785423279,
+          0.8999999761581421,
+          0.9599999785423279
+        ]
+      ],
+      "bytes": 18656,
+      "sha256": "2b9d823e4eb89d847f84ff102a252509dfe8ba69c75f7aa8f8adf3ac113e05d4",
+      "colours": [
+        "rubber",
+        "snow"
+      ],
+      "judgment": "low 우세; 중앙 구멍이 관통하는 고무 타이어 세 단",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x2": 108,
+        "1x3": 2,
+        "3x7": 1,
+        "2x7": 1,
+        "10x1": 1,
+        "1x2": 1,
+        "8x1": 1,
+        "4x1": 1,
+        "4x4": 1
+      }
+    },
+    "coal_heap": {
+      "id": "coal_heap",
+      "status": "ready",
+      "path": "res://models/props_field/coal_heap.glb",
+      "count": 111,
+      "solid": {
+        "low": 83,
+        "none": 28
+      },
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.8,
+      "lod0_tris": 92,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.9599999785423279
+        ],
+        [
+          1.440000057220459,
+          0.800000011920929,
+          0.9599999785423279
+        ]
+      ],
+      "bytes": 7128,
+      "sha256": "50189a544e27cbceced164d59fbc4913d6515849875d61f2d1a109cdf82ef03d",
+      "colours": [
+        "rubber",
+        "snow"
+      ],
+      "judgment": "low 우세; 각진 석탄 덩어리, 주변부에만 잔설",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "4x3": 4,
+        "3x2": 19
+      }
+    },
+    "candle_stand": {
+      "id": "candle_stand",
+      "status": "ready",
+      "path": "res://models/props_field/candle_stand.glb",
+      "count": 106,
+      "solid": {
+        "low": 76,
+        "none": 30
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 208,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 14560,
+      "sha256": "41461340873bab0d93e946b435317ea0ce6f0c7b0dbcb800a4e57077353c9859",
+      "colours": [
+        "enamel",
+        "iron",
+        "rubber",
+        "worn_metal"
+      ],
+      "judgment": "low 우세; 세 갈래 촛대와 꺼진 초, 불빛 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 106
+      }
+    },
+    "bench": {
+      "id": "bench",
+      "status": "ready",
+      "path": "res://models/props_field/bench.glb",
+      "count": 101,
+      "solid": {
+        "low": 58,
+        "none": 43
+      },
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.95,
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.440000057220459,
+          0.949999988079071,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 9400,
+      "sha256": "e9b6795559845d13402d18d4c7e12f51fa0059f0e55eed73df373d81cf625170",
+      "colours": [
+        "iron",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low 우세; 판자 좌판과 등받이를 가진 벤치",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x1": 85,
+        "1x3": 5,
+        "6x1": 1
+      }
+    },
+    "hand_bell": {
+      "id": "hand_bell",
+      "status": "ready",
+      "path": "res://models/props_field/hand_bell.glb",
+      "count": 92,
+      "solid": {
+        "low": 57,
+        "none": 35
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.4,
+      "lod0_tris": 112,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.15360000729560852,
+          0,
+          -0.15360000729560852
+        ],
+        [
+          0.15360000729560852,
+          0.4000000059604645,
+          0.15360000729560852
+        ]
+      ],
+      "bytes": 7832,
+      "sha256": "ac81c18f30ffc0fe8f61afcfd9f974ff71a7e9b09308b6058d0751945399367b",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_metal"
+      ],
+      "judgment": "low 상한 내; 벌어진 종 입구와 나무 손잡이",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 92
+      }
+    },
+    "salvage": {
+      "id": "salvage",
+      "status": "ready",
+      "path": "res://models/props_field/salvage.glb",
+      "count": 92,
+      "solid": {
+        "(none)": 92
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "assumed_one_cell_no_rect",
+      "height_m": 0.42,
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          0.41999998688697815,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 13852,
+      "sha256": "48de08e80fd1e22e4257e3c7cf7501fc95a41d352b0d3593558bf46af8a025f3",
+      "colours": [
+        "iron",
+        "rust",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "rect 없는 자재 지점은 1×1m 가정; 목재와 금속 부품만 배치",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {}
+    },
+    "plank_stack": {
+      "id": "plank_stack",
+      "status": "ready",
+      "path": "res://models/props_field/plank_stack.glb",
+      "count": 91,
+      "solid": {
+        "low": 91
+      },
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.85,
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.9599999785423279
+        ],
+        [
+          1.440000057220459,
+          0.8500000238418579,
+          0.9599999785423279
+        ]
+      ],
+      "bytes": 8572,
+      "sha256": "f76f34ca5642f760764b03f6969514ae772782e96ee8a88214ebeec0a28a7ebf",
+      "colours": [
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low; 엇갈린 받침 위에 두께가 보이는 제재 판자 여섯 장",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x2": 63,
+        "2x3": 28
+      }
+    },
+    "stone_wall_segment": {
+      "id": "stone_wall_segment",
+      "status": "ready",
+      "path": "res://models/props_field/stone_wall_segment.glb",
+      "count": 84,
+      "solid": {
+        "low": 84
+      },
+      "footprint_m": [
+        6,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 216,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -2.880000114440918,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          2.880000114440918,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 16152,
+      "sha256": "c6020661d65c75949ee5e2f442532b8a7067e7c9fb71173b7a5380ee89d68069",
+      "colours": [
+        "snow",
+        "stone",
+        "worn_metal"
+      ],
+      "judgment": "low; 거친 돌 여섯 구획을 쌓은 낮은 담장과 눈 덮개",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "6x1": 18,
+        "1x6": 4,
+        "1x8": 12,
+        "1x2": 16,
+        "1x4": 4,
+        "8x1": 17,
+        "5x1": 1,
+        "4x1": 1,
+        "7x1": 11
+      }
+    },
+    "shopping_cart": {
+      "id": "shopping_cart",
+      "status": "ready",
+      "path": "res://models/props_field/shopping_cart.glb",
+      "count": 78,
+      "solid": {
+        "low": 42,
+        "none": 36
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.05,
+      "lod0_tris": 428,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          1.0499999523162842,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 30480,
+      "sha256": "1b8b8e3512470dfb8288b11b559aeed16a7e2af4c97ce97c61a7473e4929f03c",
+      "colours": [
+        "iron",
+        "rubber",
+        "worn_metal"
+      ],
+      "judgment": "low 우세; 빈 장바구니, 열린 격자와 손잡이 및 네 바퀴",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 77,
+        "1x4": 1
+      }
+    },
+    "bare_orchard_tree": {
+      "id": "bare_orchard_tree",
+      "status": "ready",
+      "path": "res://models/props_field/bare_orchard_tree.glb",
+      "count": 75,
+      "solid": {
+        "tree": 75
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 2.8,
+      "lod0_tris": 208,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          2.799999952316284,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 15784,
+      "sha256": "fb3dee5950eeecf1b714ff4093edb18948ce3b5afe7d9b7ff0c53287ca6b265d",
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "judgment": "tree; 낮게 갈라지고 잘린 끝이 보이는 과수원 맨나무",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 32
+      }
+    },
+    "tip_up_flag": {
+      "id": "tip_up_flag",
+      "status": "ready",
+      "path": "res://models/props_field/tip_up_flag.glb",
+      "count": 75,
+      "solid": {
+        "none": 75
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "map_rect2i_modal",
+      "height_m": 0.48,
+      "lod0_tris": 64,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 5244,
+      "sha256": "6cbb64f35685f2a53e4376db9e20dd1e4cba3dd6234362f9de26ac9a2a4adef3",
+      "colours": [
+        "cloth",
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none; 낚시 받침과 감개, 낮은 천 깃발, 표식 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 75
+      }
+    },
+    "hymn_shelf": {
+      "id": "hymn_shelf",
+      "status": "ready",
+      "path": "res://models/props_field/hymn_shelf.glb",
+      "count": 69,
+      "solid": {
+        "low": 56,
+        "none": 13
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 180,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 13616,
+      "sha256": "c036ba9ef53358988404c35aa5095db09d9690f8580b26ed8be839647d15ab0c",
+      "colours": [
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low 우세; 찬송가 책 네 묶음을 둔 세 단 나무 선반",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 69
+      }
+    },
+    "tool_cart": {
+      "id": "tool_cart",
+      "status": "ready",
+      "path": "res://models/props_field/tool_cart.glb",
+      "count": 67,
+      "solid": {
+        "none": 36,
+        "low": 31
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 248,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 17992,
+      "sha256": "429100f410e3570d0d1958323b8366b08c74dd8b8402ac45481e2bf1361076be",
+      "colours": [
+        "iron",
+        "rubber",
+        "rust",
+        "wood",
+        "worn_metal"
+      ],
+      "judgment": "none 우세; 바퀴와 손잡이가 있는 낮은 두 단 공구 수레",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 5
+      }
+    },
+    "vestry_chest": {
+      "id": "vestry_chest",
+      "status": "ready",
+      "path": "res://models/props_field/vestry_chest.glb",
+      "count": 66,
+      "solid": {
+        "low": 54,
+        "none": 12
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.9,
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.8999999761581421,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 6900,
+      "sha256": "93636274f67f0fc9c0a384e0aead92a0d368067347a9d552ef884f4730e1a778",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low 우세; 장식표지 없는 닫힌 제의실 수납 궤",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 66
+      }
+    },
+    "fuel_drum": {
+      "id": "fuel_drum",
+      "status": "ready",
+      "path": "res://models/props_field/fuel_drum.glb",
+      "count": 63,
+      "solid": {
+        "low": 63
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.05,
+      "lod0_tris": 140,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          1.0499999523162842,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 9536,
+      "sha256": "2b3046d64876096759de9b9a5208ae596e25a1b15bccba2e1784b5f4cb428f78",
+      "colours": [
+        "iron",
+        "rust",
+        "snow"
+      ],
+      "judgment": "low; 금속 띠 둘과 주입구가 있는 녹슨 연료 드럼통",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 6
+      }
+    },
+    "parts_rack": {
+      "id": "parts_rack",
+      "status": "ready",
+      "path": "res://models/props_field/parts_rack.glb",
+      "count": 63,
+      "solid": {
+        "low": 35,
+        "none": 28
+      },
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.25,
+      "lod0_tris": 140,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.440000057220459,
+          1.25,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 10672,
+      "sha256": "7cd8e7a2d947f818dbdf0d5f1f8db2a56d786824080a2abffc1795c9b30fc18e",
+      "colours": [
+        "iron",
+        "rust",
+        "worn_metal"
+      ],
+      "judgment": "low 우세; 금속 기둥과 부품 수납함을 가진 선반",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {}
+    },
+    "car_window": {
+      "id": "car_window",
+      "status": "ready",
+      "path": "res://models/props_field/car_window.glb",
+      "count": 62,
+      "solid": {
+        "(none)": 62
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "assumed_one_cell_no_rect",
+      "height_m": 0.48,
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.0575999990105629
+        ],
+        [
+          0.47999998927116394,
+          0.47999998927116394,
+          0.0575999990105629
+        ]
+      ],
+      "bytes": 6056,
+      "sha256": "51b22888912aec8e51913bb2d08b03705ced350bcab320e472a7cda2749db44c",
+      "colours": [
+        "glass",
+        "iron",
+        "snow",
+        "worn_metal"
+      ],
+      "judgment": "rect 없는 조명 지점은 1×1m 가정; 빛 없는 유리창 부품으로만 제작",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {}
+    },
+    "bread_rack": {
+      "id": "bread_rack",
+      "status": "ready",
+      "path": "res://models/props_field/bread_rack.glb",
+      "count": 61,
+      "solid": {
+        "low": 34,
+        "none": 27
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 204,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 14532,
+      "sha256": "fbf631543f0b9e99c84cc24142b95a1c4a3f903bb4cb0fdae9e9b289836b48d1",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low 우세; 나무 쟁반 세 단과 각진 빵 여섯 개",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 61
+      }
+    },
+    "gear_rack": {
+      "id": "gear_rack",
+      "status": "ready",
+      "path": "res://models/props_field/gear_rack.glb",
+      "count": 61,
+      "solid": {
+        "none": 35,
+        "low": 26
+      },
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 192,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.440000057220459,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 16376,
+      "sha256": "66abe6834364d9e1723aa174aa2fcd155ae13352e4decc306086330718eded1d",
+      "colours": [
+        "iron",
+        "worn_metal"
+      ],
+      "judgment": "장비 선반 의미를 우선해 none 0.5m 예외; 공구와 기계 부품만 수납",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x1": 61
+      }
+    },
+    "pew_row": {
+      "id": "pew_row",
+      "status": "ready",
+      "path": "res://models/props_field/pew_row.glb",
+      "count": 59,
+      "solid": {
+        "low": 59
+      },
+      "footprint_m": [
+        6,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.1,
+      "lod0_tris": 132,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -2.880000114440918,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          2.880000114440918,
+          1.100000023841858,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 10244,
+      "sha256": "0327b3a2ff60a184ec6bf8f60fde2e78f63fd3ae610817f2e4c433c6c4eeea01",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low; 긴 좌판·등받이와 세 개 받침의 교회 의자 줄",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "6x1": 59
+      }
+    },
+    "radio_set": {
+      "id": "radio_set",
+      "status": "ready",
+      "path": "res://models/props_field/radio_set.glb",
+      "count": 57,
+      "solid": {
+        "none": 30,
+        "low": 27
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.45,
+      "lod0_tris": 152,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.44999998807907104,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 11144,
+      "sha256": "9cda5a223c9c1798650ef26433b346ccee23cd7b3f442c922a1635dcc4ff0f0f",
+      "colours": [
+        "glass",
+        "iron",
+        "rubber",
+        "wood",
+        "worn_metal"
+      ],
+      "judgment": "none 우세; 스피커 격자·주파수 창·다이얼과 접힌 안테나",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 52
+      }
+    },
+    "net_pile": {
+      "id": "net_pile",
+      "status": "ready",
+      "path": "res://models/props_field/net_pile.glb",
+      "count": 55,
+      "solid": {
+        "low": 43,
+        "none": 12
+      },
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.42,
+      "lod0_tris": 352,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.9599999785423279
+        ],
+        [
+          0.9599999785423279,
+          0.41999998688697815,
+          0.9599999785423279
+        ]
+      ],
+      "bytes": 25656,
+      "sha256": "5d6b8285cc14e8fd0ac56f7400aafe3d13abd1066daea5d4d8e996b04f0a0984",
+      "colours": [
+        "cloth",
+        "wood"
+      ],
+      "judgment": "low 상한 내; 어구인 접힌 그물의 열린 격자, 소지품 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x2": 53
+      }
+    },
+    "lamp_post": {
+      "id": "lamp_post",
+      "status": "ready",
+      "path": "res://models/props_field/lamp_post.glb",
+      "count": 54,
+      "solid": {
+        "none": 54
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 3.6,
+      "lod0_tris": 88,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          3.5999999046325684,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 6920,
+      "sha256": "088a02b52ecd1ad69a661ed9ff5b3f486cd70523c6328d1ef41dae03582b1cf5",
+      "colours": [
+        "glass",
+        "iron"
+      ],
+      "judgment": "가로등 의미를 우선한 none 높이 예외; 꺼진 등기구, 광원 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 54
+      }
+    },
+    "firebox": {
+      "id": "firebox",
+      "status": "ready",
+      "path": "res://models/props_field/firebox.glb",
+      "count": 53,
+      "solid": {
+        "(none)": 53
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "assumed_one_cell_no_rect",
+      "height_m": 0.48,
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 6052,
+      "sha256": "9964916eb4654cfa78113c45d99fc3e94f20f41c838be26bf621bc6f390d640d",
+      "colours": [
+        "iron",
+        "rubber",
+        "worn_metal"
+      ],
+      "judgment": "rect 없는 조명 지점은 1×1m 가정; 꺼진 화실과 열린 빈 입구만 제작",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {}
+    },
+    "ammo_crate": {
+      "id": "ammo_crate",
+      "status": "ready",
+      "path": "res://models/props_field/ammo_crate.glb",
+      "count": 52,
+      "solid": {
+        "none": 30,
+        "low": 22
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 6896,
+      "sha256": "187d74725de8714b28c1b61ce26ef79eff7cac20688096665a5d94430cf95014",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none 우세; 무표식 닫힌 탄약 상자, 외부 내용물 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 52
+      }
+    },
+    "quilted_vest": {
+      "id": "quilted_vest",
+      "status": "ready",
+      "path": "res://models/props_field/quilted_vest.glb",
+      "count": 52,
+      "solid": {
+        "none": 52
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.12,
+      "lod0_tris": 132,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.31200000643730164,
+          0,
+          -0.40799999237060547
+        ],
+        [
+          0.31200000643730164,
+          0.11999999731779099,
+          0.40799999237060547
+        ]
+      ],
+      "bytes": 10260,
+      "sha256": "8099e2c7138991a40753cee6a35d37d8a12ebb02973cf03f76cb42fe127e0435",
+      "colours": [
+        "cloth",
+        "wood"
+      ],
+      "judgment": "none; 평평하게 펼친 조끼 한 벌과 누빔 봉제선, 옷 더미 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 52
+      }
+    },
+    "frozen_reeds": {
+      "id": "frozen_reeds",
+      "status": "ready",
+      "path": "res://models/props_field/frozen_reeds.glb",
+      "count": 50,
+      "solid": {
+        "none": 50
+      },
+      "footprint_m": [
+        3,
+        3
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 300,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -1.440000057220459
+        ],
+        [
+          1.440000057220459,
+          0.47999998927116394,
+          1.440000057220459
+        ]
+      ],
+      "bytes": 22464,
+      "sha256": "3c2ad4d8f29b27fa8947072d9110f7956b932e72945a71adae82918dd71c8251",
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "judgment": "none; 얼어 붙은 낮은 갈대 열두 줄기와 얇은 눈 받침",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x3": 50
+      }
+    },
+    "log_stack_high": {
+      "id": "log_stack_high",
+      "status": "ready",
+      "path": "res://models/props_field/log_stack_high.glb",
+      "count": 50,
+      "solid": {
+        "wall": 50
+      },
+      "footprint_m": [
+        2,
+        9
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 2.2,
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -4.320000171661377
+        ],
+        [
+          0.9599999785423279,
+          2.200000047683716,
+          4.320000171661377
+        ]
+      ],
+      "bytes": 11172,
+      "sha256": "05d7a2f8035ba7ecb052a5c1296e285ac96491706f39f765a185f062e45b4a79",
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "wall 1.8m 이상; 2×9m 방향으로 길게 쌓인 통나무 여섯 본",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x10": 8,
+        "2x12": 12,
+        "2x8": 13,
+        "2x7": 3,
+        "2x9": 14
+      }
+    },
+    "hardware_rack": {
+      "id": "hardware_rack",
+      "status": "ready",
+      "path": "res://models/props_field/hardware_rack.glb",
+      "count": 47,
+      "solid": {
+        "none": 29,
+        "low": 18
+      },
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 184,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.440000057220459,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          1.440000057220459,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 15952,
+      "sha256": "dafa752599b754adcc75864d20d0e6a3c1fc647a0ffdc5adc67e6926420f0dfb",
+      "colours": [
+        "iron",
+        "rust",
+        "worn_metal"
+      ],
+      "judgment": "철물 선반 의미를 우선해 none 0.5m 예외; 고리·보강쇠·부품함",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "3x1": 10
+      }
+    },
+    "coupler_set": {
+      "id": "coupler_set",
+      "status": "ready",
+      "path": "res://models/props_field/coupler_set.glb",
+      "count": 45,
+      "solid": {
+        "none": 23,
+        "low": 22
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.42,
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          0.41999998688697815,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 6060,
+      "sha256": "f174d8b783c6b6a0866b6c7a04f3aefdcc5b401012e8013a0a435510e94d520e",
+      "colours": [
+        "iron",
+        "rust",
+        "worn_metal"
+      ],
+      "judgment": "none 우세; 철도 연결기 머리와 축 부품 두 개, 사슬 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 5
+      }
+    },
+    "tool_rack": {
+      "id": "tool_rack",
+      "status": "ready",
+      "path": "res://models/props_field/tool_rack.glb",
+      "count": 45,
+      "solid": {
+        "low": 45
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.25,
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          1.25,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 11920,
+      "sha256": "b614f590bbc56b8052dadf535cda9bb2205dc3badb60622291fb26ac88ec17ed",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_metal"
+      ],
+      "judgment": "low; 긴 공구 세 자루를 기대 둔 열린 공구대",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 3
+      }
+    },
+    "work_site": {
+      "id": "work_site",
+      "status": "ready",
+      "path": "res://models/props_field/work_site.glb",
+      "count": 45,
+      "solid": {
+        "(none)": 45
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "assumed_one_cell_no_rect",
+      "height_m": 0.45,
+      "lod0_tris": 92,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          0.44999998807907104,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 7328,
+      "sha256": "5fb110371f35ff2ab51b7e00771e32fff75d82ac187521c73b248f9237f9fe6c",
+      "colours": [
+        "iron",
+        "rust",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "rect 없는 작업 지점은 1×1m 가정; 받침 둘과 작업판·공구, 구획 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {}
+    },
+    "ice_cut_pool": {
+      "id": "ice_cut_pool",
+      "status": "ready",
+      "path": "res://models/props_field/ice_cut_pool.glb",
+      "count": 44,
+      "solid": {
+        "none": 44
+      },
+      "footprint_m": [
+        4,
+        3
+      ],
+      "footprint_source": "map_rect2i_modal",
+      "height_m": 0.08,
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -1.9199999570846558,
+          0,
+          -1.440000057220459
+        ],
+        [
+          1.9199999570846558,
+          0.07999999821186066,
+          1.440000057220459
+        ]
+      ],
+      "bytes": 6056,
+      "sha256": "24a8b3061e65a6bd008804a6d182efaeb909892e9dc843912376c933ad0a1629",
+      "colours": [
+        "enamel",
+        "glass",
+        "snow"
+      ],
+      "judgment": "none; 잘라낸 얼음 가장자리와 낮은 얼음면, 물 효과 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "4x3": 44
+      }
+    },
+    "lamp_shelf": {
+      "id": "lamp_shelf",
+      "status": "ready",
+      "path": "res://models/props_field/lamp_shelf.glb",
+      "count": 44,
+      "solid": {
+        "none": 24,
+        "low": 20
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 188,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 13668,
+      "sha256": "565dac52314e1f92f238d92232935a6936abe1c8f899e166cb4c7903aa83fbb1",
+      "colours": [
+        "glass",
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none 우세; 낮은 선반 위 꺼진 손등 두 개, 빛과 불꽃 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 44
+      }
+    },
+    "rope_coil": {
+      "id": "rope_coil",
+      "status": "ready",
+      "path": "res://models/props_field/rope_coil.glb",
+      "count": 44,
+      "solid": {
+        "low": 23,
+        "none": 21
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.24,
+      "lod0_tris": 212,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.47999998927116394,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.47999998927116394,
+          0.23999999463558197,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 22036,
+      "sha256": "3f862dc18f0f467460ef4ec4dcc061234326a20c25b740fdd50c098b6ef56f9b",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low 상한 내; 두 겹 밧줄 고리와 풀린 끝, 사람용 구속물 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "1x1": 5
+      }
+    },
+    "notice_board": {
+      "id": "notice_board",
+      "status": "ready",
+      "path": "res://models/props_field/notice_board.glb",
+      "count": 42,
+      "solid": {
+        "none": 42
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.85,
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.14399999380111694
+        ],
+        [
+          0.9599999785423279,
+          1.850000023841858,
+          0.14399999380111694
+        ]
+      ],
+      "bytes": 7736,
+      "sha256": "6a90e8de3d0a332bf24fd671c866208a17178cd324db864be8aa5cdc0c95715e",
+      "colours": [
+        "enamel",
+        "iron",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "게시판 쓰임을 우선한 none 높이 예외; 기둥 둘과 무문자 공지판",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 42
+      }
+    },
+    "blanket_crate": {
+      "id": "blanket_crate",
+      "status": "ready",
+      "path": "res://models/props_field/blanket_crate.glb",
+      "count": 41,
+      "solid": {
+        "none": 27,
+        "low": 14
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 0.48,
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          0.47999998927116394,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 5220,
+      "sha256": "b2e67a8573869f685583376b55dff14394b9ad85270413b20f7713607e5f49ca",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none 우세; 덮개가 닫힌 담요 보관 상자, 밖으로 쌓인 옷 없음",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {}
+    },
+    "glass_cabinet": {
+      "id": "glass_cabinet",
+      "status": "ready",
+      "path": "res://models/props_field/glass_cabinet.glb",
+      "count": 40,
+      "solid": {
+        "none": 25,
+        "low": 15
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.25,
+      "lod0_tris": 132,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          0.9599999785423279,
+          1.25,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 10248,
+      "sha256": "13ee4cd4526a1137f80bc8ea51fc8079079da86333e4e55ecd827b59d6d7cdee",
+      "colours": [
+        "glass",
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "유리 수납장 의미를 우선해 none 0.5m 예외; 불투명 청회색 유리",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "2x1": 10
+      }
+    },
+    "fieldstone_wall": {
+      "id": "fieldstone_wall",
+      "status": "ready",
+      "path": "res://models/props_field/fieldstone_wall.glb",
+      "count": 38,
+      "solid": {
+        "low": 38
+      },
+      "footprint_m": [
+        8,
+        1
+      ],
+      "footprint_source": "input_modal_rect",
+      "height_m": 1.2,
+      "lod0_tris": 288,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -3.8399999141693115,
+          0,
+          -0.47999998927116394
+        ],
+        [
+          3.8399999141693115,
+          1.2000000476837158,
+          0.47999998927116394
+        ]
+      ],
+      "bytes": 21188,
+      "sha256": "2b3f3eda619cd13028927447cf5b6a181eaf584f3d0e2a10c764a1fed5df4f7c",
+      "colours": [
+        "snow",
+        "stone",
+        "worn_metal"
+      ],
+      "judgment": "low; 길게 이어진 들돌 담장 세 단과 군데군데 잔설",
+      "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
+      "source_rects_wh": {
+        "8x1": 22,
+        "1x6": 1,
+        "1x2": 2,
+        "4x1": 2,
+        "2x1": 1,
+        "1x3": 1,
+        "1x8": 5
+      }
+    }
+  },
+  "skipped": {},
+  "source_context_counts": {
+    "tool_rack": {
+      "rect": 3,
+      "cell_or_expression": 42
+    },
+    "fuel_drum": {
+      "rect": 6,
+      "cell_or_expression": 57
+    },
+    "firewood_pile": {
+      "rect": 179,
+      "cell_or_expression": 18
+    },
+    "salvage": {
+      "cell_or_expression": 92
+    },
+    "car": {
+      "cell_or_expression": 60,
+      "rect": 93
+    },
+    "firebox": {
+      "cell_or_expression": 53
+    },
+    "car_window": {
+      "cell_or_expression": 62
+    },
+    "bench": {
+      "rect": 91,
+      "cell_or_expression": 10
+    },
+    "fieldstone_wall": {
+      "rect": 34,
+      "cell_or_expression": 4
+    },
+    "lamp_post": {
+      "rect": 54
+    },
+    "hymn_shelf": {
+      "rect": 69
+    },
+    "candle_stand": {
+      "rect": 106
+    },
+    "vestry_chest": {
+      "rect": 66
+    },
+    "hand_bell": {
+      "rect": 92
+    },
+    "lamp_shelf": {
+      "rect": 44
+    },
+    "bread_rack": {
+      "rect": 61
+    },
+    "shop_counter": {
+      "rect": 142,
+      "cell_or_expression": 11
+    },
+    "pew_row": {
+      "rect": 59
+    },
+    "work_site": {
+      "cell_or_expression": 45
+    },
+    "freezer_chest": {
+      "rect": 104,
+      "cell_or_expression": 19
+    },
+    "shopping_cart": {
+      "rect": 78
+    },
+    "coal_heap": {
+      "rect": 23,
+      "cell_or_expression": 88
+    },
+    "frozen_reeds": {
+      "rect": 50
+    },
+    "conductor_log_chest": {
+      "rect": 153
+    },
+    "tool_cart": {
+      "rect": 5,
+      "cell_or_expression": 62
+    },
+    "coupler_set": {
+      "rect": 5,
+      "cell_or_expression": 40
+    },
+    "rope_coil": {
+      "cell_or_expression": 39,
+      "rect": 5
+    },
+    "tin_crate": {
+      "rect": 117,
+      "cell_or_expression": 25
+    },
+    "hardware_rack": {
+      "rect": 10,
+      "cell_or_expression": 37
+    },
+    "street_tree": {
+      "rect": 161,
+      "cell_or_expression": 37
+    },
+    "parts_rack": {
+      "cell_or_expression": 63
+    },
+    "bare_orchard_tree": {
+      "cell_or_expression": 43,
+      "rect": 32
+    },
+    "blanket_crate": {
+      "cell_or_expression": 41
+    },
+    "glass_cabinet": {
+      "rect": 10,
+      "cell_or_expression": 30
+    },
+    "net_pile": {
+      "rect": 53,
+      "cell_or_expression": 2
+    },
+    "ice_cut_pool": {
+      "rect": 44
+    },
+    "tip_up_flag": {
+      "rect": 75
+    },
+    "bare_willow": {
+      "rect": 225
+    },
+    "record_shelf_row": {
+      "rect": 206
+    },
+    "map_cabinet": {
+      "rect": 201,
+      "cell_or_expression": 5
+    },
+    "fuel_can_group": {
+      "rect": 121,
+      "cell_or_expression": 10
+    },
+    "tire_stack": {
+      "rect": 117
+    },
+    "stone_wall_segment": {
+      "rect": 84
+    },
+    "gear_rack": {
+      "rect": 61
+    },
+    "quilted_vest": {
+      "rect": 52
+    },
+    "radio_set": {
+      "rect": 52,
+      "cell_or_expression": 5
+    },
+    "ammo_crate": {
+      "rect": 52
+    },
+    "notice_board": {
+      "rect": 42
+    },
+    "log_stack_high": {
+      "rect": 50
+    },
+    "plank_stack": {
+      "rect": 91
+    }
+  },
+  "ground_like_excluded": [
+    {
+      "kind": "fishing_hole",
+      "count": 138,
+      "maps": 9,
+      "has_model": false,
+      "rects_wh_top": [],
+      "solid": {
+        "none": 138
+      },
+      "facing": {
+        "0": 138
+      },
+      "names_top": [],
+      "map_families": [
+        "lake"
+      ],
+      "ground_like": true
+    },
+    {
+      "kind": "water",
+      "count": 94,
+      "maps": 8,
+      "has_model": false,
+      "rects_wh_top": [
+        [
+          [
+            10,
+            8
+          ],
+          40
+        ],
+        [
+          [
+            10,
+            4
+          ],
+          8
+        ],
+        [
+          [
+            8,
+            8
+          ],
+          4
+        ]
+      ],
+      "solid": {
+        "low": 94
+      },
+      "facing": {
+        "0": 40,
+        "2": 19,
+        "1": 19,
+        "3": 16
+      },
+      "names_top": [],
+      "map_families": [
+        "church",
+        "freight",
+        "houses",
+        "office"
+      ],
+      "ground_like": true
+    },
+    {
+      "kind": "snow_drift",
+      "count": 68,
+      "maps": 23,
+      "has_model": false,
+      "rects_wh_top": [
+        [
+          [
+            4,
+            2
+          ],
+          30
+        ],
+        [
+          [
+            3,
+            2
+          ],
+          1
+        ]
+      ],
+      "solid": {
+        "none": 68
+      },
+      "facing": {
+        "0": 63,
+        "3": 3,
+        "2": 1,
+        "1": 1
+      },
+      "names_top": [],
+      "map_families": [
+        "bare_line",
+        "church",
+        "lake",
+        "summit"
+      ],
+      "ground_like": true
+    },
+    {
+      "kind": "rock_face",
+      "count": 57,
+      "maps": 14,
+      "has_model": false,
+      "rects_wh_top": [
+        [
+          [
+            6,
+            3
+          ],
+          57
+        ]
+      ],
+      "solid": {
+        "wall": 57
+      },
+      "facing": {
+        "0": 57
+      },
+      "names_top": [],
+      "map_families": [
+        "mine",
+        "summit"
+      ],
+      "ground_like": true
+    },
+    {
+      "kind": "snow_bank",
+      "count": 28,
+      "maps": 17,
+      "has_model": false,
+      "rects_wh_top": [
+        [
+          [
+            6,
+            1
+          ],
+          27
+        ],
+        [
+          [
+            1,
+            6
+          ],
+          1
+        ]
+      ],
+      "solid": {
+        "low": 28
+      },
+      "facing": {
+        "0": 27,
+        "1": 1
+      },
+      "names_top": [],
+      "map_families": [
+        "bare_line",
+        "mine",
+        "summit"
+      ],
+      "ground_like": true
+    },
+    {
+      "kind": "snow_fence",
+      "count": 11,
+      "maps": 3,
+      "has_model": false,
+      "rects_wh_top": [
+        [
+          [
+            5,
+            1
+          ],
+          11
+        ]
+      ],
+      "solid": {
+        "low": 11
+      },
+      "facing": {
+        "0": 11
+      },
+      "names_top": [],
+      "map_families": [
+        "bare_line"
+      ],
+      "ground_like": true
+    },
+    {
+      "kind": "snow_gauge_pole",
+      "count": 5,
+      "maps": 5,
+      "has_model": false,
+      "rects_wh_top": [
+        [
+          [
+            1,
+            1
+          ],
+          5
+        ]
+      ],
+      "solid": {
+        "none": 5
+      },
+      "facing": {
+        "0": 5
+      },
+      "names_top": [],
+      "map_families": [
+        "summit"
+      ],
+      "ground_like": true
+    }
+  ],
+  "source_line_estimate": {
+    "per_map_triangles": {
+      "bare_line_01": 1348,
+      "bare_line_02": 1348,
+      "bare_line_03": 1348,
+      "church_01": 18392,
+      "church_02": 18936,
+      "church_03": 17160,
+      "church_04": 15784,
+      "church_05": 17036,
+      "church_06": 9984,
+      "factory_01": 248,
+      "factory_02": 248,
+      "factory_03": 248,
+      "factory_04": 248,
+      "factory_05": 248,
+      "factory_06": 248,
+      "freight_01": 7372,
+      "freight_02": 12072,
+      "freight_03": 7028,
+      "freight_04": 7064,
+      "freight_05": 10996,
+      "freight_06": 9292,
+      "hospital_01": 392,
+      "hospital_02": 392,
+      "hospital_03": 392,
+      "hospital_04": 392,
+      "hospital_05": 392,
+      "hospital_06": 392,
+      "houses_01": 28180,
+      "houses_02": 19952,
+      "houses_03": 26056,
+      "houses_04": 24880,
+      "houses_05": 30252,
+      "houses_06": 26900,
+      "lake_01": 8320,
+      "lake_02": 9872,
+      "lake_03": 8296,
+      "lake_04": 9400,
+      "lake_05": 8312,
+      "lake_06": 9832,
+      "lake_07": 8464,
+      "lake_08": 8884,
+      "lake_09": 9528,
+      "lodge_01": 648,
+      "lodge_02": 648,
+      "lodge_03": 648,
+      "lodge_04": 648,
+      "lodge_05": 648,
+      "lodge_06": 648,
+      "lodge_07": 648,
+      "lodge_08": 648,
+      "lodge_09": 648,
+      "mine_01": 1932,
+      "mine_02": 1932,
+      "mine_03": 2392,
+      "mine_04": 2088,
+      "mine_05": 2024,
+      "mine_06": 1932,
+      "mine_07": 1904,
+      "mine_08": 1748,
+      "mine_09": 1748,
+      "office_01": 44376,
+      "office_02": 53504,
+      "office_03": 36004,
+      "office_04": 45184,
+      "office_05": 22084,
+      "office_06": 59292,
+      "sawmill_01": 3804,
+      "sawmill_02": 2760,
+      "sawmill_03": 1512,
+      "sawmill_04": 2088,
+      "sawmill_05": 2808,
+      "sawmill_06": 1728,
+      "sawmill_07": 3648,
+      "sawmill_08": 1932,
+      "sawmill_09": 3180,
+      "summit_01": 3268,
+      "summit_02": 3564,
+      "summit_03": 3268,
+      "summit_04": 3564,
+      "summit_05": 3268
+    },
+    "max_map": "office_06",
+    "max_triangles": 59292,
+    "method": "지도 원문 kind 출현 수 × A종 삼각형. 반복문 실행 수·다른 소품·건물 제외; 런타임 총량 아님"
+  }
+}
