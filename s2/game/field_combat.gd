@@ -10,6 +10,7 @@ const GrabRules = preload("res://game/sim/grab_rules.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
@@ -828,7 +829,7 @@ func bite(p) -> void:
 	if p.team == "raider":
 		return
 	var part_word: String = {"arm": "팔", "torso": "몸통", "leg": "다리"}.get(part, part)
-	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word], true, "bite_" + part)
+	game.say(p, UiFonts.josa("%s %s을(를) 물렸다." % [p.display_name, part_word]), true, "bite_" + part)
 	var seen: Array = []
 	for o in game.allies_alive():
 		if o != p and o.position.distance_to(p.position) < 12.0 and game.sight_clear(o.position, p.position):
