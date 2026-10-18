@@ -1,0 +1,68 @@
+extends "res://addons/gut/test.gd"
+## 열차 가구 장부·파일 집합·바이트·해시·개별/전체 예산.
+
+const KIT_DIR := "res://models/train_interior"
+const EXPECTED := [
+	"bench", "stove", "bunk_lower", "bunk_upper", "book", "blanket",
+	"sacks", "workbench", "crates", "insulation_panel", "side_table", "supplies",
+	"curtain_half_open", "medicine_box", "dining_table", "cooking_pot", "bowls",
+	"class_slate", "ballot_box", "bell", "wrench", "memorial_board", "ladle",
+	"tools", "shelf", "captain_desk", "radio", "coal_pile", "food_crates",
+	"divider", "empty_platform", "storage_board", "boiler",
+]
+
+
+func _assets() -> Dictionary:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(KIT_DIR + "/catalog.json"))
+	if not parsed is Dictionary:
+		return {}
+	var assets: Variant = parsed.get("assets", {})
+	return assets if assets is Dictionary else {}
+
+
+func test_catalog_names_are_exactly_the_thirty_three_models() -> void:
+	var assets := _assets()
+	assert_false(assets.is_empty(), "빈 장부는 통과하지 않음")
+	var listed: Array = assets.keys()
+	listed.sort()
+	var expected: Array = EXPECTED.duplicate()
+	expected.sort()
+	assert_eq(listed, expected, "33종 이름 집합")
+	var on_disk: Array = []
+	for file: String in DirAccess.get_files_at(KIT_DIR):
+		if file.get_extension() == "glb":
+			on_disk.append(file.get_basename())
+	on_disk.sort()
+	assert_eq(on_disk, expected, "실제 glb 집합")
+
+
+func test_each_catalog_entry_has_a_matching_glb() -> void:
+	var assets := _assets()
+	assert_eq(assets.size(), 33, "모든 모델 검사")
+	for id: String in assets:
+		var asset: Dictionary = assets[id]
+		var path := "%s/%s.glb" % [KIT_DIR, id]
+		assert_eq(asset.get("path", ""), path, "%s 경로" % id)
+		assert_eq(asset.get("status", ""), "ready", "%s 상태" % id)
+		assert_eq(asset.get("origin", ""), "box_center", "%s 중앙 기준" % id)
+		assert_true(FileAccess.file_exists(path), "%s glb" % id)
+		assert_true(FileAccess.file_exists(path + ".import"), "%s 가져오기 설정" % id)
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			continue
+		assert_eq(file.get_length(), int(asset.get("bytes", -1)), "%s 바이트" % id)
+		assert_eq(FileAccess.get_sha256(path), asset.get("sha256", ""), "%s SHA-256" % id)
+
+
+func test_individual_and_total_triangle_budgets() -> void:
+	var assets := _assets()
+	assert_eq(assets.size(), 33, "33종 모두 예산 검사")
+	var total := 0
+	for id: String in assets:
+		var asset: Dictionary = assets[id]
+		var triangles := int(asset.get("lod0_tris", -1))
+		assert_gt(triangles, 0, "%s 빈 메시 금지" % id)
+		assert_lte(triangles, 600, "%s 개별 상한" % id)
+		assert_eq(int(asset.get("triangle_limit", -1)), 600, "%s 예산" % id)
+		total += triangles
+	assert_lte(total, 8000, "33종 합계 상한")
