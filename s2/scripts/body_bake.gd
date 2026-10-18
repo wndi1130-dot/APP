@@ -67,7 +67,8 @@ const OWN_POSES: Array = [
 # The living people's motions (bake_body_cli --set=person, a folder of its own
 # so the dead's numbers above stay): name, source motion ("" for one written
 # here), frames, loops, layer ("" for none), seconds (a source motion's own
-# length is what is baked). Only appended to, so a number once baked keeps its motion. Thirty-two at most:
+# length is what is baked). Those written here come first, so a bake with no
+# motion set keeps their numbers; the field finds each by its name. Thirty-two at most:
 # the shader's clip tables have thirty-two places (dead_vat.gdshader); numbers
 # 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
@@ -99,16 +100,20 @@ const PERSON_CLIPS: Array = [
 	["p_stomp", "", 20, false, "p_stomp", 0.6],
 	["p_pry", "", 24, true, "p_pry", 1.6],
 	["p_kick", "", 20, false, "p_kick", 0.6],
+	# A one-handed blow back the other way, a second to the swing across (decision 411).
+	["p_swing_back", "", 24, false, "p_swing_back", 0.6],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
 	["p_kneel_work", "Fixing_Kneeling", 32, true, "p_kneel_work", 3.12],
-	["p_open_low", "Chest_Open", 28, false, "", 1.367],
-	["p_knockback", "Hit_Knockback", 24, false, "", 0.833],
+	# A low lid and a knockback nothing played made way for these two blows: an
+	# axe chopped in from the side (UAL's sword blows turn the hips round 69 to
+	# 160 degrees, the chop 34).
+	["p_chop_side", "TreeChopping_Loop", 24, false, "", 0.967],
 	["p_pickup", "PickUp_Table", 24, false, "", 0.833],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_knockback", "p_pickup"]
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_pickup"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -724,6 +729,25 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.L", "hand.L", [-0.1, -0.2, 1.0]],
 			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.3, -0.7], [0.45, 0.35], [1, -0.16]]], ["keys", [[0, -1.0], [0.3, 0.35], [0.45, -0.1], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.5], [0.45, 0.9], [1, 0.04]]]]],
 			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, -0.3], [0.45, 0.7], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.9], [0.45, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, -0.3], [0.45, 0.7], [1, 0.1]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.45, 0.06], [1, 0.0]]],
+	},
+	# The one-handed swing back the other way (backhand): the right hand drawn
+	# across to the left shoulder with the body twisted left, out across in
+	# front to the right, back again.
+	"p_swing_back": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0, 0.0], [0.45, -0.15], [1, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.05]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.45, 0.3], [1, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.45, 0.05], [1, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, 0.0], [0.45, 0.25], [1, 0.05]]]],
+			["turn", "chest", "y", ["keys", [[0, 0.0], [0.3, 0.55], [0.45, -0.5], [1, 0.0]]]],
+			["turn", "head", "y", ["keys", [[0, 0.0], [0.3, -0.25], [0.45, 0.2], [1, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.35, -0.85, 0.25]],
+			["aim", "forearm.L", "hand.L", [-0.1, -0.2, 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.3, 0.8], [0.45, -0.6], [1, -0.16]]], ["keys", [[0, -1.0], [0.3, 0.1], [0.45, -0.05], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, 0.3], [0.45, 0.8], [1, 0.04]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, 0.45], [0.45, -0.75], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.6], [0.45, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, -0.45], [0.45, 0.65], [1, 0.1]]]]],
 		],
 		"sink": ["keys", [[0, 0.0], [0.45, 0.06], [1, 0.0]]],
 	},

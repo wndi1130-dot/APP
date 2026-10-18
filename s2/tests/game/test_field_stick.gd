@@ -179,7 +179,8 @@ func test_run_and_pause_on_the_left_crouch_with_the_fighting_keys_on_the_right()
 			right.append(b)
 	# Leaving got a pad of its own, over the situation pad and only by the train
 	# (it was a row of the situation list, hidden behind a hold when a body lay near).
-	assert_eq(right.size(), 7, "aim, attack, shove, crouch, situation, leaving, all to the train")
+	# 'All aboard' went up to the top middle under the radio (시안 2차 .fall).
+	assert_eq(right.size(), 6, "aim, attack, shove, crouch, situation, leaving")
 	assert_false(hud.depart_button.get_global_rect().intersects(hud.context_button.get_global_rect()))
 	assert_false(hud.depart_button.get_global_rect().intersects(hud.shove_button.get_global_rect()))
 	for i in right.size():
@@ -406,7 +407,13 @@ func test_situation_pad_does_the_nearest_thing_and_a_hold_lists_the_rest() -> vo
 	p.blood_soaked = true
 	hud._rebuild_context(p)
 	assert_gt(hud.context_rows.size(), 1)
-	assert_true(hud.context_button.text.begins_with(String(hud.context_rows[0]["label"])))
+	# The nearest thing's mark alone (user 2026-10-18), how many more on its rim.
+	var first := String(hud.context_rows[0]["label"])
+	assert_eq(hud.context_button.text, "", "no word on the pad")
+	assert_eq(hud.context_icon, hud.HudIcons.context_icon(first))
+	assert_eq(hud.context_button.tooltip_text, first)
+	assert_true(hud.context_badge.visible)
+	assert_eq(hud.context_more.text, "+%d" % (hud.context_rows.size() - 1))
 	var at: Vector2 = hud.context_button.get_global_rect().get_center()
 	hud.finger_down(1, at)
 	hud.fingers[1]["ms"] = Time.get_ticks_msec() - 1000
@@ -450,14 +457,16 @@ func test_one_main_action_trial_turns_aim_into_attack_with_an_axe() -> void:
 	hud.tick(0.02)
 	assert_false(hud.attack_button.visible)
 	assert_false(hud.manual_button.visible, "manual only with a gun")
-	assert_eq(hud.aim_button.text, "공격")
+	assert_eq(hud.aim_button.text, "A")
+	assert_null(hud.aim_button.icon, "A alone, as attack shows")
 	hud._pad_down(hud.aim_button, Vector2.ZERO)
 	hud._pad_up(hud.aim_button, Vector2.ZERO)
 	assert_eq(p.target_zombie, z)
 	assert_true(p.hold_attack)
 	_gun()
 	hud.tick(0.02)
-	assert_eq(hud.aim_button.text, "조준")
+	assert_eq(hud.aim_button.text, "", "the aim mark alone (user 2026-10-18)")
+	assert_not_null(hud.aim_button.icon)
 	assert_true(hud.manual_button.visible)
 
 
