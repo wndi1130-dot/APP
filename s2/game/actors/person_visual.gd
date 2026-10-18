@@ -70,6 +70,7 @@ const OWN_SHOVE: String = "p_shove"
 # folder 16-21; VatBaker.pack_motion carries them to the shader).
 const OWN_FALL: String = "p_fall"
 const OWN_FALL_FRONT: String = "p_fall_front"
+const OWN_FALL_SLUMP: String = "p_fall_slump"
 const OWN_CRAWL: String = "p_crawl"
 const OWN_RISE: String = "p_rise"
 const OWN_RISE_FRONT: String = "p_rise_front"
@@ -86,7 +87,7 @@ const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5
 	"p_bitten": 0.2, "p_shove": 0.2, "p_swing_one": 0.15, "p_swing_axe": 0.15, "p_stab": 0.15,
 	"p_swing_back": 0.15, "p_chop_side": 0.15,
 	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3,
-	"p_fall": 0.2, "p_fall_front": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
+	"p_fall": 0.2, "p_fall_front": 0.2, "p_fall_slump": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
 	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2,
 	"p_reload": 0.2, "p_kneel_work": 0.5}
 # Aiming a gun standing still (Project Zomboid: aim_handgun, aim_rifle): one hand
@@ -300,14 +301,15 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
-		# (or slipped) it lies on its face, where it can still drag itself.
+		# (or slipped) it lies on its face, where it can still drag itself;
+		# half of them slump on their face either way (fall_name).
 		var own_crawl := clip_named(own, OWN_CRAWL, -1)
 		if p.body.downed and not p.body.dead and gone > 0.01:
 			if own_crawl >= 0:
 				note["motion"] = OWN_BASE + own_crawl
 				return Vector2(_round(note, "crawl", gone, _round_of(own, own_crawl, 0.41)), own_crawl)
 			return Vector2(_round(note, "crawl", gone, _round_of(clips, CRAWL, 0.61)), CRAWL)
-		var own_down := clip_named(own, OWN_FALL if p.body.dead else OWN_FALL_FRONT, -1)
+		var own_down := clip_named(own, fall_name(p, own), -1)
 		if own_down >= 0:
 			if int(note.get("motion", -1)) == OWN_BASE + own_crawl:
 				# Stopped dragging itself: still down, not falling again.
@@ -323,7 +325,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		note["since"] = t
 	elif was >= OWN_BASE and was - OWN_BASE < own.size():
 		var down := String(own[was - OWN_BASE].get("name", ""))
-		if down == OWN_FALL or down == OWN_FALL_FRONT or down == OWN_CRAWL:
+		if down == OWN_FALL or down == OWN_FALL_FRONT or down == OWN_FALL_SLUMP or down == OWN_CRAWL:
 			note["motion"] = OWN_BASE + clip_named(own, OWN_RISE if down == OWN_FALL else OWN_RISE_FRONT, -1)
 			note["since"] = t
 	var rise: int = int(note.get("motion", -1))
@@ -407,6 +409,15 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		gait = STAGGER
 	note["motion"] = gait
 	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+
+
+## Which of the living's own falls a body goes down in: dead on its back,
+## knocked down on its face, and half of the people (by their name, so always
+## the same) slump on their face either way when the folder has it (decision 412).
+static func fall_name(p, own: Array) -> String:
+	if posmod(hash(String(p.pid)), 2) == 1 and clip_named(own, OWN_FALL_SLUMP, -1) >= 0:
+		return OWN_FALL_SLUMP
+	return OWN_FALL if p.body.dead else OWN_FALL_FRONT
 
 
 ## A melee blow in the living's own motions (y) and how far through it (x):

@@ -95,6 +95,66 @@ func test_struck_from_behind_it_goes_over_on_its_face() -> void:
 	assert_eq(DeadBody.custom(z, 0.4, 0.0, 1.0, true).g, float(DeadBody.FALL))
 
 
+# Half of the dead go over the other way of each side (decision 412), the same
+# body always the same way, and only when the folder in use has those motions.
+func test_half_of_the_dead_go_over_the_other_way_when_the_folder_has_it() -> void:
+	var names: Array = []
+	for clip in BodyBake.CLIPS:
+		names.append(clip[0])
+	assert_eq(names[DeadBody.FALL_THROWN], "fall_thrown")
+	assert_eq(names[DeadBody.FALL_SLUMP], "fall_slump")
+	var z := _body("downed")
+	z["fell_at"] = 9.9
+	for n in DeadBody.FALL_SLUMP + 1:
+		DeadBody.table.append([n * 32, 32, false])
+	var other := 0
+	for n in 40:
+		z["phase"] = (float(n) + 0.5) / 40.0
+		z["fell_fwd"] = true
+		var front := int(DeadBody.picked(z, 0.4, 0.0, 1.0, true).g)
+		assert_true(front == DeadBody.FALL_FRONT or front == DeadBody.FALL_SLUMP, "on its face")
+		assert_eq(int(DeadBody.picked(z, 0.4, 0.0, 1.0, true).g), front, "the same body the same way")
+		z["fell_fwd"] = false
+		var back := int(DeadBody.picked(z, 0.4, 0.0, 1.0, true).g)
+		assert_eq(back, DeadBody.FALL_THROWN if front == DeadBody.FALL_SLUMP else DeadBody.FALL, "on its back, the same half")
+		if front == DeadBody.FALL_SLUMP:
+			other += 1
+	assert_between(other, 14, 26, "about half")
+	# An older folder without them: the first ways only.
+	DeadBody.table.resize(DeadBody.STAGGER + 1)
+	for n in 40:
+		z["phase"] = (float(n) + 0.5) / 40.0
+		z["fell_fwd"] = n % 2 == 0
+		assert_eq(int(DeadBody.picked(z, 0.4, 0.0, 1.0, true).g), DeadBody.FALL_FRONT if n % 2 == 0 else DeadBody.FALL)
+
+
+# They lie at the end just as the first ways do, so getting up is the same.
+func test_the_other_falls_end_lying_as_the_first_ones() -> void:
+	var baked: Dictionary = BodyBake.load_baked(DeadBody.BUILT_IN)
+	var clips: Array = baked["clips"]
+	for pair in [[DeadBody.FALL, DeadBody.FALL_THROWN], [DeadBody.FALL_FRONT, DeadBody.FALL_SLUMP]]:
+		var a := _last_frame(baked, clips[pair[0]])
+		var b := _last_frame(baked, clips[pair[1]])
+		var worst := 0.0
+		for i in a.size():
+			worst = maxf(worst, a[i].distance_to(b[i]))
+		assert_lt(worst, 0.03, "%s lies as %s, metres" % [clips[pair[1]]["name"], clips[pair[0]]["name"]])
+
+
+func _last_frame(baked: Dictionary, clip: Dictionary) -> Array:
+	var img: Image = baked["image"]
+	var rows := int(baked["rows_per_frame"])
+	var first := (int(clip["start"]) + int(clip["frames"]) - 1) * rows
+	var lo := Vector3(clip["lo"][0], clip["lo"][1], clip["lo"][2])
+	var hi := Vector3(clip["hi"][0], clip["hi"][1], clip["hi"][2])
+	var out: Array = []
+	for y in range(first, first + rows):
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			out.append(lo + Vector3(c.r, c.g, c.b) * (hi - lo))
+	return out
+
+
 func test_a_crawler_drags_itself_lies_still_when_knocked_down_and_dies_on_its_face() -> void:
 	var z := _body("chase")
 	z["crawl"] = true

@@ -489,6 +489,24 @@
 		{
 			"frames": 17,
 			"hi": [
+				0.52783203125,
+				0.27197265625,
+				1.03857421875
+			],
+			"length": 1.0,
+			"lo": [
+				-0.6044921875,
+				-1.536376953125,
+				-0.9541015625
+			],
+			"loop": false,
+			"name": "p_fall_slump",
+			"round": 0.0,
+			"start": 456
+		},
+		{
+			"frames": 17,
+			"hi": [
 				0.654296875,
 				0.155960083007813,
 				0.626953125
@@ -502,7 +520,7 @@
 			"loop": false,
 			"name": "p_reload",
 			"round": 0.0,
-			"start": 456
+			"start": 473
 		},
 		{
 			"frames": 20,
@@ -520,7 +538,7 @@
 			"loop": false,
 			"name": "p_climb",
 			"round": 0.0,
-			"start": 473
+			"start": 490
 		},
 		{
 			"frames": 16,
@@ -538,7 +556,7 @@
 			"loop": true,
 			"name": "p_kneel_work",
 			"round": 0.0525062561035156,
-			"start": 493
+			"start": 510
 		},
 		{
 			"frames": 24,
@@ -556,29 +574,11 @@
 			"loop": false,
 			"name": "p_chop_side",
 			"round": 0.0,
-			"start": 509
-		},
-		{
-			"frames": 24,
-			"hi": [
-				0.62353515625,
-				0.1658935546875,
-				0.59423828125
-			],
-			"length": 0.833333313465118,
-			"lo": [
-				-1.111328125,
-				-0.6044921875,
-				-0.430908203125
-			],
-			"loop": false,
-			"name": "p_pickup",
-			"round": 0.0,
-			"start": 533
+			"start": 526
 		}
 	],
 	"format": "rgb8q",
-	"height": 557,
+	"height": 550,
 	"rows_per_frame": 1,
 	"vertices": 2997,
 	"width": 2997
