@@ -546,8 +546,8 @@ const PLAN: Dictionary = {
 		{
 			"kind": "sleeper_stack",
 			"rect": [
-				30,
-				39,
+				35,
+				37,
 				3,
 				1
 			],
@@ -594,8 +594,8 @@ const PLAN: Dictionary = {
 		{
 			"kind": "sleeper_stack",
 			"rect": [
-				30,
-				71,
+				35,
+				72,
 				3,
 				1
 			],
@@ -714,8 +714,8 @@ const PLAN: Dictionary = {
 		{
 			"kind": "rock_face",
 			"rect": [
-				68,
-				25,
+				65,
+				30,
 				6,
 				3
 			],
@@ -727,7 +727,7 @@ const PLAN: Dictionary = {
 			"kind": "rock_face",
 			"rect": [
 				84,
-				25,
+				28,
 				6,
 				3
 			],
@@ -738,8 +738,8 @@ const PLAN: Dictionary = {
 		{
 			"kind": "rock_ridge",
 			"rect": [
-				24,
-				2,
+				23,
+				28,
 				8,
 				6
 			],
@@ -751,7 +751,7 @@ const PLAN: Dictionary = {
 			"kind": "rock_ridge",
 			"rect": [
 				128,
-				3,
+				28,
 				8,
 				6
 			],
@@ -763,7 +763,7 @@ const PLAN: Dictionary = {
 			"kind": "vent_pipe",
 			"rect": [
 				3,
-				1,
+				28,
 				1,
 				1
 			],
@@ -775,7 +775,7 @@ const PLAN: Dictionary = {
 			"kind": "vent_pipe",
 			"rect": [
 				6,
-				1,
+				28,
 				1,
 				1
 			],
@@ -1588,8 +1588,8 @@ const PLAN: Dictionary = {
 			3
 		],
 		[
-			30,
-			39,
+			35,
+			37,
 			3,
 			1
 		],
@@ -1612,8 +1612,8 @@ const PLAN: Dictionary = {
 			3
 		],
 		[
-			30,
-			71,
+			35,
+			72,
 			3,
 			1
 		],
@@ -1808,7 +1808,7 @@ const PLAN: Dictionary = {
 			"name": "적재 관리동 작업실 자재함",
 			"cell": [
 				128,
-				82
+				81
 			],
 			"items": [
 				"scrap",
@@ -1834,7 +1834,7 @@ const PLAN: Dictionary = {
 			"name": "적재 관리동 위층 작업실 상자",
 			"cell": [
 				128,
-				82
+				81
 			],
 			"items": [
 				"wood",
@@ -1883,7 +1883,7 @@ const PLAN: Dictionary = {
 		},
 		{
 			"id": "forehall_0",
-			"name": "갱구 앞방 수리함",
+			"name": "갱구 앞방 공구함",
 			"cell": [
 				78,
 				21
@@ -1951,7 +1951,7 @@ const PLAN: Dictionary = {
 		},
 		{
 			"id": "deep_fuel",
-			"name": "안쪽 연료함",
+			"name": "안쪽 연료 보관함",
 			"cell": [
 				31,
 				20
@@ -3054,7 +3054,11 @@ static func build() -> Dictionary:
 	var first: Vector2i = all_doors[0]
 	data["spawns"] = {"dead_access_road": data["entries"]["access_road"].duplicate(), "dead_open_edge": data["entries"]["open_edge"].duplicate(), "squad": [first, first + Vector2i(-1, -1), first + Vector2i(1, -1), first + Vector2i(0, -2)], "train_door": all_doors, "dead_levels": dead_levels}
 	_train_lights(data)
+	# 구역과 수납 속성을 채운 뒤 암벽만 건물 키트에서 뺀다.
 	for lg: FieldGrid in [g, up, below]:
+		for index in range(WIDTH * HEIGHT):
+			if lg.solid[index] == S.WALL and lg.building[index] == 0:
+				lg.building[index] = -1
 		lg.refresh_paths()
 	return data
 
