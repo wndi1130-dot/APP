@@ -32,6 +32,8 @@ const RISE: int = 11                          # getting up off its back
 const CLIMB: int = 12                         # hauling itself up out of a hole
 const RISE_FRONT: int = 13                    # getting up off its face
 const STAGGER: int = 14                       # spent after a run: bent over, reeling on wide legs
+const FALL_THROWN: int = 15                   # on its back, thrown over (decision 412)
+const FALL_SLUMP: int = 16                    # on its face, slumped
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 # How far one round of a motion carries the body, metres, so that the foot
 # going backwards stays on its spot. The bake measures it on the body it bakes
@@ -265,7 +267,7 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 		var front := DeadPose.fall_side(z) > 0.0
 		if coming_up(z, down):
 			return Color(1.0 - down, float(RISE_FRONT if front else RISE), 1.0, shade)
-		return Color(fall_progress(z, down), float(FALL_FRONT if front else FALL), 1.0, shade)
+		return Color(fall_progress(z, down), float(fall_motion(z, front)), 1.0, shade)
 	if state == "attack" or state == "grab":
 		# It has reached them: the arms stay out at them and the legs shift
 		# under it (the body is held at their side, so a walk would slide).
@@ -293,6 +295,17 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 ## How far into its tell one of the dead is: 0 as it starts to drop, 1 as it runs.
 static func tell_k(z: Dictionary) -> float:
 	return clampf(1.0 - float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
+
+
+## Which way a body goes over: struck from behind on its face, otherwise on
+## its back, and half of the dead (by their own number, so always the same)
+## the other way of each when the folder in use has it (decision 412: thrown
+## over stiffly, or slumping limp). Both lie at the end as the first does.
+static func fall_motion(z: Dictionary, front: bool) -> int:
+	var other := FALL_SLUMP if front else FALL_THROWN
+	if other < table.size() and fposmod(float(z["phase"]) * 5.17, 1.0) < 0.5:
+		return other
+	return FALL_FRONT if front else FALL
 
 
 ## True when a body that is partly down is on its way up, not on its way down.

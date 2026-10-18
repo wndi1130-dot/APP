@@ -436,6 +436,42 @@ func test_down_crawling_and_up_again_in_the_living_own() -> void:
 	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL, "dead, on its back")
 
 
+# Half of the people (by name, decision 412) slump on their face instead, knocked
+# down or dead, and get up off their face; the other half fall as before.
+func test_half_of_the_people_slump_on_their_face_instead() -> void:
+	var own := _own()
+	var p := _person()
+	var slumps := 0
+	for n in 40:
+		p.pid = "p_%d" % n
+		if PersonVisual.fall_name(p, own) == PersonVisual.OWN_FALL_SLUMP:
+			slumps += 1
+	assert_between(slumps, 12, 28, "about half")
+	var n := 0
+	p.pid = "p_0"
+	while PersonVisual.fall_name(p, own) != PersonVisual.OWN_FALL_SLUMP:
+		n += 1
+		p.pid = "p_%d" % n
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	p.body.downed = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL_SLUMP)
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	p.position += Vector3(0.2, 0, 0)
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CRAWL, "drags itself")
+	var still := PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_named(own, still), PersonVisual.OWN_FALL_SLUMP)
+	assert_almost_eq(still.x, 1.0, 0.001, "down already, not falling again")
+	p.body.downed = false
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_RISE_FRONT, "up off its face")
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	p.body.dead = true
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_FALL_SLUMP, "dead, on its face")
+	# A folder without it: as before.
+	var older: Array = own.filter(func(c): return String(c.get("name", "")) != PersonVisual.OWN_FALL_SLUMP)
+	assert_eq(PersonVisual.fall_name(p, older), PersonVisual.OWN_FALL)
+
+
 # From motion 16 on the colour carries the shader's upper half; the easing and
 # the hand read it back as the same motion.
 func test_motions_from_sixteen_on_are_packed_for_the_shader() -> void:

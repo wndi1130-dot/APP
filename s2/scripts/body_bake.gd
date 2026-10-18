@@ -34,6 +34,9 @@ const CLIPS: Array = [
 	["climb", "", 32, false, "own_climb", 2.4],
 	["rise_front", "", 32, false, "own_rise_front", 1.3],
 	["stagger", "", 32, true, "own_stagger", 1.3],
+	# More ways to go over (decision 412), each lying at the end as one above.
+	["fall_thrown", "", 32, false, "own_fall_thrown", 0.75],
+	["fall_slump", "", 32, false, "own_fall_slump", 0.75],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -54,6 +57,8 @@ const OWN_CLIPS: Array = [
 	["climb", "", 32, false, "own_climb", 2.4],
 	["rise_front", "", 32, false, "own_rise_front", 1.3],
 	["stagger", "", 32, true, "own_stagger", 1.3],
+	["fall_thrown", "", 32, false, "own_fall_thrown", 0.75],
+	["fall_slump", "", 32, false, "own_fall_slump", 0.75],
 ]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
@@ -102,18 +107,19 @@ const PERSON_CLIPS: Array = [
 	["p_kick", "", 20, false, "p_kick", 0.6],
 	# A one-handed blow back the other way, a second to the swing across (decision 411).
 	["p_swing_back", "", 24, false, "p_swing_back", 0.6],
+	# Slumping on its face, a second way to go down to own_fall_front's (decision 412).
+	["p_fall_slump", "", 32, false, "own_fall_slump", 1.0],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
 	["p_kneel_work", "Fixing_Kneeling", 32, true, "p_kneel_work", 3.12],
-	# A low lid and a knockback nothing played made way for these two blows: an
-	# axe chopped in from the side (UAL's sword blows turn the hips round 69 to
-	# 160 degrees, the chop 34).
+	# A low lid, a knockback and a pick-up nothing played made way for a second
+	# blow and a fall: an axe chopped in from the side (UAL's sword blows turn
+	# the hips round 69 to 160 degrees, the chop 34).
 	["p_chop_side", "TreeChopping_Loop", 24, false, "", 0.967],
-	["p_pickup", "PickUp_Table", 24, false, "", 0.833],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_pickup"]
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -329,6 +335,49 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [[-0.2, -0.2, 1.5708, 0.25], [0.0, 0.7, 1.5708, 0.25], [-0.7, -1.1, 1.5708, 0.25]]],
 		],
 		"sink": [[0.0, 0.42, 0.0, 0.25], [0.5, 0.5, 1.5708, 0.25]],
+	},
+	# Thrown over on its back (played once, decision 412): the head snaps back and the
+	# arms fly up as the right foot goes back a step, then it goes over stiffly and
+	# lies as own_fall ends, so getting up is the same. UAL's Hit_Knockback flies
+	# through the air, so it is not used.
+	"own_fall_thrown": {
+		"steps": [
+			["turn", "hips", "x", ["keys", [[0, 0.12], [0.25, -0.3], [0.45, -0.55], [0.75, -1.2], [0.85, -1.5]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.45], [0.2, -0.35], [0.5, -0.3], [0.85, 0.0]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.0], [0.3, -0.15], [0.85, 0.25]]]],
+			["aim", "thigh.L", "shin.L", [0.14, ["keys", [[0, -1.0], [0.35, -0.97], [0.85, -0.08]]], ["keys", [[0, 0.0], [0.35, 0.2], [0.85, 1.0]]]]],
+			["aim", "shin.L", "foot.L", [0.1, ["keys", [[0, -1.0], [0.4, -0.95], [0.9, -0.02]]], ["keys", [[0, -0.2], [0.4, -0.1], [0.9, 1.0]]]]],
+			["aim", "thigh.R", "shin.R", [-0.3, ["keys", [[0, -1.0], [0.25, -0.93], [0.45, -0.9], [0.85, 0.15]]], ["keys", [[0, 0.0], [0.25, -0.35], [0.45, -0.2], [0.85, 1.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, ["keys", [[0, -1.0], [0.25, -0.95], [0.9, -0.35]]], ["keys", [[0, -0.1], [0.25, -0.3], [0.9, 0.6]]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.35], [0.15, -0.45], [0.5, -0.4], [0.9, -0.25]]]],
+			["turn", "head", "z", 0.3],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.2], [0.25, 0.75], [0.9, 1.0]]], ["keys", [[0, -1.0], [0.25, 0.25], [0.55, 0.35], [0.9, 0.02]]], ["keys", [[0, 0.02], [0.25, -0.15], [0.9, -0.5]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0, 0.08], [0.25, 0.5], [0.9, 0.7]]], ["keys", [[0, -1.0], [0.25, 0.5], [0.55, 0.45], [0.9, 0.0]]], ["keys", [[0, 0.2], [0.25, -0.1], [0.9, -0.8]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.12], [0.25, -0.75], [0.9, -1.0]]], ["keys", [[0, -1.0], [0.25, 0.25], [0.55, 0.35], [0.9, 0.02]]], ["keys", [[0, 0.28], [0.25, 0.0], [0.9, 0.2]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.02], [0.25, -0.45], [0.9, -0.6]]], ["keys", [[0, -0.8], [0.25, 0.5], [0.55, 0.45], [0.9, 0.0]]], ["keys", [[0, 0.5], [0.25, 0.1], [0.9, 0.9]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.3, 0.06], [0.75, 0.6], [0.85, 0.84]]],
+	},
+	# Slumping on its face (played once, decision 412): the knees give at once and
+	# it drops onto them upright, head lolling and arms hanging, then topples
+	# forward whole and lies as own_fall_front ends, so getting up is the same.
+	"own_fall_slump": {
+		"steps": [
+			["turn", "hips", "x", ["keys", [[0, 0.0], [0.3, -0.05], [0.45, 0.0], [0.8, 1.3], [0.88, 1.5]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.0], [0.88, -0.2]]]],
+			["aim", "thigh.L", "shin.L", [0.12, ["keys", [[0, -1.0], [0.3, -0.97], [0.45, -0.95], [0.88, 0.0]]], ["keys", [[0, 0.0], [0.3, 0.15], [0.45, 0.1], [0.88, -1.0]]]]],
+			["aim", "shin.L", "foot.L", [0.08, ["keys", [[0, -1.0], [0.3, -0.25], [0.88, 0.04]]], ["keys", [[0, 0.0], [0.3, -0.95], [0.88, -1.0]]]]],
+			["aim", "thigh.R", "shin.R", [-0.2, ["keys", [[0, -1.0], [0.3, -0.97], [0.45, -0.95], [0.88, 0.0]]], ["keys", [[0, 0.0], [0.3, 0.12], [0.45, 0.08], [0.88, -1.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.3, ["keys", [[0, -1.0], [0.3, -0.25], [0.88, 0.04]]], ["keys", [[0, 0.0], [0.3, -0.9], [0.88, -0.8]]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.2], [0.3, 0.25], [0.6, 0.3], [0.9, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0, 0.3], [0.2, 0.8], [0.6, 0.8], [0.92, -0.2]]]],
+			["turn", "head", "y", ["keys", [[0, 0.0], [0.6, 0.1], [0.92, 0.9]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.2], [0.65, 0.25], [0.92, 0.6]]], ["keys", [[0, -1.0], [0.65, -0.95], [0.92, 0.0]]], ["keys", [[0, 0.0], [0.65, 0.05], [0.92, 0.8]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0, 0.1], [0.65, 0.1], [0.92, -0.3]]], ["keys", [[0, -1.0], [0.65, -0.97], [0.92, 0.0]]], ["keys", [[0, 0.2], [0.65, 0.1], [0.92, 1.0]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.15], [0.65, -0.2], [0.92, -0.9]]], ["keys", [[0, -1.0], [0.65, -0.95], [0.92, 0.0]]], ["keys", [[0, 0.0], [0.65, 0.05], [0.92, 0.3]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, 0.0], [0.65, 0.0], [0.92, -0.2]]], ["keys", [[0, -0.7], [0.3, -1.0], [0.65, -0.97], [0.92, 0.0]]], ["keys", [[0, 0.4], [0.3, 0.1], [0.65, 0.05], [0.92, -0.7]]]]],
+		],
+		"sink": ["keys", [[0, 0.0], [0.3, 0.5], [0.45, 0.5], [0.88, 0.92]]],
 	},
 	# Getting up off its back (played once): it sits up and draws its legs
 	# under it, pushes off the ground with its hands, and stands as it stood.
