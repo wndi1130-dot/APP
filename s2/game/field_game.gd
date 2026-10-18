@@ -1933,12 +1933,31 @@ func on_zombie_killed(z: Dictionary) -> void:
 	pass
 
 
-func on_door_banged(c: Vector2i) -> void:
+## How many of the dead on their feet stand within CROWD_R of `z` on its floor, z counted.
+func _crowd_round(z: Dictionary) -> int:
+	var n := 0
+	var lv := level_of(z["pos"])
+	for o in zombies.list:
+		if not zombies.active(o) or o["state"] == "downed" or level_of(o["pos"]) != lv:
+			continue
+		var d: Vector3 = o["pos"] - z["pos"]
+		if Vector2(d.x, d.z).length() <= FieldHoldout.CROWD_R:
+			n += 1
+	return n
+
+
+## One blow on a building door, by `by` (one of the dead). As on the train's
+## doors (decision 314, the user's morning answer for houses): it wears the door
+## only with another of the dead on its feet within CROWD_R of the one striking;
+## one alone just knocks, and the knock is still heard.
+func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	var door: Dictionary = grid.doors[c]
 	if door["state"] == "open" or door["state"] == "broken":
 		return
-	door["hp"] = int(door["hp"]) - 1
 	make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "bang")
+	if not by.is_empty() and _crowd_round(by) < FieldHoldout.CROWD_MIN:
+		return
+	door["hp"] = int(door["hp"]) - 1
 	if door["hp"] <= 0:
 		grid.set_door_state(c, "broken")
 		view.update_door(c)
