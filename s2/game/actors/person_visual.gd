@@ -84,6 +84,7 @@ const OWN_BASE: int = 100
 # getting up 0.2. Rummaging at chest height has none of its own: its commonest, 0.2.
 const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5, "p_crouch_idle": 0.4,
 	"p_bitten": 0.2, "p_shove": 0.2, "p_swing_one": 0.15, "p_swing_axe": 0.15, "p_stab": 0.15,
+	"p_swing_back": 0.15, "p_chop_side": 0.15,
 	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3,
 	"p_fall": 0.2, "p_fall_front": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
 	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2,
@@ -107,18 +108,33 @@ const OWN_WORK: Dictionary = {
 	"treat": ["p_treat", 1.0], "splint": ["p_kneel_work", 1.0], "rub": ["p_treat", 1.0],
 	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
 }
-# A melee blow in the living's own motions: which, and where in it the blow
-# lands (body_bake.gd keys). A knife stabs, an axe comes down from overhead, the
-# rest swing across; a blow at a body on the ground is struck down in front of
-# the feet, and a stomp drives the heel into it.
-const OWN_BLOWS: Dictionary = {"one": ["p_swing_one", 0.45], "axe": ["p_swing_axe", 0.45], "stab": ["p_stab", 0.35],
-	"floor": ["p_floor_strike", 0.5], "stomp": ["p_stomp", 0.5]}
+# A melee blow in the living's own motions: the ways each weapon is swung, and
+# where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
+# right hand goes fastest) and, if not at its end, where the way back stops
+# (the chop is a loop that lifts the axe again: it stops with the axe low, so
+# the next way does not drop the arm and lift it once more). Blow after blow goes through them in turn, so the
+# same one is not seen twice running (decision 411): Project Zomboid swings a
+# one-handed weapon across, overhead or up from below and mixes three swings
+# across, and Brutal Handwork changes hands each blow. A knife stabs, then cuts
+# across; an axe comes down from overhead, then chops in from the side; the
+# rest swing across, back the other way, then come down from overhead.
+# A blow at a body on the ground is struck down in front of the feet, and a
+# stomp drives the heel into it.
+const OWN_BLOWS: Dictionary = {
+	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.45], ["p_swing_axe", 0.45]],
+	"axe": [["p_swing_axe", 0.45], ["p_chop_side", 0.16, 0.45]],
+	"stab": [["p_stab", 0.35], ["p_swing_one", 0.45]],
+	"floor": [["p_floor_strike", 0.5]], "stomp": [["p_stomp", 0.5]]}
+# A blow drawn back within this long of the last one ending goes on to the next
+# way; after a longer rest it starts again from the first.
+const CHAIN_GAP: float = 1.0
 # A door kick, and where in it the foot lands (body_bake.gd p_kick at 0.4): the
 # leg comes up over the last WIND of the try so it lands as the door is struck.
 const OWN_KICK: Array = ["p_kick", 0.4]
 const KICK_WIND: float = 0.36
 # The right hand: with both arms thrown straight out (p_shove at 0.4) the
-# furthest forward vertex on the right and those within HAND_R of it; the
+# furthest forward vertex on the right (-x: the body faces +z, as the right
+# arm's bones are turned in body_bake.gd) and those within HAND_R of it; the
 # elbow those within ELBOW_R of a point FOREARM behind it.
 const HAND_R: float = 0.1
 const ELBOW_R: float = 0.05
@@ -333,7 +349,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if bitten < 0 and hurt_k(note, t) > 0.0:
 		note["motion"] = HIT
 		return Vector2(0.0, HIT)
-	var blow := blow_of(p, own)
+	var blow := blow_of(p, own, note, t)
 	if blow.y >= 0.0:
 		note["motion"] = OWN_BASE + int(blow.y)
 		return blow
@@ -395,13 +411,25 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 
 ## A melee blow in the living's own motions (y) and how far through it (x):
 ## drawn back up to where the blow lands while the rules wind it up, the rest
-## on the way back. y is -1 with no blow, or none of its own.
-static func blow_of(p, own: Array) -> Vector2:
+## on the way back. y is -1 with no blow, or none of its own. `note` keeps which
+## way the last blow went and when it ended (at the visual's own time t).
+static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vector2:
 	if own.is_empty():
 		return Vector2(0.0, -1.0)
 	var sw: Array = Pose.swing_state(p)
 	if sw.is_empty():
+		if note.get("blow_on", false):
+			note["blow_on"] = false
+			note["blow_drawing"] = false
+			note["blow_end"] = t
 		return Vector2(0.0, -1.0)
+	# A new blow is drawn back: on to the next way if it follows on from the last.
+	var drawing: bool = not sw[2]
+	if drawing and not note.get("blow_drawing", false):
+		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
+		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
+	note["blow_drawing"] = drawing
+	note["blow_on"] = true
 	var mode: String = p.get_meta(Pose.MODE, "swing")
 	var kind := "one"
 	if mode == "stomp" or mode == "floor":
@@ -410,11 +438,18 @@ static func blow_of(p, own: Array) -> Vector2:
 		kind = "axe"
 	elif p.weapon_id() == "knife":
 		kind = "stab"
-	var clip := clip_named(own, String(OWN_BLOWS[kind][0]), -1)
+	var ways: Array = OWN_BLOWS[kind]
+	var way: Array = ways[int(note.get("blow_n", 0)) % ways.size()]
+	var clip := clip_named(own, String(way[0]), -1)
+	if clip < 0:
+		# A body baked before the later ways were added swings its first each time.
+		way = ways[0]
+		clip = clip_named(own, String(way[0]), -1)
 	if clip < 0:
 		return Vector2(0.0, -1.0)
-	var lands: float = OWN_BLOWS[kind][1]
-	var r: float = lands + (1.0 - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
+	var lands: float = way[1]
+	var ends: float = way[2] if way.size() > 2 else 1.0
+	var r: float = lands + (ends - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
 	return Vector2(r, clip)
 
 
@@ -507,7 +542,7 @@ static func hand_of(baked: Dictionary) -> Dictionary:
 	var tip := Vector3(0, 0, -99)
 	for i in rest.size():
 		at[i] = vertex_at(baked, rest, look, i, frame)
-		if at[i].x > 0.05 and at[i].z > tip.z:
+		if at[i].x < -0.05 and at[i].z > tip.z:
 			tip = at[i]
 	var hand := PackedInt32Array()
 	var elbow := PackedInt32Array()

@@ -20,6 +20,13 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const PortraitFace = preload("res://game/ui/portrait_face.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
+const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
+const GlassPane = preload("res://game/ui/glass_pane.gd")
+const GlassParts = preload("res://game/ui/glass_parts.gd")
+const PaperSheet = preload("res://game/ui/paper_sheet.gd")
+const Paper = preload("res://game/ui/paper_parts.gd")
+const LampKey = preload("res://game/ui/lamp_key.gd")
+const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
@@ -59,6 +66,7 @@ const TOAST_AT := Vector2(45.0 * PX_PER_MM + 12.0, 14.0 + 11.0 * PX_PER_MM + 6.0
 # 64 or 80 from the settings.
 const STATUS_AT := Vector2(-16.0, 84.0)
 const SETTINGS_KEY: float = 72.0   # the gear's touch square, top right while paused
+const SET_RIM := Color("f4f1ea")   # its white rim, as the state plates wear (시안 .fset)
 const STATUS_SIZES: Array[int] = [72, 64, 80]
 const STATUS_SIZE_NAMES: Dictionary = {72: "보통", 64: "작게", 80: "크게"}
 const STATUS_ART_SIZE: int = 80   # the pictures are drawn once, for the biggest
@@ -109,15 +117,49 @@ const SAY_S: float = 2.6            # a line over a companion's head stays this 
 const SAY_FONT: int = 20
 # A held train leaves: the field stands still and darkens, two lines come up,
 # then the end card (user decision 142).
+## The panels' glass pane, as wide as 시안 13's menu (mockup px); the body
+## picture's, wider for the figure and the gap beside it; the bag's with the
+## journal's note beside its list.
+const PANE_W: float = 420.0
+const BODY_PANE_W: float = 500.0
+const BODY_GAP: float = 12.0
+const BAG_PANE_W: float = 600.0
+## How high a list of things stands before it is dragged (mockup px): three
+## rows in the bag, four in a place being searched.
+const BAG_LIST_MAX: float = 144.0
+const LOOT_LIST_MAX: float = 194.0
+## A thing's put-down key, and the bag's list beside the journal (mockup px).
+const DROP_W: float = 84.0
+const BAG_LIST_W: float = 300.0
+## The journal's note in the bag (시안 .pnote: 240 wide, leaning 1.1°).
+const JOURNAL_W: float = 240.0
+const JOURNAL_LEAN_DEG: float = 1.1
+## The orders' marks (hud_icons.gd).
+const COMMAND_ICONS: Dictionary = {"follow": "people", "wait": "pause", "search": "search", "cover": "aim", "retreat": "train"}
+## The decision card's paper (시안 06: the stop card's sheet and place), and the
+## word its kick gives by the card's id. A scene longer than this many letters
+## or lines is set in print, so it stays on the sheet.
+const CARD_AT := Vector2(-10, 50)
+const CARD_KICKS: Dictionary = {"depart": "출발"}
+const CARD_KICK := "현장 결정"
+const CARD_PEN_LETTERS: int = 90
+const CARD_PEN_LINES: int = 3
+## The leave beat's paper (시안 08 .sp: 452 wide, left −12, leaning −0.6°,
+## the writing 46 in from the left, 30 from the right, 13 from the top), in the
+## upper part of the screen under the clock's lines: the middle is where the
+## people are.
+const LEAVE_AT := Vector2(-12, 84)
+const LEAVE_W: float = 452.0
+const LEAVE_LEAN_DEG: float = -0.6
+const LEAVE_IN := Rect2(46, 13, 30, 14)
 const LEAVE_BEAT_S: float = 3.5
 const LEAVE_DARK_S: float = 1.5
 const LEAVE_DARK: float = 0.62
 const LEAVE_WORDS_AT: float = 0.5   # the lines come up this long after the whistle
 const LAST_CALL_FONT: int = 96
 const READY_FONT: int = 52
-const LEAVE_WORDS_TOP: float = 96.0
-const LEAVE_COLUMN_W: float = 216.0
-const LEAVE_COLUMN_GAP: int = 24
+## The end's record stands this far right of the receipt's sheet (mockup px).
+const END_GAP: float = 32.0
 # A line a companion shouts (ally_lines.gd): bigger and a little longer than
 # the note of what happened, which goes small under it.
 const LINE_S: float = 3.2
@@ -138,8 +180,18 @@ const SHOVE_AT := Vector2(-277.0, -268.0)
 const SHOVE_SIZE := Vector2(140.0, 84.0)
 const CONTEXT_AT := Vector2(-425.0, -204.0)
 const DEPART_AT := Vector2(-425.0, -296.0)
-const ALL_ABOARD_SIZE := Vector2(150.0, 44.0)
-const ALLIES_UP: float = 140.0      # the companions' row's top, from the screen's bottom
+## 'All aboard' in the top middle under the radio (시안 2차 .fall), css px: its
+## touch rect from 40 down and 44 high with the pill 34 inside it, the train's
+## mark 16 and the words 13 between 11 and 13 of room, 5 apart; its pill 9
+## under the radio's line.
+const ALL_ABOARD_TOP: float = 40.0
+const ALL_ABOARD_H: float = 44.0
+const ALL_ABOARD_SEEN: float = 34.0
+const ALL_ABOARD_UNDER: float = 9.0
+## The companions' row's top, from the screen's bottom: at the foot of the
+## screen as the 시안's (.fally top 340 of 390, its chips' glass ending 9 above
+## the edge), now that 'all aboard' is no longer under it.
+const ALLIES_UP: float = 92.0
 ## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
 const PX_PER_MM: float = 10.3
 const BRASS := Color(0.86, 0.72, 0.42)
@@ -164,10 +216,19 @@ const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search",
 const KEY_SEEN: float = 82.0
 const ATTACK_SEEN: float = 140.0
 const ATTACK_ICON: int = 63      # 시안 .fpad--atk .ic 34
-## The lamp pills (situation, leaving, bandage): their word and mark, as big
-## as their touch rects allow (시안 .fpad--ctx: 13 and 17).
-const PILL_FONT: int = 20
-const PILL_ICON: int = 30
+## Attack shows the letter A and run the word RUN, in Barlow (user 2026-10-18),
+## css px. Shove, aim and the situation pad show their mark alone (the same
+## day: no word), so bigger than over a word.
+const ATTACK_LETTER: float = 44.0
+const RUN_WORD: float = 15.0
+const LONE_ICON: int = 40
+## How far the attack A moves up to sit in the middle of its disc (measured on
+## the drawn key: its line keeps room under the letter the eye does not count).
+const LETTER_NUDGE: float = -3.5
+## Leaving shows its word alone (user 2026-10-18: no train) on a slim lamp
+## pill, the word as big as the 시안's lamp pill word (.fpad--ctx .lab 13).
+const DEPART_SEEN := Vector2(100.0, 56.0)
+const DEPART_FONT: float = 13.0
 const FACE_SIZE: float = 84.0
 ## A companion's chip (시안 .fchip): a face 32 across, the name over the order.
 ## Each face gets its own headwear in turn (the 시안's three, then a hood).
@@ -223,6 +284,9 @@ var depart_button: Button              # leaving: its own pad, there whenever th
 var context_rows: Array = []
 var context_t: float = 0.0
 var context_icon: String = "search"     # the situation pad's picture now (HudIcons.context_icon)
+var context_badge: PanelContainer       # how many more there are to do, on the situation pad's rim
+var context_more: Label
+var all_aboard_size: Vector2            # its touch rect, as wide as its mark and words need
 var attack_icon: String = "-"           # the attack pad's picture now (_tick_attack_icon)
 var pause_shows_play: bool = false      # the pause key shows 'play' while paused
 var offer_box: HBoxContainer
@@ -397,6 +461,9 @@ func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = H
 
 
 ## The icon over the word on a round key, before it on a pill, alone if no word.
+## A key's mark or word is fixed in the middle of its disc (user 2026-10-18);
+## with no mark nothing is kept for one over the word (Godot would keep room
+## for it and the key would grow off its place).
 func _set_icon(b: Button, icon: String, icon_px: int, beside: bool = false) -> void:
 	b.icon = HudIcons.texture(icon, icon_px, Color.WHITE) if icon != "" else null
 	b.add_theme_constant_override("icon_max_width", icon_px)
@@ -405,7 +472,25 @@ func _set_icon(b: Button, icon: String, icon_px: int, beside: bool = false) -> v
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 	else:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP if b.text != "" else VERTICAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP if b.text != "" and icon != "" else VERTICAL_ALIGNMENT_CENTER
+
+
+## A key that shows a letter or a short word in Barlow where others show a mark
+## (user 2026-10-18), in the middle of its disc as every key's mark is.
+func _letter(b: Button, css: float, spacing: float = 0.0) -> void:
+	b.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 500, spacing))
+	b.add_theme_font_size_override("font_size", UiFonts.size(css))
+	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
+## Move what a key shows down by `dy` (up if less than 0), so a mark over a
+## word sits in the middle of the disc as a lone mark does: the word's line
+## keeps room under its letters that the eye does not count.
+func _nudge(b: Button, dy: float) -> void:
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var sb: StyleBox = b.get_theme_stylebox(k)
+		sb.content_margin_top = 4.0 + maxf(dy, 0.0) * 2.0
+		sb.content_margin_bottom = 4.0 + maxf(-dy, 0.0) * 2.0
 
 
 ## A pill's mark and word sit together in its middle (시안 .fpad--ctx, .fall),
@@ -686,9 +771,11 @@ func _tag(text: String, color: Color = HudSkin.INK2) -> Label:
 
 func _build_allies() -> void:
 	allies_box = HBoxContainer.new()
-	# Raised a row: 'all aboard' sits under its right end (user 2026-10-12).
-	# The row belongs to the right hand's side: _place_allies keeps its right
-	# end just left of the thumb pads, clear of where the left thumb comes down.
+	# At the foot of the screen (시안 .fally): 'all aboard' went up under the
+	# radio (시안 2차 .fall), so the row raised for it (user 2026-10-12) came
+	# back down. It belongs to the right hand's side: _place_allies keeps its
+	# right end just left of the thumb pads, clear of where the left thumb
+	# comes down.
 	allies_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	allies_box.add_theme_constant_override("separation", 10)
 	root.add_child(allies_box)
@@ -802,51 +889,74 @@ func _build_thumbs() -> void:
 	# is in aim's row (user 2026-10-12). With 'one main action' the aim pad is
 	# the only one, so it takes the big place.
 	var one: bool = bool(game.opts.get("primary_one", false))
-	attack_button = _pad("공격", ATTACK_AT, ATTACK_SIZE, 20)
+	attack_button = _pad("A", ATTACK_AT, ATTACK_SIZE, 20)
 	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON)
-	aim_button = _pad("조준", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
-	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 48 if one else 30)
+	_letter(attack_button, ATTACK_LETTER)
+	_nudge(attack_button, LETTER_NUDGE)
+	attack_button.tooltip_text = "공격"
+	# Aim: its mark alone in the middle of its disc (user 2026-10-18: no word).
+	aim_button = _pad("", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
+	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON if one else LONE_ICON)
+	aim_button.tooltip_text = "조준"
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 18)
 	_dress(manual_button, "", Vector2.ONE * 76.0, true)
-	# 시안 .fpad--shove: the mark 18, its word 12 under it.
-	shove_button = _pad("밀치기", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
-	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 32)
-	# Crouch: a round key on the right edge over attack (decision 293). It lights
-	# brass from inside while on.
+	# The shove mark alone in the middle of its disc (user 2026-10-18: no word).
+	shove_button = _pad("", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
+	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, LONE_ICON)
+	shove_button.tooltip_text = "밀치기"
+	# Crouch: a round key on the right edge over attack (decision 293), a figure
+	# on one knee (user 2026-10-18). It lights brass from inside while on.
 	var key := 11.0 * PX_PER_MM
 	crouch_button = _pad("", Vector2(-16.0 - key, ATTACK_AT.y - 8.0 - key), Vector2(key, key), 20)
-	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 40)
+	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 44)
 	crouch_button.tooltip_text = "웅크림"
-	# The situation pad and leaving are lamp pills with a brass rim (the lamp
-	# keys that are not round keep it, 시안 3절); dark ink on the light.
-	# Their word in Plex semibold, the mark and the word together in the middle
-	# (시안 .fpad--ctx: mark 17, word 13).
-	context_button = _pad("상황", CONTEXT_AT, Vector2(140, 84), PILL_FONT)
-	_dress(context_button, "search", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, PILL_ICON)
-	_bold(context_button)
-	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), PILL_FONT)
-	_dress(depart_button, "train", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, PILL_ICON)
+	# The situation pad and leaving burn like lamps with a brass rim (시안 3절,
+	# .fpad--ctx); dark ink on the light. Their touch rects stay as they were.
+	# The situation pad: the nearest thing's mark alone on a round lamp key,
+	# and on its rim how many more a hold lays out (user 2026-10-18: no word,
+	# smaller).
+	context_button = _pad("", CONTEXT_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
+	_dress(context_button, "search", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.LAMP, LONE_ICON)
+	context_button.tooltip_text = "상황"
+	context_badge = _glass(UiFonts.px(4.0), 0.0)
+	context_more = UiFonts.label("", UiFonts.NUMBER, 600, 12.0, HudSkin.INK)
+	context_more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	context_badge.add_child(context_more)
+	context_badge.visible = false
+	context_button.add_child(context_badge)
+	# Leaving: its word alone on a slim pill (the same day: no train).
+	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
+	_dress(depart_button, "", DEPART_SEEN, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)
 	_bold(depart_button)
-	_center_pill(depart_button)
+	depart_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	depart_button.visible = false
-	# Every companion back to the train at one press (user 2026-10-11): under
-	# the companions' row, at its right end (tick puts it there). Glass by day;
+	# Every companion back to the train at one press (user 2026-10-11): in the
+	# top middle under the radio, the driver's words and the way back to the
+	# train in one place (시안 2차 .fall; tick puts it there). Glass by day;
 	# from dusk it burns like a lamp (시안 2차 11절).
-	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
-	all_aboard_styles = [HudSkin.key_styles(ALL_ABOARD_SIZE, false), HudSkin.key_styles(ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
-	_dress(all_aboard_button, "train", ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 22)
-	all_aboard_button.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 500, 0.78))
+	var aboard_font: Font = UiFonts.face(UiFonts.WORD, 500, 0.78)
+	var aboard_words: float = aboard_font.get_string_size("모두 열차로", HORIZONTAL_ALIGNMENT_LEFT, -1, UiFonts.size(13.0)).x
+	all_aboard_size = Vector2(ceilf(UiFonts.px(11.0 + 16.0 + 5.0 + 13.0) + aboard_words), roundf(UiFonts.px(ALL_ABOARD_H)))
+	var aboard_seen := Vector2(all_aboard_size.x, roundf(UiFonts.px(ALL_ABOARD_SEEN)))
+	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, all_aboard_size, UiFonts.size(13.0), Control.PRESET_TOP_LEFT)
+	all_aboard_styles = [HudSkin.key_styles(aboard_seen, false), HudSkin.key_styles(aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
+	_dress(all_aboard_button, "train", aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, int(UiFonts.px(16.0)))
+	all_aboard_button.add_theme_font_override("font", aboard_font)
+	all_aboard_button.add_theme_constant_override("h_separation", int(UiFonts.px(5.0)))
 	_center_pill(all_aboard_button)
+	_place_all_aboard()
 	_place_allies()
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
 	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
 	# up, an 11 mm key (presentation_motion 5, 57446c8).
 	var up := -(35.0 * PX_PER_MM + key)
-	# The round keys show a picture and no word (시안 2차 11절, 배그처럼); a key
-	# that is on lights from inside, running and the lamp amber, crouching brass.
-	run_button = _pad("", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
-	_dress(run_button, "run", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	# The round keys show a picture and no word (시안 2차 11절, 배그처럼), but run
+	# shows RUN (user 2026-10-18); a key that is on lights from inside, running
+	# and the lamp amber, crouching brass.
+	run_button = _pad("RUN", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	_letter(run_button, RUN_WORD, 1.5)
 	run_button.tooltip_text = "뛰기"
 	# The lantern key, right of run 3 mm apart; it is there only after sunset.
 	lamp_button = _pad("", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
@@ -879,6 +989,12 @@ func _build_thumbs() -> void:
 	settings_button = _pad("", Vector2(-16.0 - SETTINGS_KEY, STATUS_AT.y - 4.0 - SETTINGS_KEY), Vector2.ONE * SETTINGS_KEY, 19, Control.PRESET_TOP_RIGHT)
 	settings_button.tooltip_text = "설정"
 	_dress(settings_button, "gear", Vector2.ONE * 64.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 34)
+	# A white rim round see-through glass, as the state plates under it.
+	for st in ["normal", "hover", "disabled"]:
+		var plate = settings_button.get_theme_stylebox(st)
+		plate.ring = SET_RIM
+		plate.ring_w = 3.0 * UiFonts.K
+		plate.over_ring = false
 	settings_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
@@ -1110,6 +1226,7 @@ func tick(delta: float) -> void:
 	radio_pill.visible = radio_label.text != "" and radio_left > 0.0
 	if radio_pill.visible:
 		radio_pill.position.x = (_view_size().x - radio_pill.size.x) * 0.5
+	_place_all_aboard()
 	_tick_portrait(p)
 	_tick_allies()
 	_tick_grab(p, delta)
@@ -1135,8 +1252,8 @@ func tick(delta: float) -> void:
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
 	attack_button.button_pressed = fighting(p)
 	_tick_primary(p)
-	blood_button.visible = p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
-	lamp_button.visible = game.clock.is_dark()
+	blood_button.visible = leaving.is_empty() and p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
+	lamp_button.visible = leaving.is_empty() and game.clock.is_dark()
 	lamp_button.button_pressed = game.lamps_on()
 	if lamp_button.visible and not lamp_hint_done:
 		lamp_hint_done = true
@@ -1206,24 +1323,23 @@ func _tick_urgent() -> void:
 	var st: Dictionary = all_aboard_styles[1 if urgent else 0]
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		all_aboard_button.add_theme_stylebox_override(k, st[k])
+	all_aboard_button.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 600 if urgent else 500, 0.78))
 	_center_pill(all_aboard_button)
 	var ink: Color = HudSkin.LAMP_INK if urgent else HudSkin.INK
 	for k in ["font_color", "font_hover_color", "font_focus_color", "icon_normal_color", "icon_hover_color", "icon_focus_color"]:
 		all_aboard_button.add_theme_color_override(k, ink)
 
 
-## The attack pad shows what is in hand: an axe for a blade or a club, a gun
-## for a gun (the mark alone, 시안 .fpad--atk), only its word for bare hands.
+## The attack pad is A whatever is in hand (user 2026-10-18). With 'one main
+## action' the aim pad stands in for it: A while a blade, a club or bare hands
+## are out, the aim mark over 조준 with a gun.
 func _tick_attack_icon(p) -> void:
-	var id: String = p.weapon_id()
-	var want: String = "" if id == "" else ("gun" if W.is_ranged(id) else "axe")
+	var want: String = "gun" if W.is_ranged(p.weapon_id()) else ""
 	if want == attack_icon:
 		return
 	attack_icon = want
-	attack_button.text = "공격" if want == "" else ""
-	_set_icon(attack_button, want, ATTACK_ICON)
 	if bool(game.opts.get("primary_one", false)):
-		_set_icon(aim_button, "aim" if want == "gun" else want, 48)
+		_set_icon(aim_button, "aim" if want == "gun" else "", 48)
 
 
 ## A finger still down on a raider who has just given up, ran or been taken:
@@ -1340,15 +1456,23 @@ func _ally_text(p, second: String) -> String:
 	return first if second == "" else first + "\n" + second
 
 
-## The companions' row ends just left of the right thumb's pads, and 'all
-## aboard' lies under its right end.
+## The companions' row ends just left of the right thumb's pads.
 func _place_allies() -> void:
 	var view: Vector2 = _view_size()
 	var one: bool = bool(game.opts.get("primary_one", false))
 	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
 	var row: Vector2 = allies_box.get_combined_minimum_size()
 	allies_box.position = Vector2(right - row.x, view.y - ALLIES_UP)
-	all_aboard_button.position = Vector2(right - ALL_ABOARD_SIZE.x, allies_box.position.y + maxf(row.y, 76.0) + 6.0)
+
+
+## 'All aboard' in the top middle with its pill just under the radio's line
+## (시안 2차 .fall). A call long enough to wrap pushes it down while it shows.
+func _place_all_aboard() -> void:
+	var top: float = UiFonts.px(ALL_ABOARD_TOP)
+	if radio_pill.visible:
+		var inset: float = (all_aboard_size.y - roundf(UiFonts.px(ALL_ABOARD_SEEN))) * 0.5
+		top = maxf(top, radio_pill.position.y + radio_pill.size.y + UiFonts.px(ALL_ABOARD_UNDER) - inset)
+	all_aboard_button.position = Vector2(roundf((_view_size().x - all_aboard_size.x) * 0.5), roundf(top))
 
 
 func _tick_allies() -> void:
@@ -1542,18 +1666,24 @@ func _rebuild_context(p) -> void:
 	context_button.visible = not context_rows.is_empty()
 	if context_rows.is_empty():
 		return
+	# The nearest thing's mark alone; its words go to the hold's list (and to a
+	# screen reader), and how many more there are to the badge on the rim.
 	var more: int = context_rows.size() - 1
-	var text: String = String(context_rows[0]["label"]) + ("\n+%d (누르고 있기)" % more if more > 0 else "")
-	var icon: String = HudIcons.context_icon(String(context_rows[0]["label"]))
-	if text == context_button.text and icon == context_icon:
-		return
-	context_button.text = text
-	# Two lines go a size smaller, so the pad keeps to its touch rect.
-	context_button.add_theme_font_size_override("font_size", PILL_FONT - 4 if more > 0 else PILL_FONT)
+	var first: String = String(context_rows[0]["label"])
+	context_button.tooltip_text = first
+	var count: String = "+%d" % more if more > 0 else ""
+	if context_more.text != count:
+		context_more.text = count
+		context_badge.visible = more > 0
+		context_badge.reset_size()
+		# Its middle on the disc's rim, up and to the right (the disc is 84
+		# across in the middle of the pad).
+		var rim: Vector2 = context_button.size * 0.5 + Vector2(1, -1) * 42.0 * 0.7071
+		context_badge.position = (rim - context_badge.size * 0.5).round()
+	var icon: String = HudIcons.context_icon(first)
 	if icon != context_icon:
 		context_icon = icon
-		_set_icon(context_button, icon, PILL_ICON, true)
-	_center_pill(context_button)
+		_set_icon(context_button, icon, LONE_ICON)
 
 
 func _context_tap() -> void:
@@ -1673,8 +1803,23 @@ func offer(list: Array) -> void:
 	for c in offer_box.get_children():
 		c.queue_free()
 	for row in list:
-		offer_box.add_child(_button(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72)))
-	offer_box.add_child(_button("그만", _offer_pick.bind(Callable()), Vector2(100, 72)))
+		offer_box.add_child(_offer_key(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72)))
+	offer_box.add_child(_offer_key("그만", _offer_pick.bind(Callable()), Vector2(100, 72), true))
+
+
+## A choice offered on the field: a glass pill of the field's (시안 .fglass) in
+## its touch rect, its word at 15/500; 그만 in side ink.
+func _offer_key(word: String, cb: Callable, at_least: Vector2, quiet: bool = false) -> Button:
+	var b := _button(word, cb, at_least)
+	UiFonts.style(b, UiFonts.WORD, 500, 15.0, HudSkin.INK2 if quiet else HudSkin.INK, 0.6)
+	var rest: StyleBoxFlat = HudSkin.glass(UiFonts.px(14.0), 0.0)
+	var down: StyleBoxFlat = HudSkin.glass(UiFonts.px(14.0), 0.0, 0.8)
+	down.content_margin_top = UiFonts.px(HudSkin.PRESS_SINK)
+	for state in ["normal", "hover", "focus", "disabled"]:
+		b.add_theme_stylebox_override(state, rest)
+	for state in ["pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(state, down)
+	return b
 
 
 func _offer_pick(cb: Callable) -> void:
@@ -1686,20 +1831,24 @@ func _offer_pick(cb: Callable) -> void:
 
 # ---------------------------------------------------------------- modal panels
 
-## The settings that can be changed in the middle of a stop: the stick and
-## how much the driver calls. Opened from the pause screen.
+## The settings that can be changed in the middle of a stop: the stick, how
+## much the driver calls and how big the state icons are, a named cell each
+## (시안 13 메뉴판's 손맛 row), what the stick and the radio now do under them.
+## Opened from the pause screen; a press goes round that setting's values.
 func settings_panel() -> void:
-	var v := _open_modal(560.0)
-	v.add_child(_label("설정", 28))
-	v.add_child(_button("스틱: 따라오기" if stick_floats() else "스틱: 고정", _set_stick, Vector2(420, 64), 22))
-	v.add_child(_label("스틱이 엄지 댄 자리로 따라옴" if stick_floats() else "스틱은 왼쪽 아래 제자리", 18, DIM))
-	v.add_child(_button("무전: " + String(game.RADIO_NAMES[game.radio_mode()]), _set_radio, Vector2(420, 64), 22))
-	var tip := _label(RADIO_TIPS[game.radio_mode()], 18, DIM)
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.custom_minimum_size = Vector2(500, 0)
-	v.add_child(tip)
-	v.add_child(_button("상태 아이콘: " + String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size, Vector2(420, 64), 22))
-	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+	var pane := _open_pane("설정", "멈춤 중", "gear")
+	var cells := GlassPane.row()
+	cells.add_child(GlassPane.cell("스틱", "따라오기" if stick_floats() else "고정", _set_stick))
+	cells.add_child(GlassPane.cell("무전", String(game.RADIO_NAMES[game.radio_mode()]), _set_radio))
+	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
+	pane.body.add_child(cells)
+	var room: float = PANE_W - GlassPane.PAD_L - GlassPane.PAD_R
+	var tips := VBoxContainer.new()
+	tips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tips.add_theme_constant_override("separation", GlassPane.px(2.0))
+	tips.add_child(GlassPane.note("스틱이 엄지 댄 자리로 따라옴" if stick_floats() else "스틱은 왼쪽 아래 제자리", room))
+	tips.add_child(GlassPane.note(RADIO_TIPS[game.radio_mode()], room))
+	pane.body.add_child(tips)
 
 
 func _set_status_size() -> void:
@@ -1717,6 +1866,48 @@ func _set_radio() -> void:
 	var modes: Array = game.RADIO_MODES
 	game.opts["radio"] = modes[(modes.find(game.radio_mode()) + 1) % modes.size()]
 	settings_panel()
+
+
+## The shade over the playing screen while a panel is up (시안 .mscrim), the
+## panel laid on it by the caller. pauses false: the field goes on at
+## BODY_SLOW under it (the body picture).
+func _open_shade(pauses: bool = true) -> Control:
+	_close_modal()
+	# Fingers held now will lift under the panel: let go of them first.
+	drop_touch()
+	modal_slows = not pauses
+	if pauses:
+		modal_paused_before = game.paused
+		game.paused = true
+	else:
+		game.slow = BODY_SLOW
+	modal_open = true
+	body_buttons = []
+	modal = Control.new()
+	modal.name = "Modal"
+	modal.set_anchors_preset(Control.PRESET_FULL_RECT)
+	modal.mouse_filter = Control.MOUSE_FILTER_STOP
+	var dim := ColorRect.new()
+	dim.name = "Shade"
+	dim.color = GlassPane.SCRIM
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	modal.add_child(dim)
+	root.add_child(modal)
+	return modal
+
+
+## A glass pane (glass_pane.gd) at the left under the band, `width_css` wide in
+## the mockup's px; its 접기 closes it. A pane laid over one already up (a
+## setting changed, a row taken) stands where it is rather than coming in again.
+func _open_pane(title: String, side: String = "", icon: String = "", width_css: float = PANE_W, pauses: bool = true) -> GlassPane:
+	var again: bool = modal != null
+	var shade := _open_shade(pauses)
+	var pane := GlassPane.new(width_css, title, side, icon)
+	pane.folded.connect(_close_modal)
+	shade.add_child(pane)
+	pane.pin(not again)
+	return pane
 
 
 ## pauses false: the field goes on at BODY_SLOW under the panel (the body picture).
@@ -1773,49 +1964,48 @@ func body_panel(o = null, part: String = "") -> void:
 	var p = game.player
 	if o == null:
 		o = p
-	var v := _open_modal(920.0, false)
+	# On the glass of the panels, a little wider for the figure beside the list.
+	var pane := _open_pane(String(o.display_name), o.body.status_words(), "bandage", BODY_PANE_W, false)
 	body_shown = o
 	var urgent: int = o.body.most_urgent()
 	if part == "":
 		part = String(o.body.wounds[urgent]["part"]) if urgent >= 0 else "torso"
 	body_part = part
-	v.add_child(_label("%s · %s" % [o.display_name, o.body.status_words()], 24))
 	var have: Dictionary = game.actions.care_tools(p, o)
-	v.add_child(_label("가진 것: 붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))], 18, DIM))
+	pane.body.add_child(GlassPane.mixed("가진 것: 붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))]))
 	var near: bool = game.actions.in_care_reach(p, o)
 	if not near:
-		v.add_child(_label("가까이 가야 처치 가능", 18, WARN))
+		pane.body.add_child(GlassPane.mixed("가까이 가야 처치 가능", 12.0, 13.0, GlassPane.AMBER, GlassPane.AMBER))
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 18)
-	v.add_child(h)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_theme_constant_override("separation", GlassPane.px(BODY_GAP))
+	pane.body.add_child(h)
 	h.add_child(_body_figure(o, part))
 	var right := VBoxContainer.new()
-	right.custom_minimum_size = Vector2(540, 0)
-	right.add_theme_constant_override("separation", 8)
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
 	h.add_child(right)
-	right.add_child(_label(Treatment.PART_NAMES[part], 22, BRASS))
+	var room: float = BODY_PANE_W - GlassPane.PAD_L - GlassPane.PAD_R - BODY_SIZE.x * BODY_SCALE / UiFonts.K - BODY_GAP
+	right.add_child(UiFonts.label(Treatment.PART_NAMES[part], UiFonts.WORD, 600, 14.0, GlassPane.AMBER, 1.12))
 	var rows: Array = body_rows(o, part)
 	if rows.is_empty():
-		right.add_child(_label("다친 데 없음", 20, DIM))
+		right.add_child(GlassPane.note("다친 데 없음", room, GlassPane.INK3, 13.0))
 	for w: Dictionary in rows:
 		var first: bool = urgent >= 0 and is_same(w, o.body.wounds[urgent])
-		right.add_child(_label(Treatment.wound_text(w) + (" · 가장 급함" if first else ""), 20, WARN if float(w["blood"]) >= BodyState.HEAVY_BLOOD else INK))
+		var heavy: bool = float(w["blood"]) >= BodyState.HEAVY_BLOOD
+		right.add_child(GlassPane.note(Treatment.wound_text(w) + (" · 가장 급함" if first else ""), room, GlassPane.RED_L if heavy else GlassPane.INK, 13.0, 500))
 		var full: Array = game.actions.care_plan(p, o, w, Treatment.FULL)
-		var steps := _label(Treatment.steps_text(full), 16, DIM)
-		steps.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		steps.custom_minimum_size = Vector2(520, 0)
-		right.add_child(steps)
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 10)
+		right.add_child(GlassPane.note(Treatment.steps_text(full), room))
+		var hb := GlassPane.row()
 		right.add_child(hb)
-		var aid := _button("응급", _care.bind(o, w, Treatment.FIRST_AID), Vector2(150, 60), 20)
+		var aid := GlassPane.key("응급", _care.bind(o, w, Treatment.FIRST_AID))
 		aid.disabled = not near or Treatment.runnable(game.actions.care_plan(p, o, w, Treatment.FIRST_AID)).is_empty()
 		hb.add_child(aid)
-		var all := _button("정밀", _care.bind(o, w, Treatment.FULL), Vector2(150, 60), 20)
+		var all := GlassPane.key("정밀", _care.bind(o, w, Treatment.FULL))
 		all.disabled = not near or Treatment.runnable(full).is_empty()
 		hb.add_child(all)
 		body_buttons.append({"wound": w, "aid": aid, "full": all})
-	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
 
 
 ## The wounds on a part, the most urgent first.
@@ -1903,7 +2093,7 @@ func _draw_body(fig: Control, chosen: String) -> void:
 		var lines: Array = look["kinds"].slice(0, 1)
 		if look["festering"]:
 			lines.append("곪음")
-		var font: Font = fig.get_theme_default_font()
+		var font: Font = UiFonts.face(UiFonts.WORD, 500)
 		for i in lines.size():
 			var w: float = font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_WORD_FONT).x
 			fig.draw_string(font, c + Vector2(-w * 0.5, 4.0 + i * (BODY_WORD_FONT + 2.0)), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_WORD_FONT, INK)
@@ -1915,21 +2105,139 @@ func _care(o, wound: Dictionary, mode: String) -> void:
 		toast("지금은 처치 불가")
 
 
-## Decision card: the line the leader shouts, and the cost under it (S1a style).
+## Decision card (시안 2차 06 사건 카드, B1): paper come in from the left, as the
+## stop card's sheet; what it is for in its kick, its first sentence in pen for
+## its title and the rest in pen under it (in print when long, so it stays on
+## the sheet), and at its foot the choices as the leader's lines (.sayb): the
+## number, the line in 「」, what it does and what it costs under it in side
+## ink. A press picks.
 func card(id: String, text: String, options: Array, cb: Callable) -> void:
-	var v := _open_modal(720.0)
-	var t := _label(text, 24)
-	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(t)
-	for o in options:
-		var b := Button.new()
-		b.focus_mode = Control.FOCUS_NONE
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.custom_minimum_size = Vector2(680, 84)
-		b.add_theme_font_size_override("font_size", 20)
-		b.text = "%s\n%s%s" % [o["label"], o.get("say", ""), ("\n" + String(o["cost"])) if o.has("cost") else ""]
-		b.pressed.connect(_card_pick.bind(cb, String(o["id"])))
-		v.add_child(b)
+	var shade := _open_shade()
+	var sheet = PaperSheet.new()
+	sheet.name = "Card"
+	sheet.position = CARD_AT * UiFonts.K
+	shade.add_child(sheet)
+	var col := VBoxContainer.new()
+	col.name = "Body"
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 0)
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sheet.inner.add_child(col)
+	# .cd__kick: a line of 20 in side ink with wide spacing.
+	var kick := Paper.line_box(20.0)
+	kick.name = "Kick"
+	kick.add_child(Paper.ink(String(CARD_KICKS.get(id, CARD_KICK)), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.2))
+	col.add_child(kick)
+	var words: Array = card_lines(text)
+	# .cd__txt h2 in pen: 36 on lines of 30.
+	var title := _ink_lines(String(words[0]), UiFonts.HAND, 36.0, 30.0)
+	title.name = "Title"
+	col.add_child(title)
+	var scene_text: String = String(words[1])
+	var said := ScrollContainer.new()
+	said.name = "Scene"
+	said.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	said.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	said.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	said.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(said)
+	if scene_text != "":
+		# .scene: pen 18 on lines of 20; print 13.5 when it is long.
+		var long: bool = scene_text.length() > CARD_PEN_LETTERS or scene_text.count("\n") >= CARD_PEN_LINES
+		var scene := _ink_lines(scene_text, UiFonts.WORD if long else UiFonts.HAND, 13.5 if long else 18.0, 20.0)
+		scene.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		said.add_child(scene)
+	var says := VBoxContainer.new()
+	says.name = "Says"
+	says.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	says.add_theme_constant_override("separation", 0)
+	col.add_child(says)
+	for i in options.size():
+		says.add_child(_say(i, options[i], cb))
+
+
+## A card's words as [title, the rest]: its first sentence is its title (with
+## no full stop, as 06's), the rest the scene under it.
+static func card_lines(text: String) -> Array:
+	var t: String = text.strip_edges()
+	for i in t.length():
+		if t[i] == "." and (i + 1 == t.length() or t[i + 1] == " " or t[i + 1] == "\n"):
+			return [t.substr(0, i), t.substr(i + 1).strip_edges()]
+	return [t, ""]
+
+
+## Ink on the paper in `kind` at `css_px`, wrapping between words on lines of
+## `line_css` (a face taller than its line keeps to the line, as CSS's does).
+func _ink_lines(text: String, kind: int, css_px: float, line_css: float, color: Color = Paper.INK) -> Label:
+	var l := Paper.ink(UiFonts.keep_all(text), kind, 400, css_px, color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var f: Font = l.get_theme_font("font")
+	var natural: float = f.get_height(l.get_theme_font_size("font_size"))
+	l.add_theme_constant_override("line_spacing", int(round(UiFonts.px(line_css) - natural)))
+	return l
+
+
+## One of the leader's lines (.sayb): a faint rule over it, its number at the
+## left (a column of 22), the line in 「」 at 14/500 on a line of 22, and under
+## it what it does and what it costs in side ink at 12; pressed, a faint shade.
+func _say(i: int, o: Dictionary, cb: Callable) -> Button:
+	var b := Button.new()
+	b.name = "Say_" + String(o["id"])
+	b.focus_mode = Control.FOCUS_NONE
+	b.clip_text = true
+	b.custom_minimum_size = Vector2(0, UiFonts.px(55.0))
+	var rest := StyleBoxFlat.new()
+	rest.bg_color = Color(0, 0, 0, 0)
+	rest.border_width_top = GlassPane.px(2.0)
+	rest.border_color = Paper.TRACK
+	var down := rest.duplicate() as StyleBoxFlat
+	down.bg_color = Color(42 / 255.0, 32 / 255.0, 24 / 255.0, 0.07)
+	for state in ["normal", "hover", "focus", "disabled"]:
+		b.add_theme_stylebox_override(state, rest)
+	for state in ["pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(state, down)
+	var h := HBoxContainer.new()
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_theme_constant_override("separation", GlassPane.px(4.0))
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# padding 7 6 6 4.
+	h.offset_left = UiFonts.px(4.0)
+	h.offset_right = -UiFonts.px(6.0)
+	h.offset_top = UiFonts.px(7.0)
+	h.offset_bottom = -UiFonts.px(6.0)
+	b.add_child(h)
+	var n := Paper.ink(str(i + 1), UiFonts.NUMBER, 600, 21.0, Paper.INK2)
+	n.custom_minimum_size = Vector2(UiFonts.px(22.0), UiFonts.px(22.0))
+	n.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	n.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	h.add_child(n)
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 0)
+	h.add_child(col)
+	var line: String = String(o.get("say", "")).strip_edges().trim_prefix("\"").trim_suffix("\"")
+	var q := Paper.ink(UiFonts.keep_all("「%s」" % line if line != "" else String(o["label"])), UiFonts.WORD, 500, 14.0)
+	q.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	q.custom_minimum_size = Vector2(0, UiFonts.px(22.0))
+	col.add_child(q)
+	var under: Array = []
+	if line != "":
+		under.append(String(o["label"]))
+	if o.has("cost"):
+		under.append(String(o["cost"]))
+	if not under.is_empty():
+		var s := Paper.ink(UiFonts.keep_all(" · ".join(under)), UiFonts.WORD, 400, 12.0, Paper.INK2, 0.36)
+		s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(s)
+	# As high as its words once they wrap (55 at the least).
+	var fit := func() -> void:
+		b.custom_minimum_size.y = maxf(UiFonts.px(55.0), h.get_combined_minimum_size().y + UiFonts.px(13.0))
+	h.minimum_size_changed.connect(fit)
+	fit.call()
+	GlassPane.sinks(b, h)
+	b.pressed.connect(_card_pick.bind(cb, String(o["id"])))
+	return b
 
 
 func _card_pick(cb: Callable, choice: String) -> void:
@@ -1941,20 +2249,49 @@ func _card_pick(cb: Callable, choice: String) -> void:
 func loot(id: String) -> void:
 	var c: Dictionary = game.data["containers"][id]
 	var p = game.player
-	var v := _open_modal(560.0)
-	v.add_child(_label(c["name"], 26))
-	v.add_child(_label("인벤토리 %.1f / %.0f" % [p.weight(), p.carry_limit()], 18, DIM))
-	if c["items"].is_empty():
-		v.add_child(_label("빈 곳", 20, DIM))
-	for i in range(c["items"].size()):
-		var item: String = c["items"][i]
-		v.add_child(_button("%s  (%.1f)" % [game.item_name(item), Carry.item_weight(item)], _loot_take.bind(id, i), Vector2(520, 56), 20))
+	var pane := _open_pane(String(c["name"]), "인벤토리 %.1f / %.0f" % [p.weight(), p.carry_limit()], "search")
+	var items: Array = c["items"]
+	if items.is_empty():
+		pane.body.add_child(GlassPane.note("빈 곳", PANE_W - GlassPane.PAD_L - GlassPane.PAD_R, GlassPane.INK3, 13.0))
+		return
+	# A press takes the one; the main key takes them all.
+	var list := VBoxContainer.new()
+	list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
+	for i in range(items.size()):
+		var item: String = items[i]
+		list.add_child(_thing_key(game.item_name(item), "%.1f" % Carry.item_weight(item), _loot_take.bind(id, i)))
+	pane.body.add_child(GlassPane.scroll(list, LOOT_LIST_MAX))
+	var foot := GlassPane.row()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	var all := LampKey.new("모두 담기", false)
+	all.pressed.connect(_loot_all.bind(id))
+	foot.add_child(all)
+	pane.body.add_child(foot)
+
+
+## A thing as a cell across its row: its name at 13/500 at the left, its
+## weight in the number face at the right.
+func _thing_key(word: String, weight: String, cb: Callable) -> Button:
+	var b := GlassPane.key("", cb)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
-	v.add_child(h)
-	if not c["items"].is_empty():
-		h.add_child(_button("모두 담기", _loot_all.bind(id), Vector2(200, 64)))
-	h.add_child(_button("닫기", _close_modal, Vector2(140, 64)))
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	h.offset_left = UiFonts.px(12.0)
+	h.offset_right = -UiFonts.px(12.0)
+	var name_l := UiFonts.label(word, UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39)
+	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_l.clip_text = true
+	name_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_l.size_flags_vertical = Control.SIZE_FILL
+	h.add_child(name_l)
+	var kg := UiFonts.label(weight, UiFonts.NUMBER, 500, 15.0, GlassPane.INK2, 0.22)
+	kg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	kg.size_flags_vertical = Control.SIZE_FILL
+	h.add_child(kg)
+	b.add_child(h)
+	GlassPane.sinks(b, h)
+	return b
 
 
 func _loot_take(id: String, i: int) -> void:
@@ -1967,37 +2304,125 @@ func _loot_all(id: String) -> void:
 	_close_modal()
 
 
+## The bag on the glass: what it is and how full in the head, the two weapons
+## and the key that swaps them, what is in it as a list (a put-down key on each
+## row), the rounds under it; beside it the journal on a pinned note.
 func bag_panel() -> void:
 	var p = game.player
-	var v := _open_modal(560.0)
-	v.add_child(_label("%s · %.1f / %.0f · %s" % [Carry.BAGS[p.bag]["name"], p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]], 22))
-	if p.hands.size() > 1:
-		var hw := HBoxContainer.new()
-		hw.add_child(_label("손 %s · 허리 %s" % [short_weapon(p), W.get_data(p.hands[1]["id"]).get("name", "")], 20))
-		var gap := Control.new()
-		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		hw.add_child(gap)
-		hw.add_child(_button("바꾸기", _swap_from_bag, Vector2(120, 52), 18))
-		v.add_child(hw)
-	if p.items.is_empty():
-		v.add_child(_label("빈 가방", 20, DIM))
-	for id in p.items.keys():
-		var h := HBoxContainer.new()
-		h.add_child(_label("%s ×%d  (%.1f)" % [game.item_name(id), int(p.items[id]), Carry.item_weight(id) * int(p.items[id])], 20))
-		var spacer := Control.new()
-		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(spacer)
-		h.add_child(_button("내려놓기", _drop.bind(id), Vector2(120, 52), 18))
-		v.add_child(h)
-	v.add_child(_label("탄: 권총 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])], 18, DIM))
 	# 일지: this stop's goals, one to a row (decision 293 ②: the field shows
 	# them under the clock only once the technology opens that line).
 	var goals: String = game.goal_text() if game.mission_play != null else ""
-	if goals != "":
-		v.add_child(_label("일지", 22))
-		for part in goals.split(" · "):
-			v.add_child(_label("· " + part, 19, HudSkin.GOAL))
-	v.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+	var pane := _open_pane(String(Carry.BAGS[p.bag]["name"]), "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]], "inv", BAG_PANE_W if goals != "" else PANE_W)
+	var left := VBoxContainer.new()
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", GlassPane.px(GlassPane.SET_GAP))
+	if goals == "":
+		pane.body.add_child(left)
+	else:
+		var side := GlassPane.row()
+		side.add_theme_constant_override("separation", GlassPane.px(16.0))
+		pane.body.add_child(side)
+		side.add_child(left)
+		side.add_child(_journal_note(goals))
+	if p.hands.size() > 1:
+		var hw := GlassPane.row()
+		var held = TypeLine.new(GlassPane.CELL_H, GlassPane.CELL_H)
+		held.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		held.add_child(UiFonts.label("손 ", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 0.6))
+		held.add_child(UiFonts.label(short_weapon(p), UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39))
+		held.add_child(UiFonts.label(" · 허리 ", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 0.6))
+		held.add_child(UiFonts.label(String(W.get_data(p.hands[1]["id"]).get("name", "")), UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39))
+		hw.add_child(held)
+		var swap := GlassPane.key("바꾸기", _swap_from_bag)
+		swap.size_flags_horizontal = Control.SIZE_SHRINK_END
+		swap.custom_minimum_size.x = UiFonts.px(DROP_W)
+		hw.add_child(swap)
+		left.add_child(hw)
+	if p.items.is_empty():
+		left.add_child(GlassPane.note("빈 가방", BAG_LIST_W, GlassPane.INK3, 13.0))
+	else:
+		var list := VBoxContainer.new()
+		list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		list.add_theme_constant_override("separation", 0)
+		var first := true
+		for id in p.items.keys():
+			if not first:
+				list.add_child(GlassPane.rule())
+			first = false
+			list.add_child(_bag_row(id, int(p.items[id])))
+		left.add_child(GlassPane.scroll(list, BAG_LIST_MAX))
+	left.add_child(GlassPane.mixed("탄: 권총 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
+
+
+## One thing in the bag: its name and count at 13/500, its weight in the number
+## face, and its put-down key at the right.
+func _bag_row(id: String, n: int) -> Control:
+	var h := HBoxContainer.new()
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.custom_minimum_size = Vector2(0, UiFonts.px(GlassPane.CELL_H))
+	h.add_theme_constant_override("separation", GlassPane.px(10.0))
+	var name_l := UiFonts.label("%s ×%d" % [game.item_name(id), n], UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39)
+	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_l.clip_text = true
+	name_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(name_l)
+	var kg := UiFonts.label("%.1f" % (Carry.item_weight(id) * n), UiFonts.NUMBER, 500, 15.0, GlassPane.INK2, 0.22)
+	kg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(kg)
+	var drop := GlassPane.key("내려놓기", _drop.bind(id))
+	drop.size_flags_horizontal = Control.SIZE_SHRINK_END
+	drop.custom_minimum_size.x = UiFonts.px(DROP_W)
+	h.add_child(drop)
+	return h
+
+
+## The journal on a note pinned in the bag (시안 .pnote: paper with its fibre,
+## a brass clip at its top, leaning 1.1° from its foot's right): 일지 in pen on
+## a line of 28, this stop's goals one to a line of 20 at 13.
+func _journal_note(goals: String) -> Control:
+	var note := PanelContainer.new()
+	note.name = "Journal"
+	note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	note.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	note.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	note.custom_minimum_size = Vector2(UiFonts.px(JOURNAL_W), 0)
+	var sb: StyleBox = HudSkin.slip()
+	# padding 11 14 6 18.
+	sb.content_margin_left = UiFonts.px(18.0)
+	sb.content_margin_right = UiFonts.px(14.0)
+	sb.content_margin_top = UiFonts.px(11.0)
+	sb.content_margin_bottom = UiFonts.px(8.0)
+	note.add_theme_stylebox_override("panel", sb)
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_theme_constant_override("separation", 0)
+	note.add_child(v)
+	var title = TypeLine.new(28.0)
+	title.add_child(Paper.ink("일지", UiFonts.HAND, 400, 24.0))
+	v.add_child(title)
+	for part in goals.split(" · "):
+		var line := Paper.ink("· " + part, UiFonts.WORD, 400, 13.0)
+		line.custom_minimum_size = Vector2(0, UiFonts.px(20.0))
+		line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		v.add_child(line)
+	note.rotation = deg_to_rad(JOURNAL_LEAN_DEG)
+	note.resized.connect(func() -> void: note.pivot_offset = note.size)
+	note.draw.connect(_draw_clip.bind(note))
+	return note
+
+
+## The brass clip over a pinned note's top (.pnote::before): 26 × 11, 5 above
+## its edge, brass from light to dark down it, a small shadow under it.
+func _draw_clip(note: Control) -> void:
+	var k: float = UiFonts.K
+	var r := Rect2(note.size.x * 0.5 - 13.0 * k, -5.0 * k, 26.0 * k, 11.0 * k)
+	GlassParts.shadow(note, r, 2.0 * k, 2.0 * k, 3.0 * k, Color(0, 0, 0, 0.5))
+	var mid: float = r.position.y + r.size.y * 0.5
+	note.draw_polygon(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), Vector2(r.end.x, mid), Vector2(r.position.x, mid)]),
+			PackedColorArray([HudSkin.RIM1, HudSkin.RIM1, HudSkin.RIM2, HudSkin.RIM2]))
+	note.draw_polygon(PackedVector2Array([Vector2(r.position.x, mid), Vector2(r.end.x, mid), r.end, Vector2(r.position.x, r.end.y)]),
+			PackedColorArray([HudSkin.RIM2, HudSkin.RIM2, HudSkin.RIM3, HudSkin.RIM3]))
 
 
 func _swap_from_bag() -> void:
@@ -2018,22 +2443,23 @@ func _drop(id: String) -> void:
 func _ally_menu(p) -> void:
 	if not p.is_alive():
 		return
-	var v := _open_modal(520.0)
-	v.add_child(_label("%s · %s" % [p.display_name, p.body.status_words()], 24))
+	var pane := _open_pane(String(p.display_name), p.body.status_words(), "people")
 	var weapons: Array = []
 	for h in p.hands:
 		weapons.append(W.get_data(h["id"]).get("name", h["id"]))
-	v.add_child(_label("손: %s · 인벤토리 %.1f/%.0f" % [", ".join(weapons), p.weight(), p.carry_limit()], 18, DIM))
-	var g := GridContainer.new()
-	g.columns = 3
-	v.add_child(g)
-	for c in COMMANDS:
-		g.add_child(_button(command_word(c), _command.bind(p, c[0]), Vector2(150, 64)))
-	var foot := HBoxContainer.new()
-	foot.add_theme_constant_override("separation", 10)
-	v.add_child(foot)
-	foot.add_child(_button("몸 상태", body_panel.bind(p), Vector2(150, 60)))
-	foot.add_child(_button("닫기", _close_modal, Vector2(140, 60)))
+	pane.body.add_child(GlassPane.mixed("손: %s · 인벤토리 %.1f/%.0f" % [", ".join(weapons), p.weight(), p.carry_limit()]))
+	# The orders as picks, the one standing in its amber corners (시안 13's
+	# picks), two rows of three with the body picture last.
+	var rows: Array = [GlassPane.row(), GlassPane.row()]
+	for i in COMMANDS.size():
+		var c: Array = COMMANDS[i]
+		rows[0 if i < 3 else 1].add_child(GlassPane.pick(command_word(c), "", String(p.command) == String(c[0]), _command.bind(p, c[0]), String(COMMAND_ICONS.get(c[0], ""))))
+	var look := GlassPane.key("몸 상태", body_panel.bind(p), "bandage")
+	# Set as the picks beside it are: the mark and the word from the left.
+	look.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	rows[1].add_child(look)
+	for r: Control in rows:
+		pane.body.add_child(r)
 
 
 ## The word for an order. The one-by-one 'retreat' may be shown as '열차로'
@@ -2057,6 +2483,8 @@ func _all_aboard() -> void:
 
 func _command(p, cmd: String, close: bool = true) -> void:
 	p.command = cmd
+	# Said back to the chief (ally_lines.gd); the retreat is said as they turn (field_ai.gd).
+	game.shout(p, "order_" + cmd)
 	p.brain["boarded"] = false
 	p.target_zombie = {}
 	p.aim.stop()
@@ -2071,23 +2499,22 @@ func _command(p, cmd: String, close: bool = true) -> void:
 
 ## Work crew settings: attitude and fire permission per crew (s2_station 2.4).
 func work_panel() -> void:
-	var v := _open_modal(620.0)
-	v.add_child(_label("석탄 작업 · 남은 석탄 %.1f · 실은 석탄 %.1f" % [game.actions.coal_left(), game.actions.coal_delivered], 22))
-	v.add_child(_label("호위조 태도", 18, DIM))
-	var h1 := HBoxContainer.new()
-	v.add_child(h1)
+	var pane := _open_pane("석탄 작업", "남은 석탄 %.1f · 실은 석탄 %.1f" % [game.actions.coal_left(), game.actions.coal_delivered], "coal")
+	# Each setting a row headed by its word, its values as picks, the one set in
+	# its amber corners (시안 13's 레버 꼴 row).
+	var h1 := GlassPane.row()
+	h1.add_child(GlassPane.row_word("호위조", "태도"))
 	for row in [["aggressive", "공격적"], ["defensive", "방어적"], ["neutral", "중립"]]:
-		var b := _button(row[1] + (" ●" if game.ai.crew_attitude == row[0] else ""), _set_crew.bind("attitude", row[0]), Vector2(170, 60))
-		h1.add_child(b)
-	v.add_child(_label("사격 허가", 18, DIM))
-	var h2 := HBoxContainer.new()
-	v.add_child(h2)
+		h1.add_child(GlassPane.pick(row[1], "", game.ai.crew_attitude == row[0], _set_crew.bind("attitude", row[0])))
+	pane.body.add_child(h1)
+	var h2 := GlassPane.row()
+	h2.add_child(GlassPane.row_word("사격", "허가"))
 	for row in [["free", "자유"], ["threat", "위협만"], ["melee", "근접만"]]:
-		h2.add_child(_button(row[1] + (" ●" if game.ai.crew_fire == row[0] else ""), _set_crew.bind("fire", row[0]), Vector2(170, 60)))
-	var h3 := HBoxContainer.new()
-	v.add_child(h3)
-	h3.add_child(_button("작업조 철수", _set_crew.bind("recall", ""), Vector2(200, 64)))
-	h3.add_child(_button("닫기", _close_modal, Vector2(140, 64)))
+		h2.add_child(GlassPane.pick(row[1], "", game.ai.crew_fire == row[0], _set_crew.bind("fire", row[0])))
+	pane.body.add_child(h2)
+	var h3 := GlassPane.row()
+	h3.add_child(GlassPane.key("작업조 철수", _set_crew.bind("recall", ""), "train"))
+	pane.body.add_child(h3)
 
 
 func _set_crew(key: String, value: String) -> void:
@@ -2169,39 +2596,116 @@ func leave_beat(result: Dictionary, lines: Array, columns: Array = []) -> void:
 	root.add_child(veil)
 	# Under the overlay, so what those left behind shout stays readable.
 	root.move_child(veil, overlay.get_index())
-	var words := VBoxContainer.new()
+	var words := Control.new()
+	words.name = "Words"
 	words.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# In the upper part of the screen: the middle is where the people are, and
-	# those left behind shout over their heads there.
-	words.alignment = BoxContainer.ALIGNMENT_BEGIN
-	words.offset_top = LEAVE_WORDS_TOP
-	words.add_theme_constant_override("separation", 14)
 	words.modulate.a = 0.0
 	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	veil.add_child(words)
-	for i in lines.size():
-		var l := _label(String(lines[i]), 48 if i == 0 else 24, INK if i == 0 else DIM)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		words.add_child(l)
 	if not columns.is_empty():
 		# The stage is over: the thumb pads go, so the columns are not under them.
 		for b in pads:
 			b.visible = false
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", LEAVE_COLUMN_GAP)
-		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		words.add_child(row)
-		for column: Array in columns:
-			var box := VBoxContainer.new()
-			box.custom_minimum_size.x = LEAVE_COLUMN_W
-			box.add_theme_constant_override("separation", 4)
-			box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			row.add_child(box)
-			box.add_child(_label(String(column[0]), 20, DIM))
-			for line in column[1]:
-				box.add_child(_label(String(line), 24))
+	# The leader is aboard: their card and the bag under it go, so the paper is
+	# not under them.
+	portrait.visible = false
+	bag_box.visible = false
+	words.add_child(_leave_strip(result, lines, columns))
 	leaving = {"result": result, "t": LEAVE_BEAT_S, "veil": veil, "words": words}
+
+
+## The leave beat on paper (시안 2차 08 짧은 판, B1), in the upper part of the
+## screen: the middle is where the people are, and those left behind shout over
+## their heads there. The place and how the stop ended in its kick (a line of
+## 20), what it came to at 26/600 (36), how long it was at 14 (22 each), then
+## under a rule the four columns side by side, each its title in side ink (18)
+## over its rows at 13/500 (20). The paper is cut to its lines.
+func _leave_strip(result: Dictionary, lines: Array, columns: Array) -> Control:
+	var k: float = UiFonts.K
+	var gap: int = GlassPane.px(10.0)
+	var col_w: float = floorf(((LEAVE_W - LEAVE_IN.position.x - LEAVE_IN.size.x) * k - gap * 3.0) / 4.0)
+	var cells: Array = []
+	var most: float = 0.0
+	for column: Array in columns:
+		var made: Array = []
+		var high: float = 0.0
+		for line in column[1]:
+			var r: Label = _leave_cell(String(line), col_w)
+			made.append(r)
+			high += r.custom_minimum_size.y
+		cells.append(made)
+		most = maxf(most, high)
+	var tall: float = LEAVE_IN.position.y + 20.0 + 36.0 + 22.0 * maxi(lines.size() - 1, 0) + LEAVE_IN.size.y
+	if not columns.is_empty():
+		tall += 10.0 + 18.0 + most / k
+	var sheet = PaperSheet.new(Vector2(LEAVE_W, tall))
+	sheet.name = "Strip"
+	sheet.rotation = deg_to_rad(LEAVE_LEAN_DEG)
+	sheet.position = LEAVE_AT * k
+	sheet.inner.position = LEAVE_IN.position * k
+	sheet.inner.size = Vector2(LEAVE_W - LEAVE_IN.position.x - LEAVE_IN.size.x, tall - LEAVE_IN.position.y - LEAVE_IN.size.y) * k
+	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 0)
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sheet.inner.add_child(col)
+	var d: Dictionary = ReceiptCard.rows(result)
+	var kick = TypeLine.new(20.0)
+	kick.add_child(Paper.ink(String(d["place"]) + (" · " + String(d["stamp"]) if String(d["stamp"]) != "" else ""), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.2))
+	col.add_child(kick)
+	for i in lines.size():
+		var line = TypeLine.new(36.0 if i == 0 else 22.0)
+		var l := Paper.ink(String(lines[i]), UiFonts.WORD, 600 if i == 0 else 400, 26.0 if i == 0 else 14.0, Paper.INK, 0.52 if i == 0 else 0.0)
+		line.add_child(l)
+		col.add_child(line)
+	if columns.is_empty():
+		return sheet
+	var rule := Control.new()
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rule.custom_minimum_size = Vector2(0, UiFonts.px(10.0))
+	rule.draw.connect(func() -> void:
+		rule.draw_rect(Rect2(0, (rule.size.y - UiFonts.px(2.0)) * 0.5, rule.size.x, UiFonts.px(2.0)), Paper.LINE))
+	col.add_child(rule)
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", gap)
+	col.add_child(row)
+	for i in columns.size():
+		var column: Array = columns[i]
+		var box := VBoxContainer.new()
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.custom_minimum_size = Vector2(col_w, 0)
+		box.add_theme_constant_override("separation", 0)
+		row.add_child(box)
+		var t := Paper.ink(String(column[0]), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.44)
+		t.custom_minimum_size = Vector2(0, UiFonts.px(18.0))
+		t.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		box.add_child(t)
+		for r: Label in cells[i]:
+			box.add_child(r)
+	return sheet
+
+
+## One row of a leave beat's column: a count (「석탄 6」, 「4명」) at 13/500 on a
+## line of 20; a line with no number in it in side ink at 12, wrapping in its
+## column between words, as high as its lines.
+func _leave_cell(text: String, col_w: float) -> Label:
+	if RegEx.create_from_string("[0-9]").search(text) != null:
+		var r := Paper.ink(text, UiFonts.WORD, 500, 13.0)
+		r.custom_minimum_size = Vector2(0, UiFonts.px(20.0))
+		r.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		return r
+	var said: String = UiFonts.keep_all(text)
+	var l := Paper.ink(said, UiFonts.WORD, 400, 12.0, Paper.INK2)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var f: Font = l.get_theme_font("font")
+	var fs: int = l.get_theme_font_size("font_size")
+	var para := TextParagraph.new()
+	para.add_string(said, f, fs)
+	para.width = col_w
+	para.break_flags = TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+	l.custom_minimum_size = Vector2(col_w, maxf(UiFonts.px(20.0), para.get_size().y))
+	return l
 
 
 func _tick_leave(delta: float) -> void:
@@ -2218,31 +2722,51 @@ func _tick_leave(delta: float) -> void:
 		show_end(result)
 
 
+## The end of a stop played alone: on the shade, the return receipt on the
+## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd,
+## its foot bare), and at the right, from under the band to the sheet's foot,
+## what the play came to (the real time and the noise, the holdout's lines) in
+## glass ink over the keys: copy the receipt, copy the record, again. The
+## stop's choices are in the receipt it copies.
 func show_end(result: Dictionary) -> void:
 	_close_modal()
 	context_rows = []
-	# The receipt is a paper slip on the dimmed stop (receipt_card.gd); the keys
-	# stay glass, under the slip.
-	var v := _open_modal(ReceiptCard.PAPER_W)
-	game.paused = true
-	v.get_parent().add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	v.add_theme_constant_override("separation", 16)
-	var notes: Array = []
-	notes.append("실제 %d분 %d초 · %s" % [int(result["real_seconds"]) / 60, int(result["real_seconds"]) % 60, noise_line()])
-	for line in result.get("holdout_lines", []):
-		notes.append(line)
-	for d in game.decisions:
-		notes.append("결정: %s → %s" % [d["id"], d["choice"]])
-	var slip: Control = ReceiptCard.build(result, notes)
-	slip.name = "Receipt"
-	v.add_child(slip)
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
-	h.alignment = BoxContainer.ALIGNMENT_END
-	v.add_child(h)
-	h.add_child(_button("영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨"), Vector2(200, 64)))
-	h.add_child(_button("기록 복사", _copy.bind(result["telemetry"], "기록 복사됨"), Vector2(180, 64)))
-	h.add_child(_button("다시", _restart, Vector2(140, 64)))
+	var shade := _open_shade()
+	var sheet = ReceiptSheet.new()
+	sheet.name = "Receipt"
+	sheet.result = result
+	sheet.seg = 0
+	shade.add_child(sheet)
+	var side := VBoxContainer.new()
+	side.name = "Record"
+	side.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	side.add_theme_constant_override("separation", GlassPane.px(4.0))
+	side.anchor_right = 1.0
+	side.anchor_bottom = 1.0
+	side.offset_left = UiFonts.px(ReceiptSheet.SHEET_AT.x + PaperSheet.SIZE.x + END_GAP)
+	side.offset_right = -UiFonts.px(16.0)
+	side.offset_top = UiFonts.px(GlassPane.TOP + GlassPane.PAD_T)
+	side.offset_bottom = -UiFonts.px(16.0)
+	shade.add_child(side)
+	side.add_child(UiFonts.label("기록", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 1.92))
+	var lines: Array = ["실제 %d분 %d초" % [int(result["real_seconds"]) / 60, int(result["real_seconds"]) % 60], noise_line()]
+	lines.append_array(result.get("holdout_lines", []))
+	for line in lines:
+		var l := UiFonts.label(UiFonts.keep_all(String(line)), UiFonts.WORD, 400, 13.0, GlassPane.INK2, 0.39)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		side.add_child(l)
+	var room := Control.new()
+	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	side.add_child(room)
+	# On no pane: the keys take the pane's dark for their ground.
+	var ground: Color = GlassPane.BACKING[0][1]
+	var keys := GlassPane.row()
+	keys.name = "Keys"
+	side.add_child(keys)
+	keys.add_child(GlassPane.key("영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨"), "", ground))
+	keys.add_child(GlassPane.key("기록 복사", _copy.bind(result["telemetry"], "기록 복사됨"), "", ground))
+	keys.add_child(GlassPane.key("다시", _restart, "", ground))
 
 
 func _copy(text: String, note: String) -> void:
@@ -2900,7 +3424,18 @@ func _tick_primary(p) -> void:
 	var melee := primary_melee(p)
 	attack_button.visible = false
 	manual_button.visible = not melee
-	aim_button.text = "공격" if melee else "조준"
+	# A with a blade in hand, as attack shows; the aim mark alone with a gun
+	# (user 2026-10-18), never the two at once.
+	var word: String = "A" if melee else ""
+	if aim_button.text != word:
+		aim_button.text = word
+		if melee:
+			aim_button.icon = null
+			_letter(aim_button, ATTACK_LETTER)
+			_nudge(aim_button, LETTER_NUDGE)
+		else:
+			_set_icon(aim_button, "aim", ATTACK_ICON)
+			_nudge(aim_button, 0.0)
 	if melee:
 		aim_button.button_pressed = fighting(p)
 
@@ -3055,6 +3590,11 @@ func _draw_overlay() -> void:
 	var p = game.player
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
+	# The stop is over (the leave beat, the end): its cues go with the pads (the
+	# stick, the tells, the moans at the edge); what those left behind shout stays.
+	if game.ended:
+		_draw_says(view_size)
+		return
 	_draw_tells()
 	_draw_says(view_size)
 	# The last call: the count, big, where nobody can miss it. The same place
