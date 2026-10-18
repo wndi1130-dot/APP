@@ -785,7 +785,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
 			if p.team != "raider":
-				game.say(p, "%s 긁혔다." % p.display_name, true, "hurt")
+				game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 		"blocked":
 			p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.05)
 			_toast(p, "외투가 손톱을 막았다.")
@@ -806,7 +806,7 @@ func breach_reaches(p) -> String:
 	p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
 	p.panic = minf(1.0, p.panic + 0.3)
 	game.telemetry.injury(now, p.pid, "scratch")
-	game.say(p, "%s 긁혔다." % p.display_name, true, "hurt")
+	game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 	return "scratch"
 
 
@@ -828,7 +828,7 @@ func bite(p) -> void:
 	if p.team == "raider":
 		return
 	var part_word: String = {"arm": "팔", "torso": "몸통", "leg": "다리"}.get(part, part)
-	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word], true, "bite_leg" if part == "leg" else "bite")
+	game.say(p, "%s %s를 물렸다." % [p.display_name, part_word], true, "bite_" + part)
 	var seen: Array = []
 	for o in game.allies_alive():
 		if o != p and o.position.distance_to(p.position) < 12.0 and game.sight_clear(o.position, p.position):
@@ -853,9 +853,9 @@ func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> v
 	if game.rng.randf() < fracture_chance:
 		p.body.fracture(not leg, wound_side("leg" if leg else "arm"), game.clock.elapsed)
 		game.telemetry.injury(game.clock.elapsed, p.pid, "fracture")
-		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true, "hurt")
+		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true, "fracture")
 	elif p.team != "raider":
-		game.say(p, "%s %s." % [p.display_name, msg], true, "hurt")
+		game.say(p, "%s %s." % [p.display_name, msg], true, "fall")
 
 
 # ---------------------------------------------------------------- guns and bows

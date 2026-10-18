@@ -63,6 +63,7 @@ var window_nodes: Dictionary = {}
 var outer_cells: Dictionary = {}  # 건물 -> 바깥벽 칸 번호들(지붕 시야)
 var outer_doors: Dictionary = {}  # 건물 -> 1층 바깥 문 칸들(문가에서는 열림을 둔다)
 var footprints: Dictionary = {}   # 건물 -> Rect2i(1층 사각형)
+var drawn_cells: Dictionary = {}  # 층 -> 실제 키트가 맡은 벽·문·창 칸
 var open_b: int = -1
 var open_lv: int = 0
 var player_lv: int = 0
@@ -276,16 +277,18 @@ static func plan(data: Dictionary) -> Dictionary:
 	var lvs: Array = levels.keys()
 	lvs.sort()
 	for b: int in areas:
+		if not has_interior(data, levels, b):
+			continue
 		var area: Rect2i = areas[b]
 		out["outer"][b] = {}
 		for lv: int in lvs:
-			_plan_level(out, levels[lv], lv, b, area)
+			_plan_level(out, levels[lv], lv, b, area, wall_rects(data, b, lv, area))
 		_plan_roofs(out, data, levels, lvs, b, area)
 	_plan_stairs(out, data, levels)
 	return out
 
 
-## 건물마다 살필 사각형: 지도 자료의 사각형(위층 포함)에 한 칸 둘레. 자료가 없으면 격자를 훑는다.
+## 건물마다 살필 범위. 실제 칸은 wall_rects의 선언된 사각형 안에서만 고른다.
 static func _areas(data: Dictionary, levels: Dictionary) -> Dictionary:
 	var areas: Dictionary = {}
 	for row: Dictionary in data.get("buildings", []):
@@ -306,21 +309,59 @@ static func _areas(data: Dictionary, levels: Dictionary) -> Dictionary:
 					var c := Vector2i(i % lg.width, i / lg.width)
 					var one := Rect2i(c, Vector2i.ONE)
 					areas[b] = (areas[b] as Rect2i).merge(one) if areas.has(b) else one
-	for b in areas:
-		areas[b] = (areas[b] as Rect2i).grow(1)
 	return areas
+
+
+## 건물 번호만 붙은 산 덩어리는 문·창·방이 있는 건물로 취급하지 않는다.
+static func has_interior(data: Dictionary, grids: Dictionary, b: int) -> bool:
+	for row: Dictionary in data.get("buildings", []):
+		if int(row.get("id", -1)) == b and not row.get("rooms", []).is_empty():
+			return true
+	for room: Dictionary in data.get("rooms", []):
+		if int(room.get("building", -1)) == b:
+			return true
+	for lg: FieldGrid in grids.values():
+		for openings: Dictionary in [lg.doors, lg.windows]:
+			for row: Dictionary in openings.values():
+				if int(row.get("building", -1)) == b:
+					return true
+	return false
+
+
+## 위층 사각형이 따로 있으면 그것을 사용한다. 여러 사각형 사이의 빈틈도 제외한다.
+static func wall_rects(data: Dictionary, b: int, lv: int, fallback: Rect2i) -> Array[Rect2i]:
+	var rects: Array[Rect2i] = []
+	if lv > 0:
+		for row: Dictionary in data.get("upper_rects", []):
+			if int(row.get("building", -1)) == b and int(row.get("level", lv)) == lv:
+				rects.append(row["rect"])
+	if rects.is_empty():
+		for row: Dictionary in data.get("buildings", []):
+			if int(row.get("id", -1)) == b and row.get("rect") is Rect2i:
+				rects.append(row["rect"])
+	# 예전의 작은 시험 지도처럼 건물 표 자체가 없을 때만 격자 범위를 쓴다.
+	if rects.is_empty() and data.get("buildings", []).is_empty():
+		rects.append(fallback)
+	return rects
+
+
+static func inside_rects(c: Vector2i, rects: Array[Rect2i]) -> bool:
+	for r in rects:
+		if r.has_point(c):
+			return true
+	return false
 
 
 static func _add(out: Dictionary, id: String, xf: Transform3D, b: int, lv: int, slot: String) -> void:
 	out["pieces"].append({"id": id, "xf": xf, "b": b, "lv": lv, "slot": slot})
 
 
-static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: Rect2i) -> void:
+static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: Rect2i, rects: Array[Rect2i]) -> void:
 	var kinds: Dictionary = {}
 	for y in range(area.position.y, area.end.y):
 		for x in range(area.position.x, area.end.x):
 			var c := Vector2i(x, y)
-			if _wallish(lg, c, b):
+			if inside_rects(c, rects) and _wallish(lg, c, b):
 				kinds[c] = cell_kind(lg, c, b)
 	if kinds.is_empty():
 		return
@@ -493,7 +534,7 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	var prints: Dictionary = {}
 	for lv: int in lvs:
 		if lv >= 0:
-			prints[lv] = _footprint(levels[lv], b, area)
+			prints[lv] = _footprint(levels[lv], b, area, wall_rects(data, b, lv, area))
 	if prints.has(0) and not prints[0].is_empty():
 		out["footprints"][b] = _bounds(prints[0])
 	var gables: Array = []
@@ -539,12 +580,12 @@ static func _chimney_wanted(data: Dictionary, b: int) -> bool:
 	return false
 
 
-static func _footprint(lg: FieldGrid, b: int, area: Rect2i) -> Dictionary:
+static func _footprint(lg: FieldGrid, b: int, area: Rect2i, rects: Array[Rect2i]) -> Dictionary:
 	var cells: Dictionary = {}
 	for y in range(area.position.y, area.end.y):
 		for x in range(area.position.x, area.end.x):
 			var c := Vector2i(x, y)
-			if lg.building_at(c) == b:
+			if inside_rects(c, rects) and lg.building_at(c) == b:
 				cells[c] = true
 	return cells
 
@@ -699,6 +740,11 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 		material.set_shader_parameter(key, world_mat.get_shader_parameter(key))
 	material.set_shader_parameter("hole_radius", HOLE_R)
 	var p := plan(map_data)
+	for key: Vector2i in p["kinds"]:
+		if not drawn_cells.has(key.y):
+			drawn_cells[key.y] = {}
+		for c: Vector2i in p["kinds"][key]:
+			drawn_cells[key.y][c] = true
 	for b: int in p["outer"]:
 		outer_cells[b] = PackedInt32Array(p["outer"][b].keys())
 	outer_doors = p["outer_doors"]
@@ -766,6 +812,14 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 
 
 ## 바깥 턱 줄 노드(map_view.wall_nodes 자리, 회색 상자와 같은 열쇠).
+func draws_cell(c: Vector2i, lv: int = 0) -> bool:
+	return drawn_cells.get(lv, {}).has(c)
+
+
+func interior_visible(b: int, lv: int) -> bool:
+	return not shells.has(Vector2i(b, lv)) or _mode(b, lv) == 2
+
+
 func cut_node(b: int, lv: int) -> MeshInstance3D:
 	return shells.get(Vector2i(b, lv), {}).get("cut")
 
