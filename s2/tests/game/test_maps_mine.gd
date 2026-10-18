@@ -26,11 +26,14 @@ const KEYS: Array[String] = [
 const PROP_KINDS: Array[String] = [
 	"rock_face", "rock_ridge", "mine_portal", "support_frame", "rubble_pile",
 	"boulder", "vent_pipe", "mine_track", "ore_cart", "ore_cart_tipped",
-	"track_switch", "buffer_stop", "signal_post", "rail_marker", "sleeper_stack",
-	"coal_wagon", "derelict_tender", "coal_heap", "slag_heap", "coal_bin",
+	"track_switch", "buffer_stop", "rail_marker", "sleeper_stack",
+	"coal_wagon", "coal_heap", "slag_heap",
 	"hopper", "conveyor", "coal_sorter", "weigh_scale", "tool_rack", "pit_props",
 	"fuel_drum", "water_barrel", "scrap_stack", "crate_stack", "ore_truck",
-	"power_pole", "cable_trough", "drain_ditch", "snow_bank", "spruce", "dry_grass",
+	"power_pole", "drain_ditch", "snow_bank", "spruce", "dry_grass",
+]
+const CONTAINER_SUFFIXES: Array[String] = [
+	"상자", "보관함", "묶음", "선반", "자재함", "궤", "찬장", "공구함", "책상", "침대", "옷장",
 ]
 const DIRECTIONS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var _maps: Array[Dictionary] = []
@@ -235,7 +238,7 @@ func test_portals_building_partitions_and_shallow_loot() -> void:
 			if (r.size.x - 2) * (r.size.y - 2) > 60:
 				var walls := 0
 				for c: Vector2i in _cells(r.grow(-1)):
-					if g.solid_at(c) == S.WALL and g.building_at(c) == int(b["id"]):
+					if g.solid_at(c) == S.WALL and g.building_at(c) == (-1 if int(b["id"]) == 0 else int(b["id"])):
 						walls += 1
 				assert_true(walls > 0)
 			if int(b["id"]) == 0:
@@ -492,6 +495,152 @@ func test_entry_names_weights_first_entry_and_zone_names() -> void:
 		for id in d["containers"]:
 			var box_name := String(d["containers"][id].get("name", ""))
 			assert_false(_has_roman(box_name), box_name)
+
+
+func test_assembled_props_clear_structure_and_reserved_cells() -> void:
+	for i in range(_maps.size()):
+		var d: Dictionary = _maps[i]
+		var terrain := _terrain_walls(MAPS[i].PLAN)
+		var occupied: Dictionary = {}
+		for prop: Dictionary in d["props"]:
+			var lv := int(prop.get("level", 0))
+			var g: FieldGrid = d["levels"][lv]
+			var reserved := _assembly_reserved(d, lv)
+			var r: Rect2i = prop["rect"]
+			var collisions := 0
+			for c: Vector2i in _cells(r):
+				var key := Vector3i(c.x, c.y, lv)
+				# wall 소품이 스스로 만든 충돌 면과 원래 지형 벽을 구별한다.
+				var wall: bool = terrain.has(c) if lv == 0 else g.solid_at(c) == S.WALL
+				wall = wall or (prop["solid"] != "wall" and g.solid_at(c) == S.WALL)
+				var narrow: bool = lv == 0 and ((terrain.has(c + Vector2i.LEFT) and terrain.has(c + Vector2i.RIGHT)) or (terrain.has(c + Vector2i.UP) and terrain.has(c + Vector2i.DOWN)))
+				if wall or narrow or reserved.has(c) or occupied.has(key):
+					collisions += 1
+				occupied[key] = true
+			assert_eq(collisions, 0, "%s %s %s" % [d["place_id"], prop["kind"], r])
+			if prop["solid"] == "low":
+				assert_true(d["low_blocks"].has(r))
+				for c: Vector2i in _cells(r):
+					assert_eq(g.solid_at(c), S.LOW)
+
+
+func test_numbered_walls_are_real_building_walls() -> void:
+	for d: Dictionary in _maps:
+		var bounds: Dictionary = {}
+		for building: Dictionary in d["buildings"]:
+			bounds[int(building["id"])] = building["rect"]
+		for lv in d["levels"]:
+			var g: FieldGrid = d["levels"][lv]
+			var level_bounds: Dictionary = bounds.duplicate()
+			if int(lv) == 1:
+				for upper: Dictionary in d["upper_rects"]:
+					level_bounds[int(upper["building"])] = upper["rect"]
+			var outside := 0
+			var rock_buildings := 0
+			for y in range(g.height):
+				for x in range(g.width):
+					var c := Vector2i(x, y)
+					if g.solid_at(c) != S.WALL or g.building_at(c) < 0:
+						continue
+					var id := g.building_at(c)
+					rock_buildings += 1 if id == 0 else 0
+					if not level_bounds.has(id) or not level_bounds[id].has_point(c):
+						outside += 1
+			assert_eq(outside, 0, "%s 층 %s 건물 밖 벽" % [d["place_id"], lv])
+			assert_eq(rock_buildings, 0, "%s 층 %s 암벽 건물 번호" % [d["place_id"], lv])
+
+
+func test_container_suffixes_and_clear_stair_landings() -> void:
+	for d: Dictionary in _maps:
+		for box: Dictionary in d["containers"].values():
+			var matched := false
+			for suffix: String in CONTAINER_SUFFIXES:
+				matched = matched or String(box["name"]).ends_with(suffix)
+			assert_true(matched, "%s %s" % [d["place_id"], box["name"]])
+			var lv := int(box.get("level", 0))
+			var g: FieldGrid = d["levels"][lv]
+			assert_true(g.people_can_walk(box["cell"]))
+			for stair: Dictionary in d["stairs"]:
+				if lv == int(stair["low"]) or lv == int(stair["high"]):
+					assert_ne(box["cell"], stair["cell"], "%s %s" % [d["place_id"], box["id"]])
+
+
+func test_assembly_inventory_and_band_cover_counts() -> void:
+	assert_eq(PROP_KINDS.size(), 33, "기존 아홉 장에서 수집한 낱말")
+	for d: Dictionary in _maps:
+		for prop: Dictionary in d["props"]:
+			assert_true(PROP_KINDS.has(String(prop["kind"])), "%s %s" % [d["place_id"], prop["kind"]])
+		for side: String in ["upper", "lower"]:
+			var count := 0
+			for r: Rect2i in d["low_blocks"]:
+				count += 1 if d["bands"][side].intersects(r) else 0
+			assert_eq(count, 4, "%s %s 기존 엄폐 수" % [d["place_id"], side])
+
+
+func _assembly_reserved(d: Dictionary, lv: int) -> Dictionary:
+	var reserved: Dictionary = {}
+	var g: FieldGrid = d["levels"][lv]
+	for c: Vector2i in g.doors:
+		reserved[c] = true
+		for step: Vector2i in DIRECTIONS:
+			reserved[c + step] = true
+	for c: Vector2i in g.windows:
+		reserved[c] = true
+	for stair: Dictionary in d["stairs"]:
+		if lv == int(stair["low"]) or lv == int(stair["high"]):
+			reserved[stair["cell"]] = true
+	for box: Dictionary in d["containers"].values():
+		if lv == int(box.get("level", 0)):
+			reserved[box["cell"]] = true
+	for stove: Dictionary in d["stoves"]:
+		if lv == int(stove.get("level", 0)):
+			reserved[stove["cell"]] = true
+	for name: String in d["entries"]:
+		if lv == int(d["entry_levels"].get(name, 0)):
+			for c: Vector2i in d["entries"][name]:
+				reserved[c] = true
+	for name: String in d["spawns"]:
+		if name == "dead_levels":
+			for row: Array in d["spawns"][name]:
+				if lv == int(row[1]):
+					reserved[row[0]] = true
+		elif lv == 0:
+			for c: Vector2i in d["spawns"][name]:
+				reserved[c] = true
+	if lv == 0:
+		for c: Vector2i in _door_apron(d) + d["barricade_slots"]:
+			reserved[c] = true
+	return reserved
+
+
+func _terrain_walls(plan: Dictionary) -> Dictionary:
+	var walls: Dictionary = {}
+	for a: Array in plan["mountains"]:
+		for c: Vector2i in _cells(_plan_rect(a)):
+			walls[c] = true
+	for a: Array in plan["cuts"] + plan["tunnels"]:
+		for c: Vector2i in _cells(_plan_rect(a)):
+			walls.erase(c)
+	for a: Array in plan["cliffs"]:
+		for c: Vector2i in _cells(_plan_rect(a)):
+			walls[c] = true
+	for house: Dictionary in plan["houses"]:
+		var r := _plan_rect(house["rect"])
+		for c: Vector2i in _cells(r):
+			if r.grow(-1).has_point(c):
+				walls.erase(c)
+			else:
+				walls[c] = true
+		for a: Array in house["walls"]:
+			for c: Vector2i in _cells(_plan_rect(a)):
+				walls[c] = true
+		for a: Array in house["doors"] + house["windows"]:
+			walls.erase(Vector2i(int(a[0]), int(a[1])))
+	return walls
+
+
+func _plan_rect(a: Array) -> Rect2i:
+	return Rect2i(int(a[0]), int(a[1]), int(a[2]), int(a[3]))
 
 
 func _has_roman(text: String) -> bool:
