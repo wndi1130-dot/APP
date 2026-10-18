@@ -1,9 +1,10 @@
 extends "res://addons/gut/test.gd"
 ## The slice's order of screens (slice_flow.gd): every step comes up in turn
-## with the train behind it at the phase the step names, the receipt panel
+## with the train behind it at the phase the step names, the receipt sheet
 ## reads a receipt, and the boot menu has the key that starts it.
 
 const SliceFlow = preload("res://game/slice_flow.gd")
+const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const Boot = preload("res://game/boot.gd")
 
 
@@ -40,24 +41,29 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 	assert_eq(f.next_button.text, "처음으로", "the main key draws its own arrow")
 
 
-func test_the_receipt_step_is_the_paper_receipt_of_the_sample_when_the_field_is_skipped() -> void:
+func test_the_receipt_step_is_the_receipt_sheet_of_the_sample_when_the_field_is_skipped() -> void:
 	var f = _flow()
 	f.next()
 	f.next()
 	assert_eq(f.current(), "receipt")
-	var slip: Control = f.panel.find_child("Receipt", true, false)
-	assert_not_null(slip, "the paper receipt")
+	assert_not_null(f.card, "the receipt sheet stands in for the panel")
+	assert_eq(String(f.card.name), "ReceiptSheet")
+	assert_false(f.panel.visible)
+	assert_true(f.gauges.visible, "the train's gauges over it, as over the stop card")
+	assert_false(f.soot_bot.visible, "the sheet lies over the bottom edge")
+	var m: Dictionary = ReceiptSheet.model(f.card.result, f.card.seg)
+	assert_has(m["seen"], "약속 서막 · 본 사람 2 · 꼬리칸 들음", "the sample's promise, as seen")
 	var texts: Array = []
-	for l in slip.find_children("*", "Label", true, false):
+	for l in f.card.find_children("*", "Label", true, false):
 		texts.append((l as Label).text)
-	assert_has(texts, "약속 서막 · 본 사람 2 · 꼬리칸 들음", "the sample's promise, as seen")
-	assert_has(texts, "출발")
+	assert_has(texts, "출발", "the end stamped")
+	assert_has(texts, "술레후프")
 	var made: Dictionary = SliceFlow.result_of(f.receipt)
 	assert_eq(made["stay"], 160)
 	assert_eq(made["boarded"], 4, "sent less the dead, missing and left")
-	f.next()
-	assert_eq(f.current(), "council")
-	assert_null(f.panel.find_child("Receipt", true, false), "gone with its step")
+	f.card.go_key.pressed.emit()
+	assert_eq(f.current(), "council", "its key goes on")
+	assert_eq(String(f.card.name), "CouncilCard", "gone with its step")
 
 
 func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
@@ -75,7 +81,8 @@ func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
 	f.next()
 	assert_eq(f.current(), "receipt")
 	assert_eq(f.receipt, f.result["receipt"], "the field's own receipt")
-	assert_not_null(f.panel.find_child("Receipt", true, false))
+	assert_eq(String(f.card.name), "ReceiptSheet")
+	assert_eq(f.card.result, f.result, "the sheet reads the field's own result")
 
 
 func test_the_special_session_is_the_session_card_and_closing_it_goes_on() -> void:
@@ -109,7 +116,7 @@ func test_choosing_the_stop_is_the_paper_card_and_its_keys_go_on() -> void:
 	assert_eq((f.card.find_child("Place", true, false) as Label).text, "술레후프")
 	(f.card.find_child("Send", true, false) as Button).pressed.emit()
 	assert_eq(f.current(), "receipt", "sent: the field (skipped here), then its receipt")
-	assert_null(f.card, "gone with its step")
+	assert_eq(String(f.card.name), "ReceiptSheet", "the stop card gone with its step, its receipt in its place")
 	var g = _flow()
 	g.next()
 	(g.card.find_child("PassBy", true, false) as Button).pressed.emit()

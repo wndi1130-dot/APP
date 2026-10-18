@@ -23,7 +23,7 @@ const TrainRules = preload("res://game/train/train_rules.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
-const ReceiptCard = preload("res://game/ui/receipt_card.gd")
+const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -67,9 +67,12 @@ const NOTES: Dictionary = {
 	"end": ["끝 카드 자리 · 이번 판의 남길 만한 일"],
 }
 const PANEL_W: float = 560.0
-## What stays lit in the gauges while a step's sheet is up (the stop is about
-## stock; the session about what a vote moves, k3c_views.js vCouncil TOP hot).
-const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"], "council": ["trust", "mood", "food", "lux"]}
+## What stays lit in the gauges while a step's sheet is up (the stop and what it
+## brought back are about stock; the session about what a vote moves,
+## k3c_views.js vCouncil TOP hot).
+const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"], "receipt": ["coal", "food", "med", "lux"], "council": ["trust", "mood", "food", "lux"]}
+## The steps whose sheet comes in from the left over the bottom edge: no soot there.
+const SHEET_STEPS: Array = ["stop_pick", "receipt"]
 ## The steps that are the train itself: its pane and its keys over it.
 const HOME_STEPS: Array = ["train", "travel"]
 ## The car picked when the train comes up (시안 01: the tail's first car).
@@ -190,9 +193,9 @@ func go(i: int) -> void:
 	sel = ""
 	var row: Array = STEPS[i]
 	var id: String = row[0]
-	# Over the train, not over the field or the receipt (a slip of its own); the
-	# slice's state, but the session's own in the special session.
-	gauges.visible = String(row[1]) != "" and id != "receipt"
+	# Over the train, not over the field; the slice's state, but the session's
+	# own in the special session.
+	gauges.visible = String(row[1]) != ""
 	gauges.g = train_g
 	gauges.t = train_t
 	gauges.set_focus(FOCUS.get(id, []))
@@ -204,7 +207,7 @@ func go(i: int) -> void:
 	# The train runs between the stops; at a stop the snow falls straight down
 	# and the drift lies still (.world.run, .world.is-stop).
 	weather.moving = String(row[1]) == "travel"
-	soot_bot.visible = gauges.visible and id != "stop_pick"
+	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
 	if id == "field":
 		panel.visible = false
 		if bool(opts.get("skip_field", false)):
@@ -674,20 +677,21 @@ func _build_panel() -> void:
 	v.add_child(next_button)
 
 
-## The receipt step: the paper receipt itself on clear glass, the key under it.
+## The receipt step: the receipt on the stop's own sheet over the train at its
+## stop (receipt_sheet.gd), its key at the sheet's foot going on.
 func _show_receipt(go_word: String) -> void:
-	_show_panel("", [], go_word)
-	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	panel.custom_minimum_size = Vector2.ZERO
 	if receipt.is_empty():
-		var none := Label.new()
-		none.text = "영수증 없음"
-		lines.add_child(none)
-	else:
-		var slip: Control = ReceiptCard.build(result if not result.is_empty() else result_of(receipt))
-		slip.name = "Receipt"
-		lines.add_child(slip)
-	_pin()
+		_show_panel(String(STEPS[step][3]), ["영수증 없음"], go_word)
+		return
+	panel.visible = false
+	var c = ReceiptSheet.new()
+	c.name = "ReceiptSheet"
+	c.result = result if not result.is_empty() else result_of(receipt)
+	c.seg = int(STEPS[step][2])
+	c.go_word = go_word
+	c.went_on.connect(next)
+	layer.add_child(c)
+	card = c
 
 
 func _show_panel(head: String, rows: Array, go_word: String) -> void:
