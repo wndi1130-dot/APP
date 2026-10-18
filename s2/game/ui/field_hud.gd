@@ -17,6 +17,7 @@ const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const PortraitFace = preload("res://game/ui/portrait_face.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
@@ -162,7 +163,26 @@ const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search",
 ## hand-tested ones and do not change with the look.
 const KEY_SEEN: float = 82.0
 const ATTACK_SEEN: float = 140.0
+const ATTACK_ICON: int = 63      # 시안 .fpad--atk .ic 34
+## The lamp pills (situation, leaving, bandage): their word and mark, as big
+## as their touch rects allow (시안 .fpad--ctx: 13 and 17).
+const PILL_FONT: int = 20
+const PILL_ICON: int = 30
 const FACE_SIZE: float = 84.0
+## A companion's chip (시안 .fchip): a face 32 across, the name over the order.
+## Each face gets its own headwear in turn (the 시안's three, then a hood).
+const CHIP_FACE: float = 59.0
+const CHIP_KINDS: Array[int] = [1, 4, 5, 2]
+## The chip's words may take this much room; a longer one is cut short, so the
+## row stays clear of the stick.
+const CHIP_WORDS_W: float = 150.0
+## The stick as the 시안 draws it (.fstick): a ring 96 across, a knob 40 (radii).
+const STICK_RING: float = 89.0
+const STICK_KNOB: float = 37.0
+## The set's hiss before a call (시안 .fradio__hiss): each letter a little off
+## its line and fainter or not ([letter, 시안 px down, alpha]).
+const HISS: Array = [["치", -1.0, 0.9], ["지", 1.0, 0.5], ["지", 0.0, 0.78], ["직", -1.5, 0.6]]
+const HISS_TEXT := "…치직"   # what the field puts up while the set only hisses
 
 var game
 var theme: Theme
@@ -187,6 +207,7 @@ var feel_label: Label                 # the chief's aside beside the risk line
 var goal_label: Label                 # the line under the clock (goal_shown; none on a plain stop)
 var promise_label: Label              # 「약속: 서막 ○○ / 교대 ○○」 under the clock, while there are any
 var radio_label: Label
+var radio_hiss: HBoxContainer          # the crackle before the call (시안 .fradio__hiss)
 var radio_left: float = 0.0
 var portrait: PanelContainer
 var portrait_style: StyleBoxFlat
@@ -274,6 +295,8 @@ func setup(field_game) -> void:
 	game = field_game
 	layer = 10
 	theme = UiTheme.make(22)
+	# The 시안's type on every word of the field: IBM Plex Sans KR (ui_fonts.gd).
+	theme.default_font = UiFonts.face(UiFonts.WORD, 400)
 	root = Control.new()
 	root.theme = theme
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -287,6 +310,7 @@ func setup(field_game) -> void:
 	overlay = Control.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the paper's fibre on the slips
 	overlay.draw.connect(_draw_overlay)
 	root.add_child(overlay)
 	_build_top()
@@ -334,23 +358,9 @@ func _glass(pad_x: float = 12.0, pad_y: float = 4.0) -> PanelContainer:
 	return p
 
 
-## The semibold face of the theme's font, for the few words that lead a line.
-var _bold_font: Font = null
-
-
+## The semibold face of the 시안's type, for the few words that lead a line.
 func _bold(c: Control) -> void:
-	if _bold_font == null:
-		if theme.default_font is SystemFont:
-			var f := SystemFont.new()
-			f.font_names = (theme.default_font as SystemFont).font_names
-			f.font_weight = 600
-			_bold_font = f
-		else:
-			var v := FontVariation.new()
-			v.base_font = theme.default_font
-			v.variation_embolden = 0.6
-			_bold_font = v
-	c.add_theme_font_override("font", _bold_font)
+	c.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 600))
 
 
 ## A line icon as a picture, `px` across.
@@ -396,6 +406,26 @@ func _set_icon(b: Button, icon: String, icon_px: int, beside: bool = false) -> v
 	else:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP if b.text != "" else VERTICAL_ALIGNMENT_CENTER
+
+
+## A pill's mark and word sit together in its middle (시안 .fpad--ctx, .fall),
+## not the mark at one end and the word in the rest. Again after its word or
+## its looks change.
+func _center_pill(b: Button) -> void:
+	var font: Font = b.get_theme_font("font")
+	var fs: int = b.get_theme_font_size("font_size")
+	var w: float = 0.0
+	for line in b.text.split("\n"):
+		w = maxf(w, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+	var mark: float = 0.0
+	if b.icon != null:
+		mark = float(b.get_theme_constant("icon_max_width") + b.get_theme_constant("h_separation"))
+	var room: float = maxf(floorf((maxf(b.size.x, b.custom_minimum_size.x) - mark - w) * 0.5), 6.0)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var sb: StyleBox = b.get_theme_stylebox(k)
+		sb.content_margin_left = room
+		sb.content_margin_right = 4.0
 
 
 func _button(text: String, cb: Callable, min_size := Vector2(96, 64), size: int = 22) -> Button:
@@ -460,12 +490,13 @@ func _build_top() -> void:
 	line.add_theme_constant_override("separation", 8)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(line)
-	clock_label = _label("10:30", 26)
-	_bold(clock_label)
+	# 시안 .ftime: the time in Barlow 15 (semibold), the rest in Plex 12.
+	clock_label = _label("10:30", UiFonts.size(15))
+	clock_label.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 600))
 	line.add_child(clock_label)
-	day_label = _label("· 1일째", 20, HudSkin.INK2)
+	day_label = _label("· 1일째", UiFonts.size(12), HudSkin.INK2)
 	line.add_child(day_label)
-	weather_label = _label("· %s · −14℃" % game.weather.label(), 20, HudSkin.INK2)
+	weather_label = _label("· %s · −14℃" % game.weather.label(), UiFonts.size(12), HudSkin.INK2)
 	line.add_child(weather_label)
 	for l: Label in [clock_label, day_label, weather_label]:
 		l.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -478,12 +509,13 @@ func _build_top() -> void:
 		# state, and the stop's goals once they are opened (goal_shown).
 		var gp := _glass(14.0, 5.0)
 		tl.add_child(gp)
-		var mark := _icon_rect("compass", 20, HudSkin.GOAL)
+		var mark := _icon_rect("compass", 22, HudSkin.GOAL)
 		mark.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		gp.add_child(mark)
-		goal_label = _label(goal_shown(), 18, HudSkin.GOAL)
+		goal_label = _label(goal_shown(), UiFonts.size(12), HudSkin.GOAL)
+		goal_label.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 500))
 		var room := StyleBoxEmpty.new()
-		room.content_margin_left = 28
+		room.content_margin_left = 30
 		goal_label.add_theme_stylebox_override("normal", room)
 		gp.add_child(goal_label)
 		gp.visible = goal_label.text != ""
@@ -491,12 +523,12 @@ func _build_top() -> void:
 	# the state the train sends): one glass line, there only while there are any.
 	var pp := _glass(14.0, 5.0)
 	tl.add_child(pp)
-	var seal := _icon_rect("promise", 20, HudSkin.INK2)
+	var seal := _icon_rect("promise", 22, HudSkin.INK2)
 	seal.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	pp.add_child(seal)
-	promise_label = _label("", 18, HudSkin.INK2)
+	promise_label = _label("", UiFonts.size(12), HudSkin.INK2)
 	var gap := StyleBoxEmpty.new()
-	gap.content_margin_left = 28
+	gap.content_margin_left = 30
 	promise_label.add_theme_stylebox_override("normal", gap)
 	pp.add_child(promise_label)
 	set_promises(game_promises())
@@ -524,11 +556,27 @@ func _build_top() -> void:
 	radio_styles = [calm, hot]
 	radio_pill.add_theme_stylebox_override("panel", calm)
 	var rh := HBoxContainer.new()
-	rh.add_theme_constant_override("separation", 10)
+	rh.add_theme_constant_override("separation", int(UiFonts.px(7)))
 	rh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	radio_pill.add_child(rh)
-	rh.add_child(_icon_rect("radio", 28, HudSkin.INK2))
-	radio_label = _label("", 22, INK)
+	rh.add_child(_icon_rect("radio", int(UiFonts.px(16)), HudSkin.INK2))
+	# The set's crackle, letter by letter a little off its line, then the call
+	# in Plex 14 semibold (시안 .fradio).
+	radio_hiss = HBoxContainer.new()
+	radio_hiss.add_theme_constant_override("separation", 0)
+	radio_hiss.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for row: Array in HISS:
+		var c := Control.new()
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var l := UiFonts.label(row[0], UiFonts.WORD, 400, 12.0, Color(HudSkin.INK2.r, HudSkin.INK2.g, HudSkin.INK2.b, HudSkin.INK2.a * float(row[2])), 0.24)
+		l.position = Vector2(0, UiFonts.px(float(row[1])))
+		c.add_child(l)
+		c.custom_minimum_size = l.get_combined_minimum_size()
+		radio_hiss.add_child(c)
+	radio_hiss.add_child(UiFonts.label("…", UiFonts.WORD, 400, 12.0, HudSkin.INK2))
+	radio_hiss.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rh.add_child(radio_hiss)
+	radio_label = _label("", UiFonts.size(14), INK)
 	_bold(radio_label)
 	radio_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	radio_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -546,7 +594,15 @@ func _build_top() -> void:
 	root.add_child(tr)
 	for row in [["−", _zoom.bind(4.0), 64.0], ["+", _zoom.bind(-4.0), 64.0], ["D", _toggle_debug, 56.0]]:
 		var k := _button(row[0], row[1], Vector2(row[2], 56), 22)
-		_dress(k, "", Vector2(52, 52), true)
+		_dress(k, "", Vector2(46, 46), true)
+		# Quieter than the game's own keys (they are not in the 시안): smaller,
+		# no ring, faint glass and faint words.
+		for st in ["normal", "hover", "disabled"]:
+			var plate = k.get_theme_stylebox(st)
+			plate.ring = Color(0, 0, 0, 0)
+			plate.fill = Color(plate.fill.r, plate.fill.g, plate.fill.b, 0.32)
+		for c in ["font_color", "font_hover_color", "font_focus_color"]:
+			k.add_theme_color_override(c, HudSkin.INK3)
 		tr.add_child(k)
 
 
@@ -592,12 +648,12 @@ func _build_portrait() -> void:
 	wh.add_theme_constant_override("separation", 6)
 	wh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wp.add_child(wh)
-	weapon_label = _label("", 21, INK)
-	_bold(weapon_label)
+	# 시안 .fwpn: the weapon in Plex 13 semibold, its state 12 semibold.
+	weapon_label = UiFonts.label("", UiFonts.WORD, 600, 13.0, INK, 0.52)
 	wh.add_child(weapon_label)
-	cond_label = _label("", 19, HudSkin.GOOD)
+	cond_label = UiFonts.label("", UiFonts.WORD, 600, 12.0, HudSkin.GOOD, 0.24)
 	wh.add_child(cond_label)
-	ammo_label = _label("", 19, HudSkin.INK2)
+	ammo_label = UiFonts.label("", UiFonts.WORD, 400, 12.0, HudSkin.INK2)
 	wh.add_child(ammo_label)
 	# The floor and a blood-soaked coat, as small tags under the weapon; the
 	# chief's name is not written (the card is the chief's).
@@ -623,7 +679,7 @@ func _follow_portrait() -> void:
 ## A small glass tag holding one word; returns its label.
 func _tag(text: String, color: Color = HudSkin.INK2) -> Label:
 	var p := _glass(10.0, 2.0)
-	var l := _label(text, 16, color)
+	var l := _label(text, UiFonts.size(10.5), color)
 	p.add_child(l)
 	return l
 
@@ -636,30 +692,35 @@ func _build_allies() -> void:
 	allies_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	allies_box.add_theme_constant_override("separation", 10)
 	root.add_child(allies_box)
-	# Companion chips: glass, the name and weapon over the order and what they
-	# are at (시안 .fchip; the faces wait for the chips' own place, a morning call).
+	# Companion chips (시안 .fchip): glass, the face (it carries the body, as the
+	# chief's does, decision 293 ①), the name with the weapon in hand after it
+	# (H3), and under them the order and, if it is more, what they are at.
 	for p in game.squad:
 		if p == game.player:
 			continue
-		var b := _button(_ally_text(p, ""), _ally_menu.bind(p), Vector2(140, 76), 17)
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var b := _button("", _ally_menu.bind(p), Vector2(140, 76), 17)
 		_chip(b)
+		var row := {"p": p, "b": b}
+		_chip_face(b, row, ally_buttons.size())
 		allies_box.add_child(b)
-		ally_buttons.append({"p": p, "b": b})
+		ally_buttons.append(row)
 	crew_button = _button("작업조", work_panel, Vector2(110, 76), 17)
 	_chip(crew_button)
 	crew_button.visible = false
 	allies_box.add_child(crew_button)
 
 
-## A companion chip's glass; a pressed chip glows at its foot like a lamp.
+## A companion chip's glass pill; a pressed chip glows amber at its foot and
+## takes an amber ring (시안 .fchip.on).
 func _chip(b: Button) -> void:
 	var rest: StyleBoxFlat = HudSkin.glass(14.0, 6.0)
-	rest.set_corner_radius_all(26)
 	var lit: StyleBoxFlat = rest.duplicate()
-	lit.bg_color = Color(0.3, 0.2, 0.09, 0.78)
-	lit.border_color = HudSkin.LAMP2
+	lit.bg_color = Color(0.34, 0.23, 0.1, 0.8)
+	lit.border_color = HudSkin.HEED
 	lit.set_border_width_all(2)
+	lit.shadow_color = Color(HudSkin.GLOW.r, HudSkin.GLOW.g, HudSkin.GLOW.b, 0.4)
+	lit.shadow_size = 14
+	lit.shadow_offset = Vector2.ZERO
 	for k in ["normal", "hover", "focus"]:
 		b.add_theme_stylebox_override(k, rest)
 	for k in ["pressed", "hover_pressed"]:
@@ -668,6 +729,65 @@ func _chip(b: Button) -> void:
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(k, HudSkin.INK)
 	b.add_theme_constant_override("line_spacing", -2)
+
+
+## The inside of a companion's chip (시안 .fchip): the face 32 across, then the
+## name (13 semibold) with the weapon in hand after it, over the order (12).
+func _chip_face(b: Button, row: Dictionary, i: int) -> void:
+	var h := HBoxContainer.new()
+	h.set_anchors_preset(Control.PRESET_FULL_RECT)
+	h.offset_left = UiFonts.px(6)
+	h.offset_right = -UiFonts.px(8)
+	h.add_theme_constant_override("separation", int(UiFonts.px(6)))
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(h)
+	var f := PortraitFace.new()
+	f.kind = CHIP_KINDS[i % CHIP_KINDS.size()]
+	f.face_seed = 11 + i
+	f.custom_minimum_size = Vector2.ONE * CHIP_FACE
+	f.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(f)
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 0)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(v)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", int(UiFonts.px(4)))
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(top)
+	var who := UiFonts.label("", UiFonts.WORD, 600, 13.0, HudSkin.INK, 0.52)
+	var arm := UiFonts.label("", UiFonts.WORD, 400, 11.0, HudSkin.INK3)
+	arm.size_flags_vertical = Control.SIZE_SHRINK_END
+	var note := UiFonts.label("", UiFonts.WORD, 400, 12.0, HudSkin.INK2)
+	for l: Label in [who, arm, note]:
+		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	top.add_child(who)
+	top.add_child(arm)
+	v.add_child(note)
+	row["face"] = f
+	row["name"] = who
+	row["arm"] = arm
+	row["note"] = note
+
+
+## A chip as wide as its words, and those cut short past CHIP_WORDS_W.
+func _fit_chip(row: Dictionary) -> void:
+	var gap: float = UiFonts.px(4)
+	var name_w: float = _fit_word(row["name"], CHIP_WORDS_W)
+	var arm_w: float = _fit_word(row["arm"], CHIP_WORDS_W - name_w - gap)
+	var note_w: float = _fit_word(row["note"], CHIP_WORDS_W)
+	var words: float = maxf(name_w + gap + arm_w, note_w)
+	row["b"].custom_minimum_size.x = maxf(140.0, UiFonts.px(6) + CHIP_FACE + UiFonts.px(6) + words + UiFonts.px(8))
+
+
+## Give a label the width of its words, `room` at most; returns that width.
+func _fit_word(l: Label, room: float) -> float:
+	var w: float = ceilf(l.get_theme_font("font").get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, l.get_theme_font_size("font_size")).x)
+	w = minf(w, maxf(room, 0.0))
+	l.custom_minimum_size.x = w
+	return w
 
 
 ## Thumb pads (field_unified 10, user 17:15, coordinators 18:10-18:30). Right:
@@ -683,13 +803,14 @@ func _build_thumbs() -> void:
 	# the only one, so it takes the big place.
 	var one: bool = bool(game.opts.get("primary_one", false))
 	attack_button = _pad("공격", ATTACK_AT, ATTACK_SIZE, 20)
-	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 52)
+	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON)
 	aim_button = _pad("조준", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
 	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 48 if one else 30)
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 18)
 	_dress(manual_button, "", Vector2.ONE * 76.0, true)
-	shove_button = _pad("밀치기", SHOVE_AT, SHOVE_SIZE, 15)
-	_dress(shove_button, "shove", Vector2.ONE * 80.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 28)
+	# 시안 .fpad--shove: the mark 18, its word 12 under it.
+	shove_button = _pad("밀치기", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
+	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 32)
 	# Crouch: a round key on the right edge over attack (decision 293). It lights
 	# brass from inside while on.
 	var key := 11.0 * PX_PER_MM
@@ -698,17 +819,24 @@ func _build_thumbs() -> void:
 	crouch_button.tooltip_text = "웅크림"
 	# The situation pad and leaving are lamp pills with a brass rim (the lamp
 	# keys that are not round keep it, 시안 3절); dark ink on the light.
-	context_button = _pad("상황", CONTEXT_AT, Vector2(140, 84), 17)
-	_dress(context_button, "search", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 22)
-	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), 19)
-	_dress(depart_button, "train", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 24)
+	# Their word in Plex semibold, the mark and the word together in the middle
+	# (시안 .fpad--ctx: mark 17, word 13).
+	context_button = _pad("상황", CONTEXT_AT, Vector2(140, 84), PILL_FONT)
+	_dress(context_button, "search", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, PILL_ICON)
+	_bold(context_button)
+	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), PILL_FONT)
+	_dress(depart_button, "train", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, PILL_ICON)
+	_bold(depart_button)
+	_center_pill(depart_button)
 	depart_button.visible = false
 	# Every companion back to the train at one press (user 2026-10-11): under
 	# the companions' row, at its right end (tick puts it there). Glass by day;
 	# from dusk it burns like a lamp (시안 2차 11절).
-	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 17, Control.PRESET_TOP_LEFT)
+	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
 	all_aboard_styles = [HudSkin.key_styles(ALL_ABOARD_SIZE, false), HudSkin.key_styles(ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
-	_dress(all_aboard_button, "train", ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 20)
+	_dress(all_aboard_button, "train", ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 22)
+	all_aboard_button.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 500, 0.78))
+	_center_pill(all_aboard_button)
 	_place_allies()
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
@@ -730,7 +858,9 @@ func _build_thumbs() -> void:
 	# It sits at the portrait's right edge, clear of the stick: a lamp pill
 	# (tick keeps it there as the card widens with the weapon's words).
 	blood_button = _pad("지혈", PORTRAIT_AT + Vector2(PORTRAIT_W + 8.0, 0), Vector2(84, 64), 19, Control.PRESET_TOP_LEFT)
-	_dress(blood_button, "bandage", Vector2(84, 52), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 18)
+	_dress(blood_button, "bandage", Vector2(84, 52), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 20)
+	_bold(blood_button)
+	_center_pill(blood_button)
 	blood_button.visible = false
 	# State icons (user, build 47): press one and it says what it does to you.
 	for i in STATUS_SLOTS:
@@ -761,9 +891,11 @@ func _build_thumbs() -> void:
 	bag_box.position = PORTRAIT_AT + Vector2(0, 96)
 	bag_box.add_theme_constant_override("separation", 8)
 	root.add_child(bag_box)
-	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), 20)
+	# 시안 .finv: the mark 15, the weight in Barlow 14.
+	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), UiFonts.size(14))
 	bag_button.tooltip_text = "인벤토리"
-	_dress(bag_button, "inv", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 22)
+	_dress(bag_button, "inv", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 26)
+	bag_button.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 500))
 	bag_box.add_child(bag_button)
 	offer_box = HBoxContainer.new()
 	offer_box.set_anchors_preset(Control.PRESET_CENTER)
@@ -1074,20 +1206,22 @@ func _tick_urgent() -> void:
 	var st: Dictionary = all_aboard_styles[1 if urgent else 0]
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		all_aboard_button.add_theme_stylebox_override(k, st[k])
+	_center_pill(all_aboard_button)
 	var ink: Color = HudSkin.LAMP_INK if urgent else HudSkin.INK
 	for k in ["font_color", "font_hover_color", "font_focus_color", "icon_normal_color", "icon_hover_color", "icon_focus_color"]:
 		all_aboard_button.add_theme_color_override(k, ink)
 
 
 ## The attack pad shows what is in hand: an axe for a blade or a club, a gun
-## for a gun, only its word for bare hands.
+## for a gun (the mark alone, 시안 .fpad--atk), only its word for bare hands.
 func _tick_attack_icon(p) -> void:
 	var id: String = p.weapon_id()
 	var want: String = "" if id == "" else ("gun" if W.is_ranged(id) else "axe")
 	if want == attack_icon:
 		return
 	attack_icon = want
-	_set_icon(attack_button, want, 52)
+	attack_button.text = "공격" if want == "" else ""
+	_set_icon(attack_button, want, ATTACK_ICON)
 	if bool(game.opts.get("primary_one", false)):
 		_set_icon(aim_button, "aim" if want == "gun" else want, 48)
 
@@ -1225,14 +1359,28 @@ func _tick_allies() -> void:
 		for c in COMMANDS:
 			if c[0] == p.command:
 				cmd = command_word(c)
-		var word: String = p.body.status_words()
+		# The face shows the body (decision 293 ①); the words say only what a face
+		# cannot: held, down, dead, back on the train, or busy with something.
+		var doing := ""
 		if not p.grabbers.is_empty():
-			word = "잡힘!"
+			doing = "잡힘!"
+		elif not p.is_alive():
+			doing = "죽음"
+		elif p.body.downed:
+			doing = "쓰러짐"
 		elif p.brain.get("boarded", false):
-			word = "열차에"
+			doing = "열차에"
 		elif p.action != "":
-			word = p.action_label
-		b.text = _ally_text(p, "%s · %s" % [cmd, word])
+			doing = p.action_label
+		var note: String = doing if doing == "죽음" else (cmd if doing == "" else "%s · %s" % [cmd, doing])
+		var arm: String = short_weapon(p)
+		if row["name"].text != p.display_name or row["arm"].text != arm or row["note"].text != note:
+			row["name"].text = p.display_name
+			row["arm"].text = arm
+			row["note"].text = note
+			_fit_chip(row)
+		row["face"].show_body(p)
+		b.tooltip_text = _ally_text(p, "%s · %s" % [cmd, p.body.status_words()])
 		b.modulate = Color(1, 0.6, 0.55) if not p.grabbers.is_empty() or p.body.downed else (Color(0.6, 0.6, 0.6) if not p.is_alive() else Color.WHITE)
 	all_aboard_button.visible = not ally_buttons.is_empty()
 	_place_allies()
@@ -1312,7 +1460,7 @@ func _draw_says(view_size: Vector2) -> void:
 		var edge := Color(AMBER.r, AMBER.g, AMBER.b, a)
 		overlay.draw_rect(Rect2(Vector2.ZERO, Vector2(14, view_size.y)), edge)
 		overlay.draw_rect(Rect2(Vector2(view_size.x - 14, 0), Vector2(14, view_size.y)), edge)
-	var font: Font = theme.default_font
+	var font: Font = UiFonts.face(UiFonts.WORD, 600, 0.48)   # 시안 .fsay: Plex semibold
 	var taken: Array = []   # people standing together: the slips go one above another
 	var pad := Vector2(10, 4)
 	for s in says:
@@ -1342,7 +1490,7 @@ func _draw_says(view_size: Vector2) -> void:
 		overlay.draw_set_transform(mid, deg_to_rad(-2.0), Vector2.ONE)
 		var slip := Rect2(-box.size * 0.5, box.size)
 		overlay.draw_rect(Rect2(slip.position + Vector2(1, 2), slip.size), Color(0, 0, 0, 0.45 * a))
-		overlay.draw_rect(slip, Color(HudSkin.PAPER.r, HudSkin.PAPER.g, HudSkin.PAPER.b, a))
+		HudSkin.draw_paper(overlay, slip, a)
 		var y: float = slip.position.y + pad.y
 		for row in rows:
 			y += float(row[1])
@@ -1395,11 +1543,17 @@ func _rebuild_context(p) -> void:
 	if context_rows.is_empty():
 		return
 	var more: int = context_rows.size() - 1
-	context_button.text = String(context_rows[0]["label"]) + ("\n+%d (누르고 있기)" % more if more > 0 else "")
+	var text: String = String(context_rows[0]["label"]) + ("\n+%d (누르고 있기)" % more if more > 0 else "")
 	var icon: String = HudIcons.context_icon(String(context_rows[0]["label"]))
+	if text == context_button.text and icon == context_icon:
+		return
+	context_button.text = text
+	# Two lines go a size smaller, so the pad keeps to its touch rect.
+	context_button.add_theme_font_size_override("font_size", PILL_FONT - 4 if more > 0 else PILL_FONT)
 	if icon != context_icon:
 		context_icon = icon
-		_set_icon(context_button, icon, 22, true)
+		_set_icon(context_button, icon, PILL_ICON, true)
+	_center_pill(context_button)
 
 
 func _context_tap() -> void:
@@ -1438,11 +1592,13 @@ func toast(text: String, kind: String = TOAST_NORMAL) -> void:
 	if kind == TOAST_WARN:
 		_toast_warn(text)
 		return
-	# A paper slip, a little askew (시안 .ftoast); a long note wraps.
-	var l := _label(text, 19, HudSkin.PAPER_INK)
-	l.add_theme_stylebox_override("normal", HudSkin.paper(12.0, 5.0))
+	# A paper slip with its fibre, a little askew (시안 .ftoast, Plex 12); a long
+	# note wraps.
+	var l := _label(text, UiFonts.size(12), HudSkin.PAPER_INK)
+	l.add_theme_stylebox_override("normal", HudSkin.slip(UiFonts.px(10), 5.0))
+	l.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	l.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	if theme.default_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x > TOAST_W:
+	if theme.default_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiFonts.size(12)).x > TOAST_W:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = TOAST_W
 	l.rotation = deg_to_rad(-1.2 if toasts.size() % 2 == 0 else 0.8)
@@ -1495,9 +1651,17 @@ func _toast_drop(entry: Dictionary) -> void:
 func radio(text: String) -> void:
 	if radio_label == null:
 		return
-	radio_label.text = text
+	# The crackle is drawn before every call, so a call that is only crackle
+	# (the set hisses before it speaks) shows the crackle alone, and one that
+	# could not be made out keeps only its own words after it.
+	var words: String = text
+	if text.begins_with(HISS_TEXT):
+		words = text.substr(HISS_TEXT.length()).lstrip("… ")
+	radio_label.text = words if words != "" else text
+	radio_label.visible = words != ""
 	# A long call wraps onto a second line rather than run off the screen.
-	var long: bool = theme.default_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x > RADIO_W
+	var font: Font = radio_label.get_theme_font("font")
+	var long: bool = font.get_string_size(radio_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, radio_label.get_theme_font_size("font_size")).x > RADIO_W
 	radio_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if long else TextServer.AUTOWRAP_OFF
 	radio_label.custom_minimum_size.x = RADIO_W if long else 0.0
 	radio_pill.reset_size()
@@ -2913,17 +3077,15 @@ func _draw_overlay() -> void:
 	# Walk target.
 	if p.moving and not p.path.is_empty() and dest_marker != Vector3.INF:
 		overlay.draw_arc(_project(dest_marker), 10.0, 0, TAU, 20, Color(1, 1, 1, 0.5), 2.0)
-	# The stick under the left thumb: base ring and knob (rim = run).
-	# The fixed one stays drawn faintly where it is; the floating one only while held.
+	# The stick under the left thumb (시안 .fstick): its ring and the knob in it,
+	# which follows the thumb (the rim = run). The fixed one stays where it is,
+	# the knob resting in its middle; the floating one is there only while held.
 	var fixed := not stick_floats()
 	if fixed or stick_index >= 0:
 		var base := stick_home() if fixed else stick_origin
-		overlay.draw_arc(base, STICK_R, 0, TAU, 40, Color(1, 1, 1, 0.28 if stick_index >= 0 else 0.14), 3.0)
-		if stick_index >= 0:
-			var knob := base + (stick_at - base).limit_length(STICK_R)
-			overlay.draw_circle(knob, 26.0, Color(1, 1, 1, 0.35 if not p.running else 0.55))
-		else:
-			overlay.draw_circle(base, 8.0, Color(1, 1, 1, 0.14))
+		var held: bool = stick_index >= 0
+		var knob: Vector2 = base + ((stick_at - base).limit_length(STICK_R) if held else Vector2.ZERO)
+		HudSkin.draw_stick(overlay, base, knob, STICK_RING, STICK_KNOB, held, p.running)
 	# Sharp shooters see the dangerous ones marked while aiming (not chosen for them).
 	if auto_aim and int(p.skills.get("shooting", 0)) >= 7:
 		for z in game.zombies.list:
@@ -3050,8 +3212,22 @@ func _draw_moans() -> void:
 		var v := Vector2(cos(a), sin(a))
 		var near := 1.0 - float(marks[o]) / MOAN_R
 		var col := Color(OMEN_COL.r, OMEN_COL.g, OMEN_COL.b, 0.35 + 0.5 * near)
-		overlay.draw_arc(me, 92.0, a - 0.28, a + 0.28, 10, col, 3.0)
-		overlay.draw_string(theme.default_font, me + v * 112.0 - Vector2(16, -6), "신음", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, col)
+		# 시안 .fmoan: a bone stroke with a dark edge, its word in Plex 12 with a
+		# shadow, so both read on snow.
+		overlay.draw_arc(me, 92.0, a - 0.28, a + 0.28, 12, Color(0, 0, 0, 0.5 * col.a), 6.0, true)
+		overlay.draw_arc(me, 92.0, a - 0.28, a + 0.28, 12, col, 4.0, true)
+		_shadowed_word("신음", me + v * 120.0, col)
+
+
+## A word on the world, centred on `at`, with a dark shadow round it (시안
+## .fmoan span, .fedge: Plex 12, wide apart).
+func _shadowed_word(text: String, at: Vector2, col: Color) -> void:
+	var f: Font = UiFonts.face(UiFonts.WORD, 500, 1.2)
+	var fs: int = UiFonts.size(12)
+	var w: float = f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var base: Vector2 = at + Vector2(-w * 0.5, fs * 0.36)
+	overlay.draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 6, Color(0, 0, 0, 0.72 * col.a))
+	overlay.draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
 func _edge_arrow(center: Vector2, view_size: Vector2, at: Vector3, text: String) -> void:
@@ -3066,5 +3242,10 @@ func _edge_arrow(center: Vector2, view_size: Vector2, at: Vector3, text: String)
 	var tip := center + dir * t
 	var side := Vector2(-dir.y, dir.x)
 	var col := OMEN_COL
-	overlay.draw_colored_polygon(PackedVector2Array([tip + dir * 14.0, tip - dir * 8.0 + side * 10.0, tip - dir * 8.0 - side * 10.0]), col)
-	overlay.draw_string(theme.default_font, tip - dir * 30.0 - Vector2(24, -6), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+	var head := PackedVector2Array([tip + dir * 14.0, tip - dir * 8.0 + side * 10.0, tip - dir * 8.0 - side * 10.0])
+	var shade := PackedVector2Array()
+	for q in head:
+		shade.append(q + (q - tip).normalized() * 2.0 + Vector2(0, 1))
+	overlay.draw_colored_polygon(shade, Color(0, 0, 0, 0.6))
+	overlay.draw_colored_polygon(head, col)
+	_shadowed_word(text, tip - dir * 40.0, col)

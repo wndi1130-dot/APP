@@ -35,8 +35,19 @@ const PAPER := Color("cdc2a8")
 const PAPER_INK := Color("231a12")
 const GLOW := Color(242 / 255.0, 160 / 255.0, 50 / 255.0, 0.42)
 const PRESS_SINK: float = 2.0
+## The paper's fibre (--tx-paper), a tile 240 시안 px across.
+const PAPER_TEX := preload("res://game/ui/tex/paper.png")
+const PAPER_TILE: float = 240.0 * 720.0 / 390.0
+## 시안 px → game px (ui_fonts.gd K).
+const K: float = 720.0 / 390.0
+## The stick's knob (시안 --med): dark enamel with a light at its top left.
+const KNOB_LIGHT := Color("323a43")
+const KNOB_DARK := Color("0c1014")
 
 enum Light { NONE, LAMP, BRASS }
+
+static var _stick_bed: ImageTexture
+static var _stick_knob: ImageTexture
 
 
 ## A glass pill: smoked glass, a faint light along its top, a soft shadow on the snow.
@@ -69,6 +80,94 @@ static func paper(pad_x: float = 12.0, pad_y: float = 5.0) -> StyleBoxFlat:
 	sb.content_margin_top = pad_y
 	sb.content_margin_bottom = pad_y
 	return sb
+
+
+## A paper slip with its fibre on it (시안 .ftoast: --tx-paper on --paper). The
+## control that shows it repeats textures (CanvasItem.TEXTURE_REPEAT_ENABLED).
+static func slip(pad_x: float = 12.0, pad_y: float = 5.0) -> StyleBox:
+	var sb := Slip.new()
+	sb.content_margin_left = pad_x
+	sb.content_margin_right = pad_x
+	sb.content_margin_top = pad_y
+	sb.content_margin_bottom = pad_y
+	return sb
+
+
+## Paper and its fibre over `rect` on `ci` (a control drawing itself).
+static func draw_paper(ci: CanvasItem, rect: Rect2, alpha: float = 1.0) -> void:
+	ci.draw_rect(rect, Color(PAPER.r, PAPER.g, PAPER.b, alpha))
+	ci.draw_polygon(_corners(rect), PackedColorArray([Color(1, 1, 1, alpha)]), _paper_uv(rect), PAPER_TEX)
+
+
+static func _corners(rect: Rect2) -> PackedVector2Array:
+	return PackedVector2Array([rect.position, Vector2(rect.end.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)])
+
+
+static func _paper_uv(rect: Rect2) -> PackedVector2Array:
+	var uvs := PackedVector2Array()
+	for p in _corners(rect):
+		uvs.append(p / PAPER_TILE)
+	return uvs
+
+
+class Slip extends StyleBox:
+	func _draw(to_canvas_item: RID, rect: Rect2) -> void:
+		var rs := RenderingServer
+		# 0 2px 4px rgba(0,0,0,.45): a soft shadow a little low.
+		for i in 3:
+			var g: float = float(3 - i)
+			rs.canvas_item_add_rect(to_canvas_item, Rect2(rect.position + Vector2(-g * 0.5, 2.0 - g * 0.5), rect.size + Vector2(g, g)), Color(0, 0, 0, 0.15))
+		rs.canvas_item_add_rect(to_canvas_item, rect, PAPER)
+		var pts := PackedVector2Array([rect.position, Vector2(rect.end.x, rect.position.y), rect.end, Vector2(rect.position.x, rect.end.y)])
+		var uvs := PackedVector2Array()
+		for p in pts:
+			uvs.append(p / PAPER_TILE)
+		rs.canvas_item_add_polygon(to_canvas_item, pts, PackedColorArray([Color.WHITE]), uvs, PAPER_TEX.get_rid())
+
+
+## The stick (시안 .fstick): a ring of smoked glass that darkens toward its
+## edge, a dark knob in it with a light at its top left and one even ring (lamp
+## light while running). `held`: a thumb is on it.
+static func draw_stick(ci: CanvasItem, base: Vector2, knob: Vector2, ring_r: float, knob_r: float, held: bool, running: bool) -> void:
+	ci.draw_texture_rect(_bed(), Rect2(base - Vector2.ONE * ring_r, Vector2.ONE * ring_r * 2.0), false)
+	ci.draw_arc(base, ring_r - 1.5 * K, 0.0, TAU, 72, Color(INK.r, INK.g, INK.b, 0.5 if held else 0.34), 3.0 * K, true)
+	# 0 2px 5px rgba(0,0,0,.5) under the knob.
+	ci.draw_texture_rect(Plate.blob(), Rect2(knob - Vector2.ONE * knob_r * 1.3 + Vector2(0, 2.0 * K), Vector2.ONE * knob_r * 2.6), false, Color(0, 0, 0, 0.5))
+	ci.draw_texture_rect(_knob(), Rect2(knob - Vector2.ONE * knob_r, Vector2.ONE * knob_r * 2.0), false)
+	ci.draw_arc(knob, knob_r - 1.0 * K, 0.0, TAU, 56, LAMP2 if running else RING, 2.0 * K, true)
+
+
+## The ring's glass: radial-gradient(circle, fg .14, fg .32) out to the box's
+## corner, so .27 at the rim; nothing outside it.
+static func _bed() -> ImageTexture:
+	if _stick_bed == null:
+		var n := 128
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for y in n:
+			for x in n:
+				var d: float = Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5).length() / (n * 0.5)
+				var a: float = lerpf(0.14, 0.32, d / sqrt(2.0)) * clampf((1.0 - d) * n * 0.5, 0.0, 1.0)
+				img.set_pixel(x, y, Color(GLASS.r, GLASS.g, GLASS.b, a))
+		_stick_bed = ImageTexture.create_from_image(img)
+	return _stick_bed
+
+
+## The knob: radial-gradient(circle at 36% 26%, #323a43, #0c1014 72%) in a disc.
+static func _knob() -> ImageTexture:
+	if _stick_knob == null:
+		var n := 96
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var light := Vector2(0.36, 0.26) * n
+		var reach: float = Vector2(0.64, 0.74).length() * n * 0.72
+		for y in n:
+			for x in n:
+				var p := Vector2(x + 0.5, y + 0.5)
+				var d: float = (p - Vector2.ONE * n * 0.5).length() / (n * 0.5)
+				var c: Color = KNOB_LIGHT.lerp(KNOB_DARK, clampf(p.distance_to(light) / reach, 0.0, 1.0))
+				c.a = clampf((1.0 - d) * n * 0.5, 0.0, 1.0)
+				img.set_pixel(x, y, c)
+		_stick_knob = ImageTexture.create_from_image(img)
+	return _stick_knob
 
 
 ## The four looks of a key or pad, inside its touch rect: `seen` is the size
