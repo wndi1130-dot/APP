@@ -4,7 +4,7 @@ extends SceneTree
 ## plus a text drawing of the grid and a row of measurements for review.
 ##
 ## Needs a real renderer, so run it without --headless:
-##   godot --path s2 -s res://tools/map_preview.gd -- --out=<folder> <map.gd> [<map.gd> ...]
+##   godot --path s2 -s res://tools/map_preview.gd -- --stats --out=<folder> <map.gd> [<map.gd> ...]
 ## A map path may be res:// or a path on disk (a map in another checkout).
 ##
 ## Per map (<id> is its place_id, or the file name when there is none):
@@ -32,6 +32,7 @@ const PHONE_SCALE: int = 2
 const MAX_SIDE: int = 2600
 ## Keys the map contract adds to the base map's.
 const EXTRA_KEYS: Array[String] = ["place_id", "place_kind", "bands", "train_doors", "crossings", "barricade_slots", "interior_kind_slots"]
+const OPTIONAL_KEYS: Array[String] = ["props"]
 const MARKS: Dictionary = {
 	"band": Color(0.2, 0.55, 1.0), "entry": Color(1.0, 0.15, 0.15), "barricade": Color(1.0, 0.6, 0.1),
 	"train_door": Color(0.2, 0.9, 0.3), "crossing": Color(0.2, 0.9, 0.9), "unseen_block": Color(1.0, 0.1, 0.9),
@@ -44,6 +45,8 @@ var viewport: SubViewport
 var camera: Camera3D
 var sun: DirectionalLight3D
 var failed: bool = false
+var stats: bool = false
+var map_view: Node3D
 
 
 func _initialize() -> void:
@@ -54,12 +57,14 @@ func _run() -> void:
 	var out := ""
 	var maps: Array[String] = []
 	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--out="):
+		if arg == "--stats":
+			stats = true
+		elif arg.begins_with("--out="):
 			out = arg.trim_prefix("--out=")
 		else:
 			maps.append(arg)
 	if out == "" or maps.is_empty():
-		printerr("usage: -- --out=<folder> <map.gd> [<map.gd> ...]")
+		printerr("usage: -- [--stats] --out=<folder> <map.gd> [<map.gd> ...]")
 		quit(2)
 		return
 	DirAccess.make_dir_recursive_absolute(out)
@@ -121,6 +126,7 @@ func _preview(path: String, out: String) -> void:
 		failed = true
 		return
 	var view := MapView.new()
+	map_view = view
 	viewport.add_child(view)
 	view.setup(data)
 	view.set_mask_enabled(false)
@@ -147,6 +153,7 @@ func _preview(path: String, out: String) -> void:
 	if not squad.is_empty():
 		await _shoot_phone(FieldGrid.center(squad[0]), out.path_join(id + "_start.png"))
 	view.queue_free()
+	map_view = null
 	marks.queue_free()
 	await process_frame
 	print("map_preview: %s done" % id)
@@ -171,9 +178,15 @@ func _take(focus: Vector3, size: float, pixels: Vector2i, file: String) -> void:
 	viewport.size = pixels
 	camera.size = size
 	camera.look_at_from_position(focus + Vector3(0, sin(pitch), cos(pitch)) * CAM_BACK, focus, Vector3.UP)
+	map_view.refresh_props(camera)
 	for k in range(3):
 		await process_frame
 	await RenderingServer.frame_post_draw
+	if stats:
+		# 지금 찍는 뷰포트의 보이는 패스. 지도 전체의 삼각형 합이나 그림자 패스가 아니다.
+		var triangles := RenderingServer.viewport_get_render_info(viewport.get_viewport_rid(), RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE)
+		var calls := RenderingServer.viewport_get_render_info(viewport.get_viewport_rid(), RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE)
+		print("map_preview_stats file=%s triangles=%d draw_calls=%d pixels=%dx%d" % [file.get_file(), triangles, calls, pixels.x, pixels.y])
 	var image := viewport.get_texture().get_image()
 	if image == null or image.save_png(file) != OK:
 		printerr("map_preview: could not save %s" % file)
@@ -245,7 +258,7 @@ func _measure(data: Dictionary, script: Variant) -> Dictionary:
 	report["missing_keys"] = missing
 	var extra: Array = []
 	for key in data:
-		if not base_keys.has(key) and not EXTRA_KEYS.has(key):
+		if not base_keys.has(key) and not EXTRA_KEYS.has(key) and not OPTIONAL_KEYS.has(key):
 			extra.append(key)
 	report["unknown_keys"] = extra
 	var need: Array = []
