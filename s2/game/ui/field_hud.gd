@@ -2057,6 +2057,8 @@ func _all_aboard() -> void:
 
 func _command(p, cmd: String, close: bool = true) -> void:
 	p.command = cmd
+	# Said back to the chief (ally_lines.gd); the retreat is said as they turn (field_ai.gd).
+	game.shout(p, "order_" + cmd)
 	p.brain["boarded"] = false
 	p.target_zombie = {}
 	p.aim.stop()

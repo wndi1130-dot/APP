@@ -8,6 +8,7 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
+const AllyLines = preload("res://game/sim/ally_lines.gd")
 
 
 func _game(extra: Dictionary = {}):
@@ -333,7 +334,7 @@ func test_the_last_call_counts_three_and_leaves_behind_whoever_missed_it() -> vo
 	assert_true(late.brain.get("left_behind", false), "for the protest motion to read")
 	var shouted: Array = game.hud.says.filter(func(s): return s["p"] == late)
 	assert_eq(shouted.size(), 1)
-	assert_eq(String(shouted[0]["line"]), "나도 데리고가 시발새끼들아!!")
+	assert_has(AllyLines.lines_for("left_platform", AllyLines.voice_of(late.pid), String(game.lines.rel_of[late.pid])), String(shouted[0]["line"]))
 	assert_true(game.receipt.to_dict()["people"]["leftBehind"].has(late.pid))
 	assert_true(h.end_lines().has("남기고 온 사람 1 · 신임 −12"))
 	assert_true(h.end_lines().has("선로 비었다 · 떠나는 값: 쟁기 부품 0 · 덜 된 채비로 석탄 +10, 부품 +2"))
