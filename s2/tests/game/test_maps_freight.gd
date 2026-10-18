@@ -27,7 +27,11 @@ const KINDS = [
 	"pit_rail_pair", "platform_cart", "weigh_platform", "dock_platform", "jib_crane", "forklift", "tool_cart",
 	"part_crate", "conductor_log_chest", "file_cabinet", "bridge_truss", "mooring_post", "water_gauge",
 	"frozen_barge", "lock_wheel", "sluice_frame", "quay_crane", "rope_coil", "reed_clump", "bare_tree", "snow_drift",
+	# 북쪽 구역에서 이미 쓰는 일곱 종류. 공용 종류 표에 올릴 후보다.
 	"log_pile", "lumber_rack", "grain_silo", "cable_drum", "transformer_unit", "medicine_crate", "plate_stack",
+]
+const CONTAINER_SUFFIXES: Array[String] = [
+	"상자", "보관함", "묶음", "선반", "자재함", "궤", "찬장", "공구함", "책상", "침대", "옷장",
 ]
 const STEP: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var built: Array[Dictionary] = []
@@ -703,6 +707,8 @@ func test_south_is_shifted_exactly_except_declared_repairs() -> void:
 	for i in range(MAPS.size()):
 		var original: Dictionary = MAPS[i]._build_south(false)
 		var data: Dictionary = built[i]
+		for c in _cells(Rect2i(0, 49, 16, 6)):
+			assert_eq(data["grid"].floor_at(c), FieldGrid.Floor.ROAD, data["place_id"] + " 서쪽 길")
 		var exceptions: Dictionary = {}
 		for a in MAPS[i].SOUTH_REPAIRS["changed"]:
 			for c in _cells(Rect2i(a[0], a[1], a[2], a[3])):
@@ -760,6 +766,157 @@ func test_entry_names_weights_and_first_entry() -> void:
 			assert_false(_roman_or_han(box_name), box_name)
 		for z in d.get("zone_names", {}):
 			assert_false(_roman_or_han(String(d["zone_names"][z])), String(d["zone_names"][z]))
+
+
+## 소품이 WALL/LOW를 덮어쓴 뒤의 격자만 보면 가려진 칸막이를 놓친다.
+## 원 배치의 벽을 먼저 모으고, 열린 틈과 문을 빼서 따로 검사한다.
+func _assembly_structure(map_script: Script) -> Dictionary:
+	var walls: Dictionary = {}
+	var constants: Dictionary = map_script.get_script_constant_map()
+	for part in range(2):
+		var plan: Dictionary = constants["PLAN"] if part == 0 else constants["NORTH_PLAN"]
+		var dy: int = 45 if part == 0 else 0
+		for row in plan["shells"]:
+			var r := Rect2i(row[2], row[3] + dy, row[4], row[5])
+			for c in _cells(r):
+				var key := Vector3i(c.x, c.y, int(row[1]))
+				if c.x == r.position.x or c.x == r.end.x - 1 or c.y == r.position.y or c.y == r.end.y - 1:
+					walls[key] = true
+				else:
+					walls.erase(key)
+		for row in plan["walls"]:
+			for c in _cells(Rect2i(row[1], row[2] + dy, row[3], row[4])):
+				walls[Vector3i(c.x, c.y, int(row[0]))] = true
+		for row in plan["openings"]:
+			for c in _cells(Rect2i(row[1], row[2] + dy, row[3], row[4])):
+				walls.erase(Vector3i(c.x, c.y, int(row[0])))
+		for row in plan["windows"]:
+			walls[Vector3i(row[1], row[2] + dy, int(row[0]))] = true
+		for row in plan["doors"]:
+			walls.erase(Vector3i(row[1], row[2] + dy, int(row[0])))
+	return walls
+
+
+func _assembly_reserved(data: Dictionary, walls: Dictionary) -> Dictionary:
+	var reserved: Dictionary = walls.duplicate()
+	for c: Vector2i in _protected(data):
+		reserved[Vector3i(c.x, c.y, 0)] = true
+	for lv in data["levels"]:
+		var g: FieldGrid = data["levels"][lv]
+		for c: Vector2i in g.windows:
+			reserved[Vector3i(c.x, c.y, lv)] = true
+		for c: Vector2i in g.doors:
+			var normal := Vector2i.RIGHT
+			if g.solid_at(c + Vector2i.LEFT) in [S.WALL, S.WINDOW] or g.solid_at(c + Vector2i.RIGHT) in [S.WALL, S.WINDOW]:
+				normal = Vector2i.DOWN
+			for k in range(-1, 2):
+				var front: Vector2i = c + normal * k
+				reserved[Vector3i(front.x, front.y, lv)] = true
+		# 객차·기관고의 닫히지 않는 출입 틈도 문과 그 앞 한 칸으로 센다.
+		for building in data["buildings"]:
+			var r: Rect2i = building["rect"]
+			for c in _cells(r):
+				if c.x != r.position.x and c.x != r.end.x - 1 and c.y != r.position.y and c.y != r.end.y - 1:
+					continue
+				var key := Vector3i(c.x, c.y, lv)
+				if g.building_at(c) != int(building["id"]) or walls.has(key) or g.doors.has(c) or g.windows.has(c):
+					continue
+				reserved[key] = true
+				for step in STEP:
+					reserved[Vector3i(c.x + step.x, c.y + step.y, lv)] = true
+	for st in data["stairs"]:
+		for lv in [int(st["low"]), int(st["high"])]:
+			reserved[Vector3i(st["cell"].x, st["cell"].y, lv)] = true
+	for id in data["entries"]:
+		for c: Vector2i in data["entries"][id]:
+			reserved[Vector3i(c.x, c.y, int(data["entry_levels"].get(id, 0)))] = true
+	for group in data["spawns"].values():
+		for spawn in group:
+			if spawn is Vector2i:
+				reserved[Vector3i(spawn.x, spawn.y, 0)] = true
+			elif spawn is Dictionary and spawn.has("cell"):
+				reserved[Vector3i(spawn["cell"].x, spawn["cell"].y, int(spawn.get("level", 0)))] = true
+	for box in data["containers"].values():
+		reserved[Vector3i(box["cell"].x, box["cell"].y, int(box.get("level", 0)))] = true
+	for stove in data["stoves"]:
+		reserved[Vector3i(stove["cell"].x, stove["cell"].y, int(stove.get("level", 0)))] = true
+	return reserved
+
+
+func test_assembly_props_leave_cells_and_passages_clear() -> void:
+	for i in range(built.size()):
+		var data: Dictionary = built[i]
+		var walls: Dictionary = _assembly_structure(MAPS[i])
+		var reserved: Dictionary = _assembly_reserved(data, walls)
+		var occupied: Dictionary = {}
+		var low_cells: Dictionary = {}
+		for r: Rect2i in data["low_blocks"]:
+			for c in _cells(r):
+				low_cells[c] = true
+		var conflicts: int = 0
+		var overlaps: int = 0
+		var missing_low: int = 0
+		var corridors: int = 0
+		for pr in data["props"]:
+			var lv: int = int(pr.get("level", 0))
+			var g: FieldGrid = data["levels"][lv]
+			for c in _cells(pr["rect"]):
+				var key := Vector3i(c.x, c.y, lv)
+				# wall 소품 자체의 WALL은 허용하되 원래 건물 벽과의 겹침은 허용하지 않는다.
+				if reserved.has(key) or (g.solid_at(c) == S.WALL and pr["solid"] != "wall"):
+					conflicts += 1
+				if occupied.has(key):
+					overlaps += 1
+				occupied[key] = true
+				# 물은 지형이며 기존 시험대로 low_blocks에 넣지 않는다.
+				if pr["solid"] == "low" and pr["kind"] != "water":
+					if lv != 0 or not low_cells.has(c):
+						missing_low += 1
+				if (walls.has(key + Vector3i.LEFT) and walls.has(key + Vector3i.RIGHT)) or (walls.has(key + Vector3i.UP) and walls.has(key + Vector3i.DOWN)):
+					corridors += 1
+		assert_eq(conflicts, 0, data["place_id"] + " 벽·출입·계단·수납 겹침")
+		assert_eq(overlaps, 0, data["place_id"] + " 소품끼리 겹침")
+		assert_eq(missing_low, 0, data["place_id"] + " 낮은 소품 대응")
+		assert_eq(corridors, 0, data["place_id"] + " 한 칸 복도")
+
+
+func test_assembly_wall_building_ids_stay_inside_rects() -> void:
+	for data in built:
+		var rects: Dictionary = {}
+		for building in data["buildings"]:
+			rects[int(building["id"])] = building["rect"]
+		var outside: int = 0
+		for lv in data["levels"]:
+			var g: FieldGrid = data["levels"][lv]
+			for y in range(g.height):
+				for x in range(g.width):
+					var c := Vector2i(x, y)
+					var id: int = g.building_at(c)
+					if g.solid_at(c) == S.WALL and id >= 0:
+						if not rects.has(id) or not rects[id].has_point(c):
+							outside += 1
+		assert_eq(outside, 0, data["place_id"] + " 건물 밖 벽 번호")
+
+
+func test_assembly_container_names_have_model_suffixes() -> void:
+	for data in built:
+		var invalid: Array[String] = []
+		for box in data["containers"].values():
+			var matched: bool = false
+			for suffix in CONTAINER_SUFFIXES:
+				matched = matched or String(box["name"]).ends_with(suffix)
+			if not matched:
+				invalid.append(String(box["id"]))
+		assert_true(invalid.is_empty(), data["place_id"] + " " + str(invalid))
+
+
+func test_assembly_prop_kinds_match_order_and_listed_candidates() -> void:
+	for data in built:
+		var invalid: Dictionary = {}
+		for pr in data["props"]:
+			if not KINDS.has(pr["kind"]):
+				invalid[pr["kind"]] = true
+		assert_true(invalid.is_empty(), data["place_id"] + " " + str(invalid.keys()))
 
 
 func _roman_or_han(text: String) -> bool:

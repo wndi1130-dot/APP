@@ -1324,6 +1324,9 @@ static func _repair_south_plan(plan: Dictionary) -> void:
 	for prop in SOUTH_REPAIRS["append"]:
 		plan["props"].append(prop.duplicate(true))
 	plan["work_site"] = SOUTH_REPAIRS["work_site"].duplicate(true)
+	# 서쪽 승강장 곁 길을 북쪽 길과 같은 폭으로 잇는다.
+	for row in SOUTH_REPAIRS["floors"]:
+		plan["floors"].append(row.duplicate())
 
 
 static func _add_north(data: Dictionary) -> void:
@@ -1966,9 +1969,50 @@ const SOUTH_REPAIRS: Dictionary = {
       "facing": 0,
       "note": "길가 마른 나무",
       "level": 0
+    },
+    "15": {
+      "kind": "shelf",
+      "rect": [
+        62,
+        82,
+        3,
+        1
+      ],
+      "solid": "low",
+      "facing": 0,
+      "note": "기관고 기관고 칸 가 선반",
+      "level": 0
+    },
+    "24": {
+      "kind": "shelf",
+      "rect": [
+        76,
+        79,
+        3,
+        1
+      ],
+      "solid": "low",
+      "facing": 0,
+      "note": "기관고 기관고 칸 라 선반",
+      "level": 0
+    },
+    "27": {
+      "kind": "shelf",
+      "rect": [
+        81,
+        79,
+        3,
+        1
+      ],
+      "solid": "low",
+      "facing": 0,
+      "note": "기관고 기관고 칸 마 선반",
+      "level": 0
     }
   },
-  "remove": [],
+  "remove": [
+    10
+  ],
   "append": [],
   "work_site": {
     "cell": [
@@ -2329,6 +2373,58 @@ const SOUTH_REPAIRS: Dictionary = {
       108,
       98,
       1,
+      1
+    ],
+    [
+      0,
+      4,
+      16,
+      6
+    ],
+    [
+      61,
+      82,
+      3,
+      1
+    ],
+    [
+      62,
+      82,
+      3,
+      1
+    ],
+    [
+      76,
+      78,
+      3,
+      1
+    ],
+    [
+      76,
+      79,
+      3,
+      1
+    ],
+    [
+      81,
+      78,
+      3,
+      1
+    ],
+    [
+      81,
+      79,
+      3,
+      1
+    ]
+  ],
+  "floors": [
+    [
+      0,
+      0,
+      4,
+      16,
+      6,
       1
     ]
   ]
