@@ -78,6 +78,22 @@ func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
 	assert_not_null(f.panel.find_child("Receipt", true, false))
 
 
+func test_the_special_session_is_the_session_card_and_closing_it_goes_on() -> void:
+	var f = _flow()
+	f.go(f._index_of("council"))
+	assert_eq(f.current(), "council")
+	assert_not_null(f.card, "the session card stands in for the panel")
+	assert_eq(String(f.card.name), "CouncilCard")
+	assert_false(f.panel.visible)
+	assert_false(f.weather.visible or f.frost.visible or f.film.visible, "the dining car is the room behind it, no snow")
+	assert_eq(f.gauges.g, f.card.g, "the gauges read the session's state")
+	assert_eq(f.gauges.focus, ["trust", "mood", "food", "lux"])
+	f.card.cast()
+	f.card.close()
+	assert_eq(f.current(), "travel", "closed: on to the next stretch")
+	assert_eq(f.gauges.g, f.train_g, "the slice's own state again")
+
+
 func test_the_boot_menu_has_the_slice_key() -> void:
 	var boot = Boot.new()
 	add_child_autofree(boot)

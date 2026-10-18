@@ -17,6 +17,10 @@ uniform float cut = 24.0;
 uniform vec2 tear = vec2(25.8, 443.0);
 uniform vec4 paper = vec4(0.804, 0.761, 0.659, 1.0);
 uniform bool shadow = false;
+// A sheet off a pad has the darker bands down its sides and the fold; a loose
+// slip (the session's bill, c3.css .bill) has neither, only the paper's shade.
+uniform bool bands = true;
+uniform bool fold = true;
 // Shadow mode: how far this rect reaches past the sheet on each side, and the blur.
 uniform float reach = 40.0;
 uniform float sigma = 12.9;
@@ -60,9 +64,9 @@ void fragment() {
 		float len = abs(sheet_size.x * dir.x) + abs(sheet_size.y * dir.y);
 		float t = dot(p - sheet_size * 0.5, dir) / len + 0.5;
 		float edge = t < 0.24 ? 0.22 * (1.0 - t / 0.24) : (t > 0.72 ? 0.15 * (t - 0.72) / 0.28 : 0.0);
-		c = lay(c, vec3(104.0, 82.0, 50.0) / 255.0, edge);
+		c = lay(c, vec3(104.0, 82.0, 50.0) / 255.0, bands ? edge : 0.0);
 		// The fold: linear-gradient(90deg, transparent 49.7%, rgba(60,44,24,.1) 50%, rgba(255,252,240,.22) 50.3%, transparent 50.8%)
-		float x = f.x;
+		float x = fold ? f.x : 0.0;
 		if (x > 0.497 && x <= 0.5) {
 			c = lay(c, vec3(60.0, 44.0, 24.0) / 255.0, 0.1 * (x - 0.497) / 0.003);
 		} else if (x > 0.5 && x <= 0.503) {
