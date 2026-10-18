@@ -195,6 +195,10 @@ static func key_styles(seen: Vector2, round_key: bool, on: int = Light.LAMP, res
 
 ## One plate: a disc or a pill of glass (or lamp light) with one ring, drawn
 ## centred in the rect it is given, a little lower while held down.
+## The 시안 lays the glass (padding-box) over the ring's colour (border-box),
+## so a key at rest is the glass over brass: warm and not see-through
+## (#302b21 over any ground, 시안 .fkey>i, .fpad), and a pill is the glass over
+## the brass sweep (.finv, .fall). With no ring the glass is see-through.
 class Plate extends StyleBox:
 	var seen: Vector2 = Vector2.ZERO
 	var round_key: bool = true
@@ -203,8 +207,9 @@ class Plate extends StyleBox:
 	var dim: float = 1.0
 	var fill: Color = Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.6)
 	var ring: Color = Color("6d5b3d")
-	var ring_w: float = 2.0
-	var brass_rim: bool = false      # the lamp pills that are not round keep a brass rim
+	var ring_w: float = 2.0 * K      # the 시안's 2px border
+	var brass_rim: bool = false      # a pill wears the brass sweep, lit or not
+	var over_ring: bool = true       # the glass lies over the ring's colour
 
 	static var _blob: ImageTexture
 
@@ -212,7 +217,7 @@ class Plate extends StyleBox:
 		seen = at_size
 		round_key = is_round
 		light = how
-		brass_rim = how != 0 and not is_round
+		brass_rim = not is_round
 
 	## A soft round blob, white in the middle and gone at the edge (shadows, glow).
 	static func blob() -> ImageTexture:
@@ -268,6 +273,11 @@ class Plate extends StyleBox:
 		var k: float = 0.62 if round_key else 0.48
 		return c1.lerp(c2, t / k) if t < k else c2.lerp(c3, (t - k) / (1.0 - k))
 
+	## The glass over `under`, as the 시안's two background layers mix.
+	func _over(under: Color) -> Color:
+		var a: float = fill.a
+		return Color(fill.r * a + under.r * (1.0 - a), fill.g * a + under.g * (1.0 - a), fill.b * a + under.b * (1.0 - a), dim)
+
 	## A 140-degree brass sweep along the rim, light at the top left (시안 .fpad--ctx).
 	func _rim_at(p: Vector2, r: Rect2) -> Color:
 		var dir := Vector2(sin(deg_to_rad(140.0)), -cos(deg_to_rad(140.0)))
@@ -296,6 +306,18 @@ class Plate extends StyleBox:
 			for i in pts.size():
 				idx.append_array([0, 1 + i, 1 + (i + 1) % pts.size()])
 			rs.canvas_item_add_triangle_array(to_canvas_item, idx, all, cols)
+		elif brass_rim and over_ring:
+			var all := PackedVector2Array([r.get_center()])
+			all.append_array(pts)
+			var cols := PackedColorArray()
+			for p in all:
+				cols.append(_over(_rim_at(p, r)))
+			var idx := PackedInt32Array()
+			for i in pts.size():
+				idx.append_array([0, 1 + i, 1 + (i + 1) % pts.size()])
+			rs.canvas_item_add_triangle_array(to_canvas_item, idx, all, cols)
+		elif over_ring and ring.a > 0.0:
+			rs.canvas_item_add_polygon(to_canvas_item, pts, PackedColorArray([_over(ring)]))
 		else:
 			rs.canvas_item_add_polygon(to_canvas_item, pts, PackedColorArray([Color(fill.r, fill.g, fill.b, fill.a * dim)]))
 		var loop := pts.duplicate()
