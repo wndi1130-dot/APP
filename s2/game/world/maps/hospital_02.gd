@@ -1496,8 +1496,8 @@ const PLAN: Dictionary = {
 		["supply_026","매장 보관함",11,68,13,4,["food_pack","cloth"],false,0],
 		["supply_027","작업실 보관함",153,13,15,4,["med_box","bandage"],false,0],
 		["supply_028","매장 보관함",5,55,17,4,["med_box","bandage"],false,0],
-		["supply_029","구급차 약품함",21,21,-1,4,["med_box","bandage"],false,0],
-		["supply_030","구급차 약품함",12,24,-1,4,["med_box","bandage"],false,0]
+		["supply_029","구급차 약품 보관함",21,21,-1,4,["med_box","bandage"],false,0],
+		["supply_030","구급차 약품 보관함",12,24,-1,4,["med_box","bandage"],false,0]
 	],
 	"entries": [
 		["west_road",[[0,32],[0,33],[0,34],[0,35]],0.6],
@@ -1975,7 +1975,7 @@ const NORTH: Dictionary = {
 		["blanket_chest",175,37,2,1,"none",0,"씨앗 보관방의 담요 궤",1]
 	],
 	"containers": [
-		["north_supply_01","씨앗 보관방 물자함",176,38,7,7,["med_box","cloth"],false,1],
+		["north_supply_01","씨앗 보관방 물자 보관함",176,38,7,7,["med_box","cloth"],false,1],
 		["north_supply_02","거실 보관함",29,20,0,4,["med_box","cloth"],false,0],
 		["north_supply_03","동쪽 보관방 보관함",58,20,1,4,["med_box","cloth"],false,0],
 		["north_supply_04","서쪽 보관방 보관함",98,20,3,4,["med_box","cloth"],false,0],
@@ -1985,8 +1985,8 @@ const NORTH: Dictionary = {
 		["north_supply_08","종자 선별방 보관함",117,33,6,4,["med_box","cloth"],false,0],
 		["north_supply_09","종자 방 보관함",143,33,6,4,["med_box","cloth"],false,0],
 		["north_supply_10","서쪽 침실 보관함",171,29,7,4,["med_box","cloth"],false,0],
-		["north_supply_11","관리동 앞 물자함",157,34,7,4,["med_box","cloth"],false,0],
-		["north_supply_shallow","마당 운반 물자함",58,41,-1,3,["med_box","cloth"],false,0]
+		["north_supply_11","관리동 앞 물자 보관함",157,34,7,4,["med_box","cloth"],false,0],
+		["north_supply_shallow","마당 운반 물자 보관함",58,41,-1,3,["med_box","cloth"],false,0]
 	],
 	"entries": [
 		["서쪽 농원길",[[0,12],[0,13],[0,14],[0,15]],0.6],

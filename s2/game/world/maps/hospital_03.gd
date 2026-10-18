@@ -936,8 +936,8 @@ const PLAN: Dictionary = {
 		["oil_lamp_out",82,58,1,1,"none",0,"꺼진 등잔",-1],
 		["wet_blanket",82,56,2,1,"none",1,"젖은 담요",-1],
 		["floor_shell",50,44,60,24,"none",0,"윗층 겉모양",3],
-		["stair_stub",63,56,1,2,"none",0,"계단 자리",2],
-		["stair_stub",96,56,1,2,"none",0,"계단 자리",2]
+		["stair_stub",62,56,1,2,"none",0,"계단 자리",2],
+		["stair_stub",95,56,1,2,"none",0,"계단 자리",2]
 	],
 	"containers": [
 		["supply_001","약 저장칸 상자",57,49,0,7,["med_box","med_box","medkit","bandage"],true,-1],
@@ -963,10 +963,10 @@ const PLAN: Dictionary = {
 		["supply_021","매장 보관함",141,86,12,4,["food_pack","cloth"],false,0],
 		["supply_022","뒤 창고 보관함",123,90,13,4,["med_box","bandage"],false,0],
 		["supply_023","거실 보관함",3,79,15,4,["med_box","bandage"],false,0],
-		["supply_024","구급차 약품함",29,56,-1,4,["med_box","bandage"],false,0],
-		["supply_025","구급차 약품함",38,41,-1,4,["med_box","bandage"],false,0],
-		["supply_026","구급차 약품함",23,23,-1,4,["med_box","bandage"],false,0],
-		["supply_027","구급차 약품함",15,24,-1,4,["med_box","bandage"],false,0]
+		["supply_024","구급차 약품 보관함",29,56,-1,4,["med_box","bandage"],false,0],
+		["supply_025","구급차 약품 보관함",38,41,-1,4,["med_box","bandage"],false,0],
+		["supply_026","구급차 약품 보관함",23,23,-1,4,["med_box","bandage"],false,0],
+		["supply_027","구급차 약품 보관함",15,24,-1,4,["med_box","bandage"],false,0]
 	],
 	"entries": [
 		["west_road",[[0,32],[0,33],[0,34],[0,35]],0.6],
@@ -1523,14 +1523,14 @@ const NORTH: Dictionary = {
 		["medicine_crate",133,11,2,1,"none",0,"동쪽 침실의 상비약 상자",2]
 	],
 	"containers": [
-		["north_supply_01","동쪽 침실 물자함",138,12,3,7,["cloth","med_box"],false,2],
+		["north_supply_01","동쪽 침실 물자 보관함",138,12,3,7,["cloth","med_box"],false,2],
 		["north_supply_02","거실 보관함",7,10,0,4,["cloth","med_box"],false,0],
 		["north_supply_03","동쪽 사무방 보관함",70,10,1,4,["cloth","med_box"],false,0],
 		["north_supply_04","식당 보관함",85,10,1,4,["cloth","med_box"],false,0],
 		["north_supply_05","거실 보관함",45,19,5,4,["cloth","med_box"],false,0],
 		["north_supply_06","거실 보관함",82,19,7,4,["cloth","med_box"],false,0],
 		["north_supply_07","동쪽 보관방 보관함",109,19,8,4,["cloth","med_box"],false,0],
-		["north_supply_shallow","마당 운반 물자함",58,41,-1,3,["cloth","med_box"],false,0]
+		["north_supply_shallow","마당 운반 물자 보관함",58,41,-1,3,["cloth","med_box"],false,0]
 	],
 	"entries": [
 		["서쪽 관사길",[[0,14],[0,15],[0,16],[0,17]],0.6],

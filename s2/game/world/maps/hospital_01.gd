@@ -1201,8 +1201,8 @@ const PLAN: Dictionary = {
 		["oil_lamp_out",94,92,1,1,"none",0,"꺼진 등잔",-1],
 		["wet_blanket",89,93,2,1,"none",1,"젖은 담요",-1],
 		["floor_shell",42,46,90,30,"none",0,"윗층 겉모양",3],
-		["stair_stub",44,59,1,2,"none",0,"계단 자리",2],
-		["stair_stub",129,59,1,2,"none",0,"계단 자리",2]
+		["stair_stub",43,59,1,2,"none",0,"계단 자리",2],
+		["stair_stub",128,59,1,2,"none",0,"계단 자리",2]
 	],
 	"containers": [
 		["supply_001","끝방 비상 약품 상자",130,47,0,7,["med_box","med_box","medkit","bandage"],true,2],
@@ -1226,11 +1226,11 @@ const PLAN: Dictionary = {
 		["supply_019","사무실 보관함",29,45,7,4,["med_box","bandage"],false,0],
 		["supply_020","작업실 보관함",164,61,10,4,["med_box","bandage"],false,0],
 		["supply_021","부엌 보관함",15,100,13,4,["med_box","bandage"],false,0],
-		["supply_022","구급차 약품함",136,71,-1,4,["med_box","bandage"],false,0],
-		["supply_023","구급차 약품함",138,85,-1,4,["med_box","bandage"],false,0],
-		["supply_024","구급차 약품함",124,40,-1,4,["med_box","bandage"],false,0],
-		["supply_025","구급차 약품함",17,19,-1,4,["med_box","bandage"],false,0],
-		["supply_026","구급차 약품함",9,21,-1,4,["med_box","bandage"],false,0]
+		["supply_022","구급차 약품 보관함",136,71,-1,4,["med_box","bandage"],false,0],
+		["supply_023","구급차 약품 보관함",138,85,-1,4,["med_box","bandage"],false,0],
+		["supply_024","구급차 약품 보관함",124,40,-1,4,["med_box","bandage"],false,0],
+		["supply_025","구급차 약품 보관함",17,19,-1,4,["med_box","bandage"],false,0],
+		["supply_026","구급차 약품 보관함",9,21,-1,4,["med_box","bandage"],false,0]
 	],
 	"entries": [
 		["west_road",[[0,33],[0,34],[0,35],[0,36]],0.6],
@@ -1724,7 +1724,7 @@ const NORTH: Dictionary = {
 		["barrel",133,6,1,1,"none",0,"동쪽 끝 선반방의 통",1]
 	],
 	"containers": [
-		["north_supply_01","동쪽 끝 선반방 물자함",134,6,2,7,["bottle_spirit","scrap"],false,1],
+		["north_supply_01","동쪽 끝 선반방 물자 보관함",134,6,2,7,["bottle_spirit","scrap"],false,1],
 		["north_supply_02","작업 홀 보관함",15,4,0,4,["bottle_spirit","scrap"],false,0],
 		["north_supply_03","안쪽 선반방 보관함",33,4,0,4,["bottle_spirit","scrap"],false,0],
 		["north_supply_04","작업 홀 보관함",119,4,2,4,["bottle_spirit","scrap"],false,0],
@@ -1732,10 +1732,10 @@ const NORTH: Dictionary = {
 		["north_supply_06","부품 선반방 보관함",71,18,4,4,["bottle_spirit","scrap"],false,0],
 		["north_supply_07","공구방 보관함",90,18,4,4,["bottle_spirit","scrap"],false,0],
 		["north_supply_08","부엌 보관함",116,18,5,4,["bottle_spirit","scrap"],false,0],
-		["north_supply_09","구급차 보관 차고 앞 물자함",156,16,6,4,["bottle_spirit","scrap"],false,0],
-		["north_supply_10","구급차 보관 차고 앞 물자함",155,16,6,4,["bottle_spirit","scrap"],false,0],
+		["north_supply_09","구급차 보관 차고 앞 물자 보관함",156,16,6,4,["bottle_spirit","scrap"],false,0],
+		["north_supply_10","구급차 보관 차고 앞 물자 보관함",155,16,6,4,["bottle_spirit","scrap"],false,0],
 		["north_supply_11","작업 홀 보관함",117,32,7,4,["bottle_spirit","scrap"],false,0],
-		["north_supply_shallow","마당 운반 물자함",58,41,-1,3,["bottle_spirit","scrap"],false,0]
+		["north_supply_shallow","마당 운반 물자 보관함",58,41,-1,3,["bottle_spirit","scrap"],false,0]
 	],
 	"entries": [
 		["서쪽 마당길",[[0,8],[0,9],[0,10],[0,11]],0.6],

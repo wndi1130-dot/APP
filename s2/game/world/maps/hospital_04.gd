@@ -1046,8 +1046,8 @@ const PLAN: Dictionary = {
 		["supply_021","사무실 보관함",47,75,14,4,["med_box","bandage"],false,0],
 		["supply_022","매장 보관함",85,71,16,4,["med_box","bandage"],false,0],
 		["supply_023","비품실 보관함",153,75,17,4,["med_box","bandage"],false,0],
-		["supply_024","구급차 약품함",13,23,-1,4,["med_box","bandage"],false,0],
-		["supply_025","구급차 약품함",4,25,-1,4,["med_box","bandage"],false,0]
+		["supply_024","구급차 약품 보관함",13,23,-1,4,["med_box","bandage"],false,0],
+		["supply_025","구급차 약품 보관함",4,25,-1,4,["med_box","bandage"],false,0]
 	],
 	"entries": [
 		["west_road",[[0,39],[0,40],[0,41],[0,42]],0.6],
@@ -1522,7 +1522,7 @@ const NORTH: Dictionary = {
 		["crate_stack",159,41,1,2,"low",0,"식료 보관방의 나무 상자 더미",0]
 	],
 	"containers": [
-		["north_supply_01","식료 보관방 물자함",164,44,7,7,["food_pack","cloth"],false,0],
+		["north_supply_01","식료 보관방 물자 보관함",164,44,7,7,["food_pack","cloth"],false,0],
 		["north_supply_02","작업 홀 보관함",43,18,0,4,["food_pack","cloth"],false,0],
 		["north_supply_03","안쪽 선반방 보관함",61,18,0,4,["food_pack","cloth"],false,0],
 		["north_supply_04","자루 적재 칸 보관함",79,18,1,4,["food_pack","cloth"],false,0],
@@ -1533,7 +1533,7 @@ const NORTH: Dictionary = {
 		["north_supply_09","서쪽 보관방 보관함",47,1,5,4,["food_pack","cloth"],false,0],
 		["north_supply_10","서쪽 보관방 보관함",125,42,7,4,["food_pack","cloth"],false,0],
 		["north_supply_11","기록방 보관함",149,42,7,4,["food_pack","cloth"],false,0],
-		["north_supply_shallow","마당 운반 물자함",46,40,-1,3,["food_pack","cloth"],false,0]
+		["north_supply_shallow","마당 운반 물자 보관함",46,40,-1,3,["food_pack","cloth"],false,0]
 	],
 	"entries": [
 		["서쪽 화물길",[[0,8],[0,9],[0,10],[0,11]],0.6],
