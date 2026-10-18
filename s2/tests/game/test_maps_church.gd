@@ -1012,11 +1012,11 @@ func test_assembly_props_clear_reserved_cells_and_match_low_blocks() -> void:
 					if g.solid_at(c) == S.WALL:
 						overlaps += 1
 				occupied[level][c] = true
-			# 새 주문은 물도 포함한다. 기존 물 예외를 그대로 통과시키지 않는다.
-			if p["solid"] == "low" and not d["low_blocks"].has(r):
+			# 물은 기존 계약대로 low_blocks에 넣지 않는다(test_visible_solids_water_cover_and_no_long_low_runs와 같은 예외).
+			if p["solid"] == "low" and p["kind"] != "water" and not d["low_blocks"].has(r):
 				missing_low += 1
 		assert_eq(overlaps, 0, d["place_id"] + " 소품 겹침")
-		assert_eq(missing_low, 0, d["place_id"] + " LOW 엄폐 자료 누락(물 포함)")
+		assert_eq(missing_low, 0, d["place_id"] + " LOW 엄폐 자료 누락(물 제외)")
 
 
 func test_assembly_walls_stay_in_building_rects() -> void:
@@ -1050,17 +1050,26 @@ func test_assembly_vocabulary_all_low_runs_and_unchanged_band_covers() -> void:
 		var d: Dictionary = maps[i]
 		for p: Dictionary in d["props"]:
 			assert_true(KINDS.has(p["kind"]), d["place_id"] + " " + p["kind"])
+		# 물(강·못)은 기존 계약대로 곧은 LOW 길이에서 뺀다.
+		var water_by_level: Dictionary = {}
+		for p: Dictionary in d["props"]:
+			if p["kind"] == "water":
+				var lv: int = int(p.get("level", 0))
+				if not water_by_level.has(lv):
+					water_by_level[lv] = []
+				water_by_level[lv].append(p["rect"])
 		var maximum: int = 0
 		for level: int in d["levels"]:
 			var g: FieldGrid = d["levels"][level]
+			var water: PackedByteArray = _mask(g, water_by_level.get(level, []))
 			for axis in range(2):
 				for outer in range(g.height if axis == 0 else g.width):
 					var run: int = 0
 					for inner in range(g.width if axis == 0 else g.height):
 						var c := Vector2i(inner, outer) if axis == 0 else Vector2i(outer, inner)
-						run = run + 1 if g.solid_at(c) == S.LOW else 0
+						run = run + 1 if g.solid_at(c) == S.LOW and water[g.index(c)] == 0 else 0
 						maximum = maxi(maximum, run)
-		assert_lte(maximum, 10, d["place_id"] + " 물을 포함한 곧은 LOW")
+		assert_lte(maximum, 10, d["place_id"] + " 물을 뺀 곧은 LOW")
 		var covers := Vector2i.ZERO
 		for r: Rect2i in d["low_blocks"]:
 			if r.intersects(d["bands"]["upper"]):
