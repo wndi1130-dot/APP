@@ -50,8 +50,9 @@ const BREAKS: Array = ["search", "treat", "loot", "salvage", "rub"]
 const STUCK_T: float = 1.5
 ## The door the chief went in by is held while he is this near it.
 const DOOR_HOLD_R: float = 16.0
-## The chief stops by things to search: the companions not on watch search the
-## others within HELP_R of him (decision 406, bundle 2).
+## The chief stops by things to search: one companion at a time searches the
+## others within HELP_R of him, the rest keep by him (decision 406, bundle 2;
+## one at a time, decision 409).
 const HELP_R: float = 6.0
 ## Arrows and dropped things this near (and this near the chief) are picked up.
 const PICK_R: float = 6.0
@@ -880,9 +881,9 @@ func _guard_downed(p) -> bool:
 	return true
 
 
-## The chief stands by to search: the companions not on watch take the
-## other things near him, one each (the rear one keeps watch). Not while
-## he walks, not while sneaking past anything, never a locked box.
+## The chief stands by to search: one companion at a time takes the other
+## things near him, one after another; the rest keep by him (the rear one
+## keeps watch). Not while he walks, never a locked box.
 func _help_search(p) -> bool:
 	var player = game.player
 	var claim: String = String(p.brain.get("help_c", ""))
@@ -902,13 +903,13 @@ func _help_search(p) -> bool:
 			return false
 		if _role(p) == "rear" and _mates_up() > 1:
 			return false
-		var taken := {}
+		# One of us already at it: the rest stay by the chief.
 		for o in game.squad:
-			if o != p and o.brain.has("help_c"):
-				taken[o.brain["help_c"]] = true
+			if o != p and o.is_alive() and o.brain.has("help_c"):
+				return false
 		var skip2: Dictionary = p.brain.get("help_skip", {})
 		for e in _help_near():
-			if not taken.has(e[0]) and not skip2.has(e[0]):
+			if not skip2.has(e[0]):
 				claim = e[0]
 				break
 		if claim == "":
