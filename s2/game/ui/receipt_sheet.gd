@@ -33,9 +33,11 @@ const STAMP_TILT_DEG: float = -6.0
 const NOTE := "지켰는지는 열차에서 · 돌아온 사람이 본 대로"
 
 var result: Dictionary = {}
-## The stretch the stop was on.
+## The stretch the stop was on; 0 where there is none to say (the field played
+## alone), and the kick says no number.
 var seg: int = 1
-## The main key's word (the next step's).
+## The main key's word (the next step's); "" leaves the foot bare, for keys of
+## the caller's own off the paper (the field's end).
 var go_word: String = ""
 var sheet: Control
 var body: VBoxContainer
@@ -107,7 +109,8 @@ func _head(m: Dictionary) -> void:
 	var kick := Paper.line_box(24.0)
 	kick.name = "Kick"
 	kick.add_theme_constant_override("separation", int(round(UiFonts.px(4.0))))
-	kick.add_child(Paper.ink(str(m["seg"]), UiFonts.NUMBER, 400, 14.0, Paper.INK2, 0.56))
+	if int(m["seg"]) > 0:
+		kick.add_child(Paper.ink(str(m["seg"]), UiFonts.NUMBER, 400, 14.0, Paper.INK2, 0.56))
 	kick.add_child(Paper.ink(String(m["kick"]), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.92))
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -236,6 +239,8 @@ func _seen(seen: Array, note: String) -> void:
 
 ## The keys at the foot (.sh__act, 48): the main key at the right, as 보내기 is.
 func _keys() -> void:
+	if go_word == "":
+		return
 	var foot := Paper.line_box(48.0)
 	body.add_child(foot)
 	var fill := Control.new()

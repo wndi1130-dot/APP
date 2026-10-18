@@ -8,11 +8,16 @@ extends Node3D
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
+const PropKinds = preload("res://game/world/prop_kinds.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
 const LEVEL_H: float = 3.0
 const CUT_H: float = 0.35
+## 카메라가 보는 층 바닥의 중심에서 잰 수평 거리(m). 최대 가로 78칸 이내.
+const PROP_CULL_DISTANCE: float = 39.0
+const PROP_LOD_DISTANCE: float = 18.0
+const PROP_REFRESH_SECONDS: float = 0.1
 const FxState = preload("res://fx/fx_state.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
@@ -47,6 +52,12 @@ var cut_level: int = 0
 var levels: Dictionary = {}       # level -> FieldGrid
 var level_roots: Dictionary = {}  # level -> Node3D
 var shown_level: int = -99
+var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiMeshInstance3D)}
+var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
+var _prop_memory := PackedByteArray()
+var _prop_seen_now: Dictionary = {}
+var _props_mask_on: bool = true
+var _prop_elapsed: float = 0.0
 var door_nodes: Dictionary = {}   # Vector2i -> MeshInstance3D
 var window_nodes: Dictionary = {}
 var container_nodes: Dictionary = {}
@@ -85,16 +96,21 @@ func setup(map_data: Dictionary) -> void:
 				wall_nodes[key] = buildings.cut_node(key.x, key.y)
 	_build_ground()
 	_build_walls()
+	_build_props()
 	_build_blocks()
 	for lv in levels:
 		if lv != 0:
 			_build_level(lv)
 	_build_stairs()
-	for c in grid.doors if buildings == null else {}:
+	for c in grid.doors:
+		if buildings and buildings.draws_cell(c):
+			continue
 		var node := _mesh_node()
 		door_nodes[c] = node
 		update_door(c)
-	for c in grid.windows if buildings == null else {}:
+	for c in grid.windows:
+		if buildings and buildings.draws_cell(c):
+			continue
 		var node := _mesh_node()
 		window_nodes[c] = node
 		update_window(c)
@@ -182,6 +198,8 @@ func update_labels(memory: PackedByteArray, mask_on: bool) -> void:
 
 func set_mask_enabled(on: bool) -> void:
 	material.set_shader_parameter("mask_on", 1.0 if on else 0.0)
+	_props_mask_on = on
+	refresh_props()
 
 
 ## seen_now: sight key (level slice * cells + cell index) -> true; memory:
@@ -190,6 +208,8 @@ func set_mask_enabled(on: bool) -> void:
 ## lamp: cell index -> byte of warm light (LampLight), written to the B channel.
 ## Only cells that changed since last call are touched.
 func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary = {}) -> void:
+	_prop_memory = memory
+	_prop_seen_now = seen_now
 	var n := grid.width * grid.height
 	if vis_bytes.size() != n * 4:
 		vis_bytes.resize(n * 4)
@@ -220,6 +240,7 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary 
 	vis_texture.update(vis_image)
 	if buildings:
 		buildings.update_seen(vis_bytes)
+	refresh_props()
 
 
 ## Snow marks (SnowTracks.take_changed: cell index -> byte, 255 untouched) for
@@ -263,6 +284,7 @@ func show_levels(player_level: int) -> void:
 		buildings.show_levels(player_level)
 	for lv in level_roots:
 		level_roots[lv].visible = lv == -1 if player_level < 0 else lv >= 0 and lv <= player_level
+	refresh_props()
 
 
 ## Lower the walls of the building the player is inside, on their floor (−1 = none).
@@ -277,16 +299,17 @@ func cut_away(building_id: int, level: int = 0) -> void:
 		if buildings and key.x >= 0:
 			continue
 		var node: MeshInstance3D = wall_nodes[key]
-		var cut: bool = key.x == building_id and key.y == level
+		var cut: bool = building_id >= 0 and key.x == building_id and key.y == level
 		node.scale = Vector3(1, CUT_H / WALL_H if cut else 1.0, 1)
 	for c in door_nodes:
 		update_door(c)
 	for c in window_nodes:
 		update_window(c)
+	refresh_props()
 
 
 func update_door(c: Vector2i) -> void:
-	if buildings:
+	if buildings and buildings.draws_cell(c):
 		buildings.update_door(c)
 		return
 	var door: Dictionary = grid.doors[c]
@@ -313,7 +336,7 @@ func update_door(c: Vector2i) -> void:
 
 
 func update_window(c: Vector2i) -> void:
-	if buildings:
+	if buildings and buildings.draws_cell(c):
 		buildings.update_window(c)
 		return
 	var win: Dictionary = grid.windows[c]
@@ -341,7 +364,7 @@ func update_window(c: Vector2i) -> void:
 func add_container(id: String) -> void:
 	var box_data: Dictionary = data["containers"][id]
 	container_nodes[id] = _mesh_node(int(box_data.get("level", 0)))
-	PropModels.attach(container_nodes[id], id, FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0))
+	PropModels.attach(container_nodes[id], id, FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0), String(box_data.get("name", "")))
 	update_container(id)
 
 
@@ -470,7 +493,7 @@ static func outdoor_block_runs(g: FieldGrid, d: Dictionary) -> Array[Rect2i]:
 ## building id -> [Rect2i]. A row of wall cells is one box, and what is left
 ## standing alone in its row joins the cells under it. A big map is drawn (and
 ## throws its shadow) far faster so than a box a cell.
-static func wall_runs(g: FieldGrid) -> Dictionary:
+static func wall_runs(g: FieldGrid, excluded: Dictionary = {}) -> Dictionary:
 	var out: Dictionary = {}
 	var single: Dictionary = {}   # cell -> building, the cells that made no row
 	for y in range(g.height):
@@ -478,7 +501,7 @@ static func wall_runs(g: FieldGrid) -> Dictionary:
 		var of := 0
 		for x in range(g.width + 1):
 			var c := Vector2i(x, y)
-			var wall: bool = x < g.width and g.solid_at(c) == S.WALL
+			var wall: bool = x < g.width and g.solid_at(c) == S.WALL and not excluded.has(c)
 			var b: int = g.building_at(c) if wall else 0
 			if start >= 0 and (not wall or b != of):
 				if x - start == 1:
@@ -585,10 +608,8 @@ func _build_ground() -> void:
 
 
 func _build_walls() -> void:
-	var runs: Dictionary = wall_runs(grid)
+	var runs: Dictionary = wall_runs(grid, buildings.drawn_cells.get(0, {}) if buildings else {})
 	for b in runs:
-		if buildings and b >= 0:
-			continue
 		var st := _begin()
 		for r: Rect2i in runs[b]:
 			box(st, Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
@@ -676,15 +697,141 @@ func _build_blocks() -> void:
 		for r in outdoor_block_runs(grid, data):
 			box(_tile_tool(tools, r.position), Vector3(r.size.x, OUTDOOR_BLOCK_H, 1), Vector3(r.position.x + r.size.x * 0.5, OUTDOOR_BLOCK_H * 0.5, r.position.y + 0.5), Color(0.44, 0.43, 0.42))
 	for c in data["trees"]:
+		if modelled_prop_cells.has(c):
+			continue
 		box(_tile_tool(tools, c), Vector3(0.5, 2.5, 0.5), FieldGrid.center(c) + Vector3(0, 1.25, 0), Color(0.3, 0.26, 0.22))
 		box(_tile_tool(tools, c), Vector3(2.2, 1.8, 2.2), FieldGrid.center(c) + Vector3(0, 3.0, 0), Color(0.62, 0.66, 0.66))
 	for r in data["low_blocks"]:
-		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
 		var tall := 1.2 if r.size.x > 1 and r.size.y > 1 else 0.9
-		box(_tile_tool(tools, r.position), Vector3(r.size.x - 0.1, tall, r.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
+		for rest in remaining_low_rects(r, modelled_prop_cells):
+			var mid := Vector3(rest.position.x + rest.size.x * 0.5, 0, rest.position.y + rest.size.y * 0.5)
+			box(_tile_tool(tools, rest.position), Vector3(rest.size.x - 0.1, tall, rest.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
 	for tile in tools:
 		var part := _mesh_node()
 		part.mesh = tools[tile].commit()
+
+
+## 모델이 차지한 칸만 덜어낸다. 원래 low_blocks와 FieldGrid는 읽기 전용이다.
+static func remaining_low_rects(r: Rect2i, covered: Dictionary) -> Array[Rect2i]:
+	var out: Array[Rect2i] = []
+	var touched := false
+	for c: Vector2i in covered:
+		if r.has_point(c):
+			touched = true
+			break
+	if not touched:
+		out.append(r)
+		return out
+	for y in range(r.position.y, r.end.y):
+		var start := -1
+		for x in range(r.position.x, r.end.x + 1):
+			var keep := x < r.end.x and not covered.has(Vector2i(x, y))
+			if keep and start < 0:
+				start = x
+			elif not keep and start >= 0:
+				out.append(Rect2i(start, y, x - start, 1))
+				start = -1
+	return out
+
+
+func _build_props() -> void:
+	if not PropModels.enabled():
+		return
+	var chosen: Dictionary = {}
+	for prop: Dictionary in data.get("props", []):
+		var kind := String(prop.get("kind", ""))
+		if not chosen.has(kind):
+			chosen[kind] = ""
+			for path in PropKinds.candidates(kind):
+				if ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
+					chosen[kind] = path
+					break
+		var path: String = chosen[kind]
+		var lv := int(prop.get("level", 0))
+		if path.is_empty() or not levels.has(lv) or not prop.get("rect") is Rect2i:
+			continue
+		var r: Rect2i = prop["rect"]
+		var at := Vector3(r.position.x + r.size.x * 0.5, lv * LEVEL_H, r.position.y + r.size.y * 0.5)
+		var lg: FieldGrid = levels[lv]
+		var b := int(prop.get("building", lg.building_at(Vector2i(int(at.x), int(at.z)))))
+		# 0은 원래 자세, 1~3은 위에서 보아 시계 방향으로 90도씩.
+		var xf := Transform3D(Basis(Vector3.UP, -float(int(prop.get("facing", 0)) % 4) * PI * 0.5), at)
+		if not prop_batches.has(path):
+			prop_batches[path] = {"items": [], "nodes": {}}
+		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b})
+		if lv == 0:
+			for y in range(r.position.y, r.end.y):
+				for x in range(r.position.x, r.end.x):
+					modelled_prop_cells[Vector2i(x, y)] = true
+	for path: String in prop_batches:
+		var batch: Dictionary = prop_batches[path]
+		var meshes := PropModels.batch_meshes(path)
+		for lod: int in meshes:
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = meshes[lod]
+			mm.instance_count = batch["items"].size()
+			mm.visible_instance_count = 0
+			var node := MultiMeshInstance3D.new()
+			node.name = "Props_%s_LOD%d" % [path.get_file().get_basename(), lod]
+			node.multimesh = mm
+			add_child(node)
+			batch["nodes"][lod] = node
+
+
+func _process(delta: float) -> void:
+	_prop_elapsed += delta
+	if _prop_elapsed >= PROP_REFRESH_SECONDS:
+		_prop_elapsed = 0.0
+		refresh_props()
+
+
+## MultiMesh 전체의 거리 범위로는 지도 끝의 소품도 제출된다. 보이는 인스턴스만 앞에 채운다.
+## 미리보기는 카메라를 옮긴 직후 같은 함수를 호출한다.
+func refresh_props(camera: Camera3D = null) -> void:
+	if prop_batches.is_empty() or not is_inside_tree():
+		return
+	if camera == null:
+		camera = get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var eye := camera.global_position
+	var ray := -camera.global_transform.basis.z
+	for batch: Dictionary in prop_batches.values():
+		var counts := {0: 0, 1: 0}
+		for item: Dictionary in batch["items"]:
+			var lv: int = item["level"]
+			if not level_roots[lv].visible or (shown_level == -99 and lv != 0):
+				continue
+			if buildings and not buildings.interior_visible(item["building"], lv):
+				continue
+			if not _prop_is_seen(item["rect"], lv):
+				continue
+			var xf: Transform3D = item["xf"]
+			var at := to_global(xf.origin)
+			var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
+			var distance := Vector2(at.x - focus.x, at.z - focus.z).length()
+			if distance > PROP_CULL_DISTANCE:
+				continue
+			var lod := 1 if distance >= PROP_LOD_DISTANCE and batch["nodes"].has(1) else 0
+			var node: MultiMeshInstance3D = batch["nodes"][lod]
+			node.multimesh.set_instance_transform(counts[lod], xf)
+			counts[lod] += 1
+		for lod: int in batch["nodes"]:
+			batch["nodes"][lod].multimesh.visible_instance_count = counts[lod]
+
+
+## 재질은 기존 소품 재질 그대로다. 아직 본 적 없는 층의 소품은 CPU에서 제외한다.
+func _prop_is_seen(r: Rect2i, lv: int) -> bool:
+	if not _props_mask_on:
+		return true
+	var n := grid.width * grid.height
+	for y in range(maxi(0, r.position.y), mini(grid.height, r.end.y)):
+		for x in range(maxi(0, r.position.x), mini(grid.width, r.end.x)):
+			var key := (lv + 1) * n + grid.index(Vector2i(x, y))
+			if _prop_seen_now.has(key) or (key >= 0 and key < _prop_memory.size() and _prop_memory[key] > 0):
+				return true
+	return false
 
 
 func _tile_tool(tools: Dictionary, c: Vector2i) -> SurfaceTool:
@@ -733,10 +880,8 @@ func _build_level(lv: int) -> void:
 	var y0 := lv * LEVEL_H
 	var floors: Dictionary = {}
 	var tools: Dictionary = {}
-	var runs: Dictionary = wall_runs(lg)
+	var runs: Dictionary = wall_runs(lg, buildings.drawn_cells.get(lv, {}) if buildings else {})
 	for b in runs:
-		if buildings and b >= 0:
-			continue
 		tools[b] = _begin()
 		for r: Rect2i in runs[b]:
 			box(tools[b], Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
@@ -758,7 +903,7 @@ func _build_level(lv: int) -> void:
 				floor_st.set_normal(Vector3.UP)
 				floor_st.add_vertex(quad[idx])
 			var b := lg.building_at(c)
-			if kind == S.WINDOW and buildings == null:
+			if kind == S.WINDOW and (buildings == null or not buildings.draws_cell(c, lv)):
 				if not tools.has(b):
 					tools[b] = _begin()
 				var horizontal := lg.solid_at(c + Vector2i(1, 0)) == S.WALL or lg.solid_at(c + Vector2i(-1, 0)) == S.WALL
