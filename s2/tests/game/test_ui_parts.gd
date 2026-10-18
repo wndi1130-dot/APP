@@ -42,6 +42,25 @@ func test_the_lamp_key_is_148_by_48_and_goes_dim_when_off() -> void:
 	assert_true(bool((k.face.material as ShaderMaterial).get_shader_parameter("off")))
 
 
+func test_a_lamp_key_sized_before_it_is_in_the_tree_lays_its_face_to_that_size() -> void:
+	var k = LampKey.new("처음으로")
+	k.size = k.custom_minimum_size
+	add_child_autofree(k)
+	var reach: float = UiFonts.px(LampKey.REACH_CSS)
+	assert_eq((k.face.material as ShaderMaterial).get_shader_parameter("key_size"), k.size, "the face drawn to the key")
+	assert_eq(k.face.size, k.size + Vector2(reach, reach) * 2.0)
+
+
+func test_two_way_particles_settle_by_the_letter_before_them() -> void:
+	assert_eq(UiFonts.josa("꼬리칸과(와)의 약속"), "꼬리칸과의 약속")
+	assert_eq(UiFonts.josa("경비대과(와)의 약속"), "경비대와의 약속")
+	assert_eq(UiFonts.josa("기관실을(를) 거쳐 열차(으)로"), "기관실을 거쳐 열차로")
+	assert_eq(UiFonts.josa("길(으)로, 역(으)로"), "길로, 역으로", "로 after ㄹ")
+	assert_eq(UiFonts.josa("앞칸이(가) 둘, 의무진은(는)"), "앞칸이 둘, 의무진은")
+	assert_eq(UiFonts.josa("3(으)로 1(으)로 2과(와)"), "3으로 1로 2와", "a digit read as its number")
+	assert_eq(UiFonts.josa("A과(와)"), "A과(와)", "after anything else the two-way form stays")
+
+
 func test_a_sheet_leans_from_its_bottom_left_and_writes_inside_its_margins() -> void:
 	var s = PaperSheet.new()
 	add_child_autofree(s)
