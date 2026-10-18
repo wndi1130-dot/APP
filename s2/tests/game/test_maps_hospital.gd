@@ -13,6 +13,9 @@ const MAPS: Array = [
 ]
 const KEYS: Array = ["grid","levels","stairs","containers","spots","stoves","entries","entry_gap","entry_levels","buildings","wagons","train","platform","unload","train_cars","spawns","labels","trees","low_blocks","upper_rects","lights","manholes","manhole_levels","sewer_names","anchors","zone_names","place_id","place_kind","bands","train_doors","crossings","barricade_slots","interior_kind_slots","props","hole_faces", "entry_names", "entry_weights", "first_entry"]
 const KINDS: Array = ["car","handcart","firewood_pile","barrel","crate_stack","sack_pile","bench","shelf","bed","desk","cold_stove","lamp_post","display_shelf","shop_counter","checkout","shopping_cart","pallet_stack","market_stall","shop_awning","freezer_chest","bread_rack","blank_sign","floor_shell","stair_stub","water","ambulance","wheeled_bed","medicine_cart","reception_desk","blanket_curtain","oxygen_cylinder","oxygen_rack","iv_stand","lift_shaft","medicine_fridge","dispensing_counter","drug_cabinet","exam_table","eye_chart_frame","dental_chair","gurney","wheelchair","surgery_lamp","operating_table","gazebo","greenhouse_frame","folding_bed","blanket_chest","meal_cart","boiler_unit","generator_unit","laundry_tub","drying_line","boiling_pot","colonnade_post","canopy_roof","ambulance_canopy","dock_platform","flower_stand","medicine_crate","screen_frame","fir_tree","bare_tree","low_fence","oil_lamp_out","wet_blanket","glasses_rack","aid_rack","tire_stack","workbench","seedling_tray","herb_rack","water_tower","transformer_unit","log_pile","hay_bale"]
+# KINDS: 원 주문의 68종과 북쪽 자료에서 이미 쓰던 후보 8종. 후보는 결과 글에 적는다.
+const CONTAINER_SUFFIXES: Array[String] = ["상자", "보관함", "묶음", "선반", "자재함", "궤", "찬장", "공구함", "책상", "침대", "옷장"]
+const ASSEMBLY_BAND_COVER: Array = [[4, 4], [4, 5], [5, 4], [4, 5], [4, 4], [5, 4]] # 위, 아래
 const ITEMS: Array = ["ammo_pistol", "ammo_shell", "bandage", "bottle_spirit", "cloth", "document", "flare", "food_pack", "info_telegraph", "info_timetable", "luxury_pack", "med_box", "medkit", "needle_thread", "plank", "scrap", "symbol_bell", "tweezers"]
 const SIZES: Array = [Vector2i(175, 150), Vector2i(180, 155), Vector2i(160, 140), Vector2i(170, 145), Vector2i(180, 155), Vector2i(165, 145)]
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
@@ -722,6 +725,191 @@ func _assert_name(value: String) -> void:
 
 func _tag(index: int, message: String) -> String:
 	return "hospital_%02d: %s" % [index + 1, message]
+
+
+
+func test_assembly_prop_footprints_and_low_backing() -> void:
+	for mi: int in range(maps.size()):
+		var d: Dictionary = maps[mi]
+		# 소품 자체의 WALL 받침과 건축 벽을 구별한다. 덮어쓴 벽도 원 표에서 찾는다.
+		var structure := _assembly_structure(MAPS[mi])
+		var forbidden: Dictionary = {}
+		var occupied: Dictionary = {}
+		for level: int in d["levels"]:
+			var g: FieldGrid = d["levels"][level]
+			for c: Vector2i in _door_clearance(g):
+				forbidden[Vector3i(c.x, c.y, level)] = true
+			for c: Vector2i in g.windows:
+				forbidden[Vector3i(c.x, c.y, level)] = true
+		for stair: Dictionary in d["stairs"]:
+			var c: Vector2i = stair["cell"]
+			for level: int in [int(stair["low"]), int(stair["high"])]:
+				forbidden[Vector3i(c.x, c.y, level)] = true
+		for row: Dictionary in d["containers"].values() + d["stoves"]:
+			var c: Vector2i = row["cell"]
+			forbidden[Vector3i(c.x, c.y, int(row.get("level", 0)))] = true
+		for name: String in d["entries"]:
+			for c: Vector2i in d["entries"][name]:
+				forbidden[Vector3i(c.x, c.y, int(d["entry_levels"].get(name, 0)))] = true
+		for c: Vector2i in d["barricade_slots"]:
+			forbidden[Vector3i(c.x, c.y, 0)] = true
+		for name: String in ["squad", "train_door", "dead_street"]:
+			for c: Vector2i in d["spawns"][name]:
+				forbidden[Vector3i(c.x, c.y, 0)] = true
+		for spawn: Dictionary in d["spawns"]["dead_levels"]:
+			var c: Vector2i = spawn["cell"]
+			forbidden[Vector3i(c.x, c.y, int(spawn["level"]))] = true
+		for side: String in ["upper", "lower"]:
+			var direction := Vector2i.UP if side == "upper" else Vector2i.DOWN
+			for door: Vector2i in d["train_doors"][side]:
+				for step: int in range(3):
+					var c := door + direction * step
+					forbidden[Vector3i(c.x, c.y, 0)] = true
+		for prop: Dictionary in d["props"]:
+			var level: int = int(prop.get("level", 0))
+			var r: Rect2i = prop["rect"]
+			var message := _tag(mi, "%s 층 %d 자리 %s" % [prop["kind"], level, r])
+			for c: Vector2i in _cells(r):
+				var key := Vector3i(c.x, c.y, level)
+				assert_false(structure.has(key), message + " 건축 벽")
+				assert_false(forbidden.has(key), message + " 예약 칸")
+				assert_false(occupied.has(key), message + " 소품 겹침")
+				occupied[key] = true
+				var across_x: bool = structure.has(key + Vector3i.LEFT) and structure.has(key + Vector3i.RIGHT)
+				var across_y: bool = structure.has(key + Vector3i.UP) and structure.has(key + Vector3i.DOWN)
+				assert_false(across_x or across_y, message + " 한 칸 통로")
+			if prop["solid"] == "low":
+				assert_eq(level, 0, message)
+				# 물은 기존 시험의 ICE 규칙을 유지한다. 일괄 LOW 받침 규칙과의 충돌은 결과 글에 남긴다.
+				if prop["kind"] != "water":
+					assert_true(d["low_blocks"].has(r), message + " LOW 받침")
+					for c: Vector2i in _cells(r):
+						assert_eq(d["grid"].solid_at(c), S.LOW, message)
+
+		assert_eq(_assembly_corridor_cuts(d, MAPS[mi], occupied, structure), 0, _tag(mi, "소품 뒤에도 이어지는 복도"))
+
+
+func test_assembly_building_walls_and_low_runs() -> void:
+	for mi: int in range(maps.size()):
+		var d: Dictionary = maps[mi]
+		for level: int in d["levels"]:
+			var g: FieldGrid = d["levels"][level]
+			for y: int in range(g.height):
+				for x: int in range(g.width):
+					var c := Vector2i(x, y)
+					var id: int = g.building_at(c)
+					if g.solid_at(c) != S.WALL or id < 0:
+						continue
+					assert_true(id < d["buildings"].size(), _tag(mi, "벽의 건물 번호"))
+					if id < d["buildings"].size():
+						var r: Rect2i = d["buildings"][id]["rect"]
+						assert_true(r.has_point(c), _tag(mi, "건물 네모 밖의 벽"))
+		assert_true(_max_low_run(d["grid"], {}) <= 10, _tag(mi, "물까지 포함한 곧은 LOW"))
+		for side_index: int in range(2):
+			var side: String = ["upper", "lower"][side_index]
+			var count: int = 0
+			for r: Rect2i in d["low_blocks"]:
+				if r.intersects(d["bands"][side]):
+					count += 1
+			assert_eq(count, ASSEMBLY_BAND_COVER[mi][side_index], _tag(mi, "띠 엄폐 수 보존"))
+
+
+func test_assembly_container_name_suffixes() -> void:
+	for mi: int in range(maps.size()):
+		for row: Dictionary in maps[mi]["containers"].values():
+			var name: String = row["name"]
+			var matched: bool = false
+			for suffix: String in CONTAINER_SUFFIXES:
+				if name.ends_with(suffix):
+					matched = true
+					break
+			assert_true(matched, _tag(mi, "수납 끝말 " + name))
+
+
+func test_assembly_prop_vocabulary() -> void:
+	for mi: int in range(maps.size()):
+		for prop: Dictionary in maps[mi]["props"]:
+			assert_true(KINDS.has(prop["kind"]), _tag(mi, "원 주문 또는 후보 낱말 " + String(prop["kind"])))
+
+
+func _assembly_structure(map_script) -> Dictionary:
+	var walls: Dictionary = {}
+	for part: int in range(2):
+		var plan: Dictionary = map_script.PLAN if part == 0 else map_script.NORTH
+		var shift: int = 45 if part == 0 else 0
+		for row: Array in plan["shells"]:
+			var r := Rect2i(int(row[2]), int(row[3]) + shift, int(row[4]), int(row[5]))
+			for c: Vector2i in _cells(r):
+				var key := Vector3i(c.x, c.y, int(row[0]))
+				if c.x == r.position.x or c.x == r.end.x - 1 or c.y == r.position.y or c.y == r.end.y - 1:
+					walls[key] = true
+				else:
+					walls.erase(key)
+		for row: Array in plan["walls"]:
+			var r := Rect2i(int(row[2]), int(row[3]) + shift, int(row[4]), int(row[5]))
+			for c: Vector2i in _cells(r):
+				walls[Vector3i(c.x, c.y, int(row[0]))] = true
+		for row: Array in plan["openings"]:
+			var r := Rect2i(int(row[1]), int(row[2]) + shift, int(row[3]), int(row[4]))
+			for c: Vector2i in _cells(r):
+				walls.erase(Vector3i(c.x, c.y, int(row[0])))
+		for row: Array in plan["windows"]:
+			walls[Vector3i(int(row[2]), int(row[3]) + shift, int(row[0]))] = true
+		for row: Array in plan["doors"]:
+			walls.erase(Vector3i(int(row[2]), int(row[3]) + shift, int(row[0])))
+	return walls
+
+
+
+
+func _assembly_corridor_cuts(d: Dictionary, map_script, occupied: Dictionary, structure: Dictionary) -> int:
+	var rooms: Dictionary = {}
+	for part: int in range(2):
+		var plan: Dictionary = map_script.PLAN if part == 0 else map_script.NORTH
+		var shift: int = 45 if part == 0 else 0
+		for row: Array in plan["rooms"]:
+			var r := Rect2i(int(row[3]), int(row[4]) + shift, int(row[5]), int(row[6]))
+			for c: Vector2i in _cells(r):
+				rooms[Vector3i(c.x, c.y, int(row[0]))] = true
+	var cuts: int = 0
+	for level: int in d["levels"]:
+		var g: FieldGrid = d["levels"][level]
+		var remaining: Dictionary = {}
+		for y: int in range(g.height):
+			for x: int in range(g.width):
+				var key := Vector3i(x, y, level)
+				if g.building_at(Vector2i(x, y)) >= 0 and not structure.has(key) and not rooms.has(key):
+					remaining[key] = true
+		while not remaining.is_empty():
+			var component := _assembly_take_component(remaining)
+			for key: Vector3i in occupied:
+				component.erase(key)
+			var pieces: int = 0
+			while not component.is_empty():
+				_assembly_take_component(component)
+				pieces += 1
+			if pieces != 1:
+				cuts += 1
+	return cuts
+
+
+func _assembly_take_component(remaining: Dictionary) -> Dictionary:
+	var start: Vector3i = remaining.keys()[0]
+	var queue: Array[Vector3i] = [start]
+	var found: Dictionary = {start: true}
+	remaining.erase(start)
+	var head: int = 0
+	while head < queue.size():
+		var key: Vector3i = queue[head]
+		head += 1
+		for direction: Vector2i in DIRS:
+			var next := key + Vector3i(direction.x, direction.y, 0)
+			if remaining.has(next):
+				remaining.erase(next)
+				found[next] = true
+				queue.append(next)
+	return found
+
 
 
 func test_entry_names_weights_and_first_entry() -> void:
