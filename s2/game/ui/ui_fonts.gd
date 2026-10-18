@@ -13,6 +13,10 @@ const BODY: Dictionary = {400: "IBMPlexSansKR-Regular.ttf", 500: "IBMPlexSansKR-
 const NUM: Dictionary = {400: "BarlowCondensed-Regular.ttf", 500: "BarlowCondensed-Medium.ttf", 600: "BarlowCondensed-SemiBold.ttf"}
 const PEN := "NanumPenScript-Regular.ttf"
 const WORD_JOINER := "\u2060"
+## [two-way, after a final consonant, after none] (josa).
+const PARTICLES: Array = [["\uacfc(\uc640)", "\uacfc", "\uc640"], ["\uc744(\ub97c)", "\uc744", "\ub97c"], ["\uc774(\uac00)", "\uc774", "\uac00"], ["\uc740(\ub294)", "\uc740", "\ub294"], ["(\uc73c)\ub85c", "\uc73c\ub85c", "\ub85c"]]
+## \uc601 \uc77c \uc774 \uc0bc \uc0ac \uc624 \uc721 \uce60 \ud314 \uad6c: each one's final consonant (\u3147 21, \u3139 8, \u3141 16, \u3131 1).
+const DIGIT_TAIL: Array = [21, 8, 0, 16, 0, 0, 1, 8, 8, 0]
 
 enum { WORD, NUMBER, HAND }
 
@@ -72,6 +76,38 @@ static func keep_all(text: String) -> String:
 		if i + 1 < n and c != " " and c != "\n" and text[i + 1] != " " and text[i + 1] != "\n":
 			out.append(WORD_JOINER)
 	return "".join(out)
+
+
+## `text` with the port's two-way particles (「과(와)」, 「을(를)」, 「이(가)」,
+## 「은(는)」, 「(으)로」) settled by the letter before them as written Korean
+## has it: 과·을·이·은·으로 after a final consonant, 와·를·가·는·로 after none,
+## and 로 after ㄹ. A digit is read as its Korean number; after anything else
+## the two-way form stays.
+static func josa(text: String) -> String:
+	var out: String = text
+	for p: Array in PARTICLES:
+		var both: String = p[0]
+		var at: int = out.find(both)
+		while at >= 0:
+			var tail: int = _tail(out.unicode_at(at - 1)) if at > 0 else -1
+			var pick: String = both
+			if tail == 0 or (tail == 8 and both == "(으)로"):
+				pick = p[2]
+			elif tail > 0:
+				pick = p[1]
+			out = out.substr(0, at) + pick + out.substr(at + both.length())
+			at = out.find(both, at + pick.length())
+	return out
+
+
+## The final consonant of a letter (0 for none, 8 for ㄹ), -1 when it is not
+## a Hangul syllable or a digit.
+static func _tail(code: int) -> int:
+	if code >= 0xAC00 and code <= 0xD7A3:
+		return (code - 0xAC00) % 28
+	if code >= 0x30 and code <= 0x39:
+		return DIGIT_TAIL[code - 0x30]
+	return -1
 
 
 ## A label as the mockup sets it: `css_px` and `spacing` in mockup px.

@@ -38,7 +38,36 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 		f.next()
 	assert_eq(seen, ["train", "stop_pick", "receipt", "council", "travel", "arrive", "end"], "the field is skipped here")
 	assert_eq(phases, ["travel", "stop", "settle", "council", "travel", "stop", "end"])
-	assert_eq(f.next_button.text, "처음으로", "the main key draws its own arrow")
+	assert_eq(String(f.card.name), "EndCard")
+	assert_eq(f.card.go_key.text, "처음으로", "the main key draws its own arrow")
+
+
+func test_the_second_station_is_its_sheet_and_the_end_the_long_sheet() -> void:
+	var f = _flow()
+	f.go(f._index_of("arrive"))
+	assert_eq(f.current(), "arrive")
+	assert_not_null(f.card, "the arrival sheet stands in for the panel")
+	assert_eq(String(f.card.name), "ArrivalSheet")
+	assert_false(f.panel.visible)
+	assert_eq(f.gauges.g, f.arrival_g, "the gauges read the station's state")
+	assert_false(f.soot_bot.visible, "the sheet lies over the bottom edge")
+	assert_eq(f.card.go_key.text, "끝 카드")
+	f.card.go_key.pressed.emit()
+	assert_eq(f.current(), "end", "its key goes on")
+	assert_eq(String(f.card.name), "EndCard", "gone with its step")
+	assert_false(f.panel.visible)
+	assert_eq(f.gauges.g, f.card.g, "the gauges read the finished state")
+	assert_eq(String(f.card.g["phase"]), "end", "the slice finished at the second station")
+
+
+func test_the_second_station_carries_the_slice_s_own_session() -> void:
+	var f = _flow()
+	f.go(f._index_of("council"))
+	f.card.cast()
+	f.card.close()
+	f.next()
+	assert_eq(f.current(), "arrive")
+	assert_eq(f.arrival_g["fieldReturns"]["special"], f.council_g["fieldReturns"]["special"], "the slip is the session the slice sat")
 
 
 func test_the_receipt_step_is_the_receipt_sheet_of_the_sample_when_the_field_is_skipped() -> void:

@@ -49,6 +49,9 @@ static func model(result0: Dictionary, seg0: int = 1) -> Dictionary:
 	if not r is Dictionary or (r as Dictionary).is_empty():
 		return {}
 	var d: Dictionary = ReceiptCard.rows(result0)
+	# The port's two-way particles settled (「과(와)」 → 「과」 or 「와」).
+	d["head"] = (d["head"] as Array).map(func(s: Variant) -> String: return UiFonts.josa(String(s)))
+	d["seen"] = (d["seen"] as Array).map(func(s: Variant) -> String: return UiFonts.josa(String(s)))
 	d["seg"] = seg0
 	d["kick"] = "구간 정차 · 귀환 영수증"
 	var open: bool = false

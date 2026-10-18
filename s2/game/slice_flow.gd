@@ -10,7 +10,12 @@ extends Node
 ##
 ## The special session is the session card (council_card.gd) over the dining
 ## car, off the politics port's own sample: the session the slice's departure
-## and receipt open (field_vectors.json, S1 TS 참값).
+## and receipt open (field_vectors.json, S1 TS 참값). The second station is the
+## same sample's arrival (the run between the stations is not in the port), with
+## the session's record the one the slice's own vote left; its summary is the
+## stop's sheet with the session's slip (arrival_sheet.gd), and the end is the
+## long sheet (end_card.gd) off the port's end card. The stretches are the
+## port sample's: the first stop on the second, the next station on the third.
 ##
 ## The slice holds one train state (the train sample's first stop) that the
 ## gauges, the car pane and the stop card all read. On the train the carriages
@@ -24,6 +29,9 @@ const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
+const ArrivalSheet = preload("res://game/ui/arrival_sheet.gd")
+const EndCard = preload("res://game/ui/end_card.gd")
+const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -50,29 +58,27 @@ const DEPARTURE_SAMPLE := "res://tests/game/fixtures/field_v4/departure_prologue
 const COUNCIL_SAMPLE := "res://tests/game/fixtures/field_port/field_vectors.json"
 
 ## The steps in order: [id, the train's phase behind the panel ("" for none),
-## the stretch it is on, the panel's title, the next key's word].
+## the stretch it is on, the panel's title, the next key's word]. The stretches
+## follow the port's sample (field_vectors.json: the first return on the
+## second, the second station on the third).
 const STEPS: Array = [
 	["train", "travel", 1, "열차 · 1구간", "정차 고르기"],
-	["stop_pick", "stop", 1, "정차 고르기", "내리기"],
-	["field", "", 1, "", ""],
-	["receipt", "settle", 1, "귀환 영수증", "특별 회기"],
-	["council", "council", 1, "특별 회기", "출발"],
+	["stop_pick", "stop", 2, "정차 고르기", "내리기"],
+	["field", "", 2, "", ""],
+	["receipt", "settle", 2, "귀환 영수증", "특별 회기"],
+	["council", "council", 2, "특별 회기", "출발"],
 	["travel", "travel", 2, "열차 · 2구간", "다음 역"],
-	["arrive", "stop", 2, "둘째 역 도착", "끝 카드"],
-	["end", "end", 2, "끝", "처음으로"],
+	["arrive", "stop", 3, "둘째 역 도착", "끝 카드"],
+	["end", "end", 3, "끝", "처음으로"],
 ]
-## The words on each plain panel until its real screen comes (가제).
-const NOTES: Dictionary = {
-	"arrive": ["둘째 역 도착 화면 자리"],
-	"end": ["끝 카드 자리 · 이번 판의 남길 만한 일"],
-}
 const PANEL_W: float = 560.0
 ## What stays lit in the gauges while a step's sheet is up (the stop and what it
 ## brought back are about stock; the session about what a vote moves,
 ## k3c_views.js vCouncil TOP hot).
-const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"], "receipt": ["coal", "food", "med", "lux"], "council": ["trust", "mood", "food", "lux"]}
+const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"], "receipt": ["coal", "food", "med", "lux"], "council": ["trust", "mood", "food", "lux"],
+		"arrive": ["trust", "tension", "coal", "food", "med", "lux"]}
 ## The steps whose sheet comes in from the left over the bottom edge: no soot there.
-const SHEET_STEPS: Array = ["stop_pick", "receipt"]
+const SHEET_STEPS: Array = ["stop_pick", "receipt", "arrive"]
 ## The steps that are the train itself: its pane and its keys over it.
 const HOME_STEPS: Array = ["train", "travel"]
 ## The car picked when the train comes up (시안 01: the tail's first car).
@@ -101,6 +107,8 @@ var train: Node3D = null
 var field: Node3D = null
 var result: Dictionary = {}        # the field's result, when the field was played
 var receipt: Dictionary = {}       # the receipt the receipt panel reads
+var council_g: Dictionary = {}     # the state the special session was left in
+var arrival_g: Dictionary = {}     # the second station's state (the port's sample, the session's record ours)
 var theme: Theme
 var layer: CanvasLayer
 var panel: PanelContainer
@@ -226,10 +234,16 @@ func go(i: int) -> void:
 	if id == "council":
 		_show_council()
 		return
+	if id == "arrive":
+		_show_arrival(String(row[4]))
+		return
+	if id == "end":
+		_show_end(String(row[4]))
+		return
 	if HOME_STEPS.has(id):
 		_show_home(String(row[4]))
 		return
-	_show_panel(String(row[3]), NOTES.get(id, []), String(row[4]))
+	_show_panel(String(row[3]), [], String(row[4]))
 
 
 func next() -> void:
@@ -249,6 +263,7 @@ func _show_stop_pick() -> void:
 	if c.g.get("stop") is Dictionary:
 		c.g["stop"]["place"] = "freight"
 	c.stop_name = "술레후프"
+	c.g["seg"] = int(STEPS[step][2])
 	c.top_room = TrainGauges.BAND_H
 	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
 	c.sent.connect(func(_g: Dictionary) -> void: next())
@@ -279,9 +294,87 @@ func _show_council() -> void:
 	c.name = "CouncilCard"
 	c.g = g0
 	c.t = s[1]
-	c.left.connect(func(_g: Dictionary) -> void: next())
+	c.left.connect(func(g1: Dictionary) -> void:
+		council_g = g1
+		next())
 	layer.add_child(c)
 	card = c
+
+
+## The second station: the stop's sheet saying what the train came to since the
+## first stop, the session's slip beside it, over the train at the stop; the
+## gauges read the station's state.
+func _show_arrival(go_word: String) -> void:
+	panel.visible = false
+	var s: Array = arrival_sample(council_g)
+	arrival_g = s[0]
+	if arrival_g.is_empty():
+		_show_panel(String(STEPS[step][3]), ["도착 표본 없음"], go_word)
+		return
+	var both: Dictionary = (s[1] as Dictionary).duplicate()
+	both.merge(train_t, false)
+	gauges.refresh(arrival_g, both)
+	var c = ArrivalSheet.new()
+	c.name = "ArrivalSheet"
+	c.g = arrival_g
+	c.t = s[1]
+	c.go_word = go_word
+	c.went_on.connect(next)
+	layer.add_child(c)
+	card = c
+
+
+## The end: the slice finished at the second station (field_arrival.gd
+## finish_slice) and the port's end card on the long sheet over the train.
+func _show_end(go_word: String) -> void:
+	panel.visible = false
+	var s: Array = arrival_sample(council_g)
+	if arrival_g.is_empty():
+		arrival_g = s[0]
+	var done: Dictionary = FieldArrival.finish_slice(arrival_g, s[1]) if not arrival_g.is_empty() else {"g": {}}
+	var g_end: Dictionary = done["g"]
+	if g_end.is_empty():
+		_show_panel(String(STEPS[step][3]), ["도착 표본 없음"], go_word)
+		return
+	var both: Dictionary = (s[1] as Dictionary).duplicate()
+	both.merge(train_t, false)
+	gauges.refresh(g_end, both)
+	var c = EndCard.new()
+	c.name = "EndCard"
+	c.g = g_end
+	c.t = s[1]
+	c.go_word = go_word
+	c.still = bool(opts.get("still", false))
+	c.went_on.connect(next)
+	layer.add_child(c)
+	card = c
+
+
+## [state, tables] of the second station in the port's sample for the slice's
+## departure and receipt, its session's record the one `left` holds when the
+## slice's session was left (its own vote); [{}, {}] when there is none.
+static func arrival_sample(left: Dictionary = {}) -> Array:
+	if not FileAccess.file_exists(COUNCIL_SAMPLE):
+		return [{}, {}]
+	var d = JSON.parse_string(FileAccess.get_file_as_string(COUNCIL_SAMPLE))
+	if not d is Dictionary:
+		return [{}, {}]
+	var receipt0: String = RECEIPT_SAMPLE.get_file().get_basename()
+	var departure: String = DEPARTURE_SAMPLE.get_file().get_basename()
+	for c in d.get("cases", []):
+		if not c is Dictionary or not c.get("arrival") is Dictionary:
+			continue
+		if c.get("receipt") != receipt0 or c.get("departure") != departure:
+			continue
+		var a: Dictionary = c["arrival"]
+		if not a.get("state") is Dictionary:
+			continue
+		var g1: Dictionary = (a["state"] as Dictionary).duplicate(true)
+		var ours: Variant = (left.get("fieldReturns", {}) as Dictionary).get("special") if left.get("fieldReturns") is Dictionary else null
+		if ours is Dictionary and g1.get("fieldReturns") is Dictionary:
+			g1["fieldReturns"]["special"] = (ours as Dictionary).duplicate(true)
+		return [g1, d.get("tables", {})]
+	return [{}, {}]
 
 
 ## The room behind the session as the mockup draws it (k3c_views.js

@@ -57,6 +57,12 @@ func _init(word: String = "", with_arrow: bool = true, css_size: Vector2 = CSS_S
 	_place()
 
 
+## A key sized before it is in the tree hears no `resized` when it enters (its
+## size did not change), so the face is laid to that size here.
+func _ready() -> void:
+	_place()
+
+
 func _pad(sink: float, right: float) -> StyleBoxEmpty:
 	var sb := StyleBoxEmpty.new()
 	sb.content_margin_left = UiFonts.px(8.0)
