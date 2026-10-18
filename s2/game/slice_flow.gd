@@ -694,6 +694,11 @@ func _start_field() -> void:
 	field = FieldGame.new()
 	var o := {"seed": int(opts.get("seed", 1))}
 	o["squad"] = field.default_squad("crude")
+	# How each one's car stands with the chief now, for what they say to him.
+	var comms: Dictionary = train_g.get("comms", {})
+	for row: Dictionary in o["squad"]:
+		if comms.has(row.get("comm", "")):
+			row["rel"] = float(comms[row["comm"]]["rel"])
 	var dep: Dictionary = _sample(DEPARTURE_SAMPLE)
 	if not dep.is_empty():
 		o["departure"] = dep

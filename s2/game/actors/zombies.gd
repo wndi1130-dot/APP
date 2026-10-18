@@ -732,7 +732,7 @@ func _bang(z: Dictionary, c: Vector2i, delta: float) -> void:
 	if z["bang_t"] > 0.0:
 		return
 	z["bang_t"] = 1.3
-	game.on_door_banged(c)
+	game.on_door_banged(c, z)
 
 
 func _slide(at: Vector3, step: Vector3) -> Vector3:

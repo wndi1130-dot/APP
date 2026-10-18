@@ -9,8 +9,15 @@ extends RefCounted
 ## step and the phone shows what the tests see. No cross, crescent, star,
 ## banner, lock or bag among them (med is a bottle and a bandage roll, aim has
 ## its ticks on one axis only, inv is a grid, fetch a box with no handle).
+## Every line is drawn at LINE of the width asked for (user 2026-10-18: the
+## lines were too heavy next to Frostpunk's), so the mockup's widths stay at
+## the call sites. Crouch is a figure down on one knee, its back bent and its
+## head low, a hand on the other knee (the same day: the user's own drawing,
+## the first of four, traced into one line like the others).
 
 const VIEW: float = 24.0
+## The share of the asked line width that is drawn: 2px of 24 comes out 1.5.
+const LINE: float = 0.75
 ## ".t": the faint fill of a solid shape.
 const FAINT: float = 0.16
 ## ".c": the lines cut back into a 2판 shape.
@@ -64,11 +71,11 @@ const PATHS: Dictionary = {
 	"horde": '<circle cx="6" cy="9" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="18" cy="9" r="2"/><path d="M3 20v-4c0-3 6-3 6 0v4M9 20v-6c0-3 6-3 6 0v6M15 20v-4c0-3 6-3 6 0v4"/>',
 	"clock": '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>',
 	"run": '<circle class="f" cx="15.6" cy="4.4" r="2.5"/><path d="M13.6 8.2L10.6 13.8M13.3 9.2l3.3 2.2 2.6-1M13.3 9.2l-3.6.6-2 2.4M10.6 13.8l3.8 2.6-1.2 4.8M10.6 13.8l-2.2 4-3.8.8"/>',
-	"crouch": '<circle class="f" cx="15" cy="8.2" r="2.5"/><path d="M13.6 11.2L8.8 14.4M13.4 11.8l2.6 2.8 2.4-.4M8.8 14.4l4.8 1.8-1.2 4.6M8.8 14.4l1.6 4.2-4 2.2"/>',
+	"crouch": '<circle class="f" cx="18" cy="5.6" r="2.5"/><path d="M15.6 7.6C12.8 7.8 9.8 11.6 10.3 15.2L11.4 19.8 4.4 20.1l1.5-1.1M10.3 15.2L17 13.8l-.4 6h2.6M14.1 9l-1.1 3.6 4.1-.5"/>',
 	"inv": '<path class="t" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
 	"bandage": '<path class="t" d="M4 9l11-5 5 11-11 5z"/><path d="M4 9l11-5 5 11-11 5z"/><path d="M9 7l5 11"/>',
 	"aim": '<circle cx="12" cy="12" r="8"/><circle class="f" cx="12" cy="12" r="1.600"/><path d="M12 2v4M12 18v4"/>',
-	"shove": '<path d="M4 12h9M10 8l4 4-4 4"/><path d="M18 5v14"/>',
+	"shove": '<path d="M5 12h9M11 8l4 4-4 4"/><path d="M19 5v14"/>',
 	"pause": '<path d="M8 5v14M16 5v14"/>',
 	"train": '<path class="t" d="M2 6h14l4 5v5H2z"/><path d="M2 6h14l4 5v5H2z"/><path d="M2 11h18"/><circle cx="6" cy="18" r="1.500"/><circle cx="11" cy="18" r="1.500"/><circle cx="16" cy="18" r="1.500"/><path d="M1 21.500h22"/>',
 	"tension": '<circle cx="12" cy="13" r="8"/><path d="M12 13l5-4"/><path d="M12 3v2"/><circle class="f" cx="12" cy="13" r="1.500"/>',
@@ -115,7 +122,7 @@ static func texture(id: String, px: int, color: Color, weight: float = 2.0, cut:
 		body = body.replace('class="t"', 'fill="%s" fill-opacity="%.2f" stroke="none"' % [hex, FAINT])
 		body = body.replace('class="f"', 'fill="%s" stroke="none"' % hex)
 		body = body.replace('class="c"', 'fill="none" stroke="#%s" stroke-width="%.2f"' % [cut.to_html(false), CUT_WIDTH])
-		var svg: String = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="%s" stroke-width="%.2f" stroke-linecap="round" stroke-linejoin="round">%s</g></svg>' % [hex, weight, body]
+		var svg: String = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="%s" stroke-width="%.2f" stroke-linecap="round" stroke-linejoin="round">%s</g></svg>' % [hex, weight * LINE, body]
 		var img := Image.new()
 		if img.load_svg_from_string(svg, px * 2.0 / VIEW) != OK:
 			return null
