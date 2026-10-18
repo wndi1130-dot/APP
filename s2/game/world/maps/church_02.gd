@@ -1095,7 +1095,7 @@ const NORTH: Dictionary = {
 		{"id":20,"name":"기름 가게","rect":[65,14,14,10],"warm":false,"window_broken":false},
 		{"id":21,"name":"판자 창고","rect":[4,0,18,8],"warm":false,"window_broken":false},
 		{"id":22,"name":"자재 창고","rect":[46,0,16,8],"warm":false,"window_broken":false},
-		{"id":23,"name":"연장 도매 창고","rect":[92,0,24,8],"warm":false,"window_broken":false}
+		{"id":23,"name":"연장 도매 창고","rect":[92,0,24,12],"warm":false,"window_broken":false}
 	],
 	"shells": [
 		{"building":16,"level":-1,"rect":[116,25,34,20]},
