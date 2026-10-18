@@ -521,9 +521,9 @@ const PLAN: Dictionary = {
 		{"building":0,"level":-1,"rect":[124,59,9,8],"use":"부엌"},
 		{"building":0,"level":-1,"rect":[124,68,9,7],"use":"안방"}],
 	"props": [{"kind":"floor_shell","rect":[140,10,38,18],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[158,12,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[159,12,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[140,76,36,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[157,78,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[158,78,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"display_shelf","rect":[82,55,4,1],"solid":"low","facing":0,"note":"진열대","level":0},
 		{"kind":"display_shelf","rect":[89,55,4,1],"solid":"low","facing":1,"note":"진열대","level":0},
 		{"kind":"display_shelf","rect":[106,55,4,1],"solid":"low","facing":2,"note":"진열대","level":0},
@@ -952,13 +952,13 @@ const PLAN: Dictionary = {
 		{"kind":"shopping_cart","rect":[112,78,1,1],"solid":"low","facing":1,"note":"장보기 수레","level":0},
 		{"kind":"shopping_cart","rect":[115,78,1,1],"solid":"low","facing":2,"note":"장보기 수레","level":0},
 		{"kind":"shopping_cart","rect":[118,78,1,1],"solid":"low","facing":3,"note":"장보기 수레","level":0},
-		{"kind":"dock_door","rect":[77,36,4,1],"solid":"none","facing":0,"note":"평평한 하역 문","level":0},
+		{"kind":"dock_door","rect":[77,38,4,1],"solid":"none","facing":0,"note":"평평한 하역 문","level":0},
 		{"kind":"dock_plate","rect":[77,29,4,3],"solid":"none","facing":1,"note":"하역 평판","level":0},
 		{"kind":"pallet_stack","rect":[72,31,2,2],"solid":"low","facing":2,"note":"팰릿 더미","level":0},
-		{"kind":"dock_door","rect":[97,36,4,1],"solid":"none","facing":3,"note":"평평한 하역 문","level":0},
+		{"kind":"dock_door","rect":[97,38,4,1],"solid":"none","facing":3,"note":"평평한 하역 문","level":0},
 		{"kind":"dock_plate","rect":[97,29,4,3],"solid":"none","facing":0,"note":"하역 평판","level":0},
 		{"kind":"pallet_stack","rect":[92,31,2,2],"solid":"low","facing":1,"note":"팰릿 더미","level":0},
-		{"kind":"dock_door","rect":[117,36,4,1],"solid":"none","facing":2,"note":"평평한 하역 문","level":0},
+		{"kind":"dock_door","rect":[117,38,4,1],"solid":"none","facing":2,"note":"평평한 하역 문","level":0},
 		{"kind":"dock_plate","rect":[117,29,4,3],"solid":"none","facing":3,"note":"하역 평판","level":0},
 		{"kind":"pallet_stack","rect":[112,31,2,2],"solid":"low","facing":0,"note":"팰릿 더미","level":0},
 		{"kind":"fuel_pump","rect":[18,40,1,2],"solid":"low","facing":1,"note":"주유기","level":0},
@@ -3508,7 +3508,7 @@ const NORTH: Dictionary = {
 			"kind": "parts_rack",
 			"rect": [
 				22,
-				19,
+				17,
 				3,
 				1
 			],
@@ -3547,7 +3547,7 @@ const NORTH: Dictionary = {
 			"kind": "parts_rack",
 			"rect": [
 				28,
-				19,
+				17,
 				3,
 				1
 			],
@@ -3586,7 +3586,7 @@ const NORTH: Dictionary = {
 			"kind": "parts_rack",
 			"rect": [
 				34,
-				19,
+				17,
 				3,
 				1
 			],

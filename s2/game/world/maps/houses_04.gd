@@ -744,16 +744,16 @@ const PLAN: Dictionary = {
 		{"building":0,"level":0,"rect":[61,75,8,4],"use":"동쪽 계단실"}],
 	"props": [{"kind":"floor_shell","rect":[40,58,44,22],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
 		{"kind":"floor_shell","rect":[18,20,32,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[20,27,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[19,27,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[66,20,32,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[68,27,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[67,27,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[4,40,30,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[6,47,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[5,47,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[136,20,32,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[138,27,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[137,27,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[134,54,34,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[136,61,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
-		{"kind":"stair_stub","rect":[45,76,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[135,61,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[44,76,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"display_shelf","rect":[42,62,4,1],"solid":"low","facing":0,"note":"진열대","level":0},
 		{"kind":"display_shelf","rect":[47,62,4,1],"solid":"low","facing":1,"note":"진열대","level":0},
 		{"kind":"display_shelf","rect":[60,62,4,1],"solid":"low","facing":2,"note":"진열대","level":0},
@@ -4011,7 +4011,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				37,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4050,7 +4050,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				43,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4089,7 +4089,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				49,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4128,7 +4128,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				55,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4167,7 +4167,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				60,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4206,7 +4206,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				65,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4466,7 +4466,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				37,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4505,7 +4505,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				43,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4544,7 +4544,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				49,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4583,7 +4583,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				55,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4622,7 +4622,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				60,
-				18,
+				17,
 				3,
 				2
 			],
@@ -4661,7 +4661,7 @@ const NORTH: Dictionary = {
 			"kind": "coal_heap",
 			"rect": [
 				65,
-				18,
+				17,
 				3,
 				2
 			],

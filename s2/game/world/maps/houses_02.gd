@@ -730,15 +730,15 @@ const PLAN: Dictionary = {
 		{"building":15,"level":0,"rect":[43,23,5,6],"use":"작업실"},
 		{"building":15,"level":0,"rect":[49,23,4,6],"use":"뒤 창고"}],
 	"props": [{"kind":"floor_shell","rect":[56,43,56,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[74,50,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[73,50,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[116,43,16,40],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[123,45,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[124,45,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[136,12,36,18],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[153,14,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[154,14,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[136,72,34,16],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[138,79,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[137,79,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"floor_shell","rect":[64,94,44,14],"solid":"none","facing":0,"note":"사층 겉모양","level":3},
-		{"kind":"stair_stub","rect":[66,100,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
+		{"kind":"stair_stub","rect":[65,100,1,2],"solid":"none","facing":0,"note":"계단 자리","level":2},
 		{"kind":"stalled_tram","rect":[142,60,12,3],"solid":"wall","facing":2,"note":"멈춘 전차","level":0},
 		{"kind":"bed","rect":[57,44,2,1],"solid":"low","facing":0,"note":"안방의 침대","level":0},
 		{"kind":"cold_stove","rect":[65,48,1,1],"solid":"low","facing":1,"note":"안방의 꺼진 난로","level":0},
@@ -3721,7 +3721,7 @@ const NORTH: Dictionary = {
 			"kind": "tin_crate",
 			"rect": [
 				56,
-				19,
+				17,
 				2,
 				1
 			],
@@ -4176,7 +4176,7 @@ const NORTH: Dictionary = {
 			"kind": "tin_crate",
 			"rect": [
 				56,
-				19,
+				17,
 				2,
 				1
 			],

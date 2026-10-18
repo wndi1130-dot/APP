@@ -4079,7 +4079,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				15,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4118,7 +4118,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				21,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4157,7 +4157,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				27,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4196,7 +4196,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				33,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4547,7 +4547,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				15,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4586,7 +4586,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				21,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4625,7 +4625,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				27,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4664,7 +4664,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				33,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4781,7 +4781,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				15,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4820,7 +4820,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				21,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4859,7 +4859,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				27,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4898,7 +4898,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				33,
-				19,
+				18,
 				3,
 				1
 			],
@@ -5678,7 +5678,7 @@ const NORTH: Dictionary = {
 			"kind": "hardware_rack",
 			"rect": [
 				161,
-				3,
+				2,
 				3,
 				1
 			],

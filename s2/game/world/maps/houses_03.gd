@@ -1007,10 +1007,10 @@ const PLAN: Dictionary = {
 		{"kind":"fieldstone_wall","rect":[5,46,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"fieldstone_wall","rect":[36,46,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"fieldstone_wall","rect":[0,84,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
-		{"kind":"fieldstone_wall","rect":[28,84,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
+		{"kind":"fieldstone_wall","rect":[27,84,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"fieldstone_wall","rect":[36,76,8,1],"solid":"low","facing":0,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"fieldstone_wall","rect":[52,76,8,1],"solid":"low","facing":0,"note":"마당의 들돌 담 토막","level":0},
-		{"kind":"fieldstone_wall","rect":[28,85,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
+		{"kind":"fieldstone_wall","rect":[29,83,1,8],"solid":"low","facing":1,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"fieldstone_wall","rect":[115,76,8,1],"solid":"low","facing":0,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"fieldstone_wall","rect":[115,99,8,1],"solid":"low","facing":0,"note":"마당의 들돌 담 토막","level":0},
 		{"kind":"bed","rect":[117,35,2,1],"solid":"low","facing":0,"note":"안방의 침대","level":0},
@@ -4340,7 +4340,7 @@ const NORTH: Dictionary = {
 			"kind": "blanket_crate",
 			"rect": [
 				84,
-				5,
+				3,
 				2,
 				1
 			],
@@ -4808,7 +4808,7 @@ const NORTH: Dictionary = {
 			"kind": "blanket_crate",
 			"rect": [
 				84,
-				5,
+				3,
 				2,
 				1
 			],
@@ -5042,7 +5042,7 @@ const NORTH: Dictionary = {
 			"kind": "blanket_crate",
 			"rect": [
 				84,
-				5,
+				3,
 				2,
 				1
 			],
