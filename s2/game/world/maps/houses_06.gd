@@ -3252,7 +3252,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				24,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3291,7 +3291,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				29,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3330,7 +3330,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				34,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3369,7 +3369,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				39,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3408,7 +3408,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				43,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3447,7 +3447,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				47,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3720,7 +3720,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				24,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3759,7 +3759,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				29,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3798,7 +3798,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				34,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3837,7 +3837,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				39,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3876,7 +3876,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				43,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3915,7 +3915,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				47,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3954,7 +3954,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				24,
-				19,
+				18,
 				3,
 				1
 			],
@@ -3993,7 +3993,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				29,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4032,7 +4032,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				34,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4071,7 +4071,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				39,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4110,7 +4110,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				43,
-				19,
+				18,
 				3,
 				1
 			],
@@ -4149,7 +4149,7 @@ const NORTH: Dictionary = {
 			"kind": "herb_drying_rack",
 			"rect": [
 				47,
-				19,
+				18,
 				3,
 				1
 			],
