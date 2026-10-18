@@ -78,9 +78,9 @@ func place() -> void:
 func opening_line() -> String:
 	match mission.kind:
 		"survey":
-			return "이번 일: 분기기와 신호기를 살피고, 역무실이나 신호소에서 선로 기록을 찾는다. 작업조는 부르지 않는다."
+			return "이번 일: 분기기·신호기 살피기 · 역무실이나 신호소에서 선로 기록 찾기 · 작업조 없이"
 		"depot":
-			return "이번 일: 측선의 석탄을 %d 싣는다. 작업조를 부르면 적재 컨베이어를 고칠지 정한다." % int(mission.goal("load")["amount"])
+			return "이번 일: 측선 석탄 %d 싣기 · 작업조를 부르면 적재 컨베이어 고칠지 정하기" % int(mission.goal("load")["amount"])
 	return ""
 
 
