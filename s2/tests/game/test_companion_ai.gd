@@ -216,12 +216,12 @@ func test_the_chief_stops_by_a_box_and_a_companion_takes_it() -> void:
 		if game.ai._help_search(q):
 			helpers += 1
 			assert_ne(game.ai._role(q), "rear", "the rear one keeps watch")
-	assert_gte(helpers, 1, "someone goes for it")
-	var claims := {}
+	assert_eq(helpers, 1, "one goes for it, the rest keep by the chief")
+	var searching := 0
 	for q in game.squad:
 		if q.brain.has("help_c"):
-			assert_false(claims.has(q.brain["help_c"]), "one each")
-			claims[q.brain["help_c"]] = true
+			searching += 1
+	assert_eq(searching, 1, "one at a time")
 
 
 func test_nobody_stops_to_search_while_the_chief_walks_on() -> void:
