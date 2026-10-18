@@ -41,6 +41,9 @@ const MACHINES: Array[String] = [
 	"box_truck", "pickup_truck", "forklift", "flat_trailer", "generator",
 ]
 const TREE_MINIMUMS: Array[int] = [170, 170, 170, 190, 170, 400, 180, 400, 200]
+const CONTAINER_SUFFIXES: Array[String] = [
+	"상자", "보관함", "묶음", "선반", "자재함", "궤", "찬장", "공구함", "책상", "침대", "옷장",
+]
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var _maps: Array[Dictionary] = []
 
@@ -903,3 +906,114 @@ func _has_roman_or_han(text: String) -> bool:
 		if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 0x3400 and c <= 0x9FFF):
 			return true
 	return false
+
+
+## 자기 WALL 충돌체와 이름표는 같은 물건이다. 건물 벽과 다른 물건은 겹칠 수 없다.
+func test_assembly_props_clear_reserved_cells_and_keep_low_cells() -> void:
+	for n in range(_maps.size()):
+		var data: Dictionary = _maps[n]
+		var source: Dictionary = MAPS[n].get_script_constant_map()["LAYOUT"]
+		for level: int in data["levels"]:
+			var g: FieldGrid = data["levels"][level]
+			var reserved: Dictionary = {}
+			var occupied: Dictionary = {}
+			var trees: Dictionary = {}
+			var low_cells: Dictionary = {}
+			for c: Vector2i in g.doors:
+				reserved[c] = true
+				for step in DIRS:
+					reserved[c + step] = true
+			for c: Vector2i in g.windows:
+				reserved[c] = true
+			for stair: Dictionary in data["stairs"]:
+				if level == int(stair["low"]) or level == int(stair["high"]):
+					reserved[stair["cell"]] = true
+			for box: Dictionary in data["containers"].values():
+				if level == int(box.get("level", 0)):
+					reserved[box["cell"]] = true
+			for stove: Dictionary in data["stoves"]:
+				if level == int(stove.get("level", 0)):
+					reserved[stove["cell"]] = true
+			for way: String in data["entries"]:
+				if level == int(data["entry_levels"].get(way, 0)):
+					for c: Vector2i in data["entries"][way]:
+						reserved[c] = true
+			for group: Array in data["spawns"].values():
+				for spawn in group:
+					if spawn is Vector2i and level == 0:
+						reserved[spawn] = true
+					elif spawn is Dictionary and level == int(spawn.get("level", 0)):
+						reserved[spawn["cell"]] = true
+			if level == 0:
+				for c: Vector2i in data["barricade_slots"]:
+					reserved[c] = true
+				for c: Vector2i in data["trees"]:
+					trees[c] = true
+				for r: Rect2i in data["low_blocks"]:
+					for c in _cells(r):
+						low_cells[c] = true
+				for side: String in data["train_doors"]:
+					var direction := Vector2i.UP if side == "upper" else Vector2i.DOWN
+					for door: Vector2i in data["train_doors"][side]:
+						for depth in range(3):
+							for width in range(-1, 2):
+								reserved[door + direction * depth + Vector2i(width, 0)] = true
+			for p: Dictionary in data["props"]:
+				if int(p.get("level", 0)) != level:
+					continue
+				var r: Rect2i = p["rect"]
+				var context := "%s 층 %d %s %s" % [data["place_id"], level, p["kind"], r]
+				var own_wall: bool = level == 0 and p["solid"] == "wall" and source["walls"].has(
+					[r.position.x, r.position.y, r.size.x, r.size.y])
+				for c in _cells(r):
+					assert_false(reserved.has(c), context + " 예약 칸")
+					assert_false(occupied.has(c), context + " 소품 겹침")
+					assert_false(trees.has(c), context + " 나무 겹침")
+					assert_false(g.solid_at(c) in [S.DOOR, S.WINDOW], context + " 문·창")
+					if g.solid_at(c) == S.WALL:
+						assert_true(own_wall and g.building_at(c) < 0, context + " 다른 벽")
+					if p["solid"] == "low":
+						assert_true(low_cells.has(c), context + " LOW 목록")
+						assert_eq(g.solid_at(c), S.LOW, context + " LOW 격자")
+					# 양쪽 벽 사이 한 칸짜리 통로에는 장식 소품도 놓지 않는다.
+					if p["solid"] == "none":
+						var across_x: bool = g.solid_at(c + Vector2i.LEFT) in [S.WALL, S.BLOCK] and g.solid_at(c + Vector2i.RIGHT) in [S.WALL, S.BLOCK]
+						var across_y: bool = g.solid_at(c + Vector2i.UP) in [S.WALL, S.BLOCK] and g.solid_at(c + Vector2i.DOWN) in [S.WALL, S.BLOCK]
+						assert_false(across_x or across_y, context + " 한 칸 통로")
+					occupied[c] = true
+
+
+func test_assembly_building_walls_stay_inside_their_rects() -> void:
+	for data: Dictionary in _maps:
+		for level: int in data["levels"]:
+			var g: FieldGrid = data["levels"][level]
+			for y in range(g.height):
+				for x in range(g.width):
+					var c := Vector2i(x, y)
+					var id: int = g.building_at(c)
+					if g.solid_at(c) != S.WALL or id < 0:
+						continue
+					assert_lt(id, data["buildings"].size(), data["place_id"])
+					if id < data["buildings"].size():
+						var r: Rect2i = data["buildings"][id]["rect"]
+						assert_true(r.has_point(c), "%s 층 %d 건물 %d 벽 %s" % [data["place_id"], level, id, c])
+
+
+func test_assembly_container_names_have_model_suffixes() -> void:
+	for data: Dictionary in _maps:
+		for box: Dictionary in data["containers"].values():
+			var matched := false
+			for suffix: String in CONTAINER_SUFFIXES:
+				matched = matched or String(box["name"]).ends_with(suffix)
+			assert_true(matched, "%s %s: %s" % [data["place_id"], box["id"], box["name"]])
+
+
+func test_assembly_prop_vocabulary_matches_the_nine_maps() -> void:
+	var used: Dictionary = {}
+	for data: Dictionary in _maps:
+		for p: Dictionary in data["props"]:
+			assert_true(PROP_KINDS.has(p["kind"]), "%s %s" % [data["place_id"], p["kind"]])
+			used[p["kind"]] = true
+	for kind: String in PROP_KINDS:
+		assert_true(used.has(kind), "기존 아홉 장에서 모은 낱말: " + kind)
+
