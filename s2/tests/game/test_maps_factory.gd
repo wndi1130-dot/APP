@@ -1079,7 +1079,7 @@ func test_assembly_props_clear_structures_and_reserved_cells() -> void:
 		for p in d["props"]:
 			var lv: int = p.get("level", 0)
 			var r: Rect2i = p["rect"]
-			if p["solid"] == "low" and not d["low_blocks"].has(r):
+			if p["solid"] == "low" and p["kind"] != "water" and not d["low_blocks"].has(r):
 				missing_low += 1
 			for c in _cells(r):
 				var key := Vector3i(c.x, c.y, lv)
@@ -1097,8 +1097,8 @@ func test_assembly_props_clear_structures_and_reserved_cells() -> void:
 		assert_eq(wall_conflicts, 0, d["place_id"] + " 소품과 구조 벽")
 		assert_eq(reserved_conflicts, 0, d["place_id"] + " 소품과 출입·수납 칸")
 		assert_eq(prop_conflicts, 0, d["place_id"] + " 같은 층 소품 겹침")
-		# 물 예외를 요구하는 기존 시험과 이번 발주의 충돌도 숨기지 않는다.
-		assert_eq(missing_low, 0, d["place_id"] + " 모든 low 소품의 low_blocks 대응")
+		# 물은 기존 계약대로 low_blocks 밖이다(위 시험들과 같은 예외).
+		assert_eq(missing_low, 0, d["place_id"] + " 물을 뺀 low 소품의 low_blocks 대응")
 
 
 func test_assembly_building_wall_bounds() -> void:
@@ -1131,19 +1131,27 @@ func test_assembly_prop_vocabulary_and_low_lines() -> void:
 	for d in _maps:
 		for p in d["props"]:
 			assert_true(KINDS.has(p["kind"]), d["place_id"] + ": " + String(p["kind"]))
+		# 물(못·도랑)은 기존 계약대로 곧은 LOW 길이에서 뺀다.
+		var water: Dictionary = {}
+		for p in d["props"]:
+			if p["kind"] == "water":
+				var lv: int = int(p.get("level", 0))
+				for c in _cells(p["rect"]):
+					water[Vector3i(c.x, c.y, lv)] = true
 		var longest := 0
-		for g: FieldGrid in d["levels"].values():
+		for lv in d["levels"]:
+			var g: FieldGrid = d["levels"][lv]
 			for y in range(g.height):
 				var run := 0
 				for x in range(g.width):
-					run = run + 1 if g.solid_at(Vector2i(x, y)) == S.LOW else 0
+					run = run + 1 if g.solid_at(Vector2i(x, y)) == S.LOW and not water.has(Vector3i(x, y, lv)) else 0
 					longest = maxi(longest, run)
 			for x in range(g.width):
 				var run := 0
 				for y in range(g.height):
-					run = run + 1 if g.solid_at(Vector2i(x, y)) == S.LOW else 0
+					run = run + 1 if g.solid_at(Vector2i(x, y)) == S.LOW and not water.has(Vector3i(x, y, lv)) else 0
 					longest = maxi(longest, run)
-		assert_true(longest <= 10, d["place_id"] + " 물을 포함한 LOW 최대 길이")
+		assert_true(longest <= 10, d["place_id"] + " 물을 뺀 LOW 최대 길이")
 
 
 func _roman_or_han(text: String) -> bool:
