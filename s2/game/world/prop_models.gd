@@ -27,24 +27,42 @@ const BY_ID := {
 	"shed_cabinet": "toolbox",
 }
 
+## id 대응을 먼저 지킨다. 닫힌 궤·보관함·자재함에 맞는 모델은 없어 상자로 둔다.
+const BY_SUFFIX: Dictionary = {
+	"선반": "shop_shelf", "책상": "office_desk", "침대": "iron_bed",
+	"옷장": "wardrobe", "공구함": "toolbox", "찬장": "bookcase",
+	"궤": "", "보관함": "", "자재함": "", "상자": "", "묶음": "",
+}
+
 static var _rows: Dictionary = {}   # model name -> [{mesh, transform, material}]
+static var _batches: Dictionary = {} # path -> LOD 번호별 합친 메시
 
 
 static func enabled() -> bool:
 	return bool(ProjectSettings.get_setting(MODE_SETTING, true))
 
 
-static func model_for(id: String) -> String:
-	if not enabled() or not BY_ID.has(id):
+static func kind_for(id: String, label: String = "") -> String:
+	if BY_ID.has(id):
+		return BY_ID[id]
+	var end := label.strip_edges()
+	for suffix: String in BY_SUFFIX:
+		if end.ends_with(suffix):
+			return BY_SUFFIX[suffix]
+	return ""
+
+
+static func model_for(id: String, label: String = "") -> String:
+	if not enabled():
 		return ""
-	var name: String = BY_ID[id]
-	return name if not rows(name).is_empty() else ""
+	var name := kind_for(id, label)
+	return name if name != "" and not rows(name).is_empty() else ""
 
 
 ## Hang the model's meshes under `node` (the container's node). Returns false
 ## when the container keeps its box.
-static func attach(node: Node3D, id: String, at: Vector3) -> bool:
-	var name := model_for(id)
+static func attach(node: Node3D, id: String, at: Vector3, label: String = "") -> bool:
+	var name := model_for(id, label)
 	if name == "":
 		return false
 	var holder := Node3D.new()
@@ -52,6 +70,8 @@ static func attach(node: Node3D, id: String, at: Vector3) -> bool:
 	holder.position = at
 	node.add_child(holder)
 	for row: Dictionary in rows(name):
+		if row["lod"] != 0:
+			continue
 		var mesh := MeshInstance3D.new()
 		mesh.mesh = row["mesh"]
 		mesh.transform = row["transform"]
@@ -61,21 +81,49 @@ static func attach(node: Node3D, id: String, at: Vector3) -> bool:
 
 
 static func rows(name: String) -> Array:
-	if _rows.has(name):
-		return _rows[name]
+	return rows_path(DIR + name + ".glb")
+
+
+## 지도 소품과 수납이 같은 로더·재질을 쓴다. 없는 선택 파일은 조용히 되돌린다.
+static func rows_path(path: String) -> Array:
+	if _rows.has(path):
+		return _rows[path]
 	var found := []
-	var path := DIR + name + ".glb"
 	if ResourceLoader.exists(path):
 		var scene := load(path) as PackedScene
 		if scene != null:
 			var source := scene.instantiate()
 			_collect(source, Transform3D.IDENTITY, found)
 			source.free()
-	_rows[name] = found
+	_rows[path] = found
 	return found
 
 
-static func _collect(node: Node, parent_transform: Transform3D, found: Array) -> void:
+## 모델의 여러 노드도 LOD마다 메시 하나로 묶는다. 원래 재질과 노드 변환을 보존한다.
+static func batch_meshes(path: String) -> Dictionary:
+	if _batches.has(path):
+		return _batches[path]
+	var meshes: Dictionary = {}
+	for row: Dictionary in rows_path(path):
+		var lod: int = row["lod"]
+		if not meshes.has(lod):
+			meshes[lod] = ArrayMesh.new()
+		var mesh: Mesh = row["mesh"]
+		for surface in range(mesh.get_surface_count()):
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			st.append_from(mesh, surface, row["transform"])
+			st.set_material(row["material"])
+			st.commit(meshes[lod])
+	if not meshes.has(0):
+		meshes.clear()
+	_batches[path] = meshes
+	return meshes
+
+
+static func _collect(node: Node, parent_transform: Transform3D, found: Array, lod: int = 0) -> void:
+	if String(node.name).ends_with("_LOD1"):
+		lod = 1
 	var transform: Transform3D = parent_transform * node.transform if node is Node3D else parent_transform
 	if node is MeshInstance3D and node.mesh != null:
 		var material := ShaderMaterial.new()
@@ -93,6 +141,6 @@ static func _collect(node: Node, parent_transform: Transform3D, found: Array) ->
 						embedded.set_image(image)
 				material.set_shader_parameter("albedo_tex", source.albedo_texture)
 			material.set_shader_parameter("albedo", source.albedo_color)
-		found.append({"mesh": node.mesh, "transform": transform, "material": material})
+		found.append({"mesh": node.mesh, "transform": transform, "material": material, "lod": lod})
 	for child in node.get_children():
-		_collect(child, transform, found)
+		_collect(child, transform, found, lod)
