@@ -13,6 +13,8 @@ const DeadPose = preload("res://game/actors/dead_pose.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const DeadSeparation = preload("res://game/sim/dead_separation.gd")
+const SEPARATION_EXCLUDED: Array[String] = ["downed", "rising", "waking", "frozen", "climb", "grab", "dead", "corpse", "dash"]
 
 const MAX_DRAW: int = 160
 const SIGHT: float = 9.0
@@ -323,6 +325,8 @@ func wake(z: Dictionary) -> void:
 
 
 func update(delta: float) -> void:
+	# Remember exclusions before timers expire or a body gets up this tick.
+	var separation_skip := _separation_exclusions()
 	var people: Array = game.people_alive()
 	_people = people
 	for z in list:
@@ -377,6 +381,59 @@ func update(delta: float) -> void:
 		if z["state"] == "tell":
 			continue   # it has just dropped into it: it stands
 		_move(z, delta)
+	_separate(delta, separation_skip)
+
+
+func _can_separate(z: Dictionary) -> bool:
+	return not z["state"] in SEPARATION_EXCLUDED and float(z.get("dash_t", 0.0)) <= 0.0 and float(z.get("shoved_t", 0.0)) <= 0.0
+
+
+func _separation_exclusions() -> Dictionary:
+	var skip: Dictionary = {}
+	for z in list:
+		if not _can_separate(z):
+			skip[z["id"]] = true
+	return skip
+
+
+## One simultaneous correction after movement. Only pos may change here;
+## targets, paths, states, facing and the game's random stream stay untouched.
+func _separate(delta: float, skip: Dictionary = {}) -> void:
+	var bodies: Array[Dictionary] = []
+	var positions := PackedVector3Array()
+	var floors := PackedInt32Array()
+	var ids := PackedInt64Array()
+	var speeds := PackedFloat32Array()
+	for z in list:
+		if skip.has(z["id"]) or not _can_separate(z):
+			continue
+		bodies.append(z)
+		positions.append(z["pos"])
+		floors.append(game.level_of(z["pos"]))
+		ids.append(z["id"])
+		speeds.append(_speed(z))
+	if bodies.size() < 2:
+		return
+	var pushes := DeadSeparation.pushes(positions, floors, ids, speeds, delta)
+	# Stairs and ladders belong to both ends of the link; never push onto one.
+	var links: Dictionary = {}
+	for stair in game.stairs:
+		var cell: Vector2i = stair["cell"]
+		links[Vector3i(cell.x, stair["low"], cell.y)] = true
+		links[Vector3i(cell.x, stair["high"], cell.y)] = true
+	for i in range(bodies.size()):
+		if pushes[i] == Vector3.ZERO:
+			continue
+		var dest := positions[i] + pushes[i]
+		var cell := FieldGrid.cell_of(dest)
+		var lg = game.grid_at(positions[i])
+		if game.level_of(dest) != floors[i] or not lg.dead_can_walk(cell):
+			continue
+		if links.has(Vector3i(cell.x, floors[i], cell.y)):
+			continue
+		if not lg.body_line_clear(FieldGrid.cell_of(positions[i]), cell):
+			continue
+		bodies[i]["pos"] = dest
 
 
 func _sense(z: Dictionary, people: Array, delta: float) -> void:
