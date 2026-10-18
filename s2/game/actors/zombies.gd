@@ -335,6 +335,14 @@ func update(delta: float) -> void:
 		z["stun"] = maxf(0.0, z["stun"] - delta)
 		if z.has("shoved_t"):
 			z["shoved_t"] = maxf(0.0, float(z["shoved_t"]) - delta)
+		if z.has("fall_in"):
+			# Shoved over, it reels first (release): now it goes down, unless
+			# it was killed or knocked down some other way meanwhile.
+			z["fall_in"] = float(z["fall_in"]) - delta
+			if z["fall_in"] <= 0.0:
+				z.erase("fall_in")
+				if z["state"] == "chase":
+					knock_down(z)
 		if z.has("dash_t"):
 			_run_down(z, delta)
 		match z["state"]:
@@ -863,13 +871,28 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	z["shoved_t"] = SHOVED_TIME
 	z["pos"] = _slide(z["pos"], away.normalized() * 1.3)
 	z["cooldown"] = 1.8
-	if knock:
+	if knock and reels_first(z):
+		# Decision 412: it reels back the shove's length on its feet, stunned
+		# (it cannot bite or grab), then goes over (update). It lies as long.
+		if float(z.get("dash_t", 0.0)) > 0.0:
+			_end_dash(z)
+		z["state"] = "chase"
+		z["stun"] = maxf(float(z["stun"]), SHOVED_TIME)
+		z["fall_in"] = SHOVED_TIME
+	elif knock:
 		knock_down(z)
 	else:
 		if z["state"] == "tell":
 			z["spent_t"] = LungerRules.SPENT   # shoved out of its tell, it does not run
 		z["state"] = "chase"
 		z["stun"] = 1.0
+
+
+## Shoved over, half of the dead go down at once and half reel first and go
+## down after (decision 412). Which, by the body's own number, so a body always
+## does the same; apart from how it falls (DeadBody.fall_motion).
+static func reels_first(z: Dictionary) -> bool:
+	return fposmod(float(z["phase"]) * 3.73 + 0.31, 1.0) < 0.5
 
 
 ## How far a shoved body has been seen to go: 0 still where it stood, 1 where
