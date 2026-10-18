@@ -1,0 +1,1865 @@
+{
+  "version": 1,
+  "script_version": 1,
+  "blender": "4.5.10 LTS",
+  "axis": "X right, +Y up, +Z front",
+  "origin": "box_center",
+  "placement": "X·Y·Z 경계 상자의 한가운데가 (0,0,0). +Y 위, +Z 앞. at에 그대로 놓고 yaw만 적용.",
+  "colour_encoding": "linear RGBA vertex colours, alpha 1",
+  "palette": {
+    "wood": [
+      0.3,
+      0.25,
+      0.2,
+      1.0
+    ],
+    "wood_worn": [
+      0.42,
+      0.35,
+      0.27,
+      1.0
+    ],
+    "wood_dark": [
+      0.18,
+      0.15,
+      0.12,
+      1.0
+    ],
+    "iron": [
+      0.12,
+      0.12,
+      0.13,
+      1.0
+    ],
+    "iron_worn": [
+      0.24,
+      0.24,
+      0.25,
+      1.0
+    ],
+    "soot": [
+      0.045,
+      0.045,
+      0.052,
+      1.0
+    ],
+    "cloth": [
+      0.5,
+      0.45,
+      0.4,
+      1.0
+    ],
+    "cloth_faded": [
+      0.64,
+      0.58,
+      0.51,
+      1.0
+    ],
+    "paper": [
+      0.8,
+      0.78,
+      0.7,
+      1.0
+    ],
+    "paper_aged": [
+      0.62,
+      0.59,
+      0.49,
+      1.0
+    ],
+    "brass": [
+      0.7,
+      0.56,
+      0.3,
+      1.0
+    ],
+    "brass_dark": [
+      0.4,
+      0.32,
+      0.17,
+      1.0
+    ]
+  },
+  "size_selection": "most frequent; ties use first occurrence in source rows",
+  "source": "_in/train_interior_models.json",
+  "source_sha256": "96a658e3fc7c93de14d217116ae5784f0d134f0c45343b83577ee62fb9103ded",
+  "godot_import_script": "res://models/train_interior/vertex_colors.gd",
+  "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
+  "triangle_limit": 600,
+  "total_triangle_limit": 8000,
+  "total_triangles": 4284,
+  "assets": {
+    "bench": {
+      "status": "ready",
+      "path": "res://models/train_interior/bench.glb",
+      "uses": 8,
+      "reference_size_m": [
+        14.4,
+        0.45,
+        0.5
+      ],
+      "dimensions_m": [
+        14.4,
+        0.45,
+        0.5
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            14.4,
+            0.45,
+            0.5
+          ],
+          "uses": 7
+        },
+        {
+          "size_m": [
+            10.82,
+            0.45,
+            0.3
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 8
+      },
+      "bounds_m": [
+        [
+          -7.2,
+          -0.225,
+          -0.25
+        ],
+        [
+          7.2,
+          0.225,
+          0.25
+        ]
+      ],
+      "origin": "box_center",
+      "use": "세 줄 긴 널과 네 받침을 가진 긴 의자",
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 7712,
+      "sha256": "8c97702c34b19a0cccf3e5c7ee1017606a44b9d27e4d60ccd7394000a0b718e5"
+    },
+    "stove": {
+      "status": "ready",
+      "path": "res://models/train_interior/stove.glb",
+      "uses": 7,
+      "reference_size_m": [
+        0.4,
+        0.7,
+        0.4
+      ],
+      "dimensions_m": [
+        0.4,
+        0.7,
+        0.4
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.4,
+            0.7,
+            0.4
+          ],
+          "uses": 7
+        }
+      ],
+      "source_materials": {
+        "wood": 7
+      },
+      "bounds_m": [
+        [
+          -0.2,
+          -0.35,
+          -0.2
+        ],
+        [
+          0.2,
+          0.35,
+          0.2
+        ]
+      ],
+      "origin": "box_center",
+      "use": "검댕 몸체·상판·짧은 연결구를 가진 난로",
+      "lod0_tris": 168,
+      "triangle_limit": 600,
+      "colours": [
+        "brass_dark",
+        "iron",
+        "iron_worn",
+        "soot"
+      ],
+      "bytes": 12148,
+      "sha256": "7e3973b6360c61e3617a502a6b95a4cf144772c9443e180ad4ddc56ecc9bdb05"
+    },
+    "bunk_lower": {
+      "status": "ready",
+      "path": "res://models/train_interior/bunk_lower.glb",
+      "uses": 6,
+      "reference_size_m": [
+        1.75,
+        0.48,
+        0.58
+      ],
+      "dimensions_m": [
+        1.75,
+        0.48,
+        0.58
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            1.75,
+            0.48,
+            0.58
+          ],
+          "uses": 6
+        }
+      ],
+      "source_materials": {
+        "wood": 6
+      },
+      "bounds_m": [
+        [
+          -0.875,
+          -0.24,
+          -0.29
+        ],
+        [
+          0.875,
+          0.24,
+          0.29
+        ]
+      ],
+      "origin": "box_center",
+      "use": "낮은 다리·매트·베개를 가진 아래 침상",
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "cloth_faded",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 8568,
+      "sha256": "ab8fa92b1243bc5443a9ecf0f2b7759fee602f3e9d3a68f6c42f9905a91a58db"
+    },
+    "bunk_upper": {
+      "status": "ready",
+      "path": "res://models/train_interior/bunk_upper.glb",
+      "uses": 2,
+      "reference_size_m": [
+        2.8,
+        0.14,
+        0.6
+      ],
+      "dimensions_m": [
+        2.8,
+        0.14,
+        0.6
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            2.8,
+            0.14,
+            0.6
+          ],
+          "uses": 2
+        }
+      ],
+      "source_materials": {
+        "wood": 2
+      },
+      "bounds_m": [
+        [
+          -1.4,
+          -0.07,
+          -0.3
+        ],
+        [
+          1.4,
+          0.07,
+          0.3
+        ]
+      ],
+      "origin": "box_center",
+      "use": "얇은 목재 받침과 매트·베개의 위 침상",
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "cloth_faded",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 5232,
+      "sha256": "7a04a761a93b57d8e256238624610933d53a712cfc45bdf1b284e5f320925902"
+    },
+    "book": {
+      "status": "ready",
+      "path": "res://models/train_interior/book.glb",
+      "uses": 5,
+      "reference_size_m": [
+        0.35,
+        0.04,
+        0.25
+      ],
+      "dimensions_m": [
+        0.35,
+        0.04,
+        0.25
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.35,
+            0.04,
+            0.25
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            0.4,
+            0.08,
+            0.3
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            0.4,
+            0.05,
+            0.25
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            0.4,
+            0.04,
+            0.28
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            0.4,
+            0.06,
+            0.3
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "paper": 5
+      },
+      "bounds_m": [
+        [
+          -0.175,
+          -0.02,
+          -0.125
+        ],
+        [
+          0.175,
+          0.02,
+          0.125
+        ]
+      ],
+      "origin": "box_center",
+      "use": "표지·책등·누런 종이 단면이 분리된 책",
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "paper",
+        "paper_aged",
+        "wood_dark"
+      ],
+      "bytes": 6040,
+      "sha256": "5a647f723fd20ad14e2c27461b7036078668a767702e8fd403a950e16ff7c3cf"
+    },
+    "blanket": {
+      "status": "ready",
+      "path": "res://models/train_interior/blanket.glb",
+      "uses": 3,
+      "reference_size_m": [
+        2.5,
+        0.04,
+        0.52
+      ],
+      "dimensions_m": [
+        2.5,
+        0.04,
+        0.52
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            2.5,
+            0.04,
+            0.52
+          ],
+          "uses": 2
+        },
+        {
+          "size_m": [
+            1.2,
+            0.04,
+            0.45
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "cloth": 3
+      },
+      "bounds_m": [
+        [
+          -1.25,
+          -0.02,
+          -0.26
+        ],
+        [
+          1.25,
+          0.02,
+          0.26
+        ]
+      ],
+      "origin": "box_center",
+      "use": "완만한 접힘이 이어지는 한 장의 바랜 담요",
+      "lod0_tris": 36,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "cloth_faded"
+      ],
+      "bytes": 3516,
+      "sha256": "ffe9699d49611cba1bc0525e4e1e2175e15fecb2265674ffdd24f443a7d2fee0"
+    },
+    "sacks": {
+      "status": "ready",
+      "path": "res://models/train_interior/sacks.glb",
+      "uses": 2,
+      "reference_size_m": [
+        0.6,
+        0.46,
+        0.6
+      ],
+      "dimensions_m": [
+        0.6,
+        0.46,
+        0.6
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.6,
+            0.46,
+            0.6
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            3,
+            0.8,
+            1.4
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "cloth": 2
+      },
+      "bounds_m": [
+        [
+          -0.3,
+          -0.23,
+          -0.3
+        ],
+        [
+          0.3,
+          0.23,
+          0.3
+        ]
+      ],
+      "origin": "box_center",
+      "use": "개인 소지품 없는 식량 포대 두 개",
+      "lod0_tris": 152,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "cloth_faded"
+      ],
+      "bytes": 15252,
+      "sha256": "89c5d3c4b9764453f5b7b616bb9d84cda5684b2a67541a88c76693256aea759d"
+    },
+    "workbench": {
+      "status": "ready",
+      "path": "res://models/train_interior/workbench.glb",
+      "uses": 2,
+      "reference_size_m": [
+        2.8,
+        0.8,
+        0.6
+      ],
+      "dimensions_m": [
+        2.8,
+        0.8,
+        0.6
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            2.8,
+            0.8,
+            0.6
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            2,
+            0.8,
+            0.6
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 2
+      },
+      "bounds_m": [
+        [
+          -1.4,
+          -0.4,
+          -0.3
+        ],
+        [
+          1.4,
+          0.4,
+          0.3
+        ]
+      ],
+      "origin": "box_center",
+      "use": "하부 선반과 작은 바이스가 달린 작업대",
+      "lod0_tris": 140,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 10700,
+      "sha256": "9a652e133df4b040b8661093798f248be146a38d01aab8df7fede33797223725"
+    },
+    "crates": {
+      "status": "ready",
+      "path": "res://models/train_interior/crates.glb",
+      "uses": 2,
+      "reference_size_m": [
+        1.4,
+        0.7,
+        0.7
+      ],
+      "dimensions_m": [
+        1.4,
+        0.7,
+        0.7
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            1.4,
+            0.7,
+            0.7
+          ],
+          "uses": 1
+        },
+        {
+          "size_m": [
+            3,
+            1,
+            1.4
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 2
+      },
+      "bounds_m": [
+        [
+          -0.7,
+          -0.35,
+          -0.35
+        ],
+        [
+          0.7,
+          0.35,
+          0.35
+        ]
+      ],
+      "origin": "box_center",
+      "use": "널 틈과 보강대가 있는 화물 상자 두 개",
+      "lod0_tris": 384,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 27904,
+      "sha256": "4350f4ae54085d94f1f13c4cac1f90da405b2b6f6e07cf9294ac10fa4ef9fc3d"
+    },
+    "insulation_panel": {
+      "status": "ready",
+      "path": "res://models/train_interior/insulation_panel.glb",
+      "uses": 1,
+      "reference_size_m": [
+        12,
+        0.42,
+        0.05
+      ],
+      "dimensions_m": [
+        12.0,
+        0.42,
+        0.05
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            12,
+            0.42,
+            0.05
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -6.0,
+          -0.21,
+          -0.025
+        ],
+        [
+          6.0,
+          0.21,
+          0.025
+        ]
+      ],
+      "origin": "box_center",
+      "use": "8개 널 경계가 있는 긴 단열 패널",
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 8572,
+      "sha256": "5f544851ae430c913f59050bf36c953f6cb2f13ec6e2a92e853256effd720668"
+    },
+    "side_table": {
+      "status": "ready",
+      "path": "res://models/train_interior/side_table.glb",
+      "uses": 1,
+      "reference_size_m": [
+        1,
+        0.7,
+        0.35
+      ],
+      "dimensions_m": [
+        1.0,
+        0.7,
+        0.35
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            1,
+            0.7,
+            0.35
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -0.5,
+          -0.35,
+          -0.175
+        ],
+        [
+          0.5,
+          0.35,
+          0.175
+        ]
+      ],
+      "origin": "box_center",
+      "use": "세 줄 상판과 네 다리의 좁은 탁자",
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 7724,
+      "sha256": "5d865cd53b3092c7276c6070c43261158a70bb28ff6915b8ed915a30fd60749a"
+    },
+    "supplies": {
+      "status": "ready",
+      "path": "res://models/train_interior/supplies.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.2,
+        0.16,
+        0.2
+      ],
+      "dimensions_m": [
+        0.2,
+        0.16,
+        0.2
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.2,
+            0.16,
+            0.2
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "cloth": 1
+      },
+      "bounds_m": [
+        [
+          -0.1,
+          -0.08,
+          -0.1
+        ],
+        [
+          0.1,
+          0.08,
+          0.1
+        ]
+      ],
+      "origin": "box_center",
+      "use": "가지런히 접은 의료용 천과 붕대 두 롤",
+      "lod0_tris": 80,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "cloth_faded"
+      ],
+      "bytes": 6120,
+      "sha256": "968fc6193b3b862a9d3facae83a9be0859126dbcc5cc1843768a757a8ea84694"
+    },
+    "curtain_half_open": {
+      "status": "ready",
+      "path": "res://models/train_interior/curtain_half_open.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.6,
+        1.3,
+        0.035
+      ],
+      "dimensions_m": [
+        0.6,
+        1.3,
+        0.035
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.6,
+            1.3,
+            0.035
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "cloth": 1
+      },
+      "bounds_m": [
+        [
+          -0.3,
+          -0.65,
+          -0.0175
+        ],
+        [
+          0.3,
+          0.65,
+          0.0175
+        ]
+      ],
+      "origin": "box_center",
+      "use": "가운데가 열린 양쪽 주름 커튼",
+      "lod0_tris": 44,
+      "triangle_limit": 600,
+      "colours": [
+        "brass_dark",
+        "cloth",
+        "cloth_faded"
+      ],
+      "bytes": 4000,
+      "sha256": "abeb6ac3630daab836b57ead8406d6e0c239d3da696506dc88c47c223a1d8a81"
+    },
+    "medicine_box": {
+      "status": "ready",
+      "path": "res://models/train_interior/medicine_box.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.45,
+        0.4,
+        0.35
+      ],
+      "dimensions_m": [
+        0.45,
+        0.4,
+        0.35
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.45,
+            0.4,
+            0.35
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "paper": 1
+      },
+      "bounds_m": [
+        [
+          -0.225,
+          -0.2,
+          -0.175
+        ],
+        [
+          0.225,
+          0.2,
+          0.175
+        ]
+      ],
+      "origin": "box_center",
+      "use": "문양 없이 가로 라벨이 있는 종이 약품 상자",
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "colours": [
+        "paper",
+        "paper_aged",
+        "wood_dark"
+      ],
+      "bytes": 5240,
+      "sha256": "ae94e7c1e00ddc9a6cb6ac3466f1a8e5ee460463c0a6ba9422d10b5fad14d4fe"
+    },
+    "dining_table": {
+      "status": "ready",
+      "path": "res://models/train_interior/dining_table.glb",
+      "uses": 1,
+      "reference_size_m": [
+        12,
+        0.75,
+        0.6
+      ],
+      "dimensions_m": [
+        12.0,
+        0.75,
+        0.6
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            12,
+            0.75,
+            0.6
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -6.0,
+          -0.375,
+          -0.3
+        ],
+        [
+          6.0,
+          0.375,
+          0.3
+        ]
+      ],
+      "origin": "box_center",
+      "use": "긴 연속 상판과 여덟 다리의 식탁",
+      "lod0_tris": 144,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 11056,
+      "sha256": "655ae2202751e4384d6c3e6e9eb3b0b668647094d22cad94e2e81f3ce3f0eab6"
+    },
+    "cooking_pot": {
+      "status": "ready",
+      "path": "res://models/train_interior/cooking_pot.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.65,
+        0.5,
+        0.55
+      ],
+      "dimensions_m": [
+        0.65,
+        0.5,
+        0.55
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.65,
+            0.5,
+            0.55
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -0.325,
+          -0.25,
+          -0.275
+        ],
+        [
+          0.325,
+          0.25,
+          0.275
+        ]
+      ],
+      "origin": "box_center",
+      "use": "속이 빈 솥과 양쪽 손잡이",
+      "lod0_tris": 188,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 16732,
+      "sha256": "1262ad212908498f0a3a29b5f2391cd882d1c14f1aa84564bfe6b93958005c49"
+    },
+    "bowls": {
+      "status": "ready",
+      "path": "res://models/train_interior/bowls.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.7,
+        0.08,
+        0.3
+      ],
+      "dimensions_m": [
+        0.7,
+        0.08,
+        0.3
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.7,
+            0.08,
+            0.3
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "paper": 1
+      },
+      "bounds_m": [
+        [
+          -0.35,
+          -0.04,
+          -0.15
+        ],
+        [
+          0.35,
+          0.04,
+          0.15
+        ]
+      ],
+      "origin": "box_center",
+      "use": "속이 파인 누런 그릇 세 개",
+      "lod0_tris": 228,
+      "triangle_limit": 600,
+      "colours": [
+        "paper",
+        "paper_aged"
+      ],
+      "bytes": 19292,
+      "sha256": "e3d34a8e5deeffe089ce88df3955dd6153d1ff59e40103b383c1b5a4131fce12"
+    },
+    "class_slate": {
+      "status": "ready",
+      "path": "res://models/train_interior/class_slate.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.8,
+        0.55,
+        0.05
+      ],
+      "dimensions_m": [
+        0.8,
+        0.55,
+        0.05
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.8,
+            0.55,
+            0.05
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -0.4,
+          -0.275,
+          -0.025
+        ],
+        [
+          0.4,
+          0.275,
+          0.025
+        ]
+      ],
+      "origin": "box_center",
+      "use": "목재 테두리와 짧은 분필 선의 칠판",
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "colours": [
+        "paper",
+        "soot",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 8596,
+      "sha256": "e532f60a72ecc885b993c50d95e714d7c2d7ea129c88e4eebabd2e2926fe792a"
+    },
+    "ballot_box": {
+      "status": "ready",
+      "path": "res://models/train_interior/ballot_box.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.55,
+        0.5,
+        0.55
+      ],
+      "dimensions_m": [
+        0.55,
+        0.5,
+        0.55
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.55,
+            0.5,
+            0.55
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -0.275,
+          -0.25,
+          -0.275
+        ],
+        [
+          0.275,
+          0.25,
+          0.275
+        ]
+      ],
+      "origin": "box_center",
+      "use": "상단 투입 틈과 무문양 종이표의 투표함",
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "paper_aged",
+        "wood",
+        "wood_worn"
+      ],
+      "bytes": 6044,
+      "sha256": "39f202d7f0a514e934636ed6d4f30e5f790c9fe097953ade1c8a91f57cf0c98f"
+    },
+    "bell": {
+      "status": "ready",
+      "path": "res://models/train_interior/bell.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.14,
+        0.2,
+        0.14
+      ],
+      "dimensions_m": [
+        0.14,
+        0.2,
+        0.14
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.14,
+            0.2,
+            0.14
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "brass": 1
+      },
+      "bounds_m": [
+        [
+          -0.07,
+          -0.1,
+          -0.07
+        ],
+        [
+          0.07,
+          0.1,
+          0.07
+        ]
+      ],
+      "origin": "box_center",
+      "use": "황동 종 몸체와 짧은 목재 손잡이",
+      "lod0_tris": 144,
+      "triangle_limit": 600,
+      "colours": [
+        "brass",
+        "brass_dark",
+        "wood_dark"
+      ],
+      "bytes": 10336,
+      "sha256": "872ba2d6f5566b26abbe8d3dd52e5c8a4921b13abe547790c5903898f1e8a1df"
+    },
+    "wrench": {
+      "status": "ready",
+      "path": "res://models/train_interior/wrench.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.1,
+        0.45,
+        0.08
+      ],
+      "dimensions_m": [
+        0.1,
+        0.45,
+        0.08
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.1,
+            0.45,
+            0.08
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -0.05,
+          -0.225,
+          -0.04
+        ],
+        [
+          0.05,
+          0.225,
+          0.04
+        ]
+      ],
+      "origin": "box_center",
+      "use": "벌어진 두 턱과 납작한 손잡이의 렌치",
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 5228,
+      "sha256": "4396cd42b8417ab1509b6e47a2d5222be49a07871661a7f9eed5d762de0d33ec"
+    },
+    "memorial_board": {
+      "status": "ready",
+      "path": "res://models/train_interior/memorial_board.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.6,
+        0.7,
+        0.06
+      ],
+      "dimensions_m": [
+        0.6,
+        0.7,
+        0.06
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.6,
+            0.7,
+            0.06
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -0.3,
+          -0.35,
+          -0.03
+        ],
+        [
+          0.3,
+          0.35,
+          0.03
+        ]
+      ],
+      "origin": "box_center",
+      "use": "목재 테두리 안의 빈 추모판과 황동 명판",
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "colours": [
+        "brass_dark",
+        "paper_aged",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 6924,
+      "sha256": "a71b185dc884aa5a5a4f164b65a29d22f0fefd9e94447909d581149828197a55"
+    },
+    "ladle": {
+      "status": "ready",
+      "path": "res://models/train_interior/ladle.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.08,
+        0.35,
+        0.08
+      ],
+      "dimensions_m": [
+        0.08,
+        0.35,
+        0.08
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.08,
+            0.35,
+            0.08
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -0.04,
+          -0.175,
+          -0.04
+        ],
+        [
+          0.04,
+          0.175,
+          0.04
+        ]
+      ],
+      "origin": "box_center",
+      "use": "오목한 국자 머리와 긴 손잡이",
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 7364,
+      "sha256": "300d1dd6962247789e46f0597d750be27ffe9f0b72ab9df99fd073ed30a070f3"
+    },
+    "tools": {
+      "status": "ready",
+      "path": "res://models/train_interior/tools.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.6,
+        0.1,
+        0.4
+      ],
+      "dimensions_m": [
+        0.6,
+        0.1,
+        0.4
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.6,
+            0.1,
+            0.4
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -0.3,
+          -0.05,
+          -0.2
+        ],
+        [
+          0.3,
+          0.05,
+          0.2
+        ]
+      ],
+      "origin": "box_center",
+      "use": "낮은 받침에 놓인 망치·스패너·드라이버",
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 6908,
+      "sha256": "2338c323b17274bc797ebbc9d6867b72561d807a8ae2410e0d993c8ffefac494"
+    },
+    "shelf": {
+      "status": "ready",
+      "path": "res://models/train_interior/shelf.glb",
+      "uses": 1,
+      "reference_size_m": [
+        2,
+        0.12,
+        0.3
+      ],
+      "dimensions_m": [
+        2.0,
+        0.12,
+        0.3
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            2,
+            0.12,
+            0.3
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -1.0,
+          -0.06,
+          -0.15
+        ],
+        [
+          1.0,
+          0.06,
+          0.15
+        ]
+      ],
+      "origin": "box_center",
+      "use": "길쭉한 널과 두 개의 아래쪽 선반 받침",
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "wood",
+        "wood_worn"
+      ],
+      "bytes": 5188,
+      "sha256": "0c738ed341c86d7ab8c4ee0ff1581493afc72d74473a553671479cb31570f69e"
+    },
+    "captain_desk": {
+      "status": "ready",
+      "path": "res://models/train_interior/captain_desk.glb",
+      "uses": 1,
+      "reference_size_m": [
+        1.6,
+        0.75,
+        0.7
+      ],
+      "dimensions_m": [
+        1.6,
+        0.75,
+        0.7
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            1.6,
+            0.75,
+            0.7
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -0.8,
+          -0.375,
+          -0.35
+        ],
+        [
+          0.8,
+          0.375,
+          0.35
+        ]
+      ],
+      "origin": "box_center",
+      "use": "서랍 세 칸과 황동 손잡이의 책상",
+      "lod0_tris": 168,
+      "triangle_limit": 600,
+      "colours": [
+        "brass_dark",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 12768,
+      "sha256": "68d8ac59527cdbda102cb792b14f031c065b610062b2984e47d92cc0a23e02e5"
+    },
+    "radio": {
+      "status": "ready",
+      "path": "res://models/train_interior/radio.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.45,
+        0.3,
+        0.3
+      ],
+      "dimensions_m": [
+        0.45,
+        0.3,
+        0.3
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.45,
+            0.3,
+            0.3
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -0.225,
+          -0.15,
+          -0.15
+        ],
+        [
+          0.225,
+          0.15,
+          0.15
+        ]
+      ],
+      "origin": "box_center",
+      "use": "스피커 슬롯·주파수 창·노브 둘의 라디오",
+      "lod0_tris": 188,
+      "triangle_limit": 600,
+      "colours": [
+        "brass_dark",
+        "iron",
+        "iron_worn",
+        "paper_aged",
+        "soot",
+        "wood_dark"
+      ],
+      "bytes": 13676,
+      "sha256": "f46b80d612b8558cd746f2f5d0b1f3a2ded8a1642a567cffaf55d0c45811ca27"
+    },
+    "coal_pile": {
+      "status": "ready",
+      "path": "res://models/train_interior/coal_pile.glb",
+      "uses": 1,
+      "reference_size_m": [
+        12,
+        0.9,
+        1.5
+      ],
+      "dimensions_m": [
+        12.0,
+        0.9,
+        1.5
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            12,
+            0.9,
+            1.5
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -6.0,
+          -0.45,
+          -0.75
+        ],
+        [
+          6.0,
+          0.45,
+          0.75
+        ]
+      ],
+      "origin": "box_center",
+      "use": "불규칙한 능선이 이어지는 긴 석탄 더미",
+      "lod0_tris": 104,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "soot"
+      ],
+      "bytes": 10680,
+      "sha256": "0674c9698b9b58d462d7f1e6e86ade3bf0c132849427b25ccd238d6305c1dcf7"
+    },
+    "food_crates": {
+      "status": "ready",
+      "path": "res://models/train_interior/food_crates.glb",
+      "uses": 1,
+      "reference_size_m": [
+        3,
+        1,
+        1.2
+      ],
+      "dimensions_m": [
+        3.0,
+        1.0,
+        1.2
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            3,
+            1,
+            1.2
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -1.5,
+          -0.5,
+          -0.6
+        ],
+        [
+          1.5,
+          0.5,
+          0.6
+        ]
+      ],
+      "origin": "box_center",
+      "use": "열린 식량 상자 두 개와 통 네 개",
+      "lod0_tris": 488,
+      "triangle_limit": 600,
+      "colours": [
+        "paper",
+        "paper_aged",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 36680,
+      "sha256": "49ccab603b7fca557677c8f3b2687e692430497cf3c7e2af8a2cb0d790ad7ca6"
+    },
+    "divider": {
+      "status": "ready",
+      "path": "res://models/train_interior/divider.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.1,
+        2,
+        1.1
+      ],
+      "dimensions_m": [
+        0.1,
+        2.0,
+        1.1
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.1,
+            2,
+            1.1
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -0.05,
+          -1.0,
+          -0.55
+        ],
+        [
+          0.05,
+          1.0,
+          0.55
+        ]
+      ],
+      "origin": "box_center",
+      "use": "세로 널 네 줄이 보이는 얇은 목재 칸막이",
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 5188,
+      "sha256": "efd284c70d8c5996198a2c1306e45c2dd44bb81294b7c809a214885b8769cf91"
+    },
+    "empty_platform": {
+      "status": "ready",
+      "path": "res://models/train_interior/empty_platform.glb",
+      "uses": 1,
+      "reference_size_m": [
+        3,
+        0.5,
+        1.2
+      ],
+      "dimensions_m": [
+        3.0,
+        0.5,
+        1.2
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            3,
+            0.5,
+            1.2
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -1.5,
+          -0.25,
+          -0.6
+        ],
+        [
+          1.5,
+          0.25,
+          0.6
+        ]
+      ],
+      "origin": "box_center",
+      "use": "빈 화물용 받침의 금속 골조와 상판",
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 7700,
+      "sha256": "a483cbc8b6b12227df6876600d6e145f3cf86891474ffd1a88a8d9980d737af5"
+    },
+    "storage_board": {
+      "status": "ready",
+      "path": "res://models/train_interior/storage_board.glb",
+      "uses": 1,
+      "reference_size_m": [
+        0.5,
+        0.35,
+        0.04
+      ],
+      "dimensions_m": [
+        0.5,
+        0.35,
+        0.04
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            0.5,
+            0.35,
+            0.04
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "bounds_m": [
+        [
+          -0.25,
+          -0.175,
+          -0.02
+        ],
+        [
+          0.25,
+          0.175,
+          0.02
+        ]
+      ],
+      "origin": "box_center",
+      "use": "목재 테두리와 짧은 기록 선의 보관판",
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "colours": [
+        "paper_aged",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 8576,
+      "sha256": "588cdbeef2d108a2c338ea5963da041a3b5fd0d6665843795228220f5648b0b3"
+    },
+    "boiler": {
+      "status": "ready",
+      "path": "res://models/train_interior/boiler.glb",
+      "uses": 1,
+      "reference_size_m": [
+        10,
+        2,
+        1.4
+      ],
+      "dimensions_m": [
+        10.0,
+        2.0,
+        1.4
+      ],
+      "size_variants": [
+        {
+          "size_m": [
+            10,
+            2,
+            1.4
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "iron": 1
+      },
+      "bounds_m": [
+        [
+          -5.0,
+          -1.0,
+          -0.7
+        ],
+        [
+          5.0,
+          1.0,
+          0.7
+        ]
+      ],
+      "origin": "box_center",
+      "use": "긴 단일 보일러 몸체·받침·배관·계기",
+      "lod0_tris": 200,
+      "triangle_limit": 600,
+      "colours": [
+        "brass",
+        "brass_dark",
+        "iron",
+        "iron_worn",
+        "soot"
+      ],
+      "bytes": 13676,
+      "sha256": "b4addb80fbb4e989f00949507ba0289b090a31a52a80925e6cd2717f2ce99f40"
+    }
+  },
+  "failures": []
+}
