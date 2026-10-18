@@ -9,12 +9,18 @@ extends Control
 ##
 ## A badge shows only a number the train has (medicine: the hurt and the sick);
 ## the rooms that have no screen yet answer 「준비 중」 over their key.
+##
+## Off the train's own screen the middle is the way the train goes instead of
+## the rooms (route_line.gd, `route`), and where the main act is pulled the main
+## key is a lever (lever_key.gd, `lever`), as the session's 「표결」.
 
 signal main_pressed
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
+const LeverKey = preload("res://game/ui/lever_key.gd")
+const RouteLine = preload("res://game/ui/route_line.gd")
 
 const BAND_CSS: float = 56.0
 ## The six rooms: icon, word (k2_parts.js SIX).
@@ -29,6 +35,12 @@ const NOTE_S: float = 1.4
 var g: Dictionary = {}
 var main_word: String = ""
 var main_key: Button
+## The middle as the way the train goes: {"seg", "total", "phase", "km"} (empty: the rooms).
+var route: Dictionary = {}
+## The main key as a lever, with its small line under the word.
+var lever: bool = false
+var lever_small: String = ""
+var route_line: Control = null
 var _six: Array = []
 var _note: Label = null
 
@@ -48,19 +60,44 @@ func _ready() -> void:
 	offset_bottom = 0.0
 	_medal_key("menu", "메뉴", Vector2(12, 6))
 	_medal_key("book", "일지", Vector2(64, 6))
-	var marks: Array = badges(g)
-	for i in SIX.size():
-		var b := _room(String(SIX[i][0]), String(SIX[i][1]), String(marks[i]))
-		add_child(b)
-		_six.append(b)
+	if route.is_empty():
+		var marks: Array = badges(g)
+		for i in SIX.size():
+			var b := _room(String(SIX[i][0]), String(SIX[i][1]), String(marks[i]))
+			add_child(b)
+			_six.append(b)
+	else:
+		var r = RouteLine.new()
+		r.name = "Route"
+		r.seg = int(route.get("seg", 1))
+		r.total = int(route.get("total", 24))
+		r.phase = String(route.get("phase", "이동"))
+		r.next_km = float(route.get("km", -1.0))
+		add_child(r)
+		route_line = r
 	_medal_key("overview", "한눈에 보기", Vector2(-212, 6))
-	main_key = LampKey.new(main_word)
+	if lever:
+		var lk = LeverKey.new(main_word, lever_small)
+		lk.pulled.connect(func() -> void: main_pressed.emit())
+		lk.confirmed.connect(func() -> void: main_pressed.emit())
+		main_key = lk
+	else:
+		main_key = LampKey.new(main_word)
+		main_key.pressed.connect(func() -> void: main_pressed.emit())
 	main_key.name = "Main"
-	main_key.pressed.connect(func() -> void: main_pressed.emit())
 	add_child(main_key)
 	main_key.size = main_key.custom_minimum_size
 	resized.connect(_lay_out)
 	_lay_out()
+
+
+## The main key's word (a lever: its small line, and whether it is down).
+func set_main(word: String, small: String = "", down: bool = false) -> void:
+	main_word = word
+	if main_key is LeverKey:
+		(main_key as LeverKey).set_word(word, small, down)
+	elif main_key:
+		main_key.text = word
 
 
 ## The middle's six spread evenly between the left keys and the right ones
@@ -73,6 +110,11 @@ func _lay_out() -> void:
 	var step: float = (x1 - x0 - 60.0) / float(maxi(1, _six.size() - 1))
 	for i in _six.size():
 		(_six[i] as Control).position = Vector2(x0 + step * i, 0.0) * k
+	# The way the train goes fills the middle (.hud__mid 116 → 220 short of the
+	# right, .route 10 in from it, 10 down the band).
+	if route_line:
+		route_line.position = Vector2(x0, 10.0) * k
+		route_line.size = Vector2(x1 - x0, RouteLine.CSS_H) * k
 	for c in get_children():
 		if c is Button and c.has_meta("right"):
 			(c as Control).position = Vector2((w + float(c.get_meta("right"))) * k, 6.0 * k)

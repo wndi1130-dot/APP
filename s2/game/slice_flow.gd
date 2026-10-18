@@ -8,6 +8,10 @@ extends Node
 ## receipt, or the sample one when the field is skipped), and PR 3 swaps them
 ## for the real ones in turn. It sets no game value.
 ##
+## The special session is the session card (council_card.gd) over the dining
+## car, off the politics port's own sample: the session the slice's departure
+## and receipt open (field_vectors.json, S1 TS 참값).
+##
 ## The slice holds one train state (the train sample's first stop) that the
 ## gauges, the car pane and the stop card all read. On the train the carriages
 ## wear name plates; a car with people of its own is picked by its plate and
@@ -21,6 +25,7 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
+const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const CarPane = preload("res://game/ui/car_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
@@ -40,6 +45,9 @@ const BOOT_SCENE := "res://scenes/boot.tscn"
 ## goes out with, till the train sends its own (S3 영수증 판 4 표본).
 const RECEIPT_SAMPLE := "res://tests/game/fixtures/field_v4/case1_symbol_kept.json"
 const DEPARTURE_SAMPLE := "res://tests/game/fixtures/field_v4/departure_prologue.json"
+## The politics port's sample: each case a departure and a receipt played
+## through the first return and the special session it opens.
+const COUNCIL_SAMPLE := "res://tests/game/fixtures/field_port/field_vectors.json"
 
 ## The steps in order: [id, the train's phase behind the panel ("" for none),
 ## the stretch it is on, the panel's title, the next key's word].
@@ -55,13 +63,13 @@ const STEPS: Array = [
 ]
 ## The words on each plain panel until its real screen comes (가제).
 const NOTES: Dictionary = {
-	"council": ["식당칸 의회 · 안건과 표 자리", "귀환 영수증의 약속 판정이 여기서 쓰임"],
 	"arrive": ["둘째 역 도착 화면 자리"],
 	"end": ["끝 카드 자리 · 이번 판의 남길 만한 일"],
 }
 const PANEL_W: float = 560.0
-## What stays lit in the gauges while a step's sheet is up (the stop is about stock).
-const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"]}
+## What stays lit in the gauges while a step's sheet is up (the stop is about
+## stock; the session about what a vote moves, k3c_views.js vCouncil TOP hot).
+const FOCUS: Dictionary = {"stop_pick": ["coal", "food", "med", "lux"], "council": ["trust", "mood", "food", "lux"]}
 ## The steps that are the train itself: its pane and its keys over it.
 const HOME_STEPS: Array = ["train", "travel"]
 ## The car picked when the train comes up (시안 01: the tail's first car).
@@ -69,6 +77,9 @@ const FIRST_CAR := "tail1"
 ## The picked car sits in the middle of what the pane leaves clear: 159 mockup
 ## px left of the screen's middle (k3_views.js vHome, 844 − 318 over two).
 const PANE_SHIFT_CSS: float = 159.0
+## Metres of the dining car's floor and roof's surroundings kept in view behind
+## the special session.
+const COUNCIL_ROOM_MARGIN: float = 0.35
 ## The picked car's corners (c1.css .car.is-sel::before): 20 long, 2 thick, lamp amber.
 const SEL_ARM: float = 20.0
 const SEL_COLOR := Color("ffc66c")
@@ -179,10 +190,15 @@ func go(i: int) -> void:
 	sel = ""
 	var row: Array = STEPS[i]
 	var id: String = row[0]
-	# Over the train, not over the field or the receipt (a slip of its own).
+	# Over the train, not over the field or the receipt (a slip of its own); the
+	# slice's state, but the session's own in the special session.
 	gauges.visible = String(row[1]) != "" and id != "receipt"
+	gauges.g = train_g
+	gauges.t = train_t
 	gauges.set_focus(FOCUS.get(id, []))
-	frost.visible = String(row[1]) != ""
+	# The world outside over the train, but not in the special session: there
+	# the dining car is the room behind it (vCouncil: the back and its dark only).
+	frost.visible = String(row[1]) != "" and id != "council"
 	weather.visible = frost.visible
 	film.visible = frost.visible
 	# The train runs between the stops; at a stop the snow falls straight down
@@ -203,6 +219,9 @@ func go(i: int) -> void:
 		return
 	if id == "stop_pick":
 		_show_stop_pick()
+		return
+	if id == "council":
+		_show_council()
 		return
 	if HOME_STEPS.has(id):
 		_show_home(String(row[4]))
@@ -233,6 +252,71 @@ func _show_stop_pick() -> void:
 	c.passed_by.connect(func() -> void: go(_index_of("travel")))
 	layer.add_child(c)
 	card = c
+
+
+## The special session: the session card over the dining car, off the session
+## the port's sample opens with the slice's departure and receipt; the gauges
+## read that state (its tables joined with the train's, which they also read).
+## Closed, it goes on to the next stretch.
+func _show_council() -> void:
+	panel.visible = false
+	for l in lines.get_children():
+		lines.remove_child(l)
+		l.queue_free()
+	var s: Array = council_sample()
+	var g0: Dictionary = s[0]
+	if g0.is_empty():
+		_show_panel(String(STEPS[step][3]), ["의회 표본 없음"], String(STEPS[step][4]))
+		return
+	_frame_dining_car()
+	var both: Dictionary = (s[1] as Dictionary).duplicate()
+	both.merge(train_t, false)
+	gauges.refresh(g0, both)
+	var c = CouncilCard.new()
+	c.name = "CouncilCard"
+	c.g = g0
+	c.t = s[1]
+	c.left.connect(func(_g: Dictionary) -> void: next())
+	layer.add_child(c)
+	card = c
+
+
+## The room behind the session as the mockup draws it (k3c_views.js
+## councilBack: the dining car large, its inside from floor to roof filling the
+## screen): the train's camera on the dining car, close, its middle at the
+## car's middle height. The session card takes the screen's touches, so
+## nothing moves the camera off it.
+func _frame_dining_car() -> void:
+	if not is_instance_valid(train) or train.camera == null:
+		return
+	for c: Dictionary in train.cars:
+		if String((c.get("def", {}) as Dictionary).get("kind", "")) == "dining":
+			train.focus_car(String(c["id"]))
+			var consts: Dictionary = train.get_script().get_script_constant_map()
+			var height: float = float(consts.get("CAR_HEIGHT", 3.0))
+			var cam: Camera3D = train.camera
+			cam.size = height + 2.0 * COUNCIL_ROOM_MARGIN
+			cam.position.y += height * 0.5 - float(consts.get("CAM_LOOK_Y", -0.3))
+			return
+
+
+## [state, tables] of the session the port's sample opens when the slice's
+## departure goes out and its receipt comes back; [{}, {}] when there is none.
+static func council_sample() -> Array:
+	if not FileAccess.file_exists(COUNCIL_SAMPLE):
+		return [{}, {}]
+	var d = JSON.parse_string(FileAccess.get_file_as_string(COUNCIL_SAMPLE))
+	if not d is Dictionary:
+		return [{}, {}]
+	var receipt: String = RECEIPT_SAMPLE.get_file().get_basename()
+	var departure: String = DEPARTURE_SAMPLE.get_file().get_basename()
+	for c in d.get("cases", []):
+		if not c is Dictionary or not c.get("open") is Dictionary:
+			continue
+		var opened: Dictionary = c["open"]
+		if c.get("receipt") == receipt and c.get("departure") == departure and opened.get("nextStep") == "council" and opened.get("after") is Dictionary:
+			return [(opened["after"] as Dictionary).duplicate(true), d.get("tables", {})]
+	return [{}, {}]
 
 
 ## A picture laid over the screen from `x0` to `x1` of its width, top to bottom.

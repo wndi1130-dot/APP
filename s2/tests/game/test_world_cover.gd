@@ -134,7 +134,7 @@ func test_the_slice_runs_the_weather_between_the_stops() -> void:
 	assert_eq(seen["train"], [true, true, true], "running on the first stretch")
 	assert_eq(seen["stop_pick"], [true, false, true], "at the stop")
 	assert_eq(seen["receipt"], [true, false, true], "still at the stop")
-	assert_eq(seen["council"], [true, false, true], "the session before it leaves")
+	assert_eq(seen["council"], [false, false, false], "the session: the dining car is the room behind it (vCouncil)")
 	assert_eq(seen["travel"], [true, true, true], "running again")
 	assert_eq(seen["arrive"], [true, false, true])
 	assert_eq(seen["end"], [true, false, true])

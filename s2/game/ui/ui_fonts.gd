@@ -12,6 +12,7 @@ const DIR := "res://game/ui/fonts/"
 const BODY: Dictionary = {400: "IBMPlexSansKR-Regular.ttf", 500: "IBMPlexSansKR-Medium.ttf", 600: "IBMPlexSansKR-SemiBold.ttf"}
 const NUM: Dictionary = {400: "BarlowCondensed-Regular.ttf", 500: "BarlowCondensed-Medium.ttf", 600: "BarlowCondensed-SemiBold.ttf"}
 const PEN := "NanumPenScript-Regular.ttf"
+const WORD_JOINER := "\u2060"
 
 enum { WORD, NUMBER, HAND }
 
@@ -57,6 +58,20 @@ static func face(kind: int = WORD, weight: int = 400, spacing: float = 0.0) -> F
 		v.spacing_glyph = int(round(spacing * K))
 		_made[key] = v
 	return _made[key]
+
+
+## `text` to wrap as the mockup wraps Korean (word-break: keep-all), between
+## words only: Godot's lines break between any two Hangul letters, so a word
+## joiner (U+2060, no width) goes between each two letters of a word.
+static func keep_all(text: String) -> String:
+	var out := PackedStringArray()
+	var n: int = text.length()
+	for i in n:
+		var c: String = text[i]
+		out.append(c)
+		if i + 1 < n and c != " " and c != "\n" and text[i + 1] != " " and text[i + 1] != "\n":
+			out.append(WORD_JOINER)
+	return "".join(out)
 
 
 ## A label as the mockup sets it: `css_px` and `spacing` in mockup px.
