@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 const V4 := "res://tests/game/fixtures/field_v4/"
 
@@ -71,9 +72,9 @@ func test_the_promise_line_is_up_only_with_promises() -> void:
 	assert_false(plain.hud.promise_label.get_parent().visible, "a stop with no promise has no line")
 	var sent = _game({"departure": _json("departure_prologue")})
 	assert_true(sent.hud.promise_label.get_parent().visible)
-	assert_eq(sent.hud.promise_label.text, "약속: 서막 2명 데려오기")
+	assert_eq(sent.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 서막 2명 데려오기")
 	sent.hud.set_promises([{"kind": "skip_dispatch", "state": "꼬리칸 쉼"}])
-	assert_eq(sent.hud.promise_label.text, "약속: 교대 꼬리칸 쉼")
+	assert_eq(sent.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 교대 꼬리칸 쉼")
 	sent.hud.set_promises([])
 	assert_false(sent.hud.promise_label.get_parent().visible)
 

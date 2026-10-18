@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 var game
 
@@ -80,7 +81,7 @@ func test_the_lantern_key_is_there_only_after_sunset_and_says_what_it_costs() ->
 	hud.tick(0.02)
 	assert_true(hud.lamp_button.visible)
 	assert_true(hud.lamp_button.button_pressed, "lit to begin with")
-	var texts: Array = hud.toasts.map(func(t): return String(t["l"].text))
+	var texts: Array = hud.toasts.map(func(t): return String(t["l"].text).replace(UiFonts.WORD_JOINER, ""))
 	assert_eq(texts.filter(func(t): return t.contains("'등불'")).size(), 1, "one line, once")
 	await wait_frames(2)
 	var at: Vector2 = hud.lamp_button.get_global_rect().get_center()
@@ -88,7 +89,7 @@ func test_the_lantern_key_is_there_only_after_sunset_and_says_what_it_costs() ->
 	hud.finger_up(1, at)
 	assert_false(game.lamps_on())
 	assert_false(hud.lamp_button.button_pressed)
-	assert_true(String(hud.toasts[-1]["l"].text).contains("모두 끔"))
+	assert_true(String(hud.toasts[-1]["l"].text).replace(UiFonts.WORD_JOINER, "").contains("모두 끔"))
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
 	assert_true(game.lamps_on())

@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const Mission = preload("res://game/sim/mission.gd")
 const SulehufMap = preload("res://game/world/sulehuf_map.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _game(extra: Dictionary):
@@ -393,7 +394,7 @@ func test_the_goals_wait_in_the_journal_until_the_line_under_the_clock_is_opened
 	assert_has(words, "· 바깥 설비 0/2")
 	assert_has(words, "· 선로 기록 0/1")
 	shut.hud._close_modal()
-	# Opened by the technology: one line under the clock.
+	# Opened by the technology: one line in the message column.
 	var game = _game({"mission": "survey", "goal_line": true})
 	assert_not_null(game.hud.goal_label)
 	assert_true(game.hud.goal_label.get_parent().visible)
@@ -403,14 +404,20 @@ func test_the_goals_wait_in_the_journal_until_the_line_under_the_clock_is_opened
 	game.mission_play._seen(game.player, "sv_store")
 	assert_eq(game.mission_play.goal_line(), "바깥 설비 2/2 ✓ · 선로 기록 0/1 · 지하 보관실 1/1 ✓")
 	game.hud.tick(0.1)
-	assert_eq(game.hud.goal_label.text, game.mission_play.goal_line())
-	# The longest line: the clock box grows sideways, not down into the leader's plate.
+	assert_eq(game.hud.goal_label.text.replace(UiFonts.WORD_JOINER, ""), game.mission_play.goal_line())
+	# The longest line: in the message column left of the state icons (user
+	# 2026-10-18), clear of the squad's orders and the leader's plate; too long
+	# for the column, it wraps between words rather than run under the icons.
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var box: Control = game.hud.goal_label.get_parent().get_parent()
-	assert_gt(box.get_global_rect().size.y, 60.0, "the box is laid out")
-	assert_false(box.get_global_rect().intersects(game.hud.portrait.get_global_rect()), "clear of the leader's plate")
-	assert_eq(game.hud.goal_label.get_line_count(), 1, "one line")
+	var line: Rect2 = game.hud.goal_label.get_parent().get_global_rect()
+	assert_gt(line.size.y, 30.0, "the line is laid out")
+	assert_false(line.intersects(game.hud.portrait.get_global_rect()), "clear of the leader's plate")
+	for b: Button in [game.hud.all_aboard_button, game.hud.follow_button, game.hud.wait_button]:
+		assert_false(line.intersects(b.get_global_rect()), "clear of the squad's orders")
+	assert_lt(line.end.x, game.hud.status_pads[0].get_global_rect().position.x, "left of the state icons")
+	assert_lte(game.hud.goal_label.get_line_count(), 2, "two lines at most")
+	assert_true(game.hud.goal_label.text.contains(UiFonts.WORD_JOINER), "it wraps between words")
 	var depot = _game({"mission": "depot"})
 	assert_eq(depot.mission_play.goal_line(), "석탄 싣기 0.0/12")
 
