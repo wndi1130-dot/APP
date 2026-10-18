@@ -87,18 +87,31 @@ func test_the_pad_sits_clear_of_every_other_key() -> void:
 	var r: Rect2 = hud.all_aboard_button.get_global_rect()
 	var view: Vector2 = hud._view_size()
 	assert_true(Rect2(Vector2.ZERO, view).encloses(r), "on the screen")
-	assert_gt(r.position.x, view.x * 0.5, "on the right thumb's side")
 	for b in hud.pads:
 		if b != hud.all_aboard_button:
-			assert_false(r.intersects(b.get_global_rect()), "clear of " + b.text)
+			assert_false(r.intersects(b.get_global_rect()), "clear of " + b.text + b.tooltip_text)
 	assert_false(r.intersects(hud.allies_box.get_global_rect()), "clear of the companions' row")
 	assert_false(r.intersects(hud.portrait.get_global_rect()))
-	# Under the companions' row, at its right end, left of the thumb pads.
-	var row: Rect2 = hud.allies_box.get_global_rect()
-	assert_gt(r.position.y, row.end.y)
-	assert_almost_eq(r.end.x, row.end.x, 1.0)
-	assert_lt(r.end.x, hud.manual_button.get_global_rect().position.x)
-	assert_lt(r.end.x, hud.attack_button.get_global_rect().position.x)
+	# In the top middle, under the radio (시안 2차 .fall): the driver's words and
+	# the way back to the train in one place.
+	assert_almost_eq(r.get_center().x, view.x * 0.5, 1.0, "in the middle")
+	assert_lt(r.end.y, view.y * 0.25, "at the top")
+
+
+func test_it_sits_under_the_radio_even_when_a_call_wraps() -> void:
+	_start()
+	var view: Vector2 = hud._view_size()
+	for words in ["무리가 역 쪽으로 접근 중!", "무리 근접! 곧 출발! 모두 열차로! 무리 근접! 곧 출발! 모두 열차로! 무리 근접! 곧 출발!"]:
+		hud.radio(words)
+		hud.tick(0.02)
+		await get_tree().process_frame
+		hud.tick(0.02)
+		assert_true(hud.radio_pill.visible, words)
+		var radio: Rect2 = hud.radio_pill.get_global_rect()
+		var r: Rect2 = hud.all_aboard_button.get_global_rect()
+		assert_gt(r.position.y, radio.end.y, "under the radio: " + words)
+		assert_almost_eq(r.get_center().x, view.x * 0.5, 1.0)
+	assert_gt(hud.radio_label.get_line_count(), 1, "the long call wrapped")
 
 
 func test_the_one_by_one_order_can_be_shown_as_to_the_train() -> void:

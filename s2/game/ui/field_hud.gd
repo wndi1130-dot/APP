@@ -66,6 +66,7 @@ const TOAST_AT := Vector2(45.0 * PX_PER_MM + 12.0, 14.0 + 11.0 * PX_PER_MM + 6.0
 # 64 or 80 from the settings.
 const STATUS_AT := Vector2(-16.0, 84.0)
 const SETTINGS_KEY: float = 72.0   # the gear's touch square, top right while paused
+const SET_RIM := Color("f4f1ea")   # its white rim, as the state plates wear (시안 .fset)
 const STATUS_SIZES: Array[int] = [72, 64, 80]
 const STATUS_SIZE_NAMES: Dictionary = {72: "보통", 64: "작게", 80: "크게"}
 const STATUS_ART_SIZE: int = 80   # the pictures are drawn once, for the biggest
@@ -179,8 +180,18 @@ const SHOVE_AT := Vector2(-277.0, -268.0)
 const SHOVE_SIZE := Vector2(140.0, 84.0)
 const CONTEXT_AT := Vector2(-425.0, -204.0)
 const DEPART_AT := Vector2(-425.0, -296.0)
-const ALL_ABOARD_SIZE := Vector2(150.0, 44.0)
-const ALLIES_UP: float = 140.0      # the companions' row's top, from the screen's bottom
+## 'All aboard' in the top middle under the radio (시안 2차 .fall), css px: its
+## touch rect from 40 down and 44 high with the pill 34 inside it, the train's
+## mark 16 and the words 13 between 11 and 13 of room, 5 apart; its pill 9
+## under the radio's line.
+const ALL_ABOARD_TOP: float = 40.0
+const ALL_ABOARD_H: float = 44.0
+const ALL_ABOARD_SEEN: float = 34.0
+const ALL_ABOARD_UNDER: float = 9.0
+## The companions' row's top, from the screen's bottom: at the foot of the
+## screen as the 시안's (.fally top 340 of 390, its chips' glass ending 9 above
+## the edge), now that 'all aboard' is no longer under it.
+const ALLIES_UP: float = 92.0
 ## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
 const PX_PER_MM: float = 10.3
 const BRASS := Color(0.86, 0.72, 0.42)
@@ -205,10 +216,19 @@ const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search",
 const KEY_SEEN: float = 82.0
 const ATTACK_SEEN: float = 140.0
 const ATTACK_ICON: int = 63      # 시안 .fpad--atk .ic 34
-## The lamp pills (situation, leaving, bandage): their word and mark, as big
-## as their touch rects allow (시안 .fpad--ctx: 13 and 17).
-const PILL_FONT: int = 20
-const PILL_ICON: int = 30
+## Attack shows the letter A and run the word RUN, in Barlow (user 2026-10-18),
+## css px. Shove, aim and the situation pad show their mark alone (the same
+## day: no word), so bigger than over a word.
+const ATTACK_LETTER: float = 44.0
+const RUN_WORD: float = 15.0
+const LONE_ICON: int = 40
+## How far the attack A moves up to sit in the middle of its disc (measured on
+## the drawn key: its line keeps room under the letter the eye does not count).
+const LETTER_NUDGE: float = -3.5
+## Leaving shows its word alone (user 2026-10-18: no train) on a slim lamp
+## pill, the word as big as the 시안's lamp pill word (.fpad--ctx .lab 13).
+const DEPART_SEEN := Vector2(100.0, 56.0)
+const DEPART_FONT: float = 13.0
 const FACE_SIZE: float = 84.0
 ## A companion's chip (시안 .fchip): a face 32 across, the name over the order.
 ## Each face gets its own headwear in turn (the 시안's three, then a hood).
@@ -264,6 +284,9 @@ var depart_button: Button              # leaving: its own pad, there whenever th
 var context_rows: Array = []
 var context_t: float = 0.0
 var context_icon: String = "search"     # the situation pad's picture now (HudIcons.context_icon)
+var context_badge: PanelContainer       # how many more there are to do, on the situation pad's rim
+var context_more: Label
+var all_aboard_size: Vector2            # its touch rect, as wide as its mark and words need
 var attack_icon: String = "-"           # the attack pad's picture now (_tick_attack_icon)
 var pause_shows_play: bool = false      # the pause key shows 'play' while paused
 var offer_box: HBoxContainer
@@ -438,6 +461,9 @@ func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = H
 
 
 ## The icon over the word on a round key, before it on a pill, alone if no word.
+## A key's mark or word is fixed in the middle of its disc (user 2026-10-18);
+## with no mark nothing is kept for one over the word (Godot would keep room
+## for it and the key would grow off its place).
 func _set_icon(b: Button, icon: String, icon_px: int, beside: bool = false) -> void:
 	b.icon = HudIcons.texture(icon, icon_px, Color.WHITE) if icon != "" else null
 	b.add_theme_constant_override("icon_max_width", icon_px)
@@ -446,7 +472,25 @@ func _set_icon(b: Button, icon: String, icon_px: int, beside: bool = false) -> v
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 	else:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP if b.text != "" else VERTICAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP if b.text != "" and icon != "" else VERTICAL_ALIGNMENT_CENTER
+
+
+## A key that shows a letter or a short word in Barlow where others show a mark
+## (user 2026-10-18), in the middle of its disc as every key's mark is.
+func _letter(b: Button, css: float, spacing: float = 0.0) -> void:
+	b.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 500, spacing))
+	b.add_theme_font_size_override("font_size", UiFonts.size(css))
+	b.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
+## Move what a key shows down by `dy` (up if less than 0), so a mark over a
+## word sits in the middle of the disc as a lone mark does: the word's line
+## keeps room under its letters that the eye does not count.
+func _nudge(b: Button, dy: float) -> void:
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var sb: StyleBox = b.get_theme_stylebox(k)
+		sb.content_margin_top = 4.0 + maxf(dy, 0.0) * 2.0
+		sb.content_margin_bottom = 4.0 + maxf(-dy, 0.0) * 2.0
 
 
 ## A pill's mark and word sit together in its middle (시안 .fpad--ctx, .fall),
@@ -727,9 +771,11 @@ func _tag(text: String, color: Color = HudSkin.INK2) -> Label:
 
 func _build_allies() -> void:
 	allies_box = HBoxContainer.new()
-	# Raised a row: 'all aboard' sits under its right end (user 2026-10-12).
-	# The row belongs to the right hand's side: _place_allies keeps its right
-	# end just left of the thumb pads, clear of where the left thumb comes down.
+	# At the foot of the screen (시안 .fally): 'all aboard' went up under the
+	# radio (시안 2차 .fall), so the row raised for it (user 2026-10-12) came
+	# back down. It belongs to the right hand's side: _place_allies keeps its
+	# right end just left of the thumb pads, clear of where the left thumb
+	# comes down.
 	allies_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	allies_box.add_theme_constant_override("separation", 10)
 	root.add_child(allies_box)
@@ -843,51 +889,74 @@ func _build_thumbs() -> void:
 	# is in aim's row (user 2026-10-12). With 'one main action' the aim pad is
 	# the only one, so it takes the big place.
 	var one: bool = bool(game.opts.get("primary_one", false))
-	attack_button = _pad("공격", ATTACK_AT, ATTACK_SIZE, 20)
+	attack_button = _pad("A", ATTACK_AT, ATTACK_SIZE, 20)
 	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON)
-	aim_button = _pad("조준", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
-	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 48 if one else 30)
+	_letter(attack_button, ATTACK_LETTER)
+	_nudge(attack_button, LETTER_NUDGE)
+	attack_button.tooltip_text = "공격"
+	# Aim: its mark alone in the middle of its disc (user 2026-10-18: no word).
+	aim_button = _pad("", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
+	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON if one else LONE_ICON)
+	aim_button.tooltip_text = "조준"
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 18)
 	_dress(manual_button, "", Vector2.ONE * 76.0, true)
-	# 시안 .fpad--shove: the mark 18, its word 12 under it.
-	shove_button = _pad("밀치기", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
-	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 32)
-	# Crouch: a round key on the right edge over attack (decision 293). It lights
-	# brass from inside while on.
+	# The shove mark alone in the middle of its disc (user 2026-10-18: no word).
+	shove_button = _pad("", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
+	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, LONE_ICON)
+	shove_button.tooltip_text = "밀치기"
+	# Crouch: a round key on the right edge over attack (decision 293), a figure
+	# on one knee (user 2026-10-18). It lights brass from inside while on.
 	var key := 11.0 * PX_PER_MM
 	crouch_button = _pad("", Vector2(-16.0 - key, ATTACK_AT.y - 8.0 - key), Vector2(key, key), 20)
-	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 40)
+	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 44)
 	crouch_button.tooltip_text = "웅크림"
-	# The situation pad and leaving are lamp pills with a brass rim (the lamp
-	# keys that are not round keep it, 시안 3절); dark ink on the light.
-	# Their word in Plex semibold, the mark and the word together in the middle
-	# (시안 .fpad--ctx: mark 17, word 13).
-	context_button = _pad("상황", CONTEXT_AT, Vector2(140, 84), PILL_FONT)
-	_dress(context_button, "search", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, PILL_ICON)
-	_bold(context_button)
-	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), PILL_FONT)
-	_dress(depart_button, "train", Vector2(140, 70), false, HudSkin.Light.LAMP, HudSkin.Light.LAMP, PILL_ICON)
+	# The situation pad and leaving burn like lamps with a brass rim (시안 3절,
+	# .fpad--ctx); dark ink on the light. Their touch rects stay as they were.
+	# The situation pad: the nearest thing's mark alone on a round lamp key,
+	# and on its rim how many more a hold lays out (user 2026-10-18: no word,
+	# smaller).
+	context_button = _pad("", CONTEXT_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
+	_dress(context_button, "search", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.LAMP, LONE_ICON)
+	context_button.tooltip_text = "상황"
+	context_badge = _glass(UiFonts.px(4.0), 0.0)
+	context_more = UiFonts.label("", UiFonts.NUMBER, 600, 12.0, HudSkin.INK)
+	context_more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	context_badge.add_child(context_more)
+	context_badge.visible = false
+	context_button.add_child(context_badge)
+	# Leaving: its word alone on a slim pill (the same day: no train).
+	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
+	_dress(depart_button, "", DEPART_SEEN, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)
 	_bold(depart_button)
-	_center_pill(depart_button)
+	depart_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	depart_button.visible = false
-	# Every companion back to the train at one press (user 2026-10-11): under
-	# the companions' row, at its right end (tick puts it there). Glass by day;
+	# Every companion back to the train at one press (user 2026-10-11): in the
+	# top middle under the radio, the driver's words and the way back to the
+	# train in one place (시안 2차 .fall; tick puts it there). Glass by day;
 	# from dusk it burns like a lamp (시안 2차 11절).
-	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, ALL_ABOARD_SIZE, 18, Control.PRESET_TOP_LEFT)
-	all_aboard_styles = [HudSkin.key_styles(ALL_ABOARD_SIZE, false), HudSkin.key_styles(ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
-	_dress(all_aboard_button, "train", ALL_ABOARD_SIZE, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 22)
-	all_aboard_button.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 500, 0.78))
+	var aboard_font: Font = UiFonts.face(UiFonts.WORD, 500, 0.78)
+	var aboard_words: float = aboard_font.get_string_size("모두 열차로", HORIZONTAL_ALIGNMENT_LEFT, -1, UiFonts.size(13.0)).x
+	all_aboard_size = Vector2(ceilf(UiFonts.px(11.0 + 16.0 + 5.0 + 13.0) + aboard_words), roundf(UiFonts.px(ALL_ABOARD_H)))
+	var aboard_seen := Vector2(all_aboard_size.x, roundf(UiFonts.px(ALL_ABOARD_SEEN)))
+	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, all_aboard_size, UiFonts.size(13.0), Control.PRESET_TOP_LEFT)
+	all_aboard_styles = [HudSkin.key_styles(aboard_seen, false), HudSkin.key_styles(aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
+	_dress(all_aboard_button, "train", aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, int(UiFonts.px(16.0)))
+	all_aboard_button.add_theme_font_override("font", aboard_font)
+	all_aboard_button.add_theme_constant_override("h_separation", int(UiFonts.px(5.0)))
 	_center_pill(all_aboard_button)
+	_place_all_aboard()
 	_place_allies()
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
 	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
 	# up, an 11 mm key (presentation_motion 5, 57446c8).
 	var up := -(35.0 * PX_PER_MM + key)
-	# The round keys show a picture and no word (시안 2차 11절, 배그처럼); a key
-	# that is on lights from inside, running and the lamp amber, crouching brass.
-	run_button = _pad("", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
-	_dress(run_button, "run", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	# The round keys show a picture and no word (시안 2차 11절, 배그처럼), but run
+	# shows RUN (user 2026-10-18); a key that is on lights from inside, running
+	# and the lamp amber, crouching brass.
+	run_button = _pad("RUN", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	_letter(run_button, RUN_WORD, 1.5)
 	run_button.tooltip_text = "뛰기"
 	# The lantern key, right of run 3 mm apart; it is there only after sunset.
 	lamp_button = _pad("", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
@@ -920,6 +989,12 @@ func _build_thumbs() -> void:
 	settings_button = _pad("", Vector2(-16.0 - SETTINGS_KEY, STATUS_AT.y - 4.0 - SETTINGS_KEY), Vector2.ONE * SETTINGS_KEY, 19, Control.PRESET_TOP_RIGHT)
 	settings_button.tooltip_text = "설정"
 	_dress(settings_button, "gear", Vector2.ONE * 64.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 34)
+	# A white rim round see-through glass, as the state plates under it.
+	for st in ["normal", "hover", "disabled"]:
+		var plate = settings_button.get_theme_stylebox(st)
+		plate.ring = SET_RIM
+		plate.ring_w = 3.0 * UiFonts.K
+		plate.over_ring = false
 	settings_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
@@ -1151,6 +1226,7 @@ func tick(delta: float) -> void:
 	radio_pill.visible = radio_label.text != "" and radio_left > 0.0
 	if radio_pill.visible:
 		radio_pill.position.x = (_view_size().x - radio_pill.size.x) * 0.5
+	_place_all_aboard()
 	_tick_portrait(p)
 	_tick_allies()
 	_tick_grab(p, delta)
@@ -1247,24 +1323,23 @@ func _tick_urgent() -> void:
 	var st: Dictionary = all_aboard_styles[1 if urgent else 0]
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		all_aboard_button.add_theme_stylebox_override(k, st[k])
+	all_aboard_button.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 600 if urgent else 500, 0.78))
 	_center_pill(all_aboard_button)
 	var ink: Color = HudSkin.LAMP_INK if urgent else HudSkin.INK
 	for k in ["font_color", "font_hover_color", "font_focus_color", "icon_normal_color", "icon_hover_color", "icon_focus_color"]:
 		all_aboard_button.add_theme_color_override(k, ink)
 
 
-## The attack pad shows what is in hand: an axe for a blade or a club, a gun
-## for a gun (the mark alone, 시안 .fpad--atk), only its word for bare hands.
+## The attack pad is A whatever is in hand (user 2026-10-18). With 'one main
+## action' the aim pad stands in for it: A while a blade, a club or bare hands
+## are out, the aim mark over 조준 with a gun.
 func _tick_attack_icon(p) -> void:
-	var id: String = p.weapon_id()
-	var want: String = "" if id == "" else ("gun" if W.is_ranged(id) else "axe")
+	var want: String = "gun" if W.is_ranged(p.weapon_id()) else ""
 	if want == attack_icon:
 		return
 	attack_icon = want
-	attack_button.text = "공격" if want == "" else ""
-	_set_icon(attack_button, want, ATTACK_ICON)
 	if bool(game.opts.get("primary_one", false)):
-		_set_icon(aim_button, "aim" if want == "gun" else want, 48)
+		_set_icon(aim_button, "aim" if want == "gun" else "", 48)
 
 
 ## A finger still down on a raider who has just given up, ran or been taken:
@@ -1381,15 +1456,23 @@ func _ally_text(p, second: String) -> String:
 	return first if second == "" else first + "\n" + second
 
 
-## The companions' row ends just left of the right thumb's pads, and 'all
-## aboard' lies under its right end.
+## The companions' row ends just left of the right thumb's pads.
 func _place_allies() -> void:
 	var view: Vector2 = _view_size()
 	var one: bool = bool(game.opts.get("primary_one", false))
 	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
 	var row: Vector2 = allies_box.get_combined_minimum_size()
 	allies_box.position = Vector2(right - row.x, view.y - ALLIES_UP)
-	all_aboard_button.position = Vector2(right - ALL_ABOARD_SIZE.x, allies_box.position.y + maxf(row.y, 76.0) + 6.0)
+
+
+## 'All aboard' in the top middle with its pill just under the radio's line
+## (시안 2차 .fall). A call long enough to wrap pushes it down while it shows.
+func _place_all_aboard() -> void:
+	var top: float = UiFonts.px(ALL_ABOARD_TOP)
+	if radio_pill.visible:
+		var inset: float = (all_aboard_size.y - roundf(UiFonts.px(ALL_ABOARD_SEEN))) * 0.5
+		top = maxf(top, radio_pill.position.y + radio_pill.size.y + UiFonts.px(ALL_ABOARD_UNDER) - inset)
+	all_aboard_button.position = Vector2(roundf((_view_size().x - all_aboard_size.x) * 0.5), roundf(top))
 
 
 func _tick_allies() -> void:
@@ -1583,18 +1666,24 @@ func _rebuild_context(p) -> void:
 	context_button.visible = not context_rows.is_empty()
 	if context_rows.is_empty():
 		return
+	# The nearest thing's mark alone; its words go to the hold's list (and to a
+	# screen reader), and how many more there are to the badge on the rim.
 	var more: int = context_rows.size() - 1
-	var text: String = String(context_rows[0]["label"]) + ("\n+%d (누르고 있기)" % more if more > 0 else "")
-	var icon: String = HudIcons.context_icon(String(context_rows[0]["label"]))
-	if text == context_button.text and icon == context_icon:
-		return
-	context_button.text = text
-	# Two lines go a size smaller, so the pad keeps to its touch rect.
-	context_button.add_theme_font_size_override("font_size", PILL_FONT - 4 if more > 0 else PILL_FONT)
+	var first: String = String(context_rows[0]["label"])
+	context_button.tooltip_text = first
+	var count: String = "+%d" % more if more > 0 else ""
+	if context_more.text != count:
+		context_more.text = count
+		context_badge.visible = more > 0
+		context_badge.reset_size()
+		# Its middle on the disc's rim, up and to the right (the disc is 84
+		# across in the middle of the pad).
+		var rim: Vector2 = context_button.size * 0.5 + Vector2(1, -1) * 42.0 * 0.7071
+		context_badge.position = (rim - context_badge.size * 0.5).round()
+	var icon: String = HudIcons.context_icon(first)
 	if icon != context_icon:
 		context_icon = icon
-		_set_icon(context_button, icon, PILL_ICON, true)
-	_center_pill(context_button)
+		_set_icon(context_button, icon, LONE_ICON)
 
 
 func _context_tap() -> void:
@@ -3335,7 +3424,18 @@ func _tick_primary(p) -> void:
 	var melee := primary_melee(p)
 	attack_button.visible = false
 	manual_button.visible = not melee
-	aim_button.text = "공격" if melee else "조준"
+	# A with a blade in hand, as attack shows; the aim mark alone with a gun
+	# (user 2026-10-18), never the two at once.
+	var word: String = "A" if melee else ""
+	if aim_button.text != word:
+		aim_button.text = word
+		if melee:
+			aim_button.icon = null
+			_letter(aim_button, ATTACK_LETTER)
+			_nudge(aim_button, LETTER_NUDGE)
+		else:
+			_set_icon(aim_button, "aim", ATTACK_ICON)
+			_nudge(aim_button, 0.0)
 	if melee:
 		aim_button.button_pressed = fighting(p)
 
