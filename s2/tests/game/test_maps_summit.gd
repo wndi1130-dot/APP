@@ -22,6 +22,9 @@ const KEYS: Array[String] = [
 const PROP_KINDS: Array[String] = [
 	"rock_face", "rock_ridge", "snow_bank", "snow_drift", "sleeper_stack", "crate_stack", "fallen_log", "signal_post", "track_switch", "rail_marker", "power_pole", "tool_bench", "tool_rack", "parts_rack", "fuel_drum", "fuel_tank", "fuel_can_group", "generator", "ladder_rack", "inspection_pit", "snowplow_truck", "sled_load", "handcart", "bed", "desk", "radio_set", "shelf", "map_cabinet", "firewood_pile", "rail_plow", "plow_blade", "rail_stack", "fallen_signal", "wind_pole", "snow_gauge_pole", "garage_door_leaf", "siding_buffer"
 ]
+const CONTAINER_SUFFIXES: Array[String] = [
+	"상자", "보관함", "묶음", "선반", "자재함", "궤", "찬장", "공구함", "책상", "침대", "옷장",
+]
 const DIRECTIONS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var _maps: Array[Dictionary] = []
 var _people: Array[PackedInt32Array] = []
@@ -664,6 +667,140 @@ func test_shed_loop_and_two_stock_pockets() -> void:
 				if int(box["level"]) == 0 and r.has_point(box["cell"]):
 					boxes += 1
 			assert_gt(boxes, 0)
+
+
+func test_assembly_props_clear_reserved_cells_and_keep_low_backing() -> void:
+	for data: Dictionary in _maps:
+		var reserved := _assembly_reserved_cells(data)
+		var occupied: Dictionary = {}
+		var errors: Array[String] = []
+		for prop: Dictionary in data["props"]:
+			var level: int = prop.get("level", 0)
+			var grid: FieldGrid = data["levels"][level]
+			var rect: Rect2i = prop["rect"]
+			for cell: Vector2i in _cells(rect):
+				var key := Vector3i(cell.x, cell.y, level)
+				if reserved.has(key) or occupied.has(key):
+					errors.append("%s %s" % [prop["kind"], key])
+				occupied[key] = true
+				# WALL 소품은 자기 충돌체를 갖는다. 다른 소품은 벽 위에 둘 수 없다.
+				if prop["solid"] != "wall" and grid.solid_at(cell) == S.WALL:
+					errors.append("벽 겹침 %s %s" % [prop["kind"], key])
+				if prop["solid"] == "low" and grid.solid_at(cell) != S.LOW:
+					errors.append("낮은 칸 불일치 %s" % key)
+				# 자기 LOW 몸체를 제외한 고정 벽 사이의 폭 한 칸 통로도 비운다.
+				if prop["solid"] not in ["wall", "tree"]:
+					var blocked: Array[bool] = []
+					for step: Vector2i in DIRECTIONS:
+						var next := cell + step
+						blocked.append(not rect.has_point(next) and grid.solid_at(next) in [S.WALL, S.BLOCK, S.WINDOW, S.AIR])
+					if (blocked[0] and blocked[1] and not blocked[2] and not blocked[3]) or (blocked[2] and blocked[3] and not blocked[0] and not blocked[1]):
+						errors.append("한 칸 통로 %s %s" % [prop["kind"], key])
+			if prop["solid"] == "low":
+				assert_true(data["low_blocks"].has(rect), "%s 낮은 소품 받침" % data["place_id"])
+		assert_eq(errors, [], "%s 소품 겹침" % data["place_id"])
+
+
+func test_assembly_building_walls_stay_inside_their_rects() -> void:
+	for data: Dictionary in _maps:
+		var bounds: Dictionary = {}
+		for building: Dictionary in data["buildings"]:
+			bounds[building["id"]] = building["rect"]
+		var outside := 0
+		var buried_rock := 0
+		for level in data["levels"]:
+			var grid: FieldGrid = data["levels"][level]
+			for y in range(grid.height):
+				for x in range(grid.width):
+					var cell := Vector2i(x, y)
+					var id: int = grid.building_at(cell)
+					if grid.solid_at(cell) != S.WALL or id < 0:
+						continue
+					var rect: Rect2i = bounds.get(id, Rect2i())
+					if not bounds.has(id) or not rect.has_point(cell):
+						outside += 1
+					if level < 0:
+						var by_room := false
+						for dy in range(-1, 2):
+							for dx in range(-1, 2):
+								by_room = by_room or grid.solid_at(cell + Vector2i(dx, dy)) in [S.NONE, S.DOOR, S.WINDOW]
+						if not by_room:
+							buried_rock += 1
+		assert_eq(outside, 0, "%s 건물 밖 벽 번호" % data["place_id"])
+		assert_eq(buried_rock, 0, "%s 방에 닿지 않는 지하 바위 번호" % data["place_id"])
+
+
+func test_assembly_container_names_have_supported_suffixes() -> void:
+	for data: Dictionary in _maps:
+		for id in data["containers"]:
+			var name: String = data["containers"][id]["name"]
+			var matched := false
+			for suffix: String in CONTAINER_SUFFIXES:
+				matched = matched or name.ends_with(suffix)
+			assert_true(matched, "%s %s: %s" % [data["place_id"], id, name])
+
+
+func test_assembly_prop_vocabulary_and_low_runs_on_every_floor() -> void:
+	for data: Dictionary in _maps:
+		for prop: Dictionary in data["props"]:
+			assert_true(PROP_KINDS.has(prop["kind"]), "%s %s" % [data["place_id"], prop["kind"]])
+		for level in data["levels"]:
+			var grid: FieldGrid = data["levels"][level]
+			var longest := 0
+			for y in range(grid.height):
+				var run := 0
+				for x in range(grid.width):
+					run = run + 1 if grid.solid_at(Vector2i(x, y)) == S.LOW else 0
+					longest = maxi(longest, run)
+			for x in range(grid.width):
+				var run := 0
+				for y in range(grid.height):
+					run = run + 1 if grid.solid_at(Vector2i(x, y)) == S.LOW else 0
+					longest = maxi(longest, run)
+			assert_lte(longest, 10, "%s 층 %s LOW 직선" % [data["place_id"], level])
+
+
+func _assembly_reserved_cells(data: Dictionary) -> Dictionary:
+	var reserved: Dictionary = {}
+	for level in data["levels"]:
+		var grid: FieldGrid = data["levels"][level]
+		for cell: Vector2i in grid.doors:
+			reserved[Vector3i(cell.x, cell.y, level)] = true
+			for step: Vector2i in DIRECTIONS:
+				var front := cell + step
+				if grid.solid_at(front) in [S.NONE, S.LOW]:
+					reserved[Vector3i(front.x, front.y, level)] = true
+		for cell: Vector2i in grid.windows:
+			reserved[Vector3i(cell.x, cell.y, level)] = true
+	for stair: Dictionary in data["stairs"]:
+		var cell: Vector2i = stair["cell"]
+		for level in [stair["low"], stair["high"]]:
+			reserved[Vector3i(cell.x, cell.y, level)] = true
+	for cell: Vector2i in data["barricade_slots"]:
+		reserved[Vector3i(cell.x, cell.y, 0)] = true
+	for name in data["spawns"]:
+		if name == "dead_levels":
+			continue
+		for cell: Vector2i in data["spawns"][name]:
+			reserved[Vector3i(cell.x, cell.y, 0)] = true
+	for name in data["entries"]:
+		var level: int = data["entry_levels"].get(name, 0)
+		for cell: Vector2i in data["entries"][name]:
+			reserved[Vector3i(cell.x, cell.y, level)] = true
+	for side in ["upper", "lower"]:
+		var step := Vector2i.UP if side == "upper" else Vector2i.DOWN
+		for door: Vector2i in data["train_doors"][side]:
+			for depth in range(3):
+				for across in range(-1, 2):
+					var cell: Vector2i = door + step * depth + Vector2i(across, 0)
+					reserved[Vector3i(cell.x, cell.y, 0)] = true
+	for box: Dictionary in data["containers"].values():
+		var cell: Vector2i = box["cell"]
+		reserved[Vector3i(cell.x, cell.y, box.get("level", 0))] = true
+	for stove: Dictionary in data["stoves"]:
+		var cell: Vector2i = stove["cell"]
+		reserved[Vector3i(cell.x, cell.y, stove.get("level", 0))] = true
+	return reserved
 
 
 func _has_roman(text: String) -> bool:

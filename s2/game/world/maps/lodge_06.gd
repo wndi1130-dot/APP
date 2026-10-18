@@ -1906,6 +1906,138 @@ const PLAN: Dictionary = {
 			-1,
 			-2,
 			"_"
+		],
+		[
+			-1,
+			111,
+			7,
+			14,
+			7,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			102,
+			19,
+			11,
+			6,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			124,
+			19,
+			10,
+			6,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			101,
+			25,
+			16,
+			9,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			120,
+			25,
+			15,
+			9,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			97,
+			25,
+			1,
+			13,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			138,
+			25,
+			1,
+			13,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			-1,
+			97,
+			38,
+			42,
+			3,
+			-1,
+			-1,
+			-1,
+			"_"
+		],
+		[
+			0,
+			66,
+			107,
+			1,
+			4,
+			5,
+			-1,
+			-2,
+			"_"
+		],
+		[
+			0,
+			169,
+			107,
+			1,
+			4,
+			5,
+			-1,
+			-2,
+			"_"
+		],
+		[
+			0,
+			173,
+			117,
+			1,
+			4,
+			5,
+			-1,
+			-2,
+			"_"
+		],
+		[
+			0,
+			70,
+			117,
+			1,
+			5,
+			5,
+			-1,
+			-2,
+			"_"
 		]
 	],
 	"buildings": [
@@ -2297,7 +2429,7 @@ const PLAN: Dictionary = {
 			2
 		],
 		[
-			54,
+			55,
 			115,
 			3,
 			1
@@ -2665,11 +2797,11 @@ const PLAN: Dictionary = {
 			68
 		],
 		[
-			121,
+			120,
 			69
 		],
 		[
-			122,
+			123,
 			69
 		],
 		[
@@ -2777,11 +2909,11 @@ const PLAN: Dictionary = {
 			68
 		],
 		[
-			153,
+			152,
 			69
 		],
 		[
-			154,
+			155,
 			69
 		],
 		[
@@ -3137,7 +3269,7 @@ const PLAN: Dictionary = {
 			47
 		],
 		[
-			120,
+			119,
 			48
 		],
 		[
@@ -5412,7 +5544,7 @@ const PLAN: Dictionary = {
 		],
 		[
 			"supply_32",
-			"막다른 식량 저장실",
+			"막다른 식량 저장실 상자",
 			99,
 			9,
 			0,
@@ -5425,7 +5557,7 @@ const PLAN: Dictionary = {
 		],
 		[
 			"supply_33",
-			"막다른 사치품 저장실",
+			"막다른 사치품 저장실 궤",
 			136,
 			9,
 			0,
@@ -5437,7 +5569,7 @@ const PLAN: Dictionary = {
 		],
 		[
 			"supply_34",
-			"계단 작업 칸",
+			"계단 작업 공구함",
 			115,
 			21,
 			0,
@@ -6021,7 +6153,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			98,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6032,7 +6164,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			108,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6043,7 +6175,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			119,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6054,7 +6186,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			130,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6065,7 +6197,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			98,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6076,7 +6208,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			108,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6087,7 +6219,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			119,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6098,7 +6230,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			130,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6109,7 +6241,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			98,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6120,7 +6252,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			108,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6131,7 +6263,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			119,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6142,7 +6274,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			130,
-			4,
+			3,
 			2,
 			1,
 			"none",
@@ -6153,7 +6285,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			98,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6164,7 +6296,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			108,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6175,7 +6307,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			119,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6186,7 +6318,7 @@ const PLAN: Dictionary = {
 		[
 			"bunk_bed",
 			130,
-			17,
+			16,
 			2,
 			1,
 			"none",
@@ -6219,7 +6351,7 @@ const PLAN: Dictionary = {
 		[
 			"cellar_shelf",
 			115,
-			21,
+			20,
 			3,
 			1,
 			"none",
@@ -6416,7 +6548,7 @@ const PLAN: Dictionary = {
 		],
 		[
 			"firewood_stack",
-			54,
+			55,
 			115,
 			3,
 			1,
@@ -6769,7 +6901,7 @@ const PLAN: Dictionary = {
 		[
 			"porch_cover",
 			116,
-			25,
+			26,
 			4,
 			2,
 			"none",
