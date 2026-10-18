@@ -36,7 +36,7 @@ func _line_of(p) -> String:
 ## What p may say for `event`, in their voice and as they stand with the chief.
 func _bank_of(p, event: String, name: String = "") -> Array:
 	var out: Array = []
-	for line in AllyLines.lines_for(event, AllyLines.voice_of(p.pid), String(game.lines.rel_of.get(p.pid, "normal"))):
+	for line in AllyLines.lines_for(event, game.lines.voice(p.pid), String(game.lines.rel_of.get(p.pid, "normal"))):
 		out.append(String(line).replace("{이름}", name))
 	return out
 
@@ -199,6 +199,22 @@ func test_the_squad_stands_as_its_cars_did_when_the_train_set_out() -> void:
 	assert_eq(by_id["p_guard_marek"], "good")
 	assert_eq(by_id["p_med_joanna"], "normal")
 	assert_eq(by_id["p_tail_tomasz"], "bad")
+
+
+func test_the_squad_speaks_in_three_voices() -> void:
+	var by_id := {}
+	for p in game.squad:
+		by_id[p.pid] = game.lines.voice(p.pid)
+	assert_eq(by_id["p_tail_tomasz"], "fear")
+	assert_eq(by_id["p_guard_marek"], "rough")
+	assert_eq(by_id["p_med_joanna"], "quiet")
+	var lines := AllyLines.new()
+	lines.voice_by["a"] = "fear"
+	var fear: Array = AllyLines.lines_for("horde_near", "fear")
+	for i in 10:
+		assert_has(fear, lines.pick("a", "horde_near", 100.0 * i))
+	lines.voice_by["b"] = "loud"
+	assert_eq(lines.voice("b"), AllyLines.voice_of("b"), "no such voice: from the id")
 
 
 func test_who_stands_badly_says_their_own_lines() -> void:

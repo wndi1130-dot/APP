@@ -14,7 +14,7 @@ extends RefCounted
 ## once in GAP_SQUAD, so four people hurt at once do not all shout at once.
 ##
 ## Richer, fitting the moment, the person and how they stand with the chief
-## (user's morning word, 2026-10-18): each person keeps a voice (voice_of) and
+## (user's morning word, 2026-10-18): each person keeps a voice (voice) and
 ## a standing with the chief (rel_of: "bad", "normal", "good"). One who stands
 ## badly or well says the lines of REL_LINES besides their voice's own, or,
 ## for what is said to the chief (TOWARD_CHIEF), instead of them.
@@ -30,7 +30,7 @@ const LINES: Dictionary = {
 }
 ## What the companions say of what they see (decision 406, bundle 4). Lines
 ## from the content stream's bank (coord/fun/콘텐츠_다양성_동료_대사.md, decision
-## 117), three voices: each person keeps one voice (voice_of). "{이름}" is the
+## 117), three voices: each person keeps one voice (voice). "{이름}" is the
 ## name of the one who fell; a line that needs it is not said without one.
 const VOICED: Dictionary = {
 	"horde_near": {
@@ -341,6 +341,9 @@ var _rng := RandomNumberGenerator.new()
 ## pid -> how they stand with the chief ("bad", "normal", "good"); set as the
 ## squad is made (field_game.gd), "normal" for anyone not in it.
 var rel_of: Dictionary = {}
+## pid -> the voice they carry ("fear", "rough", "quiet"), from their row
+## (field_game.gd default_squad); voice_of for anyone who carries none.
+var voice_by: Dictionary = {}
 
 
 func _init(seed_value: int = 0x11e5) -> void:
@@ -393,9 +396,15 @@ static func count_all() -> int:
 	return seen.size()
 
 
-## The voice a person keeps, from their id (until people carry one).
+## The voice of one who carries none, from their id.
 static func voice_of(pid: String) -> String:
 	return String(VOICES[absi(pid.hash()) % VOICES.size()])
+
+
+## The voice `pid` speaks in: their own, or voice_of.
+func voice(pid: String) -> String:
+	var v: String = String(voice_by.get(pid, ""))
+	return v if VOICES.has(v) else voice_of(pid)
 
 
 ## The line `pid` shouts for `event` at `now`, or "" if they keep quiet (no
@@ -405,7 +414,7 @@ static func voice_of(pid: String) -> String:
 ## `name`: who fell, for the lines that call them by name.
 func pick(pid: String, event: String, now: float, always: bool = false, name: String = "") -> String:
 	var bank: Array = []
-	for line in lines_for(event, voice_of(pid), String(rel_of.get(pid, "normal"))):
+	for line in lines_for(event, voice(pid), String(rel_of.get(pid, "normal"))):
 		if name != "" or not String(line).contains("{이름}"):
 			bank.append(line)
 	if bank.is_empty():

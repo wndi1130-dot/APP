@@ -695,6 +695,8 @@ func _spawn_people() -> void:
 		squad.append(p)
 		receipt.person("sent", p.pid)
 		lines.rel_of[p.pid] = AllyLines.rel_stage(float(row.get("rel", 0.0)))
+		if row.has("voice"):
+			lines.voice_by[p.pid] = String(row["voice"])
 	player = squad[0]
 	if bool(opts.get("raiders", true)):
 		var rows := [
@@ -713,13 +715,14 @@ func _spawn_people() -> void:
 
 ## "comm": the car a companion comes from; "rel": how that car stands with the
 ## chief (what they say to him, ally_lines.gd), the train's first (s1 REL0).
-## The slice hands over the train's own (slice_flow.gd).
+## The slice hands over the train's own (slice_flow.gd). "voice": how they
+## speak, each their own (coordinator, 2026-10-18).
 func default_squad(pipe_quality: String) -> Array:
 	return [
 		{"id": "p_chief", "name": "열차장", "role": "chief", "skills": {"strength": 5, "melee": 3, "shooting": 2, "stealth": 2, "search": 2}, "hands": [["axe", "factory", 0.9], ["pistol", "factory", 0.8]], "items": {"bandage": 2, "cloth": 1}},
-		{"id": "p_guard_marek", "name": "마레크", "role": "companion", "comm": "guard", "rel": 15.0, "skills": {"strength": 6, "melee": 2, "shooting": 4, "stealth": 1, "search": 1}, "hands": [["pipe_shotgun", pipe_quality, 0.9], ["knife", "factory", 0.8]], "items": {"bandage": 1}},
-		{"id": "p_med_joanna", "name": "요안나", "role": "companion", "comm": "medtech", "rel": 5.0, "medical": "skilled", "skills": {"strength": 4, "melee": 1, "shooting": 4, "stealth": 3, "search": 3}, "hands": [["bow", "factory", 0.9], ["crowbar", "factory", 0.9]], "items": {"bandage": 3, "medkit": 1, "tweezers": 1, "needle_thread": 3}},
-		{"id": "p_tail_tomasz", "name": "토마시", "role": "companion", "comm": "tail", "rel": -20.0, "skills": {"strength": 7, "melee": 3, "shooting": 1, "stealth": 1, "search": 2}, "hands": [["crowbar", "factory", 0.8], ["knife", "factory", 0.7]], "items": {"bandage": 1}, "bag": "big_pack"},
+		{"id": "p_guard_marek", "name": "마레크", "role": "companion", "comm": "guard", "rel": 15.0, "voice": "rough", "skills": {"strength": 6, "melee": 2, "shooting": 4, "stealth": 1, "search": 1}, "hands": [["pipe_shotgun", pipe_quality, 0.9], ["knife", "factory", 0.8]], "items": {"bandage": 1}},
+		{"id": "p_med_joanna", "name": "요안나", "role": "companion", "comm": "medtech", "rel": 5.0, "voice": "quiet", "medical": "skilled", "skills": {"strength": 4, "melee": 1, "shooting": 4, "stealth": 3, "search": 3}, "hands": [["bow", "factory", 0.9], ["crowbar", "factory", 0.9]], "items": {"bandage": 3, "medkit": 1, "tweezers": 1, "needle_thread": 3}},
+		{"id": "p_tail_tomasz", "name": "토마시", "role": "companion", "comm": "tail", "rel": -20.0, "voice": "fear", "skills": {"strength": 7, "melee": 3, "shooting": 1, "stealth": 1, "search": 2}, "hands": [["crowbar", "factory", 0.8], ["knife", "factory", 0.7]], "items": {"bandage": 1}, "bag": "big_pack"},
 	]
 
 
