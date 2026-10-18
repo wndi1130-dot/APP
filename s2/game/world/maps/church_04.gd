@@ -831,7 +831,8 @@ const PLAN: Dictionary = {
 		{"level":0,"rect":[109,59,2,7],"kind":"WOOD"},
 		{"level":0,"rect":[72,64,2,2],"kind":"GRAVEL"},
 		{"level":0,"rect":[88,64,2,2],"kind":"GRAVEL"},
-		{"level":0,"rect":[100,64,2,2],"kind":"GRAVEL"}
+		{"level":0,"rect":[100,64,2,2],"kind":"GRAVEL"},
+		{"level":0,"rect":[96,64,2,1],"kind":"GRAVEL"}
 	],
 	"salvage": [
 		{"id":"repair_wood","name":"수리 목재 회수 자리","cell":[72,39],"material":"wood","amount":3},
@@ -1002,7 +1003,7 @@ const NORTH: Dictionary = {
 		{"kind":"bare_tree","rect":[157,33,1,1],"solid":"tree","facing":0,"note":"비뚤어진 무리의 헐벗은 나무","level":0},
 		{"kind":"bare_tree","rect":[155,41,1,1],"solid":"tree","facing":0,"note":"비뚤어진 무리의 헐벗은 나무","level":0},
 		{"kind":"bare_tree","rect":[158,44,1,1],"solid":"tree","facing":0,"note":"비뚤어진 무리의 헐벗은 나무","level":0},
-		{"kind":"sack_pile","rect":[40,14,2,2],"solid":"none","facing":0,"note":"물자를 담은 자루","level":-1},
+		{"kind":"sack_pile","rect":[41,14,2,2],"solid":"none","facing":0,"note":"물자를 담은 자루","level":-1},
 		{"kind":"shelf","rect":[40,19,3,1],"solid":"none","facing":0,"note":"물품을 나누어 둔 선반","level":-1},
 		{"kind":"barrel","rect":[47,19,1,1],"solid":"none","facing":0,"note":"작업에 쓰던 통","level":-1},
 		{"kind":"sack_pile","rect":[49,14,2,2],"solid":"none","facing":0,"note":"물자를 담은 자루","level":-1},

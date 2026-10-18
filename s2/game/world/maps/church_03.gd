@@ -979,7 +979,7 @@ const NORTH: Dictionary = {
 		{"id":19,"name":"양모 헛간","rect":[40,13,26,11],"warm":false,"window_broken":false},
 		{"id":20,"name":"양치기 집","rect":[28,13,12,11],"warm":false,"window_broken":false},
 		{"id":21,"name":"건초 헛간","rect":[4,13,18,11],"warm":false,"window_broken":false},
-		{"id":22,"name":"외딴 오두막","rect":[6,0,10,7],"warm":false,"window_broken":false},
+		{"id":22,"name":"외딴 오두막","rect":[6,0,19,12],"warm":false,"window_broken":false},
 		{"id":23,"name":"겨울 우리 헛간","rect":[140,29,20,8],"warm":false,"window_broken":false},
 		{"id":24,"name":"농기구 헛간","rect":[132,38,10,7],"warm":false,"window_broken":false}
 	],

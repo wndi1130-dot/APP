@@ -374,10 +374,10 @@ const PLAN: Dictionary = {
 		{"cell":[6,60],"low":0,"high":1,"ladder":false}
 	],
 	"props": [
-		{"kind":"plank_patch","rect":[67,54,3,1],"solid":"wall","facing":0,"note":"안에서 덧댄 널판","level":0},
-		{"kind":"plank_patch","rect":[79,54,3,1],"solid":"wall","facing":1,"note":"안에서 덧댄 널판","level":0},
-		{"kind":"plank_patch","rect":[91,54,3,1],"solid":"wall","facing":2,"note":"안에서 덧댄 널판","level":0},
-		{"kind":"plank_patch","rect":[79,77,3,1],"solid":"none","facing":3,"note":"안에서 덧댄 남쪽 옆문의 널","level":0},
+		{"kind":"plank_patch","rect":[64,55,3,1],"solid":"wall","facing":0,"note":"안에서 덧댄 널판","level":0},
+		{"kind":"plank_patch","rect":[79,55,3,1],"solid":"wall","facing":1,"note":"안에서 덧댄 널판","level":0},
+		{"kind":"plank_patch","rect":[88,55,3,1],"solid":"wall","facing":2,"note":"안에서 덧댄 널판","level":0},
+		{"kind":"plank_patch","rect":[77,75,3,1],"solid":"none","facing":3,"note":"안에서 덧댄 남쪽 옆문의 널","level":0},
 		{"kind":"bell_rope","rect":[50,57,1,1],"solid":"none","facing":0,"note":"종 줄 한 가닥","level":1},
 		{"kind":"bell_frame","rect":[53,56,3,3],"solid":"none","facing":1,"note":"종을 거는 나무 틀","level":2},
 		{"kind":"car","rect":[31,11,4,2],"solid":"low","facing":2,"note":"길가에 선 차","level":0},
@@ -749,12 +749,12 @@ const NORTH: Dictionary = {
 		{"rect":[96,34,6,11],"kind":"ROAD"}
 	],
 	"buildings": [
-		{"id":15,"name":"사과 저장 곳간","rect":[67,14,26,10],"warm":false,"window_broken":false},
+		{"id":15,"name":"사과 저장 곳간","rect":[67,10,26,14],"warm":false,"window_broken":false},
 		{"id":16,"name":"과수지기 집","rect":[16,14,12,10],"warm":false,"window_broken":false},
 		{"id":17,"name":"짐수레 헛간","rect":[33,14,14,10],"warm":false,"window_broken":false},
 		{"id":18,"name":"곳간 별채","rect":[47,14,14,10],"warm":false,"window_broken":false},
 		{"id":19,"name":"벌통 헛간","rect":[30,2,12,6],"warm":false,"window_broken":false},
-		{"id":20,"name":"굴 입구 집","rect":[6,2,8,6],"warm":false,"window_broken":false},
+		{"id":20,"name":"굴 입구 집","rect":[6,2,19,12],"warm":false,"window_broken":false},
 		{"id":21,"name":"건조 헛간","rect":[100,2,16,8],"warm":false,"window_broken":false},
 		{"id":22,"name":"농가","rect":[116,27,18,12],"warm":false,"window_broken":false},
 		{"id":23,"name":"우물집","rect":[142,30,6,6],"warm":false,"window_broken":false}
@@ -910,7 +910,7 @@ const NORTH: Dictionary = {
 		{"kind":"bare_tree","rect":[159,29,1,1],"solid":"tree","facing":0,"note":"비뚤어진 무리의 헐벗은 나무","level":0},
 		{"kind":"bare_tree","rect":[154,37,1,1],"solid":"tree","facing":0,"note":"비뚤어진 무리의 헐벗은 나무","level":0},
 		{"kind":"bare_tree","rect":[162,44,1,1],"solid":"tree","facing":0,"note":"비뚤어진 무리의 헐벗은 나무","level":0},
-		{"kind":"crate_stack","rect":[71,14,2,2],"solid":"none","facing":0,"note":"종류별 물자를 담은 나무 상자","level":-1},
+		{"kind":"crate_stack","rect":[72,14,2,2],"solid":"none","facing":0,"note":"종류별 물자를 담은 나무 상자","level":-1},
 		{"kind":"barrel","rect":[71,19,1,1],"solid":"none","facing":0,"note":"작업에 쓰던 통","level":-1},
 		{"kind":"shelf","rect":[72,19,3,1],"solid":"none","facing":0,"note":"물품을 나누어 둔 선반","level":-1},
 		{"kind":"crate_stack","rect":[87,14,2,2],"solid":"none","facing":0,"note":"종류별 물자를 담은 나무 상자","level":-1},

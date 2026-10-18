@@ -19,6 +19,7 @@ const KEYS: Array[String] = [
 	"anchors", "zone_names", "place_id", "place_kind", "bands", "train_doors",
 	"crossings", "barricade_slots", "interior_kind_slots", "props", "hole_faces", "entry_names", "entry_weights", "first_entry",
 ]
+# 원 주문 낱말과 북쪽 확장 후보(울타리·맷돌·석탄·작업대·베틀·벌통).
 const KINDS: Array[String] = [
 	"car", "handcart", "firewood_pile", "barrel", "crate_stack", "sack_pile",
 	"bench", "shelf", "bed", "desk", "cold_stove", "lamp_post", "display_shelf",
@@ -42,6 +43,13 @@ const ITEMS: Array[String] = [
 	"ammo_shell", "scrap",
 ]
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
+const CONTAINER_NAME_ENDINGS: Array[String] = [
+	"상자", "보관함", "묶음", "선반", "자재함", "궤", "찬장", "공구함", "책상", "침대", "옷장",
+]
+const ASSEMBLY_BAND_COVERS: Array[Vector2i] = [
+	Vector2i(4, 4), Vector2i(4, 4), Vector2i(4, 5),
+	Vector2i(4, 4), Vector2i(4, 5), Vector2i(4, 5),
+]
 var maps: Array[Dictionary] = []
 
 
@@ -744,9 +752,9 @@ const SOUTH_CORRECTIONS: Array[Dictionary] = [
 	{12500: 2, 12950: 0},
 	{17339: 42, 17505: 42, 17679: 40, 17693: 40, 17707: 40, 17859: 42},
 	{3063: 42, 3071: 42, 3235: 40, 3577: 42, 4090: 40, 4425: 42, 4604: 42, 4776: 40, 6804: 40, 7314: 42, 7494: 42, 7679: 0, 7828: 42, 7999: 40, 8675: 42, 8858: 42, 9026: 40, 9375: 0, 10544: 40, 11403: 40, 12600: 0, 13604: 42, 13777: 40, 13785: 42, 14119: 42, 14478: 0, 14968: 42, 15317: 40, 15489: 42, 16175: 0},
-	{9508: 24, 9509: 24, 9510: 24, 9511: 24, 9512: 24, 9513: 24, 9520: 24, 9521: 24, 9522: 24, 9523: 24, 9524: 24, 9525: 24, 9526: 24, 9527: 24, 9528: 3, 9533: 3, 9534: 3, 9535: 3, 9536: 24, 9537: 24, 9538: 24, 9539: 24, 9540: 24, 9541: 24, 9542: 24, 9543: 24, 9544: 24, 9545: 24, 9546: 24, 9547: 24, 9548: 24, 9549: 24, 9550: 24, 9680: 24, 9681: 24, 9682: 24, 9683: 24, 9684: 24, 9685: 24, 9686: 24, 9687: 24, 9688: 3, 9690: 0, 9691: 0, 9692: 0, 9696: 24, 9697: 24, 9698: 24, 9699: 24, 9700: 24, 9701: 24, 9702: 24, 9703: 24, 9704: 24, 9705: 24, 9706: 24, 9707: 24, 9708: 24, 9709: 24, 9710: 24, 9828: 24, 9829: 24, 9830: 24, 9831: 24, 9840: 24, 9841: 24, 9842: 24, 9843: 24, 9844: 24, 9845: 24, 9846: 24, 9847: 24, 9848: 3, 9850: 0, 9851: 0, 9852: 0, 9856: 24, 9857: 24, 9863: 3, 9864: 0, 9865: 0, 9869: 24, 9870: 24, 9986: 27, 9987: 27, 9988: 27, 9989: 27, 9990: 27, 9991: 27, 9992: 27, 9993: 27, 10006: 24, 10007: 24, 10008: 3, 10009: 3, 10016: 24, 10017: 24, 10018: 3, 10019: 3, 10020: 3, 10021: 3, 10022: 3, 10023: 3, 10024: 3, 10025: 3, 10026: 3, 10027: 3, 10029: 24, 10030: 24, 10144: 24, 10145: 24, 10150: 27, 10151: 27, 10152: 27, 10153: 27, 10166: 24, 10167: 24, 10168: 3, 10169: 3, 10170: 3, 10176: 24, 10177: 24, 10180: 3, 10181: 3, 10186: 3, 10187: 3, 10188: 3, 10189: 24, 10190: 24, 10312: 56, 10313: 56, 10326: 24, 10327: 24, 10328: 56, 10329: 56, 10330: 0, 10331: 0, 10335: 0, 10336: 24, 10337: 24, 10340: 56, 10341: 56, 10349: 24, 10350: 24, 10466: 24, 10467: 24, 10468: 24, 10469: 24, 10470: 24, 10471: 24, 10472: 56, 10473: 56, 10486: 24, 10487: 24, 10488: 56, 10489: 56, 10490: 0, 10491: 0, 10495: 0, 10496: 24, 10497: 24, 10498: 0, 10499: 0, 10500: 56, 10501: 56, 10502: 0, 10503: 0, 10509: 24, 10510: 24, 10623: 27, 10624: 27, 10625: 27, 10626: 27, 10627: 27, 10628: 27, 10632: 27, 10633: 27, 10638: 27, 10639: 27, 10640: 27, 10641: 27, 10642: 27, 10643: 27, 10646: 24, 10647: 24, 10650: 0, 10651: 0, 10653: 3, 10654: 3, 10656: 24, 10657: 24, 10660: 3, 10661: 3, 10662: 3, 10663: 3, 10664: 3, 10665: 3, 10666: 3, 10667: 3, 10792: 27, 10793: 27, 10802: 27, 10803: 27, 10804: 27, 10805: 27, 10806: 27, 10807: 27, 10810: 0, 10811: 0, 10812: 0, 10814: 3, 10815: 3, 10816: 24, 10817: 24, 10820: 3, 10821: 3, 10952: 27, 10953: 27, 10966: 24, 10967: 24, 10968: 3, 10969: 3, 10973: 3, 10974: 3, 10975: 3, 10976: 24, 10977: 24, 10980: 3, 10981: 3, 11112: 27, 11113: 27, 11140: 27, 11141: 27, 11272: 27, 11273: 27, 11300: 27, 11301: 27},
+	{9508: 24, 9509: 24, 9510: 24, 9511: 24, 9512: 24, 9513: 24, 9520: 24, 9521: 24, 9522: 24, 9523: 24, 9524: 24, 9525: 24, 9526: 24, 9527: 24, 9528: 3, 9533: 3, 9534: 3, 9535: 3, 9536: 24, 9537: 24, 9538: 24, 9539: 24, 9540: 24, 9541: 24, 9542: 24, 9543: 24, 9544: 24, 9545: 24, 9546: 24, 9547: 24, 9548: 24, 9549: 24, 9550: 24, 9680: 24, 9681: 24, 9682: 24, 9683: 24, 9684: 24, 9685: 24, 9686: 24, 9687: 24, 9688: 3, 9690: 0, 9691: 0, 9692: 0, 9696: 24, 9697: 24, 9698: 24, 9699: 24, 9700: 24, 9701: 24, 9702: 24, 9703: 24, 9704: 24, 9705: 24, 9706: 24, 9707: 24, 9708: 24, 9709: 24, 9710: 24, 9828: 24, 9829: 24, 9830: 24, 9831: 24, 9840: 24, 9841: 24, 9842: 24, 9843: 24, 9844: 24, 9845: 24, 9846: 24, 9847: 24, 9848: 3, 9850: 0, 9851: 0, 9852: 0, 9856: 24, 9857: 24, 9863: 3, 9864: 0, 9865: 0, 9869: 24, 9870: 24, 9986: 27, 9987: 27, 9988: 27, 9989: 27, 9990: 27, 9991: 27, 9992: 27, 9993: 27, 10006: 24, 10007: 24, 10008: 3, 10009: 3, 10016: 24, 10017: 24, 10018: 3, 10019: 3, 10020: 3, 10021: 3, 10022: 3, 10023: 3, 10024: 3, 10025: 3, 10026: 3, 10027: 3, 10029: 24, 10030: 24, 10144: 24, 10145: 24, 10150: 27, 10151: 27, 10152: 27, 10153: 27, 10166: 24, 10167: 24, 10168: 3, 10169: 3, 10170: 3, 10176: 24, 10177: 24, 10180: 3, 10181: 3, 10186: 3, 10187: 3, 10188: 3, 10189: 24, 10190: 24, 10312: 56, 10313: 56, 10326: 24, 10327: 24, 10328: 56, 10329: 56, 10330: 0, 10331: 0, 10335: 0, 10336: 56, 10337: 56, 10340: 56, 10341: 56, 10349: 24, 10350: 24, 10466: 24, 10467: 24, 10468: 24, 10469: 24, 10470: 24, 10471: 24, 10472: 56, 10473: 56, 10486: 24, 10487: 24, 10488: 56, 10489: 56, 10490: 0, 10491: 0, 10495: 0, 10496: 24, 10497: 24, 10498: 0, 10499: 0, 10500: 56, 10501: 56, 10502: 0, 10503: 0, 10509: 24, 10510: 24, 10623: 27, 10624: 27, 10625: 27, 10626: 27, 10627: 27, 10628: 27, 10632: 27, 10633: 27, 10638: 27, 10639: 27, 10640: 27, 10641: 27, 10642: 27, 10643: 27, 10646: 24, 10647: 24, 10650: 0, 10651: 0, 10653: 3, 10654: 3, 10656: 24, 10657: 24, 10660: 3, 10661: 3, 10662: 3, 10663: 3, 10664: 3, 10665: 3, 10666: 3, 10667: 3, 10792: 27, 10793: 27, 10802: 27, 10803: 27, 10804: 27, 10805: 27, 10806: 27, 10807: 27, 10810: 0, 10811: 0, 10812: 0, 10814: 3, 10815: 3, 10816: 24, 10817: 24, 10820: 3, 10821: 3, 10952: 27, 10953: 27, 10966: 24, 10967: 24, 10968: 3, 10969: 3, 10973: 3, 10974: 3, 10975: 3, 10976: 24, 10977: 24, 10980: 3, 10981: 3, 11112: 27, 11113: 27, 11140: 27, 11141: 27, 11272: 27, 11273: 27, 11300: 27, 11301: 27},
 	{},
-	{9141: 24, 9152: 24, 9153: 24, 9159: 24, 9160: 24, 9165: 24, 9172: 24, 9173: 24, 9245: 24, 9246: 24, 9247: 24, 9267: 24, 9268: 24, 9584: 24, 9585: 24, 9774: 24, 9775: 24, 9803: 24, 9804: 24, 9808: 24, 9816: 24, 9817: 24, 9825: 24, 9832: 24, 10176: 24, 10177: 24, 10182: 24, 10183: 24, 10186: 24, 10187: 24, 10194: 24, 10195: 24, 10281: 24, 10283: 24, 10285: 24, 10320: 24, 10321: 24, 10400: 24, 10401: 24, 10586: 24, 10587: 24, 10739: 24, 10740: 24, 10741: 24, 11001: 24, 11002: 24, 11019: 24, 11020: 24, 11094: 24, 11095: 24, 11096: 24, 11853: 24, 11854: 24, 11942: 24, 11948: 24, 11953: 24, 11954: 24, 11956: 24, 11957: 24, 11962: 24, 11965: 24, 11972: 24, 11973: 24, 11977: 24, 11978: 24, 11991: 24, 11992: 24, 12001: 24, 12002: 24, 12351: 24, 12352: 24, 12353: 24, 12547: 24, 12550: 24, 12551: 24, 12554: 24, 12555: 24, 12556: 24, 12557: 24, 12567: 24, 12568: 24, 12605: 24, 12606: 24, 12622: 24, 12624: 24, 12629: 24, 12630: 24, 12897: 24, 12909: 24, 12910: 24, 13701: 24, 13702: 24, 13711: 24, 13735: 24, 13954: 24, 13969: 24, 13970: 24, 14052: 24, 14053: 24, 14064: 24, 14065: 24, 14464: 24, 14466: 24, 14467: 24}
+	{9141: 25, 9152: 24, 9153: 24, 9159: 24, 9160: 24, 9165: 25, 9172: 24, 9173: 24, 9245: 24, 9246: 24, 9247: 24, 9267: 24, 9268: 24, 9584: 24, 9585: 24, 9774: 24, 9775: 24, 9803: 24, 9804: 24, 9808: 24, 9816: 24, 9817: 24, 9825: 24, 9832: 24, 10176: 24, 10177: 24, 10182: 24, 10183: 24, 10186: 24, 10187: 24, 10194: 24, 10195: 24, 10281: 24, 10283: 24, 10285: 24, 10320: 24, 10321: 24, 10400: 24, 10401: 24, 10586: 24, 10587: 24, 10739: 24, 10740: 24, 10741: 24, 11001: 24, 11002: 24, 11019: 24, 11020: 24, 11094: 24, 11095: 24, 11096: 24, 11853: 24, 11854: 24, 11942: 24, 11948: 24, 11953: 24, 11954: 24, 11956: 24, 11957: 24, 11962: 24, 11965: 24, 11972: 24, 11973: 24, 11977: 24, 11978: 24, 11991: 24, 11992: 24, 12001: 24, 12002: 24, 12351: 24, 12352: 24, 12353: 24, 12547: 24, 12550: 24, 12551: 24, 12554: 24, 12555: 24, 12556: 24, 12557: 24, 12567: 24, 12568: 24, 12605: 24, 12606: 24, 12622: 24, 12624: 24, 12629: 24, 12630: 24, 12897: 24, 12909: 24, 12910: 24, 13701: 24, 13702: 24, 13711: 24, 13735: 24, 13954: 24, 13969: 24, 13970: 24, 14052: 24, 14053: 24, 14064: 24, 14065: 24, 14464: 24, 14466: 24, 14467: 24, 9139: 25, 9140: 25, 9154: 25, 9155: 25, 9156: 25, 9163: 25, 9164: 25},
 ]
 
 
@@ -921,3 +929,151 @@ func _roman_or_han(text: String) -> bool:
 		if (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 0x3400 and c <= 0x9FFF):
 			return true
 	return false
+
+
+# 소품을 칠하기 전 벽도 보존한다. 소품이 벽을 LOW로 덮어 숨기는 회귀를 잡는다.
+# wall 소품 자신의 고체와 겹침은 중복 배치가 아니며, 원래 건물 벽과는 겹칠 수 없다.
+func _assembly_protected(d: Dictionary, script) -> Dictionary:
+	var reserved: Dictionary = {-1: {}, 0: {}, 1: {}, 2: {}, 3: {}}
+	for part in range(2):
+		var plan: Dictionary = script.PLAN if part == 0 else script.NORTH
+		var shift := Vector2i(0, 45) if part == 0 else Vector2i.ZERO
+		for shell: Dictionary in plan["shells"]:
+			var rr: Array = shell["rect"]
+			var r := Rect2i(rr[0], rr[1], rr[2], rr[3])
+			for c: Vector2i in _cells(r):
+				if c.x == r.position.x or c.x == r.end.x - 1 or c.y == r.position.y or c.y == r.end.y - 1:
+					reserved[shell["level"]][c + shift] = true
+		for wall: Dictionary in plan["walls"]:
+			var rr: Array = wall["rect"]
+			for c: Vector2i in _cells(Rect2i(rr[0], rr[1], rr[2], rr[3])):
+				reserved[wall["level"]][c + shift] = true
+	for level: int in d["levels"]:
+		var g: FieldGrid = d["levels"][level]
+		for c: Vector2i in g.doors:
+			reserved[level][c] = true
+			var normal: Vector2i = _door_normal(g, c, d["buildings"])
+			for step in range(1, 4 if level == 0 else 2):
+				reserved[level][c + normal * step] = true
+				reserved[level][c - normal * step] = true
+		for c: Vector2i in g.windows:
+			reserved[level][c] = true
+		for y in range(1, g.height - 1):
+			for x in range(1, g.width - 1):
+				var c := Vector2i(x, y)
+				if g.solid_at(c) != S.NONE:
+					continue
+				if (g.solid_at(c + Vector2i.LEFT) == S.WALL and g.solid_at(c + Vector2i.RIGHT) == S.WALL) or (g.solid_at(c + Vector2i.UP) == S.WALL and g.solid_at(c + Vector2i.DOWN) == S.WALL):
+					reserved[level][c] = true
+	for stair: Dictionary in d["stairs"]:
+		reserved[stair["low"]][stair["cell"]] = true
+		reserved[stair["high"]][stair["cell"]] = true
+	for c: Vector2i in d["barricade_slots"]:
+		reserved[0][c] = true
+	for group: Array in d["spawns"].values():
+		for spawn in group:
+			if spawn is Vector2i:
+				reserved[0][spawn] = true
+			elif spawn is Dictionary:
+				reserved[int(spawn.get("level", 0))][spawn["cell"]] = true
+	for key: String in d["entries"]:
+		for c: Vector2i in d["entries"][key]:
+			reserved[int(d["entry_levels"].get(key, 0))][c] = true
+	for side: String in ["upper", "lower"]:
+		var outward := Vector2i.UP if side == "upper" else Vector2i.DOWN
+		for c: Vector2i in d["train_doors"][side]:
+			for step in range(4):
+				reserved[0][c + outward * step] = true
+	for box: Dictionary in d["containers"].values():
+		reserved[int(box.get("level", 0))][box["cell"]] = true
+	for stove in d["stoves"]:
+		if stove is Vector2i:
+			reserved[0][stove] = true
+		else:
+			reserved[int(stove.get("level", 0))][stove["cell"]] = true
+	return reserved
+
+
+func test_assembly_props_clear_reserved_cells_and_match_low_blocks() -> void:
+	for i in range(maps.size()):
+		var d: Dictionary = maps[i]
+		var reserved: Dictionary = _assembly_protected(d, MAPS[i])
+		var occupied: Dictionary = {-1: {}, 0: {}, 1: {}, 2: {}, 3: {}}
+		var overlaps: int = 0
+		var missing_low: int = 0
+		for p: Dictionary in d["props"]:
+			var level: int = int(p.get("level", 0))
+			var r: Rect2i = p["rect"]
+			for c: Vector2i in _cells(r):
+				if reserved[level].has(c) or occupied[level].has(c):
+					overlaps += 1
+				if d["levels"].has(level) and p["solid"] != "wall":
+					var g: FieldGrid = d["levels"][level]
+					if g.solid_at(c) == S.WALL:
+						overlaps += 1
+				occupied[level][c] = true
+			# 물은 기존 계약대로 low_blocks에 넣지 않는다(test_visible_solids_water_cover_and_no_long_low_runs와 같은 예외).
+			if p["solid"] == "low" and p["kind"] != "water" and not d["low_blocks"].has(r):
+				missing_low += 1
+		assert_eq(overlaps, 0, d["place_id"] + " 소품 겹침")
+		assert_eq(missing_low, 0, d["place_id"] + " LOW 엄폐 자료 누락(물 제외)")
+
+
+func test_assembly_walls_stay_in_building_rects() -> void:
+	for d: Dictionary in maps:
+		var outside: int = 0
+		for level: int in d["levels"]:
+			var g: FieldGrid = d["levels"][level]
+			for y in range(g.height):
+				for x in range(g.width):
+					var c := Vector2i(x, y)
+					var id: int = g.building_at(c)
+					if g.solid_at(c) == S.WALL and id >= 0:
+						if id >= d["buildings"].size() or not d["buildings"][id]["rect"].has_point(c):
+							outside += 1
+		assert_eq(outside, 0, d["place_id"])
+
+
+func test_assembly_container_names_have_model_endings() -> void:
+	for d: Dictionary in maps:
+		for box: Dictionary in d["containers"].values():
+			var matched: bool = false
+			for ending: String in CONTAINER_NAME_ENDINGS:
+				if String(box["name"]).ends_with(ending):
+					matched = true
+					break
+			assert_true(matched, d["place_id"] + " " + box["name"])
+
+
+func test_assembly_vocabulary_all_low_runs_and_unchanged_band_covers() -> void:
+	for i in range(maps.size()):
+		var d: Dictionary = maps[i]
+		for p: Dictionary in d["props"]:
+			assert_true(KINDS.has(p["kind"]), d["place_id"] + " " + p["kind"])
+		# 물(강·못)은 기존 계약대로 곧은 LOW 길이에서 뺀다.
+		var water_by_level: Dictionary = {}
+		for p: Dictionary in d["props"]:
+			if p["kind"] == "water":
+				var lv: int = int(p.get("level", 0))
+				if not water_by_level.has(lv):
+					water_by_level[lv] = []
+				water_by_level[lv].append(p["rect"])
+		var maximum: int = 0
+		for level: int in d["levels"]:
+			var g: FieldGrid = d["levels"][level]
+			var water: PackedByteArray = _mask(g, water_by_level.get(level, []))
+			for axis in range(2):
+				for outer in range(g.height if axis == 0 else g.width):
+					var run: int = 0
+					for inner in range(g.width if axis == 0 else g.height):
+						var c := Vector2i(inner, outer) if axis == 0 else Vector2i(outer, inner)
+						run = run + 1 if g.solid_at(c) == S.LOW and water[g.index(c)] == 0 else 0
+						maximum = maxi(maximum, run)
+		assert_lte(maximum, 10, d["place_id"] + " 물을 뺀 곧은 LOW")
+		var covers := Vector2i.ZERO
+		for r: Rect2i in d["low_blocks"]:
+			if r.intersects(d["bands"]["upper"]):
+				covers.x += 1
+			if r.intersects(d["bands"]["lower"]):
+				covers.y += 1
+		assert_eq(covers, ASSEMBLY_BAND_COVERS[i], d["place_id"])
