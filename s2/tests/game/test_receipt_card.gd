@@ -90,10 +90,10 @@ func test_the_end_card_is_the_paper_slip_with_its_keys_under_it() -> void:
 	assert_not_null(slip, "the slip is on the card")
 	var stamp: Control = slip.find_child("Stamp", true, false)
 	assert_not_null(stamp)
-	assert_eq((stamp.get_child(0) as Label).text, "출발")
+	assert_eq((stamp as Label).text, "출발")
 	var keys: Array = []
 	for b in game.hud.modal.find_children("*", "Button", true, false):
 		keys.append((b as Button).text)
 	assert_eq(keys, ["영수증 복사", "기록 복사", "다시"])
 	for b in game.hud.modal.find_children("*", "Button", true, false):
-		assert_false(slip.is_ancestor_of(b), "the keys are glass, under the slip")
+		assert_false(slip.is_ancestor_of(b), "the keys are glass, off the slip")
