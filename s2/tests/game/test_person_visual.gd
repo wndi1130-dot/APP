@@ -235,6 +235,57 @@ func test_a_blow_is_the_living_own_swing() -> void:
 	assert_true(PersonVisual.is_own(note))
 
 
+# Blow after blow goes through each weapon's ways, so the same one is not seen
+# twice running; after a rest the next starts again from the first.
+func test_blow_after_blow_goes_through_the_ways() -> void:
+	var own := _own()
+	var p := _person()
+	p.strike_kind = "swing"
+	p.strike_at = {"state": "chase"}
+	for want in [["crowbar", ["p_swing_one", "p_swing_back", "p_swing_axe", "p_swing_one"]],
+			["knife", ["p_stab", "p_swing_one", "p_stab", "p_swing_one"]],
+			["axe", ["p_swing_axe", "p_chop_side", "p_swing_axe", "p_chop_side"]]]:
+		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 0}]
+		var note := {}
+		var seen: Array = []
+		var t := 0.0
+		for i in 4:
+			p.strike_total = 0.2
+			p.strike_t = 0.2
+			seen.append(_named(own, PersonVisual.blow_of(p, own, note, t)))
+			p.strike_t = 0.0
+			p.swing_t = 0.3
+			assert_eq(_named(own, PersonVisual.blow_of(p, own, note, t + 0.2)), seen[-1], "the same way back as it went")
+			p.swing_t = 0.0
+			PersonVisual.blow_of(p, own, note, t + 0.5)
+			t += 0.6
+		assert_eq(seen, want[1], want[0])
+		p.strike_t = 0.2
+		assert_eq(_named(own, PersonVisual.blow_of(p, own, note, t - 0.1 + PersonVisual.CHAIN_GAP + 0.5)), want[1][0], "after a rest, the first again")
+		p.strike_t = 0.0
+		p.swing_t = 0.0
+		PersonVisual.blow_of(p, own, note, t + 5.0)
+	# A body baked before the second way was added swings its first again.
+	var older: Array = own.filter(func(c): return String(c.get("name", "")) != "p_swing_back")
+	p.hands = [{"id": "crowbar", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var gone := {"blow_n": 0, "blow_end": 0.0}
+	p.strike_t = 0.2
+	assert_eq(_named(older, PersonVisual.blow_of(p, older, gone, 0.5)), "p_swing_one", "no p_swing_back: the first way")
+	# The axe's chop from the side stops its way back with the axe low, before the loop lifts it again.
+	p.strike_t = 0.0
+	p.swing_t = 0.0
+	PersonVisual.blow_of(p, own, gone, 1.0)
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	gone = {"blow_n": 0, "blow_end": 1.0}
+	p.strike_t = 0.2
+	assert_eq(_named(own, PersonVisual.blow_of(p, own, gone, 1.5)), "p_chop_side")
+	p.strike_t = 0.0
+	p.swing_t = 0.3
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.6).x, 0.16, 0.001, "where it lands")
+	p.swing_t = 0.003
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.9).x, 0.45, 0.01, "the axe low, not lifted again")
+
+
 # The weapon goes in the worn body's right hand: hanging at the side the head
 # points forward; with the arms thrust out (the shove) the head points up.
 func test_the_weapon_sits_in_the_baked_right_hand() -> void:
@@ -247,7 +298,7 @@ func test_the_weapon_sits_in_the_baked_right_hand() -> void:
 	var clips: Array = baked["clips"]
 	var stand := Color(0.0, PersonVisual.clip_named(clips, PersonVisual.OWN_STAND, -1), 1.0, 1.0)
 	var at := PersonVisual.arm_at(table, frames, stand)
-	assert_gt(at[0].x, 0.2, "on the right")
+	assert_lt(at[0].x, -0.2, "on the right (-x, the body facing +z)")
 	assert_between(at[0].y, 0.5, 1.0, "at the hip")
 	assert_lt(at[0].y, at[1].y, "hanging below the elbow")
 	assert_gt(PersonVisual.grip_of(at[0], at[1], Basis()).z.z, 0.8, "hanging, the head forward")
