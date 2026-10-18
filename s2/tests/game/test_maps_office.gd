@@ -1116,7 +1116,7 @@ func test_assembly_props_clear_structure_landings_and_each_other() -> void:
 		for p in d["props"]:
 			var r: Rect2i = p["rect"]
 			var lv: int = int(p.get("level", 0))
-			if p["solid"] == "low":
+			if p["solid"] == "low" and p["kind"] != "water": # 물은 기존 계약대로 low_blocks 밖이다.
 				_want(d["low_blocks"].has(r), errors, "low rectangle missing: " + String(p["kind"]))
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
