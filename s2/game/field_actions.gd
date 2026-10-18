@@ -277,7 +277,7 @@ func vault_window(p, c: Vector2i) -> void:
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
 		if p.team != "raider":
-			game.say(p, "%s 유리에 베였다." % p.display_name, true, "hurt")
+			game.say(p, "%s 유리에 베였다." % p.display_name, true, "cut")
 
 
 # ---------------------------------------------------------------- searching
@@ -305,6 +305,7 @@ func search(p, id: String) -> void:
 			game.hud.loot(id)
 		return
 	p.start_action("search", "뒤지기", search_time(p, c), _searched.bind(p, id))
+	game.shout(p, "search_start")
 	c["busy"] = true
 	p.action_busy = c
 	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4).
@@ -345,9 +346,11 @@ func _searched(p, id: String) -> void:
 			keep.append(item)
 	c["items"] = keep
 	if not took.is_empty():
-		game.say(p, "%s: %s 챙겼다." % [p.display_name, ", ".join(took)])
+		game.say(p, "%s: %s 챙겼다." % [p.display_name, ", ".join(took)], false, "found")
 	elif not keep.is_empty():
-		game.say(p, "%s: 가방이 차서 못 챙겼다." % p.display_name)
+		game.say(p, "%s: 가방이 차서 못 챙겼다." % p.display_name, false, "bag_full")
+	else:
+		game.shout(p, "empty")
 
 
 ## Take one item from a searched container into the player's bag.
@@ -860,6 +863,8 @@ func _treated(medic, o, src, heavy: bool) -> void:
 		game.say(medic, "붕대가 없다.")
 		return
 	game.say(medic, "%s → %s 치료했다." % [medic.display_name, o.display_name])
+	if o != medic:
+		game.shout(o, "treated")
 
 
 func self_bandage(p) -> void:

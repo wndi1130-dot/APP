@@ -364,6 +364,7 @@ func last_call() -> void:
 	calling = true
 	call_left = LAST_CALL_S
 	game.set_radio("기관사: 셋을 센다. 탈 사람은 타라!", "must")
+	game.shout_nearest(game.player.position, "last_call", INF, null, true)
 
 
 ## Coal and plough parts that going now would cost for being unready, on top
@@ -458,6 +459,7 @@ func tick(delta: float) -> void:
 		game.pending_spawn.clear()
 		game.director.next_arrival = maxf(game.director.next_arrival, game.director.quiet_until)
 		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
+		game.shout_nearest(game.player.position, "ready", INF, null, true)
 
 
 ## The most of the dead at a door that stand within CROWD_R of one of them,
@@ -480,6 +482,7 @@ func _bang(door: Dictionary, wears: bool = true) -> void:
 	game.audio.quiet = true
 	game.make_sound(FieldGrid.center(door["cell"]), SimNoise.Level.NORMAL, "bang")
 	game.audio.quiet = false
+	game.shout_nearest(FieldGrid.center(door["cell"]), "door_bang", INF)
 	if not wears:
 		if int(door["wall"]) > 0:
 			_voice(door, "wall")

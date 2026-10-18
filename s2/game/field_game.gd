@@ -694,6 +694,9 @@ func _spawn_people() -> void:
 		var p := make_person(row, FieldGrid.center(spots[i % spots.size()]))
 		squad.append(p)
 		receipt.person("sent", p.pid)
+		lines.rel_of[p.pid] = AllyLines.rel_stage(float(row.get("rel", 0.0)))
+		if row.has("voice"):
+			lines.voice_by[p.pid] = String(row["voice"])
 	player = squad[0]
 	if bool(opts.get("raiders", true)):
 		var rows := [
@@ -710,12 +713,16 @@ func _spawn_people() -> void:
 			raiders.append(r)
 
 
+## "comm": the car a companion comes from; "rel": how that car stands with the
+## chief (what they say to him, ally_lines.gd), the train's first (s1 REL0).
+## The slice hands over the train's own (slice_flow.gd). "voice": how they
+## speak, each their own (coordinator, 2026-10-18).
 func default_squad(pipe_quality: String) -> Array:
 	return [
 		{"id": "p_chief", "name": "열차장", "role": "chief", "skills": {"strength": 5, "melee": 3, "shooting": 2, "stealth": 2, "search": 2}, "hands": [["axe", "factory", 0.9], ["pistol", "factory", 0.8]], "items": {"bandage": 2, "cloth": 1}},
-		{"id": "p_guard_marek", "name": "마레크", "role": "companion", "skills": {"strength": 6, "melee": 2, "shooting": 4, "stealth": 1, "search": 1}, "hands": [["pipe_shotgun", pipe_quality, 0.9], ["knife", "factory", 0.8]], "items": {"bandage": 1}},
-		{"id": "p_med_joanna", "name": "요안나", "role": "companion", "medical": "skilled", "skills": {"strength": 4, "melee": 1, "shooting": 4, "stealth": 3, "search": 3}, "hands": [["bow", "factory", 0.9], ["crowbar", "factory", 0.9]], "items": {"bandage": 3, "medkit": 1, "tweezers": 1, "needle_thread": 3}},
-		{"id": "p_tail_tomasz", "name": "토마시", "role": "companion", "skills": {"strength": 7, "melee": 3, "shooting": 1, "stealth": 1, "search": 2}, "hands": [["crowbar", "factory", 0.8], ["knife", "factory", 0.7]], "items": {"bandage": 1}, "bag": "big_pack"},
+		{"id": "p_guard_marek", "name": "마레크", "role": "companion", "comm": "guard", "rel": 15.0, "voice": "rough", "skills": {"strength": 6, "melee": 2, "shooting": 4, "stealth": 1, "search": 1}, "hands": [["pipe_shotgun", pipe_quality, 0.9], ["knife", "factory", 0.8]], "items": {"bandage": 1}},
+		{"id": "p_med_joanna", "name": "요안나", "role": "companion", "comm": "medtech", "rel": 5.0, "voice": "quiet", "medical": "skilled", "skills": {"strength": 4, "melee": 1, "shooting": 4, "stealth": 3, "search": 3}, "hands": [["bow", "factory", 0.9], ["crowbar", "factory", 0.9]], "items": {"bandage": 3, "medkit": 1, "tweezers": 1, "needle_thread": 3}},
+		{"id": "p_tail_tomasz", "name": "토마시", "role": "companion", "comm": "tail", "rel": -20.0, "voice": "fear", "skills": {"strength": 7, "melee": 3, "shooting": 1, "stealth": 1, "search": 2}, "hands": [["crowbar", "factory", 0.8], ["knife", "factory", 0.7]], "items": {"bandage": 1}, "bag": "big_pack"},
 	]
 
 
@@ -1283,7 +1290,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 		"downed":
 			p.cancel_action()
 			p.stop()
-			say(p, "%s 쓰러졌다." % p.display_name)
+			say(p, "%s 쓰러졌다." % p.display_name, false, "downed")
 			telemetry.injury(clock.elapsed, p.pid, "downed")
 			if p.team == "raider":
 				ai.raider_downed(p)
@@ -1294,7 +1301,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 				say(p, "%s 피가 멎었다." % p.display_name)
 		"window_closed":
 			if p.body.infected and p.team != "raider":
-				say(p, "%s 열이 오른다." % p.display_name)
+				say(p, "%s 열이 오른다." % p.display_name, false, "window_closed")
 		"exhausted_heavy":
 			if p == player:
 				hud.toast("숨이 차서 더는 뛰지 못한다.")
@@ -1801,28 +1808,33 @@ func say(p, text: String, hurt: bool = false, event: String = "") -> void:
 
 
 ## A companion shouts a line over their head (words only). The chief, the
-## raiders and the dead keep quiet.
-func shout(p, event: String, always: bool = false) -> void:
+## raiders and the dead keep quiet. `name`: who fell, for the lines that call them.
+func shout(p, event: String, always: bool = false, name: String = "") -> void:
 	if hud == null or p == player or p.body.dead or not (squad.has(p) or always and crew.has(p)):
 		return
-	var line: String = lines.pick(String(p.pid), event, clock.elapsed, always)
+	var line: String = lines.pick(String(p.pid), event, clock.elapsed, always, name)
 	if line != "":
 		hud.shout(p, line)
 
 
 ## One of the squad fell: the companion nearest to them, if near, rages.
 func shout_near(fallen, event: String) -> void:
+	shout_nearest(fallen.position, event, AllyLines.RAGE_NEAR, fallen, false, fallen.display_name)
+
+
+## The companion on their feet nearest `at`, within `reach`, says it (not `but`).
+func shout_nearest(at: Vector3, event: String, reach: float, but = null, always: bool = false, name: String = "") -> void:
 	var best = null
-	var best_d: float = AllyLines.RAGE_NEAR
+	var best_d: float = reach
 	for o in squad:
-		if o == fallen or o == player or not o.is_alive() or o.body.downed:
+		if o == but or o == player or not o.is_alive() or o.body.downed:
 			continue
-		var d: float = o.position.distance_to(fallen.position)
+		var d: float = o.position.distance_to(at)
 		if d < best_d:
 			best_d = d
 			best = o
 	if best != null:
-		shout(best, event)
+		shout(best, event, always, name)
 
 
 ## Lying hurt or held while the chief walks off.
