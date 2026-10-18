@@ -386,6 +386,7 @@ func test_the_goals_wait_in_the_journal_until_the_line_under_the_clock_is_opened
 	var shut = _game({"mission": "survey"})
 	shut.hud.tick(0.1)
 	assert_false(shut.hud.goal_label.get_parent().visible, "not under the clock")
+	assert_false(shut.hud.goal_key.visible, "no key for it either")
 	shut.hud.bag_panel()
 	var words: Array = []
 	for c in shut.hud.modal.find_children("*", "Label", true, false):
@@ -394,9 +395,13 @@ func test_the_goals_wait_in_the_journal_until_the_line_under_the_clock_is_opened
 	assert_has(words, "· 바깥 설비 0/2")
 	assert_has(words, "· 선로 기록 0/1")
 	shut.hud._close_modal()
-	# Opened by the technology: one line in the message column.
+	# Opened by the technology: a key on the clock's row that lets one line
+	# down in the message column (user 2026-10-18), folded to begin with.
 	var game = _game({"mission": "survey", "goal_line": true})
 	assert_not_null(game.hud.goal_label)
+	assert_true(game.hud.goal_key.visible, "its key")
+	assert_false(game.hud.goal_label.get_parent().visible, "folded under its key")
+	game.hud.set_goal_open(true)
 	assert_true(game.hud.goal_label.get_parent().visible)
 	assert_eq(game.mission_play.goal_line(), "바깥 설비 0/2 · 선로 기록 0/1", "the extra is not listed until someone goes")
 	game.mission_play._seen(game.player, "sv_switch")

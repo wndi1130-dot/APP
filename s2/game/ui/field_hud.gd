@@ -53,8 +53,15 @@ const STICK_HOME_MM := Vector2(21.0, 14.5)
 const STICK_CATCH: float = 2.0
 ## The body picture slows the field, it does not stop it (body_injury 4.6).
 const BODY_SLOW: float = 0.3
-## The portrait sits top left under the pause key and the clock.
-const PORTRAIT_AT := Vector2(16.0, 14.0 + 11.0 * PX_PER_MM + 6.0)
+## The pause key and the clock share one row this tall at the top left, the
+## key's disc as tall as the clock's glass (user 2026-10-18: 「높이 맞춰서 서로
+## 같은 높이에」); the key's touch square, round the disc's middle, is
+## PAUSE_TOUCH across. The portrait sits PORTRAIT_GAP under that row.
+const TOP_ROW_H: float = 58.0
+const PAUSE_TOUCH: float = 74.0
+const PAUSE_ICON: int = 22
+const PORTRAIT_GAP: float = 14.0
+const PORTRAIT_AT := Vector2(16.0, 14.0 + TOP_ROW_H + PORTRAIT_GAP)
 const PORTRAIT_W: float = 290.0
 ## The stop's own lines (goals, promises), the radio and the notes (paper
 ## slips) make one column left of the state icons (user 2026-10-18: the notes
@@ -74,9 +81,11 @@ const STATUS_SIZES: Array[int] = [72, 64, 80]
 const STATUS_SIZE_NAMES: Dictionary = {72: "보통", 64: "작게", 80: "크게"}
 const STATUS_ART_SIZE: int = 80   # the pictures are drawn once, for the biggest
 const STATUS_GAP: float = 6.0
-# A column holds four, so it ends above the shove key; a fifth starts a second
-# column to the left.
-const STATUS_PER_COLUMN: int = 4
+# One column always (user 2026-10-18: 「4개이상 나오면 작아지면서 나열」): from
+# STATUS_SMALL_FROM of them on each is STATUS_SMALL of its size, so five end
+# above the crouch key and none starts a second column into the screen.
+const STATUS_SMALL_FROM: int = 4
+const STATUS_SMALL: float = 0.72
 const RADIO_TIPS: Dictionary = {
 	"urgent": "무전: 무리가 들어올 때만 부름 · 울리면 가까운 망자가 들음",
 	"often": "무전: 무리가 지나가면 다음 예보까지 · 아는 것 많고 그만큼 자주 울림",
@@ -195,6 +204,22 @@ const ALL_ABOARD_SEEN: float = 34.0
 const ORDER_H: float = 40.0
 const ORDER_SEEN: float = 30.0
 const SQUAD_GAP: float = 8.0          # from the clock's glass, and between the two orders
+## The squad's orders fold under a small lever at the top middle (user
+## 2026-10-18: 「레버처럼 … 정중앙 상단 … 내리고 올릴수있게 … 접었다
+## 펼수있게」): its touch rect, the tab it shows hanging from the top edge, how
+## far a thumb pulls it down (or pushes it up) to open (or fold) the orders, a
+## tap flipping them, and how long the knob and the orders take to follow.
+const LEVER_TOUCH := Vector2(88.0, 48.0)
+const LEVER_SEEN := Vector2(56.0, 38.0)
+const LEVER_PULL: float = 14.0
+const LEVER_S: float = 0.12
+## The promise line, small (user 2026-10-18): its seal, and the room the seal
+## keeps before the words.
+const PROMISE_SEAL: int = 18
+const PROMISE_ROOM: float = 24.0
+## Movement and use keys are see-through (user 2026-10-18): their glass, ring
+## and light at this much; the mark and the word on them stay whole.
+const PAD_SEE: float = 0.7
 ## The companions' row's top, from the screen's bottom: at the foot of the
 ## screen as the 시안's (.fally top 340 of 390, its chips' glass ending 9 above
 ## the edge), now that 'all aboard' is no longer under it.
@@ -211,15 +236,21 @@ const RIM_DWELL: float = 0.15
 ## Omens are pale bone, never a red flag (presentation_motion 93).
 const OMEN_COL := Color(0.86, 0.84, 0.78, 0.85)
 ## An edge arrow under one of the HUD's pieces slides in along its ray by this
-## step, never nearer the middle than EDGE_IN_MIN (clear of the moan ring).
+## step, never nearer the middle than EDGE_IN_MIN.
 const EDGE_STEP: float = 8.0
 const EDGE_IN_MIN: float = 150.0
+## A sound drawn as a wifi mark (user 2026-10-18: 「와이파이 형태로 소음을
+## 측정」): a dot and three arcs a quarter turn wide, their stroke; about as big
+## as the four bars it took over.
+const WIFI_DOT: float = 2.6
+const WIFI_ARCS: Array[float] = [7.5, 13.0, 18.5]
+const WIFI_SPAN: float = PI / 4.0
+const WIFI_W: float = 3.0
 # The mark over one of the dead that has dropped low and will run: a ring that
 # closes on it as the beat runs out, in pixels. First values.
 const TELL_RING_IN: float = 12.0
 const TELL_RING_OUT: float = 40.0
 const TELL_FONT: int = 28
-const MOAN_R: float = 20.0
 const COMMANDS: Array = [["follow", "따라와"], ["wait", "대기"], ["search", "수색"], ["cover", "엄호"], ["retreat", "후퇴"]]
 ## What a key shows inside its touch rect (시안 2차 11절: keys 44, the attack
 ## pad 76, about 1.85 view px to a 시안 px). The touch rects above are the
@@ -241,13 +272,19 @@ const LETTER_NUDGE: float = -3.5
 const DEPART_SEEN := Vector2(100.0, 56.0)
 const DEPART_FONT: float = 13.0
 const FACE_SIZE: float = 84.0
-## A companion's chip (시안 .fchip): a face 32 across, the name over the order.
-## Each face gets its own headwear in turn (the 시안's three, then a hood).
+## A companion's chip (시안 .fchip's face 32 across) folded to the face alone
+## on a round of glass (user 2026-10-18: 「과감하게 가릴 때는 안 보이게」), the
+## rounds CHIP_GAP apart. Each face gets its own headwear in turn (the 시안's
+## three, then a hood).
 const CHIP_FACE: float = 59.0
+const CHIP_TOKEN: float = 72.0
+const CHIP_GAP: float = 8.0
 const CHIP_KINDS: Array[int] = [1, 4, 5, 2]
-## The chip's words may take this much room; a longer one is cut short, so the
-## row stays clear of the stick.
+## The card a tap on a face opens over it: its words may take this much room (a
+## longer one is cut short), CARD_GAP over the face, its words CARD_PAD in (css).
 const CHIP_WORDS_W: float = 150.0
+const CARD_GAP: float = 6.0
+const CARD_PAD := Vector2(10.0, 5.0)
 ## The stick as the 시안 draws it (.fstick): a ring 96 across, a knob 40 (radii).
 const STICK_RING: float = 89.0
 const STICK_KNOB: float = 37.0
@@ -268,6 +305,7 @@ var weather_label: Label
 var top_panel: Control                # the clock's box, top left
 var urgent: bool = false              # dusk has begun: the radio and 'all aboard' burn amber
 var radio_pill: PanelContainer
+var test_keys: HBoxContainer          # − + D (tests only), top right on the clock's row
 var radio_styles: Array = []          # [plain, urgent]
 var face: Control                     # the chief's face (portrait_face.gd)
 var cond_label: Label                 # the weapon's state, after its name
@@ -275,6 +313,18 @@ var ammo_label: Label
 var tag_box: HBoxContainer            # the floor and blood-soaked tags beside the weapon
 var bag_button: Button                # 인벤토리: the weight carried, opens the bag panel
 var all_aboard_styles: Array = []     # [plain, urgent] key styles
+var lever_button: Button              # the orders' lever, top middle
+var lever_styles: Array = []          # its tab: [plain, urgent]
+var lever_slot: StyleBoxFlat          # the slot its knob runs in
+var orders_open: bool = false         # the drawer under the lever is open
+var lever_t: float = 0.0              # the knob: 0 up (folded) to 1 down (open)
+var promise_text: String = ""         # the promise line's words, open or folded
+var promise_open: bool = false        # the promise line is down under its key
+var goal_open: bool = false           # the goal line is down under its key
+var clock_open: bool = false          # the clock shows the day and the weather too
+var promise_key: Button               # the promises, folded to a key left of the view keys
+var goal_key: Button                  # the stop's goals, the same, right of it
+var fold_keys: HBoxContainer          # those two, on the clock's row
 var feel_label: Label                 # the chief's aside beside the risk line
 var goal_label: Label                 # the line under the clock (goal_shown; none on a plain stop)
 var promise_label: Label              # 「약속: 서막 ○○ / 교대 ○○」 in the message column, while there are any
@@ -296,9 +346,7 @@ var wait_button: Button               # 대기 for every living companion
 var order_size: Vector2               # the touch rect of each of those two
 var clock_pill: Control               # the clock's glass line; the squad's orders stand right of it
 var radio_room: float = -1.0          # the column's width the radio's call was last fitted to
-var chip_words_w: float = CHIP_WORDS_W   # how long a chip's words may run (shorter on a narrow screen)
-var allies_fit_key: String = ""       # what the chips were last fitted for
-var allies_beside: bool = true        # the work crew's chip at the row's end (else over it)
+var card_row: int = -1                # whose card is open over their face (-1: none)
 var context_button: Button
 var depart_button: Button              # leaving: its own pad, there whenever the leader is by the train
 var context_rows: Array = []
@@ -354,6 +402,7 @@ var status_pads: Array = []        # the state icons, most urgent first
 var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
 var body_look: Dictionary = {}     # what the body picture shows of each part (body_looks())
 var status_rows: Array = []        # what each shows now (body.status_notes())
+var status_small: bool = false     # four or more show: each at STATUS_SMALL
 var bleed_hint_done: bool = false  # the one-time line that points at the blood key
 var body_shown = null              # whose body picture is (or was last) up
 var body_part: String = ""
@@ -574,25 +623,30 @@ func _bar(color: Color) -> ProgressBar:
 
 
 func _build_top() -> void:
-	# Tactical pause sits at the left end of the gauge row, about 11 mm, away
-	# from the fight under the right thumb (presentation_motion 666274f).
-	pause_button = _pad("", Vector2(16, 14), Vector2(11.0 * PX_PER_MM, 11.0 * PX_PER_MM), 22, Control.PRESET_TOP_LEFT)
-	_dress(pause_button, "pause", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	# Tactical pause sits at the left end of the clock's row, away from the
+	# fight under the right thumb (presentation_motion 666274f), its disc as
+	# tall as the clock's glass beside it (user 2026-10-18).
+	var pause_mid := Vector2(16.0, 14.0) + Vector2.ONE * TOP_ROW_H * 0.5
+	pause_button = _pad("", pause_mid - Vector2.ONE * PAUSE_TOUCH * 0.5, Vector2.ONE * PAUSE_TOUCH, 22, Control.PRESET_TOP_LEFT)
+	_dress(pause_button, "pause", Vector2.ONE * TOP_ROW_H, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, PAUSE_ICON)
 	pause_button.tooltip_text = "멈춤"
 	# The clock is one glass line (시안 2차 11절 「12:42 · 1일째 · −14℃」), the
 	# weather beside it; the share of daylight left runs as a hairline under it.
 	var tl := VBoxContainer.new()
-	tl.position = Vector2(16 + 11.0 * PX_PER_MM + 10, 14)
+	tl.position = Vector2(16.0 + TOP_ROW_H + 10.0, 14.0)
 	tl.add_theme_constant_override("separation", 6)
 	tl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var pill := _glass(16.0, 6.0)
-	# Its own width, not the widest line's under it: the squad's orders stand
-	# right of it.
+	var pill := _glass(16.0, 4.0)
+	# Its own width and the row's height, its lines in its middle: the time's
+	# line (43 at Barlow 28), the hairline under it and 4 above and below are
+	# the row's 58, so the glass is no taller than the pause disc beside it.
 	pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	pill.custom_minimum_size.y = TOP_ROW_H
 	tl.add_child(pill)
 	clock_pill = pill
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 4)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_child(v)
 	var line := HBoxContainer.new()
@@ -636,21 +690,27 @@ func _build_top() -> void:
 		room.content_margin_left = 30
 		goal_label.add_theme_stylebox_override("normal", room)
 		gp.add_child(goal_label)
-		gp.visible = goal_label.text != ""
+		# Folded under its key (user 2026-10-18); a held train's state is down to
+		# begin with (decision 293 ②: it is the stop's state, not its goals).
+		goal_open = game.holdout.enabled()
+		gp.visible = goal_open and goal_label.text != ""
 	# The promises this stop was sent out with (S3: the departure's promises, or
-	# the state the train sends): one glass line, there only while there are any.
-	var pp := _glass(14.0, 5.0)
+	# the state the train sends): one small glass line (user 2026-10-18: 「약속은
+	# 껐다 킬 수 있게 작게」), down under its key on the clock's row only while
+	# opened (「약속도 펼치거나 닫을 수 있도록」). Key and line are there only
+	# while there are any (set_promises, once the key is built).
+	var pp := _glass(10.0, 3.0)
 	pp.size_flags_horizontal = Control.SIZE_SHRINK_END
 	info_box.add_child(pp)
-	var seal := _icon_rect("promise", 22, HudSkin.INK2)
+	var seal := _icon_rect("promise", PROMISE_SEAL, HudSkin.INK2)
 	seal.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	pp.add_child(seal)
-	promise_label = _label("", UiFonts.size(12), HudSkin.INK2)
-	var gap := StyleBoxEmpty.new()
-	gap.content_margin_left = 30
-	promise_label.add_theme_stylebox_override("normal", gap)
+	promise_label = _label("", UiFonts.size(10.5), HudSkin.INK2)
+	var seal_room := StyleBoxEmpty.new()
+	seal_room.content_margin_left = PROMISE_ROOM
+	promise_label.add_theme_stylebox_override("normal", seal_room)
 	pp.add_child(promise_label)
-	set_promises(game_promises())
+	pp.visible = false
 	root.add_child(tl)
 	top_panel = tl
 	root.add_child(info_box)
@@ -710,15 +770,19 @@ func _build_top() -> void:
 	radio_pill.position = Vector2(0, 14)
 	radio_pill.visible = false
 	root.add_child(radio_pill)
-	# Test keys, top right: zoom and the measures panel (not part of the game's
-	# look), left of the corner the settings gear takes while paused.
-	var tr := HBoxContainer.new()
-	tr.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr.position = Vector2(-238.0 - SETTINGS_KEY - 8.0, 14)
-	tr.add_theme_constant_override("separation", 8)
-	root.add_child(tr)
+	# Test keys (not part of the game's look): zoom and the measures panel, on
+	# the clock's row against the right edge (user 2026-10-18: 「우측에 붙여주고
+	# 간격유지」), a step left of the gear while it shows (paused; tick).
+	test_keys = HBoxContainer.new()
+	test_keys.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	test_keys.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	test_keys.offset_left = STATUS_AT.x
+	test_keys.offset_right = STATUS_AT.x
+	test_keys.offset_top = 14.0
+	test_keys.add_theme_constant_override("separation", 8)
+	root.add_child(test_keys)
 	for row in [["−", _zoom.bind(4.0), 64.0], ["+", _zoom.bind(-4.0), 64.0], ["D", _toggle_debug, 56.0]]:
-		var k := _button(row[0], row[1], Vector2(row[2], 56), 22)
+		var k := _button(row[0], row[1], Vector2(row[2], TOP_ROW_H), 22)
 		_dress(k, "", Vector2(46, 46), true)
 		# Quieter than the game's own keys (they are not in the 시안): smaller,
 		# no ring, faint glass and faint words.
@@ -728,7 +792,43 @@ func _build_top() -> void:
 			plate.fill = Color(plate.fill.r, plate.fill.g, plate.fill.b, 0.32)
 		for c in ["font_color", "font_hover_color", "font_focus_color"]:
 			k.add_theme_color_override(c, HudSkin.INK3)
-		tr.add_child(k)
+		test_keys.add_child(k)
+	# The stop's goals and its promises fold to two keys on the clock's row,
+	# left of the view keys (user 2026-10-18: 「시점 조절 버튼 좌측에 바깥 설비
+	# 쪽 버튼」): a tap lets the line down at the head of the message column or
+	# takes it up, the key lit while it is down. Each is there only while it
+	# has words; the goals' key is the one next to the view keys.
+	fold_keys = HBoxContainer.new()
+	fold_keys.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	fold_keys.add_theme_constant_override("separation", 8)
+	root.add_child(fold_keys)
+	promise_key = _fold_key("promise", "약속", _toggle_promise)
+	goal_key = _fold_key("compass", "목표", _toggle_goal)
+	goal_key.visible = goal_label != null and goal_label.text != ""
+	goal_key.set_pressed_no_signal(goal_open)
+	set_promises(game_promises())
+	# The clock folds to its time (user 2026-10-18: 「시계도 클릭으로 펼칠 수
+	# 있게」); a tap on it shows the day and the weather as well, or folds it.
+	set_clock_open(false)
+
+
+## A round glass key on the clock's row that lets a line down or takes it up,
+## lit brass while the line is down.
+func _fold_key(icon: String, tip: String, cb: Callable) -> Button:
+	var k := _button("", cb, Vector2(56.0, TOP_ROW_H), 22)
+	_dress(k, icon, Vector2(46, 46), true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 24)
+	k.toggle_mode = true
+	k.tooltip_text = tip
+	fold_keys.add_child(k)
+	return k
+
+
+## Fold the clock to its time, or open it to the day and the weather as well.
+func set_clock_open(open: bool) -> void:
+	clock_open = open
+	day_label.visible = open
+	weather_label.visible = open
+	top_panel.reset_size()
 
 
 func _zoom(step: float) -> void:
@@ -842,37 +942,36 @@ func _cap_line(l: Label, cap: float) -> void:
 
 func _build_allies() -> void:
 	allies_box = HBoxContainer.new()
-	# At the foot of the screen (시안 .fally): 'all aboard' went up under the
-	# radio (시안 2차 .fall), so the row raised for it (user 2026-10-12) came
-	# back down. It belongs to the right hand's side: _place_allies keeps its
-	# right end just left of the thumb pads, clear of where the left thumb
-	# comes down.
+	# At the foot of the screen (시안 .fally), the middle face under the
+	# screen's middle (user 2026-10-18: 「동료는 가운데 기준」): the faces alone,
+	# their words on a card a tap opens over the face (「가릴 때는 안 보이게
+	# 클릭하면 보일 수 있게」). _place_allies keeps it clear of the stick and the
+	# right thumb's pads.
 	allies_box.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	allies_box.add_theme_constant_override("separation", 10)
+	allies_box.add_theme_constant_override("separation", int(CHIP_GAP))
 	root.add_child(allies_box)
-	# Companion chips (시안 .fchip): glass, the face (it carries the body, as the
-	# chief's does, decision 293 ①), the name with the weapon in hand after it
-	# (H3), and under them the order and, if it is more, what they are at.
 	for p in game.squad:
 		if p == game.player:
 			continue
-		var b := _button("", _ally_menu.bind(p), Vector2(140, 76), 17)
+		var i: int = ally_buttons.size()
+		var b := _button("", _toggle_card.bind(i), Vector2.ONE * CHIP_TOKEN, 17)
 		_chip(b)
 		var row := {"p": p, "b": b}
-		_chip_face(b, row, ally_buttons.size())
+		_chip_face(b, row, i)
 		allies_box.add_child(b)
+		row["card"] = _ally_card(row, i)
 		ally_buttons.append(row)
-	# The work crew's chip stands at the row's right end, or over it where
-	# the row has no room for it (_place_allies).
-	crew_button = _button("작업조", work_panel, Vector2(110, 76), 17)
+	# The work crew's chip stands right beside the faces (_place_allies), as
+	# wide as its words and as tall as a face's round.
+	crew_button = _button("작업조", work_panel, Vector2(0, CHIP_TOKEN), 17)
 	_chip(crew_button)
 	crew_button.visible = false
 	crew_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	root.add_child(crew_button)
 
 
-## A companion chip's glass pill; a pressed chip glows amber at its foot and
-## takes an amber ring (시안 .fchip.on).
+## A companion's glass (the face's round, its card, the crew's pill); pressed it
+## glows amber at its foot and takes an amber ring (시안 .fchip.on).
 func _chip(b: Button) -> void:
 	var rest: StyleBoxFlat = HudSkin.glass(14.0, 6.0)
 	var lit: StyleBoxFlat = rest.duplicate()
@@ -892,28 +991,37 @@ func _chip(b: Button) -> void:
 	b.add_theme_constant_override("line_spacing", -2)
 
 
-## The inside of a companion's chip (시안 .fchip): the face 32 across, then the
-## name (13 semibold) with the weapon in hand after it, over the order (12).
+## The face in the middle of a companion's round (it carries the body, as the
+## chief's does, decision 293 ①).
 func _chip_face(b: Button, row: Dictionary, i: int) -> void:
-	var h := HBoxContainer.new()
-	h.set_anchors_preset(Control.PRESET_FULL_RECT)
-	h.offset_left = UiFonts.px(6)
-	h.offset_right = -UiFonts.px(8)
-	h.add_theme_constant_override("separation", int(UiFonts.px(6)))
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(h)
 	var f := PortraitFace.new()
 	f.kind = CHIP_KINDS[i % CHIP_KINDS.size()]
 	f.face_seed = 11 + i
 	f.custom_minimum_size = Vector2.ONE * CHIP_FACE
-	f.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	f.size = Vector2.ONE * CHIP_FACE
+	f.position = Vector2.ONE * roundf((CHIP_TOKEN - CHIP_FACE) * 0.5)
 	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(f)
+	b.add_child(f)
+	row["face"] = f
+
+
+## The card over a companion's face (시안 .fchip's words): the name (13
+## semibold) with the weapon in hand after it (H3), over the order (12) and, if
+## it is more, what they are at. A tap on it opens their orders and state.
+func _ally_card(row: Dictionary, i: int) -> Button:
+	var card := _button("", _open_card.bind(i), Vector2.ZERO, 17)
+	_chip(card)
+	card.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	card.visible = false
+	root.add_child(card)
 	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.offset_left = UiFonts.px(CARD_PAD.x)
+	v.offset_right = -UiFonts.px(CARD_PAD.x)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_theme_constant_override("separation", 0)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(v)
+	card.add_child(v)
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", int(UiFonts.px(4)))
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -927,20 +1035,39 @@ func _chip_face(b: Button, row: Dictionary, i: int) -> void:
 	top.add_child(who)
 	top.add_child(arm)
 	v.add_child(note)
-	row["face"] = f
+	row["words"] = v
 	row["name"] = who
 	row["arm"] = arm
 	row["note"] = note
+	return card
 
 
-## A chip as wide as its words, and those cut short past CHIP_WORDS_W.
-func _fit_chip(row: Dictionary) -> void:
+## A card as wide as its words, those cut short past CHIP_WORDS_W.
+func _fit_card(row: Dictionary) -> void:
 	var gap: float = UiFonts.px(4)
-	var name_w: float = _fit_word(row["name"], chip_words_w)
-	var arm_w: float = _fit_word(row["arm"], chip_words_w - name_w - gap)
-	var note_w: float = _fit_word(row["note"], chip_words_w)
+	var name_w: float = _fit_word(row["name"], CHIP_WORDS_W)
+	var arm_w: float = _fit_word(row["arm"], CHIP_WORDS_W - name_w - gap)
+	var note_w: float = _fit_word(row["note"], CHIP_WORDS_W)
 	var words: float = maxf(name_w + gap + arm_w, note_w)
-	row["b"].custom_minimum_size.x = maxf(140.0, UiFonts.px(6) + CHIP_FACE + UiFonts.px(6) + words + UiFonts.px(8))
+	var pad: Vector2 = Vector2(UiFonts.px(CARD_PAD.x), UiFonts.px(CARD_PAD.y)) * 2.0
+	var card: Button = row["card"]
+	card.custom_minimum_size = Vector2(ceilf(words + pad.x), ceilf((row["words"] as Control).get_combined_minimum_size().y + pad.y))
+	card.size = card.custom_minimum_size
+
+
+## A tap on a face opens its card over it, or folds it; one card at a time.
+func _toggle_card(i: int) -> void:
+	card_row = -1 if card_row == i else i
+	for j in ally_buttons.size():
+		(ally_buttons[j]["card"] as Control).visible = j == card_row
+	_place_allies()
+
+
+## A tap on an open card: the companion's orders and state, the card folded.
+func _open_card(i: int) -> void:
+	var p = ally_buttons[i]["p"]
+	_toggle_card(i)
+	_ally_menu(p)
 
 
 ## Give a label the width of its words, `room` at most; returns that width.
@@ -1004,10 +1131,31 @@ func _build_thumbs() -> void:
 	_bold(depart_button)
 	depart_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	depart_button.visible = false
-	# Every companion back to the train at one press (user 2026-10-11), right
-	# of the clock (user 2026-10-18; tick puts it there). Glass by day; from
-	# dusk it burns like a lamp (시안 2차 11절). Under it 따라와 and 대기 for
-	# every living companion (decision 408), the two as wide as it.
+	# The squad's orders in a drawer under a lever at the top middle (user
+	# 2026-10-18), folded to begin with. 'All aboard' sends every companion
+	# back to the train at one press (user 2026-10-11), its word alone (no
+	# train mark); glass by day, from dusk it burns like a lamp (시안 2차
+	# 11절). Under it 따라와 and 대기 for every living companion (decision
+	# 408), the two as wide as it.
+	lever_button = _pad("", Vector2.ZERO, LEVER_TOUCH, 18, Control.PRESET_TOP_LEFT)
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		lever_button.add_theme_stylebox_override(k, StyleBoxEmpty.new())
+	lever_button.tooltip_text = "동료 명령"
+	var calm: StyleBoxFlat = HudSkin.glass(0.0, 0.0)
+	calm.corner_radius_top_left = 0
+	calm.corner_radius_top_right = 0
+	calm.corner_radius_bottom_left = 12
+	calm.corner_radius_bottom_right = 12
+	var hot: StyleBoxFlat = calm.duplicate() as StyleBoxFlat
+	hot.bg_color = Color(0.36, 0.2, 0.07, 0.78)
+	hot.shadow_color = Color(HudSkin.GLOW.r, HudSkin.GLOW.g, HudSkin.GLOW.b, 0.5)
+	hot.shadow_size = 14
+	hot.shadow_offset = Vector2.ZERO
+	lever_styles = [calm, hot]
+	lever_slot = StyleBoxFlat.new()
+	lever_slot.bg_color = Color(0, 0, 0, 0.55)
+	lever_slot.set_corner_radius_all(3)
+	lever_button.draw.connect(_draw_lever)
 	var aboard_font: Font = UiFonts.face(UiFonts.WORD, 500, 0.78)
 	var aboard_words: float = aboard_font.get_string_size("모두 열차로", HORIZONTAL_ALIGNMENT_LEFT, -1, UiFonts.size(13.0)).x
 	var order_font: Font = UiFonts.face(UiFonts.WORD, 500, 0.26)
@@ -1015,12 +1163,16 @@ func _build_thumbs() -> void:
 	for c: Array in COMMANDS.slice(0, 2):
 		order_words = maxf(order_words, order_font.get_string_size(command_word(c), HORIZONTAL_ALIGNMENT_LEFT, -1, UiFonts.size(13.0)).x)
 	var gap: float = UiFonts.px(SQUAD_GAP)
-	var wide: float = maxf(ceilf(UiFonts.px(11.0 + 16.0 + 5.0 + 13.0) + aboard_words), 2.0 * ceilf(UiFonts.px(7.0 + 7.0) + order_words) + gap)
+	var wide: float = maxf(ceilf(UiFonts.px(16.0 + 16.0) + aboard_words), 2.0 * ceilf(UiFonts.px(7.0 + 7.0) + order_words) + gap)
 	all_aboard_size = Vector2(wide, roundf(UiFonts.px(ALL_ABOARD_H)))
 	var aboard_seen := Vector2(all_aboard_size.x, roundf(UiFonts.px(ALL_ABOARD_SEEN)))
 	all_aboard_button = _pad("모두 열차로", Vector2.ZERO, all_aboard_size, UiFonts.size(13.0), Control.PRESET_TOP_LEFT)
 	all_aboard_styles = [HudSkin.key_styles(aboard_seen, false), HudSkin.key_styles(aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)]
-	_dress(all_aboard_button, "train", aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, int(UiFonts.px(16.0)))
+	# By day matte as the two under it; from dusk it burns.
+	for plate in all_aboard_styles[0].values():
+		plate.brass_rim = false
+	_dress(all_aboard_button, "", aboard_seen, false, HudSkin.Light.LAMP, HudSkin.Light.NONE, int(UiFonts.px(16.0)))
+	_matte(all_aboard_button)
 	all_aboard_button.add_theme_font_override("font", aboard_font)
 	all_aboard_button.add_theme_constant_override("h_separation", int(UiFonts.px(5.0)))
 	_center_pill(all_aboard_button)
@@ -1031,18 +1183,22 @@ func _build_thumbs() -> void:
 	_place_allies()
 	# Running is a toggle, so no required move needs a double tap (presentation_motion 8c);
 	# the stick rim and a double tap run only when set on the start screen.
-	# Fixed spot just above where the left thumb rests: about 20 mm in, 35 mm
-	# up, an 11 mm key (presentation_motion 5, 57446c8).
-	var up := -(35.0 * PX_PER_MM + key)
+	# Right over the stick (user 2026-10-18: 「왼쪽 조작 토글 바로 위에
+	# (여유있게)」): an 11 mm key on the stick's middle line, its foot 4 mm over
+	# the stick's ring, so the ring of nothing round it (finger_down) ends
+	# where the stick's ring begins (presentation_motion 5, 57446c8 had it
+	# 20 mm in and 35 mm up).
+	var run_x: float = STICK_HOME_MM.x * PX_PER_MM - key * 0.5
+	var up: float = -(STICK_HOME_MM.y * PX_PER_MM + STICK_RING + 4.0 * PX_PER_MM + key)
 	# The round keys show a picture and no word (시안 2차 11절, 배그처럼), but run
 	# shows RUN (user 2026-10-18); a key that is on lights from inside, running
 	# and the lamp amber, crouching brass.
-	run_button = _pad("RUN", Vector2(20.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	run_button = _pad("RUN", Vector2(run_x, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
 	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
 	_letter(run_button, RUN_WORD, 1.5)
 	run_button.tooltip_text = "뛰기"
 	# The lantern key, right of run 3 mm apart; it is there only after sunset.
-	lamp_button = _pad("", Vector2(20.0 * PX_PER_MM + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
+	lamp_button = _pad("", Vector2(run_x + key + 3.0 * PX_PER_MM, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
 	_dress(lamp_button, "lamp", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 36)
 	lamp_button.tooltip_text = "등불"
 	lamp_button.visible = false
@@ -1081,6 +1237,15 @@ func _build_thumbs() -> void:
 	settings_button.visible = false
 	for b in [manual_button, run_button, crouch_button, aim_button, attack_button, lamp_button]:
 		b.toggle_mode = true
+	# Movement and use keys are see-through (user 2026-10-18: 「Run 과 같은
+	# 플레이어 이동과 상호작용 버튼은 반투명하게 … 출발과 밑에 있는 버튼도」):
+	# no warm ground under their glass, the plate and its light at PAD_SEE, the
+	# mark and the word on them whole.
+	for b in [run_button, lamp_button, crouch_button, shove_button, attack_button, aim_button, manual_button, context_button, depart_button]:
+		for k in ["normal", "hover", "pressed", "hover_pressed"]:
+			var plate = b.get_theme_stylebox(k)
+			plate.over_ring = false
+			plate.dim = PAD_SEE
 	# The bag is right under the chief's portrait (user 2026-10-12; tick keeps
 	# it there as the portrait grows). There is no swap button here any more:
 	# swapping is inside the bag panel (build 47). It is 인벤토리 now and shows
@@ -1297,7 +1462,8 @@ func tick(delta: float) -> void:
 	if goal_label != null:
 		goal_label.text = UiFonts.keep_all(goal_shown())
 		var gp: Control = goal_label.get_parent()
-		gp.visible = goal_label.text != ""
+		gp.visible = goal_open and goal_label.text != ""
+		goal_key.visible = goal_label.text != ""
 		feel_label.text = UiFonts.keep_all(game.holdout.feel_line())
 		feel_label.visible = feel_label.text != "" and gp.visible
 	sun_bar.value = game.clock.sun_fraction()
@@ -1307,6 +1473,7 @@ func tick(delta: float) -> void:
 	radio_pill.modulate.a = radio_label.modulate.a
 	radio_pill.visible = radio_label.text != "" and radio_left > 0.0
 	_place_squad()
+	_tick_lever(delta)
 	_tick_portrait(p)
 	_tick_allies()
 	_tick_grab(p, delta)
@@ -1346,8 +1513,16 @@ func tick(delta: float) -> void:
 	_place_messages()
 	if pause_shows_play != game.paused:
 		pause_shows_play = game.paused
-		_set_icon(pause_button, "play" if game.paused else "pause", 30)
+		_set_icon(pause_button, "play" if game.paused else "pause", PAUSE_ICON)
 	settings_button.visible = game.paused and not modal_open and leaving.is_empty()
+	var keys_right: float = STATUS_AT.x - (SETTINGS_KEY + 8.0 if settings_button.visible else 0.0)
+	if test_keys.offset_right != keys_right:
+		test_keys.offset_left = keys_right
+		test_keys.offset_right = keys_right
+	# The fold keys a step left of the view keys, on the same row.
+	var fold: Vector2 = fold_keys.get_combined_minimum_size()
+	fold_keys.size = fold
+	fold_keys.position = Vector2(_view_size().x + keys_right - test_keys.get_combined_minimum_size().x - 8.0 - fold.x, 14.0)
 	if debug_panel.visible and fps_t <= 0.0:
 		fps_t = 0.25
 		_tick_debug()
@@ -1364,10 +1539,42 @@ func game_promises() -> Array:
 	return (dep.get("promises", []) as Array) if dep is Dictionary else []
 
 
-## Show `promises` on the line under the clock; none hides it.
+## Show `promises` on the promise line; none takes the line and its key away.
 func set_promises(promises: Array) -> void:
-	promise_label.text = UiFonts.keep_all(ReceiptCard.promise_line(promises))
-	promise_label.get_parent().visible = promise_label.text != ""
+	promise_text = ReceiptCard.promise_line(promises)
+	promise_label.text = UiFonts.keep_all(promise_text)
+	_show_promise()
+
+
+## Let the promise line down under its key, or take it up.
+func set_promise_open(open: bool) -> void:
+	promise_open = open
+	_show_promise()
+
+
+func _toggle_promise() -> void:
+	set_promise_open(not promise_open)
+
+
+func _show_promise() -> void:
+	var any: bool = promise_text != ""
+	promise_key.visible = any
+	promise_key.set_pressed_no_signal(promise_open)
+	promise_label.get_parent().visible = any and promise_open
+
+
+## Let the goal line down under its key, or take it up.
+func set_goal_open(open: bool) -> void:
+	goal_open = open
+	goal_key.set_pressed_no_signal(open)
+	if goal_label != null:
+		var gp: Control = goal_label.get_parent()
+		gp.visible = open and goal_label.text != ""
+		feel_label.visible = feel_label.text != "" and gp.visible
+
+
+func _toggle_goal() -> void:
+	set_goal_open(not goal_open)
 
 
 ## The line under the clock (decision 293 ②): the stop's goals only once the
@@ -1401,6 +1608,7 @@ func _tick_urgent() -> void:
 	urgent = now
 	radio_pill.add_theme_stylebox_override("panel", radio_styles[1 if urgent else 0])
 	radio_label.add_theme_color_override("font_color", HudSkin.URGENT if urgent else INK)
+	lever_button.queue_redraw()
 	var st: Dictionary = all_aboard_styles[1 if urgent else 0]
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		all_aboard_button.add_theme_stylebox_override(k, st[k])
@@ -1435,6 +1643,9 @@ func _drop_stale_person() -> void:
 
 func _tick_status(p) -> void:
 	status_rows = p.body.status_notes()
+	if (status_rows.size() >= STATUS_SMALL_FROM) != status_small:
+		status_small = not status_small
+		_place_status()
 	for i in status_pads.size():
 		var pad: Button = status_pads[i]
 		pad.visible = i < status_rows.size()
@@ -1452,15 +1663,21 @@ func status_diameter() -> int:
 	return d if STATUS_SIZES.has(d) else STATUS_SIZES[0]
 
 
-## The state icons down the right edge, most urgent at the top.
-func _place_status() -> void:
+## How wide the state icons are drawn now: status_diameter(), or STATUS_SMALL
+## of it while four or more show.
+func status_shown_diameter() -> float:
 	var d: float = status_diameter()
+	return roundf(d * STATUS_SMALL) if status_small else d
+
+
+## The state icons down the right edge in one column, most urgent at the top,
+## smaller while four or more show.
+func _place_status() -> void:
+	var d: float = status_shown_diameter()
 	for i in status_pads.size():
 		var pad: Button = status_pads[i]
-		var column: int = i / STATUS_PER_COLUMN
-		var slot: int = i % STATUS_PER_COLUMN
 		# Offsets from the top right corner the pad is anchored to.
-		var at: Vector2 = STATUS_AT + Vector2(-d - column * (d + STATUS_GAP), slot * (d + STATUS_GAP))
+		var at: Vector2 = STATUS_AT + Vector2(-d, i * (d + STATUS_GAP))
 		pad.custom_minimum_size = Vector2(d, d)
 		pad.offset_left = at.x
 		pad.offset_top = at.y
@@ -1537,85 +1754,109 @@ func _ally_text(p, second: String) -> String:
 	return first if second == "" else first + "\n" + second
 
 
-## The companions' row ends just left of the right thumb's pads and starts no
-## further left than a gap past the stick's ring, the work crew's chip at its
-## right end. Where that is too long (a 16:9 screen) the crew's chip stands
-## over the row's right end, and if the chips are still too long their words
-## are cut short (they end in …).
+## The faces at the foot of the screen, the middle one's under the screen's
+## middle (user 2026-10-18: 「가장 가운데 동료가 화면 정중앙 하단 중앙」), the
+## work crew's chip right beside them, and an open card over its face, kept
+## between the stick's ring and the right thumb's pads.
 func _place_allies() -> void:
 	var view: Vector2 = _view_size()
 	var one: bool = bool(game.opts.get("primary_one", false))
 	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
 	var left: float = stick_home().x + STICK_RING + UiFonts.px(SQUAD_GAP)
-	var gap: float = float(allies_box.get_theme_constant("separation"))
-	var crew: Vector2 = crew_button.get_combined_minimum_size() if crew_button.visible else Vector2.ZERO
-	var key: String = "%d %d %d" % [int(view.x), int(crew.x), int(one)]
-	for r in ally_buttons:
-		key += "|%s %s %s" % [r["name"].text, r["arm"].text, r["note"].text]
-	if key != allies_fit_key:
-		allies_fit_key = key
-		_fit_allies(right - left, gap, crew.x)
-	var beside: bool = crew.x > 0.0 and allies_beside
-	var end: float = right - (crew.x + gap if beside else 0.0)
+	var n: int = ally_buttons.size()
+	var row_w: float = n * CHIP_TOKEN + maxi(n - 1, 0) * CHIP_GAP
+	var x0: float = roundf(view.x * 0.5 - row_w * 0.5)
 	var y: float = view.y - ALLIES_UP
-	allies_box.position = Vector2(end - allies_box.get_combined_minimum_size().x, y)
-	if crew.x > 0.0:
+	allies_box.position = Vector2(x0, y)
+	allies_box.size = Vector2(row_w, CHIP_TOKEN)
+	if crew_button.visible:
+		var crew: Vector2 = crew_button.get_combined_minimum_size()
 		crew_button.size = crew
-		crew_button.position = Vector2(right - crew.x, y if beside else y - crew.y - gap)
+		crew_button.position = Vector2(x0 + row_w + CHIP_GAP, y + roundf((CHIP_TOKEN - crew.y) * 0.5))
+	if card_row >= 0 and card_row < n:
+		var card: Button = ally_buttons[card_row]["card"]
+		var mid: float = x0 + card_row * (CHIP_TOKEN + CHIP_GAP) + CHIP_TOKEN * 0.5
+		var x: float = clampf(mid - card.size.x * 0.5, left, maxf(right - card.size.x, left))
+		card.position = Vector2(roundf(x), roundf(y - UiFonts.px(CARD_GAP) - card.size.y))
 
 
-## Fit the chips into `room`: the crew's chip beside them if all fit, else
-## over the row; the chips' words cut short if they still do not fit.
-func _fit_allies(room: float, gap: float, crew_w: float) -> void:
-	chip_words_w = CHIP_WORDS_W
-	for r in ally_buttons:
-		_fit_chip(r)
-	var row_w: float = allies_box.get_combined_minimum_size().x
-	allies_beside = row_w + gap + crew_w <= room
-	if row_w > room:
-		var n: int = maxi(ally_buttons.size(), 1)
-		chip_words_w = maxf(floorf((room - gap * (n - 1)) / n - UiFonts.px(20.0) - CHIP_FACE), 0.0)
-		for r in ally_buttons:
-			_fit_chip(r)
-
-
-## The squad's orders right of the clock (user 2026-10-18): 'all aboard' on
-## the clock's row with its middle on the clock glass's, 따라와 and 대기 under
-## it. The glass keeps one width all stop long, so they never shift under a
-## thumb.
+## The lever at the top middle of the screen and the squad's orders under its
+## tab ('all aboard', then 따라와 and 대기), where they are whether shown or
+## folded, so nothing moves under a thumb; on a narrow screen never over the
+## clock's glass.
 func _place_squad() -> void:
 	var gap: float = UiFonts.px(SQUAD_GAP)
+	var mid: float = roundf(_view_size().x * 0.5)
+	lever_button.position = Vector2(mid - roundf(LEVER_TOUCH.x * 0.5), 0.0)
 	var glass: Vector2 = clock_pill.size.max(clock_pill.get_combined_minimum_size())
-	var x: float = roundf(top_panel.position.x + glass.x + gap)
-	var y: float = roundf(top_panel.position.y + (glass.y - all_aboard_size.y) * 0.5)
+	var x: float = maxf(mid - roundf(all_aboard_size.x * 0.5), roundf(top_panel.position.x + glass.x + gap))
+	var y: float = LEVER_TOUCH.y + 2.0
 	all_aboard_button.position = Vector2(x, y)
 	follow_button.position = Vector2(x, y + all_aboard_size.y)
 	wait_button.position = Vector2(x + all_aboard_size.x - order_size.x, y + all_aboard_size.y)
 
 
+## Open (or fold) the squad's orders under the lever; the knob and their fade
+## follow in tick.
+func set_orders_open(open: bool) -> void:
+	orders_open = open
+	var shown: bool = lever_button.visible and open
+	for b: Button in [all_aboard_button, follow_button, wait_button]:
+		b.visible = shown
+
+
+## The knob and the orders' fade follow orders_open over LEVER_S.
+func _tick_lever(delta: float) -> void:
+	var to: float = 1.0 if orders_open else 0.0
+	if lever_t == to:
+		return
+	lever_t = move_toward(lever_t, to, delta / LEVER_S)
+	lever_button.queue_redraw()
+	for b: Button in [all_aboard_button, follow_button, wait_button]:
+		b.modulate.a = lever_t
+
+
+## The lever's tab: glass hanging from the top edge (amber from dusk, as 'all
+## aboard' burns), a slot down its middle and a brass knob in it, up while the
+## orders are folded and down while they show. No word on it (decision 293).
+func _draw_lever() -> void:
+	var tab := Rect2(Vector2(roundf((LEVER_TOUCH.x - LEVER_SEEN.x) * 0.5), 0.0), LEVER_SEEN)
+	lever_button.draw_style_box(lever_styles[1 if urgent else 0], tab)
+	var slot := Rect2(tab.get_center() - Vector2(3.0, 11.0), Vector2(6.0, 22.0))
+	lever_button.draw_style_box(lever_slot, slot)
+	var knob := Vector2(slot.get_center().x, lerpf(slot.position.y + 3.0, slot.end.y - 3.0, lever_t))
+	lever_button.draw_circle(knob, 7.0, HudSkin.BRASS3)
+	lever_button.draw_circle(knob, 5.5, HudSkin.BRASS2)
+	lever_button.draw_circle(knob + Vector2(-1.5, -1.5), 2.2, HudSkin.BRASS1)
+
+
 ## One of the squad's two orders under 'all aboard': its word alone in the
-## middle of a glass pill (시안 .fcmd's buttons).
+## middle of a matte glass pill (시안 .fcmd's buttons).
 func _order_pad(c: Array, font: Font) -> Button:
 	var b := _pad(command_word(c), Vector2.ZERO, order_size, UiFonts.size(13.0), Control.PRESET_TOP_LEFT)
 	_dress(b, "", Vector2(order_size.x, roundf(UiFonts.px(ORDER_SEEN))), false)
+	_matte(b)
 	b.add_theme_font_override("font", font)
 	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	b.tooltip_text = "모두 " + command_word(c)
 	return b
 
 
-## The message column's left and right edges: right of the squad's orders,
-## a gap left of the first column of state icons even while none shows (so it
-## does not jump when one comes), left of the second while five or more show.
+## Plain glass with a plain ring: no brass sweep under the glass nor round the
+## rim (user 2026-10-18: 「따라와 대기 에 유광효과가 관측된다」).
+func _matte(b: Button) -> void:
+	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var plate = b.get_theme_stylebox(k)
+		plate.brass_rim = false
+
+
+## The message column's left and right edges: right of the squad's orders
+## (shown or folded, so nothing moves as they open), a gap left of the state
+## icons at their full size even while none shows or they are small (so it
+## does not jump as they come and shrink).
 func _message_span() -> Vector2:
 	var gap: float = UiFonts.px(MESSAGE_GAP)
-	var shown := 0
-	for pad: Button in status_pads:
-		if pad.visible:
-			shown += 1
-	var d: float = status_diameter()
-	var columns: int = maxi(1, ceili(float(shown) / STATUS_PER_COLUMN))
-	var right: float = _view_size().x + STATUS_AT.x - d - (columns - 1) * (d + STATUS_GAP) - gap
+	var right: float = _view_size().x + STATUS_AT.x - status_diameter() - gap
 	return Vector2(all_aboard_button.position.x + all_aboard_size.x + gap, right)
 
 
@@ -1691,11 +1932,12 @@ func _tick_allies() -> void:
 			row["name"].text = p.display_name
 			row["arm"].text = arm
 			row["note"].text = note
-			_fit_chip(row)
+			_fit_card(row)
 		row["face"].show_body(p)
 		b.tooltip_text = _ally_text(p, "%s · %s" % [cmd, p.body.status_words()])
 		b.modulate = Color(1, 0.6, 0.55) if not p.grabbers.is_empty() or p.body.downed else (Color(0.6, 0.6, 0.6) if not p.is_alive() else Color.WHITE)
-	all_aboard_button.visible = not ally_buttons.is_empty()
+	lever_button.visible = not ally_buttons.is_empty()
+	all_aboard_button.visible = lever_button.visible and orders_open
 	follow_button.visible = all_aboard_button.visible
 	wait_button.visible = all_aboard_button.visible
 	crew_button.visible = game.actions.work_started
@@ -3126,6 +3368,12 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	if portrait.get_global_rect().has_point(pos):
 		fingers[index] = {"kind": "portrait", "start": pos}
 		return true
+	# The clock, or a goal or promise line that is down: a tap folds it (or
+	# opens the clock), on the lift.
+	var glass: Control = _fold_at(pos)
+	if glass != null:
+		fingers[index] = {"kind": "fold", "start": pos, "glass": glass}
+		return true
 	# A ring 4 mm round the keys over the stick (run, and the lamp after dark)
 	# starts nothing: setting the stick down there must not toggle them, nor
 	# plant a stick on their edge.
@@ -3206,6 +3454,10 @@ func finger_up(index: int, pos: Vector2) -> bool:
 		"portrait":
 			if pos.distance_to(f["start"]) < DRAG_PX and portrait.get_global_rect().has_point(pos):
 				body_panel()
+		"fold":
+			var glass: Control = f["glass"]
+			if pos.distance_to(f["start"]) < DRAG_PX and glass.get_global_rect().has_point(pos):
+				_fold(glass)
 	return true
 
 
@@ -3243,6 +3495,27 @@ func finger_cancel(index: int) -> bool:
 				game.combat.stop_holding(game.player)
 			melee_holding = false
 	return true
+
+
+## The glass a tap folds or opens: the clock, or a goal or promise line that is
+## down (its key takes it up as well).
+func _fold_at(pos: Vector2) -> Control:
+	var glasses: Array = [clock_pill, promise_label.get_parent()]
+	if goal_label != null:
+		glasses.append(goal_label.get_parent())
+	for g: Control in glasses:
+		if g.is_visible_in_tree() and g.get_global_rect().has_point(pos):
+			return g
+	return null
+
+
+func _fold(glass: Control) -> void:
+	if glass == clock_pill:
+		set_clock_open(not clock_open)
+	elif glass == promise_label.get_parent():
+		set_promise_open(false)
+	else:
+		set_goal_open(false)
 
 
 func _view_size() -> Vector2:
@@ -3410,6 +3683,14 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 
 
 func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
+	if b == lever_button:
+		# Pulled down it opens, pushed up it folds, as the thumb goes.
+		var dy: float = pos.y - Vector2(f["start"]).y
+		if absf(dy) >= LEVER_PULL:
+			f["pulled"] = true
+			if (dy > 0.0) != orders_open:
+				set_orders_open(dy > 0.0)
+		return
 	if b != aim_button or not auto_aim:
 		return
 	var over := _over_player(pos)
@@ -3458,6 +3739,10 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		shove_button.button_pressed = false
 	elif b == run_button and run_hold():
 		_run_key_up()
+	elif b == lever_button:
+		# A tap flips it; a pull or a push did its work as the thumb went.
+		if not f.get("pulled", false) and b.get_global_rect().has_point(pos):
+			set_orders_open(not orders_open)
 
 
 ## Hold the aim pad: the gun comes up and, after a moment that shortens with
@@ -3821,7 +4106,7 @@ func _draw_overlay() -> void:
 	var view_size: Vector2 = overlay.size
 	var now: float = game.clock.elapsed
 	# The stop is over (the leave beat, the end): its cues go with the pads (the
-	# stick, the tells, the moans at the edge); what those left behind shout stays.
+	# stick, the tells, the arrows at the edge); what those left behind shout stays.
 	if game.ended:
 		_draw_says(view_size)
 		return
@@ -3895,7 +4180,9 @@ func _draw_overlay() -> void:
 	_draw_edges(view_size)
 
 
-## Sound icon at the moment of an action: bars for the four levels.
+## The sound of an action at the moment it is made, over where it was made: a
+## wifi mark (user 2026-10-18), one more of its dot and arcs lit for each of
+## the four levels, warm from loud on.
 func _draw_sounds(now: float) -> void:
 	for s in game.sounds:
 		var age: float = now - float(s["t"])
@@ -3907,12 +4194,26 @@ func _draw_sounds(now: float) -> void:
 		var c := _project(at + Vector3(0, 2.2, 0))
 		var a := clampf(1.0 - age / 1.4, 0.0, 1.0)
 		var lvl: int = int(s["level"])
-		for i in range(4):
-			var h := 6.0 + i * 5.0
-			var col := Color(1, 1, 1, a) if i <= lvl else Color(1, 1, 1, a * 0.2)
-			if lvl >= SimNoise.Level.LOUD and i <= lvl:
-				col = Color(1, 0.6, 0.45, a)
-			overlay.draw_rect(Rect2(c + Vector2(i * 7 - 12, -h), Vector2(5, h)), col)
+		var col := Color(1, 0.6, 0.45, a) if lvl >= SimNoise.Level.LOUD else Color(1, 1, 1, a)
+		_draw_wifi(c + Vector2(0, -2), Vector2.UP, lvl + 1, col)
+
+
+## A wifi mark: a dot at `at` and three arcs opening toward `dir`, the first
+## `lit` of the four in `col` and the rest faint, each over a dark edge so it
+## reads on snow.
+func _draw_wifi(at: Vector2, dir: Vector2, lit: int, col: Color) -> void:
+	var a: float = dir.angle()
+	for i in WIFI_ARCS.size() + 1:
+		var on: bool = i < lit
+		var ink := Color(col.r, col.g, col.b, col.a * (1.0 if on else 0.22))
+		var edge := Color(0, 0, 0, col.a * (0.45 if on else 0.2))
+		if i == 0:
+			overlay.draw_circle(at, WIFI_DOT + 1.2, edge, true, -1.0, true)
+			overlay.draw_circle(at, WIFI_DOT, ink, true, -1.0, true)
+			continue
+		var r: float = WIFI_ARCS[i - 1]
+		overlay.draw_arc(at, r, a - WIFI_SPAN, a + WIFI_SPAN, 16, edge, WIFI_W + 2.0, true)
+		overlay.draw_arc(at, r, a - WIFI_SPAN, a + WIFI_SPAN, 16, ink, WIFI_W, true)
 
 
 ## Off-screen threats: hordes on the way and rattling lids, as edge arrows.
@@ -3932,14 +4233,14 @@ func _draw_edges(view_size: Vector2) -> void:
 	var keep: Array[Rect2] = []
 	if not groups.is_empty() or not game.rattle.is_empty():
 		keep = hud_rects()
+	# A horde shows its sound mark, no word (user 2026-10-18: 「신음 저거 삭제」).
 	for k in groups:
 		var g: Dictionary = groups[k]
-		_edge_arrow(center, view_size, g["sum"] / float(g["n"]), "먼 신음", keep)
+		_edge_arrow(center, view_size, g["sum"] / float(g["n"]), "", keep)
 	for key in game.rattle:
 		var at: Vector3 = FieldGrid.center(game.data["manholes"][key])
 		if not game.camera.is_position_in_frustum(at):
 			_edge_arrow(center, view_size, at, "덜컹", keep)
-	_draw_moans()
 
 
 ## The HUD's own pieces on screen now (keys, state icons, glass, notes, the
@@ -3949,9 +4250,13 @@ func hud_rects() -> Array[Rect2]:
 	for b: Button in pads:
 		if b.is_visible_in_tree():
 			out.append(b.get_global_rect())
-	for c: Control in [top_panel, portrait, bag_box, radio_pill, allies_box, crew_button]:
+	for c: Control in [top_panel, portrait, bag_box, radio_pill, allies_box, crew_button, fold_keys, test_keys]:
 		if c != null and c.is_visible_in_tree():
 			out.append(c.get_global_rect())
+	for row in ally_buttons:
+		var card: Control = row["card"]
+		if card.is_visible_in_tree():
+			out.append(card.get_global_rect())
 	for box: Control in [toast_box, info_box]:
 		for c in box.get_children():
 			if c is Control and (c as Control).is_visible_in_tree():
@@ -3962,8 +4267,8 @@ func hud_rects() -> Array[Rect2]:
 
 ## The spot an edge arrow toward `at` takes: on its ray from the middle, as far
 ## out as the margin lets it, then in along the ray until neither it nor its
-## word touches one of `keep` (user 2026-10-18: no piece of the HUD over
-## another). Vector2.INF when `at` is straight ahead.
+## word (with no word, its sound mark) touches one of `keep` (user 2026-10-18:
+## no piece of the HUD over another). Vector2.INF when `at` is straight ahead.
 func edge_tip(center: Vector2, view_size: Vector2, at: Vector3, text: String, keep: Array[Rect2] = []) -> Vector2:
 	var dir := _project(at) - center
 	if dir.length() < 1.0:
@@ -3978,6 +4283,9 @@ func edge_tip(center: Vector2, view_size: Vector2, at: Vector3, text: String, ke
 	while t > EDGE_IN_MIN:
 		var tip := center + dir * t
 		var word := Rect2(tip - dir * 40.0 - Vector2(w * 0.5 + 4.0, fs), Vector2(w + 8.0, fs * 2.0))
+		if text == "":
+			# The sound mark's dot 42 back from the tip, its arcs toward it.
+			word = Rect2(tip - dir * 33.0 - Vector2(17.0, 17.0), Vector2(34.0, 34.0))
 		var cue := word.merge(Rect2(tip - Vector2(16.0, 16.0), Vector2(32.0, 32.0)))
 		if not keep.any(func(r: Rect2) -> bool: return r.intersects(cue)):
 			break
@@ -3985,7 +4293,6 @@ func edge_tip(center: Vector2, view_size: Vector2, at: Vector3, text: String, ke
 	return center + dir * maxf(t, EDGE_IN_MIN)
 
 
-## Heard, not seen (body_injury 8.3): the dead moving within MOAN_R of the
 ## The dead that have dropped low and will run, of those in sight.
 func tells() -> Array:
 	var out: Array = []
@@ -4006,37 +4313,8 @@ func _draw_tells() -> void:
 		overlay.draw_string(theme.default_font, head - Vector2(w * 0.5, 0), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, TELL_FONT, AMBER)
 
 
-## leader but outside sight show as a faint tick around the leader, one per
-## eighth of the compass. No count, no exact spot.
-func _draw_moans() -> void:
-	var p = game.player
-	var me := _project(p.position)
-	var marks: Dictionary = {}
-	for z in game.zombies.list:
-		if not game.zombies.active(z) or z["state"] == "frozen" or z["state"] == "wander":
-			continue
-		var d: float = z["pos"].distance_to(p.position)
-		if d > MOAN_R or d < 2.0 or game.cell_seen(z["pos"]):
-			continue
-		var dir := _project(z["pos"]) - me
-		if dir.length() < 1.0:
-			continue
-		var octant := int(round(dir.angle() / (PI / 4.0))) & 7
-		marks[octant] = minf(float(marks.get(octant, 1e9)), d)
-	for o in marks:
-		var a := float(o) * PI / 4.0
-		var v := Vector2(cos(a), sin(a))
-		var near := 1.0 - float(marks[o]) / MOAN_R
-		var col := Color(OMEN_COL.r, OMEN_COL.g, OMEN_COL.b, 0.35 + 0.5 * near)
-		# 시안 .fmoan: a bone stroke with a dark edge, its word in Plex 12 with a
-		# shadow, so both read on snow.
-		overlay.draw_arc(me, 92.0, a - 0.28, a + 0.28, 12, Color(0, 0, 0, 0.5 * col.a), 6.0, true)
-		overlay.draw_arc(me, 92.0, a - 0.28, a + 0.28, 12, col, 4.0, true)
-		_shadowed_word("신음", me + v * 120.0, col)
-
-
 ## A word on the world, centred on `at`, with a dark shadow round it (시안
-## .fmoan span, .fedge: Plex 12, wide apart).
+## .fedge: Plex 12, wide apart).
 func _shadowed_word(text: String, at: Vector2, col: Color) -> void:
 	var f: Font = UiFonts.face(UiFonts.WORD, 500, 1.2)
 	var fs: int = UiFonts.size(12)
@@ -4059,4 +4337,7 @@ func _edge_arrow(center: Vector2, view_size: Vector2, at: Vector3, text: String,
 		shade.append(q + (q - tip).normalized() * 2.0 + Vector2(0, 1))
 	overlay.draw_colored_polygon(shade, Color(0, 0, 0, 0.6))
 	overlay.draw_colored_polygon(head, col)
-	_shadowed_word(text, tip - dir * 40.0, col)
+	if text == "":
+		_draw_wifi(tip - dir * 42.0, dir, WIFI_ARCS.size() + 1, col)
+	else:
+		_shadowed_word(text, tip - dir * 40.0, col)

@@ -70,13 +70,19 @@ func test_the_promise_line_says_each_promise_in_a_word_or_two() -> void:
 func test_the_promise_line_is_up_only_with_promises() -> void:
 	var plain = _game()
 	assert_false(plain.hud.promise_label.get_parent().visible, "a stop with no promise has no line")
+	assert_false(plain.hud.promise_key.visible, "nor a key for it")
 	var sent = _game({"departure": _json("departure_prologue")})
+	# Folded under its key on the clock's row to begin with (user 2026-10-18).
+	assert_true(sent.hud.promise_key.visible)
+	assert_false(sent.hud.promise_label.get_parent().visible)
+	sent.hud.set_promise_open(true)
 	assert_true(sent.hud.promise_label.get_parent().visible)
 	assert_eq(sent.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 서막 2명 데려오기")
 	sent.hud.set_promises([{"kind": "skip_dispatch", "state": "꼬리칸 쉼"}])
 	assert_eq(sent.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 교대 꼬리칸 쉼")
 	sent.hud.set_promises([])
 	assert_false(sent.hud.promise_label.get_parent().visible)
+	assert_false(sent.hud.promise_key.visible)
 
 
 func test_the_end_card_is_the_paper_slip_with_its_keys_under_it() -> void:
