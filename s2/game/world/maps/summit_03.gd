@@ -1235,14 +1235,14 @@ const PLAN: Dictionary = {
 	"stores": [
 		{
 			"id": "shed_parts",
-			"name": "안쪽 부품함",
+			"name": "안쪽 부품 자재함",
 			"cell": [28,3],
 			"level": 0,
 			"items": ["cloth","plank"]
 		},
 		{
 			"id": "shed_fuel",
-			"name": "연료 칸 보급함",
+			"name": "연료 칸 보급 상자",
 			"cell": [73,3],
 			"level": 0,
 			"items": ["cloth","flare"]
@@ -1263,35 +1263,35 @@ const PLAN: Dictionary = {
 		},
 		{
 			"id": "below_parts",
-			"name": "지하 부품함",
+			"name": "지하 부품 자재함",
 			"cell": [51,17],
 			"level": -1,
 			"items": ["cloth","plank"]
 		},
 		{
 			"id": "below_supply",
-			"name": "지하 예비함",
+			"name": "지하 예비 상자",
 			"cell": [55,10],
 			"level": -1,
 			"items": ["bandage","document"]
 		},
 		{
 			"id": "hut_radio_notes",
-			"name": "무전 기록함",
+			"name": "무전 기록 보관함",
 			"cell": [106,77],
 			"level": 0,
 			"items": ["document"]
 		},
 		{
 			"id": "hut_engine_notes",
-			"name": "기관 도면함",
+			"name": "기관 도면 보관함",
 			"cell": [110,77],
 			"level": 0,
 			"items": ["document"]
 		},
 		{
 			"id": "hut_supply",
-			"name": "오두막 보급함",
+			"name": "오두막 보급 상자",
 			"cell": [118,72],
 			"level": 0,
 			"items": ["food_pack","bandage"]
