@@ -27,6 +27,7 @@ const LampKey = preload("res://game/ui/lamp_key.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const PICTURE := preload("res://game/ui/tex/lp_window.png")
+const HudIcons = preload("res://game/ui/hud_icons.gd")
 
 ## The sheet on the mockup's 844 × 390 stage: .lp from 48, its picture at
 ## 28 · 22 in it (388 × 242), its words at 452 · 18 (362 × 254), the dark
@@ -45,7 +46,9 @@ const CAPTION := Color("f1ecdf")
 ## .lp.is-good: the title's amber and the lamp amber of its rule and the dash.
 const GOOD := Color("f8c97c")
 const AMBER := Color("f2a63c")
-const KICK := "끝 · 둘째 역"
+## A bar's word drawn as its mark (decisions.md 「자원과 계기는 글자 대신 아이콘과
+## 숫자」, 결정 417).
+const ROW_MARKS: Dictionary = {"사람": "people", "석탄": "coal", "식량": "food"}
 ## The title in the hand (the serif waits on its decision): the mockup's 32 serif
 ## stands this tall in the pen.
 const TITLE_CSS: float = 42.0
@@ -94,7 +97,6 @@ static func model(g0: Dictionary, t0: Dictionary) -> Dictionary:
 		rows.append(["석탄", int(round(float(before["coal"]))), int(round(float(now["coal"])))])
 		rows.append(["식량", int(round(float(before["food"]))), int(round(float(now["food"])))])
 	return {
-		"kick": KICK,
 		"title": String(card.get("title", "")),
 		"good": true,
 		"why": String(lines[0]) if lines.size() > 0 else "",
@@ -250,7 +252,7 @@ func _column(m: Dictionary, good: bool) -> void:
 	var x0: float = TXT.position.x * k
 	var w: float = TXT.size.x * k
 	var y: float = TXT.position.y * k
-	# The kick: a short dash, 8 apart, the words (.2em).
+	# The kick: a short dash alone over the title, no 「끝 · 둘째 역」 (결정 417).
 	var kick := _part("Kick", Rect2(x0, y, w, 16.0 * k))
 	var dash := ColorRect.new()
 	dash.color = AMBER if good else Color(INK, 0.5)
@@ -258,8 +260,6 @@ func _column(m: Dictionary, good: bool) -> void:
 	dash.position = Vector2(0, (16.0 - 2.0) * 0.5 * k)
 	dash.size = Vector2(18.0, 2.0) * k
 	kick.add_child(dash)
-	var kw := UiFonts.label(String(m.get("kick", KICK)), UiFonts.WORD, 400, 12.0, Color(INK, 0.66), 2.4)
-	_centred(kick, kw, 26.0 * k)
 	y += (16.0 + 3.0) * k
 	# The title in its line of 44, its rule 5 under it.
 	var title := _part("Title", Rect2(x0, y, w, (44.0 + 5.0 + 2.0) * k))
@@ -360,7 +360,20 @@ func _bar_row(h: Control, row: Array) -> void:
 		c.position = Vector2(float(xs[i]) * k, 0)
 		c.size = Vector2(float(ws[i]) * k, ROW_H * k)
 		cells.append(c)
-	_centred(cells[0], UiFonts.label(String(row[0]), UiFonts.WORD, 400, 13.0, Color(INK, 0.72), 0.78), 0.0)
+	var mark_id: String = String(ROW_MARKS.get(String(row[0]), ""))
+	if mark_id != "":
+		var px: int = int(round(18.0 * k))
+		var mark := TextureRect.new()
+		mark.name = "Mark"
+		mark.texture = HudIcons.texture(mark_id, px, Color(INK, 0.72), 2.0)
+		mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.size = Vector2(px, px)
+		mark.position = Vector2(0.0, (ROW_H * k - px) * 0.5)
+		cells[0].add_child(mark)
+	else:
+		_centred(cells[0], UiFonts.label(String(row[0]), UiFonts.WORD, 400, 13.0, Color(INK, 0.72), 0.78), 0.0)
 	var bar: Control = cells[1]
 	bar.name = "Bar"
 	bar.set_meta("split", bar_of(row))

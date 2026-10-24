@@ -930,6 +930,10 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 	c["lamp_sway"] = 1.0
 	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
 	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
+	# The car's numbers are not on the everyday screen (decisions.md 「평소 화면에는
+	# 칸 수치를 두지 않는다」, 결정 417): the line keeps them for this scene's
+	# tests and is not drawn; a press on the car opens its pane with them.
+	(c["values"] as Label3D).visible = false
 
 
 ## An iron stove with its pipe, an ember glow and the faint steam a car stove

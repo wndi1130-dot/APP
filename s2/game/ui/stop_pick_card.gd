@@ -38,8 +38,6 @@ const SHEET_AT := Vector2(-10, 50)
 ## S1 data.ts: the places and what is worth carrying back.
 const PLACE_NAMES: Dictionary = {"freight": "화물역", "houses": "주택가", "hospital": "병원", "factory": "공장", "church": "교회", "office": "관청"}
 const TARGETS: Array = [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"]]
-## What a place is likely to still have, by what it is richest in (S1 loot weights).
-const PLACE_HINT: Dictionary = {"freight": "석탄이 남았을 만한 곳", "houses": "먹을 것이 남았을 만한 곳", "hospital": "약이 남았을 만한 곳", "factory": "석탄이 남았을 만한 곳", "church": "모일 것이 남았을 만한 곳", "office": "기록이 남았을 만한 곳"}
 const RISK_WORDS: Dictionary = {"calm": "조용함", "light": "가벼움", "hurt": "다칠 수 있음", "dead": "죽을 수 있음"}
 const COMM_SHORT: Dictionary = {"tail": "꼬리", "medtech": "의무", "guard": "경비", "front": "앞칸"}
 
@@ -111,10 +109,10 @@ static func model(g0: Dictionary, t0: Dictionary, name: String = "") -> Dictiona
 	if costs.get(String(crew_rule.get("cost", ""))) is Dictionary:
 		away = float(costs[String(crew_rule["cost"])].get("away", 0.0)) > 0.0
 	return {
-		"seg": "%d 구간 정차" % int(g0.get("seg", 1)),
-		"seg_n": int(g0.get("seg", 1)),
 		"place": name if name != "" else String(PLACE_NAMES.get(place, place)),
-		"hint": ("%s · %s" % [PLACE_NAMES.get(place, place), PLACE_HINT.get(place, "")]) if name != "" else String(PLACE_HINT.get(place, "")),
+		# Under a stop's own name, the kind of place it is; what it is likely to
+		# hold is the target chips' fill, not a line (결정 417).
+		"hint": String(PLACE_NAMES.get(place, place)) if name != "" else "",
 		"risk": String(RISK_WORDS.get(TrainStop.risk_level(risk), "?")) if known else "?",
 		"targets": targets,
 		"stays": stays,
@@ -195,22 +193,20 @@ func _fill() -> void:
 	_keys()
 
 
-## The head (.sh__head, 50): the stretch in its line (24, the kick's own 18
-## centred), the place's name in pen on the risk's baseline (.sh__tl: a 28
-## line in 26); then the scene line in pen (.scene: a 20 line atop 26).
+## The head: the place's name in pen on the risk's baseline (.sh__tl: a 28
+## line in 26), then under a named stop its kind in pen (a 20 line atop 26).
+## No 「N 구간 정차」 kick over it: the route line says the stretch (결정 417).
 func _head(m: Dictionary) -> void:
 	var head := VBoxContainer.new()
-	head.custom_minimum_size = Vector2(0, UiFonts.px(50.0))
 	head.add_theme_constant_override("separation", 0)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_child(head)
-	var kick := Paper.line_box(24.0)
-	kick.add_theme_constant_override("separation", int(round(UiFonts.px(4.0))))
-	kick.add_child(Paper.ink(str(m["seg_n"]), UiFonts.NUMBER, 400, 14.0, Paper.INK2, 0.56))
-	kick.add_child(Paper.ink("구간 정차", UiFonts.WORD, 400, 12.0, Paper.INK2, 1.92))
-	for l in kick.get_children():
-		(l as Label).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(kick)
+	# Room over the pen's tall letters where the kick line was (half its 24),
+	# so the name stays on the paper.
+	var top := Control.new()
+	top.custom_minimum_size = Vector2(0, UiFonts.px(12.0))
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(top)
 	var title = TypeLine.new(28.0, 26.0)
 	title.name = "Title"
 	head.add_child(title)
@@ -218,12 +214,12 @@ func _head(m: Dictionary) -> void:
 	place.name = "Place"
 	place.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_child(place)
-	var risk_word := Paper.ink("위험", UiFonts.WORD, 400, 12.0, Paper.INK2, 1.44)
-	risk_word.name = "Risk"
-	title.add_child(risk_word)
-	title.add_child(_space(3.0))
+	# The risk's own word (조용함 … 죽을 수 있음, 「?」 unscouted) at the name's
+	# right is the line decisions.md keeps for everyone (결정 150); no 「위험」.
 	var said: String = String(m["risk"])
 	title.add_child(Paper.ink(said, UiFonts.NUMBER if said == "?" else UiFonts.WORD, 600, 18.0 if said == "?" else 13.0))
+	if String(m["hint"]) == "":
+		return
 	var scene = TypeLine.new(20.0, 26.0)
 	var hint := Paper.ink(String(m["hint"]), UiFonts.HAND, 400, 18.0)
 	hint.name = "Scene"
@@ -231,32 +227,30 @@ func _head(m: Dictionary) -> void:
 	body.add_child(scene)
 
 
-## A row (.frow, 46): its question in side ink, 46 wide, then its chips 6 apart.
-func _row(question: String) -> HBoxContainer:
+## A row (.frow, 46): its chips 6 apart. The chips say what the row is (the
+## stocks, the stays with their cost, the cars and the count), so no question
+## heads it (결정 417: no 「무엇을 · 얼마나 · 누구를」).
+func _row() -> HBoxContainer:
 	var h := Paper.line_box(46.0)
 	h.add_theme_constant_override("separation", int(round(UiFonts.px(6.0))))
-	var q := Paper.ink(question, UiFonts.WORD, 400, 12.0, Paper.INK2, 1.44)
-	q.custom_minimum_size = Vector2(UiFonts.px(46.0), 0)
-	q.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(q)
 	body.add_child(h)
 	return h
 
 
 func _rows(m: Dictionary) -> void:
-	var what := _row("무엇을")
+	var what := _row()
 	for row: Dictionary in m["targets"]:
 		var b := Paper.target_chip(String(row["word"]), bool(row["on"]), float(row["fill"]))
 		b.name = "Target_" + String(row["id"])
 		b.pressed.connect(pick.bind("target", row["id"]))
 		what.add_child(b)
-	var long := _row("얼마나")
+	var long := _row()
 	for row: Dictionary in m["stays"]:
 		var b := Paper.chip(String(row["word"]), bool(row["on"]), String(row["cost"]))
 		b.name = "Stay_" + String(row["id"])
 		b.pressed.connect(pick.bind("stay", row["id"]))
 		long.add_child(b)
-	var who := _row("누구를")
+	var who := _row()
 	# Four cars to send from where the mockup drew three: the chips close up a little.
 	var pad: float = 12.0 if (m["crews"] as Array).size() <= 3 else 10.0
 	for row: Dictionary in m["crews"]:
@@ -334,11 +328,10 @@ func _crew_line(m: Dictionary) -> void:
 				words.add_child(_side(", "))
 			words.add_child(Paper.name_word(String(names[i])))
 		if int(m["more"]) > 0:
-			words.add_child(_side(" 외 "))
-			words.add_child(_num(str(m["more"]), 400, Paper.INK2))
-			words.add_child(_side("명"))
+			words.add_child(_num(" +%d" % int(m["more"]), 400, Paper.INK2))
+	# What sending them costs at the vote, in a word (결정 339 · 359).
 	if bool(m["away"]):
-		words.add_child(_side(" · 돌아오면 표결 빠짐"))
+		words.add_child(_side(" · 표결 빠짐"))
 	body.add_child(line)
 
 
@@ -356,7 +349,7 @@ func _promise_line(m: Dictionary) -> void:
 	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.add_child(words)
 	# Its numbers in the number face, on the words' baseline (.promline .num).
-	for run: Array in _digit_runs("이번 정차 " + said.replace("약속: ", "약속 · ")):
+	for run: Array in _digit_runs(said.replace("약속: ", "약속 · ")):
 		words.add_child(_num(run[0], 400, Paper.INK) if run[1] else _side(run[0]))
 	var st: Dictionary = promise_stamp(promises, String(m["comm"]), t)
 	if not st.is_empty():
@@ -427,10 +420,3 @@ static func _digit_runs(text: String) -> Array:
 	if cur != "":
 		out.append([cur, digits])
 	return out
-
-
-func _space(css: float) -> Control:
-	var c := Control.new()
-	c.custom_minimum_size = Vector2(UiFonts.px(css), 0)
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return c

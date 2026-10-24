@@ -72,7 +72,7 @@ func test_out_at_night_the_eye_reaches_less_and_by_day_it_changes_nothing() -> v
 	assert_gt(game.seen_now.size(), dark_cells, "and the mask shows it")
 
 
-func test_the_lantern_key_is_there_only_after_sunset_and_says_what_it_costs() -> void:
+func test_the_lantern_key_is_there_only_after_sunset_and_says_so_once() -> void:
 	var hud = game.hud
 	hud.tick(0.02)
 	assert_false(hud.lamp_button.visible, "by day there is no key")
@@ -82,14 +82,15 @@ func test_the_lantern_key_is_there_only_after_sunset_and_says_what_it_costs() ->
 	assert_true(hud.lamp_button.visible)
 	assert_true(hud.lamp_button.button_pressed, "lit to begin with")
 	var texts: Array = hud.toasts.map(func(t): return String(t["l"].text).replace(UiFonts.WORD_JOINER, ""))
-	assert_eq(texts.filter(func(t): return t.contains("'등불'")).size(), 1, "one line, once")
+	# One word, once; the key lighting up shows where (결정 417: no how-to line).
+	assert_eq(texts.filter(func(t): return t == "해 짐").size(), 1, "one word, once")
 	await wait_frames(2)
 	var at: Vector2 = hud.lamp_button.get_global_rect().get_center()
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
 	assert_false(game.lamps_on())
 	assert_false(hud.lamp_button.button_pressed)
-	assert_true(String(hud.toasts[-1]["l"].text).replace(UiFonts.WORD_JOINER, "").contains("모두 끔"))
+	assert_eq(String(hud.toasts[-1]["l"].text).replace(UiFonts.WORD_JOINER, ""), "등불 끔", "the word alone (결정 417)")
 	hud.finger_down(1, at)
 	hud.finger_up(1, at)
 	assert_true(game.lamps_on())

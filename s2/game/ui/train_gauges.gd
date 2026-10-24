@@ -217,7 +217,9 @@ func _text_w(l: Label) -> float:
 	return f.get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x / UiFonts.K
 
 
-## A gauge (.meter, 104 × 48): its word and number on one baseline (28.5),
+## A gauge (.meter, 104 × 48): its mark (trust · tension in the word's place:
+## decisions.md 「계기는 글자 대신 아이콘과 숫자」, 결정 417) and number on one
+## baseline (28.5),
 ## a 주의 · 위험 tag at the right when it is in a zone, the bar at 36 and the
 ## zones under it at 47.
 func _meter(key: String, word: String, n: int, lv: int) -> Control:
@@ -233,13 +235,21 @@ func _meter(key: String, word: String, n: int, lv: int) -> Control:
 	bar.size = c.size
 	bar.draw.connect(_draw_meter.bind(bar, key, n, lv, dim))
 	c.add_child(bar)
-	var lab := _label(word, UiFonts.WORD, 400, 12.0, tone(INK2, dim), 1.44)
-	c.add_child(lab)
-	_sit(lab, 0.0, 28.5)
+	var mark := TextureRect.new()
+	mark.name = "Mark"
+	var px: int = int(round(18.0 * UiFonts.K))
+	mark.texture = HudIcons.texture(key, px, tone(INK2, dim), 2.0, tone(SOOT_CUT, dim))
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mark.size = Vector2(px, px)
+	mark.position = Vector2(0.0, 12.0) * UiFonts.K
+	mark.tooltip_text = word
+	c.add_child(mark)
 	var num := _label(str(n), UiFonts.NUMBER, 500, 25.0, tone(WARN if lv > 0 else INK, dim), 0.375)
 	num.name = "Value"
 	c.add_child(num)
-	_sit(num, _text_w(lab) + 6.0, 28.5)
+	_sit(num, 18.0 + 5.0, 28.5)
 	if lv > 0:
 		var tag := _label("위험" if lv > 1 else "주의", UiFonts.WORD, 600, 12.0, tone(AMBER_L if lv > 1 else TAG_INK, dim), 1.2)
 		tag.name = "Tag"
@@ -460,16 +470,10 @@ func _standing(unrest: int, neutral: int, support: int) -> Control:
 	u.name = "Unrest"
 	c.add_child(u)
 	_sit(u, x0, 27.0)
-	var uw := _label("불만", UiFonts.WORD, 400, 12.0, tone(INK2, dim), 1.44)
-	c.add_child(uw)
-	_sit(uw, x0 + _text_w(u) + 5.0, 27.0)
 	var s := _label(str(support), UiFonts.NUMBER, 500, 21.0, tone(SKY, dim), 0.315)
 	s.name = "Support"
 	c.add_child(s)
 	_sit(s, x0 + 112.0 - _text_w(s), 27.0)
-	var sw := _label("지지", UiFonts.WORD, 400, 12.0, tone(INK2, dim), 1.44)
-	c.add_child(sw)
-	_sit(sw, x0 + 112.0 - _text_w(s) - 5.0 - _text_w(sw), 27.0)
 	var bar := Control.new()
 	bar.name = "Bar"
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE

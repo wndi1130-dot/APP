@@ -101,14 +101,15 @@ func test_the_stop_card_falls_on_the_mockups_lines() -> void:
 		for i in up:
 			n = n.get_parent()
 		return _in(n as Control, body).y / k
-	# c2.css: .sh__head 50 (its title line at 24), .scene 26, three .frow of 46,
-	# .crewline 22, .promline 24, and the keys (48) at the foot. A box row rounds
-	# its height up to a whole game px, so a line may come up to 1 mockup px late.
-	assert_almost_eq(at.call("Title", 0), 24.0, 1.0, "the title line under the stretch")
-	assert_almost_eq(at.call("Scene", 1), 50.0, 1.0, "the scene line, not pushed by the pen title")
-	assert_almost_eq(at.call("Target_coal", 1), 76.0, 1.0)
-	assert_almost_eq(at.call("Stay_short", 1), 122.0, 1.0)
-	assert_almost_eq(at.call("Crew_tail", 1), 168.0, 1.0)
-	assert_almost_eq(at.call("CrewLine", 0), 214.0, 1.0)
-	assert_almost_eq(at.call("Promises", 1), 236.0, 1.0)
+	# c2.css with the kick line and the place's hint taken out (결정 417): 12 over
+	# the title line (26), three .frow of 46, .crewline 22, .promline 24, and the
+	# keys (48) at the foot. A box row rounds its height up to a whole game px, so
+	# a line may come up to 1 mockup px late.
+	assert_almost_eq(at.call("Title", 0), 12.0, 1.0, "the title line, with room over the pen")
+	assert_null(c.find_child("Scene", true, false), "a stop with no name of its own: no line under it")
+	assert_almost_eq(at.call("Target_coal", 1), 38.0, 1.0)
+	assert_almost_eq(at.call("Stay_short", 1), 84.0, 1.0)
+	assert_almost_eq(at.call("Crew_tail", 1), 130.0, 1.0)
+	assert_almost_eq(at.call("CrewLine", 0), 176.0, 1.0)
+	assert_almost_eq(at.call("Promises", 1), 198.0, 1.0)
 	assert_almost_eq(at.call("Send", 1), 270.0, 1.0, "the keys at the foot (margin-top auto)")

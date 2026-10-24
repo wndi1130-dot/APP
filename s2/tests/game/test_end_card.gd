@@ -30,7 +30,7 @@ func _card(still: bool = true, g1: Dictionary = {}):
 func test_the_sheet_says_the_port_s_end_card() -> void:
 	var e: Array = _end()
 	var m: Dictionary = EndCard.model(e[0], e[1])
-	assert_eq(m["kick"], "끝 · 둘째 역")
+	assert_false(m.has("kick"), "no 「끝 · 둘째 역」 kick (결정 417)")
 	assert_eq(m["title"], "여기까지")
 	assert_true(m["good"], "the slice ends where it meant to: a good end")
 	assert_eq(m["why"], "첫 정차 한 번이 열차를 이만큼 바꿨다.")

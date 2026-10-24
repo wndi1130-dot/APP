@@ -93,12 +93,13 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 		"stage": String(St.stage_of(float(s["rel"]), t0).get("name", "")),
 		"warm": int(round(float(sit[0]))),
 		"cold": cold,
-		"say": "밤사이 앓는 사람 늘어남" if cold else "견딜 만함",
+		# Only the cold says a line: what the night does to them (결정 417).
+		"say": "밤사이 앓는 사람 늘어남" if cold else "",
 		"stats": stats,
 		"levers": [
-			{"id": "heat", "word": "난방", "cost": "석탄 −" + TrainGauges._num(snappedf(coal, 0.1)), "step": heat,
+			{"id": "heat", "word": "난방", "cost": "−" + TrainGauges._num(snappedf(coal, 0.1)), "cost_icon": "coal", "step": heat,
 				"floor": int(St.law_floor(g0, t0, "heatFloor")), "need": need_of(float(sit[0]))},
-			{"id": "ration", "word": "배급", "cost": "식량 −" + TrainGauges._num(snappedf(food, 0.1)), "step": ration,
+			{"id": "ration", "word": "배급", "cost": "−" + TrainGauges._num(snappedf(food, 0.1)), "cost_icon": "food", "step": ration,
 				"floor": int(St.law_floor(g0, t0, "rationFloor")), "need": need_of(float(sit[1]))},
 		],
 	}
@@ -195,10 +196,12 @@ func _head(m: Dictionary) -> void:
 	var name := UiFonts.label(String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
 	name.name = "Name"
 	_text(name, 44.0, 27.0)
+	# The people as their mark and count, then the stage (결정 417: no 「명 · 관계」).
+	_add(_mark("people", 14.0, Vector2(44.0, 33.0), INK2))
 	var pop := UiFonts.label(str(m["pop"]), UiFonts.NUMBER, 400, 15.0, INK, 0.225)
 	pop.name = "People"
-	_text(pop, 44.0, 45.0)
-	var stage := UiFonts.label("명 · 관계 " + String(m["stage"]), UiFonts.WORD, 400, 12.0, INK2, 0.72)
+	_text(pop, 62.0, 45.0)
+	var stage := UiFonts.label(" · " + String(m["stage"]), UiFonts.WORD, 400, 12.0, INK2, 0.72)
 	stage.name = "Stage"
 	_add(stage)
 	GlassParts.put_on(stage, pop.position.x + GlassParts.text_w(pop), GlassParts.base_of(pop))
@@ -226,15 +229,12 @@ func _head(m: Dictionary) -> void:
 	GlassParts.put_on(word, mark.position.x - 3.0 * k - GlassParts.text_w(word), 26.5 * k)
 
 
-## When cold, the paper tag and its line (.say at 48, 24 high); else the line alone.
+## When cold, its line (.say at 48, 24 high); the frosted thermometer under it
+## already says cold, so no 「추움」 tag (결정 417). Warm, nothing.
 func _say(m: Dictionary) -> void:
-	var k: float = UiFonts.K
+	if String(m["say"]) == "":
+		return
 	var x: float = 44.0
-	if bool(m["cold"]):
-		var tag: Control = GlassParts.paper_tag("추움")
-		tag.position = Vector2(71.0, 60.0) * k - tag.size * 0.5
-		_add(tag)
-		x = 108.0
 	# The mockup sets this line in Noto Serif KR; it waits on the serif's file (IBM Plex here).
 	var line := UiFonts.label(String(m["say"]), UiFonts.WORD, 400, 13.0, INK2, 0.13)
 	line.name = "Say"
@@ -244,7 +244,7 @@ func _say(m: Dictionary) -> void:
 ## The thermometer (.thermo 74 × 78 at 44, 75): a well 12 wide with the cold
 ## stretch marked beside it below 45, the warmth filling it from the bulb, the
 ## threshold across at 45; cold, the fill and the bulb go frost blue and glow.
-## The warmth's number beside it with the threshold at the right.
+## The warmth's number beside it; the threshold's 45 at the end of its line.
 func _thermo(m: Dictionary) -> void:
 	var k: float = UiFonts.K
 	var warm: int = int(m["warm"])
@@ -295,19 +295,15 @@ func _thermo(m: Dictionary) -> void:
 			c.queue_redraw(), was, float(warm), WARM_S)
 	else:
 		c.set_meta("warm", float(warm))
-	var lab := UiFonts.label("온기", UiFonts.WORD, 400, 12.0, INK2, 1.44)
-	_text(lab, 132.0, 95.0)
+	# The warmth's number beside the glass; the thermometer is its word (결정 417).
 	var num := UiFonts.label(str(warm), UiFonts.NUMBER, 600, 28.0, INK, 0.42)
 	num.name = "Warmth"
 	_text(num, 132.0, 95.0)
-	num.position.x = lab.position.x + GlassParts.text_w(lab) + 8.0 * k
-	# 문턱 45 at the right of the row, on the warmth's baseline.
-	var th := UiFonts.label("45", UiFonts.NUMBER, 400, 14.0, INK3, 0.21)
-	_text(th, 0.0, 95.0)
-	th.position.x = 316.0 * k - GlassParts.text_w(th)
-	var tw_word := UiFonts.label("문턱 ", UiFonts.WORD, 400, 12.0, INK3, 0.72)
-	_add(tw_word)
-	GlassParts.put_on(tw_word, th.position.x - GlassParts.text_w(tw_word), GlassParts.base_of(th))
+	# 45 at the end of the threshold's line across the glass, so the line says
+	# what it is (no 「문턱」).
+	var th := UiFonts.label(str(int(COLD)), UiFonts.NUMBER, 400, 14.0, INK3, 0.21)
+	th.name = "Threshold"
+	_text(th, 44.0 + 55.0, 75.0 + 63.0 - 62.0 * COLD / 100.0 + 5.0)
 
 
 ## Ration, crowding and exposure (.stat rows at 100, 120 and 140): the word,
@@ -342,6 +338,21 @@ func _stats(m: Dictionary) -> void:
 		num.position.x = 316.0 * k - GlassParts.text_w(num)
 
 
+## An icon of `css` at `at` (pane px), in `color`; nothing for an empty id.
+func _mark(icon: String, css: float, at: Vector2, color: Color) -> Control:
+	var t := TextureRect.new()
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if icon == "":
+		return t
+	var px: int = int(round(css * UiFonts.K))
+	t.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.size = Vector2(px, px)
+	t.position = at * UiFonts.K
+	return t
+
+
 ## A lever (.lever, 272 × 62 at `top`): its word, what the step burns, the word
 ## for whether it is enough at the right (부족 in red, the only red); under them
 ## the slot of five steps with the lamp fill up to the brass knob.
@@ -350,10 +361,13 @@ func _lever(lv: Dictionary, top: float, comm: String) -> void:
 	var id: String = String(lv["id"])
 	var word := UiFonts.label(String(lv["word"]), UiFonts.WORD, 500, 13.0, INK, 2.08)
 	_text(word, 44.0, top + 14.0)
-	var cost := UiFonts.label(String(lv["cost"]), UiFonts.WORD, 400, 13.0, INK2, 0.52)
+	# What a step burns: its stock's mark and the number (결정 417: no word).
+	var cost_x: float = (word.position.x + GlassParts.text_w(word)) / k + 10.0
+	_add(_mark(String(lv.get("cost_icon", "")), 13.0, Vector2(cost_x, top + 3.0), INK2))
+	var cost := UiFonts.label(String(lv["cost"]), UiFonts.NUMBER, 400, 13.0, INK2, 0.52)
 	cost.name = "Cost_" + id
 	_text(cost, 0.0, top + 14.0)
-	cost.position.x = word.position.x + GlassParts.text_w(word) + 10.0 * k
+	cost.position.x = (cost_x + 16.0) * k
 	var need: String = String(lv["need"])
 	var low: bool = need == "부족"
 	var tag := UiFonts.label(need, UiFonts.WORD, 500, 12.0, RED if low else INK2, 0.72)
