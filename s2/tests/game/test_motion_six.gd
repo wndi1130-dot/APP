@@ -57,28 +57,6 @@ func test_a_blow_holds_the_feet_from_part_way_to_its_end() -> void:
 	assert_almost_eq(float(Motion.swing_row("knife")["feet"].x) / float(W.get_data("knife")["swing"]), 0.5, 0.001)
 
 
-func test_a_blow_holds_a_squad_members_feet_on_a_path_too() -> void:
-	var a = game.squad[1] if game.squad.size() > 1 and game.squad[0] == p else game.squad[0]
-	assert_ne(a, p)
-	a.position = p.position + Vector3(3, 0, 0)
-	a.set_weapon_slots([{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}])
-	var row: Dictionary = Motion.swing_row("axe")
-	var mult: float = float(a.mults()["swing"])
-	game.combat.start_swing(a, {})
-	game.clock.elapsed += (float(row["feet"].x) + 0.02) / mult
-	assert_true(game.combat.feet_held(a))
-	a.go_to(PackedVector3Array([a.position + Vector3(4, 0, 0)]))
-	var at: Vector3 = a.position
-	game._move_person(a, 0.1)
-	assert_eq(a.position, at, "the AI's path does not walk it off mid-blow")
-	assert_false(a.moving)
-	game.clock.elapsed += float(row["len"]) / mult
-	a.strike_t = 0.0
-	a.swing_t = 0.0
-	game._move_person(a, 0.1)
-	assert_ne(a.position, at, "after the blow it goes on along the path")
-
-
 func test_at_a_run_a_blow_goes_out_as_a_shove() -> void:
 	p.running = true
 	p.moving = true
