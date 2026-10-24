@@ -34,6 +34,10 @@ const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
 const SETTING: String = "visuals/baked_people_enabled"
 const MAX_PEOPLE: int = 32
 const READS_PER_FRAME: int = 1           # bodies read in a frame (worn_of)
+## How many bodies a scene's people wear at most (body_cast.gd pick `cap`; 0 is
+## one each). For a phone that cannot hold every body's pictures: past it, a
+## new person wears the body fewest wear.
+const BODIES_SETTING: String = "visuals/people_bodies_max"
 # Motion numbers, in the order body_bake.gd bakes them (dead_body.gd names them).
 const WALK: int = 0
 const STAND: int = DeadBody.STAND
@@ -266,7 +270,7 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 ## the build. {} when it is not read in yet and `may_read` is false.
 func worn_of(p, may_read: bool = true) -> Dictionary:
 	if not body_by.has(p):
-		body_by[p] = BodyCast.pick(String(p.pid), String(p.role), taken)
+		body_by[p] = BodyCast.pick(String(p.pid), String(p.role), taken, int(ProjectSettings.get_setting(BODIES_SETTING, 0)))
 	var body: String = body_by[p]
 	if not worn.has(body):
 		if not may_read:

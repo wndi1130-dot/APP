@@ -67,6 +67,37 @@ func test_no_two_of_the_field_wear_the_same_body() -> void:
 	assert_eq(int(taken[next]), 2, "the fourteenth shares a body")
 
 
+# A phone that cannot hold every body sets a cap: past it, a new person wears
+# the body fewest wear of those already worn, and the named ones still come first.
+func test_a_cap_on_bodies_shares_the_least_worn() -> void:
+	var taken := {}
+	var picked := []
+	for row in [["p_chief", "chief"], ["p_guard_marek", "companion"], ["p_med_joanna", "companion"], ["p_tail_tomasz", "companion"],
+			["npc_raider_1", "raider"], ["npc_raider_2", "raider"], ["npc_raider_3", "raider"],
+			["s2_crew_01", "worker"], ["s2_crew_02", "worker"], ["s2_crew_03", "worker"], ["s2_crew_04", "worker"],
+			["s2_escort_01", "escort"], ["s2_escort_02", "escort"]]:
+		picked.append(BodyCast.pick(row[0], row[1], taken, 8))
+	var bodies := {}
+	for b: String in picked:
+		bodies[b] = true
+	assert_eq(bodies.size(), 8, "eight bodies for thirteen people")
+	assert_eq(picked[0], "n5-crew_railman-old")
+	for b: String in taken:
+		assert_between(int(taken[b]), 1, 2, b + " worn once or twice")
+
+
+func test_the_cap_is_read_from_the_project_setting() -> void:
+	var was = ProjectSettings.get_setting(PersonVisual.BODIES_SETTING, 0)
+	ProjectSettings.set_setting(PersonVisual.BODIES_SETTING, 2)
+	var v := PersonVisual.new()
+	add_child_autofree(v)
+	v.setup(null)
+	for row in [["p_chief", "chief"], ["p_guard_marek", "companion"], ["p_med_joanna", "companion"]]:
+		v.worn_of(_person(row[0], row[1]))
+	ProjectSettings.set_setting(PersonVisual.BODIES_SETTING, was)
+	assert_eq(v.taken.size(), 2, "the third shares one of two bodies")
+
+
 # Drawn: each person is put in their own body's multimesh, read in once.
 func test_each_one_is_drawn_in_their_own_body() -> void:
 	var v := PersonVisual.new()

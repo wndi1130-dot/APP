@@ -37,20 +37,28 @@ const ALL: Array = [
 
 ## The body one person wears, given those already worn in this scene (body ->
 ## how many wear it; the one picked is counted in). When every body is worn,
-## the one fewest wear (the first such in ALL).
-static func pick(pid: String, role: String, taken: Dictionary) -> String:
+## or `cap` bodies are (a phone that cannot hold more pictures; 0 is no cap),
+## the one fewest wear of those worn (the first such in ALL).
+static func pick(pid: String, role: String, taken: Dictionary, cap: int = 0) -> String:
 	var wants: Array = []
 	if BY_ID.has(pid):
 		wants.append(BY_ID[pid])
 	wants.append_array(BY_ROLE.get(role, []))
 	wants.append_array(ALL)
+	var worn := 0
+	for b: String in taken:
+		if int(taken[b]) > 0:
+			worn += 1
 	var body := ""
-	for b: String in wants:
-		if int(taken.get(b, 0)) == 0:
-			body = b
-			break
+	if cap <= 0 or worn < cap:
+		for b: String in wants:
+			if int(taken.get(b, 0)) == 0:
+				body = b
+				break
 	if body == "":
 		for b: String in ALL:
+			if worn > 0 and int(taken.get(b, 0)) == 0:
+				continue
 			if body == "" or int(taken.get(b, 0)) < int(taken.get(body, 0)):
 				body = b
 	taken[body] = int(taken.get(body, 0)) + 1
