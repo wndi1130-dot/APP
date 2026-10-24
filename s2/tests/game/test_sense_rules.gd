@@ -66,7 +66,7 @@ func _one(dead) -> Dictionary:
 
 
 func test_posture_uses_real_motion_and_preserves_crouch() -> void:
-	assert_eq(Rules.posture_mult(false, false, true), 0.8, "a run toggle while stopped is still stopped")
+	assert_eq(Rules.posture_mult(false, false, true), 1.0, "a run toggle while stopped is still stopped")
 	assert_eq(Rules.posture_mult(false, true, false), 1.0)
 	assert_eq(Rules.posture_mult(false, true, true), 1.5)
 	assert_eq(Rules.posture_mult(true, false, false), 0.55)
@@ -79,7 +79,9 @@ func test_weather_and_posture_change_actual_discovery_range() -> void:
 	var p := Subject.new()
 	p.position = z["pos"] + Vector3(0, 0, 8.0)
 	dead._sense(z, [p], 0.2)
-	assert_eq(z["state"], "wander", "standing 8m away exceeds 9 * .8")
+	assert_eq(z["state"], "chase", "standing 8m away is within 9m: standing is seen as walking")
+	z["state"] = "wander"
+	z["victim"] = null
 	p.moving = true
 	dead._sense(z, [p], 0.2)
 	assert_eq(z["state"], "chase", "walking can be seen at 8m")

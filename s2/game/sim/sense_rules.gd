@@ -1,7 +1,9 @@
 extends RefCounted
 ## Perception weights and a local-neighbour snapshot; no simulation random draws.
 
-const STILL_MULT: float = 0.8
+# Standing still is seen as walking is: no decision or brief line lowers it,
+# and the lunger's 8 m (user 2026-10-12) is read against the standing chief.
+const STILL_MULT: float = 1.0
 const WALK_MULT: float = 1.0
 const RUN_MULT: float = 1.5
 const CROUCH_MULT: float = 0.55

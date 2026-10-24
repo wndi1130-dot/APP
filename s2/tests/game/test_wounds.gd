@@ -368,6 +368,13 @@ func test_a_fall_that_breaks_a_leg_adds_a_leg_fracture_wound() -> void:
 func test_a_bite_lands_on_a_part_and_keeps_the_coarse_place() -> void:
 	_field()
 	var p = game.squad[1]
+	# The bite comes from the hand that has hold (body_injury 4 잡힘 → 물림):
+	# one of the dead has them in its grab, out in the open.
+	p.position = game.lift(Vector2i(60, 7), 0)
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+	z["state"] = "grab"
+	z["victim"] = p
+	p.grabbers.append(z)
 	game.combat.bite(p)
 	assert_eq(p.body.wounds.size(), 1)
 	assert_eq(p.body.wounds[0]["kind"], "bite")
