@@ -11,6 +11,7 @@ const SHOVE_WINDUP: float = 0.15     # field_combat.SHOVE_WINDUP: the arms come 
 const LUNGE: float = 0.15            # field_combat.SHOVE_LUNGE: the arms stay out this long
 const META: String = "pose_arms"
 const MODE: String = "pose_mode"      # what the swing being drawn is: "swing", "floor" (down at a body on the ground) or "stomp"
+const BLOW_WAY: String = "pose_blow_way"   # which way of its blows the swing is drawn as (person_visual.gd blow_of; field_combat.gd notes it on what it strikes)
 const FOOT_SIZE: Vector3 = Vector3(0.18, 0.16, 0.4)
 const FOOT_REST: Vector3 = Vector3(0.12, 0.08, 0.1)
 const SWING: String = "pose_swing"    # the way back of the swing being drawn: how long it is in all

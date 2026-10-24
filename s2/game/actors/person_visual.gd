@@ -457,6 +457,7 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 			note["blow_on"] = false
 			note["blow_drawing"] = false
 			note["blow_end"] = t
+			p.remove_meta(Pose.BLOW_WAY)
 		return Vector2(0.0, -1.0)
 	# A new blow is drawn back: on to the next way if it follows on from the last.
 	var drawing: bool = not sw[2]
@@ -482,6 +483,7 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 		clip = clip_named(own, String(way[0]), -1)
 	if clip < 0:
 		return Vector2(0.0, -1.0)
+	p.set_meta(Pose.BLOW_WAY, String(way[0]))   # what it strikes is seen thrown that way (dead_body.gd)
 	var lands: float = way[1]
 	var ends: float = way[2] if way.size() > 2 else 1.0
 	var r: float = lands + (ends - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
