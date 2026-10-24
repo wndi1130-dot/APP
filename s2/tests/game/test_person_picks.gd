@@ -2,12 +2,12 @@ extends GutTest
 ## Decision 422, first round: the living's new motions are picked from what the
 ## rules already know (how high a container is, which leg hurts, whose wound is
 ## seen to, where a bite came from, how the body is), and a folder without them
-## draws exactly as before. The clips themselves come with the 64-motion table.
+## draws exactly as before. That every map's containers have a height is checked
+## where every map is built (test_all_maps_open.gd).
 
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Person = preload("res://game/actors/person.gd")
 const SearchHeight = preload("res://game/actors/search_height.gd")
-const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 const Stamina = preload("res://game/sim/stamina.gd")
@@ -69,24 +69,6 @@ func _walked(p, own: Array) -> String:
 	PersonVisual.motion_of(p, note, 0.05, [], own)
 	p.position += Vector3(0.1, 0, 0)
 	return _named(own, PersonVisual.motion_of(p, note, 0.05, [], own))
-
-
-func test_every_container_of_every_map_has_a_height() -> void:
-	var ids := FieldMaps.ids()
-	if not ids.has(FieldMaps.DEFAULT_PLACE):
-		ids.append(FieldMaps.DEFAULT_PLACE)
-	var missing := {}
-	var seen := 0
-	for id in ids:
-		var d: Dictionary = FieldMaps.build(id)
-		for cid in d.get("containers", {}):
-			var word := SearchHeight.word_of(String(d["containers"][cid].get("name", "")))
-			seen += 1
-			if not SearchHeight.BY_WORD.has(word):
-				missing[word] = String(id)
-	assert_gt(ids.size(), 79, "all the maps")
-	assert_gt(seen, 5000)
-	assert_eq(missing, {}, "a container kind the table does not have (put it in search_height.gd)")
 
 
 func test_a_container_is_searched_at_its_height() -> void:

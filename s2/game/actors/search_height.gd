@@ -1,6 +1,6 @@
 extends RefCounted
 ## How high a container is searched at, by the last word of its name (the kinds
-## the maps have; tests/game/test_person_picks.gd checks that every container of
+## the maps have; tests/game/test_all_maps_open.gd checks that every container of
 ## every map is here). Looks only (decision 422): the search's time and what it
 ## finds do not change. A word not here is searched at chest height.
 
