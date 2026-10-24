@@ -861,6 +861,8 @@ func _update_attack(z: Dictionary, delta: float) -> void:
 		return
 	z["cooldown"] = GrabRules.ATTACK_COOLDOWN
 	var outcome: String = game.zombie_reaches(z, victim)
+	if outcome == "miss":
+		z["missed_at"] = z["age"]      # reached and got nothing (dead_body.gd: it snaps at the air)
 	if outcome == "grab":
 		z["state"] = "grab"
 	else:

@@ -57,6 +57,7 @@ const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61, S
 const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
 static var rounds: Dictionary = {}             # what the baked folder in use measured (see assets)
 static var table: Array = []                   # its motions: [first frame, frames, loops, seconds] each
+static var named: Dictionary = {}              # its motions by name (those not numbered here: the bite)
 
 const SECONDS: Dictionary = {STAND: 3.0, LUNGE: 1.0}   # a round of each, for a folder that does not say
 const SWAY_CAP: float = 0.1                   # a longer gap between two drawings is not played through
@@ -89,6 +90,14 @@ const TURN_CATCH: float = 0.15
 # walks' own pace), a fifth shuffle and a fifth go on a stiff leg; hurrying,
 # they walk their own walk (a slow walk at a hurry's pace would race).
 const SLOW_WALKS: float = 0.4
+# Biting the one it holds (named, not numbered: the folder adds them after these):
+# the first of the dead holding someone bends to them as the rules' hold runs
+# out, the teeth going in at BITE_LANDS of the motion as the bite lands
+# (field_game.gd grab_left; the bake puts the bite there). Reaching and getting
+# nothing (zombies.gd notes missed_at), it snaps at the air.
+const BITE: String = "bite"
+const BITE_MISS: String = "bite_miss"
+const BITE_LANDS: float = 0.5
 # Held on to someone (grab) or about to be (attack): the lunge's reach held at
 # one place in its round, the legs only shifting a little, not walking.
 const REACH_AT: float = 0.0
@@ -113,6 +122,7 @@ static func assets() -> Dictionary:
 	var got := with_albedo(BodyBake.load_baked(dir), dir) if dir != "" else {}
 	rounds = rounds_of(got)
 	table = table_of(got) if can_mix() else []
+	named = names_of(got) if can_mix() else {}
 	return got
 
 
@@ -143,6 +153,15 @@ static func table_of(vat: Dictionary) -> Array:
 	var out := []
 	for clip: Dictionary in vat.get("clips", []):
 		out.append([int(clip["start"]), int(clip["frames"]), bool(clip["loop"]), float(clip["length"])])
+	return out
+
+
+## Motion name -> its number in a baked folder.
+static func names_of(vat: Dictionary) -> Dictionary:
+	var out := {}
+	var clips: Array = vat.get("clips", [])
+	for n in clips.size():
+		out[String(clips[n].get("name", ""))] = n
 	return out
 
 
@@ -301,11 +320,18 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 		if coming_up(z, down):
 			return Color(1.0 - down, float(RISE_FRONT if front else RISE), 1.0, shade)
 		return Color(fall_progress(z, down), float(fall_motion(z, front)), 1.0, shade)
+	if state == "grab":
+		var bite := bite_k(z)
+		if bite >= 0.0:
+			return Color(bite, float(named[BITE]), 1.0, shade)
 	if state == "attack" or state == "grab":
 		# It has reached them: the arms stay out at them and the legs shift
 		# under it (the body is held at their side, so a walk would slide).
 		var shift := REACH_SHIFT * sin(TAU * (REACH_HZ * float(z["age"]) + phase))
 		return Color(fposmod(REACH_AT + shift, 1.0), float(LUNGE), 1.0, shade)
+	var snap := snap_k(z)
+	if snap >= 0.0:
+		return Color(snap, float(named[BITE_MISS]), 1.0, shade)
 	var struck := struck_motion(z)
 	if struck >= 0:
 		return Color(struck_k(z), float(struck), 1.0, shade)
@@ -461,6 +487,32 @@ static func gait_of(z: Dictionary) -> int:
 		if slow < SLOW_WALKS:
 			return WALK_D if slow < SLOW_WALKS * 0.5 else WALK_E
 	return walk_of(z["phase"])
+
+
+## How far through the bite the first of the dead holding someone is, as the
+## hold runs out; -1 when it is not biting (or the folder has no bite).
+static func bite_k(z: Dictionary) -> float:
+	if not named.has(BITE):
+		return -1.0
+	var victim = z.get("victim")
+	if victim == null or not is_instance_valid(victim) or victim.grabbers.is_empty() or victim.grabbers[0] != z:
+		return -1.0
+	var length := seconds_of(int(named[BITE]), 1.0)
+	var left := float(victim.grab_left)
+	if left > BITE_LANDS * length:
+		return -1.0
+	return clampf(BITE_LANDS - left / length, 0.0, BITE_LANDS)
+
+
+## How far through snapping at the air a body is after it reached and missed; -1 otherwise.
+static func snap_k(z: Dictionary) -> float:
+	if not named.has(BITE_MISS) or not z.has("missed_at"):
+		return -1.0
+	var length := seconds_of(int(named[BITE_MISS]), 0.6)
+	var since := float(z["age"]) - float(z["missed_at"])
+	if since < 0.0 or since >= length:
+		return -1.0
+	return since / length
 
 
 ## The length of a motion in the folder in use, seconds (`or_else` without one).

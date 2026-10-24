@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
+const SearchHeight = preload("res://game/actors/search_height.gd")
 const REQUIRED := [
 	"grid", "levels", "stairs", "containers", "spots", "stoves", "entries", "train", "platform",
 	"spawns", "labels", "trees", "low_blocks", "upper_rects", "train_cars", "lights", "buildings",
@@ -23,6 +24,7 @@ func test_registry_has_eighty_field_maps_and_the_first_stop() -> void:
 
 
 func test_every_registered_map_builds_with_required_keys() -> void:
+	var no_height: Dictionary = {}           # container kind -> a map it is in
 	for id in FieldMaps.ids():
 		var data := FieldMaps.build(id)
 		assert_false(data.is_empty(), id)
@@ -39,6 +41,12 @@ func test_every_registered_map_builds_with_required_keys() -> void:
 		assert_eq(grid.solid.size(), grid.width * grid.height, id)
 		assert_eq(data["levels"].get(0), grid, id)
 		assert_true(data.get("props", []) is Array, id)
+		# Every kind of container is searched at a height (search_height.gd, decision 422).
+		for cid in data["containers"]:
+			var word := SearchHeight.word_of(String(data["containers"][cid].get("name", "")))
+			if not SearchHeight.BY_WORD.has(word):
+				no_height[word] = id
+	assert_eq(no_height, {}, "높이 표에 없는 용기 종류(search_height.gd에 넣기)")
 
 
 func test_rock_wall_filter_rejects_featureless_buildings_and_cells_outside_rect() -> void:
