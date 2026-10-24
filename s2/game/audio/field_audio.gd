@@ -541,7 +541,8 @@ func _tick_wind(at: Vector3, delta: float) -> void:
 	var n2: float = drift.get_noise_1d(wind_t + 977.0)
 	wind.volume_db = _db(level * (1.0 + WIND_DRIFT * n))
 	wind.pitch_scale = 1.0 + WIND_PITCH_DRIFT * n2
-	if not howled and game.weather.kinds.has("blizzard"):
+	# Once the train stands (not under the brakes of its coming in).
+	if not howled and game.arrive_t < 0.0 and game.weather.kinds.has("blizzard"):
 		howled = true
 		howl()
 	gust_t -= delta
