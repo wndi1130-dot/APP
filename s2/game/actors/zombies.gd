@@ -34,6 +34,18 @@ const RISE_TIME: float = 30.0
 ## Rolled once, the first time it goes down; knocking the same one down again
 ## rolls nothing.
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
+## 몸에 박힌 무기(결정 423 카드 2, 대조 P09): 지도에 처음 서 있던 망자 가운데 드물게 등에 도끼가
+## 박혀 있다. 눈에 띄는 그림 하나와 확정 물건(쓰러뜨려 뒤지면 그 도끼)이 같이 온다.
+const EMBED_CHANCE: float = 0.03
+const EMBED_MAX: int = 2
+const EMBED_TOOL: String = "axe"
+const EMBED_MODEL: String = "res://models/weapons/axe.glb"
+## 몸 기준 자리(앞이 +Z): 도끼 머리(모델 +Z 끝)가 등에 들고, 자루가 뒤로 조금 위로 나온다.
+const EMBED_AT := Transform3D(Basis(Vector3.RIGHT, 0.45), Vector3(0.06, 1.2, -0.42))
+## 쓰러지면 도끼는 몸 곁 바닥에 떨어져 있다(구운 몸은 동작으로 누워 몸 기울기를 따라갈 수 없다).
+const EMBED_DROP_AT := Vector3(0.5, 0.03, -0.35)
+const EMBED_DROP_TURN: float = 0.6
 const FRESH_STIFFEN: float = 240.0
 const WAKE_TIME: float = 2.0
 const NEAR: float = 32.0
@@ -52,6 +64,8 @@ var list: Array[Dictionary] = []
 var next_id: int = 1
 var loot_rng := RandomNumberGenerator.new()   # its own, so a body's pockets do not shift the fight's dice
 var lunge_rng := RandomNumberGenerator.new()  # its own, so who lunges does not shift them either
+var embed_rng := RandomNumberGenerator.new()  # its own, so who has an axe in the back shifts nothing else
+var embedded_draw: MultiMeshInstance3D        # the axes in backs; null without the model
 var lungers_on: bool = false  # opts["lungers"]: some of the dead lunge (lunger_rules.gd)
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D
 var drawn_count: int = 0
@@ -68,6 +82,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	game = field_game
 	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
 	lunge_rng.seed = hash(int(game.opts.get("seed", 0))) + 63
+	embed_rng.seed = hash(int(game.opts.get("seed", 0))) + 64
 	lungers_on = bool(game.opts.get(LungerRules.OPTION, false))
 	var body := DeadBody.assets()
 	baked = not body.is_empty()
@@ -113,6 +128,17 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	mm2.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 	markers.multimesh = mm2
 	add_child(markers)
+	var axe: Dictionary = PropModels.batch_meshes(EMBED_MODEL) if ResourceLoader.exists(EMBED_MODEL) else {}
+	if axe.has(0):
+		embedded_draw = MultiMeshInstance3D.new()
+		var mm3 := MultiMesh.new()
+		mm3.transform_format = MultiMesh.TRANSFORM_3D
+		mm3.mesh = axe[0]
+		mm3.instance_count = EMBED_MAX
+		mm3.visible_instance_count = 0
+		mm3.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
+		embedded_draw.multimesh = mm3
+		add_child(embedded_draw)
 
 
 func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
@@ -182,7 +208,27 @@ func _roll_loot(z: Dictionary) -> void:
 	var loot: Array = []
 	for entry: Dictionary in LootRules.body_roll(String(z["kind"]), place, int(z.get("horde", -1)) >= 0, loot_rng):
 		loot.append(LootRules.to_pocket(entry))
+	if z.has("embedded"):
+		loot.append(LootRules.to_pocket({"tool": z["embedded"]}))
 	z["loot"] = loot
+
+
+## The dead first put on the map (not a horde's, not the frozen): now and then
+## one has an axe in its back, at most EMBED_MAX a stop. Returns how many.
+func embed_weapons() -> int:
+	var n := 0
+	for z in list:
+		if n >= EMBED_MAX:
+			break
+		if z["kind"] in ["dead", "clothed"] and int(z["horde"]) < 0 and z["state"] == "wander" and embed_rng.randf() < EMBED_CHANCE:
+			z["embedded"] = EMBED_TOOL
+			n += 1
+	return n
+
+
+## Drawn while it is still in the body (its pockets not yet gone through).
+func shows_embedded(z: Dictionary) -> bool:
+	return z.has("embedded") and not bool(z.get("searched", false))
 
 
 func alive_count() -> int:
@@ -987,6 +1033,7 @@ static func reach_basis(z: Dictionary) -> Basis:
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 	var counts := {"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0}
 	var marks := 0
+	var axes := 0
 	for z in list:
 		var at: Vector3 = z["pos"]
 		if mask_on and not seen.has(game.seen_key(at)):
@@ -1045,6 +1092,14 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		if state == "rising" and marks < 32:
 			markers.multimesh.set_instance_transform(marks, Transform3D(Basis.IDENTITY, at + Vector3(0, 0.05, 0)))
 			marks += 1
+		# The axe goes by the body as it stands or lies, before the clothed are drawn broader.
+		if embedded_draw != null and axes < EMBED_MAX and shows_embedded(z):
+			var axe := Transform3D(basis, pos) * EMBED_AT
+			if down > 0.5:
+				var turn := Basis(Vector3.UP, z["angle"])
+				axe = Transform3D(Basis(Vector3.UP, z["angle"] + EMBED_DROP_TURN), Vector3(pos.x, at.y, pos.z) + turn * EMBED_DROP_AT)
+			embedded_draw.multimesh.set_instance_transform(axes, axe)
+			axes += 1
 		if z["kind"] == "clothed":
 			basis = basis.scaled(Vector3(1.3, 1.0, 1.35))
 		if z["stun"] > 0.0:
@@ -1056,6 +1111,8 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		mm.set_instance_transform(n, Transform3D(basis, pos))
 		mm.set_instance_custom_data(n, DeadBody.custom(z, down, frozen_anim, shade, baked))
 		counts[look] = n + 1
+	if embedded_draw != null:
+		embedded_draw.multimesh.visible_instance_count = axes
 	drawn_count = 0
 	for look in counts:
 		draw[look].multimesh.visible_instance_count = counts[look]
