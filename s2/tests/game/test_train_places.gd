@@ -165,15 +165,17 @@ func test_all_layouts_have_unique_names_bounded_props_and_valid_activities() -> 
 				assert_between(float(anchor[2]), -1.1, 1.1)
 
 
-func test_storage_has_no_living_places_and_cold_car_keeps_front_and_rear_apart() -> void:
+func test_storage_has_no_living_places_and_the_cold_car_keeps_no_food() -> void:
 	for id in ["freight", "tender", "cold", "loco"]:
 		assert_true(Catalog.data()["layouts"][id]["storage_only"])
 		assert_eq(Catalog.data()["layouts"][id]["spots"], [])
 	var props: Array = Catalog.data()["layouts"]["cold"]["props"]
-	var food: Dictionary = props.filter(func(p): return p["id"] == "food_front")[0]
 	var rear: Dictionary = props.filter(func(p): return p["id"] == "rear_platform")[0]
-	assert_lt(float(food["at"][0]) + float(food["size"][0]) * .5, 8.0)
 	assert_gt(float(rear["at"][0]) - float(rear["size"][0]) * .5, 8.0)
+	# No food where the dead are laid (user 2026-10-25): the food is in the store car.
+	assert_eq(props.filter(func(p): return String(p.get("when", "")) == "food" or String(p["model"]) == "food_crates").size(), 0)
+	var store: Array = Catalog.data()["layouts"]["freight"]["props"]
+	assert_eq(store.filter(func(p): return String(p["model"]) == "food_crates").size(), 1)
 	assert_false(Catalog.data()["layouts"].has("classroom"), "classroom is part of dining")
 
 

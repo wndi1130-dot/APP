@@ -50,6 +50,10 @@ const CLIPS: Array = [
 	["turn_right", "", 24, false, "own_turn_right", 1.0],
 	["walk_d", "", 32, true, "own_walk_d", 1.8],
 	["walk_e", "", 32, true, "own_walk_e", 1.6],
+	# Eating a body (decision 423): down on its knees, the loop (the teeth meet at 0.5), up again.
+	["eat_start", "", 24, false, "own_eat_start", 1.0],
+	["eat", "", 32, true, "own_eat", 1.6],
+	["eat_rise", "", 24, false, "own_eat_rise", 1.2],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -85,6 +89,10 @@ const OWN_CLIPS: Array = [
 	["turn_right", "", 24, false, "own_turn_right", 1.0],
 	["walk_d", "", 32, true, "own_walk_d", 1.8],
 	["walk_e", "", 32, true, "own_walk_e", 1.6],
+	# Eating a body (decision 423): down on its knees, the loop (the teeth meet at 0.5), up again.
+	["eat_start", "", 24, false, "own_eat_start", 1.0],
+	["eat", "", 32, true, "own_eat", 1.6],
+	["eat_rise", "", 24, false, "own_eat_rise", 1.2],
 ]
 # Quick, or striking on a beat: every frame kept in the small bake
 # (bake_body_cli --keep), as PERSON_KEEP is for the living.
@@ -161,6 +169,17 @@ const PERSON_CLIPS: Array = [
 	["p_wear_outer", "", 24, false, "p_wear_outer", 2.4],
 	["p_wear_head", "", 24, false, "p_wear_head", 1.4],
 	["p_wear_hands", "", 24, false, "p_wear_hands", 1.8],
+	# Decision 422, second set: carrying each kind of weapon walking and running,
+	# the three melee guards, a two-handed weapon held low in the good hand.
+	["p_walk_long", "", 32, true, "p_walk_long", 0.78],
+	["p_walk_axe", "", 32, true, "p_walk_axe", 0.78],
+	["p_walk_pistol", "", 32, true, "p_walk_pistol", 0.78],
+	["p_run_long", "", 24, true, "p_run_long", 0.58],
+	["p_run_pistol", "", 24, true, "p_run_pistol", 0.58],
+	["p_ready_one", "", 24, true, "p_ready_one", 1.6],
+	["p_ready_two", "", 24, true, "p_ready_two", 1.6],
+	["p_ready_stab", "", 24, true, "p_ready_stab", 1.6],
+	["p_hold_weak", "", 24, true, "p_hold_weak", 3.0],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
@@ -908,6 +927,67 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [-0.06, [-0.5, 0.05, 1.0, 2.0], 1.0]],
 		],
 		"sink": [[0.06, 0.03, 0.4, 2.0], [0.0, 0.02, 1.571]],
+	},
+	# Going down on its knees over a body to eat (decision 423): the knees bend, drop to the
+	# ground, and it bends over with both hands on the body (played once, then own_eat).
+	"own_eat_start": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [["keys", [[0.0, 0.08], [0.4, 0.12], [0.7, 0.14], [1.0, 0.14]]], ["keys", [[0.0, -1.0], [0.4, -0.8], [0.7, -1.0], [1.0, -1.0]]], ["keys", [[0.0, 0.03], [0.4, 0.8], [0.7, 0.3], [1.0, 0.3]]]]],
+			["aim", "shin.L", "foot.L", [["keys", [[0.0, 0.04], [0.4, 0.06], [0.7, 0.06], [1.0, 0.06]]], ["keys", [[0.0, -1.0], [0.4, -1.0], [0.7, -0.15], [1.0, -0.15]]], ["keys", [[0.0, -0.08], [0.4, -0.6], [0.7, -1.0], [1.0, -1.0]]]]],
+			["aim", "thigh.R", "shin.R", [["keys", [[0.0, -0.1], [0.4, -0.12], [0.7, -0.14], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.4, -0.8], [0.7, -1.0], [1.0, -1.0]]], ["keys", [[0.0, 0.0], [0.4, 0.8], [0.7, 0.3], [1.0, 0.3]]]]],
+			["aim", "shin.R", "foot.R", [["keys", [[0.0, -0.08], [0.4, -0.06], [0.7, -0.06], [1.0, -0.06]]], ["keys", [[0.0, -1.0], [0.4, -1.0], [0.7, -0.15], [1.0, -0.15]]], ["keys", [[0.0, -0.05], [0.4, -0.6], [0.7, -1.0], [1.0, -1.0]]]]],
+			["turn", "foot.L", "x", ["keys", [[0.0, 0.0], [0.55, 0.0], [0.75, 0.9], [1.0, 0.9]]]],
+			["turn", "foot.R", "x", ["keys", [[0.0, 0.0], [0.55, 0.0], [0.75, 0.9], [1.0, 0.9]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.2], [0.4, 0.45], [0.7, 0.6], [1.0, 0.85]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.27], [1.0, 0.35]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.35], [0.7, 0.2], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.16], [0.4, 0.2], [0.8, 0.15], [1.0, 0.15]]], ["keys", [[0.0, -1.0], [0.4, -0.8], [0.8, -0.5], [1.0, -0.5]]], ["keys", [[0.0, 0.06], [0.4, 0.5], [0.8, 0.85], [1.0, 0.85]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.06], [0.4, 0.0], [0.8, -0.05], [1.0, -0.05]]], -1.0, ["keys", [[0.0, 0.16], [0.4, 0.4], [0.8, 0.25], [1.0, 0.25]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.12], [0.4, -0.2], [0.8, -0.15], [1.0, -0.15]]], ["keys", [[0.0, -1.0], [0.4, -0.8], [0.8, -0.5], [1.0, -0.5]]], ["keys", [[0.0, 0.14], [0.4, 0.5], [0.8, 0.85], [1.0, 0.85]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.02], [0.4, 0.0], [0.8, 0.05], [1.0, 0.05]]], ["keys", [[0.0, -0.8], [0.4, -1.0], [0.8, -1.0], [1.0, -1.0]]], ["keys", [[0.0, 0.5], [0.4, 0.4], [0.8, 0.25], [1.0, 0.25]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.03], [0.4, 0.3], [0.7, 0.52], [1.0, 0.52]]],
+	},
+	# Eating a body on its knees (decision 423, a loop): the head goes down to it, the teeth meet
+	# at the middle of the loop (0.5), then it jerks back tearing, the head twisting, the hands pulling.
+	"own_eat": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.14, -1.0, 0.3]],
+			["aim", "shin.L", "foot.L", [0.06, -0.15, -1.0]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1.0, 0.3]],
+			["aim", "shin.R", "foot.R", [-0.06, -0.15, -1.0]],
+			["turn", "foot.L", "x", 0.9],
+			["turn", "foot.R", "x", 0.9],
+			["turn", "spine", "x", ["keys", [[0.0, 0.85], [0.35, 0.95], [0.5, 1.0], [0.65, 0.8], [0.8, 0.75], [1.0, 0.85]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.35], [0.5, 0.45], [0.7, 0.25], [1.0, 0.35]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.35, 0.25], [0.5, 0.35], [0.62, -0.1], [0.75, -0.2], [1.0, 0.0]]]],
+			["turn", "head", "y", ["keys", [[0.0, 0.0], [0.55, 0.0], [0.68, 0.25], [0.8, -0.15], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.15, ["keys", [[0.0, -0.5], [0.5, -0.5], [0.7, -0.65], [1.0, -0.5]]], ["keys", [[0.0, 0.85], [0.5, 0.85], [0.7, 0.65], [1.0, 0.85]]]]],
+			["aim", "forearm.L", "hand.L", [-0.05, -1.0, ["keys", [[0.0, 0.25], [0.5, 0.25], [0.7, -0.05], [1.0, 0.25]]]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, ["keys", [[0.0, -0.5], [0.5, -0.5], [0.7, -0.65], [1.0, -0.5]]], ["keys", [[0.0, 0.85], [0.5, 0.85], [0.7, 0.65], [1.0, 0.85]]]]],
+			["aim", "forearm.R", "hand.R", [0.05, -1.0, ["keys", [[0.0, 0.25], [0.5, 0.25], [0.7, -0.05], [1.0, 0.25]]]]],
+		],
+		"sink": 0.52,
+	},
+	# Getting up from eating (decision 423, played once): the body up first, the right foot
+	# planted in front, then up onto both feet as it stands.
+	"own_eat_rise": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [["keys", [[0.0, 0.14], [0.55, 0.14], [0.85, 0.12], [1.0, 0.08]]], ["keys", [[0.0, -1.0], [0.55, -1.0], [0.85, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.3], [0.55, 0.3], [0.85, 0.8], [1.0, 0.03]]]]],
+			["aim", "shin.L", "foot.L", [["keys", [[0.0, 0.06], [0.55, 0.06], [0.85, 0.06], [1.0, 0.04]]], ["keys", [[0.0, -0.15], [0.55, -0.15], [0.85, -1.0], [1.0, -1.0]]], ["keys", [[0.0, -1.0], [0.55, -1.0], [0.85, -0.6], [1.0, -0.08]]]]],
+			["aim", "thigh.R", "shin.R", [["keys", [[0.0, -0.14], [0.3, -0.14], [0.55, -0.12], [0.85, -0.12], [1.0, -0.1]]], ["keys", [[0.0, -1.0], [0.3, -1.0], [0.55, -0.25], [0.85, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.3], [0.3, 0.3], [0.55, 1.0], [0.85, 0.8], [1.0, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [["keys", [[0.0, -0.06], [0.3, -0.06], [0.55, -0.06], [0.85, -0.06], [1.0, -0.08]]], ["keys", [[0.0, -0.15], [0.3, -0.15], [0.55, -1.0], [0.85, -1.0], [1.0, -1.0]]], ["keys", [[0.0, -1.0], [0.3, -1.0], [0.55, -0.08], [0.85, -0.6], [1.0, -0.05]]]]],
+			["turn", "foot.L", "x", ["keys", [[0.0, 0.9], [0.6, 0.9], [0.85, 0.0], [1.0, 0.0]]]],
+			["turn", "foot.R", "x", ["keys", [[0.0, 0.9], [0.3, 0.9], [0.5, 0.0], [1.0, 0.0]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.85], [0.3, 0.45], [0.85, 0.5], [1.0, 0.2]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.35], [1.0, 0.27]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.3, 0.3], [1.0, 0.35]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.15], [0.3, 0.2], [0.85, 0.2], [1.0, 0.16]]], ["keys", [[0.0, -0.5], [0.3, -0.8], [0.85, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.85], [0.3, 0.5], [0.85, 0.5], [1.0, 0.06]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, -0.05], [0.3, 0.0], [0.85, 0.0], [1.0, 0.06]]], -1.0, ["keys", [[0.0, 0.25], [0.3, 0.4], [0.85, 0.4], [1.0, 0.16]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.15], [0.3, -0.2], [0.85, -0.2], [1.0, -0.12]]], ["keys", [[0.0, -0.5], [0.3, -0.8], [0.85, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.85], [0.3, 0.5], [0.85, 0.5], [1.0, 0.14]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, 0.05], [0.3, 0.0], [0.85, 0.0], [1.0, -0.02]]], ["keys", [[0.0, -1.0], [0.3, -1.0], [0.85, -1.0], [1.0, -0.8]]], ["keys", [[0.0, 0.25], [0.3, 0.4], [0.85, 0.4], [1.0, 0.5]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.52], [0.3, 0.52], [0.55, 0.38], [0.85, 0.2], [1.0, 0.03]]],
 	},
 	# Run: pitched far forward as if about to fall, face up, arms trailing behind and flapping.
 	"run": {
@@ -1701,6 +1781,190 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.15, 0.75], [0.3, 0.55], [0.45, 0.75], [0.55, 0.3], [0.85, 0.3], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.15, 0.2], [0.3, 0.2], [0.45, 0.2], [0.55, 0.05], [0.85, 0.05], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.15, 0.6], [0.3, 0.8], [0.45, 0.6], [0.55, 1.0], [0.85, 1.0], [1.0, 0.1]]]]],
 		],
 		"sink": 0.0,
+	},
+	# Walking with a long weapon held upright before the right hip in both hands (decision
+	# 422, second set): the right fist at the hip, the left higher up it, the chest hardly turning.
+	"p_walk_long": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.035, 0.0]],
+			["turn", "hips", "y", [0.0, -0.09, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
+			["turn", "chest", "y", [0.0, 0.04, 0.0]],
+			["turn", "neck", "x", 0.04],
+			["turn", "head", "y", [0.0, -0.05, 0.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.1, -1.0, [0.3, 0.015, 0.0]]],
+			["aim", "forearm.R", "hand.R", [0.05, -0.35, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [-0.3, -0.7, [0.6, 0.015, 0.0]]],
+			["aim", "forearm.L", "hand.L", [-0.75, 0.45, 0.5]],
+		],
+		"sink": [0.025, 0.02, -1.5708, 2.0],
+	},
+	# Walking with an axe hanging in the right hand (decision 422, second set): that arm
+	# straight and hardly swinging under the weight, held a little out from the leg, the left swinging.
+	"p_walk_axe": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.035, 0.0]],
+			["turn", "hips", "y", [0.0, -0.09, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
+			["turn", "chest", "y", [0.0, 0.12, 0.0]],
+			["turn", "neck", "x", 0.04],
+			["turn", "head", "y", [0.0, -0.05, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.04, -0.3, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.3, -0.28, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.22, -1.0, [0.02, 0.06, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.12, -1.0, [0.12, 0.05, 0.0]]],
+		],
+		"sink": [0.025, 0.02, -1.5708, 2.0],
+	},
+	# Walking with a pistol hanging in the right hand, its muzzle down and forward
+	# (decision 422, second set): the forearm a little back, that arm hardly swinging.
+	"p_walk_pistol": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.035, 0.0]],
+			["turn", "hips", "y", [0.0, -0.09, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
+			["turn", "chest", "y", [0.0, 0.12, 0.0]],
+			["turn", "neck", "x", 0.04],
+			["turn", "head", "y", [0.0, -0.05, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.04, -0.3, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.3, -0.28, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, -1.0, [0.06, 0.08, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.06, -1.0, -0.45]],
+		],
+		"sink": [0.025, 0.02, -1.5708, 2.0],
+	},
+	# Running with a long weapon in both hands across the front (decision 422, second set):
+	# held as when walking with it, the body leaning into the run.
+	"p_run_long": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.05, 0.0]],
+			["turn", "hips", "y", [0.0, -0.12, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
+			["turn", "spine", "x", 0.15],
+			["turn", "chest", "x", 0.05],
+			["turn", "chest", "y", [0.0, 0.05, 0.0]],
+			["turn", "neck", "x", -0.12],
+			["aim", "upper_arm.R", "forearm.R", [-0.1, -1.0, [0.35, 0.02, 0.0]]],
+			["aim", "forearm.R", "hand.R", [0.05, -0.25, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [-0.3, -0.65, [0.65, 0.02, 0.0]]],
+			["aim", "forearm.L", "hand.L", [-0.75, 0.5, 0.5]],
+		],
+		"sink": [0.07, 0.04, -1.5708, 2.0],
+	},
+	# Running with a pistol (decision 422, second set): the right elbow bent and pumping less,
+	# the muzzle up, the left arm pumping as it runs.
+	"p_run_pistol": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.05, 0.0]],
+			["turn", "hips", "y", [0.0, -0.12, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
+			["turn", "spine", "x", 0.15],
+			["turn", "chest", "x", 0.05],
+			["turn", "chest", "y", [0.0, 0.16, 0.0]],
+			["turn", "neck", "x", -0.12],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.0, -0.55, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.05, [0.2, 0.25, 0.0], [0.9, -0.2, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.05, 0.2, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.05, [0.15, -0.12, 0.0], 0.9]],
+		],
+		"sink": [0.07, 0.04, -1.5708, 2.0],
+	},
+	# On guard with a one-handed weapon (decision 422, second set): knees bent, left side
+	# forward, the right fist up by the shoulder with the head of the weapon back, the left hand out.
+	"p_ready_one": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, 0.22]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.12]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1.0, -0.12]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.2]],
+			["turn", "hips", "y", 0.2],
+			["turn", "spine", "x", [0.14, 0.015, 0.0]],
+			["turn", "neck", "x", -0.1],
+			["turn", "chest", "y", [-0.2, 0.02, 0.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.55, -0.35, -0.25]],
+			["aim", "forearm.R", "hand.R", [-0.05, 1.0, [0.3, 0.03, 0.0]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.45, 0.9]],
+			["aim", "forearm.L", "hand.L", [-0.25, 0.45, 0.9]],
+		],
+		"sink": [0.07, 0.01, 0.0],
+	},
+	# On guard with a two-handed weapon (decision 422, second set): knees bent, both fists
+	# together by the right shoulder, the weapon up and back over it, ready to swing.
+	"p_ready_two": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, 0.22]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.12]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1.0, -0.12]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.2]],
+			["turn", "hips", "y", 0.2],
+			["turn", "spine", "x", [0.14, 0.015, 0.0]],
+			["turn", "neck", "x", -0.1],
+			["turn", "chest", "y", [-0.3, 0.02, 0.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.75, -0.55, 0.35]],
+			["aim", "forearm.R", "hand.R", [-0.25, 0.5, [0.85, 0.03, 0.0]]],
+			["aim", "upper_arm.L", "forearm.L", [-0.35, -0.7, 0.55]],
+			["aim", "forearm.L", "hand.L", [-0.8, 0.3, 0.55]],
+		],
+		"sink": [0.07, 0.01, 0.0],
+	},
+	# On guard with a knife (decision 422, second set): crouched lower, the right fist low
+	# in front with the blade forward, the left hand up before the face.
+	"p_ready_stab": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1.0, 0.22]],
+			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.12]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1.0, -0.12]],
+			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.2]],
+			["turn", "hips", "y", 0.2],
+			["turn", "spine", "x", [0.14, 0.015, 0.0]],
+			["turn", "neck", "x", -0.1],
+			["turn", "chest", "y", [-0.15, 0.02, 0.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -0.75, 0.6]],
+			["aim", "forearm.R", "hand.R", [-0.05, -1.0, [-0.1, 0.03, 0.0]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.4, 0.85]],
+			["aim", "forearm.L", "hand.L", [-0.3, 0.6, 0.75]],
+		],
+		"sink": [0.11, 0.01, 0.0],
+	},
+	# A two-handed weapon held low in the good right hand, the hurt left arm held across the
+	# belly (decision 422, second set): standing, shoulders down.
+	"p_hold_weak": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.04, 0.0]],
+			["aim", "thigh.L", "shin.L", [[0.08, 0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [[0.06, 0.02, 0.0], -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [[-0.08, 0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [[-0.06, 0.02, 0.0], -1.0, -0.02]],
+			["turn", "spine", "z", [0.0, -0.03, 0.0]],
+			["turn", "spine", "x", [0.03, 0.012, 0.0, 4.0]],
+			["turn", "chest", "x", [0.02, -0.015, 0.0, 4.0]],
+			["turn", "head", "y", [0.0, 0.1, 0.8]],
+			["turn", "chest", "x", 0.08],
+			["turn", "neck", "x", 0.12],
+			["aim", "upper_arm.R", "forearm.R", [-0.16, -1.0, [0.08, 0.01, 0.0, 4.0]]],
+			["aim", "forearm.R", "hand.R", [-0.06, -1.0, 0.25]],
+			["aim", "upper_arm.L", "forearm.L", [0.12, -1.0, 0.2]],
+			["aim", "forearm.L", "hand.L", [-0.85, 0.1, 0.5]],
+		],
+		"sink": [0.0, 0.004, 0.0, 4.0],
 	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},

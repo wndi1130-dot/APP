@@ -5,6 +5,7 @@ const Rules = preload("res://game/train/train_rules.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Context = preload("res://game/train/train_context.gd")
 const Body = preload("res://game/train/train_body.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 
 func _scene(panel: bool = false):
@@ -79,6 +80,14 @@ func test_coal_food_medicine_and_insulation_change_only_their_display() -> void:
 	assert_eq(s.rules["comms"]["tail"]["sit"][0], 35.0, "insulation here does not compute warmth")
 
 
+func test_the_season_comes_from_the_season_table_unless_set() -> void:
+	var s = _scene()
+	s.set_value("train.seg", 1)
+	var route: Dictionary = s.life.outside.get_meta("route")
+	assert_eq(String(route["season"]), SeasonTable.season_of_seg(1))
+	assert_eq(String(route["season"]), "late_autumn", "the first leg is the prologue's late autumn")
+
+
 func test_night_and_stop_change_lamps_and_route_metadata_stays_outside_politics() -> void:
 	var s = _scene()
 	var lamp: float = s.car("front")["lamp_energy"]
@@ -88,7 +97,7 @@ func test_night_and_stop_change_lamps_and_route_metadata_stays_outside_politics(
 	assert_eq(float(s.car("front")["lamp_sway"]), 0.0)
 	s.set_value("train.seg", 9)
 	s.set_value("view.region", "region_04")
-	s.set_value("view.season", "thaw")
+	s.set_value("view.season", "early_thaw")
 	s.set_value("stop.weather", "snow")
 	var route: Dictionary = s.life.outside.get_meta("route").duplicate(true)
 	s.set_comm("tail", "rel", -90)

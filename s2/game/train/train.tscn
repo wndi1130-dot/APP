@@ -4,3 +4,5 @@
 
 [node name="Train" type="Node3D"]
 script = ExtResource("1_train")
+room_lead = 2.5
+room_ease = 5.0
