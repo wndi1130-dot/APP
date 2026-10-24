@@ -214,7 +214,7 @@ function summarize(ms: GameMetrics[]) {
       noFreeze: +mean(ms.map(m => (m.climate.freezes === 0 ? 1 : 0))).toFixed(3),
       leverAfterDrop: +mean(ms.map(m => m.climate.leverAfterDrop)).toFixed(3),
       coalZero: +mean(ms.map(m => m.climate.coalZero)).toFixed(3),
-      heatByStage: [0, 1, 2, 3, 4].map(i => { const n = ms.reduce((a, m) => a + m.climate.segsByStage[i], 0); return n ? +(ms.reduce((a, m) => a + m.climate.heatByStage[i], 0) / n).toFixed(2) : 0; }),
+      heatByStage: CL.names.map((_, i) => { const n = ms.reduce((a, m) => a + m.climate.segsByStage[i], 0); return n ? +(ms.reduce((a, m) => a + m.climate.heatByStage[i], 0) / n).toFixed(2) : 0; }),
     },
   };
 }

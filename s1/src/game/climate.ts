@@ -1,4 +1,5 @@
 import { COMMS } from './data';
+import SEASON from './season_table.json';
 import { hash } from './omens';
 import type { Weather } from './omens';
 import { journal } from './state';
@@ -9,15 +10,31 @@ import type { Game } from './state';
 // 계절표는 판 씨앗과 상관없이 늘 같다(정해진 날). 하강과 결빙은 미리 알리지 않는다(결정 357): 다음 바뀜 구간을 어디에도 적지 않는다.
 // 기온 켠 판은 정기 한파(P.winterEvery마다 온기 −5)가 없고, 단계가 바뀔 때 온기 ∓5×차와 난방 석탄 곱이 함께 움직인다(결정 370 1).
 // 숫자는 가안이고 500판 숫자를 사용자에게 보인 뒤 정한다. tools/s1c_sim.ts의 --cl=키:값으로 바꿀 수 있다(배열은 쉼표).
+// 단계·계절표·구간 기온은 계절표 한 벌(season_table.json, S2 열차·필드 그림과 같은 파일)에서 온다(코디네이터 10-25, 결정 423·서막 (나)).
+
+type SeasonRow = { seg: number; temp: number; stage: number };
+const STAGES = SEASON.stages;
+const ROWS = SEASON.prologue as SeasonRow[];
+
+/** 계절표의 구간별 단계에서, 단계가 바뀌는 구간만 [이 구간 출발부터, 단계]로 */
+function stageTable(rows: SeasonRow[]): [number, number][] {
+  const out: [number, number][] = [];
+  for (const r of rows) if (!out.length || out[out.length - 1][1] !== r.stage) out.push([r.seg, r.stage]);
+  return out;
+}
 
 export const CL = {
-  /** 단계 0~4의 이름(가제), 표시 기준 기온 */
-  names: ['풀림', '추위', '혹한', '된추위', '극한'],
-  temp: [-6, -15, -24, -33, -42],
-  /** 단계 0~4의 난방 석탄 곱(결정 370 2, 약안: 500판에서 중안은 완주가 명세 기준보다 많이 떨어져 사용자가 약안으로 바꿈) */
-  mult: [0.9, 1, 1.1, 1.25, 1.4],
-  /** 계절표: [이 구간 출발부터, 단계]. 24구간 판(P.segments) */
-  table: [[1, 1], [5, 2], [9, 0], [11, 3], [15, 2], [18, 4], [22, 3]] as [number, number][],
+  /** 단계의 이름(가제), 기준 기온. 따뜻한 것부터(번호가 클수록 춥다) */
+  names: STAGES.map(s => s.name),
+  temp: STAGES.map(s => s.temp),
+  /** 단계의 난방 석탄 곱(결정 370 2의 약안에 늦가을 0.8을 더함) */
+  mult: STAGES.map(s => s.mult),
+  /** 단계를 떠나는 출발이 젖은 출발인가(결빙 조건, 결정 370 3: 옛 '풀림 단계'). 늦가을이 젖어 있다 */
+  wet: STAGES.map(s => (s.wet ? 1 : 0)),
+  /** 계절표: [이 구간 출발부터, 단계]. 24구간 판(P.segments) = 서막 */
+  table: stageTable(ROWS),
+  /** 구간 1~24의 한낮 바깥 기온(표시). 판 끝 너머는 마지막 값 */
+  segTemp: ROWS.map(r => r.temp),
   /** 단계 하나에 모든 칸 기준 온기가 바뀌는 양 */
   warmStep: 5,
   /** 1이면 결빙이 있다(0이면 결빙만 끈다, 500판 D줄) */
@@ -47,6 +64,11 @@ export function enableClimate(g: Game): void {
   g.outside = stageAt(g.seg);
   g.freeze = 0;
   g.climateStats = { drops: 0, freezes: 0 };
+}
+
+/** 계절표에서 이 구간의 표시 기온(날씨 보정 전) */
+export function segTemp(seg: number): number {
+  return CL.segTemp[Math.min(Math.max(seg, 1), CL.segTemp.length) - 1];
 }
 
 /** 계절표에서 이 구간 출발의 단계 */
@@ -79,8 +101,8 @@ export function outsideView(g: Game): { stage: number; name: string; temp: numbe
   const weather: Weather | undefined = d ?? (g.stop ?? g.lastStop)?.weather;
   const ch = g.climateChange;
   return {
-    stage, name: CL.names[stage], temp: CL.temp[stage] + (weather ? WEATHER_TEMP[weather] : 0),
-    delta: ch && ch.seg === g.seg ? CL.temp[ch.to] - CL.temp[ch.from] : null,
+    stage, name: CL.names[stage], temp: segTemp(g.seg) + (weather ? WEATHER_TEMP[weather] : 0),
+    delta: ch && ch.seg === g.seg ? segTemp(g.seg) - segTemp(g.seg - 1) : null,
     freezing: (g.freeze ?? 0) > 0,
   };
 }
@@ -106,16 +128,16 @@ export function climateDepart(g: Game): { from: number; to: number } | null {
   if (diff > 0) (g.climateStats ??= { drops: 0, freezes: 0 }).drops += 1;
   journal(g, line(g, diff >= 2 ? LINES.deep : diff > 0 ? LINES.drop : LINES.ease), diff > 0 ? 'bad' : 'good');
   const warm = -CL.warmStep * diff;
-  journal(g, `바깥 ${String(CL.temp[to]).replace('-', '−')}°. 모든 칸 온기 ${warm > 0 ? '+' : '−'}${Math.abs(warm)}, 난방 석탄 ×${CL.mult[to]}.`, diff > 0 ? 'bad' : 'good');
+  journal(g, `바깥 ${String(segTemp(g.seg)).replace('-', '−')}°. 모든 칸 온기 ${warm > 0 ? '+' : '−'}${Math.abs(warm)}, 난방 석탄 ×${CL.mult[to]}.`, diff > 0 ? 'bad' : 'good');
   return { from, to };
 }
 
 /** 출발 때(재난 출발 뒤): 단계가 내려갔거나 재난 한파가 이번 출발에 닥쳤고, 떠나는 정차가 젖어 있으면 선로가 언다.
- * 젖음 = 떠나는 정차의 날씨가 진눈깨비이거나, 떠날 때 적용돼 있던 단계가 풀림(0)이다(결정 370 3). */
+ * 젖음 = 떠나는 정차의 날씨가 진눈깨비이거나, 떠날 때 적용돼 있던 단계가 젖은 단계(CL.wet, 늦가을)다(결정 370 3). */
 export function freezeDepart(g: Game, shift: { from: number; to: number } | null, coldStart: boolean): void {
   if (!g.climate || !CL.freezeOn || !shift) return;
   if (!(shift.to > shift.from || coldStart)) return;
-  const wet = g.lastStop?.weather === 'sleet' || shift.from === 0;
+  const wet = g.lastStop?.weather === 'sleet' || !!CL.wet[shift.from];
   if (!wet) return;
   g.freeze = CL.freezeLen;
   (g.climateStats ??= { drops: 0, freezes: 0 }).freezes += 1;
