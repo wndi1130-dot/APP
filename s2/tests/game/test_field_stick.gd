@@ -800,6 +800,8 @@ func test_a_search_cut_short_frees_the_box() -> void:
 			break
 	assert_ne(id, "")
 	var box: Dictionary = game.data["containers"][id]
+	# A search starts only within reach of the box: stand on its cell first.
+	p.position = game.lift(box["cell"], int(box.get("level", 0)))
 	game.actions.search(p, id)
 	assert_true(box["busy"])
 	p.stick = Vector2(1, 0)

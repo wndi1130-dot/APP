@@ -47,6 +47,14 @@ const TABLE: Dictionary = {
 	# (field_actions.gd). A step cuts either short (Person.go_to).
 	"pry": {"len": 4.0, "hit": -1.0, "feet": Vector2(0.0, 4.0), "open": 0.0, "sound": 0.0, "upper": false, "loop": false},
 	"kick": {"len": 1.0, "hit": -1.0, "feet": Vector2(0.0, 1.0), "open": 0.0, "sound": -1.0, "upper": false, "loop": false},
+	# A shoved body stumbles back for SHOVED_TIME (zombies.gd); the rules have it
+	# there at once, this is what is seen. Nothing cuts it.
+	"dead_shoved": {"len": 0.28, "hit": -1.0, "feet": Vector2(0.0, 0.28), "open": -1.0, "sound": -1.0, "upper": false, "loop": false},
+	# A body at a shut door beats on it, once a round of the rules' bang time
+	# (zombies.gd, 1.3 s). The arms come back over most of the round and land at
+	# 0.85 of it, where the bang belongs (the reference game's door bang). Today the
+	# rules bang as the round starts and no picture shows it (results: 붙일 줄).
+	"dead_thump": {"len": 1.3, "hit": 1.105, "feet": Vector2(0.0, 1.3), "open": -1.0, "sound": 1.105, "upper": false, "loop": true},
 }
 
 var id: String = ""
@@ -66,14 +74,16 @@ static func row(motion_id: String) -> Dictionary:
 
 ## A melee swing as a row: the weapon comes back for its windup, the blow
 ## lands, and the rest of the weapon's swing time is the way back (a heavier
-## weapon winds up longer). Nothing cuts it.
+## weapon winds up longer). The feet are held from the weapon's feet_from to
+## the end. Nothing cuts it.
 static func swing_row(weapon_id: String) -> Dictionary:
 	var d: Dictionary = W.get_data(weapon_id)
 	if d.get("kind", "") != "melee":
 		return {}
 	var seconds: float = float(d["swing"])
 	var windup: float = W.melee_windup(weapon_id)
-	return {"len": seconds, "hit": windup, "feet": Vector2(0.0, 0.0), "open": -1.0, "sound": 0.0, "upper": true, "loop": false}
+	var held: float = seconds * clampf(float(d.get("feet_from", 1.0)), 0.0, 1.0)
+	return {"len": seconds, "hit": windup, "feet": Vector2(held, seconds), "open": -1.0, "sound": 0.0, "upper": true, "loop": false}
 
 
 ## Loading a gun or a bow as a row: the weapon's reload time (one shell of a
