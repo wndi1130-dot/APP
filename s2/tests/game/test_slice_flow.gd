@@ -9,13 +9,31 @@ const Boot = preload("res://game/boot.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
+## Without the stop scene (cinema off) unless asked: the card at once, as the
+## order of screens has it; the scene's own tests turn it on.
 func _flow(extra: Dictionary = {}):
 	var f = SliceFlow.new()
-	var o := {"skip_field": true, "seed": 3}
+	var o := {"skip_field": true, "seed": 3, "cinema": false}
 	o.merge(extra, true)
 	f.opts = o
 	add_child_autofree(f)
 	return f
+
+
+## With the stop scene, its map built at once, as if seen whole or not.
+func _cinema_flow(extra: Dictionary = {}):
+	var o := {"cinema": true, "map_threads": false, "cinema_seen": false}
+	o.merge(extra, true)
+	var f = _flow(o)
+	return f
+
+
+## Tick the stop scene by hand till `beat` (or it is gone).
+func _tick_to(f, beat: String, limit: float = 60.0) -> void:
+	var spent: float = 0.0
+	while is_instance_valid(f.cinema) and f.cinema.beat != beat and spent < limit:
+		f.cinema._step(0.05)
+		spent += 0.05
 
 
 func _texts(f) -> Array:
@@ -151,3 +169,71 @@ func test_choosing_the_stop_is_the_paper_card_and_its_keys_go_on() -> void:
 	g.next()
 	(g.card.find_child("PassBy", true, false) as Button).pressed.emit()
 	assert_eq(g.current(), "travel", "passed by: on to the next stretch")
+
+
+func test_choosing_the_stop_goes_onto_the_roof_and_the_card_comes_up_over_the_station() -> void:
+	var f = _cinema_flow()
+	assert_true(f.loader.has_data(), "the stop's map made ready on the train")
+	f.next()
+	assert_eq(f.current(), "stop_pick")
+	assert_not_null(f.cinema, "the roof of the running train first")
+	assert_eq(f.cinema.stop_opts["act_progress"], f._field_opts()["act_progress"], "in the field's own weather")
+	assert_eq(f.cinema.falls, "rain", "the first stop's late autumn rain, as on the train and the field")
+	assert_null(f.card, "no card straight away")
+	assert_false(f.gauges.visible, "nothing over the roof but the scene")
+	assert_null(f.train, "the train's inside is not drawn under it")
+	_tick_to(f, "hold")
+	assert_not_null(f.card, "the station in sight: the card")
+	assert_eq((f.card.find_child("Place", true, false) as Label).text, "술레후프")
+	assert_true(f.gauges.visible, "the gauges over the card, as before")
+	(f.card.find_child("Send", true, false) as Button).pressed.emit()
+	assert_null(f.card, "sent: the card goes")
+	assert_eq(f.cinema.beat, "brake")
+	assert_true(f.cinema.ready_to_land, "no field to wait for when it is skipped")
+	_tick_to(f, "out")
+	assert_eq(f.current(), "receipt", "over the stop: the field (skipped here), then its receipt")
+
+
+func test_passing_the_stop_by_brings_the_train_back_without_a_field() -> void:
+	var f = _cinema_flow({"skip_field": false})
+	f.next()
+	_tick_to(f, "hold")
+	(f.card.find_child("PassBy", true, false) as Button).pressed.emit()
+	assert_eq(f.cinema.beat, "away")
+	assert_null(f.loader.field, "no field is built for a stop passed by")
+	_tick_to(f, "out")
+	assert_eq(f.current(), "travel", "back on the line")
+	assert_null(f.pending_field)
+
+
+func test_sent_the_field_is_built_under_the_scene_and_shown_when_it_lands() -> void:
+	var f = _cinema_flow({"skip_field": false, "seed": 5})
+	f.loader.resting = true
+	f.next()
+	_tick_to(f, "hold")
+	(f.card.find_child("Send", true, false) as Button).pressed.emit()
+	var building = f.loader.field
+	assert_not_null(building, "the field goes up as the brakes go on")
+	assert_false(building.visible)
+	assert_eq(building.opts["seed"], 5)
+	await wait_for_signal(f.loader.field_built, 60)
+	# The scene runs on its own meanwhile: it may have handed the field over already.
+	assert_true(f.pending_field == building or f.field == building, "handed to the slice")
+	_tick_to(f, "out")
+	await wait_process_frames(2)
+	assert_eq(f.current(), "field")
+	assert_eq(f.field, building, "the field built under the scene is the one played")
+	assert_true(f.field.visible)
+	assert_false(f.field.standing_by, "shown: it starts")
+	assert_eq(f.field.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 서막 2명 데려오기", "with the sample departure, as before")
+
+
+func test_skipping_the_scene_changes_nothing_the_field_goes_out_with() -> void:
+	var a = _cinema_flow({"skip_field": false, "seed": 5})
+	var b = _cinema_flow({"skip_field": false, "seed": 5, "cinema_seen": true})
+	assert_eq_deep(a._field_opts(), b._field_opts())
+	b.next()
+	b.cinema._step(0.05)
+	b.cinema.skip()
+	assert_eq(b.cinema.beat, "hold", "seen before: a tap goes to the card")
+	assert_not_null(b.card)

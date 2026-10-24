@@ -1,6 +1,11 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 #include "res://fx/shaders/fx_common.gdshaderinc"
+// CC0 photo detail (사용자 10-25 공개 자산 먼저, fx/atmosphere.gd): the ground's grain (R snow,
+// G autumn leaf, B wet soil, A grit, light and dark round 0.5) and the photo
+// sky the puddles give back. FxState writes them; the map's colours stay.
+global uniform sampler2D fx_ground : repeat_enable, filter_linear_mipmap;
+global uniform sampler2D fx_sky_tex : source_color, repeat_enable, filter_linear_mipmap;
 
 // Low-resolution sight mask: one texel per metre cell (R = seen now, G = seen before).
 uniform sampler2D vis : filter_linear, repeat_disable;
@@ -43,11 +48,18 @@ void fragment() {
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = smoothstep(0.6, 0.9, up) * clamp(fx_snow * (0.6 + 0.8 * drift), 0.0, 1.0);
 	cover *= 0.75 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+	// The photo grain, one fetch for all four; its strength wanders so the
+	// 2.6 m tile does not read as a grid. Grit on bare ground, wet soil as it wets.
+	vec4 grain = texture(fx_ground, world_pos.xz * (1.0 / 2.6));
+	float ground_k = smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+	float wander = 0.55 + 0.9 * fx_vnoise(world_pos.xz * 0.13 + 7.0);
+	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
+	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander;
 	base *= 1.0 - 0.35 * wet;
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
-	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet), cover);
+	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);
 	// Rime on upright faces in hard cold: thin and patchy, never a white wall.
 	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
 	rime *= 0.16 * smoothstep(0.3, 0.9, fx_fbm2(vec2((world_pos.x + world_pos.z) * 0.7, world_pos.y * 1.6)));
@@ -63,13 +75,23 @@ void fragment() {
 	if (level_k * water > 0.01) {
 		standing = fx_pool(world_pos.xz) * level_k * water;
 		if (standing > 0.001) {
-			base = mix(base, fx_pool_color(base, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y)), standing);
+			// The photo sky's clouds in the water, at the hour's light (fx_sky).
+			vec2 suv = vec2(world_pos.x * 0.015 + TIME * 0.002, 0.2 + 0.6 * abs(fract(world_pos.z * 0.0075) * 2.0 - 1.0));
+			float shape = dot(texture(fx_sky_tex, suv).rgb, vec3(0.3, 0.59, 0.11));
+			float mean_l = max(dot(textureLod(fx_sky_tex, vec2(0.5), 10.0).rgb, vec3(0.3, 0.59, 0.11)), 0.02);
+			vec3 refl = fx_sky.rgb * clamp(shape / mean_l, 0.4, 1.8);
+			base = mix(base, fx_pool_color(base, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y), refl), standing);
 		}
 	}
 	base = mix(base, fx_sky.rgb * 0.5, wet * level_k * (1.0 - standing) * 0.18);
 	if (fx_cold.w * level_k > 0.01) {
-		float leaf = fx_cold.w * level_k * smoothstep(0.55, 0.8, fx_vnoise(world_pos.xz * 1.3 + 3.0));
-		base = mix(base, vec3(0.36, 0.25, 0.14), leaf * 0.35);
+		// Fallen leaf in drifts a few metres across (from this far a drift reads,
+		// a single leaf does not); the photo's leaves are the pattern inside,
+		// from dark brown to a dull orange.
+		float heap = smoothstep(0.5, 0.64, drift) * (0.6 + 0.4 * fx_vnoise(world_pos.xz * 1.1 + 3.0));
+		float leaf = fx_cold.w * level_k * heap * (0.55 + 0.45 * smoothstep(0.4, 0.65, grain.g));
+		vec3 leaf_col = mix(vec3(0.24, 0.15, 0.08), vec3(0.55, 0.34, 0.15), clamp((grain.g - 0.3) * 1.8, 0.0, 1.0));
+		base = mix(base, leaf_col, leaf * 0.62);
 	}
 	// Cloud shadows drift over whatever is open to the sky.
 	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);

@@ -13,6 +13,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const CellarRules = preload("res://game/world/cellar_rules.gd")
+const RoofRules = preload("res://game/world/roof_rules.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -134,6 +135,9 @@ static func build_from(script: Script) -> Dictionary:
 	if script.resource_path.begins_with(MAP_DIR):
 		data["_defer_paths"] = true
 		var hatches := CellarRules.hatches(data)
+		# A flat roof to climb on a town map (house_layout.md 6), its skylight ladder a stair cell
+		# the furniture leaves clear.
+		RoofRules.plan(data)
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
 		data["room_stats"]["hatches"] = hatches
 		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)

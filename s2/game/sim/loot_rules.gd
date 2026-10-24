@@ -8,17 +8,20 @@ extends RefCounted
 ## made, from the run's seed. Same seed, same stop.
 
 const T = preload("res://game/sim/loot_tables.gd")
+const LootDress = preload("res://game/sim/loot_dress.gd")
 
 
 static func _values(set_name: String) -> Dictionary:
 	return T.SETS.get(set_name, T.SETS["base"])
 
 
-## Which pocket table a fallen one uses: a padded one by where it stands,
-## anything without a table of its own as the dead.
+## Which pocket table a fallen one uses: a padded one or one of the dead by
+## where it lies, anything without a table of its own as the dead.
 static func body_key(kind: String, place: String = "") -> String:
 	if kind == "clothed" and T.BODY.has("clothed_" + place):
 		return "clothed_" + place
+	if kind == "dead" and place != "" and T.BODY.has("dead_" + place):
+		return "dead_" + place
 	return kind if T.BODY.has(kind) else "dead"
 
 
@@ -49,17 +52,37 @@ static func body_roll(kind: String, place: String, in_horde: bool, rng: RandomNu
 		var pick: Array = _pick(row["table"], rng.randi_range(1, _total(row["table"])))
 		var entry: Dictionary = (pick[1] as Dictionary).duplicate()
 		entry["n"] = rng.randi_range(1, int(pick[2]))
+		# A bundle gets its name from the dice as they stand, drawing none of them.
+		if entry.has("id"):
+			entry["id"] = LootDress.name_pocket(String(entry["id"]), rng.state)
 		out.append(entry)
 	return out
 
 
-## The place tag of a fallen one standing at cell, from the map's buildings.
+## The place tag of a fallen one lying at cell, from the map's buildings: the
+## named buildings first (where a padded one worked), then by the words of a
+## building's name (decision 423, P08).
 static func place_at(buildings: Array, cell: Vector2i) -> String:
 	for b: Dictionary in buildings:
 		if not T.PLACE_OF_BUILDING.has(String(b.get("name", ""))):
 			continue
 		if (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
 			return String(T.PLACE_OF_BUILDING[b["name"]])
+	for b: Dictionary in buildings:
+		if not b.has("rect") or not (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
+			continue
+		var place := place_of_name(String(b.get("name", "")))
+		if place != "":
+			return place
+	return ""
+
+
+## The place a building's name says ("" for none of PLACE_WORDS).
+static func place_of_name(building_name: String) -> String:
+	for place: String in T.PLACE_ORDER:
+		for w: String in T.PLACE_WORDS[place]:
+			if building_name.contains(w):
+				return place
 	return ""
 
 
