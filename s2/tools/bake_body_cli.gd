@@ -1,14 +1,16 @@
 extends SceneTree
 ## Bakes a rigged body with a motion set into a folder.
-## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb[,motion glb...] | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]
+## godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb[,motion glb...] | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person] [--shell=<kind>]
 ## Several motion files (same skeleton) are read as one set.
 ## --set=person bakes the living people's motions (BodyBake.PERSON_CLIPS, no still poses) instead of the dead's;
 ## those from a motion set need the motion files, so "-" is refused for it.
 ## --small writes the compacted bake (BodyBake.compact) the phone build carries;
 ## --keep names the clips that keep every frame in it.
+## --shell=<kind> bakes a garment (BodyBake.SHELLS) cut from the body instead of the body:
+## the same skin and motions, so it is drawn over a body baked with the same --set and --keep.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
-const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb[,motion glb...] | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person]"
+const USAGE: String = "usage: godot --headless --path <project> --script tools/bake_body_cli.gd -- <body glb> <motion glb[,motion glb...] | -> <out dir> [--check] [--small] [--keep=<clip,clip>] [--set=person] [--shell=<kind>]"
 
 
 func _init() -> void:
@@ -17,6 +19,7 @@ func _init() -> void:
 	var small := false
 	var keep: Array = []
 	var person := false
+	var garment := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--check":
 			check = true
@@ -24,6 +27,8 @@ func _init() -> void:
 			small = true
 		elif arg == "--set=person":
 			person = true
+		elif arg.begins_with("--shell="):
+			garment = arg.trim_prefix("--shell=")
 		elif arg.begins_with("--keep="):
 			keep = Array(arg.trim_prefix("--keep=").split(",", false))
 		else:
@@ -49,6 +54,10 @@ func _init() -> void:
 			motion_roots.append(loaded)
 	if body_root == null or (motion_roots.is_empty() and not own):
 		print("could not read the body or motion file")
+		quit(1)
+		return
+	if garment != "" and not BodyBake.shell(body_root, garment):
+		print("no such garment, or no skinned mesh: ", garment)
 		quit(1)
 		return
 	root.add_child(body_root)

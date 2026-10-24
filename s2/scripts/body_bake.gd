@@ -157,6 +157,10 @@ const PERSON_CLIPS: Array = [
 	["p_pain_arm", "", 24, false, "p_pain_arm", 2.0],
 	["p_pain_leg", "", 24, false, "p_pain_leg", 2.0],
 	["p_tired_stretch", "", 24, false, "p_tired_stretch", 2.5],
+	# Putting on a coat, a hat or hood, and gloves (decision 423).
+	["p_wear_outer", "", 24, false, "p_wear_outer", 2.4],
+	["p_wear_head", "", 24, false, "p_wear_head", 1.4],
+	["p_wear_hands", "", 24, false, "p_wear_hands", 1.8],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
@@ -1643,6 +1647,61 @@ const LAYERS: Dictionary = {
 		],
 		"sink": 0.0,
 	},
+	# Putting a coat on (decision 423): the right arm back and down into its
+	# sleeve, the body turned after it; the left the same; then both hands draw
+	# the front together and the shoulders settle into it.
+	"p_wear_outer": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.2, 0.1], [0.5, 0.1], [0.8, 0.12], [1.0, 0.03]]]],
+			["turn", "chest", "y", ["keys", [[0.0, 0.0], [0.2, -0.35], [0.35, -0.1], [0.5, 0.35], [0.65, 0.1], [0.8, 0.0], [1.0, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.8, 0.25], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.35, 0.14], [0.5, 0.4], [0.62, 0.3], [0.8, 0.15], [1.0, 0.14]]], ["keys", [[0.0, -1.0], [0.35, -1.0], [0.5, -0.7], [0.62, -0.6], [0.8, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.35, 0.02], [0.5, -0.5], [0.62, 0.2], [0.8, 0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.35, 0.08], [0.5, 0.25], [0.62, 0.0], [0.8, -0.7], [1.0, 0.08]]], ["keys", [[0.0, -1.0], [0.35, -1.0], [0.5, -0.9], [0.62, -0.5], [0.8, 0.3], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.35, 0.1], [0.5, -0.35], [0.62, 0.7], [0.8, 0.6], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.2, -0.4], [0.33, -0.3], [0.5, -0.2], [0.8, -0.15], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.2, -0.7], [0.33, -0.6], [0.5, -0.8], [0.8, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.2, -0.5], [0.33, 0.2], [0.5, 0.3], [0.8, 0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.2, -0.25], [0.33, 0.0], [0.5, -0.1], [0.8, 0.7], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.2, -0.9], [0.33, -0.5], [0.5, -0.9], [0.8, 0.35], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.2, -0.35], [0.33, 0.7], [0.5, 0.3], [0.8, 0.6], [1.0, 0.1]]]]],
+		],
+		"sink": 0.0,
+	},
+	# Putting a hat or a hood on (decision 423): both hands up to the top of the
+	# head, drawing it down over the ears, the head bowed a little to them.
+	"p_wear_head": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.3, 0.06], [1.0, 0.03]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.3, 0.2], [0.65, 0.12], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.15, 0.35], [0.3, 0.5], [0.65, 0.55], [0.85, 0.3], [1.0, 0.14]]], ["keys", [[0.0, -1.0], [0.15, -0.3], [0.3, 0.35], [0.65, 0.05], [0.85, -0.6], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.15, 0.7], [0.3, 0.4], [0.65, 0.25], [0.85, 0.3], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.15, 0.0], [0.3, -0.4], [0.65, -0.45], [0.85, -0.1], [1.0, 0.08]]], ["keys", [[0.0, -1.0], [0.15, 0.2], [0.3, 0.85], [0.65, 0.7], [0.85, -0.5], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.15, 1.0], [0.3, -0.2], [0.65, -0.15], [0.85, 0.6], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.15, -0.35], [0.3, -0.5], [0.65, -0.55], [0.85, -0.3], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.15, -0.3], [0.3, 0.35], [0.65, 0.05], [0.85, -0.6], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.15, 0.7], [0.3, 0.4], [0.65, 0.25], [0.85, 0.3], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.15, 0.0], [0.3, 0.4], [0.65, 0.45], [0.85, 0.1], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.15, 0.2], [0.3, 0.85], [0.65, 0.7], [0.85, -0.5], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.15, 1.0], [0.3, -0.2], [0.65, -0.15], [0.85, 0.6], [1.0, 0.1]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.3, 0.01], [1.0, 0.0]]],
+	},
+	# Putting gloves on (decision 423): the left hand held out in front, the
+	# right pulling the glove up over it and tugging at the cuff; then the
+	# other way round; both hands flexed once.
+	"p_wear_hands": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.15, 0.12], [0.85, 0.12], [1.0, 0.03]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.15, 0.35], [0.85, 0.35], [1.0, 0.0]]]],
+			["turn", "chest", "y", ["keys", [[0.0, 0.0], [0.3, 0.12], [0.45, 0.12], [0.6, -0.12], [0.75, -0.12], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.15, 0.15], [0.45, 0.15], [0.55, 0.1], [0.85, 0.1], [1.0, 0.14]]], ["keys", [[0.0, -1.0], [0.15, -0.8], [0.45, -0.8], [0.55, -0.75], [0.85, -0.75], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.15, 0.45], [0.45, 0.45], [0.55, 0.5], [0.85, 0.5], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.15, -0.3], [0.45, -0.3], [0.55, -0.75], [0.7, -0.55], [0.85, -0.75], [1.0, 0.08]]], ["keys", [[0.0, -1.0], [0.15, 0.05], [0.45, 0.05], [0.55, 0.2], [0.7, 0.2], [0.85, 0.2], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.15, 1.0], [0.45, 1.0], [0.55, 0.6], [0.7, 0.8], [0.85, 0.6], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.15, -0.1], [0.45, -0.1], [0.55, -0.15], [0.85, -0.15], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.15, -0.75], [0.45, -0.75], [0.55, -0.8], [0.85, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.15, 0.5], [0.45, 0.5], [0.55, 0.45], [0.85, 0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.15, 0.75], [0.3, 0.55], [0.45, 0.75], [0.55, 0.3], [0.85, 0.3], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.15, 0.2], [0.3, 0.2], [0.45, 0.2], [0.55, 0.05], [0.85, 0.05], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.15, 0.6], [0.3, 0.8], [0.45, 0.6], [0.55, 1.0], [0.85, 1.0], [1.0, 0.1]]]]],
+		],
+		"sink": 0.0,
+	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
 }
@@ -1964,6 +2023,209 @@ static func bake(body_root: Node3D, motion_root: Node3D) -> Dictionary:
 	if ctx.is_empty():
 		return {}
 	return _bake_list(ctx, CLIPS, POSES)
+
+
+# Garments as a layer over a body (decision 423): a coat or a head piece is the
+# body's own surface where it would be, welded, pushed out along its own
+# normals and weighted as the body is, so it moves exactly with it. Baked with
+# the same motions as the body it is drawn over (bake_body_cli --shell=, the
+# same --set and --keep), its clips line up frame for frame. Each: the bones
+# whose skin it covers, how far out (metres), and for a head piece how much of
+# the head from the top it covers ("top", 0..1) and whether it leaves the face.
+const SHELLS: Dictionary = {
+	"coat_long": {"bones": ["hips", "spine", "chest", "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R", "thigh.L", "thigh.R"], "push": 0.03},
+	"jacket_short": {"bones": ["hips", "spine", "chest", "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R"], "push": 0.025},
+	"hat_knit": {"bones": ["head"], "push": 0.02, "top": 0.55},
+	"hood": {"bones": ["head", "neck"], "push": 0.025, "top": 1.0, "face": true},
+}
+const SHELL_FACE_FORWARD: float = 0.3      # a head vertex facing forward more than this is face, for a piece that leaves it
+const SHELL_FACE_BROW: float = 0.15        # but not the top this share of the head (the brow is covered)
+const GLOVE_COLOUR: Color = Color(0.17, 0.16, 0.15)  # dark worn wool, as the colour picture holds it
+const GLOVE_GRAIN: float = 0.5             # how much of the picture's own light and dark a glove keeps
+const GLOVE_SPREAD: int = 2                # pixels painted past each hand piece, so no skin shows at a seam
+
+
+## Puts the shell of garment `kind` (SHELLS) in place of the body's skinned
+## mesh: the same skin, the same bones, only the covered part, welded where
+## the body's vertices were split, pushed out. False if `kind` is unknown or
+## the body has no skinned mesh.
+static func shell(body_root: Node3D, kind: String) -> bool:
+	var spec: Dictionary = SHELLS.get(kind, {})
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
+	if spec.is_empty() or mesh_node == null or body == null or mesh_node.skin == null:
+		return false
+	var src: Array = mesh_node.mesh.surface_get_arrays(0)
+	var pos: PackedVector3Array = src[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = src[Mesh.ARRAY_NORMAL]
+	var bones: PackedInt32Array = src[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = src[Mesh.ARRAY_WEIGHTS]
+	var index: PackedInt32Array = src[Mesh.ARRAY_INDEX]
+	var per: int = bones.size() / pos.size()
+	var skin := mesh_node.skin
+	var wanted := {}
+	for bone_name: String in spec["bones"]:
+		wanted[_bone(body, bone_name)] = true
+	var covered := PackedByteArray()
+	covered.resize(pos.size())
+	var low := INF
+	var high := -INF
+	for v in pos.size():
+		if wanted.has(_main_bone(body, skin, bones, weights, per, v)):
+			covered[v] = 1
+			low = minf(low, pos[v].y)
+			high = maxf(high, pos[v].y)
+	var top := float(spec.get("top", 1.0))
+	var span := high - low
+	for v in pos.size():
+		if covered[v] == 0:
+			continue
+		if pos[v].y < high - top * span:
+			covered[v] = 0
+		elif bool(spec.get("face", false)) and normals[v].z > SHELL_FACE_FORWARD and pos[v].y < high - SHELL_FACE_BROW * span:
+			covered[v] = 0
+	# Weld: one shell vertex for each place, taking the skin of the first there.
+	var key_of := {}
+	var out_pos := PackedVector3Array()
+	var out_bones := PackedInt32Array()
+	var out_weights := PackedFloat32Array()
+	var along := PackedVector3Array()
+	var out_index := PackedInt32Array()
+	for t in range(0, index.size(), 3):
+		var corners := [index[t], index[t + 1], index[t + 2]]
+		var inside := 0
+		for c: int in corners:
+			inside += covered[c]
+		if inside < 2:
+			continue
+		var ids := []
+		for c: int in corners:
+			var key := (pos[c] * 10000.0).round()
+			if not key_of.has(key):
+				key_of[key] = out_pos.size()
+				out_pos.append(pos[c])
+				along.append(Vector3.ZERO)
+				for k in per:
+					out_bones.append(bones[c * per + k])
+					out_weights.append(weights[c * per + k])
+			var id: int = key_of[key]
+			along[id] += normals[c]
+			ids.append(id)
+		if ids[0] == ids[1] or ids[1] == ids[2] or ids[0] == ids[2]:
+			continue
+		for id: int in ids:
+			out_index.append(id)
+	if out_index.is_empty():
+		return false
+	# The shell's own normals, from its triangles, turned the way the body's face.
+	var out_normals := PackedVector3Array()
+	out_normals.resize(out_pos.size())
+	for t in range(0, out_index.size(), 3):
+		var a := out_pos[out_index[t]]
+		var face := (out_pos[out_index[t + 1]] - a).cross(out_pos[out_index[t + 2]] - a)
+		for k in 3:
+			out_normals[out_index[t + k]] += face
+	var push := float(spec["push"])
+	for i in out_pos.size():
+		var n := out_normals[i]
+		if n.dot(along[i]) < 0.0:
+			n = -n
+		n = n.normalized() if n.length_squared() > 0.0 else along[i].normalized()
+		out_normals[i] = n
+		out_pos[i] += n * push
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = out_pos
+	arrays[Mesh.ARRAY_NORMAL] = out_normals
+	arrays[Mesh.ARRAY_BONES] = out_bones
+	arrays[Mesh.ARRAY_WEIGHTS] = out_weights
+	arrays[Mesh.ARRAY_INDEX] = out_index
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
+	mesh_node.mesh = mesh
+	return true
+
+
+## The body bone vertex `v` of a skin follows most.
+static func _main_bone(body: Skeleton3D, skin: Skin, bones: PackedInt32Array, weights: PackedFloat32Array, per: int, v: int) -> int:
+	var best := 0
+	for k in per:
+		if weights[v * per + k] > weights[v * per + best]:
+			best = k
+	var bind: int = bones[v * per + best]
+	var id := skin.get_bind_bone(bind)
+	return id if id >= 0 else body.find_bone(skin.get_bind_name(bind))
+
+
+## The body's colour picture with its hands painted as gloves (decision 423):
+## each triangle of the skin with two corners or more on a hand, a little past
+## its edges so no skin shows at a seam, in `colour` with some of the picture's
+## own light and dark kept. Null without a skinned mesh with UVs.
+static func gloved(body_root: Node3D, albedo: Image, colour: Color = GLOVE_COLOUR) -> Image:
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
+	if mesh_node == null or body == null or mesh_node.skin == null or albedo == null:
+		return null
+	var src: Array = mesh_node.mesh.surface_get_arrays(0)
+	if src[Mesh.ARRAY_TEX_UV] == null:
+		return null
+	var uv: PackedVector2Array = src[Mesh.ARRAY_TEX_UV]
+	var bones: PackedInt32Array = src[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = src[Mesh.ARRAY_WEIGHTS]
+	var index: PackedInt32Array = src[Mesh.ARRAY_INDEX]
+	var per: int = bones.size() / uv.size()
+	var hands := {_bone(body, "hand.L"): true, _bone(body, "hand.R"): true}
+	var on_hand := PackedByteArray()
+	on_hand.resize(uv.size())
+	for v in uv.size():
+		on_hand[v] = 1 if hands.has(_main_bone(body, mesh_node.skin, bones, weights, per, v)) else 0
+	var out := albedo.duplicate() as Image
+	if out.is_compressed():
+		out.decompress()
+	var size := Vector2(out.get_width(), out.get_height())
+	var w := out.get_width()
+	var mask := PackedByteArray()
+	mask.resize(w * out.get_height())
+	for t in range(0, index.size(), 3):
+		if on_hand[index[t]] + on_hand[index[t + 1]] + on_hand[index[t + 2]] < 2:
+			continue
+		var a := uv[index[t]] * size
+		var b := uv[index[t + 1]] * size
+		var c := uv[index[t + 2]] * size
+		var lo := a.min(b).min(c).floor().clamp(Vector2.ZERO, size - Vector2.ONE)
+		var hi := a.max(b).max(c).floor().clamp(Vector2.ZERO, size - Vector2.ONE)
+		for y in range(int(lo.y), int(hi.y) + 1):
+			for x in range(int(lo.x), int(hi.x) + 1):
+				if Geometry2D.point_is_inside_triangle(Vector2(x + 0.5, y + 0.5), a, b, c):
+					mask[y * w + x] = 1
+		for corner in [a, b, c]:
+			var at: Vector2 = corner.floor().clamp(Vector2.ZERO, size - Vector2.ONE)
+			mask[int(at.y) * w + int(at.x)] = 1
+	for i in GLOVE_SPREAD:
+		var grown := mask.duplicate()
+		for y in out.get_height():
+			for x in w:
+				if mask[y * w + x] == 1:
+					continue
+				var left := x > 0 and mask[y * w + x - 1] == 1
+				var right := x + 1 < w and mask[y * w + x + 1] == 1
+				var up := y > 0 and mask[(y - 1) * w + x] == 1
+				var down := y + 1 < out.get_height() and mask[(y + 1) * w + x] == 1
+				if left or right or up or down:
+					grown[y * w + x] = 1
+		mask = grown
+	var mean := 0.0
+	var count := 0
+	for i in mask.size():
+		if mask[i] == 1:
+			mean += out.get_pixel(i % w, i / w).get_luminance()
+			count += 1
+	mean = maxf(mean / maxi(count, 1), 0.05)
+	for i in mask.size():
+		if mask[i] == 1:
+			var grain := lerpf(1.0, clampf(out.get_pixel(i % w, i / w).get_luminance() / mean, 0.5, 1.5), GLOVE_GRAIN)
+			out.set_pixel(i % w, i / w, Color(colour.r * grain, colour.g * grain, colour.b * grain))
+	return out
 
 
 ## Bakes the living people's motions (PERSON_CLIPS, no still poses) with the
