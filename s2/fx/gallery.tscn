@@ -4,3 +4,4 @@
 
 [node name="FxGallery" type="Node3D"]
 script = ExtResource("1")
+show_impact_bays = true

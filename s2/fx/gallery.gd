@@ -10,6 +10,8 @@ extends Node3D
 const FxState = preload("res://fx/fx_state.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const StormLook = preload("res://fx/storm_look.gd")
+const BloodFx = preload("res://fx/blood_fx.gd")
+const ImpactFx = preload("res://fx/impact_fx.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const SH := "res://fx/shaders/"
 
@@ -54,6 +56,13 @@ var current := 0
 var scroll := 0.0
 var speed := 0.0
 var _quit_on_back := true
+@export var show_impact_bays := true
+var blood_fx: Node3D
+var impact_fx: Node3D
+var _body_sample: Node3D
+var _demo_clock := 0.5
+var _demo_auto := true
+var _camera_home := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -62,7 +71,10 @@ func _ready() -> void:
 	get_tree().set_quit_on_go_back(false)
 	_build_world()
 	_build_props()
+	if show_impact_bays:
+		_build_effect_bays()
 	_build_ui()
+	_camera_home = get_viewport().get_camera_3d().global_position
 	apply_preset(0)
 	var shots := ""
 	for a in OS.get_cmdline_user_args():
@@ -381,6 +393,8 @@ func _build_ui() -> void:
 	caption.add_theme_font_size_override("font_size", 20)
 	caption.add_theme_color_override("font_color", Color(0.92, 0.9, 0.85))
 	layer.add_child(caption)
+	if show_impact_bays:
+		_build_effect_controls(layer)
 	# Touch controls under the caption: the phone has no number keys.
 	var bar := HBoxContainer.new()
 	bar.position = Vector2(16, 48)
@@ -463,6 +477,78 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	scroll += speed * delta / 400.0
 	backdrop_mat.set_shader_parameter("scroll", scroll)
+	if not show_impact_bays or not is_instance_valid(impact_fx):
+		return
+	impact_fx.simulation_delta(delta)
+	(overlay.material as ShaderMaterial).set_shader_parameter("hurt", impact_fx.hurt_amount())
+	get_viewport().get_camera_3d().global_position = _camera_home + impact_fx.camera_offset()
+	_demo_clock -= delta
+	if _demo_auto and _demo_clock <= 0.0:
+		_demo_clock = 2.5
+		_demo_blood()
+		_demo_impacts()
+
+
+func _build_effect_bays() -> void:
+	blood_fx = BloodFx.new()
+	blood_fx.name = "BloodFx"
+	add_child(blood_fx)
+	impact_fx = ImpactFx.new()
+	impact_fx.name = "ImpactFx"
+	add_child(impact_fx)
+	for i in range(4):
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.69, 0.70, 0.72) if i == 0 else Color(0.31, 0.30, 0.28)
+		_box(Vector3(2.9, 0.12, 2.9), Vector3(-2 + i * 4, 0, -3.5), mat)
+		var label := Label3D.new()
+		label.text = ["눈 위 피 / 튀김", "벽 / 번지는 웅덩이", "불꽃 / 나무 / 유리", "몸의 자국 / 입김"][i]
+		label.position = Vector3(-2 + i * 4, 1.9, -4.4)
+		label.font_size = 42
+		label.pixel_size = 0.008
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		add_child(label)
+	_box(Vector3(2.4, 1.6, 0.15), Vector3(2, 0.8, -4.4), _weathered(Color(0.4, 0.36, 0.3)))
+	_body_sample = _box(Vector3(0.55, 1.3, 0.3), Vector3(10, 0.72, -3.5), _weathered(Color(0.36, 0.36, 0.32)))
+
+
+func _build_effect_controls(layer: CanvasLayer) -> void:
+	var bar := HBoxContainer.new()
+	bar.position = Vector2(16, 106)
+	bar.theme = UiTheme.make(20)
+	bar.add_theme_constant_override("separation", 8)
+	layer.add_child(bar)
+	var levels := OptionButton.new()
+	for label in FxState.BLOOD_LABELS:
+		levels.add_item("피: " + label)
+	levels.select(FxState.blood_level)
+	levels.item_selected.connect(func(index: int) -> void: FxState.set_blood_level(index))
+	bar.add_child(levels)
+	for spec in [["피·자국", _demo_blood], ["파편·눈·입김", _demo_impacts], ["타격 반응", func() -> void: impact_fx.hit_feedback()]]:
+		var button := Button.new()
+		button.text = spec[0]
+		button.pressed.connect(spec[1])
+		bar.add_child(button)
+	var auto := CheckButton.new()
+	auto.text = "반복"
+	auto.button_pressed = _demo_auto
+	auto.toggled.connect(func(on: bool) -> void: _demo_auto = on)
+	bar.add_child(auto)
+
+
+func _demo_blood() -> void:
+	blood_fx.hit(Vector3(-2.6, 1.1, -3.5), Vector3(1, 0, 0.25), 1.0, "slash", {"position": Vector3(-2.6, 0.06, -3.5), "snow": true})
+	blood_fx.death(Vector3(1.2, 0.9, -3.0), Vector3(1, 0, 0.4), "blunt", {"position": Vector3(1.2, 0.06, -3.0), "wall_position": Vector3(2, 0.9, -4.31), "wall_normal": Vector3.BACK})
+	blood_fx.body_mark(_body_sample, Transform3D(Basis.IDENTITY, Vector3(-0.1, 0.23, 0.16)), "bite", 0.22)
+	blood_fx.body_mark(_body_sample, Transform3D(Basis.IDENTITY, Vector3(0.1, -0.12, 0.16)), "scratch", 0.25)
+
+
+func _demo_impacts() -> void:
+	impact_fx.spark(Vector3(5.5, 0.6, -3.5), Vector3(0, 1, 1))
+	impact_fx.wood(Vector3(6.5, 0.7, -3.5), Vector3(0, 0.6, 1))
+	impact_fx.glass(Vector3(6, 1, -3.5), Vector3.BACK, Vector3(6, 0.06, -3.5))
+	impact_fx.muzzle(Vector3(8, 1, -3.5), Vector3.RIGHT)
+	impact_fx.snow(Vector3(-2, 0.16, -2.6), Vector3.RIGHT, true)
+	impact_fx.breath(Vector3(10, 1.4, -3.3), Vector3.BACK)
 
 
 func _unhandled_input(event: InputEvent) -> void:
