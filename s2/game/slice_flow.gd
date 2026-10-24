@@ -43,6 +43,7 @@ const WorldFilm = preload("res://game/ui/world_film.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
@@ -147,6 +148,8 @@ func _ready() -> void:
 	var s: Array = StopPickCard.sample()
 	train_g = s[0]
 	train_t = s[1]
+	# The train's stores, so what the field brings home has somewhere to go.
+	TrainDom.ensure(train_g)
 	marks = Control.new()
 	marks.name = "Marks"
 	marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
