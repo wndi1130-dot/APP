@@ -282,6 +282,8 @@ var region: String = Atmosphere.DEFAULT_REGION
 var cold: float = 1.0
 ## Which side of midwinter (0 autumn, 1 spring): day length, leaf and lying snow.
 var side: float = 0.0
+## The photo sky the water gives back now (Atmosphere.SKY_PHOTOS key).
+var sky_photo: String = ""
 var look_hour: float = -1.0
 var atmo: Dictionary = {}
 var atmo_min: float = -INF
@@ -433,6 +435,7 @@ func _apply_fx() -> void:
 		return
 	# A storm keeps its stage's light; the look is still made for breath and the like.
 	atmo = atmosphere_at(picture_hour())
+	_set_sky_photo()
 	fx_params = FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
 	FxState.apply(fx_params)
 	fx_light = FxState.lighting_for(look_kinds, hour)
@@ -585,6 +588,13 @@ func atmosphere_at(hour: float) -> Dictionary:
 	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side})
 
 
+## The puddles give back the look's strongest photo sky (only when it changes).
+func _set_sky_photo() -> void:
+	var key := Atmosphere.sky_main(atmo)
+	if key != sky_photo and FxState.set_sky(Atmosphere.sky_texture(key)):
+		sky_photo = key
+
+
 ## The hour the picture is drawn at: the field clock's, or a fixed one for check
 ## shots (opts "look_hour": an hour, or -2 sunrise, -3 low sun before sunset,
 ## -4 night, by this stop's cold).
@@ -614,6 +624,7 @@ func _update_atmosphere() -> void:
 				fx_params[key] = p[key]
 				changed[key] = p[key]
 		FxState.apply(changed)
+		_set_sky_photo()
 		_set_cold_frost(float(atmo["edge_frost"]))
 		# Lights and the grade change only with the look (the grade's curve is a
 		# texture: remade every frame it cost the phone a few milliseconds).

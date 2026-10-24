@@ -58,7 +58,8 @@ float fx_pool(vec2 xz) {
 
 // A pool: open water gives the sky back, ringed when it rains; frozen it is
 // pale, milky ice with dark cracks. ice: fx_cold.y. rain: how hard it falls.
-vec3 fx_pool_color(vec3 base, vec2 xz, float time, float ice, float rain) {
+// sky: what the water gives back (the hour's sky light, with the photo's clouds).
+vec3 fx_pool_color(vec3 base, vec2 xz, float time, float ice, float rain, vec3 sky) {
 	float rip = 0.0;
 	if (rain > 0.01) {
 		vec2 cell = floor(xz * 2.2);
@@ -66,9 +67,9 @@ vec3 fx_pool_color(vec3 base, vec2 xz, float time, float ice, float rain) {
 		float t = fract(time * 0.9 + fx_hash(cell) * 7.0);
 		rip = (1.0 - smoothstep(0.0, 0.06, abs(length(f) - t * 0.5))) * (1.0 - t) * rain;
 	}
-	vec3 water = mix(base * 0.35, fx_sky.rgb * 0.62, 0.7) + rip * 0.12;
+	vec3 water = mix(base * 0.35, sky * 0.62, 0.7) + rip * 0.12;
 	float crack = 1.0 - abs(fx_vnoise(xz * 3.3 + 11.0) * 2.0 - 1.0);
-	vec3 frozen = mix(vec3(0.60, 0.65, 0.70), fx_sky.rgb * 0.9, 0.35) * (0.92 + 0.08 * fx_vnoise(xz * 1.7));
+	vec3 frozen = mix(vec3(0.60, 0.65, 0.70), sky * 0.9, 0.35) * (0.92 + 0.08 * fx_vnoise(xz * 1.7));
 	frozen *= 1.0 - 0.35 * pow(crack, 14.0);
 	return mix(water, frozen, clamp(ice, 0.0, 1.0));
 }
