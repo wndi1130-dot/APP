@@ -7,7 +7,9 @@ extends RefCounted
 ## other seasons and unknown kinds are ignored, like weather.gd does.
 ## Numbers here are proposals (shaders.md 4장) until a play check fixes them.
 
-const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade"]
+## fx_cold, fx_sky and fx_cloud belong to the atmosphere frame (fx/atmosphere.gd):
+## params_for gives plain values from the temperature, Atmosphere.params the real ones.
+const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud"]
 
 enum BloodLevel { OFF, LOW, NORMAL, HIGH }
 const BLOOD_LABELS: Array[String] = ["끔", "적게", "보통", "많이"]
@@ -192,6 +194,10 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 	var band := hour_band(hour, season)
 	tint = tint * Color(band["tint"])
 	var dir := wind_dir.normalized() if wind_dir.length() > 0.001 else Vector2(1, 0)
+	# Plain atmosphere values from the temperature alone: cold +6 C .. -14 C,
+	# standing water frozen below about -1 C, no cloud shadows.
+	var cold := clampf((6.0 - ambient_c) / 20.0, 0.0, 1.0)
+	var ice := 1.0 - smoothstep(-3.0, 1.0, ambient_c)
 	return {
 		"fx_wet": clampf(wet, 0.0, 1.0),
 		"fx_snow": clampf(snow, 0.0, 1.0),
@@ -200,6 +206,9 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 		"fx_tint": Color(tint.r, tint.g, tint.b, 1.0),
 		"fx_flash": 0.0,
 		"fx_fade": 0.0,
+		"fx_cold": Vector4(cold, ice, 0.0, 0.0),
+		"fx_sky": Color(tint.r, tint.g, tint.b, 1.0),
+		"fx_cloud": Vector4(0.0, dir.x, dir.y, 0.0),
 	}
 
 

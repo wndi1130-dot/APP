@@ -1,0 +1,395 @@
+extends "res://addons/gut/test.gd"
+## The atmosphere frame (fx/atmosphere.gd, 사용자 2026-10-24 분위기 변주): one cold
+## value with the act table and its test switch, the hour bands from the season
+## brief, what falls by temperature (no rain below zero), the colour rules, the
+## look getting colder, and that the field, the train and the rules keep apart.
+
+const Atmosphere = preload("res://fx/atmosphere.gd")
+const FxState = preload("res://fx/fx_state.gd")
+const FieldGame = preload("res://game/field_game.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
+const BuildingView = preload("res://game/world/building_view.gd")
+
+
+func before_each() -> void:
+	Atmosphere.scheme = Atmosphere.DEFAULT_SCHEME
+
+
+func after_each() -> void:
+	Atmosphere.scheme = Atmosphere.DEFAULT_SCHEME
+
+
+# ---------------------------------------------------------------- the cold
+
+func test_the_default_table_runs_from_late_autumn_to_the_thaw() -> void:
+	# The user's season answer of 10-24: late autumn with rain, colder through
+	# the prologue and act 1, the coldest in act 2, the thaw only in act 3.
+	assert_eq(Atmosphere.scheme, "autumn_to_thaw")
+	assert_eq(Atmosphere.cold_for("prologue"), 0.0, "the first stop is the warmest")
+	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("prologue"), Atmosphere.side_for("prologue")), "late_autumn")
+	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("prologue", 1.0), 0.0), "early_winter", "first snow by the end of the prologue")
+	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act1", 1.0), Atmosphere.side_for("act1")), "deep_winter", "deep winter by the end of act 1")
+	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act2", 0.5), Atmosphere.side_for("act2")), "deep_winter")
+	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act3", 0.5), Atmosphere.side_for("act3")), "early_thaw")
+	# Colder at every step up to the end of act 2, then the thaw.
+	var last := -1.0
+	for act in ["prologue", "act1", "act2"]:
+		for t in [0.0, 0.5, 1.0]:
+			var c := Atmosphere.cold_for(act, t)
+			assert_gte(c, last, "%s %.1f never warmer than before" % [act, t])
+			last = c
+	assert_eq(last, 1.0, "the coldest is in act 2")
+	assert_lt(Atmosphere.cold_for("act3", 1.0), Atmosphere.cold_for("act3", 0.0), "it thaws as act 3 goes")
+	assert_eq(Atmosphere.side_for("prologue"), 0.0)
+	assert_eq(Atmosphere.side_for("act3"), 1.0)
+	# Unknown acts read as the prologue; progress is clamped.
+	assert_eq(Atmosphere.cold_for("epilogue"), Atmosphere.cold_for("prologue"))
+	assert_eq(Atmosphere.cold_for("act3", 5.0), Atmosphere.cold_for("act3", 1.0))
+
+
+func test_the_prologue_rains_then_freezes() -> void:
+	# Above zero at the first stop: what the rules call snow falls as rain.
+	var first := Atmosphere.look(12.0, ["snow"], "K1", Atmosphere.cold_for("prologue"))
+	assert_gt(float(first["temp_c"]), 1.5)
+	assert_eq(String(first["falls"]), "rain")
+	assert_eq(int(first["snow_level"]), 0)
+	# By the end of the prologue the nights freeze: still water is ice by night.
+	var last_c := Atmosphere.cold_for("prologue", 1.0)
+	var night := Atmosphere.look(22.0, ["clear"], "K1", last_c)
+	assert_lt(float(night["temp_c"]), -3.0)
+	assert_gt(float(night["ice"]), 0.9)
+	assert_ne(String(Atmosphere.look(22.0, ["snow"], "K1", last_c)["falls"]), "rain")
+
+
+func test_the_old_table_stays_as_a_test_switch() -> void:
+	assert_eq(Atmosphere.cold_for("prologue", 0.0, "winter_to_thaw"), 1.0, "10-09: deep winter at the start")
+	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act3", 0.5, "winter_to_thaw"), Atmosphere.side_for("act3", "winter_to_thaw")), "early_thaw")
+	Atmosphere.scheme = "winter_to_thaw"
+	assert_eq(Atmosphere.cold_for("prologue"), 1.0, "the switch is what cold_for reads")
+
+
+func test_the_same_cold_reads_differently_either_side_of_midwinter() -> void:
+	var autumn := Atmosphere.look(12.0, ["clear"], "K1", 0.35, {"side": 0.0})
+	var spring := Atmosphere.look(12.0, ["clear"], "K1", 0.35, {"side": 1.0})
+	assert_gt(float(autumn["leaves"]), 0.3, "leaf still on the birches in autumn")
+	assert_eq(float(spring["leaves"]), 0.0, "none in the thaw")
+	assert_gt(float(spring["snow_cm"]), float(autumn["snow_cm"]), "old snow lies in the thaw")
+	assert_gt(float(spring["sunset"]) - float(spring["sunrise"]), float(autumn["sunset"]) - float(autumn["sunrise"]), "days lengthen toward spring")
+	assert_eq(String(autumn["season"]), "late_autumn")
+	assert_eq(String(spring["season"]), "early_thaw")
+
+
+func test_the_anchors_keep_the_season_briefs_hours() -> void:
+	# seasons_regions.md 2.2 and 7장 (the spring side): the same band starts
+	# FxState already has.
+	var anchors := {1.0: "deep_winter", 0.7: "late_winter", 0.35: "early_thaw"}
+	for c in anchors:
+		var mine := Atmosphere.band_starts(c, 1.0)
+		var theirs: Dictionary = FxState.SEASON_BANDS[anchors[c]]
+		for band in ["dawn", "day", "dusk", "night"]:
+			assert_almost_eq(float(mine[band]), float(theirs[band]), 0.01, "%s %s" % [anchors[c], band])
+	var deep := Atmosphere.sun_times(1.0)
+	assert_almost_eq(deep.x, 8.0, 0.001)
+	assert_almost_eq(deep.y, 15.0 + 50.0 / 60.0, 0.001)
+
+
+func test_bands_add_up_and_agree_with_fx_state_in_deep_winter() -> void:
+	for h in range(0, 96):
+		var hour := h * 0.25
+		var w := Atmosphere.band_weights(hour, 1.0)
+		var total := 0.0
+		for k in w:
+			assert_true(float(w[k]) >= 0.0)
+			total += float(w[k])
+		assert_almost_eq(total, 1.0, 0.0001, "%.2f" % hour)
+	for hour in [3.0, 7.6, 12.0, 15.5, 17.2, 23.0]:
+		assert_eq(Atmosphere.band_of(hour, 1.0), String(FxState.hour_band(hour)["name"]), "%.1f" % hour)
+
+
+func test_midday_in_deep_winter_keeps_the_users_low_cold_sun() -> void:
+	# User 2026-10-17: a low cold sun (0.80, 0.85, 0.92) at 35 degrees.
+	var t := Atmosphere.sun_times(1.0)
+	var noon := (t.x + t.y) * 0.5
+	var l := Atmosphere.look(noon, ["clear"], "K1", 1.0)
+	assert_eq(String(l["band"]), "day")
+	var sun: Color = l["sun_color"]
+	var want: Color = FxState.BAND_LOOK["day"]["sun"]
+	assert_almost_eq(sun.r, want.r, 0.001)
+	assert_almost_eq(sun.g, want.g, 0.001)
+	assert_almost_eq(sun.b, want.b, 0.001)
+	assert_almost_eq(float(l["sun_pitch"]), FxState.SUN_PITCH, 0.05)
+	# Away from midday the sun is lower (longer shadows), never flatter than the floor.
+	var morning := Atmosphere.look(t.x + 0.3, ["clear"], "K1", 1.0)
+	assert_gt(float(morning["sun_pitch"]), float(l["sun_pitch"]))
+	assert_lte(float(morning["sun_pitch"]), -16.0)
+	assert_gt(float(morning["sun_yaw"]), 0.0, "the morning sun stands east of south")
+
+
+# ---------------------------------------------------------------- what falls
+
+func test_no_rain_below_zero() -> void:
+	for temp in [-20.0, -8.0, -3.0, -2.5, -1.0, 0.0, 0.5, 1.0]:
+		for kinds in [["snow"], ["sleet"], ["blizzard"], ["fog", "snow"], ["rain"]]:
+			var drawn := Atmosphere.drawn_kinds(kinds, temp)
+			if kinds == ["rain"]:
+				continue
+			assert_false(drawn.has("rain"), "%s at %.1f" % [kinds, temp])
+	assert_eq(Atmosphere.drawn_kinds(["snow"], 4.0), ["rain"], "warm: snow falls as rain")
+	assert_eq(Atmosphere.drawn_kinds(["snow"], -1.0), ["sleet"], "around zero: sleet")
+	assert_eq(Atmosphere.drawn_kinds(["sleet"], -14.0), ["snow"], "hard cold: no sleet")
+	assert_eq(Atmosphere.drawn_kinds(["blizzard"], -14.0), ["blizzard"])
+	assert_eq(Atmosphere.drawn_kinds(["clear", "fog", "overcast"], 6.0), ["clear", "fog", "overcast"])
+	assert_eq(Atmosphere.drawn_kinds(["acid"], -5.0), [], "unknown kinds go, as weather.gd does")
+
+
+# ---------------------------------------------------------------- colour rules
+
+func _alarm_red(c: Color) -> bool:
+	# Red is for discontent and shortage: no strong colour of red's own hue.
+	return c.s > 0.5 and (c.h < 12.0 / 360.0 or c.h > 348.0 / 360.0)
+
+
+func test_band_colours_stay_inside_the_colour_rules() -> void:
+	for band in Atmosphere.BANDS:
+		for key in ["zenith", "horizon", "glow", "sun", "ambient"]:
+			for table in [Atmosphere.BANDS, Atmosphere.WARM_BANDS]:
+				if not table[band].has(key):
+					continue
+				var c: Color = table[band][key]
+				assert_lte(c.s, Atmosphere.BAND_SAT, "%s %s" % [band, key])
+				# No loud sky blue: blue is the support gauge's. Dark night blues
+				# carry little colour however their saturation reads.
+				if c.b > c.r:
+					assert_lte(maxf(c.r, maxf(c.g, c.b)) - minf(c.r, minf(c.g, c.b)), Atmosphere.SKY_BLUE_CHROMA, "%s %s bluish" % [band, key])
+				assert_false(_alarm_red(c), "%s %s" % [band, key])
+
+
+func test_looks_stay_in_range_and_inside_the_rules() -> void:
+	for cold in [0.0, 0.35, 0.7, 1.0]:
+		for hour in [0.0, 6.0, 7.8, 9.0, 12.0, 15.0, 16.2, 18.0, 22.0]:
+			for kinds in [["clear"], ["overcast"], ["fog", "snow"], ["blizzard"], ["sleet"], []]:
+				var l := Atmosphere.look(hour, kinds, "K4", cold)
+				for key in ["cloud", "haze", "veil", "ice", "icicles", "breath", "window_frost", "leaves", "sun_visible", "lum", "wind"]:
+					var v := float(l[key])
+					assert_true(v >= 0.0 and v <= 1.0, "%s %s %s %s = %f" % [cold, hour, kinds, key, v])
+				for key in ["sky_top", "sky_low", "sun_glow", "sun_color", "ambient_color"]:
+					assert_false(_alarm_red(l[key]), "%s %s %s %s" % [cold, hour, kinds, key])
+				assert_true(String(l["falls"]) in ["none", "snow", "sleet", "rain"])
+				if float(l["temp_c"]) <= 0.0:
+					assert_ne(String(l["falls"]), "rain", "no rain below zero")
+
+
+func test_the_hours_have_their_own_colour() -> void:
+	var t := Atmosphere.sun_times(1.0)
+	var dawn := Atmosphere.look(t.x + 0.2, ["clear"], "K1", 1.0)
+	var day := Atmosphere.look(12.0, ["clear"], "K1", 1.0)
+	var dusk := Atmosphere.look(t.y - 0.4, ["clear"], "K1", 1.0)
+	var night := Atmosphere.look(t.y + 2.0, ["clear"], "K1", 1.0)
+	# Dawn and dusk lean warm low down, day stays grey-white, night is dark.
+	assert_gt(Color(dawn["sky_low"]).r - Color(dawn["sky_low"]).b, 0.2, "dawn gold and pink")
+	assert_gt(Color(dusk["sky_low"]).r - Color(dusk["sky_low"]).b, 0.25, "dusk orange")
+	assert_lt(absf(Color(day["sky_low"]).r - Color(day["sky_low"]).b), 0.08)
+	assert_gt(Color(dusk["sky_top"]).b, Color(dusk["sky_top"]).g, "violet overhead at dusk")
+	assert_lt(Color(night["sky_top"]).v, 0.12)
+	assert_lt(float(night["sun_energy"]), float(dawn["sun_energy"]))
+	# Weather closes the colour down: an overcast dawn is greyer than a clear one.
+	var grey_dawn := Atmosphere.look(t.x + 0.2, ["overcast"], "K1", 1.0)
+	assert_lt(Color(grey_dawn["sky_low"]).s, Color(dawn["sky_low"]).s)
+	assert_lt(float(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0)["sun_energy"]), float(day["sun_energy"]))
+
+
+func test_it_looks_colder_as_the_cold_rises() -> void:
+	var warm := Atmosphere.look(9.0, ["clear"], "K1", 0.0)
+	var mid := Atmosphere.look(9.0, ["clear"], "K1", 0.5)
+	var hard := Atmosphere.look(9.0, ["clear"], "K1", 1.0)
+	for key in ["breath", "icicles", "window_frost", "ice"]:
+		assert_lte(float(warm[key]), float(mid[key]), key)
+		assert_lte(float(mid[key]), float(hard[key]), key)
+	assert_gt(float(hard["breath"]), float(warm["breath"]))
+	assert_gt(float(hard["icicles"]), 0.5)
+	assert_eq(float(warm["icicles"]), 0.0)
+	assert_lt(float(hard["temp_c"]), float(mid["temp_c"]))
+	assert_lt(int(warm["snow_level"]), int(hard["snow_level"]))
+	assert_eq(int(hard["snow_level"]), 2)
+	assert_eq(int(warm["snow_level"]), 0)
+	assert_gt(float(warm["leaves"]), 0.5, "autumn leaf in the warm stage")
+	# Shorter days in the cold.
+	var day_warm := Atmosphere.sun_times(0.0)
+	var day_hard := Atmosphere.sun_times(1.0)
+	assert_gt(day_warm.y - day_warm.x, day_hard.y - day_hard.x)
+	# Breath is thicker at night.
+	var night := Atmosphere.look(22.0, ["clear"], "K1", 0.5)
+	assert_gt(float(night["breath"]), float(mid["breath"]))
+
+
+func test_params_are_every_global_and_keep_the_haze_grey() -> void:
+	var l := Atmosphere.look(8.3, ["clear"], "K1", 1.0)
+	var p := Atmosphere.params(l, Vector2(1, 0.2))
+	for key in FxState.GLOBALS:
+		assert_true(p.has(key), key)
+	assert_eq(p.size(), FxState.GLOBALS.size())
+	var cold: Vector4 = p["fx_cold"]
+	assert_eq(cold.x, 1.0)
+	assert_gt(cold.y, 0.9, "water is ice at -14")
+	# The hour's colour reaches haze and flakes at a quarter: they stay near grey.
+	var tint: Color = p["fx_tint"]
+	assert_lt(tint.s, 0.15)
+	# A closed sky throws no cloud shadows; a clear one does.
+	var cloud: Vector4 = p["fx_cloud"]
+	assert_gt(cloud.w, 0.0)
+	var shut: Vector4 = Atmosphere.params(Atmosphere.look(12.0, ["overcast"], "K1", 1.0))["fx_cloud"]
+	assert_almost_eq(shut.w, 0.0, 0.001)
+	assert_eq(FxState.apply(p).size(), FxState.GLOBALS.size())
+
+
+func test_regions_name_the_twelve_bands() -> void:
+	assert_eq(Atmosphere.REGIONS.size(), 12)
+	assert_eq(Atmosphere.region_key("region_04"), "K4")
+	assert_eq(Atmosphere.region_key("k10"), "K10")
+	assert_eq(Atmosphere.region_key("nowhere"), Atmosphere.DEFAULT_REGION)
+	for k in Atmosphere.REGIONS:
+		var r: Dictionary = Atmosphere.REGIONS[k]
+		for key in ["forest", "conifer", "birch", "water", "town", "hills", "spire", "silo", "wind", "mist"]:
+			assert_true(float(r[key]) >= 0.0 and float(r[key]) <= 1.0, "%s %s" % [k, key])
+		assert_true(String(r["poles"]) in ["telegraph", "catenary"])
+	# Poles before the border, catenary masts after it (presentation_motion 7b).
+	assert_eq(String(Atmosphere.REGIONS["K1"]["poles"]), "telegraph")
+	assert_eq(String(Atmosphere.REGIONS["K3"]["poles"]), "catenary")
+
+
+# ---------------------------------------------------------------- the field
+
+func _stop_with(o: Dictionary) -> Node:
+	var game = FieldGame.new()
+	game.opts = o
+	add_child_autofree(game)
+	game.set_process(false)
+	return game
+
+
+## A stop in the hardest cold unless more says otherwise.
+func _stop(more := {}) -> Node:
+	var o := {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["fog", "snow"], "cold": 1.0}
+	o.merge(more, true)
+	return _stop_with(o)
+
+
+func test_a_stop_takes_its_cold_from_the_act() -> void:
+	var first = _stop_with({"seed": 5, "raiders": false, "auto_pause": false, "weather": ["fog", "snow"]})
+	assert_eq(first.cold, Atmosphere.cold_for("prologue"), "the first stop of the prologue by default")
+	assert_eq(first.side, 0.0)
+	assert_eq(String(first.atmo["season"]), "late_autumn")
+	var thaw = _stop_with({"seed": 5, "raiders": false, "auto_pause": false, "weather": ["fog", "snow"], "act": "act3", "act_progress": 0.5})
+	assert_eq(thaw.cold, Atmosphere.cold_for("act3", 0.5))
+	assert_eq(thaw.side, 1.0)
+	assert_eq(String(thaw.atmo["season"]), "early_thaw")
+	# The old snow deepens with the cold through act 1, not in one season step.
+	var early = _stop_with({"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"], "act": "act1", "act_progress": 0.3})
+	var later = _stop_with({"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"], "act": "act1", "act_progress": 0.7})
+	assert_eq(String(early.atmo["season"]), String(later.atmo["season"]))
+	assert_gt(later.snow_cover.depth_cm, early.snow_cover.depth_cm + 3.0)
+
+
+func test_the_cold_changes_the_picture_and_never_the_rules() -> void:
+	var hard = _stop()
+	var warm = _stop({"cold": 0.0})
+	assert_eq(hard.cold, 1.0)
+	# The rules read the weather and its rules temperature only.
+	assert_eq(warm.weather.kinds, hard.weather.kinds)
+	assert_eq(warm.weather.ambient_c, hard.weather.ambient_c)
+	assert_almost_eq(warm.weather.sight_mult(), hard.weather.sight_mult(), 0.0001)
+	assert_almost_eq(warm.weather.sound_mult(true), hard.weather.sound_mult(true), 0.0001)
+	assert_eq(warm.clock.SUNSET_MIN, hard.clock.SUNSET_MIN)
+	# The picture: the warm stage's snow falls as rain on bare, wet ground.
+	assert_eq(String(warm.atmo["falls"]), "rain")
+	assert_eq(int((warm.snow.draw_pass_1 as QuadMesh).material.get_shader_parameter("shape")), 0, "rain streaks")
+	assert_eq(int((hard.snow.draw_pass_1 as QuadMesh).material.get_shader_parameter("shape")), 1, "round flakes")
+	assert_eq(warm.snow_cover.depth_cm, 0.0)
+	assert_gt(hard.snow_cover.depth_cm, 20.0)
+	assert_gt(float(warm.fx_params["fx_wet"]), float(hard.fx_params["fx_wet"]))
+	assert_lt(float((warm.fx_params["fx_cold"] as Vector4).y), 0.1, "standing water is open")
+
+
+func test_the_light_follows_the_hour_through_the_stop() -> void:
+	var game = _stop({"weather": ["clear"]})
+	var arrival: Color = game.sun.light_color
+	var day_energy: float = game.sun.light_energy
+	# 15:30, low sun at dusk: warmer and weaker, the shadows longer.
+	game.clock.elapsed = (15.5 * 60.0 - 630.0) * 60.0 / 15.0
+	game._update_light()
+	assert_eq(String(game.atmo["band"]), "dusk")
+	assert_gt(game.sun.light_color.r - game.sun.light_color.b, arrival.r - arrival.b)
+	assert_lt(game.sun.light_energy, day_energy)
+	assert_gt(game.sun.rotation_degrees.x, -30.0)
+	assert_true(game.environment.adjustment_enabled)
+
+
+func test_breath_shows_in_the_cold_and_frost_comes_at_night() -> void:
+	var game = _stop()
+	assert_not_null(game.breath)
+	for p in game.people:
+		p.visible = true
+	game.breath.tick(0.016, game)
+	assert_gt(game.breath.shown, 0, "everyone breathes out in the cold")
+	assert_lte(game.breath.shown, game.breath.MAX_PUFFS)
+	assert_false(game.cold_frost.visible, "no frost on the edges by day")
+	var night = _stop({"look_hour": 20.0})
+	assert_true(night.cold_frost.visible, "frost creeps in on a cold night")
+	var warm = _stop({"cold": 0.0, "look_hour": 20.0})
+	assert_false(warm.cold_frost.visible, "not in the warm stage")
+
+
+func test_a_storm_stop_keeps_its_own_light() -> void:
+	var game = _stop({"storm": "during"})
+	assert_almost_eq(game.sun.rotation_degrees.x, FxState.SUN_PITCH, 0.001)
+	assert_null(game.cold_frost, "the storm has its own frost")
+
+
+# ---------------------------------------------------------------- the train and the houses
+
+func test_the_slice_hangs_the_outside_behind_the_running_train() -> void:
+	var f = SliceFlow.new()
+	f.opts = {"skip_field": true, "seed": 3}
+	add_child_autofree(f)
+	assert_not_null(f.outside)
+	assert_eq(f.outside.get_parent(), f.train.camera, "the camera carries it")
+	assert_true(f.outside.moving, "running on the first stretch")
+	# The prologue starts in late autumn: the first stop's snow falls as rain.
+	assert_eq(String(f.weather.falls), "rain", "the first stretch, late autumn")
+	f.next()
+	assert_false(f.outside.moving, "standing at the stop")
+	var deep = SliceFlow.new()
+	deep.opts = {"skip_field": true, "seed": 3, "look": {"cold": 1.0}}
+	add_child_autofree(deep)
+	assert_eq(String(deep.weather.falls), "snow", "deep winter: snow")
+	assert_eq(deep.frost.modulate.a, 1.0, "the corners frost over in the hardest cold")
+	var warm = SliceFlow.new()
+	warm.opts = {"skip_field": true, "seed": 3, "look": {"cold": 0.0, "kinds": ["snow"], "hour": 12.0}}
+	add_child_autofree(warm)
+	assert_eq(String(warm.weather.falls), "rain")
+	assert_eq(warm.frost.modulate.a, 0.0, "no frost in the warm rain")
+	assert_false(warm.weather.drift.visible, "no lying snow to blow")
+	var clear = SliceFlow.new()
+	clear.opts = {"skip_field": true, "seed": 3, "look": {"kinds": ["clear"]}}
+	add_child_autofree(clear)
+	assert_false(clear.weather.far.visible, "nothing falls from a clear sky")
+
+
+func test_the_outside_card_is_painted_without_smoke_or_screen_reads() -> void:
+	var code := FileAccess.get_file_as_string("res://fx/shaders/outside_view.gdshader")
+	assert_false(code.contains("hint_screen_texture"))
+	assert_false(code.contains("hint_depth_texture"))
+	var s: Shader = load("res://fx/shaders/outside_view.gdshader")
+	assert_gt(s.get_shader_uniform_list().size(), 10)
+
+
+func test_houses_keep_a_little_paint() -> void:
+	var painted := 0
+	for b in range(16):
+		var c: Color = BuildingView.accent_for(b)
+		assert_true(c.a >= 0.0 and c.a <= 1.0)
+		assert_false(_alarm_red(c), str(b))
+		if c.a > 0.0:
+			painted += 1
+	assert_gt(painted, 10, "most houses kept some paint on their doors")
+	assert_lt(painted, 16, "some never had any")
