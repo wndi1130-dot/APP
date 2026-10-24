@@ -10,6 +10,7 @@ extends Node3D
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingShader = preload("res://game/world/building.gdshader")
+const BuildPace = preload("res://game/world/build_pace.gd")
 const S = FieldGrid.Solid
 const CATALOG_PATH := "res://models/building_kit/catalog.json"
 const MODE_SETTING := "visuals/building_models_enabled"
@@ -731,7 +732,8 @@ static func _plan_stairs(out: Dictionary, data: Dictionary, levels: Dictionary) 
 
 # ---------------------------------------------------------------- 노드
 
-func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
+## `pace` (build_pace.gd, staged stops): wait a frame between pieces; null: all at once.
+func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void:
 	levels = map_data.get("levels", {0: map_data["grid"]})
 	world_material = world_mat
 	material = ShaderMaterial.new()
@@ -739,7 +741,9 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 	for key in ["vis", "map_size", "lamp_color"]:
 		material.set_shader_parameter(key, world_mat.get_shader_parameter(key))
 	material.set_shader_parameter("hole_radius", HOLE_R)
-	var p := plan(map_data)
+	# Planned off the main thread with the map, when it was (stop_loader.gd).
+	var p: Dictionary = map_data["_building_plan"] if map_data.get("_building_plan") is Dictionary else plan(map_data)
+	await BuildPace.rest(pace)
 	for key: Vector2i in p["kinds"]:
 		if not drawn_cells.has(key.y):
 			drawn_cells[key.y] = {}
@@ -758,8 +762,10 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 			bakes[key].box(row["xf"], row["box"], row["colour"])
 		else:
 			bakes[key].add(_arrays[row["id"]], row["xf"])
+		await BuildPace.rest(pace)
 	var pairs: Dictionary = {}
 	for key: String in bakes:
+		await BuildPace.rest(pace)
 		var bits := key.split("|")
 		var shell := Vector2i(int(bits[0]), int(bits[1]))
 		var slot := bits[2]
@@ -780,7 +786,9 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 		if not roof_bakes.has(row["b"]):
 			roof_bakes[row["b"]] = Bake.new()
 		roof_bakes[row["b"]].add(_arrays[row["id"]], row["xf"])
+		await BuildPace.rest(pace)
 	for b: int in roof_bakes:
+		await BuildPace.rest(pace)
 		var node := _node(b, 0, roof_bakes[b].mesh(), true)
 		node.position.y = 0.0
 		node.set_instance_shader_parameter("seen_fixed", Vector2.ZERO)
@@ -790,11 +798,13 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 		var key := Vector3i(row["cell"].x, row["cell"].y, row["lv"])
 		door_nodes[key] = {"node": node, "plan": row, "cut": false}
 		_draw_door(key)
+		await BuildPace.rest(pace)
 	for row: Dictionary in p["windows"]:
 		var node := _node(row["b"], row["lv"], null, false)
 		var key := Vector3i(row["cell"].x, row["cell"].y, row["lv"])
 		window_nodes[key] = {"node": node, "plan": row, "cut": false}
 		_draw_window(key)
+		await BuildPace.rest(pace)
 	_apply()
 	_instant = false
 

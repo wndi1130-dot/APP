@@ -23,6 +23,7 @@ const FxState = preload("res://fx/fx_state.gd")
 const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
+const BuildPace = preload("res://game/world/build_pace.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
 ## Size (along the wall, up, thickness) and height of each glowing face.
@@ -86,6 +87,9 @@ const LID_JOLT: float = 0.07           # metres, the first of two jolts
 const LID_PUFF: Dictionary = {"style": 5, "life": 0.45, "speed": 0.8, "size": 0.18, "gravity": Vector3(0, -1.2, 0), "spread": 70.0, "color": Color(0.70, 0.71, 0.73, 0.5)}
 const LEVEL_WAYS := {-1: "지하로", 0: "1층으로", 1: "2층으로", 2: "3층으로"}
 var label_nodes: Array = []             # [Label3D, cell]
+## Set by a staged stop (field_game.gd): setup then waits a frame between
+## pieces (build_pace.gd). Null: all of it in one call.
+var pace = null
 
 
 func setup(map_data: Dictionary) -> void:
@@ -110,32 +114,38 @@ func setup(map_data: Dictionary) -> void:
 		buildings = BuildingView.new()
 		buildings.name = "Buildings"
 		add_child(buildings)
-		buildings.setup(data, material)
+		await buildings.setup(data, material, pace)
 		for key: Vector2i in buildings.shells:
 			if buildings.cut_node(key.x, key.y):
 				wall_nodes[key] = buildings.cut_node(key.x, key.y)
-	_build_ground()
+	await BuildPace.rest(pace)
+	await _build_ground()
 	_build_walls()
-	_build_props()
-	_build_blocks()
+	await BuildPace.rest(pace)
+	await _build_props()
+	await _build_blocks()
 	for lv in levels:
 		if lv != 0:
-			_build_level(lv)
+			await _build_level(lv)
 	_build_stairs()
+	await BuildPace.rest(pace)
 	for c in grid.doors:
 		if buildings and buildings.draws_cell(c):
 			continue
 		var node := _mesh_node()
 		door_nodes[c] = node
 		update_door(c)
+	await BuildPace.rest(pace)
 	for c in grid.windows:
 		if buildings and buildings.draws_cell(c):
 			continue
 		var node := _mesh_node()
 		window_nodes[c] = node
 		update_window(c)
+	await BuildPace.rest(pace)
 	for id in data["containers"]:
 		add_container(id)
+		await BuildPace.rest(pace)
 	for id in data["spots"]:
 		var node := _mesh_node()
 		spot_nodes[id] = node
@@ -691,7 +701,9 @@ func _build_ground() -> void:
 	for y in range(grid.height + 1):
 		for x in range(grid.width + 1):
 			banks.append(drift_uv(grid, Vector2i(x, y)))
+		await BuildPace.rest(pace)
 	for y in range(grid.height):
+		await BuildPace.rest(pace)
 		for x in range(grid.width):
 			var c := Vector2i(x, y)
 			var tile := c / TILE
@@ -717,6 +729,7 @@ func _build_ground() -> void:
 		var node := _mesh_node()
 		node.mesh = tools[tile].commit()
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		await BuildPace.rest(pace)
 
 
 func _build_walls() -> void:
@@ -759,6 +772,7 @@ func _build_blocks() -> void:
 	train_node = _mesh_node()
 	# 모델을 먼저 붙이고, 모델로 바꾸지 못했다고 돌려받은 칸만 상자로 그린다.
 	var models := TrainModels.attach_field(train_node, data)
+	await BuildPace.rest(pace)
 	for index: int in models.get_meta("fallback_cars", []):
 		var car: Dictionary = data["train_cars"][index]
 		var r: Rect2i = car["rect"]
@@ -784,6 +798,7 @@ func _build_blocks() -> void:
 				box(tt, Vector3(0.8, 0.07, 0.1), Vector3(at_x, 0.3 + 0.3 * k, z), wood)
 	train_node.mesh = tt.commit()
 	_build_lights()
+	await BuildPace.rest(pace)
 	for w in data["wagons"]:
 		var r: Rect2i = w["rect"]
 		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
@@ -800,6 +815,7 @@ func _build_blocks() -> void:
 					box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
 	var node := _mesh_node()
 	node.mesh = st.commit()
+	await BuildPace.rest(pace)
 	# What stands about the map goes by tile, as the ground does: a tree or a
 	# stack far off is neither drawn nor made to throw a shadow.
 	var tools: Dictionary = {}
@@ -818,9 +834,11 @@ func _build_blocks() -> void:
 		for rest in remaining_low_rects(r, modelled_prop_cells):
 			var mid := Vector3(rest.position.x + rest.size.x * 0.5, 0, rest.position.y + rest.size.y * 0.5)
 			box(_tile_tool(tools, rest.position), Vector3(rest.size.x - 0.1, tall, rest.size.y - 0.1), mid + Vector3(0, tall * 0.5, 0), Color(0.42, 0.4, 0.38))
+	await BuildPace.rest(pace)
 	for tile in tools:
 		var part := _mesh_node()
 		part.mesh = tools[tile].commit()
+		await BuildPace.rest(pace)
 
 
 ## 모델이 차지한 칸만 덜어낸다. 원래 low_blocks와 FieldGrid는 읽기 전용이다.
@@ -860,6 +878,7 @@ func _build_props() -> void:
 					break
 		var path: String = chosen[kind]
 		var lv := int(prop.get("level", 0))
+		await BuildPace.rest(pace)
 		if path.is_empty() or not levels.has(lv) or not prop.get("rect") is Rect2i:
 			continue
 		var r: Rect2i = prop["rect"]
@@ -898,6 +917,7 @@ func _build_props() -> void:
 			node.multimesh = mm
 			add_child(node)
 			batch["nodes"][lod] = node
+		await BuildPace.rest(pace)
 
 
 func _process(delta: float) -> void:
@@ -1009,6 +1029,7 @@ func _build_level(lv: int) -> void:
 		for r: Rect2i in runs[b]:
 			box(tools[b], Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
 	for y in range(lg.height):
+		await BuildPace.rest(pace)
 		for x in range(lg.width):
 			var c := Vector2i(x, y)
 			var kind := lg.solid_at(c)
@@ -1038,6 +1059,7 @@ func _build_level(lv: int) -> void:
 		var floor_node := _mesh_node(lv)
 		floor_node.mesh = floors[tile].commit()
 		floor_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		await BuildPace.rest(pace)
 	for b in tools:
 		var node := _mesh_node(lv)
 		node.mesh = tools[b].commit()
