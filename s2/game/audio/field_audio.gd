@@ -26,6 +26,7 @@ extends Node3D
 
 const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
 
 const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
@@ -132,7 +133,14 @@ const THROUGH_WALL_FROM: float = 1.5
 ## over its own length, its wandering starts at a random place (so its first
 ## loudness and pitch are new), and the first gust, or a blizzard's howl,
 ## waits its own few seconds after getting down.
+## And it is not one wind (결정 434 1절: 「패턴 여러게 + 오프닝 달라지게」):
+## beds of their own grain in audio/wind (wind_<name>; wind.ogg is "plain") and
+## gusts in audio/wind_gust (gust_<name>; tools/sound/synth_wind.py). A stop
+## takes a bed by what blows and the ground it blows over, never the bed the
+## stop before had (pick_bed); gusts come from the gust files and the bed,
+## never the same file twice running, a howl's layers each its own.
 const WIND_IN: Array = [0.8, 3.0]     # s the bed takes to come up as the stop starts
+const BED_DIP_S: float = 0.3          # the bed coming round at a new place eases back in this fast
 const FIRST_AFTER: Array = [2.0, 10.0]   # s after getting down to the first gust, or the howl
 const WIND_PHASE: float = 1000.0      # the wandering starts somewhere in this much of its noise
 const WIND_DRIFT_HZ: float = 0.07     # how fast the bed wanders
@@ -149,8 +157,13 @@ const HOWL_LEN: Array = [3.0, 6.5]
 const GUSTS: int = 3                  # players for gusts (a howl lays up to three)
 const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell"]
 
+static var last_bed: String = ""       # the bed the last stop had: the next takes another
 var game
 var lib: Dictionary = {}               # group -> Array[AudioStream]
+var beds: Dictionary = {}              # wind bed name -> AudioStream
+var gust_files: Dictionary = {}        # gust name -> AudioStream
+var bed_name: String = ""              # this stop's bed
+var bed_dip: float = 1.0               # 0..1 the bed easing back in after coming round
 var slots: Array = []                  # {"player": AudioStreamPlayer3D, "z": Dictionary, "wait": float}
 var bed: AudioStreamPlayer
 var wind: AudioStreamPlayer
@@ -197,17 +210,25 @@ func setup(field_game) -> void:
 		add_child(p)
 		slots.append({"player": p, "z": {}, "wait": randf_range(0.5, 3.0)})
 	bed = _loop_player("horde_bed")
-	wind = _loop_player("wind")
+	# This stop's wind: one bed of many, never the last stop's.
+	beds = _load_named("wind", "wind")
+	gust_files = _load_named("wind_gust", "gust")
+	bed_name = pick_bed(beds.keys(), game.weather.kinds, wind_strength(), _open_ground(), last_bed, randf())
+	last_bed = bed_name
+	wind = AudioStreamPlayer.new()
+	wind.bus = "SFX"
+	wind.volume_db = -80.0
+	add_child(wind)
+	if bed_name != "":
+		wind.stream = beds[bed_name]
+		wind.finished.connect(_wind_again)
+		_wind_again()
 	drift.seed = randi()
 	drift.frequency = WIND_DRIFT_HZ
 	# The noise is level at its start: begin somewhere along it instead.
 	wind_t = randf_range(0.0, WIND_PHASE)
 	wind_in = randf_range(float(WIND_IN[0]), float(WIND_IN[1]))
 	howl_wait = randf_range(float(FIRST_AFTER[0]), float(FIRST_AFTER[1]))
-	if wind.finished.is_connected(wind.play):
-		wind.finished.disconnect(wind.play)
-		wind.finished.connect(_wind_again)
-		_wind_again()
 	for i in range(GUSTS):
 		var g := AudioStreamPlayer.new()
 		g.bus = "SFX"
@@ -260,6 +281,72 @@ static func moan_band(d: float) -> Array:
 		if d >= float(b[0]):
 			band = b
 	return band
+
+
+## A group's files by name: "<prefix>_<name>.<ext>" is <name>, the bare
+## "<prefix>.<ext>" is "plain".
+func _load_named(group: String, prefix: String) -> Dictionary:
+	var out: Dictionary = {}
+	var dir := "res://audio/" + group
+	if not DirAccess.dir_exists_absolute(dir):
+		return out
+	for f in ResourceLoader.list_directory(dir):
+		var file := String(f)
+		if not (file.ends_with(".ogg") or file.ends_with(".wav") or file.ends_with(".mp3")):
+			continue
+		var s = load(dir + "/" + file)
+		if not s is AudioStream:
+			continue
+		var base := file.get_basename()
+		out["plain" if base == prefix else base.trim_prefix(prefix + "_")] = s
+	return out
+
+
+## Which bed a stop takes (roll in [0, 1)): each by what blows (a blizzard, a
+## hard or a light wind) and the ground it blows over (open, or trees and
+## walls to blow through), never `last` while there is another.
+static func pick_bed(names: Array, kinds: Array, strength: float, open_ground: bool, last: String, roll: float) -> String:
+	var storm := kinds.has("blizzard")
+	var weights: Array = []
+	var total := 0.0
+	for n in names:
+		var w := 1.2
+		match String(n):
+			"blizzard":
+				w = 6.0 if storm else 0.0
+			"gusty":
+				w = 1.0 + 3.0 * strength + (2.0 if storm else 0.0)
+			"breeze":
+				w = 0.0 if storm else 3.0 * (1.0 - strength)
+			"low":
+				w = 1.5 + (1.0 if open_ground else 0.0) + (1.5 if storm else 0.0)
+			"whistle":
+				w = 1.2 + (0.0 if open_ground else 1.0)
+			"forest":
+				w = 0.3 if storm else (0.6 if open_ground else 2.0)
+		if String(n) == last and names.size() > 1:
+			w = 0.0
+		weights.append(w)
+		total += w
+	if names.is_empty():
+		return ""
+	if total <= 0.0:
+		for n in names:
+			if String(n) != last:
+				return String(n)
+		return String(names[0])
+	var at := clampf(roll, 0.0, 0.999999) * total
+	for i in names.size():
+		at -= float(weights[i])
+		if at < 0.0:
+			return String(names[i])
+	return String(names[names.size() - 1])
+
+
+## The stop's ground is open (the region's open steppe) rather than among trees and walls.
+func _open_ground() -> bool:
+	var region: Variant = game.get("region")
+	return region != null and bool(Atmosphere.region(String(region)).get("open", false))
 
 
 func _load_group(group: String) -> Array:
@@ -550,6 +637,7 @@ func _wind_again() -> void:
 	if wind.stream == null:
 		return
 	wind.play(randf_range(0.0, 0.6) * wind.stream.get_length())
+	bed_dip = 0.0
 
 
 func _tick_wind(at: Vector3, delta: float) -> void:
@@ -562,7 +650,9 @@ func _tick_wind(at: Vector3, delta: float) -> void:
 	# The bed wanders on a slow noise: no two stretches alike, no beat to it.
 	var n: float = drift.get_noise_1d(wind_t)
 	var n2: float = drift.get_noise_1d(wind_t + 977.0)
-	wind.volume_db = _db(level * (1.0 + WIND_DRIFT * n))
+	# Come round to a new place in its file: eased back in, no hard seam.
+	bed_dip = minf(1.0, bed_dip + delta / BED_DIP_S)
+	wind.volume_db = _db(level * (1.0 + WIND_DRIFT * n) * lerpf(0.35, 1.0, smoothstep(0.0, 1.0, bed_dip)))
 	wind.pitch_scale = 1.0 + WIND_PITCH_DRIFT * n2
 	# Once the train stands (not under the brakes of its coming in), and its
 	# own few seconds after (FIRST_AFTER), never the moment one gets down.
@@ -593,19 +683,25 @@ func _tick_wind(at: Vector3, delta: float) -> void:
 		p.pitch_scale = lerpf(float(g["p0"]), float(g["p1"]), smoothstep(0.0, 1.0, k))
 
 
-## One gust over the bed: a place in the wind file it has not just started at,
-## its own length, loudness and bend.
-func _gust(length: float, peak: float, howl_layer: bool) -> void:
-	if not has("wind"):
+## One gust over the bed: a file the last gust was not (a gust file, or the
+## bed's own; `avoid` keeps a howl's layers apart), a place in it the last gust
+## of that file did not start at, its own length, loudness and bend.
+func _gust(length: float, peak: float, howl_layer: bool, avoid: Array = []) -> void:
+	var last: Array = gust_log.back() if not gust_log.is_empty() else []
+	var source := _pick_gust(String(last[6]) if last.size() > 6 else "", avoid)
+	var stream: AudioStream = gust_stream(source)
+	if stream == null:
 		return
+	avoid.append(source)
 	var g: Dictionary = gusts[0]
 	for other: Dictionary in gusts:
 		if float(other["len"]) <= 0.0:
 			g = other
 			break
-	var stream: AudioStream = lib["wind"][0]
 	var full: float = maxf(stream.get_length(), 0.1)
-	var last: Array = gust_log.back() if not gust_log.is_empty() else []
+	if last.size() > 6 and String(last[6]) != source:
+		last = last.duplicate()
+		last[0] = -INF   # another file: no place to keep away from
 	var lo: float = float(GUST_PITCH[0])
 	var hi: float = float(GUST_PITCH[1])
 	var from: float = randf_range(0.0, full * 0.7)
@@ -633,15 +729,39 @@ func _gust(length: float, peak: float, howl_layer: bool) -> void:
 	p.pitch_scale = p0
 	p.volume_db = -80.0
 	p.play(from)
-	gust_log.append([from, length, peak, p0, p1, howl_layer])
+	gust_log.append([from, length, peak, p0, p1, howl_layer, source])
+
+
+## A gust's file: a gust file by name, or "bed" for this stop's bed.
+func gust_stream(source: String) -> AudioStream:
+	if source == "bed":
+		return beds.get(bed_name)
+	return gust_files.get(source)
+
+
+## Which file a gust comes from: any gust file or the bed, not `last`, not one
+## of `avoid`, while another is there.
+func _pick_gust(last: String, avoid: Array) -> String:
+	var all: Array = gust_files.keys()
+	if beds.has(bed_name):
+		all.append("bed")
+	if all.is_empty():
+		return ""
+	var free: Array = all.filter(func(n) -> bool: return n != last and not avoid.has(n))
+	if free.is_empty():
+		free = all.filter(func(n) -> bool: return n != last)
+	if free.is_empty():
+		free = all
+	return String(free[randi() % free.size()])
 
 
 ## A blizzard comes in: one to three gusts laid together, long, each bending
-## its own way, a new shape every time it is heard.
+## its own way and from its own file, a new shape every time it is heard.
 func howl() -> void:
 	var layers := randi_range(int(HOWL_LAYERS[0]), int(HOWL_LAYERS[1]))
+	var used: Array = []
 	for i in range(layers):
-		_gust(randf_range(float(HOWL_LEN[0]), float(HOWL_LEN[1])), randf_range(0.6, 1.0), true)
+		_gust(randf_range(float(HOWL_LEN[0]), float(HOWL_LEN[1])), randf_range(0.6, 1.0), true, used)
 	gust_t = maxf(gust_t, float(HOWL_LEN[0]))
 
 

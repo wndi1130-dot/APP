@@ -473,13 +473,55 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 	for g in gaps:
 		distinct[g] = true
 	assert_gt(distinct.size(), gaps.size() / 2, "the gaps are uneven, no beat")
-	var full: float = a.lib["wind"][0].get_length()
 	for k in range(n0 + 1, a.gust_log.size()):
 		var g: Array = a.gust_log[k]
 		var before: Array = a.gust_log[k - 1]
 		assert_between(float(g[1]), float(a.GUST_LEN[0]), float(a.GUST_LEN[1]))
-		assert_gte(absf(float(g[0]) - float(before[0])), a.GUST_APART * full - 0.001, "not the place just heard")
+		assert_ne(String(g[6]), String(before[6]), "not the file just heard")
 		assert_gt(absf(float(g[3]) - float(before[3])), a.GUST_PITCH_APART, "nor the pitch")
+
+
+# Not one wind (결정 434 1절: 「패턴 여러게 + 오프닝 달라지게」): beds of
+# their own grain and gusts of their own, a stop never taking the bed the one
+# before had, a blizzard its own kind, a howl's layers each from its own file.
+func test_the_wind_is_many_and_no_two_stops_running_share_a_bed() -> void:
+	var a = game.audio
+	assert_gte(a.beds.size(), 6, "five beds of their own and the plain one")
+	for name in ["breeze", "gusty", "low", "whistle", "forest", "blizzard"]:
+		assert_true(a.beds.has(name), name)
+	assert_gte(a.gust_files.size(), 3, "gusts of their own")
+	assert_true(a.beds.has(a.bed_name))
+	var names: Array = a.beds.keys()
+	var last := ""
+	var seen: Dictionary = {}
+	for i in range(60):
+		var b: String = a.pick_bed(names, ["fog", "snow"], 0.4, false, last, randf())
+		assert_ne(b, last, "never the bed the stop before had")
+		assert_ne(b, "blizzard", "no blizzard's roar on a fog stop")
+		seen[b] = true
+		last = b
+	assert_gte(seen.size(), 5, "the stops go round many beds")
+	var storm: Dictionary = {}
+	for i in range(60):
+		storm[a.pick_bed(names, ["blizzard"], 0.9, true, "", randf())] = true
+	assert_true(storm.has("blizzard"))
+	assert_false(storm.has("breeze"), "no soft breeze in a blizzard")
+	# A new stop takes another bed than this one.
+	var was: String = a.bed_name
+	var b2 = a.get_script().new()
+	game.add_child(b2)
+	b2.setup(game)
+	assert_ne(b2.bed_name, was, "the next stop opens on another bed")
+	b2.queue_free()
+	# A howl's layers come from files of their own.
+	for g in a.gusts:
+		g["len"] = 0.0
+	var n: int = a.gust_log.size()
+	a.howl()
+	var files: Dictionary = {}
+	for g in a.gust_log.slice(n):
+		files[g[6]] = true
+	assert_eq(files.size(), a.gust_log.size() - n, "each layer its own file")
 
 
 # Nor does a stop open the same way (user 2026-10-25: 「처음내릴떄 휘오오옹
