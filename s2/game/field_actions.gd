@@ -12,6 +12,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
 
 const REACH: float = 1.4
 const INTERACT_REACH: float = REACH + 0.6
@@ -1033,6 +1034,7 @@ func treat(medic, o) -> void:
 	var t := 6.0 if medic.medical == "none" else 4.0
 	medic.face_point(o.position)
 	medic.start_action("treat", "치료", t, _treated.bind(medic, o, src, heavy))
+	_note_care(medic, o, "", t, "치료")
 
 
 func _treated(medic, o, src, heavy: bool) -> void:
@@ -1103,8 +1105,16 @@ func _care_next(medic, o, wound: Dictionary, mode: String) -> bool:
 	var step: Dictionary = steps[0]
 	if medic != o:
 		medic.face_point(o.position)
-	medic.start_action("treat", String(step["label"]), Treatment.seconds(step, medic.medical), _care_done.bind(medic, o, wound, mode, step))
+	var seconds: float = Treatment.seconds(step, medic.medical)
+	medic.start_action("treat", String(step["label"]), seconds, _care_done.bind(medic, o, wound, mode, step))
+	_note_care(medic, o, String(wound.get("part", "")), seconds, String(step["label"]))
 	return true
+
+
+## For the drawing only: whom the treatment just begun is for and where.
+func _note_care(medic, o, part: String, seconds: float, label: String) -> void:
+	if medic.action == "treat":
+		medic.set_meta(Pose.CARE, {"of": o, "part": part, "total": seconds, "label": label})
 
 
 func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> void:

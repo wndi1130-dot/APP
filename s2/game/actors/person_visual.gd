@@ -22,6 +22,8 @@ const BodyBake = preload("res://scripts/body_bake.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
+const SearchHeight = preload("res://game/actors/search_height.gd")
+const InjuryRules = preload("res://game/sim/injury_rules.gd")
 
 const FOLDER: String = "res://models/people/n5-crew_seamstress"
 const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
@@ -101,7 +103,29 @@ const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5
 	"p_search_mid": 0.2, "p_search_low": 0.5, "p_treat": 0.2, "p_aim_one": 0.3, "p_aim_two": 0.3,
 	"p_fall": 0.2, "p_fall_front": 0.2, "p_fall_slump": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
 	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2,
-	"p_reload": 0.2, "p_kneel_work": 0.5}
+	"p_reload": 0.2, "p_kneel_work": 0.5,
+	"p_search_high": 0.2, "p_treat_head": 0.2, "p_treat_arm": 0.2, "p_treat_leg": 0.2,
+	"p_limp_light": 0.2, "p_limp_heavy": 0.2, "p_limp_light_l": 0.2, "p_limp_light_r": 0.2,
+	"p_limp_heavy_l": 0.2, "p_limp_heavy_r": 0.2, "p_bitten_front": 0.2, "p_bitten_back": 0.2,
+	"p_shiver": 0.3, "p_pain_head": 0.3, "p_pain_torso": 0.3, "p_pain_arm": 0.3, "p_pain_leg": 0.3,
+	"p_tired_stretch": 0.3}
+# Decision 422 (the gaps in the motions), each only where the folder has it and
+# otherwise as before: a leg that hurts limps (splinted broken or cut deep, the
+# heavy limp; festering or lightly cut, the light one; a side's own if there is
+# one, `_l`/`_r`), a wound is treated where it is (head and body, an arm, a leg;
+# someone else's knelt by), a bite or blow from in front or behind has its own
+# flinch, and standing still now and then the body shows how it is: hurting,
+# cold, tired, in that order, each person at their own time (MOOD_EVERY).
+const OWN_LIMP: Dictionary = {"heavy": "p_limp_heavy", "light": "p_limp_light"}
+const OWN_TREAT: Dictionary = {"head_neck": "p_treat_head", "torso": "p_treat_head", "arm": "p_treat_arm", "leg": "p_treat_leg"}
+const OWN_TREAT_OTHER: String = "p_kneel_work"
+const OWN_BITTEN_FRONT: String = "p_bitten_front"
+const OWN_BITTEN_BACK: String = "p_bitten_back"
+const OWN_PAIN: Dictionary = {"head_neck": "p_pain_head", "torso": "p_pain_torso", "arm": "p_pain_arm", "leg": "p_pain_leg"}
+const OWN_SHIVER: String = "p_shiver"
+const OWN_TIRED: String = "p_tired_stretch"
+const MOOD_EVERY: Vector2 = Vector2(9.0, 15.0)
+const PAIN_SHOWN: float = 0.25        # it hurts this much in all (body_state.gd pain) before it is shown
 # Aiming a gun standing still (as the reference game aims a handgun and a rifle): one hand
 # out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
 const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
@@ -349,10 +373,13 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if own_rise >= 0 and own_rise < own.size() and (String(own[own_rise].get("name", "")) == OWN_RISE or String(own[own_rise].get("name", "")) == OWN_RISE_FRONT):
 		if t - float(note["since"]) < _length(own, own_rise, 1.0):
 			return Vector2((t - float(note["since"])) / _length(own, own_rise, 1.0), own_rise)
-	var bitten := clip_named(own, OWN_BITTEN, -1)
+	var bitten := clip_named(own, bitten_name(note), -1)
+	if bitten < 0:
+		bitten = clip_named(own, OWN_BITTEN, -1)
 	if bitten >= 0 and note.has("hurt_at") and t - float(note["hurt_at"]) < _length(own, bitten, 0.6):
 		# Flinching, shoulders up and the head thrown back, then bracing.
 		note["motion"] = OWN_BASE + bitten
+		note["hurt_own"] = String(own[bitten].get("name", ""))
 		return Vector2((t - float(note["hurt_at"])) / _length(own, bitten, 0.6), bitten)
 	if not p.grabbers.is_empty():
 		var held := clip_named(own, OWN_HELD, -1)
@@ -410,6 +437,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		note["motion"] = turn_gait
 		return Vector2(_round(note, "step", foot, _round_of(clips, turn_gait, float(DeadBody.STRIDE.get(turn_gait, 1.2)))), turn_gait)
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		var mood := mood_of(p, note, t, own)
+		if mood.y >= 0.0:
+			return mood
 		var own_stand := clip_named(own, OWN_CROUCH_STAND if p.crouched else OWN_STAND, -1)
 		if own_stand >= 0:
 			return Vector2(_own_cycle(note, OWN_BASE + own_stand, t, _length(own, own_stand, 1.0), unit), own_stand)
@@ -420,6 +450,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		return Vector2(_own_cycle(note, STAND, t, _length(clips, STAND, 1.0), unit), STAND)
 	var own_gait := own_spent if spent else -1
 	if not spent:
+		own_gait = limp_of(p, own) if not p.running and not p.crouched else -1
+	if not spent and own_gait < 0:
 		own_gait = clip_named(own, OWN_RUN if p.running else (OWN_CROUCH_WALK if p.crouched else OWN_WALK), -1)
 	if own_gait >= 0:
 		note["motion"] = OWN_BASE + own_gait
@@ -505,10 +537,17 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 	if not OWN_WORK.has(p.action):
 		return Vector2(0.0, -1.0)
 	var work_name := String(OWN_WORK[p.action][0])
+	if p.action == "search" and p.action_busy is Dictionary and p.action_busy.has("name"):
+		work_name = SearchHeight.clip_of(p.action_busy)
+	elif p.action == "treat":
+		work_name = treat_name(p)
 	# Crouched it keeps low (the reference game's sneaking jobs): chest-high work done low.
-	if p.crouched and (work_name == "p_search_mid" or work_name == "p_pry"):
+	if p.crouched and (work_name == "p_search_mid" or work_name == "p_search_high" or work_name == "p_pry"):
 		work_name = "p_search_low"
 	var clip := clip_named(own, work_name, -1)
+	if clip < 0:
+		# A folder without the new ways of it: the job's old motion.
+		clip = clip_named(own, String(OWN_WORK[p.action][0]), -1)
 	if clip < 0:
 		return Vector2(0.0, -1.0)
 	var pace: float = OWN_WORK[p.action][1]
@@ -516,6 +555,103 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 		note["motion"] = OWN_BASE + clip
 		return Vector2(clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0), clip)
 	return Vector2(_own_cycle(note, OWN_BASE + clip, t * pace, _length(own, clip, 1.0), p.name_unit("work")), clip)
+
+
+## Which of the living's own a treatment is drawn in: kneeling by someone else
+## (field_actions.gd notes who, Pose.CARE), otherwise where the wound is that is
+## being seen to (or, with none noted, the one that bleeds and hurts most).
+static func treat_name(p) -> String:
+	var care: Dictionary = p.get_meta(Pose.CARE, {})
+	var noted: bool = not care.is_empty() and is_equal_approx(float(care.get("total", -1.0)), p.action_total) and String(care.get("label", "")) == p.action_label
+	var other = care.get("of") if noted else null
+	if other != null and is_instance_valid(other) and other != p:
+		return OWN_TREAT_OTHER
+	var part := String(care.get("part", "")) if noted else ""
+	if part == "":
+		part = sorest_part(p.body)
+	return String(OWN_TREAT.get(coarse(part), OWN_WORK["treat"][0]))
+
+
+## Where a body's worst wound is: the one bleeding most, then hurting most ("" with none).
+static func sorest_part(body) -> String:
+	var best := 0.0
+	var part := ""
+	for w: Dictionary in body.wounds:
+		var k := float(w.get("blood", 0.0)) * 10.0 + InjuryRules.pain(w)
+		if k > best:
+			best = k
+			part = String(w.get("part", ""))
+	return part
+
+
+## head_neck, torso, arm or leg.
+static func coarse(part: String) -> String:
+	if part.begins_with("arm_"):
+		return "arm"
+	if part.begins_with("leg_"):
+		return "leg"
+	return part
+
+
+## The flinch for the last wound by where it came from: in front or behind,
+## its own; from the side "" (the old one, thrown over to the far side).
+static func bitten_name(note: Dictionary) -> String:
+	var from: Vector2 = note.get("hurt_from", Vector2(0.0, 1.0))
+	if absf(from.y) < absf(from.x):
+		return ""
+	return OWN_BITTEN_FRONT if from.y > 0.0 else OWN_BITTEN_BACK
+
+
+## The limp a walking body has, in the living's own (-1: none, or none of its
+## own). A broken leg not yet splinted is as before (the rules' crawl pace).
+static func limp_of(p, own: Array) -> int:
+	var how := ""
+	var side := ""
+	for w: Dictionary in p.body.wounds:
+		var part := String(w.get("part", ""))
+		if coarse(part) != "leg":
+			continue
+		var kind := String(w.get("kind", ""))
+		var heavy: bool = (kind == "fracture" and bool(w.get("splinted", false))) or kind == "deep" or kind == "embedded"
+		var light: bool = bool(w.get("festering", false)) or kind in ["scratch", "laceration", "bite"]
+		if heavy and how != "heavy":
+			how = "heavy"
+			side = part
+		elif light and how == "":
+			how = "light"
+			side = part
+	if how == "":
+		return -1
+	var name := String(OWN_LIMP[how])
+	var sided := clip_named(own, name + ("_l" if side.ends_with("left") else "_r"), -1)
+	return sided if sided >= 0 else clip_named(own, name, -1)
+
+
+## Standing still, now and then the body shows how it is (y; -1 the rest of
+## the time, with nothing to show, or none of its own): its worst hurt held, a
+## shiver in the cold, a stretch when tired. Once in MOOD_EVERY, each person at
+## their own time and pace of it.
+static func mood_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
+	if p.crouched or p.body.downed:
+		return Vector2(0.0, -1.0)
+	var name := ""
+	if p.body.pain() >= PAIN_SHOWN:
+		name = String(OWN_PAIN.get(coarse(sorest_part(p.body)), ""))
+	if name == "" and p.heat.level() >= 1:
+		name = OWN_SHIVER
+	if name == "" and p.body.exhaustion_level() >= 1:
+		name = OWN_TIRED
+	var clip := clip_named(own, name, -1) if name != "" else -1
+	if clip < 0:
+		return Vector2(0.0, -1.0)
+	var unit: float = p.name_unit("mood")
+	var every := lerpf(MOOD_EVERY.x, MOOD_EVERY.y, unit)
+	var at := fposmod(t + unit * every, every)
+	var length := _length(own, clip, 1.0)
+	if at >= length:
+		return Vector2(0.0, -1.0)
+	note["motion"] = OWN_BASE + clip
+	return Vector2(at / length, clip)
 
 
 ## Loading or clearing the handgun in the hand in the living's own (y), how far
@@ -697,6 +833,7 @@ static func _note_hurt(p, note: Dictionary, t: float) -> void:
 		note["hurt_at"] = t
 		note["hurt_kind"] = String(p.body.wounds[-1].get("kind", ""))
 		note["hurt_from"] = hurt_from(p)
+		note["hurt_own"] = ""
 	note["wounds"] = n
 
 
@@ -762,7 +899,9 @@ static func lean_of(p, note: Dictionary) -> Basis:
 		# Away from the blow: back from in front, forward from behind, over from the side.
 		var lean := float(HURT_LEAN.get(note.get("hurt_kind", ""), HURT_LEAN[""])) * k * k
 		var from: Vector2 = note.get("hurt_from", Vector2(0.0, 1.0))
-		pitch += lean * from.y
+		var thrown := String(note.get("hurt_own", ""))
+		if thrown != OWN_BITTEN_FRONT and thrown != OWN_BITTEN_BACK:   # those throw it themselves
+			pitch += lean * from.y
 		roll += absf(lean) * HURT_SIDE_ROLL * -from.x
 	if pitch == 0.0 and roll == 0.0 and turn == 0.0:
 		return Basis()
