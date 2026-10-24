@@ -9,6 +9,7 @@ const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _game(extra: Dictionary = {}):
@@ -648,7 +649,7 @@ func test_the_chief_mutters_beside_the_risk_line_by_the_word_alone() -> void:
 	assert_string_contains(game.goal_text(), "버티기 위험: 낮다")
 	game.hud.tick(0.1)
 	assert_true(game.hud.feel_label.visible)
-	assert_eq(game.hud.feel_label.text, said)
+	assert_eq(game.hud.feel_label.text.replace(UiFonts.WORD_JOINER, ""), said)
 	assert_eq(h.feel_number(), h.feel + 1, "the low lines are the first five")
 	assert_eq(game.audio.played.filter(func(g: String) -> bool: return g.begins_with("chief_feel")), [], "no voice file yet: no sound")
 	for flip in ["rolled", "forecast", "woke"]:
