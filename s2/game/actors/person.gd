@@ -259,6 +259,14 @@ func is_running_now() -> bool:
 
 
 func add_item(id: String, n: int = 1) -> void:
+	# A found pack bigger than the one on the back is worn at once (P20); the
+	# old one is left. One no bigger goes in the pack like any thing.
+	var worn: String = Carry.FieldItems.bag_of(id)
+	if n > 0 and worn != "" and int(Carry.BAGS[worn]["limit"]) > int(Carry.BAGS.get(bag, Carry.BAGS["pockets"])["limit"]):
+		bag = worn
+		n -= 1
+		if n <= 0:
+			return
 	items[id] = int(items.get(id, 0)) + n
 
 

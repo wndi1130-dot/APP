@@ -53,7 +53,7 @@ const ALLY_TURN_DEG: float = 35.0
 ## off these works of the hands (the ones the stick breaks off, and rummaging a
 ## body); any other (a climb, a crossing, a door or a window, a weapon swap)
 ## runs to its end and no blow or shove starts meanwhile.
-const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "loot"]
+const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "loot"]
 
 var game
 ## The player's shove pressed during a blow: it goes once the blow is over
