@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## 코어 장면(결정 426 D②, core_scenes.gd): 화물역·공장 지도마다 기계 건물 하나에 멈춘 기계 하나,
+## 코어 장면(결정 426 D②, core_scenes.gd): 화물역·공장·탄광 지도마다 기계 건물 하나에 멈춘 기계 하나,
 ## 판마다 코어가 남았는지 굴림(보임 15%, 숨음 15%), 떼는 데 30초, 코어는 영수증 items.gained로.
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -14,10 +14,13 @@ const EXPECTED: Dictionary = {
 	"freight_04": "멈춘 냉동기", "freight_05": "멈춘 증기 기관", "freight_06": "멈춘 증기 기관",
 	"factory_01": "멈춘 발전기", "factory_02": "뜯다 만 기관", "factory_03": "멈춘 증기 기관",
 	"factory_04": "뜯다 만 기관차", "factory_05": "멈춘 변압기", "factory_06": "뜯다 만 기관",
+	"mine_01": "멈춘 권양기", "mine_02": "멈춘 권양기", "mine_03": "멈춘 권양기",
+	"mine_04": "멈춘 권양기", "mine_05": "멈춘 권양기", "mine_06": "멈춘 권양기",
+	"mine_07": "멈춘 권양기", "mine_08": "멈춘 권양기", "mine_09": "멈춘 권양기",
 }
 
 
-func test_every_freight_yard_and_works_has_one_machine_inside_a_machine_building() -> void:
+func test_every_freight_yard_works_and_mine_has_one_machine_inside_a_machine_building() -> void:
 	for id: String in EXPECTED:
 		var d := FieldMaps.build(id)
 		var spot := CoreScenes.place(d)
@@ -42,7 +45,7 @@ func test_every_freight_yard_and_works_has_one_machine_inside_a_machine_building
 
 
 func test_other_places_have_no_core_scene() -> void:
-	for id: String in [FieldMaps.DEFAULT_PLACE, "houses_01", "hospital_01", "church_01", "office_01", "lake_01", "lodge_01", "sawmill_01", "mine_01", "summit_01", "bare_line_01"]:
+	for id: String in [FieldMaps.DEFAULT_PLACE, "houses_01", "hospital_01", "church_01", "office_01", "lake_01", "lodge_01", "sawmill_01", "summit_01", "bare_line_01"]:
 		var d := FieldMaps.build(id)
 		assert_eq(CoreScenes.place(d), {}, id)
 		assert_false(d["spots"].has(CoreScenes.SPOT), id)
