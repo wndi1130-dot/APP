@@ -496,8 +496,9 @@ func update_container(id: String) -> void:
 	var st := _begin()
 	var at := FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
 	var color := Color(0.62, 0.5, 0.3) if not box_data["searched"] else Color(0.35, 0.32, 0.28)
-	if node.has_node("Prop"):
-		# The furniture stands in for the box; a floor mat keeps the searched colour.
+	if node.has_node("Prop") or box_data.has("furniture"):
+		# The furniture stands in for the box (a model of its own, or the wardrobe
+		# or shelf it was put in by room_furnish); a floor mat keeps the searched colour.
 		box(st, Vector3(0.6, 0.02, 0.6), at + Vector3(0, 0.01, 0), color)
 	elif box_data["id"] == "bell":
 		color = Color(0.75, 0.62, 0.25) if box_data["items"].size() > 0 else Color(0.3, 0.3, 0.3)

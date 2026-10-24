@@ -42,7 +42,7 @@ void fragment() {
 	float drift = fx_fbm2(world_pos.xz * 0.35);
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = smoothstep(0.6, 0.9, up) * clamp(fx_snow * (0.6 + 0.8 * drift), 0.0, 1.0);
-	cover *= 0.55 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+	cover *= 0.75 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	base *= 1.0 - 0.35 * wet;
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
 	cover *= 1.0 - 0.9 * trodden;
@@ -52,6 +52,27 @@ void fragment() {
 	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
 	rime *= 0.16 * smoothstep(0.3, 0.9, fx_fbm2(vec2((world_pos.x + world_pos.z) * 0.7, world_pos.y * 1.6)));
 	base = mix(base, FX_RIME, rime * (1.0 - smoothstep(0.08, 0.3, chroma)));
+	// The atmosphere frame (fx_cold, fx_sky): standing water on open flat ground
+	// where the snow thins, open and ringed by rain above freezing, ice below;
+	// wet ground gives a little of the sky back (no specular here); dead leaf on
+	// bare ground in the warm stages. Saturated floor kinds are spared.
+	float level_k = smoothstep(0.9, 0.98, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma)) * (1.0 - smoothstep(0.3, 0.7, cover));
+	float water = clamp(max(fx_wet * 1.2, fx_cold.y * 0.85), 0.0, 1.0);
+	float standing = 0.0;
+	// Noise only where a pool could show (phone budget).
+	if (level_k * water > 0.01) {
+		standing = fx_pool(world_pos.xz) * level_k * water;
+		if (standing > 0.001) {
+			base = mix(base, fx_pool_color(base, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y)), standing);
+		}
+	}
+	base = mix(base, fx_sky.rgb * 0.5, wet * level_k * (1.0 - standing) * 0.18);
+	if (fx_cold.w * level_k > 0.01) {
+		float leaf = fx_cold.w * level_k * smoothstep(0.55, 0.8, fx_vnoise(world_pos.xz * 1.3 + 3.0));
+		base = mix(base, vec3(0.36, 0.25, 0.14), leaf * 0.35);
+	}
+	// Cloud shadows drift over whatever is open to the sky.
+	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);
 	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
 	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);

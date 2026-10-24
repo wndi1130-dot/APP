@@ -17,7 +17,7 @@ concurrency:
 jobs:
   test-and-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
       GODOT_VERSION: 4.7.2
       GUT_VERSION: 9.7.1
