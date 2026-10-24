@@ -40,6 +40,8 @@ const HomeBar = preload("res://game/ui/home_bar.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const WorldWeather = preload("res://game/ui/world_weather.gd")
 const WorldFilm = preload("res://game/ui/world_film.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
+const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
@@ -130,6 +132,10 @@ var home: Control = null           # the train's own screen on the train steps: 
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
+var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
+## What the slice's outside is when nothing says otherwise: the first stop's
+## weather, the same the field plays it in (field_game.gd's default).
+const SLICE_WEATHER: Array = ["fog", "snow"]
 
 
 func _ready() -> void:
@@ -462,8 +468,41 @@ func _show_train(phase: String, seg: int) -> void:
 	train.rules = rules
 	add_child(train)
 	stage = train
+	# The world outside by the hour, the weather, the region and the cold
+	# (the atmosphere frame); the snow over it falls as that look says.
+	var look := outside_look(rules, seg)
+	var cam: Camera3D = train.get("camera")
+	if cam != null:
+		outside = OutsideView.attach(cam, look, phase == "travel")
+	weather.falls = "none" if String(look["falls"]) == "none" else String(look["falls"])
+	weather.drift_on = int(look["snow_level"]) > 0
+	weather.light = clampf(float(look["lum"]) * 0.85 + 0.15, 0.2, 1.0)
+	weather.set_haze(float(look["haze"]))
+	# The corners' frost grows with the cold: none in late autumn's rain.
+	frost.modulate = Color(1, 1, 1, float(look["window_frost"]))
 	_quiet_labels()
 	_quiet_labels.call_deferred()
+
+
+## The look outside the train: opts "look" ({hour, kinds, cold, region}, for
+## check shots), else the train's view (daytime, hour, cold, region), the first
+## stop's weather and the cold the act table gives this stretch of the prologue.
+func outside_look(rules: Dictionary, seg: int) -> Dictionary:
+	var view: Dictionary = rules.get("view", {})
+	var want: Dictionary = opts.get("look", {})
+	var night := String(view.get("daytime", "day")) == "night"
+	var hour := float(want.get("hour", view.get("hour", 21.0 if night else 11.5)))
+	var kinds: Array = want.get("kinds", view.get("weather_kinds", SLICE_WEATHER))
+	var cold := float(want.get("cold", view.get("cold", Atmosphere.cold_for("prologue", prologue_progress(seg)))))
+	var side := float(want.get("side", view.get("side", Atmosphere.side_for("prologue"))))
+	var region_name := String(want.get("region", view.get("region", Atmosphere.DEFAULT_REGION)))
+	return Atmosphere.look(hour, kinds, region_name, cold, {"side": side})
+
+
+## How far into the prologue a stretch is (the slice is its first stops): the
+## cold the atmosphere table gives it, the same for the train and the stop.
+static func prologue_progress(seg: int) -> float:
+	return clampf((seg - 1) / 4.0, 0.0, 1.0)
 
 
 ## The train's own floating names and value lines are for its test bench;
@@ -694,6 +733,9 @@ func _draw_marks() -> void:
 func _start_field() -> void:
 	field = FieldGame.new()
 	var o := {"seed": int(opts.get("seed", 1))}
+	# The stop is drawn in the same cold as the stretch that brought the train here.
+	o["act"] = "prologue"
+	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
 	o["squad"] = field.default_squad("crude")
 	# How each one's car stands with the chief now, for what they say to him.
 	var comms: Dictionary = train_g.get("comms", {})
