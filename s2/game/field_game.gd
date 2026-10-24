@@ -5,6 +5,8 @@ extends Node3D
 
 signal finished(result: Dictionary)
 signal restart_requested
+## The stop is built (at the end of _ready; a staged one some frames later).
+signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
@@ -44,6 +46,7 @@ const BreathFx = preload("res://fx/breath_fx.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const BuildPace = preload("res://game/world/build_pace.gd")
 
 const AMBIENT_C: float = -14.0
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
@@ -263,6 +266,13 @@ var lantern: OmniLight3D
 var firebox: OmniLight3D
 var lamp_pulse: float = 0.0
 var fx_light_night: Dictionary = {}
+## Building the stop over frames (opts "staged", 결정 421-3): the same pieces in
+## the same order, a frame's share at a time while the camera goes down, and
+## then it stands still (standing_by) till go_live(). opts "map_data" hands over
+## the map already built off the main thread (stop_loader.gd).
+var pace: BuildPace
+var is_built: bool = false
+var standing_by: bool = false
 ## The atmosphere frame (fx/atmosphere.gd; picture only, rules never read it):
 ## the region band, the cold (opts "cold", else the act's from the scheme
 ## table), a fixed picture hour for check shots (opts "look_hour", -1: the
@@ -281,6 +291,10 @@ var cold_frost_mat: ShaderMaterial
 
 
 func _ready() -> void:
+	pace = BuildPace.new(get_tree(), bool(opts.get("staged", false)))
+	if pace.on:
+		standing_by = true
+		process_mode = Node.PROCESS_MODE_DISABLED
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
 	# A storm stop plays by its stage's weather (clear, blizzard, clear) and
@@ -304,7 +318,10 @@ func _ready() -> void:
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	place = FieldMaps.resolve(String(opts.get("place", "")))
-	_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	if opts.get("map_data") is Dictionary:
+		_take_map(opts["map_data"])
+	else:
+		_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
@@ -335,28 +352,37 @@ func _ready() -> void:
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
 	_build_world()
+	await BuildPace.rest(pace)
 	view = MapView.new()
 	add_child(view)
-	view.setup(data)
+	view.pace = pace
+	await view.setup(data)
 	zombies = Zombies.new()
 	add_child(zombies)
-	zombies.setup(self, VatBaker.build(int(opts.get("vertices", 1500))))
+	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
+	zombies.setup(self, opts["vat"] if opts.get("vat") is Dictionary else VatBaker.build(int(opts.get("vertices", 1500))))
+	await BuildPace.rest(pace)
 	combat = Combat.new(self)
 	ai = AI.new(self)
 	actions = Actions.new(self)
-	_spawn_people()
+	await BuildPace.heavy(pace)
+	await _spawn_people()
 	people_look = PersonVisual.new()
 	add_child(people_look)
 	people_look.setup(self)
+	await BuildPace.rest(pace)
 	_spawn_dead()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
+	await BuildPace.rest(pace)
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
+	await BuildPace.rest(pace)
 	audio = FieldAudio.new()
 	add_child(audio)
 	audio.setup(self)
+	await BuildPace.rest(pace)
 	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
 	if holdout.feel_line() != "":
 		audio.chief_feel(holdout.feel_number())
@@ -375,6 +401,18 @@ func _ready() -> void:
 	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
 	if opts.get("field_resume") is Dictionary:
 		FieldSave.apply(self, opts["field_resume"])
+	pace.finish()
+	is_built = true
+	built.emit()
+
+
+## A staged stop, built, starts: its clock, its people and its touches. A stop
+## built in one go is live from the start and this does nothing.
+func go_live() -> void:
+	if not standing_by:
+		return
+	standing_by = false
+	process_mode = Node.PROCESS_MODE_INHERIT
 
 
 ## Weather is fixed for the whole stop, so the shader globals are set once;
@@ -909,6 +947,7 @@ func _spawn_people() -> void:
 		lines.rel_of[p.pid] = AllyLines.rel_stage(float(row.get("rel", 0.0)))
 		if row.has("voice"):
 			lines.voice_by[p.pid] = String(row["voice"])
+		await BuildPace.rest(pace)
 	player = squad[0]
 	if bool(opts.get("raiders", true)):
 		var rows := [
@@ -923,6 +962,7 @@ func _spawn_people() -> void:
 			r.brain = {"role": rows[i]["brain"], "state": "idle", "aware": 0.0, "morale": 1.0, "seen_t": 0.0, "last_seen": Vector3.ZERO, "home": r.position, "aim_t": 0.0, "target": null, "fight_t": 0.0}
 			r.add_item("med_box", 1)
 			raiders.append(r)
+			await BuildPace.rest(pace)
 
 
 ## "comm": the car a companion comes from; "rel": how that car stands with the
@@ -1189,6 +1229,9 @@ func shift_to_height(world: Vector3, y: float) -> Vector3:
 # ---------------------------------------------------------------- loop
 
 func _notification(what: int) -> void:
+	# Still being built or not yet shown: nothing runs to stop (the slice holds it).
+	if not is_built or standing_by:
+		return
 	# A call, the home button or a dropped screen stops the field (reference harvest r1, #16).
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		interrupt()
@@ -2290,7 +2333,7 @@ func arrive_far() -> float:
 func _arrive(delta: float) -> void:
 	var cry_at: float = ARRIVE_ROLL_S - ARRIVE_BRAKE_S
 	if arrive_t < cry_at and arrive_t + delta >= cry_at:
-		audio.train_brake()
+		audio.train_brake(ARRIVE_BRAKE_S)
 	arrive_t += delta
 	view.slide_train(-train_in(arrive_t, arrive_far()))
 	if arrive_t >= ARRIVE_ROLL_S + ARRIVE_HUSH_S:

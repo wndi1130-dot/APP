@@ -349,7 +349,9 @@ func test_a_storm_stop_keeps_its_own_light() -> void:
 
 func test_the_slice_hangs_the_outside_behind_the_running_train() -> void:
 	var f = SliceFlow.new()
-	f.opts = {"skip_field": true, "seed": 3}
+	# The train's own screen at the stop: without the stop scene (with it, the
+	# stop pick is the scene from the roof, test_stop_cinema.gd).
+	f.opts = {"skip_field": true, "seed": 3, "cinema": false}
 	add_child_autofree(f)
 	assert_not_null(f.outside)
 	assert_eq(f.outside.get_parent(), f.train.camera, "the camera carries it")
