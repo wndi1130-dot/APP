@@ -1,5 +1,5 @@
 extends Node3D
-## How the train's people look (결정 421-4): the field's baked body in place of
+## How the train's people look (user request 2026-10-24): the field's baked body in place of
 ## the capsule and ball, with the train's own motions (train_clips.gd, folder
 ## n5-crew_seamstress_t). It only reads the bodies the train scene moves (where
 ## each is, which way it faces, its pose, its gesture, the life activity it is

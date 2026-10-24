@@ -1,6 +1,6 @@
 # n5-crew_seamstress_t — 열차 사람 동작
 
-재봉 몸(`../n5-crew_seamstress/`와 같은 메시·색 그림)에 열차 칸 사람 동작만 구운 폴더(결정 421-4). 필드 폴더(`_p`)의 번호는 건드리지 않는다. 동작 목록과 손으로 쓴 층은 `game/train/train_clips.gd`, 굽는 도구는 `tools/bake_train_cli.gd`(body_bake.gd는 읽기만 한다). 그리는 쪽은 `game/train/train_people_view.gd`로, 게임은 번호가 아니라 이름(`clips.json`)으로 찾는다.
+재봉 몸(`../n5-crew_seamstress/`와 같은 메시·색 그림)에 열차 칸 사람 동작만 구운 폴더(사용자 요청 2026-10-24). 필드 폴더(`_p`)의 번호는 건드리지 않는다. 동작 목록과 손으로 쓴 층은 `game/train/train_clips.gd`, 굽는 도구는 `tools/bake_train_cli.gd`(body_bake.gd는 읽기만 한다). 그리는 쪽은 `game/train/train_people_view.gd`로, 게임은 번호가 아니라 이름(`clips.json`)으로 찾는다.
 
 굽는 법(원본 glb는 저장소 밖):
 `godot --headless --path s2 --script tools/bake_train_cli.gd -- <seamstress.glb> <UAL1_Standard.glb>,<UAL2_Standard.glb> res://models/people/n5-crew_seamstress_t --check --small`

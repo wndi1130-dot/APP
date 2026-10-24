@@ -1,5 +1,5 @@
 extends RefCounted
-## The train people's own motions (결정 421-4): baked on the field's body
+## The train people's own motions (user request 2026-10-24): baked on the field's body
 ## (models/people/n5-crew_seamstress) into a folder of their own, so the field's
 ## numbers stay as they are. Names begin with t_. tools/bake_train_cli.gd bakes
 ## them; train_people_view.gd finds each by its name.
