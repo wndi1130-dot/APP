@@ -9,6 +9,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const SenseRules = preload("res://game/sim/sense_rules.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const Motion = preload("res://game/sim/motion.gd")
@@ -58,6 +59,9 @@ var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
 var markers: MultiMeshInstance3D
 var _people: Array = []
+var _sense_cells: Dictionary = {}
+var _sense_cells_ready: bool = false
+var _sense_padding: float = 0.0
 
 
 func setup(field_game, vat_assets: Dictionary) -> void:
@@ -129,6 +133,7 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 		z["state"] = "horde"
 		z["target"] = opts["target"]
 	list.append(z)
+	_sense_cells_ready = false
 	return z
 
 
@@ -272,6 +277,8 @@ func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 		if state == "wander" or state == "search":
 			z["turn_t"] = game.rng.randf_range(0.4, 0.9)
 		z["clue"] = level
+		z["clue_kind"] = "sound"
+		z["clue_left"] = SimNoise.LINGER[level]
 		z["state"] = "investigate"
 		z["target"] = at
 		z["linger"] = SimNoise.LINGER[level]
@@ -329,6 +336,8 @@ func update(delta: float) -> void:
 	var separation_skip := _separation_exclusions()
 	var people: Array = game.people_alive()
 	_people = people
+	_sense_cells_ready = false
+	_sense_padding = LungerRules.DASH_SPEED * maxf(delta, 0.0)
 	for z in list:
 		z["age"] += delta
 		z["cooldown"] = maxf(0.0, z["cooldown"] - delta)
@@ -448,7 +457,9 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 	# Far dead keep their errand; near ones look (forward cone), feel (arm's
 	# reach all round) and smell blood. Senses tick at ~6 Hz per zombie.
 	# Far from every person (not just the player) and not chasing: skip.
-	if z["state"] != "chase":
+	if z["state"] == "chase":
+		z["seen_t"] += delta
+	else:
 		var anyone_near := false
 		for q in people:
 			if z["pos"].distance_squared_to(q.position) <= NEAR * NEAR:
@@ -457,9 +468,9 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		if not anyone_near:
 			return
 	z["sense_t"] = float(z.get("sense_t", 0.0)) - delta
-	if z["sense_t"] > 0.0 and z["state"] != "chase":
+	if z["sense_t"] > 0.0:
 		return
-	z["sense_t"] = 0.15 + game.rng.randf() * 0.05
+	z["sense_t"] = SenseRules.TICK_MIN + game.rng.randf() * SenseRules.TICK_JITTER
 	# Weather cuts sight for both sides (body_injury 8.3); dusk cuts it again.
 	var sight: float = SIGHT * float(game.weather.sight_mult(game.clock.is_dark()))
 	var best = null
@@ -473,17 +484,17 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			continue
 		var d: float = z["pos"].distance_to(p.position)
 		var reach: float = sight * float(p.smell_mult()) * float(game.weather.downwind(p.position, z["pos"]) if p.smell > 0 else 1.0)
-		if p.crouched:
-			reach *= 0.55
+		reach *= SenseRules.posture_mult(p.crouched, p.moving, p.is_running_now())
 		var to_p: Vector3 = (p.position - z["pos"])
 		to_p.y = 0
-		var in_cone := d < FEEL or (to_p.length() > 0.01 and forward.dot(to_p.normalized()) >= CONE_COS)
+		var close_sense: bool = d < FEEL and lg.body_line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position))
+		var in_cone := close_sense or (to_p.length() > 0.01 and forward.dot(to_p.normalized()) >= CONE_COS)
 		# Already chasing: keeps tracking a moving target a bit outside the cone.
 		if z["state"] == "chase" and z["victim"] == p and d < reach:
 			in_cone = true
 		if not in_cone or d > reach or d > best_d:
 			continue
-		if d > FEEL and not lg.line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position)):
+		if not lg.line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position)):
 			continue
 		best = p
 		best_d = d
@@ -508,23 +519,16 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 	if float(z.get("dash_t", 0.0)) > 0.0:
 		return   # in its run it does not look for what it lost: it runs on
 	if z["state"] == "chase":
-		# Memory holds only the spot it saw; it never reads where the target is now,
-		# except up or down a stair it just watched them take: it hears the steps.
-		z["seen_t"] += 0.17
+		# Memory holds the last observed spot, never an unseen person's new floor.
 		z["target"] = z["last_seen"]
-		var v = z["victim"]
-		if v != null and v.is_alive() and game.level_of(v.position) != zl and z["seen_t"] < 2.0:
-			var lseen: Vector3 = z["last_seen"]
-			if Vector2(v.position.x - lseen.x, v.position.z - lseen.z).length() < 3.0:
-				z["target"] = v.position
-				z["last_seen"] = v.position
-				z["path_t"] = 0.0
-				return
 		if z["pos"].distance_to(z["last_seen"]) < 1.0:
 			_begin_search(z, z["last_seen"])
 		elif z["seen_t"] > MEMORY:
 			z["state"] = "wander"
+			z["victim"] = null
 			z["home"] = z["pos"]
+			z["target"] = z["pos"]
+			z["path"] = PackedVector3Array()
 			z["t"] = 2.0
 		return
 	# Blood: fresh trail points pull the dead (body_injury 8.1: heavy bleeding reaches far).
@@ -532,6 +536,7 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		var scent: Dictionary = game.strongest_scent(z["pos"])
 		if not scent.is_empty():
 			z["state"] = "investigate"
+			z["clue_kind"] = "scent"
 			z["target"] = scent["pos"]
 			z["linger"] = 8.0
 			z["speed"] = SPEED_SHAMBLE
@@ -543,6 +548,7 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 ## Lost the target: walk to where it was last seen, then poke around nearby.
 func _begin_search(z: Dictionary, around: Vector3) -> void:
 	z["state"] = "search"
+	z["victim"] = null
 	z["home"] = around
 	z["target"] = around
 	z["search_left"] = 2
@@ -553,12 +559,20 @@ func _begin_search(z: Dictionary, around: Vector3) -> void:
 
 ## Herd behaviour: dead that see a neighbour lurch after something follow it.
 func _call_neighbours(z: Dictionary, toward: Vector3) -> void:
-	for o in list:
-		if o == z or o["state"] in ["dead", "rising", "frozen", "waking", "downed", "chase", "attack", "grab", "climb", "tell"]:
+	if not _sense_cells_ready:
+		_sense_cells = SenseRules.index(list, Callable(game, "level_of"), HERD)
+		_sense_cells_ready = true
+	var floor_id: int = game.level_of(z["pos"])
+	var lg = game.grid_at(z["pos"])
+	for o in SenseRules.neighbours(_sense_cells, z["pos"], floor_id, HERD, HERD + _sense_padding):
+		if o["id"] == z["id"] or o["state"] in ["dead", "rising", "frozen", "waking", "downed", "chase", "attack", "grab", "climb", "tell"]:
 			continue
-		if o["pos"].distance_to(z["pos"]) > HERD:
+		if game.level_of(o["pos"]) != floor_id or o["pos"].distance_to(z["pos"]) > HERD:
+			continue
+		if not lg.line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(o["pos"])):
 			continue
 		o["state"] = "investigate"
+		o["clue_kind"] = "herd"
 		o["target"] = toward + Vector3(game.rng.randf_range(-1.5, 1.5), 0, game.rng.randf_range(-1.5, 1.5))
 		o["linger"] = 6.0
 		o["speed"] = SPEED_SHAMBLE
@@ -704,6 +718,12 @@ func _move(z: Dictionary, delta: float) -> void:
 				z["path"] = PackedVector3Array()
 			return
 	elif state == "investigate":
+		# Travel to a sound has a deadline too. Arrival keeps the existing linger.
+		if at.distance_to(target) >= 1.2 and z.get("clue_kind", "") == "sound":
+			z["clue_left"] = maxf(0.0, float(z.get("clue_left", 0.0)) - delta)
+			if z["clue_left"] <= 0.0:
+				_begin_search(z, at)
+				return
 		if at.distance_to(target) < 1.2:
 			z["linger"] -= delta
 			if z["linger"] <= 0.0:
@@ -786,8 +806,7 @@ func _move(z: Dictionary, delta: float) -> void:
 	if lg.blocks_body(dc):
 		if lg == game.grid and game.grid.doors.has(dc):
 			_bang(z, dc, delta)
-		else:
-			dest = _slide(at, step)
+		dest = _slide(at, step)
 	z["angle"] = atan2(dir.x, dir.z)
 	z["pos"] = _avoid_people(z, dest)
 
@@ -834,12 +853,12 @@ func _update_attack(z: Dictionary, delta: float) -> void:
 		return
 	z["windup"] -= delta
 	var d: float = z["pos"].distance_to(victim.position)
-	if d > ATTACK_RANGE + 0.4 or not can_reach(z, victim):
+	if d > ATTACK_RANGE + GrabRules.CONTACT_MARGIN or not can_reach(z, victim):
 		z["state"] = "chase"
 		return
 	if z["windup"] > 0.0:
 		return
-	z["cooldown"] = 1.6
+	z["cooldown"] = GrabRules.ATTACK_COOLDOWN
 	var outcome: String = game.zombie_reaches(z, victim)
 	if outcome == "grab":
 		z["state"] = "grab"
@@ -850,7 +869,14 @@ func _update_attack(z: Dictionary, delta: float) -> void:
 func _update_grab(z: Dictionary, delta: float) -> void:
 	var victim = z["victim"]
 	if victim == null or not victim.is_alive():
+		if victim != null:
+			victim.release_grab(z)
+			GrabRules.mark_released(victim, game.clock.elapsed)
 		z["state"] = "wander"
+		z["victim"] = null
+		return
+	if not victim.grabbers.has(z) or z["pos"].distance_to(victim.position) > ATTACK_RANGE + GrabRules.CONTACT_MARGIN or not can_reach(z, victim):
+		release(z, victim.position, false)
 		return
 	z["pos"] = victim.position + (z["pos"] - victim.position).normalized() * 0.5
 	z["angle"] = atan2(victim.position.x - z["pos"].x, victim.position.z - z["pos"].z)
@@ -863,6 +889,7 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	# Whoever it held is let go, knocked down or not (release_grab is safe to repeat).
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
+		GrabRules.mark_released(z["victim"], game.clock.elapsed)
 	var away: Vector3 = z["pos"] - push_from
 	away.y = 0
 	if away.length() < 0.01:
@@ -870,7 +897,7 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 	z["shoved_from"] = z["pos"]
 	z["shoved_t"] = SHOVED_TIME
 	z["pos"] = _slide(z["pos"], away.normalized() * 1.3)
-	z["cooldown"] = 1.8
+	z["cooldown"] = GrabRules.RELEASE_RECOVERY
 	if knock and reels_first(z):
 		# Decision 412: it reels back the shove's length on its feet, stunned
 		# (it cannot bite or grab), then goes over (update). It lies as long.
@@ -917,6 +944,7 @@ func knock_down(z: Dictionary) -> void:
 	# Knocked off its victim: the victim is let go, or the grab still bites.
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
+		GrabRules.mark_released(z["victim"], game.clock.elapsed)
 	DeadPose.mark_fall(z, _people)
 	if float(z.get("dash_t", 0.0)) > 0.0:
 		_end_dash(z)
@@ -929,6 +957,7 @@ func knock_down(z: Dictionary) -> void:
 func kill(z: Dictionary) -> void:
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
+		GrabRules.mark_released(z["victim"], game.clock.elapsed)
 	DeadPose.mark_fall(z, _people)
 	z["state"] = "dead"
 	z["victim"] = null
