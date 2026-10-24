@@ -8,7 +8,7 @@ import type { ResumeBeat, StallBeat } from '../ui/stall_beats';
 // - data-stranded: 열차가 서 있는 동안 붙어 있다
 // 여기는 무엇을 언제 켜고 끌지만 정한다(소리 장치를 모른다). 소리만 내고 규칙에는 닿지 않는다.
 
-/** 긴 소리 다섯: 달림(되풀이), 급제동(한 번), 김 빠짐(한 번), 바람(되풀이), 기적(한 번). 파일 이름과 같다(stall/run.wav) */
+/** 긴 소리 다섯: 달림(되풀이), 급제동(한 번), 김 빠짐(한 번), 바람(되풀이로 켜지만 장치가 깔개와 무작위 돌풍으로 낸다, gusts.ts), 기적(한 번). 파일 이름과 같다(stall/run.wav) */
 export const STALL_TRACKS = ['run', 'brake', 'steam', 'wind', 'whistle'] as const;
 export type StallTrack = typeof STALL_TRACKS[number];
 
