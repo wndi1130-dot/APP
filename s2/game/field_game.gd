@@ -1057,7 +1057,7 @@ func _step(delta: float) -> void:
 	_check_end()
 	var keep: Array = []
 	for s in sounds:
-		if now - float(s["t"]) < 1.6:
+		if now - float(s["t"]) < SimNoise.EVENT_DISPLAY_SECONDS:
 			keep.append(s)
 	sounds = keep
 
@@ -1082,6 +1082,7 @@ func _update_zone(delta: float) -> void:
 # ---------------------------------------------------------------- people
 
 func _update_person(p: Person, delta: float) -> void:
+	actions.validate_work(p)
 	if not p.is_alive():
 		return
 	var cell := FieldGrid.cell_of(p.position)
@@ -1115,6 +1116,7 @@ func _update_person(p: Person, delta: float) -> void:
 			actions.search_noise(p, delta)
 		p.action_t -= delta * rate
 		if p.action_t <= 0.0:
+			actions.complete_work(p)
 			var done := p.action_done
 			p.cancel_action()
 			if done.is_valid():
@@ -1166,7 +1168,10 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
-	if lg == grid and grid.windows.has(dc) and grid.windows[dc]["broken"] and not p.brain.get("vaulted_" + str(dc), false):
+	dc = FieldGrid.cell_of(dest)
+	if lg == grid and grid.windows.has(dc) and FieldGrid.cell_of(p.position) != dc:
+		if not actions.can_vault_window(p, dc):
+			return
 		actions.vault_window(p, dc)
 	p.position = dest
 	p.moving = true
@@ -1204,7 +1209,10 @@ func _move_person(p: Person, delta: float) -> void:
 		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
-	if lg == grid and grid.windows.has(dc) and grid.windows[dc]["broken"] and not p.brain.get("vaulted_" + str(dc), false):
+	dc = FieldGrid.cell_of(dest)
+	if lg == grid and grid.windows.has(dc) and FieldGrid.cell_of(p.position) != dc:
+		if not actions.can_vault_window(p, dc):
+			return
 		actions.vault_window(p, dc)
 	p.facing = atan2(step.x, step.z)
 	p.position = dest
@@ -1230,11 +1238,13 @@ func _footsteps(p: Person, delta: float, cell: Vector2i) -> void:
 	var floor_kind := lg.floor_at(cell)
 	p.brain["step_t"] = float(p.brain.get("step_t", 0.0)) - delta
 	if p.brain["step_t"] <= 0.0:
-		p.brain["step_t"] = 0.5
+		p.brain["step_t"] += SimNoise.STEP_EVERY
 		var glass: bool = lg.windows.has(cell) and lg.windows[cell]["glass"]
 		var trait_mult := 1.0
-		var r := SimNoise.footstep_radius(running, FieldGrid.FLOOR_SOUND[floor_kind], trait_mult, p.crouched, int(p.skills["stealth"]), glass) * weather.sound_mult(true)
-		zombies.hear(p.position, SimNoise.footstep_level(running, glass), r)
+		var r := SimNoise.footstep_radius(running, FieldGrid.FLOOR_SOUND[floor_kind], trait_mult, p.crouched, int(p.skills["stealth"]), glass, lg.indoor(cell)) * weather.sound_mult(true)
+		var level := SimNoise.footstep_level(running, glass)
+		var reacted: int = zombies.hear(p.position, level, r)
+		ledger.observe(level, "run" if running else ("crouch" if p.crouched else "walk"), r, reacted)
 		if p == player and audio != null:
 			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
@@ -1357,7 +1367,8 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
 			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
-	zombies.hear(at, level, radius)
+	var reacted: int = zombies.hear(at, level, radius)
+	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
 	if level >= SimNoise.Level.LOUD:

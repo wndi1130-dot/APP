@@ -244,6 +244,10 @@ func test_a_search_is_begun_and_what_came_of_it_said() -> void:
 		if not c["locked"] and not c["searched"] and not c.has("pick"):
 			id = key
 			break
+	# A search starts only within reach of the box (same floor, a step away):
+	# the companion stands on its cell, where walking up to it leaves them.
+	var box: Dictionary = game.data["containers"][id]
+	mate.position = game.lift(box["cell"], int(box.get("level", 0)))
 	game.actions.search(mate, id)
 	assert_has(_bank_of(mate, "search_start"), _line_of(mate))
 	game.hud.says.clear()

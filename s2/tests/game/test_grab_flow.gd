@@ -88,11 +88,17 @@ func _a_locked_door() -> Vector2i:
 	return game.grid.doors.keys()[0]
 
 
+## The crowbar has to reach the door: stand on its walkable side.
+func _by_the_door(c: Vector2i) -> Vector2i:
+	p.position = game.lift(game.actions._side_cell(game.grid, c, p.position), 0)
+	return c
+
+
 func test_a_crowbar_starts_prying_a_door() -> void:
 	assert_false(game.grid.doors.is_empty(), "the field has doors")
 	p.hands = [{"id": "crowbar", "quality": "factory", "condition": 1.0, "loaded": 0}]
 	p.set_weapon_slots(p.hands)
-	game.actions.pry_door(p, _a_locked_door())
+	game.actions.pry_door(p, _by_the_door(_a_locked_door()))
 	assert_eq(p.action, "pry", "the crowbar goes into the door")
 	assert_almost_eq(p.action_t, game.actions.PRY_TIME, 0.0001)
 
@@ -101,5 +107,6 @@ func test_no_crowbar_no_prying() -> void:
 	p.hands = [{"id": "knife", "quality": "factory", "condition": 1.0, "loaded": 0}]
 	p.set_weapon_slots(p.hands)
 	p.cancel_action()
-	game.actions.pry_door(p, _a_locked_door())
+	# By the door too, so it is the knife that fails and not the distance.
+	game.actions.pry_door(p, _by_the_door(_a_locked_door()))
 	assert_eq(p.action, "", "a knife does not pry a door")
