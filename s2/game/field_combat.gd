@@ -969,7 +969,7 @@ func start_aim(p) -> bool:
 	if not can_shoot(p):
 		if p == game.player and W.is_ranged(p.weapon_id()):
 			if arm_too_hurt(p):
-				game.hud.toast("팔이 부러져 두 손 무기를 못 쓴다.")
+				game.hud.toast("팔 골절 · 두 손 무기 못 씀")
 			elif bool(p.weapon().get("broken", false)):
 				game.hud.toast("총이 망가졌다.")
 			elif p.jam_t > 0.0:

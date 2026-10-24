@@ -1057,6 +1057,8 @@ func _build_stairs() -> void:
 		# Named on both floors so the way up or down is found (H3 2026-10-09: never seen).
 		_floor_label(LEVEL_WAYS.get(high, ""), c, low)
 		_floor_label(LEVEL_WAYS.get(low, ""), c, high)
+		if s.get("hatch", false):
+			_build_hatch(c, s["into"])
 		if buildings:
 			continue
 		var st := _begin()
@@ -1069,6 +1071,53 @@ func _build_stairs() -> void:
 		box(up, Vector3(0.95, 0.03, 0.95), top + Vector3(0, 0.02, 0), Color(0.16, 0.15, 0.15))
 		box(up, Vector3(0.06, 0.9, 0.95), top + Vector3(0.47, 0.45, 0), Color(0.48, 0.4, 0.32))
 		_mesh_node(high).mesh = up.commit()
+	_build_cellar_windows()
+
+
+## A yard hatch into a big cellar (cellar_rules.hatches): a dark way down
+## toward the house in a low timber curb, its leaf thrown open on the far side.
+## The house's own stairs well is drawn by building_view; this one stands in
+## the yard, outside any building, so the map draws it. Drawing only.
+func _build_hatch(c: Vector2i, into: Vector2i) -> void:
+	var st := _begin()
+	var mid := FieldGrid.center(c)
+	var wood := Color(0.36, 0.28, 0.2)
+	box(st, Vector3(0.84, 0.02, 0.84), mid + Vector3(0, 0.015, 0), Color(0.05, 0.05, 0.05))
+	var side := Vector2i(into.y, into.x)
+	for k: int in [-1, 1]:
+		var at := mid + Vector3(side.x, 0, side.y) * (0.45 * k) + Vector3(0, 0.09, 0)
+		box(st, Vector3(0.1, 0.18, 0.9) if side.x != 0 else Vector3(0.9, 0.18, 0.1), at, wood)
+	var back := mid - Vector3(into.x, 0, into.y) * 0.45 + Vector3(0, 0.09, 0)
+	box(st, Vector3(0.9, 0.18, 0.1) if into.x == 0 else Vector3(0.1, 0.18, 0.9), back, wood)
+	# The leaf, open, leans back on the yard side.
+	var leaf := mid - Vector3(into.x, 0, into.y) * 0.56 + Vector3(0, 0.38, 0)
+	box(st, Vector3(0.8, 0.6, 0.05) if into.x == 0 else Vector3(0.05, 0.6, 0.8), leaf, wood.darkened(0.15))
+	_mesh_node(0).mesh = st.commit()
+
+
+## Cellar windows: a low dark pane set in the foot of the outer wall on the
+## ground floor where a cellar room lies behind it (cellar_rules.windows), so
+## a cellar is seen before it is entered (house_layout.md 5.2). Drawing only.
+const CELLAR_WINDOW_W: float = 0.7
+const CELLAR_WINDOW_H: float = 0.22
+
+
+func _build_cellar_windows() -> void:
+	var rows: Array = data.get("cellar_windows", [])
+	if rows.is_empty():
+		return
+	var st := _begin()
+	for row: Dictionary in rows:
+		var c: Vector2i = row["cell"]
+		var out: Vector2i = row["out"]
+		var along_x := out.y != 0
+		var pane := Vector3(CELLAR_WINDOW_W, CELLAR_WINDOW_H, 0.03) if along_x else Vector3(0.03, CELLAR_WINDOW_H, CELLAR_WINDOW_W)
+		var frame := pane + (Vector3(0.08, 0.06, 0.0) if along_x else Vector3(0.0, 0.06, 0.08))
+		# The foot of the wall reaches the cell edge (the plinth), so the pane sits there.
+		var face := FieldGrid.center(c) + Vector3(out.x, 0, out.y) * 0.5 + Vector3(0, 0.04 + CELLAR_WINDOW_H * 0.5, 0)
+		box(st, frame, face + Vector3(out.x, 0, out.y) * 0.01, Color(0.27, 0.24, 0.21))
+		box(st, pane, face + Vector3(out.x, 0, out.y) * 0.025, Color(0.05, 0.05, 0.06))
+	_mesh_node(0).mesh = st.commit()
 
 
 ## A word on the floor, shown once its cell has been seen (as room names are).
