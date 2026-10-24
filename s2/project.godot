@@ -73,3 +73,11 @@ fx_cloud={
 "type": "vec4",
 "value": Vector4(0, 1, 0, 0)
 }
+fx_ground={
+"type": "sampler2D",
+"value": "res://fx/textures/ground_detail.png"
+}
+fx_sky_tex={
+"type": "sampler2D",
+"value": "res://fx/textures/sky/sky_day.jpg"
+}

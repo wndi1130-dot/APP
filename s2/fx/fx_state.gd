@@ -10,6 +10,9 @@ extends RefCounted
 ## fx_cold, fx_sky and fx_cloud belong to the atmosphere frame (fx/atmosphere.gd):
 ## params_for gives plain values from the temperature, Atmosphere.params the real ones.
 const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud"]
+## Texture globals (CC0 photos, 사용자 10-25 공개 자산 먼저): the ground's grain stays as
+## project.godot sets it; the photo sky follows the look (set_sky).
+const TEXTURE_GLOBALS: Array[String] = ["fx_ground", "fx_sky_tex"]
 
 enum BloodLevel { OFF, LOW, NORMAL, HIGH }
 const BLOOD_LABELS: Array[String] = ["끔", "적게", "보통", "많이"]
@@ -241,6 +244,14 @@ static func lighting_for(kinds: Array, hour := 12.0, season := DEFAULT_SEASON) -
 
 ## Write params into the shader globals. Unknown keys are ignored.
 ## Returns the keys written.
+## The photo sky the field's water gives back; nothing happens without one.
+static func set_sky(tex: Texture2D) -> bool:
+	if tex == null:
+		return false
+	RenderingServer.global_shader_parameter_set("fx_sky_tex", tex)
+	return true
+
+
 static func apply(params: Dictionary) -> Array[String]:
 	var written: Array[String] = []
 	for key in GLOBALS:

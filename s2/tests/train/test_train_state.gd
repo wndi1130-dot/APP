@@ -79,7 +79,9 @@ func test_laws_pot_and_engine_match_s1() -> void:
 
 func test_a_switched_on_branch_is_not_s1a() -> void:
 	assert_true(St.is_s1a({"comms": {}}))
-	assert_false(St.is_s1a({"dom": {"wood": 1}}))
+	# The stores alone are not the domestic branch (train_dom.gd); S1's DomState is.
+	assert_true(St.is_s1a({"dom": {"wood": 1}}))
+	assert_false(St.is_s1a({"dom": {"wood": 1, "techs": {}}}))
 	assert_false(St.is_s1a({"climate": true}))
 	assert_true(St.is_s1a({"climate": false, "dark": null}))
 
