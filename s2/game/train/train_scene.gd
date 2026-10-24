@@ -17,6 +17,22 @@ const Life = preload("res://game/train/train_life.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
+const BackdropShader = preload("res://fx/shaders/horizon_backdrop.gdshader")
+## The car's shell: floor, back wall with framed windows, end walls with door
+## frames, roof, buffers, bellows and bogies in one model a kind of car
+## (tools/blender/train_shell.py). Without the file the boxes below stand in.
+const SHELL_ROOT := "res://models/train_shell/shell_%s.glb"
+const SHELL_OF := {"front": "clean", "dining": "clean", "captain": "chief", "medical": "medic"}
+const SHELL_GLASS_Z: float = -1.40       # the glass sits in the shell's window reveal
+## How warm or cold a car's walls look (tint on the shell, no new light).
+const SHELL_COLD := Color(0.66, 0.74, 0.92)
+const SHELL_WARM := Color(1.0, 0.93, 0.84)
+## The land and sky seen through the windows: one card behind the whole train.
+const BACKDROP_Z: float = -1.85
+const BACKDROP_LOW: float = 0.5          # metres: the card's bottom (h = 0) and top (h = 1)
+const BACKDROP_HIGH: float = 3.1
+const BACKDROP_METRES: float = 22.0      # one unit of the card's x a this many metres
+const RUN_SPEED: float = 14.0            # m/s the land goes by while the train runs
 
 const CAR_LENGTH: float = 16.0          # the field's car (16 x 2.8 x 3)
 const CAR_WIDTH: float = 2.8
@@ -54,6 +70,7 @@ const TABLED: Array = ["dining", "captain"]   # the kinds of car with a table or
 const STOVE_AT := Vector3(7.85, 0.0, -0.4)
 const STOVE_AT_END := Vector3(0.45, 0.0, -0.9)
 const STOVE_COLOR := Color(1.0, 0.55, 0.3)
+const STOVE_MODEL := "res://models/train_interior/stove.glb"
 const STOVE_ENERGY: float = 1.1
 const LAMP_SWAY: float = 0.05           # metres, with the train's rocking
 const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
@@ -98,6 +115,9 @@ var _hold_from: float = 0.0             # the council room along the train while
 var _hold_to: float = 0.0
 var _mats: Dictionary = {}
 var _font: SystemFont
+var _shells: Dictionary = {}
+var backdrop: MeshInstance3D
+var _scroll: float = 0.0
 var life = Life.new()
 
 
@@ -250,6 +270,7 @@ func life_signal(cue: String, car_id: String = "") -> void:
 func step(delta: float) -> void:
 	clock += delta
 	life.advance(delta)
+	_step_backdrop(delta)
 	for c in cars:
 		_step_lamp(c, delta)
 		_step_errand(c, delta)
@@ -346,6 +367,7 @@ func _seat_car(c: Dictionary, reseat: bool = true) -> void:
 		_seat_bodies(c, comm, n, w, m, look)
 	# 등불은 생활 쪽이 밤·정차에 맞춰 곱하므로 다시 앉히지 않는 칸도 매번 바탕값부터 칠한다.
 	_dress_car(c, w, look)
+	_dress_backdrop()
 	(c["values"] as Label3D).text = values_text(c)
 
 
@@ -663,6 +685,9 @@ func _dress_car(c: Dictionary, w: float, look: Dictionary) -> void:
 	c["lamp_energy"] = float(look["energy"])
 	c["lamp_sway"] = float(look["sway"])
 	(c["glass"] as ShaderMaterial).set_shader_parameter("cold_car", Look.frost(w))
+	if c.has("shell_mat"):
+		# Cold walls go blue-grey, a warm car's go a little amber.
+		(c["shell_mat"] as StandardMaterial3D).albedo_color = SHELL_COLD.lerp(SHELL_WARM, smoothstep(25.0, 70.0, w))
 	if c.has("stove_light"):
 		var burn := Look.stove(w)
 		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn
@@ -878,12 +903,47 @@ func _build_train() -> void:
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)
 	_box(train, Vector3(train_length() + 6.0, 0.12, 0.1), Vector3(train_length() * 0.5, -1.5, CAR_WIDTH * 0.5 - 0.3), Color(0.3, 0.3, 0.32))
+	_build_backdrop()
 
 
 func _build_car(c: Dictionary, gangway: bool) -> void:
 	var node: Node3D = c["node"]
 	var def: Dictionary = c["def"]
 	var kind := String(def.get("kind", ""))
+	var steel := Color(0.2, 0.2, 0.21)
+	var l := CAR_LENGTH
+	var w := CAR_WIDTH
+	var h := CAR_HEIGHT
+	var shell := _shell(c)
+	var glass_z: float = -w * 0.5 + WALL
+	if shell != null:
+		node.add_child(shell)
+		glass_z = SHELL_GLASS_Z
+	else:
+		_build_car_boxes(node, gangway)
+	# Windows: the field's glass, so frost grows in from the frame as the car cools.
+	var glass := ShaderMaterial.new()
+	glass.shader = GlassShader
+	c["glass"] = glass
+	for k in 4:
+		var at := Vector3(l * (k + 0.5) / 4.0, 1.75, glass_z)
+		if shell == null:
+			_box(node, Vector3(1.6, 0.9, 0.02), at, Color(0.07, 0.09, 0.13))
+		var pane := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(1.6, 0.9)
+		pane.mesh = quad
+		pane.material_override = glass
+		pane.position = at + Vector3(0, 0, 0.02)
+		node.add_child(pane)
+	if gangway:
+		_box(node, Vector3(CAR_GAP, 0.1, DOOR_TO - DOOR_FROM + 0.2), Vector3(l + CAR_GAP * 0.5, -0.05, (DOOR_FROM + DOOR_TO) * 0.5), steel)
+	_build_car_rest(c, node, def, l, h)
+
+
+## The stand-in car when the shell model is missing: boxes for the floor, the
+## back wall, the roof, the end walls with a doorway, the underframe and the bogies.
+func _build_car_boxes(node: Node3D, _gangway: bool) -> void:
 	var steel := Color(0.2, 0.2, 0.21)
 	var wood := Color(0.3, 0.25, 0.2)
 	var l := CAR_LENGTH
@@ -897,25 +957,12 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		_box(node, Vector3(WALL, h, DOOR_FROM + w * 0.5), Vector3(x, h * 0.5, (DOOR_FROM - w * 0.5) * 0.5), wood.darkened(0.3))
 		_box(node, Vector3(WALL, h, w * 0.5 - DOOR_TO), Vector3(x, h * 0.5, (DOOR_TO + w * 0.5) * 0.5), wood.darkened(0.3))
 		_box(node, Vector3(WALL, h - DOOR_HEIGHT, DOOR_TO - DOOR_FROM), Vector3(x, DOOR_HEIGHT + (h - DOOR_HEIGHT) * 0.5, (DOOR_FROM + DOOR_TO) * 0.5), wood.darkened(0.3))
-	# Windows: the field's glass, so frost grows in from the frame as the car cools.
-	var glass := ShaderMaterial.new()
-	glass.shader = GlassShader
-	c["glass"] = glass
-	for k in 4:
-		var at := Vector3(l * (k + 0.5) / 4.0, 1.75, -w * 0.5 + WALL)
-		_box(node, Vector3(1.6, 0.9, 0.02), at, Color(0.07, 0.09, 0.13))
-		var pane := MeshInstance3D.new()
-		var quad := QuadMesh.new()
-		quad.size = Vector2(1.6, 0.9)
-		pane.mesh = quad
-		pane.material_override = glass
-		pane.position = at + Vector3(0, 0, 0.02)
-		node.add_child(pane)
 	_box(node, Vector3(l, 0.45, w - 0.4), Vector3(l * 0.5, -0.45, 0), steel.darkened(0.2))
 	for x in [2.2, 3.6, l - 3.6, l - 2.2]:
 		_box(node, Vector3(0.9, 0.9, 0.15), Vector3(x, -1.0, w * 0.5 - 0.3), steel.darkened(0.4))
-	if gangway:
-		_box(node, Vector3(CAR_GAP, 0.1, DOOR_TO - DOOR_FROM + 0.2), Vector3(l + CAR_GAP * 0.5, -0.05, (DOOR_FROM + DOOR_TO) * 0.5), steel)
+
+
+func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
 	life.add_car(c)
 	var calm := Look.mood_look("calm")
 	var lamp := OmniLight3D.new()
@@ -936,12 +983,111 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 	(c["values"] as Label3D).visible = false
 
 
+## The shell model of this car's kind, with a material of its own so the
+## warmth can tint it; null when the file is missing.
+func _shell(c: Dictionary) -> Node3D:
+	var variant: String = String(SHELL_OF.get(Catalog.layout_id(c["def"]), "plain"))
+	var path := SHELL_ROOT % variant
+	if not _shells.has(path):
+		_shells[path] = load(path) if ResourceLoader.exists(path) else null
+	var packed = _shells[path]
+	if not (packed is PackedScene):
+		return null
+	var shell := (packed as PackedScene).instantiate() as Node3D
+	shell.name = "Shell"
+	for mesh_node in shell.find_children("*", "MeshInstance3D", true, false):
+		var source := (mesh_node as MeshInstance3D).get_active_material(0) as StandardMaterial3D
+		if source != null:
+			var mat := source.duplicate() as StandardMaterial3D
+			mat.roughness = 1.0
+			(mesh_node as MeshInstance3D).material_override = mat
+			c["shell_mat"] = mat
+	return shell
+
+
+## One card of land and sky behind the train, seen only through the windows
+## (the back wall hides the rest). Its x runs in units of BACKDROP_METRES so
+## the hills keep their size whatever the train's length.
+func _build_backdrop() -> void:
+	# One quad a car, inside its back wall, so nothing shows between the cars;
+	# x runs on across the cars so the hills do not jump at a gap.
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var normals := PackedVector3Array()
+	var index := PackedInt32Array()
+	for c in cars:
+		var x0: float = float(c["x0"]) + 0.2
+		var x1: float = float(c["x0"]) + CAR_LENGTH - 0.2
+		var k := verts.size()
+		verts.append_array([Vector3(x0, BACKDROP_HIGH, BACKDROP_Z), Vector3(x1, BACKDROP_HIGH, BACKDROP_Z),
+			Vector3(x1, BACKDROP_LOW, BACKDROP_Z), Vector3(x0, BACKDROP_LOW, BACKDROP_Z)])
+		uvs.append_array([Vector2(x0 / BACKDROP_METRES, 0.0), Vector2(x1 / BACKDROP_METRES, 0.0),
+			Vector2(x1 / BACKDROP_METRES, 1.0), Vector2(x0 / BACKDROP_METRES, 1.0)])
+		normals.append_array([Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK])
+		index.append_array([k, k + 1, k + 2, k, k + 2, k + 3])
+	if verts.is_empty():
+		return
+	var mesh := ArrayMesh.new()
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = index
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	backdrop = MeshInstance3D.new()
+	backdrop.name = "Backdrop"
+	backdrop.mesh = mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = BackdropShader
+	mat.set_shader_parameter("haze", 0.55)
+	mat.set_shader_parameter("sky_top", Color(0.26, 0.3, 0.36))
+	mat.set_shader_parameter("sky_low", Color(0.5, 0.53, 0.57))
+	mat.set_shader_parameter("land", Color(0.12, 0.13, 0.14))
+	backdrop.material_override = mat
+	backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	train.add_child(backdrop)
+	_dress_backdrop()
+
+
+## Night darkens the card; the land goes by only while the train runs.
+func _dress_backdrop() -> void:
+	if backdrop == null:
+		return
+	var view: Dictionary = rules.get("view", {})
+	var night: bool = String(view.get("daytime", "day")) == "night"
+	(backdrop.material_override as ShaderMaterial).set_shader_parameter("night", 1.0 if night else 0.0)
+
+
+func running() -> bool:
+	var view: Dictionary = rules.get("view", {})
+	var motion := String(view.get("motion", "auto"))
+	if motion == "auto":
+		var t: Dictionary = rules.get("train", {})
+		return phase() != "stop" and t.get("stranded") == null
+	return motion == "running"
+
+
+func _step_backdrop(delta: float) -> void:
+	if backdrop == null or not running():
+		return
+	_scroll += delta * RUN_SPEED / BACKDROP_METRES
+	(backdrop.material_override as ShaderMaterial).set_shader_parameter("scroll", _scroll)
+
+
 ## An iron stove with its pipe, an ember glow and the faint steam a car stove
 ## may make (fx/smoke.gd "stove").
 func _build_stove(c: Dictionary, at: Vector3) -> void:
 	var node: Node3D = c["node"]
 	var iron := Color(0.12, 0.12, 0.13)
-	_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
+	# The iron stove model of the furniture set (origin at its middle); a box without it.
+	if ResourceLoader.exists(STOVE_MODEL):
+		var stove := (load(STOVE_MODEL) as PackedScene).instantiate() as Node3D
+		stove.name = "Stove"
+		stove.position = at + Vector3(0, 0.35, 0)
+		node.add_child(stove)
+	else:
+		_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
 	_box(node, Vector3(0.1, CAR_HEIGHT - 0.7, 0.1), at + Vector3(0, 0.7 + (CAR_HEIGHT - 0.7) * 0.5, -0.1), iron)
 	var glow := OmniLight3D.new()
 	glow.light_color = STOVE_COLOR
