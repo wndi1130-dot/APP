@@ -1,6 +1,6 @@
 extends SceneTree
 ## Makes the atmosphere frame's photo textures from CC0 originals kept outside
-## the repository (C:\dev\zombie\assets_raw\polyhaven, Poly Haven, 결정 424):
+## the repository (C:\dev\zombie\assets_raw\polyhaven, Poly Haven, 사용자 10-25 공개 자산 먼저):
 ## - sky bands: the half of each 2k sky that faces the sun, from the horizon up
 ##   to 40 degrees, tone-mapped to 1024x256 (fx/textures/sky/<name>.jpg);
 ## - ground detail: four 1k ground photos reduced to their light and dark

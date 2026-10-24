@@ -244,7 +244,7 @@ const WEATHER: Dictionary = {
 	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.1, "veil": 0.86, "veil_color": Color(0.40, 0.43, 0.46), "haze": 0.55, "fall": 0.7},
 }
 
-## Photo skies (CC0, Poly Haven, 결정 424; made by tools/atmo_textures.gd from
+## Photo skies (CC0, Poly Haven, 사용자 10-25 공개 자산 먼저; made by tools/atmo_textures.gd from
 ## originals outside the repository): the cloud shapes behind the train and in
 ## the field's puddles. The hour's colour still comes from BANDS: a photo only
 ## lends its clouds, and a little of its own colour (hue). source: the Poly

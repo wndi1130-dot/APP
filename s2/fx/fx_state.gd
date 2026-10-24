@@ -10,7 +10,7 @@ extends RefCounted
 ## fx_cold, fx_sky and fx_cloud belong to the atmosphere frame (fx/atmosphere.gd):
 ## params_for gives plain values from the temperature, Atmosphere.params the real ones.
 const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud"]
-## Texture globals (CC0 photos, 결정 424): the ground's grain stays as
+## Texture globals (CC0 photos, 사용자 10-25 공개 자산 먼저): the ground's grain stays as
 ## project.godot sets it; the photo sky follows the look (set_sky).
 const TEXTURE_GLOBALS: Array[String] = ["fx_ground", "fx_sky_tex"]
 

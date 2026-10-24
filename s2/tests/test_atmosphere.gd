@@ -395,14 +395,14 @@ func test_houses_keep_a_little_paint() -> void:
 	assert_lt(painted, 16, "some never had any")
 
 
-# ---------------------------------------------------------------- CC0 photos (결정 424)
+# ---------------------------------------------------------------- CC0 photos (사용자 10-25, 공개 자산 먼저)
 
 func test_the_photo_skies_and_the_ground_grain_are_in_the_build() -> void:
 	for key in Atmosphere.SKY_PHOTOS:
 		var tex := Atmosphere.sky_texture(key)
 		assert_not_null(tex, key)
 		if tex != null:
-			# Phone budget (결정 424): 1024 wide at most.
+			# Phone budget (사용자 10-25, 공개 자산 먼저): 1024 wide at most.
 			assert_eq(tex.get_size(), Vector2(1024, 256), key)
 	var ground: Texture2D = load(Atmosphere.GROUND_DETAIL)
 	assert_not_null(ground)

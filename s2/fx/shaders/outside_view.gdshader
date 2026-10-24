@@ -61,7 +61,7 @@ uniform float mist : hint_range(0.0, 1.0) = 0.3;
 uniform float catenary : hint_range(0.0, 1.0) = 0.0;
 // Rain or wet snow falling: the far line goes greyer, the near ground darker.
 uniform float falling : hint_range(0.0, 1.0) = 0.0;
-// Photo skies (CC0, 결정 424): up to three bands mixed by sky_w, each the half
+// Photo skies (CC0, 사용자 10-25 공개 자산 먼저): up to three bands mixed by sky_w, each the half
 // of a real sky that faces the sun, horizon at the bottom. They lend their
 // clouds to the hour's colours, and sky_hue of their own colour. photo_on 0:
 // the drawn sky only.

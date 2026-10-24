@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 #include "res://fx/shaders/fx_common.gdshaderinc"
-// CC0 photo detail (결정 424, fx/atmosphere.gd): the ground's grain (R snow,
+// CC0 photo detail (사용자 10-25 공개 자산 먼저, fx/atmosphere.gd): the ground's grain (R snow,
 // G autumn leaf, B wet soil, A grit, light and dark round 0.5) and the photo
 // sky the puddles give back. FxState writes them; the map's colours stay.
 global uniform sampler2D fx_ground : repeat_enable, filter_linear_mipmap;
