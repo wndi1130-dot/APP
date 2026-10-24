@@ -161,7 +161,8 @@ func test_held_bitten_and_the_shove_in_their_own_motions() -> void:
 	assert_almost_eq(lean.x.y, 0.0, 0.0001, "no twist added on top")
 	p.body.apply_bite(RandomNumberGenerator.new(), "arm_right", 0.0)
 	var bite := PersonVisual.motion_of(p, note, 0.0, [], own)
-	assert_eq(_named(own, bite), PersonVisual.OWN_BITTEN, "the flinch, even held")
+	# The one holding it has no place here: from in front (decision 422: its own flinch).
+	assert_eq(_named(own, bite), PersonVisual.OWN_BITTEN_FRONT, "the flinch, even held")
 	assert_almost_eq(bite.x, 0.0, 0.001, "from its start")
 	assert_gt(PersonVisual.motion_of(p, note, 0.3, [], own).x, 0.4)
 	PersonVisual.motion_of(p, note, 0.4, [], own)
@@ -321,8 +322,9 @@ func test_a_job_of_the_hands_is_the_living_own() -> void:
 	# 부목(막대 + 천)); without them it does not start.
 	p.items = {"plank": 1, "cloth": 1}
 	p.body.fracture(false)
+	# Treating itself, at its worst wound: the broken leg (decision 422).
 	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_pry"], ["swap", "p_search_mid"],
-			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat"],
+			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat_leg"],
 			["splint", "p_kneel_work"], ["lid", "p_kneel_work"], ["dig", "p_floor_strike"], ["window", "p_swing_one"],
 			["kick", "p_kick"]]:
 		p.start_action(want[0], "시험", 2.0, func() -> void: pass)

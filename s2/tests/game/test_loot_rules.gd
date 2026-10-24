@@ -8,6 +8,7 @@ const T = preload("res://game/sim/loot_tables.gd")
 const OLD_CHANCE := 0.1
 const OLD_TABLE: Array = [[4, {"id": "bandage"}, 1], [3, {"ammo": "pistol"}, 2], [3, {"ammo": "shell"}, 2]]
 const Carry = preload("res://game/sim/carry.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Sulehuf = preload("res://game/world/sulehuf_map.gd")
 
@@ -29,7 +30,8 @@ func _known(entry: Dictionary) -> bool:
 		return entry["ammo"] in ["pistol", "shell"]
 	if entry.has("tool"):
 		return W.is_known(String(entry["tool"]))
-	return Carry.ITEM_NAMES.has(String(entry["id"]))
+	# A bundle in a pocket comes named (field_items.gd, decision 423-8).
+	return Carry.ITEM_NAMES.has(String(entry["id"])) or FieldItems.has(String(entry["id"]))
 
 
 func test_the_dead_keep_todays_pockets_and_draw_the_same_dice() -> void:
@@ -182,7 +184,9 @@ func test_a_padded_one_is_placed_by_the_building_it_stands_near_and_a_tool_comes
 	var buildings := [{"name": "역사", "rect": Rect2i(20, 12, 20, 12)}, {"name": "화물 창고", "rect": Rect2i(126, 12, 26, 12)}, {"name": "약국", "rect": Rect2i(34, 38, 8, 10)}]
 	assert_eq(R.place_at(buildings, Vector2i(30, 22)), "station")
 	assert_eq(R.place_at(buildings, Vector2i(142, 16)), "shed")
-	assert_eq(R.place_at(buildings, Vector2i(38, 40)), "", "the pharmacy has no padded table")
+	# The dead by a pharmacy carry its things (decision 423, P08); a padded one there keeps the padded table.
+	assert_eq(R.place_at(buildings, Vector2i(38, 40)), "hospital")
+	assert_eq(R.body_key("clothed", "hospital"), "clothed", "the pharmacy has no padded table")
 	assert_eq(R.place_at(buildings, Vector2i(90, 90)), "")
 	var p := R.to_pocket({"tool": "crowbar", "n": 1})
 	assert_eq(p["id"], "crowbar")
