@@ -21,7 +21,8 @@
       "상징물의 실재 여부, 교파별 배치, 운반 가능성, 실제 도시 표식 사용 권리",
       "loot 가중치·risk의 게임 균형, 국가·지역별 보정, 고갈·빈 결과 처리",
       "최종 장소 JSON Schema, symbol 목록의 런타임 표현, secret·moral_cards의 참조 id"
-    ]
+    ],
+    "stops": "들름 다섯(탄광 mine, 산장 lodge, 목재소 sawmill, 호숫가 lake, 산맥 고개 summit)은 결정 423 (15)로 각자 장소 유형이 됐다. 가중치는 house_layout.md 7.1의 「얻는 것」에서 낸 첫 제안이고, 목재·고철·코어·폭약은 이 표가 아니라 장소 부산물이다(places.md 0장). 들름의 상징물 후보는 아직 없어 symbol은 0(추첨에서 뺌)이고 symbols는 비어 있다. 도시 여섯의 가중치는 그대로다."
   },
   "sources": {
     "freight_operations": {
@@ -524,6 +525,81 @@
         "symbol_office_municipal_seal",
         "symbol_office_council_photo"
       ],
+      "moral_cards": []
+    },
+    {
+      "id": "place_mine_draft",
+      "type": "mine",
+      "risk": 3,
+      "loot": {
+        "coal": 65,
+        "food": 10,
+        "medicine": 5,
+        "luxury": 5,
+        "symbol": 0,
+        "secret": 15
+      },
+      "symbols": [],
+      "moral_cards": []
+    },
+    {
+      "id": "place_lodge_draft",
+      "type": "lodge",
+      "risk": 2,
+      "loot": {
+        "coal": 15,
+        "food": 45,
+        "medicine": 10,
+        "luxury": 25,
+        "symbol": 0,
+        "secret": 5
+      },
+      "symbols": [],
+      "moral_cards": []
+    },
+    {
+      "id": "place_sawmill_draft",
+      "type": "sawmill",
+      "risk": 2,
+      "loot": {
+        "coal": 35,
+        "food": 15,
+        "medicine": 5,
+        "luxury": 15,
+        "symbol": 0,
+        "secret": 30
+      },
+      "symbols": [],
+      "moral_cards": []
+    },
+    {
+      "id": "place_lake_draft",
+      "type": "lake",
+      "risk": 2,
+      "loot": {
+        "coal": 20,
+        "food": 55,
+        "medicine": 5,
+        "luxury": 15,
+        "symbol": 0,
+        "secret": 5
+      },
+      "symbols": [],
+      "moral_cards": []
+    },
+    {
+      "id": "place_summit_draft",
+      "type": "summit",
+      "risk": 3,
+      "loot": {
+        "coal": 20,
+        "food": 15,
+        "medicine": 10,
+        "luxury": 10,
+        "symbol": 0,
+        "secret": 45
+      },
+      "symbols": [],
       "moral_cards": []
     }
   ]
