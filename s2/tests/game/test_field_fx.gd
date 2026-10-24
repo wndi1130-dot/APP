@@ -11,7 +11,7 @@ const MapView = preload("res://game/world/map_view.gd")
 
 func _stop(weather: Array) -> Node:
 	var game = FieldGame.new()
-	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": weather}
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 1.0, "weather": weather}
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
@@ -75,15 +75,19 @@ func test_floors_under_a_roof_are_kept_from_snow_and_wet() -> void:
 	assert_eq(MapView.sky_alpha(g, outdoor), 1.0)
 
 
-func test_light_and_backdrop_come_from_fx_state() -> void:
+func test_light_and_backdrop_come_from_the_atmosphere_frame() -> void:
+	# A plain stop is lit by the atmosphere frame (사용자 2026-10-24 분위기 변주):
+	# hour, weather, region and cold. A storm stop keeps FxState and its stage.
+	var Atmosphere = load("res://fx/atmosphere.gd")
 	var game = _stop(["fog", "snow"])
-	var light: Dictionary = FxState.lighting_for(["fog", "snow"], 10.5)
+	var light: Dictionary = Atmosphere.light(Atmosphere.look(10.5, ["fog", "snow"], "K1", 1.0, {"wind": game.weather.wind}))
 	assert_eq(String(light["band"]), "day", "10:30 arrival")
 	assert_eq(game.sun.light_color, light["sun_color"])
 	assert_almost_eq(game.sun.light_energy, float(light["sun_energy"]), 0.0001)
 	assert_eq(game.environment.ambient_light_color, light["ambient_color"])
 	assert_almost_eq(game.environment.ambient_light_energy, float(light["ambient_energy"]), 0.0001)
-	# The void around the map is the weather tint, darkened: grey, never sky blue.
+	assert_almost_eq(game.sun.rotation_degrees.x, float(light["sun_pitch"]), 0.001)
+	# The void around the map is more land in the same light, darkened: never sky blue.
 	var back: Color = game.environment.background_color
 	assert_lt(back.v, Color(game.fx_params["fx_tint"]).v)
 	assert_false(back.b > back.r and back.s > 0.15, "no sky blue")
@@ -97,10 +101,11 @@ func test_a_blizzard_is_dimmer_than_a_clear_day() -> void:
 
 
 func test_dusk_dims_the_arrival_light_down_to_the_night_band() -> void:
+	var Atmosphere = load("res://fx/atmosphere.gd")
 	var game = _stop(["clear"])
 	var day: float = game.sun.light_energy
-	var night: Dictionary = FxState.lighting_for(["clear"], 0.0)
-	# 15:45 is halfway between 15:00 and 16:30.
+	var night: Dictionary = Atmosphere.light(Atmosphere.look(0.0, ["clear"], "K1", 1.0, {"wind": game.weather.wind}))
+	# 15:45, the sun on the line.
 	game.clock.elapsed = (945.0 - 630.0) * 60.0 / 15.0
 	game._update_light()
 	assert_lt(game.sun.light_energy, day)
@@ -168,7 +173,10 @@ func test_a_plain_stop_has_no_storm_layers() -> void:
 	assert_eq(game.storm_layers.size(), 0)
 	assert_null(game.storm_screen)
 	assert_true(game.snow.emitting, "plain snowfall as before")
-	assert_almost_eq(game.sun.rotation_degrees.x, FxState.SUN_PITCH, 0.001)
+	# The atmosphere frame moves the sun with the hour: at 10:30 a little lower
+	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd).
+	assert_almost_eq(game.sun.rotation_degrees.x, float(game.fx_light["sun_pitch"]), 0.001)
+	assert_gt(game.sun.rotation_degrees.x, FxState.SUN_PITCH)
 	assert_eq(game.storm_glows().size(), 0)
 
 

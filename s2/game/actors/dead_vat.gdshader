@@ -11,19 +11,19 @@ render_mode cull_back;
 // the rule clock picks the frame and TIME is not used.
 // g may carry more than the clip (game/actors/dead_body.gd, mixed): the frame
 // a body was in when it changed to this clip and how much of that it still
-// keeps, g = clip + 16 * frame + 65536 * share (share 0..63). A plain clip
-// number reads as before: no frame, no share. Clips 16 and up carry 4194304
-// more for each sixteen (16..31 once, 32..47 twice, 48..63 three times) and
-// are written as clip % 16 (scripts/vat_baker.gd pack_motion), so every g
-// below 4194304 reads exactly as it did with sixteen places; 63 with every
-// frame and share is 2^24 - 1, the most a float carries whole.
+// keeps, g = clip + 16 * frame + 65536 * share (share 0..31). A plain clip
+// number reads as before: no frame, no share. Clips 16 and up carry 2097152
+// more for each sixteen (16..31 once, 32..47 twice, up to 112..127 seven
+// times) and are written as clip % 16 (scripts/vat_baker.gd pack_motion), so
+// every g below 2097152 reads exactly as it did with sixteen places; 127 with
+// every frame and share is 2^24 - 1, the most a float carries whole.
 uniform sampler2D vat : filter_nearest, repeat_disable;
 uniform float rows_per_frame = 1.0;
 uniform float frame_rows = 64.0;
-uniform float clip_start[64];
-uniform float clip_frames[64];
-uniform float clip_rate[64];
-uniform float clip_loop[64];
+uniform float clip_start[128];
+uniform float clip_frames[128];
+uniform float clip_rate[128];
+uniform float clip_loop[128];
 // Box bake stores offset + 0.5 in 8 bits; a skinned bake stores metres (bias 0).
 uniform float bias = 0.5;
 uniform vec3 tint = vec3(0.5);
@@ -37,8 +37,8 @@ uniform bool mixes = false;
 // A compacted bake (scripts/body_bake.gd compact) keeps 8 bits a channel
 // inside each clip's own box; the picture's 0..1 goes back to lo..hi.
 uniform bool quantized = false;
-uniform vec3 clip_lo[64];
-uniform vec3 clip_hi[64];
+uniform vec3 clip_lo[128];
+uniform vec3 clip_hi[128];
 // A baked body that brings its own colour picture (models/people/<body>/albedo.png)
 // is drawn with it, pressed like every other model (fx_model_grade, the user's
 // values of 2026-10-17); tint then only shifts it (tint / 0.5, so 0.5 leaves it).
@@ -63,7 +63,7 @@ vec3 offset_at(float x, float row, int clip) {
 
 // The clip a frame row belongs to (for the frame a body keeps while it changes motion).
 int clip_of(float frame) {
-	for (int n = 0; n < 64; n++) {
+	for (int n = 0; n < 128; n++) {
 		if (frame >= clip_start[n] && frame < clip_start[n] + clip_frames[n]) {
 			return n;
 		}
@@ -75,8 +75,8 @@ void vertex() {
 	// g is a whole number; above 2^23 a float has no halves, so adding 0.5 would
 	// round an odd one up to the next clip (clips 32 and on). round() keeps it.
 	float packed = round(INSTANCE_CUSTOM.g);
-	float upper = floor(packed / 4194304.0);
-	packed -= upper * 4194304.0;
+	float upper = floor(packed / 2097152.0);
+	packed -= upper * 2097152.0;
 	float share = floor(packed / 65536.0);
 	float kept = floor((packed - share * 65536.0) / 16.0);
 	int clip = int(packed - share * 65536.0 - kept * 16.0 + 0.5) + 16 * int(upper);
@@ -106,7 +106,7 @@ void vertex() {
 	vec3 offset = mix(a, b, fract(frame));
 	if (mixes && share > 0.5) {
 		float row_c = (kept * rows_per_frame + UV2.y + 0.5) / height;
-		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? clip_of(kept) : clip), share / 63.0);
+		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? clip_of(kept) : clip), share / 31.0);
 	}
 	VERTEX += offset;
 	shade = INSTANCE_CUSTOM.a;

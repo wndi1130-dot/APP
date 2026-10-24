@@ -112,7 +112,7 @@ func test_world_shader_reads_tracks_only_where_snow_can_lie() -> void:
 
 func _stop(weather: Array) -> Node:
 	var game = load("res://game/field_game.gd").new()
-	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": weather}
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 1.0, "weather": weather}
 	add_child_autofree(game)
 	game.set_process(false)
 	return game

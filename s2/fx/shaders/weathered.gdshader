@@ -79,6 +79,8 @@ void fragment() {
 	// Rime: a grey-white bloom on whatever is left bare.
 	float r = clamp(fx_frost, 0.0, 1.0) * rime_catch * (1.0 - cover);
 	base = mix(base, FX_RIME, r * 0.35 * smoothstep(0.35, 0.8, n));
+	// Cloud shadows drifting over (the atmosphere frame, fx_cloud).
+	base *= mix(1.0, fx_cloud_shade(w_pos.xz, TIME), open);
 
 	ALBEDO = fx_photo(base, fx_fade);
 	ROUGHNESS = rough;

@@ -26,6 +26,17 @@ const NEAR_STOP := Vector2(-400.0 / 15.0, 1600.0 / 15.0)
 var moving: bool = true: set = set_moving
 ## Held at the start (screens taken for checks).
 var still: bool = false: set = set_still
+## What falls (the atmosphere frame's look, fx/atmosphere.gd): "snow" as the
+## mockup has it, "sleet" thinner and quicker, "rain" the same sheets drawn as
+## long thin streaks, "none" nothing falling (clear, overcast, fog). The drift
+## along the ground needs lying snow (drift_on).
+var falls: String = "snow": set = set_falls
+var drift_on: bool = true: set = set_drift_on
+## Light of the hour on the snow and the fog (1 day, low at night).
+var light: float = 1.0: set = set_light
+## How the rain sheets are stretched and sped up from the snow's.
+const RAIN_STRETCH := Vector2(0.35, 3.2)
+const RAIN_SPEED := Vector2(0.25, 3.4)
 
 var drift: ColorRect
 var fog: ColorRect
@@ -57,18 +68,56 @@ func set_still(v: bool) -> void:
 			((c as ColorRect).material as ShaderMaterial).set_shader_parameter("still", 1.0 if v else 0.0)
 
 
+func set_falls(v: String) -> void:
+	falls = v if v in ["snow", "sleet", "rain", "none"] else "snow"
+	_apply()
+
+
+func set_drift_on(v: bool) -> void:
+	drift_on = v
+	_apply()
+
+
+## How thick the low fog sheet is (the look's haze, 0..1): the mockup's .42 at
+## a heavy haze, thinner on a clear day.
+func set_haze(v: float) -> void:
+	if fog != null:
+		(fog.material as ShaderMaterial).set_shader_parameter("opacity", 0.42 * lerpf(0.3, 1.0, clampf(v, 0.0, 1.0)))
+
+
+func set_light(v: float) -> void:
+	light = clampf(v, 0.0, 1.0)
+	for c in [drift, fog, far, near]:
+		if c != null:
+			(c as ColorRect).modulate = Color(light, light, light, 1.0)
+
+
 func _apply() -> void:
 	if far == null:
 		return
-	drift.visible = moving
-	_snow(far, SNOW_RUN_FAR if moving else SNOW_STOP_FAR, FAR_RUN if moving else FAR_STOP)
-	_snow(near, SNOW_RUN_NEAR if moving else SNOW_STOP_NEAR, NEAR_RUN if moving else NEAR_STOP)
+	drift.visible = moving and drift_on
+	far.visible = falls != "none"
+	near.visible = falls != "none"
+	_snow(far, SNOW_RUN_FAR if moving else SNOW_STOP_FAR, FAR_RUN if moving else FAR_STOP, 400.0, 0.8)
+	_snow(near, SNOW_RUN_NEAR if moving else SNOW_STOP_NEAR, NEAR_RUN if moving else NEAR_STOP, 400.0, 0.6)
 
 
-func _snow(c: ColorRect, tex: Texture2D, speed: Vector2) -> void:
+func _snow(c: ColorRect, tex: Texture2D, speed: Vector2, tile: float, opacity: float) -> void:
 	var m := c.material as ShaderMaterial
+	var k: float = UiFonts.K
+	var tile_px := Vector2(tile, tile)
+	if falls == "rain":
+		# The same flakes, drawn as long thin streaks coming down fast.
+		tile_px *= RAIN_STRETCH
+		speed = Vector2(speed.x * RAIN_SPEED.x, absf(speed.x) * RAIN_SPEED.y + speed.y)
+		opacity *= 0.55
+	elif falls == "sleet":
+		speed *= 1.6
+		opacity *= 0.75
 	m.set_shader_parameter("tex", tex)
-	m.set_shader_parameter("speed_px", speed * UiFonts.K)
+	m.set_shader_parameter("tile_px", tile_px * k)
+	m.set_shader_parameter("speed_px", speed * k)
+	m.set_shader_parameter("opacity", opacity)
 
 
 ## A sheet across the screen, `h_css` high at `top_css` (−1: all of it), its
