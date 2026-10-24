@@ -4109,7 +4109,13 @@ func _tap_thing(p, world: Vector3) -> bool:
 	# Stairs: a tap on them goes up (or down) them.
 	var lv: int = game.level_of(p.position)
 	for s in game.stairs:
-		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
+		if not (s["low"] == lv or s["high"] == lv):
+			continue
+		if s["ladder"]:
+			# A rooftop's ladder: walk to its foot (or top) and climb it.
+			if s.has("roof") and game.lift(s["cell"], lv).distance_to(world) < 1.0:
+				game.actions.go_and_do(p, "ladder", s, game.lift(s["cell"], lv))
+				return true
 			continue
 		if game.lift(s["cell"], lv).distance_to(world) < 1.0:
 			if _assist_off(p):

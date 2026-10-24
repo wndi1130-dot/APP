@@ -1050,6 +1050,10 @@ func _build_level(lv: int) -> void:
 func _build_stairs() -> void:
 	for s in data.get("stairs", []):
 		if s["ladder"]:
+			# A rooftop's skylight ladder (house_layout.md 6.1) is named like stairs; the kit draws it.
+			if s.has("roof"):
+				_floor_label("옥상으로", s["cell"], int(s["low"]))
+				_floor_label(LEVEL_WAYS.get(int(s["low"]), ""), s["cell"], int(s["high"]))
 			continue
 		var c: Vector2i = s["cell"]
 		var low: int = s["low"]

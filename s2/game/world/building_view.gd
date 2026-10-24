@@ -32,7 +32,7 @@ const PIECES: Array[String] = [
 	"ext_window", "ext_window_cut", "window_glass", "window_glass_broken", "window_glass_floor",
 	"ext_door", "door_leaf", "door_leaf_broken", "door_leaf_cut", "door_frame_cut",
 	"int_wall", "int_wall_cut", "int_door", "roof_gable", "roof_gable_end", "roof_flat",
-	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards",
+	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards", "ladder",
 ]
 const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
@@ -547,6 +547,10 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	if prints.has(0) and not prints[0].is_empty():
 		out["footprints"][b] = _bounds(prints[0])
 	var gables: Array = []
+	# 오르는 옥상으로 고른 건물(roof_rules.gd)은 맨 위도 낮은 담을 두른 평지붕이다.
+	var flat_top := false
+	for row: Variant in data.get("rooftops", []):
+		flat_top = flat_top or (row is Dictionary and int(row.get("building", -1)) == b)
 	for lv: int in prints:
 		var here: Dictionary = prints[lv]
 		var above: Dictionary = prints.get(lv + 1, {})
@@ -556,7 +560,7 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 				region[c] = true
 		var top := (lv + 1) * LEVEL_H
 		for r: Rect2i in _rects_of(region):
-			if _touches(r, above):
+			if _touches(r, above) or (flat_top and above.is_empty()):
 				_plan_flat(out, r, top, above, b)
 			else:
 				gables.append(_plan_gable(out, r, top, b))
@@ -711,6 +715,8 @@ static func _plan_flat(out: Dictionary, r: Rect2i, top: float, above: Dictionary
 static func _plan_stairs(out: Dictionary, data: Dictionary, levels: Dictionary) -> void:
 	for s: Dictionary in data.get("stairs", []):
 		if s.get("ladder", false):
+			if s.has("roof"):
+				_plan_roof_ladder(out, s, levels)
 			continue
 		var c: Vector2i = s["cell"]
 		var low: int = s["low"]
@@ -736,6 +742,25 @@ static func _plan_stairs(out: Dictionary, data: Dictionary, levels: Dictionary) 
 		_add(out, "stair_steep", xf, b, low, "int_stand")
 		_add(out, "stair_well", xf, hg.building_at(c), high, "int_stand")
 		out["pieces"].append({"box": Vector3(0.47, 0.01, 0.47), "colour": ZONE_METAL_IN, "xf": _xf(Vector3(c.x + 0.5, 0.012, c.y + 0.5), 0.0), "b": hg.building_at(c), "lv": high, "slot": "int_stand"})
+
+
+## 옥상 천창의 접이 사다리(house_layout.md 6.1): 맨 위층 방 안에서 벽에 기대 지붕 위로 0.9 m
+## 나온다. 안을 열면 방 안에, 밖에서는 지붕 조각과 함께 그려 지붕 위로 나온 끝이 오를 자리를 알린다.
+static func _plan_roof_ladder(out: Dictionary, s: Dictionary, levels: Dictionary) -> void:
+	var c: Vector2i = s["cell"]
+	var low: int = s["low"]
+	if not levels.has(low):
+		return
+	var lg: FieldGrid = levels[low]
+	var wall := Vector2i.ZERO
+	for d in DIRS:
+		if lg.solid_at(c + d) == S.WALL:
+			wall = d
+	var b := int(s["roof"])
+	# 사다리 조각은 -Z 쪽에 붙어 있다: -Z가 벽을 보게 돌린다.
+	var yaw := yaw_of(-wall) if wall != Vector2i.ZERO else 0.0
+	_add(out, "ladder", _xf(Vector3(c.x + 0.5, 0, c.y + 0.5), yaw), b, low, "int_stand")
+	out["roofs"].append({"id": "ladder", "xf": _xf(Vector3(c.x + 0.5, low * LEVEL_H, c.y + 0.5), yaw), "b": b})
 
 
 # ---------------------------------------------------------------- 노드
