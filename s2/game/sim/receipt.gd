@@ -3,7 +3,9 @@ extends RefCounted
 
 const STOCK_KEYS := ["coal", "food", "medicine", "luxury", "symbol", "info", "scrap", "wood", "ammo_pistol", "ammo_shell", "ammo_craft"]
 const PEOPLE_LISTS := ["sent", "injured", "bitten", "dead", "missing", "leftBehind", "rescued"]
-const PLACE_TYPES := ["freight", "houses", "hospital", "factory", "church", "office"]
+## The six towns, and the five stops on the way (mine, lodge, sawmill, lake,
+## summit: each its own kind, decision 423).
+const PLACE_TYPES := ["freight", "houses", "hospital", "factory", "church", "office", "mine", "lodge", "sawmill", "lake", "summit"]
 const SOURCES := ["direct", "auto"]
 const END_REASONS := ["departed", "limit", "wiped"]
 const REQUIRED := ["place", "time", "stock", "items", "people", "witnessed", "placeState", "promises"]

@@ -152,15 +152,18 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 		start += frames.size()
 	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
 
-const TABLE_SIZE: int = 64
+const TABLE_SIZE: int = 128
 ## Clips 16 and up go in the shader's upper part, sixteen to each step of
-## UPPER (dead_vat.gdshader): 16..31 one step, 32..47 two, 48..63 three. With a
-## frame under 4096 and a share of 0..63 that is at most 2^24 - 1, which a
-## float carries whole: sixty-four clips is as far as this packing goes.
-const UPPER: float = 4194304.0
+## UPPER (dead_vat.gdshader): 16..31 one step, 32..47 two, and so on to
+## 112..127 seven. With a frame under 4096 and a share of 0..SHARE_MAX that is
+## at most 2^24 - 1, which a float carries whole: 128 clips is as far as this
+## packing goes. (Up to 2026-10-24 a share went to 63 and UPPER was twice
+## this, which held 64 clips; the clip numbers are the same either way.)
+const UPPER: float = 2097152.0
+const SHARE_MAX: int = 31
 
 ## INSTANCE_CUSTOM.g for dead_vat.gdshader: the clip, and while a body changes
-## motion the frame row it was in and how much of that it keeps (share 0..63).
+## motion the frame row it was in and how much of that it keeps (share 0..SHARE_MAX).
 ## Below sixteen it is the same number as clip + 16 * frame + 65536 * share.
 static func pack_motion(clip: int, frame: int = 0, share: int = 0) -> float:
 	return float(clip % 16) + 16.0 * float(frame) + 65536.0 * float(share) + UPPER * floorf(clip / 16.0)

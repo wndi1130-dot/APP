@@ -91,7 +91,8 @@ func test_a_place_the_receipt_does_not_know_is_written_beside_its_type() -> void
 	var game = _game({"seed": 3, "raiders": false, "auto_pause": false})
 	assert_false(game.receipt.to_dict()["place"].has("placeKind"), "the old stop's receipt is as it was")
 	var Receipt = preload("res://game/sim/receipt.gd")
-	assert_false(Receipt.PLACE_TYPES.has("mine"), "when the contract learns it, this note goes")
+	assert_true(Receipt.PLACE_TYPES.has("mine"), "the stops are kinds of their own now (decision 423)")
+	assert_false(Receipt.PLACE_TYPES.has("bare_line"), "a bare line still is not")
 
 
 func test_the_train_has_doors_drawn_on_each_side_the_map_gives() -> void:

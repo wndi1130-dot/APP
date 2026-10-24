@@ -37,6 +37,8 @@ const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
+const BreathFx = preload("res://fx/breath_fx.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
@@ -245,6 +247,21 @@ var lantern: OmniLight3D
 var firebox: OmniLight3D
 var lamp_pulse: float = 0.0
 var fx_light_night: Dictionary = {}
+## The atmosphere frame (fx/atmosphere.gd; picture only, rules never read it):
+## the region band, the cold (opts "cold", else the act's from the scheme
+## table), a fixed picture hour for check shots (opts "look_hour", -1: the
+## clock's), the look now and the game minute it was made at.
+var region: String = Atmosphere.DEFAULT_REGION
+var cold: float = 1.0
+## Which side of midwinter (0 autumn, 1 spring): day length, leaf and lying snow.
+var side: float = 0.0
+var look_hour: float = -1.0
+var atmo: Dictionary = {}
+var atmo_min: float = -INF
+var breath: Node3D
+## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
+var cold_frost: Control
+var cold_frost_mat: ShaderMaterial
 
 
 func _ready() -> void:
@@ -256,7 +273,17 @@ func _ready() -> void:
 	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), AMBIENT_C, Vector2(1, 0.2), 0.4)
 	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
 	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
-	snow_cover = SnowCover.new(SnowCover.DEFAULT_SEASON, false, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))))
+	region = Atmosphere.region_key(String(opts.get("region", Atmosphere.DEFAULT_REGION)))
+	var act := String(opts.get("act", "prologue"))
+	cold = clampf(float(opts.get("cold", Atmosphere.cold_for(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
+	side = clampf(float(opts.get("side", Atmosphere.side_for(act, String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
+	look_hour = float(opts.get("look_hour", -1.0))
+	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
+	# in the rules reads it). A storm stop keeps its season's depth.
+	var open_ground := bool(Atmosphere.region(region)["open"])
+	var season := Atmosphere.season_for(cold, side) if storm.is_empty() else SnowCover.DEFAULT_SEASON
+	var old_cm := Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side) if storm.is_empty() else -1.0
+	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
@@ -333,6 +360,18 @@ func _ready() -> void:
 func _apply_fx() -> void:
 	var hour := clock.game_minutes() / 60.0
 	snow_at_min = clock.game_minutes()
+	if storm.is_empty():
+		# The atmosphere frame draws a plain stop; a storm stage keeps its own look.
+		atmo = atmosphere_at(picture_hour())
+		# The first light update sets the lights, the floors and the grade.
+		atmo_min = -INF
+		fx_params = Atmosphere.params(atmo, weather.wind_dir, snow_cover.cover())
+		FxState.apply(fx_params)
+		fx_light = Atmosphere.light(atmo)
+		fx_light_night = Atmosphere.light(atmosphere_at(0.0))
+		return
+	# A storm keeps its stage's light; the look is still made for breath and the like.
+	atmo = atmosphere_at(picture_hour())
 	fx_params = FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
 	FxState.apply(fx_params)
 	fx_light = FxState.lighting_for(look_kinds, hour)
@@ -351,9 +390,16 @@ func _update_snow() -> void:
 	var now := clock.game_minutes()
 	if now - snow_at_min < 1.0:
 		return
-	snow_cover.advance(now - snow_at_min, weather.kinds, weather.ambient_c)
+	# Lying snow is picture only: on a plain stop it goes by what is drawn and
+	# the picture temperature (rain eats it), a storm by its stage's rules.
+	var kinds_now: Array = weather.kinds
+	var temp_now := weather.ambient_c
+	if storm.is_empty() and not atmo.is_empty():
+		kinds_now = atmo["kinds"]
+		temp_now = float(atmo["temp_c"])
+	snow_cover.advance(now - snow_at_min, kinds_now, temp_now)
 	if snow_tracks != null:
-		snow_tracks.refill(now - snow_at_min, SnowCover.rate_cm_h(weather.kinds, weather.ambient_c))
+		snow_tracks.refill(now - snow_at_min, SnowCover.rate_cm_h(kinds_now, temp_now))
 	snow_at_min = now
 	var p := FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, now / 60.0, snow_cover.cover())
 	if absf(float(p["fx_snow"]) - float(fx_params["fx_snow"])) < 0.002:
@@ -473,8 +519,81 @@ func _update_fade(delta: float) -> void:
 	FxState.apply({"fx_fade": fx_params["fx_fade"]})
 
 
+## The atmosphere frame's look of this stop at an hour.
+func atmosphere_at(hour: float) -> Dictionary:
+	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side})
+
+
+## The hour the picture is drawn at: the field clock's, or a fixed one for check
+## shots (opts "look_hour": an hour, or -2 sunrise, -3 low sun before sunset,
+## -4 night, by this stop's cold).
+func picture_hour() -> float:
+	if look_hour >= 0.0:
+		return look_hour
+	if look_hour <= -1.5:
+		var t := Atmosphere.sun_times(cold, side)
+		return [t.x + 0.25, t.y - 0.4, t.y + 1.7][clampi(int(round(-look_hour)) - 2, 0, 2)]
+	return clock.game_minutes() / 60.0
+
+
+## A plain stop follows the atmosphere frame through the day, a game minute at
+## a time: sun, fill, sky light and cloud shadows move with the hour. The gray
+## box has no lamps everywhere yet, so after dark the light keeps the field's
+## floors (NIGHT_SUN_MIN, NIGHT_AMBIENT_MIN) as far as the hour is night.
+func _update_atmosphere() -> void:
+	var m := clock.game_minutes()
+	if absf(m - atmo_min) >= 1.0:
+		atmo_min = m
+		atmo = atmosphere_at(picture_hour())
+		fx_light = Atmosphere.light(atmo)
+		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
+		var changed := {}
+		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost"]:
+			if p[key] != fx_params.get(key):
+				fx_params[key] = p[key]
+				changed[key] = p[key]
+		FxState.apply(changed)
+		_set_cold_frost(float(atmo["edge_frost"]))
+		# Lights and the grade change only with the look (the grade's curve is a
+		# texture: remade every frame it cost the phone a few milliseconds).
+		var night := float(atmo["weights"]["night"])
+		sun.light_color = fx_light["sun_color"]
+		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
+		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		environment.ambient_light_color = fx_light["ambient_color"]
+		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
+		environment.background_color = fx_light["background"]
+		_apply_grade(atmo["grade"])
+	if cold_frost != null and cold_frost.visible:
+		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
+
+
+## The look's colour grade on the WorldEnvironment: saturation and contrast, and
+## a three-stop curve that leans the shadows to the fill's hue and the lights to the sun's.
+func _apply_grade(g: Dictionary) -> void:
+	environment.adjustment_enabled = true
+	environment.adjustment_saturation = float(g["saturation"])
+	environment.adjustment_contrast = float(g["contrast"])
+	environment.adjustment_brightness = float(g["brightness"])
+	var tex := environment.adjustment_color_correction as GradientTexture1D
+	if tex == null:
+		tex = GradientTexture1D.new()
+		tex.width = 64
+		tex.gradient = Gradient.new()
+		environment.adjustment_color_correction = tex
+	var k := float(g["strength"])
+	var shadow: Color = Color(0.3, 0.3, 0.3).lerp(Color(g["shadow"]) * (0.3 / maxf(Color(g["shadow"]).v, 0.05)), k * 0.35)
+	var lit: Color = Color(0.85, 0.85, 0.85).lerp(Color(g["light"]) * (0.85 / maxf(Color(g["light"]).v, 0.05)), k * 0.3)
+	var gr := tex.gradient
+	gr.offsets = PackedFloat32Array([0.0, 0.3, 0.85, 1.0])
+	gr.colors = PackedColorArray([Color(0, 0, 0), shadow, lit, Color(1, 1, 1)])
+
+
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
+	if storm.is_empty():
+		_update_atmosphere()
+		return
 	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
 	# The night band is lamps only; the gray-box field has no lamps yet, so the
 	# floors keep people, doors and the platform edge readable after dark.
@@ -486,7 +605,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(fx_params["fx_tint"]).darkened(0.75)
+	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
 	environment.ambient_light_energy = fx_light["ambient_energy"]
@@ -503,6 +622,10 @@ func _build_world() -> void:
 	sun.light_color = fx_light["sun_color"]
 	sun.shadow_enabled = bool(opts.get("shadows", true)) and bool(storm.get("shadows", true))
 	sun.rotation_degrees.x = float(storm.get("sun_pitch", FxState.SUN_PITCH))
+	if storm.is_empty():
+		# The atmosphere frame moves the sun with the hour (FxState.SUN_PITCH at midday in deep winter).
+		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
@@ -544,8 +667,29 @@ func _build_world() -> void:
 	flake.material = fm
 	snow.draw_pass_1 = flake
 	snow.emitting = bool(opts.get("snow", true)) and weather.particles() > 0
+	# What falls is the picture temperature's (atmosphere frame): rain streaks
+	# when it is warm, small quick wet flakes for sleet. The count is the rules'.
+	var falls := String(atmo.get("falls", "snow"))
+	if falls == "rain":
+		flake.size = Vector2(0.025, 0.5)
+		fm.set_shader_parameter("shape", 0)
+		fm.set_shader_parameter("opacity", 0.6)
+		pm.initial_velocity_min = 7.0
+		pm.initial_velocity_max = 9.0
+		pm.gravity = Vector3(0.0, -4.0, 0.0)
+		snow.lifetime = 1.6
+	elif falls == "sleet":
+		flake.size = Vector2(0.07, 0.07)
+		fm.set_shader_parameter("opacity", 0.7)
+		pm.initial_velocity_min = 3.5
+		pm.initial_velocity_max = 4.5
+		snow.lifetime = 2.6
 	add_child(snow)
 	_build_storm()
+	if storm.is_empty():
+		_build_cold_frost()
+	breath = BreathFx.new()
+	add_child(breath)
 
 
 ## Snow layers and the screen layer of a storm stop; nothing on other stops.
@@ -620,17 +764,58 @@ func _fit_storm_port() -> void:
 		storm_screen.size = Vector2(want)
 	if storm_frost == null:
 		return
-	# Top and bottom run the whole width; left and right fill in between.
+	_fit_frost_strips(storm_frost, float(storm["edge_frost"]))
+
+
+## Four full-size frost strips along the edges, only as deep as frost of this
+## amount can reach. Top and bottom run the whole width; left and right fill in between.
+func _fit_frost_strips(holder: Control, amount: float) -> void:
 	var view := Vector2(get_viewport().get_visible_rect().size)
-	var deep := minf(ceilf((float(storm["edge_frost"]) * FROST_REACH + FROST_MARGIN) * view.y), view.y * 0.5)
-	if storm_frost.get_child(0).size == Vector2(view.x, deep):
+	var deep := minf(ceilf((amount * FROST_REACH + FROST_MARGIN) * view.y), view.y * 0.5)
+	if holder.get_child(0).size == Vector2(view.x, deep):
 		return
 	var rects := [Rect2(0, 0, view.x, deep), Rect2(0, view.y - deep, view.x, deep),
 			Rect2(0, deep, deep, view.y - deep * 2.0), Rect2(view.x - deep, deep, deep, view.y - deep * 2.0)]
 	for i in range(4):
-		var strip: ColorRect = storm_frost.get_child(i)
+		var strip: ColorRect = holder.get_child(i)
 		strip.position = rects[i].position
 		strip.size = rects[i].size
+
+
+## Frost creeping in at the edges on a plain stop (the atmosphere's edge_frost:
+## the coldest stages, more at night). Same strips as a storm's; off below a trace.
+func _build_cold_frost() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 5   # over the world, under the HUD (10)
+	add_child(layer)
+	cold_frost = Control.new()
+	cold_frost.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cold_frost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cold_frost_mat = ShaderMaterial.new()
+	cold_frost_mat.shader = load("res://fx/shaders/screen_overlay.gdshader")
+	cold_frost_mat.set_shader_parameter("vignette", 0.0)
+	cold_frost_mat.set_shader_parameter("grain", 0.0)
+	for _i in range(4):
+		var strip := ColorRect.new()
+		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		strip.material = cold_frost_mat
+		cold_frost.add_child(strip)
+	layer.add_child(cold_frost)
+	_set_cold_frost(float(atmo.get("edge_frost", 0.0)))
+
+
+const COLD_FROST_MIN: float = 0.06
+
+
+func _set_cold_frost(amount: float) -> void:
+	if cold_frost == null:
+		return
+	var on := amount >= COLD_FROST_MIN
+	cold_frost.visible = on
+	cold_frost_mat.set_shader_parameter("edge_frost", amount if on else 0.0)
+	cold_frost.set_meta("amount", amount)
+	if on:
+		_fit_frost_strips(cold_frost, amount)
 
 
 ## Lamps that are on, nearest the middle of the view first (at most 8): where
@@ -1023,6 +1208,7 @@ func _process(delta: float) -> void:
 		view.slide_train(train_roll(leave_t))
 	_update_lantern(delta)
 	_update_camera(delta)
+	breath.tick(delta, self)
 	vis_t -= delta
 	if vis_t <= 0.0:
 		vis_t = 0.1
