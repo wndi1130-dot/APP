@@ -25,7 +25,7 @@ function makeContext(): AudioContext | null {
 
 export function installSound(root: HTMLElement): void {
   const clips = clipTable(FILES);
-  const engine = createEngine({ makeContext, clips, tracks: trackTable(STALL_FILES), load: url => fetch(url).then(r => r.arrayBuffer()), onReady: () => onBeat() });
+  const engine = createEngine({ makeContext, clips, tracks: trackTable(STALL_FILES), gusty: ['wind'], load: url => fetch(url).then(r => r.arrayBuffer()), onReady: () => onBeat() });
   const plan = createPlanner(Object.fromEntries(CUES.map(c => [c, clips[c].length])) as Record<Cue, number>);
   const fire = (cue: Cue) => {
     const shot = plan(cue, performance.now());
