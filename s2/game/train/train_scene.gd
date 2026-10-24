@@ -15,6 +15,7 @@ const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
+const PeopleView = preload("res://game/train/train_people_view.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
 const BackdropShader = preload("res://fx/shaders/horizon_backdrop.gdshader")
@@ -117,6 +118,7 @@ var _mats: Dictionary = {}
 var _font: SystemFont
 var _shells: Dictionary = {}
 var backdrop: MeshInstance3D
+var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
 
@@ -132,6 +134,10 @@ func _ready() -> void:
 		_build_train()
 		life.build_outside()
 		apply_rules()
+		if PeopleView.enabled() and bool(opts.get("baked_people", true)):
+			people_view = PeopleView.new()
+			people_view.setup(self)
+			add_child(people_view)
 	else:
 		push_warning("train rules: %s" % ", ".join(problems))
 	if bool(opts.get("panel", true)):
