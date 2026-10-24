@@ -5,7 +5,7 @@ import {
   advance, canLift, enterMartial, liftMartial, autoLevers, lawFloor, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P, PLACES, sendScouts, stopRisk, crewEnoughCount,
   setDelegate, delegateStatus, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
-  peopleCardRecent, CONTENT_CARD_KIND, enableClimate, enableScoutGear, hangLure, lureBlock, effThreat, enableDisasters, enableDeathWeight, enableArrivals, arrivedIn, setLever, enableBudget, heatCost, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS,
+  peopleCardRecent, CONTENT_CARD_KIND, enableClimate, enableScoutGear, hangLure, lureBlock, effThreat, enableDisasters, enableDeathWeight, enableArrivals, arrivedIn, setLever, enableBudget, heatCost, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS, CL,
 } from '../src/game';
 import type { Card, CardView, Choice, Comm, Eff, Game, LocoId, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
@@ -440,7 +440,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   const lastH: Partial<Record<Comm, number>> = {};
   const m: GameMetrics = {
     end: '', segReached: 0, coalMin: g.coal, foodMin: g.food, coalUnder30: 0, foodUnder30: 0, councils: 0, forced: 0, lawsPassed: 0, harshPassed: 0,
-    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, gear: { scouts: 0, noiseUp: 0, calmUp: 0, lures: 0, blind: 0, scoutHurt: 0, scoutDead: 0, stops: 0, stopHurt: 0, haul: 0, threatSum: 0 }, climate: { drops: 0, freezes: 0, leverAfterDrop: 0, coalZero: 0, heatByStage: [0, 0, 0, 0, 0], segsByStage: [0, 0, 0, 0, 0] }, cards, s1aCards: 0, domCards: 0,
+    deaths: 0, emergencyCoal: false, endCoal: 0, endFood: 0, disasters: { blizzard: 0, cold: 0 }, disasterDeaths: 0, prep: { coal: 0, huddle: 0, wait: 0, none: 0 }, tensionMax: g.tension, tensionEnd: 0, warmEnd: 0, gear: { scouts: 0, noiseUp: 0, calmUp: 0, lures: 0, blind: 0, scoutHurt: 0, scoutDead: 0, stops: 0, stopHurt: 0, haul: 0, threatSum: 0 }, climate: { drops: 0, freezes: 0, leverAfterDrop: 0, coalZero: 0, heatByStage: CL.names.map(() => 0), segsByStage: CL.names.map(() => 0) }, cards, s1aCards: 0, domCards: 0,
     tailExpoMax: situation(g, 'tail')[3], tailExpoEnd: 0, crews: {}, crewStat: { stops: 0, crewSum: 0, crew8: 0, band: { short: crewCell(), tight: crewCell(), enough: crewCell() }, byRiskCrew: {} }, spaceSegs: 0,
     travelById: {}, travelRepeats: 0, contentById: {}, contentRepeats: 0, titleRepeats: 0, titleTotal: 0,
     segsTotal: 0, segsWithTravel: 0, segsNoTravel: { rest: 0, empty: 0, other: 0 }, cardsPerSeg: [0, 0, 0, 0, 0], cardsPerSegMax: 0,

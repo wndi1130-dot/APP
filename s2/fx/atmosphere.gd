@@ -10,20 +10,22 @@ extends RefCounted
 ## docs/design/briefs/atmosphere.md. Numbers are proposals until a play check.
 
 const FxState = preload("res://fx/fx_state.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 # ------------------------------------------------------------------ the cold
 
-## Act -> [cold at its first stop, cold at its last, which side of midwinter].
 ## cold: 0 the warmest the campaign gets, 1 the coldest. side: 0 the autumn side
 ## (days still shortening, leaf on the trees, first frosts), 1 the spring side
-## (days lengthening, old snow going grey). The default is the user's season
-## answer of 2026-10-24 (가): late autumn with rain, turning (first night frosts
-## and first snow by the end of the prologue), early winter to deep winter
-## through act 1, the coldest with blizzards in act 2, the early thaw in act 3.
-## "winter_to_thaw" is the old 10-09 table, kept to compare. The weather odds
-## per season are the season brief's to set (atmosphere.md 14장 lists where).
+## (days lengthening, old snow going grey). The default, "autumn_to_thaw", is
+## the one season table S1 and the train read too (game/season_table.gd, the
+## user's season answer of 2026-10-24 with the prologue (나)): an early cold
+## snap at the start, late autumn rain, first night frosts and snow by the end
+## of the first leg, early winter to deep winter through act 1, the coldest with
+## blizzards in act 2, the early thaw in act 3. Its cold comes from the table's
+## midday temperature (cold_from_temp), so the two never disagree.
+## "winter_to_thaw" is the old 10-09 flow, kept to compare:
+## act -> [cold at its first stop, cold at its last, side].
 const SCHEMES: Dictionary = {
-	"autumn_to_thaw": {"prologue": [0.0, 0.42, 0.0], "act1": [0.45, 0.88, 0.0], "act2": [0.9, 1.0, 0.5], "act3": [0.42, 0.3, 1.0]},
 	"winter_to_thaw": {"prologue": [1.0, 1.0, 0.5], "act1": [1.0, 0.9, 1.0], "act2": [0.82, 0.6, 1.0], "act3": [0.42, 0.3, 1.0]},
 }
 const DEFAULT_SCHEME := "autumn_to_thaw"
@@ -61,19 +63,53 @@ const RAIN_ABOVE := 1.5
 const SNOW_BELOW := -2.0
 
 
+static func _from_table(which: String) -> bool:
+	return not SCHEMES.has(which if which != "" else scheme)
+
+
 static func _scheme_row(act: String, which: String) -> Array:
-	var s: Dictionary = SCHEMES.get(which if which != "" else scheme, SCHEMES[DEFAULT_SCHEME])
+	var s: Dictionary = SCHEMES[which if which != "" else scheme]
 	return s.get(act, s["prologue"])
 
 
 static func cold_for(act: String, progress := 0.0, which := "") -> float:
+	if _from_table(which):
+		return cold_from_temp(SeasonTable.temp_at(act, progress), SeasonTable.side_at(act))
 	var row := _scheme_row(act, which)
 	return clampf(lerpf(float(row[0]), float(row[1]), clampf(progress, 0.0, 1.0)), 0.0, 1.0)
 
 
 ## Which side of midwinter the act stands on (0 autumn, 1 spring).
 static func side_for(act: String, which := "") -> float:
+	if _from_table(which):
+		return SeasonTable.side_at(act)
 	return clampf(float(_scheme_row(act, which)[2]), 0.0, 1.0)
+
+
+## The season state's name at this point of the campaign: the table's (the
+## same name S1 and the train read), else from the old flow's cold.
+static func season_at(act: String, progress := 0.0, which := "") -> String:
+	if _from_table(which):
+		return SeasonTable.season_at(act, progress)
+	return season_for(cold_for(act, progress, which), side_for(act, which))
+
+
+## The cold whose midday picture temperature is this (the keys' temp read
+## backwards, straight between them): +7 C and warmer is 0, -14 C and colder 1.
+static func cold_from_temp(temp: float, side := 0.0) -> float:
+	var k := clampf(side, 0.0, 1.0)
+	return lerpf(_cold_on(AUTUMN_KEYS, temp), _cold_on(SPRING_KEYS, temp), k)
+
+
+static func _cold_on(table: Array, temp: float) -> float:
+	if temp >= float(table[0]["temp"]):
+		return 0.0
+	for i in range(table.size() - 1):
+		var a: Dictionary = table[i]
+		var b: Dictionary = table[i + 1]
+		if temp >= float(b["temp"]):
+			return lerpf(float(a["cold"]), float(b["cold"]), inverse_lerp(float(a["temp"]), float(b["temp"]), temp))
+	return 1.0
 
 
 static func _key_on(table: Array, c: float, key: String, index: int) -> float:
@@ -302,7 +338,8 @@ static func _band_lum(w: Dictionary) -> float:
 ## Everything the pictures read. hour: 0..24. kinds: the rules' weather (or a
 ## storm stage's look). region: "K1".."K12" or the train's "region_NN". cold:
 ## 0..1. more: "side" 0 autumn .. 1 spring (side_for), "wind" 0..1 (else the
-## region's), "temp_c" (picture temperature given outright, else from cold and hour).
+## region's), "temp_c" (picture temperature given outright, else from cold and hour),
+## "season" (the season table's name for this point, else from the cold).
 static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold := 1.0, more := {}) -> Dictionary:
 	var c := clampf(cold, 0.0, 1.0)
 	var side := clampf(float(more.get("side", 0.0)), 0.0, 1.0)
@@ -381,7 +418,7 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var ice := 1.0 - smoothstep(-3.0, 1.0, temp)
 	var out := {
 		"hour": fposmod(hour, 24.0), "band": band_of(hour, c, side), "weights": w,
-		"cold": c, "side": side, "season": season_for(c, side), "temp_c": temp, "region": region_key(region_name),
+		"cold": c, "side": side, "season": String(more.get("season", season_for(c, side))), "temp_c": temp, "region": region_key(region_name),
 		"sunrise": sun_times(c, side).x, "sunset": sun_times(c, side).y,
 		"sun_height": angles.x, "sun_azimuth": angles.y,
 		"sun_pitch": light_pitch, "sun_yaw": light_yaw,

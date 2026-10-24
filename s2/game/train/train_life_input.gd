@@ -47,7 +47,7 @@ static func check(d: Dictionary, car_ids: Array) -> PackedStringArray:
 						bad.append("comms.%s.sit[%d]: finite number required" % [str(id), i])
 	var view: Dictionary = d.get("view") if d.get("view") is Dictionary else {}
 	var enums := {"daytime": ["day", "night"], "motion": ["auto", "running", "stopped", "departing"],
-		"season": ["deep_winter", "late_winter", "thaw"], "riot_stage": ["none", "protest", "riot"]}
+		"season": ["late_autumn", "early_winter", "deep_winter", "early_thaw"], "riot_stage": ["none", "protest", "riot"]}
 	for key in enums:
 		if view.has(key) and (not view[key] is String or not enums[key].has(view[key])):
 			bad.append("view.%s: unknown value" % key)

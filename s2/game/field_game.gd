@@ -254,6 +254,8 @@ var region: String = Atmosphere.DEFAULT_REGION
 var cold: float = 1.0
 ## Which side of midwinter (0 autumn, 1 spring): day length, leaf and lying snow.
 var side: float = 0.0
+## The season state's name (the season table's, the same S1 and the train read).
+var season_name: String = ""
 var look_hour: float = -1.0
 var atmo: Dictionary = {}
 var atmo_min: float = -INF
@@ -280,7 +282,13 @@ func _ready() -> void:
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
 	var open_ground := bool(Atmosphere.region(region)["open"])
-	var season := Atmosphere.season_for(cold, side) if storm.is_empty() else SnowCover.DEFAULT_SEASON
+	# The season table names the season by the act; a cold given outright (check
+	# shots, tests) names it by that cold.
+	if opts.has("cold"):
+		season_name = Atmosphere.season_for(cold, side)
+	else:
+		season_name = Atmosphere.season_at(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", "")))
+	var season := season_name if storm.is_empty() else SnowCover.DEFAULT_SEASON
 	var old_cm := Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side) if storm.is_empty() else -1.0
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
@@ -520,7 +528,7 @@ func _update_fade(delta: float) -> void:
 
 ## The atmosphere frame's look of this stop at an hour.
 func atmosphere_at(hour: float) -> Dictionary:
-	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side})
+	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side, "season": season_name})
 
 
 ## The hour the picture is drawn at: the field clock's, or a fixed one for check
