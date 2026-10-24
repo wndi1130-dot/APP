@@ -446,3 +446,77 @@ func test_one_in_sight_going_down_breathes_out_and_one_out_of_sight_does_not() -
 	assert_eq(fell, [seen["id"]], "a breath out only from the one in sight")
 	assert_true(a.played.has("fall_hit"), "the fall itself is heard from both")
 
+
+
+# The wind never comes round the same way (user 2026-10-24: 「지금
+# 규칙적이니까 귀가피곤함」): the bed wanders, gusts come at uneven gaps, and
+# no gust has the shape of the one before.
+func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void:
+	var a = game.audio
+	assert_true(a.has("wind"), "the shipped wind file")
+	var at: Vector3 = game.player.position
+	var levels: Array = []
+	var starts: Array = []
+	var n0: int = a.gust_log.size()
+	for k in range(480):
+		a._tick_wind(at, 0.25)
+		levels.append(a.wind.volume_db)
+		if a.gust_log.size() > n0 + starts.size():
+			starts.append(k * 0.25)
+	assert_gt(levels.max() - levels.min(), 2.0, "the bed rises and falls")
+	assert_gte(starts.size(), 6, "gusts in two minutes")
+	var gaps: Array = []
+	for k in range(1, starts.size()):
+		gaps.append(snappedf(starts[k] - starts[k - 1], 0.25))
+	var distinct: Dictionary = {}
+	for g in gaps:
+		distinct[g] = true
+	assert_gt(distinct.size(), gaps.size() / 2, "the gaps are uneven, no beat")
+	var full: float = a.lib["wind"][0].get_length()
+	for k in range(n0 + 1, a.gust_log.size()):
+		var g: Array = a.gust_log[k]
+		var before: Array = a.gust_log[k - 1]
+		assert_between(float(g[1]), float(a.GUST_LEN[0]), float(a.GUST_LEN[1]))
+		assert_true(absf(float(g[0]) - float(before[0])) >= a.GUST_APART * full - 0.001 or absf(float(g[3]) - float(before[3])) > 0.06, "not the shape just heard")
+		assert_false(g == before)
+
+
+func test_a_stronger_wind_gusts_more_often() -> void:
+	var a = game.audio
+	var calm: Vector2 = a.gust_gap(0.2)
+	var storm: Vector2 = a.gust_gap(1.0)
+	assert_lt(storm.y, calm.y)
+	assert_lt(storm.x, calm.x)
+	game.weather.kinds.append("blizzard")
+	assert_gte(a.wind_strength(), 0.9, "a blizzard blows hard whatever the number")
+
+
+# A blizzard stop comes in with a howl: one to three gusts laid together, a
+# new shape each time it is heard.
+func test_a_blizzard_comes_in_with_a_howl_of_a_new_shape_each_time() -> void:
+	var a = game.audio
+	game.weather.kinds.append("blizzard")
+	a._tick_wind(game.player.position, 0.1)
+	assert_true(a.howled)
+	var shapes: Array = []
+	var first: Array = []
+	for g in a.gust_log:
+		if g[5]:
+			first.append(g)
+	assert_between(first.size(), 1, 3, "one to three layers")
+	for g in first:
+		assert_between(float(g[1]), float(a.HOWL_LEN[0]), float(a.HOWL_LEN[1]))
+	shapes.append(first)
+	for k in range(4):
+		var n: int = a.gust_log.size()
+		for g in a.gusts:
+			g["len"] = 0.0
+		a.howl()
+		shapes.append(a.gust_log.slice(n))
+	var distinct: Dictionary = {}
+	for s in shapes:
+		distinct[str(s)] = true
+	assert_eq(distinct.size(), shapes.size(), "no two howls alike")
+	var howls: int = a.gust_log.filter(func(g): return g[5]).size()
+	a._tick_wind(game.player.position, 0.1)
+	assert_eq(a.gust_log.filter(func(g): return g[5]).size(), howls, "it howls once as the stop comes in, not over and over")

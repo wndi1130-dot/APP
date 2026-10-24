@@ -13,7 +13,7 @@ extends Node3D
 ##              behind a wall they come through duller (SFX_MID)
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
-##   wind       outdoor bed
+##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust)
 ##   train_idle the waiting engine, placed on the train
 ##   whistle    departure
 ##   pen        the pen stroke when '떠난다' is pressed
@@ -116,6 +116,24 @@ const BIRDS_EVERY: float = 45.0
 const FAR_THUD: Array = ["slam", 0.45, 0.42, 0.5]   # file prefix, loudness, pitch low and high
 ## From this near a sound is never behind a wall (the player's own).
 const THROUGH_WALL_FROM: float = 1.5
+## The wind never comes round the same way (user 2026-10-24: 「지금
+## 규칙적이니까 귀가피곤함」). The bed's level and pitch wander on a slow
+## noise (as the reference's wind intensity does) and it starts again each
+## time at a new place in its file; over it come gusts at random gaps, each
+## its own place in the file, length, loudness and pitch bend, never the
+## shape just heard. A blizzard stop comes in with a howl of one to three
+## gusts laid together, a new shape every time. Heard only; nothing hears it.
+const WIND_DRIFT_HZ: float = 0.07     # how fast the bed wanders
+const WIND_DRIFT: float = 0.35        # this far below and above its level
+const WIND_PITCH_DRIFT: float = 0.05
+const GUST_GAP: Array = [4.0, 13.0]   # s between gusts at strength 0.5; stronger is closer
+const GUST_LEN: Array = [1.6, 4.5]
+const GUST_LOUD: Array = [0.35, 0.8]  # of the bed's level, at the gust's top
+const GUST_PITCH: Array = [0.82, 1.22]   # where a gust starts and ends: its bend
+const GUST_APART: float = 0.25        # of the file: a gust starts this far from the last one's place
+const HOWL_LAYERS: Array = [1, 3]
+const HOWL_LEN: Array = [3.0, 6.5]
+const GUSTS: int = 3                  # players for gusts (a howl lays up to three)
 const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell"]
 
 var game
@@ -139,6 +157,12 @@ var said: Array = []                   # what the dead said, in order: [id, what
 var voices: Dictionary = {}            # zombie id -> {"kind", "pitch"}
 var recent: Array[int] = []            # the last moan files heard, from anyone
 var cut_n: int = 0
+var drift := FastNoiseLite.new()       # the wind bed's wandering, a new seed each stop
+var wind_t: float = 0.0
+var gusts: Array = []                  # {"player", "t", "len", "peak", "p0", "p1", "top"}
+var gust_t: float = 0.0                # s to the next gust
+var gust_log: Array = []               # every gust's shape [at, len, peak, p0, p1, howl] (tests)
+var howled: bool = false
 var quiet: bool = false                # the caller voices this sound itself
 var falls: Array = []                  # falls being followed: {"z", "i": next beat, "gun"}
 var fall_heard: Dictionary = {}        # zombie id -> the fall of its that was taken up
@@ -158,6 +182,19 @@ func setup(field_game) -> void:
 		slots.append({"player": p, "z": {}, "wait": randf_range(0.5, 3.0)})
 	bed = _loop_player("horde_bed")
 	wind = _loop_player("wind")
+	drift.seed = randi()
+	drift.frequency = WIND_DRIFT_HZ
+	if wind.finished.is_connected(wind.play):
+		wind.finished.disconnect(wind.play)
+		wind.finished.connect(_wind_again)
+		_wind_again()
+	for i in range(GUSTS):
+		var g := AudioStreamPlayer.new()
+		g.bus = "SFX"
+		g.volume_db = -80.0
+		add_child(g)
+		gusts.append({"player": g, "t": 0.0, "len": 0.0})
+	gust_t = randf_range(1.0, 4.0)
 	engine = AudioStreamPlayer3D.new()
 	engine.bus = "SFX"
 	engine.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
@@ -249,12 +286,15 @@ func tick(delta: float) -> void:
 	if game.ended:
 		for p in [bed, wind]:
 			p.volume_db = -80.0
+		for g: Dictionary in gusts:
+			(g["player"] as AudioStreamPlayer).volume_db = -80.0
 		return
 	if held:
 		# The note is up: the bed stays where it was, lower; nothing new starts.
 		for s in slots:
 			var p: AudioStreamPlayer3D = s["player"]
 			p.volume_db = maxf(-80.0, p.volume_db - 40.0 * delta)
+		_tick_wind(at, delta)   # the wind goes on (it is not the field's time)
 		return
 	heard_t += delta
 	pick_t -= delta
@@ -267,8 +307,7 @@ func tick(delta: float) -> void:
 	# The mass: one bed scaled by how many dead are near and how near.
 	bed.volume_db = lerpf(bed.volume_db, _db(clampf(crowd / BED_FULL, 0.0, 1.0) * 0.8), minf(1.0, delta * 2.0))
 	birds_t = maxf(0.0, birds_t - delta)
-	var outdoor: bool = not game.grid_at(at).indoor(game.FieldGrid.cell_of(at))
-	wind.volume_db = _db((0.25 + 0.5 * float(game.weather.wind)) * (1.0 if outdoor else 0.35))
+	_tick_wind(at, delta)
 	engine.volume_db = _db(clampf(1.0 - at.distance_to(engine.position) / 70.0, 0.0, 1.0) * 0.5)
 	# Indoor gunfire leaves the ears ringing: everything else ducks.
 	var bus := AudioServer.get_bus_index("SFX")
@@ -467,6 +506,108 @@ func _fall_voice(z: Dictionary, at: Vector3) -> void:
 	var band: Array = moan_band(d)
 	said.append([int(z["id"]), "fall", i])
 	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], String(band[2]), float(row["cut"]))
+
+
+# ---------------------------------------------------------------- wind
+
+## How hard the wind blows for the ear, 0..1: the weather's wind, and a
+## blizzard is a storm whatever its number.
+func wind_strength() -> float:
+	var w: float = float(game.weather.wind)
+	if game.weather.kinds.has("blizzard"):
+		w = maxf(w, 0.9)
+	return clampf(w, 0.0, 1.0)
+
+
+## Seconds between gusts at this strength (low, high): stronger, closer.
+static func gust_gap(strength: float) -> Vector2:
+	var k := 1.0 / (0.5 + clampf(strength, 0.0, 1.0))
+	return Vector2(float(GUST_GAP[0]) * k, float(GUST_GAP[1]) * k)
+
+
+## The bed comes round again at a new place in its file, never the start.
+func _wind_again() -> void:
+	if wind.stream == null:
+		return
+	wind.play(randf_range(0.0, 0.6) * wind.stream.get_length())
+
+
+func _tick_wind(at: Vector3, delta: float) -> void:
+	wind_t += delta
+	var outdoor: bool = not game.grid_at(at).indoor(game.FieldGrid.cell_of(at))
+	var level: float = (0.25 + 0.5 * wind_strength()) * (1.0 if outdoor else 0.35)
+	# The bed wanders on a slow noise: no two stretches alike, no beat to it.
+	var n: float = drift.get_noise_1d(wind_t)
+	var n2: float = drift.get_noise_1d(wind_t + 977.0)
+	wind.volume_db = _db(level * (1.0 + WIND_DRIFT * n))
+	wind.pitch_scale = 1.0 + WIND_PITCH_DRIFT * n2
+	if not howled and game.weather.kinds.has("blizzard"):
+		howled = true
+		howl()
+	gust_t -= delta
+	if gust_t <= 0.0:
+		var gap := gust_gap(wind_strength())
+		gust_t = randf_range(gap.x, gap.y)
+		_gust(randf_range(float(GUST_LEN[0]), float(GUST_LEN[1])), randf_range(float(GUST_LOUD[0]), float(GUST_LOUD[1])), false)
+	for g: Dictionary in gusts:
+		var p: AudioStreamPlayer = g["player"]
+		if float(g["len"]) <= 0.0:
+			continue
+		g["t"] = float(g["t"]) + delta
+		var k: float = float(g["t"]) / float(g["len"])
+		if k >= 1.0:
+			g["len"] = 0.0
+			p.stop()
+			continue
+		# Up to its top and away again, slower on the way out; the pitch bends.
+		var top: float = float(g["top"])
+		var env: float = sin(0.5 * PI * k / top) if k < top else cos(0.5 * PI * (k - top) / (1.0 - top))
+		p.volume_db = _db(level * float(g["peak"]) * env)
+		p.pitch_scale = lerpf(float(g["p0"]), float(g["p1"]), smoothstep(0.0, 1.0, k))
+
+
+## One gust over the bed: a place in the wind file it has not just started at,
+## its own length, loudness and bend.
+func _gust(length: float, peak: float, howl_layer: bool) -> void:
+	if not has("wind"):
+		return
+	var g: Dictionary = gusts[0]
+	for other: Dictionary in gusts:
+		if float(other["len"]) <= 0.0:
+			g = other
+			break
+	var stream: AudioStream = lib["wind"][0]
+	var full: float = maxf(stream.get_length(), 0.1)
+	var last: Array = gust_log.back() if not gust_log.is_empty() else []
+	var from: float = randf_range(0.0, full * 0.7)
+	var p0: float = randf_range(float(GUST_PITCH[0]), float(GUST_PITCH[1]))
+	var p1: float = randf_range(float(GUST_PITCH[0]), float(GUST_PITCH[1]))
+	for k in range(8):
+		if last.is_empty() or (absf(from - float(last[0])) >= GUST_APART * full and absf(p0 - float(last[3])) > 0.06):
+			break
+		from = randf_range(0.0, full * 0.7)
+		p0 = randf_range(float(GUST_PITCH[0]), float(GUST_PITCH[1]))
+	var p: AudioStreamPlayer = g["player"]
+	g["t"] = 0.0
+	g["len"] = length
+	g["peak"] = peak
+	g["p0"] = p0
+	g["p1"] = p1
+	g["top"] = randf_range(0.25, 0.5)
+	p.stream = stream
+	p.pitch_scale = p0
+	p.volume_db = -80.0
+	p.play(from)
+	gust_log.append([from, length, peak, p0, p1, howl_layer])
+
+
+## A blizzard comes in: one to three gusts laid together, long, each bending
+## its own way, a new shape every time it is heard.
+func howl() -> void:
+	var layers := randi_range(int(HOWL_LAYERS[0]), int(HOWL_LAYERS[1]))
+	for i in range(layers):
+		_gust(randf_range(float(HOWL_LEN[0]), float(HOWL_LEN[1])), randf_range(0.6, 1.0), true)
+	gust_t = maxf(gust_t, float(HOWL_LEN[0]))
 
 
 # ---------------------------------------------------------------- events
