@@ -506,7 +506,7 @@ func _fall_voice(z: Dictionary, at: Vector3) -> void:
 	var i := _next_file(String(v["kind"]), -1)
 	var band: Array = moan_band(d)
 	said.append([int(z["id"]), "fall", i])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], String(band[2]), float(row["cut"]))
+	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], 0.0, String(band[2]), float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -684,7 +684,7 @@ func _fall_beat(i: int, where: Vector3, at: Vector3, gun: bool, now: float) -> v
 	fall_last[group] = now
 	played.append(group)
 	var loud: float = FALL_GUN_HIT if gun and i == 0 else float(beat[1])
-	_one_shot(group, where, loud * clampf(1.0 - d / FALL_RANGE, 0.0, 1.0), randf_range(float(beat[2]), float(beat[3])), null, _bus_at(where))
+	_one_shot(group, where, loud * clampf(1.0 - d / FALL_RANGE, 0.0, 1.0), randf_range(float(beat[2]), float(beat[3])), null, 0.0, _bus_at(where))
 
 
 ## '떠난다': impact, pen stroke, a gap, the whistle.
@@ -711,7 +711,7 @@ func horde_started() -> void:
 	for s: AudioStream in lib.get("impact", []):
 		if s.resource_path.get_file().begins_with(String(FAR_THUD[0])):
 			played.append("far_thud")
-			_one_shot("impact", far, float(FAR_THUD[1]), randf_range(float(FAR_THUD[2]), float(FAR_THUD[3])), s, "SFX_FAR")
+			_one_shot("impact", far, float(FAR_THUD[1]), randf_range(float(FAR_THUD[2]), float(FAR_THUD[3])), s, 0.0, "SFX_FAR")
 			break
 	if birds_t <= 0.0 and has("birds"):
 		birds_t = BIRDS_EVERY
@@ -740,7 +740,7 @@ func door(kind: String, at: Vector3, level: int) -> void:
 	if DOOR_BLOWS.has(kind):
 		loud *= clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])), null, _bus_at(at))
+	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])), null, 0.0, _bus_at(at))
 
 
 ## A lid dragged off a manhole, for the player's ear only: no rule hears it
@@ -754,11 +754,11 @@ func lid_scrape(at: Vector3) -> void:
 	var lin: float = float(LID_VOICE[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
 	var pitch := randf_range(float(LID_VOICE[2]), float(LID_VOICE[3]))
 	if has(group):
-		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		_one_shot(group, at, lin, pitch, null, 0.0, _bus_at(at))
 		return
 	for s: AudioStream in lib.get("impact", []):
 		if s.resource_path.get_file().begins_with(LID_STANDIN):
-			_one_shot("impact", at, lin, pitch, s, _bus_at(at))
+			_one_shot("impact", at, lin, pitch, s, 0.0, _bus_at(at))
 			return
 
 
@@ -812,7 +812,7 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 	var d: float = at.distance_to(game.player.position)
 	var loud := clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var lin := loud * clampf(1.0 - d / 60.0, 0.0, 1.0) if group != "whistle" else 1.0
-	_one_shot(group, at, lin, 0.7 if tag == "gun" and group == "impact" else randf_range(0.9, 1.1), null, "SFX" if group == "whistle" else _bus_at(at))
+	_one_shot(group, at, lin, 0.7 if tag == "gun" and group == "impact" else randf_range(0.9, 1.1), null, 0.0, "SFX" if group == "whistle" else _bus_at(at))
 
 
 func footstep(at: Vector3, running: bool) -> void:
@@ -825,8 +825,9 @@ func _bus_at(at: Vector3) -> String:
 	return "SFX_MID" if through_wall(at) else "SFX"
 
 
-## cut > 0: only that many seconds of it are heard, then it fades out fast.
-func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: AudioStream = null, bus: String = "SFX", cut: float = 0.0) -> void:
+## from: where in the file it starts (s). cut > 0: only that many seconds of
+## it are heard, then it fades out fast.
+func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: AudioStream = null, from: float = 0.0, bus: String = "SFX", cut: float = 0.0) -> void:
 	if lin <= 0.01 or not has(group):
 		return
 	var o: AudioStreamPlayer3D = one_shots[0]
@@ -840,7 +841,7 @@ func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: Aud
 	o.stream = stream if stream != null else _pick(group)
 	o.volume_db = _db(lin)
 	o.pitch_scale = pitch
-	o.play()
+	o.play(from)
 	cut_n += 1
 	o.set_meta("cut", cut_n)
 	if cut > 0.0 and is_inside_tree():
