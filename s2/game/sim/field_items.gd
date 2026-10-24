@@ -72,7 +72,19 @@ const ITEMS: Dictionary = {
 	"fuel_can": {"name": "연료 통", "icon": "it_fuel", "weight": 1.5, "stock": "coal", "melt": 1.0, "group": "material"},
 	# A bigger pack, worn at once if it is bigger than the one on the back.
 	"found_big_pack": {"name": "큰 배낭", "icon": "inv", "weight": 1.0, "group": "bag", "bag": "big_pack", "keep": true},
+	# ---- 나단계 (decision 423 cards 10·11, P22)
+	# What is left of an opened tin: thrown, it rattles where it lands (a lure).
+	"can_empty": {"name": "빈 깡통", "icon": "it_can", "weight": 0.2, "group": "tool", "throw": true, "stays": true},
+	# Found in the snow (card 11): a frozen hare, food once thawed.
+	"hare_frozen": {"name": "언 토끼", "icon": "it_hare", "weight": 1.0, "stock": "food", "melt": 0.5, "group": "food", "state": "frozen", "eat": "thaw"},
+	# A note from a dead one's pocket (card 10): where a box is hidden at the next stop.
+	"note_map": {"name": "쪽지", "icon": "papers", "weight": 0.05, "group": "paper", "keep": true},
 }
+
+## A building's key (P12): one id a building, "key_<building index>". It opens
+## that building's locked doors without a sound and stays in the field.
+const KEY_PREFIX: String = "key_"
+const KEY_ROW: Dictionary = {"name": "열쇠", "icon": "it_key", "weight": 0.05, "group": "key", "stays": true}
 
 ## Named finds, at most one a stop (P14). "places" are the stop kinds it can
 ## turn up at; "line" is what the one who finds it says, once.
@@ -89,13 +101,38 @@ const RARE: Dictionary = {
 
 
 static func has(id: String) -> bool:
-	return ITEMS.has(id) or RARE.has(id)
+	return ITEMS.has(id) or RARE.has(id) or is_key(id)
 
 
 static func row(id: String) -> Dictionary:
 	if ITEMS.has(id):
 		return ITEMS[id]
+	if is_key(id):
+		return KEY_ROW
 	return RARE.get(id, {})
+
+
+static func is_key(id: String) -> bool:
+	return id.begins_with(KEY_PREFIX) and id.trim_prefix(KEY_PREFIX).is_valid_int()
+
+
+static func key_for(building: int) -> String:
+	return "%s%d" % [KEY_PREFIX, building]
+
+
+## The building a key opens (-1 for no key).
+static func key_building(id: String) -> int:
+	return int(id.trim_prefix(KEY_PREFIX)) if is_key(id) else -1
+
+
+## Things that stay on the body when the rest is loaded on the train: a key,
+## an empty tin, the can opener.
+static func stays_on_body(id: String) -> bool:
+	return bool(row(id).get("stays", false)) or id == "can_opener"
+
+
+static func throwable(id: String) -> bool:
+	return bool(row(id).get("throw", false))
 
 
 static func item_name(id: String) -> String:

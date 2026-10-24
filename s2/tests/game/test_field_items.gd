@@ -130,7 +130,7 @@ func test_dressing_keeps_what_each_building_holds_and_names_every_bundle() -> vo
 	var report := LootDress.dress(d, 7)
 	var c: Dictionary = d["containers"]
 	var after := _counts(c, ["k", "b1", "b2", "p"])
-	for f in ["found_big_pack", "wrist_watch", "wrist_watch_set", "can_opener", "nails", "fuel_can"]:
+	for f in ["found_big_pack", "wrist_watch", "wrist_watch_set", "can_opener", "nails", "fuel_can", "frying_pan", "broken_bottle"]:
 		after.erase(f)
 	for rare: String in FieldItems.RARE:
 		after.erase(rare)

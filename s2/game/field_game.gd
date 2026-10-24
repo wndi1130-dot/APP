@@ -231,6 +231,18 @@ var alarms: Array = []
 ## Named things somebody has already said something about (once a stop).
 var named_seen: Dictionary = {}
 var eat_rng := RandomNumberGenerator.new()
+## Under the snow out of doors, not yet seen (card 11): [{"cell", "id"}].
+var glints: Array = []
+## How each building with a locked door gives its key (LootDress.key_ways).
+var key_ways: Dictionary = {}
+## Where the note of this stop says a box is hidden at the next one ("" if none).
+var note_spot: String = ""
+## Tins thrown, still to land and rattle: [{"pos", "at", "who"}]; and where
+## they landed, shown a moment: [{"pos", "t"}].
+var lures: Array = []
+var lure_marks: Array = []
+## Bodies gone through, and who saw it (card 12): [{"who", "seen": [pid]}].
+var body_searches: Array = []
 var cam_focus := Vector3.ZERO
 var cam_push := Vector3.ZERO
 var cam_size: float = 24.0
@@ -337,6 +349,9 @@ func _ready() -> void:
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
 		loot_report = LootDress.dress(data, rng.seed)
+		# The box a note of the last stop told of (card 10, opts "stash": its spot).
+		if String(opts.get("stash", "")) != "":
+			loot_report["stash"] = LootDress.place_stash(data, String(opts["stash"]), rng.seed)
 	# Its own dice, so eating and the watches move nothing else of the run.
 	eat_rng.seed = ("%d:eat" % rng.seed).hash()
 	director = HordeDirector.new(rng)
@@ -383,6 +398,7 @@ func _ready() -> void:
 	people_look.setup(self)
 	await BuildPace.rest(pace)
 	_spawn_dead()
+	_give_finds()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
 	await BuildPace.rest(pace)
@@ -1329,6 +1345,8 @@ func _step(delta: float) -> void:
 	_update_night(delta)
 	_update_zone(delta)
 	_watch_named()
+	_reveal_glints()
+	_land_lures()
 	actions.update(delta)
 	holdout.tick(delta)
 	holdout.watch(delta)
@@ -2479,6 +2497,7 @@ func finish(reason: String) -> void:
 	elif holdout.mode == "roll":
 		holdout.note_leaving()
 		telemetry.holdout = holdout.roll_note()
+	_receipt_finds(boarded)
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -2538,6 +2557,12 @@ func item_name(id: String) -> String:
 		return "고철"
 	if id == "wood":
 		return "목재"
+	if FieldItems.is_key(id):
+		# A key says whose door it opens.
+		var b: int = FieldItems.key_building(id)
+		var buildings: Array = data.get("buildings", [])
+		var where: String = String((buildings[b] as Dictionary).get("name", "")) if b >= 0 and b < buildings.size() else ""
+		return "%s 열쇠" % where if where != "" else FieldItems.item_name(id)
 	if FieldItems.has(id):
 		return FieldItems.item_name(id)
 	return String(Carry.ITEM_NAMES.get(id, W.get_data(id).get("name", id)))
@@ -2558,6 +2583,8 @@ const BUNDLE_ICONS: Dictionary = {
 	"bottle_spirit": "lux", "document": "papers", "info_telegraph": "papers", "info_timetable": "papers",
 	"cloth": "it_cloth", "plank": "it_plank", "wood": "it_plank", "scrap": "wrench", "flare": "lamp",
 	"needle_thread": "it_needle", "tweezers": "it_needle", "symbol_bell": "it_bell",
+	"frying_pan": "it_pan", "broken_bottle": "it_bottle_broken", "wood_stake": "it_stake",
+	"knife": "it_knife", "crowbar": "wrench", "axe": "axe",
 }
 
 
@@ -2580,6 +2607,9 @@ func _watch_named() -> void:
 			elif FieldItems.line(id) != "" and not named_seen.has(id):
 				named_seen[id] = true
 				say(p, "%s: %s" % [p.display_name, FieldItems.line(id)])
+			elif id == "note_map" and note_line() != "" and not named_seen.has(id):
+				named_seen[id] = true
+				say(p, "%s: 쪽지다. 「%s」" % [p.display_name, note_line()])
 	var keep: Array = []
 	for a: Dictionary in alarms:
 		var who = a["who"]
@@ -2659,9 +2689,190 @@ func _ate(p, id: String, plan: Dictionary) -> void:
 		p.body.apply_cut(false, clock.elapsed, "arm_left")
 		if p == player and hud != null:
 			hud.toast("칼날이 미끄러져 손을 베었다.")
+	# What is left of a tin is a lure to throw (P22).
+	if String(FieldItems.row(id).get("eat", "")) == "can":
+		p.add_item("can_empty")
 	var result: Dictionary = FieldItems.eat_result(id, float(plan["spill"]))
 	if bool(result["bad"]):
 		if p == player and hud != null:
 			hud.toast("상해 있었다.")
 		return
 	p.body.add_fatigue(-float(result["rest"]))
+
+
+# ---------------------------------------------------------------- keys, the snow, notes, lures
+
+## Things under the snow show to one of the squad this near (card 11), less
+## after dark and in a blizzard. No key asks for it: walking by is enough.
+const GLINT_REACH: float = 3.0
+const GLINT_DARK: float = 0.6
+const GLINT_STORM: float = 0.5
+## An empty tin flies this far where the thrower faces (short of a wall), lands
+## after a moment and rattles there; where it landed shows a little while.
+const THROW_REACH: float = 8.0
+const THROW_FLIGHT: float = 0.6
+const LURE_MARK_S: float = 3.0
+
+
+## Out the keys of the buildings with a locked door (P12), the things under
+## the snow (card 11) and the note of the next stop (card 10), from the seed.
+func _give_finds() -> void:
+	if not bool(opts.get("loot_dress", true)):
+		return
+	glints = LootDress.glints(data, rng.seed)
+	key_ways = LootDress.key_ways(grid.doors, rng.seed)
+	var who := RandomNumberGenerator.new()
+	who.seed = ("%d:finds:who" % rng.seed).hash()
+	for b: int in key_ways:
+		var key := FieldItems.key_for(b)
+		var way: String = key_ways[b]
+		if way == "dead":
+			var inside: Array = []
+			for z in zombies.list:
+				if z["kind"] != "frozen" and grid_at(z["home"]).building_at(FieldGrid.cell_of(z["home"])) == b:
+					inside.append(z)
+			if inside.is_empty():
+				way = "box"
+			else:
+				var holder: Dictionary = inside[who.randi_range(0, inside.size() - 1)]
+				holder["carry"] = (holder.get("carry", []) as Array) + [key]
+		if way == "snow":
+			var at := _outside_door(b)
+			if at.x < 0:
+				way = "box"
+			else:
+				glints.append({"cell": at, "id": key})
+		if way == "box":
+			var boxes: Array = []
+			for id: String in data["containers"]:
+				var c: Dictionary = data["containers"][id]
+				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick"):
+					boxes.append(id)
+			if boxes.is_empty():
+				way = "none"
+			else:
+				(data["containers"][boxes[who.randi_range(0, boxes.size() - 1)]]["items"] as Array).append(key)
+		key_ways[b] = way
+	if who.randf() < LootDress.NOTE_CHANCE:
+		var dead: Array = []
+		for z in zombies.list:
+			if z["kind"] != "frozen":
+				dead.append(z)
+		if not dead.is_empty():
+			var holder: Dictionary = dead[who.randi_range(0, dead.size() - 1)]
+			holder["carry"] = (holder.get("carry", []) as Array) + ["note_map"]
+			note_spot = LootDress.NOTE_SPOTS[who.randi_range(0, LootDress.NOTE_SPOTS.size() - 1)]
+
+
+## A snow cell two steps out of a door of building b, or (-1, -1).
+func _outside_door(b: int) -> Vector2i:
+	for c: Vector2i in grid.doors:
+		if int(grid.doors[c].get("building", -1)) != b:
+			continue
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var o: Vector2i = c + d * 2
+			if grid.inside(o) and grid.people_can_walk(o) and not grid.indoor(o):
+				return o
+	return Vector2i(-1, -1)
+
+
+func glint_reach() -> float:
+	var r := GLINT_REACH
+	if clock.is_dark():
+		r *= GLINT_DARK
+	if weather.kinds.has("blizzard"):
+		r *= GLINT_STORM
+	return r
+
+
+## What lies under the snow comes up where one of the squad walks close (a
+## thing on the ground from then on, picked up as any).
+func _reveal_glints() -> void:
+	if glints.is_empty():
+		return
+	var reach := glint_reach()
+	var keep: Array = []
+	for g: Dictionary in glints:
+		var at := lift(g["cell"], 0)
+		var seen := false
+		for p in squad:
+			if p.is_alive() and level_of(p.position) == 0 and p.position.distance_to(at) <= reach:
+				seen = true
+				break
+		if seen:
+			ground_items.append({"pos": at, "id": String(g["id"]), "n": 1, "glint": true})
+		else:
+			keep.append(g)
+	glints = keep
+
+
+## Throw an empty tin where `p` faces (P22): it lands short of a wall and
+## rattles there a moment later; the dead go to the sound.
+func throw_lure(p, id: String) -> void:
+	if p == null or not p.can_act() or p.action != "" or not FieldItems.throwable(id) or not p.take_item(id):
+		return
+	var lg := grid_at(p.position)
+	var from := FieldGrid.cell_of(p.position)
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var land: Vector3 = p.position
+	var step := 0.5
+	while step <= THROW_REACH:
+		var at: Vector3 = p.position + fwd * step
+		var c := FieldGrid.cell_of(at)
+		if not lg.inside(c) or lg.blocks_body(c) or not lg.line_clear(from, c):
+			break
+		land = at
+		step += 0.5
+	lures.append({"pos": land, "at": clock.elapsed + THROW_FLIGHT, "who": p, "id": id})
+
+
+func _land_lures() -> void:
+	var now := clock.elapsed
+	var keep: Array = []
+	for l: Dictionary in lures:
+		if now < float(l["at"]):
+			keep.append(l)
+			continue
+		var who = l["who"]
+		make_sound(l["pos"], SimNoise.Level.NORMAL, "lure", who if is_instance_valid(who) else null)
+		ground_items.append({"pos": l["pos"], "id": String(l["id"]), "n": 1})
+		lure_marks.append({"pos": l["pos"], "t": now})
+	lures = keep
+	var marks: Array = []
+	for m: Dictionary in lure_marks:
+		if now - float(m["t"]) < LURE_MARK_S:
+			marks.append(m)
+	lure_marks = marks
+
+
+## On the receipt (decision 423): who saw the dead gone through, one row a
+## searcher and only those who came back to tell it (card 12); and the note of
+## the next stop as a document, when the stop knows which stop comes next and
+## writes a stop receipt (card 10; opts "next_stop", "segment").
+func _receipt_finds(boarded: Array) -> void:
+	var back: Dictionary = {}
+	for q in boarded:
+		back[String(q.pid)] = true
+	var by_who: Dictionary = {}
+	for row: Dictionary in body_searches:
+		var seen: Array = by_who.get(row["who"], [])
+		for pid: String in row["seen"]:
+			if back.has(pid) and not seen.has(pid):
+				seen.append(pid)
+		by_who[row["who"]] = seen
+	for who: String in by_who:
+		if not (by_who[who] as Array).is_empty():
+			receipt.witness(who, "body_search", String(data["place_id"]), clock.label(), "searched_the_dead", by_who[who], "body_search")
+	var next: String = String(opts.get("next_stop", ""))
+	if int(unloaded.get("note_map", 0)) > 0 and note_spot != "" and next != "" and receipt.is_stop_receipt():
+		var seg: int = int(opts.get("segment", 0))
+		receipt.add_document({"id": "note_" + String(data["place_id"]), "sourcePlaceId": String(data["place_id"]), "segment": seg,
+			"bodyKey": "note_stash", "choices": [], "targetId": null, "state": "pending", "kind": "next_stop",
+			"nextStop": {"stopId": next, "observedSegment": seg, "blankKey": "stash", "confirmed": false}})
+
+
+## What the note says, when it is read (card 10).
+func note_line() -> String:
+	if note_spot == "":
+		return ""
+	return "다음 역 %s에 상자를 숨겼다." % note_spot
