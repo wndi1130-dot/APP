@@ -118,7 +118,8 @@ func test_the_first_stop_keeps_its_own_cells() -> void:
 	assert_false(d.has("furniture_stats"))
 
 
-## 80장: 열차 문에서 걸어서(층 사이는 계단) 모든 상자에 닿는다.
+## 80장: 열차 문에서 걸어서(층 사이는 계단) 모든 상자에 닿는다. 몸을 막는 가구는 벽 속에
+## 없고, 문 안쪽 두 칸은 걸어서 지나간다.
 func test_every_map_keeps_every_box_reachable_from_the_train() -> void:
 	for id in FieldMaps.ids():
 		if id == FieldMaps.DEFAULT_PLACE:
@@ -136,6 +137,44 @@ func test_every_map_keeps_every_box_reachable_from_the_train() -> void:
 			if not hit:
 				missed.append(c)
 		assert_eq(missed, [], id + ": 닿지 않는 상자")
+		assert_eq(_faults(d), [], id + ": 벽 속 가구, 막힌 문 앞")
+
+
+## 집 가구(다시 놓는 종류, 담는 가구, 큰 가구)가 벽·문·창 칸에 걸친 곳과, 문 안쪽 두
+## 칸(같은 방)이 막힌 문. 벽선에 걸쳐 세운 기계·탈것·기둥·문짝은 지도 그대로라 안 본다.
+func _faults(d: Dictionary) -> Array:
+	var out: Array = []
+	for p: Dictionary in d["props"]:
+		var lv := int(p.get("level", 0))
+		var kind := String(p.get("kind", ""))
+		var r: Variant = RoomFurnish._rect(p.get("rect"))
+		if r == null or not d["levels"].has(lv) or not RoomFurnish.blocks(kind, lv):
+			continue
+		if not (RoomFurnish.REPLACED.has(kind) or RoomFurnish.HOLDER_KINDS.has(kind) or RoomFurnish.TALL_KINDS.has(kind)):
+			continue
+		var g: FieldGrid = d["levels"][lv]
+		var rect: Rect2i = r
+		if g.building_at(rect.position + rect.size / 2) < 0:
+			continue
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				var s := g.solid_at(Vector2i(x, y))
+				if s == S.WALL or s == S.DOOR or s == S.WINDOW:
+					out.append("%s %d %s 벽 속" % [p["kind"], lv, Vector2i(x, y)])
+	for lv: int in d["levels"]:
+		var g: FieldGrid = d["levels"][lv]
+		var map := RoomFurnish.rooms_of(g)
+		var of: PackedInt32Array = map["of"]
+		for dc: Vector2i in g.doors:
+			for dd in DIRS:
+				var n := dc + dd
+				var ri := RoomFurnish._at(g, of, n)
+				if ri < 0:
+					continue
+				for fc: Vector2i in [n, n + dd]:
+					if RoomFurnish._at(g, of, fc) == ri and not g.people_can_walk(fc):
+						out.append("문 %d %s 앞 %s" % [lv, dc, fc])
+	return out
 
 
 func _reach_all(d: Dictionary) -> Dictionary:
@@ -253,3 +292,152 @@ func test_shop_upstairs_with_a_bed_is_a_home() -> void:
 	assert_eq(RoomFurnish.room_class("부엌", {"dining_set": true}, -1), "", "지하 부엌은 카드 답 기다림")
 	assert_eq(RoomFurnish.room_class("광부 숙소", {"bed": true}, 0), "bed", "광은 따로 선 낱말일 때만")
 	assert_eq(RoomFurnish.room_class("", {"bed": true, "iv_stand": true}, 1), "", "병실은 그대로")
+
+
+func test_a_box_in_a_room_left_as_it_is_goes_into_its_cabinet() -> void:
+	var d := _house()
+	# 다시 놓지 않는 방(이름 없는 서류 방): 서류장 (2, 2)~(3, 2), 상자는 바닥 (5, 3).
+	d["props"].append({"kind": "file_cabinet", "rect": Rect2i(2, 2, 2, 1), "solid": "none", "facing": 0, "level": 0})
+	d["containers"]["c"] = {"id": "c", "cell": Vector2i(5, 3), "level": 0, "items": ["paper"]}
+	RoomFurnish.block_furniture_with(d, _model)
+	assert_eq(RoomFurnish.boxes_into_furniture(d), 1)
+	var box: Dictionary = d["containers"]["c"]
+	assert_eq(box["furniture"], "file_cabinet")
+	assert_true(Rect2i(2, 2, 2, 1).has_point(box["cell"]))
+	assert_eq(box["items"], ["paper"])
+
+
+## 문 앞 비움(3장): 문 안쪽 2칸 × 3칸, 계단과 그 둘레. 창 앞은 큰 가구만.
+func _front_clear(g: FieldGrid) -> bool:
+	for c: Vector2i in [Vector2i(3, 4), Vector2i(4, 4), Vector2i(5, 4), Vector2i(3, 3), Vector2i(4, 3), Vector2i(5, 3)]:
+		if g.solid_at(c) != S.NONE:
+			return false
+	return true
+
+
+func test_a_shelf_in_the_doorway_is_moved_aside_with_its_box() -> void:
+	var d := _house()
+	# 문 (4, 5) 안쪽 둘째 줄에 선 선반, 그 안에 상자.
+	d["props"].append(_prop("shelf", Rect2i(3, 3, 3, 1), 0))
+	d["containers"]["c"] = {"id": "c", "cell": Vector2i(4, 3), "level": 0}
+	var stats := RoomFurnish.clear_fronts(d)
+	assert_eq(stats["moved"], 1)
+	var r: Rect2i = d["props"][0]["rect"]
+	assert_eq(r, Rect2i(2, 2, 3, 1), "가까운 빈 자리, 계단 둘레(5, 2)는 피함")
+	assert_eq(d["containers"]["c"]["cell"], Vector2i(3, 2), "상자도 같이")
+	RoomFurnish.block_furniture_with(d, _model)
+	assert_true(_front_clear(d["levels"][0]), "문 앞 2×3이 빔")
+	assert_eq(d["levels"][0].solid_at(Vector2i(2, 2)), S.LOW, "옮긴 자리에서 몸을 막음")
+
+
+func _with_window(d: Dictionary) -> Dictionary:
+	var g: FieldGrid = d["levels"][0]
+	var w := Vector2i(1, 3)
+	g.set_solid(w, S.WINDOW)
+	g.windows[w] = {"broken": false, "glass": false, "building": 0, "cell": w}
+	g.refresh_paths()
+	return d
+
+
+func test_a_tall_piece_leaves_the_window_and_a_low_one_stays() -> void:
+	var d := _with_window(_house())
+	d["props"].append(_prop("wardrobe", Rect2i(2, 3, 1, 1), 0))
+	assert_eq(RoomFurnish.clear_fronts(d)["moved"], 1)
+	assert_eq(d["props"][0]["rect"], Rect2i(2, 2, 1, 1), "창 앞을 비우고 귀퉁이 벽으로")
+	var e := _with_window(_house())
+	e["props"].append(_prop("bed", Rect2i(2, 3, 1, 1), 0))
+	var stats := RoomFurnish.clear_fronts(e)
+	assert_eq(stats["moved"] + stats["removed"] + stats["left"], 0, "낮은 가구는 창 앞에 있어도 된다")
+	assert_eq(e["props"][0]["rect"], Rect2i(2, 3, 1, 1))
+
+
+func test_a_piece_half_in_the_wall_comes_into_the_room() -> void:
+	var d := _house()
+	# 작업대 (1, 3)~(2, 3): 서쪽 벽 칸에 반이 박혔다.
+	d["props"].append(_prop("workbench", Rect2i(1, 3, 2, 1), 0))
+	assert_eq(RoomFurnish.clear_fronts(d)["moved"], 1)
+	assert_eq(d["props"][0]["rect"], Rect2i(2, 2, 2, 1), "벽에서 나와 북쪽 벽에 붙음")
+	assert_eq(d["levels"][0].solid_at(Vector2i(1, 3)), S.WALL, "벽은 그대로")
+
+
+func test_a_later_piece_does_not_close_the_front_of_one_already_standing() -> void:
+	var d := _house()
+	# 귀퉁이 (2, 2)에 이미 몸을 막는 장롱. 그 앞 두 칸을 다 막는 통 둘 가운데 둘째는 남는다.
+	d["props"].append(_prop("wardrobe", Rect2i(2, 2, 1, 1), 0))
+	d["levels"][0].set_solid(Vector2i(2, 2), S.LOW)
+	d["props"].append(_prop("barrel", Rect2i(3, 2, 1, 1), 0))
+	d["props"].append(_prop("barrel", Rect2i(2, 3, 1, 1), 0))
+	var stats := RoomFurnish.block_furniture_with(d, _model)
+	assert_eq(stats["painted"], 1)
+	assert_eq(stats["kept_path"], 1)
+
+
+func test_rooms_of_one_use_get_different_sets_by_seed() -> void:
+	var sets: Dictionary = {}
+	for n in range(12):
+		var d := _bedroom()
+		d["place_id"] = "houses_%02d" % n
+		d["containers"] = {}
+		RoomFurnish.furnish_rooms(d)
+		var kinds: Array = []
+		for p: Dictionary in d["props"]:
+			kinds.append(p["kind"])
+		kinds.sort()
+		assert_has(kinds, "bed")
+		assert_has(kinds, "wardrobe")
+		sets[str(kinds)] = true
+	assert_gt(sets.size(), 2, "덤 가구는 방마다 굴린다")
+
+
+func test_a_needed_piece_takes_a_shorter_shape_on_a_short_wall() -> void:
+	# 3×4 매장(x 2~4, y 2~5), 문은 남쪽 (3, 6). 문 앞 두 줄을 비우면 계산대가 북쪽 벽을
+	# 다 쓰고, 4칸짜리 진열 선반은 어느 벽에도 안 들어간다.
+	var g := FieldGrid.new(7, 8)
+	for y in range(8):
+		for x in range(7):
+			var c := Vector2i(x, y)
+			if x >= 1 and x <= 5 and y >= 1 and y <= 6:
+				g.building[g.index(c)] = 0
+				var wall: bool = x == 1 or x == 5 or y == 1 or y == 6
+				g.set_solid(c, S.WALL if wall else S.NONE)
+	var door := Vector2i(3, 6)
+	g.set_solid(door, S.DOOR)
+	g.doors[door] = {"state": "closed", "hp": 8, "building": 0, "cell": door}
+	g.refresh_paths()
+	var d := {"grid": g, "levels": {0: g}, "stairs": [], "low_blocks": [], "place_id": "houses_99", "containers": {},
+		"props": [{"kind": "shop_counter", "rect": Rect2i(2, 2, 1, 1), "solid": "none", "facing": 0, "note": "매장의 계산대", "level": 0}]}
+	var stats := RoomFurnish.furnish_rooms(d)
+	assert_eq(stats["need_missing"], 0, str(stats["missing"]))
+	var shelf: Variant = null
+	for p: Dictionary in d["props"]:
+		if p["kind"] == "display_shelf":
+			shelf = p
+	assert_not_null(shelf, "진열 선반이 있다")
+	if shelf != null:
+		var r: Rect2i = shelf["rect"]
+		assert_lt(maxi(r.size.x, r.size.y), 4, "짧은 꼴")
+
+
+func test_a_long_rack_in_the_doorway_turns_to_stand_by_the_side_wall() -> void:
+	# 5×4 방(x 2~6, y 2~5), 문 (4, 6). 북쪽 두 줄은 작업대가 차지했다.
+	var g := FieldGrid.new(9, 8)
+	for y in range(8):
+		for x in range(9):
+			var c := Vector2i(x, y)
+			if x >= 1 and x <= 7 and y >= 1 and y <= 6:
+				g.building[g.index(c)] = 0
+				var wall: bool = x == 1 or x == 7 or y == 1 or y == 6
+				g.set_solid(c, S.WALL if wall else S.NONE)
+	var door := Vector2i(4, 6)
+	g.set_solid(door, S.DOOR)
+	g.doors[door] = {"state": "closed", "hp": 8, "building": 0, "cell": door}
+	g.refresh_paths()
+	var d := {"grid": g, "levels": {0: g}, "stairs": [], "low_blocks": [], "containers": {},
+		"props": [_prop("workbench", Rect2i(2, 2, 5, 1), 0), _prop("workbench", Rect2i(4, 3, 3, 1), 0),
+			_prop("cloth_bolt_rack", Rect2i(2, 4, 3, 1), 0)]}
+	d["containers"]["c"] = {"id": "c", "cell": Vector2i(4, 4), "level": 0}
+	assert_eq(RoomFurnish.clear_fronts(d)["moved"], 1)
+	var rack: Dictionary = d["props"][2]
+	assert_eq(rack["rect"], Rect2i(2, 3, 1, 3), "옆벽에 세로로")
+	assert_eq(rack["facing"], 3, "등은 서쪽 벽")
+	assert_true((rack["rect"] as Rect2i).has_point(d["containers"]["c"]["cell"]), "든 상자도 가구 안")

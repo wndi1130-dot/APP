@@ -125,10 +125,14 @@ static func build_from(script: Script) -> Dictionary:
 	# (house_layout.md 1, user decision 415). Only the maps in MAP_DIR: the first
 	# stop keeps its own hand-made cells.
 	# Home rooms, shops and stores are laid out again by rule first (same map,
-	# same rooms), and the boxes go into the furniture that holds them.
+	# same rooms), the map's own pieces that stand in a doorway, on the stairs'
+	# step, tall in front of a window or half in a wall are moved aside, and
+	# the boxes go into the furniture that holds them.
 	if script.resource_path.begins_with(MAP_DIR):
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
+		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)
 		data["furniture_stats"] = RoomFurnish.block_furniture(data)
+		data["room_stats"]["boxes_moved"] = RoomFurnish.boxes_into_furniture(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
