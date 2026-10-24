@@ -491,3 +491,41 @@ func test_motions_from_sixteen_on_are_packed_for_the_shader() -> void:
 	var front := PersonVisual.clip_named(baked["clips"], PersonVisual.OWN_FALL_FRONT, -1)
 	var down := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(1.0, front, 1.0, 1.0), front, 0, 0.0))
 	assert_lt(down[0].y, 0.5, "the hand of a body lying on its face is near the ground")
+
+
+# Decision 422, first set, in the living's own folder (the shader has sixty-four
+# places now): every one there by name, the quick ones with every frame, the
+# limps covering ground and nothing else, a hand to where it hurts ending as it
+# began; and the hand of one past thirty-two read back through the packing.
+func test_the_first_set_of_decision_422_is_in_the_living_own() -> void:
+	var names := ["p_search_high", "p_limp_light_l", "p_limp_light_r", "p_limp_heavy_l", "p_limp_heavy_r",
+		"p_treat_arm", "p_treat_leg", "p_treat_head", "p_bitten_front", "p_bitten_back", "p_shiver",
+		"p_pain_head", "p_pain_torso", "p_pain_arm", "p_pain_leg", "p_tired_stretch"]
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var clips: Array = baked["clips"]
+	assert_eq(clips.size(), BodyBake.PERSON_CLIPS.size())
+	for name: String in names:
+		var n := PersonVisual.clip_named(clips, name, -1)
+		assert_gt(n, -1, name)
+		var clip: Dictionary = clips[n]
+		if BodyBake.PERSON_KEEP.has(name):
+			assert_eq(int(clip["frames"]), 24, name + " keeps every frame")
+		assert_eq(float(clip["round"]) > 0.0, name.begins_with("p_limp"), name + " covers ground only if it limps")
+	for name in ["p_pain_head", "p_pain_torso", "p_pain_arm", "p_pain_leg", "p_tired_stretch"]:
+		var clip: Dictionary = clips[PersonVisual.clip_named(clips, name, -1)]
+		var img: Image = baked["image"]
+		var worst := 0
+		for x in img.get_width():
+			var a := img.get_pixel(x, int(clip["start"]))
+			var b := img.get_pixel(x, int(clip["start"]) + int(clip["frames"]) - 1)
+			worst = maxi(worst, roundi(maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b))) * 255.0))
+		assert_lte(worst, 1, name + " ends as it began")
+	var arm := PersonVisual.hand_of(baked)
+	var table := PersonVisual.arm_table(baked, arm["hand"], arm["elbow"])
+	var frames := DeadBody.table_of(baked)
+	var treat := PersonVisual.clip_named(clips, "p_treat_leg", -1)
+	assert_gt(treat, 32, "past thirty-two")
+	var low := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(0.0, treat, 1.0, 1.0), treat, 5, 10.0))
+	var plain := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(0.0, treat, 1.0, 1.0), treat, 0, 0.0))
+	assert_lt(plain[0].y, 0.7, "the hands are down at the shin")
+	assert_true(low[0].is_finite(), "a frame and share on top read back")

@@ -251,7 +251,7 @@ static func shadow(ci: CanvasItem, rect: Rect2, radius: float, drop: float, blur
 
 ## The paper tag that hangs on a cold car (.ptag): paper with its fibre, cut
 ## to a point at the left, tilted `tilt` degrees, a line icon and a word in
-## ink. Its touch is the parent's; it only shows.
+## ink (no word: the mark alone). Its touch is the parent's; it only shows.
 static func paper_tag(word: String, icon: String = "snow", tilt: float = -2.0) -> Control:
 	var k: float = UiFonts.K
 	var c := Control.new()
@@ -267,7 +267,7 @@ static func paper_tag(word: String, icon: String = "snow", tilt: float = -2.0) -
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mark.size = Vector2(px, px)
 	# padding 0 7 0 9, gap 3, 18 high.
-	var width: float = (9.0 + 12.0 + 3.0 + 7.0) * k + text_w(w)
+	var width: float = (9.0 + 12.0 + 7.0) * k + ((3.0 * k + text_w(w)) if word != "" else 0.0)
 	c.size = Vector2(width, 18.0 * k)
 	c.custom_minimum_size = c.size
 	c.pivot_offset = c.size * 0.5
@@ -296,6 +296,9 @@ static func paper_tag(word: String, icon: String = "snow", tilt: float = -2.0) -
 	c.add_child(body)
 	mark.position = Vector2(9.0 * k, (c.size.y - mark.size.y) * 0.5)
 	c.add_child(mark)
+	if word == "":
+		w.free()
+		return c
 	c.add_child(w)
 	# Its word on the line its ink sits on in the mockup, 13.3 down the 18.
 	put_on(w, (9.0 + 12.0 + 3.0) * k, 13.3 * k)

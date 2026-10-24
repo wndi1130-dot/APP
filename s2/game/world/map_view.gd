@@ -20,6 +20,8 @@ const PROP_CULL_DISTANCE: float = 39.0
 const PROP_LOD_DISTANCE: float = 18.0
 const PROP_REFRESH_SECONDS: float = 0.1
 const FxState = preload("res://fx/fx_state.gd")
+const ParticlePool = preload("res://fx/particle_pool.gd")
+const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
@@ -66,6 +68,22 @@ var container_nodes: Dictionary = {}
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
+var lid_nodes: Dictionary = {}          # manhole key -> its lid (and any planks on it), a node of its own so it can move
+var lid_anim: Dictionary = {}           # manhole key -> {"kind": "open" or "jolt", "t": seconds in}
+var _lid_puff: ParticlePool                   # the snow a dropped lid throws up (ParticlePool), made the first time
+## A lid pushed open by one of the dead coming up (decision 422 M9), in seconds
+## from the start of its climb: lifted from under and tipped up on the side the
+## hands push, dragged aside, dropped in a puff of snow. Where it ends is where
+## an open lid always lay. A blocked lid only jolts under its planks and settles.
+const LID_OPEN_TIME: float = 0.8
+const LID_LIFT_END: float = 0.18
+const LID_DROP_AT: float = 0.66
+const LID_LIFT: float = 0.14           # metres up from under
+const LID_TIP: float = 0.22            # radians; the far edge stays off the ground
+const LID_ASIDE: Vector3 = Vector3(1.0, 0.02, 0.25)
+const LID_JOLT_TIME: float = 0.6
+const LID_JOLT: float = 0.07           # metres, the first of two jolts
+const LID_PUFF: Dictionary = {"style": 5, "life": 0.45, "speed": 0.8, "size": 0.18, "gravity": Vector3(0, -1.2, 0), "spread": 70.0, "color": Color(0.70, 0.71, 0.73, 0.5)}
 const LEVEL_WAYS := {-1: "지하로", 0: "1층으로", 1: "2층으로", 2: "3층으로"}
 var label_nodes: Array = []             # [Label3D, cell]
 
@@ -166,7 +184,9 @@ func setup(map_data: Dictionary) -> void:
 
 
 ## Manhole lid, or the culvert mouth; blocked shows a heavy plank stack on the
-## lid, open shows the lid pushed aside and the dark of the hole.
+## lid, open shows the lid pushed aside and the dark of the hole. A lid that
+## goes from shut to open is pushed aside over LID_OPEN_TIME (advance_lids);
+## one that shuts is back at once, as before.
 func update_manhole(key: String, blocked: bool, open: bool = false) -> void:
 	var node: MeshInstance3D = manhole_nodes[key]
 	var st := _begin()
@@ -178,16 +198,106 @@ func update_manhole(key: String, blocked: bool, open: bool = false) -> void:
 	elif key.begins_with("culvert"):
 		box(st, Vector3(2.0, 0.9, 0.5), Vector3(0, 0.45, -0.4), Color(0.32, 0.31, 0.3))
 		box(st, Vector3(1.4, 0.7, 0.2), Vector3(0, 0.35, -0.12), Color(0.05, 0.05, 0.06))
-	elif open:
-		box(st, Vector3(1.0, 0.02, 1.0), Vector3(0, 0.01, 0), Color(0.03, 0.03, 0.04))
-		box(st, Vector3(1.1, 0.06, 1.1), Vector3(1.0, 0.05, 0.25), Color(0.18, 0.18, 0.2))
-		box(st, Vector3(0.9, 0.02, 0.15), Vector3(1.0, 0.09, 0.25), Color(0.3, 0.3, 0.32))
 	else:
-		box(st, Vector3(1.1, 0.06, 1.1), Vector3(0, 0.03, 0), Color(0.18, 0.18, 0.2))
-		box(st, Vector3(0.9, 0.02, 0.15), Vector3(0, 0.07, 0), Color(0.3, 0.3, 0.32))
+		# The dark of the hole lies under the lid; the lid is drawn on its own node.
+		box(st, Vector3(1.0, 0.02, 1.0), Vector3(0, 0.01, 0), Color(0.03, 0.03, 0.04))
+		var lid := _lid_node(key, node)
+		var ls := _begin()
+		box(ls, Vector3(1.1, 0.06, 1.1), Vector3(0, 0.03, 0), Color(0.18, 0.18, 0.2))
+		box(ls, Vector3(0.9, 0.02, 0.15), Vector3(0, 0.07, 0), Color(0.3, 0.3, 0.32))
 		if blocked:
-			box(st, Vector3(1.2, 0.25, 0.9), Vector3(0, 0.2, 0), Color(0.5, 0.4, 0.28))
+			box(ls, Vector3(1.2, 0.25, 0.9), Vector3(0, 0.2, 0), Color(0.5, 0.4, 0.28))
+		lid.mesh = ls.commit()
+		var was_open: bool = lid.get_meta("open", false)
+		lid.set_meta("open", open)
+		if open and not was_open:
+			lid_anim[key] = {"kind": "open", "t": 0.0}
+		elif not open:
+			lid_anim.erase(key)
+			lid.transform = Transform3D.IDENTITY
 	node.mesh = st.commit()
+
+
+func _lid_node(key: String, hole: MeshInstance3D) -> MeshInstance3D:
+	if lid_nodes.has(key):
+		return lid_nodes[key]
+	var lid := MeshInstance3D.new()
+	lid.material_override = material
+	hole.add_child(lid)
+	lid_nodes[key] = lid
+	return lid
+
+
+## The dead under a blocked lid push at it and it holds (decision 422 M9):
+## it jolts twice under its planks and settles. Nothing else changes.
+func jolt_manhole(key: String) -> void:
+	if not lid_nodes.has(key) or (lid_anim.has(key) and lid_anim[key]["kind"] == "open"):
+		return
+	lid_anim[key] = {"kind": "jolt", "t": 0.0}
+
+
+## Moves the lids being pushed (field time, from _process; tests call it).
+func advance_lids(delta: float) -> void:
+	for key in lid_anim.keys():
+		var anim: Dictionary = lid_anim[key]
+		anim["t"] = float(anim["t"]) + delta
+		var lid: MeshInstance3D = lid_nodes[key]
+		var t: float = anim["t"]
+		if anim["kind"] == "open":
+			lid.transform = lid_open_pose(t)
+			if t >= LID_OPEN_TIME:
+				lid_anim.erase(key)
+				_puff(lid.global_position, LID_ASIDE)
+		else:
+			lid.transform = lid_jolt_pose(t)
+			if t >= LID_JOLT_TIME:
+				lid_anim.erase(key)
+	if _lid_puff != null:
+		_lid_puff.advance(delta)
+
+
+## Where an opening lid is (in its hole's frame), t seconds after the body under
+## it began to climb.
+static func lid_open_pose(t: float) -> Transform3D:
+	var up := Vector3(0, LID_LIFT, 0)
+	var tip_axis := Vector3.UP.cross(Vector3(LID_ASIDE.x, 0, LID_ASIDE.z)).normalized()
+	var at := Vector3.ZERO
+	var tip := 0.0
+	if t <= 0.0:
+		return Transform3D.IDENTITY
+	if t < LID_LIFT_END:
+		var k := smoothstep(0.0, LID_LIFT_END, t)
+		at = up * k
+		tip = LID_TIP * k
+	elif t < LID_DROP_AT:
+		var k := smoothstep(LID_LIFT_END, LID_DROP_AT, t)
+		at = up.lerp(LID_ASIDE + up * 0.6, k)
+		tip = lerpf(LID_TIP, LID_TIP * 0.5, k)
+	elif t < LID_OPEN_TIME:
+		var k := smoothstep(LID_DROP_AT, LID_OPEN_TIME, t)
+		at = (LID_ASIDE + up * 0.6).lerp(LID_ASIDE, k)
+		tip = lerpf(LID_TIP * 0.5, 0.0, k)
+	else:
+		return Transform3D(Basis.IDENTITY, LID_ASIDE)
+	return Transform3D(Basis(tip_axis, tip), at)
+
+
+## A blocked lid t seconds after the push: two jolts, the second smaller.
+static func lid_jolt_pose(t: float) -> Transform3D:
+	if t <= 0.0 or t >= LID_JOLT_TIME:
+		return Transform3D.IDENTITY
+	var beat := t / (LID_JOLT_TIME * 0.5)
+	var size := LID_JOLT if beat < 1.0 else LID_JOLT * 0.5
+	var y := size * sin(fposmod(beat, 1.0) * PI)
+	return Transform3D(Basis(Vector3.RIGHT, y * 1.5), Vector3(0, y, 0))
+
+
+func _puff(at: Vector3, away: Vector3) -> void:
+	if _lid_puff == null:
+		_lid_puff = ParticlePool.new()
+		add_child(_lid_puff)
+		_lid_puff.prepare(2, PUFF_SHADER)
+	_lid_puff.burst(at + Vector3(0, 0.05, 0), Vector3(away.x, 0, away.z).normalized() + Vector3.UP * 0.4, 10, int(at.x * 131.0 + at.z * 17.0), LID_PUFF)
 
 
 ## Room names show once the room has been seen (no free map knowledge).
@@ -791,6 +901,8 @@ func _build_props() -> void:
 
 
 func _process(delta: float) -> void:
+	if not lid_anim.is_empty() or _lid_puff != null:
+		advance_lids(delta)
 	_prop_elapsed += delta
 	if _prop_elapsed >= PROP_REFRESH_SECONDS:
 		_prop_elapsed = 0.0

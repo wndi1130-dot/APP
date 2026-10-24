@@ -9,8 +9,9 @@ const N = Number(process.argv[2] ?? 1000);
 const OUT = process.argv[3];
 const BOT = process.argv[4] ?? 'first';
 const extra: Partial<BotOptions> = BOT === 'first' ? {} : { pickRule: BOT as 'second' | 'random' };
-// view.choices에는 id가 없어 칸 번호로 센다: 앞칸 솥·몫·살림을 건드리는 칸 = low_fire 셋째(가구), burst_crates 셋째(앞칸 비축), too_heavy 첫째(살림 상자), warm_potatoes 둘째(앞칸 몫)
-const TOUCH = new Set(['ev_h01_low_fire/2', 'ev_h02_burst_crates/2', 'ev_h09_too_heavy/0', 'ev_b01_warm_potatoes/1']);
+// view.choices에는 id가 없어 칸 번호로 센다: 앞칸 겨울 솥(먹을 것)을 건드리는 칸 = burst_crates 셋째(앞칸 비축), warm_potatoes 둘째(앞칸 몫).
+// 가구 땔감(low_fire 셋째)·살림 상자(too_heavy 첫째)는 결정 423부터 「어긴 말」을 부르지 않는다(front_goods_given).
+const TOUCH = new Set(['ev_h02_burst_crates/2', 'ev_b01_warm_potatoes/1']);
 
 interface Night { crowd: number; med: number; injured: number; seg: number; pick: string }
 const nights: Night[] = [];
