@@ -283,6 +283,8 @@ export function jobCheck(g: Game, kind: ModKind, car: string): JobCheck {
   }
   if (kind === 'armor') {
     if (!techUsable(g, 'w3')) return { ok: false, why: '장갑 객차를 아직 모른다' };
+    // 장갑이 하는 일은 경비대 노출을 낮추는 것뿐이다(sit.ts). 다른 칸에 대면 고철만 든다.
+    if (car !== 'guard') return { ok: false, why: '경비대칸에만 댄다' };
     if (d.armored.includes(car)) return { ok: false, why: '이미 장갑을 댔다' };
     if (d.scrap < D.armorScrap) return { ok: false, why: `고철 ${D.armorScrap}이 든다` };
     return { ok: true };
@@ -296,6 +298,7 @@ export function jobCheck(g: Game, kind: ModKind, car: string): JobCheck {
 export function startJob(g: Game, kind: ModKind, car: string): boolean {
   const d = dom(g);
   if (!jobCheck(g, kind, car).ok) return false;
+  const wood0 = d.wood, scrap0 = d.scrap;
   if (kind === 'insulate') d.wood -= D.insulateWood;
   else if (kind === 'armor') d.scrap -= D.armorScrap;
   else {
@@ -307,8 +310,26 @@ export function startJob(g: Game, kind: ModKind, car: string): boolean {
     }
   }
   const need = kind === 'insulate' ? D.insulateWork : kind === 'armor' ? D.armorWork : D.convertWork;
-  d.job = { kind, car, progress: 0, need };
+  d.job = { kind, car, progress: 0, need, paid: { wood: wood0 - d.wood, scrap: scrap0 - d.scrap } };
   journal(g, `공방 개조 줄에 올렸다: ${jobTitle(kind, car)}.`);
+  return true;
+}
+
+/** 줄에 올린 개조를 거둘 수 있나: 공방이 아직 손대지 않았을 때만(잘못 누른 것을 되돌리는 길). */
+export function cancelOpen(g: Game): boolean {
+  const job = g.dom?.job;
+  return !!job && job.progress <= 0 && !!job.paid;
+}
+
+/** 줄에 올린 개조를 거둔다. 낸 자재를 그대로 돌려준다. 일이 시작된 뒤에는 못 거둔다. */
+export function cancelJob(g: Game): boolean {
+  if (!cancelOpen(g)) return false;
+  const d = dom(g);
+  const job = d.job!;
+  d.wood += job.paid!.wood;
+  d.scrap += job.paid!.scrap;
+  d.job = null;
+  journal(g, `공방 개조 줄에서 내렸다: ${jobTitle(job.kind, job.car)}.`);
   return true;
 }
 
@@ -343,31 +364,14 @@ function completeJob(g: Game): void {
 function convertGreenhouse(g: Game, car: string): void {
   const d = dom(g);
   d.greenhouse = car;
-  // 관계와 적의는 '칸을 내줄 곳' 카드가 고를 때 바로 움직였다(10장 8번). 여기선 처지만 바뀐다.
-  if (car === 'front') {
-    const s = g.comms.front;
-    s.base[0] -= 15;
-    s.base[2] += 20;
-    journal(g, '앞칸에 유리 지붕을 얹었다. 앞칸 사람들이 다른 칸으로 흩어졌다.', 'dark');
-  } else if (car === 'store') {
+  // 온실은 창고칸에만 얹는다(GREENHOUSE_CARS). 사람이 사는 칸은 내주지 않고(금지선, 2026-10-25),
+  // 냉동칸은 시신 자리라 먹을 것과 섞지 않는다. 옛 저장 판에 다른 칸이 줄에 있으면 지붕만 얹는다.
+  if (car === 'store') {
     const cap = storeCap(g);
     trimToCap(g, cap);
     journal(g, '창고칸을 비우고 온실로 바꿨다. 자재를 쌓을 곳이 없어졌다.', 'bad');
-  } else if (car === 'cold') {
-    if (g.stored > 0) {
-      g.thrown += g.stored;
-      if (lawActive(g, 'corpse_store')) {
-        bump(g, 'tension', 5, 'corpse');
-        bump(g, 'trust', -3, 'corpse');
-        journal(g, `냉동칸 안치법을 지킬 수 없게 됐다. 시신 ${g.stored}구를 선로에 내놓았다.`, 'bad');
-      }
-      g.stored = 0;
-      if (g.dark) g.dark.checkedStored = 0; // S1b: 확인 수도 같이 비운다
-    }
-    journal(g, '냉동칸을 온실로 바꿨다.', 'good');
   } else {
-    g.comms.tail.base[2] += 15;
-    journal(g, '꼬리칸 하나를 비워 온실로 바꿨다. 남은 두 칸이 더 좁아졌다.', 'bad');
+    journal(g, `${CAR_NAME[car] ?? car}에 유리 지붕을 얹었다.`, 'good');
   }
 }
 
