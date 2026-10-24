@@ -63,6 +63,10 @@ const TELL_GROUP: String = "lunge_tell"
 const TELL_LOUD: float = 0.9
 const FEEL_GROUP: String = "chief_feel_%02d"
 const BRAKE_LOUD: float = 0.8
+## Seconds into the brake file at which the train stands: its wheels' beat
+## stopped, the squeal choked, the couplers running in
+## (tools/sound/synth_stop_sounds.py STOP_AT).
+const BRAKE_STAND_AT: float = 2.4
 const FEEL_LOUD: float = 0.25
 const TELL_RANGE: float = 40.0
 const TELL_STANDIN_PITCH: float = 1.5
@@ -785,9 +789,11 @@ func lid_scrape(at: Vector3) -> void:
 
 ## The brakes as the train comes to its stand on open line (user decision
 ## 141's file). Part of the opening scene: nothing in the field hears it.
-func train_brake() -> void:
+## `lead`: how long before the train stands this is called; the file starts
+## so its own standing (BRAKE_STAND_AT) falls on the train's.
+func train_brake(lead: float = BRAKE_STAND_AT) -> void:
 	played.append("train_brake")
-	_one_shot("train_brake", game.player.position, BRAKE_LOUD, 1.0)
+	_one_shot("train_brake", game.player.position, BRAKE_LOUD, 1.0, null, "SFX", 0.0, maxf(0.0, BRAKE_STAND_AT - lead))
 
 
 ## The chief's aside beside the risk line, muttered very low (user decision
@@ -847,7 +853,8 @@ func _bus_at(at: Vector3) -> String:
 
 
 ## cut > 0: only that many seconds of it are heard, then it fades out fast.
-func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: AudioStream = null, bus: String = "SFX", cut: float = 0.0) -> void:
+## from: where in the file it starts (seconds).
+func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: AudioStream = null, bus: String = "SFX", cut: float = 0.0, from: float = 0.0) -> void:
 	if lin <= 0.01 or not has(group):
 		return
 	var o: AudioStreamPlayer3D = one_shots[0]
@@ -861,7 +868,7 @@ func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: Aud
 	o.stream = stream if stream != null else _pick(group)
 	o.volume_db = _db(lin)
 	o.pitch_scale = pitch
-	o.play()
+	o.play(from)
 	cut_n += 1
 	o.set_meta("cut", cut_n)
 	if cut > 0.0 and is_inside_tree():
