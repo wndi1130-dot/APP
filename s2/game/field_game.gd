@@ -12,6 +12,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -103,6 +104,9 @@ const EXTRA_ITEMS: Dictionary = {
 	"flare": {"name": "철도 섬광", "weight": 0.5, "stock": ""},
 	# What the four drives of the pass's plough give up together (user decision 188).
 	"plow_core": {"name": "제설기 코어", "weight": 4.0, "stock": ""},
+	# The cores of the fixed scenes at freight yards and works (decision 426, core_scenes.gd).
+	"core_engine": {"name": "기관 코어", "weight": CoreScenes.WEIGHT, "stock": ""},
+	"core_electric": {"name": "전기 코어", "weight": CoreScenes.WEIGHT, "stock": ""},
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
@@ -321,6 +325,11 @@ func _ready() -> void:
 	# place, so a resumed stop gets the same ones; what was picked stays in the place's state.
 	if data.has("room_stats"):
 		receipt.place_note("roomStories", RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash()))
+	# A freight yard's or works' one fixed core scene (decision 426): the place is the map's,
+	# whether a core is left in it is this run's dice, kept in the place's state like the stories.
+	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash())
+	if not core_note.is_empty():
+		receipt.place_note("coreScene", core_note)
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
 	if not MISSIONS.has(mission):
@@ -2386,8 +2395,13 @@ func finish(reason: String) -> void:
 		if STOCK_OF.has(id):
 			var row: Array = STOCK_OF[id]
 			stock[row[0]] = float(stock.get(row[0], 0.0)) + float(row[1]) * int(unloaded[id])
-		if id in ["symbol_bell", "info_telegraph", "info_timetable", "plow_core"]:
+		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
+		elif CoreScenes.CORE_ITEMS.has(id):
+			# One entry a core, so the count reads off the list (CoreScenes.count). Once the
+			# field receipt takes ids, set_extras puts that count into extras.coreCount here.
+			for k in range(int(unloaded[id])):
+				receipt.gain_item(id)
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
@@ -2417,6 +2431,9 @@ func finish(reason: String) -> void:
 	receipt.set_place_state(snappedf(float(searched) / maxi(data["containers"].size(), 1), 0.01), clampi(zombies.alive_count() / 10, 0, 5))
 	if data["spots"].has("water_tower"):
 		receipt.place_note("waterTower", data["spots"]["water_tower"]["state"])
+	# A hidden core looked at without the engine hand (field_unified 3장): one line, a reason to bring them.
+	if String(data["spots"].get(CoreScenes.SPOT, {}).get("state", "")) == "seen_hidden":
+		receipt.place_note("coreHint", true)
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)

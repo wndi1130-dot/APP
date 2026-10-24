@@ -545,6 +545,20 @@ func update_spot(id: String) -> void:
 		"salvage":
 			if spot["state"] == "intact":
 				box(st, Vector3(0.8, 0.3, 0.5), at + Vector3(0, 0.15, 0), Color(0.5, 0.48, 0.45) if spot["material"] == "scrap" else Color(0.55, 0.42, 0.28))
+		"core":
+			# A stopped machine (core_scenes.gd): a dark casing with its panel off. Only a core
+			# still in it shows, a dull brass lump; a hidden one looks as stripped as the rest.
+			# Its back to the wall, its open side ("face") to the room.
+			var casing := Color(0.3, 0.3, 0.31)
+			var f: Vector2i = spot.get("face", Vector2i(0, 1))
+			var out := Vector3(f.x, 0, f.y)
+			var side := Vector3(absf(out.z), 0, absf(out.x))   # along the wall
+			box(st, Vector3(0.95, 1.0, 0.95), at - out * 0.02 + Vector3(0, 0.5, 0), casing)
+			box(st, Vector3(0.5, 0.3, 0.5), at - out * 0.22 + Vector3(0, 1.15, 0), casing.darkened(0.2))
+			box(st, side * 0.6 + out.abs() * 0.4 + Vector3(0, 0.05, 0), at + out * 0.75 + side * 0.15 + Vector3(0, 0.03, 0), casing.lightened(0.1))
+			if spot["state"] == "core":
+				# In the open hatch on top, so the camera sees it from any side.
+				box(st, side * 0.4 + out.abs() * 0.3 + Vector3(0, 0.14, 0), at + out * 0.2 + Vector3(0, 1.07, 0), Color(0.5, 0.43, 0.28))
 	node.mesh = st.commit()
 
 
