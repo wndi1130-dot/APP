@@ -441,3 +441,85 @@ func test_a_long_rack_in_the_doorway_turns_to_stand_by_the_side_wall() -> void:
 	assert_eq(rack["rect"], Rect2i(2, 3, 1, 3), "옆벽에 세로로")
 	assert_eq(rack["facing"], 3, "등은 서쪽 벽")
 	assert_true((rack["rect"] as Rect2i).has_point(d["containers"]["c"]["cell"]), "든 상자도 가구 안")
+
+
+## ---------------------------------------------------------------- 이름표·건물 이름으로 읽는 방
+
+## 방 rule 묶음별 방 수(그 지도 그 건물 이름).
+func _rule_rooms(d: Dictionary, building_name: String) -> Dictionary:
+	var ids: Dictionary = {}
+	for row: Dictionary in d.get("buildings", []):
+		if String(row.get("name", "")) == building_name:
+			ids[int(row["id"])] = true
+	var maps: Dictionary = {}
+	var seen: Dictionary = {}
+	for p: Dictionary in d["props"]:
+		if not p.has("rule") or not ids.has(int(p.get("building", -1))):
+			continue
+		var lv := int(p.get("level", 0))
+		if not maps.has(lv):
+			maps[lv] = RoomFurnish.rooms_of(d["levels"][lv])
+		var r: Rect2i = RoomFurnish._rect(p["rect"])
+		var ri := RoomFurnish._at(d["levels"][lv], maps[lv]["of"], r.position + r.size / 2)
+		seen["%d|%d" % [lv, ri]] = p["rule"]
+	var out: Dictionary = {}
+	for k: String in seen:
+		out[seen[k]] = int(out.get(seen[k], 0)) + 1
+	return out
+
+
+func _kinds_in(d: Dictionary, building_name: String, rule: String) -> Dictionary:
+	var ids: Dictionary = {}
+	for row: Dictionary in d.get("buildings", []):
+		if String(row.get("name", "")) == building_name:
+			ids[int(row["id"])] = true
+	var out: Dictionary = {}
+	for p: Dictionary in d["props"]:
+		if p.get("rule", "") == rule and ids.has(int(p.get("building", -1))):
+			out[p["kind"]] = true
+	return out
+
+
+func test_an_empty_house_on_a_label_map_gets_a_kitchen_and_a_bedroom() -> void:
+	# 호수 지도의 어장 주택: 가구도 이름표도 없는 두 방. 큰 방이 부엌, 작은 방이 침실.
+	var d := FieldMaps.build("lake_01")
+	var rooms := _rule_rooms(d, "어장 주택")
+	assert_eq(rooms.get("kitchen", 0), 5, "다섯 채의 부엌")
+	assert_eq(rooms.get("bed", 0), 5, "다섯 채의 침실")
+	var bed := _kinds_in(d, "어장 주택", "bed")
+	assert_true(bed.has("bed") and bed.has("wardrobe"), "침실에 침대와 장롱")
+	var kitchen := _kinds_in(d, "어장 주택", "kitchen")
+	assert_true(kitchen.has("cold_stove") and kitchen.has("jar_shelf"), "부엌에 난로와 항아리 선반")
+
+
+func test_a_one_room_hut_is_a_living_room() -> void:
+	var d := FieldMaps.build("lake_01")
+	var kinds := _kinds_in(d, "얼음 낚시 움막", "living")
+	assert_true(kinds.has("cold_stove") and kinds.has("bench"), "난로와 긴 의자")
+
+
+func test_a_labelled_bedroom_with_bunks_gets_no_second_bed() -> void:
+	# 산장 위층 침실 이름표, 지도의 이층 침대가 침대를 대신한다. 아래층 빈 침실은 침대를 받는다.
+	var d := FieldMaps.build("lodge_01")
+	var g1: FieldGrid = d["levels"][1]
+	var map := RoomFurnish.rooms_of(g1)
+	var beds: Dictionary = {}
+	var bunks: Dictionary = {}
+	for p: Dictionary in d["props"]:
+		if int(p.get("level", 0)) != 1:
+			continue
+		var r: Rect2i = RoomFurnish._rect(p["rect"])
+		var ri := RoomFurnish._at(g1, map["of"], r.position + r.size / 2)
+		if p["kind"] == "bed":
+			beds[ri] = true
+		elif p["kind"] == "bunk_bed":
+			bunks[ri] = true
+	assert_gt(bunks.size(), 0)
+	for ri: int in bunks:
+		assert_false(beds.has(ri), "이층 침대 방에 침대를 더하지 않는다")
+	assert_gt(_rule_rooms(d, "본채").get("bed", 0), 3, "본채 침실 이름표가 읽힌다")
+
+
+func test_the_empty_rooms_of_a_store_building_are_stores() -> void:
+	var d := FieldMaps.build("lake_01")
+	assert_gt(_rule_rooms(d, "얼음 창고").get("storage", 0), 1, "얼음 창고의 빈 방")
