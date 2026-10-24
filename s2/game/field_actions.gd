@@ -9,12 +9,16 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
+const SearchRules = preload("res://game/sim/search_rules.gd")
+const DoorRules = preload("res://game/sim/door_rules.gd")
+const WindowRules = preload("res://game/sim/window_rules.gd")
 
 const REACH: float = 1.4
-const DOOR_TIME: float = 0.5
-const PRY_TIME: float = 4.0
-const KICK_TIME: float = 1.0
-const GLASS_TIME: float = 3.0
+const INTERACT_REACH: float = REACH + 0.6
+const DOOR_TIME: float = DoorRules.TOGGLE_SECONDS
+const PRY_TIME: float = DoorRules.PRY_SECONDS
+const KICK_TIME: float = DoorRules.KICK_SECONDS
+const GLASS_TIME: float = WindowRules.CLEAR_SECONDS
 # The pass's snow plough (user decisions 176, 188): its drives are the salvage
 # spots named so, and with the last of them off comes the core and this much scrap.
 const DRIVE_PREFIX: String = "plow_drive_"
@@ -45,7 +49,7 @@ const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "twe
 const BODY_SEARCH_TIME: float = 3.0
 ## Going through a container is quiet (3 m, indoors 1.5 m), once every four
 ## seconds of it (loot spec v1 4, user decision 407 B4).
-const SEARCH_NOISE_EVERY: float = 4.0
+const SEARCH_NOISE_EVERY: float = SearchRules.NOISE_EVERY
 const ROUND_NAMES: Dictionary = {"pistol": "권총탄", "shell": "산탄"}
 const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
 
@@ -57,10 +61,101 @@ var fire_left: float = 0.0
 var fire_noise_t: float = 0.0
 var dig_noise_t: float = 0.0
 var unload_t: float = 0.0
+## Short-lived reservations, separate from saved AI state. No actor or callback is retained.
+var ongoing: Dictionary = {}
 
 
 func _init(field_game) -> void:
 	game = field_game
+
+
+func _in_reach(p, at: Vector3, boundary: bool = false) -> bool:
+	if game.level_of(p.position) != game.level_of(at) or p.position.distance_to(at) > INTERACT_REACH:
+		return false
+	var lg = game.grid_at(at)
+	var from_cell := FieldGrid.cell_of(p.position)
+	var to_cell := FieldGrid.cell_of(at)
+	# A door/frame may itself block the body; ordinary items may not be taken through one.
+	return lg.line_clear(from_cell, to_cell) if boundary else lg.body_line_clear(from_cell, to_cell)
+
+
+func _can_start(p, at: Vector3, boundary: bool = false) -> bool:
+	return p.can_act() and p.action == "" and _in_reach(p, at, boundary)
+
+
+func _target(work: Dictionary) -> Dictionary:
+	match work["kind"]:
+		"container": return game.data["containers"].get(work["key"], {})
+		"door": return game.grid.doors.get(work["key"], {})
+		"window": return game.grid.windows.get(work["key"], {})
+	return {}
+
+
+func _work_valid(p, work: Dictionary) -> bool:
+	if not p.can_act() or not _in_reach(p, work["at"], work["kind"] != "container"):
+		return false
+	if p.body.injured_at != work["injured_at"] or p.body.wounds.size() > int(work["wounds"]):
+		return false
+	if work["pry"] and not has_pry(p):
+		return false
+	var target := _target(work)
+	if not is_same(target, work["object"]):
+		return false
+	for key in work["state"]:
+		if target.get(key) != work["state"][key]:
+			return false
+	return true
+
+
+func _begin_work(p, action: String, label: String, seconds: float, done: Callable,
+		kind: String, key, at: Vector3, needs_pry: bool = false) -> bool:
+	var work := {"kind": kind, "key": key, "at": at, "pry": needs_pry}
+	var target := _target(work)
+	if target.is_empty() or bool(target.get("busy", false)) or not _can_start(p, at, kind != "container"):
+		return false
+	if needs_pry and not has_pry(p):
+		return false
+	var state: Dictionary = {}
+	for field in ["state", "locked", "searched", "broken", "glass"]:
+		if target.has(field):
+			state[field] = target[field]
+	work.merge({"action": action, "object": target, "state": state, "ready": false,
+		"injured_at": p.body.injured_at, "wounds": p.body.wounds.size()})
+	p.start_action(action, label, seconds, done)
+	target["busy"] = true
+	p.action_busy = target
+	ongoing[p.get_instance_id()] = work
+	return true
+
+
+## Called before the body/action tick, including for fallen or grabbed people.
+func validate_work(p) -> void:
+	var id: int = p.get_instance_id()
+	if not ongoing.has(id):
+		return
+	var work: Dictionary = ongoing[id]
+	if p.action != work["action"] or not is_same(p.action_busy, work["object"]):
+		ongoing.erase(id)
+		return
+	if not _work_valid(p, work):
+		p.cancel_action()
+		ongoing.erase(id)
+
+
+## Only the timed-action completion branch can issue a completion ticket.
+func complete_work(p) -> void:
+	var id: int = p.get_instance_id()
+	if ongoing.has(id) and _work_valid(p, ongoing[id]):
+		ongoing[id]["ready"] = true
+
+
+func _finished_work(p, action: String) -> bool:
+	var id: int = p.get_instance_id()
+	if not ongoing.has(id):
+		return false
+	var work: Dictionary = ongoing[id]
+	ongoing.erase(id)
+	return work["action"] == action and work["ready"] and _work_valid(p, work)
 
 
 func update(delta: float) -> void:
@@ -80,7 +175,17 @@ func update(delta: float) -> void:
 
 ## Walk to an interactable, then act. kind: door | window | container | spot | item | manhole.
 func go_and_do(p, kind: String, key, at: Vector3, verb: String = "") -> void:
+	if not p.can_act():
+		return
+	# Ground-array indices change as other people pick things up while this person walks.
+	var ground_item: Dictionary = {}
+	if kind == "item":
+		if not key is int or key < 0 or key >= game.ground_items.size():
+			return
+		ground_item = game.ground_items[key]
 	p.brain["goal"] = {"kind": kind, "key": key, "at": at, "verb": verb}
+	if kind == "item":
+		p.brain["goal"]["ground_item"] = ground_item
 	p.target_zombie = {}
 	var stand: Vector3 = at
 	if kind in ["door", "window", "container", "spot", "manhole"]:
@@ -118,7 +223,7 @@ func _player_goal() -> void:
 			continue
 		var g: Dictionary = p.brain["goal"]
 		if p.path.is_empty() or p.position.distance_to(g["at"]) <= REACH:
-			if p.position.distance_to(g["at"]) <= REACH + 0.6:
+			if p.position.distance_to(g["at"]) <= INTERACT_REACH:
 				_do_goal(p)
 			else:
 				p.brain.erase("goal")
@@ -139,7 +244,10 @@ func _do_goal(p) -> void:
 		"spot":
 			spot_default(p, g["key"], g["verb"])
 		"item":
-			pick_up(p, g["key"])
+			var idx: int = int(g["key"])
+			if g.has("ground_item") and (idx < 0 or idx >= game.ground_items.size() or not is_same(game.ground_items[idx], g["ground_item"])):
+				return
+			pick_up(p, idx)
 		"body":
 			search_body(p, g["key"])
 		"manhole":
@@ -149,40 +257,47 @@ func _do_goal(p) -> void:
 # ---------------------------------------------------------------- doors
 
 func open_door_on_way(p, c: Vector2i) -> void:
-	var door: Dictionary = game.grid.doors[c]
-	if p.action != "":
+	var door: Dictionary = game.grid.doors.get(c, {})
+	if door.is_empty() or not _can_start(p, FieldGrid.center(c), true):
 		return
 	if door["state"] == "locked":
 		p.stop()
 		if p == game.player:
 			game.hud.toast("잠겼다. 쇠지렛대로 따거나 차서 연다.")
 		return
+	if not DoorRules.can_toggle(door, "open"):
+		return
 	# Opening a door on the way keeps the walk going afterwards.
 	var keep: PackedVector3Array = p.path.duplicate()
 	var run: bool = p.running
-	p.start_action("door", "문", DOOR_TIME, _door_on_way_done.bind(p, c, keep, run))
+	_begin_work(p, "door", "문", DOOR_TIME, _door_on_way_done.bind(p, c, keep, run), "door", c, FieldGrid.center(c))
 
 
 func _door_on_way_done(p, c: Vector2i, keep: PackedVector3Array, run: bool) -> void:
+	if not _finished_work(p, "door"):
+		return
 	_set_door(c, "open")
-	p.go_to(keep, run)
+	if game.grid.doors.has(c) and game.grid.doors[c]["state"] == "open" and p.can_act():
+		p.go_to(keep, run)
 
 
 func door_default(p, c: Vector2i, verb: String) -> void:
-	var door: Dictionary = game.grid.doors[c]
+	var door: Dictionary = game.grid.doors.get(c, {})
+	if door.is_empty() or not _can_start(p, FieldGrid.center(c), true):
+		return
 	match verb:
 		"close":
 			if door["state"] == "open":
-				p.start_action("door", "문 닫기", DOOR_TIME, _set_door.bind(c, "closed"))
+				_begin_work(p, "door", "문 닫기", DOOR_TIME, _set_door.bind(c, "closed", p), "door", c, FieldGrid.center(c))
 		"pry":
 			pry_door(p, c)
 		"kick":
 			kick_door(p, c)
 		_:
 			if door["state"] == "closed":
-				p.start_action("door", "문 열기", DOOR_TIME, _set_door.bind(c, "open"))
+				_begin_work(p, "door", "문 열기", DOOR_TIME, _set_door.bind(c, "open", p), "door", c, FieldGrid.center(c))
 			elif door["state"] == "open":
-				p.start_action("door", "문 닫기", DOOR_TIME, _set_door.bind(c, "closed"))
+				_begin_work(p, "door", "문 닫기", DOOR_TIME, _set_door.bind(c, "closed", p), "door", c, FieldGrid.center(c))
 			elif door["state"] == "locked":
 				if has_pry(p):
 					pry_door(p, c)
@@ -190,10 +305,18 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 					game.hud.toast("잠겼다. 쇠지렛대가 있으면 딴다. 차면 시끄럽다.")
 
 
-func _set_door(c: Vector2i, state: String) -> void:
-	# Something standing in the doorway keeps it from closing.
-	if state == "closed" and not game.zombies.in_radius(FieldGrid.center(c), 0.6).is_empty():
+func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> void:
+	if p != null and not _finished_work(p, "pry" if pried else "door"):
 		return
+	if not DoorRules.can_toggle(game.grid.doors.get(c, {}), state, pried):
+		return
+	# Something standing in the doorway keeps it from closing.
+	if state == "closed":
+		if not game.zombies.in_radius(FieldGrid.center(c), DoorRules.OCCUPANT_RADIUS).is_empty():
+			return
+		for person in game.people:
+			if person.is_alive() and person.position.distance_to(FieldGrid.center(c)) < DoorRules.OCCUPANT_RADIUS:
+				return
 	game.grid.set_door_state(c, state)
 	game.view.update_door(c)
 	_check_raider_door(c)
@@ -208,22 +331,27 @@ func has_pry(p) -> bool:
 
 ## Pry a locked door with a crowbar: a few seconds and a normal sound.
 func pry_door(p, c: Vector2i) -> void:
+	if not DoorRules.can_force(game.grid.doors.get(c, {})) or not _can_start(p, FieldGrid.center(c), true):
+		return
 	if not has_pry(p):
 		if p == game.player:
 			game.hud.toast("쇠지렛대가 손에 있어야 한다.")
 		return
-	game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "pry", p)
-	p.start_action("pry", "문 따기", PRY_TIME, _set_door.bind(c, "open"))
+	if _begin_work(p, "pry", "문 따기", PRY_TIME, _set_door.bind(c, "open", p, true), "door", c, FieldGrid.center(c), true):
+		game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "pry", p)
 
 
 ## Kick: one loud try, half the time it gives (s2_station 2.4).
 func kick_door(p, c: Vector2i) -> void:
-	p.start_action("kick", "문 차기", KICK_TIME, _kicked.bind(p, c))
+	if DoorRules.can_force(game.grid.doors.get(c, {})):
+		_begin_work(p, "kick", "문 차기", KICK_TIME, _kicked.bind(p, c), "door", c, FieldGrid.center(c))
 
 
 func _kicked(p, c: Vector2i) -> void:
+	if not _finished_work(p, "kick") or not DoorRules.can_force(game.grid.doors.get(c, {})):
+		return
 	game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "kick", p)
-	if game.rng.randf() < 0.5:
+	if game.rng.randf() < DoorRules.KICK_CHANCE:
 		game.grid.set_door_state(c, "broken")
 		game.view.update_door(c)
 		_check_raider_door(c)
@@ -243,19 +371,29 @@ func _check_raider_door(c: Vector2i) -> void:
 # ---------------------------------------------------------------- windows
 
 func window_default(p, c: Vector2i, verb: String) -> void:
-	var w: Dictionary = game.grid.windows[c]
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if w.is_empty() or not _can_start(p, FieldGrid.center(c), true):
+		return
 	if not w["broken"]:
 		if verb == "break" or p != game.player:
-			p.start_action("window", "창 깨기", 1.0, _break_window.bind(p, c))
+			_begin_work(p, "window", "창 깨기", WindowRules.BREAK_SECONDS, _window_work_done.bind(p, c), "window", c, FieldGrid.center(c))
 		else:
 			game.hud.toast("창은 깨야 넘는다. 깨면 시끄럽고 안의 온기가 빠진다.")
 			game.hud.offer([{"label": "창을 깬다", "call": window_default.bind(p, c, "break")}])
 		return
-	if w["glass"]:
-		p.start_action("glass", "유리 치우기", GLASS_TIME, _clear_glass.bind(c))
+	if WindowRules.can_clear(w):
+		_begin_work(p, "glass", "유리 치우기", GLASS_TIME, _clear_glass.bind(c, p), "window", c, FieldGrid.center(c))
 
 
+func _window_work_done(p, c: Vector2i) -> void:
+	if _finished_work(p, "window"):
+		_break_window(p, c)
+
+
+## Also called by a weapon impact: the combat caller already resolved the hit.
 func _break_window(p, c: Vector2i) -> void:
+	if not WindowRules.can_break(game.grid.windows.get(c, {})):
+		return
 	game.grid.break_window(c)
 	game.view.update_window(c)
 	var b: int = int(game.grid.windows[c]["building"])
@@ -264,14 +402,23 @@ func _break_window(p, c: Vector2i) -> void:
 	game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "glass", p)
 
 
-func _clear_glass(c: Vector2i) -> void:
+func _clear_glass(c: Vector2i, p = null) -> void:
+	if p != null and not _finished_work(p, "glass"):
+		return
+	if not WindowRules.can_clear(game.grid.windows.get(c, {})):
+		return
 	game.grid.windows[c]["glass"] = false
 	game.view.update_window(c)
 
 
-## Climbing through a broken window: glass left in the frame cuts (gloves help).
+func can_vault_window(p, c: Vector2i) -> bool:
+	return p.can_act() and p.action == "" and _in_reach(p, FieldGrid.center(c), true) and WindowRules.can_cross(game.grid.windows.get(c, {}), p.carry_state())
+
+
+## Called once on actual entry, not once per frame or once per window lifetime.
 func vault_window(p, c: Vector2i) -> void:
-	p.brain["vaulted_" + str(c)] = true
+	if not can_vault_window(p, c):
+		return
 	var w: Dictionary = game.grid.windows[c]
 	if w["glass"] and game.rng.randf() < (0.2 if p.gloves else 0.5):
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
@@ -283,11 +430,17 @@ func vault_window(p, c: Vector2i) -> void:
 # ---------------------------------------------------------------- searching
 
 func search_time(p, c: Dictionary) -> float:
-	return float(c["search"]) / (1.0 + 0.15 * int(p.skills["search"]))
+	return SearchRules.seconds(float(c["search"]), int(p.skills["search"]))
+
+
+func _container_at(c: Dictionary) -> Vector3:
+	return game.lift(c["cell"], int(c.get("level", 0)))
 
 
 func search(p, id: String) -> void:
-	var c: Dictionary = game.data["containers"][id]
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if c.is_empty() or not _can_start(p, _container_at(c)) or bool(c.get("busy", false)):
+		return
 	if c["locked"]:
 		if c.has("pick"):
 			# A record box of this stop's goal: quiet and slow, or quick and loud.
@@ -295,39 +448,64 @@ func search(p, id: String) -> void:
 				game.mission_play.lock_card(p, id)
 			return
 		if has_pry(p):
-			game.make_sound(FieldGrid.center(c["cell"]), SimNoise.Level.NORMAL, "pry", p)
-			p.start_action("pry", "금고 따기", PRY_TIME + 1.0, _unlock.bind(id))
+			if _begin_work(p, "pry", "금고 따기", PRY_TIME + DoorRules.SAFE_EXTRA_SECONDS, _unlock.bind(id, p), "container", id, _container_at(c), true):
+				game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "pry", p)
 		elif p == game.player:
 			game.hud.toast("잠긴 금고다. 쇠지렛대가 있어야 한다.")
 		return
 	if c["searched"]:
 		if p == game.player:
 			game.hud.loot(id)
+		else:
+			_companion_take(p, c)
 		return
-	p.start_action("search", "뒤지기", search_time(p, c), _searched.bind(p, id))
+	if not SearchRules.can_search(c):
+		return
+	if p != game.player and p.team == "squad":
+		var helpers := 0
+		for other in game.squad:
+			if other != p and other != game.player and other.is_alive() and other.action == "search":
+				helpers += 1
+		if helpers >= SearchRules.COMPANION_LIMIT:
+			return
+	if not _begin_work(p, "search", "뒤지기", search_time(p, c), _search_work_done.bind(p, id), "container", id, _container_at(c)):
+		return
 	game.shout(p, "search_start")
-	c["busy"] = true
-	p.action_busy = c
 	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4).
-	p.action_noise_t = SEARCH_NOISE_EVERY
+	p.action_noise_t = 0.0
+	game.make_sound(_container_at(c), SimNoise.Level.QUIET, "search", p)
 
 
-func _unlock(id: String) -> void:
+func _unlock(id: String, p = null) -> void:
+	if p != null and not _finished_work(p, "pry"):
+		return
+	if not game.data["containers"].has(id):
+		return
 	game.data["containers"][id]["locked"] = false
 	game.view.update_container(id)
 
 
 ## Called each frame of a container search: the quiet rummage when it is due.
 func search_noise(p, delta: float) -> void:
-	p.action_noise_t += delta
-	if p.action_noise_t < SEARCH_NOISE_EVERY or p.action_busy.is_empty():
+	if p.action != "search" or p.action_busy.is_empty():
 		return
-	p.action_noise_t -= SEARCH_NOISE_EVERY
-	game.make_sound(FieldGrid.center(p.action_busy["cell"]), SimNoise.Level.QUIET, "search", p)
+	p.action_noise_t += delta
+	if p.action_noise_t < SEARCH_NOISE_EVERY:
+		return
+	p.action_noise_t = fmod(p.action_noise_t, SEARCH_NOISE_EVERY)
+	game.make_sound(_container_at(p.action_busy), SimNoise.Level.QUIET, "search", p)
 
 
+func _search_work_done(p, id: String) -> void:
+	if _finished_work(p, "search"):
+		_searched(p, id)
+
+
+## A completed search notification; timed work reaches it only through its ticket.
 func _searched(p, id: String) -> void:
-	var c: Dictionary = game.data["containers"][id]
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if c.is_empty() or c["searched"]:
+		return
 	c["searched"] = true
 	c["busy"] = false
 	game.view.update_container(id)
@@ -335,12 +513,16 @@ func _searched(p, id: String) -> void:
 	if p == game.player:
 		game.hud.loot(id)
 		return
+	_companion_take(p, c)
+
+
+func _companion_take(p, c: Dictionary) -> void:
 	# A companion takes what fits in the bag without going over the limit.
 	var keep: Array = []
 	var took: Array = []
 	for item in c["items"]:
-		if p.weight() + Carry.item_weight(item) <= p.carry_limit():
-			p.add_item(item)
+		if AMMO_ITEMS.has(item) or p.weight() + Carry.item_weight(item) <= p.carry_limit():
+			_receive(p, item, 1)
 			took.append(game.item_name(item))
 		else:
 			keep.append(item)
@@ -355,22 +537,29 @@ func _searched(p, id: String) -> void:
 
 ## Take one item from a searched container into the player's bag.
 func take(p, id: String, index: int) -> void:
-	var c: Dictionary = game.data["containers"][id]
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if not SearchRules.can_take(c) or not _can_start(p, _container_at(c)):
+		return
 	if index < 0 or index >= c["items"].size():
 		return
 	var item: String = c["items"][index]
 	c["items"].remove_at(index)
 	_receive(p, item, 1)
 	if item == "symbol_bell":
-		game.make_sound(FieldGrid.center(c["cell"]), SimNoise.Level.NORMAL, "bell", p)
+		game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "bell", p)
 		game.hud.toast("종이 흔들려 울렸다.")
 	game.view.update_container(id)
 
 
 func take_all(p, id: String) -> void:
-	var c: Dictionary = game.data["containers"][id]
-	while not c["items"].is_empty():
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if not SearchRules.can_take(c):
+		return
+	for i in range(c["items"].size()):
+		var before: int = c["items"].size()
 		take(p, id, 0)
+		if c["items"].size() == before:
+			break
 
 
 func _receive(p, item: String, n: int) -> void:
@@ -422,16 +611,19 @@ func pick_up(p, idx: int) -> void:
 	if idx < 0 or idx >= game.ground_items.size():
 		return
 	var g: Dictionary = game.ground_items[idx]
-	game.ground_items.remove_at(idx)
+	if not _can_start(p, g["pos"]) or int(g.get("n", 0)) <= 0:
+		return
 	if g.has("weapon"):
+		# The bag stores counts, not weapon condition/ammunition. Keep a full-handed pickup intact.
+		if p.hands.size() >= 2:
+			return
 		var h: Dictionary = g["weapon"]
-		if p.hands.size() < 2:
-			p.hands.append(h)
-			p.set_weapon_slots(p.hands)
-		else:
-			p.add_item(h["id"])
+		game.ground_items.remove_at(idx)
+		p.hands.append(h)
+		p.set_weapon_slots(p.hands)
 		game.say(p, "%s 주웠다." % W.get_data(h["id"]).get("name", h["id"]))
 		return
+	game.ground_items.remove_at(idx)
 	_receive(p, g["id"], int(g["n"]))
 
 
