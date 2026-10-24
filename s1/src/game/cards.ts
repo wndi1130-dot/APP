@@ -13,6 +13,7 @@ import { clamp, journal, lawActive, pick, PROFILES, rnd, situation } from './sta
 import { BIRTH, ELDER_NIGHT, familyOf, recover, revertLater } from './people';
 import { NEED_GRACE, NEEDS } from './needs';
 import { BUDGET_TITLE, budgetPass, budgetPick } from './budget';
+import { applyRationCut, RATION_CUT } from './ration_cut';
 import type { NeedId } from './needs';
 import type { Card, EventMemo, Game } from './state';
 
@@ -155,6 +156,8 @@ const PICKS = {
   // 사람이 들어오는 사건(arrival_cards.ts). 옛 라벨이 없는 새 선택지라 라벨은 지금 글이다
   turn_away: '돌려보낸다', turn_away_law: '법대로 보낸다', take_some: '가족 몇 무리만 태운다', take_all: '모두 태운다', escort: '수색대를 붙여 데려온다',
   fetch: '데리러 보낸다', stay_put: '지금은 못 간다',
+  // 비상식량감축법 뒤 꼬리칸 요구(ration_cut.ts). 거절은 refuse를 쓴다
+  cut_spare_tail: '꼬리칸은 뺀다', cut_front_first: '앞칸이 먼저 낸다',
 } as const;
 export type PickId = keyof typeof PICKS;
 /** 옛 라벨 → id. 같은 id를 가리키던 옛 라벨이 둘 이상이면 여기 더한다(예전 급수탑은 '꼬리칸이 눈을 녹인다'였다) */
@@ -449,6 +452,7 @@ function remember(g: Game, key: string, pick: string): void {
 /** viewCard가 직접 그리는 S1a 카드 종류(닿음 검사 tools/reach_check.ts가 읽는다). 사람의 무게는 PEOPLE_KINDS. */
 export const S1A_CARD_KINDS = [
   'travel', 'demand', 'favor', 'strike_warn', 'strike', 'rescue', 'bitten', 'bite_found', 'tension_crisis', 'protest', 'trust_crisis', 'leash', 'need_warn', 'info',
+  'ration_cut',
 ] as const;
 
 // ---- 다른 묶음의 카드(S1c 내정, domestic/cards.ts가 등록한다) ----
@@ -528,6 +532,28 @@ function baseView(g: Game, card: Card): CardView {
           { id: 'refuse', label: '거절한다',
             say: was(past, 'refuse') ? '사람을 몰고 와도 석탄은 늘지 않는다.' : which === 'heat' ? '다들 붙어 자기는 마찬가지다. 지금은 안 된다.' : '모두 반 그릇이다. 더 나올 데가 없다.',
             effs: [{ t: 'fervor', c, v: 1 }, { t: 'rel', c, v: -worse(was(past, 'refuse') ? past : undefined, P.refuseRel, 3) }] },
+        ]),
+      };
+    }
+    case 'ration_cut': {
+      // 비상식량감축법이 선 뒤 꼬리칸의 요구(결정 091·430, ration_cut.ts). 답 셋: 꼬리칸은 뺀다 / 앞칸이 먼저 낸다 / 거절
+      const past = memo(g, 'ration_cut');
+      const r = Math.round(situation(g, 'tail')[1]);
+      const k = RATION_CUT;
+      return {
+        title: '감축 배급 요구', speaker: leader(g, 'tail'), focus: 'tail', required: true, key: 'ration_cut',
+        body: past
+          ? `감축법이 다시 섰다. 꼬리칸 대표가 지난번 답을 기억하고 왔다. 꼬리칸 배급 ${r}.`
+          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게가 아니라고 한다. 꼬리칸 배급 ${r}.`,
+        choices: withAfford(g, [
+          { id: 'cut_spare_tail', label: '꼬리칸은 뺀다', say: '꼬리칸 그릇은 그대로 둔다. 나머지 칸이 줄인다.', special: 'cut_spare_tail',
+            effs: [{ t: 'rel', c: 'tail', v: k.spareRel.tail }, { t: 'rel', c: 'front', v: k.spareRel.front }],
+            why: `아끼는 식량이 구간마다 ${-k.spareFood}로 준다.` },
+          { id: 'cut_front_first', label: '앞칸이 먼저 낸다', say: '앞칸이 한 단 더 줄인다. 꼬리칸 몫은 거기서 나온다.', special: 'cut_front_first',
+            effs: [{ t: 'rel', c: 'tail', v: k.frontRel.tail }, { t: 'rel', c: 'front', v: k.frontRel.front }],
+            why: `앞칸 배급 처지는 모두 −${2 * k.sit}까지 내려간다. 아끼는 식량은 그대로다.` },
+          { id: 'refuse', label: '거절한다', say: '예외는 없다. 모두 같이 줄인다.', special: 'cut_refuse',
+            effs: [{ t: 'rel', c: 'tail', v: k.refuseRel }, { t: 'tension', v: k.refuseTension }] },
         ]),
       };
     }
@@ -976,6 +1002,15 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
     case 'riot_end':
       riotEnd(g);
+      break;
+    case 'cut_spare_tail':
+      applyRationCut(g, 'spare_tail');
+      break;
+    case 'cut_front_first':
+      applyRationCut(g, 'front_first');
+      break;
+    case 'cut_refuse':
+      applyRationCut(g, 'refuse');
       break;
     case 'riot_guard':
       riotEnd(g);

@@ -8,6 +8,7 @@ import type { DisasterKind, DisasterState } from './disaster';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import type { FieldReturns } from './field_receipt';
+import type { RationCutState } from './ration_cut';
 import {
   COH0, COMMS, IDEO, P, POP0, REL0, REP_AGE, SECRET_POOL, START, STAGES, TRAIT_BAN, TRAITS,
 } from './data';
@@ -332,6 +333,8 @@ export interface Game {
   ratifyRepeal?: LawId[];
   /** 1회 효과(신임·공포·식량)를 이미 받은 법. 다시 통과해도 또 받지 않는다(R3 카드 1) */
   onceTaken?: LawId[];
+  /** 비상식량감축법이 선 뒤 꼬리칸 요구에 준 답과 그 답이 칸 처지에 더한 값(ration_cut.ts). 법을 폐지하면 되돌리고 지운다 */
+  rationCut?: RationCutState;
   guardEscort: boolean;
   forcedRun: boolean;
   autoLevers: boolean;
