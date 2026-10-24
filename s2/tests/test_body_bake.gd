@@ -286,3 +286,75 @@ func test_a_round_is_what_a_foot_goes_back_in_a_frame_times_the_frames() -> void
 	assert_almost_eq(BodyBake.round_of(zs), 1.2, 0.001)
 	assert_eq(BodyBake.round_of([0.1, 0.1, 0.1, 0.1]), 0.0, "a foot that stays covers none")
 
+
+## The stick body wearing a skin of three pieces: a square on the chest cut in
+## two along a seam, so its corners there are split as an exported body's are;
+## a triangle on the head; one on the left hand. Each in its own corner of the
+## colour picture.
+func _dressed_body() -> Node3D:
+	var root := _stick_body()
+	var body := BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	var chest := body.find_bone("chest")
+	var head := body.find_bone("head")
+	var hand := body.find_bone("hand.L")
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([
+		Vector3(-0.1, 1.3, 0.1), Vector3(0.1, 1.3, 0.1), Vector3(0.1, 1.5, 0.1),
+		Vector3(-0.1, 1.3, 0.1), Vector3(0.1, 1.5, 0.1), Vector3(-0.1, 1.5, 0.1),
+		Vector3(0.0, 1.75, 0.1), Vector3(0.05, 1.85, 0.1), Vector3(-0.05, 1.85, 0.1),
+		Vector3(0.8, 1.45, 0.0), Vector3(0.9, 1.45, 0.0), Vector3(0.85, 1.55, 0.0)])
+	var normals := PackedVector3Array()
+	var bones := PackedInt32Array()
+	var weights := PackedFloat32Array()
+	for v in 12:
+		normals.append(Vector3.BACK)
+		bones.append_array([chest if v < 6 else (head if v < 9 else hand), 0, 0, 0])
+		weights.append_array([1, 0, 0, 0])
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_BONES] = bones
+	arrays[Mesh.ARRAY_WEIGHTS] = weights
+	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([
+		Vector2(0.05, 0.05), Vector2(0.45, 0.05), Vector2(0.45, 0.45),
+		Vector2(0.05, 0.05), Vector2(0.45, 0.45), Vector2(0.05, 0.45),
+		Vector2(0.55, 0.05), Vector2(0.95, 0.05), Vector2(0.75, 0.45),
+		Vector2(0.55, 0.55), Vector2(0.95, 0.55), Vector2(0.75, 0.95)])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	(BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D).mesh = mesh
+	return root
+
+
+func test_a_garment_is_the_body_s_skin_where_it_covers_welded_and_pushed_out() -> void:
+	var root := _dressed_body()
+	add_child_autofree(root)
+	assert_false(BodyBake.shell(root, "no_such_garment"))
+	assert_true(BodyBake.shell(root, "jacket_short"))
+	var arrays: Array = (BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D).mesh.surface_get_arrays(0)
+	var pos: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	assert_eq(pos.size(), 4, "the chest square alone, its split corners made one")
+	assert_eq((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size(), 6, "both its halves")
+	var push: float = BodyBake.SHELLS["jacket_short"]["push"]
+	for v in pos:
+		assert_almost_eq(v.z, 0.1 + push, 0.0001, "pushed out the way the chest faces")
+	var chest := (BodyBake.first_of(root, "Skeleton3D") as Skeleton3D).find_bone("chest")
+	assert_eq((arrays[Mesh.ARRAY_BONES] as PackedInt32Array)[0], chest, "moving with the chest")
+	var hat := _dressed_body()
+	add_child_autofree(hat)
+	assert_true(BodyBake.shell(hat, "hat_knit"))
+	var hat_pos: PackedVector3Array = (BodyBake.first_of(hat, "MeshInstance3D") as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	assert_eq(hat_pos.size(), 3, "the head alone")
+
+
+func test_gloves_paint_the_hands_in_the_colour_picture_and_leave_the_rest() -> void:
+	var root := _dressed_body()
+	add_child_autofree(root)
+	var albedo := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	albedo.fill(Color(0.8, 0.7, 0.6))
+	var out := BodyBake.gloved(root, albedo, Color(0.2, 0.2, 0.2))
+	assert_not_null(out)
+	assert_almost_eq(out.get_pixel(48, 52).r, 0.2, 0.01, "on the hand")
+	assert_almost_eq(out.get_pixel(16, 16).r, 0.8, 0.01, "not the chest")
+	assert_almost_eq(out.get_pixel(48, 16).r, 0.8, 0.01, "nor the head")
+	assert_almost_eq(albedo.get_pixel(48, 52).r, 0.8, 0.01, "the picture it was given is left as it was")

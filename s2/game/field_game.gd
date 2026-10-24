@@ -987,6 +987,8 @@ func _spawn_dead() -> void:
 		zombies.spawn("dead", lift(row[0], int(row[1])))
 	for c in s.get("frozen_siding", []):
 		zombies.spawn("frozen", FieldGrid.center(c), {"depth": rng.randf_range(0.6, 1.0)})
+	# Now and then one of them has an axe in its back (zombies.gd EMBED_*).
+	zombies.embed_weapons()
 	# Those first put inside the place (the zones a map names in
 	# "interior_kind_slots"): waking one of them is counted (user decision 177).
 	var inside: Array = []
