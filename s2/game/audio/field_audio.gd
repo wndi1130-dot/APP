@@ -127,6 +127,14 @@ const THROUGH_WALL_FROM: float = 1.5
 ## its own place in the file, length, loudness and pitch bend, never the
 ## shape just heard. A blizzard stop comes in with a howl of one to three
 ## gusts laid together, a new shape every time. Heard only; nothing hears it.
+## Nor does a stop open the same way (user 2026-10-25: 「처음내릴떄 휘오오옹
+## 하는거 스타트가 매번똑같은니까 귀가피곤함」): the bed comes up from nothing
+## over its own length, its wandering starts at a random place (so its first
+## loudness and pitch are new), and the first gust, or a blizzard's howl,
+## waits its own few seconds after getting down.
+const WIND_IN: Array = [0.8, 3.0]     # s the bed takes to come up as the stop starts
+const FIRST_AFTER: Array = [2.0, 10.0]   # s after getting down to the first gust, or the howl
+const WIND_PHASE: float = 1000.0      # the wandering starts somewhere in this much of its noise
 const WIND_DRIFT_HZ: float = 0.07     # how fast the bed wanders
 const WIND_DRIFT: float = 0.35        # this far below and above its level
 const WIND_PITCH_DRIFT: float = 0.05
@@ -168,6 +176,9 @@ var gusts: Array = []                  # {"player", "t", "len", "peak", "p0", "p
 var gust_t: float = 0.0                # s to the next gust
 var gust_log: Array = []               # every gust's shape [at, len, peak, p0, p1, howl] (tests)
 var howled: bool = false
+var wind_in: float = 1.0               # this stop's coming up (WIND_IN)
+var wind_up: float = 0.0               # s the wind has been heard this stop
+var howl_wait: float = 0.0             # s after the train stands before a blizzard howls
 var quiet: bool = false                # the caller voices this sound itself
 var falls: Array = []                  # falls being followed: {"z", "i": next beat, "gun"}
 var fall_heard: Dictionary = {}        # zombie id -> the fall of its that was taken up
@@ -189,6 +200,10 @@ func setup(field_game) -> void:
 	wind = _loop_player("wind")
 	drift.seed = randi()
 	drift.frequency = WIND_DRIFT_HZ
+	# The noise is level at its start: begin somewhere along it instead.
+	wind_t = randf_range(0.0, WIND_PHASE)
+	wind_in = randf_range(float(WIND_IN[0]), float(WIND_IN[1]))
+	howl_wait = randf_range(float(FIRST_AFTER[0]), float(FIRST_AFTER[1]))
 	if wind.finished.is_connected(wind.play):
 		wind.finished.disconnect(wind.play)
 		wind.finished.connect(_wind_again)
@@ -199,7 +214,7 @@ func setup(field_game) -> void:
 		g.volume_db = -80.0
 		add_child(g)
 		gusts.append({"player": g, "t": 0.0, "len": 0.0})
-	gust_t = randf_range(1.0, 4.0)
+	gust_t = randf_range(float(FIRST_AFTER[0]), float(FIRST_AFTER[1]))
 	engine = AudioStreamPlayer3D.new()
 	engine.bus = "SFX"
 	engine.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
@@ -539,17 +554,23 @@ func _wind_again() -> void:
 
 func _tick_wind(at: Vector3, delta: float) -> void:
 	wind_t += delta
+	wind_up += delta
 	var outdoor: bool = not game.grid_at(at).indoor(game.FieldGrid.cell_of(at))
 	var level: float = (0.25 + 0.5 * wind_strength()) * (1.0 if outdoor else 0.35)
+	# Getting down: the wind comes up from nothing, not on at once.
+	level *= smoothstep(0.0, 1.0, clampf(wind_up / wind_in, 0.0, 1.0))
 	# The bed wanders on a slow noise: no two stretches alike, no beat to it.
 	var n: float = drift.get_noise_1d(wind_t)
 	var n2: float = drift.get_noise_1d(wind_t + 977.0)
 	wind.volume_db = _db(level * (1.0 + WIND_DRIFT * n))
 	wind.pitch_scale = 1.0 + WIND_PITCH_DRIFT * n2
-	# Once the train stands (not under the brakes of its coming in).
+	# Once the train stands (not under the brakes of its coming in), and its
+	# own few seconds after (FIRST_AFTER), never the moment one gets down.
 	if not howled and game.arrive_t < 0.0 and game.weather.kinds.has("blizzard"):
-		howled = true
-		howl()
+		howl_wait -= delta
+		if howl_wait <= 0.0:
+			howled = true
+			howl()
 	gust_t -= delta
 	if gust_t <= 0.0:
 		var gap := gust_gap(wind_strength())

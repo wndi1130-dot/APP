@@ -482,6 +482,38 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 		assert_gt(absf(float(g[3]) - float(before[3])), a.GUST_PITCH_APART, "nor the pitch")
 
 
+# Nor does a stop open the same way (user 2026-10-25: 「처음내릴떄 휘오오옹
+# 하는거 스타트가 매번똑같은니까」): the bed comes up from nothing over its own
+# length, its first loudness and pitch are new, the first gust waits its own time.
+func test_getting_down_the_wind_comes_up_its_own_way_each_stop() -> void:
+	var at: Vector3 = game.player.position
+	var opens: Array = []
+	for i in range(5):
+		var b = game.audio.get_script().new()
+		game.add_child(b)
+		b.setup(game)
+		assert_between(b.wind_in, float(b.WIND_IN[0]), float(b.WIND_IN[1]))
+		assert_between(b.gust_t, float(b.FIRST_AFTER[0]), float(b.FIRST_AFTER[1]))
+		assert_between(b.howl_wait, float(b.FIRST_AFTER[0]), float(b.FIRST_AFTER[1]))
+		var first_gust: float = b.gust_t
+		b._tick_wind(at, 1.0 / 60.0)
+		assert_lt(b.wind.volume_db, -30.0, "near silence the moment one gets down")
+		var first_pitch: float = b.wind.pitch_scale
+		while b.wind_up < b.wind_in:
+			b._tick_wind(at, 0.1)
+		assert_gt(b.wind.volume_db, -25.0, "up to its level once it has come in")
+		opens.append([snappedf(b.wind_in, 0.01), snappedf(first_gust, 0.01), snappedf(first_pitch, 0.001)])
+		b.queue_free()
+	var distinct: Dictionary = {}
+	for o in opens:
+		distinct[str(o)] = true
+	assert_eq(distinct.size(), opens.size(), "no two stops open alike")
+	var pitches: Dictionary = {}
+	for o in opens:
+		pitches[o[2]] = true
+	assert_gt(pitches.size(), 1, "the first pitch is not the same each stop")
+
+
 func test_a_stronger_wind_gusts_more_often() -> void:
 	var a = game.audio
 	var calm: Vector2 = a.gust_gap(0.2)
@@ -493,12 +525,17 @@ func test_a_stronger_wind_gusts_more_often() -> void:
 
 
 # A blizzard stop comes in with a howl: one to three gusts laid together, a
-# new shape each time it is heard.
+# new shape each time it is heard, its own few seconds after getting down
+# (user 2026-10-25), never the moment one does.
 func test_a_blizzard_comes_in_with_a_howl_of_a_new_shape_each_time() -> void:
 	var a = game.audio
 	game.weather.kinds.append("blizzard")
-	a._tick_wind(game.player.position, 0.1)
+	var t := 0.0
+	while not a.howled and t < float(a.FIRST_AFTER[1]) + 0.5:
+		a._tick_wind(game.player.position, 0.1)
+		t += 0.1
 	assert_true(a.howled)
+	assert_between(t, float(a.FIRST_AFTER[0]) - 0.001, float(a.FIRST_AFTER[1]) + 0.2, "a few seconds after getting down")
 	var shapes: Array = []
 	var first: Array = []
 	for g in a.gust_log:
