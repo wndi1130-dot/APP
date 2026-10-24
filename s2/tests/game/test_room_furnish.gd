@@ -118,13 +118,20 @@ func test_the_first_stop_keeps_its_own_cells() -> void:
 	assert_false(d.has("furniture_stats"))
 
 
-## 80장: 열차 문에서 걸어서(층 사이는 계단) 모든 상자에 닿는다. 몸을 막는 가구는 벽 속에
-## 없고, 문 안쪽 두 칸은 걸어서 지나간다.
+## 80장: 열차 문에서 걸어서(층 사이는 계단, 덧문 포함) 모든 상자에 닿는다. 몸을 막는 가구는
+## 벽 속에 없고, 문 안쪽 두 칸은 걸어서 지나간다. 지하에는 살림방·부엌·거실 묶음이 없다.
 func test_every_map_keeps_every_box_reachable_from_the_train() -> void:
+	var hatches := 0
 	for id in FieldMaps.ids():
 		if id == FieldMaps.DEFAULT_PLACE:
 			continue
 		var d := FieldMaps.build(id)
+		hatches += int(d["room_stats"].get("hatches", 0))
+		var cellar_homes: Array = []
+		for p: Dictionary in d["props"]:
+			if int(p.get("level", 0)) < 0 and ["bed", "kitchen", "living"].has(String(p.get("rule", ""))):
+				cellar_homes.append(p["kind"])
+		assert_eq(cellar_homes, [], id + ": 지하에 살림방·부엌·거실 묶음")
 		assert_true(d.has("furniture_stats"), id)
 		var seen := _reach_all(d)
 		var missed: Array = []
@@ -138,6 +145,7 @@ func test_every_map_keeps_every_box_reachable_from_the_train() -> void:
 				missed.append(c)
 		assert_eq(missed, [], id + ": 닿지 않는 상자")
 		assert_eq(_faults(d), [], id + ": 벽 속 가구, 막힌 문 앞")
+	assert_gt(hatches, 0, "큰 지하에 마당 쪽 덧문")
 
 
 ## 집 가구(다시 놓는 종류, 담는 가구, 큰 가구)가 벽·문·창 칸에 걸친 곳과, 문 안쪽 두
@@ -289,7 +297,7 @@ func test_same_seed_same_room_other_map_other_room() -> void:
 func test_shop_upstairs_with_a_bed_is_a_home() -> void:
 	assert_eq(RoomFurnish.room_class("매장", {"bed": true, "wardrobe": true}, 1), "bed")
 	assert_eq(RoomFurnish.room_class("매장", {"shop_counter": true}, 0), "shop")
-	assert_eq(RoomFurnish.room_class("부엌", {"dining_set": true}, -1), "", "지하 부엌은 카드 답 기다림")
+	assert_eq(RoomFurnish.room_class("부엌", {"dining_set": true}, -1), "boiler", "지하 부엌은 보일러실")
 	assert_eq(RoomFurnish.room_class("광부 숙소", {"bed": true}, 0), "bed", "광은 따로 선 낱말일 때만")
 	assert_eq(RoomFurnish.room_class("", {"bed": true, "iv_stand": true}, 1), "", "병실은 그대로")
 

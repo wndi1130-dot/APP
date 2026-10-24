@@ -6,6 +6,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
 const TRAIN_SCENE := "res://game/train/train.tscn"
@@ -40,6 +41,13 @@ const CHOICES: Array = [
 	["holdout_chance", "시험: 「굴려서」의 굴림", [[-1, "장소 확률대로"], [100, "늘 뜬다"]]],
 	["holdout_forecast_heard", "시험: 무전수가 듣는 판", [[80, "열에 여덟"], [100, "늘 듣는다"]]],
 	["lungers_many", "시험: 달려드는 자의 수", [[false, "열에 하나"], [true, "서 있는 망자는 모두"]]],
+	# The atmosphere frame (fx/atmosphere.gd), picture only: which season table the
+	# cold comes from (the user's 10-24 answer, or the old 10-09 one to compare),
+	# which act, and an hour to draw the stop at. The slice follows the table too.
+	["cold_scheme", "시험: 계절 흐름", [["", "늦가을 → 한겨울 → 해빙 초입 (10-24)"], ["winter_to_thaw", "옛 표: 한겨울 → 해빙 초입 (10-09)"]]],
+	["act", "시험: 막 (추위 값)", [["prologue", "서막"], ["act1", "1막"], ["act2", "2막"], ["act3", "3막"]]],
+	["look_hour", "시험: 그림 시각", [[-1.0, "시계대로"], [-2.0, "해 뜰 녘"], [-3.0, "해 질 녘"], [-4.0, "밤"]]],
+	["region", "시험: 지역 띠", [["K1", "K1 호수 평야"], ["K4", "K4 소나무 평원"], ["K10", "K10 호수와 숲"], ["K11", "K11 늪과 해안"]]],
 	# Which map the stop is played on, for looking at one on the phone: a kind
 	# and its number. Left as it is, the stop is the one it always was. A
 	# number the kind has no map for is the usual stop too.
@@ -164,6 +172,8 @@ func _show_menu() -> void:
 
 func _pick(key: String, value) -> void:
 	settings[key] = value
+	if key == "cold_scheme":
+		Atmosphere.scheme = String(value) if String(value) != "" else Atmosphere.DEFAULT_SCHEME
 	_show_menu()
 
 

@@ -32,7 +32,7 @@ const PIECES: Array[String] = [
 	"ext_window", "ext_window_cut", "window_glass", "window_glass_broken", "window_glass_floor",
 	"ext_door", "door_leaf", "door_leaf_broken", "door_leaf_cut", "door_frame_cut",
 	"int_wall", "int_wall_cut", "int_door", "roof_gable", "roof_gable_end", "roof_flat",
-	"roof_parapet", "chimney", "stair_steep", "stair_well",
+	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards",
 ]
 const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
@@ -45,11 +45,19 @@ const PAINTS: Array[Color] = [
 	Color(0.60, 0.57, 0.51, 0.0), Color(0.56, 0.52, 0.44, 1.0),
 	Color(0.50, 0.53, 0.51, 0.0), Color(0.58, 0.49, 0.43, 1.0),
 ]
+## 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 문짝·덧문·창틀에 남은 칠, a는 남은 정도
+## (0 칠 없음). 바랜 색만 두고 셰이더가 한 번 더 누른다(흰 눈 위에서 튀지 않게).
+const ACCENTS: Array[Color] = [
+	Color(0.30, 0.42, 0.32, 0.85), Color(0.44, 0.27, 0.20, 0.8), Color(0.62, 0.50, 0.22, 0.75),
+	Color(0.22, 0.40, 0.42, 0.85), Color(0.70, 0.66, 0.55, 0.7), Color(0.38, 0.27, 0.18, 0.9),
+	Color(0.33, 0.40, 0.55, 0.75), Color(0.0, 0.0, 0.0, 0.0),
+]
 ## 정점 색으로 쓰는 칠 구역(R 1자리, G 2자리, B 4자리, A 날씨 받음).
 const ZONE_METAL_OUT := Color(1, 0, 1, 1)
 const ZONE_METAL_IN := Color(1, 0, 1, 0)
 
 static var _arrays: Dictionary = {}   # 조각 id -> [자리, 법선, 색, 순번]
+static var _board_slots: Array = []   # 창 판자 자리 [{"height_m", "roll_deg"}](catalog.json board_slots)
 static var _state: int = 0            # 0 아직, 1 씀, -1 못 씀
 
 var material: ShaderMaterial
@@ -135,6 +143,7 @@ static func _load_pieces() -> bool:
 			push_warning("건물 조각 %s에 메시 없음: 건물을 상자로 그린다" % id)
 			return false
 		_arrays[id] = found
+	_board_slots = (book.get("board_slots", {}) as Dictionary).get("window", []).duplicate(true)
 	return true
 
 
@@ -775,6 +784,14 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 	for shell: Vector2i in pairs:
 		cut_meshes[shell] = pairs[shell]
 		shells[shell]["cut"] = _node(shell.x, shell.y, pairs[shell][0], true)
+	# 맨 위 층의 바깥벽이 처마 밑: 고드름이 거기에만 달린다(building.gdshader eave).
+	var top_lv: Dictionary = {}
+	for shell: Vector2i in shells:
+		top_lv[shell.x] = maxi(int(top_lv.get(shell.x, shell.y)), shell.y)
+	for shell: Vector2i in shells:
+		if shell.y == int(top_lv[shell.x]):
+			for slot in shells[shell]:
+				(shells[shell][slot] as MeshInstance3D).set_instance_shader_parameter("eave", 1.0)
 	var roof_bakes: Dictionary = {}
 	for row: Dictionary in p["roofs"]:
 		if not roof_bakes.has(row["b"]):
@@ -808,7 +825,13 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 	add_child(node)
 	node.set_instance_shader_parameter("paint", PAINTS[posmod(b, PAINTS.size())])
 	node.set_instance_shader_parameter("building_id", float(b))
+	node.set_instance_shader_parameter("accent", accent_for(b))
 	return node
+
+
+## 건물마다 남은 칠(ACCENTS). 이웃한 번호끼리 같은 색이 덜 붙게 건너뛰며 고른다.
+static func accent_for(b: int) -> Color:
+	return ACCENTS[posmod(b * 5 + 3, ACCENTS.size())]
 
 
 ## 바깥 턱 줄 노드(map_view.wall_nodes 자리, 회색 상자와 같은 열쇠).
@@ -970,9 +993,11 @@ func _draw_door(key: Vector3i) -> void:
 				bake.add(_arrays["door_leaf_broken"], _xf(hinge, yaw))
 		"locked":
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
-			# 쇠 빗장: 밖에서 잠긴 문을 읽게(회색 상자의 자물쇠 자리).
-			var bar_y := 0.2 if cut else 1.05
-			bake.box(_xf(at + Basis(Vector3.UP, yaw) * Vector3(0, bar_y, 0.08), yaw), Vector3(0.42, 0.04, 0.03), ZONE_METAL_OUT)
+			# 쇠 빗장: 밖에서 잠긴 문을 읽게(회색 상자의 자물쇠 자리). 안에서 막은 문(방 이야기,
+			# 금지선 「밖에서 잠근 문」)은 바깥에 아무것도 없다.
+			if String(door.get("barred", "")) != "inside":
+				var bar_y := 0.2 if cut else 1.05
+				bake.box(_xf(at + Basis(Vector3.UP, yaw) * Vector3(0, bar_y, 0.08), yaw), Vector3(0.42, 0.04, 0.03), ZONE_METAL_OUT)
 		_:
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
 	row["node"].mesh = bake.mesh()
@@ -986,6 +1011,10 @@ func _draw_window(key: Vector3i) -> void:
 	var bake := Bake.new()
 	if not row["cut"]:
 		bake.add(_arrays["window_glass_broken" if win.get("broken", false) else "window_glass"], xf)
+		# 판자 친 창(방 이야기): 위 자리부터 몇 장. 세 자리를 다 채우지 않아 창 일부만 가린다.
+		for i in range(mini(int(win.get("boards", 0)), _board_slots.size())):
+			var slot: Dictionary = _board_slots[i]
+			bake.add(_arrays["window_boards"], xf * Transform3D(Basis(Vector3.BACK, deg_to_rad(float(slot["roll_deg"]))), Vector3(0, float(slot["height_m"]), 0)))
 	if win.get("glass", false):
 		bake.add(_arrays["window_glass_floor"], xf)
 	row["node"].mesh = bake.mesh()
