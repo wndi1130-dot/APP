@@ -94,7 +94,6 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 		"warm": int(round(float(sit[0]))),
 		"cold": cold,
 		# Only the cold says a line: what the night does to them (결정 417).
-		"say": "밤사이 앓는 사람 늘어남" if cold else "",
 		"stats": stats,
 		"levers": [
 			{"id": "heat", "word": "난방", "cost": "−" + TrainGauges._num(snappedf(coal, 0.1)), "cost_icon": "coal", "step": heat,
@@ -167,7 +166,6 @@ func _draw_all() -> void:
 	if m.is_empty():
 		return
 	_head(m)
-	_say(m)
 	_thermo(m)
 	_stats(m)
 	for i in 2:
@@ -227,18 +225,6 @@ func _head(m: Dictionary) -> void:
 	fold.add_child(word)
 	# On the line its ink sits on in the mockup, 26.5 down.
 	GlassParts.put_on(word, mark.position.x - 3.0 * k - GlassParts.text_w(word), 26.5 * k)
-
-
-## When cold, its line (.say at 48, 24 high); the frosted thermometer under it
-## already says cold, so no 「추움」 tag (결정 417). Warm, nothing.
-func _say(m: Dictionary) -> void:
-	if String(m["say"]) == "":
-		return
-	var x: float = 44.0
-	# The mockup sets this line in Noto Serif KR; it waits on the serif's file (IBM Plex here).
-	var line := UiFonts.label(String(m["say"]), UiFonts.WORD, 400, 13.0, INK2, 0.13)
-	line.name = "Say"
-	_text(line, x, 65.5)
 
 
 ## The thermometer (.thermo 74 × 78 at 44, 75): a well 12 wide with the cold

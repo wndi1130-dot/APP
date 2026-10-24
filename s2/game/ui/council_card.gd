@@ -906,18 +906,13 @@ func _head(words: String, cols: Array, at: Array) -> void:
 		GlassParts.put_on(cl, float(at[i]) * k - GlassParts.text_w(cl) + 0.24 * k, base)
 
 
-## A row's name and seats (.cl__n: 14 · 500 and the seats 13 in the numbers'
-## face, 7 apart, on one baseline); returns the baseline.
+## A row's name (.cl__n: 14 · 500); returns its baseline. The seats are on
+## the group's plate on the ring already (결정 417).
 func _row_name(c: Dictionary, top: float, h: float) -> float:
-	var k: float = UiFonts.K
 	var n := _ink(String(c["name"]), UiFonts.WORD, 500, 14.0, INK, 1.4)
 	_on_pane(n)
 	GlassParts.put(n, PANE_X0, top, h)
-	var base: float = GlassParts.base_of(n)
-	var s := _ink("%d석" % int(c["seats"]), UiFonts.NUMBER, 400, 13.0, INK3, 0.26)
-	_on_pane(s)
-	GlassParts.put_on(s, n.position.x + GlassParts.text_w(n) - 1.4 * k + 7.0 * k, base)
-	return base
+	return GlassParts.base_of(n)
 
 
 func _num(text: String, weight: int, col: Color, right: float, base: float) -> void:
