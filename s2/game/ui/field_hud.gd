@@ -1269,7 +1269,10 @@ func _build_thumbs() -> void:
 	# 시안 .finv: the mark 15, the weight in Barlow 14.
 	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), UiFonts.size(14))
 	bag_button.tooltip_text = "인벤토리"
-	_dress(bag_button, "inv", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 26)
+	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	# Plain glass like the orders and 모두 열차로: a key that is not lit wears no
+	# brass sweep (user 2026-10-25 on the phone: 「배낭 버튼 유광」).
+	_matte(bag_button)
 	bag_button.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 500))
 	bag_box.add_child(bag_button)
 	offer_box = HBoxContainer.new()
