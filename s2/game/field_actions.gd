@@ -63,9 +63,9 @@ var dig_noise_t: float = 0.0
 var unload_t: float = 0.0
 ## Short-lived reservations, separate from saved AI state. No actor or callback is retained.
 var ongoing: Dictionary = {}
-## A work of the hands asked for while the body is in a blow or a shove waits
-## here, one per body, and is done once as soon as the blow is over (decision
-## 420: one body does one thing at a time). Short-lived, never saved.
+## A work of the hands the player asked for while in a blow or a shove waits
+## here and is done once as soon as the blow is over (decision 420: one body
+## does one thing at a time). Short-lived, never saved.
 var after_blow: Dictionary = {}
 
 
@@ -78,14 +78,17 @@ func striking(p) -> bool:
 	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
 
 
-## Asked for mid-blow, a work waits for the blow to end (true: it waits). The
-## fight is let go, as walking off to a thing lets it go (go_and_do).
+## Asked for mid-blow, a work does not start (true: not now). The player's own
+## press waits for the blow to end and lets the fight go, as walking off to a
+## thing lets it go (go_and_do). A companion's AI only asks again later: its
+## fight is its own to keep.
 func _wait_blow(p, call: Callable) -> bool:
 	if not striking(p):
 		return false
-	after_blow[p.get_instance_id()] = call
-	p.target_zombie = {}
-	p.target_person = null
+	if p == game.player:
+		after_blow[p.get_instance_id()] = call
+		p.target_zombie = {}
+		p.target_person = null
 	return true
 
 

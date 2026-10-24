@@ -156,7 +156,8 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 			var before: Array = was.get(p, ["", false])
 			if before[0] == "" and now_action != "" and now_action != "aim":
 				started += 1
-				if before[1] or now_striking:
+				# In a blow on both sides of the start: begun mid-blow, not as it ended.
+				if before[1] and now_striking:
 					started_striking += 1
 			if not before[1] and now_striking and before[0] != "" and before[0] != "aim":
 				struck_acting += 1

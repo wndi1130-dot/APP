@@ -106,6 +106,40 @@ func test_asking_for_work_mid_blow_lets_the_fight_go() -> void:
 	assert_false(game.combat.fighting(p), "the fight is let go for the search")
 
 
+func test_a_companion_mid_blow_is_refused_and_keeps_its_fight() -> void:
+	_start()
+	var mate = game.squad[1]
+	mate.position = p.position
+	var z: Dictionary = game.zombies.spawn("dead", mate.position + Vector3(0.8, 0, 0))
+	game.combat.fight(mate, z, true)
+	game.combat.start_swing(mate, z)
+	assert_true(game.actions.striking(mate))
+	game.actions.search(mate, id)
+	assert_eq(mate.action, "", "nothing starts mid-blow")
+	assert_true(game.actions.after_blow.is_empty(), "its AI asks again later")
+	assert_true(game.combat.fighting(mate), "and it keeps its fight")
+
+
+func test_no_timed_work_starts_mid_blow_whoever_asks() -> void:
+	_start()
+	var mate = game.squad[1]
+	assert_ne(mate, p)
+	game.combat.start_shove(mate)
+	for job in ["treat", "dig", "wall", "inspect", "repair", "swap"]:
+		mate.start_action(job, job, 5.0, func() -> void: pass)
+		assert_eq(mate.action, "", "%s does not start mid-shove" % job)
+	_finish_blow_of(mate)
+	mate.start_action("treat", "treat", 5.0, func() -> void: pass)
+	assert_eq(mate.action, "treat", "and starts once the shove is over")
+
+
+func _finish_blow_of(who) -> void:
+	for i in range(60):
+		if not game.actions.striking(who):
+			return
+		game.combat.update(0.05)
+
+
 func test_taken_while_waiting_the_work_is_dropped() -> void:
 	_start()
 	game.combat.start_swing(p, {})
