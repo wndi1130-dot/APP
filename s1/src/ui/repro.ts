@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, PHASE_NAME, viewCard, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   drain, migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, takeAltPlace, toggleGear, hangLure, startFinish, startJob, startRestore, supportComm, uniqueAction, logCardPick,
+  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, takeAltPlace, toggleGear, hangLure, startFinish, startJob, cancelJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LedgerRow, LootKey, ModKind, StayId, Task, TechId, Variant, WhySys } from '../game';
 import type { PotMode } from '../game';
@@ -195,6 +195,7 @@ function runStep(g: Game, s: Step): string | null {
     case 'dom-target': setTarget(g, Number(d.value)); return null;
     case 'dom-full': setFullRule(g, d.rule as 'parts' | 'dump' | 'aisle'); return null;
     case 'dom-job': return startJob(g, d.kind as ModKind, d.car ?? '') ? null : '개조를 올릴 수 없다';
+    case 'dom-job-cancel': return cancelJob(g) ? null : '공방이 이미 손댄 개조는 내릴 수 없다';
     case 'dom-escort': setEscort(g, d.id || null); return null;
     case 'dom-bury': setBury(g, d.on === '1'); return null;
     case 'dom-hang': {

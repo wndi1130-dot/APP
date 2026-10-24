@@ -207,3 +207,39 @@ func test_the_brakes_are_the_field_s_own_brake_sound_as_loud() -> void:
 	assert_eq(c.beat, "brake")
 	assert_not_null(c.brake_player.stream, "the stop's brake sound (audio/train_brake)")
 	assert_between(float(c._brake["len"]), StopCinema.BRAKE_MIN_S, StopCinema.BRAKE_MAX_S)
+
+
+func _worn(stop_opts: Dictionary):
+	var c = StopCinema.new()
+	c.remember = false
+	c.stop_opts = stop_opts
+	c.data = _data()
+	add_child_autofree(c)
+	c.set_process(false)
+	return c
+
+
+# The scene wears the weather the field opens with (사용자가 가장 싫어하는
+# 어긋남: 비 오는 열차 화면, 눈밭 연출, 비 오는 필드): late autumn's rain on wet
+# ground in the prologue's second stretch, snow lying white in the deep cold.
+func test_the_scene_wears_the_weather_the_field_opens_with() -> void:
+	var autumn = _worn({"act": "prologue", "act_progress": 0.25})
+	assert_eq(autumn.falls, "rain", "the prologue's second stretch: rain")
+	assert_lt(autumn.white, 0.1, "no snow lying")
+	assert_true(autumn.snow.emitting)
+	assert_eq(int(autumn.snow.draw_pass_1.material.get_shader_parameter("shape")), 0, "streaks, not flakes")
+	var ground: Color = autumn._ground(StopCinema.SNOW)
+	assert_lt(ground.v, StopCinema.SNOW.v, "wet ground, darker than snow")
+	var deep = _worn({"act": "prologue", "cold": 1.0})
+	assert_eq(deep.falls, "snow", "deep cold: snow")
+	assert_gt(deep.white, 0.5, "snow lying")
+	assert_gt(deep._ground(StopCinema.SNOW).v, ground.v, "the snowy ground is the paler")
+	# The field itself opens with the same: what falls, the lying snow, the sun.
+	var field = preload("res://game/field_game.gd").new()
+	field.opts = {"seed": 3, "act": "prologue", "act_progress": 0.25, "raiders": false, "auto_pause": false}
+	add_child_autofree(field)
+	field.set_process(false)
+	assert_eq(String(field.atmo["falls"]), autumn.falls)
+	assert_almost_eq(float(field.fx_params["fx_snow"]), float(autumn.fx["fx_snow"]), 0.001)
+	assert_almost_eq(float(field.fx_params["fx_wet"]), float(autumn.fx["fx_wet"]), 0.001)
+	assert_almost_eq(float(field.atmo["sun_pitch"]), float(autumn.look["sun_pitch"]), 0.001)

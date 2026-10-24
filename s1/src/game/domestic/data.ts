@@ -268,7 +268,9 @@ export const CAR_COMM: Record<string, Comm> = { tail1: 'tail', tail2: 'tail', ta
 export const COMM_CARS: Record<Comm, number> = { tail: 3, medtech: 1, guard: 1, front: 1, engine: 1 };
 
 /** 온실을 들일 때 내줄 수 있는 칸(4.4). 산출은 칸 값이 아니라 구역 값(ZONE_GREEN) × 칸 몸체(GREEN_BODY)로 낸다. */
-export const GREENHOUSE_CARS = ['front', 'store', 'cold', 'tail3'] as const;
+/** 온실로 내줄 수 있는 칸: 창고칸뿐이다. 사람이 사는 칸(앞칸·꼬리칸)은 내주지 않고(금지선, 2026-10-25 코디네이터),
+ * 냉동칸은 시신 자리라 먹을 것을 기르지 않는다. */
+export const GREENHOUSE_CARS = ['store'] as const;
 /** 화차는 지붕 전체를 유리로 갈 수 있어 객차보다 ×1.5(4.4, 2026-10-09). 창고칸만 화차다. */
 export const GREEN_BODY: Record<string, number> = { store: 1.5 };
 

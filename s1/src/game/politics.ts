@@ -13,7 +13,8 @@ import { deathLawOpen } from './death_weight';
 import { eduEnacted, enactScale, repealScale } from './domestic/classroom';
 import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
-import { addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
+import { addCard, addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
+import { revertRationCut } from './ration_cut';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, PromiseState, VoteFlip, VoteResult } from './state';
 
 // 의회: 입장 점수, 찬성·반대·미정, 거래 다섯, 개표, 폐지(브리프 1.3, 3장, 8.4).
@@ -226,6 +227,9 @@ export function lawOpen(g: Game, law: LawId): boolean {
   const sit = (c: Comm) => situation(g, c);
   switch (law) {
     case 'seed_grain': return g.food <= 50;
+    // 비상식량감축법(결정 083·091·430)은 공동 식당·기여 배급과 함께 못 선다. 하나가 서 있으면 다른 쪽은 오르지 않는다.
+    case 'emergency_ration': return g.food <= 40 && !lawActive(g, 'common_kitchen') && !lawActive(g, 'contribution_ration');
+    case 'common_kitchen': case 'contribution_ration': return !lawActive(g, 'emergency_ration');
     case 'common_heating': return sit('tail')[0] <= 40;
     case 'heat_quota': return g.coal <= 50;
     case 'child_labor': return g.coal <= 40 || g.food <= 40;
@@ -263,7 +267,8 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   }
   for (const law of LAW_IDS) {
     const at = g.passed[law];
-    if (at !== undefined && g.session - at >= P.repealCool && !FAREWELL_LAWS.includes(law)) options.push({ law, repeal: true });
+    // 통과한 뒤 2회기 안에는 폐지 못 한다(s1a_politics_numbers 폐지 절). 폐지한 법을 다시 올리는 위 줄과 같은 셈이다.
+    if (at !== undefined && g.session - at > P.repealCool && !FAREWELL_LAWS.includes(law)) options.push({ law, repeal: true });
   }
   // 대권이 끝난 포고의 추인을 가장 먼저 둔다(법 16: 추인하지 않은 포고는 사라진다).
   const motions = motionsNow(g);
@@ -807,6 +812,8 @@ export function enactLaw(g: Game, law: LawId, boughtFrom: Comm[]): void {
   }
   calmEnact(g, law);
   eduEnacted(g, law);
+  // 비상식량감축법이 서면 꼬리칸이 요구를 낸다(결정 091: 꼬리칸은 뺀다 / 앞칸이 먼저 낸다 / 거절, ration_cut.ts).
+  if (law === 'emergency_ration') addCard(g, { kind: 'ration_cut', comm: 'tail' });
   if (law === 'guided_voting') g.guidedLeft = 3;
   // 3구간짜리 대권(numbers 8장 법 16). 통과한 구간은 이미 표결이 끝났으니 다음 세 구간을 센다(nextSegment가 하나씩 줄인다).
   if (law === 'emergency_powers') { g.decreeLeft = DECREE_SEGS + 1; g.decreed = []; }
@@ -836,6 +843,7 @@ export function repealLaw(g: Game, law: LawId): void {
   calmRepeal(g, law);
   if (law === 'guided_voting') g.guidedLeft = 0;
   if (law === 'emergency_powers') g.decreeLeft = 0;
+  if (law === 'emergency_ration') revertRationCut(g);
   refreshSit(g);
   g.stats.repeals += 1;
 }

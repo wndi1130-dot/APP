@@ -1823,6 +1823,22 @@
           "yaw": 0,
           "material": "paper",
           "when": "authority"
+        },
+        {
+          "id": "cupboard",
+          "model": "cupboard",
+          "at": [
+            15.6,
+            0.56,
+            -1.05
+          ],
+          "size": [
+            0.52,
+            1.12,
+            0.38
+          ],
+          "yaw": 0,
+          "material": "wood"
         }
       ],
       "spots": [
@@ -2400,6 +2416,22 @@
           "yaw": 0,
           "material": "cloth",
           "when": "always"
+        },
+        {
+          "id": "parts_cupboard",
+          "model": "cupboard",
+          "at": [
+            15.6,
+            0.56,
+            -1.05
+          ],
+          "size": [
+            0.52,
+            1.12,
+            0.38
+          ],
+          "yaw": 0,
+          "material": "wood"
         }
       ],
       "spots": [
@@ -3264,6 +3296,22 @@
           "yaw": 0,
           "material": "paper",
           "when": "always"
+        },
+        {
+          "id": "spare_chair",
+          "model": "wood_chair",
+          "at": [
+            15.5,
+            0.48,
+            -0.8
+          ],
+          "size": [
+            0.44,
+            0.96,
+            0.54
+          ],
+          "yaw": -0.9,
+          "material": "wood"
         }
       ],
       "spots": [
@@ -3565,6 +3613,23 @@
           "yaw": 0,
           "material": "cloth",
           "trace": true
+        },
+        {
+          "id": "food_store",
+          "model": "food_crates",
+          "at": [
+            7,
+            0.5,
+            -0.3
+          ],
+          "size": [
+            3,
+            1,
+            1.2
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "when": "food"
         }
       ],
       "spots": []
@@ -3594,26 +3659,9 @@
       "spots": []
     },
     "cold": {
-      "label": "앞 음식·뒤 안치 자리",
+      "label": "앞 빈 바닥·뒤 안치 자리",
       "storage_only": true,
       "props": [
-        {
-          "id": "food_front",
-          "model": "food_crates",
-          "at": [
-            3,
-            0.5,
-            -0.4
-          ],
-          "size": [
-            3,
-            1,
-            1.2
-          ],
-          "yaw": 0,
-          "material": "wood",
-          "when": "food"
-        },
         {
           "id": "divider",
           "model": "divider",

@@ -15,7 +15,8 @@ const DeadBody = preload("res://game/actors/dead_body.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const DeadSeparation = preload("res://game/sim/dead_separation.gd")
-const SEPARATION_EXCLUDED: Array[String] = ["downed", "rising", "waking", "frozen", "climb", "grab", "dead", "corpse", "dash"]
+const EatRules = preload("res://game/sim/eat_rules.gd")
+const SEPARATION_EXCLUDED: Array[String] = ["downed", "rising", "waking", "frozen", "climb", "grab", "dead", "corpse", "dash", "eat"]
 
 const MAX_DRAW: int = 160
 const SIGHT: float = 9.0
@@ -73,6 +74,7 @@ var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
 var markers: MultiMeshInstance3D
 var _people: Array = []
+var _food: Array = []                 # the bodies of the living that can be eaten, this update (EatRules)
 var _sense_cells: Dictionary = {}
 var _sense_cells_ready: bool = false
 var _sense_padding: float = 0.0
@@ -210,6 +212,10 @@ func _roll_loot(z: Dictionary) -> void:
 		loot.append(LootRules.to_pocket(entry))
 	if z.has("embedded"):
 		loot.append(LootRules.to_pocket({"tool": z["embedded"]}))
+	# What this one was given to carry when the stop was made (a building's key,
+	# a note; decision 423 P12 and card 10): always there, drawing no dice.
+	for id in z.get("carry", []):
+		loot.append({"id": String(id), "n": 1})
 	z["loot"] = loot
 
 
@@ -320,7 +326,7 @@ func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 		if (state == "investigate" or state == "horde") and level < int(z.get("clue", 0)) and z["pos"].distance_to(z["target"]) > 1.2:
 			continue
 		# Idle dead first turn toward the noise, then set off (no instant lock-on).
-		if state == "wander" or state == "search":
+		if state == "wander" or state == "search" or state == "eat":
 			z["turn_t"] = game.rng.randf_range(0.4, 0.9)
 		z["clue"] = level
 		z["clue_kind"] = "sound"
@@ -341,7 +347,7 @@ func smell(at: Vector3, radius: float) -> int:
 	var reacted := 0
 	for z in list:
 		var state: String = z["state"]
-		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase", "climb", "tell"]:
+		if state in ["dead", "rising", "downed", "grab", "attack", "frozen", "waking", "chase", "climb", "tell", "eat"]:
 			continue
 		var reach := radius * float(game.weather.scent_mult(at, z["pos"]))
 		if at.distance_to(z["pos"]) > reach:
@@ -382,6 +388,7 @@ func update(delta: float) -> void:
 	var separation_skip := _separation_exclusions()
 	var people: Array = game.people_alive()
 	_people = people
+	_food = _edible_bodies()
 	_sense_cells_ready = false
 	_sense_padding = LungerRules.DASH_SPEED * maxf(delta, 0.0)
 	for z in list:
@@ -436,6 +443,8 @@ func update(delta: float) -> void:
 			"tell":
 				_update_tell(z, delta)
 				continue
+			"eat":
+				_keep_eating(z)       # then it looks and listens as ever (half sight: _sense)
 		if z["kind"] == "fresh" and z["age"] > FRESH_STIFFEN:
 			z["kind"] = "dead"
 		if z["stun"] > 0.0:
@@ -519,6 +528,8 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 	z["sense_t"] = SenseRules.TICK_MIN + game.rng.randf() * SenseRules.TICK_JITTER
 	# Weather cuts sight for both sides (body_injury 8.3); dusk cuts it again.
 	var sight: float = SIGHT * float(game.weather.sight_mult(game.clock.is_dark()))
+	if z["state"] == "eat":
+		sight *= EatRules.SIGHT_MULT
 	var best = null
 	var best_d := 999.0
 	var forward := Vector3(sin(z["angle"]), 0, cos(z["angle"]))
@@ -577,6 +588,10 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			z["path"] = PackedVector3Array()
 			z["t"] = 2.0
 		return
+	if z["state"] == "eat":
+		return   # eating: no trail or other body pulls it off (a sound still does: hear)
+	if (z["state"] == "wander" or z["state"] == "search") and _go_to_food(z):
+		return
 	# Blood: fresh trail points pull the dead (body_injury 8.1: heavy bleeding reaches far).
 	if z["state"] != "investigate" or float(z.get("smell_lock", 0.0)) <= 0.0:
 		var scent: Dictionary = game.strongest_scent(z["pos"])
@@ -589,6 +604,95 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			z["path_t"] = 0.0
 			z["smell_lock"] = 3.0
 	z["smell_lock"] = maxf(0.0, float(z.get("smell_lock", 0.0)) - 0.17)
+
+
+## The bodies of the living lying there that can be eaten (EatRules.edible).
+func _edible_bodies() -> Array:
+	var out: Array = []
+	for p in game.people:
+		if not p.body.dead:
+			continue
+		var rising: Dictionary = find(int(p.brain.get("rising_id", -1))) if p.brain.has("rising_id") else {}
+		if EatRules.edible(p, rising):
+			out.append(p)
+	return out
+
+
+## The body this one eats or goes to eat, if it can still be eaten.
+func _food_of(z: Dictionary):
+	var id := int(z.get("eat_of", 0))
+	if id == 0:
+		return null
+	for p in _food:
+		if p.get_instance_id() == id:
+			return p
+	return null
+
+
+func _eaters_at(p) -> int:
+	var n := 0
+	for o in list:
+		if o["state"] == "eat" and int(o.get("eat_of", 0)) == p.get_instance_id():
+			n += 1
+	return n
+
+
+## Wandering near a body that can be eaten: off to it (the nearest, same floor).
+func _go_to_food(z: Dictionary) -> bool:
+	var best = null
+	var best_d := EatRules.GATHER_R
+	for p in _food:
+		if game.level_of(p.position) != game.level_of(z["pos"]):
+			continue
+		var d: float = z["pos"].distance_to(p.position)
+		if d < best_d:
+			best = p
+			best_d = d
+	if best == null:
+		return false
+	z["state"] = "investigate"
+	z["clue_kind"] = "food"
+	z["clue"] = SimNoise.Level.QUIET
+	z["target"] = best.position
+	z["linger"] = 3.0
+	z["speed"] = SPEED_SHAMBLE
+	z["path_t"] = 0.0
+	z["eat_of"] = best.get_instance_id()
+	return true
+
+
+## At the body: it kneels to eat, unless enough are at it already (then it
+## stands round it a while and wanders off, and may come back).
+func _begin_eating(z: Dictionary) -> bool:
+	var p = _food_of(z)
+	if p == null or _eaters_at(p) >= EatRules.AT_MOST:
+		return false
+	z["state"] = "eat"
+	z["eat_at"] = z["age"]                 # dead_body.gd: kneeling down, then eating
+	z["angle"] = atan2(p.position.x - z["pos"].x, p.position.z - z["pos"].z)
+	z["last_seen"] = z["pos"]
+	z["path"] = PackedVector3Array()
+	return true
+
+
+## Eating: it stops when the body gets up (or is gone), and goes back to it if
+## it was pushed off.
+func _keep_eating(z: Dictionary) -> void:
+	var p = _food_of(z)
+	if p == null:
+		z["state"] = "wander"
+		z["home"] = z["pos"]
+		z["target"] = z["pos"]
+		z["t"] = 2.0
+		z["ate_until"] = z["age"]          # dead_body.gd: getting up from it
+		z.erase("eat_of")
+		return
+	if Vector2(p.position.x - z["pos"].x, p.position.z - z["pos"].z).length() > EatRules.LEAVE_R:
+		z["state"] = "investigate"
+		z["clue_kind"] = "food"
+		z["target"] = p.position
+		z["linger"] = 3.0
+		z["path_t"] = 0.0
 
 
 ## Lost the target: walk to where it was last seen, then poke around nearby.
@@ -741,6 +845,8 @@ func _speed(z: Dictionary) -> float:
 
 
 func _move(z: Dictionary, delta: float) -> void:
+	if z["state"] == "eat":
+		return
 	if z["state"] == "chase" and float(z.get("dash_t", 0.0)) > 0.0 and not z["crawl"]:
 		_dash(z, delta)
 		return
@@ -770,7 +876,9 @@ func _move(z: Dictionary, delta: float) -> void:
 			if z["clue_left"] <= 0.0:
 				_begin_search(z, at)
 				return
-		if at.distance_to(target) < 1.2:
+		if at.distance_to(target) < EatRules.REACH:
+			if z.get("clue_kind", "") == "food" and _begin_eating(z):
+				return
 			z["linger"] -= delta
 			if z["linger"] <= 0.0:
 				z["state"] = "wander"
@@ -1082,6 +1190,10 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 				var low := DeadBody.tell_k(z)
 				basis = basis * Basis(Vector3.RIGHT, 0.45 * low)
 				pos.y -= 0.18 * low
+		elif state == "eat" and not baked:
+			# The boxes have no motion for it: bent low over the body.
+			basis = basis * Basis(Vector3.RIGHT, 0.6)
+			pos.y -= 0.25
 		elif state != "frozen" and state != "waking" and not baked:
 			basis = basis * DeadPose.gait_basis(z)
 		if state == "frozen":
