@@ -4,8 +4,6 @@ extends "res://addons/gut/test.gd"
 ## reads a receipt, and the boot menu has the key that starts it.
 
 const SliceFlow = preload("res://game/slice_flow.gd")
-const SeasonTable = preload("res://game/season_table.gd")
-const Atmosphere = preload("res://fx/atmosphere.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const Boot = preload("res://game/boot.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -180,11 +178,7 @@ func test_choosing_the_stop_goes_onto_the_roof_and_the_card_comes_up_over_the_st
 	assert_eq(f.current(), "stop_pick")
 	assert_not_null(f.cinema, "the roof of the running train first")
 	assert_eq(f.cinema.stop_opts["act_progress"], f._field_opts()["act_progress"], "in the field's own weather")
-	# What falls goes by the season table's temperature there (the first stop, the
-	# cold snap easing, is about -1 C: sleet), as on the train and the field.
-	var temp := SeasonTable.temp_at("prologue", float(f._field_opts()["act_progress"]))
-	var wet := "rain" if temp > Atmosphere.RAIN_ABOVE else ("sleet" if temp > Atmosphere.SNOW_BELOW else "snow")
-	assert_eq(f.cinema.falls, wet, "the first stop's weather by the season table, as on the train and the field")
+	assert_eq(f.cinema.falls, "rain", "the first stop's late autumn rain, as on the train and the field")
 	assert_null(f.card, "no card straight away")
 	assert_false(f.gauges.visible, "nothing over the roof but the scene")
 	assert_null(f.train, "the train's inside is not drawn under it")
