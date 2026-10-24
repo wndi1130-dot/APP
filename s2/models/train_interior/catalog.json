@@ -87,7 +87,7 @@
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
   "total_triangle_limit": 8000,
-  "total_triangles": 4284,
+  "total_triangles": 5884,
   "assets": {
     "bench": {
       "status": "ready",
@@ -496,15 +496,16 @@
         ]
       ],
       "origin": "box_center",
-      "use": "개인 소지품 없는 식량 포대 두 개",
-      "lod0_tris": 152,
+      "use": "쌓은 자루 셋(Poly Haven cement_bag, CC0, 천 색으로 다시 칠함)",
+      "lod0_tris": 540,
       "triangle_limit": 600,
       "colours": [
         "cloth",
         "cloth_faded"
       ],
-      "bytes": 15252,
-      "sha256": "89c5d3c4b9764453f5b7b616bb9d84cda5684b2a67541a88c76693256aea759d"
+      "bytes": 16272,
+      "sha256": "13a1a79e811221fc1e5c02923dc2b4c4203fc089cfd1a9460a6cd873f4cf7e42",
+      "source_asset": "Poly Haven cement_bag (CC0)"
     },
     "workbench": {
       "status": "ready",
@@ -615,16 +616,16 @@
         ]
       ],
       "origin": "box_center",
-      "use": "널 틈과 보강대가 있는 화물 상자 두 개",
-      "lod0_tris": 384,
+      "use": "나무 상자 둘, 작은 것을 위에(Poly Haven wooden_crate_02, CC0)",
+      "lod0_tris": 540,
       "triangle_limit": 600,
       "colours": [
-        "wood",
         "wood_dark",
         "wood_worn"
       ],
-      "bytes": 27904,
-      "sha256": "4350f4ae54085d94f1f13c4cac1f90da405b2b6f6e07cf9294ac10fa4ef9fc3d"
+      "bytes": 40112,
+      "sha256": "b34746025f2ee3d168339f000071f959b7481b0d746ba1aafd270e8de3453c4b",
+      "source_asset": "Poly Haven wooden_crate_02 (CC0)"
     },
     "insulation_panel": {
       "status": "ready",
@@ -1859,7 +1860,113 @@
       ],
       "bytes": 13676,
       "sha256": "b4addb80fbb4e989f00949507ba0289b090a31a52a80925e6cd2717f2ce99f40"
+    },
+    "cupboard": {
+      "status": "ready",
+      "path": "res://models/train_interior/cupboard.glb",
+      "reference_size_m": [
+        0.52,
+        1.12,
+        0.38
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 2,
+      "size_variants": [
+        {
+          "size_m": [
+            0.52,
+            1.12,
+            0.38
+          ],
+          "uses": 2
+        }
+      ],
+      "source_materials": {
+        "wood": 2
+      },
+      "dimensions_m": [
+        0.52,
+        1.12,
+        0.38
+      ],
+      "bounds_m": [
+        [
+          -0.26,
+          -0.56,
+          -0.19
+        ],
+        [
+          0.26,
+          0.56,
+          0.19
+        ]
+      ],
+      "use": "칠 벗겨진 작은 선반장, 칸 끝 구석(Poly Haven painted_wooden_shelves, CC0)",
+      "lod0_tris": 524,
+      "colours": [
+        "wood_dark"
+      ],
+      "bytes": 20784,
+      "sha256": "bba09d580fdb9a0b29ce47a08c63d0f889ce9183180b6ec4606ebb614af1d013",
+      "source_asset": "Poly Haven painted_wooden_shelves (CC0)"
+    },
+    "wood_chair": {
+      "status": "ready",
+      "path": "res://models/train_interior/wood_chair.glb",
+      "reference_size_m": [
+        0.44,
+        0.96,
+        0.54
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.44,
+            0.96,
+            0.54
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {
+        "wood": 1
+      },
+      "dimensions_m": [
+        0.44,
+        0.96,
+        0.54
+      ],
+      "bounds_m": [
+        [
+          -0.22,
+          -0.48,
+          -0.27
+        ],
+        [
+          0.22,
+          0.48,
+          0.27
+        ]
+      ],
+      "use": "칠 벗겨진 나무 의자(Poly Haven painted_wooden_chair_01, CC0)",
+      "lod0_tris": 532,
+      "colours": [
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 31756,
+      "sha256": "7adc491ae241dc704dba49531007df9e829d85294801782f4accbd2009d89161",
+      "source_asset": "Poly Haven painted_wooden_chair_01 (CC0)"
     }
   },
-  "failures": []
+  "failures": [],
+  "swapped": {
+    "script": "tools/blender/train_interior_swap.py",
+    "note": "공개 3D(CC0)에서 가져와 면을 줄이고 색 판으로 다시 칠한 소품. 권리 장부에 한 줄씩."
+  }
 }
