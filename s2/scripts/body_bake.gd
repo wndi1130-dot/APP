@@ -102,7 +102,7 @@ const OWN_POSES: Array = [
 # so the dead's numbers above stay): name, source motion ("" for one written
 # here), frames, loops, layer ("" for none), seconds (a source motion's own
 # length is what is baked). Those written here come first, so a bake with no
-# motion set keeps their numbers; the field finds each by its name. Sixty-four at
+# motion set keeps their numbers; the field finds each by its name. 128 at
 # most: the shader's clip tables have VatBaker.TABLE_SIZE places
 # (dead_vat.gdshader); numbers 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
