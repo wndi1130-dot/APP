@@ -122,7 +122,7 @@ static func hatches(data: Dictionary) -> int:
 		cel.set_solid(land, S.NONE)
 		data["stairs"].append({"cell": land, "low": -1, "high": 0, "ladder": false, "hatch": true, "into": w - land})
 		made += 1
-	if made > 0:
+	if made > 0 and not data.get("_defer_paths", false):
 		cel.refresh_paths()
 	return made
 

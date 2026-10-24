@@ -36,31 +36,67 @@ static func blocks(kind: String, lv: int) -> bool:
 
 ## 건물 안 칸 덩어리: 같은 건물·같은 층에서 벽·문·창으로 나뉜다(4이웃).
 ## {"of": 칸마다 방 번호(PackedInt32Array, y*너비+x, 없으면 -1), "rooms": [{"cells": [칸], "building": 번호}]}
+## 칸 배열을 바로 읽는다(지도 하나에 층마다 수만 칸). 칸 차례는 깊이 우선, 이웃은 DIRS 차례.
 static func rooms_of(g: FieldGrid) -> Dictionary:
+	var w := g.width
+	var n := w * g.height
 	var of := PackedInt32Array()
-	of.resize(g.width * g.height)
+	of.resize(n)
 	of.fill(-1)
+	var solid := g.solid
+	var bld := g.building
 	var rooms: Array = []
-	for y in range(g.height):
-		for x in range(g.width):
-			var c := Vector2i(x, y)
-			if of[y * g.width + x] >= 0 or not _interior(g, c):
-				continue
-			var b := g.building_at(c)
-			var idx := rooms.size()
-			var cells: Array[Vector2i] = []
-			var stack: Array[Vector2i] = [c]
-			of[y * g.width + x] = idx
-			while not stack.is_empty():
-				var cur: Vector2i = stack.pop_back()
-				cells.append(cur)
-				for d in DIRS:
-					var n := cur + d
-					if g.inside(n) and of[n.y * g.width + n.x] < 0 and _interior(g, n) and g.building_at(n) == b:
-						of[n.y * g.width + n.x] = idx
-						stack.append(n)
-			rooms.append({"cells": cells, "building": b})
+	var stack := PackedInt32Array()
+	for i in range(n):
+		if of[i] >= 0:
+			continue
+		var b := bld[i]
+		var s0 := solid[i]
+		if b < 0 or not (s0 == S.NONE or s0 == S.LOW or s0 == S.BLOCK):
+			continue
+		var idx := rooms.size()
+		var cells: Array[Vector2i] = []
+		of[i] = idx
+		stack.resize(0)
+		stack.append(i)
+		while not stack.is_empty():
+			var cur := stack[stack.size() - 1]
+			stack.resize(stack.size() - 1)
+			var x := cur % w
+			cells.append(Vector2i(x, cur / w))
+			# DIRS 차례: +x, -x, +y, -y.
+			for k in range(4):
+				var nb := -1
+				if k == 0:
+					nb = cur + 1 if x + 1 < w else -1
+				elif k == 1:
+					nb = cur - 1 if x > 0 else -1
+				elif k == 2:
+					nb = cur + w if cur + w < n else -1
+				else:
+					nb = cur - w if cur >= w else -1
+				if nb < 0 or of[nb] >= 0 or bld[nb] != b:
+					continue
+				var s := solid[nb]
+				if s == S.NONE or s == S.LOW or s == S.BLOCK:
+					of[nb] = idx
+					stack.append(nb)
+		rooms.append({"cells": cells, "building": b})
 	return {"of": of, "rooms": rooms}
+
+
+## 지도를 짓는 동안 길 찾기 자료(refresh_paths)는 맨 끝에 한 번: field_maps가 "_defer_paths"를
+## 켜고 다 지은 뒤 층마다 다시 만든다. 따로 부르면(시험) 단계마다 다시 만든다.
+## 지도를 짓는 동안 층마다 한 번만 나눈다(가구 칠하기·옮기기는 방을 나누지 않는다).
+## 칸을 바꾸는 단계(덧문)는 이것보다 먼저 돈다. field_maps가 다 지은 뒤 지운다.
+static func _rooms(data: Dictionary, lv: int, g: FieldGrid) -> Dictionary:
+	var cache: Dictionary = data.get("_rooms", {})
+	if cache.has(lv) and cache[lv]["grid"] == g:
+		return cache[lv]["map"]
+	var map := rooms_of(g)
+	cache[lv] = {"grid": g, "map": map}
+	data["_rooms"] = cache
+	return map
 
 
 ## 칸의 방 번호(-1이면 방 밖).
@@ -120,22 +156,50 @@ static func _keys(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vect
 	return {"seeds": seeds, "boxes": box_sets}
 
 
+## 길 찾기 표시(칸마다 한 바이트). 다 찾으면 쓴 칸만 되돌린다.
+static var _mark := PackedByteArray()
+
+
+## 방 ri 안에서 seeds부터 걸어서 닿는 빈칸. 칸 배열을 바로 읽는다(지도 짓기에 수만 번 돈다).
+## 넓이 우선, 이웃은 DIRS 차례.
 static func _reach(g: FieldGrid, of: PackedInt32Array, ri: int, seeds: Array[Vector2i]) -> Dictionary:
-	var seen: Dictionary = {}
-	var queue: Array[Vector2i] = []
+	var w := g.width
+	var h := g.height
+	var n := w * h
+	if _mark.size() != n:
+		_mark.resize(n)
+		_mark.fill(0)
+	var solid := g.solid
+	var queue := PackedInt32Array()
 	for s in seeds:
-		if not seen.has(s) and g.solid_at(s) == S.NONE:
-			seen[s] = true
-			queue.append(s)
+		if s.x < 0 or s.y < 0 or s.x >= w or s.y >= h:
+			continue
+		var i := s.y * w + s.x
+		if _mark[i] == 0 and solid[i] == S.NONE:
+			_mark[i] = 1
+			queue.append(i)
 	var head := 0
 	while head < queue.size():
-		var cur: Vector2i = queue[head]
+		var cur := queue[head]
 		head += 1
-		for d in DIRS:
-			var n := cur + d
-			if not seen.has(n) and _at(g, of, n) == ri and g.solid_at(n) == S.NONE:
-				seen[n] = true
-				queue.append(n)
+		var x := cur % w
+		for k in range(4):
+			var nb := -1
+			if k == 0:
+				nb = cur + 1 if x + 1 < w else -1
+			elif k == 1:
+				nb = cur - 1 if x > 0 else -1
+			elif k == 2:
+				nb = cur + w if cur + w < n else -1
+			else:
+				nb = cur - w if cur >= w else -1
+			if nb >= 0 and _mark[nb] == 0 and of[nb] == ri and solid[nb] == S.NONE:
+				_mark[nb] = 1
+				queue.append(nb)
+	var seen: Dictionary = {}
+	for i in queue:
+		seen[Vector2i(i % w, i / w)] = true
+		_mark[i] = 0
 	return seen
 
 
@@ -238,7 +302,7 @@ static func block_furniture_with(data: Dictionary, has_model: Callable) -> Dicti
 	for lv: int in levels:
 		var g: FieldGrid = levels[lv]
 		var stairs: Dictionary = stairs_by.get(lv, {})
-		var map := rooms_of(g)
+		var map := _rooms(data, lv, g)
 		var of: PackedInt32Array = map["of"]
 		var wanted: Dictionary = {}  # 방 번호 -> [{"rect", "cells"}]
 		var room_rects: Dictionary = {}  # 방 번호 -> [막는 가구 rect]
@@ -326,7 +390,8 @@ static func block_furniture_with(data: Dictionary, has_model: Callable) -> Dicti
 					for c: Vector2i in it["cells"]:
 						g.set_solid(c, S.NONE)
 					stats["kept_path"] += 1
-		g.refresh_paths()
+		if not data.get("_defer_paths", false):
+			g.refresh_paths()
 	return stats
 
 
@@ -382,6 +447,37 @@ static func _nudges() -> Array[Vector2i]:
 	return out
 
 
+## 방 안 모든 자리(옛 자리에서 NUDGE_MAX보다 먼 것)를 가까운 차례로: 거리, 위, 왼쪽, 넓은 꼴.
+## 숫자 열쇠로 엔진 안에서 정렬한다. [[false, Rect2i], ...]
+static func _far_spots(cells: Array[Vector2i], shapes: Array[Vector2i], old: Rect2i) -> Array:
+	var lo := cells[0]
+	var hi := cells[0]
+	for c in cells:
+		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	var widest := 0
+	for shape in shapes:
+		widest = maxi(widest, shape.x)
+	var keys := PackedInt64Array()
+	for si in range(shapes.size()):
+		var shape: Vector2i = shapes[si]
+		var rank := 0 if shape.x == widest else 1
+		for y in range(lo.y, hi.y - shape.y + 2):
+			for x in range(lo.x, hi.x - shape.x + 2):
+				var dist := absi(x - old.position.x) + absi(y - old.position.y)
+				if dist > NUDGE_MAX:
+					keys.append((((dist * 4096 + y) * 4096 + x) * 2 + rank) * 2 + si)
+	keys.sort()
+	var out: Array = []
+	for key in keys:
+		var si := key % 2
+		var rest := key / 4
+		var x := rest % 4096
+		var y := (rest / 4096) % 4096
+		out.append([false, Rect2i(x, y, shapes[si].x, shapes[si].y)])
+	return out
+
+
 ## 문·계단 앞, 창 앞(큰 가구)에 서거나 벽에 박힌 가구를 옮긴다. 막는 가구(blocks)만 본다: 바닥에
 ## 깔리거나 벽에 걸리거나 안 보이는 것은 문 앞에 있어도 걸리지 않는다. 새 자리는 같은
 ## 방, 빈 칸(또는 제 옛 칸), 다른 가구·바닥 상자·비울 칸이 아니고, 막아도 방의
@@ -404,7 +500,7 @@ static func clear_fronts(data: Dictionary) -> Dictionary:
 	for lv: int in lvs:
 		var g: FieldGrid = levels[lv]
 		var stairs: Dictionary = stairs_by.get(lv, {})
-		var map := rooms_of(g)
+		var map := _rooms(data, lv, g)
 		var of: PackedInt32Array = map["of"]
 		var in_room: Dictionary = {}  # 방 -> [가구 번호]
 		for i in range(props.size()):
@@ -508,61 +604,42 @@ static func clear_fronts(data: Dictionary) -> Dictionary:
 							tries.append([keep_wall, Rect2i(old.position, shape)])
 						for off: Vector2i in nudges:
 							tries.append([keep_wall, Rect2i(old.position + off, shape)])
-				# 그래도 없으면 방 안 모든 자리를 가까운 차례로(좁은 방의 긴 가구).
-				var far: Array = []
-				var lo := cells[0]
-				var hi := cells[0]
-				for c in cells:
-					lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
-					hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
-				for shape in shapes:
-					for y in range(lo.y, hi.y - shape.y + 2):
-						for x in range(lo.x, hi.x - shape.x + 2):
-							var dist := absi(x - old.position.x) + absi(y - old.position.y)
-							if dist > NUDGE_MAX:
-								far.append([dist, Rect2i(x, y, shape.x, shape.y)])
-				far.sort_custom(func(a: Array, b: Array) -> bool:
-					if a[0] != b[0]:
-						return a[0] < b[0]
-					var ra: Rect2i = a[1]
-					var rb: Rect2i = b[1]
-					if ra.position.y != rb.position.y:
-						return ra.position.y < rb.position.y
-					if ra.position.x != rb.position.x:
-						return ra.position.x < rb.position.x
-					return ra.size.x > rb.size.x)
-				for f: Array in far:
-					tries.append([false, f[1]])
-				for t: Array in tries:
-					var keep_wall: bool = t[0]
-					var r: Rect2i = t[1]
-					var fits := true
-					var under: Array = []
-					for y in range(r.position.y, r.end.y):
-						for x in range(r.position.x, r.end.x):
-							var c := Vector2i(x, y)
-							if _at(g, of, c) != ri or g.solid_at(c) != S.NONE or taken.has(c) or stairs.has(c):
-								fits = false
-							elif floor_box.has(c):
-								under.append(floor_box[c])
-					if under.size() > (1 if can_hold else 0):
-						fits = false
-					if not fits or _in_front(r, kind, forbid):
-						continue
-					if keep_wall and _wall_sides(g, of, ri, r) < walls:
-						continue
-					for y in range(r.position.y, r.end.y):
-						for x in range(r.position.x, r.end.x):
-							g.set_solid(Vector2i(x, y), S.LOW)
-					var open := _still_open(g, of, ri, keys, before, [r] + guard)
-					for y in range(r.position.y, r.end.y):
-						for x in range(r.position.x, r.end.x):
-							g.set_solid(Vector2i(x, y), S.NONE)
-					if open:
-						best = r
-						found = true
-						held_box = under
+				# 가까운 자리에 없으면 방 안 모든 자리를 가까운 차례로(좁은 방의 긴 가구). 그때만 만든다.
+				for phase in range(2):
+					if found:
 						break
+					if phase == 1:
+						tries = _far_spots(cells, shapes, old)
+					for t: Array in tries:
+						var keep_wall: bool = t[0]
+						var r: Rect2i = t[1]
+						var fits := true
+						var under: Array = []
+						for y in range(r.position.y, r.end.y):
+							for x in range(r.position.x, r.end.x):
+								var c := Vector2i(x, y)
+								if _at(g, of, c) != ri or g.solid_at(c) != S.NONE or taken.has(c) or stairs.has(c):
+									fits = false
+								elif floor_box.has(c):
+									under.append(floor_box[c])
+						if under.size() > (1 if can_hold else 0):
+							fits = false
+						if not fits or _in_front(r, kind, forbid):
+							continue
+						if keep_wall and _wall_sides(g, of, ri, r) < walls:
+							continue
+						for y in range(r.position.y, r.end.y):
+							for x in range(r.position.x, r.end.x):
+								g.set_solid(Vector2i(x, y), S.LOW)
+						var open := _still_open(g, of, ri, keys, before, [r] + guard)
+						for y in range(r.position.y, r.end.y):
+							for x in range(r.position.x, r.end.x):
+								g.set_solid(Vector2i(x, y), S.NONE)
+						if open:
+							best = r
+							found = true
+							held_box = under
+							break
 				if found:
 					var turned := best.size != old.size
 					p["rect"] = best
@@ -595,7 +672,7 @@ static func clear_fronts(data: Dictionary) -> Dictionary:
 					for c in was_low:
 						g.set_solid(c, S.LOW)
 					stats["left"] += 1
-		if changed:
+		if changed and not data.get("_defer_paths", false):
 			g.refresh_paths()
 	if not drop.is_empty():
 		var out: Array = []
@@ -949,7 +1026,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	for lv: int in lvs:
 		var g: FieldGrid = levels[lv]
 		var stairs: Dictionary = stairs_by.get(lv, {})
-		var map := rooms_of(g)
+		var map := _rooms(data, lv, g)
 		var of: PackedInt32Array = map["of"]
 		var in_room: Dictionary = {}
 		for i in range(props.size()):
@@ -1170,7 +1247,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 					new_ground.append(r)
 			stats["rooms"] += 1
 			stats["placed"] += placed.size()
-		if changed:
+		if changed and not data.get("_defer_paths", false):
 			g.refresh_paths()
 	var out: Array = []
 	for i in range(props.size()):
@@ -1230,7 +1307,7 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 	lvs.sort()
 	for lv: int in lvs:
 		var g: FieldGrid = levels[lv]
-		var map := rooms_of(g)
+		var map := _rooms(data, lv, g)
 		var of: PackedInt32Array = map["of"]
 		var holders_of: Dictionary = {}  # 방 -> [rect, kind]
 		var used: Dictionary = {}
@@ -1256,6 +1333,7 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 			for k in range(holders_of.get(hi, []).size()):
 				if (holders_of[hi][k][0] as Rect2i).has_point(hc):
 					used[Vector3i(lv, hi, k)] = true
+		var seen_of: Dictionary = {}  # 방 -> 걸어서 닿는 칸(상자는 칸을 막지 않으니 방마다 한 번)
 		for id: String in ids:
 			var box: Dictionary = containers[id]
 			if int(box.get("level", 0)) != lv or box.has("furniture"):
@@ -1266,9 +1344,10 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 			var ri := _at(g, of, bc)
 			if ri < 0 or not holders_of.has(ri):
 				continue
-			var room: Dictionary = map["rooms"][ri]
-			var keys := _keys(g, of, ri, room["cells"], stairs_by.get(lv, {}), [])
-			var seen := _from_first(g, of, ri, keys)
+			if not seen_of.has(ri):
+				var room: Dictionary = map["rooms"][ri]
+				seen_of[ri] = _from_first(g, of, ri, _keys(g, of, ri, room["cells"], stairs_by.get(lv, {}), []))
+			var seen: Dictionary = seen_of[ri]
 			var list: Array = holders_of[ri]
 			var order: Array = range(list.size())
 			order.sort_custom(func(a: int, b: int) -> bool:

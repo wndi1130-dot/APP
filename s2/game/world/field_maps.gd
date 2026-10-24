@@ -132,6 +132,7 @@ static func build_from(script: Script) -> Dictionary:
 	# A big cellar gets its second way in (a yard hatch) before the rooms are
 	# laid out, so nothing stands at its foot (house_layout.md 5.2).
 	if script.resource_path.begins_with(MAP_DIR):
+		data["_defer_paths"] = true
 		var hatches := CellarRules.hatches(data)
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
 		data["room_stats"]["hatches"] = hatches
@@ -140,6 +141,10 @@ static func build_from(script: Script) -> Dictionary:
 		data["room_stats"]["boxes_moved"] = RoomFurnish.boxes_into_furniture(data)
 		# Low cellar windows at the foot of the walls show a cellar from outside.
 		data["cellar_windows"] = CellarRules.windows(data)
+		data.erase("_rooms")
+		data.erase("_defer_paths")
+		for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
+			g.refresh_paths()
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
