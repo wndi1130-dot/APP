@@ -1,4 +1,6 @@
 import type { Cue, Shot } from './cues';
+import { BED, HOWL, bedStep, gustGap, planGust, planHowl } from './gusts';
+import type { Gust } from './gusts';
 import { SOUND_VOL_GAIN, soundVol } from './settings';
 
 // 소리 장치(Web Audio). 폰 브라우저는 손짓 안에서 연 장치만 소리를 낸다. 그래서 파일은 미리 받아 두기만 하고
@@ -20,6 +22,12 @@ export interface EngineDeps {
   onReady?: () => void;
   /** 지금 시각(ms). 시험에서 바꿔 넣는다 */
   now?: () => number;
+  /** 되풀이 대신 깔개와 돌풍으로 내는 긴 소리 이름(바람, gusts.ts). 없으면 모두 그냥 되풀이한다 */
+  gusty?: string[];
+  /** 0~1 무작위. 시험에서 바꿔 넣는다 */
+  random?: () => number;
+  /** ms 뒤에 부른다. 돌려준 것을 부르면 취소한다. 시험에서 바꿔 넣는다 */
+  later?: (fn: () => void, ms: number) => () => void;
 }
 
 export interface HoldOpts { loop: boolean; gain: number; fadeMs?: number }
@@ -47,6 +55,17 @@ function decode(ctx: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
   });
 }
 
+interface Windy {
+  bed: { src: AudioBufferSourceNode; gain: GainNode };
+  filter: BiquadFilterNode;
+  gusts: Set<{ src: AudioBufferSourceNode; gain: GainNode }>;
+  gain: number;
+  buffer: AudioBuffer;
+  last: Gust | null;
+  stopDrift: (() => void) | null;
+  stopNext: (() => void) | null;
+}
+
 export function createEngine(deps: EngineDeps): Engine {
   const trackUrls = Object.values(deps.tracks ?? {}).filter((u): u is string => !!u);
   const urls = [...new Set([...Object.values(deps.clips).flat(), ...trackUrls])];
@@ -54,6 +73,9 @@ export function createEngine(deps: EngineDeps): Engine {
   const buffers = new Map<string, AudioBuffer>();
   const voices = new Map<Cue, { src: AudioBufferSourceNode; gain: GainNode }>();
   const held = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
+  const windy = new Map<string, Windy>();
+  const rand = deps.random ?? Math.random;
+  const later = deps.later ?? ((fn: () => void, ms: number) => { const id = setTimeout(fn, ms); return () => clearTimeout(id); });
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
   let loading: Promise<void> | null = null;
@@ -144,6 +166,7 @@ export function createEngine(deps: EngineDeps): Engine {
     const url = deps.tracks?.[name];
     const buffer = url ? buffers.get(url) : undefined;
     if (!buffer) return false;
+    if (opts.loop && deps.gusty?.includes(name)) return holdWind(name, buffer, opts);
     if (held.has(name)) {
       if (opts.loop) return true;
       release(name, 40);
@@ -185,7 +208,99 @@ export function createEngine(deps: EngineDeps): Engine {
     v.gain.gain.linearRampToValueAtTime(gain, end);
   }
 
+  /** 바람: 낮게 거른 잡음 깔개가 무작위로 천천히 움직이고, 그 위에 돌풍이 고르지 않은 사이로 분다(gusts.ts) */
+  function holdWind(name: string, buffer: AudioBuffer, opts: HoldOpts): boolean {
+    if (windy.has(name)) return true;
+    const c = ctx as AudioContext;
+    const out = master as GainNode;
+    const t = c.currentTime;
+    out.gain.value = SOUND_VOL_GAIN[soundVol()];
+    const noise = c.createBuffer(1, Math.round(c.sampleRate * BED.noiseSecs), c.sampleRate);
+    const data = noise.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = rand() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.7;
+    filter.frequency.value = BED.freq[0];
+    const gain = c.createGain();
+    const fade = Math.max((opts.fadeMs ?? 0) / 1000, 0.05);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(opts.gain * BED.start, t + fade);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(out);
+    src.start(t);
+    const w: Windy = { bed: { src, gain }, filter, gusts: new Set(), gain: opts.gain, buffer, last: null, stopDrift: null, stopNext: null };
+    windy.set(name, w);
+    const drift = () => {
+      if (windy.get(name) !== w) return;
+      const step = bedStep(rand);
+      const now = c.currentTime;
+      glide(filter.frequency, step.freq, now, step.secs);
+      glide(gain.gain, w.gain * step.gain, now, step.secs);
+      w.stopDrift = later(drift, step.secs * 1000);
+    };
+    w.stopDrift = later(drift, fade * 1000);
+    for (const g of planHowl(rand)) gust(w, g);
+    const next = () => {
+      if (windy.get(name) !== w) return;
+      gust(w, planGust(rand, w.last));
+      w.stopNext = later(next, gustGap(rand) * 1000);
+    };
+    w.stopNext = later(next, (HOWL.len[0] + gustGap(rand)) * 1000);
+    return true;
+  }
+
+  function glide(p: AudioParam, v: number, t: number, secs: number): void {
+    p.setValueAtTime(p.value, t);
+    p.linearRampToValueAtTime(v, t + secs);
+  }
+
+  /** 돌풍 하나: 파일의 g.offset부터, 빠르기가 휘고, 꼭대기까지 올랐다가 g.len에 잦아든다 */
+  function gust(w: Windy, g: Gust): void {
+    const c = ctx as AudioContext;
+    const t = c.currentTime + g.delay;
+    const src = c.createBufferSource();
+    const gain = c.createGain();
+    src.buffer = w.buffer;
+    src.playbackRate.setValueAtTime(g.rate0, t);
+    src.playbackRate.linearRampToValueAtTime(g.rate1, t + g.len);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(w.gain * g.peak, t + g.len * g.top);
+    gain.gain.linearRampToValueAtTime(0, t + g.len);
+    src.connect(gain);
+    gain.connect(master as GainNode);
+    const v = { src, gain };
+    w.gusts.add(v);
+    src.onended = () => {
+      w.gusts.delete(v);
+      src.disconnect();
+      gain.disconnect();
+    };
+    src.start(t, g.offset);
+    src.stop(t + g.len + 0.05);
+    w.last = g;
+  }
+
   function release(name: string, ms: number): void {
+    const w = windy.get(name);
+    if (ctx && w) {
+      windy.delete(name);
+      w.stopDrift?.();
+      w.stopNext?.();
+      const t = ctx.currentTime;
+      const end = t + ms / 1000;
+      for (const v of [w.bed, ...w.gusts]) {
+        v.gain.gain.cancelScheduledValues(t);
+        v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+        v.gain.gain.linearRampToValueAtTime(0, end);
+        v.src.stop(end + 0.02);
+      }
+      return;
+    }
     const v = held.get(name);
     if (!ctx || !v) return;
     held.delete(name);

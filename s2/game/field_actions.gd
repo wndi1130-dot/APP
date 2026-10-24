@@ -301,7 +301,7 @@ func open_door_on_way(p, c: Vector2i) -> void:
 	if door["state"] == "locked":
 		p.stop()
 		if p == game.player:
-			game.hud.toast("잠겼다. 쇠지렛대로 따거나 차서 연다.")
+			game.hud.toast("잠김")
 		return
 	if not DoorRules.can_toggle(door, "open"):
 		return
@@ -342,7 +342,7 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 				if has_pry(p):
 					pry_door(p, c)
 				elif p == game.player:
-					game.hud.toast("잠겼다. 쇠지렛대가 있으면 딴다. 차면 시끄럽다.")
+					game.hud.toast("잠김")
 
 
 func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> void:
@@ -377,7 +377,7 @@ func pry_door(p, c: Vector2i) -> void:
 		return
 	if not has_pry(p):
 		if p == game.player:
-			game.hud.toast("쇠지렛대가 손에 있어야 한다.")
+			game.hud.toast("쇠지렛대 없음")
 		return
 	if _begin_work(p, "pry", "문 따기", PRY_TIME, _set_door.bind(c, "open", p, true), "door", c, FieldGrid.center(c), true):
 		game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "pry", p)
@@ -424,7 +424,7 @@ func window_default(p, c: Vector2i, verb: String) -> void:
 		if verb == "break" or p != game.player:
 			_begin_work(p, "window", "창 깨기", WindowRules.BREAK_SECONDS, _window_work_done.bind(p, c), "window", c, FieldGrid.center(c))
 		else:
-			game.hud.toast("창은 깨야 넘는다. 깨면 시끄럽고 안의 온기가 빠진다.")
+			game.hud.toast("깨야 넘음")
 			game.hud.offer([{"label": "창을 깬다", "call": window_default.bind(p, c, "break")}])
 		return
 	if WindowRules.can_clear(w):
@@ -501,7 +501,7 @@ func search(p, id: String) -> void:
 			if _begin_work(p, "pry", "금고 따기", PRY_TIME + DoorRules.SAFE_EXTRA_SECONDS, _unlock.bind(id, p), "container", id, _container_at(c), true):
 				game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "pry", p)
 		elif p == game.player:
-			game.hud.toast("잠긴 금고다. 쇠지렛대가 있어야 한다.")
+			game.hud.toast("잠긴 금고 · 쇠지렛대 없음")
 		return
 	if c["searched"]:
 		if p == game.player:
@@ -993,10 +993,10 @@ func start_work(p) -> void:
 		game.hud.toast("살피기만 · 작업조 안 부름")
 		return
 	if not site_clear():
-		game.hud.toast("측선에 아직 저것들이 서 있다. 치우고 불러야 한다.")
+		game.hud.toast("측선에 망자")
 		return
 	if game.allies_alive().size() + 6 > game.ALLY_CAP:
-		game.hud.toast("필드에 사람이 너무 많다.")
+		game.hud.toast("사람이 너무 많음")
 		return
 	work_started = true
 	var spot: Dictionary = game.data["spots"]["work_site"]
@@ -1068,7 +1068,7 @@ func block_lid(p, key: String) -> void:
 			break
 	if mat == "":
 		if p == game.player:
-			game.hud.toast("뚜껑을 누를 무거운 것(판자나 고철)이 있어야 한다.")
+			game.hud.toast("판자나 고철 없음")
 		return
 	game.make_sound(p.position, SimNoise.Level.NORMAL, "lid", p)
 	p.start_action("lid", "뚜껑 막기", BLOCK_LID_TIME, _lid_blocked.bind(p, key, mat))
@@ -1202,10 +1202,10 @@ func splint(p) -> void:
 	if _wait_blow(p, splint.bind(p)):
 		return
 	if not (p.body.arm_fracture or p.body.leg_fracture) or p.body.splinted:
-		game.hud.toast("부목을 댈 데가 없다.")
+		game.hud.toast("부목 댈 데 없음")
 		return
 	if int(p.items.get("plank", 0)) <= 0 and int(p.items.get("wood", 0)) <= 0:
-		game.hud.toast("판자가 있어야 부목을 댄다.")
+		game.hud.toast("판자 없음")
 		return
 	p.start_action("splint", "부목", 10.0, _splinted.bind(p))
 

@@ -531,3 +531,28 @@ func test_the_first_set_of_decision_422_is_in_the_living_own() -> void:
 	var plain := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(0.0, treat, 1.0, 1.0), treat, 0, 0.0))
 	assert_lt(plain[0].y, 0.7, "the hands are down at the shin")
 	assert_true(low[0].is_finite(), "a frame and share on top read back")
+
+
+func test_the_putting_on_motions_and_the_garments_over_the_living_own() -> void:
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var clips: Array = baked["clips"]
+	for name in ["p_wear_outer", "p_wear_head", "p_wear_hands"]:
+		var n := PersonVisual.clip_named(clips, name, -1)
+		assert_gt(n, -1, name)
+		if n > -1:
+			assert_false(bool(clips[n]["loop"]), name + " is played once")
+	# Each garment is baked with the same motions, so it is drawn with the body's motion and frame.
+	var line_up := func(list: Array) -> Array:
+		var out := []
+		for clip: Dictionary in list:
+			out.append([clip["name"], clip["start"], clip["frames"], clip["loop"], clip["length"]])
+		return out
+	for kind: String in BodyBake.SHELLS:
+		var worn := BodyBake.load_baked(PersonVisual.OWN_FOLDER.path_join("wear").path_join(kind))
+		assert_false(worn.is_empty(), kind)
+		if worn.is_empty():
+			continue
+		assert_eq(int(worn["height"]), int(baked["height"]), kind)
+		assert_lt(int(worn["vertices"]), int(baked["vertices"]), kind + " covers a part of the body")
+		assert_eq(line_up.call(worn["clips"]), line_up.call(clips), kind + " lines up with the body")
+	assert_true(ResourceLoader.exists(PersonVisual.OWN_FOLDER.path_join("albedo_gloves.png")), "the colour picture with gloves on")
