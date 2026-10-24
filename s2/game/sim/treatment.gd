@@ -8,6 +8,7 @@ extends RefCounted
 ## a needle with thread (one length a stitching).
 
 const BodyState = preload("res://game/sim/body_state.gd")
+const InjuryRules = preload("res://game/sim/injury_rules.gd")
 
 const FIRST_AID := "first_aid"
 const FULL := "full"
@@ -34,7 +35,7 @@ const STEPS: Dictionary = {
 	"disinfect": {"label": "소독", "seconds": 2.0, "tools": ["bottle_spirit"], "need": "소독할 술"},
 	"suture": {"label": "봉합", "seconds": 12.0, "tools": ["needle_thread"], "need": "바늘과 실"},
 	"bandage": {"label": "붕대", "seconds": 4.0, "tools": ["bandage"], "need": "붕대"},
-	"splint": {"label": "부목", "seconds": 10.0, "tools": ["plank", "wood"], "need": "판자"},
+	"splint": {"label": "부목", "seconds": 10.0, "tools": [], "made_of": [["plank", "wood"], ["cloth"]], "need": "판자와 천"},
 }
 
 ## The order of care for each kind of wound (the table in 4.6).
@@ -70,6 +71,9 @@ static func plan(wound: Dictionary, have: Dictionary, mode: String = FULL) -> Ar
 	for id: String in _order(wound, mode):
 		var row: Dictionary = STEPS[id]
 		var step := {"id": id, "label": row["label"], "seconds": float(row["seconds"]), "need": "", "tool": "", "count": 0, "uses": {}, "state": DO}
+		if id == "bandage" and InjuryRules.dirty(wound):
+			step["seconds"] = InjuryRules.BANDAGE_REPLACE_S
+			step["label"] = "붕대 갈기"
 		if _is_done(wound, id):
 			step["state"] = DONE
 		elif stopped:
@@ -139,7 +143,7 @@ static func wound_text(wound: Dictionary) -> String:
 	else:
 		words.append(blood_word(float(wound["blood"])))
 		if wound["bandaged"]:
-			words.append("붕대 감음")
+			words.append("더러운 붕대" if InjuryRules.dirty(wound) else "붕대 감음")
 		if wound["disinfected"]:
 			words.append("소독함")
 		if wound["kind"] == "embedded":
@@ -185,7 +189,7 @@ static func _order(wound: Dictionary, mode: String) -> Array:
 		return []
 	if mode == FIRST_AID:
 		# Blood only: the bandage, when there is blood to stop.
-		return ["bandage"] if float(wound["blood"]) > 0.0 and ORDER[kind].has("bandage") else []
+		return ["bandage"] if (float(wound["blood"]) > 0.0 or InjuryRules.dirty(wound)) and ORDER[kind].has("bandage") else []
 	var out: Array = []
 	for id: String in ORDER[kind]:
 		# A tourniquet goes on a limb.
@@ -203,7 +207,7 @@ static func _is_done(wound: Dictionary, id: String) -> bool:
 		"disinfect":
 			return bool(wound["disinfected"])
 		"bandage":
-			return bool(wound["bandaged"])
+			return bool(wound["bandaged"]) and not InjuryRules.dirty(wound)
 		"splint":
 			return bool(wound["splinted"])
 		"tourniquet":
@@ -217,6 +221,8 @@ static func _is_done(wound: Dictionary, id: String) -> bool:
 
 ## How many of the tool the step takes (a wound bleeding hard takes two bandages).
 static func _count(wound: Dictionary, id: String) -> int:
+	if id == "bandage" and InjuryRules.dirty(wound):
+		return 1
 	if id == "bandage" and float(wound["blood"]) >= BodyState.HEAVY_BLOOD:
 		return 2
 	return 1

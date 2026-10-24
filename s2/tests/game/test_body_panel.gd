@@ -32,6 +32,17 @@ func _step(p, seconds: float) -> void:
 		t += 0.02
 
 
+## Steps while the care step `label` (any, when "") is in hand; returns the
+## seconds it took. Wounds and pain slow the hands (body_injury 4.6: 부위가
+## 동작을 바꾼다, 통증 → 손일), so a step's time is its seconds over the hands.
+func _care(p, label: String = "", cap: float = 120.0) -> float:
+	var t := 0.0
+	while p.action != "" and (label == "" or p.action_label == label) and t < cap:
+		game._update_person(p, 0.02)
+		t += 0.02
+	return t
+
+
 func _row(wound: Dictionary) -> Dictionary:
 	for row: Dictionary in game.hud.body_buttons:
 		if is_same(row["wound"], wound):
@@ -205,7 +216,8 @@ func test_first_aid_binds_the_wound_chosen_and_takes_one_bandage() -> void:
 	assert_eq(game.slow, 1.0)
 	assert_eq(p.action, "treat")
 	assert_eq(p.action_label, "붕대")
-	_step(p, 5.0)
+	var seconds: float = p.action_total / float(p.mults()["hands"])
+	assert_almost_eq(_care(p, "붕대"), seconds, 0.05, "the cut arm's hands take longer")
 	assert_eq(p.action, "")
 	assert_true(p.body.wounds[cut]["bandaged"])
 	assert_false(p.body.wounds[cut]["disinfected"], "first aid does not clean")
@@ -222,11 +234,11 @@ func test_full_care_runs_every_step_in_order() -> void:
 	hud.body_panel()
 	_row(p.body.wounds[cut])["full"].pressed.emit()
 	assert_eq(p.action_label, "소독")
-	_step(p, 2.4)
+	_care(p, "소독")
 	assert_true(p.body.wounds[cut]["disinfected"])
 	assert_false(p.body.wounds[cut]["bandaged"])
 	assert_eq(p.action_label, "붕대", "the next step starts by itself")
-	_step(p, 5.0)
+	_care(p, "붕대")
 	assert_true(p.body.wounds[cut]["bandaged"])
 	assert_eq(p.action, "")
 	assert_false(p.items.has("bandage"))
@@ -240,7 +252,7 @@ func test_walking_off_cuts_the_care_short_and_keeps_what_was_done() -> void:
 	p.add_item("bandage", 1)
 	p.add_item("bottle_spirit", 1)
 	assert_true(game.actions.treat_wound(p, p, p.body.wounds[cut], Treatment.FULL))
-	_step(p, 2.4)
+	_care(p, "소독")
 	assert_true(p.body.wounds[cut]["disinfected"])
 	p.cancel_action()
 	_step(p, 6.0)
@@ -399,7 +411,8 @@ func test_full_care_of_a_bullet_hole_runs_to_the_end_and_keeps_the_tweezers() ->
 	p.body.apply_gunshot(RandomNumberGenerator.new(), 0.0, "head")
 	var w: Dictionary = p.body.wounds[0]
 	game.actions.treat_wound(p, p, w, Treatment.FULL)
-	_step(p, 40.0)
+	# The bullet's pain slows the hands (4.6 통증): the care runs to its end.
+	_care(p)
 	assert_true(w["pulled"])
 	assert_true(w["disinfected"])
 	assert_true(w["sutured"])
