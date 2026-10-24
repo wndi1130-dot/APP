@@ -1459,6 +1459,10 @@ func _move_person(p: Person, delta: float) -> void:
 	if p.path.is_empty():
 		p.moving = false
 		return
+	# Walking a path too, a blow holds the feet (decision 425): the squad's and raiders' as well as the player's.
+	if combat.feet_held(p):
+		p.moving = false
+		return
 	var next := p.path[0]
 	var d := next - p.position
 	d.y = 0
