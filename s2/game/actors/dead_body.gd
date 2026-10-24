@@ -46,6 +46,10 @@ const TURN_LEFT: int = 23                     # turning round to something on it
 const TURN_RIGHT: int = 24                    # on its right
 const WALK_D: int = 25                        # two slower walks: a shuffle
 const WALK_E: int = 26                        # and a lurch on a stiff leg
+# Eating a body (decision 423): baked in both bodies; nothing picks them yet.
+const EAT_START: int = 27                     # down on its knees over it
+const EAT: int = 28                           # the loop: the teeth meet at its middle
+const EAT_RISE: int = 29                      # up off it again
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 # How far one round of a motion carries the body, metres, so that the foot
 # going backwards stays on its spot. The bake measures it on the body it bakes
