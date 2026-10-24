@@ -1,6 +1,6 @@
 extends RefCounted
 ## 방 안 가구 규칙(docs/design/briefs/house_layout.md 1·3장). 이 차례로 돈다.
-## furnish_rooms: 살림방·부엌·거실·매장·창고·지하 저장 칸을 묶음 규칙대로 다시 놓고
+## furnish_rooms: 살림방·부엌·거실·매장·창고·지하 저장 칸·보일러실을 묶음 규칙대로 다시 놓고
 ## 상자를 용기 가구 칸으로 옮긴다(아래 「방 종류별 가구」).
 ## clear_fronts: 문·계단 앞과 창 앞(큰 가구)에 서거나 벽에 박힌 지도 가구를 가까운 빈 자리로 옮긴다.
 ## block_furniture: 「가구는 몸을 막는다」. 건물 안 가구를 모든 층에서 낮은 막힘(LOW)으로 칠한다.
@@ -663,6 +663,14 @@ const PALETTE: Dictionary = {
 		{"kind": "barrel", "size": Vector2i(1, 1), "at": "wall"},
 		{"kind": "sack_pile", "size": Vector2i(2, 2), "at": "wall"},
 	],
+	# 보일러실(지하): 화실과 석탄함이 꼭 있고, 연료통·공구함·선반은 덤.
+	"boiler": [
+		{"kind": "firebox", "size": Vector2i(1, 1), "need": true, "at": "wall"},
+		{"kind": "coal_bin", "size": Vector2i(3, 2), "need": true, "at": "wall"},
+		{"kind": "fuel_drum", "size": Vector2i(1, 1), "at": "wall"},
+		{"kind": "toolbox", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
+	],
 	"store": [
 		{"kind": "jar_shelf", "size": Vector2i(3, 1), "need": true, "holds": true, "at": "wall"},
 		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
@@ -718,9 +726,11 @@ static func room_class(name: String, kinds: Dictionary, lv: int) -> String:
 		return "bed"
 	if cls == "work":
 		return ""
-	# 지하의 침실·부엌은 사용자 답(지하실 카드)을 기다린다. 지도 가구 그대로.
-	if lv < 0 and (cls == "bed" or cls == "kitchen" or cls == "living"):
-		return ""
+	# 지하의 부엌은 보일러실, 침실·거실은 저장 칸으로(결정 423, 지하실 카드 「가」. 방 수는 그대로).
+	if lv < 0 and cls == "kitchen":
+		return "boiler"
+	if lv < 0 and (cls == "bed" or cls == "living"):
+		return "store"
 	# 지하의 매장은 저장 칸으로, 땅 위 저장 칸은 창고로.
 	if lv < 0 and (cls == "shop" or cls == "storage"):
 		return "store"
@@ -1178,12 +1188,13 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	return stats
 
 
-const ROOM_LABEL: Dictionary = {"bed": "살림방", "kitchen": "부엌", "living": "거실", "shop": "매장", "storage": "창고", "store": "저장 칸"}
+const ROOM_LABEL: Dictionary = {"bed": "살림방", "kitchen": "부엌", "living": "거실", "shop": "매장", "storage": "창고", "store": "저장 칸", "boiler": "보일러실"}
 const KIND_LABEL: Dictionary = {
 	"bed": "침대", "wardrobe": "장롱", "blanket_chest": "담요 궤", "bookcase": "책장", "bench": "긴 의자",
 	"cold_stove": "꺼진 난로", "jar_shelf": "항아리 선반", "dining_set": "식탁과 의자", "fridge_open": "문 열린 냉장고",
 	"barrel": "통", "radio_set": "라디오", "shop_counter": "계산대", "display_shelf": "진열 선반",
 	"crate_stack": "상자 더미", "shelf": "선반", "sack_pile": "자루 더미", "tin_crate": "나무 궤",
+	"firebox": "보일러 화실", "coal_bin": "석탄함", "fuel_drum": "연료통", "toolbox": "공구함",
 }
 
 
