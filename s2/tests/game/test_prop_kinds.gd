@@ -58,7 +58,8 @@ func test_twenty_optional_common_models_precede_existing_models() -> void:
 
 
 func test_unknown_kinds_keep_existing_fallbacks_without_loading() -> void:
-	assert_true(Kinds.candidates("unlisted_prop").is_empty())
+	# 지도 조립 소품 폴더 후보 하나만 남는다. 파일이 없으니 model_path는 비어 있고 불러오지 않는다.
+	assert_eq(Kinds.candidates("unlisted_prop"), [Kinds.FIELD_DIR + "unlisted_prop.glb"])
 	assert_eq(Kinds.model_path("unlisted_prop"), "")
 	assert_eq(Kinds.fallback_for("low"), "low")
 	for solid: String in ["none", "tree", "wall", "wagon", ""]:

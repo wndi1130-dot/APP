@@ -22,7 +22,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2
 TRIANGLE_LIMIT = 600
 # 선형 RGBA. 색 자체를 내보내므로 건물 키트의 구역 비트 셰이더가 필요 없다.
 PALETTE = {
@@ -32,7 +32,16 @@ PALETTE = {
     "worn_metal": (0.28, 0.32, 0.33, 1.0),
     "cloth": (0.43, 0.41, 0.31, 1.0),
     "enamel": (0.68, 0.70, 0.66, 1.0),
+    "snow": (0.84, 0.88, 0.90, 1.0),
+    "bark": (0.19, 0.15, 0.12, 1.0),
+    "rust": (0.31, 0.16, 0.09, 1.0),
+    "glass": (0.24, 0.37, 0.40, 1.0),
+    "rubber": (0.045, 0.055, 0.06, 1.0),
+    "stone": (0.29, 0.30, 0.28, 1.0),
 }
+# 눈은 노출된 윗면만 칠한다. 값은 fit 이전 조형 좌표의 높이다.
+SNOW_LINE = {"bare_tree": 0.38, "barrel": 0.94, "handcart": 0.59,
+             "crate_stack": 0.96, "pallet_stack": 0.97, "sack_pile": 0.75}
 SKIPPED = {
     "wardrobe": "props_stop01/wardrobe.glb 기존 소품 사용",
     "workbench": "props_stop01/workbench.glb 기존 소품 사용",
@@ -62,8 +71,31 @@ class Piece:
             pts.reverse()
         face = self.bm.faces.new([self.bm.verts.new(p) for p in pts])
         face.smooth = False
+        unit = Vector(outward).normalized()
+        # 면 안에서도 모서리마다 밝기와 마모량을 달리한다. 무작위 상태 없이 재현된다.
         for loop in face.loops:
-            loop[self.col] = PALETTE[colour]
+            at = loop.vert.co
+            grain = 0.5 + 0.5 * math.sin(at.x * 37 + at.y * 19 + at.z * 29)
+            shade = 0.79 + 0.14 * max(0, unit.z) + 0.07 * grain
+            rgba = [v * shade for v in PALETTE[colour][:3]]
+            worn = {"wood": "worn_wood", "bark": "worn_wood", "iron": "worn_metal",
+                    "enamel": "worn_metal", "cloth": "enamel"}.get(colour)
+            if worn:
+                weight = (0.10 + 0.24 * grain) * (0.45 if colour == "cloth" else 1.0)
+                rgba = [a * (1 - weight) + b * weight for a, b in zip(rgba, PALETTE[worn])]
+                self.colours.add(worn)
+            if colour in ("iron", "worn_metal", "enamel"):
+                patch = max(0.0, math.sin(at.x * 17 + at.z * 23) - 0.55)
+                weight = patch * (0.8 if colour != "enamel" else 0.40)
+                if weight:
+                    rgba = [a * (1 - weight) + b * weight for a, b in zip(rgba, PALETTE["rust"])]
+                    self.colours.add("rust")
+            snow_normal = 0.25 if self.pid == "bare_tree" else 0.65
+            if self.pid in SNOW_LINE and at.z >= SNOW_LINE[self.pid] and unit.z > snow_normal:
+                weight = 0.58 + 0.34 * grain
+                rgba = [a * (1 - weight) + b * weight for a, b in zip(rgba, PALETTE["snow"])]
+                self.colours.add("snow")
+            loop[self.col] = (*rgba, 1.0)
         self.colours.add(colour)
 
     def box(self, x, y, z, colour):
@@ -97,12 +129,17 @@ class Piece:
             j = (i + 1) % sides
             self.face([lower[i], lower[j], upper[j], upper[i]], colour, radial[i] + radial[j])
 
-    def lathe(self, centre, profile, colour, sides=8, alternate=None):
+    def lathe(self, centre, profile, colour, sides=8, alternate=None, folded=False):
         """높이·가로 반지름·깊이 반지름의 고리를 잇는다."""
         cx, cy = centre
-        rings = [[(cx + rx * math.cos(i * math.tau / sides),
-                   cy + ry * math.sin(i * math.tau / sides), z)
-                  for i in range(sides)] for z, rx, ry in profile]
+        rings = []
+        for level, (z, rx, ry) in enumerate(profile):
+            ring = []
+            for i in range(sides):
+                crease = 1 + (0.10 * math.sin(i * 2.7 + level * 1.6) if folded else 0)
+                ring.append((cx + rx * crease * math.cos(i * math.tau / sides),
+                             cy + ry * crease * math.sin(i * math.tau / sides), z))
+            rings.append(ring)
         self.face(rings[0], colour, (0, 0, -1))
         self.face(rings[-1], colour, (0, 0, 1))
         for lower, upper in zip(rings, rings[1:]):
@@ -112,6 +149,30 @@ class Piece:
                 tint = alternate if alternate and i % 3 == 0 else colour
                 self.face([lower[i], lower[j], upper[j], upper[i]], tint,
                           (math.cos(angle), math.sin(angle), 0))
+
+    def ring(self, centre, outer, inner, width, colour, sides=10, axis="y"):
+        """구멍이 실제로 열린 테. 축은 바퀴 Y 또는 통 Z다."""
+        c = Vector(centre)
+        u, v, n = (Vector((1, 0, 0)), Vector((0, 0, 1)), Vector((0, 1, 0)))
+        if axis == "z":
+            u, v, n = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
+        for i in range(sides):
+            a, b = i * math.tau / sides, (i + 1) * math.tau / sides
+            ra, rb = u * math.cos(a) + v * math.sin(a), u * math.cos(b) + v * math.sin(b)
+            points = [c + r * d + n * w for w in (-width / 2, width / 2)
+                      for r, d in ((outer, ra), (outer, rb), (inner, rb), (inner, ra))]
+            self.face(points[:4], colour, -n)
+            self.face(points[4:], colour, n)
+            self.face([points[j] for j in (0, 1, 5, 4)], colour, ra + rb)
+            self.face([points[j] for j in (2, 3, 7, 6)], colour, -ra - rb)
+
+    def handle(self, x, y, z, width=0.20):
+        """손이 들어가는 세 변의 손잡이. 전면은 -Y다."""
+        for sign in (-1, 1):
+            a = x + sign * width / 2
+            self.box((a - 0.013, a + 0.013), (y - 0.055, y), (z - 0.018, z + 0.018), "iron")
+        self.box((x - width / 2 - 0.013, x + width / 2 + 0.013),
+                 (y - 0.067, y - 0.045), (z - 0.018, z + 0.018), "worn_metal")
 
     def fit(self, footprint, height):
         """장식·열린 문까지 포함한 경계를 발자국 안에 맞추고 바닥을 0에 둔다."""
@@ -136,42 +197,76 @@ class Piece:
 
 
 def shelf(p):
-    for x in (-0.5, 0.46):
-        p.box((x, x + 0.04), (-0.5, 0.5), (0, 1), "wood")
-    p.box((-0.46, 0.46), (0.46, 0.5), (0.02, 0.98), "wood")
+    for x in (-0.5, 0.455):
+        for y in (-0.5, 0.445):
+            p.box((x, x + 0.045), (y, y + 0.055), (0, 1), "wood")
+        for z in (0.04, 0.34, 0.65, 0.96):
+            p.box((x, x + 0.045), (-0.445, 0.445), (z - 0.035, z), "wood")
+    for x in (-0.32, 0, 0.32):
+        p.box((x - 0.06, x + 0.06), (0.46, 0.5), (0.02, 0.98), "wood")
     for z in (0.04, 0.34, 0.65, 0.96):
-        p.box((-0.46, 0.46), (-0.5, 0.46), (z, z + 0.04), "worn_wood")
+        for y in (-0.49, -0.17, 0.15):
+            p.box((-0.455, 0.455), (y, y + 0.30), (z, z + 0.04), "worn_wood")
+    p.beam((-0.42, 0.48, 0.08), (0.42, 0.48, 0.92), 0.025, "wood", 4)
 
 
 def cold_stove(p):
     for x in (-0.3, 0.3):
         for y in (-0.3, 0.3):
-            p.box((x - 0.05, x + 0.05), (y - 0.05, y + 0.05), (0, 0.18), "iron")
+            p.beam((x * 1.15, y * 1.15, 0.025), (x, y, 0.20), 0.045, "iron", 4)
+            p.box((x * 1.15 - 0.07, x * 1.15 + 0.07), (y * 1.15 - 0.06, y * 1.15 + 0.06), (0, 0.035), "rust")
     p.lathe((0, 0), [(0.14, 0.43, 0.43), (0.65, 0.48, 0.48)], "iron")
     p.box((-0.5, 0.5), (-0.5, 0.5), (0.65, 0.70), "worn_metal")
-    p.box((-0.23, 0.23), (-0.47, -0.43), (0.24, 0.56), "worn_metal")
-    p.box((0.13, 0.2), (-0.5, -0.47), (0.36, 0.40), "iron")
-    p.beam((0, 0.22, 0.70), (0, 0.22, 1), 0.12, "iron")
+    p.box((-0.25, 0.25), (-0.485, -0.42), (0.22, 0.59), "worn_metal")
+    p.box((-0.20, 0.20), (-0.501, -0.485), (0.27, 0.55), "iron")
+    for z in (0.30, 0.49):
+        p.beam((-0.24, -0.51, z), (-0.24, -0.51, z + 0.065), 0.026, "rust", 6)
+    p.handle(0.13, -0.505, 0.40, 0.10)
+    p.box((-0.29, 0.29), (-0.51, -0.37), (0.16, 0.19), "iron")
+    for x in (-0.12, 0, 0.12):
+        p.box((x - 0.025, x + 0.025), (-0.503, -0.50), (0.29, 0.33), "rubber")
+    p.beam((0, 0.22, 0.70), (0, 0.22, 1), 0.105, "iron")
+    for z in (0.72, 0.87):
+        p.beam((0, 0.22, z), (0, 0.22, z + 0.035), 0.127, "rust")
+    p.beam((0, -0.18, 0.70), (0, -0.18, 0.72), 0.16, "iron", 10)
 
 
 def desk(p):
-    p.box((-0.5, 0.5), (-0.5, 0.5), (0.91, 1), "worn_wood")
+    for y in (-0.5, -0.165, 0.17):
+        p.box((-0.5, 0.5), (y, y + 0.33), (0.93, 1), "worn_wood")
+    p.box((-0.45, 0.45), (0.36, 0.42), (0.77, 0.93), "wood")
+    p.box((-0.05, 0.43), (-0.44, -0.39), (0.81, 0.93), "wood")
     for x in (-0.44, 0.38):
         for y in (-0.43, 0.36):
             p.box((x, x + 0.06), (y, y + 0.07), (0, 0.91), "wood")
+            p.box((x - 0.005, x + 0.065), (y - 0.005, y + 0.075), (0, 0.08), "iron")
+    for x in (-0.42, 0.40):
+        p.box((x, x + 0.04), (-0.38, 0.38), (0.22, 0.28), "wood")
     p.box((-0.43, -0.1), (-0.43, 0.43), (0.45, 0.91), "wood")
     for z in (0.49, 0.70):
         p.box((-0.40, -0.13), (-0.46, -0.43), (z, z + 0.17), "worn_wood")
-        p.box((-0.31, -0.22), (-0.49, -0.46), (z + 0.07, z + 0.10), "iron")
+        p.handle(-0.265, -0.46, z + 0.085, 0.13)
 
 
 def barrel(p):
-    p.lathe((0, 0), [(0, 0.40, 0.40), (0.12, 0.44, 0.44), (0.5, 0.49, 0.49),
-                      (0.88, 0.44, 0.44), (1, 0.40, 0.40)], "wood", 12, "worn_wood")
-    for z in (0.18, 0.74):
-        p.lathe((0, 0), [(z, 0.47, 0.47), (z + 0.08, 0.48, 0.48)], "iron", 12)
-    for x in (-0.22, 0, 0.22):
-        p.box((x - 0.012, x + 0.012), (-0.30, 0.30), (1, 1.005), "wood")
+    # 부푼 널 각각의 단면을 닫고 널 사이에 실제 틈을 둔다.
+    profile = [(0, 0.40), (0.12, 0.44), (0.5, 0.49), (0.88, 0.44), (1, 0.40)]
+    for i in range(12):
+        a, b = (i + 0.035) * math.tau / 12, (i + 0.965) * math.tau / 12
+        left = [(r * math.cos(a), r * math.sin(a), z) for z, r in profile]
+        right = [(r * math.cos(b), r * math.sin(b), z) for z, r in profile]
+        tint = "worn_wood" if i % 4 == 0 else "wood"
+        for j in range(4):
+            p.face([left[j], right[j], right[j + 1], left[j + 1]], tint, (math.cos(a), math.sin(a), 0))
+        p.face([(0, 0, 0)] + left + [(0, 0, 1)], "wood", (math.sin(a), -math.cos(a), 0))
+        p.face([(0, 0, 0)] + right + [(0, 0, 1)], "wood", (-math.sin(b), math.cos(b), 0))
+        p.face([(0, 0, 0), left[0], right[0]], tint, (0, 0, -1))
+        p.face([(0, 0, 1), left[-1], right[-1]], tint, (0, 0, 1))
+    for z in (0.18, 0.81):
+        p.ring((0, 0, z), 0.475, 0.437, 0.065, "iron", 12, "z")
+    for y in (-0.23, -0.075, 0.08):
+        p.box((-0.30, 0.30), (y, y + 0.145), (1, 1.02), "worn_wood")
+    p.beam((0.16, -0.04, 1.02), (0.16, -0.04, 1.04), 0.04, "wood", 6)
 
 
 def bed(p):
@@ -181,23 +276,37 @@ def bed(p):
         for y in (-0.46, 0.38):
             p.box((x, x + 0.08), (y, y + 0.08), (0, 0.28), "wood")
     for x, height in ((-0.5, 1), (0.46, 0.85)):
-        p.box((x, x + 0.04), (-0.5, 0.5), (0.46, height), "worn_wood")
+        for y in (-0.5, 0.45):
+            p.box((x, x + 0.04), (y, y + 0.05), (0.20, height), "wood")
+        p.box((x, x + 0.04), (-0.45, 0.45), (height - 0.10, height), "worn_wood")
+        for y in (-0.28, -0.035, 0.21):
+            p.box((x + 0.008, x + 0.032), (y, y + 0.07), (0.47, height - 0.10), "wood")
     p.box((-0.40, -0.20), (-0.34, 0.34), (0.74, 0.86), "enamel")
-    p.box((0.16, 0.42), (-0.45, 0.45), (0.74, 0.79), "cloth")
+    p.box((0.10, 0.43), (-0.46, 0.46), (0.74, 0.785), "cloth")
+    p.box((0.13, 0.43), (-0.45, 0.45), (0.79, 0.825), "cloth")
+    p.box((0.11, 0.145), (-0.46, 0.46), (0.785, 0.84), "cloth")
+    p.box((0.10, 0.43), (-0.47, -0.445), (0.54, 0.78), "cloth")
 
 
 def bare_tree(p):
     nodes = [(0, 0, 0), (0.04, 0.03, 0.38), (-0.03, -0.02, 0.72), (0.04, 0, 1)]
     for i in range(3):
-        p.beam(nodes[i], nodes[i + 1], 0.13 - i * 0.035, "wood", 6, 0.09 - i * 0.032)
+        p.beam(nodes[i], nodes[i + 1], 0.10 - i * 0.027, "bark", 7, 0.07 - i * 0.024)
+    for angle in (0, 2.1, 4.2):
+        p.beam((0, 0, 0.04), (0.18 * math.cos(angle), 0.18 * math.sin(angle), 0.005),
+               0.05, "bark", 5, 0.018)
     for start, middle, end in [
         (nodes[1], (-0.29, -0.11, 0.58), (-0.49, -0.19, 0.81)),
         (nodes[1], (0.30, 0.14, 0.57), (0.48, 0.22, 0.75)),
         (nodes[2], (-0.12, 0.32, 0.83), (-0.22, 0.49, 0.96)),
         (nodes[2], (0.20, -0.30, 0.84), (0.31, -0.48, 0.98)),
     ]:
-        p.beam(start, middle, 0.045, "wood", 6, 0.026)
-        p.beam(middle, end, 0.026, "worn_wood", 6, 0.008)
+        p.beam(start, middle, 0.037, "bark", 6, 0.023)
+        p.beam(middle, end, 0.023, "bark", 5, 0.006)
+        fork = (middle[0] * 0.55, middle[1] * 1.25 + 0.035, min(0.99, middle[2] + 0.24))
+        twig = (end[0] * 0.76, end[1] * 1.05, min(1.04, end[2] + 0.12))
+        p.beam(middle, fork, 0.018, "bark", 5, 0.004)
+        p.beam(tuple((a + b) / 2 for a, b in zip(middle, end)), twig, 0.012, "bark", 4, 0.003)
 
 
 def crate(p, x, y, z):
@@ -205,12 +314,16 @@ def crate(p, x, y, z):
     y0, y1 = y
     z0, z1 = z
     t = 0.035
-    p.box(x, y, z, "wood")
+    for i in range(3):
+        bottom = z0 + (z1 - z0) * i / 3
+        p.box(x, y, (bottom, bottom + (z1 - z0) / 3 - 0.012), "wood")
     for a in (x0, x1 - t):
         for b in (y0 - 0.01, y1 - t + 0.01):
             p.box((a, a + t), (b, b + t), z, "worn_wood")
     for b in (y0 - 0.015, y1):
         p.box(x, (b, b + 0.015), (z0 + 0.08, z0 + 0.12), "worn_wood")
+    p.beam((x0 + 0.06, y0 - 0.025, z0 + 0.08),
+           (x1 - 0.06, y0 - 0.025, z1 - 0.06), 0.022, "worn_wood", 4)
     for i in range(3):
         a = x0 + (x1 - x0) * i / 3
         p.box((a + 0.01, a + (x1 - x0) / 3 - 0.01), y, (z1, z1 + 0.015), "worn_wood")
@@ -228,17 +341,29 @@ def sack_pile(p):
         height = 0.55 * scale
         profile = [(z + h * height, r * scale, r * scale * 0.85)
                    for h, r in ((0, 0.16), (0.16, 0.25), (0.57, 0.26), (0.88, 0.19), (1, 0.055))]
-        p.lathe((x, y), profile, "cloth", 8)
-        p.lathe((x, y), [(z + height, 0.055, 0.047), (z + height + 0.035, 0.08, 0.068)], "cloth", 6)
+        p.lathe((x, y), profile, "cloth", 8, folded=True)
+        p.lathe((x, y), [(z + height - 0.008, 0.057, 0.049),
+                        (z + height + 0.016, 0.055, 0.047)], "wood", 6)
+        p.lathe((x, y), [(z + height + 0.016, 0.045, 0.04),
+                        (z + height + 0.060, 0.09, 0.07)], "cloth", 6, folded=True)
+        p.beam((x, y - 0.05, z + height + 0.008),
+               (x + 0.08, y - 0.07, z + height - 0.055), 0.013, "wood", 4)
 
 
 def drawer_unit(p, drawers):
-    p.box((-0.5, 0.5), (-0.46, 0.5), (0, 1), "iron")
+    p.box((-0.5, 0.5), (-0.46, 0.5), (0.065, 1), "iron")
+    p.box((-0.46, 0.46), (-0.42, 0.46), (0, 0.065), "rubber")
+    for x in (-0.50, 0.47):
+        p.box((x, x + 0.03), (-0.50, -0.46), (0.065, 1), "worn_metal")
     for i in range(drawers):
         z = 0.05 + 0.90 * i / drawers
         top = z + 0.90 / drawers - 0.025
         p.box((-0.46, 0.46), (-0.49, -0.46), (z, top), "worn_metal")
-        p.box((-0.11, 0.11), (-0.53, -0.49), (top - 0.085, top - 0.055), "iron")
+        p.handle(0, -0.495, top - 0.10, 0.24)
+        # 아무 문자도 없는 빈 명패 홈과 아래쪽 접힌 철판 가장자리.
+        p.box((0.28, 0.40), (-0.498, -0.49), (top - 0.12, top - 0.065), "rubber")
+        p.box((0.295, 0.385), (-0.502, -0.498), (top - 0.108, top - 0.077), "stone")
+        p.box((-0.45, 0.45), (-0.505, -0.49), (z, z + 0.018), "iron")
 
 
 def file_cabinet(p):
@@ -250,35 +375,59 @@ def part_crate(p):
     for x in (-0.5, 0.44):
         p.box((x, x + 0.06), (-0.5, 0.5), (0.08, 0.60), "worn_wood")
     for y in (-0.5, 0.44):
-        p.box((-0.44, 0.44), (y, y + 0.06), (0.08, 0.60), "wood")
+        for z in (0.08, 0.255, 0.43):
+            p.box((-0.44, 0.44), (y, y + 0.06), (z, z + 0.16), "wood")
     # 경첩 쪽에 세워 열린 뚜껑. 자물쇠나 걸쇠는 없다.
-    p.box((-0.49, 0.49), (0.45, 0.5), (0.60, 1), "worn_wood")
+    for x in (-0.49, -0.16, 0.17):
+        p.box((x, x + 0.32), (0.45, 0.5), (0.60, 1), "worn_wood")
+    for x in (-0.33, 0.29):
+        p.box((x, x + 0.04), (0.42, 0.45), (0.56, 0.95), "wood")
+        p.beam((x - 0.02, 0.43, 0.61), (x + 0.08, 0.43, 0.61), 0.025, "rust", 6)
     for x, y, z in ((-0.22, -0.15, 0.35), (0.19, 0.12, 0.40), (0.14, -0.23, 0.30)):
         p.beam((x - 0.1, y, 0.10), (x + 0.08, y + 0.07, z), 0.12, "worn_metal", 6)
+    p.ring((-0.18, -0.12, 0.40), 0.13, 0.07, 0.06, "rust", 8, "z")
 
 
 def handcart(p):
-    p.box((-0.5, 0.22), (-0.36, 0.36), (0.28, 0.36), "wood")
+    for y in (-0.36, -0.12, 0.12):
+        p.box((-0.5, 0.22), (y, y + 0.23), (0.28, 0.36), "wood")
     for y in (-0.38, 0.34):
         p.box((-0.5, 0.22), (y, y + 0.04), (0.36, 0.62), "worn_wood")
     for x in (-0.5, 0.18):
         p.box((x, x + 0.04), (-0.34, 0.34), (0.36, 0.62), "wood")
-    p.beam((-0.18, -0.5, 0.20), (-0.18, 0.5, 0.20), 0.04, "iron")
-    for y in (-0.5, 0.40):
-        p.beam((-0.18, y, 0.20), (-0.18, y + 0.10, 0.20), 0.20, "iron", 12)
+    p.beam((-0.18, -0.52, 0.20), (-0.18, 0.52, 0.20), 0.035, "iron", 6)
+    body_vertices = set(p.bm.verts)
+    for y in (-0.46, 0.46):
+        p.ring((-0.18, y, 0.20), 0.20, 0.157, 0.07, "rubber", 10)
+        p.beam((-0.18, y - 0.055, 0.20), (-0.18, y + 0.055, 0.20), 0.048, "rust", 6)
+        for i in range(5):
+            angle = math.tau * i / 5
+            p.beam((-0.18, y, 0.20), (-0.18 + 0.166 * math.cos(angle), y,
+                                     0.20 + 0.166 * math.sin(angle)), 0.016, "worn_metal", 4)
+    wheel_vertices = set(p.bm.verts) - body_vertices
     for y in (-0.26, 0.26):
-        p.beam((0.12, y, 0.32), (0.5, y, 1), 0.035, "wood")
+        p.beam((0.12, y, 0.32), (0.5, y, 1), 0.035, "wood", 6)
+        p.beam((0.44, y, 0.89), (0.5, y, 1), 0.04, "rubber", 6)
         p.box((0.12, 0.17), (y - 0.03, y + 0.03), (0, 0.30), "iron")
+    # 2×1m 발자국 fit이 바퀴까지 가로로 늘리지 않도록 미리 역보정한다.
+    width = max(v.co.x for v in p.bm.verts) - min(v.co.x for v in p.bm.verts)
+    height = max(v.co.z for v in p.bm.verts) - min(v.co.z for v in p.bm.verts)
+    for vertex in wheel_vertices:
+        vertex.co.x = -0.18 + (vertex.co.x + 0.18) * width / (2 * height)
 
 
 def blanket_chest(p):
-    p.box((-0.5, 0.5), (-0.48, 0.48), (0.10, 0.86), "wood")
-    p.box((-0.5, 0.5), (-0.5, 0.5), (0.86, 1), "worn_wood")
+    for z in (0.10, 0.35, 0.60):
+        p.box((-0.5, 0.5), (-0.48, 0.48), (z, z + 0.245), "wood")
+    for y in (-0.5, -0.165, 0.17):
+        p.box((-0.5, 0.5), (y, y + 0.33), (0.86, 1), "worn_wood")
     for x in (-0.46, 0.36):
         for y in (-0.43, 0.33):
             p.box((x, x + 0.10), (y, y + 0.10), (0, 0.10), "wood")
     for x in (-0.28, 0.26):
-        p.box((x, x + 0.02), (-0.48, 0.48), (1, 1.002), "wood")
+        p.box((x, x + 0.04), (-0.48, 0.48), (1, 1.012), "iron")
+        p.box((x, x + 0.04), (-0.495, -0.48), (0.16, 0.97), "iron")
+    p.handle(0, -0.49, 0.68, 0.21)
 
 
 def fridge_open(p):
@@ -287,11 +436,23 @@ def fridge_open(p):
     for z in (0, 0.94):
         p.box((-0.39, 0.39), (-0.05, 0.5), (z, z + 0.06), "enamel")
     p.box((-0.39, 0.39), (0.44, 0.5), (0.06, 0.94), "worn_metal")
-    for z in (0.36, 0.65):
-        p.box((-0.39, 0.39), (0.0, 0.44), (z, z + 0.025), "enamel")
+    for z in (0.32, 0.60, 0.81):
+        p.box((-0.39, 0.39), (0.0, 0.44), (z, z + 0.018), "glass")
+        p.box((-0.39, 0.39), (-0.018, 0.01), (z - 0.008, z + 0.025), "worn_metal")
+        for x in (-0.39, 0.36):
+            p.box((x, x + 0.03), (0.0, 0.39), (z - 0.025, z), "enamel")
     # 왼쪽 경첩에서 90도 열린 문. 전체 외곽(문 포함)을 1×1m에 맞춘다.
     p.box((-0.50, -0.44), (-0.95, -0.05), (0.06, 0.96), "enamel")
     p.box((-0.54, -0.50), (-0.82, -0.76), (0.43, 0.63), "iron")
+    for y in (-0.94, -0.09):
+        p.box((-0.438, -0.425), (y, y + 0.025), (0.08, 0.94), "rubber")
+    for z in (0.08, 0.915):
+        p.box((-0.438, -0.425), (-0.915, -0.065), (z, z + 0.025), "rubber")
+    for z in (0.22, 0.52):
+        p.box((-0.425, -0.32), (-0.87, -0.15), (z, z + 0.025), "enamel")
+        p.box((-0.34, -0.32), (-0.87, -0.15), (z + 0.025, z + 0.09), "enamel")
+    for z in (0.19, 0.83):
+        p.beam((-0.45, -0.05, z), (-0.45, -0.05, z + 0.07), 0.025, "rust", 6)
 
 
 def iv_stand(p):
@@ -300,10 +461,15 @@ def iv_stand(p):
         angle = math.tau * i / 3
         x, y = 0.5 * math.cos(angle), 0.5 * math.sin(angle)
         p.beam((0, 0, 0.12), (x, y, 0.055), 0.025, "worn_metal", 6)
-        p.beam((x - 0.025, y, 0.045), (x + 0.025, y, 0.045), 0.045, "iron")
+        p.beam((x - 0.025, y, 0.045), (x + 0.025, y, 0.045), 0.045, "rubber")
+        p.beam((x - 0.029, y, 0.045), (x + 0.029, y, 0.045), 0.019, "worn_metal", 6)
+        p.box((x - 0.037, x + 0.037), (y - 0.018, y + 0.018), (0.072, 0.095), "iron")
+    p.beam((0, 0, 0.43), (0, 0, 0.49), 0.039, "iron", 8)
+    p.beam((0, 0, 0.46), (0.08, 0, 0.46), 0.012, "worn_metal", 6)
     for sign in (-1, 1):
         points = [(0, 0, 0.91), (sign * 0.13, 0, 0.98),
-                  (sign * 0.24, 0, 0.94), (sign * 0.24, 0, 0.88)]
+                  (sign * 0.24, 0, 0.94), (sign * 0.24, 0, 0.88),
+                  (sign * 0.20, 0, 0.875)]
         for a, b in zip(points, points[1:]):
             p.beam(a, b, 0.012, "worn_metal", 6)
 
@@ -311,19 +477,29 @@ def iv_stand(p):
 def tool_chest(p):
     drawer_unit(p, 3)
     p.box((-0.5, 0.5), (-0.49, 0.5), (1, 1.035), "wood")
+    for x in (-0.52, 0.50):
+        p.box((x, x + 0.02), (-0.12, 0.20), (0.70, 0.76), "worn_metal")
+    for y in (-0.49, 0.47):
+        p.box((-0.5, 0.5), (y, y + 0.03), (1.035, 1.065), "iron")
 
 
 def paper_cart(p):
     for x in (-0.46, 0.40):
         for y in (-0.42, 0.36):
             p.box((x, x + 0.06), (y, y + 0.06), (0.12, 1), "worn_metal")
-            p.beam((x, y, 0.07), (x + 0.06, y, 0.07), 0.07, "iron")
+            p.beam((x, y, 0.07), (x + 0.06, y, 0.07), 0.07, "rubber")
+            p.beam((x - 0.004, y, 0.07), (x + 0.064, y, 0.07), 0.025, "worn_metal", 6)
     for z in (0.16, 0.52, 0.88):
         p.box((-0.5, 0.5), (-0.5, 0.5), (z, z + 0.04), "wood")
+        p.box((-0.5, 0.5), (0.47, 0.50), (z + 0.04, z + 0.085), "worn_metal")
+    for y in (-0.42, 0.42):
+        p.beam((0.44, y, 0.88), (0.56, y, 1), 0.023, "worn_metal", 6)
+    p.beam((0.56, -0.42, 1), (0.56, 0.42, 1), 0.026, "rubber", 6)
     for x, y, z in ((-0.23, 0, 0.20), (0.22, 0.04, 0.56), (-0.15, -0.03, 0.92)):
         for i in range(3):
             p.box((x - 0.18 + 0.008 * i, x + 0.18), (y - 0.30, y + 0.30),
                   (z + i * 0.018, z + i * 0.018 + 0.014), "enamel")
+        p.box((x - 0.025, x + 0.025), (y - 0.301, y + 0.301), (z + 0.051, z + 0.057), "cloth")
 
 
 def oxygen_cylinder(p):
@@ -331,8 +507,15 @@ def oxygen_cylinder(p):
     p.lathe((0, 0), [(0.06, 0.28, 0.28), (0.12, 0.33, 0.33), (0.77, 0.33, 0.33),
                       (0.87, 0.22, 0.22), (0.91, 0.09, 0.09)], "worn_metal", 12)
     p.beam((0, 0, 0.91), (0, 0, 1), 0.045, "iron", 6)
-    p.box((-0.13, 0.13), (-0.04, 0.04), (0.97, 1), "iron")
-    p.beam((0.08, -0.03, 0.94), (0.08, -0.11, 0.94), 0.055, "enamel")
+    p.ring((0, 0, 1), 0.12, 0.075, 0.024, "iron", 8, "z")
+    for angle in (0, 2.1, 4.2):
+        p.beam((0, 0, 1), (0.09 * math.cos(angle), 0.09 * math.sin(angle), 1), 0.012, "worn_metal", 4)
+    p.beam((0.08, -0.03, 0.94), (0.08, -0.11, 0.94), 0.055, "iron")
+    p.beam((0.08, -0.112, 0.94), (0.08, -0.116, 0.94), 0.044, "glass")
+    p.beam((0.08, -0.118, 0.94), (0.10, -0.118, 0.963), 0.005, "enamel", 4)
+    p.beam((-0.02, 0, 0.93), (-0.14, 0, 0.93), 0.025, "rust", 6)
+    p.beam((-0.14, 0, 0.93), (-0.19, 0, 0.85), 0.021, "rubber", 6)
+    p.ring((0, 0, 0.105), 0.345, 0.30, 0.06, "iron", 10, "z")
 
 
 def pallet_stack(p):
@@ -345,6 +528,13 @@ def pallet_stack(p):
         for i in range(5):
             x = -0.5 + 0.21 * i
             p.box((x, x + 0.16), (-0.5, 0.5), (z + 0.265, z + 1 / 3), "worn_wood")
+            if layer == 2:
+                for y in (-0.40, 0.40):
+                    # 작은 철제 못 머리. 윗면 눈에 일부 가려진다.
+                    p.beam((x + 0.08, y, z + 1 / 3), (x + 0.08, y, z + 1 / 3 + 0.003),
+                           0.012, "iron", 4)
+    for x in (-0.49, 0.36):
+        p.box((x, x + 0.12), (-0.505, -0.5), (0.70, 0.89), "bark")
 
 
 # kind: (조형 함수, 최빈 발자국 m, 높이 m, 최빈 크기 원문 수, 종류 원문 수, 쓰임)
@@ -444,7 +634,7 @@ def write_books(out_dir, rows, failures):
              "이 파일과 `catalog.json`은 손으로 고치지 않는다.", "", "```",
              "blender -b --factory-startup -P tools/blender/props_common.py -- --repo .", "```", "",
              "칸 1m, 소품마다 메시·면 묶음 각 하나, LOD 없음, 삼각형 상한 600. "
-             "재질·그림·셰이더 없이 6색 팔레트의 정점색을 쓴다.", "", placement, "",
+             "재질·그림·셰이더 없이 12색 팔레트와 그 명암을 정점색 Col로 쓴다.", "", placement, "",
              "크기 순서는 Godot X×Y×Z(가로×높이×깊이)다. "
              "최빈 수는 지도 원문 rect 수이며 실제 런타임 배치 수와 구분한다.", "",
              "| 이름 | 쓰임 | 발자국 m | 높이 m | 최빈 수/원문 수 | 삼각형/상한 | 크기 X×Y×Z m | 바이트 | 놓는 법 |",

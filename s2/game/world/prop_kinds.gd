@@ -3,6 +3,8 @@ extends RefCounted
 
 const STOP_DIR := "res://models/props_stop01/"
 const COMMON_DIR := "res://models/props_common/"
+## 지도 조립 소품(종류 이름 = 파일 이름). 파일이 있을 때만 쓴다. preload하지 않는다.
+const FIELD_DIR := "res://models/props_field/"
 
 ## 첫 정차의 같은 이름 26종, 뜻이 가까운 가구, 아직 모델이 없는 종류.
 ## 빈 경로는 low 덩이 또는 기존 비표시로 돌아간다는 뜻이다.
@@ -82,6 +84,7 @@ static func candidates(kind: String) -> Array[String]:
 		paths.append(COMMON_MODELS[kind])
 	if MODELS.has(kind) and not String(MODELS[kind]).is_empty():
 		paths.append(MODELS[kind])
+	paths.append(FIELD_DIR + kind + ".glb")
 	return paths
 
 

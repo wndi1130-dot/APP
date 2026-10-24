@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 var game
 
@@ -293,7 +294,7 @@ func test_the_ally_menu_leads_to_the_body_picture() -> void:
 # ---------------------------------------------------------------- state icons
 
 func _toast_texts() -> Array:
-	return game.hud.toasts.map(func(t): return String(t["l"].text))
+	return game.hud.toasts.map(func(t): return String(t["l"].text).replace(UiFonts.WORD_JOINER, ""))
 
 
 func test_state_icons_show_the_most_urgent_first_as_pictures() -> void:
