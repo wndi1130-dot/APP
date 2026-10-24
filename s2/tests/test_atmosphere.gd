@@ -393,3 +393,57 @@ func test_houses_keep_a_little_paint() -> void:
 			painted += 1
 	assert_gt(painted, 10, "most houses kept some paint on their doors")
 	assert_lt(painted, 16, "some never had any")
+
+
+# ---------------------------------------------------------------- CC0 photos (결정 424)
+
+func test_the_photo_skies_and_the_ground_grain_are_in_the_build() -> void:
+	for key in Atmosphere.SKY_PHOTOS:
+		var tex := Atmosphere.sky_texture(key)
+		assert_not_null(tex, key)
+		if tex != null:
+			# Phone budget (결정 424): 1024 wide at most.
+			assert_eq(tex.get_size(), Vector2(1024, 256), key)
+	var ground: Texture2D = load(Atmosphere.GROUND_DETAIL)
+	assert_not_null(ground)
+	assert_eq(ground.get_size(), Vector2(512, 512))
+	for name in FxState.TEXTURE_GLOBALS:
+		assert_true(ProjectSettings.has_setting("shader_globals/" + name), name)
+		assert_eq(String(ProjectSettings.get_setting("shader_globals/" + name)["type"]), "sampler2D", name)
+
+
+func test_each_hour_and_weather_takes_its_photo_sky() -> void:
+	var t := Atmosphere.sun_times(1.0)
+	var cases := [
+		[t.x + 0.2, ["clear"], "dawn"], [12.0, ["clear"], "day"], [t.y - 0.4, ["clear"], "dusk"], [t.y + 2.0, ["clear"], "night"],
+		[12.0, ["overcast"], "overcast"], [12.0, ["fog"], "mist"], [12.0, ["snow"], "snow"], [12.0, ["blizzard"], "snow"],
+	]
+	for c in cases:
+		var l := Atmosphere.look(float(c[0]), c[1], "K1", 1.0)
+		assert_eq(Atmosphere.sky_main(l), String(c[2]), "%s %s" % [c[0], c[1]])
+		var total := 0.0
+		for row in l["skies"]:
+			assert_true(Atmosphere.SKY_PHOTOS.has(String(row[0])), String(row[0]))
+			total += float(row[1])
+		assert_almost_eq(total, 1.0, 0.0001)
+	# Warm rain is a grey sky too.
+	assert_eq(Atmosphere.sky_main(Atmosphere.look(12.0, ["snow"], "K1", 0.0)), "overcast")
+
+
+func test_the_train_and_the_field_show_the_photo_sky() -> void:
+	var f = SliceFlow.new()
+	f.opts = {"skip_field": true, "seed": 3, "look": {"hour": 12.0, "kinds": ["overcast"]}}
+	add_child_autofree(f)
+	var m: ShaderMaterial = f.outside.material
+	assert_eq(float(m.get_shader_parameter("photo_on")), 1.0)
+	var w: Vector3 = m.get_shader_parameter("sky_w")
+	assert_almost_eq(w.x + w.y + w.z, 1.0, 0.0001)
+	var game = _stop({"weather": ["fog"]})
+	assert_eq(game.sky_photo, "mist", "the puddles give back the foggy sky")
+
+
+func test_the_ground_reads_its_photo_grain_once() -> void:
+	# Phone budget: one fetch for all four grains, on top of the sight mask.
+	var code := FileAccess.get_file_as_string("res://game/world/world_vis.gdshader")
+	assert_eq(code.count("texture(fx_ground"), 1)
+	assert_false(code.contains("hint_screen_texture"))

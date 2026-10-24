@@ -244,6 +244,65 @@ const WEATHER: Dictionary = {
 	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.1, "veil": 0.86, "veil_color": Color(0.40, 0.43, 0.46), "haze": 0.55, "fall": 0.7},
 }
 
+## Photo skies (CC0, Poly Haven, 결정 424; made by tools/atmo_textures.gd from
+## originals outside the repository): the cloud shapes behind the train and in
+## the field's puddles. The hour's colour still comes from BANDS: a photo only
+## lends its clouds, and a little of its own colour (hue). source: the Poly
+## Haven name. Kloppenheim is a village near Frankfurt, the right latitude.
+const SKY_PHOTOS: Dictionary = {
+	"dawn": {"source": "kloppenheim_06_puresky", "hue": 0.45},
+	"day": {"source": "kloppenheim_05_puresky", "hue": 0.25},
+	"dusk": {"source": "belfast_sunset_puresky", "hue": 0.45},
+	"night": {"source": "kloppenheim_02_puresky", "hue": 0.2},
+	"overcast": {"source": "overcast_soil_puresky", "hue": 0.2},
+	"snow": {"source": "snow_field_2_puresky", "hue": 0.2},
+	"mist": {"source": "kloofendal_misty_morning_puresky", "hue": 0.2},
+}
+## Which photo a closed sky takes, by what is drawn (the heaviest first).
+const WEATHER_SKY: Array = [["fog", "mist"], ["blizzard", "snow"], ["snow", "snow"], ["sleet", "overcast"], ["rain", "overcast"], ["overcast", "overcast"]]
+## The field's ground detail (R snow, G autumn leaf, B wet soil, A grit).
+const GROUND_DETAIL := "res://fx/textures/ground_detail.png"
+static var _sky_cache: Dictionary = {}
+
+
+static func sky_path(key: String) -> String:
+	return "res://fx/textures/sky/sky_%s.jpg" % key
+
+
+## The photo skies a look mixes, as [[key, weight], ...] adding up to 1: the
+## two strongest hour bands, and the closed sky's photo as far as it is veiled.
+static func sky_photos(w: Dictionary, drawn: Array, veil: float) -> Array:
+	var bands: Array = ["dawn", "day", "dusk", "night"]
+	bands.sort_custom(func(a, b): return float(w[a]) > float(w[b]))
+	var a := float(w[bands[0]])
+	var b := float(w[bands[1]])
+	var open := 1.0 - clampf(veil, 0.0, 1.0)
+	var out: Array = [[bands[0], open * a / maxf(a + b, 0.0001)], [bands[1], open * b / maxf(a + b, 0.0001)]]
+	var closed := "overcast"
+	for row in WEATHER_SKY:
+		if drawn.has(row[0]):
+			closed = row[1]
+			break
+	out.append([closed, 1.0 - open])
+	return out
+
+
+## The photo with the most weight (what the field's puddles give back).
+static func sky_main(l: Dictionary) -> String:
+	var best: Array = ["day", -1.0]
+	for row in l.get("skies", []):
+		if float(row[1]) > float(best[1]):
+			best = row
+	return String(best[0])
+
+
+## A photo sky as a texture, loaded once (null if it is not in this build).
+static func sky_texture(key: String) -> Texture2D:
+	if not _sky_cache.has(key):
+		var path := sky_path(key)
+		_sky_cache[key] = load(path) if ResourceLoader.exists(path) else null
+	return _sky_cache[key]
+
 ## What the rules' weather falls as at this picture temperature (the user's
 ## 10-24 answer: what falls goes by the temperature): snow, sleet and rain are
 ## rain when it is warm, sleet around zero, snow in hard cold; a blizzard is
@@ -402,6 +461,7 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 		"lamp": FxState.LAMP,
 	}
 	out["grade"] = grade(out)
+	out["skies"] = sky_photos(w, drawn, veil)
 	out["fog_color"] = horizon.lerp(veil_color * lum, 0.5)
 	# Past the map's edge: more snowy land in the same light, darker (not a void).
 	var land := Color(ambient) * float(ambient_energy) * 1.7 + Color(sun) * float(sun_energy) * 0.45
