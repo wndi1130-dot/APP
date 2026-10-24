@@ -68,6 +68,9 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 		"seg": int(train.get("seg", 1)), "region": String(view.get("region", "region_01")),
 		"country": String(view.get("country", "country_a")), "season": String(view.get("season", "deep_winter")),
 		"outside": view.get("outside", {}), "accident": bool(view.get("accident", false)),
+		# Crowding steps (train_look.gd crowd_level): more sacks, crates and bedding on the floor.
+		"crowd1": Look.crowd_level(float(sit[2])) >= 1, "crowd2": Look.crowd_level(float(sit[2])) >= 2,
+		"crowd3": Look.crowd_level(float(sit[2])) >= 3,
 	}
 	return c
 
