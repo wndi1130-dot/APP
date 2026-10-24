@@ -102,9 +102,9 @@ const OWN_POSES: Array = [
 # so the dead's numbers above stay): name, source motion ("" for one written
 # here), frames, loops, layer ("" for none), seconds (a source motion's own
 # length is what is baked). Those written here come first, so a bake with no
-# motion set keeps their numbers; the field finds each by its name. Thirty-two at most:
-# the shader's clip tables have thirty-two places (dead_vat.gdshader); numbers
-# 16 and up are written with VatBaker.pack_motion.
+# motion set keeps their numbers; the field finds each by its name. Sixty-four at
+# most: the shader's clip tables have VatBaker.TABLE_SIZE places
+# (dead_vat.gdshader); numbers 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
 	["p_walk", "", 32, true, "p_walk", 0.78],
 	["p_run", "", 24, true, "p_run", 0.58],
@@ -138,6 +138,25 @@ const PERSON_CLIPS: Array = [
 	["p_swing_back", "", 24, false, "p_swing_back", 0.6],
 	# Slumping on its face, a second way to go down to own_fall_front's (decision 412).
 	["p_fall_slump", "", 32, false, "own_fall_slump", 1.0],
+	# Decision 422, first set: a high shelf, limping (each leg), binding a wound
+	# by where it is, bitten from in front and from behind, cold, a hand to
+	# where it hurts, spent.
+	["p_search_high", "", 24, true, "p_search_high", 2.0],
+	["p_limp_light_l", "", 32, true, "p_limp_light_l", 1.0],
+	["p_limp_light_r", "", 32, true, "p_limp_light_r", 1.0],
+	["p_limp_heavy_l", "", 32, true, "p_limp_heavy_l", 1.4],
+	["p_limp_heavy_r", "", 32, true, "p_limp_heavy_r", 1.4],
+	["p_treat_arm", "", 24, true, "p_treat_arm", 2.0],
+	["p_treat_leg", "", 24, true, "p_treat_leg", 2.0],
+	["p_treat_head", "", 24, true, "p_treat_head", 2.0],
+	["p_bitten_front", "", 24, false, "p_bitten_front", 0.6],
+	["p_bitten_back", "", 24, false, "p_bitten_back", 0.6],
+	["p_shiver", "", 24, true, "p_shiver", 1.0],
+	["p_pain_head", "", 24, false, "p_pain_head", 2.0],
+	["p_pain_torso", "", 24, false, "p_pain_torso", 2.0],
+	["p_pain_arm", "", 24, false, "p_pain_arm", 2.0],
+	["p_pain_leg", "", 24, false, "p_pain_leg", 2.0],
+	["p_tired_stretch", "", 24, false, "p_tired_stretch", 2.5],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
@@ -148,7 +167,7 @@ const PERSON_CLIPS: Array = [
 	["p_chop_side", "TreeChopping_Loop", 24, false, "", 0.967],
 ]
 # Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side"]
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_bitten_front", "p_bitten_back", "p_shiver"]
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -1307,6 +1326,322 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [-0.2, -0.6, 0.2]],
 		],
 		"sink": ["keys", [[0, 0.0], [0.4, 0.04], [1, 0.0]]],
+	},
+	# Searching a high shelf: up on the toes, both arms up in front, the hands
+	# turning things over by turns, the head back to see.
+	"p_search_high": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, 0.0]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, 0.0]],
+			["turn", "foot.L", "x", 0.45],
+			["turn", "foot.R", "x", 0.45],
+			["turn", "spine", "x", -0.04],
+			["turn", "chest", "y", [0.0, 0.06, 0.0]],
+			["turn", "neck", "x", -0.45],
+			["turn", "head", "y", [0.0, 0.12, 1.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.12, 0.9, 0.45]],
+			["aim", "forearm.L", "hand.L", [-0.05, [0.55, 0.25, 0.0, 2.0], [0.8, 0.15, 0.6, 2.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.12, 0.9, 0.45]],
+			["aim", "forearm.R", "hand.R", [0.05, [0.55, 0.25, 3.142, 2.0], [0.8, 0.15, 3.742, 2.0]]],
+		],
+		"sink": -0.06,
+	},
+	# Limping, the left leg hurt (decision 422 M1): its knee hardly folds, the
+	# body dips and leans off it each time it takes the weight. Both feet go
+	# back alike (the same swing), so neither slides; the bake measures the round.
+	"p_limp_light_l": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.035, 0.0]],
+			["turn", "hips", "y", [0.0, -0.08, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.36, 0.0], [0.0, -0.036, 0.0, 3.0], [0.0, 0.013, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.049, -1.0, [[-0.16, 0.342, 0.0], [0.0, -0.036, 0.0, 3.0], [0.0, 0.013, 0.0, 5.0], [0.0, -0.12, -1.571], [0.0, -0.05, -1.571, 2.0]]]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.36, 3.142], [0.0, -0.036, 9.425, 3.0], [0.0, 0.013, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.049, -1.0, [[-0.26, 0.342, 3.142], [0.0, -0.036, 9.425, 3.0], [0.0, 0.013, 15.708, 5.0], [0.0, -0.3, 1.571], [0.0, -0.12, 4.712, 2.0]]]],
+			["turn", "spine", "x", [0.08, 0.02, 0.0, 2.0]],
+			["turn", "spine", "z", [0.02, 0.07, 1.571]],
+			["turn", "chest", "y", [0.0, 0.1, 0.0]],
+			["turn", "neck", "x", [0.06, 0.06, 1.571]],
+			["turn", "head", "y", [0.0, -0.05, 0.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.18, -1.0, [0.04, -0.2, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.25, -0.2, 0.0]]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.04, 0.3, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.08, -1.0, [0.3, 0.28, 0.0]]],
+		],
+		"sink": [[0.03, 0.02, -1.571, 2.0], [0.0, 0.03, 1.571]],
+	},
+	# The same, the right leg hurt.
+	"p_limp_light_r": {
+		"steps": [
+			["turn", "hips", "z", [0.0, -0.035, 0.0]],
+			["turn", "hips", "y", [0.0, 0.08, 0.0]],
+			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.36, 0.0], [0.0, -0.036, 0.0, 3.0], [0.0, 0.013, 0.0, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.049, -1.0, [[-0.16, 0.342, 0.0], [0.0, -0.036, 0.0, 3.0], [0.0, 0.013, 0.0, 5.0], [0.0, -0.12, -1.571], [0.0, -0.05, -1.571, 2.0]]]],
+			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.36, 3.142], [0.0, -0.036, 9.425, 3.0], [0.0, 0.013, 15.708, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.049, -1.0, [[-0.26, 0.342, 3.142], [0.0, -0.036, 9.425, 3.0], [0.0, 0.013, 15.708, 5.0], [0.0, -0.3, 1.571], [0.0, -0.12, 4.712, 2.0]]]],
+			["turn", "spine", "x", [0.08, 0.02, 0.0, 2.0]],
+			["turn", "spine", "z", [-0.02, -0.07, 1.571]],
+			["turn", "chest", "y", [0.0, -0.1, 0.0]],
+			["turn", "neck", "x", [0.06, 0.06, 1.571]],
+			["turn", "head", "y", [0.0, 0.05, 0.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.18, -1.0, [0.04, -0.2, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.08, -1.0, [0.25, -0.2, 0.0]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.04, 0.3, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.3, 0.28, 0.0]]],
+		],
+		"sink": [[0.03, 0.02, -1.571, 2.0], [0.0, 0.03, 1.571]],
+	},
+	# Limping hard on a broken or deep-cut left leg: it stays straight, turned
+	# out and dragged on its toe, swung round from a hitched hip; the body
+	# lurches over the right leg, the left hand pressed on the thigh.
+	"p_limp_heavy_l": {
+		"steps": [
+			["turn", "hips", "z", [0.0, 0.1, -1.571]],
+			["turn", "hips", "y", [0.0, -0.06, 0.0]],
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, [[0.02, 0.28, 0.0], [0.0, -0.028, 0.0, 3.0], [0.0, 0.01, 0.0, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.056, -1.0, [[-0.01, 0.266, 0.0], [0.0, -0.028, 0.0, 3.0], [0.0, 0.01, 0.0, 5.0], [0.0, -0.02, -1.571]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, [[0.02, 0.28, 3.142], [0.0, -0.028, 9.425, 3.0], [0.0, 0.01, 15.708, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.056, -1.0, [[-0.26, 0.266, 3.142], [0.0, -0.028, 9.425, 3.0], [0.0, 0.01, 15.708, 5.0], [0.0, -0.32, 1.571], [0.0, -0.13, 4.712, 2.0]]]],
+			["turn", "foot.L", "y", 0.35],
+			["turn", "foot.L", "x", 0.25],
+			["turn", "spine", "x", [0.18, 0.04, 0.0, 2.0]],
+			["turn", "spine", "z", [0.07, 0.1, 1.571]],
+			["turn", "chest", "y", [0.0, 0.12, 0.0]],
+			["turn", "neck", "x", [0.15, 0.08, 1.571]],
+			["aim", "upper_arm.L", "forearm.L", [0.22, -1.0, 0.28]],
+			["aim", "forearm.L", "hand.L", [-0.12, -1.0, 0.4]],
+			["aim", "upper_arm.R", "forearm.R", [-0.35, -1.0, [0.05, 0.3, 0.0]]],
+			["aim", "forearm.R", "hand.R", [-0.15, -1.0, [0.3, 0.3, 0.0]]],
+		],
+		"sink": [[0.05, 0.02, -1.571, 2.0], [0.0, 0.05, 1.571]],
+	},
+	# The same, the right leg hurt.
+	"p_limp_heavy_r": {
+		"steps": [
+			["turn", "hips", "z", [0.0, -0.1, -1.571]],
+			["turn", "hips", "y", [0.0, 0.06, 0.0]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, [[0.02, 0.28, 0.0], [0.0, -0.028, 0.0, 3.0], [0.0, 0.01, 0.0, 5.0]]]],
+			["aim", "shin.R", "foot.R", [-0.056, -1.0, [[-0.01, 0.266, 0.0], [0.0, -0.028, 0.0, 3.0], [0.0, 0.01, 0.0, 5.0], [0.0, -0.02, -1.571]]]],
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, [[0.02, 0.28, 3.142], [0.0, -0.028, 9.425, 3.0], [0.0, 0.01, 15.708, 5.0]]]],
+			["aim", "shin.L", "foot.L", [0.056, -1.0, [[-0.26, 0.266, 3.142], [0.0, -0.028, 9.425, 3.0], [0.0, 0.01, 15.708, 5.0], [0.0, -0.32, 1.571], [0.0, -0.13, 4.712, 2.0]]]],
+			["turn", "foot.R", "y", -0.35],
+			["turn", "foot.R", "x", 0.25],
+			["turn", "spine", "x", [0.18, 0.04, 0.0, 2.0]],
+			["turn", "spine", "z", [-0.07, -0.1, 1.571]],
+			["turn", "chest", "y", [0.0, -0.12, 0.0]],
+			["turn", "neck", "x", [0.15, 0.08, 1.571]],
+			["aim", "upper_arm.R", "forearm.R", [-0.22, -1.0, 0.28]],
+			["aim", "forearm.R", "hand.R", [0.12, -1.0, 0.4]],
+			["aim", "upper_arm.L", "forearm.L", [0.35, -1.0, [0.05, 0.3, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.15, -1.0, [0.3, 0.3, 0.0]]],
+		],
+		"sink": [[0.05, 0.02, -1.571, 2.0], [0.0, 0.05, 1.571]],
+	},
+	# Binding the left forearm standing: it held across in front, the right
+	# hand going round and round it, head down over it.
+	"p_treat_arm": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", 0.15],
+			["turn", "chest", "y", -0.1],
+			["turn", "neck", "x", 0.45],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.75, 0.45]],
+			["aim", "forearm.L", "hand.L", [-0.7, 0.1, 0.7]],
+			["aim", "upper_arm.R", "forearm.R", [-0.2, -0.7, [0.5, 0.08, 0.0]]],
+			["aim", "forearm.R", "hand.R", [[0.55, 0.25, 0.0], [0.15, 0.35, 1.571], 0.7]],
+		],
+		"sink": 0.0,
+	},
+	# Binding the left shin, down on the right knee: bent over the raised left
+	# knee, both hands at the shin, the right one going round it.
+	"p_treat_leg": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -0.25, 1.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.08]],
+			["aim", "thigh.R", "shin.R", [-0.12, -1.0, 0.1]],
+			["aim", "shin.R", "foot.R", [-0.06, -0.12, -1.0]],
+			["turn", "foot.R", "x", 0.9],
+			["turn", "spine", "x", 0.7],
+			["turn", "chest", "x", 0.15],
+			["turn", "neck", "x", 0.25],
+			["aim", "upper_arm.L", "forearm.L", [0.18, -1.0, 0.35]],
+			["aim", "forearm.L", "hand.L", [-0.15, -0.8, 0.6]],
+			["aim", "upper_arm.R", "forearm.R", [-0.05, -1.0, [0.4, 0.1, 0.0]]],
+			["aim", "forearm.R", "hand.R", [[0.5, 0.3, 0.0], [-0.6, 0.3, 1.571], 0.6]],
+		],
+		"sink": 0.36,
+	},
+	# Binding the head or the body (both read from here): the left hand holds a
+	# pad to the side of the head, the right takes the strip round over the top.
+	"p_treat_head": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", 0.05],
+			["turn", "neck", "x", 0.15],
+			["turn", "head", "z", -0.12],
+			["aim", "upper_arm.L", "forearm.L", [0.5, 0.0, 0.35]],
+			["aim", "forearm.L", "hand.L", [-0.4, 0.8, -0.2]],
+			["aim", "upper_arm.R", "forearm.R", [-0.5, [0.05, 0.15, 0.0], [0.35, 0.2, 1.571]]],
+			["aim", "forearm.R", "hand.R", [[0.45, 0.3, 1.571], 0.75, [-0.25, 0.35, 0.0]]],
+		],
+		"sink": 0.0,
+	},
+	# Bitten by one in front: thrown back from it, both forearms up to fend it
+	# off, the head turned away, the right foot a step back; then braced.
+	"p_bitten_front": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, 0.08], [1.0, 0.036]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, -0.3], [1.0, -0.135]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, -0.4], [1.0, -0.191]]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.05], [0.25, -0.3], [1.0, -0.107]]]],
+			["turn", "chest", "y", ["keys", [[0.0, 0.0], [0.25, -0.2], [1.0, -0.09]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, -0.45], [1.0, -0.203]]]],
+			["turn", "head", "y", ["keys", [[0.0, 0.0], [0.25, 0.4], [1.0, 0.18]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.25, 0.3], [1.0, 0.212]]], ["keys", [[0.0, -1.0], [0.25, -0.2], [1.0, -0.64]]], ["keys", [[0.0, 0.1], [0.25, 0.9], [1.0, 0.46]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.25, -0.2], [1.0, -0.046]]], ["keys", [[0.0, -1.0], [0.25, 0.55], [1.0, -0.302]]], ["keys", [[0.0, 0.2], [0.25, 0.8], [1.0, 0.47]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.25, -0.3], [1.0, -0.212]]], ["keys", [[0.0, -1.0], [0.25, -0.25], [1.0, -0.662]]], ["keys", [[0.0, 0.1], [0.25, 0.9], [1.0, 0.46]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.25, 0.2], [1.0, 0.046]]], ["keys", [[0.0, -1.0], [0.25, 0.5], [1.0, -0.325]]], ["keys", [[0.0, 0.2], [0.25, 0.8], [1.0, 0.47]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.25, 0.06], [1.0, 0.027]]],
+	},
+	# Bitten from behind, on the shoulder: jerked forward and hunched, the left
+	# foot a step forward, the head twisting back to it, the right hand
+	# clawing back over the shoulder; then braced.
+	"p_bitten_back": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, 0.35], [1.0, 0.158]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, 0.0], [1.0, -0.011]]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, -0.08], [1.0, -0.036]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, -0.15], [1.0, -0.079]]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.05], [0.25, 0.4], [1.0, 0.208]]]],
+			["turn", "chest", "y", ["keys", [[0.0, 0.0], [0.25, -0.3], [1.0, -0.135]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, 0.1], [1.0, 0.045]]]],
+			["turn", "head", "y", ["keys", [[0.0, 0.0], [0.25, -0.6], [1.0, -0.27]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.25, 0.4], [1.0, 0.257]]], ["keys", [[0.0, -1.0], [0.25, -0.5], [1.0, -0.775]]], ["keys", [[0.0, 0.1], [0.25, 0.6], [1.0, 0.325]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.25, 0.2], [1.0, 0.134]]], ["keys", [[0.0, -1.0], [0.25, -0.2], [1.0, -0.64]]], ["keys", [[0.0, 0.2], [0.25, 0.9], [1.0, 0.515]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.25, -0.45], [1.0, -0.28]]], ["keys", [[0.0, -1.0], [0.25, 0.55], [1.0, -0.302]]], ["keys", [[0.0, 0.1], [0.25, -0.15], [1.0, -0.012]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.25, 0.35], [1.0, 0.114]]], ["keys", [[0.0, -1.0], [0.25, 0.55], [1.0, -0.302]]], ["keys", [[0.0, 0.2], [0.25, -0.6], [1.0, -0.16]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.25, 0.07], [1.0, 0.032]]],
+	},
+	# Cold (decision 422 M13): hunched, knees in, the arms wrapped round the
+	# chest, shaking six times a second, breathing.
+	"p_shiver": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.04, -1.0, 0.06]],
+			["aim", "shin.L", "foot.L", [0.07, -1.0, -0.04]],
+			["aim", "thigh.R", "shin.R", [-0.04, -1.0, 0.06]],
+			["aim", "shin.R", "foot.R", [-0.07, -1.0, -0.04]],
+			["turn", "spine", "x", [0.2, 0.015, 0.0, 1.0]],
+			["turn", "spine", "z", [0.0, 0.015, 1.0, 6.0]],
+			["turn", "chest", "x", 0.15],
+			["turn", "chest", "z", [0.0, 0.025, 0.0, 6.0]],
+			["turn", "neck", "x", 0.35],
+			["turn", "head", "z", [0.0, 0.03, 0.5, 6.0]],
+			["aim", "upper_arm.L", "forearm.L", [0.15, -0.7, 0.6]],
+			["aim", "forearm.L", "hand.L", [-0.9, 0.3, 0.2]],
+			["aim", "upper_arm.R", "forearm.R", [-0.15, -0.7, 0.6]],
+			["aim", "forearm.R", "hand.R", [0.9, 0.35, 0.15]],
+		],
+		"sink": 0.03,
+	},
+	# A hand to where it hurts (decision 422 M13), now and then while standing:
+	# reached for, held, let go. The head: the right hand to the temple, the
+	# head bowed and tipped to it.
+	"p_pain_head": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.25, 0.12], [0.75, 0.12], [1.0, 0.03]]]],
+			["turn", "chest", "y", ["keys", [[0.0, 0.0], [0.25, -0.1], [0.75, -0.1], [1.0, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, 0.25], [0.75, 0.25], [1.0, 0.0]]]],
+			["turn", "head", "z", ["keys", [[0.0, 0.0], [0.25, 0.15], [0.75, 0.15], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, 0.02]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, 0.1]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.12, -0.3], [0.25, -0.45], [0.75, -0.45], [0.88, -0.3], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.12, -0.3], [0.25, 0.15], [0.75, 0.15], [0.88, -0.3], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.12, 0.8], [0.25, 0.55], [0.75, 0.55], [0.88, 0.8], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.12, 0.0], [0.25, 0.4], [0.75, 0.4], [0.88, 0.0], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.12, 0.0], [0.25, 0.8], [0.75, 0.8], [0.88, 0.0], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.12, 1.0], [0.25, -0.35], [0.75, -0.35], [0.88, 1.0], [1.0, 0.1]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.25, 0.0], [0.75, 0.0], [1.0, 0.0]]],
+	},
+	# The body: both hands pressed to the belly, bent over them, knees giving a little.
+	"p_pain_torso": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, 0.12], [0.75, 0.12], [1.0, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, -0.08], [0.75, -0.08], [1.0, -0.02]]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, 0.12], [0.75, 0.12], [1.0, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, -0.08], [0.75, -0.08], [1.0, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.25, 0.35], [0.75, 0.35], [1.0, 0.03]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.0], [0.25, 0.1], [0.75, 0.1], [1.0, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, 0.3], [0.75, 0.3], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.25, 0.12], [0.75, 0.12], [1.0, 0.14]]], ["keys", [[0.0, -1.0], [0.25, -0.85], [0.75, -0.85], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.25, 0.45], [0.75, 0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.25, -0.8], [0.75, -0.8], [1.0, 0.08]]], ["keys", [[0.0, -1.0], [0.25, 0.1], [0.75, 0.1], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.25, 0.5], [0.75, 0.5], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.25, -0.12], [0.75, -0.12], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.25, -0.85], [0.75, -0.85], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.25, 0.45], [0.75, 0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.25, 0.8], [0.75, 0.8], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.25, 0.15], [0.75, 0.15], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.25, 0.5], [0.75, 0.5], [1.0, 0.1]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.25, 0.04], [0.75, 0.04], [1.0, 0.0]]],
+	},
+	# The left arm: the right hand gripping it above the elbow, the arm hanging stiff, the head turned to it.
+	"p_pain_arm": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "chest", "y", ["keys", [[0.0, 0.0], [0.25, 0.15], [0.75, 0.15], [1.0, 0.0]]]],
+			["turn", "chest", "z", ["keys", [[0.0, 0.0], [0.25, -0.06], [0.75, -0.06], [1.0, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, 0.3], [0.75, 0.3], [1.0, 0.0]]]],
+			["turn", "head", "y", ["keys", [[0.0, 0.0], [0.25, 0.4], [0.75, 0.4], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.25, 0.25], [0.75, 0.25], [1.0, 0.14]]], -1.0, ["keys", [[0.0, 0.02], [0.25, 0.12], [0.75, 0.12], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.25, 0.12], [0.75, 0.12], [1.0, 0.08]]], -1.0, ["keys", [[0.0, 0.1], [0.25, 0.18], [0.75, 0.18], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.12, -0.1], [0.25, 0.05], [0.75, 0.05], [0.88, -0.1], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.12, -0.6], [0.25, -0.55], [0.75, -0.55], [0.88, -0.6], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.12, 0.9], [0.25, 0.85], [0.75, 0.85], [0.88, 0.9], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.12, 0.4], [0.25, 0.95], [0.75, 0.95], [0.88, 0.4], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.12, -0.2], [0.25, 0.3], [0.75, 0.3], [0.88, -0.2], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.12, 1.0], [0.25, 0.05], [0.75, 0.05], [0.88, 1.0], [1.0, 0.1]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.25, 0.0], [0.75, 0.0], [1.0, 0.0]]],
+	},
+	# The left leg: the weight off it, bent down with the left hand on the knee.
+	"p_pain_leg": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [["keys", [[0.0, 0.08], [0.25, 0.1], [0.75, 0.1], [1.0, 0.08]]], -1.0, ["keys", [[0.0, 0.0], [0.25, 0.3], [0.75, 0.3], [1.0, 0.0]]]]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, -0.12], [0.75, -0.12], [1.0, -0.02]]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0.0, 0.0], [0.25, 0.04], [0.75, 0.04], [1.0, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0.0, -0.02], [0.25, -0.04], [0.75, -0.04], [1.0, -0.02]]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.25, 0.45], [0.75, 0.45], [1.0, 0.03]]]],
+			["turn", "spine", "z", ["keys", [[0.0, 0.0], [0.25, 0.08], [0.75, 0.08], [1.0, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, 0.2], [0.75, 0.2], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.25, 0.12], [0.75, 0.12], [1.0, 0.14]]], -1.0, ["keys", [[0.0, 0.02], [0.25, 0.3], [0.75, 0.3], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.25, 0.0], [0.75, 0.0], [1.0, 0.08]]], -1.0, ["keys", [[0.0, 0.1], [0.25, 0.3], [0.75, 0.3], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.25, -0.25], [0.75, -0.25], [1.0, -0.14]]], -1.0, ["keys", [[0.0, 0.02], [0.25, 0.1], [0.75, 0.1], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.25, -0.1], [0.75, -0.1], [1.0, -0.08]]], -1.0, ["keys", [[0.0, 0.1], [0.25, 0.2], [0.75, 0.2], [1.0, 0.1]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0], [0.25, 0.06], [0.75, 0.06], [1.0, 0.0]]],
+	},
+	# Spent (decision 422 M13): both hands to the small of the back, the back
+	# arched and the head back, held a moment, and straight again.
+	"p_tired_stretch": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.08, -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [-0.06, -1.0, -0.02]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.03], [0.25, -0.094], [0.45, -0.28], [0.7, -0.28], [1.0, 0.03]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.0], [0.25, -0.06], [0.45, -0.15], [0.7, -0.15], [1.0, 0.0]]]],
+			["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.25, -0.14], [0.45, -0.35], [0.7, -0.35], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.2, 0.35], [0.8, 0.35], [1.0, 0.14]]], ["keys", [[0.0, -1.0], [0.2, -0.8], [0.8, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.2, -0.45], [0.8, -0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, 0.08], [0.1, 0.4], [0.2, -0.6], [0.8, -0.6], [0.9, 0.4], [1.0, 0.08]]], ["keys", [[0.0, -1.0], [0.1, -0.6], [0.2, 0.1], [0.8, 0.1], [0.9, -0.6], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.1, -0.3], [0.2, -0.6], [0.8, -0.6], [0.9, -0.3], [1.0, 0.1]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.14], [0.2, -0.35], [0.8, -0.35], [1.0, -0.14]]], ["keys", [[0.0, -1.0], [0.2, -0.8], [0.8, -0.8], [1.0, -1.0]]], ["keys", [[0.0, 0.02], [0.2, -0.45], [0.8, -0.45], [1.0, 0.02]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, -0.08], [0.1, -0.4], [0.2, 0.6], [0.8, 0.6], [0.9, -0.4], [1.0, -0.08]]], ["keys", [[0.0, -1.0], [0.1, -0.6], [0.2, 0.1], [0.8, 0.1], [0.9, -0.6], [1.0, -1.0]]], ["keys", [[0.0, 0.1], [0.1, -0.3], [0.2, -0.6], [0.8, -0.6], [0.9, -0.3], [1.0, 0.1]]]]],
+		],
+		"sink": 0.0,
 	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
