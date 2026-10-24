@@ -56,10 +56,8 @@ function sidesEffs(g: Game, id: TechId, v?: Variant): Eff[] {
   return (Object.entries(relDelta(g, id, v)) as [Comm, number][]).map(([c, n]) => rel(c, n));
 }
 
-const GIVE_LABEL: Record<string, string> = { front: '앞칸을 내준다', store: '창고칸을 내준다', cold: '냉동칸을 내준다', tail3: '꼬리칸 하나를' };
-const GIVE_EXTRA: Record<string, string> = {
-  front: '앞칸 온기 −15, 과밀 +20', store: '자재 상한 0', cold: '안치한 시신을 내놓는다', tail3: '꼬리칸 과밀 +15',
-};
+const GIVE_LABEL: Record<string, string> = { store: '창고칸을 내준다' };
+const GIVE_EXTRA: Record<string, string> = { store: '자재 상한 0' };
 
 /** 내줄 칸의 대가와 온실 산출(4.4). 산출은 그 칸이 지금 선 구역으로 센다. */
 function giveExtra(g: Game, car: string): string[] {
@@ -185,16 +183,11 @@ export function domView(g: Game, card: Card): CardView | null {
     }
     case 'dom:give': {
       const cands = giveCandidates(g);
-      const say: Record<string, string> = {
-        front: '앞칸은 충분히 따뜻하게 지냈다. 이제 내놓아라!', store: '창고를 비운다. 쇳조각보다 먹을 것이다!',
-        cold: '냉동칸을 비운다. 산 사람이 먼저다.', tail3: '꼬리칸 하나를 비운다. 자라면 그들이 먼저 먹는다.',
-      };
-      const effs: Record<string, Eff[]> = {
-        front: [rel('front', -25), { t: 'grudge', c: 'front' }], store: [], cold: [], tail3: [rel('tail', -10)],
-      };
+      const say: Record<string, string> = { store: '창고를 비운다. 쇳조각보다 먹을 것이다!' };
+      const effs: Record<string, Eff[]> = { store: [] };
       return {
         title: '칸을 내줄 곳', required: false,
-        body: '온실 유리 지붕을 얹을 칸 하나가 필요하다. 그 칸에 살던 사람이나 물건은 밀려난다.',
+        body: '온실 유리 지붕을 얹을 칸 하나가 필요하다. 그 칸의 물건은 밀려난다.',
         choices: [
           ...cands.map(car => ({
             label: GIVE_LABEL[car] ?? `${CAR_NAME[car]} 내준다`, say: say[car], effs: effs[car] ?? [], special: `dom:give:${car}`,

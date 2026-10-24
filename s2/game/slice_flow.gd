@@ -338,6 +338,8 @@ func _show_stop_cinema() -> void:
 	c.name = "StopCinema"
 	c.seen = bool(opts.get("cinema_seen", StopCinema.was_seen()))
 	c.remember = not opts.has("cinema_seen")
+	# The weather the field will open with, worn by the scene over it.
+	c.stop_opts = _field_opts()
 	if loader.has_data():
 		c.data = loader.data
 	else:
@@ -930,6 +932,15 @@ func _field_opts() -> Dictionary:
 	# building it from the pick gives the same).
 	o["act"] = "prologue"
 	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
+	# A look asked of the slice for check shots (opts "look", as outside_look
+	# reads it) is the stop's as well: the train, the stop scene and the field alike.
+	var want: Dictionary = opts.get("look", {})
+	if want.has("cold"):
+		o["cold"] = float(want["cold"])
+	if want.has("kinds"):
+		o["look"] = want["kinds"]
+	if want.has("hour"):
+		o["look_hour"] = float(want["hour"])
 	# A field of its own to ask: the stop scene builds the field before the
 	# field step makes one.
 	var probe = FieldGame.new()

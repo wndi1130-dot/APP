@@ -1,7 +1,7 @@
 import {
   BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
-  COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, knowers, lawActive, living, manualWriter, materials, moveOpen,
+  COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, cancelOpen, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workBonus, workPower, workshopChief, workshopState, zoneAt, enableArrivals, enableClimate, enableDark, enableDeathWeight, enableDisasters, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
   gearOwned, gearTaken, lureBlock, techShown, techVariants,
@@ -381,6 +381,8 @@ function modifyView(view: View): HTMLElement {
     h('div', { class: 'dom-now' },
       gear(job ? 'work' : 'idle'),
       h('span', null, job ? h('b', null, `${jobTitle(job.kind, job.car)} ${Math.round((job.progress / Math.max(1, job.need)) * 100)}%`) : '줄에 올린 개조 없음'),
+      // 공방이 손대기 전이면 내릴 수 있다(낸 자재를 그대로 돌려받는다). 잘못 누른 것을 되돌리는 길.
+      cancelOpen(g) ? h('button', { class: 'chip', 'data-action': 'dom-job-cancel', 'aria-label': '개조 줄에서 내리기' }, '내리기') : null,
       h('small', { class: 'sub num' }, workText(g))),
     MOD_KINDS.map(({ k, name, cost }) => {
       const done = (c: string) => (k === 'insulate' ? d.insulated : d.armored).includes(c);
@@ -1352,6 +1354,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-pot':
     case 'dom-full':
     case 'dom-job':
+    case 'dom-job-cancel':
     case 'dom-escort':
     case 'dom-bury':
     case 'dom-hang':
