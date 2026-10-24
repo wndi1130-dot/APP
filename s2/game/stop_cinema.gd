@@ -27,6 +27,9 @@ const FxState = preload("res://fx/fx_state.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const BRAKE_SOUND := "res://audio/train_brake/brake.wav"
+## Seconds into the brake sound at which the train stands; the sound starts
+## so that moment falls on the train's own.
+const BRAKE_STAND_AT: float = FieldAudio.BRAKE_STAND_AT
 const ROLL_SOUND := "res://audio/train_idle/train_idle.wav"
 
 ## The beats (seconds; the result notes and test_stop_cinema.gd hold them).
@@ -373,7 +376,7 @@ func _begin(b: String) -> void:
 		var v: float = maxf((_d - HOLD_LEFT) / HOLD_K, 0.0) if beat == "hold" else maxf(speed, 0.0)
 		_brake = {"d0": _d, "v0": v, "len": clampf(2.0 * _d / maxf(v, 0.01), BRAKE_MIN_S, BRAKE_MAX_S)}
 		if is_instance_valid(brake_player) and brake_player.stream != null:
-			brake_player.play()
+			brake_player.play(maxf(0.0, BRAKE_STAND_AT - float(_brake["len"])))
 	elif b == "away":
 		_brake = {"v0": maxf((_d - HOLD_LEFT) / HOLD_K, 0.0)}
 	elif b == "hold":

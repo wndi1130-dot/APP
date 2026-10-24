@@ -2120,7 +2120,7 @@ func arrive_far() -> float:
 func _arrive(delta: float) -> void:
 	var cry_at: float = ARRIVE_ROLL_S - ARRIVE_BRAKE_S
 	if arrive_t < cry_at and arrive_t + delta >= cry_at:
-		audio.train_brake()
+		audio.train_brake(ARRIVE_BRAKE_S)
 	arrive_t += delta
 	view.slide_train(-train_in(arrive_t, arrive_far()))
 	if arrive_t >= ARRIVE_ROLL_S + ARRIVE_HUSH_S:

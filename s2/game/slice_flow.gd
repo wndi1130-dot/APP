@@ -44,6 +44,8 @@ const St = preload("res://game/train/train_state.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const StopCinema = preload("res://game/stop_cinema.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
+const PaperMotion = preload("res://game/ui/paper_motion.gd")
+const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
 ## The frost grown in from the screen's corners over the world (시안 .w-frost,
@@ -296,6 +298,9 @@ func _show_stop_pick() -> void:
 	c.passed_by.connect(_pass_stop)
 	layer.add_child(c)
 	card = c
+	# The paper comes up folded and opens out, not all at once (사용자 2026-10-24).
+	if c.sheet != null:
+		PaperMotion.open(c.sheet, _seen_before())
 
 
 # ---------------------------------------------------------------- the stop seen from the train
@@ -319,7 +324,8 @@ func _show_stop_cinema() -> void:
 		plates.remove_child(p)
 		p.queue_free()
 	loader.prepare(_field_place())
-	var c = StopCinema.new()
+	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
+	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
 	c.seen = bool(opts.get("cinema_seen", StopCinema.was_seen()))
 	c.remember = not opts.has("cinema_seen")
@@ -384,10 +390,23 @@ func _on_cinema_done(how: String) -> void:
 
 
 func _drop_card() -> void:
-	if is_instance_valid(card):
-		card.queue_free()
+	var c: Control = card if is_instance_valid(card) else null
 	card = null
 	gauges.visible = false
+	if c == null:
+		return
+	# Folded away under the finger that sent it; nothing on it answers any more.
+	c.propagate_call("set", ["mouse_filter", Control.MOUSE_FILTER_IGNORE])
+	var paper: Variant = c.get("sheet")
+	if paper is Control:
+		PaperMotion.close(paper, _seen_before()).finished.connect(c.queue_free)
+	else:
+		c.queue_free()
+
+
+## The stop scene seen whole before: its paper comes and goes in half the time.
+func _seen_before() -> bool:
+	return bool(opts.get("cinema_seen", StopCinema.was_seen()))
 
 
 ## Leaving a step: the stop scene goes unless it is already fading out over
