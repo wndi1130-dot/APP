@@ -141,10 +141,43 @@ func test_the_other_falls_end_lying_as_the_first_ones() -> void:
 		assert_lt(worst, 0.03, "%s lies as %s, metres" % [clips[pair[1]]["name"], clips[pair[0]]["name"]])
 
 
+# The motions added for what the reference game's dead do (motion detail 2): in
+# both bodies under the numbers named in dead_body.gd, the quick ones with every
+# frame, the one-shots ending as they began, and only the two walks covering ground.
+func test_the_added_motions_are_baked_under_their_numbers() -> void:
+	var named := {DeadBody.THUMP: "thump", DeadBody.CLAW: "claw", DeadBody.HIT_LEFT: "hit_left",
+		DeadBody.HIT_RIGHT: "hit_right", DeadBody.HIT_TOP: "hit_top", DeadBody.HIT_UPPER: "hit_upper",
+		DeadBody.TURN_LEFT: "turn_left", DeadBody.TURN_RIGHT: "turn_right", DeadBody.WALK_D: "walk_d", DeadBody.WALK_E: "walk_e"}
+	for n: int in named:
+		assert_eq(BodyBake.OWN_CLIPS[n][0], named[n])
+		assert_eq(BodyBake.CLIPS[n][0], named[n], "the same number either way")
+	for folder in [DeadBody.BUILT_IN, "res://models/people/n5-crew_seamstress"]:
+		var baked: Dictionary = BodyBake.load_baked(folder)
+		var clips: Array = baked["clips"]
+		assert_eq(clips.size(), BodyBake.OWN_CLIPS.size(), folder)
+		for n: int in named:
+			var clip: Dictionary = clips[n]
+			assert_eq(str(clip["name"]), named[n], folder)
+			if BodyBake.DEAD_KEEP.has(named[n]):
+				assert_eq(int(clip["frames"]), int(BodyBake.OWN_CLIPS[n][2]), named[n] + " keeps every frame")
+			assert_eq(float(clip["round"]) > 0.0, n == DeadBody.WALK_D or n == DeadBody.WALK_E, named[n] + " covers ground only if it walks")
+			if not bool(clip["loop"]):
+				var a := _frame(baked, clip, 0)
+				var b := _last_frame(baked, clip)
+				var worst := 0.0
+				for i in a.size():
+					worst = maxf(worst, a[i].distance_to(b[i]))
+				assert_lt(worst, 0.02, "%s ends as it began, metres" % named[n])
+
+
 func _last_frame(baked: Dictionary, clip: Dictionary) -> Array:
+	return _frame(baked, clip, int(clip["frames"]) - 1)
+
+
+func _frame(baked: Dictionary, clip: Dictionary, k: int) -> Array:
 	var img: Image = baked["image"]
 	var rows := int(baked["rows_per_frame"])
-	var first := (int(clip["start"]) + int(clip["frames"]) - 1) * rows
+	var first := (int(clip["start"]) + k) * rows
 	var lo := Vector3(clip["lo"][0], clip["lo"][1], clip["lo"][2])
 	var hi := Vector3(clip["hi"][0], clip["hi"][1], clip["hi"][2])
 	var out: Array = []
