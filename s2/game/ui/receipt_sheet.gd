@@ -214,7 +214,7 @@ func _seen(seen: Array) -> void:
 		var s: String = String(line)
 		var row := Paper.line_box(22.0)
 		row.add_theme_constant_override("separation", int(round(UiFonts.px(6.0))))
-		row.add_child(Paper.mark("fetch" if s.begins_with("약속") else "inv", 16.0))
+		row.add_child(Paper.mark("promise" if s.begins_with("약속") else "inv", 16.0))
 		var words = _runs(s, 0.0, 22.0)
 		words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(words)
