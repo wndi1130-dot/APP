@@ -285,10 +285,9 @@ static func packed(plain: Color, motion: int, from: int, share: float) -> Color:
 ## The motion a packed colour is in (undoing packed()).
 static func motion_in(g: float) -> int:
 	var at := floorf(g + 0.5)
-	var upper := at >= VatBaker.UPPER
-	if upper:
-		at -= VatBaker.UPPER
-	return int(fposmod(at, 16.0)) + (16 if upper else 0)
+	var upper := floorf(at / VatBaker.UPPER)
+	at -= upper * VatBaker.UPPER
+	return int(fposmod(at, 16.0)) + 16 * int(upper)
 
 
 ## The motion one body is in and how far through it, before any easing.

@@ -49,8 +49,16 @@ const ALLY_SWITCH_MIN: float = 0.5
 const ALLY_SWITCH_MAX: float = 0.8
 ## How far a companion must have turned toward the target before it swings.
 const ALLY_TURN_DEG: float = 35.0
+## One body does one thing at a time (decision 420). A blow or a shove breaks
+## off these works of the hands (the ones the stick breaks off, and rummaging a
+## body); any other (a climb, a crossing, a door or a window, a weapon swap)
+## runs to its end and no blow or shove starts meanwhile.
+const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "loot"]
 
 var game
+## The player's shove pressed during a blow: it goes once the blow is over
+## (decision 420). Short-lived, never saved.
+var shove_after: Dictionary = {}
 var tracers: Array = []                 # {"from", "to", "t"} for the view
 var kills: int = 0
 # Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
@@ -103,6 +111,12 @@ func update(delta: float) -> void:
 			p.strike_t -= delta
 			if p.strike_t <= 0.0:
 				_land_strike(p)
+		if shove_after.has(p.get_instance_id()):
+			if not p.can_act():
+				shove_after.erase(p.get_instance_id())
+			elif not striking(p):
+				shove_after.erase(p.get_instance_id())
+				start_shove(p)
 		if p.jam_t > 0.0:
 			p.jam_t -= delta * float(m["hands"])
 			if p.jam_t <= 0.0 and p == game.player:
@@ -418,7 +432,7 @@ static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
 ## it lands (swing, swing_person). `at` is a zombie's Dictionary or a person.
 ## With no melee weapon in the hand it is the old shove, at once.
 func start_swing(p, at) -> void:
-	if p.swing_t > 0.0 or p.strike_t > 0.0:
+	if p.swing_t > 0.0 or p.strike_t > 0.0 or not _hands_free_for_blow(p):
 		return
 	var stomp_it: bool = stomps(p, at)
 	p.strike_kind = "stomp" if stomp_it else "swing"
@@ -432,7 +446,7 @@ func start_swing(p, at) -> void:
 	p.swing_t = windup
 
 
-## The attack pad with nobody in reach (decision 405, as in Zomboid): the
+## The attack pad with nobody in reach (decision 405, as in the reference game): the
 ## weapon comes round all the same and lands on whatever is in its arc by then
 ## (an empty Dictionary as strike_at). No melee weapon in the hand: the shove.
 func swing_air(p) -> void:
@@ -683,16 +697,42 @@ func _kill(p, z: Dictionary, msg: String) -> void:
 ## Shove: a short cone in front, breaks a grab, sometimes knocks down.
 ## The player's shove key: the arms come back for a moment, then it lands.
 ## Companions shove on reflex (shove itself).
+## The shove key ends a one-press fight (decision 420: one press, one thing);
+## pressed mid-blow it goes once the blow is over.
 func start_shove(p) -> void:
-	if p.swing_t > 0.0 or p.shove_t > 0.0 or game.paused:
+	if game.paused:
+		return
+	if p == game.player and fighting(p):
+		call_off(p)
+	if striking(p):
+		if p == game.player:
+			shove_after[p.get_instance_id()] = true
+		return
+	if not _hands_free_for_blow(p):
 		return
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
 	p.swing_t = p.shove_t
 
 
+## In a blow or a shove: drawn back, landing, or coming back from it.
+func striking(p) -> bool:
+	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+
+
+## Free to start a blow or a shove (decision 420): a work it breaks off is let
+## go now; any other work of the hands runs to its end first.
+func _hands_free_for_blow(p) -> bool:
+	if p.action == "" or p.action == "aim":
+		return true
+	if BLOW_BREAKS.has(p.action):
+		p.cancel_action()
+		return true
+	return false
+
+
 func shove(p) -> void:
 	# One shove per swing time: mashing the button must not stack stuns.
-	if p.swing_t > 0.0 or game.paused:
+	if p.swing_t > 0.0 or game.paused or not _hands_free_for_blow(p):
 		return
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
@@ -729,6 +769,13 @@ func break_grab(p) -> bool:
 	p.grabbers.clear()
 	p.grab_left = 0.0
 	p.swing_t = SHOVE_TIME
+	p.lunge_t = SHOVE_LUNGE      # the arms seen thrown out as it breaks free
+	# A blow drawn back as it was grabbed is lost when it breaks free, as the
+	# grab rule says (decision 420); with "none" it still lands.
+	if String(game.opts.get("melee_break", "grab")) == "grab" and p.strike_t > 0.0:
+		p.strike_t = 0.0
+		p.strike_total = 0.0
+		p.strike_at = null
 	return true
 
 
@@ -1175,7 +1222,8 @@ func _take(p, kind: String, n: int) -> int:
 
 ## Swap hand slots: belt to hand, slower with a heavy bag (body_injury 6).
 func swap(p) -> void:
-	if p.hands.size() < 2 or not p.can_act() or p.action != "":
+	# Not mid-blow either: one body does one thing at a time (decision 420).
+	if p.hands.size() < 2 or not p.can_act() or p.action != "" or striking(p):
 		return
 	p.aim.stop()
 	p.reload_t = 0.0

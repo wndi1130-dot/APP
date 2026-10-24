@@ -11,6 +11,7 @@ extends RefCounted
 ## and nothing here keeps state.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -120,6 +121,11 @@ static func build_from(script: Script) -> Dictionary:
 		for y in range(r.position.y, r.end.y):
 			for x in range(r.position.x, r.end.x):
 				ground.floor[ground.index(Vector2i(x, y))] = FieldGrid.Floor.DEEP_SNOW
+	# Furniture indoors stops the body on every floor, as it does on the ground
+	# (house_layout.md 1, user decision 415). Only the maps in MAP_DIR: the first
+	# stop keeps its own hand-made cells.
+	if script.resource_path.begins_with(MAP_DIR):
+		data["furniture_stats"] = RoomFurnish.block_furniture(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)

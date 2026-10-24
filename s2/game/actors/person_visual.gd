@@ -776,8 +776,7 @@ static func arm_table(baked: Dictionary, hand: PackedInt32Array, elbow: PackedIn
 static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
 	var packed := floorf(drawn.g + 0.5)
 	var motion := DeadBody.motion_in(drawn.g)
-	if packed >= VatBaker.UPPER:
-		packed -= VatBaker.UPPER
+	packed -= floorf(packed / VatBaker.UPPER) * VatBaker.UPPER
 	var share := floorf(packed / 65536.0)
 	var kept := floorf((packed - share * 65536.0) / 16.0)
 	if motion >= tab.size():
