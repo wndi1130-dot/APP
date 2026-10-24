@@ -1,76 +1,79 @@
 {
   "version": 1,
   "mode_setting": "visuals/train_models_enabled",
-  "near_distance_m": 32,
+  "near_distance_m": 80,
   "far_distance_m": 120,
   "assets": {
     "coach_worn": {
       "status": "ready",
       "path": "res://models/train_exterior/coach_worn.glb",
       "category": "exterior",
-      "lod0_tris": 3634,
-      "lod1_tris": 1816,
+      "lod0_tris": 2612,
+      "lod1_tris": 818,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
-        768,
-        768
+        256,
+        256
       ],
       "materials": 1,
-      "bytes": 388148,
+      "bytes": 230300,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
-        3,
-        2.846797
+        3.34,
+        2.94
       ],
-      "sha256": "9d6552644baa194395a9079398b84575e908505c9f0121150a0f829c065df6c9",
-      "no_cutaway": true
+      "sha256": "2e62f8a0151157021fe8f1161a8e88cbf40d39870cb3c44703327763b8d8a8de",
+      "no_cutaway": true,
+      "source": "tools/blender/train_exterior.py"
     },
     "coach_clean": {
       "status": "ready",
       "path": "res://models/train_exterior/coach_clean.glb",
       "category": "exterior",
-      "lod0_tris": 3323,
-      "lod1_tris": 1661,
+      "lod0_tris": 2438,
+      "lod1_tris": 710,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
-        768,
-        768
+        256,
+        256
       ],
       "materials": 1,
-      "bytes": 353988,
+      "bytes": 211268,
       "byte_limit": 1800000,
       "dimensions_m": [
-        16.00002,
-        3.016359,
-        2.80135
+        16,
+        3.02,
+        2.94
       ],
-      "sha256": "86193b95b9b579647fc2d54aee072e1e13837c639502cbf64bce0d86d46be5a4",
-      "no_cutaway": true
+      "sha256": "d27cc0ffadeda970b731397625d60fc4dd5aff922c78978b17d4c476cf908b21",
+      "no_cutaway": true,
+      "source": "tools/blender/train_exterior.py"
     },
     "freight_open": {
       "status": "ready",
       "path": "res://models/train_exterior/freight_open.glb",
       "category": "exterior",
-      "lod0_tris": 5819,
-      "lod1_tris": 2820,
+      "lod0_tris": 1946,
+      "lod1_tris": 582,
       "triangle_limit": 6000,
       "texture_limit": 1024,
       "texture_size": [
-        768,
-        768
+        256,
+        256
       ],
       "materials": 1,
-      "bytes": 1194832,
+      "bytes": 170364,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
-        7.839137,
-        7.07469
+        3.61,
+        2.96
       ],
-      "sha256": "e7fb26236fc427786441f9257e81edf40cbffb8c4522dede4a523acbec0342a0"
+      "sha256": "cbe52539287a6594e5954fbb0084b0196d080b39af3005b89755554d225f8fd8",
+      "source": "tools/blender/train_exterior.py"
     },
     "tender": {
       "status": "ready",
@@ -120,75 +123,77 @@
       "status": "ready",
       "path": "res://models/train_exterior/coach_glass.glb",
       "category": "exterior",
-      "lod0_tris": 3369,
-      "lod1_tris": 1682,
+      "lod0_tris": 1870,
+      "lod1_tris": 528,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
-        768,
-        768
+        256,
+        256
       ],
       "materials": 1,
-      "bytes": 347732,
+      "bytes": 159784,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
-        3.019466,
-        2.8
+        3.05,
+        2.88
       ],
-      "sha256": "2d167b1fe994d130404ca573cdbac17b449752592323cc0959e1fb695a51215b",
-      "no_cutaway": true
+      "sha256": "322ed1419457f35e46bfdac63bc541e8b7af7a1339366a5435a334a9953762d7",
+      "no_cutaway": true,
+      "source": "tools/blender/train_exterior.py"
     },
     "coach_chief": {
       "status": "ready",
       "path": "res://models/train_exterior/coach_chief.glb",
       "category": "exterior",
-      "lod0_tris": 3772,
-      "lod1_tris": 1886,
+      "lod0_tris": 2306,
+      "lod1_tris": 682,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
-        768,
-        768
+        256,
+        256
       ],
       "materials": 1,
-      "bytes": 391564,
+      "bytes": 200324,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
-        3.0,
-        2.8
+        3.02,
+        2.94
       ],
-      "sha256": "e6592397975f3e0882f255816b64221d2c99836768d0c7ac8d1b5d1519fcf2ad",
-      "no_cutaway": true
+      "sha256": "17af5d59dc41bb1ee59d984927d798168cfb9ab1b5c33705265fdb3b7929eba3",
+      "no_cutaway": true,
+      "source": "tools/blender/train_exterior.py"
     },
     "coach_medic": {
       "status": "ready",
       "path": "res://models/train_exterior/coach_medic.glb",
       "category": "exterior",
-      "lod0_tris": 6298,
-      "lod1_tris": 3020,
+      "lod0_tris": 2342,
+      "lod1_tris": 730,
       "triangle_limit": 8000,
       "texture_limit": 1024,
       "texture_size": [
-        768,
-        768
+        256,
+        256
       ],
       "materials": 1,
-      "bytes": 1350936,
+      "bytes": 205948,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
-        5.140098,
-        4.541282
+        3.02,
+        2.94
       ],
-      "sha256": "d1c55fe2940de6ccfe77567d47fd33349f048f97adcdebb14327d6b4b9fe04c6",
+      "sha256": "04a5f9a89292f2e1ac89203bbf53e7583dd90623d689282c4f026482a5895da6",
       "attachment_sites": {
         "roof_clear": {
           "zone": "roof",
           "position": [
             0,
-            5.140098,
+            2.92,
             0
           ],
           "clearance_m": [
@@ -203,7 +208,8 @@
           "blocks_passage": false,
           "duplicate": false
         }
-      }
+      },
+      "source": "tools/blender/train_exterior.py"
     },
     "coach_window_frame": {
       "status": "ready",
