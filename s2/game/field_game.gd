@@ -183,6 +183,7 @@ var vis_t: float = 0.0
 var hud_t: float = 0.0
 var mask_on: bool = true
 var forecast_precision: int = 0
+var roof_seen: bool = false           # up on a rooftop once this stop (house_layout.md 6.2)
 var weather: Weather
 var cap: int = HordeDirector.CONCURRENT_CAP
 var waiting: int = 0                   # bodies held at entries by the concurrent cap

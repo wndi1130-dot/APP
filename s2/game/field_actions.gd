@@ -289,6 +289,8 @@ func _do_goal(p) -> void:
 			search_body(p, g["key"])
 		"manhole":
 			block_lid(p, g["key"])
+		"ladder":
+			climb_ladder(p, g["key"], g["verb"])
 
 
 # ---------------------------------------------------------------- doors
@@ -865,6 +867,38 @@ func _climbed(p, up: bool) -> void:
 			game.hud.toast("내려왔다.")
 
 
+# ---------------------------------------------------------------- rooftop ladders
+
+## A rooftop's skylight ladder (stairs with "roof", house_layout.md 6.1): the signal box
+## ladder's rule as it is. Fast is a normal sound, careful is quiet but slow; grabbed on
+## it, 30% to fall (_ladder_falls). Up or down the same. The dead cannot climb it (paths
+## skip ladders), and the companions wait at its foot.
+func climb_ladder(p, s: Dictionary, verb: String = "") -> void:
+	if not p.can_act():
+		return
+	var up: bool = game.level_of(p.position) == int(s["low"])
+	if verb == "":
+		game.hud.offer([
+			{"label": "빨리 오른다" if up else "빨리 내려간다", "call": climb_ladder.bind(p, s, "fast")},
+			{"label": "조심히 오른다" if up else "조심히 내려간다", "call": climb_ladder.bind(p, s, "careful")},
+		])
+		return
+	if verb == "fast":
+		game.make_sound(p.position, SimNoise.Level.NORMAL, "ladder", p)
+	p.brain["on_ladder"] = true
+	p.start_action("climb", "오르기" if up else "내려가기", CLIMB_CAREFUL if verb == "careful" else CLIMB_FAST, _ladder_done.bind(p, s, up))
+
+
+func _ladder_done(p, s: Dictionary, up: bool) -> void:
+	p.brain["on_ladder"] = false
+	p.position = game.lift(s["cell"], int(s["high"]) if up else int(s["low"]))
+	if p == game.player and up and not game.roof_seen:
+		# Up on a roof the forecast gets sharper, once a stop (6.2, the signal box's rule).
+		game.roof_seen = true
+		game.forecast_precision = 1
+		game.set_radio("옥상: " + game.director.forecast(game.clock.elapsed, 1, game.clock), "say")
+
+
 ## Grabbed on the ladder: 30% to fall and break a leg (body_injury 3.2).
 func _ladder_falls() -> void:
 	for p in game.people_alive():
@@ -1266,13 +1300,18 @@ func _near_things(p) -> Array:
 	var rows: Array = []
 	var lv: int = game.level_of(p.position)
 	for s in game.stairs:
-		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
+		if not (s["low"] == lv or s["high"] == lv):
+			continue
+		if s["ladder"] and not s.has("roof"):
 			continue
 		var at: Vector3 = game.lift(s["cell"], lv)
 		var d: float = at.distance_to(p.position)
 		if d < NEAR_USE:
 			var up: bool = s["low"] == lv
-			rows.append([d, "올라가기" if up else "내려가기", take_stairs.bind(p, s)])
+			if s["ladder"]:
+				rows.append([d, "옥상으로" if up else "사다리 내려가기", climb_ladder.bind(p, s, "")])
+			else:
+				rows.append([d, "올라가기" if up else "내려가기", take_stairs.bind(p, s)])
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
 		var at: Vector3 = game.lift(c["cell"], int(c.get("level", 0)))
