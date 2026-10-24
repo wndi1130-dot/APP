@@ -114,6 +114,19 @@ const NAILS_CHANCE: float = 0.08        # each toolbox: a handful of nails
 const NAILS_MOST: int = 4
 const FUEL_CHANCE: float = 0.30         # one fuel can in a garage
 const RARE_CHANCE: float = 0.25         # one named find
+# 나단계 (decision 423, P23, card 11)
+const PAN_CHANCE: float = 0.50          # one frying pan in a kitchen
+const BOTTLE_CHANCE: float = 0.40       # one broken bottle in a washroom, a bedroom or a store
+## Things lying under the snow out of doors, shown only to one close by
+## (field_game.glint_reach): how many a stop, and what they are.
+const GLINTS: int = 6
+const GLINT_KINDS: Array = [["wood", 3], ["scrap", 2], ["hare_frozen", 1]]
+## How the key of a building with a locked door is found (P12): on one of the
+## dead inside it, dropped in the snow by its door, or in a drawer inside.
+const KEY_WAYS: Array = [["dead", 6], ["snow", 2], ["box", 2]]
+## One of the dead may carry a note of a box hidden at the next stop (card 10).
+const NOTE_CHANCE: float = 0.35
+const NOTE_SPOTS: Array[String] = ["신호소 마루 밑", "급수탑 발치", "화물 창고 뒤 돌무더기", "역사 지하 계단 밑", "선로 반대편 헛간"]
 
 
 static func _has_word(name: String, words: Array) -> bool:
@@ -356,6 +369,87 @@ static func _finds(containers: Dictionary, buildings: Array, seed: int, report: 
 			nails += 1
 	if rng.randf() < FUEL_CHANCE:
 		_put(containers, _boxes(containers, buildings, [], ["garage"]), "fuel_can", rng, report)
+	# Something to grab when there is nothing better (P23).
+	var hands_rng := _rng(seed, "grab")
+	if hands_rng.randf() < PAN_CHANCE:
+		_put(containers, _boxes(containers, buildings, ["kitchen"], []), "frying_pan", hands_rng, report)
+	if hands_rng.randf() < BOTTLE_CHANCE:
+		_put(containers, _boxes(containers, buildings, ["bathroom", "bedroom", "storage"], LIVED_IN), "broken_bottle", hands_rng, report)
+
+
+## Where things lie under the snow (card 11): out of doors, where one can
+## walk, off the train. [{"cell", "id"}]; a key dropped by a door is added by
+## the field when it gives out the keys.
+static func glints(data: Dictionary, seed: int) -> Array:
+	var out: Array = []
+	var grid = data.get("grid")
+	if grid == null:
+		return out
+	var train: Rect2i = data.get("train", Rect2i())
+	var rng := _rng(seed, "glints")
+	var tries := 0
+	while out.size() < GLINTS and tries < GLINTS * 40:
+		tries += 1
+		var c := Vector2i(rng.randi_range(1, grid.width - 2), rng.randi_range(1, grid.height - 2))
+		if not grid.people_can_walk(c) or grid.indoor(c) or train.grow(2).has_point(c):
+			continue
+		out.append({"cell": c, "id": _pick(GLINT_KINDS, rng)})
+	return out
+
+
+## What a hidden box holds (card 10): three bundles, named where they lie.
+const STASH: Array[String] = ["food_pack", "food_pack", "med_box"]
+
+
+## The box a note told of: the first box whose name shares a word with the
+## spot ("신호소 마루 밑" → a 신호소 box), else one in a building; its things
+## are added, named. Returns the box id ("" when there is none).
+static func place_stash(data: Dictionary, spot: String, seed: int) -> String:
+	var containers: Dictionary = data.get("containers", {})
+	var words: PackedStringArray = spot.split(" ", false)
+	var at := ""
+	var any := ""
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if c.has("pick") or LootTables.FIXED.has(id):
+			continue
+		if any == "" and int(c.get("building", -1)) >= 0:
+			any = id
+		for w in words:
+			if w.length() >= 2 and String(c.get("name", "")).contains(w):
+				at = id
+				break
+		if at != "":
+			break
+	if at == "":
+		at = any
+	if at == "":
+		return ""
+	var rng := _rng(seed, "stash")
+	var c: Dictionary = containers[at]
+	var room := room_of(c)
+	var items: Array = (c.get("items", []) as Array).duplicate()
+	for b: String in STASH:
+		items.append(name_bundle(b, name_table(String(FAMILY[b]), room, "", String(data.get("place_kind", ""))), rng))
+	c["items"] = items
+	return at
+
+
+## How each building with a locked door gives its key: {building: "dead" |
+## "snow" | "box"}, in building order.
+static func key_ways(doors: Dictionary, seed: int) -> Dictionary:
+	var out: Dictionary = {}
+	var rng := _rng(seed, "keys")
+	var shut: Array = []
+	for c: Vector2i in doors:
+		var d: Dictionary = doors[c]
+		var b: int = int(d.get("building", -1))
+		if b >= 0 and String(d.get("state", "")) == "locked" and not shut.has(b):
+			shut.append(b)
+	shut.sort()
+	for b: int in shut:
+		out[b] = _pick(KEY_WAYS, rng)
+	return out
 
 
 ## The named find of this stop, if there is one: a box in a building (a locked

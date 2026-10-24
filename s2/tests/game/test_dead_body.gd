@@ -170,6 +170,55 @@ func test_the_added_motions_are_baked_under_their_numbers() -> void:
 				assert_lt(worst, 0.02, "%s ends as it began, metres" % named[n])
 
 
+# Eating a body (decision 423), in both bodies: down, the loop and up again run
+# into each other with no jump, none covers ground, and the head is lowest (the
+# teeth meet) at the middle of the loop.
+func test_eating_a_body_goes_down_eats_and_gets_up_with_no_jump() -> void:
+	# Picked by name (dead_body.gd EAT_START, EAT, EAT_RISE); their numbers in the bake.
+	var number := {}
+	for i in BodyBake.CLIPS.size():
+		number[BodyBake.CLIPS[i][0]] = i
+	var start: int = number[DeadBody.EAT_START]
+	var loop: int = number[DeadBody.EAT]
+	var rise: int = number[DeadBody.EAT_RISE]
+	var named := {start: DeadBody.EAT_START, loop: DeadBody.EAT, rise: DeadBody.EAT_RISE}
+	for n: int in named:
+		assert_eq(BodyBake.OWN_CLIPS[n][0], named[n])
+		assert_eq(BodyBake.CLIPS[n][0], named[n], "the same number either way")
+	for folder in [DeadBody.BUILT_IN, "res://models/people/n5-crew_seamstress"]:
+		var baked: Dictionary = BodyBake.load_baked(folder)
+		var clips: Array = baked["clips"]
+		for n: int in named:
+			assert_eq(str(clips[n]["name"]), named[n], folder)
+			assert_eq(bool(clips[n]["loop"]), n == loop, named[n] + " loops only if it is the eating")
+			assert_eq(float(clips[n]["round"]), 0.0, named[n] + " covers no ground")
+		var down: Dictionary = clips[start]
+		var eat: Dictionary = clips[loop]
+		var up: Dictionary = clips[rise]
+		var joins := [[_last_frame(baked, down), _frame(baked, eat, 0), "down into the eating"],
+			[_frame(baked, eat, 0), _frame(baked, up, 0), "the eating into getting up"],
+			[_last_frame(baked, up), _frame(baked, down, 0), "up to where it went down from"]]
+		for join: Array in joins:
+			var worst := 0.0
+			for i in join[0].size():
+				worst = maxf(worst, join[0][i].distance_to(join[1][i]))
+			assert_lt(worst, 0.02, "%s, metres (%s)" % [join[2], folder])
+		var standing := _frame(baked, clips[DeadBody.STAND], 0)
+		var head := 0
+		for i in standing.size():
+			if standing[i].y > standing[head].y:
+				head = i
+		var lowest := 0
+		var low := INF
+		for k in int(eat["frames"]):
+			var y: float = _frame(baked, eat, k)[head].y
+			if y < low:
+				low = y
+				lowest = k
+		assert_almost_eq(float(lowest) / float(eat["frames"]), 0.5, 1.0 / float(eat["frames"]), "the teeth meet at the middle (%s)" % folder)
+		assert_lt(low, _frame(baked, down, 0)[head].y - 0.3, "down at the body, not standing over it")
+
+
 func _last_frame(baked: Dictionary, clip: Dictionary) -> Array:
 	return _frame(baked, clip, int(clip["frames"]) - 1)
 

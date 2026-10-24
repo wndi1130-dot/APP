@@ -50,7 +50,8 @@ func _ready() -> void:
 		_number(row[0], row[1], row[2])
 	_enum("view.daytime", "낮밤", ["day", "night"], ["낮", "밤"])
 	_enum("view.motion", "열차", ["auto", "running", "stopped", "departing"], ["단계에 따름", "달림", "정차", "출발 직전"])
-	_enum("view.season", "계절", ["deep_winter", "late_winter", "thaw"], ["한겨울", "늦겨울", "해빙 초입"])
+	# The season table's four states (game/season_table.gd); unset, the stretch's own.
+	_enum("view.season", "계절", ["late_autumn", "early_winter", "deep_winter", "early_thaw"], ["늦가을", "초겨울", "한겨울", "해빙 초입"])
 	_enum("stop.weather", "날씨", ["overcast", "snow", "fog", "sleet", "clear", "blizzard"], ["흐림", "눈", "안개", "진눈깨비", "맑음", "눈보라(화면)"])
 	_enum("view.riot_stage", "폭동 입력", ["none", "protest", "riot"], ["없음", "항의", "폭동"])
 	_text("view.region", "지역 띠")
