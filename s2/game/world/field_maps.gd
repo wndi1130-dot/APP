@@ -129,10 +129,15 @@ static func build_from(script: Script) -> Dictionary:
 	# step, tall in front of a window or half in a wall are moved aside, and
 	# the boxes go into the furniture that holds them.
 	if script.resource_path.begins_with(MAP_DIR):
+		data["_defer_paths"] = true
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
 		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)
 		data["furniture_stats"] = RoomFurnish.block_furniture(data)
 		data["room_stats"]["boxes_moved"] = RoomFurnish.boxes_into_furniture(data)
+		data.erase("_rooms")
+		data.erase("_defer_paths")
+		for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
+			g.refresh_paths()
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
