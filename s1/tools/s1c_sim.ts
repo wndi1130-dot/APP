@@ -1,5 +1,5 @@
 // S1a 판과 S1a+S1c 판을 같은 시드로 돌려 비교한다(s1c_domestic 14.1의 2번).
-// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D·BUDGET·DRAW키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never|wait|read] [--budget] [--events] [--pick=second|random]
+// 사용: npx tsx tools/s1c_sim.ts [판 수=1000] [결과 JSON 경로]  [--only=이름] [--set=D·BUDGET·DRAW키:값] [--disasters] [--dz=DZ키:값] [--prep=auto|never|wait|read] [--budget] [--events] [--pick=second|random] [--push=법id]
 // --pick: 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸이나 안 막힌 칸 아무거나를 고르는 봇(첫 칸 치우침을 가르는 측정용)
 // --budget: 카드 구간 예산(src/game/budget.ts, events_disasters 3.1)을 켠다. 상한은 --set=perSeg:4 처럼 바꾼다(D에 없고 BUDGET에 있는 키는 BUDGET을 바꾼다).
 // --events: 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(src/game/event_pack.ts)를 켠다. 가중치 상수는 --set=pressMax:4 처럼 DRAW 키로 바꾼다.
@@ -8,7 +8,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { BUDGET, CL, CREW, D, DRAW, DZ, TRAVEL_EVENTS } from '../src/game';
-import type { CrewCost, CrewCurve, CrewHaul, TechId, Variant } from '../src/game';
+import type { CrewCost, CrewCurve, CrewHaul, LawId, TechId, Variant } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, CrewPolicy, GameMetrics } from './s1c_bot';
 
@@ -48,6 +48,8 @@ const arrivals = flags.includes('--arrivals');
 const noLevers = flags.includes('--nolevers');
 // --climate-levers: 돌봄 봇이 기온을 읽는 레버 규칙을 쓴다(결정 384 재기, s1c_bot.ts climateLevers).
 const climateLevers = flags.includes('--climate-levers');
+// --push=법id: 돌봄 봇이 그 법을 안건에 오를 때마다 고른다(결정 091 '이 법을 늘 통과시키는 길' 재기)
+const pushLaw = flags.find(x => x.startsWith('--push='))?.slice(7) as LawId | undefined;
 const gearFlag = flags.find(x => x.startsWith('--gear='))?.slice(7);
 const GEAR_SETS: Record<string, [TechId, Variant | undefined][]> = {
   none: [], natural: [], X0: [['x2', undefined]], A: [['r4', 'a']], B: [['r4', 'b']], C: [['x2', 'a']], D: [['x2', 'b']], E: [['w4', undefined]],
@@ -214,7 +216,7 @@ function summarize(ms: GameMetrics[]) {
       noFreeze: +mean(ms.map(m => (m.climate.freezes === 0 ? 1 : 0))).toFixed(3),
       leverAfterDrop: +mean(ms.map(m => m.climate.leverAfterDrop)).toFixed(3),
       coalZero: +mean(ms.map(m => m.climate.coalZero)).toFixed(3),
-      heatByStage: [0, 1, 2, 3, 4].map(i => { const n = ms.reduce((a, m) => a + m.climate.segsByStage[i], 0); return n ? +(ms.reduce((a, m) => a + m.climate.heatByStage[i], 0) / n).toFixed(2) : 0; }),
+      heatByStage: CL.names.map((_, i) => { const n = ms.reduce((a, m) => a + m.climate.segsByStage[i], 0); return n ? +(ms.reduce((a, m) => a + m.climate.heatByStage[i], 0) / n).toFixed(2) : 0; }),
     },
   };
 }
@@ -235,6 +237,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(arrivals ? { arrivals: true } : {}),
     ...(noLevers ? { noLevers: true } : {}),
     ...(climateLevers ? { climateLevers: true } : {}),
+    ...(pushLaw ? { pushLaw } : {}),
     ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);

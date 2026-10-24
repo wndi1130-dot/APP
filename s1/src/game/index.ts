@@ -8,6 +8,7 @@ export * from './hub';
 export * from './prologue';
 export * from './content';
 export * from './cards';
+export * from './ration_cut';
 export * from './turn';
 export * from './death';
 export * from './calm';

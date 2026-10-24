@@ -4,8 +4,8 @@
   "train": { "phase": "travel", "tension": 20, "fear": 0, "trust": 50, "voting": false, "seg": 1, "coal": 100, "food": 100, "med": 20, "lux": 8, "hunger": 0, "injured": 0, "sickCount": 0, "stored": 0, "decreeLeft": 0, "passed": {}, "council": {}, "edu": {}, "stranded": null },
   "dom": { "wood": 10, "scrap": 10, "parts": 4, "insulated": [], "extraCars": [], "bedding": {}, "bedOrder": null, "fullRule": null },
   "stop": { "weather": "overcast" },
-  "view_note": "화면 입력의 첫 값(가안). S1에 없는 낮밤·근무 신호·지역 띠·나라·계절·출발 직전·폭동·화재·인물 배정은 view에만 둔다. 희망 수치는 만들지 않는다. 자원·정치·피해 계산은 하지 않는다.",
-  "view": { "daytime": "day", "motion": "auto", "season": "deep_winter", "region": "region_01", "country": "country_a", "work_time": false, "meal_time": true, "memorial": false, "accident": false, "teacher_present": true, "riot_stage": "none", "fire_cars": [], "aftermath": false, "collapse_override": -1, "collapse_by_car": {}, "actors": {}, "outside": { "chasing": false, "refugees": false, "passing": false } },
+  "view_note": "화면 입력의 첫 값(가안). S1에 없는 낮밤·근무 신호·지역 띠·나라·계절·출발 직전·폭동·화재·인물 배정은 view에만 둔다. 계절은 비워 두면 계절표(game/season_table.gd)의 그 구간 값을 쓴다. 희망 수치는 만들지 않는다. 자원·정치·피해 계산은 하지 않는다.",
+  "view": { "daytime": "day", "motion": "auto", "region": "region_01", "country": "country_a", "work_time": false, "meal_time": true, "memorial": false, "accident": false, "teacher_present": true, "riot_stage": "none", "fire_cars": [], "aftermath": false, "collapse_override": -1, "collapse_by_car": {}, "actors": {}, "outside": { "chasing": false, "refugees": false, "passing": false } },
   "comms": {
     "tail": { "name": "꼬리칸", "pop": 90, "away": 0, "rel": -20, "grudge": 0, "sit": [35, 40, 75, 60] },
     "medtech": { "name": "기술·의무진", "pop": 30, "away": 0, "rel": 5, "grudge": 0, "sit": [55, 50, 45, 25] },

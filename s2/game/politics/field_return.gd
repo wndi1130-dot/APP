@@ -585,6 +585,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 				g["comms"][comm]["promise"] = null
 			_journal(g, "%s: 그 약속을 본 사람이 아무도 돌아오지 못했다. 지켰는지 어겼는지 열차는 모른다." % spec["label"])
 			lines.append({"k": "promise", "comm": comm, "text": "%s과(와)의 약속: 본 사람이 돌아오지 못해 알 수 없다." % t["COMM_NAME"][comm]})
+	_body_searches(g, departure, receipt)
 	if receipt["symbol"] is Dictionary:
 		var comm: String = receipt["symbol"]["groupId"]
 		lines.append({"k": "symbol", "comm": comm, "text": "%s의 상징물을 가져왔다. 쓰임을 고른다." % t["COMM_NAME"][comm]})
@@ -605,6 +606,29 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	g["fieldReturns"]["applied"][receipt["receiptId"]] = fingerprint
 	(g["fieldReturns"]["records"] as Array).append(record)
 	return {"status": "applied", "record": record, "g": g}
+
+
+## Bodies gone through in the field (decision 423 card 12, the same values as
+## s1 field_receipt.ts BODY_SEARCH_REL): the car of one who saw it and came back
+## minds it or not, once a return.
+const BODY_SEARCH_REL: Dictionary = {"tail": 0.0, "medtech": -1.0, "guard": 0.0, "front": -1.0, "engine": 0.0}
+
+
+static func _body_searches(g: Dictionary, departure: Dictionary, receipt: Dictionary) -> void:
+	var minded: Dictionary = {}
+	for row: Dictionary in receipt.get("witnessed", []):
+		if String(row.get("template", "")) != "body_search":
+			continue
+		for w: Variant in row.get("witnesses", []):
+			var pid: String = String(w) if w is String else String((w as Dictionary).get("person", ""))
+			for r: Dictionary in departure.get("roster", []):
+				var comm: String = String(r.get("comm", ""))
+				if String(r.get("id", "")) != pid or minded.has(comm):
+					continue
+				minded[comm] = true
+				var d: float = float(BODY_SEARCH_REL.get(comm, 0.0))
+				if d != 0.0:
+					_bump_rel(g, comm, d, "field.body")
 
 
 static func _hang_why(g: Dictionary, comm: String) -> Variant:
