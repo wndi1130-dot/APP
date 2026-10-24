@@ -478,8 +478,8 @@ func _show_train(phase: String, seg: int) -> void:
 	weather.drift_on = int(look["snow_level"]) > 0
 	weather.light = clampf(float(look["lum"]) * 0.85 + 0.15, 0.2, 1.0)
 	weather.set_haze(float(look["haze"]))
-	# The corners' frost grows with the cold (faint in the warm stages).
-	frost.modulate = Color(1, 1, 1, lerpf(0.25, 1.0, float(look["window_frost"])))
+	# The corners' frost grows with the cold: none in late autumn's rain.
+	frost.modulate = Color(1, 1, 1, float(look["window_frost"]))
 	_quiet_labels()
 	_quiet_labels.call_deferred()
 

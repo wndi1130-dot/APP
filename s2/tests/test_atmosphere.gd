@@ -362,10 +362,12 @@ func test_the_slice_hangs_the_outside_behind_the_running_train() -> void:
 	deep.opts = {"skip_field": true, "seed": 3, "look": {"cold": 1.0}}
 	add_child_autofree(deep)
 	assert_eq(String(deep.weather.falls), "snow", "deep winter: snow")
+	assert_eq(deep.frost.modulate.a, 1.0, "the corners frost over in the hardest cold")
 	var warm = SliceFlow.new()
 	warm.opts = {"skip_field": true, "seed": 3, "look": {"cold": 0.0, "kinds": ["snow"], "hour": 12.0}}
 	add_child_autofree(warm)
 	assert_eq(String(warm.weather.falls), "rain")
+	assert_eq(warm.frost.modulate.a, 0.0, "no frost in the warm rain")
 	assert_false(warm.weather.drift.visible, "no lying snow to blow")
 	var clear = SliceFlow.new()
 	clear.opts = {"skip_field": true, "seed": 3, "look": {"kinds": ["clear"]}}
