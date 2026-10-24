@@ -78,7 +78,7 @@ const STAND_PACE: Vector2 = Vector2(0.3, 1.25)
 const STRIDE_SPREAD: float = 0.1
 const REEL_PACE: float = 0.6                  # stunned after being thrown off: its reel at this pace, on the spot
 const REEL_AFTER: float = 1.0                 # that long after it was thrown off at most (zombies.gd release stuns it 1 s)
-const MIX_STEPS: float = 63.0                 # how finely the shader is told how much (see dead_vat.gdshader)
+const MIX_STEPS: float = 31.0                 # how finely the shader is told how much (VatBaker.SHARE_MAX, dead_vat.gdshader)
 
 const STILL_AFTER: float = 0.3               # it stands (not walks) once it has kept its place this long
 

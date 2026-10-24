@@ -45,6 +45,13 @@ const PAINTS: Array[Color] = [
 	Color(0.60, 0.57, 0.51, 0.0), Color(0.56, 0.52, 0.44, 1.0),
 	Color(0.50, 0.53, 0.51, 0.0), Color(0.58, 0.49, 0.43, 1.0),
 ]
+## 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 문짝·덧문·창틀에 남은 칠, a는 남은 정도
+## (0 칠 없음). 바랜 색만 두고 셰이더가 한 번 더 누른다(흰 눈 위에서 튀지 않게).
+const ACCENTS: Array[Color] = [
+	Color(0.30, 0.42, 0.32, 0.85), Color(0.44, 0.27, 0.20, 0.8), Color(0.62, 0.50, 0.22, 0.75),
+	Color(0.22, 0.40, 0.42, 0.85), Color(0.70, 0.66, 0.55, 0.7), Color(0.38, 0.27, 0.18, 0.9),
+	Color(0.33, 0.40, 0.55, 0.75), Color(0.0, 0.0, 0.0, 0.0),
+]
 ## 정점 색으로 쓰는 칠 구역(R 1자리, G 2자리, B 4자리, A 날씨 받음).
 const ZONE_METAL_OUT := Color(1, 0, 1, 1)
 const ZONE_METAL_IN := Color(1, 0, 1, 0)
@@ -775,6 +782,14 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 	for shell: Vector2i in pairs:
 		cut_meshes[shell] = pairs[shell]
 		shells[shell]["cut"] = _node(shell.x, shell.y, pairs[shell][0], true)
+	# 맨 위 층의 바깥벽이 처마 밑: 고드름이 거기에만 달린다(building.gdshader eave).
+	var top_lv: Dictionary = {}
+	for shell: Vector2i in shells:
+		top_lv[shell.x] = maxi(int(top_lv.get(shell.x, shell.y)), shell.y)
+	for shell: Vector2i in shells:
+		if shell.y == int(top_lv[shell.x]):
+			for slot in shells[shell]:
+				(shells[shell][slot] as MeshInstance3D).set_instance_shader_parameter("eave", 1.0)
 	var roof_bakes: Dictionary = {}
 	for row: Dictionary in p["roofs"]:
 		if not roof_bakes.has(row["b"]):
@@ -808,7 +823,13 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 	add_child(node)
 	node.set_instance_shader_parameter("paint", PAINTS[posmod(b, PAINTS.size())])
 	node.set_instance_shader_parameter("building_id", float(b))
+	node.set_instance_shader_parameter("accent", accent_for(b))
 	return node
+
+
+## 건물마다 남은 칠(ACCENTS). 이웃한 번호끼리 같은 색이 덜 붙게 건너뛰며 고른다.
+static func accent_for(b: int) -> Color:
+	return ACCENTS[posmod(b * 5 + 3, ACCENTS.size())]
 
 
 ## 바깥 턱 줄 노드(map_view.wall_nodes 자리, 회색 상자와 같은 열쇠).
