@@ -9,6 +9,7 @@ signal restart_requested
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const RoomStories = preload("res://game/world/room_stories.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -272,6 +273,10 @@ func _ready() -> void:
 	receipt.set_source("direct")
 	if not Receipt.PLACE_TYPES.has(kind):
 		receipt.place_note("placeKind", kind)   # what it really is, beside the type the contract knows
+	# Room stories on the maps laid out by rule (house_layout.md 4): this run's own dice for this
+	# place, so a resumed stop gets the same ones; what was picked stays in the place's state.
+	if data.has("room_stats"):
+		receipt.place_note("roomStories", RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash()))
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
 	if not MISSIONS.has(mission):

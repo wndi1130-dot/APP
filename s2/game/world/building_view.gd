@@ -32,7 +32,7 @@ const PIECES: Array[String] = [
 	"ext_window", "ext_window_cut", "window_glass", "window_glass_broken", "window_glass_floor",
 	"ext_door", "door_leaf", "door_leaf_broken", "door_leaf_cut", "door_frame_cut",
 	"int_wall", "int_wall_cut", "int_door", "roof_gable", "roof_gable_end", "roof_flat",
-	"roof_parapet", "chimney", "stair_steep", "stair_well",
+	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards",
 ]
 const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
@@ -50,6 +50,7 @@ const ZONE_METAL_OUT := Color(1, 0, 1, 1)
 const ZONE_METAL_IN := Color(1, 0, 1, 0)
 
 static var _arrays: Dictionary = {}   # 조각 id -> [자리, 법선, 색, 순번]
+static var _board_slots: Array = []   # 창 판자 자리 [{"height_m", "roll_deg"}](catalog.json board_slots)
 static var _state: int = 0            # 0 아직, 1 씀, -1 못 씀
 
 var material: ShaderMaterial
@@ -135,6 +136,7 @@ static func _load_pieces() -> bool:
 			push_warning("건물 조각 %s에 메시 없음: 건물을 상자로 그린다" % id)
 			return false
 		_arrays[id] = found
+	_board_slots = (book.get("board_slots", {}) as Dictionary).get("window", []).duplicate(true)
 	return true
 
 
@@ -970,9 +972,11 @@ func _draw_door(key: Vector3i) -> void:
 				bake.add(_arrays["door_leaf_broken"], _xf(hinge, yaw))
 		"locked":
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
-			# 쇠 빗장: 밖에서 잠긴 문을 읽게(회색 상자의 자물쇠 자리).
-			var bar_y := 0.2 if cut else 1.05
-			bake.box(_xf(at + Basis(Vector3.UP, yaw) * Vector3(0, bar_y, 0.08), yaw), Vector3(0.42, 0.04, 0.03), ZONE_METAL_OUT)
+			# 쇠 빗장: 밖에서 잠긴 문을 읽게(회색 상자의 자물쇠 자리). 안에서 막은 문(방 이야기,
+			# 금지선 「밖에서 잠근 문」)은 바깥에 아무것도 없다.
+			if String(door.get("barred", "")) != "inside":
+				var bar_y := 0.2 if cut else 1.05
+				bake.box(_xf(at + Basis(Vector3.UP, yaw) * Vector3(0, bar_y, 0.08), yaw), Vector3(0.42, 0.04, 0.03), ZONE_METAL_OUT)
 		_:
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
 	row["node"].mesh = bake.mesh()
@@ -986,6 +990,10 @@ func _draw_window(key: Vector3i) -> void:
 	var bake := Bake.new()
 	if not row["cut"]:
 		bake.add(_arrays["window_glass_broken" if win.get("broken", false) else "window_glass"], xf)
+		# 판자 친 창(방 이야기): 위 자리부터 몇 장. 세 자리를 다 채우지 않아 창 일부만 가린다.
+		for i in range(mini(int(win.get("boards", 0)), _board_slots.size())):
+			var slot: Dictionary = _board_slots[i]
+			bake.add(_arrays["window_boards"], xf * Transform3D(Basis(Vector3.BACK, deg_to_rad(float(slot["roll_deg"]))), Vector3(0, float(slot["height_m"]), 0)))
 	if win.get("glass", false):
 		bake.add(_arrays["window_glass_floor"], xf)
 	row["node"].mesh = bake.mesh()
