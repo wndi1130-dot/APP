@@ -10,6 +10,7 @@ extends Node3D
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingShader = preload("res://game/world/building.gdshader")
+const BuildPace = preload("res://game/world/build_pace.gd")
 const S = FieldGrid.Solid
 const CATALOG_PATH := "res://models/building_kit/catalog.json"
 const MODE_SETTING := "visuals/building_models_enabled"
@@ -32,7 +33,7 @@ const PIECES: Array[String] = [
 	"ext_window", "ext_window_cut", "window_glass", "window_glass_broken", "window_glass_floor",
 	"ext_door", "door_leaf", "door_leaf_broken", "door_leaf_cut", "door_frame_cut",
 	"int_wall", "int_wall_cut", "int_door", "roof_gable", "roof_gable_end", "roof_flat",
-	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards",
+	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards", "ladder",
 ]
 const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
@@ -547,6 +548,10 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	if prints.has(0) and not prints[0].is_empty():
 		out["footprints"][b] = _bounds(prints[0])
 	var gables: Array = []
+	# 오르는 옥상으로 고른 건물(roof_rules.gd)은 맨 위도 낮은 담을 두른 평지붕이다.
+	var flat_top := false
+	for row: Variant in data.get("rooftops", []):
+		flat_top = flat_top or (row is Dictionary and int(row.get("building", -1)) == b)
 	for lv: int in prints:
 		var here: Dictionary = prints[lv]
 		var above: Dictionary = prints.get(lv + 1, {})
@@ -556,7 +561,7 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 				region[c] = true
 		var top := (lv + 1) * LEVEL_H
 		for r: Rect2i in _rects_of(region):
-			if _touches(r, above):
+			if _touches(r, above) or (flat_top and above.is_empty()):
 				_plan_flat(out, r, top, above, b)
 			else:
 				gables.append(_plan_gable(out, r, top, b))
@@ -711,6 +716,8 @@ static func _plan_flat(out: Dictionary, r: Rect2i, top: float, above: Dictionary
 static func _plan_stairs(out: Dictionary, data: Dictionary, levels: Dictionary) -> void:
 	for s: Dictionary in data.get("stairs", []):
 		if s.get("ladder", false):
+			if s.has("roof"):
+				_plan_roof_ladder(out, s, levels)
 			continue
 		var c: Vector2i = s["cell"]
 		var low: int = s["low"]
@@ -738,9 +745,29 @@ static func _plan_stairs(out: Dictionary, data: Dictionary, levels: Dictionary) 
 		out["pieces"].append({"box": Vector3(0.47, 0.01, 0.47), "colour": ZONE_METAL_IN, "xf": _xf(Vector3(c.x + 0.5, 0.012, c.y + 0.5), 0.0), "b": hg.building_at(c), "lv": high, "slot": "int_stand"})
 
 
+## 옥상 천창의 접이 사다리(house_layout.md 6.1): 맨 위층 방 안에서 벽에 기대 지붕 위로 0.9 m
+## 나온다. 안을 열면 방 안에, 밖에서는 지붕 조각과 함께 그려 지붕 위로 나온 끝이 오를 자리를 알린다.
+static func _plan_roof_ladder(out: Dictionary, s: Dictionary, levels: Dictionary) -> void:
+	var c: Vector2i = s["cell"]
+	var low: int = s["low"]
+	if not levels.has(low):
+		return
+	var lg: FieldGrid = levels[low]
+	var wall := Vector2i.ZERO
+	for d in DIRS:
+		if lg.solid_at(c + d) == S.WALL:
+			wall = d
+	var b := int(s["roof"])
+	# 사다리 조각은 -Z 쪽에 붙어 있다: -Z가 벽을 보게 돌린다.
+	var yaw := yaw_of(-wall) if wall != Vector2i.ZERO else 0.0
+	_add(out, "ladder", _xf(Vector3(c.x + 0.5, 0, c.y + 0.5), yaw), b, low, "int_stand")
+	out["roofs"].append({"id": "ladder", "xf": _xf(Vector3(c.x + 0.5, low * LEVEL_H, c.y + 0.5), yaw), "b": b})
+
+
 # ---------------------------------------------------------------- 노드
 
-func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
+## `pace` (build_pace.gd, staged stops): wait a frame between pieces; null: all at once.
+func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void:
 	levels = map_data.get("levels", {0: map_data["grid"]})
 	world_material = world_mat
 	material = ShaderMaterial.new()
@@ -748,7 +775,9 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 	for key in ["vis", "map_size", "lamp_color"]:
 		material.set_shader_parameter(key, world_mat.get_shader_parameter(key))
 	material.set_shader_parameter("hole_radius", HOLE_R)
-	var p := plan(map_data)
+	# Planned off the main thread with the map, when it was (stop_loader.gd).
+	var p: Dictionary = map_data["_building_plan"] if map_data.get("_building_plan") is Dictionary else plan(map_data)
+	await BuildPace.rest(pace)
 	for key: Vector2i in p["kinds"]:
 		if not drawn_cells.has(key.y):
 			drawn_cells[key.y] = {}
@@ -767,8 +796,10 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 			bakes[key].box(row["xf"], row["box"], row["colour"])
 		else:
 			bakes[key].add(_arrays[row["id"]], row["xf"])
+		await BuildPace.rest(pace)
 	var pairs: Dictionary = {}
 	for key: String in bakes:
+		await BuildPace.rest(pace)
 		var bits := key.split("|")
 		var shell := Vector2i(int(bits[0]), int(bits[1]))
 		var slot := bits[2]
@@ -797,7 +828,9 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 		if not roof_bakes.has(row["b"]):
 			roof_bakes[row["b"]] = Bake.new()
 		roof_bakes[row["b"]].add(_arrays[row["id"]], row["xf"])
+		await BuildPace.rest(pace)
 	for b: int in roof_bakes:
+		await BuildPace.rest(pace)
 		var node := _node(b, 0, roof_bakes[b].mesh(), true)
 		node.position.y = 0.0
 		node.set_instance_shader_parameter("seen_fixed", Vector2.ZERO)
@@ -807,11 +840,13 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial) -> void:
 		var key := Vector3i(row["cell"].x, row["cell"].y, row["lv"])
 		door_nodes[key] = {"node": node, "plan": row, "cut": false}
 		_draw_door(key)
+		await BuildPace.rest(pace)
 	for row: Dictionary in p["windows"]:
 		var node := _node(row["b"], row["lv"], null, false)
 		var key := Vector3i(row["cell"].x, row["cell"].y, row["lv"])
 		window_nodes[key] = {"node": node, "plan": row, "cut": false}
 		_draw_window(key)
+		await BuildPace.rest(pace)
 	_apply()
 	_instant = false
 
