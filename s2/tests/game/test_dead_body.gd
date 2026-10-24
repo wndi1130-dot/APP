@@ -174,7 +174,14 @@ func test_the_added_motions_are_baked_under_their_numbers() -> void:
 # into each other with no jump, none covers ground, and the head is lowest (the
 # teeth meet) at the middle of the loop.
 func test_eating_a_body_goes_down_eats_and_gets_up_with_no_jump() -> void:
-	var named := {DeadBody.EAT_START: "eat_start", DeadBody.EAT: "eat", DeadBody.EAT_RISE: "eat_rise"}
+	# Picked by name (dead_body.gd EAT_START, EAT, EAT_RISE); their numbers in the bake.
+	var number := {}
+	for i in BodyBake.CLIPS.size():
+		number[BodyBake.CLIPS[i][0]] = i
+	var start: int = number[DeadBody.EAT_START]
+	var loop: int = number[DeadBody.EAT]
+	var rise: int = number[DeadBody.EAT_RISE]
+	var named := {start: DeadBody.EAT_START, loop: DeadBody.EAT, rise: DeadBody.EAT_RISE}
 	for n: int in named:
 		assert_eq(BodyBake.OWN_CLIPS[n][0], named[n])
 		assert_eq(BodyBake.CLIPS[n][0], named[n], "the same number either way")
@@ -183,11 +190,11 @@ func test_eating_a_body_goes_down_eats_and_gets_up_with_no_jump() -> void:
 		var clips: Array = baked["clips"]
 		for n: int in named:
 			assert_eq(str(clips[n]["name"]), named[n], folder)
-			assert_eq(bool(clips[n]["loop"]), n == DeadBody.EAT, named[n] + " loops only if it is the eating")
+			assert_eq(bool(clips[n]["loop"]), n == loop, named[n] + " loops only if it is the eating")
 			assert_eq(float(clips[n]["round"]), 0.0, named[n] + " covers no ground")
-		var down: Dictionary = clips[DeadBody.EAT_START]
-		var eat: Dictionary = clips[DeadBody.EAT]
-		var up: Dictionary = clips[DeadBody.EAT_RISE]
+		var down: Dictionary = clips[start]
+		var eat: Dictionary = clips[loop]
+		var up: Dictionary = clips[rise]
 		var joins := [[_last_frame(baked, down), _frame(baked, eat, 0), "down into the eating"],
 			[_frame(baked, eat, 0), _frame(baked, up, 0), "the eating into getting up"],
 			[_last_frame(baked, up), _frame(baked, down, 0), "up to where it went down from"]]
