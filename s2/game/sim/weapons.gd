@@ -1,21 +1,25 @@
 extends RefCounted
 # Weapon data and pure rules for S2 (weapons.md 'S2에 넣을 범위', crafted-gun axis split 2026-10-07).
+# feet_from (melee, motion only): how far into the swing the feet are held,
+# to its end (motion.gd swing_row). A knife is thrust with the feet free for
+# its first half; a crowbar or an axe plants them almost at once (as the
+# reference game holds the feet from 10% of a swing, from 50% of a stab).
 
 const DATA: Dictionary = {
 	"knife": {
 		"name": "칼", "kind": "melee", "hands": 1, "weight": 1.0, "sound": 0,
 		"reach": 1.0, "swing": 0.45, "windup": 0.10, "head_base": 0.30, "head_kill": 0.85, "knockdown": 0.1,
-		"blade": true, "fatigue": 0.004, "wear": 0.01, "pry": false,
+		"blade": true, "fatigue": 0.004, "wear": 0.01, "pry": false, "feet_from": 0.5,
 	},
 	"crowbar": {
 		"name": "쇠지렛대", "kind": "melee", "hands": 1, "weight": 2.0, "sound": 0,
 		"reach": 1.15, "swing": 0.6, "windup": 0.18, "head_base": 0.28, "head_kill": 0.6, "knockdown": 0.5,
-		"blade": false, "fatigue": 0.006, "wear": 0.004, "pry": true,
+		"blade": false, "fatigue": 0.006, "wear": 0.004, "pry": true, "feet_from": 0.1,
 	},
 	"axe": {
 		"name": "손도끼", "kind": "melee", "hands": 1, "weight": 3.0, "sound": 0,
 		"reach": 1.6, "swing": 0.9, "windup": 0.30, "head_base": 0.32, "head_kill": 0.9, "knockdown": 0.6,
-		"blade": true, "fatigue": 0.012, "wear": 0.006, "pry": false,
+		"blade": true, "fatigue": 0.012, "wear": 0.006, "pry": false, "feet_from": 0.1,
 	},
 	"pistol": {
 		"name": "권총", "kind": "gun", "hands": 1, "weight": 2.0, "sound": 2,

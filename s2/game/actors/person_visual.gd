@@ -43,7 +43,7 @@ const TELL: int = DeadBody.TELL
 const SHADE: float = 1.0
 const STRIDE_CAP: float = 0.5            # more than this between two drawings is not a step
 const STILL_AFTER: float = 0.2           # stands once it has kept its place this long
-# Held by the dead (after Project Zomboid's struck state, 상태표 2.3): the arms
+# Held by the dead (after the reference game's struck state, 상태표 2.3): the arms
 # out against them (the lunge's reach), leaning back from one in front and
 # bent under one behind, twisting to get free.
 const HELD_LEAN: Vector2 = Vector2(-0.2, 0.22)   # in front, behind
@@ -53,8 +53,20 @@ const HELD_HZ: float = 2.6
 # back, easing out. A bite throws it furthest.
 const HURT_TIME: float = 0.45
 const HURT_LEAN: Dictionary = {"bite": -0.35, "": -0.2}
+# The blow throws the body away from where it came: back from one in front,
+# forward from one behind, over to the far side from one at the side (the
+# reference game picks its struck motion by the striker's side). What struck
+# it is the nearest of the dead holding it; with none, it came from in front.
+const HURT_SIDE_ROLL: float = 0.6        # of the lean, rolled away from one at the side
+# Turning where it stands, the feet step round instead of the body spinning on
+# them (the reference game steps its turns in place): a turn of one radian goes
+# TURN_FOOT metres round the walk, so a half turn is about two steps.
+const TURN_FOOT: float = 0.35
+const TURN_HOLD: float = 0.15            # it keeps stepping this long after the turn stops
+const TURN_MIN: float = 0.002            # less than this between two drawings is not a turn
+const TURN_CAP: float = 1.2              # more than this at once is a snap round, not stepped
 # The living's own motions in OWN_FOLDER, by name; where the build has no such
-# folder, the dead's that read closest. Crouched (Project Zomboid's sneak: its
+# folder, the dead's that read closest. Crouched (the reference game's sneak: its
 # own stand and walk) it stands low as the dead do before they run, and walks
 # the bent shuffle. A note keeps an own motion as OWN_BASE + its number, so it
 # is never taken for one of the dead's.
@@ -79,7 +91,7 @@ const OWN_SPENT: String = "p_spent"
 # long gun turns over in the hand in it, so it is held as person_pose.gd has it.
 const OWN_RELOAD: String = "p_reload"
 const OWN_BASE: int = 100
-# Easing into each own motion: Project Zomboid's own (its AnimSets m_BlendTime):
+# Easing into each own motion: the reference game's own blend-in times:
 # walk, stand 0.2, run 0.35, sneak walk 0.5 and low 0.4, bitten 0.2, shove
 # 0.2, a melee blow 0.15, rummaging low 0.5, a bandage 0.2, aiming 0.3, falling and
 # getting up 0.2. Rummaging at chest height has none of its own: its commonest, 0.2.
@@ -90,10 +102,10 @@ const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5
 	"p_fall": 0.2, "p_fall_front": 0.2, "p_fall_slump": 0.2, "p_crawl": 0.2, "p_rise": 0.2, "p_rise_front": 0.2,
 	"p_floor_strike": 0.15, "p_stomp": 0.2, "p_kick": 0.2, "p_pry": 0.2,
 	"p_reload": 0.2, "p_kneel_work": 0.5}
-# Aiming a gun standing still (Project Zomboid: aim_handgun, aim_rifle): one hand
+# Aiming a gun standing still (as the reference game aims a handgun and a rifle): one hand
 # out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
 const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
-# A timed job of the hands (Project Zomboid: the hands' own motions over the
+# A timed job of the hands (as in the reference game: the hands' own motions over the
 # standing, by how high the work is): the own motion and how fast it goes
 # round. 0 plays it once over the job: a window is broken with one blow. A bar
 # is worked back and forth, the pickaxe comes down in front of the feet, work on
@@ -114,9 +126,9 @@ const OWN_WORK: Dictionary = {
 # right hand goes fastest) and, if not at its end, where the way back stops
 # (the chop is a loop that lifts the axe again: it stops with the axe low, so
 # the next way does not drop the arm and lift it once more). Blow after blow goes through them in turn, so the
-# same one is not seen twice running (decision 411): Project Zomboid swings a
+# same one is not seen twice running (decision 411): the reference game swings a
 # one-handed weapon across, overhead or up from below and mixes three swings
-# across, and Brutal Handwork changes hands each blow. A knife stabs, then cuts
+# across, and a hand-to-hand mod for it changes hands each blow. A knife stabs, then cuts
 # across; an axe comes down from overhead, then chops in from the side; the
 # rest swing across, back the other way, then come down from overhead.
 # A blow at a body on the ground is struck down in front of the feet, and a
@@ -298,6 +310,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var gone: float = at.distance_to(note.get("at", at))
 	note["at"] = at
 	_note_hurt(p, note, t)
+	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
+	var turned := _turned(p, note, t)
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
@@ -385,6 +399,16 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		if own_spent >= 0:
 			return Vector2(_own_cycle(note, OWN_BASE + own_spent, t, _length(own, own_spent, 1.0) * 2.0, unit), own_spent)
 		return Vector2(_own_cycle(note, STAGGER, t, _length(clips, STAGGER, 1.0) * 2.0, unit), STAGGER)
+	if t - float(note.get("moved", -10.0)) >= STILL_AFTER and t - float(note.get("turned", -10.0)) < TURN_HOLD:
+		# Turning on the spot: the walk goes round by the turn, not by ground covered.
+		var own_turn := clip_named(own, OWN_CROUCH_WALK if p.crouched else OWN_WALK, -1)
+		var foot := turned * TURN_FOOT
+		if own_turn >= 0:
+			note["motion"] = OWN_BASE + own_turn
+			return Vector2(_round(note, "step", foot, _round_of(own, own_turn, 1.2)), own_turn)
+		var turn_gait := CROUCH_WALK if p.crouched else WALK
+		note["motion"] = turn_gait
+		return Vector2(_round(note, "step", foot, _round_of(clips, turn_gait, float(DeadBody.STRIDE.get(turn_gait, 1.2)))), turn_gait)
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
 		var own_stand := clip_named(own, OWN_CROUCH_STAND if p.crouched else OWN_STAND, -1)
 		if own_stand >= 0:
@@ -479,7 +503,7 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 	if not OWN_WORK.has(p.action):
 		return Vector2(0.0, -1.0)
 	var work_name := String(OWN_WORK[p.action][0])
-	# Crouched it keeps low (Project Zomboid's sneaking jobs): chest-high work done low.
+	# Crouched it keeps low (the reference game's sneaking jobs): chest-high work done low.
 	if p.crouched and (work_name == "p_search_mid" or work_name == "p_pry"):
 		work_name = "p_search_low"
 	var clip := clip_named(own, work_name, -1)
@@ -670,7 +694,43 @@ static func _note_hurt(p, note: Dictionary, t: float) -> void:
 	if n > int(note.get("wounds", n)):
 		note["hurt_at"] = t
 		note["hurt_kind"] = String(p.body.wounds[-1].get("kind", ""))
+		note["hurt_from"] = hurt_from(p)
 	note["wounds"] = n
+
+
+## Where the blow came from, seen from the body: x to its right (+) or left
+## (-), y in front (+) or behind (-). The nearest of the dead holding it; with
+## none of them (or none with a place), straight in front.
+static func hurt_from(p) -> Vector2:
+	var best := INF
+	var from := Vector2(0.0, 1.0)
+	# The way the body is drawn turned (it may still be coming round to its facing).
+	var fwd := Vector3(sin(p.rotation.y), 0.0, cos(p.rotation.y))
+	var right := Vector3(-fwd.z, 0.0, fwd.x)
+	for z in p.grabbers:
+		if not (z is Dictionary) or not z.has("pos"):
+			continue
+		var to: Vector3 = z["pos"] - p.position
+		to.y = 0.0
+		var d := to.length()
+		if d < 0.01 or d >= best:
+			continue
+		best = d
+		from = Vector2(right.dot(to / d), fwd.dot(to / d))
+	return from
+
+
+## How far the body has turned since it was last drawn (radians); notes when it
+## last turned. A snap round (TURN_CAP) or a tremble (TURN_MIN) is not a turn.
+static func _turned(p, note: Dictionary, t: float) -> float:
+	var yaw: float = p.rotation.y
+	var was: float = float(note.get("yaw", yaw))
+	note["yaw"] = yaw
+	var d := absf(angle_difference(was, yaw))
+	if d < TURN_MIN or d > TURN_CAP:
+		return 0.0
+	note["turned"] = t
+	return d
 
 
 ## 1 as a wound comes, down to 0 HURT_TIME after.
@@ -697,7 +757,11 @@ static func lean_of(p, note: Dictionary) -> Basis:
 			turn = HELD_TWIST.y * sin(w * 0.5 + 0.7)
 	var k := hurt_k(note, t)
 	if k > 0.0:
-		pitch += float(HURT_LEAN.get(note.get("hurt_kind", ""), HURT_LEAN[""])) * k * k
+		# Away from the blow: back from in front, forward from behind, over from the side.
+		var lean := float(HURT_LEAN.get(note.get("hurt_kind", ""), HURT_LEAN[""])) * k * k
+		var from: Vector2 = note.get("hurt_from", Vector2(0.0, 1.0))
+		pitch += lean * from.y
+		roll += absf(lean) * HURT_SIDE_ROLL * -from.x
 	if pitch == 0.0 and roll == 0.0 and turn == 0.0:
 		return Basis()
 	return Basis(Vector3.UP, turn) * Basis(Vector3.RIGHT, pitch) * Basis(Vector3.BACK, roll)
@@ -730,7 +794,7 @@ static func clip_named(clips: Array, clip_name: String, fallback: int) -> int:
 
 
 ## A motion that goes round by the clock, each person from their own place
-## in it and at their own pace (Project Zomboid scatters its standing: 상태표 3.1).
+## in it and at their own pace (the reference game scatters its standing: 상태표 3.1).
 ## `key` is what the note keeps it as, `length` one round of it.
 static func _own_cycle(note: Dictionary, key: int, t: float, length: float, unit: float) -> float:
 	note["motion"] = key
