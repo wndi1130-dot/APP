@@ -217,7 +217,6 @@ var auto_paused_once: bool = false
 var flash_t: float = 0.0
 var dark_noise_t: float = 0.0
 var safe_warned: bool = false
-var ice_warned: bool = false
 var glass_warned: bool = false
 var player_downed_t: float = 0.0
 var spotted_events: int = 0
@@ -1386,7 +1385,7 @@ func _move_person(p: Person, delta: float) -> void:
 	if spd <= 0.0:
 		p.moving = false
 		if p == player:
-			hud.toast("너무 무겁다. 짐을 덜어야 움직인다.")
+			hud.toast("너무 무거움")
 			p.stop()
 		return
 	var step := d.normalized() * minf(spd * delta, d.length())
@@ -1448,9 +1447,6 @@ func _footsteps(p: Person, delta: float, cell: Vector2i) -> void:
 				p.ice_t = 0.0
 				if rng.randf() < 0.1:
 					combat.fall(p, "얼음에 미끄러졌다")
-			if p == player and not ice_warned:
-				ice_warned = true
-				hud.toast("얼음 위에선 걷는 게 좋다.")
 		elif p.carry_state() >= 2 and rng.randf() < delta * 0.03:
 			combat.fall(p, "짐에 눌려 넘어졌다")
 
@@ -1502,7 +1498,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 				say(p, "%s 열이 오른다." % p.display_name, false, "window_closed")
 		"exhausted_heavy":
 			if p == player:
-				hud.toast("숨이 차서 더는 뛰지 못한다.")
+				hud.toast("숨참")
 
 
 func on_person_died(p: Person) -> void:
