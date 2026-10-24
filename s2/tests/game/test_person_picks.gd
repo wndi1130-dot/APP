@@ -12,6 +12,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 const Stamina = preload("res://game/sim/stamina.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
+const BodyBake = preload("res://scripts/body_bake.gd")
 
 const OLD: Array = ["p_walk", "p_run", "p_stand", "p_crouch_walk", "p_crouch_idle", "p_bitten",
 	"p_search_mid", "p_search_low", "p_kneel_work", "p_treat", "p_pry"]
@@ -256,3 +257,21 @@ func test_the_first_of_the_dead_holding_someone_bites_as_the_hold_runs_out() -> 
 	DeadBody.named = {}
 	held.grab_left = 0.25
 	assert_eq(DeadBody.motion_in(DeadBody.custom(z, 0.0, 0.0, 1.0, true).g), DeadBody.LUNGE, "a folder without them: as before")
+
+
+func test_the_living_folder_in_the_build_has_every_motion_these_ask_for() -> void:
+	var own: Array = BodyBake.load_baked(PersonVisual.OWN_FOLDER).get("clips", [])
+	for n: String in NEW + ["p_limp_light_l", "p_limp_light_r"]:
+		if n == "p_limp_light":
+			continue
+		assert_gt(PersonVisual.clip_named(own, n, -1), -1, n)
+	for h in SearchHeight.CLIP.values():
+		assert_gt(PersonVisual.clip_named(own, String(h), -1), -1, String(h))
+	# The shiver goes round: kept up a while, not one round.
+	var p := _person()
+	p.heat.heat = 50.0
+	var unit: float = p.name_unit("mood")
+	var every := lerpf(PersonVisual.MOOD_EVERY.x, PersonVisual.MOOD_EVERY.y, unit)
+	var start := every - fposmod(unit * every, every)
+	assert_eq(_named(own, PersonVisual.mood_of(p, {}, start + 2.5, own)), "p_shiver")
+	assert_eq(PersonVisual.mood_of(p, {}, start + PersonVisual.MOOD_LOOP + 0.1, own).y, -1.0)

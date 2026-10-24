@@ -125,6 +125,7 @@ const OWN_PAIN: Dictionary = {"head_neck": "p_pain_head", "torso": "p_pain_torso
 const OWN_SHIVER: String = "p_shiver"
 const OWN_TIRED: String = "p_tired_stretch"
 const MOOD_EVERY: Vector2 = Vector2(9.0, 15.0)
+const MOOD_LOOP: float = 3.0          # a shiver (a motion that goes round) is kept up this long
 const PAIN_SHOWN: float = 0.25        # it hurts this much in all (body_state.gd pain) before it is shown
 # Aiming a gun standing still (as the reference game aims a handgun and a rifle): one hand
 # out for a handgun, the long gun up at the shoulder. A bow has none of its own yet.
@@ -648,10 +649,11 @@ static func mood_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 	var every := lerpf(MOOD_EVERY.x, MOOD_EVERY.y, unit)
 	var at := fposmod(t + unit * every, every)
 	var length := _length(own, clip, 1.0)
-	if at >= length:
+	var loops := bool(own[clip].get("loop", false))
+	if at >= (maxf(length, MOOD_LOOP) if loops else length):
 		return Vector2(0.0, -1.0)
 	note["motion"] = OWN_BASE + clip
-	return Vector2(at / length, clip)
+	return Vector2(fposmod(at / length, 1.0) if loops else at / length, clip)
 
 
 ## Loading or clearing the handgun in the hand in the living's own (y), how far
