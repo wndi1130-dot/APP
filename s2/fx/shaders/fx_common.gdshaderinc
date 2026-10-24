@@ -10,6 +10,14 @@ global uniform float fx_flash;  // lightning, 0..1 for a few frames
 // Tactical pause: the world fades like an old photo. People and HUD skip it
 // (presentation_motion.md 필드 일시정지), so only world shaders call fx_photo.
 global uniform float fx_fade;
+// The atmosphere frame (fx/atmosphere.gd): x the cold (0 warmest .. 1 coldest),
+// y how frozen standing water is, z how long icicles hang, w dead leaf left.
+global uniform vec4 fx_cold;
+// The sky's light: what wet ground and ice give back, low sun on paint.
+global uniform vec4 fx_sky : source_color;
+// Cloud shadows crossing the ground: x cover, yz drift (m/s), w how much of the
+// light they take (0 under a closed sky, where there is no sun to block).
+global uniform vec4 fx_cloud;
 
 // Mobile budget: value noise with two octaves, no textures.
 float fx_hash(vec2 p) {
@@ -28,6 +36,41 @@ float fx_vnoise(vec2 p) {
 
 float fx_fbm2(vec2 p) {
 	return fx_vnoise(p) * 0.65 + fx_vnoise(p * 2.13 + 7.1) * 0.35;
+}
+
+// Cloud shadow drifting over world xz: 1 in the open, darker under a cloud.
+// Built-ins are not seen inside functions, so the caller hands TIME in.
+float fx_cloud_shade(vec2 xz, float time) {
+	if (fx_cloud.w <= 0.001) {
+		return 1.0;
+	}
+	vec2 p = (xz - fx_cloud.yz * time) * 0.022;
+	float n = fx_fbm2(p) * 0.8 + fx_vnoise(p * 3.1 + 5.0) * 0.2;
+	float edge = 1.0 - fx_cloud.x;
+	return 1.0 - smoothstep(edge - 0.08, edge + 0.12, n) * fx_cloud.w * 0.75;
+}
+
+// Where water stands on open flat ground (0..1). Pools are the same in every
+// shader, so a wall's foot and the ground beside it agree.
+float fx_pool(vec2 xz) {
+	return smoothstep(0.63, 0.71, fx_fbm2(xz * 0.42 + vec2(17.0, 3.0)));
+}
+
+// A pool: open water gives the sky back, ringed when it rains; frozen it is
+// pale, milky ice with dark cracks. ice: fx_cold.y. rain: how hard it falls.
+vec3 fx_pool_color(vec3 base, vec2 xz, float time, float ice, float rain) {
+	float rip = 0.0;
+	if (rain > 0.01) {
+		vec2 cell = floor(xz * 2.2);
+		vec2 f = fract(xz * 2.2) - 0.5;
+		float t = fract(time * 0.9 + fx_hash(cell) * 7.0);
+		rip = (1.0 - smoothstep(0.0, 0.06, abs(length(f) - t * 0.5))) * (1.0 - t) * rain;
+	}
+	vec3 water = mix(base * 0.35, fx_sky.rgb * 0.62, 0.7) + rip * 0.12;
+	float crack = 1.0 - abs(fx_vnoise(xz * 3.3 + 11.0) * 2.0 - 1.0);
+	vec3 frozen = mix(vec3(0.60, 0.65, 0.70), fx_sky.rgb * 0.9, 0.35) * (0.92 + 0.08 * fx_vnoise(xz * 1.7));
+	frozen *= 1.0 - 0.35 * pow(crack, 14.0);
+	return mix(water, frozen, clamp(ice, 0.0, 1.0));
 }
 
 // Rime and snow are grey-white, never sky blue (decisions.md 날씨와 빛).
