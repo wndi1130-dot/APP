@@ -793,6 +793,60 @@
 			"start": 709
 		},
 		{
+			"frames": 13,
+			"hi": [
+				0.774169921875,
+				0.16746012866497,
+				0.42913818359375
+			],
+			"length": 2.4,
+			"lo": [
+				-0.77587890625,
+				-0.53271484375,
+				-0.27655029296875
+			],
+			"loop": false,
+			"name": "p_wear_outer",
+			"round": 0.0,
+			"start": 722
+		},
+		{
+			"frames": 13,
+			"hi": [
+				0.636962890625,
+				0.427897125482559,
+				0.56689453125
+			],
+			"length": 1.4,
+			"lo": [
+				-0.6365966796875,
+				-0.53173828125,
+				-0.11728922277689
+			],
+			"loop": false,
+			"name": "p_wear_head",
+			"round": 0.0,
+			"start": 735
+		},
+		{
+			"frames": 13,
+			"hi": [
+				0.795654296875,
+				0.1610107421875,
+				0.512044250965118
+			],
+			"length": 1.8,
+			"lo": [
+				-0.796061217784882,
+				-0.53173828125,
+				-0.11260986328125
+			],
+			"loop": false,
+			"name": "p_wear_hands",
+			"round": 0.0,
+			"start": 748
+		},
+		{
 			"frames": 17,
 			"hi": [
 				0.654296875,
@@ -808,7 +862,7 @@
 			"loop": false,
 			"name": "p_reload",
 			"round": 0.0,
-			"start": 722
+			"start": 761
 		},
 		{
 			"frames": 20,
@@ -826,7 +880,7 @@
 			"loop": false,
 			"name": "p_climb",
 			"round": 0.0,
-			"start": 739
+			"start": 778
 		},
 		{
 			"frames": 16,
@@ -844,7 +898,7 @@
 			"loop": true,
 			"name": "p_kneel_work",
 			"round": 0.0525062561035156,
-			"start": 759
+			"start": 798
 		},
 		{
 			"frames": 24,
@@ -862,11 +916,11 @@
 			"loop": false,
 			"name": "p_chop_side",
 			"round": 0.0,
-			"start": 775
+			"start": 814
 		}
 	],
 	"format": "rgb8q",
-	"height": 799,
+	"height": 838,
 	"rows_per_frame": 1,
 	"vertices": 2997,
 	"width": 2997

@@ -12,6 +12,7 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
+const CellarRules = preload("res://game/world/cellar_rules.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -128,12 +129,18 @@ static func build_from(script: Script) -> Dictionary:
 	# same rooms), the map's own pieces that stand in a doorway, on the stairs'
 	# step, tall in front of a window or half in a wall are moved aside, and
 	# the boxes go into the furniture that holds them.
+	# A big cellar gets its second way in (a yard hatch) before the rooms are
+	# laid out, so nothing stands at its foot (house_layout.md 5.2).
 	if script.resource_path.begins_with(MAP_DIR):
 		data["_defer_paths"] = true
+		var hatches := CellarRules.hatches(data)
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
+		data["room_stats"]["hatches"] = hatches
 		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)
 		data["furniture_stats"] = RoomFurnish.block_furniture(data)
 		data["room_stats"]["boxes_moved"] = RoomFurnish.boxes_into_furniture(data)
+		# Low cellar windows at the foot of the walls show a cellar from outside.
+		data["cellar_windows"] = CellarRules.windows(data)
 		data.erase("_rooms")
 		data.erase("_defer_paths")
 		for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
