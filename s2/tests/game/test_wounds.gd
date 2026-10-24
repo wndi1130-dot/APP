@@ -368,6 +368,13 @@ func test_a_fall_that_breaks_a_leg_adds_a_leg_fracture_wound() -> void:
 func test_a_bite_lands_on_a_part_and_keeps_the_coarse_place() -> void:
 	_field()
 	var p = game.squad[1]
+	# The bite comes from the hand that has hold (body_injury 4 잡힘 → 물림):
+	# one of the dead has them in its grab, out in the open.
+	p.position = game.lift(Vector2i(60, 7), 0)
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.8, 0, 0))
+	z["state"] = "grab"
+	z["victim"] = p
+	p.grabbers.append(z)
 	game.combat.bite(p)
 	assert_eq(p.body.wounds.size(), 1)
 	assert_eq(p.body.wounds[0]["kind"], "bite")
@@ -604,16 +611,22 @@ func test_what_festers_and_what_does_not() -> void:
 
 
 func test_a_festering_wound_slows_what_that_part_does() -> void:
+	# The cut already slows its part and its pain slows the hands (body_injury
+	# 4.6: 부위가 동작을 바꾼다, 통증), so festering is set against the same cut.
 	var clean: Dictionary = Body.new().multipliers({})
 	var b = Body.new()
-	b.set_festering(b.add_wound("arm_left", "laceration", 0.0, 0.0), true)
+	var cut: int = b.add_wound("arm_left", "laceration", 0.0, 0.0)
+	var before: Dictionary = b.multipliers({})
+	b.set_festering(cut, true)
 	var arm: Dictionary = b.multipliers({})
-	assert_almost_eq(float(arm["hands"]), float(clean["hands"]) * Body.FESTER_MULT, 0.0001)
-	assert_almost_eq(float(arm["reload"]), float(clean["reload"]) * Body.FESTER_MULT, 0.0001)
+	assert_almost_eq(float(arm["reload"]), float(before["reload"]) * Body.FESTER_MULT, 0.0001)
+	assert_lt(float(arm["hands"]), float(before["hands"]) * Body.FESTER_MULT, "and it hurts more (4.6: 통증이 는다)")
 	assert_almost_eq(float(arm["move"]), float(clean["move"]), 0.0001)
 	var c = Body.new()
-	c.set_festering(c.add_wound("leg_right", "laceration", 0.0, 0.0), true)
-	assert_almost_eq(float(c.multipliers({})["move"]), float(clean["move"]) * Body.FESTER_MULT, 0.0001)
+	var leg: int = c.add_wound("leg_right", "laceration", 0.0, 0.0)
+	var walk: float = float(c.multipliers({})["move"])
+	c.set_festering(leg, true)
+	assert_almost_eq(float(c.multipliers({})["move"]), walk * Body.FESTER_MULT, 0.0001)
 	var notes: Array = c.status_notes()
 	assert_eq(notes.size(), 1)
 	assert_eq([notes[0]["id"], notes[0]["short"], notes[0]["title"]], ["fester", "곪음", "곪은 상처"])

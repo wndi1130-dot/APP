@@ -42,6 +42,12 @@ func test_a_whole_coat_never_lets_a_scratch_through() -> void:
 	for i in range(TRIES):
 		# Each blocked reach wears the coat; put it back so the block stays whole.
 		p.coat["wear"] = 0.0
+		# A blocked reach also tears where it struck, and a torn spot no longer
+		# blocks (body_injury 4): mend it too, so the coat stays whole.
+		p.coat.erase("holes")
+		# A hand that was let go is shoved off out of reach: reach afresh.
+		z["pos"] = p.position + Vector3(0.8, 0, 0)
+		z["state"] = "attack"
 		var outcome: String = game.combat.zombie_reaches(z, p)
 		seen[outcome] = true
 		if outcome == "blocked":
@@ -71,6 +77,9 @@ func test_a_hold_with_no_window_left_cannot_be_broken() -> void:
 
 func test_a_bite_lets_go_panics_and_goes_on_the_receipt() -> void:
 	var z := _body_at(0.8)
+	# The bite comes from the hand that has hold (body_injury 4 잡힘 → 물림).
+	z["state"] = "grab"
+	z["victim"] = p
 	p.grabbers.append(z)
 	p.grab_left = 0.0
 	game.combat.bite(p)
@@ -88,11 +97,17 @@ func _a_locked_door() -> Vector2i:
 	return game.grid.doors.keys()[0]
 
 
+## The crowbar has to reach the door: stand on its walkable side.
+func _by_the_door(c: Vector2i) -> Vector2i:
+	p.position = game.lift(game.actions._side_cell(game.grid, c, p.position), 0)
+	return c
+
+
 func test_a_crowbar_starts_prying_a_door() -> void:
 	assert_false(game.grid.doors.is_empty(), "the field has doors")
 	p.hands = [{"id": "crowbar", "quality": "factory", "condition": 1.0, "loaded": 0}]
 	p.set_weapon_slots(p.hands)
-	game.actions.pry_door(p, _a_locked_door())
+	game.actions.pry_door(p, _by_the_door(_a_locked_door()))
 	assert_eq(p.action, "pry", "the crowbar goes into the door")
 	assert_almost_eq(p.action_t, game.actions.PRY_TIME, 0.0001)
 
@@ -101,5 +116,6 @@ func test_no_crowbar_no_prying() -> void:
 	p.hands = [{"id": "knife", "quality": "factory", "condition": 1.0, "loaded": 0}]
 	p.set_weapon_slots(p.hands)
 	p.cancel_action()
-	game.actions.pry_door(p, _a_locked_door())
+	# By the door too, so it is the knife that fails and not the distance.
+	game.actions.pry_door(p, _by_the_door(_a_locked_door()))
 	assert_eq(p.action, "", "a knife does not pry a door")

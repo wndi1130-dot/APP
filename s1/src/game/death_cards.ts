@@ -103,7 +103,7 @@ function lossView(g: Game, card: Card): CardView | null {
         body: PUSH_BODY[slot],
         choices: withAfford(g, [
           { label: '들어준다', say: '알았다. 이번엔 들어주겠다.', effs: [...PUSH_COST[slot], { t: 'rel', c, v: 3 }] },
-          { label: '물리친다', say: '이미 대답했다. 같은 말을 두 번 하지 않는다.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }]), special: 'dw_push_refuse', extra: ['다음 회기 그 칸 표 한 단 반대'] },
+          { label: '물리친다', say: '이미 대답했다. 같은 말을 두 번 하지 않는다.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }]), special: 'dw_push_refuse', extra: ['다음 회기 그 칸 한 석이 반대로'] },
         ]),
       };
     }

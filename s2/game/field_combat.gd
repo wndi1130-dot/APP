@@ -751,18 +751,34 @@ func _toast(p, text: String) -> void:
 
 # ---------------------------------------------------------------- grabs and bites
 
+func _dead_contact_valid(z: Dictionary, p) -> bool:
+	if p == null or not p.is_alive() or z.is_empty():
+		return false
+	if z.get("state", "dead") in ["dead", "downed", "rising", "frozen", "waking", "climb"]:
+		return false
+	var reach: float = game.zombies.ATTACK_RANGE + GrabRules.CONTACT_MARGIN
+	return z["pos"].distance_to(p.position) <= reach and game.zombies.can_reach(z, p)
+
+
 ## A dead hand reaches a person (body_injury 2): grab, scratch or blocked.
 func zombie_reaches(z: Dictionary, p) -> String:
+	if not _dead_contact_valid(z, p):
+		return "miss"
+	if p.grabbers.has(z):
+		return "grab"
 	var rng: RandomNumberGenerator = game.rng
 	var now: float = game.clock.elapsed
-	var block: float = float(p.coat.get("block", 0.0)) * (1.0 - float(p.coat.get("wear", 0.0)))
+	var part: String = BodyState.pick_scratch_part(wound_rng())
+	var block: float = GrabRules.clothing_block(p.coat, part)
 	var outcome: String = GrabRules.attack_outcome(rng, block)
 	match outcome:
 		"grab":
-			var forward := Vector3(sin(p.facing), 0, cos(p.facing))
-			var to_z: Vector3 = z["pos"] - p.position
-			to_z.y = 0
-			var front: bool = to_z.length() < 0.01 or forward.dot(to_z.normalized()) > 0.0
+			if not GrabRules.can_regrab(p, now):
+				return "miss"
+			var prone: bool = p.fallen_t > 0.0 or p.body.downed
+			var front: bool = GrabRules.front_contact(p.facing, z["pos"] - p.position, prone)
+			z["victim"] = p
+			z["state"] = "grab"
 			if not p.grabbers.has(z):
 				p.grabbers.append(z)
 				game.shout(p, "grabbed")
@@ -781,14 +797,14 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			if p == game.player:
 				game.hud.grab_alert(front)
 		"scratch":
-			p.body.apply_scratch(rng, now, BodyState.pick_scratch_part(wound_rng()))
-			p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
+			p.body.apply_scratch(rng, now, part)
+			GrabRules.damage_clothing(p.coat, part, false)
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
 			if p.team != "raider":
 				game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 		"blocked":
-			p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.05)
+			GrabRules.damage_clothing(p.coat, part, true)
 			_toast(p, "외투가 손톱을 막았다.")
 	return outcome
 
@@ -798,13 +814,14 @@ func zombie_reaches(z: Dictionary, p) -> String:
 ## scratch (nothing has hold of them yet, so no grab comes of this).
 func breach_reaches(p) -> String:
 	var now: float = game.clock.elapsed
-	var block: float = float(p.coat.get("block", 0.0)) * (1.0 - float(p.coat.get("wear", 0.0)))
-	if GrabRules.attack_outcome(game.rng, block) == "blocked":
-		p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.05)
+	var part: String = BodyState.pick_scratch_part(wound_rng())
+	var block: float = GrabRules.clothing_block(p.coat, part)
+	if game.rng.randf() < block:
+		GrabRules.damage_clothing(p.coat, part, true)
 		_toast(p, "외투가 손톱을 막았다.")
 		return "blocked"
-	p.body.apply_scratch(game.rng, now, BodyState.pick_scratch_part(wound_rng()))
-	p.coat["wear"] = minf(1.0, float(p.coat.get("wear", 0.0)) + 0.1)
+	p.body.apply_scratch(game.rng, now, part)
+	GrabRules.damage_clothing(p.coat, part, false)
 	p.panic = minf(1.0, p.panic + 0.3)
 	game.telemetry.injury(now, p.pid, "scratch")
 	game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
@@ -815,16 +832,35 @@ func breach_reaches(p) -> String:
 func bite(p) -> void:
 	var rng: RandomNumberGenerator = game.rng
 	var now: float = game.clock.elapsed
+	var held: bool = not p.grabbers.is_empty()
+	# A departed target or a stale hand cannot bite across a wall or floor.
+	for z in p.grabbers.duplicate():
+		if z.get("state") != "grab" or z.get("victim") != p or not _dead_contact_valid(z, p):
+			p.release_grab(z)
+			if z.get("state") == "grab" and z.get("victim") == p:
+				game.zombies.release(z, p.position, false)
+	if p.grabbers.is_empty():
+		if held:
+			GrabRules.mark_released(p, now)
+		return
 	var crawler := false
 	for z in p.grabbers:
 		crawler = crawler or bool(z.get("crawl", false))
 	var part: String = GrabRules.bite_location(rng, crawler)
-	p.body.apply_bite(rng, BodyState.pick_side(wound_rng(), part), now)
+	var site: String = BodyState.pick_side(wound_rng(), part)
+	var block: float = GrabRules.clothing_block(p.coat, site, true)
+	var blocked: bool = block > 0.0 and rng.randf() < block
+	GrabRules.damage_clothing(p.coat, site, blocked)
+	if not blocked:
+		p.body.apply_bite(rng, site, now)
 	for z in p.grabbers.duplicate():
 		game.zombies.release(z, p.position, false)
 	p.grabbers.clear()
 	p.grab_left = 0.0
 	p.panic = 1.0
+	if blocked:
+		_toast(p, "외투가 물림을 막았다.")
+		return
 	game.telemetry.injury(now, p.pid, "bite")
 	if p.team == "raider":
 		return

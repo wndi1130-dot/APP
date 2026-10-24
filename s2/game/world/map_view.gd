@@ -9,6 +9,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
+const PropFit = preload("res://game/world/prop_fit.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
@@ -54,6 +55,7 @@ var level_roots: Dictionary = {}  # level -> Node3D
 var shown_level: int = -99
 var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiMeshInstance3D)}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
+var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
 var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
@@ -754,8 +756,17 @@ func _build_props() -> void:
 		var at := Vector3(r.position.x + r.size.x * 0.5, lv * LEVEL_H, r.position.y + r.size.y * 0.5)
 		var lg: FieldGrid = levels[lv]
 		var b := int(prop.get("building", lg.building_at(Vector2i(int(at.x), int(at.z)))))
-		# 0은 원래 자세, 1~3은 위에서 보아 시계 방향으로 90도씩.
-		var xf := Transform3D(Basis(Vector3.UP, -float(int(prop.get("facing", 0)) % 4) * PI * 0.5), at)
+		# 0은 원래 자세, 1~3은 위에서 보아 시계 방향으로 90도씩. 모델의 긴 축을 rect의
+		# 긴 축에 맞추고, 남는 작은 넘침만 그 축으로 줄인다(prop_fit.gd). 칸은 그대로.
+		var box: AABB = PropModels.batch_meshes(path)[0].get_aabb()
+		var fit := PropFit.fit(box.position, box.end, r, int(prop.get("facing", 0)), lg)
+		var turn := Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
+		var xf := Transform3D(Basis.from_scale(fit["scale"]) * turn, at)
+		prop_fit_counts["placed"] += 1
+		if fit["turned"]:
+			prop_fit_counts["turned"] += 1
+		if fit["shrunk"]:
+			prop_fit_counts["shrunk"] += 1
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}}
 		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b})

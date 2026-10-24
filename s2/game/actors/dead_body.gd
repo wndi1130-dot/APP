@@ -49,7 +49,7 @@ static var table: Array = []                   # its motions: [first frame, fram
 const SECONDS: Dictionary = {STAND: 3.0, LUNGE: 1.0}   # a round of each, for a folder that does not say
 const SWAY_CAP: float = 0.1                   # a longer gap between two drawings is not played through
 const MIX_TIME: float = 0.2                   # a body changing motion keeps something of the frame it was in this long
-# How long a change into these is eased, after the dead of Project Zomboid
+# How long a change into these is eased, after the reference game's dead
 # (상태표 2.4: struck 0.10 s, the lunge 0.35, reeling back 0.40, getting up
 # 0.20; walking, running and standing 0.35, crawling 0.20). Struck shows at
 # once; a body that reels goes into it slowly.
@@ -60,7 +60,7 @@ const MIX_IN: Dictionary = {HIT: 0.1, LUNGE: 0.35, STAGGER: 0.4, RISE: 0.2, RISE
 const REACH_AT: float = 0.0
 const REACH_SHIFT: float = 0.03               # how far round the legs shift either way
 const REACH_HZ: float = 0.9
-# Project Zomboid scatters how fast each of the dead stands breathing (0.2..1.25
+# The reference game scatters how fast each of the dead stands breathing (0.2..1.25
 # of its pace) and how long its stride is; past a tenth of the stride the feet slide.
 const STAND_PACE: Vector2 = Vector2(0.3, 1.25)
 const STRIDE_SPREAD: float = 0.1
