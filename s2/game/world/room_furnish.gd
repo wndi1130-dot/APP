@@ -823,6 +823,171 @@ static func _named(name: String, word: String) -> bool:
 	return name.find(word) >= 0
 
 
+## ---------------------------------------------------------------- 이름표와 건물 이름으로 읽는 방
+
+## 살림집 건물 이름의 낱말(「… 집」으로 끝나는 이름도). 이름표도 가구도 없는 빈 집의 방을
+## 땅 층 큰 방부터 이 차례로, 나머지와 위층은 침실로 읽는다.
+const HOME_WORDS: Array[String] = ["주택", "사택", "관사", "농가", "오두막", "움막", "살림"]
+const HOME_ORDER: Array[String] = ["kitchen", "bed", "living"]
+## 한 방뿐인 살림 움막은 거실(난로와 긴 의자).
+const ONE_ROOM_HOME: String = "living"
+## 방으로 칠 크기: 복도·벽장은 뺀다.
+const ROOM_MIN_CELLS: int = 12
+const ROOM_MIN_SIDE: int = 3
+## 남긴 지도 가구가 대신하는 꼭 있을 가구.
+const STANDS_FOR: Dictionary = {"bunk_bed": "bed"}
+
+
+## 가구 메모 「X의 Y」에서 가장 많은 X(같으면 가나다 앞).
+static func _note_name(props: Array, idxs: Array) -> String:
+	var names: Dictionary = {}
+	for i: int in idxs:
+		var note := String(props[i].get("note", ""))
+		var cut := note.find("의 ")
+		if cut > 0:
+			var who := note.substr(0, cut)
+			names[who] = int(names.get(who, 0)) + 1
+	var name := ""
+	var best := 0
+	var keys: Array = names.keys()
+	keys.sort()
+	for k: String in keys:
+		if names[k] > best:
+			best = names[k]
+			name = k
+	return name
+
+
+## 방 안 이름표 가운데 방 이름 낱말이 든 첫 것. 방 번호 -> 글.
+static func _room_labels(data: Dictionary, lv: int, g: FieldGrid, of: PackedInt32Array) -> Dictionary:
+	var out: Dictionary = {}
+	for lab: Variant in data.get("labels", []):
+		if not lab is Dictionary or int(lab.get("level", 0)) != lv:
+			continue
+		var c: Variant = _cell(lab.get("cell"))
+		if c == null:
+			continue
+		var ri := _at(g, of, c)
+		var text := String(lab.get("text", ""))
+		if ri >= 0 and not out.has(ri) and _name_class(text)[1]:
+			out[ri] = text
+	return out
+
+
+## 어느 층이든 가구 메모·이름표·가구로 묶음이 정해진 방이 있는 건물.
+static func _classified_buildings(data: Dictionary, levels: Dictionary, props: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for lv: int in levels:
+		var g: FieldGrid = levels[lv]
+		var map := _rooms(data, lv, g)
+		var of: PackedInt32Array = map["of"]
+		var labels := _room_labels(data, lv, g, of)
+		var in_room := _props_by_room(g, of, props, lv)
+		for ri in range(map["rooms"].size()):
+			var idxs: Array = in_room.get(ri, [])
+			if idxs.is_empty() and not labels.has(ri):
+				continue
+			var kinds: Dictionary = {}
+			for i: int in idxs:
+				kinds[String(props[i].get("kind", ""))] = true
+			var name := _note_name(props, idxs)
+			if name.is_empty():
+				name = labels.get(ri, "")
+			if not room_class(name, kinds, lv).is_empty():
+				out[int(map["rooms"][ri]["building"])] = true
+	return out
+
+
+static func _props_by_room(g: FieldGrid, of: PackedInt32Array, props: Array, lv: int) -> Dictionary:
+	var out: Dictionary = {}
+	for i in range(props.size()):
+		if int(props[i].get("level", 0)) != lv:
+			continue
+		var r: Variant = _rect(props[i].get("rect"))
+		if r == null:
+			continue
+		var ri := _at(g, of, r.position + r.size / 2)
+		if ri >= 0:
+			if not out.has(ri):
+				out[ri] = []
+			out[ri].append(i)
+	return out
+
+
+## 가구도 이름도 없는 빈 방을 건물 이름으로 읽는다(이름표만 둔 지도, house_layout.md 3장).
+## 창고·가게처럼 이름에 방 낱말이 든 건물은 그 묶음. 살림집은 그 건물에 묶음이 정해진 방이
+## 하나도 없을 때만: 땅 층 큰 방부터 부엌·침실·거실, 나머지와 위층은 침실, 한 방뿐이면 거실.
+## 방 번호 -> 묶음.
+static func _building_classes(data: Dictionary, lv: int, map: Dictionary, in_room: Dictionary, props: Array,
+		labels: Dictionary, classified: Dictionary) -> Dictionary:
+	var names: Dictionary = {}
+	for row: Variant in data.get("buildings", []):
+		if row is Dictionary:
+			names[int(row.get("id", -1))] = String(row.get("name", ""))
+	var empty: Dictionary = {}  # 건물 -> [방 번호]
+	for ri in range(map["rooms"].size()):
+		if in_room.has(ri) or labels.has(ri):
+			continue
+		var room: Dictionary = map["rooms"][ri]
+		if not _roomy(room["cells"]):
+			continue
+		var b: int = room["building"]
+		if not empty.has(b):
+			empty[b] = []
+		empty[b].append(ri)
+	var out: Dictionary = {}
+	var ids: Array = empty.keys()
+	ids.sort()
+	for b: int in ids:
+		var bname: String = names.get(b, "")
+		var rooms: Array = empty[b]
+		var found := _name_class(bname)
+		if found[1]:
+			var cls := room_class(bname, {}, lv)
+			# 가게 위층의 빈 방은 살림방이다(가게 이름을 물려받은 위층, room_class의 주석과 같은 뜻).
+			if lv >= 1 and cls == "shop":
+				cls = "bed"
+			if not cls.is_empty():
+				for ri: int in rooms:
+					out[ri] = cls
+			continue
+		if lv < 0 or classified.has(b) or not _home(bname):
+			continue
+		rooms.sort_custom(func(a: int, c: int) -> bool:
+			var na: int = map["rooms"][a]["cells"].size()
+			var nc: int = map["rooms"][c]["cells"].size()
+			return na > nc or (na == nc and a < c))
+		for k in range(rooms.size()):
+			var cls := "bed"
+			if lv == 0 and rooms.size() == 1:
+				cls = ONE_ROOM_HOME
+			elif lv == 0 and k < HOME_ORDER.size():
+				cls = HOME_ORDER[k]
+			out[rooms[k]] = cls
+	return out
+
+
+static func _home(name: String) -> bool:
+	if name.ends_with("집"):
+		return true
+	for w: String in HOME_WORDS:
+		if name.find(w) >= 0:
+			return true
+	return false
+
+
+## 방으로 칠 만한가: 칸 수와 짧은 변.
+static func _roomy(cells: Array[Vector2i]) -> bool:
+	if cells.size() < ROOM_MIN_CELLS:
+		return false
+	var lo := cells[0]
+	var hi := cells[0]
+	for c in cells:
+		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	return mini(hi.x - lo.x + 1, hi.y - lo.y + 1) >= ROOM_MIN_SIDE
+
+
 ## 비울 칸: "all"은 아무것도, "tall"은 큰 가구만 못 놓는다.
 static func _forbidden(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], stairs: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
@@ -1023,6 +1188,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	var added: Array = []
 	var lvs: Array = levels.keys()
 	lvs.sort()
+	var classified := _classified_buildings(data, levels, props)
 	for lv: int in lvs:
 		var g: FieldGrid = levels[lv]
 		var stairs: Dictionary = stairs_by.get(lv, {})
@@ -1055,31 +1221,24 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						box_room[bi] = []
 					box_room[bi].append(id)
 		var changed := false
+		# 방 이름은 가구 메모에서, 없으면 방 안 이름표에서 읽는다. 둘 다 없는 빈 방은 건물 이름으로.
+		var labels := _room_labels(data, lv, g, of)
+		var by_building := _building_classes(data, lv, map, in_room, props, labels, classified)
 		for ri in range(map["rooms"].size()):
-			if not in_room.has(ri):
+			var idxs: Array = in_room.get(ri, [])
+			if idxs.is_empty() and not labels.has(ri) and not by_building.has(ri):
 				continue
 			var room: Dictionary = map["rooms"][ri]
 			var cells: Array[Vector2i] = room["cells"]
-			var idxs: Array = in_room[ri]
 			var kinds: Dictionary = {}
-			var names: Dictionary = {}
 			for i: int in idxs:
-				var p: Dictionary = props[i]
-				kinds[String(p.get("kind", ""))] = true
-				var note := String(p.get("note", ""))
-				var cut := note.find("의 ")
-				if cut > 0:
-					var who := note.substr(0, cut)
-					names[who] = int(names.get(who, 0)) + 1
-			var name := ""
-			var best := 0
-			var name_keys: Array = names.keys()
-			name_keys.sort()
-			for k: String in name_keys:
-				if names[k] > best:
-					best = names[k]
-					name = k
+				kinds[String(props[i].get("kind", ""))] = true
+			var name := _note_name(props, idxs)
+			if name.is_empty():
+				name = labels.get(ri, "")
 			var cls := room_class(name, kinds, lv)
+			if cls.is_empty():
+				cls = by_building.get(ri, "")
 			if cls.is_empty():
 				continue
 			changed = true
@@ -1113,6 +1272,20 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				var bc: Vector2i = _cell(containers[id]["cell"])
 				box_cells.append(bc)
 				box_at[bc] = true
+			# 남긴 지도 가구 가운데 몸을 막을 것(뒤에 block_furniture가 칠한다)을 이 방을 채우는
+			# 동안만 막는 칸으로 칠해 둔다. 새 가구가 그 앞을 막지 않게 지킨다(_standing).
+			var held: Array[Vector2i] = []
+			for i: int in idxs:
+				var hk := String(props[i].get("kind", ""))
+				if drop.has(i) or REPLACED.has(hk) or not blocks(hk, lv):
+					continue
+				var hr: Rect2i = _rect(props[i].get("rect"))
+				for y in range(hr.position.y, hr.end.y):
+					for x in range(hr.position.x, hr.end.x):
+						var hc := Vector2i(x, y)
+						if _at(g, of, hc) == ri and g.solid_at(hc) == S.NONE:
+							g.set_solid(hc, S.LOW)
+							held.append(hc)
 			var keys := _keys(g, of, ri, cells, stairs, box_cells)
 			var before := _from_first(g, of, ri, keys)
 			var guard := _standing(g, of, ri, kept_rects, before)
@@ -1138,7 +1311,15 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				var kk := String(props[i].get("kind", ""))
 				if not drop.has(i) and (HOLDER_KINDS.has(kk) or (piles and not PASS_KINDS.has(kk))):
 					kept_holder = true
+			# 남긴 가구가 대신하는 꼭 있을 가구(이층 침대는 침대).
+			var covered: Dictionary = {}
+			for i: int in idxs:
+				var kk := String(props[i].get("kind", ""))
+				if not drop.has(i) and STANDS_FOR.has(kk):
+					covered[STANDS_FOR[kk]] = true
 			for item: Dictionary in PALETTE[cls]:
+				if covered.has(item["kind"]):
+					continue
 				var need: bool = item.get("need", false)
 				if need and item.get("holds", false) and kept_holder:
 					need = false
@@ -1208,6 +1389,9 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 					_missing(stats, cls, item, why)
 			# 상자: 가까운 용기 가구로, 가구 하나에 하나. 그 가구 칸 가운데 바로 앞이
 			# 걸어서 닿는 칸에 둔다. 들 가구가 없고 원래 칸이 가구에 덮였으면 닿는 바닥으로.
+			# 상자 자리는 예전처럼 남긴 가구를 칠하기 전 칸으로 본다.
+			for hc in held:
+				g.set_solid(hc, S.NONE)
 			var seen := _from_first(g, of, ri, keys)
 			var free_holders: Array = []
 			for pl: Dictionary in placed:

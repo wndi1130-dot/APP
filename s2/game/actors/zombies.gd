@@ -858,6 +858,7 @@ func _move(z: Dictionary, delta: float) -> void:
 
 
 func _bang(z: Dictionary, c: Vector2i, delta: float) -> void:
+	z["bang_seen"] = z["age"]      # at the door now (dead_body.gd draws it beating on it)
 	z["bang_t"] -= delta
 	if z["bang_t"] > 0.0:
 		return
@@ -906,6 +907,8 @@ func _update_attack(z: Dictionary, delta: float) -> void:
 		return
 	z["cooldown"] = GrabRules.ATTACK_COOLDOWN
 	var outcome: String = game.zombie_reaches(z, victim)
+	if outcome == "miss":
+		z["missed_at"] = z["age"]      # reached and got nothing (dead_body.gd: it snaps at the air)
 	if outcome == "grab":
 		z["state"] = "grab"
 	else:
@@ -1044,7 +1047,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			continue
 		var look: String = z["kind"]
 		var state: String = z["state"]
-		var basis := Basis(Vector3.UP, z["angle"])
+		var basis := Basis(Vector3.UP, DeadBody.yaw_of(z, baked))
 		var pos := draw_pos(z)
 		var reel := 1.0 - shoved_k(z)
 		var frozen_anim := 0.0

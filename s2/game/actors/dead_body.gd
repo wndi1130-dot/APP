@@ -34,8 +34,8 @@ const RISE_FRONT: int = 13                    # getting up off its face
 const STAGGER: int = 14                       # spent after a run: bent over, reeling on wide legs
 const FALL_THROWN: int = 15                   # on its back, thrown over (decision 412)
 const FALL_SLUMP: int = 16                    # on its face, slumped
-# What the reference game's dead do that these could not yet (motion detail 2,
-# 2026-10-24): baked in both bodies; nothing here picks them yet.
+# What the reference game's dead do that these could not before (motion detail 2,
+# 2026-10-24), picked below only where the folder in use has them (decision 422).
 const THUMP: int = 17                         # at a door, both forearms on it (motion.gd dead_thump)
 const CLAW: int = 18                          # at a door, clawing with one hand then the other
 const HIT_LEFT: int = 19                      # struck on the head from its left
@@ -53,20 +53,51 @@ const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds 
 # baked before it did, measured the same way on one body. The feet keep that
 # pace to within a quarter. The crawl's hands keep no steady pace, and its
 # number is only their middle.
-const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61, STAGGER: 1.01}
+const STRIDE: Dictionary = {0: 1.27, 1: 1.46, 2: 0.91, RUN: 2.14, CRAWL: 0.61, STAGGER: 1.01, WALK_D: 0.61, WALK_E: 1.08}
 const STRIDE_CAP: float = 0.5                 # more than this between two drawings is not a step (it was moved, or not drawn)
 static var rounds: Dictionary = {}             # what the baked folder in use measured (see assets)
 static var table: Array = []                   # its motions: [first frame, frames, loops, seconds] each
+static var named: Dictionary = {}              # its motions by name (those not numbered here: the bite)
 
 const SECONDS: Dictionary = {STAND: 3.0, LUNGE: 1.0}   # a round of each, for a folder that does not say
 const SWAY_CAP: float = 0.1                   # a longer gap between two drawings is not played through
 const MIX_TIME: float = 0.2                   # a body changing motion keeps something of the frame it was in this long
 # How long a change into these is eased, after the reference game's dead
 # (상태표 2.4: struck 0.10 s, the lunge 0.35, reeling back 0.40, getting up
-# 0.20; walking, running and standing 0.35, crawling 0.20). Struck shows at
-# once; a body that reels goes into it slowly.
+# 0.20; walking, running and standing 0.35, crawling 0.20; at a door 0.20;
+# turning round 0.40). Struck shows at once; a body that reels goes into it slowly.
 const MIX_IN: Dictionary = {HIT: 0.1, LUNGE: 0.35, STAGGER: 0.4, RISE: 0.2, RISE_FRONT: 0.2,
-	0: 0.35, 1: 0.35, 2: 0.35, RUN: 0.35, STAND: 0.35, CRAWL: 0.2}
+	0: 0.35, 1: 0.35, 2: 0.35, RUN: 0.35, STAND: 0.35, CRAWL: 0.2,
+	THUMP: 0.2, CLAW: 0.2, HIT_LEFT: 0.1, HIT_RIGHT: 0.1, HIT_TOP: 0.1, HIT_UPPER: 0.1,
+	TURN_LEFT: 0.4, TURN_RIGHT: 0.4, WALK_D: 0.35, WALK_E: 0.35}
+# At a door: still at it while it was last seen banging within AT_DOOR; half of
+# the dead (by their own number) claw at it, and a claw's bang lands at CLAW_LANDS
+# of its round (the thump's where motion.gd dead_thump has it).
+const AT_DOOR: float = 0.25
+const CLAW_LANDS: float = 0.73
+# Struck on the head (field_combat.gd notes when, from where and with which way
+# of the blow): across and the axe's chop in come from the striker's right, back
+# the other way from its left, overhead from above, a stab from under the chin.
+const BLOW_FROM: Dictionary = {"p_swing_back": -1.0, "p_swing_axe": 0.0, "p_stab": 0.0}
+const BLOW_MOTION: Dictionary = {"p_swing_axe": HIT_TOP, "p_stab": HIT_UPPER}
+const HAND_OUT: float = 0.4                   # how far to the striker's side a swing comes in from, metres
+# Turning round to something it heard (zombies.gd turn_t): the body is drawn
+# coming round over the rules' turn, not at once; less than TURN_MIN is no turn.
+# Cut short, it comes the rest of the way round within TURN_CATCH.
+const TURN_MIN: float = 0.35
+const TURN_CATCH: float = 0.15
+# Of the dead only wandering (zombies.gd SPEED_WANDER, slower than the slow
+# walks' own pace), a fifth shuffle and a fifth go on a stiff leg; hurrying,
+# they walk their own walk (a slow walk at a hurry's pace would race).
+const SLOW_WALKS: float = 0.4
+# Biting the one it holds (named, not numbered: the folder adds them after these):
+# the first of the dead holding someone bends to them as the rules' hold runs
+# out, the teeth going in at BITE_LANDS of the motion as the bite lands
+# (field_game.gd grab_left; the bake puts the bite there). Reaching and getting
+# nothing (zombies.gd notes missed_at), it snaps at the air.
+const BITE: String = "bite"
+const BITE_MISS: String = "bite_miss"
+const BITE_LANDS: float = 0.5
 # Held on to someone (grab) or about to be (attack): the lunge's reach held at
 # one place in its round, the legs only shifting a little, not walking.
 const REACH_AT: float = 0.0
@@ -91,6 +122,7 @@ static func assets() -> Dictionary:
 	var got := with_albedo(BodyBake.load_baked(dir), dir) if dir != "" else {}
 	rounds = rounds_of(got)
 	table = table_of(got) if can_mix() else []
+	named = names_of(got) if can_mix() else {}
 	return got
 
 
@@ -121,6 +153,15 @@ static func table_of(vat: Dictionary) -> Array:
 	var out := []
 	for clip: Dictionary in vat.get("clips", []):
 		out.append([int(clip["start"]), int(clip["frames"]), bool(clip["loop"]), float(clip["length"])])
+	return out
+
+
+## Motion name -> its number in a baked folder.
+static func names_of(vat: Dictionary) -> Dictionary:
+	var out := {}
+	var clips: Array = vat.get("clips", [])
+	for n in clips.size():
+		out[String(clips[n].get("name", ""))] = n
 	return out
 
 
@@ -279,21 +320,39 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 		if coming_up(z, down):
 			return Color(1.0 - down, float(RISE_FRONT if front else RISE), 1.0, shade)
 		return Color(fall_progress(z, down), float(fall_motion(z, front)), 1.0, shade)
+	if state == "grab":
+		var bite := bite_k(z)
+		if bite >= 0.0:
+			return Color(bite, float(named[BITE]), 1.0, shade)
 	if state == "attack" or state == "grab":
 		# It has reached them: the arms stay out at them and the legs shift
 		# under it (the body is held at their side, so a walk would slide).
 		var shift := REACH_SHIFT * sin(TAU * (REACH_HZ * float(z["age"]) + phase))
 		return Color(fposmod(REACH_AT + shift, 1.0), float(LUNGE), 1.0, shade)
+	var snap := snap_k(z)
+	if snap >= 0.0:
+		return Color(snap, float(named[BITE_MISS]), 1.0, shade)
+	var struck := struck_motion(z)
+	if struck >= 0:
+		return Color(struck_k(z), float(struck), 1.0, shade)
 	if float(z.get("shoved_t", 0.0)) > 0.0:
 		# Thrown off: it reels back, its feet going back over the ground it is
 		# seen to cover; then, stunned, it reels on the spot until it comes on.
 		return Color(step_back(z, STAGGER), float(STAGGER), 1.0, shade)
 	if float(z.get("stun", 0.0)) > 0.0 and float(z["age"]) - float(z.get("body_reeled", -10.0)) < REEL_AFTER:
 		return Color(reeling(z, still), float(STAGGER), 1.0, shade)
+	if at_door(z):
+		moved(z)
+		var beat := door_motion(z)
+		return Color(door_k(z, beat), float(beat), 1.0, shade)
 	if state == "tell":
 		return Color(tell_k(z), float(TELL), 1.0, shade)
 	if state == "frozen" or state == "waking":
 		return Color(swayed(z, STAND, still), float(STAND), 1.0, shade)
+	var turn := turn_motion(z)
+	if turn >= 0:
+		moved(z)
+		return Color(turn_k(z), float(turn), 1.0, shade)
 	# Its feet go by the ground it has covered, not by the clock: a wanderer
 	# plods and one hurrying steps quicker, on the same walk.
 	var gait := gait_of(z)
@@ -423,4 +482,174 @@ static func gait_of(z: Dictionary) -> int:
 			return STAGGER
 	if z["state"] == "chase" and z.get("kind", "") == "fresh":
 		return RUN
+	if z["state"] == "wander" and WALK_E < table.size():
+		var slow := fposmod(float(z["phase"]) * 4.21, 1.0)
+		if slow < SLOW_WALKS:
+			return WALK_D if slow < SLOW_WALKS * 0.5 else WALK_E
 	return walk_of(z["phase"])
+
+
+## How far through the bite the first of the dead holding someone is, as the
+## hold runs out; -1 when it is not biting (or the folder has no bite).
+static func bite_k(z: Dictionary) -> float:
+	if not named.has(BITE):
+		return -1.0
+	var victim = z.get("victim")
+	if victim == null or not is_instance_valid(victim) or victim.grabbers.is_empty() or victim.grabbers[0] != z:
+		return -1.0
+	var length := seconds_of(int(named[BITE]), 1.0)
+	var left := float(victim.grab_left)
+	if left > BITE_LANDS * length:
+		return -1.0
+	return clampf(BITE_LANDS - left / length, 0.0, BITE_LANDS)
+
+
+## How far through snapping at the air a body is after it reached and missed; -1 otherwise.
+static func snap_k(z: Dictionary) -> float:
+	if not named.has(BITE_MISS) or not z.has("missed_at"):
+		return -1.0
+	var length := seconds_of(int(named[BITE_MISS]), 0.6)
+	var since := float(z["age"]) - float(z["missed_at"])
+	if since < 0.0 or since >= length:
+		return -1.0
+	return since / length
+
+
+## The length of a motion in the folder in use, seconds (`or_else` without one).
+static func seconds_of(motion: int, or_else: float) -> float:
+	if motion < table.size() and table[motion].size() > 3 and float(table[motion][3]) > 0.0:
+		return float(table[motion][3])
+	return or_else
+
+
+## True while a body is at a shut door beating on it (zombies.gd _bang notes
+## each moment it is there), and the folder in use has the motions for it.
+static func at_door(z: Dictionary) -> bool:
+	if CLAW >= table.size() or not z.has("bang_seen"):
+		return false
+	var since := float(z["age"]) - float(z["bang_seen"])
+	return since >= 0.0 and since < AT_DOOR
+
+
+## Thumping with both forearms, or (half of the dead, by their own number) clawing.
+static func door_motion(z: Dictionary) -> int:
+	return CLAW if fposmod(float(z["phase"]) * 6.73, 1.0) < 0.5 else THUMP
+
+
+## How far round its beat at the door a body is: on the rules' bang clock, so
+## the blow lands as the door is banged on (and the sound made).
+static func door_k(z: Dictionary, motion: int) -> float:
+	var row: Dictionary = Motion.row("dead_thump")
+	var beat := float(row["len"])
+	var lands := float(row["hit"]) / beat if motion == THUMP else CLAW_LANDS
+	var since := beat - clampf(float(z.get("bang_t", 0.0)), 0.0, beat)
+	return fposmod(lands + since / beat, 1.0)
+
+
+## Struck on the head and still on its feet: which of the four, for as long as
+## the motion lasts after the blow; -1 otherwise (or the folder has none of
+## them: then as before). A shove after the blow is seen over it.
+static func struck_motion(z: Dictionary) -> int:
+	if HIT_UPPER >= table.size() or not z.has("hit_at"):
+		return -1
+	var since := float(z["age"]) - float(z["hit_at"])
+	if since < 0.0 or since >= seconds_of(HIT_LEFT, 0.4):
+		return -1
+	var shoved := float(z.get("shoved_t", 0.0))
+	if shoved > 0.0 and float(Motion.row("dead_shoved")["len"]) - shoved < since:
+		return -1
+	if float(z.get("body_hit_seen", -1.0)) != float(z["hit_at"]):
+		z["body_hit_seen"] = z["hit_at"]
+		z["body_hit"] = struck_from(z)
+	return int(z["body_hit"])
+
+
+static func struck_k(z: Dictionary) -> float:
+	return clampf((float(z["age"]) - float(z["hit_at"])) / seconds_of(HIT_LEFT, 0.4), 0.0, 1.0)
+
+
+## Which side of its head the blow came in from: the way of the blow the
+## striker was seen to swing, and where it stood (it faces what it strikes).
+static func struck_from(z: Dictionary) -> int:
+	var way := String(z.get("hit_way", ""))
+	if BLOW_MOTION.has(way):
+		return int(BLOW_MOTION[way])
+	var at: Vector3 = z["pos"]
+	var by: Vector3 = z.get("hit_by", at)
+	var toward := Vector3(at.x - by.x, 0.0, at.z - by.z)
+	if toward.length() < 0.01:
+		return HIT_LEFT
+	toward = toward.normalized()
+	var hand := float(BLOW_FROM.get(way, 1.0))
+	var came := Vector3(by.x - at.x, 0.0, by.z - at.z) + Vector3(-toward.z, 0.0, toward.x) * hand * HAND_OUT
+	var fwd := Vector3(sin(float(z["angle"])), 0.0, cos(float(z["angle"])))
+	var right := Vector3(-fwd.z, 0.0, fwd.x)
+	return HIT_RIGHT if right.dot(came) > 0.0 else HIT_LEFT
+
+
+## Notes a turn the rules have just begun (turn_t from nothing): from the way
+## the body was last drawn facing to the way it turns to, over the rules' turn.
+## Safe to call more than once a frame.
+static func _note_turn(z: Dictionary) -> void:
+	if TURN_RIGHT >= table.size():
+		return
+	var left := float(z.get("turn_t", 0.0))
+	if left <= 0.0:
+		if bool(z.get("body_turning", false)):
+			z["body_turning"] = false
+			if int(z.get("body_turn", -1)) >= 0 and _turn_ratio(z) < 1.0:
+				# Cut short (it saw someone): the rest of the way round, quickly.
+				z["body_turn_from"] = z.get("body_yaw", z["angle"])
+				z["body_turn_at"] = z["age"]
+				z["body_turn_len"] = TURN_CATCH
+				z["body_turn"] = -2
+		return
+	if bool(z.get("body_turning", false)):
+		return
+	z["body_turning"] = true
+	var from := float(z.get("body_yaw", z["angle"]))
+	var to: Vector3 = z.get("target", z["pos"])
+	var want := atan2(to.x - z["pos"].x, to.z - z["pos"].z) if to.distance_to(z["pos"]) > 0.01 else float(z["angle"])
+	var d := angle_difference(from, want)
+	z["body_turn_from"] = from
+	z["body_turn_at"] = z["age"]
+	z["body_turn_len"] = maxf(left, 0.05)
+	# Turning by more round toward its left (the body faces +z, its right is -x).
+	z["body_turn"] = (TURN_LEFT if d > 0.0 else TURN_RIGHT) if absf(d) >= TURN_MIN else -1
+
+
+## How far through its turn round a body is, 0..1; -1 when it is not turning.
+static func turn_k(z: Dictionary) -> float:
+	var k := _turn_ratio(z)
+	return -1.0 if k >= 1.0 else maxf(k, 0.0)
+
+
+static func _turn_ratio(z: Dictionary) -> float:
+	if not z.has("body_turn_at"):
+		return INF
+	return (float(z["age"]) - float(z["body_turn_at"])) / maxf(float(z["body_turn_len"]), 0.001)
+
+
+## The turn-round motion a body is in, or -1.
+static func turn_motion(z: Dictionary) -> int:
+	_note_turn(z)
+	var turn := int(z.get("body_turn", -1))
+	if turn < 0 or not bool(z.get("body_turning", false)) or turn_k(z) < 0.0:
+		return -1
+	return turn
+
+
+## The way a body is drawn facing: the rules' own, except while it comes round
+## to something it heard, eased over the turn (the motion only moves the limbs).
+## Notes what it was drawn as. The boxes face the rules' way.
+static func yaw_of(z: Dictionary, baked: bool) -> float:
+	var yaw := float(z["angle"])
+	if not baked:
+		return yaw
+	_note_turn(z)
+	if int(z.get("body_turn", -1)) != -1:
+		var k := turn_k(z)
+		if k >= 0.0:
+			yaw = lerp_angle(float(z["body_turn_from"]), yaw, k * k * (3.0 - 2.0 * k))
+	z["body_yaw"] = yaw
+	return yaw
