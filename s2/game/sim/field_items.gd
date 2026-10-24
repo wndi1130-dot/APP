@@ -1,4 +1,6 @@
 extends RefCounted
+
+const Wear = preload("res://game/sim/wear.gd")
 ## The field's named things (decision 423-8, field_unified 4장 「물건 두 층」): what
 ## comes out of a box has a name and a picture of its own, and on the train it
 ## melts into the stock numbers the politics reads, as before. Values only, and
@@ -104,8 +106,10 @@ const RARE: Dictionary = {
 }
 
 
+## Clothes are on the list too (decision 423 card 2): their name, picture and
+## weight are wear.gd's; they are worn, not carried, so they never melt.
 static func has(id: String) -> bool:
-	return ITEMS.has(id) or RARE.has(id) or is_key(id)
+	return ITEMS.has(id) or RARE.has(id) or is_key(id) or Wear.is_garment(id)
 
 
 static func row(id: String) -> Dictionary:
@@ -113,6 +117,8 @@ static func row(id: String) -> Dictionary:
 		return ITEMS[id]
 	if is_key(id):
 		return KEY_ROW
+	if Wear.is_garment(id):
+		return Wear.KINDS[id]
 	return RARE.get(id, {})
 
 

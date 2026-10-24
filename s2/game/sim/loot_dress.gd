@@ -117,6 +117,15 @@ const NAILS_MOST: int = 4
 const PARTS_CHANCE: float = 0.12
 const PARTS_MOST: int = 5
 const PARTS_KINDS: Array = [["gears", 2], ["springs", 2], ["wire_coil", 1]]
+## Clothes left behind (decision 423 card 2): each may lie, once a stop, in one
+## of these rooms of a house lived in (the gloves also in a workshop or a garage).
+const WEAR_FINDS: Array = [
+	["coat_long", 0.30, ["bedroom", "storage", "hall"], LIVED_IN],
+	["jacket_short", 0.20, ["bedroom", "storage", "hall"], LIVED_IN],
+	["hat_knit", 0.40, ["bedroom", "hall"], LIVED_IN],
+	["hood", 0.30, ["bedroom", "storage"], LIVED_IN],
+	["gloves", 0.35, [], ["house", "farm", "fish", "clinic", "garage", "workshop"]],
+]
 const FUEL_CHANCE: float = 0.30         # one fuel can in a garage
 const RARE_CHANCE: float = 0.25         # one named find
 # 나단계 (decision 423, P23, card 11)
@@ -390,6 +399,11 @@ static func _finds(containers: Dictionary, buildings: Array, seed: int, report: 
 			(containers[id]["items"] as Array).append(what)
 			(report["finds"] as Array).append([what, id])
 			parts += 1
+	# Clothes, on dice of their own too.
+	var wear_rng := _rng(seed, "wear")
+	for row: Array in WEAR_FINDS:
+		if wear_rng.randf() < float(row[1]):
+			_put(containers, _boxes(containers, buildings, row[2], row[3]), String(row[0]), wear_rng, report)
 	# Something to grab when there is nothing better (P23).
 	var hands_rng := _rng(seed, "grab")
 	if hands_rng.randf() < PAN_CHANCE:
