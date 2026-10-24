@@ -5,6 +5,22 @@ const SimNoise = preload("res://game/sim/noise.gd")
 
 var total: int = 0
 var history: Array = []
+## Hearing observations do not add pressure. Footsteps aggregate without growing history.
+var sound_events: int = 0
+var sound_reactions: int = 0
+var by_action: Dictionary = {}
+
+
+func observe(level: int, tag: String, radius: float, reacted: int) -> void:
+	var count := maxi(reacted, 0)
+	sound_events += 1
+	sound_reactions += count
+	var row: Dictionary = by_action.get(tag, {"events": 0, "reactions": 0, "max_radius": 0.0, "linger": 0.0})
+	row["events"] += 1
+	row["reactions"] += count
+	row["max_radius"] = maxf(float(row["max_radius"]), maxf(radius, 0.0))
+	row["linger"] = maxf(float(row["linger"]), SimNoise.LINGER[SimNoise.clamp_level(level)])
+	by_action[tag] = row
 
 
 ## Adds one sound event; returns the points added.

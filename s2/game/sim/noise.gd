@@ -15,6 +15,9 @@ const CROUCH_MULT := 0.5
 const STEALTH_STEP := 0.04
 const STEALTH_MAX := 0.40
 const WHOLE_MAP_MIN := 500.0
+const INDOOR_MULT := 0.5
+const STEP_EVERY := 0.5
+const EVENT_DISPLAY_SECONDS := 1.6
 
 
 static func clamp_level(level: int) -> int:
@@ -32,19 +35,19 @@ static func radius(level: int, indoor: bool, range_mult: float = 1.0) -> float:
 	if lv == Level.VERY_LOUD:
 		return maxf(r * maxf(range_mult, 0.0), WHOLE_MAP_MIN)
 	if indoor:
-		r *= 0.5
+		r *= INDOOR_MULT
 	return r * maxf(range_mult, 0.0)
 
 
 ## Walk 3m, run 12m (glass: walking counts as 12m too). Crouch (walk only) x0.5 and
 ## stealth -4%/level (max -40%, crouched only). Then floor and trait multipliers.
-static func footstep_radius(running: bool, floor_mult: float, trait_mult: float, crouched: bool, stealth_skill: int, on_glass: bool = false) -> float:
+static func footstep_radius(running: bool, floor_mult: float, trait_mult: float, crouched: bool, stealth_skill: int, on_glass: bool = false, indoor: bool = false) -> float:
 	var r: float = RUN_RADIUS if (running or on_glass) else WALK_RADIUS
 	if crouched and not running:
 		r *= CROUCH_MULT
 		var cut: float = minf(STEALTH_STEP * float(maxi(stealth_skill, 0)), STEALTH_MAX)
 		r *= 1.0 - cut
-	return r * maxf(floor_mult, 0.0) * maxf(trait_mult, 0.0)
+	return r * maxf(floor_mult, 0.0) * maxf(trait_mult, 0.0) * (INDOOR_MULT if indoor else 1.0)
 
 
 static func footstep_level(running: bool, on_glass: bool) -> int:
