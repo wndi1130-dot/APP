@@ -280,6 +280,10 @@ func take_item(id: String, n: int = 1) -> bool:
 
 
 func start_action(id: String, label: String, seconds: float, done: Callable) -> void:
+	# One body does one thing at a time (decision 420): no work of the hands
+	# starts while a blow or a shove is on, whoever asks for it.
+	if swing_t > 0.0 or strike_t > 0.0 or shove_t > 0.0:
+		return
 	if id == "climb" and carry_state() >= 3:
 		return
 	if id == "splint" and not _can_simple_splint():

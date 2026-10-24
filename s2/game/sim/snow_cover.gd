@@ -10,6 +10,10 @@ const SEASON_START_CM: Dictionary = {
 	"deep_winter": [25.0, 25.0],
 	"late_winter": [25.0, 7.0],
 	"early_thaw": [7.0, 0.0],
+	# The autumn side of the atmosphere frame (fx/atmosphere.gd): bare ground,
+	# then the first snow that does not stay on wind-swept ground.
+	"late_autumn": [0.0, 0.0],
+	"early_winter": [3.0, 0.0],
 }
 const DEFAULT_SEASON := "deep_winter"
 ## Centimetres an hour each weather kind lays down (negative: eats snow).
@@ -31,10 +35,13 @@ var fresh_cm: float = 0.0
 
 ## storm_cm: snow a storm laid just before arrival (weather_fx.md 14장, the stop
 ## after the storm). It is added to the season depth and counts as fresh.
-func _init(season := DEFAULT_SEASON, open_ground := false, storm_cm := 0.0) -> void:
+## start_cm >= 0: the old snow given outright (the atmosphere frame's cold, so it
+## deepens stop by stop instead of by season steps), else the season's row.
+func _init(season := DEFAULT_SEASON, open_ground := false, storm_cm := 0.0, start_cm := -1.0) -> void:
 	var row: Array = SEASON_START_CM.get(season, SEASON_START_CM[DEFAULT_SEASON])
+	var old := start_cm if start_cm >= 0.0 else float(row[1 if open_ground else 0])
 	fresh_cm = clampf(storm_cm, 0.0, MAX_CM)
-	depth_cm = minf(float(row[1 if open_ground else 0]) + fresh_cm, MAX_CM)
+	depth_cm = minf(old + fresh_cm, MAX_CM)
 
 
 ## Net change in cm per hour for this weather. Snow kinds only lay snow at or

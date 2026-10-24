@@ -9,7 +9,7 @@ const FieldGame = preload("res://game/field_game.gd")
 
 func _stop(weather: Array) -> Node:
 	var game = FieldGame.new()
-	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": weather}
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 1.0, "weather": weather}
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
@@ -108,13 +108,13 @@ func test_field_takes_the_storm_pictures_without_changing_rules() -> void:
 	# weather_fx 14장: the look and the storm snow are picture inputs only.
 	var plain = _stop(["clear"])
 	var before = FieldGame.new()
-	before.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"], "look": ["overcast"]}
+	before.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 1.0, "weather": ["clear"], "look": ["overcast"]}
 	add_child_autofree(before)
 	before.set_process(false)
 	assert_eq(before.weather.kinds, plain.weather.kinds, "rules play as clear")
 	assert_lt(float(before.fx_light["sun_energy"]), float(plain.fx_light["sun_energy"]), "the sky is darker")
 	var after = FieldGame.new()
-	after.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"], "storm_cm": 25.0}
+	after.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 1.0, "weather": ["clear"], "storm_cm": 25.0}
 	add_child_autofree(after)
 	after.set_process(false)
 	assert_eq(after.snow_cover.depth_cm, 50.0)
