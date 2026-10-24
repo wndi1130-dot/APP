@@ -46,8 +46,8 @@ func test_cold_is_under_the_threshold_of_45() -> void:
 		var warm: float = float(St.situation(g, t, "tail")[0])
 		var m: Dictionary = CarPane.model(g, t, TAIL)
 		assert_eq(m["cold"], warm < 45.0, "heat %d, warmth %.1f" % [heat, warm])
-		# Warm, no line (결정 417: 「견딜 만함」 was a tagline); cold, the night's cost.
-		assert_eq(m["say"], "밤사이 앓는 사람 늘어남" if warm < 45.0 else "")
+		# No line either way (결정 417): the frost and the heating's 「부족」 say it.
+		assert_false(m.has("say"))
 		seen[warm < 45.0] = true
 	assert_eq(seen.size(), 2, "the heating lever takes the tail across the threshold")
 
@@ -79,9 +79,10 @@ func test_the_pane_draws_what_the_model_says() -> void:
 	var m: Dictionary = CarPane.model(g, t, TAIL)
 	assert_true(bool(m["cold"]), "no heating: cold")
 	assert_eq((pane.find_child("Warmth", true, false) as Label).text, str(m["warm"]))
-	# No 「추움」 tag (결정 417): the frosted thermometer says cold, and one line what it costs.
+	# No 「추움」 tag nor a line on what it costs (결정 417): the frosted
+	# thermometer says cold, the heating lever's 「부족」 what to do.
 	assert_null(pane.find_child("Tag", true, false), "no paper tag")
-	assert_not_null(pane.find_child("Say", true, false), "cold: the night's line")
+	assert_null(pane.find_child("Say", true, false), "cold: no line")
 	assert_eq((pane.find_child("Need_heat", true, false) as Label).text, m["levers"][0]["need"])
 	g["comms"]["tail"]["heat"] = 4
 	pane.refresh(g, t)
