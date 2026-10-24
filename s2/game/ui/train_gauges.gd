@@ -586,12 +586,11 @@ func _stock(s: Dictionary) -> Control:
 	c.add_child(n)
 	_sit(n, 30.0, 25.0)
 	var text_w: float = _text_w(n)
-	if String(s["per"]) != "":
-		var parts: Array = [_label(String(s["per"]), UiFonts.NUMBER, 400, 13.0, side, 0.195)]
-		if int(s["left"]) >= 0:
-			parts.append(_label("·", UiFonts.WORD, 400, 12.0, side, 0.24))
-			parts.append(_label(str(s["left"]), UiFonts.NUMBER, 400, 13.0, side, 0.195))
-			parts.append(_label("구간", UiFonts.WORD, 400, 12.0, side, 0.24))
+	if String(s["per"]) != "" and int(s["left"]) >= 0:
+		# How many stretches it lasts; the burn per stretch was a second
+		# figure for the same thing (결정 417).
+		var parts: Array = [_label(str(s["left"]), UiFonts.NUMBER, 400, 13.0, side, 0.195)]
+		parts.append(_label("구간", UiFonts.WORD, 400, 12.0, side, 0.24))
 		var x: float = 30.0
 		for l: Label in parts:
 			c.add_child(l)
