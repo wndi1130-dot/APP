@@ -7,7 +7,8 @@ extends RefCounted
 ## shape (".f") with lines cut back in the colour of what it sits on (".c",
 ## 1.25px). Kept as text and drawn at the size asked for, so there is no import
 ## step and the phone shows what the tests see. No cross, crescent, star,
-## banner, lock or bag among them (med is a bottle and a bandage roll, aim has
+## banner, lock or luggage among them (the pack is a rucksack worn on the back,
+## not a case or a bundle set down; med is a bottle and a bandage roll, aim has
 ## its ticks on one axis only, inv is a grid, fetch a box with no handle).
 ## Every line is drawn at LINE of the width asked for (user 2026-10-18: the
 ## lines were too heavy next to Frostpunk's), so the mockup's widths stay at
@@ -72,6 +73,9 @@ const PATHS: Dictionary = {
 	"clock": '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>',
 	"run": '<circle class="f" cx="15.6" cy="4.4" r="2.5"/><path d="M13.6 8.2L10.6 13.8M13.3 9.2l3.3 2.2 2.6-1M13.3 9.2l-3.6.6-2 2.4M10.6 13.8l3.8 2.6-1.2 4.8M10.6 13.8l-2.2 4-3.8.8"/>',
 	"crouch": '<circle class="f" cx="18" cy="5.6" r="2.5"/><path d="M15.6 7.6C12.8 7.8 9.8 11.6 10.3 15.2L11.4 19.8 4.4 20.1l1.5-1.1M10.3 15.2L17 13.8l-.4 6h2.6M14.1 9l-1.1 3.6 4.1-.5"/>',
+	# The load one carries (the field's bag key, user 2026-10-25: the grid did not read on the
+	# phone): a rucksack, its top loop, the flap's edge and one front pocket.
+	"pack": '<path class="t" d="M7 9.500a3.500 3.500 0 0 1 3.500-3.500h3a3.500 3.500 0 0 1 3.500 3.500v10a1.500 1.500 0 0 1-1.500 1.500h-7A1.500 1.500 0 0 1 7 19.500z"/><path d="M7 9.500a3.500 3.500 0 0 1 3.500-3.500h3a3.500 3.500 0 0 1 3.500 3.500v10a1.500 1.500 0 0 1-1.500 1.500h-7A1.500 1.500 0 0 1 7 19.500z"/><path d="M10 6V4.500a2 2 0 0 1 4 0V6M7 12c2.700 1.300 7.300 1.300 10 0M9.500 15.500h5V19h-5z"/>',
 	"inv": '<path class="t" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
 	"bandage": '<path class="t" d="M4 9l11-5 5 11-11 5z"/><path d="M4 9l11-5 5 11-11 5z"/><path d="M9 7l5 11"/>',
 	"aim": '<circle cx="12" cy="12" r="8"/><circle class="f" cx="12" cy="12" r="1.600"/><path d="M12 2v4M12 18v4"/>',
