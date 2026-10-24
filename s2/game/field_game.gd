@@ -25,6 +25,8 @@ const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
+const LootDress = preload("res://game/sim/loot_dress.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
@@ -81,7 +83,7 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat"]
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
@@ -107,6 +109,13 @@ const EXTRA_ITEMS: Dictionary = {
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
 const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5]}
+## A watch found still set (P19): it starts ringing this long (real seconds)
+## after it is first carried, rings this many times this far apart at the one
+## who carries it (a "normal" sound, as any), then is quiet. One key stops them all.
+const ALARM_DELAY_MIN: float = 60.0
+const ALARM_DELAY_MAX: float = 150.0
+const ALARM_RINGS: int = 4
+const ALARM_EVERY: float = 2.0
 
 var opts: Dictionary = {}
 ## What this stop is for (opts["mission"]; content_variety_first_build 2부):
@@ -214,6 +223,26 @@ var rattle: Dictionary = {}            # manhole key -> seconds of rattling left
 var lid_open: Dictionary = {}          # manhole key -> seconds the lid stays pushed aside (a body is coming up)
 var ground_items: Array = []           # {pos, id, n}
 var decisions: Array = []
+## What LootDress did to this stop's boxes (empty when it was not asked).
+var loot_report: Dictionary = {}
+## Watches still set to ring, by who carries them: [{"who", "at", "left", "next"}]
+## (P19). "at" is when it starts, "left" how many rings are still to come.
+var alarms: Array = []
+## Named things somebody has already said something about (once a stop).
+var named_seen: Dictionary = {}
+var eat_rng := RandomNumberGenerator.new()
+## Under the snow out of doors, not yet seen (card 11): [{"cell", "id"}].
+var glints: Array = []
+## How each building with a locked door gives its key (LootDress.key_ways).
+var key_ways: Dictionary = {}
+## Where the note of this stop says a box is hidden at the next one ("" if none).
+var note_spot: String = ""
+## Tins thrown, still to land and rattle: [{"pos", "at", "who"}]; and where
+## they landed, shown a moment: [{"pos", "t"}].
+var lures: Array = []
+var lure_marks: Array = []
+## Bodies gone through, and who saw it (card 12): [{"who", "seen": [pid]}].
+var body_searches: Array = []
 var cam_focus := Vector3.ZERO
 var cam_push := Vector3.ZERO
 var cam_size: float = 24.0
@@ -265,6 +294,10 @@ var region: String = Atmosphere.DEFAULT_REGION
 var cold: float = 1.0
 ## Which side of midwinter (0 autumn, 1 spring): day length, leaf and lying snow.
 var side: float = 0.0
+## The season state's name (the season table's, the same S1 and the train read).
+var season_name: String = ""
+## The photo sky the water gives back now (Atmosphere.SKY_PHOTOS key).
+var sky_photo: String = ""
 var look_hour: float = -1.0
 var atmo: Dictionary = {}
 var atmo_min: float = -INF
@@ -295,7 +328,13 @@ func _ready() -> void:
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
 	var open_ground := bool(Atmosphere.region(region)["open"])
-	var season := Atmosphere.season_for(cold, side) if storm.is_empty() else SnowCover.DEFAULT_SEASON
+	# The season table names the season by the act; a cold given outright (check
+	# shots, tests) names it by that cold.
+	if opts.has("cold"):
+		season_name = Atmosphere.season_for(cold, side)
+	else:
+		season_name = Atmosphere.season_at(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", "")))
+	var season := season_name if storm.is_empty() else SnowCover.DEFAULT_SEASON
 	var old_cm := Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side) if storm.is_empty() else -1.0
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
@@ -306,6 +345,15 @@ func _ready() -> void:
 		_take_map(opts["map_data"])
 	else:
 		_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	# The boxes get their named things, from this run's seed (decision 423-8).
+	# opts "loot_dress" false keeps the map's own bundles, as before.
+	if bool(opts.get("loot_dress", true)):
+		loot_report = LootDress.dress(data, rng.seed)
+		# The box a note of the last stop told of (card 10, opts "stash": its spot).
+		if String(opts.get("stash", "")) != "":
+			loot_report["stash"] = LootDress.place_stash(data, String(opts["stash"]), rng.seed)
+	# Its own dice, so eating and the watches move nothing else of the run.
+	eat_rng.seed = ("%d:eat" % rng.seed).hash()
 	director = HordeDirector.new(rng)
 	director.use_map(data)
 	if opts.has("budget"):
@@ -350,6 +398,7 @@ func _ready() -> void:
 	people_look.setup(self)
 	await BuildPace.rest(pace)
 	_spawn_dead()
+	_give_finds()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
 	await BuildPace.rest(pace)
@@ -410,6 +459,7 @@ func _apply_fx() -> void:
 		return
 	# A storm keeps its stage's light; the look is still made for breath and the like.
 	atmo = atmosphere_at(picture_hour())
+	_set_sky_photo()
 	fx_params = FxState.params_for(look_kinds, weather.ambient_c, weather.wind_dir, weather.wind, hour, snow_cover.cover())
 	FxState.apply(fx_params)
 	fx_light = FxState.lighting_for(look_kinds, hour)
@@ -559,7 +609,14 @@ func _update_fade(delta: float) -> void:
 
 ## The atmosphere frame's look of this stop at an hour.
 func atmosphere_at(hour: float) -> Dictionary:
-	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side})
+	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side, "season": season_name})
+
+
+## The puddles give back the look's strongest photo sky (only when it changes).
+func _set_sky_photo() -> void:
+	var key := Atmosphere.sky_main(atmo)
+	if key != sky_photo and FxState.set_sky(Atmosphere.sky_texture(key)):
+		sky_photo = key
 
 
 ## The hour the picture is drawn at: the field clock's, or a fixed one for check
@@ -591,6 +648,7 @@ func _update_atmosphere() -> void:
 				fx_params[key] = p[key]
 				changed[key] = p[key]
 		FxState.apply(changed)
+		_set_sky_photo()
 		_set_cold_frost(float(atmo["edge_frost"]))
 		# Lights and the grade change only with the look (the grade's curve is a
 		# texture: remade every frame it cost the phone a few milliseconds).
@@ -1286,6 +1344,9 @@ func _step(delta: float) -> void:
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
+	_watch_named()
+	_reveal_glints()
+	_land_lures()
 	actions.update(delta)
 	holdout.tick(delta)
 	holdout.watch(delta)
@@ -1306,7 +1367,7 @@ func _update_zone(delta: float) -> void:
 	telemetry.zone_tick(z, delta)
 	var looted := false
 	for id in player.items:
-		if STOCK_OF.has(id):
+		if STOCK_OF.has(id) or String(FieldItems.stock_of(id)[0]) != "":
 			looted = true
 	if looted and player.moving:
 		telemetry.carry_time(delta)
@@ -2386,6 +2447,14 @@ func finish(reason: String) -> void:
 		if STOCK_OF.has(id):
 			var row: Array = STOCK_OF[id]
 			stock[row[0]] = float(stock.get(row[0], 0.0)) + float(row[1]) * int(unloaded[id])
+		elif FieldItems.has(id):
+			# A named thing melts into the number it was cut from (decision 423-8).
+			var melt: Array = FieldItems.stock_of(id)
+			if String(melt[0]) != "":
+				stock[melt[0]] = float(stock.get(melt[0], 0.0)) + float(melt[1]) * int(unloaded[id])
+			if FieldItems.kept_by_name(id):
+				for k in range(int(unloaded[id])):
+					receipt.gain_item(id)
 		if id in ["symbol_bell", "info_telegraph", "info_timetable", "plow_core"]:
 			receipt.gain_item(id)
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
@@ -2428,6 +2497,7 @@ func finish(reason: String) -> void:
 	elif holdout.mode == "roll":
 		holdout.note_leaving()
 		telemetry.holdout = holdout.roll_note()
+	_receipt_finds(boarded)
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -2487,4 +2557,322 @@ func item_name(id: String) -> String:
 		return "고철"
 	if id == "wood":
 		return "목재"
+	if FieldItems.is_key(id):
+		# A key says whose door it opens.
+		var b: int = FieldItems.key_building(id)
+		var buildings: Array = data.get("buildings", [])
+		var where: String = String((buildings[b] as Dictionary).get("name", "")) if b >= 0 and b < buildings.size() else ""
+		return "%s 열쇠" % where if where != "" else FieldItems.item_name(id)
+	if FieldItems.has(id):
+		return FieldItems.item_name(id)
 	return String(Carry.ITEM_NAMES.get(id, W.get_data(id).get("name", id)))
+
+
+## The picture of a thing in the bag or a box ("" for one with none of its own).
+func item_icon(id: String) -> String:
+	if FieldItems.has(id):
+		return FieldItems.icon(id)
+	return String(BUNDLE_ICONS.get(id, ""))
+
+
+# ---------------------------------------------------------------- named things
+
+## The old field things' pictures (hud_icons.gd), so a row never stands bare.
+const BUNDLE_ICONS: Dictionary = {
+	"food_pack": "food", "med_box": "med", "luxury_pack": "lux", "bandage": "bandage", "medkit": "med",
+	"bottle_spirit": "lux", "document": "papers", "info_telegraph": "papers", "info_timetable": "papers",
+	"cloth": "it_cloth", "plank": "it_plank", "wood": "it_plank", "scrap": "wrench", "flare": "lamp",
+	"needle_thread": "it_needle", "tweezers": "it_needle", "symbol_bell": "it_bell",
+	"frying_pan": "it_pan", "broken_bottle": "it_bottle_broken", "wood_stake": "it_stake",
+	"knife": "it_knife", "crowbar": "wrench", "axe": "axe",
+}
+
+
+## A set watch in somebody's pack starts its count when first carried and rings
+## at whoever carries it unless switched off (P19); a named find gets its line
+## from the one who has it, once (P14).
+func _watch_named() -> void:
+	var now := clock.elapsed
+	for p in squad:
+		if not p.is_alive():
+			continue
+		for id: String in p.items:
+			if FieldItems.rings(id):
+				var have := 0
+				for a: Dictionary in alarms:
+					if a["who"] == p and a["id"] == id:
+						have += 1
+				for k in range(int(p.items[id]) - have):
+					alarms.append({"who": p, "id": id, "at": now + eat_rng.randf_range(ALARM_DELAY_MIN, ALARM_DELAY_MAX), "left": ALARM_RINGS})
+			elif FieldItems.line(id) != "" and not named_seen.has(id):
+				named_seen[id] = true
+				say(p, "%s: %s" % [p.display_name, FieldItems.line(id)])
+			elif id == "note_map" and note_line() != "" and not named_seen.has(id):
+				named_seen[id] = true
+				say(p, "%s: 쪽지다. 「%s」" % [p.display_name, note_line()])
+	var keep: Array = []
+	for a: Dictionary in alarms:
+		var who = a["who"]
+		# Put down, loaded on the train, or switched off: it is no one's worry now.
+		if not is_instance_valid(who) or not who.is_alive() or int(who.items.get(a["id"], 0)) <= 0:
+			continue
+		if now >= float(a["at"]):
+			if int(a["left"]) == ALARM_RINGS and hud != null:
+				hud.toast("%s의 가방 속 시계가 울린다." % who.display_name)
+			make_sound(who.position, SimNoise.Level.NORMAL, "alarm", who)
+			a["left"] = int(a["left"]) - 1
+			a["at"] = now + ALARM_EVERY
+			if int(a["left"]) <= 0:
+				# Rung out: that watch is quiet from now on.
+				who.take_item(a["id"])
+				who.add_item(FieldItems.silenced(a["id"]))
+				continue
+		keep.append(a)
+	alarms = keep
+
+
+## Is a watch in the squad still set? (the key that stops them shows then)
+func alarm_set() -> bool:
+	for p in squad:
+		if p.is_alive():
+			for id: String in p.items:
+				if FieldItems.rings(id):
+					return true
+	return false
+
+
+## One key stops every set watch the squad carries.
+func alarm_off() -> void:
+	for p in squad:
+		for id: String in p.items.keys():
+			if FieldItems.rings(id):
+				var n: int = int(p.items[id])
+				p.take_item(id, n)
+				p.add_item(FieldItems.silenced(id), n)
+	alarms.clear()
+
+
+## What the hands and the pack give for opening a tin (field_items.eat_plan).
+func eat_tools(p) -> Dictionary:
+	var knife := false
+	var blunt := false
+	for h: Dictionary in p.hands:
+		var hid: String = String(h.get("id", ""))
+		if String(W.get_data(hid).get("kind", "")) != "melee":
+			continue
+		if hid == "knife":
+			knife = true
+		else:
+			blunt = true
+	return {"opener": int(p.items.get("can_opener", 0)) > 0, "knife": knife, "blunt": blunt}
+
+
+## Eat one of `id` there and then (survival_detail 3.5): a short while with the
+## hands busy, less exhaustion after; a tin opened by a blow is heard.
+func eat(p, id: String) -> void:
+	if p == null or not p.can_act() or p.action != "" or int(p.items.get(id, 0)) <= 0:
+		return
+	var plan: Dictionary = FieldItems.eat_plan(id, eat_tools(p))
+	if not bool(plan["ok"]):
+		if p == player and hud != null:
+			hud.toast("%s." % String(plan["why"]))
+		return
+	p.start_action("eat", "먹기", float(plan["seconds"]), _ate.bind(p, id, plan))
+
+
+func _ate(p, id: String, plan: Dictionary) -> void:
+	if not p.is_alive() or not p.take_item(id):
+		return
+	if bool(plan["loud"]):
+		make_sound(p.position, SimNoise.Level.NORMAL, "can_bash", p)
+	if float(plan["slip"]) > 0.0 and eat_rng.randf() < float(plan["slip"]):
+		p.body.apply_cut(false, clock.elapsed, "arm_left")
+		if p == player and hud != null:
+			hud.toast("칼날이 미끄러져 손을 베었다.")
+	# What is left of a tin is a lure to throw (P22).
+	if String(FieldItems.row(id).get("eat", "")) == "can":
+		p.add_item("can_empty")
+	var result: Dictionary = FieldItems.eat_result(id, float(plan["spill"]))
+	if bool(result["bad"]):
+		if p == player and hud != null:
+			hud.toast("상해 있었다.")
+		return
+	p.body.add_fatigue(-float(result["rest"]))
+
+
+# ---------------------------------------------------------------- keys, the snow, notes, lures
+
+## Things under the snow show to one of the squad this near (card 11), less
+## after dark and in a blizzard. No key asks for it: walking by is enough.
+const GLINT_REACH: float = 3.0
+const GLINT_DARK: float = 0.6
+const GLINT_STORM: float = 0.5
+## An empty tin flies this far where the thrower faces (short of a wall), lands
+## after a moment and rattles there; where it landed shows a little while.
+const THROW_REACH: float = 8.0
+const THROW_FLIGHT: float = 0.6
+const LURE_MARK_S: float = 3.0
+
+
+## Out the keys of the buildings with a locked door (P12), the things under
+## the snow (card 11) and the note of the next stop (card 10), from the seed.
+func _give_finds() -> void:
+	if not bool(opts.get("loot_dress", true)):
+		return
+	glints = LootDress.glints(data, rng.seed)
+	key_ways = LootDress.key_ways(grid.doors, rng.seed)
+	var who := RandomNumberGenerator.new()
+	who.seed = ("%d:finds:who" % rng.seed).hash()
+	for b: int in key_ways:
+		var key := FieldItems.key_for(b)
+		var way: String = key_ways[b]
+		if way == "dead":
+			var inside: Array = []
+			for z in zombies.list:
+				if z["kind"] != "frozen" and grid_at(z["home"]).building_at(FieldGrid.cell_of(z["home"])) == b:
+					inside.append(z)
+			if inside.is_empty():
+				way = "box"
+			else:
+				var holder: Dictionary = inside[who.randi_range(0, inside.size() - 1)]
+				holder["carry"] = (holder.get("carry", []) as Array) + [key]
+		if way == "snow":
+			var at := _outside_door(b)
+			if at.x < 0:
+				way = "box"
+			else:
+				glints.append({"cell": at, "id": key})
+		if way == "box":
+			var boxes: Array = []
+			for id: String in data["containers"]:
+				var c: Dictionary = data["containers"][id]
+				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick"):
+					boxes.append(id)
+			if boxes.is_empty():
+				way = "none"
+			else:
+				(data["containers"][boxes[who.randi_range(0, boxes.size() - 1)]]["items"] as Array).append(key)
+		key_ways[b] = way
+	if who.randf() < LootDress.NOTE_CHANCE:
+		var dead: Array = []
+		for z in zombies.list:
+			if z["kind"] != "frozen":
+				dead.append(z)
+		if not dead.is_empty():
+			var holder: Dictionary = dead[who.randi_range(0, dead.size() - 1)]
+			holder["carry"] = (holder.get("carry", []) as Array) + ["note_map"]
+			note_spot = LootDress.NOTE_SPOTS[who.randi_range(0, LootDress.NOTE_SPOTS.size() - 1)]
+
+
+## A snow cell two steps out of a door of building b, or (-1, -1).
+func _outside_door(b: int) -> Vector2i:
+	for c: Vector2i in grid.doors:
+		if int(grid.doors[c].get("building", -1)) != b:
+			continue
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var o: Vector2i = c + d * 2
+			if grid.inside(o) and grid.people_can_walk(o) and not grid.indoor(o):
+				return o
+	return Vector2i(-1, -1)
+
+
+func glint_reach() -> float:
+	var r := GLINT_REACH
+	if clock.is_dark():
+		r *= GLINT_DARK
+	if weather.kinds.has("blizzard"):
+		r *= GLINT_STORM
+	return r
+
+
+## What lies under the snow comes up where one of the squad walks close (a
+## thing on the ground from then on, picked up as any).
+func _reveal_glints() -> void:
+	if glints.is_empty():
+		return
+	var reach := glint_reach()
+	var keep: Array = []
+	for g: Dictionary in glints:
+		var at := lift(g["cell"], 0)
+		var seen := false
+		for p in squad:
+			if p.is_alive() and level_of(p.position) == 0 and p.position.distance_to(at) <= reach:
+				seen = true
+				break
+		if seen:
+			ground_items.append({"pos": at, "id": String(g["id"]), "n": 1, "glint": true})
+		else:
+			keep.append(g)
+	glints = keep
+
+
+## Throw an empty tin where `p` faces (P22): it lands short of a wall and
+## rattles there a moment later; the dead go to the sound.
+func throw_lure(p, id: String) -> void:
+	if p == null or not p.can_act() or p.action != "" or not FieldItems.throwable(id) or not p.take_item(id):
+		return
+	var lg := grid_at(p.position)
+	var from := FieldGrid.cell_of(p.position)
+	var fwd := Vector3(sin(p.facing), 0, cos(p.facing))
+	var land: Vector3 = p.position
+	var step := 0.5
+	while step <= THROW_REACH:
+		var at: Vector3 = p.position + fwd * step
+		var c := FieldGrid.cell_of(at)
+		if not lg.inside(c) or lg.blocks_body(c) or not lg.line_clear(from, c):
+			break
+		land = at
+		step += 0.5
+	lures.append({"pos": land, "at": clock.elapsed + THROW_FLIGHT, "who": p, "id": id})
+
+
+func _land_lures() -> void:
+	var now := clock.elapsed
+	var keep: Array = []
+	for l: Dictionary in lures:
+		if now < float(l["at"]):
+			keep.append(l)
+			continue
+		var who = l["who"]
+		make_sound(l["pos"], SimNoise.Level.NORMAL, "lure", who if is_instance_valid(who) else null)
+		ground_items.append({"pos": l["pos"], "id": String(l["id"]), "n": 1})
+		lure_marks.append({"pos": l["pos"], "t": now})
+	lures = keep
+	var marks: Array = []
+	for m: Dictionary in lure_marks:
+		if now - float(m["t"]) < LURE_MARK_S:
+			marks.append(m)
+	lure_marks = marks
+
+
+## On the receipt (decision 423): who saw the dead gone through, one row a
+## searcher and only those who came back to tell it (card 12); and the note of
+## the next stop as a document, when the stop knows which stop comes next and
+## writes a stop receipt (card 10; opts "next_stop", "segment").
+func _receipt_finds(boarded: Array) -> void:
+	var back: Dictionary = {}
+	for q in boarded:
+		back[String(q.pid)] = true
+	var by_who: Dictionary = {}
+	for row: Dictionary in body_searches:
+		var seen: Array = by_who.get(row["who"], [])
+		for pid: String in row["seen"]:
+			if back.has(pid) and not seen.has(pid):
+				seen.append(pid)
+		by_who[row["who"]] = seen
+	for who: String in by_who:
+		if not (by_who[who] as Array).is_empty():
+			receipt.witness(who, "body_search", String(data["place_id"]), clock.label(), "searched_the_dead", by_who[who], "body_search")
+	var next: String = String(opts.get("next_stop", ""))
+	if int(unloaded.get("note_map", 0)) > 0 and note_spot != "" and next != "" and receipt.is_stop_receipt():
+		var seg: int = int(opts.get("segment", 0))
+		receipt.add_document({"id": "note_" + String(data["place_id"]), "sourcePlaceId": String(data["place_id"]), "segment": seg,
+			"bodyKey": "note_stash", "choices": [], "targetId": null, "state": "pending", "kind": "next_stop",
+			"nextStop": {"stopId": next, "observedSegment": seg, "blankKey": "stash", "confirmed": false}})
+
+
+## What the note says, when it is read (card 10).
+func note_line() -> String:
+	if note_spot == "":
+		return ""
+	return "다음 역 %s에 상자를 숨겼다." % note_spot

@@ -161,7 +161,8 @@ func test_held_bitten_and_the_shove_in_their_own_motions() -> void:
 	assert_almost_eq(lean.x.y, 0.0, 0.0001, "no twist added on top")
 	p.body.apply_bite(RandomNumberGenerator.new(), "arm_right", 0.0)
 	var bite := PersonVisual.motion_of(p, note, 0.0, [], own)
-	assert_eq(_named(own, bite), PersonVisual.OWN_BITTEN, "the flinch, even held")
+	# The one holding it has no place here: from in front (decision 422: its own flinch).
+	assert_eq(_named(own, bite), PersonVisual.OWN_BITTEN_FRONT, "the flinch, even held")
 	assert_almost_eq(bite.x, 0.0, 0.001, "from its start")
 	assert_gt(PersonVisual.motion_of(p, note, 0.3, [], own).x, 0.4)
 	PersonVisual.motion_of(p, note, 0.4, [], own)
@@ -321,8 +322,9 @@ func test_a_job_of_the_hands_is_the_living_own() -> void:
 	# 부목(막대 + 천)); without them it does not start.
 	p.items = {"plank": 1, "cloth": 1}
 	p.body.fracture(false)
+	# Treating itself, at its worst wound: the broken leg (decision 422).
 	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_pry"], ["swap", "p_search_mid"],
-			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat"],
+			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat_leg"],
 			["splint", "p_kneel_work"], ["lid", "p_kneel_work"], ["dig", "p_floor_strike"], ["window", "p_swing_one"],
 			["kick", "p_kick"]]:
 		p.start_action(want[0], "시험", 2.0, func() -> void: pass)
@@ -529,6 +531,29 @@ func test_the_first_set_of_decision_422_is_in_the_living_own() -> void:
 	var plain := PersonVisual.arm_at(table, frames, DeadBody.packed(Color(0.0, treat, 1.0, 1.0), treat, 0, 0.0))
 	assert_lt(plain[0].y, 0.7, "the hands are down at the shin")
 	assert_true(low[0].is_finite(), "a frame and share on top read back")
+
+
+# Decision 422, second set: carrying each kind of weapon keeps the legs of the
+# plain walk and run (the same ground a round, so the move pace picks them with
+# no slide), and the three guards and the weak-hand hold stay on the spot.
+func test_the_second_set_of_decision_422_is_in_the_living_own() -> void:
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var clips: Array = baked["clips"]
+	var round_of := func(name: String) -> float:
+		var n := PersonVisual.clip_named(clips, name, -1)
+		assert_gt(n, -1, name)
+		if n < 0:
+			return -1.0
+		assert_true(bool(clips[n]["loop"]), name + " loops")
+		return float(clips[n]["round"])
+	var walk: float = round_of.call("p_walk")
+	var run: float = round_of.call("p_run")
+	for name in ["p_walk_long", "p_walk_axe", "p_walk_pistol"]:
+		assert_almost_eq(round_of.call(name), walk, walk * 0.05, name + " covers what the walk does")
+	for name in ["p_run_long", "p_run_pistol"]:
+		assert_almost_eq(round_of.call(name), run, run * 0.05, name + " covers what the run does")
+	for name in ["p_ready_one", "p_ready_two", "p_ready_stab", "p_hold_weak"]:
+		assert_eq(round_of.call(name), 0.0, name + " stays on the spot")
 
 
 func test_the_putting_on_motions_and_the_garments_over_the_living_own() -> void:

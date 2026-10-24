@@ -6,7 +6,7 @@ import { createGame } from '../../src/game/state';
 import type { Game } from '../../src/game/state';
 import { enableDomestic } from '../../src/game/domestic/state';
 import {
-  applyFieldReturn, checkDeparture, chooseSymbolUse, decodeFieldReceipt, judgePromises, matchDeparture, symbolOptions,
+  applyFieldReturn, BODY_SEARCH_REL, checkDeparture, chooseSymbolUse, decodeFieldReceipt, judgePromises, matchDeparture, symbolOptions,
 } from '../../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt } from '../../src/game/field_receipt';
 
@@ -181,6 +181,25 @@ describe('필드 영수증 판 4: 판에 반영', () => {
     expect(broken.g.fieldReturns!.records[0].verdicts[0].verdict).toBe('broken');
     expect(kept.g.trust).toBeGreaterThan(broken.g.trust);
     expect(kept.g.comms.tail.rel).toBeGreaterThan(broken.g.comms.tail.rel);
+  });
+
+  it('시체 뒤지기를 본 사람이 돌아오면 그 칸이 여기는 만큼 관계가 바뀐다, 한 귀환에 칸마다 한 번(결정 423 카드 12)', () => {
+    const r = read<FieldReceipt>('case3_nosymbol_kept.json');
+    const row = (who: string, seen: string[]) => ({
+      who, what: 'body_search', where: 'first_leg_01_sulechow', when: 'D1 10:00', why: 'searched_the_dead', witnesses: seen, template: 'body_search',
+    });
+    const control = createGame(SEED);
+    applyFieldReturn(control, dep(), r);
+    const g = createGame(SEED);
+    applyFieldReturn(g, dep(), { ...r, witnessed: [row('p_151', ['p_152', 'p_122']), row('p_153', ['p_122'])] });
+    expect(BODY_SEARCH_REL).toEqual({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
+    expect(BODY_SEARCH_REL.medtech).toBe(-1);
+    expect(g.comms.medtech.rel - control.comms.medtech.rel).toBe(BODY_SEARCH_REL.medtech);
+    expect(g.comms.guard.rel).toBe(control.comms.guard.rel);
+    // 다른 템플릿의 목격 줄은 닿지 않는다.
+    const other = createGame(SEED);
+    applyFieldReturn(other, dep(), { ...r, witnessed: [{ ...row('p_151', ['p_122']), template: 'something_else' }] });
+    expect(other.comms.medtech.rel).toBe(control.comms.medtech.rel);
   });
 
   it('서막 판정은 꼬리칸에 걸린 다른 약속을 지우지 않는다', () => {

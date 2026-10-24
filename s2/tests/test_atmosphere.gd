@@ -9,6 +9,7 @@ const FxState = preload("res://fx/fx_state.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 
 func before_each() -> void:
@@ -21,23 +22,29 @@ func after_each() -> void:
 
 # ---------------------------------------------------------------- the cold
 
-func test_the_default_table_runs_from_late_autumn_to_the_thaw() -> void:
-	# The user's season answer of 10-24: late autumn with rain, colder through
-	# the prologue and act 1, the coldest in act 2, the thaw only in act 3.
+func test_the_default_flow_is_the_one_season_table() -> void:
+	# The user's season answer of 10-24 with the prologue (나), as S1 and the
+	# train read it: an early cold snap at the start, late autumn rain, first
+	# frosts and snow by the end of the first leg, deep winter by the end of act
+	# 1, the coldest in act 2, the thaw only in act 3.
 	assert_eq(Atmosphere.scheme, "autumn_to_thaw")
-	assert_eq(Atmosphere.cold_for("prologue"), 0.0, "the first stop is the warmest")
-	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("prologue"), Atmosphere.side_for("prologue")), "late_autumn")
-	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("prologue", 1.0), 0.0), "early_winter", "first snow by the end of the prologue")
-	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act1", 1.0), Atmosphere.side_for("act1")), "deep_winter", "deep winter by the end of act 1")
-	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act2", 0.5), Atmosphere.side_for("act2")), "deep_winter")
-	assert_eq(Atmosphere.season_for(Atmosphere.cold_for("act3", 0.5), Atmosphere.side_for("act3")), "early_thaw")
-	# Colder at every step up to the end of act 2, then the thaw.
+	var start := Atmosphere.cold_for("prologue")
+	assert_almost_eq(start, Atmosphere.cold_from_temp(float(SeasonTable.row(1)["temp"])), 0.0001, "the first stretch's temperature")
+	var autumn := Atmosphere.cold_for("prologue", SeasonTable.seg_progress(5))
+	assert_lt(autumn, start, "late autumn is milder than the cold snap the leg sets out in")
+	assert_lt(Atmosphere.look(12.0, ["clear"], "K1", autumn)["temp_c"], 7.0)
+	assert_eq(Atmosphere.season_at("prologue"), "late_autumn")
+	assert_eq(Atmosphere.season_at("prologue", 1.0), "late_autumn", "the prologue's one state (늦가을 → 이른 첫 추위)")
+	assert_eq(Atmosphere.season_at("act1", 0.0), "early_winter")
+	assert_eq(Atmosphere.season_at("act1", 1.0), "deep_winter", "deep winter by the end of act 1")
+	assert_eq(Atmosphere.season_at("act2", 0.5), "deep_winter")
+	assert_eq(Atmosphere.season_at("act3", 0.5), "early_thaw")
+	# Colder at every step from late autumn to the end of act 2, then the thaw.
 	var last := -1.0
-	for act in ["prologue", "act1", "act2"]:
-		for t in [0.0, 0.5, 1.0]:
-			var c := Atmosphere.cold_for(act, t)
-			assert_gte(c, last, "%s %.1f never warmer than before" % [act, t])
-			last = c
+	for row in [["prologue", SeasonTable.seg_progress(5)], ["prologue", 0.5], ["prologue", 1.0], ["act1", 0.0], ["act1", 0.5], ["act1", 1.0], ["act2", 0.0], ["act2", 1.0]]:
+		var c := Atmosphere.cold_for(String(row[0]), float(row[1]))
+		assert_gte(c, last, "%s %.2f never warmer than before" % row)
+		last = c
 	assert_eq(last, 1.0, "the coldest is in act 2")
 	assert_lt(Atmosphere.cold_for("act3", 1.0), Atmosphere.cold_for("act3", 0.0), "it thaws as act 3 goes")
 	assert_eq(Atmosphere.side_for("prologue"), 0.0)
@@ -47,9 +54,18 @@ func test_the_default_table_runs_from_late_autumn_to_the_thaw() -> void:
 	assert_eq(Atmosphere.cold_for("act3", 5.0), Atmosphere.cold_for("act3", 1.0))
 
 
+func test_cold_reads_the_temperature_backwards() -> void:
+	for t in [7.0, 4.0, 0.0, -0.5, -3.0, -7.0, -10.0, -14.0]:
+		for side in [0.0, 1.0]:
+			var c := Atmosphere.cold_from_temp(t, side)
+			assert_almost_eq(Atmosphere.cold_key(c, "temp", -1, side), t, 0.01, "%s side %s" % [t, side])
+	assert_eq(Atmosphere.cold_from_temp(12.0), 0.0)
+	assert_eq(Atmosphere.cold_from_temp(-42.0), 1.0, "S1's hardest cold is the deepest winter picture")
+
+
 func test_the_prologue_rains_then_freezes() -> void:
-	# Above zero at the first stop: what the rules call snow falls as rain.
-	var first := Atmosphere.look(12.0, ["snow"], "K1", Atmosphere.cold_for("prologue"))
+	# Above zero in late autumn: what the rules call snow falls as rain.
+	var first := Atmosphere.look(12.0, ["snow"], "K1", Atmosphere.cold_for("prologue", SeasonTable.seg_progress(4)))
 	assert_gt(float(first["temp_c"]), 1.5)
 	assert_eq(String(first["falls"]), "rain")
 	assert_eq(int(first["snow_level"]), 0)
@@ -278,7 +294,7 @@ func test_a_stop_takes_its_cold_from_the_act() -> void:
 	var first = _stop_with({"seed": 5, "raiders": false, "auto_pause": false, "weather": ["fog", "snow"]})
 	assert_eq(first.cold, Atmosphere.cold_for("prologue"), "the first stop of the prologue by default")
 	assert_eq(first.side, 0.0)
-	assert_eq(String(first.atmo["season"]), "late_autumn")
+	assert_eq(String(first.atmo["season"]), "late_autumn", "the season table's name")
 	var thaw = _stop_with({"seed": 5, "raiders": false, "auto_pause": false, "weather": ["fog", "snow"], "act": "act3", "act_progress": 0.5})
 	assert_eq(thaw.cold, Atmosphere.cold_for("act3", 0.5))
 	assert_eq(thaw.side, 1.0)
@@ -356,8 +372,10 @@ func test_the_slice_hangs_the_outside_behind_the_running_train() -> void:
 	assert_not_null(f.outside)
 	assert_eq(f.outside.get_parent(), f.train.camera, "the camera carries it")
 	assert_true(f.outside.moving, "running on the first stretch")
-	# The prologue starts in late autumn: the first stop's snow falls as rain.
-	assert_eq(String(f.weather.falls), "rain", "the first stretch, late autumn")
+	# The first stretch sets out in the early cold snap; late autumn rain comes after.
+	assert_ne(String(f.weather.falls), "rain", "the first stretch, the cold snap")
+	assert_eq(String(f.outside_look({}, 4)["falls"]), "rain", "the fourth stretch, late autumn")
+	assert_eq(String(f.outside_look({}, 4)["season"]), "late_autumn")
 	f.next()
 	assert_false(f.outside.moving, "standing at the stop")
 	var deep = SliceFlow.new()
@@ -395,3 +413,57 @@ func test_houses_keep_a_little_paint() -> void:
 			painted += 1
 	assert_gt(painted, 10, "most houses kept some paint on their doors")
 	assert_lt(painted, 16, "some never had any")
+
+
+# ---------------------------------------------------------------- CC0 photos (사용자 10-25, 공개 자산 먼저)
+
+func test_the_photo_skies_and_the_ground_grain_are_in_the_build() -> void:
+	for key in Atmosphere.SKY_PHOTOS:
+		var tex := Atmosphere.sky_texture(key)
+		assert_not_null(tex, key)
+		if tex != null:
+			# Phone budget (사용자 10-25, 공개 자산 먼저): 1024 wide at most.
+			assert_eq(tex.get_size(), Vector2(1024, 256), key)
+	var ground: Texture2D = load(Atmosphere.GROUND_DETAIL)
+	assert_not_null(ground)
+	assert_eq(ground.get_size(), Vector2(512, 512))
+	for name in FxState.TEXTURE_GLOBALS:
+		assert_true(ProjectSettings.has_setting("shader_globals/" + name), name)
+		assert_eq(String(ProjectSettings.get_setting("shader_globals/" + name)["type"]), "sampler2D", name)
+
+
+func test_each_hour_and_weather_takes_its_photo_sky() -> void:
+	var t := Atmosphere.sun_times(1.0)
+	var cases := [
+		[t.x + 0.2, ["clear"], "dawn"], [12.0, ["clear"], "day"], [t.y - 0.4, ["clear"], "dusk"], [t.y + 2.0, ["clear"], "night"],
+		[12.0, ["overcast"], "overcast"], [12.0, ["fog"], "mist"], [12.0, ["snow"], "snow"], [12.0, ["blizzard"], "snow"],
+	]
+	for c in cases:
+		var l := Atmosphere.look(float(c[0]), c[1], "K1", 1.0)
+		assert_eq(Atmosphere.sky_main(l), String(c[2]), "%s %s" % [c[0], c[1]])
+		var total := 0.0
+		for row in l["skies"]:
+			assert_true(Atmosphere.SKY_PHOTOS.has(String(row[0])), String(row[0]))
+			total += float(row[1])
+		assert_almost_eq(total, 1.0, 0.0001)
+	# Warm rain is a grey sky too.
+	assert_eq(Atmosphere.sky_main(Atmosphere.look(12.0, ["snow"], "K1", 0.0)), "overcast")
+
+
+func test_the_train_and_the_field_show_the_photo_sky() -> void:
+	var f = SliceFlow.new()
+	f.opts = {"skip_field": true, "seed": 3, "look": {"hour": 12.0, "kinds": ["overcast"]}}
+	add_child_autofree(f)
+	var m: ShaderMaterial = f.outside.material
+	assert_eq(float(m.get_shader_parameter("photo_on")), 1.0)
+	var w: Vector3 = m.get_shader_parameter("sky_w")
+	assert_almost_eq(w.x + w.y + w.z, 1.0, 0.0001)
+	var game = _stop({"weather": ["fog"]})
+	assert_eq(game.sky_photo, "mist", "the puddles give back the foggy sky")
+
+
+func test_the_ground_reads_its_photo_grain_once() -> void:
+	# Phone budget: one fetch for all four grains, on top of the sight mask.
+	var code := FileAccess.get_file_as_string("res://game/world/world_vis.gdshader")
+	assert_eq(code.count("texture(fx_ground"), 1)
+	assert_false(code.contains("hint_screen_texture"))

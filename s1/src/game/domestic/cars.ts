@@ -58,7 +58,8 @@ export function previewMove(g: Game, order: string[]): MovePreview {
     out.rel[c] = (out.rel[c] ?? 0) + (steps > 0 ? D.moveUpRel * steps : D.moveDownRel * -steps);
     if (c === 'front' && from === 'front') out.frontPushed = true;
   }
-  // 사람이 사는 칸이 아니어도 자리는 바뀐다. 실제로 끌어 옮긴 칸 수는 자리가 바뀐 칸의 반쯤이지만, 단순하게 자리가 바뀐 칸을 센다.
+  // 사람이 사는 칸이 아니어도 자리는 바뀐다. 두 칸이 자리를 맞바꾸면 실제로 끌어 옮긴 칸은 하나라서,
+  // 자리가 바뀐 칸 수의 절반(올림)을 「옮긴 칸」으로 센다(s1c_build_notes 칸 순서, s1c_domestic 4.5).
   const shunted = Math.ceil(out.moved.length / 2);
   out.coal = shunted * D.moveCoal;
   if (shunted > D.moveMax) out.why = `한 번에 ${D.moveMax}칸까지`;

@@ -1,0 +1,478 @@
+extends RefCounted
+## Dressing a stop's boxes when the stop is made (decision 423-8, P01·P14·P19·P20):
+## what a building holds stays what the map gave it, but it goes where the room
+## says it would be (food to the kitchen and the larder, iron to the toolbox,
+## cloth and small things to the bedroom), so some boxes come up empty more
+## often than others and 「여긴 건너뛰자」 can be learnt; then every bundle gets a
+## name (field_items.gd), and a few finds of their own go in: a bigger pack, a
+## watch, a can opener, nails, a fuel can, and now and then one named find.
+##
+## Rolled once from the run's seed, like the pockets: same seed, same stop. The
+## map's numbers are not changed: a building ends with the same bundles it
+## started with (the finds are added on top, each listed in the PR's new values).
+## Untouched: a stop goal's box ("pick"), the fixed boxes the story leans on
+## (loot_tables.gd FIXED, only named), locked ones (only named; a named find may
+## go in one), and boxes standing in no building (only named).
+
+const FieldItems = preload("res://game/sim/field_items.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
+
+## What may be moved between the boxes of one building, and as what.
+const FAMILY: Dictionary = {
+	"food_pack": "food", "med_box": "med", "luxury_pack": "lux",
+	"plank": "wood", "wood": "wood", "scrap": "scrap", "cloth": "cloth",
+	"bandage": "small", "bottle_spirit": "small",
+}
+
+## The room a box stands in, from the words of its name (first kind that
+## matches wins, in this order). A map may give a box a "room" of its own.
+const ROOM_ORDER: Array[String] = ["toolbox", "clinic", "bathroom", "kitchen", "pantry", "bedroom", "shop", "office", "hall", "storage"]
+const ROOM_WORDS: Dictionary = {
+	"toolbox": ["공구", "작업", "자재함", "부품", "정비", "기계", "철물", "도면"],
+	"clinic": ["진료", "약국", "약방", "약장", "병실", "간호", "처치", "구급", "의무"],
+	"bathroom": ["화장실", "세면", "욕실"],
+	"kitchen": ["부엌", "찬장", "식당", "취사", "식료"],
+	"pantry": ["저장", "곳간", "광", "식량", "얼음", "지하실"],
+	"bedroom": ["안방", "침실", "옷장", "서랍", "숙직", "기숙", "사제관"],
+	"shop": ["매장", "가게", "진열", "계산대", "매점", "상회"],
+	"office": ["사무", "기록", "장부", "책상", "계량", "선별", "수위", "신호", "문서"],
+	"hall": ["제의", "성가", "회중", "종", "예배", "찬송", "합창", "탑"],
+	"storage": [],
+}
+## How strongly each room draws each kind of thing (a weight; 0.3 is 「hardly
+## ever」). The rooms with low weights everywhere are the ones often found empty.
+const AFFINITY: Dictionary = {
+	"kitchen": {"food": 6.0, "med": 0.3, "lux": 1.0, "wood": 0.5, "scrap": 0.3, "cloth": 0.5, "small": 1.0},
+	"pantry": {"food": 6.0, "med": 0.2, "lux": 0.5, "wood": 2.0, "scrap": 1.0, "cloth": 0.3, "small": 0.5},
+	"bedroom": {"food": 0.3, "med": 1.5, "lux": 3.0, "wood": 0.3, "scrap": 0.2, "cloth": 4.0, "small": 1.0},
+	"bathroom": {"food": 0.1, "med": 5.0, "lux": 0.3, "wood": 0.1, "scrap": 0.1, "cloth": 1.0, "small": 3.0},
+	"clinic": {"food": 0.2, "med": 6.0, "lux": 0.2, "wood": 0.2, "scrap": 0.2, "cloth": 2.0, "small": 4.0},
+	"toolbox": {"food": 0.2, "med": 0.3, "lux": 0.2, "wood": 3.0, "scrap": 6.0, "cloth": 1.0, "small": 0.5},
+	"shop": {"food": 5.0, "med": 1.0, "lux": 3.0, "wood": 0.5, "scrap": 0.5, "cloth": 2.0, "small": 1.0},
+	"office": {"food": 0.5, "med": 0.5, "lux": 1.0, "wood": 0.5, "scrap": 0.5, "cloth": 0.5, "small": 0.5},
+	"hall": {"food": 0.3, "med": 0.3, "lux": 0.3, "wood": 0.3, "scrap": 0.3, "cloth": 0.3, "small": 0.3},
+	"storage": {"food": 3.0, "med": 0.5, "lux": 0.5, "wood": 4.0, "scrap": 4.0, "cloth": 1.0, "small": 0.5},
+}
+## No box takes more than this many things from the others.
+const CAP: int = 6
+
+## What a building is, from the words of its name (first that matches). Only the
+## naming and the finds read it.
+const BUILDING_ORDER: Array[String] = ["fish", "cold", "bakery", "pharmacy", "clinic", "grocery", "farm", "garage", "workshop", "house"]
+const BUILDING_WORDS: Dictionary = {
+	"fish": ["낚시", "어장", "생선"],
+	"cold": ["얼음", "냉장", "냉동"],
+	"bakery": ["빵집", "제과"],
+	"pharmacy": ["약국", "약방"],
+	"clinic": ["병원", "의사", "간호", "진료", "구급"],
+	"grocery": ["식료품", "잡화", "매점", "상회", "가게", "상점"],
+	"farm": ["농가", "외양간", "헛간", "마구간", "우물집", "과수"],
+	"garage": ["차고"],
+	"workshop": ["공장", "기계", "공구", "정비", "철물", "부품", "제재", "변전", "대장"],
+	"house": ["주택", "사택", "연립", "본채", "오두막", "관리인", "숙직", "기숙", "움막", "집"],
+}
+## Where people lived (a pack or a watch is left in a room, never on a platform).
+const LIVED_IN: Array[String] = ["house", "farm", "fish", "clinic"]
+
+## Bundle → named thing, by where it lies. [id, weight] rows; the weights are
+## set so a bundle weighs 1.0 on average (± 0.05), so a pack carries as much as
+## before; spoiled and wilted things are what is lost on the train.
+const NAMES: Dictionary = {
+	"food": {
+		"default": [["can_beans", 3], ["can_meat", 2], ["can_dented", 2], ["jar_cabbage", 2], ["jar_jam", 1], ["jar_honey", 1], ["hardtack", 2], ["rusk", 2], ["sugar", 1], ["oats", 3], ["peas", 2], ["bread_moldy", 1]],
+		"pantry": [["jar_cabbage", 3], ["jar_jam", 2], ["jar_honey", 1], ["oats", 2], ["peas", 2], ["flour", 1], ["can_beans", 2], ["can_dented", 1], ["apple_wilted", 1], ["hardtack", 2], ["rusk", 2]],
+		"shop": [["can_beans", 4], ["can_meat", 3], ["can_dented", 2], ["sugar", 2], ["hardtack", 2], ["jar_jam", 1], ["flour", 1], ["oats", 1], ["peas", 1], ["meat_spoiled", 1]],
+		# Raw meat and fish only where they were kept frozen (survival_detail 3.5).
+		"cold": [["meat_frozen", 5], ["fish_frozen", 2], ["can_meat", 1]],
+		"fish": [["fish_frozen", 6], ["can_beans", 1], ["hardtack", 1], ["peas", 1]],
+		"bakery": [["flour", 8], ["rusk", 3], ["sugar", 2], ["bread_moldy", 3]],
+		# Late autumn (decision 423-1): the orchards still bear.
+		"farm": [["apple", 3], ["apple_wilted", 3], ["jar_cabbage", 2], ["jar_honey", 2], ["meat_spoiled", 1]],
+	},
+	"med": {
+		"default": [["painkillers", 3], ["fever_pills", 2], ["ointment", 1], ["cough_syrup", 2], ["antiseptic", 3], ["herbs", 3]],
+		"clinic": [["antiseptic", 3], ["painkillers", 3], ["saline", 3], ["cough_syrup", 2], ["fever_pills", 2], ["ointment", 1]],
+		"herbal": [["herbs", 4], ["painkillers", 1], ["ointment", 4], ["cough_syrup", 1]],
+	},
+	"lux": {
+		"default": [["cigarettes", 2], ["coffee", 2], ["record", 3], ["painting", 3], ["pocket_watch", 1]],
+		"shop": [["cigarettes", 2], ["coffee", 5], ["record", 2], ["painting", 2]],
+		"bedroom": [["pocket_watch", 2], ["record", 2], ["painting", 4], ["cigarettes", 2], ["coffee", 1]],
+		# Pockets hold small things; not held to the 1.0 (a few a stop at most).
+		"pocket": [["cigarettes", 3], ["pocket_watch", 2], ["coffee", 1]],
+	},
+}
+## The naming tables not held to the 1.0 average (see above).
+const LIGHT_TABLES: Array[String] = ["lux:pocket"]
+
+## Finds of their own, a stop at a time (new values, PR 「새로 넣은 값」).
+const BIG_PACK_CHANCE: float = 0.35     # one bigger pack in a lived-in bedroom or store room
+const WATCH_CHANCE: float = 0.30        # one wrist watch left in a lived-in bedroom
+const WATCH_SET_SHARE: float = 0.5      # how many of the watches are still set to ring
+const OPENER_CHANCE: float = 0.60       # one can opener in a kitchen or larder
+const NAILS_CHANCE: float = 0.08        # each toolbox: a handful of nails
+const NAILS_MOST: int = 4
+const FUEL_CHANCE: float = 0.30         # one fuel can in a garage
+const RARE_CHANCE: float = 0.25         # one named find
+# 나단계 (decision 423, P23, card 11)
+const PAN_CHANCE: float = 0.50          # one frying pan in a kitchen
+const BOTTLE_CHANCE: float = 0.40       # one broken bottle in a washroom, a bedroom or a store
+## Things lying under the snow out of doors, shown only to one close by
+## (field_game.glint_reach): how many a stop, and what they are.
+const GLINTS: int = 6
+const GLINT_KINDS: Array = [["wood", 3], ["scrap", 2], ["hare_frozen", 1]]
+## How the key of a building with a locked door is found (P12): on one of the
+## dead inside it, dropped in the snow by its door, or in a drawer inside.
+const KEY_WAYS: Array = [["dead", 6], ["snow", 2], ["box", 2]]
+## One of the dead may carry a note of a box hidden at the next stop (card 10).
+const NOTE_CHANCE: float = 0.35
+const NOTE_SPOTS: Array[String] = ["신호소 마루 밑", "급수탑 발치", "화물 창고 뒤 돌무더기", "역사 지하 계단 밑", "선로 반대편 헛간"]
+
+
+static func _has_word(name: String, words: Array) -> bool:
+	var tokens: PackedStringArray = name.split(" ", false)
+	for w: String in words:
+		for t in tokens:
+			if t == w or (w.length() >= 2 and t.begins_with(w)):
+				return true
+	return false
+
+
+## The room a box stands in ("storage" when its name says nothing).
+static func room_of(c: Dictionary) -> String:
+	if c.has("room") and AFFINITY.has(String(c["room"])):
+		return String(c["room"])
+	var n: String = String(c.get("name", ""))
+	for kind in ROOM_ORDER:
+		if _has_word(n, ROOM_WORDS[kind]):
+			return kind
+	return "storage"
+
+
+## What a building is by its name ("" for none of these).
+static func building_kind(name: String) -> String:
+	for kind in BUILDING_ORDER:
+		for w: String in BUILDING_WORDS[kind]:
+			if name.contains(w):
+				return kind
+	return ""
+
+
+static func _rng(seed: int, what: String) -> RandomNumberGenerator:
+	var r := RandomNumberGenerator.new()
+	r.seed = ("%d:dress:%s" % [seed, what]).hash()
+	return r
+
+
+static func _pick(rows: Array, rng: RandomNumberGenerator) -> String:
+	var total := 0.0
+	for r: Array in rows:
+		total += float(r[1])
+	var at := rng.randf() * total
+	for r: Array in rows:
+		at -= float(r[1])
+		if at < 0.0:
+			return String(r[0])
+	return String(rows[rows.size() - 1][0])
+
+
+## Average weight of a naming table's things.
+static func mean_weight(family: String, table: String) -> float:
+	var rows: Array = NAMES[family][table]
+	var n := 0.0
+	var w := 0.0
+	for r: Array in rows:
+		n += float(r[1])
+		w += float(r[1]) * FieldItems.weight(String(r[0]))
+	return w / n
+
+
+## Which naming table a bundle uses where it lies.
+static func name_table(family: String, room: String, building: String, place_kind: String) -> String:
+	match family:
+		"food":
+			if ["cold", "fish", "bakery", "farm"].has(building):
+				return building
+			if room == "pantry" or room == "shop":
+				return room
+			if building == "grocery":
+				return "shop"
+		"med":
+			if building == "pharmacy" or building == "clinic" or room == "clinic" or place_kind == "hospital":
+				return "clinic"
+			if building == "farm" or place_kind == "church" or place_kind == "lodge":
+				return "herbal"
+		"lux":
+			if room == "shop" or building == "grocery":
+				return "shop"
+			if room == "bedroom":
+				return "bedroom"
+	return "default"
+
+
+## One bundle id named, or the id itself when it is no bundle. A dented tin may
+## have gone off (rolled here, hidden until it is opened).
+static func name_bundle(id: String, table: String, rng: RandomNumberGenerator) -> String:
+	var family: String = String(FAMILY.get(id, ""))
+	if not FieldItems.BUNDLES.has(id) or not NAMES.has(family):
+		return id
+	var rows: Array = NAMES[family].get(table, NAMES[family]["default"])
+	var named := _pick(rows, rng)
+	if named == "can_dented" and rng.randf() < FieldItems.DENTED_BAD:
+		return "can_dented_bad"
+	return named
+
+
+## A pocket's bundle named without drawing from the pockets' dice (the dead roll
+## the same things from the same seed as before): from a number the caller
+## already has (the pockets' dice state).
+static func name_pocket(id: String, salt: int) -> String:
+	if not FieldItems.BUNDLES.has(id):
+		return id
+	var r := RandomNumberGenerator.new()
+	r.seed = ("pocket:%d:%s" % [salt, id]).hash()
+	return name_bundle(id, "pocket" if FAMILY.get(id, "") == "lux" else "default", r)
+
+
+## Dress the stop in place. data: the map's dictionary (containers, buildings,
+## place_kind). Returns what was done, for the tests and the measuring tool:
+## {"moved", "named", "finds": [[id, box]], "rare": id or ""}.
+static func dress(data: Dictionary, seed: int) -> Dictionary:
+	var containers: Dictionary = data.get("containers", {})
+	var buildings: Array = data.get("buildings", [])
+	var place_kind: String = String(data.get("place_kind", ""))
+	var report := {"moved": 0, "named": 0, "finds": [], "rare": ""}
+	# 1. Within each building, the bundles go where the room says.
+	var by_building: Dictionary = {}
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if not _movable_box(id, c):
+			continue
+		var b: int = int(c.get("building", -1))
+		if b < 0:
+			continue
+		if not by_building.has(b):
+			by_building[b] = []
+		(by_building[b] as Array).append(id)
+	for b: int in by_building:
+		report["moved"] += _deal(containers, by_building[b], _rng(seed, "deal:%d" % b))
+	# 2. Every bundle gets its name.
+	var name_rng := _rng(seed, "names")
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if c.has("pick"):
+			continue
+		var room := room_of(c)
+		var bk := _building_kind_of(buildings, c)
+		# A fresh list: a map may hand out the same list (or a read-only one) twice.
+		var items: Array = (c.get("items", []) as Array).duplicate()
+		c["items"] = items
+		for i in range(items.size()):
+			var item: String = String(items[i])
+			if not FieldItems.BUNDLES.has(item):
+				continue
+			var table := name_table(String(FAMILY[item]), room, bk, place_kind)
+			items[i] = name_bundle(item, table, name_rng)
+			report["named"] += 1
+	# 3. Finds of their own.
+	_finds(containers, buildings, seed, report)
+	_rare(containers, place_kind, seed, report)
+	return report
+
+
+static func _movable_box(id: String, c: Dictionary) -> bool:
+	return not c.has("pick") and not LootTables.FIXED.has(id) and not bool(c.get("locked", false))
+
+
+static func _building_kind_of(buildings: Array, c: Dictionary) -> String:
+	var b: int = int(c.get("building", -1))
+	if b < 0 or b >= buildings.size():
+		return ""
+	return building_kind(String((buildings[b] as Dictionary).get("name", "")))
+
+
+## Take the movable things out of these boxes and deal them again by room.
+## Returns how many ended in another box than they started in.
+static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator) -> int:
+	var pool: Array = []   # [item, from box]
+	for id: String in ids:
+		var keep: Array = []
+		for item in containers[id].get("items", []):
+			if FAMILY.has(String(item)):
+				pool.append([String(item), id])
+			else:
+				keep.append(item)
+		containers[id]["items"] = keep
+	var moved := 0
+	for row: Array in pool:
+		var family: String = FAMILY[row[0]]
+		var total := 0.0
+		var weights: Array = []
+		for id: String in ids:
+			var w := 0.0
+			if (containers[id]["items"] as Array).size() < CAP:
+				w = float(AFFINITY[room_of(containers[id])][family])
+			weights.append(w)
+			total += w
+		var to: String = row[1]
+		if total > 0.0:
+			var at := rng.randf() * total
+			for i in range(ids.size()):
+				at -= float(weights[i])
+				if at < 0.0:
+					to = ids[i]
+					break
+		(containers[to]["items"] as Array).append(row[0])
+		if to != row[1]:
+			moved += 1
+	return moved
+
+
+static func _boxes(containers: Dictionary, buildings: Array, rooms: Array, kinds: Array) -> Array:
+	var out: Array = []
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if not _movable_box(id, c):
+			continue
+		if not rooms.is_empty() and not rooms.has(room_of(c)):
+			continue
+		if not kinds.is_empty() and not kinds.has(_building_kind_of(buildings, c)):
+			continue
+		out.append(id)
+	return out
+
+
+static func _put(containers: Dictionary, ids: Array, item: String, rng: RandomNumberGenerator, report: Dictionary) -> void:
+	if ids.is_empty():
+		return
+	var id: String = ids[rng.randi_range(0, ids.size() - 1)]
+	(containers[id]["items"] as Array).append(item)
+	(report["finds"] as Array).append([item, id])
+
+
+static func _finds(containers: Dictionary, buildings: Array, seed: int, report: Dictionary) -> void:
+	var rng := _rng(seed, "finds")
+	if rng.randf() < BIG_PACK_CHANCE:
+		_put(containers, _boxes(containers, buildings, ["bedroom", "storage"], LIVED_IN), "found_big_pack", rng, report)
+	if rng.randf() < WATCH_CHANCE:
+		var watch := "wrist_watch_set" if rng.randf() < WATCH_SET_SHARE else "wrist_watch"
+		_put(containers, _boxes(containers, buildings, ["bedroom"], LIVED_IN), watch, rng, report)
+	if rng.randf() < OPENER_CHANCE:
+		_put(containers, _boxes(containers, buildings, ["kitchen", "pantry"], []), "can_opener", rng, report)
+	var nails := 0
+	for id: String in _boxes(containers, buildings, ["toolbox"], []):
+		if nails >= NAILS_MOST:
+			break
+		if rng.randf() < NAILS_CHANCE:
+			(containers[id]["items"] as Array).append("nails")
+			(report["finds"] as Array).append(["nails", id])
+			nails += 1
+	if rng.randf() < FUEL_CHANCE:
+		_put(containers, _boxes(containers, buildings, [], ["garage"]), "fuel_can", rng, report)
+	# Something to grab when there is nothing better (P23).
+	var hands_rng := _rng(seed, "grab")
+	if hands_rng.randf() < PAN_CHANCE:
+		_put(containers, _boxes(containers, buildings, ["kitchen"], []), "frying_pan", hands_rng, report)
+	if hands_rng.randf() < BOTTLE_CHANCE:
+		_put(containers, _boxes(containers, buildings, ["bathroom", "bedroom", "storage"], LIVED_IN), "broken_bottle", hands_rng, report)
+
+
+## Where things lie under the snow (card 11): out of doors, where one can
+## walk, off the train. [{"cell", "id"}]; a key dropped by a door is added by
+## the field when it gives out the keys.
+static func glints(data: Dictionary, seed: int) -> Array:
+	var out: Array = []
+	var grid = data.get("grid")
+	if grid == null:
+		return out
+	var train: Rect2i = data.get("train", Rect2i())
+	var rng := _rng(seed, "glints")
+	var tries := 0
+	while out.size() < GLINTS and tries < GLINTS * 40:
+		tries += 1
+		var c := Vector2i(rng.randi_range(1, grid.width - 2), rng.randi_range(1, grid.height - 2))
+		if not grid.people_can_walk(c) or grid.indoor(c) or train.grow(2).has_point(c):
+			continue
+		out.append({"cell": c, "id": _pick(GLINT_KINDS, rng)})
+	return out
+
+
+## What a hidden box holds (card 10): three bundles, named where they lie.
+const STASH: Array[String] = ["food_pack", "food_pack", "med_box"]
+
+
+## The box a note told of: the first box whose name shares a word with the
+## spot ("신호소 마루 밑" → a 신호소 box), else one in a building; its things
+## are added, named. Returns the box id ("" when there is none).
+static func place_stash(data: Dictionary, spot: String, seed: int) -> String:
+	var containers: Dictionary = data.get("containers", {})
+	var words: PackedStringArray = spot.split(" ", false)
+	var at := ""
+	var any := ""
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if c.has("pick") or LootTables.FIXED.has(id):
+			continue
+		if any == "" and int(c.get("building", -1)) >= 0:
+			any = id
+		for w in words:
+			if w.length() >= 2 and String(c.get("name", "")).contains(w):
+				at = id
+				break
+		if at != "":
+			break
+	if at == "":
+		at = any
+	if at == "":
+		return ""
+	var rng := _rng(seed, "stash")
+	var c: Dictionary = containers[at]
+	var room := room_of(c)
+	var items: Array = (c.get("items", []) as Array).duplicate()
+	for b: String in STASH:
+		items.append(name_bundle(b, name_table(String(FAMILY[b]), room, "", String(data.get("place_kind", ""))), rng))
+	c["items"] = items
+	return at
+
+
+## How each building with a locked door gives its key: {building: "dead" |
+## "snow" | "box"}, in building order.
+static func key_ways(doors: Dictionary, seed: int) -> Dictionary:
+	var out: Dictionary = {}
+	var rng := _rng(seed, "keys")
+	var shut: Array = []
+	for c: Vector2i in doors:
+		var d: Dictionary = doors[c]
+		var b: int = int(d.get("building", -1))
+		if b >= 0 and String(d.get("state", "")) == "locked" and not shut.has(b):
+			shut.append(b)
+	shut.sort()
+	for b: int in shut:
+		out[b] = _pick(KEY_WAYS, rng)
+	return out
+
+
+## The named find of this stop, if there is one: a box in a building (a locked
+## one too: a safe is a good place for it).
+static func _rare(containers: Dictionary, place_kind: String, seed: int, report: Dictionary) -> void:
+	var rng := _rng(seed, "rare")
+	if rng.randf() >= RARE_CHANCE:
+		return
+	var kinds: Array = []
+	for id: String in FieldItems.RARE:
+		if (FieldItems.RARE[id]["places"] as Array).has(place_kind):
+			kinds.append(id)
+	if kinds.is_empty():
+		return
+	var boxes: Array = []
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if not c.has("pick") and not LootTables.FIXED.has(id) and int(c.get("building", -1)) >= 0:
+			boxes.append(id)
+	if boxes.is_empty():
+		return
+	var rare: String = kinds[rng.randi_range(0, kinds.size() - 1)]
+	var at: String = boxes[rng.randi_range(0, boxes.size() - 1)]
+	(containers[at]["items"] as Array).append(rare)
+	report["rare"] = rare
+	(report["finds"] as Array).append([rare, at])

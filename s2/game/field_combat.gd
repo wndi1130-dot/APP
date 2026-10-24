@@ -11,6 +11,7 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
 
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
@@ -52,7 +53,7 @@ const ALLY_TURN_DEG: float = 35.0
 ## off these works of the hands (the ones the stick breaks off, and rummaging a
 ## body); any other (a climb, a crossing, a door or a window, a weapon swap)
 ## runs to its end and no blow or shove starts meanwhile.
-const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "loot"]
+const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "loot"]
 
 var game
 ## The player's shove pressed during a blow: it goes once the blow is over
@@ -612,6 +613,10 @@ func swing(p, z: Dictionary) -> void:
 	# Read before the blow's own sound: a quiet sound turns the body toward it
 	# (zombies.hear), and this one comes from where the body stands.
 	var from_back := behind(z, p.position)
+	# Seen struck (dead_body.gd picks which way it is thrown by these; nothing reads them here).
+	z["hit_at"] = z["age"]
+	z["hit_by"] = p.position
+	z["hit_way"] = String(p.get_meta(Pose.BLOW_WAY, ""))
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	var state: String = z["state"]
 	var blade: bool = bool(d["blade"])
@@ -789,6 +794,12 @@ func _wear(p, amount: float) -> void:
 		return
 	var h: Dictionary = p.hands[0]
 	h["condition"] = maxf(0.0, float(h["condition"]) - amount)
+	# An improvised one goes to pieces in the hand (decision 423, P23).
+	if h["condition"] <= 0.0 and W.breaks(String(h["id"])):
+		var gone: String = String(W.get_data(String(h["id"])).get("name", ""))
+		p.hands.remove_at(0)
+		p.set_weapon_slots(p.hands)
+		_toast(p, "%s이(가) 부서졌다." % gone)
 
 
 func _toast(p, text: String) -> void:

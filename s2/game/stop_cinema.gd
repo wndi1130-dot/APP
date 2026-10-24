@@ -14,6 +14,9 @@ extends Node
 ## buildings, wagons and trees stand; nothing is written, and skipping a beat
 ## (once it has been seen whole) changes nothing in the stop. It has a world of
 ## its own (a SubViewport) so the field can be built in the main one under it.
+## It wears the weather the field will open with (stop_look: the atmosphere
+## frame's look for the stop's act, cold and hour): late autumn's rain on wet
+## ground, snow lying only as deep as it lies, the same sky light.
 
 signal card_time
 signal done(how: String)           # "sent" or "passed"
@@ -26,6 +29,10 @@ const Smoke = preload("res://fx/smoke.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
+const SnowCover = preload("res://game/sim/snow_cover.gd")
+const Weather = preload("res://game/sim/weather.gd")
+const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const BRAKE_SOUND := "res://audio/train_brake/brake.wav"
 ## Seconds into the brake sound at which the train stands; the sound starts
 ## so that moment falls on the train's own.
@@ -77,6 +84,12 @@ const WINDOW_DARK := Color(0.13, 0.13, 0.14)
 const ROOF_SNOW := Color(0.78, 0.8, 0.83)
 const TRUNK := Color(0.3, 0.26, 0.22)
 const CROWN := Color(0.62, 0.66, 0.66)
+## A fir's own dark green-grey, where no snow lies on it.
+const FIR := Color(0.25, 0.28, 0.26)
+## The field's air (field_game.gd AMBIENT_C, the Weather it makes from it) and
+## its lying snow's white (world_vis.gdshader FX_SNOW).
+const AMBIENT_C: float = -14.0
+const FX_SNOW := Color(0.70, 0.71, 0.72)
 ## Camera places on the train (its own frame: TRAIN at the origin, the line
 ## along x through z 1.5, the roofs about 3.4 up): beside it as the train's
 ## screen shows it, on the tail car's roof looking ahead, and turned out to the
@@ -113,6 +126,14 @@ var seen: bool = false
 var remember: bool = true
 ## The field is built: the look down may end.
 var ready_to_land: bool = false
+## The stop's field opts (slice_flow.gd _field_opts): read for the weather the
+## field opens with, so the scene and the field under it wear the same.
+var stop_opts: Dictionary = {}
+var look: Dictionary = {}          # the stop's atmosphere look (stop_look)
+var fx: Dictionary = {}            # its fx_* shader globals
+var falls: String = "snow"         # what falls: snow, sleet, rain or none
+var white: float = 1.0             # how white the ground lies, 0..1 (fx_snow)
+var wet: float = 0.0               # how wet it is (fx_wet)
 ## rise, run, near, hold, brake, away, down, rest, out, end.
 var beat: String = ""
 var t: float = 0.0                 # seconds into the beat
@@ -181,6 +202,15 @@ func _ready() -> void:
 	marks.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	marks.draw.connect(_draw_marks)
 	layer.add_child(marks)
+	var sl := stop_look(stop_opts)
+	look = sl["look"]
+	fx = sl["params"]
+	falls = String(look.get("falls", "snow"))
+	white = clampf(float(fx.get("fx_snow", 0.0)), 0.0, 1.0)
+	wet = clampf(float(fx.get("fx_wet", 0.0)), 0.0, 1.0)
+	# The globals the field sets as it is built under the scene, set now: the
+	# train's models and the smoke read them, so nothing turns mid-scene.
+	FxState.apply(fx)
 	_build_world()
 	_build_train()
 	_build_sound()
@@ -416,7 +446,7 @@ func _build_world() -> void:
 	world = Node3D.new()
 	world.name = "World"
 	port.add_child(world)
-	var light: Dictionary = FxState.lighting_for(WEATHER, HOUR)
+	var light: Dictionary = Atmosphere.light(look)
 	var env := Environment.new()
 	# Dark and cold, as the field's air is (its background is the weather's tint, darkened).
 	var air: Color = Color(light["fog_color"]).darkened(0.3)
@@ -435,7 +465,8 @@ func _build_world() -> void:
 	we.environment = env
 	world.add_child(we)
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(FxState.SUN_PITCH, -30, 0)
+	# Where the field's sun stands at the hour it opens (field_game.gd).
+	sun.rotation_degrees = Vector3(float(light["sun_pitch"]), float(light["sun_yaw"]), 0.0)
 	sun.light_color = light["sun_color"]
 	sun.light_energy = light["sun_energy"]
 	sun.shadow_enabled = true
@@ -446,10 +477,11 @@ func _build_world() -> void:
 	camera.far = 600.0
 	world.add_child(camera)
 	camera.current = true
-	# The ground: one sheet of snow, the line's ballast and rails along it.
+	# The ground: one sheet (snow as deep as it lies, else wet open ground),
+	# the line's ballast and rails along it.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	MapView.box(st, Vector3(6000, 0.2, 1600), Vector3(0, -0.1, 1.5), SNOW)
+	MapView.box(st, Vector3(6000, 0.2, 1600), Vector3(0, -0.1, 1.5), _ground(SNOW))
 	MapView.box(st, Vector3(6000, 0.03, 3.2), Vector3(0, 0.016, 1.5), MapView.FLOOR_COLORS[FieldGrid.Floor.RAIL])
 	for z: float in [1.5 - 0.72, 1.5 + 0.72]:
 		MapView.box(st, Vector3(6000, 0.12, 0.08), Vector3(0, 0.16, z), STEEL)
@@ -468,16 +500,65 @@ func _build_world() -> void:
 	pm.initial_velocity_max = 2.2
 	pm.gravity = Vector3(0.0, -0.5, 0.0)
 	snow.process_material = pm
+	# What falls is the field's (field_game.gd, the same precip shader): rain
+	# streaks when it is warm, small quick wet flakes for sleet, else snow.
 	var flake := QuadMesh.new()
 	flake.size = Vector2(0.09, 0.09)
-	var fm := StandardMaterial3D.new()
-	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fm.albedo_color = Color(0.92, 0.94, 0.97, 0.8)
+	var fm := ShaderMaterial.new()
+	fm.shader = PrecipShader
+	fm.set_shader_parameter("shape", 1)
+	fm.set_shader_parameter("opacity", 0.85)
+	if falls == "rain":
+		flake.size = Vector2(0.025, 0.5)
+		fm.set_shader_parameter("shape", 0)
+		fm.set_shader_parameter("opacity", 0.6)
+		pm.direction = Vector3(0.05, -1, 0.02)
+		pm.initial_velocity_min = 7.0
+		pm.initial_velocity_max = 9.0
+		pm.gravity = Vector3(0.0, -4.0, 0.0)
+		snow.lifetime = 1.6
+	elif falls == "sleet":
+		flake.size = Vector2(0.07, 0.07)
+		fm.set_shader_parameter("opacity", 0.7)
+		pm.initial_velocity_min = 3.5
+		pm.initial_velocity_max = 4.5
+		snow.lifetime = 2.6
 	flake.material = fm
 	snow.draw_pass_1 = flake
+	snow.emitting = falls != "none"
 	world.add_child(snow)
+
+
+## The look the field opens this stop with (field_game.gd _ready, _apply_fx
+## and picture_hour: the same region, act cold, side, weather, hour and lying
+## snow) and the shader globals it sets: {"look", "params"}.
+static func stop_look(o: Dictionary) -> Dictionary:
+	var region := Atmosphere.region_key(String(o.get("region", Atmosphere.DEFAULT_REGION)))
+	var act := String(o.get("act", "prologue"))
+	var scheme := String(o.get("cold_scheme", ""))
+	var cold := clampf(float(o.get("cold", Atmosphere.cold_for(act, float(o.get("act_progress", 0.0)), scheme))), 0.0, 1.0)
+	var side := clampf(float(o.get("side", Atmosphere.side_for(act, scheme))), 0.0, 1.0)
+	var weather = Weather.new(o.get("weather", WEATHER), AMBIENT_C, Vector2(1, 0.2), 0.4)
+	var kinds: Array = o.get("look", weather.kinds)
+	var hour := float(o.get("look_hour", -1.0))
+	if hour <= -1.5:
+		var sun := Atmosphere.sun_times(cold, side)
+		hour = [sun.x + 0.25, sun.y - 0.4, sun.y + 1.7][clampi(int(round(-hour)) - 2, 0, 2)]
+	elif hour < 0.0:
+		hour = HOUR
+	var l: Dictionary = Atmosphere.look(hour, kinds, region, cold, {"wind": weather.wind, "side": side})
+	var open_ground := bool(Atmosphere.region(region)["open"])
+	var lying = SnowCover.new(Atmosphere.season_for(cold, side), open_ground, 0.0, Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side))
+	return {"look": l, "params": Atmosphere.params(l, weather.wind_dir, lying.cover())}
+
+
+## A colour open to the sky as the field's world_vis.gdshader shows it: darker
+## when wet, under the snow as far as it lies.
+func _ground(base: Color) -> Color:
+	var damp: float = 1.0 - 0.35 * wet
+	var bare := Color(base.r * damp, base.g * damp, base.b * damp)
+	var snowy: Color = FX_SNOW * lerpf(1.0, 0.75, wet)
+	return bare.lerp(Color(snowy.r, snowy.g, snowy.b), 0.75 * white)
 
 
 func _build_train() -> void:
@@ -564,7 +645,7 @@ func _build_station() -> void:
 			var shown: int = f if f != FieldGrid.Floor.SNOW and f != FieldGrid.Floor.DEEP_SNOW else -1
 			if start >= 0 and shown != kind:
 				var high: float = 0.28 if kind == FieldGrid.Floor.PLATFORM else 0.03
-				MapView.box(st, Vector3(x - start, high, 1), Vector3((start + x) * 0.5, high * 0.5 + 0.005, y + 0.5), MapView.FLOOR_COLORS[kind])
+				MapView.box(st, Vector3(x - start, high, 1), Vector3((start + x) * 0.5, high * 0.5 + 0.005, y + 0.5), _ground(MapView.FLOOR_COLORS[kind]))
 				start = -1
 			if shown >= 0 and start < 0:
 				start = x
@@ -635,7 +716,8 @@ func _lay_corridor(to: float) -> void:
 			var side: float = -1.0 if rng.randf() < 0.55 else 1.0
 			var z: float = 1.5 + side * rng.randf_range(11.0, 140.0)
 			_tree(st, Vector3(rng.randf_range(x0, x1), 0, z))
-		for i in 5:
+		# Drifts out from the line, only where snow lies to drift.
+		for i in (5 if white > 0.3 else 0):
 			var side: float = -1.0 if rng.randf() < 0.5 else 1.0
 			var z: float = 1.5 + side * rng.randf_range(7.0, 60.0)
 			var w: float = rng.randf_range(3.0, 9.0)
@@ -659,19 +741,21 @@ func _sleepers(x0: float, x1: float) -> void:
 	node.visibility_range_end = 140.0
 
 
-## A fir in three snowy tiers on a dark trunk (seen from the side, the field's
-## trunk-and-crown box reads as a sign).
+## A fir in three tiers on a dark trunk (seen from the side, the field's
+## trunk-and-crown box reads as a sign), as snowy as the stop's snow lies.
 func _tree(st: SurfaceTool, at: Vector3) -> void:
+	var crown: Color = FIR.lerp(CROWN, white)
 	MapView.box(st, Vector3(0.35, 1.6, 0.35), at + Vector3(0, 0.8, 0), TRUNK)
-	MapView.box(st, Vector3(2.6, 1.3, 2.6), at + Vector3(0, 1.9, 0), Color(0.33, 0.37, 0.36))
-	MapView.box(st, Vector3(1.9, 1.2, 1.9), at + Vector3(0, 3.0, 0), CROWN.darkened(0.25))
-	MapView.box(st, Vector3(1.1, 1.1, 1.1), at + Vector3(0, 4.0, 0), CROWN)
+	MapView.box(st, Vector3(2.6, 1.3, 2.6), at + Vector3(0, 1.9, 0), FIR.darkened(0.08).lerp(Color(0.33, 0.37, 0.36), white))
+	MapView.box(st, Vector3(1.9, 1.2, 1.9), at + Vector3(0, 3.0, 0), crown.darkened(0.25))
+	MapView.box(st, Vector3(1.1, 1.1, 1.1), at + Vector3(0, 4.0, 0), crown)
 
 
 ## A building as one block of its own paint (building_view.gd PAINTS, a little
 ## darker), dark windows along it, lamp-lit ones where a stove is kept going,
-## and a snow-laden gable roof along its long side.
+## and a gable roof along its long side, snow-laden as far as snow lies.
 func _building(st: SurfaceTool, lamps: SurfaceTool, b: Dictionary, floors: int) -> void:
+	var roof: Color = ROOF.lightened(0.12).darkened(0.3 * wet).lerp(ROOF_SNOW, white)
 	var r: Rect2i = b["rect"]
 	var paint: Color = BuildingView.PAINTS[posmod(int(b.get("id", 0)), BuildingView.PAINTS.size())]
 	var wall := Color(paint.r, paint.g, paint.b).darkened(0.28)
@@ -699,14 +783,14 @@ func _building(st: SurfaceTool, lamps: SurfaceTool, b: Dictionary, floors: int) 
 	var top: float = h + rise
 	if long_x:
 		var zm: float = (z0 + z1) * 0.5
-		_quad(st, Vector3(x0, h, z0), Vector3(x1, h, z0), Vector3(x1, top, zm), Vector3(x0, top, zm), ROOF_SNOW)
-		_quad(st, Vector3(x1, h, z1), Vector3(x0, h, z1), Vector3(x0, top, zm), Vector3(x1, top, zm), ROOF_SNOW.darkened(0.12))
+		_quad(st, Vector3(x0, h, z0), Vector3(x1, h, z0), Vector3(x1, top, zm), Vector3(x0, top, zm), roof)
+		_quad(st, Vector3(x1, h, z1), Vector3(x0, h, z1), Vector3(x0, top, zm), Vector3(x1, top, zm), roof.darkened(0.12))
 		_tri(st, Vector3(x0, h, z1), Vector3(x0, h, z0), Vector3(x0, top, zm), wall.darkened(0.1))
 		_tri(st, Vector3(x1, h, z0), Vector3(x1, h, z1), Vector3(x1, top, zm), wall.darkened(0.1))
 	else:
 		var xm: float = (x0 + x1) * 0.5
-		_quad(st, Vector3(x0, h, z1), Vector3(x0, h, z0), Vector3(xm, top, z0), Vector3(xm, top, z1), ROOF_SNOW)
-		_quad(st, Vector3(x1, h, z0), Vector3(x1, h, z1), Vector3(xm, top, z1), Vector3(xm, top, z0), ROOF_SNOW.darkened(0.12))
+		_quad(st, Vector3(x0, h, z1), Vector3(x0, h, z0), Vector3(xm, top, z0), Vector3(xm, top, z1), roof)
+		_quad(st, Vector3(x1, h, z0), Vector3(x1, h, z1), Vector3(xm, top, z1), Vector3(xm, top, z0), roof.darkened(0.12))
 		_tri(st, Vector3(x0, h, z0), Vector3(x1, h, z0), Vector3(xm, top, z0), wall.darkened(0.1))
 		_tri(st, Vector3(x1, h, z1), Vector3(x0, h, z1), Vector3(xm, top, z1), wall.darkened(0.1))
 	MapView.box(st, Vector3(x1 - x0, 0.18, z1 - z0), mid + Vector3(0, h + 0.02, 0), ROOF)

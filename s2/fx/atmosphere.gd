@@ -10,20 +10,22 @@ extends RefCounted
 ## docs/design/briefs/atmosphere.md. Numbers are proposals until a play check.
 
 const FxState = preload("res://fx/fx_state.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 # ------------------------------------------------------------------ the cold
 
-## Act -> [cold at its first stop, cold at its last, which side of midwinter].
 ## cold: 0 the warmest the campaign gets, 1 the coldest. side: 0 the autumn side
 ## (days still shortening, leaf on the trees, first frosts), 1 the spring side
-## (days lengthening, old snow going grey). The default is the user's season
-## answer of 2026-10-24 (가): late autumn with rain, turning (first night frosts
-## and first snow by the end of the prologue), early winter to deep winter
-## through act 1, the coldest with blizzards in act 2, the early thaw in act 3.
-## "winter_to_thaw" is the old 10-09 table, kept to compare. The weather odds
-## per season are the season brief's to set (atmosphere.md 14장 lists where).
+## (days lengthening, old snow going grey). The default, "autumn_to_thaw", is
+## the one season table S1 and the train read too (game/season_table.gd, the
+## user's season answer of 2026-10-24 with the prologue (나)): an early cold
+## snap at the start, late autumn rain, first night frosts and snow by the end
+## of the first leg, early winter to deep winter through act 1, the coldest with
+## blizzards in act 2, the early thaw in act 3. Its cold comes from the table's
+## midday temperature (cold_from_temp), so the two never disagree.
+## "winter_to_thaw" is the old 10-09 flow, kept to compare:
+## act -> [cold at its first stop, cold at its last, side].
 const SCHEMES: Dictionary = {
-	"autumn_to_thaw": {"prologue": [0.0, 0.42, 0.0], "act1": [0.45, 0.88, 0.0], "act2": [0.9, 1.0, 0.5], "act3": [0.42, 0.3, 1.0]},
 	"winter_to_thaw": {"prologue": [1.0, 1.0, 0.5], "act1": [1.0, 0.9, 1.0], "act2": [0.82, 0.6, 1.0], "act3": [0.42, 0.3, 1.0]},
 }
 const DEFAULT_SCHEME := "autumn_to_thaw"
@@ -61,19 +63,53 @@ const RAIN_ABOVE := 1.5
 const SNOW_BELOW := -2.0
 
 
+static func _from_table(which: String) -> bool:
+	return not SCHEMES.has(which if which != "" else scheme)
+
+
 static func _scheme_row(act: String, which: String) -> Array:
-	var s: Dictionary = SCHEMES.get(which if which != "" else scheme, SCHEMES[DEFAULT_SCHEME])
+	var s: Dictionary = SCHEMES[which if which != "" else scheme]
 	return s.get(act, s["prologue"])
 
 
 static func cold_for(act: String, progress := 0.0, which := "") -> float:
+	if _from_table(which):
+		return cold_from_temp(SeasonTable.temp_at(act, progress), SeasonTable.side_at(act))
 	var row := _scheme_row(act, which)
 	return clampf(lerpf(float(row[0]), float(row[1]), clampf(progress, 0.0, 1.0)), 0.0, 1.0)
 
 
 ## Which side of midwinter the act stands on (0 autumn, 1 spring).
 static func side_for(act: String, which := "") -> float:
+	if _from_table(which):
+		return SeasonTable.side_at(act)
 	return clampf(float(_scheme_row(act, which)[2]), 0.0, 1.0)
+
+
+## The season state's name at this point of the campaign: the table's (the
+## same name S1 and the train read), else from the old flow's cold.
+static func season_at(act: String, progress := 0.0, which := "") -> String:
+	if _from_table(which):
+		return SeasonTable.season_at(act, progress)
+	return season_for(cold_for(act, progress, which), side_for(act, which))
+
+
+## The cold whose midday picture temperature is this (the keys' temp read
+## backwards, straight between them): +7 C and warmer is 0, -14 C and colder 1.
+static func cold_from_temp(temp: float, side := 0.0) -> float:
+	var k := clampf(side, 0.0, 1.0)
+	return lerpf(_cold_on(AUTUMN_KEYS, temp), _cold_on(SPRING_KEYS, temp), k)
+
+
+static func _cold_on(table: Array, temp: float) -> float:
+	if temp >= float(table[0]["temp"]):
+		return 0.0
+	for i in range(table.size() - 1):
+		var a: Dictionary = table[i]
+		var b: Dictionary = table[i + 1]
+		if temp >= float(b["temp"]):
+			return lerpf(float(a["cold"]), float(b["cold"]), inverse_lerp(float(a["temp"]), float(b["temp"]), temp))
+	return 1.0
 
 
 static func _key_on(table: Array, c: float, key: String, index: int) -> float:
@@ -244,6 +280,65 @@ const WEATHER: Dictionary = {
 	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.1, "veil": 0.86, "veil_color": Color(0.40, 0.43, 0.46), "haze": 0.55, "fall": 0.7},
 }
 
+## Photo skies (CC0, Poly Haven, 사용자 10-25 공개 자산 먼저; made by tools/atmo_textures.gd from
+## originals outside the repository): the cloud shapes behind the train and in
+## the field's puddles. The hour's colour still comes from BANDS: a photo only
+## lends its clouds, and a little of its own colour (hue). source: the Poly
+## Haven name. Kloppenheim is a village near Frankfurt, the right latitude.
+const SKY_PHOTOS: Dictionary = {
+	"dawn": {"source": "kloppenheim_06_puresky", "hue": 0.45},
+	"day": {"source": "kloppenheim_05_puresky", "hue": 0.25},
+	"dusk": {"source": "belfast_sunset_puresky", "hue": 0.45},
+	"night": {"source": "kloppenheim_02_puresky", "hue": 0.2},
+	"overcast": {"source": "overcast_soil_puresky", "hue": 0.2},
+	"snow": {"source": "snow_field_2_puresky", "hue": 0.2},
+	"mist": {"source": "kloofendal_misty_morning_puresky", "hue": 0.2},
+}
+## Which photo a closed sky takes, by what is drawn (the heaviest first).
+const WEATHER_SKY: Array = [["fog", "mist"], ["blizzard", "snow"], ["snow", "snow"], ["sleet", "overcast"], ["rain", "overcast"], ["overcast", "overcast"]]
+## The field's ground detail (R snow, G autumn leaf, B wet soil, A grit).
+const GROUND_DETAIL := "res://fx/textures/ground_detail.png"
+static var _sky_cache: Dictionary = {}
+
+
+static func sky_path(key: String) -> String:
+	return "res://fx/textures/sky/sky_%s.jpg" % key
+
+
+## The photo skies a look mixes, as [[key, weight], ...] adding up to 1: the
+## two strongest hour bands, and the closed sky's photo as far as it is veiled.
+static func sky_photos(w: Dictionary, drawn: Array, veil: float) -> Array:
+	var bands: Array = ["dawn", "day", "dusk", "night"]
+	bands.sort_custom(func(a, b): return float(w[a]) > float(w[b]))
+	var a := float(w[bands[0]])
+	var b := float(w[bands[1]])
+	var open := 1.0 - clampf(veil, 0.0, 1.0)
+	var out: Array = [[bands[0], open * a / maxf(a + b, 0.0001)], [bands[1], open * b / maxf(a + b, 0.0001)]]
+	var closed := "overcast"
+	for row in WEATHER_SKY:
+		if drawn.has(row[0]):
+			closed = row[1]
+			break
+	out.append([closed, 1.0 - open])
+	return out
+
+
+## The photo with the most weight (what the field's puddles give back).
+static func sky_main(l: Dictionary) -> String:
+	var best: Array = ["day", -1.0]
+	for row in l.get("skies", []):
+		if float(row[1]) > float(best[1]):
+			best = row
+	return String(best[0])
+
+
+## A photo sky as a texture, loaded once (null if it is not in this build).
+static func sky_texture(key: String) -> Texture2D:
+	if not _sky_cache.has(key):
+		var path := sky_path(key)
+		_sky_cache[key] = load(path) if ResourceLoader.exists(path) else null
+	return _sky_cache[key]
+
 ## What the rules' weather falls as at this picture temperature (the user's
 ## 10-24 answer: what falls goes by the temperature): snow, sleet and rain are
 ## rain when it is warm, sleet around zero, snow in hard cold; a blizzard is
@@ -302,7 +397,8 @@ static func _band_lum(w: Dictionary) -> float:
 ## Everything the pictures read. hour: 0..24. kinds: the rules' weather (or a
 ## storm stage's look). region: "K1".."K12" or the train's "region_NN". cold:
 ## 0..1. more: "side" 0 autumn .. 1 spring (side_for), "wind" 0..1 (else the
-## region's), "temp_c" (picture temperature given outright, else from cold and hour).
+## region's), "temp_c" (picture temperature given outright, else from cold and hour),
+## "season" (the season table's name for this point, else from the cold).
 static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold := 1.0, more := {}) -> Dictionary:
 	var c := clampf(cold, 0.0, 1.0)
 	var side := clampf(float(more.get("side", 0.0)), 0.0, 1.0)
@@ -381,7 +477,7 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var ice := 1.0 - smoothstep(-3.0, 1.0, temp)
 	var out := {
 		"hour": fposmod(hour, 24.0), "band": band_of(hour, c, side), "weights": w,
-		"cold": c, "side": side, "season": season_for(c, side), "temp_c": temp, "region": region_key(region_name),
+		"cold": c, "side": side, "season": String(more.get("season", season_for(c, side))), "temp_c": temp, "region": region_key(region_name),
 		"sunrise": sun_times(c, side).x, "sunset": sun_times(c, side).y,
 		"sun_height": angles.x, "sun_azimuth": angles.y,
 		"sun_pitch": light_pitch, "sun_yaw": light_yaw,
@@ -402,6 +498,7 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 		"lamp": FxState.LAMP,
 	}
 	out["grade"] = grade(out)
+	out["skies"] = sky_photos(w, drawn, veil)
 	out["fog_color"] = horizon.lerp(veil_color * lum, 0.5)
 	# Past the map's edge: more snowy land in the same light, darker (not a void).
 	var land := Color(ambient) * float(ambient_energy) * 1.7 + Color(sun) * float(sun_energy) * 0.45

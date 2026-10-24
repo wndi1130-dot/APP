@@ -12,6 +12,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
 
 const REACH: float = 1.4
 const INTERACT_REACH: float = REACH + 0.6
@@ -43,6 +44,17 @@ const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
 # Planks and spirits go on the train as wood and luxury (user decision 407 B1); cloth and bandages stay field stores.
 const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "tweezers", "needle_thread"]
+const FieldItems = preload("res://game/sim/field_items.gd")
+## 나단계 손일 (decision 423, P12·P22): a key turns in a second and a half
+## without a sound; boarding a door takes a plank and a handful of nails, eight
+## seconds of hammering, and gives the door three more blows to break; a
+## stake is whittled from a plank in six.
+const KEY_TIME: float = 1.5
+const BOARD_TIME: float = 8.0
+const BOARD_HP: int = 3
+const STAKE_TIME: float = 6.0
+## Who sees one of the dead gone through (card 12): a companion this near, in sight.
+const BODY_SEEN_M: float = 8.0
 ## Going through the pockets of a plain body: three seconds with the hands
 ## busy (a grab stops it, as any work). The frozen and the padded take their
 ## own (loot_tables.gd BODY, zombies.search_time).
@@ -301,7 +313,9 @@ func open_door_on_way(p, c: Vector2i) -> void:
 		return
 	if door["state"] == "locked":
 		p.stop()
-		if p == game.player:
+		if has_key(p, c):
+			unlock_with_key(p, c)
+		elif p == game.player:
 			game.hud.toast("잠김")
 		return
 	if not DoorRules.can_toggle(door, "open"):
@@ -340,7 +354,9 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 			elif door["state"] == "open":
 				_begin_work(p, "door", "문 닫기", DOOR_TIME, _set_door.bind(c, "closed", p), "door", c, FieldGrid.center(c))
 			elif door["state"] == "locked":
-				if has_pry(p):
+				if has_key(p, c):
+					unlock_with_key(p, c)
+				elif has_pry(p):
 					pry_door(p, c)
 				elif p == game.player:
 					game.hud.toast("잠김")
@@ -368,6 +384,93 @@ func has_pry(p) -> bool:
 		if bool(W.get_data(h["id"]).get("pry", false)):
 			return true
 	return false
+
+
+## The key of this door's building is in the pack (P12), and the door is not
+## boarded up.
+func has_key(p, c: Vector2i) -> bool:
+	var door: Dictionary = game.grid.doors.get(c, {})
+	if door.is_empty() or bool(door.get("boarded", false)):
+		return false
+	return int(p.items.get(FieldItems.key_for(int(door.get("building", -1))), 0)) > 0
+
+
+## A key opens a locked door quickly and makes no sound (P12: the reward for
+## going through the dead of the house).
+func unlock_with_key(p, c: Vector2i) -> void:
+	if not _can_start(p, FieldGrid.center(c), true):
+		return
+	_begin_work(p, "door", "열쇠로 열기", KEY_TIME, _key_opened.bind(p, c), "door", c, FieldGrid.center(c))
+
+
+func _key_opened(p, c: Vector2i) -> void:
+	if not _finished_work(p, "door") or not has_key(p, c):
+		return
+	if String(game.grid.doors[c]["state"]) != "locked":
+		return
+	game.grid.set_door_state(c, "open")
+	game.view.update_door(c)
+	_check_raider_door(c)
+
+
+## A closed door near by can be boarded up with a plank and a handful of nails
+## (P22): locked from this side, harder to break, and heard while it is done.
+func can_board(p, c: Vector2i) -> bool:
+	var door: Dictionary = game.grid.doors.get(c, {})
+	return not door.is_empty() and String(door["state"]) in ["closed", "locked"] and not bool(door.get("boarded", false)) \
+		and (int(p.items.get("plank", 0)) > 0 or int(p.items.get("wood", 0)) > 0) and int(p.items.get("nails", 0)) > 0
+
+
+func board_door(p, c: Vector2i) -> void:
+	if _wait_blow(p, board_door.bind(p, c)):
+		return
+	if not can_board(p, c) or not _can_start(p, FieldGrid.center(c), true):
+		return
+	if _begin_work(p, "craft", "문 막기", BOARD_TIME, _boarded.bind(p, c), "door", c, FieldGrid.center(c)):
+		game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "hammer", p)
+
+
+func _boarded(p, c: Vector2i) -> void:
+	if not _finished_work(p, "craft") or not can_board(p, c):
+		return
+	if not (p.take_item("plank") or p.take_item("wood")) or not p.take_item("nails"):
+		return
+	var door: Dictionary = game.grid.doors[c]
+	game.grid.set_door_state(c, "locked")
+	door["boarded"] = true
+	door["hp"] = int(door.get("hp", 0)) + BOARD_HP
+	game.view.update_door(c)
+
+
+## A plank whittled to a stake (P22, P23): into a free hand.
+func whittle_stake(p) -> void:
+	if _wait_blow(p, whittle_stake.bind(p)):
+		return
+	if int(p.items.get("plank", 0)) <= 0 or p.hands.size() >= 2:
+		return
+	p.start_action("craft", "말뚝 깎기", STAKE_TIME, _whittled.bind(p))
+
+
+func _whittled(p) -> void:
+	if p.hands.size() >= 2 or not p.take_item("plank"):
+		return
+	_into_hand(p, "wood_stake")
+
+
+## An improvised weapon goes straight into a free hand (P23: one tap). Returns
+## false when both hands are full.
+func _into_hand(p, id: String) -> bool:
+	if p.hands.size() >= 2 or not W.is_known(id) or String(W.get_data(id).get("kind", "")) != "melee":
+		return false
+	var h := {"id": id, "quality": "factory", "condition": 1.0, "loaded": 0}
+	if p.hands.is_empty():
+		p.hands.append(h)
+	else:
+		p.hands.insert(0, h)
+	p.set_weapon_slots(p.hands)
+	if p == game.player:
+		game.hud.toast("%s을(를) 쥐었다." % String(W.get_data(id)["name"]))
+	return true
 
 
 ## Pry a locked door with a crowbar: a few seconds and a normal sound.
@@ -595,7 +698,9 @@ func take(p, id: String, index: int) -> void:
 		return
 	var item: String = c["items"][index]
 	c["items"].remove_at(index)
-	_receive(p, item, 1)
+	# Something to hit with goes straight into a free hand (P23).
+	if not W.breaks(item) or not _into_hand(p, item):
+		_receive(p, item, 1)
 	if item == "symbol_bell":
 		game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "bell", p)
 		game.hud.toast("종이 흔들려 울렸다.")
@@ -658,6 +763,30 @@ func _body_searched(p, zid: int) -> void:
 			_receive(p, row["id"], n)
 	if p == game.player:
 		game.hud.toast("찾았다: %s." % ", ".join(names) if not names.is_empty() else "아무것도 없다.")
+	_body_seen(p)
+
+
+## One of the dead gone through (decision 423 card 12): the nearest companion
+## who sees it says a line, and the train hears of it from those who saw
+## (the receipt's witnessed row "body_search"; their car minds it or not).
+func _body_seen(p) -> void:
+	var seen: Array = []
+	var nearest = null
+	var best := BODY_SEEN_M
+	for q in game.squad:
+		if q == p or not q.is_alive() or game.level_of(q.position) != game.level_of(p.position):
+			continue
+		var d: float = q.position.distance_to(p.position)
+		if d > BODY_SEEN_M or not game.sight_clear(q.position, p.position):
+			continue
+		seen.append(String(q.pid))
+		if q != game.player and d < best:
+			best = d
+			nearest = q
+	if nearest != null:
+		game.shout(nearest, "body_search")
+	if not seen.is_empty():
+		game.body_searches.append({"who": String(p.pid), "seen": seen})
 
 
 func pick_up(p, idx: int) -> void:
@@ -1130,6 +1259,7 @@ func treat(medic, o) -> void:
 	var t := 6.0 if medic.medical == "none" else 4.0
 	medic.face_point(o.position)
 	medic.start_action("treat", "치료", t, _treated.bind(medic, o, src, heavy))
+	_note_care(medic, o, "", t, "치료")
 
 
 func _treated(medic, o, src, heavy: bool) -> void:
@@ -1200,8 +1330,16 @@ func _care_next(medic, o, wound: Dictionary, mode: String) -> bool:
 	var step: Dictionary = steps[0]
 	if medic != o:
 		medic.face_point(o.position)
-	medic.start_action("treat", String(step["label"]), Treatment.seconds(step, medic.medical), _care_done.bind(medic, o, wound, mode, step))
+	var seconds: float = Treatment.seconds(step, medic.medical)
+	medic.start_action("treat", String(step["label"]), seconds, _care_done.bind(medic, o, wound, mode, step))
+	_note_care(medic, o, String(wound.get("part", "")), seconds, String(step["label"]))
 	return true
+
+
+## For the drawing only: whom the treatment just begun is for and where.
+func _note_care(medic, o, part: String, seconds: float, label: String) -> void:
+	if medic.action == "treat":
+		medic.set_meta(Pose.CARE, {"of": o, "part": part, "total": seconds, "label": label})
 
 
 func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> void:
@@ -1270,6 +1408,14 @@ func context(p) -> Array:
 		out.append({"label": "눈으로 문지름", "call": rub_snow.bind(p)})
 	if p.items.has("cloth") and int(p.items.get("bandage", 0)) < 2:
 		out.append({"label": "붕대 만들기", "call": tear_bandage.bind(p)})
+	# Made there and then (P22): a door boarded up, a stake from a plank.
+	if game.level_of(p.position) == 0:
+		for dc: Vector2i in game.grid.doors:
+			if FieldGrid.center(dc).distance_to(p.position) < NEAR_USE and can_board(p, dc):
+				out.append({"label": "문 막기", "call": board_door.bind(p, dc)})
+				break
+	if p.items.has("plank") and p.hands.size() < 2:
+		out.append({"label": "말뚝 깎기", "call": whittle_stake.bind(p)})
 	for key in game.data["manholes"]:
 		if game.FieldMaps.lid(key) and game.director.is_open(key) and p.position.distance_to(FieldGrid.center(game.data["manholes"][key])) < 2.5:
 			out.append({"label": "맨홀 막기", "call": block_lid.bind(p, key)})
@@ -1384,7 +1530,8 @@ func _auto_unload() -> void:
 			continue
 		var put: Array = []
 		for id in p.items.keys():
-			if UNLOAD_KEEP.has(id) or W.is_known(id):
+			# A key, an empty tin and the can opener stay with the one who has them.
+			if UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id):
 				continue
 			var n: int = int(p.items[id])
 			game.unloaded[id] = int(game.unloaded.get(id, 0)) + n

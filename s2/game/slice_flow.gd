@@ -41,6 +41,7 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const WorldWeather = preload("res://game/ui/world_weather.gd")
 const WorldFilm = preload("res://game/ui/world_film.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
@@ -338,6 +339,8 @@ func _show_stop_cinema() -> void:
 	c.name = "StopCinema"
 	c.seen = bool(opts.get("cinema_seen", StopCinema.was_seen()))
 	c.remember = not opts.has("cinema_seen")
+	# The weather the field will open with, worn by the scene over it.
+	c.stop_opts = _field_opts()
 	if loader.has_data():
 		c.data = loader.data
 	else:
@@ -662,13 +665,16 @@ func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 	var cold := float(want.get("cold", view.get("cold", Atmosphere.cold_for("prologue", prologue_progress(seg)))))
 	var side := float(want.get("side", view.get("side", Atmosphere.side_for("prologue"))))
 	var region_name := String(want.get("region", view.get("region", Atmosphere.DEFAULT_REGION)))
-	return Atmosphere.look(hour, kinds, region_name, cold, {"side": side})
+	var more := {"side": side}
+	if not want.has("cold") and not view.has("cold"):
+		more["season"] = Atmosphere.season_at("prologue", prologue_progress(seg))
+	return Atmosphere.look(hour, kinds, region_name, cold, more)
 
 
 ## How far into the prologue a stretch is (the slice is its first stops): the
-## cold the atmosphere table gives it, the same for the train and the stop.
+## season table's row for that stretch, the same for the train and the stop.
 static func prologue_progress(seg: int) -> float:
-	return clampf((seg - 1) / 4.0, 0.0, 1.0)
+	return SeasonTable.seg_progress(seg)
 
 
 ## The train's own floating names and value lines are for its test bench;
@@ -930,6 +936,15 @@ func _field_opts() -> Dictionary:
 	# building it from the pick gives the same).
 	o["act"] = "prologue"
 	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
+	# A look asked of the slice for check shots (opts "look", as outside_look
+	# reads it) is the stop's as well: the train, the stop scene and the field alike.
+	var want: Dictionary = opts.get("look", {})
+	if want.has("cold"):
+		o["cold"] = float(want["cold"])
+	if want.has("kinds"):
+		o["look"] = want["kinds"]
+	if want.has("hour"):
+		o["look_hour"] = float(want["hour"])
 	# A field of its own to ask: the stop scene builds the field before the
 	# field step makes one.
 	var probe = FieldGame.new()

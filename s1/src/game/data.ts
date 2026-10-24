@@ -121,7 +121,7 @@ export const STAGES = [
   { min: -100, name: '적대', band: -2 },
 ] as const;
 
-// ---- 법 31개(브리프 8.3) ----
+// ---- 법 34개(브리프 8.3) ----
 export type Axes = [number, number, number];
 export type Mats = Partial<Record<Comm, [number, number, number, number]>>;
 export type LawId =
@@ -137,7 +137,9 @@ export type LawId =
   // 교육 법 셋(결정 205·207, classroom_radio 2.1): 무엇을 가르치나에 답 셋, 하나만 선다. 효과는 domestic/classroom.ts가 읽는다. S1c를 켠 판에서만 열린다.
   | 'edu_letters' | 'edu_trade' | 'edu_engine'
   // 「배웅」 한 쌍(결정 355·367, death_weight.ts): 남은 사람이 죽음을 어떻게 치르나. 죽음의 무게를 켠 판에서만 열리고, 하나를 세우면 다른 하나는 닫히며 거두지 않는다.
-  | 'farewell_rite' | 'farewell_hands';
+  | 'farewell_rite' | 'farewell_hands'
+  // 비상식량감축법(결정 083·091·430): 모든 칸이 반 단씩 덜 먹는다. 통과하면 꼬리칸이 요구 카드를 낸다(ration_cut.ts).
+  | 'emergency_ration';
 export type Crisis = 'coal' | 'food' | 'corpse' | 'med';
 
 export interface LawRes {
@@ -372,6 +374,17 @@ export const LAWS: Record<LawId, LawDef> = {
     whyNot: '꼬리칸: 보내는 손은 늘 일하는 칸에서 나온다.',
     changes: ['죽음마다 신임 깎임 절반', '죽은 이의 칸 관계 벌이 없다', '죽음마다 다음 정차 작업조 −1(숙련 일손이면 −2)', '함께 보낸다가 닫힌다', '한 번 정하면 거두지 않는다'],
     opensWhen: '첫 죽음 뒤, 시신 법이 선 뒤',
+  }),
+  // 결정 083·091·430: 고르게 반 단. 앞칸·기관실도 빼지 않는다. 덜 먹은 몸이라 정차에 보낸 수색대가 덜 가져온다(haulMult).
+  // 공동 식당·기여 배급과 함께 못 선다(politics.ts lawOpen). 통과 뒤 꼬리칸 요구 카드(ration_cut.ts).
+  emergency_ration: L({
+    id: 'emergency_ration', title: '비상식량감축법', group: '식량', tag: '가혹', kind: 'normal', axes: [1, 1, 0],
+    mats: { tail: [0, -6, 0, 0], engine: [0, -6, 0, 0], guard: [0, -6, 0, 0], medtech: [0, -6, 0, 0], front: [0, -6, 0, 0] },
+    rels: { tail: -8 }, res: { foodAdd: -2.5, tensionAdd: 1, haulMult: 0.8 }, crisis: ['food'],
+    why: '식량이 바닥나기 전에 모두가 반 단씩 덜 먹는다. 앞칸도 기관실도 예외가 없다.',
+    whyNot: '꼬리칸: 원래 제일 적게 받는 칸에서 또 깎는다.',
+    changes: ['식량 +2.5/구간 절약', '모든 칸 배급 처지 −6', '긴장 +1/구간', '꼬리칸 관계 −8', '정차 수색 산출 −20%', '통과하면 꼬리칸이 요구를 낸다'],
+    opensWhen: '식량 40 이하, 공동 식당·기여 배급이 없을 때',
   }),
 };
 /** S1c 법. S1a 판에선 열리지 않는다. */

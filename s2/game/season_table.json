@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "note": "계절표 하나(코디네이터 10-25 요청, 결정 423과 서막 (나)). S1 climate.ts, S2 열차(train_context·train_life), S2 필드·이동 그림(fx/atmosphere.gd)이 이 파일을 읽는다. 정본은 s1/src/game/season_table.json이고 s2/game/season_table.json은 그 복사본이다(s1/tools/season_table_sync.ts가 쓰고 S1 시험이 둘이 같은지 본다). 숫자는 모두 가안이다. temp는 그 구간 한낮의 바깥 기온(°C, 표시와 그림 온도), stage는 S1 기후 단계(stages의 번호: 난방 석탄 곱과 온기 단계), season은 계절 상태 이름(seasons_regions.md 2.2), night_freeze는 밤 결빙, snow는 쌓인 눈, blizzard는 눈보라가 올 수 있는가다. night_freeze·snow·blizzard와 seasons의 weather는 아직 아무 규칙도 읽지 않는다(후속에서 얼음 사건 조건과 날씨 뽑기로 쓴다).",
+  "first_leg_segments": 24,
+  "stages": [
+    { "id": "late_autumn", "name": "늦가을", "temp": 4, "mult": 0.8, "wet": true },
+    { "id": "first_cold", "name": "첫 추위", "temp": -3, "mult": 0.9, "wet": false },
+    { "id": "cold", "name": "추위", "temp": -15, "mult": 1, "wet": false },
+    { "id": "hard", "name": "혹한", "temp": -24, "mult": 1.1, "wet": false },
+    { "id": "harder", "name": "된추위", "temp": -33, "mult": 1.25, "wet": false },
+    { "id": "extreme", "name": "극한", "temp": -42, "mult": 1.4, "wet": false }
+  ],
+  "seasons": {
+    "late_autumn": { "name": "늦가을 → 이른 첫 추위", "weather": { "overcast": 30, "snow": 5, "fog": 25, "blizzard": 0, "clear": 15, "sleet": 25 } },
+    "early_winter": { "name": "초겨울", "weather": { "overcast": 30, "snow": 20, "fog": 15, "blizzard": 5, "clear": 15, "sleet": 15 } },
+    "deep_winter": { "name": "한겨울", "weather": { "overcast": 25, "snow": 30, "fog": 15, "blizzard": 15, "clear": 15, "sleet": 0 } },
+    "early_thaw": { "name": "해빙 초입", "weather": { "overcast": 25, "snow": 10, "fog": 20, "blizzard": 5, "clear": 15, "sleet": 25 } }
+  },
+  "prologue": [
+    { "seg": 1, "temp": -3, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "이른 한파: 얕은 호수가 언다(출발 이유)" },
+    { "seg": 2, "temp": -1, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "이른 한파가 풀려 간다" },
+    { "seg": 3, "temp": 5, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "늦가을: 비·안개·단풍" },
+    { "seg": 4, "temp": 6, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 5, "temp": 6, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 6, "temp": 5, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 7, "temp": 5, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 8, "temp": 4, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 9, "temp": 4, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 10, "temp": 4, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 11, "temp": 3, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 12, "temp": 3, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 13, "temp": 2, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 14, "temp": 2, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 15, "temp": 1, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 16, "temp": 1, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 17, "temp": 0, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "첫 추위: 밤 결빙이 시작된다" },
+    { "seg": 18, "temp": -1, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 19, "temp": -1, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 20, "temp": -2, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 21, "temp": -2, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": true, "blizzard": false, "note": "첫눈이 쌓인다" },
+    { "seg": 22, "temp": -3, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": true, "blizzard": false, "note": "" },
+    { "seg": 23, "temp": -3, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": true, "blizzard": false, "note": "" },
+    { "seg": 24, "temp": -4, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": true, "blizzard": false, "note": "첫 구간 끝" }
+  ],
+  "acts": {
+    "act1": { "temp": [-4, -15], "side": 0.0, "season": [[0.0, "early_winter"], [0.85, "deep_winter"]], "night_freeze": true, "snow": true, "blizzard": true, "note": "초겨울 → 막 끝 한겨울" },
+    "act2": { "temp": [-15, -24], "side": 0.5, "season": [[0.0, "deep_winter"]], "night_freeze": true, "snow": true, "blizzard": true, "note": "한겨울·눈보라가 가장 잦다" },
+    "act3": { "temp": [-3, 2], "side": 1.0, "season": [[0.0, "early_thaw"]], "night_freeze": true, "snow": true, "blizzard": true, "note": "해빙 초입: 진창, 녹는 고드름, 비가 다시 온다" }
+  }
+}

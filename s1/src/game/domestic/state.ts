@@ -75,7 +75,8 @@ export interface TechState {
 }
 
 export type ModKind = 'insulate' | 'armor' | 'convert';
-export interface ModJob { kind: ModKind; car: string; progress: number; need: number }
+/** paid: 시작할 때 낸 자재. 일이 하나도 안 됐을 때 거두면 그대로 돌려준다(cancelJob). 옛 저장 판에는 없다. */
+export interface ModJob { kind: ModKind; car: string; progress: number; need: number; paid?: { wood: number; scrap: number } }
 export type Task = 'parts' | 'restore' | 'modify';
 export type Penalty = { kind: 'coal' | 'haul'; until: number };
 
