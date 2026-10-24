@@ -15,7 +15,12 @@
         "hospital",
         "factory",
         "church",
-        "office"
+        "office",
+        "mine",
+        "lodge",
+        "sawmill",
+        "lake",
+        "summit"
       ]
     },
     "risk": {

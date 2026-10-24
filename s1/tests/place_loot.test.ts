@@ -51,8 +51,8 @@ describe('place loot contract', () => {
     }));
   });
 
-  it('accepts all six B5 draft places through the content validator', () => {
-    expect(draft.places).toHaveLength(6);
+  it('accepts all eleven draft places (six towns, five stops) through the content validator', () => {
+    expect(draft.places).toHaveLength(11);
     draft.places.forEach((place, index) => {
       expect(validateContent(place, draftFile, `/places/${index}`)).toEqual([]);
     });
