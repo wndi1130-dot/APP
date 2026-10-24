@@ -63,10 +63,42 @@ var dig_noise_t: float = 0.0
 var unload_t: float = 0.0
 ## Short-lived reservations, separate from saved AI state. No actor or callback is retained.
 var ongoing: Dictionary = {}
+## A work of the hands asked for while the body is in a blow or a shove waits
+## here, one per body, and is done once as soon as the blow is over (decision
+## 420: one body does one thing at a time). Short-lived, never saved.
+var after_blow: Dictionary = {}
 
 
 func _init(field_game) -> void:
 	game = field_game
+
+
+## In a blow or a shove: drawn back, landing, or coming back from it.
+func striking(p) -> bool:
+	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+
+
+## Asked for mid-blow, a work waits for the blow to end (true: it waits). The
+## fight is let go, as walking off to a thing lets it go (go_and_do).
+func _wait_blow(p, call: Callable) -> bool:
+	if not striking(p):
+		return false
+	after_blow[p.get_instance_id()] = call
+	p.target_zombie = {}
+	p.target_person = null
+	return true
+
+
+## Does what waited for a blow to end; dropped if the body was taken meanwhile.
+func _after_blows() -> void:
+	for id in after_blow.keys():
+		var p = instance_from_id(id)
+		var call: Callable = after_blow[id]
+		if p == null or not is_instance_valid(p) or not call.is_valid() or not p.can_act():
+			after_blow.erase(id)
+		elif not striking(p):
+			after_blow.erase(id)
+			call.call()
 
 
 func _in_reach(p, at: Vector3, boundary: bool = false) -> bool:
@@ -80,7 +112,7 @@ func _in_reach(p, at: Vector3, boundary: bool = false) -> bool:
 
 
 func _can_start(p, at: Vector3, boundary: bool = false) -> bool:
-	return p.can_act() and p.action == "" and _in_reach(p, at, boundary)
+	return p.can_act() and p.action == "" and not striking(p) and _in_reach(p, at, boundary)
 
 
 func _target(work: Dictionary) -> Dictionary:
@@ -163,6 +195,7 @@ func update(delta: float) -> void:
 	_dig_noise(delta)
 	_ladder_falls()
 	_crossing_falls()
+	_after_blows()
 	_player_goal()
 	unload_t -= delta
 	if unload_t <= 0.0:
@@ -219,7 +252,8 @@ func _side_cell(lg, c: Vector2i, from: Vector3) -> Vector2i:
 
 func _player_goal() -> void:
 	for p in game.squad:
-		if not p.brain.has("goal") or not p.can_act() or p.action != "":
+		# Mid-blow the goal waits: it is done once the blow is over.
+		if not p.brain.has("goal") or not p.can_act() or p.action != "" or striking(p):
 			continue
 		var g: Dictionary = p.brain["goal"]
 		if p.path.is_empty() or p.position.distance_to(g["at"]) <= REACH:
@@ -282,6 +316,8 @@ func _door_on_way_done(p, c: Vector2i, keep: PackedVector3Array, run: bool) -> v
 
 
 func door_default(p, c: Vector2i, verb: String) -> void:
+	if _wait_blow(p, door_default.bind(p, c, verb)):
+		return
 	var door: Dictionary = game.grid.doors.get(c, {})
 	if door.is_empty() or not _can_start(p, FieldGrid.center(c), true):
 		return
@@ -331,6 +367,8 @@ func has_pry(p) -> bool:
 
 ## Pry a locked door with a crowbar: a few seconds and a normal sound.
 func pry_door(p, c: Vector2i) -> void:
+	if _wait_blow(p, pry_door.bind(p, c)):
+		return
 	if not DoorRules.can_force(game.grid.doors.get(c, {})) or not _can_start(p, FieldGrid.center(c), true):
 		return
 	if not has_pry(p):
@@ -343,6 +381,8 @@ func pry_door(p, c: Vector2i) -> void:
 
 ## Kick: one loud try, half the time it gives (s2_station 2.4).
 func kick_door(p, c: Vector2i) -> void:
+	if _wait_blow(p, kick_door.bind(p, c)):
+		return
 	if DoorRules.can_force(game.grid.doors.get(c, {})):
 		_begin_work(p, "kick", "문 차기", KICK_TIME, _kicked.bind(p, c), "door", c, FieldGrid.center(c))
 
@@ -371,6 +411,8 @@ func _check_raider_door(c: Vector2i) -> void:
 # ---------------------------------------------------------------- windows
 
 func window_default(p, c: Vector2i, verb: String) -> void:
+	if _wait_blow(p, window_default.bind(p, c, verb)):
+		return
 	var w: Dictionary = game.grid.windows.get(c, {})
 	if w.is_empty() or not _can_start(p, FieldGrid.center(c), true):
 		return
@@ -417,6 +459,8 @@ func can_vault_window(p, c: Vector2i) -> bool:
 
 ## Called once on actual entry, not once per frame or once per window lifetime.
 func vault_window(p, c: Vector2i) -> void:
+	if _wait_blow(p, vault_window.bind(p, c)):
+		return
 	if not can_vault_window(p, c):
 		return
 	var w: Dictionary = game.grid.windows[c]
@@ -438,6 +482,8 @@ func _container_at(c: Dictionary) -> Vector3:
 
 
 func search(p, id: String) -> void:
+	if _wait_blow(p, search.bind(p, id)):
+		return
 	var c: Dictionary = game.data["containers"].get(id, {})
 	if c.is_empty() or not _can_start(p, _container_at(c)) or bool(c.get("busy", false)):
 		return
@@ -574,6 +620,8 @@ func _receive(p, item: String, n: int) -> void:
 ## thing; a raider has what it carried). Most have nothing: the three seconds
 ## are the price. If it gets up meanwhile the hands come away empty.
 func search_body(p, zid: int) -> void:
+	if _wait_blow(p, search_body.bind(p, zid)):
+		return
 	var z: Dictionary = game.zombies.find(zid)
 	if p.action != "" or not game.zombies.lootable(z):
 		return
@@ -639,6 +687,8 @@ func _auto_pickup() -> void:
 # ---------------------------------------------------------------- salvage, spots
 
 func spot_default(p, id: String, verb: String) -> void:
+	if _wait_blow(p, spot_default.bind(p, id, verb)):
+		return
 	var spot: Dictionary = game.data["spots"][id]
 	match spot["kind"]:
 		"salvage":
@@ -711,6 +761,8 @@ func water_tower_card(p) -> void:
 
 
 func _tower_choice(choice: String, p) -> void:
+	if _wait_blow(p, _tower_choice.bind(choice, p)):
+		return
 	var tower: Dictionary = game.data["spots"]["water_tower"]
 	game.decisions.append({"id": "water_tower", "choice": choice})
 	match choice:
@@ -782,6 +834,8 @@ func on_signal_top(p) -> bool:
 ## Up the ladder: fast is a normal sound, careful is quiet but slow. Upstairs
 ## the forecast gets sharper and the view wider (s2_station 2.2).
 func ladder(p, verb: String) -> void:
+	if _wait_blow(p, ladder.bind(p, verb)):
+		return
 	if on_signal_top(p):
 		p.start_action("climb", "내려가기", CLIMB_CAREFUL if verb == "careful" else CLIMB_FAST, _climbed.bind(p, false))
 		return
@@ -881,6 +935,8 @@ func cross_seconds(p) -> float:
 ## Over the train: hands full of the climb for its seconds, then down on the
 ## other side. The companions who follow come over after, one by one.
 func cross_train(p, way: Dictionary) -> bool:
+	if striking(p):
+		return false
 	var no: String = cross_refused(p, way)
 	if no != "":
 		if p == game.player:
@@ -993,6 +1049,8 @@ func coal_left() -> float:
 ## Put something heavy on the street manhole: one plank or scrap, 8 s, a
 ## normal sound. The culvert can't be closed (field_unified 6 하수도).
 func block_lid(p, key: String) -> void:
+	if _wait_blow(p, block_lid.bind(p, key)):
+		return
 	if not game.FieldMaps.lid(key):
 		if p == game.player:
 			game.hud.toast("%s는 막을 수 없다." % ("암거" if key == "culvert" else "이 구멍"))
@@ -1026,6 +1084,8 @@ func _lid_blocked(p, key: String, mat: String) -> void:
 ## A medic (or anyone) treats another person: kit for heavy bleeding, bandages
 ## otherwise; a medic within 2 min of the wound eases it one more step.
 func treat(medic, o) -> void:
+	if _wait_blow(medic, treat.bind(medic, o)):
+		return
 	if medic.action != "" or o.body.bleed <= 0:
 		return
 	var src = medic if (medic.items.has("medkit") or medic.items.has("bandage")) else o
@@ -1095,7 +1155,7 @@ func treat_wound(medic, o, wound: Dictionary, mode: String) -> bool:
 
 
 func _care_next(medic, o, wound: Dictionary, mode: String) -> bool:
-	if o.body.index_of(wound) < 0 or not medic.can_act() or not in_care_reach(medic, o):
+	if o.body.index_of(wound) < 0 or not medic.can_act() or striking(medic) or not in_care_reach(medic, o):
 		return false
 	var steps: Array = Treatment.runnable(care_plan(medic, o, wound, mode))
 	if steps.is_empty():
@@ -1126,6 +1186,8 @@ func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> 
 
 
 func splint(p) -> void:
+	if _wait_blow(p, splint.bind(p)):
+		return
 	if not (p.body.arm_fracture or p.body.leg_fracture) or p.body.splinted:
 		game.hud.toast("부목을 댈 데가 없다.")
 		return
@@ -1141,6 +1203,8 @@ func _splinted(p) -> void:
 
 
 func tear_bandage(p) -> void:
+	if _wait_blow(p, tear_bandage.bind(p)):
+		return
 	if int(p.items.get("cloth", 0)) <= 0:
 		game.hud.toast("천이 없다.")
 		return
@@ -1153,6 +1217,8 @@ func _torn(p) -> void:
 
 
 func rub_snow(p) -> void:
+	if _wait_blow(p, rub_snow.bind(p)):
+		return
 	p.start_action("rub", "눈으로 문지르기", RUB_SNOW_TIME, p.rub_snow)
 
 
