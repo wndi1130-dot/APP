@@ -121,6 +121,15 @@ static func batch_meshes(path: String) -> Dictionary:
 	return meshes
 
 
+## 정점색을 가진 모델(들판 소품 GLB)은 셰이더가 그 색을 곱하게 한다. 임포터는
+## 재질 플래그를 켜 주지 않아 메시 자료를 직접 본다. 색 속성이 없는 모델은 그대로.
+static func _has_vertex_colors(mesh: Mesh) -> bool:
+	for surface in range(mesh.get_surface_count()):
+		if mesh.surface_get_arrays(surface)[Mesh.ARRAY_COLOR] != null:
+			return true
+	return false
+
+
 static func _collect(node: Node, parent_transform: Transform3D, found: Array, lod: int = 0) -> void:
 	if String(node.name).ends_with("_LOD1"):
 		lod = 1
@@ -141,6 +150,8 @@ static func _collect(node: Node, parent_transform: Transform3D, found: Array, lo
 						embedded.set_image(image)
 				material.set_shader_parameter("albedo_tex", source.albedo_texture)
 			material.set_shader_parameter("albedo", source.albedo_color)
+		if _has_vertex_colors(node.mesh):
+			material.set_shader_parameter("use_vertex_color", true)
 		found.append({"mesh": node.mesh, "transform": transform, "material": material, "lod": lod})
 	for child in node.get_children():
 		_collect(child, transform, found, lod)

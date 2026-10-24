@@ -46,3 +46,29 @@ func test_switch_off_keeps_every_box() -> void:
 	view.setup(FieldMap.build())
 	for id: String in view.container_nodes:
 		assert_false(view.container_nodes[id].has_node("Prop"), id)
+
+
+func test_vertex_coloured_models_turn_the_shader_colour_on() -> void:
+	var painted := _collected_material(_triangle(true))
+	var plain := _collected_material(_triangle(false))
+	assert_true(painted.get_shader_parameter("use_vertex_color"), "a coloured model uses its colours")
+	assert_ne(plain.get_shader_parameter("use_vertex_color"), true, "a plain model keeps the default")
+
+
+func _triangle(coloured: bool) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for point: Vector3 in [Vector3.ZERO, Vector3.RIGHT, Vector3.UP]:
+		if coloured:
+			st.set_color(Color(0.6, 0.3, 0.1))
+		st.add_vertex(point)
+	return st.commit()
+
+
+func _collected_material(mesh: Mesh) -> ShaderMaterial:
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	var found := []
+	Props._collect(node, Transform3D.IDENTITY, found)
+	node.free()
+	return found[0]["material"]

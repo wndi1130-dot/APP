@@ -1,0 +1,4578 @@
+{
+  "version": 1,
+  "axis": "X right, +Y up, +Z front",
+  "origin": "footprint centre floor",
+  "palette": {
+    "wood": [
+      0.24,
+      0.17,
+      0.11,
+      1.0
+    ],
+    "worn_wood": [
+      0.38,
+      0.29,
+      0.19,
+      1.0
+    ],
+    "iron": [
+      0.12,
+      0.15,
+      0.17,
+      1.0
+    ],
+    "worn_metal": [
+      0.28,
+      0.32,
+      0.33,
+      1.0
+    ],
+    "cloth": [
+      0.43,
+      0.41,
+      0.31,
+      1.0
+    ],
+    "enamel": [
+      0.68,
+      0.7,
+      0.66,
+      1.0
+    ],
+    "snow": [
+      0.82,
+      0.88,
+      0.91,
+      1.0
+    ],
+    "bark": [
+      0.2,
+      0.16,
+      0.13,
+      1.0
+    ],
+    "rust": [
+      0.32,
+      0.16,
+      0.09,
+      1.0
+    ],
+    "glass": [
+      0.19,
+      0.33,
+      0.38,
+      1.0
+    ],
+    "rubber": [
+      0.035,
+      0.045,
+      0.05,
+      1.0
+    ],
+    "stone": [
+      0.35,
+      0.37,
+      0.39,
+      1.0
+    ]
+  },
+  "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+  "source": "_in/kinds_b.json",
+  "expected_kinds": [
+    "power_pole",
+    "sleeper_stack",
+    "cable_drum",
+    "ration_ledger_chest",
+    "hose_reel",
+    "spruce",
+    "cloth_bolt_rack",
+    "coal_wagon",
+    "loom",
+    "log_stack_low",
+    "axe_rack",
+    "heavy_coat_rack",
+    "sunken_bow",
+    "sunken_wheelhouse",
+    "battery_rack",
+    "engine",
+    "fuel_drum_stack",
+    "lumber_stack",
+    "sunken_deck_section",
+    "buoy_line",
+    "scrap_stack",
+    "shore_ice_heap",
+    "firewood_stack",
+    "herb_drying_rack",
+    "door_pile",
+    "dry_bush",
+    "net_drying_rack",
+    "fuel_tank",
+    "log_scatter",
+    "rail_marker",
+    "rock_ridge",
+    "ice_sled_load",
+    "buffer_stop",
+    "office_cabinet",
+    "overturned_boat",
+    "plate_stack",
+    "fallen_log",
+    "floor_shell",
+    "stair_stub",
+    "fish_trap_stack",
+    "flat_wagon",
+    "fallen_mast",
+    "pier_deck",
+    "unload",
+    "vent_pipe",
+    "fish_crate_stack",
+    "hay_cart",
+    "medicine_crate",
+    "coal_bin",
+    "firewood_rick"
+  ],
+  "skipped": {
+    "unload": "지도 spots의 하역 상호작용 지점이며 소품 rect가 없음. 물체나 하역 경사로를 새로 만들지 않음."
+  },
+  "skip_ground_like": [
+    "fishing_hole",
+    "water",
+    "snow_drift",
+    "rock_face",
+    "snow_bank",
+    "snow_fence",
+    "snow_gauge_pole"
+  ],
+  "assets": {
+    "power_pole": {
+      "status": "ready",
+      "path": "res://models/props_field/power_pole.glb",
+      "count": 38,
+      "maps": 17,
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 38,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 105,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 106,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 107,
+          "rect_wh": [
+            1,
+            1
+          ]
+        }
+      ],
+      "height_m": 5.2,
+      "solid": {
+        "wall": 38
+      },
+      "facing": {
+        "0": 38
+      },
+      "map_families": [
+        "bare_line",
+        "mine",
+        "summit"
+      ],
+      "lod0_tris": 124,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "enamel",
+        "iron",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wall 전봇대: 전선 없이 좁은 가로대·애자로 식별, 높이 예외.",
+      "bytes": 8992,
+      "sha256": "13915876b7b22851e54f13134d0ab9c4cf77e0a1b214b5937696f86c8af35223",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -0.5
+        ],
+        [
+          0.5,
+          5.199999809265137,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        5.2,
+        1
+      ]
+    },
+    "sleeper_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/sleeper_stack.glb",
+      "count": 38,
+      "maps": 17,
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 30,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 79,
+          "rect_wh": [
+            1,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 83,
+          "rect_wh": [
+            1,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 104,
+          "rect_wh": [
+            3,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.05,
+      "solid": {
+        "low": 38
+      },
+      "facing": {
+        "0": 30,
+        "1": 8
+      },
+      "map_families": [
+        "bare_line",
+        "mine",
+        "summit"
+      ],
+      "lod0_tris": 144,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 낡은 침목을 세 단으로 쌓고 윗단에 눈.",
+      "bytes": 11040,
+      "sha256": "580e2e06c79e43432baa0c5d04951577a5d113aa7b29bd9541db62c41e099e9b",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -0.5
+        ],
+        [
+          1.5,
+          1.0499999523162842,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.05,
+        1
+      ]
+    },
+    "cable_drum": {
+      "status": "ready",
+      "path": "res://models/props_field/cable_drum.glb",
+      "count": 37,
+      "maps": 3,
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 37,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/freight_03.gd",
+          "line": 4402,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_03.gd",
+          "line": 4688,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_03.gd",
+          "line": 4844,
+          "rect_wh": [
+            2,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.15,
+      "solid": {
+        "none": 19,
+        "low": 18
+      },
+      "facing": {
+        "0": 22,
+        "2": 5,
+        "1": 5,
+        "3": 5
+      },
+      "map_families": [
+        "freight",
+        "office"
+      ],
+      "lod0_tris": 196,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rubber",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none/low 혼합: 케이블 권취통의 둥근 플랜지를 살리기 위해 높이 예외.",
+      "bytes": 12876,
+      "sha256": "731d91acce909fdec01d2d148cc6d987a7b2fb1806564ba300565a7d7578dae6",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1
+        ],
+        [
+          1,
+          1.149999976158142,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.15,
+        2
+      ]
+    },
+    "ration_ledger_chest": {
+      "status": "ready",
+      "path": "res://models/props_field/ration_ledger_chest.glb",
+      "count": 37,
+      "maps": 1,
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 37,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/office_05.gd",
+          "line": 763,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_05.gd",
+          "line": 770,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_05.gd",
+          "line": 771,
+          "rect_wh": [
+            2,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.48,
+      "solid": {
+        "none": 27,
+        "low": 10
+      },
+      "facing": {
+        "1": 12,
+        "0": 10,
+        "2": 8,
+        "3": 7
+      },
+      "map_families": [
+        "office"
+      ],
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "enamel",
+        "iron",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none 우세: 낮은 배급 장부함, 뚜껑 위 장부 두 권.",
+      "bytes": 6848,
+      "sha256": "086b05d5efa24435a1d2350168152e87cbe7805921eb798d89855816402920e1",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -0.5
+        ],
+        [
+          1,
+          0.47999998927116394,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        0.48,
+        1
+      ]
+    },
+    "hose_reel": {
+      "status": "ready",
+      "path": "res://models/props_field/hose_reel.glb",
+      "count": 36,
+      "maps": 2,
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 36,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 765,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 769,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 776,
+          "rect_wh": [
+            2,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.0,
+      "solid": {
+        "low": 18,
+        "none": 18
+      },
+      "facing": {
+        "3": 12,
+        "2": 12,
+        "1": 10,
+        "0": 2
+      },
+      "map_families": [
+        "office"
+      ],
+      "lod0_tris": 260,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rubber",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low/none 동수: 받침 있는 호스 릴과 짧은 노즐, low 높이 채택.",
+      "bytes": 17080,
+      "sha256": "a049fd688a169dbc300bab20ec5557008fdd4fe338d8e127ae3468a7d8fdd22d",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1
+        ],
+        [
+          1,
+          1,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.0,
+        2
+      ]
+    },
+    "spruce": {
+      "status": "ready",
+      "path": "res://models/props_field/spruce.glb",
+      "count": 36,
+      "maps": 9,
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 36,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 1146,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 1158,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 1170,
+          "rect_wh": [
+            1,
+            1
+          ]
+        }
+      ],
+      "height_m": 4.2,
+      "solid": {
+        "tree": 36
+      },
+      "facing": {
+        "0": 36
+      },
+      "map_families": [
+        "mine"
+      ],
+      "lod0_tris": 188,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "iron",
+        "snow"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "tree: 좁은 침엽 수관 세 층과 눈, 나무 높이 예외.",
+      "bytes": 12444,
+      "sha256": "49421b743304a006275cff9b4bcf3391077ed47deaac7c6d463fbc8305457c2b",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -0.5
+        ],
+        [
+          0.5,
+          4.199999809265137,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        4.2,
+        1
+      ]
+    },
+    "cloth_bolt_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/cloth_bolt_rack.glb",
+      "count": 34,
+      "maps": 2,
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 34,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_03.gd",
+          "line": 4157,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_03.gd",
+          "line": 4196,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_03.gd",
+          "line": 4235,
+          "rect_wh": [
+            3,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.15,
+      "solid": {
+        "none": 24,
+        "low": 10
+      },
+      "facing": {
+        "0": 32,
+        "2": 2
+      },
+      "map_families": [
+        "houses"
+      ],
+      "lod0_tris": 240,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "enamel",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none 우세지만 원단 롤 보관대 의미 우선, 옷이나 소지품 더미 아님.",
+      "bytes": 16228,
+      "sha256": "cdfedda8350c5acf8f80e849a97f7da5f1bf3e2c66e804ecc903d47ae78ad9ab",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -0.5
+        ],
+        [
+          1.5,
+          1.149999976158142,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.15,
+        1
+      ]
+    },
+    "coal_wagon": {
+      "status": "ready",
+      "path": "res://models/props_field/coal_wagon.glb",
+      "count": 34,
+      "maps": 12,
+      "footprint_m": [
+        10,
+        3
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 31,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/church_04.gd",
+          "line": 980,
+          "rect_wh": [
+            8,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_04.gd",
+          "line": 981,
+          "rect_wh": [
+            8,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_04.gd",
+          "line": 982,
+          "rect_wh": [
+            8,
+            3
+          ]
+        }
+      ],
+      "height_m": 2.0,
+      "solid": {
+        "wagon": 34
+      },
+      "facing": {
+        "0": 34
+      },
+      "map_families": [
+        "church",
+        "freight",
+        "mine"
+      ],
+      "lod0_tris": 386,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rubber",
+        "rust",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wagon: 열린 석탄 적재함·대차, 사람 승차 설비 없음.",
+      "bytes": 25908,
+      "sha256": "dea0df03b727e6c33d18d03b096b4e99999f97a7f5128d9d7175c07497832744",
+      "bounds_m": [
+        [
+          -5,
+          0,
+          -1.5
+        ],
+        [
+          5,
+          2,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        10,
+        2.0,
+        3
+      ]
+    },
+    "loom": {
+      "status": "ready",
+      "path": "res://models/props_field/loom.glb",
+      "count": 34,
+      "maps": 2,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 34,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/church_03.gd",
+          "line": 1099,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_03.gd",
+          "line": 1131,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_03.gd",
+          "line": 1137,
+          "rect_wh": [
+            3,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.2,
+      "solid": {
+        "none": 21,
+        "low": 13
+      },
+      "facing": {
+        "0": 34
+      },
+      "map_families": [
+        "church",
+        "houses"
+      ],
+      "lod0_tris": 212,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "enamel",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none/low 혼합: 직기 틀·날실·직물 면을 구분하도록 높이 예외.",
+      "bytes": 15396,
+      "sha256": "f9a0d3d4203464975bec561e24a3994aaa2151d19b2e0fbfccf43ad1a5a3e59b",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          1.2000000476837158,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.2,
+        2
+      ]
+    },
+    "log_stack_low": {
+      "status": "ready",
+      "path": "res://models/props_field/log_stack_low.glb",
+      "count": 32,
+      "maps": 9,
+      "footprint_m": [
+        3,
+        6
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 32,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/sawmill_01.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            6
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/sawmill_01.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            6
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/sawmill_02.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            6
+          ]
+        }
+      ],
+      "height_m": 1.2,
+      "solid": {
+        "low": 32
+      },
+      "facing": {
+        "0": 32
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "lod0_tris": 204,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 긴 통나무 여덟 개와 밝은 절단면, 1.3m 미만.",
+      "bytes": 13700,
+      "sha256": "98e8c6ef0cd891cca837f15966967a2ab7f7c5b335a921fa714fa11268fe6694",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -3
+        ],
+        [
+          1.5,
+          1.2000000476837158,
+          3
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.2,
+        6
+      ]
+    },
+    "axe_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/axe_rack.glb",
+      "count": 31,
+      "maps": 2,
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 31,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 767,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 770,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 773,
+          "rect_wh": [
+            2,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.05,
+      "solid": {
+        "none": 16,
+        "low": 15
+      },
+      "facing": {
+        "2": 11,
+        "0": 9,
+        "1": 7,
+        "3": 4
+      },
+      "map_families": [
+        "office"
+      ],
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none/low 혼합: 도끼 세 자루를 수직 보관하는 낮은 설비로 예외.",
+      "bytes": 11672,
+      "sha256": "874d9199f7717a42e612fa60364df6d3d9f2250e351afd4f2c6562404ebc9c94",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -0.5
+        ],
+        [
+          1,
+          1.0499999523162842,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.05,
+        1
+      ]
+    },
+    "heavy_coat_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/heavy_coat_rack.glb",
+      "count": 31,
+      "maps": 2,
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 31,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 771,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 774,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_03.gd",
+          "line": 779,
+          "rect_wh": [
+            3,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.25,
+      "solid": {
+        "none": 16,
+        "low": 15
+      },
+      "facing": {
+        "3": 9,
+        "0": 8,
+        "1": 7,
+        "2": 7
+      },
+      "map_families": [
+        "office"
+      ],
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none/low 혼합: 빈 외투 걸이 설비만 제작, 옷·가방·신발 더미 없음.",
+      "bytes": 11868,
+      "sha256": "488a8bb9adfa8850f1e61705969f4b588cf09e1e6693715d7761ed921785d40c",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -0.5
+        ],
+        [
+          1.5,
+          1.25,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.25,
+        1
+      ]
+    },
+    "sunken_bow": {
+      "status": "ready",
+      "path": "res://models/props_field/sunken_bow.glb",
+      "count": 31,
+      "maps": 9,
+      "footprint_m": [
+        2,
+        4
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 31,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1035,
+          "rect_wh": [
+            2,
+            4
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1039,
+          "rect_wh": [
+            2,
+            4
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 857,
+          "rect_wh": [
+            2,
+            4
+          ]
+        }
+      ],
+      "height_m": 1.9,
+      "solid": {
+        "wall": 31
+      },
+      "facing": {
+        "1": 31
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 44,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wall: 수면 위 솟은 뾰족한 선수와 열린 선체, 1.8m 이상.",
+      "bytes": 4212,
+      "sha256": "e159eabedfe8d1b6437479973f86f16f505e9278ea4efa686d10c1e8ca976cb8",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -2
+        ],
+        [
+          1,
+          1.899999976158142,
+          2
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.9,
+        4
+      ]
+    },
+    "sunken_wheelhouse": {
+      "status": "ready",
+      "path": "res://models/props_field/sunken_wheelhouse.glb",
+      "count": 31,
+      "maps": 9,
+      "footprint_m": [
+        4,
+        3
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 31,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1034,
+          "rect_wh": [
+            4,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1038,
+          "rect_wh": [
+            4,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 856,
+          "rect_wh": [
+            4,
+            3
+          ]
+        }
+      ],
+      "height_m": 1.9,
+      "solid": {
+        "wall": 31
+      },
+      "facing": {
+        "0": 31
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 128,
+      "triangle_limit": 600,
+      "colours": [
+        "glass",
+        "iron",
+        "rust",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wall: 창 개구부를 남긴 조타실 윗부분, 지붕에 눈.",
+      "bytes": 9792,
+      "sha256": "a8aab857cbce54f2d4c3fe2b13bc567e2ee5057804d4ccd101b6a17bdf439218",
+      "bounds_m": [
+        [
+          -2,
+          0,
+          -1.5
+        ],
+        [
+          2,
+          1.899999976158142,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        4,
+        1.9,
+        3
+      ]
+    },
+    "battery_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/battery_rack.glb",
+      "count": 30,
+      "maps": 3,
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 30,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/office_01.gd",
+          "line": 2370,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_01.gd",
+          "line": 2374,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/office_01.gd",
+          "line": 2410,
+          "rect_wh": [
+            2,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "low": 18,
+        "none": 12
+      },
+      "facing": {
+        "0": 10,
+        "3": 7,
+        "1": 7,
+        "2": 6
+      },
+      "map_families": [
+        "office"
+      ],
+      "lod0_tris": 264,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rubber",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 두 단 배터리와 단자, 글자·경고표지 없음.",
+      "bytes": 19436,
+      "sha256": "ed367f9fcb31481aa1bdfd89eb2e96f07567aa3dc9e9d51c2cb0d1a7dcc75298",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -0.5
+        ],
+        [
+          1,
+          1.100000023841858,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.1,
+        1
+      ]
+    },
+    "engine": {
+      "status": "ready",
+      "path": "res://models/props_field/engine.glb",
+      "count": 30,
+      "maps": 30,
+      "footprint_m": [
+        16,
+        3
+      ],
+      "footprint_source": "train_cars Rect2i(16 + k * 16, 1, 16, 3), props 아님",
+      "modal_rect_count": 0,
+      "source_samples": [],
+      "height_m": 3.2,
+      "solid": {
+        "(none)": 30
+      },
+      "facing": {
+        "(none)": 30
+      },
+      "map_families": [
+        "church",
+        "factory",
+        "freight",
+        "hospital",
+        "houses"
+      ],
+      "lod0_tris": 368,
+      "triangle_limit": 600,
+      "colours": [
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "별도 train_cars의 기관차: 16×3m 원문 치수, 연기·굴뚝·승객 설비 없음. props 자동 배치 대상 아님.",
+      "bytes": 24656,
+      "sha256": "6cfb6ccbb099ef170b153f26d88945e8a593832d8871210bcb50fa24611cdc7e",
+      "bounds_m": [
+        [
+          -8,
+          0,
+          -1.5
+        ],
+        [
+          8,
+          3.200000047683716,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        16,
+        3.2,
+        3
+      ]
+    },
+    "fuel_drum_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/fuel_drum_stack.glb",
+      "count": 30,
+      "maps": 1,
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 30,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_04.gd",
+          "line": 3997,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_04.gd",
+          "line": 4036,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_04.gd",
+          "line": 4075,
+          "rect_wh": [
+            2,
+            2
+          ]
+        }
+      ],
+      "height_m": 0.95,
+      "solid": {
+        "none": 18,
+        "low": 12
+      },
+      "facing": {
+        "0": 30
+      },
+      "map_families": [
+        "houses"
+      ],
+      "lod0_tris": 432,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none 우세지만 연료통 세 개의 원통 형태 우선, 낮은 한 단 예외.",
+      "bytes": 26592,
+      "sha256": "c369c47b71512e9fcbdab1feaf3793501853f7a1af82c0990474fbc6ee7ec3a6",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1
+        ],
+        [
+          1,
+          0.949999988079071,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        0.95,
+        2
+      ]
+    },
+    "lumber_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/lumber_stack.glb",
+      "count": 29,
+      "maps": 3,
+      "footprint_m": [
+        4,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 28,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_05.gd",
+          "line": 3182,
+          "rect_wh": [
+            4,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_05.gd",
+          "line": 3221,
+          "rect_wh": [
+            4,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_05.gd",
+          "line": 3260,
+          "rect_wh": [
+            4,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.05,
+      "solid": {
+        "low": 19,
+        "none": 10
+      },
+      "facing": {
+        "0": 20,
+        "1": 3,
+        "2": 3,
+        "3": 3
+      },
+      "map_families": [
+        "houses",
+        "office"
+      ],
+      "lod0_tris": 180,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 각재를 간격 둔 네 단으로 적재.",
+      "bytes": 13552,
+      "sha256": "d4c20dee3930f47173de17ce57b89f15917018d6cb37d77861362038101954f2",
+      "bounds_m": [
+        [
+          -2,
+          0,
+          -1
+        ],
+        [
+          2,
+          1.0499999523162842,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        4,
+        1.05,
+        2
+      ]
+    },
+    "sunken_deck_section": {
+      "status": "ready",
+      "path": "res://models/props_field/sunken_deck_section.glb",
+      "count": 29,
+      "maps": 9,
+      "footprint_m": [
+        8,
+        3
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 29,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1036,
+          "rect_wh": [
+            8,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1040,
+          "rect_wh": [
+            8,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 858,
+          "rect_wh": [
+            8,
+            3
+          ]
+        }
+      ],
+      "height_m": 0.65,
+      "solid": {
+        "low": 29
+      },
+      "facing": {
+        "0": 29
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 192,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 고르지 않은 갑판 조각과 받침보, 난간·승차 자리 없음.",
+      "bytes": 14408,
+      "sha256": "e208fae83de7e256cdd2a6a1899b6bcb64b248f16157eba669a77862e6928505",
+      "bounds_m": [
+        [
+          -4,
+          0,
+          -1.5
+        ],
+        [
+          4,
+          0.6499999761581421,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        8,
+        0.65,
+        3
+      ]
+    },
+    "buoy_line": {
+      "status": "ready",
+      "path": "res://models/props_field/buoy_line.glb",
+      "count": 28,
+      "maps": 9,
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 28,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1049,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1055,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1131,
+          "rect_wh": [
+            2,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.3,
+      "solid": {
+        "none": 28
+      },
+      "facing": {
+        "0": 28
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 196,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "enamel",
+        "iron",
+        "rust"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 바닥에 놓인 부표 세 개와 낮은 연결 밧줄.",
+      "bytes": 13648,
+      "sha256": "64a64b30a59521c130f15a2eb58ce3fe3c2984e1bcd10b95c5da3a685560430b",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -0.5
+        ],
+        [
+          1,
+          0.30000001192092896,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        0.3,
+        1
+      ]
+    },
+    "scrap_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/scrap_stack.glb",
+      "count": 28,
+      "maps": 9,
+      "footprint_m": [
+        2,
+        3
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 18,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 534,
+          "rect_wh": [
+            2,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 582,
+          "rect_wh": [
+            2,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 978,
+          "rect_wh": [
+            3,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "low": 28
+      },
+      "facing": {
+        "1": 18,
+        "0": 10
+      },
+      "map_families": [
+        "mine"
+      ],
+      "lod0_tris": 112,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 금속 판재·관 폐자재만, 소지품을 섞지 않음.",
+      "bytes": 8532,
+      "sha256": "73742ac2738058d0b995d6989552020b396fe975b9f97dcbb596762099e7bf82",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1.5
+        ],
+        [
+          1,
+          1.100000023841858,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.1,
+        3
+      ]
+    },
+    "shore_ice_heap": {
+      "status": "ready",
+      "path": "res://models/props_field/shore_ice_heap.glb",
+      "count": 28,
+      "maps": 9,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 28,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1060,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1063,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1070,
+          "rect_wh": [
+            3,
+            2
+          ]
+        }
+      ],
+      "height_m": 0.95,
+      "solid": {
+        "low": 28
+      },
+      "facing": {
+        "0": 28
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "colours": [
+        "glass",
+        "snow"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 별도 제외 7종에 없는 물가 얼음 덩어리 세 개, 불투명 정점색.",
+      "bytes": 11556,
+      "sha256": "1f12264aefa4d7e2169b1edbb63484a12f58693d04188d60ec7b3afceb36f815",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          0.949999988079071,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        0.95,
+        2
+      ]
+    },
+    "firewood_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/firewood_stack.glb",
+      "count": 27,
+      "maps": 9,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 27,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1030,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1073,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1081,
+          "rect_wh": [
+            3,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.05,
+      "solid": {
+        "low": 27
+      },
+      "facing": {
+        "0": 27
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 204,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 절단면이 보이는 장작 단, 1.3m 미만.",
+      "bytes": 13704,
+      "sha256": "43e71f84dde4643bbe4499edc7b0508a983cba56a07d53d92f4ae0c6df873ba1",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          1.0499999523162842,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.05,
+        2
+      ]
+    },
+    "herb_drying_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/herb_drying_rack.glb",
+      "count": 26,
+      "maps": 1,
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 24,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 3251,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 3290,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 3329,
+          "rect_wh": [
+            3,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "none": 18,
+        "low": 8
+      },
+      "facing": {
+        "0": 26
+      },
+      "map_families": [
+        "houses"
+      ],
+      "lod0_tris": 232,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none 우세: 약초 묶음을 걸어 말리는 틀 의미를 위해 높이 예외.",
+      "bytes": 16952,
+      "sha256": "ee69f2005ff6744a181353626ccb8555270b66697497ef120cef4566054cd282",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -0.5
+        ],
+        [
+          1.5,
+          1.100000023841858,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.1,
+        1
+      ]
+    },
+    "door_pile": {
+      "status": "ready",
+      "path": "res://models/props_field/door_pile.glb",
+      "count": 25,
+      "maps": 4,
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 25,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_01.gd",
+          "line": 931,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_01.gd",
+          "line": 934,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_01.gd",
+          "line": 937,
+          "rect_wh": [
+            2,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.65,
+      "solid": {
+        "low": 17,
+        "none": 8
+      },
+      "facing": {
+        "0": 11,
+        "1": 7,
+        "2": 5,
+        "3": 2
+      },
+      "map_families": [
+        "houses"
+      ],
+      "lod0_tris": 132,
+      "triangle_limit": 600,
+      "colours": [
+        "snow",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 떼어 낸 문짝 세 장, 사람 칸의 문·빗장·잠금 아님.",
+      "bytes": 10188,
+      "sha256": "5e301e4e1c589365d1d0735d9fd9b8f860efbb1052b98438627965091fd0fcd2",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -0.5
+        ],
+        [
+          1,
+          0.6499999761581421,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        0.65,
+        1
+      ]
+    },
+    "dry_bush": {
+      "status": "ready",
+      "path": "res://models/props_field/dry_bush.glb",
+      "count": 25,
+      "maps": 9,
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 25,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1048,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1052,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1058,
+          "rect_wh": [
+            2,
+            2
+          ]
+        }
+      ],
+      "height_m": 0.45,
+      "solid": {
+        "none": 25
+      },
+      "facing": {
+        "0": 25
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 196,
+      "triangle_limit": 600,
+      "colours": [
+        "bark"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 잎 없는 낮은 갈색 잔가지, 바닥 가까운 높이.",
+      "bytes": 14600,
+      "sha256": "5ed55caeb75d0f9893607d1bedd5c04ec476350655e6313f7a5b3a3b4a040625",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1
+        ],
+        [
+          1,
+          0.44999998807907104,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        0.45,
+        2
+      ]
+    },
+    "net_drying_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/net_drying_rack.glb",
+      "count": 24,
+      "maps": 10,
+      "footprint_m": [
+        4,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 1,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 810,
+          "rect_wh": [
+            4,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1028,
+          "rect_wh": [
+            1,
+            4
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1054,
+          "rect_wh": [
+            4,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.2,
+      "solid": {
+        "low": 24
+      },
+      "facing": {
+        "0": 14,
+        "1": 9,
+        "3": 1
+      },
+      "map_families": [
+        "houses",
+        "lake"
+      ],
+      "lod0_tris": 248,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 성긴 어망과 두 기둥, 철조망 없이 섬유 밧줄색.",
+      "bytes": 18004,
+      "sha256": "88c2b6102e7953d3755daf588868f0cc0ff43f77858b039ad8bf430ef8cb2e99",
+      "bounds_m": [
+        [
+          -2,
+          0,
+          -0.5
+        ],
+        [
+          2,
+          1.2000000476837158,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        4,
+        1.2,
+        1
+      ]
+    },
+    "fuel_tank": {
+      "status": "ready",
+      "path": "res://models/props_field/fuel_tank.glb",
+      "count": 23,
+      "maps": 22,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 14,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1094,
+          "rect_wh": [
+            3,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1098,
+          "rect_wh": [
+            3,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 941,
+          "rect_wh": [
+            3,
+            3
+          ]
+        }
+      ],
+      "height_m": 1.25,
+      "solid": {
+        "low": 14,
+        "wall": 9
+      },
+      "facing": {
+        "0": 23
+      },
+      "map_families": [
+        "lake",
+        "sawmill",
+        "summit"
+      ],
+      "lod0_tris": 224,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low14/wall9 혼합: 다수 low 기준 수평 연료탱크, wall 배치와 높이 불일치 남음.",
+      "bytes": 14568,
+      "sha256": "7b1722d36f9a244b4880f82f713d3913290c37b929c71d38e1c94f821ba621cc",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          1.25,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.25,
+        2
+      ]
+    },
+    "log_scatter": {
+      "status": "ready",
+      "path": "res://models/props_field/log_scatter.glb",
+      "count": 23,
+      "maps": 9,
+      "footprint_m": [
+        3,
+        3
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 23,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/sawmill_01.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/sawmill_02.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/sawmill_03.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            3
+          ]
+        }
+      ],
+      "height_m": 0.4,
+      "solid": {
+        "none": 23
+      },
+      "facing": {
+        "0": 23
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 바닥에 흩어진 짧은 통나무 세 개.",
+      "bytes": 5420,
+      "sha256": "e5c21747283c6d07f9556ca91a58a8cf37836fb859d5b28b335e4fd5739a211a",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1.5
+        ],
+        [
+          1.5,
+          0.4000000059604645,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        0.4,
+        3
+      ]
+    },
+    "rail_marker": {
+      "status": "ready",
+      "path": "res://models/props_field/rail_marker.glb",
+      "count": 23,
+      "maps": 17,
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 23,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 115,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 117,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 122,
+          "rect_wh": [
+            1,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.48,
+      "solid": {
+        "none": 23
+      },
+      "facing": {
+        "0": 23
+      },
+      "map_families": [
+        "bare_line",
+        "mine",
+        "summit"
+      ],
+      "lod0_tris": 48,
+      "triangle_limit": 600,
+      "colours": [
+        "enamel",
+        "iron",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 낮은 직사각 철도 표지, 번호·대기 구획·십자 없음.",
+      "bytes": 4312,
+      "sha256": "3fecae6f0573873a88cee0d01d2655a8ffb9e6459baf0f72b11ae8b3c1d9aac8",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -0.5
+        ],
+        [
+          0.5,
+          0.47999998927116394,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        0.48,
+        1
+      ]
+    },
+    "rock_ridge": {
+      "status": "ready",
+      "path": "res://models/props_field/rock_ridge.glb",
+      "count": 23,
+      "maps": 14,
+      "footprint_m": [
+        8,
+        6
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 23,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 738,
+          "rect_wh": [
+            8,
+            6
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 750,
+          "rect_wh": [
+            8,
+            6
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_02.gd",
+          "line": 881,
+          "rect_wh": [
+            8,
+            6
+          ]
+        }
+      ],
+      "height_m": 2.4,
+      "solid": {
+        "wall": 23
+      },
+      "facing": {
+        "0": 23
+      },
+      "map_families": [
+        "mine",
+        "summit"
+      ],
+      "lod0_tris": 192,
+      "triangle_limit": 600,
+      "colours": [
+        "snow",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wall: 눈 덮인 각진 바위 능선 세 봉우리, 시야 차단 높이.",
+      "bytes": 13620,
+      "sha256": "c42989c13e1823e3eb8683f5dfc12e2ee872a9fd4ef9369d85844503418f694e",
+      "bounds_m": [
+        [
+          -4,
+          0,
+          -3
+        ],
+        [
+          4,
+          2.4000000953674316,
+          3
+        ]
+      ],
+      "dimensions_m": [
+        8,
+        2.4,
+        6
+      ]
+    },
+    "ice_sled_load": {
+      "status": "ready",
+      "path": "res://models/props_field/ice_sled_load.glb",
+      "count": 22,
+      "maps": 11,
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 11,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_01.gd",
+          "line": 1462,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_01.gd",
+          "line": 1465,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_01.gd",
+          "line": 1468,
+          "rect_wh": [
+            3,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.95,
+      "solid": {
+        "low": 21,
+        "none": 1
+      },
+      "facing": {
+        "0": 13,
+        "2": 6,
+        "3": 2,
+        "1": 1
+      },
+      "map_families": [
+        "houses",
+        "lake"
+      ],
+      "lod0_tris": 124,
+      "triangle_limit": 600,
+      "colours": [
+        "glass",
+        "iron",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 얼음 덩어리만 실은 썰매, 소지품 더미 없음.",
+      "bytes": 9380,
+      "sha256": "117e2488e6f31c1c6e5c06ac704a237a7d2c788e05719658c25ffb7bbc162492",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -0.5
+        ],
+        [
+          1.5,
+          0.949999988079071,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        0.95,
+        1
+      ]
+    },
+    "buffer_stop": {
+      "status": "ready",
+      "path": "res://models/props_field/buffer_stop.glb",
+      "count": 21,
+      "maps": 9,
+      "footprint_m": [
+        1,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 20,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/freight_01.gd",
+          "line": 3937,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 1122,
+          "rect_wh": [
+            1,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 1134,
+          "rect_wh": [
+            1,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "low": 21
+      },
+      "facing": {
+        "0": 21
+      },
+      "map_families": [
+        "freight",
+        "mine"
+      ],
+      "lod0_tris": 128,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 삼각 지지대와 목재 완충 보, 철길 종단 설비.",
+      "bytes": 9396,
+      "sha256": "619a700eb677d2b9524d465eee50290c9c4c42a96d9f0708eb3369dfb89054ed",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -1
+        ],
+        [
+          0.5,
+          1.100000023841858,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        1.1,
+        2
+      ]
+    },
+    "office_cabinet": {
+      "status": "ready",
+      "path": "res://models/props_field/office_cabinet.glb",
+      "count": 21,
+      "maps": 3,
+      "footprint_m": [
+        2,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 21,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_02.gd",
+          "line": 4214,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_02.gd",
+          "line": 4253,
+          "rect_wh": [
+            2,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_04.gd",
+          "line": 1283,
+          "rect_wh": [
+            2,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.15,
+      "solid": {
+        "low": 11,
+        "none": 10
+      },
+      "facing": {
+        "0": 12,
+        "2": 6,
+        "1": 3
+      },
+      "map_families": [
+        "houses"
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 두 문 달린 낮은 사무용 철제 보관장.",
+      "bytes": 5996,
+      "sha256": "a8097fb57fa4b288e4a52a7039b20175c17ad678e3183ef4f543e8d38af2e3b7",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -0.5
+        ],
+        [
+          1,
+          1.149999976158142,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.15,
+        1
+      ]
+    },
+    "overturned_boat": {
+      "status": "ready",
+      "path": "res://models/props_field/overturned_boat.glb",
+      "count": 21,
+      "maps": 9,
+      "footprint_m": [
+        4,
+        2
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 21,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1027,
+          "rect_wh": [
+            4,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1053,
+          "rect_wh": [
+            4,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 850,
+          "rect_wh": [
+            4,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "low": 21
+      },
+      "facing": {
+        "0": 21
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 64,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 뒤집힌 뾰족 선체와 바닥 리브, 눈 얹힌 용골.",
+      "bytes": 5752,
+      "sha256": "72e47eb9d6c69fccc9f2456eac4f5ece893a7f8bb297e1900ada6309feb4c4ed",
+      "bounds_m": [
+        [
+          -2,
+          0,
+          -1
+        ],
+        [
+          2,
+          1.100000023841858,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        4,
+        1.1,
+        2
+      ]
+    },
+    "plate_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/plate_stack.glb",
+      "count": 21,
+      "maps": 1,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 21,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/freight_05.gd",
+          "line": 4163,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_05.gd",
+          "line": 4241,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_05.gd",
+          "line": 4254,
+          "rect_wh": [
+            3,
+            2
+          ]
+        }
+      ],
+      "height_m": 0.7,
+      "solid": {
+        "low": 11,
+        "none": 10
+      },
+      "facing": {
+        "0": 21
+      },
+      "map_families": [
+        "freight"
+      ],
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "colours": [
+        "rust",
+        "snow",
+        "wood",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 철판 여섯 장과 받침 각재, 낡은 금속색.",
+      "bytes": 8508,
+      "sha256": "82b73f5f3b0a01611be9adf62e1c56313a78707c95ed5cc90ad07cfafa8b4288",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          0.699999988079071,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        0.7,
+        2
+      ]
+    },
+    "fallen_log": {
+      "status": "ready",
+      "path": "res://models/props_field/fallen_log.glb",
+      "count": 20,
+      "maps": 17,
+      "footprint_m": [
+        5,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 18,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/bare_line_01.gd",
+          "line": 118,
+          "rect_wh": [
+            5,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_02.gd",
+          "line": 121,
+          "rect_wh": [
+            5,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/bare_line_03.gd",
+          "line": 124,
+          "rect_wh": [
+            5,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.65,
+      "solid": {
+        "low": 20
+      },
+      "facing": {
+        "0": 18,
+        "1": 2
+      },
+      "map_families": [
+        "bare_line",
+        "sawmill",
+        "summit"
+      ],
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 부러진 가지와 절단면이 있는 쓰러진 통나무.",
+      "bytes": 4896,
+      "sha256": "95dbffc865a75e11ea12d88bafd760421acfd9264c1101cbc7c020924943405d",
+      "bounds_m": [
+        [
+          -2.5,
+          0,
+          -0.5
+        ],
+        [
+          2.5,
+          0.6499999761581421,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        5,
+        0.65,
+        1
+      ]
+    },
+    "floor_shell": {
+      "status": "ready",
+      "path": "res://models/props_field/floor_shell.glb",
+      "count": 20,
+      "maps": 6,
+      "footprint_m": [
+        32,
+        16
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 3,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 463,
+          "rect_wh": [
+            22,
+            18
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 465,
+          "rect_wh": [
+            20,
+            18
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 467,
+          "rect_wh": [
+            24,
+            20
+          ]
+        }
+      ],
+      "height_m": 0.12,
+      "solid": {
+        "none": 20
+      },
+      "facing": {
+        "0": 16,
+        "2": 3,
+        "3": 1
+      },
+      "map_families": [
+        "church",
+        "houses",
+        "office"
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "snow",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 가장 흔한 32×16m의 얇은 바닥판만, 벽·창 막음 없음.",
+      "bytes": 5988,
+      "sha256": "db201ef9b609d80cf9374347ac9848b568a437e00c41372e2b28a20c9c711b8a",
+      "bounds_m": [
+        [
+          -16,
+          0,
+          -8
+        ],
+        [
+          16,
+          0.11999999731779099,
+          8
+        ]
+      ],
+      "dimensions_m": [
+        32,
+        0.12,
+        16
+      ]
+    },
+    "stair_stub": {
+      "status": "ready",
+      "path": "res://models/props_field/stair_stub.glb",
+      "count": 20,
+      "maps": 6,
+      "footprint_m": [
+        1,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 20,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 464,
+          "rect_wh": [
+            1,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 466,
+          "rect_wh": [
+            1,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 468,
+          "rect_wh": [
+            1,
+            2
+          ]
+        }
+      ],
+      "height_m": 0.48,
+      "solid": {
+        "none": 20
+      },
+      "facing": {
+        "0": 14,
+        "3": 3,
+        "1": 3
+      },
+      "map_families": [
+        "church",
+        "houses",
+        "office"
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "snow",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 3단 돌계단 잔재, 높이 0.5m 이하.",
+      "bytes": 5988,
+      "sha256": "12b3d57e1cc3c981e35ddbf331b0e15172c07d33c10c85f1ba6b9ebe2004aaf1",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -1
+        ],
+        [
+          0.5,
+          0.47999998927116394,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        0.48,
+        2
+      ]
+    },
+    "fish_trap_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/fish_trap_stack.glb",
+      "count": 19,
+      "maps": 9,
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 10,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1029,
+          "rect_wh": [
+            2,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 852,
+          "rect_wh": [
+            2,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 874,
+          "rect_wh": [
+            2,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "low": 19
+      },
+      "facing": {
+        "0": 10,
+        "1": 9
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 576,
+      "triangle_limit": 600,
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 속이 보이는 작은 통발 세 개, 어구 바구니 형태.",
+      "bytes": 41284,
+      "sha256": "b6c262d4d3e9dc05c81cd7ed342cd9113224d3fc07c1efe15182007df96fc813",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1
+        ],
+        [
+          1,
+          1.100000023841858,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.1,
+        2
+      ]
+    },
+    "flat_wagon": {
+      "status": "ready",
+      "path": "res://models/props_field/flat_wagon.glb",
+      "count": 19,
+      "maps": 5,
+      "footprint_m": [
+        12,
+        3
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 9,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/freight_01.gd",
+          "line": 3911,
+          "rect_wh": [
+            12,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_01.gd",
+          "line": 3924,
+          "rect_wh": [
+            12,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_02.gd",
+          "line": 994,
+          "rect_wh": [
+            3,
+            11
+          ]
+        }
+      ],
+      "height_m": 1.2,
+      "solid": {
+        "wagon": 19
+      },
+      "facing": {
+        "0": 10,
+        "1": 9
+      },
+      "map_families": [
+        "freight"
+      ],
+      "lod0_tris": 320,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wagon: 눈 얹힌 빈 평판 화차와 대차, 승객·하역 경사로 없음.",
+      "bytes": 21304,
+      "sha256": "67328c7280d7c28069e6a5d8852d532909baf63e81dd0d0c402cd586b8740994",
+      "bounds_m": [
+        [
+          -6,
+          0,
+          -1.5
+        ],
+        [
+          6,
+          1.2000000476837158,
+          1.5
+        ]
+      ],
+      "dimensions_m": [
+        12,
+        1.2,
+        3
+      ]
+    },
+    "fallen_mast": {
+      "status": "ready",
+      "path": "res://models/props_field/fallen_mast.glb",
+      "count": 18,
+      "maps": 9,
+      "footprint_m": [
+        7,
+        1
+      ],
+      "footprint_source": "map literal Rect2i modal",
+      "modal_rect_count": 18,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1037,
+          "rect_wh": [
+            7,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 859,
+          "rect_wh": [
+            7,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_02.gd",
+          "line": 866,
+          "rect_wh": [
+            7,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.5,
+      "solid": {
+        "low": 18
+      },
+      "facing": {
+        "0": 18
+      },
+      "map_families": [
+        "lake"
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "cloth",
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 가로대와 짧은 밧줄이 붙은 쓰러진 돛대.",
+      "bytes": 5596,
+      "sha256": "3edddf8a8ad002c06fd6b7771a612fa6a8ed148d981511b31fd3c886f93d43e5",
+      "bounds_m": [
+        [
+          -3.5,
+          0,
+          -0.5
+        ],
+        [
+          3.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        7,
+        0.5,
+        1
+      ]
+    },
+    "pier_deck": {
+      "status": "ready",
+      "path": "res://models/props_field/pier_deck.glb",
+      "count": 18,
+      "maps": 10,
+      "footprint_m": [
+        3,
+        22
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 1,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 476,
+          "rect_wh": [
+            3,
+            22
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1031,
+          "rect_wh": [
+            73,
+            3
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/lake_01.gd",
+          "line": 1032,
+          "rect_wh": [
+            3,
+            34
+          ]
+        }
+      ],
+      "height_m": 0.18,
+      "solid": {
+        "none": 18
+      },
+      "facing": {
+        "1": 14,
+        "0": 4
+      },
+      "map_families": [
+        "houses",
+        "lake"
+      ],
+      "lod0_tris": 192,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none: 입력 최빈 3×22m의 낮은 잔교 판재, 난간·경사로 없음.",
+      "bytes": 14392,
+      "sha256": "270e4e19f72382e3a6d0d6623b8b3efe0f098a95ac5456036bf0e46a9804a912",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -11
+        ],
+        [
+          1.5,
+          0.18000000715255737,
+          11
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        0.18,
+        22
+      ]
+    },
+    "vent_pipe": {
+      "status": "ready",
+      "path": "res://models/props_field/vent_pipe.glb",
+      "count": 18,
+      "maps": 9,
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 18,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 762,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_01.gd",
+          "line": 774,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/mine_02.gd",
+          "line": 905,
+          "rect_wh": [
+            1,
+            1
+          ]
+        }
+      ],
+      "height_m": 2.0,
+      "solid": {
+        "wall": 18
+      },
+      "facing": {
+        "0": 18
+      },
+      "map_families": [
+        "mine"
+      ],
+      "lod0_tris": 156,
+      "triangle_limit": 600,
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "stone",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "wall: 광산 환기관과 빗물 막이, 굴뚝 연기 자리 없음.",
+      "bytes": 10316,
+      "sha256": "8d2fa2f477f222891d6a741745bc866a5dd2e9958198c1dff85e00cf50e88360",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -0.5
+        ],
+        [
+          0.5,
+          2,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        2.0,
+        1
+      ]
+    },
+    "fish_crate_stack": {
+      "status": "ready",
+      "path": "res://models/props_field/fish_crate_stack.glb",
+      "count": 17,
+      "maps": 10,
+      "footprint_m": [
+        2,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 8,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 597,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 600,
+          "rect_wh": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_06.gd",
+          "line": 603,
+          "rect_wh": [
+            2,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.1,
+      "solid": {
+        "low": 11,
+        "none": 6
+      },
+      "facing": {
+        "0": 11,
+        "2": 5,
+        "3": 1
+      },
+      "map_families": [
+        "houses",
+        "lake"
+      ],
+      "lod0_tris": 252,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 생선 운반 나무상자 네 개, 내용물·소지품 없음.",
+      "bytes": 18600,
+      "sha256": "bbb2b36ac72565d64e291ff542ced2d5a00ae3a5d342af434ecbd62f1ca54c63",
+      "bounds_m": [
+        [
+          -1,
+          0,
+          -1
+        ],
+        [
+          1,
+          1.100000023841858,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        2,
+        1.1,
+        2
+      ]
+    },
+    "hay_cart": {
+      "status": "ready",
+      "path": "res://models/props_field/hay_cart.glb",
+      "count": 17,
+      "maps": 2,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 9,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/houses_03.gd",
+          "line": 1384,
+          "rect_wh": [
+            4,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_03.gd",
+          "line": 1387,
+          "rect_wh": [
+            4,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/houses_03.gd",
+          "line": 1390,
+          "rect_wh": [
+            4,
+            2
+          ]
+        }
+      ],
+      "height_m": 1.2,
+      "solid": {
+        "low": 15,
+        "none": 2
+      },
+      "facing": {
+        "0": 8,
+        "1": 5,
+        "2": 3,
+        "3": 1
+      },
+      "map_families": [
+        "houses",
+        "office"
+      ],
+      "lod0_tris": 240,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "cloth",
+        "snow",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low 우세: 마른 건초 두 묶음과 수레 바퀴·손잡이.",
+      "bytes": 16532,
+      "sha256": "597251e7c03dcbbbb955dc3a646411c0b065c66b19e583fa6b59174c913c5dbc",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          1.2000000476837158,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.2,
+        2
+      ]
+    },
+    "medicine_crate": {
+      "status": "ready",
+      "path": "res://models/props_field/medicine_crate.glb",
+      "count": 17,
+      "maps": 1,
+      "footprint_m": [
+        1,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 17,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/freight_04.gd",
+          "line": 4655,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_04.gd",
+          "line": 4785,
+          "rect_wh": [
+            1,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/freight_04.gd",
+          "line": 5045,
+          "rect_wh": [
+            1,
+            1
+          ]
+        }
+      ],
+      "height_m": 0.48,
+      "solid": {
+        "none": 13,
+        "low": 4
+      },
+      "facing": {
+        "0": 17
+      },
+      "map_families": [
+        "freight"
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "colours": [
+        "cloth",
+        "enamel",
+        "iron",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none 우세: 낮은 약품 상자와 빈 직사각 라벨, 빨간 십자·초승달 없음.",
+      "bytes": 6000,
+      "sha256": "2a133f7a962f5dbe0e4af5319d5f56b735d9be409bb410777335388a83ef6a51",
+      "bounds_m": [
+        [
+          -0.5,
+          0,
+          -0.5
+        ],
+        [
+          0.5,
+          0.47999998927116394,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        1,
+        0.48,
+        1
+      ]
+    },
+    "coal_bin": {
+      "status": "ready",
+      "path": "res://models/props_field/coal_bin.glb",
+      "count": 16,
+      "maps": 6,
+      "footprint_m": [
+        3,
+        2
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 16,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/church_01.gd",
+          "line": 443,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 582,
+          "rect_wh": [
+            3,
+            2
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/church_02.gd",
+          "line": 777,
+          "rect_wh": [
+            3,
+            2
+          ]
+        }
+      ],
+      "height_m": 0.95,
+      "solid": {
+        "none": 8,
+        "low": 8
+      },
+      "facing": {
+        "0": 6,
+        "2": 4,
+        "1": 4,
+        "3": 2
+      },
+      "map_families": [
+        "church"
+      ],
+      "lod0_tris": 138,
+      "triangle_limit": 600,
+      "colours": [
+        "rubber",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "none/low 동수: 열린 석탄함의 벽과 석탄 덩어리, low 기준 예외.",
+      "bytes": 10412,
+      "sha256": "12106aa333353abc578576a410815757ef5ebd9190ba7d834d6ed099cbc2ae67",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -1
+        ],
+        [
+          1.5,
+          0.949999988079071,
+          1
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        0.95,
+        2
+      ]
+    },
+    "firewood_rick": {
+      "status": "ready",
+      "path": "res://models/props_field/firewood_rick.glb",
+      "count": 16,
+      "maps": 9,
+      "footprint_m": [
+        3,
+        1
+      ],
+      "footprint_source": "input rects_wh_top[0]",
+      "modal_rect_count": 16,
+      "source_samples": [
+        {
+          "source": "s2/game/world/maps/sawmill_01.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/sawmill_01.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            1
+          ]
+        },
+        {
+          "source": "s2/game/world/maps/sawmill_02.gd",
+          "line": 39,
+          "rect_wh": [
+            3,
+            1
+          ]
+        }
+      ],
+      "height_m": 1.15,
+      "solid": {
+        "low": 16
+      },
+      "facing": {
+        "0": 16
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "lod0_tris": 216,
+      "triangle_limit": 600,
+      "colours": [
+        "bark",
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥. +Y 위, +Z 앞. facing은 +Y 둘레 시계 방향 0/90/180/270도. 현 map_view는 크기를 보정하지 않음.",
+      "judgment": "low: 양 끝 지지판 안에 가지런히 쌓은 장작, 눈 덮인 윗단.",
+      "bytes": 14928,
+      "sha256": "9e1167e6a7f7d1310795908b1c1015cde0a3feb3d8ea1ee6487a5e9a1a61919f",
+      "bounds_m": [
+        [
+          -1.5,
+          0,
+          -0.5
+        ],
+        [
+          1.5,
+          1.149999976158142,
+          0.5
+        ]
+      ],
+      "dimensions_m": [
+        3,
+        1.15,
+        1
+      ]
+    }
+  },
+  "failures": [],
+  "per_map_literal_counts": {
+    "bare_line_01.gd": {
+      "sleeper_stack": 3,
+      "power_pole": 8,
+      "rail_marker": 3,
+      "fallen_log": 1
+    },
+    "bare_line_02.gd": {
+      "sleeper_stack": 3,
+      "power_pole": 8,
+      "rail_marker": 3,
+      "fallen_log": 1
+    },
+    "bare_line_03.gd": {
+      "sleeper_stack": 3,
+      "power_pole": 8,
+      "rail_marker": 3,
+      "fallen_log": 1
+    },
+    "church_01.gd": {
+      "coal_bin": 1
+    },
+    "church_02.gd": {
+      "floor_shell": 4,
+      "stair_stub": 4,
+      "coal_bin": 2
+    },
+    "church_03.gd": {
+      "coal_bin": 3,
+      "loom": 8
+    },
+    "church_04.gd": {
+      "coal_bin": 6,
+      "coal_wagon": 3
+    },
+    "church_05.gd": {
+      "coal_bin": 2
+    },
+    "church_06.gd": {
+      "coal_bin": 2
+    },
+    "factory_01.gd": {},
+    "factory_02.gd": {},
+    "factory_03.gd": {},
+    "factory_04.gd": {},
+    "factory_05.gd": {},
+    "factory_06.gd": {},
+    "freight_01.gd": {
+      "coal_wagon": 2,
+      "flat_wagon": 2,
+      "buffer_stop": 1
+    },
+    "freight_02.gd": {
+      "flat_wagon": 9
+    },
+    "freight_03.gd": {
+      "flat_wagon": 1,
+      "cable_drum": 19
+    },
+    "freight_04.gd": {
+      "medicine_crate": 17
+    },
+    "freight_05.gd": {
+      "plate_stack": 21,
+      "flat_wagon": 4
+    },
+    "freight_06.gd": {
+      "flat_wagon": 3,
+      "coal_wagon": 2
+    },
+    "hospital_01.gd": {},
+    "hospital_02.gd": {},
+    "hospital_03.gd": {},
+    "hospital_04.gd": {},
+    "hospital_05.gd": {},
+    "hospital_06.gd": {},
+    "houses_01.gd": {
+      "door_pile": 8,
+      "ice_sled_load": 6
+    },
+    "houses_02.gd": {
+      "floor_shell": 5,
+      "stair_stub": 5,
+      "door_pile": 9,
+      "office_cabinet": 2
+    },
+    "houses_03.gd": {
+      "hay_cart": 8,
+      "door_pile": 4,
+      "loom": 26,
+      "cloth_bolt_rack": 28
+    },
+    "houses_04.gd": {
+      "floor_shell": 6,
+      "stair_stub": 6,
+      "cloth_bolt_rack": 6,
+      "office_cabinet": 3,
+      "fuel_drum_stack": 30
+    },
+    "houses_05.gd": {
+      "floor_shell": 2,
+      "stair_stub": 2,
+      "office_cabinet": 16,
+      "lumber_stack": 16,
+      "door_pile": 4
+    },
+    "houses_06.gd": {
+      "pier_deck": 1,
+      "fish_crate_stack": 8,
+      "ice_sled_load": 5,
+      "net_drying_rack": 1,
+      "herb_drying_rack": 26
+    },
+    "lake_01.gd": {
+      "overturned_boat": 2,
+      "net_drying_rack": 2,
+      "fish_trap_stack": 1,
+      "firewood_stack": 3,
+      "pier_deck": 2,
+      "sunken_wheelhouse": 2,
+      "sunken_bow": 2,
+      "sunken_deck_section": 2,
+      "fallen_mast": 1,
+      "fish_crate_stack": 1,
+      "dry_bush": 3,
+      "buoy_line": 3,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1,
+      "fuel_tank": 2
+    },
+    "lake_02.gd": {
+      "overturned_boat": 4,
+      "net_drying_rack": 5,
+      "fish_trap_stack": 4,
+      "firewood_stack": 3,
+      "pier_deck": 1,
+      "sunken_wheelhouse": 3,
+      "sunken_bow": 3,
+      "sunken_deck_section": 3,
+      "fallen_mast": 2,
+      "fish_crate_stack": 1,
+      "dry_bush": 5,
+      "buoy_line": 5,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1,
+      "fuel_tank": 1
+    },
+    "lake_03.gd": {
+      "overturned_boat": 1,
+      "net_drying_rack": 1,
+      "fish_trap_stack": 1,
+      "firewood_stack": 4,
+      "pier_deck": 1,
+      "sunken_wheelhouse": 4,
+      "sunken_bow": 4,
+      "sunken_deck_section": 4,
+      "fallen_mast": 2,
+      "fish_crate_stack": 1,
+      "dry_bush": 2,
+      "buoy_line": 2,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1,
+      "fuel_tank": 1
+    },
+    "lake_04.gd": {
+      "overturned_boat": 3,
+      "net_drying_rack": 4,
+      "fish_trap_stack": 3,
+      "firewood_stack": 2,
+      "pier_deck": 1,
+      "sunken_wheelhouse": 3,
+      "sunken_bow": 3,
+      "sunken_deck_section": 3,
+      "fallen_mast": 2,
+      "fish_crate_stack": 1,
+      "dry_bush": 3,
+      "buoy_line": 4,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 3,
+      "fuel_tank": 1
+    },
+    "lake_05.gd": {
+      "overturned_boat": 2,
+      "net_drying_rack": 2,
+      "fish_trap_stack": 1,
+      "firewood_stack": 3,
+      "pier_deck": 1,
+      "sunken_wheelhouse": 3,
+      "sunken_bow": 3,
+      "sunken_deck_section": 2,
+      "fallen_mast": 2,
+      "fish_crate_stack": 1,
+      "dry_bush": 3,
+      "buoy_line": 3,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1,
+      "fuel_tank": 1
+    },
+    "lake_06.gd": {
+      "overturned_boat": 3,
+      "net_drying_rack": 3,
+      "fish_trap_stack": 3,
+      "firewood_stack": 5,
+      "pier_deck": 1,
+      "sunken_wheelhouse": 2,
+      "sunken_bow": 2,
+      "sunken_deck_section": 2,
+      "fallen_mast": 1,
+      "fish_crate_stack": 1,
+      "dry_bush": 2,
+      "buoy_line": 3,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1,
+      "fuel_tank": 1
+    },
+    "lake_07.gd": {
+      "overturned_boat": 1,
+      "net_drying_rack": 1,
+      "fish_trap_stack": 1,
+      "firewood_stack": 2,
+      "pier_deck": 7,
+      "sunken_wheelhouse": 5,
+      "sunken_bow": 5,
+      "sunken_deck_section": 5,
+      "fallen_mast": 3,
+      "fish_crate_stack": 1,
+      "dry_bush": 2,
+      "buoy_line": 2,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1,
+      "fuel_tank": 1
+    },
+    "lake_08.gd": {
+      "overturned_boat": 2,
+      "net_drying_rack": 2,
+      "fish_trap_stack": 1,
+      "firewood_stack": 2,
+      "pier_deck": 2,
+      "sunken_wheelhouse": 7,
+      "sunken_bow": 7,
+      "sunken_deck_section": 6,
+      "fallen_mast": 4,
+      "fish_crate_stack": 1,
+      "dry_bush": 2,
+      "buoy_line": 3,
+      "shore_ice_heap": 4,
+      "ice_sled_load": 1,
+      "fuel_tank": 1
+    },
+    "lake_09.gd": {
+      "overturned_boat": 3,
+      "net_drying_rack": 3,
+      "fish_trap_stack": 4,
+      "firewood_stack": 3,
+      "pier_deck": 1,
+      "sunken_wheelhouse": 2,
+      "sunken_bow": 2,
+      "sunken_deck_section": 2,
+      "fallen_mast": 1,
+      "fish_crate_stack": 1,
+      "dry_bush": 3,
+      "buoy_line": 3,
+      "shore_ice_heap": 3,
+      "ice_sled_load": 1
+    },
+    "lodge_01.gd": {},
+    "lodge_02.gd": {},
+    "lodge_03.gd": {},
+    "lodge_04.gd": {},
+    "lodge_05.gd": {},
+    "lodge_06.gd": {},
+    "lodge_07.gd": {},
+    "lodge_08.gd": {},
+    "lodge_09.gd": {},
+    "mine_01.gd": {
+      "coal_wagon": 2,
+      "scrap_stack": 3,
+      "sleeper_stack": 3,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 2,
+      "spruce": 4
+    },
+    "mine_02.gd": {
+      "coal_wagon": 2,
+      "scrap_stack": 3,
+      "sleeper_stack": 3,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 2,
+      "spruce": 4
+    },
+    "mine_03.gd": {
+      "coal_wagon": 4,
+      "scrap_stack": 3,
+      "sleeper_stack": 2,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 3,
+      "spruce": 4
+    },
+    "mine_04.gd": {
+      "coal_wagon": 4,
+      "scrap_stack": 3,
+      "sleeper_stack": 2,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 4,
+      "spruce": 4
+    },
+    "mine_05.gd": {
+      "coal_wagon": 2,
+      "scrap_stack": 3,
+      "sleeper_stack": 2,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 1,
+      "spruce": 4
+    },
+    "mine_06.gd": {
+      "coal_wagon": 2,
+      "scrap_stack": 3,
+      "sleeper_stack": 3,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 2,
+      "spruce": 4
+    },
+    "mine_07.gd": {
+      "coal_wagon": 3,
+      "scrap_stack": 3,
+      "sleeper_stack": 2,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 2,
+      "spruce": 4
+    },
+    "mine_08.gd": {
+      "coal_wagon": 2,
+      "scrap_stack": 4,
+      "sleeper_stack": 3,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "spruce": 4
+    },
+    "mine_09.gd": {
+      "coal_wagon": 6,
+      "scrap_stack": 3,
+      "sleeper_stack": 2,
+      "rock_ridge": 2,
+      "vent_pipe": 2,
+      "power_pole": 1,
+      "rail_marker": 1,
+      "buffer_stop": 4,
+      "spruce": 4
+    },
+    "office_01.gd": {
+      "floor_shell": 1,
+      "stair_stub": 1,
+      "cable_drum": 8,
+      "lumber_stack": 1,
+      "battery_rack": 10
+    },
+    "office_02.gd": {},
+    "office_03.gd": {
+      "hose_reel": 27,
+      "axe_rack": 23,
+      "heavy_coat_rack": 23,
+      "lumber_stack": 12,
+      "battery_rack": 2
+    },
+    "office_04.gd": {
+      "floor_shell": 2,
+      "stair_stub": 2,
+      "battery_rack": 18,
+      "cable_drum": 10
+    },
+    "office_05.gd": {
+      "hay_cart": 9,
+      "hose_reel": 9,
+      "ration_ledger_chest": 37,
+      "axe_rack": 8,
+      "heavy_coat_rack": 8
+    },
+    "office_06.gd": {},
+    "sawmill_01.gd": {
+      "firewood_rick": 2,
+      "log_stack_low": 2,
+      "log_scatter": 1,
+      "fuel_tank": 1,
+      "fallen_log": 1
+    },
+    "sawmill_02.gd": {
+      "firewood_rick": 2,
+      "fallen_log": 2,
+      "log_stack_low": 2,
+      "log_scatter": 1,
+      "fuel_tank": 1
+    },
+    "sawmill_03.gd": {
+      "firewood_rick": 2,
+      "log_stack_low": 2,
+      "log_scatter": 1,
+      "fuel_tank": 1,
+      "fallen_log": 1
+    },
+    "sawmill_04.gd": {
+      "log_stack_low": 5,
+      "firewood_rick": 2,
+      "log_scatter": 5,
+      "fuel_tank": 1,
+      "fallen_log": 1
+    },
+    "sawmill_05.gd": {
+      "firewood_rick": 3,
+      "log_stack_low": 5,
+      "log_scatter": 1,
+      "fuel_tank": 1,
+      "fallen_log": 1
+    },
+    "sawmill_06.gd": {
+      "firewood_rick": 2,
+      "fallen_log": 3,
+      "log_stack_low": 2,
+      "log_scatter": 1,
+      "fuel_tank": 1
+    },
+    "sawmill_07.gd": {
+      "log_stack_low": 2,
+      "log_scatter": 1,
+      "fuel_tank": 1,
+      "firewood_rick": 1,
+      "fallen_log": 1
+    },
+    "sawmill_08.gd": {
+      "log_stack_low": 10,
+      "log_scatter": 1,
+      "fuel_tank": 1,
+      "firewood_rick": 1,
+      "fallen_log": 1
+    },
+    "sawmill_09.gd": {
+      "log_stack_low": 2,
+      "log_scatter": 11,
+      "fuel_tank": 1,
+      "firewood_rick": 1,
+      "fallen_log": 1
+    },
+    "summit_01.gd": {
+      "fuel_tank": 1,
+      "sleeper_stack": 2,
+      "fallen_log": 1,
+      "rail_marker": 1,
+      "power_pole": 1,
+      "rock_ridge": 1
+    },
+    "summit_02.gd": {
+      "fuel_tank": 1,
+      "fallen_log": 1,
+      "rail_marker": 1,
+      "power_pole": 1,
+      "rock_ridge": 1,
+      "sleeper_stack": 1
+    },
+    "summit_03.gd": {
+      "fuel_tank": 1,
+      "sleeper_stack": 2,
+      "fallen_log": 1,
+      "rail_marker": 1,
+      "power_pole": 1,
+      "rock_ridge": 1
+    },
+    "summit_04.gd": {
+      "fuel_tank": 1,
+      "fallen_log": 1,
+      "sleeper_stack": 1,
+      "rail_marker": 1,
+      "power_pole": 1,
+      "rock_ridge": 1
+    },
+    "summit_05.gd": {
+      "fuel_tank": 1,
+      "sleeper_stack": 1,
+      "rail_marker": 1,
+      "power_pole": 1,
+      "rock_ridge": 1,
+      "fallen_log": 1
+    }
+  },
+  "map_triangle_estimate": {
+    "method": "literal rect dictionaries × generated triangles; B only; no runtime claim",
+    "map_files": 80,
+    "max_map": "office_03.gd",
+    "max_triangles": 16884,
+    "per_map_triangles": {
+      "bare_line_01.gd": 1628,
+      "bare_line_02.gd": 1628,
+      "bare_line_03.gd": 1628,
+      "church_01.gd": 138,
+      "church_02.gd": 852,
+      "church_03.gd": 2110,
+      "church_04.gd": 1986,
+      "church_05.gd": 276,
+      "church_06.gd": 276,
+      "factory_01.gd": 0,
+      "factory_02.gd": 0,
+      "factory_03.gd": 0,
+      "factory_04.gd": 0,
+      "factory_05.gd": 0,
+      "factory_06.gd": 0,
+      "freight_01.gd": 1540,
+      "freight_02.gd": 2880,
+      "freight_03.gd": 4044,
+      "freight_04.gd": 1224,
+      "freight_05.gd": 3548,
+      "freight_06.gd": 1732,
+      "hospital_01.gd": 0,
+      "hospital_02.gd": 0,
+      "hospital_03.gd": 0,
+      "hospital_04.gd": 0,
+      "hospital_05.gd": 0,
+      "hospital_06.gd": 0,
+      "houses_01.gd": 1800,
+      "houses_02.gd": 2052,
+      "houses_03.gd": 14680,
+      "houses_04.gd": 15480,
+      "houses_05.gd": 4848,
+      "houses_06.gd": 9108,
+      "lake_01.gd": 5464,
+      "lake_02.gd": 8868,
+      "lake_03.gd": 5348,
+      "lake_04.gd": 7436,
+      "lake_05.gd": 5292,
+      "lake_06.gd": 6724,
+      "lake_07.gd": 6528,
+      "lake_08.gd": 6840,
+      "lake_09.gd": 6864,
+      "lodge_01.gd": 0,
+      "lodge_02.gd": 0,
+      "lodge_03.gd": 0,
+      "lodge_04.gd": 0,
+      "lodge_05.gd": 0,
+      "lodge_06.gd": 0,
+      "lodge_07.gd": 0,
+      "lodge_08.gd": 0,
+      "lodge_09.gd": 0,
+      "mine_01.gd": 3416,
+      "mine_02.gd": 3416,
+      "mine_03.gd": 4172,
+      "mine_04.gd": 4300,
+      "mine_05.gd": 3144,
+      "mine_06.gd": 3416,
+      "mine_07.gd": 3658,
+      "mine_08.gd": 3272,
+      "mine_09.gd": 5072,
+      "office_01.gd": 4532,
+      "office_02.gd": 0,
+      "office_03.gd": 16884,
+      "office_04.gd": 7000,
+      "office_05.gd": 10104,
+      "office_06.gd": 0,
+      "sawmill_01.gd": 1196,
+      "sawmill_02.gd": 1256,
+      "sawmill_03.gd": 1196,
+      "sawmill_04.gd": 2096,
+      "sawmill_05.gd": 2024,
+      "sawmill_06.gd": 1316,
+      "sawmill_07.gd": 980,
+      "sawmill_08.gd": 2612,
+      "sawmill_09.gd": 1700,
+      "summit_01.gd": 936,
+      "summit_02.gd": 792,
+      "summit_03.gd": 936,
+      "summit_04.gd": 792,
+      "summit_05.gd": 792
+    }
+  }
+}

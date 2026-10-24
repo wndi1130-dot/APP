@@ -175,11 +175,11 @@ func test_run_and_pause_on_the_left_crouch_with_the_fighting_keys_on_the_right()
 	for b in hud.pads:
 		# The state icons moved to the right edge (build 89); they tell, they are not keys to fight with.
 		# The settings gear sits top right too, and only while paused.
-		if b.get_global_rect().position.x > half and b != hud.manual_button and b != hud.settings_button and not hud.status_pads.has(b):
+		# The top band (the orders' lever and drawer, user 2026-10-18) is not the right thumb's.
+		if b.get_global_rect().position.x > half and b.get_global_rect().position.y > view.y * 0.5 and b != hud.manual_button and b != hud.settings_button and not hud.status_pads.has(b):
 			right.append(b)
 	# Leaving got a pad of its own, over the situation pad and only by the train
 	# (it was a row of the situation list, hidden behind a hold when a body lay near).
-	# 'All aboard' went up to the top middle under the radio (시안 2차 .fall).
 	assert_eq(right.size(), 6, "aim, attack, shove, crouch, situation, leaving")
 	assert_false(hud.depart_button.get_global_rect().intersects(hud.context_button.get_global_rect()))
 	assert_false(hud.depart_button.get_global_rect().intersects(hud.shove_button.get_global_rect()))

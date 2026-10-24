@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const SliceFlow = preload("res://game/slice_flow.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const Boot = preload("res://game/boot.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _flow(extra: Dictionary = {}):
@@ -101,7 +102,7 @@ func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
 	f.next()
 	assert_eq(f.current(), "field")
 	assert_not_null(f.field)
-	assert_eq(f.field.hud.promise_label.text, "약속: 서막 2명 데려오기", "the field goes out with the sample departure")
+	assert_eq(f.field.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 서막 2명 데려오기", "the field goes out with the sample departure")
 	assert_false(f.panel.visible, "nothing over the stop while it is played")
 	assert_false(f.weather.visible or f.film.visible, "the field brings its own weather")
 	f.field.set_process(false)

@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## Touch rules on the field HUD (headless).
 
 const FieldGame = preload("res://game/field_game.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 var game
 
@@ -177,7 +178,7 @@ func _clear_toasts() -> void:
 func _toast_texts() -> Array[String]:
 	var out: Array[String] = []
 	for t in game.hud.toasts:
-		out.append(t["l"].text)
+		out.append(t["l"].text.replace(UiFonts.WORD_JOINER, ""))
 	return out
 
 

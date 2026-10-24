@@ -1,0 +1,3832 @@
+{
+  "version": 1,
+  "generator": "tools/blender/props_field_d.py",
+  "blender": "4.5.10 LTS",
+  "axis": "X right, +Y up, +Z front",
+  "origin": "footprint_center_floor",
+  "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+  "palette": {
+    "wood": [
+      0.24,
+      0.17,
+      0.11,
+      1.0
+    ],
+    "worn_wood": [
+      0.38,
+      0.29,
+      0.19,
+      1.0
+    ],
+    "iron": [
+      0.12,
+      0.15,
+      0.17,
+      1.0
+    ],
+    "worn_metal": [
+      0.28,
+      0.32,
+      0.33,
+      1.0
+    ],
+    "cloth": [
+      0.43,
+      0.41,
+      0.31,
+      1.0
+    ],
+    "enamel": [
+      0.68,
+      0.7,
+      0.66,
+      1.0
+    ],
+    "snow": [
+      0.82,
+      0.88,
+      0.91,
+      1.0
+    ],
+    "bark": [
+      0.19,
+      0.16,
+      0.13,
+      1.0
+    ],
+    "rust": [
+      0.31,
+      0.16,
+      0.095,
+      1.0
+    ],
+    "glass": [
+      0.16,
+      0.27,
+      0.31,
+      1.0
+    ],
+    "rubber": [
+      0.035,
+      0.045,
+      0.05,
+      1.0
+    ],
+    "stone": [
+      0.33,
+      0.35,
+      0.36,
+      1.0
+    ]
+  },
+  "colour_encoding": "linear RGBA vertex Col, alpha 1",
+  "triangle_limit": 600,
+  "expected_kinds": [
+    "rubble_pile",
+    "service_counter",
+    "skidder",
+    "support_frame",
+    "bark_heap",
+    "cleaning_table",
+    "debarker",
+    "drying_rack",
+    "fish_hoist",
+    "fishing_platform",
+    "flat_trailer",
+    "fuel_drum_group",
+    "log_carriage",
+    "log_cart",
+    "log_conveyor",
+    "oil_drum",
+    "ore_cart_tipped",
+    "ore_truck",
+    "pickup_truck",
+    "planer",
+    "rubbish_pile",
+    "sawdust_bin",
+    "sawdust_pile",
+    "sawhorse",
+    "sleeper_pile",
+    "weigh_scale",
+    "arcade_column",
+    "farm_cart",
+    "fish_truck",
+    "garden_rack",
+    "grave_plot",
+    "ice_saw_frame",
+    "ladder_rack",
+    "repair_lumber",
+    "signal_post",
+    "tender_wagon",
+    "anvil_block",
+    "box_wagon",
+    "city_bus",
+    "cooking_pot",
+    "dough_table",
+    "grave_slab",
+    "parish_chest",
+    "reed_bundle",
+    "altar_table",
+    "bell_frame",
+    "bell_rope",
+    "cloister_post",
+    "fallen_signal",
+    "high_rack",
+    "meeting_table",
+    "old_coach",
+    "plow_blade",
+    "pulpit",
+    "snowplow_truck",
+    "wire_coil",
+    "blanket_screen",
+    "boulder",
+    "butcher_block",
+    "courtyard_planter"
+  ],
+  "input_sha256": "2a8324756db4e907e2472143f7fe6e062eed7fd1b7e4a0f856bc08230a1acffe",
+  "assets": {
+    "rubble_pile": {
+      "status": "ready",
+      "path": "res://models/props_field/rubble_pile.glb",
+      "count": 10,
+      "maps": 9,
+      "solid": {
+        "low": 10
+      },
+      "facing": {
+        "0": 10
+      },
+      "map_families": [
+        "mine"
+      ],
+      "footprint_m": [
+        4,
+        3
+      ],
+      "height_m": 0.85,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 10,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -1.44
+        ],
+        [
+          1.92,
+          0.85,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        0.85,
+        2.88
+      ],
+      "lod0_tris": 182,
+      "triangle_limit": 600,
+      "bytes": 16892,
+      "sha256": "22259620231325e4d6fdc863411debb113c301221b11e8300a304a4055c4c4a8",
+      "colours": [
+        "stone",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "광산의 각진 돌·벽돌 잔해, low 높이"
+    },
+    "service_counter": {
+      "status": "ready",
+      "path": "res://models/props_field/service_counter.glb",
+      "count": 10,
+      "maps": 5,
+      "solid": {
+        "low": 6,
+        "none": 4
+      },
+      "facing": {
+        "1": 4,
+        "0": 3,
+        "3": 2,
+        "2": 1
+      },
+      "map_families": [
+        "office"
+      ],
+      "footprint_m": [
+        4,
+        1
+      ],
+      "height_m": 1.05,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 10,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.48
+        ],
+        [
+          1.92,
+          1.05,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        1.05,
+        0.96
+      ],
+      "lod0_tris": 116,
+      "triangle_limit": 600,
+      "bytes": 9016,
+      "sha256": "b8d526bfc1bc24336b9581f08f11cac0389957126c326631cda4707062c9f612",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "창구 상판·서랍·발받침, low 우세여서 none 배치도 같은 높이"
+    },
+    "skidder": {
+      "status": "ready",
+      "path": "res://models/props_field/skidder.glb",
+      "count": 10,
+      "maps": 9,
+      "solid": {
+        "low": 10
+      },
+      "facing": {
+        "0": 10
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        5,
+        3
+      ],
+      "height_m": 1.3,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 10,
+      "bounds_m": [
+        [
+          -0.9792,
+          0.0,
+          -1.44
+        ],
+        [
+          0.9792,
+          1.3,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        1.9584,
+        1.3,
+        2.88
+      ],
+      "lod0_tris": 396,
+      "triangle_limit": 600,
+      "bytes": 27192,
+      "sha256": "988ea1461078c0aac741b4ead587c925603414521465507d1f15636a46c3eb91",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "제재소 집재차의 큰 바퀴·윈치·열린 운전석을 낮게 압축"
+    },
+    "support_frame": {
+      "status": "ready",
+      "path": "res://models/props_field/support_frame.glb",
+      "count": 10,
+      "maps": 9,
+      "solid": {
+        "none": 10
+      },
+      "facing": {
+        "0": 10
+      },
+      "map_families": [
+        "mine"
+      ],
+      "footprint_m": [
+        3,
+        1
+      ],
+      "height_m": 2.35,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.48
+        ],
+        [
+          1.44,
+          2.35,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        2.35,
+        0.96
+      ],
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "bytes": 5216,
+      "sha256": "5f8da315c89d3f9a1af3568b720271448383842484200306986dc8bf8a3c8f4c",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "갱도 목재 지지틀 뜻을 우선해 none 높이 예외; 가운데 통과 공간"
+    },
+    "bark_heap": {
+      "status": "ready",
+      "path": "res://models/props_field/bark_heap.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "none": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 0.38,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          0.38,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        0.38,
+        1.92
+      ],
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bytes": 9408,
+      "sha256": "1798c4cd8f5c9a793f9fb16892b07aae19b6d4512d225ccbe67abe13a842947b",
+      "colours": [
+        "bark",
+        "snow"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "제재소 나무껍질 조각을 낮게 쌓음"
+    },
+    "cleaning_table": {
+      "status": "ready",
+      "path": "res://models/props_field/cleaning_table.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        4,
+        2
+      ],
+      "height_m": 0.9,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.96
+        ],
+        [
+          1.92,
+          0.9,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        0.9,
+        1.92
+      ],
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bytes": 9420,
+      "sha256": "ae2d554c5511473daf401910bfb5180725ab823161714283b566393230591b52",
+      "colours": [
+        "enamel",
+        "wood",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "호수 손질대의 씻는 판·작은 배수 홈·받침"
+    },
+    "debarker": {
+      "status": "ready",
+      "path": "res://models/props_field/debarker.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        5,
+        3
+      ],
+      "height_m": 1.25,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -2.4,
+          0.0,
+          -1.44
+        ],
+        [
+          2.4,
+          1.25,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        4.8,
+        1.25,
+        2.88
+      ],
+      "lod0_tris": 276,
+      "triangle_limit": 600,
+      "bytes": 19292,
+      "sha256": "bcd22c4ecabcedf06124fd09f5037a91d4510cb7e91d9ae467af55e33be6f803",
+      "colours": [
+        "iron",
+        "rust",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "박피기의 원형 투입구·톱니 없는 롤러·받침"
+    },
+    "drying_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/drying_rack.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        6,
+        3
+      ],
+      "height_m": 1.25,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -2.88,
+          0.0,
+          -1.44
+        ],
+        [
+          2.88,
+          1.25,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        5.76,
+        1.25,
+        2.88
+      ],
+      "lod0_tris": 144,
+      "triangle_limit": 600,
+      "bytes": 11076,
+      "sha256": "731a2024759719d2a210663dbb4ce1431f3bfd207748cb76f65c18aed72a2a7b",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "널빤지 건조 선반의 열린 세 단 구조"
+    },
+    "fish_hoist": {
+      "status": "ready",
+      "path": "res://models/props_field/fish_hoist.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "wall": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        3,
+        3
+      ],
+      "height_m": 2.7,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -1.44
+        ],
+        [
+          1.44,
+          2.7,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        2.7,
+        2.88
+      ],
+      "lod0_tris": 140,
+      "triangle_limit": 600,
+      "bytes": 10296,
+      "sha256": "73e3b4c9e548b2daad6b1a29b3a22454c37752fdf39df40373a64146e4fe84a5",
+      "colours": [
+        "cloth",
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "어망 인양용 A자 틀·권양 드럼·밧줄, wall 높이"
+    },
+    "fishing_platform": {
+      "status": "ready",
+      "path": "res://models/props_field/fishing_platform.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "none": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        24,
+        14
+      ],
+      "height_m": 0.3,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 3,
+      "bounds_m": [
+        [
+          -11.52,
+          0.0,
+          -6.72
+        ],
+        [
+          11.52,
+          0.3,
+          6.72
+        ]
+      ],
+      "dimensions_m": [
+        23.04,
+        0.3,
+        13.44
+      ],
+      "lod0_tris": 204,
+      "triangle_limit": 600,
+      "bytes": 15304,
+      "sha256": "00a0147edb274d0158e8891466222336a617db84557809a9e652bf4e3dc787fc",
+      "colours": [
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "넓고 평평한 나무 작업 발판, 난간·승선 시설 없음"
+    },
+    "flat_trailer": {
+      "status": "ready",
+      "path": "res://models/props_field/flat_trailer.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        8,
+        3
+      ],
+      "height_m": 0.95,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -3.84,
+          0.0,
+          -1.44
+        ],
+        [
+          3.84,
+          0.95,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        7.68,
+        0.95,
+        2.88
+      ],
+      "lod0_tris": 248,
+      "triangle_limit": 600,
+      "bytes": 17096,
+      "sha256": "93db8d13d447f53e98e09744e920a8ce91be78a6b15c508ec84078aa1e2bce79",
+      "colours": [
+        "iron",
+        "rubber",
+        "snow",
+        "wood",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "낮은 빈 평판 화물 트레일러와 바퀴·견인봉"
+    },
+    "fuel_drum_group": {
+      "status": "ready",
+      "path": "res://models/props_field/fuel_drum_group.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.1,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.1,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.1,
+        1.92
+      ],
+      "lod0_tris": 564,
+      "triangle_limit": 600,
+      "bytes": 36284,
+      "sha256": "5b2dd2ebc11c80ad159f8b2458f1cae1c43fbccc201b3345a9dd39accbc986e8",
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "뚜껑 닫힌 무표식 연료 드럼 세 개"
+    },
+    "log_carriage": {
+      "status": "ready",
+      "path": "res://models/props_field/log_carriage.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        6,
+        2
+      ],
+      "height_m": 1.15,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -2.88,
+          0.0,
+          -0.96
+        ],
+        [
+          2.88,
+          1.15,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        5.76,
+        1.15,
+        1.92
+      ],
+      "lod0_tris": 316,
+      "triangle_limit": 600,
+      "bytes": 21344,
+      "sha256": "d3bbcd61c1592c0f9321d68c5b8c8a06eccb400769627c4006ffab96246291c4",
+      "colours": [
+        "bark",
+        "iron",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "통나무를 싣는 레일 대차의 받침과 목재 한 개"
+    },
+    "log_cart": {
+      "status": "ready",
+      "path": "res://models/props_field/log_cart.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        4,
+        2
+      ],
+      "height_m": 1.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.96
+        ],
+        [
+          1.92,
+          1.2,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        1.2,
+        1.92
+      ],
+      "lod0_tris": 372,
+      "triangle_limit": 600,
+      "bytes": 24748,
+      "sha256": "b110df7e4494b45481217a2514b3cc697051c043b56de9bc5b87df7468c9dac5",
+      "colours": [
+        "bark",
+        "iron",
+        "rubber",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "바퀴 달린 작은 원목 수레, 원목 두 개"
+    },
+    "log_conveyor": {
+      "status": "ready",
+      "path": "res://models/props_field/log_conveyor.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        8,
+        1
+      ],
+      "height_m": 1.05,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -3.84,
+          0.0,
+          -0.48
+        ],
+        [
+          3.84,
+          1.05,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        7.68,
+        1.05,
+        0.96
+      ],
+      "lod0_tris": 296,
+      "triangle_limit": 600,
+      "bytes": 19696,
+      "sha256": "bda6f4140ba54f07a03649d0067e928f83ad36bd9514f77bb18b1073a8aa0e0b",
+      "colours": [
+        "iron",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "연속 롤러가 드러나는 낮은 원목 이송대"
+    },
+    "oil_drum": {
+      "status": "ready",
+      "path": "res://models/props_field/oil_drum.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.9,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          0.9,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.9,
+        0.96
+      ],
+      "lod0_tris": 188,
+      "triangle_limit": 600,
+      "bytes": 12768,
+      "sha256": "447527d7826853a381fa152ddbd00903cb0dfd83c15cb5daff95d603806a896a",
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "철제 기름통의 두 테·작은 마개, 무표식"
+    },
+    "ore_cart_tipped": {
+      "status": "ready",
+      "path": "res://models/props_field/ore_cart_tipped.glb",
+      "count": 9,
+      "maps": 8,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "mine"
+      ],
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.1,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.1,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.1,
+        1.92
+      ],
+      "lod0_tris": 272,
+      "triangle_limit": 600,
+      "bytes": 18784,
+      "sha256": "557b35e85227bc4d40c3bd63d99fc15a93550fea38a6e25eed1ee83e228fdf15",
+      "colours": [
+        "iron",
+        "rust",
+        "wood",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "옆으로 기운 빈 광차와 노출된 바퀴"
+    },
+    "ore_truck": {
+      "status": "ready",
+      "path": "res://models/props_field/ore_truck.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "wall": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "mine"
+      ],
+      "footprint_m": [
+        6,
+        3
+      ],
+      "height_m": 2.65,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.9792,
+          0.0,
+          -1.44
+        ],
+        [
+          0.9792,
+          2.65,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        1.9584,
+        2.65,
+        2.88
+      ],
+      "lod0_tris": 392,
+      "triangle_limit": 600,
+      "bytes": 27172,
+      "sha256": "4d581da330e51b8c81920abf28c40dcccc780069b78196884ed18be30ae49b61",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "광산 덤프트럭의 높은 적재함·유리 운전실, wall"
+    },
+    "pickup_truck": {
+      "status": "ready",
+      "path": "res://models/props_field/pickup_truck.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        5,
+        2
+      ],
+      "height_m": 1.3,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.6528,
+          0.0,
+          -0.96
+        ],
+        [
+          0.6528,
+          1.3,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.3056,
+        1.3,
+        1.92
+      ],
+      "lod0_tris": 392,
+      "triangle_limit": 600,
+      "bytes": 27180,
+      "sha256": "18f83ca9d5c350ab170ee34484207cef5332688b89f89fd2f9946e72e1de6612",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "눈 덮인 소형 픽업의 열린 적재함, low에 맞춘 높이"
+    },
+    "planer": {
+      "status": "ready",
+      "path": "res://models/props_field/planer.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 1.05,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          1.05,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.05,
+        1.92
+      ],
+      "lod0_tris": 236,
+      "triangle_limit": 600,
+      "bytes": 16248,
+      "sha256": "06b925a970808ce3419d223f1e0a0f053e6e4564aad0b55eb5329fe97609d4ee",
+      "colours": [
+        "enamel",
+        "iron",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "대패 기계의 투입판·보호 덮개·회전 손잡이"
+    },
+    "rubbish_pile": {
+      "status": "ready",
+      "path": "res://models/props_field/rubbish_pile.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "none": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.3,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.48
+        ],
+        [
+          0.96,
+          0.3,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.3,
+        0.96
+      ],
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "bytes": 7740,
+      "sha256": "c4394a65e4cd427d339ce21ee5fbdfc733be909e0b7d8d85c39056eb1f5b9ee1",
+      "colours": [
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "쏟아진 쓰레기는 판재·금속 조각만; 가방·신발·옷 없음"
+    },
+    "sawdust_bin": {
+      "status": "ready",
+      "path": "res://models/props_field/sawdust_bin.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 1.1,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          1.1,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.1,
+        1.92
+      ],
+      "lod0_tris": 98,
+      "triangle_limit": 600,
+      "bytes": 8448,
+      "sha256": "6d9884ea4c97d8a6db3db386cfd76a695ed113fbf6bce8beedaa111c8304db9a",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "열린 나무 통 안에 톱밥이 담긴 설비"
+    },
+    "sawdust_pile": {
+      "status": "ready",
+      "path": "res://models/props_field/sawdust_pile.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        3,
+        3
+      ],
+      "height_m": 0.8,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -1.44
+        ],
+        [
+          1.44,
+          0.8,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        0.8,
+        2.88
+      ],
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "bytes": 8300,
+      "sha256": "ecc1dd154974045e97e34a496cc3413badd325df181b8a2c53f3db040f8498ea",
+      "colours": [
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "잘게 부서진 목재색 톱밥 언덕과 옅은 눈"
+    },
+    "sawhorse": {
+      "status": "ready",
+      "path": "res://models/props_field/sawhorse.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "sawmill"
+      ],
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.85,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.48
+        ],
+        [
+          0.96,
+          0.85,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.85,
+        0.96
+      ],
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "bytes": 5208,
+      "sha256": "e5935020fdef4d65041989fe424179498e99664b146121d94380868d4421b597",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "목공용 A자 다리 두 쌍과 긴 가로보"
+    },
+    "sleeper_pile": {
+      "status": "ready",
+      "path": "res://models/props_field/sleeper_pile.glb",
+      "count": 9,
+      "maps": 6,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "freight"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 0.8,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          0.8,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        0.8,
+        1.92
+      ],
+      "lod0_tris": 132,
+      "triangle_limit": 600,
+      "bytes": 10252,
+      "sha256": "8662a03c55308d6406c3cabbc1008e66168313e11d52aa634647f5f629bf1c09",
+      "colours": [
+        "snow",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "철도 침목 두 층을 교차해 쌓은 낮은 더미"
+    },
+    "weigh_scale": {
+      "status": "ready",
+      "path": "res://models/props_field/weigh_scale.glb",
+      "count": 9,
+      "maps": 9,
+      "solid": {
+        "low": 9
+      },
+      "facing": {
+        "0": 9
+      },
+      "map_families": [
+        "mine"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 1.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 9,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          1.2,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.2,
+        1.92
+      ],
+      "lod0_tris": 80,
+      "triangle_limit": 600,
+      "bytes": 6484,
+      "sha256": "76bb2fd876a46a5bbf7faacdfa0c30f67bc1f900f7129cf20825622f60bdeb22",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "광산 바닥 저울의 넓은 계량판·기계식 눈금판"
+    },
+    "arcade_column": {
+      "status": "ready",
+      "path": "res://models/props_field/arcade_column.glb",
+      "count": 8,
+      "maps": 1,
+      "solid": {
+        "wall": 8
+      },
+      "facing": {
+        "0": 4,
+        "3": 4
+      },
+      "map_families": [
+        "office"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 3.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          3.2,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        3.2,
+        0.96
+      ],
+      "lod0_tris": 48,
+      "triangle_limit": 600,
+      "bytes": 4376,
+      "sha256": "ee0eb580a9e6fa4b2d8bb88309def30417493b27af926c898188ed5d8f3affbf",
+      "colours": [
+        "snow",
+        "stone",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "회랑의 각진 석주·기단·주두, wall 높이"
+    },
+    "farm_cart": {
+      "status": "ready",
+      "path": "res://models/props_field/farm_cart.glb",
+      "count": 8,
+      "maps": 5,
+      "solid": {
+        "low": 8
+      },
+      "facing": {
+        "0": 7,
+        "2": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        4,
+        2
+      ],
+      "height_m": 1.1,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 5,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.96
+        ],
+        [
+          1.92,
+          1.1,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        1.1,
+        1.92
+      ],
+      "lod0_tris": 296,
+      "triangle_limit": 600,
+      "bytes": 20452,
+      "sha256": "33d92484ef0298c038303593b1fbb98516d4fc8d12ea46a4151fa21d828a1502",
+      "colours": [
+        "iron",
+        "rubber",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "목재 짐수레의 열린 적재칸·두 바퀴·긴 끌채"
+    },
+    "fish_truck": {
+      "status": "ready",
+      "path": "res://models/props_field/fish_truck.glb",
+      "count": 8,
+      "maps": 6,
+      "solid": {
+        "wall": 8
+      },
+      "facing": {
+        "0": 8
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        6,
+        3
+      ],
+      "height_m": 2.45,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -0.9792,
+          0.0,
+          -1.44
+        ],
+        [
+          0.9792,
+          2.45,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        1.9584,
+        2.45,
+        2.88
+      ],
+      "lod0_tris": 392,
+      "triangle_limit": 600,
+      "bytes": 27172,
+      "sha256": "fff63ba9e8374b657d430428c7f50dff70af62dfab6f80e3d9ad9c23235a4dce",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "생선 운반용 무표식 냉장 화물차, 유리창·빈 적재함"
+    },
+    "garden_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/garden_rack.glb",
+      "count": 8,
+      "maps": 2,
+      "solid": {
+        "low": 8
+      },
+      "facing": {
+        "1": 4,
+        "0": 2,
+        "3": 2
+      },
+      "map_families": [
+        "houses"
+      ],
+      "footprint_m": [
+        3,
+        1
+      ],
+      "height_m": 1.15,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.48
+        ],
+        [
+          1.44,
+          1.15,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.15,
+        0.96
+      ],
+      "lod0_tris": 176,
+      "triangle_limit": 600,
+      "bytes": 13336,
+      "sha256": "4a41c44b89c5e78d4a2124165a4e4fc4ddcf2765d287f6f46145467c5654a027",
+      "colours": [
+        "bark",
+        "iron",
+        "rust",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "정원용 낮은 선반에 빈 화분 두 개와 막대 도구"
+    },
+    "grave_plot": {
+      "status": "ready",
+      "path": "res://models/props_field/grave_plot.glb",
+      "count": 8,
+      "maps": 2,
+      "solid": {
+        "low": 8
+      },
+      "facing": {
+        "0": 3,
+        "2": 2,
+        "3": 2,
+        "1": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        4,
+        3
+      ],
+      "height_m": 0.85,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -1.44
+        ],
+        [
+          1.92,
+          0.85,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        0.85,
+        2.88
+      ],
+      "lod0_tris": 92,
+      "triangle_limit": 600,
+      "bytes": 7580,
+      "sha256": "4e6606ad40c6bca809c08c6b7e769d8ccf8d84e66efb931e39c0c970637545ef",
+      "colours": [
+        "snow",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "낮은 묘역 테두리·비문 없는 둥근 묘비, 번호·대기 칸 없음"
+    },
+    "ice_saw_frame": {
+      "status": "ready",
+      "path": "res://models/props_field/ice_saw_frame.glb",
+      "count": 8,
+      "maps": 8,
+      "solid": {
+        "low": 8
+      },
+      "facing": {
+        "0": 8
+      },
+      "map_families": [
+        "lake"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 1.1,
+      "footprint_source": "s2/game/world/maps/lake_*.gd (Rect2i)",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          1.1,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.1,
+        1.92
+      ],
+      "lod0_tris": 118,
+      "triangle_limit": 600,
+      "bytes": 9596,
+      "sha256": "6db717addb0ffbf205f01766e42906e432d536f3c5027647bcb3a203ceada4e8",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "얼음톱의 사각 틀·손잡이·아래쪽 짧은 톱날"
+    },
+    "ladder_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/ladder_rack.glb",
+      "count": 8,
+      "maps": 6,
+      "solid": {
+        "low": 8
+      },
+      "facing": {
+        "0": 7,
+        "2": 1
+      },
+      "map_families": [
+        "office",
+        "summit"
+      ],
+      "footprint_m": [
+        4,
+        1
+      ],
+      "height_m": 1.15,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.48
+        ],
+        [
+          1.92,
+          1.15,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        1.15,
+        0.96
+      ],
+      "lod0_tris": 168,
+      "triangle_limit": 600,
+      "bytes": 12780,
+      "sha256": "81abb3a4cabd315b88d746f5e667fbd81348c99e64ddee20f3645c19c499a633",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "사다리를 가로로 받치는 낮은 거치대"
+    },
+    "repair_lumber": {
+      "status": "ready",
+      "path": "res://models/props_field/repair_lumber.glb",
+      "count": 8,
+      "maps": 2,
+      "solid": {
+        "low": 8
+      },
+      "facing": {
+        "0": 5,
+        "1": 2,
+        "2": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        4,
+        2
+      ],
+      "height_m": 0.55,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.96
+        ],
+        [
+          1.92,
+          0.55,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        0.55,
+        1.92
+      ],
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "bytes": 8576,
+      "sha256": "65cac5c4a347ef91b1655dbf1a56998eb5942f247218f155876d3e06831c0f97",
+      "colours": [
+        "snow",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "수리용 널빤지 묶음과 목재 받침"
+    },
+    "signal_post": {
+      "status": "ready",
+      "path": "res://models/props_field/signal_post.glb",
+      "count": 8,
+      "maps": 8,
+      "solid": {
+        "wall": 8
+      },
+      "facing": {
+        "0": 8
+      },
+      "map_families": [
+        "bare_line",
+        "summit"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 3.1,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 8,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          3.1,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        3.1,
+        0.96
+      ],
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bytes": 8652,
+      "sha256": "0b71d3c1941cbb64739d722393d810724a3f4070b3294a2bbff4f296b1794ad3",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "rust",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "철도 신호 기둥·무광 원판·수평 신호팔, 발광 없음"
+    },
+    "tender_wagon": {
+      "status": "ready",
+      "path": "res://models/props_field/tender_wagon.glb",
+      "count": 8,
+      "maps": 2,
+      "solid": {
+        "wagon": 8
+      },
+      "facing": {
+        "1": 7,
+        "0": 1
+      },
+      "map_families": [
+        "freight"
+      ],
+      "footprint_m": [
+        3,
+        11
+      ],
+      "height_m": 2.8,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -5.28
+        ],
+        [
+          1.44,
+          2.8,
+          5.28
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        2.8,
+        10.56
+      ],
+      "lod0_tris": 402,
+      "triangle_limit": 600,
+      "bytes": 28964,
+      "sha256": "2dba5fc439f157c7380b17e396434329cae66bcd3f6452d11fd34abadda92ce3",
+      "colours": [
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "wagon은 탄수차로 해석; 석탄 칸·물 탱크, 사람 탑승 자리 없음"
+    },
+    "anvil_block": {
+      "status": "ready",
+      "path": "res://models/props_field/anvil_block.glb",
+      "count": 7,
+      "maps": 2,
+      "solid": {
+        "low": 7
+      },
+      "facing": {
+        "1": 4,
+        "0": 3
+      },
+      "map_families": [
+        "church",
+        "houses"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.85,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          0.85,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.85,
+        0.96
+      ],
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "bytes": 7028,
+      "sha256": "be56124b74ce7553b25c3c545a5f418cfd95de0956335c00ca2c5f846eec7b6b",
+      "colours": [
+        "bark",
+        "iron",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "나무 받침 위 모루의 뿔·허리·평평한 타격면"
+    },
+    "box_wagon": {
+      "status": "ready",
+      "path": "res://models/props_field/box_wagon.glb",
+      "count": 7,
+      "maps": 2,
+      "solid": {
+        "wagon": 7
+      },
+      "facing": {
+        "1": 6,
+        "0": 1
+      },
+      "map_families": [
+        "freight"
+      ],
+      "footprint_m": [
+        3,
+        11
+      ],
+      "height_m": 3.1,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -5.28
+        ],
+        [
+          1.44,
+          3.1,
+          5.28
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        3.1,
+        10.56
+      ],
+      "lod0_tris": 392,
+      "triangle_limit": 600,
+      "bytes": 27168,
+      "sha256": "a9889a2bd7ade702930855fbf5a6fb5c2af5619638ba2df547f78cbf3e204115",
+      "colours": [
+        "iron",
+        "snow",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "wagon은 빈 유개 화차; 양옆 문을 처음부터 옆으로 열어 둠"
+    },
+    "city_bus": {
+      "status": "ready",
+      "path": "res://models/props_field/city_bus.glb",
+      "count": 7,
+      "maps": 1,
+      "solid": {
+        "wall": 7
+      },
+      "facing": {
+        "2": 2,
+        "3": 2,
+        "0": 2,
+        "1": 1
+      },
+      "map_families": [
+        "office"
+      ],
+      "footprint_m": [
+        10,
+        3
+      ],
+      "height_m": 1.8,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 4,
+      "bounds_m": [
+        [
+          -0.7488,
+          0.0,
+          -1.44
+        ],
+        [
+          0.7488,
+          1.8,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        1.4976,
+        1.8,
+        2.88
+      ],
+      "lod0_tris": 572,
+      "triangle_limit": 600,
+      "bytes": 39776,
+      "sha256": "7de5f175554f0d46ef6b9019618447b7b91cdba0ea82341e887a6031733d7a5c",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "시내버스·유리창·열린 출입구, 짧은 rect 깊이에 맞춰 폭도 축소"
+    },
+    "cooking_pot": {
+      "status": "ready",
+      "path": "res://models/props_field/cooking_pot.glb",
+      "count": 7,
+      "maps": 2,
+      "solid": {
+        "low": 7
+      },
+      "facing": {
+        "1": 6,
+        "2": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 0.75,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          0.75,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.75,
+        1.92
+      ],
+      "lod0_tris": 184,
+      "triangle_limit": 600,
+      "bytes": 12860,
+      "sha256": "b9b98e9b26ccb998135ef46b911bd36187ad495635a179f80acc6022e16bbf4a",
+      "colours": [
+        "bark",
+        "iron",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "뚜껑과 두 손잡이를 단 큰 조리솥, 불·연기 없음"
+    },
+    "dough_table": {
+      "status": "ready",
+      "path": "res://models/props_field/dough_table.glb",
+      "count": 7,
+      "maps": 3,
+      "solid": {
+        "low": 7
+      },
+      "facing": {
+        "1": 4,
+        "2": 2,
+        "0": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.85,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.48
+        ],
+        [
+          0.96,
+          0.85,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.85,
+        0.96
+      ],
+      "lod0_tris": 112,
+      "triangle_limit": 600,
+      "bytes": 8600,
+      "sha256": "5c836ed153d4726cb94768755177e0fede7a017db8d3139f6d29af4361a4e49e",
+      "colours": [
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "반죽 작업대의 두꺼운 판·밀대·평평한 반죽판"
+    },
+    "grave_slab": {
+      "status": "ready",
+      "path": "res://models/props_field/grave_slab.glb",
+      "count": 7,
+      "maps": 2,
+      "solid": {
+        "none": 7
+      },
+      "facing": {
+        "1": 2,
+        "2": 2,
+        "3": 2,
+        "0": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.48
+        ],
+        [
+          0.96,
+          0.2,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.2,
+        0.96
+      ],
+      "lod0_tris": 36,
+      "triangle_limit": 600,
+      "bytes": 3528,
+      "sha256": "2319f10cb5f09bad5a9e7069e0dce07e483c67871417b6c0ccebc49bc8b20543",
+      "colours": [
+        "snow",
+        "stone",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "비문 없는 낮은 석재 묘판, none 높이"
+    },
+    "parish_chest": {
+      "status": "ready",
+      "path": "res://models/props_field/parish_chest.glb",
+      "count": 7,
+      "maps": 6,
+      "solid": {
+        "low": 6,
+        "none": 1
+      },
+      "facing": {
+        "1": 2,
+        "0": 2,
+        "2": 2,
+        "3": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.8,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.48
+        ],
+        [
+          0.96,
+          0.8,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.8,
+        0.96
+      ],
+      "lod0_tris": 84,
+      "triangle_limit": 600,
+      "bytes": 6896,
+      "sha256": "bda0a3b3397adfff9d49c213ffe3b46d765d3612b5a4f190fc8bfe0332b9add7",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "교구 보관용 나무 궤, low 우세; 금속 띠와 뚜껑"
+    },
+    "reed_bundle": {
+      "status": "ready",
+      "path": "res://models/props_field/reed_bundle.glb",
+      "count": 7,
+      "maps": 1,
+      "solid": {
+        "low": 7
+      },
+      "facing": {
+        "0": 4,
+        "2": 2,
+        "1": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 0.85,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 7,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          0.85,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.85,
+        1.92
+      ],
+      "lod0_tris": 352,
+      "triangle_limit": 600,
+      "bytes": 24636,
+      "sha256": "791d5b06cb45f2cdb34a3e181700d166ff4e89b55d1a6f3eb36ec5b9a542084b",
+      "colours": [
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "갈대 줄기를 묶은 자재 다발, 소지품 없음"
+    },
+    "altar_table": {
+      "status": "ready",
+      "path": "res://models/props_field/altar_table.glb",
+      "count": 6,
+      "maps": 6,
+      "solid": {
+        "low": 6
+      },
+      "facing": {
+        "0": 3,
+        "2": 2,
+        "1": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        3,
+        1
+      ],
+      "height_m": 1.0,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.48
+        ],
+        [
+          1.44,
+          1.0,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.0,
+        0.96
+      ],
+      "lod0_tris": 96,
+      "triangle_limit": 600,
+      "bytes": 7716,
+      "sha256": "2efd717ae2709335a8e66725e81591f5e1418cd005c1ab07ea5640305edb7c69",
+      "colours": [
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "단순한 제단 상판과 두 받침, 천 한 장·금지 표식 없음"
+    },
+    "bell_frame": {
+      "status": "ready",
+      "path": "res://models/props_field/bell_frame.glb",
+      "count": 6,
+      "maps": 6,
+      "solid": {
+        "none": 6
+      },
+      "facing": {
+        "1": 6
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        3,
+        3
+      ],
+      "height_m": 2.7,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 3,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -1.44
+        ],
+        [
+          1.44,
+          2.7,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        2.7,
+        2.88
+      ],
+      "lod0_tris": 176,
+      "triangle_limit": 600,
+      "bytes": 12692,
+      "sha256": "0e79f4d3a0e238cb7bedd32c627267fbf3c3ea9cc0060f09c0c70fbb7f135714",
+      "colours": [
+        "iron",
+        "rust",
+        "wood",
+        "worn_metal",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "종을 매단 목재 틀 뜻을 우선해 none 높이 예외"
+    },
+    "bell_rope": {
+      "status": "ready",
+      "path": "res://models/props_field/bell_rope.glb",
+      "count": 6,
+      "maps": 6,
+      "solid": {
+        "none": 6
+      },
+      "facing": {
+        "0": 6
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.18,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          0.18,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.18,
+        0.96
+      ],
+      "lod0_tris": 308,
+      "triangle_limit": 600,
+      "bytes": 22452,
+      "sha256": "5e9eeb6f3bcba1444f46153b74f4834e1d62da5f1f60ae0082d38e44a1cd5b8a",
+      "colours": [
+        "cloth"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "바닥에 둥글게 감긴 종 밧줄 한 가닥으로 none 높이 유지"
+    },
+    "cloister_post": {
+      "status": "ready",
+      "path": "res://models/props_field/cloister_post.glb",
+      "count": 6,
+      "maps": 1,
+      "solid": {
+        "wall": 6
+      },
+      "facing": {
+        "3": 2,
+        "0": 2,
+        "1": 1,
+        "2": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 2.65,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          2.65,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        2.65,
+        0.96
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bytes": 6064,
+      "sha256": "9eff36f7deaf5fb6662f4ce37712a4fb06bd4798d821c43660b68fb3c6525b1b",
+      "colours": [
+        "snow",
+        "stone",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "회랑 목재 기둥·받침·짧은 버팀대, wall 높이"
+    },
+    "fallen_signal": {
+      "status": "ready",
+      "path": "res://models/props_field/fallen_signal.glb",
+      "count": 6,
+      "maps": 6,
+      "solid": {
+        "low": 6
+      },
+      "facing": {
+        "0": 4,
+        "1": 2
+      },
+      "map_families": [
+        "bare_line",
+        "summit"
+      ],
+      "footprint_m": [
+        5,
+        1
+      ],
+      "height_m": 0.45,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 4,
+      "bounds_m": [
+        [
+          -2.4,
+          0.0,
+          -0.48
+        ],
+        [
+          2.4,
+          0.45,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        4.8,
+        0.45,
+        0.96
+      ],
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bytes": 8652,
+      "sha256": "5e6c825692e68b93cc506e471f7291125c9e304c53299a02fc2940708e86c31a",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "rust",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "옆으로 쓰러진 신호 기둥·원판·짧은 신호팔"
+    },
+    "high_rack": {
+      "status": "ready",
+      "path": "res://models/props_field/high_rack.glb",
+      "count": 6,
+      "maps": 1,
+      "solid": {
+        "wall": 6
+      },
+      "facing": {
+        "0": 2,
+        "1": 2,
+        "2": 1,
+        "3": 1
+      },
+      "map_families": [
+        "houses"
+      ],
+      "footprint_m": [
+        4,
+        1
+      ],
+      "height_m": 2.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.48
+        ],
+        [
+          1.92,
+          2.2,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        2.2,
+        0.96
+      ],
+      "lod0_tris": 108,
+      "triangle_limit": 600,
+      "bytes": 8572,
+      "sha256": "4016a20f6b70213650b267c110b393006c406ecc44201e96140d101d8f40d9b4",
+      "colours": [
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "높은 보관 선반의 네 단·빈 공간, wall 높이"
+    },
+    "meeting_table": {
+      "status": "ready",
+      "path": "res://models/props_field/meeting_table.glb",
+      "count": 6,
+      "maps": 3,
+      "solid": {
+        "none": 6
+      },
+      "facing": {
+        "3": 2,
+        "0": 2,
+        "1": 1,
+        "2": 1
+      },
+      "map_families": [
+        "office"
+      ],
+      "footprint_m": [
+        4,
+        2
+      ],
+      "height_m": 0.76,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.96
+        ],
+        [
+          1.92,
+          0.76,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        0.76,
+        1.92
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bytes": 6060,
+      "sha256": "e18e224c3ccbf078e67684fc5f438fca876e856f359404c7fa3b997a50471c2b",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "회의용 탁자 뜻을 우선해 none 높이 예외; 의자·대기열 없음"
+    },
+    "old_coach": {
+      "status": "ready",
+      "path": "res://models/props_field/old_coach.glb",
+      "count": 6,
+      "maps": 1,
+      "solid": {
+        "none": 6
+      },
+      "facing": {
+        "0": 6
+      },
+      "map_families": [
+        "freight"
+      ],
+      "footprint_m": [
+        14,
+        5
+      ],
+      "height_m": 2.8,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.248,
+          0.0,
+          -2.4
+        ],
+        [
+          1.248,
+          2.8,
+          2.4
+        ]
+      ],
+      "dimensions_m": [
+        2.496,
+        2.8,
+        4.8
+      ],
+      "lod0_tris": 572,
+      "triangle_limit": 600,
+      "bytes": 39780,
+      "sha256": "acc59193d5fc95b55d26124439858bf0c279ca676c76a55fef3844276a9bf69a",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "snow",
+        "wood",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "낡은 객차 뜻을 우선해 none 높이 예외; 유리창·열린 문 유지"
+    },
+    "plow_blade": {
+      "status": "ready",
+      "path": "res://models/props_field/plow_blade.glb",
+      "count": 6,
+      "maps": 5,
+      "solid": {
+        "low": 6
+      },
+      "facing": {
+        "0": 5,
+        "1": 1
+      },
+      "map_families": [
+        "summit"
+      ],
+      "footprint_m": [
+        4,
+        2
+      ],
+      "height_m": 1.15,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -1.92,
+          0.0,
+          -0.96
+        ],
+        [
+          1.92,
+          1.15,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        3.84,
+        1.15,
+        1.92
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bytes": 6052,
+      "sha256": "a742654e7c1aeb3024a206939ac2a11d9c38adff4eb7ba304ac75a5fa5a5fd25",
+      "colours": [
+        "iron",
+        "rust",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "제설 삽날의 꺾인 판·보강 리브·받침"
+    },
+    "pulpit": {
+      "status": "ready",
+      "path": "res://models/props_field/pulpit.glb",
+      "count": 6,
+      "maps": 6,
+      "solid": {
+        "low": 6
+      },
+      "facing": {
+        "1": 3,
+        "3": 2,
+        "2": 1
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.25,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.25,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.25,
+        1.92
+      ],
+      "lod0_tris": 60,
+      "triangle_limit": 600,
+      "bytes": 5188,
+      "sha256": "b12dd9e8e97a9c3798e4f58a6c4ce64b0cbbfe6d9b7ead9721c4af00c413c964",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "교회 설교단의 앞 판·읽기용 경사진 책받침·낮은 발판"
+    },
+    "snowplow_truck": {
+      "status": "ready",
+      "path": "res://models/props_field/snowplow_truck.glb",
+      "count": 6,
+      "maps": 6,
+      "solid": {
+        "wall": 6
+      },
+      "facing": {
+        "0": 5,
+        "2": 1
+      },
+      "map_families": [
+        "office",
+        "summit"
+      ],
+      "footprint_m": [
+        6,
+        3
+      ],
+      "height_m": 2.5,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -0.9792,
+          0.0,
+          -1.44
+        ],
+        [
+          0.9792,
+          2.5,
+          1.44
+        ]
+      ],
+      "dimensions_m": [
+        1.9584,
+        2.5,
+        2.88
+      ],
+      "lod0_tris": 416,
+      "triangle_limit": 600,
+      "bytes": 28848,
+      "sha256": "62fe8f7b5587fe50f55dce91b544d87961e60fa69331466f48d0479941bc75ee",
+      "colours": [
+        "enamel",
+        "glass",
+        "iron",
+        "rubber",
+        "snow",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "앞쪽 제설 삽날을 붙인 화물차, wall 높이"
+    },
+    "wire_coil": {
+      "status": "ready",
+      "path": "res://models/props_field/wire_coil.glb",
+      "count": 6,
+      "maps": 3,
+      "solid": {
+        "low": 6
+      },
+      "facing": {
+        "0": 6
+      },
+      "map_families": [
+        "bare_line"
+      ],
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.28,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 6,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          0.28,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.28,
+        0.96
+      ],
+      "lod0_tris": 308,
+      "triangle_limit": 600,
+      "bytes": 23988,
+      "sha256": "37f589500319e2d79d30fff9caa5cf3105439c4cbe0a285bae3da87684f5b845",
+      "colours": [
+        "rubber"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "바닥에 감긴 매끈한 전선; 가시·철조망 없음"
+    },
+    "blanket_screen": {
+      "status": "ready",
+      "path": "res://models/props_field/blanket_screen.glb",
+      "count": 5,
+      "maps": 4,
+      "solid": {
+        "low": 5
+      },
+      "facing": {
+        "3": 3,
+        "0": 2
+      },
+      "map_families": [
+        "church"
+      ],
+      "footprint_m": [
+        3,
+        1
+      ],
+      "height_m": 1.25,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 5,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.48
+        ],
+        [
+          1.44,
+          1.25,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.25,
+        0.96
+      ],
+      "lod0_tris": 92,
+      "triangle_limit": 600,
+      "bytes": 7448,
+      "sha256": "a6dcf69dd1890405e81b30702c80a4ec13dff3ba7ebda349a7adc78d90ae36a7",
+      "colours": [
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "담요 한 장을 낮은 목재 틀에 펼친 가림막, low 높이·소지품 더미 없음"
+    },
+    "boulder": {
+      "status": "ready",
+      "path": "res://models/props_field/boulder.glb",
+      "count": 5,
+      "maps": 4,
+      "solid": {
+        "low": 5
+      },
+      "facing": {
+        "0": 5
+      },
+      "map_families": [
+        "mine"
+      ],
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 5,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.2,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.2,
+        1.92
+      ],
+      "lod0_tris": 64,
+      "triangle_limit": 600,
+      "bytes": 6448,
+      "sha256": "8a1ac8069b780b72a3484a1236a7a270d168b8f583a8acb834a42d025a70a736",
+      "colours": [
+        "snow",
+        "stone",
+        "worn_metal"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "눈이 조금 얹힌 각진 바위, low 높이"
+    },
+    "butcher_block": {
+      "status": "ready",
+      "path": "res://models/props_field/butcher_block.glb",
+      "count": 5,
+      "maps": 1,
+      "solid": {
+        "low": 3,
+        "none": 2
+      },
+      "facing": {
+        "2": 3,
+        "1": 2
+      },
+      "map_families": [
+        "houses"
+      ],
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.9,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 5,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.48
+        ],
+        [
+          0.96,
+          0.9,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        0.9,
+        0.96
+      ],
+      "lod0_tris": 72,
+      "triangle_limit": 600,
+      "bytes": 6060,
+      "sha256": "00da435c6edbb4f680955d2b402dd34b5c9da19c86f75a8a4db1eded871127e7",
+      "colours": [
+        "wood",
+        "worn_wood"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "두꺼운 정육 작업판·튼튼한 다리, low 우세"
+    },
+    "courtyard_planter": {
+      "status": "ready",
+      "path": "res://models/props_field/courtyard_planter.glb",
+      "count": 5,
+      "maps": 3,
+      "solid": {
+        "low": 5
+      },
+      "facing": {
+        "0": 3,
+        "3": 1,
+        "1": 1
+      },
+      "map_families": [
+        "office"
+      ],
+      "footprint_m": [
+        3,
+        2
+      ],
+      "height_m": 1.2,
+      "footprint_source": "_in/kinds_d.json",
+      "modal_rect_count": 5,
+      "bounds_m": [
+        [
+          -1.44,
+          0.0,
+          -0.96
+        ],
+        [
+          1.44,
+          1.2,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        2.88,
+        1.2,
+        1.92
+      ],
+      "lod0_tris": 168,
+      "triangle_limit": 600,
+      "bytes": 12660,
+      "sha256": "f41fdf8e1402fc4146f35e9831d031de2b593b631ddcc3b062f6bf93399df6da",
+      "colours": [
+        "bark",
+        "snow",
+        "stone"
+      ],
+      "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
+      "judgment": "중정 화분의 석재 통·눈·마른 가지"
+    }
+  },
+  "skipped": {
+    "fishing_hole": "지형성 제외 목록; 이번 60종 밖",
+    "water": "지형성 제외 목록; 이번 60종 밖",
+    "snow_drift": "지형성 제외 목록; 이번 60종 밖",
+    "rock_face": "지형성 제외 목록; 이번 60종 밖",
+    "snow_bank": "지형성 제외 목록; 이번 60종 밖",
+    "snow_fence": "지형성 제외 목록; 이번 60종 밖",
+    "snow_gauge_pole": "지형성 제외 목록; 이번 60종 밖"
+  },
+  "failures": [],
+  "census": {
+    "source": "s2/game/world/maps/*.gd",
+    "map_files": 80,
+    "method": "literal prop dictionaries, array rect and Rect2i; no runtime spawning",
+    "map_counts": {
+      "bare_line_01.gd": {
+        "fallen_signal": 1,
+        "wire_coil": 2,
+        "signal_post": 1
+      },
+      "bare_line_02.gd": {
+        "fallen_signal": 1,
+        "wire_coil": 2,
+        "signal_post": 1
+      },
+      "bare_line_03.gd": {
+        "fallen_signal": 1,
+        "wire_coil": 2,
+        "signal_post": 1
+      },
+      "church_01.gd": {
+        "bell_rope": 1,
+        "bell_frame": 1,
+        "grave_plot": 3,
+        "grave_slab": 4,
+        "parish_chest": 1,
+        "dough_table": 3,
+        "altar_table": 1,
+        "pulpit": 1,
+        "farm_cart": 1
+      },
+      "church_02.gd": {
+        "bell_rope": 1,
+        "bell_frame": 1,
+        "parish_chest": 1,
+        "dough_table": 1,
+        "altar_table": 1,
+        "pulpit": 1,
+        "blanket_screen": 1,
+        "anvil_block": 3,
+        "repair_lumber": 4
+      },
+      "church_03.gd": {
+        "bell_rope": 1,
+        "bell_frame": 1,
+        "farm_cart": 3,
+        "cloister_post": 6,
+        "parish_chest": 2,
+        "cooking_pot": 4,
+        "dough_table": 3,
+        "altar_table": 1,
+        "pulpit": 1,
+        "blanket_screen": 1
+      },
+      "church_04.gd": {
+        "bell_rope": 1,
+        "bell_frame": 1,
+        "repair_lumber": 4,
+        "grave_plot": 5,
+        "grave_slab": 3,
+        "parish_chest": 1,
+        "altar_table": 1,
+        "pulpit": 1,
+        "farm_cart": 2
+      },
+      "church_05.gd": {
+        "bell_rope": 1,
+        "bell_frame": 1,
+        "reed_bundle": 7,
+        "parish_chest": 1,
+        "altar_table": 1,
+        "pulpit": 1,
+        "blanket_screen": 1,
+        "farm_cart": 1
+      },
+      "church_06.gd": {
+        "bell_rope": 1,
+        "bell_frame": 1,
+        "blanket_screen": 2,
+        "cooking_pot": 3,
+        "parish_chest": 1,
+        "altar_table": 1,
+        "pulpit": 1,
+        "farm_cart": 1
+      },
+      "factory_01.gd": {},
+      "factory_02.gd": {},
+      "factory_03.gd": {},
+      "factory_04.gd": {},
+      "factory_05.gd": {},
+      "factory_06.gd": {},
+      "freight_01.gd": {
+        "box_wagon": 1,
+        "sleeper_pile": 2
+      },
+      "freight_02.gd": {
+        "box_wagon": 6,
+        "tender_wagon": 7,
+        "sleeper_pile": 2
+      },
+      "freight_03.gd": {
+        "tender_wagon": 1,
+        "sleeper_pile": 2
+      },
+      "freight_04.gd": {
+        "sleeper_pile": 1
+      },
+      "freight_05.gd": {
+        "old_coach": 6,
+        "sleeper_pile": 1
+      },
+      "freight_06.gd": {
+        "sleeper_pile": 1
+      },
+      "hospital_01.gd": {},
+      "hospital_02.gd": {},
+      "hospital_03.gd": {},
+      "hospital_04.gd": {},
+      "hospital_05.gd": {},
+      "hospital_06.gd": {},
+      "houses_01.gd": {
+        "garden_rack": 2
+      },
+      "houses_02.gd": {},
+      "houses_03.gd": {
+        "anvil_block": 4
+      },
+      "houses_04.gd": {
+        "butcher_block": 5
+      },
+      "houses_05.gd": {
+        "high_rack": 6,
+        "garden_rack": 6
+      },
+      "houses_06.gd": {},
+      "lake_01.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fish_truck": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_02.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_03.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_04.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fish_truck": 3,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_05.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fish_truck": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_06.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fish_truck": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_07.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fish_truck": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_08.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fish_truck": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lake_09.gd": {
+        "fishing_platform": 1,
+        "fish_hoist": 1,
+        "cleaning_table": 1,
+        "ice_saw_frame": 1,
+        "fuel_drum_group": 1,
+        "rubbish_pile": 1
+      },
+      "lodge_01.gd": {},
+      "lodge_02.gd": {},
+      "lodge_03.gd": {},
+      "lodge_04.gd": {},
+      "lodge_05.gd": {},
+      "lodge_06.gd": {},
+      "lodge_07.gd": {},
+      "lodge_08.gd": {},
+      "lodge_09.gd": {},
+      "mine_01.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1,
+        "boulder": 1
+      },
+      "mine_02.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1,
+        "boulder": 1
+      },
+      "mine_03.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1
+      },
+      "mine_04.gd": {
+        "support_frame": 2,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1
+      },
+      "mine_05.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1
+      },
+      "mine_06.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1,
+        "boulder": 1
+      },
+      "mine_07.gd": {
+        "support_frame": 1,
+        "rubble_pile": 2,
+        "ore_cart_tipped": 2,
+        "ore_truck": 1,
+        "weigh_scale": 1
+      },
+      "mine_08.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "boulder": 2,
+        "ore_truck": 1,
+        "weigh_scale": 1
+      },
+      "mine_09.gd": {
+        "support_frame": 1,
+        "rubble_pile": 1,
+        "ore_cart_tipped": 1,
+        "ore_truck": 1,
+        "weigh_scale": 1
+      },
+      "office_01.gd": {
+        "arcade_column": 8,
+        "courtyard_planter": 2,
+        "service_counter": 2,
+        "meeting_table": 2
+      },
+      "office_02.gd": {
+        "service_counter": 2,
+        "meeting_table": 2,
+        "courtyard_planter": 1
+      },
+      "office_03.gd": {
+        "ladder_rack": 1,
+        "snowplow_truck": 1
+      },
+      "office_04.gd": {
+        "courtyard_planter": 2,
+        "service_counter": 2,
+        "meeting_table": 2,
+        "city_bus": 7
+      },
+      "office_05.gd": {
+        "service_counter": 2
+      },
+      "office_06.gd": {
+        "service_counter": 2
+      },
+      "sawmill_01.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_02.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_03.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_04.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_05.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_06.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_07.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_08.gd": {
+        "log_cart": 1,
+        "skidder": 2,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "sawmill_09.gd": {
+        "log_cart": 1,
+        "skidder": 1,
+        "flat_trailer": 1,
+        "oil_drum": 1,
+        "log_carriage": 1,
+        "planer": 1,
+        "bark_heap": 1,
+        "drying_rack": 1,
+        "sawdust_bin": 1,
+        "pickup_truck": 1,
+        "sawhorse": 1,
+        "debarker": 1,
+        "log_conveyor": 1,
+        "sawdust_pile": 1
+      },
+      "summit_01.gd": {
+        "ladder_rack": 1,
+        "plow_blade": 1,
+        "snowplow_truck": 1,
+        "signal_post": 1
+      },
+      "summit_02.gd": {
+        "ladder_rack": 2,
+        "fallen_signal": 1,
+        "plow_blade": 2,
+        "snowplow_truck": 1,
+        "signal_post": 1
+      },
+      "summit_03.gd": {
+        "ladder_rack": 1,
+        "plow_blade": 1,
+        "snowplow_truck": 1,
+        "signal_post": 1
+      },
+      "summit_04.gd": {
+        "ladder_rack": 2,
+        "plow_blade": 1,
+        "fallen_signal": 1,
+        "snowplow_truck": 1,
+        "signal_post": 1
+      },
+      "summit_05.gd": {
+        "ladder_rack": 1,
+        "fallen_signal": 1,
+        "plow_blade": 1,
+        "snowplow_truck": 1,
+        "signal_post": 1
+      }
+    },
+    "map_triangles_d": {
+      "bare_line_01.gd": 856,
+      "bare_line_02.gd": 856,
+      "bare_line_03.gd": 856,
+      "church_01.gd": 1776,
+      "church_02.gd": 1612,
+      "church_03.gd": 3292,
+      "church_04.gd": 2316,
+      "church_05.gd": 3576,
+      "church_06.gd": 1756,
+      "factory_01.gd": 0,
+      "factory_02.gd": 0,
+      "factory_03.gd": 0,
+      "factory_04.gd": 0,
+      "factory_05.gd": 0,
+      "factory_06.gd": 0,
+      "freight_01.gd": 656,
+      "freight_02.gd": 5430,
+      "freight_03.gd": 666,
+      "freight_04.gd": 132,
+      "freight_05.gd": 3564,
+      "freight_06.gd": 132,
+      "hospital_01.gd": 0,
+      "hospital_02.gd": 0,
+      "hospital_03.gd": 0,
+      "hospital_04.gd": 0,
+      "hospital_05.gd": 0,
+      "hospital_06.gd": 0,
+      "houses_01.gd": 352,
+      "houses_02.gd": 0,
+      "houses_03.gd": 336,
+      "houses_04.gd": 360,
+      "houses_05.gd": 1704,
+      "houses_06.gd": 0,
+      "lake_01.gd": 1634,
+      "lake_02.gd": 1242,
+      "lake_03.gd": 1124,
+      "lake_04.gd": 2418,
+      "lake_05.gd": 1634,
+      "lake_06.gd": 1634,
+      "lake_07.gd": 1634,
+      "lake_08.gd": 1634,
+      "lake_09.gd": 1242,
+      "lodge_01.gd": 0,
+      "lodge_02.gd": 0,
+      "lodge_03.gd": 0,
+      "lodge_04.gd": 0,
+      "lodge_05.gd": 0,
+      "lodge_06.gd": 0,
+      "lodge_07.gd": 0,
+      "lodge_08.gd": 0,
+      "lodge_09.gd": 0,
+      "mine_01.gd": 1050,
+      "mine_02.gd": 1050,
+      "mine_03.gd": 986,
+      "mine_04.gd": 1046,
+      "mine_05.gd": 986,
+      "mine_06.gd": 778,
+      "mine_07.gd": 1440,
+      "mine_08.gd": 1114,
+      "mine_09.gd": 986,
+      "office_01.gd": 1096,
+      "office_02.gd": 544,
+      "office_03.gd": 584,
+      "office_04.gd": 4716,
+      "office_05.gd": 232,
+      "office_06.gd": 232,
+      "sawmill_01.gd": 3226,
+      "sawmill_02.gd": 3226,
+      "sawmill_03.gd": 3226,
+      "sawmill_04.gd": 3226,
+      "sawmill_05.gd": 3226,
+      "sawmill_06.gd": 3226,
+      "sawmill_07.gd": 3226,
+      "sawmill_08.gd": 3622,
+      "sawmill_09.gd": 3226,
+      "summit_01.gd": 776,
+      "summit_02.gd": 1136,
+      "summit_03.gd": 776,
+      "summit_04.gd": 1064,
+      "summit_05.gd": 896
+    },
+    "max_map": "freight_02.gd",
+    "max_map_triangles_d": 5430,
+    "placed_triangles_d": 95342,
+    "source_instances_d": 466
+  }
+}
