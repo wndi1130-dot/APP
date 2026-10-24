@@ -11,6 +11,7 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
 
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
@@ -612,6 +613,10 @@ func swing(p, z: Dictionary) -> void:
 	# Read before the blow's own sound: a quiet sound turns the body toward it
 	# (zombies.hear), and this one comes from where the body stands.
 	var from_back := behind(z, p.position)
+	# Seen struck (dead_body.gd picks which way it is thrown by these; nothing reads them here).
+	z["hit_at"] = z["age"]
+	z["hit_by"] = p.position
+	z["hit_way"] = String(p.get_meta(Pose.BLOW_WAY, ""))
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	var state: String = z["state"]
 	var blade: bool = bool(d["blade"])
