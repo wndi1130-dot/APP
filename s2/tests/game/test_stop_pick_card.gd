@@ -21,7 +21,7 @@ func test_the_card_says_what_the_train_rules_say_for_the_sample_stop() -> void:
 	assert_eq(m["crews"].map(func(r): return r["word"]), ["꼬리", "의무", "경비", "앞칸"])
 	assert_eq(m["size"], 4)
 	var pre: Dictionary = TrainStop.crew_preview(g, t, "tail")
-	assert_true(String(m["crew_line"]).begins_with("꼬리 노출 %d → %d · " % [int(pre["from"]), int(pre["to"])]), m["crew_line"])
+	assert_true(String(m["crew_line"]).begins_with("노출 %d → %d · " % [int(pre["from"]), int(pre["to"])]), m["crew_line"])
 	var named: Dictionary = StopPickCard.model(g, t, "술레후프")
 	assert_eq(named["place"], "술레후프")
 	assert_eq(named["hint"], "병원", "the kind of place under its own name")
@@ -56,7 +56,7 @@ func test_the_promises_the_stop_goes_with_are_one_line() -> void:
 	var c = StopPickCard.new()
 	c.promises = [{"kind": "prologue", "subjects": ["a", "b"]}, {"kind": "skip_dispatch", "madeTo": "tail"}]
 	add_child_autofree(c)
-	assert_eq(_said(c.find_child("Promises", true, false)), "약속 · 서막 2명 데려오기 / 교대 꼬리칸 파견 제외", "one line, its numbers in their own face (no 「이번 정차」: 결정 417)")
+	assert_eq(_said(c.find_child("Promises", true, false)), "서막 2명 데려오기 / 교대 꼬리칸 파견 제외", "one line, its numbers in their own face (no 「이번 정차」 nor 「약속」: 결정 417)")
 	var plain = StopPickCard.new()
 	add_child_autofree(plain)
 	assert_null(plain.find_child("Promises", true, false), "no promise, no line")

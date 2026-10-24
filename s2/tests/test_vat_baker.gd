@@ -99,3 +99,22 @@ func test_pack_motion_keeps_the_sixteen_place_numbers_and_reaches_thirty_two() -
 	assert_eq(VatBaker.pack_motion(16), VatBaker.UPPER)
 	assert_eq(VatBaker.pack_motion(31, 4095, 63), 15.0 + 16.0 * 4095.0 + 65536.0 * 63.0 + VatBaker.UPPER)
 	assert_true(VatBaker.pack_motion(31, 4095, 63) < 16777216.0, "exact in a 32-bit float")
+
+
+# Sixty-four places (decision 422): 32..63 carry two and three steps of UPPER,
+# and the last with every frame and share is 2^24 - 1, still whole in a float.
+# The shader's tables are as long as TABLE_SIZE, and it rounds g rather than
+# adding a half (above 2^23 a float has no halves: clip 33 drew as 34).
+func test_pack_motion_reaches_sixty_four_and_the_shader_tables_are_as_long() -> void:
+	const DeadBody = preload("res://game/actors/dead_body.gd")
+	assert_eq(VatBaker.TABLE_SIZE, 64)
+	assert_eq(VatBaker.pack_motion(32), 2.0 * VatBaker.UPPER)
+	assert_eq(VatBaker.pack_motion(63, 4095, 63), 16777215.0, "2^24 - 1")
+	for clip in [0, 15, 16, 31, 32, 33, 47, 48, 63]:
+		var g := Color(0.0, VatBaker.pack_motion(clip, 7, 9), 0.0).g
+		assert_eq(DeadBody.motion_in(g), clip, "back through a 32-bit colour: %d" % clip)
+	var shader: String = FileAccess.get_file_as_string("res://game/actors/dead_vat.gdshader")
+	for table in ["clip_start", "clip_frames", "clip_rate", "clip_loop", "clip_lo", "clip_hi"]:
+		assert_string_contains(shader, "%s[%d]" % [table, VatBaker.TABLE_SIZE], table)
+	assert_string_contains(shader, "n < %d" % VatBaker.TABLE_SIZE, "clip_of looks through every place")
+	assert_string_contains(shader, "round(INSTANCE_CUSTOM.g)")

@@ -2,6 +2,8 @@
 
 작성: 2026-10-07 · 상태: 제안. 갈림길 셋(1.1~1.3)은 2026-10-07 사용자가 정했다: 공통 서막, 앞당겨진 출발, 필드 정차 5곳. 나머지는 제안이다.
 
+계절 알림(2026-10-24 결정 423): 서막의 계절은 한겨울에서 늦가을로 바뀌었다([seasons_regions.md](seasons_regions.md) 2.2). 이 문서의 겨울 장면(2장 호수 결빙과 출발 이유, 술레후프의 얼어붙은 급수탑, 5장 '여섯 번째 겨울 1일째', 8장 한겨울 낮 길이)은 아직 옛 흐름으로 적혀 있다. 이야기 뜻이 걸려 있어 고칠지는 따로 정한다.
+
 1차 완성(수직 슬라이스)은 첫 구간을 처음부터 끝까지 플레이하는 것이다. 이 문서는 그 구간의 이야기 뼈대, 정차 순서, 그리고 S3(정차 한 번으로 정치와 필드 잇기)에 바로 쓸 첫 정차 하나를 정한다. 대사는 견본 몇 줄만 쓰고, 나머지는 Gemini(안티그래비티)가 쓴다.
 
 바탕: [decisions.md](../decisions.md), [world_lore.md](world_lore.md), [europe_setting.md](europe_setting.md), [s1a_politics_numbers.md](s1a_politics_numbers.md)(인물·비밀·법·사건 카드), [field_unified.md](field_unified.md)(정차 고리, 영수증), [zombies.md](zombies.md), [ref/map_references.md](../../../ref/map_references.md) 4장과 [ref/map/summary.md](../../../ref/map/summary.md), [S1 콘텐츠 가이드](../../prototype/s1_content_guide.md) 2장(문체).

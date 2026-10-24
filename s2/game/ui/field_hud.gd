@@ -218,6 +218,9 @@ const PAD_SEE: float = 0.7
 const ALLIES_UP: float = 92.0
 ## Millimetres on the S22+ held sideways: 720 view px over about 70 mm.
 const PX_PER_MM: float = 10.3
+## 48 dp (7.62 mm), the least a finger lands on for sure: a smaller key keeps
+## the picture it has and takes a finger this wide (user 2026-10-24).
+const MIN_TOUCH: float = 79.0
 const BRASS := Color(0.86, 0.72, 0.42)
 const AMBER := Color(0.98, 0.66, 0.22)
 ## Stick-rim run (a setting): stay past 90% for 0.15 s to run, back under 75%
@@ -785,7 +788,11 @@ func _build_top() -> void:
 	test_keys.offset_top = 14.0
 	test_keys.add_theme_constant_override("separation", 8)
 	root.add_child(test_keys)
-	for row in [["−", _zoom.bind(4.0), 64.0], ["+", _zoom.bind(-4.0), 64.0], ["D", _toggle_debug, 56.0]]:
+	# D (the debug view) is a builder's key: a release export leaves it out.
+	var rows: Array = [["−", _zoom.bind(4.0), 64.0], ["+", _zoom.bind(-4.0), 64.0]]
+	if OS.is_debug_build():
+		rows.append(["D", _toggle_debug, 56.0])
+	for row in rows:
 		var k := _button(row[0], row[1], Vector2(row[2], TOP_ROW_H), 22)
 		_dress(k, "", Vector2(46, 46), true)
 		# Quieter than the game's own keys (they are not in the 시안): smaller,
@@ -1706,7 +1713,9 @@ func _tick_portrait(p) -> void:
 	name_label.get_parent().visible = name_label.text != ""
 	status_label.get_parent().visible = p.blood_soaked
 	tag_box.visible = name_label.text != "" or p.blood_soaked
-	# The weapon in hand and its state in its own colour (시안 「손도끼 (양호)」).
+	# The weapon in hand and, once it wears, its state in its own colour (시안
+	# 「손도끼 (양호)」; a sound one says nothing, 결정 417). The one at the hip
+	# is in the bag's two hands.
 	var h: Dictionary = p.weapon()
 	var wid: String = String(h.get("id", ""))
 	var cond := ""
@@ -1717,7 +1726,7 @@ func _tick_portrait(p) -> void:
 		var d: Dictionary = W.get_data(wid)
 		text = String(d.get("name", wid))
 		var level: int = W.condition_level(float(h["condition"]))
-		cond = W.CONDITION_NAMES[level]
+		cond = W.CONDITION_NAMES[level] if level > 0 else ""
 		cond_ink = [HudSkin.GOOD, HudSkin.HEED, HudSkin.BAD][level]
 		if bool(h.get("broken", false)):
 			cond = "망가짐"
@@ -1728,8 +1737,6 @@ func _tick_portrait(p) -> void:
 				extra += " · 걸림"
 			elif p.reload_t > 0.0:
 				extra += " · 장전"
-	if p.hands.size() > 1:
-		extra += ("   " if extra != "" else "") + "허리: %s" % W.get_data(p.hands[1]["id"]).get("name", "")
 	weapon_label.text = text
 	cond_label.text = cond
 	cond_label.visible = cond != ""
@@ -3383,6 +3390,21 @@ func finger_down(index: int, pos: Vector2) -> bool:
 			fingers[index] = {"kind": "button", "button": ui, "start": pos}
 			return true
 		return false
+	# Nothing drawn under the finger: a small key whose 48 dp skirt holds it
+	# takes it, the nearer where two skirts meet (user 2026-10-24). The first
+	# finger as well: Godot sees no button there.
+	var near: Control = _skirt_at(pos)
+	if near != null:
+		if pads.has(near):
+			fingers[index] = {"kind": "pad", "pad": near, "start": pos, "ms": Time.get_ticks_msec()}
+			_pad_down(near as Button, pos)
+		elif near == portrait:
+			fingers[index] = {"kind": "portrait", "start": pos}
+		elif near is Button:
+			fingers[index] = {"kind": "button", "button": near, "start": pos}
+		else:
+			fingers[index] = {"kind": "fold", "start": pos, "glass": near}
+		return true
 	var floats := stick_floats()
 	var in_reach: bool = pos.x < _view_size().x * 0.5 if floats else pos.distance_to(stick_home()) <= STICK_R * STICK_CATCH
 	if in_reach and stick_index < 0:
@@ -3442,18 +3464,18 @@ func finger_up(index: int, pos: Vector2) -> bool:
 			_pad_up(f["pad"], pos, f)
 		"button":
 			var b: Button = f["button"]
-			if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+			if b.is_visible_in_tree() and touch_rect(b).has_point(pos):
 				if b.toggle_mode:
 					b.button_pressed = not b.button_pressed
 				b.pressed.emit()
 		"hand":
 			_release(pos)
 		"portrait":
-			if pos.distance_to(f["start"]) < DRAG_PX and portrait.get_global_rect().has_point(pos):
+			if pos.distance_to(f["start"]) < DRAG_PX and touch_rect(portrait).has_point(pos):
 				body_panel()
 		"fold":
 			var glass: Control = f["glass"]
-			if pos.distance_to(f["start"]) < DRAG_PX and glass.get_global_rect().has_point(pos):
+			if pos.distance_to(f["start"]) < DRAG_PX and touch_rect(glass).has_point(pos):
 				_fold(glass)
 	return true
 
@@ -3497,13 +3519,17 @@ func finger_cancel(index: int) -> bool:
 ## The glass a tap folds or opens: the clock, or a goal or promise line that is
 ## down (its key takes it up as well).
 func _fold_at(pos: Vector2) -> Control:
-	var glasses: Array = [clock_pill, promise_label.get_parent()]
-	if goal_label != null:
-		glasses.append(goal_label.get_parent())
-	for g: Control in glasses:
+	for g: Control in _fold_glasses():
 		if g.is_visible_in_tree() and g.get_global_rect().has_point(pos):
 			return g
 	return null
+
+
+func _fold_glasses() -> Array:
+	var glasses: Array = [clock_pill, promise_label.get_parent()]
+	if goal_label != null:
+		glasses.append(goal_label.get_parent())
+	return glasses
 
 
 func _fold(glass: Control) -> void:
@@ -3531,6 +3557,49 @@ func _button_at(pos: Vector2) -> Button:
 			if c is Control and c.visible:
 				stack.append(c)
 	return hit
+
+
+## Where a finger takes a key: its drawn rect, a side shorter than MIN_TOUCH
+## grown evenly to it. What is drawn stays as it is.
+func touch_rect(c: Control) -> Rect2:
+	var r: Rect2 = c.get_global_rect()
+	var gx: float = maxf(MIN_TOUCH - r.size.x, 0.0) * 0.5
+	var gy: float = maxf(MIN_TOUCH - r.size.y, 0.0) * 0.5
+	return r.grow_individual(gx, gy, gx, gy)
+
+
+## The key whose touch rect holds the point, the one whose drawn edge is
+## nearest first: the pads, the portrait, the folding glass, every ordinary
+## button.
+func _skirt_at(pos: Vector2) -> Control:
+	var keys: Array = pads.filter(func(b: Button) -> bool: return b.is_visible_in_tree())
+	for c: Control in [portrait] + _fold_glasses():
+		if c.is_visible_in_tree():
+			keys.append(c)
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var n = stack.pop_back()
+		if n is Button and n.mouse_filter != Control.MOUSE_FILTER_IGNORE and n.is_visible_in_tree():
+			keys.append(n)
+		for c in n.get_children():
+			if c is Control and c.visible:
+				stack.append(c)
+	var best: Control = null
+	var best_gap: float = INF
+	for k: Control in keys:
+		if not touch_rect(k).has_point(pos):
+			continue
+		var gap: float = _gap_to(k.get_global_rect(), pos)
+		if gap < best_gap:
+			best = k
+			best_gap = gap
+	return best
+
+
+static func _gap_to(r: Rect2, p: Vector2) -> float:
+	var dx: float = maxf(maxf(r.position.x - p.x, p.x - r.end.x), 0.0)
+	var dy: float = maxf(maxf(r.position.y - p.y, p.y - r.end.y), 0.0)
+	return Vector2(dx, dy).length()
 
 
 # ---------------------------------------------------------------- stick
@@ -3726,11 +3795,11 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		_auto_aim_end(pos)
 	elif b == context_button:
 		context_button.button_pressed = false
-		if not f.get("opened", false) and b.get_global_rect().has_point(pos):
+		if not f.get("opened", false) and touch_rect(b).has_point(pos):
 			_context_tap()
 	elif b == depart_button:
 		depart_button.button_pressed = false
-		if b.get_global_rect().has_point(pos) and not game.ended:
+		if touch_rect(b).has_point(pos) and not game.ended:
 			depart_card()
 	elif b == shove_button:
 		shove_button.button_pressed = false
@@ -3738,7 +3807,7 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 		_run_key_up()
 	elif b == lever_button:
 		# A tap flips it; a pull or a push did its work as the thumb went.
-		if not f.get("pulled", false) and b.get_global_rect().has_point(pos):
+		if not f.get("pulled", false) and touch_rect(b).has_point(pos):
 			set_orders_open(not orders_open)
 
 
