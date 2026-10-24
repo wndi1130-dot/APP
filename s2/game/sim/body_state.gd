@@ -3,6 +3,9 @@ extends RefCounted
 # The wound list is the source of truth; bleed, arm_fracture, leg_fracture, splinted and
 # bite_part are read from it (the first four also accept writes, kept for old callers and tests).
 
+const InjuryRules = preload("res://game/sim/injury_rules.gd")
+const Stamina = preload("res://game/sim/stamina.gd")
+
 const WINDOW := 480.0
 const SCRATCH_INFECT := 0.10
 const LIGHT_BLEED_STOP := 240.0
@@ -20,22 +23,24 @@ const HEAVY_BLOOD := 1.0
 ## Festering (body_injury 4.6 stage 2; start values, to be set on the phone).
 const FESTER_IN_FIELD := true    # false: nothing festers on the field, only the train decides
 const FESTER_TIME := 360.0       # seconds a dirty wound is left before it turns
-const FESTER_KINDS := ["laceration", "embedded"]
+const FESTER_KINDS := ["scratch", "laceration", "deep", "embedded"]
 const FESTER_MULT := 0.9
 const SEEP_BLOOD := 0.4          # a heavy wound with a plain bandage seeps on as a light one
 
-const RUN_FATIGUE := 0.004       # exhaustion per second while running
-const OVERLOAD_FATIGUE := 1.6    # carry_state >= 2
-const COLD_FATIGUE := 1.25       # cold_level >= 1
-const REST_RECOVER := 1.0 / 120.0  # indoor rest: about one level per minute (doc 4 table)
-const BREATH_RUN := 0.12
-const BREATH_REST := 0.25
-const RUN_BREATH_MIN := 0.15
+const RUN_FATIGUE := Stamina.RUN_FATIGUE
+const OVERLOAD_FATIGUE := Stamina.OVERLOAD_FATIGUE
+const COLD_FATIGUE := Stamina.COLD_FATIGUE
+const REST_RECOVER := Stamina.REST_RECOVER
+const BREATH_RUN := Stamina.BREATH_RUN
+const BREATH_REST := Stamina.BREATH_REST
+const RUN_BREATH_MIN := Stamina.RUN_BREATH_MIN
 
 const FLOOR := 0.5
 const MOVE_FLOOR := 0.25
 const AIM_UP := 1.4
 const AIM_MAX := 3.0
+const MELEE_HIT_FLOOR: float = 0.15
+const MELEE_HIT_NEED: Array[float] = [1.0, 0.85, 0.65]
 
 # One entry per wound: {part, kind, blood, disinfected, bandaged, splinted, festering, at}
 # and, from stage 2, {tourniquet, pulled, sutured, what, open_t}.
@@ -57,6 +62,7 @@ var injured_at: float = -INF
 var cold_level: int = 0          # last cold_level seen by tick(), for icons
 var _heavy_reported: bool = false
 var _level_seen: int = 0         # bleed level at the last change, to reset timers on a drop
+var breath_locked: bool = false
 
 # 0 none, 1 light, 2 heavy: from the total blood of all wounds (body_injury 4.6).
 var bleed: int:
@@ -102,12 +108,31 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 	if not PARTS.has(part) or not KINDS.has(kind):
 		push_warning("body: bad wound %s / %s" % [part, kind])
 		return -1
+	# Repeated trauma keeps the fourth matching record's identity for callers.
+	# At most 6 regions * 6 kinds * 4 rows take part in a body's tick.
+	var same := 0
+	for i in wounds.size():
+		var old: Dictionary = wounds[i]
+		if old["part"] != part or old["kind"] != kind:
+			continue
+		same += 1
+		if same < InjuryRules.MAX_SAME_WOUNDS:
+			continue
+		old["hits"] = int(old.get("hits", 1)) + 1
+		old["blood"] = float(old["blood"]) + (float(BLOOD[kind]) if blood < 0.0 else blood)
+		for flag in ["disinfected", "bandaged", "splinted", "tourniquet", "pulled", "sutured", "bandage_dirty"]:
+			old[flag] = false
+		old["bandage_t"] = 0.0
+		_refresh()
+		if bleed_level() == 1:
+			light_bleed_time = 0.0
+		return i
 	wounds.append({
 		"part": part, "kind": kind,
 		"blood": float(BLOOD[kind]) if blood < 0.0 else blood,
 		"disinfected": false, "bandaged": false, "splinted": false, "festering": false,
 		"tourniquet": false, "pulled": false, "sutured": false, "what": "", "open_t": 0.0,
-		"at": now,
+		"at": now, "hits": 1, "bandage_t": 0.0, "bandage_dirty": false,
 	})
 	_refresh()
 	if wounds[-1]["blood"] > 0.0 and bleed_level() == 1:
@@ -179,11 +204,10 @@ func bandage(count: int = 1) -> bool:
 		if i < 0:
 			break
 		var heavy: bool = float(wounds[i]["blood"]) >= HEAVY_BLOOD
-		var cost: int = 2 if heavy else 1
+		var cost: int = 2 if heavy and not InjuryRules.dirty(wounds[i]) else 1
 		if cost > budget:
 			break
-		wounds[i]["blood"] = SEEP_BLOOD if heavy else 0.0
-		wounds[i]["bandaged"] = true
+		bandage_wound(i)
 		budget -= cost
 		last_bandages_used += cost
 		done = true
@@ -200,13 +224,16 @@ func bandage_wound(index: int) -> int:
 	if index < 0 or index >= wounds.size():
 		return 0
 	var w: Dictionary = wounds[index]
-	if w["kind"] == "fracture" or (bool(w["bandaged"]) and float(w["blood"]) <= 0.0):
+	if w["kind"] == "fracture" or (bool(w["bandaged"]) and not InjuryRules.dirty(w)):
 		return 0
+	var replacement := InjuryRules.dirty(w)
 	var heavy: bool = float(w["blood"]) >= HEAVY_BLOOD
-	w["blood"] = SEEP_BLOOD if heavy else 0.0
+	w["blood"] = SEEP_BLOOD if heavy or InjuryRules.needs_closure(w) else 0.0
 	w["bandaged"] = true
+	w["bandage_t"] = 0.0
+	w["bandage_dirty"] = false
 	_refresh()
-	return 2 if heavy else 1
+	return 2 if heavy and not replacement else 1
 
 
 # Splints one chosen fracture. False when that wound is not an unsplinted fracture.
@@ -263,7 +290,11 @@ func suture_wound(index: int) -> bool:
 # Will this wound fester if left as it is (stage 2)? A torn wound not cleaned, or
 # anything still stuck in. Never the plague: this is 'festering' and nothing else.
 func festers(w: Dictionary) -> bool:
-	if bool(w["festering"]) or String(w["kind"]) not in FESTER_KINDS:
+	if bool(w["festering"]) or w["kind"] == "fracture":
+		return false
+	if InjuryRules.dirty(w):
+		return true
+	if String(w["kind"]) not in FESTER_KINDS:
 		return false
 	if w["kind"] == "embedded" and not bool(w["pulled"]):
 		return true
@@ -301,6 +332,8 @@ func use_kit() -> bool:
 		if float(w["blood"]) > 0.0:
 			w["blood"] = 0.0
 			w["bandaged"] = true
+			w["bandage_t"] = 0.0
+			w["bandage_dirty"] = false
 	_refresh()
 	return true
 
@@ -322,7 +355,10 @@ func disinfect(index: int = -1) -> bool:
 				best_key = _order_key(i)
 	if index < 0 or index >= wounds.size() or wounds[index]["kind"] == "fracture":
 		return false
+	if wounds[index]["disinfected"] or (wounds[index]["kind"] == "embedded" and not bool(wounds[index].get("pulled", false))):
+		return false
 	wounds[index]["disinfected"] = true
+	wounds[index]["open_t"] = 0.0
 	return true
 
 
@@ -454,12 +490,38 @@ func add_fatigue(x: float) -> void:
 
 # Exhaustion rate multiplier from load and cold (also for add_fatigue callers).
 static func fatigue_mult(ctx: Dictionary) -> float:
-	var m: float = 1.0
-	if int(ctx.get("carry_state", 0)) >= 2:
-		m *= OVERLOAD_FATIGUE
-	if int(ctx.get("cold_level", 0)) >= 1:
-		m *= COLD_FATIGUE
-	return m
+	return Stamina.fatigue_mult(ctx)
+
+
+func pain() -> float:
+	var total := 0.0
+	for w: Dictionary in wounds:
+		total += InjuryRules.pain(w)
+	return minf(1.0, total)
+
+
+func torso_effort() -> float:
+	var load := 0.0
+	for w: Dictionary in wounds:
+		if w["part"] == "torso":
+			load = maxf(load, InjuryRules.pain(w))
+	return 1.0 + load
+
+
+func exert_climb(seconds: float, ctx: Dictionary = {}) -> void:
+	var effort := ctx.duplicate()
+	effort["torso_effort"] = torso_effort()
+	var cost := Stamina.climb_cost(seconds, effort)
+	add_fatigue(cost.x)
+	breath = maxf(0.0, breath - cost.y)
+	_update_breath_lock()
+
+
+func _update_breath_lock() -> void:
+	if breath <= RUN_BREATH_MIN:
+		breath_locked = true
+	elif breath >= Stamina.RUN_BREATH_RESUME:
+		breath_locked = false
 
 
 # ctx: running, swinging, carry_state, cold_level, indoor_rest. Returns event names.
@@ -468,7 +530,6 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 	if dead or delta <= 0.0:
 		return events
 	var running: bool = bool(ctx.get("running", false))
-	var swinging: bool = bool(ctx.get("swinging", false))
 	cold_level = int(ctx.get("cold_level", 0))
 
 	# Bleeding
@@ -478,9 +539,11 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 			light_bleed_time += delta
 			if light_bleed_time >= LIGHT_BLEED_STOP:
 				for w: Dictionary in wounds:
-					w["blood"] = 0.0
+					if not InjuryRules.needs_closure(w):
+						w["blood"] = 0.0
 				_refresh()
-				events.append("bleed_stopped")
+				if bleed_level() == 0:
+					events.append("bleed_stopped")
 	elif level >= 2:
 		heavy_bleed_time += delta
 		if downed:
@@ -494,11 +557,22 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 			events.append("died")
 			return events
 
-	# Festering (stage 2): a dirty wound left FESTER_TIME turns.
+	# Count only the part of a tick spent dirty, including a large time step.
 	if FESTER_IN_FIELD:
 		for w: Dictionary in wounds:
+			var was_at_risk := festers(w)
+			var exposed := delta
+			if bool(w["bandaged"]) and not InjuryRules.dirty(w) and not bool(w.get("sutured", false)):
+				var old_t := float(w.get("bandage_t", 0.0))
+				var life := InjuryRules.bandage_life(w)
+				w["bandage_t"] = old_t + delta
+				if float(w["bandage_t"]) >= life:
+					w["bandage_dirty"] = true
+					events.append("bandage_dirty")
+					if not was_at_risk:
+						exposed = maxf(0.0, old_t + delta - life)
 			if festers(w):
-				w["open_t"] = float(w["open_t"]) + delta
+				w["open_t"] = float(w.get("open_t", 0.0)) + exposed
 				if float(w["open_t"]) >= FESTER_TIME:
 					w["festering"] = true
 					events.append("festering")
@@ -512,11 +586,13 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 				infection = ""
 
 	# Exhaustion
-	var gain: float = RUN_FATIGUE * delta if running else 0.0
-	exhaustion += gain * fatigue_mult(ctx)
-	if bool(ctx.get("indoor_rest", false)) and not running and not swinging:
-		exhaustion -= REST_RECOVER * delta
-	exhaustion = clampf(exhaustion, 0.0, 1.0)
+	_update_breath_lock()
+	var effort := ctx.duplicate()
+	effort["torso_effort"] = torso_effort()
+	var stamina := Stamina.advance(exhaustion, breath, delta, effort)
+	exhaustion = stamina.x
+	breath = stamina.y
+	_update_breath_lock()
 	if exhaustion_level() == 2:
 		if not _heavy_reported:
 			_heavy_reported = true
@@ -524,25 +600,19 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 	else:
 		_heavy_reported = false
 
-	# Breath
-	if running:
-		breath -= BREATH_RUN * delta
-	elif not swinging:
-		breath += BREATH_REST * delta
-	breath = clampf(breath, 0.0, 1.0)
 	return events
 
 
 func exhaustion_level() -> int:
-	if exhaustion >= 0.8:
+	if exhaustion >= Stamina.FATIGUE_HEAVY:
 		return 2
-	if exhaustion >= 0.5:
+	if exhaustion >= Stamina.FATIGUE_LIGHT:
 		return 1
 	return 0
 
 
 func can_run() -> bool:
-	return not leg_fracture and not has_deep_leg_wound() and exhaustion_level() < 2 and breath > RUN_BREATH_MIN and not downed and not dead
+	return not leg_fracture and not has_deep_leg_wound() and exhaustion_level() < 2 and breath > RUN_BREATH_MIN and not breath_locked and not downed and not dead
 
 
 # body_injury 4.2. Speed factors (time = base / factor) except aim_min (circle floor size, bigger is worse).
@@ -551,10 +621,8 @@ func can_run() -> bool:
 ## the one action that may fall below half. It scales the chance to hit the
 ## head and to knock down (weapons.melee_odds), so a spent, bleeding, frozen
 ## hand needs many blows where a fresh one needs two.
-const MELEE_HIT_FLOOR: float = 0.15
 ## Hunger and sore muscles come from the train; the field has no such state
 ## yet. ctx["hunger_level"], ctx["sore_level"]: 0 none, 1 some, 2 bad.
-const MELEE_HIT_NEED: Array[float] = [1.0, 0.85, 0.65]
 
 
 func multipliers(ctx: Dictionary) -> Dictionary:
@@ -566,6 +634,31 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 		"swap": 1.0, "hands": 1.0, "shove_window": 1.0, "aim_shrink": 1.0,
 		"melee_hit": 1.0,
 	}
+	var arm_hurt := 0.0
+	var leg_hurt := 0.0
+	var head_bleeding := false
+	for w: Dictionary in wounds:
+		if w["kind"] == "fracture":
+			continue
+		if _in_group(String(w["part"]), "arm"):
+			arm_hurt = maxf(arm_hurt, InjuryRules.severity(w))
+		elif _in_group(String(w["part"]), "leg"):
+			leg_hurt = maxf(leg_hurt, InjuryRules.severity(w))
+		elif w["part"] == "head_neck" and float(w["blood"]) > 0.0 and not bool(w["bandaged"]):
+			head_bleeding = true
+	if not arm_fracture and arm_hurt > 0.0:
+		_mul(m, "aim_min", lerpf(1.0, InjuryRules.HEAD_AIM_MULT, arm_hurt))
+		_mul(m, "reload", lerpf(1.0, InjuryRules.ARM_RELOAD_MULT, arm_hurt))
+		_mul(m, "swap", lerpf(1.0, InjuryRules.ARM_SWAP_MULT, arm_hurt))
+		_mul(m, "hands", lerpf(1.0, InjuryRules.ARM_HANDS_MULT, arm_hurt))
+		_mul(m, "shove_window", lerpf(1.0, InjuryRules.ARM_SHOVE_MULT, arm_hurt))
+	if not leg_fracture and leg_hurt > 0.0:
+		_mul(m, "move", lerpf(1.0, InjuryRules.LEG_MOVE_MULT, leg_hurt))
+	if head_bleeding:
+		_mul(m, "aim_min", InjuryRules.HEAD_AIM_MULT)
+	var pain_mult := lerpf(1.0, InjuryRules.PAIN_ACTION_FLOOR, pain())
+	_mul(m, "hands", pain_mult)
+	_mul(m, "aim_shrink", pain_mult)
 	# Bag (strength 7+ halves these)
 	if carry == 1:
 		_mul(m, "move", _soft(0.9, strong))
@@ -658,7 +751,7 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	m["aim_min"] = minf(AIM_MAX, float(m["aim_min"]))
 	if carry >= 3:
 		m["move"] = 0.0
-	m["one_hand"] = arm_fracture
+	m["one_hand"] = arm_fracture or arm_hurt >= 1.0
 	return m
 
 
@@ -690,8 +783,8 @@ func icons() -> Array:
 	return out.slice(0, 5)
 
 
-# The icons with their words (user, build 47: 'icons like Zomboid; press one and it
-# says what it does to you'). Same order as icons(). Each row: id, short (the two
+# The icons with their words: press one for its effects. Same order as icons().
+# Each row: id, short (the two
 # letters on the icon), title (a noun phrase), good (a help or a harm), severe, text.
 func status_notes() -> Array:
 	var out: Array = []
@@ -810,7 +903,7 @@ func _set_fracture(group: String, on: bool) -> void:
 
 
 static func _in_group(part: String, group: String) -> bool:
-	return group == "" or part.begins_with(group + "_")
+	return group == "" or part == group or part.begins_with(group + "_")
 
 
 func _has_fracture_on(part: String) -> bool:
@@ -840,9 +933,9 @@ func _light_side(group: String, kind: String) -> String:
 		if String(w["kind"]) != kind and not (kind == "cut" and w["kind"] in ["laceration", "deep"]):
 			continue
 		if w["part"] == group + "_left":
-			left += 1
+			left += int(w.get("hits", 1))
 		elif w["part"] == group + "_right":
-			right += 1
+			right += int(w.get("hits", 1))
 	return group + ("_left" if left <= right else "_right")
 
 
@@ -854,6 +947,8 @@ func _top_bleeder() -> int:
 	var best := -1
 	var best_blood := 0.0
 	for i in wounds.size():
+		if bool(wounds[i]["bandaged"]) and not InjuryRules.dirty(wounds[i]):
+			continue
 		var blood: float = wounds[i]["blood"]
 		if blood > best_blood:
 			best = i
@@ -880,6 +975,8 @@ func _order_key(i: int) -> float:
 	if float(w["blood"]) > 0.0:
 		return 3.0 + float(w["blood"])
 	if w["festering"]:
+		return 2.0
+	if InjuryRules.dirty(w):
 		return 2.0
 	if w["kind"] == "fracture" and not w["splinted"]:
 		return 1.5 if String(w["part"]).begins_with("leg_") else 1.0
