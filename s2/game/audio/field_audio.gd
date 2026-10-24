@@ -48,6 +48,11 @@ const DOOR_VOICES: Dictionary = {
 	"break": ["door_break", 1.0, 0.95, 1.05],
 }
 const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
+## A manhole lid dragged aside by one of the dead coming up (decision 422 M9):
+## group, loudness, pitch low and high. Until a file is in its group it is the
+## impact set's iron, pitched down.
+const LID_VOICE: Array = ["lid_scrape", 0.7, 0.55, 0.65]
+const LID_STANDIN: String = "metal"    # the impact file that stands in for it
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
 ## moan that stands in for it. First values.
@@ -394,6 +399,25 @@ func door(kind: String, at: Vector3, level: int) -> void:
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])))
 
 
+## A lid dragged off a manhole, for the player's ear only: no rule hears it
+## (the dead's coming up is heard as it was).
+func lid_scrape(at: Vector3) -> void:
+	var group: String = LID_VOICE[0]
+	if not lib.has(group):
+		lib[group] = _load_group(group)
+	played.append(group)
+	var d: float = at.distance_to(game.player.position)
+	var lin: float = float(LID_VOICE[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
+	var pitch := randf_range(float(LID_VOICE[2]), float(LID_VOICE[3]))
+	if has(group):
+		_one_shot(group, at, lin, pitch)
+		return
+	for s: AudioStream in lib.get("impact", []):
+		if s.resource_path.get_file().begins_with(LID_STANDIN):
+			_one_shot("impact", at, lin, pitch, s)
+			return
+
+
 ## The brakes as the train comes to its stand on open line (user decision
 ## 141's file). Part of the opening scene: nothing in the field hears it.
 func train_brake() -> void:
@@ -452,7 +476,7 @@ func footstep(at: Vector3, running: bool) -> void:
 		_one_shot("step_snow", at, 0.5 if running else 0.3, randf_range(0.9, 1.1))
 
 
-func _one_shot(group: String, at: Vector3, lin: float, pitch: float) -> void:
+func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: AudioStream = null) -> void:
 	if lin <= 0.01 or not has(group):
 		return
 	var o: AudioStreamPlayer3D = one_shots[0]
@@ -461,7 +485,7 @@ func _one_shot(group: String, at: Vector3, lin: float, pitch: float) -> void:
 			o = p
 			break
 	o.position = at
-	o.stream = _pick(group)
+	o.stream = stream if stream != null else _pick(group)
 	o.volume_db = _db(lin)
 	o.pitch_scale = pitch
 	o.play()

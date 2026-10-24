@@ -1840,6 +1840,8 @@ func _update_spawns(delta: float) -> void:
 		var key: String = s["entry"]
 		# A manhole closed mid-horde sends the rest out of the culvert.
 		if director.sewer(key) and not director.is_open(key):
+			if FieldMaps.lid(key) and view.manhole_nodes.has(key):
+				view.jolt_manhole(key)   # they push at it from under, and it holds
 			key = _other_way(key)
 			s["entry"] = key
 			s["pos"] = entry_pos(key)
@@ -1913,6 +1915,7 @@ func _climb_out(z: Dictionary, key: String, s: Dictionary) -> void:
 	if FieldMaps.lid(key) and view.manhole_nodes.has(key):
 		if not lid_open.has(key):
 			view.update_manhole(key, false, true)
+			audio.lid_scrape(view.manhole_nodes[key].global_position)
 		lid_open[key] = float(Motion.row("dead_climb_lid")["len"])
 
 
