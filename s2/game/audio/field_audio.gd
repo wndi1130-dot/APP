@@ -131,6 +131,7 @@ const GUST_LEN: Array = [1.6, 4.5]
 const GUST_LOUD: Array = [0.35, 0.8]  # of the bed's level, at the gust's top
 const GUST_PITCH: Array = [0.82, 1.22]   # where a gust starts and ends: its bend
 const GUST_APART: float = 0.25        # of the file: a gust starts this far from the last one's place
+const GUST_PITCH_APART: float = 0.06  # and its starting pitch more than this from the last one's
 const HOWL_LAYERS: Array = [1, 3]
 const HOWL_LEN: Array = [3.0, 6.5]
 const GUSTS: int = 3                  # players for gusts (a howl lays up to three)
@@ -580,14 +581,22 @@ func _gust(length: float, peak: float, howl_layer: bool) -> void:
 	var stream: AudioStream = lib["wind"][0]
 	var full: float = maxf(stream.get_length(), 0.1)
 	var last: Array = gust_log.back() if not gust_log.is_empty() else []
+	var lo: float = float(GUST_PITCH[0])
+	var hi: float = float(GUST_PITCH[1])
 	var from: float = randf_range(0.0, full * 0.7)
-	var p0: float = randf_range(float(GUST_PITCH[0]), float(GUST_PITCH[1]))
-	var p1: float = randf_range(float(GUST_PITCH[0]), float(GUST_PITCH[1]))
-	for k in range(8):
-		if last.is_empty() or (absf(from - float(last[0])) >= GUST_APART * full and absf(p0 - float(last[3])) > 0.06):
-			break
-		from = randf_range(0.0, full * 0.7)
-		p0 = randf_range(float(GUST_PITCH[0]), float(GUST_PITCH[1]))
+	var p0: float = randf_range(lo, hi)
+	var p1: float = randf_range(lo, hi)
+	if not last.is_empty():
+		# Too near the last one's place or pitch: step away from it, so no two
+		# gusts in a row ever have the same shape. The first 70% of the file is
+		# wider than two steps, so one way always fits.
+		var was: float = float(last[0])
+		if absf(from - was) < GUST_APART * full:
+			var away: float = (GUST_APART + 0.1 * randf()) * full
+			from = was + away if was + away <= full * 0.7 else was - away
+		var pitch_was: float = float(last[3])
+		if absf(p0 - pitch_was) <= GUST_PITCH_APART:
+			p0 = pitch_was + 2.0 * GUST_PITCH_APART if pitch_was + 2.0 * GUST_PITCH_APART <= hi else pitch_was - 2.0 * GUST_PITCH_APART
 	var p: AudioStreamPlayer = g["player"]
 	g["t"] = 0.0
 	g["len"] = length

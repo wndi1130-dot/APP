@@ -8,6 +8,7 @@ var game
 
 
 func before_each() -> void:
+	seed(20261024)   # the ear's dice: the same every run, so a check never rides on luck
 	game = FieldGame.new()
 	game.opts = {"seed": 5, "raiders": false, "auto_pause": false}
 	add_child_autofree(game)
@@ -477,8 +478,8 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 		var g: Array = a.gust_log[k]
 		var before: Array = a.gust_log[k - 1]
 		assert_between(float(g[1]), float(a.GUST_LEN[0]), float(a.GUST_LEN[1]))
-		assert_true(absf(float(g[0]) - float(before[0])) >= a.GUST_APART * full - 0.001 or absf(float(g[3]) - float(before[3])) > 0.06, "not the shape just heard")
-		assert_false(g == before)
+		assert_gte(absf(float(g[0]) - float(before[0])), a.GUST_APART * full - 0.001, "not the place just heard")
+		assert_gt(absf(float(g[3]) - float(before[3])), a.GUST_PITCH_APART, "nor the pitch")
 
 
 func test_a_stronger_wind_gusts_more_often() -> void:
