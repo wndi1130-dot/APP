@@ -530,8 +530,8 @@ S2 회색 상자는 소리 파일이 없어서 무리가 오는 것을 막대로
 
 | 순서 | 소리 | 층(6장) | 규칙 | 재료 후보 |
 |---|---|---|---|---|
-| 1 | 망자 신음 | 3 세계 | 위치 소리(`AudioStreamPlayer3D`). 가까운 망자 몇(동시 최대 6)만 개별로 내고, 나머지는 무리 덩어리 바탕 한 줄로 묶어 수와 거리에 따라 키운다. 높이 ±5%, 변형 돌리기(`AudioStreamRandomizer`) | OpenGameArt [Zombies Sound Pack](https://opengameart.org/content/zombies-sound-pack)(artisticdude, CC0, wav 24개), [zombie noises and moans](https://opengameart.org/content/zombie-noises-and-moans)(ianzazz, CC0), [zombie moans](https://opengameart.org/content/zombie-moans)(Darsycho, CC0) |
-| 2 | 무리가 모여듦 | 1 규칙 경고 | 소음 단추에 반응한 망자가 생기면(지금 `noise_hits`) 멀리서 신음이 모이는 층을 올리고, 화면 표시를 짝으로 띄운다(원칙 1). 지붕의 새 떼가 한꺼번에 날아오르는 소리를 한 번 얹는다(zombies.md 망자 예고) | 1의 재료를 겹쳐 만든다. 새 떼 날갯짓은 찾을 것 |
+| 1 | 망자 신음 | 3 세계 | 위치 소리(`AudioStreamPlayer3D`). 플레이어가 볼 수 있는 망자(시야 가림·보이는 층·화면 안)만 목소리를 낸다. 그 가운데 가까운 몇(동시 최대 6)만 개별로 내고, 나머지 보이는 무리는 바탕 한 줄로 묶어 수와 거리에 따라 키운다. 망자마다 목소리 갈래(낮음·보통·높음, 갓 일어난 자는 거친 목)와 높이가 씨앗으로 정해지고, 하는 짓에 따라 서성임·알아챔·쫓음·물기·맞음·쓰러짐 소리를 나눠 낸다. 같은 파일이 연달아 나오지 않는다(2026-10-24 사용자 말 「멀리 있거나 보이지도 않는데 우어어어 소리나는 것도 짜침」, 「좀비 소리도 다양하게」). 안 보이는 망자의 행동 소리(두드림, 쓰러짐)는 그대로 들리고 벽 너머면 둔하게 난다 | OpenGameArt [Zombies Sound Pack](https://opengameart.org/content/zombies-sound-pack)(artisticdude, CC0, wav 24개), [zombie noises and moans](https://opengameart.org/content/zombie-noises-and-moans)(ianzazz, CC0), [zombie moans](https://opengameart.org/content/zombie-moans)(Darsycho, CC0) |
+| 2 | 무리가 모여듦 | 1 규칙 경고 | 무리가 출발하면 목소리가 아닌 신호로 알린다: 먼 데서 무언가 무너지는 낮고 둔한 쿵 하나와, 가끔 지붕의 새 떼가 한꺼번에 날아오르는 소리(zombies.md 망자 예고). 무전 예보와 화면 소리 표시는 그대로다(원칙 1). 멀리서 신음이 모이는 층은 2026-10-24에 뺐다(멀리 있는 망자는 보이지 않으니 목소리를 내지 않는다) | 1의 재료를 겹쳐 만든다. 새 떼 날갯짓은 찾을 것 |
 | 3 | 소음 단추 자체 | 3 세계 | 반경 12m를 부르는 소리이니 그만큼 커야 한다. 쇠를 두드리는 소리나 깨지는 소리 하나 | Kenney Impact Sounds(CC0, rights_ledger 49줄) |
 | 4 | 발소리 | 3 세계 | 탭 이동마다. 눈 위 | 가루눈 걷기 773736, 단단한 눈 559459(둘 다 CC0, rights_ledger) |
 | 5 | 바탕 | 6 바탕 | 바람이 끊기지 않게 깔리고, 열차 엔진이 멀리서 숨 쉰다(거리에 따라 작아짐) | 증기기관차 대기 686057(CC0). 바람은 찾을 것 |
