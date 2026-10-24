@@ -34,6 +34,18 @@ const RISE_FRONT: int = 13                    # getting up off its face
 const STAGGER: int = 14                       # spent after a run: bent over, reeling on wide legs
 const FALL_THROWN: int = 15                   # on its back, thrown over (decision 412)
 const FALL_SLUMP: int = 16                    # on its face, slumped
+# What the reference game's dead do that these could not yet (motion detail 2,
+# 2026-10-24): baked in both bodies; nothing here picks them yet.
+const THUMP: int = 17                         # at a door, both forearms on it (motion.gd dead_thump)
+const CLAW: int = 18                          # at a door, clawing with one hand then the other
+const HIT_LEFT: int = 19                      # struck on the head from its left
+const HIT_RIGHT: int = 20                     # from its right
+const HIT_TOP: int = 21                       # from above
+const HIT_UPPER: int = 22                     # from under the chin
+const TURN_LEFT: int = 23                     # turning round to something on its left
+const TURN_RIGHT: int = 24                    # on its right
+const WALK_D: int = 25                        # two slower walks: a shuffle
+const WALK_E: int = 26                        # and a lurch on a stiff leg
 const CRAWL_LEN: float = 1.8                  # one round of the crawl, seconds (as baked)
 # How far one round of a motion carries the body, metres, so that the foot
 # going backwards stays on its spot. The bake measures it on the body it bakes
@@ -232,10 +244,9 @@ static func packed(plain: Color, motion: int, from: int, share: float) -> Color:
 ## The motion a packed colour is in (undoing packed()).
 static func motion_in(g: float) -> int:
 	var at := floorf(g + 0.5)
-	var upper := at >= VatBaker.UPPER
-	if upper:
-		at -= VatBaker.UPPER
-	return int(fposmod(at, 16.0)) + (16 if upper else 0)
+	var upper := floorf(at / VatBaker.UPPER)
+	at -= upper * VatBaker.UPPER
+	return int(fposmod(at, 16.0)) + 16 * int(upper)
 
 
 ## The motion one body is in and how far through it, before any easing.

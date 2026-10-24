@@ -13,6 +13,7 @@ const Pose = preload("res://game/actors/person_pose.gd")
 const WALK: float = 2.1
 const RUN: float = 3.9
 const CROUCH: float = 1.1
+const CROUCH_NOISE_MULT: float = 0.5 # contract with the sound rules; no extra sound event
 const ROLE_COLORS: Dictionary = {
 	"chief": Color(0.92, 0.9, 0.84), "companion": Color(0.72, 0.62, 0.45), "worker": Color(0.55, 0.45, 0.35),
 	"escort": Color(0.45, 0.5, 0.42), "raider": Color(0.7, 0.3, 0.26), "survivor": Color(0.6, 0.6, 0.7),
@@ -180,8 +181,8 @@ func weapon_id() -> String:
 func weight() -> float:
 	var w := Carry.total_weight(items)
 	for i in range(1, hands.size()):
-		w += Carry.item_weight(hands[i]["id"]) * 0.5
-	w += 1.0 if heat.wet > 0.5 else 0.0
+		w += Carry.item_weight(hands[i]["id"]) * Carry.RESERVE_WEAPON_WEIGHT
+	w += Carry.SOAKED_WEIGHT if heat.wet > Carry.SOAKED_THRESHOLD else 0.0
 	return w
 
 
@@ -196,7 +197,7 @@ func carry_state() -> int:
 ## S2 keeps only the '추움' tier (on/off, s2_station 2.4 after the 2026-10-07
 ## review). Hypothermia tiers wait for S3.
 func cold_level() -> int:
-	return mini(heat.level(), 1)
+	return 1 if heat.wet > BodyHeat.WET_COLD_THRESHOLD else mini(heat.level(), 1)
 
 
 ## A close kill splashes the coat; three within a minute soak it: the body
@@ -233,12 +234,20 @@ func mults() -> Dictionary:
 	return body.multipliers(mult_ctx())
 
 
+## The field loop can pass this complete movement/work context to the body.
+func body_context(indoor: bool = false) -> Dictionary:
+	return {"running": is_running_now(), "moving": moving, "swinging": swing_t > 0.0,
+		"working": action != "" or climbing, "crouched": crouched,
+		"carry_state": carry_state(), "cold_level": cold_level(),
+		"indoor_rest": indoor and not moving and action == "" and grabbers.is_empty() and fallen_t <= 0.0}
+
+
 func speed(floor_kind: int) -> float:
 	var base := WALK
-	if running and body.can_run() and carry_state() <= 2:
-		base = RUN
-	elif crouched:
+	if crouched:
 		base = CROUCH
+	elif running and body.can_run() and carry_state() <= 2:
+		base = RUN
 	if carry_state() >= 3:
 		return 0.0
 	var m: Dictionary = mults()
@@ -246,7 +255,7 @@ func speed(floor_kind: int) -> float:
 
 
 func is_running_now() -> bool:
-	return running and moving and body.can_run()
+	return running and moving and not crouched and carry_state() < 3 and body.can_run()
 
 
 func add_item(id: String, n: int = 1) -> void:
@@ -263,14 +272,32 @@ func take_item(id: String, n: int = 1) -> bool:
 
 
 func start_action(id: String, label: String, seconds: float, done: Callable) -> void:
+	if id == "climb" and carry_state() >= 3:
+		return
+	if id == "splint" and not _can_simple_splint():
+		return
 	_free_busy()
 	action = id
 	action_label = label
 	action_t = seconds
 	action_total = seconds
-	action_done = done
+	action_done = _complete_simple_splint.bind(done) if id == "splint" else done
 	path = PackedVector3Array()
 	moving = false
+	if id == "climb":
+		body.exert_climb(seconds, body_context())
+
+
+func _can_simple_splint() -> bool:
+	return int(items.get("cloth", 0)) > 0 and (int(items.get("plank", 0)) > 0 or int(items.get("wood", 0)) > 0) and (body.arm_fracture or body.leg_fracture) and not body.splinted
+
+
+func _complete_simple_splint(done: Callable) -> void:
+	if not _can_simple_splint() or not done.is_valid():
+		return
+	# The existing completion takes the plank. Consume cloth at completion too.
+	take_item("cloth")
+	done.call()
 
 
 func cancel_action() -> void:

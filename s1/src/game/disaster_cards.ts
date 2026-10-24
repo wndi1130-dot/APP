@@ -23,11 +23,11 @@ function prepView(g: Game, card: Card): CardView | null {
     ? `서쪽 하늘이 낮다. 내일부터 ${lenOf(kind)}구간 눈보라가 온다. 모든 칸 온기 −${warm}, 석탄이 구간마다 ${coalOf(kind)} 더 든다. 대비 없이 가면 밤사이 얼어 숨지는 사람이 나올 수 있다.`
     : `북쪽에서 찬 공기가 내려온다. 내일부터 ${lenOf(kind)}구간 한파가 온다. 모든 칸 온기 −${warm}, 석탄이 구간마다 ${coalOf(kind)} 더 든다. 대비 없이 가면 밤사이 얼어 숨지는 사람이 나올 수 있다.`;
   const choices: Choice[] = [
-    { label: '석탄을 쌓아 둔다', say: '불을 미리 키워 둬라. 석탄은 이럴 때 쓰려고 있다.', effs: [{ t: 'coal', v: -DZ.prepCoal }], special: 'dz_coal', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '재난 동안 더 드는 석탄이 없다'] },
+    { label: '석탄을 쌓아 둔다', say: '불을 미리 키워 둬라. 석탄은 이럴 때 쓰는 거다.', effs: [{ t: 'coal', v: -DZ.prepCoal }], special: 'dz_coal', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '재난 동안 더 드는 석탄이 없다'] },
     {
       label: '칸을 모아 잔다', say: '오늘 밤은 문을 열어 두고 한 칸에 붙어 자라. 서로 체온이 난로다.',
       effs: [...HUDDLE_COMMS.map(c => ({ t: 'base' as const, c, i: 2 as const, v: DZ.huddleCrowd })), { t: 'tension', v: DZ.huddleTension }],
-      special: 'dz_huddle', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '과밀은 재난이 끝나면 돌아온다'],
+      special: 'dz_huddle', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '과밀은 재난이 끝나면 원래대로 돌아간다'],
     },
     // 출발 미루기(날씨 명세 4장, DZ.wait로 끈다): 석탄과 긴장을 치르고 첫 구간을 선 채로 넘기며, 그날 같은 정차를 한 번 더 뒤진다.
     // 눈보라 예고 때만 있다(결정 338). 한파에도 두면 늘 미루기가 가장 나아진다(500판, 결정 332).

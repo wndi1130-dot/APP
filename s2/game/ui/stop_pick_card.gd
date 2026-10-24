@@ -119,7 +119,7 @@ static func model(g0: Dictionary, t0: Dictionary, name: String = "") -> Dictiona
 		"crews": crews,
 		"comm": c,
 		"size": size,
-		"crew_line": "%s 노출 %d → %d · %s" % [COMM_SHORT.get(c, c), int(pre["from"]), int(pre["to"]), who],
+		"crew_line": "노출 %d → %d · %s" % [int(pre["from"]), int(pre["to"]), who],
 		"exposure": [int(pre["from"]), int(pre["to"])],
 		"names": names.slice(0, 2).map(func(n): return String(n).get_slice(" ", 0)),
 		"more": maxi(0, names.size() - 2),
@@ -317,7 +317,8 @@ func _crew_line(m: Dictionary) -> void:
 	var words = TypeLine.new(0.0, 22.0)
 	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.add_child(words)
-	words.add_child(_side("%s 노출 " % COMM_SHORT.get(String(m["comm"]), String(m["comm"]))))
+	# The car is the chip lit right over it (결정 417): no name again.
+	words.add_child(_side("노출 "))
 	var ex: Array = m["exposure"]
 	words.add_child(_num("%d → %d" % [ex[0], ex[1]], 500, Paper.INK))
 	var names: Array = m["names"]
@@ -343,13 +344,14 @@ func _promise_line(m: Dictionary) -> void:
 		return
 	var line := Paper.line_box(24.0)
 	line.add_theme_constant_override("separation", int(round(UiFonts.px(6.0))))
-	line.add_child(Paper.mark("fetch", 16.0))
+	line.add_child(Paper.mark("promise", 16.0))
 	var words = TypeLine.new(0.0, 24.0)
 	words.name = "Promises"
 	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.add_child(words)
 	# Its numbers in the number face, on the words' baseline (.promline .num).
-	for run: Array in _digit_runs(said.replace("약속: ", "약속 · ")):
+	# The promise mark says what the line is (결정 417): no 「약속」 before it.
+	for run: Array in _digit_runs(said.trim_prefix("약속: ")):
 		words.add_child(_num(run[0], 400, Paper.INK) if run[1] else _side(run[0]))
 	var st: Dictionary = promise_stamp(promises, String(m["comm"]), t)
 	if not st.is_empty():

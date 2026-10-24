@@ -71,7 +71,7 @@ function prologueView(g: Game, card: Card): CardView | null {
         body: `${who(g)} 열차장 앞에 섰다. "저탄장에 우리 사람 다섯이 있다. 그들을 데려오면 첫 회기에서 당신 편에 서겠다." 출발 전까지다.`,
         choices: [
           { label: '약속한다', say: '다섯 다 데려온다. 한 사람도 두고 가지 않는다.', effs: [], special: 'pro_promise', extra: ['다 데려오면 약속을 지킨 것, 하나라도 남기면 어긴 것'] },
-          { label: '약속하지 않는다', say: '약속은 못 한다. 할 수 있는 만큼만 한다.', effs: [], special: 'pro_refuse', extra: ['어기는 일은 없다. 첫 거래가 무거워진다'] },
+          { label: '약속하지 않는다', say: '약속은 못 한다. 할 수 있는 만큼만 한다.', effs: [], special: 'pro_refuse', extra: ['어길 약속이 없다. 첫 거래 요구가 커진다'] },
         ],
       };
     case 'pro_search': {

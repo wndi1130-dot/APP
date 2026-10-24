@@ -84,8 +84,11 @@ func test_a_fracture_takes_a_plank_or_wood() -> void:
 	var b := Body.new()
 	var i: int = b.add_wound("leg_left", "fracture", 0.0)
 	assert_eq(_states(Treatment.plan(b.wounds[i], {})), [Treatment.MISSING])
-	var steps: Array = Treatment.plan(b.wounds[i], {"wood": 1})
-	assert_eq(steps[0]["tool"], "wood")
+	# A splint is a stick and a cloth (body_injury 4.6 도구: 부목(막대 + 천)).
+	assert_eq(_states(Treatment.plan(b.wounds[i], {"wood": 1})), [Treatment.MISSING], "wood alone is not a splint")
+	var steps: Array = Treatment.plan(b.wounds[i], {"wood": 1, "cloth": 1})
+	assert_eq(steps[0]["state"], Treatment.DO)
+	assert_eq([int(steps[0]["uses"].get("wood", 0)), int(steps[0]["uses"].get("cloth", 0))], [1, 1])
 	assert_eq(Treatment.apply(b, i, "splint"), 1)
 	assert_true(b.wounds[i]["splinted"])
 	assert_eq(_states(Treatment.plan(b.wounds[i], {"wood": 1})), [Treatment.DONE])

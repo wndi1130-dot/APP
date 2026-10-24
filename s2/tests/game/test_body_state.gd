@@ -145,7 +145,11 @@ func test_two_bandages_save_a_downed_person() -> void:
 	assert_eq(b.bleed, 1)
 	assert_false(b.downed)
 	assert_eq(b.heavy_bleed_time, 0.0)
-	assert_true(b.bandage())
+	# A deep wound bound with bandages alone seeps on (body_injury 4.6 table:
+	# 붕대만 감으면 금방 배어 피가 이어짐): a third does not close it, stitches do.
+	assert_false(b.bandage())
+	assert_eq(b.bleed, 1)
+	assert_true(b.suture_wound(0))
 	assert_eq(b.bleed, 0)
 	assert_false(b.bandage())
 

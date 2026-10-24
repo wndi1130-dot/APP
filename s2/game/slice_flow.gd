@@ -661,7 +661,8 @@ func _plate(name_label: Label3D) -> Control:
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		row.gui_input.connect(_plate_input.bind(id))
 		if float(St.situation(train_g, train_t, String(def["comm"]))[0]) < CarPane.COLD:
-			var tag: Control = GlassParts.paper_tag("추움", "snow", -2.5)
+			# The snow mark alone: the frost says cold (결정 417).
+			var tag: Control = GlassParts.paper_tag("", "snow", -2.5)
 			tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			row.add_child(tag)
 	return row
