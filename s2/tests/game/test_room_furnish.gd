@@ -172,3 +172,84 @@ func _reach_all(d: Dictionary) -> Dictionary:
 				seen[n] = true
 				queue.append(n)
 	return seen
+
+
+## ---------------------------------------------------------------- 방 종류별 가구
+
+## 침실 하나(바깥벽, 남쪽 문, 방 안 x 2~7 · y 2~5 = 6×4), 상자 하나.
+func _bedroom() -> Dictionary:
+	var g := FieldGrid.new(10, 8)
+	for y in range(8):
+		for x in range(10):
+			var c := Vector2i(x, y)
+			if x >= 1 and x <= 8 and y >= 1 and y <= 6:
+				g.building[g.index(c)] = 0
+				var wall: bool = x == 1 or x == 8 or y == 1 or y == 6
+				g.set_solid(c, S.WALL if wall else S.NONE)
+	var door := Vector2i(4, 6)
+	g.set_solid(door, S.DOOR)
+	g.doors[door] = {"state": "closed", "hp": 8, "building": 0, "cell": door}
+	var win := Vector2i(8, 3)
+	g.set_solid(win, S.WINDOW)
+	g.windows[win] = {"broken": false, "glass": false, "building": 0, "cell": win}
+	g.refresh_paths()
+	return {"grid": g, "levels": {0: g}, "stairs": [], "low_blocks": [], "place_id": "houses_99",
+		"containers": {"cache_0": {"id": "cache_0", "cell": Vector2i(6, 4), "level": 0, "items": ["plank"]}},
+		"props": [
+			{"kind": "bed", "rect": Rect2i(2, 2, 2, 1), "solid": "none", "facing": 0, "note": "안방의 침대", "level": 0},
+			{"kind": "cold_stove", "rect": Rect2i(7, 5, 1, 1), "solid": "none", "facing": 0, "note": "안방의 꺼진 난로", "level": 0},
+			{"kind": "wardrobe", "rect": Rect2i(2, 5, 2, 1), "solid": "none", "facing": 0, "note": "안방의 장롱", "level": 0},
+		]}
+
+
+func test_a_bedroom_gets_a_bed_and_a_wardrobe_by_the_rules() -> void:
+	var d := _bedroom()
+	var stats := RoomFurnish.furnish_rooms(d)
+	assert_eq(stats["rooms"], 1)
+	assert_eq(stats["need_missing"], 0)
+	var kinds: Array = []
+	for p: Dictionary in d["props"]:
+		kinds.append(p["kind"])
+		var r: Rect2i = p["rect"]
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				var c := Vector2i(x, y)
+				assert_false(c == Vector2i(4, 5) or c == Vector2i(4, 4), "문 안쪽 2칸: %s %s" % [p["kind"], c])
+				if p["kind"] == "wardrobe" or p["kind"] == "bookcase":
+					assert_ne(c, Vector2i(7, 3), "창 앞 큰 가구")
+	assert_has(kinds, "bed")
+	assert_has(kinds, "wardrobe")
+	assert_false(kinds.has("cold_stove"), "침실 묶음에 난로는 없다")
+
+
+func test_the_box_goes_into_a_holding_piece() -> void:
+	var d := _bedroom()
+	RoomFurnish.furnish_rooms(d)
+	var box: Dictionary = d["containers"]["cache_0"]
+	assert_has(["wardrobe", "blanket_chest", "bookcase"], box.get("furniture", ""))
+	var inside := false
+	for p: Dictionary in d["props"]:
+		if p["kind"] == box["furniture"] and (p["rect"] as Rect2i).has_point(box["cell"]):
+			inside = true
+	assert_true(inside, "상자 칸이 그 가구 칸 안")
+	assert_eq(box["items"], ["plank"], "내용물 그대로")
+
+
+func test_same_seed_same_room_other_map_other_room() -> void:
+	var a := _bedroom()
+	var b := _bedroom()
+	var c := _bedroom()
+	c["place_id"] = "houses_98"
+	RoomFurnish.furnish_rooms(a)
+	RoomFurnish.furnish_rooms(b)
+	RoomFurnish.furnish_rooms(c)
+	assert_eq(str(a["props"]), str(b["props"]))
+	assert_eq(a["grid"].solid, b["grid"].solid)
+
+
+func test_shop_upstairs_with_a_bed_is_a_home() -> void:
+	assert_eq(RoomFurnish.room_class("매장", {"bed": true, "wardrobe": true}, 1), "bed")
+	assert_eq(RoomFurnish.room_class("매장", {"shop_counter": true}, 0), "shop")
+	assert_eq(RoomFurnish.room_class("부엌", {"dining_set": true}, -1), "", "지하 부엌은 카드 답 기다림")
+	assert_eq(RoomFurnish.room_class("광부 숙소", {"bed": true}, 0), "bed", "광은 따로 선 낱말일 때만")
+	assert_eq(RoomFurnish.room_class("", {"bed": true, "iv_stand": true}, 1), "", "병실은 그대로")
