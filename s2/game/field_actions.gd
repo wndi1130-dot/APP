@@ -43,7 +43,7 @@ const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
 # Planks and spirits go on the train as wood and luxury (user decision 407 B1); cloth and bandages stay field stores.
-const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "tweezers", "needle_thread"]
+const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "ammo_craft", "flare", "tweezers", "needle_thread"]
 const FieldItems = preload("res://game/sim/field_items.gd")
 ## 나단계 손일 (decision 423, P12·P22): a key turns in a second and a half
 ## without a sound; boarding a door takes a plank and a handful of nails, eight
@@ -63,7 +63,7 @@ const BODY_SEARCH_TIME: float = 3.0
 ## seconds of it (loot spec v1 4, user decision 407 B4).
 const SEARCH_NOISE_EVERY: float = SearchRules.NOISE_EVERY
 const ROUND_NAMES: Dictionary = {"pistol": "권총탄", "shell": "산탄"}
-const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
+const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "ammo_craft": ["craft", 1]}
 
 var game
 var coal_delivered: float = 0.0
@@ -814,7 +814,7 @@ func _auto_pickup() -> void:
 	var p = game.player
 	for i in range(game.ground_items.size() - 1, -1, -1):
 		var g: Dictionary = game.ground_items[i]
-		if g["id"] == "arrow" and p.position.distance_to(g["pos"]) < 1.0:
+		if g["id"] == "ammo_craft" and p.position.distance_to(g["pos"]) < 1.0:
 			pick_up(p, i)
 
 

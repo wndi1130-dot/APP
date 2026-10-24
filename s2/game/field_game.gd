@@ -108,7 +108,7 @@ const EXTRA_ITEMS: Dictionary = {
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
-const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5]}
+const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5], "cloth": ["cloth", 1.0]}
 ## A watch found still set (P19): it starts ringing this long (real seconds)
 ## after it is first carried, rings this many times this far apart at the one
 ## who carries it (a "normal" sound, as any), then is quiet. One key stops them all.
@@ -212,6 +212,10 @@ var radio_t: float = 0.0
 var ammo: Dictionary = {"pistol": 8, "shell": 4, "craft": 8}
 var ammo_start: Dictionary = {}
 var loaded_start: Dictionary = {}      # rounds already in the squad's guns at the start
+## The cloth the squad went out with (decision 426 D2): the train gets what
+## came back less this, so a strip torn for a bandage is its own and the
+## kit is not new cloth every stop.
+var cloth_start: int = 0
 var unloaded: Dictionary = {}
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
@@ -393,6 +397,9 @@ func _ready() -> void:
 	_give_finds()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
+	cloth_start = 0
+	for p in squad:
+		cloth_start += int(p.items.get("cloth", 0))
 	await BuildPace.rest(pace)
 	hud = Hud.new()
 	add_child(hud)
@@ -2452,6 +2459,7 @@ func finish(reason: String) -> void:
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
+	stock["cloth"] = float(stock.get("cloth", 0.0)) - cloth_start
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
 	# count, and so do the ones in a gun that stays behind with its carrier.
 	var boarded_squad: Array = []

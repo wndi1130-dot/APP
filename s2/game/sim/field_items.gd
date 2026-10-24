@@ -70,6 +70,10 @@ const ITEMS: Dictionary = {
 	"can_opener": {"name": "깡통 따개", "icon": "it_opener", "weight": 0.1, "group": "tool", "keep": true},
 	"nails": {"name": "못 한 줌", "icon": "it_nails", "weight": 0.5, "stock": "scrap", "melt": 0.5, "group": "material"},
 	"fuel_can": {"name": "연료 통", "icon": "it_fuel", "weight": 1.5, "stock": "coal", "melt": 1.0, "group": "material"},
+	# What the train's workshop makes parts of, picked up as it lies (decision 426 D2).
+	"gears": {"name": "톱니바퀴", "icon": "gear", "weight": 0.6, "stock": "parts", "melt": 0.5, "group": "material"},
+	"springs": {"name": "용수철 한 줌", "icon": "it_spring", "weight": 0.3, "stock": "parts", "melt": 0.25, "group": "material"},
+	"wire_coil": {"name": "전선 뭉치", "icon": "it_wire", "weight": 0.5, "stock": "parts", "melt": 0.25, "group": "material"},
 	# A bigger pack, worn at once if it is bigger than the one on the back.
 	"found_big_pack": {"name": "큰 배낭", "icon": "inv", "weight": 1.0, "group": "bag", "bag": "big_pack", "keep": true},
 	# ---- 나단계 (decision 423 cards 10·11, P22)

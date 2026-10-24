@@ -107,6 +107,9 @@ static func from_json(text: String) -> Dictionary:
 		z["horde"] = int(z["horde"])
 	for g in d.get("ground_items", []):
 		g["n"] = int(g["n"])
+		# An arrow saved before it took the stock's name (decision 426).
+		if g.get("id") == "arrow":
+			g["id"] = "ammo_craft"
 	for key in ["ammo", "unloaded"]:
 		var counts: Dictionary = d.get(key, {})
 		for id in counts:
