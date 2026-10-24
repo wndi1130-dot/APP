@@ -28,10 +28,15 @@ func build(parent: Node3D, car: Dictionary, stove_builder: Callable) -> void:
 			var packed = load(path)
 			if packed is PackedScene:
 				node = packed.instantiate() as Node3D
+		var fitted := false
 		if node == null:
 			node = _box(Catalog.vector(row["size"]), String(row["material"]))
+		else:
+			fitted = true
 		node.name = String(row["id"])
 		node.position = at
+		if fitted:
+			_fit_to(node, at, Catalog.vector(row["size"]))
 		node.rotation.y = float(row["yaw"])
 		node.set_meta("model_key", model)
 		node.set_meta("reserved_size", Catalog.vector(row["size"]))
@@ -70,6 +75,36 @@ func cleanup() -> void:
 		traces[id]["overturned"] = false
 		(props[id] as Node3D).rotation.z = 0.0
 	# Scorch remains. No rule value or irreversible loss is manufactured here.
+
+
+## A model stands on the floor of the box its row keeps for it, and one taller
+## than that box is made evenly smaller to fit its height: a crate kept under a
+## bench fits under it, and one in a taller box does not float. Its length is
+## left alone (a bench or a table keeps its seat height and its run).
+static func _fit_to(node: Node3D, at: Vector3, reserved: Vector3) -> void:
+	var box := _bounds_of(node)
+	if box.size.y <= 0.0:
+		return
+	var k: float = minf(1.0, reserved.y / box.size.y)
+	node.scale = Vector3.ONE * k
+	node.position.y = at.y - reserved.y * 0.5 - box.position.y * k
+
+
+static func _bounds_of(node: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for child in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := child as MeshInstance3D
+		var local: AABB = mi.get_aabb()
+		var t := Transform3D.IDENTITY
+		var walk: Node = mi
+		while walk != node and walk is Node3D:
+			t = (walk as Node3D).transform * t
+			walk = walk.get_parent()
+		local = t * local
+		box = local if first else box.merge(local)
+		first = false
+	return box
 
 
 func _box(size: Vector3, material: String) -> MeshInstance3D:
