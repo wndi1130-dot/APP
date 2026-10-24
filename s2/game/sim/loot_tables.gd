@@ -2,7 +2,8 @@ extends RefCounted
 ## What the fallen carry and what the places hold (loot spec v1). Values only;
 ## the rules that read them are in loot_rules.gd. Every number is a first
 ## guess ("base" set), to be set after the 500-run and hand play. Item ids are
-## the field items of carry.gd and the weapon ids of weapons.gd, nothing new.
+## the field items of carry.gd, the named things of field_items.gd and the
+## weapon ids of weapons.gd.
 ##
 ## A table row is [weight, entry, most]: the row is picked by weight, then
 ## 1..most of it. An entry is {"id": item}, {"ammo": "pistol"|"shell"} (rounds
@@ -44,10 +45,54 @@ const BODY: Dictionary = {
 		[2, {"id": "cloth"}, 1],
 		[1, {"tool": "crowbar"}, 1],
 	]},
+	# The dead by the building they are found in (decision 423, P08): as often and
+	# as quick as the dead's, but what they carry says what the place was. The
+	# named things are field_items.gd's; a watch may still be set to ring (P19).
+	"dead_hospital": {"chance": 0.10, "rolls": 1, "search": 3.0, "table": [
+		[3, {"id": "painkillers"}, 1],
+		[3, {"id": "bandage"}, 1],
+		[2, {"id": "ointment"}, 1],
+		[1, {"id": "antiseptic"}, 1],
+	]},
+	"dead_workshop": {"chance": 0.10, "rolls": 1, "search": 3.0, "table": [
+		[3, {"id": "nails"}, 1],
+		[2, {"id": "scrap"}, 1],
+		[2, {"ammo": "shell"}, 2],
+		[1, {"id": "bandage"}, 1],
+	]},
+	"dead_shop": {"chance": 0.10, "rolls": 1, "search": 3.0, "table": [
+		[3, {"id": "cigarettes"}, 1],
+		[2, {"id": "hardtack"}, 1],
+		[2, {"ammo": "pistol"}, 2],
+		[1, {"id": "wrist_watch_set"}, 1],
+	]},
+	"dead_house": {"chance": 0.10, "rolls": 1, "search": 3.0, "table": [
+		[3, {"id": "wrist_watch_set"}, 1],
+		[2, {"id": "wrist_watch"}, 1],
+		[2, {"id": "bandage"}, 1],
+		[2, {"ammo": "pistol"}, 2],
+		[1, {"id": "pocket_watch"}, 1],
+	]},
+	"dead_farm": {"chance": 0.10, "rolls": 1, "search": 3.0, "table": [
+		[3, {"id": "apple"}, 1],
+		[2, {"id": "bandage"}, 1],
+		[2, {"ammo": "shell"}, 2],
+	]},
 }
 
 ## Where a padded one stood, read from the building it is nearest (by name).
 const PLACE_OF_BUILDING: Dictionary = {"역사": "station", "화물 창고": "shed"}
+## Then by the words of the building's name, in this order (the first that
+## matches): where the dead were found, for the tables above. A padded one with
+## no table of its own for the place keeps the padded table.
+const PLACE_ORDER: Array[String] = ["hospital", "shop", "workshop", "farm", "house"]
+const PLACE_WORDS: Dictionary = {
+	"hospital": ["병원", "약국", "약방", "의사", "간호", "진료", "구급"],
+	"shop": ["식료품", "잡화", "매점", "상회", "가게", "상점", "빵집"],
+	"workshop": ["공장", "기계", "공구", "정비", "철물", "부품", "제재", "변전", "차고", "대장"],
+	"farm": ["농가", "외양간", "헛간", "마구간", "우물집", "과수"],
+	"house": ["주택", "사택", "연립", "본채", "오두막", "관리인", "숙직", "기숙", "움막", "집"],
+}
 ## How near (cells) a building must be to count as where it stood.
 const PLACE_REACH: int = 4
 ## A tool found in pockets comes worn.
