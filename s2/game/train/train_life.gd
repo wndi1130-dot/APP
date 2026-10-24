@@ -4,6 +4,7 @@ extends RefCounted
 
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Context = preload("res://game/train/train_context.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 const LifeInput = preload("res://game/train/train_life_input.gd")
 const Places = preload("res://game/train/train_places.gd")
 const Schedule = preload("res://game/train/train_schedule.gd")
@@ -201,7 +202,7 @@ func refresh(event: String = "rules") -> void:
 			"seg": host.rules.get("train", {}).get("seg", 1),
 			"region": host.rules.get("view", {}).get("region", "region_01"),
 			"country": host.rules.get("view", {}).get("country", "country_a"),
-			"season": host.rules.get("view", {}).get("season", "deep_winter"),
+			"season": host.rules.get("view", {}).get("season", SeasonTable.season_of_seg(int(host.rules.get("train", {}).get("seg", 1)))),
 			"weather": host.rules.get("stop", {}).get("weather", "overcast"),
 			"layers": host.rules.get("view", {}).get("outside", {}).duplicate(true),
 		}

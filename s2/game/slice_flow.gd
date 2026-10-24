@@ -41,6 +41,7 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const WorldWeather = preload("res://game/ui/world_weather.gd")
 const WorldFilm = preload("res://game/ui/world_film.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
@@ -682,13 +683,16 @@ func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 	var cold := float(want.get("cold", view.get("cold", Atmosphere.cold_for("prologue", prologue_progress(seg)))))
 	var side := float(want.get("side", view.get("side", Atmosphere.side_for("prologue"))))
 	var region_name := String(want.get("region", view.get("region", Atmosphere.DEFAULT_REGION)))
-	return Atmosphere.look(hour, kinds, region_name, cold, {"side": side})
+	var more := {"side": side}
+	if not want.has("cold") and not view.has("cold"):
+		more["season"] = Atmosphere.season_at("prologue", prologue_progress(seg))
+	return Atmosphere.look(hour, kinds, region_name, cold, more)
 
 
 ## How far into the prologue a stretch is (the slice is its first stops): the
-## cold the atmosphere table gives it, the same for the train and the stop.
+## season table's row for that stretch, the same for the train and the stop.
 static func prologue_progress(seg: int) -> float:
-	return clampf((seg - 1) / 4.0, 0.0, 1.0)
+	return SeasonTable.seg_progress(seg)
 
 
 ## The train's own floating names and value lines are for its test bench;
