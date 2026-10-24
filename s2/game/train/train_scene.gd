@@ -75,6 +75,18 @@ const STOVE_MODEL := "res://models/train_interior/stove.glb"
 const STOVE_ENERGY: float = 1.1
 const LAMP_SWAY: float = 0.05           # metres, with the train's rocking
 const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
+## The room before the people (user decision 2026-10-25): when a car's state
+## changes, its stove fire turns first (over STOVE_SHARE of room_ease), then the
+## walls and the window frost (the rest of it), and the people are reseated only
+## room_lead seconds after the change; each then takes up their own motion at
+## their own delay (train_people_view.gd). A change that adds or takes people,
+## moves the car or turns the phase is still taken at once. 0 takes everything
+## at once: an instance of the script alone (the tests, the tools) keeps that,
+## and train.tscn sets the screen's own values.
+const STOVE_SHARE: float = 0.35
+const WALLS_FROM: float = 0.1           # of room_ease: the walls start a little after the stove
+@export var room_lead: float = 0.0
+@export var room_ease: float = 0.0
 ## The council sits on both sides of the dining table: the far side on the
 ## bench, the near side with their backs to the open side. The chair and the
 ## clerk stand by the table's head.
@@ -181,8 +193,15 @@ func apply_rules(event: String = "rules") -> void:
 	for c in cars:
 		var key := _seat_key(c)
 		if key != String(c.get("seat_key", "")):
-			reseat.append(c["id"])
 			c["seat_key"] = key
+			var core := _seat_core(c)
+			if room_lead > 0.0 and not rebuild and core == String(c.get("seat_core", "")):
+				# Only the car's state changed: the room turns first, the people after.
+				c["reseat_at"] = clock + room_lead
+			else:
+				reseat.append(c["id"])
+				c["seat_core"] = core
+				c.erase("reseat_at")
 	life.before_reseat(reseat)
 	_hold_from = 0.0
 	_hold_to = 0.0
@@ -277,8 +296,10 @@ func step(delta: float) -> void:
 	clock += delta
 	life.advance(delta)
 	_step_backdrop(delta)
+	_step_reseat()
 	for c in cars:
 		_step_lamp(c, delta)
+		_step_room(c)
 		_step_errand(c, delta)
 		_step_call(c, delta)
 		if _in_session(c):
@@ -344,6 +365,30 @@ func _unhandled_input(event: InputEvent) -> void:
 		dx = event.relative.x
 	if dx != 0.0:
 		scroll(-dx * camera.size / maxf(get_viewport().get_visible_rect().size.y, 1.0))
+
+
+## What has a car reseated at once even while the room goes first: the car
+## itself, where it stands, the phase, the council, and how many are in it.
+func _seat_core(c: Dictionary) -> String:
+	var comm := Rules.comm_of(rules, c["def"])
+	return var_to_str([c["def"], phase(), c["x0"], _captain_side(c), _in_session(c), Look.figures(c["def"], comm, phase())])
+
+
+## The people of the cars whose room went first sit down as their state has
+## them now, once their lead is over.
+func _step_reseat() -> void:
+	var due: Array = []
+	for c in cars:
+		if c.has("reseat_at") and clock >= float(c["reseat_at"]):
+			due.append(c["id"])
+	if due.is_empty():
+		return
+	life.before_reseat(due)
+	for c in cars:
+		if due.has(c["id"]):
+			c.erase("reseat_at")
+			_seat_car(c, true)
+	life.refresh("rules")
 
 
 ## 칸이 앉는 모양을 정하는 값을 한 줄로 묶는다. 이 줄이 같으면 다시 앉혀도 같은 모양이라 사람을 움직이지 않는다.
@@ -690,14 +735,65 @@ func _dress_car(c: Dictionary, w: float, look: Dictionary) -> void:
 	c["lamp_color"] = look["lamp"]
 	c["lamp_energy"] = float(look["energy"])
 	c["lamp_sway"] = float(look["sway"])
-	(c["glass"] as ShaderMaterial).set_shader_parameter("cold_car", Look.frost(w))
+	if room_ease <= 0.0 or not c.has("room_w"):
+		c["room_w"] = w
+		c["room_to"] = w
+		c["room_vis"] = _room_look(w)
+		_show_room(c)
+	elif not is_equal_approx(float(c["room_to"]), w):
+		# A new warmth: the turn starts from what shows now.
+		c["room_to"] = w
+		c["room_from"] = float(c["room_w"])
+		c["vis_from"] = (c["room_vis"] as Dictionary).duplicate()
+		c["room_since"] = clock
+
+
+## What a warmth looks like in a car: the stove's burn, the window frost and
+## how warm the walls are (0 blue-grey .. 1 amber).
+static func _room_look(w: float) -> Dictionary:
+	return {"burn": Look.stove(w), "frost": Look.frost(w), "walls": smoothstep(25.0, 70.0, w)}
+
+
+## The stove, the walls and the frost as the room shows them now (`room_vis`).
+func _show_room(c: Dictionary) -> void:
+	var vis: Dictionary = c["room_vis"]
+	(c["glass"] as ShaderMaterial).set_shader_parameter("cold_car", float(vis["frost"]))
 	if c.has("shell_mat"):
 		# Cold walls go blue-grey, a warm car's go a little amber.
-		(c["shell_mat"] as StandardMaterial3D).albedo_color = SHELL_COLD.lerp(SHELL_WARM, smoothstep(25.0, 70.0, w))
+		(c["shell_mat"] as StandardMaterial3D).albedo_color = SHELL_COLD.lerp(SHELL_WARM, float(vis["walls"]))
 	if c.has("stove_light"):
-		var burn := Look.stove(w)
+		var burn: float = float(vis["burn"])
 		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn
 		(c["steam"] as GPUParticles3D).emitting = burn >= Look.STOVE_STEAM_FROM
+
+
+## The turn itself: the look moves evenly from what showed to what the new
+## warmth looks like, quick at first and settling, the stove in its first
+## STOVE_SHARE, the walls and frost over the rest. `room_w` (the warmth the
+## people read) moves with the walls.
+func _step_room(c: Dictionary) -> void:
+	if not c.has("room_since"):
+		return
+	var t: float = (clock - float(c["room_since"])) / maxf(room_ease, 0.001)
+	var to: float = float(c["room_to"])
+	var aim := _room_look(to)
+	var from: Dictionary = c["vis_from"]
+	var stove_k: float = _ease_out(t / STOVE_SHARE)
+	var walls_k: float = _ease_out((t - WALLS_FROM) / (1.0 - WALLS_FROM))
+	c["room_vis"] = {
+		"burn": lerpf(float(from["burn"]), float(aim["burn"]), stove_k),
+		"frost": lerpf(float(from["frost"]), float(aim["frost"]), walls_k),
+		"walls": lerpf(float(from["walls"]), float(aim["walls"]), walls_k),
+	}
+	c["room_w"] = lerpf(float(c["room_from"]), to, walls_k)
+	_show_room(c)
+	if t >= 1.0:
+		c.erase("room_since")
+
+
+static func _ease_out(x: float) -> float:
+	var k := clampf(x, 0.0, 1.0)
+	return 1.0 - (1.0 - k) * (1.0 - k)
 
 
 func _step_lamp(c: Dictionary, delta: float) -> void:

@@ -163,7 +163,8 @@ func _process(_delta: float) -> void:
 func car_state(c: Dictionary) -> Dictionary:
 	var comm := Rules.comm_of(scene.rules, c["def"])
 	var train: Dictionary = scene.rules.get("train", {})
-	var w := Look.warmth(comm)
+	# The warmth the room shows (train_scene.gd room_w), so the people follow the stove and the frost.
+	var w: float = float(c.get("room_w", Look.warmth(comm)))
 	var view: Dictionary = scene.rules.get("view", {})
 	return {
 		"layout": Catalog.layout_id(c["def"]), "warmth": w, "cold": w < Look.WARM_COLD, "freezing": w < Look.WARM_FREEZING,
