@@ -299,7 +299,7 @@ func _seen(seen: Array) -> void:
 		at.custom_minimum_size = Vector2(UiFonts.px(16.0), UiFonts.px(22.0))
 		at.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		at.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		at.add_child(Paper.mark("fetch" if String(item[0]) == "promise" else "inv", 16.0))
+		at.add_child(Paper.mark("promise" if String(item[0]) == "promise" else "inv", 16.0))
 		row.add_child(at)
 		row.add_child(_para(String(item[1]), floorf(room)))
 		box.add_child(row)

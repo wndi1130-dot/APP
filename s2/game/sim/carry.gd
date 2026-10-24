@@ -2,6 +2,7 @@ extends RefCounted
 # Carry weight in pack units, not kg (body_injury 6).
 
 const W = preload("res://game/sim/weapons.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
 
 const BAGS: Dictionary = {
 	"pockets": {"name": "주머니만", "limit": 3},
@@ -71,10 +72,12 @@ static func state(weight: float, p_limit: float) -> int:
 	return 3
 
 
-# Weight of one item id: field items first, then weapons.
+# Weight of one item id: field items first, then the named things, then weapons.
 static func item_weight(id: String) -> float:
 	if ITEM_WEIGHTS.has(id):
 		return float(ITEM_WEIGHTS[id])
+	if FieldItems.has(id):
+		return FieldItems.weight(id)
 	return float(W.get_data(id).get("weight", 0.0))
 
 

@@ -61,6 +61,16 @@ uniform float mist : hint_range(0.0, 1.0) = 0.3;
 uniform float catenary : hint_range(0.0, 1.0) = 0.0;
 // Rain or wet snow falling: the far line goes greyer, the near ground darker.
 uniform float falling : hint_range(0.0, 1.0) = 0.0;
+// Photo skies (CC0, 사용자 10-25 공개 자산 먼저): up to three bands mixed by sky_w, each the half
+// of a real sky that faces the sun, horizon at the bottom. They lend their
+// clouds to the hour's colours, and sky_hue of their own colour. photo_on 0:
+// the drawn sky only.
+uniform sampler2D sky_a : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D sky_b : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D sky_c : source_color, filter_linear_mipmap, repeat_enable;
+uniform vec3 sky_w = vec3(1.0, 0.0, 0.0);
+uniform vec3 sky_hue = vec3(0.25);
+uniform float photo_on : hint_range(0.0, 1.0) = 0.0;
 
 varying vec3 wpos;
 
@@ -129,13 +139,32 @@ void fragment() {
 	col = mix(sky_low.rgb, sky_top.rgb, t);
 	float glow = exp(-r * 2.6) * (1.0 - night) * (1.0 - 0.7 * veil);
 	col = mix(col, sun_glow.rgb, glow * 0.75);
+	if (photo_on > 0.0) {
+		// The photo's sun (the band's middle) stands where the drawn sun is.
+		vec2 suv = vec2(0.5 + (sx - sun_p.x) * 0.14, 1.0 - clamp(h / 8.0, 0.0, 1.0));
+		vec3 ph = texture(sky_a, suv).rgb * sky_w.x;
+		vec3 mean_c = textureLod(sky_a, vec2(0.5), 10.0).rgb * sky_w.x;
+		if (sky_w.y > 0.001) {
+			ph += texture(sky_b, suv).rgb * sky_w.y;
+			mean_c += textureLod(sky_b, vec2(0.5), 10.0).rgb * sky_w.y;
+		}
+		if (sky_w.z > 0.001) {
+			ph += texture(sky_c, suv).rgb * sky_w.z;
+			mean_c += textureLod(sky_c, vec2(0.5), 10.0).rgb * sky_w.z;
+		}
+		const vec3 LUM = vec3(0.2126, 0.7152, 0.0722);
+		float lm = max(dot(mean_c, LUM), 0.02);
+		vec3 shaped = col * (dot(ph, LUM) / lm);
+		vec3 own = ph * (dot(col, LUM) / lm);
+		col = mix(col, mix(shaped, own, dot(sky_hue, sky_w)), photo_on);
+	}
 	// Cloud: bands that flatten toward the line, lit on the sun's side.
 	vec2 q = vec2(rel * 0.045 + scroll * 0.0015 + TIME * 0.006 * (0.3 + fx_wind.z), h * 0.22 + 2.0 / (h + 2.5));
 	float n = fx_fbm2(q * vec2(1.0, 1.7));
 	float dens = smoothstep(1.0 - cloud - 0.12, 1.0 - cloud + 0.22, n) * smoothstep(-0.2, 0.8, h);
 	vec3 belly = mix(sky_low.rgb * 0.62, lin(vec3(0.42, 0.43, 0.45)) * lum, veil);
 	vec3 rim = mix(belly, sun_glow.rgb, exp(-r * 4.0) * (1.0 - veil) * 0.8);
-	col = mix(col, mix(belly, rim, smoothstep(0.4, 0.9, n)), dens * 0.85);
+	col = mix(col, mix(belly, rim, smoothstep(0.4, 0.9, n)), dens * 0.85 * (1.0 - photo_on));
 	// Light through the gaps: soft rays from the sun where the cloud breaks.
 	float shafts = sun_vis * cloud * (1.0 - cloud) * 4.0 * (1.0 - night);
 	if (shafts > 0.02) {

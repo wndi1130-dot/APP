@@ -133,3 +133,26 @@ func test_two_cores_are_two_entries() -> void:
 	_board(game)
 	game.finish("departed")
 	assert_eq(CoreScenes.count(game.receipt.to_dict()["items"]["gained"]), 2)
+
+
+func test_a_stop_receipt_carries_the_count_in_its_extras() -> void:
+	# 정차 영수증(id가 있는 영수증)이면 코어 수가 extras.coreCount에도 들어간다(set_extras는 한 곳).
+	var game = _game("freight_03")
+	assert_true(game.receipt.set_ids("ret_sulechow_01", "stop_sulechow"))
+	game.player.add_item("core_engine")
+	game.player.add_item("plow_core")
+	_board(game)
+	game.finish("departed")
+	var d: Dictionary = game.receipt.to_dict()
+	assert_eq(int(d["extras"]["coreCount"]), 2)
+	assert_eq(Array(game.Receipt.check(d)), [], "정차 영수증 형식 그대로")
+
+
+func test_a_field_receipt_without_ids_keeps_its_old_shape() -> void:
+	var game = _game("freight_03")
+	game.player.add_item("core_electric")
+	_board(game)
+	game.finish("departed")
+	var d: Dictionary = game.receipt.to_dict()
+	assert_false(d.has("receiptId"), "id 없는 필드 영수증은 정차 영수증이 되지 않는다")
+	assert_eq(CoreScenes.count(d["items"]["gained"]), 1)
