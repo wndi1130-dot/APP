@@ -232,6 +232,9 @@ func test_searching_a_container_is_heard_once_at_once_and_every_four_seconds() -
 			break
 	assert_ne(id, "")
 	game.data["containers"][id]["search"] = 20.0
+	# A search starts only within reach of the box: stand on its cell first.
+	var box: Dictionary = game.data["containers"][id]
+	p.position = game.lift(box["cell"], int(box.get("level", 0)))
 	game.sounds.clear()
 	game.actions.search(p, id)
 	_work(9.0)
