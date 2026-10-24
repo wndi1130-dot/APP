@@ -263,7 +263,8 @@ export function agendaOptions(g: Game): { options: Agenda[]; forced: boolean } {
   }
   for (const law of LAW_IDS) {
     const at = g.passed[law];
-    if (at !== undefined && g.session - at >= P.repealCool && !FAREWELL_LAWS.includes(law)) options.push({ law, repeal: true });
+    // 통과한 뒤 2회기 안에는 폐지 못 한다(s1a_politics_numbers 폐지 절). 폐지한 법을 다시 올리는 위 줄과 같은 셈이다.
+    if (at !== undefined && g.session - at > P.repealCool && !FAREWELL_LAWS.includes(law)) options.push({ law, repeal: true });
   }
   // 대권이 끝난 포고의 추인을 가장 먼저 둔다(법 16: 추인하지 않은 포고는 사라진다).
   const motions = motionsNow(g);
