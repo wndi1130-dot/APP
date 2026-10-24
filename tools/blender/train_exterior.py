@@ -343,6 +343,7 @@ def coach(p, detail, body, body_low=None, roof_col="roof", wins=None, door_xs=(6
                 p.box((a, b), (1.53, 1.58), (z0, z1), belt, skip=("-y",))
     for xs in (1, -1):
         end_wall(p, xs, body, detail=detail)
+    liner(p)
     # 차체 바닥 밑면
     p.face([(-BODY_X, FLOOR_Y, -BODY_Z), (BODY_X, FLOOR_Y, -BODY_Z), (BODY_X, FLOOR_Y, BODY_Z), (-BODY_X, FLOOR_Y, BODY_Z)], "iron", (0, -1, 0))
     roof(p, -BODY_X - 0.08, BODY_X + 0.08, roof_col, 8 if detail else 4)
@@ -358,6 +359,17 @@ def coach(p, detail, body, body_low=None, roof_col="roof", wins=None, door_xs=(6
         bogie(p, cx, detail)
     if extras:
         extras(p, detail)
+
+
+def liner(p):
+    """안쪽 면: 홈 단면(앞벽 위를 잘라 냄)에서 칸 속이 비어 보이지 않게 뒷벽·끝벽 안쪽과 바닥 윗면을 둔다."""
+    zi = -(BODY_Z - 0.07)
+    p.face([(-BODY_X + 0.07, FLOOR_Y, zi), (BODY_X - 0.07, FLOOR_Y, zi), (BODY_X - 0.07, EAVE_Y, zi), (-BODY_X + 0.07, EAVE_Y, zi)], "plank", (0, 0, 1))
+    p.face([(-BODY_X + 0.07, FLOOR_Y + 0.01, -BODY_Z + 0.07), (BODY_X - 0.07, FLOOR_Y + 0.01, -BODY_Z + 0.07),
+            (BODY_X - 0.07, FLOOR_Y + 0.01, BODY_Z - 0.07), (-BODY_X + 0.07, FLOOR_Y + 0.01, BODY_Z - 0.07)], "plank_dark", (0, 1, 0))
+    for xs in (1, -1):
+        x = xs * (BODY_X - 0.07)
+        p.face([(x, FLOOR_Y, -BODY_Z + 0.07), (x, FLOOR_Y, BODY_Z - 0.07), (x, EAVE_Y, BODY_Z - 0.07), (x, EAVE_Y, -BODY_Z + 0.07)], "plank", (-xs, 0, 0))
 
 
 def _between(holes, lo, hi):
@@ -447,6 +459,7 @@ def glass_coach(p, detail):
             p.box((-BODY_X, BODY_X), (FLOOR_Y + 0.2, FLOOR_Y + 0.25), (z0, z1), "plank_dark", skip=("-y",))
     for xs in (1, -1):
         end_wall(p, xs, "plank", detail=detail)
+    liner(p)
     p.face([(-BODY_X, FLOOR_Y, -BODY_Z), (BODY_X, FLOOR_Y, -BODY_Z), (BODY_X, FLOOR_Y, BODY_Z), (-BODY_X, FLOOR_Y, BODY_Z)], "iron", (0, -1, 0))
     roof(p, -BODY_X - 0.08, BODY_X + 0.08, "roof", 8 if detail else 4)
     roof_seams(p, detail, x0=-BODY_X, x1=-5.7, every=0.95)
