@@ -98,6 +98,12 @@ const SLOW_WALKS: float = 0.4
 const BITE: String = "bite"
 const BITE_MISS: String = "bite_miss"
 const BITE_LANDS: float = 0.5
+# Eating a body (zombies.gd state "eat", decision 423): it goes down to it, eats
+# on and on, and gets up from it when it stops (named; until the folder has
+# them it stands as it did).
+const EAT_START: String = "eat_start"
+const EAT: String = "eat"
+const EAT_RISE: String = "eat_rise"
 # Held on to someone (grab) or about to be (attack): the lunge's reach held at
 # one place in its round, the legs only shifting a little, not walking.
 const REACH_AT: float = 0.0
@@ -345,6 +351,12 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 		moved(z)
 		var beat := door_motion(z)
 		return Color(door_k(z, beat), float(beat), 1.0, shade)
+	var eat := eat_motion(z)
+	if eat.y >= 0.0:
+		moved(z)
+		return Color(eat.x, eat.y, 1.0, shade)
+	if state == "eat":
+		return Color(swayed(z, STAND, still), float(STAND), 1.0, shade)
 	if state == "tell":
 		return Color(tell_k(z), float(TELL), 1.0, shade)
 	if state == "frozen" or state == "waking":
@@ -502,6 +514,30 @@ static func bite_k(z: Dictionary) -> float:
 	if left > BITE_LANDS * length:
 		return -1.0
 	return clampf(BITE_LANDS - left / length, 0.0, BITE_LANDS)
+
+
+## Going down to a body, eating it, or getting up from it: how far through (x)
+## and the motion (y; -1 for none, or none in the folder).
+static func eat_motion(z: Dictionary) -> Vector2:
+	var age := float(z["age"])
+	if z["state"] == "eat":
+		var since := age - float(z.get("eat_at", age))
+		if named.has(EAT_START):
+			var start := int(named[EAT_START])
+			var down := seconds_of(start, 1.0)
+			if since < down:
+				return Vector2(since / down, start)
+		if named.has(EAT):
+			var eating := int(named[EAT])
+			return Vector2(fposmod(since / seconds_of(eating, 1.0) + float(z["phase"]), 1.0), eating)
+		return Vector2(0.0, -1.0)
+	if z.has("ate_until") and named.has(EAT_RISE):
+		var up := int(named[EAT_RISE])
+		var after := age - float(z["ate_until"])
+		var still_there: bool = Vector3(z["pos"]).distance_to(z.get("body_at", z["pos"])) < 0.001
+		if after >= 0.0 and after < seconds_of(up, 1.0) and still_there:
+			return Vector2(after / seconds_of(up, 1.0), up)
+	return Vector2(0.0, -1.0)
 
 
 ## How far through snapping at the air a body is after it reached and missed; -1 otherwise.
