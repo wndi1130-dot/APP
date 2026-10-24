@@ -12,9 +12,9 @@ func test_the_card_says_what_the_train_rules_say_for_the_sample_stop() -> void:
 	var t: Dictionary = s[1]
 	assert_false(g.is_empty(), "the train sample is there")
 	var m: Dictionary = StopPickCard.model(g, t)
-	assert_eq(m["seg"], "1 구간 정차")
+	assert_false(m.has("seg"), "no 「1 구간 정차」 kick (결정 417)")
 	assert_eq(m["place"], "병원")
-	assert_eq(m["hint"], "약이 남았을 만한 곳")
+	assert_eq(m["hint"], "", "no line on what the place holds: the target chips' fill says it (결정 417)")
 	assert_eq(m["risk"], "?", "not scouted: not known")
 	assert_eq(m["stays"].map(func(r): return "%s %s" % [r["word"], r["cost"]]), ["짧게 석탄 −1", "보통 석탄 −2", "길게 석탄 −3"])
 	assert_eq(m["targets"].filter(func(r): return r["on"]).map(func(r): return r["id"]), ["food"])
@@ -24,7 +24,7 @@ func test_the_card_says_what_the_train_rules_say_for_the_sample_stop() -> void:
 	assert_true(String(m["crew_line"]).begins_with("꼬리 노출 %d → %d · " % [int(pre["from"]), int(pre["to"])]), m["crew_line"])
 	var named: Dictionary = StopPickCard.model(g, t, "술레후프")
 	assert_eq(named["place"], "술레후프")
-	assert_eq(named["hint"], "병원 · 약이 남았을 만한 곳", "the kind of place under its own name")
+	assert_eq(named["hint"], "병원", "the kind of place under its own name")
 
 
 func test_a_pick_goes_through_the_train_rule() -> void:
@@ -56,7 +56,7 @@ func test_the_promises_the_stop_goes_with_are_one_line() -> void:
 	var c = StopPickCard.new()
 	c.promises = [{"kind": "prologue", "subjects": ["a", "b"]}, {"kind": "skip_dispatch", "madeTo": "tail"}]
 	add_child_autofree(c)
-	assert_eq(_said(c.find_child("Promises", true, false)), "이번 정차 약속 · 서막 2명 데려오기 / 교대 꼬리칸 파견 제외", "one line, its numbers in their own face")
+	assert_eq(_said(c.find_child("Promises", true, false)), "약속 · 서막 2명 데려오기 / 교대 꼬리칸 파견 제외", "one line, its numbers in their own face (no 「이번 정차」: 결정 417)")
 	var plain = StopPickCard.new()
 	add_child_autofree(plain)
 	assert_null(plain.find_child("Promises", true, false), "no promise, no line")

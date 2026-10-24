@@ -34,7 +34,6 @@ const PAPER_TEX := preload("res://game/ui/tex/paper.png")
 ## it, clear of the sheet's torn edge.
 const SHEET_AT := Vector2(-10, 50)
 const SLIP_AT := Vector2(452, 66)
-const KICK := "구간 정차 · 도착"
 ## The three columns' widths and the room between them: 366 of the writing's 386.
 const COL_W: Array = [150.0, 120.0, 96.0]
 const COL_GAP: float = 10.0
@@ -44,6 +43,8 @@ const WRAP_LINE: float = 18.0
 const STOCKS: Array = [["coal", "석탄"], ["food", "식량"], ["med", "의약품"], ["lux", "사치품"]]
 const DEAD_WORD := "돌아오지 못한 사람"
 const SAME := "그대로"
+## The slip's rows drawn as a mark for their word.
+const ROW_MARKS: Dictionary = {"신임": "trust", "긴장": "tension"}
 const MINUS := "−"
 ## The slip (c3.css .bill): 180 wide, written 16 to 168 across, leaning; its
 ## drop-shadow(4px 6px 10px rgba(0,0,0,.62)).
@@ -125,7 +126,6 @@ static func model(g0: Dictionary, t0: Dictionary) -> Dictionary:
 			seen.append([k, UiFonts.josa(String(line))])
 	return {
 		"seg": int(g0["seg"]),
-		"kick": KICK,
 		"title": String(by["arrive"]["title"]),
 		"arrive": UiFonts.josa(String((by["arrive"]["lines"] as Array)[0])),
 		"columns": [["사람", people], ["물자", stock], ["온기", warm]],
@@ -200,23 +200,20 @@ func _ready() -> void:
 		_build_slip(m["council"])
 
 
-## The head (50, as the stop card's): the kick in its line of 24 (the stretch in
-## the number face and what the paper is), then the station in pen on a line of
-## 28 in 26.
+## The head, as the stop card's: the station in pen on a line of 28 in 26.
 func _head(m: Dictionary) -> void:
+	# The station in pen heads the sheet; no 「N 구간 정차 · 도착」 kick over it
+	# (결정 417): the route line under the sheet says the stretch.
 	var head := VBoxContainer.new()
-	head.custom_minimum_size = Vector2(0, UiFonts.px(50.0))
 	head.add_theme_constant_override("separation", 0)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_child(head)
-	var kick := Paper.line_box(24.0)
-	kick.name = "Kick"
-	kick.add_theme_constant_override("separation", int(round(UiFonts.px(4.0))))
-	kick.add_child(Paper.ink(str(m["seg"]), UiFonts.NUMBER, 400, 14.0, Paper.INK2, 0.56))
-	kick.add_child(Paper.ink(String(m["kick"]), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.92))
-	for c in kick.get_children():
-		(c as Control).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(kick)
+	# Room over the pen's tall letters where the kick line was (half its 24),
+	# so the name stays on the paper.
+	var top := Control.new()
+	top.custom_minimum_size = Vector2(0, UiFonts.px(12.0))
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(top)
 	var title = TypeLine.new(28.0, 26.0)
 	title.name = "Title"
 	head.add_child(title)
@@ -387,13 +384,11 @@ func _build_slip(c: Dictionary) -> void:
 	parts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var y: float = 7.0
 	if bool(c["open"]):
-		var seg := _slip_ink(str(int(c["seg"])), UiFonts.NUMBER, 400, 14.0, Paper.INK, 0.28)
-		parts.add_child(seg)
-		GlassParts.put(seg, SLIP_X0, y, 17.0)
-		var kick := _slip_ink("구간 특별 회기", UiFonts.WORD, 400, 12.0, Paper.INK2, 1.2)
+		# The slip's name, as the closed slip's (no stretch number: 결정 417).
+		var kick := _slip_ink("특별 회기", UiFonts.WORD, 400, 12.0, Paper.INK2, 1.2)
 		kick.name = "SlipKick"
 		parts.add_child(kick)
-		GlassParts.put_on(kick, seg.position.x + GlassParts.text_w(seg), GlassParts.base_of(seg))
+		GlassParts.put(kick, SLIP_X0, y, 17.0)
 		y += 17.0 + 4.0
 		y = _slip_title(parts, String(c["title"]), y)
 		if String(c["stamp"]) != "":
@@ -522,8 +517,18 @@ func _slip_votes(parts: Control, votes: Array, top: float) -> float:
 func _slip_row(parts: Control, row: Array, top: float) -> float:
 	var k: float = UiFonts.K
 	var pad: float = 5.0
-	var label := _slip_ink(String(row[0]), UiFonts.WORD, 400, 12.5, Paper.INK2)
+	# Trust and tension by their marks, as the gauges above show them (decisions.md
+	# 「계기는 글자 대신 아이콘과 숫자」, 결정 417); a group's relation keeps its
+	# name. The empty word holds the line.
+	var mark_id: String = String(ROW_MARKS.get(String(row[0]), ""))
+	var label := _slip_ink("" if mark_id != "" else String(row[0]), UiFonts.WORD, 400, 12.5, Paper.INK2)
 	parts.add_child(label)
+	if mark_id != "":
+		var mark: TextureRect = Paper.mark(mark_id, 15.0, Paper.INK2)
+		mark.name = "Mark_" + mark_id
+		parts.add_child(mark)
+		mark.size = mark.custom_minimum_size
+		mark.position = Vector2(SLIP_X0, top + pad + 3.0) * k
 	var right: Array = []
 	if String(row[1]) == "":
 		right.append(_slip_ink(SAME, UiFonts.WORD, 400, 12.0, Paper.INK2))

@@ -70,7 +70,7 @@ func test_a_law_s_lines_split_as_the_mockup_s_bill() -> void:
 
 func test_the_bill_turns_between_agendas_and_a_group_opens_its_pane() -> void:
 	var c = _card()
-	assert_has(_said(c.bill), "구간 특별 회기")
+	assert_has(_said(c.bill), "특별", "a special session says so in a word (결정 417)")
 	var prev: Button = c.bill.find_child("Prev", true, false)
 	var nxt: Button = c.bill.find_child("Next", true, false)
 	assert_true(prev.disabled, "the first agenda: nothing before it")
@@ -78,7 +78,8 @@ func test_the_bill_turns_between_agendas_and_a_group_opens_its_pane() -> void:
 	nxt.pressed.emit()
 	assert_eq(c.idx, 1)
 	assert_eq(c.m["title"], CouncilVote.agenda_title(c.t, c.g["council"]["options"][1]))
-	assert_has(_said(c.pane), "집단별 표")
+	# The groups' list by its columns (no 「집단별 표」 over them: 결정 417).
+	assert_has(_said(c.pane), "미정")
 	c.board.picked.emit(0)
 	assert_eq(c.sel, 0)
 	var fold: Button = c.pane.find_child("Fold", true, false)
@@ -100,7 +101,9 @@ func test_the_lever_casts_the_port_s_vote_and_closing_hands_on_its_state() -> vo
 	assert_eq(c.bar.main_word, "확인", "the lever stays down on 확인")
 	assert_true((c.bill.find_child("Prev", true, false) as Button).disabled, "no turning the bill after the vote")
 	c.board.finish_reveal()
-	assert_has(_said(c.pane), "집단별 결과")
+	# The count's list: yes and no only (no 「집단별 결과」: 결정 417).
+	assert_does_not_have(_said(c.pane), "미정")
+	assert_has(_said(c.pane), "반대")
 	var got: Array = []
 	c.left.connect(func(g2: Dictionary) -> void: got.append(g2))
 	c.bar.main_pressed.emit()

@@ -1,8 +1,8 @@
 extends Control
 ## The return receipt on the stop's own sheet (UI 3단계 시안 2차, B1; the paper of
 ## 03 「정차 · 승강장 가」 handed back): the sheet comes in from the left where the
-## stop card went out and says what the stop came to. The kick (the stretch, what
-## the paper is, the hours), the place in pen with the end stamped at its right,
+## stop card went out and says what the stop came to. The hours at the top
+## right, the place in pen with the end stamped at its right,
 ## the head lines (leave_scene.gd), the four columns side by side, what was seen
 ## of the promises and of the symbol, and at the foot the main key that goes on.
 ## It reads the stop's own record (result["receipt"], S3 영수증 판 4) through
@@ -10,8 +10,8 @@ extends Control
 ##
 ## The look is the stop card's (stop_pick_card.gd) in the mockup's px × ui_fonts.gd
 ## K: the sheet 446 × 346 at (−10, 50); in it the head (50), the head lines (26 ·
-## 18), a rule, the columns, a rule, a line of 22 for each thing seen, the
-## note under them (18) and the keys (48) at the foot.
+## 18), a rule, the columns, a rule, a line of 22 for each thing seen and the
+## keys (48) at the foot.
 
 signal went_on
 
@@ -28,9 +28,6 @@ const SHEET_AT := Vector2(-10, 50)
 const COL_GAP: float = 10.0
 ## The end stamped askew, as a rubber stamp comes down.
 const STAMP_TILT_DEG: float = -6.0
-## What the train makes of a promise, once it has: until then the receipt says
-## who saw it and leaves the call to the train.
-const NOTE := "지켰는지는 열차에서 · 돌아온 사람이 본 대로"
 
 var result: Dictionary = {}
 ## The stretch the stop was on; 0 where there is none to say (the field played
@@ -55,13 +52,6 @@ static func model(result0: Dictionary, seg0: int = 1) -> Dictionary:
 	d["head"] = (d["head"] as Array).map(func(s: Variant) -> String: return UiFonts.josa(String(s)))
 	d["seen"] = (d["seen"] as Array).map(func(s: Variant) -> String: return UiFonts.josa(String(s)))
 	d["seg"] = seg0
-	d["kick"] = "구간 정차 · 귀환 영수증"
-	var open: bool = false
-	for line in d["seen"]:
-		var s: String = String(line)
-		if s.begins_with("약속 ") and not (s.ends_with("지킴") or s.ends_with("어김")):
-			open = true
-	d["note"] = NOTE if open else ""
 	return d
 
 
@@ -89,7 +79,7 @@ func _ready() -> void:
 		_columns(m["columns"])
 		if not (m["seen"] as Array).is_empty():
 			body.add_child(_rule())
-			_seen(m["seen"], String(m["note"]))
+			_seen(m["seen"])
 	var room := Control.new()
 	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -109,9 +99,8 @@ func _head(m: Dictionary) -> void:
 	var kick := Paper.line_box(24.0)
 	kick.name = "Kick"
 	kick.add_theme_constant_override("separation", int(round(UiFonts.px(4.0))))
-	if int(m["seg"]) > 0:
-		kick.add_child(Paper.ink(str(m["seg"]), UiFonts.NUMBER, 400, 14.0, Paper.INK2, 0.56))
-	kick.add_child(Paper.ink(String(m["kick"]), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.92))
+	# The row keeps only the hours at its right: no 「N 구간 정차 · 귀환 영수증」
+	# (결정 417); the paper coming back from where the stop card went says it.
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -213,9 +202,9 @@ func _cell(text: String, w: float) -> Control:
 
 
 ## What was seen (.promline, 22 each): the promises with the stop card's mark
-## for them, the symbol with the four-square one; then the note that the train
-## makes the call, while there is a promise it has not made yet.
-func _seen(seen: Array, note: String) -> void:
+## for them, the symbol with the four-square one. A promise with no 지킴 · 어김
+## stamped on it is one the train has not called yet (결정 417: no line saying so).
+func _seen(seen: Array) -> void:
 	var box := VBoxContainer.new()
 	box.name = "Seen"
 	box.add_theme_constant_override("separation", 0)
@@ -230,11 +219,6 @@ func _seen(seen: Array, note: String) -> void:
 		words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(words)
 		box.add_child(row)
-	if note != "":
-		var n = TypeLine.new(0.0, 18.0)
-		n.name = "Note"
-		n.add_child(Paper.ink(note, UiFonts.WORD, 400, 12.0, Paper.INK2))
-		box.add_child(n)
 
 
 ## The keys at the foot (.sh__act, 48): the main key at the right, as 보내기 is.

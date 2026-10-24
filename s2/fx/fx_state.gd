@@ -9,6 +9,55 @@ extends RefCounted
 
 const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade"]
 
+enum BloodLevel { OFF, LOW, NORMAL, HIGH }
+const BLOOD_LABELS: Array[String] = ["끔", "적게", "보통", "많이"]
+## 피·타격 효과(짧게 튀는 CPU 입자)가 한꺼번에 쓸 수 있는 입자 수. 날씨 입자는
+## 폰에서 이미 잰 값이라 여기서 줄이지 않는다.
+const TRANSIENT_PARTICLES := 120
+static var blood_level: int = BloodLevel.NORMAL
+static var _particle_leases: Dictionary = {}
+static var _blood_clients: Array[WeakRef] = []
+
+
+static func set_blood_level(level: int) -> void:
+	blood_level = clampi(level, BloodLevel.OFF, BloodLevel.HIGH)
+	for i in range(_blood_clients.size() - 1, -1, -1):
+		var client = _blood_clients[i].get_ref()
+		if client == null:
+			_blood_clients.remove_at(i)
+		elif blood_level == BloodLevel.OFF:
+			client.clear()
+
+
+static func register_blood_client(client: Node) -> void:
+	_blood_clients.append(weakref(client))
+
+
+static func blood_scale() -> float:
+	return [0.0, 0.4, 1.0, 1.5][clampi(blood_level, 0, 3)]
+
+
+static func leased_particles() -> int:
+	var total := 0
+	for key in _particle_leases.keys():
+		if _particle_leases[key]["owner"].get_ref() == null:
+			_particle_leases.erase(key)
+		else:
+			total += int(_particle_leases[key]["count"])
+	return total
+
+
+static func lease_particles(owner: Node, requested: int) -> int:
+	release_particles(owner)
+	var count := clampi(requested, 0, maxi(0, TRANSIENT_PARTICLES - leased_particles()))
+	if count > 0:
+		_particle_leases[owner.get_instance_id()] = {"owner": weakref(owner), "count": count}
+	return count
+
+
+static func release_particles(owner: Node) -> void:
+	_particle_leases.erase(owner.get_instance_id())
+
 ## How wet each kind leaves surfaces (0..1). Fog only dampens.
 const WET: Dictionary = {"rain": 1.0, "sleet": 0.75, "fog": 0.25, "overcast": 0.1}
 ## Colour washed over sky, haze and particles. Grey and grey-blue only:

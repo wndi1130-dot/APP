@@ -110,7 +110,7 @@ func test_wet_cools_twice_as_fast() -> void:
 	assert_between(t_wet / t_dry, 0.48, 0.56)
 
 
-func test_ctx_wet_applies_without_soaking() -> void:
+func test_ctx_wet_applies_and_soaks_the_clothes() -> void:
 	var a := Heat.new()
 	var b := Heat.new()
 	var sleet := OUTSIDE.duplicate()
@@ -118,4 +118,5 @@ func test_ctx_wet_applies_without_soaking() -> void:
 	a.tick(10.0, OUTSIDE)
 	b.tick(10.0, sleet)
 	assert_almost_eq(100.0 - b.heat, (100.0 - a.heat) * 2.0, 0.0001)
-	assert_eq(b.wet, 0.0)
+	# Sleet wets the clothes and they stay wet till dried (body_injury 8.3: 옷이 젖는다).
+	assert_almost_eq(b.wet, 1.0 - Heat.DRY_SLOW * 10.0, 0.0001)

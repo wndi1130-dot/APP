@@ -33,7 +33,7 @@ func _said(n: Node) -> Array:
 func test_the_sheet_says_what_the_stop_s_record_says() -> void:
 	var m: Dictionary = ReceiptSheet.model(SliceFlow.result_of(_receipt("case1_symbol_kept")), 1)
 	assert_eq(m["seg"], 1)
-	assert_eq(m["kick"], "구간 정차 · 귀환 영수증")
+	assert_false(m.has("kick"), "no 「구간 정차 · 귀환 영수증」 kick (결정 417)")
 	assert_eq(m["place"], "술레후프")
 	assert_eq(m["stamp"], "출발")
 	assert_eq(m["when"], "1일째 10:30 → 13:10", "the same day said once")
@@ -41,7 +41,7 @@ func test_the_sheet_says_what_the_stop_s_record_says() -> void:
 	assert_eq(m["columns"][0], ["실은 것", ["석탄 6", "식량 3", "상징물 1"]])
 	assert_eq(m["columns"][1], ["탄 사람", ["4명", "모두 탔다"]])
 	assert_eq(m["seen"], ["약속 서막 · 본 사람 2 · 꼬리칸 들음", "상징물 · 꼬리칸의 것 · 든 사람 있음"])
-	assert_eq(m["note"], ReceiptSheet.NOTE, "the train makes the promise's call")
+	assert_false(m.has("note"), "no line on who calls the promise (결정 417): no stamp on it says so")
 	assert_eq(ReceiptSheet.model({}), {}, "no receipt, nothing to say")
 
 
@@ -55,7 +55,7 @@ func test_the_sheet_lies_where_the_stop_card_lies_and_its_key_goes_on() -> void:
 	var c = _sheet()
 	assert_eq(c.sheet.position, ReceiptSheet.SHEET_AT * UiFonts.K)
 	assert_eq(c.sheet.size, PaperSheet.SIZE * UiFonts.K, "the stop card's sheet, 446 × 346")
-	for n in ["Place", "Stamp", "Head", "Stay", "Columns", "Seen", "Note", "When", "Go"]:
+	for n in ["Place", "Stamp", "Head", "Stay", "Columns", "Seen", "When", "Go"]:
 		assert_not_null(c.find_child(n, true, false), n)
 	assert_eq(c.go_key.text, "특별 회기")
 	var said: Array = _said(c)

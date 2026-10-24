@@ -317,7 +317,8 @@ func _ready() -> void:
 	bar.name = "HomeBar"
 	bar.g = {}
 	bar.lever = true
-	bar.lever_small = "당겨 내리기"
+	# The lever's own shape and pull say how (결정 417: no 「당겨 내리기」).
+	bar.lever_small = ""
 	bar.main_word = "표결"
 	bar.main_pressed.connect(_on_main)
 	m = model(g, t, idx)
@@ -530,21 +531,18 @@ func _lay_bill() -> void:
 		_bill_parts.remove_child(c)
 		c.queue_free()
 	var k: float = UiFonts.K
-	# The kick: the stretch it sits on and what sits (.bill__kick: 「6구간 회기」),
-	# and which agenda of how many.
-	var seg := _ink(str(int(m["seg"])), UiFonts.NUMBER, 400, 14.0, PINK, 0.28)
-	_on_bill(seg)
-	GlassParts.put(seg, BILL_X0, 7.0, 17.0)
-	var base: float = GlassParts.base_of(seg)
-	var kick := _ink("구간 특별 회기" if bool(m["special"]) else "구간 회기", UiFonts.WORD, 400, 12.0, PINK2, 1.2)
-	_on_bill(kick)
-	GlassParts.put_on(kick, seg.position.x + GlassParts.text_w(seg), base)
+	# The kick: 「특별」 when the session is a special one (결정 303), and which
+	# agenda of how many by the arrows' count; the stretch and 「의회」 are on
+	# the route line under it (결정 417: no 「6구간 회기」, no 「안건」).
 	var of_n := _ink("%d/%d" % [int(m["idx"]) + 1, int(m["count"])], UiFonts.NUMBER, 400, 14.0, PINK, 0.28)
 	_on_bill(of_n)
-	GlassParts.put_on(of_n, BILL_X1 * k - GlassParts.text_w(of_n), base)
-	var of_w := _ink("안건", UiFonts.WORD, 400, 12.0, PINK2, 1.2)
-	_on_bill(of_w)
-	GlassParts.put_on(of_w, of_n.position.x - 4.0 * k - GlassParts.text_w(of_w), base)
+	GlassParts.put(of_n, BILL_X0, 7.0, 17.0)
+	var base: float = GlassParts.base_of(of_n)
+	of_n.position.x = BILL_X1 * k - GlassParts.text_w(of_n)
+	if bool(m["special"]):
+		var kick := _ink("특별", UiFonts.WORD, 400, 12.0, PINK2, 1.2)
+		_on_bill(kick)
+		GlassParts.put_on(kick, BILL_X0 * k, base)
 	# The title between the arrows, in the hand, as large as fits in two lines
 	# (three at the smallest); the row grows with it.
 	var title := _ink(UiFonts.keep_all(String(m["title"])), UiFonts.HAND, 400, 27.0, PINK)
@@ -588,11 +586,9 @@ func _lay_bill() -> void:
 	var eye := _icon("secret" if bool(m["secret"]) else "eye", 14.0, PINK2)
 	eye.position = Vector2(x, y + 3.0) * k
 	_on_bill(eye)
-	x += 14.0 + 3.0
-	var open_w := _ink("비밀" if bool(m["secret"]) else "공개", UiFonts.WORD, 400, 12.0, PINK2, 0.72)
-	_on_bill(open_w)
-	GlassParts.put_on(open_w, x * k, tbase)
-	x += GlassParts.text_w(open_w) / k + 10.0
+	# Open or secret by its eye alone (decisions.md 의회 화면 「공개·비밀 표시」,
+	# 결정 417: no word).
+	x += 14.0 + 10.0
 	if String(m["tag"]) != "":
 		_on_bill(_chip(String(m["tag"]), Vector2(x, y)))
 	var rule_y: float = y + 20.0 + 8.0
@@ -851,7 +847,8 @@ func _fill_pane() -> void:
 ## picks its group (not while the count is on).
 func _list(counting: bool) -> void:
 	var k: float = UiFonts.K
-	_head("집단별 표", [["찬성", SKY], ["미정", INK2], ["반대", RED]], COLS_BEFORE)
+	# The columns' words only, no 「집단별 표」 over them (결정 417).
+	_head("", [["찬성", SKY], ["미정", INK2], ["반대", RED]], COLS_BEFORE)
 	var comms: Array = m["comms"]
 	for i in comms.size():
 		var c: Dictionary = comms[i]
@@ -882,7 +879,7 @@ func _list(counting: bool) -> void:
 
 ## After the count: each group's yes and no (cast_vote byComm), rows 36 high.
 func _results() -> void:
-	_head("집단별 결과", [["찬성", SKY], ["반대", RED]], COLS_AFTER)
+	_head("", [["찬성", SKY], ["반대", RED]], COLS_AFTER)
 	var comms: Array = m["comms"]
 	var by: Dictionary = result.get("byComm", {})
 	for i in comms.size():
@@ -963,7 +960,7 @@ func _detail(c: Dictionary) -> void:
 	var y: float = 76.0
 	var seats := _ink(str(int(c["seats"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
 	_on_pane(seats)
-	var stage_l := _ink("석 · 관계 " + String(c["stage"]), UiFonts.WORD, 400, 12.0, INK2, 0.0)
+	var stage_l := _ink("석 · " + String(c["stage"]), UiFonts.WORD, 400, 12.0, INK2, 0.0)
 	_on_pane(stage_l)
 	GlassParts.put(stage_l, 0.0, y, 24.0)
 	var base: float = GlassParts.base_of(stage_l)
