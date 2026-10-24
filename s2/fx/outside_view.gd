@@ -58,6 +58,7 @@ func set_look(l: Dictionary) -> void:
 	m.set_shader_parameter("sky_top", l["sky_top"])
 	m.set_shader_parameter("sky_low", l["sky_low"])
 	m.set_shader_parameter("sun_glow", l["sun_glow"])
+	_set_photo_skies(l.get("skies", []))
 	m.set_shader_parameter("lamp", l["lamp"])
 	m.set_shader_parameter("sun_col", l["sun_color"])
 	m.set_shader_parameter("sun_e", float(l["sun_energy"]))
@@ -79,6 +80,30 @@ func set_look(l: Dictionary) -> void:
 		m.set_shader_parameter(key, float(reg[key]))
 	m.set_shader_parameter("catenary", 1.0 if String(reg["poles"]) == "catenary" else 0.0)
 	m.set_shader_parameter("falling", float(l["fall"]) if String(l["falls"]) in ["rain", "sleet"] else float(l["fall"]) * 0.5)
+
+
+## The look's photo skies on the card's three slots (the drawn sky alone if
+## none is in this build).
+func _set_photo_skies(skies: Array) -> void:
+	var slots: Array = ["sky_a", "sky_b", "sky_c"]
+	var w := Vector3.ZERO
+	var hue := Vector3(0.25, 0.25, 0.25)
+	var n := 0
+	for row in skies:
+		if n >= slots.size():
+			break
+		var key := String(row[0])
+		var tex := Atmosphere.sky_texture(key)
+		if tex == null or float(row[1]) <= 0.0:
+			continue
+		material.set_shader_parameter(slots[n], tex)
+		w[n] = float(row[1])
+		hue[n] = float(Atmosphere.SKY_PHOTOS[key]["hue"])
+		n += 1
+	var total := w.x + w.y + w.z
+	material.set_shader_parameter("sky_w", w / total if total > 0.0 else Vector3(1, 0, 0))
+	material.set_shader_parameter("sky_hue", hue)
+	material.set_shader_parameter("photo_on", 1.0 if n > 0 else 0.0)
 
 
 func _process(delta: float) -> void:

@@ -44,7 +44,12 @@ const Atmosphere = preload("res://fx/atmosphere.gd")
 const SeasonTable = preload("res://game/season_table.gd")
 const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
+const StopCinema = preload("res://game/stop_cinema.gd")
+const StopLoader = preload("res://game/stop_loader.gd")
+const PaperMotion = preload("res://game/ui/paper_motion.gd")
+const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
 ## The frost grown in from the screen's corners over the world (시안 .w-frost,
@@ -103,7 +108,10 @@ const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 
 var opts: Dictionary = {}          # skip_field: true goes past the field with the sample receipt;
-                                   # still: true holds the snow and the fog (screens for checks)
+                                   # still: true holds the snow and the fog (screens for checks);
+                                   # cinema: false puts the stop card straight up (no roof, no look down);
+                                   # cinema_seen: as if the stop scene had been seen whole (taps skip);
+                                   # map_threads: false builds the stop's map at once (tests)
 var step: int = -1
 var stage: Node = null             # what is up behind the panel: the train or the field
 var train: Node3D = null
@@ -137,6 +145,12 @@ var outside: MeshInstance3D = null  # the world outside the train (fx/outside_vi
 ## What the slice's outside is when nothing says otherwise: the first stop's
 ## weather, the same the field plays it in (field_game.gd's default).
 const SLICE_WEATHER: Array = ["fog", "snow"]
+## The stop seen from the train (결정 421-3): the scene from the roof to the
+## look down (stop_cinema.gd), the field made ready under it (stop_loader.gd),
+## and that field, built and standing still, till the field step shows it.
+var cinema: Node = null
+var loader: Node
+var pending_field: Node = null
 
 
 func _ready() -> void:
@@ -148,6 +162,8 @@ func _ready() -> void:
 	var s: Array = StopPickCard.sample()
 	train_g = s[0]
 	train_t = s[1]
+	# The train's stores, so what the field brings home has somewhere to go.
+	TrainDom.ensure(train_g)
 	marks = Control.new()
 	marks.name = "Marks"
 	marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -188,6 +204,10 @@ func _ready() -> void:
 	gauges.t = train_t
 	layer.add_child(gauges)
 	_build_panel()
+	loader = StopLoader.new()
+	loader.name = "StopLoader"
+	loader.threaded = bool(opts.get("map_threads", true))
+	add_child(loader)
 	go(0)
 
 
@@ -198,7 +218,12 @@ func current() -> String:
 
 func go(i: int) -> void:
 	step = i
+	var id: String = STEPS[i][0]
+	# The train's own screen stays a moment under the stop scene as it comes in.
+	if id == "stop_pick" and _cinema_on():
+		_let_stage_go(StopCinema.FADE_S)
 	_clear_stage()
+	_drop_cinema(id)
 	if is_instance_valid(card):
 		card.queue_free()
 	card = null
@@ -207,7 +232,6 @@ func go(i: int) -> void:
 	bar = null
 	sel = ""
 	var row: Array = STEPS[i]
-	var id: String = row[0]
 	# Over the train, not over the field; the slice's state, but the session's
 	# own in the special session.
 	gauges.visible = String(row[1]) != ""
@@ -223,6 +247,13 @@ func go(i: int) -> void:
 	# and the drift lies still (.world.run, .world.is-stop).
 	weather.moving = String(row[1]) == "travel"
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
+	# The next stop is known on the train: its map is made ready off the main
+	# thread while the train runs.
+	if id == "train" and _cinema_on():
+		loader.prepare(_field_place())
+	if id == "stop_pick" and _cinema_on():
+		_show_stop_cinema()
+		return
 	if id == "field":
 		panel.visible = false
 		if bool(opts.get("skip_field", false)):
@@ -273,10 +304,145 @@ func _show_stop_pick() -> void:
 	c.g["seg"] = int(STEPS[step][2])
 	c.top_room = TrainGauges.BAND_H
 	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
-	c.sent.connect(func(_g: Dictionary) -> void: next())
-	c.passed_by.connect(func() -> void: go(_index_of("travel")))
+	c.sent.connect(func(_g: Dictionary) -> void: _send_crew())
+	c.passed_by.connect(_pass_stop)
 	layer.add_child(c)
 	card = c
+	# The paper comes up folded and opens out, not all at once (사용자 2026-10-24).
+	if c.sheet != null:
+		PaperMotion.open(c.sheet, _seen_before())
+
+
+# ---------------------------------------------------------------- the stop seen from the train
+
+func _cinema_on() -> bool:
+	return bool(opts.get("cinema", true))
+
+
+## The place of the slice's field (FieldMaps; "" is its default, Sulechów).
+func _field_place() -> String:
+	return String(opts.get("place", ""))
+
+
+## 「정차 고르기」: the roof of the running train, not the card at once. The
+## card comes up with the station behind it (card_time).
+func _show_stop_cinema() -> void:
+	panel.visible = false
+	gauges.visible = false
+	soot_bot.visible = false
+	for p in plates.get_children():
+		plates.remove_child(p)
+		p.queue_free()
+	loader.prepare(_field_place())
+	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
+	var c = STOP_CINEMA_SCENE.instantiate()
+	c.name = "StopCinema"
+	c.seen = bool(opts.get("cinema_seen", StopCinema.was_seen()))
+	c.remember = not opts.has("cinema_seen")
+	if loader.has_data():
+		c.data = loader.data
+	else:
+		loader.data_ready.connect(func() -> void:
+			if is_instance_valid(c):
+				c.set_map(loader.data), CONNECT_ONE_SHOT)
+	c.card_time.connect(_on_card_time)
+	c.done.connect(_on_cinema_done)
+	add_child(c)
+	cinema = c
+
+
+## The station is in sight and the train slows: the stop card over it, the
+## gauges over the card as before.
+func _on_card_time() -> void:
+	gauges.visible = true
+	gauges.set_focus(FOCUS.get("stop_pick", []))
+	_show_stop_pick()
+
+
+## Sent: the brakes and the look down, the field built under it meanwhile.
+## Without the stop scene the field comes at once, as it did.
+func _send_crew() -> void:
+	if not is_instance_valid(cinema):
+		next()
+		return
+	_drop_card()
+	cinema.send()
+	if bool(opts.get("skip_field", false)):
+		cinema.land()
+		return
+	loader.field_built.connect(_on_field_built, CONNECT_ONE_SHOT)
+	loader.build_field(self, _field_opts())
+
+
+## Passed by: the train picks up speed and its own screen comes back.
+func _pass_stop() -> void:
+	if not is_instance_valid(cinema):
+		go(_index_of("travel"))
+		return
+	_drop_card()
+	cinema.pass_by()
+
+
+func _on_field_built(f: Node) -> void:
+	pending_field = f
+	loader.field = null
+	if is_instance_valid(cinema):
+		cinema.land()
+
+
+## The stop scene's end: over the stop (the field step takes the field built
+## under it) or back on the line.
+func _on_cinema_done(how: String) -> void:
+	if how == "sent":
+		go(_index_of("field"))
+	else:
+		go(_index_of("travel"))
+
+
+func _drop_card() -> void:
+	var c: Control = card if is_instance_valid(card) else null
+	card = null
+	gauges.visible = false
+	if c == null:
+		return
+	# Folded away under the finger that sent it; nothing on it answers any more.
+	c.propagate_call("set", ["mouse_filter", Control.MOUSE_FILTER_IGNORE])
+	var paper: Variant = c.get("sheet")
+	if paper is Control:
+		PaperMotion.close(paper, _seen_before()).finished.connect(c.queue_free)
+	else:
+		c.queue_free()
+
+
+## The stop scene seen whole before: its paper comes and goes in half the time.
+func _seen_before() -> bool:
+	return bool(opts.get("cinema_seen", StopCinema.was_seen()))
+
+
+## Leaving a step: the stop scene goes unless it is already fading out over
+## the next one, and a field made ready for a stop not played goes too.
+func _drop_cinema(id: String) -> void:
+	if is_instance_valid(cinema) and not (cinema.beat == "out" or cinema.beat == "end"):
+		cinema.queue_free()
+	if not is_instance_valid(cinema) or cinema.is_queued_for_deletion():
+		cinema = null
+	if id != "field" and is_instance_valid(pending_field):
+		pending_field.queue_free()
+		pending_field = null
+	if id != "field" and id != "stop_pick":
+		loader.abandon()
+
+
+## The stage behind goes after `seconds`, not now (the next screen fades in over it).
+func _let_stage_go(seconds: float) -> void:
+	if not is_instance_valid(stage):
+		return
+	var old: Node = stage
+	stage = null
+	train = null
+	field = null
+	# Bound to the node itself: gone first (the slice left), the call goes with it.
+	get_tree().create_timer(seconds + 0.05).timeout.connect(old.queue_free)
 
 
 ## The special session: the session card over the dining car, off the session
@@ -606,6 +772,13 @@ func _enamel(name_label: Label3D) -> Control:
 
 func _process(_delta: float) -> void:
 	marks.queue_redraw()
+	# Under the stop scene: the snow over the screen runs with the train, and
+	# the field is built in longer slices once the camera is at rest.
+	if is_instance_valid(cinema):
+		loader.resting = cinema.at_rest()
+		var running: bool = absf(cinema.speed) > 1.0
+		if weather.moving != running:
+			weather.moving = running
 	if not is_instance_valid(train) or plates.get_child_count() == 0:
 		return
 	var cam: Camera3D = train.get("camera")
@@ -735,12 +908,37 @@ func _draw_marks() -> void:
 
 
 func _start_field() -> void:
+	# Built under the stop scene already: it is shown and starts now.
+	if is_instance_valid(pending_field):
+		field = pending_field
+		pending_field = null
+		field.visible = true
+		field.finished.connect(_field_done)
+		stage = field
+		field.go_live()
+		return
+	loader.abandon()
 	field = FieldGame.new()
+	field.opts = _field_opts()
+	field.finished.connect(_field_done)
+	add_child(field)
+	stage = field
+
+
+## What the slice's field goes out with: the default crew as each one's car
+## stands with the chief now (for what they say to him), the sample departure.
+func _field_opts() -> Dictionary:
 	var o := {"seed": int(opts.get("seed", 1))}
-	# The stop is drawn in the same cold as the stretch that brought the train here.
+	# The stop is drawn in the same cold as the stretch that brought the train
+	# here (the stop pick and the field are the same stretch, so the stop scene
+	# building it from the pick gives the same).
 	o["act"] = "prologue"
 	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
-	o["squad"] = field.default_squad("crude")
+	# A field of its own to ask: the stop scene builds the field before the
+	# field step makes one.
+	var probe = FieldGame.new()
+	o["squad"] = probe.default_squad("crude")
+	probe.free()
 	# How each one's car stands with the chief now, for what they say to him.
 	var comms: Dictionary = train_g.get("comms", {})
 	for row: Dictionary in o["squad"]:
@@ -749,10 +947,9 @@ func _start_field() -> void:
 	var dep: Dictionary = _sample(DEPARTURE_SAMPLE)
 	if not dep.is_empty():
 		o["departure"] = dep
-	field.opts = o
-	field.finished.connect(_field_done)
-	add_child(field)
-	stage = field
+	if opts.has("place"):
+		o["place"] = String(opts["place"])
+	return o
 
 
 ## The field is over: its end card stays where it is, and a key over it goes

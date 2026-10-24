@@ -7,6 +7,7 @@ const Rng = preload("res://game/politics/rng.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
 const TrainState = preload("res://game/train/train_state.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
 const SYMBOL_USES := ["hang_before_session", "hang_in_car"]
@@ -607,7 +608,8 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 
 
 static func _hang_why(g: Dictionary, comm: String) -> Variant:
-	if not g.get("dom") is Dictionary:
+	# The stores alone (train_dom.gd) do not carry the bond a hung symbol builds.
+	if not TrainDom.rules_on(g):
 		return "내정을 켠 판에서만 쓴다."
 	if (g["dom"].get("hung", []) as Array).has(comm):
 		return "이 칸에는 이미 걸려 있다."

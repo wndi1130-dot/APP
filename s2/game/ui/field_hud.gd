@@ -137,6 +137,8 @@ const BAG_LIST_MAX: float = 144.0
 const LOOT_LIST_MAX: float = 194.0
 ## A thing's put-down key, and the bag's list beside the journal (mockup px).
 const DROP_W: float = 84.0
+## A thing's picture in the loot and bag rows (decision 417: a picture and a short name).
+const ITEM_ICON_PX: int = 18
 const BAG_LIST_W: float = 300.0
 ## The journal's note in the bag (시안 .pnote: 240 wide, leaning 1.1°).
 const JOURNAL_W: float = 240.0
@@ -385,6 +387,7 @@ var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
 var settings_button: Button          # shown while paused: opens the settings (stick, radio)
 var bag_box: HBoxContainer           # the bag key, right under the portrait
+var alarm_button: Button             # a found watch still set to ring: one press stops it (P19)
 var says: Array = []                 # [{p, text, t, hurt}] short lines over companions' heads
 var hurt_flash: float = 0.0          # the screen's side edges glow amber when the chief is hurt
 var debug_panel: PanelContainer
@@ -1272,6 +1275,12 @@ func _build_thumbs() -> void:
 	_dress(bag_button, "inv", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 26)
 	bag_button.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 500))
 	bag_box.add_child(bag_button)
+	# A watch picked up still set: its mark lights beside the bag until pressed.
+	alarm_button = _button("", _alarm_key_off, Vector2(52, 52), UiFonts.size(14))
+	alarm_button.tooltip_text = "시계 알람 끄기"
+	_dress(alarm_button, "clock", Vector2(48, 48), true, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 26)
+	alarm_button.visible = false
+	bag_box.add_child(alarm_button)
 	offer_box = HBoxContainer.new()
 	offer_box.set_anchors_preset(Control.PRESET_CENTER)
 	offer_box.position = Vector2(-260, 90)
@@ -1751,6 +1760,11 @@ func _tick_portrait(p) -> void:
 	var heavy: Color = [HudSkin.INK, HudSkin.HEED, HudSkin.BAD, HudSkin.BAD][clampi(state, 0, 3)]
 	for k in ["font_color", "font_hover_color", "font_focus_color"]:
 		bag_button.add_theme_color_override(k, heavy)
+	var ringing: bool = game.alarm_set()
+	if alarm_button != null and ringing != alarm_button.visible:
+		alarm_button.visible = ringing
+		if ringing:
+			_beckon(alarm_button)
 
 
 ## Short name of the weapon in hand ("펌프식 산탄총" -> "산탄총").
@@ -2720,7 +2734,7 @@ func loot(id: String) -> void:
 	list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
 	for i in range(items.size()):
 		var item: String = items[i]
-		list.add_child(_thing_key(game.item_name(item), "%.1f" % Carry.item_weight(item), _loot_take.bind(id, i)))
+		list.add_child(_thing_key(game.item_name(item), "%.1f" % Carry.item_weight(item), _loot_take.bind(id, i), game.item_icon(item)))
 	pane.body.add_child(GlassPane.scroll(list, LOOT_LIST_MAX))
 	var foot := GlassPane.row()
 	foot.alignment = BoxContainer.ALIGNMENT_END
@@ -2730,15 +2744,19 @@ func loot(id: String) -> void:
 	pane.body.add_child(foot)
 
 
-## A thing as a cell across its row: its name at 13/500 at the left, its
-## weight in the number face at the right.
-func _thing_key(word: String, weight: String, cb: Callable) -> Button:
+## A thing as a cell across its row: its picture and its name at 13/500 at the
+## left (decision 417: a picture and a short name), its weight in the number
+## face at the right.
+func _thing_key(word: String, weight: String, cb: Callable, icon: String = "") -> Button:
 	var b := GlassPane.key("", cb)
 	var h := HBoxContainer.new()
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	h.offset_left = UiFonts.px(12.0)
 	h.offset_right = -UiFonts.px(12.0)
+	h.add_theme_constant_override("separation", GlassPane.px(8.0))
+	if icon != "" and HudIcons.PATHS.has(icon):
+		h.add_child(_icon_rect(icon, ITEM_ICON_PX, GlassPane.INK))
 	var name_l := UiFonts.label(word, UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39)
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_l.clip_text = true
@@ -2814,13 +2832,17 @@ func bag_panel() -> void:
 	left.add_child(GlassPane.mixed("권총탄 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
 
 
-## One thing in the bag: its name and count at 13/500, its weight in the number
-## face, and its put-down key at the right.
+## One thing in the bag: its picture, name and count at 13/500, its weight in
+## the number face, and its keys at the right: put down, and eat for food, or
+## switch off for a watch still set to ring.
 func _bag_row(id: String, n: int) -> Control:
 	var h := HBoxContainer.new()
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.custom_minimum_size = Vector2(0, UiFonts.px(GlassPane.CELL_H))
 	h.add_theme_constant_override("separation", GlassPane.px(10.0))
+	var icon: String = game.item_icon(id)
+	if icon != "" and HudIcons.PATHS.has(icon):
+		h.add_child(_icon_rect(icon, ITEM_ICON_PX, GlassPane.INK))
 	var name_l := UiFonts.label("%s ×%d" % [game.item_name(id), n], UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39)
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_l.clip_text = true
@@ -2829,6 +2851,16 @@ func _bag_row(id: String, n: int) -> Control:
 	var kg := UiFonts.label("%.1f" % (Carry.item_weight(id) * n), UiFonts.NUMBER, 500, 15.0, GlassPane.INK2, 0.22)
 	kg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(kg)
+	if Carry.FieldItems.rings(id):
+		var off := GlassPane.key("끄기", _alarm_off)
+		off.size_flags_horizontal = Control.SIZE_SHRINK_END
+		off.custom_minimum_size.x = UiFonts.px(DROP_W)
+		h.add_child(off)
+	elif Carry.FieldItems.edible(id):
+		var eat := GlassPane.key("먹기", _eat.bind(id))
+		eat.size_flags_horizontal = Control.SIZE_SHRINK_END
+		eat.custom_minimum_size.x = UiFonts.px(DROP_W)
+		h.add_child(eat)
 	var drop := GlassPane.key("내려놓기", _drop.bind(id))
 	drop.size_flags_horizontal = Control.SIZE_SHRINK_END
 	drop.custom_minimum_size.x = UiFonts.px(DROP_W)
@@ -2897,6 +2929,24 @@ func _drop(id: String) -> void:
 	p.take_item(id, n)
 	game.ground_items.append({"pos": p.position + Vector3(0.4, 0, 0.4), "id": id, "n": n})
 	bag_panel()
+
+
+## Eat one there and then: the bag closes and the hands get to it.
+func _eat(id: String) -> void:
+	_close_modal()
+	game.eat(game.player, id)
+
+
+## The watch row's key: every set watch is switched off, the bag shown again.
+func _alarm_off() -> void:
+	game.alarm_off()
+	bag_panel()
+
+
+## The key beside the bag: the same, without opening anything.
+func _alarm_key_off() -> void:
+	game.alarm_off()
+	toast("시계 알람을 껐다.")
 
 
 func _ally_menu(p) -> void:
@@ -4109,7 +4159,13 @@ func _tap_thing(p, world: Vector3) -> bool:
 	# Stairs: a tap on them goes up (or down) them.
 	var lv: int = game.level_of(p.position)
 	for s in game.stairs:
-		if s["ladder"] or not (s["low"] == lv or s["high"] == lv):
+		if not (s["low"] == lv or s["high"] == lv):
+			continue
+		if s["ladder"]:
+			# A rooftop's ladder: walk to its foot (or top) and climb it.
+			if s.has("roof") and game.lift(s["cell"], lv).distance_to(world) < 1.0:
+				game.actions.go_and_do(p, "ladder", s, game.lift(s["cell"], lv))
+				return true
 			continue
 		if game.lift(s["cell"], lv).distance_to(world) < 1.0:
 			if _assist_off(p):
