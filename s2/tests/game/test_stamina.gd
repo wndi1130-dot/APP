@@ -19,12 +19,12 @@ func test_load_and_cold_raise_cost_without_double_counting_fatigue() -> void:
 	assert_almost_eq(b.breath, 1.0 - 0.12 * 1.5 * 1.25, 0.00001)
 
 
-func test_walking_recovers_a_quarter_and_fatigue_reduces_rest_recovery() -> void:
+func test_walking_recovers_a_quarter_and_rest_recovers_in_full() -> void:
 	var walk := Stamina.advance(0.0, 0.2, 1.0, {"moving": true})
 	var rest := Stamina.advance(0.0, 0.2, 1.0, {})
 	var tired := Stamina.advance(0.5, 0.2, 1.0, {})
 	assert_almost_eq(walk.y - 0.2, (rest.y - 0.2) * 0.25, 0.00001)
-	assert_almost_eq(tired.y, 0.2 + 0.25 * (1.0 - 0.5 * 0.85), 0.00001)
+	assert_almost_eq(tired.y, rest.y, 0.00001, "the stop's fatigue does not slow the rest (reverted reference value)")
 
 
 func test_loaded_walk_cannot_recharge_but_stationary_rest_can() -> void:

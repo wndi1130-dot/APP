@@ -65,12 +65,12 @@ func test_context_wetness_persists_and_dries_after_exposure() -> void:
 	assert_almost_eq(h.wet, 0.78, 0.00001)
 
 
-func test_wet_insulation_uses_a_clamped_ratio() -> void:
+func test_wet_loss_uses_a_clamped_ratio() -> void:
 	var dry := Heat.loss_rate(OUTSIDE, 0.0)
 	var wet := Heat.loss_rate(OUTSIDE, 1.0)
-	var expected := Heat.BASE_LOSS * 2.0 * (1.25 - 0.6 * (1.0 - 0.75) * 0.6)
-	assert_almost_eq(wet, expected, 0.00001)
-	assert_gt(wet, dry * 2.0)
+	# Soaked through cools twice as fast, the warmth not cut again (reverted
+	# reference value: no decision or brief number, the existing rule first).
+	assert_almost_eq(wet, dry * 2.0, 0.00001)
 	assert_eq(Heat.loss_rate(OUTSIDE, 2.0), wet)
 	assert_eq(Heat.loss_rate(OUTSIDE, -1.0), dry)
 

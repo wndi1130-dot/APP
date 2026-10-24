@@ -12,7 +12,6 @@ const REF_AMBIENT := -14.0       # BASE_LOSS is tuned for this outside temperatu
 const NO_LOSS_AT := 10.0         # at or above this ambient (C) no heat is lost
 const DRY_STOVE := 0.02
 const DRY_SLOW := 0.001          # away from a stove: very slow
-const WET_INSULATION_LOSS := 0.75
 const WET_COLD_THRESHOLD := 0.0
 const DEFAULT_WARMTH := 0.6
 const MAX_WARMTH := 1.2
@@ -50,7 +49,8 @@ static func loss_rate(ctx: Dictionary, wet_now: float) -> float:
 	var windproof: float = clampf(float(ctx.get("windproof", 0.0)), 0.0, 1.0)
 	var wet_ratio := clampf(wet_now, 0.0, 1.0)
 	var warmth: float = clampf(float(ctx.get("warmth", DEFAULT_WARMTH)), 0.0, MAX_WARMTH)
-	warmth *= 1.0 - WET_INSULATION_LOSS * wet_ratio
+	# Soaked through cools twice as fast (the 1 + wet term) and the warmth is not
+	# cut again: no decision or brief gives a number for it.
 	var r: float = BASE_LOSS * amb * (1.0 + wind * (1.0 - windproof)) * (1.0 + wet_ratio) * (LOSS_WITHOUT_INSULATION - warmth * WARMTH_LOSS_CUT)
 	if bool(ctx.get("moving", false)):
 		r *= MOVING_MULT

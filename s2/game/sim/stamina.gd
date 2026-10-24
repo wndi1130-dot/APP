@@ -12,7 +12,6 @@ const RUN_BREATH_MIN := 0.15
 const RUN_BREATH_RESUME := 0.25
 const FATIGUE_LIGHT := 0.5
 const FATIGUE_HEAVY := 0.8
-const REST_FATIGUE_PENALTY := 0.85
 const WALK_RECOVERY_MULT := 0.25
 const CROUCH_EFFORT_MULT := 1.5
 const LOAD_BREATH_MULT := [1.0, 1.0, 1.5, 2.8]
@@ -46,9 +45,11 @@ static func advance(exhaustion: float, breath: float, delta: float, ctx: Diction
 		fatigue += RUN_FATIGUE * delta * fatigue_mult(ctx) * maxf(1.0, float(ctx.get("torso_effort", 1.0)))
 		air -= BREATH_RUN * delta * breath_mult(ctx)
 	elif not working:
-		var recovery := maxf(0.0, 1.0 - fatigue * (1.0 if moving else REST_FATIGUE_PENALTY))
+		# At rest the breath comes back in full whatever the stop's fatigue: no
+		# decision or brief line slows it (body_injury 4: 숨은 몇 초 쉬면 돌아온다).
+		var recovery := 1.0
 		if moving:
-			recovery *= WALK_RECOVERY_MULT
+			recovery = maxf(0.0, 1.0 - fatigue) * WALK_RECOVERY_MULT
 		if not moving or int(ctx.get("carry_state", 0)) < 2:
 			air += BREATH_REST * delta * recovery
 		if bool(ctx.get("indoor_rest", false)) and not moving:

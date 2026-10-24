@@ -317,6 +317,10 @@ func test_the_weapon_sits_in_the_baked_right_hand() -> void:
 func test_a_job_of_the_hands_is_the_living_own() -> void:
 	var own := _own()
 	var p := _person()
+	# A splint takes a stick and a cloth and a break to set (body_injury 4.6 도구:
+	# 부목(막대 + 천)); without them it does not start.
+	p.items = {"plank": 1, "cloth": 1}
+	p.body.fracture(false)
 	for want in [["search", "p_search_mid"], ["door", "p_search_mid"], ["pry", "p_pry"], ["swap", "p_search_mid"],
 			["loot", "p_kneel_work"], ["fire", "p_kneel_work"], ["snow", "p_search_low"], ["treat", "p_treat"],
 			["splint", "p_kneel_work"], ["lid", "p_kneel_work"], ["dig", "p_floor_strike"], ["window", "p_swing_one"],

@@ -23,7 +23,10 @@ const HEAVY_BLOOD := 1.0
 ## Festering (body_injury 4.6 stage 2; start values, to be set on the phone).
 const FESTER_IN_FIELD := true    # false: nothing festers on the field, only the train decides
 const FESTER_TIME := 360.0       # seconds a dirty wound is left before it turns
-const FESTER_KINDS := ["scratch", "laceration", "deep", "embedded"]
+# A deep wound is not among them: its care has no cleaning (tourniquet,
+# stitches, bandage) and left alone it bleeds on (body_injury 4.6 table).
+# Its dressing still festers once dirty.
+const FESTER_KINDS := ["scratch", "laceration", "embedded"]
 const FESTER_MULT := 0.9
 const SEEP_BLOOD := 0.4          # a heavy wound with a plain bandage seeps on as a light one
 
@@ -295,6 +298,10 @@ func festers(w: Dictionary) -> bool:
 	if InjuryRules.dirty(w):
 		return true
 	if String(w["kind"]) not in FESTER_KINDS:
+		return false
+	# A scratch is cared for by a bandage alone (body_injury 4.6 table: 붕대만도 됨);
+	# left bare it can fester.
+	if w["kind"] == "scratch" and bool(w["bandaged"]):
 		return false
 	if w["kind"] == "embedded" and not bool(w["pulled"]):
 		return true
