@@ -41,14 +41,16 @@ func _ready() -> void:
 	_seg_l = [
 		UiFonts.label(str(seg), UiFonts.NUMBER, 500, 15.0, INK, 0.45),
 		UiFonts.label("/%d" % total, UiFonts.NUMBER, 400, 15.0, INK2, 0.45),
-		UiFonts.label("구간", UiFonts.WORD, 400, 12.0, INK2, 0.72),
+		# The stretch as 6/24 with its ticks on the line under it, no 「구간」 (결정 417).
+		UiFonts.label("", UiFonts.WORD, 400, 12.0, INK2, 0.72),
 		UiFonts.label(phase, UiFonts.WORD, 500, 12.0, INK, 0.72),
 	]
 	for l: Label in _seg_l:
 		add_child(l)
 	if next_km >= 0.0:
+		# The km alone at the row's right, over the line it runs along (no 「다음 역」).
 		_next_l = [
-			UiFonts.label("다음 역", UiFonts.WORD, 400, 12.0, INK2, 0.72),
+			UiFonts.label("", UiFonts.WORD, 400, 12.0, INK2, 0.72),
 			UiFonts.label("%skm" % _km(next_km), UiFonts.NUMBER, 500, 15.0, INK, 0.45),
 		]
 		for l: Label in _next_l:

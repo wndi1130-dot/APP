@@ -86,11 +86,6 @@ const STATUS_GAP: float = 6.0
 # above the crouch key and none starts a second column into the screen.
 const STATUS_SMALL_FROM: int = 4
 const STATUS_SMALL: float = 0.72
-const RADIO_TIPS: Dictionary = {
-	"urgent": "무전: 무리가 들어올 때만 부름 · 울리면 가까운 망자가 들음",
-	"often": "무전: 무리가 지나가면 다음 예보까지 · 아는 것 많고 그만큼 자주 울림",
-	"off": "무전 끔 · 떠날 때만 울림 · 아무것도 못 들음",
-}
 const DUSK_TEST_MIN: float = 940.0   # the test key jumps to 15:40, five minutes before sunset
 const STATUS_SLOTS: int = 5
 const BLOOD_BROWN := Color(0.33, 0.2, 0.12, 0.97)   # blood is dark brown here, never red
@@ -148,12 +143,9 @@ const JOURNAL_W: float = 240.0
 const JOURNAL_LEAN_DEG: float = 1.1
 ## The orders' marks (hud_icons.gd).
 const COMMAND_ICONS: Dictionary = {"follow": "people", "wait": "pause", "search": "search", "cover": "aim", "retreat": "train"}
-## The decision card's paper (시안 06: the stop card's sheet and place), and the
-## word its kick gives by the card's id. A scene longer than this many letters
-## or lines is set in print, so it stays on the sheet.
+## The decision card's paper (시안 06: the stop card's sheet and place). A scene
+## longer than this many letters or lines is set in print, so it stays on the sheet.
 const CARD_AT := Vector2(-10, 50)
-const CARD_KICKS: Dictionary = {"depart": "출발"}
-const CARD_KICK := "현장 결정"
 const CARD_PEN_LETTERS: int = 90
 const CARD_PEN_LINES: int = 3
 ## The leave beat's paper (시안 08 .sp: 452 wide, left −12, leaning −0.6°,
@@ -560,6 +552,18 @@ func _nudge(b: Button, dy: float) -> void:
 		var sb: StyleBox = b.get_theme_stylebox(k)
 		sb.content_margin_top = 4.0 + maxf(dy, 0.0) * 2.0
 		sb.content_margin_bottom = 4.0 + maxf(-dy, 0.0) * 2.0
+
+
+## Light key `b` up twice when it first shows, so the eye finds it without a
+## line saying where it is (결정 417): its glow only, nothing moves.
+func _beckon(b: Button) -> void:
+	if b == null:
+		return
+	var was: Color = b.modulate
+	var tw := b.create_tween()
+	for i in 2:
+		tw.tween_property(b, "modulate", was * Color(1.6, 1.45, 1.2), 0.22)
+		tw.tween_property(b, "modulate", was, 0.32)
 
 
 ## A pill's mark and word sit together in its middle (시안 .fpad--ctx, .fall),
@@ -1504,11 +1508,14 @@ func tick(delta: float) -> void:
 	lamp_button.button_pressed = game.lamps_on()
 	if lamp_button.visible and not lamp_hint_done:
 		lamp_hint_done = true
-		toast("해 짐 · 등불은 1분마다 들킴 · '등불'로 끄면 안 들키나 멀리 못 봄")
-	# The first time it shows, one line points at it (build 47: it was never found).
+		toast("해 짐")
+		_beckon(lamp_button)
+	# The first time it shows, a word and the key lighting up point at it
+	# (build 47: it was never found; 결정 417: no how-to line).
 	if blood_button.visible and not bleed_hint_done:
 		bleed_hint_done = true
-		toast("출혈 · 초상 옆 '지혈'로 붕대 감기")
+		toast("출혈")
+		_beckon(blood_button)
 	_tick_status(p)
 	_place_messages()
 	if pause_shows_play != game.paused:
@@ -1710,13 +1717,13 @@ func _tick_portrait(p) -> void:
 		var d: Dictionary = W.get_data(wid)
 		text = String(d.get("name", wid))
 		var level: int = W.condition_level(float(h["condition"]))
-		cond = "(%s)" % W.CONDITION_NAMES[level]
+		cond = W.CONDITION_NAMES[level]
 		cond_ink = [HudSkin.GOOD, HudSkin.HEED, HudSkin.BAD][level]
 		if bool(h.get("broken", false)):
-			cond = "(망가짐)"
+			cond = "망가짐"
 			cond_ink = HudSkin.BAD
 		elif W.is_ranged(wid):
-			extra = "%d/%d · 남은 %d" % [int(h["loaded"]), int(d["mag"]), int(game.ammo.get(d["ammo"], 0))]
+			extra = "%d/%d · %d" % [int(h["loaded"]), int(d["mag"]), int(game.ammo.get(d["ammo"], 0))]
 			if p.jam_t > 0.0:
 				extra += " · 걸림"
 			elif p.reload_t > 0.0:
@@ -2288,22 +2295,16 @@ func _offer_pick(cb: Callable) -> void:
 
 ## The settings that can be changed in the middle of a stop: the stick, how
 ## much the driver calls and how big the state icons are, a named cell each
-## (시안 13 메뉴판's 손맛 row), what the stick and the radio now do under them.
-## Opened from the pause screen; a press goes round that setting's values.
+## (시안 13 메뉴판's 손맛 row); the values say what each is set to, with no
+## line under them (결정 417). Opened from the pause screen; a press goes round
+## that setting's values.
 func settings_panel() -> void:
-	var pane := _open_pane("설정", "멈춤 중", "gear")
+	var pane := _open_pane("설정", "", "gear")
 	var cells := GlassPane.row()
 	cells.add_child(GlassPane.cell("스틱", "따라오기" if stick_floats() else "고정", _set_stick))
 	cells.add_child(GlassPane.cell("무전", String(game.RADIO_NAMES[game.radio_mode()]), _set_radio))
 	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
 	pane.body.add_child(cells)
-	var room: float = PANE_W - GlassPane.PAD_L - GlassPane.PAD_R
-	var tips := VBoxContainer.new()
-	tips.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tips.add_theme_constant_override("separation", GlassPane.px(2.0))
-	tips.add_child(GlassPane.note("스틱이 엄지 댄 자리로 따라옴" if stick_floats() else "스틱은 왼쪽 아래 제자리", room))
-	tips.add_child(GlassPane.note(RADIO_TIPS[game.radio_mode()], room))
-	pane.body.add_child(tips)
 
 
 func _set_status_size() -> void:
@@ -2427,10 +2428,10 @@ func body_panel(o = null, part: String = "") -> void:
 		part = String(o.body.wounds[urgent]["part"]) if urgent >= 0 else "torso"
 	body_part = part
 	var have: Dictionary = game.actions.care_tools(p, o)
-	pane.body.add_child(GlassPane.mixed("가진 것: 붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))]))
+	pane.body.add_child(GlassPane.mixed("붕대 %d · 술 %d · 판자 %d · 천 %d · 핀셋 %d · 바늘과 실 %d" % [int(have.get("bandage", 0)), int(have.get("bottle_spirit", 0)), int(have.get("plank", 0)) + int(have.get("wood", 0)), int(have.get("cloth", 0)), int(have.get("tweezers", 0)), int(have.get("needle_thread", 0))]))
 	var near: bool = game.actions.in_care_reach(p, o)
 	if not near:
-		pane.body.add_child(GlassPane.mixed("가까이 가야 처치 가능", 12.0, 13.0, GlassPane.AMBER, GlassPane.AMBER))
+		pane.body.add_child(GlassPane.mixed("가까이 가기", 12.0, 13.0, GlassPane.AMBER, GlassPane.AMBER))
 	var h := HBoxContainer.new()
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	h.add_theme_constant_override("separation", GlassPane.px(BODY_GAP))
@@ -2449,7 +2450,8 @@ func body_panel(o = null, part: String = "") -> void:
 	for w: Dictionary in rows:
 		var first: bool = urgent >= 0 and is_same(w, o.body.wounds[urgent])
 		var heavy: bool = float(w["blood"]) >= BodyState.HEAVY_BLOOD
-		right.add_child(GlassPane.note(Treatment.wound_text(w) + (" · 가장 급함" if first else ""), room, GlassPane.RED_L if heavy else GlassPane.INK, 13.0, 500))
+		# The most urgent in amber, no word after it (결정 417).
+		right.add_child(GlassPane.note(Treatment.wound_text(w), room, GlassPane.RED_L if heavy else (GlassPane.AMBER if first else GlassPane.INK), 13.0, 500))
 		var full: Array = game.actions.care_plan(p, o, w, Treatment.FULL)
 		right.add_child(GlassPane.note(Treatment.steps_text(full), room))
 		var hb := GlassPane.row()
@@ -2578,11 +2580,7 @@ func card(id: String, text: String, options: Array, cb: Callable) -> void:
 	col.add_theme_constant_override("separation", 0)
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	sheet.inner.add_child(col)
-	# .cd__kick: a line of 20 in side ink with wide spacing.
-	var kick := Paper.line_box(20.0)
-	kick.name = "Kick"
-	kick.add_child(Paper.ink(String(CARD_KICKS.get(id, CARD_KICK)), UiFonts.WORD, 400, 12.0, Paper.INK2, 1.2))
-	col.add_child(kick)
+	# No 「현장 결정」 · 「출발」 kick over the title (결정 417): the card is its title.
 	var words: Array = card_lines(text)
 	# .cd__txt h2 in pen: 36 on lines of 30.
 	var title := _ink_lines(String(words[0]), UiFonts.HAND, 36.0, 30.0)
@@ -2704,7 +2702,7 @@ func _card_pick(cb: Callable, choice: String) -> void:
 func loot(id: String) -> void:
 	var c: Dictionary = game.data["containers"][id]
 	var p = game.player
-	var pane := _open_pane(String(c["name"]), "인벤토리 %.1f / %.0f" % [p.weight(), p.carry_limit()], "search")
+	var pane := _open_pane(String(c["name"]), "%.1f / %.0f" % [p.weight(), p.carry_limit()], "search")
 	var items: Array = c["items"]
 	if items.is_empty():
 		pane.body.add_child(GlassPane.note("빈 곳", PANE_W - GlassPane.PAD_L - GlassPane.PAD_R, GlassPane.INK3, 13.0))
@@ -2784,9 +2782,8 @@ func bag_panel() -> void:
 		var hw := GlassPane.row()
 		var held = TypeLine.new(GlassPane.CELL_H, GlassPane.CELL_H)
 		held.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		held.add_child(UiFonts.label("손 ", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 0.6))
 		held.add_child(UiFonts.label(short_weapon(p), UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39))
-		held.add_child(UiFonts.label(" · 허리 ", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 0.6))
+		held.add_child(UiFonts.label(" · ", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 0.6))
 		held.add_child(UiFonts.label(String(W.get_data(p.hands[1]["id"]).get("name", "")), UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39))
 		hw.add_child(held)
 		var swap := GlassPane.key("바꾸기", _swap_from_bag)
@@ -2807,7 +2804,7 @@ func bag_panel() -> void:
 			first = false
 			list.add_child(_bag_row(id, int(p.items[id])))
 		left.add_child(GlassPane.scroll(list, BAG_LIST_MAX))
-	left.add_child(GlassPane.mixed("탄: 권총 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
+	left.add_child(GlassPane.mixed("권총탄 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
 
 
 ## One thing in the bag: its name and count at 13/500, its weight in the number
@@ -2971,12 +2968,12 @@ func work_panel() -> void:
 	# Each setting a row headed by its word, its values as picks, the one set in
 	# its amber corners (시안 13's 레버 꼴 row).
 	var h1 := GlassPane.row()
-	h1.add_child(GlassPane.row_word("호위조", "태도"))
+	h1.add_child(GlassPane.row_word("태도"))
 	for row in [["aggressive", "공격적"], ["defensive", "방어적"], ["neutral", "중립"]]:
 		h1.add_child(GlassPane.pick(row[1], "", game.ai.crew_attitude == row[0], _set_crew.bind("attitude", row[0])))
 	pane.body.add_child(h1)
 	var h2 := GlassPane.row()
-	h2.add_child(GlassPane.row_word("사격", "허가"))
+	h2.add_child(GlassPane.row_word("사격"))
 	for row in [["free", "자유"], ["threat", "위협만"], ["melee", "근접만"]]:
 		h2.add_child(GlassPane.pick(row[1], "", game.ai.crew_fire == row[0], _set_crew.bind("fire", row[0])))
 	pane.body.add_child(h2)
@@ -3666,10 +3663,10 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 	elif b == lamp_button:
 		game.set_lamps(not game.lamps_on())
 		lamp_button.button_pressed = game.lamps_on()
-		toast("등불 켬 · 1분마다 불빛 들킴" if game.lamps_on() else "등불 모두 끔 · 불빛으로 안 들킴 · 멀리 못 봄")
+		toast("등불 켬" if game.lamps_on() else "등불 끔")
 	elif b == manual_button:
 		manual_button.button_pressed = not manual_button.button_pressed
-		toast("수동 조준: 오른손으로 겨눌 곳 끌어 놓고 떼기" if manual_button.button_pressed else "자동 조준")
+		toast("수동 조준" if manual_button.button_pressed else "자동 조준")
 	elif b == shove_button:
 		shove_button.button_pressed = true
 		_shove()
@@ -3750,7 +3747,7 @@ func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
 func _auto_aim_start() -> void:
 	var p = game.player
 	if not W.is_ranged(p.weapon_id()):
-		toast("총을 든 사람만 조준 · 무기 바꾸기")
+		toast("총 없음")
 		return
 	if not game.combat.start_aim(p):
 		return
@@ -4068,7 +4065,7 @@ func _tap_thing(p, world: Vector3) -> bool:
 		if game.grid.doors.has(c) and FieldGrid.center(c).distance_to(world) < 0.9:
 			var door: Dictionary = game.grid.doors[c]
 			if door["state"] == "locked" and not game.actions.has_pry(p):
-				offer([{"label": "문 차기 (시끄러움)", "call": _go_and_do.bind(p, "door", c, FieldGrid.center(c), "kick")}])
+				offer([{"label": "문 차기", "call": _go_and_do.bind(p, "door", c, FieldGrid.center(c), "kick")}])
 				return true
 			_go_and_do(p, "door", c, FieldGrid.center(c))
 			return true
@@ -4079,11 +4076,11 @@ func _tap_thing(p, world: Vector3) -> bool:
 
 
 ## A tap's walk-and-do (user decision 330): off while the dead are near;
-## then only the stick and the pads, and the tap says so.
+## then only the stick and the pads, and the tap says so in a word.
 func _assist_off(p) -> bool:
 	if not game.combat.tap_assist_off(p):
 		return false
-	toast("망자 가까움 · 탭으로 안 감 · 스틱으로 가서 단추로")
+	toast("망자 가까움")
 	return true
 
 
@@ -4165,7 +4162,8 @@ func _draw_overlay() -> void:
 			var me := _project(p.position + Vector3(0, 1.0, 0))
 			var col := Color(1, 1, 1, 0.85) if aim_cancel else Color(1, 1, 1, 0.3)
 			overlay.draw_arc(me, AIM_CANCEL_PX, 0, TAU, 32, col, 2.0)
-			overlay.draw_string(theme.default_font, me + Vector2(-14, AIM_CANCEL_PX + 18), "내리기", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+			# Its mark under the ring, not a word (결정 417): the gun goes down.
+			overlay.draw_texture_rect(HudIcons.texture("down", 18, col, 2.0), Rect2(me + Vector2(-9, AIM_CANCEL_PX + 4), Vector2(18, 18)), false)
 	for row in game.people:
 		if row.aim.active and row != p and row.visible:
 			var t = row.brain.get("target")

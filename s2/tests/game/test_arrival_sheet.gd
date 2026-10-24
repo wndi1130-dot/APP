@@ -31,7 +31,7 @@ func test_the_sheet_says_what_the_arrival_summary_says() -> void:
 	var s: Array = SliceFlow.arrival_sample()
 	var m: Dictionary = ArrivalSheet.model(s[0], s[1])
 	assert_eq(m["seg"], 3)
-	assert_eq(m["kick"], "구간 정차 · 도착")
+	assert_false(m.has("kick"), "no 「구간 정차 · 도착」 kick (결정 417)")
 	assert_eq(m["title"], "둘째 역")
 	assert_eq(m["arrive"], "3구간, 둘째 역에 닿았다. 첫 정차에서 1구간을 달려왔다.")
 	assert_eq(m["columns"][0], ["사람", [["다친 사람", "1", "+1"]]])
@@ -69,7 +69,7 @@ func test_the_sheet_lies_where_the_stop_card_lies_and_its_key_goes_on() -> void:
 	var c = _sheet()
 	assert_eq(c.sheet.position, ArrivalSheet.SHEET_AT * UiFonts.K)
 	assert_eq(c.sheet.size, PaperSheet.SIZE * UiFonts.K, "the stop card's sheet, 446 × 346")
-	for n in ["Kick", "Place", "Arrive", "Columns", "Go"]:
+	for n in ["Place", "Arrive", "Columns", "Go"]:
 		assert_not_null(c.find_child(n, true, false), n)
 	assert_not_null(c.slip, "the session's slip beside it")
 	assert_eq(c.go_key.text, "끝 카드")

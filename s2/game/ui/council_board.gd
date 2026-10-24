@@ -404,9 +404,10 @@ func _pit_labels() -> void:
 		GlassParts.put(sure, 0.0, PLATES_Y - 5.0 - 22.0, 22.0)
 		sure.position.x = mid_x * UiFonts.K - (GlassParts.text_w(sure) - _spacing(600, 1.56)) * 0.5
 	else:
-		var cap: Label = _label("cap", "찬성 표", UiFonts.WORD, 400, 12.0, INK2, 1.68)
-		var w: float = 9.0 + 5.0 + GlassParts.text_w(cap) / UiFonts.K - _spacing(400, 1.68) / UiFonts.K
-		GlassParts.put(cap, mid_x - w * 0.5 + 14.0, PLATES_Y - 5.0 - 18.0, 18.0)
+		# The yes stone alone heads the plates (결정 417: no 「찬성 표」); its word
+		# is left empty so the stone keeps its place, centred.
+		var cap: Label = _label("cap", "", UiFonts.WORD, 400, 12.0, INK2, 1.68)
+		GlassParts.put(cap, mid_x - 4.5 + 14.0, PLATES_Y - 5.0 - 18.0, 18.0)
 	var mean: int = int(model.get("mean", 0))
 	var rows: Array = [["확보", got, GOT_INK], ["예상", mean, GOT_INK if mean >= need else SHORT_INK], ["필요", need, INK]]
 	for i in 3:

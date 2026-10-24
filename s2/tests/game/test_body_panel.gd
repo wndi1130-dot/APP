@@ -368,8 +368,9 @@ func test_the_blood_key_is_pointed_at_once_and_says_what_it_binds() -> void:
 	p.body.add_wound("arm_left", "laceration", 0.0)
 	hud.tick(0.02)
 	hud.tick(0.02)
-	var hints: Array = _toast_texts().filter(func(t): return t.contains("'지혈'"))
-	assert_eq(hints.size(), 1, "one line, once")
+	# One word, once; the key lighting up beside the portrait shows where (결정 417).
+	var hints: Array = _toast_texts().filter(func(t): return t == "출혈")
+	assert_eq(hints.size(), 1, "one word, once")
 	await wait_frames(2)
 	var at: Vector2 = hud.blood_button.get_global_rect().get_center()
 	hud.finger_down(1, at)
