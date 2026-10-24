@@ -78,8 +78,8 @@ func test_people_board_from_either_side_of_the_train() -> void:
 	assert_eq(r["people"]["leftBehind"], [game.squad[2].pid], "who was not by the train stays")
 	assert_eq(r["placeState"]["looted"], 0.0, "nothing to search is nothing searched")
 	assert_false(r["placeState"].has("waterTower"), "no tower here to speak of")
-	assert_eq(r["place"]["type"], "freight", "the type the contract knows")
-	assert_eq(r["placeState"]["placeKind"], "mine", "and beside it what the place really is")
+	assert_eq(r["place"]["type"], "mine", "a stop on the way is a kind of its own (decision 423)")
+	assert_false(r["placeState"].has("placeKind"), "so nothing is written beside it")
 
 
 func test_the_train_can_be_held_on_it() -> void:
