@@ -359,13 +359,20 @@ static func drawn_kinds(kinds: Array, temp_c: float) -> Array:
 	return out
 
 
-## The picture temperature: the cold's midday value, colder at night and dawn,
-## colder still under a clear night sky.
-static func temp_at(cold: float, w: Dictionary, kinds: Array, side := 0.0) -> float:
-	var t := cold_key(cold, "temp", -1, side)
-	var dark := float(w["night"]) + float(w["dawn"]) * 0.6 + float(w["dusk"]) * 0.3
+## How dark the hour is for the air: full night 1, dawn 0.6, dusk 0.3 of the
+## band weights (the night is coldest, the dawn still cold, the dusk cooling).
+static func dark_share(w: Dictionary) -> float:
+	return float(w["night"]) + float(w["dawn"]) * 0.6 + float(w["dusk"]) * 0.3
+
+
+## The picture temperature: the midday value (the rules' midday given as
+## midday_c, else the cold's), colder at night and dawn, colder still under a
+## clear night sky, held to the season table's night frost (SeasonTable.night_air,
+## the same curve the field rules' air takes: 2026-10-25 user answer).
+static func temp_at(cold: float, w: Dictionary, kinds: Array, side := 0.0, midday := NAN, frost := -1) -> float:
+	var t := cold_key(cold, "temp", -1, side) if is_nan(midday) else midday
 	var clear := kinds.is_empty() or kinds.has("clear")
-	return t - dark * (5.0 if clear else 2.5)
+	return SeasonTable.night_air(t, dark_share(w), clear, frost)
 
 
 static func _mix_bands(w: Dictionary, cold: float, key: String) -> Color:
@@ -398,14 +405,21 @@ static func _band_lum(w: Dictionary) -> float:
 ## storm stage's look). region: "K1".."K12" or the train's "region_NN". cold:
 ## 0..1. more: "side" 0 autumn .. 1 spring (side_for), "wind" 0..1 (else the
 ## region's), "temp_c" (picture temperature given outright, else from cold and hour),
+## "midday_c" (the rules' midday air, else the cold's), "night_frost" (1 or 0:
+## the season table's night frost for this point, -1 or none: no bounds),
 ## "season" (the season table's name for this point, else from the cold).
 static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold := 1.0, more := {}) -> Dictionary:
 	var c := clampf(cold, 0.0, 1.0)
 	var side := clampf(float(more.get("side", 0.0)), 0.0, 1.0)
 	var w := band_weights(hour, c, side)
 	var reg := region(region_name)
-	var temp := float(more.get("temp_c", temp_at(c, w, kinds, side)))
-	var drawn := drawn_kinds(kinds, temp)
+	var midday := float(more.get("midday_c", NAN))
+	var temp := float(more.get("temp_c", temp_at(c, w, kinds, side, midday, int(more.get("night_frost", -1)))))
+	# What falls is the midday air's for the whole stop, as in the rules (a
+	# night's sleet turning to snow would take the ice underfoot away). A
+	# temperature given outright decides it.
+	var falls_c := temp if more.has("temp_c") else (cold_key(c, "temp", -1, side) if is_nan(midday) else midday)
+	var drawn := drawn_kinds(kinds, falls_c)
 	# Weather: most cloud, least sun, the heaviest veil and haze win.
 	var cloud := 0.0
 	var sun_k := 10.0
@@ -506,18 +520,32 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	return out
 
 
-## The colour grade (WorldEnvironment adjustments): weather and hour change
-## saturation and contrast; shadows lean to the fill's hue, lights to the sun's.
+## How far the grade spreads the tones about its grey: 1.2, in every weather
+## (an overcast or a fog does not flatten the picture; only colour goes).
+const TONE_CONTRAST := 1.2
+## The grey the tone turns about: 0.4 by day, lower as the hour's light goes,
+## so the spread does not darken a dim picture (night stays where it was).
+const TONE_PIVOT_DAY := 0.4
+const TONE_PIVOT_NIGHT := 0.1
+
+
+## The colour grade (WorldEnvironment adjustments): a fixed tone (contrast 1.2
+## about the hour's grey); weather and hour only change the saturation; shadows
+## lean to the fill's hue, lights to the sun's.
 static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
-	var sat := lerpf(1.08, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
+	var sat := lerpf(1.0, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
-	var contrast := lerpf(1.08, 0.94, maxf(veil, float(l["haze"]) * 0.8))
+	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
+	# 0.5 + k(b·c − 0.5) is the line 1.2(c − pivot) + pivot when these hold.
+	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"]))
+	var k := 1.0 + 2.0 * pivot * (TONE_CONTRAST - 1.0)
 	return {
 		"saturation": sat,
-		"contrast": contrast,
-		"brightness": 1.0,
+		"contrast": k,
+		"brightness": TONE_CONTRAST / k,
+		"pivot": pivot,
 		"shadow": Color(l["ambient_color"]),
 		"light": Color(l["sun_color"]),
 		"strength": lerpf(0.5, 0.2, veil),

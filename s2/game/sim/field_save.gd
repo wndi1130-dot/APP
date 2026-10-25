@@ -282,7 +282,7 @@ static func _runtime(game) -> Dictionary:
 	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lungers_on"])
 	for level in game.levels:
 		var grid = game.levels[level]
-		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "revision": grid.revision, "doors": {}, "windows": {}}
+		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
 		for kind: String in ["doors", "windows"]:
 			for cell in grid.get(kind):
 				level_state[kind][cell] = _record(game, grid.get(kind)[cell])
@@ -471,6 +471,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		grid.solid = row["solid"].duplicate()
 		grid.doors = (row["doors"] as Dictionary).duplicate(true)
 		grid.windows = (row["windows"] as Dictionary).duplicate(true)
+		# The glass fallen from a window onto the floor (field_actions.gd), there to sweep up.
+		grid.floor_glass = (row.get("floor_glass", {}) as Dictionary).duplicate(true)
 		grid.refresh_paths()
 		grid.revision = int(row["revision"])
 	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)

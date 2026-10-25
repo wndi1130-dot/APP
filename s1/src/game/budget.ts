@@ -117,6 +117,7 @@ export const CARD_GRADE: Record<string, KindRule> = {
   pro_promise: R(2, false, '서막 흐름(1구간 앞)'),
   pro_search: R(2, false, '서막 흐름(약속 바로 뒤)'),
   pro_deal: R(2, false, '서막 흐름(1구간 출발)'),
+  pro_trail: R(2, false, '두고 떠난 사람의 흔적. 지금 선 역의 기둥 글씨라 미루면 말이 안 된다(trail.ts)'),
   hub_omen: R(2, false, '라이프치히 두 구간 전의 징후(시계)'),
   hub_split: R(2, false, '라이프치히 도착 결정'),
   hub_few: R(2, false, '라이프치히 도착 결정'),
