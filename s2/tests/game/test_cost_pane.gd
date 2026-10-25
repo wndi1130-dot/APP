@@ -165,8 +165,11 @@ func test_the_slice_opens_the_cost_pane_from_the_gauges() -> void:
 	await wait_process_frames(1)
 	assert_eq(f.current(), "train")
 	var was: String = f.sel
-	f.gauges.stock_pressed.emit("coal")
+	# A finger's way: the band's own key, whose press draws the band again under it.
+	(f.gauges.find_child("Tap_coal", true, false) as Button).pressed.emit()
+	await wait_process_frames(1)
 	assert_true(is_instance_valid(f.cost), "the cost pane is up")
+	assert_not_null(f.gauges.find_child("Tap_coal", true, false), "the band drew its keys again")
 	assert_eq(String(f.cost.name), "CostPane")
 	assert_eq(String(f.cost.which), "coal")
 	assert_false(f.pane.visible, "the car's pane makes way")
