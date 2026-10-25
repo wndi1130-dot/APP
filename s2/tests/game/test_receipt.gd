@@ -396,7 +396,9 @@ func test_add_wound_refuses_unknown_names_and_bad_ids() -> void:
 	assert_false(r.to_dict().has("version"), "nothing was added")
 	for part: String in Receipt.WOUND_PARTS:
 		for kind: String in Receipt.WOUND_KINDS:
-			assert_true(r.add_wound("s2_scout", part, kind), "%s %s" % [part, kind])
+			# Only an arm or a leg is cut off; the head, the neck and the torso are not.
+			var ok: bool = kind != "amputation" or Receipt.CUT_PARTS.has(part)
+			assert_eq(r.add_wound("s2_scout", part, kind), ok, "%s %s" % [part, kind])
 	assert_eq(Receipt.check(r.to_dict()), [] as Array[String])
 
 
@@ -412,6 +414,22 @@ func test_add_wound_folds_bites_and_serious_wounds_into_the_lists() -> void:
 	assert_eq(people["bitten"], ["s2_lead"])
 	assert_eq(people["injured"], ["s2_medic", "s2_scout", "s2_shooter"])
 	assert_eq(Receipt.fold_gaps(r.to_dict()), [] as Array[String])
+
+
+## A limb cut off in the field (J05) is an amputation on the train: one who is hurt.
+func test_an_amputation_folds_into_injured_and_is_limbs_only() -> void:
+	var r := Receipt.new("first_leg_01_sulechow")
+	assert_false(r.add_wound("s2_scout", "torso", "amputation"))
+	assert_false(r.add_wound("s2_scout", "head_neck", "amputation"))
+	assert_true(r.add_wound("s2_scout", "leg_left", "amputation"))
+	assert_eq(r.to_dict()["people"]["injured"], ["s2_scout"])
+	assert_eq(Receipt.fold_gaps(r.to_dict()), [] as Array[String])
+	var s := _sample()
+	assert_true(s.add_wound("s2_scout", "arm_right", "amputation"))
+	var d := s.to_dict()
+	assert_eq(Receipt.check(d), [] as Array[String])
+	d["people"]["wounds"][0]["part"] = "torso"
+	assert_eq(Receipt.check(d), ["people.wounds.0.part: 팔·다리가 아닌 절단"] as Array[String])
 
 
 func test_fold_gaps_names_what_is_missing_and_skips_the_gone() -> void:
