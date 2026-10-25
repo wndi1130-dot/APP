@@ -395,8 +395,15 @@ func _ready() -> void:
 	# The receipt knows six kinds of place (the S1 contract); a kind it does not
 	# know yet is written as the freight stop it was drawn from.
 	var kind: String = data["place_kind"]
-	receipt = Receipt.new(data["place_id"], kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
+	# Under the train's contract the receipt names the stop as the train named it (its placeId).
+	var place_id: String = String(opts["departure"]["placeId"]) if contract_on() else String(data["place_id"])
+	receipt = Receipt.new(place_id, kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
 	receipt.set_source("direct")
+	# Sent under the train's departure contract (v2, s3 contract 2): the receipt carries its ids
+	# and goes back as v4/v5, which the train takes in once (field_return.gd).
+	if contract_on():
+		var dep: Dictionary = opts["departure"]
+		receipt.set_ids(String(opts.get("receipt_id", "ret_" + String(dep["departureId"]).trim_prefix("dep_"))), String(dep["stopId"]), String(dep["departureId"]))
 	# A place asked for that has no map was played on the default one: said so (R16).
 	if String(opts.get("place", "")) != "" and String(opts.get("place", "")) != place:
 		receipt.place_note("placeAsked", String(opts["place"]))
@@ -1040,7 +1047,7 @@ func _update_storm() -> void:
 
 
 func _spawn_people() -> void:
-	var loadout: Array = opts.get("squad", default_squad("crude"))
+	var loadout: Array = squad_rows(opts["departure"]["roster"]) if contract_on() else opts.get("squad", default_squad("crude"))
 	var spots: Array = data["spawns"]["squad"]
 	for i in range(loadout.size()):
 		var row: Dictionary = loadout[i]
@@ -1081,12 +1088,60 @@ func default_squad(pipe_quality: String) -> Array:
 	]
 
 
+## Is this stop sent under the train's departure contract v2 (the people the train picked)?
+func contract_on() -> bool:
+	var dep: Variant = opts.get("departure")
+	return dep is Dictionary and int((dep as Dictionary).get("version", 0)) == 2
+
+
+## How each car's people speak (ally_lines.gd), the field's first squad's by car.
+const VOICE_OF_COMM := {"guard": "rough", "medtech": "quiet", "tail": "fear", "engine": "rough", "front": "quiet"}
+const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
+
+
+## The field's rows for people of the departure contract (field_departure.gd person): the same
+## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
+## what they know of medicine and how hungry and sore they go out. One of the medical staff with
+## no knowledge on record still goes as an apprentice (the car's own work).
+static func squad_rows(people: Array) -> Array:
+	var out: Array = []
+	for person: Dictionary in people:
+		var role: String = String(person["role"])
+		var row := {
+			"id": person["id"], "name": person["name"], "role": "chief" if role == "chief" else ("worker" if role == "carrier" else role),
+			"comm": person["comm"], "rel": float(person["rel"]), "skills": (person["body"] as Dictionary).duplicate(),
+			"hands": (person["gear"]["hands"] as Array).duplicate(true), "items": (person["gear"]["items"] as Dictionary).duplicate(),
+			"bag": String(person["gear"]["bag"]), "wear": (person["gear"]["wear"] as Dictionary).duplicate(),
+			"hunger": int(person["hunger"]), "sore": maxi(int(person["sore"]), int(person["rest"])),
+		}
+		if role != "chief":
+			row["voice"] = VOICE_OF_COMM.get(String(person["comm"]), "quiet")
+		var know: Variant = person.get("know")
+		var level := 0
+		if know is Dictionary and String(know.get("field", "")) == "med":
+			level = clampi(int(know["skill"]), 0, 3)
+		elif String(person["comm"]) == "medtech":
+			level = 1
+		row["medical"] = MEDICAL_OF_SKILL[level]
+		out.append(row)
+	return out
+
+
+## The work crew the train can send down (carriers, then escorts), as field rows; empty off the contract.
+func work_rows() -> Array:
+	if not contract_on():
+		return []
+	return squad_rows(opts["departure"].get("workCrew", []))
+
+
 func make_person(row: Dictionary, at: Vector3) -> Person:
 	var p := Person.new()
 	add_child(p)
 	p.setup(String(row["id"]), String(row["name"]), String(row["role"]), at)
 	p.skills = row.get("skills", p.skills).duplicate()
 	p.medical = String(row.get("medical", "none"))
+	p.hunger_level = clampi(int(row.get("hunger", 0)), 0, 2)
+	p.sore_level = clampi(int(row.get("sore", 0)), 0, 2)
 	p.bag = String(row.get("bag", "pack"))
 	# What they go out in (wear.gd): a row may say, place by place, else what everyone wears.
 	Wear.dress_from(p, row.get("wear", {}))
@@ -2592,7 +2647,7 @@ func finish(reason: String) -> void:
 			receipt.person("injured", p.pid)
 		# Wounds go on as they are; the receipt folds bites and serious ones into the lists.
 		for row: Dictionary in p.body.receipt_wounds():
-			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)))
+			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)), row.get("treat", {}))
 	var stock: Dictionary = {}
 	for id in unloaded:
 		if STOCK_OF.has(id):
@@ -2665,6 +2720,7 @@ func finish(reason: String) -> void:
 		holdout.note_leaving()
 		telemetry.holdout = holdout.roll_note()
 	_receipt_finds(boarded)
+	_contract_end(boarded)
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -2687,6 +2743,25 @@ func finish(reason: String) -> void:
 	else:
 		hud.show_end(result)
 	finished.emit(result)
+
+
+## The contract's side of the receipt (s3 contract 3): each departure promise as seen by those of
+## the squad who came back (the train judges it), and how each one aboard came back (v5 crew rows).
+func _contract_end(boarded: Array) -> void:
+	if not contract_on():
+		return
+	var back: Array = []
+	for p in boarded:
+		if squad.has(p):
+			back.append(p.pid)
+	for promise: Dictionary in opts["departure"].get("promises", []):
+		receipt.see_promise(String(promise["id"]), String(promise["kind"]), back, [String(promise["madeTo"])])
+	for p in boarded:
+		var hands: Array = []
+		for h: Dictionary in p.hands:
+			if String(h.get("id", "")) != "":
+				hands.append([String(h["id"]), String(h.get("quality", "factory")), snappedf(float(h.get("condition", 1.0)), 0.01)])
+		receipt.set_crew_row(p.pid, p.body.exhaustion_level(), p.hunger_level, {}, hands, p.items)
 
 
 func _save(result: Dictionary) -> void:
