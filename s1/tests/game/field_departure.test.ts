@@ -107,13 +107,13 @@ describe('영수증 판 5', () => {
     expect(() => decodeFieldReceipt(bad)).toThrow();
   });
 
-  it('돌아온 옷·실은 옷·남은 미끼 칸은 없어도 되고, 꼴이 틀리면 막는다(계약 글 3절)', () => {
+  it('돌아온 옷·실은 옷·남은 미끼·실은 음식 칸은 없어도 되고, 꼴이 틀리면 막는다(계약 글 3절)', () => {
     const g = atStop('slice-seed-a', true);
     const d = buildDeparture(g, { placeId: 'sulechow_station' });
     const sent = d.roster.map(p => p.id);
     const coat = { id: 'wool_coat', condition: 0.6, holes: { torso: true } };
     const crew = [{ person: sent[0], exhaustion: 0, hunger: 0, bodyUse: {}, gearBack: { hands: [], items: {}, wear: { jacket: '', hands: { id: 'work_gloves', condition: 1 }, coat } } }];
-    const ok = receiptFor(d, sent, { crew, wardrobeIn: [{ id: 'denim_jacket', condition: 0.4 }], luresBack: { clockwork: 2 } });
+    const ok = receiptFor(d, sent, { crew, wardrobeIn: [{ id: 'denim_jacket', condition: 0.4 }], luresBack: { clockwork: 2 }, foodIn: { meat_spoiled: 1, can_dented: 2 } });
     const got = decodeFieldReceipt(ok);
     expect(got.version === 5 && got.luresBack).toEqual({ clockwork: 2 });
     expect(decodeFieldReceipt(receiptFor(d, sent)).version).toBe(5);
@@ -122,6 +122,7 @@ describe('영수증 판 5', () => {
     expect(() => decodeFieldReceipt(torn(r => { r.crew[0].gearBack.wear = { hands: '' }; }))).toThrow();
     expect(() => decodeFieldReceipt(torn(r => { r.wardrobeIn[0].holes = { torso: false }; }))).toThrow();
     expect(() => decodeFieldReceipt(torn(r => { r.luresBack.clockwork = -1; }))).toThrow();
+    expect(() => decodeFieldReceipt(torn(r => { r.foodIn.can_dented = 0.5; }))).toThrow();
   });
 
   it('판 2 명단: 수색대는 다 나가야 하고, 작업조는 불린 사람만, 계약 밖 사람은 안 된다', () => {

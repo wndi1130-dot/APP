@@ -92,8 +92,8 @@ export interface FieldWearBack { jacket: FieldGarment | ''; hands: FieldGarment 
 export interface FieldDefense { held: boolean; people: string[]; hurt: string[]; dead: string[]; wounds: FieldWound[] }
 export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & {
   version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null;
-  /** 승강장에서 실은 옷장 자리 옷, 남은 미끼(계약 글 3절). 없으면 빈 것 */
-  wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>;
+  /** 승강장에서 실은 옷장 자리 옷, 남은 미끼, 실은 음식의 이름별 개수(계약 글 3절). 없으면 빈 것 */
+  wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>; foodIn?: Record<string, number>;
 };
 export type FieldReceipt = ReceiptV4 | FieldReceiptV5;
 /** 출발 계약 판 1(시험 표본) 또는 판 2(field_departure.ts buildDeparture). */
@@ -192,6 +192,7 @@ const v5Schema = {
     defense: { anyOf: [{ type: 'null' }, object({ held: { type: 'boolean' }, people: ids, hurt: ids, dead: ids, wounds: { type: 'array', items: woundV5 } })] },
     wardrobeIn: { type: 'array', items: garment },
     luresBack: counts,
+    foodIn: counts,
   },
   required: [...v4Schema.required, 'crew', 'defense'],
 };
@@ -207,7 +208,7 @@ export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const record = value as Record<string, unknown>;
   const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
   if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, ...rest } = record;
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, ...rest } = record;
   // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
   const people = rest.people as { wounds?: Record<string, unknown>[] };
   const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;

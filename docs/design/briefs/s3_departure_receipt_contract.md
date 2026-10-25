@@ -56,6 +56,7 @@ defense:{ held: bool, people: [ids], hurt: [ids], dead: [ids],
 witnessed: [ {…, template?} ]               // 판 4와 같음. template 이름 표는 4절
 wardrobeIn?: [ Garment ]                    // 승강장에서 열차에 실은 옷장 자리 옷
 luresBack?:  {id: n}                        // 남은 미끼
+foodIn?:     {id: n}                        // 열차에 실은 음식, 녹이기 전 이름별(J07)
 
 Garment = { id, condition: 0~1, holes?: {부위: true} }
 wear    = { jacket: Garment|"", hands: Garment|"", coat?: Garment|"" }   // "" = 맨몸
@@ -66,6 +67,7 @@ wear    = { jacket: Garment|"", hands: Garment|"", coat?: Garment|"" }   // "" =
 - **열차 방어**는 정차 소리 줄기(결정 416)가 채운다. 방어에 선 사람은 계약의 명단이 아니라 열차에 남은 사람이라 `people`과 따로 둔다. 상처는 같은 꼴, 같은 반영(4절)이다.
 - `crew.bodyUse`는 필드에서 몸 능력을 쓴 양이다. 쓰면 오르는 규칙(field_unified 3장)이 들어올 자리이고, 그 전까지는 비어 있다.
 - **장비 귀환**(출발 때 빼지 않은 장비의 순증감, 2절): `gearBack.wear`는 그 사람이 입고 돌아온 옷장 자리 옷이다. 출발 `gear.wear`와 같은 꼴이고, `coat`는 필드에서 주워 입은 긴 외투가 있을 때만 쓴다. `wardrobeIn`은 승강장에서 실은 옷장 자리 옷(재킷·외투·장갑)이고 셔츠 같은 것은 넣지 않는다. `luresBack`은 미끼가 나갔을 때만 쓴다. 세 칸 다 없어도 된다(판 5 앞쪽 영수증).
+- **실은 음식**(J07): `foodIn`은 열차에 실은 음식을 녹이기 전 필드 물건 id(`meat_spoiled`·`can_dented` 등, 상태가 id에 들어 있다)별 개수다. `stock.food`를 쪼갠 내역이지 더할 몫이 아니다: 열차는 식량을 지금처럼 `stock.food`로만 더하고, 솥이 `foodIn`의 id로 신선도·익힘·밀봉을 읽는다. 없으면 이름 없는 식량으로 센다.
 - 열차는 이렇게 맞춘다. 탄 = 출발 전 − 계약 `train.ammo` + `stock.ammo_*`. 무기고 = 나간 `gear.hands` − 돌아온 `gearBack.hands`. 옷장 = 나간 `gear.wear` − 돌아온 `gearBack.wear` + `wardrobeIn`. 미끼 = 출발 전 − 계약 `train.lures` + `luresBack`. `gearBack.wear`가 없으면 나간 그대로 돌아온 것으로, `luresBack`이 없으면 다 쓴 것으로 센다. 죽거나 남겨져 `crew`에 없는 사람의 무기·옷은 잃은 것이다.
 
 ## 4. 열차가 영수증을 반영하는 법
