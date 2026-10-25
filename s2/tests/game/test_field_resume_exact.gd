@@ -33,6 +33,8 @@ func _game(extra: Dictionary = {}):
 func _scenario(game, grabbed: bool) -> void:
 	game.clock.elapsed = 41.3
 	game.combat.wound_rng().randf()
+	# The gear dice are seeded on first use (field_combat.gd gear_rng): drawn once, so both runs hold a seeded one.
+	game.combat.gear_rng().randf()
 	game.zombies.list.clear()
 	game.director.next_arrival = 42.0
 	game.director.budget_left = 21
@@ -189,8 +191,8 @@ func test_all_rng_steps_and_large_seed_survive_json() -> void:
 	var game = _game({"seed": 9223372036854775123})
 	_scenario(game, false)
 	var resumed = _game(FieldSave.resume_opts(_saved(game)))
-	var originals: Array = [game.rng, game.eat_rng, game.zombies.loot_rng, game.zombies.lunge_rng, game.zombies.embed_rng, game.combat._wound_rng, game.combat._pace_rng, game.lines._rng]
-	var copies: Array = [resumed.rng, resumed.eat_rng, resumed.zombies.loot_rng, resumed.zombies.lunge_rng, resumed.zombies.embed_rng, resumed.combat._wound_rng, resumed.combat._pace_rng, resumed.lines._rng]
+	var originals: Array = [game.rng, game.eat_rng, game.zombies.loot_rng, game.zombies.lunge_rng, game.zombies.embed_rng, game.combat._wound_rng, game.combat._gear_rng, game.combat._pace_rng, game.lines._rng]
+	var copies: Array = [resumed.rng, resumed.eat_rng, resumed.zombies.loot_rng, resumed.zombies.lunge_rng, resumed.zombies.embed_rng, resumed.combat._wound_rng, resumed.combat._gear_rng, resumed.combat._pace_rng, resumed.lines._rng]
 	for i in originals.size():
 		assert_eq(copies[i].seed, originals[i].seed, "seed %d" % i)
 		assert_eq(copies[i].state, originals[i].state, "state %d" % i)
