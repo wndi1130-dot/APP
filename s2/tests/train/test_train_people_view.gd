@@ -35,7 +35,7 @@ func test_the_baked_folder_has_every_train_motion_by_name() -> void:
 	assert_false(baked.is_empty())
 	var names: Array = (baked["clips"] as Array).map(func(c): return String(c["name"]))
 	assert_eq(names, TrainClips.names())
-	assert_lte(names.size(), 32, "the shader's clip tables have thirty-two places")
+	assert_lte(names.size(), 128, "the shader's clip tables have a hundred and twenty-eight places")
 	for n in names:
 		assert_true(String(n).begins_with("t_"), n)
 

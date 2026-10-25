@@ -31,6 +31,9 @@ export const DEATH_WEIGHT_HOOK: {
   tick?: (g: Game) => void;
 } = {};
 
+/** 사람 기억(memory.ts)이 붙는 자리. 그 파일을 불러오면 채워진다(import 순환을 피한다). 기억은 켜고 끄는 판이 따로 없다: 사건 줄이 없으면 아무것도 안 한다. */
+export const MEMORY_HOOK: { tick?: (g: Game) => void } = {};
+
 export function addPeopleCard(g: Game, card: Parameters<typeof addCard>[1]): void {
   addCard(g, card);
   g.peopleSeg = g.seg;
@@ -282,6 +285,7 @@ export function peopleTick(g: Game, rnd: () => number): void {
   weakTick(g);
   sickTick(g, rnd);
   if (g.deathWeight) DEATH_WEIGHT_HOOK.tick?.(g); // 죽음의 무게(켠 판만): 난방 배당 밤사이 죽음 다음의 뒷사건, 사건 줄의 다음 단계
+  MEMORY_HOOK.tick?.(g); // 사람 기억: 열차 안 사건 줄(personEvents)을 그 사람·가족의 기억으로
   elderNightTick(g, rnd);
   elderTick(g);
   birthTick(g);

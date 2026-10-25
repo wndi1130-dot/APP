@@ -14,7 +14,13 @@ import type { Game, Phase } from './state';
 import { breakPromise, keepPromise } from './turn';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
-import { noteInjury } from './wounds';
+import { CAPTAIN, recordFieldWound } from './wounds';
+import type { Wound, WoundGrade, WoundPart } from './wounds';
+import type { FieldDepartureV2 } from './field_departure';
+
+/** 명부 밖의 열차장 id 하나(출발 계약·영수증의 사람 id). 열차 명부의 부상 기록은 이름(CAPTAIN)으로 남는다. */
+export const CAPTAIN_ID = 'captain';
+const CAPTAIN_COMM: Comm = 'front';
 
 // S3 연결의 영수증 계약(구현명세 S3 연결 v1 2절, 결정 294·301·302·304).
 // 열차가 필드에 넘기는 「출발 명세」와 필드가 돌려주는 「귀환 영수증」(판 4)을 따로 둔다.
@@ -61,9 +67,28 @@ export interface FieldDeparture {
 /** 영수증의 약속 칸: 그 약속을 본 사람과, 공동체가 들은 칸. 판정은 없다. */
 export interface FieldPromiseSeen { id: string; kind: FieldPromiseKind; witnesses: string[]; heardBy: Comm[] }
 export interface FieldSymbol { id: string; groupId: Comm; carriedBy: string }
-export type FieldReceipt = Extract<StopReceipt, { version: 3 }> extends infer V3
+type ReceiptV4 = Extract<StopReceipt, { version: 3 }> extends infer V3
   ? Omit<V3, 'version'> & { version: 4; departureId: string; symbol: FieldSymbol | null; fieldPromises: FieldPromiseSeen[] }
   : never;
+
+// 판 5(docs/design/briefs/s3_departure_receipt_contract.md 3절) = 판 4 + 상처마다 처치 + 사람마다 끝 상태 + 열차 방어.
+export const WOUND_TREATS = ['bandaged', 'disinfected', 'sutured', 'splinted', 'tourniquet', 'pulled', 'quick'] as const;
+export type WoundTreat = Partial<Record<typeof WOUND_TREATS[number], true>>;
+export interface FieldWound { person: string; part: string; kind: string; festering?: boolean; treat?: WoundTreat }
+/** 살아서 열차에 오른 사람의 끝 상태. bodyUse는 쓰면 오르는 규칙이 들어올 자리(지금은 빈 칸). */
+export interface FieldCrewRow {
+  person: string;
+  exhaustion: 0 | 1 | 2;
+  hunger: 0 | 1 | 2;
+  bodyUse: Record<string, number>;
+  gearBack: { hands: [string, string, number][]; items: Record<string, number> };
+}
+/** 열차 방어(결정 416, 정차 소리 줄기가 채운다). 방어에 선 사람은 출발 명단이 아니라 열차에 남은 사람이다. */
+export interface FieldDefense { held: boolean; people: string[]; hurt: string[]; dead: string[]; wounds: FieldWound[] }
+export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & { version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null };
+export type FieldReceipt = ReceiptV4 | FieldReceiptV5;
+/** 출발 계약 판 1(시험 표본) 또는 판 2(field_departure.ts buildDeparture). */
+export type AnyDeparture = FieldDeparture | FieldDepartureV2;
 
 export interface FieldVerdict { id: string; kind: FieldPromiseKind; madeTo: Comm; verdict: PromiseVerdict; witnessesBack: string[] }
 export interface FieldSnapshot {
@@ -87,6 +112,10 @@ export interface FieldReturnRecord {
   before: FieldSnapshot;
   after: FieldSnapshot;
   lines: FieldLine[];
+  /** 이 정차에 나간 사람(영수증 people.sent). 다음 출발의 근육통·휴식이 읽는다(field_departure.ts) */
+  sent?: string[];
+  /** 판 5의 끝 상태(살아서 오른 사람) */
+  crew?: FieldCrewRow[];
 }
 export interface FieldReturns {
   /** 반영한 영수증 id → 정규화한 내용. 같은 id가 다시 오면 내용을 견주고 아무것도 하지 않는다(T07·T08). */
@@ -131,32 +160,61 @@ const v4Schema = {
   },
   required: [...v3Schema.required, 'departureId', 'symbol', 'fieldPromises'],
 };
+const level = { enum: [0, 1, 2] };
+const handRow = { type: 'array', prefixItems: [{ type: 'string' }, { type: 'string' }, { type: 'number' }], minItems: 3, maxItems: 3 };
+const counts = { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } };
+const treat = { type: 'object', properties: Object.fromEntries(WOUND_TREATS.map(k => [k, { const: true }])), additionalProperties: false };
+const woundV5 = { ...receiptSchema.$defs.wound, properties: { ...receiptSchema.$defs.wound.properties, treat } };
+const v5Schema = {
+  ...v4Schema, $id: 'urn:s1:prep:field-receipt-v5',
+  $defs: { ...receiptSchema.$defs, wound: woundV5 },
+  properties: {
+    ...v4Schema.properties, version: { const: 5 },
+    crew: { type: 'array', items: object({
+      person: id, exhaustion: level, hunger: level, bodyUse: { type: 'object', additionalProperties: { type: 'number', minimum: 0 } },
+      gearBack: object({ hands: { type: 'array', items: handRow }, items: counts }),
+    }) },
+    defense: { anyOf: [{ type: 'null' }, object({ held: { type: 'boolean' }, people: ids, hurt: ids, dead: ids, wounds: { type: 'array', items: woundV5 } })] },
+  },
+  required: [...v4Schema.required, 'crew', 'defense'],
+};
 const ajv = new Ajv2020({ allErrors: true, strict: true, allowUnionTypes: true });
 for (const schema of [commonSchema, placeSchema, chronicleSchema, receiptSchema]) ajv.addSchema(schema);
 const v4Validator = ajv.compile(v4Schema);
+const v5Validator = ajv.compile(v5Schema);
 
-/** 판 4 영수증을 검사하고 독립 사본으로 돌려준다. 판 3의 검사(목표·문서)는 판 번호만 바꿔 그대로 거친다. 오류에는 본문을 싣지 않는다. */
+/** 판 4·5 영수증을 검사하고 독립 사본으로 돌려준다. 판 3의 검사(목표·문서)는 판 번호만 바꿔 그대로 거친다. 오류에는 본문을 싣지 않는다. */
 export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const value: unknown = typeof input === 'string' ? JSON.parse(input) : input;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('영수증은 객체여야 한다');
   const record = value as Record<string, unknown>;
-  if (record.version !== 4 || !v4Validator(record)) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, ...rest } = record;
-  decodeReceipt({ ...rest, version: 3 });
+  const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
+  if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, ...rest } = record;
+  // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
+  const people = rest.people as { wounds?: Record<string, unknown>[] };
+  const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;
+  decodeReceipt({ ...rest, people: bare, version: 3 });
   const receipt = structuredClone(record) as unknown as FieldReceipt;
   if (receipt.symbol && (receipt.stock.symbol ?? 0) < 1) throw new Error('상징물을 들고 왔는데 장부에 없다');
   if (new Set(receipt.fieldPromises.map(p => p.id)).size !== receipt.fieldPromises.length) throw new Error('영수증에 같은 약속이 두 번 있다');
   return receipt;
 }
 
+/** 나갈 수 있는 사람 전부: 판 1은 명단, 판 2는 수색대와 작업조. */
+export function departurePeople(d: AnyDeparture): { id: string; comm: Comm }[] {
+  return d.version === 2 ? [...d.roster, ...d.workCrew] : d.roster;
+}
+
 /** 출발 명세의 모양을 본다. */
-export function checkDeparture(d: FieldDeparture): void {
+export function checkDeparture(d: AnyDeparture): void {
   const re = /^[a-z][a-z0-9_]*$/;
   const okId = (v: unknown) => typeof v === 'string' && re.test(v);
-  if (d.version !== 1 || ![d.departureId, d.stopId, d.placeId].every(okId) || !Number.isSafeInteger(d.segment) || d.segment < 0) {
+  if ((d.version !== 1 && d.version !== 2) || ![d.departureId, d.stopId, d.placeId].every(okId) || !Number.isSafeInteger(d.segment) || d.segment < 0) {
     throw new Error('출발 명세가 올바르지 않다');
   }
-  if (!d.roster.every(r => okId(r.id) && COMMS.includes(r.comm)) || new Set(d.roster.map(r => r.id)).size !== d.roster.length) {
+  const people = departurePeople(d);
+  if (!people.every(r => okId(r.id) && COMMS.includes(r.comm)) || new Set(people.map(r => r.id)).size !== people.length) {
     throw new Error('출발 명단이 올바르지 않다');
   }
   for (const p of d.promises) {
@@ -177,26 +235,32 @@ export function returnedOf(r: FieldReceipt): string[] {
  * 약속 판정(결정 301·304). 본 사람이 한 명도 돌아오지 못했으면 알 수 없음이다(사람이 돌아와야 말이 돌아온다).
  * 한 명이라도 돌아왔으면 그 사람들 기준으로 증거를 본다.
  * - 서막 약속: 데려오기로 한 사람이 모두 살아서 열차에 올랐으면 지킴, 하나라도 못 오르면 어김.
- * - 교대 약속: 출발 명단에 약속받은 칸 사람이 없으면 지킴, 있으면 어김.
+ * - 교대 약속: 실제로 나간 사람(판 1은 출발 명단, 판 2는 불린 작업조까지) 가운데 약속받은 칸 사람이 없으면 지킴, 있으면 어김.
  */
-export function judgePromises(d: FieldDeparture, r: FieldReceipt): FieldVerdict[] {
+export function judgePromises(d: AnyDeparture, r: FieldReceipt): FieldVerdict[] {
   const back = new Set(returnedOf(r));
+  const went = d.version === 2 ? departurePeople(d).filter(x => r.people.sent.includes(x.id)) : d.roster;
   return d.promises.map(p => {
     const seen = r.fieldPromises.find(x => x.id === p.id);
     const witnessesBack = (seen?.witnesses ?? []).filter(w => back.has(w));
     let verdict: PromiseVerdict;
     if (witnessesBack.length === 0) verdict = 'unknown';
     else if (p.kind === 'prologue') verdict = p.subjects.every(s => back.has(s)) ? 'kept' : 'broken';
-    else verdict = d.roster.some(x => x.comm === p.madeTo) ? 'broken' : 'kept';
+    else verdict = went.some(x => x.comm === p.madeTo) ? 'broken' : 'kept';
     return { id: p.id, kind: p.kind, madeTo: p.madeTo, verdict, witnessesBack };
   });
 }
 
-/** 영수증이 출발 명세와 같은 정차·같은 명단·같은 약속을 말하는지 본다. */
-export function matchDeparture(d: FieldDeparture, r: FieldReceipt): void {
+/**
+ * 영수증이 출발 명세와 같은 정차·같은 명단·같은 약속을 말하는지 본다.
+ * 판 1은 나간 사람이 명단과 똑같아야 하고, 판 2는 수색대 전부에 불린 작업조만 더할 수 있다.
+ */
+export function matchDeparture(d: AnyDeparture, r: FieldReceipt): void {
   if (r.departureId !== d.departureId || r.stopId !== d.stopId || r.place.id !== d.placeId) throw new Error('출발 명세와 영수증의 정차가 다르다');
   const sent = new Set(r.people.sent);
-  if (sent.size !== d.roster.length || d.roster.some(x => !sent.has(x.id))) throw new Error('출발 명단과 영수증의 명단이 다르다');
+  const may = new Set(departurePeople(d).map(x => x.id));
+  const exact = d.version === 1 && sent.size !== d.roster.length;
+  if (exact || d.roster.some(x => !sent.has(x.id)) || [...sent].some(x => !may.has(x))) throw new Error('출발 명단과 영수증의 명단이 다르다');
   const want = new Set(d.promises.map(p => p.id));
   if (r.fieldPromises.length !== want.size || r.fieldPromises.some(p => !want.has(p.id) || d.promises.find(q => q.id === p.id)!.kind !== p.kind)) {
     throw new Error('출발 약속과 영수증의 약속이 다르다');
@@ -213,13 +277,14 @@ export function snapshot(g: Game): FieldSnapshot {
   };
 }
 
-/** 프로필 id → 이름·칸. 모르는 id는 명단의 칸으로 읽고 이름은 id 그대로 둔다. */
-function personOf(d: FieldDeparture, pid: string): { name: string; comm: Comm } {
+/** 프로필 id → 이름·칸. 열차장은 CAPTAIN·앞칸, 모르는 id는 명단의 칸으로 읽고 이름은 id 그대로 둔다. */
+function personOf(d: AnyDeparture, pid: string): { name: string; comm: Comm } {
+  if (pid === CAPTAIN_ID) return { name: CAPTAIN, comm: CAPTAIN_COMM };
   const p = PROFILES.find(x => x.id === pid);
-  return { name: p?.name ?? pid, comm: p?.community ?? d.roster.find(x => x.id === pid)?.comm ?? 'tail' };
+  return { name: p?.name ?? pid, comm: p?.community ?? departurePeople(d).find(x => x.id === pid)?.comm ?? 'tail' };
 }
 
-function byComm(d: FieldDeparture, list: readonly string[]): Map<Comm, string[]> {
+function byComm(d: AnyDeparture, list: readonly string[]): Map<Comm, string[]> {
   const out = new Map<Comm, string[]>();
   for (const pid of list) {
     const { name, comm } = personOf(d, pid);
@@ -230,12 +295,40 @@ function byComm(d: FieldDeparture, list: readonly string[]): Map<Comm, string[]>
 
 export type FieldApplyStatus = 'applied' | 'duplicate';
 
+/** 귀환 반영 끝에 붙는 자리. memory.ts를 불러오면 채워진다(그 파일이 이 파일을 읽으니 import 순환을 피한다). 같은 귀환이 두 번 오면 부르지 않는다. */
+export const RETURN_HOOK: { after?: (g: Game, departure: AnyDeparture, r: FieldReceipt) => void } = {};
+
 /**
  * 귀환 한 번을 판에 반영한다. 같은 영수증 id가 다시 오면(앱을 껐다 켜서 또 받아도) 아무것도 하지 않고 'duplicate'다(확인 줄 9, T07·T08).
  * 같은 id에 다른 내용이 오면 판을 건드리지 않고 오류로 알린다. 검사가 모두 끝난 뒤에만 판을 바꾼다.
  * 차례: 물자 → 사람 → 약속. 상징물은 장부에만 넣고 쓰임은 chooseSymbolUse로 따로 고른다(결정 302).
  */
-export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unknown): { status: FieldApplyStatus; record: FieldReturnRecord } {
+/** 필드 상처 부위 → 열차 명부 부위(s3_departure_receipt_contract.md 4절). 손은 팔, 발은 다리에 묶여 있다. */
+export const FIELD_PART: Readonly<Record<string, WoundPart>> = Object.freeze({
+  head_neck: 'head', torso: 'torso', arm_left: 'armL', arm_right: 'armR', leg_left: 'legL', leg_right: 'legR',
+});
+const LIMB_PARTS: readonly WoundPart[] = ['armL', 'armR', 'legL', 'legR'];
+
+/**
+ * 부상자 한 사람의 열차 기록 하나(J02, 몸과 부상 4.1·4.6). 필드가 적은 상처 줄에서 가장 무거운 것이 등급·부위가 되고, 나머지는 field 칸에 붙는다.
+ * - 골절 → 골절. 빠른 처치로 부목을 댔으면 가벼운 상처(4장 「빠른 처치」). 팔다리가 아닌 골절은 깊은 상처로 친다(열차의 골절은 팔다리뿐).
+ * - 깊은 상처·박힌 것 → 깊은 상처.
+ * - 긁힘·찢김뿐인데 부상자 목록에 든 사람(출혈 심함·쓰러짐) → 깊은 상처(결정 카드 C, 2026-10-25 사용자 답). 상처 줄이 없으면 몸통.
+ * - 곪음은 그 사람의 상처 줄 가운데 하나라도 곪았으면. 아무것도 굴리지 않는다.
+ */
+export function fieldWoundOf(rows: readonly FieldWound[], pid: string): { grade: WoundGrade; part: WoundPart; septic: boolean; field: NonNullable<Wound['field']> } {
+  const mine = rows.filter(w => w.person === pid);
+  const quick = (w: FieldWound) => !!(w.treat?.splinted && w.treat?.quick);
+  const rank = (w: FieldWound) => w.kind === 'fracture' ? (quick(w) ? 0.5 : 2) : w.kind === 'deep' || w.kind === 'embedded' ? 1 : 0;
+  let top: FieldWound | undefined;
+  for (const w of mine) if (!top || rank(w) > rank(top)) top = w;
+  const part = top ? FIELD_PART[top.part] ?? 'torso' : 'torso';
+  let grade: WoundGrade = !top ? 'deep' : rank(top) === 2 ? 'fracture' : rank(top) === 0.5 ? 'light' : 'deep';
+  if (grade === 'fracture' && !LIMB_PARTS.includes(part)) grade = 'deep';
+  return { grade, part, septic: mine.some(w => !!w.festering), field: mine.map(({ person: _p, ...w }) => w) };
+}
+
+export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknown): { status: FieldApplyStatus; record: FieldReturnRecord } {
   const r = decodeFieldReceipt(input);
   const fingerprint = canonical(r);
   const known = g.fieldReturns?.applied[r.receiptId];
@@ -282,11 +375,30 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 돌아오지 못했다(죽음).` });
   }
   const gone = new Set([...r.people.dead, ...r.people.missing, ...r.people.leftBehind]);
+  // 크게 다친 사람: 필드가 적은 부위·종류·처치·곪음을 그대로 명부에 옮긴다(J02: 등급·부위를 다시 뽑지 않는다).
   const hurt = r.people.injured.filter(p => !gone.has(p));
-  for (const [c, names] of byComm(departure, hurt)) {
+  const rows = (r.people.wounds ?? []) as unknown as FieldWound[];
+  const hurtBy = new Map<Comm, string[]>();
+  for (const pid of hurt) {
+    const c = personOf(departure, pid).comm;
+    hurtBy.set(c, [...(hurtBy.get(c) ?? []), pid]);
+  }
+  for (const [c, pids] of hurtBy) {
+    const names = pids.map(pid => personOf(departure, pid).name);
     g.injured += names.length;
-    noteInjury(g, names.length, 'stop', place, { names, comm: c });
+    for (const pid of pids) {
+      const { field, ...fw } = fieldWoundOf(rows, pid);
+      recordFieldWound(g, { who: personOf(departure, pid).name, comm: c, from: 'stop', where: place, ...fw }, field);
+    }
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 크게 다쳐 돌아왔다.` });
+  }
+  // 물린 채 돌아온 사람: 열차의 숨은 물림 규칙으로(2구간 안에 드러나거나 칸 안에서 일어난다, 결정 카드 C).
+  for (const pid of r.people.bitten.filter(p => !gone.has(p))) {
+    const { name, comm: c } = personOf(departure, pid);
+    if ((g.hiddenBites ?? []).some(b => b.who === name)) continue;
+    (g.hiddenBites ??= []).push({ who: name, comm: c, at: g.seg, due: g.seg + 2 });
+    journal(g, `${name}이(가) 물린 채 돌아왔다. 아는 사람은 수색대뿐이다.`, 'dark');
+    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${name}이(가) 물린 채 돌아왔다. 2구간 안에 드러나거나 일어난다.` });
   }
   const lost = [...r.people.leftBehind, ...r.people.missing].filter(p => !r.people.dead.includes(p));
   for (const [c, names] of byComm(departure, lost)) {
@@ -321,6 +433,7 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   }
 
   bodySearches(g, departure, r);
+  RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
   if (r.symbol) {
     lines.push({ k: 'symbol', comm: r.symbol.groupId, text: `${COMM_NAME[r.symbol.groupId]}의 상징물을 가져왔다. 쓰임을 고른다.` });
   }
@@ -328,6 +441,8 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
     receiptId: r.receiptId, departureId: r.departureId, stopId: r.stopId, seg: g.seg, verdicts,
     dead: r.people.dead.map(pid => personOf(departure, pid).name),
     symbol: r.symbol ? { ...r.symbol, use: null } : null, before, after: snapshot(g), lines,
+    ...(departure.version === 2 ? { sent: [...r.people.sent] } : {}),
+    ...(r.version === 5 ? { crew: structuredClone(r.crew) } : {}),
   };
   g.fieldReturns ??= { applied: {}, records: [] };
   Object.defineProperty(g.fieldReturns.applied, r.receiptId, { value: fingerprint, enumerable: true, configurable: true, writable: true });
@@ -341,14 +456,14 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
  */
 export const BODY_SEARCH_REL: Readonly<Record<Comm, number>> = Object.freeze({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
 
-function bodySearches(g: Game, departure: FieldDeparture, r: FieldReceipt): void {
+function bodySearches(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
   const minded = new Set<Comm>();
   for (const row of r.witnessed) {
     if (row.template !== 'body_search' || !Array.isArray(row.witnesses)) continue;
     for (const w of row.witnesses as unknown[]) {
       const pid = typeof w === 'string' ? w : (w as { person?: unknown } | null)?.person;
       if (typeof pid !== 'string') continue;
-      const c = departure.roster.find(x => x.id === pid)?.comm;
+      const c = departurePeople(departure).find(x => x.id === pid)?.comm;
       if (!c || minded.has(c)) continue;
       minded.add(c);
       if (BODY_SEARCH_REL[c]) bumpRel(g, c, BODY_SEARCH_REL[c], 'field.body');

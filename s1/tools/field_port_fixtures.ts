@@ -16,14 +16,17 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  advance, agendaOptions, blocs, castVote, cloneGame, COMM_NAME, COMMS, CORPSE_LAWS, createGame, expected, IDEO, LAW_VARIANT_OF, LAWS, P,
-  PROFILES, PROLOGUE, resolveStop, stance, STAGES,
+  advance, agendaOptions, blocs, castVote, cloneGame, COMM_NAME, COMMS, CORPSE_LAWS, createGame, expected, FAMILIES, IDEO, LAW_VARIANT_OF, LAWS, P,
+  PROFILES, PROLOGUE, resolveStop, stance, STAGES, voiceOf,
 } from '../src/game';
 import type { Game } from '../src/game';
 import { applyFieldReturn, chooseSymbolUse, FIELD, snapshot, symbolOptions } from '../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt } from '../src/game/field_receipt';
 import { leaveSpecialCouncil, nextFieldStep, specialCandidates, specialReasons } from '../src/game/field_council';
 import { arrivalSummary, endCard, finishSlice, secondStationReached } from '../src/game/field_arrival';
+import { buildDeparture } from '../src/game/field_departure';
+import type { FieldDepartureV2 } from '../src/game/field_departure';
+import { enableDomestic } from '../src/game/domestic/state';
 
 export const FORMAT = 'field-vectors-v1';
 const SEEDS = ['slice-seed-a', 'train-0', 'train-1'];
@@ -128,6 +131,90 @@ function runCase(seed: string, receiptName: string, depName: string, hang: boole
   return { seed, receipt: receiptName, departure: depName, hang, start, apply, duplicate, symbol, open, preview, votes, leave, arrival };
 }
 
+/**
+ * 출발 계약 판 2·영수증 판 5(docs/design/briefs/s3_departure_receipt_contract.md). 첫 정차에 선 판(정차를 풀기 전)에서 계약을 만들고,
+ * 그 계약에 맞춘 판 5 영수증(수색대 + 운송조 둘이 나감, 동료 하나가 왼팔 골절에 곧바로 부목, 운송조 하나가 다리 골절과 곪은 박힌 것, 동료 하나는 물림)을 반영한 뒤 같은 판에서 계약을 다시 만든다
+ * (다시 만든 계약의 근육통·휴식이 앞 귀환을 읽는다). 내정을 끈 판과 켠 판 둘.
+ */
+function liveReceipt(d: FieldDepartureV2): Record<string, unknown> {
+  const hurt = d.roster[1].id;
+  const carriers = d.workCrew.filter(p => p.role === 'carrier').slice(0, 2).map(p => p.id);
+  const sent = [...d.roster.map(p => p.id), ...carriers];
+  const everyone = [...d.roster, ...d.workCrew];
+  return {
+    version: 5, receiptId: `ret_${d.placeId}_${d.segment}`, departureId: d.departureId, stopId: d.stopId, source: 'direct', endReason: 'departed',
+    place: { id: d.placeId, type: 'freight', variant: 's2_graybox' },
+    time: { arrive: 'D1 10:30', depart: 'D1 12:40', stayGameMinutes: 130 },
+    stock: { coal: 4, wood: 2, ammo_shell: -2 }, items: { gained: [], lost: [] },
+    people: {
+      sent, injured: [hurt, carriers[1]], bitten: [d.roster[3].id], dead: [], missing: [], leftBehind: [], rescued: [],
+      wounds: [
+        { person: hurt, part: 'arm_left', kind: 'fracture', treat: { splinted: true, quick: true } },
+        { person: carriers[0], part: 'leg_right', kind: 'laceration', treat: { disinfected: true, bandaged: true } },
+        { person: carriers[1], part: 'leg_left', kind: 'fracture', treat: { splinted: true } },
+        { person: carriers[1], part: 'torso', kind: 'embedded', festering: true },
+        { person: d.roster[3].id, part: 'arm_right', kind: 'bite', treat: { bandaged: true } },
+      ],
+    },
+    witnessed: [{ who: d.roster[0].id, what: 'searched_body', where: 'siding', when: 'D1 11:05', why: 'loot', witnesses: [d.roster[2].id], template: 'body_search' }],
+    placeState: { looted: 0.3, remainingRisk: 2 }, promises: [],
+    goal: { kind: 'coal', required: 4, earned: 4, status: 'done' }, extras: { documents: [], symbolCount: 0, fragments: [], coreCount: 0 },
+    symbol: null, fieldPromises: [],
+    crew: sent.map(id => ({
+      person: id, exhaustion: id === hurt ? 2 : id === carriers[0] ? 1 : 0, hunger: 0, bodyUse: {},
+      gearBack: { hands: everyone.find(p => p.id === id)!.gear.hands.map(h => [...h]), items: {} },
+    })),
+    defense: null,
+  };
+}
+
+function contractCase(seed: string, domestic: boolean) {
+  const g = createGame(seed);
+  if (domestic) enableDomestic(g);
+  g.seg = 2;
+  step(g); step(g);
+  const opts = { placeId: 'sulechow_station' };
+  const state = plain(g);
+  const departure = plain(buildDeparture(g, opts));
+  const receipt = liveReceipt(departure);
+  const applied = applyFieldReturn(g, departure, receipt);
+  const apply = { status: applied.status, record: plain(applied.record), after: plain(g) };
+  const again = plain(buildDeparture(g, opts));
+  return { seed, domestic, opts, state, departure, receipt, apply, again };
+}
+
+/** 사람 기억(memory.ts): 목격 template 아홉 꼴을 다 담은 귀환 하나를 반영하고, 다음 출발 계약의 stance·cues까지 본다. */
+function memoryCase(seed: string) {
+  const g = createGame(seed);
+  g.seg = 2;
+  step(g); step(g);
+  const opts = { placeId: 'sulechow_station' };
+  const state = plain(g);
+  const departure = plain(buildDeparture(g, opts));
+  const [chief, r1, r2, r3] = departure.roster.map(p => p.id);
+  const [c0, c1] = departure.workCrew.filter(p => p.role === 'carrier').map(p => p.id);
+  const base = liveReceipt(departure);
+  const row = (who: string, what: string, witnesses: string[], template?: string) => ({ who, what, where: 'siding', when: 'D1 11:20', why: 'field', witnesses, ...(template ? { template } : {}) });
+  const receipt = {
+    ...base, receiptId: `ret_memory_${departure.segment}`,
+    people: { ...(base.people as Record<string, unknown>), dead: [c1] },
+    witnessed: [
+      row(chief, `freed_${r1}`, [r1, r2], 'rescued_from_grab'),
+      row(r2, `carried_${r3}`, [r3, r2], 'carried_back'),
+      row(chief, `treated_${r2}`, [r2], 'treated_by'),
+      row(chief, `left_${r3}`, [r3], 'left_behind_survived'),
+      row(chief, 'shot_surrendered_raider', [r2, r3]),
+      row(chief, 'took_raider', [r1, c0], 'spared_raider'),
+      row(r1, 'signal_box_a', [r1, r2, c0], 'resident_robbed'),
+      row(c1, 'bitten_torso', [r2, chief]),
+    ],
+  };
+  const applied = applyFieldReturn(g, departure, receipt);
+  const apply = { status: applied.status, record: plain(applied.record), after: plain(g) };
+  const again = plain(buildDeparture(g, opts));
+  return { seed, opts, state, departure, receipt, apply, again };
+}
+
 /** nextFieldStep은 회기를 여는 부작용이 있어, 열기 전 걸음은 복제본으로 본다. */
 function nextFieldStepPeek(g: Game): string {
   return nextFieldStep(cloneGame(g));
@@ -137,9 +224,13 @@ function main(): void {
   const out = process.argv[2] ? resolve(process.argv[2]) : resolve(here, '../../s2/tests/game/fixtures/field_port/field_vectors.json');
   const cases = [];
   for (const seed of SEEDS) for (const [r, d, h] of PAIRS) cases.push(runCase(seed, r, d, h));
+  const contracts = SEEDS.flatMap(seed => [contractCase(seed, false), contractCase(seed, true)]);
+  const memories = SEEDS.map(memoryCase);
   const tables = {
     COMMS, COMM_NAME, P, STAGES, IDEO, LAWS, LAW_VARIANT_OF, CORPSE_LAWS, PROLOGUE, FIELD,
     PROFILES: PROFILES.map(p => ({ id: p.id, name: p.name, community: p.community, age: p.age })),
+    // 사람 기억의 가족 한 사람(memory.ts kinOf, person_memory.gd kin_of)
+    FAMILIES: FAMILIES.map(f => ({ id: f.id, parents: [...f.parents], children: [...f.children] })),
   };
   const file = {
     format: FORMAT,
@@ -148,12 +239,15 @@ function main(): void {
     receipts: Object.fromEntries([...new Set(PAIRS.map(p => p[0]))].map(n => [n, read(n)])),
     tables: plain(tables),
     cases,
+    contracts,
+    memories,
+    voices: Object.fromEntries(PROFILES.map(p => [p.id, voiceOf(p.id)])),
   };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(file)}\n`);
   const votes = cases.reduce((n, c) => n + c.votes.length, 0);
   const arrivals = cases.filter(c => c.arrival).length;
-  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
+  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, 기억 ${memories.length}, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
 }
 
 main();
