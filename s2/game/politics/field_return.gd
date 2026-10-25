@@ -383,6 +383,8 @@ const LIMB_PARTS := ["armL", "armR", "legL", "legR"]
 
 static func _field_rank(w: Dictionary) -> float:
 	var kind: String = w["kind"]
+	if kind == "amputation":
+		return 3.0
 	if kind == "fracture":
 		var treat: Dictionary = w.get("treat", {})
 		return 0.5 if bool(treat.get("splinted", false)) and bool(treat.get("quick", false)) else 2.0
@@ -391,7 +393,8 @@ static func _field_rank(w: Dictionary) -> float:
 
 ## One badly hurt person's record on the train (J02, body_injury 4.1·4.6; s1 field_receipt.ts
 ## fieldWoundOf): the heaviest of the wounds the field wrote is the grade and the part, all of
-## them ride along in "field". A fracture is a fracture, or a light wound when a medic splinted it
+## them ride along in "field". An arm or a leg cut off in the field is an amputation, above all
+## else. A fracture is a fracture, or a light wound when a medic splinted it
 ## at once; a fracture off the limbs counts as deep (the train's fractures are limbs). Deep and
 ## embedded are deep. Only scratches and cuts on one listed as badly hurt is deep (decision card C,
 ## user 2026-10-25); with no rows at all, the torso. Festering if any of them festers. No draws.
@@ -408,8 +411,8 @@ static func field_wound_of(rows: Array, pid: String) -> Dictionary:
 	var grade := "deep"
 	if top is Dictionary:
 		var rank := _field_rank(top)
-		grade = "fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep")
-	if grade == "fracture" and not LIMB_PARTS.has(part):
+		grade = "amputation" if rank == 3.0 else ("fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep"))
+	if (grade == "fracture" or grade == "amputation") and not LIMB_PARTS.has(part):
 		grade = "deep"
 	var septic := false
 	var field: Array = []
