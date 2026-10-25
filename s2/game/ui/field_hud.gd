@@ -17,6 +17,7 @@ const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
+const TextFit = preload("res://game/ui/text_fit.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const PortraitFace = preload("res://game/ui/portrait_face.gd")
@@ -299,6 +300,7 @@ const HISS_TEXT := "…치직"   # what the field puts up while the set only his
 var game
 var theme: Theme
 var root: Control
+var text_fit: Node                       # text_fit.gd
 var touch: Control
 var overlay: Control
 var clock_label: Label
@@ -460,6 +462,10 @@ func setup(field_game) -> void:
 	# The bag and the blood key keep to the card as it grows with the weapon's words.
 	portrait.resized.connect(_follow_portrait)
 	_follow_portrait()
+	# No key's word sticks out of it (text_fit.gd), the panes' keys too.
+	text_fit = TextFit.new()
+	text_fit.watch(root)
+	add_child(text_fit)
 
 
 # ---------------------------------------------------------------- building
