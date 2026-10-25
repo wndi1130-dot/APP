@@ -6,11 +6,14 @@ extends SceneTree
 ## Optional: --what=field|travel|both --stages=autumn,early,deep,thaw
 ##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet
 ##   --region=K1 --place=<map id> --edge (the field at the map's west edge)
+##   --ref (only the three reference scenes, REF_SCENES)
 ## Writes <what>_<stage>_<band>_<weather>.jpg and index.json (what each cell drew).
 
 const FieldGame = preload("res://game/field_game.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 
 ## Rules weather and the drawn look for each column (overcast plays by clear
 ## rules, as the storm's "before" stop does).
@@ -43,6 +46,17 @@ var bare := false
 var mask := false
 ## --edge: look at the map's west edge, half the screen past it (결정 448 17).
 var edge := false
+## The reference scenes the look (mood) and the materials (art3d) both judge by
+## (색감 루프, 2026-10-26): late autumn K1, a street at midday under overcast,
+## indoors at dusk by a curtained window, a rainy night. The rules clock is the
+## picture hour, so lamps and lit windows go with it. Written as ref_<name>.jpg.
+const REF_SCENES: Array = [
+	{"name": "street_noon", "hour": 12.0, "rules": ["clear"], "look": ["overcast"], "indoor": false},
+	{"name": "indoor_dusk", "hour": 16.0 + 10.0 / 60.0, "rules": ["clear"], "look": ["clear"], "indoor": true},
+	{"name": "rain_night", "hour": 19.0, "rules": ["rain"], "look": ["rain"], "indoor": false},
+]
+## --ref: only the reference scenes.
+var ref := false
 var index: Array = []
 
 
@@ -86,8 +100,14 @@ func _run() -> void:
 			mask = true
 		elif a == "--edge":
 			edge = true
+		elif a == "--ref":
+			ref = true
 	DirAccess.make_dir_recursive_absolute(out)
 	await process_frame
+	if ref:
+		stages = []
+		for s: Dictionary in REF_SCENES:
+			await _field_shot(String(s["name"]), float(STAGES["autumn"][0]), float(STAGES["autumn"][1]), float(s["hour"]), "", "", s)
 	for st in stages:
 		var c := float(STAGES[st][0])
 		var side := float(STAGES[st][1])
@@ -112,17 +132,23 @@ func _save(name: String) -> void:
 	img.save_jpg(out.path_join(name + ".jpg"), 0.86)
 
 
-func _field_shot(tag: String, c: float, side: float, hour: float, band: String, w: String) -> void:
+## scene: one of REF_SCENES (then w and band are unused and tag is its name).
+func _field_shot(tag: String, c: float, side: float, hour: float, band: String, w: String, scene := {}) -> void:
 	var game = FieldGame.new()
+	var rules: Array = scene.get("rules", WEATHERS.get(w, [[]])[0])
+	var look: Array = scene.get("look", WEATHERS.get(w, [[], []])[1])
 	var o := {"seed": 5, "raiders": false, "auto_pause": false, "arrive": false,
-		"weather": WEATHERS[w][0], "look": WEATHERS[w][1], "cold": c, "side": side, "look_hour": hour, "region": region}
+		"weather": rules, "look": look, "cold": c, "side": side, "look_hour": hour, "region": region}
 	if place != "":
 		o["place"] = place
 	game.opts = o
 	root.add_child(game)
 	# Lamps and lit windows go by the rules clock: after dark for night shots,
-	# the dusk band for dusk ones (the picture hour stays as asked).
-	if band == "night":
+	# the dusk band for dusk ones (the picture hour stays as asked); a reference
+	# scene's rules clock is its picture hour.
+	if not scene.is_empty():
+		game.clock.elapsed = maxf(hour - 10.5, 0.0) * 240.0
+	elif band == "night":
 		game.clock.elapsed = (17.5 - 10.5) * 240.0
 	elif band == "dusk":
 		game.clock.elapsed = (15.3 - 10.5) * 240.0
@@ -133,6 +159,12 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 	game.cam_push = Vector3(0, 0, 16)
 	if edge:
 		game.cam_push = Vector3(2.0 - game.player.position.x, 0, 16)
+	if bool(scene.get("indoor", false)):
+		# Inside by a curtained window, the walls cut away round the player.
+		var at := indoor_cell(game.view.grid)
+		if at.x >= 0:
+			game.player.position = FieldGrid.center(at)
+			game.cam_push = Vector3.ZERO
 	if not mask:
 		game.mask_on = false
 		game.view.set_mask_enabled(false)
@@ -145,14 +177,38 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 		await process_frame
 	game.paused = false
 	game.set_process(false)
+	if bool(scene.get("indoor", false)):
+		var b: int = game.view.grid.building_at(FieldGrid.cell_of(game.player.position))
+		game.view.show_levels(0)
+		game.view.cut_away(b, 0)
+		game._update_camera(1.0)
 	game._update_light()
 	await create_timer(2.6).timeout
-	await _save("field_" + tag)
-	index.append({"shot": "field_" + tag, "cold": c, "side": side, "hour": hour, "band": game.atmo["band"], "weather": w,
+	var shot := ("ref_" if not scene.is_empty() else "field_") + tag
+	await _save(shot)
+	index.append({"shot": shot, "cold": c, "side": side, "hour": hour, "band": game.atmo["band"], "weather": w if scene.is_empty() else look,
 		"drawn": game.atmo["kinds"], "falls": game.atmo["falls"], "temp_c": snappedf(float(game.atmo["temp_c"]), 0.1),
 		"season": game.atmo["season"], "breath": snappedf(float(game.atmo["breath"]), 0.01), "breaths": game.breath.shown})
 	game.queue_free()
 	await process_frame
+
+
+## An open floor cell just inside a curtained window, first by row then
+## column, a window in a north wall first (the camera looks north, so its
+## inside face shows). (-1, -1) when the map has none.
+static func indoor_cell(g: FieldGrid) -> Vector2i:
+	var keys: Array = g.windows.keys()
+	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y or (a.y == b.y and a.x < b.x))
+	for pass_dirs in [[Vector2i(0, 1)], [Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, -1)]]:
+		for w: Vector2i in keys:
+			var win: Dictionary = g.windows[w]
+			if not BuildingRules.has_curtain(win):
+				continue
+			for d: Vector2i in pass_dirs:
+				var c: Vector2i = w + d
+				if g.inside(c) and g.building_at(c) == int(win["building"]) and g.solid_at(c) == FieldGrid.Solid.NONE:
+					return c
+	return Vector2i(-1, -1)
 
 
 func _travel_shot(tag: String, c: float, side: float, hour: float, w: String) -> void:

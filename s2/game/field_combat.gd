@@ -944,9 +944,14 @@ func breach_reaches(p) -> String:
 func _held_line(by: String) -> String:
 	if by == "" or by == String(Wear.KINDS["jacket_short"]["name"]):
 		return "외투가 손톱을 막았다."
-	var last: int = by.unicode_at(by.length() - 1) - 0xAC00
+	return "%s 손톱을 막았다." % _subject(by)
+
+
+## A garment's name as the one doing it: 이 after a closed syllable, else 가.
+static func _subject(word: String) -> String:
+	var last: int = word.unicode_at(word.length() - 1) - 0xAC00 if word != "" else -1
 	var closed: bool = last >= 0 and last < 11172 and last % 28 != 0
-	return "%s%s 손톱을 막았다." % [by, "이" if closed else "가"]
+	return "%s%s" % [word, "이" if closed else "가"]
 
 
 ## The window ran out: the bite lands (body_injury 2). Witnesses go on the receipt.
@@ -1185,17 +1190,22 @@ func _after_shot(p) -> void:
 func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) -> bool:
 	var rng: RandomNumberGenerator = game.rng
 	if z["state"] == "rising":
-		if AimModel.roll(rng, radius) != "miss":
+		var rose: String = AimModel.roll(rng, radius)
+		if rose != "miss":
+			_shot_through(z, rose)
 			_kill(p, z, "")
 			return true
 		return false
 	if int(d.get("pellets", 1)) > 1:
 		var spread_m: float = dist * tan(deg_to_rad(float(d["spread_deg"])))
 		var hits: Dictionary = AimModel.pellet_hits(rng, radius, spread_m, int(d["pellets"]))
+		var body: int = int(hits["body"])
+		if body > 0:
+			_shot_through(z, "body")
 		if int(hits["head"]) > 0:
+			_shot_through(z, "head")
 			_kill(p, z, "")
 			return true
-		var body: int = int(hits["body"])
 		if body <= 0:
 			return false
 		var knock := 1.0 - pow(1.0 - float(d["body_knockdown"]) , body)
@@ -1209,18 +1219,34 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 		return true
 	var zone: String = AimModel.roll(rng, radius)
 	if zone == "head":
+		_shot_through(z, zone)
 		_kill(p, z, "")
 		return true
 	if zone == "body":
 		# A thick coat stops blades and bites only; rounds go through (user
-		# 17:34, zombies.md 82e27ce). Only a police vest would stop a pistol
-		# round, and Sulechów has no police station.
+		# 17:34, zombies.md 82e27ce). Only the vest stops a pistol round, on the
+		# body (decision 434: the dead by the police station wear it): the round
+		# stays in it, the body only staggers, and the vest is mostly holed there.
+		var worn: Dictionary = game.zombies.worn_of(z)
+		var stop: float = Wear.bullet_block_in(worn, "torso") if String(d.get("ammo", "")) == "pistol" else 0.0
+		var held: bool = stop > 0.0 and rng.randf() < stop
+		var by: String = Wear.shot_in(worn, "torso", held, rng)
+		if held:
+			z["stun"] = 0.3
+			_toast(p, "%s 탄을 막았다." % _subject(by))
+			return true
 		if rng.randf() < float(d["body_knockdown"]):
 			game.zombies.knock_down(z)
 		else:
 			z["stun"] = 0.5
 		return true
 	return false
+
+
+## What hit one of the dead (a round, shot, an arrow) went through its clothes
+## there, holing each layer as on the living (clothing.md 3.3). No dice.
+func _shot_through(z: Dictionary, zone: String) -> void:
+	Wear.shot_in(game.zombies.worn_of(z), "head_neck" if zone == "head" else "torso", false, game.rng)
 
 
 func _shoot_person(p, o, radius: float) -> bool:
@@ -1235,7 +1261,24 @@ func _shoot_person(p, o, radius: float) -> bool:
 	if zone == "miss":
 		return false
 	o.last_hurt_by = p.pid
-	var part: String = o.body.apply_gunshot(rng, game.clock.elapsed, zone)
+	var fine: String = o.body.gunshot_part(rng, zone)
+	# A pistol round where a vest covers (decision 434, body_injury 6장): it is
+	# stopped, and the vest more often than not holed there for the next one.
+	# Where nothing stops rounds no dice are drawn: it goes in as it always did,
+	# holing what it goes through.
+	var pistol: bool = String(W.get_data(p.weapon_id()).get("ammo", "")) == "pistol"
+	var stop: float = Wear.bullet_block_in(o.worn, fine) if pistol else 0.0
+	var held: bool = stop > 0.0 and rng.randf() < stop
+	var by: String = Wear.shot_in(o.worn, fine, held, rng)
+	if held:
+		game.actions.struck(o)
+		game.make_sound(o.position, SimNoise.Level.QUIET, "impact", p)
+		if o.team == "raider":
+			game.ai.raider_hit(o, p)
+		else:
+			game.say(o, "%s 총에 맞았다 — %s 막았다." % [o.display_name, _subject(by)], true, "hurt")
+		return true
+	var part: String = o.body.gunshot_at(fine, game.clock.elapsed)
 	if zone == "head":
 		o.body.downed = true
 	game.telemetry.injury(game.clock.elapsed, o.pid, "gunshot")
