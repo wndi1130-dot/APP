@@ -28,6 +28,7 @@ const Motion = preload("res://game/sim/motion.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
+const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
@@ -84,7 +85,7 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
@@ -112,7 +113,7 @@ const EXTRA_ITEMS: Dictionary = {
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
-const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5]}
+const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5], "cloth": ["cloth", 1.0]}
 ## A watch found still set (P19): it starts ringing this long (real seconds)
 ## after it is first carried, rings this many times this far apart at the one
 ## who carries it (a "normal" sound, as any), then is quiet. One key stops them all.
@@ -216,6 +217,10 @@ var radio_t: float = 0.0
 var ammo: Dictionary = {"pistol": 8, "shell": 4, "craft": 8}
 var ammo_start: Dictionary = {}
 var loaded_start: Dictionary = {}      # rounds already in the squad's guns at the start
+## The cloth the squad went out with (decision 426 D2): the train gets what
+## came back less this, so a strip torn for a bandage is its own and the
+## kit is not new cloth every stop.
+var cloth_start: int = 0
 var unloaded: Dictionary = {}
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
@@ -410,6 +415,9 @@ func _ready() -> void:
 	_give_finds()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
+	cloth_start = 0
+	for p in squad:
+		cloth_start += int(p.items.get("cloth", 0))
 	await BuildPace.rest(pace)
 	hud = Hud.new()
 	add_child(hud)
@@ -1030,6 +1038,14 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 	p.skills = row.get("skills", p.skills).duplicate()
 	p.medical = String(row.get("medical", "none"))
 	p.bag = String(row.get("bag", "pack"))
+	# What they go out in (wear.gd): a row may say, else the coat and the gloves everyone has.
+	var dress: Dictionary = row.get("wear", {})
+	if dress.has("outer"):
+		p.coat = Wear.make(String(dress["outer"])) if String(dress["outer"]) != "" else Wear.bare_outer()
+	if dress.has("head"):
+		p.hat = Wear.make(String(dress["head"]))
+	if dress.has("hands"):
+		p.gloves = bool(dress["hands"])
 	var slots: Array = []
 	for h in row.get("hands", []):
 		var id: String = h[0]
@@ -1398,7 +1414,7 @@ func _update_person(p: Person, delta: float) -> void:
 	var ctx := {"running": p.is_running_now(), "swinging": p.swing_t > 0.0, "carry_state": p.carry_state(), "cold_level": p.cold_level(), "indoor_rest": indoor and not p.moving}
 	for ev in p.body.tick(delta, ctx):
 		_on_body_event(p, ev)
-	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": indoor and not building_open(lg.building_at(cell)), "stove": stove, "warmth": float(p.coat["warmth"]) + (0.1 if p.gloves else 0.0), "windproof": float(p.coat["windproof"]), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
+	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": indoor and not building_open(lg.building_at(cell)), "stove": stove, "warmth": Wear.warmth(p, p.heat.wet), "windproof": Wear.windproof(p), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
 	if weather.always_cold() and not indoor and not stove:
 		p.heat.heat = minf(p.heat.heat, 60.0)
 	p.panic = maxf(0.0, p.panic - delta * 0.08)
@@ -2481,6 +2497,7 @@ func finish(reason: String) -> void:
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
+	stock["cloth"] = float(stock.get("cloth", 0.0)) - cloth_start
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
 	# count, and so do the ones in a gun that stays behind with its carrier.
 	var boarded_squad: Array = []

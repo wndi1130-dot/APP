@@ -254,7 +254,7 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   // 잔액보다 큰 음수는 0에서 멈추고(시작 + 순증감 = 잔액, 모자라면 0과 부족분) 귀환 줄에 부족분을 적는다.
   const s = r.stock;
   const have: Partial<Record<keyof typeof s, number>> = {
-    coal: g.coal, food: g.food, medicine: g.med, luxury: g.lux, ...(g.dom ? { wood: g.dom.wood, scrap: g.dom.scrap } : {}),
+    coal: g.coal, food: g.food, medicine: g.med, luxury: g.lux, ...(g.dom ? { wood: g.dom.wood, scrap: g.dom.scrap, parts: g.dom.parts } : {}),
   };
   if (s.coal) bump(g, 'coal', s.coal, 'field.loot', { floor0: true });
   if (s.food) bump(g, 'food', s.food, 'field.loot', { floor0: true });
@@ -264,8 +264,10 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   if (g.dom) {
     if (s.wood) g.dom.wood = Math.max(0, g.dom.wood + s.wood);
     if (s.scrap) g.dom.scrap = Math.max(0, g.dom.scrap + s.scrap);
+    if (s.parts) g.dom.parts = Math.max(0, g.dom.parts + s.parts);
+    // 천(cloth)은 S1 내정 그릇에 칸이 없다: 받기만 하고 S2 열차(train_dom.gd)가 담는다(결정 426 D②).
   }
-  const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['wood', '목재'], ['scrap', '고철']] as const)
+  const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['wood', '목재'], ['scrap', '고철'], ['parts', '부품']] as const)
     .filter(([k]) => s[k]).map(([k, name]) => {
       const lack = have[k] === undefined ? 0 : Math.max(0, -(have[k]! + s[k]!));
       return `${name} ${s[k]! > 0 ? '+' : ''}${s[k]}${lack > 0 ? ` (모자라 0, 부족 ${lack})` : ''}`;

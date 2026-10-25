@@ -8,13 +8,15 @@ extends Control
 ## mockup (px × ui_fonts.gd K); the middle stretches with the screen.
 ##
 ## A badge shows only a number the train has (medicine: the hurt and the sick);
-## the rooms that have no screen yet answer 「준비 중」 over their key.
+## a room whose screen is open (`open_rooms`, by its icon) says so (room_pressed)
+## and the rooms that have no screen yet answer 「준비 중」 over their key.
 ##
 ## Off the train's own screen the middle is the way the train goes instead of
 ## the rooms (route_line.gd, `route`), and where the main act is pulled the main
 ## key is a lever (lever_key.gd, `lever`), as the session's 「표결」.
 
 signal main_pressed
+signal room_pressed(icon: String)
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -40,6 +42,8 @@ var route: Dictionary = {}
 ## The main key as a lever, with its small line under the word.
 var lever: bool = false
 var lever_small: String = ""
+## The rooms with a screen of their own, by icon (the workshop: "gear").
+var open_rooms: Array = []
 var route_line: Control = null
 var _six: Array = []
 var _note: Label = null
@@ -170,7 +174,10 @@ func _room(icon: String, word: String, badge: String) -> Button:
 		b.add_child(em)
 		em.size = em.get_combined_minimum_size()
 		em.position = Vector2(40.0, 2.0) * k
-	b.pressed.connect(_soon.bind(b))
+	if open_rooms.has(icon):
+		b.pressed.connect(func() -> void: room_pressed.emit(icon))
+	else:
+		b.pressed.connect(_soon.bind(b))
 	_press_sink(b)
 	return b
 
