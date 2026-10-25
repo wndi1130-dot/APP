@@ -77,7 +77,9 @@ func test_parts_first_up_to_the_target_then_the_line() -> void:
 	assert_eq(float(g["dom"]["parts"]), 5.0)
 	assert_eq(r["made"], ["bow"])
 	assert_null(TrainWorkshop.line(g))
-	assert_eq(g["dom"]["armory"], [{"id": "bow", "quality": "usable", "condition": 1.0}])
+	# Onto the start armory (the first kits, PR 5).
+	assert_eq((g["dom"]["armory"] as Array).size(), TrainDom.START_ARMORY.size() + 1)
+	assert_eq(g["dom"]["armory"].back(), {"id": "bow", "quality": "usable", "condition": 1.0})
 	assert_true(TrainDom.is_store(g["dom"]), "the bow is a weapon the field knows")
 	assert_eq(r["events"], [{"kind": "made", "car": "", "comm": "", "sign": 1, "size": 0.4, "day": 2}])
 
