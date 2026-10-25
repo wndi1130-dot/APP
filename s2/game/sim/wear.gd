@@ -685,11 +685,27 @@ static func dress_from(p, d: Dictionary) -> void:
 			p.gloves = bool(d["hands"])
 		return
 	for s in d:
-		if SLOTS.has(String(s)):
-			if String(d[s]) == "":
-				take_off(p, String(s))
-			else:
-				put_on(p, make(String(d[s])))
+		if not SLOTS.has(String(s)):
+			continue
+		# A thing out of the wardrobe comes as it is kept there: {id, condition, holes?}.
+		if d[s] is Dictionary:
+			put_on(p, from_wardrobe(d[s]))
+		elif String(d[s]) == "":
+			take_off(p, String(s))
+		else:
+			put_on(p, make(String(d[s])))
+
+
+## A garment as the train's wardrobe keeps it ({id, condition, holes?}, train_dom.gd) made
+## into the state worn: its wear is what its condition lacks.
+static func from_wardrobe(entry: Dictionary) -> Dictionary:
+	var g := make(String(entry.get("id", "")))
+	if g.is_empty():
+		return g
+	g["wear"] = clampf(1.0 - float(entry.get("condition", 1.0)), 0.0, 1.0)
+	if not (entry.get("holes", {}) as Dictionary).is_empty():
+		g["holes"] = (entry["holes"] as Dictionary).duplicate()
+	return g
 
 
 ## What a save keeps of one person's clothes, and how it comes back. A save
