@@ -15,6 +15,7 @@ export * from './calm';
 export * from './disembark';
 export * from './scene';
 export * from './needs';
+export * from './council_log';
 export * from './omens';
 export * from './people';
 export * from './domestic';

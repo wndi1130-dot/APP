@@ -97,6 +97,18 @@ func test_blocked_bite_leaves_a_hole_and_releases_but_the_next_same_part_bite_la
 	assert_true(game.player.grabbers.is_empty())
 
 
+## The one at the front that bit is noted for its drawing (DeadBody.bite_after_k):
+## it tears away through the rest of the bite. One behind it is not.
+func test_the_front_one_that_bit_is_noted_for_its_tear_away() -> void:
+	var game = _game()
+	var front := _held(game)
+	var behind := _held(game)
+	front["age"] = 12.5
+	game.combat.bite(game.player)
+	assert_eq(float(front.get("bit_at", -1.0)), 12.5)
+	assert_false(behind.has("bit_at"))
+
+
 func test_crawler_bite_reaches_a_leg_the_coat_does_not_cover() -> void:
 	var game = _game()
 	_held(game, true)

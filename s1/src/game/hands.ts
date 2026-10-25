@@ -31,7 +31,7 @@ export function workShare(c: Comm): number {
   return share[c];
 }
 
-const JOB_NAME: Record<HandJob, string> = { stoker: '화실 교대', stove: '난로와 물', watch: '지붕 보초', roof: '지붕 얼음과 선로', repair: '고칠 손' };
+const JOB_NAME: Record<HandJob, string> = { stoker: '화실 교대', stove: '난로와 물', watch: '지붕 보초', roof: '지붕과 선로', repair: '고칠 손' };
 
 /** 칸 대표가 내는 뜻(0~1): 관계가 나쁠수록, 작업을 거부하는 칸일수록, 그 칸 몫(난방·배급)이 낮을수록 덜 낸다. */
 export function handsWill(g: Game, c: Comm): number {
