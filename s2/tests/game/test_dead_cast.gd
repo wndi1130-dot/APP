@@ -71,6 +71,28 @@ func test_a_cap_on_the_bodies_the_dead_wear() -> void:
 
 # Read in one a frame, each body with its own five looks and its own walk's
 # stride; a dead one whose body is not read yet is drawn in the first.
+class NoField:
+	var opts := {}
+
+
+# With the baked bodies off (the boxes drawn instead) there are no others to
+# read in, and setting up does not stop on the empty list.
+func test_with_the_baked_bodies_off_no_others_are_read() -> void:
+	var boxes := DeadBody.assets()
+	if boxes.is_empty():
+		pending("no baked body to stand in for the boxes")
+		return
+	var was := OS.get_environment(DeadBody.FOLDER_ENV)
+	OS.set_environment(DeadBody.FOLDER_ENV, "user://no_such_dead_body")
+	var z := Zombies.new()
+	add_child_autofree(z)
+	z.setup(NoField.new(), boxes)
+	OS.set_environment(DeadBody.FOLDER_ENV, was)
+	assert_false(z.baked)
+	assert_true(z.bodies_to_read.is_empty())
+	assert_eq(z.bodies_planned, 1)
+
+
 func test_the_bodies_are_read_one_a_frame_each_with_its_looks_and_stride() -> void:
 	if not _build_bodies_in_use():
 		pending("a folder put in place of the build's own")
