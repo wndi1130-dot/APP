@@ -194,7 +194,7 @@ func test_context_is_a_snapshot_and_resource_gates_do_not_spend_anything() -> vo
 	r["train"]["med"] = 0
 	r["train"]["injured"] = 2
 	var before := r.duplicate(true)
-	var c := Context.read(r, r["cars"][1])
+	var c := Context.read(r, _car(r, "medtech"))
 	assert_false(c["stove"])
 	assert_false(c["meal"])
 	assert_false(c["medicine"])
@@ -218,14 +218,22 @@ func test_preferences_keep_layers_and_filter_children_and_injured_people() -> vo
 	assert_eq(Schedule.main_state(c, {"injured": true}), "heal")
 
 
+## The default formation's car `id` (S1's order, so not by its place in the list).
+func _car(r: Dictionary, id: String) -> Dictionary:
+	for c: Dictionary in r["cars"]:
+		if String(c["id"]) == id:
+			return c
+	return {}
+
+
 func test_laws_close_dining_for_session_and_reopen_education_afterwards() -> void:
 	var r := Rules.load_default()
 	r["train"]["passed"] = {"edu_letters": 1, "child_pack": 2}
-	var c := Context.read(r, r["cars"][2])
+	var c := Context.read(r, _car(r, "dining"))
 	assert_true(c["classroom"])
 	assert_true(c["half_class"])
 	r["train"]["phase"] = "council"
-	c = Context.read(r, r["cars"][2])
+	c = Context.read(r, _car(r, "dining"))
 	assert_false(c["classroom"])
 	assert_false(c["meal"])
 	assert_eq(Schedule.main_state(c, {}), "session")

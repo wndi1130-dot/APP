@@ -14,12 +14,19 @@
     "engine": { "name": "기관실", "pop": 25, "away": 0, "rel": 10, "grudge": 0, "sit": [80, 55, 40, 45] }
   },
   "cars": [
+    { "id": "tail3", "kind": "comm", "comm": "tail", "name": "꼬리칸 3", "plate": "꼬리" },
+    { "id": "tail2", "kind": "comm", "comm": "tail", "name": "꼬리칸 2", "plate": "꼬리" },
     { "id": "tail1", "kind": "comm", "comm": "tail", "name": "꼬리칸 1", "plate": "꼬리" },
+    { "id": "cold", "kind": "cold", "name": "찬 칸", "plate": "찬칸" },
+    { "id": "store", "kind": "freight", "name": "창고칸", "plate": "창고" },
     { "id": "medtech", "kind": "comm", "comm": "medtech", "name": "의무칸", "plate": "의무" },
     { "id": "dining", "kind": "dining", "name": "식당칸", "plate": "의회" },
+    { "id": "guard", "kind": "comm", "comm": "guard", "name": "경비대칸", "plate": "경비" },
     { "id": "captain", "kind": "captain", "name": "열차장실", "plate": "일지" },
     { "id": "front", "kind": "comm", "comm": "front", "name": "앞칸", "plate": "앞칸" },
-    { "id": "workshop", "kind": "technical", "name": "공방칸", "plate": "공방" }
+    { "id": "workshop", "kind": "technical", "name": "공방칸", "plate": "공방" },
+    { "id": "engine", "kind": "engine", "comm": "engine", "name": "기관실·탄수차", "plate": "기관" },
+    { "id": "loco", "kind": "loco", "name": "기관차", "plate": "" }
   ],
   "errands": [
     { "id": "council", "to": "dining", "phase": "council", "every": 6.0, "stay": 20.0 },
