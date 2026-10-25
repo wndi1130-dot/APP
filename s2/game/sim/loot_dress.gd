@@ -16,6 +16,7 @@ extends RefCounted
 
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
+const LootJunk = preload("res://game/sim/loot_junk.gd")
 
 ## What may be moved between the boxes of one building, and as what.
 const FAMILY: Dictionary = {
@@ -339,6 +340,12 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 	var place_kind: String = String(data.get("place_kind", ""))
 	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "fragment": "", "store": ""}
 	# 1. Within each building, the bundles go where the room says.
+	# The odds and ends go in first, as the reference rolls them, and stay where
+	# they are put (loot_junk.gd).
+	var rooms: Dictionary = {}
+	for id: String in containers:
+		rooms[id] = room_of(containers[id])
+	report["junk"] = LootJunk.strew(containers, seed, rooms)
 	var by_building: Dictionary = {}
 	for id: String in containers:
 		var c: Dictionary = containers[id]
