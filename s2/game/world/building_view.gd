@@ -59,8 +59,8 @@ const ZONE_METAL_OUT := Color(1, 0, 1, 1)
 const ZONE_METAL_IN := Color(1, 0, 1, 0)
 const ZONE_WOOD_OUT := Color(0, 1, 0, 1)
 const ZONE_WOOD_IN := Color(0, 1, 0, 0)
-## 커튼 천: 안쪽 벽지 칠(구역 0, 날씨 안 받음)을 빌린다. 셰이더에 천 구역이 생기면 바꾼다.
-const ZONE_CLOTH := Color(0, 0, 0, 0)
+## 커튼 천: 셰이더의 천 구역(6, 안쪽이라 날씨 안 받음).
+const ZONE_CLOTH := Color(0, 1, 1, 0)
 ## 판자·커튼은 벽 겉면에 붙는다: 바깥벽 바깥 면, 바깥벽 안쪽 면, 안벽 면까지의 거리(대응표 grid
 ## ext_wall_m 0.45 — 바깥 +0.285, 안 -0.225 — 와 int_wall_m 0.2).
 const BOARD_OUT := 0.29

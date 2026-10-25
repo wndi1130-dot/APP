@@ -12,6 +12,7 @@ import { hangWhy, hangSymbol } from './domestic/symbols';
 import { journal, PROFILES, situation, storyOf } from './state';
 import type { Game, Phase } from './state';
 import { breakPromise, keepPromise } from './turn';
+import { noteBroken } from './council_log';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
 import { CAPTAIN, recordFieldWound } from './wounds';
@@ -311,6 +312,7 @@ const LIMB_PARTS: readonly WoundPart[] = ['armL', 'armR', 'legL', 'legR'];
 
 /**
  * 부상자 한 사람의 열차 기록 하나(J02, 몸과 부상 4.1·4.6). 필드가 적은 상처 줄에서 가장 무거운 것이 등급·부위가 되고, 나머지는 field 칸에 붙는다.
+ * - 절단 → 절단. 무엇보다 무겁다. 필드는 팔·다리만 자른다(영수증도 팔·다리만 받는다).
  * - 골절 → 골절. 빠른 처치로 부목을 댔으면 가벼운 상처(4장 「빠른 처치」). 팔다리가 아닌 골절은 깊은 상처로 친다(열차의 골절은 팔다리뿐).
  * - 깊은 상처·박힌 것 → 깊은 상처.
  * - 긁힘·찢김뿐인데 부상자 목록에 든 사람(출혈 심함·쓰러짐) → 깊은 상처(결정 카드 C, 2026-10-25 사용자 답). 상처 줄이 없으면 몸통.
@@ -319,12 +321,12 @@ const LIMB_PARTS: readonly WoundPart[] = ['armL', 'armR', 'legL', 'legR'];
 export function fieldWoundOf(rows: readonly FieldWound[], pid: string): { grade: WoundGrade; part: WoundPart; septic: boolean; field: NonNullable<Wound['field']> } {
   const mine = rows.filter(w => w.person === pid);
   const quick = (w: FieldWound) => !!(w.treat?.splinted && w.treat?.quick);
-  const rank = (w: FieldWound) => w.kind === 'fracture' ? (quick(w) ? 0.5 : 2) : w.kind === 'deep' || w.kind === 'embedded' ? 1 : 0;
+  const rank = (w: FieldWound) => w.kind === 'amputation' ? 3 : w.kind === 'fracture' ? (quick(w) ? 0.5 : 2) : w.kind === 'deep' || w.kind === 'embedded' ? 1 : 0;
   let top: FieldWound | undefined;
   for (const w of mine) if (!top || rank(w) > rank(top)) top = w;
   const part = top ? FIELD_PART[top.part] ?? 'torso' : 'torso';
-  let grade: WoundGrade = !top ? 'deep' : rank(top) === 2 ? 'fracture' : rank(top) === 0.5 ? 'light' : 'deep';
-  if (grade === 'fracture' && !LIMB_PARTS.includes(part)) grade = 'deep';
+  let grade: WoundGrade = !top ? 'deep' : rank(top) === 3 ? 'amputation' : rank(top) === 2 ? 'fracture' : rank(top) === 0.5 ? 'light' : 'deep';
+  if ((grade === 'fracture' || grade === 'amputation') && !LIMB_PARTS.includes(part)) grade = 'deep';
   return { grade, part, septic: mine.some(w => !!w.festering), field: mine.map(({ person: _p, ...w }) => w) };
 }
 
@@ -476,8 +478,10 @@ function breakPrologueVow(g: Game, c: Comm, label: string): void {
   bump(g, 'trust', PROLOGUE.brokenTrust, 'promise');
   bumpRel(g, c, PROLOGUE.brokenRel, 'promise');
   g.stats.promisesBroken += 1;
+  g.comms[c].broken = (g.comms[c].broken ?? 0) + 1;
   if (g.dark) g.dark.broken[c] += 1;
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
+  noteBroken(g, c);
 }
 
 /** 상징물 쓰임 하나의 고를 수 있음과 까닭(결정 302·339: 선택지 밑에 사정과 나중에 돌아올 것 두 줄). */
