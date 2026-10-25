@@ -70,9 +70,9 @@ blender -b --factory-startup -P tools/blender/train_interior.py -- --repo .
 | bunk_upper | 7a04a761a93b57d8e256238624610933d53a712cfc45bdf1b284e5f320925902 |
 | book | 5a647f723fd20ad14e2c27461b7036078668a767702e8fd403a950e16ff7c3cf |
 | blanket | ffe9699d49611cba1bc0525e4e1e2175e15fecb2265674ffdd24f443a7d2fee0 |
-| sacks | 89c5d3c4b9764453f5b7b616bb9d84cda5684b2a67541a88c76693256aea759d |
+| sacks | 13a1a79e811221fc1e5c02923dc2b4c4203fc089cfd1a9460a6cd873f4cf7e42 |
 | workbench | 9a652e133df4b040b8661093798f248be146a38d01aab8df7fede33797223725 |
-| crates | 4350f4ae54085d94f1f13c4cac1f90da405b2b6f6e07cf9294ac10fa4ef9fc3d |
+| crates | b34746025f2ee3d168339f000071f959b7481b0d746ba1aafd270e8de3453c4b |
 | insulation_panel | 5f544851ae430c913f59050bf36c953f6cb2f13ec6e2a92e853256effd720668 |
 | side_table | 5d865cd53b3092c7276c6070c43261158a70bb28ff6915b8ed915a30fd60749a |
 | supplies | 968fc6193b3b862a9d3facae83a9be0859126dbcc5cc1843768a757a8ea84694 |
@@ -115,3 +115,14 @@ blender -b --factory-startup -P tools/blender/train_interior.py -- --repo .
 
 stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으로 교체되지 않는다.
 난로 기본 material 표기는 wood지만 금속 몸체이므로 iron/soot 계열을 썼다. 불 자리 모델은 만들지 않는다.
+
+## 공개 3D로 바꾼 것
+
+`tools/blender/train_interior_swap.py`가 위 표의 같은 경로를 덮어쓴다. 전체 삼각형: 5884.
+
+| 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
+|---|---|---|---:|---|---|
+| sacks | Poly Haven cement_bag (CC0) | 0.6×0.46×0.6 | 540 | cloth, cloth_faded | 13a1a79e811221fc1e5c02923dc2b4c4203fc089cfd1a9460a6cd873f4cf7e42 |
+| crates | Poly Haven wooden_crate_02 (CC0) | 1.4×0.7×0.7 | 540 | wood_dark, wood_worn | b34746025f2ee3d168339f000071f959b7481b0d746ba1aafd270e8de3453c4b |
+| cupboard | Poly Haven painted_wooden_shelves (CC0) | 0.52×1.12×0.38 | 524 | wood_dark | bba09d580fdb9a0b29ce47a08c63d0f889ce9183180b6ec4606ebb614af1d013 |
+| wood_chair | Poly Haven painted_wooden_chair_01 (CC0) | 0.44×0.96×0.54 | 532 | wood, wood_dark, wood_worn | 7adc491ae241dc704dba49531007df9e829d85294801782f4accbd2009d89161 |

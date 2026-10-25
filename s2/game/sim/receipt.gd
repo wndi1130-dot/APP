@@ -127,18 +127,25 @@ func add_wound(person_id: String, part: String, kind: String, festering: bool = 
 
 
 ## when_at: "D1 12:10" (field) or an integer segment (S1 chronicle style).
-func witness(who: String, what: String, where: String, when_at: Variant, why: String, witnesses: Array) -> bool:
+## template: an id the train reads the row by (e.g. "body_search", decision 423
+## card 12), "" for none; both optional keys of the schema's witnessed rows.
+func witness(who: String, what: String, where: String, when_at: Variant, why: String, witnesses: Array, template: String = "") -> bool:
 	var id_re := RegEx.create_from_string(ID_PATTERN)
 	var ok := _id_ok(who) and what != "" and where != "" and why != ""
 	for x: Variant in witnesses:
 		ok = ok and _witness_ok(x, id_re)
+	if template != "":
+		ok = ok and _id_ok(template)
 	if not ok:
 		push_warning("receipt: witness refused (%s)" % who)
 		return false
-	_witnessed.append({
+	var row := {
 		"who": who, "what": what, "where": where, "when": when_at, "why": why,
 		"witnesses": witnesses.duplicate(true),
-	})
+	}
+	if template != "":
+		row["template"] = template
+	_witnessed.append(row)
 	return true
 
 
@@ -219,7 +226,29 @@ func set_extras(symbol_count: int, fragments: Array, core_count: int) -> bool:
 	for fragment: Variant in fragments:
 		if not FRAGMENT_KINDS.has(fragment):
 			return false
-	_extras = {"documents": [], "symbolCount": symbol_count, "fragments": fragments.duplicate(), "coreCount": core_count}
+	_extras = {"documents": _extras["documents"], "symbolCount": symbol_count, "fragments": fragments.duplicate(), "coreCount": core_count}
+	_has_v3 = true
+	return true
+
+
+## A stop receipt (v3 or v4: it has its ids), the shape that carries documents.
+func is_stop_receipt() -> bool:
+	return _has_v3 or _has_v4
+
+
+## A document found in the field (S1 info_documents.ts, extras.documents of a
+## stop receipt): the note of a box hidden at the next stop (decision 423 card
+## 10). Refused (false) when it is not one the contract knows, or twice.
+func add_document(document: Dictionary) -> bool:
+	var out: Array[String] = []
+	_check_document(out, "document", document, RegEx.create_from_string(ID_PATTERN))
+	for d: Dictionary in _extras["documents"]:
+		if d.get("id") == document.get("id"):
+			out.append("document: 같은 문서가 두 번 있음")
+	if not out.is_empty():
+		push_warning("receipt: document refused (%s)" % ", ".join(out))
+		return false
+	(_extras["documents"] as Array).append(document.duplicate(true))
 	_has_v3 = true
 	return true
 

@@ -9,6 +9,7 @@ const EXPECTED := [
 	"class_slate", "ballot_box", "bell", "wrench", "memorial_board", "ladle",
 	"tools", "shelf", "captain_desk", "radio", "coal_pile", "food_crates",
 	"divider", "empty_platform", "storage_board", "boiler",
+	"cupboard", "wood_chair",
 ]
 var failures: Array[String] = []
 
@@ -115,7 +116,7 @@ func _run() -> void:
 			print("FAIL %s %s" % [id, stats])
 	if total_triangles > 8000 or total_triangles != int(parsed.get("total_triangles", -1)):
 		failures.append("total triangle budget")
-	print("TRAIN_INTERIOR_CHECK %d/33 %s triangles=%d/8000" % [passed, "PASS" if failures.is_empty() and passed == 33 else "FAIL", total_triangles])
+	print("TRAIN_INTERIOR_CHECK %d/%d %s triangles=%d/8000" % [passed, EXPECTED.size(), "PASS" if failures.is_empty() and passed == EXPECTED.size() else "FAIL", total_triangles])
 	for failure in failures:
 		print("FAILURE " + failure)
-	quit(0 if failures.is_empty() and passed == 33 else 1)
+	quit(0 if failures.is_empty() and passed == EXPECTED.size() else 1)

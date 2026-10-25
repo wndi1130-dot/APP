@@ -68,12 +68,40 @@ const JAM_ROWS: Array[float] = [0.0, 0.03, 0.10, 0.15]
 const MISFIRE_ROWS: Array[float] = [0.03, 0.06, 0.10]
 
 
+## What is grabbed when there is nothing better (decision 423, P23): found in a
+## kitchen or a washroom, or made from a plank, picked up into a free hand at
+## once. Weak and short-lived: "breaks" takes it out of the hand when it is
+## worn to nothing (a broken bottle after four blows, a stake after five).
+const IMPROVISED: Dictionary = {
+	"frying_pan": {
+		"name": "프라이팬", "kind": "melee", "hands": 1, "weight": 1.5, "sound": 0,
+		"reach": 1.0, "swing": 0.6, "windup": 0.18, "head_base": 0.24, "head_kill": 0.45, "knockdown": 0.45,
+		"blade": false, "fatigue": 0.007, "wear": 0.05, "pry": false, "feet_from": 0.1, "breaks": true,
+	},
+	"broken_bottle": {
+		"name": "깨진 병", "kind": "melee", "hands": 1, "weight": 0.5, "sound": 0,
+		"reach": 0.8, "swing": 0.4, "windup": 0.08, "head_base": 0.25, "head_kill": 0.6, "knockdown": 0.05,
+		"blade": true, "fatigue": 0.004, "wear": 0.25, "pry": false, "feet_from": 0.5, "breaks": true,
+	},
+	"wood_stake": {
+		"name": "나무 말뚝", "kind": "melee", "hands": 1, "weight": 1.0, "sound": 0,
+		"reach": 1.1, "swing": 0.5, "windup": 0.12, "head_base": 0.28, "head_kill": 0.7, "knockdown": 0.15,
+		"blade": true, "fatigue": 0.005, "wear": 0.2, "pry": false, "feet_from": 0.5, "breaks": true,
+	},
+}
+
+
 static func is_known(id: String) -> bool:
-	return DATA.has(id)
+	return DATA.has(id) or IMPROVISED.has(id)
 
 
 static func get_data(id: String) -> Dictionary:
-	return DATA.get(id, {})
+	return DATA.get(id, IMPROVISED.get(id, {}))
+
+
+## A weapon that goes to pieces when worn out (an improvised one).
+static func breaks(id: String) -> bool:
+	return bool(get_data(id).get("breaks", false))
 
 
 static func is_ranged(id: String) -> bool:

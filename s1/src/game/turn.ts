@@ -40,6 +40,7 @@ import { applyScoutGear, effThreat, scoutHaulNow, scoutNowText, scoutPlan, threa
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { voiceKept } from './promise_voice';
+import { rationCutFood } from './ration_cut';
 import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
@@ -174,7 +175,11 @@ export function foodCost(g: Game): number {
 
 function lawSum(g: Game, key: 'tensionAdd' | 'foodAdd' | 'coalAdd' | 'fearAdd'): number {
   let sum = 0;
-  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) sum += lawTechRes(g, law)[key] ?? 0;
+  for (const law of Object.keys(g.passed) as (keyof typeof LAWS)[]) {
+    const v = lawTechRes(g, law)[key] ?? 0;
+    // 비상식량감축법에서 꼬리칸을 빼면 덜 아낀다(ration_cut.ts)
+    sum += law === 'emergency_ration' && key === 'foodAdd' ? rationCutFood(g, v) : v;
+  }
   return sum;
 }
 function lawMult(g: Game, key: 'heatMult' | 'haulMult' | 'medMult' | 'deathMult'): number {

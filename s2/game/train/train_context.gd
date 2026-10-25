@@ -3,6 +3,7 @@ extends RefCounted
 
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Look = preload("res://game/train/train_look.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 
 static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
@@ -66,7 +67,7 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 		"emergency": int(train.get("decreeLeft", 0)) > 0 or laws.has("emergency_powers"),
 		"weather": String(rules.get("stop", {}).get("weather", "overcast")),
 		"seg": int(train.get("seg", 1)), "region": String(view.get("region", "region_01")),
-		"country": String(view.get("country", "country_a")), "season": String(view.get("season", "deep_winter")),
+		"country": String(view.get("country", "country_a")), "season": String(view.get("season", SeasonTable.season_of_seg(int(train.get("seg", 1))))),
 		"outside": view.get("outside", {}), "accident": bool(view.get("accident", false)),
 		# Crowding steps (train_look.gd crowd_level): more sacks, crates and bedding on the floor.
 		"crowd1": Look.crowd_level(float(sit[2])) >= 1, "crowd2": Look.crowd_level(float(sit[2])) >= 2,

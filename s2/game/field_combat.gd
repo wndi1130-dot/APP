@@ -832,6 +832,12 @@ func _wear(p, amount: float) -> void:
 		return
 	var h: Dictionary = p.hands[0]
 	h["condition"] = maxf(0.0, float(h["condition"]) - amount)
+	# An improvised one goes to pieces in the hand (decision 423, P23).
+	if h["condition"] <= 0.0 and W.breaks(String(h["id"])):
+		var gone: String = String(W.get_data(String(h["id"])).get("name", ""))
+		p.hands.remove_at(0)
+		p.set_weapon_slots(p.hands)
+		_toast(p, "%s이(가) 부서졌다." % gone)
 
 
 func _toast(p, text: String) -> void:

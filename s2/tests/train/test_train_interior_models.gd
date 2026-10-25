@@ -9,6 +9,8 @@ const EXPECTED := [
 	"class_slate", "ballot_box", "bell", "wrench", "memorial_board", "ladle",
 	"tools", "shelf", "captain_desk", "radio", "coal_pile", "food_crates",
 	"divider", "empty_platform", "storage_board", "boiler",
+	# 공개 3D(CC0)에서 가져와 더한 자리(tools/blender/train_interior_swap.py).
+	"cupboard", "wood_chair",
 ]
 
 
@@ -20,14 +22,14 @@ func _assets() -> Dictionary:
 	return assets if assets is Dictionary else {}
 
 
-func test_catalog_names_are_exactly_the_thirty_three_models() -> void:
+func test_catalog_names_are_exactly_the_listed_models() -> void:
 	var assets := _assets()
 	assert_false(assets.is_empty(), "빈 장부는 통과하지 않음")
 	var listed: Array = assets.keys()
 	listed.sort()
 	var expected: Array = EXPECTED.duplicate()
 	expected.sort()
-	assert_eq(listed, expected, "33종 이름 집합")
+	assert_eq(listed, expected, "이름 집합")
 	var on_disk: Array = []
 	for file: String in DirAccess.get_files_at(KIT_DIR):
 		if file.get_extension() == "glb":
@@ -38,7 +40,7 @@ func test_catalog_names_are_exactly_the_thirty_three_models() -> void:
 
 func test_each_catalog_entry_has_a_matching_glb() -> void:
 	var assets := _assets()
-	assert_eq(assets.size(), 33, "모든 모델 검사")
+	assert_eq(assets.size(), EXPECTED.size(), "모든 모델 검사")
 	for id: String in assets:
 		var asset: Dictionary = assets[id]
 		var path := "%s/%s.glb" % [KIT_DIR, id]
@@ -56,7 +58,7 @@ func test_each_catalog_entry_has_a_matching_glb() -> void:
 
 func test_individual_and_total_triangle_budgets() -> void:
 	var assets := _assets()
-	assert_eq(assets.size(), 33, "33종 모두 예산 검사")
+	assert_eq(assets.size(), EXPECTED.size(), "모두 예산 검사")
 	var total := 0
 	for id: String in assets:
 		var asset: Dictionary = assets[id]
@@ -65,4 +67,4 @@ func test_individual_and_total_triangle_budgets() -> void:
 		assert_lte(triangles, 600, "%s 개별 상한" % id)
 		assert_eq(int(asset.get("triangle_limit", -1)), 600, "%s 예산" % id)
 		total += triangles
-	assert_lte(total, 8000, "33종 합계 상한")
+	assert_lte(total, 8000, "합계 상한")

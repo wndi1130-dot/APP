@@ -533,6 +533,29 @@ func test_the_first_set_of_decision_422_is_in_the_living_own() -> void:
 	assert_true(low[0].is_finite(), "a frame and share on top read back")
 
 
+# Decision 422, second set: carrying each kind of weapon keeps the legs of the
+# plain walk and run (the same ground a round, so the move pace picks them with
+# no slide), and the three guards and the weak-hand hold stay on the spot.
+func test_the_second_set_of_decision_422_is_in_the_living_own() -> void:
+	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
+	var clips: Array = baked["clips"]
+	var round_of := func(name: String) -> float:
+		var n := PersonVisual.clip_named(clips, name, -1)
+		assert_gt(n, -1, name)
+		if n < 0:
+			return -1.0
+		assert_true(bool(clips[n]["loop"]), name + " loops")
+		return float(clips[n]["round"])
+	var walk: float = round_of.call("p_walk")
+	var run: float = round_of.call("p_run")
+	for name in ["p_walk_long", "p_walk_axe", "p_walk_pistol"]:
+		assert_almost_eq(round_of.call(name), walk, walk * 0.05, name + " covers what the walk does")
+	for name in ["p_run_long", "p_run_pistol"]:
+		assert_almost_eq(round_of.call(name), run, run * 0.05, name + " covers what the run does")
+	for name in ["p_ready_one", "p_ready_two", "p_ready_stab", "p_hold_weak"]:
+		assert_eq(round_of.call(name), 0.0, name + " stays on the spot")
+
+
 func test_the_putting_on_motions_and_the_garments_over_the_living_own() -> void:
 	var baked := BodyBake.load_baked(PersonVisual.OWN_FOLDER)
 	var clips: Array = baked["clips"]

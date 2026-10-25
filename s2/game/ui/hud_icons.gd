@@ -7,7 +7,8 @@ extends RefCounted
 ## shape (".f") with lines cut back in the colour of what it sits on (".c",
 ## 1.25px). Kept as text and drawn at the size asked for, so there is no import
 ## step and the phone shows what the tests see. No cross, crescent, star,
-## banner, lock or bag among them (med is a bottle and a bandage roll, aim has
+## banner, lock or luggage among them (the pack is a rucksack worn on the back,
+## not a case or a bundle set down; med is a bottle and a bandage roll, aim has
 ## its ticks on one axis only, inv is a grid, fetch a box with no handle).
 ## Every line is drawn at LINE of the width asked for (user 2026-10-18: the
 ## lines were too heavy next to Frostpunk's), so the mockup's widths stay at
@@ -72,6 +73,9 @@ const PATHS: Dictionary = {
 	"clock": '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>',
 	"run": '<circle class="f" cx="15.6" cy="4.4" r="2.5"/><path d="M13.6 8.2L10.6 13.8M13.3 9.2l3.3 2.2 2.6-1M13.3 9.2l-3.6.6-2 2.4M10.6 13.8l3.8 2.6-1.2 4.8M10.6 13.8l-2.2 4-3.8.8"/>',
 	"crouch": '<circle class="f" cx="18" cy="5.6" r="2.5"/><path d="M15.6 7.6C12.8 7.8 9.8 11.6 10.3 15.2L11.4 19.8 4.4 20.1l1.5-1.1M10.3 15.2L17 13.8l-.4 6h2.6M14.1 9l-1.1 3.6 4.1-.5"/>',
+	# The load one carries (the field's bag key, user 2026-10-25: the grid did not read on the
+	# phone): a rucksack, its top loop, the flap's edge and one front pocket.
+	"pack": '<path class="t" d="M7 9.500a3.500 3.500 0 0 1 3.500-3.500h3a3.500 3.500 0 0 1 3.500 3.500v10a1.500 1.500 0 0 1-1.500 1.500h-7A1.500 1.500 0 0 1 7 19.500z"/><path d="M7 9.500a3.500 3.500 0 0 1 3.500-3.500h3a3.500 3.500 0 0 1 3.500 3.500v10a1.500 1.500 0 0 1-1.500 1.500h-7A1.500 1.500 0 0 1 7 19.500z"/><path d="M10 6V4.500a2 2 0 0 1 4 0V6M7 12c2.700 1.300 7.300 1.300 10 0M9.500 15.500h5V19h-5z"/>',
 	"inv": '<path class="t" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
 	"bandage": '<path class="t" d="M4 9l11-5 5 11-11 5z"/><path d="M4 9l11-5 5 11-11 5z"/><path d="M9 7l5 11"/>',
 	"aim": '<circle cx="12" cy="12" r="8"/><circle class="f" cx="12" cy="12" r="1.600"/><path d="M12 2v4M12 18v4"/>',
@@ -131,6 +135,13 @@ const PATHS: Dictionary = {
 	"it_violin": '<path class="t" d="M12 8.500C10 8.500 8.300 9.700 8.300 11.600 8.300 13.200 9.900 14 9.900 15.200 9.900 16.200 6.200 16.800 6.200 19.300 6.200 21.200 8.600 22.200 12 22.200 15.400 22.200 17.800 21.200 17.800 19.300 17.800 16.800 14.100 16.200 14.100 15.200 14.100 14 15.700 13.200 15.700 11.600 15.700 9.700 14 8.500 12 8.500z"/><path d="M12 8.500C10 8.500 8.300 9.700 8.300 11.600 8.300 13.200 9.900 14 9.900 15.200 9.900 16.200 6.200 16.800 6.200 19.300 6.200 21.200 8.600 22.200 12 22.200 15.400 22.200 17.800 21.200 17.800 19.300 17.800 16.800 14.100 16.200 14.100 15.200 14.100 14 15.700 13.200 15.700 11.600 15.700 9.700 14 8.500 12 8.500zM12 8.500V4.300M10.500 4.300V3c0-.9.700-1.400 1.500-1.400s1.500.5 1.500 1.400v1.300zM10 16.300c-.5 1-.5 2.200 0 3.200M14 16.300c.5 1 .5 2.200 0 3.200M10.800 18.200h2.400"/>',
 	"it_doctor_box": '<path class="t" d="M2.500 5.500h19v5h-19z"/><path d="M2.500 5.500h19v5h-19z"/><path class="t" d="M3.500 10.500h17v9h-17z"/><path d="M3.500 10.500h17v9h-17zM6 9h2.500v3.500H6zM15.500 9H18v3.500h-2.500zM6 16c2-.7 3.500.7 5.500 0M13.500 17c1.800-.7 3 .6 4.500 0"/>',
 	"it_crate": '<path class="t" d="M3 4.500h18v15H3z"/><path d="M3 4.500h18v15H3zM3 9.500h18M3 14.500h18M4.500 18.500 19.500 5.500"/>',
+	# 나단계 (decision 423): a key, a frozen hare, and what is grabbed to hit with.
+	"it_key": '<circle class="t" cx="7" cy="12" r="3.500"/><circle cx="7" cy="12" r="3.500"/><circle class="f" cx="7" cy="12" r="1.100"/><path d="M10.500 12h10M17 12v3M19.500 12v2.500"/>',
+	"it_hare": '<ellipse class="t" cx="10" cy="16" rx="6" ry="3.500"/><ellipse cx="10" cy="16" rx="6" ry="3.500"/><circle class="t" cx="17.500" cy="13.500" r="2.500"/><circle cx="17.500" cy="13.500" r="2.500"/><path d="M16.800 11.200 15.500 5.500M18.600 11.300l.8-5.800M3.500 9.500l2 1M6 6.500l1 1.800M9 5.500v2"/>',
+	"it_pan": '<circle class="t" cx="9" cy="12" r="6"/><circle cx="9" cy="12" r="6"/><circle cx="9" cy="12" r="3.800"/><path d="M15 12h6.500"/>',
+	"it_bottle_broken": '<path class="t" d="M10.500 3h3v4.500l2.500 3V15l-1.200 1.800 1 2.200-2 .8-1.200-1.600-1.600 1.600-1.400-1.200-1.300 1.300L7.500 18.500l1-2-1-1.500v-4.500l3-3z"/><path d="M10.500 3h3v4.500l2.500 3V15l-1.200 1.800 1 2.200-2 .8-1.200-1.600-1.600 1.600-1.400-1.200-1.300 1.300L7.500 18.500l1-2-1-1.500v-4.500l3-3z"/><path d="M10.500 4.800h3"/>',
+	"it_stake": '<path class="t" d="M3.500 20.500 6 14.500l9.500-9.500 3.500 3.500L9.500 18z"/><path d="M3.500 20.500 6 14.500l9.500-9.500 3.500 3.500L9.500 18zM6 14.500l3.500 3.500M9 12.500l5-5"/>',
+	"it_knife": '<path class="t" d="M4 20l9-9 2 2c-3 4-7 6-11 7z"/><path d="M4 20l9-9 2 2c-3 4-7 6-11 7z"/><path class="t" d="M14 10l5-5 1.500 1.500-5 5z"/><path d="M14 10l5-5 1.500 1.500-5 5z"/>',
 }
 
 

@@ -218,6 +218,10 @@ func _roll_loot(z: Dictionary) -> void:
 		loot.append(LootRules.to_pocket(entry))
 	if z.has("embedded"):
 		loot.append(LootRules.to_pocket({"tool": z["embedded"]}))
+	# What this one was given to carry when the stop was made (a building's key,
+	# a note; decision 423 P12 and card 10): always there, drawing no dice.
+	for id in z.get("carry", []):
+		loot.append({"id": String(id), "n": 1})
 	z["loot"] = loot
 
 

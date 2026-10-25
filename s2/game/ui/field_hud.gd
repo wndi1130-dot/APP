@@ -139,6 +139,8 @@ const LOOT_LIST_MAX: float = 194.0
 const DROP_W: float = 84.0
 ## A thing's picture in the loot and bag rows (decision 417: a picture and a short name).
 const ITEM_ICON_PX: int = 18
+## How fast a thing come up out of the snow glimmers (radians a second).
+const GLINT_PULSE: float = 4.0
 const BAG_LIST_W: float = 300.0
 ## The journal's note in the bag (시안 .pnote: 240 wide, leaning 1.1°).
 const JOURNAL_W: float = 240.0
@@ -1272,7 +1274,10 @@ func _build_thumbs() -> void:
 	# 시안 .finv: the mark 15, the weight in Barlow 14.
 	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), UiFonts.size(14))
 	bag_button.tooltip_text = "인벤토리"
-	_dress(bag_button, "inv", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 26)
+	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	# Plain glass like the orders and 모두 열차로: a key that is not lit wears no
+	# brass sweep (user 2026-10-25 on the phone: 「배낭 버튼 유광」).
+	_matte(bag_button)
 	bag_button.add_theme_font_override("font", UiFonts.face(UiFonts.NUMBER, 500))
 	bag_box.add_child(bag_button)
 	# A watch picked up still set: its mark lights beside the bag until pressed.
@@ -2861,6 +2866,11 @@ func _bag_row(id: String, n: int) -> Control:
 		eat.size_flags_horizontal = Control.SIZE_SHRINK_END
 		eat.custom_minimum_size.x = UiFonts.px(DROP_W)
 		h.add_child(eat)
+	elif Carry.FieldItems.throwable(id):
+		var toss := GlassPane.key("던지기", _throw.bind(id))
+		toss.size_flags_horizontal = Control.SIZE_SHRINK_END
+		toss.custom_minimum_size.x = UiFonts.px(DROP_W)
+		h.add_child(toss)
 	var drop := GlassPane.key("내려놓기", _drop.bind(id))
 	drop.size_flags_horizontal = Control.SIZE_SHRINK_END
 	drop.custom_minimum_size.x = UiFonts.px(DROP_W)
@@ -2935,6 +2945,12 @@ func _drop(id: String) -> void:
 func _eat(id: String) -> void:
 	_close_modal()
 	game.eat(game.player, id)
+
+
+## Throw an empty tin where the chief faces (a lure): the bag closes.
+func _throw(id: String) -> void:
+	_close_modal()
+	game.throw_lure(game.player, id)
 
 
 ## The watch row's key: every set watch is switched off, the bag shown again.
@@ -4254,6 +4270,18 @@ func _draw_overlay() -> void:
 	# Walk target.
 	if p.moving and not p.path.is_empty() and dest_marker != Vector3.INF:
 		overlay.draw_arc(_project(dest_marker), 10.0, 0, TAU, 20, Color(1, 1, 1, 0.5), 2.0)
+	# Something come up out of the snow (decision 423 card 11): a small light
+	# that comes and goes on it, no word and no key.
+	var glow: float = 0.45 + 0.4 * sin(now * GLINT_PULSE)
+	for g: Dictionary in game.ground_items:
+		if bool(g.get("glint", false)) and game.level_shown(game.level_of(g["pos"])):
+			var at := _project(g["pos"])
+			overlay.draw_circle(at, 3.0, Color(1, 1, 1, glow))
+			overlay.draw_arc(at, 7.0 + 2.0 * glow, 0, TAU, 18, Color(1, 1, 1, glow * 0.6), 1.5)
+	# Where a thrown tin came down, a moment (P22).
+	for m: Dictionary in game.lure_marks:
+		var fade: float = 1.0 - (now - float(m["t"])) / game.LURE_MARK_S
+		overlay.draw_arc(_project(m["pos"]), 12.0, 0, TAU, 24, Color(1, 0.85, 0.6, 0.8 * fade), 2.0)
 	# The stick under the left thumb (시안 .fstick): its ring and the knob in it,
 	# which follows the thumb (the rim = run). The fixed one stays where it is,
 	# the knob resting in its middle; the floating one is there only while held.

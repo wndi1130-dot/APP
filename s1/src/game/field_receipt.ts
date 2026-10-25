@@ -318,6 +318,7 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
     }
   }
 
+  bodySearches(g, departure, r);
   if (r.symbol) {
     lines.push({ k: 'symbol', comm: r.symbol.groupId, text: `${COMM_NAME[r.symbol.groupId]}의 상징물을 가져왔다. 쓰임을 고른다.` });
   }
@@ -330,6 +331,27 @@ export function applyFieldReturn(g: Game, departure: FieldDeparture, input: unkn
   Object.defineProperty(g.fieldReturns.applied, r.receiptId, { value: fingerprint, enumerable: true, configurable: true, writable: true });
   g.fieldReturns.records.push(record);
   return { status: 'applied', record };
+}
+
+/**
+ * 필드에서 시체를 뒤진 것을 본 사람이 돌아오면 그 칸이 그 일을 어떻게 여기나(결정 423 카드 12, 새 값).
+ * 영수증 witnessed의 template 'body_search' 줄만 읽고, 한 귀환에 칸마다 한 번이다. S2 field_return.gd와 같은 값.
+ */
+export const BODY_SEARCH_REL: Readonly<Record<Comm, number>> = Object.freeze({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
+
+function bodySearches(g: Game, departure: FieldDeparture, r: FieldReceipt): void {
+  const minded = new Set<Comm>();
+  for (const row of r.witnessed) {
+    if (row.template !== 'body_search' || !Array.isArray(row.witnesses)) continue;
+    for (const w of row.witnesses as unknown[]) {
+      const pid = typeof w === 'string' ? w : (w as { person?: unknown } | null)?.person;
+      if (typeof pid !== 'string') continue;
+      const c = departure.roster.find(x => x.id === pid)?.comm;
+      if (!c || minded.has(c)) continue;
+      minded.add(c);
+      if (BODY_SEARCH_REL[c]) bumpRel(g, c, BODY_SEARCH_REL[c], 'field.body');
+    }
+  }
 }
 
 /** 서막 약속 어김(prologue.ts의 breakPrologue와 같은 값·같은 기록). 「열기·긴장·적의」는 걸지 않는다(저장소 119). */

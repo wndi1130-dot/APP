@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   advance, CL, CLIMATE_LINES, climateDepart, climateSettle, COMMS, createGame, disasterSettle, DZ, enableClimate, enableDisasters,
-  foodCost, forecast, resolveStop, freezeDepart, freezeTrackBoost, heatCost, outsideView, PLACES, predictStall, stageAt, tempMult,
+  foodCost, forecast, resolveStop, freezeDepart, freezeTrackBoost, heatCost, outsideView, PLACES, predictStall, segTemp, stageAt, tempMult,
 } from '../../src/game';
 import type { Game, Weather } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
 
 // 바깥 기온과 결빙(coord fun/구현명세_바깥기온_결빙_v1 5장 1~12, 결정 351·357·370). 값은 가안이라 CL을 바꾼 시험은 끝날 때 되돌린다.
+// 계절표는 season_table.json 한 벌(서막 (나)): 1~2구간 이른 한파(첫 추위), 3구간부터 늦가을, 17구간부터 다시 첫 추위.
 
 const CL0 = structuredClone(CL);
 const DZ0 = { ...DZ };
@@ -52,11 +53,16 @@ describe('climate', () => {
     expect(texts(w).some(t => CLIMATE_LINES.includes(t))).toBe(false);
   });
 
-  it('2 stageAt은 계절표대로 5·9·11·15·18·22구간에서만 바뀌고 씨앗과 무관하다', () => {
+  it('2 stageAt은 계절표대로 3·17구간에서만 바뀌고 씨앗과 무관하다', () => {
     const seq = Array.from({ length: 24 }, (_, i) => stageAt(i + 1));
-    expect(seq).toEqual([1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 3, 3, 3, 3, 2, 2, 2, 4, 4, 4, 4, 3, 3, 3]);
+    expect(seq).toEqual([1, 1, ...Array(14).fill(0), ...Array(8).fill(1)]);
     const changes = seq.map((s, i) => (i > 0 && s !== seq[i - 1] ? i + 1 : 0)).filter(Boolean);
-    expect(changes).toEqual([5, 9, 11, 15, 18, 22]);
+    expect(changes).toEqual([3, 17]);
+    // 서막의 표시 기온: 이른 한파는 영하, 늦가을 낮은 영상, 첫 구간 끝은 다시 영하
+    expect(segTemp(1)).toBeLessThan(0);
+    for (let seg = 3; seg <= 16; seg += 1) expect(segTemp(seg), `seg ${seg}`).toBeGreaterThan(0);
+    expect(segTemp(24)).toBeLessThan(0);
+    expect(segTemp(99)).toBe(segTemp(24));
     for (const seed of ['cl-s1', 'cl-s2']) {
       const g = createGame(seed);
       enableClimate(g);
@@ -64,37 +70,38 @@ describe('climate', () => {
     }
   });
 
-  it('3 tempMult는 단계 0~4에서 약안 곱이고, heatCost에 한 번만 들어 forecast·predictStall이 그대로 따른다', () => {
-    expect(CL.mult).toEqual([0.9, 1, 1.1, 1.25, 1.4]);
+  it('3 tempMult는 단계마다 약안 곱이고, heatCost에 한 번만 들어 forecast·predictStall이 그대로 따른다', () => {
+    expect(CL.mult).toEqual([0.8, 0.9, 1, 1.1, 1.25, 1.4]);
     const g = createGame('cl-mult');
     enableClimate(g);
+    g.outside = 2;
     const base = heatCost(g);
     const f1 = forecast(g).coal;
-    for (let st = 0; st <= 4; st += 1) {
+    for (let st = 0; st < CL.mult.length; st += 1) {
       g.outside = st;
       expect(tempMult(g)).toBe(CL.mult[st]);
       expect(heatCost(g)).toBeCloseTo(base * CL.mult[st], 9);
       expect(forecast(g).coal - f1).toBeCloseTo(base * (CL.mult[st] - 1), 9);
     }
     // 석탄이 모자라면 predictStall이 같은 forecast로 판단한다(곱을 두 번 넣지 않는다)
-    g.outside = 1;
+    g.outside = 2;
     const need1 = forecast(g).coal;
-    g.outside = 4;
+    g.outside = 5;
     g.coal = (need1 + forecast(g).coal) / 2;
     expect(predictStall(g)).not.toBeNull();
-    g.outside = 1;
+    g.outside = 2;
     expect(predictStall(g)).toBeNull();
   });
 
   it('4 하강 전 정차까지 다음 하강이 새지 않는다(예고 없음)', () => {
-    const g = at('cl-quiet', 5);
+    const g = at('cl-quiet', 17);
     const fBefore = forecast(g).coal;
-    // 5구간 출발 직전: 적용 단계는 아직 1, 석탄 예고도 1단계 값
-    expect(g.outside).toBe(1);
-    expect(tempMult(g)).toBe(1);
+    // 17구간 출발 직전: 적용 단계는 아직 늦가을(0), 석탄 예고도 늦가을 값
+    expect(g.outside).toBe(0);
+    expect(tempMult(g)).toBe(0.8);
     const v = outsideView(g)!;
     expect(Object.keys(v).sort()).toEqual(['delta', 'freezing', 'name', 'stage', 'temp']);
-    expect(v).toMatchObject({ stage: 1, name: '추위', delta: null, freezing: false });
+    expect(v).toMatchObject({ stage: 0, name: '늦가을', delta: null, freezing: false });
     // 기온 켠 판을 한 판 돌려도 일지에 앞날 낱말이나 다음 단계 이름이 미리 나오지 않는다
     const { g: p } = playGame('cl-quiet-play', { s1c: false, policy: 'caretaker', dom: 'idle', climate: true });
     const cl = p.journal.filter(j => CLIMATE_LINES.includes(j.text) || j.text.startsWith('바깥 '));
@@ -103,7 +110,7 @@ describe('climate', () => {
   });
 
   it('5 하강 출발은 모든 칸 온기를 단계 차×5만큼 옮기고, 기온 켠 판에는 정기 한파 줄이 없다', () => {
-    for (const [seg, diff] of [[5, 1], [9, -2], [11, 3], [15, -1], [18, 2], [22, -1]] as const) {
+    for (const [seg, diff] of [[3, -1], [17, 1]] as const) {
       const g = at(`cl-warm-${seg}`, seg);
       const before = warmth(g);
       go(g);
@@ -122,17 +129,17 @@ describe('climate', () => {
     const n0 = same.journal.length;
     go(same);
     expect(same.journal.slice(n0).some(j => CLIMATE_LINES.includes(j.text) || j.text.startsWith('바깥 '))).toBe(false);
-    const g = at('cl-lines-5', 5);
+    const g = at('cl-lines-17', 17);
     const n = g.journal.length;
     go(g);
     const fresh = g.journal.slice(n);
     const i = fresh.findIndex(j => CLIMATE_LINES.includes(j.text));
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(fresh[i + 1].text).toBe('바깥 −24°. 모든 칸 온기 −5, 난방 석탄 ×1.1.');
+    expect(fresh[i + 1].text).toBe('바깥 0°. 모든 칸 온기 −5, 난방 석탄 ×0.9.');
     expect(fresh[i].tone).toBe('bad');
-    const up = at('cl-lines-9', 9);
+    const up = at('cl-lines-3', 3);
     go(up);
-    expect(texts(up)).toContain('바깥 −6°. 모든 칸 온기 +10, 난방 석탄 ×0.9.');
+    expect(texts(up)).toContain('바깥 5°. 모든 칸 온기 +5, 난방 석탄 ×0.8.');
     // 한 판 안에서 날씨 글의 인칭이 번갈아 든다(CLIMATE_LINES는 [1인칭, 3인칭] 쌍을 이어 붙인 것)
     const { g: p } = playGame('cl-voice', { s1c: false, policy: 'caretaker', dom: 'idle', climate: true });
     const voices = p.journal.filter(j => CLIMATE_LINES.includes(j.text)).map(j => CLIMATE_LINES.indexOf(j.text) % 2);
@@ -140,12 +147,14 @@ describe('climate', () => {
     for (let k = 1; k < voices.length; k += 1) expect(voices[k]).not.toBe(voices[k - 1]);
   });
 
-  it('7 결빙 참: 진눈깨비 정차에서 하강, 풀림 단계에서 하강, 진눈깨비 정차에서 한파가 닥침', () => {
+  it('7 결빙 참: 진눈깨비 정차에서 하강, 젖은 단계(늦가을)에서 하강, 진눈깨비 정차에서 한파가 닥침', () => {
+    CL.table = [[1, 1], [5, 2]]; // 젖지 않은 단계끼리의 하강을 만든다(진눈깨비 정차라서 언다)
     const a = at('cl-fz-a', 5, 'sleet');
     go(a);
     expect(a.freeze).toBe(1);
     expect(texts(a)).toContain('선로 결빙: 석탄 +1, 식량 +반나절.');
-    const b = at('cl-fz-b', 11, 'snow'); // 풀림(0)에서 떠나 된추위(3)로: 늘 언다
+    CL.table = structuredClone(CL0.table);
+    const b = at('cl-fz-b', 17, 'snow'); // 늦가을(0, 젖음)에서 떠나 첫 추위(1)로: 늘 언다
     go(b);
     expect(b.freeze).toBe(1);
     // 진눈깨비 정차, 단계는 그대로인데 재난 한파가 이번 출발에 닥친다
@@ -164,20 +173,22 @@ describe('climate', () => {
   });
 
   it('8 결빙 거짓: 젖지 않은 정차에서 하강, 진눈깨비인데 하강·한파 없음, 오르는 출발', () => {
+    CL.table = [[1, 1], [5, 2]]; // 젖지 않은 단계(첫 추위)에서 추위로
     for (const w of ['snow', 'fog', 'overcast', 'clear'] as Weather[]) {
       const g = at(`cl-nofz-${w}`, 5, w);
       go(g);
       expect(g.freeze, w).toBe(0);
     }
+    CL.table = structuredClone(CL0.table);
     const flat = at('cl-nofz-flat', 7, 'sleet');
     go(flat);
     expect(flat.freeze).toBe(0);
-    const up = at('cl-nofz-up', 9, 'sleet');
+    const up = at('cl-nofz-up', 3, 'sleet');
     go(up);
     expect(up.freeze).toBe(0);
     // 결빙만 끄는 스위치(500판 D줄)
     CL.freezeOn = 0;
-    const off = at('cl-nofz-off', 5, 'sleet');
+    const off = at('cl-nofz-off', 17, 'sleet');
     go(off);
     expect(off.freeze).toBe(0);
     // freezeDepart는 바뀜 정보가 없으면(꺼진 판) 아무것도 안 한다
@@ -198,7 +209,7 @@ describe('climate', () => {
     g.disaster = { kind: 'cold', stage: 'active', left: 2 };
     expect(forecast(g).coal - f0.coal).toBeCloseTo(2, 9);
     // 정산이 결빙 몫을 장부에 '결빙' 까닭으로 적는다
-    const s = at('cl-ledger', 5, 'sleet');
+    const s = at('cl-ledger', 17, 'sleet');
     go(s);
     expect(s.freeze).toBe(1);
     for (let guard = 0; guard < 50 && s.phase !== 'settle'; guard += 1) {
@@ -247,7 +258,7 @@ describe('climate', () => {
   });
 
   it('12 저장 뒤 불러와도 기온 칸이 같고, 날씨 글에 장소 이름이 없다', () => {
-    const g = at('cl-save', 11, 'sleet');
+    const g = at('cl-save', 17, 'sleet');
     go(g);
     const back = JSON.parse(JSON.stringify(g)) as Game;
     expect([back.climate, back.outside, back.freeze, back.climateChange, back.climateVoice, back.climateStats])
