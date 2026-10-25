@@ -4,26 +4,13 @@ extends RefCounted
 const FieldReturn = preload("res://game/politics/field_return.gd")
 
 
+## A ledger amount as the sheet writes it: to one decimal (field_arrival.ts num, Math.round
+## half up), whole numbers without a point.
 static func _number(value: Variant) -> String:
-	var n := float(value)
-	if n == 0.0:
-		return "0"
+	var n := floorf(float(value) * 10.0 + 0.5) / 10.0
 	if n == floorf(n):
 		return str(int(n))
-	# JS Number.toString chooses the shortest decimal that round-trips to the same double. Godot's
-	# str() is display-rounded, so search increasing significant precision over this UI's fixed range.
-	var magnitude := int(floor(log(absf(n)) / log(10.0)))
-	for significant: int in range(1, 18):
-		var decimals := maxi(0, significant - 1 - magnitude)
-		var candidate: String = ("%." + str(decimals) + "f") % n
-		if candidate.contains("."):
-			while candidate.ends_with("0"):
-				candidate = candidate.left(-1)
-			if candidate.ends_with("."):
-				candidate = candidate.left(-1)
-		if float(candidate) == n:
-			return candidate
-	return "%.17g" % n
+	return "%.1f" % n
 
 
 static func _diff(before: Variant, after: Variant) -> String:
