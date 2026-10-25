@@ -10,6 +10,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 const SenseRules = preload("res://game/sim/sense_rules.gd")
+const SmellRules = preload("res://game/sim/smell_rules.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const Motion = preload("res://game/sim/motion.gd")
@@ -363,9 +364,10 @@ func smell(at: Vector3, radius: float) -> int:
 		if state == "wander" or state == "search":
 			z["turn_t"] = game.rng.randf_range(0.4, 0.9)
 		z["clue"] = SimNoise.Level.NORMAL
+		z["clue_kind"] = "scent"
 		z["state"] = "investigate"
 		z["target"] = at
-		z["linger"] = 8.0
+		z["linger"] = SmellRules.LINGER
 		z["speed"] = SPEED_SHAMBLE
 		z["path_t"] = 0.0
 		reacted += 1
@@ -546,11 +548,13 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		if game.level_of(p.position) != zl:
 			continue
 		var d: float = z["pos"].distance_to(p.position)
-		var reach: float = sight * float(p.smell_mult()) * float(game.weather.downwind(p.position, z["pos"]) if p.smell > 0 else 1.0)
+		# The body's smell stretches the end of sight and the feel alike, one step more downwind (8.1).
+		var body_scent: float = SmellRules.body_mult(int(p.smell), SmellRules.downwind(game.weather.wind, game.weather.wind_dir, p.position, z["pos"]))
+		var reach: float = sight * body_scent
 		reach *= SenseRules.posture_mult(p.crouched, p.moving, p.is_running_now())
 		var to_p: Vector3 = (p.position - z["pos"])
 		to_p.y = 0
-		var close_sense: bool = d < FEEL and lg.body_line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position))
+		var close_sense: bool = d < FEEL * body_scent and lg.body_line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position))
 		var in_cone := close_sense or (to_p.length() > 0.01 and forward.dot(to_p.normalized()) >= CONE_COS)
 		# Already chasing: keeps tracking a moving target a bit outside the cone.
 		if z["state"] == "chase" and z["victim"] == p and d < reach:
@@ -606,11 +610,11 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 			z["state"] = "investigate"
 			z["clue_kind"] = "scent"
 			z["target"] = scent["pos"]
-			z["linger"] = 8.0
+			z["linger"] = SmellRules.LINGER
 			z["speed"] = SPEED_SHAMBLE
 			z["path_t"] = 0.0
-			z["smell_lock"] = 3.0
-	z["smell_lock"] = maxf(0.0, float(z.get("smell_lock", 0.0)) - 0.17)
+			z["smell_lock"] = SmellRules.TRAIL_LOCK
+	z["smell_lock"] = maxf(0.0, float(z.get("smell_lock", 0.0)) - SmellRules.TRAIL_LOCK_TICK)
 
 
 ## The bodies of the living lying there that can be eaten (EatRules.edible).
