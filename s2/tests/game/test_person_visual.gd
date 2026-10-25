@@ -360,7 +360,7 @@ func test_a_gun_is_aimed_in_the_living_own() -> void:
 		assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), want[1], want[0])
 		assert_true(PersonVisual.aiming(note, own), want[0])
 	p.position += Vector3(0.3, 0, 0)
-	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), "p_walk", "on the move")
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), "p_walk_long", "on the move: the long gun's own walk (gait.gd)")
 	assert_false(PersonVisual.aiming(note, own))
 	p.hands = [{"id": "bow", "quality": "factory", "condition": 1.0, "loaded": 1}]
 	assert_eq(PersonVisual.aim_of(p, own), -1, "no aim of its own with a bow")
