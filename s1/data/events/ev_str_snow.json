@@ -8,6 +8,10 @@
       "type": "flag",
       "id": "stranded",
       "value": true
+    },
+    {
+      "type": "season",
+      "needs": "snow"
     }
   ],
   "speaker": "engine",

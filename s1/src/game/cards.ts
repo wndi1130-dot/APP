@@ -1,6 +1,6 @@
 import { riotEnd, riotFell } from './riot';
 import { bump, bumpRel, put } from './ledger';
-import { freezeTrackBoost } from './climate';
+import { freezeTrackBoost, seasonHolds } from './climate';
 import { noteInjury, noteRelief } from './wounds';
 import type { WoundFrom } from './wounds';
 import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
@@ -252,7 +252,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
-    id: 'water_tower', when: g => g.seg >= 2,
+    // 급수탑은 얼음이 서는 구간(계절표 밤 결빙·한파·선로 결빙)에만 언다. 기온 꺼진 판은 그대로(climate.ts seasonHolds).
+    id: 'water_tower', when: g => g.seg >= 2 && seasonHolds(g, 'frost'),
     // 눈을 녹일 칸은 꼬리칸 고정이 아니라 마지막 작업조를 낸 칸이다(first_leg_story 6.4: 노출 +10, 의무진·앞칸은 궂은일 반감 −3).
     view: (g, past) => {
       const sc = g.lastCrew ?? 'tail';
@@ -274,7 +275,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     },
   },
   {
-    id: 'snow_drift', when: g => g.seg >= 3,
+    // 눈더미는 눈이 쌓인 구간(계절표 snow, 서막은 첫눈 뒤)에만. 기온 꺼진 판은 그대로.
+    id: 'snow_drift', when: g => g.seg >= 3 && seasonHolds(g, 'snow'),
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
