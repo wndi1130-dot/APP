@@ -112,6 +112,11 @@ const WATCH_SET_SHARE: float = 0.5      # how many of the watches are still set 
 const OPENER_CHANCE: float = 0.60       # one can opener in a kitchen or larder
 const NAILS_CHANCE: float = 0.08        # each toolbox: a handful of nails
 const NAILS_MOST: int = 4
+## Parts stuff (decision 426 D2): each toolbox, or any box in a garage or a
+## workshop, may hold one; so many a stop at most; which one by weight.
+const PARTS_CHANCE: float = 0.12
+const PARTS_MOST: int = 5
+const PARTS_KINDS: Array = [["gears", 2], ["springs", 2], ["wire_coil", 1]]
 const FUEL_CHANCE: float = 0.30         # one fuel can in a garage
 const RARE_CHANCE: float = 0.25         # one named find
 # 나단계 (decision 423, P23, card 11)
@@ -369,6 +374,22 @@ static func _finds(containers: Dictionary, buildings: Array, seed: int, report: 
 			nails += 1
 	if rng.randf() < FUEL_CHANCE:
 		_put(containers, _boxes(containers, buildings, [], ["garage"]), "fuel_can", rng, report)
+	# Its own dice, so the finds above come out as they did.
+	var parts_rng := _rng(seed, "parts")
+	var where: Array = _boxes(containers, buildings, ["toolbox"], [])
+	for id: String in _boxes(containers, buildings, [], ["garage", "workshop"]):
+		if not where.has(id):
+			where.append(id)
+	where.sort()
+	var parts := 0
+	for id: String in where:
+		if parts >= PARTS_MOST:
+			break
+		if parts_rng.randf() < PARTS_CHANCE:
+			var what := _pick(PARTS_KINDS, parts_rng)
+			(containers[id]["items"] as Array).append(what)
+			(report["finds"] as Array).append([what, id])
+			parts += 1
 	# Something to grab when there is nothing better (P23).
 	var hands_rng := _rng(seed, "grab")
 	if hands_rng.randf() < PAN_CHANCE:

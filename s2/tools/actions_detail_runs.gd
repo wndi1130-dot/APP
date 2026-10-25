@@ -526,7 +526,7 @@ func _checks() -> int:
 	p.position = Vector3(60.5, 0, 4.5)
 	game.ground_items.clear()
 	var target := {"pos": p.position + Vector3(4.0, 0, 0), "id": "cloth", "n": 1}
-	game.ground_items.append({"pos": p.position, "id": "arrow", "n": 1})
+	game.ground_items.append({"pos": p.position, "id": "ammo_craft", "n": 1})
 	game.ground_items.append(target)
 	game.ground_items.append({"pos": target["pos"], "id": "food_pack", "n": 1})
 	var cloth_before: int = p.items.get("cloth", 0)

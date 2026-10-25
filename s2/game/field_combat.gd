@@ -1069,7 +1069,7 @@ func fire(p, at: Vector3, target = null) -> String:
 		end = blocked_at
 	tracers.append({"from": p.position + Vector3(0, 1.2, 0), "to": end + Vector3(0, 1.0, 0), "t": 0.12})
 	if wid == "bow":
-		game.ground_items.append({"pos": end, "id": "arrow", "n": 1})
+		game.ground_items.append({"pos": end, "id": "ammo_craft", "n": 1})
 	if blocked_at != null or dist > float(d["range"]):
 		game.make_sound(end, SimNoise.Level.QUIET, "impact", p)
 		_after_shot(p)
