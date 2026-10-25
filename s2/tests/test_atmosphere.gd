@@ -215,6 +215,19 @@ func test_the_hours_have_their_own_colour() -> void:
 	assert_lt(float(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0)["sun_energy"]), float(day["sun_energy"]))
 
 
+func test_the_dusk_shade_is_the_open_sky_s_cool_light() -> void:
+	# A warm low sun and a shade lit by the sky's blue, as in the sunset sky
+	# photo: the ground does not go one orange-brown at dusk.
+	for cold in [0.0, 1.0]:
+		var t := Atmosphere.sun_times(cold)
+		var dusk := Atmosphere.look(t.y - 0.4, ["clear"], "K1", cold)
+		var sun: Color = dusk["sun_color"]
+		var shade: Color = dusk["ambient_color"]
+		assert_gt(sun.r - sun.b, 0.2, "a warm low sun (cold %s)" % cold)
+		assert_lt(sun.s, 0.5, "no deep orange sun (cold %s)" % cold)
+		assert_gte(shade.b, shade.r, "a cool shade (cold %s)" % cold)
+
+
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	# Contrast 1.2 about the hour's grey whatever falls: an overcast, a fog or
 	# a sleet takes colour out, not the spread (the grey day used to go flat).
