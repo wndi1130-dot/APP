@@ -86,6 +86,8 @@ var ongoing: Dictionary = {}
 var after_blow: Dictionary = {}
 ## Who stands on broken glass, and on which cell (one crunch a cell, J08).
 var glass_feet: Dictionary = {}
+## Frames with glass in them the player was stopped at and asked about: cell -> when.
+var glass_asked: Dictionary = {}
 
 
 func _init(field_game) -> void:
@@ -671,6 +673,9 @@ func window_default(p, c: Vector2i, verb: String) -> void:
 			if WindowRules.can_clear(w):
 				_begin_work(p, "glass", "유리 치우기", GLASS_TIME, _clear_glass.bind(c, p), "window", c, FieldGrid.center(c))
 			return
+		"cross":
+			cross_window(p, c)
+			return
 	if p != game.player:
 		if BuildingRules.can_open(w) and not latched_against(p, c):
 			open_window(p, c)
@@ -698,6 +703,8 @@ func window_choices(p, c: Vector2i) -> Array:
 		rows.append({"label": "창 닫기", "call": window_default.bind(p, c, "close")})
 	if WindowRules.can_clear(w):
 		rows.append({"label": "유리 치우기", "call": window_default.bind(p, c, "glass")})
+	if WindowRules.can_cross(w, p.carry_state()):
+		rows.append({"label": "그냥 넘기" if WindowRules.can_clear(w) else "넘어가기", "call": window_default.bind(p, c, "cross")})
 	if BuildingRules.has_curtain(w):
 		rows.append({"label": "커튼 열기" if String(w["curtain"]) == "closed" else "커튼 닫기", "call": window_default.bind(p, c, "curtain")})
 	if can_board_window(p, c):
@@ -800,9 +807,31 @@ func _curtain_set(p, c: Vector2i, to: String) -> void:
 	game.view.update_window(c)
 
 
+## The player who broke it is asked at once: the glass out first, or straight through.
 func _window_work_done(p, c: Vector2i) -> void:
 	if _finished_work(p, "window"):
 		_break_window(p, c)
+		if p == game.player and WindowRules.can_clear(game.grid.windows.get(c, {})):
+			_ask_glass(p, c)
+
+
+func _ask_glass(p, c: Vector2i) -> void:
+	glass_asked[c] = game.clock.elapsed
+	game.hud.offer([{"label": "유리 치우기", "call": window_default.bind(p, c, "glass")},
+		{"label": "그냥 넘기", "call": window_default.bind(p, c, "cross")}])
+
+
+## Through to the far side of the frame; walking into it does the climb (vault_window).
+func cross_window(p, c: Vector2i) -> void:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not WindowRules.can_cross(w, p.carry_state()):
+		return
+	glass_asked[c] = -INF
+	var sides: Array[Vector2i] = game.grid.faces(c)
+	var far: Vector2i = sides[1 - game.grid.face_toward(c, p.position)]
+	var path: PackedVector3Array = game.find_path(p.position, FieldGrid.center(far), false)
+	if not path.is_empty():
+		p.go_to(path, p.running)
 
 
 ## Also called by a weapon impact: the combat caller already resolved the hit.
@@ -835,6 +864,11 @@ func _clear_glass(c: Vector2i, p = null) -> void:
 		return
 	game.grid.windows[c]["glass"] = false
 	game.view.update_window(c)
+	if p != null and game.rng.randf() < WindowRules.clear_cut_chance(p.gloves, not p.hands.is_empty()):
+		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("arm"))
+		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
+		if p.team != "raider":
+			game.say(p, "%s 유리에 손을 베였다." % p.display_name, true, "cut")
 
 
 ## The glass on the floor is swept aside as the frame's is (three seconds).
@@ -875,8 +909,18 @@ func _glass_steps() -> void:
 				game.say(p, "%s 유리에 발을 베였다." % p.display_name, true, "cut")
 
 
+## The player walking into a frame with glass still in it is stopped once and
+## asked (WindowRules.holds_for_choice); running, or a companion, goes straight in.
 func can_vault_window(p, c: Vector2i) -> bool:
-	return p.can_act() and p.action == "" and _in_reach(p, FieldGrid.center(c), true) and WindowRules.can_cross(game.grid.windows.get(c, {}), p.carry_state())
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not (p.can_act() and p.action == "" and _in_reach(p, FieldGrid.center(c), true) and WindowRules.can_cross(w, p.carry_state())):
+		return false
+	if p == game.player and WindowRules.holds_for_choice(w, p.running, glass_asked.has(c), float(glass_asked.get(c, 0.0)), game.clock.elapsed):
+		if not glass_asked.has(c):
+			p.stop()
+			_ask_glass(p, c)
+		return false
+	return true
 
 
 ## Called once on actual entry, not once per frame or once per window lifetime.
@@ -886,11 +930,14 @@ func vault_window(p, c: Vector2i) -> void:
 	if not can_vault_window(p, c):
 		return
 	var w: Dictionary = game.grid.windows[c]
-	if w["glass"] and game.rng.randf() < (0.2 if p.gloves else 0.5):
+	if game.rng.randf() < WindowRules.cross_cut_chance(w, p.gloves):
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
 		if p.team != "raider":
 			game.say(p, "%s 유리에 베였다." % p.display_name, true, "cut")
+		if p == game.player and not game.glass_warned:
+			game.glass_warned = true
+			game.hud.toast("창틀 유리를 먼저 치우면 안 베인다")
 
 
 # ---------------------------------------------------------------- searching
@@ -1997,7 +2044,13 @@ func _near_things(p) -> Array:
 					elif st != "broken":
 						rows.append([d, "문 닫기" if st == "open" else ("문 따기" if st == "locked" else "문 열기"), go_and_do.bind(p, "door", c, at)])
 				elif game.grid.windows.has(c):
-					rows.append([d, "창", go_and_do.bind(p, "window", c, at)])
+					var w: Dictionary = game.grid.windows[c]
+					if WindowRules.can_clear(w):
+						rows.append([d, "유리 치우기", go_and_do.bind(p, "window", c, at, "glass")])
+					elif bool(w.get("broken", false)) and WindowRules.can_cross(w, p.carry_state()):
+						rows.append([d, "넘어가기", go_and_do.bind(p, "window", c, at, "cross")])
+					else:
+						rows.append([d, "창", go_and_do.bind(p, "window", c, at)])
 				elif game.grid.floor_glass.has(c):
 					rows.append([d, "유리 치우기", sweep_glass.bind(p, c)])
 		for id in game.data["spots"]:
