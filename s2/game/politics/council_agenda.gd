@@ -87,7 +87,8 @@ static func _depart_share(g: Dictionary, t: Dictionary, comm: String) -> float:
 
 
 static func agenda_options(g: Dictionary, t: Dictionary) -> Dictionary:
-	assert(not g.get("dom") is Dictionary and not g.get("dark") is Dictionary, "agenda_options: S1a only")
+	# S1a only; the slice's domestic stores (train_dom.gd, stocks only) are still S1a (train_state.gd is_s1a).
+	assert(State.is_s1a(g), "agenda_options: S1a only")
 	var options: Array = []
 	var corpse_set: bool = false
 	for corpse: String in t["CORPSE_LAWS"]:
