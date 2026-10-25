@@ -14,7 +14,7 @@ const DATA: Dictionary = {
 	"crowbar": {
 		"name": "쇠지렛대", "kind": "melee", "hands": 1, "weight": 2.0, "sound": 0,
 		"reach": 1.15, "swing": 0.6, "windup": 0.18, "head_base": 0.28, "head_kill": 0.6, "knockdown": 0.5,
-		"blade": false, "fatigue": 0.006, "wear": 0.004, "pry": true, "feet_from": 0.1,
+		"blade": false, "fatigue": 0.006, "wear": 0.0014, "pry": true, "feet_from": 0.1,
 	},
 	"axe": {
 		"name": "손도끼", "kind": "melee", "hands": 1, "weight": 3.0, "sound": 0,
