@@ -174,7 +174,7 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 	var wet := 0.0
 	for k in known:
 		wet = maxf(wet, float(WET.get(k, 0.0)))
-	# Nothing stays wet below -3 C: water is ice (weather.gd SLEET_MIN_C).
+	# Nothing stays wet below -3 C: water is ice (weather.gd falls by the air).
 	if ambient_c < -3.0:
 		wet = minf(wet, 0.25)
 	var snow := ground_snow

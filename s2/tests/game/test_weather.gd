@@ -25,17 +25,37 @@ func test_blizzard_matches_gunshot_value() -> void:
 	assert_lt(w.sight_mult(), 0.5)
 
 
+## What falls is the air's (결정 423; the season table's falls, 코디네이터 10-25):
+## sleet given at -14 C falls as snow (it used to be dropped), no rain below
+## rain_above, no sleet at or below snow_below.
 func test_no_rain_below_zero() -> void:
 	var cold = Weather.new(["sleet"], -14.0)
-	assert_eq(cold.kinds.size(), 0, "sleet is dropped at -14 C")
+	assert_eq(cold.kinds, ["snow"] as Array[String], "sleet falls as snow at -14 C")
 	assert_false(cold.wets_clothes())
 	var thaw = Weather.new(["sleet"], -1.0)
 	assert_true(thaw.wets_clothes())
 	assert_true(thaw.ice_everywhere())
+	assert_eq(Weather.new(["rain"], -1.0).kinds, ["sleet"] as Array[String], "no rain at -1 C")
+	assert_eq(Weather.new(["snow"], 4.0).kinds, ["rain"] as Array[String], "snow falls as rain at +4 C")
+	assert_eq(Weather.new(["fog", "snow"], -3.0).kinds, ["fog", "snow"] as Array[String], "the first stretch's -3 C keeps the snow")
+	assert_eq(Weather.new(["snow", "sleet"], 6.0).kinds, ["rain"] as Array[String], "two falling kinds are one")
+
+
+func test_rain_hides_and_covers_a_little_and_wets_without_ice() -> void:
+	var w = Weather.new(["rain"], 5.0)
+	assert_eq(w.kinds, ["rain"] as Array[String])
+	assert_almost_eq(w.sight_mult(), 0.85, 0.0001)
+	assert_almost_eq(w.sound_mult(), 0.9, 0.0001, "the rain's noise covers sounds a little")
+	assert_almost_eq(w.sound_mult(true), 0.9, 0.0001, "footsteps are not muffled")
+	assert_true(w.wets_clothes())
+	assert_false(w.ice_everywhere(), "wet, not icy underfoot")
+	assert_false(w.always_cold())
+	assert_gt(w.particles(), 0, "the field draws what falls by this count")
+	assert_eq(w.label(), "비")
 
 
 func test_unknown_kind_ignored_and_clear_label() -> void:
-	var w = Weather.new(["rain", "monsoon"])
+	var w = Weather.new(["monsoon"])
 	assert_eq(w.kinds.size(), 0)
 	assert_eq(w.label(), "맑음")
 	assert_almost_eq(w.sight_mult(), 1.0, 0.0001)

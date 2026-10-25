@@ -172,13 +172,15 @@ func test_choosing_the_stop_is_the_paper_card_and_its_keys_go_on() -> void:
 
 
 func test_choosing_the_stop_goes_onto_the_roof_and_the_card_comes_up_over_the_station() -> void:
-	var f = _cinema_flow()
+	# Seed 12 draws sleet for the stop (stretch 2) from the season table, as S1 does.
+	var f = _cinema_flow({"seed": 12})
 	assert_true(f.loader.has_data(), "the stop's map made ready on the train")
 	f.next()
 	assert_eq(f.current(), "stop_pick")
 	assert_not_null(f.cinema, "the roof of the running train first")
 	assert_eq(f.cinema.stop_opts["act_progress"], f._field_opts()["act_progress"], "in the field's own weather")
-	assert_eq(f.cinema.falls, "rain", "the first stop's late autumn rain, as on the train and the field")
+	assert_eq(String(f.stop_weather(2)["weather"]), "sleet")
+	assert_true(f.cinema.falls in ["sleet", "snow"], "the stop's sleet in the early cold snap (−1 °C, no rain), as on the train and the field")
 	assert_null(f.card, "no card straight away")
 	assert_false(f.gauges.visible, "nothing over the roof but the scene")
 	assert_null(f.train, "the train's inside is not drawn under it")

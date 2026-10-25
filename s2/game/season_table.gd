@@ -82,3 +82,73 @@ static func season_at(act_name: String, progress: float) -> String:
 ## The season state of a stretch of the first leg (the train's view).
 static func season_of_seg(seg: int) -> String:
 	return String(row(seg).get("season", "late_autumn"))
+
+
+## What falls is the temperature's (결정 423): above rain_above rain, at or
+## below snow_below snow, between sleet. fx/atmosphere.gd draws by the same two.
+static func falls() -> Dictionary:
+	return data().get("falls", {"rain_above": 1.5, "snow_below": -2.0})
+
+
+## The weathers a plain stop draws, in S1's order (s1/src/game/season.ts DRAWN):
+## a blizzard comes only as a storm (S1's disaster), never from this draw.
+const DRAWN: Array = ["snow", "fog", "sleet", "overcast", "clear"]
+
+
+## A season state's weather weights, in DRAWN's order.
+static func weights(season: String) -> Array:
+	var w: Dictionary = data().get("seasons", {}).get(season, {}).get("weather", {})
+	var out: Array = []
+	for k in DRAWN:
+		out.append(float(w.get(k, 0.0)))
+	return out
+
+
+## S1's string hash (omens.ts hash, FNV-1a 32 bit), so a stop drawn here from
+## S1's key falls the same way S1 drew it.
+static func hash32(s: String) -> int:
+	var x := 2166136261
+	for i in s.length():
+		x = ((x ^ s.unicode_at(i)) * 16777619) & 0xFFFFFFFF
+	return x
+
+
+## A plain stop's weather from the table: the season's weights, then what falls
+## by the midday temperature. seed and seg make S1's key ("<seed>:w:<seg>") on
+## the prologue; an act's stop keys by its progress. Returns "weather" (S1's
+## name: snow, fog, sleet, overcast, clear; rain stays "sleet" as in S1),
+## "falls" (rain, sleet, snow or none), "temp" and "look" (the picture's kinds:
+## fx/atmosphere.gd turns sleet into rain by the same temperature).
+static func pick_weather(act_name: String, progress: float, stop_seed: String) -> Dictionary:
+	var prologue_stop := act_name == "prologue" or act(act_name).is_empty()
+	var seg := int(round(seg_at(progress)))
+	var key := "%s:w:%d" % [stop_seed, seg] if prologue_stop else "%s:w:%s:%d" % [stop_seed, act_name, int(round(clampf(progress, 0.0, 1.0) * 100.0))]
+	var w := weights(season_at(act_name, progress))
+	var total := 0
+	for v in w:
+		total += int(v)
+	var picked := "snow"
+	if total > 0:
+		var x := hash32(key) % total
+		for i in DRAWN.size():
+			if x < int(w[i]):
+				picked = String(DRAWN[i])
+				break
+			x -= int(w[i])
+	var temp := float(row(seg).get("temp", 0.0)) if prologue_stop else temp_at(act_name, progress)
+	var f := falls()
+	var falling := "none"
+	if picked == "snow" or picked == "sleet":
+		picked = "snow" if temp <= float(f["snow_below"]) else "sleet"
+		falling = "snow" if picked == "snow" else ("rain" if temp > float(f["rain_above"]) else "sleet")
+	return {"weather": picked, "falls": falling, "temp": temp, "look": [picked], "rules": rules_kinds(picked, falling)}
+
+
+## The field rules' kinds (sim/weather.gd ROWS) for a drawn weather: overcast
+## has no row (it changes nothing), rain is its own row (no ice underfoot).
+static func rules_kinds(weather: String, falling: String) -> Array:
+	if weather == "overcast":
+		return []
+	if falling == "rain":
+		return ["rain"]
+	return [weather]

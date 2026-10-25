@@ -2,6 +2,8 @@ import { COMMS } from './data';
 import SEASON from './season_table.json';
 import { hash } from './omens';
 import type { Weather } from './omens';
+import { SEASON_ROWS } from './season';
+import type { SeasonRow } from './season';
 import { journal } from './state';
 import type { Game } from './state';
 
@@ -12,9 +14,8 @@ import type { Game } from './state';
 // 숫자는 가안이고 500판 숫자를 사용자에게 보인 뒤 정한다. tools/s1c_sim.ts의 --cl=키:값으로 바꿀 수 있다(배열은 쉼표).
 // 단계·계절표·구간 기온은 계절표 한 벌(season_table.json, S2 열차·필드 그림과 같은 파일)에서 온다(코디네이터 10-25, 결정 423·서막 (나)).
 
-type SeasonRow = { seg: number; temp: number; stage: number };
 const STAGES = SEASON.stages;
-const ROWS = SEASON.prologue as SeasonRow[];
+const ROWS = SEASON_ROWS;
 
 /** 계절표의 구간별 단계에서, 단계가 바뀌는 구간만 [이 구간 출발부터, 단계]로 */
 function stageTable(rows: SeasonRow[]): [number, number][] {
