@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
 
 
 func test_the_size_of_a_box_sets_how_long_a_look_takes() -> void:
@@ -28,3 +29,12 @@ func test_the_searcher_waits_by_the_box_and_the_skill() -> void:
 	assert_almost_eq(game.actions.search_time(p, c), 2.0 / (1.0 + SearchRules.SKILL_STEP * skill), 0.0001)
 	c["furniture"] = "crate_stack"
 	assert_almost_eq(game.actions.search_time(p, c), 4.0 / (1.0 + SearchRules.SKILL_STEP * skill), 0.0001)
+
+
+## Every piece of furniture map-layout puts a box in has a size (Carry.BOX_LIMITS): a new one
+## (the closets' small shelf) would otherwise fall to a drawer's.
+func test_every_furniture_that_holds_a_box_has_a_size() -> void:
+	for kind: String in RoomFurnish.HOLDER_KINDS:
+		assert_true(Carry.BOX_LIMITS.has(kind), kind)
+	assert_eq(Carry.box_limit({"furniture": "small_shelf"}), Carry.BOX_SMALL)
+
