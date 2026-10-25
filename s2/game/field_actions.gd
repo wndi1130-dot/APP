@@ -882,7 +882,7 @@ func undress(p, slot: String) -> void:
 func _begin_chain(p, plan: Array, lay: Dictionary) -> void:
 	if plan.is_empty():
 		return
-	var chain := {"plan": plan, "at": 0, "lay": lay, "held": {}, "walk": Wear.plan_walks(plan)}
+	var chain := {"plan": plan, "at": 0, "lay": lay, "held": {}, "walk": Wear.plan_walks(plan), "injured_at": p.body.injured_at, "wounds": p.body.wounds.size()}
 	_next_step(p, chain)
 
 
@@ -924,7 +924,8 @@ func _step_done(p, chain: Dictionary) -> void:
 		"back":
 			var held: Dictionary = chain["held"].get(slot, {})
 			chain["held"].erase(slot)
-			if _lift_garment(held):
+			# Rags are not put back on (3.3): it stays where it lies.
+			if not held.is_empty() and Wear.wearable(held["garment"]) and _lift_garment(held):
 				for old: Dictionary in Wear.put_on(p, (held["garment"] as Dictionary).duplicate(true)):
 					_put_down_garment(p, old)
 	chain["at"] = int(chain["at"]) + 1
@@ -932,11 +933,24 @@ func _step_done(p, chain: Dictionary) -> void:
 
 
 ## A chain whose step was cut short ends there (called each frame before the
-## body's tick, validate_work): what it took off stays where it lies.
+## body's tick, validate_work): what it took off stays where it lies. A wound
+## cuts it as it cuts other work (_work_valid).
 func _check_chain(p) -> void:
 	var id: int = p.get_instance_id()
-	if wear_chains.has(id) and p.action != "wear":
+	if not wear_chains.has(id):
+		return
+	var chain: Dictionary = wear_chains[id]
+	if p.action == "wear" and (p.body.injured_at != float(chain["injured_at"]) or p.body.wounds.size() > int(chain["wounds"])):
+		p.cancel_action()
+	if p.action != "wear":
 		wear_chains.erase(id)
+
+
+## A round a vest stopped is no wound, but it knocks the hands off a change
+## of clothes all the same (clothing.md 7장).
+func struck(p) -> void:
+	if p.action == "wear":
+		p.cancel_action()
 
 
 ## The player is shown the change first when it takes layers off and back on
@@ -945,9 +959,10 @@ func _asks(p, id: String, asked: bool) -> bool:
 	return not asked and p == game.player and game.hud != null and Wear.dress_plan(p, id).size() > 1
 
 
-## Is this one going on and off at a walk (field_game.gd lets the stick walk it).
+## Is this one going on and off at a walk (field_game.gd lets the stick walk
+## it, and a run cuts it).
 func walk_work(p) -> bool:
-	return p.action == "wear" and bool(p.action_busy.get("walk", false)) and not p.running
+	return p.action == "wear" and bool(p.action_busy.get("walk", false))
 
 
 ## Take a garment lying on the ground up again (true if it was still there).
@@ -1005,7 +1020,7 @@ func strip_body(p, zid: int, slot: String) -> void:
 	if _wait_blow(p, strip_body.bind(p, zid, slot)):
 		return
 	var z: Dictionary = game.zombies.find(zid)
-	if p.action != "" or not game.zombies.strippable(z):
+	if not game.zombies.strippable(z) or not _can_start(p, z["pos"]):
 		return
 	var g: Dictionary = game.zombies.worn_of(z).get(slot, {})
 	if g.is_empty():
@@ -1018,6 +1033,8 @@ func _body_stripped(p, zid: int, slot: String) -> void:
 	if not game.zombies.strippable(z):
 		if p == game.player:
 			game.hud.toast("일어났다. 손을 뗐다.")
+		return
+	if not _in_reach(p, z["pos"]):
 		return
 	var worn: Dictionary = game.zombies.worn_of(z)
 	if not worn.has(slot):

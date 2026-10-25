@@ -1456,9 +1456,10 @@ func _update_person(p: Person, delta: float) -> void:
 		return
 	# Pushing the stick walks away from slow work (search, prying, treating);
 	# a hat, a scarf, a mask or gloves go on and off at a walk (decision 434),
-	# the feet free while the hands work.
+	# the feet free while the hands work, but not at a run.
 	var walking_work: bool = actions.walk_work(p)
-	if p.stick.length() > 0.3 and STICK_BREAKS.has(p.action) and not walking_work:
+	var breaks: bool = (p.running and p.stick != Vector2.ZERO) if walking_work else p.stick.length() > 0.3
+	if breaks and STICK_BREAKS.has(p.action):
 		p.cancel_action()
 	if p.action != "":
 		# Each action takes its body multiplier once, here (not also in its length).

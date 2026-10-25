@@ -640,6 +640,11 @@ func test_a_coat_comes_off_one_of_the_dead_as_it_is() -> void:
 	coat["wear"] = 0.5
 	coat["holes"] = {"torso": true}
 	z["worn"] = {"coat": coat, "hands": Wear.make("mittens")}
+	var far: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 0))
+	far["state"] = "dead"
+	far["worn"] = {"coat": Wear.make("coat_long")}
+	game.actions.strip_body(p, int(far["id"]), "coat")
+	assert_eq(p.action, "", "out of reach nothing starts")
 	game.actions.strip_body(p, int(z["id"]), "coat")
 	assert_eq(p.action, "loot", "kneeling at it, as for its pockets")
 	assert_almost_eq(p.action_total, Wear.STRIP_PER_WEIGHT * 3.0, 0.0001, "as long as it is heavy")
@@ -656,6 +661,13 @@ func test_a_coat_comes_off_one_of_the_dead_as_it_is() -> void:
 	z["state"] = "wander"
 	_finish(game, p)
 	assert_true(z["worn"].has("hands"))
+	# Nor from one left behind meanwhile.
+	z["state"] = "dead"
+	game.actions.strip_body(p, int(z["id"]), "hands")
+	assert_eq(p.action, "loot")
+	z["pos"] = p.position + Vector3(6, 0, 0)
+	_finish(game, p)
+	assert_true(z["worn"].has("hands"), "out of reach by the end, nothing comes away")
 
 
 func test_one_of_ours_gets_up_in_what_it_wore() -> void:
@@ -737,8 +749,12 @@ func test_a_hat_goes_on_at_a_walk_and_a_jacket_does_not() -> void:
 	p.moving = true
 	assert_eq(PersonVisual.wear_of(p, {}, _clips()).y, -1.0, "the walk shows")
 	p.running = true
+	p.stick = Vector2.ZERO
 	game._update_person(p, 0.05)
-	assert_eq(p.action, "", "a run cuts it")
+	assert_eq(p.action, "wear", "the run key on, standing still: it goes on")
+	p.stick = Vector2(0.2, 0)
+	game._update_person(p, 0.05)
+	assert_eq(p.action, "", "a run cuts it, however light the push")
 	p.running = false
 	p.stick = Vector2.ZERO
 	p.drive_speed = 0.0
@@ -805,3 +821,135 @@ func test_the_save_keeps_the_dead_clothes_and_what_went_aboard() -> void:
 	var back: Dictionary = game.zombies.find(int(z["id"]))
 	assert_almost_eq(float(back["worn"]["shirt"]["wear"]), 0.9, 0.0001)
 	assert_true(bool(back["stripped"]))
+
+
+func test_one_of_the_dead_not_yet_looked_at_keeps_where_it_kept_to_through_a_save() -> void:
+	var game = _game()
+	game.zombies.list.clear()
+	var at: Vector3 = game.player.position + Vector3(3, 0, 0)
+	var cell: Vector2i = FieldGame.FieldGrid.cell_of(at)
+	game.data["buildings"] = (game.data.get("buildings", []) as Array) + [{"name": "경찰서", "rect": Rect2i(cell - Vector2i(1, 1), Vector2i(3, 3))}]
+	var z: Dictionary = game.zombies.spawn("dead", at)
+	var there: String = str(game.zombies.worn_of(z.duplicate()))
+	var away: Dictionary = z.duplicate()
+	away["home"] = at + Vector3(40, 0, 0)
+	assert_ne(str(game.zombies.worn_of(away)), there, "the place tells (else this proves nothing)")
+	z["pos"] = at + Vector3(40, 0, 0)
+	var d: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	FieldSave._put_zombies(game, d["zombies"])
+	var back: Dictionary = game.zombies.find(int(z["id"]))
+	assert_false(back.has("worn"), "not rolled before")
+	assert_eq(str(game.zombies.worn_of(back)), there, "dressed by where it kept to, not where it lay")
+
+
+func test_a_wound_or_a_round_on_the_vest_cuts_a_change_short() -> void:
+	var game = _game()
+	game.zombies.list.clear()
+	var o = game.squad[1]
+	var r = game.make_person({"id": "r_test", "name": "약탈자", "role": "raider"}, o.position + Vector3(4, 0, 0))
+	r.set_weapon_slots([{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}])
+	var held := 0
+	var hurt := 0
+	for s in range(1, 81):
+		o.body.wounds.clear()
+		o.body._refresh()
+		o.body.downed = false
+		o.body.injured_at = -INF
+		o.coat = Wear.make("vest_armor")
+		game.actions.pick_up(o, _lay(game, o, "trousers_wool"), true)
+		assert_eq(o.action, "wear")
+		game.rng.seed = s
+		if not game.combat._shoot_person(r, o, AimModel.BODY_R):
+			o.cancel_action()
+			game._update_person(o, 0.0)
+			continue
+		game._update_person(o, 0.0)
+		assert_eq(o.action, "", "cut short (seed %d)" % s)
+		assert_false(game.actions.wear_chains.has(o.get_instance_id()))
+		if o.body.wounds.is_empty():
+			held += 1
+		else:
+			hurt += 1
+	assert_gt(held, 0, "a round the vest stopped")
+	assert_gt(hurt, 0, "a round that went in")
+
+
+func test_rags_over_it_come_off_and_stay_down() -> void:
+	var game = _game()
+	var p = game.player
+	game.zombies.list.clear()
+	p.coat = Wear.make("coat_long")
+	p.worn["coat"]["wear"] = 1.0
+	var steps := func(plan: Array) -> Array: return plan.map(func(s: Dictionary) -> String: return "%s:%s" % [s["op"], s["slot"]])
+	assert_eq(steps.call(Wear.dress_plan(p, "shirt_flannel")), ["aside:coat", "off:jacket", "on:shirt", "back:jacket"], "not put back on")
+	assert_almost_eq(Wear.dress_time(p, "shirt_flannel"), 2.4 + 2.4 + 2.0 * 2.4, 0.0001, "off once, not back")
+	assert_eq(steps.call(Wear.undress_plan(p, "shirt")), ["aside:coat", "off:jacket", "drop:shirt", "back:jacket"])
+	assert_eq(Wear.displaced(p, "shirt_flannel").map(func(g: Dictionary) -> String: return String(g["id"])), ["shirt_cotton", "coat_long"], "shown as left down")
+	game.actions.pick_up(p, _lay(game, p, "shirt_flannel"), true)
+	_finish_all(game, p)
+	assert_eq(Wear.worn_ids(p), _ids_with({"shirt": "shirt_flannel"}))
+	assert_eq(_garments_down(game), ["coat_long", "shirt_cotton"])
+	# Worn through while it lay there: it stays down.
+	var game2 = _game()
+	var p2 = game2.player
+	game2.zombies.list.clear()
+	p2.coat = Wear.make("coat_long")
+	game2.actions.pick_up(p2, _lay(game2, p2, "shirt_flannel"), true)
+	_finish(game2, p2)
+	var coat: Dictionary = game2.ground_items.filter(func(g: Dictionary) -> bool: return g.has("garment") and String(g["id"]) == "coat_long")[0]
+	coat["garment"]["wear"] = 1.0
+	_finish_all(game2, p2)
+	assert_eq(Wear.worn_ids(p2)["coat"], "", "rags are not put back on")
+	assert_eq(_garments_down(game2), ["coat_long", "shirt_cotton"])
+
+
+func test_what_hits_one_of_the_dead_goes_through_its_clothes() -> void:
+	var game = _game()
+	game.zombies.list.clear()
+	var p = game.player
+	for gun: String in ["pistol", "bow", "shotgun"]:
+		var d: Dictionary = W.get_data(gun)
+		var head := 0
+		var body := 0
+		for s in range(1, 41):
+			var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(5, 0, 0))
+			z["worn"] = {"head": Wear.make("hat_knit"), "coat": Wear.make("coat_long")}
+			game.rng.seed = s
+			if not game.combat._shoot_zombie(p, z, d, AimModel.BODY_R, 5.0):
+				continue
+			var hat: bool = (z["worn"]["head"].get("holes", {}) as Dictionary).has("head_neck")
+			var coat: bool = (z["worn"]["coat"].get("holes", {}) as Dictionary).has("torso")
+			assert_true(hat or coat, "%s, seed %d: through something" % [gun, s])
+			head += int(hat)
+			body += int(coat)
+		assert_gt(head, 0, gun + " to the head holes the hat")
+		assert_gt(body, 0, gun + " to the body holes the coat")
+
+
+func test_clothes_draw_no_dice_where_no_vest_stops_a_round() -> void:
+	var game = _game()
+	game.zombies.list.clear()
+	var p = game.player
+	var o = game.squad[1]
+	var r = game.make_person({"id": "r_test", "name": "약탈자", "role": "raider"}, o.position + Vector3(4, 0, 0))
+	for gun: String in ["pistol", "bow", "shotgun"]:
+		var d: Dictionary = W.get_data(gun)
+		r.set_weapon_slots([{"id": gun, "quality": "factory", "condition": 1.0, "loaded": 8}])
+		for s in range(1, 31):
+			var dead: Array = []
+			var alive: Array = []
+			for dressed: bool in [false, true]:
+				var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(5, 0, 0))
+				z["worn"] = {"head": Wear.make("hat_knit"), "coat": Wear.make("coat_long")} if dressed else {}
+				game.rng.seed = s
+				game.combat._shoot_zombie(p, z, d, AimModel.BODY_R, 5.0)
+				dead.append(game.rng.state)
+				o.body.wounds.clear()
+				o.body._refresh()
+				o.body.downed = false
+				o.worn = Wear.outfit(Wear.DEFAULT) if dressed else {}
+				game.rng.seed = s
+				game.combat._shoot_person(r, o, AimModel.BODY_R)
+				alive.append(game.rng.state)
+			assert_eq(dead[0], dead[1], "%s on the dead, seed %d" % [gun, s])
+			assert_eq(alive[0], alive[1], "%s on the living, seed %d" % [gun, s])

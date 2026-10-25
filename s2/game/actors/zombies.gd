@@ -210,10 +210,11 @@ func set_loot(z: Dictionary, loot: Array) -> void:
 
 
 ## What one of the dead has on (decision 434, loot_tables.gd WEAR_*): rolled
-## the first time it is asked for, on dice of its own from the run's seed and
-## the body's number, so whenever that is (a round on a vest, a hand on a
-## coat) it comes out the same and moves no other dice. A risen one of ours
-## has what it wore (field_game.gd).
+## the first time it is asked for, by the place it keeps to (its home, which a
+## save keeps), on dice of its own from the run's seed and the body's number,
+## so whenever that is (a round on a vest, a hand on a coat) it comes out the
+## same and moves no other dice. A risen one of ours has what it wore
+## (field_game.gd).
 func worn_of(z: Dictionary) -> Dictionary:
 	if not z.has("worn"):
 		var rng := RandomNumberGenerator.new()

@@ -109,10 +109,11 @@ const KINDS: Dictionary = {
 	"scarf_thick": {"slot": "neck", "name": "두꺼운 목도리", "icon": "it_scarf", "weight": 0.3, "warmth": 0.12, "stuff": "wool"},
 	"mask_cloth": {"slot": "face", "name": "천 마스크", "icon": "it_mask", "weight": 0.05, "warmth": 0.02, "stuff": "cotton"},
 	# Hands.
-	"gloves": {"slot": "hands", "name": "장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.1, "stuff": "wool"},
-	"gloves_cotton": {"slot": "hands", "name": "면 장갑", "icon": "it_gloves", "weight": 0.1, "warmth": 0.05, "stuff": "cotton"},
-	"gloves_leather": {"slot": "hands", "name": "가죽 장갑", "icon": "it_gloves", "weight": 0.3, "warmth": 0.08, "block": 0.1, "bite": 0.2, "stuff": "leather"},
-	"mittens": {"slot": "hands", "name": "벙어리장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.15, "stuff": "wool"},
+	# The hands are painted, not shelled: a tint each (the 3D side's glove colour, #616).
+	"gloves": {"slot": "hands", "name": "장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.1, "stuff": "wool", "tint": [0.12, 0.115, 0.11], "pattern": "knit"},
+	"gloves_cotton": {"slot": "hands", "name": "면 장갑", "icon": "it_gloves", "weight": 0.1, "warmth": 0.05, "stuff": "cotton", "tint": [0.17, 0.165, 0.155], "pattern": "plain"},
+	"gloves_leather": {"slot": "hands", "name": "가죽 장갑", "icon": "it_gloves", "weight": 0.3, "warmth": 0.08, "block": 0.1, "bite": 0.2, "stuff": "leather", "tint": [0.12, 0.095, 0.075], "pattern": "plain"},
+	"mittens": {"slot": "hands", "name": "벙어리장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.15, "stuff": "wool", "tint": [0.13, 0.11, 0.1], "pattern": "knit"},
 	# Whole suits: a shirt and trousers in one.
 	"coverall": {"slot": "shirt", "also": ["trousers"], "name": "작업복", "icon": "it_overalls", "weight": 1.2, "warmth": 0.1, "block": 0.15, "stuff": "cotton"},
 	"dress_wool": {"slot": "shirt", "also": ["trousers"], "name": "원피스", "icon": "it_dress", "weight": 0.6, "warmth": 0.08, "stuff": "wool"},
@@ -504,39 +505,21 @@ static func _over(p, slots: Array[String]) -> Array[String]:
 ## taking that off and putting it back (7장), and taking off a whole suit it
 ## puts aside elsewhere. Swapping what is in its own place costs nothing more.
 static func dress_time(p, id: String) -> float:
-	var slots := slots_of(id)
-	if slots.is_empty():
-		return 0.0
-	var t: float = float(TIME[slots[0]])
-	var aside: Array[String] = []
-	for s: String in slots:
-		var key := holder_slot(p, s)
-		if key != "" and key != slots[0] and not aside.has(key):
-			aside.append(key)
-			t += float(TIME[key])
-	for key: String in _over(p, slots):
-		if not aside.has(key):
-			t += 2.0 * float(TIME[key])
-	return t
+	return plan_time(dress_plan(p, id))
 
 
 ## How long taking off what takes `slot` takes, the layers over it off and back on.
 static func undress_time(p, slot: String) -> float:
-	var key := holder_slot(p, slot)
-	if key == "":
-		return 0.0
-	var t: float = float(TIME[key])
-	for over: String in _over(p, slots_of(String((p.worn[key] as Dictionary).get("id", "")))):
-		t += 2.0 * float(TIME[over])
-	return t
+	return plan_time(undress_plan(p, slot))
 
 
 ## The steps of putting `id` on, in order (7장): each layer over its places
 ## off, the outermost first; what holds another place a whole suit takes off
 ## and put aside; the garment on in its own place (what was there comes off
-## with it); then the layers taken off back on, the innermost first. A step is
-## {"op": "off" | "aside" | "on" | "back", "slot", "t" seconds}; the seconds
-## add up to dress_time. Cut short, the steps done stay done.
+## with it); then the layers taken off back on, the innermost first. A layer
+## over it worn to rags comes off and stays down (3.3: it is not put on). A
+## step is {"op": "off" | "aside" | "on" | "back", "slot", "t" seconds}. Cut
+## short, the steps done stay done.
 static func dress_plan(p, id: String) -> Array:
 	var slots := slots_of(id)
 	if slots.is_empty():
@@ -550,31 +533,43 @@ static func dress_plan(p, id: String) -> Array:
 	for key: String in _over(p, slots):
 		if not aside.has(key):
 			over.append(key)
-	var plan: Array = []
-	for i in range(over.size() - 1, -1, -1):
-		plan.append({"op": "off", "slot": over[i], "t": float(TIME[over[i]])})
+	var plan: Array = _off_steps(p, over)
 	for key: String in aside:
 		plan.append({"op": "aside", "slot": key, "t": float(TIME[key])})
 	plan.append({"op": "on", "slot": slots[0], "t": float(TIME[slots[0]])})
-	for key: String in over:
-		plan.append({"op": "back", "slot": key, "t": float(TIME[key])})
+	plan.append_array(_back_steps(p, over))
 	return plan
 
 
 ## Taking off what holds `slot`: the layers over it off, it off and put down,
-## the layers back on ({"op": "drop"} is the one taken off). Adds up to undress_time.
+## the layers back on ({"op": "drop"} is the one taken off; rags over it stay down).
 static func undress_plan(p, slot: String) -> Array:
 	var key := holder_slot(p, slot)
 	if key == "":
 		return []
 	var over := _over(p, slots_of(String((p.worn[key] as Dictionary).get("id", ""))))
-	var plan: Array = []
-	for i in range(over.size() - 1, -1, -1):
-		plan.append({"op": "off", "slot": over[i], "t": float(TIME[over[i]])})
+	var plan: Array = _off_steps(p, over)
 	plan.append({"op": "drop", "slot": key, "t": float(TIME[key])})
-	for o: String in over:
-		plan.append({"op": "back", "slot": o, "t": float(TIME[o])})
+	plan.append_array(_back_steps(p, over))
 	return plan
+
+
+## The layers in `over` off, the outermost first: for a while, or put aside
+## for good when worn to rags.
+static func _off_steps(p, over: Array[String]) -> Array:
+	var out: Array = []
+	for i in range(over.size() - 1, -1, -1):
+		out.append({"op": "off" if wearable(p.worn[over[i]]) else "aside", "slot": over[i], "t": float(TIME[over[i]])})
+	return out
+
+
+## The layers taken off for a while back on, the innermost first.
+static func _back_steps(p, over: Array[String]) -> Array:
+	var out: Array = []
+	for key: String in over:
+		if wearable(p.worn[key]):
+			out.append({"op": "back", "slot": key, "t": float(TIME[key])})
+	return out
 
 
 ## A plan's steps that take a garment off (the motion played backwards).
@@ -597,13 +592,18 @@ static func plan_time(plan: Array) -> float:
 	return t
 
 
-## What putting `id` on puts down for good: what holds its places now, each once.
+## What putting `id` on puts down for good: what holds its places now, and a
+## layer over them worn to rags, each once.
 static func displaced(p, id: String) -> Array:
 	var keys: Array[String] = []
 	var out: Array = []
 	for s: String in slots_of(id):
 		var key := holder_slot(p, s)
 		if key != "" and not keys.has(key):
+			keys.append(key)
+			out.append(p.worn[key])
+	for key: String in _over(p, slots_of(id)):
+		if not keys.has(key) and not wearable(p.worn[key]):
 			keys.append(key)
 			out.append(p.worn[key])
 	return out
