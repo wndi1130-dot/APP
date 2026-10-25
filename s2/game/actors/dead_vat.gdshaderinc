@@ -4,7 +4,8 @@
 #include "res://fx/shaders/fx_common.gdshaderinc"
 
 // VAT layout from scripts/vat_baker.gd. INSTANCE_CUSTOM:
-// r = phase, g = clip number, b = 1 stops the animation, a = shade.
+// r = phase, g = clip number, b = 1 stops the animation, a = shade. b below 0
+// is a tremble of the cold (the train's people, -0.5 at most) and stops nothing.
 // Clips stack downward in the texture; the four tables say where each one
 // starts, how many frames it has, how fast it runs and whether it loops.
 // Tables left unset mean the box bake: 0 wander and 1 chase, 32 frames each.
@@ -114,7 +115,9 @@ void vertex() {
 	}
 	// Each body walks at its own pace (0.82..1.18), from its own number.
 	float pace = mix(0.82, 1.18, fract(INSTANCE_CUSTOM.r * 7.31));
-	float speed = rate * pace * (1.0 - INSTANCE_CUSTOM.b);
+	float hold = max(INSTANCE_CUSTOM.b, 0.0);
+	float shiver = max(-INSTANCE_CUSTOM.b, 0.0);
+	float speed = rate * pace * (1.0 - hold);
 	float looped = mod(TIME * speed + INSTANCE_CUSTOM.r * frames, frames);
 	float once = clamp(INSTANCE_CUSTOM.r, 0.0, 1.0) * (frames - 1.0);
 	float frame = mix(once, looped, loops);
@@ -135,6 +138,8 @@ void vertex() {
 	rest_normal = NORMAL;
 #endif
 	VERTEX += offset;
+	// The cold's tremble: quick and small, from the hips up, more toward the head, each body at its own phase.
+	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin(TIME * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin(TIME * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
 	shade = INSTANCE_CUSTOM.a;
 	view_pos = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 #ifdef WORN
