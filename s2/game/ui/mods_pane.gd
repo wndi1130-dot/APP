@@ -28,6 +28,10 @@ const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_W: float = 330.0
 const CSS_H_MIN: float = 286.0
+## No higher than the car's pane (the band to the bottom bar): more cars than
+## fit are dragged up under the stores (glass_pane.gd scroll), as S1's
+## thirteen-car train has seven lived-in cars.
+const CSS_H_MAX: float = 286.0
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"]]
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
@@ -40,12 +44,15 @@ const WELL := Color(0, 0, 0, 0.6)
 const ACCENT := Color("f2a63c")
 const RED := Color("e2604b")
 const SOOT_CUT := Color("10151a")
+const SHADE := Color("0b0e12")
 
 var g: Dictionary = {}
 ## The cars of this train a refit can go on, in train order: {id, name}.
 ## Empty means the default train's (formation()).
 var cars: Array = []
 var _parts: Control
+## Where a row's parts go while the rows are laid (the scrolled list), else the pane.
+var _into: Control = null
 
 
 ## The cars of `rules` (train_rules.json's shape) that people live in.
@@ -93,7 +100,7 @@ static func model(g0: Dictionary, cars0: Array = []) -> Dictionary:
 
 
 static func css_size(rows: int) -> Vector2:
-	return Vector2(CSS_W, maxf(CSS_H_MIN, ROW_TOP + ROW_H * rows + 12.0))
+	return Vector2(CSS_W, clampf(ROW_TOP + ROW_H * rows + 12.0, CSS_H_MIN, CSS_H_MAX))
 
 
 func _ready() -> void:
@@ -141,12 +148,49 @@ func _draw_all() -> void:
 	_head(String(m["need"]))
 	_stores(m["stores"])
 	var rows: Array = m["rows"]
+	var k: float = UiFonts.K
+	var list := Control.new()
+	list.name = "Rows"
+	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	list.custom_minimum_size = Vector2(CSS_W, ROW_H * rows.size()) * k
+	var s := ScrollContainer.new()
+	s.name = "List"
+	s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	s.mouse_filter = Control.MOUSE_FILTER_PASS
+	s.position = Vector2(0.0, ROW_TOP) * k
+	s.size = Vector2(CSS_W, css_size(rows.size()).y - ROW_TOP - 12.0) * k
+	s.add_child(list)
+	_parts.add_child(s)
+	_into = list
 	for i in rows.size():
-		_row(rows[i], ROW_TOP + ROW_H * i)
+		_row(rows[i], ROW_H * i)
+	_into = null
+	if list.custom_minimum_size.y > s.size.y + 0.5:
+		_parts.add_child(_more(s))
+
+
+## While rows are left under the list's foot, the glass darkens there (a fold
+## of shade 22 high), so the cars below are known to be there to drag up.
+func _more(s: ScrollContainer) -> Control:
+	var k: float = UiFonts.K
+	var fade := Control.new()
+	fade.name = "More"
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade.position = Vector2(0.0, s.position.y + s.size.y - 22.0 * k)
+	fade.size = Vector2(s.size.x, 22.0 * k)
+	fade.draw.connect(func() -> void:
+		var w: float = fade.size.x
+		var h: float = fade.size.y
+		fade.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
+			PackedColorArray([Color(SHADE, 0.0), Color(SHADE, 0.0), Color(SHADE, 0.85), Color(SHADE, 0.85)])))
+	var bar: ScrollBar = s.get_v_scroll_bar()
+	bar.value_changed.connect(func(v: float) -> void: fade.visible = v < bar.max_value - bar.page - 1.0)
+	return fade
 
 
 func _add(c: Control) -> Control:
-	_parts.add_child(c)
+	(_into if _into != null else _parts).add_child(c)
 	return c
 
 
