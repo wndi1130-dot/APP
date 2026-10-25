@@ -29,7 +29,8 @@ export type ContentCondition =
   | { type: 'community'; community: Comm; metric: CommunityMetric; operator: 'lt' | 'lte' | 'eq' | 'gte' | 'gt'; value: number }
   | { type: 'flag'; id: string; value: boolean | number | string }
   | { type: 'person'; id: string; state: 'alive' | 'injured' | 'dead' | 'away' }
-  /** 계절표의 눈·얼음(climate.ts seasonHolds): frost 얼음이 서는 구간, snow 눈이 쌓인 구간. 기온 꺼진 판은 늘 참 */
+  /** 계절표의 눈·얼음(climate.ts seasonHolds): frost 얼음이 서는 구간, snow 눈이 쌓인 구간, bare 둘 다 없는 구간.
+   * 기온 꺼진 판은 frost·snow가 늘 참, bare는 늘 거짓 */
   | { type: 'season'; needs: SeasonNeed }
   | ResourceCondition;
 /** 자원이 얼마 이상/이하인가. symbol은 지금 가진 상징물 수 */
