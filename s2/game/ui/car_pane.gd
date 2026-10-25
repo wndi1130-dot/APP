@@ -25,6 +25,7 @@ const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_SIZE := Vector2(330, 286)
@@ -36,6 +37,10 @@ const COLD: float = 45.0
 const STATS: Array = [["배급", 1, 45.0, true], ["과밀", 2, 60.0, false], ["노출", 3, 50.0, false]]
 ## The levers: id, word, what a step burns.
 const LEVERS: Array = [["heat", "난방", "석탄"], ["ration", "배급", "식량"]]
+## J12: a community that lives in more cars than this one says how many after
+## its people, so the count, the bars and the levers read as theirs, not this
+## car's alone (the tail's three, S1 COMM_CARS).
+const SPAN_WORDS: Dictionary = {2: "두 칸", 3: "세 칸", 4: "네 칸"}
 const STEPS: int = 5
 ## 디자인 토큰 2차.
 const INK := Color("eee9dc")
@@ -98,6 +103,7 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 		# An insulated car says so after its stage; what it gains is already in
 		# the warmth, the crowding and the heat lever's coal (train_mods.gd, PR 4).
 		"insulated": (dom.get("insulated", []) as Array).has(String(car0.get("id", ""))),
+		"span": int(TrainMods.COMM_CARS.get(c, 1)),
 		"warm": int(round(float(sit[0]))),
 		"cold": cold,
 		# Only the cold says a line: what the night does to them (결정 417).
@@ -206,7 +212,8 @@ func _head(m: Dictionary) -> void:
 	var pop := UiFonts.label(str(m["pop"]), UiFonts.NUMBER, 400, 15.0, INK, 0.225)
 	pop.name = "People"
 	_text(pop, 62.0, 45.0)
-	var stage := UiFonts.label(" · " + String(m["stage"]) + (" · 단열" if bool(m["insulated"]) else ""), UiFonts.WORD, 400, 12.0, INK2, 0.72)
+	var span: String = String(SPAN_WORDS.get(int(m["span"]), "")) if int(m["span"]) > 1 else ""
+	var stage := UiFonts.label((" · " + span if span != "" else "") + " · " + String(m["stage"]) + (" · 단열" if bool(m["insulated"]) else ""), UiFonts.WORD, 400, 12.0, INK2, 0.72)
 	stage.name = "Stage"
 	_add(stage)
 	GlassParts.put_on(stage, pop.position.x + GlassParts.text_w(pop), GlassParts.base_of(pop))
