@@ -20,8 +20,10 @@ import {
   STAY, stopRisk, supportShare, tailIdle, THREAT_STEPS, threatStep, totalPop, viewCard,
 } from '../src/game';
 import type { Comm, CrewCost, CrewCurve, CrewHaul, Game, LawId, LocoId, LootKey, StayId, StopState } from '../src/game';
+import { HANDS } from '../src/game/data';
+import { handShort, handsCoal, handsNow, handsOffered, handsSettle, handsTrackBoost, handsWatchMult, handsWill, handsWorkMult, workShare } from '../src/game/hands';
 
-export const FORMAT = 'train-vectors-v1';
+export const FORMAT = 'train-vectors-v2';
 const SEEDS = ['train-0', 'train-1', 'train-2', 'train-3'];
 const MAX_STEPS = 2000;
 
@@ -47,7 +49,8 @@ function pickState(g: Game): Record<string, unknown> {
     route: g.route ?? null, passed: { ...g.passed }, calm: g.calm ? { ...g.calm } : null, loco: g.loco ?? null,
     space: g.space ? { ...g.space } : null, thrown: g.thrown, pyre: g.pyre ?? 0, pyreKin: { ...(g.pyreKin ?? {}) }, stored: g.stored,
     deaths: [...g.deaths], left: [...(g.left ?? [])], decreeLeft: g.decreeLeft, autoLevers: g.autoLevers, autoDropped: !!g.autoDropped,
-    hunger: g.hunger, stop: pickStop(g.stop),
+    hunger: g.hunger, stop: pickStop(g.stop), injured: g.injured,
+    hands: g.hands ? { have: g.hands.have, short: { ...g.hands.short }, ...(g.hands.expose ? { expose: { ...g.hands.expose } } : {}) } : null,
     // 작업조 거름(CREW_BUSY)이 읽는 두 칸: 가볍지 않은 상처로 낫는 사람, 받아들이길 기다리는 새 사람.
     wounds: ((g as Game & { wounds?: { who: string; grade: string; state: string }[] }).wounds ?? []).map(w => ({ who: w.who, grade: w.grade, state: w.state })),
     arrivals: g.arrivals?.pending ? { pending: { names: [...(g.arrivals.pending.names ?? [])] } } : null,
@@ -134,12 +137,36 @@ function shake(g0: Game, v: Vary): Game {
 
 // ---- 지점마다 잴 것 ----
 
+/** 별도 난수로 인구·관계·자리비움·부상을 흔든 뒤 S1 정산으로 다음 구간 몫을 둔다. 기존 난수 흐름은 보존한다. */
+function shakeHands(g0: Game, v: Vary): Game {
+  const g = cloneGame(g0);
+  const mode = v.int(0, 3);
+  for (const c of COMMS) {
+    const s = g.comms[c];
+    s.pop = mode === 0 ? 0 : v.int(1, mode === 1 ? 12 : 40);
+    s.away = v.int(0, s.pop + 2);
+    s.rel = v.pick([-100, -40, -39, -16, -15, 0, 20]);
+    s.fervor = v.int(0, 2);
+    s.heat = v.int(0, 4);
+    s.ration = v.int(0, 4);
+  }
+  g.injured = mode === 3 ? v.int(30, 80) : v.int(0, 10);
+  handsSettle(g, []);
+  return g;
+}
+
+const TRACK_POOLS = [[], ['water_tower'], ['snow_drift'], ['other'], ['water_tower', 'other', 'snow_drift', 'water_tower']];
+
 function reads(g: Game): Record<string, unknown> {
   const fc = forecast(g);
   const ps = predictStall(g);
   const st = standings(g);
   const als = autoLeverStatus(g);
   const out: Record<string, unknown> = {
+    workShare: byComm(c => workShare(c)), handsWill: byComm(c => handsWill(g, c)), handsOffered: byComm(c => handsOffered(g, c)),
+    handsNow: handsNow(g), handShort: Object.fromEntries(HANDS.order.map(j => [j, handShort(g, j)])),
+    handsCoal: handsCoal(g), handsWatchMult: handsWatchMult(g), handsWorkMult: handsWorkMult(g),
+    handsTrackBoost: TRACK_POOLS.map(pool => ({ pool, out: handsTrackBoost(g, pool) })),
     situation: byComm(c => situation(g, c)),
     relStage: byComm(c => relStage(g, c)),
     stage: byComm(c => stageOf(g.comms[c].rel)),
@@ -169,6 +196,12 @@ function reads(g: Game): Record<string, unknown> {
 /** 바꾸는 함수를 복제본에 불러 전/후를 적는다. */
 function changes(g0: Game, v: Vary): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  {
+    const g = cloneGame(g0);
+    const notes: string[] = [];
+    handsSettle(g, notes);
+    out.handsSettle = { hands: g.hands, notes };
+  }
   {
     const g = cloneGame(g0);
     const j = g.journal.length;
@@ -272,7 +305,7 @@ function shakeSettle(g0: Game, v: Vary): Game {
 
 interface Point { seed: string; step: number; act: string; vary: boolean; state: Record<string, unknown>; reads: Record<string, unknown>; changes: Record<string, unknown>; journalN: number }
 
-function playSeed(seed: string, v: Vary, vs: Vary, points: Point[], nextSegs: unknown[], settles: unknown[]): void {
+function playSeed(seed: string, v: Vary, vs: Vary, vh: Vary, points: Point[], nextSegs: unknown[], settles: unknown[]): void {
   const g = createGame(seed);
   let step = 0;
   const settleAt = (): void => {
@@ -293,6 +326,8 @@ function playSeed(seed: string, v: Vary, vs: Vary, points: Point[], nextSegs: un
     points.push({ seed, step, act, vary: false, state: pickState(g), reads: reads(g), changes: changes(g, v), journalN: g.journal.length });
     const s = shake(g, v);
     points.push({ seed, step, act, vary: true, state: pickState(s), reads: reads(s), changes: changes(s, v), journalN: s.journal.length });
+    const h = shakeHands(g, vh);
+    points.push({ seed, step, act: `${act}:hands`, vary: true, state: pickState(h), reads: reads(h), changes: changes(h, vh), journalN: h.journal.length });
     if (nextSegOk(g)) nextSegs.push({ seed, step, vary: false, before: pickState(g), ...nextSegCase(g) });
     if (nextSegOk(s)) nextSegs.push({ seed, step, vary: true, before: pickState(s), ...nextSegCase(s) });
     step += 1;
@@ -357,7 +392,7 @@ function scalars(): Record<string, unknown> {
 function tables(): Record<string, unknown> {
   return {
     COMMS, P, STAGES, STAY, LOCO_DEFAULT, CREW: { ...CREW }, CREW_COST, CREW_COST_REF, CREW_HAUL, CREW_HAUL_OVER, CHORE_COMMS, CREW_COMMS, REST_FLOOR,
-    COMM_NAME, PROTEST, THREAT_STEPS, CALM, HUNGER_GRACE,
+    COMM_NAME, PROTEST, THREAT_STEPS, CALM, HUNGER_GRACE, HANDS,
     DELEGATE: { after: DELEGATE_AFTER, on: DELEGATE_ON, reOn: DELEGATE_RE_ON },
     LAWS_RES: Object.fromEntries(LAW_IDS.map(id => [id, LAWS[id].res])),
     LOCO_COAL: Object.fromEntries(LOCO_IDS.map(id => [id, LOCO[id].coal])),
@@ -369,10 +404,11 @@ function tables(): Record<string, unknown> {
 export function trainVectors(): Record<string, unknown> {
   const v = new Vary();
   const vs = new Vary('train-vary-settle');
+  const vh = new Vary('train-vary-hands');
   const points: Point[] = [];
   const nextSegs: unknown[] = [];
   const settles: unknown[] = [];
-  for (const seed of SEEDS) playSeed(seed, v, vs, points, nextSegs, settles);
+  for (const seed of SEEDS) playSeed(seed, v, vs, vh, points, nextSegs, settles);
   return { format: FORMAT, seeds: SEEDS, tables: tables(), scalars: scalars(), points, nextSegment: nextSegs, settle: settles };
 }
 
@@ -382,5 +418,6 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(data)}\n`);
   const pts = data.points as Point[];
-  console.log(`${out}: 판 ${SEEDS.length}, 지점 ${pts.length}, 다음 구간 ${(data.nextSegment as unknown[]).length}, 정산 ${(data.settle as unknown[]).length}`);
+  const short = pts.filter(p => Object.values((p.state.hands as Game['hands'])?.short ?? {}).some(n => n > 0.01)).length;
+  console.log(`${out}: 판 ${SEEDS.length}, 지점 ${pts.length}, 손 몫이 비는 지점 ${short}, 다음 구간 ${(data.nextSegment as unknown[]).length}, 정산 ${(data.settle as unknown[]).length}`);
 }
