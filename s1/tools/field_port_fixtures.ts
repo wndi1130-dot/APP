@@ -17,7 +17,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   advance, agendaOptions, blocs, castVote, cloneGame, COMM_NAME, COMMS, CORPSE_LAWS, createGame, expected, IDEO, LAW_VARIANT_OF, LAWS, P,
-  PROFILES, PROLOGUE, resolveStop, stance, STAGES,
+  CREW, CREW_COST, FETCH_WANT, LOOT_NAME, PLACES, PROFILES, PROLOGUE, resolveStop, REST_FLOOR, stance, STAGES, STAY,
 } from '../src/game';
 import type { Game } from '../src/game';
 import { applyFieldReturn, chooseSymbolUse, FIELD, snapshot, symbolOptions } from '../src/game/field_receipt';
@@ -195,6 +195,8 @@ function main(): void {
   const contracts = SEEDS.flatMap(seed => [contractCase(seed, false), contractCase(seed, true)]);
   const tables = {
     COMMS, COMM_NAME, P, STAGES, IDEO, LAWS, LAW_VARIANT_OF, CORPSE_LAWS, PROLOGUE, FIELD,
+    // 필드가 다녀온 정차를 닫는 셈(closeFieldStop)이 읽는 표.
+    STAY, PLACES, LOOT_NAME, REST_FLOOR, CREW, CREW_COST, FETCH_WANT,
     PROFILES: PROFILES.map(p => ({ id: p.id, name: p.name, community: p.community, age: p.age })),
   };
   const file = {

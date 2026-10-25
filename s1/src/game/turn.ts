@@ -761,7 +761,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   return stop.result;
 }
 
-function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Record<LootKey, number>>): void {
+export function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Record<LootKey, number>>): void {
   for (const c of COMMS) {
     const p = g.comms[c].promise;
     if (!p || p.due > g.seg) continue;

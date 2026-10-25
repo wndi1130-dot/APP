@@ -89,7 +89,7 @@ func test_the_second_station_carries_the_slice_s_own_session() -> void:
 	assert_eq(f.arrival_g["fieldReturns"]["special"], f.council_g["fieldReturns"]["special"], "the slip is the session the slice sat")
 
 
-func test_the_receipt_step_is_the_receipt_sheet_of_the_sample_when_the_field_is_skipped() -> void:
+func test_the_receipt_step_is_the_quiet_receipt_of_the_contract_when_the_field_is_skipped() -> void:
 	var f = _flow()
 	f.next()
 	f.next()
@@ -99,16 +99,19 @@ func test_the_receipt_step_is_the_receipt_sheet_of_the_sample_when_the_field_is_
 	assert_false(f.panel.visible)
 	assert_true(f.gauges.visible, "the train's gauges over it, as over the stop card")
 	assert_false(f.soot_bot.visible, "the sheet lies over the bottom edge")
-	var m: Dictionary = ReceiptSheet.model(f.card.result, f.card.seg)
-	assert_has(m["seen"], "약속 서막 · 본 사람 2 · 꼬리칸 들음", "the sample's promise, as seen")
+	# The field skipped: the contract's searchers went and came back with nothing (slice_flow.gd quiet_receipt),
+	# on the board's own departure, and that return is on the board once.
+	assert_eq(f.receipt["departureId"], f._departure()["departureId"], "the receipt of the slice's own contract")
+	assert_eq((f.train_g["fieldReturns"]["records"] as Array).size(), 1, "taken onto the board once")
+	assert_true(bool(f.train_g["stop"]["done"]), "the stop closed with the field's result")
 	var texts: Array = []
 	for l in f.card.find_children("*", "Label", true, false):
 		texts.append((l as Label).text)
 	assert_has(texts, "출발", "the end stamped")
 	assert_has(texts, "술레후프")
 	var made: Dictionary = SliceFlow.result_of(f.receipt)
-	assert_eq(made["stay"], 160)
-	assert_eq(made["boarded"], 4, "sent less the dead, missing and left")
+	assert_eq(made["stay"], 120)
+	assert_eq(made["boarded"], (f._departure()["roster"] as Array).size(), "everyone sent came back")
 	f.card.go_key.pressed.emit()
 	assert_eq(f.current(), "council", "its key goes on")
 	assert_eq(String(f.card.name), "CouncilCard", "gone with its step")
