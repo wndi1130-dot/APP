@@ -467,7 +467,7 @@ function remember(g: Game, key: string, pick: string): void {
 /** viewCard가 직접 그리는 S1a 카드 종류(닿음 검사 tools/reach_check.ts가 읽는다). 사람의 무게는 PEOPLE_KINDS. */
 export const S1A_CARD_KINDS = [
   'travel', 'demand', 'favor', 'strike_warn', 'strike', 'rescue', 'bitten', 'bite_found', 'tension_crisis', 'protest', 'trust_crisis', 'leash', 'need_warn', 'info',
-  'ration_cut',
+  'ration_cut', 'promise_ledger',
 ] as const;
 
 // ---- 다른 묶음의 카드(S1c 내정, domestic/cards.ts가 등록한다) ----
@@ -708,6 +708,17 @@ function baseView(g: Game, card: Card): CardView {
         title: '불신임', speaker: leader(g, 'guard'), required: true,
         body: `더는 열차장을 믿지 않는다는 말이 돈다. ${Math.max(0, (g.trustCrisis ?? g.seg) - g.seg)}구간 안에 신임을 25까지 되돌리지 못하면 끌려 내려온다.`,
         choices: [{ label: '알았다', say: '신임은 말로 되찾는 게 아니다. 결과로 보여 주겠다.', effs: [] }],
+      };
+    }
+    case 'promise_ledger': {
+      // 결과 아크(정치 흐름 3.4): 같은 칸과의 약속을 두 번 어기면 그 칸 대표가 장부를 들고 온다. 한 번 더 어기면 공개 협상이 닫힌다(council_log.ts).
+      return {
+        title: '약속 장부', speaker: leader(g, c), focus: c, required: true,
+        body: `${leader(g, c).name}이(가) 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 ${COMM_NAME[c]}은(는) 열차장의 약속을 받지 않는다.`,
+        choices: withAfford(g, [
+          { label: '사과하고 갚는다', say: '내 잘못이다. 지금 갚겠다.', effs: [{ t: 'lux', v: -3 }, { t: 'rel', c, v: 8 }] },
+          { label: '물리친다', say: '지난 일이다. 앞을 보자.', effs: [{ t: 'rel', c, v: -5 }], special: 'ledger_refuse' },
+        ]),
       };
     }
     case 'leash': {
@@ -1017,6 +1028,9 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
       break;
     case 'riot_end':
       riotEnd(g);
+      break;
+    case 'ledger_refuse':
+      offend(g, c);
       break;
     case 'cut_spare_tail':
       applyRationCut(g, 'spare_tail');

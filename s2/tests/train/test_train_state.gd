@@ -79,9 +79,11 @@ func test_laws_pot_and_engine_match_s1() -> void:
 
 func test_a_switched_on_branch_is_not_s1a() -> void:
 	assert_true(St.is_s1a({"comms": {}}))
-	# The stores alone are not the domestic branch (train_dom.gd); S1's DomState is.
+	# The stores, the workshop and research (train_dom.gd) are not the whole
+	# domestic branch; a key not ported yet, like S1's people, is.
 	assert_true(St.is_s1a({"dom": {"wood": 1}}))
-	assert_false(St.is_s1a({"dom": {"wood": 1, "techs": {}}}))
+	assert_true(St.is_s1a({"dom": {"wood": 1, "techs": {}}}))
+	assert_false(St.is_s1a({"dom": {"wood": 1, "people": []}}))
 	assert_false(St.is_s1a({"climate": true}))
 	assert_true(St.is_s1a({"climate": false, "dark": null}))
 
