@@ -1,15 +1,23 @@
 extends RefCounted
-## S1a council stance, blocs and one non-decree vote. Only the field slice's two motions and five
-## law ids are accepted; extending that set requires porting the corresponding S1 effects too.
+## S1a council stance, blocs and one non-decree vote. The field slice's two motions and every
+## S1a law but 비상대권 are accepted, enacted or repealed (결정 426 PR 7: S1a laws are LAW_IDS less
+## S1C_LAWS and FAREWELL_LAWS; emergency_powers, ratifying and deals are not ported yet, and no
+## S1a law has a variant to amend to). tests/train/test_law_port.gd checks them against S1.
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const VoteCount = preload("res://game/politics/vote_count.gd")
 const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
+const St = preload("res://game/train/train_state.gd")
+const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 
 const LEDGER_MAX := 64
 const SUPPORTED_LAWS := [
-	"corpse_throw", "corpse_store", "corpse_burn", "common_kitchen", "contribution_ration",
+	"common_kitchen", "contribution_ration", "seed_grain", "common_heating", "heat_quota", "snow_duty",
+	"child_labor", "corpse_throw", "corpse_store", "corpse_burn", "treat_all", "triage", "no_outsiders",
+	"patrol", "secret_ballot", "strike_ban", "guided_voting", "evening_pot", "wall_ledger",
+	"night_of_names", "emergency_ration",
 ]
+const CHILD_LAWS := ["child_labor", "child_pack"]
 const SUPPORTED_MOTIONS := ["field_symbol", "field_promise"]
 
 
@@ -62,7 +70,7 @@ static func _is_law(agenda: Dictionary) -> bool:
 static func _assert_supported(agenda: Dictionary) -> void:
 	if _is_law(agenda):
 		assert(SUPPORTED_LAWS.has(agenda.get("law")), "지원하지 않는 법 안건: %s" % agenda.get("law"))
-		assert(not bool(agenda.get("repeal", false)) and not bool(agenda.get("ratify", false)) and not agenda.has("amend"), "폐지·추인·개정 안건은 이 슬라이스 범위가 아니다")
+		assert(not bool(agenda.get("ratify", false)) and not agenda.has("amend"), "추인·개정 안건은 아직 옮기지 않았다")
 	else:
 		assert(SUPPORTED_MOTIONS.has(agenda.get("motion")), "지원하지 않는 동의 안건: %s" % agenda.get("motion"))
 
@@ -276,30 +284,96 @@ static func _motion_effect(g: Dictionary, t: Dictionary, agenda: Dictionary, pas
 		_journal(g, "%s의 추궁이 부결됐다. 그 칸은 들어 주지 않았다고 기억한다." % name, "bad")
 
 
+## S1 addCard.
+static func _add_card(g: Dictionary, value: Dictionary) -> void:
+	var row: Dictionary = {"uid": g["nextCardUid"]}
+	row.merge(value)
+	g["nextCardUid"] = int(g["nextCardUid"]) + 1
+	(g["cards"] as Array).append(row)
+
+
+## S1 classroom enactScale (결정 205): child work set while a lesson stands
+## takes its one-time cost at half, and remembers so its repeal takes back half.
+static func _enact_scale(g: Dictionary, t: Dictionary, law: String) -> float:
+	if not CHILD_LAWS.has(law):
+		return 1.0
+	var lesson := false
+	for edu: String in t["EDU_LAWS"]:
+		lesson = lesson or _law_active(g, edu)
+	if not lesson:
+		return 1.0
+	if not g.get("edu") is Dictionary:
+		g["edu"] = {"segs": 0, "early": 0, "hands": 0}
+	if not g["edu"].get("halfMat") is Dictionary:
+		g["edu"]["halfMat"] = {}
+	g["edu"]["halfMat"][law] = true
+	return 0.5
+
+
+## S1 classroom repealScale.
+static func _repeal_scale(g: Dictionary, law: String) -> float:
+	var edu: Variant = g.get("edu")
+	if not edu is Dictionary or not edu.get("halfMat") is Dictionary or not edu["halfMat"].get(law, false):
+		return 1.0
+	edu["halfMat"].erase(law)
+	return 0.5
+
+
+static func _calm(g: Dictionary) -> Dictionary:
+	if not g.get("calm") is Dictionary:
+		g["calm"] = {}
+	return g["calm"]
+
+
+## S1 calmEnact: the evening pot, the wall ledger and the night of names start from now.
+static func _calm_enact(g: Dictionary, t: Dictionary, law: String) -> void:
+	if law == "evening_pot":
+		var c := _calm(g)
+		c["potOn"] = float(g["coal"]) > float(t["CALM"]["potOffCoal"])
+		c["potSegs"] = 0
+	elif law == "wall_ledger":
+		var c := _calm(g)
+		c["ledger"] = St.ledger_level(g, t)
+		c["ledgerSegs"] = 0
+	elif law == "night_of_names":
+		_calm(g)["nightSeg"] = int(g["seg"]) - 1
+
+
+## S1 calmRepeal: wiping the wall ledger costs trust once.
+static func _calm_repeal(g: Dictionary, t: Dictionary, law: String) -> void:
+	if law == "wall_ledger":
+		_bump(g, "trust", float(t["CALM"]["repealTrust"]), "calm.ledger")
+		_journal(g, "벽 장부를 지웠다. 숨기는 것이 있다는 말이 돈다.", "bad")
+	elif law == "evening_pot" and g.get("calm") is Dictionary:
+		g["calm"].erase("potOn")
+
+
 static func _enact_law_mut(g: Dictionary, t: Dictionary, law: String, bought_from: Array) -> void:
 	assert(SUPPORTED_LAWS.has(law), "지원하지 않는 법: %s" % law)
-	assert(bought_from.is_empty(), "field slice council accepts no bought votes")
+	assert(bought_from.is_empty(), "the council accepts no bought votes yet")
 	var definition: Dictionary = t["LAWS"][law]
 	var base: Variant = t["LAW_VARIANT_OF"].get(law)
 	if base != null and (g["passed"] as Dictionary).has(base):
 		(g["passed"] as Dictionary).erase(base)
 		g["repealedAt"][base] = g["session"]
 		var old: Dictionary = t["LAWS"][base]
+		var base_scale := _repeal_scale(g, base)
 		for comm: String in t["COMMS"]:
 			var mats: Variant = (old.get("mats", {}) as Dictionary).get(comm)
 			if mats is Array:
 				for i: int in 4:
-					g["comms"][comm]["base"][i] = float(g["comms"][comm]["base"][i]) - float(mats[i])
+					g["comms"][comm]["base"][i] = float(g["comms"][comm]["base"][i]) - float(mats[i]) * base_scale
 		_journal(g, "%s을(를) %s(으)로 고쳤다." % [old["title"], definition["title"]])
 	g["passed"][law] = g["session"]
+	var scale := _enact_scale(g, t, law)
 	for comm: String in t["COMMS"]:
 		var mats: Variant = (definition.get("mats", {}) as Dictionary).get(comm)
 		if mats is Array:
 			for i: int in 4:
-				g["comms"][comm]["base"][i] = float(g["comms"][comm]["base"][i]) + float(mats[i])
+				g["comms"][comm]["base"][i] = float(g["comms"][comm]["base"][i]) + float(mats[i]) * scale
 		var relation: Variant = (definition.get("rels", {}) as Dictionary).get(comm)
 		if relation != null:
-			_bump_rel(g, comm, float(relation), "vote")
+			_bump_rel(g, comm, float(relation) * scale, "vote")
 	if not g.get("onceTaken") is Array:
 		g["onceTaken"] = []
 	var once: String = base if base != null else law
@@ -308,11 +382,17 @@ static func _enact_law_mut(g: Dictionary, t: Dictionary, law: String, bought_fro
 		if float(res.get("trustOnce", 0)) != 0.0:
 			_bump(g, "trust", float(res["trustOnce"]), "vote")
 		if float(res.get("fearOnce", 0)) != 0.0:
-			g["fear"] = _clamp(float(g["fear"]) + float(res["fearOnce"]), 0.0, 100.0)
+			g["fear"] = _clamp(float(g["fear"]) + float(res["fearOnce"]) * scale, 0.0, 100.0)
 		if float(res.get("foodOnce", 0)) != 0.0:
 			_bump(g, "food", float(res["foodOnce"]), "vote")
 		if float(res.get("trustOnce", 0)) != 0.0 or float(res.get("fearOnce", 0)) != 0.0 or float(res.get("foodOnce", 0)) != 0.0:
 			(g["onceTaken"] as Array).append(once)
+	_calm_enact(g, t, law)
+	# 비상식량감축법이 서면 꼬리칸이 요구를 낸다(결정 091·430, turn_ration_cut.gd).
+	if law == "emergency_ration":
+		_add_card(g, {"kind": "ration_cut", "comm": "tail"})
+	if law == "guided_voting":
+		g["guidedLeft"] = 3
 	if (t["CORPSE_LAWS"] as Array).has(law):
 		g["corpseIssue"] = false
 	g["stats"]["lawsPassed"] = int(g["stats"]["lawsPassed"]) + 1
@@ -321,6 +401,52 @@ static func _enact_law_mut(g: Dictionary, t: Dictionary, law: String, bought_fro
 static func enact_law(g0: Dictionary, t: Dictionary, law: String, bought_from: Array = []) -> Dictionary:
 	var g := g0.duplicate(true)
 	_enact_law_mut(g, t, law, bought_from)
+	return g
+
+
+## S1 repealLaw: the law's cost comes back off the cars, the cars that wanted it
+## (stance 3 or more) take it badly, and a law bought with a promise and turned
+## over within three sessions is remembered as betrayal.
+static func _repeal_law_mut(g: Dictionary, t: Dictionary, law: String) -> void:
+	assert(SUPPORTED_LAWS.has(law), "지원하지 않는 법: %s" % law)
+	var definition: Dictionary = t["LAWS"][law]
+	var supporters: Array[String] = []
+	for comm: String in t["COMMS"]:
+		if int(stance(g, t, comm, {"law": law, "repeal": false}, false)["score"]) >= 3:
+			supporters.append(comm)
+	(g["passed"] as Dictionary).erase(law)
+	g["repealedAt"][law] = g["session"]
+	var scale := _repeal_scale(g, law)
+	for comm: String in t["COMMS"]:
+		var mats: Variant = (definition.get("mats", {}) as Dictionary).get(comm)
+		if mats is Array:
+			for i: int in 4:
+				g["comms"][comm]["base"][i] = float(g["comms"][comm]["base"][i]) - float(mats[i]) * scale
+	for comm: String in supporters:
+		_bump_rel(g, comm, -float(t["P"]["repealRel"]), "vote")
+	var bought: Variant = null
+	if g.get("boughtBy") is Dictionary:
+		bought = g["boughtBy"].get(law)
+		g["boughtBy"].erase(law)
+	if bought is Dictionary and int(g["session"]) - int(bought["session"]) <= 3:
+		var names: Array[String] = []
+		for comm: String in bought["comms"]:
+			_offend(g, comm)
+			names.append(String(t["COMM_NAME"][comm]))
+		_journal(g, "약속으로 통과시킨 %s을(를) 뒤집었다. %s이(가) 배신으로 기억한다." % [definition["title"], ", ".join(names)], "bad")
+	if (t["CORPSE_LAWS"] as Array).has(law):
+		g["corpseIssue"] = true
+	_calm_repeal(g, t, law)
+	if law == "guided_voting":
+		g["guidedLeft"] = 0
+	if law == "emergency_ration":
+		RationCut.revert(g)
+	g["stats"]["repeals"] = int(g["stats"]["repeals"]) + 1
+
+
+static func repeal_law(g0: Dictionary, t: Dictionary, law: String) -> Dictionary:
+	var g := g0.duplicate(true)
+	_repeal_law_mut(g, t, law)
 	return g
 
 
@@ -379,6 +505,8 @@ static func cast_vote(g0: Dictionary, t: Dictionary) -> Dictionary:
 		_motion_effect(g, t, agenda, bool(result["passed"]))
 	elif not bool(result["passed"]):
 		g["stats"]["lawsFailed"] = int(g["stats"]["lawsFailed"]) + 1
+	elif bool(agenda.get("repeal", false)):
+		_repeal_law_mut(g, t, agenda["law"])
 	else:
 		_enact_law_mut(g, t, agenda["law"], [])
 	return {"result": result, "g": g}
