@@ -845,7 +845,7 @@ func _wear(p, amount: float) -> void:
 	var h: Dictionary = p.hands[0]
 	var id: String = String(h["id"])
 	var before: float = float(h["condition"])
-	h["condition"] = maxf(0.0, before - amount)
+	h["condition"] = WR.worn(id, before, amount)
 	var label: String = String(W.get_data(id).get("name", ""))
 	# An improvised one goes to pieces in the hand (decision 423, P23); a
 	# factory one cracks first and breaks at nothing (weapons.md: never
@@ -1122,6 +1122,10 @@ func fire(p, at: Vector3, target = null) -> String:
 		return "burst"
 	# A silencer takes the shot one step down and wears with it (weapons.md 소음기).
 	var silencer: String = String(h.get("silencer", ""))
+	if silencer != "" and (not WR.silencer_fits(silencer, wid) or float(h.get("silencer_cond", 1.0)) <= 0.0):
+		h.erase("silencer")
+		h.erase("silencer_cond")
+		silencer = ""
 	game.make_sound(p.position, WR.shot_level(wid, silencer), "gun" if int(d["sound"]) > 0 else "bow", p)
 	if silencer != "":
 		h["silencer_cond"] = float(h.get("silencer_cond", 1.0)) - WR.silencer_wear(silencer, wid)
@@ -1154,11 +1158,13 @@ func fire(p, at: Vector3, target = null) -> String:
 		var z: Dictionary = game.zombies.nearest(at, 0.8, true, true)
 		if not z.is_empty():
 			hit = _shoot_zombie(p, z, d, radius, dist)
+	var lands: Vector3 = end
 	if not hit:
-		# The miss lands somewhere past the target: a small sound over there.
+		# The miss lands somewhere past the target: a small sound over there, and the arrow with it.
 		var past: Vector3 = at + (at - p.position).normalized() * rng.randf_range(1.0, 3.0)
 		game.make_sound(past, SimNoise.Level.QUIET, "impact", p)
-	_drop_arrow(arrow, end, hit)
+		lands = past
+	_drop_arrow(arrow, lands, hit)
 	_after_shot(p)
 	return "shot"
 

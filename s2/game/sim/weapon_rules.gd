@@ -71,6 +71,19 @@ static func melee_breaks(id: String) -> bool:
 	return W.get_data(id).get("kind", "") == "melee"
 
 
+## Condition after one use. A factory melee weapon not yet cracked is never
+## worn to nothing in one go: it stops just short, cracked, so the warning
+## always comes first.
+const LAST_SLIVER: float = 0.01
+
+
+static func worn(id: String, before: float, amount: float) -> float:
+	var after: float = maxf(0.0, before - amount)
+	if after <= 0.0 and melee_breaks(id) and not W.breaks(id) and W.condition_level(before) < 2:
+		return LAST_SLIVER
+	return after
+
+
 ## The blow that took it from "닳음" into "위험".
 static func cracks(id: String, before: float, after: float) -> bool:
 	return melee_breaks(id) and not W.breaks(id) and W.condition_level(before) < 2 and W.condition_level(after) == 2 and after > 0.0

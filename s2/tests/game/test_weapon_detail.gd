@@ -88,6 +88,28 @@ func test_a_factory_knife_cracks_then_breaks() -> void:
 	assert_true(p.hands.is_empty(), "broken at nothing")
 
 
+func test_one_heavy_wear_cracks_before_it_breaks() -> void:
+	var p = game.player
+	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.35, "loaded": 0}])
+	game.combat._wear(p, 0.5)
+	assert_eq(p.hands.size(), 1, "never broken without the crack first")
+	assert_eq(float(p.hands[0]["condition"]), WR.LAST_SLIVER)
+	game.combat._wear(p, 0.5)
+	assert_true(p.hands.is_empty())
+
+
+func test_a_spent_or_unknown_silencer_is_taken_off_before_the_shot() -> void:
+	var p = game.player
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8, "silencer": "no_such_thing", "silencer_cond": 0.0}]
+	var guard := 0
+	while game.combat.fire(p, p.position + Vector3(6, 0, 0)) != "shot" and guard < 50:
+		guard += 1
+		p.jam_t = 0.0
+		p.reload_t = 0.0
+	assert_false(p.weapon().has("silencer"))
+	assert_eq(_last_gun_level(), SimNoise.Level.LOUD)
+
+
 func test_arrows_break_now_and_then() -> void:
 	assert_true(WR.arrow_breaks(0.29, true))
 	assert_false(WR.arrow_breaks(0.31, true))
