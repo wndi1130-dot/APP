@@ -4,6 +4,7 @@ extends RefCounted
 ## - only a running locomotive makes thick smoke, long and grey, flowing back;
 ## - a stopped locomotive makes low steam under the wheels, never a rising column;
 ## - car stoves make faint steam only;
+## - breath in a freezing car is a small puff that spreads off a face and is gone in a second;
 ## - omen and field smoke hugs the ground (doorframes, sacks), never a column;
 ## - buildings, factory chimneys and cooling towers make none, so there is no
 ##   kind for them, and a closed wagon has no flue.
@@ -26,6 +27,9 @@ const KINDS: Dictionary = {
 	"stove": {"amount": 8, "lifetime": 2.0, "dir": Vector3(0.0, 1.0, 0.0), "spread": 25.0,
 		"v_min": 0.25, "v_max": 0.4, "up_g": 0.02, "scale": Vector2(0.2, 0.35), "grow": 2.0,
 		"color": Color(0.78, 0.79, 0.80), "old": Color(0.84, 0.85, 0.86), "max_alpha": 0.22, "max_rise": 1.0},
+	"breath": {"amount": 8, "lifetime": 1.3, "dir": Vector3(0.0, 0.5, 1.0), "spread": 35.0,
+		"v_min": 0.15, "v_max": 0.25, "up_g": 0.05, "scale": Vector2(0.12, 0.16), "grow": 2.6,
+		"color": Color(0.52, 0.54, 0.58), "old": Color(0.58, 0.59, 0.62), "max_alpha": 0.4, "max_rise": 0.4},
 	"low_drift": {"amount": 18, "lifetime": 3.0, "dir": Vector3(1.0, 0.1, 0.0), "spread": 30.0, "flat": true,
 		"v_min": 0.3, "v_max": 0.6, "up_g": 0.03, "scale": Vector2(0.5, 0.9), "grow": 2.2,
 		"color": Color(0.36, 0.36, 0.37), "old": Color(0.55, 0.56, 0.57), "max_alpha": 0.45, "max_rise": 1.5},

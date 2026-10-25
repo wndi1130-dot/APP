@@ -22,6 +22,13 @@ extends Node3D
 ## short joining motion between two. What the scene does to the body itself
 ## (sat it down, stood it up, set it walking, a gesture) is taken at once.
 ## The change of clip itself is eased (dead_body.gd mix_from).
+##
+## The cold over it (user 2026-10-25: two or three under one blanket, breath,
+## doing things while shivering): a tremble on top of whatever one does, as
+## much as the cold gets to that person; on a cold bench neighbours hunched
+## under one blanket; in a freezing car breath before a few faces. All three
+## follow the warmth the room shows and each person's own delay, so the stove
+## and the frost still go first.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
@@ -31,6 +38,7 @@ const Gesture = preload("res://game/train/train_gesture.gd")
 const Look = preload("res://game/train/train_look.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Rules = preload("res://game/train/train_rules.gd")
+const Smoke = preload("res://fx/smoke.gd")
 
 const SETTING: String = "visuals/baked_people_enabled"   # the field's switch (person_visual.gd)
 const MAX_PEOPLE: int = 240
@@ -89,6 +97,41 @@ const POSTURE: Dictionary = {
 	"t_floor_sit": "floor", "t_crouch": "floor", "t_warm_hands": "floor", "t_lie": "lie", "t_kneel_work": "floor",
 	"t_walk": "walk", "t_carry": "walk",
 }
+## The tremble of the cold (dead_vat.gdshader: b below 0), at most SHIVER_MAX,
+## less in a motion that already warms or already shivers.
+const SHIVER_MAX: float = 0.5
+const SHIVER_DAMP: Dictionary = {
+	"t_shiver": 0.0, "t_warm_hands": 0.4, "t_lie": 0.5, "t_walk": 0.3, "t_carry": 0.3,
+	"t_shovel": 0.5, "t_stir": 0.5, "t_kneel_work": 0.5,
+}
+const UNDER_BLANKET: float = 0.5          # the tremble left under a shared blanket
+## One blanket over two or three side by side on a cold bench, hunched up under
+## it. The cloth is shaped here (blanket_mesh) over the hunched sitting body of
+## the train bake, for the bench's seat step; it is pulled up over BLANKET_UP
+## once all under it are seen hunched, and let down again the same way.
+const BLANKETS_A_CAR: int = 2
+const BLANKETS: int = 16                  # of each size, for the whole train
+const BLANKET_UP: float = 0.9
+const BLANKET_LOW: float = 0.55           # how far down it starts (in the lap)
+const BLANKET_STEP: float = 0.95          # metres between two seats (train_scene.gd SLOT_STEP)
+const BLANKET_EDGE: float = 0.34          # metres it reaches past the outer two
+## Worn wool, dark and cold beside the snow light: one of these a blanket.
+const BLANKET_TINTS: Array = [
+	Color(0.60, 0.54, 0.46), Color(0.46, 0.50, 0.44), Color(0.47, 0.51, 0.58), Color(0.52, 0.42, 0.38),
+]
+## Breath in a freezing car: one small emitter a car (fx/smoke.gd "breath"),
+## from the mouths of a few who feel the cold, not of everyone.
+const BREATH_CARS: int = 6
+const BREATH_HEADS: int = 4
+const BREATH_FROM: float = 0.05           # the tremble from which one's breath shows
+const BREATH_PER_HEAD: float = 0.5        # puffs alive a head: one about every 2.4 s
+const BREATH_EVERY: float = 0.5           # seconds between looks at whose breath shows
+## Where the mouth is in a motion (metres from the baked body's place).
+const MOUTH: Dictionary = {
+	"t_sit_huddle": Vector3(0.0, 1.0, 0.34), "t_sit": Vector3(0.0, 1.16, 0.04),
+	"t_sit_talk": Vector3(0.0, 1.16, 0.04), "t_sit_doze": Vector3(0.0, 1.1, 0.18),
+}
+const MOUTH_STANDING := Vector3(0.0, 1.45, 0.13)
 
 var scene                                 # train_scene.gd
 var bodies: Dictionary = {}               # folder -> {draw, clip_index, table, mix_in, count}
@@ -97,6 +140,11 @@ var drawn: Dictionary = {}                # body -> clip name last drawn, for th
 var worn: Dictionary = {}                 # body -> the folder it wears
 var people: Dictionary = {}               # body -> {shown, want, want_since, pose, bridge_until, after, mix, wears}
 var guns: MultiMeshInstance3D
+var blankets: Array = []                  # one multimesh for two under it, one for three
+var covers: Dictionary = {}               # first under it -> {k (0 down .. 1 up), under}
+var shivers: Dictionary = {}              # body -> the tremble drawn, for the tests and the shots
+var breath: Dictionary = {}               # car id -> {p, t, key, heads}
+var _last_now: float = 0.0
 
 
 static func enabled() -> bool:
@@ -150,6 +198,8 @@ func setup(train_scene) -> void:
 		one["draw"] = draw
 		bodies[String(folder)] = one
 	guns = _lap_guns()
+	for n in [2, 3]:
+		blankets.append(_blanket_draw(n))
 
 
 func is_worn() -> bool:
@@ -160,12 +210,17 @@ func _process(_delta: float) -> void:
 	if draws.is_empty() or scene == null:
 		return
 	var now: float = float(scene.clock)
+	var dt: float = clampf(now - _last_now, 0.0, 0.5)
+	_last_now = now
 	for folder in bodies:
 		bodies[folder]["count"] = 0
 	drawn.clear()
 	worn.clear()
+	shivers.clear()
 	var seen: Dictionary = {}
 	var gun_count := 0
+	var wanted: Array = []                # the blankets wanted this frame: the bodies under each
+	var cars_seen: Dictionary = {}
 	for c in scene.cars:
 		var state := car_state(c)
 		var prev := ""
@@ -173,9 +228,15 @@ func _process(_delta: float) -> void:
 		var last_want := ""
 		var last_x := -1000.0
 		var last_pose := ""
-		for b in in_seat_order(c["bodies"]):
-			if not is_instance_valid(b):
-				continue
+		var ordered := in_seat_order(c["bodies"])
+		var under: Dictionary = {}
+		for group in blanket_groups(_bench_rows(ordered, state, now), state):
+			var members: Array = group.map(func(i): return ordered[i])
+			for m in members:
+				under[m] = true
+			wanted.append(members)
+		var heads: Array = []
+		for b in ordered:
 			_hide_boxes(b)
 			if not b.visible:
 				continue
@@ -183,6 +244,8 @@ func _process(_delta: float) -> void:
 			var key: int = absi(b.get_instance_id())
 			var life: Dictionary = scene.life.actors.get(b.get_instance_id(), {})
 			var traits: Dictionary = life.get("traits", {})
+			if under.has(b):
+				traits = traits.merged({"blanket": true})
 			var x: float = b.global_position.x
 			var beside: bool = String(b.pose) == last_pose and x - last_x < NEIGHBOUR
 			var want := want_for(b, state, String(life.get("activity", "")), key, now, traits, last_want if beside else "")
@@ -206,13 +269,25 @@ func _process(_delta: float) -> void:
 			var mm: MultiMesh = (one["draw"] as MultiMeshInstance3D).multimesh
 			mm.set_instance_transform(i, place_of(b, clip, state))
 			var shade: float = lerpf(0.78, 1.0, _h(key, 11)) * (0.9 if state["freezing"] else 1.0)
-			var plain := Color(_h(key, 12), float(one["clip_index"].get(clip, 0)), 0.0, shade)
+			var shiver := _shiver_of(rec, state, key, clip, under.has(b), dt)
+			shivers[b] = shiver
+			var plain := Color(_h(key, 12), float(one["clip_index"].get(clip, 0)), -shiver, shade)
 			mm.set_instance_custom_data(i, DeadBody.mix_from(rec["mix"], plain, now, one["table"], one["mix_in"]))
 			one["count"] = i + 1
+			if state["freezing"] and shiver >= BREATH_FROM and heads.size() < BREATH_HEADS:
+				var mouth = MOUTH.get(clip, MOUTH_STANDING if String(b.pose) == "stand" else null)
+				if mouth != null:
+					heads.append(place_of(b, clip, state) * Vector3(mouth))
 			if guns != null and gun_count < LAP_GUNS and String(state["layout"]) == "guard" and clip == "t_sit" and String(b.pose) == "sit":
 				var at: Transform3D = place_of(b, clip, state)
 				guns.multimesh.set_instance_transform(gun_count, at * Transform3D(Basis(Vector3.UP, PI * 0.5), LAP_AT))
 				gun_count += 1
+		cars_seen[String(c["id"])] = true
+		_breathe(c, heads, now)
+	for id in breath:
+		if not cars_seen.has(id):
+			(breath[id]["p"] as GPUParticles3D).emitting = false
+	_cover(wanted, dt)
 	if guns != null:
 		guns.multimesh.visible_instance_count = gun_count
 	for folder in bodies:
@@ -352,6 +427,9 @@ static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.
 	var forced := _forced(b, s, activity, t)
 	if forced != "":
 		return forced
+	# Under a shared blanket one sits hunched up with the others.
+	if pose == "sit" and bool(life.get("blanket", false)):
+		return "t_sit_huddle"
 	var me := traits_of(key)
 	# What the life plan already knows of them: the sick and hurt, the children.
 	me["ill"] = bool(life.get("sick", false)) or bool(life.get("injured", false))
@@ -434,7 +512,7 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 ## The odds of each motion for one person in one posture: the car's numbers
 ## (0..1 how cold, hungry, exposed, tense, crowded) against their own traits.
 static func weights_for(pose: String, b, s: Dictionary, me: Dictionary) -> Dictionary:
-	var cold_n: float = clampf((60.0 - float(s["warmth"])) / 40.0, 0.0, 1.0)
+	var cold_n: float = cold_of(s)
 	var hunger_n: float = clampf((60.0 - float(s.get("ration", 60.0))) / 40.0, 0.0, 1.0)
 	var expo_n: float = clampf((float(s["exposure"]) - 30.0) / 60.0, 0.0, 1.0)
 	var tense_n: float = maxf(clampf((float(s.get("tension", 0.0)) - 30.0) / 50.0, 0.0, 1.0), 0.6 if s.get("resent", false) else 0.0)
@@ -551,6 +629,269 @@ func shown_for(b, want: String, now: float) -> String:
 		return String(rec["shown"])
 	rec["shown"] = want
 	return want
+
+
+## How cold a car is for the people in it, 0 (60 and warmer) .. 1 (20 and colder).
+static func cold_of(s: Dictionary) -> float:
+	return clampf((60.0 - float(s["warmth"])) / 40.0, 0.0, 1.0)
+
+
+## How much one person trembles in a car (0 .. SHIVER_MAX): only the ones the
+## cold gets to (their own `cold` under the car's), more the further under.
+static func shiver_for(s: Dictionary, me: Dictionary) -> float:
+	var felt: float = cold_of(s) - float(me.get("cold", 1.0))
+	if felt <= 0.0:
+		return 0.0
+	return clampf(0.12 + felt * 0.6, 0.0, SHIVER_MAX)
+
+
+## The tremble drawn on one person: what the car and their motion call for,
+## reached at their own pace (their `react`), so they do not all start at once.
+func _shiver_of(rec: Dictionary, s: Dictionary, key: int, clip: String, covered: bool, dt: float) -> float:
+	var me := traits_of(key)
+	var target: float = shiver_for(s, me) * float(SHIVER_DAMP.get(clip, 1.0)) * (UNDER_BLANKET if covered else 1.0)
+	if not rec.has("shiver"):
+		rec["shiver"] = target
+	else:
+		rec["shiver"] = lerpf(float(rec["shiver"]), target, 1.0 - exp(-dt / float(me["react"])))
+	return float(rec["shiver"])
+
+
+## A car's people in seat order as blanket_groups reads them: where each sits,
+## whether they sit on the bench with nothing else to do, how soon the cold gets to them.
+func _bench_rows(ordered: Array, s: Dictionary, now: float) -> Array:
+	var rows: Array = []
+	for b in ordered:
+		var life: Dictionary = scene.life.actors.get(b.get_instance_id(), {})
+		var free: bool = b.visible and String(b.pose) == "sit" and int(b.seat) < 0 \
+			and _forced(b, s, String(life.get("activity", "")), now) in ["", "t_sit_huddle"]
+		rows.append({"x": b.global_position.x, "free": free, "cold": float(traits_of(absi(b.get_instance_id()))["cold"])})
+	return rows
+
+
+## Who shares a blanket on a cold bench: neighbours side by side (NEIGHBOUR
+## apart in seat order), each one the cold gets to, two or three a blanket and
+## BLANKETS_A_CAR of them a car. Indices into the rows.
+static func blanket_groups(rows: Array, s: Dictionary) -> Array:
+	var groups: Array = []
+	if not bool(s.get("cold", false)):
+		return groups
+	var cold_n := cold_of(s)
+	var run: Array = []
+	var last_x := -1000.0
+	for i in rows.size() + 1:
+		var ok: bool = i < rows.size() and bool(rows[i]["free"]) and float(rows[i]["cold"]) < cold_n
+		if ok and not run.is_empty() and float(rows[i]["x"]) - last_x >= NEIGHBOUR:
+			_split_run(run, groups)
+			run = []
+		if ok:
+			run.append(i)
+			last_x = float(rows[i]["x"])
+		elif not run.is_empty():
+			_split_run(run, groups)
+			run = []
+	return groups.slice(0, BLANKETS_A_CAR)
+
+
+## Two or three a blanket: a run of four is two pairs, of five a three and a pair.
+static func _split_run(run: Array, groups: Array) -> void:
+	var at := 0
+	var left := run.size()
+	while left >= 2:
+		var take := 3 if left == 3 or left >= 5 else 2
+		groups.append(run.slice(at, at + take))
+		at += take
+		left -= take
+
+
+## Draw the blankets: each wanted one is pulled up once all under it are seen
+## hunched, and one no longer wanted (warmer, or someone got up) let down and gone.
+func _cover(wanted: Array, dt: float) -> void:
+	var seen: Dictionary = {}
+	for members in wanted:
+		var key: int = absi((members[0] as Node3D).get_instance_id())
+		var rec: Dictionary = covers.get(key, {"k": 0.0})
+		rec["under"] = members
+		rec["up"] = members.all(func(m): return String(drawn.get(m, "")) == "t_sit_huddle")
+		covers[key] = rec
+		seen[key] = true
+	var counts := [0, 0]
+	for key in covers.keys():
+		var rec: Dictionary = covers[key]
+		var members: Array = rec["under"]
+		if not members.all(func(m): return is_instance_valid(m)):
+			covers.erase(key)
+			continue
+		var up: bool = seen.has(key) and bool(rec["up"])
+		rec["k"] = move_toward(float(rec["k"]), 1.0 if up else 0.0, dt / BLANKET_UP)
+		if float(rec["k"]) <= 0.0:
+			if not seen.has(key):
+				covers.erase(key)
+			continue
+		var size: int = members.size() - 2
+		if counts[size] >= BLANKETS:
+			continue
+		var mm: MultiMesh = (blankets[size] as MultiMeshInstance3D).multimesh
+		mm.set_instance_transform(counts[size], cover_place(members, float(rec["k"])))
+		mm.set_instance_color(counts[size], BLANKET_TINTS[key % BLANKET_TINTS.size()])
+		counts[size] += 1
+	for n in blankets.size():
+		var draw: MultiMeshInstance3D = blankets[n]
+		draw.multimesh.visible_instance_count = counts[n]
+		draw.visible = counts[n] > 0          # no draw call while no one is under one
+
+
+## Where one blanket lies: over the middle of those under it, stretched to how
+## far apart they sit, low in the lap at k 0 and over the shoulders at k 1.
+func cover_place(members: Array, k: float) -> Transform3D:
+	var first: Transform3D = place_of(members[0], "t_sit_huddle", {})
+	var last: Transform3D = place_of(members[members.size() - 1], "t_sit_huddle", {})
+	var span: float = first.origin.distance_to(last.origin) / float(members.size() - 1)
+	var e: float = k * k * (3.0 - 2.0 * k)
+	var basis := first.basis * Basis.from_scale(Vector3(span / BLANKET_STEP, lerpf(BLANKET_LOW, 1.0, e), lerpf(0.85, 1.0, e)))
+	return Transform3D(basis, (first.origin + last.origin) * 0.5)
+
+
+func _blanket_draw(n: int) -> MultiMeshInstance3D:
+	var draw := MultiMeshInstance3D.new()
+	draw.name = "Blankets%d" % n
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = blanket_mesh(n)
+	mm.instance_count = BLANKETS
+	mm.visible_instance_count = 0
+	mm.custom_aabb = AABB(Vector3(-20, -3, -5), Vector3(400, 10, 10))
+	draw.multimesh = mm
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.vertex_color_is_srgb = false
+	mat.roughness = 1.0
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	draw.material_override = mat
+	draw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(draw)
+	return draw
+
+
+## The cloth across the car (z, y), from the hem behind the backs over the
+## shoulders to the hem over the shins, measured round the train bake's hunched
+## sitting body (t_sit_huddle: shoulders about 0.95 m up, head bowed forward
+## over the knees, arms round them as far as 0.6 m in front).
+const BLANKET_PROFILE: Array = [
+	Vector2(-0.55, 0.48), Vector2(-0.52, 0.70), Vector2(-0.46, 0.88), Vector2(-0.34, 0.98),
+	Vector2(-0.16, 1.02), Vector2(0.04, 1.02), Vector2(0.24, 0.96), Vector2(0.45, 0.86),
+	Vector2(0.65, 0.76), Vector2(0.70, 0.60), Vector2(0.66, 0.44), Vector2(0.58, 0.30),
+]
+## How much each point is the top of the cloth (which sinks round a head and between two).
+const BLANKET_TOP: Array = [0.0, 0.0, 0.3, 0.7, 1.0, 1.0, 0.8, 0.4, 0.0, 0.0, 0.0, 0.0]
+const BLANKET_WOOL := Color(0.40, 0.38, 0.35)
+const BLANKET_STRIPE := Color(0.16, 0.15, 0.14)
+
+
+## One blanket for `n` side by side, `BLANKET_STEP` apart: the cloth sinks
+## round each head (it lies on the shoulders, the head above it) and a little
+## between two, hangs at the ends, falls in folds to a wavy hem, and has a dark
+## band near each hem. Linear vertex colours, tinted per blanket.
+static func blanket_mesh(n: int) -> ArrayMesh:
+	var centres: Array = []
+	for k in n:
+		centres.append(BLANKET_STEP * (float(k) - float(n - 1) * 0.5))
+	var half: float = BLANKET_STEP * float(n - 1) * 0.5 + BLANKET_EDGE
+	var cols: int = int(ceil(half * 2.0 / 0.08))
+	# The profile, three rows a stretch, with its top weight and its length from each hem.
+	var prof: Array = []
+	for i in BLANKET_PROFILE.size() - 1:
+		for j in 3:
+			var f: float = float(j) / 3.0
+			prof.append([(BLANKET_PROFILE[i] as Vector2).lerp(BLANKET_PROFILE[i + 1], f), lerpf(BLANKET_TOP[i], BLANKET_TOP[i + 1], f)])
+	prof.append([BLANKET_PROFILE[BLANKET_PROFILE.size() - 1], 0.0])
+	var along: Array = [0.0]
+	for r in range(1, prof.size()):
+		along.append(float(along[r - 1]) + (prof[r][0] as Vector2).distance_to(prof[r - 1][0]))
+	var total: float = along[along.size() - 1]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_smooth_group(0)
+	for ci in cols + 1:
+		var x: float = -half + 2.0 * half * float(ci) / float(cols)
+		var near: float = 99.0
+		for cx in centres:
+			near = minf(near, absf(x - float(cx)))
+		var head: float = 1.0 - smoothstep(0.10, 0.20, near)
+		var gap: float = smoothstep(0.28, BLANKET_STEP * 0.5, near) if absf(x) < float(centres[n - 1]) else 0.0
+		var end: float = smoothstep(half - 0.3, half, absf(x))
+		# Folds that fall from the shoulders, deeper toward the hem, darker in their hollows.
+		var wave: float = 0.7 * sin(x * 21.0 + 1.3) + 0.3 * sin(x * 9.0 + 0.4)
+		var fold: float = 0.03 * wave
+		for r in prof.size():
+			var p: Vector2 = prof[r][0]
+			var top: float = prof[r][1]
+			var hem: float = 1.0 - top
+			var z: float = p.x * (1.0 - 0.25 * end) + fold * hem * signf(p.x)
+			var y: float = p.y - top * (0.13 * head + 0.08 * gap + 0.14 * end) - 0.08 * end
+			if r == 0 or r == prof.size() - 1:
+				y += 0.035 * sin(x * 13.0 + float(r)) - 0.03 * wave
+			var from_hem: float = minf(float(along[r]), total - float(along[r]))
+			var band: float = 1.0 - smoothstep(0.03, 0.06, absf(from_hem - 0.12))
+			var hollow: float = 1.0 - 0.22 * hem * (0.5 - 0.5 * wave)
+			st.set_color(BLANKET_WOOL.lerp(BLANKET_STRIPE, band) * hollow * (0.95 + 0.05 * sin(x * 7.0 + float(r))))
+			st.add_vertex(Vector3(x, y, z))
+	var rows: int = prof.size()
+	for ci in cols:
+		for r in rows - 1:
+			var a: int = ci * rows + r
+			var b: int = a + rows
+			st.add_index(a)
+			st.add_index(b)
+			st.add_index(a + 1)
+			st.add_index(a + 1)
+			st.add_index(b)
+			st.add_index(b + 1)
+	st.generate_normals()
+	return st.commit()
+
+
+## The breath of a freezing car: one small emitter (fx/smoke.gd "breath") at
+## the mouths of up to BREATH_HEADS who feel the cold, looked at every
+## BREATH_EVERY seconds; a puff about every 3.5 s a head.
+func _breathe(c: Dictionary, heads: Array, now: float) -> void:
+	var id: String = c["id"]
+	if not breath.has(id):
+		if heads.is_empty() or breath.size() >= BREATH_CARS:
+			return
+		var made := Smoke.build("breath")
+		if made == null:
+			return
+		made.top_level = true
+		add_child(made)
+		made.global_transform = Transform3D.IDENTITY
+		breath[id] = {"p": made, "t": -BREATH_EVERY, "key": "", "heads": 0}
+	var rec: Dictionary = breath[id]
+	var p: GPUParticles3D = rec["p"]
+	if now - float(rec["t"]) < BREATH_EVERY:
+		return
+	rec["t"] = now
+	p.emitting = not heads.is_empty()
+	rec["heads"] = heads.size()
+	if heads.is_empty():
+		return
+	var key := var_to_str(heads.map(func(h: Vector3) -> Vector3i: return Vector3i((h * 20.0).round())))
+	if key == String(rec["key"]):
+		return
+	rec["key"] = key
+	var image := Image.create(heads.size(), 1, false, Image.FORMAT_RGBF)
+	var box := AABB(heads[0], Vector3.ZERO)
+	for i in heads.size():
+		var h: Vector3 = heads[i]
+		image.set_pixel(i, 0, Color(h.x, h.y, h.z))
+		box = box.expand(h)
+	var pm := p.process_material as ParticleProcessMaterial
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_POINTS
+	pm.emission_point_texture = ImageTexture.create_from_image(image)
+	pm.emission_point_count = heads.size()
+	p.amount_ratio = clampf(float(heads.size()) * BREATH_PER_HEAD / float(p.amount), 1.0 / float(p.amount), 1.0)
+	p.visibility_aabb = box.grow(1.0)
 
 
 ## Where the baked body stands for a body of the scene: its place and facing,
