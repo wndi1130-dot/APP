@@ -23,7 +23,12 @@ const SHOVE_KNOCK: float = 0.35
 ## after the last one (user, build 47: 0.5 felt late). Still one per swing time.
 const SHOVE_TIME: float = 0.35
 const SHOVE_WINDUP: float = 0.15     # the arms come back first; then the shove lands (build 89: it was instant)
-const SHOVE_LUNGE: float = 0.15
+## The arms out and back after it lands, as long as the lockout after it: the whole shove
+## is seen through, half a second (user field test 10-25: "a little longer"; it was 0.15).
+const SHOVE_LUNGE: float = 0.35
+## The feet stay planted from the arms coming back until this long after it lands, the
+## first half of the shove: the body does not slide on under its own push.
+const SHOVE_PLANT: float = 0.1
 ## What stops a melee blow while it is drawn back (opts["melee_break"], to be
 ## shown on the phone): "grab" a grab on the one swinging stops it (as with the
 ## shove), "none" nothing does. The time is spent either way.
@@ -471,8 +476,11 @@ func start_swing(p, at) -> void:
 
 ## True while a melee blow holds the feet (decision 425): from its weapon's
 ## feet_from of the swing to its end (Motion.swing_row), the body does not walk
-## off under the stick. Shoves and stomps do not hold them.
+## off under the stick. A shove holds them over its first half; stomps do not.
 func feet_held(p) -> bool:
+	# A shove: from the arms drawn back to just after it lands (SHOVE_PLANT).
+	if p.shove_t > 0.0 or p.lunge_t > SHOVE_LUNGE - SHOVE_PLANT:
+		return true
 	var id: int = p.get_instance_id()
 	if not blows.has(id):
 		return false

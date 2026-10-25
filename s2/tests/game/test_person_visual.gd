@@ -178,6 +178,9 @@ func test_held_bitten_and_the_shove_in_their_own_motions() -> void:
 	p.shove_t = 0.0
 	p.lunge_t = PersonVisual.Pose.LUNGE
 	assert_almost_eq(PersonVisual.motion_of(p, note, 0.1, [], own).x, PersonVisual.SHOVE_OUT.x, 0.001, "out as it lands")
+	p.lunge_t = PersonVisual.Pose.LUNGE * 0.5
+	assert_almost_eq(PersonVisual.motion_of(p, note, 0.1, [], own).x, lerpf(PersonVisual.SHOVE_OUT.x, PersonVisual.SHOVE_OUT.y, 0.5), 0.001, "coming back")
+	assert_eq(PersonVisual.SHOVE_OUT.y, 1.0, "the whole shove is seen, back to where it started")
 
 
 # Two people standing do not breathe together.
