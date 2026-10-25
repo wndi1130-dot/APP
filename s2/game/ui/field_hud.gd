@@ -17,6 +17,7 @@ const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
+const TextFit = preload("res://game/ui/text_fit.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const PortraitFace = preload("res://game/ui/portrait_face.gd")
@@ -28,9 +29,11 @@ const PaperSheet = preload("res://game/ui/paper_sheet.gd")
 const Paper = preload("res://game/ui/paper_parts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
+const SoundRows = preload("res://game/ui/sound_rows.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
+const Amputation = preload("res://game/sim/amputation.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 
@@ -132,8 +135,14 @@ const SAY_FONT: int = 20
 const PANE_W: float = 420.0
 const BODY_PANE_W: float = 500.0
 const BODY_GAP: float = 12.0
+## The cut asks twice (body_injury 2.2): a second press within this many
+## seconds of the first cuts.
+const CUT_CONFIRM_S: float = 3.0
 ## A key beside a thing's row (mockup px).
 const DROP_W: float = 84.0
+## How high the list of what one of the fallen has on stands before it is
+## dragged (mockup px, about four rows; strip_pane).
+const LOOT_LIST_MAX: float = 194.0
 ## A thing's picture in the loot and bag rows (decision 417: a picture and a short name).
 const ITEM_ICON_PX: int = 18
 ## How fast a thing come up out of the snow glimmers (radians a second).
@@ -291,6 +300,7 @@ const HISS_TEXT := "…치직"   # what the field puts up while the set only his
 var game
 var theme: Theme
 var root: Control
+var text_fit: Node                       # text_fit.gd
 var touch: Control
 var overlay: Control
 var clock_label: Label
@@ -407,6 +417,8 @@ var body_shown = null              # whose body picture is (or was last) up
 var body_part: String = ""
 var body_parts: Dictionary = {}    # part -> its button in the picture
 var body_buttons: Array = []       # [{wound, aid, full}] of the rows shown
+var body_cut: Dictionary = {}      # {part, key, plan} the cut's row shown, {} with none
+var cut_armed: Dictionary = {}     # {of, part, t} the first press on 자르기
 var fps_t: float = 0.0
 var frame_ms: float = 0.0
 
@@ -455,6 +467,10 @@ func setup(field_game) -> void:
 	# The bag and the blood key keep to the card as it grows with the weapon's words.
 	portrait.resized.connect(_follow_portrait)
 	_follow_portrait()
+	# No key's word sticks out of it (text_fit.gd), the panes' keys too.
+	text_fit = TextFit.new()
+	text_fit.watch(root)
+	add_child(text_fit)
 
 
 # ---------------------------------------------------------------- building
@@ -2330,6 +2346,7 @@ func settings_panel() -> void:
 	cells.add_child(GlassPane.cell("무전", String(game.RADIO_NAMES[game.radio_mode()]), _set_radio))
 	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
 	pane.body.add_child(cells)
+	pane.body.add_child(SoundRows.make())   # 전체·음악·효과·목소리 (결정 448)
 
 
 func _set_status_size() -> void:
@@ -2488,6 +2505,28 @@ func body_panel(o = null, part: String = "") -> void:
 		all.disabled = not near or Treatment.runnable(full).is_empty()
 		hb.add_child(all)
 		body_buttons.append({"wound": w, "aid": aid, "full": all})
+	# Cutting the limb off (body_injury 2.2): under a limb whose bite or
+	# scratch carries the window, what it takes or why not; a second press cuts.
+	body_cut = {}
+	if o.body.lost.has(part):
+		right.add_child(GlassPane.note("잘렸다", room, GlassPane.INK3, 13.0))
+	elif Amputation.LIMBS.has(part) and o.body.at_risk_on(part):
+		var plan: Dictionary = Amputation.plan(p, o, part, have)
+		right.add_child(GlassPane.note("자르기 · " + Amputation.plan_text(plan), room, GlassPane.INK if bool(plan["ok"]) else GlassPane.INK3, 13.0, 500))
+		var also: Array = plan["also"]
+		if not also.is_empty():
+			right.add_child(GlassPane.note("%s도 물렸다. 그것도 잘라야 막는다" % "·".join(also.map(func(x): return Treatment.PART_NAMES[x])), room))
+		var cut_row := GlassPane.row()
+		right.add_child(cut_row)
+		var cut := GlassPane.key("자르기", _cut.bind(o, part))
+		cut.disabled = not near or not bool(plan["ok"])
+		cut_row.add_child(cut)
+		body_cut = {"part": part, "key": cut, "plan": plan}
+	elif o.body.at_risk_on(part) and o.body.window_left > 0.0:
+		# No cut reaches it (결정 441 (4)): why and how long, and no key.
+		var bitten: bool = o.body.wounds.any(func(w): return w["part"] == part and w["kind"] == "bite" and bool(w.get("risk", false)))
+		var when: String = ("열이 오르기까지 %s" if bitten else "감염인지는 %s 뒤에 안다") % o.body.window_words()
+		right.add_child(GlassPane.note("자를 수 없다 · " + when, room, GlassPane.INK3, 13.0, 500))
 
 
 ## The wounds on a part, the most urgent first.
@@ -2503,10 +2542,17 @@ func body_rows(o, part: String) -> Array:
 ## What the body picture shows of each part: {"fill", "rim", "rim_w",
 ## "cracked", "kinds", "festering"}. A part that bleeds is dark brown (no red,
 ## nothing gory); the chosen one wears brass, a festering one a sallow rim (the
-## brass wins when both), a broken one a crack.
+## brass wins when both), a broken one a crack. A limb cut off is left all but
+## empty, with its word.
 func body_looks(o, chosen: String) -> Dictionary:
 	var out: Dictionary = {}
 	for part: String in BODY_LAYOUT:
+		if o.body.lost.has(part):
+			out[part] = {
+				"fill": Color(0.2, 0.2, 0.2, 0.2), "rim": BRASS if part == chosen else Color(INK, 0.3),
+				"rim_w": 4.0 if part == chosen else 1.5, "cracked": false, "kinds": ["잘림"], "festering": false,
+			}
+			continue
 		var kinds: Array = []
 		var blood := 0.0
 		var festering := false
@@ -2585,6 +2631,21 @@ func _care(o, wound: Dictionary, mode: String) -> void:
 	_close_modal()
 	if not game.actions.treat_wound(game.player, o, wound, mode):
 		toast("지금은 처치 불가")
+
+
+## 자르기: the first press asks once more (the key says so); a second within
+## CUT_CONFIRM_S closes the picture and the cut goes on in the field.
+func _cut(o, part: String) -> void:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if not is_same(cut_armed.get("of"), o) or String(cut_armed.get("part", "")) != part or now - float(cut_armed.get("t", -INF)) > CUT_CONFIRM_S:
+		cut_armed = {"of": o, "part": part, "t": now}
+		if not body_cut.is_empty():
+			(body_cut["key"] as Button).text = "한 번 더 누르면 자른다"
+		return
+	cut_armed = {}
+	_close_modal()
+	if not game.actions.amputate(game.player, o, part):
+		toast("지금은 자를 수 없음")
 
 
 ## Decision card (시안 2차 06 사건 카드, B1): paper come in from the left, as the
@@ -2831,7 +2892,9 @@ func _worn_row(slot: String, id: String) -> Control:
 	name_l.clip_text = true
 	name_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(name_l)
-	var off := GlassPane.key("벗기", _undress.bind(slot))
+	# One under others takes them off and back on: how long shows on the key.
+	var plan: Array = Wear.undress_plan(p, slot)
+	var off := GlassPane.key("벗기" if plan.size() <= 1 else "벗기 %d초" % ceili(Wear.plan_time(plan)), _undress.bind(slot))
 	off.size_flags_horizontal = Control.SIZE_SHRINK_END
 	off.custom_minimum_size.x = UiFonts.px(DROP_W)
 	h.add_child(off)
@@ -2841,6 +2904,83 @@ func _worn_row(slot: String, id: String) -> Control:
 func _undress(slot: String) -> void:
 	game.actions.undress(game.player, slot)
 	_close_modal()
+
+
+## Putting on a garment that takes layers off and back on (decision 434,
+## clothing.md 7장): the steps in a line, what comes off for good, the seconds,
+## and the key that does it. `src`: {"box", "i"} for one in a searched box or
+## {"ground": the garment lying there}, and its "id".
+func wear_pane(src: Dictionary) -> void:
+	var p = game.player
+	var id: String = String(src["id"])
+	var plan: Array = Wear.dress_plan(p, id)
+	var pane := _open_pane(game.item_name(id), "%d초" % ceili(Wear.plan_time(plan)), game.item_icon(id))
+	var w: float = PANE_W - GlassPane.PAD_L - GlassPane.PAD_R
+	var steps: Array = []
+	for step: Dictionary in plan:
+		var slot: String = String(step["slot"])
+		match String(step["op"]):
+			"off", "aside":
+				steps.append("%s 벗기" % game.item_name(String(Wear.occupant(p, slot).get("id", ""))))
+			"on":
+				steps.append("%s 입기" % game.item_name(id))
+			"back":
+				steps.append(game.item_name(String(Wear.occupant(p, slot).get("id", ""))))
+	pane.body.add_child(GlassPane.note(" → ".join(steps), w, GlassPane.INK, 13.0, 500))
+	var down: Array = Wear.displaced(p, id).map(func(g: Dictionary) -> String: return game.item_name(String(g.get("id", ""))))
+	if not down.is_empty():
+		pane.body.add_child(GlassPane.note("발밑에 둠: %s" % ", ".join(down), w, GlassPane.INK2, 12.0))
+	var foot := GlassPane.row()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	var go := LampKey.new("입기", false)
+	go.pressed.connect(_wear_go.bind(src))
+	foot.add_child(go)
+	pane.body.add_child(foot)
+
+
+func _wear_go(src: Dictionary) -> void:
+	_close_modal()
+	var p = game.player
+	var id: String = String(src["id"])
+	if src.has("box"):
+		var items: Array = game.data["containers"].get(String(src["box"]), {}).get("items", [])
+		var i: int = int(src["i"]) if int(src["i"]) < items.size() and String(items[int(src["i"])]) == id else items.find(id)
+		if i >= 0:
+			game.actions.take(p, String(src["box"]), i, true)
+		return
+	for i in game.ground_items.size():
+		if is_same(game.ground_items[i], src["ground"]):
+			game.actions.pick_up(p, i, true)
+			return
+
+
+## What one of the fallen has on (decision 434, clothing.md 8장): a row each,
+## the outermost first, its name and how worn (해짐, 너덜), and its seconds; a
+## press takes that one off (field_actions.gd strip_body) and it is put down
+## by the body.
+func strip_pane(zid: int) -> void:
+	var z: Dictionary = game.zombies.find(zid)
+	if not game.zombies.strippable(z):
+		return
+	var worn: Dictionary = game.zombies.worn_of(z)
+	var pane := _open_pane("옷 가져오기", "", "search")
+	var list := VBoxContainer.new()
+	list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
+	for slot: String in Wear.OUTSIDE_IN:
+		if not worn.has(slot):
+			continue
+		var g: Dictionary = worn[slot]
+		var gid: String = String(g.get("id", ""))
+		var word: String = Wear.state_word(g)
+		var shown: String = game.item_name(gid) if word == Wear.STATE_WORDS[0] else "%s · %s" % [game.item_name(gid), word]
+		list.add_child(_thing_key(shown, "%d초" % ceili(Wear.strip_time(gid)), _strip.bind(zid, slot), game.item_icon(gid)))
+	pane.body.add_child(GlassPane.scroll(list, LOOT_LIST_MAX))
+
+
+func _strip(zid: int, slot: String) -> void:
+	_close_modal()
+	game.actions.strip_body(game.player, zid, slot)
 
 
 ## The journal on a note pinned in the bag (시안 .pnote: paper with its fibre,
@@ -3713,6 +3853,10 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 		var slot: int = status_pads.find(b)
 		if slot < status_rows.size():
 			toast(status_line(status_rows[slot]))
+			# The window's answer is on the body picture: it opens at the limb to cut.
+			var cuts: Array = p.body.cut_parts()
+			if String(status_rows[slot]["id"]) == "infection" and not cuts.is_empty() and p.body.window_left > 0.0:
+				body_panel(p, String(cuts[0]))
 		return
 	if b == blood_button:
 		# Say what the press does: it was pressed without knowing (build 47).

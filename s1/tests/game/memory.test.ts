@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGame } from '../../src/game';
 import type { Game } from '../../src/game';
-import { CAPTAIN_ID, decodeFieldReceipt } from '../../src/game/field_receipt';
+import { applyFieldReturn, CAPTAIN_ID, decodeFieldReceipt } from '../../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt } from '../../src/game/field_receipt';
 import {
   cuesOf, departureMemory, dispatchNote, kinLine, kinOf, memoriesOf, memoryFromReturn, memoryTestimonies, memoryTick, spendRefusal, stanceOf,
@@ -78,6 +78,17 @@ describe('사람 기억: 개인 경험을 칸 관계 위에 따로 둔다', () =
     expect(dispatchNote(g, DAD).volunteer).toBe(false);
     g.seg += 4;
     expect(memoriesOf(g, DAD)).toHaveLength(0);
+  });
+});
+
+describe('사람 기억: 귀환 반영에 붙는다', () => {
+  it('귀환을 반영하면 기억이 생기고, 같은 귀환을 다시 받아도 한 번이다', () => {
+    const g = game();
+    const r = receipt('r_hook', [{ who: CAPTAIN_ID, what: `freed_${DAD}`, witnesses: [DAD], template: 'rescued_from_grab' }]);
+    expect(applyFieldReturn(g, departure, r).status).toBe('applied');
+    expect(memoriesOf(g, DAD).map(m => m.kind)).toEqual(['saved_me']);
+    expect(applyFieldReturn(g, departure, r).status).toBe('duplicate');
+    expect(memoriesOf(g, DAD)).toHaveLength(1);
   });
 });
 

@@ -6,7 +6,7 @@ import { s } from './dom';
 export type IconName =
   | 'coal' | 'food' | 'med' | 'lux' | 'trust' | 'tension' | 'fist' | 'hand' | 'book' | 'menu' | 'overview'
   | 'arrow' | 'back' | 'eye' | 'eyeOff' | 'secret' | 'symbol' | 'heat' | 'ration' | 'people' | 'witness'
-  | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed' | 'gear' | 'wrench' | 'radio' | 'compass' | 'check' | 'lock' | 'alert' | 'skull' | 'dot' | 'peg' | 'cloth';
+  | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'persuade' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed' | 'gear' | 'wrench' | 'radio' | 'compass' | 'check' | 'lock' | 'alert' | 'skull' | 'dot' | 'peg' | 'cloth';
 
 const P: Record<IconName, string> = {
   coal: 'M3 9h18l-2 8H5z M6 9l2-3 3 2 3-3 3 2 2 2 M7 20a1.5 1.5 0 1 0 0.01 0 M17 20a1.5 1.5 0 1 0 0.01 0',
@@ -35,6 +35,8 @@ const P: Record<IconName, string> = {
   fetch: 'M4 8l8-4 8 4v9l-8 4-8-4z M12 12v9 M4 8l8 4 8-4 M18 2v4',
   bribe: 'M7 9c0-3 2-5 5-5s5 2 5 5v3c0 5-2 8-5 8s-5-3-5-8z M10 4l2-2 2 2',
   blackmail: 'M5 5h10l4 4v11H5z M9 13h6v5H9z M10 13v-2a2 2 0 0 1 4 0v2',
+  // 설득: 말풍선 둘(마주 보고 말한다)
+  persuade: 'M3 5h11v7H8l-3 3v-3H3z M14 9h7v7h-2v3l-3-3h-5v-4',
   papers: 'M6 6h11v14H6z M8 4h11v14 M9 10h5 M9 13h5 M9 16h3',
   numbers: 'M4 20V10 M10 20V4 M16 20v-7 M22 20H2',
   scale: 'M12 4v16 M7 20h10 M5 7h14 M5 7l-3 7a3 3 0 0 0 6 0z M19 7l-3 7a3 3 0 0 0 6 0z',

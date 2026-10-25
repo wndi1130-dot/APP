@@ -8,6 +8,7 @@ extends RefCounted
 
 const Rng = preload("res://game/politics/rng.gd")
 const TrainStop = preload("res://game/train/train_stop.gd")
+const PersonMemory = preload("res://game/politics/person_memory.gd")
 
 ## The chief's one id outside the roll of names; the train's wound book keeps him by name.
 const CAPTAIN_ID := "captain"
@@ -125,11 +126,14 @@ static func person(g: Dictionary, t: Dictionary, id: String, role: String, gear:
 	var prof := _profile(t, id)
 	var name: String = CAPTAIN_NAME if id == CAPTAIN_ID else String(prof.get("name", id))
 	var comm: String = CAPTAIN_COMM if id == CAPTAIN_ID else String(prof.get("community", "tail"))
-	return {
+	var out := {
 		"id": id, "comm": comm, "name": name, "role": role, "body": body_of(id, float(prof.get("age", 40)), comm),
 		"know": _know_of(g, name), "wounds": _wounds_of(g, name), "hunger": hunger_of(g, comm), "sore": sore_of(g, id),
 		"rest": rest_of(g, id), "gear": gear.duplicate(true), "rel": 0 if id == CAPTAIN_ID else g["comms"][comm]["rel"],
 	}
+	# The person's own memory of the chief, when they have one (person_memory.gd).
+	out.merge(PersonMemory.departure_memory(g, id))
+	return out
 
 
 ## Who may go out as a companion from car `comm` this stretch (profile ids): S1 crewNames' sieve.

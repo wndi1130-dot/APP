@@ -2355,6 +2355,18 @@ const SHELLS: Dictionary = {
 	"hat_knit": {"bones": ["head"], "push": 0.02, "top": 0.55},
 	"hood": {"bones": ["head", "neck"], "push": 0.025, "top": 1.0, "face": true},
 }
+# Bags on the back (carry.gd BAGS, decision 448): not cut from the body but
+# made here against its back, each vertex weighted as the back beside it is,
+# so a bag moves and bends with the body as a garment does (bake_body_cli
+# --shell=, drawn as one). Everyday packs, not an army one (no frame, no
+# webbing). Width, height, depth in metres; a pocket on the outside, or a
+# rolled blanket strapped on top.
+const BAG_SHELLS: Dictionary = {
+	"pack": {"size": Vector3(0.3, 0.4, 0.14), "pocket": true},
+	"big_pack": {"size": Vector3(0.36, 0.54, 0.2), "roll": true},
+}
+const BAG_GAP: float = 0.04                # off the back: past a coat (SHELLS push) and a little air
+const BAG_BELOW_TOP: float = 0.05          # its top this far under the top of the back
 const SHELL_FACE_FORWARD: float = 0.3      # a head vertex facing forward more than this is face, for a piece that leaves it
 const SHELL_FACE_BROW: float = 0.15        # but not the top this share of the head (the brow is covered)
 const GLOVE_COLOUR: Color = Color(0.17, 0.16, 0.15)  # dark worn wool, as the colour picture holds it
@@ -2368,6 +2380,8 @@ const HAND_LIGHT: StringName = &"hand_light"   # a marked mesh's meta: the colou
 ## the body's vertices were split, pushed out. False if `kind` is unknown or
 ## the body has no skinned mesh.
 static func shell(body_root: Node3D, kind: String) -> bool:
+	if BAG_SHELLS.has(kind):
+		return _bag(body_root, kind)
 	var spec: Dictionary = SHELLS.get(kind, {})
 	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
 	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
@@ -2462,6 +2476,159 @@ static func shell(body_root: Node3D, kind: String) -> bool:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
 	mesh_node.mesh = mesh
 	return true
+
+
+## Puts bag `kind` (BAG_SHELLS) in place of the body's skinned mesh: a block
+## with its edges cut, against the back under the shoulders, with a pocket or
+## a roll; each face its own vertices (flat light), each vertex weighted as
+## the nearest piece of the back. False without a skinned mesh or a back.
+static func _bag(body_root: Node3D, kind: String) -> bool:
+	var spec: Dictionary = BAG_SHELLS[kind]
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
+	if mesh_node == null or body == null or mesh_node.skin == null:
+		return false
+	var src: Array = mesh_node.mesh.surface_get_arrays(0)
+	var pos: PackedVector3Array = src[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = src[Mesh.ARRAY_NORMAL]
+	var bones: PackedInt32Array = src[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = src[Mesh.ARRAY_WEIGHTS]
+	var per: int = bones.size() / pos.size()
+	var trunk := {_bone(body, "spine"): true, _bone(body, "chest"): true, _bone(body, "hips"): true}
+	var back := PackedInt32Array()
+	var top := -INF
+	for v in pos.size():
+		if normals[v].z < -0.2 and absf(pos[v].x) < 0.2 and trunk.has(_main_bone(body, mesh_node.skin, bones, weights, per, v)):
+			back.append(v)
+			top = maxf(top, pos[v].y)
+	if back.is_empty():
+		return false
+	var size: Vector3 = spec["size"]
+	var high := top - BAG_BELOW_TOP
+	var low := high - size.y
+	# Its face against the back, leaning as the back does: behind the furthest-out
+	# part of the back in its upper third and in its lower third.
+	var upper := INF
+	var lower := INF
+	for v in back:
+		if absf(pos[v].x) >= size.x * 0.5:
+			continue
+		if pos[v].y <= high and pos[v].y >= high - size.y / 3.0:
+			upper = minf(upper, pos[v].z)
+		elif pos[v].y >= low and pos[v].y <= low + size.y / 3.0:
+			lower = minf(lower, pos[v].z)
+	if upper == INF:
+		return false
+	if lower == INF:
+		lower = upper
+	var face := (upper + lower) * 0.5 - BAG_GAP
+	var out := {"pos": [], "normal": [], "index": []}
+	_block(out, Vector3(0.0, (low + high) * 0.5, face - size.z * 0.5), size, minf(0.035, size.z * 0.25), 0.78, upper - lower)
+	# (The pocket and the roll follow the same lean.)
+	var lean := upper - lower
+	if bool(spec.get("pocket", false)):
+		var pocket := Vector3(size.x * 0.66, size.y * 0.36, size.z * 0.4)
+		var y := low + pocket.y * 0.5 + 0.03
+		var along := lean * ((y - low) / size.y - 0.5)
+		_block(out, Vector3(0.0, y, face + along - size.z - pocket.z * 0.5 + 0.01), pocket, 0.02, 0.85, lean * pocket.y / size.y)
+	if bool(spec.get("roll", false)):
+		# On the narrowed top, toward the back.
+		_roll(out, Vector3(0.0, high + 0.05, face + lean * 0.5 - size.z * 0.4), size.x * 0.95, 0.06)
+	# Each vertex rides as the piece of the back nearest it does.
+	var out_bones := PackedInt32Array()
+	var out_weights := PackedFloat32Array()
+	for p: Vector3 in out["pos"]:
+		var best := back[0]
+		var best_d := INF
+		for v in back:
+			var d := Vector2(pos[v].x - p.x, pos[v].y - clampf(p.y, low, high)).length_squared()
+			if d < best_d:
+				best_d = d
+				best = v
+		for k in per:
+			out_bones.append(bones[best * per + k])
+			out_weights.append(weights[best * per + k])
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(out["pos"])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(out["normal"])
+	arrays[Mesh.ARRAY_BONES] = out_bones
+	arrays[Mesh.ARRAY_WEIGHTS] = out_weights
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array(out["index"])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
+	mesh_node.mesh = mesh
+	return true
+
+
+## A flat face (its corners in order around `normal`) added to `out`.
+static func _face(out: Dictionary, corners: Array, normal: Vector3) -> void:
+	var first: int = (out["pos"] as Array).size()
+	var a: Vector3 = corners[0]
+	var b: Vector3 = corners[1]
+	var c: Vector3 = corners[2]
+	var flip := (b - a).cross(c - a).dot(normal) > 0.0
+	for p: Vector3 in corners:
+		(out["pos"] as Array).append(p)
+		(out["normal"] as Array).append(normal)
+	for i in range(1, corners.size() - 1):
+		var tri := [first, first + i, first + i + 1]
+		# Godot's front faces wind clockwise as seen from outside.
+		if flip:
+			tri = [first, first + i + 1, first + i]
+		(out["index"] as Array).append_array(tri)
+
+
+## A block of `size` centred at `at`, its four upright edges cut by `cut`; its
+## top `taper` as wide and deep as its bottom, drawn to its +z side (toward the
+## back it hangs on), as a filled pack sags; its top `lean` further along z
+## than its bottom (the whole leaning as the back under it).
+static func _block(out: Dictionary, at: Vector3, size: Vector3, cut: float, taper: float = 1.0, lean: float = 0.0) -> void:
+	var hx := size.x * 0.5
+	var hz := size.z * 0.5
+	# Around the block, seen from above: eight corners of the cut rectangle.
+	var ring := [Vector2(-hx + cut, -hz), Vector2(hx - cut, -hz), Vector2(hx, -hz + cut), Vector2(hx, hz - cut),
+		Vector2(hx - cut, hz), Vector2(-hx + cut, hz), Vector2(-hx, hz - cut), Vector2(-hx, -hz + cut)]
+	var lo := at.y - size.y * 0.5
+	var hi := at.y + size.y * 0.5
+	var bottom_ring := []
+	var top_ring := []
+	for p: Vector2 in ring:
+		bottom_ring.append(Vector3(at.x + p.x, lo, at.z + p.y - lean * 0.5))
+		top_ring.append(Vector3(at.x + p.x * taper, hi, at.z + hz - (hz - p.y) * taper + lean * 0.5))
+	for i in ring.size():
+		var j := (i + 1) % ring.size()
+		var a: Vector3 = bottom_ring[i]
+		var b: Vector3 = bottom_ring[j]
+		var c: Vector3 = top_ring[j]
+		var side := (b - a).cross(c - a).normalized()
+		var mid := (a + b + c) / 3.0 - Vector3(at.x, (lo + hi) * 0.5, at.z)
+		if side.dot(Vector3(mid.x, 0.0, mid.z)) < 0.0:
+			side = -side
+		_face(out, [a, b, c, top_ring[i]], side)
+	_face(out, top_ring, Vector3.UP)
+	_face(out, bottom_ring, Vector3.DOWN)
+
+
+## A rolled blanket lying across, `length` long, of `radius`, centred at `at`.
+static func _roll(out: Dictionary, at: Vector3, length: float, radius: float) -> void:
+	var sides := 8
+	var l := at.x - length * 0.5
+	var r := at.x + length * 0.5
+	var left_cap := []
+	var right_cap := []
+	for i in sides:
+		var a := TAU * float(i) / sides
+		var b := TAU * float(i + 1) / sides
+		var pa := Vector2(cos(a), sin(a)) * radius
+		var pb := Vector2(cos(b), sin(b)) * radius
+		var mid := (a + b) * 0.5
+		_face(out, [Vector3(l, at.y + pa.y, at.z + pa.x), Vector3(r, at.y + pa.y, at.z + pa.x),
+			Vector3(r, at.y + pb.y, at.z + pb.x), Vector3(l, at.y + pb.y, at.z + pb.x)], Vector3(0.0, sin(mid), cos(mid)))
+		left_cap.append(Vector3(l, at.y + pa.y, at.z + pa.x))
+		right_cap.append(Vector3(r, at.y + pa.y, at.z + pa.x))
+	_face(out, left_cap, Vector3.LEFT)
+	_face(out, right_cap, Vector3.RIGHT)
 
 
 ## The body bone vertex `v` of a skin follows most.
