@@ -114,7 +114,7 @@ const CAM_BACK: float = 30.0
 const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the bottom
 
 var rules: Dictionary = {}
-var opts: Dictionary = {}               # seed: int, panel: bool
+var opts: Dictionary = {}               # seed: int, panel: bool, rules_before: the values last shown (people react to the change)
 var problems := PackedStringArray()
 var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, call_t, call_i, mood, unrest, quiet, seats, values}]
 var rng := RandomNumberGenerator.new()
@@ -293,6 +293,16 @@ func _comm_in(source: Dictionary, comm_id: String) -> Dictionary:
 
 func life_signal(cue: String, car_id: String = "") -> void:
 	life.send_signal(cue, car_id)
+
+
+## Something that happened that the people should be seen to take in, in the
+## form {kind, car, comm, sign (-1/0/1), size (0..1), day}: what the workshop
+## made ("made"), a car changed ("mod_done") or added ("car_added"). The
+## changes of the rule values themselves (laws, rations, people) the people's
+## view finds on its own. It changes no value.
+func post_event(ev: Dictionary) -> void:
+	if people_view != null:
+		people_view.react(ev)
 
 
 ## One tick of the people: movers pace their own aisle, and now and then one
