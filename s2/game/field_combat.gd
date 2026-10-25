@@ -13,6 +13,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
+const Motion = preload("res://game/sim/motion.gd")
 
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
@@ -60,6 +61,9 @@ var game
 ## The player's shove pressed during a blow: it goes once the blow is over
 ## (decision 420). Short-lived, never saved.
 var shove_after: Dictionary = {}
+## Melee blows under way, by person: when each began (the game clock) and its
+## motion row, for the feet it holds (decision 425: feet_held).
+var blows: Dictionary = {}
 var tracers: Array = []                 # {"from", "to", "t"} for the view
 var kills: int = 0
 # Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
@@ -435,6 +439,11 @@ static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
 func start_swing(p, at) -> void:
 	if p.swing_t > 0.0 or p.strike_t > 0.0 or not _hands_free_for_blow(p):
 		return
+	# Running, the blow goes out as a shove (decision 425, as in the reference
+	# game: no swing at a run). Stopped, it is a swing again.
+	if p.is_running_now():
+		_shove_now(p)
+		return
 	var stomp_it: bool = stomps(p, at)
 	p.strike_kind = "stomp" if stomp_it else "swing"
 	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
@@ -445,7 +454,27 @@ func start_swing(p, at) -> void:
 	p.strike_t = windup
 	p.strike_total = windup
 	p.swing_t = windup
+	if not stomp_it:
+		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
 
+
+## True while a melee blow holds the feet (decision 425): from its weapon's
+## feet_from of the swing to its end (Motion.swing_row), the body does not walk
+## off under the stick. Shoves and stomps do not hold them.
+func feet_held(p) -> bool:
+	var id: int = p.get_instance_id()
+	if not blows.has(id):
+		return false
+	if p.strike_t <= 0.0 and p.swing_t <= 0.0:
+		blows.erase(id)
+		return false
+	var blow: Dictionary = blows[id]
+	var row: Dictionary = blow["row"]
+	if row.is_empty():
+		return false
+	var gone: float = (game.clock.elapsed - float(blow["at"])) * float(blow["mult"])
+	var feet: Vector2 = row["feet"]
+	return gone >= feet.x and gone < feet.y
 
 ## The attack pad with nobody in reach (decision 405, as in the reference game): the
 ## weapon comes round all the same and lands on whatever is in its arc by then
@@ -709,8 +738,14 @@ func start_shove(p) -> void:
 		if p == game.player:
 			shove_after[p.get_instance_id()] = true
 		return
-	if not _hands_free_for_blow(p):
+	_shove_now(p)
+
+
+## The shove itself, drawn back first (start_shove; a blow at a run).
+func _shove_now(p) -> void:
+	if striking(p) or not _hands_free_for_blow(p):
 		return
+	blows.erase(p.get_instance_id())
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
 	p.swing_t = p.shove_t
 
@@ -742,7 +777,10 @@ func shove(p) -> void:
 	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
 	var hit := 0
 	for z in game.zombies.in_radius(p.position, SHOVE_REACH):
-		if z["state"] == "frozen" or z["state"] == "downed" or z["state"] == "rising":
+		if z["state"] == "frozen" or z["state"] == "rising":
+			continue
+		# Getting up off the ground it can be shoved again (decision 425); lying it cannot.
+		if z["state"] == "downed" and not game.zombies.getting_up(z):
 			continue
 		var to_z: Vector3 = z["pos"] - p.position
 		to_z.y = 0
