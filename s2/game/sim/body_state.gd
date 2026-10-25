@@ -437,6 +437,13 @@ func receipt_wounds() -> Array[Dictionary]:
 		var row := {"part": w["part"], "kind": w["kind"]}
 		if w["festering"]:
 			row["festering"] = true
+		# What was done for it (receipt v5 treat): the train reads it instead of drawing anew (J02).
+		var treat := {}
+		for flag: String in ["bandaged", "disinfected", "sutured", "splinted", "tourniquet", "pulled", "quick"]:
+			if bool(w.get(flag, false)):
+				treat[flag] = true
+		if not treat.is_empty():
+			row["treat"] = treat
 		out.append(row)
 	return out
 
@@ -629,8 +636,8 @@ func can_run() -> bool:
 ## the one action that may fall below half. It scales the chance to hit the
 ## head and to knock down (weapons.melee_odds), so a spent, bleeding, frozen
 ## hand needs many blows where a fresh one needs two.
-## Hunger and sore muscles come from the train; the field has no such state
-## yet. ctx["hunger_level"], ctx["sore_level"]: 0 none, 1 some, 2 bad.
+## Hunger and sore muscles come from the train (the departure contract, person.gd
+## hunger_level and sore_level). ctx["hunger_level"], ctx["sore_level"]: 0 none, 1 some, 2 bad.
 
 
 func multipliers(ctx: Dictionary) -> Dictionary:

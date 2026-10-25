@@ -49,6 +49,8 @@ const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
 const StopCinema = preload("res://game/stop_cinema.gd")
+const FieldDeparture = preload("res://game/politics/field_departure.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
 const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
@@ -318,7 +320,8 @@ func _show_stop_pick() -> void:
 	c.stop_name = "술레후프"
 	c.g["seg"] = int(STEPS[step][2])
 	c.top_room = TrainGauges.BAND_H
-	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
+	c.promises = _departure().get("promises", [])
+	c.squad = _departure().get("roster", [])
 	c.sent.connect(func(_g: Dictionary) -> void: _send_crew())
 	c.passed_by.connect(_pass_stop)
 	layer.add_child(c)
@@ -983,8 +986,19 @@ func _start_field() -> void:
 	stage = field
 
 
-## What the slice's field goes out with: the default crew as each one's car
-## stands with the chief now (for what they say to him), the sample departure.
+## The departure contract for the stop the slice's train stands at (field_departure.gd,
+## s3 contract 2): the train's own people, made once a stop and kept for its return.
+var contract: Dictionary = {}
+
+
+func _departure() -> Dictionary:
+	if contract.is_empty() or int(contract.get("segment", -1)) != int(train_g.get("seg", -2)):
+		contract = FieldDeparture.build(train_g, train_t, {"placeId": FieldMaps.resolve(_field_place())})
+	return contract
+
+
+## What the slice's field goes out with: the train's departure contract (who goes, their
+## bodies, kit, hunger and soreness, the promises riding on the stop).
 func _field_opts() -> Dictionary:
 	var o := {"seed": int(opts.get("seed", 1))}
 	# The stop is drawn in the same cold as the stretch that brought the train
@@ -1005,19 +1019,7 @@ func _field_opts() -> Dictionary:
 		o["look"] = want["kinds"]
 	if want.has("hour"):
 		o["look_hour"] = float(want["hour"])
-	# A field of its own to ask: the stop scene builds the field before the
-	# field step makes one.
-	var probe = FieldGame.new()
-	o["squad"] = probe.default_squad("crude")
-	probe.free()
-	# How each one's car stands with the chief now, for what they say to him.
-	var comms: Dictionary = train_g.get("comms", {})
-	for row: Dictionary in o["squad"]:
-		if comms.has(row.get("comm", "")):
-			row["rel"] = float(comms[row["comm"]]["rel"])
-	var dep: Dictionary = _sample(DEPARTURE_SAMPLE)
-	if not dep.is_empty():
-		o["departure"] = dep
+	o["departure"] = _departure().duplicate(true)
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
 	return o

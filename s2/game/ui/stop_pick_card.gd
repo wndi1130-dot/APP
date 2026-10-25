@@ -47,6 +47,9 @@ var t: Dictionary = {}
 var stop_name: String = ""
 ## The promises this stop goes out with (S3 출발 명세), shown on one line.
 var promises: Array = []
+## Who goes down with the chief (the departure contract's roster, s3 contract 2): those who go
+## out hungry or sore get a line each, what it does and what eases it (decision card B).
+var squad: Array = []
 ## Kept for callers that left room for the gauges; the sheet's place is the mockup's now.
 var top_room: float = 0.0
 var sheet: Control
@@ -185,6 +188,7 @@ func _fill() -> void:
 	_head(m)
 	_rows(m)
 	_crew_line(m)
+	_squad_lines()
 	_promise_line(m)
 	var room := Control.new()
 	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -334,6 +338,40 @@ func _crew_line(m: Dictionary) -> void:
 	if bool(m["away"]):
 		words.add_child(_side(" · 표결 빠짐"))
 	body.add_child(line)
+
+
+## One line for each of the squad who goes out hungry or sore (card B, user 2026-10-25): the
+## state, what it does in the field, what eases it on the train. Nothing for the well.
+static func squad_lines(roster: Array) -> Array[String]:
+	var out: Array[String] = []
+	for p: Dictionary in roster:
+		var states: Array[String] = []
+		var eases: Array[String] = []
+		var hunger := int(p.get("hunger", 0))
+		var sore := maxi(int(p.get("sore", 0)), int(p.get("rest", 0)))
+		if hunger > 0:
+			states.append("굶주림" if hunger >= 2 else "배고픔")
+			eases.append("배급을 올리")
+		if sore > 0:
+			states.append("심한 근육통" if sore >= 2 else "근육통")
+			eases.append("한 정차 쉬게 하")
+		if states.is_empty():
+			continue
+		out.append("%s: %s — 휘두름이 덜 맞는다. %s면 풀린다" % [String(p.get("name", "")), " · ".join(states), "고 ".join(eases)])
+	return out
+
+
+func _squad_lines() -> void:
+	for said: String in squad_lines(squad):
+		var line := Paper.line_box(22.0)
+		line.name = "SquadLine"
+		line.add_theme_constant_override("separation", int(round(UiFonts.px(6.0))))
+		line.add_child(Paper.mark("people", 16.0))
+		var words = TypeLine.new(0.0, 22.0)
+		words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		words.add_child(_side(said))
+		line.add_child(words)
+		body.add_child(line)
 
 
 ## The promise line (.promline, 24): what this stop was promised, and at its
