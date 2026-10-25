@@ -12,6 +12,7 @@ const GrabRules = preload("res://game/sim/grab_rules.gd")
 const SenseRules = preload("res://game/sim/sense_rules.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
+const DeadCast = preload("res://game/actors/dead_cast.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const DeadSeparation = preload("res://game/sim/dead_separation.gd")
@@ -74,7 +75,11 @@ var lunge_rng := RandomNumberGenerator.new()  # its own, so who lunges does not 
 var embed_rng := RandomNumberGenerator.new()  # its own, so who has an axe in the back shifts nothing else
 var embedded_draw: MultiMeshInstance3D        # the axes in backs; null without the model
 var lungers_on: bool = false  # opts["lungers"]: some of the dead lunge (lunger_rules.gd)
-var draw: Dictionary = {}     # look -> MultiMeshInstance3D
+var draw: Dictionary = {}     # look -> MultiMeshInstance3D (the first body's)
+var draws: Array = []         # body (dead_cast.gd) -> look -> MultiMeshInstance3D; {} for one not in the build
+var body_rounds: Array = []   # body -> its walks' rounds (dead_body.gd rounds_of)
+var bodies_to_read: Array[String] = []   # bodies not read in yet: one a frame (render)
+var bodies_planned: int = 1
 var drawn_count: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
@@ -95,30 +100,11 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	var body := DeadBody.assets()
 	baked = not body.is_empty()
 	vat = body if baked else vat_assets
-	for look in ["dead", "clothed", "fresh", "frozen", "corpse"]:
-		var node := MultiMeshInstance3D.new()
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_custom_data = true
-		mm.mesh = vat["mesh"]
-		mm.instance_count = MAX_DRAW
-		mm.visible_instance_count = 0
-		mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
-		node.multimesh = mm
-		var mat := ShaderMaterial.new()
-		mat.shader = preload("res://game/actors/dead_vat.gdshader")
-		mat.set_shader_parameter("vat", vat["texture"])
-		mat.set_shader_parameter("rows_per_frame", float(vat["rows_per_frame"]))
-		if baked:
-			var tables := VatBaker.shader_tables(vat)
-			for key in tables:
-				mat.set_shader_parameter(key, tables[key])
-			mat.set_shader_parameter("mixes", true)
-		var t: Color = TINTS[look]
-		mat.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
-		node.material_override = mat
-		add_child(node)
-		draw[look] = node
+	draw = _draws_of(vat)
+	draws = [draw]
+	body_rounds = [DeadBody.rounds]
+	bodies_to_read = DeadCast.others() if baked else []
+	bodies_planned = 1 + bodies_to_read.size()
 	# Rising markers above corpses that will stand up.
 	markers = MultiMeshInstance3D.new()
 	var mm2 := MultiMesh.new()
@@ -1178,9 +1164,52 @@ static func reach_basis(z: Dictionary) -> Basis:
 	return Basis(Vector3.RIGHT, HOLD_LEAN + TUG.x * sin(w)) * Basis(Vector3.BACK, TUG.y * sin(w * 0.5 + 1.0))
 
 
-## Visible-only drawing with CPU frustum test, one MultiMesh per look.
+## One body's multimeshes, one per look, each in the look's tint.
+func _draws_of(body: Dictionary) -> Dictionary:
+	var out := {}
+	for look in ["dead", "clothed", "fresh", "frozen", "corpse"]:
+		var node := MultiMeshInstance3D.new()
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = body["mesh"]
+		mm.instance_count = MAX_DRAW
+		mm.visible_instance_count = 0
+		mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
+		node.multimesh = mm
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://game/actors/dead_vat.gdshader")
+		mat.set_shader_parameter("vat", body["texture"])
+		mat.set_shader_parameter("rows_per_frame", float(body["rows_per_frame"]))
+		if baked:
+			var tables := VatBaker.shader_tables(body)
+			for key in tables:
+				mat.set_shader_parameter(key, tables[key])
+			mat.set_shader_parameter("mixes", true)
+		var t: Color = TINTS[look]
+		mat.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
+		node.material_override = mat
+		add_child(node)
+		out[look] = node
+	return out
+
+
+## The next body the dead wear read in (dead_cast.gd), one a frame so the field
+## does not stall starting; until then the dead in it are drawn in the first.
+func _read_a_body() -> void:
+	if bodies_to_read.is_empty():
+		return
+	var got := DeadCast.read(bodies_to_read.pop_front(), vat)
+	draws.append(_draws_of(got) if not got.is_empty() else {})
+	body_rounds.append(DeadBody.rounds_of(got) if not got.is_empty() else DeadBody.rounds)
+
+
+## Visible-only drawing with CPU frustum test, one MultiMesh per body and look.
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
-	var counts := {"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0}
+	_read_a_body()
+	var counts := []
+	for _b in draws.size():
+		counts.append({"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0})
 	var marks := 0
 	var axes := 0
 	for z in list:
@@ -1257,18 +1286,26 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 			basis = basis.scaled(Vector3(1.3, 1.0, 1.35))
 		if z["stun"] > 0.0:
 			shade = 0.8
-		var n: int = counts[look]
+		var b := DeadCast.body_of(int(z["id"]), bodies_planned)
+		if b >= draws.size() or (draws[b] as Dictionary).is_empty():
+			b = 0
+		var n: int = counts[b][look]
 		if n >= MAX_DRAW:
 			continue
-		var mm: MultiMesh = draw[look].multimesh
+		var mm: MultiMesh = draws[b][look].multimesh
 		mm.set_instance_transform(n, Transform3D(basis, pos))
+		# Its walk goes by its own body's stride (dead_body.gd reads the rounds of the folder in use).
+		DeadBody.rounds = body_rounds[b]
 		mm.set_instance_custom_data(n, DeadBody.custom(z, down, frozen_anim, shade, baked))
-		counts[look] = n + 1
+		counts[b][look] = n + 1
+	DeadBody.rounds = body_rounds[0]
 	if embedded_draw != null:
 		embedded_draw.multimesh.visible_instance_count = axes
 	drawn_count = 0
-	for look in counts:
-		draw[look].multimesh.visible_instance_count = counts[look]
-		if look != "corpse":
-			drawn_count += counts[look]
+	for b in draws.size():
+		for look in counts[b]:
+			if not (draws[b] as Dictionary).is_empty():
+				draws[b][look].multimesh.visible_instance_count = counts[b][look]
+			if look != "corpse":
+				drawn_count += counts[b][look]
 	markers.multimesh.visible_instance_count = marks
