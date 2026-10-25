@@ -12,6 +12,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
+const WoodsShade = preload("res://fx/woods_shade.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
@@ -443,6 +444,11 @@ func _ready() -> void:
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
 	map_edge.set_fog(fx_light["fog_color"])
+	# The shade under the side path's trees: the gap reads as the light way in.
+	if data.get("side_path") is Dictionary:
+		var shade := WoodsShade.new()
+		add_child(shade)
+		shade.setup(data["side_path"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
