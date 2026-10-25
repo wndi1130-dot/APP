@@ -116,6 +116,27 @@ func test_swarmed_the_companion_asks_to_keep_its_face_to_them() -> void:
 	assert_false(ally.running, "it steps back at a walk, not a run")
 
 
+# Backing off toward the chief it does not back into the chief's body (check
+# shots 10-26: the two bodies stood as one): with the chief in the way back, it
+# ends at the chief's side, CHIEF_ROOM off; with the chief out of the way, as before.
+func test_swarmed_it_backs_off_beside_the_chief_not_through_it() -> void:
+	game.player.position = ally.position + Vector3(-1.5, 0, 0)
+	var z: Dictionary = game.zombies.spawn("dead", ally.position + Vector3(1.6, 0, 0))
+	game.zombies.spawn("dead", ally.position + Vector3(1.8, 0, 0.6))
+	game.zombies.spawn("dead", ally.position + Vector3(1.7, 0, -0.6))
+	game.ai._engage(ally, z)
+	var dest: Vector3 = ally.brain["dest"]
+	var chief: Vector3 = game.player.position
+	assert_almost_eq(Vector2(dest.x - chief.x, dest.z - chief.z).length(), game.ai.CHIEF_ROOM, 0.01, "at the chief's side")
+	var way := Vector2(dest.x - ally.position.x, dest.z - ally.position.z)
+	var rel := Vector2(chief.x - ally.position.x, chief.z - ally.position.z)
+	var near := way * clampf(rel.dot(way) / way.length_squared(), 0.0, 1.0)
+	assert_gt(near.distance_to(rel), 0.5, "the way there goes by the chief, not through")
+	game.player.position = ally.position + Vector3(0, 0, 4.0)
+	var open: Vector3 = game.ai._beside_chief(ally.position, ally.position + Vector3(-2.5, 0, 0), Vector3(-1, 0, 0))
+	assert_eq(open, ally.position + Vector3(-2.5, 0, 0), "the chief out of the way: as before")
+
+
 func test_a_step_back_sounds_as_a_step() -> void:
 	ally.brain["step_r"] = 0.6
 	assert_gt(FieldGame.steps_in(ally, -3.0), 0)
