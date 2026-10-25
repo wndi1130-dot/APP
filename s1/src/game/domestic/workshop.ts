@@ -9,6 +9,7 @@ import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
 import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
 import { saveRestore, workBonus } from './classroom';
+import { handsWorkMult } from '../hands';
 import { domCard, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
@@ -26,6 +27,7 @@ export function workPower(g: Game): number {
   const craft = topSkill(g, 'craft');
   let w = D.work * D.workSkill[craft] * ZONE_WORK[zoneOf(g, 'workshop')] * (1 + (D.w1Work - 1) * techMult(g, 'w1'));
   if (d.people.some(p => p.alive && !p.gone && p.field === 'craft' && p.pupil && !p.resting)) w *= D.teachWork;
+  w *= handsWorkMult(g); // 고칠 손이 빈 만큼(손 몫, hands.ts)
   return w + workBonus(g); // 공방 곁에서 배우는 수업의 몫(결정 207·208)
 }
 
