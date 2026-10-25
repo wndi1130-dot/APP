@@ -12,6 +12,7 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const W = preload("res://game/sim/weapons.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
+const Gait = preload("res://game/sim/gait.gd")
 
 var game
 var p
@@ -140,8 +141,9 @@ func test_footsteps_go_by_the_walk_and_the_drawn_feet_with_them() -> void:
 	for gait in [["walk", "p_walk"], ["run", "p_run"], ["crouch", "p_crouch_walk"]]:
 		var n := PersonVisual.clip_named(own, String(gait[1]), -1)
 		assert_almost_eq(float(SimNoise.STEP_ROUND[gait[0]]), float(own[n]["round"]), 0.01 * float(own[n]["round"]), String(gait[0]) + ": the round is the drawn one")
-	p.brain.erase("step_r")
-	var walk: float = float(SimNoise.STEP_ROUND["walk"])
+	# From the start of the round, at this person's own stride (decision 423 card 3).
+	p.brain["step_r"] = 0.0
+	var walk: float = float(SimNoise.STEP_ROUND["walk"]) * Gait.stride(p)
 	assert_eq(game.steps_in(p, walk * 0.1), 0, "not yet a foot down")
 	assert_eq(game.steps_in(p, walk * 0.15), 1, "one at 0.2 of the round")
 	assert_eq(game.steps_in(p, walk * 0.5), 1, "the other at 0.65")
@@ -150,8 +152,8 @@ func test_footsteps_go_by_the_walk_and_the_drawn_feet_with_them() -> void:
 	p.moving = true
 	var before := float(p.brain["step_r"])
 	game.steps_in(p, 0.5)
-	assert_almost_eq(fposmod(float(p.brain["step_r"]) - before, 1.0), 0.5 / float(SimNoise.STEP_ROUND["run"]), 0.001, "a run goes round by its own")
-	# The drawn walk is where the footsteps are.
+	assert_almost_eq(fposmod(float(p.brain["step_r"]) - before, 1.0), 0.5 / (float(SimNoise.STEP_ROUND["run"]) * Gait.stride(p)), 0.001, "a run goes round by its own")
+	# The drawn walk is where the footsteps are (the axe in the hand: its own walk).
 	p.running = false
 	p.moving = false
 	var note := {}
@@ -159,5 +161,5 @@ func test_footsteps_go_by_the_walk_and_the_drawn_feet_with_them() -> void:
 	p.position += Vector3(0.1, 0, 0)
 	p.brain["step_r"] = 0.42
 	var c := PersonVisual.motion_of(p, note, 0.05, [], own)
-	assert_eq(String(own[int(c.y)]["name"]), "p_walk")
+	assert_eq(String(own[int(c.y)]["name"]), "p_walk_axe")
 	assert_almost_eq(c.x, 0.42, 0.001)
