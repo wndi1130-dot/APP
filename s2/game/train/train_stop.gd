@@ -6,6 +6,7 @@ extends RefCounted
 ## tests/train/test_train_stop.gd checks every function against the S1 answers.
 
 const St = preload("res://game/train/train_state.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
 const Rng = preload("res://game/politics/rng.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
@@ -172,7 +173,7 @@ static func stop_risk(g: Dictionary, t: Dictionary) -> Dictionary:
 	var horde := minf(1.5, 1.0 + float(p["thrownHorde"]) * float(g["thrown"]))
 	var escort := 0.5 if bool(g["guardEscort"]) else 1.0
 	var now := eff_threat(stop, t)
-	var threat := now * (float(p["pyreLight"]) if St.pyre_count(g) > 0.0 else 1.0)
+	var threat := now * (float(p["pyreLight"]) if St.pyre_count(g) > 0.0 else 1.0) * TrainHands.hands_watch_mult(g, t)
 	var tired := expose_mult(g, t, stop["crewComm"]) if has_stop else 1.0
 	var risk := float(place["risk"])
 	var need := maxf(float(p["crewNeedMin"]), float(p["crewNeed"]) * risk * float(stay["risk"]) * now * guard_mult * horde * escort)

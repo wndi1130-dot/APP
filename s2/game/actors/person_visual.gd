@@ -56,6 +56,9 @@ const BODIES_SETTING: String = "visuals/people_bodies_max"
 ## folder's motions and the dead's alike.
 const WEAR_TINTS: Dictionary = {"jacket_short": Vector3(0.1, 0.11, 0.14), "coat_long": Vector3(0.12, 0.1, 0.085),
 	"hat_knit": Vector3(0.17, 0.12, 0.1), "hood": Vector3(0.13, 0.135, 0.14)}
+## The bags worn on the back (carry.gd BAGS, body_bake.gd BAG_SHELLS), drawn as a
+## garment is: everyday colours, worn canvas brown and a faded blue.
+const BAG_TINTS: Dictionary = {"pack": Vector3(0.15, 0.11, 0.075), "big_pack": Vector3(0.075, 0.095, 0.13)}
 ## A garment's pattern as the shader numbers it (person_vat.gdshader worn_look).
 const PATTERNS: Dictionary = {"plain": 0, "check": 1, "knit": 2, "quilt": 3}
 const SHADER: Shader = preload("res://game/actors/person_vat.gdshader")
@@ -301,7 +304,7 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 func garment_of(d: Dictionary, kind: String) -> MultiMeshInstance3D:
 	var wear: Dictionary = d["wear"]
 	if not wear.has(kind):
-		var shell := BodyBake.load_baked(String(d["wear_dir"]).path_join(kind)) if WEAR_TINTS.has(kind) else {}
+		var shell := BodyBake.load_baked(String(d["wear_dir"]).path_join(kind)) if WEAR_TINTS.has(kind) or BAG_TINTS.has(kind) else {}
 		wear[kind] = _wear(shell, true) if not shell.is_empty() else null
 	return wear[kind]
 
@@ -420,7 +423,7 @@ func _process(delta: float) -> void:
 			d["k"] = k + 1
 			# What they wear moves with the body: the same place, the same frame.
 			var worn_n: Dictionary = d["worn_n"]
-			for worn_look: Dictionary in looks_on(p):
+			for worn_look: Dictionary in looks_on(p) + bag_on(p):
 				var kind: String = worn_look["shell"]
 				var garment := garment_of(d, kind)
 				if garment != null:
@@ -488,6 +491,17 @@ static func looks_on(p) -> Array[Dictionary]:
 		var hat := _look_of(String(p.worn["head"].get("id", "")))
 		if not hat.is_empty():
 			out.append(hat)
+	return out
+
+
+## The bag on the back as looks_on gives a garment ({shell, colour}, plain), none
+## with pockets only (person.gd bag).
+static func bag_on(p) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var kind := String(p.bag)
+	if BAG_TINTS.has(kind):
+		var c: Vector3 = BAG_TINTS[kind]
+		out.append({"shell": kind, "colour": Color(c.x, c.y, c.z, 0.0)})
 	return out
 
 
