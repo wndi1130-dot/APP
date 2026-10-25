@@ -104,7 +104,7 @@ export const START: Record<Comm, [number, number, number, number]> = {
 };
 export const POP0: Record<Comm, number> = { tail: 90, engine: 25, guard: 25, medtech: 30, front: 30 };
 
-/** 손 몫(2026-10-25 사용자 결정, carry_people.md 3.1): 구간마다 손이 드는 일 다섯. 드는 손은 기획서 제안 그대로(합 74), 나머지는 새 값(hands.ts).
+/** 손 몫(결정 425, carry_people.md 3.1): 구간마다 손이 드는 일 다섯. 드는 손은 기획서 제안 그대로(합 74), 나머지는 새 값(hands.ts).
  * 모자라면 order의 뒤에서부터 빈다(화실을 먼저 채운다). 칸 대표가 내는 손은 그 칸 일할 나이(16~65)의 몫 × 뜻(관계·레버)이다. */
 export type HandJob = 'stoker' | 'stove' | 'watch' | 'roof' | 'repair';
 export const HANDS = {

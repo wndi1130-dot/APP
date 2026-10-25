@@ -4,7 +4,7 @@ import {
 } from '../../src/game';
 import type { Game, HandJob } from '../../src/game';
 
-// 손 몫(2026-10-25 사용자 결정 카드 1 가, carry_people.md 3.1): 일 다섯에 칸이 내는 손, 모자라면 뒤에서부터 빈다.
+// 손 몫(결정 425 가, carry_people.md 3.1): 일 다섯에 칸이 내는 손, 모자라면 뒤에서부터 빈다.
 
 const JOBS = HANDS.order;
 const noShort = (): Record<HandJob, number> => Object.fromEntries(JOBS.map(j => [j, 0])) as Record<HandJob, number>;
