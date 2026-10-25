@@ -10,6 +10,7 @@ extends RefCounted
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
+const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 
 
 ## The S1a game only: a state carrying a switched-on branch would need rules not ported here.
@@ -111,7 +112,11 @@ static func law_res(t: Dictionary, law: String) -> Dictionary:
 static func law_sum(g: Dictionary, t: Dictionary, key: String) -> float:
 	var sum := 0.0
 	for law: String in (g.get("passed", {}) as Dictionary):
-		sum += float(law_res(t, law).get(key, 0))
+		var v := float(law_res(t, law).get(key, 0))
+		# Sparing the tail under 비상식량감축법 saves less (rationCutFood).
+		if law == "emergency_ration" and key == "foodAdd":
+			v = RationCut.food(g, t, v)
+		sum += v
 	return sum
 
 
