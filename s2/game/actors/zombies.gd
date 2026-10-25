@@ -550,7 +550,7 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		var reach: float = sight * float(p.smell_mult()) * float(game.weather.downwind(p.position, z["pos"]) if p.smell > 0 else 1.0)
 		reach *= SenseRules.posture_mult(p.crouched, p.moving, p.is_running_now())
 		# One standing in an unlit room after dark is seen no farther than in a cellar (decision 439 card 1).
-		reach = BuildingRules.dark_reach(reach, game.dark_at(p.position))
+		reach = BuildingRules.dark_reach(reach, game.has_method("dark_at") and game.dark_at(p.position))
 		var to_p: Vector3 = (p.position - z["pos"])
 		to_p.y = 0
 		var close_sense: bool = d < FEEL and lg.body_line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position))
