@@ -343,6 +343,9 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 		return Color(struck_k(z), float(struck), 1.0, shade)
 	var torn := bite_after_k(z)
 	if torn >= 0.0:
+		# Thrown off as it tears away: the daze the release left (zombies.gd release) reels on after it.
+		moved(z)
+		z["body_reeled"] = z["age"]
 		return Color(torn, float(named[BITE]), 1.0, shade)
 	if float(z.get("shoved_t", 0.0)) > 0.0:
 		# Thrown off: it reels back, its feet going back over the ground it is
