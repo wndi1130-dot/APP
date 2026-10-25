@@ -1,12 +1,13 @@
 {
   "version": 1,
   "batch": "gap",
-  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf",
+  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket",
   "expected_kinds": [
     "gap_wire",
     "gap_gate",
     "gap_planks",
-    "small_shelf"
+    "small_shelf",
+    "thicket"
   ],
   "blender": "4.5.10 LTS",
   "palette": {
@@ -242,6 +243,45 @@
         "worn_wood"
       ],
       "judgment": "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "thicket": {
+      "path": "res://models/props_field/thicket.glb",
+      "status": "ready",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.8,
+      "solid": "low",
+      "lod0_tris": 350,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.8,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.8,
+        1.92
+      ],
+      "bytes": 28712,
+      "sha256": "2392dae3c943026e78eecb829b4448bb7a37852ffeb1027b1c68ce660fee9d16",
+      "colours": [
+        "bark",
+        "cloth",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른",
       "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
     }
   },
