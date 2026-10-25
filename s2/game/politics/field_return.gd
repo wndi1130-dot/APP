@@ -9,6 +9,7 @@ const CouncilMath = preload("res://game/politics/council_math.gd")
 const TrainState = preload("res://game/train/train_state.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
+const TurnDeath = preload("res://game/train/turn/turn_death.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
@@ -383,6 +384,8 @@ const LIMB_PARTS := ["armL", "armR", "legL", "legR"]
 
 static func _field_rank(w: Dictionary) -> float:
 	var kind: String = w["kind"]
+	if kind == "amputation":
+		return 3.0
 	if kind == "fracture":
 		var treat: Dictionary = w.get("treat", {})
 		return 0.5 if bool(treat.get("splinted", false)) and bool(treat.get("quick", false)) else 2.0
@@ -391,7 +394,8 @@ static func _field_rank(w: Dictionary) -> float:
 
 ## One badly hurt person's record on the train (J02, body_injury 4.1·4.6; s1 field_receipt.ts
 ## fieldWoundOf): the heaviest of the wounds the field wrote is the grade and the part, all of
-## them ride along in "field". A fracture is a fracture, or a light wound when a medic splinted it
+## them ride along in "field". An arm or a leg cut off in the field is an amputation, above all
+## else. A fracture is a fracture, or a light wound when a medic splinted it
 ## at once; a fracture off the limbs counts as deep (the train's fractures are limbs). Deep and
 ## embedded are deep. Only scratches and cuts on one listed as badly hurt is deep (decision card C,
 ## user 2026-10-25); with no rows at all, the torso. Festering if any of them festers. No draws.
@@ -408,8 +412,8 @@ static func field_wound_of(rows: Array, pid: String) -> Dictionary:
 	var grade := "deep"
 	if top is Dictionary:
 		var rank := _field_rank(top)
-		grade = "fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep")
-	if grade == "fracture" and not LIMB_PARTS.has(part):
+		grade = "amputation" if rank == 3.0 else ("fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep"))
+	if (grade == "fracture" or grade == "amputation") and not LIMB_PARTS.has(part):
 		grade = "deep"
 	var septic := false
 	var field: Array = []
@@ -466,68 +470,7 @@ static func _record_field_wound(g: Dictionary, t: Dictionary, who: String, comm:
 
 
 static func _on_death(g: Dictionary, t: Dictionary, comm: String, names: Array) -> void:
-	var count := names.size()
-	if count <= 0:
-		return
-	var state: Dictionary = g["comms"][comm]
-	state["pop"] = maxi(1, int(state["pop"]) - count)
-	(g["deaths"] as Array).append_array(names)
-	if not g.has("deathLog"):
-		g["deathLog"] = []
-	# wounds.ts registers a death hook in S1. Merely checking active wounds creates the empty book.
-	if not g.has("wounds"):
-		g["wounds"] = []
-	for name: String in names:
-		(g["deathLog"] as Array).append({"seg": g["seg"], "name": name, "cause": "other", "comm": comm})
-	if not g.has("story"):
-		g["story"] = {"stage": 1, "flags": {}}
-	if not g["story"].has("flags"):
-		g["story"]["flags"] = {}
-	g["story"]["flags"]["first_death"] = true
-	if _law_active(g, "corpse_throw"):
-		g["thrown"] = int(g["thrown"]) + count
-	elif _law_active(g, "corpse_store"):
-		g["stored"] = int(g["stored"]) + count
-		g["comms"]["tail"]["base"][2] = float(g["comms"]["tail"]["base"][2]) + count
-	elif _law_active(g, "corpse_burn"):
-		var in_car := mini(count, maxi(0, int(t["P"]["coldCap"]) - int(g["stored"]) - int(g.get("pyre", 0))))
-		g["pyre"] = int(g.get("pyre", 0)) + in_car
-		var over := count - in_car
-		if over > 0:
-			if not g.has("pyreKin"):
-				g["pyreKin"] = {}
-			g["pyreKin"][comm] = int(g["pyreKin"].get(comm, 0)) + over
-			state["base"][2] = float(state["base"][2]) + float(t["P"]["pyreKinCrowd"]) * over
-			_journal(g, "냉동칸이 찼다. 시신 %d구를 %s에 둔다." % [over, t["COMM_NAME"][comm]], "dark")
-	else:
-		if not bool(g["corpseIssue"]):
-			_journal(g, "첫 시신을 두고 다툼이 났다. 시신 처리가 안건에 올랐다.", "bad")
-			var flags: Dictionary = g["story"]["flags"]
-			if not flags.has("first_corpse_agenda") or flags["first_corpse_agenda"] == "none":
-				flags["first_corpse_agenda"] = "own"
-		g["corpseIssue"] = true
-		_bump(g, "tension", 3.0 * count, "corpse")
-		g["thrown"] = int(g["thrown"]) + count
-	_journal(g, "%s의 %s이(가) 죽었다." % [t["COMM_NAME"][comm], ", ".join(names)], "bad")
-	# field-vectors-v1 carries no family table. Its named field deaths have no surviving family,
-	# so S1 afterDeath adds the ordinary keepsake card and no mourning records.
-	var known: Array = []
-	for name: String in names:
-		for profile: Dictionary in t["PROFILES"]:
-			if profile["name"] == name and g["comms"][comm]["leader"]["name"] != name:
-				known.append(name)
-				break
-	var has_orphan := false
-	for card: Dictionary in g["cards"]:
-		if card["kind"] == "orphan":
-			has_orphan = true
-	if not known.is_empty() and not has_orphan:
-		var card := {"uid": g["nextCardUid"], "kind": "keepsake", "comm": comm, "who": known[0]}
-		if g["phase"] == "stop":
-			card["text"] = "field"
-		(g["cards"] as Array).append(card)
-		g["nextCardUid"] = int(g["nextCardUid"]) + 1
-		g["peopleSeg"] = g["seg"]
+	TurnDeath.on_death(g, t, comm, names)
 
 
 static func _receipt_value(input: Variant) -> Dictionary:
