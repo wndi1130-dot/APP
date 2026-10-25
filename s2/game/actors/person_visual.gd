@@ -17,6 +17,10 @@ extends Node3D
 ## weapon box stays, since the blows are still drawn with it (person_pose.gd).
 ## With the switch off, or no baked folder in the build, nothing is drawn here
 ## and the people keep their boxes.
+## Each person wears a body of their own (body_cast.gd), each body with its own
+## two multimeshes (and its garments', WEAR_TINTS), read in the first time
+## someone wears it. FOLDER and
+## OWN_FOLDER are the body worn when a person's own is not in the build.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
@@ -24,17 +28,24 @@ const DeadBody = preload("res://game/actors/dead_body.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 const SearchHeight = preload("res://game/actors/search_height.gd")
 const InjuryRules = preload("res://game/sim/injury_rules.gd")
+const BodyCast = preload("res://game/actors/body_cast.gd")
 const Wear = preload("res://game/sim/wear.gd")
 
 const FOLDER: String = "res://models/people/n5-crew_seamstress"
 const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
 const SETTING: String = "visuals/baked_people_enabled"
 const MAX_PEOPLE: int = 32
+const READS_PER_FRAME: int = 1           # bodies read in a frame (worn_of)
+## How many bodies a scene's people wear at most (body_cast.gd pick `cap`; 0 is
+## one each). For a phone that cannot hold every body's pictures: past it, a
+## new person wears the body fewest wear.
+const BODIES_SETTING: String = "visuals/people_bodies_max"
 ## What is worn over the body (decision 423 card 2, #564): each look is a
 ## shell baked with the own folder's motions (wear/<id>), drawn in its own
 ## colour (it has no picture): dark and cold, as the snow wants. The gloves are
-## the body again with the gloved picture. Only the own folder has them, so one
-## drawn from the dead's folder for a moment is drawn without.
+## the body again with the gloved picture. Each body's own folder has its own,
+## baked against that body; a body without them is drawn without (the values
+## still count, wear.gd), and so is one drawn from the dead's folder for a moment.
 const WEAR_TINTS: Dictionary = {"jacket_short": Vector3(0.1, 0.11, 0.14), "coat_long": Vector3(0.12, 0.1, 0.085),
 	"hat_knit": Vector3(0.17, 0.12, 0.1), "hood": Vector3(0.13, 0.135, 0.14)}
 const GLOVES_FILE: String = "albedo_gloves.png"
@@ -186,6 +197,7 @@ const KICK_WIND: float = 0.36
 # elbow those within ELBOW_R of a point FOREARM behind it.
 const HAND_R: float = 0.1
 const ELBOW_R: float = 0.05
+const ELBOW_SPARE: float = 0.02
 const FOREARM: float = 0.32
 const GRIP_FOLLOW: float = 0.5           # how far the weapon turns toward the hand's way each frame
 const OWN_MIX_TIME: float = 0.35
@@ -207,8 +219,11 @@ var own_table: Array = []
 var own_mix: Dictionary = {}             # own motion number -> how long a change into it is eased
 var own_frames: Array = []               # the own folder's table, for the hand (dead_body.gd table_of)
 var frames: Array = []                   # the dead folder's
-var wear_draws: Dictionary = {}          # look id -> its multimesh (WEAR_TINTS)
-var gloved_draw: MultiMeshInstance3D     # the own body with gloves on
+var wear_draws: Dictionary = {}          # look id -> its multimesh once worn (garment_of; null: none), FOLDER / OWN_FOLDER's
+var gloved_draw: MultiMeshInstance3D     # the own body with gloves on, FOLDER / OWN_FOLDER's
+var worn: Dictionary = {}                # body -> its pictures and what is read off them (_dress); "" is FOLDER / OWN_FOLDER
+var body_by: Dictionary = {}             # person -> the body they wear (body_cast.gd)
+var taken: Dictionary = {}               # body -> how many in this scene wear it
 
 
 func setup(field_game) -> void:
@@ -216,37 +231,92 @@ func setup(field_game) -> void:
 	process_priority = 100               # after field_game has set every person's view
 	if not enabled():
 		return
-	vat = DeadBody.with_albedo(BodyBake.load_baked(FOLDER), FOLDER)
-	if vat.is_empty():
+	var d := _dress(FOLDER, OWN_FOLDER)
+	if d.is_empty():
 		return
-	draw = _wear(vat)
+	worn[""] = d
+	vat = d["vat"]
+	draw = d["draw"]
+	table = d["table"]
+	own_vat = d["own_vat"]
+	own_draw = d["own_draw"]
+	own_table = d["own_table"]
+	own_mix = d["own_mix"]
+	own_frames = d["own_frames"]
+	frames = d["frames"]
+	wear_draws = d["wear"]
+	gloved_draw = d["gloved"]
+
+
+## One body's two pictures: the dead's folder (the struck pose, and a build
+## whose own folder lacks a motion) and the living's own, each in a multimesh,
+## with the tables, eases and the right hand read off them. A folder with no
+## colour picture of its own is drawn with the other's. With them the body with
+## gloves on, where it has the picture; what is worn over it is read in when
+## first worn (garment_of).
+func _dress(dead_dir: String, own_dir: String) -> Dictionary:
+	var dead_look := dead_dir if ResourceLoader.exists(dead_dir.path_join(DeadBody.ALBEDO_FILE)) else own_dir
+	var dead := DeadBody.with_albedo(BodyBake.load_baked(dead_dir), dead_look)
+	if dead.is_empty():
+		return {}
+	var d := {"vat": dead, "draw": _wear(dead), "table": [], "own_vat": {}, "own_draw": null,
+		"own_table": [], "own_mix": {}, "own_frames": [], "frames": [], "wear": {}, "gloved": null,
+		"wear_dir": own_dir.path_join("wear"), "n": 0, "k": 0, "gk": 0, "worn_n": {}}
 	if DeadBody.can_mix():
-		table = DeadBody.table_of(vat)
-	own_vat = DeadBody.with_albedo(BodyBake.load_baked(OWN_FOLDER), OWN_FOLDER)
-	if own_vat.is_empty():
-		return
-	own_draw = _wear(own_vat)
-	var clips: Array = own_vat.get("clips", [])
+		d["table"] = DeadBody.table_of(dead)
+	var own := DeadBody.with_albedo(BodyBake.load_baked(own_dir), own_dir)
+	if own.is_empty():
+		return d
+	d["own_vat"] = own
+	d["own_draw"] = _wear(own)
+	var clips: Array = own.get("clips", [])
 	for n in clips.size():
-		own_mix[n] = float(OWN_MIX.get(String(clips[n].get("name", "")), OWN_MIX_TIME))
+		d["own_mix"][n] = float(OWN_MIX.get(String(clips[n].get("name", "")), OWN_MIX_TIME))
 	if DeadBody.can_mix():
-		own_table = DeadBody.table_of(own_vat)
-	own_frames = DeadBody.table_of(own_vat)
-	for kind: String in WEAR_TINTS:
-		var shell := BodyBake.load_baked(OWN_FOLDER.path_join("wear").path_join(kind))
-		if not shell.is_empty():
-			wear_draws[kind] = _wear(shell, WEAR_TINTS[kind])
-	var gloved_path := OWN_FOLDER.path_join(GLOVES_FILE)
+		d["own_table"] = DeadBody.table_of(own)
+	d["own_frames"] = DeadBody.table_of(own)
+	var gloved_path := own_dir.path_join(GLOVES_FILE)
 	if ResourceLoader.exists(gloved_path):
-		var gloved: Dictionary = own_vat.duplicate()
+		var gloved: Dictionary = own.duplicate()
 		gloved["albedo"] = load(gloved_path)
-		gloved_draw = _wear(gloved)
-	var arm := hand_of(own_vat)
+		d["gloved"] = _wear(gloved)
+	var arm := hand_of(own)
 	if not arm.is_empty():
-		own_vat["arm"] = arm_table(own_vat, arm["hand"], arm["elbow"])
-		if int(vat.get("vertices", 0)) == int(own_vat.get("vertices", -1)):
-			vat["arm"] = arm_table(vat, arm["hand"], arm["elbow"])
-			frames = DeadBody.table_of(vat)
+		own["arm"] = arm_table(own, arm["hand"], arm["elbow"])
+		if int(dead.get("vertices", 0)) == int(own.get("vertices", -1)):
+			dead["arm"] = arm_table(dead, arm["hand"], arm["elbow"])
+			d["frames"] = DeadBody.table_of(dead)
+	return d
+
+
+## One garment over a body (WEAR_TINTS), read in the first time someone in that
+## body wears it: the gloves and the short coat everyone starts in come with
+## nearly every body, the rest only when worn, so a phone holds what is on show
+## (a body's four with its gloves are more than half the body again). null
+## when this body has none of that kind.
+func garment_of(d: Dictionary, kind: String) -> MultiMeshInstance3D:
+	var wear: Dictionary = d["wear"]
+	if not wear.has(kind):
+		var shell := BodyBake.load_baked(String(d["wear_dir"]).path_join(kind)) if WEAR_TINTS.has(kind) else {}
+		wear[kind] = _wear(shell, WEAR_TINTS[kind]) if not shell.is_empty() else null
+	return wear[kind]
+
+
+## The body one person wears, picked the first time they are drawn and read in
+## the first time anyone wears it; FOLDER / OWN_FOLDER's when theirs is not in
+## the build. {} when it is not read in yet and `may_read` is false.
+func worn_of(p, may_read: bool = true) -> Dictionary:
+	if not body_by.has(p):
+		body_by[p] = BodyCast.pick(String(p.pid), String(p.role), taken, int(ProjectSettings.get_setting(BODIES_SETTING, 0)))
+	var body: String = body_by[p]
+	if not worn.has(body):
+		if not may_read:
+			return {}
+		var d := {}
+		if ResourceLoader.exists(BodyCast.own_folder(body).path_join("clips.json")):
+			d = _dress(BodyCast.dead_folder(body), BodyCast.own_folder(body))
+		worn[body] = d if not d.is_empty() and d["own_draw"] != null else worn[""]
+	return worn[body]
 
 
 ## One multimesh wearing a baked folder (a garment in its own colour).
@@ -285,20 +355,37 @@ func is_worn() -> bool:
 func _process(delta: float) -> void:
 	if draw == null:
 		return
-	var mm := draw.multimesh
-	var own_mm: MultiMesh = own_draw.multimesh if own_draw != null else null
-	var gloved_mm: MultiMesh = gloved_draw.multimesh if gloved_draw != null else null
-	var n := 0
-	var k := 0
-	var gk := 0
-	var worn_n: Dictionary = {}
+	for d: Dictionary in worn.values():
+		d["n"] = 0
+		d["k"] = 0
+		d["gk"] = 0
+		d["worn_n"] = {}
+	var count := 0
+	# One body read in a frame (about a tenth of a second each on a PC): someone
+	# whose body is not in yet is left out for the frames it takes.
+	var reads := READS_PER_FRAME
 	for p in game.people:
 		_hide_boxes(p)
-		if not p.visible or n + k + gk >= MAX_PEOPLE:
+		if not p.visible or count >= MAX_PEOPLE:
 			continue
+		var had := worn.size()
+		var d := worn_of(p, reads > 0)
+		if worn.size() > had:
+			reads -= 1
+		if d.is_empty():
+			continue
+		count += 1
+		var b_vat: Dictionary = d["vat"]
+		var b_own: Dictionary = d["own_vat"]
+		var b_own_frames: Array = d["own_frames"]
+		var b_frames: Array = d["frames"]
+		var mm: MultiMesh = d["draw"].multimesh
+		var own_mm: MultiMesh = d["own_draw"].multimesh if d["own_draw"] != null else null
+		var n: int = d["n"]
+		var k: int = d["k"]
 		var note: Dictionary = notes.get(p, {})
 		notes[p] = note
-		var c := motion_of(p, note, delta, vat.get("clips", []), own_vat.get("clips", []))
+		var c := motion_of(p, note, delta, b_vat.get("clips", []), b_own.get("clips", []))
 		var look := Color(c.x, c.y, 1.0, SHADE)
 		var at := Transform3D(Basis(Vector3.UP, p.rotation.y) * lean_of(p, note), p.global_position)
 		var own := is_own(note)
@@ -309,51 +396,57 @@ func _process(delta: float) -> void:
 		var mix: Dictionary = note.get_or_add("mix_own" if own else "mix_dead", {})
 		var drawn: Color
 		if own:
-			drawn = DeadBody.mix_from(mix, look, float(note["t"]), own_table, own_mix)
-			if p.gloves and gloved_mm != null:
-				gloved_mm.set_instance_transform(gk, at)
-				gloved_mm.set_instance_custom_data(gk, drawn)
-				gk += 1
+			drawn = DeadBody.mix_from(mix, look, float(note["t"]), d["own_table"], d["own_mix"])
+			var gloved: MultiMeshInstance3D = d["gloved"]
+			if p.gloves and gloved != null:
+				var gk: int = d["gk"]
+				gloved.multimesh.set_instance_transform(gk, at)
+				gloved.multimesh.set_instance_custom_data(gk, drawn)
+				d["gk"] = gk + 1
 			else:
 				own_mm.set_instance_transform(k, at)
 				own_mm.set_instance_custom_data(k, drawn)
-				k += 1
+				d["k"] = k + 1
 			# What they wear moves with the body: the same place, the same frame.
+			var worn_n: Dictionary = d["worn_n"]
 			for kind: String in looks_of(p):
-				if wear_draws.has(kind):
+				var garment := garment_of(d, kind)
+				if garment != null:
 					var w: int = int(worn_n.get(kind, 0))
-					var wmm: MultiMesh = (wear_draws[kind] as MultiMeshInstance3D).multimesh
+					var wmm: MultiMesh = garment.multimesh
 					wmm.set_instance_transform(w, at)
 					wmm.set_instance_custom_data(w, drawn)
 					worn_n[kind] = w + 1
 		else:
-			drawn = DeadBody.mix_from(mix, look, float(note["t"]), table)
+			drawn = DeadBody.mix_from(mix, look, float(note["t"]), d["table"])
 			mm.set_instance_transform(n, at)
 			mm.set_instance_custom_data(n, drawn)
-			n += 1
-		var baked: Dictionary = own_vat if own else vat
-		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, own_vat.get("clips", [])))):
-			var hand := arm_at(baked["arm"], own_frames if own else frames, drawn)
+			d["n"] = n + 1
+		var baked: Dictionary = b_own if own else b_vat
+		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, b_own.get("clips", [])))):
+			var hand := arm_at(baked["arm"], b_own_frames if own else b_frames, drawn)
 			var grip := grip_of(hand[0], hand[1], note.get("grip", Basis()))
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
-		elif baked.has("arm") and own and aiming(note, own_vat.get("clips", [])):
+		elif baked.has("arm") and own and aiming(note, b_own.get("clips", [])):
 			# The gun in the hand held out, the muzzle ahead, kicking back as it fires
 			# as person_pose.gd has it (its aim less where it would hold it still).
-			var hand := arm_at(baked["arm"], own_frames, drawn)
+			var hand := arm_at(baked["arm"], b_own_frames, drawn)
 			var hold := Pose.hold_of(p.weapon_id())
 			var still: Vector3 = Pose.aim_at(hold)["weapon"]["pos"]
 			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, Time.get_ticks_msec()))["weapon"]
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * Basis.from_euler(shot["rot"]), lean * (hand[0] + shot["pos"] - still))
-	mm.visible_instance_count = n
-	if own_mm != null:
-		own_mm.visible_instance_count = k
-	if gloved_mm != null:
-		gloved_mm.visible_instance_count = gk
-	for kind: String in wear_draws:
-		(wear_draws[kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(worn_n.get(kind, 0))
+	for d: Dictionary in worn.values():
+		d["draw"].multimesh.visible_instance_count = d["n"]
+		if d["own_draw"] != null:
+			d["own_draw"].multimesh.visible_instance_count = d["k"]
+		if d["gloved"] != null:
+			d["gloved"].multimesh.visible_instance_count = d["gk"]
+		for kind: String in d["wear"]:
+			if d["wear"][kind] != null:
+				(d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(d["worn_n"].get(kind, 0))
 
 
 ## The looks one person wears over the body: the shell of the outermost layer
@@ -787,10 +880,17 @@ static func hand_of(baked: Dictionary) -> Dictionary:
 	var hand := PackedInt32Array()
 	var elbow := PackedInt32Array()
 	var bend := tip - Vector3(0, 0, FOREARM)
+	# A body of fewer vertices may have none that near the elbow: then those
+	# within ELBOW_SPARE of the nearest one.
+	var nearest := INF
+	for i in rest.size():
+		if at[i].distance_to(tip) >= HAND_R:
+			nearest = minf(nearest, at[i].distance_to(bend))
+	var reach := ELBOW_R if nearest < ELBOW_R else nearest + ELBOW_SPARE
 	for i in rest.size():
 		if at[i].distance_to(tip) < HAND_R:
 			hand.append(i)
-		elif at[i].distance_to(bend) < ELBOW_R:
+		elif at[i].distance_to(bend) < reach:
 			elbow.append(i)
 	if hand.is_empty() or elbow.is_empty():
 		return {}
@@ -824,15 +924,45 @@ static func arm_table(baked: Dictionary, hand: PackedInt32Array, elbow: PackedIn
 	var arrays: Array = (baked["mesh"] as Mesh).surface_get_arrays(0)
 	var rest: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var look: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
-	var count: int = int(baked["height"]) / maxi(1, int(baked["rows_per_frame"]))
+	var rows: int = maxi(1, int(baked["rows_per_frame"]))
+	var count: int = int(baked["height"]) / rows
+	var img: Image = baked["image"]
+	var width: float = float(baked["width"])
+	var packed: bool = baked.get("format", "") != ""
+	var clips: Array = baked["clips"]
 	var out := PackedVector3Array()
 	out.resize(count * 2)
+	# What vertex_at does for each vertex and frame, with each vertex's place in
+	# the picture read once and each frame's clip box once (a body's folder of
+	# sixty motions took seconds the other way).
+	var parts: Array[PackedInt32Array] = [hand, elbow]
+	var cols: Array[PackedInt32Array] = [PackedInt32Array(), PackedInt32Array()]
+	var lines: Array[PackedInt32Array] = [PackedInt32Array(), PackedInt32Array()]
+	for part in 2:
+		for i in parts[part]:
+			cols[part].append(int(look[i].x * width))
+			lines[part].append(int(look[i].y))
+	var clip: Dictionary = clips[0] if not clips.is_empty() else {}
+	var lo := Vector3.ZERO
+	var span := Vector3.ONE
+	var first := -1
+	var last := -1
 	for f in count:
+		if packed and (f < first or f >= last):
+			clip = _clip_at(clips, f)
+			lo = Vector3(clip["lo"][0], clip["lo"][1], clip["lo"][2])
+			span = Vector3(clip["hi"][0], clip["hi"][1], clip["hi"][2]) - lo
+			first = int(clip["start"])
+			last = first + int(clip["frames"])
 		for part in 2:
-			var ids: PackedInt32Array = hand if part == 0 else elbow
+			var ids: PackedInt32Array = parts[part]
 			var sum := Vector3.ZERO
-			for i in ids:
-				sum += vertex_at(baked, rest, look, i, f)
+			for j in ids.size():
+				var c := img.get_pixel(cols[part][j], f * rows + lines[part][j])
+				var v := Vector3(c.r, c.g, c.b)
+				if packed:
+					v = lo + v * span
+				sum += rest[ids[j]] + v
 			out[f * 2 + part] = sum / float(ids.size())
 	return out
 
