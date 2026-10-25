@@ -44,7 +44,7 @@ blender -b --factory-startup -P tools/blender/train_interior.py -- --repo .
 | captain_desk | 1 | 1.6×0.75×0.7 | 1.6×0.75×0.7 | 168 | 12768 | 서랍 세 칸과 황동 손잡이의 책상 |
 | radio | 1 | 0.45×0.3×0.3 | 0.45×0.3×0.3 | 188 | 13676 | 스피커 슬롯·주파수 창·노브 둘의 라디오 |
 | coal_pile | 1 | 12×0.9×1.5 | 12×0.9×1.5 | 104 | 10680 | 불규칙한 능선이 이어지는 긴 석탄 더미 |
-| food_crates | 1 | 3×1×1.2 | 3×1×1.2 | 488 | 36680 | 열린 식량 상자 두 개와 통 네 개 |
+| food_crates | 1 | 3×1×1.2 | 3×1×1.2 | 488 | 36680 | 창고칸 얼음 상자 둘(train_ice_chest.py) |
 | divider | 1 | 0.1×2×1.1 | 0.1×2×1.1 | 60 | 5188 | 세로 널 네 줄이 보이는 얇은 목재 칸막이 |
 | empty_platform | 1 | 3×0.5×1.2 | 3×0.5×1.2 | 96 | 7700 | 빈 화물용 받침의 금속 골조와 상판 |
 | storage_board | 1 | 0.5×0.35×0.04 | 0.5×0.35×0.04 | 108 | 8576 | 목재 테두리와 짧은 기록 선의 보관판 |
@@ -92,7 +92,7 @@ blender -b --factory-startup -P tools/blender/train_interior.py -- --repo .
 | captain_desk | 68d8ac59527cdbda102cb792b14f031c065b610062b2984e47d92cc0a23e02e5 |
 | radio | f46b80d612b8558cd746f2f5d0b1f3a2ded8a1642a567cffaf55d0c45811ca27 |
 | coal_pile | 0674c9698b9b58d462d7f1e6e86ade3bf0c132849427b25ccd238d6305c1dcf7 |
-| food_crates | 49ccab603b7fca557677c8f3b2687e692430497cf3c7e2af8a2cb0d790ad7ca6 |
+| food_crates | 1f7287a4d048888a398878ec092f2941d09fbc593391dcfd56429782aaf581fa |
 | divider | efd284c70d8c5996198a2c1306e45c2dd44bb81294b7c809a214885b8769cf91 |
 | empty_platform | a483cbc8b6b12227df6876600d6e145f3cf86891474ffd1a88a8d9980d737af5 |
 | storage_board | 588cdbeef2d108a2c338ea5963da041a3b5fd0d6665843795228220f5648b0b3 |
@@ -118,11 +118,12 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 
 ## 공개 3D로 바꾼 것
 
-`tools/blender/train_interior_swap.py`가 위 표의 같은 경로를 덮어쓴다. 전체 삼각형: 5884.
+`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓴다. 전체 삼각형: 5984.
 
 | 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
 |---|---|---|---:|---|---|
 | sacks | Poly Haven cement_bag (CC0) | 0.6×0.46×0.6 | 540 | cloth, cloth_faded | 13a1a79e811221fc1e5c02923dc2b4c4203fc089cfd1a9460a6cd873f4cf7e42 |
 | crates | Poly Haven wooden_crate_02 (CC0) | 1.4×0.7×0.7 | 540 | wood_dark, wood_worn | b34746025f2ee3d168339f000071f959b7481b0d746ba1aafd270e8de3453c4b |
+| food_crates | 손으로 만듦(tools/blender/train_ice_chest.py) | 3×1×1.2 | 588 | cloth, cloth_faded, frost, ice, ice_dark, iron, iron_worn, wood, wood_dark, wood_worn | 1f7287a4d048888a398878ec092f2941d09fbc593391dcfd56429782aaf581fa |
 | cupboard | Poly Haven painted_wooden_shelves (CC0) | 0.52×1.12×0.38 | 524 | wood_dark | bba09d580fdb9a0b29ce47a08c63d0f889ce9183180b6ec4606ebb614af1d013 |
 | wood_chair | Poly Haven painted_wooden_chair_01 (CC0) | 0.44×0.96×0.54 | 532 | wood, wood_dark, wood_worn | 7adc491ae241dc704dba49531007df9e829d85294801782f4accbd2009d89161 |
