@@ -79,6 +79,35 @@ static func season_at(act_name: String, progress: float) -> String:
 	return out
 
 
+## Whether the night freezes at this point: the prologue stretch's night_freeze,
+## an act's.
+static func night_freeze_at(act_name: String, progress: float) -> bool:
+	if act_name == "prologue" or act(act_name).is_empty():
+		return bool(row(int(round(seg_at(progress)))).get("night_freeze", false))
+	return bool(act(act_name).get("night_freeze", true))
+
+
+## The night air (2026-10-25 user answer: the rules follow the pictures' curve,
+## held to the table's night frost at zero). Full night is colder than midday by
+## NIGHT_DROP_CLEAR under a clear sky, NIGHT_DROP otherwise; a stretch without
+## night frost stays at NO_FROST_FLOOR or above, one with it gets to FROST_CEIL
+## or below. dark: 0 day .. 1 full night. frost: 1 freezes, 0 does not, -1 not
+## known (an air or a cold given outright): no bounds. Proposals.
+const NIGHT_DROP_CLEAR := 5.0
+const NIGHT_DROP := 2.5
+const NO_FROST_FLOOR := 0.5
+const FROST_CEIL := -1.0
+
+
+static func night_air(midday: float, dark: float, clear: bool, frost: int) -> float:
+	var night := midday - (NIGHT_DROP_CLEAR if clear else NIGHT_DROP)
+	if frost == 0:
+		night = maxf(night, minf(midday, NO_FROST_FLOOR))
+	elif frost == 1:
+		night = minf(night, FROST_CEIL)
+	return lerpf(midday, night, clampf(dark, 0.0, 1.0))
+
+
 ## The season state of a stretch of the first leg (the train's view).
 static func season_of_seg(seg: int) -> String:
 	return String(row(seg).get("season", "late_autumn"))

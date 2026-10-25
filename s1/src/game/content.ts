@@ -3,6 +3,8 @@ import { noteInjury } from './wounds';
 import type { Comm, LawId } from './data';
 import { affordable, applyEffs, CARD_EXTENSIONS, costLines, DRAW, DRAW_HOOKS, EVENT_CHAIN_MAX, EVENT_COOLDOWN, memo, politicsLines, withAfford } from './cards';
 import type { CardView, Choice, Eff } from './cards';
+import { seasonHolds } from './climate';
+import type { SeasonNeed } from './climate';
 import { onDeath } from './death';
 import { inEventPack } from './event_pack';
 import { josa } from './josa';
@@ -27,6 +29,8 @@ export type ContentCondition =
   | { type: 'community'; community: Comm; metric: CommunityMetric; operator: 'lt' | 'lte' | 'eq' | 'gte' | 'gt'; value: number }
   | { type: 'flag'; id: string; value: boolean | number | string }
   | { type: 'person'; id: string; state: 'alive' | 'injured' | 'dead' | 'away' }
+  /** 계절표의 눈·얼음(climate.ts seasonHolds): frost 얼음이 서는 구간, snow 눈이 쌓인 구간. 기온 꺼진 판은 늘 참 */
+  | { type: 'season'; needs: SeasonNeed }
   | ResourceCondition;
 /** 자원이 얼마 이상/이하인가. symbol은 지금 가진 상징물 수 */
 export interface ResourceCondition { type: 'resource'; resource: 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol'; operator: 'lte' | 'gte'; value: number }
@@ -137,6 +141,7 @@ function holds(g: Game, c: ContentCondition): boolean {
     }
     case 'flag': return flagsOf(g)[c.id] === c.value;
     case 'person': return personState(g, c.id) === c.state;
+    case 'season': return seasonHolds(g, c.needs);
     case 'resource': {
       const v = c.resource === 'coal' ? g.coal : c.resource === 'food' ? g.food : c.resource === 'medicine' ? g.med : c.resource === 'luxury' ? g.lux : g.symbols;
       return c.operator === 'lte' ? v <= c.value : v >= c.value;
