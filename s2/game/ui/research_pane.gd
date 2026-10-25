@@ -10,7 +10,11 @@ extends Control
 ## back), 완성판 for a defective plate. When a restoration can go more than one
 ## way (decision 068's either-or), 복원 turns the row into a key for each way.
 ## A key that cannot is dimmed and shakes; why is its tooltip (결정 417: no
-## sentence on the pane).
+## sentence on the pane). A technology that only bends a law (train_lawtech.gd)
+## names that law at the right of its name (or of the line under it when the
+## name leaves no room), red with 없음 while it does not stand (S1 useTag), so
+## none is bought unawares (7.3); its use line is the key's tooltip when
+## nothing blocks it.
 ##
 ## The rules are train_research.gd; the pane asks them, and tries a start on a
 ## copy to know whether a way can go. It changes the state it was given.
@@ -23,6 +27,7 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const Research = preload("res://game/train/train_research.gd")
+const LawTech = preload("res://game/train/train_lawtech.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 ## As tall as the workshop's pane while four rows fit; longer lists grow it.
@@ -32,8 +37,17 @@ const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "g
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "core": "gear"}
 ## S1 ui/domestic.ts BRANCH_ICON.
 const BRANCH_ICON: Dictionary = {"engine": "gear", "med": "med", "craft": "wrench", "radio": "radio", "expedition": "compass"}
-## What a working technology does on S2's train, in a few words (decision 449).
-const EFFECT: Dictionary = {"w1": "공방 일 ×1.25"}
+## The technologies whose every S2 effect is on a law: S1 LAW_ONLY_TECHS but E5,
+## whose insulation (the refit room) is of use with no law standing.
+const LAW_TAGGED: Array[String] = ["e1", "e2", "e3", "m2", "m3", "x1"]
+## What a working technology does on S2's train, in a few words (decision 449);
+## a law technology's says which law and how (train_lawtech.gd TOUCHES·OPENS).
+const EFFECT: Dictionary = {
+	"w1": "공방 일 ×1.25", "e1": "눈 녹이기 당번: 벌 줄임", "e2": "난방 배당: 벌 줄임",
+	"e3a": "공동 난방: 석탄 −0.65", "e3b": "난방 배당: 앞칸 온기 +5", "e5": "개조 방: 칸 단열",
+	"x1": "아동 노동: 짐 꾸리기만", "m2": "중환자 분류: 기준 변형",
+	"m3a": "종자곡 풀기: 반만 변형", "m3b": "공동 식당: 식량 −1.5",
+}
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
 const KEY_H: float = 44.0
@@ -83,6 +97,9 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		"have": int(float((dom.get("frags", {}) as Dictionary).get(branch, 0))),
 		"variant": String(def["variants"][st["variant"]]["name"]) if st.get("variant") != null and def.has("variants") else "",
 		"effect": _effect(id, st.get("variant")), "ways": [], "word": "", "can": false, "why": "", "cost": [],
+		"law": law_tag(id, st.get("variant")) if LAW_TAGGED.has(id) else "",
+		"law_on": LawTech.law_standing(g0, id, st.get("variant")),
+		"use": LawTech.use_line(g0, id, st.get("variant")) if LAW_TAGGED.has(id) else "",
 	}
 	if stage == "new":
 		# S1 offers the defective plate only when the full one cannot be had (restoreCheck).
@@ -116,6 +133,14 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 
 static func _effect(id: String, variant: Variant) -> String:
 	return String(EFFECT.get(id + String(variant) if variant != null else id, EFFECT.get(id, "")))
+
+
+## The laws this technology (way) needs, by title (「난방 배당·공동 난방」), or "".
+static func law_tag(id: String, variant: Variant) -> String:
+	var titles: Array[String] = []
+	for law: String in LawTech.tech_laws(id, variant):
+		titles.append(String(LawTech.LAW_TITLE[law]))
+	return "·".join(titles)
 
 
 func _ready() -> void:
@@ -239,17 +264,25 @@ func _row(r: Dictionary, top: float) -> void:
 	var word := UiFonts.label(title, UiFonts.WORD, 500, 13.0, INK, 2.08)
 	word.name = "Name_" + id
 	_text(word, 64.0, top + 18.0)
+	var law_x1: float = 226.0 if String(r["word"]) != "" else 312.0
+	var tagged: bool = _law(r, top + 18.0, 64.0 + GlassParts.text_w(word) / k + 8.0, law_x1)
 	var stage: String = String(r["stage"])
+	# Where the line under the name ends, for a tag the name line had no room for.
+	var under_x: float = 0.0
 	if bool(r["active"]):
 		_bar(id, float(r["share"]), top)
+		under_x = 208.0
 	elif stage == "new":
 		_pips(id, int(r["have"]), int(r["need"]), top)
-		_cost(r["cost"], top + 40.0, "Cost_" + id, 44.0 + (14.0 * int(r["need"]) + 10.0 if int(r["need"]) > 0 else 0.0))
+		under_x = _cost(r["cost"], top + 40.0, "Cost_" + id, 44.0 + (14.0 * int(r["need"]) + 10.0 if int(r["need"]) > 0 else 0.0))
 	else:
 		_add(_mark("check", 13.0, Vector2(44.0, top + 28.0), INK2 if stage == "done" else ACCENT))
 		var said := UiFonts.label(("½ " if stage == "defective" else "") + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
 		said.name = "Effect_" + id
 		_text(said, 62.0, top + 40.0)
+		under_x = 62.0 + GlassParts.text_w(said) / k
+	if not tagged:
+		_law(r, top + 40.0, under_x + 8.0, law_x1)
 	if String(r["word"]) == "":
 		return
 	var cancelling: bool = _cancelling == id
@@ -257,8 +290,28 @@ func _row(r: Dictionary, top: float) -> void:
 	_add(key)
 	key.position = Vector2(232.0, top + 5.0) * k
 	key.size = Vector2(KEY_W, KEY_H) * k
-	key.tooltip_text = String(r["why"])
+	key.tooltip_text = String(r["why"]) if String(r["why"]) != "" else String(r["use"])
 	key.pressed.connect(func() -> void: _press(r, key))
+
+
+## The law a law technology is for, on the baseline `base`, right-aligned
+## between `x0` and `x1`: dim ink while it stands, red with 없음 while it does
+## not. When both laws do not fit, the first. False when nothing was put (no
+## law, or no room: the caller tries the line under).
+func _law(r: Dictionary, base: float, x0: float, x1: float) -> bool:
+	if String(r["law"]) == "":
+		return true
+	var on: bool = bool(r["law_on"])
+	var k: float = UiFonts.K
+	for text: String in [String(r["law"]), String(r["law"]).get_slice("·", 0)]:
+		var tag := UiFonts.label(text + ("" if on else " 없음"), UiFonts.WORD, 400, 11.0, INK2 if on else RED, 0.44)
+		tag.name = "Law_" + String(r["id"])
+		var w: float = GlassParts.text_w(tag) / k
+		if x1 - w >= x0:
+			_text(tag, x1 - w, base)
+			return true
+		tag.free()
+	return false
 
 
 ## The ways a restoration can go, a full key each, in the row's place (its
@@ -272,6 +325,7 @@ func _ways(r: Dictionary, top: float) -> void:
 		_add(key)
 		key.position = Vector2(64.0 + (WAY_W + 4.0) * i, top + 5.0) * k
 		key.size = Vector2(WAY_W, KEY_H) * k
+		key.tooltip_text = LawTech.use_line(g, String(r["id"]), w["variant"])
 		key.pressed.connect(func() -> void:
 			if not Research.start_restore(g, String(r["id"]), String(w["mode"]), w["variant"]):
 				UiDeny.shake(key)
@@ -348,8 +402,9 @@ func _bar(id: String, share: float, top: float) -> void:
 	_add(bar)
 
 
-## What a plate costs besides fragments: each store's mark and number, red when short.
-func _cost(cost: Array, base: float, prefix: String, x0: float) -> void:
+## What a plate costs besides fragments: each store's mark and number, red when
+## short. Gives where the last number ends (css px).
+func _cost(cost: Array, base: float, prefix: String, x0: float) -> float:
 	var k: float = UiFonts.K
 	var x: float = x0
 	for c: Dictionary in cost:
@@ -359,6 +414,7 @@ func _cost(cost: Array, base: float, prefix: String, x0: float) -> void:
 		n.name = "%s_%s" % [prefix, c["key"]]
 		_text(n, x + 19.0, base)
 		x += 19.0 + GlassParts.text_w(n) / k + 12.0
+	return x - 12.0 if not cost.is_empty() else x0
 
 
 func _after() -> void:

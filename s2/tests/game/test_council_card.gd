@@ -53,6 +53,24 @@ func test_the_card_says_what_the_port_says_for_the_sample_session() -> void:
 	assert_eq(m["changes"], [["가결", "꼬리칸 관계", "+5"], ["부결", "꼬리칸 관계", "−5"]], "the symbol's motion: what passing and failing do")
 
 
+## An amendment says first which law it stands in for (S1 ui/council.ts), and
+## a technology in use that bends the law follows the law's lines (lawTechLines).
+func test_an_amendment_and_the_technology_that_bends_a_law_are_on_the_bill() -> void:
+	var t: Dictionary = SliceFlow.council_sample()[1]
+	var rows: Array = CouncilCard.change_rows(t, {"law": "child_pack", "repeal": false, "amend": "child_labor"})
+	assert_eq(rows[0], ["아동 노동 대신 선다", "", ""])
+	assert_eq(rows.size(), 1 + (t["LAWS"]["child_pack"]["changes"] as Array).size())
+	var g := {"passed": {"heat_quota": 0}, "dom": {"techs": {"e2": {"stage": "done", "defect": false, "progress": 4, "need": 4}},
+		"experts": [{"name": "기관사", "comm": "engine", "field": "engine", "skill": 3}]}}
+	var plain: Array = CouncilCard.change_rows(t, {"law": "heat_quota", "repeal": false})
+	rows = CouncilCard.change_rows(t, {"law": "heat_quota", "repeal": false}, g)
+	assert_eq(rows.size(), plain.size() + 1)
+	var at: int = mini(4, plain.size())
+	assert_eq(rows[at], ["압력 조절: 꼬리칸·의무진 온기 −10 → −5, 경비대 벌 없음", "", ""], "after the first four lines, unscrolled")
+	assert_eq(rows.slice(0, at), plain.slice(0, at))
+	assert_eq(rows.slice(at + 1), plain.slice(at), "the rest of the law's lines still follow")
+
+
 func test_a_law_s_lines_split_as_the_mockup_s_bill() -> void:
 	var t: Dictionary = SliceFlow.council_sample()[1]
 	assert_eq(CouncilCard.change_rows(t, {"law": "contribution_ration"}), [

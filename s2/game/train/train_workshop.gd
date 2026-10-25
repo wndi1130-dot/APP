@@ -18,6 +18,7 @@ extends RefCounted
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
@@ -154,6 +155,12 @@ static func run(g: Dictionary) -> Dictionary:
 	var restored: Dictionary = TrainResearch.advance_restore(g, w)
 	w -= float(restored["used"])
 	did.append_array(restored["did"])
+	# A standing law the restored technology bends says so (S1 completeTech's lawTechNews).
+	if restored.get("done") != null:
+		for news: String in TrainLawTech.news(g, String(restored["done"])):
+			if not g.get("journal") is Array:
+				g["journal"] = []
+			g["journal"].append({"seg": int(g.get("seg", 0)), "text": news, "tone": "good"})
 	var modified: Dictionary = TrainMods.advance_job(g, w)
 	w -= float(modified["used"])
 	did.append_array(modified["did"])

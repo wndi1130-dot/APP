@@ -14,6 +14,7 @@ extends RefCounted
 const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 
@@ -42,6 +43,7 @@ static func tail_idle(g: Dictionary) -> bool:
 
 
 ## Coal and food this stretch will cost, stops left out: {coal, food}. A stranded train burns none.
+## The dom's share is what technology takes off an ideal law (dom_coal/dom_food, S1 domesticForecast).
 static func forecast(g: Dictionary, t: Dictionary) -> Dictionary:
 	var p: Dictionary = t["P"]
 	var run := float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])
@@ -50,7 +52,17 @@ static func forecast(g: Dictionary, t: Dictionary) -> Dictionary:
 	var food := food_cost(g, t) + St.law_sum(g, t, "foodAdd")
 	if g.has("nextCardUid") and g.get("hands") is Dictionary:
 		coal += float(t["HANDS"]["stokerCoal"]) * float(g["hands"]["short"]["stoker"])
-	return {"coal": 0.0 if g.get("stranded") != null else coal, "food": food}
+	return {"coal": 0.0 if g.get("stranded") != null else coal + dom_coal(g), "food": food + dom_food(g)}
+
+
+## S1 domesticForecast's coal and food for the ported dom: E3 가 and M3 나 make
+## 공동 난방 and 공동 식당 cheaper (TrainLawTech). 0 without a dom.
+static func dom_coal(g: Dictionary) -> float:
+	return 0.0 - TrainLawTech.coal(g)
+
+
+static func dom_food(g: Dictionary) -> float:
+	return 0.0 - TrainLawTech.food(g)
 
 
 static func seg_km_of(g: Dictionary, t: Dictionary, seg: int = -1) -> float:

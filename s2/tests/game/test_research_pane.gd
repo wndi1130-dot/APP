@@ -49,6 +49,13 @@ func _key(p: Control, key_name: String) -> Button:
 	return p.find_child(key_name, true, false) as Button
 
 
+func _row(m: Dictionary, id: String) -> Dictionary:
+	for r: Dictionary in m["rows"]:
+		if r["id"] == id:
+			return r
+	return {}
+
+
 func _word(b: Button) -> String:
 	return (b.get_node("Word") as Label).text
 
@@ -56,10 +63,10 @@ func _word(b: Button) -> String:
 func test_only_what_runs_is_listed_with_what_it_needs() -> void:
 	var m: Dictionary = ResearchPane.model(_game())
 	assert_eq(m["rows"].map(func(r: Dictionary) -> String: return r["id"]), Research.visible(_game()))
-	var w1: Dictionary = m["rows"][0]
+	var w1: Dictionary = _row(m, "w1")
 	assert_eq([w1["id"], w1["word"], w1["can"], w1["have"], w1["need"]], ["w1", "복원", true, 1, 1])
 	assert_eq(w1["cost"].map(func(c: Dictionary) -> Array: return [c["key"], c["n"], c["short"]]), [["wood", 4.0, false]])
-	var none: Dictionary = ResearchPane.model(_game(0))["rows"][0]
+	var none: Dictionary = _row(ResearchPane.model(_game(0)), "w1")
 	assert_false(none["can"])
 	assert_eq(none["why"], "설계도 조각이 모자라다")
 
@@ -162,6 +169,56 @@ func test_a_working_technology_says_what_it_does_and_has_no_key() -> void:
 	await wait_process_frames(1)
 	assert_eq((p.find_child("Effect_w1", true, false) as Label).text, ResearchPane.EFFECT["w1"])
 	assert_null(_key(p, "Key_w1"))
+
+
+## A technology that only bends a law names it at the right of its name: red
+## with 없음 while it does not stand, dim ink once it does (S1 useTag); the
+## key's tooltip is its use line (train_lawtech.gd use_line).
+func test_a_law_technology_names_its_law_and_whether_it_stands() -> void:
+	var g := _game()
+	var p := _pane(g, ["e1"])
+	await wait_process_frames(1)
+	var tag: Label = p.find_child("Law_e1", true, false)
+	assert_not_null(tag)
+	assert_eq(tag.text, "눈 녹이기 당번 없음")
+	assert_eq(tag.get_theme_color("font_color"), ResearchPane.RED)
+	var key: Button = _key(p, "Key_e1")
+	assert_eq(key.tooltip_text, "쓸모: 눈 녹이기 당번이(가) 서 있을 때(지금은 없다)")
+	var name: Label = p.find_child("Name_e1", true, false)
+	assert_lt(name.position.x + name.size.x, tag.position.x, "the tag does not run over the name")
+	assert_lt(tag.position.x + tag.size.x, key.position.x, "nor under the key")
+	g["passed"] = {"snow_duty": 0}
+	p.show_state(g)
+	await wait_process_frames(1)
+	tag = p.find_child("Law_e1", true, false)
+	assert_eq(tag.text, "눈 녹이기 당번")
+	assert_eq(_row(ResearchPane.model(g), "e1")["law_on"], true)
+	assert_eq(_row(ResearchPane.model(g), "w1")["law"], "", "a technology no law touches has no tag")
+	assert_eq([_row(ResearchPane.model(g), "e5")["law"], _row(ResearchPane.model(g), "e5")["use"]], ["", ""],
+		"insulation is of use with no law standing: no tag, no use line")
+
+
+## A name that leaves no room for the tag puts it at the end of the line under it.
+func test_a_long_name_s_tag_goes_under_it() -> void:
+	var g := _game()
+	g["dom"]["frags"]["expedition"] = 1
+	var p := _pane(g, ["x1"])
+	await wait_process_frames(1)
+	var tag: Label = p.find_child("Law_x1", true, false)
+	var name: Label = p.find_child("Name_x1", true, false)
+	assert_not_null(tag)
+	assert_eq(tag.text, "아동 노동 없음")
+	assert_gt(tag.position.y, name.position.y + name.size.y * 0.5, "on the line under the name")
+	assert_lt(tag.position.x + tag.size.x, _key(p, "Key_x1").position.x, "clear of the key")
+
+
+## Both ways' laws when no way is picked; the way's own law once it is.
+func test_an_either_or_law_technology_tags_both_laws_then_its_own() -> void:
+	var g := _game()
+	assert_eq(_row(ResearchPane.model(g, ["e3"]), "e3")["law"], "난방 배당·공동 난방")
+	g["dom"]["techs"]["e3"] = {"stage": "done", "defect": false, "progress": 4, "need": 4, "variant": "a"}
+	var r: Dictionary = _row(ResearchPane.model(g, ["e3"]), "e3")
+	assert_eq([r["law"], r["effect"]], ["공동 난방", ResearchPane.EFFECT["e3a"]])
 
 
 func test_the_fold_key_folds() -> void:
