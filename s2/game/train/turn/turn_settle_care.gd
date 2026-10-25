@@ -124,49 +124,6 @@ static func calm_night(g: Dictionary, t: Dictionary) -> void:
 	if chosen: C.bump(g, "trust", float(p["chosenTrust"]), "calm.night")
 	C.journal(g, "떠난 사람의 밤. 식당칸에 모여 %s의 이름을 불렀다.%s" % [", ".join(names), " 그중에는 열차장이 고른 죽음이 있었다." if chosen else ""], "bad" if chosen else "good")
 
-static func hands_settle(g: Dictionary, t: Dictionary, notes: Array) -> void:
-	var h: Dictionary = t["HANDS"]
-	var offered: float = 0
-	var gave: Dictionary = {}
-	var wills: Dictionary = {}
-	for c: String in t["COMMS"]:
-		var count: int = 0
-		var adults: int = 0
-		for p: Dictionary in t["PROFILES"]:
-			if p["community"] != c: continue
-			count += 1
-			if int(p["age"]) >= 16 and int(p["age"]) <= 65: adults += 1
-		var share: float = float(adults) / count if count > 0 else 0.75
-		var s: Dictionary = g["comms"][c]
-		var will: float = (float(h["willRefuse"]) if int(s["fervor"]) >= 1 else float(h["willHostile"])) if float(s["rel"]) <= -40 else (float(h["willCold"]) if float(s["rel"]) < -15 else 1.0)
-		var lever: float = minf(float(s["heat"]), float(s["ration"]))
-		if lever <= 0: will *= float(h["leverCut"])
-		elif lever <= 1: will *= float(h["leverLow"])
-		gave[c] = maxf(0, float(s["pop"]) - float(s["away"])) * share * will
-		wills[c] = will
-		offered += float(gave[c])
-	var have: float = maxf(0, offered - float(g["injured"]))
-	var left: float = have
-	var short: Dictionary = {}
-	var empty: Array = []
-	var names: Dictionary = {"stoker": "화실 교대", "stove": "난로와 물", "watch": "지붕 보초", "roof": "지붕 얼음과 선로", "repair": "고칠 손"}
-	for j: String in h["order"]:
-		var got: float = minf(float(h["need"][j]), left)
-		left -= got
-		short[j] = 1 - got / float(h["need"][j])
-		if float(short[j]) > 0.01: empty.append(names[j])
-	# hands.ts handsNow: past loadFree of the need over the hands given, the cars still giving carry the rest
-	# and their exposure rises (by their will), read by situation.
-	var need: float = 0
-	for j: String in h["order"]:
-		need += float(h["need"][j])
-	var over: float = maxf(0, minf(1, need / maxf(1, have)) - float(h["loadFree"]))
-	var expose: Dictionary = {}
-	for c: String in t["COMMS"]:
-		expose[c] = float(h["loadExpose"]) * over * float(wills[c]) if over > 0 and float(gave[c]) > 0 else 0
-	g["hands"] = {"have": have, "short": short, "expose": expose}
-	if not empty.is_empty(): notes.append("일손이 모자라 %s이(가) 빈다." % "·".join(empty))
-
 static func lookback(g: Dictionary) -> void:
 	if not g.has("look"): g["look"] = {"low": {}, "skip": {}, "coalStops": 0}
 	var look: Dictionary = g["look"]

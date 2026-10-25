@@ -1,0 +1,75 @@
+{
+  "id": "ev_h15_wet_coal",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 4,
+      "max": 16
+    },
+    {
+      "type": "season",
+      "needs": "bare"
+    }
+  ],
+  "speaker": "engine",
+  "body": "석탄칸 덮개가 찢겨 밤새 비가 들었다. 젖은 석탄은 화실에서 잘 붙지 않고 압력이 떨어진다.",
+  "choices": [
+    {
+      "id": "c_burn_more",
+      "label": "석탄을 더 넣는다",
+      "say": "더 넣어라. 압력부터 올린다.",
+      "why": "젖은 석탄은 반쯤 헛탄다. 마른 것을 섞어 넣는 만큼 창고가 준다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_dry_by_stove",
+      "label": "꼬리칸 난로에 말린다",
+      "say": "자루를 꼬리칸 난로 옆에 펴라. 말라야 쓴다.",
+      "why": "난로 둘레가 석탄 자루로 찬다. 그 칸 사람들은 불에서 한 걸음 물러나 앉는다.",
+      "effects": [
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": -5
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_stokers_on",
+      "label": "화부가 교대 없이 땐다",
+      "say": "화부는 교대 없이 간다. 이번 구간만이다.",
+      "why": "젖은 석탄을 두 배로 퍼 넣는 일이다. 기관실은 쉬는 시간을 내준 걸 기억한다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -2
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
