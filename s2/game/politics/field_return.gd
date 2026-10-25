@@ -7,6 +7,7 @@ const Rng = preload("res://game/politics/rng.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
 const TrainState = preload("res://game/train/train_state.gd")
+const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
@@ -62,10 +63,12 @@ static func _profile(t: Dictionary, person_id: String) -> Dictionary:
 
 
 static func _person_of(t: Dictionary, departure: Dictionary, person_id: String) -> Dictionary:
+	if person_id == FieldDeparture.CAPTAIN_ID:
+		return {"name": FieldDeparture.CAPTAIN_NAME, "comm": FieldDeparture.CAPTAIN_COMM}
 	var profile := _profile(t, person_id)
 	if not profile.is_empty():
 		return {"name": profile["name"], "comm": profile["community"]}
-	for row: Dictionary in departure["roster"]:
+	for row: Dictionary in FieldDeparture.people_of(departure):
 		if row["id"] == person_id:
 			return {"name": person_id, "comm": row["comm"]}
 	return {"name": person_id, "comm": "tail"}
@@ -124,6 +127,13 @@ static func judge_promises(departure: Dictionary, receipt: Dictionary) -> Array:
 	var back := {}
 	for person_id: String in returned_of(receipt):
 		back[person_id] = true
+	# Who actually went: the roster on v1, and on v2 the work crew too once called down.
+	var went: Array = departure["roster"]
+	if int(departure["version"]) == 2:
+		went = []
+		for row: Dictionary in FieldDeparture.people_of(departure):
+			if (receipt["people"]["sent"] as Array).has(row["id"]):
+				went.append(row)
 	var out: Array = []
 	for promise: Dictionary in departure["promises"]:
 		var seen: Variant = null
@@ -146,7 +156,7 @@ static func judge_promises(departure: Dictionary, receipt: Dictionary) -> Array:
 						break
 			else:
 				verdict = "kept"
-				for roster: Dictionary in departure["roster"]:
+				for roster: Dictionary in went:
 					if roster["comm"] == promise["madeTo"]:
 						verdict = "broken"
 						break
@@ -172,14 +182,15 @@ static func check_departure(departure: Dictionary, t: Dictionary) -> Array[Strin
 			out.append("출발 명세에 %s 칸이 없다" % key)
 	if not out.is_empty():
 		return out
-	if int(departure["version"]) != 1 or not _valid_id(departure["departureId"]) or not _valid_id(departure["stopId"]) or not _valid_id(departure["placeId"]):
+	var version := int(departure["version"])
+	if (version != 1 and version != 2) or (version == 2 and not departure.get("workCrew") is Array) or not _valid_id(departure["departureId"]) or not _valid_id(departure["stopId"]) or not _valid_id(departure["placeId"]):
 		out.append("출발 명세가 올바르지 않다")
 	if not departure["segment"] is int and not departure["segment"] is float:
 		out.append("출발 구간이 수가 아니다")
 	elif float(departure["segment"]) != floorf(float(departure["segment"])) or int(departure["segment"]) < 0:
 		out.append("출발 구간이 올바르지 않다")
 	var roster_ids := {}
-	for row: Dictionary in departure["roster"]:
+	for row: Dictionary in FieldDeparture.people_of(departure):
 		if not _valid_id(row.get("id")) or not (t["COMMS"] as Array).has(row.get("comm")) or roster_ids.has(row.get("id")):
 			out.append("출발 명단이 올바르지 않다")
 			break
@@ -201,16 +212,22 @@ static func match_departure(departure: Dictionary, receipt: Dictionary) -> Array
 	var out: Array[String] = []
 	if receipt["departureId"] != departure["departureId"] or receipt["stopId"] != departure["stopId"] or receipt["place"]["id"] != departure["placeId"]:
 		out.append("출발 명세와 영수증의 정차가 다르다")
+	# v1: those sent are the roster exactly; v2: the whole roster and any of the work crew called down.
 	var sent := {}
 	for person_id: String in receipt["people"]["sent"]:
 		sent[person_id] = true
-	if sent.size() != (departure["roster"] as Array).size():
+	var may := {}
+	for row: Dictionary in FieldDeparture.people_of(departure):
+		may[row["id"]] = true
+	var same := not (int(departure["version"]) == 1 and sent.size() != (departure["roster"] as Array).size())
+	for row: Dictionary in departure["roster"]:
+		if not sent.has(row["id"]):
+			same = false
+	for person_id: String in sent:
+		if not may.has(person_id):
+			same = false
+	if not same:
 		out.append("출발 명단과 영수증의 명단이 다르다")
-	else:
-		for row: Dictionary in departure["roster"]:
-			if not sent.has(row["id"]):
-				out.append("출발 명단과 영수증의 명단이 다르다")
-				break
 	var promises := {}
 	for promise: Dictionary in departure["promises"]:
 		promises[promise["id"]] = promise["kind"]
@@ -480,7 +497,7 @@ static func _receipt_value(input: Variant) -> Dictionary:
 	assert(value is Dictionary, "영수증은 객체여야 한다")
 	var problems := Receipt.check(value)
 	assert(problems.is_empty(), "필드 영수증 계약이 올바르지 않다: %s" % [problems])
-	assert(int(value["version"]) == 4, "필드 영수증은 판 4여야 한다")
+	assert(int(value["version"]) == 4 or int(value["version"]) == 5, "필드 영수증은 판 4나 5여야 한다")
 	return (value as Dictionary).duplicate(true)
 
 
@@ -601,6 +618,11 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		"seg": g["seg"], "verdicts": verdicts, "dead": dead_names, "symbol": symbol,
 		"before": before, "after": snapshot(g, t), "lines": lines,
 	}
+	# Who went (the next departure's soreness reads it) and, on v5, how each came back.
+	if int(departure["version"]) == 2:
+		record["sent"] = (receipt["people"]["sent"] as Array).duplicate()
+	if int(receipt["version"]) == 5:
+		record["crew"] = (receipt["crew"] as Array).duplicate(true)
 	if not g.get("fieldReturns") is Dictionary:
 		g["fieldReturns"] = {"applied": {}, "records": []}
 	g["fieldReturns"]["applied"][receipt["receiptId"]] = fingerprint
@@ -621,7 +643,7 @@ static func _body_searches(g: Dictionary, departure: Dictionary, receipt: Dictio
 			continue
 		for w: Variant in row.get("witnesses", []):
 			var pid: String = String(w) if w is String else String((w as Dictionary).get("person", ""))
-			for r: Dictionary in departure.get("roster", []):
+			for r: Dictionary in FieldDeparture.people_of(departure):
 				var comm: String = String(r.get("comm", ""))
 				if String(r.get("id", "")) != pid or minded.has(comm):
 					continue

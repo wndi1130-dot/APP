@@ -69,7 +69,7 @@ S1의 글(프로필, 인물, 사건 카드, 법안, 일대기)은 Gemini 4.0이 
 | id | 문자열 | 예: ev_tail_cold_01 |
 | stage | 열거 | s1a, s1b, s1c |
 | phase | 열거 | travel(이동), stop(정차), council(의회), settle(정산) |
-| trigger | 조건 목록 | 구간 범위, 처지 문턱, 플래그, 필요한 인물, 자원(`resource`: coal·food·medicine·luxury·symbol을 lte/gte로) |
+| trigger | 조건 목록 | 구간 범위, 처지 문턱, 플래그, 필요한 인물, 자원(`resource`: coal·food·medicine·luxury·symbol을 lte/gte로), 계절(`season`: `needs`가 `frost`면 얼음이 서는 구간(계절표 밤 결빙·한파·선로 결빙), `snow`면 눈이 쌓인 구간. 기온을 켜지 않은 판은 늘 참). 얼음·눈이 사건의 뼈대면 조건을 달고, 글 한 구절만 걸리면 계절과 상관없는 말로 고친다 |
 | speaker | 참조 | 인물 역할 또는 공동체 |
 | body | 문자열 | 3문장, 120자 이내(Gemini) |
 | choices | 2~4개 | {label: 15자 이내(일지에 남는 행동), say: 40자 이내(카드에 보이는 열차장의 말), effects, followups, witnesses} |

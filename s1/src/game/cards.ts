@@ -1,6 +1,6 @@
 import { riotEnd, riotFell } from './riot';
 import { bump, bumpRel, put } from './ledger';
-import { freezeTrackBoost } from './climate';
+import { freezeTrackBoost, seasonHolds } from './climate';
 import { handsTrackBoost } from './hands';
 import { noteInjury, noteRelief } from './wounds';
 import type { WoundFrom } from './wounds';
@@ -253,7 +253,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
-    id: 'water_tower', when: g => g.seg >= 2,
+    // 급수탑은 얼음이 서는 구간(계절표 밤 결빙·한파·선로 결빙)에만 언다. 기온 꺼진 판은 그대로(climate.ts seasonHolds).
+    id: 'water_tower', when: g => g.seg >= 2 && seasonHolds(g, 'frost'),
     // 눈을 녹일 칸은 꼬리칸 고정이 아니라 마지막 작업조를 낸 칸이다(first_leg_story 6.4: 노출 +10, 의무진·앞칸은 궂은일 반감 −3).
     view: (g, past) => {
       const sc = g.lastCrew ?? 'tail';
@@ -275,7 +276,8 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     },
   },
   {
-    id: 'snow_drift', when: g => g.seg >= 3,
+    // 눈더미는 눈이 쌓인 구간(계절표 snow, 서막은 첫눈 뒤)에만. 기온 꺼진 판은 그대로.
+    id: 'snow_drift', when: g => g.seg >= 3 && seasonHolds(g, 'snow'),
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
@@ -642,7 +644,7 @@ function baseView(g: Game, card: Card): CardView {
         choices: withAfford(g, [
           { label: '의무칸에서 자른다', say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
             ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
-          { label: '격리한다', say: '빈 칸 끝에 따로 둬라. 마지막은 가족과 보내게 해라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '따로 눕힌다', say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
           { label: '쏜다', say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
@@ -651,7 +653,7 @@ function baseView(g: Game, card: Card): CardView {
         title: '숨긴 물림이 드러났다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_found',
         body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
         choices: withAfford(g, [
-          { label: '격리한다', say: '빈 칸 끝에 따로 둬라. 마지막은 가족과 보내게 해라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '따로 눕힌다', say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
           { label: '쏜다', say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
@@ -661,7 +663,7 @@ function baseView(g: Game, card: Card): CardView {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
         body: '칸마다 사람들이 모였다. 통로마다 막아선 사람들이 거래를 끊었다. 오늘 밤을 넘기지 못할 수도 있다.',
         choices: withAfford(g, [
-          { label: '경비대를 푼다', say: '경비대를 풀어라! 통로를 막는 자는 끌어내라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
+          { label: '경비대를 푼다', say: '경비대, 통로를 비워라. 손은 쓰지 마라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
           { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'tension_reset' },
           { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'revolt' },
         ]),

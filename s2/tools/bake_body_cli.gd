@@ -60,6 +60,8 @@ func _init() -> void:
 		print("no such garment, or no skinned mesh: ", garment)
 		quit(1)
 		return
+	# A body (not a garment over it) carries its hands marked, for the shader's gloves.
+	var marks := BodyBake.mark_hands(body_root) if garment == "" else PackedColorArray()
 	root.add_child(body_root)
 	for motion_root: Node3D in motion_roots:
 		root.add_child(motion_root)
@@ -71,6 +73,8 @@ func _init() -> void:
 		return
 	if small:
 		assets = BodyBake.compact(assets, keep)
+	if not marks.is_empty():
+		(assets["mesh"] as Mesh).set_meta(BodyBake.HAND_LIGHT, BodyBake.hand_light(assets["mesh"], marks, BodyBake.picture_of(body_root)))
 	BodyBake.save(assets, paths[2])
 	var image: Image = assets["image"]
 	print("vertices ", assets["vertices"], " image ", image.get_width(), " x ", image.get_height(), " bytes ", image.get_data().size())
