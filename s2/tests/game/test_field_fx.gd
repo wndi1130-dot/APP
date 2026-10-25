@@ -174,9 +174,11 @@ func test_a_plain_stop_has_no_storm_layers() -> void:
 	assert_null(game.storm_screen)
 	assert_true(game.snow.emitting, "plain snowfall as before")
 	# The atmosphere frame moves the sun with the hour: at 10:30 a little lower
-	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd).
+	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd). Under fog
+	# and snow by day the light comes from the bright dome, higher than the sun.
 	assert_almost_eq(game.sun.rotation_degrees.x, float(game.fx_light["sun_pitch"]), 0.001)
-	assert_gt(game.sun.rotation_degrees.x, FxState.SUN_PITCH)
+	assert_gt(float(game.atmo["sun_pitch"]), FxState.SUN_PITCH)
+	assert_lt(game.sun.rotation_degrees.x, float(game.atmo["sun_pitch"]), "the light leans to the sky dome")
 	assert_eq(game.storm_glows().size(), 0)
 
 
