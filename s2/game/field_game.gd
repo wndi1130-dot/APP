@@ -2648,6 +2648,7 @@ func finish(reason: String) -> void:
 		for row: Dictionary in p.body.receipt_wounds():
 			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)), row.get("treat", {}))
 	var stock: Dictionary = {}
+	var fragments: Array = []
 	for id in unloaded:
 		if STOCK_OF.has(id):
 			var row: Array = STOCK_OF[id]
@@ -2660,20 +2661,25 @@ func finish(reason: String) -> void:
 			if FieldItems.kept_by_name(id):
 				for k in range(int(unloaded[id])):
 					receipt.gain_item(id)
+			# A blueprint piece is one entry of its field on extras.fragments (S1 domestic 5.2).
+			var piece: String = FieldItems.fragment_of(id)
+			if piece != "":
+				for k in range(int(unloaded[id])):
+					fragments.append(piece)
 		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
 		elif CoreScenes.CORE_ITEMS.has(id):
 			# One entry a core, so the count reads off the list (CoreScenes.count).
 			for k in range(int(unloaded[id])):
 				receipt.gain_item(id)
-	# The cores' count goes into extras.coreCount here and only here (decision 426), on a stop
-	# receipt, one that has its ids: setting extras on a field receipt without ids would make
-	# it a stop receipt with empty ones, which the receipt check turns down. set_extras keeps
-	# the documents already found.
+	# The cores' count and the blueprint pieces go into extras here and only here (decision
+	# 426), on a stop receipt, one that has its ids: setting extras on a field receipt without
+	# ids would make it a stop receipt with empty ones, which the receipt check turns down.
+	# set_extras keeps the documents already found.
 	if receipt.is_stop_receipt():
 		var so_far := receipt.to_dict()
 		var extras: Dictionary = so_far.get("extras", {})
-		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])), CoreScenes.count(so_far["items"]["gained"]))
+		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])) + fragments, CoreScenes.count(so_far["items"]["gained"]))
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
@@ -2852,6 +2858,10 @@ func _watch_named() -> void:
 			elif id == "note_map" and note_line() != "" and not named_seen.has(id):
 				named_seen[id] = true
 				say(p, "%s: 쪽지다. 「%s」" % [p.display_name, note_line()])
+			elif FieldItems.fragment_of(id) != "" and not named_seen.has(id):
+				# As S1 has it: the train can use it for its research.
+				named_seen[id] = true
+				say(p, "%s: %s을 찾았다." % [p.display_name, FieldItems.item_name(id)])
 	var keep: Array = []
 	for a: Dictionary in alarms:
 		var who = a["who"]
