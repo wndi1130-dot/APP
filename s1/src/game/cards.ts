@@ -159,6 +159,8 @@ const PICKS = {
   fetch: '데리러 보낸다', stay_put: '지금은 못 간다',
   // 비상식량감축법 뒤 꼬리칸 요구(ration_cut.ts). 거절은 refuse를 쓴다
   cut_spare_tail: '꼬리칸은 뺀다', cut_front_first: '앞칸이 먼저 낸다',
+  // 두고 떠난 사람의 흔적(prologue.ts 'pro_trail', 결정 425 카드 3)
+  trail_wait: '기다렸다 태운다', trail_note: '쪽지를 남긴다',
 } as const;
 export type PickId = keyof typeof PICKS;
 /** 옛 라벨 → id. 같은 id를 가리키던 옛 라벨이 둘 이상이면 여기 더한다(예전 급수탑은 '꼬리칸이 눈을 녹인다'였다) */

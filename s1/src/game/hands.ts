@@ -14,6 +14,8 @@ export interface HandsState {
   have: number;
   /** 일마다 빈 몫(0 다 참 ~ 1 다 빔) */
   short: Record<HandJob, number>;
+  /** 남은 칸이 일을 나눠 져서 오르는 노출(칸마다, situation이 읽는다). 옛 저장 판에는 없다 */
+  expose?: Record<Comm, number>;
 }
 
 /** 칸마다 일할 나이(16~65)의 몫. 사람 표(profiles.json)에서 처음 쓸 때 한 번 센다(state.ts와 서로 불러오므로 모듈을 읽을 때 세지 않는다). */
@@ -47,7 +49,9 @@ export function handsOffered(g: Game, c: Comm): number {
   return Math.max(0, s.pop - s.away) * workShare(c) * handsWill(g, c);
 }
 
-/** 손을 일 차례대로 나눠 빈 몫을 셈한다(화실부터 채운다). */
+const NEED = HANDS.order.reduce((s, j) => s + HANDS.need[j], 0);
+
+/** 손을 일 차례대로 나눠 빈 몫을 셈한다(화실부터 채운다). 손이 줄수록 남은 칸이 더 지고 그 칸 노출이 오른다(carry_people 3.3). */
 export function handsNow(g: Game): HandsState {
   const have = Math.max(0, COMMS.reduce((sum, c) => sum + handsOffered(g, c), 0) - g.injured);
   let left = have;
@@ -57,7 +61,11 @@ export function handsNow(g: Game): HandsState {
     left -= got;
     short[j] = 1 - got / HANDS.need[j];
   }
-  return { have, short };
+  // 부담이 1을 넘으면(일이 빔) 더 지지 않고 일이 덜 된다. 손을 거둔 칸은 거둔 만큼 덜 진다.
+  const over = Math.max(0, Math.min(1, NEED / Math.max(1, have)) - HANDS.loadFree);
+  const expose = {} as Record<Comm, number>;
+  for (const c of COMMS) expose[c] = over > 0 && handsOffered(g, c) > 0 ? HANDS.loadExpose * over * handsWill(g, c) : 0;
+  return { have, short, expose };
 }
 
 /** 정산 끝: 다음 구간의 손 몫을 둔다. 빈 일이 있으면 결과 줄 하나. */

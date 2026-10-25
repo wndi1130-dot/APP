@@ -15,7 +15,7 @@ import { chooseElder, elderPerson, elderPupil, elderSign, elderSpan, elderWhy } 
 import { hygieneWhy, resolveLice, resolveTyphus } from './hygiene';
 import { chooseSide, eduLaw, halved, SIDE_NAME } from './classroom';
 import type { EduSide } from './classroom';
-import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, startManual } from './knowledge';
+import { attachApprentice, distributeBlocked, fieldOwner, freeTeacher, manualWriter, newcomerComm, startManual } from './knowledge';
 import { setBedOrder } from './medbay';
 import { domCard, personById, techMult, techVariants } from './state';
 import type { DomPerson } from './state';
@@ -131,12 +131,15 @@ export function domView(g: Game, card: Card): CardView | null {
       const owner = fieldOwner(g, f);
       const other: Comm = owner === 'tail' ? 'medtech' : 'tail';
       const blocked = distributeBlocked(g, f);
+      // 늦게 탄 사람이 남은 칸이 있으면 넷째 후보(결정 425 카드 4). 받은 일이 비용만이 아니게 된다.
+      const fresh = newcomerComm(g);
       return {
         title: '견습생 후보', speaker: sp(t && t !== 'manual' ? t : chief(g, f)), required: false,
-        body: `${FIELD_NAME[f]}을(를) 배울 사람 셋이 왔다. ${COMM_NAME[owner]} 아이, ${COMM_NAME[other]} 아이, 그리고 간부가 미는 아이.${f === 'engine' ? ` 기관실 화부 노출 ${Math.round(g.comms.engine.base[3])}.` : ''}`,
+        body: `${FIELD_NAME[f]}을(를) 배울 사람 ${fresh ? '넷' : '셋'}이 왔다. ${COMM_NAME[owner]} 아이, ${COMM_NAME[other]} 아이, 간부가 미는 아이${fresh ? `, 그리고 ${COMM_NAME[fresh]}에 늦게 탄 사람 하나` : ''}.${f === 'engine' ? ` 기관실 화부 노출 ${Math.round(g.comms.engine.base[3])}.` : ''}`,
         choices: [
           { label: '길드에 맡긴다', say: '기술은 그 일을 해 온 손에 남긴다.', effs: [rel(owner, D.guildRel)], special: 'dom:pupil:guild', disabled: t ? undefined : '가르칠 사람이 없다' },
           { label: '다른 칸에 나눈다', say: '기술은 한 칸의 것이 아니다. 다른 칸 아이에게도 가르쳐라!', effs: [rel(owner, D.distributeRel)], special: 'dom:pupil:other', disabled: !t ? '가르칠 사람이 없다' : blocked },
+          ...(fresh ? [{ label: '늦게 탄 사람에게', say: '새로 탄 손도 우리 손이다. 가르쳐라.', effs: fresh === owner ? [] : [rel(owner, D.distributeRel)], special: 'dom:pupil:new', disabled: t ? undefined : '가르칠 사람이 없다' }] : []),
           { label: '아직 아니다', say: '지금은 손이 모자라다. 다음에 보자.', effs: [], special: 'dom:none' },
         ],
       };
@@ -367,7 +370,7 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
       }
       break;
     case 'pupil':
-      attachApprentice(g, card.text as Field, arg as 'guild' | 'other', true);
+      attachApprentice(g, card.text as Field, arg as 'guild' | 'other' | 'new', true);
       break;
     case 'manual':
       startManual(g, card.text as Field);
