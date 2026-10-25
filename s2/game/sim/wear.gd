@@ -156,7 +156,7 @@ const WORN_WARMTH_LOSS: float = 0.5
 const SWEAT_AT: float = 1.0
 const SWEAT_RATE: float = 0.004
 const SWEAT_MOST: float = 0.4
-## Rain and sleet under the open sky (decision 435's wet weather, weather.gd
+## Rain and sleet under the open sky (the weather that wets, weather.gd
 ## wets_clothes), so much a second, less what the outermost layer keeps out. New value.
 const RAIN_WET: float = 0.003
 
