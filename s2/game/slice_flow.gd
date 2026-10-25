@@ -54,6 +54,7 @@ const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
 const ModsPane = preload("res://game/ui/mods_pane.gd")
+const ResearchPane = preload("res://game/ui/research_pane.gd")
 const StopCinema = preload("res://game/stop_cinema.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
@@ -162,6 +163,7 @@ var sel: String = ""               # the picked car's id, "" with the pane folde
 var shop: Control = null           # the workshop's pane where the car's stands (workshop_pane.gd)
 var shop_was: String = ""          # the car picked before the workshop or the refit pane came up
 var mods: Control = null           # the refit pane, where the workshop's stands (mods_pane.gd)
+var research: Control = null       # the research pane, where the workshop's stands (research_pane.gd)
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
@@ -985,7 +987,7 @@ func _show_home(word: String) -> void:
 	b.g = train_g
 	b.main_word = word
 	b.main_pressed.connect(next)
-	b.open_rooms = ["wrench", "gear"]
+	b.open_rooms = ["papers", "wrench", "gear"]
 	b.room_pressed.connect(_open_room)
 	h.add_child(b)
 	layer.add_child(h)
@@ -1031,6 +1033,8 @@ func _open_room(icon: String) -> void:
 		_open_workshop()
 	elif icon == "wrench":
 		_open_mods()
+	elif icon == "papers":
+		_open_research()
 
 
 ## The workshop's pane where the car's stands; folding it brings the car back.
@@ -1070,21 +1074,39 @@ func _open_mods() -> void:
 	mods = m
 
 
+## The research pane (research_pane.gd) where the workshop's stands: what
+## can be restored now, its fragments and what it asks; a start, a way picked
+## or a stop draws the band again (its parts and wood).
+func _open_research() -> void:
+	if is_instance_valid(research) or not is_instance_valid(home):
+		return
+	_room_up()
+	var r = ResearchPane.new()
+	r.name = "ResearchPane"
+	r.folded.connect(_close_room)
+	r.changed.connect(_room_changed)
+	home.add_child(r)
+	r.pin(TrainGauges.BAND_H)
+	r.show_state(train_g)
+	research = r
+
+
 ## One room's pane at a time: a room opened over another keeps the car
 ## picked before the first, to come back to on folding.
 func _room_up() -> void:
-	if not is_instance_valid(shop) and not is_instance_valid(mods):
+	if not is_instance_valid(shop) and not is_instance_valid(mods) and not is_instance_valid(research):
 		shop_was = sel if sel != "" else FIRST_CAR
 	_put_rooms_away()
 	_select("")
 
 
 func _put_rooms_away() -> void:
-	for r in [shop, mods]:
+	for r in [shop, mods, research]:
 		if is_instance_valid(r):
 			r.queue_free()
 	shop = null
 	mods = null
+	research = null
 
 
 func _room_changed() -> void:
