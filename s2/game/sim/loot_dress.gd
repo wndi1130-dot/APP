@@ -16,6 +16,7 @@ extends RefCounted
 
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
+const LootJunk = preload("res://game/sim/loot_junk.gd")
 
 ## What may be moved between the boxes of one building, and as what.
 const FAMILY: Dictionary = {
@@ -104,6 +105,26 @@ const NAMES: Dictionary = {
 }
 ## The naming tables not held to the 1.0 average (see above).
 const LIGHT_TABLES: Array[String] = ["lux:pocket"]
+## Boxes of one room split what they hold (ref-ops L1: the reference's kitchen counters each
+## take one list — tins, dry food, baking, bottles — at most so many a room): where a room
+## (one building, one room kind) has two boxes or more with the same family's bundles, each box
+## takes one theme for all of them, the room's boxes spread over the themes as evenly as their
+## shares of the table allow (room_themes). Every row of the food and medicine tables is in one
+## theme; luxuries are left as they are.
+const THEMES: Dictionary = {
+	"food": {
+		"tins": ["can_beans", "can_meat", "can_dented"],
+		"jars": ["jar_cabbage", "jar_jam", "jar_honey"],
+		"dry": ["oats", "peas", "flour", "sugar"],
+		"biscuits": ["hardtack", "rusk"],
+		"fresh": ["bread_moldy", "apple_wilted", "apple", "meat_spoiled", "meat_frozen", "fish_frozen"],
+	},
+	"med": {
+		"pills": ["painkillers", "fever_pills"],
+		"dressings": ["antiseptic", "ointment", "saline"],
+		"syrups": ["cough_syrup", "herbs"],
+	},
+}
 
 ## Finds of their own, a stop at a time (new values, PR 「새로 넣은 값」).
 const BIG_PACK_CHANCE: float = 0.35     # one bigger pack in a lived-in bedroom or store room
@@ -277,16 +298,90 @@ static func name_table(family: String, room: String, building: String, place_kin
 
 
 ## One bundle id named, or the id itself when it is no bundle. A dented tin may
-## have gone off (rolled here, hidden until it is opened).
-static func name_bundle(id: String, table: String, rng: RandomNumberGenerator) -> String:
+## have gone off (rolled here, hidden until it is opened). `theme` (THEMES) keeps
+## to that theme's rows of the table; the dice are drawn as often either way.
+static func name_bundle(id: String, table: String, rng: RandomNumberGenerator, theme: String = "") -> String:
 	var family: String = String(FAMILY.get(id, ""))
 	if not FieldItems.BUNDLES.has(id) or not NAMES.has(family):
 		return id
-	var rows: Array = NAMES[family].get(table, NAMES[family]["default"])
+	var rows: Array = theme_rows(family, NAMES[family].get(table, NAMES[family]["default"]), theme)
 	var named := _pick(rows, rng)
 	if named == "can_dented" and rng.randf() < FieldItems.DENTED_BAD:
 		return "can_dented_bad"
 	return named
+
+
+## A table's rows of one theme (all of them for "" or a theme with none there).
+static func theme_rows(family: String, rows: Array, theme: String) -> Array:
+	if theme == "" or not THEMES.has(family) or not (THEMES[family] as Dictionary).has(theme):
+		return rows
+	var ids: Array = THEMES[family][theme]
+	var out: Array = rows.filter(func(r: Array) -> bool: return ids.has(String(r[0])))
+	return out if not out.is_empty() else rows
+
+
+## Which theme each box of a shared room takes, as {"<box>|<family>": theme}: rooms
+## (building, room kind, family, naming table) with two boxes or more holding that family's
+## bundles, box ids in order, the themes dealt evenly by their shares of the table.
+static func room_themes(containers: Dictionary, buildings: Array, place_kind: String, rng: RandomNumberGenerator) -> Dictionary:
+	var rooms: Dictionary = {}
+	var ids: Array = containers.keys()
+	ids.sort()
+	for id: String in ids:
+		var c: Dictionary = containers[id]
+		var b: int = int(c.get("building", -1))
+		if c.has("pick") or b < 0:
+			continue
+		var room := room_of(c)
+		var bk := _building_kind_of(buildings, c)
+		var seen: Dictionary = {}
+		for item in c.get("items", []):
+			var family: String = String(FAMILY.get(String(item), ""))
+			if not THEMES.has(family) or not FieldItems.BUNDLES.has(String(item)) or seen.has(family):
+				continue
+			seen[family] = true
+			var key := "%d|%s|%s|%s" % [b, room, family, name_table(family, room, bk, place_kind)]
+			if not rooms.has(key):
+				rooms[key] = []
+			(rooms[key] as Array).append(id)
+	var out: Dictionary = {}
+	var keys: Array = rooms.keys()
+	keys.sort()
+	for key: String in keys:
+		var boxes: Array = rooms[key]
+		if boxes.size() < 2:
+			continue
+		var family: String = key.get_slice("|", 2)
+		var table: String = key.get_slice("|", 3)
+		var shares: Dictionary = {}
+		for r: Array in NAMES[family].get(table, NAMES[family]["default"]):
+			for theme: String in THEMES[family]:
+				if (THEMES[family][theme] as Array).has(String(r[0])):
+					shares[theme] = float(shares.get(theme, 0.0)) + float(r[1])
+		# Evenly by share: the themes laid end to end in a shuffled order, the boxes' marks one
+		# box apart from a random start. A theme comes up about as often as its share of the
+		# table says (so the room holds what it held before, in all) and twice only when its
+		# share is more than one box's.
+		var order: Array = shares.keys()
+		for i in range(order.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var t: Variant = order[i]
+			order[i] = order[j]
+			order[j] = t
+		var total := 0.0
+		for theme: String in order:
+			total += float(shares[theme])
+		var start := rng.randf()
+		for k in boxes.size():
+			var at := (start + k) / boxes.size() * total
+			var drawn: String = String(order[order.size() - 1])
+			for theme: String in order:
+				at -= float(shares[theme])
+				if at < 0.0:
+					drawn = theme
+					break
+			out["%s|%s" % [boxes[k], family]] = drawn
+	return out
 
 
 ## A pocket's bundle named without drawing from the pockets' dice (the dead roll
@@ -309,6 +404,12 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 	var place_kind: String = String(data.get("place_kind", ""))
 	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "fragment": ""}
 	# 1. Within each building, the bundles go where the room says.
+	# The odds and ends go in first, as the reference rolls them, and stay where
+	# they are put (loot_junk.gd).
+	var rooms: Dictionary = {}
+	for id: String in containers:
+		rooms[id] = room_of(containers[id])
+	report["junk"] = LootJunk.strew(containers, seed, rooms)
 	var by_building: Dictionary = {}
 	for id: String in containers:
 		var c: Dictionary = containers[id]
@@ -322,7 +423,8 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 		(by_building[b] as Array).append(id)
 	for b: int in by_building:
 		report["moved"] += _deal(containers, by_building[b], _rng(seed, "deal:%d" % b))
-	# 2. Every bundle gets its name.
+	# 2. Every bundle gets its name; boxes of one room split the themes (THEMES).
+	var themes := room_themes(containers, buildings, place_kind, _rng(seed, "themes"))
 	var name_rng := _rng(seed, "names")
 	for id: String in containers:
 		var c: Dictionary = containers[id]
@@ -338,7 +440,7 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 			if not FieldItems.BUNDLES.has(item):
 				continue
 			var table := name_table(String(FAMILY[item]), room, bk, place_kind)
-			items[i] = name_bundle(item, table, name_rng)
+			items[i] = name_bundle(item, table, name_rng, String(themes.get("%s|%s" % [id, FAMILY[item]], "")))
 			report["named"] += 1
 	# 3. Finds of their own.
 	_finds(containers, buildings, seed, report)

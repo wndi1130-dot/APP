@@ -142,6 +142,18 @@ func test_a_bite_elsewhere_or_a_closed_window_is_not_stopped() -> void:
 	assert_eq(late.body.lost, ["leg_right"] as Array[String])
 
 
+## The receipt carries the stump back as the amputation it is (the train keeps it for
+## good); the other wounds go as they are.
+func test_the_stump_goes_back_as_an_amputation() -> void:
+	var o := _bitten("arm_left")
+	o.body.add_wound("leg_right", "laceration", 1.0)
+	assert_true(o.body.amputate("arm_left", "laceration", 2.0))
+	var kinds := {}
+	for row: Dictionary in o.body.receipt_wounds():
+		kinds[row["part"]] = row["kind"]
+	assert_eq(kinds, {"arm_left": "amputation", "leg_right": "laceration"})
+
+
 func test_scratches_by_which_one_held_it() -> void:
 	var o := _person()
 	var rng := RandomNumberGenerator.new()

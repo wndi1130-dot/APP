@@ -1,7 +1,7 @@
 extends RefCounted
 ## The train's stores under the S1 domestic branch's own key (DomState in
 ## s1/src/game/domestic/state.ts): what the field brings home lands here
-## (decision 426, PR 1), and the workshop and research (PR 3, PR 6) keep their
+## (decision 426, PR 1), and workshop, insulation and research (PR 3, 4, 6) keep their
 ## state beside it. The rest of S1's domestic branch is not ported, so a dom of
 ## this subset still reads as S1a (train_state.gd is_s1a) and no other
 ## domestic rule opens.
@@ -12,6 +12,7 @@ extends RefCounted
 ## the armory holds weapons as the field carries them: id, quality, condition.
 
 const Weapons = preload("res://game/sim/weapons.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
 
 const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft"]
 ## S1's Field, the receipt's FRAGMENT_KINDS.
@@ -114,10 +115,12 @@ static func start() -> Dictionary:
 	d["techs"] = {}
 	d["restoring"] = null
 	d["experts"] = START_EXPERTS.duplicate(true)
+	d["insulated"] = []
+	d["job"] = null
 	return d
 
 
-## The S2-ported domestic subset: stores, workshop and PR 6 research only.
+## The S2-ported domestic subset: stores, workshop, insulation and PR 6 research.
 ## S1a hooks remain off; people/manuals/classroom and all other keys reject it.
 static func is_store(dom: Variant) -> bool:
 	if not dom is Dictionary:
@@ -155,6 +158,17 @@ static func is_store(dom: Variant) -> bool:
 		elif key == "make":
 			if v != null and not is_line(v):
 				return false
+		elif key == "insulated":
+			if not v is Array:
+				return false
+			var seen := {}
+			for car: Variant in v:
+				if not car is String or not TrainMods.CAR_COMM.has(car) or seen.has(car):
+					return false
+				seen[car] = true
+		elif key == "job":
+			if v != null and not is_job(v):
+				return false
 		elif key == "techs":
 			if not v is Dictionary:
 				return false
@@ -171,6 +185,26 @@ static func is_store(dom: Variant) -> bool:
 				if not is_expert(expert):
 					return false
 		else:
+			return false
+	return true
+
+
+## The single insulation job. Paid stores are saved amounts, not today's price.
+static func is_job(v: Variant) -> bool:
+	if not v is Dictionary or v.size() != 5 or v.get("kind") != "insulate":
+		return false
+	if not v.get("car") is String or not TrainMods.CAR_COMM.has(v["car"]):
+		return false
+	for key: String in ["progress", "need"]:
+		if not _amount(v.get(key)) or not is_finite(float(v[key])):
+			return false
+	if float(v["need"]) <= 0.0 or float(v["progress"]) > float(v["need"]):
+		return false
+	var paid: Variant = v.get("paid")
+	if not paid is Dictionary or paid.size() != 2:
+		return false
+	for key: String in ["wood", "scrap"]:
+		if not _amount(paid.get(key)) or not is_finite(float(paid[key])):
 			return false
 	return true
 

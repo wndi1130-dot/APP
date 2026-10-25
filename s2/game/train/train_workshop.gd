@@ -12,12 +12,13 @@ extends RefCounted
 ## they take are new values (the PR's table). What they do is the field's: the
 ## train only holds them.
 ##
-## The work is shared: parts first (S1's order), then the line. The refit (PR 4)
-## comes after the line, so making a thing slows a refit (decision 070).
+## The work is shared: parts, the making line, restoration, then insulation.
+## Making a thing slows a refit (decision 070); the order is fixed in S2.
 
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
 const WORK: float = 4.0
@@ -153,6 +154,10 @@ static func run(g: Dictionary) -> Dictionary:
 	var restored: Dictionary = TrainResearch.advance_restore(g, w)
 	w -= float(restored["used"])
 	did.append_array(restored["did"])
+	var modified: Dictionary = TrainMods.advance_job(g, w)
+	w -= float(modified["used"])
+	did.append_array(modified["did"])
+	events.append_array(modified["events"])
 	return {"parts": parts_made, "made": made, "events": events, "used": initial_work - w, "did": did}
 
 
