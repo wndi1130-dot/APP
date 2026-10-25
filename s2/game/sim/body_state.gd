@@ -160,7 +160,8 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 func apply_bite(_rng: RandomNumberGenerator, part: String, now: float) -> void:
 	# Already infected: the window runs on (a closed one stays closed); a new bite never resets it.
 	var was_infected: bool = infected
-	var i: int = add_wound(_fine_part(part, "bite"), "bite", now)
+	# A bite on the head or the neck bleeds as a deep wound (결정 441 (5)); the others as before.
+	var i: int = add_wound(_fine_part(part, "bite"), "bite", now, 1.0 if part == "head_neck" else -1.0)
 	if i >= 0:
 		wounds[i]["risk"] = true
 		wounds[i]["infects"] = true

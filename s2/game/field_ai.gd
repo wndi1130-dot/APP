@@ -325,6 +325,8 @@ func _use_bandage(giver, who, n: int) -> void:
 ## then the order, then keeping beside the chief. Threat always outranks a job
 ## (zomboid mod lesson: workers that let themselves be eaten mid-task).
 func _companion(p) -> void:
+	if _hold_swing(p):
+		return
 	var player = game.player
 	if _live_on:
 		_near_of = null
@@ -494,6 +496,10 @@ func _squad_threat(p) -> Dictionary:
 ## the chief and shove the nearest off. The pace of the blows is the combat's
 ## (decision 119); this only says whom.
 func _engage(p, z: Dictionary) -> void:
+	if _hold_swing(p):
+		return
+	if _finish_fallen(p):
+		return
 	var d: float = p.position.distance_to(z["pos"])
 	if _crowd(p) >= CROWD_N:
 		p.target_zombie = {}
@@ -526,7 +532,42 @@ func _engage(p, z: Dictionary) -> void:
 		return
 	if d > 3.0 and p.target_zombie != z:
 		p.running = true
+	# In reach it stops where it is and strikes; out of reach the chase walks the way (결정 441 (1)).
+	if d <= game.combat.melee_range(p) and not game.combat.melee_blocked(p, z["pos"]):
+		p.stop()
 	game.combat.melee_target(p, z, true)
+
+
+## A swing once begun is seen through where it stands (결정 441 (1)): no next target or
+## order takes it off. The rest after a blow, a shove and a stomp do not hold the feet.
+func _hold_swing(p) -> bool:
+	if p.strike_kind != "swing" or (p.strike_t <= 0.0 and not game.combat.feet_held(p)):
+		return false
+	p.stop()
+	return true
+
+
+## Stopping to swing (결정 441 (1)) left the ones it knocked down behind as it went on to the
+## next, and they got up again among the squad. So one already down within the blow's reach
+## is finished with the weapon in hand before it moves on. It never walks to a body further
+## off, and a gun or bare hands (a stomp) keep to the shove they had.
+func _finish_fallen(p) -> bool:
+	if p.action != "" or not p.grabbers.is_empty():
+		return false
+	var best: Dictionary = {}
+	var nearest: float = game.combat.melee_range(p)
+	for z in _dead_near(p.position, nearest):
+		if z["state"] != "downed" or game.combat.stomps(p, z):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		if d <= nearest and not game.combat.melee_blocked(p, z["pos"]):
+			nearest = d
+			best = z
+	if best.is_empty():
+		return false
+	p.stop()
+	game.combat.melee_target(p, best, true)
+	return true
 
 
 func _should_shoot(p, z: Dictionary, d: float) -> bool:
@@ -1114,6 +1155,8 @@ func _wagon_with_coal() -> Dictionary:
 ## Escorts guard the carriers. Attitude says how far they go out; fire
 ## permission says whether they may shoot (s2_station 2.4).
 func _escort(p) -> void:
+	if _hold_swing(p):
+		return
 	var site: Vector3 = FieldGrid.center(game.data["spots"]["work_site"]["cell"])
 	var reach: float = {"aggressive": 12.0, "defensive": 6.0, "neutral": 2.0}.get(crew_attitude, 6.0)
 	var threat: Dictionary = {}
@@ -1148,6 +1191,8 @@ func _escort(p) -> void:
 			_shoot_or_aim(p, threat["pos"], threat)
 			return
 	_prefer(p, false)
+	if dist <= game.combat.melee_range(p) and not game.combat.melee_blocked(p, threat["pos"]):
+		p.stop()
 	game.combat.melee_target(p, threat, true)
 
 
@@ -1269,6 +1314,8 @@ func _alert_all(target, spotter) -> void:
 
 
 func _raider_fight(r, target, sees: bool) -> void:
+	if _hold_swing(r):
+		return
 	var b: Dictionary = r.brain
 	if target == null or not target.is_alive():
 		b["state"] = "search"
@@ -1299,6 +1346,7 @@ func _raider_fight(r, target, sees: bool) -> void:
 			# Goes round the side and closes in with the axe: it names a target only
 			# within the blow's reach and with nothing in the way, else it walks on.
 			if sees and d <= game.combat.melee_range(r) and not game.combat.melee_blocked(r, target.position):
+				r.stop()
 				game.combat.melee_person(r, target)
 			else:
 				var side := Vector3(-(at - r.position).z, 0, (at - r.position).x).normalized() * 5.0

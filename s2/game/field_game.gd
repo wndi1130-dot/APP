@@ -1556,6 +1556,10 @@ func _drive(p: Person, delta: float) -> void:
 
 
 func _move_person(p: Person, delta: float) -> void:
+	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
+	if combat.feet_held(p):
+		p.moving = false
+		return
 	if p.path.is_empty():
 		p.moving = false
 		return

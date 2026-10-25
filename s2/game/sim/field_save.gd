@@ -16,6 +16,7 @@ const PATH := "user://field_save.json"
 ## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const EatRules = preload("res://game/sim/eat_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
@@ -83,6 +84,7 @@ static func _person(game, p) -> Dictionary:
 		"pid": p.pid, "team": p.team, "pos": p.position, "level": game.level_of(p.position), "alive": p.is_alive(),
 		"bag": p.bag, "items": p.items.duplicate(), "hands": p.hands.duplicate(true), "wear": Wear.save_of(p),
 		"body": {"wounds": b.wounds.duplicate(true), "infection": b.infection, "infected": b.infected, "window": b.window_left, "lost": b.lost.duplicate(), "exhaustion": b.exhaustion, "downed": b.downed, "dead": b.dead},
+		"eaten": float(p.get_meta(EatRules.EATEN_META, 0.0)),
 	}
 
 
@@ -234,6 +236,8 @@ static func _put_person(p, row: Dictionary) -> void:
 	b.exhaustion = float(body["exhaustion"])
 	b.downed = bool(body["downed"])
 	b.dead = bool(body["dead"])
+	# How long the dead have eaten at this body (결정 441 (3)): one eaten up stays so. None before it.
+	p.set_meta(EatRules.EATEN_META, float(row.get("eaten", 0.0)))
 
 
 static func _put_counts(into: Dictionary, counts: Dictionary) -> void:
