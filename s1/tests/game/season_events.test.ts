@@ -11,6 +11,8 @@ afterEach(() => { CONTENT_EVENTS.length = 0; });
 
 const FROST = ['ev_b01_frozen_switch', 'ev_b01_window_ice', 'ev_h02_burst_crates', 'ev_h03_roof_ice', 'ev_h06_split_pipe', 'ev_b01_frost_bird'];
 const SNOW = ['ev_h08_white_wind', 'ev_str_snow'];
+// 늦가을 선로 시련(결정 447 카드 2): 젖은 낙엽, 불어난 개울, 젖은 석탄, 새는 지붕, 안개 속 신호
+const BARE = ['ev_h13_wet_leaves', 'ev_h14_swollen_creek', 'ev_h15_wet_coal', 'ev_h16_leaking_roof', 'ev_h17_fog_signal'];
 
 function at(seg: number, on: boolean, weather?: Weather): Game {
   const g = createGame(`season-ev-${seg}`);
@@ -53,11 +55,24 @@ describe('seasonHolds: 계절표 칸', () => {
     f.freeze = 1;
     expect(seasonHolds(f, 'frost')).toBe(true);
   });
+
+  it('bare는 얼음도 눈도 없을 때다. 꺼진 판(늘 겨울)은 늘 거짓, 한파·결빙이 닥치면 늦가을에도 거짓', () => {
+    for (let seg = 1; seg <= SEASON_ROWS.length; seg += 1) {
+      expect(seasonHolds(at(seg, false), 'bare'), `${seg}구간 꺼짐`).toBe(false);
+      const row = rowAt(seg);
+      expect(seasonHolds(at(seg, true), 'bare'), `${seg}구간`).toBe(!row.night_freeze && !row.snow);
+    }
+    expect(seasonHolds(at(5, true), 'bare')).toBe(true);
+    expect(seasonHolds(at(5, true, 'cold_front'), 'bare')).toBe(false);
+    const f = at(5, true);
+    f.freeze = 1;
+    expect(seasonHolds(f, 'bare')).toBe(false);
+  });
 });
 
 describe('사건 데이터', () => {
-  it('얼음 사건은 frost, 눈 사건은 snow 조건을 단다', () => {
-    for (const [ids, needs] of [[FROST, 'frost'], [SNOW, 'snow']] as const) {
+  it('얼음 사건은 frost, 눈 사건은 snow, 늦가을 선로 시련은 bare 조건을 단다', () => {
+    for (const [ids, needs] of [[FROST, 'frost'], [SNOW, 'snow'], [BARE, 'bare']] as const) {
       for (const id of ids) {
         const ev = CONTENT_EVENTS.find(e => e.id === id);
         expect(ev, id).toBeDefined();
@@ -72,7 +87,8 @@ describe('사건 데이터', () => {
       if (!s || s.type !== 'season') continue;
       const range = ev.trigger.find(c => c.type === 'segment');
       const [lo, hi] = range && range.type === 'segment' ? [range.min, range.max] : [1, SEASON_ROWS.length];
-      const segs = SEASON_ROWS.filter(r => r.seg >= lo && r.seg <= hi && (s.needs === 'snow' ? r.snow : r.night_freeze));
+      const holds = (r: (typeof SEASON_ROWS)[number]) => s.needs === 'snow' ? r.snow : s.needs === 'bare' ? !r.night_freeze && !r.snow : r.night_freeze;
+      const segs = SEASON_ROWS.filter(r => r.seg >= lo && r.seg <= hi && holds(r));
       expect(segs.length, ev.id).toBeGreaterThanOrEqual(3);
     }
   });
@@ -84,6 +100,15 @@ describe('뽑기', () => {
     expect(ids(at(5, true))).not.toContain('ev_b01_frozen_switch');
     expect(ids(at(18, true))).toContain('ev_b01_frozen_switch');
     expect(ids(at(5, false))).toContain('ev_b01_frozen_switch');
+  });
+
+  it('늦가을 선로 시련은 켠 판 늦가을(5구간)에만 든다. 밤 결빙(18구간)과 꺼진 판에는 안 든다', () => {
+    const ids = (g: Game) => contentPool(g).map(e => e.id);
+    for (const id of BARE) {
+      expect(ids(at(5, true)), id).toContain(id);
+      expect(ids(at(18, true)), id).not.toContain(id);
+      expect(ids(at(5, false)), id).not.toContain(id);
+    }
   });
 
   it('흰 바람은 첫눈 뒤(22구간)에만 든다', () => {

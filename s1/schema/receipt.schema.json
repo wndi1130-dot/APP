@@ -389,9 +389,10 @@
             "deep",
             "embedded",
             "bite",
-            "fracture"
+            "fracture",
+            "amputation"
           ],
-          "description": "긁힘, 찢김, 깊은 상처, 박힌 것(유리·총알), 물림, 골절."
+          "description": "긁힘, 찢김, 깊은 상처, 박힌 것(유리·총알), 물림, 골절, 절단(필드에서 자른 팔·다리, 그 부위만)."
         },
         "festering": {
           "type": "boolean",
@@ -403,7 +404,37 @@
         "part",
         "kind"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "amputation"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "part": {
+                "type": "string",
+                "enum": [
+                  "arm_left",
+                  "arm_right",
+                  "leg_left",
+                  "leg_right"
+                ]
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
