@@ -271,3 +271,20 @@ func test_a_closet_door_is_on_its_long_side_and_one_shelf_stands_at_the_far_end(
 	var open: Vector2i = rect.position if at != rect.position else rect.end - Vector2i.ONE
 	assert_true(d["grid"].people_can_walk(open), "the cell inside the door stays free")
 	assert_eq(d["containers"].size(), 0)
+
+
+func test_a_pantry_never_takes_the_kitchen_s_last_counter_wall() -> void:
+	var d := Maps.build("lake_02")
+	var pantries: Array = d["room_splits"]["rows"].filter(func(r: Dictionary) -> bool: return r["kind"] == "pantry")
+	assert_gt(pantries.size(), 0)
+	for row: Dictionary in pantries:
+		assert_false(Split._in_line(row["door"], row["rect"]), "pantry door on the long side, so it has its shelf")
+		var g: Grid = d["levels"][row["level"]]
+		var map := Furnish.rooms_of(g)
+		var ri := Furnish._at(g, map["of"], row["parent"])
+		var kitchen := 0
+		for p: Dictionary in d["props"]:
+			if int(p.get("level", 0)) == row["level"] and p.get("rule") == "kitchen" and p.get("rect") is Rect2i:
+				if Furnish._at(g, map["of"], (p["rect"] as Rect2i).position) == ri:
+					kitchen += 1
+		assert_gt(kitchen, 0, "kitchen beside the pantry at %s is furnished" % row["rect"])

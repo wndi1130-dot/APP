@@ -26,8 +26,8 @@ static func is_home(building: Dictionary) -> bool:
 	return Furnish._home(name)
 
 
-## 순수 후보 선택. 격자·상자·이름표는 바꾸지 않는다.
-static func choose(g: Grid, cells: Array, sizes: Array, protected: Dictionary) -> Dictionary:
+## 순수 후보 선택. 격자·상자·이름표는 바꾸지 않는다. accept가 있으면 그것이 받는 후보만.
+static func choose(g: Grid, cells: Array, sizes: Array, protected: Dictionary, accept: Callable = Callable()) -> Dictionary:
 	if cells.is_empty():
 		return {}
 	var inside := {}
@@ -110,8 +110,45 @@ static func choose(g: Grid, cells: Array, sizes: Array, protected: Dictionary) -
 					continue
 				var walls := wall.duplicate()
 				walls.erase(door)
-				return {"rect": rect, "inner": inner, "remaining": remaining, "walls": walls, "door": door}
+				var found := {"rect": rect, "inner": inner, "remaining": remaining, "walls": walls, "door": door}
+				if accept.is_valid() and not accept.call(found):
+					continue
+				return found
 	return {}
+
+
+## 찬방을 떼고도 부엌에 조리대 한 줄이 설 곧은 벽(COUNTER_MIN칸)이 남는가. 칸막이를 잠깐 세워
+## 보고 되돌린다(가구 코드의 _kitchen_run과 같은 칸: 비었고, 문 앞이 아니고, 벽에 붙음).
+static func _keeps_counter_run(data: Dictionary, g: Grid, lv: int, found: Dictionary) -> bool:
+	var door: Vector2i = found["door"]
+	for c: Vector2i in found["walls"]:
+		g.set_solid(c, S.WALL)
+	g.set_solid(door, S.DOOR)
+	g.doors[door] = {"state": "closed", "hp": DOOR_HP, "cell": door}
+	var map := Furnish.rooms_of(g)
+	var of: PackedInt32Array = map["of"]
+	var ri := Furnish._at(g, of, found["remaining"].keys()[0])
+	var ok := false
+	if ri >= 0:
+		var cells: Array[Vector2i] = map["rooms"][ri]["cells"]
+		var forbid := Furnish._forbidden(g, of, ri, cells, Furnish._stairs_by_level(data).get(lv, {}))
+		var usable := {}
+		for c: Vector2i in cells:
+			if g.solid_at(c) == S.NONE and forbid.get(c, "") != "all" and Furnish._wall_sides(g, of, ri, Rect2i(c, Vector2i.ONE)) > 0:
+				usable[c] = true
+		for c: Vector2i in usable:
+			for d: Vector2i in [Vector2i.RIGHT, Vector2i.DOWN]:
+				if usable.has(c - d):
+					continue
+				var n := 1
+				while usable.has(c + d * n):
+					n += 1
+				ok = ok or n >= Furnish.COUNTER_MIN
+	for c: Vector2i in found["walls"]:
+		g.set_solid(c, S.NONE)
+	g.set_solid(door, S.NONE)
+	g.doors.erase(door)
+	return ok
 
 
 ## 두 칸짜리 방의 짧은 끝에 난 문(문과 두 칸이 한 줄).
@@ -203,7 +240,13 @@ static func _apply(data: Dictionary, lv: int, room: Dictionary, cls: String, kin
 	for c in cells:
 		of[g.index(c)] = 0
 	var map := {"of": of, "rooms": [{"cells": cells}]}
-	var candidate := choose(g, cells, BATH_SIZES if kind == "bath" else STORE_SIZES, _protected(data, g, lv, map, 0))
+	# 벽장·찬방은 문이 긴 변에 날 때만(선반 자리), 찬방은 부엌 조리대 벽도 남을 때만.
+	var accept := Callable()
+	if kind == "closet":
+		accept = func(found: Dictionary) -> bool: return not _in_line(found["door"], found["rect"])
+	elif kind == "pantry":
+		accept = func(found: Dictionary) -> bool: return not _in_line(found["door"], found["rect"]) and _keeps_counter_run(data, g, lv, found)
+	var candidate := choose(g, cells, BATH_SIZES if kind == "bath" else STORE_SIZES, _protected(data, g, lv, map, 0), accept)
 	if candidate.is_empty():
 		return {}
 	var moves: Variant = _box_moves(data, g, lv, candidate)
