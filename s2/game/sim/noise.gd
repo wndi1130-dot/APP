@@ -64,6 +64,7 @@ const SOURCES := {
 	"lure": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"alarm": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
 	"can_bash": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"scream": {"levels": [Level.VERY_LOUD], "at": "maker", "pull": true},
 	"whistle": {"levels": [Level.VERY_LOUD], "at": "train", "pull": true},
 	"train_brake": {"levels": [Level.LOUD], "at": "train", "pull": false},
 	"train_guard": {"levels": [Level.QUIET], "at": "train", "pull": false},

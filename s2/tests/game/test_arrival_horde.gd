@@ -160,7 +160,7 @@ func test_every_sound_the_code_makes_is_in_the_table() -> void:
 				continue
 			var tag: String = tags[tags.size() - 1].get_string(1)
 			seen[tag] = true
-			assert_true(SimNoise.SOURCES.has(tag), "%s: %s" % [path, tag])
+			assert_true(SimNoise.SOURCES.has(tag), "%s: %s — a new sound: add its row to noise.gd SOURCES (levels, at, pull)" % [path, tag])
 			var lv := level_re.search(m.get_string(1))
 			if lv != null and SimNoise.SOURCES.has(tag):
 				assert_true((SimNoise.SOURCES[tag]["levels"] as Array).has(SimNoise.Level.get(lv.get_string(1))), "%s: %s at %s" % [path, tag, lv.get_string(1)])
