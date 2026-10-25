@@ -12,6 +12,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 
 const REACH: float = 1.4
@@ -911,6 +912,37 @@ func spot_default(p, id: String, verb: String) -> void:
 				game.hud.work_panel()
 			else:
 				start_work(p)
+		"core":
+			core_scene(p, id)
+
+
+## A freight yard's or works' stopped machine (decision 426, core_scenes.gd). A core left in it
+## comes away in half a minute of normal noise, start and end; a stripped one is a short look.
+## A hidden core looks stripped: without the engine hand it stays where it is.
+func core_scene(p, id: String) -> void:
+	var spot: Dictionary = game.data["spots"][id]
+	match String(spot["state"]):
+		"core":
+			game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+			p.start_action("salvage", "떼어 내기", CoreScenes.DETACH_SECONDS, _core_taken.bind(p, id))
+		"bare", "hidden", "seen", "seen_hidden":
+			if spot["state"] == "bare":
+				spot["state"] = "seen"
+			elif spot["state"] == "hidden":
+				spot["state"] = "seen_hidden"
+			game.view.update_spot(id)
+			game.say(p, "쓸 만한 건 이미 뜯겨 나갔다.")
+
+
+func _core_taken(p, id: String) -> void:
+	var spot: Dictionary = game.data["spots"][id]
+	if spot["state"] != "core":
+		return
+	spot["state"] = "taken"
+	game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+	p.add_item(spot["item"])
+	game.view.update_spot(id)
+	game.say(p, "%s를 떼어 냈다." % game.item_name(spot["item"]))
 
 
 func _salvaged(p, id: String) -> void:
@@ -1566,7 +1598,8 @@ func _near_things(p) -> Array:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])
 			var d: float = at.distance_to(p.position)
-			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"]:
+			var usable: bool = spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"] or spot["kind"] == "core" and spot["state"] != "taken"
+			if d < NEAR_USE + 0.5 and usable:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []
