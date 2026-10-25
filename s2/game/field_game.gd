@@ -463,6 +463,7 @@ func _ready() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
+	_say_bare_coats()
 	await BuildPace.rest(pace)
 	audio = FieldAudio.new()
 	add_child(audio)
@@ -1089,6 +1090,19 @@ func default_squad(pipe_quality: String) -> Array:
 
 
 ## Is this stop sent under the train's departure contract v2 (the people the train picked)?
+## The wardrobe ran short (decision 443, card E 가): who went out with no coat over them is
+## said once at the start — they feel the cold sooner.
+func _say_bare_coats() -> void:
+	if not contract_on() or hud == null:
+		return
+	var bare: Array = []
+	for p in squad:
+		if not p.worn.has("jacket") and not p.worn.has("coat"):
+			bare.append(p.display_name)
+	if not bare.is_empty():
+		hud.toast("외투 없음 — 추위: %s" % ", ".join(bare))
+
+
 ## The rounds the train hands over (the contract's train.ammo, kit_pick.gd, PR 5): the guns of
 ## those who went out are loaded first, as far as the rounds go, and the rest is the pool. A stop
 ## without them keeps the field's own pool (and the guns as they were loaded).

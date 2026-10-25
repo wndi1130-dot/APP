@@ -5,6 +5,9 @@ extends RefCounted
 ## that hand stays empty. The train also hands over its rounds (and the workshop's lures once it
 ## keeps any). A train that keeps no armory or rounds of its own (S1's states: S1 has neither)
 ## sends the kits as they are and no rounds, so the same state still gives the same sheet.
+## The chief and the companions are dressed out of the wardrobe the same way (dress).
+
+const Wear = preload("res://game/sim/wear.gd")
 
 
 ## The armory to take from (a copy: taking spends it), or null when the train keeps none.
@@ -58,3 +61,53 @@ static func train_kit(g: Dictionary) -> Dictionary:
 	if dom.has("lures"):
 		out["lures"] = int(dom["lures"])
 	return out
+
+
+## What everyone goes out in over their own underthings (decision 443, card E 가): the railway
+## coat and the gloves, by the place they are worn.
+const OUTER_WISH: Dictionary = {"jacket": "jacket_short", "hands": "gloves"}
+
+
+## The wardrobe to take from (a copy: taking spends it), or null when the train keeps none.
+static func closet_of(g: Dictionary) -> Variant:
+	var dom: Variant = g.get("dom")
+	if dom is Dictionary and dom.get("wardrobe") is Array:
+		return (dom["wardrobe"] as Array).duplicate(true)
+	return null
+
+
+## `gear` dressed out of `closet` (spent as taken): for each place of OUTER_WISH the wished
+## thing in the best condition left, else anything for that place in the best condition, else
+## that place goes bare ("": dress_from takes it off). As it is when the train keeps no
+## wardrobe. The work crew is not dressed out of it (443: they go in what everyone wears).
+static func dress(gear: Dictionary, closet: Variant) -> Dictionary:
+	var out := gear.duplicate(true)
+	if closet == null:
+		return out
+	var wear: Dictionary = out.get("wear", {})
+	for slot: String in OUTER_WISH:
+		var at := _garment(closet, slot, String(OUTER_WISH[slot]))
+		if at < 0:
+			wear[slot] = ""
+			continue
+		wear[slot] = (closet[at] as Dictionary).duplicate(true)
+		closet.remove_at(at)
+	out["wear"] = wear
+	return out
+
+
+## Where in `closet` a thing for `slot` is: the wished id in the best condition, else any for
+## that place in the best condition, else -1.
+static func _garment(closet: Array, slot: String, wish: String) -> int:
+	var best := -1
+	var best_any := -1
+	for i in closet.size():
+		var c: Dictionary = closet[i]
+		var id: String = String(c.get("id", ""))
+		if Wear.slot_of(id) != slot:
+			continue
+		if best_any < 0 or float(c["condition"]) > float(closet[best_any]["condition"]):
+			best_any = i
+		if id == wish and (best < 0 or float(c["condition"]) > float(closet[best]["condition"])):
+			best = i
+	return best if best >= 0 else best_any
