@@ -1,4 +1,6 @@
 extends RefCounted
+
+const Wear = preload("res://game/sim/wear.gd")
 ## The field's named things (decision 423-8, field_unified 4장 「물건 두 층」): what
 ## comes out of a box has a name and a picture of its own, and on the train it
 ## melts into the stock numbers the politics reads, as before. Values only, and
@@ -70,6 +72,10 @@ const ITEMS: Dictionary = {
 	"can_opener": {"name": "깡통 따개", "icon": "it_opener", "weight": 0.1, "group": "tool", "keep": true},
 	"nails": {"name": "못 한 줌", "icon": "it_nails", "weight": 0.5, "stock": "scrap", "melt": 0.5, "group": "material"},
 	"fuel_can": {"name": "연료 통", "icon": "it_fuel", "weight": 1.5, "stock": "coal", "melt": 1.0, "group": "material"},
+	# What the train's workshop makes parts of, picked up as it lies (decision 426 D2).
+	"gears": {"name": "톱니바퀴", "icon": "gear", "weight": 0.6, "stock": "parts", "melt": 0.5, "group": "material"},
+	"springs": {"name": "용수철 한 줌", "icon": "it_spring", "weight": 0.3, "stock": "parts", "melt": 0.25, "group": "material"},
+	"wire_coil": {"name": "전선 뭉치", "icon": "it_wire", "weight": 0.5, "stock": "parts", "melt": 0.25, "group": "material"},
 	# A bigger pack, worn at once if it is bigger than the one on the back.
 	"found_big_pack": {"name": "큰 배낭", "icon": "inv", "weight": 1.0, "group": "bag", "bag": "big_pack", "keep": true},
 	# ---- 나단계 (decision 423 cards 10·11, P22)
@@ -100,8 +106,10 @@ const RARE: Dictionary = {
 }
 
 
+## Clothes are on the list too (decision 423 card 2): their name, picture and
+## weight are wear.gd's; they are worn, not carried, so they never melt.
 static func has(id: String) -> bool:
-	return ITEMS.has(id) or RARE.has(id) or is_key(id)
+	return ITEMS.has(id) or RARE.has(id) or is_key(id) or Wear.is_garment(id)
 
 
 static func row(id: String) -> Dictionary:
@@ -109,6 +117,8 @@ static func row(id: String) -> Dictionary:
 		return ITEMS[id]
 	if is_key(id):
 		return KEY_ROW
+	if Wear.is_garment(id):
+		return Wear.KINDS[id]
 	return RARE.get(id, {})
 
 

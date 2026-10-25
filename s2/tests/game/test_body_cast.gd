@@ -7,6 +7,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Person = preload("res://game/actors/person.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
+const Wear = preload("res://game/sim/wear.gd")
 
 
 func _person(pid: String, role: String) -> Node3D:
@@ -117,3 +118,45 @@ func test_each_one_is_drawn_in_their_own_body() -> void:
 	var raider := _person("npc_raider_1", "raider")
 	assert_true(v.worn_of(raider, false).is_empty(), "not read in while it may not be")
 	assert_false(v.worn_of(raider).is_empty(), "read in when it may")
+
+
+# What is worn over the body (WEAR_TINTS) is baked against one body, so each
+# body draws only its own: a garment lines up with that body's motions, and a
+# body with none of its own draws none rather than the reference body's, which
+# would not fit it (the values still count, wear.gd).
+func test_garments_are_drawn_over_the_body_they_were_baked_for() -> void:
+	var v := PersonVisual.new()
+	add_child_autofree(v)
+	v.setup(null)
+	assert_eq(v.wear_draws.size(), PersonVisual.WEAR_TINTS.size(), "the reference body has all four")
+	assert_not_null(v.gloved_draw, "and its gloved picture")
+	var chief := _person("p_chief", "chief")
+	var marek := _person("p_guard_marek", "companion")
+	chief.hat = Wear.make("hat_knit")
+	marek.gloves = false
+	v.game = {"people": [chief, marek]}
+	v._process(0.016)
+	v._process(0.016)                     # one body read in a frame
+	for p in [chief, marek]:
+		var d: Dictionary = v.worn_of(p, false)
+		assert_false(d.is_empty(), String(p.pid) + " is drawn")
+		assert_ne(d["own_draw"], v.own_draw, String(p.pid) + " in a body of their own")
+		var dir := BodyCast.own_folder(String(v.body_by[p]))
+		var clips := _line_up(d["own_vat"]["clips"])
+		for kind: String in PersonVisual.WEAR_TINTS:
+			var shell := BodyBake.load_baked(dir.path_join("wear").path_join(kind))
+			assert_eq(d["wear"].has(kind), not shell.is_empty(), kind + " drawn where this body has it")
+			if d["wear"].has(kind):
+				assert_ne(d["wear"][kind], v.wear_draws[kind], kind + " is this body's")
+				assert_eq(_line_up(shell["clips"]), clips, kind + " lines up with this body")
+		var gloved := ResourceLoader.exists(dir.path_join(PersonVisual.GLOVES_FILE))
+		assert_eq(d["gloved"] != null, gloved, String(p.pid) + " gloved where this body has the picture")
+		var on := int(d["gk"]) if p.gloves and gloved else int(d["k"])
+		assert_eq(on, 1, String(p.pid) + " drawn once")
+		for kind: String in PersonVisual.looks_of(p):
+			if d["wear"].has(kind):
+				assert_eq(int(d["worn_n"].get(kind, 0)), 1, kind + " drawn over " + String(p.pid))
+	for kind: String in v.wear_draws:
+		assert_eq((v.wear_draws[kind] as MultiMeshInstance3D).multimesh.visible_instance_count, 0,
+			"the reference body's " + kind + " is not drawn over another body")
+	assert_eq(v.gloved_draw.multimesh.visible_instance_count, 0, "nor its gloved picture")

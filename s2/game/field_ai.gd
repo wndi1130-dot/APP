@@ -61,7 +61,7 @@ const GIVE_R: float = 12.0
 ## A thing it cannot get to in this long is given up.
 const HELP_GIVE_UP: float = 12.0
 ## What is worth stooping for: light, and of use to everyone.
-const PICK_IDS: Array = ["arrow", "ammo_pistol", "ammo_shell", "bandage", "cloth"]
+const PICK_IDS: Array = ["ammo_craft", "ammo_pistol", "ammo_shell", "bandage", "cloth"]
 ## One of us held by the dead this near: the nearest free companion runs over
 ## and shoves it off (decision 406, bundle 3). Only one goes.
 const RESCUE_R: float = 9.0
@@ -982,7 +982,7 @@ func _pick_ground(p) -> bool:
 	else:
 		var g2: Dictionary = game.ground_items[best]
 		game.actions.pick_up(p, best)
-		if g2["id"] == "arrow":
+		if g2["id"] == "ammo_craft":
 			game.say(p, "%s: 화살을 주웠다." % p.display_name)
 	return true
 

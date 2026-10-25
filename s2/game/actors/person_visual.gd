@@ -18,7 +18,8 @@ extends Node3D
 ## With the switch off, or no baked folder in the build, nothing is drawn here
 ## and the people keep their boxes.
 ## Each person wears a body of their own (body_cast.gd), each body with its own
-## two multimeshes, read in the first time someone wears it. FOLDER and
+## two multimeshes (and its garments', WEAR_TINTS), read in the first time
+## someone wears it. FOLDER and
 ## OWN_FOLDER are the body worn when a person's own is not in the build.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
@@ -28,6 +29,7 @@ const Pose = preload("res://game/actors/person_pose.gd")
 const SearchHeight = preload("res://game/actors/search_height.gd")
 const InjuryRules = preload("res://game/sim/injury_rules.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
+const Wear = preload("res://game/sim/wear.gd")
 
 const FOLDER: String = "res://models/people/n5-crew_seamstress"
 const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
@@ -38,6 +40,15 @@ const READS_PER_FRAME: int = 1           # bodies read in a frame (worn_of)
 ## one each). For a phone that cannot hold every body's pictures: past it, a
 ## new person wears the body fewest wear.
 const BODIES_SETTING: String = "visuals/people_bodies_max"
+## What is worn over the body (decision 423 card 2, #564): each look is a
+## shell baked with the own folder's motions (wear/<id>), drawn in its own
+## colour (it has no picture): dark and cold, as the snow wants. The gloves are
+## the body again with the gloved picture. Each body's own folder has its own,
+## baked against that body; a body without them is drawn without (the values
+## still count, wear.gd), and so is one drawn from the dead's folder for a moment.
+const WEAR_TINTS: Dictionary = {"jacket_short": Vector3(0.1, 0.11, 0.14), "coat_long": Vector3(0.12, 0.1, 0.085),
+	"hat_knit": Vector3(0.17, 0.12, 0.1), "hood": Vector3(0.13, 0.135, 0.14)}
+const GLOVES_FILE: String = "albedo_gloves.png"
 # Motion numbers, in the order body_bake.gd bakes them (dead_body.gd names them).
 const WALK: int = 0
 const STAND: int = DeadBody.STAND
@@ -154,6 +165,7 @@ const OWN_WORK: Dictionary = {
 	"lid": ["p_kneel_work", 1.0],
 	"treat": ["p_treat", 1.0], "splint": ["p_kneel_work", 1.0], "rub": ["p_treat", 1.0],
 	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
+	"wear": ["p_wear_outer", 0.0],
 }
 # A melee blow in the living's own motions: the ways each weapon is swung, and
 # where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
@@ -207,6 +219,8 @@ var own_table: Array = []
 var own_mix: Dictionary = {}             # own motion number -> how long a change into it is eased
 var own_frames: Array = []               # the own folder's table, for the hand (dead_body.gd table_of)
 var frames: Array = []                   # the dead folder's
+var wear_draws: Dictionary = {}          # look id -> its multimesh (WEAR_TINTS), FOLDER / OWN_FOLDER's
+var gloved_draw: MultiMeshInstance3D     # the own body with gloves on, FOLDER / OWN_FOLDER's
 var worn: Dictionary = {}                # body -> its pictures and what is read off them (_dress); "" is FOLDER / OWN_FOLDER
 var body_by: Dictionary = {}             # person -> the body they wear (body_cast.gd)
 var taken: Dictionary = {}               # body -> how many in this scene wear it
@@ -230,19 +244,23 @@ func setup(field_game) -> void:
 	own_mix = d["own_mix"]
 	own_frames = d["own_frames"]
 	frames = d["frames"]
+	wear_draws = d["wear"]
+	gloved_draw = d["gloved"]
 
 
 ## One body's two pictures: the dead's folder (the struck pose, and a build
 ## whose own folder lacks a motion) and the living's own, each in a multimesh,
 ## with the tables, eases and the right hand read off them. A folder with no
-## colour picture of its own is drawn with the other's.
+## colour picture of its own is drawn with the other's. With them, what is worn
+## over this body (WEAR_TINTS) and the body with gloves on, where it has them.
 func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 	var dead_look := dead_dir if ResourceLoader.exists(dead_dir.path_join(DeadBody.ALBEDO_FILE)) else own_dir
 	var dead := DeadBody.with_albedo(BodyBake.load_baked(dead_dir), dead_look)
 	if dead.is_empty():
 		return {}
 	var d := {"vat": dead, "draw": _wear(dead), "table": [], "own_vat": {}, "own_draw": null,
-		"own_table": [], "own_mix": {}, "own_frames": [], "frames": [], "n": 0, "k": 0}
+		"own_table": [], "own_mix": {}, "own_frames": [], "frames": [], "wear": {}, "gloved": null,
+		"n": 0, "k": 0, "gk": 0, "worn_n": {}}
 	if DeadBody.can_mix():
 		d["table"] = DeadBody.table_of(dead)
 	var own := DeadBody.with_albedo(BodyBake.load_baked(own_dir), own_dir)
@@ -256,6 +274,15 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 	if DeadBody.can_mix():
 		d["own_table"] = DeadBody.table_of(own)
 	d["own_frames"] = DeadBody.table_of(own)
+	for kind: String in WEAR_TINTS:
+		var shell := BodyBake.load_baked(own_dir.path_join("wear").path_join(kind))
+		if not shell.is_empty():
+			d["wear"][kind] = _wear(shell, WEAR_TINTS[kind])
+	var gloved_path := own_dir.path_join(GLOVES_FILE)
+	if ResourceLoader.exists(gloved_path):
+		var gloved: Dictionary = own.duplicate()
+		gloved["albedo"] = load(gloved_path)
+		d["gloved"] = _wear(gloved)
 	var arm := hand_of(own)
 	if not arm.is_empty():
 		own["arm"] = arm_table(own, arm["hand"], arm["elbow"])
@@ -282,8 +309,8 @@ func worn_of(p, may_read: bool = true) -> Dictionary:
 	return worn[body]
 
 
-## One multimesh wearing a baked folder.
-func _wear(baked: Dictionary) -> MultiMeshInstance3D:
+## One multimesh wearing a baked folder (a garment in its own colour).
+func _wear(baked: Dictionary, tint: Vector3 = Vector3(0.5, 0.5, 0.5)) -> MultiMeshInstance3D:
 	var one := MultiMeshInstance3D.new()
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -299,7 +326,7 @@ func _wear(baked: Dictionary) -> MultiMeshInstance3D:
 	var tables := VatBaker.shader_tables(baked)
 	for key in tables:
 		mat.set_shader_parameter(key, tables[key])
-	mat.set_shader_parameter("tint", Vector3(0.5, 0.5, 0.5))
+	mat.set_shader_parameter("tint", tint)
 	if DeadBody.can_mix():
 		mat.set_shader_parameter("mixes", true)
 	one.material_override = mat
@@ -321,6 +348,8 @@ func _process(delta: float) -> void:
 	for d: Dictionary in worn.values():
 		d["n"] = 0
 		d["k"] = 0
+		d["gk"] = 0
+		d["worn_n"] = {}
 	var count := 0
 	# One body read in a frame (about a tenth of a second each on a PC): someone
 	# whose body is not in yet is left out for the frames it takes.
@@ -358,9 +387,26 @@ func _process(delta: float) -> void:
 		var drawn: Color
 		if own:
 			drawn = DeadBody.mix_from(mix, look, float(note["t"]), d["own_table"], d["own_mix"])
-			own_mm.set_instance_transform(k, at)
-			own_mm.set_instance_custom_data(k, drawn)
-			d["k"] = k + 1
+			var gloved: MultiMeshInstance3D = d["gloved"]
+			if p.gloves and gloved != null:
+				var gk: int = d["gk"]
+				gloved.multimesh.set_instance_transform(gk, at)
+				gloved.multimesh.set_instance_custom_data(gk, drawn)
+				d["gk"] = gk + 1
+			else:
+				own_mm.set_instance_transform(k, at)
+				own_mm.set_instance_custom_data(k, drawn)
+				d["k"] = k + 1
+			# What they wear moves with the body: the same place, the same frame.
+			var wear: Dictionary = d["wear"]
+			var worn_n: Dictionary = d["worn_n"]
+			for kind: String in looks_of(p):
+				if wear.has(kind):
+					var w: int = int(worn_n.get(kind, 0))
+					var wmm: MultiMesh = (wear[kind] as MultiMeshInstance3D).multimesh
+					wmm.set_instance_transform(w, at)
+					wmm.set_instance_custom_data(w, drawn)
+					worn_n[kind] = w + 1
 		else:
 			drawn = DeadBody.mix_from(mix, look, float(note["t"]), d["table"])
 			mm.set_instance_transform(n, at)
@@ -386,6 +432,19 @@ func _process(delta: float) -> void:
 		d["draw"].multimesh.visible_instance_count = d["n"]
 		if d["own_draw"] != null:
 			d["own_draw"].multimesh.visible_instance_count = d["k"]
+		if d["gloved"] != null:
+			d["gloved"].multimesh.visible_instance_count = d["gk"]
+		for kind: String in d["wear"]:
+			(d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(d["worn_n"].get(kind, 0))
+
+
+## The looks one person wears over the body: the coat and what is on the head.
+static func looks_of(p) -> Array[String]:
+	var out: Array[String] = []
+	for id: String in [String(p.coat.get("id", "")), String(p.hat.get("id", ""))]:
+		if WEAR_TINTS.has(id):
+			out.append(id)
+	return out
 
 
 func _hide_boxes(p) -> void:
@@ -610,6 +669,8 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 		return Vector2(float(OWN_KICK[1]) * clampf(1.0 - p.action_t / wind, 0.0, 1.0), kick)
 	if not OWN_WORK.has(p.action):
 		return Vector2(0.0, -1.0)
+	if p.action == "wear":
+		return wear_of(p, note, own)
 	var work_name := String(OWN_WORK[p.action][0])
 	if p.action == "search" and p.action_busy is Dictionary and p.action_busy.has("name"):
 		work_name = SearchHeight.clip_of(p.action_busy)
@@ -629,6 +690,18 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 		note["motion"] = OWN_BASE + clip
 		return Vector2(clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0), clip)
 	return Vector2(_own_cycle(note, OWN_BASE + clip, t * pace, _length(own, clip, 1.0), p.name_unit("work")), clip)
+
+
+## Putting a garment on plays its place's motion once over the job (wear.gd
+## CLIP); taking it off plays it backwards.
+static func wear_of(p, note: Dictionary, own: Array) -> Vector2:
+	var slot: String = String(p.action_busy.get("slot", "outer"))
+	var clip := clip_named(own, String(Wear.CLIP.get(slot, Wear.CLIP["outer"])), -1)
+	if clip < 0:
+		return Vector2(0.0, -1.0)
+	note["motion"] = OWN_BASE + clip
+	var done := clampf(1.0 - p.action_t / p.action_total, 0.0, 1.0)
+	return Vector2(1.0 - done if bool(p.action_busy.get("off", false)) else done, clip)
 
 
 ## Which of the living's own a treatment is drawn in: kneeling by someone else

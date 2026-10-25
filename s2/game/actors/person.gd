@@ -7,6 +7,7 @@ const BodyState = preload("res://game/sim/body_state.gd")
 const BodyHeat = preload("res://game/sim/body_heat.gd")
 const AimModel = preload("res://game/sim/aim_model.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const Wear = preload("res://game/sim/wear.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 
@@ -40,7 +41,11 @@ var aim := AimModel.new()
 var hands: Array = []                  # [{id, quality, condition, loaded}], index 0 = in hand
 var bag: String = "pack"
 var items: Dictionary = {}             # item id -> count
-var coat: Dictionary = {"name": "철도원 외투", "warmth": 0.7, "windproof": 0.5, "block": 0.25, "heavy": false, "wear": 0}
+## The three places for clothes (wear.gd, decision 423 card 2): the outer one
+## is this coat (as grab_rules.gd reads it), the head one a hat or a hood ({}
+## for none), the hands the gloves.
+var coat: Dictionary = Wear.make("jacket_short")
+var hat: Dictionary = {}
 var gloves: bool = true
 var smell: int = 0                     # 0 clean, 1 sweat, 2 stench
 var traits: Array = []
