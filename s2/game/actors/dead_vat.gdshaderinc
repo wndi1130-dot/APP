@@ -28,6 +28,8 @@ uniform float clip_rate[128];
 uniform float clip_loop[128];
 // Box bake stores offset + 0.5 in 8 bits; a skinned bake stores metres (bias 0).
 uniform float bias = 0.5;
+// Seconds the field has stood paused (pause_veil.gd): the motions run on TIME - fx_still, so they hold.
+global uniform float fx_still;
 uniform vec3 tint = vec3(0.5);
 // The bake moves vertices only, so a lying body keeps its standing normals.
 // On, the face normal is taken from the moved surface instead. Off until it
@@ -118,7 +120,7 @@ void vertex() {
 	float hold = max(INSTANCE_CUSTOM.b, 0.0);
 	float shiver = max(-INSTANCE_CUSTOM.b, 0.0);
 	float speed = rate * pace * (1.0 - hold);
-	float looped = mod(TIME * speed + INSTANCE_CUSTOM.r * frames, frames);
+	float looped = mod((TIME - fx_still) * speed + INSTANCE_CUSTOM.r * frames, frames);
 	float once = clamp(INSTANCE_CUSTOM.r, 0.0, 1.0) * (frames - 1.0);
 	float frame = mix(once, looped, loops);
 	float current = floor(frame);
@@ -139,7 +141,7 @@ void vertex() {
 #endif
 	VERTEX += offset;
 	// The cold's tremble: quick and small, from the hips up, more toward the head, each body at its own phase.
-	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin(TIME * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin(TIME * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
+	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin((TIME - fx_still) * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin((TIME - fx_still) * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
 	shade = INSTANCE_CUSTOM.a;
 	view_pos = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 #ifdef WORN

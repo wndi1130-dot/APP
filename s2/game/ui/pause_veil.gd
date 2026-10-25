@@ -4,13 +4,16 @@ extends Control
 ## world: the screen's top and bottom go dark and a faint dim lies over the
 ## rest, 「일시 정지」 stands in the middle of the upper screen between two
 ## rules, a lamp ring breathes round the pause key (now the play key), and
-## what falls or drifts in the world (the snow, smoke, sparks) holds still.
+## what falls or drifts in the world (the snow, smoke, sparks) holds still,
+## and so do the bodies' motions (fx_still: the seconds stood paused, which
+## the people's and the dead's shader takes off TIME).
 ## The world itself already fades like an old photo (field_game.gd fx_fade).
 ## Nothing here touches the game's state; it reads game.paused only. A panel
 ## (settings, a pane) brings its own shade, so the veil steps aside for it.
 
 const HudSkin = preload("res://game/ui/hud_skin.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const FxState = preload("res://fx/fx_state.gd")
 
 const WORD := "일시 정지"
 const EASE: float = 0.22            # seconds the veil takes to come or go
@@ -21,10 +24,12 @@ const WORD_Y: float = 0.27          # of the height: the word's middle, under th
 const WORD_SIZE: int = 30
 const RULE: float = 64.0            # the rules either side of the word
 const RING_PULSE: float = 1.6       # seconds a breath of the ring takes
+const STILL_WRAP: float = 3600.0    # the engine's TIME rolls over at an hour; fx_still keeps in step
 
 var hud                             # field_hud.gd
 var shown: float = 0.0              # 0 gone .. 1 fully up
 var _held: Array = []               # the particle systems held still, with their own speed
+var still: float = 0.0              # fx_still: seconds stood paused
 
 
 func setup(field_hud) -> void:
@@ -45,7 +50,11 @@ func _process(delta: float) -> void:
 	var up: bool = wanted()
 	var was: float = shown
 	shown = move_toward(shown, 1.0 if up else 0.0, delta / EASE)
-	_hold_world(hud != null and hud.game != null and bool(hud.game.paused) and not bool(hud.game.ended))
+	var hold: bool = hud != null and hud.game != null and bool(hud.game.paused) and not bool(hud.game.ended)
+	_hold_world(hold)
+	if hold:
+		still = fposmod(still + delta, STILL_WRAP)
+		FxState.set_still(still)
 	visible = shown > 0.0
 	if visible or was > 0.0:
 		queue_redraw()

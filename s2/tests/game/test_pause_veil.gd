@@ -73,3 +73,20 @@ func test_what_falls_holds_still_while_paused() -> void:
 	game.paused = false
 	veil._process(0.1)
 	assert_eq(snow.speed_scale, 0.8, "and falls on at its own speed")
+
+
+## The bodies' motions hold too: fx_still counts the seconds stood paused, and
+## stays where it is while the field plays (the shader runs on TIME - fx_still).
+func test_the_bodies_hold_still_while_paused() -> void:
+	var s := _setup()
+	var game: FakeGame = s[0]
+	var veil = s[3]
+	veil._process(0.5)
+	assert_eq(veil.still, 0.0, "nothing counted while playing")
+	game.paused = true
+	veil._process(0.25)
+	veil._process(0.25)
+	assert_almost_eq(veil.still, 0.5, 0.0001)
+	game.paused = false
+	veil._process(1.0)
+	assert_almost_eq(veil.still, 0.5, 0.0001, "kept, so the motions go on from where they stood")
