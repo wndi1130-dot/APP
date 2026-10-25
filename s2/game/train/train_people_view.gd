@@ -1,11 +1,11 @@
 extends Node3D
-## How the train's people look (user request 2026-10-24): the field's baked body in place of
-## the capsule and ball, with the train's own motions (train_clips.gd, folder
-## n5-crew_seamstress_t). It only reads the bodies the train scene moves (where
-## each is, which way it faces, its pose, its gesture, the life activity it is
-## at) and the car's numbers, and decides nothing. Four multimeshes, one a
-## coat, carry every drawn body of the train. Without the folder, or with the
-## field's switch off, nothing is drawn here and the capsules stay.
+## How the train's people look (user request 2026-10-24): baked bodies in place of
+## the capsule and ball, with the train's own motions (train_clips.gd, folders
+## <body>_t). It only reads the bodies the train scene moves (where each is,
+## which way it faces, its pose, its gesture, the life activity it is at) and
+## the car's numbers, and decides nothing. One multimesh a body carries every
+## person of the train who wears it. Without the folders, or with the field's
+## switch off, nothing is drawn here and the capsules stay.
 ##
 ## Every person is someone of their own (user 2026-10-24: each person's state
 ## and doing differ). Their number gives them traits that stay: how soon the
@@ -34,9 +34,29 @@ const Rules = preload("res://game/train/train_rules.gd")
 
 const SETTING: String = "visuals/baked_people_enabled"   # the field's switch (person_visual.gd)
 const MAX_PEOPLE: int = 240
-## Four worn coats over the one body's picture (tint / 0.5): faded neutral, brown,
-## grey-blue and dark, so a bench of people is not one colour. No uniform among them.
-const COATS: Array = [Vector3(0.44, 0.43, 0.41), Vector3(0.6, 0.46, 0.34), Vector3(0.34, 0.4, 0.5), Vector3(0.3, 0.3, 0.31)]
+const PEOPLE_DIR: String = "res://models/people/"
+## Each person has a body of their own (user 2026-10-25: every person a different
+## body), every one baked with the same train motions (tools/bake_train_cli.gd,
+## folders <body>_t). The car and the person's work pick it first; the rest wear
+## ordinary clothes, and two neighbours do not share one. No uniform among them:
+## the guards wear plain coats.
+## Eight bodies at most on the train screen at once (the body bake's PC
+## estimate until the phone is measured: about 2.5MB of GPU each), and the
+## light ones (1,200 to 1,420 points): the twice-as-heavy bodies stay out.
+const ROLE_BODIES: Dictionary = {
+	"cook": ["n5-crew_cook_t"],
+	"stoker": ["n5-crew_stoker_t"],
+	"carer": ["n5-crew_medic_t"],
+	"guard": ["n5-crew_guard_t"],
+}
+const GENERAL_BODIES: Array = [
+	"n10-body_sheepskin-m_t", "n3-body_parka_t", "n10-body_apron-f_t", "n5-crew_guard-f_t",
+]
+## How many in one car wear their work's body: the life plan makes every able
+## person in the medical car a carer and every adult in the dining car a cook,
+## so the first two do and the rest wear their own clothes (no car of twins).
+const ROLE_A_CAR: int = 2
+const NEUTRAL_TINT := Vector3(0.5, 0.5, 0.5)   # the body's own picture as it is (tint / 0.5)
 const SIT_FORWARD: float = 0.3           # metres: the baked seat is this far behind the feet
 const BED_HEIGHT: float = 0.47           # one lying on a bench or a bed lies on its top
 const STOVE_NEAR: float = 1.6            # metres: one cold this close to the stove holds its hands out to it
@@ -63,13 +83,11 @@ const POSTURE: Dictionary = {
 }
 
 var scene                                 # train_scene.gd
-var baked: Dictionary = {}
+var bodies: Dictionary = {}               # folder -> {draw, clip_index, table, mix_in, count}
 var draws: Array = []
-var clip_index: Dictionary = {}
-var table: Array = []                     # the folder's frames, for easing a change of clip
-var mix_in: Dictionary = {}
 var drawn: Dictionary = {}                # body -> clip name last drawn, for the tests and the shots
-var people: Dictionary = {}               # body -> {shown, want, want_since, pose, bridge_until, after, mix}
+var worn: Dictionary = {}                 # body -> the folder it wears
+var people: Dictionary = {}               # body -> {shown, want, want_since, pose, bridge_until, after, mix, wears}
 
 
 static func enabled() -> bool:
@@ -80,19 +98,27 @@ func setup(train_scene) -> void:
 	scene = train_scene
 	name = "PeopleView"
 	process_priority = 100               # after the scene has moved and posed everyone
-	baked = DeadBody.with_albedo(BodyBake.load_baked(TrainClips.FOLDER), TrainClips.FOLDER)
-	if baked.is_empty():
-		return
-	var clips: Array = baked["clips"]
-	for n in clips.size():
-		clip_index[String(clips[n]["name"])] = n
-		mix_in[n] = MIX_TIME
 	var mixes: bool = DeadBody.can_mix()
-	if mixes:
-		table = DeadBody.table_of(baked)
-	var tables := VatBaker.shader_tables(baked)
-	for coat in COATS:
-		var one := MultiMeshInstance3D.new()
+	var folders: Array = GENERAL_BODIES.duplicate()
+	for role in ROLE_BODIES:
+		folders.append_array(ROLE_BODIES[role])
+	for folder in folders:
+		var dir: String = PEOPLE_DIR + String(folder)
+		if not ResourceLoader.exists(dir.path_join("clips.json")):
+			continue
+		var baked: Dictionary = DeadBody.with_albedo(BodyBake.load_baked(dir), dir)
+		if baked.is_empty():
+			continue
+		var one := {"clip_index": {}, "table": [], "mix_in": {}, "count": 0}
+		var clips: Array = baked["clips"]
+		for n in clips.size():
+			one["clip_index"][String(clips[n]["name"])] = n
+			one["mix_in"][n] = MIX_TIME
+		if mixes:
+			one["table"] = DeadBody.table_of(baked)
+		var tables := VatBaker.shader_tables(baked)
+		var draw := MultiMeshInstance3D.new()
+		draw.name = String(folder)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
@@ -100,18 +126,20 @@ func setup(train_scene) -> void:
 		mm.instance_count = MAX_PEOPLE
 		mm.visible_instance_count = 0
 		mm.custom_aabb = AABB(Vector3(-20, -3, -5), Vector3(400, 10, 10))
-		one.multimesh = mm
+		draw.multimesh = mm
 		var mat := ShaderMaterial.new()
 		mat.shader = preload("res://game/actors/dead_vat.gdshader")
 		mat.set_shader_parameter("vat", baked["texture"])
 		for key in tables:
 			mat.set_shader_parameter(key, tables[key])
-		mat.set_shader_parameter("tint", coat)
+		mat.set_shader_parameter("tint", NEUTRAL_TINT)
 		mat.set_shader_parameter("mixes", mixes)
-		one.material_override = mat
-		one.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(one)
-		draws.append(one)
+		draw.material_override = mat
+		draw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(draw)
+		draws.append(draw)
+		one["draw"] = draw
+		bodies[String(folder)] = one
 
 
 func is_worn() -> bool:
@@ -122,13 +150,15 @@ func _process(_delta: float) -> void:
 	if draws.is_empty() or scene == null:
 		return
 	var now: float = float(scene.clock)
-	var counts: Array = []
-	counts.resize(COATS.size())
-	counts.fill(0)
+	for folder in bodies:
+		bodies[folder]["count"] = 0
 	drawn.clear()
+	worn.clear()
 	var seen: Dictionary = {}
 	for c in scene.cars:
 		var state := car_state(c)
+		var prev := ""
+		var at_work := 0
 		for b in c["bodies"]:
 			if not is_instance_valid(b):
 				continue
@@ -137,26 +167,78 @@ func _process(_delta: float) -> void:
 				continue
 			seen[b] = true
 			var key: int = absi(b.get_instance_id())
-			var coat: int = key % COATS.size()
-			if counts[coat] >= MAX_PEOPLE:
-				continue
 			var life: Dictionary = scene.life.actors.get(b.get_instance_id(), {})
-			var want := want_for(b, state, String(life.get("activity", "")), key, now, life.get("traits", {}))
+			var traits: Dictionary = life.get("traits", {})
+			var want := want_for(b, state, String(life.get("activity", "")), key, now, traits)
 			var clip := shown_for(b, want, now)
-			drawn[b] = clip
-			var mm: MultiMesh = (draws[coat] as MultiMeshInstance3D).multimesh
-			mm.set_instance_transform(counts[coat], place_of(b, clip, state))
-			var shade: float = lerpf(0.72, 1.0, _h(key, 11)) * (0.9 if state["freezing"] else 1.0)
-			var plain := Color(_h(key, 12), float(clip_index.get(clip, 0)), 0.0, shade)
 			var rec: Dictionary = people[b]
-			mm.set_instance_custom_data(counts[coat], DeadBody.mix_from(rec["mix"], plain, now, table, mix_in))
-			counts[coat] += 1
-	for i in draws.size():
-		(draws[i] as MultiMeshInstance3D).multimesh.visible_instance_count = counts[i]
+			if not rec.has("wears") or not bodies.has(String(rec["wears"])):
+				rec["wears"] = _available(body_for(String(state["layout"]), String(traits.get("role", "")), at_work, key, prev), key)
+			var folder: String = rec["wears"]
+			if not GENERAL_BODIES.has(folder):
+				at_work += 1
+			prev = folder
+			var one: Dictionary = bodies[folder]
+			if int(one["count"]) >= MAX_PEOPLE:
+				continue
+			drawn[b] = clip
+			worn[b] = folder
+			var i: int = one["count"]
+			var mm: MultiMesh = (one["draw"] as MultiMeshInstance3D).multimesh
+			mm.set_instance_transform(i, place_of(b, clip, state))
+			var shade: float = lerpf(0.78, 1.0, _h(key, 11)) * (0.9 if state["freezing"] else 1.0)
+			var plain := Color(_h(key, 12), float(one["clip_index"].get(clip, 0)), 0.0, shade)
+			mm.set_instance_custom_data(i, DeadBody.mix_from(rec["mix"], plain, now, one["table"], one["mix_in"]))
+			one["count"] = i + 1
+	for folder in bodies:
+		(bodies[folder]["draw"] as MultiMeshInstance3D).multimesh.visible_instance_count = int(bodies[folder]["count"])
 	# Forget the people who are gone (a car reseated, a layout rebuilt).
 	for b in people.keys():
 		if not seen.has(b):
 			people.erase(b)
+
+
+## Which body a person wears: the car and their work first (the cook, the
+## stoker, the carers, the guard car's guards), ROLE_A_CAR of them a car
+## (`at_work` already wear one), otherwise ordinary clothes by their number,
+## never the same as the one beside them.
+static func body_for(layout: String, role: String, at_work: int, key: int, prev: String) -> String:
+	var kind := ""
+	match role:
+		"cook":
+			kind = "cook"
+		"carer":
+			kind = "carer"
+		"worker":
+			kind = "stoker" if layout in ["technical", "loco", "tender"] else ""
+	if kind == "" and layout == "guard":
+		kind = "guard"
+	if kind == "" and layout == "loco":
+		kind = "stoker"
+	if at_work >= ROLE_A_CAR:
+		kind = ""
+	if kind == "guard":
+		return String(ROLE_BODIES["guard"][at_work % ROLE_BODIES["guard"].size()])
+	if kind != "":
+		var list: Array = ROLE_BODIES[kind]
+		return String(list[key % list.size()])
+	var n: int = GENERAL_BODIES.size()
+	var pick: int = key % n
+	if String(GENERAL_BODIES[pick]) == prev:
+		pick = (pick + 1) % n
+	return String(GENERAL_BODIES[pick])
+
+
+## The body if it was baked here, else an ordinary one that was.
+func _available(folder: String, key: int) -> String:
+	if bodies.has(folder):
+		return folder
+	var n: int = GENERAL_BODIES.size()
+	for k in n:
+		var other: String = GENERAL_BODIES[(key + k) % n]
+		if bodies.has(other):
+			return other
+	return String(bodies.keys()[0])
 
 
 ## What a car is in, for picking motions: its numbers and kind, read only.
