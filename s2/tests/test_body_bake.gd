@@ -42,7 +42,7 @@ func test_the_three_walks_differ_and_the_motion_numbers_fit_the_shader_table() -
 		names.append(clip[0])
 	assert_eq(names, ["walk_a", "walk_b", "walk_c", "stand", "lunge", "hit", "fall", "run", "tell", "fall_front", "crawl", "rise", "climb", "rise_front", "stagger", "fall_thrown", "fall_slump",
 		"thump", "claw", "hit_left", "hit_right", "hit_top", "hit_upper", "turn_left", "turn_right", "walk_d", "walk_e",
-		"eat_start", "eat", "eat_rise"], "the numbers the drawing side uses")
+		"eat_start", "eat", "eat_rise", "bite", "bite_miss"], "the numbers the drawing side uses")
 	assert_true(BodyBake.CLIPS.size() + 1 <= VatBaker.TABLE_SIZE, "with the still poses")
 	assert_ne(BodyBake.LAYERS["walk"]["damp"], BodyBake.LAYERS["walk_c"]["damp"], "a different leg drags")
 
@@ -359,3 +359,33 @@ func test_gloves_paint_the_hands_in_the_colour_picture_and_leave_the_rest() -> v
 	assert_almost_eq(out.get_pixel(16, 16).r, 0.8, 0.01, "not the chest")
 	assert_almost_eq(out.get_pixel(48, 16).r, 0.8, 0.01, "nor the head")
 	assert_almost_eq(albedo.get_pixel(48, 52).r, 0.8, 0.01, "the picture it was given is left as it was")
+
+
+# For the shader's gloves (decision 434): the hands marked in the vertex colour
+# where gloved() paints, the picture's light there kept with the mesh, and
+# nothing else of it changed, so the motion picture reads it as before; a body
+# marked before it is baked carries the marks.
+func test_the_hands_are_marked_for_the_shader_and_the_rest_left_as_it_was() -> void:
+	var root := _dressed_body()
+	add_child_autofree(root)
+	var marks := BodyBake.hand_marks(root)
+	assert_eq(marks.size(), 12)
+	for v in 12:
+		assert_eq(marks[v].a, 1.0 if v >= 9 else 0.0, "vertex %d on the hand or not" % v)
+		assert_eq(marks[v].r, 1.0, "white, so the colour each body is drawn in shows as it is")
+	var mesh := (BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D).mesh
+	var albedo := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	albedo.fill(Color(0.8, 0.7, 0.6))
+	var light := BodyBake.hand_light(mesh, marks, albedo)
+	assert_almost_eq(light, Color(0.8, 0.7, 0.6).get_luminance(), 0.01, "the picture's light at the hands")
+	var marked := BodyBake.with_hand_marks(mesh, marks, light)
+	var before: Array = mesh.surface_get_arrays(0)
+	var after: Array = marked.surface_get_arrays(0)
+	for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_INDEX, Mesh.ARRAY_BONES]:
+		assert_eq(after[slot], before[slot], "slot %d the same, in the same order" % slot)
+	assert_eq((after[Mesh.ARRAY_COLOR] as PackedColorArray)[10].a, 1.0)
+	assert_almost_eq(float(marked.get_meta(BodyBake.HAND_LIGHT)), light, 0.0001)
+	assert_null(BodyBake.with_hand_marks(mesh, PackedColorArray([Color.WHITE]), 0.0), "marks of another mesh")
+	assert_eq(BodyBake.mark_hands(root), marks)
+	var colours = (BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_eq(colours, marks, "the body to bake has them")
