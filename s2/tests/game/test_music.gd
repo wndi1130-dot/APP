@@ -329,6 +329,10 @@ func test_a_warning_ducks_harder_than_the_radio() -> void:
 	for i in range(10):
 		p.tick(0.2)
 	assert_almost_eq(p.duck_db, 0.0, 0.01, "back after its hold")
+	p.on_hush("radio", 2.5)
+	assert_almost_eq(float(p.ducks["radio"]), 2.5, 0.01, "held as long as the call")
+	p.on_hush("brake", 3.0)
+	assert_gte(p.director.quiet_until, p.director.now + 3.0 - 0.01, "the brake: nothing new while it sounds")
 
 
 # --- the field input -----------------------------------------------------------------------

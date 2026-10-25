@@ -118,6 +118,15 @@ func duck(kind: String) -> void:
 		ducks[kind] = float(DUCKS[kind][2])
 
 
+## The field sound's own call when a rule sound plays: the brake stops the music and nothing new
+## starts while it lasts; the rest duck by their row and hold at least `seconds`.
+func on_hush(kind: String, seconds: float) -> void:
+	if kind == "brake":
+		director.hush(seconds)
+	elif DUCKS.has(kind):
+		ducks[kind] = maxf(float(DUCKS[kind][2]), seconds)
+
+
 ## The lowest level the held ducks ask for, dB (0 with none).
 static func duck_target(holding: Dictionary) -> float:
 	var v := 0.0
