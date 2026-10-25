@@ -17,7 +17,7 @@ const Workshop = preload("res://game/train/train_workshop.gd")
 const TV = preload("res://tests/train/train_vectors.gd")
 const PATH: String = "res://tests/fixtures/train/lawtech_vectors.json"
 ## What a variant law's enactment, amendment, vote and repeal touch. S1's council
-## log (councilLog, 정치 흐름 P5) is not on S2's council yet, so the whole state is
+## log (councilLog, S3 연결 ports it) is not on S2's council yet, so the whole state is
 ## not compared.
 const VARIANT_KEYS: Array[String] = ["passed", "repealedAt", "boughtBy", "onceTaken", "comms", "coal", "food",
 	"med", "trust", "tension", "fear", "journal", "ledger", "cards", "guidedLeft"]
