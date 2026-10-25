@@ -1,9 +1,10 @@
 extends RefCounted
 ## The train's stores under the S1 domestic branch's own key (DomState in
-## s1/src/game/domestic/state.ts): what the field brings home lands here while
-## the domestic rules are not ported yet (decision 426, PR 1). A dom that holds
-## stores only carries no rule state, so the S1a rules still read the game as
-## S1a (train_state.gd is_s1a) and nothing a domestic rule would give opens.
+## s1/src/game/domestic/state.ts): what the field brings home lands here
+## (decision 426, PR 1), and the workshop and research (PR 3, PR 6) keep their
+## state beside it. The rest of S1's domestic branch is not ported, so a dom of
+## this subset still reads as S1a (train_state.gd is_s1a) and no other
+## domestic rule opens.
 ##
 ## S1's names where S1 has the store (scrap, wood, parts, cores, frags by
 ## field); the receipt's own names for the ones only the field fills so far
@@ -236,6 +237,29 @@ static func rules_on(g: Dictionary) -> bool:
 static func ensure(g: Dictionary) -> void:
 	if g.get("dom") == null:
 		g["dom"] = empty()
+
+
+## A stop receipt's fragments and cores into the stores (S1 stop_receipt.ts
+## applyStopResult: a fragment for each field entry, the cores by count). The
+## slice calls it once a stop is back (_after_return). Refused (false, nothing
+## changed) when the extras are not that shape.
+static func take_extras(g: Dictionary, extras: Variant) -> bool:
+	if not extras is Dictionary:
+		return false
+	var found: Variant = extras.get("fragments", [])
+	var cores: Variant = extras.get("coreCount", 0)
+	if not found is Array or not _amount(cores) or float(cores) != floorf(float(cores)):
+		return false
+	for f: Variant in found:
+		if not FIELDS.has(f):
+			return false
+	ensure(g)
+	var d: Dictionary = g["dom"]
+	for f: String in found:
+		d["frags"][f] = float(d["frags"].get(f, 0)) + 1.0
+	if float(cores) > 0.0:
+		d["cores"] = float(d.get("cores", 0)) + float(cores)
+	return true
 
 
 static func _amount(v: Variant) -> bool:
