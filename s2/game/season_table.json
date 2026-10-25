@@ -1,7 +1,9 @@
 {
   "version": 1,
-  "note": "계절표 하나(코디네이터 10-25 요청, 결정 423과 서막 (나)). S1 climate.ts, S2 열차(train_context·train_life), S2 필드·이동 그림(fx/atmosphere.gd)이 이 파일을 읽는다. 정본은 s1/src/game/season_table.json이고 s2/game/season_table.json은 그 복사본이다(s1/tools/season_table_sync.ts가 쓰고 S1 시험이 둘이 같은지 본다). 숫자는 모두 가안이다. temp는 그 구간 한낮의 바깥 기온(°C, 표시와 그림 온도), stage는 S1 기후 단계(stages의 번호: 난방 석탄 곱과 온기 단계), season은 계절 상태 이름(seasons_regions.md 2.2), night_freeze는 밤 결빙, snow는 쌓인 눈, blizzard는 눈보라가 올 수 있는가다. night_freeze·snow·blizzard와 seasons의 weather는 아직 아무 규칙도 읽지 않는다(후속에서 얼음 사건 조건과 날씨 뽑기로 쓴다).",
+  "note": "계절표 하나(코디네이터 10-25 요청, 결정 423과 서막 (나)). S1 climate.ts, S2 열차(train_context·train_life), S2 필드·이동 그림(fx/atmosphere.gd)이 이 파일을 읽는다. 정본은 s1/src/game/season_table.json이고 s2/game/season_table.json은 그 복사본이다(s1/tools/season_table_sync.ts가 쓰고 S1 시험이 둘이 같은지 본다). 숫자는 모두 가안이다. temp는 그 구간 한낮의 바깥 기온(°C, 표시와 그림 온도), stage는 S1 기후 단계(stages의 번호: 난방 석탄 곱과 온기 단계), season은 계절 상태 이름(seasons_regions.md 2.2), night_freeze는 밤 결빙, snow는 쌓인 눈, blizzard는 눈보라가 올 수 있는가다. night_freeze·snow·blizzard와 seasons의 weather를 누가 읽는지는 falls_note에 있다(사건의 눈·얼음 조건은 아직 읽지 않는다).",
   "first_leg_segments": 24,
+  "falls_note": "내리는 것은 기온으로(결정 423): 내리는 날씨(눈·진눈깨비)를 뽑으면 그 구간 한낮 기온이 rain_above보다 높으면 비(S1은 sleet로 두고 글만 비), snow_below 이하면 눈, 그 사이는 진눈깨비. S2 그림(fx/atmosphere.gd RAIN_ABOVE·SNOW_BELOW)도 같은 값이다. 기온을 켠 S1 판에서는 정차 날씨를 seasons의 weather 비율로 뽑고(눈보라는 빼고 재난으로만 온다), 눈보라 재난은 그 재난이 닥칠 구간의 blizzard가 true일 때만, 창밖·조짐 글은 snow(쌓인 눈)와 night_freeze(밤 결빙)를 따라 바뀐다. S2는 슬라이스 정차가 같은 씨앗·구간 열쇠로 같은 날씨를 뽑고(s2/game/season_table.gd pick_weather), 필드·정차 연출의 규칙 기온이 그 구간 temp다(s2/game/sim/outside_temp.gd, 코디네이터 10-25 판단, 예전엔 −14 고정).",
+  "falls": { "rain_above": 1.5, "snow_below": -2 },
   "stages": [
     { "id": "late_autumn", "name": "늦가을", "temp": 4, "mult": 0.8, "wet": true },
     { "id": "first_cold", "name": "첫 추위", "temp": -3, "mult": 0.9, "wet": false },

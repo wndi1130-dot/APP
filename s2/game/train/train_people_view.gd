@@ -1,11 +1,11 @@
 extends Node3D
-## How the train's people look (user request 2026-10-24): the field's baked body in place of
-## the capsule and ball, with the train's own motions (train_clips.gd, folder
-## n5-crew_seamstress_t). It only reads the bodies the train scene moves (where
-## each is, which way it faces, its pose, its gesture, the life activity it is
-## at) and the car's numbers, and decides nothing. Four multimeshes, one a
-## coat, carry every drawn body of the train. Without the folder, or with the
-## field's switch off, nothing is drawn here and the capsules stay.
+## How the train's people look (user request 2026-10-24): baked bodies in place of
+## the capsule and ball, with the train's own motions (train_clips.gd, folders
+## <body>_t). It only reads the bodies the train scene moves (where each is,
+## which way it faces, its pose, its gesture, the life activity it is at) and
+## the car's numbers, and decides nothing. One multimesh a body carries every
+## person of the train who wears it. Without the folders, or with the field's
+## switch off, nothing is drawn here and the capsules stay.
 ##
 ## Every person is someone of their own (user 2026-10-24: each person's state
 ## and doing differ). Their number gives them traits that stay: how soon the
@@ -34,9 +34,37 @@ const Rules = preload("res://game/train/train_rules.gd")
 
 const SETTING: String = "visuals/baked_people_enabled"   # the field's switch (person_visual.gd)
 const MAX_PEOPLE: int = 240
-## Four worn coats over the one body's picture (tint / 0.5): faded neutral, brown,
-## grey-blue and dark, so a bench of people is not one colour. No uniform among them.
-const COATS: Array = [Vector3(0.44, 0.43, 0.41), Vector3(0.6, 0.46, 0.34), Vector3(0.34, 0.4, 0.5), Vector3(0.3, 0.3, 0.31)]
+const PEOPLE_DIR: String = "res://models/people/"
+## Each person has a body of their own (user 2026-10-25: every person a different
+## body), every one baked with the same train motions (tools/bake_train_cli.gd,
+## folders <body>_t). The car and the person's work pick it first; the rest wear
+## ordinary clothes, and two neighbours do not share one. No uniform among them:
+## the guards wear plain coats.
+## Eight bodies at most on the train screen at once (the body bake's PC
+## estimate until the phone is measured: about 2.5MB of GPU each), and the
+## light ones (1,200 to 1,420 points): the twice-as-heavy bodies stay out.
+const ROLE_BODIES: Dictionary = {
+	"cook": ["n5-crew_cook_t"],
+	"stoker": ["n5-crew_stoker_t"],
+	"carer": ["n5-crew_medic_t"],
+	"guard": ["n5-crew_guard_t"],
+}
+const GENERAL_BODIES: Array = [
+	"n10-body_sheepskin-m_t", "n3-body_parka_t", "n10-body_apron-f_t", "n5-crew_guard-f_t",
+]
+## How many in one car wear their work's body: the life plan makes every able
+## person in the medical car a carer and every adult in the dining car a cook,
+## so the first two do and the rest wear their own clothes (no car of twins).
+const ROLE_A_CAR: int = 2
+const NEUTRAL_TINT := Vector3(0.5, 0.5, 0.5)   # the body's own picture as it is (tint / 0.5)
+## Two in one place doing the same at the same moment read as a loop: the one
+## beside (NEIGHBOUR m along the car, same posture) is not copied, talk aside.
+const NEIGHBOUR: float = 1.3
+const TOGETHER: Array = ["t_sit_talk", "t_talk"]
+## A guard on the guard car's bench sits with a gun across the knees, looking it over.
+const LAP_GUN := "res://models/weapons/shotgun.glb"
+const LAP_GUNS: int = 2
+const LAP_AT := Vector3(0.0, 0.56, 0.12)   # metres from the feet: on the knees
 const SIT_FORWARD: float = 0.3           # metres: the baked seat is this far behind the feet
 const BED_HEIGHT: float = 0.47           # one lying on a bench or a bed lies on its top
 const STOVE_NEAR: float = 1.6            # metres: one cold this close to the stove holds its hands out to it
@@ -63,13 +91,12 @@ const POSTURE: Dictionary = {
 }
 
 var scene                                 # train_scene.gd
-var baked: Dictionary = {}
+var bodies: Dictionary = {}               # folder -> {draw, clip_index, table, mix_in, count}
 var draws: Array = []
-var clip_index: Dictionary = {}
-var table: Array = []                     # the folder's frames, for easing a change of clip
-var mix_in: Dictionary = {}
 var drawn: Dictionary = {}                # body -> clip name last drawn, for the tests and the shots
-var people: Dictionary = {}               # body -> {shown, want, want_since, pose, bridge_until, after, mix}
+var worn: Dictionary = {}                 # body -> the folder it wears
+var people: Dictionary = {}               # body -> {shown, want, want_since, pose, bridge_until, after, mix, wears}
+var guns: MultiMeshInstance3D
 
 
 static func enabled() -> bool:
@@ -80,19 +107,27 @@ func setup(train_scene) -> void:
 	scene = train_scene
 	name = "PeopleView"
 	process_priority = 100               # after the scene has moved and posed everyone
-	baked = DeadBody.with_albedo(BodyBake.load_baked(TrainClips.FOLDER), TrainClips.FOLDER)
-	if baked.is_empty():
-		return
-	var clips: Array = baked["clips"]
-	for n in clips.size():
-		clip_index[String(clips[n]["name"])] = n
-		mix_in[n] = MIX_TIME
 	var mixes: bool = DeadBody.can_mix()
-	if mixes:
-		table = DeadBody.table_of(baked)
-	var tables := VatBaker.shader_tables(baked)
-	for coat in COATS:
-		var one := MultiMeshInstance3D.new()
+	var folders: Array = GENERAL_BODIES.duplicate()
+	for role in ROLE_BODIES:
+		folders.append_array(ROLE_BODIES[role])
+	for folder in folders:
+		var dir: String = PEOPLE_DIR + String(folder)
+		if not ResourceLoader.exists(dir.path_join("clips.json")):
+			continue
+		var baked: Dictionary = DeadBody.with_albedo(BodyBake.load_baked(dir), dir)
+		if baked.is_empty():
+			continue
+		var one := {"clip_index": {}, "table": [], "mix_in": {}, "count": 0}
+		var clips: Array = baked["clips"]
+		for n in clips.size():
+			one["clip_index"][String(clips[n]["name"])] = n
+			one["mix_in"][n] = MIX_TIME
+		if mixes:
+			one["table"] = DeadBody.table_of(baked)
+		var tables := VatBaker.shader_tables(baked)
+		var draw := MultiMeshInstance3D.new()
+		draw.name = String(folder)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
@@ -100,18 +135,21 @@ func setup(train_scene) -> void:
 		mm.instance_count = MAX_PEOPLE
 		mm.visible_instance_count = 0
 		mm.custom_aabb = AABB(Vector3(-20, -3, -5), Vector3(400, 10, 10))
-		one.multimesh = mm
+		draw.multimesh = mm
 		var mat := ShaderMaterial.new()
 		mat.shader = preload("res://game/actors/dead_vat.gdshader")
 		mat.set_shader_parameter("vat", baked["texture"])
 		for key in tables:
 			mat.set_shader_parameter(key, tables[key])
-		mat.set_shader_parameter("tint", coat)
+		mat.set_shader_parameter("tint", NEUTRAL_TINT)
 		mat.set_shader_parameter("mixes", mixes)
-		one.material_override = mat
-		one.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(one)
-		draws.append(one)
+		draw.material_override = mat
+		draw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(draw)
+		draws.append(draw)
+		one["draw"] = draw
+		bodies[String(folder)] = one
+	guns = _lap_guns()
 
 
 func is_worn() -> bool:
@@ -122,14 +160,20 @@ func _process(_delta: float) -> void:
 	if draws.is_empty() or scene == null:
 		return
 	var now: float = float(scene.clock)
-	var counts: Array = []
-	counts.resize(COATS.size())
-	counts.fill(0)
+	for folder in bodies:
+		bodies[folder]["count"] = 0
 	drawn.clear()
+	worn.clear()
 	var seen: Dictionary = {}
+	var gun_count := 0
 	for c in scene.cars:
 		var state := car_state(c)
-		for b in c["bodies"]:
+		var prev := ""
+		var at_work := 0
+		var last_want := ""
+		var last_x := -1000.0
+		var last_pose := ""
+		for b in in_seat_order(c["bodies"]):
 			if not is_instance_valid(b):
 				continue
 			_hide_boxes(b)
@@ -137,26 +181,122 @@ func _process(_delta: float) -> void:
 				continue
 			seen[b] = true
 			var key: int = absi(b.get_instance_id())
-			var coat: int = key % COATS.size()
-			if counts[coat] >= MAX_PEOPLE:
-				continue
 			var life: Dictionary = scene.life.actors.get(b.get_instance_id(), {})
-			var want := want_for(b, state, String(life.get("activity", "")), key, now, life.get("traits", {}))
+			var traits: Dictionary = life.get("traits", {})
+			var x: float = b.global_position.x
+			var beside: bool = String(b.pose) == last_pose and x - last_x < NEIGHBOUR
+			var want := want_for(b, state, String(life.get("activity", "")), key, now, traits, last_want if beside else "")
+			last_want = want
+			last_x = x
+			last_pose = String(b.pose)
 			var clip := shown_for(b, want, now)
-			drawn[b] = clip
-			var mm: MultiMesh = (draws[coat] as MultiMeshInstance3D).multimesh
-			mm.set_instance_transform(counts[coat], place_of(b, clip, state))
-			var shade: float = lerpf(0.72, 1.0, _h(key, 11)) * (0.9 if state["freezing"] else 1.0)
-			var plain := Color(_h(key, 12), float(clip_index.get(clip, 0)), 0.0, shade)
 			var rec: Dictionary = people[b]
-			mm.set_instance_custom_data(counts[coat], DeadBody.mix_from(rec["mix"], plain, now, table, mix_in))
-			counts[coat] += 1
-	for i in draws.size():
-		(draws[i] as MultiMeshInstance3D).multimesh.visible_instance_count = counts[i]
+			if not rec.has("wears") or not bodies.has(String(rec["wears"])):
+				rec["wears"] = _available(body_for(String(state["layout"]), String(traits.get("role", "")), at_work, key, prev), key)
+			var folder: String = rec["wears"]
+			if not GENERAL_BODIES.has(folder):
+				at_work += 1
+			prev = folder
+			var one: Dictionary = bodies[folder]
+			if int(one["count"]) >= MAX_PEOPLE:
+				continue
+			drawn[b] = clip
+			worn[b] = folder
+			var i: int = one["count"]
+			var mm: MultiMesh = (one["draw"] as MultiMeshInstance3D).multimesh
+			mm.set_instance_transform(i, place_of(b, clip, state))
+			var shade: float = lerpf(0.78, 1.0, _h(key, 11)) * (0.9 if state["freezing"] else 1.0)
+			var plain := Color(_h(key, 12), float(one["clip_index"].get(clip, 0)), 0.0, shade)
+			mm.set_instance_custom_data(i, DeadBody.mix_from(rec["mix"], plain, now, one["table"], one["mix_in"]))
+			one["count"] = i + 1
+			if guns != null and gun_count < LAP_GUNS and String(state["layout"]) == "guard" and clip == "t_sit" and String(b.pose) == "sit":
+				var at: Transform3D = place_of(b, clip, state)
+				guns.multimesh.set_instance_transform(gun_count, at * Transform3D(Basis(Vector3.UP, PI * 0.5), LAP_AT))
+				gun_count += 1
+	if guns != null:
+		guns.multimesh.visible_instance_count = gun_count
+	for folder in bodies:
+		(bodies[folder]["draw"] as MultiMeshInstance3D).multimesh.visible_instance_count = int(bodies[folder]["count"])
 	# Forget the people who are gone (a car reseated, a layout rebuilt).
 	for b in people.keys():
 		if not seen.has(b):
 			people.erase(b)
+
+
+## Which body a person wears: the car and their work first (the cook, the
+## stoker, the carers, the guard car's guards), ROLE_A_CAR of them a car
+## (`at_work` already wear one), otherwise ordinary clothes by their number,
+## never the same as the one beside them.
+static func body_for(layout: String, role: String, at_work: int, key: int, prev: String) -> String:
+	var kind := ""
+	match role:
+		"cook":
+			kind = "cook"
+		"carer":
+			kind = "carer"
+		"worker":
+			kind = "stoker" if layout in ["technical", "loco", "tender"] else ""
+	if kind == "" and layout == "guard":
+		kind = "guard"
+	if kind == "" and layout == "loco":
+		kind = "stoker"
+	if at_work >= ROLE_A_CAR:
+		kind = ""
+	if kind == "guard":
+		return String(ROLE_BODIES["guard"][at_work % ROLE_BODIES["guard"].size()])
+	if kind != "":
+		var list: Array = ROLE_BODIES[kind]
+		return String(list[key % list.size()])
+	var n: int = GENERAL_BODIES.size()
+	var pick: int = key % n
+	if String(GENERAL_BODIES[pick]) == prev:
+		pick = (pick + 1) % n
+	return String(GENERAL_BODIES[pick])
+
+
+## A car's people from one end to the other, so the one beside is the one before.
+static func in_seat_order(list: Array) -> Array:
+	var out: Array = list.filter(func(b): return is_instance_valid(b))
+	out.sort_custom(func(a, b): return a.global_position.x < b.global_position.x)
+	return out
+
+
+## One multimesh of the gun that lies across a guard's knees (one draw for all).
+func _lap_guns() -> MultiMeshInstance3D:
+	if not ResourceLoader.exists(LAP_GUN):
+		return null
+	var packed = load(LAP_GUN)
+	if not packed is PackedScene:
+		return null
+	var root: Node = (packed as PackedScene).instantiate()
+	var found: Array = root.find_children("*", "MeshInstance3D", true, false)
+	var mesh: Mesh = (found[0] as MeshInstance3D).mesh if not found.is_empty() else null
+	root.free()
+	if mesh == null:
+		return null
+	var draw := MultiMeshInstance3D.new()
+	draw.name = "LapGuns"
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = LAP_GUNS
+	mm.visible_instance_count = 0
+	draw.multimesh = mm
+	draw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(draw)
+	return draw
+
+
+## The body if it was baked here, else an ordinary one that was.
+func _available(folder: String, key: int) -> String:
+	if bodies.has(folder):
+		return folder
+	var n: int = GENERAL_BODIES.size()
+	for k in n:
+		var other: String = GENERAL_BODIES[(key + k) % n]
+		if bodies.has(other):
+			return other
+	return String(bodies.keys()[0])
 
 
 ## What a car is in, for picking motions: its numbers and kind, read only.
@@ -173,6 +313,7 @@ func car_state(c: Dictionary) -> Dictionary:
 		"tension": float(train.get("tension", 0)), "fear": float(train.get("fear", 0)),
 		"resent": Look.resents(comm) if not comm.is_empty() else false,
 		"night": String(view.get("daytime", "day")) == "night", "stove_x": _stove_x(c),
+		"meal": bool(scene.life.contexts.get(c["id"], {}).get("meal", false)),
 	}
 
 
@@ -204,7 +345,7 @@ static func traits_of(key: int) -> Dictionary:
 ## decide first (walking, a job, a gesture of a bad value, the council), and
 ## otherwise a pick of their own, weighted by the car's state and their traits,
 ## changed when their timetable comes round. `t` is the scene's clock.
-static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.0, life: Dictionary = {}) -> String:
+static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.0, life: Dictionary = {}, avoid: String = "") -> String:
 	var pose: String = String(b.pose)
 	if pose == "walk":
 		return "t_carry" if activity == "carry" or String(b.errand.get("id", "")) in ["carry", "coal", "food"] else "t_walk"
@@ -215,8 +356,20 @@ static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.
 	# What the life plan already knows of them: the sick and hurt, the children.
 	me["ill"] = bool(life.get("sick", false)) or bool(life.get("injured", false))
 	me["child"] = bool(life.get("child", false))
+	me["role"] = String(life.get("role", ""))
 	var round_no: int = int(floor((t + float(me["offset"])) / float(me["hold"])))
-	return _pick(weights_for(pose, b, s, me), key, round_no)
+	var weights := weights_for(pose, b, s, me)
+	# Not the same as the one beside at the same moment (talk is done together):
+	# that motion is left out of this person's odds, unless it is all there is.
+	if avoid != "" and not TOGETHER.has(avoid) and float(weights.get(avoid, 0.0)) > 0.0:
+		var others := weights.duplicate()
+		others[avoid] = 0.0
+		var rest := 0.0
+		for k in others:
+			rest += maxf(float(others[k]), 0.0)
+		if rest > 0.0:
+			weights = others
+	return _pick(weights, key, round_no)
 
 
 ## What the scene or the life activity has already decided for this body.
@@ -293,32 +446,41 @@ static func weights_for(pose: String, b, s: Dictionary, me: Dictionary) -> Dicti
 	var sleepy: bool = float(me["tired"]) < 0.12 + (0.5 if s["night"] else 0.0)
 	var hothead: bool = float(me["temper"]) < tense_n * 0.7
 	var talker: bool = float(me["social"]) > 0.55 and not afraid
+	# At ease: warm, fed, no quarrel in the air. Then the car rests, talks and eats
+	# as a car of its kind does (user 2026-10-25: a peaceful train shown at random).
+	var calm: bool = cold_n < 0.4 and hunger_n < 0.4 and tense_n < 0.3 and not afraid
+	var layout: String = String(s["layout"])
+	var role: String = String(me.get("role", ""))
+	var guard: bool = layout == "guard" and not me.get("child", false)
 	match pose:
 		"sit":
 			return {
-				"t_sit": 2.0,
-				"t_sit_talk": (1.6 if talker else 0.25) + (2.0 if hothead else 0.0),
+				"t_sit": 2.0 + (1.5 if guard else 0.0),
+				"t_sit_talk": (1.6 if talker else 0.25) + (2.0 if hothead else 0.0) + (1.0 if calm else 0.0) + (1.2 if layout == "dining" else 0.0),
 				"t_sit_huddle": (4.0 if chilled else 0.0) + (1.5 if sick else 0.0) + (2.0 if afraid else 0.0),
-				"t_sit_doze": 3.0 if sleepy else 0.2,
-				"t_eat": 3.5 if hungry else 0.0,
+				"t_sit_doze": (3.0 if sleepy else 0.2) * (0.3 if guard else 1.0) + (0.8 if calm and not guard else 0.0),
+				"t_eat": (3.5 if hungry else 0.0) + ((3.0 if s.get("meal", false) else 0.8) if layout == "dining" else 0.0),
 			}
 		"floor":
 			var near: bool = absf(b.global_position.x - float(s["stove_x"])) < STOVE_NEAR
+			var at_work: bool = (role == "carer" and layout == "medical") or (role == "worker" and layout == "technical")
 			return {
 				"t_floor_sit": 2.0,
 				"t_crouch": 2.5 if chilled else 0.3,
 				"t_warm_hands": 5.0 if chilled and near else 0.0,
-				"t_lie": (2.0 if sleepy else 0.0) + (2.0 if sick else 0.0) + 1.5 * crowd_n,
+				"t_lie": (2.0 if sleepy else 0.0) + (2.0 if sick else 0.0) + 1.5 * crowd_n + (0.8 if calm else 0.0),
+				"t_kneel_work": 3.0 if at_work else 0.0,
 			}
-	var guard: bool = String(s["layout"]) == "guard" and not me.get("child", false)
 	return {
 		"t_stand": 2.0,
 		"t_fold": 1.0 + (1.5 if chilled else 0.0) + (2.0 if guard and not s["night"] else 0.0),
 		"t_shiver": 4.0 if chilled else 0.0,
 		"t_cough": 5.0 if sick else 0.0,
-		"t_talk": 2.5 if hothead else (0.8 if talker else 0.0),
+		"t_talk": (2.5 if hothead else (0.8 if talker else 0.0)) + (0.8 if calm and talker else 0.0),
 		"t_no": 1.5 if hothead else 0.0,
 		"t_lantern": (5.0 if s["night"] else 1.5) if guard else 0.0,
+		"t_stir": 3.0 if role == "cook" and layout == "dining" else 0.0,
+		"t_shovel": 1.5 if role == "worker" and layout in ["technical", "tender", "loco"] else 0.0,
 	}
 
 

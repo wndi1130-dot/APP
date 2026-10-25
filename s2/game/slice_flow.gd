@@ -46,6 +46,8 @@ const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
+const TrainWorkshop = preload("res://game/train/train_workshop.gd")
+const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
 const StopCinema = preload("res://game/stop_cinema.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
@@ -141,10 +143,10 @@ var home: Control = null           # the train's own screen on the train steps: 
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
+var shop: Control = null           # the workshop's pane where the car's stands (workshop_pane.gd)
+var shop_was: String = ""          # the car picked before the workshop came up
+var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
-## What the slice's outside is when nothing says otherwise: the first stop's
-## weather, the same the field plays it in (field_game.gd's default).
-const SLICE_WEATHER: Array = ["fog", "snow"]
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
 ## look down (stop_cinema.gd), the field made ready under it (stop_loader.gd),
 ## and that field, built and standing still, till the field step shows it.
@@ -162,7 +164,10 @@ func _ready() -> void:
 	var s: Array = StopPickCard.sample()
 	train_g = s[0]
 	train_t = s[1]
-	# The train's stores, so what the field brings home has somewhere to go.
+	# The train's stores, so what the field brings home has somewhere to go:
+	# a new run's starting scrap, wood and parts (S1's), or what a state carries.
+	if train_g.get("dom") == null:
+		train_g["dom"] = TrainDom.start()
 	TrainDom.ensure(train_g)
 	marks = Control.new()
 	marks.name = "Marks"
@@ -230,6 +235,7 @@ func go(i: int) -> void:
 	home = null
 	pane = null
 	bar = null
+	shop = null
 	sel = ""
 	var row: Array = STEPS[i]
 	# Over the train, not over the field; the slice's state, but the session's
@@ -261,8 +267,17 @@ func go(i: int) -> void:
 		else:
 			_start_field()
 		return
+	# Leaving a stop the workshop does a stretch's work, once (train_workshop.gd).
+	var shop_events: Array = []
+	if id == "travel" and int(row[2]) != shop_seg:
+		shop_seg = int(row[2])
+		shop_events = TrainWorkshop.run(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(row[2]))
+		# What it made, for the people on the train to see (the train scene's events).
+		if is_instance_valid(train) and train.has_method("post_event"):
+			for ev: Dictionary in shop_events:
+				train.call("post_event", ev)
 	if id == "receipt":
 		_show_receipt(String(row[4]))
 		return
@@ -654,14 +669,14 @@ func _show_train(phase: String, seg: int) -> void:
 
 
 ## The look outside the train: opts "look" ({hour, kinds, cold, region}, for
-## check shots), else the train's view (daytime, hour, cold, region), the first
-## stop's weather and the cold the act table gives this stretch of the prologue.
+## check shots), else the train's view (daytime, hour, cold, region), this
+## stretch's weather from the season table and the cold it gives the stretch.
 func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 	var view: Dictionary = rules.get("view", {})
 	var want: Dictionary = opts.get("look", {})
 	var night := String(view.get("daytime", "day")) == "night"
 	var hour := float(want.get("hour", view.get("hour", 21.0 if night else 11.5)))
-	var kinds: Array = want.get("kinds", view.get("weather_kinds", SLICE_WEATHER))
+	var kinds: Array = want.get("kinds", view.get("weather_kinds", stop_weather(seg)["look"]))
 	var cold := float(want.get("cold", view.get("cold", Atmosphere.cold_for("prologue", prologue_progress(seg)))))
 	var side := float(want.get("side", view.get("side", Atmosphere.side_for("prologue"))))
 	var region_name := String(want.get("region", view.get("region", Atmosphere.DEFAULT_REGION)))
@@ -675,6 +690,13 @@ func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 ## season table's row for that stretch, the same for the train and the stop.
 static func prologue_progress(seg: int) -> float:
 	return SeasonTable.seg_progress(seg)
+
+
+## A stretch's weather from the season table (코디네이터 10-25): its season's
+## weights and what falls by its temperature, drawn on the slice's seed with S1's
+## key, so the train outside, the stop scene and the field all wear the same.
+func stop_weather(seg: int) -> Dictionary:
+	return SeasonTable.pick_weather("prologue", prologue_progress(seg), str(int(opts.get("seed", 1))))
 
 
 ## The train's own floating names and value lines are for its test bench;
@@ -820,6 +842,8 @@ func _show_home(word: String) -> void:
 	b.g = train_g
 	b.main_word = word
 	b.main_pressed.connect(next)
+	b.open_rooms = ["gear"]
+	b.room_pressed.connect(_open_room)
 	h.add_child(b)
 	layer.add_child(h)
 	home = h
@@ -832,6 +856,10 @@ func _show_home(word: String) -> void:
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
 ## it into the middle of what the pane leaves clear.
 func _select(id: String) -> void:
+	# A car picked over the workshop puts the workshop away.
+	if id != "" and is_instance_valid(shop):
+		shop.queue_free()
+		shop = null
 	var was: String = sel
 	sel = ""
 	var def: Dictionary = {}
@@ -853,6 +881,34 @@ func _select(id: String) -> void:
 	if sel != "":
 		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
+
+
+## A room on the bottom bar with a screen of its own (home_bar.gd open_rooms).
+func _open_room(icon: String) -> void:
+	if icon == "gear":
+		_open_workshop()
+
+
+## The workshop's pane where the car's stands; folding it brings the car back.
+func _open_workshop() -> void:
+	if is_instance_valid(shop) or not is_instance_valid(home):
+		return
+	shop_was = sel if sel != "" else FIRST_CAR
+	_select("")
+	var w = WorkshopPane.new()
+	w.name = "WorkshopPane"
+	w.folded.connect(_close_workshop)
+	home.add_child(w)
+	w.pin(TrainGauges.BAND_H)
+	w.show_state(train_g)
+	shop = w
+
+
+func _close_workshop() -> void:
+	if is_instance_valid(shop):
+		shop.queue_free()
+	shop = null
+	_select(shop_was)
 
 
 ## A lever on the pane: set it in the slice's state and draw again what reads it.
@@ -941,6 +997,10 @@ func _field_opts() -> Dictionary:
 	var want: Dictionary = opts.get("look", {})
 	if want.has("cold"):
 		o["cold"] = float(want["cold"])
+	# The stop's weather from the season table: the rules' kinds and the picture's.
+	var w := stop_weather(int(STEPS[step][2]))
+	o["weather"] = w["rules"]
+	o["look"] = w["look"]
 	if want.has("kinds"):
 		o["look"] = want["kinds"]
 	if want.has("hour"):

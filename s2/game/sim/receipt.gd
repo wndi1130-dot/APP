@@ -1,7 +1,7 @@
 extends RefCounted
 ## Stop receipt builder. Legacy schema plus S1 stop v3 and field v4 contracts.
 
-const STOCK_KEYS := ["coal", "food", "medicine", "luxury", "symbol", "info", "scrap", "wood", "ammo_pistol", "ammo_shell", "ammo_craft"]
+const STOCK_KEYS := ["coal", "food", "medicine", "luxury", "symbol", "info", "scrap", "wood", "cloth", "parts", "ammo_pistol", "ammo_shell", "ammo_craft"]
 const PEOPLE_LISTS := ["sent", "injured", "bitten", "dead", "missing", "leftBehind", "rescued"]
 ## The six towns, and the five stops on the way (mine, lodge, sawmill, lake,
 ## summit: each its own kind, decision 423).

@@ -86,9 +86,10 @@ const TRUNK := Color(0.3, 0.26, 0.22)
 const CROWN := Color(0.62, 0.66, 0.66)
 ## A fir's own dark green-grey, where no snow lies on it.
 const FIR := Color(0.25, 0.28, 0.26)
-## The field's air (field_game.gd AMBIENT_C, the Weather it makes from it) and
-## its lying snow's white (world_vis.gdshader FX_SNOW).
-const AMBIENT_C: float = -14.0
+## The field's air (game/sim/outside_temp.gd, the season table's stretch
+## temperature, and the Weather the field makes from it) and its lying snow's
+## white (world_vis.gdshader FX_SNOW).
+const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const FX_SNOW := Color(0.70, 0.71, 0.72)
 ## Camera places on the train (its own frame: TRAIN at the origin, the line
 ## along x through z 1.5, the roofs about 3.4 up): beside it as the train's
@@ -538,7 +539,7 @@ static func stop_look(o: Dictionary) -> Dictionary:
 	var scheme := String(o.get("cold_scheme", ""))
 	var cold := clampf(float(o.get("cold", Atmosphere.cold_for(act, float(o.get("act_progress", 0.0)), scheme))), 0.0, 1.0)
 	var side := clampf(float(o.get("side", Atmosphere.side_for(act, scheme))), 0.0, 1.0)
-	var weather = Weather.new(o.get("weather", WEATHER), AMBIENT_C, Vector2(1, 0.2), 0.4)
+	var weather = Weather.new(o.get("weather", WEATHER), OutsideTemp.of(o, cold, side), Vector2(1, 0.2), 0.4)
 	var kinds: Array = o.get("look", weather.kinds)
 	var hour := float(o.get("look_hour", -1.0))
 	if hour <= -1.5:
@@ -546,9 +547,12 @@ static func stop_look(o: Dictionary) -> Dictionary:
 		hour = [sun.x + 0.25, sun.y - 0.4, sun.y + 1.7][clampi(int(round(-hour)) - 2, 0, 2)]
 	elif hour < 0.0:
 		hour = HOUR
-	var l: Dictionary = Atmosphere.look(hour, kinds, region, cold, {"wind": weather.wind, "side": side})
+	# The season by the season table, as the field names it (a cold given
+	# outright names it by that cold).
+	var season := Atmosphere.season_for(cold, side) if o.has("cold") else Atmosphere.season_at(act, float(o.get("act_progress", 0.0)), scheme)
+	var l: Dictionary = Atmosphere.look(hour, kinds, region, cold, {"wind": weather.wind, "side": side, "season": season})
 	var open_ground := bool(Atmosphere.region(region)["open"])
-	var lying = SnowCover.new(Atmosphere.season_for(cold, side), open_ground, 0.0, Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side))
+	var lying = SnowCover.new(season, open_ground, 0.0, Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side))
 	return {"look": l, "params": Atmosphere.params(l, weather.wind_dir, lying.cover())}
 
 
