@@ -26,6 +26,7 @@ extends Node3D
 
 const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const SimNoise = preload("res://game/sim/noise.gd")
 
 const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
@@ -147,7 +148,7 @@ const GUST_PITCH_APART: float = 0.06  # and its starting pitch more than this fr
 const HOWL_LAYERS: Array = [1, 3]
 const HOWL_LEN: Array = [3.0, 6.5]
 const GUSTS: int = 3                  # players for gusts (a howl lays up to three)
-const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell"]
+const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell", "train_guard"]
 
 var game
 var lib: Dictionary = {}               # group -> Array[AudioStream]
@@ -165,6 +166,15 @@ var last_tag_group: String = ""        # what the last make_sound played (tests)
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
+
+## The music steps aside for a sound that matters (the music frame's ducking
+## connects here; nothing in the rules reads it). kind: "brake" (the train
+## coming to a stand), "radio" (a call), "near" (a loud sound of the field
+## near enough to hear); seconds: how long.
+signal hush(kind: String, seconds: float)
+const HUSH_BRAKE_S: float = 3.0
+const HUSH_RADIO_S: float = 2.5
+const HUSH_LOUD_S: float = 1.5
 var last_bus: String = ""              # the bus the last one-shot went through (tests)
 var said: Array = []                   # what the dead said, in order: [id, what, file] (tests)
 var voices: Dictionary = {}            # zombie id -> {"kind", "pitch"}
@@ -752,6 +762,8 @@ const RADIO_LOUD: Dictionary = {"hiss": 0.35, "call": 0.6, "urgent": 1.0}
 func radio(kind: String) -> void:
 	var group := "radio_hiss" if kind == "hiss" else "radio"
 	played.append(group)
+	if kind != "hiss":
+		hush.emit("radio", HUSH_RADIO_S)
 	_one_shot(group, game.player.position, float(RADIO_LOUD.get(kind, 0.6)), 1.0)
 
 
@@ -788,11 +800,15 @@ func lid_scrape(at: Vector3) -> void:
 
 
 ## The brakes as the train comes to its stand on open line (user decision
-## 141's file). Part of the opening scene: nothing in the field hears it.
+## 141's file), the ear's half of the opening scene. The rules' half is the
+## loud sound at the engine end the dead do hear (decision 416, field
+## train_guard brake, noise.gd SOURCES "train_brake"): made once as the clock
+## starts, so skipping the scene changes nothing; it plays no sound of its own.
 ## `lead`: how long before the train stands this is called; the file starts
 ## so its own standing (BRAKE_STAND_AT) falls on the train's.
 func train_brake(lead: float = BRAKE_STAND_AT) -> void:
 	played.append("train_brake")
+	hush.emit("brake", HUSH_BRAKE_S)
 	_one_shot("train_brake", game.player.position, BRAKE_LOUD, 1.0, null, "SFX", 0.0, maxf(0.0, BRAKE_STAND_AT - lead))
 
 
@@ -839,6 +855,8 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 	var d: float = at.distance_to(game.player.position)
 	var loud := clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var lin := loud * clampf(1.0 - d / 60.0, 0.0, 1.0) if group != "whistle" else 1.0
+	if level >= SimNoise.Level.LOUD and lin > 0.01:
+		hush.emit("near", HUSH_LOUD_S)
 	_one_shot(group, at, lin, 0.7 if tag == "gun" and group == "impact" else randf_range(0.9, 1.1), null, "SFX" if group == "whistle" else _bus_at(at))
 
 

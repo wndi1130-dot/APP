@@ -68,7 +68,7 @@ func test_all_read_functions_against_s1() -> void:
 			"work": Workshop.work_power(g), "usable": Research.usable(g, {}, id), "mult": Research.mult(g, {}, id),
 			"prereqs": Research.prereqs(id), "visible": Research.visible_techs(g), "skills": skills}
 		_same(want, got, _label(row))
-		_same(["w1"], Research.visible(g), _label(row) + " S2 visible")
+		_same(Research.VISIBLE, Research.visible(g), _label(row) + " S2 visible")
 		assert_true(Dom.is_store(g["dom"]), _label(row) + " projected state")
 	assert_eq(_bad, [] as Array[String])
 
