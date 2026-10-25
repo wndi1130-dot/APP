@@ -1,0 +1,89 @@
+{
+  "id": "ev_h18_hot_axle",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "flag",
+      "id": "h14_creek_waded",
+      "value": true
+    }
+  ],
+  "speaker": "engine",
+  "body": "물을 건넌 뒤로 차축 상자 하나가 손을 못 댈 만큼 뜨겁다. 기관사가 말한다. \"흙탕물이 기름에 섞였습니다.\"",
+  "choices": [
+    {
+      "id": "c_regrease",
+      "label": "서서 기름을 갈아 낀다",
+      "say": "세워라. 상자를 열고 기름을 새로 넣는다.",
+      "why": "선 동안 화실은 불을 먹고, 기름 대신 쓸 것이 창고에서 나간다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -3
+        },
+        {
+          "type": "luxury",
+          "amount": -2
+        },
+        {
+          "type": "flag",
+          "id": "h14_creek_waded",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_engine_cools",
+      "label": "기관실이 달리며 식힌다",
+      "say": "기관실이 맡아라. 물통으로 식히며 간다.",
+      "why": "달리는 차축 옆에 매달려 물을 붓는 일이다. 기관사가 지난번 물을 건널 때 한 말을 꺼낸다.",
+      "effects": [
+        {
+          "type": "community.exposure",
+          "target": "engine",
+          "amount": 6
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -5
+        },
+        {
+          "type": "flag",
+          "id": "h14_creek_waded",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_crawl_on",
+      "label": "늦춰서 그대로 간다",
+      "say": "속도를 반으로 줄여라. 다음 정차까지 버틴다.",
+      "why": "느리게 가는 만큼 화실이 불을 더 먹는다. 상자는 정차할 때까지 뜨겁다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -2
+        },
+        {
+          "type": "tension",
+          "amount": 2
+        },
+        {
+          "type": "flag",
+          "id": "h14_creek_waded",
+          "value": false
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
