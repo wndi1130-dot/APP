@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { advance, chooseCard, cloneGame, createGame, createS1cGame, restoreCheck, TECH_IDS } from '../../src/game';
+import { advance, chooseCard, cloneGame, createGame, createS1cGame, restoreCheck, seasonAct, stageAt, TECH_IDS, useSeasonAct } from '../../src/game';
 import type { Game } from '../../src/game';
 import { attachCar } from '../../src/game/domestic/cars';
 import { CARS } from '../../src/ui/common';
 import type { Ui } from '../../src/ui/common';
 import {
-  domesticActive, domesticOp, h6Input, h6Render, h6Summary, h6Visibility, handleDomestic, newGame, stayLocked, trainCars,
+  domesticActive, domesticOp, h6Input, h6Render, h6Summary, h6Visibility, handleDomestic, newGame, seasonNote, stayLocked, trainCars,
 } from '../../src/ui/domestic';
 import type { DomCtx, H6Clock } from '../../src/ui/domestic';
-import { applyStep } from '../../src/ui/repro';
+import { applyStep, reviveSave } from '../../src/ui/repro';
 
 // S1c 내정 화면의 DOM 없이 볼 수 있는 규칙: 편성 순서, 칸 순서 바꾸기 입력, H6 재기(s1c_domestic 11장, 12장).
 
@@ -111,6 +111,32 @@ describe('홈 편성', () => {
     expect(box.g.eventPack).toBe(true);
     expect([box.g.seed, !!box.g.dom, !!box.g.dark]).toEqual(['ev-1', true, true]);
     expect(box.toasts).toEqual(['사건 끈 새 판: 시드 ev-1.', '사건 켠 새 판: 시드 ev-1.']);
+  });
+
+  it("메뉴의 '시험 판: 막 곡선 새 판'은 서막 → 1막 → 2막 → 3막 → 서막으로 곡선만 바꾸고, 저장한 판에 곡선이 남는다", () => {
+    try {
+      const { box, ctx } = ctxFor(newGame('act-1', true, true), ui());
+      expect(seasonNote()).toBe('');
+      for (const act of ['act1', 'act2', 'act3', 'prologue']) {
+        handleDomestic('dom-season', { act }, ctx);
+        expect(seasonAct()).toBe(act);
+        expect(box.g.seasonAct).toBe(act === 'prologue' ? undefined : act);
+        expect([box.g.seed, !!box.g.dom, !!box.g.dark, !!box.g.eventPack]).toEqual(['act-1', true, true, true]);
+      }
+      expect(box.toasts[0]).toBe('1막 곡선 시험 판: 시드 act-1. 기온만 그 막을 따른다.');
+      expect(box.toasts[3]).toBe('서막 곡선으로 새 판: 시드 act-1.');
+      // 2막 곡선 판을 저장했다가 서막 곡선인 창에서 열면, 판에 남은 곡선으로 되돌릴 수 있다(app.ts 시작).
+      handleDomestic('dom-season', { act: 'act2' }, ctx);
+      expect(seasonNote()).toBe(' · 2막 곡선(시험)');
+      const raw = JSON.parse(JSON.stringify(box.g));
+      useSeasonAct('prologue');
+      const back = reviveSave(raw)!;
+      expect(back.seasonAct).toBe('act2');
+      useSeasonAct(back.seasonAct!);
+      expect(stageAt(24)).toBe(3);
+    } finally {
+      useSeasonAct('prologue');
+    }
   });
 
   it("끝 화면의 '내정 기록(JSON) 복사'는 복사가 막힌 창에서 펼치는 칸으로 안내하고 판은 그대로 둔다", async () => {

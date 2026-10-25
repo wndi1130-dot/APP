@@ -14,7 +14,7 @@ import { luxBreakdown } from './lux_tags';
 import type { View } from './common';
 import { grudgeText, standingsBar } from './council';
 import { nameBtn, shortText } from './names';
-import { deathMenu, domesticEnd, domesticMenu, domesticPanel, eventsMenu, prologueDone } from './domestic'; // S1c 내정 훅
+import { deathMenu, domesticEnd, domesticMenu, domesticPanel, eventsMenu, prologueDone, seasonMenu, seasonNote } from './domestic'; // S1c 내정 훅
 import { darkEndSection, darkMenu, darkSupportWhy } from './dark'; // S1b 어두운 길 훅
 import { reproError, reproText } from './repro';
 import { soundLabel, soundOn } from '../audio/settings';
@@ -94,7 +94,7 @@ function menuPanel(view: View): HTMLElement {
   return h('div', { class: 'side side--menu', role: 'dialog' },
     h('div', { class: 'drop__head' }, icon('menu'), h('b', null, '메뉴'),
       h('button', { class: 'x', 'data-action': 'panel', 'data-panel': '', 'aria-label': '닫기' }, '×')),
-    h('p', { class: 'sub' }, `시드 ${g.seed} · 저장은 자동(한 칸)`),
+    h('p', { class: 'sub' }, `시드 ${g.seed} · 저장은 자동(한 칸)${seasonNote()}`),
     h('div', { class: 'menu' },
       h('button', { class: 'btn', 'data-action': 'fullscreen' }, document.fullscreenElement ? '전체 화면 끄기' : '전체 화면'),
       h('button', { class: 'btn btn--ghost', 'data-action': 'restart' }, '같은 시드로 처음부터'),
@@ -104,6 +104,7 @@ function menuPanel(view: View): HTMLElement {
       domesticMenu(view),
       eventsMenu(view),
       deathMenu(view),
+      seasonMenu(),
       // 진동(5b.6): 나쁜 쪽 선 넘음과 죽음에만 40ms. 동작 감소 설정과 따로 끈다. 아이폰 브라우저는 원래 안 떤다.
       h('button', { class: cx('btn btn--ghost', vibrateOn() && 'is-on'), 'data-action': 'toggle-vibrate', 'aria-pressed': vibrateOn() ? 'true' : 'false' }, vibrateOn() ? '진동 켬' : '진동 끔'),
       // 소리(sound_music 8b.1): 단추·서류·레버를 만질 때 나는 손끝 소리. 누를 때마다 끔 → 작게 → 보통 → 크게로 돈다. 꺼도 놓치는 정보는 없다.

@@ -24,6 +24,8 @@ const KEY_W: float = 84.0
 const WORN_MAX: float = 132.0
 ## The key of the place chosen at the right.
 const CHOSEN := Color(0.95, 0.65, 0.24, 0.24)
+## A box this near its limit shows full (the lightest things weigh 0.05).
+const FULL_GAP: float = 0.05
 
 
 ## The places near `p`, as the right side's keys, the train's hold first.
@@ -124,8 +126,10 @@ static func _bag_side(hud, p, at: Dictionary) -> Control:
 		list.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
 		var loadable: Array = game.actions.loadable(p)
+		var box: Dictionary = game.data["containers"][at["id"]] if at["kind"] == "box" else {}
 		for id: String in bag_order(game, p, hud.inv_sort):
-			list.add_child(_bag_row(hud, p, id, at["kind"] != "train" or loadable.has(id)))
+			var can_move: bool = loadable.has(id) if at["kind"] == "train" else (box.is_empty() or Carry.box_room(box, id) > 0)
+			list.add_child(_bag_row(hud, p, id, can_move))
 		side.add_child(GlassPane.scroll(list, LIST_MAX))
 	side.add_child(GlassPane.mixed("권총탄 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
 	return side
@@ -133,7 +137,8 @@ static func _bag_side(hud, p, at: Dictionary) -> Control:
 
 ## One kind in the bag: a press moves it to the place chosen at the right
 ## (as many as move_count); its own job (eat, throw, switch off) on a key
-## beside it. Aboard, what stays on the body cannot be pressed.
+## beside it. Aboard, what stays on the body cannot be pressed; nor what a
+## box has no room for.
 static func _bag_row(hud, p, id: String, can_move: bool) -> Control:
 	var game = hud.game
 	var h := GlassPane.row()
@@ -153,6 +158,25 @@ static func _bag_row(hud, p, id: String, can_move: bool) -> Control:
 		job.custom_minimum_size.x = UiFonts.px(KEY_W)
 		h.add_child(job)
 	return h
+
+
+## A box's load against its limit (Carry.box_limit): the words and a thin bar,
+## red once it takes nothing more.
+static func _box_load(hud, c: Dictionary) -> Control:
+	var v := VBoxContainer.new()
+	v.name = "BoxLoad"
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_theme_constant_override("separation", GlassPane.px(4.0))
+	var held: float = Carry.box_load(c)
+	var cap: float = Carry.box_limit(c)
+	v.add_child(GlassPane.mixed("담긴 무게 %.1f / %.0f" % [held, cap]))
+	var bar: ProgressBar = hud._bar(GlassPane.RED_L if held >= cap - FULL_GAP else GlassPane.AMBER)
+	bar.custom_minimum_size = Vector2(0, GlassPane.px(4.0))
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.max_value = cap
+	bar.value = minf(held, cap)
+	v.add_child(bar)
+	return v
 
 
 ## The right: a key to each place near (the chosen one lit), what is there,
@@ -179,6 +203,7 @@ static func _near_side(hud, p, at: Dictionary, all: Array) -> Control:
 	var all_key: LampKey = null
 	match String(at["kind"]):
 		"box":
+			side.add_child(_box_load(hud, game.data["containers"][at["id"]]))
 			var items: Array = game.data["containers"][at["id"]]["items"]
 			for i in items.size():
 				var item: String = items[i]

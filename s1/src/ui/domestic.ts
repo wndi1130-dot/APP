@@ -3,7 +3,7 @@ import {
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, cancelOpen, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
-  workBonus, workPower, workshopChief, workshopState, zoneAt, enableArrivals, enableClimate, enableDark, enableDeathWeight, enableDisasters, enableEventPack, josa, PLACES, crisisNow, hangWhy, SYM,
+  workBonus, workPower, workshopChief, workshopState, zoneAt, enableArrivals, enableClimate, enableDark, enableDeathWeight, enableDisasters, enableEventPack, seasonAct, useSeasonAct, josa, PLACES, crisisNow, hangWhy, SYM,
   gearOwned, gearTaken, lureBlock, techShown, techVariants,
 } from '../game';
 import { copyText } from './clip';
@@ -14,7 +14,7 @@ function workText(g: Game): string {
   const bonus = workBonus(g);
   return bonus > 0 ? `작업 ${total.toFixed(1)}/구간 (공방장 ${(total - bonus).toFixed(1)}, 수업 +${bonus})` : `작업 ${total.toFixed(1)}/구간`;
 }
-import type { Comm, DomPerson, Field, Game, GearKey, ModKind, PotMode, Task, TechId, Upkeep, Variant } from '../game';
+import type { Comm, DomPerson, Field, Game, GearKey, ModKind, PotMode, SeasonAct, Task, TechId, Upkeep, Variant } from '../game';
 import { P, isSessionSeg, potMult, potView } from '../game';
 import { cx, h, raw, s } from './dom';
 import { icon } from './icons';
@@ -48,6 +48,9 @@ export function urlWantsS1c(): boolean {
  * 바깥 기온·결빙(game/climate.ts, 결정 370·384)과 사람 들어오는 사건(game/arrivals.ts, 결정 352·369·389)도 어느 새 판이든 켠다(결정 407 E2). */
 export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c, death = true): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
+  // 시험 판 곡선(메뉴 '시험 판' 단추)은 다른 켬/끔처럼 새 판에 그대로 이어진다. 서막으로 되돌릴 때까지.
+  const act = seasonAct();
+  if (act !== 'prologue') g.seasonAct = act;
   if (s1b) enableDark(g);
   enableDisasters(g);
   enableClimate(g);
@@ -1118,6 +1121,19 @@ export function deathMenu(view: View): HTMLElement {
   return h('button', { class: 'btn btn--ghost', 'data-action': 'dom-death', 'data-on': on ? '0' : '1' }, on ? '죽음의 무게 끈 새 판(비교용)' : '죽음의 무게 켠 새 판');
 }
 
+const ACT_NEXT: Record<SeasonAct, SeasonAct> = { prologue: 'act1', act1: 'act2', act2: 'act3', act3: 'prologue' };
+const ACT_NAME: Record<SeasonAct, string> = { prologue: '서막', act1: '1막', act2: '2막', act3: '3막' };
+/** 메뉴의 단추: 계절 곡선만 다음 막으로 바꾼 새 판(시험용, 결정 447 카드 3). 서막 → 1막 → 2막 → 3막 → 서막으로 돈다. 다른 켬/끔은 그대로 둔다. */
+export function seasonMenu(): HTMLElement {
+  const next = ACT_NEXT[seasonAct()];
+  return h('button', { class: cx('btn btn--ghost', seasonAct() !== 'prologue' && 'is-on'), 'data-action': 'dom-season', 'data-act': next },
+    next === 'prologue' ? '서막 곡선으로 새 판(시험 끝)' : `시험 판: ${ACT_NAME[next]} 곡선 새 판`);
+}
+/** 메뉴 윗줄에 붙는 지금 곡선. 서막이면 없다 */
+export function seasonNote(): string {
+  return seasonAct() === 'prologue' ? '' : ` · ${ACT_NAME[seasonAct()]} 곡선(시험)`;
+}
+
 // ---- H6 재기(12장) ----
 
 // 입력 없이 읽거나 고민하는 시간도 센다. 앱이 뒤로 가거나 화면이 꺼진 시간만 뺀다(12.1, 옛 30초 무입력 컷은 없앰, K01).
@@ -1291,6 +1307,13 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
   if (action === 'dom-events') {
     ctx.reset(newGame(g0.seed, !!g0.dom, !!g0.dark, true, data.on === '1', !!g0.deathWeight));
     ctx.toast(data.on === '1' ? `사건 켠 새 판: 시드 ${g0.seed}.` : `사건 끈 새 판: 시드 ${g0.seed}.`);
+    return true;
+  }
+  if (action === 'dom-season') {
+    const act = (Object.keys(ACT_NAME) as SeasonAct[]).find(a => a === data.act) ?? 'prologue';
+    useSeasonAct(act);
+    ctx.reset(newGame(g0.seed, !!g0.dom, !!g0.dark, true, !!g0.eventPack, !!g0.deathWeight));
+    ctx.toast(act === 'prologue' ? `서막 곡선으로 새 판: 시드 ${g0.seed}.` : `${ACT_NAME[act]} 곡선 시험 판: 시드 ${g0.seed}. 기온만 그 막을 따른다.`);
     return true;
   }
   if (action === 'dom-death') {
