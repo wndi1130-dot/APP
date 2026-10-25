@@ -25,7 +25,7 @@
     { "id": "captain", "kind": "captain", "name": "열차장실", "plate": "일지" },
     { "id": "front", "kind": "comm", "comm": "front", "name": "앞칸", "plate": "앞칸" },
     { "id": "workshop", "kind": "technical", "name": "공방칸", "plate": "공방" },
-    { "id": "engine", "kind": "engine", "comm": "engine", "name": "기관실·탄수차", "plate": "기관" },
+    { "id": "engine", "kind": "comm", "comm": "engine", "interior": "engine_room", "name": "기관실", "plate": "기관" },
     { "id": "loco", "kind": "loco", "name": "기관차", "plate": "" }
   ],
   "errands": [

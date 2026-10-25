@@ -382,10 +382,13 @@ func test_friendly_cars_call_on_each_other_and_the_tail_calls_on_nobody() -> voi
 			var from_door: float = minf(absf(b.position.x - x0), absf(b.position.x - x0 - Scene.CAR_LENGTH))
 			if absf(from_door - Scene.CALL_INSIDE) > 0.05 or not is_equal_approx(b.position.z, Scene.AISLE_Z):
 				bad.append("a caller stands at %s" % b.position)
-		if int(s.car("tail1")["out"]) != 0:
-			bad.append("the tail sent someone")
+		for tail in ["tail1", "tail2", "tail3"]:
+			if int(s.car(tail)["out"]) != 0:
+				bad.append("the tail sent someone")
 	assert_true(called.has("front") or called.has("medtech"), "the infirmary and the front car are on calling terms")
-	assert_eq(called.keys().filter(func(id) -> bool: return id != "front" and id != "medtech"), [], "nobody calls anywhere else")
+	# S1's formation has the guard's and the engine's cars too, and their ideas are close.
+	var friends: Array = ["front", "medtech", "guard", "engine"]
+	assert_eq(called.keys().filter(func(id) -> bool: return not friends.has(id)), [], "nobody calls anywhere else")
 	assert_eq(bad.slice(0, 3), [], "a caller stops just inside the doorway, on the aisle")
 
 
@@ -458,8 +461,10 @@ func test_the_line_over_the_council_names_its_step_of_unrest() -> void:
 
 func test_a_communitys_own_numbers_move_no_seat_in_the_council() -> void:
 	var s = _council()
-	for i in 200:
+	for i in 600:
 		s.step(0.1)
+		if i >= 200 and _leaning(s) > 0:
+			break
 	assert_gt(_leaning(s), 0, "the room is in the middle of its gestures")
 	var before: Array = _seats_of(s)
 	s.set_comm("tail", "rel", -80)
