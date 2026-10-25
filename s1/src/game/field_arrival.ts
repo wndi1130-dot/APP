@@ -11,7 +11,9 @@ import type { FieldSnapshot } from './field_receipt';
 export type ArrivalKind = 'arrive' | 'people' | 'stock' | 'warm' | 'symbol' | 'promise' | 'council';
 export interface ArrivalSection { k: ArrivalKind; title: string; lines: string[] }
 
-const diff = (a: number, b: number) => (b === a ? '그대로' : `${a} → ${b} (${b > a ? '+' : '−'}${Math.abs(b - a)})`);
+// 장부 값은 소수가 섞인다(정산 배분). 화면에는 소수 첫째 자리까지만 적는다(0.05 단위 끝자리가 9.950000000000003으로 보이지 않게).
+const num = (x: number) => String(Math.round(x * 10) / 10);
+const diff = (a: number, b: number) => (b === a ? '그대로' : `${num(a)} → ${num(b)} (${b > a ? '+' : '−'}${num(Math.abs(b - a))})`);
 
 /** 첫 귀환 뒤 다음 정차에 닿았고 아직 정차를 고르지 않았다. 이때 정차 카드 대신 도착 화면을 보인다. */
 export function secondStationReached(g: Game): boolean {

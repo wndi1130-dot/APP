@@ -210,3 +210,41 @@ func test_the_brakes_and_the_radio_hush_the_music() -> void:
 	game.audio.radio("hiss")
 	game.audio.radio("urgent")
 	assert_eq(heard, [["brake", game.audio.HUSH_BRAKE_S], ["radio", game.audio.HUSH_RADIO_S]])
+
+
+## The guards cover the doors all through the stop (the user's field test,
+## 14): one of the dead that comes at someone getting on is theirs too.
+func test_the_guards_cover_someone_getting_on() -> void:
+	var game = _game({"place": "houses_01", "arrival_horde": false})
+	game.zombies.list.clear()
+	game.pending_spawn.clear()
+	var p = game.squad[1]
+	var door: Vector3 = FieldGrid.center(game.data["spawns"]["train_door"][0])
+	p.position = door
+	p.command = "retreat"
+	var z: Dictionary = game.zombies.spawn("dead", door + Vector3(1.6, 0, 0))
+	z["state"] = "chase"
+	z["victim"] = p
+	var t := 0.0
+	while t < TrainGuard.KILL_S + 1.5:
+		game._step(0.1)
+		t += 0.1
+	var g = game.train_guard
+	assert_eq(g.at_doors, 1, "taken at the door")
+	assert_eq(z["state"], "dead", "and put down by the guards")
+	assert_true(g.put_down.has(int(z["id"])))
+	game.finish("departed")
+	assert_eq(game.receipt.to_dict()["placeState"]["trainGuard"]["atDoors"], 1)
+	assert_eq(game.receipt.problems().size(), 0, str(game.receipt.problems()))
+
+
+func test_nobody_getting_on_nobody_covered() -> void:
+	var game = _game({"place": "houses_01", "arrival_horde": false})
+	game.zombies.list.clear()
+	game.pending_spawn.clear()
+	var door: Vector3 = FieldGrid.center(game.data["spawns"]["train_door"][0])
+	var z: Dictionary = game.zombies.spawn("dead", door + Vector3(1.6, 0, 0))
+	for i in range(20):
+		game._step(0.1)
+	assert_false(z.get("at_door", false))
+	assert_eq(game.train_guard.at_doors, 0)

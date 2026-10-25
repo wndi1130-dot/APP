@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "batch": "gap",
+  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf",
+  "expected_kinds": [
+    "gap_wire",
+    "gap_gate",
+    "gap_planks",
+    "small_shelf"
+  ],
+  "blender": "4.5.10 LTS",
+  "palette": {
+    "wood": [
+      0.24,
+      0.17,
+      0.11,
+      1.0
+    ],
+    "worn_wood": [
+      0.38,
+      0.29,
+      0.19,
+      1.0
+    ],
+    "iron": [
+      0.12,
+      0.15,
+      0.17,
+      1.0
+    ],
+    "worn_metal": [
+      0.28,
+      0.32,
+      0.33,
+      1.0
+    ],
+    "cloth": [
+      0.43,
+      0.41,
+      0.31,
+      1.0
+    ],
+    "enamel": [
+      0.68,
+      0.7,
+      0.66,
+      1.0
+    ],
+    "snow": [
+      0.82,
+      0.87,
+      0.89,
+      1.0
+    ],
+    "bark": [
+      0.18,
+      0.14,
+      0.11,
+      1.0
+    ],
+    "rust": [
+      0.32,
+      0.18,
+      0.11,
+      1.0
+    ],
+    "glass": [
+      0.22,
+      0.35,
+      0.39,
+      1.0
+    ],
+    "rubber": [
+      0.055,
+      0.065,
+      0.07,
+      1.0
+    ],
+    "stone": [
+      0.37,
+      0.39,
+      0.38,
+      1.0
+    ]
+  },
+  "colour_encoding": "linear RGBA vertex Col, alpha 1",
+  "axis": "+Y up, +Z front",
+  "origin": "footprint_center_floor",
+  "placement": "rect 가운데 바닥, +Y 위·+Z 앞(지도 안쪽), facing은 +Y축 -90도씩. 발자국 96% 안쪽.",
+  "assets": {
+    "gap_wire": {
+      "path": "res://models/props_field/gap_wire.glb",
+      "status": "ready",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.6,
+      "solid": "none",
+      "lod0_tris": 316,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.6,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.6,
+        1.92
+      ],
+      "bytes": 24412,
+      "sha256": "b3f6e4d688cee49e727f7f913ea5f6a15c263e8fb71a2258b23f5fbe86bfdac1",
+      "colours": [
+        "bark",
+        "rust",
+        "worn_metal"
+      ],
+      "judgment": "none: 마름모 철망 울타리의 한쪽이 기둥째 벌어져 젖혀진 틈, 가시 없음, 밟힌 흙길",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "gap_gate": {
+      "path": "res://models/props_field/gap_gate.glb",
+      "status": "ready",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.3,
+      "solid": "none",
+      "lod0_tris": 300,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.3,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.3,
+        1.92
+      ],
+      "bytes": 22012,
+      "sha256": "6b1b22d154e1480455e73cdec464bc03301cdf9e32779e9a0aa04b00760a614f",
+      "colours": [
+        "bark",
+        "iron",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none: 판자 울타리 사이 나무 쪽문이 바깥으로 열려 있음, 자물쇠·빗장 없음, 밟힌 흙길",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "gap_planks": {
+      "path": "res://models/props_field/gap_planks.glb",
+      "status": "ready",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.2,
+      "solid": "none",
+      "lod0_tris": 276,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.2,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.2,
+        1.92
+      ],
+      "bytes": 20464,
+      "sha256": "ede1e4d966d51ce0f9fcfd92686c8d549bae0bcd92c598b1a5dabed7149bcbfe",
+      "colours": [
+        "bark",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "none: 가운데 기둥이 부러져 판자 울타리가 무너지고 판자가 바닥에 흩어진 틈",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "small_shelf": {
+      "path": "res://models/props_field/small_shelf.glb",
+      "status": "ready",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 1.4,
+      "solid": "low",
+      "lod0_tris": 340,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.2016
+        ],
+        [
+          0.48,
+          1.4,
+          0.2016
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        1.4,
+        0.4032
+      ],
+      "bytes": 24824,
+      "sha256": "630bad8097e739bd9cd77f39057cbdc4779bbbf9821c6195a34a7ae13e224edc",
+      "colours": [
+        "cloth",
+        "enamel",
+        "glass",
+        "stone",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    }
+  },
+  "skipped": {},
+  "failures": []
+}

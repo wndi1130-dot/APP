@@ -14,7 +14,8 @@ const FATIGUE_LIGHT := 0.5
 const FATIGUE_HEAVY := 0.8
 const WALK_RECOVERY_MULT := 0.25
 const CROUCH_EFFORT_MULT := 1.5
-const LOAD_BREATH_MULT := [1.0, 1.0, 1.5, 2.8]
+## Past half the load a run (or a climb) costs half as much breath again (card G 가).
+const LOAD_BREATH_MULT := [1.0, 1.5, 1.5, 2.8]
 
 
 static func fatigue_mult(ctx: Dictionary) -> float:
