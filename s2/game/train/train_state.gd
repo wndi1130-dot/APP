@@ -40,8 +40,12 @@ static func situation(g: Dictionary, t: Dictionary, c: String) -> Array[float]:
 	var base: Array = s["base"]
 	var room := 0.0
 	var hands_warm: float = 0.0
+	var hands_expose: float = 0.0
 	if g.get("hands") is Dictionary and t.has("HANDS"):
 		hands_warm = float(t["HANDS"]["stoveWarm"]) * float(g["hands"]["short"].get("stove", 0))
+		# A car carrying the work of the hands that are gone tires (hands.ts handsNow); old saves have none.
+		if g["hands"].get("expose") is Dictionary:
+			hands_expose = float(g["hands"]["expose"].get(c, 0))
 	var sp: Variant = g.get("space")
 	if sp is Dictionary and sp.get("giver") != null and float(sp.get("step", 0)) > 0:
 		var side := -1.0 if c == "tail" else (1.0 if c == sp["giver"] else 0.0)
@@ -50,7 +54,7 @@ static func situation(g: Dictionary, t: Dictionary, c: String) -> Array[float]:
 		clampv(float(base[0]) + float(p["leverStep"]) * (float(s["heat"]) - 2.0) - hands_warm, 0.0, 100.0),
 		clampv(float(base[1]) + float(p["leverStep"]) * (float(s["ration"]) - 2.0), 0.0, 100.0),
 		clampv(float(base[2]) + room, 0.0, 100.0),
-		clampv(float(base[3]), 0.0, 100.0),
+		clampv(float(base[3]) + hands_expose, 0.0, 100.0),
 	]
 
 

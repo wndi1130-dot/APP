@@ -127,6 +127,8 @@ static func calm_night(g: Dictionary, t: Dictionary) -> void:
 static func hands_settle(g: Dictionary, t: Dictionary, notes: Array) -> void:
 	var h: Dictionary = t["HANDS"]
 	var offered: float = 0
+	var gave: Dictionary = {}
+	var wills: Dictionary = {}
 	for c: String in t["COMMS"]:
 		var count: int = 0
 		var adults: int = 0
@@ -140,7 +142,9 @@ static func hands_settle(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		var lever: float = minf(float(s["heat"]), float(s["ration"]))
 		if lever <= 0: will *= float(h["leverCut"])
 		elif lever <= 1: will *= float(h["leverLow"])
-		offered += maxf(0, float(s["pop"]) - float(s["away"])) * share * will
+		gave[c] = maxf(0, float(s["pop"]) - float(s["away"])) * share * will
+		wills[c] = will
+		offered += float(gave[c])
 	var have: float = maxf(0, offered - float(g["injured"]))
 	var left: float = have
 	var short: Dictionary = {}
@@ -151,7 +155,16 @@ static func hands_settle(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		left -= got
 		short[j] = 1 - got / float(h["need"][j])
 		if float(short[j]) > 0.01: empty.append(names[j])
-	g["hands"] = {"have": have, "short": short}
+	# hands.ts handsNow: past loadFree of the need over the hands given, the cars still giving carry the rest
+	# and their exposure rises (by their will), read by situation.
+	var need: float = 0
+	for j: String in h["order"]:
+		need += float(h["need"][j])
+	var over: float = maxf(0, minf(1, need / maxf(1, have)) - float(h["loadFree"]))
+	var expose: Dictionary = {}
+	for c: String in t["COMMS"]:
+		expose[c] = float(h["loadExpose"]) * over * float(wills[c]) if over > 0 and float(gave[c]) > 0 else 0
+	g["hands"] = {"have": have, "short": short, "expose": expose}
 	if not empty.is_empty(): notes.append("일손이 모자라 %s이(가) 빈다." % "·".join(empty))
 
 static func lookback(g: Dictionary) -> void:
