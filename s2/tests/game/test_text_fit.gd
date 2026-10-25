@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const TextFit = preload("res://game/ui/text_fit.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _pill(text: String, seen: Vector2, font_size: int = 22, round_key: bool = false) -> Button:
@@ -13,6 +14,8 @@ func _pill(text: String, seen: Vector2, font_size: int = 22, round_key: bool = f
 	b.text = text
 	b.custom_minimum_size = seen + Vector2(20, 20)
 	b.size = b.custom_minimum_size
+	# The HUD's own word face: the engine's default has no Korean on a bare machine.
+	b.add_theme_font_override("font", UiFonts.face(UiFonts.WORD, 400))
 	b.add_theme_font_size_override("font_size", font_size)
 	var st: Dictionary = HudSkin.key_styles(seen, round_key)
 	b.add_theme_stylebox_override("normal", st["normal"])
