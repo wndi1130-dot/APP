@@ -397,21 +397,19 @@ static func _mix_num(w: Dictionary, key: String) -> float:
 ## How much of the clear hour's light a closed sky keeps by day before what
 ## falls and the wind take theirs: a little gloom of our own (the reference
 ## keeps it all).
-const CLOUD_KEEP := 0.85
+const CLOUD_KEEP := 0.7
 
 
 static func _lin_lum(c: Color) -> float:
-	var l := c.srgb_to_linear()
-	return 0.2126 * l.r + 0.7152 * l.g + 0.0722 * l.b
+	return c.srgb_to_linear().get_luminance()
 
 
 ## Colour c brought up to the brightness of `like` (linear luminance) when it
 ## fell below it, as far as it stays in range; never darkened.
 static func _keep_lum(c: Color, like: Color) -> Color:
 	var lc := c.srgb_to_linear()
-	var y := 0.2126 * lc.r + 0.7152 * lc.g + 0.0722 * lc.b
-	var ll := like.srgb_to_linear()
-	var want := 0.2126 * ll.r + 0.7152 * ll.g + 0.0722 * ll.b
+	var y := lc.get_luminance()
+	var want := _lin_lum(like)
 	if y <= 0.0001 or y >= want:
 		return c
 	var k := want / y

@@ -99,7 +99,16 @@ func test_a_blizzard_is_dimmer_than_a_clear_day() -> void:
 	var clear = _stop(["clear"])
 	var storm = _stop(["blizzard"])
 	assert_lt(storm.sun.light_energy, clear.sun.light_energy)
-	assert_lt(storm.environment.ambient_light_energy, clear.environment.ambient_light_energy)
+	# Under a closed sky the fill carries the day (Atmosphere CLOUD_KEEP), but
+	# all told less light reaches the ground than under a clear sky.
+	assert_lt(_ground_light(storm), _ground_light(clear))
+
+
+func _ground_light(game: Node) -> float:
+	var s := sin(deg_to_rad(-float(game.sun.rotation_degrees.x)))
+	var sun_l: float = Color(game.sun.light_color).srgb_to_linear().get_luminance()
+	var amb_l: float = Color(game.environment.ambient_light_color).srgb_to_linear().get_luminance()
+	return float(game.sun.light_energy) * s * sun_l + float(game.environment.ambient_light_energy) * amb_l
 
 
 func test_dusk_dims_the_arrival_light_down_to_the_night_band() -> void:

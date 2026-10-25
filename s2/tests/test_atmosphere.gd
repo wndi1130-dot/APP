@@ -267,6 +267,30 @@ func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
 		assert_almost_eq(float(same_lt["shadow"]), 1.0, 0.0001)
 
 
+func test_a_closed_sky_greys_the_day_and_what_falls_dims_it() -> void:
+	# Cloud greys the day and gives back as fill what it takes of the sun; what
+	# falls and the wind dim it (1 − 0.15·fall − 0.2·wind), after our own
+	# CLOUD_KEEP. K1's wind is 0.5.
+	var clear := _face(Atmosphere.look(12.0, ["clear"], "K1", 1.0))
+	var grey := _face(Atmosphere.look(12.0, ["overcast"], "K1", 1.0))
+	var snow := _face(Atmosphere.look(12.0, ["snow"], "K1", 1.0))
+	var storm := _face(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0))
+	assert_almost_eq(grey / clear, Atmosphere.CLOUD_KEEP * (1.0 - 0.2 * 0.5), 0.03, "an overcast keeps most of the day")
+	assert_lt(snow, grey, "falling snow dims it")
+	assert_lt(storm, snow, "a blizzard's wind more")
+	# The veil greys the light without darkening it: never less than the band's.
+	var l := Atmosphere.look(12.0, ["overcast"], "K1", 1.0)
+	var band := Atmosphere.look(12.0, ["clear"], "K1", 1.0)
+	assert_gte(Color(l["ambient_color"]).srgb_to_linear().get_luminance(), Color(band["ambient_color"]).srgb_to_linear().get_luminance() - 0.001)
+	assert_lt(Color(l["ambient_color"]).s, Color(band["ambient_color"]).s, "grey, not tinted")
+
+
+## The light an up-facing face gets (linear).
+func _face(l: Dictionary) -> float:
+	var s := sin(deg_to_rad(clampf(-float(l["sun_pitch"]), 5.0, 90.0)))
+	return float(l["sun_energy"]) * s * Color(l["sun_color"]).srgb_to_linear().get_luminance() + float(l["ambient_energy"]) * Color(l["ambient_color"]).srgb_to_linear().get_luminance()
+
+
 func test_it_looks_colder_as_the_cold_rises() -> void:
 	var warm := Atmosphere.look(9.0, ["clear"], "K1", 0.0)
 	var mid := Atmosphere.look(9.0, ["clear"], "K1", 0.5)
