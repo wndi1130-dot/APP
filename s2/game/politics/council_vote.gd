@@ -4,6 +4,7 @@ extends RefCounted
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const VoteCount = preload("res://game/politics/vote_count.gd")
+const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
 
 const LEDGER_MAX := 64
 const SUPPORTED_LAWS := [
@@ -78,7 +79,7 @@ static func _motion_lean(t: Dictionary, comm: String, agenda: Dictionary) -> Dic
 
 
 static func stance(g: Dictionary, t: Dictionary, comm: String, agenda: Dictionary, with_grudge: bool = true) -> Dictionary:
-	_assert_supported(agenda)
+	# Reading a law's stance is table-driven; action support is checked by cast_vote.
 	var mat := 0.0
 	var ideology := 0.0
 	if not _is_law(agenda):
@@ -221,7 +222,7 @@ static func agenda_need(t: Dictionary, agenda: Dictionary) -> int:
 
 
 static func agenda_title(t: Dictionary, agenda: Dictionary) -> String:
-	_assert_supported(agenda)
+	# A table-driven title is also needed for AI proposals outside executable votes.
 	if not _is_law(agenda):
 		var name: String = String(t["COMM_NAME"].get(agenda.get("subject"), "그 칸"))
 		if agenda["motion"] == "field_symbol":
@@ -356,6 +357,16 @@ static func cast_vote(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var pre := council.get("pre") is Dictionary and council["pre"].get("result") == null
 	if not pre:
 		g.erase("voteShift")
+	if _law_active(g, "guided_voting") and int(g.get("guidedLeft", 0)) > 0 and not pre:
+		for comm: String in t["COMMS"]:
+			_bump_rel(g, comm, -3.0, "vote")
+		g["fear"] = _clamp(float(g["fear"]) + 3.0, 0.0, 100.0)
+		g["guidedLeft"] = int(g["guidedLeft"]) - 1
+	if not pre and not bool(council.get("emergency", false)):
+		for proposal: Dictionary in g.get("proposals", []):
+			if proposal.get("by") != null and not CouncilAgenda.same_agenda(proposal, agenda):
+				_bump_rel(g, str(proposal["by"]), -3.0, "vote")
+		g["proposals"] = []
 	if not pre and bool(council.get("emergency", false)) and bool(result["passed"]):
 		for comm: String in t["COMMS"]:
 			if int(map[comm]["absent"]) > 0 and int(map[comm]["score"]) < 0:

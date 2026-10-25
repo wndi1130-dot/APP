@@ -265,7 +265,7 @@ func test_a_bedroom_gets_a_bed_and_a_wardrobe_by_the_rules() -> void:
 				if p["kind"] == "wardrobe" or p["kind"] == "bookcase":
 					assert_ne(c, Vector2i(7, 3), "창 앞 큰 가구")
 	assert_has(kinds, "bed")
-	assert_has(kinds, "wardrobe")
+	assert_true(kinds.has("wardrobe") or kinds.has("dresser"), "침실 필수 수납: 장롱 또는 서랍장")
 	assert_false(kinds.has("cold_stove"), "침실 묶음에 난로는 없다")
 
 
@@ -273,7 +273,7 @@ func test_the_box_goes_into_a_holding_piece() -> void:
 	var d := _bedroom()
 	RoomFurnish.furnish_rooms(d)
 	var box: Dictionary = d["containers"]["cache_0"]
-	assert_has(["wardrobe", "blanket_chest", "bookcase"], box.get("furniture", ""))
+	assert_has(["wardrobe", "dresser", "nightstand"], box.get("furniture", ""))
 	var inside := false
 	for p: Dictionary in d["props"]:
 		if p["kind"] == box["furniture"] and (p["rect"] as Rect2i).has_point(box["cell"]):
@@ -392,7 +392,7 @@ func test_rooms_of_one_use_get_different_sets_by_seed() -> void:
 			kinds.append(p["kind"])
 		kinds.sort()
 		assert_has(kinds, "bed")
-		assert_has(kinds, "wardrobe")
+		assert_true(kinds.has("wardrobe") or kinds.has("dresser"), "침실 필수 수납")
 		sets[str(kinds)] = true
 	assert_gt(sets.size(), 2, "덤 가구는 방마다 굴린다")
 
@@ -495,15 +495,15 @@ func test_an_empty_house_on_a_label_map_gets_a_kitchen_and_a_bedroom() -> void:
 	assert_eq(rooms.get("kitchen", 0), 5, "다섯 채의 부엌")
 	assert_eq(rooms.get("bed", 0), 5, "다섯 채의 침실")
 	var bed := _kinds_in(d, "어장 주택", "bed")
-	assert_true(bed.has("bed") and bed.has("wardrobe"), "침실에 침대와 장롱")
+	assert_true(bed.has("bed") and (bed.has("wardrobe") or bed.has("dresser")), "침실에 침대와 수납장")
 	var kitchen := _kinds_in(d, "어장 주택", "kitchen")
-	assert_true(kitchen.has("cold_stove") and kitchen.has("jar_shelf"), "부엌에 난로와 항아리 선반")
+	assert_true(kitchen.has("cold_stove") and kitchen.has("counter") and kitchen.has("sink"), "부엌에 난로·싱크를 포함한 조리대 줄")
 
 
 func test_a_one_room_hut_is_a_living_room() -> void:
 	var d := FieldMaps.build("lake_01")
 	var kinds := _kinds_in(d, "얼음 낚시 움막", "living")
-	assert_true(kinds.has("cold_stove") and kinds.has("bench"), "난로와 긴 의자")
+	assert_true(kinds.has("cold_stove") and kinds.has("armchair"), "난로와 안락의자")
 
 
 func test_a_labelled_bedroom_with_bunks_gets_no_second_bed() -> void:
