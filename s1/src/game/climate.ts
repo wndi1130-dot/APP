@@ -2,8 +2,8 @@ import { COMMS } from './data';
 import SEASON from './season_table.json';
 import { hash } from './omens';
 import type { Weather } from './omens';
-import { rowAt, SEASON_ROWS } from './season';
-import type { SeasonRow } from './season';
+import { rowAt, SEASON_ROWS, setSeasonRows } from './season';
+import type { SeasonAct, SeasonRow } from './season';
 import { journal } from './state';
 import type { Game } from './state';
 
@@ -65,6 +65,15 @@ export function enableClimate(g: Game): void {
   g.outside = stageAt(g.seg);
   g.freeze = 0;
   g.climateStats = { drops: 0, freezes: 0 };
+}
+
+/** 시험 판 스위치(결정 447 카드 3): S1 24구간을 그 막의 계절표 곡선으로 돌린다(act1 초겨울→한겨울, act2 한겨울·혹한,
+ * act3 해빙 초입). 'prologue'는 본래 서막 곡선으로 되돌린다. 모든 판이 함께 읽는 표라 판을 만들기 전에 부른다.
+ * 봇(tools/s1c_sim.ts --act)과 시험 판에서만 쓰고, 플레이어의 판은 그대로다. */
+export function useSeasonAct(act: SeasonAct): void {
+  setSeasonRows(act);
+  CL.table = stageTable(ROWS);
+  CL.segTemp = ROWS.map(r => r.temp);
 }
 
 /** 계절표에서 이 구간의 표시 기온(날씨 보정 전) */
