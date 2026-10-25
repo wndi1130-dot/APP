@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
@@ -146,6 +147,7 @@ var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
+var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
 var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
@@ -431,6 +433,11 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
+	map_edge = MapEdge.new()
+	add_child(map_edge)
+	map_edge.setup(view.grid, view.material)
+	map_edge.set_fog(fx_light["fog_color"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -724,6 +731,8 @@ func _update_atmosphere() -> void:
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
+		if map_edge != null:
+			map_edge.set_fog(fx_light["fog_color"])
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
