@@ -18,7 +18,8 @@
     { "id": "medtech", "kind": "comm", "comm": "medtech", "name": "의무칸", "plate": "의무" },
     { "id": "dining", "kind": "dining", "name": "식당칸", "plate": "의회" },
     { "id": "captain", "kind": "captain", "name": "열차장실", "plate": "일지" },
-    { "id": "front", "kind": "comm", "comm": "front", "name": "앞칸", "plate": "앞칸" }
+    { "id": "front", "kind": "comm", "comm": "front", "name": "앞칸", "plate": "앞칸" },
+    { "id": "workshop", "kind": "technical", "name": "공방칸", "plate": "공방" }
   ],
   "errands": [
     { "id": "council", "to": "dining", "phase": "council", "every": 6.0, "stay": 20.0 },
