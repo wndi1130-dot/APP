@@ -135,9 +135,12 @@ static func tools_of(id: String) -> Array:
 	return out
 
 
-## One line for a wound row: "왼팔 찢김 · 피 보통".
+## One line for a wound row: "왼팔 찢김 · 피 보통" ("왼팔 잘린 자리 · 깊은 상처 ·
+## 피 보통" where the limb was cut off).
 static func wound_text(wound: Dictionary) -> String:
 	var words: Array = ["%s %s" % [PART_NAMES.get(wound["part"], wound["part"]), KIND_NAMES.get(wound["kind"], wound["kind"])]]
+	if bool(wound.get("stump", false)):
+		words = ["%s 잘린 자리" % PART_NAMES.get(wound["part"], wound["part"]), KIND_NAMES.get(wound["kind"], wound["kind"])]
 	if wound["kind"] == "fracture":
 		words.append("부목 댐" if wound["splinted"] else "부목 없음")
 	else:
