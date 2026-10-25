@@ -25,6 +25,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
+const FieldTrainGuard = preload("res://game/field_train_guard.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
 const Carry = preload("res://game/sim/carry.gd")
@@ -56,6 +57,7 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 ## 10-25; it was -14 C fixed), the same the stop scene and the pictures read.
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -139,6 +141,7 @@ const MISSIONS: Array[String] = ["", "survey", "depot"]
 var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
+var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
@@ -426,6 +429,7 @@ func _ready() -> void:
 	mission_play = FieldMission.new(self)
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
+	train_guard = FieldTrainGuard.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
 	view = MapView.new()
@@ -489,6 +493,11 @@ func _ready() -> void:
 	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
 	if opts.get("field_resume") is Dictionary:
 		FieldSave.apply(self, opts["field_resume"])
+		train_guard.resumed()
+	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
+		# The train has just stood: its brakes are heard as the clock starts,
+		# the scene of it rolling in or not (decision 416).
+		train_guard.brake()
 	pace.finish()
 	is_built = true
 	built.emit()
@@ -1058,6 +1067,12 @@ func _spawn_people() -> void:
 		lines.rel_of[p.pid] = AllyLines.rel_stage(float(row.get("rel", 0.0)))
 		if row.has("voice"):
 			lines.voice_by[p.pid] = String(row["voice"])
+		# Their own memory of the chief, when the departure sheet carries one (people memory).
+		lines.names_by[p.pid] = String(row.get("name", p.pid))
+		if row.has("stance"):
+			lines.stance_by[p.pid] = String(row["stance"])
+		if row.get("cues") is Array:
+			lines.cues_by[p.pid] = (row["cues"] as Array).duplicate()
 		await BuildPace.rest(pace)
 	player = squad[0]
 	if bool(opts.get("raiders", true)):
@@ -1477,6 +1492,7 @@ func _step(delta: float) -> void:
 	combat.update(delta)
 	_update_hordes(delta)
 	_update_spawns(delta)
+	train_guard.tick()
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
@@ -1836,12 +1852,15 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
-	if level >= SimNoise.Level.LOUD:
+	# The train's own sounds (noise.gd SOURCES) call the dead to the train and
+	# pull nothing: they tell nobody where the squad is.
+	var noticed: bool = level >= SimNoise.Level.LOUD and SimNoise.notices(tag)
+	if noticed:
 		last_loud = at
 		director.noticed(now)
 	if audio != null:
 		audio.on_sound(at, level, tag)
-	if level >= SimNoise.Level.LOUD:
+	if noticed:
 		ai.raiders_hear(at, radius, from)
 	if tag == "gun":
 		shot_times.append(now)
@@ -2405,6 +2424,9 @@ func cell_seen(at: Vector3) -> bool:
 
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
+	# The view ends inside the woods round the map, never past them (edge_band.gd).
+	var screen := get_viewport().get_visible_rect().size
+	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, screen.x / maxf(screen.y, 1.0), CAM_PITCH), grid.width, grid.height)
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
@@ -2652,6 +2674,7 @@ func finish(reason: String) -> void:
 		for row: Dictionary in p.body.receipt_wounds():
 			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)), row.get("treat", {}))
 	var stock: Dictionary = {}
+	var fragments: Array = []
 	for id in unloaded:
 		if STOCK_OF.has(id):
 			var row: Array = STOCK_OF[id]
@@ -2664,20 +2687,25 @@ func finish(reason: String) -> void:
 			if FieldItems.kept_by_name(id):
 				for k in range(int(unloaded[id])):
 					receipt.gain_item(id)
+			# A blueprint piece is one entry of its field on extras.fragments (S1 domestic 5.2).
+			var piece: String = FieldItems.fragment_of(id)
+			if piece != "":
+				for k in range(int(unloaded[id])):
+					fragments.append(piece)
 		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
 		elif CoreScenes.CORE_ITEMS.has(id):
 			# One entry a core, so the count reads off the list (CoreScenes.count).
 			for k in range(int(unloaded[id])):
 				receipt.gain_item(id)
-	# The cores' count goes into extras.coreCount here and only here (decision 426), on a stop
-	# receipt, one that has its ids: setting extras on a field receipt without ids would make
-	# it a stop receipt with empty ones, which the receipt check turns down. set_extras keeps
-	# the documents already found.
+	# The cores' count and the blueprint pieces go into extras here and only here (decision
+	# 426), on a stop receipt, one that has its ids: setting extras on a field receipt without
+	# ids would make it a stop receipt with empty ones, which the receipt check turns down.
+	# set_extras keeps the documents already found.
 	if receipt.is_stop_receipt():
 		var so_far := receipt.to_dict()
 		var extras: Dictionary = so_far.get("extras", {})
-		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])), CoreScenes.count(so_far["items"]["gained"]))
+		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])) + fragments, CoreScenes.count(so_far["items"]["gained"]))
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
@@ -2724,6 +2752,7 @@ func finish(reason: String) -> void:
 		telemetry.holdout = holdout.roll_note()
 	_receipt_finds(boarded)
 	_contract_end(boarded)
+	train_guard.write_receipt()
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -2856,6 +2885,10 @@ func _watch_named() -> void:
 			elif id == "note_map" and note_line() != "" and not named_seen.has(id):
 				named_seen[id] = true
 				say(p, "%s: 쪽지다. 「%s」" % [p.display_name, note_line()])
+			elif FieldItems.fragment_of(id) != "" and not named_seen.has(id):
+				# As S1 has it: the train can use it for its research.
+				named_seen[id] = true
+				say(p, "%s: %s을 찾았다." % [p.display_name, FieldItems.item_name(id)])
 	var keep: Array = []
 	for a: Dictionary in alarms:
 		var who = a["who"]
