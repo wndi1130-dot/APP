@@ -149,6 +149,10 @@ func test_ring_trees_and_yard_fences_are_drawn_as_models() -> void:
 		var g: FieldGrid = after["grid"]
 		var modelled := {}
 		for p in after["props"].slice(original.get("props", []).size()):
+			if p["kind"] == "plank_fence":
+				var long_side: int = maxi(p["rect"].size.x, p["rect"].size.y)
+				assert_true(long_side <= Ring.FENCE_PIECE, "%s fence piece %s" % [place, p["rect"]])
+				assert_eq(int(p["facing"]) % 2, 1 if p["rect"].size.y > 1 else 0, "%s fence runs along %s" % [place, p["rect"]])
 			if p["kind"] in ["bare_tree", "plank_fence"]:
 				for y in range(p["rect"].position.y, p["rect"].end.y):
 					for x in range(p["rect"].position.x, p["rect"].end.x):

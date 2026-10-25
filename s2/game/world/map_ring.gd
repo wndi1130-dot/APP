@@ -16,7 +16,7 @@ const WILD_WIDTH := 20
 const ROAD_WIDTH := 2
 const LOT_STEP := 22
 const TREE_STEP := 9
-const FENCE_PIECE := 6
+const FENCE_PIECE := 7
 static var _finishing := false
 
 
@@ -245,7 +245,8 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 	Shell._window(g, Vector2i(r.position.x + 2, r.position.y), id)
 	Shell._window(g, Vector2i(r.end.x - 3, r.end.y - 1), id)
 	# Low wooden yard fences, with a three-cell opening facing the road; each straight
-	# run is drawn as plank-fence models of at most FENCE_PIECE cells.
+	# run is drawn as plank-fence models (6 m) of at most FENCE_PIECE cells, turned
+	# along the run: the model fit turns a piece only when it fits either way.
 	var yard := r.grow(1)
 	var gate := door + direction
 	var sides_cells: Array = [[], [], [], []]
@@ -255,7 +256,9 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 	for y in range(yard.position.y + 1, yard.end.y - 1):
 		sides_cells[2].append(Vector2i(yard.position.x, y))
 		sides_cells[3].append(Vector2i(yard.end.x - 1, y))
-	for cells: Array in sides_cells:
+	for side_index in range(4):
+		var cells: Array = sides_cells[side_index]
+		var facing := 0 if side_index < 2 else 1
 		var run: Array[Vector2i] = []
 		for k in range(cells.size() + 1):
 			var c: Vector2i = cells[k] if k < cells.size() else Vector2i(-1, -1)
@@ -265,12 +268,13 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 				data["low_blocks"].append(Rect2i(c, Vector2i.ONE))
 				run.append(c)
 			if not open and not run.is_empty():
-				# Even pieces (14 -> 5, 5, 4), so no one-cell stub squashes the planks.
+				# Even pieces of 4 to 7 cells from a run of 4 on (8 -> 4, 4; 15 -> 5, 5, 5),
+				# so no short stub squashes the planks past what the fit allows.
 				var pieces := ceili(float(run.size()) / FENCE_PIECE)
 				var from := 0
 				for p in range(pieces):
 					var n := run.size() / pieces + (1 if p < run.size() % pieces else 0)
-					data["props"].append({"kind": "plank_fence", "rect": Rect2i(run[from], run[from + n - 1] - run[from] + Vector2i.ONE), "facing": 0, "level": 0})
+					data["props"].append({"kind": "plank_fence", "rect": Rect2i(run[from], run[from + n - 1] - run[from] + Vector2i.ONE), "facing": facing, "level": 0})
 					from += n
 				run.clear()
 	var at := door + direction
