@@ -197,14 +197,24 @@ func apply_cut(heavy: bool, now: float, part: String = "torso") -> void:
 # Returns the coarse place ("head", "torso" or "leg"). The side comes from the same roll.
 # zone "head" (the aim roll hit the head) puts the round there, not on a rolled part.
 func apply_gunshot(rng: RandomNumberGenerator, now: float, zone: String = "") -> String:
-	var was_heavy: bool = bleed_level() >= 2
+	return gunshot_at(gunshot_part(rng, zone), now)
+
+
+## Where a round lands, on the one roll it always drew: the fine part (a vest
+## may stop it there first, field_combat.gd).
+func gunshot_part(rng: RandomNumberGenerator, zone: String = "") -> String:
 	var roll: float = rng.randf()
-	var part: String = "torso"
 	if zone == "head":
-		part = "head"
-	elif roll < GUNSHOT_LEG:
-		part = "leg"
-	var fine: String = "head_neck" if part == "head" else ("torso" if part == "torso" else ("leg_left" if roll < GUNSHOT_LEG * 0.5 else "leg_right"))
+		return "head_neck"
+	if roll < GUNSHOT_LEG:
+		return "leg_left" if roll < GUNSHOT_LEG * 0.5 else "leg_right"
+	return "torso"
+
+
+## The round in `fine` (gunshot_part); returns the coarse place.
+func gunshot_at(fine: String, now: float) -> String:
+	var was_heavy: bool = bleed_level() >= 2
+	var part: String = "head" if fine == "head_neck" else ("torso" if fine == "torso" else "leg")
 	wounds[add_wound(fine, "embedded", now)]["what"] = "bullet"
 	injured_at = now
 	if part == "leg" and not _has_fracture_on(fine):
@@ -457,6 +467,13 @@ func receipt_wounds() -> Array[Dictionary]:
 		var row := {"part": w["part"], "kind": "amputation" if bool(w.get("stump", false)) else w["kind"]}
 		if w["festering"]:
 			row["festering"] = true
+		# What was done for it (receipt v5 treat): the train reads it instead of drawing anew (J02).
+		var treat := {}
+		for flag: String in ["bandaged", "disinfected", "sutured", "splinted", "tourniquet", "pulled", "quick"]:
+			if bool(w.get(flag, false)):
+				treat[flag] = true
+		if not treat.is_empty():
+			row["treat"] = treat
 		out.append(row)
 	return out
 
@@ -729,8 +746,8 @@ func lost_limb(group: String) -> bool:
 ## the one action that may fall below half. It scales the chance to hit the
 ## head and to knock down (weapons.melee_odds), so a spent, bleeding, frozen
 ## hand needs many blows where a fresh one needs two.
-## Hunger and sore muscles come from the train; the field has no such state
-## yet. ctx["hunger_level"], ctx["sore_level"]: 0 none, 1 some, 2 bad.
+## Hunger and sore muscles come from the train (the departure contract, person.gd
+## hunger_level and sore_level). ctx["hunger_level"], ctx["sore_level"]: 0 none, 1 some, 2 bad.
 
 
 func multipliers(ctx: Dictionary) -> Dictionary:
