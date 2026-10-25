@@ -374,9 +374,17 @@ func is_worn() -> bool:
 	return draw != null
 
 
+## The time the people's motions go on by in a frame: none while the field stands
+## paused (the player's pause or the app away), as the dead and the train stand
+## still then (field_game.gd still shading); at the end, the train leaving, they go on.
+static func frame_delta(field, delta: float) -> float:
+	return 0.0 if bool(field.paused) and not bool(field.ended) else delta
+
+
 func _process(delta: float) -> void:
 	if draw == null:
 		return
+	delta = frame_delta(game, delta)
 	for d: Dictionary in worn.values():
 		d["n"] = 0
 		d["k"] = 0
