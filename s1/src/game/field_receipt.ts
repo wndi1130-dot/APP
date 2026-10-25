@@ -12,6 +12,7 @@ import { hangWhy, hangSymbol } from './domestic/symbols';
 import { journal, PROFILES, situation, storyOf } from './state';
 import type { Game, Phase } from './state';
 import { breakPromise, keepPromise } from './turn';
+import { noteBroken } from './council_log';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
 import { CAPTAIN, recordFieldWound } from './wounds';
@@ -476,8 +477,10 @@ function breakPrologueVow(g: Game, c: Comm, label: string): void {
   bump(g, 'trust', PROLOGUE.brokenTrust, 'promise');
   bumpRel(g, c, PROLOGUE.brokenRel, 'promise');
   g.stats.promisesBroken += 1;
+  g.comms[c].broken = (g.comms[c].broken ?? 0) + 1;
   if (g.dark) g.dark.broken[c] += 1;
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
+  noteBroken(g, c);
 }
 
 /** 상징물 쓰임 하나의 고를 수 있음과 까닭(결정 302·339: 선택지 밑에 사정과 나중에 돌아올 것 두 줄). */

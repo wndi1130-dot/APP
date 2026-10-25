@@ -234,9 +234,9 @@ func test_loads_put_down_at_the_train_are_counted() -> void:
 	p.add_item("scrap", 2)
 	var rect: Rect2i = game.data["unload"]
 	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
-	game.actions._auto_unload()
+	game.actions.load_train(p)
 	assert_eq(game.telemetry.trips, 1)
-	game.actions._auto_unload()
+	game.actions.load_train(p)
 	assert_eq(game.telemetry.trips, 1, "empty hands are not a load")
 
 
@@ -252,7 +252,7 @@ func test_planks_and_spirits_go_on_the_train_and_cloth_stays() -> void:
 	p.add_item("bandage", 1)
 	var rect: Rect2i = game.data["unload"]
 	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
-	game.actions._auto_unload()
+	game.actions.load_train(p)
 	assert_eq(int(game.unloaded.get("plank", 0)), 2)
 	assert_eq(int(game.unloaded.get("bottle_spirit", 0)), 2)
 	assert_eq(int(p.items.get("cloth", 0)), cloth, "cloth stays on the body")

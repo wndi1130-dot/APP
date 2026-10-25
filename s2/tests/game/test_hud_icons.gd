@@ -32,3 +32,20 @@ func test_a_see_through_colour_is_the_whole_icons_alpha() -> void:
 		for x in img.get_width():
 			top = maxf(top, img.get_pixel(x, y).a)
 	assert_almost_eq(top, 0.5, 0.02, "no part is more solid than the colour says")
+
+
+## Every thing the situation pad can offer shows a picture of that thing, not
+## the magnifier (user 2026-10-25: a key whose picture does not say what it does).
+func test_each_situation_shows_its_own_picture() -> void:
+	var want := {
+		"맨홀 막기": "manhole", "창": "window", "옥상으로": "ladder", "사다리 내려가기": "ladder",
+		"줍기": "pickup", "입기": "wear", "문 따기": "unlock", "문 막기": "barricade", "문 열기": "door", "문 닫기": "door",
+		"말뚝 깎기": "stake", "방벽 세우기": "wall", "뒤지기": "rummage", "품 뒤지기": "body",
+		"올라가기": "stairs", "내려가기": "stairs", "열차 넘기 4초": "train",
+		"붕대": "bandage", "부목": "bandage", "눈으로 문지름": "bandage", "다리 치료": "bandage",
+	}
+	for label in want:
+		assert_eq(HudIcons.context_icon(label), want[label], label)
+	assert_eq(HudIcons.context_icon("우물"), "search", "a place by its own name: look at it")
+	for row in HudIcons.CONTEXT_ICONS:
+		assert_true(HudIcons.PATHS.has(String(row[2])), String(row[2]))

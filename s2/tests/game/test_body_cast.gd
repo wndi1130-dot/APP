@@ -193,6 +193,53 @@ func test_garments_are_drawn_over_the_body_they_were_baked_for() -> void:
 	assert_not_null(v.garment_of(v.worn[""], "coat_long"), "the reference body has its own when worn")
 
 
+# The bag one carries is on their back (decision 448): every body has both
+# bags baked against it, lined up with its motions, behind it and off it, and
+# the one carried is drawn over the body as a garment is; with pockets only, none.
+func test_the_bag_carried_is_drawn_on_the_back() -> void:
+	assert_eq(PersonVisual.BAG_TINTS.keys(), BodyBake.BAG_SHELLS.keys(), "a colour for each bag baked")
+	for body: String in BodyCast.ALL + [PersonVisual.OWN_FOLDER.get_file().trim_suffix(BodyCast.OWN_SUFFIX)]:
+		var dir := BodyCast.own_folder(body)
+		var own := BodyBake.load_baked(dir)
+		var rest: PackedVector3Array = (own["mesh"] as Mesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var back := INF
+		for p in rest:
+			back = minf(back, p.z)
+		for kind: String in PersonVisual.BAG_TINTS:
+			var bag := BodyBake.load_baked(dir.path_join("wear").path_join(kind))
+			assert_false(bag.is_empty(), body + " " + kind)
+			if bag.is_empty():
+				continue
+			assert_eq(_line_up(bag["clips"]), _line_up(own["clips"]), body + " " + kind + " lines up with the body")
+			assert_lt(int(bag["width"]), 80, body + " " + kind + " is a few corners")
+			var shape: PackedVector3Array = (bag["mesh"] as Mesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+			var front := -INF
+			var rear := INF
+			for p in shape:
+				front = maxf(front, p.z)
+				rear = minf(rear, p.z)
+			assert_lt(front, 0.0, body + " " + kind + " is behind the body's middle")
+			assert_lt(rear, back, body + " " + kind + " stands out past the back")
+			assert_false(PersonVisual.hands_marked(bag["mesh"]), body + " " + kind)
+	var v := PersonVisual.new()
+	add_child_autofree(v)
+	v.setup(null)
+	var tomasz := _person("p_tail_tomasz", "companion")
+	tomasz.bag = "big_pack"
+	var marek := _person("p_guard_marek", "companion")
+	marek.bag = "pockets"
+	assert_eq(PersonVisual.bag_on(tomasz)[0]["shell"], "big_pack")
+	assert_true(PersonVisual.bag_on(marek).is_empty(), "pockets only: no bag")
+	v.game = {"people": [tomasz, marek]}
+	v._process(0.016)
+	v._process(0.016)
+	var d: Dictionary = v.worn_of(tomasz, false)
+	assert_eq(int(d["worn_n"].get("big_pack", 0)), 1, "the big pack drawn on his back")
+	assert_false(d["wear"].has("pack"), "the other bag not read in")
+	var m: Dictionary = v.worn_of(marek, false)
+	assert_false(m["wear"].has("pack") or m["wear"].has("big_pack"), "nothing on the back with pockets only")
+
+
 # Each garment over the body is drawn in its own colour and pattern (wear.gd
 # look) person by person: the outermost of coat and jacket that has a shell,
 # then what is on the head. The gloves are painted in the kind's colour, else
