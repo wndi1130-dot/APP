@@ -27,7 +27,7 @@ DESIGNS = {
     "gap_gate": (1.3, [2, 2], None, "none", "none: 판자 울타리 사이 나무 쪽문이 바깥으로 열려 있음, 자물쇠·빗장 없음, 밟힌 흙길"),
     "gap_planks": (1.2, [2, 2], None, "none", "none: 가운데 기둥이 부러져 판자 울타리가 무너지고 판자가 바닥에 흩어진 틈"),
     "small_shelf": (1.4, [1, 1], .42, "low", "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음"),
-    "thicket": (1.8, [2, 2], None, "low", "low: 2×2칸을 채우는 겨울 잡목 덤불, 낮은 어두운 속심 셋과 위·바깥으로 퍼진 밝은 마른 가지 서른넷"),
+    "thicket": (1.8, [2, 2], None, "low", "low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른"),
 }
 
 
@@ -172,9 +172,10 @@ def small_shelf(p):
 
 def thicket(p):
     # 위에서 「가는 막대 줄」도 「어두운 바위」도 아니게(map-layout 지도 그림 10-26 06:5x): 낮은 어두운
-    # 속심 셋에서 밝은 마른 가지 서른넷이 위·바깥으로 퍼져 2×2칸 가장자리까지 덮는다.
+    # 속심 셋에서 밝은 마른 가지 서른넷이 퍼진다. 위에서 덮는 넓이는 가지가 얼마나 낮고 멀리
+    # 뻗느냐로 정해져(07:2x 「띠가 듬성」), 가지 대부분은 낮게 멀리, 넷에 하나만 높이 선다.
     # 가지 끝은 마른 색(worn_wood·cloth)이라 윗면이 밝다. 맨나무(376삼각형)보다 적게.
-    cores = ((-.4, -.3, .38, .34, .38), (.35, -.35, .36, .38, .34), (0, .35, .42, .36, .44))
+    cores = ((-.5, -.36, .44, .4, .4), (.5, -.36, .42, .44, .36), (0, .5, .48, .42, .46))
     for x, y, rx, ry, h in cores:
         p.lathe((x, y), [(0, rx*.9, ry*.9), (h*.6, rx, ry), (h, rx*.45, ry*.4)], "bark", 5)
     tips = ("worn_wood", "cloth", "worn_wood", "wood")
@@ -182,9 +183,10 @@ def thicket(p):
         n = 12 if i == 2 else 11
         for k in range(n):
             a = i*.9 + k*math.tau/n + .25*math.sin(k*2.3 + i)
-            reach = .65 + .45*((k*5 + i*2) % 7)/6
+            tall = (k + i) % 4 == 0
+            reach = (.4 if tall else .6) + .28*((k*5 + i*2) % 7)/6
             base = (x + rx*.3*math.cos(a), y + ry*.3*math.sin(a), h*.45)
-            tip = (x + reach*math.cos(a), y + reach*math.sin(a), .9 + .9*((k*3 + i) % 5)/4)
+            tip = (x + reach*math.cos(a), y + reach*math.sin(a), (1.5 + .3*((k + i) % 3)/2) if tall else .55 + .5*((k*3 + i) % 5)/4)
             p.beam(base, tip, .032, tips[(k + i) % 4], 3, .006)
 
 

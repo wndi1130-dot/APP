@@ -14,6 +14,6 @@ rect 가운데 바닥, +Y 위·+Z 앞(지도 안쪽), facing은 +Y축 -90도씩.
 | `gap_gate` | 2×2 | 1.3 | none | 300 | 22012 | `6b1b22d154e1480455e73cdec464bc03301cdf9e32779e9a0aa04b00760a614f` | none: 판자 울타리 사이 나무 쪽문이 바깥으로 열려 있음, 자물쇠·빗장 없음, 밟힌 흙길 |
 | `gap_planks` | 2×2 | 1.2 | none | 276 | 20464 | `ede1e4d966d51ce0f9fcfd92686c8d549bae0bcd92c598b1a5dabed7149bcbfe` | none: 가운데 기둥이 부러져 판자 울타리가 무너지고 판자가 바닥에 흩어진 틈 |
 | `small_shelf` | 1×1 | 1.4 | low | 340 | 24824 | `630bad8097e739bd9cd77f39057cbdc4779bbbf9821c6195a34a7ae13e224edc` | low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음 |
-| `thicket` | 2×2 | 1.8 | low | 350 | 28520 | `12cece5a52f7e4b8de71c4caabd3af0462d642e5a3655fa6a78c34af925fb867` | low: 2×2칸을 채우는 겨울 잡목 덤불, 낮은 어두운 속심 셋과 위·바깥으로 퍼진 밝은 마른 가지 서른넷 |
+| `thicket` | 2×2 | 1.8 | low | 350 | 28712 | `2392dae3c943026e78eecb829b4448bb7a37852ffeb1027b1c68ce660fee9d16` | low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른 |
 
 팔레트는 E 묶음과 같다(`catalog_gap.json` palette).

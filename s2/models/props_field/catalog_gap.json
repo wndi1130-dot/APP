@@ -273,15 +273,15 @@
         1.8,
         1.92
       ],
-      "bytes": 28520,
-      "sha256": "12cece5a52f7e4b8de71c4caabd3af0462d642e5a3655fa6a78c34af925fb867",
+      "bytes": 28712,
+      "sha256": "2392dae3c943026e78eecb829b4448bb7a37852ffeb1027b1c68ce660fee9d16",
       "colours": [
         "bark",
         "cloth",
         "wood",
         "worn_wood"
       ],
-      "judgment": "low: 2×2칸을 채우는 겨울 잡목 덤불, 낮은 어두운 속심 셋과 위·바깥으로 퍼진 밝은 마른 가지 서른넷",
+      "judgment": "low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른",
       "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
     }
   },
