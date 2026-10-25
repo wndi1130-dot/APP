@@ -830,9 +830,11 @@ func pick_up(p, idx: int) -> void:
 
 # ---------------------------------------------------------------- clothes
 
-## Put on the garment lying at `idx` (decision 423 card 2): a job of the hands
-## as long as its motion (wear.gd TIME); what was in its place is put down at
-## the feet as it is. Cut short, the garment stays where it lay.
+## Put on the garment lying at `idx` (decision 434): a job of the hands as
+## long as its motion, and for a layer under others as long as taking those off
+## and putting them back (wear.gd dress_time); what was in its place, or a
+## whole suit it puts aside, is put down at the feet as it is. Cut short, the
+## garment stays where it lay.
 func dress(p, idx: int) -> void:
 	if idx < 0 or idx >= game.ground_items.size():
 		return
@@ -840,7 +842,7 @@ func dress(p, idx: int) -> void:
 	if not g.has("garment") or not _can_start(p, g["pos"]):
 		return
 	var slot: String = Wear.slot_of(String(g["id"]))
-	p.start_action("wear", "입기", float(Wear.TIME[slot]), _dressed.bind(p, g))
+	p.start_action("wear", "입기", Wear.dress_time(p, String(g["id"])), _dressed.bind(p, g))
 	if p.action == "wear":
 		p.action_busy = {"slot": slot, "off": false}
 
@@ -855,16 +857,18 @@ func _dressed(p, g: Dictionary) -> void:
 		return
 	game.ground_items.remove_at(idx)
 	var state: Dictionary = (g["garment"] as Dictionary).duplicate(true)
-	_put_down_garment(p, Wear.put_on(p, state))
+	for old: Dictionary in Wear.put_on(p, state):
+		_put_down_garment(p, old)
 	if p == game.player:
 		game.hud.toast("%s 입었다." % String(state.get("name", game.item_name(String(g["id"])))))
 
 
-## Take off what is in `slot`; it is put down at the feet as it is.
+## Take off what is in `slot` (the layers over it off and back on); it is put
+## down at the feet as it is.
 func undress(p, slot: String) -> void:
-	if String(Wear.worn_ids(p).get(slot, "")) == "" or not p.can_act() or p.action != "" or striking(p):
+	if Wear.occupant(p, slot).is_empty() or not p.can_act() or p.action != "" or striking(p):
 		return
-	p.start_action("wear", "벗기", float(Wear.TIME[slot]), _undressed.bind(p, slot))
+	p.start_action("wear", "벗기", Wear.undress_time(p, slot), _undressed.bind(p, slot))
 	if p.action == "wear":
 		p.action_busy = {"slot": slot, "off": true}
 

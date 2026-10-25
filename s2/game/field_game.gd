@@ -1052,14 +1052,8 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 	p.skills = row.get("skills", p.skills).duplicate()
 	p.medical = String(row.get("medical", "none"))
 	p.bag = String(row.get("bag", "pack"))
-	# What they go out in (wear.gd): a row may say, else the coat and the gloves everyone has.
-	var dress: Dictionary = row.get("wear", {})
-	if dress.has("outer"):
-		p.coat = Wear.make(String(dress["outer"])) if String(dress["outer"]) != "" else Wear.bare_outer()
-	if dress.has("head"):
-		p.hat = Wear.make(String(dress["head"]))
-	if dress.has("hands"):
-		p.gloves = bool(dress["hands"])
+	# What they go out in (wear.gd): a row may say, place by place, else what everyone wears.
+	Wear.dress_from(p, row.get("wear", {}))
 	var slots: Array = []
 	for h in row.get("hands", []):
 		var id: String = h[0]
@@ -1431,7 +1425,12 @@ func _update_person(p: Person, delta: float) -> void:
 	var ctx := {"running": p.is_running_now(), "swinging": p.swing_t > 0.0, "carry_state": p.carry_state(), "cold_level": p.cold_level(), "indoor_rest": indoor and not p.moving}
 	for ev in p.body.tick(delta, ctx):
 		_on_body_event(p, ev)
-	p.heat.tick(delta, {"ambient_c": weather.ambient_c, "indoor": indoor and not building_open(lg.building_at(cell)), "stove": stove, "warmth": Wear.warmth(p, p.heat.wet), "windproof": Wear.windproof(p), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
+	var sheltered: bool = indoor and not building_open(lg.building_at(cell))
+	# Rain and sleet under the open sky, and sweat dressed warm at a run or at work (wear.gd).
+	var wetter: float = Wear.wet_gain(p, delta, weather.wets_clothes() and not sheltered and not stove, p.is_running_now() or p.action != "")
+	if wetter > 0.0:
+		p.heat.soak(wetter)
+	p.heat.tick(delta, {"ambient_c": weather.ambient_c, "indoor": sheltered, "stove": stove, "warmth": Wear.warmth(p, p.heat.wet), "windproof": Wear.windproof(p), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
 	if weather.always_cold() and not indoor and not stove:
 		p.heat.heat = minf(p.heat.heat, 60.0)
 	p.panic = maxf(0.0, p.panic - delta * 0.08)

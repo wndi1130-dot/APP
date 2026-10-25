@@ -28,6 +28,7 @@ const FESTER_TIME := 360.0       # seconds a dirty wound is left before it turns
 # Its dressing still festers once dirty.
 const FESTER_KINDS := ["scratch", "laceration", "embedded"]
 const FESTER_MULT := 0.9
+const BAREFOOT_MOVE := 0.9      # walking with no shoes on (clothing.md 5장, new value)
 const SEEP_BLOOD := 0.4          # a heavy wound with a plain bandage seeps on as a light one
 
 const RUN_FATIGUE := Stamina.RUN_FATIGUE
@@ -623,7 +624,7 @@ func can_run() -> bool:
 
 
 # body_injury 4.2. Speed factors (time = base / factor) except aim_min (circle floor size, bigger is worse).
-# ctx: carry_state 0..3, cold_level 0..3, gloves, heavy_coat, panic, strength.
+# ctx: carry_state 0..3, cold_level 0..3, gloves, heavy_coat, barefoot, panic, strength.
 ## How well a blow lands (body_injury 4.2, decisions 2026-10-11 '근접 타수'):
 ## the one action that may fall below half. It scales the chance to hit the
 ## head and to knock down (weapons.melee_odds), so a spent, bleeding, frozen
@@ -743,6 +744,9 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 		_mul(m, "move", 0.85)
 		_mul(m, "swing", 0.9)
 		_mul(m, "melee_hit", 0.9)
+	# No shoes on the snow (clothing.md 5장, new value).
+	if bool(ctx.get("barefoot", false)):
+		_mul(m, "move", BAREFOOT_MOVE)
 	if bool(ctx.get("panic", false)):
 		_mul(m, "aim_min", AIM_UP)
 		_mul(m, "reload", 0.8)
