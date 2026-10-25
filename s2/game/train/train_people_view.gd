@@ -57,6 +57,14 @@ const GENERAL_BODIES: Array = [
 ## so the first two do and the rest wear their own clothes (no car of twins).
 const ROLE_A_CAR: int = 2
 const NEUTRAL_TINT := Vector3(0.5, 0.5, 0.5)   # the body's own picture as it is (tint / 0.5)
+## Two in one place doing the same at the same moment read as a loop: the one
+## beside (NEIGHBOUR m along the car, same posture) is not copied, talk aside.
+const NEIGHBOUR: float = 1.3
+const TOGETHER: Array = ["t_sit_talk", "t_talk"]
+## A guard on the guard car's bench sits with a gun across the knees, looking it over.
+const LAP_GUN := "res://models/weapons/shotgun.glb"
+const LAP_GUNS: int = 2
+const LAP_AT := Vector3(0.0, 0.56, 0.12)   # metres from the feet: on the knees
 const SIT_FORWARD: float = 0.3           # metres: the baked seat is this far behind the feet
 const BED_HEIGHT: float = 0.47           # one lying on a bench or a bed lies on its top
 const STOVE_NEAR: float = 1.6            # metres: one cold this close to the stove holds its hands out to it
@@ -88,6 +96,7 @@ var draws: Array = []
 var drawn: Dictionary = {}                # body -> clip name last drawn, for the tests and the shots
 var worn: Dictionary = {}                 # body -> the folder it wears
 var people: Dictionary = {}               # body -> {shown, want, want_since, pose, bridge_until, after, mix, wears}
+var guns: MultiMeshInstance3D
 
 
 static func enabled() -> bool:
@@ -140,6 +149,7 @@ func setup(train_scene) -> void:
 		draws.append(draw)
 		one["draw"] = draw
 		bodies[String(folder)] = one
+	guns = _lap_guns()
 
 
 func is_worn() -> bool:
@@ -155,11 +165,15 @@ func _process(_delta: float) -> void:
 	drawn.clear()
 	worn.clear()
 	var seen: Dictionary = {}
+	var gun_count := 0
 	for c in scene.cars:
 		var state := car_state(c)
 		var prev := ""
 		var at_work := 0
-		for b in c["bodies"]:
+		var last_want := ""
+		var last_x := -1000.0
+		var last_pose := ""
+		for b in in_seat_order(c["bodies"]):
 			if not is_instance_valid(b):
 				continue
 			_hide_boxes(b)
@@ -169,7 +183,12 @@ func _process(_delta: float) -> void:
 			var key: int = absi(b.get_instance_id())
 			var life: Dictionary = scene.life.actors.get(b.get_instance_id(), {})
 			var traits: Dictionary = life.get("traits", {})
-			var want := want_for(b, state, String(life.get("activity", "")), key, now, traits)
+			var x: float = b.global_position.x
+			var beside: bool = String(b.pose) == last_pose and x - last_x < NEIGHBOUR
+			var want := want_for(b, state, String(life.get("activity", "")), key, now, traits, last_want if beside else "")
+			last_want = want
+			last_x = x
+			last_pose = String(b.pose)
 			var clip := shown_for(b, want, now)
 			var rec: Dictionary = people[b]
 			if not rec.has("wears") or not bodies.has(String(rec["wears"])):
@@ -190,6 +209,12 @@ func _process(_delta: float) -> void:
 			var plain := Color(_h(key, 12), float(one["clip_index"].get(clip, 0)), 0.0, shade)
 			mm.set_instance_custom_data(i, DeadBody.mix_from(rec["mix"], plain, now, one["table"], one["mix_in"]))
 			one["count"] = i + 1
+			if guns != null and gun_count < LAP_GUNS and String(state["layout"]) == "guard" and clip == "t_sit" and String(b.pose) == "sit":
+				var at: Transform3D = place_of(b, clip, state)
+				guns.multimesh.set_instance_transform(gun_count, at * Transform3D(Basis(Vector3.UP, PI * 0.5), LAP_AT))
+				gun_count += 1
+	if guns != null:
+		guns.multimesh.visible_instance_count = gun_count
 	for folder in bodies:
 		(bodies[folder]["draw"] as MultiMeshInstance3D).multimesh.visible_instance_count = int(bodies[folder]["count"])
 	# Forget the people who are gone (a car reseated, a layout rebuilt).
@@ -229,6 +254,39 @@ static func body_for(layout: String, role: String, at_work: int, key: int, prev:
 	return String(GENERAL_BODIES[pick])
 
 
+## A car's people from one end to the other, so the one beside is the one before.
+static func in_seat_order(list: Array) -> Array:
+	var out: Array = list.filter(func(b): return is_instance_valid(b))
+	out.sort_custom(func(a, b): return a.global_position.x < b.global_position.x)
+	return out
+
+
+## One multimesh of the gun that lies across a guard's knees (one draw for all).
+func _lap_guns() -> MultiMeshInstance3D:
+	if not ResourceLoader.exists(LAP_GUN):
+		return null
+	var packed = load(LAP_GUN)
+	if not packed is PackedScene:
+		return null
+	var root: Node = (packed as PackedScene).instantiate()
+	var found: Array = root.find_children("*", "MeshInstance3D", true, false)
+	var mesh: Mesh = (found[0] as MeshInstance3D).mesh if not found.is_empty() else null
+	root.free()
+	if mesh == null:
+		return null
+	var draw := MultiMeshInstance3D.new()
+	draw.name = "LapGuns"
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = LAP_GUNS
+	mm.visible_instance_count = 0
+	draw.multimesh = mm
+	draw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(draw)
+	return draw
+
+
 ## The body if it was baked here, else an ordinary one that was.
 func _available(folder: String, key: int) -> String:
 	if bodies.has(folder):
@@ -255,6 +313,7 @@ func car_state(c: Dictionary) -> Dictionary:
 		"tension": float(train.get("tension", 0)), "fear": float(train.get("fear", 0)),
 		"resent": Look.resents(comm) if not comm.is_empty() else false,
 		"night": String(view.get("daytime", "day")) == "night", "stove_x": _stove_x(c),
+		"meal": bool(scene.life.contexts.get(c["id"], {}).get("meal", false)),
 	}
 
 
@@ -286,7 +345,7 @@ static func traits_of(key: int) -> Dictionary:
 ## decide first (walking, a job, a gesture of a bad value, the council), and
 ## otherwise a pick of their own, weighted by the car's state and their traits,
 ## changed when their timetable comes round. `t` is the scene's clock.
-static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.0, life: Dictionary = {}) -> String:
+static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.0, life: Dictionary = {}, avoid: String = "") -> String:
 	var pose: String = String(b.pose)
 	if pose == "walk":
 		return "t_carry" if activity == "carry" or String(b.errand.get("id", "")) in ["carry", "coal", "food"] else "t_walk"
@@ -297,8 +356,20 @@ static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.
 	# What the life plan already knows of them: the sick and hurt, the children.
 	me["ill"] = bool(life.get("sick", false)) or bool(life.get("injured", false))
 	me["child"] = bool(life.get("child", false))
+	me["role"] = String(life.get("role", ""))
 	var round_no: int = int(floor((t + float(me["offset"])) / float(me["hold"])))
-	return _pick(weights_for(pose, b, s, me), key, round_no)
+	var weights := weights_for(pose, b, s, me)
+	# Not the same as the one beside at the same moment (talk is done together):
+	# that motion is left out of this person's odds, unless it is all there is.
+	if avoid != "" and not TOGETHER.has(avoid) and float(weights.get(avoid, 0.0)) > 0.0:
+		var others := weights.duplicate()
+		others[avoid] = 0.0
+		var rest := 0.0
+		for k in others:
+			rest += maxf(float(others[k]), 0.0)
+		if rest > 0.0:
+			weights = others
+	return _pick(weights, key, round_no)
 
 
 ## What the scene or the life activity has already decided for this body.
@@ -375,32 +446,41 @@ static func weights_for(pose: String, b, s: Dictionary, me: Dictionary) -> Dicti
 	var sleepy: bool = float(me["tired"]) < 0.12 + (0.5 if s["night"] else 0.0)
 	var hothead: bool = float(me["temper"]) < tense_n * 0.7
 	var talker: bool = float(me["social"]) > 0.55 and not afraid
+	# At ease: warm, fed, no quarrel in the air. Then the car rests, talks and eats
+	# as a car of its kind does (user 2026-10-25: a peaceful train shown at random).
+	var calm: bool = cold_n < 0.4 and hunger_n < 0.4 and tense_n < 0.3 and not afraid
+	var layout: String = String(s["layout"])
+	var role: String = String(me.get("role", ""))
+	var guard: bool = layout == "guard" and not me.get("child", false)
 	match pose:
 		"sit":
 			return {
-				"t_sit": 2.0,
-				"t_sit_talk": (1.6 if talker else 0.25) + (2.0 if hothead else 0.0),
+				"t_sit": 2.0 + (1.5 if guard else 0.0),
+				"t_sit_talk": (1.6 if talker else 0.25) + (2.0 if hothead else 0.0) + (1.0 if calm else 0.0) + (1.2 if layout == "dining" else 0.0),
 				"t_sit_huddle": (4.0 if chilled else 0.0) + (1.5 if sick else 0.0) + (2.0 if afraid else 0.0),
-				"t_sit_doze": 3.0 if sleepy else 0.2,
-				"t_eat": 3.5 if hungry else 0.0,
+				"t_sit_doze": (3.0 if sleepy else 0.2) * (0.3 if guard else 1.0) + (0.8 if calm and not guard else 0.0),
+				"t_eat": (3.5 if hungry else 0.0) + ((3.0 if s.get("meal", false) else 0.8) if layout == "dining" else 0.0),
 			}
 		"floor":
 			var near: bool = absf(b.global_position.x - float(s["stove_x"])) < STOVE_NEAR
+			var at_work: bool = (role == "carer" and layout == "medical") or (role == "worker" and layout == "technical")
 			return {
 				"t_floor_sit": 2.0,
 				"t_crouch": 2.5 if chilled else 0.3,
 				"t_warm_hands": 5.0 if chilled and near else 0.0,
-				"t_lie": (2.0 if sleepy else 0.0) + (2.0 if sick else 0.0) + 1.5 * crowd_n,
+				"t_lie": (2.0 if sleepy else 0.0) + (2.0 if sick else 0.0) + 1.5 * crowd_n + (0.8 if calm else 0.0),
+				"t_kneel_work": 3.0 if at_work else 0.0,
 			}
-	var guard: bool = String(s["layout"]) == "guard" and not me.get("child", false)
 	return {
 		"t_stand": 2.0,
 		"t_fold": 1.0 + (1.5 if chilled else 0.0) + (2.0 if guard and not s["night"] else 0.0),
 		"t_shiver": 4.0 if chilled else 0.0,
 		"t_cough": 5.0 if sick else 0.0,
-		"t_talk": 2.5 if hothead else (0.8 if talker else 0.0),
+		"t_talk": (2.5 if hothead else (0.8 if talker else 0.0)) + (0.8 if calm and talker else 0.0),
 		"t_no": 1.5 if hothead else 0.0,
 		"t_lantern": (5.0 if s["night"] else 1.5) if guard else 0.0,
+		"t_stir": 3.0 if role == "cook" and layout == "dining" else 0.0,
+		"t_shovel": 1.5 if role == "worker" and layout in ["technical", "tender", "loco"] else 0.0,
 	}
 
 
