@@ -215,6 +215,29 @@ func test_the_hours_have_their_own_colour() -> void:
 	assert_lt(float(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0)["sun_energy"]), float(day["sun_energy"]))
 
 
+func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
+	# Contrast 1.2 about the hour's grey whatever falls: an overcast, a fog or
+	# a sleet takes colour out, not the spread (the grey day used to go flat).
+	var clear := Atmosphere.grade(Atmosphere.look(12.0, ["clear"], "K1", 0.0))
+	for kinds in [["overcast"], ["fog"], ["sleet"], ["blizzard"]]:
+		var g := Atmosphere.grade(Atmosphere.look(12.0, kinds, "K1", 0.0))
+		assert_almost_eq(float(g["contrast"]), float(clear["contrast"]), 0.0001, "%s keeps the contrast" % [kinds])
+		assert_almost_eq(float(g["brightness"]), float(clear["brightness"]), 0.0001)
+		assert_lt(float(g["saturation"]), float(clear["saturation"]), "%s takes colour out" % [kinds])
+	# Godot: 0.5 + k(b·c − 0.5). By day that is 1.2(c − 0.4) + 0.4.
+	for c: float in [0.1, 0.4, 0.8]:
+		var out: float = 0.5 + float(clear["contrast"]) * (float(clear["brightness"]) * c - 0.5)
+		assert_almost_eq(out, 1.2 * (c - 0.4) + 0.4, 0.0001)
+	assert_almost_eq(float(clear["pivot"]), Atmosphere.TONE_PIVOT_DAY, 0.0001)
+	assert_lte(float(clear["saturation"]), 1.0, "the grade never adds colour by day")
+	# At night the grey sinks with the light, so the spread keeps the night's level.
+	var t := Atmosphere.sun_times(0.0)
+	var night := Atmosphere.grade(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))
+	var p := float(night["pivot"])
+	assert_lt(p, 0.15)
+	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
+
+
 func test_it_looks_colder_as_the_cold_rises() -> void:
 	var warm := Atmosphere.look(9.0, ["clear"], "K1", 0.0)
 	var mid := Atmosphere.look(9.0, ["clear"], "K1", 0.5)
