@@ -20,7 +20,7 @@ const name = (id: string) => PROFILES.find(p => p.id === id)!.name;
 
 const departure: FieldDeparture = {
   version: 1, departureId: 'dep_sulechow_3', stopId: 'stop_3', placeId: 'sulechow_station', segment: 3,
-  roster: [{ id: DAD, comm: 'tail' }, { id: MATE, comm: 'tail' }, { id: MATE2, comm: 'tail' }], promises: [],
+  roster: [{ id: DAD, comm: 'tail' }, { id: MATE, comm: 'tail' }, { id: MATE2, comm: 'tail' }], promises: [], domestic: false,
 };
 
 type Row = { who: string; what: string; witnesses: string[]; template?: string };
