@@ -14,6 +14,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const CellarRules = preload("res://game/world/cellar_rules.gd")
 const RoofRules = preload("res://game/world/roof_rules.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -67,9 +68,16 @@ static func has(place_id: String) -> bool:
 	return ResourceLoader.exists(path_of(place_id))
 
 
-## The place asked for, or the default when there is no such map.
+## The place asked for, or the default when there is no such map. No name is
+## the default stop of a bare start; a name with no map behind it is a mistake
+## somewhere upstream, and it is said so rather than quietly played elsewhere
+## (R16: the field also notes the name in the receipt's place).
 static func resolve(place_id: String) -> String:
-	return place_id if has(place_id) else DEFAULT_PLACE
+	if has(place_id):
+		return place_id
+	if not place_id.is_empty():
+		push_warning("no map for place '%s': the default stop is played" % place_id)
+	return DEFAULT_PLACE
 
 
 ## Every map there is: the built-in ones, then each kind's by number.
@@ -149,6 +157,8 @@ static func build_from(script: Script) -> Dictionary:
 		data.erase("_defer_paths")
 		for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
 			g.refresh_paths()
+	# Every window's latch and curtain, fixed per map and window (J08).
+	BuildingRules.dress_windows(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)
