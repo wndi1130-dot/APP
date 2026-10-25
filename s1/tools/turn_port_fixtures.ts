@@ -15,7 +15,7 @@ const LIMIT = 30 * 1024 * 1024;
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 type Action = { kind: 'advance' | 'resolve_stop' | 'choose_card' | 'cast_vote'; uid?: number; index?: number; go?: boolean };
 
-function tables(): Record<string, unknown> {
+export function tables(): Record<string, unknown> {
   // 상수의 선언 순서와 배열 순서를 보존한다. 함수인 사건 조건/효과는 JSON 표가 아니다.
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(S1)) {
