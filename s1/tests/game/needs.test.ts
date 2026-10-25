@@ -206,7 +206,7 @@ describe('숨긴 물림', () => {
     const found = g.cards.find(c => c.kind === 'bite_found');
     expect(found).toBeDefined();
     const choices = viewCard(g, found!).choices;
-    expect(choices.map(ch => ch.label)).toEqual(['격리한다', '쏜다']);
+    expect(choices.map(ch => ch.label)).toEqual(['따로 눕힌다', '쏜다']);
     expect(choices.some(ch => ch.special === 'bite_cut')).toBe(false);
   });
 
