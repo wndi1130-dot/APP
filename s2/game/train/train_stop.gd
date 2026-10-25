@@ -173,6 +173,8 @@ static func stop_risk(g: Dictionary, t: Dictionary) -> Dictionary:
 	var escort := 0.5 if bool(g["guardEscort"]) else 1.0
 	var now := eff_threat(stop, t)
 	var threat := now * (float(p["pyreLight"]) if St.pyre_count(g) > 0.0 else 1.0)
+	if g.get("hands") is Dictionary and t.has("HANDS"):
+		threat *= 1 + float(t["HANDS"]["watchRisk"]) * float(g["hands"]["short"].get("watch", 0))
 	var tired := expose_mult(g, t, stop["crewComm"]) if has_stop else 1.0
 	var risk := float(place["risk"])
 	var need := maxf(float(p["crewNeedMin"]), float(p["crewNeed"]) * risk * float(stay["risk"]) * now * guard_mult * horde * escort)
