@@ -236,7 +236,7 @@ func test_nobody_stops_to_search_while_the_chief_walks_on() -> void:
 func test_an_arrow_on_the_ground_is_picked_up() -> void:
 	_start()
 	var before: int = int(game.ammo.get("craft", 0))
-	game.ground_items.append({"pos": ally.position + Vector3(0.3, 0, 0), "id": "arrow", "n": 1})
+	game.ground_items.append({"pos": ally.position + Vector3(0.3, 0, 0), "id": "ammo_craft", "n": 1})
 	assert_true(game.ai._pick_ground(ally))
 	assert_eq(int(game.ammo.get("craft", 0)), before + 1, "back in the quiver")
 	assert_true(game.ground_items.is_empty())

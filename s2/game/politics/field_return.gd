@@ -512,11 +512,11 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	if float(stock.get("symbol", 0)) != 0.0:
 		g["symbols"] = maxf(0.0, float(g["symbols"]) + float(stock["symbol"]))
 	if g.get("dom") is Dictionary:
-		for key: String in ["wood", "scrap"]:
+		for key: String in ["wood", "scrap", "cloth", "parts"]:
 			if float(stock.get(key, 0)) != 0.0:
 				g["dom"][key] = maxf(0.0, float(g["dom"].get(key, 0)) + float(stock[key]))
 	var got: Array[String] = []
-	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"]]:
+	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
 		var amount := float(stock.get(row[0], 0))
 		if amount != 0.0:
 			got.append("%s %s%s" % [row[1], "+" if amount > 0 else "", int(amount) if amount == floorf(amount) else amount])
