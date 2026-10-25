@@ -51,8 +51,9 @@ describe('둘째 역 도착', () => {
     const g = slice('case3_nosymbol_kept');
     const rec = g.fieldReturns!.records[0];
     const coal = arrivalSummary(g)!.find(x => x.k === 'stock')!.lines[0];
-    expect(coal).toContain(`${rec.before.coal}`);
-    expect(coal).toContain(`${g.coal}`);
+    // 화면은 소수 첫째 자리까지 적는다.
+    expect(coal).toContain(`${Math.round(rec.before.coal * 10) / 10}`);
+    expect(coal).toContain(`${Math.round(g.coal * 10) / 10}`);
   });
 
   it('「계속」이면 끝 카드로 닫히고 더 나아가지 않는다(24)', () => {
