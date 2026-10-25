@@ -449,12 +449,13 @@ func _process(delta: float) -> void:
 				(d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(d["worn_n"].get(kind, 0))
 
 
-## The looks one person wears over the body: the coat and what is on the head.
+## The looks one person wears over the body: the shell of the outermost layer
+## over the body and of what is on the head (wear.gd shells, decision 434).
 static func looks_of(p) -> Array[String]:
 	var out: Array[String] = []
-	for id: String in [String(p.coat.get("id", "")), String(p.hat.get("id", ""))]:
-		if WEAR_TINTS.has(id):
-			out.append(id)
+	for shell: String in Wear.shells(p):
+		if WEAR_TINTS.has(shell):
+			out.append(shell)
 	return out
 
 
@@ -706,8 +707,8 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 ## Putting a garment on plays its place's motion once over the job (wear.gd
 ## CLIP); taking it off plays it backwards.
 static func wear_of(p, note: Dictionary, own: Array) -> Vector2:
-	var slot: String = String(p.action_busy.get("slot", "outer"))
-	var clip := clip_named(own, String(Wear.CLIP.get(slot, Wear.CLIP["outer"])), -1)
+	var slot: String = String(p.action_busy.get("slot", "jacket"))
+	var clip := clip_named(own, String(Wear.CLIP.get(slot, Wear.CLIP["jacket"])), -1)
 	if clip < 0:
 		return Vector2(0.0, -1.0)
 	note["motion"] = OWN_BASE + clip
