@@ -72,6 +72,31 @@ func test_skinned_bake_folds_rows_past_the_width() -> void:
 	# Vertex 2 folds to the second row of each frame.
 	assert_almost_eq((assets["image"] as Image).get_pixel(0, 3).g, 1.0, 0.001)
 
+# Split at a seam, two vertices at one place with the same bones and weights
+# move alike: one column, both pointing at it. One more at that place riding
+# another bone moves its own way and keeps its own column.
+func test_vertices_that_move_alike_share_one_column() -> void:
+	var source := _two_bone_source()
+	source[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(0, 0.5, 0), Vector3(0, 1, 0), Vector3(0, 1, 0)])
+	source[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.LEFT, Vector3.BACK])
+	source[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 2, 3, 4])
+	source[Mesh.ARRAY_BONES] = PackedInt32Array([0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+	source[Mesh.ARRAY_WEIGHTS] = PackedFloat32Array([1, 0, 0, 0, 1, 0, 0, 0, 0.5, 0.5, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
+	var still := [Transform3D(), Transform3D()]
+	var lifted := [Transform3D(), Transform3D(Basis(), Vector3(0, 2, 0))]
+	var assets := VatBaker.build_skinned(source, [{"name": "lift", "frames": [still, lifted]}])
+	assert_eq(int(assets["vertices"]), 5, "the mesh keeps every vertex")
+	assert_eq(int(assets["columns"]), 4)
+	assert_eq(int(assets["width"]), 4)
+	var look: PackedVector2Array = (assets["mesh"] as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	assert_eq(look[3], look[1], "the seam's other side reads the same column")
+	assert_ne(look[4], look[1], "another bone, another column")
+	var image: Image = assets["image"]
+	for v: int in [1, 3, 4]:
+		var lift := image.get_pixel(int(look[v].x * 4.0), 1).g
+		assert_almost_eq(lift, 2.0 if v != 4 else 0.0, 0.001, "vertex %d moves with its own bone" % v)
+
+
 func test_shader_tables_follow_the_clips_and_fill_every_slot() -> void:
 	var still := [Transform3D(), Transform3D()]
 	var clips := [{"name": "walk", "length": 1.5, "frames": [still, still, still]}, {"name": "fall", "loop": false, "length": 2.5, "frames": [still, still, still, still, still]}]

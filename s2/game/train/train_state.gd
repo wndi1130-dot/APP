@@ -9,6 +9,7 @@ extends RefCounted
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
 
 
 ## The S1a game only: a state carrying a switched-on branch would need rules not ported here.
@@ -38,16 +39,20 @@ static func situation(g: Dictionary, t: Dictionary, c: String) -> Array[float]:
 	var s: Dictionary = g["comms"][c]
 	var p: Dictionary = t["P"]
 	var base: Array = s["base"]
+	var hands: Dictionary = g["hands"] if g.get("hands") is Dictionary else {}
+	var short: Dictionary = hands.get("short", {})
+	var expose: Dictionary = hands.get("expose", {})
+	var h: Dictionary = t.get("HANDS", TrainHands.HANDS)
 	var room := 0.0
 	var sp: Variant = g.get("space")
 	if sp is Dictionary and sp.get("giver") != null and float(sp.get("step", 0)) > 0:
 		var side := -1.0 if c == "tail" else (1.0 if c == sp["giver"] else 0.0)
 		room = side * float(p["spaceStep"]) * float(sp["step"])
 	return [
-		clampv(float(base[0]) + float(p["leverStep"]) * (float(s["heat"]) - 2.0), 0.0, 100.0),
+		clampv(float(base[0]) + float(p["leverStep"]) * (float(s["heat"]) - 2.0) - float(h["stoveWarm"]) * float(short.get("stove", 0.0)), 0.0, 100.0),
 		clampv(float(base[1]) + float(p["leverStep"]) * (float(s["ration"]) - 2.0), 0.0, 100.0),
 		clampv(float(base[2]) + room, 0.0, 100.0),
-		clampv(float(base[3]), 0.0, 100.0),
+		clampv(float(base[3]) + float(expose.get(c, 0.0)), 0.0, 100.0),
 	]
 
 
