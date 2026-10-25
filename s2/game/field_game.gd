@@ -25,6 +25,7 @@ const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
+const FieldTrainGuard = preload("res://game/field_train_guard.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
 const Carry = preload("res://game/sim/carry.gd")
@@ -139,6 +140,7 @@ const MISSIONS: Array[String] = ["", "survey", "depot"]
 var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
+var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
@@ -426,6 +428,7 @@ func _ready() -> void:
 	mission_play = FieldMission.new(self)
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
+	train_guard = FieldTrainGuard.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
 	view = MapView.new()
@@ -488,6 +491,11 @@ func _ready() -> void:
 	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
 	if opts.get("field_resume") is Dictionary:
 		FieldSave.apply(self, opts["field_resume"])
+		train_guard.resumed()
+	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
+		# The train has just stood: its brakes are heard as the clock starts,
+		# the scene of it rolling in or not (decision 416).
+		train_guard.brake()
 	pace.finish()
 	is_built = true
 	built.emit()
@@ -1056,6 +1064,12 @@ func _spawn_people() -> void:
 		lines.rel_of[p.pid] = AllyLines.rel_stage(float(row.get("rel", 0.0)))
 		if row.has("voice"):
 			lines.voice_by[p.pid] = String(row["voice"])
+		# Their own memory of the chief, when the departure sheet carries one (people memory).
+		lines.names_by[p.pid] = String(row.get("name", p.pid))
+		if row.has("stance"):
+			lines.stance_by[p.pid] = String(row["stance"])
+		if row.get("cues") is Array:
+			lines.cues_by[p.pid] = (row["cues"] as Array).duplicate()
 		await BuildPace.rest(pace)
 	player = squad[0]
 	if bool(opts.get("raiders", true)):
@@ -1475,6 +1489,7 @@ func _step(delta: float) -> void:
 	combat.update(delta)
 	_update_hordes(delta)
 	_update_spawns(delta)
+	train_guard.tick()
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
@@ -1834,12 +1849,15 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
-	if level >= SimNoise.Level.LOUD:
+	# The train's own sounds (noise.gd SOURCES) call the dead to the train and
+	# pull nothing: they tell nobody where the squad is.
+	var noticed: bool = level >= SimNoise.Level.LOUD and SimNoise.notices(tag)
+	if noticed:
 		last_loud = at
 		director.noticed(now)
 	if audio != null:
 		audio.on_sound(at, level, tag)
-	if level >= SimNoise.Level.LOUD:
+	if noticed:
 		ai.raiders_hear(at, radius, from)
 	if tag == "gun":
 		shot_times.append(now)
@@ -2726,6 +2744,7 @@ func finish(reason: String) -> void:
 		telemetry.holdout = holdout.roll_note()
 	_receipt_finds(boarded)
 	_contract_end(boarded)
+	train_guard.write_receipt()
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])

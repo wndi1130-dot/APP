@@ -231,7 +231,7 @@ describe('8. 불신임', () => {
     MOTIONS.no_confidence.onPass(g, conf);
     expect(g.phase).toBe('end');
     expect(g.end).toBe('ousted');
-    expect(g.journal.filter(e => e.text === '의회가 열차장을 끌어내렸다.')).toHaveLength(1);
+    expect(g.journal.filter(e => e.text.startsWith('의회가 열차장을 끌어내렸다.'))).toHaveLength(1);
     expect(g.journal.filter(e => e.text.startsWith('기록: 징후'))).toHaveLength(1);
     const before = JSON.stringify(g);
     afterVote(g, conf, { yes: 0, no: 0, absent: 0, passed: true, byComm } as never);

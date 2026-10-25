@@ -460,10 +460,11 @@ func bleed_level() -> int:
 
 
 # The wounds as receipt rows (no person): {part, kind} plus festering when true.
+# The stump a cut left goes back as the amputation it is (the train keeps it for good).
 func receipt_wounds() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for w: Dictionary in wounds:
-		var row := {"part": w["part"], "kind": w["kind"]}
+		var row := {"part": w["part"], "kind": "amputation" if bool(w.get("stump", false)) else w["kind"]}
 		if w["festering"]:
 			row["festering"] = true
 		# What was done for it (receipt v5 treat): the train reads it instead of drawing anew (J02).

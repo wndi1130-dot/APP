@@ -57,7 +57,7 @@ witnessed: [ {…, template?} ]               // 판 4와 같음. template 이�
 ```
 
 - **사람 목록**(sent·injured·bitten·dead·missing·leftBehind·rescued)은 판 4 그대로다. 단 `sent`는 `roster` 전부에 불린 `workCrew`를 더한 것과 같아야 한다(판 4는 `roster`와 똑같아야 했다).
-- **상처 줄 하나가 필드의 상처 하나다.** 부위 여섯(`head_neck`·`torso`·`arm_left`·`arm_right`·`leg_left`·`leg_right`), 종류 여섯(`scratch`·`laceration`·`deep`·`embedded`·`bite`·`fracture`). `treat`는 그 상처에 해 둔 처치이고 `quick`는 의료 지식 견습 이상이 다친 지 실시간 2분 안에 처치한 것(몸과 부상 4장 「빠른 처치」)이다.
+- **상처 줄 하나가 필드의 상처 하나다.** 부위 여섯(`head_neck`·`torso`·`arm_left`·`arm_right`·`leg_left`·`leg_right`), 종류 일곱(`scratch`·`laceration`·`deep`·`embedded`·`bite`·`fracture`·`amputation`). `amputation`은 필드에서 자른 팔·다리의 남은 자리이고 팔·다리 네 부위에만 온다(J05). `treat`는 그 상처에 해 둔 처치이고 `quick`는 의료 지식 견습 이상이 다친 지 실시간 2분 안에 처치한 것(몸과 부상 4장 「빠른 처치」)이다.
 - **열차 방어**는 정차 소리 줄기(결정 416)가 채운다. 방어에 선 사람은 계약의 명단이 아니라 열차에 남은 사람이라 `people`과 따로 둔다. 상처는 같은 꼴, 같은 반영(4절)이다.
 - `crew.bodyUse`는 필드에서 몸 능력을 쓴 양이다. 쓰면 오르는 규칙(field_unified 3장)이 들어올 자리이고, 그 전까지는 비어 있다.
 
@@ -69,6 +69,7 @@ witnessed: [ {…, template?} ]               // 판 4와 같음. template 이�
 
 | 필드 상처 | 열차 명부 |
 |---|---|
+| 절단 | 절단(`amputation`), 같은 부위. 침상 4일 뒤 그 팔·다리는 돌아오지 않는다 |
 | 골절 | 골절(`fracture`), 같은 부위. 빠른 처치로 부목을 댔으면 가벼운 상처(`light`) |
 | 깊은 상처, 박힌 것 | 깊은 상처(`deep`), 같은 부위 |
 | 긁힘·찢김뿐 | 기록하지 않는다(한 구간 안에 낫는다). 단 출혈 심함·쓰러짐으로 `injured`에 든 사람은 카드 C |
@@ -76,7 +77,7 @@ witnessed: [ {…, template?} ]               // 판 4와 같음. template 이�
 | 곪음 | 곪음(`septic`)을 그대로. 굴리지 않는다 |
 | 부위 | `head_neck`→`head`, `torso`→`torso`, `arm_left`→`armL`, `arm_right`→`armR`, `leg_left`→`legL`, `leg_right`→`legR` |
 
-- **사람마다 기록 하나**다. 열차의 부상자 수와 침상은 사람을 센다. 한 사람이 무거운 상처를 여럿 가져오면 가장 무거운 것(골절 > 깊은 상처)이 등급·부위가 되고, 나머지는 그 기록의 `field` 칸에 그대로 붙어 의무칸 화면이 읽는다.
+- **사람마다 기록 하나**다. 열차의 부상자 수와 침상은 사람을 센다. 한 사람이 무거운 상처를 여럿 가져오면 가장 무거운 것(절단 > 골절 > 깊은 상처)이 등급·부위가 되고, 나머지는 그 기록의 `field` 칸에 그대로 붙어 의무칸 화면이 읽는다.
 - 낫는 날 수는 S1 표(결정 055)대로다. 깊은 상처의 3일/4일만 지금처럼 그 사람·그 구간으로 정해진 동전이 고른다(등급·부위·곪음은 굴리지 않는다). 처치가 날 수에 닿게 할지는 카드 C.
 - 열차장이 다쳐 오면 같은 명부에 열차장으로 오른다(S1 `hurtCaptain`과 같은 꼴).
 - **몸 상태**: `crew`의 탈진·허기는 그 사람의 다음 출발 계약 `rest`·`hunger`로 이어진다(카드 B).

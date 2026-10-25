@@ -156,6 +156,58 @@
       "valid": true
     },
     {
+      "name": "팔 절단",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          2
+        ],
+        [
+          [
+            "people",
+            "wounds"
+          ],
+          [
+            {
+              "person": "s2_shooter",
+              "part": "arm_left",
+              "kind": "amputation"
+            }
+          ]
+        ]
+      ],
+      "remove": [],
+      "valid": true
+    },
+    {
+      "name": "몸통 절단",
+      "set": [
+        [
+          [
+            "version"
+          ],
+          2
+        ],
+        [
+          [
+            "people",
+            "wounds"
+          ],
+          [
+            {
+              "person": "s2_shooter",
+              "part": "torso",
+              "kind": "amputation"
+            }
+          ]
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
       "name": "모르는 꼭대기 키",
       "set": [
         [
