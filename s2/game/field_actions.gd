@@ -952,7 +952,7 @@ func vault_window(p, c: Vector2i) -> void:
 # ---------------------------------------------------------------- searching
 
 func search_time(p, c: Dictionary) -> float:
-	return SearchRules.seconds(float(c["search"]), int(p.skills["search"]))
+	return SearchRules.seconds(SearchRules.box_seconds(c), int(p.skills["search"]))
 
 
 func _container_at(c: Dictionary) -> Vector3:
