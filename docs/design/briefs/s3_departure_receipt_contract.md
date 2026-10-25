@@ -50,16 +50,25 @@ Person = { id, comm, name, role: chief|companion|carrier|escort,
 people.wounds: [ {person, part, kind, festering?, treat?: {bandaged, disinfected,
                   sutured, splinted, tourniquet, pulled, quick}} ]
 crew:   [ {person, exhaustion: 0|1|2, hunger: 0|1|2, bodyUse: {melee: n, …},
-           gearBack: {hands, items}} ]      // 살아서 열차에 오른 사람만
+           gearBack: {hands, items, wear?}} ]  // 살아서 열차에 오른 사람만
 defense:{ held: bool, people: [ids], hurt: [ids], dead: [ids],
           wounds: [ {person, part, kind, festering?, treat?} ] } | null
 witnessed: [ {…, template?} ]               // 판 4와 같음. template 이름 표는 4절
+wardrobeIn?: [ Garment ]                    // 승강장에서 열차에 실은 옷장 자리 옷
+luresBack?:  {id: n}                        // 남은 미끼
+foodIn?:     {id: n}                        // 열차에 실은 음식, 녹이기 전 이름별(J07)
+
+Garment = { id, condition: 0~1, holes?: {부위: true} }
+wear    = { jacket: Garment|"", hands: Garment|"", coat?: Garment|"" }   // "" = 맨몸
 ```
 
 - **사람 목록**(sent·injured·bitten·dead·missing·leftBehind·rescued)은 판 4 그대로다. 단 `sent`는 `roster` 전부에 불린 `workCrew`를 더한 것과 같아야 한다(판 4는 `roster`와 똑같아야 했다).
 - **상처 줄 하나가 필드의 상처 하나다.** 부위 여섯(`head_neck`·`torso`·`arm_left`·`arm_right`·`leg_left`·`leg_right`), 종류 일곱(`scratch`·`laceration`·`deep`·`embedded`·`bite`·`fracture`·`amputation`). `amputation`은 필드에서 자른 팔·다리의 남은 자리이고 팔·다리 네 부위에만 온다(J05). `treat`는 그 상처에 해 둔 처치이고 `quick`는 의료 지식 견습 이상이 다친 지 실시간 2분 안에 처치한 것(몸과 부상 4장 「빠른 처치」)이다.
 - **열차 방어**는 정차 소리 줄기(결정 416)가 채운다. 방어에 선 사람은 계약의 명단이 아니라 열차에 남은 사람이라 `people`과 따로 둔다. 상처는 같은 꼴, 같은 반영(4절)이다.
 - `crew.bodyUse`는 필드에서 몸 능력을 쓴 양이다. 쓰면 오르는 규칙(field_unified 3장)이 들어올 자리이고, 그 전까지는 비어 있다.
+- **장비 귀환**(출발 때 빼지 않은 장비의 순증감, 2절): `gearBack.wear`는 그 사람이 입고 돌아온 옷장 자리 옷이다. 출발 `gear.wear`와 같은 꼴이고, `coat`는 필드에서 주워 입은 긴 외투가 있을 때만 쓴다. `wardrobeIn`은 승강장에서 실은 옷장 자리 옷(재킷·외투·장갑)이고 셔츠 같은 것은 넣지 않는다. `luresBack`은 미끼가 나갔을 때만 쓴다. 세 칸 다 없어도 된다(판 5 앞쪽 영수증).
+- **실은 음식**(J07): `foodIn`은 열차에 실은 음식을 녹이기 전 필드 물건 id(`meat_spoiled`·`can_dented` 등, 상태가 id에 들어 있다)별 개수다. `stock.food`를 쪼갠 내역이지 더할 몫이 아니다: 열차는 식량을 지금처럼 `stock.food`로만 더하고, 솥이 `foodIn`의 id로 신선도·익힘·밀봉을 읽는다. 없으면 이름 없는 식량으로 센다.
+- 열차는 이렇게 맞춘다. 탄 = 출발 전 − 계약 `train.ammo` + `stock.ammo_*`. 무기고 = 나간 `gear.hands` − 돌아온 `gearBack.hands`. 옷장 = 나간 `gear.wear` − 돌아온 `gearBack.wear` + `wardrobeIn`. 미끼 = 출발 전 − 계약 `train.lures` + `luresBack`. `gearBack.wear`가 없으면 나간 그대로 돌아온 것으로, `luresBack`이 없으면 다 쓴 것으로 센다. 죽거나 남겨져 `crew`에 없는 사람의 무기·옷은 잃은 것이다.
 
 ## 4. 열차가 영수증을 반영하는 법
 
@@ -89,6 +98,12 @@ witnessed: [ {…, template?} ]               // 판 4와 같음. template 이�
 귀환을 반영한 판 상태(정차 고르기에서 들고 간 그 판)가 그대로 특별 회기를 열고(결정 290·303), 회기를 닫은 상태가 열차 턴으로 다음 구간을 달려 둘째 역 도착 화면과 끝 카드를 만든다(결정 297). 표본 파일은 시험만 읽는다. 결정 382의 고정 매핑(목재 → 난방 배당 표 → 다음 파견)은 이 판 상태 위에서 그대로 돈다.
 
 같은 시작에서 가져온 것·구한 사람·지킨 약속이 다르면 회기 후보·표·둘째 역 화면이 달라야 한다. 이것이 J01의 받아들임이고, 시험은 같은 씨앗에서 영수증 셋(목재 있음/없음, 약속 지킴/어김, 사람 하나 잃음)을 넣어 셋이 서로 다른 회기·도착을 내는지 본다.
+
+조각의 판은 S1 새 판(`createGame`)을 자산 `s2/game/train/slice_start.json`으로 내보낸 것이다(`s1/tools/slice_vectors.ts`). 조각은 이 판을 2구간에 두고 열차 턴(`train_advance.gd`, S1 그대로)으로 첫 정차까지 달린다. 열차 서류는 조각에 아직 화면이 없어 걸음마다 비운다(S1 `field_arrival.test.ts`의 조각과 같다). 차례는 첫 정차 → 출발 계약 → 필드 → 영수증 반영 → 특별 회기(보통 안건은 `council_agenda.gd`) → 표결·회기 닫기 → 열차 턴으로 둘째 역 → 끝이다.
+
+필드가 정차를 대신 나가므로 열차는 `resolveStop`을 부르지 않는다. 영수증을 반영할 때 정차 단계이고 정차가 아직 안 끝났으면 그 정차를 **필드 결과로 닫는다**(S1 `closeFieldStop`, S2 `field_return.gd` `_close_field_stop`, 결정 카드 s3-link 2026-10-26 F를 결정 442로 추천 적용). 굴림은 없다. 정차마다 같은 것(장작더미, 돌아온 사람의 자리비움, 가장 많이 나간 칸 말고는 쉼, 정차 약속 확인)은 파견과 같이 세고, 체류 석탄·위험·전리품·부상·사망·구조·물림은 영수증이 이미 적었으니 다시 세지 않는다. 내정 정차 훅(`domesticStop`)은 내정 줄기가 붙인다.
+
+맞대기 시험(`s2/tests/train/test_slice_vectors.gd`)은 같은 계약에 영수증 셋(가져옴 많음 / 빈손에 한 명 다침 / 한 명 죽음)을 넣어, 첫 정차·계약·반영·회기 후보·표결·둘째 역 걸음·도착 화면·끝까지 S1과 판 상태 전체가 같은지, 그리고 셋이 서로 다른 회기 후보나 둘째 역을 내는지 본다. S1 새 판에는 서막 약속이 없어 약속 지킴/어김 갈래는 서막을 거친 판이 들어올 때 더한다. 둘째 역 화면의 수는 소수 첫째 자리까지 적는다.
 
 ## 6. 앱 중단 뒤 같은 위기로
 

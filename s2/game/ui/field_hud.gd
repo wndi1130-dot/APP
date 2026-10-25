@@ -17,6 +17,7 @@ const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
+const PauseVeil = preload("res://game/ui/pause_veil.gd")
 const TextFit = preload("res://game/ui/text_fit.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -28,6 +29,7 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const PaperSheet = preload("res://game/ui/paper_sheet.gd")
 const Paper = preload("res://game/ui/paper_parts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
+const InventoryPane = preload("res://game/ui/inventory_pane.gd")
 const SoundRows = preload("res://game/ui/sound_rows.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
@@ -129,28 +131,25 @@ const SAY_FONT: int = 20
 # A held train leaves: the field stands still and darkens, two lines come up,
 # then the end card (user decision 142).
 ## The panels' glass pane, as wide as 시안 13's menu (mockup px); the body
-## picture's, wider for the figure and the gap beside it; the bag's with the
-## journal's note beside its list.
+## picture's, wider for the figure and the gap beside it (the bag's is
+## inventory_pane.gd's).
 const PANE_W: float = 420.0
 const BODY_PANE_W: float = 500.0
 const BODY_GAP: float = 12.0
 ## The cut asks twice (body_injury 2.2): a second press within this many
 ## seconds of the first cuts.
 const CUT_CONFIRM_S: float = 3.0
-const BAG_PANE_W: float = 600.0
-## How high a list of things stands before it is dragged (mockup px): three
-## rows in the bag, four in a place being searched.
-const BAG_LIST_MAX: float = 144.0
-## The rows of what is worn shown before that list scrolls (about three).
-const WORN_LIST_MAX: float = 132.0
-const LOOT_LIST_MAX: float = 194.0
-## A thing's put-down key, and the bag's list beside the journal (mockup px).
+## A key beside a thing's row (mockup px).
 const DROP_W: float = 84.0
+## How high the list of what one of the fallen has on stands before it is
+## dragged (mockup px, about four rows; strip_pane).
+const LOOT_LIST_MAX: float = 194.0
 ## A thing's picture in the loot and bag rows (decision 417: a picture and a short name).
 const ITEM_ICON_PX: int = 18
 ## How fast a thing come up out of the snow glimmers (radians a second).
 const GLINT_PULSE: float = 4.0
-const BAG_LIST_W: float = 300.0
+## The load's walk said at most this often (s).
+const LOAD_WALK_EVERY: float = 6.0
 ## The journal's note in the bag (시안 .pnote: 240 wide, leaning 1.1°).
 const JOURNAL_W: float = 240.0
 const JOURNAL_LEAN_DEG: float = 1.1
@@ -304,6 +303,7 @@ const HISS_TEXT := "…치직"   # what the field puts up while the set only his
 var game
 var theme: Theme
 var root: Control
+var pause_veil: Control                   # pause_veil.gd
 var text_fit: Node                       # text_fit.gd
 var touch: Control
 var overlay: Control
@@ -374,6 +374,7 @@ var grab_bar: ProgressBar
 var grab_total: float = 1.0
 var crouch_button: Button
 var run_button: Button
+var load_walk_said: float = -999.0   # when the load last kept the feet to a walk (card G)
 var aim_button: Button
 var manual_button: Button
 var attack_button: Button
@@ -407,6 +408,9 @@ var debug_label: Label
 var modal: Control
 var modal_paused_before: bool = false
 var modal_open: bool = false
+## The bag pane's right side: the place near shown, and the bag's order (inventory_pane.gd).
+var inv_near: Dictionary = {}
+var inv_sort: String = "weight"
 var modal_slows: bool = false      # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
 var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
@@ -458,6 +462,10 @@ func setup(field_game) -> void:
 	overlay.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the paper's fibre on the slips
 	overlay.draw.connect(_draw_overlay)
 	root.add_child(overlay)
+	# A pause shows at a glance (pause_veil.gd), under the keys and over the world.
+	pause_veil = PauseVeil.new()
+	pause_veil.setup(self)
+	root.add_child(pause_veil)
 	_build_top()
 	_build_portrait()
 	_build_allies()
@@ -2787,27 +2795,7 @@ func _card_pick(cb: Callable, choice: String) -> void:
 
 
 func loot(id: String) -> void:
-	var c: Dictionary = game.data["containers"][id]
-	var p = game.player
-	var pane := _open_pane(String(c["name"]), "%.1f / %.0f" % [p.weight(), p.carry_limit()], "search")
-	var items: Array = c["items"]
-	if items.is_empty():
-		pane.body.add_child(GlassPane.note("빈 곳", PANE_W - GlassPane.PAD_L - GlassPane.PAD_R, GlassPane.INK3, 13.0))
-		return
-	# A press takes the one; the main key takes them all.
-	var list := VBoxContainer.new()
-	list.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
-	for i in range(items.size()):
-		var item: String = items[i]
-		list.add_child(_thing_key(game.item_name(item), "%.1f" % Carry.item_weight(item), _loot_take.bind(id, i), game.item_icon(item)))
-	pane.body.add_child(GlassPane.scroll(list, LOOT_LIST_MAX))
-	var foot := GlassPane.row()
-	foot.alignment = BoxContainer.ALIGNMENT_END
-	var all := LampKey.new("모두 담기", false)
-	all.pressed.connect(_loot_all.bind(id))
-	foot.add_child(all)
-	pane.body.add_child(foot)
+	InventoryPane.open(self, {"kind": "box", "id": id})
 
 
 ## A thing as a cell across its row: its picture and its name at 13/500 at the
@@ -2845,124 +2833,54 @@ func _loot_take(id: String, i: int) -> void:
 
 func _loot_all(id: String) -> void:
 	game.actions.take_all(game.player, id)
-	_close_modal()
+	loot(id)
 
 
-## The bag on the glass: what it is and how full in the head, the two weapons
-## and the key that swaps them, what is in it as a list (a put-down key on each
-## row), the rounds under it; beside it the journal on a pinned note.
+## The bag on the glass with what is near beside it (decision 448-1,
+## inventory_pane.gd): opened anew, the first place near (the train's hold by
+## the train); shown again, the place last shown if it is still near.
 func bag_panel() -> void:
+	if modal == null:
+		inv_near = {}
+	InventoryPane.open(self, inv_near)
+
+
+## A row of the bag pressed: it goes across to the place shown at the right.
+func _inv_put(id: String) -> void:
 	var p = game.player
-	# 일지: this stop's goals, one to a row (decision 293 ②: the field shows
-	# them under the clock only once the technology opens that line).
-	var goals: String = game.goal_text() if game.mission_play != null else ""
-	var pane := _open_pane(String(Carry.BAGS[p.bag]["name"]), "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]], "inv", BAG_PANE_W if goals != "" else PANE_W)
-	var left := VBoxContainer.new()
-	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", GlassPane.px(GlassPane.SET_GAP))
-	if goals == "":
-		pane.body.add_child(left)
+	match String(inv_near.get("kind", "ground")):
+		"box":
+			game.actions.store(p, String(inv_near["id"]), id)
+		"train":
+			game.actions.load_train(p, id)
+		_:
+			game.actions.put_down(p, id)
+	bag_panel()
+
+
+## A thing lying near pressed: picked up (a garment is put on, the pane closing
+## on the hands' work).
+func _inv_pick(i: int) -> void:
+	game.actions.pick_up(game.player, i)
+	if game.player.action != "":
+		_close_modal()
 	else:
-		var side := GlassPane.row()
-		side.add_theme_constant_override("separation", GlassPane.px(16.0))
-		pane.body.add_child(side)
-		side.add_child(left)
-		side.add_child(_journal_note(goals))
-	if p.hands.size() > 1:
-		var hw := GlassPane.row()
-		var held = TypeLine.new(GlassPane.CELL_H, GlassPane.CELL_H)
-		held.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		held.add_child(UiFonts.label(short_weapon(p), UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39))
-		held.add_child(UiFonts.label(" · ", UiFonts.WORD, 400, 12.0, GlassPane.INK3, 0.6))
-		held.add_child(UiFonts.label(String(W.get_data(p.hands[1]["id"]).get("name", "")), UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39))
-		hw.add_child(held)
-		var swap := GlassPane.key("바꾸기", _swap_from_bag)
-		swap.size_flags_horizontal = Control.SIZE_SHRINK_END
-		swap.custom_minimum_size.x = UiFonts.px(DROP_W)
-		hw.add_child(swap)
-		left.add_child(hw)
-	# What is worn (decision 434), a row to each place with something in it,
-	# skin first, in a list of its own that scrolls past a few rows.
-	var worn := VBoxContainer.new()
-	worn.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	worn.add_theme_constant_override("separation", 0)
-	var ids: Dictionary = Wear.worn_ids(p)
-	for slot: String in Wear.SLOTS:
-		if String(ids[slot]) != "":
-			worn.add_child(_worn_row(slot, String(ids[slot])))
-	if worn.get_child_count() > 0:
-		var worn_list := GlassPane.scroll(worn, WORN_LIST_MAX)
-		worn_list.name = "Worn"
-		left.add_child(worn_list)
-	if p.items.is_empty():
-		left.add_child(GlassPane.note("빈 가방", BAG_LIST_W, GlassPane.INK3, 13.0))
-	else:
-		var list := VBoxContainer.new()
-		list.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		list.add_theme_constant_override("separation", 0)
-		var first := true
-		for id in p.items.keys():
-			if not first:
-				list.add_child(GlassPane.rule())
-			first = false
-			list.add_child(_bag_row(id, int(p.items[id])))
-		left.add_child(GlassPane.scroll(list, BAG_LIST_MAX))
-	left.add_child(GlassPane.mixed("권총탄 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
-	# By the train: what the bag holds goes aboard with one key (decision 448-13).
-	if game.actions.at_unloading(p) and not game.actions.loadable(p).is_empty():
-		var foot := GlassPane.row()
-		foot.alignment = BoxContainer.ALIGNMENT_END
-		var aboard := LampKey.new("열차에 싣기", false)
-		aboard.pressed.connect(_load_train)
-		foot.add_child(aboard)
-		left.add_child(foot)
+		bag_panel()
+
+
+func _inv_place(place: Dictionary) -> void:
+	inv_near = place
+	bag_panel()
+
+
+func _inv_sort() -> void:
+	inv_sort = "name" if inv_sort == "weight" else "weight"
+	bag_panel()
 
 
 func _load_train() -> void:
 	game.actions.load_train(game.player)
 	bag_panel()
-
-
-## One thing in the bag: its picture, name and count at 13/500, its weight in
-## the number face, and its keys at the right: put down, and eat for food, or
-## switch off for a watch still set to ring.
-func _bag_row(id: String, n: int) -> Control:
-	var h := HBoxContainer.new()
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.custom_minimum_size = Vector2(0, UiFonts.px(GlassPane.CELL_H))
-	h.add_theme_constant_override("separation", GlassPane.px(10.0))
-	var icon: String = game.item_icon(id)
-	if icon != "" and HudIcons.PATHS.has(icon):
-		h.add_child(_icon_rect(icon, ITEM_ICON_PX, GlassPane.INK))
-	var name_l := UiFonts.label("%s ×%d" % [game.item_name(id), n], UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39)
-	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_l.clip_text = true
-	name_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(name_l)
-	var kg := UiFonts.label("%.1f" % (Carry.item_weight(id) * n), UiFonts.NUMBER, 500, 15.0, GlassPane.INK2, 0.22)
-	kg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	h.add_child(kg)
-	if Carry.FieldItems.rings(id):
-		var off := GlassPane.key("끄기", _alarm_off)
-		off.size_flags_horizontal = Control.SIZE_SHRINK_END
-		off.custom_minimum_size.x = UiFonts.px(DROP_W)
-		h.add_child(off)
-	elif Carry.FieldItems.edible(id):
-		var eat := GlassPane.key("먹기", _eat.bind(id))
-		eat.size_flags_horizontal = Control.SIZE_SHRINK_END
-		eat.custom_minimum_size.x = UiFonts.px(DROP_W)
-		h.add_child(eat)
-	elif Carry.FieldItems.throwable(id):
-		var toss := GlassPane.key("던지기", _throw.bind(id))
-		toss.size_flags_horizontal = Control.SIZE_SHRINK_END
-		toss.custom_minimum_size.x = UiFonts.px(DROP_W)
-		h.add_child(toss)
-	var drop := GlassPane.key("내려놓기", _drop.bind(id))
-	drop.size_flags_horizontal = Control.SIZE_SHRINK_END
-	drop.custom_minimum_size.x = UiFonts.px(DROP_W)
-	h.add_child(drop)
-	return h
 
 
 ## One thing worn: its picture and name, how worn it is once it shows
@@ -3125,16 +3043,6 @@ func _draw_clip(note: Control) -> void:
 func _swap_from_bag() -> void:
 	_close_modal()
 	_swap()
-
-
-func _drop(id: String) -> void:
-	var p = game.player
-	var n: int = int(p.items.get(id, 0))
-	if n <= 0:
-		return
-	p.take_item(id, n)
-	game.ground_items.append({"pos": p.position + Vector3(0.4, 0, 0.4), "id": id, "n": n})
-	bag_panel()
 
 
 ## Eat one there and then: the bag closes and the hands get to it.
@@ -3535,6 +3443,7 @@ func _toggle_run() -> void:
 	if run_button.button_pressed:
 		p.crouched = false
 		crouch_button.button_pressed = false
+		_load_walk_note(p)
 	if p.moving:
 		p.running = run_button.button_pressed
 
@@ -3916,6 +3825,20 @@ func _set_running(p) -> void:
 	if p.running:
 		p.crouched = false
 		crouch_button.button_pressed = false
+		_load_walk_note(p)
+
+
+## Running asked for under a load that does not let one run (card G 가): why,
+## once in a while, and the feet walk.
+func _load_walk_note(p) -> void:
+	if p.load_lets_run() or game.clock.elapsed - load_walk_said < LOAD_WALK_EVERY:
+		return
+	load_walk_said = game.clock.elapsed
+	for id: String in p.items:
+		if int(p.items[id]) > 0 and Carry.item_weight(id) >= Carry.BIG_THING and not W.is_known(id):
+			toast("%s을(를) 안고는 못 뛴다 · 걷는다" % game.item_name(id))
+			return
+	toast("짐이 넘쳐 못 뛴다 · 걷는다")
 
 
 ## Stick-rim running with a way in and a way out (a setting, off by default).

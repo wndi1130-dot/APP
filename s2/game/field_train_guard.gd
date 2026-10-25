@@ -8,6 +8,11 @@ extends RefCounted
 ## end; each one that gets to the train in the first minutes is put down
 ## there by the guards, by the one function an unplayed stop uses too. One the
 ## squad puts down first is not theirs, so the squad at the train spares them.
+##
+## The guards also cover the doors all through the stop (the user's field
+## test, 14): one of the dead that comes at someone getting on (brain
+## "boarding", field_ai) or making for a door by the train is theirs as well,
+## so nobody is beaten at the door while climbing up.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
@@ -16,6 +21,9 @@ const TrainGuard = preload("res://game/sim/train_guard.gd")
 
 ## Cells round the train within which the guards reach one of the dead.
 const REACH_CELLS := 2
+## How near someone getting on one of the dead must be for the guards at the
+## door to take it.
+const DOOR_COVER_M := 2.5
 ## Each of them makes for its own place along the engine end, up to this many
 ## cells either way of where the brakes were, so they come up against the
 ## plough, the cab door and the first car's door instead of piling on one cell.
@@ -38,10 +46,16 @@ var engaged: Dictionary = {}
 var put_down: Dictionary = {}
 var told: Dictionary = {}
 var radio_said: bool = false
+## The dead the guards took at the doors (not of the brakes).
+var at_doors: int = 0
 
 
 func _init(field_game) -> void:
 	game = field_game
+	# The train's people at the posts (the departure contract's ids, S3), else
+	# as many nameless hands as the stop says.
+	guard_ids = game.opts.get("train_guard_ids", []) if game.opts.get("train_guard_ids") is Array else []
+	hands = guard_ids.size() if not guard_ids.is_empty() else maxi(int(game.opts.get("train_guards", TrainGuard.HANDS)), 0)
 
 
 ## The train has come to a stand: its brakes, heard as any sound (noise.gd
@@ -51,10 +65,6 @@ func brake() -> void:
 		return
 	done = true
 	spot = FieldGrid.center(game.data["anchors"]["whistle"])
-	# The train's people at the posts (the departure contract's ids, S3), else
-	# as many nameless hands as the stop says.
-	guard_ids = game.opts.get("train_guard_ids", []) if game.opts.get("train_guard_ids") is Array else []
-	hands = guard_ids.size() if not guard_ids.is_empty() else maxi(int(game.opts.get("train_guards", TrainGuard.HANDS)), 0)
 	game.make_sound(spot, ArrivalHorde.LEVEL, "train_brake")
 	for z in game.zombies.list:
 		if z["state"] == "investigate" and (z["target"] as Vector3).distance_to(spot) < 0.01:
@@ -73,17 +83,17 @@ func resumed() -> void:
 
 
 func tick() -> void:
-	if not done:
-		return
 	var now: float = game.clock.elapsed
-	_fill(now)
-	if not radio_said and now >= ArrivalHorde.RADIO_AT_S:
-		radio_said = true
-		if heard + filled > 0:
-			game.set_radio(ArrivalHorde.RADIO_LINE, "urgent", spot)
+	if done:
+		_fill(now)
+		if not radio_said and now >= ArrivalHorde.RADIO_AT_S:
+			radio_said = true
+			if heard + filled > 0:
+				game.set_radio(ArrivalHorde.RADIO_LINE, "urgent", spot)
+	_cover_doors()
 	var changed := false
 	for z in game.zombies.list:
-		if not z.get("arrival", false):
+		if not (z.get("arrival", false) or z.get("at_door", false)):
 			continue
 		var id: int = int(z["id"])
 		if by_id.has(id):
@@ -91,11 +101,13 @@ func tick() -> void:
 			if z["state"] == "dead" and not put_down.has(id) and float(b["taken"]) == INF:
 				b["taken"] = now
 				changed = true
-		elif game.zombies.threat(z) and now <= ArrivalHorde.WINDOW_S and at_train(z["pos"]):
+		elif game.zombies.threat(z) and (now <= ArrivalHorde.WINDOW_S or z.get("at_door", false)) and at_train(z["pos"]):
 			var row := {"id": id, "t": now, "post": TrainGuard.post_at(FieldGrid.cell_of(z["pos"]).x, game.data["train"]), "taken": INF}
 			bodies.append(row)
 			by_id[id] = row
 			changed = true
+			if not z.get("arrival", false):
+				at_doors += 1
 	if changed:
 		result = TrainGuard.resolve(bodies, hands, game.rng.seed)
 	if result.is_empty():
@@ -113,7 +125,9 @@ func tick() -> void:
 			by_id[id]["by"] = "left"
 			result = TrainGuard.resolve(bodies, hands, game.rng.seed)
 			continue
-		if not z["state"] in ["grab", "attack", "downed"]:
+		# Held off by the guard: it stops coming at anyone (a grab is let go of
+		# as a grab is, by the one holding it, so that is left as it is).
+		if not z["state"] in ["grab", "downed"]:
 			z["state"] = "investigate"
 			z["target"] = z["pos"]
 			z["linger"] = TrainGuard.KILL_S + 1.0
@@ -145,6 +159,20 @@ func place_for(id: int) -> Vector3:
 	return game.walkable_near(spot + Vector3(off, 0.0, 0.0), true, 2)
 
 
+## The dead coming at someone getting on, or making for a door by the train,
+## are the guards' too.
+func _cover_doors() -> void:
+	for p in game.squad + game.crew:
+		if not p.is_alive() or p.brain.get("boarded", false):
+			continue
+		var going: bool = p.brain.get("boarding", false) or (p.command == "retreat" and at_train(p.position))
+		if not going:
+			continue
+		for z in game.zombies.in_radius(p.position, DOOR_COVER_M):
+			if not z.get("arrival", false):
+				z["at_door"] = true
+
+
 ## Close enough to the train for the guards at its doors and on its roof.
 func at_train(at: Vector3) -> bool:
 	if game.level_of(at) != 0:
@@ -154,11 +182,11 @@ func at_train(at: Vector3) -> bool:
 
 ## On the receipt as the stop ends (train_guard.gd write).
 func write_receipt() -> void:
-	if not done or result.is_empty() and heard + filled == 0:
+	if result.is_empty() and heard + filled == 0:
 		return
 	if result.is_empty():
 		result = TrainGuard.resolve(bodies, hands, game.rng.seed)
-	TrainGuard.write(game.receipt, result, heard, hands)
+	TrainGuard.write(game.receipt, result, heard, hands, at_doors)
 	# The S3 contract's own field, once the receipt has it (v5); only with the
 	# train's people named, there is nobody to name otherwise.
 	var d: Variant = TrainGuard.defense(result, guard_ids, game.rng.seed)

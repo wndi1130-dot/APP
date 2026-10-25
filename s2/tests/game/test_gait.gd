@@ -167,6 +167,29 @@ func test_out_of_breath_with_the_run_on_it_walks() -> void:
 	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_SPENT, "spent with the run on: it reels")
 
 
+# Over the load, or with something big in both arms, the rules walk it with the
+# run on (person.gd load_lets_run, decision 448-19): the picture walks too, not a
+# run at a walking pace.
+func test_over_the_load_or_with_a_big_thing_the_run_on_walks() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	p.running = true
+	p.items.clear()
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_RUN)
+	p.add_item("symbol_bell", 1)
+	assert_false(p.load_lets_run())
+	assert_false(Gait.runs(p))
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "the bell in the arms: it walks")
+	p.items.clear()
+	p.add_item("scrap", int(ceil(p.carry_limit() * 1.25)))
+	assert_eq(p.carry_state(), 2)
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "over the load: it walks")
+	p.items.clear()
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_RUN, "put down, it runs again")
+
+
 func test_each_person_has_their_own_beat_stride_and_lean() -> void:
 	var a := _person("p_a", "가나")
 	var b := _person("p_b", "다라마")
