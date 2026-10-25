@@ -341,6 +341,9 @@ static func picked(z: Dictionary, down: float, still: float, shade: float, baked
 	var struck := struck_motion(z)
 	if struck >= 0:
 		return Color(struck_k(z), float(struck), 1.0, shade)
+	var torn := bite_after_k(z)
+	if torn >= 0.0:
+		return Color(torn, float(named[BITE]), 1.0, shade)
 	if float(z.get("shoved_t", 0.0)) > 0.0:
 		# Thrown off: it reels back, its feet going back over the ground it is
 		# seen to cover; then, stunned, it reels on the spot until it comes on.
@@ -514,6 +517,17 @@ static func bite_k(z: Dictionary) -> float:
 	if left > BITE_LANDS * length:
 		return -1.0
 	return clampf(BITE_LANDS - left / length, 0.0, BITE_LANDS)
+
+
+## Once the teeth have gone in (field_combat bite notes "bit_at"), the one that bit
+## tears away through the rest of the bite, from BITE_LANDS to the end, before it
+## reels on as one let go; -1 when that is over (or the folder has no bite).
+static func bite_after_k(z: Dictionary) -> float:
+	if not named.has(BITE) or not z.has("bit_at"):
+		return -1.0
+	var since := float(z["age"]) - float(z["bit_at"])
+	var k := BITE_LANDS + since / seconds_of(int(named[BITE]), 1.0)
+	return k if since >= 0.0 and k < 1.0 else -1.0
 
 
 ## Going down to a body, eating it, or getting up from it: how far through (x)
