@@ -254,7 +254,7 @@
       ],
       "height_m": 1.8,
       "solid": "low",
-      "lod0_tris": 356,
+      "lod0_tris": 350,
       "triangle_limit": 600,
       "bounds_m": [
         [
@@ -273,14 +273,15 @@
         1.8,
         1.92
       ],
-      "bytes": 29968,
-      "sha256": "4f813cadecb60b0b38a9d8da65f2cb9658f26b9055faa1ae54effa46aef45979",
+      "bytes": 28520,
+      "sha256": "12cece5a52f7e4b8de71c4caabd3af0462d642e5a3655fa6a78c34af925fb867",
       "colours": [
         "bark",
+        "cloth",
         "wood",
         "worn_wood"
       ],
-      "judgment": "low: 2×2칸을 채우는 낮고 넓은 겨울 잡목 덤불, 잔가지 덩이 다섯과 삐죽한 가지, 눈은 셰이더가 윗면에",
+      "judgment": "low: 2×2칸을 채우는 겨울 잡목 덤불, 낮은 어두운 속심 셋과 위·바깥으로 퍼진 밝은 마른 가지 서른넷",
       "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
     }
   },

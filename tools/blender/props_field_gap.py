@@ -27,7 +27,7 @@ DESIGNS = {
     "gap_gate": (1.3, [2, 2], None, "none", "none: 판자 울타리 사이 나무 쪽문이 바깥으로 열려 있음, 자물쇠·빗장 없음, 밟힌 흙길"),
     "gap_planks": (1.2, [2, 2], None, "none", "none: 가운데 기둥이 부러져 판자 울타리가 무너지고 판자가 바닥에 흩어진 틈"),
     "small_shelf": (1.4, [1, 1], .42, "low", "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음"),
-    "thicket": (1.8, [2, 2], None, "low", "low: 2×2칸을 채우는 낮고 넓은 겨울 잡목 덤불, 잔가지 덩이 다섯과 삐죽한 가지, 눈은 셰이더가 윗면에"),
+    "thicket": (1.8, [2, 2], None, "low", "low: 2×2칸을 채우는 겨울 잡목 덤불, 낮은 어두운 속심 셋과 위·바깥으로 퍼진 밝은 마른 가지 서른넷"),
 }
 
 
@@ -171,21 +171,21 @@ def small_shelf(p):
 
 
 def thicket(p):
-    # 위에서 「가는 막대 줄」이 아니라 덩이로 읽히게: 잔가지 덩이 다섯(위가 넓어 눈 셰이더가 얹음)과
-    # 덩이에서 삐져나온 가지 열. 맨나무(376삼각형)보다 적게.
-    # 덩이는 낮고 넓은 둔덕(알 모양이면 돌로 읽힘), 가지는 덩이 위·옆으로 많이 삐져나오게.
-    clumps = ((-.5, -.45, .5, .44, .95, "bark"), (.45, -.5, .48, .5, .8, "bark"), (-.45, .5, .5, .42, 1.05, "bark"),
-              (.5, .45, .5, .48, .9, "bark"), (0, 0, .62, .58, 1.3, "bark"))
-    for x, y, rx, ry, h, colour in clumps:
-        p.lathe((x, y), [(0, rx*.9, ry*.9), (h*.5, rx, ry), (h*.85, rx*.7, ry*.65), (h, rx*.3, ry*.28)], colour, 5)
-    for i, (x, y, rx, ry, h, colour) in enumerate(clumps):
-        n = 6 if i == 4 else 4
+    # 위에서 「가는 막대 줄」도 「어두운 바위」도 아니게(map-layout 지도 그림 10-26 06:5x): 낮은 어두운
+    # 속심 셋에서 밝은 마른 가지 서른넷이 위·바깥으로 퍼져 2×2칸 가장자리까지 덮는다.
+    # 가지 끝은 마른 색(worn_wood·cloth)이라 윗면이 밝다. 맨나무(376삼각형)보다 적게.
+    cores = ((-.4, -.3, .38, .34, .38), (.35, -.35, .36, .38, .34), (0, .35, .42, .36, .44))
+    for x, y, rx, ry, h in cores:
+        p.lathe((x, y), [(0, rx*.9, ry*.9), (h*.6, rx, ry), (h, rx*.45, ry*.4)], "bark", 5)
+    tips = ("worn_wood", "cloth", "worn_wood", "wood")
+    for i, (x, y, rx, ry, h) in enumerate(cores):
+        n = 12 if i == 2 else 11
         for k in range(n):
-            a = i*1.3 + k*math.tau/n + (.4 if k % 2 else 0)
-            lean = .55 + .35*((k*7 + i*3) % 5)/4
-            base = (x + rx*.35*math.cos(a), y + ry*.35*math.sin(a), h*(.55 + .1*(k % 3)))
-            tip = (x + rx*(.75 + lean)*math.cos(a), y + ry*(.75 + lean)*math.sin(a), h*(1.0 + .25*lean) + (.5 if i == 4 else .1))
-            p.beam(base, tip, .025, "wood" if k % 2 else "worn_wood", 3, .004)
+            a = i*.9 + k*math.tau/n + .25*math.sin(k*2.3 + i)
+            reach = .65 + .45*((k*5 + i*2) % 7)/6
+            base = (x + rx*.3*math.cos(a), y + ry*.3*math.sin(a), h*.45)
+            tip = (x + reach*math.cos(a), y + reach*math.sin(a), .9 + .9*((k*3 + i) % 5)/4)
+            p.beam(base, tip, .032, tips[(k + i) % 4], 3, .006)
 
 
 BUILD = {"gap_wire": gap_wire, "gap_gate": gap_gate, "gap_planks": gap_planks, "small_shelf": small_shelf,
