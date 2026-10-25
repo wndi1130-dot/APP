@@ -113,7 +113,7 @@ const CAM_BACK: float = 30.0
 const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the bottom
 
 var rules: Dictionary = {}
-var opts: Dictionary = {}               # seed: int, panel: bool
+var opts: Dictionary = {}               # seed: int, panel: bool, rules_before: the values last shown (people react to the change)
 var problems := PackedStringArray()
 var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, call_t, call_i, mood, unrest, quiet, seats, values}]
 var rng := RandomNumberGenerator.new()
