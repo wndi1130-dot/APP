@@ -41,6 +41,7 @@ export const REACH_NOTES: Record<string, string> = {
   'content:ev_h09_dropped_food': '앞 사건 ev_h09_too_heavy에서 예비 식량을 내리는 선택을 해야 온다. 봇은 첫 칸(앞칸 살림 상자)만 고른다',
   'content:ev_h11_bridge_sag': '앞 사건 ev_b01_doubtful_bridge에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
   'content:ev_h12_switch_stuck': '앞 사건 ev_b01_frozen_switch에서 그대로 지나는 선택을 해야 온다. 봇은 그 선택을 안 한다',
+  'content:ev_h18_hot_axle': '앞 사건 ev_h14_swollen_creek에서 그대로 건너는 선택을 해야 온다. 봇은 그 선택을 안 한다',
 };
 
 export const CONFIGS: [string, BotOptions][] = [
@@ -50,6 +51,8 @@ export const CONFIGS: [string, BotOptions][] = [
   ['S1c 첫 선택지', { s1c: true, policy: 'first', dom: 'idle' }],
   // 새 이동 사건 묶음(ev_b01_, event_pack.ts)은 기본 꺼짐이라 켠 판을 따로 돌려야 닿는다
   ['S1c 돌봄 묶음 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', eventPack: true }],
+  // 늦가을 선로 시련(계절 조건 bare, 결정 447)은 기온을 켠 판의 늦가을 구간에서만 뜬다
+  ['S1c 돌봄 묶음·기온 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', eventPack: true, climate: true }],
   // 사람이 들어오는 사건(arrivals.ts)도 기본 꺼짐이라 켠 판을 따로 돌린다
   ['S1c 돌봄 들어옴 켬', { s1c: true, policy: 'caretaker', dom: 'engaged', arrivals: true }],
   // 죽음의 무게(death_weight.ts)도 기본 꺼짐이라 켠 판을 따로 돌린다
