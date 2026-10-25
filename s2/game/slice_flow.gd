@@ -288,11 +288,12 @@ func go(i: int) -> void:
 		else:
 			_start_field()
 		return
-	# Leaving a stop the workshop does a stretch's work, once (train_workshop.gd).
+	# Leaving a stop the technologies take their upkeep and the workshop does a
+	# stretch's work, once (train_workshop.gd stretch).
 	var shop_events: Array = []
 	if id == "travel" and int(row[2]) != shop_seg:
 		shop_seg = int(row[2])
-		shop_events = TrainWorkshop.run(train_g)["events"]
+		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(row[2]))
 		# What it made, for the people on the train to see (the train scene's events).
