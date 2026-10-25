@@ -11,6 +11,7 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -26,7 +27,7 @@ const SMALL_BUILDING_CELLS: int = 600
 const HOME_CLASSES: Dictionary = {"bed": true, "kitchen": true, "living": true, "shop": true, "storage": true}
 ## 안에서 막은 방이 되는 방(4.2: 침실, 창고).
 const BARRICADE_CLASSES: Dictionary = {"bed": true, "storage": true}
-## 창 하나에 대는 판자(창 판자 자리는 셋, building_kit catalog.json board_slots). 창 일부만 가린다.
+## 창 하나 안쪽 면에 댄 판자(building_rules 한 면 넷까지). 셋째부터 시야를 막으니 둘만: 창 일부만 가린다.
 const BOARDS_PER_WINDOW: int = 2
 ## 작은 이야기 소품. 모두 바닥에 놓여 몸을 막지 않는다. [종류, 곁에 둘 가구들]
 const SMALL_PIECES: Array = [
@@ -168,6 +169,15 @@ static func _shuffle(a: Array, rng: RandomNumberGenerator) -> void:
 
 
 ## 건물 b의 땅 층 바깥문: 바로 밖이 건물 밖 걸을 수 있는 칸인 문. 칸 차례.
+## 막은 사람이 안에서 댄 판자: 창의 안쪽 면에 BOARDS_PER_WINDOW장.
+static func _board_inside(g: FieldGrid, c: Vector2i) -> void:
+	var outer := g.outer_face(c)
+	var inner := 1 - outer if outer >= 0 else 0
+	for i in range(BOARDS_PER_WINDOW):
+		BuildingRules.add_plank(g.windows[c], inner)
+	g.refresh_cell(c)
+
+
 static func outer_doors(g: FieldGrid, b: int) -> Array:
 	var out: Array = []
 	for c: Vector2i in g.doors:
@@ -267,7 +277,8 @@ static func _barricade_room(data: Dictionary, city: Dictionary, b: int, room: Di
 	for id: String in _boxes(data, b):
 		if _room_of_box(data, city, id) == Vector2i(0, ri):
 			box_ids.append(id)
-	if doors.is_empty() or windows.is_empty() or box_ids.is_empty():
+	# 창이 둘은 있어야 한다: 하나는 막은 사람이 나간 창, 하나는 판자 친 창(바깥 흔적).
+	if doors.is_empty() or windows.size() < 2 or box_ids.is_empty():
 		return false
 	# 지도가 이 방에 둔 망자가 있으면 막지 않는다(금지선: 잠긴 방 안의 망자).
 	var room_cells: Dictionary = {}
@@ -296,12 +307,10 @@ static func _barricade_room(data: Dictionary, city: Dictionary, b: int, room: Di
 	for c: Vector2i in doors:
 		g.doors[c]["barred"] = "inside"
 		g.set_door_state(c, "locked")
+	# 나간 창은 비워 둔다(판자가 한 장이라도 있으면 못 지난다). 다른 창은 하나 걸러 판자.
 	g.break_window(exit)
-	if wins.size() == 1:
-		g.windows[exit]["boards"] = BOARDS_PER_WINDOW
-	else:
-		for k in range(1, wins.size(), 2):
-			g.windows[wins[k]]["boards"] = BOARDS_PER_WINDOW
+	for k in range(1, wins.size(), 2):
+		_board_inside(g, wins[k])
 	g.revision += 1
 	# 다른 상자마다 절반(내림)을 이 방 첫 상자로.
 	var into: String = box_ids[0]
