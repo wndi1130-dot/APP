@@ -7,6 +7,7 @@ extends SceneTree
 ##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet
 ##   --region=K1 --place=<map id> --edge (the field at the map's west edge)
 ##   --ref (only the three reference scenes, REF_SCENES)
+##   --indoor (the field shots from inside a building, its walls cut away)
 ## Writes <what>_<stage>_<band>_<weather>.jpg and index.json (what each cell drew).
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -46,6 +47,8 @@ var bare := false
 var mask := false
 ## --edge: look at the map's west edge, half the screen past it (결정 448 17).
 var edge := false
+## --indoor: the field shots from inside a building, as the indoor reference scene stands.
+var indoor := false
 ## The reference scenes the look (mood) and the materials (art3d) both judge by
 ## (색감 루프, 2026-10-26): late autumn K1, a street at midday under overcast,
 ## indoors at dusk by a curtained window, a rainy night. The rules clock is the
@@ -100,6 +103,8 @@ func _run() -> void:
 			mask = true
 		elif a == "--edge":
 			edge = true
+		elif a == "--indoor":
+			indoor = true
 		elif a == "--ref":
 			ref = true
 	DirAccess.make_dir_recursive_absolute(out)
@@ -159,7 +164,7 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 	game.cam_push = Vector3(0, 0, 16)
 	if edge:
 		game.cam_push = Vector3(2.0 - game.player.position.x, 0, 16)
-	if bool(scene.get("indoor", false)):
+	if bool(scene.get("indoor", indoor)):
 		# Inside by a curtained window, the walls cut away round the player.
 		var at := indoor_cell(game.view.grid)
 		if at.x >= 0:
@@ -177,7 +182,7 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 		await process_frame
 	game.paused = false
 	game.set_process(false)
-	if bool(scene.get("indoor", false)):
+	if bool(scene.get("indoor", indoor)):
 		var b: int = game.view.grid.building_at(FieldGrid.cell_of(game.player.position))
 		game.view.show_levels(0)
 		game.view.cut_away(b, 0)

@@ -2403,11 +2403,21 @@ func cell_seen(at: Vector3) -> bool:
 	return not mask_on or seen_now.has(seen_key(at))
 
 
+## The footprint of the building whose walls are cut away round the player
+## (building_view open_b); empty outside or with grey boxes.
+func _open_room() -> Rect2i:
+	var bv = view.buildings
+	if bv == null or int(bv.open_b) < 0 or not bv.footprints.has(bv.open_b):
+		return Rect2i(0, 0, -1, -1)
+	return bv.footprints[bv.open_b]
+
+
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
+		map_edge.set_room(_open_room())
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0

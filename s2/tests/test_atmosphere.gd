@@ -414,6 +414,19 @@ func test_a_foggy_day_lays_fog_over_the_field() -> void:
 	assert_lt(night_light.length(), day_light.length() * 0.3)
 
 
+func test_the_fog_lifts_in_the_room_the_eye_is_in() -> void:
+	# The reference game lays no fog sheet in a room: in the building the player
+	# is in, its walls cut away, the fog over the field lifts off its footprint.
+	var game = _stop({"weather": ["fog"], "cold": 0.0})
+	var edge = game.map_edge
+	edge.set_room(Rect2i(4, 5, 6, 3))
+	assert_eq(edge.field_mat.get_shader_parameter("room"), Vector4(4, 5, 10, 8))
+	edge.set_room(Rect2i(0, 0, -1, -1))
+	assert_eq(edge.field_mat.get_shader_parameter("room"), Vector4(0, 0, -1, -1), "outside: no room")
+	assert_false(game._open_room().has_area(), "the player starts outside")
+	assert_true(FileAccess.get_file_as_string("res://fx/shaders/field_fog.gdshader").contains("ROOM_KEEP"))
+
+
 func test_breath_shows_in_the_cold_and_frost_comes_at_night() -> void:
 	var game = _stop()
 	assert_not_null(game.breath)
