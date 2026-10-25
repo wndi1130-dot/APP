@@ -5,7 +5,7 @@ extends SceneTree
 ##   godot --path s2 --resolution 1688x780 -s res://tools/atmosphere_shots.gd -- --out=<folder>
 ## Optional: --what=field|travel|both --stages=autumn,early,deep,thaw
 ##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet
-##   --region=K1 --place=<map id>
+##   --region=K1 --place=<map id> --edge (the field at the map's west edge)
 ## Writes <what>_<stage>_<band>_<weather>.jpg and index.json (what each cell drew).
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -41,6 +41,8 @@ var place := ""
 var bare := false
 ## --mask: keep the field's sight mask (default off, so the whole stop shows its light).
 var mask := false
+## --edge: look at the map's west edge, half the screen past it (결정 448 17).
+var edge := false
 var index: Array = []
 
 
@@ -82,6 +84,8 @@ func _run() -> void:
 			bare = true
 		elif a == "--mask":
 			mask = true
+		elif a == "--edge":
+			edge = true
 	DirAccess.make_dir_recursive_absolute(out)
 	await process_frame
 	for st in stages:
@@ -127,6 +131,8 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 	game.hud.visible = false
 	# The same patch of the stop every time: south of the train, the yard and its buildings.
 	game.cam_push = Vector3(0, 0, 16)
+	if edge:
+		game.cam_push = Vector3(2.0 - game.player.position.x, 0, 16)
 	if not mask:
 		game.mask_on = false
 		game.view.set_mask_enabled(false)
