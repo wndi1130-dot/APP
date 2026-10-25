@@ -12,6 +12,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -27,6 +28,7 @@ const Motion = preload("res://game/sim/motion.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
+const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
@@ -63,6 +65,9 @@ const ARRIVE_KINDS: Array[String] = ["bare_line"]
 const ARRIVE_ROLL_S: float = 3.0
 const ARRIVE_BRAKE_S: float = 1.1
 const ARRIVE_HUSH_S: float = 0.8
+## How long the sight mask takes to come in over a field handed over from the
+## stop scene (mask_in).
+const MASK_IN_S: float = 2.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
@@ -83,7 +88,7 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
@@ -105,10 +110,13 @@ const EXTRA_ITEMS: Dictionary = {
 	"flare": {"name": "철도 섬광", "weight": 0.5, "stock": ""},
 	# What the four drives of the pass's plough give up together (user decision 188).
 	"plow_core": {"name": "제설기 코어", "weight": 4.0, "stock": ""},
+	# The cores of the fixed scenes at freight yards and works (decision 426, core_scenes.gd).
+	"core_engine": {"name": "기관 코어", "weight": CoreScenes.WEIGHT, "stock": ""},
+	"core_electric": {"name": "전기 코어", "weight": CoreScenes.WEIGHT, "stock": ""},
 	"ammo_pistol": {"name": "권총탄 한 줌", "weight": 0.0, "stock": ""},
 	"ammo_shell": {"name": "산탄 한 줌", "weight": 0.0, "stock": ""},
 }
-const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5]}
+const STOCK_OF: Dictionary = {"food_pack": ["food", 0.5], "med_box": ["medicine", 0.5], "luxury_pack": ["luxury", 0.5], "symbol_bell": ["symbol", 1.0], "info_telegraph": ["info", 1.0], "info_timetable": ["info", 1.0], "medkit": ["medicine", 1.0], "document": ["info", 0.0], "plank": ["wood", 1.0], "bottle_spirit": ["luxury", 0.5], "cloth": ["cloth", 1.0]}
 ## A watch found still set (P19): it starts ringing this long (real seconds)
 ## after it is first carried, rings this many times this far apart at the one
 ## who carries it (a "normal" sound, as any), then is quiet. One key stops them all.
@@ -191,6 +199,11 @@ var seen_memory := PackedByteArray()
 var vis_t: float = 0.0
 var hud_t: float = 0.0
 var mask_on: bool = true
+## The sight mask coming in, 0..1 (1: in full). A field handed over from the
+## stop scene starts at 0, as bright as the scene's last look down, and what
+## is out of sight darkens over MASK_IN_S (결정 421-3: no dark cut at the
+## hand-over). Picture only: what is in sight is never wider for it.
+var mask_in: float = 1.0
 var forecast_precision: int = 0
 var roof_seen: bool = false           # up on a rooftop once this stop (house_layout.md 6.2)
 var weather: Weather
@@ -212,6 +225,10 @@ var radio_t: float = 0.0
 var ammo: Dictionary = {"pistol": 8, "shell": 4, "craft": 8}
 var ammo_start: Dictionary = {}
 var loaded_start: Dictionary = {}      # rounds already in the squad's guns at the start
+## The cloth the squad went out with (decision 426 D2): the train gets what
+## came back less this, so a strip torn for a bandage is its own and the
+## kit is not new cloth every stop.
+var cloth_start: int = 0
 var unloaded: Dictionary = {}
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
@@ -369,6 +386,11 @@ func _ready() -> void:
 	# place, so a resumed stop gets the same ones; what was picked stays in the place's state.
 	if data.has("room_stats"):
 		receipt.place_note("roomStories", RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash()))
+	# A freight yard's or works' one fixed core scene (decision 426): the place is the map's,
+	# whether a core is left in it is this run's dice, kept in the place's state like the stories.
+	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash())
+	if not core_note.is_empty():
+		receipt.place_note("coreScene", core_note)
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
 	mission = String(opts.get("mission", ""))
 	if not MISSIONS.has(mission):
@@ -401,6 +423,9 @@ func _ready() -> void:
 	_give_finds()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
+	cloth_start = 0
+	for p in squad:
+		cloth_start += int(p.items.get("cloth", 0))
 	await BuildPace.rest(pace)
 	hud = Hud.new()
 	add_child(hud)
@@ -440,6 +465,9 @@ func go_live() -> void:
 		return
 	standing_by = false
 	process_mode = Node.PROCESS_MODE_INHERIT
+	# Shown from under the stop scene: as bright as its last look, the mask coming in.
+	mask_in = 0.0
+	view.set_mask_shade(0.0)
 
 
 ## Weather is fixed for the whole stop, so the shader globals are set once;
@@ -1021,6 +1049,14 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 	p.skills = row.get("skills", p.skills).duplicate()
 	p.medical = String(row.get("medical", "none"))
 	p.bag = String(row.get("bag", "pack"))
+	# What they go out in (wear.gd): a row may say, else the coat and the gloves everyone has.
+	var dress: Dictionary = row.get("wear", {})
+	if dress.has("outer"):
+		p.coat = Wear.make(String(dress["outer"])) if String(dress["outer"]) != "" else Wear.bare_outer()
+	if dress.has("head"):
+		p.hat = Wear.make(String(dress["head"]))
+	if dress.has("hands"):
+		p.gloves = bool(dress["hands"])
 	var slots: Array = []
 	for h in row.get("hands", []):
 		var id: String = h[0]
@@ -1316,6 +1352,9 @@ func _process(delta: float) -> void:
 	if vis_t <= 0.0:
 		vis_t = 0.1
 		_refresh_vision()
+	if mask_in < 1.0:
+		mask_in = minf(1.0, mask_in + delta / MASK_IN_S)
+		view.set_mask_shade(smoothstep(0.0, 1.0, mask_in))
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		if p != player and p.turn_rate <= 0.0:
@@ -1389,7 +1428,7 @@ func _update_person(p: Person, delta: float) -> void:
 	var ctx := {"running": p.is_running_now(), "swinging": p.swing_t > 0.0, "carry_state": p.carry_state(), "cold_level": p.cold_level(), "indoor_rest": indoor and not p.moving}
 	for ev in p.body.tick(delta, ctx):
 		_on_body_event(p, ev)
-	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": indoor and not building_open(lg.building_at(cell)), "stove": stove, "warmth": float(p.coat["warmth"]) + (0.1 if p.gloves else 0.0), "windproof": float(p.coat["windproof"]), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
+	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": indoor and not building_open(lg.building_at(cell)), "stove": stove, "warmth": Wear.warmth(p, p.heat.wet), "windproof": Wear.windproof(p), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
 	if weather.always_cold() and not indoor and not stove:
 		p.heat.heat = minf(p.heat.heat, 60.0)
 	p.panic = maxf(0.0, p.panic - delta * 0.08)
@@ -2455,11 +2494,24 @@ func finish(reason: String) -> void:
 			if FieldItems.kept_by_name(id):
 				for k in range(int(unloaded[id])):
 					receipt.gain_item(id)
-		if id in ["symbol_bell", "info_telegraph", "info_timetable", "plow_core"]:
+		if id in ["symbol_bell", "info_telegraph", "info_timetable"]:
 			receipt.gain_item(id)
+		elif CoreScenes.CORE_ITEMS.has(id):
+			# One entry a core, so the count reads off the list (CoreScenes.count).
+			for k in range(int(unloaded[id])):
+				receipt.gain_item(id)
+	# The cores' count goes into extras.coreCount here and only here (decision 426), on a stop
+	# receipt, one that has its ids: setting extras on a field receipt without ids would make
+	# it a stop receipt with empty ones, which the receipt check turns down. set_extras keeps
+	# the documents already found.
+	if receipt.is_stop_receipt():
+		var so_far := receipt.to_dict()
+		var extras: Dictionary = so_far.get("extras", {})
+		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])), CoreScenes.count(so_far["items"]["gained"]))
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
 	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
+	stock["cloth"] = float(stock.get("cloth", 0.0)) - cloth_start
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
 	# count, and so do the ones in a gun that stays behind with its carrier.
 	var boarded_squad: Array = []
@@ -2486,6 +2538,9 @@ func finish(reason: String) -> void:
 	receipt.set_place_state(snappedf(float(searched) / maxi(data["containers"].size(), 1), 0.01), clampi(zombies.alive_count() / 10, 0, 5))
 	if data["spots"].has("water_tower"):
 		receipt.place_note("waterTower", data["spots"]["water_tower"]["state"])
+	# A hidden core looked at without the engine hand (field_unified 3장): one line, a reason to bring them.
+	if String(data["spots"].get(CoreScenes.SPOT, {}).get("state", "")) == "seen_hidden":
+		receipt.place_note("coreHint", true)
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)
@@ -2585,6 +2640,7 @@ const BUNDLE_ICONS: Dictionary = {
 	"needle_thread": "it_needle", "tweezers": "it_needle", "symbol_bell": "it_bell",
 	"frying_pan": "it_pan", "broken_bottle": "it_bottle_broken", "wood_stake": "it_stake",
 	"knife": "it_knife", "crowbar": "wrench", "axe": "axe",
+	"plow_core": "gear", "core_engine": "gear", "core_electric": "gear",
 }
 
 

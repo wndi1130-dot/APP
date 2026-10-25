@@ -12,6 +12,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 
 const REACH: float = 1.4
@@ -43,8 +44,9 @@ const RUB_SNOW_TIME: float = 10.0
 const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
 # Planks and spirits go on the train as wood and luxury (user decision 407 B1); cloth and bandages stay field stores.
-const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "arrow", "flare", "tweezers", "needle_thread"]
+const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "ammo_craft", "flare", "tweezers", "needle_thread"]
 const FieldItems = preload("res://game/sim/field_items.gd")
+const Wear = preload("res://game/sim/wear.gd")
 ## 나단계 손일 (decision 423, P12·P22): a key turns in a second and a half
 ## without a sound; boarding a door takes a plank and a handful of nails, eight
 ## seconds of hammering, and gives the door three more blows to break; a
@@ -63,7 +65,7 @@ const BODY_SEARCH_TIME: float = 3.0
 ## seconds of it (loot spec v1 4, user decision 407 B4).
 const SEARCH_NOISE_EVERY: float = SearchRules.NOISE_EVERY
 const ROUND_NAMES: Dictionary = {"pistol": "권총탄", "shell": "산탄"}
-const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "arrow": ["craft", 1]}
+const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["shell", 4], "ammo_craft": ["craft", 1]}
 
 var game
 var coal_delivered: float = 0.0
@@ -675,7 +677,10 @@ func _companion_take(p, c: Dictionary) -> void:
 	var keep: Array = []
 	var took: Array = []
 	for item in c["items"]:
-		if AMMO_ITEMS.has(item) or p.weight() + Carry.item_weight(item) <= p.carry_limit():
+		# Clothes are put on, not bagged (wear.gd): a companion leaves them.
+		if Wear.is_garment(String(item)):
+			keep.append(item)
+		elif AMMO_ITEMS.has(item) or p.weight() + Carry.item_weight(item) <= p.carry_limit():
 			_receive(p, item, 1)
 			took.append(game.item_name(item))
 		else:
@@ -698,6 +703,12 @@ func take(p, id: String, index: int) -> void:
 		return
 	var item: String = c["items"][index]
 	c["items"].remove_at(index)
+	# A garment is put on, not bagged (wear.gd): laid at the feet as found, then worn.
+	if Wear.is_garment(item):
+		_put_down_garment(p, Wear.make(item))
+		dress(p, game.ground_items.size() - 1)
+		game.view.update_container(id)
+		return
 	# Something to hit with goes straight into a free hand (P23).
 	if not W.breaks(item) or not _into_hand(p, item):
 		_receive(p, item, 1)
@@ -711,9 +722,14 @@ func take_all(p, id: String) -> void:
 	var c: Dictionary = game.data["containers"].get(id, {})
 	if not SearchRules.can_take(c):
 		return
-	for i in range(c["items"].size()):
+	# Clothes stay in the box: each is put on by itself (wear.gd).
+	var i := 0
+	while i < c["items"].size():
+		if Wear.is_garment(String(c["items"][i])):
+			i += 1
+			continue
 		var before: int = c["items"].size()
-		take(p, id, 0)
+		take(p, id, i)
 		if c["items"].size() == before:
 			break
 
@@ -795,6 +811,9 @@ func pick_up(p, idx: int) -> void:
 	var g: Dictionary = game.ground_items[idx]
 	if not _can_start(p, g["pos"]) or int(g.get("n", 0)) <= 0:
 		return
+	if g.has("garment"):
+		dress(p, idx)
+		return
 	if g.has("weapon"):
 		# The bag stores counts, not weapon condition/ammunition. Keep a full-handed pickup intact.
 		if p.hands.size() >= 2:
@@ -809,12 +828,63 @@ func pick_up(p, idx: int) -> void:
 	_receive(p, g["id"], int(g["n"]))
 
 
+# ---------------------------------------------------------------- clothes
+
+## Put on the garment lying at `idx` (decision 423 card 2): a job of the hands
+## as long as its motion (wear.gd TIME); what was in its place is put down at
+## the feet as it is. Cut short, the garment stays where it lay.
+func dress(p, idx: int) -> void:
+	if idx < 0 or idx >= game.ground_items.size():
+		return
+	var g: Dictionary = game.ground_items[idx]
+	if not g.has("garment") or not _can_start(p, g["pos"]):
+		return
+	var slot: String = Wear.slot_of(String(g["id"]))
+	p.start_action("wear", "입기", float(Wear.TIME[slot]), _dressed.bind(p, g))
+	if p.action == "wear":
+		p.action_busy = {"slot": slot, "off": false}
+
+
+func _dressed(p, g: Dictionary) -> void:
+	var idx := -1
+	for i in game.ground_items.size():
+		if is_same(game.ground_items[i], g):
+			idx = i
+			break
+	if idx < 0:
+		return
+	game.ground_items.remove_at(idx)
+	var state: Dictionary = (g["garment"] as Dictionary).duplicate(true)
+	_put_down_garment(p, Wear.put_on(p, state))
+	if p == game.player:
+		game.hud.toast("%s 입었다." % String(state.get("name", game.item_name(String(g["id"])))))
+
+
+## Take off what is in `slot`; it is put down at the feet as it is.
+func undress(p, slot: String) -> void:
+	if String(Wear.worn_ids(p).get(slot, "")) == "" or not p.can_act() or p.action != "" or striking(p):
+		return
+	p.start_action("wear", "벗기", float(Wear.TIME[slot]), _undressed.bind(p, slot))
+	if p.action == "wear":
+		p.action_busy = {"slot": slot, "off": true}
+
+
+func _undressed(p, slot: String) -> void:
+	_put_down_garment(p, Wear.take_off(p, slot))
+
+
+func _put_down_garment(p, state: Dictionary) -> void:
+	if state.is_empty():
+		return
+	game.ground_items.append({"pos": p.position, "id": String(state["id"]), "n": 1, "garment": state})
+
+
 ## Arrows and small things right under the player's feet go in by themselves.
 func _auto_pickup() -> void:
 	var p = game.player
 	for i in range(game.ground_items.size() - 1, -1, -1):
 		var g: Dictionary = game.ground_items[i]
-		if g["id"] == "arrow" and p.position.distance_to(g["pos"]) < 1.0:
+		if g["id"] == "ammo_craft" and p.position.distance_to(g["pos"]) < 1.0:
 			pick_up(p, i)
 
 
@@ -842,6 +912,37 @@ func spot_default(p, id: String, verb: String) -> void:
 				game.hud.work_panel()
 			else:
 				start_work(p)
+		"core":
+			core_scene(p, id)
+
+
+## A freight yard's or works' stopped machine (decision 426, core_scenes.gd). A core left in it
+## comes away in half a minute of normal noise, start and end; a stripped one is a short look.
+## A hidden core looks stripped: without the engine hand it stays where it is.
+func core_scene(p, id: String) -> void:
+	var spot: Dictionary = game.data["spots"][id]
+	match String(spot["state"]):
+		"core":
+			game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+			p.start_action("salvage", "떼어 내기", CoreScenes.DETACH_SECONDS, _core_taken.bind(p, id))
+		"bare", "hidden", "seen", "seen_hidden":
+			if spot["state"] == "bare":
+				spot["state"] = "seen"
+			elif spot["state"] == "hidden":
+				spot["state"] = "seen_hidden"
+			game.view.update_spot(id)
+			game.say(p, "쓸 만한 건 이미 뜯겨 나갔다.")
+
+
+func _core_taken(p, id: String) -> void:
+	var spot: Dictionary = game.data["spots"][id]
+	if spot["state"] != "core":
+		return
+	spot["state"] = "taken"
+	game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+	p.add_item(spot["item"])
+	game.view.update_spot(id)
+	game.say(p, "%s를 떼어 냈다." % game.item_name(spot["item"]))
 
 
 func _salvaged(p, id: String) -> void:
@@ -1468,7 +1569,7 @@ func _near_things(p) -> Array:
 		var g: Dictionary = game.ground_items[i]
 		var d: float = g["pos"].distance_to(p.position)
 		if d < NEAR_USE:
-			rows.append([d, "줍기", go_and_do.bind(p, "item", i, g["pos"])])
+			rows.append([d, "입기" if g.has("garment") else "줍기", go_and_do.bind(p, "item", i, g["pos"])])
 	# The nearest one lying there whose pockets nobody has been through.
 	var body: Dictionary = {}
 	var body_d: float = NEAR_USE
@@ -1497,7 +1598,8 @@ func _near_things(p) -> Array:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])
 			var d: float = at.distance_to(p.position)
-			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"]:
+			var usable: bool = spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"] or spot["kind"] == "core" and spot["state"] != "taken"
+			if d < NEAR_USE + 0.5 and usable:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []

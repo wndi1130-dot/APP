@@ -15,16 +15,29 @@ const Weapons = preload("res://game/sim/weapons.gd")
 const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft"]
 ## S1's Field, the receipt's FRAGMENT_KINDS.
 const FIELDS: Array[String] = ["engine", "med", "craft", "radio", "expedition"]
+## What the wardrobe can hold: the long coat the workshop makes (decision 070).
+## The field's own clothes table takes this over when it comes.
+const WEARABLES: Array[String] = ["coat_long"]
+## The train's stores at the start of a run (S1 domestic/data.ts D.scrap0, wood0, parts0).
+const START: Dictionary = {"scrap": 10, "wood": 10, "parts": 4}
 
 
-## Empty stores: every amount 0, no fragments, nothing in the armory.
+## Empty stores: every amount 0, no fragments, nothing in the armory or the wardrobe.
 static func empty() -> Dictionary:
 	var frags := {}
 	for f: String in FIELDS:
 		frags[f] = 0
-	var d := {"frags": frags, "armory": []}
+	var d := {"frags": frags, "armory": [], "wardrobe": []}
 	for key: String in AMOUNTS:
 		d[key] = 0
+	return d
+
+
+## The stores a new run starts with: S1's starting scrap, wood and parts.
+static func start() -> Dictionary:
+	var d := empty()
+	for key: String in START:
+		d[key] = START[key]
 	return d
 
 
@@ -50,7 +63,49 @@ static func is_store(dom: Variant) -> bool:
 			for w: Variant in v:
 				if not is_weapon(w):
 					return false
+		elif key == "wardrobe":
+			if not v is Array:
+				return false
+			for c: Variant in v:
+				if not is_wearable(c):
+					return false
+		elif key == "target":
+			# The workshop's parts target (train_workshop.gd).
+			if not (v is int or v is float) or float(v) < 0.0 or float(v) > 10.0:
+				return false
+		elif key == "partWork":
+			if not (v is int or v is float) or float(v) < 0.0 or float(v) > 1.0:
+				return false
+		elif key == "make":
+			if v != null and not is_line(v):
+				return false
 		else:
+			return false
+	return true
+
+
+## One wardrobe entry: a thing the wardrobe knows and a condition from 0 to 1.
+static func is_wearable(c: Variant) -> bool:
+	if not c is Dictionary or c.size() != 2:
+		return false
+	var id: Variant = c.get("id")
+	var condition: Variant = c.get("condition")
+	return id is String and WEARABLES.has(id) and (condition is float or condition is int) \
+		and float(condition) >= 0.0 and float(condition) <= 1.0
+
+
+## What is on the workshop's line (train_workshop.gd): {id, progress, need, paid}.
+static func is_line(m: Variant) -> bool:
+	if not m is Dictionary or m.size() != 4:
+		return false
+	var paid: Variant = m.get("paid")
+	if not m.get("id") is String or not paid is Dictionary:
+		return false
+	for k: Variant in [m.get("progress"), m.get("need")]:
+		if not (k is int or k is float) or float(k) < 0.0:
+			return false
+	for key: Variant in paid:
+		if not AMOUNTS.has(key) or not _amount(paid[key]):
 			return false
 	return true
 
