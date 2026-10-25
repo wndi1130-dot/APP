@@ -600,7 +600,11 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		own_gait = clip_named(own, OWN_RUN if p.running else (OWN_CROUCH_WALK if p.crouched else OWN_WALK), -1)
 	if own_gait >= 0:
 		note["motion"] = OWN_BASE + own_gait
-		return Vector2(_round(note, "step", gone, _round_of(own, own_gait, 1.2)), own_gait)
+		var stepped := _round(note, "step", gone, _round_of(own, own_gait, 1.2))
+		var gait_name := String(own[own_gait].get("name", ""))
+		if p.brain.has("step_r") and (gait_name == OWN_WALK or gait_name == OWN_RUN or gait_name == OWN_CROUCH_WALK):
+			stepped = float(p.brain["step_r"])   # the feet land with the footsteps (field_game.gd steps_in)
+		return Vector2(stepped, own_gait)
 	var gait := WALK
 	if p.running:
 		gait = RUN

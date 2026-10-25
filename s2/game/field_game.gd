@@ -1468,6 +1468,11 @@ func _update_person(p: Person, delta: float) -> void:
 ## so loaded, worn out or on ice. A hard turn at a run drops to a walk first.
 func _drive(p: Person, delta: float) -> void:
 	var push := p.stick.length()
+	# A melee blow holds the feet from part way through it to its end (decision 425).
+	if push > 0.05 and combat.feet_held(p):
+		p.drive_speed = 0.0
+		p.moving = false
+		return
 	var lg := grid_at(p.position)
 	var cell := FieldGrid.cell_of(p.position)
 	var floor_kind := lg.floor_at(cell)
@@ -1508,9 +1513,10 @@ func _drive(p: Person, delta: float) -> void:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
+	var gone := p.position.distance_to(dest)
 	p.position = dest
 	p.moving = true
-	_footsteps(p, delta, dc)
+	_footsteps(p, delta, dc, gone)
 
 
 func _move_person(p: Person, delta: float) -> void:
@@ -1550,9 +1556,10 @@ func _move_person(p: Person, delta: float) -> void:
 			return
 		actions.vault_window(p, dc)
 	p.facing = atan2(step.x, step.z)
+	var gone := p.position.distance_to(dest)
 	p.position = dest
 	p.moving = true
-	_footsteps(p, delta, dc)
+	_footsteps(p, delta, dc, gone)
 
 
 func _slide(at: Vector3, step: Vector3) -> Vector3:
@@ -1567,13 +1574,25 @@ func _slide(at: Vector3, step: Vector3) -> Vector3:
 	return r
 
 
-func _footsteps(p: Person, delta: float, cell: Vector2i) -> void:
+## A footstep as the walk puts a foot down (decision 425): the walk goes round
+## by the ground covered (`gone`), two steps to a round (SimNoise.STEP_AT).
+## The round's place is kept on the body (brain "step_r") for the drawing too.
+static func steps_in(p, gone: float) -> int:
+	var size: float = float(SimNoise.STEP_ROUND["run" if p.is_running_now() else ("crouch" if p.crouched else "walk")])
+	var was := float(p.brain.get("step_r", 0.0))
+	var now := was + gone / maxf(size, 0.01)
+	p.brain["step_r"] = fposmod(now, 1.0)
+	var n := 0
+	for at: float in SimNoise.STEP_AT:
+		n += int(floorf(now - at)) - int(floorf(was - at))
+	return n
+
+
+func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
 	var running := p.is_running_now()
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)
-	p.brain["step_t"] = float(p.brain.get("step_t", 0.0)) - delta
-	if p.brain["step_t"] <= 0.0:
-		p.brain["step_t"] += SimNoise.STEP_EVERY
+	if steps_in(p, gone) > 0:
 		var glass: bool = lg.windows.has(cell) and lg.windows[cell]["glass"]
 		var trait_mult := 1.0
 		var r := SimNoise.footstep_radius(running, FieldGrid.FLOOR_SOUND[floor_kind], trait_mult, p.crouched, int(p.skills["stealth"]), glass, lg.indoor(cell)) * weather.sound_mult(true)
