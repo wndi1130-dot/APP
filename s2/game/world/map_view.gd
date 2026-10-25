@@ -10,6 +10,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
@@ -57,6 +58,8 @@ var cut_level: int = 0
 var levels: Dictionary = {}       # level -> FieldGrid
 var level_roots: Dictionary = {}  # level -> Node3D
 var shown_level: int = -99
+## What the edge band drew (counts, for the build log and tests).
+var edge_band: Dictionary = {}
 var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiMeshInstance3D)}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
 var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
@@ -125,6 +128,8 @@ func setup(map_data: Dictionary) -> void:
 				wall_nodes[key] = buildings.cut_node(key.x, key.y)
 	await BuildPace.rest(pace)
 	await _build_ground()
+	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
+	edge_band = EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS)
 	_build_walls()
 	await BuildPace.rest(pace)
 	await _build_props()
