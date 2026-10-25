@@ -710,6 +710,7 @@ func _update_atmosphere() -> void:
 		sun.light_color = fx_light["sun_color"]
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -775,6 +776,7 @@ func _build_world() -> void:
 	if storm.is_empty():
 		# The atmosphere frame moves the sun with the hour (FxState.SUN_PITCH at midday in deep winter).
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)

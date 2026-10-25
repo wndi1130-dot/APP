@@ -554,15 +554,38 @@ static func grade(l: Dictionary) -> Dictionary:
 
 ## Light for a WorldEnvironment and sun, the same keys as FxState.lighting_for
 ## plus where the sun stands.
+## Under a closing sky by day the light comes from the whole bright dome above:
+## this much of the fill turns into the sun light, brought up nearly overhead
+## with only a faint shadow. Ground and roofs stay as bright; walls and the sides
+## of things fall darker, so an overcast has form instead of one flat grey.
+const SKY_DOME_SHARE := 0.45
+const SKY_DOME_PITCH := -78.0
+const SKY_DOME_SHADOW := 0.3
+
+
 static func light(l: Dictionary) -> Dictionary:
+	var dome := smoothstep(0.45, 0.9, float(l["veil"])) * (1.0 - float(l["weights"]["night"]))
+	var fill := float(l["ambient_energy"])
+	var moved := fill * SKY_DOME_SHARE * dome
+	var pitch := lerpf(float(l["sun_pitch"]), SKY_DOME_PITCH, dome)
+	# Raised overhead, the sun keeps what it gave the ground from where it stood
+	# (a low dusk sun behind cloud does not flood the yard), and the light's
+	# colour is the two parts by their strength.
+	var high := sin(deg_to_rad(clampf(-pitch, 5.0, 90.0)))
+	var sun_part := float(l["sun_energy"]) * sin(deg_to_rad(clampf(-float(l["sun_pitch"]), 5.0, 90.0))) / high
+	var dome_part := moved / high
+	var color := Color(l["sun_color"])
+	if sun_part + dome_part > 0.001:
+		color = Color(l["sun_color"]).lerp(Color(l["ambient_color"]), dome_part / (sun_part + dome_part))
 	return {
 		"band": l["band"],
-		"sun_color": l["sun_color"],
-		"sun_energy": l["sun_energy"],
-		"sun_pitch": l["sun_pitch"],
+		"sun_color": color,
+		"sun_energy": sun_part + dome_part,
+		"sun_pitch": pitch,
 		"sun_yaw": l["sun_yaw"],
+		"shadow": lerpf(1.0, SKY_DOME_SHADOW, dome),
 		"ambient_color": l["ambient_color"],
-		"ambient_energy": l["ambient_energy"],
+		"ambient_energy": fill - moved,
 		"fog_color": l["fog_color"],
 		"fog_density": 0.012 + 0.03 * float(l["haze"]),
 		"background": l["background"],

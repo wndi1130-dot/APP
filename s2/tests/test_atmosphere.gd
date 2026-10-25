@@ -237,6 +237,35 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
 
 
+func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
+	# A closed sky by day: part of the fill becomes a light nearly overhead with
+	# a faint shadow, so walls fall darker while the ground keeps its light; a
+	# clear sky and the night are as the look has them.
+	var l := Atmosphere.look(12.0, ["overcast"], "K1", 0.0)
+	var lt := Atmosphere.light(l)
+	assert_lt(float(lt["ambient_energy"]), float(l["ambient_energy"]), "less flat fill")
+	assert_lt(float(lt["sun_pitch"]), float(l["sun_pitch"]), "the light stands higher")
+	assert_lt(float(lt["shadow"]), 0.6, "only a faint shadow under cloud")
+	var ground_before := float(l["sun_energy"]) * sin(deg_to_rad(-float(l["sun_pitch"]))) + float(l["ambient_energy"])
+	var ground_after := float(lt["sun_energy"]) * sin(deg_to_rad(-float(lt["sun_pitch"]))) + float(lt["ambient_energy"])
+	assert_almost_eq(ground_after, ground_before, ground_before * 0.02, "the ground keeps its light")
+	# A wall facing away from the light gets only the fill: darker than before.
+	assert_lt(float(lt["ambient_energy"]), float(l["ambient_energy"]) * 0.8)
+	# The low dusk sun behind cloud keeps its colour share by strength, not more.
+	var t := Atmosphere.sun_times(0.0)
+	var dusk := Atmosphere.look(t.y - 0.4, ["overcast"], "K1", 0.0)
+	var dusk_lt := Atmosphere.light(dusk)
+	var dusk_before := float(dusk["sun_energy"]) * sin(deg_to_rad(clampf(-float(dusk["sun_pitch"]), 5.0, 90.0))) + float(dusk["ambient_energy"])
+	var dusk_after := float(dusk_lt["sun_energy"]) * sin(deg_to_rad(-float(dusk_lt["sun_pitch"]))) + float(dusk_lt["ambient_energy"])
+	assert_almost_eq(dusk_after, dusk_before, dusk_before * 0.02, "no flood of dusk light from overhead")
+	for k in [[12.0, ["clear"]], [t.y + 3.0, ["overcast"]]]:
+		var same := Atmosphere.look(float(k[0]), k[1], "K1", 0.0)
+		var same_lt := Atmosphere.light(same)
+		assert_almost_eq(float(same_lt["sun_energy"]), float(same["sun_energy"]), 0.0001, "%s" % [k])
+		assert_almost_eq(float(same_lt["sun_pitch"]), float(same["sun_pitch"]), 0.0001)
+		assert_almost_eq(float(same_lt["shadow"]), 1.0, 0.0001)
+
+
 func test_it_looks_colder_as_the_cold_rises() -> void:
 	var warm := Atmosphere.look(9.0, ["clear"], "K1", 0.0)
 	var mid := Atmosphere.look(9.0, ["clear"], "K1", 0.5)
