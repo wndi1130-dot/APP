@@ -4,6 +4,8 @@ export const WHY_NAME: Record<string, string> = {
   // 이미 옮긴 자리
   need: '들어주지 않은 요구',
   promise: '약속',
+  arc: '말과 다른 행동',
+  ladder: '항의를 다룬 방식',
   sick: '아픈 사람 돌봄',
   corpse: '시신',
   hub: '거점에서 주고받은 것',

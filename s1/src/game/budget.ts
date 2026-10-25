@@ -37,6 +37,7 @@ export const CARD_GRADE: Record<string, KindRule> = {
   protest: R(2, false, '항의·난장판. 긴장이 문턱을 넘은 정산에 뜨고, 미루면 폭동의 끊김이 어긋난다'),
   trust_crisis: R(2, false, '신임 바닥, 3구간 기한'),
   need_warn: R(2, false, '법 요구 기한(needs.ts)'),
+  promise_ledger: R(2, false, '약속을 두 번 어긴 칸의 장부(결과 아크, council_log.ts). 다음 어김에 협상이 닫히니 미루면 경고가 늦는다'),
   strike_warn: R(2, false, '다음 역까지의 파업 경고'),
   strike: R(2, false, '열차가 서 있는 지금의 일'),
   bite_found: R(2, false, '숨긴 물림 기한(biteTick)·시신에게 물림, 감염 창'),

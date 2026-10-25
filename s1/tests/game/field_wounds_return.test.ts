@@ -65,6 +65,17 @@ describe('J02 필드 상처 그대로', () => {
     expect(book[0].field?.length).toBe(2);
   });
 
+  it('필드에서 자른 팔은 골절보다 무거운 절단으로 남고, 팔·다리가 아닌 절단은 깊은 상처로 친다', () => {
+    const { g, who } = returnWith('train-0', pid => [
+      { person: pid, part: 'leg_left', kind: 'fracture', treat: { splinted: true } },
+      { person: pid, part: 'arm_right', kind: 'amputation', treat: { tourniquet: true } },
+    ]);
+    const book = bookOf(g, who);
+    expect(book.map(w => [w.grade, w.part, w.bedDays])).toEqual([['amputation', 'armR', 4]]);
+    expect(book[0].field?.length).toBe(2);
+    expect(fieldWoundOf([{ person: 'p', part: 'torso', kind: 'amputation' }], 'p').grade).toBe('deep');
+  });
+
   it('긁힘·찢김뿐인 부상자는 깊은 상처(카드 C), 줄이 없으면 몸통, 머리 골절은 깊은 상처', () => {
     expect(fieldWoundOf([{ person: 'p', part: 'arm_right', kind: 'laceration' }], 'p').grade).toBe('deep');
     expect(fieldWoundOf([{ person: 'p', part: 'arm_right', kind: 'laceration' }], 'p').part).toBe('armR');

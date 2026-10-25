@@ -13,14 +13,17 @@ extends RefCounted
 
 const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
+const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 
 
 static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 	var sum := 0.0
 	for c: String in St.comms(t):
 		var s: Dictionary = g["comms"][c]
-		sum += (float(s["heat"]) * float(s["pop"])) / 40.0
+		sum += (float(s["heat"]) * float(s["pop"])) / 40.0 \
+			* (1.0 - float(TrainMods.D["insulateHeat"]) * TrainMods.insulated_share(g, c))
 	return sum * float(t["P"]["coalHeatPerLever"])
 
 
@@ -45,6 +48,8 @@ static func forecast(g: Dictionary, t: Dictionary) -> Dictionary:
 	var coal := heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd") + St.calm_coal(g, t) + run \
 		- (2.0 if bool(g["forcedRun"]) else 0.0) + (float(p["tailIdleCoal"]) if tail_idle(g) else 0.0) + St.loco_coal(g, t) + TrainHands.hands_coal(g, t)
 	var food := food_cost(g, t) + St.law_sum(g, t, "foodAdd")
+	if g.has("nextCardUid") and g.get("hands") is Dictionary:
+		coal += float(t["HANDS"]["stokerCoal"]) * float(g["hands"]["short"]["stoker"])
 	return {"coal": 0.0 if g.get("stranded") != null else coal, "food": food}
 
 
@@ -140,13 +145,24 @@ static func auto_levers(g0: Dictionary, t: Dictionary) -> Dictionary:
 static func _journal(g: Dictionary, text: String, tone: Variant = null) -> void:
 	if not g.get("journal") is Array:
 		g["journal"] = []
-	(g["journal"] as Array).append({"seg": g["seg"], "text": text, "tone": tone})
+	var row: Dictionary = {"seg": g["seg"], "text": text}
+	# Older train fixtures project absent tone to null; whole Game JSON omits it.
+	if tone != null or not g.has("version"):
+		row["tone"] = tone
+	(g["journal"] as Array).append(row)
 
 
 static func _card(g: Dictionary, card: Dictionary) -> void:
 	if not g.get("cards") is Array:
 		g["cards"] = []
-	(g["cards"] as Array).append(card)
+	var row: Dictionary = card.duplicate(true)
+	# Full states carry the card sequence; the original projection has no uid field.
+	if g.has("nextCardUid"):
+		row["uid"] = g["nextCardUid"]
+		g["nextCardUid"] = int(g["nextCardUid"]) + 1
+		for key: String in ["comm", "who", "text"]:
+			if row.has(key) and row[key] == null: row.erase(key)
+	(g["cards"] as Array).append(row)
 
 
 static func _bump_rel(s: Dictionary, d: float) -> void:
@@ -178,9 +194,11 @@ static func drift(g0: Dictionary, t: Dictionary) -> Dictionary:
 		elif c == "tail":
 			s["backStreak"] = 0
 		var back := c == "tail" and int(s["backStreak"]) >= int(p["backSegs"])
-		_bump_rel(s, St.clampv(dr, -6.0, float(p["recoverCap"])))
+		if g.has("nextCardUid"): TurnCommon.bump_rel(g, c, St.clampv(dr, -6.0, float(p["recoverCap"])), "situation")
+		else: _bump_rel(s, St.clampv(dr, -6.0, float(p["recoverCap"])))
 		if back:
-			_bump_rel(s, float(p["backBonus"]))
+			if g.has("nextCardUid"): TurnCommon.bump_rel(g, c, float(p["backBonus"]), "back")
+			else: _bump_rel(s, float(p["backBonus"]))
 			if int(s["fervor"]) > 0:
 				s["fervor"] = int(s["fervor"]) - 1
 			s["badStreak"] = 0
@@ -208,7 +226,8 @@ static func meters(g0: Dictionary, t: Dictionary) -> Dictionary:
 	for c: String in St.comms(t):
 		avg += float(g["comms"][c]["rel"]) * float(seat_map[c])
 	avg /= 100.0
-	g["trust"] = St.clampv(float(g["trust"]) + St.clampv(avg / 40.0, -2.5, 2.5), 0.0, 100.0)
+	if g.has("nextCardUid"): TurnCommon.bump(g, "trust", St.clampv(avg / 40.0, -2.5, 2.5), "mood")
+	else: g["trust"] = St.clampv(float(g["trust"]) + St.clampv(avg / 40.0, -2.5, 2.5), 0.0, 100.0)
 	var inc := 0.0
 	for c: String in St.comms(t):
 		var rel := float(g["comms"][c]["rel"])
@@ -219,14 +238,20 @@ static func meters(g0: Dictionary, t: Dictionary) -> Dictionary:
 		var sit := St.situation(g, t, c)
 		if sit[0] <= 25.0 or sit[1] <= 25.0:
 			inc += 2.0
-	inc += 8.0 if float(g["food"]) <= 0.0 else 0.0
+	var mood_inc: float = inc
+	var food_inc: float = 8.0 if float(g["food"]) <= 0.0 else 0.0
+	inc += food_inc
 	inc += St.law_sum(g, t, "tensionAdd") + St.calm_tension(g, t)
 	g["fear"] = St.clampv(float(g["fear"]) + St.law_sum(g, t, "fearAdd"), 0.0, 100.0)
 	if inc <= 0.0:
-		g["tension"] = St.clampv(float(g["tension"]) - 2.0, 0.0, 100.0)
+		if g.has("nextCardUid"): TurnCommon.bump(g, "tension", -2, "drift")
+		else: g["tension"] = St.clampv(float(g["tension"]) - 2.0, 0.0, 100.0)
 	else:
 		var calmed := 1.0 if int(g.get("tensionCrisisUsed", 0)) > 0 else 1.0 - float(g["fear"]) / 200.0
-		g["tension"] = St.clampv(float(g["tension"]) + maxf(0.0, inc) * calmed, 0.0, 100.0)
+		if g.has("nextCardUid"):
+			var pot_t: float = float(t["CALM"]["potTension"]) if St.pot_running(g, t) else 0.0
+			TurnCommon.bump_parts(g, "tension", maxf(0.0, inc) * calmed, [["mood", mood_inc], ["short", food_inc], ["law", St.law_sum(g, t, "tensionAdd")], ["calm.pot", pot_t], ["calm.ledger", St.calm_tension(g, t) - pot_t], ["cast", 0]])
+		else: g["tension"] = St.clampv(float(g["tension"]) + maxf(0.0, inc) * calmed, 0.0, 100.0)
 	g["fear"] = St.clampv(float(g["fear"]) - 1.0, 0.0, 100.0)
 	return g
 
