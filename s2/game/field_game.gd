@@ -427,6 +427,7 @@ func _ready() -> void:
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
 	map_edge.set_fog(fx_light["fog_color"])
+	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -722,6 +723,7 @@ func _update_atmosphere() -> void:
 		environment.background_color = fx_light["background"]
 		if map_edge != null:
 			map_edge.set_fog(fx_light["fog_color"])
+			map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
@@ -2332,6 +2334,8 @@ func cell_seen(at: Vector3) -> bool:
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
+	if map_edge != null:
+		map_edge.set_eye(player.position)
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
