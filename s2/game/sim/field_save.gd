@@ -581,14 +581,18 @@ static func _put_zombies(game, rows: Array) -> void:
 	all.list.clear()
 	var top := 0
 	for row: Dictionary in rows:
-		var z: Dictionary = all.spawn(String(row["kind"]), row["pos"], {"horde": int(row["horde"]), "name": String(row["name"])})
+		var z: Dictionary = all.spawn(String(row["kind"]), row["pos"], {"horde": int(row.get("horde", -1)), "name": String(row.get("name", ""))})
 		var state := String(row["state"])
 		if state in ["downed", "dead"]:
 			DeadPose.mark_fall(z, game.people)  # lies as it fell, not standing
 		z["id"] = int(row["id"])
 		z["state"] = state if state in RESUME_STATES else "wander"
-		z["loot"] = (row["loot"] as Array).duplicate(true)
-		z["searched"] = bool(row["searched"])
+		# A version-2 row is the whole record: pockets not rolled yet stay unrolled (zombies.gd rolls them when asked).
+		if row.has("loot"):
+			z["loot"] = (row["loot"] as Array).duplicate(true)
+		else:
+			z.erase("loot")
+		z["searched"] = bool(row.get("searched", false))
 		# Where it keeps to: its pockets and clothes are rolled by that place when first asked.
 		if row.get("home") is Vector3:
 			z["home"] = row["home"]
