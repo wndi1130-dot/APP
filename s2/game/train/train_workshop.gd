@@ -17,6 +17,7 @@ extends RefCounted
 
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
 const WORK: float = 4.0
@@ -44,7 +45,7 @@ const ORDER: Array[String] = ["bow", "crowbar", "coat_long"]
 
 ## A stretch's work.
 static func work_power(g: Dictionary = {}, t: Dictionary = {}) -> float:
-	return WORK * SKILL * ZONE * TrainHands.hands_work_mult(g, t)
+	return TrainResearch.work_power(g, t)
 
 
 ## How many parts the workshop keeps.
@@ -114,6 +115,8 @@ static func run(g: Dictionary) -> Dictionary:
 	TrainDom.ensure(g)
 	var dom: Dictionary = g["dom"]
 	var w: float = work_power(g)
+	var initial_work: float = w
+	var did: Array[String] = []
 	var parts_made: int = 0
 	var made: Array[String] = []
 	var events: Array = []
@@ -131,6 +134,8 @@ static func run(g: Dictionary) -> Dictionary:
 			dom["parts"] = float(dom.get("parts", 0)) + 1.0
 			parts_made += 1
 		dom["partWork"] = done_part
+	if parts_made > 0:
+		did.append("부품 %d" % parts_made)
 	var m: Variant = dom.get("make")
 	if w > 0.0 and m is Dictionary:
 		var spend_line: float = minf(w, float(m["need"]) - float(m["progress"]))
@@ -143,7 +148,12 @@ static func run(g: Dictionary) -> Dictionary:
 			made.append(id)
 			# No workshop car on S2's train yet: the train as a whole made it.
 			events.append({"kind": "made", "car": "", "comm": "", "sign": 1, "size": 0.4, "day": int(g.get("seg", 0))})
-	return {"parts": parts_made, "made": made, "events": events}
+	# Preserve the existing making line immediately after parts. Restoration
+	# receives the remaining work (S1 parts -> restore when no making is queued).
+	var restored: Dictionary = TrainResearch.advance_restore(g, w)
+	w -= float(restored["used"])
+	did.append_array(restored["did"])
+	return {"parts": parts_made, "made": made, "events": events, "used": initial_work - w, "did": did}
 
 
 ## What the workshop is doing for the screen: the line's thing and how far

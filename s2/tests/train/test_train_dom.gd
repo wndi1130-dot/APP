@@ -34,7 +34,7 @@ func test_stores_only_means_these_keys_and_nothing_under_zero() -> void:
 	assert_true(TrainDom.is_store({"armory": [{"id": "axe", "quality": "factory", "condition": 0.9}]}))
 	assert_false(TrainDom.is_store({"wood": -1}), "under zero")
 	assert_false(TrainDom.is_store({"wood": "3"}), "not a number")
-	assert_false(TrainDom.is_store({"techs": {}}), "S1 domestic rule state")
+	assert_true(TrainDom.is_store({"techs": {}}), "PR 6 research is ported")
 	assert_false(TrainDom.is_store({"frags": {"magic": 1}}), "a field the receipt does not know")
 	assert_false(TrainDom.is_store({"armory": [{"id": "laser", "quality": "factory", "condition": 1.0}]}), "a weapon the field does not know")
 	assert_false(TrainDom.is_store({"armory": [{"id": "axe", "quality": "shiny", "condition": 1.0}]}), "a quality the field does not know")
@@ -46,8 +46,30 @@ func test_the_stores_are_not_the_domestic_branch() -> void:
 	assert_true(St.is_s1a({"dom": TrainDom.empty()}))
 	assert_false(TrainDom.rules_on({"dom": TrainDom.empty()}))
 	assert_false(TrainDom.rules_on({}))
-	assert_true(TrainDom.rules_on({"dom": {"wood": 1, "techs": {}}}))
-	assert_false(St.is_s1a({"dom": {"wood": 1, "techs": {}}}))
+	assert_false(TrainDom.rules_on({"dom": {"wood": 1, "techs": {}}}))
+	assert_true(St.is_s1a({"dom": {"wood": 1, "techs": {}}}))
+	assert_true(St.is_s1a({"dom": TrainDom.start(), "hands": {"short": {"repair": 0.5}}}))
+	for key: String in ["people", "manuals", "classroom", "beds", "elder"]:
+		var d: Dictionary = TrainDom.start()
+		d[key] = {}
+		assert_false(St.is_s1a({"dom": d}), key + " is not ported")
+	assert_false(TrainDom.is_store({"techs": {"w1": {"stage": "done"}}}), "incomplete TechState")
+	assert_false(TrainDom.is_store({"restoring": "unknown"}))
+	assert_false(TrainDom.is_store({"experts": [{"name": "x", "comm": "tail", "field": "craft", "skill": 4}]}))
+	assert_false(TrainDom.is_store({"experts": [{"name": "x", "comm": "tail", "field": "craft", "skill": 1, "pupil": "y"}]}))
+
+
+func test_research_start_keeps_its_own_roster_and_fragments() -> void:
+	var first: Dictionary = TrainDom.start()
+	var second: Dictionary = TrainDom.start()
+	assert_eq(first["frags"], {"engine": 1, "med": 1, "craft": 0, "radio": 0, "expedition": 0})
+	assert_eq(first["experts"].size(), 8)
+	assert_eq(first["techs"], {})
+	assert_null(first["restoring"])
+	first["experts"][0]["skill"] = 0
+	first["frags"]["engine"] = 9
+	assert_eq(second["experts"][0]["skill"], 3)
+	assert_eq(second["frags"]["engine"], 1)
 
 
 func test_with_the_stores_the_train_rules_give_the_s1_answers() -> void:
@@ -109,3 +131,21 @@ func test_the_stores_alone_do_not_open_hanging_a_symbol_in_a_car() -> void:
 	# The bond a hung symbol builds is a domestic rule not ported yet.
 	assert_eq(FieldReturn._hang_why({"dom": TrainDom.empty(), "symbols": 1}, "tail"), "내정을 켠 판에서만 쓴다.")
 	assert_null(FieldReturn._hang_why({"dom": {"hung": []}, "symbols": 1}, "tail"))
+
+
+func test_a_stop_brings_its_fragments_and_cores_to_the_stores() -> void:
+	var g := {"dom": TrainDom.start()}
+	assert_true(TrainDom.take_extras(g, {"documents": [], "symbolCount": 0, "fragments": ["craft", "craft", "radio"], "coreCount": 1}))
+	assert_eq(float(g["dom"]["frags"]["craft"]), 2.0)
+	assert_eq(float(g["dom"]["frags"]["radio"]), 1.0)
+	assert_eq(float(g["dom"]["frags"]["engine"]), 1.0, "the start's one stays")
+	assert_eq(float(g["dom"]["cores"]), 1.0)
+	assert_true(TrainDom.is_store(g["dom"]))
+	var none := {}
+	assert_true(TrainDom.take_extras(none, {"fragments": [], "coreCount": 0}), "a stop with nothing in it")
+	assert_eq(none["dom"], TrainDom.empty())
+	for bad: Variant in [null, {"fragments": ["magic"]}, {"fragments": "craft"}, {"coreCount": -1}, {"coreCount": 0.5}]:
+		var before: Dictionary = TrainDom.start()
+		var h := {"dom": before.duplicate(true)}
+		assert_false(TrainDom.take_extras(h, bad), str(bad))
+		assert_eq(h["dom"], before, "nothing changed for " + str(bad))
