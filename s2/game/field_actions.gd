@@ -399,6 +399,9 @@ func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> voi
 	game.grid.set_door_state(c, state)
 	game.view.update_door(c)
 	_check_raider_door(c)
+	# Pried open is broken into (J17); opened with its key, or as it was, is not.
+	if pried and state == "open":
+		game.building_alarms.broken_into(int(game.grid.doors[c].get("building", -1)), c)
 
 
 func has_pry(p) -> bool:
@@ -620,6 +623,7 @@ func _kicked(p, c: Vector2i) -> void:
 		game.grid.set_door_state(c, "broken")
 		game.view.update_door(c)
 		_check_raider_door(c)
+		game.building_alarms.broken_into(int(game.grid.doors[c].get("building", -1)), c)
 	elif p == game.player:
 		game.hud.toast("문이 버텼다.")
 
@@ -816,6 +820,7 @@ func _break_window(p, c: Vector2i) -> void:
 	game.view.update_window(c)
 	_note_cold(c)
 	game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "glass", p)
+	game.building_alarms.broken_into(int(game.grid.windows[c].get("building", -1)), c)
 
 
 ## A window of a building changed: does the building still keep the warmth?
