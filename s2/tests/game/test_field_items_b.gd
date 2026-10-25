@@ -11,6 +11,7 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldActions = preload("res://game/field_actions.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const V = preload("res://tests/politics/field_vectors.gd")
@@ -82,9 +83,10 @@ func test_an_improvised_weapon_goes_to_pieces_when_worn_out() -> void:
 	assert_eq(p.hands.size(), 1, "still whole")
 	game.combat._wear(p, 0.25)
 	assert_true(p.hands.is_empty(), "gone to pieces")
-	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.01, "loaded": 0}])
-	game.combat._wear(p, 0.5)
-	assert_eq(p.hands.size(), 1, "a real knife only wears down")
+	# A real knife lasts far longer and breaks only when worn to nothing (weapons.md).
+	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.3, "loaded": 0}])
+	game.combat._wear(p, 0.25)
+	assert_eq(p.hands.size(), 1, "a real knife is not gone where a bottle would be")
 
 
 func _locked_door(game) -> Vector2i:
@@ -114,7 +116,7 @@ func test_a_key_opens_its_buildings_door_quietly_and_a_boarded_one_not_at_all() 
 	assert_eq(game.grid.doors[c]["state"], "open")
 	assert_eq(game.ledger.sound_events, heard, "no sound")
 	game.grid.set_door_state(c, "locked")
-	game.grid.doors[c]["boarded"] = true
+	BuildingRules.add_plank(game.grid.doors[c], 0)
 	assert_false(game.actions.has_key(p, c), "the boards are in the way")
 
 
@@ -137,8 +139,10 @@ func test_boarding_a_door_takes_a_plank_and_nails_and_makes_it_harder() -> void:
 	game.actions.board_door(p, c)
 	assert_eq(game.ledger.sound_events, heard + 1, "the hammering is heard")
 	_finish(game, p)
-	assert_eq(game.grid.doors[c]["state"], "locked")
-	assert_true(bool(game.grid.doors[c]["boarded"]))
+	# The door stays shut as it was; the plank on the player's face keeps it so (J08).
+	assert_eq(game.grid.doors[c]["state"], "closed")
+	assert_eq(BuildingRules.planks(game.grid.doors[c], game.grid.face_toward(c, p.position)), 1)
+	assert_false(game.grid.people_can_walk(c), "a boarded door is not walked through")
 	assert_eq(int(game.grid.doors[c]["hp"]), hp + FieldActions.BOARD_HP)
 	assert_false(p.items.has("plank") or p.items.has("nails"))
 

@@ -17,6 +17,7 @@ const Motion = preload("res://game/sim/motion.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const DeadSeparation = preload("res://game/sim/dead_separation.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const SEPARATION_EXCLUDED: Array[String] = ["downed", "rising", "waking", "frozen", "climb", "grab", "dead", "corpse", "dash", "eat"]
 
 const MAX_DRAW: int = 160
@@ -534,6 +535,8 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		var d: float = z["pos"].distance_to(p.position)
 		var reach: float = sight * float(p.smell_mult()) * float(game.weather.downwind(p.position, z["pos"]) if p.smell > 0 else 1.0)
 		reach *= SenseRules.posture_mult(p.crouched, p.moving, p.is_running_now())
+		# One standing in an unlit room after dark is seen no farther than in a cellar (decision 439 card 1).
+		reach = BuildingRules.dark_reach(reach, game.has_method("dark_at") and game.dark_at(p.position))
 		var to_p: Vector3 = (p.position - z["pos"])
 		to_p.y = 0
 		var close_sense: bool = d < FEEL and lg.body_line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position))

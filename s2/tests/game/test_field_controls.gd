@@ -702,6 +702,7 @@ func _mean_blows(spent: float) -> float:
 		for n in 60:
 			p.body.exhaustion = spent
 			p.swing_t = 0.0
+			p.hands[0]["condition"] = 1.0   # blows counted, not worn through (a crowbar breaks at nothing)
 			game.combat.swing(p, z)
 			blows += 1
 			if z["state"] == "dead":

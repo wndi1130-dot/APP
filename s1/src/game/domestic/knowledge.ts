@@ -1,7 +1,7 @@
 import { bumpRel } from '../ledger';
 import { COMMS } from '../data';
 import type { Comm } from '../data';
-import { drawPerson, journal, lawActive, rnd } from '../state';
+import { arrivedIn, drawPerson, journal, lawActive, PROFILES, rnd } from '../state';
 import type { Game } from '../state';
 import { D, FIELDS, TECHS, TECH_IDS } from './data';
 import type { Field } from './data';
@@ -36,15 +36,38 @@ export function distributeBlocked(g: Game, f: Field): string | undefined {
   return undefined;
 }
 
-/** 견습생을 붙인다(8.3). from: 'guild'는 그 분야를 쥔 공동체, 'other'는 다른 공동체(분산). */
-export function attachApprentice(g: Game, f: Field, from: 'guild' | 'other', quiet = false): DomPerson | null {
+/** 늦게 탄 사람(arrivals.ts)이 가장 많이 남은 칸. 받은 사람이 없거나 사람 들어옴이 꺼진 판이면 null(결정 425 카드 4: 받은 사람이 견습 후보) */
+export function newcomerComm(g: Game): Comm | null {
+  if (!g.arrivals) return null;
+  const best = [...COMMS].sort((a, b) => arrivedIn(g, b) - arrivedIn(g, a))[0];
+  return arrivedIn(g, best) >= 1 ? best : null;
+}
+
+/** 늦게 탄 사람의 이름: 들어온 사람은 명부(PROFILES)에 없어서, 같은 말·같은 성별의 이름과 성을 엮어 명부에도 열차에도 없는 이름을 만든다. */
+function newcomerName(g: Game): { name: string; age: number } {
+  const taken = new Set([...PROFILES.map(p => p.name), ...dom(g).people.map(p => p.name)]);
+  for (let tries = 0; tries < 40; tries += 1) {
+    const a = PROFILES[Math.floor(rnd(g) * PROFILES.length)];
+    const pool = PROFILES.filter(p => p !== a && p.name_lang === a.name_lang && p.gender === a.gender);
+    if (pool.length === 0) continue;
+    const b = pool[Math.floor(rnd(g) * pool.length)];
+    const name = `${a.name.split(' ')[0]} ${b.name.split(' ').slice(-1)[0]}`;
+    if (!taken.has(name)) return { name, age: 16 + Math.floor(rnd(g) * 25) };
+  }
+  return { name: '늦게 탄 사람', age: 30 };
+}
+
+/** 견습생을 붙인다(8.3). from: 'guild'는 그 분야를 쥔 공동체, 'other'는 다른 공동체(분산), 'new'는 늦게 탄 사람(결정 425 카드 4). */
+export function attachApprentice(g: Game, f: Field, from: 'guild' | 'other' | 'new', quiet = false): DomPerson | null {
   const d = dom(g);
   const teacher = freeTeacher(g, f);
   if (!teacher) return null;
   if (from === 'other' && distributeBlocked(g, f)) return null;
   const owner = teacher === 'manual' ? fieldOwner(g, f) : teacher.comm;
-  const comm: Comm = from === 'guild' ? owner : owner === 'tail' ? 'medtech' : 'tail';
-  const prof = drawPerson(g, comm, [16, 40]);
+  const fresh = from === 'new' ? newcomerComm(g) : null;
+  if (from === 'new' && !fresh) return null;
+  const comm: Comm = fresh ?? (from === 'guild' ? owner : owner === 'tail' ? 'medtech' : 'tail');
+  const prof = fresh ? newcomerName(g) : drawPerson(g, comm, [16, 40]);
   const cap = teacher === 'manual' ? 2 : teacher.skill;
   const person: DomPerson = {
     id: `sp${d.nextPersonId}`, name: prof.name, age: prof.age, comm, field: f, skill: 0, role: '견습생', alive: true,
@@ -55,10 +78,10 @@ export function attachApprentice(g: Game, f: Field, from: 'guild' | 'other', qui
   if (teacher !== 'manual') teacher.pupil = person.id;
   // quiet: 카드 효과 줄이 관계를 이미 움직였거나(견습생 후보), 법이 자동으로 배정했다(법 20).
   if (!quiet) bumpRel(g, owner, from === 'guild' ? D.guildRel : D.distributeRel, 'knowhow');
-  if (from === 'other' && f === 'engine' && g.comms.engine.rel <= -15) g.comms.engine.fervor = Math.min(3, g.comms.engine.fervor + 1);
+  if (from !== 'guild' && comm !== owner && f === 'engine' && g.comms.engine.rel <= -15) g.comms.engine.fervor = Math.min(3, g.comms.engine.fervor + 1);
   if (comm !== owner) d.flags.otherApprentice = true;
   d.log.apprentices.push({ seg: g.seg, field: f, other: comm !== owner });
-  journal(g, `${person.name}(${comm === owner ? '같은 칸' : '다른 칸'})이(가) ${teacher === 'manual' ? '매뉴얼로' : `${teacher.name}에게`} ${FIELD_LABEL[f]}을(를) 배우기 시작했다.`);
+  journal(g, `${person.name}(${fresh ? '늦게 탄 사람' : comm === owner ? '같은 칸' : '다른 칸'})이(가) ${teacher === 'manual' ? '매뉴얼로' : `${teacher.name}에게`} ${FIELD_LABEL[f]}을(를) 배우기 시작했다.`);
   return person;
 }
 

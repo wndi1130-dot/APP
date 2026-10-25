@@ -48,6 +48,8 @@ export interface Wound {
   reSent?: number;
   /** 수업 덕에 낫는 날이 하루 줄었다(domestic/classroom.ts). 나으면 끝 장면의 수에 센다 */
   edu?: true;
+  /** 필드에서 직접 뛴 정차의 상처 줄 그대로(영수증 people.wounds: 부위·종류·곪음·처치). 등급·부위는 이 줄에서 왔다 */
+  field?: { part: string; kind: string; festering?: boolean; treat?: Record<string, true> }[];
 }
 
 /** Game에 붙을 두 칸. state.ts에 들어가기 전까지는 이 꼴로 읽는다. */
@@ -316,6 +318,16 @@ export function noteInjury(g: Game, n: number, from: WoundFrom, where: string, o
     const comm = commOfName(g, who) ?? opt.comm ?? 'tail';
     pushWound(g, { who, comm, from, where, ...(opt.why ? { why: opt.why } : {}) }, hashRng(`${g.seed}:wound:${g.seg}:${(g as G).nextWoundId ?? 1}:${who}`));
   }
+}
+
+/**
+ * 필드에서 정해진 상처 하나를 명부에 올린다(S3 직접 정차, 다시 뽑지 않음). 등급·부위·곪음은 받은 그대로이고, 깊은 상처의
+ * 3일/4일만 noteInjury와 같은 로컬 난수(시드·구간·기록 id·이름)가 고른다. 저널·g.injured는 부르는 쪽 몫이다.
+ */
+export function recordFieldWound(g: Game, input: WoundInput & { grade: WoundGrade; part: WoundPart; septic: boolean }, field: Wound['field']): Wound {
+  const w = pushWound(g, input, hashRng(`${g.seed}:wound:${g.seg}:${(g as G).nextWoundId ?? 1}:${input.who}`));
+  if (field && field.length > 0) w.field = structuredClone(field);
+  return w;
 }
 
 /** 옛 규칙이 g.injured를 n만큼 내렸을 때(나음·죽음·의무진 고유 행동) 가장 오래된 활성 기록 n개를 거둔다. 누가 나았는지는 정하지 않는다(먼저 볼 사람 고르기는 사용자 답을 기다린다). */

@@ -5,6 +5,8 @@ extends RefCounted
 ## upper levels are AIR outside the buildings: nothing to stand on, nothing
 ## in the way of the eye.
 
+const BuildingRules = preload("res://game/sim/building_rules.gd")
+
 enum Solid { NONE, WALL, BLOCK, LOW, DOOR, WINDOW, AIR }
 enum Floor { SNOW, ROAD, PLATFORM, WOOD, RAIL, DEEP_SNOW, ICE, GRAVEL }
 const FLOOR_SOUND: Array[float] = [1.0, 1.0, 1.0, 1.0, 1.5, 0.5, 1.0, 1.0]
@@ -16,8 +18,10 @@ var solid: PackedByteArray
 var floor: PackedByteArray
 var building: PackedInt32Array
 var zone: PackedStringArray
-var doors: Dictionary = {}    # Vector2i -> {"state": open|closed|locked|broken, "hp": int, "building": int, "key": String}
-var windows: Dictionary = {}  # Vector2i -> {"broken": bool, "glass": bool, "building": int}
+var doors: Dictionary = {}    # Vector2i -> {"state": open|closed|locked|broken, "hp": int, "building": int, "key": String, "planks": [face 0, face 1], "plank_hp": int}
+var windows: Dictionary = {}  # Vector2i -> {"broken": bool, "glass": bool, "building": int, "open", "latched", "stuck", "curtain": ""|open|closed, "planks", "plank_hp"}
+## Broken glass on the floor (building_rules.gd): cell -> the window it fell from.
+var floor_glass: Dictionary = {}
 var people_path := AStarGrid2D.new()
 var dead_path := AStarGrid2D.new()
 var revision: int = 0         # bumps when doors or windows change
@@ -86,7 +90,7 @@ func indoor(c: Vector2i) -> bool:
 	return building_at(c) >= 0
 
 
-## People may walk through closed (unlocked) doors; they open them on the way.
+## People may walk through closed (unlocked, unboarded) doors; they open them on the way.
 func people_can_walk(c: Vector2i) -> bool:
 	if not inside(c):
 		return false
@@ -94,9 +98,9 @@ func people_can_walk(c: Vector2i) -> bool:
 		Solid.NONE:
 			return true
 		Solid.DOOR:
-			return doors[c]["state"] != "locked"
+			return doors[c]["state"] != "locked" and BuildingRules.planks_total(doors[c]) == 0
 		Solid.WINDOW:
-			return windows[c]["broken"]
+			return BuildingRules.window_passable(windows[c])
 	return false
 
 
@@ -109,7 +113,7 @@ func dead_can_walk(c: Vector2i) -> bool:
 		Solid.DOOR:
 			return doors[c]["state"] == "open" or doors[c]["state"] == "broken"
 		Solid.WINDOW:
-			return windows[c]["broken"]
+			return BuildingRules.window_passable(windows[c])
 	return false
 
 
@@ -123,7 +127,7 @@ func blocks_body(c: Vector2i) -> bool:
 		Solid.DOOR:
 			return not (doors[c]["state"] == "open" or doors[c]["state"] == "broken")
 		Solid.WINDOW:
-			return not windows[c]["broken"]
+			return not BuildingRules.window_passable(windows[c])
 	return true
 
 
@@ -139,6 +143,8 @@ func _opaque_now(c: Vector2i) -> bool:
 			return true
 		Solid.DOOR:
 			return not doors.has(c) or doors[c]["state"] == "closed" or doors[c]["state"] == "locked"
+		Solid.WINDOW:
+			return windows.has(c) and BuildingRules.window_opaque(windows[c])
 	return false
 
 
@@ -189,7 +195,31 @@ func break_window(c: Vector2i) -> void:
 	if windows.has(c):
 		windows[c]["broken"] = true
 		windows[c]["glass"] = true
+		windows[c]["open"] = false
 		refresh_cell(c)
+
+
+## The two cells either side of a door or window, across the wall it stands
+## in: face 0 is the lower coordinate (building_rules.gd).
+func faces(c: Vector2i) -> Array[Vector2i]:
+	if solid_at(c + Vector2i(1, 0)) == Solid.WALL or solid_at(c + Vector2i(-1, 0)) == Solid.WALL:
+		return [c + Vector2i(0, -1), c + Vector2i(0, 1)]
+	return [c + Vector2i(-1, 0), c + Vector2i(1, 0)]
+
+
+## The face of the door or window at c that one standing at `from` is on.
+func face_toward(c: Vector2i, from: Vector3) -> int:
+	return BuildingRules.face_toward(faces(c), from)
+
+
+## The face of a window that looks out of its building (-1 when both are in).
+func outer_face(c: Vector2i) -> int:
+	var f := faces(c)
+	if not indoor(f[0]) and indoor(f[1]):
+		return 0
+	if indoor(f[0]) and not indoor(f[1]):
+		return 1
+	return -1
 
 
 ## Nearest walkable cell for people around c (spiral), or c itself.
