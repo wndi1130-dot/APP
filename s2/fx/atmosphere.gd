@@ -394,6 +394,32 @@ static func _mix_num(w: Dictionary, key: String) -> float:
 	return v
 
 
+## How much of the clear hour's light a closed sky keeps by day before what
+## falls and the wind take theirs: a little gloom of our own (the reference
+## keeps it all).
+const CLOUD_KEEP := 0.85
+
+
+static func _lin_lum(c: Color) -> float:
+	var l := c.srgb_to_linear()
+	return 0.2126 * l.r + 0.7152 * l.g + 0.0722 * l.b
+
+
+## Colour c brought up to the brightness of `like` (linear luminance) when it
+## fell below it, as far as it stays in range; never darkened.
+static func _keep_lum(c: Color, like: Color) -> Color:
+	var lc := c.srgb_to_linear()
+	var y := 0.2126 * lc.r + 0.7152 * lc.g + 0.0722 * lc.b
+	var ll := like.srgb_to_linear()
+	var want := 0.2126 * ll.r + 0.7152 * ll.g + 0.0722 * ll.b
+	if y <= 0.0001 or y >= want:
+		return c
+	var k := want / y
+	k = minf(k, 1.0 / maxf(lc.r, maxf(lc.g, maxf(lc.b, 0.0001))))
+	var out := Color(lc.r * k, lc.g * k, lc.b * k, c.a).linear_to_srgb()
+	return Color(out.r, out.g, out.b, c.a)
+
+
 ## How bright the band is, for veils and haze (night dark, day full).
 static func _band_lum(w: Dictionary) -> float:
 	return float(w["night"]) * 0.09 + float(w["dawn"]) * 0.6 + float(w["day"]) * 1.0 + float(w["dusk"]) * 0.55
@@ -464,9 +490,11 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var sun_energy := _mix_num(w, "sun_energy") * lerpf(sun_k, minf(sun_k, 1.0), night_part) * lerpf(lerpf(0.35, 1.0, up), 1.0, night_part)
 	sun_energy *= lerpf(1.0, lerpf(1.0, 0.35, cloud), night_part)
 	var ambient_energy := _mix_num(w, "ambient_energy") * fill
-	# Under a closed sky the fill is the sky's grey, not the band's tint.
-	ambient = ambient.lerp(veil_color * 0.9, veil * 0.6)
-	sun = sun.lerp(veil_color.lerp(sun, 0.5), veil * 0.5)
+	# Under a closed sky the fill is the sky's grey, not the band's tint. The
+	# veil takes the colour, not the light: cloud greys the day as the
+	# reference's cloudy palette does (CLOUD_KEEP below sets how much it dims).
+	ambient = _keep_lum(ambient.lerp(veil_color * 0.9, veil * 0.6), ambient)
+	sun = _keep_lum(sun.lerp(veil_color.lerp(sun, 0.5), veil * 0.5), sun)
 	# Never flatter than 16 degrees: the oblique field must still read its ground.
 	var light_pitch := -clampf(angles.x, 16.0, 60.0)
 	var light_yaw := angles.y
@@ -483,6 +511,19 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var wind := float(more.get("wind", reg["wind"]))
 	if drawn.has("blizzard"):
 		wind = maxf(wind, 0.9)
+	# By day a closed sky gives back as fill what it takes of the sun: an
+	# up-facing face keeps the clear hour's light, short of what falls and the
+	# wind (the reference's day light 1 − 0.15·fall − 0.2·wind) and our own gloom.
+	var closed := clampf(veil / 0.75, 0.0, 1.0) * (1.0 - night_part)
+	if closed > 0.0:
+		var face_sin := sin(deg_to_rad(-light_pitch))
+		var clear_sun := _mix_num(w, "sun_energy") * float(WEATHER["clear"]["sun"]) * lerpf(0.35, 1.0, up)
+		var clear_face := clear_sun * face_sin * _lin_lum(_mix_bands(w, c, "sun")) + _mix_num(w, "ambient_energy") * _lin_lum(_mix_bands(w, c, "ambient"))
+		var face := sun_energy * face_sin * _lin_lum(sun) + ambient_energy * _lin_lum(ambient)
+		var keep := CLOUD_KEEP * (1.0 - 0.15 * fall - 0.2 * wind)
+		var short := (clear_face * keep - face) * closed
+		if short > 0.0:
+			ambient_energy += short / maxf(_lin_lum(ambient), 0.01)
 	var falls := "none"
 	for k in ["blizzard", "snow", "sleet", "rain"]:
 		if drawn.has(k):
