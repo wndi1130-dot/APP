@@ -14,7 +14,8 @@ import type { Game, Phase } from './state';
 import { breakPromise, keepPromise } from './turn';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
-import { CAPTAIN, noteInjury } from './wounds';
+import { CAPTAIN, recordFieldWound } from './wounds';
+import type { Wound, WoundGrade, WoundPart } from './wounds';
 import type { FieldDepartureV2 } from './field_departure';
 
 /** 명부 밖의 열차장 id 하나(출발 계약·영수증의 사람 id). 열차 명부의 부상 기록은 이름(CAPTAIN)으로 남는다. */
@@ -299,6 +300,31 @@ export type FieldApplyStatus = 'applied' | 'duplicate';
  * 같은 id에 다른 내용이 오면 판을 건드리지 않고 오류로 알린다. 검사가 모두 끝난 뒤에만 판을 바꾼다.
  * 차례: 물자 → 사람 → 약속. 상징물은 장부에만 넣고 쓰임은 chooseSymbolUse로 따로 고른다(결정 302).
  */
+/** 필드 상처 부위 → 열차 명부 부위(s3_departure_receipt_contract.md 4절). 손은 팔, 발은 다리에 묶여 있다. */
+export const FIELD_PART: Readonly<Record<string, WoundPart>> = Object.freeze({
+  head_neck: 'head', torso: 'torso', arm_left: 'armL', arm_right: 'armR', leg_left: 'legL', leg_right: 'legR',
+});
+const LIMB_PARTS: readonly WoundPart[] = ['armL', 'armR', 'legL', 'legR'];
+
+/**
+ * 부상자 한 사람의 열차 기록 하나(J02, 몸과 부상 4.1·4.6). 필드가 적은 상처 줄에서 가장 무거운 것이 등급·부위가 되고, 나머지는 field 칸에 붙는다.
+ * - 골절 → 골절. 빠른 처치로 부목을 댔으면 가벼운 상처(4장 「빠른 처치」). 팔다리가 아닌 골절은 깊은 상처로 친다(열차의 골절은 팔다리뿐).
+ * - 깊은 상처·박힌 것 → 깊은 상처.
+ * - 긁힘·찢김뿐인데 부상자 목록에 든 사람(출혈 심함·쓰러짐) → 깊은 상처(결정 카드 C, 2026-10-25 사용자 답). 상처 줄이 없으면 몸통.
+ * - 곪음은 그 사람의 상처 줄 가운데 하나라도 곪았으면. 아무것도 굴리지 않는다.
+ */
+export function fieldWoundOf(rows: readonly FieldWound[], pid: string): { grade: WoundGrade; part: WoundPart; septic: boolean; field: NonNullable<Wound['field']> } {
+  const mine = rows.filter(w => w.person === pid);
+  const quick = (w: FieldWound) => !!(w.treat?.splinted && w.treat?.quick);
+  const rank = (w: FieldWound) => w.kind === 'fracture' ? (quick(w) ? 0.5 : 2) : w.kind === 'deep' || w.kind === 'embedded' ? 1 : 0;
+  let top: FieldWound | undefined;
+  for (const w of mine) if (!top || rank(w) > rank(top)) top = w;
+  const part = top ? FIELD_PART[top.part] ?? 'torso' : 'torso';
+  let grade: WoundGrade = !top ? 'deep' : rank(top) === 2 ? 'fracture' : rank(top) === 0.5 ? 'light' : 'deep';
+  if (grade === 'fracture' && !LIMB_PARTS.includes(part)) grade = 'deep';
+  return { grade, part, septic: mine.some(w => !!w.festering), field: mine.map(({ person: _p, ...w }) => w) };
+}
+
 export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknown): { status: FieldApplyStatus; record: FieldReturnRecord } {
   const r = decodeFieldReceipt(input);
   const fingerprint = canonical(r);
@@ -346,11 +372,30 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 돌아오지 못했다(죽음).` });
   }
   const gone = new Set([...r.people.dead, ...r.people.missing, ...r.people.leftBehind]);
+  // 크게 다친 사람: 필드가 적은 부위·종류·처치·곪음을 그대로 명부에 옮긴다(J02: 등급·부위를 다시 뽑지 않는다).
   const hurt = r.people.injured.filter(p => !gone.has(p));
-  for (const [c, names] of byComm(departure, hurt)) {
+  const rows = (r.people.wounds ?? []) as unknown as FieldWound[];
+  const hurtBy = new Map<Comm, string[]>();
+  for (const pid of hurt) {
+    const c = personOf(departure, pid).comm;
+    hurtBy.set(c, [...(hurtBy.get(c) ?? []), pid]);
+  }
+  for (const [c, pids] of hurtBy) {
+    const names = pids.map(pid => personOf(departure, pid).name);
     g.injured += names.length;
-    noteInjury(g, names.length, 'stop', place, { names, comm: c });
+    for (const pid of pids) {
+      const { field, ...fw } = fieldWoundOf(rows, pid);
+      recordFieldWound(g, { who: personOf(departure, pid).name, comm: c, from: 'stop', where: place, ...fw }, field);
+    }
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 크게 다쳐 돌아왔다.` });
+  }
+  // 물린 채 돌아온 사람: 열차의 숨은 물림 규칙으로(2구간 안에 드러나거나 칸 안에서 일어난다, 결정 카드 C).
+  for (const pid of r.people.bitten.filter(p => !gone.has(p))) {
+    const { name, comm: c } = personOf(departure, pid);
+    if ((g.hiddenBites ?? []).some(b => b.who === name)) continue;
+    (g.hiddenBites ??= []).push({ who: name, comm: c, at: g.seg, due: g.seg + 2 });
+    journal(g, `${name}이(가) 물린 채 돌아왔다. 아는 사람은 수색대뿐이다.`, 'dark');
+    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${name}이(가) 물린 채 돌아왔다. 2구간 안에 드러나거나 일어난다.` });
   }
   const lost = [...r.people.leftBehind, ...r.people.missing].filter(p => !r.people.dead.includes(p));
   for (const [c, names] of byComm(departure, lost)) {
