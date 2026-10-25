@@ -16,6 +16,7 @@ const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const PeopleView = preload("res://game/train/train_people_view.gd")
+const MusicPlayer = preload("res://game/audio/music_player.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
 const BackdropShader = preload("res://fx/shaders/horizon_backdrop.gdshader")
@@ -133,6 +134,7 @@ var backdrop: MeshInstance3D
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
+var music: MusicPlayer                  # the faint train piece by the train's state (briefs/bgm.md 3.1)
 
 
 func _ready() -> void:
@@ -156,10 +158,14 @@ func _ready() -> void:
 		panel = HandPanel.new()
 		panel.scene = self
 		add_child(panel)
+	music = MusicPlayer.new()
+	add_child(music)
+	music.setup("train", self)
 
 
 func _process(delta: float) -> void:
 	step(delta)
+	music.tick(delta)
 
 
 func phase() -> String:
@@ -287,6 +293,16 @@ func _comm_in(source: Dictionary, comm_id: String) -> Dictionary:
 
 func life_signal(cue: String, car_id: String = "") -> void:
 	life.send_signal(cue, car_id)
+
+
+## Something that happened that the people should be seen to take in, in the
+## form {kind, car, comm, sign (-1/0/1), size (0..1), day}: what the workshop
+## made ("made"), a car changed ("mod_done") or added ("car_added"). The
+## changes of the rule values themselves (laws, rations, people) the people's
+## view finds on its own. It changes no value.
+func post_event(ev: Dictionary) -> void:
+	if people_view != null:
+		people_view.react(ev)
 
 
 ## One tick of the people: movers pace their own aisle, and now and then one

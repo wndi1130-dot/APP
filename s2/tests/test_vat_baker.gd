@@ -114,7 +114,7 @@ func test_pack_motion_reaches_128_and_the_shader_reads_it_the_same_way() -> void
 	for clip in [0, 15, 16, 26, 31, 32, 33, 47, 63, 64, 95, 112, 127]:
 		var g := Color(0.0, VatBaker.pack_motion(clip, 7, 9), 0.0).g
 		assert_eq(DeadBody.motion_in(g), clip, "back through a 32-bit colour: %d" % clip)
-	var shader: String = FileAccess.get_file_as_string("res://game/actors/dead_vat.gdshader")
+	var shader: String = FileAccess.get_file_as_string("res://game/actors/dead_vat.gdshaderinc")
 	for table in ["clip_start", "clip_frames", "clip_rate", "clip_loop", "clip_lo", "clip_hi"]:
 		assert_string_contains(shader, "%s[%d]" % [table, VatBaker.TABLE_SIZE], table)
 	assert_string_contains(shader, "n < %d" % VatBaker.TABLE_SIZE, "clip_of looks through every place")

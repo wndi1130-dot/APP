@@ -42,6 +42,7 @@ const AI = preload("res://game/field_ai.gd")
 const Actions = preload("res://game/field_actions.gd")
 const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
+const MusicPlayer = preload("res://game/audio/music_player.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -182,6 +183,7 @@ var ai: AI
 var actions: Actions
 var hud: Hud
 var audio: FieldAudio
+var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
 
 var people: Array = []
 var people_look  # person_visual.gd: the baked body the people wear
@@ -438,6 +440,9 @@ func _ready() -> void:
 	audio = FieldAudio.new()
 	add_child(audio)
 	audio.setup(self)
+	music = MusicPlayer.new()
+	add_child(music)
+	music.setup("field", self)
 	await BuildPace.rest(pace)
 	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
 	if holdout.feel_line() != "":
@@ -482,6 +487,7 @@ func _apply_fx() -> void:
 	if storm.is_empty():
 		# The atmosphere frame draws a plain stop; a storm stage keeps its own look.
 		atmo = atmosphere_at(picture_hour())
+		_take_air()
 		# The first light update sets the lights, the floors and the grade.
 		atmo_min = -INF
 		fx_params = Atmosphere.params(atmo, weather.wind_dir, snow_cover.cover())
@@ -639,9 +645,15 @@ func _update_fade(delta: float) -> void:
 	FxState.apply({"fx_fade": fx_params["fx_fade"]})
 
 
-## The atmosphere frame's look of this stop at an hour.
+## The atmosphere frame's look of this stop at an hour (the rules' midday air
+## and the table's night frost, so the picture's air is the rules' air).
 func atmosphere_at(hour: float) -> Dictionary:
-	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side, "season": season_name})
+	return Atmosphere.look(hour, look_kinds, region, cold, {"wind": weather.wind, "side": side, "season": season_name, "midday_c": weather.midday_c, "night_frost": OutsideTemp.frost_of(opts)})
+
+
+## The rules' air follows the hour: colder at dusk and night (outside_temp.gd at_hour).
+func _take_air() -> void:
+	weather.ambient_c = OutsideTemp.at_hour(weather.midday_c, picture_hour(), cold, side, look_kinds, OutsideTemp.frost_of(opts))
 
 
 ## The puddles give back the look's strongest photo sky (only when it changes).
@@ -672,6 +684,7 @@ func _update_atmosphere() -> void:
 	if absf(m - atmo_min) >= 1.0:
 		atmo_min = m
 		atmo = atmosphere_at(picture_hour())
+		_take_air()
 		fx_light = Atmosphere.light(atmo)
 		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
 		var changed := {}
@@ -1362,6 +1375,7 @@ func _process(delta: float) -> void:
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
+	music.tick(delta)
 
 
 func _step(delta: float) -> void:

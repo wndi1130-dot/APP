@@ -219,6 +219,59 @@ func test_eating_a_body_goes_down_eats_and_gets_up_with_no_jump() -> void:
 		assert_lt(low, _frame(baked, down, 0)[head].y - 0.3, "down at the body, not standing over it")
 
 
+# Biting the one it holds and snapping at the air (decision 422), in both
+# bodies: under the names dead_body.gd picks them by, every frame kept, played
+# once from the lunge's reach and back to it with no jump, neither covering
+# ground; the head is lowest as the teeth go in (BITE_LANDS) and, missing, goes
+# furthest forward early, at the front of the throw.
+func test_the_bite_and_the_snap_start_and_end_at_the_lunge() -> void:
+	for folder in [DeadBody.BUILT_IN, "res://models/people/n5-crew_seamstress"]:
+		var baked: Dictionary = BodyBake.load_baked(folder)
+		var clips: Array = baked["clips"]
+		var number := {}
+		for i in clips.size():
+			number[str(clips[i]["name"])] = i
+		var rest: PackedVector3Array = (baked["mesh"] as Mesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var top := 0
+		for i in rest.size():
+			if rest[i].y > rest[top].y:
+				top = i
+		var reach := _frame(baked, clips[DeadBody.LUNGE], 0)
+		for name: String in [DeadBody.BITE, DeadBody.BITE_MISS]:
+			assert_true(number.has(name), folder + " " + name)
+			if not number.has(name):
+				continue
+			var n: int = number[name]
+			var clip: Dictionary = clips[n]
+			assert_false(bool(clip["loop"]), name + " is played once")
+			assert_eq(int(clip["frames"]), int(BodyBake.OWN_CLIPS[n][2]), name + " keeps every frame")
+			assert_eq(float(clip["round"]), 0.0, name + " covers no ground")
+			for k in [0, int(clip["frames"]) - 1]:
+				var at := _frame(baked, clip, k)
+				var worst := 0.0
+				for i in at.size():
+					worst = maxf(worst, (at[i] as Vector3).distance_to(reach[i]))
+				assert_lt(worst, 0.03, "%s frame %d is the lunge's reach, metres" % [name, k])
+			# Where the top of the head goes through it.
+			var low := 0
+			var low_y := INF
+			var front := 0
+			var front_z := -INF
+			for k in int(clip["frames"]):
+				var head: Vector3 = rest[top] + _frame(baked, clip, k)[top]
+				if head.y < low_y:
+					low_y = head.y
+					low = k
+				if head.z > front_z:
+					front_z = head.z
+					front = k
+			var last := float(int(clip["frames"]) - 1)
+			if name == DeadBody.BITE:
+				assert_almost_eq(float(low) / last, DeadBody.BITE_LANDS, 0.1, folder + ": the head is lowest as the teeth go in")
+			else:
+				assert_between(float(front) / last, 0.25, 0.55, folder + ": thrown furthest forward early in the snap")
+
+
 func _last_frame(baked: Dictionary, clip: Dictionary) -> Array:
 	return _frame(baked, clip, int(clip["frames"]) - 1)
 
