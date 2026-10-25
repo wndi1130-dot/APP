@@ -77,3 +77,48 @@ func test_only_those_from_the_train_carry_the_law() -> void:
 	var lawless = _game([])
 	for p in lawless.squad:
 		assert_false(p.body.ration_cut, "no law, nothing short")
+
+
+func test_the_crews_haul_is_the_laws_value_in_the_train_tables() -> void:
+	# Decision 430 ②, card domestic Q1 가: one value with S1 data.ts (LAWS_RES).
+	var f := FileAccess.open("res://tests/fixtures/train/train_vectors.json", FileAccess.READ)
+	var tables: Dictionary = JSON.parse_string(f.get_as_text())["tables"]
+	assert_almost_eq(FieldGame.RATION_HAUL, float(tables["LAWS_RES"]["emergency_ration"]["haulMult"]), 0.0001)
+	assert_eq(_game([]).haul_mult(), 1.0, "no law, the trip as it was")
+	assert_almost_eq(_game(["emergency_ration"]).haul_mult(), 0.8, 0.0001)
+
+
+func test_under_the_law_a_carrier_takes_less_coal_a_trip() -> void:
+	var loads := []
+	for laws: Array in [[], ["emergency_ration"]]:
+		var game = _game(laws)
+		game.zombies.list.clear()
+		game.actions.start_work(game.player)
+		assert_true(game.actions.work_started)
+		var w: Dictionary = game.ai._wagon_with_coal()
+		assert_false(w.is_empty(), "a wagon to dig")
+		var worker = game.crew.filter(func(q) -> bool: return q.role == "worker")[0]
+		game.ai._dug(worker)
+		loads.append(float(worker.brain["load"]))
+	assert_almost_eq(loads[1], loads[0] * 0.8, 0.0001, "a fifth less a trip")
+
+
+func test_the_crews_chip_and_the_work_pane_show_the_law_and_why() -> void:
+	var game = _game(["emergency_ration"])
+	game.zombies.list.clear()
+	game.actions.start_work(game.player)
+	game.hud._tick_allies()
+	assert_not_null(game.hud.crew_button.icon, "the law's picture on the crew's chip")
+	game.hud.work_panel()
+	var why: Node = game.hud.modal.find_child("RationHaul", true, false)
+	assert_not_null(why)
+	var text := ""
+	for l in why.find_children("*", "Label", true, false):
+		text += String(l.text)
+	assert_true(text.replace(game.hud.UiFonts.WORD_JOINER, "").contains("20% 덜 나른다"), text)
+	game.hud._close_modal()
+	var plain = _game([])
+	plain.zombies.list.clear()
+	plain.actions.start_work(plain.player)
+	plain.hud._tick_allies()
+	assert_null(plain.hud.crew_button.icon, "no law, no picture")
