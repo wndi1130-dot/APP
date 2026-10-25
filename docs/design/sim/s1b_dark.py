@@ -117,7 +117,7 @@ Q = dict(
     quiet_out=8,          # 브리프 4구간. 2라운드 기준선은 8(조정)
     guard_post_line=0,    # (가정) caretaker류는 경비대 노출이 이 아래일 때만 기척·위협·사보타주에 경비를 붙인다(0 = 폭행·암살 임박에만)
     guard_len=2, guard_max=2,  # 경비 2명이 2구간, 동시에 두 곳까지(4.2, 2판)
-    curfew_esc=0.10,      # 통행 금지: 오르는 확률 −10%(2판, 새 불씨를 막지 않는다)
+    curfew_esc=0.10,      # 통행 금지(뺐다, curfew=0이라 쓰이지 않음): 오르는 확률 −10%
     lack_line=25, starve_line=20, theft_p=0.3,  # 굶주림의 도둑질(사다리 밖, 2판)
     floor_drift=0,        # (가정) 0이면 처지에 따른 관계 하락(drift)은 바닥 환산에서 뺀다. 칼질·탄압 같은 '깎음'만 센다
     armory=1, assault_death_armory=0.10,  # 무기고 통제(4.1 예방, 2판). 정책 모두 받아들인다(가정)
@@ -135,7 +135,7 @@ Q = dict(
     exec_blackmail_p=0.2,  # (가정) 실행자 칸 관계가 회의 이하일 때 구간마다 열차장 협박 확률
     # 5.1 탄압, 5.3 계엄
     repress_extinguish=1, disperse_tension=6,  # 탄압이 그 칸 불씨를 끈다(5.1). 0이면 끄지 않는다(시험)
-    guard_refuse=0.5, ep_len=3, coup_line=-15, coup_clear=15, coup_wait=2, curfew=1, ml_direct=0, ml_lift=0,
+    guard_refuse=0.5, ep_len=3, coup_line=-15, coup_clear=15, coup_wait=2, curfew=0, ml_direct=0, ml_lift=0,
     ml_tension=2, decree_guard=-5,  # 계엄 긴장 +2/구간, 포고마다 경비대 관계 −5(2판)
     ep_normal=0,          # 1이면 비상대권을 일반 51표로(코디네이터 C-2 시험)
     brink_max=2, war_max=1, brink_clock=3, brink_tension=101, brink_esc=0.20,  # 5.5 내전 직전(3판)
@@ -169,7 +169,7 @@ Q = dict(
     harm_gate=1,          # 1.2 피해 사건: 수사·군중 시계·내전 직전 중엔 다른 불씨가 사보타주(2) 위로 못 오르고,
     harm_cap=6,           #     피해 사건이 판당 harm_cap건에 닿으면 새 불씨가 생기지 않는다(플레이어가 고른 탄압·처벌은 그대로)
     susp_nostack=1,       # 4.5 판 중 합류(+2)와 구조민(+1)을 겹쳐 세지 않는다(둘 다면 +2)
-    curfew_trainwide=1,   # 5.1 통행 금지는 열차 전체: 경비대 외 모든 칸 관계 −1/구간(3라운드: 꼬리칸·앞칸 −2)
+    curfew_trainwide=0,   # 통행 금지는 뺐다(결정 426 6항, 2026-10-25). 옛 값 1: 열차 전체, 경비대 외 모든 칸 관계 −1/구간
     ml_ratify=1,          # 5.3 계엄을 거두면 계엄 중 포고를 추인 안건 하나(51)로 묶는다(계엄을 거둘 때만 쓰인다: ml_lift=1이나 시험 깃발 ml_lift_after)
     corpse_once=1,        # 9.1·9.3 확인한 시신은 어디 두든 안 일어난다. 확인 안 한 시신만 놓인 자리 값으로 일어난다
     corpse_field_checked=0,  # (가정) 1이면 정차(바깥)에서 죽은 사람도 확인한 것으로 본다. 0이면 확인 안 한 시신으로 친다

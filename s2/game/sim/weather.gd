@@ -23,7 +23,11 @@ const FALLING: Array = ["snow", "sleet", "rain"]
 const SeasonTable = preload("res://game/season_table.gd")
 
 var kinds: Array[String] = []
+## The outside air now. It starts at the stop's midday air; the field moves it
+## with the hour (sim/outside_temp.gd at_hour: colder at dusk and night). What
+## falls is the midday air's and stays for the whole stop.
 var ambient_c: float = -14.0
+var midday_c: float = -14.0
 ## Wind blows toward this direction on the ground plane (x, z).
 var wind_dir := Vector2(1, 0)
 var wind: float = 0.4
@@ -32,6 +36,7 @@ var wind: float = 0.4
 ## kinds can stack (Sulechów: fog and light snow). Unknown kinds are ignored.
 func _init(p_kinds: Array = ["fog", "snow"], p_ambient_c: float = -14.0, p_wind_dir := Vector2(1, 0), p_wind: float = 0.4) -> void:
 	ambient_c = p_ambient_c
+	midday_c = p_ambient_c
 	var falls := SeasonTable.falls()
 	var falling := "rain" if ambient_c > float(falls["rain_above"]) else ("sleet" if ambient_c > float(falls["snow_below"]) else "snow")
 	for k in p_kinds:

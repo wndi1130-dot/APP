@@ -168,6 +168,8 @@
 
 ## 8. 구현 계획(사용자 평가 뒤, 4단계)
 
+**됨(2026-10-25, 곡 파일 없이 도는 틀)**: `s2/game/audio/`의 네 파일. `music_rules.gd`(곡 표 22곡, 위협 점수·단계, 3.1 열차 차례, 곡 맞춤·고르기), `music_director.gd`(시간: 틈, 읽기 박자, 위협 버팀·한 단계씩 내림·최소 유지, 나빠지면 3초에 빼고 좋아지면 끝까지, 칸 노래 −12dB), `music_input.gd`(보이는 망자·나를 향해 오는 망자·잡힘·피 흘림·화면 테두리로 보이는 무리 압력만 읽음), `music_player.gd`(`Music` 버스, 두 재생기로 섞어 넘김, 비켜서기 표). 걸이는 `field_game.gd`·`train_scene.gd`에 각 몇 줄. 곡은 `res://audio/music/`(지금 비어 있음) → 환경 변수 `ZOMBIE_BGM_DIR`의 폴더 → `user://music/` 순서로 찾고, 곡 이름(예: `BGM05_TRAIN_B.ogg`)이 파일 이름이다. 아무 데도 없으면 조용함. 시험 `s2/tests/game/test_music.gd`. 아직 안 한 것: 시작 화면·돌아옴·잃음·큰 결정의 걸이(`cue()`는 있음), 규칙 소리 때 비켜서기 걸이(`duck()`는 있음, `field_audio.gd` 주인과 맞춘 뒤), 정차 연출의 ARRIVAL 조각.
+
 - 음악 감독 노드 하나를 필드·열차·정차 연출이 같이 쓴다(제안 이름 `s2/game/audio/music_director.gd`). 입력은 장면(title, train, stop, field, under, return, loss, decision), 탐색 결(띠, 날씨, 계절), 위협 단계다. 하는 일은 곡 고르기, 섞어 넘기기, 틈, 비켜서기다.
 - 입력 연결: 분위기 틀의 `look`(띠·날씨·추위), 무리 조율의 `pressure()`·도착 단계·`forecast()`, 필드 시야와 잡힘. 새 사건 장부를 따로 만들지 않고 이미 있는 값을 읽는다.
 - 겹치는 파일: `field_audio.gd`(망자 소리 세션)와 `slice_flow.gd`(정차 연출 세션)는 4단계를 시작할 때 열린 PR을 먼저 본다.

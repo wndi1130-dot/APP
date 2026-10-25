@@ -24,6 +24,8 @@ export * from './disaster';
 export * from './arrivals';
 export * from './arrival_cards';
 export * from './climate';
+export * from './hands';
+export * from './trail';
 export * from './season';
 export * from './disaster_cards';
 export * from './death_weight';
@@ -34,5 +36,6 @@ export * from './stranded';
 export * from './loco';
 export * from './lookback';
 export * from './promise_voice';
+export * from './memory';
 import './stranded_cards';
 import './field_council'; // 새 안건 둘과 특별 회기 닫는 길을 건다(COUNCIL_LINK)

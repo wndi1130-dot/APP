@@ -103,6 +103,25 @@ export const START: Record<Comm, [number, number, number, number]> = {
   medtech: [55, 50, 45, 25], front: [75, 65, 20, 10],
 };
 export const POP0: Record<Comm, number> = { tail: 90, engine: 25, guard: 25, medtech: 30, front: 30 };
+
+/** 손 몫(결정 425, carry_people.md 3.1): 구간마다 손이 드는 일 다섯. 드는 손은 기획서 제안 그대로(합 74), 나머지는 새 값(hands.ts).
+ * 모자라면 order의 뒤에서부터 빈다(화실을 먼저 채운다). 칸 대표가 내는 손은 그 칸 일할 나이(16~65)의 몫 × 뜻(관계·레버)이다. */
+export type HandJob = 'stoker' | 'stove' | 'watch' | 'roof' | 'repair';
+export const HANDS = {
+  order: ['stoker', 'stove', 'watch', 'roof', 'repair'] as HandJob[],
+  need: { stoker: 12, stove: 24, watch: 12, roof: 18, repair: 8 } as Record<HandJob, number>,
+  /** 칸 대표가 내는 뜻: 관계 −15 아래, −40 이하, 작업 거부(열기 1 이상·−40 이하) */
+  willCold: 0.85, willHostile: 0.7, willRefuse: 0.4,
+  /** 그 칸 난방·배급 레버 중 낮은 쪽이 낮음(1)·끊음(0)이면 */
+  leverLow: 0.85, leverCut: 0.7,
+  /** 다 비었을 때의 값(모자란 몫만큼 곱한다): 화실 석탄 +/구간, 모든 칸 온기 −, 정차 위험 ×(1+), 수리 공방 작업량 ×(1−) */
+  stokerCoal: 3, stoveWarm: 10, watchRisk: 0.5, repairWork: 0.5,
+  /** 지붕·선로가 이만큼 넘게 비면 선로 사건이 roofTrack배로 뽑힌다 */
+  roofOver: 0.5, roofTrack: 2,
+  /** 남은 칸이 일을 나눠 질 때(carry_people 3.3): 부담 = 드는 손 ÷ 낸 손이 loadFree를 넘은 만큼 × loadExpose를 손을 낸 칸의 노출에 더한다(뜻만큼).
+   * 시작 열차는 부담 0.53이라 0이고, 낸 손이 74까지 줄면(부담 1) 노출 +18 */
+  loadFree: 0.55, loadExpose: 40,
+};
 export const REL0: Record<Comm, number> = { tail: -20, engine: 10, guard: 15, medtech: 5, front: 20 };
 export const COH0: Record<Comm, number> = { tail: 0.55, engine: 0.85, guard: 0.8, medtech: 0.7, front: 0.65 };
 // 이념: 배급(+1 균등/−1 기여), 권위(+1 규율/−1 실용), 기술(+1 복원/−1 적응)

@@ -8,6 +8,10 @@
       "type": "segment",
       "min": 6,
       "max": 24
+    },
+    {
+      "type": "season",
+      "needs": "snow"
     }
   ],
   "speaker": "engine",
