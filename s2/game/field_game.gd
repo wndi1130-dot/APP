@@ -1031,6 +1031,12 @@ func _spawn_people() -> void:
 		lines.rel_of[p.pid] = AllyLines.rel_stage(float(row.get("rel", 0.0)))
 		if row.has("voice"):
 			lines.voice_by[p.pid] = String(row["voice"])
+		# Their own memory of the chief, when the departure sheet carries one (people memory).
+		lines.names_by[p.pid] = String(row.get("name", p.pid))
+		if row.has("stance"):
+			lines.stance_by[p.pid] = String(row["stance"])
+		if row.get("cues") is Array:
+			lines.cues_by[p.pid] = (row["cues"] as Array).duplicate()
 		await BuildPace.rest(pace)
 	player = squad[0]
 	if bool(opts.get("raiders", true)):

@@ -319,6 +319,40 @@ const REL_LINES: Dictionary = {
 		"good": {"fear": ["열차장님 먼저 타요!!", "같이 타요, 같이!!"], "rough": ["대장, 먼저 타! 따라간다!", "다 탔나 본다, 대장 타!"], "quiet": ["열차장 먼저. 내가 마지막.", "...다 탔다. 가자."]},
 	},
 }
+## What one remembers of an earlier stop (people-memory design 1.8, decision
+## 439): the departure sheet carries each person's memory keys (cues), and the
+## first time this stop they answer an order or the squad is ready, they say
+## one of these instead, once. "saved_by:<id>" puts that companion's name in.
+const MEMORY_LINES: Dictionary = {
+	"saved_me": {
+		"fear": ["그때 열차장님이 안 끌어냈으면... 저 지금 없어요.", "이번에도 옆에 있을게요."],
+		"rough": ["빚진 건 안 잊는다, 대장.", "그날 잡아 준 손, 이번엔 내가 갚는다."],
+		"quiet": ["...그날 일은 기억한다. 등은 맡겨.", "한 번 구해 줬다. 이번엔 내 차례다."],
+	},
+	"left_me": {
+		"fear": ["또 두고 갈 거예요...? 그때처럼요?", "이번엔 안 보이는 데 가지 마요."],
+		"rough": ["한 번 버린 놈은 두 번도 버려.", "등 돌리는 거, 한 번 봤다."],
+		"quiet": ["...그때 멀어지던 등, 기억한다.", "이번엔 내 눈에 보이는 데 있어라."],
+	},
+	"saw_shot_surrendered": {
+		"fear": ["손 든 사람이었잖아요...", "빈손이었는데... 꼭 쏴야 했어요?"],
+		"rough": ["손 든 놈까지 쏘더라, 우리 대장은."],
+		"quiet": ["...손을 들고 있었다."],
+	},
+	"saw_mercy": {
+		"fear": ["그 사람... 보낸 거 잘한 거죠?"],
+		"rough": ["그 약탈자 놈, 다시 보이면 그땐 내가 쏜다."],
+		"quiet": ["...살려 보낸 건 잘했다."],
+	},
+	"saved_by": {
+		"fear": ["{이름} 씨 아니었으면 저 거기서 못 나왔어요."],
+		"rough": ["{이름}, 그날 빚 아직이다."],
+		"quiet": ["...{이름}. 고맙다는 말 아직 못 했다."],
+	},
+}
+## The moments a memory may be said in place of the moment's own line.
+const MEMORY_MOMENTS: Array = ["order_follow", "order_wait", "order_search", "order_cover", "ready"]
+
 ## Said to the chief, so how one stands with him is the whole of it: one who
 ## stands badly or well says only their REL_LINES here.
 const TOWARD_CHIEF: Array = ["retreat", "order_follow", "order_wait", "order_search", "order_cover",
@@ -350,6 +384,16 @@ var rel_of: Dictionary = {}
 ## pid -> the voice they carry ("fear", "rough", "quiet"), from their row
 ## (field_game.gd default_squad); voice_of for anyone who carries none.
 var voice_by: Dictionary = {}
+## pid -> their own standing with the chief from what they lived through
+## ("good", "bad"), from the departure sheet. It stands in place of their
+## car's rel_of: one the chief pulled free does not distrust him because of
+## how their car stands (people-memory design 1.4, R15).
+var stance_by: Dictionary = {}
+## pid -> their memory keys, newest first (the departure sheet's cues).
+var cues_by: Dictionary = {}
+## pid -> name, for a memory that names a companion.
+var names_by: Dictionary = {}
+var _memory_said: Dictionary = {}   # pid -> true once they said one this stop
 
 
 func _init(seed_value: int = 0x11e5) -> void:
@@ -413,6 +457,31 @@ func voice(pid: String) -> String:
 	return v if VOICES.has(v) else voice_of(pid)
 
 
+## How `pid` stands with the chief: their own memory's standing if they have
+## one, else their car's.
+func standing(pid: String) -> String:
+	var s: String = String(stance_by.get(pid, ""))
+	return s if RELS.has(s) else String(rel_of.get(pid, "normal"))
+
+
+## The memory line `pid` would say now, "" for none: the newest of their cues
+## that has a line in their voice (and, for saved_by, a known name).
+func memory_line(pid: String) -> String:
+	for cue: Variant in cues_by.get(pid, []):
+		var key: String = String(cue)
+		var who: String = ""
+		if key.begins_with("saved_by:"):
+			who = String(names_by.get(key.substr(9), ""))
+			key = "saved_by"
+			if who == "":
+				continue
+		var bank: Array = MEMORY_LINES.get(key, {}).get(voice(pid), [])
+		if bank.is_empty():
+			continue
+		return String(bank[_rng.randi() % bank.size()]).replace("{이름}", who)
+	return ""
+
+
 ## The line `pid` shouts for `event` at `now`, or "" if they keep quiet (no
 ## such line, or someone has only just spoken).
 ## `always`: this one is shouted whoever spoke just before (everyone left on
@@ -420,7 +489,7 @@ func voice(pid: String) -> String:
 ## `name`: who fell, for the lines that call them by name.
 func pick(pid: String, event: String, now: float, always: bool = false, name: String = "") -> String:
 	var bank: Array = []
-	for line in lines_for(event, voice(pid), String(rel_of.get(pid, "normal"))):
+	for line in lines_for(event, voice(pid), standing(pid)):
 		if name != "" or not String(line).contains("{이름}"):
 			bank.append(line)
 	if bank.is_empty():
@@ -436,6 +505,13 @@ func pick(pid: String, event: String, now: float, always: bool = false, name: St
 	_last_event[key] = now
 	_last_event["*/" + event] = now
 	_last_any = now
+	# Once a stop, the first order answered or the squad ready brings back what they remember.
+	if MEMORY_MOMENTS.has(event) and not _memory_said.has(pid):
+		var memory := memory_line(pid)
+		if memory != "":
+			_memory_said[pid] = true
+			_last_line[pid] = memory
+			return memory
 	# Not the same line twice running.
 	var line: String = String(bank[_rng.randi() % bank.size()])
 	if bank.size() > 1 and line == String(_last_line.get(pid, "")):
