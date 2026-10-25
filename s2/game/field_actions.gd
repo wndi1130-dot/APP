@@ -15,6 +15,7 @@ const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 
 const REACH: float = 1.4
@@ -83,6 +84,8 @@ var ongoing: Dictionary = {}
 ## here and is done once as soon as the blow is over (decision 420: one body
 ## does one thing at a time). Short-lived, never saved.
 var after_blow: Dictionary = {}
+## Who stands on broken glass, and on which cell (one crunch a cell, J08).
+var glass_feet: Dictionary = {}
 
 
 func _init(field_game) -> void:
@@ -167,7 +170,7 @@ func _begin_work(p, action: String, label: String, seconds: float, done: Callabl
 	if needs_pry and not has_pry(p):
 		return false
 	var state: Dictionary = {}
-	for field in ["state", "locked", "searched", "broken", "glass"]:
+	for field in ["state", "locked", "searched", "broken", "glass", "open", "curtain"]:
 		if target.has(field):
 			state[field] = target[field]
 	work.merge({"action": action, "object": target, "state": state, "ready": false,
@@ -215,6 +218,7 @@ func update(delta: float) -> void:
 	_ladder_falls()
 	_crossing_falls()
 	_after_blows()
+	_glass_steps()
 	_player_goal()
 	unload_t -= delta
 	if unload_t <= 0.0:
@@ -315,6 +319,11 @@ func open_door_on_way(p, c: Vector2i) -> void:
 	var door: Dictionary = game.grid.doors.get(c, {})
 	if door.is_empty() or not _can_start(p, FieldGrid.center(c), true):
 		return
+	if BuildingRules.planks_total(door) > 0:
+		p.stop()
+		if p == game.player:
+			game.hud.toast("판자로 막혀 있다")
+		return
 	if door["state"] == "locked":
 		p.stop()
 		if has_key(p, c):
@@ -343,6 +352,17 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 		return
 	var door: Dictionary = game.grid.doors.get(c, {})
 	if door.is_empty() or not _can_start(p, FieldGrid.center(c), true):
+		return
+	# A boarded door (J08): the planks on this face come off with a bar; boarded
+	# only on the far face, it can be kicked at.
+	if BuildingRules.planks_total(door) > 0 and verb in ["", "unboard"]:
+		if can_unboard(p, c):
+			unboard(p, c)
+		elif p == game.player:
+			var mine: int = BuildingRules.planks(door, game.grid.face_toward(c, p.position))
+			game.hud.toast("판자로 막혀 있다 · 쇠지렛대 없음" if mine > 0 else "안쪽이 판자로 막혀 있다")
+			if mine == 0:
+				game.hud.offer([{"label": "문 차기", "call": kick_door.bind(p, c)}])
 		return
 	match verb:
 		"close":
@@ -390,11 +410,11 @@ func has_pry(p) -> bool:
 	return false
 
 
-## The key of this door's building is in the pack (P12), and the door is not
-## boarded up.
+## The key of this door's building is in the pack (P12), and no plank is on
+## the door.
 func has_key(p, c: Vector2i) -> bool:
 	var door: Dictionary = game.grid.doors.get(c, {})
-	if door.is_empty() or bool(door.get("boarded", false)):
+	if door.is_empty() or BuildingRules.planks_total(door) > 0:
 		return false
 	return int(p.items.get(FieldItems.key_for(int(door.get("building", -1))), 0)) > 0
 
@@ -417,12 +437,29 @@ func _key_opened(p, c: Vector2i) -> void:
 	_check_raider_door(c)
 
 
-## A closed door near by can be boarded up with a plank and a handful of nails
-## (P22): locked from this side, harder to break, and heard while it is done.
+# ---------------------------------------------------------------- boards (J08)
+
+## A plank and a nail in the pack (P22: what boarding takes).
+func _board_stuff(p) -> bool:
+	return (int(p.items.get("plank", 0)) > 0 or int(p.items.get("wood", 0)) > 0) \
+		and int(p.items.get("nails", 0)) >= BuildingRules.NAILS_PER_PLANK
+
+
+## A shut door near by can be boarded on the face one stands on (P22, J08): up
+## to four planks a face, both faces; it no longer opens, and each plank gives
+## it three more blows to break. Heard while it is done.
 func can_board(p, c: Vector2i) -> bool:
 	var door: Dictionary = game.grid.doors.get(c, {})
-	return not door.is_empty() and String(door["state"]) in ["closed", "locked"] and not bool(door.get("boarded", false)) \
-		and (int(p.items.get("plank", 0)) > 0 or int(p.items.get("wood", 0)) > 0) and int(p.items.get("nails", 0)) > 0
+	return not door.is_empty() and String(door["state"]) in ["closed", "locked"] \
+		and BuildingRules.can_add_plank(door, game.grid.face_toward(c, p.position)) and _board_stuff(p)
+
+
+## A window, whole or broken but not open, is boarded the same way; from the
+## third plank on a face nobody sees through it.
+func can_board_window(p, c: Vector2i) -> bool:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	return not w.is_empty() and not bool(w.get("open", false)) \
+		and BuildingRules.can_add_plank(w, game.grid.face_toward(c, p.position)) and _board_stuff(p)
 
 
 func board_door(p, c: Vector2i) -> void:
@@ -430,20 +467,70 @@ func board_door(p, c: Vector2i) -> void:
 		return
 	if not can_board(p, c) or not _can_start(p, FieldGrid.center(c), true):
 		return
-	if _begin_work(p, "craft", "문 막기", BOARD_TIME, _boarded.bind(p, c), "door", c, FieldGrid.center(c)):
+	var face: int = game.grid.face_toward(c, p.position)
+	if _begin_work(p, "craft", "문 막기", BOARD_TIME, _boarded.bind(p, c, "door", face), "door", c, FieldGrid.center(c)):
 		game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "hammer", p)
 
 
-func _boarded(p, c: Vector2i) -> void:
-	if not _finished_work(p, "craft") or not can_board(p, c):
+func board_window(p, c: Vector2i) -> void:
+	if _wait_blow(p, board_window.bind(p, c)):
 		return
-	if not (p.take_item("plank") or p.take_item("wood")) or not p.take_item("nails"):
+	if not can_board_window(p, c) or not _can_start(p, FieldGrid.center(c), true):
 		return
-	var door: Dictionary = game.grid.doors[c]
-	game.grid.set_door_state(c, "locked")
-	door["boarded"] = true
-	door["hp"] = int(door.get("hp", 0)) + BOARD_HP
-	game.view.update_door(c)
+	var face: int = game.grid.face_toward(c, p.position)
+	if _begin_work(p, "craft", "창 막기", BOARD_TIME, _boarded.bind(p, c, "window", face), "window", c, FieldGrid.center(c)):
+		game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "hammer", p)
+
+
+func _boarded(p, c: Vector2i, kind: String, face: int) -> void:
+	if not _finished_work(p, "craft"):
+		return
+	var d: Dictionary = (game.grid.doors if kind == "door" else game.grid.windows).get(c, {})
+	if d.is_empty() or not BuildingRules.can_add_plank(d, face) or not _board_stuff(p):
+		return
+	if not (p.take_item("plank") or p.take_item("wood")) or not p.take_item("nails", BuildingRules.NAILS_PER_PLANK):
+		return
+	BuildingRules.add_plank(d, face)
+	_boards_changed(c, kind)
+
+
+## The planks on one's own face come off one at a time with a bar (J08): twice
+## the hammering, quiet, and the plank back in the pack (its nail is bent).
+## Those nailed on the far face cannot be got at from here.
+func can_unboard(p, c: Vector2i) -> bool:
+	var d: Dictionary = game.grid.doors.get(c, game.grid.windows.get(c, {}))
+	return not d.is_empty() and has_pry(p) and BuildingRules.planks(d, game.grid.face_toward(c, p.position)) > 0
+
+
+func unboard(p, c: Vector2i) -> void:
+	if _wait_blow(p, unboard.bind(p, c)):
+		return
+	if not can_unboard(p, c) or not _can_start(p, FieldGrid.center(c), true):
+		return
+	var kind := "door" if game.grid.doors.has(c) else "window"
+	var face: int = game.grid.face_toward(c, p.position)
+	if _begin_work(p, "pry", "판자 뜯기", BuildingRules.UNBOARD_SECONDS, _unboarded.bind(p, c, kind, face), kind, c, FieldGrid.center(c), true):
+		game.make_sound(FieldGrid.center(c), SimNoise.Level.QUIET, "pry", p)
+
+
+func _unboarded(p, c: Vector2i, kind: String, face: int) -> void:
+	if not _finished_work(p, "pry"):
+		return
+	var d: Dictionary = (game.grid.doors if kind == "door" else game.grid.windows).get(c, {})
+	if d.is_empty() or not BuildingRules.remove_plank(d, face):
+		return
+	game.make_sound(FieldGrid.center(c), SimNoise.Level.QUIET, "pry", p)
+	p.add_item("plank")
+	_boards_changed(c, kind)
+
+
+func _boards_changed(c: Vector2i, kind: String) -> void:
+	game.grid.refresh_cell(c)
+	if kind == "door":
+		game.view.update_door(c)
+	else:
+		game.view.update_window(c)
+		_note_cold(c)
 
 
 ## A plank whittled to a stake (P22, P23): into a free hand.
@@ -477,9 +564,16 @@ func _into_hand(p, id: String) -> bool:
 	return true
 
 
-## Pry a locked door with a crowbar: a few seconds and a normal sound.
+## Pry a locked door with a crowbar: a few seconds and a normal sound. A
+## boarded door is not pried: its planks come off first (J08).
 func pry_door(p, c: Vector2i) -> void:
 	if _wait_blow(p, pry_door.bind(p, c)):
+		return
+	if BuildingRules.planks_total(game.grid.doors.get(c, {})) > 0:
+		if can_unboard(p, c):
+			unboard(p, c)
+		elif p == game.player:
+			game.hud.toast("안쪽이 판자로 막혀 있다")
 		return
 	if not DoorRules.can_force(game.grid.doors.get(c, {})) or not _can_start(p, FieldGrid.center(c), true):
 		return
@@ -491,16 +585,37 @@ func pry_door(p, c: Vector2i) -> void:
 		game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "pry", p)
 
 
-## Kick: one loud try, half the time it gives (s2_station 2.4).
+## Kick: one loud try, half the time it gives (s2_station 2.4). Planks nailed on
+## the far face come off one a kick that gives (J08); planks on one's own face
+## are in the way of the foot and come off with a bar.
 func kick_door(p, c: Vector2i) -> void:
 	if _wait_blow(p, kick_door.bind(p, c)):
 		return
-	if DoorRules.can_force(game.grid.doors.get(c, {})):
+	if DoorRules.can_force(game.grid.doors.get(c, {})) or _far_planks_only(p, c):
 		_begin_work(p, "kick", "문 차기", KICK_TIME, _kicked.bind(p, c), "door", c, FieldGrid.center(c))
 
 
+## The door is boarded only on the far face from p, and shut.
+func _far_planks_only(p, c: Vector2i) -> bool:
+	var door: Dictionary = game.grid.doors.get(c, {})
+	var face: int = game.grid.face_toward(c, p.position)
+	return String(door.get("state", "")) in ["closed", "locked"] and BuildingRules.planks(door, face) == 0 		and BuildingRules.planks(door, 1 - face) > 0
+
+
 func _kicked(p, c: Vector2i) -> void:
-	if not _finished_work(p, "kick") or not DoorRules.can_force(game.grid.doors.get(c, {})):
+	if not _finished_work(p, "kick"):
+		return
+	if _far_planks_only(p, c):
+		game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "kick", p)
+		if game.rng.randf() < DoorRules.KICK_CHANCE:
+			BuildingRules.remove_plank(game.grid.doors[c], 1 - game.grid.face_toward(c, p.position))
+			_boards_changed(c, "door")
+			if p == game.player:
+				game.hud.toast("안쪽 판자 하나가 떨어져 나갔다.")
+		elif p == game.player:
+			game.hud.toast("문이 버텼다.")
+		return
+	if not DoorRules.can_force(game.grid.doors.get(c, {})):
 		return
 	game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "kick", p)
 	if game.rng.randf() < DoorRules.KICK_CHANCE:
@@ -511,9 +626,10 @@ func _kicked(p, c: Vector2i) -> void:
 		game.hud.toast("문이 버텼다.")
 
 
-## Opening the pharmacy door lets the raiders see us (s2_station 2.5).
+## Opening the door of the raiders' den lets them see us (s2_station 2.5): the
+## building's role, not its place in the map's list (J08, R09).
 func _check_raider_door(c: Vector2i) -> void:
-	if int(game.grid.doors[c]["building"]) != 3:
+	if BuildingRules.role_of(game.data, int(game.grid.doors[c]["building"])) != "raider_den":
 		return
 	for r in game.raiders:
 		if r.is_alive() and r.brain.get("state", "") == "idle":
@@ -522,21 +638,166 @@ func _check_raider_door(c: Vector2i) -> void:
 
 # ---------------------------------------------------------------- windows
 
+## What is done at a window (J08). The player is offered what makes sense
+## there; a companion goes in by the quiet way when there is one and breaks
+## the glass when there is not.
 func window_default(p, c: Vector2i, verb: String) -> void:
 	if _wait_blow(p, window_default.bind(p, c, verb)):
 		return
 	var w: Dictionary = game.grid.windows.get(c, {})
 	if w.is_empty() or not _can_start(p, FieldGrid.center(c), true):
 		return
-	if not w["broken"]:
-		if verb == "break" or p != game.player:
-			_begin_work(p, "window", "창 깨기", WindowRules.BREAK_SECONDS, _window_work_done.bind(p, c), "window", c, FieldGrid.center(c))
-		else:
-			game.hud.toast("깨야 넘음")
-			game.hud.offer([{"label": "창을 깬다", "call": window_default.bind(p, c, "break")}])
+	match verb:
+		"break":
+			if WindowRules.can_break(w):
+				_begin_work(p, "window", "창 깨기", WindowRules.BREAK_SECONDS, _window_work_done.bind(p, c), "window", c, FieldGrid.center(c))
+			return
+		"open":
+			open_window(p, c)
+			return
+		"close":
+			close_window(p, c)
+			return
+		"curtain":
+			toggle_curtain(p, c)
+			return
+		"board":
+			board_window(p, c)
+			return
+		"unboard":
+			unboard(p, c)
+			return
+		"glass":
+			if WindowRules.can_clear(w):
+				_begin_work(p, "glass", "유리 치우기", GLASS_TIME, _clear_glass.bind(c, p), "window", c, FieldGrid.center(c))
+			return
+	if p != game.player:
+		if BuildingRules.can_open(w) and not latched_against(p, c):
+			open_window(p, c)
+		elif WindowRules.can_break(w):
+			window_default(p, c, "break")
 		return
+	var rows := window_choices(p, c)
+	if rows.size() == 1:
+		(rows[0]["call"] as Callable).call()
+	elif not rows.is_empty():
+		game.hud.offer(rows)
+	elif BuildingRules.planks_total(w) > 0:
+		game.hud.toast("판자로 막혀 있다")
+
+
+## The choices at a window for the player, most useful first, at most four.
+func window_choices(p, c: Vector2i) -> Array:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	var rows: Array = []
+	if can_unboard(p, c):
+		rows.append({"label": "판자 뜯기", "call": window_default.bind(p, c, "unboard")})
+	if BuildingRules.can_open(w):
+		rows.append({"label": "걸쇠 비틀기" if latched_against(p, c) else "창 열기", "call": window_default.bind(p, c, "open")})
+	elif BuildingRules.can_shut(w):
+		rows.append({"label": "창 닫기", "call": window_default.bind(p, c, "close")})
 	if WindowRules.can_clear(w):
-		_begin_work(p, "glass", "유리 치우기", GLASS_TIME, _clear_glass.bind(c, p), "window", c, FieldGrid.center(c))
+		rows.append({"label": "유리 치우기", "call": window_default.bind(p, c, "glass")})
+	if BuildingRules.has_curtain(w):
+		rows.append({"label": "커튼 열기" if String(w["curtain"]) == "closed" else "커튼 닫기", "call": window_default.bind(p, c, "curtain")})
+	if can_board_window(p, c):
+		rows.append({"label": "창 막기", "call": window_default.bind(p, c, "board")})
+	if WindowRules.can_break(w):
+		rows.append({"label": "창을 깬다", "call": window_default.bind(p, c, "break")})
+	return rows.slice(0, 4)
+
+
+## A latched window seen from its outer face: the latch is on the other side.
+func latched_against(p, c: Vector2i) -> bool:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	var outer: int = game.grid.outer_face(c)
+	return bool(w.get("latched", false)) and outer >= 0 and game.grid.face_toward(c, p.position) == outer
+
+
+## Open a shut window: quiet and quick from inside, the latch lifted; from
+## outside a latched one is a struggle, one quiet try after another until it
+## gives or the latch snaps and only breaking opens it (building_rules.gd).
+func open_window(p, c: Vector2i) -> void:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not BuildingRules.can_open(w) or not _can_start(p, FieldGrid.center(c), true):
+		if bool(w.get("stuck", false)) and p == game.player:
+			game.hud.toast("걸쇠가 망가져 안 열린다")
+		return
+	if latched_against(p, c):
+		if _begin_work(p, "door", "걸쇠 비틀기", BuildingRules.LATCH_TRY_SECONDS, _latch_tried.bind(p, c), "window", c, FieldGrid.center(c)):
+			game.make_sound(FieldGrid.center(c), SimNoise.Level.QUIET, "latch", p)
+		return
+	_begin_work(p, "door", "창 열기", BuildingRules.WINDOW_SECONDS, _window_set.bind(p, c, true), "window", c, FieldGrid.center(c))
+
+
+func _latch_tried(p, c: Vector2i) -> void:
+	if not _finished_work(p, "door"):
+		return
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not BuildingRules.can_open(w):
+		return
+	match BuildingRules.try_latch(int(p.skills.get("strength", 0)), game.rng.randf(), game.rng.randf()):
+		"open":
+			w["latched"] = false
+			_set_window_open(c, true)
+		"stuck":
+			w["stuck"] = true
+			if p == game.player:
+				game.hud.toast("걸쇠가 부러져 끼었다. 이제 깨야 열린다.")
+		_:
+			open_window(p, c)
+
+
+func close_window(p, c: Vector2i) -> void:
+	if not BuildingRules.can_shut(game.grid.windows.get(c, {})) or not _can_start(p, FieldGrid.center(c), true):
+		return
+	_begin_work(p, "door", "창 닫기", BuildingRules.WINDOW_SECONDS, _window_set.bind(p, c, false), "window", c, FieldGrid.center(c))
+
+
+func _window_set(p, c: Vector2i, open: bool) -> void:
+	if not _finished_work(p, "door"):
+		return
+	_set_window_open(c, open)
+
+
+## Something standing in the frame keeps a window from shutting, as a door.
+func _set_window_open(c: Vector2i, open: bool) -> void:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if w.is_empty() or (open and not BuildingRules.can_open(w)) or (not open and not BuildingRules.can_shut(w)):
+		return
+	if not open:
+		if not game.zombies.in_radius(FieldGrid.center(c), DoorRules.OCCUPANT_RADIUS).is_empty():
+			return
+		for person in game.people:
+			if person.is_alive() and person.position.distance_to(FieldGrid.center(c)) < DoorRules.OCCUPANT_RADIUS:
+				return
+	w["open"] = open
+	if open:
+		w["latched"] = false
+	game.grid.refresh_cell(c)
+	game.view.update_window(c)
+	_note_cold(c)
+
+
+## Draw or open a window's curtain: at once and quiet; drawn, nobody sees
+## through that window either way.
+func toggle_curtain(p, c: Vector2i) -> void:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not BuildingRules.has_curtain(w) or not _can_start(p, FieldGrid.center(c), true):
+		return
+	var to := "open" if String(w["curtain"]) == "closed" else "closed"
+	_begin_work(p, "door", "커튼 닫기" if to == "closed" else "커튼 열기", BuildingRules.CURTAIN_SECONDS, _curtain_set.bind(p, c, to), "window", c, FieldGrid.center(c))
+
+
+func _curtain_set(p, c: Vector2i, to: String) -> void:
+	if not _finished_work(p, "door"):
+		return
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not BuildingRules.has_curtain(w):
+		return
+	w["curtain"] = to
+	game.grid.refresh_cell(c)
+	game.view.update_window(c)
 
 
 func _window_work_done(p, c: Vector2i) -> void:
@@ -545,15 +806,26 @@ func _window_work_done(p, c: Vector2i) -> void:
 
 
 ## Also called by a weapon impact: the combat caller already resolved the hit.
+## The glass falls on the far side from the one who broke it (J08).
 func _break_window(p, c: Vector2i) -> void:
 	if not WindowRules.can_break(game.grid.windows.get(c, {})):
 		return
 	game.grid.break_window(c)
+	var sides: Array[Vector2i] = game.grid.faces(c)
+	var fell: Vector2i = sides[1 - game.grid.face_toward(c, p.position)] if p != null else sides[1]
+	if game.grid.people_can_walk(fell):
+		game.grid.floor_glass[fell] = c
 	game.view.update_window(c)
-	var b: int = int(game.grid.windows[c]["building"])
-	if b >= 0:
-		game.data["buildings"][b]["window_broken"] = true
+	_note_cold(c)
 	game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "glass", p)
+
+
+## A window of a building changed: does the building still keep the warmth?
+func _note_cold(c: Vector2i) -> void:
+	var b: int = int(game.grid.windows.get(c, {}).get("building", -1))
+	var row: Dictionary = BuildingRules.building(game.data, b)
+	if not row.is_empty():
+		row["window_broken"] = BuildingRules.lets_cold_in(game.data.get("levels", {0: game.grid}), b)
 
 
 func _clear_glass(c: Vector2i, p = null) -> void:
@@ -563,6 +835,44 @@ func _clear_glass(c: Vector2i, p = null) -> void:
 		return
 	game.grid.windows[c]["glass"] = false
 	game.view.update_window(c)
+
+
+## The glass on the floor is swept aside as the frame's is (three seconds).
+func sweep_glass(p, cell: Vector2i) -> void:
+	if _wait_blow(p, sweep_glass.bind(p, cell)):
+		return
+	if not game.grid.floor_glass.has(cell) or not _can_start(p, FieldGrid.center(cell)):
+		return
+	p.start_action("glass", "유리 치우기", GLASS_TIME, _swept.bind(cell))
+
+
+func _swept(cell: Vector2i) -> void:
+	var from: Variant = game.grid.floor_glass.get(cell)
+	game.grid.floor_glass.erase(cell)
+	if from is Vector2i and game.grid.windows.has(from):
+		game.view.update_window(from)
+
+
+## Stepping onto broken glass (J08): a crunch heard close by; barefoot, a cut foot.
+func _glass_steps() -> void:
+	if game.grid.floor_glass.is_empty():
+		glass_feet.clear()
+		return
+	for p in game.people_alive():
+		var id: int = p.get_instance_id()
+		var cell := FieldGrid.cell_of(p.position)
+		if game.level_of(p.position) != 0 or not game.grid.floor_glass.has(cell):
+			glass_feet.erase(id)
+			continue
+		if glass_feet.get(id, Vector2i(-1, -1)) == cell:
+			continue
+		glass_feet[id] = cell
+		game.make_sound(p.position, SimNoise.Level.QUIET, "glass_step", p)
+		if Wear.barefoot(p) and game.rng.randf() < BuildingRules.BAREFOOT_GLASS_CUT:
+			p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
+			game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
+			if p.team != "raider":
+				game.say(p, "%s 유리에 발을 베였다." % p.display_name, true, "cut")
 
 
 func can_vault_window(p, c: Vector2i) -> bool:
@@ -1067,9 +1377,10 @@ func _nearest_companion(at: Vector3, r: float):
 
 # ---------------------------------------------------------------- signal box ladder
 
-## Up the signal box ladder (the only way down from there is the ladder).
+## Up the signal box ladder (the only way down from there is the ladder): the
+## top of the building whose role is the lookout (J08, R09).
 func on_signal_top(p) -> bool:
-	return p.upstairs and game.grid_at(p.position).building_at(FieldGrid.cell_of(p.position)) == 1
+	return p.upstairs and BuildingRules.role_of(game.data, game.grid_at(p.position).building_at(FieldGrid.cell_of(p.position))) == "lookout"
 
 
 ## Up the ladder: fast is a normal sound, careful is quiet but slow. Upstairs
@@ -1584,12 +1895,26 @@ func context(p) -> Array:
 		out.append({"label": "눈으로 문지름", "call": rub_snow.bind(p)})
 	if p.items.has("cloth") and int(p.items.get("bandage", 0)) < 2:
 		out.append({"label": "붕대 만들기", "call": tear_bandage.bind(p)})
-	# Made there and then (P22): a door boarded up, a stake from a plank.
+	# Made there and then (P22, J08): a door or a window boarded up, a plank
+	# taken off one's own face of it, a stake from a plank.
 	if game.level_of(p.position) == 0:
-		for dc: Vector2i in game.grid.doors:
-			if FieldGrid.center(dc).distance_to(p.position) < NEAR_USE and can_board(p, dc):
-				out.append({"label": "문 막기", "call": board_door.bind(p, dc)})
-				break
+		var board_row: Dictionary = {}
+		var unboard_row: Dictionary = {}
+		var here := FieldGrid.cell_of(p.position)
+		for dy in range(-2, 3):
+			for dx in range(-2, 3):
+				var bc: Vector2i = here + Vector2i(dx, dy)
+				if FieldGrid.center(bc).distance_to(p.position) >= NEAR_USE:
+					continue
+				if board_row.is_empty() and can_board(p, bc):
+					board_row = {"label": "문 막기", "call": board_door.bind(p, bc)}
+				elif board_row.is_empty() and can_board_window(p, bc):
+					board_row = {"label": "창 막기", "call": board_window.bind(p, bc)}
+				if unboard_row.is_empty() and can_unboard(p, bc):
+					unboard_row = {"label": "판자 뜯기", "call": unboard.bind(p, bc)}
+		for row: Dictionary in [board_row, unboard_row]:
+			if not row.is_empty():
+				out.append(row)
 	if p.items.has("plank") and p.hands.size() < 2:
 		out.append({"label": "말뚝 깎기", "call": whittle_stake.bind(p)})
 	for key in game.data["manholes"]:
@@ -1665,10 +1990,14 @@ func _near_things(p) -> Array:
 				var d: float = at.distance_to(p.position)
 				if game.grid.doors.has(c):
 					var st: String = game.grid.doors[c]["state"]
-					if st != "broken":
+					if BuildingRules.planks_total(game.grid.doors[c]) > 0:
+						rows.append([d, "막힌 문", go_and_do.bind(p, "door", c, at)])
+					elif st != "broken":
 						rows.append([d, "문 닫기" if st == "open" else ("문 따기" if st == "locked" else "문 열기"), go_and_do.bind(p, "door", c, at)])
 				elif game.grid.windows.has(c):
 					rows.append([d, "창", go_and_do.bind(p, "window", c, at)])
+				elif game.grid.floor_glass.has(c):
+					rows.append([d, "유리 치우기", sweep_glass.bind(p, c)])
 		for id in game.data["spots"]:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])

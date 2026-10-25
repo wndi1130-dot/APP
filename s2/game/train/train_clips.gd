@@ -34,10 +34,22 @@ const CLIPS: Array = [
 	["t_sit_huddle", "Sitting_Idle_Loop", 24, true, "t_huddle", 0.0],
 	["t_sit_doze", "Sitting_Idle_Loop", 24, true, "t_doze", 0.0],
 	["t_warm_hands", "Crouch_Idle_Loop", 24, true, "t_hands_out", 0.0],
+	# The second set (user 2026-10-25: a train that reacts): nods, head shakes, folded
+	# arms and claps standing and sitting, a reach, a bowl passed, work in the lap.
+	["t_nod", "Yes", 24, true, "", 0.0],
+	["t_reach", "Interact", 24, true, "", 0.0],
+	["t_pass", "PickUp_Table", 24, true, "", 0.0],
+	["t_clap", "Idle_Loop", 24, true, "t_clap", 0.0],
+	["t_sit_nod", "Sitting_Idle_Loop", 24, true, "t_sit_nod", 0.0],
+	["t_sit_no", "Sitting_Idle_Loop", 24, true, "t_sit_no", 0.0],
+	["t_sit_fold", "Sitting_Idle_Loop", 24, true, "t_sit_fold", 0.0],
+	["t_sit_clap", "Sitting_Idle_Loop", 24, true, "t_sit_clap", 0.0],
+	["t_gun_clean", "Sitting_Idle_Loop", 24, true, "t_gun_clean", 0.0],
+	["t_handwork", "Sitting_Idle_Loop", 24, true, "t_handwork", 0.0],
 ]
 
 ## Kept at every frame in the small bake (their beats are quicker than half the frames).
-const KEEP: Array = ["t_shiver", "t_cough"]
+const KEEP: Array = ["t_shiver", "t_cough", "t_clap", "t_sit_nod", "t_sit_no", "t_sit_clap"]
 
 const LAYERS: Dictionary = {
 	# Kneeling at a job: the middle of the motion only, without going down or getting up.
@@ -86,6 +98,56 @@ const LAYERS: Dictionary = {
 		["aim", "forearm.L", "hand.L", [[-0.15, 0.06, 0.0, 3.0], 0.1, 1.0]],
 		["aim", "upper_arm.R", "forearm.R", [-0.12, -0.35, 1.0]],
 		["aim", "forearm.R", "hand.R", [[0.15, 0.06, 3.14, 3.0], 0.1, 1.0]],
+	]},
+	# Clapping, slowly, three times a round: the forearms swing in and meet in front of the chest.
+	"t_clap": {"span": [0.0, 0.5], "steps": [
+		["aim", "upper_arm.L", "forearm.L", [0.18, -0.55, 0.8]],
+		["aim", "forearm.L", "hand.L", [[-0.45, 0.35, 0.0, 3.0], 0.35, 0.8]],
+		["aim", "upper_arm.R", "forearm.R", [-0.18, -0.55, 0.8]],
+		["aim", "forearm.R", "hand.R", [[0.45, 0.35, 3.14, 3.0], 0.35, 0.8]],
+	]},
+	"t_sit_clap": {"span": [0.0, 0.5], "steps": [
+		["aim", "upper_arm.L", "forearm.L", [0.18, -0.55, 0.8]],
+		["aim", "forearm.L", "hand.L", [[-0.45, 0.35, 0.0, 3.0], 0.35, 0.8]],
+		["aim", "upper_arm.R", "forearm.R", [-0.18, -0.55, 0.8]],
+		["aim", "forearm.R", "hand.R", [[0.45, 0.35, 3.14, 3.0], 0.35, 0.8]],
+	]},
+	# Sitting, nodding twice and then still: yes, that is right.
+	"t_sit_nod": {"span": [0.0, 0.6], "steps": [
+		["turn", "neck", "x", ["keys", [[0.0, 0.0], [0.1, 0.22], [0.2, 0.0], [0.3, 0.22], [0.4, 0.02], [1.0, 0.0]]]],
+		["turn", "head", "x", ["keys", [[0.0, 0.0], [0.1, 0.12], [0.2, 0.0], [0.3, 0.12], [0.4, 0.0], [1.0, 0.0]]]],
+	]},
+	# Sitting, shaking the head, leant a little forward: no.
+	"t_sit_no": {"span": [0.0, 0.6], "steps": [
+		["turn", "spine", "x", 0.08],
+		["turn", "head", "y", ["keys", [[0.0, 0.0], [0.08, 0.32], [0.18, -0.32], [0.28, 0.3], [0.38, -0.25], [0.48, 0.0], [1.0, 0.0]]]],
+	]},
+	# Sitting, arms folded tight across the chest, the head turned a little away.
+	"t_sit_fold": {"steps": [
+		["turn", "spine", "x", -0.04],
+		["aim", "upper_arm.L", "forearm.L", [0.12, -0.85, 0.5]],
+		["aim", "forearm.L", "hand.L", [-0.95, 0.12, 0.28]],
+		["aim", "upper_arm.R", "forearm.R", [-0.12, -0.85, 0.5]],
+		["aim", "forearm.R", "hand.R", [0.95, 0.18, 0.22]],
+		["turn", "head", "y", 0.22],
+	]},
+	# Sitting with the gun across the knees: head down, the hands working along it.
+	"t_gun_clean": {"steps": [
+		["turn", "spine", "x", 0.18],
+		["turn", "neck", "x", 0.4],
+		["aim", "upper_arm.L", "forearm.L", [0.22, -0.75, 0.6]],
+		["aim", "forearm.L", "hand.L", [-0.25, -0.4, 0.85]],
+		["aim", "upper_arm.R", "forearm.R", [-0.22, -0.75, 0.6]],
+		["aim", "forearm.R", "hand.R", [[0.3, 0.12, 0.0, 3.0], -0.4, 0.85]],
+	]},
+	# Sitting at handwork (mending, a book): the hands together low before the chest, the head bent over them.
+	"t_handwork": {"steps": [
+		["turn", "spine", "x", 0.12],
+		["turn", "neck", "x", 0.45],
+		["aim", "upper_arm.L", "forearm.L", [0.15, -0.8, 0.5]],
+		["aim", "forearm.L", "hand.L", [-0.35, 0.1, 0.9]],
+		["aim", "upper_arm.R", "forearm.R", [-0.15, -0.8, 0.5]],
+		["aim", "forearm.R", "hand.R", [0.35, [0.1, 0.14, 0.0, 2.0], 0.9]],
 	]},
 }
 
