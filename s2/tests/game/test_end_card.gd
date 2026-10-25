@@ -4,7 +4,7 @@ extends "res://addons/gut/test.gd"
 ## the parts coming up one after another or all at once, and its key goes on.
 
 const EndCard = preload("res://game/ui/end_card.gd")
-const SliceFlow = preload("res://game/slice_flow.gd")
+const SliceSamples = preload("res://tests/game/slice_samples.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
@@ -12,7 +12,7 @@ const PARTS: Array = ["Picture", "Caption", "Kick", "Title", "Why", "Row0", "Row
 
 
 func _end() -> Array:
-	var s: Array = SliceFlow.arrival_sample()
+	var s: Array = SliceSamples.arrival_sample()
 	return [FieldArrival.finish_slice(s[0], s[1])["g"], s[1]]
 
 
