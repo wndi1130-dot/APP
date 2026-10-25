@@ -476,6 +476,7 @@ function breakPrologueVow(g: Game, c: Comm, label: string): void {
   bump(g, 'trust', PROLOGUE.brokenTrust, 'promise');
   bumpRel(g, c, PROLOGUE.brokenRel, 'promise');
   g.stats.promisesBroken += 1;
+  g.comms[c].broken = (g.comms[c].broken ?? 0) + 1;
   if (g.dark) g.dark.broken[c] += 1;
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
 }
