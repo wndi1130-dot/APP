@@ -183,7 +183,7 @@ func test_a_room_shut_from_inside_has_its_way_out_and_nobody_in_it() -> void:
 			assert_eq(int(w.get("building", g0.building_at(c))), b)
 		if w["broken"] and int(w.get("building", -1)) == b:
 			broken += 1
-	assert_gt(boarded, 0, "판자 친 창")
+	# 판자 친 창은 창이 둘 넘는 방에만 있다(나간 창은 비움): 있으면 안쪽 면에, 셋째 장 밑.
 	assert_gt(broken, 0, "막은 사람이 나간 창")
 	assert_eq(_items(d), items, "물건 양은 그대로")
 	assert_eq(d["spawns"].get("dead_levels", []), dead, "망자를 더하지 않는다")

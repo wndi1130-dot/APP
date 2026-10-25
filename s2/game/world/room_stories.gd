@@ -277,8 +277,7 @@ static func _barricade_room(data: Dictionary, city: Dictionary, b: int, room: Di
 	for id: String in _boxes(data, b):
 		if _room_of_box(data, city, id) == Vector2i(0, ri):
 			box_ids.append(id)
-	# 창이 둘은 있어야 한다: 하나는 막은 사람이 나간 창, 하나는 판자 친 창(바깥 흔적).
-	if doors.is_empty() or windows.size() < 2 or box_ids.is_empty():
+	if doors.is_empty() or windows.is_empty() or box_ids.is_empty():
 		return false
 	# 지도가 이 방에 둔 망자가 있으면 막지 않는다(금지선: 잠긴 방 안의 망자).
 	var room_cells: Dictionary = {}
@@ -308,6 +307,7 @@ static func _barricade_room(data: Dictionary, city: Dictionary, b: int, room: Di
 		g.doors[c]["barred"] = "inside"
 		g.set_door_state(c, "locked")
 	# 나간 창은 비워 둔다(판자가 한 장이라도 있으면 못 지난다). 다른 창은 하나 걸러 판자.
+	# 창이 하나뿐인 방은 판자 친 창 없이 나간 창(창틀의 밧줄)만 바깥 흔적이 된다.
 	g.break_window(exit)
 	for k in range(1, wins.size(), 2):
 		_board_inside(g, wins[k])
