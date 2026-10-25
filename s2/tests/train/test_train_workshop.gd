@@ -72,7 +72,7 @@ func test_parts_first_up_to_the_target_then_the_line() -> void:
 	var g := _game()
 	TrainWorkshop.start(g, "bow")
 	var r: Dictionary = TrainWorkshop.run(g)
-	# A stretch is 4 work: one part (4 → 5, 2 scrap and 1 wood), then the bow's 3.
+	# PR 6's starting craft master gives 5 work: one part, then the bow's 3.
 	assert_eq(r["parts"], 1)
 	assert_eq(float(g["dom"]["parts"]), 5.0)
 	assert_eq(r["made"], ["bow"])
@@ -95,8 +95,9 @@ func test_a_long_thing_carries_over_and_parts_stop_at_the_target() -> void:
 	var g := _game({"parts": 0})
 	TrainWorkshop.set_target(g, 3)
 	TrainWorkshop.start(g, "crowbar")
+	g["dom"]["make"]["need"] = 4.0
 	var r1: Dictionary = TrainWorkshop.run(g)
-	# 3 work to three parts, 1 to the crowbar's 2.
+	# Starting master gives 5 work: 3 parts, then 2 of this longer job's 4.
 	assert_eq(r1["parts"], 3)
 	assert_eq(r1["made"], [])
 	assert_almost_eq(float(TrainWorkshop.now(g)["share"]), 0.5, 1e-6)

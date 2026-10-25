@@ -365,7 +365,9 @@ function verdict(result: VoteResult, need: number): HTMLElement {
   return h('div', { class: cx('big verdict num', result.passed ? 'is-pass' : 'is-fail') },
     h('span', { class: 'verdict__word' }, result.decree ? '포고' : result.passed ? '가결' : '부결'),
     h('b', null, result.yes), h('span', null, ` / ${need}`),
-    h('small', null, `반대 ${result.no}${result.absent ? ` · 부재 ${result.absent}` : ''}`));
+    h('small', null, `반대 ${result.no}${result.absent ? ` · 부재 ${result.absent}` : ''}`),
+    // 개표 설명 한 줄(정치 흐름 3.3). 비밀 투표면 칸별 갈림을 말하지 않는다.
+    result.why && !result.secret && !result.decree ? h('small', { class: 'verdict__why' }, result.why) : null);
 }
 
 /** 표결 전 셈(presentation_motion '확보·예상·필요 표', 18:19 교차 확인 반영): 같은 크기 명판 셋이 주인이고 막대는 거든다.
