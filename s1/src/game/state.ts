@@ -147,6 +147,10 @@ export interface HiddenBite { who: string; comm: Comm; at: number; due: number; 
 export interface RiotState {
   prev: number; stage: 0 | 1 | 2; fire: string[]; scorched: string[]; spilled: number;
   riots: number; protests: number; riotCards: number; fell: number; died: number;
+  /** 고조 사다리의 대응 흔적(riot.ts LADDER, 정치 흐름 4.2). 모두 선택 칸이라 옛 저장도 읽힌다.
+   * ignoredAt: 항의를 물리친 구간(풀리지 않았으면 다시 온다), yieldUntil: 들어준 뒤 항의 문턱이 낮은 마지막 구간,
+   * guardUntil·guardComm: 경비로 누른 칸과 불씨가 잘 생기는 마지막 구간, pending: 항의 없이 난장판 문턱을 넘어 한 정산 미뤘다 */
+  ignoredAt?: number; yieldUntil?: number; guardUntil?: number; guardComm?: Comm; pending?: boolean;
 }
 export function riotStart(): RiotState {
   return { prev: P.tension0, stage: 0, fire: [], scorched: [], spilled: 0, riots: 0, protests: 0, riotCards: 0, fell: 0, died: 0 };
@@ -502,6 +506,8 @@ export interface Game {
   disasterDeaths?: number;
   /** 바깥 기온(climate.ts)이 켜진 판. 없으면 꺼진 판이고 아래 칸들도 없다 */
   climate?: boolean;
+  /** 시험 판 스위치(결정 447 카드 3)로 막 곡선을 따르는 판. 없으면 서막 곡선. 판을 다시 열 때 useSeasonAct로 되살린다 */
+  seasonAct?: 'act1' | 'act2' | 'act3';
   /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠 판. 켜지 않은 판에는 r4·w4가 없고 핸드카에 갈래가 없다 */
   gearOn?: boolean;
   /** 적용된 기온 단계 0~4(출발 때만 계절표를 따라 바뀐다) */

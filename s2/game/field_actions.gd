@@ -48,6 +48,9 @@ const UPSTAIRS_Y: float = 3.0
 const CARE_REACH: float = 2.0     # how near you must be to treat someone else
 # Planks and spirits go on the train as wood and luxury (user decision 407 B1); cloth and bandages stay field stores.
 const UNLOAD_KEEP: Array = ["bandage", "cloth", "medkit", "ammo_craft", "flare", "tweezers", "needle_thread"]
+## A thing this light moves by the handful in the bag (move_count): the
+## reference moves small things twenty at a time (inventory.md 1절).
+const SMALL_THING: float = 0.1
 const FieldItems = preload("res://game/sim/field_items.gd")
 const Wear = preload("res://game/sim/wear.gd")
 ## 나단계 손일 (decision 423, P12·P22): a key turns in a second and a half
@@ -2169,6 +2172,9 @@ const NEAR_USE: float = 1.7
 func _near_things(p) -> Array:
 	var rows: Array = []
 	var lv: int = game.level_of(p.position)
+	# By the train with something to put aboard: that comes first.
+	if at_unloading(p) and not loadable(p).is_empty():
+		rows.append([0.0, "열차에 싣기", load_train.bind(p)])
 	for s in game.stairs:
 		if not (s["low"] == lv or s["high"] == lv):
 			continue
@@ -2271,19 +2277,100 @@ func on_platform(p) -> bool:
 
 
 ## Anything put down on the platform counts as loaded (s2_station 2.4).
+## The companions load what they carry by themselves; the player does it with
+## the key (load_train, decision 448-13: what goes aboard is a choice to see).
 func _auto_unload() -> void:
 	for p in game.squad:
-		if not p.is_alive() or not game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading"):
+		if p != game.player and p.is_alive() and at_unloading(p):
+			load_train(p)
+
+
+## Standing where loads are put aboard (the platform's unloading cells).
+func at_unloading(p) -> bool:
+	return game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading")
+
+
+## What of one's bag goes aboard: all but a key, an empty tin and the can
+## opener, a weapon, and the field's own stores (bandages, cloth, tools).
+func loadable(p) -> Array:
+	var out: Array = []
+	for id in p.items.keys():
+		if not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id)):
+			out.append(id)
+	return out
+
+
+## Put aboard what one carries (s2_station 2.4: what is aboard is the train's,
+## whatever comes of the one who brought it), all of it or the one kind `only`.
+## True if anything went.
+func load_train(p, only: String = "") -> bool:
+	if not at_unloading(p):
+		return false
+	var put: Array = []
+	for id in loadable(p):
+		if only != "" and id != only:
 			continue
-		var put: Array = []
-		for id in p.items.keys():
-			# A key, an empty tin and the can opener stay with the one who has them.
-			if UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id):
-				continue
-			var n: int = int(p.items[id])
-			game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
-			put.append("%s %d" % [game.item_name(id), n])
-			p.items.erase(id)
-		if not put.is_empty():
-			game.telemetry.trip()
-			game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])
+		var n: int = int(p.items[id])
+		game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
+		put.append("%s %d" % [game.item_name(id), n])
+		p.items.erase(id)
+	if put.is_empty():
+		return false
+	game.telemetry.trip()
+	game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])
+	return true
+
+
+# ---------------------------------------------------------------- the bag and what is near
+
+## How many of `id` a press on its row moves: the whole of a small thing
+## (a handful of nails, a box of matches), else one (inventory.md 3절).
+func move_count(p, id: String) -> int:
+	var n: int = int(p.items.get(id, 0))
+	return n if Carry.item_weight(id) <= SMALL_THING else mini(n, 1)
+
+
+## The boxes searched and within reach of `p`, nearest first.
+func near_boxes(p) -> Array:
+	var rows: Array = []
+	for id in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][id]
+		var at := _container_at(c)
+		if SearchRules.can_take(c) and _in_reach(p, at):
+			rows.append([p.position.distance_to(at), String(id)])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	return rows.map(func(r: Array) -> String: return r[1])
+
+
+## The things lying within reach of `p` (indices into game.ground_items).
+func near_ground(p) -> Array:
+	var out: Array = []
+	for i in game.ground_items.size():
+		var g: Dictionary = game.ground_items[i]
+		if int(g.get("n", 0)) > 0 and _in_reach(p, g["pos"]):
+			out.append(i)
+	return out
+
+
+## Put `id` from the bag into a searched box within reach (as many as a press
+## moves and the box still takes, Carry.box_room).
+func store(p, box: String, id: String) -> bool:
+	var c: Dictionary = game.data["containers"].get(box, {})
+	var n: int = mini(move_count(p, id), Carry.box_room(c, id))
+	if n <= 0 or not SearchRules.can_take(c) or not _in_reach(p, _container_at(c)):
+		return false
+	p.take_item(id, n)
+	for i in n:
+		c["items"].append(id)
+	game.view.update_container(box)
+	return true
+
+
+## Put `id` from the bag down at the feet (as many as a press moves).
+func put_down(p, id: String) -> bool:
+	var n: int = move_count(p, id)
+	if n <= 0:
+		return false
+	p.take_item(id, n)
+	game.ground_items.append({"pos": p.position + Vector3(0.4, 0, 0.4), "id": id, "n": n})
+	return true

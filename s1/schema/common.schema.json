@@ -384,7 +384,8 @@
               "type": "string",
               "enum": [
                 "frost",
-                "snow"
+                "snow",
+                "bare"
               ]
             }
           },

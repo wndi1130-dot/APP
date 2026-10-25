@@ -762,7 +762,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   return stop.result;
 }
 
-function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Record<LootKey, number>>): void {
+export function checkStopPromises(g: Game, target: LootKey | null, gains: Partial<Record<LootKey, number>>): void {
   for (const c of COMMS) {
     const p = g.comms[c].promise;
     if (!p || p.due > g.seg) continue;
@@ -1235,7 +1235,7 @@ function finish(g: Game, end: Game['end']): void {
   if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
-  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 열차장실 문을 열어 둔 채 짐을 쌌다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
+  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다. 아무도 소리치지 않았다. 사람들이 길을 비켜 섰다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다. 식당칸 탁자가 엎어지고 고함이 칸을 넘어왔다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 열차장실 문을 열어 둔 채 짐을 쌌다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   writeLookback(g);
   for (const line of raisedLines(g)) journal(g, line);

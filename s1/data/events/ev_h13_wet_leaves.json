@@ -1,0 +1,79 @@
+{
+  "id": "ev_h13_wet_leaves",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 16
+    },
+    {
+      "type": "season",
+      "needs": "bare"
+    }
+  ],
+  "speaker": "engine",
+  "body": "젖은 낙엽이 레일을 덮어 오르막에서 바퀴가 헛돈다. 기관사가 말한다. \"모래통이 반입니다, 뿌리며 오르거나 내려서 쓸어야 합니다.\"",
+  "choices": [
+    {
+      "id": "c_sand",
+      "label": "모래를 뿌리며 오른다",
+      "say": "모래를 아끼지 마라. 한 번에 오른다.",
+      "why": "모래통이 비고, 헛도는 동안 화실이 불을 먹는다. 다음 오르막은 맨 레일로 오른다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -3
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_tail_sweep",
+      "label": "꼬리칸이 레일을 쓴다",
+      "say": "꼬리칸은 빗자루를 들어라. 오르막 끝까지 쓴다.",
+      "why": "비를 맞으며 오르막 끝까지 걷는 일이다. 식량 몫을 더 받지만 젖은 옷은 칸에서 잘 마르지 않는다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -2
+        },
+        {
+          "type": "community.exposure",
+          "target": "tail",
+          "amount": 6
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_back_run",
+      "label": "물러났다 다시 오른다",
+      "say": "뒤로 물러나 힘을 붙여라. 한 번 더 간다.",
+      "why": "석탄은 조금만 든다. 기관사는 헛돈 바퀴가 레일을 갈아 먹는다는 말을 삼킨다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -1
+        },
+        {
+          "type": "relation",
+          "target": "engine",
+          "amount": -3
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
