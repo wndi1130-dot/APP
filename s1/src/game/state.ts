@@ -8,6 +8,7 @@ import type { DisasterKind, DisasterState } from './disaster';
 import type { SignTier, Weather } from './omens';
 import type { RngState } from '../core/rng';
 import type { FieldReturns } from './field_receipt';
+import type { MemoryBook, PersonEvent } from './memory';
 import type { RationCutState } from './ration_cut';
 import type { HandsState } from './hands';
 import {
@@ -462,6 +463,10 @@ export interface Game {
   contentDeals?: { id: string; comm: Comm; due: number }[];
   /** 일대기 기록(틀 id, 누가, 어디서(정차 id, 이동 중이면 빈칸), 언제, 목격자 id). S3 일대기 화면이 읽는다 */
   chronicle?: { template: string; who: string; where: string; when: number; witnesses: string[]; from: string }[];
+  /** 사람 기억(memory.ts): 사람 한 명이 겪거나 들은 일. 그 사람의 말·출발 화면·회고만 바꾸고 칸 관계·긴장·신임은 안 쓴다 */
+  memory?: MemoryBook;
+  /** 열차 안 사건이 사람 기억에 남기는 줄(사건 키 + 사람 id). 정산 때 memory.ts가 읽고 비운다 */
+  personEvents?: PersonEvent[];
   /** 다음 표결 한 번에만 옮기는 표: 칸, 석 수, 쪽(captain은 열차장이 밝힌 편, 열차장이 올린 안건이면 찬성). 표결이 끝나면 지운다 */
   voteShift?: { comm: Comm; n: number; side: 'captain' | 'yes' | 'no' }[];
   /** 열차장 이름(열차장 만들기). S1a는 없어서 '열차장'으로 부른다 */
