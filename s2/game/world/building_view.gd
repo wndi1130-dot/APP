@@ -1079,7 +1079,9 @@ func _draw_window(key: Vector3i) -> void:
 	var in_dir := Vector3(sides[inner].x - c.x, 0, sides[inner].y - c.y)
 	if not row["cut"]:
 		if win.get("broken", false):
-			bake.add(_arrays["window_glass_broken"], xf)
+			# 깬 창: 틀에 유리가 남았으면 들쭉날쭉한 조각, 치웠으면 빈 틀.
+			if win.get("glass", false):
+				bake.add(_arrays["window_glass_broken"], xf)
 		elif win.get("open", false):
 			bake.add(_arrays["window_glass"], _swung(xf, in_dir))
 		else:

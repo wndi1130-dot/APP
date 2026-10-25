@@ -42,6 +42,14 @@ const CURTAIN_CLASSES: Dictionary = {"bed": true, "kitchen": true, "living": tru
 const CURTAIN_SECONDS: float = 0.5
 ## Barefoot onto broken glass: the foot is cut. Booted, only the crunch is heard.
 const BAREFOOT_GLASS_CUT: float = 1.0
+## Indoors after dark (decision 439 card 1): a room is dark beyond this many
+## cells from a window the light comes through (not curtained, under three
+## planks a face) and outside any lamp's light. Into the dark the eye reaches
+## as far as in a cellar, the dead's as well as the living's.
+const WINDOW_LIGHT_CELLS: int = 2
+const DARK_SIGHT: float = 7.0
+## A lamp's light this bright (0..255, LampLight) is enough to see by.
+const LIT_MIN: int = 40
 
 
 # ---------------------------------------------------------------- boards
@@ -188,6 +196,31 @@ static func dress_windows(data: Dictionary) -> void:
 				w["curtain"] = "closed" if curtain_roll < CURTAIN_SHUT_SHARE else "open"
 				if w["curtain"] == "closed":
 					g.refresh_cell(c)
+
+
+# ---------------------------------------------------------------- dark rooms
+
+## Indoor cells (index -> true) within WINDOW_LIGHT_CELLS of a window of the
+## same building that lets the light in: what the night still shows of a room.
+static func window_lit_cells(g) -> Dictionary:
+	var out: Dictionary = {}
+	var r := WINDOW_LIGHT_CELLS
+	for c: Vector2i in g.windows:
+		var w: Dictionary = g.windows[c]
+		if window_opaque(w):
+			continue
+		var b: int = int(w.get("building", -1))
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var n: Vector2i = c + Vector2i(dx, dy)
+				if g.inside(n) and g.building_at(n) >= 0 and (b < 0 or g.building_at(n) == b):
+					out[g.index(n)] = true
+	return out
+
+
+## How far the eye reaches to one standing in the dark.
+static func dark_reach(reach: float, dark: bool) -> float:
+	return minf(reach, DARK_SIGHT) if dark else reach
 
 
 # ---------------------------------------------------------------- buildings
