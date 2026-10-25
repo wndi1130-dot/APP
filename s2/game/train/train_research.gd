@@ -3,7 +3,7 @@ extends RefCounted
 ## Data below is copied from the S1 export and checked against tech-vectors-v1.
 
 const TrainHands = preload("res://game/train/train_hands.gd")
-const VISIBLE: Array[String] = ["w1"]
+const VISIBLE: Array[String] = ["w1", "e5"]
 # BEGIN S1 TABLES
 const TECHS: Dictionary = {
 	"e1": {
@@ -627,8 +627,10 @@ static func visible_techs(g: Dictionary) -> Array[String]:
 
 static func visible(g: Dictionary, _t: Dictionary = {}) -> Array[String]:
 	var out: Array[String] = []
-	for id: String in visible_techs(g):
-		if VISIBLE.has(id) and not NOT_YET.has(id):
+	# Keep existing rows in place when another working effect becomes visible.
+	var shown: Array[String] = visible_techs(g)
+	for id: String in VISIBLE:
+		if shown.has(id) and not NOT_YET.has(id):
 			out.append(id)
 	return out
 
