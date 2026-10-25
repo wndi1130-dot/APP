@@ -7,6 +7,7 @@ const Rng = preload("res://game/politics/rng.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
 const TrainState = preload("res://game/train/train_state.gd")
+const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
@@ -62,10 +63,12 @@ static func _profile(t: Dictionary, person_id: String) -> Dictionary:
 
 
 static func _person_of(t: Dictionary, departure: Dictionary, person_id: String) -> Dictionary:
+	if person_id == FieldDeparture.CAPTAIN_ID:
+		return {"name": FieldDeparture.CAPTAIN_NAME, "comm": FieldDeparture.CAPTAIN_COMM}
 	var profile := _profile(t, person_id)
 	if not profile.is_empty():
 		return {"name": profile["name"], "comm": profile["community"]}
-	for row: Dictionary in departure["roster"]:
+	for row: Dictionary in FieldDeparture.people_of(departure):
 		if row["id"] == person_id:
 			return {"name": person_id, "comm": row["comm"]}
 	return {"name": person_id, "comm": "tail"}
@@ -124,6 +127,13 @@ static func judge_promises(departure: Dictionary, receipt: Dictionary) -> Array:
 	var back := {}
 	for person_id: String in returned_of(receipt):
 		back[person_id] = true
+	# Who actually went: the roster on v1, and on v2 the work crew too once called down.
+	var went: Array = departure["roster"]
+	if int(departure["version"]) == 2:
+		went = []
+		for row: Dictionary in FieldDeparture.people_of(departure):
+			if (receipt["people"]["sent"] as Array).has(row["id"]):
+				went.append(row)
 	var out: Array = []
 	for promise: Dictionary in departure["promises"]:
 		var seen: Variant = null
@@ -146,7 +156,7 @@ static func judge_promises(departure: Dictionary, receipt: Dictionary) -> Array:
 						break
 			else:
 				verdict = "kept"
-				for roster: Dictionary in departure["roster"]:
+				for roster: Dictionary in went:
 					if roster["comm"] == promise["madeTo"]:
 						verdict = "broken"
 						break
@@ -172,14 +182,15 @@ static func check_departure(departure: Dictionary, t: Dictionary) -> Array[Strin
 			out.append("출발 명세에 %s 칸이 없다" % key)
 	if not out.is_empty():
 		return out
-	if int(departure["version"]) != 1 or not _valid_id(departure["departureId"]) or not _valid_id(departure["stopId"]) or not _valid_id(departure["placeId"]):
+	var version := int(departure["version"])
+	if (version != 1 and version != 2) or (version == 2 and not departure.get("workCrew") is Array) or not _valid_id(departure["departureId"]) or not _valid_id(departure["stopId"]) or not _valid_id(departure["placeId"]):
 		out.append("출발 명세가 올바르지 않다")
 	if not departure["segment"] is int and not departure["segment"] is float:
 		out.append("출발 구간이 수가 아니다")
 	elif float(departure["segment"]) != floorf(float(departure["segment"])) or int(departure["segment"]) < 0:
 		out.append("출발 구간이 올바르지 않다")
 	var roster_ids := {}
-	for row: Dictionary in departure["roster"]:
+	for row: Dictionary in FieldDeparture.people_of(departure):
 		if not _valid_id(row.get("id")) or not (t["COMMS"] as Array).has(row.get("comm")) or roster_ids.has(row.get("id")):
 			out.append("출발 명단이 올바르지 않다")
 			break
@@ -201,16 +212,22 @@ static func match_departure(departure: Dictionary, receipt: Dictionary) -> Array
 	var out: Array[String] = []
 	if receipt["departureId"] != departure["departureId"] or receipt["stopId"] != departure["stopId"] or receipt["place"]["id"] != departure["placeId"]:
 		out.append("출발 명세와 영수증의 정차가 다르다")
+	# v1: those sent are the roster exactly; v2: the whole roster and any of the work crew called down.
 	var sent := {}
 	for person_id: String in receipt["people"]["sent"]:
 		sent[person_id] = true
-	if sent.size() != (departure["roster"] as Array).size():
+	var may := {}
+	for row: Dictionary in FieldDeparture.people_of(departure):
+		may[row["id"]] = true
+	var same := not (int(departure["version"]) == 1 and sent.size() != (departure["roster"] as Array).size())
+	for row: Dictionary in departure["roster"]:
+		if not sent.has(row["id"]):
+			same = false
+	for person_id: String in sent:
+		if not may.has(person_id):
+			same = false
+	if not same:
 		out.append("출발 명단과 영수증의 명단이 다르다")
-	else:
-		for row: Dictionary in departure["roster"]:
-			if not sent.has(row["id"]):
-				out.append("출발 명단과 영수증의 명단이 다르다")
-				break
 	var promises := {}
 	for promise: Dictionary in departure["promises"]:
 		promises[promise["id"]] = promise["kind"]
@@ -358,56 +375,93 @@ static func _heal_cuts(g: Dictionary, t: Dictionary) -> int:
 	return cuts
 
 
-static func _note_injury(g: Dictionary, t: Dictionary, names: Array, comm: String, place: String) -> void:
+## The field wound's part to the train's wound book (s3 contract 4); hands go with arms, feet with legs.
+const FIELD_PART := {"head_neck": "head", "torso": "torso", "arm_left": "armL", "arm_right": "armR", "leg_left": "legL", "leg_right": "legR"}
+const LIMB_PARTS := ["armL", "armR", "legL", "legR"]
+
+
+static func _field_rank(w: Dictionary) -> float:
+	var kind: String = w["kind"]
+	if kind == "fracture":
+		var treat: Dictionary = w.get("treat", {})
+		return 0.5 if bool(treat.get("splinted", false)) and bool(treat.get("quick", false)) else 2.0
+	return 1.0 if kind == "deep" or kind == "embedded" else 0.0
+
+
+## One badly hurt person's record on the train (J02, body_injury 4.1·4.6; s1 field_receipt.ts
+## fieldWoundOf): the heaviest of the wounds the field wrote is the grade and the part, all of
+## them ride along in "field". A fracture is a fracture, or a light wound when a medic splinted it
+## at once; a fracture off the limbs counts as deep (the train's fractures are limbs). Deep and
+## embedded are deep. Only scratches and cuts on one listed as badly hurt is deep (decision card C,
+## user 2026-10-25); with no rows at all, the torso. Festering if any of them festers. No draws.
+static func field_wound_of(rows: Array, pid: String) -> Dictionary:
+	var mine: Array = []
+	for w: Dictionary in rows:
+		if w["person"] == pid:
+			mine.append(w)
+	var top: Variant = null
+	for w: Dictionary in mine:
+		if top == null or _field_rank(w) > _field_rank(top):
+			top = w
+	var part: String = String(FIELD_PART.get(top["part"], "torso")) if top is Dictionary else "torso"
+	var grade := "deep"
+	if top is Dictionary:
+		var rank := _field_rank(top)
+		grade = "fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep")
+	if grade == "fracture" and not LIMB_PARTS.has(part):
+		grade = "deep"
+	var septic := false
+	var field: Array = []
+	for w: Dictionary in mine:
+		septic = septic or bool(w.get("festering", false))
+		var row := (w as Dictionary).duplicate(true)
+		row.erase("person")
+		field.append(row)
+	return {"grade": grade, "part": part, "septic": septic, "field": field}
+
+
+## A wound the field settled, put in the book as it is (s1 wounds.ts recordFieldWound): only a deep
+## wound's 3 or 4 days takes the local coin noteInjury uses (seed, stretch, record id, name).
+static func _record_field_wound(g: Dictionary, t: Dictionary, who: String, comm: String, place: String, fw: Dictionary) -> void:
 	if not g.has("wounds"):
 		g["wounds"] = []
-	for who: String in names:
-		var wound_id := int(g.get("nextWoundId", 1))
-		var state := _hash_state("%s:wound:%d:%d:%s" % [g["seed"], int(g["seg"]), wound_id, who])
-		var draw := _hash_draw(state)
-		state = int(draw[1])
-		var grade := _weighted_pick(float(draw[0]), ["light", "deep", "fracture", "amputation"], [0.3, 0.45, 0.2, 0.05])
-		draw = _hash_draw(state)
-		state = int(draw[1])
-		var part := _weighted_pick(float(draw[0]), ["armL", "armR", "legL", "legR", "torso", "head"], [0.2, 0.2, 0.2, 0.2, 0.15, 0.05])
-		if grade == "fracture" and not ["armL", "armR", "legL", "legR"].has(part):
-			draw = _hash_draw(state)
-			state = int(draw[1])
-			part = ["armL", "armR", "legL", "legR"][int(floor(float(draw[0]) * 4.0))]
-		var coin := 0.0
-		if grade == "deep":
-			draw = _hash_draw(state)
-			state = int(draw[1])
-			coin = float(draw[0])
-		draw = _hash_draw(state)
-		var septic := float(draw[0]) < 0.2 + _crowd_septic(g, t, comm)
-		var days := 1
-		if grade == "deep":
-			days = 3 if coin < 0.5 else 4
-		elif grade == "fracture":
-			days = 6 if ["armL", "armR"].has(part) else 8
-		elif grade == "amputation":
-			days = 4
-		var floor_days := 1 if grade == "light" else (2 if grade == "deep" or grade == "amputation" else (3 if ["armL", "armR"].has(part) else 4))
-		var cuts := _heal_cuts(g, t)
-		if cuts > 0:
-			days = maxi(floor_days, days - cuts)
-		if septic:
-			days = int(ceil(days * 1.5))
-		var wound_state := "light" if grade == "light" else "bed"
-		if wound_state == "bed" and comm != "medtech" and not _active_wounds(g, "medtech").is_empty():
-			days += 1
-		var wound := {
-			"id": wound_id, "who": who, "comm": comm, "grade": grade, "part": part,
-			"from": "stop", "where": place, "septic": septic, "daysLeft": days, "days0": days,
-			"bedDays": 0 if grade == "light" else (4 if grade == "amputation" else 2),
-			"state": wound_state, "at": g["seg"],
-		}
-		var leader: Dictionary = g["comms"][comm]["leader"]
-		if leader["name"] == who:
-			wound["personId"] = leader["personId"]
-		g["nextWoundId"] = wound_id + 1
-		(g["wounds"] as Array).append(wound)
+	var wound_id := int(g.get("nextWoundId", 1))
+	var state := _hash_state("%s:wound:%d:%d:%s" % [g["seed"], int(g["seg"]), wound_id, who])
+	var grade: String = fw["grade"]
+	var part: String = fw["part"]
+	var coin := 0.0
+	if grade == "deep":
+		coin = float(_hash_draw(state)[0])
+	var septic: bool = fw["septic"]
+	var days := 1
+	if grade == "deep":
+		days = 3 if coin < 0.5 else 4
+	elif grade == "fracture":
+		days = 6 if ["armL", "armR"].has(part) else 8
+	elif grade == "amputation":
+		days = 4
+	var floor_days := 1 if grade == "light" else (2 if grade == "deep" or grade == "amputation" else (3 if ["armL", "armR"].has(part) else 4))
+	var cuts := _heal_cuts(g, t)
+	if cuts > 0:
+		days = maxi(floor_days, days - cuts)
+	if septic:
+		days = int(ceil(days * 1.5))
+	var wound_state := "light" if grade == "light" else "bed"
+	if wound_state == "bed" and comm != "medtech" and not _active_wounds(g, "medtech").is_empty():
+		days += 1
+	var wound := {
+		"id": wound_id, "who": who, "comm": comm, "grade": grade, "part": part,
+		"from": "stop", "where": place, "septic": septic, "daysLeft": days, "days0": days,
+		"bedDays": 0 if grade == "light" else (4 if grade == "amputation" else 2),
+		"state": wound_state, "at": g["seg"],
+	}
+	var leader: Dictionary = g["comms"][comm]["leader"]
+	if leader["name"] == who:
+		wound["personId"] = leader["personId"]
+	if not (fw["field"] as Array).is_empty():
+		wound["field"] = (fw["field"] as Array).duplicate(true)
+	g["nextWoundId"] = wound_id + 1
+	(g["wounds"] as Array).append(wound)
 
 
 static func _on_death(g: Dictionary, t: Dictionary, comm: String, names: Array) -> void:
@@ -480,7 +534,7 @@ static func _receipt_value(input: Variant) -> Dictionary:
 	assert(value is Dictionary, "영수증은 객체여야 한다")
 	var problems := Receipt.check(value)
 	assert(problems.is_empty(), "필드 영수증 계약이 올바르지 않다: %s" % [problems])
-	assert(int(value["version"]) == 4, "필드 영수증은 판 4여야 한다")
+	assert(int(value["version"]) == 4 or int(value["version"]) == 5, "필드 영수증은 판 4나 5여야 한다")
 	return (value as Dictionary).duplicate(true)
 
 
@@ -532,15 +586,38 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	for key: String in ["dead", "missing", "leftBehind"]:
 		for person_id: String in receipt["people"][key]:
 			gone[person_id] = true
-	var hurt: Array = []
+	# Badly hurt: the field's own part, kind, care and festering go in as they are (J02: no new draw).
+	var hurt_by := {}
 	for person_id: String in receipt["people"]["injured"]:
 		if not gone.has(person_id):
-			hurt.append(person_id)
-	for comm: String in _by_comm(t, departure, hurt):
-		var names: Array = _by_comm(t, departure, hurt)[comm]
+			var c: String = _person_of(t, departure, person_id)["comm"]
+			if not hurt_by.has(c):
+				hurt_by[c] = []
+			(hurt_by[c] as Array).append(person_id)
+	var rows: Array = receipt["people"].get("wounds", [])
+	for comm: String in hurt_by:
+		var names: Array = []
+		for person_id: String in hurt_by[comm]:
+			names.append(_person_of(t, departure, person_id)["name"])
 		g["injured"] = int(g["injured"]) + names.size()
-		_note_injury(g, t, names, comm, place)
+		for person_id: String in hurt_by[comm]:
+			_record_field_wound(g, t, _person_of(t, departure, person_id)["name"], comm, place, field_wound_of(rows, person_id))
 		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 크게 다쳐 돌아왔다." % [t["COMM_NAME"][comm], ", ".join(names)]})
+	# Bitten and back: the train's hidden-bite clock (two stretches to show or rise, decision card C).
+	for person_id: String in receipt["people"]["bitten"]:
+		if gone.has(person_id):
+			continue
+		var who: Dictionary = _person_of(t, departure, person_id)
+		var hidden := false
+		for b: Dictionary in g.get("hiddenBites", []):
+			hidden = hidden or b["who"] == who["name"]
+		if hidden:
+			continue
+		if not g.get("hiddenBites") is Array:
+			g["hiddenBites"] = []
+		(g["hiddenBites"] as Array).append({"who": who["name"], "comm": who["comm"], "at": g["seg"], "due": int(g["seg"]) + 2})
+		_journal(g, "%s이(가) 물린 채 돌아왔다. 아는 사람은 수색대뿐이다." % who["name"], "dark")
+		lines.append({"k": "people", "comm": who["comm"], "text": "%s %s이(가) 물린 채 돌아왔다. 2구간 안에 드러나거나 일어난다." % [t["COMM_NAME"][who["comm"]], who["name"]]})
 	var lost_ids: Array = []
 	for person_id: String in receipt["people"]["leftBehind"]:
 		if not (receipt["people"]["dead"] as Array).has(person_id):
@@ -601,6 +678,11 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		"seg": g["seg"], "verdicts": verdicts, "dead": dead_names, "symbol": symbol,
 		"before": before, "after": snapshot(g, t), "lines": lines,
 	}
+	# Who went (the next departure's soreness reads it) and, on v5, how each came back.
+	if int(departure["version"]) == 2:
+		record["sent"] = (receipt["people"]["sent"] as Array).duplicate()
+	if int(receipt["version"]) == 5:
+		record["crew"] = (receipt["crew"] as Array).duplicate(true)
 	if not g.get("fieldReturns") is Dictionary:
 		g["fieldReturns"] = {"applied": {}, "records": []}
 	g["fieldReturns"]["applied"][receipt["receiptId"]] = fingerprint
@@ -621,7 +703,7 @@ static func _body_searches(g: Dictionary, departure: Dictionary, receipt: Dictio
 			continue
 		for w: Variant in row.get("witnesses", []):
 			var pid: String = String(w) if w is String else String((w as Dictionary).get("person", ""))
-			for r: Dictionary in departure.get("roster", []):
+			for r: Dictionary in FieldDeparture.people_of(departure):
 				var comm: String = String(r.get("comm", ""))
 				if String(r.get("id", "")) != pid or minded.has(comm):
 					continue
