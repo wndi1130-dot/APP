@@ -23,6 +23,7 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const St = preload("res://game/train/train_state.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_SIZE := Vector2(330, 286)
@@ -90,6 +91,7 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 		"name": String(car0.get("name", names.get(c, c))),
 		"comm": c,
 		"pop": pop,
+		"hands_line": TrainHands.shortage_line(g0, t0, true),
 		"stage": String(St.stage_of(float(s["rel"]), t0).get("name", "")),
 		"warm": int(round(float(sit[0]))),
 		"cold": cold,
@@ -203,6 +205,11 @@ func _head(m: Dictionary) -> void:
 	stage.name = "Stage"
 	_add(stage)
 	GlassParts.put_on(stage, pop.position.x + GlassParts.text_w(pop), GlassParts.base_of(pop))
+	if not String(m["hands_line"]).is_empty():
+		var hands := UiFonts.label(String(m["hands_line"]), UiFonts.WORD, 400, 11.0, INK2, 0.0)
+		hands.name = "HandsShortage"
+		hands.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_text(hands, 44.0, 64.0)
 	var fold := Button.new()
 	fold.name = "Fold"
 	fold.flat = true
