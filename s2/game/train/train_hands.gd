@@ -3,7 +3,7 @@ extends RefCounted
 ## Read functions use that stored share, never a fresh estimate. No share at
 ## the start (or in an old save) means no missing work. Tables come from S1.
 
-const JOB_NAME := {"stoker": "화실 교대", "stove": "난로와 물", "watch": "지붕 보초", "roof": "지붕 얼음과 선로", "repair": "고칠 손"}
+const JOB_NAME := {"stoker": "화실 교대", "stove": "난로와 물", "watch": "지붕 보초", "roof": "지붕과 선로", "repair": "고칠 손"}
 const TRACK := ["water_tower", "snow_drift"]
 ## Older field fixtures and the workshop have callers without HANDS tables.
 ## This fallback is checked in full against S1's exported HANDS by the tests.

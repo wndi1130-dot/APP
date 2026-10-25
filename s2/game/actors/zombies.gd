@@ -105,7 +105,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	draw = _draws_of(vat)
 	draws = [draw]
 	body_rounds = [DeadBody.rounds]
-	bodies_to_read = DeadCast.others() if baked else []
+	bodies_to_read = DeadCast.others() if baked else ([] as Array[String])
 	bodies_planned = 1 + bodies_to_read.size()
 	# Rising markers above corpses that will stand up.
 	markers = MultiMeshInstance3D.new()

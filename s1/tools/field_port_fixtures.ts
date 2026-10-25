@@ -147,12 +147,13 @@ function liveReceipt(d: FieldDepartureV2): Record<string, unknown> {
     time: { arrive: 'D1 10:30', depart: 'D1 12:40', stayGameMinutes: 130 },
     stock: { coal: 4, wood: 2, ammo_shell: -2 }, items: { gained: [], lost: [] },
     people: {
-      sent, injured: [hurt, carriers[1]], bitten: [d.roster[3].id], dead: [], missing: [], leftBehind: [], rescued: [],
+      sent, injured: [hurt, carriers[1], d.roster[2].id], bitten: [d.roster[3].id], dead: [], missing: [], leftBehind: [], rescued: [],
       wounds: [
         { person: hurt, part: 'arm_left', kind: 'fracture', treat: { splinted: true, quick: true } },
         { person: carriers[0], part: 'leg_right', kind: 'laceration', treat: { disinfected: true, bandaged: true } },
         { person: carriers[1], part: 'leg_left', kind: 'fracture', treat: { splinted: true } },
         { person: carriers[1], part: 'torso', kind: 'embedded', festering: true },
+        { person: d.roster[2].id, part: 'arm_right', kind: 'amputation', treat: { tourniquet: true } },
         { person: d.roster[3].id, part: 'arm_right', kind: 'bite', treat: { bandaged: true } },
       ],
     },
