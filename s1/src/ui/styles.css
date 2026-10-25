@@ -727,6 +727,9 @@ small { font-size: 12px; }
 .verdict__word { font-size: 16px; font-weight: 700; margin-right: 8px; }
 .verdict.is-pass .verdict__word, .verdict.is-pass b { color: #9cc3f2; }
 .verdict.is-fail .verdict__word, .verdict.is-fail b { color: #f0a0a0; }
+/* 개표 설명 한 줄(정치 흐름 3.3): 큰 숫자 아래 작게, 줄을 넘기면 감싼다 */
+.verdict:has(.verdict__why) { flex-wrap: wrap; justify-content: center; width: 100%; max-width: 420px; }
+.big .verdict__why { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; line-height: 1.35; white-space: normal; text-align: center; color: var(--ink-3); }
 
 .cpanel { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; padding: 10px; border-radius: var(--radius); background: var(--surface-1); border: 1px solid var(--line); }
 .cpanel__head { display: flex; align-items: center; gap: 8px; }
