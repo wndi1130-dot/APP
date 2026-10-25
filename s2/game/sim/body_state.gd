@@ -16,6 +16,8 @@ const GUNSHOT_LEG := 0.25
 
 # Wound model (body_injury 4.6). Names match s1/schema/receipt.schema.json $defs.wound.
 const PARTS := ["head_neck", "torso", "arm_left", "arm_right", "leg_left", "leg_right"]
+# The parts in the words of the state notes (as treatment.gd PART_NAMES).
+const PART_WORDS := {"head_neck": "머리·목", "torso": "몸통", "arm_left": "왼팔", "arm_right": "오른팔", "leg_left": "왼다리", "leg_right": "오른다리"}
 const KINDS := ["scratch", "laceration", "deep", "embedded", "bite", "fracture"]
 # Starting blood flow per kind (start values). Heavy bleeding is a total of 1.0 or more.
 const BLOOD := {"scratch": 0.15, "laceration": 0.4, "deep": 1.0, "embedded": 1.0, "bite": 0.4, "fracture": 0.0}
@@ -50,10 +52,14 @@ const MELEE_HIT_NEED: Array[float] = [1.0, 0.85, 0.65]
 # and, from stage 2, {tourniquet, pulled, sutured, what, open_t}.
 # blood is the flow now (0 once stopped). what: "bullet" for a round that stayed in.
 # open_t: seconds the wound has been left dirty (it festers at FESTER_TIME).
+# For the cut (body_injury 2.2): risk (the bite or scratch opened the window
+# now running), infects (a bite always; a scratch when its roll came up),
+# stump (what is left where a limb was cut off).
 var wounds: Array[Dictionary] = []
 var infection: String = ""       # "" | "scratch" | "bite"
 var infected: bool = false       # hidden for scratches
 var window_left: float = 0.0
+var lost: Array[String] = []     # the arms and legs cut off (amputate)
 var exhaustion: float = 0.0
 var breath: float = 1.0
 var downed: bool = false
@@ -112,6 +118,13 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 	if not PARTS.has(part) or not KINDS.has(kind):
 		push_warning("body: bad wound %s / %s" % [part, kind])
 		return -1
+	# Nothing lands where a limb was cut off: the other side, else the torso.
+	if lost.has(part):
+		part = _whole(part)
+		if part == "":
+			if kind == "fracture":
+				return -1
+			part = "torso"
 	# Repeated trauma keeps the fourth matching record's identity for callers.
 	# At most 6 regions * 6 kinds * 4 rows take part in a body's tick.
 	var same := 0
@@ -147,7 +160,10 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 func apply_bite(_rng: RandomNumberGenerator, part: String, now: float) -> void:
 	# Already infected: the window runs on (a closed one stays closed); a new bite never resets it.
 	var was_infected: bool = infected
-	add_wound(_fine_part(part, "bite"), "bite", now)
+	var i: int = add_wound(_fine_part(part, "bite"), "bite", now)
+	if i >= 0:
+		wounds[i]["risk"] = true
+		wounds[i]["infects"] = true
 	injured_at = now
 	infection = "bite"
 	window_left = minf(window_left, WINDOW) if was_infected else WINDOW
@@ -155,9 +171,12 @@ func apply_bite(_rng: RandomNumberGenerator, part: String, now: float) -> void:
 
 
 func apply_scratch(rng: RandomNumberGenerator, now: float, part: String = "torso") -> void:
-	add_wound(_fine_part(part, "scratch"), "scratch", now)
+	var i: int = add_wound(_fine_part(part, "scratch"), "scratch", now)
 	injured_at = now
 	var roll: bool = rng.randf() < SCRATCH_INFECT
+	if i >= 0:
+		wounds[i]["risk"] = true
+		wounds[i]["infects"] = bool(wounds[i].get("infects", false)) or roll
 	var was_infected: bool = infected
 	if infection != "bite":
 		infection = "scratch"
@@ -464,6 +483,75 @@ func has_bite_wound() -> bool:
 	return false
 
 
+## Does a bite or a scratch on this part carry the window now running?
+func at_risk_on(part: String) -> bool:
+	for w: Dictionary in wounds:
+		if w["part"] == part and bool(w.get("risk", false)):
+			return true
+	return false
+
+
+## The arms and legs a bite of the window now running sits on.
+func bitten_limbs() -> Array[String]:
+	var out: Array[String] = []
+	for w: Dictionary in wounds:
+		var part: String = String(w["part"])
+		if w["kind"] == "bite" and bool(w.get("risk", false)) and coarse(part) in ["arm", "leg"] and not out.has(part):
+			out.append(part)
+	return out
+
+
+## The limbs to cut to stop the window now running, when every bite and
+## scratch of it sits on one; none when one sits where no cut reaches.
+func cut_parts() -> Array[String]:
+	var out: Array[String] = []
+	for w: Dictionary in wounds:
+		if not bool(w.get("risk", false)):
+			continue
+		var part: String = String(w["part"])
+		if coarse(part) not in ["arm", "leg"]:
+			out.clear()
+			return out
+		if not out.has(part):
+			out.append(part)
+	return out
+
+
+## Where a bite of the window now running sits that no cut takes off (the
+## torso, the head or the neck, 결정 441); "" when there is none.
+func uncut_bite() -> String:
+	for w: Dictionary in wounds:
+		if w["kind"] == "bite" and bool(w.get("risk", false)) and coarse(String(w["part"])) not in ["arm", "leg"]:
+			return String(w["part"])
+	return ""
+
+
+## Cuts off an arm or a leg (body_injury 2.2): every wound on it goes with it,
+## a stump is left (stump_kind, under the tourniquet it was cut with) and the
+## body is spent, whoever it is. Inside the window whatever came in through
+## that limb is gone; it is not a chance (decisions.md 「절단은 확률이 아니다」).
+## A risk left elsewhere runs on in the window, not knowing. Once the window
+## has closed it is too late: the limb is lost for nothing. Returns true when
+## no infection is left after it.
+func amputate(part: String, stump_kind: String, now: float) -> bool:
+	if lost.has(part) or coarse(part) not in ["arm", "leg"]:
+		return not infected
+	var in_time: bool = window_left > 0.0
+	for i in range(wounds.size() - 1, -1, -1):
+		if wounds[i]["part"] == part:
+			wounds.remove_at(i)
+	var s: int = add_wound(part, stump_kind, now, minf(float(BLOOD.get(stump_kind, SEEP_BLOOD)), SEEP_BLOOD))
+	if s >= 0:
+		wounds[s]["stump"] = true
+		wounds[s]["tourniquet"] = true
+	lost.append(part)
+	injured_at = now
+	exhaustion = maxf(exhaustion, Stamina.FATIGUE_HEAVY)
+	if in_time:
+		_recount_infection()
+	return not infected
+
+
 ## "arm_left" -> "arm", "leg_right" -> "leg", others as they are.
 static func coarse(part: String) -> String:
 	if part.begins_with("arm_"):
@@ -599,6 +687,9 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 			events.append("window_closed")
 			if not infected:
 				infection = ""
+				# Clean after all: nothing left there to cut for.
+				for w: Dictionary in wounds:
+					w.erase("risk")
 
 	# Exhaustion
 	_update_breath_lock()
@@ -627,7 +718,15 @@ func exhaustion_level() -> int:
 
 
 func can_run() -> bool:
-	return not leg_fracture and not has_deep_leg_wound() and exhaustion_level() < 2 and breath > RUN_BREATH_MIN and not breath_locked and not downed and not dead
+	return not leg_fracture and not lost_limb("leg") and not has_deep_leg_wound() and exhaustion_level() < 2 and breath > RUN_BREATH_MIN and not breath_locked and not downed and not dead
+
+
+## An arm ("arm") or a leg ("leg") cut off.
+func lost_limb(group: String) -> bool:
+	for part: String in lost:
+		if _in_group(part, group):
+			return true
+	return false
 
 
 # body_injury 4.2. Speed factors (time = base / factor) except aim_min (circle floor size, bigger is worse).
@@ -652,8 +751,11 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	var arm_hurt := 0.0
 	var leg_hurt := 0.0
 	var head_bleeding := false
+	# A limb cut off is a broken one for good: its row below, not its stump's hurt.
+	var lost_arm: bool = lost_limb("arm")
+	var lost_leg: bool = lost_limb("leg")
 	for w: Dictionary in wounds:
-		if w["kind"] == "fracture":
+		if w["kind"] == "fracture" or lost.has(String(w["part"])):
 			continue
 		if _in_group(String(w["part"]), "arm"):
 			arm_hurt = maxf(arm_hurt, InjuryRules.severity(w))
@@ -661,13 +763,13 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 			leg_hurt = maxf(leg_hurt, InjuryRules.severity(w))
 		elif w["part"] == "head_neck" and float(w["blood"]) > 0.0 and not bool(w["bandaged"]):
 			head_bleeding = true
-	if not arm_fracture and arm_hurt > 0.0:
+	if not arm_fracture and not lost_arm and arm_hurt > 0.0:
 		_mul(m, "aim_min", lerpf(1.0, InjuryRules.HEAD_AIM_MULT, arm_hurt))
 		_mul(m, "reload", lerpf(1.0, InjuryRules.ARM_RELOAD_MULT, arm_hurt))
 		_mul(m, "swap", lerpf(1.0, InjuryRules.ARM_SWAP_MULT, arm_hurt))
 		_mul(m, "hands", lerpf(1.0, InjuryRules.ARM_HANDS_MULT, arm_hurt))
 		_mul(m, "shove_window", lerpf(1.0, InjuryRules.ARM_SHOVE_MULT, arm_hurt))
-	if not leg_fracture and leg_hurt > 0.0:
+	if not leg_fracture and not lost_leg and leg_hurt > 0.0:
 		_mul(m, "move", lerpf(1.0, InjuryRules.LEG_MOVE_MULT, leg_hurt))
 	if head_bleeding:
 		_mul(m, "aim_min", InjuryRules.HEAD_AIM_MULT)
@@ -702,16 +804,17 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 		_mul(m, "swing", 0.85)
 		_mul(m, "melee_hit", 0.6)
 		_mul(m, "aim_min", AIM_UP)
-	# Arm fracture
-	if arm_fracture:
+	# Arm fracture, or an arm cut off (one hand, body_injury 2.2)
+	if arm_fracture or lost_arm:
 		_mul(m, "aim_min", AIM_UP)
 		_mul(m, "reload", 0.6)
 		_mul(m, "swap", 0.7)
 		_mul(m, "hands", 0.5)
 		_mul(m, "shove_window", 0.7)
-	# Leg fracture: splinted limps, unsplinted crawls
-	if leg_fracture:
-		_mul(m, "move", 0.6 if fractures_splinted("leg") else MOVE_FLOOR)
+	# Leg fracture: splinted limps, unsplinted crawls; a leg cut off crawls
+	# (body_injury 2.2: it cannot walk; two carrying it is for later)
+	if leg_fracture or lost_leg:
+		_mul(m, "move", 0.6 if leg_fracture and not lost_leg and fractures_splinted("leg") else MOVE_FLOOR)
 		_mul(m, "swing", 0.9)
 		_mul(m, "melee_hit", 0.8)
 		_mul(m, "shove_window", 0.7)
@@ -769,7 +872,7 @@ func multipliers(ctx: Dictionary) -> Dictionary:
 	m["aim_min"] = minf(AIM_MAX, float(m["aim_min"]))
 	if carry >= 3:
 		m["move"] = 0.0
-	m["one_hand"] = arm_fracture or arm_hurt >= 1.0
+	m["one_hand"] = arm_fracture or lost_arm or arm_hurt >= 1.0
 	return m
 
 
@@ -785,6 +888,8 @@ func icons() -> Array:
 		rest.append({"id": "bleed", "severe": bleed >= 2})
 	if arm_fracture or leg_fracture:
 		rest.append({"id": "fracture", "severe": leg_fracture and not fractures_splinted("leg")})
+	if not lost.is_empty():
+		rest.append({"id": "lost", "severe": lost_limb("leg")})
 	if has_festering():
 		rest.append({"id": "fester", "severe": false})
 	if cold_level >= 1:
@@ -812,12 +917,34 @@ func status_notes() -> Array:
 		match String(icon["id"]):
 			"infection":
 				row["short"] = "감염"
+				# What to cut to stop it (body_injury 2.2). A bite no cut reaches
+				# says why and how long until the fever, with nothing to decide
+				# (결정 441 (4)): 「정해야 한다」 is for an arm or a leg.
+				var time: String = window_words()
+				var core: String = uncut_bite()
+				var off: String = _off_limb_risk()
 				if infection == "bite":
 					row["title"] = "물린 상처"
-					row["text"] = "감염 창이 %d분 %02d초 남았다. 닫히기 전에 정해야 한다" % [int(window_left) / 60, int(window_left) % 60] if window_left > 0.0 else "감염 창이 닫혔다"
+					var limbs: Array[String] = bitten_limbs()
+					if window_left <= 0.0:
+						row["text"] = "감염 창이 닫혔다"
+					elif core != "":
+						row["text"] = "%s 자를 수 없다. 열이 오르기까지 %s" % [_ira(PART_WORDS[core]), time]
+					elif limbs.is_empty():
+						row["text"] = "감염 창이 %s 남았다. 닫히기 전에 정해야 한다" % time
+					else:
+						row["text"] = "감염 창이 %s 남았다. 닫히기 전에 정해야 한다: %s 자르면 막는다" % [time, _eul(_words(limbs))]
+						if off != "":
+							row["text"] += ". %s 긁힘은 자를 수 없다" % PART_WORDS[off]
 				else:
 					row["title"] = "긁힌 상처"
-					row["text"] = "감염됐는지 아직 모른다. 창이 끝나야 안다"
+					if window_left > 0.0 and off != "":
+						row["text"] = "감염됐는지 아직 모른다. %s 자를 수 없다. %s 뒤 창이 끝나면 안다" % [_ira(PART_WORDS[off]), time]
+					else:
+						row["text"] = "감염됐는지 아직 모른다. 창이 끝나야 안다"
+						var cut: Array[String] = cut_parts()
+						if not cut.is_empty() and window_left > 0.0:
+							row["text"] += ". %s 자르면 감염이어도 막는다" % _eul(_words(cut))
 			"bleed":
 				row["short"] = "출혈"
 				if severe:
@@ -835,6 +962,18 @@ func status_notes() -> Array:
 				else:
 					row["title"] = "팔 골절"
 					row["text"] = "양손 무기를 못 쓴다. 재장전과 손일이 느리고 조준이 흔들린다"
+			"lost":
+				row["short"] = "잘림"
+				var words: Array = []
+				for part: String in lost:
+					words.append(PART_WORDS[part])
+				row["title"] = "잘린 " + "·".join(words)
+				var says: Array = []
+				if lost_limb("arm"):
+					says.append("한 손 무기만 쓴다(양손 총과 활은 못 쓴다). 재장전과 손일이 느리다")
+				if lost_limb("leg"):
+					says.append("기어간다. 뛰지 못한다")
+				row["text"] = ". ".join(says)
 			"fester":
 				row["short"] = "곪음"
 				row["title"] = "곪은 상처"
@@ -861,9 +1000,9 @@ func status_words() -> String:
 		return "물림"
 	if bleed >= 2:
 		return "피를 흘림"
-	if leg_fracture:
-		return "느림" if fractures_splinted("leg") else "못 걸음"
-	if arm_fracture:
+	if leg_fracture or lost_limb("leg"):
+		return "느림" if leg_fracture and not lost_limb("leg") and fractures_splinted("leg") else "못 걸음"
+	if arm_fracture or lost_limb("arm"):
 		return "한 손"
 	if cold_level >= 2:
 		return "손이 떨림"
@@ -922,6 +1061,67 @@ func _set_fracture(group: String, on: bool) -> void:
 
 static func _in_group(part: String, group: String) -> bool:
 	return group == "" or part == group or part.begins_with(group + "_")
+
+
+# The same limb on the other side, for one cut off; "" when that is gone too.
+func _whole(part: String) -> String:
+	var other: String = part.replace("_left", "_right") if part.ends_with("_left") else part.replace("_right", "_left")
+	return "" if lost.has(other) else other
+
+
+# After a cut inside the window: what still carries it. A bite always does
+# (one from an old save has no flag); a scratch only as its roll came up.
+func _recount_infection() -> void:
+	var risk := false
+	var bite := false
+	infected = false
+	for w: Dictionary in wounds:
+		if not bool(w.get("risk", false)):
+			continue
+		risk = true
+		bite = bite or w["kind"] == "bite"
+		infected = infected or bool(w.get("infects", w["kind"] == "bite"))
+	if not risk:
+		infection = ""
+		window_left = 0.0
+	else:
+		infection = "bite" if bite else "scratch"
+
+
+# Parts in words, joined: ["arm_left", "leg_right"] → "왼팔·오른다리".
+static func _words(parts: Array[String]) -> String:
+	var words: Array = []
+	for part: String in parts:
+		words.append(PART_WORDS[part])
+	return "·".join(words)
+
+
+# The first part off the arms and legs a bite or scratch of the window sits on ("" none).
+func _off_limb_risk() -> String:
+	for w: Dictionary in wounds:
+		if bool(w.get("risk", false)) and coarse(String(w["part"])) not in ["arm", "leg"]:
+			return String(w["part"])
+	return ""
+
+
+# The window left in words: "7분 32초".
+func window_words() -> String:
+	return "%d분 %02d초" % [int(window_left) / 60, int(window_left) % 60]
+
+
+static func _has_final(word: String) -> bool:
+	var c: int = word.unicode_at(word.length() - 1)
+	return c >= 0xAC00 and c <= 0xD7A3 and (c - 0xAC00) % 28 != 0
+
+
+# A word with its object ending: 왼팔 → 왼팔을, 왼다리 → 왼다리를.
+static func _eul(word: String) -> String:
+	return word + ("을" if _has_final(word) else "를")
+
+
+# A word with 이라/라: 몸통 → 몸통이라, 머리·목 → 머리·목이라.
+static func _ira(word: String) -> String:
+	return word + ("이라" if _has_final(word) else "라")
 
 
 func _has_fracture_on(part: String) -> bool:
