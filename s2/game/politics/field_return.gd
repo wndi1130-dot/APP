@@ -309,6 +309,8 @@ static func _keep_promise(g: Dictionary, t: Dictionary, comm: String, label: Str
 	if int(state["grudge"]) == 1:
 		state["grudge"] = 0
 	g["stats"]["promisesKept"] = int(g["stats"]["promisesKept"]) + 1
+	# Each car's own count of promises kept to it (turn.ts keepPromise, decision 433 persuasion reads it).
+	state["kept"] = int(state.get("kept", 0)) + 1
 	_journal(g, "%s과(와)의 약속을 지켰다: %s." % [t["COMM_NAME"][comm], label], "good")
 	_voice_kept(g, t, comm)
 
@@ -322,6 +324,7 @@ static func _break_promise(g: Dictionary, t: Dictionary, comm: String, label: St
 	state["fervor"] = mini(3, int(state["fervor"]) + 1)
 	_bump(g, "tension", 3.0, "promise")
 	g["stats"]["promisesBroken"] = int(g["stats"]["promisesBroken"]) + 1
+	state["broken"] = int(state.get("broken", 0)) + 1  # the car's own count (turn.ts breakPromise)
 	_offend(g, comm)
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
 
@@ -330,6 +333,7 @@ static func _break_prologue(g: Dictionary, t: Dictionary, comm: String, label: S
 	_bump(g, "trust", float(t["PROLOGUE"]["brokenTrust"]), "promise")
 	_bump_rel(g, comm, float(t["PROLOGUE"]["brokenRel"]), "promise")
 	g["stats"]["promisesBroken"] = int(g["stats"]["promisesBroken"]) + 1
+	g["comms"][comm]["broken"] = int(g["comms"][comm].get("broken", 0)) + 1  # field_receipt.ts breakPrologueVow
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
 
 
