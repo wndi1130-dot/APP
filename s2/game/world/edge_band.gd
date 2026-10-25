@@ -1,21 +1,23 @@
 extends RefCounted
-## What stands round a stop map, outside its cells (결정 448 17번): bare woods on
-## snow starting just past the last walkable cell, the rails running on out of
-## them, and every road ending a few metres out at sleepers or crates (지도 발주
-## 6장: no wire on roads or bands; barricades are crates, sleds and sleeper piles).
-## Nothing here is walked on: the cells end where they always did. The camera is
-## held so the screen never reaches past the band (clamp_focus).
+## What stands round a stop map, outside its cells (결정 448 17번): bare woods
+## starting just past the last walkable cell, the rails running on out of them,
+## and every road ending a few metres out at sleepers or crates (지도 발주 6장:
+## no wire on roads or bands; barricades are crates, sleds and sleeper piles).
+## The ground and the low fog out there are fx/map_edge.gd's; this draws what
+## stands on it. Nothing here is walked on: the cells end where they always did.
+## The camera is held so the screen never reaches past the band (clamp_focus).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const F = FieldGrid.Floor
 
 ## Metres of woods drawn outside each edge; the camera may look this far out.
-const BAND: float = 16.0
+## The fog past the edge (fx/map_edge.gd FOG_REACH) covers all from here on.
+const BAND: float = 12.0
 ## The first rows, close and thick, read as the end of the way.
 const INNER_ROW: float = 2.6
 const INNER_SPACING: float = 2.0
-const DEEP_SPACING: float = 3.4
+const DEEP_SPACING: float = 4.0
 ## No trunk nearer the edge than this: the last walkable cell stays clear.
 const TRUNK_GAP: float = 0.3
 ## How far that start wanders out along the edge.
@@ -24,17 +26,16 @@ const EDGE_WAVE: float = 1.2
 const RAIL_CLEAR: float = 2.5
 ## A road goes on this far past the edge before it is blocked.
 const ROAD_RUN: float = 5.0
-## Snow drawn past the band, so no glimpse ever finds the void.
-const SKIRT: float = 60.0
 ## Trees are drawn in pieces this many metres a side, so those off screen are not.
 const CHUNK: float = 16.0
-## Past this many metres out the trees throw no shadow.
-const SHADE_DEPTH: float = 3.5
+## Only the first trees throw a shadow, the ones whose shadow falls on the ground
+## people walk: the sun's shadow reaches the edge even from the middle of a map,
+## and further out the fog past the edge (fx/map_edge.gd) lies over the ground.
+const SHADE_DEPTH: float = 1.2
 const TREE_HEIGHT := Vector2(3.6, 5.6)
 
 const TREE_MODEL := "res://models/props_common/bare_tree.glb"
 const BLOCK_MODELS: Array[String] = ["res://models/props_stop01/sleeper_fence.glb", "res://models/props_common/crate_stack.glb"]
-const SNOW := Color(0.66, 0.68, 0.71)
 
 
 ## Half the ground the field camera shows: across from the aspect, along from the pitch.
@@ -197,33 +198,18 @@ static func _chunk(at: Vector3) -> Vector2i:
 	return Vector2i(floori((at.x + BAND) / CHUNK), floori((at.z + BAND) / CHUNK))
 
 
-## Draw the band under `parent` (the ground level's root): ground and the
-## road and rail runs in the map's own material, trees and blocks as models.
-## Returns counts for the build log and the tests.
+## Draw the band under `parent` (the ground level's root): the road and rail runs
+## in the map's own material, trees and blocks as models. Returns counts for the
+## build log and the tests.
 static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array) -> Dictionary:
 	var p := plan(g, seed_of(data))
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
+	# Roads and rails run on out in their own colour (the rails' sleepers every other
+	# metre), a hair above the ground past the edge (fx/map_edge.gd).
 	var ground := SurfaceTool.new()
 	ground.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var w := float(g.width)
-	var h := float(g.height)
-	# The band in 2 m squares with the ground's small checker, then the plain skirt past it.
-	var step := 2.0
-	var z := -BAND
-	while z < h + BAND:
-		var x := -BAND
-		while x < w + BAND:
-			if outside(g, x + step * 0.5, z + step * 0.5) > 0.0:
-				var n := (float(posmod(int(x) * 73 + int(z) * 37, 11)) / 11.0 - 0.5) * 0.035
-				_quad(ground, Rect2(x, z, step, step), 0.0, Color(SNOW.r + n, SNOW.g + n, SNOW.b + n))
-			x += step
-		z += step
-	for r in [Rect2(-BAND - SKIRT, -BAND - SKIRT, w + 2.0 * (BAND + SKIRT), SKIRT), Rect2(-BAND - SKIRT, h + BAND, w + 2.0 * (BAND + SKIRT), SKIRT),
-			Rect2(-BAND - SKIRT, -BAND, SKIRT, h + 2.0 * BAND), Rect2(w + BAND, -BAND, SKIRT, h + 2.0 * BAND)]:
-		_quad(ground, r, -0.01, SNOW)
-	# Roads and rails run on out in their own colour (the rails' sleepers every other metre).
 	for run: Dictionary in p["runs"]:
 		var f := int(run["floor"])
 		var r := run_rect(g, run, BAND if f == F.RAIL else ROAD_RUN, 0.0)
@@ -232,12 +218,13 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			for xx in range(floori(r.position.x), ceili(r.end.x)):
 				var col := base.darkened(0.15) if f == F.RAIL and posmod(xx, 2) == 0 else base
 				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, col)
-	var ground_node := MeshInstance3D.new()
-	ground_node.name = "Ground"
-	ground_node.mesh = ground.commit()
-	ground_node.material_override = material
-	ground_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(ground_node)
+	if not p["runs"].is_empty():
+		var ground_node := MeshInstance3D.new()
+		ground_node.name = "Runs"
+		ground_node.mesh = ground.commit()
+		ground_node.material_override = material
+		ground_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(ground_node)
 	# Trees and blocks: models when there are, else the grey trunk and crown the map uses.
 	var tree_mesh: Mesh = _model_mesh(TREE_MODEL)
 	var tree_h := tree_mesh.get_aabb().size.y if tree_mesh else 1.0

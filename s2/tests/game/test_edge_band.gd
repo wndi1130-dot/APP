@@ -18,15 +18,15 @@ func _grid() -> FieldGrid:
 
 
 func test_values_are_fixed() -> void:
-	assert_eq(EdgeBand.BAND, 16.0)
+	assert_eq(EdgeBand.BAND, 12.0)
 	assert_eq(EdgeBand.INNER_ROW, 2.6)
 	assert_eq(EdgeBand.INNER_SPACING, 2.0)
-	assert_eq(EdgeBand.DEEP_SPACING, 3.4)
+	assert_eq(EdgeBand.DEEP_SPACING, 4.0)
 	assert_eq(EdgeBand.TRUNK_GAP, 0.3)
 	assert_eq(EdgeBand.EDGE_WAVE, 1.2)
 	assert_eq(EdgeBand.RAIL_CLEAR, 2.5)
 	assert_eq(EdgeBand.ROAD_RUN, 5.0)
-	assert_eq(EdgeBand.SHADE_DEPTH, 3.5)
+	assert_eq(EdgeBand.SHADE_DEPTH, 1.2)
 
 
 func test_the_camera_never_looks_past_the_band() -> void:
@@ -75,9 +75,9 @@ func test_the_same_map_draws_the_same_woods() -> void:
 	assert_eq(a["trees"].size(), b["trees"].size())
 	assert_eq(a["trees"][0]["at"], b["trees"][0]["at"])
 	assert_ne(a["trees"][0]["at"], c["trees"][0]["at"], "another place, other woods")
-	# 60 x 40 map: the ring is about (92 x 72 - 60 x 40) square metres.
+	# 60 x 40 map: the ring is about (84 x 64 - 60 x 40) square metres.
 	var n: int = a["trees"].size()
-	assert_between(n, 200, 900)
+	assert_between(n, 150, 700)
 
 
 func test_the_band_is_built_under_the_ground_level() -> void:
@@ -87,7 +87,7 @@ func test_the_band_is_built_under_the_ground_level() -> void:
 	var counts := EdgeBand.build(root, g, {"place_id": "test"}, StandardMaterial3D.new(), [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY])
 	var band := root.get_node("EdgeBand")
 	assert_not_null(band)
-	assert_not_null(band.get_node("Ground"))
+	assert_not_null(band.get_node("Runs"), "the road and rail runs out of the map")
 	assert_eq(int(counts["blocks"]), 1)
 	assert_gt(int(counts["trees"]), 0)
 	assert_gt(int(counts["chunks"]), 4, "the woods are cut in pieces so those off screen are not drawn")
