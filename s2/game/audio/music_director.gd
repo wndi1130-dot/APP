@@ -178,7 +178,9 @@ func _threat(s: Dictionary, rising: bool) -> void:
 		if playing_kind == "explore" and stage >= 2 and not is_equal_approx(db, UNDER_THREAT_DB):
 			_gain(UNDER_THREAT_DB, 1.0)
 		return
-	_play(id, float(FADE_UP[stage]) if rising else STEP, want)
+	# Coming up, or again after the piece ran out under a long threat: the short fade. Stepping
+	# down from another threat piece: the long cross.
+	_play(id, float(FADE_UP[stage]) if rising or playing == "" else STEP, want)
 
 
 ## Explore pieces: none in a blizzard (the wind is the music, bgm.md 4) and not past the share.

@@ -88,6 +88,15 @@ func test_threat_music_comes_at_once_and_goes_slowly() -> void:
 	assert_eq(d.playing, "", "the threat piece fades out")
 
 
+func test_a_threat_longer_than_its_piece_plays_it_again_at_once() -> void:
+	var d := _director("field", _all(115.0))
+	_run(d, 116.0 + STEP, _with(_day(), {"coming_near": 2, "seen": 2}))
+	var chase := _plays(d).filter(func(c: Dictionary) -> bool: return c["id"] == "BGM14_THREAT_CHASE")
+	assert_eq(chase.size(), 2, "the chase piece again when it runs out")
+	assert_lte(float(chase[1]["fade"]), 1.0, "no 10 s dip in the middle of a chase")
+	assert_lt(float(chase[1]["t"]) - 115.0, 0.5, "with no gap")
+
+
 func test_a_stage_is_kept_at_least_eight_seconds() -> void:
 	var d := _director("field", _all())
 	d.tick(STEP, _with(_day(), {"coming_near": 2, "seen": 2}))
