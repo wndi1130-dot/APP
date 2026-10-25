@@ -301,6 +301,7 @@ export function trialPromises(g: Game): void {
     g.comms[v].fervor = Math.min(3, g.comms[v].fervor + 1);
     bump(g, 'tension', 3, 'promise');
     g.stats.promisesBroken += 1;
+    g.comms[v].broken = (g.comms[v].broken ?? 0) + 1;
     d.broken[v] += 1;
     offend(g, v);
     journal(g, `${COMM_NAME[v]}에게 약속한 재판이 열리지 않았다.`, 'bad');

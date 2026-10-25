@@ -15,6 +15,7 @@ import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
 import { addCard, addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import { revertRationCut } from './ration_cut';
+import { hash } from './omens';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, PromiseState, VoteFlip, VoteResult } from './state';
 
 // 의회: 입장 점수, 찬성·반대·미정, 거래 다섯, 개표, 폐지(브리프 1.3, 3장, 8.4).
@@ -178,6 +179,12 @@ function applyDeal(g: Game, b: Bloc, c: Comm, tool: DealTool): void {
   if (tool === 'open' || tool === 'fetch') {
     // 공개 약속은 새지 않는다(원작). 미정 전부와 움직이는 반대의 20%.
     const moved = Math.round(soft * 0.2);
+    b.yes += b.und + moved;
+    b.no -= moved;
+    b.und = 0;
+  } else if (tool === 'persuade') {
+    // 설득(결정 433)은 마음을 돌린다: 미정 전부와 움직이는 반대의 일부만. 대표가 끌고 오는 표가 아니라 새지 않는다.
+    const moved = Math.round(soft * P.persuadeSoft);
     b.yes += b.und + moved;
     b.no -= moved;
     b.und = 0;
@@ -449,8 +456,38 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
       if (hostile) return { ok: false, why: '집단이 따르지 않는다', cost };
       return { ok: true, cost };
     }
+    case 'persuade': {
+      const cost = `될 듯 ${Math.round(100 * persuadeChance(g, c, agenda))}%`;
+      if (hostile) return { ok: false, why: '열차장 말을 듣지 않는다', cost };
+      if (b.und === 0 && b.no - b.hard === 0) return { ok: false, why: '돌릴 마음이 없다', cost };
+      return { ok: true, cost };
+    }
   }
 }
+
+/** 설득의 근거(결정 433): 이 안건이 지금의 위기(석탄·식량·시신·의약품)를 푸는 법이면 그 위기 이름. 아니면 null */
+export function persuadeEvidence(g: Game, agenda: Agenda): Crisis | null {
+  if (!isLawAgenda(agenda) || agenda.repeal) return null;
+  const now = crisisNow(g);
+  return LAWS[agenda.law].crisis.find(x => now.includes(x)) ?? null;
+}
+
+/** 설득이 먹힐 확률(결정 433): 신임·관계·그 칸과 지킨 약속·이념·근거. 값은 들지 않고 관계가 나쁘면 잘 안 먹힌다. */
+export function persuadeChance(g: Game, c: Comm, agenda: Agenda): number {
+  const s = g.comms[c];
+  const ideo = blocs(g, agenda, [])[c].ideo;
+  const p = P.persuadeBase + P.persuadeRel * s.rel + P.persuadeTrust * (g.trust - 50)
+    + P.persuadeKept * Math.min(P.persuadeKeptMax, s.kept ?? 0) - P.persuadeBroken * (s.broken ?? 0)
+    + P.persuadeIdeo * ideo + (persuadeEvidence(g, agenda) ? P.persuadeEvidence : 0);
+  return clamp(p, P.persuadeMin, P.persuadeMax);
+}
+
+/** 설득이 먹혔나: 판 씨앗·회기·칸으로 정한 0~1 값이라 같은 회기에 다시 물어도 같고 판 난수 흐름을 건드리지 않는다. */
+function persuadeRoll(g: Game, c: Comm): number {
+  return hash(`${g.seed}|${g.session}|${c}|persuade`) / 4294967296;
+}
+
+const CRISIS_WORD: Record<Crisis, string> = { coal: '석탄 바닥', food: '식량 바닥', corpse: '쌓인 시신', med: '떨어진 약' };
 
 export function bribePrice(g: Game, c: Comm): number {
   return 2 + Math.round(seats(g)[c] / 10);
@@ -544,6 +581,17 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
       return { ok: false, text: `${s.leader.name}이(가) 뇌물을 의회 앞에서 내보였다.` };
     }
     journal(g, `${s.leader.name}에게 사치품 ${price}을(를) 건넸다.`, 'dark');
+  } else if (tool === 'persuade') {
+    const ev = persuadeEvidence(g, agenda);
+    const why = ev ? `${CRISIS_WORD[ev]}${josa(CRISIS_WORD[ev], '을/를')} 들어` : (s.kept ?? 0) > 0 ? '지킨 약속을 들어' : '말로';
+    if (persuadeRoll(g, c) >= persuadeChance(g, c, agenda)) {
+      bumpRel(g, c, P.persuadeFailRel, 'deal');
+      council.deals.push({ comm: c, tool, label: '설득이 먹히지 않음', refused: true });
+      journal(g, `${s.leader.name}을(를) ${why} 설득했지만 고개를 저었다.`, 'bad');
+      return { ok: false, text: `${s.leader.name}이(가) 설득에 넘어오지 않았다.` };
+    }
+    label = `설득: ${why}`;
+    journal(g, `${s.leader.name}을(를) ${why} 설득했다. ${agendaTitle(agenda)}에 마음이 돌아섰다.`, 'deal');
   } else {
     const secret = [...g.secrets].filter(x => x.about === c).sort((a, b) => b.weight - a.weight)[0];
     g.secrets = g.secrets.filter(x => x.id !== secret.id);

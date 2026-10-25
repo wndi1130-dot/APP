@@ -38,6 +38,11 @@ export const P = Object.freeze({
   scoutHurt: 0.05, scoutDeath: 0.012,
   repealCool: 2, repealRel: 10, hostileGrudge: 2, blackmailReputation: 3, grudgeDecay: 2,
   maxDealsPerSession: 3, promiseSegments: 3,
+  // 설득(결정 433, 표결 전 수단 셋의 셋째): 값은 들지 않고 신임·관계·근거로 미정을 돌린다. 성공 확률 =
+  // 기본 + 관계×rel + (신임−50)×trust + 그 칸과 지킨 약속×kept(셋까지) − 어긴 약속×broken + 이념×ideo + 위기 근거,
+  // min~max로 자른다. 성공하면 미정 전부와 움직이는 반대의 soft만큼, 실패하면 그 칸 관계 failRel(숫자는 제안, 봇으로 정함).
+  persuadeBase: 0.35, persuadeRel: 0.01, persuadeTrust: 0.004, persuadeKept: 0.08, persuadeKeptMax: 3, persuadeBroken: 0.12,
+  persuadeIdeo: 0.05, persuadeEvidence: 0.15, persuadeMin: 0.05, persuadeMax: 0.9, persuadeSoft: 0.1, persuadeFailRel: -1,
   // 꼬리칸 수단(first_leg_story 6.4, 사용자 16:00 '수단 더하기'. 숫자는 제안).
   // 작업조를 낸 칸 노출 +5, 안 낸 칸 −10(쉼 바닥까지), 지나친 정차는 모두 쉰다. 의무진·앞칸은 궂은일 반감 관계 −3. 다친 사람 1명마다 그 칸 −2.
   crewGain: 5, crewRest: 10, choreRel: -3, hurtRel: -2, snowExposure: 10,
