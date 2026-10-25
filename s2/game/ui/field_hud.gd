@@ -17,6 +17,7 @@ const FieldHoldout = preload("res://game/field_holdout.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
+const PauseVeil = preload("res://game/ui/pause_veil.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const PortraitFace = preload("res://game/ui/portrait_face.gd")
@@ -298,6 +299,7 @@ const HISS_TEXT := "…치직"   # what the field puts up while the set only his
 var game
 var theme: Theme
 var root: Control
+var pause_veil: Control                   # pause_veil.gd
 var touch: Control
 var overlay: Control
 var clock_label: Label
@@ -449,6 +451,10 @@ func setup(field_game) -> void:
 	overlay.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # the paper's fibre on the slips
 	overlay.draw.connect(_draw_overlay)
 	root.add_child(overlay)
+	# A pause shows at a glance (pause_veil.gd), under the keys and over the world.
+	pause_veil = PauseVeil.new()
+	pause_veil.setup(self)
+	root.add_child(pause_veil)
 	_build_top()
 	_build_portrait()
 	_build_allies()
