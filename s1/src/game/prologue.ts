@@ -1,6 +1,6 @@
 import { bump, bumpRel } from './ledger';
 import { COMM_NAME, REP_ROLE } from './data';
-import { CARD_EXTENSIONS } from './cards';
+import { CARD_EXTENSIONS, withAfford } from './cards';
 import type { CardView, Choice } from './cards';
 import { josa } from './josa';
 import { addCard, isGone, journal, PROFILES, rnd, storyOf } from './state';
@@ -105,10 +105,11 @@ function prologueView(g: Game, card: Card): CardView | null {
       return {
         title: '분필 글씨', speaker: speaker(g), focus: 'tail', required: true,
         body: `역 기둥에 분필로 쓴 이름들이 있다. ${names.join(', ')}. 그 밑에 화살표와 「선로 따라」. 재 위의 불 땐 자리가 아직 따뜻하다. ${who(g)} 말한다. "저탄장에 두고 온 사람들이다. 길을 질러 여기까지 왔다."`,
-        choices: [
+        // 석탄이 모자라면 기다릴 불이 없다(다른 사람 카드처럼 withAfford가 막는다)
+        choices: withAfford(g, [
           { id: 'trail_wait', label: '기다렸다 태운다', say: '불을 지펴 두고 부른다. 다 같이 간다.', effs: [{ t: 'coal', v: -TRAIL.coal }], special: 'pro_trail_wait', extra: [`${names.length}명이 다시 탄다`, `꼬리칸 관계 +${TRAIL.rel}`] },
           { id: 'trail_note', label: '쪽지를 남긴다', say: '갈 곳을 적어 둔다. 지금은 기다릴 수 없다.', effs: [], special: 'pro_trail_note', extra: ['걸어서 뒤를 따른다'] },
-        ],
+        ]),
       };
     }
     default:
