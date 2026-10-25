@@ -323,3 +323,14 @@ func test_life_input_checks_car_context_field_types() -> void:
 		var car: Dictionary = {"id": "home", "kind": "comm", "comm": "tail"}
 		car[key_value[0]] = key_value[1]
 		assert_false(LifeInput.check({"cars": [car]}, ["home"]).is_empty(), key_value[0])
+
+
+## The engine car's people live in their own car by the engine (S1 편성, 결정카드 domestic Q2):
+## a living layout with bunks and a place to shovel at the front end, not the coal-only tender.
+func test_the_engine_room_is_lived_in() -> void:
+	var row: Dictionary = Catalog.data()["layouts"]["engine_room"]
+	assert_false(bool(row.get("storage_only", false)))
+	var acts: Array = (row["spots"] as Array).map(func(s): return String(s["activity"]))
+	for a in ["rest", "sleep", "warm", "work"]:
+		assert_has(acts, a)
+	assert_eq(Catalog.layout_id({"id": "engine", "kind": "comm", "comm": "engine", "interior": "engine_room"}), "engine_room")

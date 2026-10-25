@@ -386,10 +386,10 @@ static func body_for(layout: String, role: String, at_work: int, key: int, prev:
 		"carer":
 			kind = "carer"
 		"worker":
-			kind = "stoker" if layout in ["technical", "loco", "tender"] else ""
+			kind = "stoker" if layout in ["technical", "loco", "tender", "engine_room"] else ""
 	if kind == "" and layout == "guard":
 		kind = "guard"
-	if kind == "" and layout == "loco":
+	if kind == "" and layout in ["loco", "engine_room"]:
 		kind = "stoker"
 	if at_work >= ROLE_A_CAR:
 		kind = ""
@@ -547,7 +547,7 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 			return "t_eat"
 		"work":
 			# Coal and the firebox are shovelled; the rest is knelt at.
-			return "t_shovel" if pose == "stand" and String(s["layout"]) in ["technical", "tender", "loco"] else "t_kneel_work"
+			return "t_shovel" if pose == "stand" and String(s["layout"]) in ["technical", "tender", "loco", "engine_room"] else "t_kneel_work"
 		"clean":
 			return "t_shovel" if pose == "stand" else "t_kneel_work"
 		"care", "mend":
@@ -659,7 +659,7 @@ static func _base_weights(pose: String, b, s: Dictionary, me: Dictionary) -> Dic
 		# The cook hands the bowls round at a meal; one cold by the stove reaches to it.
 		"t_pass": 2.0 if role == "cook" and layout == "dining" and s.get("meal", false) else 0.0,
 		"t_reach": 3.0 if chilled and b.is_inside_tree() and absf(b.global_position.x - float(s["stove_x"])) < STOVE_NEAR else 0.0,
-		"t_shovel": 1.5 if role == "worker" and layout in ["technical", "tender", "loco"] else 0.0,
+		"t_shovel": 1.5 if role == "worker" and layout in ["technical", "tender", "loco", "engine_room"] else 0.0,
 	}
 
 
