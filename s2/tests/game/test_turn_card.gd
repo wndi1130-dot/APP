@@ -71,6 +71,13 @@ func test_the_bitten_card_says_what_s1_says() -> void:
 	assert_true(String(ch[0]["say"]).begins_with("지금 "), "what the captain says, not the label")
 
 
+## A choice's extra lines (what it costs that is no effect) close its line in
+## words, so a way that costs wood and coal never reads 「지금 드는 값 없음」.
+func test_extra_lines_close_the_cost_line() -> void:
+	var fx: Array = TurnCard.effects({"COMM_NAME": {}}, {"effs": [], "extra": ["목재 −10 · 고철 −6", "달리기 석탄 +0.4/구간"]})
+	assert_eq(fx, [{"icon": "", "text": "목재 −10 · 고철 −6", "tone": ""}, {"icon": "", "text": "달리기 석탄 +0.4/구간", "tone": ""}])
+
+
 func test_a_press_answers_the_card_through_the_train_rule() -> void:
 	if _data.is_empty(): return
 	var s: Array = _case("bitten/card-0/6/0/first")

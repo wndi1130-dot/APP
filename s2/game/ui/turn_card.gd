@@ -139,6 +139,9 @@ static func effects(t0: Dictionary, choice: Dictionary) -> Array:
 			out.append({"icon": "", "text": line, "tone": ""})
 		for p: Dictionary in CardText.politics_lines(t0, {"effs": [e]}):
 			out.append({"icon": "", "text": String(p["text"]), "tone": String(p["tone"])})
+	# What it costs that is no effect (S1 costLines' extra: wood and scrap, coal a stretch).
+	for line: String in CardText.cost_lines(t0, {"effs": [], "extra": choice.get("extra", [])}):
+		out.append({"icon": "", "text": line, "tone": ""})
 	if out.is_empty():
 		out.append({"icon": "", "text": "지금 드는 값 없음", "tone": "none"})
 	return out
