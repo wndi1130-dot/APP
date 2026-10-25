@@ -133,6 +133,7 @@ function breakPrologue(g: Game): void {
   bump(g, 'trust', PROLOGUE.brokenTrust, 'promise');
   bumpRel(g, 'tail', PROLOGUE.brokenRel, 'promise');
   g.stats.promisesBroken += 1;
+  s.broken = (s.broken ?? 0) + 1;
   if (g.dark) g.dark.broken.tail += 1;
   journal(g, `${COMM_NAME.tail}과(와)의 약속을 어겼다: 저탄장 운반조를 다 데려온다.`, 'bad');
 }

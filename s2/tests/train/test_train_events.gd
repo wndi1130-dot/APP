@@ -7,6 +7,7 @@ const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const View = preload("res://game/train/train_people_view.gd")
 const Body = preload("res://game/train/train_body.gd")
+const Gesture = preload("res://game/train/train_gesture.gd")
 
 
 func _rules() -> Dictionary:
@@ -103,6 +104,22 @@ func test_people_take_it_each_in_their_own_way() -> void:
 		for pose in View.REACTIONS[way]:
 			var clip: String = View.REACTIONS[way][pose]
 			assert_eq(String(View.POSTURE.get(clip, "stand")), pose, "%s %s" % [way, pose])
+
+
+## One picked to react shows it over the everyday gestures (the cold hunch, a
+## bowl, a chat), but not asleep or at a job.
+func test_a_reaction_comes_before_the_everyday_gestures() -> void:
+	var s := {"layout": "coach", "warmth": 60.0, "cold": false, "freezing": false, "exposure": 0.0, "night": false, "stove_x": 7.85, "ration": 70.0, "crowding": 40.0, "tension": 0.0, "fear": 0.0, "resent": false, "meal": false}
+	var react := {"react": "t_sit_no"}
+	for g in [Gesture.BOWL_SIT, Gesture.HUG_KNEES, ""]:
+		var b: Node3D = add_child_autofree(Body.new())
+		b.pose = "sit"
+		b.gesture = g
+		b.huddled = g == ""
+		assert_eq(View.want_for(b, s, "", 3, 0.0, react), "t_sit_no", "over 「%s」" % g)
+		assert_eq(View.want_for(b, s, "chat", 3, 0.0, react), "t_sit_no", "over a chat")
+		assert_eq(View.want_for(b, s, "sleep", 3, 0.0, react), "t_lie", "not asleep")
+		assert_eq(View.want_for(b, s, "work", 3, 0.0, react), "t_kneel_work", "not at a job")
 
 
 ## A trace stays: after a ration cut the car eats and murmurs more; after a memorial it is quiet.
