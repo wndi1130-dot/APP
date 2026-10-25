@@ -152,6 +152,8 @@ const REACT_FEW: int = 2
 const REACT_MANY: int = 6
 const REACT_FOR := Vector2(10.0, 60.0)
 const REACT_CARS: int = 3
+## Metres past the screen's edge a car still counts as seen (on_screen).
+const SIGHT_MARGIN: float = 2.0
 ## What keeps someone from reacting: asleep, hurt, or at a job. The rest (a
 ## chat, warming hands, a bowl, the cold hunch) look up for it.
 const REACT_BUSY: Array = ["sleep", "heal", "cook", "serve", "work", "clean", "care", "mend", "refuge", "mourn"]
@@ -310,6 +312,7 @@ func _process(_delta: float) -> void:
 			wanted.append(members)
 		var heads: Array = []
 		var reacting: Dictionary = _reacting(String(c["id"]), now)
+		var in_sight: bool = on_screen(c)
 		for b in ordered:
 			_hide_boxes(b)
 			if not b.visible:
@@ -341,12 +344,16 @@ func _process(_delta: float) -> void:
 				continue
 			drawn[b] = clip
 			worn[b] = folder
+			var shiver := _shiver_of(rec, state, key, clip, under.has(b), dt)
+			shivers[b] = shiver
+			# A car off the screen goes on living but is not drawn: the people of a
+			# long train are one draw a body, so they would all be drawn every frame.
+			if not in_sight:
+				continue
 			var i: int = one["count"]
 			var mm: MultiMesh = (one["draw"] as MultiMeshInstance3D).multimesh
 			mm.set_instance_transform(i, place_of(b, clip, state))
 			var shade: float = lerpf(0.78, 1.0, _h(key, 11)) * (0.9 if state["freezing"] else 1.0)
-			var shiver := _shiver_of(rec, state, key, clip, under.has(b), dt)
-			shivers[b] = shiver
 			var plain := Color(_h(key, 12), float(one["clip_index"].get(clip, 0)), -shiver, shade)
 			mm.set_instance_custom_data(i, DeadBody.mix_from(rec["mix"], plain, now, one["table"], one["mix_in"]))
 			one["count"] = i + 1
@@ -372,6 +379,20 @@ func _process(_delta: float) -> void:
 	for b in people.keys():
 		if not seen.has(b):
 			people.erase(b)
+
+
+## Whether a car is on the screen, with SIGHT_MARGIN either side (people
+## standing in the doorway, a scroll under way). Without a camera, every car is.
+func on_screen(c: Dictionary) -> bool:
+	var cam: Camera3D = scene.camera
+	if cam == null or not cam.is_inside_tree():
+		return true
+	var view: Vector2 = cam.get_viewport().get_visible_rect().size
+	var half: float = cam.size * 0.5 * (view.x / maxf(view.y, 1.0)) if cam.keep_aspect == Camera3D.KEEP_HEIGHT else cam.size * 0.5
+	var x0: float = float(c["x0"])
+	var x1: float = x0 + scene.CAR_LENGTH
+	var mid: float = cam.global_position.x
+	return x1 >= mid - half - SIGHT_MARGIN and x0 <= mid + half + SIGHT_MARGIN
 
 
 ## Which body a person wears: the car and their work first (the cook, the
