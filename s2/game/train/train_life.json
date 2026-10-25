@@ -3658,6 +3658,471 @@
       ],
       "spots": []
     },
+    "engine_room": {
+      "label": "기관실 사람들의 생활 칸(교대 침상, 앞쪽 끝 삽질 자리)",
+      "props": [
+        {
+          "id": "bench",
+          "model": "bench",
+          "at": [
+            8,
+            0.225,
+            -1
+          ],
+          "size": [
+            14.4,
+            0.45,
+            0.5
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "stove",
+          "model": "stove",
+          "at": [
+            7.85,
+            0,
+            -0.4
+          ],
+          "size": [
+            0.4,
+            0.7,
+            0.4
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "system": "stove"
+        },
+        {
+          "id": "upper_bunk_a",
+          "model": "bunk_upper",
+          "at": [
+            4,
+            1.8,
+            -1
+          ],
+          "size": [
+            2.8,
+            0.14,
+            0.6
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "upper_bunk_b",
+          "model": "bunk_upper",
+          "at": [
+            11,
+            1.8,
+            -1
+          ],
+          "size": [
+            2.8,
+            0.14,
+            0.6
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "blanket_a",
+          "model": "blanket",
+          "at": [
+            4,
+            1.89,
+            -1
+          ],
+          "size": [
+            2.5,
+            0.04,
+            0.52
+          ],
+          "yaw": 0,
+          "material": "cloth",
+          "when": "bedding"
+        },
+        {
+          "id": "blanket_b",
+          "model": "blanket",
+          "at": [
+            11,
+            1.89,
+            -1
+          ],
+          "size": [
+            2.5,
+            0.04,
+            0.52
+          ],
+          "yaw": 0,
+          "material": "cloth",
+          "when": "bedding"
+        },
+        {
+          "id": "wall_wrench",
+          "model": "wrench",
+          "at": [
+            13.1,
+            1.2,
+            -1.13
+          ],
+          "size": [
+            0.12,
+            0.6,
+            0.08
+          ],
+          "yaw": 0,
+          "material": "iron",
+          "when": "always",
+          "grow": 1.4
+        },
+        {
+          "id": "gear_crates",
+          "model": "crates",
+          "at": [
+            1.0,
+            0.35,
+            -0.6
+          ],
+          "size": [
+            1.0,
+            0.7,
+            0.6
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "when": "always"
+        },
+        {
+          "id": "under_sacks",
+          "model": "sacks",
+          "at": [
+            3.4,
+            0.2,
+            -1.0
+          ],
+          "size": [
+            0.6,
+            0.4,
+            0.42
+          ],
+          "yaw": 0,
+          "material": "cloth",
+          "when": "crowd1"
+        },
+        {
+          "id": "floor_bedding_a",
+          "model": "blanket",
+          "at": [
+            2.6,
+            0.02,
+            -0.5
+          ],
+          "size": [
+            1.8,
+            0.04,
+            0.5
+          ],
+          "yaw": 0,
+          "material": "cloth",
+          "when": "crowd3"
+        }
+      ],
+      "spots": [
+        {
+          "id": "bench",
+          "activity": "rest",
+          "anchors": [
+            [
+              3,
+              0,
+              -0.85
+            ],
+            [
+              6,
+              0,
+              -0.85
+            ],
+            [
+              10,
+              0,
+              -0.85
+            ],
+            [
+              13,
+              0,
+              -0.85
+            ]
+          ],
+          "capacity": 4,
+          "hold": [
+            8,
+            15
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "always"
+        },
+        {
+          "id": "stove_side",
+          "activity": "warm",
+          "anchors": [
+            [
+              7.2,
+              0,
+              0.02
+            ],
+            [
+              8.6,
+              0,
+              -0.08
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            10,
+            18
+          ],
+          "cycle": [
+            31,
+            9
+          ],
+          "when": "stove"
+        },
+        {
+          "id": "window",
+          "activity": "watch",
+          "anchors": [
+            [
+              5,
+              0,
+              -0.45
+            ],
+            [
+              11,
+              0,
+              -0.45
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            7,
+            13
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "always"
+        },
+        {
+          "id": "door_tail",
+          "activity": "chat",
+          "anchors": [
+            [
+              1,
+              0,
+              0.65
+            ],
+            [
+              1.7,
+              0,
+              0.65
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            7,
+            12
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "social"
+        },
+        {
+          "id": "door_front",
+          "activity": "chat",
+          "anchors": [
+            [
+              15,
+              0,
+              0.65
+            ],
+            [
+              14.3,
+              0,
+              0.65
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            7,
+            12
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "social"
+        },
+        {
+          "id": "gather",
+          "activity": "gather",
+          "anchors": [
+            [
+              2.1,
+              0,
+              -0.12
+            ],
+            [
+              3,
+              0,
+              0.05
+            ],
+            [
+              4.2,
+              0,
+              -0.25
+            ],
+            [
+              5.2,
+              0,
+              0.02
+            ]
+          ],
+          "capacity": 4,
+          "hold": [
+            10,
+            16
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "gather"
+        },
+        {
+          "id": "refuge",
+          "activity": "refuge",
+          "anchors": [
+            [
+              9.6,
+              0,
+              -0.35
+            ],
+            [
+              10.6,
+              0,
+              -0.05
+            ],
+            [
+              11.6,
+              0,
+              -0.35
+            ],
+            [
+              12.4,
+              0,
+              0.02
+            ]
+          ],
+          "capacity": 4,
+          "hold": [
+            15,
+            22
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "safe"
+        },
+        {
+          "id": "bunk",
+          "activity": "sleep",
+          "anchors": [
+            [
+              4,
+              0,
+              -0.85
+            ],
+            [
+              11,
+              0,
+              -0.85
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            20,
+            32
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "night"
+        },
+        {
+          "id": "cleanup",
+          "activity": "clean",
+          "anchors": [
+            [
+              0.65,
+              0,
+              0.1
+            ],
+            [
+              1.5,
+              0,
+              -0.1
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            8,
+            15
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "recovery"
+        },
+        {
+          "id": "work",
+          "activity": "work",
+          "anchors": [
+            [
+              13.4,
+              0,
+              0.1
+            ],
+            [
+              14.1,
+              0,
+              0.4
+            ]
+          ],
+          "capacity": 2,
+          "hold": [
+            8,
+            15
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "work"
+        }
+      ]
+    },
     "cold": {
       "label": "앞 빈 바닥·뒤 안치 자리",
       "storage_only": true,
