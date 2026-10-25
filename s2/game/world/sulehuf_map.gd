@@ -27,6 +27,9 @@ const HIDEOUT_BUILDING: int = 3
 const HIDEOUT_WINDOW := Vector2i(34, 38)
 
 const BUILDING_NAMES: Array[String] = ["역사", "신호소", "가게", "약국", "주택", "주택", "공동주택", "화물 창고", "남쪽 주택", "남쪽 주택", "남쪽 주택"]
+## What a building is for in this stop (building_rules.gd role_of): the field
+## reads these, never a building's number. The raiders hide in the pharmacy.
+const BUILDING_ROLES: Dictionary = {1: "lookout", HIDEOUT_BUILDING: "raider_den", 4: "home", 5: "home", 6: "home", 8: "home", 9: "home", 10: "home"}
 const ZONE_NAMES: Dictionary = {"platform": "승강장", "A": "역사", "B": "화물 측선", "C": "급수탑", "D": "역 앞 거리", "E": "신호소", "F": "공동주택", "G": "화물 창고", "H": "남쪽 주택가", "": "바깥"}
 
 ## Everything the field needs besides the grid.
@@ -510,7 +513,7 @@ static func _fill_solid(g: FieldGrid, r: Rect2i, kind: int) -> void:
 
 ## Outer walls on the rectangle border; inside is a wooden floor of building id.
 static func _building(g: FieldGrid, data: Dictionary, id: int, r: Rect2i) -> void:
-	data["buildings"].append({"id": id, "name": BUILDING_NAMES[id], "rect": r, "warm": id == 0, "window_broken": false})
+	data["buildings"].append({"id": id, "name": BUILDING_NAMES[id], "rect": r, "warm": id == 0, "window_broken": false, "role": String(BUILDING_ROLES.get(id, ""))})
 	_rooms(g, id, r)
 
 

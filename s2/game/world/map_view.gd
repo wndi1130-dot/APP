@@ -6,6 +6,7 @@ extends Node3D
 ## player climbs to them, and the cellar shows alone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
@@ -464,7 +465,17 @@ func update_door(c: Vector2i) -> void:
 		"broken":
 			box(st, Vector3(0.8, 0.12, 0.5), at + Vector3(0, 0.06, 0), Color(0.4, 0.3, 0.22))
 	box(st, Vector3(1.0, 0.04, 1.0), at + Vector3(0, 0.02, 0), Color(0.35, 0.3, 0.26))
+	_planks(st, c, door, horizontal, [0.65, 1.1, 1.55, 1.9])
 	node.mesh = st.commit()
+
+
+## Boards on each face of a door or window (J08), a plank a height.
+func _planks(st: SurfaceTool, c: Vector2i, d: Dictionary, horizontal: bool, heights: Array) -> void:
+	var sides := grid.faces(c)
+	for f in 2:
+		var dir := Vector3(sides[f].x - c.x, 0, sides[f].y - c.y) * 0.13
+		for i in range(mini(BuildingRules.planks(d, f), heights.size())):
+			box(st, Vector3(1.0, 0.12, 0.04) if horizontal else Vector3(0.04, 0.12, 1.0), FieldGrid.center(c) + dir + Vector3(0, float(heights[i]), 0), Color(0.42, 0.33, 0.24))
 
 
 func update_window(c: Vector2i) -> void:
@@ -480,15 +491,31 @@ func update_window(c: Vector2i) -> void:
 	var size := Vector3(1.0, 0.1, 0.25) if horizontal else Vector3(0.25, 0.1, 1.0)
 	box(st, size + Vector3(0, 0.75, 0), at + Vector3(0, 0.4, 0), Color(0.4, 0.4, 0.42))
 	if not cut:
-		if win["broken"]:
+		if win["broken"] or win.get("open", false):
 			box(st, size * Vector3(1, 1, 1) + Vector3(0, 0.0, 0), at + Vector3(0, WALL_H - 0.05, 0), Color(0.4, 0.4, 0.42))
 		else:
 			box(st, (Vector3(1.0, 1.0, 0.08) if horizontal else Vector3(0.08, 1.0, 1.0)), at + Vector3(0, 1.3, 0), Color(0.62, 0.72, 0.78))
 			box(st, size, at + Vector3(0, WALL_H - 0.05, 0), Color(0.4, 0.4, 0.42))
-	if win["glass"]:
+		_planks(st, c, win, horizontal, [1.6, 1.0, 1.3, 1.85])
+		if BuildingRules.has_curtain(win):
+			var outer := grid.outer_face(c)
+			var sides := grid.faces(c)
+			var f := 1 - outer if outer >= 0 else 1
+			var in_off := Vector3(sides[f].x - c.x, 0, sides[f].y - c.y) * 0.2
+			if String(win["curtain"]) == "closed":
+				box(st, Vector3(0.95, 1.1, 0.03) if horizontal else Vector3(0.03, 1.1, 0.95), at + in_off + Vector3(0, 1.35, 0), Color(0.24, 0.22, 0.24))
+			else:
+				var along := Vector3(0.4, 0, 0) if horizontal else Vector3(0, 0, 0.4)
+				for k in [-1.0, 1.0]:
+					box(st, Vector3(0.14, 1.1, 0.04) if horizontal else Vector3(0.04, 1.1, 0.14), at + in_off + along * k + Vector3(0, 1.35, 0), Color(0.24, 0.22, 0.24))
+	var shards: Array = [at] if win["glass"] else []
+	for fell: Vector2i in grid.floor_glass:
+		if grid.floor_glass[fell] == c:
+			shards.append(FieldGrid.center(fell))
+	for spot: Vector3 in shards:
 		for k in range(5):
 			var o := Vector3(fmod(k * 0.37, 0.8) - 0.4, 0.02, fmod(k * 0.53, 0.8) - 0.4)
-			box(st, Vector3(0.12, 0.03, 0.08), at + o, Color(0.8, 0.9, 0.95))
+			box(st, Vector3(0.12, 0.03, 0.08), spot + o, Color(0.8, 0.9, 0.95))
 	node.mesh = st.commit()
 
 
