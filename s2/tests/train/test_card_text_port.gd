@@ -76,7 +76,7 @@ func test_every_card_reads_as_s1() -> void:
 			var w: Dictionary = wc[i]
 			var g: Dictionary = gc[i]
 			var label: String = "%s[%d]" % [at, i]
-			for field: Array in [["id", ""], ["label", ""], ["say", ""], ["why", ""], ["disabled", ""], ["witness", false], ["special", ""], ["log", ""]]:
+			for field: Array in [["id", ""], ["label", ""], ["say", ""], ["why", ""], ["disabled", ""], ["witness", false], ["special", ""], ["log", ""], ["extra", []]]:
 				_same(w.get(field[0], field[1]), g.get(field[0], field[1]), "%s.%s" % [label, field[0]])
 			_same((w["effs"] as Array).map(_tuple), g["effs"], label + ".effs")
 			_same(row["costs"][i], CardText.cost_lines(t, g), label + " costLines")
@@ -102,6 +102,8 @@ func test_a_shortfall_shuts_a_way_but_never_all() -> void:
 	assert_eq(v["choices"][1]["disabled"], "")
 	assert_eq(CardText.shortfall({"coal": 5.0}, [["coal", -3]]), "")
 	assert_eq(CardText.sign_of(-1.5), "−1.5")
+	assert_eq(CardText.cost_lines(t, {"effs": [["coal", -2]], "extra": ["목재 −10 · 고철 −6", "달리기 석탄 +0.4/구간"]}),
+		["석탄 −2", "목재 −10 · 고철 −6", "달리기 석탄 +0.4/구간"] as Array[String], "S1 costLines: extra lines after the effects")
 	assert_eq(CardText.sign_of(2.0), "+2")
 
 

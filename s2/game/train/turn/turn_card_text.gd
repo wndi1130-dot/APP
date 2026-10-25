@@ -115,7 +115,9 @@ static func _afford(g: Dictionary, choices: Array) -> void:
 			ch["disabled"] = shortfall(g, ch["effs"])
 
 
-## costLines: a choice's stores, standing and levers as 「석탄 −3」 lines.
+## costLines: a choice's stores, standing and levers as 「석탄 −3」 lines, then
+## its extra lines as they are (what a domestic card costs that is no effect:
+## the wood and scrap, the coal a stretch). No S1a card has any yet.
 static func cost_lines(t: Dictionary, choice: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	var names: Dictionary = t["COMM_NAME"]
@@ -125,6 +127,8 @@ static func cost_lines(t: Dictionary, choice: Dictionary) -> Array[String]:
 			"base": out.append("%s %s %s" % [names[e[1]], BASE_NAME[int(e[2])], sign_of(float(e[3]))])
 			"lever": out.append("%s %s %s" % [names[e[1]], "난방" if e[2] == "heat" else "배급", sign_of(float(e[3]))])
 			"pop": out.append("%s %s명" % [names[e[1]], sign_of(float(e[2]))])
+	for line: Variant in choice.get("extra", []):
+		out.append(String(line))
 	return out
 
 
