@@ -80,3 +80,63 @@ static func _moved(v, rows: int, key: String):
 			arr.append(_moved(item, rows, key))
 		return arr
 	return v
+
+
+## Add ground on any side without changing the old cells or their identities.
+## A direction stays a direction; dictionary keys and embedded positions move.
+static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int) -> Dictionary:
+	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
+	if left + top + right + bottom == 0:
+		return data
+	var offset := Vector2i(left, top)
+	var levels: Dictionary = {}
+	var source: Dictionary = data.get("levels", {})
+	if source.is_empty():
+		source = {0: data["grid"]}
+	for lv in source:
+		var g: FieldGrid = source[lv]
+		var n := FieldGrid.new(g.width + left + right, g.height + top + bottom)
+		n.solid.fill(FieldGrid.Solid.AIR if int(lv) > 0 else (FieldGrid.Solid.BLOCK if int(lv) < 0 else FieldGrid.Solid.NONE))
+		n.floor.fill(FieldGrid.Floor.SNOW)
+		for y in range(g.height):
+			for x in range(g.width):
+				var i := y * g.width + x
+				var j := (y + top) * n.width + x + left
+				n.solid[j] = g.solid[i]
+				n.floor[j] = g.floor[i]
+				n.building[j] = g.building[i]
+				n.zone[j] = g.zone[i]
+		n.doors = _offset(g.doors, offset, "")
+		n.windows = _offset(g.windows, offset, "")
+		n.floor_glass = _offset(g.floor_glass, offset, "")
+		n.refresh_paths()
+		n.revision = g.revision
+		levels[lv] = n
+	var out: Dictionary = _offset(data, offset, "")
+	out["levels"] = levels
+	out["grid"] = levels[0]
+	return out
+
+
+static func _offset(value, offset: Vector2i, key: String):
+	if DIRECTIONS.has(key):
+		return value.duplicate(true) if value is Dictionary or value is Array else value
+	if value is Vector2i:
+		return value + offset
+	if value is Rect2i:
+		return Rect2i(value.position + offset, value.size)
+	if value is Vector3:
+		return value + Vector3(offset.x, 0, offset.y)
+	if value is Dictionary:
+		var out := {}
+		for k in value:
+			if k is String and (k == "grid" or k == "levels"):
+				continue
+			out[_offset(k, offset, "") if k is Vector2i else k] = _offset(value[k], offset, k if k is String else key)
+		return out
+	if value is Array:
+		var out := []
+		for item in value:
+			out.append(_offset(item, offset, key))
+		return out
+	return value

@@ -15,6 +15,7 @@ const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const CellarRules = preload("res://game/world/cellar_rules.gd")
 const RoofRules = preload("res://game/world/roof_rules.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -99,6 +100,9 @@ static func build(place_id: String) -> Dictionary:
 
 
 static func build_from(script: Script) -> Dictionary:
+	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
+	if MapRing.enabled(script):
+		return MapRing.build(script, build_from)
 	var data: Dictionary = script.build()
 	var consts: Dictionary = script.get_script_constant_map()
 	if not data.has("place_id"):
