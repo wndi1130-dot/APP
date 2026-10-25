@@ -116,13 +116,18 @@ static func law_sum(g: Dictionary, t: Dictionary, key: String) -> float:
 	return sum
 
 
-## Product of one multiplying law effect (lawMult in turn.ts). haulMult needs the classroom rule,
-## which is not ported, so it is refused.
+## Product of one multiplying law effect (lawMult in turn.ts).
+## Classroom/child-work half-share also applies without domestic mode.
 static func law_mult(g: Dictionary, t: Dictionary, key: String) -> float:
-	assert(key != "haulMult", "law_mult: haulMult is not ported")
+	assert(key != "haulMult" or is_s1a(g), "law_mult: domestic haulMult is not ported")
 	var m := 1.0
+	var schooling: bool = false
+	for edu: String in t.get("EDU_LAWS", []):
+		if law_active(g, edu): schooling = true
 	for law: String in (g.get("passed", {}) as Dictionary):
-		m *= float(law_res(t, law).get(key, 1))
+		var factor: float = float(law_res(t, law).get(key, 1))
+		if key == "haulMult" and schooling and law in ["child_labor", "child_pack"]: factor = 1 + (factor - 1) / 2
+		m *= factor
 	return m
 
 
