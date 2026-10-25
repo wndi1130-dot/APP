@@ -375,56 +375,93 @@ static func _heal_cuts(g: Dictionary, t: Dictionary) -> int:
 	return cuts
 
 
-static func _note_injury(g: Dictionary, t: Dictionary, names: Array, comm: String, place: String) -> void:
+## The field wound's part to the train's wound book (s3 contract 4); hands go with arms, feet with legs.
+const FIELD_PART := {"head_neck": "head", "torso": "torso", "arm_left": "armL", "arm_right": "armR", "leg_left": "legL", "leg_right": "legR"}
+const LIMB_PARTS := ["armL", "armR", "legL", "legR"]
+
+
+static func _field_rank(w: Dictionary) -> float:
+	var kind: String = w["kind"]
+	if kind == "fracture":
+		var treat: Dictionary = w.get("treat", {})
+		return 0.5 if bool(treat.get("splinted", false)) and bool(treat.get("quick", false)) else 2.0
+	return 1.0 if kind == "deep" or kind == "embedded" else 0.0
+
+
+## One badly hurt person's record on the train (J02, body_injury 4.1·4.6; s1 field_receipt.ts
+## fieldWoundOf): the heaviest of the wounds the field wrote is the grade and the part, all of
+## them ride along in "field". A fracture is a fracture, or a light wound when a medic splinted it
+## at once; a fracture off the limbs counts as deep (the train's fractures are limbs). Deep and
+## embedded are deep. Only scratches and cuts on one listed as badly hurt is deep (decision card C,
+## user 2026-10-25); with no rows at all, the torso. Festering if any of them festers. No draws.
+static func field_wound_of(rows: Array, pid: String) -> Dictionary:
+	var mine: Array = []
+	for w: Dictionary in rows:
+		if w["person"] == pid:
+			mine.append(w)
+	var top: Variant = null
+	for w: Dictionary in mine:
+		if top == null or _field_rank(w) > _field_rank(top):
+			top = w
+	var part: String = String(FIELD_PART.get(top["part"], "torso")) if top is Dictionary else "torso"
+	var grade := "deep"
+	if top is Dictionary:
+		var rank := _field_rank(top)
+		grade = "fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep")
+	if grade == "fracture" and not LIMB_PARTS.has(part):
+		grade = "deep"
+	var septic := false
+	var field: Array = []
+	for w: Dictionary in mine:
+		septic = septic or bool(w.get("festering", false))
+		var row := (w as Dictionary).duplicate(true)
+		row.erase("person")
+		field.append(row)
+	return {"grade": grade, "part": part, "septic": septic, "field": field}
+
+
+## A wound the field settled, put in the book as it is (s1 wounds.ts recordFieldWound): only a deep
+## wound's 3 or 4 days takes the local coin noteInjury uses (seed, stretch, record id, name).
+static func _record_field_wound(g: Dictionary, t: Dictionary, who: String, comm: String, place: String, fw: Dictionary) -> void:
 	if not g.has("wounds"):
 		g["wounds"] = []
-	for who: String in names:
-		var wound_id := int(g.get("nextWoundId", 1))
-		var state := _hash_state("%s:wound:%d:%d:%s" % [g["seed"], int(g["seg"]), wound_id, who])
-		var draw := _hash_draw(state)
-		state = int(draw[1])
-		var grade := _weighted_pick(float(draw[0]), ["light", "deep", "fracture", "amputation"], [0.3, 0.45, 0.2, 0.05])
-		draw = _hash_draw(state)
-		state = int(draw[1])
-		var part := _weighted_pick(float(draw[0]), ["armL", "armR", "legL", "legR", "torso", "head"], [0.2, 0.2, 0.2, 0.2, 0.15, 0.05])
-		if grade == "fracture" and not ["armL", "armR", "legL", "legR"].has(part):
-			draw = _hash_draw(state)
-			state = int(draw[1])
-			part = ["armL", "armR", "legL", "legR"][int(floor(float(draw[0]) * 4.0))]
-		var coin := 0.0
-		if grade == "deep":
-			draw = _hash_draw(state)
-			state = int(draw[1])
-			coin = float(draw[0])
-		draw = _hash_draw(state)
-		var septic := float(draw[0]) < 0.2 + _crowd_septic(g, t, comm)
-		var days := 1
-		if grade == "deep":
-			days = 3 if coin < 0.5 else 4
-		elif grade == "fracture":
-			days = 6 if ["armL", "armR"].has(part) else 8
-		elif grade == "amputation":
-			days = 4
-		var floor_days := 1 if grade == "light" else (2 if grade == "deep" or grade == "amputation" else (3 if ["armL", "armR"].has(part) else 4))
-		var cuts := _heal_cuts(g, t)
-		if cuts > 0:
-			days = maxi(floor_days, days - cuts)
-		if septic:
-			days = int(ceil(days * 1.5))
-		var wound_state := "light" if grade == "light" else "bed"
-		if wound_state == "bed" and comm != "medtech" and not _active_wounds(g, "medtech").is_empty():
-			days += 1
-		var wound := {
-			"id": wound_id, "who": who, "comm": comm, "grade": grade, "part": part,
-			"from": "stop", "where": place, "septic": septic, "daysLeft": days, "days0": days,
-			"bedDays": 0 if grade == "light" else (4 if grade == "amputation" else 2),
-			"state": wound_state, "at": g["seg"],
-		}
-		var leader: Dictionary = g["comms"][comm]["leader"]
-		if leader["name"] == who:
-			wound["personId"] = leader["personId"]
-		g["nextWoundId"] = wound_id + 1
-		(g["wounds"] as Array).append(wound)
+	var wound_id := int(g.get("nextWoundId", 1))
+	var state := _hash_state("%s:wound:%d:%d:%s" % [g["seed"], int(g["seg"]), wound_id, who])
+	var grade: String = fw["grade"]
+	var part: String = fw["part"]
+	var coin := 0.0
+	if grade == "deep":
+		coin = float(_hash_draw(state)[0])
+	var septic: bool = fw["septic"]
+	var days := 1
+	if grade == "deep":
+		days = 3 if coin < 0.5 else 4
+	elif grade == "fracture":
+		days = 6 if ["armL", "armR"].has(part) else 8
+	elif grade == "amputation":
+		days = 4
+	var floor_days := 1 if grade == "light" else (2 if grade == "deep" or grade == "amputation" else (3 if ["armL", "armR"].has(part) else 4))
+	var cuts := _heal_cuts(g, t)
+	if cuts > 0:
+		days = maxi(floor_days, days - cuts)
+	if septic:
+		days = int(ceil(days * 1.5))
+	var wound_state := "light" if grade == "light" else "bed"
+	if wound_state == "bed" and comm != "medtech" and not _active_wounds(g, "medtech").is_empty():
+		days += 1
+	var wound := {
+		"id": wound_id, "who": who, "comm": comm, "grade": grade, "part": part,
+		"from": "stop", "where": place, "septic": septic, "daysLeft": days, "days0": days,
+		"bedDays": 0 if grade == "light" else (4 if grade == "amputation" else 2),
+		"state": wound_state, "at": g["seg"],
+	}
+	var leader: Dictionary = g["comms"][comm]["leader"]
+	if leader["name"] == who:
+		wound["personId"] = leader["personId"]
+	if not (fw["field"] as Array).is_empty():
+		wound["field"] = (fw["field"] as Array).duplicate(true)
+	g["nextWoundId"] = wound_id + 1
+	(g["wounds"] as Array).append(wound)
 
 
 static func _on_death(g: Dictionary, t: Dictionary, comm: String, names: Array) -> void:
@@ -549,15 +586,38 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	for key: String in ["dead", "missing", "leftBehind"]:
 		for person_id: String in receipt["people"][key]:
 			gone[person_id] = true
-	var hurt: Array = []
+	# Badly hurt: the field's own part, kind, care and festering go in as they are (J02: no new draw).
+	var hurt_by := {}
 	for person_id: String in receipt["people"]["injured"]:
 		if not gone.has(person_id):
-			hurt.append(person_id)
-	for comm: String in _by_comm(t, departure, hurt):
-		var names: Array = _by_comm(t, departure, hurt)[comm]
+			var c: String = _person_of(t, departure, person_id)["comm"]
+			if not hurt_by.has(c):
+				hurt_by[c] = []
+			(hurt_by[c] as Array).append(person_id)
+	var rows: Array = receipt["people"].get("wounds", [])
+	for comm: String in hurt_by:
+		var names: Array = []
+		for person_id: String in hurt_by[comm]:
+			names.append(_person_of(t, departure, person_id)["name"])
 		g["injured"] = int(g["injured"]) + names.size()
-		_note_injury(g, t, names, comm, place)
+		for person_id: String in hurt_by[comm]:
+			_record_field_wound(g, t, _person_of(t, departure, person_id)["name"], comm, place, field_wound_of(rows, person_id))
 		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 크게 다쳐 돌아왔다." % [t["COMM_NAME"][comm], ", ".join(names)]})
+	# Bitten and back: the train's hidden-bite clock (two stretches to show or rise, decision card C).
+	for person_id: String in receipt["people"]["bitten"]:
+		if gone.has(person_id):
+			continue
+		var who: Dictionary = _person_of(t, departure, person_id)
+		var hidden := false
+		for b: Dictionary in g.get("hiddenBites", []):
+			hidden = hidden or b["who"] == who["name"]
+		if hidden:
+			continue
+		if not g.get("hiddenBites") is Array:
+			g["hiddenBites"] = []
+		(g["hiddenBites"] as Array).append({"who": who["name"], "comm": who["comm"], "at": g["seg"], "due": int(g["seg"]) + 2})
+		_journal(g, "%s이(가) 물린 채 돌아왔다. 아는 사람은 수색대뿐이다." % who["name"], "dark")
+		lines.append({"k": "people", "comm": who["comm"], "text": "%s %s이(가) 물린 채 돌아왔다. 2구간 안에 드러나거나 일어난다." % [t["COMM_NAME"][who["comm"]], who["name"]]})
 	var lost_ids: Array = []
 	for person_id: String in receipt["people"]["leftBehind"]:
 		if not (receipt["people"]["dead"] as Array).has(person_id):
