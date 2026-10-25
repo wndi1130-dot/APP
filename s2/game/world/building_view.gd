@@ -9,6 +9,7 @@ extends Node3D
 ## (세로 안벽과 계단). 지붕은 건물마다 하나. 문짝과 유리만 낱 노드다.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const BuildingShader = preload("res://game/world/building.gdshader")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const S = FieldGrid.Solid
@@ -56,6 +57,17 @@ const ACCENTS: Array[Color] = [
 ## 정점 색으로 쓰는 칠 구역(R 1자리, G 2자리, B 4자리, A 날씨 받음).
 const ZONE_METAL_OUT := Color(1, 0, 1, 1)
 const ZONE_METAL_IN := Color(1, 0, 1, 0)
+const ZONE_WOOD_OUT := Color(0, 1, 0, 1)
+const ZONE_WOOD_IN := Color(0, 1, 0, 0)
+## 커튼 천: 안쪽 벽지 칠(구역 0, 날씨 안 받음)을 빌린다. 셰이더에 천 구역이 생기면 바꾼다.
+const ZONE_CLOTH := Color(0, 0, 0, 0)
+## 판자·커튼은 벽 겉면에 붙는다: 바깥벽 바깥 면, 바깥벽 안쪽 면, 안벽 면까지의 거리(대응표 grid
+## ext_wall_m 0.45 — 바깥 +0.285, 안 -0.225 — 와 int_wall_m 0.2).
+const BOARD_OUT := 0.29
+const BOARD_IN := 0.24
+const BOARD_INT := 0.12
+## 문 판자 높이(m)와 기울기(도): 한 면 넷까지(building_rules.PLANKS_PER_FACE).
+const DOOR_PLANKS: Array = [[1.55, 4.0], [0.65, -5.0], [1.1, 3.0], [1.9, -3.0]]
 
 static var _arrays: Dictionary = {}   # 조각 id -> [자리, 법선, 색, 순번]
 static var _board_slots: Array = []   # 창 판자 자리 [{"height_m", "roll_deg"}](catalog.json board_slots)
@@ -1028,14 +1040,30 @@ func _draw_door(key: Vector3i) -> void:
 				bake.add(_arrays["door_leaf_broken"], _xf(hinge, yaw))
 		"locked":
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
-			# 쇠 빗장: 밖에서 잠긴 문을 읽게(회색 상자의 자물쇠 자리). 안에서 막은 문(방 이야기,
-			# 금지선 「밖에서 잠근 문」)은 바깥에 아무것도 없다.
-			if String(door.get("barred", "")) != "inside":
-				var bar_y := 0.2 if cut else 1.05
-				bake.box(_xf(at + Basis(Vector3.UP, yaw) * Vector3(0, bar_y, 0.08), yaw), Vector3(0.42, 0.04, 0.03), ZONE_METAL_OUT)
+			# 자물쇠 판: 열쇠로 잠긴 집 문으로 읽게 안팎 같은 작은 판(결정 카드 4 가, 코디네이터
+			# 10-25 — 바깥 쇠 빗장은 금지선 「밖에서 잠근 문」과 닿아 뺐다).
+			var lock_y := 0.2 if cut else 1.0
+			for side in [-1.0, 1.0]:
+				bake.box(_xf(at + Basis(Vector3.UP, yaw) * Vector3(0.32, lock_y, 0.06 * side), yaw), Vector3(0.035, 0.07, 0.012), ZONE_METAL_OUT if side > 0.0 else ZONE_METAL_IN)
 		_:
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
+	if not cut:
+		_bake_door_planks(bake, lg, Vector2i(key.x, key.y), door, yaw)
 	row["node"].mesh = bake.mesh()
+
+
+## 문 판자(J08): 면마다 그 면 쪽에 DOOR_PLANKS 자리부터.
+func _bake_door_planks(bake: Bake, lg: FieldGrid, c: Vector2i, door: Dictionary, yaw: float) -> void:
+	var at := Vector3(c.x + 0.5, 0, c.y + 0.5)
+	var sides := lg.faces(c)
+	var outer := lg.outer_face(c)
+	for f in 2:
+		var dir := Vector3(sides[f].x - c.x, 0, sides[f].y - c.y)
+		var off := BOARD_OUT if f == outer else (BOARD_IN if outer >= 0 else BOARD_INT)
+		for i in range(mini(BuildingRules.planks(door, f), DOOR_PLANKS.size())):
+			var slot: Array = DOOR_PLANKS[i]
+			var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, deg_to_rad(float(slot[1]))), at + dir * off + Vector3(0, float(slot[0]), 0))
+			bake.box(xf, Vector3(0.52, 0.07, 0.02), ZONE_WOOD_OUT if f == outer else ZONE_WOOD_IN)
 
 
 func _draw_window(key: Vector3i) -> void:
@@ -1044,15 +1072,63 @@ func _draw_window(key: Vector3i) -> void:
 	var win: Dictionary = lg.windows.get(Vector2i(key.x, key.y), {})
 	var xf := _xf(Vector3(key.x + 0.5, 0, key.y + 0.5), row["plan"]["yaw"])
 	var bake := Bake.new()
+	var c := Vector2i(key.x, key.y)
+	var sides := lg.faces(c)
+	var outer := lg.outer_face(c)
+	var inner := 1 - outer if outer >= 0 else 1
+	var in_dir := Vector3(sides[inner].x - c.x, 0, sides[inner].y - c.y)
 	if not row["cut"]:
-		bake.add(_arrays["window_glass_broken" if win.get("broken", false) else "window_glass"], xf)
-		# 판자 친 창(방 이야기): 위 자리부터 몇 장. 세 자리를 다 채우지 않아 창 일부만 가린다.
-		for i in range(mini(int(win.get("boards", 0)), _board_slots.size())):
-			var slot: Dictionary = _board_slots[i]
-			bake.add(_arrays["window_boards"], xf * Transform3D(Basis(Vector3.BACK, deg_to_rad(float(slot["roll_deg"]))), Vector3(0, float(slot["height_m"]), 0)))
+		if win.get("broken", false):
+			bake.add(_arrays["window_glass_broken"], xf)
+		elif win.get("open", false):
+			bake.add(_arrays["window_glass"], _swung(xf, in_dir))
+		else:
+			bake.add(_arrays["window_glass"], xf)
+		# 판자(J08): 면마다 그 면 쪽에 위 자리부터. 넷째 자리는 첫 두 자리 사이(판자 틈은 남는다).
+		# 판자 조각은 창의 +Z 쪽 벽 겉면에 놓이게 만들어졌다: 반대쪽 면은 Y축으로 뒤집어 놓는다.
+		var slots := _window_plank_slots()
+		for f in 2:
+			var dir := Vector3(sides[f].x - c.x, 0, sides[f].y - c.y)
+			var fx := xf if dir.dot(xf.basis.z) > 0.0 else xf * Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO)
+			for i in range(mini(BuildingRules.planks(win, f), slots.size())):
+				var slot: Dictionary = slots[i]
+				bake.add(_arrays["window_boards"], fx * Transform3D(Basis(Vector3.BACK, deg_to_rad(float(slot["roll_deg"]))), Vector3(0, float(slot["height_m"]), 0)))
+		# 커튼: 안쪽 면에. 닫히면 창을 덮고, 열리면 양옆에 모인다.
+		if BuildingRules.has_curtain(win):
+			var cloth_at := xf.origin + in_dir * (BOARD_IN + 0.03) + Vector3(0, 1.55, 0)
+			if String(win["curtain"]) == "closed":
+				bake.box(Transform3D(xf.basis, cloth_at), Vector3(0.46, 0.55, 0.015), ZONE_CLOTH)
+			else:
+				for side in [-1.0, 1.0]:
+					bake.box(Transform3D(xf.basis, cloth_at + xf.basis.x * 0.4 * side), Vector3(0.07, 0.55, 0.02), ZONE_CLOTH)
 	if win.get("glass", false):
 		bake.add(_arrays["window_glass_floor"], xf)
+	# 바닥에 떨어진 유리(깬 사람 반대쪽 칸).
+	for fell: Vector2i in lg.floor_glass:
+		if lg.floor_glass[fell] == c:
+			bake.add(_arrays["window_glass_floor"], Transform3D(xf.basis, Vector3(fell.x + 0.5, xf.origin.y, fell.y + 0.5)))
 	row["node"].mesh = bake.mesh()
+
+
+## 연 창: 한쪽 경첩을 축으로 안쪽으로 80° 돌린 유리짝(여닫이창).
+static func _swung(xf: Transform3D, in_dir: Vector3) -> Transform3D:
+	var best := xf
+	var best_d := INF
+	for turn in [-1.0, 1.0]:
+		var t := xf * Transform3D(Basis(), Vector3(-0.35, 0, 0.06)) * Transform3D(Basis(Vector3.UP, turn * deg_to_rad(80.0)), Vector3.ZERO) * Transform3D(Basis(), Vector3(0.35, 0, -0.06))
+		var d := (t.origin - (xf.origin + in_dir)).length_squared()
+		if d < best_d:
+			best_d = d
+			best = t
+	return best
+
+
+## 창 판자 자리 넷: 대응표의 셋에 넷째(첫 두 자리 사이, 반대로 기울게)를 더한다.
+static func _window_plank_slots() -> Array:
+	var out: Array = _board_slots.duplicate()
+	if out.size() >= 2 and out.size() < BuildingRules.PLANKS_PER_FACE:
+		out.append({"height_m": (float(out[0]["height_m"]) + float(out[1]["height_m"])) * 0.5, "roll_deg": -float(out[0]["roll_deg"])})
+	return out
 
 
 # ---------------------------------------------------------------- 시야와 매 틀

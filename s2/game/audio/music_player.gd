@@ -4,10 +4,12 @@ extends Node
 ## the first of these that has any: res://audio/music/ (empty until the user picks pieces and the
 ## terms are checked, bgm.md 9.3), the folder in ZOMBIE_BGM_DIR, user://music/. No file anywhere:
 ## silence, and the game runs the same.
-## The rules' sounds come first (bgm.md 6): duck(kind) lowers the bus and lets it back.
+## The rules' sounds come first (bgm.md 6): duck(kind) lowers the players and lets them back. The
+## bus itself is the player's own music level (sound_levels.gd) and is never moved here.
 
 const Director = preload("res://game/audio/music_director.gd")
 const MusicInput = preload("res://game/audio/music_input.gd")
+const SoundLevels = preload("res://game/audio/sound_levels.gd")
 
 const BUS: String = "Music"
 const DIRS: Array[String] = ["res://audio/music"]
@@ -28,6 +30,7 @@ var streams: Dictionary = {}          # piece id -> AudioStream
 var players: Array[AudioStreamPlayer] = []
 var held: Array[String] = ["", ""]    # the piece each player has
 var fades: Array = []                 # per player: {"to": dB, "rate": dB a second, "stop": bool}
+var levels: Array[float] = [-80.0, -80.0]   # each player's faded level; heard at this + duck_db
 var ducks: Dictionary = {}            # kind -> seconds left of its hold
 var duck_db: float = 0.0
 var back_rate: float = 15.0           # dB a second the bus comes back at (the last duck's)
@@ -35,7 +38,7 @@ var back_rate: float = 15.0           # dB a second the bus comes back at (the l
 
 func setup(what: String, scene_node = null, dirs: Array = []) -> void:
 	game = scene_node
-	_ensure_bus()
+	SoundLevels.apply_saved()
 	var files := find_files(dirs if not dirs.is_empty() else search_dirs())
 	var lengths := {}
 	for id in files:
@@ -91,15 +94,6 @@ static func load_stream(path: String) -> AudioStream:
 	return null
 
 
-static func _ensure_bus() -> void:
-	if AudioServer.get_bus_index(BUS) >= 0:
-		return
-	AudioServer.add_bus()
-	var i := AudioServer.bus_count - 1
-	AudioServer.set_bus_name(i, BUS)
-	AudioServer.set_bus_send(i, "Master")
-
-
 func tick(delta: float) -> void:
 	var s: Dictionary = {}
 	if game != null and director.scene == "field":
@@ -146,9 +140,9 @@ func _tick_ducks(delta: float) -> void:
 			ducks.erase(kind)
 	var target := duck_target(ducks)
 	duck_db = move_toward(duck_db, target, (down_rate if target < duck_db else back_rate) * delta)
-	var i := AudioServer.get_bus_index(BUS)
-	if i >= 0:
-		AudioServer.set_bus_volume_db(i, duck_db)
+	for i in range(2):
+		if players[i].playing:
+			players[i].volume_db = levels[i] + duck_db
 
 
 func _do(c: Dictionary) -> void:
@@ -162,7 +156,8 @@ func _do(c: Dictionary) -> void:
 			if players[0].playing and (not players[1].playing or (bool(fades[1]["stop"]) and not bool(fades[0]["stop"]))):
 				i = 1
 			players[i].stream = streams[id]
-			players[i].volume_db = -80.0 if float(c["fade"]) > 0.0 else float(c["db"])
+			levels[i] = -80.0 if float(c["fade"]) > 0.0 else float(c["db"])
+			players[i].volume_db = levels[i] + duck_db
 			players[i].play()
 			held[i] = id
 			_fade_to(i, float(c["db"]), float(c["fade"]), false)
@@ -177,10 +172,10 @@ func _do(c: Dictionary) -> void:
 
 
 func _fade_to(i: int, to: float, seconds: float, stop: bool) -> void:
-	var rate := absf(to - players[i].volume_db) / seconds if seconds > 0.0 else 0.0
+	var rate := absf(to - levels[i]) / seconds if seconds > 0.0 else 0.0
 	fades[i] = {"to": to, "rate": rate, "stop": stop}
 	if seconds <= 0.0:
-		players[i].volume_db = to
+		levels[i] = to
 
 
 func _tick_fades(delta: float) -> void:
@@ -189,7 +184,8 @@ func _tick_fades(delta: float) -> void:
 		if not p.playing:
 			continue
 		var f: Dictionary = fades[i]
-		p.volume_db = move_toward(p.volume_db, float(f["to"]), float(f["rate"]) * delta)
-		if bool(f["stop"]) and p.volume_db <= -79.0:
+		levels[i] = move_toward(levels[i], float(f["to"]), float(f["rate"]) * delta)
+		p.volume_db = levels[i] + duck_db
+		if bool(f["stop"]) and levels[i] <= -79.0:
 			p.stop()
 			held[i] = ""

@@ -101,4 +101,15 @@ describe('뽑기', () => {
     expect(travel('snow_drift').when(at(22, true))).toBe(true);
     expect(travel('snow_drift').when(at(5, false))).toBe(true);
   });
+
+  it('경비대 지붕 보초는 늦가을엔 찬비에 젖고, 얼음이 서는 구간과 꺼진 판에선 동상이다. 값은 같다', () => {
+    const view = (g: Game) => travel('guard_frost').view(g, undefined);
+    const autumn = view(at(5, true));
+    const frost = view(at(18, true));
+    expect(autumn.title).toBe('젖은 보초');
+    expect(autumn.body).not.toMatch(/동상|영하/u);
+    expect(frost.title).toBe('동상');
+    expect(view(at(5, false)).title).toBe('동상');
+    expect(autumn.choices.map(c => c.effs)).toEqual(frost.choices.map(c => c.effs));
+  });
 });

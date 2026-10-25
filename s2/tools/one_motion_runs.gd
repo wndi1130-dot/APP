@@ -175,10 +175,18 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	for p in game.squad:
 		if p.body.dead:
 			deaths += 1
+	# Footsteps heard (field_game.gd _footsteps notes each on the ledger by gait).
+	var steps := 0
+	var step_reactions := 0
+	for gait in ["walk", "run", "crouch"]:
+		var noted: Dictionary = game.ledger.by_action.get(gait, {})
+		steps += int(noted.get("events", 0))
+		step_reactions += int(noted.get("reactions", 0))
 	var row := {"kind": "trial", "label": label, "mode": mode, "seed": run_seed, "ticks": ticks,
 		"actions_started": started, "started_while_striking": started_striking,
 		"struck_while_acting": struck_acting, "both_ticks": both_ticks,
 		"fallen": fallen.size(), "kills": int(game.combat.kills), "bites": bites, "deaths": deaths,
+		"steps": steps, "step_reactions": step_reactions,
 		"first_end_s": first_end, "wall_s": float(Time.get_ticks_usec() - clock) / 1000000.0}
 	game.free()
 	return row
