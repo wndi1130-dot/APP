@@ -2909,6 +2909,19 @@ func bag_panel() -> void:
 			list.add_child(_bag_row(id, int(p.items[id])))
 		left.add_child(GlassPane.scroll(list, BAG_LIST_MAX))
 	left.add_child(GlassPane.mixed("권총탄 %d · 산탄 %d · 화살 %d" % [int(game.ammo["pistol"]), int(game.ammo["shell"]), int(game.ammo["craft"])]))
+	# By the train: what the bag holds goes aboard with one key (decision 448-13).
+	if game.actions.at_unloading(p) and not game.actions.loadable(p).is_empty():
+		var foot := GlassPane.row()
+		foot.alignment = BoxContainer.ALIGNMENT_END
+		var aboard := LampKey.new("열차에 싣기", false)
+		aboard.pressed.connect(_load_train)
+		foot.add_child(aboard)
+		left.add_child(foot)
+
+
+func _load_train() -> void:
+	game.actions.load_train(game.player)
+	bag_panel()
 
 
 ## One thing in the bag: its picture, name and count at 13/500, its weight in

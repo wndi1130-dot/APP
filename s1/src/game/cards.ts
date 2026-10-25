@@ -1,10 +1,10 @@
-import { riotEnd, riotFell } from './riot';
+import { guardRefuses, ladderGuard, ladderIgnore, ladderYield, riotEnd, riotFell } from './riot';
 import { bump, bumpRel, put } from './ledger';
 import { freezeTrackBoost, seasonHolds } from './climate';
 import { handsTrackBoost } from './hands';
 import { noteInjury, noteRelief } from './wounds';
 import type { WoundFrom } from './wounds';
-import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
+import { CHORE_COMMS, COMMS, COMM_NAME, OPPOSITE, P, REP_ROLE } from './data';
 import type { Comm } from './data';
 import { logDeath, onDeath } from './death';
 import { josa } from './josa';
@@ -671,25 +671,32 @@ function baseView(g: Game, card: Card): CardView {
       };
     }
     case 'tension_crisis': {
+      // 고조 사다리 5단계(정치 흐름 4.2): 경비·양보·방치. 경비대가 반대 이하면 경비는 회색이다.
+      const why = guardRefuses(g);
+      const refused = why ? { disabled: why } : {};
       return {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
         body: '칸마다 사람들이 모였다. 통로마다 막아선 사람들이 거래를 끊었다. 오늘 밤을 넘기지 못할 수도 있다.',
         choices: withAfford(g, [
-          { label: '경비대를 푼다', say: '경비대, 통로를 비워라. 손은 쓰지 마라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'tension_reset' },
-          { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'tension_reset' },
+          { label: '경비대를 푼다', say: '경비대, 통로를 비워라. 손은 쓰지 마라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'crisis_guard', ...refused },
+          { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'crisis_yield' },
           { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'revolt' },
         ]),
       };
     }
     case 'protest': {
       // 항의(긴장이 50을 위로 넘은 정산)와 난장판(80을 위로 넘은 정산과 이어지는 정산마다). 꼴은 카드에 얼려 둔다(riot.ts). 효과는 마지막 기회보다 작다(추정).
+      // 대응 셋(정치 흐름 4.2): 양보·경비·방치. 경비대가 반대 이하면 경비는 회색이다.
+      const why = guardRefuses(g);
+      const refused = why ? { disabled: why } : {};
       if (card.text !== 'riot') {
         return {
           title: '항의', speaker: leader(g, 'tail'), focus: 'tail', required: true,
           body: '복도마다 사람들이 모여 열차장을 찾는다. 배급과 석탄을 두고 목소리가 높아지고 있다.',
           choices: withAfford(g, [
-            { label: '들어준다', say: '들어보자. 줄 수 있는 것은 나눠 주겠다.', effs: [{ t: 'food', v: -8 }, { t: 'coal', v: -5 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 3 }] },
-            { label: '물리친다', say: '지금은 줄 것이 없다. 돌아가 제 일을 해라.', effs: [{ t: 'rel', c: 'tail', v: -5 }] },
+            { label: '들어준다', say: '들어보자. 줄 수 있는 것은 나눠 주겠다.', effs: [{ t: 'food', v: -8 }, { t: 'coal', v: -5 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 3 }, { t: 'rel', c: OPPOSITE.tail, v: -3 }], special: 'ladder_yield' },
+            { label: '경비대를 세운다', say: '통로에 경비를 세워라. 손은 쓰지 마라.', effs: [{ t: 'tension', v: -6 }], special: 'ladder_guard', ...refused },
+            { label: '물리친다', say: '지금은 줄 것이 없다. 돌아가 제 일을 해라.', effs: [{ t: 'rel', c: 'tail', v: -5 }], special: 'ladder_ignore' },
           ]),
         };
       }
@@ -697,9 +704,9 @@ function baseView(g: Game, card: Card): CardView {
         title: '난장판', speaker: leader(g, 'tail'), focus: 'tail', required: true,
         body: `싸움이 번졌다. 물건이 날고 어른들이 쓰러진다.${g.riot?.fire.length ? ' 불이 붙었다. 사람들은 걸어서 옆 칸으로 옮겨 간다.' : ''}`,
         choices: withAfford(g, [
-          { label: '들어준다', say: '요구를 듣겠다. 모두 손을 내려라.', effs: [{ t: 'food', v: -10 }, { t: 'coal', v: -6 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 4 }], special: 'riot_end' },
-          { label: '경비대를 푼다', say: '경비대를 풀어라! 싸움부터 말려라.', effs: [{ t: 'fear', v: 8 }, { t: 'trust', v: -5 }, { t: 'rel', c: 'tail', v: -5 }], special: 'riot_guard' },
-          { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [] },
+          { label: '들어준다', say: '요구를 듣겠다. 모두 손을 내려라.', effs: [{ t: 'food', v: -10 }, { t: 'coal', v: -6 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: OPPOSITE.tail, v: -3 }], special: 'riot_yield' },
+          { label: '경비대를 푼다', say: '경비대를 풀어라! 싸움부터 말려라.', effs: [{ t: 'fear', v: 8 }, { t: 'trust', v: -5 }, { t: 'rel', c: 'tail', v: -5 }], special: 'riot_guard', ...refused },
+          { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'ladder_ignore' },
         ]),
       };
     }
@@ -1044,6 +1051,25 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     case 'riot_guard':
       riotEnd(g);
       riotFell(g, P.riotFall);
+      ladderGuard(g, 'tail');
+      break;
+    case 'riot_yield':
+      riotEnd(g);
+      ladderYield(g);
+      break;
+    case 'ladder_yield':
+      ladderYield(g);
+      break;
+    case 'ladder_guard':
+      ladderGuard(g, 'tail');
+      break;
+    case 'ladder_ignore':
+      ladderIgnore(g);
+      break;
+    case 'crisis_guard': case 'crisis_yield':
+      put(g, 'tension', P.crisisBase + P.crisisStep * g.tensionCrisisUsed, 'card');
+      g.tensionCrisisUsed += 1;
+      if (choice.special === 'crisis_guard') ladderGuard(g, 'tail'); else ladderYield(g);
       break;
     case 'tension_reset':
       put(g, 'tension', P.crisisBase + P.crisisStep * g.tensionCrisisUsed, 'card');

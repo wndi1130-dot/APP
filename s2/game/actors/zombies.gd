@@ -105,7 +105,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	draw = _draws_of(vat)
 	draws = [draw]
 	body_rounds = [DeadBody.rounds]
-	bodies_to_read = DeadCast.others() if baked else []
+	bodies_to_read = DeadCast.others() if baked else ([] as Array[String])
 	bodies_planned = 1 + bodies_to_read.size()
 	# Rising markers above corpses that will stand up.
 	markers = MultiMeshInstance3D.new()
@@ -1171,21 +1171,26 @@ static func reach_basis(z: Dictionary) -> Basis:
 	return Basis(Vector3.RIGHT, HOLD_LEAN + TUG.x * sin(w)) * Basis(Vector3.BACK, TUG.y * sin(w * 0.5 + 1.0))
 
 
-## One body's multimeshes, one per look, each in the look's tint.
+## One body's multimeshes, one per look, each in the look's tint, each of the
+## dead in it worn as its own (dead_cast.gd tear_of, the multimesh colour).
 func _draws_of(body: Dictionary) -> Dictionary:
 	var out := {}
+	var mesh: Mesh = body["mesh"]
+	var marked: bool = mesh != null and mesh.get_surface_count() > 0 and (mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_COLOR) != 0
 	for look in ["dead", "clothed", "fresh", "frozen", "corpse"]:
 		var node := MultiMeshInstance3D.new()
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
+		mm.use_colors = true
+		node.set_meta(&"hands_marked", marked)
 		mm.mesh = body["mesh"]
 		mm.instance_count = MAX_DRAW
 		mm.visible_instance_count = 0
 		mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 		node.multimesh = mm
 		var mat := ShaderMaterial.new()
-		mat.shader = preload("res://game/actors/dead_vat.gdshader")
+		mat.shader = preload("res://game/actors/dead_weathered.gdshader")
 		mat.set_shader_parameter("vat", body["texture"])
 		mat.set_shader_parameter("rows_per_frame", float(body["rows_per_frame"]))
 		if baked:
@@ -1299,11 +1304,13 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		var n: int = counts[b][look]
 		if n >= MAX_DRAW:
 			continue
-		var mm: MultiMesh = draws[b][look].multimesh
+		var node: MultiMeshInstance3D = draws[b][look]
+		var mm: MultiMesh = node.multimesh
 		mm.set_instance_transform(n, Transform3D(basis, pos))
 		# Its walk goes by its own body's stride (dead_body.gd reads the rounds of the folder in use).
 		DeadBody.rounds = body_rounds[b]
 		mm.set_instance_custom_data(n, DeadBody.custom(z, down, frozen_anim, shade, baked))
+		mm.set_instance_color(n, DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false))))
 		counts[b][look] = n + 1
 	DeadBody.rounds = body_rounds[0]
 	if embedded_draw != null:

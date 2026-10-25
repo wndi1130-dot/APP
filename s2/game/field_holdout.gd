@@ -261,12 +261,13 @@ func quiet_and_clear() -> bool:
 	return people_noise() <= QUIET_NOISE and track_now() <= CLEAR_TRACK
 
 
-## The stop's noise score, of the sounds the people made.
+## The stop's noise score, of the sounds the people made (the train's own,
+## its brakes and its guards, score nothing: noise.gd SOURCES).
 func people_noise() -> int:
 	var sum := 0
 	for e: Dictionary in game.ledger.history:
 		if not NOT_OURS.has(String(e["tag"])):
-			sum += SimNoise.score(int(e["level"]))
+			sum += SimNoise.tag_score(int(e["level"]), String(e["tag"]))
 	return sum
 
 
