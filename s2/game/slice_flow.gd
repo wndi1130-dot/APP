@@ -705,8 +705,11 @@ func _leave_session() -> void:
 		_leave_session()
 
 
-## The train runs on from the session to the second station.
+## The train runs on from the session to the second station. A stop passed by has no
+## return to carry there: the slice ends at it (its arrival and end panels say so).
 func _run_to_station() -> void:
+	if not _returned():
+		return
 	for i in RUN_LIMIT:
 		if FieldArrival.second_station_reached(train_g) or String(train_g.get("phase", "")) == "end" or port_error != "":
 			return

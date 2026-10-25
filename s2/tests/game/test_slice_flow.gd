@@ -211,6 +211,26 @@ func test_passing_the_stop_by_brings_the_train_back_without_a_field() -> void:
 	assert_null(f.pending_field)
 
 
+## Passed by on the board: the stop resolved as passed (S1 resolveStop), no return, no
+## session, and the slice ends there without running the train on.
+func test_a_stop_passed_by_ends_the_slice_on_the_board_without_a_return() -> void:
+	var f = _flow()
+	f.next()
+	assert_eq(f.current(), "stop_pick")
+	f.card.passed_by.emit()
+	assert_eq(f.current(), "travel", "back on the line")
+	assert_true(f.passed)
+	assert_true(bool(f.train_g["stop"]["done"]), "the stop resolved as passed")
+	assert_false(f._returned(), "no field, no return")
+	var seg: int = int(f.train_g["seg"])
+	f.next()
+	assert_eq(f.current(), "arrive")
+	assert_eq(int(f.train_g["seg"]), seg, "the train is not run on past the stop")
+	assert_eq(f.port_error, "", "nothing outside the port was asked")
+	f.next()
+	assert_eq(f.current(), "end")
+
+
 func test_sent_the_field_is_built_under_the_scene_and_shown_when_it_lands() -> void:
 	var f = _cinema_flow({"skip_field": false, "seed": 5})
 	f.loader.resting = true

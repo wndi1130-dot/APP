@@ -111,7 +111,24 @@ func test_different_returns_open_different_sessions_or_stations() -> void:
 	assert_eq(seen.size(), (_data["cases"] as Array).size())
 
 
-## J01's second acceptance: the slice plays on its own state, no test fixture.
+## J01's second acceptance: the slice plays on its own state, no test fixture. The game's
+## code reads nothing under res://tests/ but the stop card's own sample, which it takes only
+## when no state is given (a card shown alone); the slice always gives it the board.
+const FIXTURE_READERS: Array[String] = ["res://game/ui/stop_pick_card.gd"]
+
+
 func test_the_slice_reads_no_test_fixture() -> void:
 	var src: String = FileAccess.get_file_as_string("res://game/slice_flow.gd")
 	assert_false(src.contains("res://tests/"), "slice_flow.gd reads nothing under res://tests/")
+	assert_true(src.contains("c.g = train_g.duplicate(true)"), "the stop card gets the board, so its sample stays unread")
+	var readers: Array[String] = []
+	_scan("res://game", readers)
+	assert_eq(readers, FIXTURE_READERS, "game code that names res://tests/")
+
+
+func _scan(dir: String, out: Array[String]) -> void:
+	for sub: String in DirAccess.get_directories_at(dir):
+		_scan(dir + "/" + sub, out)
+	for f: String in DirAccess.get_files_at(dir):
+		if f.ends_with(".gd") and FileAccess.get_file_as_string(dir + "/" + f).contains("res://" + "tests/"):
+			out.append(dir + "/" + f)
