@@ -47,10 +47,12 @@ static func kind_of(weapon_id: String) -> String:
 	return ""
 
 
-## A long weapon in the hand with an arm broken: held low in one hand standing,
-## and carried in one hand on the move (the long walk and run hold it in both).
+## A long weapon in the hand with an arm too hurt for it (body_state.gd
+## "one_hand": broken, or as bad as broken; field_combat.gd will not let it be
+## aimed): held low in one hand standing, and carried in one hand on the move
+## (the long walk and run hold it in both).
 static func weak_hold(p) -> bool:
-	return p.body.arm_fracture and kind_of(p.weapon_id()) == "long"
+	return kind_of(p.weapon_id()) == "long" and bool(p.mults()["one_hand"])
 
 
 ## Running as the feet go now: the run is on and the body can run. Out of

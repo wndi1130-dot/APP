@@ -131,6 +131,7 @@ func test_a_broken_arm_holds_a_long_weapon_low() -> void:
 	assert_false(Gait.weak_hold(p))
 	p.body.fracture(true, "arm_left")
 	assert_true(Gait.weak_hold(p))
+	assert_true(bool(p.mults()["one_hand"]), "the same state the rules will not let it aim in")
 	assert_eq(_drawn(p, note, own, false), Gait.HOLD_WEAK, "standing: low in one hand")
 	assert_eq(_drawn(p, note, own, true), "p_walk", "walking: carried in one hand")
 	p.running = true
