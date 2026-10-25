@@ -2307,6 +2307,7 @@ const SHELL_FACE_BROW: float = 0.15        # but not the top this share of the h
 const GLOVE_COLOUR: Color = Color(0.17, 0.16, 0.15)  # dark worn wool, as the colour picture holds it
 const GLOVE_GRAIN: float = 0.5             # how much of the picture's own light and dark a glove keeps
 const GLOVE_SPREAD: int = 2                # pixels painted past each hand piece, so no skin shows at a seam
+const HAND_LIGHT: StringName = &"hand_light"   # a marked mesh's meta: the colour picture's light at its hands (hand_light)
 
 
 ## Puts the shell of garment `kind` (SHELLS) in place of the body's skinned
@@ -2490,6 +2491,105 @@ static func gloved(body_root: Node3D, albedo: Image, colour: Color = GLOVE_COLOU
 			var grain := lerpf(1.0, clampf(out.get_pixel(i % w, i / w).get_luminance() / mean, 0.5, 1.5), GLOVE_GRAIN)
 			out.set_pixel(i % w, i / w, Color(colour.r * grain, colour.g * grain, colour.b * grain))
 	return out
+
+
+## The body's hands marked for the shader to glove (dead_vat.gdshader `gloves`,
+## decision 434) instead of a second, gloved colour picture: a colour for each
+## vertex of the skinned mesh, white, its alpha 1 where the hand bones carry it
+## most (as gloved() picks the hands) and 0 elsewhere. Empty without a skinned mesh.
+static func hand_marks(body_root: Node3D) -> PackedColorArray:
+	var out := PackedColorArray()
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
+	if mesh_node == null or body == null or mesh_node.skin == null:
+		return out
+	var src: Array = mesh_node.mesh.surface_get_arrays(0)
+	var bones: PackedInt32Array = src[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = src[Mesh.ARRAY_WEIGHTS]
+	var count: int = (src[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var per: int = bones.size() / maxi(count, 1)
+	var hands := {_bone(body, "hand.L"): true, _bone(body, "hand.R"): true}
+	out.resize(count)
+	for v in count:
+		out[v] = Color(1, 1, 1, 1.0 if hands.has(_main_bone(body, mesh_node.skin, bones, weights, per, v)) else 0.0)
+	return out
+
+
+## How light the colour picture is at the hands (marks as hand_marks gives
+## them): the mean of its light over each triangle with two corners or more on a
+## hand, as the picture holds it. A glove keeps GLOVE_GRAIN of the picture's own
+## light and dark against it. 0 when there is no hand.
+static func hand_light(mesh: Mesh, marks: PackedColorArray, albedo: Image) -> float:
+	var src: Array = mesh.surface_get_arrays(0)
+	if src[Mesh.ARRAY_TEX_UV] == null or albedo == null:
+		return 0.0
+	var picture := albedo.duplicate() as Image
+	if picture.is_compressed():
+		picture.decompress()
+	var uv: PackedVector2Array = src[Mesh.ARRAY_TEX_UV]
+	var index: PackedInt32Array = src[Mesh.ARRAY_INDEX]
+	var size := Vector2(picture.get_width(), picture.get_height())
+	var sum := 0.0
+	var count := 0
+	for t in range(0, index.size(), 3):
+		if marks[index[t]].a + marks[index[t + 1]].a + marks[index[t + 2]].a < 1.5:
+			continue
+		var a := uv[index[t]] * size
+		var b := uv[index[t + 1]] * size
+		var c := uv[index[t + 2]] * size
+		var lo := a.min(b).min(c).floor().clamp(Vector2.ZERO, size - Vector2.ONE)
+		var hi := a.max(b).max(c).floor().clamp(Vector2.ZERO, size - Vector2.ONE)
+		for y in range(int(lo.y), int(hi.y) + 1):
+			for x in range(int(lo.x), int(hi.x) + 1):
+				if Geometry2D.point_is_inside_triangle(Vector2(x + 0.5, y + 0.5), a, b, c):
+					sum += picture.get_pixel(x, y).get_luminance()
+					count += 1
+	return sum / count if count > 0 else 0.0
+
+
+## `mesh` (one surface, as build_skinned makes it) with `marks` as its vertex
+## colours, the rest as it was: the same vertices in the same order, so the
+## motion picture reads it as before. Its hand light (hand_light) goes with it
+## as the mesh's HAND_LIGHT. Null when the counts differ.
+static func with_hand_marks(mesh: Mesh, marks: PackedColorArray, light: float) -> ArrayMesh:
+	var src: Array = mesh.surface_get_arrays(0)
+	if (src[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() != marks.size():
+		return null
+	src[Mesh.ARRAY_COLOR] = marks
+	var bones = src[Mesh.ARRAY_BONES]
+	var eight: bool = bones != null and (bones as PackedInt32Array).size() == 8 * marks.size()
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, src, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if eight else 0)
+	out.set_meta(HAND_LIGHT, light)
+	return out
+
+
+## Puts the hands' marks (hand_marks) in the skinned mesh of `body_root`, so a
+## bake of it carries them (build_skinned keeps the vertex colours), and gives
+## them back; empty without a skinned mesh.
+static func mark_hands(body_root: Node3D) -> PackedColorArray:
+	var marks := hand_marks(body_root)
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	if marks.is_empty() or mesh_node == null:
+		return PackedColorArray()
+	var marked := with_hand_marks(mesh_node.mesh, marks, 0.0)
+	if marked == null:
+		return PackedColorArray()
+	if mesh_node.mesh.surface_get_material(0) != null:
+		marked.surface_set_material(0, mesh_node.mesh.surface_get_material(0))
+	mesh_node.mesh = marked
+	return marks
+
+
+## The body's own colour picture, out of its material (null without one).
+static func picture_of(body_root: Node3D) -> Image:
+	for node in body_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.get_active_material(i)
+			if mat is BaseMaterial3D and (mat as BaseMaterial3D).albedo_texture != null:
+				return (mat as BaseMaterial3D).albedo_texture.get_image()
+	return null
 
 
 ## Bakes the living people's motions (PERSON_CLIPS, no still poses) with the

@@ -8,6 +8,10 @@
       "type": "segment",
       "min": 5,
       "max": 22
+    },
+    {
+      "type": "season",
+      "needs": "frost"
     }
   ],
   "speaker": "engine",
