@@ -10,7 +10,7 @@ import type { InfoDocument, RecurringRoles } from './info_documents';
 import { goalStatus } from './stop_goals';
 import type { GoalStatus, StopEnd, StopGoal } from './stop_goals';
 
-export type StockKey = 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol' | 'info' | 'scrap' | 'wood'
+export type StockKey = 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol' | 'info' | 'scrap' | 'wood' | 'cloth' | 'parts'
   | 'ammo_pistol' | 'ammo_shell' | 'ammo_craft';
 export interface ReceiptPeople {
   sent: string[]; injured: string[]; bitten: string[]; dead: string[];

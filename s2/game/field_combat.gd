@@ -53,7 +53,7 @@ const ALLY_TURN_DEG: float = 35.0
 ## off these works of the hands (the ones the stick breaks off, and rummaging a
 ## body); any other (a climb, a crossing, a door or a window, a weapon swap)
 ## runs to its end and no blow or shove starts meanwhile.
-const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "loot"]
+const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "loot"]
 
 var game
 ## The player's shove pressed during a blow: it goes once the blow is over
@@ -1069,7 +1069,7 @@ func fire(p, at: Vector3, target = null) -> String:
 		end = blocked_at
 	tracers.append({"from": p.position + Vector3(0, 1.2, 0), "to": end + Vector3(0, 1.0, 0), "t": 0.12})
 	if wid == "bow":
-		game.ground_items.append({"pos": end, "id": "arrow", "n": 1})
+		game.ground_items.append({"pos": end, "id": "ammo_craft", "n": 1})
 	if blocked_at != null or dist > float(d["range"]):
 		game.make_sound(end, SimNoise.Level.QUIET, "impact", p)
 		_after_shot(p)

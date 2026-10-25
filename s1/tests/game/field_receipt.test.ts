@@ -202,6 +202,21 @@ describe('필드 영수증 판 4: 판에 반영', () => {
     expect(other.comms.medtech.rel).toBe(control.comms.medtech.rel);
   });
 
+  it('천·부품도 영수증으로 온다: 부품은 내정 그릇에 더하고 천은 계약만 지난다(결정 426 D②)', () => {
+    const r = read<FieldReceipt>('case3_nosymbol_kept.json');
+    const got = { ...r, receiptId: `${r.receiptId}_stores`, stock: { ...r.stock, cloth: 2, parts: 3 } };
+    expect(decodeFieldReceipt(got).stock).toMatchObject({ cloth: 2, parts: 3 });
+    const g = createGame(SEED);
+    enableDomestic(g);
+    const parts0 = g.dom!.parts;
+    applyFieldReturn(g, dep(), got);
+    expect(g.dom!.parts).toBe(parts0 + 3);
+    const lost = createGame(SEED);
+    enableDomestic(lost);
+    applyFieldReturn(lost, dep(), { ...got, receiptId: `${r.receiptId}_lost`, stock: { ...r.stock, parts: -(parts0 + 5) } });
+    expect(lost.dom!.parts).toBe(0);
+  });
+
   it('서막 판정은 꼬리칸에 걸린 다른 약속을 지우지 않는다', () => {
     const g = createGame(SEED);
     const live = { kind: 'open', cond: { kind: 'skip_dispatch', label: '다음 파견에서 제외', now: false }, label: '다음 파견에서 제외', due: 2 };

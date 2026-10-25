@@ -146,7 +146,8 @@ describe('정차 영수증 준비', () => {
       value => { value.stock.wood = Number.MAX_SAFE_INTEGER + 1; },
       value => { value.stock.info = 1; },
       value => { (value as unknown as Record<string, unknown>).unknown = true; },
-      value => { (value.stock as Record<string, unknown>).parts = 1; },
+      // 부품(parts)은 결정 426 D②로 영수증 재고 키가 됐다. 코어는 extras.coreCount로만 온다.
+      value => { (value.stock as Record<string, unknown>).cores = 1; },
       value => { value.extras.documents.push(structuredClone(value.extras.documents[0])); },
       value => { value.extras.documents[0].state = 'used'; },
       value => { value.extras.documents[0].sourcePlaceId = 'place_other'; },
