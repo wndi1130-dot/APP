@@ -62,6 +62,10 @@ var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # мІАл
 var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
+## How deep the sight mask is drawn, 0..1: 1 in full, less while it comes in
+## over a field just handed over from the stop scene (field_game.gd
+## MASK_IN_S). Picture only: what is in sight is the same either way.
+var mask_shade: float = 1.0
 var _prop_elapsed: float = 0.0
 var door_nodes: Dictionary = {}   # Vector2i -> MeshInstance3D
 var window_nodes: Dictionary = {}
@@ -319,9 +323,15 @@ func update_labels(memory: PackedByteArray, mask_on: bool) -> void:
 
 
 func set_mask_enabled(on: bool) -> void:
-	material.set_shader_parameter("mask_on", 1.0 if on else 0.0)
+	material.set_shader_parameter("mask_on", mask_shade if on else 0.0)
 	_props_mask_on = on
 	refresh_props()
+
+
+func set_mask_shade(k: float) -> void:
+	mask_shade = clampf(k, 0.0, 1.0)
+	if _props_mask_on:
+		material.set_shader_parameter("mask_on", mask_shade)
 
 
 ## seen_now: sight key (level slice * cells + cell index) -> true; memory:

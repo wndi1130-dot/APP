@@ -65,6 +65,9 @@ const ARRIVE_KINDS: Array[String] = ["bare_line"]
 const ARRIVE_ROLL_S: float = 3.0
 const ARRIVE_BRAKE_S: float = 1.1
 const ARRIVE_HUSH_S: float = 0.8
+## How long the sight mask takes to come in over a field handed over from the
+## stop scene (mask_in).
+const MASK_IN_S: float = 2.0
 const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
@@ -196,6 +199,11 @@ var seen_memory := PackedByteArray()
 var vis_t: float = 0.0
 var hud_t: float = 0.0
 var mask_on: bool = true
+## The sight mask coming in, 0..1 (1: in full). A field handed over from the
+## stop scene starts at 0, as bright as the scene's last look down, and what
+## is out of sight darkens over MASK_IN_S (결정 421-3: no dark cut at the
+## hand-over). Picture only: what is in sight is never wider for it.
+var mask_in: float = 1.0
 var forecast_precision: int = 0
 var roof_seen: bool = false           # up on a rooftop once this stop (house_layout.md 6.2)
 var weather: Weather
@@ -457,6 +465,9 @@ func go_live() -> void:
 		return
 	standing_by = false
 	process_mode = Node.PROCESS_MODE_INHERIT
+	# Shown from under the stop scene: as bright as its last look, the mask coming in.
+	mask_in = 0.0
+	view.set_mask_shade(0.0)
 
 
 ## Weather is fixed for the whole stop, so the shader globals are set once;
@@ -1341,6 +1352,9 @@ func _process(delta: float) -> void:
 	if vis_t <= 0.0:
 		vis_t = 0.1
 		_refresh_vision()
+	if mask_in < 1.0:
+		mask_in = minf(1.0, mask_in + delta / MASK_IN_S)
+		view.set_mask_shade(smoothstep(0.0, 1.0, mask_in))
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		if p != player and p.turn_rate <= 0.0:
