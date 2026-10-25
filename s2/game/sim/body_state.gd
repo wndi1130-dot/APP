@@ -68,6 +68,31 @@ var _heavy_reported: bool = false
 var _level_seen: int = 0         # bleed level at the last change, to reset timers on a drop
 var breath_locked: bool = false
 
+## Stored values only: derived wound properties must not run their setters on restore.
+const SAVE_FIELDS: Array[String] = [
+	"wounds", "infection", "infected", "window_left", "exhaustion", "breath",
+	"downed", "dead", "heavy_bleed_time", "light_bleed_time", "last_bandages_used",
+	"down_time", "injured_at", "cold_level", "_heavy_reported", "_level_seen", "breath_locked",
+]
+
+
+func save_of() -> Dictionary:
+	var out: Dictionary = {}
+	for key: String in SAVE_FIELDS:
+		var value: Variant = get(key)
+		out[key] = value.duplicate(true) if value is Array else value
+	return out
+
+
+func restore(saved: Dictionary) -> void:
+	for key: String in SAVE_FIELDS:
+		if not saved.has(key):
+			continue
+		if key == "wounds":
+			wounds.assign((saved[key] as Array).duplicate(true))
+		else:
+			set(key, saved[key])
+
 # 0 none, 1 light, 2 heavy: from the total blood of all wounds (body_injury 4.6).
 var bleed: int:
 	get:

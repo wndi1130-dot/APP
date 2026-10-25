@@ -189,6 +189,10 @@ var crew: Array = []
 var raiders: Array = []
 var player: Person
 var paused: bool = false
+var resume_pending: bool = false
+var resume_wait_left: float = 0.0
+var resume_ready_at_ms: int = 0
+var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
@@ -1370,8 +1374,10 @@ func interrupt() -> void:
 	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
 	if bool(opts.get("field_save", false)):
 		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
-	if ended or paused:
+	if ended:
 		return
+	if not away:
+		resume_announce = not paused
 	paused = true
 	away = true
 
@@ -1382,11 +1388,47 @@ func welcome_back() -> void:
 	if not away:
 		return
 	away = false
-	if hud != null and not ended:
-		hud.toast("멈춰 둔 자리다.")
+	if not ended:
+		if resume_announce and hud != null:
+			hud.toast("멈춰 둔 자리다.")
+		begin_resume()
+
+
+## One entry path for both an app interruption and a restored slot. This clock
+## is real foreground time, independent of the field clock's rate and pause.
+func begin_resume() -> void:
+	resume_pending = true
+	resume_wait_left = 1.0
+	paused = true
+	if hud != null:
+		hud.show_resume()
+	paused = true
+	# Arm on the first visible field frame, after restoration/building has finished.
+	resume_ready_at_ms = -1
+
+
+func continue_resume() -> bool:
+	if not resume_pending or resume_ready_at_ms < 0 or away:
+		return false
+	resume_wait_left = maxf(0.0, float(resume_ready_at_ms - Time.get_ticks_msec()) / 1000.0)
+	if resume_wait_left > 0.0:
+		return false
+	if hud != null:
+		hud.close_resume()
+	resume_pending = false
+	paused = false
+	return true
 
 
 func _process(delta: float) -> void:
+	if resume_pending:
+		if not away and resume_ready_at_ms >= 0:
+			resume_wait_left = maxf(0.0, float(resume_ready_at_ms - Time.get_ticks_msec()) / 1000.0)
+		if hud != null:
+			hud.tick_resume()
+		if not away and resume_ready_at_ms < 0:
+			resume_ready_at_ms = Time.get_ticks_msec() + 1000
+		return
 	delta = minf(delta, 0.1)
 	if arrive_t >= 0.0:
 		_arrive(delta)
