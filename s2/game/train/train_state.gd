@@ -4,7 +4,8 @@ extends RefCounted
 ## file (tests/fixtures/train/train_vectors.json, written by s1/tools/train_port_fixtures.ts).
 ## Only the S1a game: the domestic, dark-path, climate, disaster and arrivals branches are off, so
 ## their hooks give 0 or 1 here exactly as they do in S1 when switched off. A dom holding the
-## train's stores and nothing else (train_dom.gd) is not the domestic branch.
+## S2's explicitly ported stores/workshop/research subset (train_dom.gd) keeps
+## unported S1c hooks off. Its research effects are wired by TrainResearch only.
 ## tests/train/test_train_state.gd checks every function against the S1 answers.
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
@@ -13,7 +14,7 @@ const TrainHands = preload("res://game/train/train_hands.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 
 
-## The S1a game only: a state carrying a switched-on branch would need rules not ported here.
+## S1a plus the allowed S2 domestic subset; unknown domestic keys still reject it.
 static func is_s1a(g: Dictionary) -> bool:
 	for key: String in ["dom", "dark", "climate", "disasters", "arrivals", "budget"]:
 		var v: Variant = g.get(key)
