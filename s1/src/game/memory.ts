@@ -1,5 +1,5 @@
 import type { Comm } from './data';
-import { CAPTAIN_ID, departurePeople, returnedOf } from './field_receipt';
+import { CAPTAIN_ID, departurePeople, RETURN_HOOK, returnedOf } from './field_receipt';
 import type { AnyDeparture, FieldReceipt } from './field_receipt';
 import { familyOf, MEMORY_HOOK } from './people';
 import { isGone, PROFILES } from './state';
@@ -374,3 +374,4 @@ export function memoryTestimonies(g: Game): MemoryTestimony[] {
 }
 
 MEMORY_HOOK.tick = memoryTick;
+RETURN_HOOK.after = (g, departure, r) => { memoryFromReturn(g, departure, r); };
