@@ -1158,6 +1158,8 @@ func _field_opts() -> Dictionary:
 		o["look_hour"] = float(want["hour"])
 	o["departure"] = _departure().duplicate(true)
 	o["train_guard_ids"] = _guard_ids(o["departure"])
+	# The laws standing on the train (its passed laws), for the field's own effects of them (domestic: emergency_ration).
+	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
 	return o
