@@ -1,7 +1,7 @@
 // 「왜 다 태우고 가나」 재기(결정 425, carry_people.md 4장): 「태우고 간다」와 「줄인다」 두 정책의 완주를 견준다.
 // 사용: npx tsx tools/carry_sim.ts [판 수=1000] [--only=caretaker|engaged]
-//   태우고 간다: 서막에서 다섯을 약속하고 운반조부터 부른다, 사람 들어옴 카드는 모두 태우거나 데리러 간다.
-//   줄인다: 서막에서 약속하지 않고 바로 돌아선다, 사람 들어옴 카드는 돌려보내거나 지금은 못 간다고 한다.
+//   태우고 간다: 서막에서 다섯을 약속하고 운반조부터 부른다, 사람 들어옴 카드는 모두 태우거나 데리러 간다(두고 온 사람의 흔적은 기다렸다 태운다).
+//   줄인다: 서막에서 약속하지 않고 바로 돌아선다, 사람 들어옴 카드는 돌려보내거나 지금은 못 간다고 한다(흔적엔 쪽지만 남긴다).
 // 사람 들어옴(arrivals.ts)은 켠 판으로 돈다. 그 밖의 카드는 봇 규칙대로다.
 // 손 몫 줄(결정 425-1): 정산마다 handsNow를 읽어, 한 번이라도 일이 빈 판과 그 까닭(모두 뜻 1이어도 모자람 = 사람 탓, 아니면 뜻 탓),
 // 일마다 한 번이라도 빈 판, 판마다 가장 적은 손과 가장 적은 여유(낸 손 − 드는 손)를 센다. 읽기만 하고 판을 바꾸지 않는다.
@@ -15,9 +15,9 @@ const flags = process.argv.slice(2).filter(a => a.startsWith('--'));
 const N = Number(args[0] ?? 1000);
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 
-const ARRIVAL_KINDS = ['arrival', 'family'];
-const TAKE = ['take_all', 'escort', 'fetch', 'take_some'];
-const SHED = ['turn_away', 'turn_away_law', 'stay_put'];
+const ARRIVAL_KINDS = ['arrival', 'family', 'pro_trail'];
+const TAKE = ['take_all', 'escort', 'fetch', 'take_some', 'trail_wait'];
+const SHED = ['turn_away', 'turn_away_law', 'stay_put', 'trail_note'];
 
 function picker(prefer: string[]) {
   return (_g: Game, card: Card, view: CardView, open: number[]): number | undefined => {
