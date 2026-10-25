@@ -33,6 +33,10 @@ const GLASS := preload("res://game/ui/tex/pane_glass.png")
 ## As tall as the workshop's pane while four rows fit; longer lists grow it.
 const CSS_W: float = 330.0
 const CSS_H_MIN: float = 286.0
+## No higher than the car's pane (the band to the bottom bar): more rows than
+## fit are dragged up under the stores (glass_pane.gd scroll), as mods_pane.gd.
+const CSS_H_MAX: float = 286.0
+const SHADE := Color("0b0e12")
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"]]
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "core": "gear"}
 ## S1 ui/domestic.ts BRANCH_ICON.
@@ -65,6 +69,8 @@ var g: Dictionary = {}
 ## The technologies listed; empty means the ones whose effect runs (Research.visible).
 var techs: Array = []
 var _parts: Control
+## Where a row's parts go while the rows are laid (the scrolled list), else the pane.
+var _into: Control = null
 ## The row whose ways are open (복원 pressed with more than one way), and the
 ## row whose 취소 waits for the second press.
 var _choosing: String = ""
@@ -163,7 +169,7 @@ func _ready() -> void:
 
 ## The pane's size for `rows` rows, in CSS px.
 static func css_size(rows: int) -> Vector2:
-	return Vector2(CSS_W, maxf(CSS_H_MIN, ROW_TOP + ROW_H * rows + 12.0))
+	return Vector2(CSS_W, clampf(ROW_TOP + ROW_H * rows + 12.0, CSS_H_MIN, CSS_H_MAX))
 
 
 ## At the right of the screen under a band `top` game px high (as workshop_pane.gd).
@@ -195,12 +201,48 @@ func _draw_all() -> void:
 	_head()
 	_stores(m["stores"])
 	var rows: Array = m["rows"]
+	var k: float = UiFonts.K
+	var list := Control.new()
+	list.name = "Rows"
+	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	list.custom_minimum_size = Vector2(CSS_W, ROW_H * rows.size()) * k
+	var s := ScrollContainer.new()
+	s.name = "List"
+	s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	s.mouse_filter = Control.MOUSE_FILTER_PASS
+	s.position = Vector2(0.0, ROW_TOP) * k
+	s.size = Vector2(CSS_W, css_size(rows.size()).y - ROW_TOP - 12.0) * k
+	s.add_child(list)
+	_parts.add_child(s)
+	_into = list
 	for i in rows.size():
-		_row(rows[i], ROW_TOP + ROW_H * i)
+		_row(rows[i], ROW_H * i)
+	_into = null
+	if list.custom_minimum_size.y > s.size.y + 0.5:
+		_parts.add_child(_more(s))
+
+
+## While rows are left under the list's foot, the glass darkens there (as mods_pane.gd).
+func _more(s: ScrollContainer) -> Control:
+	var k: float = UiFonts.K
+	var fade := Control.new()
+	fade.name = "More"
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade.position = Vector2(0.0, s.position.y + s.size.y - 22.0 * k)
+	fade.size = Vector2(s.size.x, 22.0 * k)
+	fade.draw.connect(func() -> void:
+		var w: float = fade.size.x
+		var h: float = fade.size.y
+		fade.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
+			PackedColorArray([Color(SHADE, 0.0), Color(SHADE, 0.0), Color(SHADE, 0.85), Color(SHADE, 0.85)])))
+	var bar: ScrollBar = s.get_v_scroll_bar()
+	bar.value_changed.connect(func(v: float) -> void: fade.visible = v < bar.max_value - bar.page - 1.0)
+	return fade
 
 
 func _add(c: Control) -> Control:
-	_parts.add_child(c)
+	(_into if _into != null else _parts).add_child(c)
 	return c
 
 

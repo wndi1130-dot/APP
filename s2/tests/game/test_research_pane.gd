@@ -221,6 +221,27 @@ func test_an_either_or_law_technology_tags_both_laws_then_its_own() -> void:
 	assert_eq([r["law"], r["effect"]], ["공동 난방", ResearchPane.EFFECT["e3a"]])
 
 
+## Six technologies do not fit under the stores: the pane stays the car pane's
+## height over the bottom bar and the rows are dragged up inside it, the glass
+## darkening at the foot while some are left below.
+func test_more_rows_than_fit_scroll_inside_the_pane() -> void:
+	var ids: Array = ["e1", "e2", "e3", "e5", "w1", "x1"]
+	var p := _pane(_game(), ids)
+	await wait_process_frames(2)
+	assert_almost_eq(p.size.y / UiFonts.K, ResearchPane.CSS_H_MAX, 0.5, "no higher than the car's pane")
+	var s := p.find_child("List", true, false) as ScrollContainer
+	var rows := p.find_child("Rows", true, false) as Control
+	assert_gt(rows.size.y, s.size.y, "six rows are longer than the room for them")
+	var more := p.find_child("More", true, false) as Control
+	assert_true(more != null and more.visible, "the glass darkens where rows are left below")
+	s.scroll_vertical = 10000
+	await wait_process_frames(2)
+	assert_false(more.visible, "dragged to the end, the shade goes")
+	var few := _pane(_game(), ["e5", "w1"])
+	await wait_process_frames(1)
+	assert_null(few.find_child("More", true, false), "rows that fit: no shade")
+
+
 func test_the_fold_key_folds() -> void:
 	var p := _pane(_game())
 	await wait_process_frames(1)
