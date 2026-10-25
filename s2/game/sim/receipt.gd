@@ -32,8 +32,9 @@ const MAX_SAFE_INTEGER := 9007199254740991
 const WITNESS_KEYS := ["who", "what", "where", "when", "why", "witnesses"]
 const WITNESS_OPTIONAL := ["id", "weight", "template"]
 const WOUND_PARTS := ["head_neck", "torso", "arm_left", "arm_right", "leg_left", "leg_right"]
-const WOUND_KINDS := ["scratch", "laceration", "deep", "embedded", "bite", "fracture"]
-const SERIOUS_KINDS := ["deep", "embedded", "fracture"]   # these fold into people.injured (S1)
+const WOUND_KINDS := ["scratch", "laceration", "deep", "embedded", "bite", "fracture", "amputation"]
+const SERIOUS_KINDS := ["deep", "embedded", "fracture", "amputation"]   # these fold into people.injured (S1)
+const CUT_PARTS := ["arm_left", "arm_right", "leg_left", "leg_right"]   # an amputation is of an arm or a leg
 const ID_PATTERN := "^[a-z][a-z0-9_]*$"
 const CLOCK_PATTERN := "^D[1-9][0-9]* ([01][0-9]|2[0-3]):[0-5][0-9]$"
 
@@ -125,12 +126,14 @@ func person(list_name: String, id: String) -> bool:
 	return true
 
 
-## One wound of one person (body_injury 4.6). Refused for a bad id, part or kind.
+## One wound of one person (body_injury 4.6). Refused for a bad id, part or kind, and
+## for an amputation off the arms and legs (the field cuts only those, amputation.gd).
 ## It folds the way S1 expects: a bite also puts the person in bitten, a deep wound,
-## an embedded one or a fracture in injured. festering is written only when true.
+## an embedded one, a fracture or an amputation in injured. festering is written only when true.
 ## `treat` (WOUND_TREATS keys, the true ones kept) goes out on a v5 receipt only.
 func add_wound(person_id: String, part: String, kind: String, festering: bool = false, treat: Dictionary = {}) -> bool:
-	if not _id_ok(person_id) or not WOUND_PARTS.has(part) or not WOUND_KINDS.has(kind):
+	if not _id_ok(person_id) or not WOUND_PARTS.has(part) or not WOUND_KINDS.has(kind) \
+			or (kind == "amputation" and not CUT_PARTS.has(part)):
 		push_warning("receipt: wound refused (%s %s %s)" % [person_id, part, kind])
 		return false
 	var row := {"person": person_id, "part": part, "kind": kind}
@@ -909,6 +912,8 @@ static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx, tre
 			out.append("people.wounds.%d.part: 모르는 부위" % i)
 		if not WOUND_KINDS.has(w.get("kind")):
 			out.append("people.wounds.%d.kind: 모르는 상처" % i)
+		elif w.get("kind") == "amputation" and WOUND_PARTS.has(w.get("part")) and not CUT_PARTS.has(w.get("part")):
+			out.append("people.wounds.%d.part: 팔·다리가 아닌 절단" % i)
 		if w.has("festering") and not (w["festering"] is bool):
 			out.append("people.wounds.%d.festering: 참·거짓이 아님" % i)
 

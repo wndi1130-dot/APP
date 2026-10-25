@@ -93,6 +93,11 @@ const ITEMS: Dictionary = {
 	"frag_craft": {"name": "공작 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "craft"},
 	"frag_radio": {"name": "무전 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "radio"},
 	"frag_expedition": {"name": "원정 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "expedition"},
+	# ---- odds and ends (decision 444, loot_junk.gd): light, worth a little on the train.
+	"junk_paper": {"name": "헌 신문", "icon": "papers", "weight": 0.1, "stock": "wood", "melt": 0.05, "group": "junk"},
+	"junk_rag": {"name": "걸레 조각", "icon": "it_cloth", "weight": 0.1, "stock": "cloth", "melt": 0.1, "group": "junk"},
+	"junk_nails": {"name": "굽은 못", "icon": "it_nails", "weight": 0.1, "stock": "scrap", "melt": 0.1, "group": "junk"},
+	"junk_smokes": {"name": "담배 몇 개비", "icon": "it_cigarettes", "weight": 0.05, "stock": "luxury", "melt": 0.05, "group": "junk"},
 }
 
 ## A building's key (P12): one id a building, "key_<building index>". It opens
