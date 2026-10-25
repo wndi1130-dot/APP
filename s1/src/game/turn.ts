@@ -792,6 +792,7 @@ export function keepPromise(g: Game, c: Comm, label = g.comms[c].promise?.label 
   bumpRel(g, c, 5, 'promise');
   if (s.grudge === 1) s.grudge = 0;
   g.stats.promisesKept += 1;
+  s.kept = (s.kept ?? 0) + 1;
   if (g.dark) g.dark.kept[c] += 1; // S1b 신임 입장(5.3): 칸마다 지킨 약속
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 지켰다: ${label}.`, 'good');
   voiceKept(g, c);
@@ -806,6 +807,7 @@ export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label
   s.fervor = Math.min(3, s.fervor + 1);
   bump(g, 'tension', 3, 'promise');
   g.stats.promisesBroken += 1;
+  s.broken = (s.broken ?? 0) + 1;
   if (g.dark) g.dark.broken[c] += 1;
   offend(g, c);
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
