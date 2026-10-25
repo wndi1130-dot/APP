@@ -20,10 +20,17 @@ const CouncilMath = preload("res://game/politics/council_math.gd")
 static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 	var sum := 0.0
 	for c: String in St.comms(t):
-		var s: Dictionary = g["comms"][c]
-		sum += (float(s["heat"]) * float(s["pop"])) / 40.0 \
-			* (1.0 - float(TrainMods.D["insulateHeat"]) * TrainMods.insulated_share(g, c))
+		sum += comm_heat(g, c)
 	return sum * float(t["P"]["coalHeatPerLever"])
+
+
+## One community's term of heat_cost, before coalHeatPerLever: its heat
+## step over its people, less what its insulated cars save. The car pane's
+## heat cost reads this too, so the forecast and the pane agree (J12).
+static func comm_heat(g: Dictionary, c: String) -> float:
+	var s: Dictionary = g["comms"][c]
+	return (float(s["heat"]) * float(s["pop"])) / 40.0 \
+		* (1.0 - float(TrainMods.D["insulateHeat"]) * TrainMods.insulated_share(g, c))
 
 
 static func food_cost(g: Dictionary, t: Dictionary) -> float:
