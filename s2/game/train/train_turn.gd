@@ -13,6 +13,7 @@ extends RefCounted
 
 const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 
@@ -21,7 +22,8 @@ static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 	var sum := 0.0
 	for c: String in St.comms(t):
 		var s: Dictionary = g["comms"][c]
-		sum += (float(s["heat"]) * float(s["pop"])) / 40.0
+		sum += (float(s["heat"]) * float(s["pop"])) / 40.0 \
+			* (1.0 - float(TrainMods.D["insulateHeat"]) * TrainMods.insulated_share(g, c))
 	return sum * float(t["P"]["coalHeatPerLever"])
 
 

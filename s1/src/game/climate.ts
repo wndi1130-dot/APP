@@ -153,19 +153,22 @@ export function climateSettle(g: Game): void {
   if (g.freeze <= 0) journal(g, line(g, LINES.thaw), 'good');
 }
 
-/** 사건의 눈·얼음 조건(콘텐츠 조건 season, TS 선로 사건 급수탑·눈더미)이 묻는 것: frost는 얼음이 서는가, snow는 눈이 쌓였는가 */
-export type SeasonNeed = 'frost' | 'snow';
+/** 사건의 눈·얼음 조건(콘텐츠 조건 season, TS 선로 사건 급수탑·눈더미)이 묻는 것: frost는 얼음이 서는가, snow는 눈이 쌓였는가,
+ * bare는 얼음도 눈도 없는가(늦가을 선로 시련, 결정 447) */
+export type SeasonNeed = 'frost' | 'snow' | 'bare';
 
-/** 사건의 눈·얼음 조건. 기온 꺼진 판은 늘 참이다(옛 판은 처음부터 겨울이고 골든 그대로).
+/** 사건의 눈·얼음 조건. 기온 꺼진 판은 frost·snow가 늘 참이고 bare는 늘 거짓이다(옛 판은 처음부터 겨울이고 골든 그대로).
  * 켠 판의 frost는 계절표 그 구간의 밤 결빙(night_freeze)이거나, 한파가 닥쳤거나(재난·정차 날씨), 선로 결빙 중이다.
- * snow는 계절표 그 구간의 쌓인 눈(snow)이다. 창밖·조짐 글(omens.ts seasonCond)과 같은 칸을 읽는다. 난수를 쓰지 않는다. */
+ * snow는 계절표 그 구간의 쌓인 눈(snow)이다. bare는 frost도 snow도 아닐 때다.
+ * 창밖·조짐 글(omens.ts seasonCond)과 같은 칸을 읽는다. 난수를 쓰지 않는다. */
 export function seasonHolds(g: Game, need: SeasonNeed): boolean {
-  if (!g.climate) return true;
+  if (!g.climate) return need !== 'bare';
   const row = rowAt(g.seg);
   if (need === 'snow') return row.snow;
   const d = g.disasters && g.disaster?.stage === 'active' ? g.disaster.kind : undefined;
   const w = d ?? (g.stop ?? g.lastStop)?.weather;
-  return row.night_freeze || w === 'cold' || w === 'cold_front' || (g.freeze ?? 0) > 0;
+  const frost = row.night_freeze || w === 'cold' || w === 'cold_front' || (g.freeze ?? 0) > 0;
+  return need === 'bare' ? !frost && !row.snow : frost;
 }
 
 /** 이동 사건 후보(drawTravelEvent): 결빙 구간이면 이미 든 선로 사건을 더 넣어 뽑힐 몫을 키운다(쿨다운에 걸린 것은 안 든다). */

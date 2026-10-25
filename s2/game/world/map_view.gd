@@ -776,6 +776,7 @@ func _build_ground() -> void:
 				st.set_color(color)
 				st.set_normal(Vector3.UP)
 				st.set_uv(banks[int(quad[idx].z) * (grid.width + 1) + int(quad[idx].x)])
+				st.set_uv2(Vector2(f + 1, 0))   # the floor kind for world_vis bare_ground (0: not ground)
 				st.add_vertex(quad[idx])
 	for tile in tools:
 		var node := _mesh_node()
