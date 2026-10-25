@@ -137,7 +137,7 @@ func test_an_arrow_lands_and_is_picked_up_as_a_crafted_round() -> void:
 	game.ground_items.clear()
 	assert_eq(game.combat.fire(p, p.position + Vector3(8, 0, 0)), "shot")
 	assert_eq(game.ground_items.size(), 1, "one arrow fell")
-	assert_eq(game.ground_items[0]["id"], "arrow")
+	assert_eq(game.ground_items[0]["id"], "ammo_craft")
 	var before: int = int(game.ammo["craft"])
 	p.position = game.ground_items[0]["pos"]
 	game.actions._auto_pickup()

@@ -2,24 +2,30 @@ extends SceneTree
 ## Bakes the train people's motions (game/train/train_clips.gd) on a rigged body
 ## into a folder of their own. body_bake.gd is only read: its helpers retarget,
 ## skin and save; the layers here are train_clips.gd's, not body_bake.gd's.
-## godot --headless --path s2 --script tools/bake_train_cli.gd -- <body glb> <motion glb,motion glb> <out dir> [--check] [--small]
+## godot --headless --path s2 --script tools/bake_train_cli.gd -- <body glb> <motion glb,motion glb> <out dir> [--check] [--small] [--albedo]
 ## --small writes the compacted bake (BodyBake.compact) the phone build carries.
+## --albedo also writes the body's own colour picture (from inside the glb, with
+## the gloves BodyBake.gloved paints) as albedo.png, ALBEDO_SIZE across.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const TrainClips = preload("res://game/train/train_clips.gd")
-const USAGE: String = "usage: godot --headless --path s2 --script tools/bake_train_cli.gd -- <body glb> <motion glb[,motion glb...]> <out dir> [--check] [--small]"
+const USAGE: String = "usage: godot --headless --path s2 --script tools/bake_train_cli.gd -- <body glb> <motion glb[,motion glb...]> <out dir> [--check] [--small] [--albedo]"
+const ALBEDO_SIZE: int = 512
 
 
 func _init() -> void:
 	var paths: Array[String] = []
 	var check := false
 	var small := false
+	var albedo := false
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--check":
 			check = true
 		elif arg == "--small":
 			small = true
+		elif arg == "--albedo":
+			albedo = true
 		else:
 			paths.append(arg)
 	if paths.size() < 3:
@@ -50,6 +56,10 @@ func _init() -> void:
 	if small:
 		assets = BodyBake.compact(assets, TrainClips.KEEP)
 	BodyBake.save(assets, paths[2])
+	if albedo and not _save_albedo(body_root, paths[2]):
+		print("no colour picture in ", paths[0])
+		quit(1)
+		return
 	var image: Image = assets["image"]
 	print("vertices ", assets["vertices"], " image ", image.get_width(), " x ", image.get_height(), " bytes ", image.get_data().size())
 	if check:
@@ -107,3 +117,27 @@ static func _pose(ctx: Dictionary, clip: String, spec: Dictionary, u: float) -> 
 		at = lerpf(float(span[0]), float(span[1]), at)
 	BodyBake._pose_at(ctx, clip, at, spec.get("damp", {}))
 	BodyBake.apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
+
+
+## The body's colour picture, out of its own material, gloved and made ALBEDO_SIZE across.
+func _save_albedo(body_root: Node3D, out_dir: String) -> bool:
+	var picture: Image = null
+	for node in body_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.get_active_material(i)
+			if mat is BaseMaterial3D and (mat as BaseMaterial3D).albedo_texture != null:
+				picture = (mat as BaseMaterial3D).albedo_texture.get_image()
+				break
+		if picture != null:
+			break
+	if picture == null:
+		return false
+	if picture.is_compressed():
+		picture.decompress()
+	var gloved: Image = BodyBake.gloved(body_root, picture)
+	if gloved != null:
+		picture = gloved
+	picture.resize(ALBEDO_SIZE, ALBEDO_SIZE, Image.INTERPOLATE_LANCZOS)
+	var path := ProjectSettings.globalize_path(out_dir.path_join("albedo.png"))
+	return picture.save_png(path) == OK
