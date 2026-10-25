@@ -109,6 +109,9 @@ export interface CommState {
   /** 관계가 바닥인데 레버를 돌려준 연속 구간 수(결정 080: 돌려주면 관계가 빨리 오른다) */
   backStreak: number;
   grudge: number;
+  /** 이 칸과 지킨 약속·어긴 약속 수(판 전체 누계). 설득(결정 433)과 정치 흐름의 결과 아크가 같은 키를 읽는다. 옛 저장 판에는 없어서 0이다 */
+  kept?: number;
+  broken?: number;
   lastOffense: number;
   demandCool: number;
   favorCool: number;
@@ -205,7 +208,7 @@ export interface StopResult {
   disembark?: string;
 }
 
-export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail';
+export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'persuade';
 /** refused: 이상주의 대표가 뇌물을 거절했다. 거래 자리는 썼지만 표는 움직이지 않는다(K01 1). */
 export interface Deal { comm: Comm; tool: DealTool; label: string; refused?: boolean }
 /** 의회 안건. 법(제정·폐지·추인)이거나 법이 아닌 안건(motion)이다(s1b_dark_path 12.3).
