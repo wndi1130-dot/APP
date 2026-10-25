@@ -168,4 +168,43 @@ func test_the_view_draws_every_body_and_hides_the_capsules() -> void:
 	for d in s.people_view.draws:
 		shown += (d as MultiMeshInstance3D).multimesh.visible_instance_count
 	assert_eq(shown, bodies)
-	assert_eq(s.people_view.draws.size(), View.COATS.size(), "one draw a coat for the whole train")
+	assert_eq(s.people_view.draws.size(), s.people_view.bodies.size(), "one draw a body for the whole train")
+	var wearing := {}
+	for b in s.people_view.worn:
+		wearing[s.people_view.worn[b]] = true
+	assert_gte(wearing.size(), 3, "the train is not one body: %s" % [wearing.keys()])
+
+
+## Every body the train can pick was baked with the same train motions, picture and all.
+func test_every_train_body_is_baked_with_the_train_motions() -> void:
+	var folders: Array = View.GENERAL_BODIES.duplicate()
+	for role in View.ROLE_BODIES:
+		folders.append_array(View.ROLE_BODIES[role])
+	for folder in folders:
+		var dir: String = View.PEOPLE_DIR + String(folder)
+		var baked: Dictionary = BodyBake.load_baked(dir)
+		assert_false(baked.is_empty(), folder)
+		if baked.is_empty():
+			continue
+		var names: Array = (baked["clips"] as Array).map(func(c): return String(c["name"]))
+		assert_eq(names, TrainClips.names(), folder)
+		assert_true(ResourceLoader.exists(dir.path_join("albedo.png")), folder + " has its own picture")
+
+
+## The car and the person's work pick the body; the rest wear ordinary clothes,
+## and neighbours differ.
+func test_the_car_and_the_work_pick_the_body() -> void:
+	assert_has(View.ROLE_BODIES["cook"], View.body_for("dining", "cook", 0, 5, ""))
+	assert_has(View.ROLE_BODIES["carer"], View.body_for("medical", "carer", 0, 5, ""))
+	assert_has(View.ROLE_BODIES["stoker"], View.body_for("technical", "worker", 0, 5, ""))
+	assert_has(View.ROLE_BODIES["stoker"], View.body_for("loco", "", 0, 5, ""))
+	assert_eq(View.body_for("guard", "", 0, 5, ""), View.ROLE_BODIES["guard"][0], "the guard car's first guard")
+	assert_has(View.ROLE_BODIES["guard"], View.body_for("guard", "", 1, 5, ""), "and its second")
+	assert_has(View.GENERAL_BODIES, View.body_for("guard", "", View.ROLE_A_CAR, 5, ""), "the rest of the guard car is plain")
+	assert_has(View.GENERAL_BODIES, View.body_for("medical", "carer", View.ROLE_A_CAR, 5, ""), "two carers a car, not a car of them")
+	assert_has(View.GENERAL_BODIES, View.body_for("dining", "cook", View.ROLE_A_CAR, 5, ""), "two cooks a car")
+	assert_has(View.GENERAL_BODIES, View.body_for("coach", "", 0, 5, ""))
+	assert_has(View.GENERAL_BODIES, View.body_for("medical", "", 0, 5, ""), "a patient wears their own clothes")
+	for key in range(0, 40):
+		var first := View.body_for("coach", "", 0, key, "")
+		assert_ne(View.body_for("coach", "", 0, key, first), first, "no two neighbours in one body")

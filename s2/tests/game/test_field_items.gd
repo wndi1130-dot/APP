@@ -134,6 +134,9 @@ func test_dressing_keeps_what_each_building_holds_and_names_every_bundle() -> vo
 		after.erase(f)
 	for rare: String in FieldItems.RARE:
 		after.erase(rare)
+	# The parts stuff and the clothes are finds too (decision 426 D2, 423 card 2).
+	for found: String in ["gears", "springs", "wire_coil"] + FieldItems.Wear.KINDS.keys():
+		after.erase(found)
 	assert_eq(after, before, "the same bundles and things, only moved")
 	for id: String in c:
 		if id == "goal":
