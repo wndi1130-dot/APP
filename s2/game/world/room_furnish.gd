@@ -11,6 +11,7 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -1171,6 +1172,14 @@ static func _missing(stats: Dictionary, cls: String, item: Dictionary, why: Stri
 
 ## 방 안 가구를 묶음 규칙대로 다시 놓고, 상자를 그 방 용기 가구 칸으로 옮긴다.
 ## 돌려주는 값: {"rooms", "placed", "need_missing", "boxes_in", "boxes_near"}.
+static func _hang_curtains(g: FieldGrid, cells: Array[Vector2i]) -> void:
+	for c in cells:
+		for d in DIRS:
+			var n: Vector2i = c + d
+			if g.windows.has(n) and not g.windows[n].has("curtain"):
+				g.windows[n]["curtain"] = "open"
+
+
 static func furnish_rooms(data: Dictionary) -> Dictionary:
 	var stats := {"rooms": 0, "placed": 0, "need_missing": 0, "boxes_in": 0, "boxes_near": 0, "missing": {}}
 	if not data.has("low_blocks"):
@@ -1242,6 +1251,9 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			if cls.is_empty():
 				continue
 			changed = true
+			# A home room's windows have curtains (J08; building_rules draws some).
+			if BuildingRules.CURTAIN_CLASSES.has(cls):
+				_hang_curtains(g, cells)
 			# 지우기: 다시 놓을 종류만. 남는 것(기계 등)은 칸을 차지한 채 둔다.
 			var taken: Dictionary = {}
 			for i: int in idxs:
