@@ -16,6 +16,7 @@ const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const PeopleView = preload("res://game/train/train_people_view.gd")
+const MusicPlayer = preload("res://game/audio/music_player.gd")
 const Smoke = preload("res://fx/smoke.gd")
 const GlassShader = preload("res://fx/shaders/window_glass.gdshader")
 const BackdropShader = preload("res://fx/shaders/horizon_backdrop.gdshader")
@@ -113,7 +114,7 @@ const CAM_BACK: float = 30.0
 const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the bottom
 
 var rules: Dictionary = {}
-var opts: Dictionary = {}               # seed: int, panel: bool
+var opts: Dictionary = {}               # seed: int, panel: bool, rules_before: the values last shown (people react to the change)
 var problems := PackedStringArray()
 var cars: Array = []                    # [{def, id, index, x0, node, bodies, out, errand_t, errand_i, call_t, call_i, mood, unrest, quiet, seats, values}]
 var rng := RandomNumberGenerator.new()
@@ -133,6 +134,7 @@ var backdrop: MeshInstance3D
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
+var music: MusicPlayer                  # the faint train piece by the train's state (briefs/bgm.md 3.1)
 
 
 func _ready() -> void:
@@ -156,10 +158,14 @@ func _ready() -> void:
 		panel = HandPanel.new()
 		panel.scene = self
 		add_child(panel)
+	music = MusicPlayer.new()
+	add_child(music)
+	music.setup("train", self)
 
 
 func _process(delta: float) -> void:
 	step(delta)
+	music.tick(delta)
 
 
 func phase() -> String:

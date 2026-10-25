@@ -48,6 +48,9 @@ function pickState(g: Game): Record<string, unknown> {
     space: g.space ? { ...g.space } : null, thrown: g.thrown, pyre: g.pyre ?? 0, pyreKin: { ...(g.pyreKin ?? {}) }, stored: g.stored,
     deaths: [...g.deaths], left: [...(g.left ?? [])], decreeLeft: g.decreeLeft, autoLevers: g.autoLevers, autoDropped: !!g.autoDropped,
     hunger: g.hunger, stop: pickStop(g.stop),
+    // 작업조 거름(CREW_BUSY)이 읽는 두 칸: 가볍지 않은 상처로 낫는 사람, 받아들이길 기다리는 새 사람.
+    wounds: ((g as Game & { wounds?: { who: string; grade: string; state: string }[] }).wounds ?? []).map(w => ({ who: w.who, grade: w.grade, state: w.state })),
+    arrivals: g.arrivals?.pending ? { pending: { names: [...(g.arrivals.pending.names ?? [])] } } : null,
     comms: byComm(c => {
       const s = g.comms[c];
       return {

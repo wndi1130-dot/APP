@@ -187,6 +187,7 @@ const MARKS: Dictionary = {
 }
 const LINGER: Dictionary = {"memorial": 3, "dead_stored": 3, "made": 1}
 const LINGER_DAYS: int = 2
+const HEARD_KEPT: int = 64              # the last events kept for the tests and the shots
 ## A change of rations this big (of 100) is an event.
 const RATION_STEP: float = 8.0
 
@@ -261,8 +262,14 @@ func setup(train_scene) -> void:
 	guns = _lap_guns()
 	for n in [2, 3]:
 		blankets.append(_blanket_draw(n))
-	_seen_rules = scene.rules.duplicate(true)
+	# A screen built afresh from a state that moved on (the slice shows a new train
+	# scene at each stop) can bring the values it last showed, so what changed in
+	# between is taken in here as it would be on one screen.
+	var before = scene.opts.get("rules_before", null)
+	_seen_rules = (before if before is Dictionary else scene.rules).duplicate(true)
 	scene.rules_applied.connect(_on_rules)
+	if before is Dictionary:
+		_on_rules()
 
 
 func is_worn() -> bool:
@@ -730,6 +737,8 @@ func react(ev: Dictionary) -> void:
 	var kind: String = String(ev.get("kind", ""))
 	var size: float = clampf(float(ev.get("size", 0.5)), 0.0, 1.0)
 	heard.append(ev)
+	if heard.size() > HEARD_KEPT:
+		heard = heard.slice(heard.size() - HEARD_KEPT)
 	var shown := 0
 	for c in cars_for(ev, scene.cars):
 		var id: String = String(c["id"])
