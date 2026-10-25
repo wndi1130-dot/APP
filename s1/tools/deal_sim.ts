@@ -13,10 +13,12 @@ const N = Number(args[0] ?? 1000);
 const push = flags.find(x => x.startsWith('--push='))?.slice(7) as LawId | undefined;
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 
-const POLICIES: [string, DealTool[]][] = [
+// [이름, 수단 차례, 설득을 쓰는 「될 듯」 확률 하한]
+const POLICIES: [string, DealTool[], number?][] = [
   ['공개 협상(기준)', ['open']],
   ['늘 협박', ['blackmail', 'open']],
   ['늘 설득', ['persuade', 'open']],
+  ['설득은 될 듯 60% 넘을 때', ['persuade', 'open'], 0.6],
   ['늘 뇌물', ['bribe', 'open']],
 ];
 // 설득이 안 먹힌 칸은 그 회기 다른 거래가 막히므로 「설득 먼저, 협박 마지막」은 「늘 설득」과 같은 판이 된다. 따로 두지 않는다.
@@ -26,12 +28,12 @@ const END_WORD: Record<string, string> = { complete: '완주', stranded: '석탄
 const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
 const pc = (x: number) => `${(100 * x).toFixed(1)}%`;
 const t0 = Date.now();
-for (const [name, tools] of POLICIES.filter(([n]) => !only || n.includes(only))) {
+for (const [name, tools, persuadeAt] of POLICIES.filter(([n]) => !only || n.includes(only))) {
   const ms: GameMetrics[] = [];
   const gs: { trust: number; tension: number; hostile: number; blackmails: number; persuadeTry: number; persuadeOk: number; pushed: boolean }[] = [];
   for (let i = 0; i < N; i += 1) {
     let tries = 0; let oks = 0;
-    const opts: BotOptions = { s1c: false, policy: 'caretaker', dom: 'idle', dealTools: tools, ...(push ? { pushLaw: push } : {}) };
+    const opts: BotOptions = { s1c: false, policy: 'caretaker', dom: 'idle', dealTools: tools, persuadeAt, ...(push ? { pushLaw: push } : {}) };
     const { g, m } = playGame(`deal-${i}`, opts);
     // 설득의 결과는 일지 줄로 센다(makeDeal이 남기는 두 꼴)
     for (const e of g.journal) {

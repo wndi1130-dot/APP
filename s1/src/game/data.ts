@@ -43,6 +43,9 @@ export const P = Object.freeze({
   // min~max로 자른다. 성공하면 미정 전부와 움직이는 반대의 soft만큼, 실패하면 그 칸 관계 failRel(숫자는 제안, 봇으로 정함).
   persuadeBase: 0.35, persuadeRel: 0.01, persuadeTrust: 0.004, persuadeKept: 0.08, persuadeKeptMax: 3, persuadeBroken: 0.12,
   persuadeIdeo: 0.05, persuadeEvidence: 0.15, persuadeMin: 0.05, persuadeMax: 0.9, persuadeSoft: 0.1, persuadeFailRel: -1,
+  // 협박의 대가(결정 433 「표는 빨리 오지만 관계·신임이 크게 깎인다」): 누를 때마다 열차장 신임 blackmailTrust, 그 칸 관계 blackmailRel.
+  // 앙금·목줄·소문(blackmailReputation)은 그 위에 그대로 붙는다. 숫자는 「늘 협박」이 공개 협상보다 쉬운 길이 안 되게 봇으로 정함.
+  blackmailTrust: -2, blackmailRel: -10,
   // 꼬리칸 수단(first_leg_story 6.4, 사용자 16:00 '수단 더하기'. 숫자는 제안).
   // 작업조를 낸 칸 노출 +5, 안 낸 칸 −10(쉼 바닥까지), 지나친 정차는 모두 쉰다. 의무진·앞칸은 궂은일 반감 관계 −3. 다친 사람 1명마다 그 칸 −2.
   crewGain: 5, crewRest: 10, choreRel: -3, hurtRel: -2, snowExposure: 10,

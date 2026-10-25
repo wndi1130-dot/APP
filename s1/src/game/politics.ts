@@ -451,7 +451,7 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
     }
     case 'blackmail': {
       const held = g.secrets.filter(x => x.about === c).length;
-      const cost = `비밀 ${held}`;
+      const cost = `비밀 ${held} · 신임 −${Math.abs(P.blackmailTrust)}`;
       if (held === 0) return { ok: false, why: '쥔 비밀이 없다', cost };
       if (hostile) return { ok: false, why: '집단이 따르지 않는다', cost };
       return { ok: true, cost };
@@ -599,6 +599,8 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
     g.leashes.push({ comm: c, since: g.seg, weight: Math.max(1, secret.weight - secret.uses) });
     g.blackmails += 1;
     g.stats.blackmails += 1;
+    bump(g, 'trust', P.blackmailTrust, 'deal');
+    bumpRel(g, c, P.blackmailRel, 'deal');
     offend(g, c);
     revealTrait(g, c);
     journal(g, `${s.leader.name}을(를) 비밀로 눌렀다: "${secret.text}".`, 'dark');

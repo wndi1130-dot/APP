@@ -127,3 +127,18 @@ describe('설득', () => {
     expect(g.comms.engine.kept ?? 0).toBe(0);
   });
 });
+
+// 협박의 대가(결정 433): 표는 빨리 오지만 열차장 신임과 그 칸 관계가 깎이고, 비용 줄에 신임 몫이 보인다.
+describe('협박의 대가', () => {
+  it('누르면 신임과 그 칸 관계가 깎이고 앙금이 쌓인다', () => {
+    const g = council('bm-cost', x => { x.trust = 50; for (const c of COMMS) Object.assign(x.comms[c], { grudge: 0, rel: 0 }); });
+    const c = swayable(g);
+    g.secrets.push({ id: 99, text: '시험 비밀', weight: 2, about: c, uses: 0 });
+    expect(toolStatus(g, c, 'blackmail').cost).toBe(`비밀 1 · 신임 −${Math.abs(P.blackmailTrust)}`);
+    const trust0 = g.trust;
+    expect(makeDeal(g, c, 'blackmail').ok).toBe(true);
+    expect(g.trust).toBe(trust0 + P.blackmailTrust);
+    expect(g.comms[c].rel).toBe(P.blackmailRel);
+    expect(g.comms[c].grudge).toBe(1);
+  });
+});
