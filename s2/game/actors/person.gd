@@ -82,7 +82,6 @@ var look: float = 0.0
 var moving: bool = false
 var stick := Vector2.ZERO               # player's left thumb: world x/z direction, length 0..1
 var drive_speed: float = 0.0            # body speed under the stick (eases in and out)
-var pace: float = 0.0                   # speed along a path now (eases in and out, move_rules.gd)
 var drive_dir := Vector3.ZERO
 var command: String = "follow"         # companions: follow | wait | search | cover | retreat
 var command_target := Vector3.ZERO

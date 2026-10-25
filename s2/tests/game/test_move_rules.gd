@@ -1,8 +1,8 @@
 extends GutTest
-## One the AI walks turns into the way before it goes, gets going and slows over
-## a moment, and backs off a crowd with its face to them, the walk drawn
-## backwards (move_rules.gd; user field test 10-25: the companions "whip round
-## and move like drones"). The player on a path goes as before.
+## One the AI walks turns into the way before it goes and backs off a crowd with
+## its face to them, the walk drawn backwards (move_rules.gd; user field test
+## 10-25: the companions "whip round and move like drones"). The player on a
+## path goes as before.
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -49,15 +49,6 @@ func test_the_share_of_pace_by_how_far_the_body_is_off_the_way() -> void:
 	assert_eq(MoveRules.heading_share(PI), 0.0)
 
 
-func test_the_pace_comes_up_and_goes_down_over_a_moment() -> void:
-	var walk := Person.WALK
-	assert_almost_eq(MoveRules.paced(0.0, walk, walk, walk, 0.1), walk * 0.1 / MoveRules.START, 0.0001)
-	assert_eq(MoveRules.paced(0.0, walk, walk, walk, 1.0), walk, "not past what it wants")
-	assert_almost_eq(MoveRules.paced(walk, 0.0, walk, walk, 0.1), walk - walk * 0.1 / MoveRules.STOP, 0.0001)
-	var run := Person.RUN
-	assert_almost_eq(MoveRules.paced(run, 0.0, run, walk, 0.1), run - run * 0.1 / MoveRules.STOP_RUN, 0.0001, "a run takes longer to stop")
-
-
 func test_a_body_still_turned_away_turns_on_the_spot_before_it_goes() -> void:
 	_east(ally)
 	ally.look = -PI * 0.5   # its drawn body faces west, the way is east
@@ -73,32 +64,23 @@ func test_a_body_still_turned_away_turns_on_the_spot_before_it_goes() -> void:
 
 func test_a_walker_whose_way_turns_back_stops_and_turns_rather_than_glide_off() -> void:
 	ally.look = PI * 0.5
-	ally.pace = Person.WALK
 	ally.path = PackedVector3Array([ally.position + Vector3(-4, 0, 0)])
 	var at: Vector3 = ally.position
 	game._move_person(ally, 0.1)
-	assert_eq(ally.position, at, "no gliding off the other way while still turned from it")
-	assert_eq(ally.pace, 0.0, "a half turn is made standing")
+	assert_eq(ally.position, at, "no gliding off the other way while still turned from it: a half turn is made standing")
+	assert_false(ally.moving)
 	assert_almost_eq(ally.facing, -PI * 0.5, 0.0001)
 
 
-func test_it_gets_going_over_a_moment_not_at_once() -> void:
+# Facing the way it goes at its pace at once: an easing in at 0.2 s left the
+# companions behind the chief and bitten more (40 runs 10-26, on the walk 5 → 13).
+func test_facing_the_way_it_goes_at_its_pace_at_once() -> void:
 	ally.look = PI * 0.5
 	_east(ally)
 	var top := _top(ally)
 	var at: Vector3 = ally.position
 	game._move_person(ally, 0.05)
-	assert_almost_eq(ally.position.distance_to(at), top * 0.05 / MoveRules.START * 0.05, 0.001, "a quarter of its pace in the first twentieth")
-	for _i in 6:
-		game._move_person(ally, 0.05)
-	assert_almost_eq(ally.pace, top, 0.0001, "up to pace after START")
-	ally.stop()
-	game._move_person(ally, 0.05)
-	assert_almost_eq(ally.pace, MoveRules.paced(top, 0.0, top, Person.WALK, 0.05), 0.0001, "with no way it comes down as a stop does")
-	assert_gt(ally.pace, 0.0, "a way handed on just now goes on at the pace it had")
-	for _i in 10:
-		game._move_person(ally, 0.05)
-	assert_eq(ally.pace, 0.0, "stood a while, it starts from nothing again")
+	assert_almost_eq(ally.position.distance_to(at), top * 0.05, 0.001)
 
 
 func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -> void:
@@ -106,7 +88,7 @@ func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -
 	ally.brain["face_hold"] = them
 	ally.brain["face_hold_t"] = game.clock.elapsed
 	ally.look = -PI * 0.5
-	ally.pace = Person.RUN
+	ally.running = true
 	ally.brain["step_r"] = 0.5
 	_east(ally)
 	var at: Vector3 = ally.position
@@ -148,4 +130,3 @@ func test_the_player_on_a_path_still_goes_at_once() -> void:
 	game._move_person(p, 0.05)
 	assert_almost_eq(p.position.distance_to(at), top * 0.05, 0.001)
 	assert_almost_eq(p.facing, PI * 0.5, 0.0001)
-	assert_eq(p.pace, 0.0, "the player's path walk has no pace of its own")

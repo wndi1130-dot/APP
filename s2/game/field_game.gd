@@ -1560,13 +1560,9 @@ func _move_person(p: Person, delta: float) -> void:
 	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
 	if combat.feet_held(p):
 		p.moving = false
-		p.pace = 0.0
 		return
 	if p.path.is_empty():
 		p.moving = false
-		# It comes down as a stop does, not to nothing at once: a way handed on to the
-		# next (the AI gives a new one as it reaches the last) goes on at the pace it had.
-		p.pace = MoveRules.paced(p.pace, 0.0, p.pace, Person.WALK, delta)
 		return
 	var next := p.path[0]
 	var d := next - p.position
@@ -1590,26 +1586,19 @@ func _move_person(p: Person, delta: float) -> void:
 	var way := atan2(d.x, d.z)
 	var face := way
 	if p != player:
-		# One the AI walks turns into the way before it goes and gets going (move_rules.gd);
-		# backing off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
-		var top := spd
+		# One the AI walks turns into the way before it goes (move_rules.gd); backing
+		# off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
 		var hold: Variant = p.brain.get("face_hold")
 		if hold is Vector3 and clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
 			var them: Vector3 = hold
 			face = atan2(them.x - p.position.x, them.z - p.position.z)
 			if absf(angle_difference(face, way)) > PI * 0.5:
-				spd = minf(spd, MoveRules.BACKPEDAL)
-				p.pace = minf(p.pace, MoveRules.BACKPEDAL)   # none runs backwards
+				spd = minf(spd, MoveRules.BACKPEDAL)   # none runs backwards
 		elif p.turn_rate > 0.0:
-			var share := MoveRules.heading_share(absf(angle_difference(p.look, way)))
-			spd *= share
-			if share <= 0.0:
-				p.pace = 0.0   # a half turn is made standing, not gliding off the other way meanwhile
+			spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
 		p.facing = face
-		p.pace = MoveRules.paced(p.pace, spd, top, Person.WALK, delta)
-		spd = p.pace
 		if spd <= 0.0:
-			p.moving = false   # it turns on the spot first
+			p.moving = false   # a half turn is made standing, not gliding off the other way meanwhile
 			return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
