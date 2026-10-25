@@ -85,6 +85,14 @@ const ITEMS: Dictionary = {
 	"hare_frozen": {"name": "언 토끼", "icon": "it_hare", "weight": 1.0, "stock": "food", "melt": 0.5, "group": "food", "state": "frozen", "eat": "thaw"},
 	# A note from a dead one's pocket (card 10): where a box is hidden at the next stop.
 	"note_map": {"name": "쪽지", "icon": "papers", "weight": 0.05, "group": "paper", "keep": true},
+	# ---- 설계도 조각 (S1 domestic 5.2): one a field of research. Aboard, each
+	# goes on the receipt's extras.fragments as its field (receipt.gd
+	# FRAGMENT_KINDS), not into a stock number; where they lie is loot_dress.gd.
+	"frag_engine": {"name": "기관 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "engine"},
+	"frag_med": {"name": "의술 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "med"},
+	"frag_craft": {"name": "공작 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "craft"},
+	"frag_radio": {"name": "무전 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "radio"},
+	"frag_expedition": {"name": "원정 설계도 조각", "icon": "papers", "weight": 0.05, "group": "paper", "fragment": "expedition"},
 }
 
 ## A building's key (P12): one id a building, "key_<building index>". It opens
@@ -189,6 +197,11 @@ static func kept_by_name(id: String) -> bool:
 ## What the one who picks it up says once (a named find).
 static func line(id: String) -> String:
 	return String(RARE.get(id, {}).get("line", ""))
+
+
+## The field of research a blueprint piece is for ("" for anything else).
+static func fragment_of(id: String) -> String:
+	return String(row(id).get("fragment", ""))
 
 
 static func rings(id: String) -> bool:
