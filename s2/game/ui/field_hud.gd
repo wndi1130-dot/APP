@@ -27,6 +27,7 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const PaperSheet = preload("res://game/ui/paper_sheet.gd")
 const Paper = preload("res://game/ui/paper_parts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
+const SoundRows = preload("res://game/ui/sound_rows.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -2340,6 +2341,7 @@ func settings_panel() -> void:
 	cells.add_child(GlassPane.cell("무전", String(game.RADIO_NAMES[game.radio_mode()]), _set_radio))
 	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
 	pane.body.add_child(cells)
+	pane.body.add_child(SoundRows.make())   # 전체·음악·효과·목소리 (결정 448)
 
 
 func _set_status_size() -> void:
