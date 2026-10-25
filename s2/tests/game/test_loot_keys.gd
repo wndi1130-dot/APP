@@ -8,6 +8,10 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
+
+## map-layout's room kinds (room_furnish.gd PALETTE) read as ours (card I).
+const PALETTE_ROOM: Dictionary = {"bed": "bedroom", "living": "bedroom", "kitchen": "kitchen", "bath": "bathroom", "office": "office", "shop": "shop", "store": "pantry", "boiler": "toolbox", "storage": "storage"}
 
 const MAPS: Array[String] = ["first_leg_01_sulechow", "houses_01", "houses_04", "hospital_01", "factory_01", "freight_01", "church_01", "lodge_01", "lake_01", "office_01"]
 
@@ -91,3 +95,32 @@ func test_a_box_searched_again_holds_no_more() -> void:
 		assert_true(game.data["buildings"].any(func(b: Dictionary) -> bool: return b.has("dead_place")), "the fallen's keys are on the buildings")
 		return
 	fail_test("no box to search")
+
+
+## Card I: a box's room is what its furniture says when map-layout lays that furniture in one kind
+## of room only; a shelf laid in several says nothing. Before it a key the map gives, after it the name.
+func test_the_furniture_says_the_room_when_it_is_of_one_room() -> void:
+	var rooms_of: Dictionary = {}
+	for room: String in RoomFurnish.PALETTE:
+		for item: Dictionary in RoomFurnish.PALETTE[room]:
+			if bool(item.get("holds", false)):
+				if not rooms_of.has(item["kind"]):
+					rooms_of[item["kind"]] = {}
+				rooms_of[item["kind"]][room] = true
+	for kind: String in rooms_of:
+		var rooms: Array = (rooms_of[kind] as Dictionary).keys()
+		if rooms.size() == 1:
+			assert_eq(LootDress.FURNITURE_ROOM.get(kind, ""), PALETTE_ROOM[rooms[0]], "%s: laid in %s only" % [kind, rooms[0]])
+		else:
+			assert_false(LootDress.FURNITURE_ROOM.has(kind), "%s: laid in %s, says nothing" % [kind, str(rooms)])
+	for kind: String in LootDress.FURNITURE_ROOM:
+		assert_true(rooms_of.has(kind) or kind == "counter", "%s comes from the palette (the counter from the kitchen's run)" % kind)
+	assert_eq(LootDress.FURNITURE_ROOM["counter"], "kitchen")
+	# A key, then the furniture, then the name.
+	assert_eq(LootDress.room_of({"name": "공구 보관함", "furniture": "washstand"}), "bathroom")
+	assert_eq(LootDress.room_of({"name": "공구 보관함", "furniture": "shelf"}), "toolbox", "a shelf says nothing: the name")
+	assert_eq(LootDress.room_of({"name": "현관 보관함", "furniture": "wardrobe", "room": "office"}), "office")
+	var data := {"containers": {"x": {"name": "현관 방 보관함", "furniture": "dresser"}}, "buildings": []}
+	LootDress.name_keys(data)
+	assert_eq(data["containers"]["x"]["room"], "bedroom")
+

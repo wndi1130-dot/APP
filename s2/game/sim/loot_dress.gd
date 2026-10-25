@@ -40,6 +40,20 @@ const ROOM_WORDS: Dictionary = {
 	"hall": ["제의", "성가", "회중", "종", "예배", "찬송", "합창", "탑"],
 	"storage": [],
 }
+## The room a piece of furniture says (card I 가): only what map-layout lays in one
+## kind of room (room_furnish.gd PALETTE, and the kitchen's run of counters); a
+## shelf or a crate stack, laid in several, says nothing and the name is read.
+## Their rooms as ours: bed and living → bedroom, bath → bathroom, store → pantry,
+## boiler → toolbox. A key the map gives comes first, then this, then the name.
+const FURNITURE_ROOM: Dictionary = {
+	"dresser": "bedroom", "wardrobe": "bedroom", "nightstand": "bedroom", "bookcase": "bedroom", "side_table": "bedroom",
+	"cupboard": "kitchen", "fridge_open": "kitchen", "counter": "kitchen",
+	"washstand": "bathroom", "towel_shelf": "bathroom",
+	"desk": "office", "file_cabinet": "office",
+	"display_shelf": "shop", "shop_counter": "shop",
+	"jar_shelf": "pantry", "tin_crate": "pantry",
+	"toolbox": "toolbox",
+}
 ## How strongly each room draws each kind of thing (a weight; 0.3 is 「hardly
 ## ever」). The rooms with low weights everywhere are the ones often found empty.
 const AFFINITY: Dictionary = {
@@ -230,7 +244,13 @@ static func _has_word(name: String, words: Array) -> bool:
 static func room_of(c: Dictionary) -> String:
 	if c.has("room") and AFFINITY.has(String(c["room"])):
 		return String(c["room"])
-	return room_of_name(String(c.get("name", "")))
+	return room_of_box(c)
+
+
+## A box's room without a key: what the furniture it stands in says, else its name.
+static func room_of_box(c: Dictionary) -> String:
+	var by_furniture: String = String(FURNITURE_ROOM.get(String(c.get("furniture", "")), ""))
+	return by_furniture if by_furniture != "" else room_of_name(String(c.get("name", "")))
 
 
 static func room_of_name(n: String) -> String:
@@ -241,16 +261,17 @@ static func room_of_name(n: String) -> String:
 
 
 ## The keys the loot reads instead of names (J06): each box's "room" and each
-## building's "loot_kind", read once from the words of the name unless the map
-## gives them, and written on the map's rows, so what is dressed no longer
-## follows a name once the keys are there (LootRules.place_keys does the same
-## for where the fallen stood).
+## building's "loot_kind", read once unless the map gives them — a box's room from
+## the furniture it stands in when that says one (FURNITURE_ROOM, card I), else
+## from the words of its name — and written on the map's rows, so what is
+## dressed no longer follows a name once the keys are there (LootRules.place_keys
+## does the same for where the fallen stood).
 static func name_keys(data: Dictionary) -> void:
 	var containers: Dictionary = data.get("containers", {})
 	for id in containers:
 		var c: Dictionary = containers[id]
 		if not (c.has("room") and AFFINITY.has(String(c["room"]))):
-			c["room"] = room_of_name(String(c.get("name", "")))
+			c["room"] = room_of_box(c)
 	for b in data.get("buildings", []):
 		if b is Dictionary and not (b as Dictionary).has("loot_kind"):
 			b["loot_kind"] = building_kind(String(b.get("name", "")))
