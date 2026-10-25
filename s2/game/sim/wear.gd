@@ -7,10 +7,13 @@ extends RefCounted
 ## garment keeps only some of its warmth, by what it is made of; a worn one a
 ## little less. The dead's nails and teeth meet the layers over a part outside
 ## in (3.4): the first that holds is torn a little, the ones it got through
-## more. Putting one on is a job of the hands as long as its motion, and a
-## layer under others takes those off and puts them back (field_actions.gd
-## dress/undress, the clips of #564). A garment taken off lies at the feet as
-## it is, worn and torn (ground_items "garment"); the bag never holds clothes.
+## more; a pistol round only the vest stops (bullet). Putting one on is a job
+## of the hands as long as its motion, and a layer under others takes those
+## off and puts them back, step by step (dress_plan, field_actions.gd, the
+## clips of #564); the head, the neck, the face and the hands at a walk. A
+## garment taken off lies at the feet as it is, worn and torn (ground_items
+## "garment"; by the train it goes aboard); the bag never holds clothes. The
+## dead wear clothes too, and they can be taken off them (loot_rules.gd wear_roll).
 ## What everyone goes out in is as before: the railway coat and the gloves give
 ## warmth 0.8, windproof 0.5 and block 0.25, the plain cotton under them nothing.
 
@@ -82,7 +85,7 @@ const KINDS: Dictionary = {
 	"coat_wool_long": {"slot": "coat", "name": "긴 털 외투", "icon": "it_coat", "weight": 2.8, "warmth": 0.75, "windproof": 0.6, "block": 0.3, "stuff": "wool", "shell": "coat_long", "tint": [0.11, 0.105, 0.1], "pattern": "plain"},
 	"raincoat": {"slot": "coat", "name": "비옷", "icon": "it_coat", "weight": 0.8, "warmth": 0.05, "windproof": 0.7, "water": 0.9, "block": 0.05, "stuff": "oilcloth", "shell": "coat_long", "tint": [0.12, 0.13, 0.12], "pattern": "plain"},
 	"fire_suit": {"slot": "coat", "also": ["overtrousers"], "name": "방화복", "icon": "it_coat", "weight": 5.0, "warmth": 0.6, "windproof": 0.8, "water": 0.6, "block": 0.5, "bite": 0.5, "heavy": true, "stuff": "oilcloth", "shell": "coat_long", "tint": [0.13, 0.12, 0.1], "pattern": "plain"},
-	"vest_armor": {"slot": "coat", "name": "방탄조끼", "icon": "it_vest", "weight": 3.0, "warmth": 0.15, "windproof": 0.2, "block": 0.5, "bite": 0.5, "heavy": true, "stuff": "padded", "covers": ["torso"], "pattern": "quilt", "tint": [0.13, 0.135, 0.14]},
+	"vest_armor": {"slot": "coat", "name": "방탄조끼", "icon": "it_vest", "weight": 3.0, "warmth": 0.15, "windproof": 0.2, "block": 0.5, "bite": 0.5, "bullet": 1.0, "heavy": true, "stuff": "padded", "covers": ["torso"], "pattern": "quilt", "tint": [0.13, 0.135, 0.14]},
 	# Trousers.
 	"trousers_cotton": {"slot": "trousers", "name": "면 바지", "icon": "it_trousers", "weight": 0.5, "warmth": 0.0, "stuff": "cotton"},
 	"trousers_work": {"slot": "trousers", "name": "작업 바지", "icon": "it_trousers", "weight": 0.7, "warmth": 0.05, "block": 0.1, "stuff": "cotton"},
@@ -115,7 +118,10 @@ const KINDS: Dictionary = {
 	"dress_wool": {"slot": "shirt", "also": ["trousers"], "name": "원피스", "icon": "it_dress", "weight": 0.6, "warmth": 0.08, "stuff": "wool"},
 }
 ## The values a garment carries on itself, so a worn one keeps what it was.
-const VALUE_KEYS: Array[String] = ["warmth", "windproof", "water", "block", "bite"]
+## "bullet" is the vest's alone: it stops a pistol round on what it covers
+## (body_injury 6장: the only garment that does; a thick coat stops blades and
+## teeth, never a round).
+const VALUE_KEYS: Array[String] = ["warmth", "windproof", "water", "block", "bite", "bullet"]
 ## How much of its warmth a garment keeps soaked through: wool about half
 ## (body_injury 6장 「털옷은 젖어도 따뜻함을 반쯤」), cotton next to none (#594);
 ## leather, oilcloth and wadding new.
@@ -159,6 +165,23 @@ const SWEAT_MOST: float = 0.4
 ## Rain and sleet under the open sky (the weather that wets, weather.gd
 ## wets_clothes), so much a second, less what the outermost layer keeps out. New value.
 const RAIN_WET: float = 0.003
+## The places put on and taken off at a walk (7장): the head, the neck, the
+## face and the hands; the rest stop when one walks. A run stops them all.
+const WALKABLE: Array[String] = ["head", "neck", "face", "hands"]
+## Worn this far through a garment is in rags: it cannot be put on any more
+## (3.3; cut into cloth on the train, PR D).
+const BROKEN_AT: float = 1.0
+## Taking a garment off one of the fallen (8장): so many seconds for each unit
+## of its weight (as long as one 2.4 s motion a unit), the weight counted from
+## this little up to this much. New values.
+const STRIP_PER_WEIGHT: float = 2.4
+const STRIP_WEIGHT_LEAST: float = 0.5
+const STRIP_WEIGHT_MOST: float = 3.0
+## A round stopped by the vest tears what stopped it there this often at the
+## least, the less so the more that holds teeth (1 − bite / this): so the
+## next round on that spot most often goes through. New values.
+const SHOT_HOLE_LEAST: float = 0.3
+const SHOT_HOLE_BITE: float = 1.5
 
 
 static func is_garment(id: String) -> bool:
@@ -350,9 +373,14 @@ static func layer_block(g: Dictionary, part: String, bite: bool) -> float:
 
 ## What covers `part`, outside in.
 static func layers(p, part: String) -> Array:
+	return layers_in(p.worn, part)
+
+
+## The same for clothes as a place-by-place dictionary (one of the dead's).
+static func layers_in(worn: Dictionary, part: String) -> Array:
 	var ranked: Array = []
-	for key in p.worn:
-		var g: Dictionary = p.worn[key]
+	for key in worn:
+		var g: Dictionary = worn[key]
 		var id: String = String(g.get("id", ""))
 		if not covers(id).has(part):
 			continue
@@ -380,12 +408,54 @@ static func block(p, part: String, bite: bool = false) -> float:
 static func tear(p, part: String, blocked: bool, bite: bool = false) -> String:
 	for g: Dictionary in layers(p, part):
 		var held: bool = blocked and layer_block(g, part, bite) > 0.0
-		var holes: Dictionary = g.get("holes", {})
-		holes[part] = true
-		g["holes"] = holes
-		g["wear"] = minf(1.0, float(g.get("wear", 0.0)) + (GrabRules.COAT_BLOCK_WEAR if held else GrabRules.COAT_HIT_WEAR))
+		_hole(g, part, GrabRules.COAT_BLOCK_WEAR if held else GrabRules.COAT_HIT_WEAR)
 		if held:
 			return String(g.get("name", ""))
+	return ""
+
+
+static func _hole(g: Dictionary, part: String, wear: float) -> void:
+	var holes: Dictionary = g.get("holes", {})
+	holes[part] = true
+	g["holes"] = holes
+	g["wear"] = minf(1.0, float(g.get("wear", 0.0)) + wear)
+
+
+## A garment's own stop for a pistol round on `part`: nothing where it does not
+## cover or is holed; its bullet value (a vest saved before it had one keeps
+## its kind's), less as it wears.
+static func layer_bullet(g: Dictionary, part: String) -> float:
+	var id: String = String(g.get("id", ""))
+	if not covers(id).has(part) or (g.get("holes", {}) as Dictionary).has(part):
+		return 0.0
+	var b: float = float(g.get("bullet", KINDS.get(id, {}).get("bullet", 0.0)))
+	return clampf(b * (1.0 - float(g.get("wear", 0.0))), 0.0, 1.0)
+
+
+## The chance the clothes over `part` stop a pistol round: only the vest does.
+static func bullet_block_in(worn: Dictionary, part: String) -> float:
+	var through := 1.0
+	for g: Dictionary in layers_in(worn, part):
+		through *= 1.0 - layer_bullet(g, part)
+	return 1.0 - through
+
+
+## A pistol round met the clothes over `part`, outside in: each layer it went
+## through is holed there and worn the more (as a nail that got through);
+## the one that stopped it is worn a little and, more often than not, holed
+## there too (SHOT_HOLE_*), what is under it untouched. `rng` is drawn once,
+## only when a round was stopped. Comes back with the name of the one that held.
+static func shot_in(worn: Dictionary, part: String, blocked: bool, rng: RandomNumberGenerator) -> String:
+	for g: Dictionary in layers_in(worn, part):
+		if blocked and layer_bullet(g, part) > 0.0:
+			g["wear"] = minf(1.0, float(g.get("wear", 0.0)) + GrabRules.COAT_BLOCK_WEAR)
+			var bite: float = float(g.get("bite", 0.0))
+			if rng.randf() < maxf(SHOT_HOLE_LEAST, 1.0 - bite / SHOT_HOLE_BITE):
+				var holes: Dictionary = g.get("holes", {})
+				holes[part] = true
+				g["holes"] = holes
+			return String(g.get("name", ""))
+		_hole(g, part, GrabRules.COAT_HIT_WEAR)
 	return ""
 
 
@@ -459,6 +529,94 @@ static func undress_time(p, slot: String) -> float:
 	for over: String in _over(p, slots_of(String((p.worn[key] as Dictionary).get("id", "")))):
 		t += 2.0 * float(TIME[over])
 	return t
+
+
+## The steps of putting `id` on, in order (7장): each layer over its places
+## off, the outermost first; what holds another place a whole suit takes off
+## and put aside; the garment on in its own place (what was there comes off
+## with it); then the layers taken off back on, the innermost first. A step is
+## {"op": "off" | "aside" | "on" | "back", "slot", "t" seconds}; the seconds
+## add up to dress_time. Cut short, the steps done stay done.
+static func dress_plan(p, id: String) -> Array:
+	var slots := slots_of(id)
+	if slots.is_empty():
+		return []
+	var aside: Array[String] = []
+	for s: String in slots:
+		var key := holder_slot(p, s)
+		if key != "" and key != slots[0] and not aside.has(key):
+			aside.append(key)
+	var over: Array[String] = []
+	for key: String in _over(p, slots):
+		if not aside.has(key):
+			over.append(key)
+	var plan: Array = []
+	for i in range(over.size() - 1, -1, -1):
+		plan.append({"op": "off", "slot": over[i], "t": float(TIME[over[i]])})
+	for key: String in aside:
+		plan.append({"op": "aside", "slot": key, "t": float(TIME[key])})
+	plan.append({"op": "on", "slot": slots[0], "t": float(TIME[slots[0]])})
+	for key: String in over:
+		plan.append({"op": "back", "slot": key, "t": float(TIME[key])})
+	return plan
+
+
+## Taking off what holds `slot`: the layers over it off, it off and put down,
+## the layers back on ({"op": "drop"} is the one taken off). Adds up to undress_time.
+static func undress_plan(p, slot: String) -> Array:
+	var key := holder_slot(p, slot)
+	if key == "":
+		return []
+	var over := _over(p, slots_of(String((p.worn[key] as Dictionary).get("id", ""))))
+	var plan: Array = []
+	for i in range(over.size() - 1, -1, -1):
+		plan.append({"op": "off", "slot": over[i], "t": float(TIME[over[i]])})
+	plan.append({"op": "drop", "slot": key, "t": float(TIME[key])})
+	for o: String in over:
+		plan.append({"op": "back", "slot": o, "t": float(TIME[o])})
+	return plan
+
+
+## A plan's steps that take a garment off (the motion played backwards).
+static func step_off(step: Dictionary) -> bool:
+	return ["off", "aside", "drop"].has(String(step.get("op", "")))
+
+
+## A plan done at a walk: every step on the head, the neck, the face or the hands.
+static func plan_walks(plan: Array) -> bool:
+	for step: Dictionary in plan:
+		if not WALKABLE.has(String(step["slot"])):
+			return false
+	return not plan.is_empty()
+
+
+static func plan_time(plan: Array) -> float:
+	var t := 0.0
+	for step: Dictionary in plan:
+		t += float(step["t"])
+	return t
+
+
+## What putting `id` on puts down for good: what holds its places now, each once.
+static func displaced(p, id: String) -> Array:
+	var keys: Array[String] = []
+	var out: Array = []
+	for s: String in slots_of(id):
+		var key := holder_slot(p, s)
+		if key != "" and not keys.has(key):
+			keys.append(key)
+			out.append(p.worn[key])
+	return out
+
+
+## Not worn through to rags (3.3): it can still be put on.
+static func wearable(state: Dictionary) -> bool:
+	return float(state.get("wear", 0.0)) < BROKEN_AT
+
+
+## How long taking `id` off one of the fallen takes, by its weight.
+static func strip_time(id: String) -> float:
+	return STRIP_PER_WEIGHT * clampf(float(KINDS.get(id, {}).get("weight", 0.0)), STRIP_WEIGHT_LEAST, STRIP_WEIGHT_MOST)
 
 
 ## How much wetter one gets this tick: rain or sleet under the open sky, less

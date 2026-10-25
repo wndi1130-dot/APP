@@ -2912,7 +2912,9 @@ func _worn_row(slot: String, id: String) -> Control:
 	name_l.clip_text = true
 	name_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(name_l)
-	var off := GlassPane.key("벗기", _undress.bind(slot))
+	# One under others takes them off and back on: how long shows on the key.
+	var plan: Array = Wear.undress_plan(p, slot)
+	var off := GlassPane.key("벗기" if plan.size() <= 1 else "벗기 %d초" % ceili(Wear.plan_time(plan)), _undress.bind(slot))
 	off.size_flags_horizontal = Control.SIZE_SHRINK_END
 	off.custom_minimum_size.x = UiFonts.px(DROP_W)
 	h.add_child(off)
@@ -2922,6 +2924,83 @@ func _worn_row(slot: String, id: String) -> Control:
 func _undress(slot: String) -> void:
 	game.actions.undress(game.player, slot)
 	_close_modal()
+
+
+## Putting on a garment that takes layers off and back on (decision 434,
+## clothing.md 7장): the steps in a line, what comes off for good, the seconds,
+## and the key that does it. `src`: {"box", "i"} for one in a searched box or
+## {"ground": the garment lying there}, and its "id".
+func wear_pane(src: Dictionary) -> void:
+	var p = game.player
+	var id: String = String(src["id"])
+	var plan: Array = Wear.dress_plan(p, id)
+	var pane := _open_pane(game.item_name(id), "%d초" % ceili(Wear.plan_time(plan)), game.item_icon(id))
+	var w: float = PANE_W - GlassPane.PAD_L - GlassPane.PAD_R
+	var steps: Array = []
+	for step: Dictionary in plan:
+		var slot: String = String(step["slot"])
+		match String(step["op"]):
+			"off", "aside":
+				steps.append("%s 벗기" % game.item_name(String(Wear.occupant(p, slot).get("id", ""))))
+			"on":
+				steps.append("%s 입기" % game.item_name(id))
+			"back":
+				steps.append(game.item_name(String(Wear.occupant(p, slot).get("id", ""))))
+	pane.body.add_child(GlassPane.note(" → ".join(steps), w, GlassPane.INK, 13.0, 500))
+	var down: Array = Wear.displaced(p, id).map(func(g: Dictionary) -> String: return game.item_name(String(g.get("id", ""))))
+	if not down.is_empty():
+		pane.body.add_child(GlassPane.note("발밑에 둠: %s" % ", ".join(down), w, GlassPane.INK2, 12.0))
+	var foot := GlassPane.row()
+	foot.alignment = BoxContainer.ALIGNMENT_END
+	var go := LampKey.new("입기", false)
+	go.pressed.connect(_wear_go.bind(src))
+	foot.add_child(go)
+	pane.body.add_child(foot)
+
+
+func _wear_go(src: Dictionary) -> void:
+	_close_modal()
+	var p = game.player
+	var id: String = String(src["id"])
+	if src.has("box"):
+		var items: Array = game.data["containers"].get(String(src["box"]), {}).get("items", [])
+		var i: int = int(src["i"]) if int(src["i"]) < items.size() and String(items[int(src["i"])]) == id else items.find(id)
+		if i >= 0:
+			game.actions.take(p, String(src["box"]), i, true)
+		return
+	for i in game.ground_items.size():
+		if is_same(game.ground_items[i], src["ground"]):
+			game.actions.pick_up(p, i, true)
+			return
+
+
+## What one of the fallen has on (decision 434, clothing.md 8장): a row each,
+## the outermost first, its name and how worn (해짐, 너덜), and its seconds; a
+## press takes that one off (field_actions.gd strip_body) and it is put down
+## by the body.
+func strip_pane(zid: int) -> void:
+	var z: Dictionary = game.zombies.find(zid)
+	if not game.zombies.strippable(z):
+		return
+	var worn: Dictionary = game.zombies.worn_of(z)
+	var pane := _open_pane("옷 가져오기", "", "search")
+	var list := VBoxContainer.new()
+	list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
+	for slot: String in Wear.OUTSIDE_IN:
+		if not worn.has(slot):
+			continue
+		var g: Dictionary = worn[slot]
+		var gid: String = String(g.get("id", ""))
+		var word: String = Wear.state_word(g)
+		var shown: String = game.item_name(gid) if word == Wear.STATE_WORDS[0] else "%s · %s" % [game.item_name(gid), word]
+		list.add_child(_thing_key(shown, "%d초" % ceili(Wear.strip_time(gid)), _strip.bind(zid, slot), game.item_icon(gid)))
+	pane.body.add_child(GlassPane.scroll(list, LOOT_LIST_MAX))
+
+
+func _strip(zid: int, slot: String) -> void:
+	_close_modal()
+	game.actions.strip_body(game.player, zid, slot)
 
 
 ## The journal on a note pinned in the bag (시안 .pnote: paper with its fibre,
