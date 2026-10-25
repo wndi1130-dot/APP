@@ -42,6 +42,7 @@ import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 �
 import { voiceKept } from './promise_voice';
 import { rationCutFood } from './ration_cut';
 import { handsCoal, handsSettle, handsWatchMult } from './hands';
+import { trailAfterStop } from './trail';
 import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
@@ -293,7 +294,7 @@ function depart(g: Game): void {
     engine.fervor = 0;
     bumpRel(g, 'engine', -10, 'strike');
     g.fear = clamp(g.fear + 10, 0, 100);
-    journal(g, '파업 금지법에 따라 경비대가 기관실 문을 열었다. 화부들이 불 앞으로 끌려갔다.', 'dark');
+    journal(g, '파업 금지법을 내밀자 화부들이 말없이 불 앞으로 돌아갔다.', 'dark');
   } else if (striking && !domesticStrikeRuns(g)) {
     if (!g.inStrike) g.strikes += 1;
     g.inStrike = true;
@@ -751,8 +752,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);
   // 사람이 들어오는 사건(arrivals.ts): 피난민 무리가 뜨면 이 정차의 부상자 카드는 건너뛴다. 부상자 굴림(rnd)은 그대로 굴려 난수 흐름을 끈 판과 맞춘다.
-  const arrived = g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
-  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
+  // 두고 떠난 사람의 흔적(prologue.ts, 결정 425 카드 3)이 뜬 정차엔 사람 들어옴·부상자 카드를 얹지 않는다. 부상자 굴림(rnd)은 그대로 굴린다.
+  const trail = trailAfterStop(g);
+  const arrived = !trail && g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
+  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived && !trail) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
   if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
   return stop.result;
@@ -883,14 +886,14 @@ function settle(g: Game): void {
 }
 
 /** 숨긴 물림의 시계(body_injury 4.4, 숫자는 제안). 귀환 검사 법이 있으면 바로, 없으면 열이 올라 구간마다 반쯤 들킨다.
- * 기한까지 안 들키면 그 칸 안에서 일어난다. 격리했으면 조용히 끝난다. */
+ * 기한까지 안 들키면 그 칸 안에서 일어난다. 따로 눕혔으면 조용히 끝난다. */
 function biteTick(g: Game): void {
   const keep: typeof g.hiddenBites = [];
   for (const b of g.hiddenBites ?? []) {
     if (g.seg >= b.due) {
       let bitten = 0;
       if (b.isolated) {
-        journal(g, `격리된 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
+        journal(g, `따로 눕힌 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
       } else if (!b.found || !g.cards.some(k => k.kind === 'bite_found' && k.who === b.who)) {
         // 숨긴 물림, 또는 드러났는데 아무도 처리하지 않은 채 기한이 온 물림(K02 1 보험: 무기한으로 남지 않는다).
         bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
@@ -1228,7 +1231,7 @@ function finish(g: Game, end: Game['end']): void {
   if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
-  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
+  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 열차장실 문을 열어 둔 채 짐을 쌌다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   writeLookback(g);
   for (const line of raisedLines(g)) journal(g, line);
