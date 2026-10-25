@@ -10,6 +10,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 const SeasonTable = preload("res://game/season_table.gd")
+const MapEdge = preload("res://fx/map_edge.gd")
 
 
 func before_each() -> void:
@@ -214,6 +215,29 @@ func test_the_hours_have_their_own_colour() -> void:
 	assert_lt(float(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0)["sun_energy"]), float(day["sun_energy"]))
 
 
+func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
+	# Contrast 1.2 about the hour's grey whatever falls: an overcast, a fog or
+	# a sleet takes colour out, not the spread (the grey day used to go flat).
+	var clear := Atmosphere.grade(Atmosphere.look(12.0, ["clear"], "K1", 0.0))
+	for kinds in [["overcast"], ["fog"], ["sleet"], ["blizzard"]]:
+		var g := Atmosphere.grade(Atmosphere.look(12.0, kinds, "K1", 0.0))
+		assert_almost_eq(float(g["contrast"]), float(clear["contrast"]), 0.0001, "%s keeps the contrast" % [kinds])
+		assert_almost_eq(float(g["brightness"]), float(clear["brightness"]), 0.0001)
+		assert_lt(float(g["saturation"]), float(clear["saturation"]), "%s takes colour out" % [kinds])
+	# Godot: 0.5 + k(b·c − 0.5). By day that is 1.2(c − 0.4) + 0.4.
+	for c: float in [0.1, 0.4, 0.8]:
+		var out: float = 0.5 + float(clear["contrast"]) * (float(clear["brightness"]) * c - 0.5)
+		assert_almost_eq(out, 1.2 * (c - 0.4) + 0.4, 0.0001)
+	assert_almost_eq(float(clear["pivot"]), Atmosphere.TONE_PIVOT_DAY, 0.0001)
+	assert_lte(float(clear["saturation"]), 1.0, "the grade never adds colour by day")
+	# At night the grey sinks with the light, so the spread keeps the night's level.
+	var t := Atmosphere.sun_times(0.0)
+	var night := Atmosphere.grade(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))
+	var p := float(night["pivot"])
+	assert_lt(p, 0.15)
+	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
+
+
 func test_it_looks_colder_as_the_cold_rises() -> void:
 	var warm := Atmosphere.look(9.0, ["clear"], "K1", 0.0)
 	var mid := Atmosphere.look(9.0, ["clear"], "K1", 0.5)
@@ -340,6 +364,36 @@ func test_the_light_follows_the_hour_through_the_stop() -> void:
 	assert_lt(game.sun.light_energy, day_energy)
 	assert_gt(game.sun.rotation_degrees.x, -30.0)
 	assert_true(game.environment.adjustment_enabled)
+
+
+func test_past_the_map_edge_the_ground_goes_on_under_fog() -> void:
+	# 결정 448 17 (「맵끝이 대놓고 랜더링 되있음」): no flat slab past the map. The
+	# ground goes on in the edge's colours under the map's own material, and fog
+	# in the hour's colour lies over it.
+	var game = _stop({"weather": ["clear"], "cold": 0.0})
+	assert_not_null(game.map_edge)
+	var box: AABB = game.map_edge.ground.get_aabb()
+	var w := float(game.view.grid.width)
+	var h := float(game.view.grid.height)
+	assert_lt(box.position.x, -30.0)
+	assert_gt(box.end.x, w + 30.0)
+	assert_lt(box.position.z, -30.0)
+	assert_gt(box.end.z, h + 30.0)
+	assert_eq(game.map_edge.ground.material_override, game.view.material, "the map's own ground material")
+	assert_eq(game.map_edge.sheets.size(), 3)
+	assert_eq(Color(game.map_edge.fog_mats[0].get_shader_parameter("fog_color")), Color(game.fx_light["fog_color"]))
+	assert_eq(game.map_edge.fog_mats[0].get_shader_parameter("vis"), game.view.vis_texture, "the fog reads the map's sight mask")
+	# The ground past the edge settles to the edge's mean colour, not a grey slab.
+	var mean: Color = MapEdge.mean_edge_color(game.view.grid)
+	assert_almost_eq(mean.a, 1.0, 0.0001)
+	# The fog frame starts inside the edge and leaves the middle of the map open.
+	var fog_box: AABB = game.map_edge.sheets[0].get_aabb()
+	assert_lt(fog_box.position.x, -30.0)
+	var frame: ArrayMesh = game.map_edge.sheets[0].mesh
+	var verts: PackedVector3Array = frame.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	for v in verts:
+		var inside := v.x > MapEdge.FOG_INSET + 0.01 and v.x < w - MapEdge.FOG_INSET - 0.01 and v.z > MapEdge.FOG_INSET + 0.01 and v.z < h - MapEdge.FOG_INSET - 0.01
+		assert_false(inside, "no fog corner in the map's middle: %s" % v)
 
 
 func test_breath_shows_in_the_cold_and_frost_comes_at_night() -> void:

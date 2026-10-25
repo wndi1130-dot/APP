@@ -1,13 +1,27 @@
-extends RefCounted
+extends "res://addons/gut/test.gd"
 ## Loads the train-vectors file (written by s1/tools/train_port_fixtures.ts from the S1 rules) and
 ## compares answers: whole numbers must be equal, other numbers within 1e-6, text and flags exact.
 ## Keys the S1 answer does not have are not compared.
 
 const PATH := "res://tests/fixtures/train/train_vectors.json"
-const FORMAT := "train-vectors-v1"
+const FORMAT := "train-vectors-v2"
 const EPS := 1e-6
 
 static var _data: Dictionary = {}
+
+
+## Also runnable in the requested GUT list; keep the static reader usable by
+## every train test while checking the versioned fixture contract itself.
+func test_fixture_contract() -> void:
+	assert_eq(data().get("format"), FORMAT)
+	assert_true(tables().has("HANDS"))
+	assert_gt(points().size(), 0)
+	var missing := 0
+	for point: Dictionary in points():
+		var state: Dictionary = point["state"]
+		if not state.has("hands") or not state.has("injured"):
+			missing += 1
+	assert_eq(missing, 0, "v2 requires hands (nullable) and injured")
 
 
 static func data() -> Dictionary:

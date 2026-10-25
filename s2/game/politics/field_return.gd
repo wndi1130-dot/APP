@@ -10,6 +10,7 @@ const TrainState = preload("res://game/train/train_state.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TurnDeath = preload("res://game/train/turn/turn_death.gd")
+const PersonMemory = preload("res://game/politics/person_memory.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
 const SYMBOL_USES := ["hang_before_session", "hang_in_car"]
@@ -603,6 +604,8 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			_journal(g, "%s: 그 약속을 본 사람이 아무도 돌아오지 못했다. 지켰는지 어겼는지 열차는 모른다." % spec["label"])
 			lines.append({"k": "promise", "comm": comm, "text": "%s과(와)의 약속: 본 사람이 돌아오지 못해 알 수 없다." % t["COMM_NAME"][comm]})
 	_body_searches(g, departure, receipt)
+	# Each person's own memory of the stop (person_memory.gd, s1 memory.ts on RETURN_HOOK).
+	PersonMemory.from_return(g, t, departure, receipt, returned_of(receipt))
 	if receipt["symbol"] is Dictionary:
 		var comm: String = receipt["symbol"]["groupId"]
 		lines.append({"k": "symbol", "comm": comm, "text": "%s의 상징물을 가져왔다. 쓰임을 고른다." % t["COMM_NAME"][comm]})

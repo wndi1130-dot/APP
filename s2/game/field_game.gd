@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
@@ -146,6 +147,7 @@ var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
+var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
 var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
@@ -297,6 +299,11 @@ var track_last: Dictionary = {}
 ## two real lights (the chief's lantern and the firebox).
 var lamp_key: String = "-"
 var lamp_fixed: Dictionary = {}
+## The light the last look found (cell index -> 0..255) and, per floor, the
+## indoor cells a window lights (rebuilt when that floor's doors and windows
+## change): what dark_at reads (decision 439 card 1).
+var lit_now: Dictionary = {}
+var _window_lit: Dictionary = {}
 var lantern: OmniLight3D
 var firebox: OmniLight3D
 var lamp_pulse: float = 0.0
@@ -415,6 +422,11 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
+	map_edge = MapEdge.new()
+	add_child(map_edge)
+	map_edge.setup(view.grid, view.material)
+	map_edge.set_fog(fx_light["fog_color"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -708,6 +720,8 @@ func _update_atmosphere() -> void:
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
+		if map_edge != null:
+			map_edge.set_fog(fx_light["fog_color"])
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
@@ -2257,6 +2271,14 @@ func _refresh_vision() -> void:
 	view.set_mask_enabled(true)
 	var forward := Vector2.ZERO if tower else Vector2(sin(player.facing), cos(player.facing))
 	var result := lg.visible_cells(origin, radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
+	lit_now = lamp_cells(result)
+	# Indoors after dark the eye reaches into an unlit room only as far as in a cellar.
+	if lv >= 0 and clock.is_dark():
+		var reach2 := BuildingRules.DARK_SIGHT * BuildingRules.DARK_SIGHT
+		for i: int in result.keys():
+			var c := Vector2i(i % lg.width, i / lg.width)
+			if Vector2(c - origin).length_squared() > reach2 and _dark_cell(lg, lv, c):
+				result.erase(i)
 	var n := grid.width * grid.height
 	seen_now = {}
 	for i in result:
@@ -2269,8 +2291,30 @@ func _refresh_vision() -> void:
 		seen_memory[key] = 1
 	if not ended and not paused:
 		_mark_tracks()
-	view.update_vis(seen_now, seen_memory, lamp_cells(result))
+	view.update_vis(seen_now, seen_memory, lit_now)
 	view.update_labels(seen_memory, mask_on)
+
+
+## Indoors after dark, out of a window's light and any lamp's (decision 439 card 1).
+## The cellar has its own short sight and is not counted here.
+func dark_at(at: Vector3) -> bool:
+	if not clock.is_dark():
+		return false
+	var lv := level_of(at)
+	return lv >= 0 and _dark_cell(grid_at(at), lv, FieldGrid.cell_of(at))
+
+
+func _dark_cell(lg: FieldGrid, lv: int, c: Vector2i) -> bool:
+	if not lg.indoor(c):
+		return false
+	var i := lg.index(c)
+	if int(lit_now.get(i, 0)) >= BuildingRules.LIT_MIN:
+		return false
+	var row: Dictionary = _window_lit.get(lv, {})
+	if int(row.get("rev", -1)) != lg.revision:
+		row = {"rev": lg.revision, "cells": BuildingRules.window_lit_cells(lg)}
+		_window_lit[lv] = row
+	return not (row["cells"] as Dictionary).has(i)
 
 
 func _person_visible(p: Person) -> bool:
