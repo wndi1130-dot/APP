@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
@@ -146,6 +147,7 @@ var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
+var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
 var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
@@ -235,6 +237,9 @@ var loaded_start: Dictionary = {}      # rounds already in the squad's guns at t
 ## kit is not new cloth every stop.
 var cloth_start: int = 0
 var unloaded: Dictionary = {}
+## Clothes taken off by the train (decision 434, clothing.md 7장): they are not
+## left lying there but go aboard as they are, worn and holed (wear.gd states).
+var loaded_wear: Array = []
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
 var shot_times: Array = []
@@ -390,8 +395,15 @@ func _ready() -> void:
 	# The receipt knows six kinds of place (the S1 contract); a kind it does not
 	# know yet is written as the freight stop it was drawn from.
 	var kind: String = data["place_kind"]
-	receipt = Receipt.new(data["place_id"], kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
+	# Under the train's contract the receipt names the stop as the train named it (its placeId).
+	var place_id: String = String(opts["departure"]["placeId"]) if contract_on() else String(data["place_id"])
+	receipt = Receipt.new(place_id, kind if Receipt.PLACE_TYPES.has(kind) else "freight", "small_station_siding")
 	receipt.set_source("direct")
+	# Sent under the train's departure contract (v2, s3 contract 2): the receipt carries its ids
+	# and goes back as v4/v5, which the train takes in once (field_return.gd).
+	if contract_on():
+		var dep: Dictionary = opts["departure"]
+		receipt.set_ids(String(opts.get("receipt_id", "ret_" + String(dep["departureId"]).trim_prefix("dep_"))), String(dep["stopId"]), String(dep["departureId"]))
 	# A place asked for that has no map was played on the default one: said so (R16).
 	if String(opts.get("place", "")) != "" and String(opts.get("place", "")) != place:
 		receipt.place_note("placeAsked", String(opts["place"]))
@@ -420,6 +432,11 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
+	map_edge = MapEdge.new()
+	add_child(map_edge)
+	map_edge.setup(view.grid, view.material)
+	map_edge.set_fog(fx_light["fog_color"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -714,6 +731,8 @@ func _update_atmosphere() -> void:
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
+		if map_edge != null:
+			map_edge.set_fog(fx_light["fog_color"])
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
@@ -1029,7 +1048,7 @@ func _update_storm() -> void:
 
 
 func _spawn_people() -> void:
-	var loadout: Array = opts.get("squad", default_squad("crude"))
+	var loadout: Array = squad_rows(opts["departure"]["roster"]) if contract_on() else opts.get("squad", default_squad("crude"))
 	var spots: Array = data["spawns"]["squad"]
 	for i in range(loadout.size()):
 		var row: Dictionary = loadout[i]
@@ -1070,12 +1089,60 @@ func default_squad(pipe_quality: String) -> Array:
 	]
 
 
+## Is this stop sent under the train's departure contract v2 (the people the train picked)?
+func contract_on() -> bool:
+	var dep: Variant = opts.get("departure")
+	return dep is Dictionary and int((dep as Dictionary).get("version", 0)) == 2
+
+
+## How each car's people speak (ally_lines.gd), the field's first squad's by car.
+const VOICE_OF_COMM := {"guard": "rough", "medtech": "quiet", "tail": "fear", "engine": "rough", "front": "quiet"}
+const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
+
+
+## The field's rows for people of the departure contract (field_departure.gd person): the same
+## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
+## what they know of medicine and how hungry and sore they go out. One of the medical staff with
+## no knowledge on record still goes as an apprentice (the car's own work).
+static func squad_rows(people: Array) -> Array:
+	var out: Array = []
+	for person: Dictionary in people:
+		var role: String = String(person["role"])
+		var row := {
+			"id": person["id"], "name": person["name"], "role": "chief" if role == "chief" else ("worker" if role == "carrier" else role),
+			"comm": person["comm"], "rel": float(person["rel"]), "skills": (person["body"] as Dictionary).duplicate(),
+			"hands": (person["gear"]["hands"] as Array).duplicate(true), "items": (person["gear"]["items"] as Dictionary).duplicate(),
+			"bag": String(person["gear"]["bag"]), "wear": (person["gear"]["wear"] as Dictionary).duplicate(),
+			"hunger": int(person["hunger"]), "sore": maxi(int(person["sore"]), int(person["rest"])),
+		}
+		if role != "chief":
+			row["voice"] = VOICE_OF_COMM.get(String(person["comm"]), "quiet")
+		var know: Variant = person.get("know")
+		var level := 0
+		if know is Dictionary and String(know.get("field", "")) == "med":
+			level = clampi(int(know["skill"]), 0, 3)
+		elif String(person["comm"]) == "medtech":
+			level = 1
+		row["medical"] = MEDICAL_OF_SKILL[level]
+		out.append(row)
+	return out
+
+
+## The work crew the train can send down (carriers, then escorts), as field rows; empty off the contract.
+func work_rows() -> Array:
+	if not contract_on():
+		return []
+	return squad_rows(opts["departure"].get("workCrew", []))
+
+
 func make_person(row: Dictionary, at: Vector3) -> Person:
 	var p := Person.new()
 	add_child(p)
 	p.setup(String(row["id"]), String(row["name"]), String(row["role"]), at)
 	p.skills = row.get("skills", p.skills).duplicate()
 	p.medical = String(row.get("medical", "none"))
+	p.hunger_level = clampi(int(row.get("hunger", 0)), 0, 2)
+	p.sore_level = clampi(int(row.get("sore", 0)), 0, 2)
 	p.bag = String(row.get("bag", "pack"))
 	# What they go out in (wear.gd): a row may say, place by place, else what everyone wears.
 	Wear.dress_from(p, row.get("wear", {}))
@@ -1100,7 +1167,14 @@ func _spawn_dead() -> void:
 			continue
 		for c in s[key]:
 			zombies.spawn("dead", FieldGrid.center(c))
-	for key in ["clothed_station", "clothed_shed"]:
+	# The padded ones: the two lists of before first, as they were, then any
+	# other "clothed_..." list a map has (where they stood shows in what they
+	# have on, loot_tables.gd WEAR_PLACE).
+	var clothed: Array[String] = ["clothed_station", "clothed_shed"]
+	for key: String in s:
+		if key.begins_with("clothed_") and not clothed.has(key):
+			clothed.append(key)
+	for key in clothed:
 		for c in s.get(key, []):
 			zombies.spawn("clothed", FieldGrid.center(c))
 	# The dead indoors, on every floor and in the cellar.
@@ -1470,8 +1544,12 @@ func _update_person(p: Person, delta: float) -> void:
 		return
 	if p.body.downed:
 		return
-	# Pushing the stick walks away from slow work (search, prying, treating).
-	if p.stick.length() > 0.3 and STICK_BREAKS.has(p.action):
+	# Pushing the stick walks away from slow work (search, prying, treating);
+	# a hat, a scarf, a mask or gloves go on and off at a walk (decision 434),
+	# the feet free while the hands work, but not at a run.
+	var walking_work: bool = actions.walk_work(p)
+	var breaks: bool = (p.running and p.stick != Vector2.ZERO) if walking_work else p.stick.length() > 0.3
+	if breaks and STICK_BREAKS.has(p.action):
 		p.cancel_action()
 	if p.action != "":
 		# Each action takes its body multiplier once, here (not also in its length).
@@ -1485,7 +1563,8 @@ func _update_person(p: Person, delta: float) -> void:
 			p.cancel_action()
 			if done.is_valid():
 				done.call()
-		return
+		if not walking_work:
+			return
 	if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
 		_drive(p, delta)
 	else:
@@ -1717,6 +1796,8 @@ func on_person_died(p: Person) -> void:
 	# Everyone is already infected: the body stands up again (zombies.md).
 	var z := zombies.add_rising(p.position, p.display_name)
 	p.brain["rising_id"] = z["id"]
+	# It gets up in what it wore, and that is what can be taken off it (decision 434).
+	z["worn"] = p.worn.duplicate(true)
 	if p.team == "raider":
 		# What a raider had stays on it until someone goes through it (user 2026-10-11).
 		var loot: Array = []
@@ -2567,7 +2648,7 @@ func finish(reason: String) -> void:
 			receipt.person("injured", p.pid)
 		# Wounds go on as they are; the receipt folds bites and serious ones into the lists.
 		for row: Dictionary in p.body.receipt_wounds():
-			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)))
+			receipt.add_wound(p.pid, row["part"], row["kind"], bool(row.get("festering", false)), row.get("treat", {}))
 	var stock: Dictionary = {}
 	for id in unloaded:
 		if STOCK_OF.has(id):
@@ -2640,6 +2721,7 @@ func finish(reason: String) -> void:
 		holdout.note_leaving()
 		telemetry.holdout = holdout.roll_note()
 	_receipt_finds(boarded)
+	_contract_end(boarded)
 	receipt.set_end(reason)
 	for d in decisions:
 		receipt.decision(d["id"], d["choice"])
@@ -2662,6 +2744,25 @@ func finish(reason: String) -> void:
 	else:
 		hud.show_end(result)
 	finished.emit(result)
+
+
+## The contract's side of the receipt (s3 contract 3): each departure promise as seen by those of
+## the squad who came back (the train judges it), and how each one aboard came back (v5 crew rows).
+func _contract_end(boarded: Array) -> void:
+	if not contract_on():
+		return
+	var back: Array = []
+	for p in boarded:
+		if squad.has(p):
+			back.append(p.pid)
+	for promise: Dictionary in opts["departure"].get("promises", []):
+		receipt.see_promise(String(promise["id"]), String(promise["kind"]), back, [String(promise["madeTo"])])
+	for p in boarded:
+		var hands: Array = []
+		for h: Dictionary in p.hands:
+			if String(h.get("id", "")) != "":
+				hands.append([String(h["id"]), String(h.get("quality", "factory")), snappedf(float(h.get("condition", 1.0)), 0.01)])
+		receipt.set_crew_row(p.pid, p.body.exhaustion_level(), p.hunger_level, {}, hands, p.items)
 
 
 func _save(result: Dictionary) -> void:

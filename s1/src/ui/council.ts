@@ -35,6 +35,7 @@ const TOOLS: { tool: DealTool; name: string; icon: IconName }[] = [
   { tool: 'fetch', name: '현장 조달', icon: 'fetch' },
   { tool: 'bribe', name: '뇌물', icon: 'bribe' },
   { tool: 'blackmail', name: '협박', icon: 'blackmail' },
+  { tool: 'persuade', name: '설득', icon: 'persuade' },
 ];
 
 /** 쐐기마다 좌석 상태를 각도 순서로 늘어놓는다. 개표 중이면 미정이 하나씩 갈린다. */
