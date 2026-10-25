@@ -1875,6 +1875,9 @@ const NEAR_USE: float = 1.7
 func _near_things(p) -> Array:
 	var rows: Array = []
 	var lv: int = game.level_of(p.position)
+	# By the train with something to put aboard: that comes first.
+	if at_unloading(p) and not loadable(p).is_empty():
+		rows.append([0.0, "열차에 싣기", load_train.bind(p)])
 	for s in game.stairs:
 		if not (s["low"] == lv or s["high"] == lv):
 			continue
@@ -1959,19 +1962,42 @@ func on_platform(p) -> bool:
 
 
 ## Anything put down on the platform counts as loaded (s2_station 2.4).
+## The companions load what they carry by themselves; the player does it with
+## the key (load_train, decision 448-13: what goes aboard is a choice to see).
 func _auto_unload() -> void:
 	for p in game.squad:
-		if not p.is_alive() or not game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading"):
-			continue
-		var put: Array = []
-		for id in p.items.keys():
-			# A key, an empty tin and the can opener stay with the one who has them.
-			if UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id):
-				continue
-			var n: int = int(p.items[id])
-			game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
-			put.append("%s %d" % [game.item_name(id), n])
-			p.items.erase(id)
-		if not put.is_empty():
-			game.telemetry.trip()
-			game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])
+		if p != game.player and p.is_alive() and at_unloading(p):
+			load_train(p)
+
+
+## Standing where loads are put aboard (the platform's unloading cells).
+func at_unloading(p) -> bool:
+	return game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading")
+
+
+## What of one's bag goes aboard: all but a key, an empty tin and the can
+## opener, a weapon, and the field's own stores (bandages, cloth, tools).
+func loadable(p) -> Array:
+	var out: Array = []
+	for id in p.items.keys():
+		if not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id)):
+			out.append(id)
+	return out
+
+
+## Put aboard what one carries (s2_station 2.4: what is aboard is the train's,
+## whatever comes of the one who brought it). True if anything went.
+func load_train(p) -> bool:
+	if not at_unloading(p):
+		return false
+	var put: Array = []
+	for id in loadable(p):
+		var n: int = int(p.items[id])
+		game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
+		put.append("%s %d" % [game.item_name(id), n])
+		p.items.erase(id)
+	if put.is_empty():
+		return false
+	game.telemetry.trip()
+	game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])
+	return true

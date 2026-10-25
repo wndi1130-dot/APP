@@ -268,7 +268,7 @@ func test_keys_tins_and_the_opener_stay_on_the_body_at_the_train() -> void:
 		p.add_item(id)
 	var rect: Rect2i = game.data["unload"]
 	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
-	game.actions._auto_unload()
+	game.actions.load_train(p)
 	assert_true(p.items.has("key_1") and p.items.has("can_empty") and p.items.has("can_opener"))
 	assert_false(p.items.has("can_beans"))
 	assert_eq(int(game.unloaded.get("can_beans", 0)), 1)
