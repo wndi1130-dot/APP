@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { actRows, CL, createGame, enableClimate, rowAt, SEASON_ROWS, segTemp, useSeasonAct } from '../../src/game';
+import { actRows, CL, climateDepart, createGame, enableClimate, enableDisasters, rowAt, SEASON_ROWS, segTemp, stageAt, useSeasonAct } from '../../src/game';
+import type { DisasterState } from '../../src/game';
 
 // 시험 판 스위치(결정 447 카드 3): S1 24구간을 막의 계절표 곡선으로 돌린다. 봇 --act와 시험 판만 쓰고 플레이어의 판은 그대로다.
 
@@ -39,5 +40,38 @@ describe('스위치', () => {
     useSeasonAct('prologue');
     expect(SEASON_ROWS).toEqual(before);
     expect(CL.table).toEqual(table);
+  });
+});
+
+describe('한파의 단계 내림(결정 447 덧붙임, 분위기 카드 4 가)', () => {
+  const cold = (g: ReturnType<typeof createGame>) => { g.disaster = { kind: 'cold', stage: 'warn', left: 2 } as DisasterState; };
+
+  it('추위 이상에서 한파가 닥치면 한 단계 더 춥고(혹한 → 된추위), 끝나면 계절표 단계로 돌아온다', () => {
+    useSeasonAct('act2');
+    const g = createGame('cold-step');
+    enableClimate(g);
+    enableDisasters(g);
+    g.seg = 20;
+    g.outside = stageAt(19);
+    expect(g.outside).toBe(3);
+    cold(g);
+    expect(climateDepart(g)).toEqual({ from: 3, to: 3 + CL.coldStep });
+    // 글의 기온은 한파가 닥친 동안 보이는 기온과 같다(혹한 구간 + 한파 보정이 된추위 기온 가까이).
+    expect(g.journal.at(-1)!.text).toContain(`바깥 ${String(segTemp(20) - 12).replace('-', '−')}°`);
+    expect(Math.abs(segTemp(20) - 12 - -33)).toBeLessThanOrEqual(3);
+    expect(CL.mult[g.outside!]).toBeGreaterThan(CL.mult[3]);
+    delete g.disaster;
+    expect(climateDepart(g)).toEqual({ from: 3 + CL.coldStep, to: 3 });
+  });
+
+  it('서막(첫 추위 이하)의 한파는 단계를 바꾸지 않는다', () => {
+    const p = createGame('cold-pro');
+    enableClimate(p);
+    enableDisasters(p);
+    p.seg = 18;
+    p.outside = stageAt(17);
+    cold(p);
+    expect(climateDepart(p)!.to).toBe(stageAt(18));
+    expect(Math.max(...SEASON_ROWS.map(r => r.stage))).toBeLessThan(CL.coldFrom);
   });
 });

@@ -42,6 +42,10 @@ export const CL = {
   freezeOn: 1,
   /** 결빙이 이어지는 구간 수, 구간마다 더 드는 석탄, 식량(foodCost에 곱하는 몫, 반나절치), 선로 사건이 후보에 드는 수 */
   freezeLen: 1, freezeCoal: 1, freezeFood: 0.5, freezeTrack: 2,
+  /** 한파(재난)가 닥친 동안 단계를 이만큼 더 내린다(결정 447 덧붙임, 분위기 카드 4 가): 2막 혹한 구간의 한파는 된추위(−33°). 0이면 끈다 */
+  coldStep: 1,
+  /** 한파의 단계 내림은 이 단계(추위) 이상에서만: 늦가을·첫 추위의 서막은 그대로 */
+  coldFrom: 2,
 };
 
 /** 표시 기온의 날씨 보정(표시만, 석탄·온기는 안 읽는다) */
@@ -124,12 +128,20 @@ function line(g: Game, pair: readonly [string, string]): string {
   return pair[voice];
 }
 
+/** 이번 출발에 적용할 단계: 계절표 단계에, 한파(재난)가 이번 출발에 닥치거나 이어지면 coldStep만큼 더(추위 이상에서만, 맨 끝 단계까지) */
+function departStage(g: Game): number {
+  const base = stageAt(g.seg);
+  const d = g.disasters ? g.disaster : undefined;
+  const cold = !!d && d.kind === 'cold' && (d.stage === 'warn' || d.stage === 'active');
+  return cold && CL.coldStep > 0 && base >= CL.coldFrom ? Math.min(base + CL.coldStep, CL.mult.length - 1) : base;
+}
+
 /** 출발 때: 계절표 단계가 바뀌었으면 적용된 단계를 갱신하고 모든 칸 온기를 ∓5×차만큼 옮기고 글 두 줄을 남긴다.
  * 선 열차는 부르지 않는다(선 동안 바뀐 단계는 다음 실제 출발에 한 번에 든다). 떠난 단계와 새 단계를 돌려준다. 꺼진 판은 null. */
 export function climateDepart(g: Game): { from: number; to: number } | null {
   if (!g.climate) return null;
   const from = g.outside ?? stageAt(g.seg);
-  const to = stageAt(g.seg);
+  const to = departStage(g);
   if (to === from) return { from, to };
   const diff = to - from; // 양수면 추워진다
   for (const c of COMMS) g.comms[c].base[0] -= CL.warmStep * diff;
@@ -138,7 +150,9 @@ export function climateDepart(g: Game): { from: number; to: number } | null {
   if (diff > 0) (g.climateStats ??= { drops: 0, freezes: 0 }).drops += 1;
   journal(g, line(g, diff >= 2 ? LINES.deep : diff > 0 ? LINES.drop : LINES.ease), diff > 0 ? 'bad' : 'good');
   const warm = -CL.warmStep * diff;
-  journal(g, `바깥 ${String(segTemp(g.seg)).replace('-', '−')}°. 모든 칸 온기 ${warm > 0 ? '+' : '−'}${Math.abs(warm)}, 난방 석탄 ×${CL.mult[to]}.`, diff > 0 ? 'bad' : 'good');
+  // 한파로 한 단계 더 내려간 출발은 한파가 닥친 동안 보이는 기온(outsideView의 한파 보정)을 같이 적는다.
+  const temp = segTemp(g.seg) + (to > stageAt(g.seg) ? WEATHER_TEMP.cold : 0);
+  journal(g, `바깥 ${String(temp).replace('-', '−')}°. 모든 칸 온기 ${warm > 0 ? '+' : '−'}${Math.abs(warm)}, 난방 석탄 ×${CL.mult[to]}.`, diff > 0 ? 'bad' : 'good');
   return { from, to };
 }
 

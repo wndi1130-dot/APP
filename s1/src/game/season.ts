@@ -28,9 +28,15 @@ export function actRows(act: Exclude<SeasonAct, 'prologue'>): SeasonRow[] {
   });
 }
 
+let current: SeasonAct = 'prologue';
 /** 구간 줄을 서막이나 막 곡선으로 바꾼다. 모든 판이 함께 읽으므로 climate.ts useSeasonAct로만 부른다 */
 export function setSeasonRows(act: SeasonAct): void {
   SEASON_ROWS.splice(0, SEASON_ROWS.length, ...(act === 'prologue' ? PROLOGUE_ROWS : actRows(act)));
+  current = act;
+}
+/** 지금 구간 줄이 따르는 곡선 */
+export function seasonAct(): SeasonAct {
+  return current;
 }
 /** 내리는 것은 기온으로: rain_above보다 높으면 비, snow_below 이하면 눈, 사이는 진눈깨비 */
 export const FALLS = SEASON.falls;
