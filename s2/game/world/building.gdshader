@@ -45,7 +45,7 @@ instance uniform vec2 seen_fixed = vec2(-1.0, -1.0);
 instance uniform vec4 paint = vec4(0.58, 0.55, 0.50, 0.0);
 instance uniform float building_id = -1.0;
 // 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 나무(문짝·덧문·창틀)에 남은 칠(rgb)과
-// 남은 정도(a). 회벽의 안쪽 면은 벽지, 유리 뒤엔 커튼이 건물·창마다 다르게 비친다.
+// 남은 정도(a). 회벽의 안쪽 면은 벽지, 커튼(천 구역 6)은 건물·층마다 다른 색이다.
 // 칠은 모델 색 보정을 거치되 덜 누른다(accent_saturation). 0이면 칠 없음.
 instance uniform vec4 accent = vec4(0.0);
 // 이 층이 지붕 바로 밑(맨 위 층)이면 1: 처마 밑에 고드름(fx_cold.z), 녹을 땐 물 자국.
@@ -61,7 +61,7 @@ void vertex() {
 	w_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
-// 벽지·커튼 색(바랜 것만). 건물·창의 번호로 고른다.
+// 벽지·커튼 색(바랜 것만). 건물·층의 번호로 고른다.
 const vec3 PAPERS[5] = vec3[5](vec3(0.60, 0.46, 0.43), vec3(0.50, 0.56, 0.46), vec3(0.66, 0.56, 0.38), vec3(0.48, 0.52, 0.58), vec3(0.72, 0.68, 0.56));
 const vec3 CURTAINS[6] = vec3[6](vec3(0.52, 0.30, 0.22), vec3(0.70, 0.56, 0.26), vec3(0.31, 0.45, 0.31), vec3(0.75, 0.70, 0.58), vec3(0.31, 0.37, 0.52), vec3(0.80, 0.79, 0.75));
 
@@ -151,17 +151,19 @@ void fragment() {
 		base = glass_color * (0.85 + 0.3 * fine);
 		rough = 0.12;
 		porous = 0.0;
-		if (exposed > 0.5 && up < 0.5) {
-			// 유리 뒤의 커튼: 창 칸마다 절반쯤, 주름이 세로로 진다. 안이라 어둡게 비친다.
-			float win = fx_hash(vec2(floor(run * 0.9) + building_id * 7.0, floor(w_pos.y / level_h)));
-			if (win > 0.45) {
-				vec3 cloth = CURTAINS[int(fract(win * 13.7) * 5.99)];
-				float fold = 0.75 + 0.25 * sin(run * 26.0 + win * 9.0);
-				float drawn = step(0.5, abs(fract(run * 0.9) - 0.5) + win * 0.35);
-				base = mix(base, cloth * fold * 0.5, 0.75 * drawn);
-				lively = 0.8 * drawn;
-			}
-		}
+	} else if (zone == 6) {
+		// 커튼(building_view ZONE_CLOTH): 창 안쪽에 걸린 천. 열림·닫힘은 그 모형이 보여 주고,
+		// 색은 건물·층마다 하나(한 집의 커튼은 맞춘다), 창마다 조금 바래고 주름이 세로로 진다.
+		float level = floor(w_pos.y / level_h);
+		float pick = fx_hash(vec2(building_id * 7.0 + 1.3, level));
+		float cell = fx_hash(vec2(floor(run * 0.9) + building_id * 7.0, level));
+		// 안에 걸려 벽지(PAPERS)보다 밝지 않게 누른다.
+		vec3 cloth = CURTAINS[int(pick * 5.99)] * (0.75 + 0.14 * cell);
+		float fold = 0.78 + 0.22 * sin(run * 26.0 + cell * 9.0);
+		base = cloth * fold * (0.95 + 0.08 * fine);
+		rough = 1.0;
+		porous = 0.4;
+		lively = 0.8;
 	} else if (zone == 4) {
 		// 지붕: 높이로 줄을 긋고 용마루 쪽으로 엇갈린 이음.
 		vec3 roof = mix(slate_color, tile_color, paint.a);

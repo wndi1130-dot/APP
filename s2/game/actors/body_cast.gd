@@ -14,6 +14,7 @@ const OWN_SUFFIX: String = "_p"
 ## The squad that goes out (field_game.gd default_squad).
 const BY_ID: Dictionary = {
 	"p_chief": "n5-crew_railman-old",       # the train's chief: an old railwayman's jacket and cap
+	"captain": "n5-crew_railman-old",       # the same chief sent under the train's departure contract (s3)
 	"p_guard_marek": "n5-crew_guard",       # the guard car: a dark coat over a jumper, no uniform
 	"p_med_joanna": "n5-crew_medic",        # the medical car: blouse and apron
 	"p_tail_tomasz": "n3-body_sheepskin",   # the tail car: a big man in a sheepskin coat
