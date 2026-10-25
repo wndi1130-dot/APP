@@ -527,6 +527,11 @@ const TONE_CONTRAST := 1.2
 ## so the spread does not darken a dim picture (night stays where it was).
 const TONE_PIVOT_DAY := 0.4
 const TONE_PIVOT_NIGHT := 0.1
+## The field's exposure (WorldEnvironment tonemap): every colour, the floors
+## too (world_vis), is read as sRGB, and the hour's light alone left a mid grey
+## at 0.19 and white at 0.4 on an overcast noon. 1.8 brings them near the
+## reference's picture; the ground stays about where it was.
+const EXPOSURE := 1.8
 
 
 ## The colour grade (WorldEnvironment adjustments): a fixed tone (contrast 1.2

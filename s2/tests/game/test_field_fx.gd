@@ -87,6 +87,8 @@ func test_light_and_backdrop_come_from_the_atmosphere_frame() -> void:
 	assert_eq(game.environment.ambient_light_color, light["ambient_color"])
 	assert_almost_eq(game.environment.ambient_light_energy, float(light["ambient_energy"]), 0.0001)
 	assert_almost_eq(game.sun.rotation_degrees.x, float(light["sun_pitch"]), 0.001)
+	# Every colour, the floors too, is read as sRGB; the exposure lifts the picture (mood C9).
+	assert_almost_eq(game.environment.tonemap_exposure, float(Atmosphere.EXPOSURE), 0.0001)
 	# The void around the map is more land in the same light, darkened: never sky blue.
 	var back: Color = game.environment.background_color
 	assert_lt(back.v, Color(game.fx_params["fx_tint"]).v)
