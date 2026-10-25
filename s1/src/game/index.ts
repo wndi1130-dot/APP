@@ -24,6 +24,7 @@ export * from './disaster';
 export * from './arrivals';
 export * from './arrival_cards';
 export * from './climate';
+export * from './hands';
 export * from './disaster_cards';
 export * from './death_weight';
 export * from './death_cards';
