@@ -105,6 +105,7 @@ const BRIDGES: Dictionary = {
 ## Which posture a motion is drawn in (a change between postures is not delayed).
 const POSTURE: Dictionary = {
 	"t_sit": "sit", "t_sit_talk": "sit", "t_sit_huddle": "sit", "t_sit_doze": "sit", "t_eat": "sit",
+	"t_sit_nod": "sit", "t_sit_no": "sit", "t_sit_fold": "sit", "t_sit_clap": "sit", "t_gun_clean": "sit", "t_handwork": "sit",
 	"t_floor_sit": "floor", "t_crouch": "floor", "t_warm_hands": "floor", "t_lie": "lie", "t_kneel_work": "floor",
 	"t_walk": "walk", "t_carry": "walk",
 }
@@ -141,6 +142,8 @@ const BREATH_EVERY: float = 0.5           # seconds between looks at whose breat
 const MOUTH: Dictionary = {
 	"t_sit_huddle": Vector3(0.0, 1.0, 0.34), "t_sit": Vector3(0.0, 1.16, 0.04),
 	"t_sit_talk": Vector3(0.0, 1.16, 0.04), "t_sit_doze": Vector3(0.0, 1.1, 0.18),
+	"t_sit_nod": Vector3(0.0, 1.16, 0.04), "t_sit_no": Vector3(0.0, 1.16, 0.04), "t_sit_fold": Vector3(0.0, 1.16, 0.04),
+	"t_sit_clap": Vector3(0.0, 1.16, 0.04), "t_gun_clean": Vector3(0.0, 1.06, 0.2), "t_handwork": Vector3(0.0, 1.06, 0.2),
 }
 const MOUTH_STANDING := Vector3(0.0, 1.45, 0.13)
 ## A reaction: how many react (2 .. 6 by the event's size), for how long
@@ -149,14 +152,14 @@ const REACT_FEW: int = 2
 const REACT_MANY: int = 6
 const REACT_FOR := Vector2(10.0, 60.0)
 const REACT_CARS: int = 3
-## What each way of taking it looks like in each posture. The motions to come
-## (a nod, a clap) go in here when they are baked.
+## What each way of taking it looks like in each posture.
 const REACTIONS: Dictionary = {
 	"argue": {"sit": "t_sit_talk", "stand": "t_no", "floor": "t_floor_sit"},
 	"whisper": {"sit": "t_sit_talk", "stand": "t_talk", "floor": "t_floor_sit"},
-	"withdraw": {"sit": "t_sit_huddle", "stand": "t_fold", "floor": "t_floor_sit"},
-	"headshake": {"sit": "t_sit_huddle", "stand": "t_no", "floor": "t_floor_sit"},
-	"approve": {"sit": "t_sit_talk", "stand": "t_talk", "floor": "t_floor_sit"},
+	"withdraw": {"sit": "t_sit_fold", "stand": "t_fold", "floor": "t_floor_sit"},
+	"headshake": {"sit": "t_sit_no", "stand": "t_no", "floor": "t_floor_sit"},
+	"approve": {"sit": "t_sit_nod", "stand": "t_nod", "floor": "t_floor_sit"},
+	"cheer": {"sit": "t_sit_clap", "stand": "t_clap", "floor": "t_floor_sit"},
 	"grief": {"sit": "t_sit_huddle", "stand": "t_fold", "floor": "t_floor_sit"},
 }
 ## Events that are a loss: everyone it reaches is quiet.
@@ -341,7 +344,7 @@ func _process(_delta: float) -> void:
 				var mouth = MOUTH.get(clip, MOUTH_STANDING if String(b.pose) == "stand" else null)
 				if mouth != null:
 					heads.append(place_of(b, clip, state) * Vector3(mouth))
-			if guns != null and gun_count < LAP_GUNS and String(state["layout"]) == "guard" and clip == "t_sit" and String(b.pose) == "sit":
+			if guns != null and gun_count < LAP_GUNS and String(state["layout"]) == "guard" and clip in ["t_sit", "t_gun_clean"] and String(b.pose) == "sit":
 				var at: Transform3D = place_of(b, clip, state)
 				guns.multimesh.set_instance_transform(gun_count, at * Transform3D(Basis(Vector3.UP, PI * 0.5), LAP_AT))
 				gun_count += 1
@@ -614,7 +617,10 @@ static func _base_weights(pose: String, b, s: Dictionary, me: Dictionary) -> Dic
 	match pose:
 		"sit":
 			return {
-				"t_sit": 2.0 + (1.5 if guard else 0.0),
+				"t_sit": 2.0 + (0.8 if guard else 0.0),
+				# A guard looks the gun on the knees over; a calm car mends and reads.
+				"t_gun_clean": 1.5 if guard and not s["night"] else 0.0,
+				"t_handwork": (1.0 if calm else 0.2) if not guard and not me.get("child", false) else 0.0,
 				"t_sit_talk": (1.6 if talker else 0.25) + (2.0 if hothead else 0.0) + (1.0 if calm else 0.0) + (1.2 if layout == "dining" else 0.0),
 				"t_sit_huddle": (4.0 if chilled else 0.0) + (1.5 if sick else 0.0) + (2.0 if afraid else 0.0),
 				"t_sit_doze": (3.0 if sleepy else 0.2) * (0.3 if guard else 1.0) + (0.8 if calm and not guard else 0.0),
@@ -639,6 +645,9 @@ static func _base_weights(pose: String, b, s: Dictionary, me: Dictionary) -> Dic
 		"t_no": 1.5 if hothead else 0.0,
 		"t_lantern": (5.0 if s["night"] else 1.5) if guard else 0.0,
 		"t_stir": 3.0 if role == "cook" and layout == "dining" else 0.0,
+		# The cook hands the bowls round at a meal; one cold by the stove reaches to it.
+		"t_pass": 2.0 if role == "cook" and layout == "dining" and s.get("meal", false) else 0.0,
+		"t_reach": 3.0 if chilled and b.is_inside_tree() and absf(b.global_position.x - float(s["stove_x"])) < STOVE_NEAR else 0.0,
 		"t_shovel": 1.5 if role == "worker" and layout in ["technical", "tender", "loco"] else 0.0,
 	}
 
@@ -803,8 +812,8 @@ static func reaction_picks(kind: String, sign: int, size: float, rows: Array, da
 	return out
 
 
-## How one person takes it: a loss quietly; good news approved (the shy only
-## murmur); bad news argued by the quick-tempered, murmured over by the
+## How one person takes it: a loss quietly; good news nodded at, clapped by
+## the talkers, murmured over by the shy; bad news argued by the quick-tempered, murmured over by the
 ## talkers, closed up against by the shy, the rest shake their heads.
 static func role_for(kind: String, sign: int, me: Dictionary) -> String:
 	if GRIEF.has(kind):
@@ -813,7 +822,9 @@ static func role_for(kind: String, sign: int, me: Dictionary) -> String:
 	var talker: bool = float(me["social"]) > 0.55
 	var shy: bool = float(me["social"]) < 0.3
 	if sign > 0:
-		return "whisper" if shy else "approve"
+		if shy:
+			return "whisper"
+		return "cheer" if talker else "approve"
 	if sign < 0:
 		if hot:
 			return "argue"
@@ -1199,7 +1210,7 @@ func place_of(b, clip: String, _state: Dictionary) -> Transform3D:
 	var at: Vector3 = b.global_position
 	var basis := Basis(Vector3.UP, yaw)
 	match clip:
-		"t_sit", "t_sit_talk", "t_sit_huddle", "t_sit_doze", "t_eat":
+		"t_sit", "t_sit_talk", "t_sit_huddle", "t_sit_doze", "t_eat", "t_sit_nod", "t_sit_no", "t_sit_fold", "t_sit_clap", "t_gun_clean", "t_handwork":
 			if String(b.pose) == "sit":
 				at += basis * Vector3(0, 0, SIT_FORWARD)
 		"t_lie":
