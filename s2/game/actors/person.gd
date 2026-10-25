@@ -35,6 +35,10 @@ var role: String = "companion"
 var team: String = "squad"            # squad | crew | raider
 var skills: Dictionary = {"strength": 5, "melee": 1, "shooting": 1, "stealth": 1, "search": 1}
 var medical: String = "none"          # none | apprentice | skilled | master
+## What the train sends them out with (the departure contract, s3 contract 2; card B): 0 none,
+## 1 some, 2 bad. Both take from how well a blow lands (body_injury 4.2).
+var hunger_level: int = 0
+var sore_level: int = 0
 var body := BodyState.new()
 var heat := BodyHeat.new()
 var aim := AimModel.new()
@@ -254,7 +258,8 @@ func smell_mult() -> float:
 
 
 func mult_ctx() -> Dictionary:
-	return {"carry_state": carry_state(), "cold_level": cold_level(), "gloves": gloves, "heavy_coat": Wear.heavy(self), "barefoot": Wear.barefoot(self), "panic": panic > 0.6, "strength": int(skills["strength"])}
+	return {"carry_state": carry_state(), "cold_level": cold_level(), "gloves": gloves, "heavy_coat": Wear.heavy(self), "barefoot": Wear.barefoot(self), "panic": panic > 0.6, "strength": int(skills["strength"]),
+			"hunger_level": hunger_level, "sore_level": sore_level}
 
 
 func mults() -> Dictionary:
