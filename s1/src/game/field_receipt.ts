@@ -4,14 +4,14 @@ import placeSchema from '../../schema/place.schema.json';
 import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { bump, bumpRel } from './ledger';
-import { COMMS, COMM_NAME } from './data';
-import type { Comm } from './data';
+import { COMMS, COMM_NAME, LOOT_NAME, PLACES, STAY } from './data';
+import type { Comm, LootKey } from './data';
 import { onDeath } from './death';
 import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
 import { journal, PROFILES, situation, storyOf } from './state';
 import type { Game, Phase } from './state';
-import { breakPromise, keepPromise } from './turn';
+import { breakPromise, burnPyre, checkStopPromises, crewAwayOf, crewRest, keepPromise } from './turn';
 import { noteBroken } from './council_log';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
@@ -312,6 +312,7 @@ const LIMB_PARTS: readonly WoundPart[] = ['armL', 'armR', 'legL', 'legR'];
 
 /**
  * 부상자 한 사람의 열차 기록 하나(J02, 몸과 부상 4.1·4.6). 필드가 적은 상처 줄에서 가장 무거운 것이 등급·부위가 되고, 나머지는 field 칸에 붙는다.
+ * - 절단 → 절단. 무엇보다 무겁다. 필드는 팔·다리만 자른다(영수증도 팔·다리만 받는다).
  * - 골절 → 골절. 빠른 처치로 부목을 댔으면 가벼운 상처(4장 「빠른 처치」). 팔다리가 아닌 골절은 깊은 상처로 친다(열차의 골절은 팔다리뿐).
  * - 깊은 상처·박힌 것 → 깊은 상처.
  * - 긁힘·찢김뿐인데 부상자 목록에 든 사람(출혈 심함·쓰러짐) → 깊은 상처(결정 카드 C, 2026-10-25 사용자 답). 상처 줄이 없으면 몸통.
@@ -320,12 +321,12 @@ const LIMB_PARTS: readonly WoundPart[] = ['armL', 'armR', 'legL', 'legR'];
 export function fieldWoundOf(rows: readonly FieldWound[], pid: string): { grade: WoundGrade; part: WoundPart; septic: boolean; field: NonNullable<Wound['field']> } {
   const mine = rows.filter(w => w.person === pid);
   const quick = (w: FieldWound) => !!(w.treat?.splinted && w.treat?.quick);
-  const rank = (w: FieldWound) => w.kind === 'fracture' ? (quick(w) ? 0.5 : 2) : w.kind === 'deep' || w.kind === 'embedded' ? 1 : 0;
+  const rank = (w: FieldWound) => w.kind === 'amputation' ? 3 : w.kind === 'fracture' ? (quick(w) ? 0.5 : 2) : w.kind === 'deep' || w.kind === 'embedded' ? 1 : 0;
   let top: FieldWound | undefined;
   for (const w of mine) if (!top || rank(w) > rank(top)) top = w;
   const part = top ? FIELD_PART[top.part] ?? 'torso' : 'torso';
-  let grade: WoundGrade = !top ? 'deep' : rank(top) === 2 ? 'fracture' : rank(top) === 0.5 ? 'light' : 'deep';
-  if (grade === 'fracture' && !LIMB_PARTS.includes(part)) grade = 'deep';
+  let grade: WoundGrade = !top ? 'deep' : rank(top) === 3 ? 'amputation' : rank(top) === 2 ? 'fracture' : rank(top) === 0.5 ? 'light' : 'deep';
+  if ((grade === 'fracture' || grade === 'amputation') && !LIMB_PARTS.includes(part)) grade = 'deep';
   return { grade, part, septic: mine.some(w => !!w.festering), field: mine.map(({ person: _p, ...w }) => w) };
 }
 
@@ -435,6 +436,7 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
 
   bodySearches(g, departure, r);
   RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
+  closeFieldStop(g, departure, r);
   if (r.symbol) {
     lines.push({ k: 'symbol', comm: r.symbol.groupId, text: `${COMM_NAME[r.symbol.groupId]}의 상징물을 가져왔다. 쓰임을 고른다.` });
   }
@@ -449,6 +451,47 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   Object.defineProperty(g.fieldReturns.applied, r.receiptId, { value: fingerprint, enumerable: true, configurable: true, writable: true });
   g.fieldReturns.records.push(record);
   return { status: 'applied', record };
+}
+
+/**
+ * 필드가 다녀온 정차를 필드 결과로 닫는다(결정 카드 s3-link 10-26 F, 결정 442로 추천 적용). 아직 정차 단계이고 정차가 안 끝났을 때만.
+ * 굴리지 않는다: 체류 석탄은 영수증 석탄이 이미 뺐고, 위험·전리품·부상·사망·구조·물림은 필드가 적었다.
+ * 정차마다 같은 것(장작더미, 돌아온 사람의 자리비움, 쉬는 칸, 정차 약속)은 파견과 같이 센다.
+ */
+function closeFieldStop(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
+  const stop = g.stop;
+  if (g.phase !== 'stop' || !stop || stop.done) return;
+  stop.done = true;
+  burnPyre(g);
+  const back = new Set(returnedOf(r));
+  const went = new Map<Comm, number>();
+  const home = new Map<Comm, number>();
+  for (const pid of r.people.sent) {
+    const c = personOf(departure, pid).comm;
+    went.set(c, (went.get(c) ?? 0) + 1);
+    if (back.has(pid)) home.set(c, (home.get(c) ?? 0) + 1);
+  }
+  for (const [c, n] of home) g.comms[c].away += crewAwayOf(n);
+  // 쉬지 못하는 칸은 가장 많이 나간 칸(같으면 먼저 나간 사람의 칸).
+  let busy: Comm | null = null;
+  for (const [c, n] of went) if (busy === null || n > went.get(busy)!) busy = c;
+  crewRest(g, busy);
+  if (busy) g.lastCrew = busy;
+  // 내정 정차 훅(domesticStop: 호위·정차 하차 등)은 내정을 켠 판의 몫이라 여기서 부르지 않는다. 내정 줄기가 필드 정차에 붙일 자리다.
+  const notes = ['필드에서 돌아왔다.'];
+  const s = r.stock;
+  const gains: Partial<Record<LootKey, number>> = {};
+  for (const [k, v] of [['coal', s.coal], ['food', s.food], ['medicine', s.medicine], ['luxury', s.luxury]] as const) if ((v ?? 0) > 0) gains[k] = v;
+  const gone = new Set([...r.people.dead, ...r.people.missing, ...r.people.leftBehind]);
+  stop.result = {
+    passed: false, gains, notes,
+    injured: r.people.injured.filter(p => !gone.has(p)).map(p => personOf(departure, p).name),
+    dead: r.people.dead.map(p => personOf(departure, p).name),
+  };
+  const place = PLACES.find(p => p.id === stop.place) ?? PLACES[0];
+  const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
+  journal(g, `${place.name}에 ${STAY[stop.stay].name} 머물렀다(필드 ${r.people.sent.length}명). ${got || '빈손'}.`);
+  checkStopPromises(g, stop.target, gains);
 }
 
 /**
