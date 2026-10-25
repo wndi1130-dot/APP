@@ -56,7 +56,7 @@ func test_the_card_says_what_the_port_says_for_the_sample_session() -> void:
 ## An amendment says first which law it stands in for (S1 ui/council.ts), and
 ## a technology in use that bends the law follows the law's lines (lawTechLines).
 func test_an_amendment_and_the_technology_that_bends_a_law_are_on_the_bill() -> void:
-	var t: Dictionary = SliceFlow.council_sample()[1]
+	var t: Dictionary = SliceSamples.council_sample()[1]
 	var rows: Array = CouncilCard.change_rows(t, {"law": "child_pack", "repeal": false, "amend": "child_labor"})
 	assert_eq(rows[0], ["아동 노동 대신 선다", "", ""])
 	assert_eq(rows.size(), 1 + (t["LAWS"]["child_pack"]["changes"] as Array).size())
