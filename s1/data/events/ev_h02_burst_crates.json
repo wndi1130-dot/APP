@@ -8,6 +8,10 @@
       "type": "segment",
       "min": 3,
       "max": 20
+    },
+    {
+      "type": "season",
+      "needs": "frost"
     }
   ],
   "speaker": "ration_officer",
@@ -17,7 +21,7 @@
       "id": "c_throw_away",
       "label": "다 버린다",
       "say": "다 버려라. 탈 날 걸 먹일 순 없다.",
-      "why": "상자 여섯이 통째로 눈밭에 간다. 배급 담당이 장부에서 그만큼 줄을 긋는다.",
+      "why": "상자 여섯이 통째로 선로 옆에 버려진다. 배급 담당이 장부에서 그만큼 줄을 긋는다.",
       "effects": [
         {
           "type": "food",

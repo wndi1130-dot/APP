@@ -373,7 +373,8 @@ describe('경비대 재판', () => {
     expect(viewCard(g, card).choices.some(x => x.label === '경비대 재판에 넘긴다')).toBe(true);
     const vigil = viewCard(g, add(g, { kind: 'dark:vigil', comm: 'tail', who: '아무개' }));
     expect(vigil.speaker?.role).toBe(viewCard(g, add(g, { kind: 'dark:vigil', comm: 'guard', who: '아무개' })).speaker?.role);
-    expect(vigil.choices[0].label).toBe('통행 쪽지를 써 준다');
+    expect(vigil.choices[0].label).toBe('허락한다');
+    expect(vigil.choices[0].say).not.toContain('쪽지');
   });
 });
 
