@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   advance, CL, CLIMATE_LINES, climateDepart, climateSettle, COMMS, createGame, disasterSettle, DZ, enableClimate, enableDisasters,
-  foodCost, forecast, resolveStop, freezeDepart, freezeTrackBoost, heatCost, outsideView, PLACES, predictStall, segTemp, stageAt, tempMult,
+  foodCost, forecast, resolveStop, freezeDepart, freezeTrackBoost, heatCost, outsideView, PLACES, predictStall, rowAt, segTemp, stageAt, tempMult,
 } from '../../src/game';
 import type { Game, Weather } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -241,8 +241,20 @@ describe('climate', () => {
     expect(freezeTrackBoost(g, pool)).toEqual(pool);
   });
 
-  it('11 기온 켬·끔에서 눈보라 두 단계 예고 글과 정산이 같다(결정 338 그대로)', () => {
+  it('11 기온 켬·끔에서 눈보라 두 단계 예고 글과 정산이 같다(결정 338 그대로). 서막엔 계절표가 눈보라를 막는다', () => {
     DZ.blizzardP = 1; DZ.coldP = 0; DZ.lead = 2;
+    // 계절표가 눈보라를 허락하는 구간이면(서막 다음 막) 기온 켠 판도 같은 두 단계 예고를 낸다. 서막 줄 하나를 잠시 허락으로 바꿔 본다.
+    const row = rowAt(DZ.fromSeg + DZ.lead);
+    const runBlocked = (() => {
+      const g = createGame('cl-dz');
+      enableDisasters(g);
+      enableClimate(g);
+      g.seg = DZ.fromSeg;
+      disasterSettle(g);
+      return g.disaster;
+    })();
+    expect(runBlocked).toBeUndefined();
+    row.blizzard = true;
     const run = (on: boolean) => {
       const g = createGame('cl-dz');
       enableDisasters(g);
@@ -254,7 +266,11 @@ describe('climate', () => {
       disasterSettle(g);
       return { a, b: { ...g.disaster }, lines: g.journal.map(j => j.text), cards: g.cards.map(c => c.kind) };
     };
-    expect(run(true)).toEqual(run(false));
+    try {
+      expect(run(true)).toEqual(run(false));
+    } finally {
+      row.blizzard = false;
+    }
   });
 
   it('12 저장 뒤 불러와도 기온 칸이 같고, 날씨 글에 장소 이름이 없다', () => {

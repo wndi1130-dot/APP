@@ -7,11 +7,13 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
 const AimModel = preload("res://game/sim/aim_model.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const Wear = preload("res://game/sim/wear.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
+const Motion = preload("res://game/sim/motion.gd")
 
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
@@ -59,6 +61,9 @@ var game
 ## The player's shove pressed during a blow: it goes once the blow is over
 ## (decision 420). Short-lived, never saved.
 var shove_after: Dictionary = {}
+## Melee blows under way, by person: when each began (the game clock) and its
+## motion row, for the feet it holds (decision 425: feet_held).
+var blows: Dictionary = {}
 var tracers: Array = []                 # {"from", "to", "t"} for the view
 var kills: int = 0
 # Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
@@ -434,6 +439,11 @@ static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
 func start_swing(p, at) -> void:
 	if p.swing_t > 0.0 or p.strike_t > 0.0 or not _hands_free_for_blow(p):
 		return
+	# Running, the blow goes out as a shove (decision 425, as in the reference
+	# game: no swing at a run). Stopped, it is a swing again.
+	if p.is_running_now():
+		_shove_now(p)
+		return
 	var stomp_it: bool = stomps(p, at)
 	p.strike_kind = "stomp" if stomp_it else "swing"
 	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
@@ -444,7 +454,27 @@ func start_swing(p, at) -> void:
 	p.strike_t = windup
 	p.strike_total = windup
 	p.swing_t = windup
+	if not stomp_it:
+		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
 
+
+## True while a melee blow holds the feet (decision 425): from its weapon's
+## feet_from of the swing to its end (Motion.swing_row), the body does not walk
+## off under the stick. Shoves and stomps do not hold them.
+func feet_held(p) -> bool:
+	var id: int = p.get_instance_id()
+	if not blows.has(id):
+		return false
+	if p.strike_t <= 0.0 and p.swing_t <= 0.0:
+		blows.erase(id)
+		return false
+	var blow: Dictionary = blows[id]
+	var row: Dictionary = blow["row"]
+	if row.is_empty():
+		return false
+	var gone: float = (game.clock.elapsed - float(blow["at"])) * float(blow["mult"])
+	var feet: Vector2 = row["feet"]
+	return gone >= feet.x and gone < feet.y
 
 ## The attack pad with nobody in reach (decision 405, as in the reference game): the
 ## weapon comes round all the same and lands on whatever is in its arc by then
@@ -708,8 +738,14 @@ func start_shove(p) -> void:
 		if p == game.player:
 			shove_after[p.get_instance_id()] = true
 		return
-	if not _hands_free_for_blow(p):
+	_shove_now(p)
+
+
+## The shove itself, drawn back first (start_shove; a blow at a run).
+func _shove_now(p) -> void:
+	if striking(p) or not _hands_free_for_blow(p):
 		return
+	blows.erase(p.get_instance_id())
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
 	p.swing_t = p.shove_t
 
@@ -741,7 +777,10 @@ func shove(p) -> void:
 	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
 	var hit := 0
 	for z in game.zombies.in_radius(p.position, SHOVE_REACH):
-		if z["state"] == "frozen" or z["state"] == "downed" or z["state"] == "rising":
+		if z["state"] == "frozen" or z["state"] == "rising":
+			continue
+		# Getting up off the ground it can be shoved again (decision 425); lying it cannot.
+		if z["state"] == "downed" and not game.zombies.getting_up(z):
 			continue
 		var to_z: Vector3 = z["pos"] - p.position
 		to_z.y = 0
@@ -827,7 +866,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 	var rng: RandomNumberGenerator = game.rng
 	var now: float = game.clock.elapsed
 	var part: String = BodyState.pick_scratch_part(wound_rng())
-	var block: float = GrabRules.clothing_block(p.coat, part)
+	var block: float = Wear.block(p, part)
 	var outcome: String = GrabRules.attack_outcome(rng, block)
 	match outcome:
 		"grab":
@@ -856,14 +895,13 @@ func zombie_reaches(z: Dictionary, p) -> String:
 				game.hud.grab_alert(front)
 		"scratch":
 			p.body.apply_scratch(rng, now, part)
-			GrabRules.damage_clothing(p.coat, part, false)
+			Wear.tear(p, part, false)
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
 			if p.team != "raider":
 				game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 		"blocked":
-			GrabRules.damage_clothing(p.coat, part, true)
-			_toast(p, "외투가 손톱을 막았다.")
+			_toast(p, _held_line(Wear.tear(p, part, true)))
 	return outcome
 
 
@@ -873,17 +911,25 @@ func zombie_reaches(z: Dictionary, p) -> String:
 func breach_reaches(p) -> String:
 	var now: float = game.clock.elapsed
 	var part: String = BodyState.pick_scratch_part(wound_rng())
-	var block: float = GrabRules.clothing_block(p.coat, part)
+	var block: float = Wear.block(p, part)
 	if game.rng.randf() < block:
-		GrabRules.damage_clothing(p.coat, part, true)
-		_toast(p, "외투가 손톱을 막았다.")
+		_toast(p, _held_line(Wear.tear(p, part, true)))
 		return "blocked"
 	p.body.apply_scratch(game.rng, now, part)
-	GrabRules.damage_clothing(p.coat, part, false)
+	Wear.tear(p, part, false)
 	p.panic = minf(1.0, p.panic + 0.3)
 	game.telemetry.injury(now, p.pid, "scratch")
 	game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 	return "scratch"
+
+
+## What a held nail shows: the coat as it always said, else the garment that held.
+func _held_line(by: String) -> String:
+	if by == "" or by == String(Wear.KINDS["jacket_short"]["name"]):
+		return "외투가 손톱을 막았다."
+	var last: int = by.unicode_at(by.length() - 1) - 0xAC00
+	var closed: bool = last >= 0 and last < 11172 and last % 28 != 0
+	return "%s%s 손톱을 막았다." % [by, "이" if closed else "가"]
 
 
 ## The window ran out: the bite lands (body_injury 2). Witnesses go on the receipt.
@@ -906,9 +952,9 @@ func bite(p) -> void:
 		crawler = crawler or bool(z.get("crawl", false))
 	var part: String = GrabRules.bite_location(rng, crawler)
 	var site: String = BodyState.pick_side(wound_rng(), part)
-	var block: float = GrabRules.clothing_block(p.coat, site, true)
+	var block: float = Wear.block(p, site, true)
 	var blocked: bool = block > 0.0 and rng.randf() < block
-	GrabRules.damage_clothing(p.coat, site, blocked)
+	Wear.tear(p, site, blocked, true)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
 	for z in p.grabbers.duplicate():

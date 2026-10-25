@@ -117,14 +117,53 @@ const NAILS_MOST: int = 4
 const PARTS_CHANCE: float = 0.12
 const PARTS_MOST: int = 5
 const PARTS_KINDS: Array = [["gears", 2], ["springs", 2], ["wire_coil", 1]]
-## Clothes left behind (decision 423 card 2): each may lie, once a stop, in one
-## of these rooms of a house lived in (the gloves also in a workshop or a garage).
+## Clothes left behind (decision 423 card 2, more of them decision 434): each
+## may lie, once a stop, in one of these rooms ([] for any) of these buildings:
+## the warm and the plain where people lived, the work clothes where people
+## worked. The first five as they were; the rest new (common 0.1, 0.06, rare 0.03).
+## What everyone goes out in is not left lying, and the fire suit and the vest
+## come off the dead (PR C).
+const WORK_PLACES: Array[String] = ["farm", "garage", "workshop"]
 const WEAR_FINDS: Array = [
 	["coat_long", 0.30, ["bedroom", "storage", "hall"], LIVED_IN],
 	["jacket_short", 0.20, ["bedroom", "storage", "hall"], LIVED_IN],
 	["hat_knit", 0.40, ["bedroom", "hall"], LIVED_IN],
 	["hood", 0.30, ["bedroom", "storage"], LIVED_IN],
 	["gloves", 0.35, [], ["house", "farm", "fish", "clinic", "garage", "workshop"]],
+	["sweater_wool", 0.10, ["bedroom", "storage"], LIVED_IN],
+	["socks_wool", 0.10, ["bedroom"], LIVED_IN],
+	["scarf_wool", 0.10, ["bedroom", "hall"], LIVED_IN],
+	["shirt_flannel", 0.10, ["bedroom", "storage"], LIVED_IN],
+	["hat_earflap", 0.10, ["bedroom", "hall"], LIVED_IN],
+	["mittens", 0.10, ["bedroom", "hall"], LIVED_IN],
+	["raincoat", 0.10, ["hall", "storage"], ["house", "farm", "fish"]],
+	["jacket_work", 0.10, ["hall", "storage"], ["farm", "fish", "garage", "workshop"]],
+	["trousers_work", 0.10, ["storage"], WORK_PLACES],
+	["boots_work", 0.10, ["hall", "storage"], WORK_PLACES],
+	["gloves_cotton", 0.10, [], ["clinic", "garage", "workshop"]],
+	["undershirt_wool", 0.06, ["bedroom"], LIVED_IN],
+	["long_johns", 0.06, ["bedroom"], LIVED_IN],
+	["shirt_wool", 0.06, ["bedroom"], LIVED_IN],
+	["sweater_thick", 0.06, ["bedroom", "storage"], LIVED_IN],
+	["vest_knit", 0.06, ["bedroom"], LIVED_IN],
+	["jacket_plain", 0.06, ["bedroom", "hall"], LIVED_IN],
+	["coat_padded", 0.06, ["bedroom", "hall"], LIVED_IN],
+	["trousers_wool", 0.06, ["bedroom"], LIVED_IN],
+	["hood_wool", 0.06, ["bedroom"], LIVED_IN],
+	["cap_brim", 0.06, ["hall"], ["house", "farm", "garage"]],
+	["vest_quilted", 0.06, ["hall", "storage"], ["house", "farm", "fish"]],
+	["shirt_work", 0.06, ["storage", "hall"], WORK_PLACES],
+	["overtrousers_oil", 0.06, ["storage"], ["farm", "fish"]],
+	["boots_rubber", 0.06, ["hall", "storage"], ["farm", "fish"]],
+	["bib_work", 0.06, ["storage"], WORK_PLACES],
+	["coverall", 0.06, ["storage"], ["garage", "workshop"]],
+	["gloves_leather", 0.06, ["storage", "toolbox"], ["garage", "workshop"]],
+	["mask_cloth", 0.06, [], ["clinic", "workshop"]],
+	["coat_leather", 0.03, ["hall", "storage"], ["house", "garage"]],
+	["coat_wool_long", 0.03, ["hall"], LIVED_IN],
+	["boots_fur", 0.03, ["hall"], LIVED_IN],
+	["scarf_thick", 0.03, ["bedroom"], LIVED_IN],
+	["dress_wool", 0.03, ["bedroom"], ["house"]],
 ]
 const FUEL_CHANCE: float = 0.30         # one fuel can in a garage
 const RARE_CHANCE: float = 0.25         # one named find

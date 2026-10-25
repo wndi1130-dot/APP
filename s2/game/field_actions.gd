@@ -12,6 +12,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 
 const REACH: float = 1.4
@@ -829,9 +830,11 @@ func pick_up(p, idx: int) -> void:
 
 # ---------------------------------------------------------------- clothes
 
-## Put on the garment lying at `idx` (decision 423 card 2): a job of the hands
-## as long as its motion (wear.gd TIME); what was in its place is put down at
-## the feet as it is. Cut short, the garment stays where it lay.
+## Put on the garment lying at `idx` (decision 434): a job of the hands as
+## long as its motion, and for a layer under others as long as taking those off
+## and putting them back (wear.gd dress_time); what was in its place, or a
+## whole suit it puts aside, is put down at the feet as it is. Cut short, the
+## garment stays where it lay.
 func dress(p, idx: int) -> void:
 	if idx < 0 or idx >= game.ground_items.size():
 		return
@@ -839,7 +842,7 @@ func dress(p, idx: int) -> void:
 	if not g.has("garment") or not _can_start(p, g["pos"]):
 		return
 	var slot: String = Wear.slot_of(String(g["id"]))
-	p.start_action("wear", "입기", float(Wear.TIME[slot]), _dressed.bind(p, g))
+	p.start_action("wear", "입기", Wear.dress_time(p, String(g["id"])), _dressed.bind(p, g))
 	if p.action == "wear":
 		p.action_busy = {"slot": slot, "off": false}
 
@@ -854,16 +857,18 @@ func _dressed(p, g: Dictionary) -> void:
 		return
 	game.ground_items.remove_at(idx)
 	var state: Dictionary = (g["garment"] as Dictionary).duplicate(true)
-	_put_down_garment(p, Wear.put_on(p, state))
+	for old: Dictionary in Wear.put_on(p, state):
+		_put_down_garment(p, old)
 	if p == game.player:
 		game.hud.toast("%s 입었다." % String(state.get("name", game.item_name(String(g["id"])))))
 
 
-## Take off what is in `slot`; it is put down at the feet as it is.
+## Take off what is in `slot` (the layers over it off and back on); it is put
+## down at the feet as it is.
 func undress(p, slot: String) -> void:
-	if String(Wear.worn_ids(p).get(slot, "")) == "" or not p.can_act() or p.action != "" or striking(p):
+	if Wear.occupant(p, slot).is_empty() or not p.can_act() or p.action != "" or striking(p):
 		return
-	p.start_action("wear", "벗기", float(Wear.TIME[slot]), _undressed.bind(p, slot))
+	p.start_action("wear", "벗기", Wear.undress_time(p, slot), _undressed.bind(p, slot))
 	if p.action == "wear":
 		p.action_busy = {"slot": slot, "off": true}
 
@@ -911,6 +916,37 @@ func spot_default(p, id: String, verb: String) -> void:
 				game.hud.work_panel()
 			else:
 				start_work(p)
+		"core":
+			core_scene(p, id)
+
+
+## A freight yard's or works' stopped machine (decision 426, core_scenes.gd). A core left in it
+## comes away in half a minute of normal noise, start and end; a stripped one is a short look.
+## A hidden core looks stripped: without the engine hand it stays where it is.
+func core_scene(p, id: String) -> void:
+	var spot: Dictionary = game.data["spots"][id]
+	match String(spot["state"]):
+		"core":
+			game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+			p.start_action("salvage", "떼어 내기", CoreScenes.DETACH_SECONDS, _core_taken.bind(p, id))
+		"bare", "hidden", "seen", "seen_hidden":
+			if spot["state"] == "bare":
+				spot["state"] = "seen"
+			elif spot["state"] == "hidden":
+				spot["state"] = "seen_hidden"
+			game.view.update_spot(id)
+			game.say(p, "쓸 만한 건 이미 뜯겨 나갔다.")
+
+
+func _core_taken(p, id: String) -> void:
+	var spot: Dictionary = game.data["spots"][id]
+	if spot["state"] != "core":
+		return
+	spot["state"] = "taken"
+	game.make_sound(FieldGrid.center(spot["cell"]), SimNoise.Level.NORMAL, "salvage", p)
+	p.add_item(spot["item"])
+	game.view.update_spot(id)
+	game.say(p, "%s를 떼어 냈다." % game.item_name(spot["item"]))
 
 
 func _salvaged(p, id: String) -> void:
@@ -1566,7 +1602,8 @@ func _near_things(p) -> Array:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])
 			var d: float = at.distance_to(p.position)
-			if d < NEAR_USE + 0.5 and spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"]:
+			var usable: bool = spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"] or spot["kind"] == "core" and spot["state"] != "taken"
+			if d < NEAR_USE + 0.5 and usable:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []

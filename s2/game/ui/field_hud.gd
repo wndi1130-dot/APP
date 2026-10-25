@@ -135,6 +135,8 @@ const BAG_PANE_W: float = 600.0
 ## How high a list of things stands before it is dragged (mockup px): three
 ## rows in the bag, four in a place being searched.
 const BAG_LIST_MAX: float = 144.0
+## The rows of what is worn shown before that list scrolls (about three).
+const WORN_LIST_MAX: float = 132.0
 const LOOT_LIST_MAX: float = 194.0
 ## A thing's put-down key, and the bag's list beside the journal (mockup px).
 const DROP_W: float = 84.0
@@ -2822,7 +2824,8 @@ func bag_panel() -> void:
 		swap.custom_minimum_size.x = UiFonts.px(DROP_W)
 		hw.add_child(swap)
 		left.add_child(hw)
-	# What is worn (decision 423 card 2), a row to each of the three places.
+	# What is worn (decision 434), a row to each place with something in it,
+	# skin first, in a list of its own that scrolls past a few rows.
 	var worn := VBoxContainer.new()
 	worn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	worn.add_theme_constant_override("separation", 0)
@@ -2831,7 +2834,9 @@ func bag_panel() -> void:
 		if String(ids[slot]) != "":
 			worn.add_child(_worn_row(slot, String(ids[slot])))
 	if worn.get_child_count() > 0:
-		left.add_child(worn)
+		var worn_list := GlassPane.scroll(worn, WORN_LIST_MAX)
+		worn_list.name = "Worn"
+		left.add_child(worn_list)
 	if p.items.is_empty():
 		left.add_child(GlassPane.note("빈 가방", BAG_LIST_W, GlassPane.INK3, 13.0))
 	else:
@@ -2889,7 +2894,7 @@ func _bag_row(id: String, n: int) -> Control:
 	return h
 
 
-## One thing worn: its picture and name, how worn the coat is once it shows
+## One thing worn: its picture and name, how worn it is once it shows
 ## (해짐, 너덜), and a key that takes it off (field_actions.gd undress).
 func _worn_row(slot: String, id: String) -> Control:
 	var p = game.player
@@ -2900,7 +2905,7 @@ func _worn_row(slot: String, id: String) -> Control:
 	var icon: String = game.item_icon(id)
 	if icon != "" and HudIcons.PATHS.has(icon):
 		h.add_child(_icon_rect(icon, ITEM_ICON_PX, GlassPane.INK))
-	var word: String = Wear.state_word(p.coat) if slot == "outer" else ""
+	var word: String = Wear.state_word(Wear.occupant(p, slot))
 	var shown: String = game.item_name(id) if word == "" or word == Wear.STATE_WORDS[0] else "%s · %s" % [game.item_name(id), word]
 	var name_l := UiFonts.label(shown, UiFonts.WORD, 500, 13.0, GlassPane.INK, 0.39)
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL

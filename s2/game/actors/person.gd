@@ -41,12 +41,32 @@ var aim := AimModel.new()
 var hands: Array = []                  # [{id, quality, condition, loaded}], index 0 = in hand
 var bag: String = "pack"
 var items: Dictionary = {}             # item id -> count
-## The three places for clothes (wear.gd, decision 423 card 2): the outer one
-## is this coat (as grab_rules.gd reads it), the head one a hat or a hood ({}
-## for none), the hands the gloves.
-var coat: Dictionary = Wear.make("jacket_short")
-var hat: Dictionary = {}
-var gloves: bool = true
+## What is worn, place by place (wear.gd, decision 434): {slot: garment state}.
+## coat, hat and gloves are the old three places seen through it: the coat
+## over the body (the coat over the jacket, else the jacket), what is on the
+## head ({} for none), whether the hands are gloved.
+var worn: Dictionary = Wear.outfit(Wear.DEFAULT)
+var coat: Dictionary:
+	get:
+		return Wear.torso_outer(self)
+	set(value):
+		Wear.set_torso_outer(self, value)
+var hat: Dictionary:
+	get:
+		return worn.get("head", {})
+	set(value):
+		if value.is_empty():
+			worn.erase("head")
+		else:
+			worn["head"] = value
+var gloves: bool:
+	get:
+		return worn.has("hands")
+	set(value):
+		if value and not worn.has("hands"):
+			worn["hands"] = Wear.make("gloves")
+		elif not value:
+			worn.erase("hands")
 var smell: int = 0                     # 0 clean, 1 sweat, 2 stench
 var traits: Array = []
 var lamp: Dictionary = {}              # {strength, reach} of the lantern carried; empty = none
@@ -188,6 +208,8 @@ func weight() -> float:
 	for i in range(1, hands.size()):
 		w += Carry.item_weight(hands[i]["id"]) * Carry.RESERVE_WEAPON_WEIGHT
 	w += Carry.SOAKED_WEIGHT if heat.wet > Carry.SOAKED_THRESHOLD else 0.0
+	# Clothes worn past what everyone goes out in (wear.gd 5장).
+	w += Wear.extra_weight(self)
 	return w
 
 
@@ -232,7 +254,7 @@ func smell_mult() -> float:
 
 
 func mult_ctx() -> Dictionary:
-	return {"carry_state": carry_state(), "cold_level": cold_level(), "gloves": gloves, "heavy_coat": bool(coat.get("heavy", false)), "panic": panic > 0.6, "strength": int(skills["strength"])}
+	return {"carry_state": carry_state(), "cold_level": cold_level(), "gloves": gloves, "heavy_coat": Wear.heavy(self), "barefoot": Wear.barefoot(self), "panic": panic > 0.6, "strength": int(skills["strength"])}
 
 
 func mults() -> Dictionary:

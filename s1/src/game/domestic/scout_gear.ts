@@ -1,5 +1,6 @@
 import { P } from '../data';
 import type { Weather } from '../omens';
+import { rainAt } from '../season';
 import { journal } from '../state';
 import type { Game, StopState } from '../state';
 import { D } from './data';
@@ -91,7 +92,9 @@ export function applyScoutGear(g: Game, stop: StopState, plan: ReturnType<typeof
   if (used.glass || used.signal || used.pedal || used.motor) stop.scoutGear = used;
   // 짙음 위로 넘친 소리는 버린다(결정 371 셋째). 그래야 뒤에 건 미끼가 한 단계를 온전히 내린다.
   if (plan.noise) stop.noise = Math.min(2, threatStep(effThreat(stop)) + plan.noise) - threatStep(stop.threat ?? 1);
-  if (plan.blind) journal(g, `${BLIND_NAME[stop.weather ?? 'fog'] ?? '안개'}에 가려 망원경으로 멀리 보지 못했다.`);
+  // 기온 켠 판에서 따뜻한 구간의 진눈깨비는 비다(omens.ts RAIN_SWAP).
+  const blindName = stop.weather === 'sleet' && g.climate && rainAt(g.seg) ? '비' : BLIND_NAME[stop.weather ?? 'fog'] ?? '안개';
+  if (plan.blind) journal(g, `${blindName}에 가려 망원경으로 멀리 보지 못했다.`);
 }
 
 /** 미끼를 못 거는 까닭. 걸 수 있으면 undefined */

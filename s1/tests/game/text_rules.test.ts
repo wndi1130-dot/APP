@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   advance, castVote, chooseCard, COMMON_CONDITIONS, COMMS, CONDITIONS, createGame, currentAgenda, DISEMBARK_LINES, enterStranded, LAWS, makeDeal, PLACES,
-  elderCandidate, fallSick, FAMILIES, PLACE_LOOK, PLACE_OMENS, PROFILES, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS,
+  elderCandidate, fallSick, FAMILIES, PLACE_LOOK, PLACE_OMENS, PROFILES, RELATION_LINES, VERDICT, WEATHER_LOOK, WEATHER_OMENS, SNOW_SWAP, FROST_SWAP, RAIN_SWAP,
   primaryAction, resolveStop, SECRET_POOL, toolStatus, TRAVEL_EVENTS, viewCard,
 } from '../../src/game';
 import type { Card } from '../../src/game';
@@ -103,6 +103,7 @@ describe('화면 글 규칙', () => {
       ...Object.values(WEATHER_LOOK).flat(),
       ...Object.values(PLACE_OMENS).flatMap(t => Object.values(t).flat()),
       ...Object.values(WEATHER_OMENS).flatMap(t => Object.values(t).flat()),
+      ...[SNOW_SWAP, FROST_SWAP, RAIN_SWAP].flatMap(m => Object.values(m)),
       ...Object.values(VERDICT),
       ...Object.values(DISEMBARK_LINES),
       ...Object.values(RELATION_LINES),

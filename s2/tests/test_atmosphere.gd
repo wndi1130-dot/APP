@@ -306,15 +306,17 @@ func test_a_stop_takes_its_cold_from_the_act() -> void:
 	assert_gt(later.snow_cover.depth_cm, early.snow_cover.depth_cm + 3.0)
 
 
-func test_the_cold_changes_the_picture_and_never_the_rules() -> void:
+## 코디네이터 10-25 (the field's air follows the season table; it was -14 C for
+## every stop): the cold moves the rules' air too, and what falls with it, so a
+## rainy picture is a rainy stop. The field clock stays the rules' own.
+func test_the_cold_changes_the_picture_and_the_air_with_it() -> void:
 	var hard = _stop()
 	var warm = _stop({"cold": 0.0})
 	assert_eq(hard.cold, 1.0)
-	# The rules read the weather and its rules temperature only.
-	assert_eq(warm.weather.kinds, hard.weather.kinds)
-	assert_eq(warm.weather.ambient_c, hard.weather.ambient_c)
-	assert_almost_eq(warm.weather.sight_mult(), hard.weather.sight_mult(), 0.0001)
-	assert_almost_eq(warm.weather.sound_mult(true), hard.weather.sound_mult(true), 0.0001)
+	assert_almost_eq(hard.weather.ambient_c, -14.0, 0.001, "the hardest cold is the old fixed air")
+	assert_almost_eq(warm.weather.ambient_c, 7.0, 0.001, "the warmest picture's midday")
+	assert_eq(hard.weather.kinds, ["fog", "snow"] as Array[String])
+	assert_eq(warm.weather.kinds, ["fog", "rain"] as Array[String], "what falls is the air's, in the rules as in the picture")
 	assert_eq(warm.clock.SUNSET_MIN, hard.clock.SUNSET_MIN)
 	# The picture: the warm stage's snow falls as rain on bare, wet ground.
 	assert_eq(String(warm.atmo["falls"]), "rain")
@@ -367,14 +369,15 @@ func test_the_slice_hangs_the_outside_behind_the_running_train() -> void:
 	var f = SliceFlow.new()
 	# The train's own screen at the stop: without the stop scene (with it, the
 	# stop pick is the scene from the roof, test_stop_cinema.gd).
-	f.opts = {"skip_field": true, "seed": 3, "cinema": false}
+	# Seed 2 draws snow on stretch 1 and sleet on stretch 4 from the season table.
+	f.opts = {"skip_field": true, "seed": 2, "cinema": false}
 	add_child_autofree(f)
 	assert_not_null(f.outside)
 	assert_eq(f.outside.get_parent(), f.train.camera, "the camera carries it")
 	assert_true(f.outside.moving, "running on the first stretch")
 	# The first stretch sets out in the early cold snap; late autumn rain comes after.
 	assert_ne(String(f.weather.falls), "rain", "the first stretch, the cold snap")
-	assert_eq(String(f.outside_look({}, 4)["falls"]), "rain", "the fourth stretch, late autumn")
+	assert_eq(String(f.outside_look({}, 4)["falls"]), "rain", "the fourth stretch, late autumn: its sleet falls as rain")
 	assert_eq(String(f.outside_look({}, 4)["season"]), "late_autumn")
 	f.next()
 	assert_false(f.outside.moving, "standing at the stop")
