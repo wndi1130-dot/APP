@@ -374,6 +374,27 @@
           "additionalProperties": false
         },
         {
+          "type": "object",
+          "description": "계절표의 눈·얼음(season_table.json 그 구간 줄). frost는 얼음이 서는 구간(밤 결빙, 한파, 선로 결빙), snow는 눈이 쌓인 구간. 기온을 켜지 않은 판은 늘 참이다.",
+          "properties": {
+            "type": {
+              "const": "season"
+            },
+            "needs": {
+              "type": "string",
+              "enum": [
+                "frost",
+                "snow"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "needs"
+          ],
+          "additionalProperties": false
+        },
+        {
           "$ref": "#/$defs/resourceCondition"
         }
       ]
