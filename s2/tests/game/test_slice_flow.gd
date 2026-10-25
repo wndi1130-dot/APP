@@ -172,16 +172,12 @@ func test_choosing_the_stop_is_the_paper_card_and_its_keys_go_on() -> void:
 
 
 func test_choosing_the_stop_goes_onto_the_roof_and_the_card_comes_up_over_the_station() -> void:
-	# Seed 12 draws sleet for the stop (stretch 2) from the season table, as S1 does.
-	var f = _cinema_flow({"seed": 12})
+	var f = _cinema_flow()
 	assert_true(f.loader.has_data(), "the stop's map made ready on the train")
 	f.next()
 	assert_eq(f.current(), "stop_pick")
 	assert_not_null(f.cinema, "the roof of the running train first")
 	assert_eq(f.cinema.stop_opts["act_progress"], f._field_opts()["act_progress"], "in the field's own weather")
-	assert_eq(String(f.stop_weather(2)["weather"]), "sleet")
-	# The season table (decision 423, 서막 (나)): the first stop is the early cold snap (-1 C), no rain.
-	assert_eq(f.cinema.falls, "sleet", "the first stop's sleet, as on the train and the field")
 	assert_null(f.card, "no card straight away")
 	assert_false(f.gauges.visible, "nothing over the roof but the scene")
 	assert_null(f.train, "the train's inside is not drawn under it")
@@ -215,11 +211,17 @@ func test_sent_the_field_is_built_under_the_scene_and_shown_when_it_lands() -> v
 	f.next()
 	_tick_to(f, "hold")
 	(f.card.find_child("Send", true, false) as Button).pressed.emit()
+	var roof_look: Dictionary = f.cinema.look
 	var building = f.loader.field
 	assert_not_null(building, "the field goes up as the brakes go on")
 	assert_false(building.visible)
 	assert_eq(building.opts["seed"], 5)
 	await wait_for_signal(f.loader.field_built, 60)
+	# The scene wore the weather this field opens in, whatever the season table
+	# gives this stop: what falls, how cold it is, the season's look.
+	assert_eq(String(roof_look["falls"]), String(building.atmo["falls"]), "the same rain, sleet or snow over the roof and the field")
+	assert_almost_eq(float(roof_look["temp_c"]), float(building.atmo["temp_c"]), 0.01, "as cold")
+	assert_eq(String(roof_look["season"]), String(building.atmo["season"]), "the same season's look")
 	# The scene runs on its own meanwhile: it may have handed the field over already.
 	assert_true(f.pending_field == building or f.field == building, "handed to the slice")
 	_tick_to(f, "out")

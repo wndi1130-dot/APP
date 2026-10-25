@@ -547,9 +547,12 @@ static func stop_look(o: Dictionary) -> Dictionary:
 		hour = [sun.x + 0.25, sun.y - 0.4, sun.y + 1.7][clampi(int(round(-hour)) - 2, 0, 2)]
 	elif hour < 0.0:
 		hour = HOUR
-	var l: Dictionary = Atmosphere.look(hour, kinds, region, cold, {"wind": weather.wind, "side": side})
+	# The season by the season table, as the field names it (a cold given
+	# outright names it by that cold).
+	var season := Atmosphere.season_for(cold, side) if o.has("cold") else Atmosphere.season_at(act, float(o.get("act_progress", 0.0)), scheme)
+	var l: Dictionary = Atmosphere.look(hour, kinds, region, cold, {"wind": weather.wind, "side": side, "season": season})
 	var open_ground := bool(Atmosphere.region(region)["open"])
-	var lying = SnowCover.new(Atmosphere.season_for(cold, side), open_ground, 0.0, Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side))
+	var lying = SnowCover.new(season, open_ground, 0.0, Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side))
 	return {"look": l, "params": Atmosphere.params(l, weather.wind_dir, lying.cover())}
 
 
