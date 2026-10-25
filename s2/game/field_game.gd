@@ -27,6 +27,7 @@ const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const MoveRules = preload("res://game/sim/move_rules.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
@@ -1559,9 +1560,11 @@ func _move_person(p: Person, delta: float) -> void:
 	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
 	if combat.feet_held(p):
 		p.moving = false
+		p.pace = 0.0
 		return
 	if p.path.is_empty():
 		p.moving = false
+		p.pace = 0.0
 		return
 	var next := p.path[0]
 	var d := next - p.position
@@ -1582,6 +1585,30 @@ func _move_person(p: Person, delta: float) -> void:
 			hud.toast("너무 무거움")
 			p.stop()
 		return
+	var way := atan2(d.x, d.z)
+	var face := way
+	if p != player:
+		# One the AI walks turns into the way before it goes and gets going (move_rules.gd);
+		# backing off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
+		var top := spd
+		var hold: Variant = p.brain.get("face_hold")
+		if hold is Vector3 and clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
+			var them: Vector3 = hold
+			face = atan2(them.x - p.position.x, them.z - p.position.z)
+			if absf(angle_difference(face, way)) > PI * 0.5:
+				spd = minf(spd, MoveRules.BACKPEDAL)
+				p.pace = minf(p.pace, MoveRules.BACKPEDAL)   # none runs backwards
+		elif p.turn_rate > 0.0:
+			var share := MoveRules.heading_share(absf(angle_difference(p.look, way)))
+			spd *= share
+			if share <= 0.0:
+				p.pace = 0.0   # a half turn is made standing, not gliding off the other way meanwhile
+		p.facing = face
+		p.pace = MoveRules.paced(p.pace, spd, top, Person.WALK, delta)
+		spd = p.pace
+		if spd <= 0.0:
+			p.moving = false   # it turns on the spot first
+			return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
@@ -1595,8 +1622,10 @@ func _move_person(p: Person, delta: float) -> void:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
-	p.facing = atan2(step.x, step.z)
+	p.facing = face
 	var gone := p.position.distance_to(dest)
+	if absf(angle_difference(face, way)) > PI * 0.5:
+		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
@@ -1626,7 +1655,7 @@ static func steps_in(p, gone: float) -> int:
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
 	for at: float in SimNoise.STEP_AT:
-		n += int(floorf(now - at)) - int(floorf(was - at))
+		n += absi(int(floorf(now - at)) - int(floorf(was - at)))   # a step back is a step too
 	return n
 
 

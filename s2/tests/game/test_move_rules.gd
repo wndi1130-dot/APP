@@ -1,0 +1,144 @@
+extends GutTest
+## One the AI walks turns into the way before it goes, gets going and slows over
+## a moment, and backs off a crowd with its face to them, the walk drawn
+## backwards (move_rules.gd; user field test 10-25: the companions "whip round
+## and move like drones"). The player on a path goes as before.
+
+const FieldGame = preload("res://game/field_game.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
+const MoveRules = preload("res://game/sim/move_rules.gd")
+const Person = preload("res://game/actors/person.gd")
+
+var game
+var ally
+
+
+func before_each() -> void:
+	game = FieldGame.new()
+	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	game.zombies.list.clear()
+	game.pending_spawn.clear()
+	game.player.position = game.lift(Vector2i(60, 7), 0)
+	ally = null
+	for q in game.squad:
+		if q != game.player:
+			q.position = game.lift(Vector2i(30, 7), 0)
+			if ally == null:
+				ally = q
+	ally.position = game.lift(Vector2i(60, 12), 0)
+	ally.turn_rate = deg_to_rad(400.0)
+	ally.brain.erase("face_hold")
+
+
+func _east(p) -> void:
+	p.path = PackedVector3Array([p.position + Vector3(4, 0, 0)])
+
+
+func _top(p) -> float:
+	return p.speed(game.grid_at(p.position).floor_at(FieldGrid.cell_of(p.position)))
+
+
+func test_the_share_of_pace_by_how_far_the_body_is_off_the_way() -> void:
+	assert_eq(MoveRules.heading_share(0.0), 1.0)
+	assert_eq(MoveRules.heading_share(deg_to_rad(MoveRules.FREE_DEG)), 1.0)
+	assert_almost_eq(MoveRules.heading_share(deg_to_rad(60.0)), cos(deg_to_rad(60.0)) / cos(deg_to_rad(MoveRules.FREE_DEG)), 0.0001)
+	assert_eq(MoveRules.heading_share(deg_to_rad(MoveRules.STILL_DEG)), 0.0)
+	assert_eq(MoveRules.heading_share(PI), 0.0)
+
+
+func test_the_pace_comes_up_and_goes_down_over_a_moment() -> void:
+	var walk := Person.WALK
+	assert_almost_eq(MoveRules.paced(0.0, walk, walk, walk, 0.1), walk * 0.1 / MoveRules.START, 0.0001)
+	assert_eq(MoveRules.paced(0.0, walk, walk, walk, 1.0), walk, "not past what it wants")
+	assert_almost_eq(MoveRules.paced(walk, 0.0, walk, walk, 0.1), walk - walk * 0.1 / MoveRules.STOP, 0.0001)
+	var run := Person.RUN
+	assert_almost_eq(MoveRules.paced(run, 0.0, run, walk, 0.1), run - run * 0.1 / MoveRules.STOP_RUN, 0.0001, "a run takes longer to stop")
+
+
+func test_a_body_still_turned_away_turns_on_the_spot_before_it_goes() -> void:
+	_east(ally)
+	ally.look = -PI * 0.5   # its drawn body faces west, the way is east
+	var at: Vector3 = ally.position
+	game._move_person(ally, 0.1)
+	assert_eq(ally.position, at, "it does not glide off backwards")
+	assert_false(ally.moving)
+	assert_almost_eq(ally.facing, PI * 0.5, 0.0001, "it means to face the way")
+	ally.look = PI * 0.5
+	game._move_person(ally, 0.1)
+	assert_gt(ally.position.x, at.x, "come round, it goes")
+
+
+func test_a_walker_whose_way_turns_back_stops_and_turns_rather_than_glide_off() -> void:
+	ally.look = PI * 0.5
+	ally.pace = Person.WALK
+	ally.path = PackedVector3Array([ally.position + Vector3(-4, 0, 0)])
+	var at: Vector3 = ally.position
+	game._move_person(ally, 0.1)
+	assert_eq(ally.position, at, "no gliding off the other way while still turned from it")
+	assert_eq(ally.pace, 0.0, "a half turn is made standing")
+	assert_almost_eq(ally.facing, -PI * 0.5, 0.0001)
+
+
+func test_it_gets_going_over_a_moment_not_at_once() -> void:
+	ally.look = PI * 0.5
+	_east(ally)
+	var top := _top(ally)
+	var at: Vector3 = ally.position
+	game._move_person(ally, 0.05)
+	assert_almost_eq(ally.position.distance_to(at), top * 0.05 / MoveRules.START * 0.05, 0.001, "a quarter of its pace in the first twentieth")
+	for _i in 6:
+		game._move_person(ally, 0.05)
+	assert_almost_eq(ally.pace, top, 0.0001, "up to pace after START")
+	ally.stop()
+	game._move_person(ally, 0.05)
+	assert_eq(ally.pace, 0.0, "stopped, it starts from nothing again")
+
+
+func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -> void:
+	var them: Vector3 = ally.position + Vector3(-1.0, 0, 0)
+	ally.brain["face_hold"] = them
+	ally.brain["face_hold_t"] = game.clock.elapsed
+	ally.look = -PI * 0.5
+	ally.pace = Person.RUN
+	ally.brain["step_r"] = 0.5
+	_east(ally)
+	var at: Vector3 = ally.position
+	game._move_person(ally, 0.1)
+	assert_almost_eq(ally.facing, -PI * 0.5, 0.0001, "its face stays to them")
+	assert_gt(ally.position.x, at.x, "it goes back, away from them")
+	assert_lte(ally.position.distance_to(at), MoveRules.BACKPEDAL * 0.1 + 0.0001, "slower than a walk, never a run")
+	assert_lt(float(ally.brain["step_r"]), 0.5, "the walk's round runs back: it is drawn stepping backwards")
+	ally.brain["face_hold_t"] = game.clock.elapsed - MoveRules.FACE_HOLD - 0.1
+	game._move_person(ally, 0.1)
+	assert_almost_eq(ally.facing, PI * 0.5, 0.0001, "the hold over, it turns to the way")
+
+
+func test_swarmed_the_companion_asks_to_keep_its_face_to_them() -> void:
+	var z: Dictionary = game.zombies.spawn("dead", ally.position + Vector3(1.6, 0, 0))
+	game.zombies.spawn("dead", ally.position + Vector3(1.8, 0, 0.6))
+	game.zombies.spawn("dead", ally.position + Vector3(1.7, 0, -0.6))
+	assert_gte(game.ai._crowd(ally), game.ai.CROWD_N)
+	ally.running = true
+	game.ai._engage(ally, z)
+	assert_eq(ally.brain.get("face_hold"), z["pos"])
+	assert_almost_eq(float(ally.brain["face_hold_t"]), game.clock.elapsed, 0.0001)
+	assert_false(ally.running, "it steps back at a walk, not a run")
+
+
+func test_a_step_back_sounds_as_a_step() -> void:
+	ally.brain["step_r"] = 0.6
+	assert_gt(FieldGame.steps_in(ally, -3.0), 0)
+
+
+func test_the_player_on_a_path_still_goes_at_once() -> void:
+	var p = game.player
+	p.look = -PI * 0.5
+	_east(p)
+	var top := _top(p)
+	var at: Vector3 = p.position
+	game._move_person(p, 0.05)
+	assert_almost_eq(p.position.distance_to(at), top * 0.05, 0.001)
+	assert_almost_eq(p.facing, PI * 0.5, 0.0001)
+	assert_eq(p.pace, 0.0, "the player's path walk has no pace of its own")

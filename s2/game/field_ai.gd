@@ -508,7 +508,12 @@ func _engage(p, z: Dictionary) -> void:
 		var away: Vector3 = (p.position - z["pos"])
 		away.y = 0
 		var back: Vector3 = (away.normalized() + (game.player.position - p.position).normalized() * 0.5).normalized()
-		_walk(p, game.walkable_near(p.position + back * 2.5, false, 2), true)
+		# It steps back with its face to them, at a walk, not turning its back to run off
+		# and round again to shove (move_rules.gd; user field test: they "whip round").
+		p.running = false
+		_walk(p, game.walkable_near(p.position + back * 2.5, false, 2), false)
+		p.brain["face_hold"] = z["pos"]
+		p.brain["face_hold_t"] = game.clock.elapsed
 		if d < 1.3:
 			p.face_point(z["pos"])
 			game.combat.shove(p)
