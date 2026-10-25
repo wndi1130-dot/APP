@@ -295,6 +295,9 @@ function byComm(d: AnyDeparture, list: readonly string[]): Map<Comm, string[]> {
 
 export type FieldApplyStatus = 'applied' | 'duplicate';
 
+/** 귀환 반영 끝에 붙는 자리. memory.ts를 불러오면 채워진다(그 파일이 이 파일을 읽으니 import 순환을 피한다). 같은 귀환이 두 번 오면 부르지 않는다. */
+export const RETURN_HOOK: { after?: (g: Game, departure: AnyDeparture, r: FieldReceipt) => void } = {};
+
 /**
  * 귀환 한 번을 판에 반영한다. 같은 영수증 id가 다시 오면(앱을 껐다 켜서 또 받아도) 아무것도 하지 않고 'duplicate'다(확인 줄 9, T07·T08).
  * 같은 id에 다른 내용이 오면 판을 건드리지 않고 오류로 알린다. 검사가 모두 끝난 뒤에만 판을 바꾼다.
@@ -430,6 +433,7 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   }
 
   bodySearches(g, departure, r);
+  RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
   if (r.symbol) {
     lines.push({ k: 'symbol', comm: r.symbol.groupId, text: `${COMM_NAME[r.symbol.groupId]}의 상징물을 가져왔다. 쓰임을 고른다.` });
   }
@@ -472,6 +476,7 @@ function breakPrologueVow(g: Game, c: Comm, label: string): void {
   bump(g, 'trust', PROLOGUE.brokenTrust, 'promise');
   bumpRel(g, c, PROLOGUE.brokenRel, 'promise');
   g.stats.promisesBroken += 1;
+  g.comms[c].broken = (g.comms[c].broken ?? 0) + 1;
   if (g.dark) g.dark.broken[c] += 1;
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
 }
