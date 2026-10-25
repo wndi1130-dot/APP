@@ -627,11 +627,13 @@ static func _fragment(containers: Dictionary, place_kind: String, seed: int, rep
 	(report["finds"] as Array).append([piece, at])
 
 
-## The building that is the rare store (-1 for a stop without one).
+## The id of the building that is the rare store, as a box's "building" names it (its place
+## in the list for a map whose buildings carry no id); -1 for a stop without one.
 static func rare_store_of(buildings: Array) -> int:
 	for i in buildings.size():
-		if String((buildings[i] as Dictionary).get("name", "")) == RARE_STORE:
-			return i
+		var b: Dictionary = buildings[i]
+		if String(b.get("name", "")) == RARE_STORE:
+			return int(b.get("id", i))
 	return -1
 
 

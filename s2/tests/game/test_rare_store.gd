@@ -99,6 +99,19 @@ func test_a_core_half_the_time_in_a_rail_store() -> void:
 	assert_almost_eq(cores / float(runs), LootDress.RARE_CORE_CHANCE, 0.06)
 
 
+func test_the_store_is_found_by_its_building_id() -> void:
+	# A map whose building ids are not their places in the list (map-layout 05:1x).
+	var d := {"place_kind": "freight", "buildings": [{"id": 7, "name": "역사"}, {"id": 3, "name": LootDress.RARE_STORE}], "containers": {
+		"a": {"name": "희귀 창고의 궤짝", "building": 3, "items": []},
+		"b": {"name": "역사 사무실 책상", "building": 7, "items": []},
+		"c": {"name": "희귀 창고의 선반", "building": 1, "items": []},
+	}}
+	assert_eq(LootDress.rare_store_of(d["buildings"]), 3)
+	LootDress.dress(d, 5)
+	assert_gte((d["containers"]["a"]["items"] as Array).size(), LootDress.RARE_STORE_ROLLS, "the store's box is filled")
+	assert_lt((d["containers"]["c"]["items"] as Array).size(), LootDress.RARE_STORE_ROLLS, "a box of building 1 is not the store")
+
+
 func test_the_same_seed_fills_the_same_store() -> void:
 	var a := _stop("office", true)
 	var b := _stop("office", true)
