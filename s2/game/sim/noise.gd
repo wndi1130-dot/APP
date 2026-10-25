@@ -20,8 +20,7 @@ const STEP_EVERY := 0.5
 ## Footsteps go by the walk (decision 425, as the reference game times them):
 ## two to a round of the gait, at these points of it, the round being the
 ## metres the living's own walk, run and crouched walk cover (their baked
-## "round"; tests check they match), each person's own stride on it (gait.gd).
-## Loudness and reach are as they were.
+## "round"; tests check they match). Loudness and reach are as they were.
 const STEP_AT := [0.2, 0.65]
 const STEP_ROUND := {"walk": 1.64, "run": 2.27, "crouch": 1.19}
 const EVENT_DISPLAY_SECONDS := 1.6
