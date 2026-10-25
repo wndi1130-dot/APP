@@ -261,6 +261,7 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 	if not data.has("trees"):
 		data["trees"] = []
 	_belt_trees(data, g, belt, rng)
+	var woods: Array[Vector2i] = []
 	for v in range(1, STRIP - 2, TREE_STEP):
 		for u in range(1, length - 1, TREE_STEP):
 			if u >= a - BELT - 2 and u < a + LOT_WIDTH + BELT + 2:
@@ -269,6 +270,7 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 			var c := _at(g, side, tu, v + rng.randi_range(0, 1))
 			if rng.randf() < TREE_SHARE and g.solid_at(c) == S.NONE and not (lanes.has(tu - 1) or lanes.has(tu) or lanes.has(tu + 1)):
 				_tree(data, g, Rect2i(c, Vector2i.ONE), rng)
+				woods.append(c)
 	# The store: its door faces the gap, its windows shut and half boarded from inside.
 	var su := a + (LOT_WIDTH - STORE_SIZE.x) / 2
 	var corner_a := _at(g, side, su, 1)
@@ -350,6 +352,9 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 		dead.append(yard.pop_at(rng.randi_range(0, yard.size() - 1)))
 	data.get_or_add("spawns", {})["dead_rare_store"] = dead
 	g.refresh_paths()
+	# For the ground shade under the trees (mood, fx): the belt is darkest, the sparse woods less.
+	spot["belt"] = belt
+	spot["woods"] = woods
 	spot["gap"] = gap
 	spot["entrance"] = [_at(g, side, gap_u, STRIP), _at(g, side, gap_u + 1, STRIP)]
 	spot["store"] = store
