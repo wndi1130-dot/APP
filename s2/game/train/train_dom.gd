@@ -20,6 +20,59 @@ const FIELDS: Array[String] = ["engine", "med", "craft", "radio", "expedition"]
 const WEARABLES: Array[String] = ["coat_long"]
 ## The train's stores at the start of a run (S1 domestic/data.ts D.scrap0, wood0, parts0).
 const START: Dictionary = {"scrap": 10, "wood": 10, "parts": 4}
+const START_FRAGS: Dictionary = {"engine": 1, "med": 1}
+## S1's eight specialties; first unused community names in PROFILES order.
+const START_EXPERTS: Array = [
+	{
+		"name": "킨가 자크",
+		"comm": "engine",
+		"field": "engine",
+		"skill": 3
+	},
+	{
+		"name": "보이테흐 포스피실",
+		"comm": "engine",
+		"field": "engine",
+		"skill": 1
+	},
+	{
+		"name": "빅토리야 트카첸코",
+		"comm": "medtech",
+		"field": "med",
+		"skill": 3
+	},
+	{
+		"name": "레오나르도 숄츠",
+		"comm": "front",
+		"field": "med",
+		"skill": 1
+	},
+	{
+		"name": "솔로미야 트카첸코",
+		"comm": "medtech",
+		"field": "craft",
+		"skill": 3
+	},
+	{
+		"name": "알기르다스 유레비추스",
+		"comm": "tail",
+		"field": "craft",
+		"skill": 1
+	},
+	{
+		"name": "라우라 크뤼거",
+		"comm": "guard",
+		"field": "radio",
+		"skill": 2
+	},
+	{
+		"name": "도미니크 슐츠",
+		"comm": "guard",
+		"field": "expedition",
+		"skill": 2
+	}
+]
+const TECH_IDS: Array[String] = ["e1", "e2", "e3", "e4", "e5", "m1", "m2", "m3", "m4", "m5", "w1", "w2", "w3", "w4", "r1", "r2", "r3", "r4", "x1", "x2", "x3"]
 
 
 ## Empty stores: every amount 0, no fragments, nothing in the armory or the wardrobe.
@@ -38,11 +91,16 @@ static func start() -> Dictionary:
 	var d := empty()
 	for key: String in START:
 		d[key] = START[key]
+	for field: String in START_FRAGS:
+		d["frags"][field] = START_FRAGS[field]
+	d["techs"] = {}
+	d["restoring"] = null
+	d["experts"] = START_EXPERTS.duplicate(true)
 	return d
 
 
-## A dom holding stores and nothing else: only these keys, each amount a
-## number not under 0, fragments by field, the armory a list of weapons.
+## The S2-ported domestic subset: stores, workshop and PR 6 research only.
+## S1a hooks remain off; people/manuals/classroom and all other keys reject it.
 static func is_store(dom: Variant) -> bool:
 	if not dom is Dictionary:
 		return false
@@ -78,6 +136,51 @@ static func is_store(dom: Variant) -> bool:
 				return false
 		elif key == "make":
 			if v != null and not is_line(v):
+				return false
+		elif key == "techs":
+			if not v is Dictionary:
+				return false
+			for id: Variant in v:
+				if not TECH_IDS.has(id) or not is_tech(v[id]):
+					return false
+		elif key == "restoring":
+			if v != null and (not v is String or not TECH_IDS.has(v)):
+				return false
+		elif key == "experts":
+			if not v is Array:
+				return false
+			for expert: Variant in v:
+				if not is_expert(expert):
+					return false
+		else:
+			return false
+	return true
+
+
+static func is_expert(v: Variant) -> bool:
+	if not v is Dictionary or v.size() != 4:
+		return false
+	if not v.get("name") is String or String(v["name"]).is_empty() or not FIELDS.has(v.get("field")):
+		return false
+	if v.get("comm") not in ["engine", "medtech", "front", "tail", "guard"]:
+		return false
+	var skill: Variant = v.get("skill")
+	return _amount(skill) and float(skill) <= 3.0 and float(skill) == floorf(float(skill))
+
+
+static func is_tech(v: Variant) -> bool:
+	if not v is Dictionary or v.get("stage") not in ["restoring", "defective", "done"]:
+		return false
+	if not v.get("defect") is bool or not _amount(v.get("progress")) or not _amount(v.get("need")):
+		return false
+	for key: Variant in v:
+		if key in ["stage", "defect", "progress", "need"]:
+			continue
+		if key == "variant":
+			if v[key] not in ["a", "b"]:
+				return false
+		elif key in ["finishing", "starved", "off", "pending"]:
+			if not v[key] is bool:
 				return false
 		else:
 			return false

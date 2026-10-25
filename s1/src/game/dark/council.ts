@@ -11,6 +11,7 @@ import { caseById, crimeTitle, level, LEVEL_WORD, topByClues, updateFlags } from
 import { cross, scene } from './chronicle';
 import { DEFENSE_LINES } from './lines';
 import { newEmber } from './embers';
+import { noteBroken } from '../council_log';
 import { byId, commOf, darkCard, eun, nameOf, rivals } from './state';
 
 // 재판(4.4), 적의 3 지도자의 불신임 동의, 정기 신임 표결(5.3)을 의회 안건 표(motions.ts)에 더한다. 입장은 stance()가 lean()에서 받아
@@ -301,9 +302,11 @@ export function trialPromises(g: Game): void {
     g.comms[v].fervor = Math.min(3, g.comms[v].fervor + 1);
     bump(g, 'tension', 3, 'promise');
     g.stats.promisesBroken += 1;
+    g.comms[v].broken = (g.comms[v].broken ?? 0) + 1;
     d.broken[v] += 1;
     offend(g, v);
     journal(g, `${COMM_NAME[v]}에게 약속한 재판이 열리지 않았다.`, 'bad');
+    noteBroken(g, v);
   }
 }
 

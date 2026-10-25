@@ -53,6 +53,39 @@ func test_each_of_the_dead_wears_one_body_and_they_spread_over_all() -> void:
 	assert_eq(DeadCast.body_of(5, 1), 0, "one body: the first")
 
 
+# Each of the dead is worn as its own (dead_weathered.gdshader): within its
+# kind's span, the same every time, the fresh bloodier and less gone off than
+# the long dead, one at a body bloodied, and the hands left alone in a body with
+# none marked. The field draws them so (the multimesh colour, the weathered shader).
+func test_each_of_the_dead_is_worn_as_its_own() -> void:
+	var sums := {}
+	for kind: String in DeadCast.TEAR:
+		var lo: Vector3 = DeadCast.TEAR[kind][0]
+		var hi: Vector3 = DeadCast.TEAR[kind][1]
+		var sum := Vector3.ZERO
+		for id in range(1, 201):
+			var c := DeadCast.tear_of({"id": id, "kind": kind, "state": "wander"}, true)
+			assert_eq(c, DeadCast.tear_of({"id": id, "kind": kind, "state": "wander"}, true), "the same every time")
+			var v := Vector3(c.r, c.g, c.b)
+			assert_true(v.x >= lo.x - 0.0001 and v.x <= hi.x + 0.0001 and v.y >= lo.y - 0.0001 and v.y <= hi.y + 0.0001 and v.z >= lo.z - 0.0001 and v.z <= hi.z + 0.0001, "%s %d within its span" % [kind, id])
+			sum += v
+		sums[kind] = sum / 200.0
+	assert_gt(sums["fresh"].x, sums["dead"].x, "the fresh bloodier")
+	assert_lt(sums["fresh"].z, sums["dead"].z, "and less gone off")
+	assert_lt(sums["frozen"].z, sums["dead"].z, "the cold keeps them")
+	assert_gte(DeadCast.tear_of({"id": 3, "kind": "dead", "state": "eat"}, true).r, DeadCast.TEAR_EATING - 0.0001, "one at a body is bloodied")
+	assert_eq(DeadCast.tear_of({"id": 3, "kind": "dead"}, true).a, 1.0, "marked hands take the blood")
+	assert_eq(DeadCast.tear_of({"id": 3, "kind": "dead"}, false).a, 0.0, "none marked: not the whole body")
+	var z := Zombies.new()
+	add_child_autofree(z)
+	z.baked = true
+	var looks: Dictionary = z._draws_of(DeadBody.assets())
+	for look: String in looks:
+		var node: MultiMeshInstance3D = looks[look]
+		assert_true(node.multimesh.use_colors, look + ": each one's own wear")
+		assert_eq((node.material_override as ShaderMaterial).shader.resource_path, "res://game/actors/dead_weathered.gdshader", look)
+
+
 # A phone that cannot hold every body sets a cap; 1 is the first alone, as before.
 func test_a_cap_on_the_bodies_the_dead_wear() -> void:
 	if not _build_bodies_in_use():
