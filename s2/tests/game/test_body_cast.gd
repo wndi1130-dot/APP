@@ -120,16 +120,32 @@ func test_each_one_is_drawn_in_their_own_body() -> void:
 	assert_false(v.worn_of(raider).is_empty(), "read in when it may")
 
 
-# What is worn over the body (WEAR_TINTS) is baked against one body, so each
-# body draws only its own: a garment lines up with that body's motions, and a
-# body with none of its own draws none rather than the reference body's, which
-# would not fit it (the values still count, wear.gd).
+# What is worn over the body (WEAR_TINTS) is baked against each body: every
+# body has the four garments, cut from its own mesh and lined up with its own
+# motions, and its gloved colour picture.
+func test_every_body_has_its_own_garments_and_gloves() -> void:
+	for body: String in BodyCast.ALL:
+		var dir := BodyCast.own_folder(body)
+		var own := BodyBake.load_baked(dir)
+		var clips := _line_up(own["clips"])
+		for kind: String in PersonVisual.WEAR_TINTS:
+			var shell := BodyBake.load_baked(dir.path_join("wear").path_join(kind))
+			assert_false(shell.is_empty(), body + " " + kind)
+			if shell.is_empty():
+				continue
+			assert_eq(_line_up(shell["clips"]), clips, body + " " + kind + " lines up with the body")
+			assert_lt(int(shell["vertices"]), int(own["vertices"]), body + " " + kind + " covers a part of it")
+		assert_true(ResourceLoader.exists(dir.path_join(PersonVisual.GLOVES_FILE)), body + " gloved picture")
+
+
+# Drawn: each body draws its own garments, never the reference body's (which
+# would not fit it), and reads one in only when someone in it wears it.
 func test_garments_are_drawn_over_the_body_they_were_baked_for() -> void:
 	var v := PersonVisual.new()
 	add_child_autofree(v)
 	v.setup(null)
-	assert_eq(v.wear_draws.size(), PersonVisual.WEAR_TINTS.size(), "the reference body has all four")
-	assert_not_null(v.gloved_draw, "and its gloved picture")
+	assert_true(v.wear_draws.is_empty(), "nothing read in before anyone wears it")
+	assert_not_null(v.gloved_draw, "the reference body's gloved picture")
 	var chief := _person("p_chief", "chief")
 	var marek := _person("p_guard_marek", "companion")
 	chief.hat = Wear.make("hat_knit")
@@ -141,22 +157,16 @@ func test_garments_are_drawn_over_the_body_they_were_baked_for() -> void:
 		var d: Dictionary = v.worn_of(p, false)
 		assert_false(d.is_empty(), String(p.pid) + " is drawn")
 		assert_ne(d["own_draw"], v.own_draw, String(p.pid) + " in a body of their own")
-		var dir := BodyCast.own_folder(String(v.body_by[p]))
-		var clips := _line_up(d["own_vat"]["clips"])
+		var looks := PersonVisual.looks_of(p)
 		for kind: String in PersonVisual.WEAR_TINTS:
-			var shell := BodyBake.load_baked(dir.path_join("wear").path_join(kind))
-			assert_eq(d["wear"].has(kind), not shell.is_empty(), kind + " drawn where this body has it")
-			if d["wear"].has(kind):
-				assert_ne(d["wear"][kind], v.wear_draws[kind], kind + " is this body's")
-				assert_eq(_line_up(shell["clips"]), clips, kind + " lines up with this body")
-		var gloved := ResourceLoader.exists(dir.path_join(PersonVisual.GLOVES_FILE))
-		assert_eq(d["gloved"] != null, gloved, String(p.pid) + " gloved where this body has the picture")
-		var on := int(d["gk"]) if p.gloves and gloved else int(d["k"])
-		assert_eq(on, 1, String(p.pid) + " drawn once")
-		for kind: String in PersonVisual.looks_of(p):
-			if d["wear"].has(kind):
-				assert_eq(int(d["worn_n"].get(kind, 0)), 1, kind + " drawn over " + String(p.pid))
-	for kind: String in v.wear_draws:
-		assert_eq((v.wear_draws[kind] as MultiMeshInstance3D).multimesh.visible_instance_count, 0,
-			"the reference body's " + kind + " is not drawn over another body")
+			assert_eq(d["wear"].has(kind), looks.has(kind), kind + " read in only when " + String(p.pid) + " wears it")
+		for kind: String in looks:
+			assert_not_null(d["wear"][kind], kind + " of this body")
+			assert_eq(int(d["worn_n"].get(kind, 0)), 1, kind + " drawn over " + String(p.pid))
+			assert_eq((d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count, 1, kind + " on show")
+		var on := int(d["gk"]) if p.gloves else int(d["k"])
+		assert_eq(on, 1, String(p.pid) + " drawn once, gloved when they wear gloves")
+	assert_eq(PersonVisual.looks_of(chief), ["jacket_short", "hat_knit"] as Array[String])
+	assert_true(v.wear_draws.is_empty(), "the reference body's garments are not drawn over another body")
 	assert_eq(v.gloved_draw.multimesh.visible_instance_count, 0, "nor its gloved picture")
+	assert_not_null(v.garment_of(v.worn[""], "coat_long"), "the reference body has its own when worn")

@@ -219,7 +219,7 @@ var own_table: Array = []
 var own_mix: Dictionary = {}             # own motion number -> how long a change into it is eased
 var own_frames: Array = []               # the own folder's table, for the hand (dead_body.gd table_of)
 var frames: Array = []                   # the dead folder's
-var wear_draws: Dictionary = {}          # look id -> its multimesh (WEAR_TINTS), FOLDER / OWN_FOLDER's
+var wear_draws: Dictionary = {}          # look id -> its multimesh once worn (garment_of; null: none), FOLDER / OWN_FOLDER's
 var gloved_draw: MultiMeshInstance3D     # the own body with gloves on, FOLDER / OWN_FOLDER's
 var worn: Dictionary = {}                # body -> its pictures and what is read off them (_dress); "" is FOLDER / OWN_FOLDER
 var body_by: Dictionary = {}             # person -> the body they wear (body_cast.gd)
@@ -251,8 +251,9 @@ func setup(field_game) -> void:
 ## One body's two pictures: the dead's folder (the struck pose, and a build
 ## whose own folder lacks a motion) and the living's own, each in a multimesh,
 ## with the tables, eases and the right hand read off them. A folder with no
-## colour picture of its own is drawn with the other's. With them, what is worn
-## over this body (WEAR_TINTS) and the body with gloves on, where it has them.
+## colour picture of its own is drawn with the other's. With them the body with
+## gloves on, where it has the picture; what is worn over it is read in when
+## first worn (garment_of).
 func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 	var dead_look := dead_dir if ResourceLoader.exists(dead_dir.path_join(DeadBody.ALBEDO_FILE)) else own_dir
 	var dead := DeadBody.with_albedo(BodyBake.load_baked(dead_dir), dead_look)
@@ -260,7 +261,7 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 		return {}
 	var d := {"vat": dead, "draw": _wear(dead), "table": [], "own_vat": {}, "own_draw": null,
 		"own_table": [], "own_mix": {}, "own_frames": [], "frames": [], "wear": {}, "gloved": null,
-		"n": 0, "k": 0, "gk": 0, "worn_n": {}}
+		"wear_dir": own_dir.path_join("wear"), "n": 0, "k": 0, "gk": 0, "worn_n": {}}
 	if DeadBody.can_mix():
 		d["table"] = DeadBody.table_of(dead)
 	var own := DeadBody.with_albedo(BodyBake.load_baked(own_dir), own_dir)
@@ -274,10 +275,6 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 	if DeadBody.can_mix():
 		d["own_table"] = DeadBody.table_of(own)
 	d["own_frames"] = DeadBody.table_of(own)
-	for kind: String in WEAR_TINTS:
-		var shell := BodyBake.load_baked(own_dir.path_join("wear").path_join(kind))
-		if not shell.is_empty():
-			d["wear"][kind] = _wear(shell, WEAR_TINTS[kind])
 	var gloved_path := own_dir.path_join(GLOVES_FILE)
 	if ResourceLoader.exists(gloved_path):
 		var gloved: Dictionary = own.duplicate()
@@ -290,6 +287,19 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 			dead["arm"] = arm_table(dead, arm["hand"], arm["elbow"])
 			d["frames"] = DeadBody.table_of(dead)
 	return d
+
+
+## One garment over a body (WEAR_TINTS), read in the first time someone in that
+## body wears it: the gloves and the short coat everyone starts in come with
+## nearly every body, the rest only when worn, so a phone holds what is on show
+## (a body's four with its gloves are more than half the body again). null
+## when this body has none of that kind.
+func garment_of(d: Dictionary, kind: String) -> MultiMeshInstance3D:
+	var wear: Dictionary = d["wear"]
+	if not wear.has(kind):
+		var shell := BodyBake.load_baked(String(d["wear_dir"]).path_join(kind)) if WEAR_TINTS.has(kind) else {}
+		wear[kind] = _wear(shell, WEAR_TINTS[kind]) if not shell.is_empty() else null
+	return wear[kind]
 
 
 ## The body one person wears, picked the first time they are drawn and read in
@@ -398,12 +408,12 @@ func _process(delta: float) -> void:
 				own_mm.set_instance_custom_data(k, drawn)
 				d["k"] = k + 1
 			# What they wear moves with the body: the same place, the same frame.
-			var wear: Dictionary = d["wear"]
 			var worn_n: Dictionary = d["worn_n"]
 			for kind: String in looks_of(p):
-				if wear.has(kind):
+				var garment := garment_of(d, kind)
+				if garment != null:
 					var w: int = int(worn_n.get(kind, 0))
-					var wmm: MultiMesh = (wear[kind] as MultiMeshInstance3D).multimesh
+					var wmm: MultiMesh = garment.multimesh
 					wmm.set_instance_transform(w, at)
 					wmm.set_instance_custom_data(w, drawn)
 					worn_n[kind] = w + 1
@@ -435,7 +445,8 @@ func _process(delta: float) -> void:
 		if d["gloved"] != null:
 			d["gloved"].multimesh.visible_instance_count = d["gk"]
 		for kind: String in d["wear"]:
-			(d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(d["worn_n"].get(kind, 0))
+			if d["wear"][kind] != null:
+				(d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(d["worn_n"].get(kind, 0))
 
 
 ## The looks one person wears over the body: the coat and what is on the head.
