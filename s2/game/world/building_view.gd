@@ -61,8 +61,11 @@ const ZONE_WOOD_OUT := Color(0, 1, 0, 1)
 const ZONE_WOOD_IN := Color(0, 1, 0, 0)
 ## 커튼 천: 안쪽 벽지 칠(구역 0, 날씨 안 받음)을 빌린다. 셰이더에 천 구역이 생기면 바꾼다.
 const ZONE_CLOTH := Color(0, 0, 0, 0)
-## 판자는 문·창의 면에서 이만큼 떨어져 붙는다(building_rules 면 0·1).
-const FACE_OFF := 0.11
+## 판자·커튼은 벽 겉면에 붙는다: 바깥벽 바깥 면, 바깥벽 안쪽 면, 안벽 면까지의 거리(대응표 grid
+## ext_wall_m 0.45 — 바깥 +0.285, 안 -0.225 — 와 int_wall_m 0.2).
+const BOARD_OUT := 0.29
+const BOARD_IN := 0.24
+const BOARD_INT := 0.12
 ## 문 판자 높이(m)와 기울기(도): 한 면 넷까지(building_rules.PLANKS_PER_FACE).
 const DOOR_PLANKS: Array = [[1.55, 4.0], [0.65, -5.0], [1.1, 3.0], [1.9, -3.0]]
 
@@ -1056,9 +1059,10 @@ func _bake_door_planks(bake: Bake, lg: FieldGrid, c: Vector2i, door: Dictionary,
 	var outer := lg.outer_face(c)
 	for f in 2:
 		var dir := Vector3(sides[f].x - c.x, 0, sides[f].y - c.y)
+		var off := BOARD_OUT if f == outer else (BOARD_IN if outer >= 0 else BOARD_INT)
 		for i in range(mini(BuildingRules.planks(door, f), DOOR_PLANKS.size())):
 			var slot: Array = DOOR_PLANKS[i]
-			var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, deg_to_rad(float(slot[1]))), at + dir * FACE_OFF + Vector3(0, float(slot[0]), 0))
+			var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, deg_to_rad(float(slot[1]))), at + dir * off + Vector3(0, float(slot[0]), 0))
 			bake.box(xf, Vector3(0.52, 0.07, 0.02), ZONE_WOOD_OUT if f == outer else ZONE_WOOD_IN)
 
 
@@ -1081,16 +1085,17 @@ func _draw_window(key: Vector3i) -> void:
 		else:
 			bake.add(_arrays["window_glass"], xf)
 		# 판자(J08): 면마다 그 면 쪽에 위 자리부터. 넷째 자리는 첫 두 자리 사이(판자 틈은 남는다).
+		# 판자 조각은 창의 +Z 쪽 벽 겉면에 놓이게 만들어졌다: 반대쪽 면은 Y축으로 뒤집어 놓는다.
 		var slots := _window_plank_slots()
 		for f in 2:
 			var dir := Vector3(sides[f].x - c.x, 0, sides[f].y - c.y)
-			var fx := Transform3D(xf.basis, xf.origin + dir * FACE_OFF)
+			var fx := xf if dir.dot(xf.basis.z) > 0.0 else xf * Transform3D(Basis(Vector3.UP, PI), Vector3.ZERO)
 			for i in range(mini(BuildingRules.planks(win, f), slots.size())):
 				var slot: Dictionary = slots[i]
 				bake.add(_arrays["window_boards"], fx * Transform3D(Basis(Vector3.BACK, deg_to_rad(float(slot["roll_deg"]))), Vector3(0, float(slot["height_m"]), 0)))
 		# 커튼: 안쪽 면에. 닫히면 창을 덮고, 열리면 양옆에 모인다.
 		if BuildingRules.has_curtain(win):
-			var cloth_at := xf.origin + in_dir * (FACE_OFF + 0.05) + Vector3(0, 1.35, 0)
+			var cloth_at := xf.origin + in_dir * (BOARD_IN + 0.03) + Vector3(0, 1.55, 0)
 			if String(win["curtain"]) == "closed":
 				bake.box(Transform3D(xf.basis, cloth_at), Vector3(0.46, 0.55, 0.015), ZONE_CLOTH)
 			else:
@@ -1110,7 +1115,7 @@ static func _swung(xf: Transform3D, in_dir: Vector3) -> Transform3D:
 	var best := xf
 	var best_d := INF
 	for turn in [-1.0, 1.0]:
-		var t := xf * Transform3D(Basis(), Vector3(-0.45, 0, 0)) * Transform3D(Basis(Vector3.UP, turn * deg_to_rad(80.0)), Vector3.ZERO) * Transform3D(Basis(), Vector3(0.45, 0, 0))
+		var t := xf * Transform3D(Basis(), Vector3(-0.35, 0, 0.06)) * Transform3D(Basis(Vector3.UP, turn * deg_to_rad(80.0)), Vector3.ZERO) * Transform3D(Basis(), Vector3(0.35, 0, -0.06))
 		var d := (t.origin - (xf.origin + in_dir)).length_squared()
 		if d < best_d:
 			best_d = d
