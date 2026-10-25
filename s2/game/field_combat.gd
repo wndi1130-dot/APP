@@ -979,6 +979,8 @@ func bite(p) -> void:
 	Wear.tear(p, site, blocked, true)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
+	# The one at the front bit: it is drawn tearing away through the rest of its bite (DeadBody.bite_after_k).
+	p.grabbers[0]["bit_at"] = float(p.grabbers[0]["age"])
 	for z in p.grabbers.duplicate():
 		game.zombies.release(z, p.position, false)
 	p.grabbers.clear()
