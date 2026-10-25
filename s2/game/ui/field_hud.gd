@@ -147,6 +147,8 @@ const LOOT_LIST_MAX: float = 194.0
 const ITEM_ICON_PX: int = 18
 ## How fast a thing come up out of the snow glimmers (radians a second).
 const GLINT_PULSE: float = 4.0
+## The load's walk said at most this often (s).
+const LOAD_WALK_EVERY: float = 6.0
 ## The journal's note in the bag (시안 .pnote: 240 wide, leaning 1.1°).
 const JOURNAL_W: float = 240.0
 const JOURNAL_LEAN_DEG: float = 1.1
@@ -370,6 +372,7 @@ var grab_bar: ProgressBar
 var grab_total: float = 1.0
 var crouch_button: Button
 var run_button: Button
+var load_walk_said: float = -999.0   # when the load last kept the feet to a walk (card G)
 var aim_button: Button
 var manual_button: Button
 var attack_button: Button
@@ -3434,6 +3437,7 @@ func _toggle_run() -> void:
 	if run_button.button_pressed:
 		p.crouched = false
 		crouch_button.button_pressed = false
+		_load_walk_note(p)
 	if p.moving:
 		p.running = run_button.button_pressed
 
@@ -3815,6 +3819,20 @@ func _set_running(p) -> void:
 	if p.running:
 		p.crouched = false
 		crouch_button.button_pressed = false
+		_load_walk_note(p)
+
+
+## Running asked for under a load that does not let one run (card G 가): why,
+## once in a while, and the feet walk.
+func _load_walk_note(p) -> void:
+	if p.load_lets_run() or game.clock.elapsed - load_walk_said < LOAD_WALK_EVERY:
+		return
+	load_walk_said = game.clock.elapsed
+	for id: String in p.items:
+		if int(p.items[id]) > 0 and Carry.item_weight(id) >= Carry.BIG_THING and not W.is_known(id):
+			toast("%s을(를) 안고는 못 뛴다 · 걷는다" % game.item_name(id))
+			return
+	toast("짐이 넘쳐 못 뛴다 · 걷는다")
 
 
 ## Stick-rim running with a way in and a way out (a setting, off by default).

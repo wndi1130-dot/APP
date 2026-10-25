@@ -16,6 +16,7 @@ const CellarRules = preload("res://game/world/cellar_rules.gd")
 const RoofRules = preload("res://game/world/roof_rules.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const MapRing = preload("res://game/world/map_ring.gd")
+const RoomSplit = preload("res://game/world/room_split.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -150,6 +151,8 @@ static func build_from(script: Script) -> Dictionary:
 		# A flat roof to climb on a town map (house_layout.md 6), its skylight ladder a stair cell
 		# the furniture leaves clear.
 		RoofRules.plan(data)
+		# Big rooms in a home give up a bathroom, a closet or a pantry before furnishing.
+		RoomSplit.apply(data, script)
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
 		data["room_stats"]["hatches"] = hatches
 		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)

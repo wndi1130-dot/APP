@@ -1,0 +1,86 @@
+{
+  "id": "ev_h14_swollen_creek",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 16
+    },
+    {
+      "type": "season",
+      "needs": "bare"
+    }
+  ],
+  "speaker": "engine",
+  "body": "밤새 내린 비로 개울이 불어 둑 아래 선로가 물에 잠겼다. 기관사가 말한다. \"무릎 깊이에 물살이 빠릅니다.\"",
+  "choices": [
+    {
+      "id": "c_detour",
+      "label": "옛 지선으로 돈다",
+      "say": "옛 지선으로 돌아간다. 반나절 늦어도 된다.",
+      "why": "돌아가는 길은 길고, 화실은 그만큼 불을 먹는다.",
+      "effects": [
+        {
+          "type": "coal",
+          "amount": -4
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_raise_bank",
+      "label": "흙을 쌓아 둑을 돋운다",
+      "say": "삽을 든 사람은 다 내려라. 둑부터 돋운다.",
+      "why": "진흙 속에서 반나절이다. 경비칸과 꼬리칸이 같이 내리고, 젖은 채로 돌아온다. 솥은 그 사람들 몫으로 건다.",
+      "effects": [
+        {
+          "type": "food",
+          "amount": -2
+        },
+        {
+          "type": "community.exposure",
+          "target": "guard",
+          "amount": 5
+        },
+        {
+          "type": "community.exposure",
+          "target": "tail",
+          "amount": 5
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_wade",
+      "label": "천천히 물을 건넌다",
+      "say": "속도를 줄여 그대로 건넌다. 바닥을 믿는다.",
+      "why": "오늘은 아무것도 안 든다. 물 아래 침목이 어떤지는 아무도 못 봤다.",
+      "later": "2구간 뒤 흙탕물이 든 차축 상자가 달아올라 기름과 일손이 든다.",
+      "effects": [
+        {
+          "type": "flag",
+          "id": "h14_creek_waded",
+          "value": true
+        },
+        {
+          "type": "followup",
+          "id": "ev_h18_hot_axle",
+          "delay": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}
