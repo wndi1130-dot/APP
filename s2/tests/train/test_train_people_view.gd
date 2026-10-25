@@ -167,13 +167,13 @@ func test_the_view_draws_every_body_and_hides_the_capsules() -> void:
 	var bodies := 0
 	for c in s.cars:
 		for b in c["bodies"]:
-			bodies += 1
+			bodies += int(s.people_view.on_screen(c))
 			assert_false(b.body_mesh.visible, "the capsule is hidden")
 			assert_true(s.people_view.drawn.has(b))
 	var shown := 0
 	for d in s.people_view.draws:
 		shown += (d as MultiMeshInstance3D).multimesh.visible_instance_count
-	assert_eq(shown, bodies)
+	assert_eq(shown, bodies, "everyone in the cars on the screen")
 	assert_eq(s.people_view.draws.size(), s.people_view.bodies.size(), "one draw a body for the whole train")
 	var wearing := {}
 	for b in s.people_view.worn:
@@ -382,3 +382,36 @@ func test_a_freezing_car_trembles_shares_blankets_and_breathes() -> void:
 		assert_lt(float(view.shivers.get(b, 0.0)), View.BREATH_FROM, "the trembling has died down")
 	if view.breath.has("tail1"):
 		assert_false((view.breath["tail1"]["p"] as GPUParticles3D).emitting, "no breath")
+
+
+## A long train draws only the cars on the screen (one draw a body would
+## otherwise put every car's people in every frame); the rest go on living.
+func test_only_the_cars_on_the_screen_are_drawn() -> void:
+	var s := Scene.new()
+	s.rules = Rules.load_default()
+	for i in 6:
+		s.rules["cars"].append({"id": "tail_x%d" % i, "kind": "comm", "comm": "tail", "name": "꼬리칸"})
+	s.opts = {"seed": 7, "panel": false}
+	add_child_autofree(s)
+	var view = s.people_view
+	if view == null:
+		pass_test("no baked people here")
+		return
+	s.focus_car("tail1")
+	view._process(0.016)
+	var far: Dictionary = s.cars[s.cars.size() - 1]
+	assert_false(view.on_screen(far), "the far end is off the screen")
+	assert_true(view.on_screen(s.car("tail1")))
+	var drawn_now := 0
+	for d in view.draws:
+		drawn_now += (d as MultiMeshInstance3D).multimesh.visible_instance_count
+	var everyone := 0
+	for c in s.cars:
+		everyone += (c["bodies"] as Array).size()
+	assert_lt(drawn_now, everyone, "not the whole train")
+	for b in far["bodies"]:
+		assert_true(view.drawn.has(b), "they still live their lives")
+	s.focus_car(String(far["id"]))
+	view._process(0.016)
+	assert_true(view.on_screen(far), "scrolled to")
+	assert_false(view.on_screen(s.car("tail1")))
