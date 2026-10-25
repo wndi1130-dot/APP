@@ -3,6 +3,7 @@ const C = preload("res://game/train/turn/turn_common.gd")
 const St = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
 const Care = preload("res://game/train/turn/turn_settle_care.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
 const W = preload("res://game/train/turn/turn_wounds.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
 const Death = preload("res://game/train/turn/turn_death.gd")
@@ -62,7 +63,8 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	g = Turn.meters(g, t)
 	if g["phase"] != "end": riot_tick(g, t, notes)
 	for comm: String in t["COMMS"]: g["comms"][comm]["away"] = 0
-	Care.hands_settle(g, t, notes)
+	# hands.ts handsSettle: the one rule for the hands, the S1a board's and the domestic train's alike (train_hands.gd).
+	g = TrainHands.settle(g, t, notes)
 	if g["phase"] != "end": g = Turn.check_end(g, t)
 	if g["phase"] == "end": return C.unsupported(g0, "settle: finish lookback")
 	Care.lookback(g)

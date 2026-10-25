@@ -134,6 +134,10 @@ func test_dressing_keeps_what_each_building_holds_and_names_every_bundle() -> vo
 		after.erase(f)
 	for rare: String in FieldItems.RARE:
 		after.erase(rare)
+	# A blueprint piece (S1 domestic 5.2) is put in on top as well.
+	for id: String in FieldItems.ITEMS:
+		if FieldItems.fragment_of(id) != "":
+			after.erase(id)
 	# The parts stuff and the clothes are finds too (decision 426 D2, 423 card 2).
 	for found: String in ["gears", "springs", "wire_coil"] + FieldItems.Wear.KINDS.keys():
 		after.erase(found)
