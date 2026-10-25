@@ -82,7 +82,7 @@ static func _person(game, p) -> Dictionary:
 	return {
 		"pid": p.pid, "team": p.team, "pos": p.position, "level": game.level_of(p.position), "alive": p.is_alive(),
 		"bag": p.bag, "items": p.items.duplicate(), "hands": p.hands.duplicate(true), "wear": Wear.save_of(p),
-		"body": {"wounds": b.wounds.duplicate(true), "infection": b.infection, "infected": b.infected, "exhaustion": b.exhaustion, "downed": b.downed, "dead": b.dead},
+		"body": {"wounds": b.wounds.duplicate(true), "infection": b.infection, "infected": b.infected, "window": b.window_left, "lost": b.lost.duplicate(), "exhaustion": b.exhaustion, "downed": b.downed, "dead": b.dead},
 	}
 
 
@@ -228,6 +228,9 @@ static func _put_person(p, row: Dictionary) -> void:
 	b.wounds.assign(body["wounds"])
 	b.infection = String(body["infection"])
 	b.infected = bool(body["infected"])
+	# A save from before the cut (J05) has neither: the window reads as closed.
+	b.window_left = float(body.get("window", 0.0))
+	b.lost.assign(body.get("lost", []))
 	b.exhaustion = float(body["exhaustion"])
 	b.downed = bool(body["downed"])
 	b.dead = bool(body["dead"])
