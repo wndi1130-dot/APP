@@ -1,4 +1,5 @@
 import { P } from './data';
+import { fallsAt, rainAt, rowAt, weatherWeights } from './season';
 import type { Game, StopState } from './state';
 
 // 정차 조짐(2026-10-07 사용자): 위험을 꼬리표로 적지 않고, 정찰조가 본 조짐과 그 해석으로 알린다.
@@ -8,7 +9,8 @@ import type { Game, StopState } from './state';
 // 금지선: 사람이나 무리가 화차·닫힌 칸 안에 갇힌 장면은 쓰지 않는다(강제 이송 열차로 읽힌다). 화차는 빈 풍경으로만.
 // 해석 말(매우 불길하다 / 불길하다 / …)은 일부러 고정한다. 플레이어가 약속을 읽는 말이라 매번 바뀌면 못 읽는다.
 
-/** 정차 날씨. 평상 다섯은 씨앗 해시로 뽑고, 눈보라·한파는 재난을 켠 판에서 재난이 닥친 구간에만 온다(pickWeather). */
+/** 정차 날씨. 평상 다섯은 씨앗 해시로 뽑고(기온 켠 판은 계절표 비율, season.ts), 눈보라·한파는 재난을 켠 판에서 재난이 닥친 구간에만 온다(pickWeather).
+ *  기온 켠 판에서 한낮 기온이 rain_above보다 높은 구간의 sleet는 비다(규칙은 진눈깨비와 같고 글만 비, RAIN_SWAP). */
 export type Weather = 'snow' | 'fog' | 'sleet' | 'overcast' | 'clear' | 'blizzard' | 'cold' | 'cold_front';
 /** 바깥 기척. 정차마다 정해지고 준비를 바꿔도 안 바뀐다. many 무리가 많다, some 보통, few 거의 없다. */
 export type SignTier = 'many' | 'some' | 'few';
@@ -117,6 +119,74 @@ export const WEATHER_OMENS: Record<Weather, Record<SignTier, string[]>> = {
   },
 };
 
+// 계절표를 따르는 판(기온 켠 판)의 글 바꿔 끼우기(결정 423, 서막 (나)). 위 글은 겨울 글이라 눈·얼음이 박혀 있다.
+// 그 구간에 쌓인 눈이 없으면 SNOW_SWAP, 밤 결빙도 없으면(한파·한파 전조 날씨는 빼고) FROST_SWAP, 진눈깨비가 비면 RAIN_SWAP 글로 바꾼다.
+// 한 줄을 한 줄로 바꿔 글 수가 그대로라 한 판 안 되풀이 규칙이 같이 산다. 바꾼 글도 위 글과 같은 규칙(길이·금지선·고요)을 지킨다.
+/** 쌓인 눈이 없는 구간: 눈밭·눈 더미가 박힌 글 → 낙엽·진흙 글. 이 글들도 얼음은 말하지 않는다(한파 날씨 글은 빼고). */
+export const SNOW_SWAP: Record<string, string> = {
+  '저탄장의 검은 더미가 눈을 이고 있다.': '저탄장의 검은 더미에 낙엽이 들러붙었다.',
+  '작은 교회 지붕에 눈이 두껍게 앉았다.': '작은 교회 지붕에 젖은 낙엽이 수북하다.',
+  '플랫폼 눈이 붉게 얼룩졌다. 끌린 자국이 창고로 이어진다.': '플랫폼 바닥이 붉게 얼룩졌다. 끌린 자국이 창고로 이어진다.',
+  '기중기 밑 눈 더미에서 무언가 긁는 소리가 났다.': '기중기 밑 낙엽 더미에서 무언가 긁는 소리가 났다.',
+  '창고 문마다 눈이 무릎까지 쌓였다. 드나든 자국이 없다.': '창고 문마다 낙엽이 수북이 쌓였다. 드나든 자국이 없다.',
+  '눈 덮인 마당에 신발 한 짝과 끌린 자국이 있다.': '젖은 마당에 신발 한 짝과 끌린 자국이 있다.',
+  '골목 눈 위에 새 발자국만 찍혀 있다.': '골목 진흙 위에 새 발자국만 찍혀 있다.',
+  '접수대에 눈이 들이쳐 쌓였다. 발자국 하나 없다.': '접수대에 낙엽이 들이쳐 쌓였다. 발자국 하나 없다.',
+  '담 밑 눈이 사람 모양으로 꺼져 있다.': '담 밑 덤불이 사람 모양으로 꺾여 있다.',
+  '앞마당 눈이 진창이 됐다. 발자국이 전부 안으로 향한다.': '앞마당이 진창이 됐다. 발자국이 전부 안으로 향한다.',
+  '묘지 울타리 너머까지 눈이 고르게 덮였다.': '묘지 울타리 너머까지 낙엽이 고르게 덮였다.',
+  '정문 눈 위엔 새 발자국뿐이다. 사람 기척은 없다.': '정문 진흙 위엔 새 발자국뿐이다. 사람 기척은 없다.',
+  '하늘이 맑다. 눈밭이 눈부시다.': '하늘이 맑다. 먼 들판까지 훤하다.',
+  '눈이 발밑에서 마른 소리를 내며 부서진다.': '언 땅이 발밑에서 마른 소리를 낸다.',
+  '빛이 유난히 희다. 눈밭이 쨍하다.': '빛이 유난히 희다. 들판이 쨍하다.',
+  '눈 위 핏자국이 볕에 선명하다. 아직 얼지 않았다.': '자갈 위 핏자국이 볕에 선명하다. 아직 마르지 않았다.',
+  '눈부신 눈밭 너머로 무언가 움직였다.': '볕 드는 들판 너머로 무언가 움직였다.',
+  '언 눈 위에 맨발 자국이 새로 났다. 다 얼지는 않았다.': '언 진흙에 맨발 자국이 새로 났다. 다 얼지는 않았다.',
+  '눈 위에 발자국이 어지럽다. 볕에 핏자국이 검다.': '서리 위에 발자국이 어지럽다. 볕에 핏자국이 검다.',
+  '맑은 눈밭 끝에 그림자 하나가 서성인다.': '맑은 들판 끝에 그림자 하나가 서성인다.',
+};
+/** 밤 결빙도 없는 구간(늦가을): 성에·언 것·살을 베는 추위가 박힌 글 → 젖고 쌀쌀한 글 */
+export const FROST_SWAP: Record<string, string> = {
+  '선로 사이에 언 발자국이 몇 줄 있다. 며칠 됐다.': '선로 사이 진흙에 발자국이 몇 줄 있다. 며칠 됐다.',
+  '빨랫줄에 언 옷이 걸려 있다. 참새들이 그 위에서 떠든다.': '빨랫줄에 젖은 옷이 걸려 있다. 참새들이 그 위에서 떠든다.',
+  '기계마다 성에가 하얗게 앉았다. 손댄 흔적이 없다.': '기계마다 녹이 붉게 앉았다. 손댄 흔적이 없다.',
+  '관청 계단에 흩어진 서류가 핏물에 얼어붙어 있다.': '관청 계단에 흩어진 서류가 핏물에 젖어 있다.',
+  '오랜만에 하늘이 갰다. 추위가 살을 벤다.': '오랜만에 하늘이 갰다. 바람이 차다.',
+  '볕은 드는데 숨이 얼 만큼 춥다.': '볕은 드는데 바람 끝이 맵다.',
+  '맑은 하늘 아래 성에가 반짝인다.': '맑은 하늘 아래 젖은 선로가 반짝인다.',
+  '바람 한 점 없이 쨍하게 춥다.': '바람 한 점 없이 볕이 엷다.',
+  '쨍한 추위에 먼 데 문 닫히는 소리가 또렷하다.': '맑은 공기에 먼 데 문 닫히는 소리가 또렷하다.',
+};
+/** 한낮 기온이 rain_above보다 높은 구간의 진눈깨비 = 비 */
+export const RAIN_SWAP: Record<string, string> = {
+  '진눈깨비가 창을 때린다.': '찬비가 창을 때린다.',
+  '진눈깨비가 내린다. 옷이 금세 젖겠다.': '비가 그치지 않는다. 옷이 금세 젖겠다.',
+  '젖은 눈이 선로 위에서 녹았다 언다.': '침목 사이마다 빗물이 고였다.',
+  '처마마다 진눈깨비 물이 떨어진다.': '처마마다 빗물이 줄줄 떨어진다.',
+  '진눈깨비에 플랫폼이 번들거린다.': '비에 젖은 플랫폼이 번들거린다.',
+  '진눈깨비에 젖은 핏자국이 선로 옆으로 길게 번졌다.': '빗물에 번진 핏자국이 선로 옆으로 길게 이어진다.',
+  '진눈깨비가 소리를 덮는다. 가까이 와야 들린다.': '빗소리가 발소리를 덮는다. 가까이 와야 들린다.',
+  '젖은 눈 위에 발자국 하나가 끌린 듯 이어진다.': '진흙 위에 발자국 하나가 끌린 듯 이어진다.',
+  '처마 밑에서 참새들이 진눈깨비를 피하며 운다.': '처마 밑에서 참새들이 비를 피하며 운다.',
+};
+
+/** 이 정차의 글 고르기 조건: 계절표를 안 따르는 판(기온 꺼진 판)은 null(겨울 글 그대로, 골든 그대로) */
+function seasonCond(g: Game, weather: Weather): { snow: boolean; frost: boolean; rain: boolean } | null {
+  if (!g.climate) return null;
+  const row = rowAt(g.seg);
+  const cold = weather === 'cold' || weather === 'cold_front';
+  return { snow: row.snow, frost: row.night_freeze || cold, rain: weather === 'sleet' && rainAt(g.seg) };
+}
+
+function seasonLine(t: string, c: { snow: boolean; frost: boolean; rain: boolean } | null): string {
+  if (!c) return t;
+  let out = t;
+  if (c.rain) out = RAIN_SWAP[out] ?? out;
+  if (!c.frost) out = FROST_SWAP[out] ?? out;
+  if (!c.snow) out = SNOW_SWAP[out] ?? out;
+  return out;
+}
+
 /** 해석 말. 준비(얼마나·몇 명·호위)에 따라 바뀌고, 이 말이 약속이다. */
 export type RiskLevel = 'dead' | 'hurt' | 'light' | 'calm';
 export const VERDICT: Record<RiskLevel, string> = {
@@ -204,9 +274,11 @@ export function pickWeather(g: Game): Weather {
   const d = g.disasters ? g.disaster : undefined;
   if (d?.stage === 'active') return d.kind;
   if (d?.stage === 'brewing') return d.kind === 'blizzard' ? 'overcast' : 'cold_front';
-  const total = WEATHER_WEIGHT.reduce((s, [, w]) => s + w, 0);
+  // 기온 켠 판은 계절표의 그 구간 계절 비율로 뽑고, 내리는 것(눈·진눈깨비·비)은 그 구간 기온이 정한다(season.ts). 꺼진 판은 옛 고정 비율 그대로(골든).
+  const table = g.climate ? weatherWeights(g.seg) : WEATHER_WEIGHT;
+  const total = table.reduce((s, [, w]) => s + w, 0);
   let x = hash(`${g.seed}:w:${g.seg}`) % total;
-  for (const [w, n] of WEATHER_WEIGHT) { if (x < n) return w; x -= n; }
+  for (const [w, n] of table) { if (x < n) return g.climate ? fallsAt(g.seg, w) : w; x -= n; }
   return 'snow';
 }
 
@@ -218,9 +290,11 @@ export function stopView(g: Game, stop: StopState, horde: boolean): StopView {
   const sign = stop.sign ?? signTier(stop.threat ?? 1, horde);
   const seen = g.linesSeen ?? [];
   const salt = `${g.seed}:${g.seg}:${stop.place}`;
-  const sky = pickFresh(WEATHER_LOOK[weather], seen, `${salt}:wl`);
-  const ground = pickFresh(PLACE_LOOK[stop.place] ?? PLACE_LOOK.freight, seen, `${salt}:pl`);
-  const omens = [...(PLACE_OMENS[stop.place] ?? PLACE_OMENS.freight)[sign], ...WEATHER_OMENS[weather][sign]];
+  const c = seasonCond(g, weather);
+  const fit = (pool: string[]) => pool.map(t => seasonLine(t, c));
+  const sky = pickFresh(fit(WEATHER_LOOK[weather]), seen, `${salt}:wl`);
+  const ground = pickFresh(fit(PLACE_LOOK[stop.place] ?? PLACE_LOOK.freight), seen, `${salt}:pl`);
+  const omens = fit([...(PLACE_OMENS[stop.place] ?? PLACE_OMENS.freight)[sign], ...WEATHER_OMENS[weather][sign]]);
   return { weather, sign, sky, ground, omen: stop.omen ?? pickFresh(omens, seen, `${salt}:om`) };
 }
 

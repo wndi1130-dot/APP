@@ -11,9 +11,16 @@ const ROWS: Dictionary = {
 	"snow": {"name": "눈 내림", "sight": 0.85, "sound": 1.0, "footstep": 0.75, "always_cold": false, "wet": false, "ice_all": false, "particles": 300},
 	"blizzard": {"name": "눈보라", "sight": 0.4, "sound": 0.75, "footstep": 1.0, "always_cold": true, "wet": false, "ice_all": false, "particles": 900},
 	"sleet": {"name": "진눈깨비", "sight": 0.85, "sound": 1.0, "footstep": 1.0, "always_cold": false, "wet": true, "ice_all": true, "particles": 400},
+	# Rain (코디네이터 10-25: the field's air follows the season table, so late
+	# autumn and the thaw rain). Proposals: the rain hides a little, its noise
+	# covers sounds a little, wet but no ice underfoot.
+	"rain": {"name": "비", "sight": 0.85, "sound": 0.9, "footstep": 1.0, "always_cold": false, "wet": true, "ice_all": false, "particles": 500},
 }
-## No rain below zero; sleet only near 0 C or in the thaw (body_injury 8.3).
-const SLEET_MIN_C: float = -3.0
+## What falls is the air's (결정 423, the season table's "falls", the pictures'
+## too): snow, sleet or rain given to a stop falls as the one its temperature
+## gives. No rain at or below rain_above, no sleet at or below snow_below.
+const FALLING: Array = ["snow", "sleet", "rain"]
+const SeasonTable = preload("res://game/season_table.gd")
 
 var kinds: Array[String] = []
 var ambient_c: float = -14.0
@@ -25,13 +32,16 @@ var wind: float = 0.4
 ## kinds can stack (Sulechów: fog and light snow). Unknown kinds are ignored.
 func _init(p_kinds: Array = ["fog", "snow"], p_ambient_c: float = -14.0, p_wind_dir := Vector2(1, 0), p_wind: float = 0.4) -> void:
 	ambient_c = p_ambient_c
+	var falls := SeasonTable.falls()
+	var falling := "rain" if ambient_c > float(falls["rain_above"]) else ("sleet" if ambient_c > float(falls["snow_below"]) else "snow")
 	for k in p_kinds:
 		var key := String(k)
 		if not ROWS.has(key):
 			continue
-		if key == "sleet" and ambient_c < SLEET_MIN_C:
-			continue
-		kinds.append(key)
+		if FALLING.has(key):
+			key = falling
+		if not kinds.has(key):
+			kinds.append(key)
 	wind_dir = p_wind_dir.normalized() if p_wind_dir.length() > 0.001 else Vector2(1, 0)
 	wind = clampf(p_wind, 0.0, 1.0)
 

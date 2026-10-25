@@ -49,8 +49,9 @@ const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
-
-const AMBIENT_C: float = -14.0
+## The stop's outside air: the season table's stretch temperature (코디네이터
+## 10-25; it was -14 C fixed), the same the stop scene and the pictures read.
+const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -334,13 +335,15 @@ func _ready() -> void:
 	# A storm stop plays by its stage's weather (clear, blizzard, clear) and
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
-	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), AMBIENT_C, Vector2(1, 0.2), 0.4)
-	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
-	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
-	region = Atmosphere.region_key(String(opts.get("region", Atmosphere.DEFAULT_REGION)))
 	var act := String(opts.get("act", "prologue"))
 	cold = clampf(float(opts.get("cold", Atmosphere.cold_for(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	side = clampf(float(opts.get("side", Atmosphere.side_for(act, String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
+	# The rules' air is the stretch's (outside_temp.gd): what falls, the body's
+	# cold, smell and the cold in a fight read it.
+	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), OutsideTemp.of(opts, cold, side), Vector2(1, 0.2), 0.4)
+	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
+	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
+	region = Atmosphere.region_key(String(opts.get("region", Atmosphere.DEFAULT_REGION)))
 	look_hour = float(opts.get("look_hour", -1.0))
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
@@ -1427,7 +1430,7 @@ func _update_person(p: Person, delta: float) -> void:
 	var wetter: float = Wear.wet_gain(p, delta, weather.wets_clothes() and not sheltered and not stove, p.is_running_now() or p.action != "")
 	if wetter > 0.0:
 		p.heat.soak(wetter)
-	p.heat.tick(delta, {"ambient_c": AMBIENT_C, "indoor": sheltered, "stove": stove, "warmth": Wear.warmth(p, p.heat.wet), "windproof": Wear.windproof(p), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
+	p.heat.tick(delta, {"ambient_c": weather.ambient_c, "indoor": sheltered, "stove": stove, "warmth": Wear.warmth(p, p.heat.wet), "windproof": Wear.windproof(p), "moving": p.moving, "wind": 0.0 if indoor else weather.wind})
 	if weather.always_cold() and not indoor and not stove:
 		p.heat.heat = minf(p.heat.heat, 60.0)
 	p.panic = maxf(0.0, p.panic - delta * 0.08)

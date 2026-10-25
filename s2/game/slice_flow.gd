@@ -147,9 +147,6 @@ var shop: Control = null           # the workshop's pane where the car's stands 
 var shop_was: String = ""          # the car picked before the workshop came up
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
-## What the slice's outside is when nothing says otherwise: the first stop's
-## weather, the same the field plays it in (field_game.gd's default).
-const SLICE_WEATHER: Array = ["fog", "snow"]
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
 ## look down (stop_cinema.gd), the field made ready under it (stop_loader.gd),
 ## and that field, built and standing still, till the field step shows it.
@@ -672,14 +669,14 @@ func _show_train(phase: String, seg: int) -> void:
 
 
 ## The look outside the train: opts "look" ({hour, kinds, cold, region}, for
-## check shots), else the train's view (daytime, hour, cold, region), the first
-## stop's weather and the cold the act table gives this stretch of the prologue.
+## check shots), else the train's view (daytime, hour, cold, region), this
+## stretch's weather from the season table and the cold it gives the stretch.
 func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 	var view: Dictionary = rules.get("view", {})
 	var want: Dictionary = opts.get("look", {})
 	var night := String(view.get("daytime", "day")) == "night"
 	var hour := float(want.get("hour", view.get("hour", 21.0 if night else 11.5)))
-	var kinds: Array = want.get("kinds", view.get("weather_kinds", SLICE_WEATHER))
+	var kinds: Array = want.get("kinds", view.get("weather_kinds", stop_weather(seg)["look"]))
 	var cold := float(want.get("cold", view.get("cold", Atmosphere.cold_for("prologue", prologue_progress(seg)))))
 	var side := float(want.get("side", view.get("side", Atmosphere.side_for("prologue"))))
 	var region_name := String(want.get("region", view.get("region", Atmosphere.DEFAULT_REGION)))
@@ -693,6 +690,13 @@ func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 ## season table's row for that stretch, the same for the train and the stop.
 static func prologue_progress(seg: int) -> float:
 	return SeasonTable.seg_progress(seg)
+
+
+## A stretch's weather from the season table (코디네이터 10-25): its season's
+## weights and what falls by its temperature, drawn on the slice's seed with S1's
+## key, so the train outside, the stop scene and the field all wear the same.
+func stop_weather(seg: int) -> Dictionary:
+	return SeasonTable.pick_weather("prologue", prologue_progress(seg), str(int(opts.get("seed", 1))))
 
 
 ## The train's own floating names and value lines are for its test bench;
@@ -993,6 +997,10 @@ func _field_opts() -> Dictionary:
 	var want: Dictionary = opts.get("look", {})
 	if want.has("cold"):
 		o["cold"] = float(want["cold"])
+	# The stop's weather from the season table: the rules' kinds and the picture's.
+	var w := stop_weather(int(STEPS[step][2]))
+	o["weather"] = w["rules"]
+	o["look"] = w["look"]
 	if want.has("kinds"):
 		o["look"] = want["kinds"]
 	if want.has("hour"):

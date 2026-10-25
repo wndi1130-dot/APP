@@ -3,6 +3,7 @@ import type { Comm } from './data';
 import { onDeath } from './death';
 import { josa } from './josa';
 import { hash } from './omens';
+import { rowAt } from './season';
 import { addCard, isGone, journal, PROFILES, situation } from './state';
 import type { Game, Profile } from './state';
 
@@ -153,6 +154,9 @@ export function disasterSettle(g: Game): void {
   const r = hash(`${g.seed}|${g.seg}|disaster`) / 4294967296;
   const kind: DisasterKind | null = r < DZ.blizzardP ? 'blizzard' : r < DZ.blizzardP + DZ.coldP ? 'cold' : null;
   if (!kind) return;
+  // 기온 켠 판은 계절표를 따른다: 눈보라는 닥칠 구간(예고 lead 구간 뒤)의 blizzard가 true일 때만 온다(서막엔 없다, 결정 423).
+  // 막힌 눈보라는 한파로 바꾸지 않아 한파 확률과 씨앗별 한파는 그대로다. 꺼진 판은 그대로(골든).
+  if (kind === 'blizzard' && g.climate && !rowAt(g.seg + DZ.lead).blizzard) return;
   (g.disasterStats ??= { blizzard: 0, cold: 0 })[kind] += 1;
   if (DZ.lead >= 2) {
     g.disaster = { kind, stage: 'brewing', left: 0 };
