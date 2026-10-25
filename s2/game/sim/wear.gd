@@ -109,8 +109,9 @@ const KINDS: Dictionary = {
 	"scarf_thick": {"slot": "neck", "name": "두꺼운 목도리", "icon": "it_scarf", "weight": 0.3, "warmth": 0.12, "stuff": "wool"},
 	"mask_cloth": {"slot": "face", "name": "천 마스크", "icon": "it_mask", "weight": 0.05, "warmth": 0.02, "stuff": "cotton"},
 	# Hands.
-	# The hands are painted, not shelled: a tint each (the 3D side's glove colour, #616).
-	"gloves": {"slot": "hands", "name": "장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.1, "stuff": "wool", "tint": [0.12, 0.115, 0.11], "pattern": "knit"},
+	# The hands are painted, not shelled: a tint each (the 3D side's glove colour,
+	# #616); the plain ones keep the dark worn wool of the gloved picture.
+	"gloves": {"slot": "hands", "name": "장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.1, "stuff": "wool", "pattern": "knit"},
 	"gloves_cotton": {"slot": "hands", "name": "면 장갑", "icon": "it_gloves", "weight": 0.1, "warmth": 0.05, "stuff": "cotton", "tint": [0.17, 0.165, 0.155], "pattern": "plain"},
 	"gloves_leather": {"slot": "hands", "name": "가죽 장갑", "icon": "it_gloves", "weight": 0.3, "warmth": 0.08, "block": 0.1, "bite": 0.2, "stuff": "leather", "tint": [0.12, 0.095, 0.075], "pattern": "plain"},
 	"mittens": {"slot": "hands", "name": "벙어리장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.15, "stuff": "wool", "tint": [0.13, 0.11, 0.1], "pattern": "knit"},
