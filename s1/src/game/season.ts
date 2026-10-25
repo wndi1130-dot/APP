@@ -4,7 +4,7 @@ import type { Weather } from './omens';
 // 계절표 한 벌(season_table.json)의 구간 줄을 읽는 곳. 기후(climate.ts), 정차 날씨·창밖 글(omens.ts), 재난(disaster.ts)이 함께 읽는다.
 // 이 파일은 표만 읽고 판 상태를 바꾸지 않는다. 판이 표를 따를지(기온 켠 판인지)는 부르는 쪽이 정한다.
 
-export type SeasonRow = { seg: number; temp: number; stage: number; season: string; night_freeze: boolean; snow: boolean; blizzard: boolean; note: string };
+export type SeasonRow = { seg: number; region: string; temp: number; stage: number; season: string; night_freeze: boolean; snow: boolean; blizzard: boolean; note: string };
 export const SEASON_ROWS = SEASON.prologue as SeasonRow[];
 /** 내리는 것은 기온으로: rain_above보다 높으면 비, snow_below 이하면 눈, 사이는 진눈깨비 */
 export const FALLS = SEASON.falls;
