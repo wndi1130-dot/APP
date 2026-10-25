@@ -130,6 +130,10 @@ func test_dressing_keeps_what_each_building_holds_and_names_every_bundle() -> vo
 	var report := LootDress.dress(d, 7)
 	var c: Dictionary = d["containers"]
 	var after := _counts(c, ["k", "b1", "b2", "p"])
+	# The odds and ends are put in on top (loot_junk.gd).
+	for rows: Array in LootDress.LootJunk.JUNK.values():
+		for row: Array in rows:
+			after.erase(String(row[0]))
 	for f in ["found_big_pack", "wrist_watch", "wrist_watch_set", "can_opener", "nails", "fuel_can", "frying_pan", "broken_bottle"]:
 		after.erase(f)
 	for rare: String in FieldItems.RARE:
