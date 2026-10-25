@@ -7,8 +7,10 @@ const Rng = preload("res://game/politics/rng.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
 const TrainState = preload("res://game/train/train_state.gd")
+const TrainStop = preload("res://game/train/train_stop.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
+const TurnDeath = preload("res://game/train/turn/turn_death.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
@@ -307,6 +309,8 @@ static func _keep_promise(g: Dictionary, t: Dictionary, comm: String, label: Str
 	if int(state["grudge"]) == 1:
 		state["grudge"] = 0
 	g["stats"]["promisesKept"] = int(g["stats"]["promisesKept"]) + 1
+	# Each car's own count of promises kept to it (turn.ts keepPromise, decision 433 persuasion reads it).
+	state["kept"] = int(state.get("kept", 0)) + 1
 	_journal(g, "%s과(와)의 약속을 지켰다: %s." % [t["COMM_NAME"][comm], label], "good")
 	_voice_kept(g, t, comm)
 
@@ -320,6 +324,7 @@ static func _break_promise(g: Dictionary, t: Dictionary, comm: String, label: St
 	state["fervor"] = mini(3, int(state["fervor"]) + 1)
 	_bump(g, "tension", 3.0, "promise")
 	g["stats"]["promisesBroken"] = int(g["stats"]["promisesBroken"]) + 1
+	state["broken"] = int(state.get("broken", 0)) + 1  # the car's own count (turn.ts breakPromise)
 	_offend(g, comm)
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
 
@@ -328,6 +333,7 @@ static func _break_prologue(g: Dictionary, t: Dictionary, comm: String, label: S
 	_bump(g, "trust", float(t["PROLOGUE"]["brokenTrust"]), "promise")
 	_bump_rel(g, comm, float(t["PROLOGUE"]["brokenRel"]), "promise")
 	g["stats"]["promisesBroken"] = int(g["stats"]["promisesBroken"]) + 1
+	g["comms"][comm]["broken"] = int(g["comms"][comm].get("broken", 0)) + 1  # field_receipt.ts breakPrologueVow
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
 
 
@@ -383,6 +389,8 @@ const LIMB_PARTS := ["armL", "armR", "legL", "legR"]
 
 static func _field_rank(w: Dictionary) -> float:
 	var kind: String = w["kind"]
+	if kind == "amputation":
+		return 3.0
 	if kind == "fracture":
 		var treat: Dictionary = w.get("treat", {})
 		return 0.5 if bool(treat.get("splinted", false)) and bool(treat.get("quick", false)) else 2.0
@@ -391,7 +399,8 @@ static func _field_rank(w: Dictionary) -> float:
 
 ## One badly hurt person's record on the train (J02, body_injury 4.1·4.6; s1 field_receipt.ts
 ## fieldWoundOf): the heaviest of the wounds the field wrote is the grade and the part, all of
-## them ride along in "field". A fracture is a fracture, or a light wound when a medic splinted it
+## them ride along in "field". An arm or a leg cut off in the field is an amputation, above all
+## else. A fracture is a fracture, or a light wound when a medic splinted it
 ## at once; a fracture off the limbs counts as deep (the train's fractures are limbs). Deep and
 ## embedded are deep. Only scratches and cuts on one listed as badly hurt is deep (decision card C,
 ## user 2026-10-25); with no rows at all, the torso. Festering if any of them festers. No draws.
@@ -408,8 +417,8 @@ static func field_wound_of(rows: Array, pid: String) -> Dictionary:
 	var grade := "deep"
 	if top is Dictionary:
 		var rank := _field_rank(top)
-		grade = "fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep")
-	if grade == "fracture" and not LIMB_PARTS.has(part):
+		grade = "amputation" if rank == 3.0 else ("fracture" if rank == 2.0 else ("light" if rank == 0.5 else "deep"))
+	if (grade == "fracture" or grade == "amputation") and not LIMB_PARTS.has(part):
 		grade = "deep"
 	var septic := false
 	var field: Array = []
@@ -466,68 +475,7 @@ static func _record_field_wound(g: Dictionary, t: Dictionary, who: String, comm:
 
 
 static func _on_death(g: Dictionary, t: Dictionary, comm: String, names: Array) -> void:
-	var count := names.size()
-	if count <= 0:
-		return
-	var state: Dictionary = g["comms"][comm]
-	state["pop"] = maxi(1, int(state["pop"]) - count)
-	(g["deaths"] as Array).append_array(names)
-	if not g.has("deathLog"):
-		g["deathLog"] = []
-	# wounds.ts registers a death hook in S1. Merely checking active wounds creates the empty book.
-	if not g.has("wounds"):
-		g["wounds"] = []
-	for name: String in names:
-		(g["deathLog"] as Array).append({"seg": g["seg"], "name": name, "cause": "other", "comm": comm})
-	if not g.has("story"):
-		g["story"] = {"stage": 1, "flags": {}}
-	if not g["story"].has("flags"):
-		g["story"]["flags"] = {}
-	g["story"]["flags"]["first_death"] = true
-	if _law_active(g, "corpse_throw"):
-		g["thrown"] = int(g["thrown"]) + count
-	elif _law_active(g, "corpse_store"):
-		g["stored"] = int(g["stored"]) + count
-		g["comms"]["tail"]["base"][2] = float(g["comms"]["tail"]["base"][2]) + count
-	elif _law_active(g, "corpse_burn"):
-		var in_car := mini(count, maxi(0, int(t["P"]["coldCap"]) - int(g["stored"]) - int(g.get("pyre", 0))))
-		g["pyre"] = int(g.get("pyre", 0)) + in_car
-		var over := count - in_car
-		if over > 0:
-			if not g.has("pyreKin"):
-				g["pyreKin"] = {}
-			g["pyreKin"][comm] = int(g["pyreKin"].get(comm, 0)) + over
-			state["base"][2] = float(state["base"][2]) + float(t["P"]["pyreKinCrowd"]) * over
-			_journal(g, "냉동칸이 찼다. 시신 %d구를 %s에 둔다." % [over, t["COMM_NAME"][comm]], "dark")
-	else:
-		if not bool(g["corpseIssue"]):
-			_journal(g, "첫 시신을 두고 다툼이 났다. 시신 처리가 안건에 올랐다.", "bad")
-			var flags: Dictionary = g["story"]["flags"]
-			if not flags.has("first_corpse_agenda") or flags["first_corpse_agenda"] == "none":
-				flags["first_corpse_agenda"] = "own"
-		g["corpseIssue"] = true
-		_bump(g, "tension", 3.0 * count, "corpse")
-		g["thrown"] = int(g["thrown"]) + count
-	_journal(g, "%s의 %s이(가) 죽었다." % [t["COMM_NAME"][comm], ", ".join(names)], "bad")
-	# field-vectors-v1 carries no family table. Its named field deaths have no surviving family,
-	# so S1 afterDeath adds the ordinary keepsake card and no mourning records.
-	var known: Array = []
-	for name: String in names:
-		for profile: Dictionary in t["PROFILES"]:
-			if profile["name"] == name and g["comms"][comm]["leader"]["name"] != name:
-				known.append(name)
-				break
-	var has_orphan := false
-	for card: Dictionary in g["cards"]:
-		if card["kind"] == "orphan":
-			has_orphan = true
-	if not known.is_empty() and not has_orphan:
-		var card := {"uid": g["nextCardUid"], "kind": "keepsake", "comm": comm, "who": known[0]}
-		if g["phase"] == "stop":
-			card["text"] = "field"
-		(g["cards"] as Array).append(card)
-		g["nextCardUid"] = int(g["nextCardUid"]) + 1
-		g["peopleSeg"] = g["seg"]
+	TurnDeath.on_death(g, t, comm, names)
 
 
 static func _receipt_value(input: Variant) -> Dictionary:
@@ -557,6 +505,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		for old: Dictionary in g["fieldReturns"]["records"]:
 			assert(old["stopId"] != receipt["stopId"] and old["departureId"] != receipt["departureId"], "이미 반영한 정차에 다른 영수증이 왔다")
 	var verdicts := judge_promises(departure, receipt)
+	# S1's snapshot reads situation, which reads the wound book and so makes the empty book (wounds.ts book).
+	if not g.has("wounds"):
+		g["wounds"] = []
 	var before := snapshot(g, t)
 	var lines: Array = []
 	var stock: Dictionary = receipt["stock"]
@@ -666,6 +617,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	_body_searches(g, departure, receipt)
 	# Each person's own memory of the stop (person_memory.gd, s1 memory.ts on RETURN_HOOK).
 	PersonMemory.from_return(g, t, departure, receipt, returned_of(receipt))
+	_close_field_stop(g, t, departure, receipt)
 	if receipt["symbol"] is Dictionary:
 		var comm: String = receipt["symbol"]["groupId"]
 		lines.append({"k": "symbol", "comm": comm, "text": "%s의 상징물을 가져왔다. 쓰임을 고른다." % t["COMM_NAME"][comm]})
@@ -691,6 +643,66 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	g["fieldReturns"]["applied"][receipt["receiptId"]] = fingerprint
 	(g["fieldReturns"]["records"] as Array).append(record)
 	return {"status": "applied", "record": record, "g": g}
+
+
+## The stop the field went out on, closed by the field's result (s1 field_receipt.ts
+## closeFieldStop; s3-link card 10-26 F, taken as recommended under decision 442): only
+## while the train still stands at an open stop. Nothing is rolled: the receipt's coal is
+## net of the stay, and the field wrote its own finds, wounds, deaths, rescues and bites.
+## What every stop does is done as a dispatch does it: the pyre, the away of who came
+## back, the cars that rest, the stop's promises.
+static func _close_field_stop(g: Dictionary, t: Dictionary, departure: Dictionary, receipt: Dictionary) -> void:
+	var stop: Variant = g.get("stop")
+	if g["phase"] != "stop" or not stop is Dictionary or bool(stop["done"]):
+		return
+	# Loaded when called: train_advance.gd preloads this file.
+	var adv: GDScript = load("res://game/train/train_advance.gd")
+	stop["done"] = true
+	adv._burn_pyre(g, t)
+	var back: Array = returned_of(receipt)
+	var went: Dictionary = {}
+	var home: Dictionary = {}
+	for person_id: String in receipt["people"]["sent"]:
+		var comm: String = _person_of(t, departure, person_id)["comm"]
+		went[comm] = int(went.get(comm, 0)) + 1
+		if back.has(person_id):
+			home[comm] = int(home.get(comm, 0)) + 1
+	for comm: String in home:
+		g["comms"][comm]["away"] = int(g["comms"][comm]["away"]) + TrainStop.crew_away_of(float(home[comm]), t["CREW"]["cost"], t)
+	# The car that cannot rest is the one that sent the most (the first to go on a tie).
+	var busy: String = ""
+	for comm: String in went:
+		if busy == "" or int(went[comm]) > int(went[busy]):
+			busy = comm
+	adv._crew_rest(g, t, busy)
+	if busy != "":
+		g["lastCrew"] = busy
+	# 내정 훅 자리: domesticStop (escort, leaving at the stop) is the domestic side's, not called here (as in S1).
+	var notes: Array = ["필드에서 돌아왔다."]
+	var stock: Dictionary = receipt["stock"]
+	var gains: Dictionary = {}
+	for key: String in ["coal", "food", "medicine", "luxury"]:
+		if float(stock.get(key, 0)) > 0:
+			gains[key] = stock[key]
+	var gone: Array = (receipt["people"]["dead"] as Array) + (receipt["people"]["missing"] as Array) + (receipt["people"]["leftBehind"] as Array)
+	var hurt: Array = []
+	for person_id: String in receipt["people"]["injured"]:
+		if not gone.has(person_id):
+			hurt.append(_person_of(t, departure, person_id)["name"])
+	var dead: Array = []
+	for person_id: String in receipt["people"]["dead"]:
+		dead.append(_person_of(t, departure, person_id)["name"])
+	stop["result"] = {"passed": false, "gains": gains, "notes": notes, "injured": hurt, "dead": dead}
+	var place: Dictionary = t["PLACES"][0]
+	for p: Dictionary in t["PLACES"]:
+		if p["id"] == stop["place"]:
+			place = p
+			break
+	var got: Array = []
+	for key: String in gains:
+		got.append("%s %d" % [t["LOOT_NAME"][key], int(gains[key])])  # the ledger's amounts are whole (stop_receipt.ts)
+	_journal(g, "%s에 %s 머물렀다(필드 %d명). %s." % [place["name"], t["STAY"][stop["stay"]]["name"], (receipt["people"]["sent"] as Array).size(), ", ".join(got) if not got.is_empty() else "빈손"])
+	adv._check_stop_promises(g, t, stop["target"], gains)
 
 
 ## Bodies gone through in the field (decision 423 card 12, the same values as

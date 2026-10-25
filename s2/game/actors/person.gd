@@ -35,6 +35,10 @@ var role: String = "companion"
 var team: String = "squad"            # squad | crew | raider
 var skills: Dictionary = {"strength": 5, "melee": 1, "shooting": 1, "stealth": 1, "search": 1}
 var medical: String = "none"          # none | apprentice | skilled | master
+## What the train sends them out with (the departure contract, s3 contract 2; card B): 0 none,
+## 1 some, 2 bad. Both take from how well a blow lands (body_injury 4.2).
+var hunger_level: int = 0
+var sore_level: int = 0
 var body := BodyState.new()
 var heat := BodyHeat.new()
 var aim := AimModel.new()
@@ -221,6 +225,12 @@ func carry_state() -> int:
 	return Carry.state(weight(), carry_limit())
 
 
+## The load lets one run: not over the limit and nothing held in both arms
+## (card G 가, decision 448-19: one walks with it).
+func load_lets_run() -> bool:
+	return carry_state() < 2 and not Carry.has_big(items)
+
+
 ## S2 keeps only the '추움' tier (on/off, s2_station 2.4 after the 2026-10-07
 ## review). Hypothermia tiers wait for S3.
 func cold_level() -> int:
@@ -254,7 +264,8 @@ func smell_mult() -> float:
 
 
 func mult_ctx() -> Dictionary:
-	return {"carry_state": carry_state(), "cold_level": cold_level(), "gloves": gloves, "heavy_coat": Wear.heavy(self), "barefoot": Wear.barefoot(self), "panic": panic > 0.6, "strength": int(skills["strength"])}
+	return {"carry_state": carry_state(), "cold_level": cold_level(), "gloves": gloves, "heavy_coat": Wear.heavy(self), "barefoot": Wear.barefoot(self), "panic": panic > 0.6, "strength": int(skills["strength"]),
+			"hunger_level": hunger_level, "sore_level": sore_level}
 
 
 func mults() -> Dictionary:
@@ -273,7 +284,7 @@ func speed(floor_kind: int) -> float:
 	var base := WALK
 	if crouched:
 		base = CROUCH
-	elif running and body.can_run() and carry_state() <= 2:
+	elif running and body.can_run() and load_lets_run():
 		base = RUN
 	if carry_state() >= 3:
 		return 0.0
@@ -282,7 +293,7 @@ func speed(floor_kind: int) -> float:
 
 
 func is_running_now() -> bool:
-	return running and moving and not crouched and carry_state() < 3 and body.can_run()
+	return running and moving and not crouched and load_lets_run() and body.can_run()
 
 
 func add_item(id: String, n: int = 1) -> void:

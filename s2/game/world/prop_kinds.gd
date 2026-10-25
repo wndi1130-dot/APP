@@ -51,6 +51,18 @@ const MODELS: Dictionary = {
 	"barrel": "", "bare_tree": "", "crate_stack": "", "sack_pile": "",
 	"part_crate": "", "handcart": "", "blanket_chest": "", "fridge_open": "",
 	"iv_stand": "", "paper_cart": "", "oxygen_cylinder": "", "pallet_stack": "",
+	"dresser": "", "chair": "", "nightstand": "", "counter": "", "sink": "", "cupboard": "",
+	"settee": "", "armchair": "", "low_table": "", "side_table": "",
+	"toilet": "", "washstand": "", "bathtub": "", "towel_shelf": "", "small_shelf": "",
+}
+
+## 새 방 가구의 기본 바닥 크기. 모델은 별도 제작하며 경로는 비워 둔다.
+const ROOM_SIZES: Dictionary = {
+	"dresser": Vector2i(2, 1), "chair": Vector2i(1, 1), "nightstand": Vector2i(1, 1),
+	"counter": Vector2i(1, 1), "sink": Vector2i(1, 1), "cupboard": Vector2i(1, 1),
+	"settee": Vector2i(2, 1), "armchair": Vector2i(1, 1), "low_table": Vector2i(1, 1),
+	"side_table": Vector2i(1, 1), "toilet": Vector2i(1, 1), "washstand": Vector2i(1, 1),
+	"bathtub": Vector2i(2, 1), "towel_shelf": Vector2i(1, 1), "small_shelf": Vector2i(1, 1),
 }
 
 ## 상위 20종은 공용 파일이 실제로 있을 때만 우선한다. preload하지 않는다.

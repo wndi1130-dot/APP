@@ -15,6 +15,8 @@ import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
 import { addCard, addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import { revertRationCut } from './ration_cut';
+import { logVote, noteHeld } from './council_log';
+import type { LogKind } from './council_log';
 import { hash } from './omens';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, PromiseState, VoteFlip, VoteResult } from './state';
 
@@ -202,6 +204,35 @@ function applyDeal(g: Game, b: Bloc, c: Comm, tool: DealTool): void {
   }
 }
 
+/** 개표 설명 한 줄(정치 흐름 3.3, 6.1 sol 검수 2): 미정·대표 몫 가운데 기대와 가장 크게 다르게 갈린 칸 하나.
+ * 꿈쩍 않는 반대·부재·옮긴 표는 표결 전 셈(확보·예상)에 이미 들어 있어 여기서 다시 말하지 않는다. 같은 석을 두 번 세지 않는다.
+ * 차이가 한 석 아래면 null. 새 난수를 쓰지 않는다. */
+export function voteWhy(map: Record<Comm, Bloc>, turned: Record<Comm, { und: number; pool: number }>): string | null {
+  let best: { gap: number; text: string } | null = null;
+  for (const c of COMMS) {
+    const b = map[c];
+    const t = turned[c];
+    if (!t) continue;
+    const name = COMM_NAME[c];
+    if (b.und > 0) {
+      const p = undecidedChance(b.score);
+      const exp = b.und * p;
+      const gap = Math.abs(t.und - exp);
+      if (gap >= 1 && (!best || gap > best.gap)) {
+        best = { gap, text: `${name} 미정 ${b.und}석 가운데 ${t.und}석이 찬성했다(기대 ${Math.round(exp)}석, 한 석마다 찬성 ${Math.round(p * 100)}%).` };
+      }
+    }
+    if (b.pool > 0) {
+      const exp = b.pool * b.poolChance;
+      const gap = Math.abs(t.pool - exp);
+      if (gap >= 1 && (!best || gap > best.gap)) {
+        best = { gap, text: `${name} 대표가 끌고 오겠다던 ${b.pool}석 가운데 ${t.pool}석이 따랐다(기대 ${Math.round(exp)}석, 결속 ${Math.round(b.poolChance * 100)}%).` };
+      }
+    }
+  }
+  return best?.text ?? null;
+}
+
 export function expected(map: Record<Comm, Bloc>): { mean: number; min: number; max: number } {
   let mean = 0;
   let min = 0;
@@ -364,7 +395,10 @@ export function openCouncil(g: Game, emergency = false): void {
       if (sc > best) { best = sc; idx = i; }
     });
   }
-  g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}), ...(martial ? { martial } : {}) };
+  g.council = {
+    options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}), ...(martial ? { martial } : {}),
+    ...(g.agendaHolder && options.length > 0 ? { holder: g.agendaHolder } : {}),
+  };
   if (g.agendaHolder && options.length > 0) journal(g, `${COMM_NAME[g.agendaHolder]}이(가) 안건을 골랐다: ${agendaTitle(options[idx])}.`);
   g.agendaHolder = null;
   for (const hook of COUNCIL_HOOKS) hook.open?.(g);
@@ -430,6 +464,7 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
     case 'open':
     case 'fetch': {
       const cost = tool === 'fetch' ? `다음 정차: ${FETCH_WANT[c].label}` : '조건 하나';
+      if (s.openClosed) return { ok: false, why: '약속을 세 번 어겼다', cost };
       if (s.promise) return { ok: false, why: '지키지 않은 약속', cost };
       if (hostile) return { ok: false, why: '열차장을 적대한다', cost };
       if (s.rel <= -40) return { ok: false, why: '관계가 반대 이하', cost };
@@ -730,19 +765,21 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   let yes = 0;
   let no = 0;
   let absent = 0;
+  const turned = {} as Record<Comm, { und: number; pool: number }>;
   for (const c of COMMS) {
     const b = map[c];
     let cy = b.yes;
     let cn = b.no;
+    turned[c] = { und: 0, pool: 0 };
     for (let i = 0; i < b.und; i += 1) {
       const v = rnd(g) < undecidedChance(b.score);
       flips.push({ comm: c, yes: v });
-      if (v) cy += 1; else cn += 1;
+      if (v) { cy += 1; turned[c].und += 1; } else cn += 1;
     }
     for (let i = 0; i < b.pool; i += 1) {
       const v = rnd(g) < b.poolChance;
       flips.push({ comm: c, yes: v });
-      if (v) cy += 1; else cn += 1;
+      if (v) { cy += 1; turned[c].pool += 1; } else cn += 1;
     }
     byComm[c] = { yes: cy, no: cn, absent: b.absent };
     yes += cy;
@@ -756,6 +793,8 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   }
   const passed = decree || yes >= need;
   const result: VoteResult = { yes, no, absent, need, passed, byComm, flips, decree, secret: lawActive(g, 'secret_ballot') };
+  const why = decree ? null : voteWhy(map, turned);
+  if (why) result.why = why;
   council.result = result;
   if (!lawActive(g, 'secret_ballot') && !decree) g.fear = clamp(g.fear + 1, 0, 100);
   if (lawActive(g, 'guided_voting') && g.guidedLeft > 0 && !pre) {
@@ -779,6 +818,13 @@ function vote(g: Game, decree: boolean): VoteResult | null {
     }
   }
   const title = agendaTitle(agenda);
+  const kind: LogKind = decree ? 'decree' : !isLawAgenda(agenda) ? 'motion' : agenda.ratify ? 'ratify' : agenda.amend ? 'amend' : agenda.repeal ? 'repeal' : 'enact';
+  logVote(g, {
+    session: g.session, seg: g.seg, title, kind, by: agenda.by ?? 'chief', passed, yes, no, absent, need,
+    exp: expected(map), ...(why ? { why } : {}),
+  });
+  // 안건 선택권을 넘겨받은 칸이 고른 안건(결과 아크): 이어 부결되면 서운해한다.
+  if (council.holder && !pre && !decree) noteHeld(g, council.holder, passed);
   if (!isLawAgenda(agenda)) {
     journal(g, `${title}: 찬성 ${yes}, 반대 ${no}${absent ? `, 부재 ${absent}` : ''}. ${passed ? '가결' : '부결'}.`, passed ? 'good' : 'bad');
     if (passed) MOTIONS[agenda.motion].onPass(g, agenda);

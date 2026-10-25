@@ -23,10 +23,11 @@ func observe(level: int, tag: String, radius: float, reacted: int) -> void:
 	by_action[tag] = row
 
 
-## Adds one sound event; returns the points added.
+## Adds one sound event; returns the points added (none for a tag that pulls
+## nothing, noise.gd SOURCES: it is still in the history).
 func add(level: int, t: float, tag: String) -> int:
 	var lv: int = SimNoise.clamp_level(level)
-	var pts: int = SimNoise.score(lv)
+	var pts: int = SimNoise.tag_score(lv, tag)
 	total += pts
 	history.append({"t": t, "level": lv, "tag": tag, "total": total})
 	return pts
@@ -37,5 +38,5 @@ func score_since(t: float) -> int:
 	var sum: int = 0
 	for e: Dictionary in history:
 		if float(e["t"]) >= t:
-			sum += SimNoise.score(int(e["level"]))
+			sum += SimNoise.tag_score(int(e["level"]), String(e["tag"]))
 	return sum

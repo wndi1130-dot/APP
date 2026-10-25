@@ -1,5 +1,6 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
+import type { CouncilLogRow } from './council_log';
 import type { DomState } from './domestic/state';
 import type { ScoutGearUsed } from './domestic/scout_gear';
 import type { EduState } from './domestic/classroom';
@@ -112,6 +113,10 @@ export interface CommState {
   /** 이 칸과 지킨 약속·어긴 약속 수(판 전체 누계). 설득(결정 433)과 정치 흐름의 결과 아크가 같은 키를 읽는다. 옛 저장 판에는 없어서 0이다 */
   kept?: number;
   broken?: number;
+  /** 약속을 세 번 어겨 이 칸과 공개 협상·현장 조달이 판 끝까지 닫혔다(결과 아크, council_log.ts) */
+  openClosed?: boolean;
+  /** 이 칸에 넘긴 안건이 이어 부결된 수(결과 아크) */
+  heldFails?: number;
   lastOffense: number;
   demandCool: number;
   favorCool: number;
@@ -142,6 +147,10 @@ export interface HiddenBite { who: string; comm: Comm; at: number; due: number; 
 export interface RiotState {
   prev: number; stage: 0 | 1 | 2; fire: string[]; scorched: string[]; spilled: number;
   riots: number; protests: number; riotCards: number; fell: number; died: number;
+  /** 고조 사다리의 대응 흔적(riot.ts LADDER, 정치 흐름 4.2). 모두 선택 칸이라 옛 저장도 읽힌다.
+   * ignoredAt: 항의를 물리친 구간(풀리지 않았으면 다시 온다), yieldUntil: 들어준 뒤 항의 문턱이 낮은 마지막 구간,
+   * guardUntil·guardComm: 경비로 누른 칸과 불씨가 잘 생기는 마지막 구간, pending: 항의 없이 난장판 문턱을 넘어 한 정산 미뤘다 */
+  ignoredAt?: number; yieldUntil?: number; guardUntil?: number; guardComm?: Comm; pending?: boolean;
 }
 export function riotStart(): RiotState {
   return { prev: P.tension0, stage: 0, fire: [], scorched: [], spilled: 0, riots: 0, protests: 0, riotCards: 0, fell: 0, died: 0 };
@@ -238,12 +247,16 @@ export interface VoteResult {
   decree: boolean;
   /** 표결한 그때 비밀 투표였나. 비밀 투표 법을 통과·폐지한 표결이어도 화면은 표결 때 방식을 따른다(K01 2) */
   secret?: boolean;
+  /** 개표 설명 한 줄: 미정·대표 몫 가운데 기대와 가장 크게 다르게 갈린 칸(정치 흐름 3.3). 고정 조건(꿈쩍 않는 반대·부재)은 표결 전 셈에 이미 있다 */
+  why?: string;
 }
 
 export interface CouncilState {
   options: Agenda[];
   idx: number;
   locked: boolean;
+  /** 안건 선택권을 넘겨받아 안건을 고른 칸(결과 아크) */
+  holder?: Comm;
   deals: Deal[];
   result: VoteResult | null;
   /** 회기가 아닌 구간에 열차장이 부른 비상 소집 */
@@ -360,6 +373,8 @@ export interface Game {
   needs: Partial<Record<NeedId, NeedState>>;
   /** 법 요구마다 예고가 몇 번 왔나(예고 글 변주) */
   needAsked?: Partial<Record<NeedId, number>>;
+  /** 회기 기록부: 표결마다 한 줄, 최근 줄만(council_log.ts). 옛 저장에는 없다 */
+  councilLog?: CouncilLogRow[];
   /** 비상 소집을 부른 구간들 */
   emergencyCalls: number[];
   /** 식량 0으로 버틴 구간 수 */
@@ -491,6 +506,8 @@ export interface Game {
   disasterDeaths?: number;
   /** 바깥 기온(climate.ts)이 켜진 판. 없으면 꺼진 판이고 아래 칸들도 없다 */
   climate?: boolean;
+  /** 시험 판 스위치(결정 447 카드 3)로 막 곡선을 따르는 판. 없으면 서막 곡선. 판을 다시 열 때 useSeasonAct로 되살린다 */
+  seasonAct?: 'act1' | 'act2' | 'act3';
   /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠 판. 켜지 않은 판에는 r4·w4가 없고 핸드카에 갈래가 없다 */
   gearOn?: boolean;
   /** 적용된 기온 단계 0~4(출발 때만 계절표를 따라 바뀐다) */

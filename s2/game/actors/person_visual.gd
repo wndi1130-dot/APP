@@ -181,6 +181,8 @@ const OWN_WORK: Dictionary = {
 	"treat": ["p_treat", 1.0], "splint": ["p_kneel_work", 1.0], "rub": ["p_treat", 1.0],
 	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
 	"wear": ["p_wear_outer", 0.0],
+	# Climbing up into a car at its door (field_ai.gd retreat; a climb of its own is to come).
+	"board": ["p_climb", 0.0],
 }
 # A melee blow in the living's own motions: the ways each weapon is swung, and
 # where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
@@ -814,8 +816,11 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 
 
 ## Putting a garment on plays its place's motion once over the job (wear.gd
-## CLIP); taking it off plays it backwards.
+## CLIP); taking it off plays it backwards. At a walk (a hat or gloves, wear.gd
+## WALKABLE) the walk shows: the whole-body motion cannot be laid over the legs.
 static func wear_of(p, note: Dictionary, own: Array) -> Vector2:
+	if p.moving and bool(p.action_busy.get("walk", false)):
+		return Vector2(0.0, -1.0)
 	var slot: String = String(p.action_busy.get("slot", "jacket"))
 	var clip := clip_named(own, String(Wear.CLIP.get(slot, Wear.CLIP["jacket"])), -1)
 	if clip < 0:
