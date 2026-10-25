@@ -269,12 +269,12 @@ function view(g: Game, card: Card): CardView | null {
     }
     case 'dark:vigil': {
       const name = card.who ?? '';
-      const martial = !!d.martial; // 계엄 중엔 통행을 허락하는 사람이 경비대장이다(5.3 비상 변형)
+      const martial = !!d.martial; // 계엄 중엔 밤샘 말을 경비대장이 들고 온다(5.3 비상 변형). 통행 쪽지는 쓰지 않는다(결정 426 6항)
       return {
         title: '밤샘', speaker: martial ? rep(g, 'guard') : rep(g, c), focus: c, required: true,
         body: `${name}의 곁을 하룻밤 지키겠다고 한다.`,
         choices: [
-          { label: martial ? '통행 쪽지를 써 준다' : '허락한다', say: martial ? '하룻밤이다. 쪽지에 칸 이름과 시간을 적어라.' : '하룻밤이다. 등잔 하나는 켜 둬라.', effs: [], special: 'dark:vigil:allow', extra: [`${COMM_NAME[c]} 관계 +4`] },
+          { label: '허락한다', say: martial ? '하룻밤이다. 경비대장 당직표에 적어 둬라.' : '하룻밤이다. 등잔 하나는 켜 둬라.', effs: [], special: 'dark:vigil:allow', extra: [`${COMM_NAME[c]} 관계 +4`] },
           { label: '경비와 함께', say: '지켜라. 다만 경비 하나가 문가에 선다.', effs: [], special: 'dark:vigil:guard', extra: [`${COMM_NAME[c]} 관계 +2`, '경비대 노출 +1'] },
           { label: '거절한다', say: '오늘 보내야 한다. 미안하다.', effs: [], special: 'dark:vigil:refuse', extra: [`${COMM_NAME[c]} 관계 −3`] },
         ],
