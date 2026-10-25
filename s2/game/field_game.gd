@@ -2787,7 +2787,8 @@ func finish(reason: String) -> void:
 
 
 ## The contract's side of the receipt (s3 contract 3): each departure promise as seen by those of
-## the squad who came back (the train judges it), and how each one aboard came back (v5 crew rows).
+## the squad who came back (the train judges it), how each one aboard came back (v5 crew rows,
+## with what they wear of the wardrobe's places), the outer things put aboard, the lures back.
 func _contract_end(boarded: Array) -> void:
 	if not contract_on():
 		return
@@ -2802,7 +2803,20 @@ func _contract_end(boarded: Array) -> void:
 		for h: Dictionary in p.hands:
 			if String(h.get("id", "")) != "":
 				hands.append([String(h["id"]), String(h.get("quality", "factory")), snappedf(float(h.get("condition", 1.0)), 0.01)])
-		receipt.set_crew_row(p.pid, p.body.exhaustion_level(), p.hunger_level, {}, hands, p.items)
+		receipt.set_crew_row(p.pid, p.body.exhaustion_level(), p.hunger_level, {}, hands, p.items, Wear.back_of(p))
+	# The outer things put aboard at the platform go to the wardrobe; the rest of what was put
+	# aboard has no place there.
+	var into: Array = []
+	for g: Dictionary in loaded_wear:
+		if Wear.OUTER_PLACES.has(Wear.slot_of(String(g.get("id", "")))):
+			var e := Wear.to_wardrobe(g)
+			if not e.is_empty():
+				into.append(e)
+	receipt.set_wardrobe_in(into)
+	# The train's lures are not handed out in the field yet: all come back.
+	var given_lures := int((opts["departure"].get("train", {}) as Dictionary).get("lures", 0))
+	if given_lures > 0:
+		receipt.set_lures_back({"clockwork": given_lures})
 
 
 func _save(result: Dictionary) -> void:

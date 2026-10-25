@@ -14,6 +14,12 @@ const V3_REQUIRED := ["receiptId", "stopId", "goal", "extras"]
 const V4_REQUIRED := ["departureId", "symbol", "fieldPromises"]
 ## v5 (s3_departure_receipt_contract.md 3): v4 + how each came back + the train's defence.
 const V5_REQUIRED := ["crew", "defense"]
+## v5 may also carry (s3 contract 3): the outer things put aboard at the platform, the lures
+## that came back. Left out when there are none.
+const V5_OPTIONAL := ["wardrobeIn", "luresBack"]
+## gearBack.wear's places: the wardrobe's (wear.gd OUTER_PLACES), the coat only when one is on.
+const GEAR_WEAR_KEYS := ["jacket", "coat", "hands"]
+const WARDROBE_ENTRY_KEYS := ["id", "condition", "holes"]
 ## What was done for a wound (s3 contract 3; quick: by a medic within two real minutes, body_injury 4).
 const WOUND_TREATS := ["bandaged", "disinfected", "sutured", "splinted", "tourniquet", "pulled", "quick"]
 const CREW_KEYS := ["person", "exhaustion", "hunger", "bodyUse", "gearBack"]
@@ -62,6 +68,8 @@ var _field_promises: Array[Dictionary] = []
 var _has_v5: bool = false
 var _crew: Array[Dictionary] = []
 var _defense: Dictionary = {}
+var _wardrobe_in: Array = []
+var _lures_back: Dictionary = {}
 
 
 func _init(place_id: String, place_type: String = "freight", variant: String = "s2_graybox") -> void:
@@ -294,18 +302,34 @@ func see_promise(id: String, kind: String, witnesses: Array, heard_by: Array) ->
 
 ## Problems with what has been built so far (check() on to_dict()).
 ## How one who boarded came back (v5): exhaustion and hunger 0..2, what the body was used for,
-## the guns and things they brought back. Opts the receipt into v5.
-func set_crew_row(person_id: String, exhaustion: int, hunger: int, body_use: Dictionary = {}, hands: Array = [], items: Dictionary = {}) -> bool:
+## the guns and things they brought back, and what they wear at the wardrobe's places (`wear`,
+## wear.gd back_of; left out when not given: the train reads them as gone out). Opts the
+## receipt into v5.
+func set_crew_row(person_id: String, exhaustion: int, hunger: int, body_use: Dictionary = {}, hands: Array = [], items: Dictionary = {}, wear: Dictionary = {}) -> bool:
 	if not _id_ok(person_id):
 		return false
 	for row: Dictionary in _crew:
 		if row["person"] == person_id:
 			_crew.erase(row)
 			break
+	var back := {"hands": hands.duplicate(true), "items": items.duplicate()}
+	if not wear.is_empty():
+		back["wear"] = wear.duplicate(true)
 	_crew.append({"person": person_id, "exhaustion": clampi(exhaustion, 0, 2), "hunger": clampi(hunger, 0, 2),
-			"bodyUse": body_use.duplicate(), "gearBack": {"hands": hands.duplicate(true), "items": items.duplicate()}})
+			"bodyUse": body_use.duplicate(), "gearBack": back})
 	_has_v5 = true
 	return true
+
+
+## The outer things put aboard at the platform ({id, condition, holes?} each, wear.gd
+## to_wardrobe), for the train's wardrobe. On a v5 receipt only.
+func set_wardrobe_in(rows: Array) -> void:
+	_wardrobe_in = rows.duplicate(true)
+
+
+## The lures that came back unspent, by kind. On a v5 receipt only.
+func set_lures_back(by_kind: Dictionary) -> void:
+	_lures_back = by_kind.duplicate()
 
 
 ## The train's defence at the stop (decision 416; the stop-sound stream fills it): those who
@@ -377,6 +401,10 @@ func to_dict() -> Dictionary:
 		if v5:
 			d["crew"] = _crew.duplicate(true)
 			d["defense"] = _defense.duplicate(true) if not _defense.is_empty() else null
+			if not _wardrobe_in.is_empty():
+				d["wardrobeIn"] = _wardrobe_in.duplicate(true)
+			if not _lures_back.is_empty():
+				d["luresBack"] = _lures_back.duplicate()
 		return d
 	if not _wounds.is_empty():
 		d["version"] = 2
@@ -442,7 +470,7 @@ static func check(d: Dictionary) -> Array[String]:
 		if not d.has(key):
 			out.append("%s: 없음" % key)
 	for key: Variant in d:
-		if not (required.has(key) or OPTIONAL.has(key)):
+		if not (required.has(key) or OPTIONAL.has(key) or (version == 5 and V5_OPTIONAL.has(key))):
 			out.append("%s: 모르는 칸" % str(key))
 
 	var place: Variant = d.get("place")
@@ -611,6 +639,32 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 			var back: Variant = row.get("gearBack")
 			if not (back is Dictionary and back.get("hands") is Array and back.get("items") is Dictionary):
 				out.append("crew.%d.gearBack: 꼴이 아님" % i)
+			elif (back as Dictionary).has("wear"):
+				_no_extra(out, "crew.%d.gearBack" % i, back, ["hands", "items", "wear"])
+				var wear: Variant = back["wear"]
+				if not (wear is Dictionary and wear.has("jacket") and wear.has("hands")):
+					out.append("crew.%d.gearBack.wear: 꼴이 아님" % i)
+				else:
+					_no_extra(out, "crew.%d.gearBack.wear" % i, wear, GEAR_WEAR_KEYS)
+					for place: Variant in wear:
+						if not (wear[place] is String and wear[place] == "") and not _wardrobe_entry_ok(wear[place], id_re):
+							out.append("crew.%d.gearBack.wear.%s: 옷장 꼴이 아님" % [i, str(place)])
+	if d.has("wardrobeIn"):
+		var rows: Variant = d["wardrobeIn"]
+		if not rows is Array:
+			out.append("wardrobeIn: 목록이 아님")
+		else:
+			for i: int in (rows as Array).size():
+				if not _wardrobe_entry_ok(rows[i], id_re):
+					out.append("wardrobeIn.%d: 옷장 꼴이 아님" % i)
+	if d.has("luresBack"):
+		var lures: Variant = d["luresBack"]
+		if not lures is Dictionary:
+			out.append("luresBack: 사전이 아님")
+		else:
+			for kind: Variant in lures:
+				if not (_is_id(kind, id_re) and _is_int(lures[kind]) and float(lures[kind]) >= 0.0):
+					out.append("luresBack.%s: 0 이상 정수가 아님" % str(kind))
 	var defense: Variant = d.get("defense")
 	if defense is Dictionary:
 		_no_extra(out, "defense", defense, DEFENSE_KEYS)
@@ -861,6 +915,25 @@ static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx, tre
 
 static func _is_num(v: Variant) -> bool:
 	return v is int or v is float
+
+
+## One wardrobe entry: {id, condition 0..1, holes?: {part: true}} (train_dom.gd).
+static func _wardrobe_entry_ok(v: Variant, id_re: RegEx) -> bool:
+	if not (v is Dictionary and _is_id(v.get("id"), id_re)):
+		return false
+	for key: Variant in v:
+		if not WARDROBE_ENTRY_KEYS.has(key):
+			return false
+	var c: Variant = v.get("condition")
+	if not ((c is float or c is int) and float(c) >= 0.0 and float(c) <= 1.0):
+		return false
+	if v.has("holes"):
+		if not v["holes"] is Dictionary:
+			return false
+		for part: Variant in v["holes"]:
+			if not (part is String and v["holes"][part] is bool and v["holes"][part]):
+				return false
+	return true
 
 
 static func _is_int(v: Variant) -> bool:
