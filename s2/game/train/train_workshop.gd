@@ -16,6 +16,7 @@ extends RefCounted
 ## comes after the line, so making a thing slows a refit (decision 070).
 
 const TrainDom = preload("res://game/train/train_dom.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
 const WORK: float = 4.0
@@ -42,8 +43,8 @@ const ORDER: Array[String] = ["bow", "crowbar", "coat_long"]
 
 
 ## A stretch's work.
-static func work_power() -> float:
-	return WORK * SKILL * ZONE
+static func work_power(g: Dictionary = {}, t: Dictionary = {}) -> float:
+	return WORK * SKILL * ZONE * TrainHands.hands_work_mult(g, t)
 
 
 ## How many parts the workshop keeps.
@@ -112,7 +113,7 @@ static func cancel(g: Dictionary) -> bool:
 static func run(g: Dictionary) -> Dictionary:
 	TrainDom.ensure(g)
 	var dom: Dictionary = g["dom"]
-	var w: float = work_power()
+	var w: float = work_power(g)
 	var parts_made: int = 0
 	var made: Array[String] = []
 	var events: Array = []
