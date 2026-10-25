@@ -114,6 +114,28 @@ func test_a_shove_plants_the_feet_for_its_first_half() -> void:
 	assert_ne(p.position, at)
 
 
+# A companion's reflex shove (not drawn back first) is seen all the same, plants the
+# feet just after it lands, and keeps the walk it was on: the hold is for swings.
+func test_a_reflex_shove_is_seen_plants_the_feet_and_keeps_the_order() -> void:
+	ally.stop()
+	ally.swing_t = 0.0
+	ally.strike_t = 0.0
+	ally.strike_kind = "swing"      # it swung before
+	game.combat.shove(ally)
+	assert_almost_eq(ally.lunge_t, FieldCombat.SHOVE_LUNGE, 0.001, "the arms out and back are seen")
+	assert_true(game.combat.feet_held(ally), "planted as it lands")
+	ally.path = PackedVector3Array([ally.position + Vector3(2, 0, 0)])
+	assert_false(game.ai._hold_swing(ally), "the order is not held")
+	assert_false(ally.path.is_empty(), "nor the walk dropped")
+	var at: Vector3 = ally.position
+	game._move_person(ally, 0.05)
+	assert_eq(ally.position, at)
+	game.combat.update(FieldCombat.SHOVE_PLANT + 0.01)
+	assert_false(game.combat.feet_held(ally))
+	game._move_person(ally, 0.05)
+	assert_ne(ally.position, at, "then it walks on")
+
+
 func test_companion_walks_between_targets_then_stops_before_swinging() -> void:
 	var z := _dead(ally.position + Vector3(5, 0, 0))
 	ally.facing = PI * 0.5

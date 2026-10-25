@@ -126,7 +126,6 @@ func update(delta: float) -> void:
 				p.shove_t = 0.0
 				if p.can_act() and p.grabbers.is_empty():
 					p.swing_t = 0.0
-					p.lunge_t = SHOVE_LUNGE
 					shove(p)
 		if p.strike_t > 0.0:
 			p.strike_t -= delta
@@ -474,13 +473,19 @@ func start_swing(p, at) -> void:
 		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
 
 
-## True while a melee blow holds the feet (decision 425): from its weapon's
-## feet_from of the swing to its end (Motion.swing_row), the body does not walk
-## off under the stick. A shove holds them over its first half; stomps do not.
+## True while a melee blow or a shove holds the feet (decision 425): the body does
+## not walk off under the stick or its own push. Stomps do not hold them.
 func feet_held(p) -> bool:
-	# A shove: from the arms drawn back to just after it lands (SHOVE_PLANT).
-	if p.shove_t > 0.0 or p.lunge_t > SHOVE_LUNGE - SHOVE_PLANT:
-		return true
+	return shove_holds_feet(p) or blow_holds_feet(p)
+
+
+## A shove: from the arms drawn back to just after it lands (SHOVE_PLANT).
+func shove_holds_feet(p) -> bool:
+	return p.shove_t > 0.0 or p.lunge_t > SHOVE_LUNGE - SHOVE_PLANT
+
+
+## A melee blow: from its weapon's feet_from of the swing to its end (Motion.swing_row).
+func blow_holds_feet(p) -> bool:
 	var id: int = p.get_instance_id()
 	if not blows.has(id):
 		return false
@@ -792,6 +797,8 @@ func shove(p) -> void:
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
 	p.swing_t = SHOVE_TIME / float(m["swing"])
+	# Every shove is seen, the reflex ones (not drawn back first) too: the arms out and back.
+	p.lunge_t = SHOVE_LUNGE
 	p.body.add_fatigue(0.003)
 	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
 	var hit := 0
