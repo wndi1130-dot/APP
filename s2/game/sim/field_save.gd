@@ -19,7 +19,7 @@ const DeadPose = preload("res://game/actors/dead_pose.gd")
 const Wear = preload("res://game/sim/wear.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
-const VEC_KEYS := ["pos"]
+const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
 const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id"]
 ## What a body may be doing when it comes back: anything mid-act (a grab, a lunge,
@@ -35,7 +35,12 @@ static func capture(game) -> Dictionary:
 	var zombies: Array = []
 	if game.zombies != null:
 		for z in game.zombies.list:
-			zombies.append({"id": int(z["id"]), "kind": String(z["kind"]), "pos": z["pos"], "state": String(z["state"]), "loot": (z.get("loot", []) as Array).duplicate(true), "searched": bool(z.get("searched", false)), "horde": int(z.get("horde", -1)), "name": String(z.get("name", ""))})
+			var row := {"id": int(z["id"]), "kind": String(z["kind"]), "pos": z["pos"], "state": String(z["state"]), "loot": (z.get("loot", []) as Array).duplicate(true), "searched": bool(z.get("searched", false)), "horde": int(z.get("horde", -1)), "name": String(z.get("name", "")), "home": z.get("home", z["pos"])}
+			# What it has on, once rolled or taken from (decision 434); unrolled it rolls the same again.
+			if z.has("worn"):
+				row["worn"] = (z["worn"] as Dictionary).duplicate(true)
+				row["stripped"] = bool(z.get("stripped", false))
+			zombies.append(row)
 	var containers := {}
 	for id in game.data.get("containers", {}):
 		var c: Dictionary = game.data["containers"][id]
@@ -57,7 +62,7 @@ static func capture(game) -> Dictionary:
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
 		"people": people, "ammo": game.ammo.duplicate(), "containers": containers, "spots": spots,
-		"ground_items": ground, "unloaded": game.unloaded.duplicate(),
+		"ground_items": ground, "unloaded": game.unloaded.duplicate(), "loaded_wear": game.loaded_wear.duplicate(true),
 		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
 		"zombies": zombies, "decisions": game.decisions.duplicate(true),
 		# The return's id, the same as the receipt's receiptId: the train side applies it once.
@@ -192,6 +197,7 @@ static func apply(game, save: Dictionary) -> void:
 	_put_counts(game.ammo, save.get("ammo", {}))
 	game.unloaded.clear()
 	_put_counts(game.unloaded, save.get("unloaded", {}))
+	game.loaded_wear = (save.get("loaded_wear", []) as Array).duplicate(true)
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	var boxes: Dictionary = game.data.get("containers", {})
@@ -254,6 +260,12 @@ static func _put_zombies(game, rows: Array) -> void:
 		z["state"] = state if state in RESUME_STATES else "wander"
 		z["loot"] = (row["loot"] as Array).duplicate(true)
 		z["searched"] = bool(row["searched"])
+		# Where it keeps to: its pockets and clothes are rolled by that place when first asked.
+		if row.get("home") is Vector3:
+			z["home"] = row["home"]
+		if row.get("worn") is Dictionary:
+			z["worn"] = (row["worn"] as Dictionary).duplicate(true)
+			z["stripped"] = bool(row.get("stripped", false))
 		top = maxi(top, int(row["id"]))
 	all.next_id = top + 1
 
