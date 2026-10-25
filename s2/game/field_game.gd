@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
@@ -146,6 +147,7 @@ var grid: FieldGrid                    # the ground level
 var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upstairs, -1 cellar)
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
+var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
 var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
@@ -235,6 +237,9 @@ var loaded_start: Dictionary = {}      # rounds already in the squad's guns at t
 ## kit is not new cloth every stop.
 var cloth_start: int = 0
 var unloaded: Dictionary = {}
+## Clothes taken off by the train (decision 434, clothing.md 7장): they are not
+## left lying there but go aboard as they are, worn and holed (wear.gd states).
+var loaded_wear: Array = []
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
 var shot_times: Array = []
@@ -427,6 +432,11 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
+	map_edge = MapEdge.new()
+	add_child(map_edge)
+	map_edge.setup(view.grid, view.material)
+	map_edge.set_fog(fx_light["fog_color"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -720,6 +730,8 @@ func _update_atmosphere() -> void:
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
+		if map_edge != null:
+			map_edge.set_fog(fx_light["fog_color"])
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
@@ -1153,7 +1165,14 @@ func _spawn_dead() -> void:
 			continue
 		for c in s[key]:
 			zombies.spawn("dead", FieldGrid.center(c))
-	for key in ["clothed_station", "clothed_shed"]:
+	# The padded ones: the two lists of before first, as they were, then any
+	# other "clothed_..." list a map has (where they stood shows in what they
+	# have on, loot_tables.gd WEAR_PLACE).
+	var clothed: Array[String] = ["clothed_station", "clothed_shed"]
+	for key: String in s:
+		if key.begins_with("clothed_") and not clothed.has(key):
+			clothed.append(key)
+	for key in clothed:
 		for c in s.get(key, []):
 			zombies.spawn("clothed", FieldGrid.center(c))
 	# The dead indoors, on every floor and in the cellar.
@@ -1523,8 +1542,12 @@ func _update_person(p: Person, delta: float) -> void:
 		return
 	if p.body.downed:
 		return
-	# Pushing the stick walks away from slow work (search, prying, treating).
-	if p.stick.length() > 0.3 and STICK_BREAKS.has(p.action):
+	# Pushing the stick walks away from slow work (search, prying, treating);
+	# a hat, a scarf, a mask or gloves go on and off at a walk (decision 434),
+	# the feet free while the hands work, but not at a run.
+	var walking_work: bool = actions.walk_work(p)
+	var breaks: bool = (p.running and p.stick != Vector2.ZERO) if walking_work else p.stick.length() > 0.3
+	if breaks and STICK_BREAKS.has(p.action):
 		p.cancel_action()
 	if p.action != "":
 		# Each action takes its body multiplier once, here (not also in its length).
@@ -1538,7 +1561,8 @@ func _update_person(p: Person, delta: float) -> void:
 			p.cancel_action()
 			if done.is_valid():
 				done.call()
-		return
+		if not walking_work:
+			return
 	if p.stick != Vector2.ZERO or p.drive_speed > 0.0:
 		_drive(p, delta)
 	else:
@@ -1770,6 +1794,8 @@ func on_person_died(p: Person) -> void:
 	# Everyone is already infected: the body stands up again (zombies.md).
 	var z := zombies.add_rising(p.position, p.display_name)
 	p.brain["rising_id"] = z["id"]
+	# It gets up in what it wore, and that is what can be taken off it (decision 434).
+	z["worn"] = p.worn.duplicate(true)
 	if p.team == "raider":
 		# What a raider had stays on it until someone goes through it (user 2026-10-11).
 		var loot: Array = []
