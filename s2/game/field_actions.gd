@@ -1799,14 +1799,16 @@ func start_work(p) -> void:
 	spot["state"] = "open"
 	game.view.update_spot("work_site")
 	var doors: Array = game.data["spawns"]["train_door"]
-	var rows := [
+	var rows: Array = game.work_rows()
+	if rows.is_empty():
+		rows = [
 		{"id": "s2_crew_01", "name": "운송조 1", "role": "worker", "skills": {"strength": 6, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_crew_02", "name": "운송조 2", "role": "worker", "skills": {"strength": 6, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_crew_03", "name": "운송조 3", "role": "worker", "skills": {"strength": 5, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_crew_04", "name": "운송조 4", "role": "worker", "skills": {"strength": 7, "melee": 2, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_escort_01", "name": "호위조 1", "role": "escort", "skills": {"strength": 6, "melee": 3, "shooting": 3, "stealth": 1, "search": 1}, "hands": [["shotgun", "factory", 0.8], ["crowbar", "factory", 0.9]]},
 		{"id": "s2_escort_02", "name": "호위조 2", "role": "escort", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 1, "search": 1}, "hands": [["axe", "factory", 0.9]]},
-	]
+		]
 	for i in range(rows.size()):
 		var c: Vector2i = doors[i % doors.size()]
 		var q = game.make_person(rows[i], FieldGrid.center(c) + Vector3(game.rng.randf_range(-0.5, 0.5), 0, 0.3))
@@ -1982,6 +1984,10 @@ func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> 
 		return
 	if Treatment.apply(o.body, index, String(step["id"])) <= 0:
 		return
+	# A medic's splint inside the first two minutes (body_injury 4 「빠른 처치」): the train
+	# counts that break as a light wound (s3 contract 4).
+	if String(step["id"]) == "splint" and medic.medical != "none" and game.clock.elapsed - float(wound.get("at", -INF)) <= o.body.QUICK_TREAT:
+		wound["quick"] = true
 	# What it takes comes from the one who treats first, then from the one treated.
 	for item: String in step["uses"]:
 		var used: int = int(step["uses"][item])

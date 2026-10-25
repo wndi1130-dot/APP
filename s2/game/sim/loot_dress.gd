@@ -180,6 +180,19 @@ const KEY_WAYS: Array = [["dead", 6], ["snow", 2], ["box", 2]]
 ## One of the dead may carry a note of a box hidden at the next stop (card 10).
 const NOTE_CHANCE: float = 0.35
 const NOTE_SPOTS: Array[String] = ["신호소 마루 밑", "급수탑 발치", "화물 창고 뒤 돌무더기", "역사 지하 계단 밑", "선로 반대편 헛간"]
+## A blueprint piece a stop (S1 domestic data.ts BYPRODUCT, 5.2): the chance at
+## each kind of place and the fields of research it may be for ("any": all
+## five). A kind of place not listed has none. It lies with the papers (an
+## office's desk or cabinet) if the stop has any, else in any box indoors.
+const FRAGMENT_PLACES: Dictionary = {
+	"freight": [0.3, ["engine", "expedition"]],
+	"houses": [0.15, ["med", "expedition"]],
+	"hospital": [0.4, ["med"]],
+	"factory": [0.4, ["craft", "engine"]],
+	"church": [0.05, "any"],
+	"office": [0.4, ["radio"]],
+}
+const FRAGMENT_FIELDS: Array[String] = ["engine", "med", "craft", "radio", "expedition"]
 
 ## The rare store at the end of a side path (decision 450, card F 가 by
 ## decision 442; the path, the building and its locked door are map-layout's):
@@ -318,12 +331,13 @@ static func name_pocket(id: String, salt: int) -> String:
 
 ## Dress the stop in place. data: the map's dictionary (containers, buildings,
 ## place_kind). Returns what was done, for the tests and the measuring tool:
-## {"moved", "named", "finds": [[id, box]], "rare": id or "", "store": kind or ""}.
+## {"moved", "named", "finds": [[id, box]], "rare": id or "", "fragment": id or "",
+## "store": kind or ""}.
 static func dress(data: Dictionary, seed: int) -> Dictionary:
 	var containers: Dictionary = data.get("containers", {})
 	var buildings: Array = data.get("buildings", [])
 	var place_kind: String = String(data.get("place_kind", ""))
-	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "store": ""}
+	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "fragment": "", "store": ""}
 	# 1. Within each building, the bundles go where the room says.
 	var by_building: Dictionary = {}
 	for id: String in containers:
@@ -361,6 +375,7 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 	# 3. Finds of their own.
 	_finds(containers, buildings, seed, report)
 	_rare(containers, place_kind, seed, report)
+	_fragment(containers, place_kind, seed, report)
 	return report
 
 
@@ -581,6 +596,35 @@ static func _rare(containers: Dictionary, place_kind: String, seed: int, report:
 	(containers[at]["items"] as Array).append(rare)
 	report["rare"] = rare
 	(report["finds"] as Array).append([rare, at])
+
+
+## This stop's blueprint piece, if there is one (FRAGMENT_PLACES): a box in a
+## building, the office's first (a locked one too, like the named find).
+static func _fragment(containers: Dictionary, place_kind: String, seed: int, report: Dictionary) -> void:
+	if not FRAGMENT_PLACES.has(place_kind):
+		return
+	var rng := _rng(seed, "fragment")
+	var row: Array = FRAGMENT_PLACES[place_kind]
+	if rng.randf() >= float(row[0]):
+		return
+	var fields: Array = FRAGMENT_FIELDS if row[1] is String else row[1]
+	var papers: Array = []
+	var indoors: Array = []
+	for id: String in containers:
+		var c: Dictionary = containers[id]
+		if c.has("pick") or LootTables.FIXED.has(id) or int(c.get("building", -1)) < 0:
+			continue
+		indoors.append(id)
+		if room_of(c) == "office":
+			papers.append(id)
+	var boxes: Array = papers if not papers.is_empty() else indoors
+	if boxes.is_empty():
+		return
+	var piece: String = "frag_" + String(fields[rng.randi_range(0, fields.size() - 1)])
+	var at: String = boxes[rng.randi_range(0, boxes.size() - 1)]
+	(containers[at]["items"] as Array).append(piece)
+	report["fragment"] = piece
+	(report["finds"] as Array).append([piece, at])
 
 
 ## The building that is the rare store (-1 for a stop without one).
