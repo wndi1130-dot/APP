@@ -122,20 +122,35 @@ func test_each_one_is_drawn_in_their_own_body() -> void:
 
 # What is worn over the body (WEAR_TINTS) is baked against each body: every
 # body has the four garments, cut from its own mesh and lined up with its own
-# motions, and its gloved colour picture.
-func test_every_body_has_its_own_garments_and_gloves() -> void:
-	for body: String in BodyCast.ALL:
+# motions, and its hands marked for the shader's gloves in both its folders
+# (the same marks), with no second, gloved colour picture.
+func test_every_body_has_its_own_garments_and_its_hands_marked() -> void:
+	for body: String in BodyCast.ALL + [PersonVisual.OWN_FOLDER.get_file().trim_suffix(BodyCast.OWN_SUFFIX)]:
 		var dir := BodyCast.own_folder(body)
 		var own := BodyBake.load_baked(dir)
 		var clips := _line_up(own["clips"])
-		for kind: String in PersonVisual.WEAR_TINTS:
-			var shell := BodyBake.load_baked(dir.path_join("wear").path_join(kind))
-			assert_false(shell.is_empty(), body + " " + kind)
-			if shell.is_empty():
-				continue
-			assert_eq(_line_up(shell["clips"]), clips, body + " " + kind + " lines up with the body")
-			assert_lt(int(shell["vertices"]), int(own["vertices"]), body + " " + kind + " covers a part of it")
-		assert_true(ResourceLoader.exists(dir.path_join(PersonVisual.GLOVES_FILE)), body + " gloved picture")
+		if body in BodyCast.ALL:
+			for kind: String in PersonVisual.WEAR_TINTS:
+				var shell := BodyBake.load_baked(dir.path_join("wear").path_join(kind))
+				assert_false(shell.is_empty(), body + " " + kind)
+				if shell.is_empty():
+					continue
+				assert_eq(_line_up(shell["clips"]), clips, body + " " + kind + " lines up with the body")
+				assert_lt(int(shell["vertices"]), int(own["vertices"]), body + " " + kind + " covers a part of it")
+				assert_false(PersonVisual.hands_marked(shell["mesh"]), body + " " + kind + " has no hands to glove")
+		var mesh: Mesh = own["mesh"]
+		assert_true(PersonVisual.hands_marked(mesh), body + " has its hands marked")
+		if not PersonVisual.hands_marked(mesh):
+			continue
+		var marks: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+		var hands := 0
+		for c in marks:
+			hands += 1 if c.a > 0.5 else 0
+		assert_between(hands, 20, int(marks.size() * 0.2), body + ": the hands, and only them")
+		assert_true(mesh.has_meta(BodyBake.HAND_LIGHT) and float(mesh.get_meta(BodyBake.HAND_LIGHT)) > 0.0, body + " knows the light of its hands")
+		var dead: Mesh = BodyBake.load_baked(BodyCast.dead_folder(body))["mesh"]
+		assert_true(PersonVisual.hands_marked(dead) and dead.surface_get_arrays(0)[Mesh.ARRAY_COLOR] == marks, body + "'s dead folder has the same marks")
+		assert_false(ResourceLoader.exists(dir.path_join("albedo_gloves.png")), body + ": no gloved picture any more")
 
 
 # Drawn: each body draws its own garments, never the reference body's (which
@@ -145,7 +160,6 @@ func test_garments_are_drawn_over_the_body_they_were_baked_for() -> void:
 	add_child_autofree(v)
 	v.setup(null)
 	assert_true(v.wear_draws.is_empty(), "nothing read in before anyone wears it")
-	assert_not_null(v.gloved_draw, "the reference body's gloved picture")
 	var chief := _person("p_chief", "chief")
 	var marek := _person("p_guard_marek", "companion")
 	chief.hat = Wear.make("hat_knit")
@@ -160,13 +174,52 @@ func test_garments_are_drawn_over_the_body_they_were_baked_for() -> void:
 		var looks := PersonVisual.looks_of(p)
 		for kind: String in PersonVisual.WEAR_TINTS:
 			assert_eq(d["wear"].has(kind), looks.has(kind), kind + " read in only when " + String(p.pid) + " wears it")
-		for kind: String in looks:
+		for worn_look: Dictionary in PersonVisual.looks_on(p):
+			var kind: String = worn_look["shell"]
 			assert_not_null(d["wear"][kind], kind + " of this body")
 			assert_eq(int(d["worn_n"].get(kind, 0)), 1, kind + " drawn over " + String(p.pid))
-			assert_eq((d["wear"][kind] as MultiMeshInstance3D).multimesh.visible_instance_count, 1, kind + " on show")
-		var on := int(d["gk"]) if p.gloves else int(d["k"])
-		assert_eq(on, 1, String(p.pid) + " drawn once, gloved when they wear gloves")
+			var garment := d["wear"][kind] as MultiMeshInstance3D
+			assert_eq(garment.multimesh.visible_instance_count, 1, kind + " on show")
+			# Each in their own colour (the headless test server keeps no instance colours to read back).
+			assert_true(garment.multimesh.use_colors, kind + " in the look of what " + String(p.pid) + " wears")
+			assert_true(bool((garment.material_override as ShaderMaterial).get_shader_parameter("worn_look")), kind)
+		assert_eq(int(d["k"]), 1, String(p.pid) + " drawn once, gloved or not")
+		assert_true(d["own_draw"].multimesh.use_colors, "each one's gloves their own")
+		var mat := d["own_draw"].material_override as ShaderMaterial
+		assert_true(bool(mat.get_shader_parameter("gloves")), "the shader paints the marked hands")
+		assert_false(bool(mat.get_shader_parameter("worn_look")), "the body keeps its own picture")
 	assert_eq(PersonVisual.looks_of(chief), ["jacket_short", "hat_knit"] as Array[String])
 	assert_true(v.wear_draws.is_empty(), "the reference body's garments are not drawn over another body")
-	assert_eq(v.gloved_draw.multimesh.visible_instance_count, 0, "nor its gloved picture")
 	assert_not_null(v.garment_of(v.worn[""], "coat_long"), "the reference body has its own when worn")
+
+
+# Each garment over the body is drawn in its own colour and pattern (wear.gd
+# look) person by person: the outermost of coat and jacket that has a shell,
+# then what is on the head. The gloves are painted in the kind's colour, else
+# in the dark wool the gloved picture had.
+func test_what_is_worn_is_drawn_in_its_own_colour_and_pattern() -> void:
+	var chief := _person("p_chief", "chief")
+	chief.worn["coat"] = Wear.make("coat_padded")
+	chief.hat = Wear.make("hat_knit")
+	var looks := PersonVisual.looks_on(chief)
+	assert_eq(PersonVisual.looks_of(chief), ["coat_long", "hat_knit"] as Array[String], "the padded coat over the railway jacket")
+	var tint: Array = Wear.look("coat_padded")["look_tint"]
+	var coat: Color = looks[0]["colour"]
+	assert_true(coat.is_equal_approx(Color(float(tint[0]), float(tint[1]), float(tint[2]), 1.0)), "its own colour, quilted")
+	var hat: Color = looks[1]["colour"]
+	assert_almost_eq(hat.a, 2.0 / 3.0, 0.0001, "knit")
+	chief.worn["coat"] = Wear.make("vest_armor")
+	assert_eq(PersonVisual.looks_of(chief)[0], "jacket_short", "a vest with no shell leaves the jacket under it on show")
+	assert_almost_eq(PersonVisual.looks_on(chief)[0]["colour"].a, 0.0, 0.0001, "the railway jacket is plain")
+	var gloves := PersonVisual.hands_colour(chief)
+	assert_true(gloves.is_equal_approx(Color(BodyBake.GLOVE_COLOUR.srgb_to_linear(), 1.0)), "the dark wool of before")
+	chief.gloves = false
+	assert_eq(PersonVisual.hands_colour(chief).a, 0.0, "bare hands")
+	# The dead and the train's people keep the shader as it was: what is worn is
+	# the living's alone (person_vat.gdshader defines WORN).
+	var dead_shader := FileAccess.get_file_as_string("res://game/actors/dead_vat.gdshader")
+	var person_shader := FileAccess.get_file_as_string("res://game/actors/person_vat.gdshader")
+	assert_false(dead_shader.contains("#define WORN"))
+	assert_true(person_shader.contains("#define WORN"))
+	for shader: String in [dead_shader, person_shader]:
+		assert_string_contains(shader, "#include \"res://game/actors/dead_vat.gdshaderinc\"")

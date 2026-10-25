@@ -41,6 +41,7 @@ const AI = preload("res://game/field_ai.gd")
 const Actions = preload("res://game/field_actions.gd")
 const Hud = preload("res://game/ui/field_hud.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
+const MusicPlayer = preload("res://game/audio/music_player.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -182,6 +183,7 @@ var ai: AI
 var actions: Actions
 var hud: Hud
 var audio: FieldAudio
+var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
 
 var people: Array = []
 var people_look  # person_visual.gd: the baked body the people wear
@@ -441,6 +443,9 @@ func _ready() -> void:
 	audio = FieldAudio.new()
 	add_child(audio)
 	audio.setup(self)
+	music = MusicPlayer.new()
+	add_child(music)
+	music.setup("field", self)
 	await BuildPace.rest(pace)
 	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
 	if holdout.feel_line() != "":
@@ -1365,6 +1370,7 @@ func _process(delta: float) -> void:
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
+	music.tick(delta)
 
 
 func _step(delta: float) -> void:

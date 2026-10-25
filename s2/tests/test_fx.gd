@@ -120,8 +120,8 @@ func test_snow_level_by_season() -> void:
 
 func test_smoke_has_no_chimney_or_column_kinds() -> void:
 	# Ban line: buildings, factory chimneys and cooling towers never smoke, and a
-	# stopped train never sends a column up. Only these four kinds exist.
-	assert_eq(Smoke.KINDS.keys().size(), 4)
+	# stopped train never sends a column up. Only these five kinds exist.
+	assert_eq(Smoke.KINDS.keys().size(), 5)
 	for kind in ["chimney", "column", "factory", "cooling_tower", "wagon_flue", "pyre"]:
 		assert_null(Smoke.build(kind), kind)
 
@@ -133,6 +133,9 @@ func test_smoke_heights_follow_the_ban_lines() -> void:
 	assert_lt(Smoke.max_rise("loco_idle"), 1.0)
 	# Omen and field smoke hugs the ground.
 	assert_lt(Smoke.max_rise("low_drift"), 1.5)
+	# Breath is a small puff gone in a second, not a rising wisp.
+	assert_lt(Smoke.max_rise("breath"), 0.6)
+	assert_true(float(Smoke.KINDS["breath"]["max_alpha"]) <= 0.5)
 	# Stove steam is faint.
 	assert_true(float(Smoke.KINDS["stove"]["max_alpha"]) <= 0.25)
 	# Running smoke flows back more than it rises: never a straight column.
