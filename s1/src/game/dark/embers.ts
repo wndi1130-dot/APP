@@ -5,6 +5,7 @@ import type { Comm } from '../data';
 import { onDeath } from '../death';
 import { pickFresh, markSeen } from '../omens';
 import { revertLater } from '../people';
+import { ladderEmberMult } from '../riot';
 import { clamp, journal, lawActive, situation as situationOf } from '../state';
 import type { Game } from '../state';
 import { CAR_COMM } from '../domestic/data';
@@ -101,6 +102,7 @@ export function newEmber(g: Game, who: Comm, target: Target, cause: EmberCause, 
   if (harmCapped(g)) return null;
   let chance = p;
   if (g.fear >= 80) chance *= 0.7;
+  chance *= ladderEmberMult(g, who); // 경비로 누른 칸은 한동안 불씨가 잘 생긴다(riot.ts LADDER, s1b_dark_path 5.1)
   if (dr(g) >= Math.min(1, chance)) return null;
   if (d.embers.some(e => e.who === who && e.target === target)) return null;
   if (d.embers.length >= B.emberMax) return null;
