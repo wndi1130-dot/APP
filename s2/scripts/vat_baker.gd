@@ -106,17 +106,30 @@ static func build(target_vertices: int = 144, max_width: int = MAX_WIDTH) -> Dic
 ## Transform3D per bone (pose * inverse bind, mesh space). Clips stack downward
 ## in the order given, so "start" is a clip's first frame row. Offsets are
 ## metres in half floats: a fall moves a vertex well past the +-0.5 of RGBA8.
+## Vertices at the same place with the same bones and weights (a body's are
+## split at the colour picture's seams) move alike, so they share one column
+## of the picture: "vertices" is the mesh's count, "columns" the picture's.
 static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDTH) -> Dictionary:
 	var positions: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
 	var bones = source[Mesh.ARRAY_BONES]
 	var weights = source[Mesh.ARRAY_WEIGHTS]
 	var total := positions.size()
 	var per: int = bones.size() / total
-	var width := mini(total, max_width)
-	var rows_per_frame := ceili(float(total) / width)
+	var column := PackedInt32Array()
+	var held := PackedInt32Array()  # the vertex each column is worked out from
+	var seen := {}
+	for id in range(total):
+		var key := [positions[id], bones.slice(id * per, id * per + per), weights.slice(id * per, id * per + per)]
+		if not seen.has(key):
+			seen[key] = held.size()
+			held.append(id)
+		column.append(int(seen[key]))
+	var count := held.size()
+	var width := mini(count, max_width)
+	var rows_per_frame := ceili(float(count) / width)
 	var lookup := PackedVector2Array()
 	for id in range(total):
-		lookup.append(Vector2((float(id % width) + 0.5) / width, float(id / width)))
+		lookup.append(Vector2((float(column[id] % width) + 0.5) / width, float(column[id] / width)))
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_COLOR, Mesh.ARRAY_INDEX]:
@@ -135,7 +148,8 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 		for frame in range(frames.size()):
 			var skin: Array = frames[frame]
 			var row := (start + frame) * rows_per_frame
-			for vertex in range(total):
+			for at in range(count):
+				var vertex := held[at]
 				var rest := positions[vertex]
 				var moved := Vector3.ZERO
 				var weight_sum: float = 0.0
@@ -147,10 +161,10 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 						weight_sum += weight
 				# A vertex no bone holds stays where it rests.
 				var offset := moved / weight_sum - rest if weight_sum > 0.0 else Vector3.ZERO
-				image.set_pixel(vertex % width, row + vertex / width, Color(offset.x, offset.y, offset.z, 1.0))
+				image.set_pixel(at % width, row + at / width, Color(offset.x, offset.y, offset.z, 1.0))
 		table.append({"name": clip.get("name", ""), "start": start, "frames": frames.size(), "loop": bool(clip.get("loop", true)), "length": float(clip.get("length", 1.0))})
 		start += frames.size()
-	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
+	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "columns": count, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
 
 const TABLE_SIZE: int = 128
 ## Clips 16 and up go in the shader's upper part, sixteen to each step of

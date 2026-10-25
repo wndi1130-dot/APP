@@ -276,17 +276,20 @@ func _last_frame(baked: Dictionary, clip: Dictionary) -> Array:
 	return _frame(baked, clip, int(clip["frames"]) - 1)
 
 
+## Each vertex's offset in frame k, read through its UV2 as the shader does
+## (vertices at one place share a column of the picture).
 func _frame(baked: Dictionary, clip: Dictionary, k: int) -> Array:
 	var img: Image = baked["image"]
 	var rows := int(baked["rows_per_frame"])
 	var first := (int(clip["start"]) + k) * rows
 	var lo := Vector3(clip["lo"][0], clip["lo"][1], clip["lo"][2])
 	var hi := Vector3(clip["hi"][0], clip["hi"][1], clip["hi"][2])
+	var look: PackedVector2Array = (baked["mesh"] as Mesh).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	var width := float(img.get_width())
 	var out: Array = []
-	for y in range(first, first + rows):
-		for x in img.get_width():
-			var c := img.get_pixel(x, y)
-			out.append(lo + Vector3(c.r, c.g, c.b) * (hi - lo))
+	for at in look:
+		var c := img.get_pixel(int(at.x * width), first + int(at.y))
+		out.append(lo + Vector3(c.r, c.g, c.b) * (hi - lo))
 	return out
 
 
