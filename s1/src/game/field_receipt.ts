@@ -82,11 +82,19 @@ export interface FieldCrewRow {
   exhaustion: 0 | 1 | 2;
   hunger: 0 | 1 | 2;
   bodyUse: Record<string, number>;
-  gearBack: { hands: [string, string, number][]; items: Record<string, number> };
+  gearBack: { hands: [string, string, number][]; items: Record<string, number>; wear?: FieldWearBack };
 }
+/** 옷장 자리 옷 한 벌(파밍 손맛 줄기의 옷장 꼴). holes는 해진 부위. */
+export interface FieldGarment { id: string; condition: number; holes?: Record<string, true> }
+/** 입고 돌아온 옷장 자리 옷. "" = 맨몸, coat는 필드에서 주워 입은 긴 외투가 있을 때만. */
+export interface FieldWearBack { jacket: FieldGarment | ''; hands: FieldGarment | ''; coat?: FieldGarment | '' }
 /** 열차 방어(결정 416, 정차 소리 줄기가 채운다). 방어에 선 사람은 출발 명단이 아니라 열차에 남은 사람이다. */
 export interface FieldDefense { held: boolean; people: string[]; hurt: string[]; dead: string[]; wounds: FieldWound[] }
-export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & { version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null };
+export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & {
+  version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null;
+  /** 승강장에서 실은 옷장 자리 옷, 남은 미끼(계약 글 3절). 없으면 빈 것 */
+  wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>;
+};
 export type FieldReceipt = ReceiptV4 | FieldReceiptV5;
 /** 출발 계약 판 1(시험 표본) 또는 판 2(field_departure.ts buildDeparture). */
 export type AnyDeparture = FieldDeparture | FieldDepartureV2;
@@ -166,6 +174,12 @@ const handRow = { type: 'array', prefixItems: [{ type: 'string' }, { type: 'stri
 const counts = { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } };
 const treat = { type: 'object', properties: Object.fromEntries(WOUND_TREATS.map(k => [k, { const: true }])), additionalProperties: false };
 const woundV5 = { ...receiptSchema.$defs.wound, properties: { ...receiptSchema.$defs.wound.properties, treat } };
+const garment = object({
+  id, condition: { type: 'number', minimum: 0, maximum: 1 },
+  holes: { type: 'object', additionalProperties: { const: true } },
+}, ['id', 'condition']);
+const wearSlot = { anyOf: [{ const: '' }, garment] };
+const wearBack = object({ jacket: wearSlot, hands: wearSlot, coat: wearSlot }, ['jacket', 'hands']);
 const v5Schema = {
   ...v4Schema, $id: 'urn:s1:prep:field-receipt-v5',
   $defs: { ...receiptSchema.$defs, wound: woundV5 },
@@ -173,9 +187,11 @@ const v5Schema = {
     ...v4Schema.properties, version: { const: 5 },
     crew: { type: 'array', items: object({
       person: id, exhaustion: level, hunger: level, bodyUse: { type: 'object', additionalProperties: { type: 'number', minimum: 0 } },
-      gearBack: object({ hands: { type: 'array', items: handRow }, items: counts }),
+      gearBack: object({ hands: { type: 'array', items: handRow }, items: counts, wear: wearBack }, ['hands', 'items']),
     }) },
     defense: { anyOf: [{ type: 'null' }, object({ held: { type: 'boolean' }, people: ids, hurt: ids, dead: ids, wounds: { type: 'array', items: woundV5 } })] },
+    wardrobeIn: { type: 'array', items: garment },
+    luresBack: counts,
   },
   required: [...v4Schema.required, 'crew', 'defense'],
 };
@@ -191,7 +207,7 @@ export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const record = value as Record<string, unknown>;
   const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
   if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, ...rest } = record;
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, ...rest } = record;
   // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
   const people = rest.people as { wounds?: Record<string, unknown>[] };
   const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;

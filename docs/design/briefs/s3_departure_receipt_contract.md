@@ -50,16 +50,23 @@ Person = { id, comm, name, role: chief|companion|carrier|escort,
 people.wounds: [ {person, part, kind, festering?, treat?: {bandaged, disinfected,
                   sutured, splinted, tourniquet, pulled, quick}} ]
 crew:   [ {person, exhaustion: 0|1|2, hunger: 0|1|2, bodyUse: {melee: n, …},
-           gearBack: {hands, items}} ]      // 살아서 열차에 오른 사람만
+           gearBack: {hands, items, wear?}} ]  // 살아서 열차에 오른 사람만
 defense:{ held: bool, people: [ids], hurt: [ids], dead: [ids],
           wounds: [ {person, part, kind, festering?, treat?} ] } | null
 witnessed: [ {…, template?} ]               // 판 4와 같음. template 이름 표는 4절
+wardrobeIn?: [ Garment ]                    // 승강장에서 열차에 실은 옷장 자리 옷
+luresBack?:  {id: n}                        // 남은 미끼
+
+Garment = { id, condition: 0~1, holes?: {부위: true} }
+wear    = { jacket: Garment|"", hands: Garment|"", coat?: Garment|"" }   // "" = 맨몸
 ```
 
 - **사람 목록**(sent·injured·bitten·dead·missing·leftBehind·rescued)은 판 4 그대로다. 단 `sent`는 `roster` 전부에 불린 `workCrew`를 더한 것과 같아야 한다(판 4는 `roster`와 똑같아야 했다).
 - **상처 줄 하나가 필드의 상처 하나다.** 부위 여섯(`head_neck`·`torso`·`arm_left`·`arm_right`·`leg_left`·`leg_right`), 종류 일곱(`scratch`·`laceration`·`deep`·`embedded`·`bite`·`fracture`·`amputation`). `amputation`은 필드에서 자른 팔·다리의 남은 자리이고 팔·다리 네 부위에만 온다(J05). `treat`는 그 상처에 해 둔 처치이고 `quick`는 의료 지식 견습 이상이 다친 지 실시간 2분 안에 처치한 것(몸과 부상 4장 「빠른 처치」)이다.
 - **열차 방어**는 정차 소리 줄기(결정 416)가 채운다. 방어에 선 사람은 계약의 명단이 아니라 열차에 남은 사람이라 `people`과 따로 둔다. 상처는 같은 꼴, 같은 반영(4절)이다.
 - `crew.bodyUse`는 필드에서 몸 능력을 쓴 양이다. 쓰면 오르는 규칙(field_unified 3장)이 들어올 자리이고, 그 전까지는 비어 있다.
+- **장비 귀환**(출발 때 빼지 않은 장비의 순증감, 2절): `gearBack.wear`는 그 사람이 입고 돌아온 옷장 자리 옷이다. 출발 `gear.wear`와 같은 꼴이고, `coat`는 필드에서 주워 입은 긴 외투가 있을 때만 쓴다. `wardrobeIn`은 승강장에서 실은 옷장 자리 옷(재킷·외투·장갑)이고 셔츠 같은 것은 넣지 않는다. `luresBack`은 미끼가 나갔을 때만 쓴다. 세 칸 다 없어도 된다(판 5 앞쪽 영수증).
+- 열차는 이렇게 맞춘다. 탄 = 출발 전 − 계약 `train.ammo` + `stock.ammo_*`. 무기고 = 나간 `gear.hands` − 돌아온 `gearBack.hands`. 옷장 = 나간 `gear.wear` − 돌아온 `gearBack.wear` + `wardrobeIn`. 미끼 = 출발 전 − 계약 `train.lures` + `luresBack`. `gearBack.wear`가 없으면 나간 그대로 돌아온 것으로, `luresBack`이 없으면 다 쓴 것으로 센다. 죽거나 남겨져 `crew`에 없는 사람의 무기·옷은 잃은 것이다.
 
 ## 4. 열차가 영수증을 반영하는 법
 
