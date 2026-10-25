@@ -9,6 +9,8 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
+const Amputation = preload("res://game/sim/amputation.gd")
+const BodyState = preload("res://game/sim/body_state.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
@@ -1821,6 +1823,77 @@ func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> 
 			o.take_item(item, used - from_first)
 	if not _care_next(medic, o, wound, mode):
 		game.say(medic, "%s: 처치했다." % Treatment.wound_text(wound))
+
+
+## Cutting off a bitten or scratched arm or leg (body_injury 2.2): the plan
+## (amputation.gd) names what it takes or what stops it. The one cut screams
+## as it starts and the whole map hears it. It is slow work of the hands, so
+## moving off or a blow cuts it short as it does treating; both must still be
+## there when it is done, or it was for nothing but the time. False when it
+## does not start.
+func amputate(medic, o, part: String) -> bool:
+	if _wait_blow(medic, amputate.bind(medic, o, part)):
+		return false
+	if medic.action != "" or not medic.can_act() or not in_care_reach(medic, o):
+		return false
+	var plan: Dictionary = Amputation.plan(medic, o, part, care_tools(medic, o))
+	if not bool(plan["ok"]):
+		return false
+	if medic != o:
+		medic.face_point(o.position)
+	var seconds: float = float(plan["seconds"])
+	medic.start_action("treat", "절단", seconds, _amputated.bind(medic, o, part))
+	if medic.action != "treat":
+		return false
+	_note_care(medic, o, part, seconds, "절단")
+	game.make_sound(o.position, Amputation.SCREAM, "scream", o)
+	return true
+
+
+## The cut done: the tools are asked again (they may have gone meanwhile), not
+## the window: a slow hand that let it close lost the limb for nothing
+## (body_injury 2.2). Then the shock, by who cut and how strong the body is.
+## The one who cuts can act here: the work only runs out while they can
+## (field_game.gd _update_person stops it while grabbed, fallen or down).
+func _amputated(medic, o, part: String) -> void:
+	if not o.is_alive() or not o.grabbers.is_empty() or not in_care_reach(medic, o):
+		game.say(medic, "자르지 못했다. 그 자리를 떠났다.")
+		return
+	var t: Dictionary = Amputation.tools(medic, o, care_tools(medic, o))
+	if String(t["why"]) != "":
+		game.say(medic, "자르지 못했다. %s." % t["why"])
+		return
+	# What it takes comes from the one who cuts first, then from the one cut.
+	for item: String in t["uses"]:
+		var used: int = int(t["uses"][item])
+		var from_first: int = mini(used, int(medic.items.get(item, 0)))
+		if from_first > 0:
+			medic.take_item(item, from_first)
+		if used > from_first:
+			o.take_item(item, used - from_first)
+	var bite_there: bool = o.body.bitten_limbs().has(part)
+	var in_time: bool = o.body.window_left > 0.0
+	o.body.amputate(part, Amputation.stump_kind(String(medic.medical)), game.clock.elapsed)
+	game.telemetry.injury(game.clock.elapsed, o.pid, "amputation")
+	# The blood of it on both (body_injury 2.2 「피 냄새」), as a coat soaked from close kills.
+	for who in [medic, o]:
+		if not who.blood_soaked:
+			who.blood_soaked = true
+			who.smell = mini(who.smell + 1, 2)
+	if game.rng.randf() < Amputation.shock_chance(String(medic.medical), int(o.skills["strength"]), bool(t["kit"])):
+		game.say(o, "%s 쇼크로 숨이 멎었다." % o.display_name)
+		game.on_person_died(o)
+		return
+	var what: String = "%s의 %s 잘랐다." % [o.display_name, BodyState._eul(String(Treatment.PART_NAMES[part]))]
+	if not in_time:
+		what += " 감염 창이 먼저 닫혀 소용없었다."
+	elif o.body.infection == "bite":
+		what += " 물린 데가 더 남았다."
+	elif bite_there:
+		what += " 물림은 막았다."
+	else:
+		what += " 긁힌 데가 감염이었어도 막았다."
+	game.say(medic, what)
 
 
 func splint(p) -> void:
