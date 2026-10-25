@@ -10,7 +10,9 @@ extends RefCounted
 ## knives and empty hands the plain walk. It has nothing by person and nothing
 ## for a hurt arm: those are ours. Our hatchet and crowbar are one-handed but
 ## heavy, so they hang in the hand as they are carried (the axe walk); there is
-## no axe run, so they run the plain run.
+## no axe run, so they run the plain run. A bow (the reference game has none) is
+## carried in the hand on the plain walk: the long gun's two-handed carry put it
+## across the hip with its end on the ground (check shots, 10-25).
 
 const W = preload("res://game/sim/weapons.gd")
 
@@ -33,15 +35,13 @@ const RUN_POSTURE: float = 1.3
 const POSTURE_EASE: float = 4.0
 
 
-## "long" (a two-handed gun or a bow), "pistol" (a one-handed gun), "axe" (a
-## heavy one-handed tool) or "" (a light weapon or nothing).
+## "long" (a two-handed gun), "pistol" (a one-handed gun), "axe" (a heavy
+## one-handed tool) or "" (a light weapon, a bow or nothing).
 static func kind_of(weapon_id: String) -> String:
 	var d: Dictionary = W.get_data(weapon_id)
 	match String(d.get("kind", "")):
 		"gun":
 			return "pistol" if int(d.get("hands", 1)) == 1 else "long"
-		"bow":
-			return "long"
 		"melee":
 			return "axe" if float(d.get("weight", 0.0)) >= HEAVY_TOOL else ""
 	return ""

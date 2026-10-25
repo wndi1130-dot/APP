@@ -49,12 +49,12 @@ func _drawn(p, note: Dictionary, own: Array, move: bool) -> String:
 
 func test_each_kind_of_hand_has_its_walk_and_run() -> void:
 	var kinds := {"knife": "", "crowbar": "axe", "axe": "axe", "pistol": "pistol", "shotgun": "long",
-		"pipe_shotgun": "long", "bow": "long", "frying_pan": "", "broken_bottle": "", "wood_stake": "", "": ""}
+		"pipe_shotgun": "long", "bow": "", "frying_pan": "", "broken_bottle": "", "wood_stake": "", "": ""}
 	for wid: String in kinds:
 		assert_eq(Gait.kind_of(wid), String(kinds[wid]), wid)
 	var p := _person()
 	for row in [["pistol", "p_walk_pistol", "p_run_pistol"], ["shotgun", "p_walk_long", "p_run_long"],
-			["bow", "p_walk_long", "p_run_long"], ["axe", "p_walk_axe", ""], ["knife", "", ""]]:
+			["bow", "", ""], ["axe", "p_walk_axe", ""], ["knife", "", ""]]:
 		_hold(p, String(row[0]))
 		assert_eq(Gait.gait_name(p, false), String(row[1]), String(row[0]) + " walks")
 		assert_eq(Gait.gait_name(p, true), String(row[2]), String(row[0]) + " runs")
