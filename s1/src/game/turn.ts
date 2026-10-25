@@ -42,6 +42,7 @@ import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 �
 import { voiceKept } from './promise_voice';
 import { rationCutFood } from './ration_cut';
 import { handsCoal, handsSettle, handsWatchMult } from './hands';
+import { trailAfterStop } from './trail';
 import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
@@ -751,8 +752,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);
   // 사람이 들어오는 사건(arrivals.ts): 피난민 무리가 뜨면 이 정차의 부상자 카드는 건너뛴다. 부상자 굴림(rnd)은 그대로 굴려 난수 흐름을 끈 판과 맞춘다.
-  const arrived = g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
-  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
+  // 두고 떠난 사람의 흔적(prologue.ts, 결정 425 카드 3)이 뜬 정차엔 사람 들어옴·부상자 카드를 얹지 않는다. 부상자 굴림(rnd)은 그대로 굴린다.
+  const trail = trailAfterStop(g);
+  const arrived = !trail && g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
+  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived && !trail) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
   if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
   return stop.result;
