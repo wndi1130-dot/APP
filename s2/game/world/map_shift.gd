@@ -84,7 +84,9 @@ static func _moved(v, rows: int, key: String):
 
 ## Add ground on any side without changing the old cells or their identities.
 ## A direction stays a direction; dictionary keys and embedded positions move.
-static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int) -> Dictionary:
+## refresh_ground false leaves the ground floor's paths to a caller that builds on it
+## and refreshes once after (side_path.gd), as the other floors are refreshed here.
+static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true) -> Dictionary:
 	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
 	if left + top + right + bottom == 0:
 		return data
@@ -109,7 +111,8 @@ static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int)
 		n.doors = _offset(g.doors, offset, "")
 		n.windows = _offset(g.windows, offset, "")
 		n.floor_glass = _offset(g.floor_glass, offset, "")
-		n.refresh_paths()
+		if int(lv) != 0 or refresh_ground:
+			n.refresh_paths()
 		n.revision = g.revision
 		levels[lv] = n
 	var out: Dictionary = _offset(data, offset, "")
