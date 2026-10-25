@@ -130,10 +130,18 @@ func test_dressing_keeps_what_each_building_holds_and_names_every_bundle() -> vo
 	var report := LootDress.dress(d, 7)
 	var c: Dictionary = d["containers"]
 	var after := _counts(c, ["k", "b1", "b2", "p"])
+	# The odds and ends are put in on top (loot_junk.gd).
+	for rows: Array in LootDress.LootJunk.JUNK.values():
+		for row: Array in rows:
+			after.erase(String(row[0]))
 	for f in ["found_big_pack", "wrist_watch", "wrist_watch_set", "can_opener", "nails", "fuel_can", "frying_pan", "broken_bottle"]:
 		after.erase(f)
 	for rare: String in FieldItems.RARE:
 		after.erase(rare)
+	# A blueprint piece (S1 domestic 5.2) is put in on top as well.
+	for id: String in FieldItems.ITEMS:
+		if FieldItems.fragment_of(id) != "":
+			after.erase(id)
 	# The parts stuff and the clothes are finds too (decision 426 D2, 423 card 2).
 	for found: String in ["gears", "springs", "wire_coil"] + FieldItems.Wear.KINDS.keys():
 		after.erase(found)

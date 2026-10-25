@@ -15,6 +15,9 @@ import { refreshSit } from './domestic/sit';
 import { MOTIONS, motionsNow } from './motions';
 import { addCard, addSecret, clamp, journal, lawActive, rnd, seats, situation, stageOf } from './state';
 import { revertRationCut } from './ration_cut';
+import { logVote, noteHeld } from './council_log';
+import type { LogKind } from './council_log';
+import { hash } from './omens';
 import type { Agenda, CouncilState, Deal, DealTool, Game, LawAgenda, MotionAgenda, PromiseState, VoteFlip, VoteResult } from './state';
 
 // 의회: 입장 점수, 찬성·반대·미정, 거래 다섯, 개표, 폐지(브리프 1.3, 3장, 8.4).
@@ -181,6 +184,12 @@ function applyDeal(g: Game, b: Bloc, c: Comm, tool: DealTool): void {
     b.yes += b.und + moved;
     b.no -= moved;
     b.und = 0;
+  } else if (tool === 'persuade') {
+    // 설득(결정 433)은 마음을 돌린다: 미정 전부와 움직이는 반대의 일부만. 대표가 끌고 오는 표가 아니라 새지 않는다.
+    const moved = Math.round(soft * P.persuadeSoft);
+    b.yes += b.und + moved;
+    b.no -= moved;
+    b.und = 0;
   } else if (tool === 'blackmail') {
     // 협박은 대표가 집단을 끌고 온다(3.1, 결속도 1.0). 꿈쩍 않는 반대는 대표 말도 안 듣는다.
     b.yes += b.und + soft;
@@ -193,6 +202,35 @@ function applyDeal(g: Game, b: Bloc, c: Comm, tool: DealTool): void {
     b.und = 0;
     b.no = b.hard;
   }
+}
+
+/** 개표 설명 한 줄(정치 흐름 3.3, 6.1 sol 검수 2): 미정·대표 몫 가운데 기대와 가장 크게 다르게 갈린 칸 하나.
+ * 꿈쩍 않는 반대·부재·옮긴 표는 표결 전 셈(확보·예상)에 이미 들어 있어 여기서 다시 말하지 않는다. 같은 석을 두 번 세지 않는다.
+ * 차이가 한 석 아래면 null. 새 난수를 쓰지 않는다. */
+export function voteWhy(map: Record<Comm, Bloc>, turned: Record<Comm, { und: number; pool: number }>): string | null {
+  let best: { gap: number; text: string } | null = null;
+  for (const c of COMMS) {
+    const b = map[c];
+    const t = turned[c];
+    if (!t) continue;
+    const name = COMM_NAME[c];
+    if (b.und > 0) {
+      const p = undecidedChance(b.score);
+      const exp = b.und * p;
+      const gap = Math.abs(t.und - exp);
+      if (gap >= 1 && (!best || gap > best.gap)) {
+        best = { gap, text: `${name} 미정 ${b.und}석 가운데 ${t.und}석이 찬성했다(기대 ${Math.round(exp)}석, 한 석마다 찬성 ${Math.round(p * 100)}%).` };
+      }
+    }
+    if (b.pool > 0) {
+      const exp = b.pool * b.poolChance;
+      const gap = Math.abs(t.pool - exp);
+      if (gap >= 1 && (!best || gap > best.gap)) {
+        best = { gap, text: `${name} 대표가 끌고 오겠다던 ${b.pool}석 가운데 ${t.pool}석이 따랐다(기대 ${Math.round(exp)}석, 결속 ${Math.round(b.poolChance * 100)}%).` };
+      }
+    }
+  }
+  return best?.text ?? null;
 }
 
 export function expected(map: Record<Comm, Bloc>): { mean: number; min: number; max: number } {
@@ -357,7 +395,10 @@ export function openCouncil(g: Game, emergency = false): void {
       if (sc > best) { best = sc; idx = i; }
     });
   }
-  g.council = { options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}), ...(martial ? { martial } : {}) };
+  g.council = {
+    options, idx, locked: g.agendaHolder !== null, deals: [], result: null, ...(emergency ? { emergency } : {}), ...(martial ? { martial } : {}),
+    ...(g.agendaHolder && options.length > 0 ? { holder: g.agendaHolder } : {}),
+  };
   if (g.agendaHolder && options.length > 0) journal(g, `${COMM_NAME[g.agendaHolder]}이(가) 안건을 골랐다: ${agendaTitle(options[idx])}.`);
   g.agendaHolder = null;
   for (const hook of COUNCIL_HOOKS) hook.open?.(g);
@@ -423,6 +464,7 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
     case 'open':
     case 'fetch': {
       const cost = tool === 'fetch' ? `다음 정차: ${FETCH_WANT[c].label}` : '조건 하나';
+      if (s.openClosed) return { ok: false, why: '약속을 세 번 어겼다', cost };
       if (s.promise) return { ok: false, why: '지키지 않은 약속', cost };
       if (hostile) return { ok: false, why: '열차장을 적대한다', cost };
       if (s.rel <= -40) return { ok: false, why: '관계가 반대 이하', cost };
@@ -444,13 +486,43 @@ export function toolStatus(g: Game, c: Comm, tool: DealTool): ToolStatus {
     }
     case 'blackmail': {
       const held = g.secrets.filter(x => x.about === c).length;
-      const cost = `비밀 ${held}`;
+      const cost = `비밀 ${held} · 신임 −${Math.abs(P.blackmailTrust)}`;
       if (held === 0) return { ok: false, why: '쥔 비밀이 없다', cost };
       if (hostile) return { ok: false, why: '집단이 따르지 않는다', cost };
       return { ok: true, cost };
     }
+    case 'persuade': {
+      const cost = `될 듯 ${Math.round(100 * persuadeChance(g, c, agenda))}%`;
+      if (hostile) return { ok: false, why: '열차장 말을 듣지 않는다', cost };
+      if (b.und === 0 && b.no - b.hard === 0) return { ok: false, why: '돌릴 마음이 없다', cost };
+      return { ok: true, cost };
+    }
   }
 }
+
+/** 설득의 근거(결정 433): 이 안건이 지금의 위기(석탄·식량·시신·의약품)를 푸는 법이면 그 위기 이름. 아니면 null */
+export function persuadeEvidence(g: Game, agenda: Agenda): Crisis | null {
+  if (!isLawAgenda(agenda) || agenda.repeal) return null;
+  const now = crisisNow(g);
+  return LAWS[agenda.law].crisis.find(x => now.includes(x)) ?? null;
+}
+
+/** 설득이 먹힐 확률(결정 433): 신임·관계·그 칸과 지킨 약속·이념·근거. 값은 들지 않고 관계가 나쁘면 잘 안 먹힌다. */
+export function persuadeChance(g: Game, c: Comm, agenda: Agenda): number {
+  const s = g.comms[c];
+  const ideo = blocs(g, agenda, [])[c].ideo;
+  const p = P.persuadeBase + P.persuadeRel * s.rel + P.persuadeTrust * (g.trust - 50)
+    + P.persuadeKept * Math.min(P.persuadeKeptMax, s.kept ?? 0) - P.persuadeBroken * (s.broken ?? 0)
+    + P.persuadeIdeo * ideo + (persuadeEvidence(g, agenda) ? P.persuadeEvidence : 0);
+  return clamp(p, P.persuadeMin, P.persuadeMax);
+}
+
+/** 설득이 먹혔나: 판 씨앗·회기·칸으로 정한 0~1 값이라 같은 회기에 다시 물어도 같고 판 난수 흐름을 건드리지 않는다. */
+function persuadeRoll(g: Game, c: Comm): number {
+  return hash(`${g.seed}|${g.session}|${c}|persuade`) / 4294967296;
+}
+
+const CRISIS_WORD: Record<Crisis, string> = { coal: '석탄 바닥', food: '식량 바닥', corpse: '쌓인 시신', med: '떨어진 약' };
 
 export function bribePrice(g: Game, c: Comm): number {
   return 2 + Math.round(seats(g)[c] / 10);
@@ -544,6 +616,17 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
       return { ok: false, text: `${s.leader.name}이(가) 뇌물을 의회 앞에서 내보였다.` };
     }
     journal(g, `${s.leader.name}에게 사치품 ${price}을(를) 건넸다.`, 'dark');
+  } else if (tool === 'persuade') {
+    const ev = persuadeEvidence(g, agenda);
+    const why = ev ? `${CRISIS_WORD[ev]}${josa(CRISIS_WORD[ev], '을/를')} 들어` : (s.kept ?? 0) > 0 ? '지킨 약속을 들어' : '말로';
+    if (persuadeRoll(g, c) >= persuadeChance(g, c, agenda)) {
+      bumpRel(g, c, P.persuadeFailRel, 'deal');
+      council.deals.push({ comm: c, tool, label: '설득이 먹히지 않음', refused: true });
+      journal(g, `${s.leader.name}을(를) ${why} 설득했지만 고개를 저었다.`, 'bad');
+      return { ok: false, text: `${s.leader.name}이(가) 설득에 넘어오지 않았다.` };
+    }
+    label = `설득: ${why}`;
+    journal(g, `${s.leader.name}을(를) ${why} 설득했다. ${agendaTitle(agenda)}에 마음이 돌아섰다.`, 'deal');
   } else {
     const secret = [...g.secrets].filter(x => x.about === c).sort((a, b) => b.weight - a.weight)[0];
     g.secrets = g.secrets.filter(x => x.id !== secret.id);
@@ -551,6 +634,8 @@ export function makeDeal(g: Game, c: Comm, tool: DealTool, condIndex = 0, cutTar
     g.leashes.push({ comm: c, since: g.seg, weight: Math.max(1, secret.weight - secret.uses) });
     g.blackmails += 1;
     g.stats.blackmails += 1;
+    bump(g, 'trust', P.blackmailTrust, 'deal');
+    bumpRel(g, c, P.blackmailRel, 'deal');
     offend(g, c);
     revealTrait(g, c);
     journal(g, `${s.leader.name}을(를) 비밀로 눌렀다: "${secret.text}".`, 'dark');
@@ -680,19 +765,21 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   let yes = 0;
   let no = 0;
   let absent = 0;
+  const turned = {} as Record<Comm, { und: number; pool: number }>;
   for (const c of COMMS) {
     const b = map[c];
     let cy = b.yes;
     let cn = b.no;
+    turned[c] = { und: 0, pool: 0 };
     for (let i = 0; i < b.und; i += 1) {
       const v = rnd(g) < undecidedChance(b.score);
       flips.push({ comm: c, yes: v });
-      if (v) cy += 1; else cn += 1;
+      if (v) { cy += 1; turned[c].und += 1; } else cn += 1;
     }
     for (let i = 0; i < b.pool; i += 1) {
       const v = rnd(g) < b.poolChance;
       flips.push({ comm: c, yes: v });
-      if (v) cy += 1; else cn += 1;
+      if (v) { cy += 1; turned[c].pool += 1; } else cn += 1;
     }
     byComm[c] = { yes: cy, no: cn, absent: b.absent };
     yes += cy;
@@ -706,6 +793,8 @@ function vote(g: Game, decree: boolean): VoteResult | null {
   }
   const passed = decree || yes >= need;
   const result: VoteResult = { yes, no, absent, need, passed, byComm, flips, decree, secret: lawActive(g, 'secret_ballot') };
+  const why = decree ? null : voteWhy(map, turned);
+  if (why) result.why = why;
   council.result = result;
   if (!lawActive(g, 'secret_ballot') && !decree) g.fear = clamp(g.fear + 1, 0, 100);
   if (lawActive(g, 'guided_voting') && g.guidedLeft > 0 && !pre) {
@@ -729,6 +818,13 @@ function vote(g: Game, decree: boolean): VoteResult | null {
     }
   }
   const title = agendaTitle(agenda);
+  const kind: LogKind = decree ? 'decree' : !isLawAgenda(agenda) ? 'motion' : agenda.ratify ? 'ratify' : agenda.amend ? 'amend' : agenda.repeal ? 'repeal' : 'enact';
+  logVote(g, {
+    session: g.session, seg: g.seg, title, kind, by: agenda.by ?? 'chief', passed, yes, no, absent, need,
+    exp: expected(map), ...(why ? { why } : {}),
+  });
+  // 안건 선택권을 넘겨받은 칸이 고른 안건(결과 아크): 이어 부결되면 서운해한다.
+  if (council.holder && !pre && !decree) noteHeld(g, council.holder, passed);
   if (!isLawAgenda(agenda)) {
     journal(g, `${title}: 찬성 ${yes}, 반대 ${no}${absent ? `, 부재 ${absent}` : ''}. ${passed ? '가결' : '부결'}.`, passed ? 'good' : 'bad');
     if (passed) MOTIONS[agenda.motion].onPass(g, agenda);
