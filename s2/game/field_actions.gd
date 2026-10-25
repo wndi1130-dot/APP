@@ -186,6 +186,7 @@ func _begin_work(p, action: String, label: String, seconds: float, done: Callabl
 
 ## Called before the body/action tick, including for fallen or grabbed people.
 func validate_work(p) -> void:
+	_check_chain(p)
 	var id: int = p.get_instance_id()
 	if not ongoing.has(id):
 		return
@@ -226,6 +227,7 @@ func update(delta: float) -> void:
 	if unload_t <= 0.0:
 		unload_t = 0.5
 		_auto_unload()
+		_load_garments()
 		_auto_pickup()
 
 
@@ -309,6 +311,10 @@ func _do_goal(p) -> void:
 			pick_up(p, idx)
 		"body":
 			search_body(p, g["key"])
+		"strip":
+			# The player picks which garment from the body's list (field_hud.gd).
+			if p == game.player:
+				game.hud.strip_pane(int(g["key"]))
 		"manhole":
 			block_lid(p, g["key"])
 		"ladder":
@@ -1058,14 +1064,18 @@ func _companion_take(p, c: Dictionary) -> void:
 		game.shout(p, "empty")
 
 
-## Take one item from a searched container into the player's bag.
-func take(p, id: String, index: int) -> void:
+## Take one item from a searched container into the player's bag. `asked`:
+## the player has seen what putting a garment on takes (field_hud.gd wear_pane).
+func take(p, id: String, index: int, asked: bool = false) -> void:
 	var c: Dictionary = game.data["containers"].get(id, {})
 	if not SearchRules.can_take(c) or not _can_start(p, _container_at(c)):
 		return
 	if index < 0 or index >= c["items"].size():
 		return
 	var item: String = c["items"][index]
+	if Wear.is_garment(item) and _asks(p, item, asked):
+		game.hud.wear_pane({"box": id, "i": index, "id": item})
+		return
 	c["items"].remove_at(index)
 	# A garment is put on, not bagged (wear.gd): laid at the feet as found, then worn.
 	if Wear.is_garment(item):
@@ -1147,9 +1157,10 @@ func _body_searched(p, zid: int) -> void:
 
 
 ## One of the dead gone through (decision 423 card 12): the nearest companion
-## who sees it says a line, and the train hears of it from those who saw
-## (the receipt's witnessed row "body_search"; their car minds it or not).
-func _body_seen(p) -> void:
+## who sees it says a line (`event`: its pockets, or its clothes taken), and
+## the train hears of it from those who saw (the receipt's witnessed row
+## "body_search"; their car minds it or not).
+func _body_seen(p, event: String = "body_search") -> void:
 	var seen: Array = []
 	var nearest = null
 	var best := BODY_SEEN_M
@@ -1164,18 +1175,21 @@ func _body_seen(p) -> void:
 			best = d
 			nearest = q
 	if nearest != null:
-		game.shout(nearest, "body_search")
+		game.shout(nearest, event)
 	if not seen.is_empty():
 		game.body_searches.append({"who": String(p.pid), "seen": seen})
 
 
-func pick_up(p, idx: int) -> void:
+func pick_up(p, idx: int, asked: bool = false) -> void:
 	if idx < 0 or idx >= game.ground_items.size():
 		return
 	var g: Dictionary = game.ground_items[idx]
 	if not _can_start(p, g["pos"]) or int(g.get("n", 0)) <= 0:
 		return
 	if g.has("garment"):
+		if _asks(p, String(g["id"]), asked) and Wear.wearable(g["garment"]):
+			game.hud.wear_pane({"ground": g, "id": String(g["id"])})
+			return
 		dress(p, idx)
 		return
 	if g.has("weapon"):
@@ -1194,37 +1208,31 @@ func pick_up(p, idx: int) -> void:
 
 # ---------------------------------------------------------------- clothes
 
-## Put on the garment lying at `idx` (decision 434): a job of the hands as
-## long as its motion, and for a layer under others as long as taking those off
-## and putting them back (wear.gd dress_time); what was in its place, or a
-## whole suit it puts aside, is put down at the feet as it is. Cut short, the
-## garment stays where it lay.
+## Changing clothes is a chain of steps (decision 434, clothing.md 7장,
+## wear.gd dress_plan): the layers over a place off, the garment on, them back
+## on, each step a job of the hands as long as its motion, one after the
+## other. A layer taken off for the while lies at the feet until it goes back
+## on; cut short (the stick, a blow, a grab), the steps done stay done and what
+## was taken off stays at the feet. The head, the neck, the face and the hands
+## go on and off at a walk (Wear.WALKABLE, field_game.gd). Never saved: what
+## a chain holds is on the body or on the ground. Keyed by the body's instance.
+var wear_chains: Dictionary = {}
+
+
+## Put on the garment lying at `idx` (decision 434); what was in its place, or
+## a whole suit it puts aside, is put down at the feet as it is. One worn
+## through to rags is not put on (3.3).
 func dress(p, idx: int) -> void:
 	if idx < 0 or idx >= game.ground_items.size():
 		return
 	var g: Dictionary = game.ground_items[idx]
 	if not g.has("garment") or not _can_start(p, g["pos"]):
 		return
-	var slot: String = Wear.slot_of(String(g["id"]))
-	p.start_action("wear", "입기", Wear.dress_time(p, String(g["id"])), _dressed.bind(p, g))
-	if p.action == "wear":
-		p.action_busy = {"slot": slot, "off": false}
-
-
-func _dressed(p, g: Dictionary) -> void:
-	var idx := -1
-	for i in game.ground_items.size():
-		if is_same(game.ground_items[i], g):
-			idx = i
-			break
-	if idx < 0:
+	if not Wear.wearable(g["garment"]):
+		if p == game.player:
+			game.hud.toast("너덜해서 못 입는다.")
 		return
-	game.ground_items.remove_at(idx)
-	var state: Dictionary = (g["garment"] as Dictionary).duplicate(true)
-	for old: Dictionary in Wear.put_on(p, state):
-		_put_down_garment(p, old)
-	if p == game.player:
-		game.hud.toast("%s 입었다." % String(state.get("name", game.item_name(String(g["id"])))))
+	_begin_chain(p, Wear.dress_plan(p, String(g["id"])), g)
 
 
 ## Take off what is in `slot` (the layers over it off and back on); it is put
@@ -1232,19 +1240,179 @@ func _dressed(p, g: Dictionary) -> void:
 func undress(p, slot: String) -> void:
 	if Wear.occupant(p, slot).is_empty() or not p.can_act() or p.action != "" or striking(p):
 		return
-	p.start_action("wear", "벗기", Wear.undress_time(p, slot), _undressed.bind(p, slot))
-	if p.action == "wear":
-		p.action_busy = {"slot": slot, "off": true}
+	_begin_chain(p, Wear.undress_plan(p, slot), {})
 
 
-func _undressed(p, slot: String) -> void:
-	_put_down_garment(p, Wear.take_off(p, slot))
-
-
-func _put_down_garment(p, state: Dictionary) -> void:
-	if state.is_empty():
+func _begin_chain(p, plan: Array, lay: Dictionary) -> void:
+	if plan.is_empty():
 		return
-	game.ground_items.append({"pos": p.position, "id": String(state["id"]), "n": 1, "garment": state})
+	var chain := {"plan": plan, "at": 0, "lay": lay, "held": {}, "walk": Wear.plan_walks(plan), "injured_at": p.body.injured_at, "wounds": p.body.wounds.size()}
+	_next_step(p, chain)
+
+
+func _next_step(p, chain: Dictionary) -> void:
+	var id: int = p.get_instance_id()
+	var plan: Array = chain["plan"]
+	var at: int = int(chain["at"])
+	if at >= plan.size():
+		wear_chains.erase(id)
+		return
+	var step: Dictionary = plan[at]
+	var off: bool = Wear.step_off(step)
+	var label: String = "갈아입기" if plan.size() > 1 else ("벗기" if off else "입기")
+	p.start_action("wear", label, float(step["t"]), _step_done.bind(p, chain))
+	if p.action != "wear":
+		wear_chains.erase(id)
+		return
+	p.action_busy = {"slot": String(step["slot"]), "off": off, "walk": bool(chain["walk"])}
+	wear_chains[id] = chain
+
+
+## One step done: its garment off (laid down for the while, or for good) or on.
+func _step_done(p, chain: Dictionary) -> void:
+	var step: Dictionary = chain["plan"][int(chain["at"])]
+	var slot: String = String(step["slot"])
+	match String(step["op"]):
+		"off":
+			chain["held"][slot] = _put_down_garment(p, Wear.take_off(p, slot))
+		"aside", "drop":
+			_put_down_garment(p, Wear.take_off(p, slot))
+		"on":
+			var lay: Dictionary = chain["lay"]
+			if _lift_garment(lay):
+				var state: Dictionary = (lay["garment"] as Dictionary).duplicate(true)
+				for old: Dictionary in Wear.put_on(p, state):
+					_put_down_garment(p, old)
+				if p == game.player:
+					game.hud.toast("%s 입었다." % String(state.get("name", game.item_name(String(lay["id"])))))
+		"back":
+			var held: Dictionary = chain["held"].get(slot, {})
+			chain["held"].erase(slot)
+			# Rags are not put back on (3.3): it stays where it lies.
+			if not held.is_empty() and Wear.wearable(held["garment"]) and _lift_garment(held):
+				for old: Dictionary in Wear.put_on(p, (held["garment"] as Dictionary).duplicate(true)):
+					_put_down_garment(p, old)
+	chain["at"] = int(chain["at"]) + 1
+	_next_step(p, chain)
+
+
+## A chain whose step was cut short ends there (called each frame before the
+## body's tick, validate_work): what it took off stays where it lies. A wound
+## cuts it as it cuts other work (_work_valid).
+func _check_chain(p) -> void:
+	var id: int = p.get_instance_id()
+	if not wear_chains.has(id):
+		return
+	var chain: Dictionary = wear_chains[id]
+	if p.action == "wear" and (p.body.injured_at != float(chain["injured_at"]) or p.body.wounds.size() > int(chain["wounds"])):
+		p.cancel_action()
+	if p.action != "wear":
+		wear_chains.erase(id)
+
+
+## A round a vest stopped is no wound, but it knocks the hands off a change
+## of clothes all the same (clothing.md 7장).
+func struck(p) -> void:
+	if p.action == "wear":
+		p.cancel_action()
+
+
+## The player is shown the change first when it takes layers off and back on
+## (7장: what comes off and how long), once: `asked` is the answer.
+func _asks(p, id: String, asked: bool) -> bool:
+	return not asked and p == game.player and game.hud != null and Wear.dress_plan(p, id).size() > 1
+
+
+## Is this one going on and off at a walk (field_game.gd lets the stick walk
+## it, and a run cuts it).
+func walk_work(p) -> bool:
+	return p.action == "wear" and bool(p.action_busy.get("walk", false))
+
+
+## Take a garment lying on the ground up again (true if it was still there).
+func _lift_garment(g: Dictionary) -> bool:
+	if g.is_empty():
+		return false
+	for i in game.ground_items.size():
+		if is_same(game.ground_items[i], g):
+			game.ground_items.remove_at(i)
+			return true
+	return false
+
+
+## Lay a garment down at the feet as it is; returns what lies there ({} for
+## nothing). By the train it goes aboard soon after (_load_garments), unless a
+## change of clothes under way will take it up again.
+func _put_down_garment(p, state: Dictionary) -> Dictionary:
+	if state.is_empty():
+		return {}
+	var g := {"pos": p.position, "id": String(state["id"]), "n": 1, "garment": state}
+	game.ground_items.append(g)
+	return g
+
+
+## Clothes put down by the train are not left lying there (clothing.md 7장):
+## they go aboard as they are, all but those a change of clothes under way
+## will take up again (and the one it is putting on).
+func _load_garments() -> void:
+	var held: Array = []
+	for chain: Dictionary in wear_chains.values():
+		held.append(chain["lay"])
+		held.append_array((chain["held"] as Dictionary).values())
+	var put: Array = []
+	for i in range(game.ground_items.size() - 1, -1, -1):
+		var g: Dictionary = game.ground_items[i]
+		if not g.has("garment") or held.any(func(h: Dictionary) -> bool: return is_same(h, g)):
+			continue
+		if not game.FieldMaps.by_train(game.data, FieldGrid.cell_of(g["pos"]), "unloading"):
+			continue
+		game.loaded_wear.append(g["garment"])
+		put.append(String((g["garment"] as Dictionary).get("name", game.item_name(String(g["id"])))))
+		game.ground_items.remove_at(i)
+	if not put.is_empty():
+		game.say(game.player, "실었다: %s" % ", ".join(put))
+
+
+# ---------------------------------------------------------------- the dead's clothes
+
+## Take `slot`'s garment off one of the fallen (decision 434, clothing.md 8장):
+## as long as its weight says (Wear.strip_time), kneeling at the body as for
+## its pockets (the same job, "loot"); it is put down by the body as it is,
+## worn and holed. If it gets up meanwhile the hands come away empty. Seen,
+## it is as going through the pockets is (card 12).
+func strip_body(p, zid: int, slot: String) -> void:
+	if _wait_blow(p, strip_body.bind(p, zid, slot)):
+		return
+	var z: Dictionary = game.zombies.find(zid)
+	if not game.zombies.strippable(z) or not _can_start(p, z["pos"]):
+		return
+	var g: Dictionary = game.zombies.worn_of(z).get(slot, {})
+	if g.is_empty():
+		return
+	p.start_action("loot", "옷 가져오기", Wear.strip_time(String(g["id"])), _body_stripped.bind(p, zid, slot))
+
+
+func _body_stripped(p, zid: int, slot: String) -> void:
+	var z: Dictionary = game.zombies.find(zid)
+	if not game.zombies.strippable(z):
+		if p == game.player:
+			game.hud.toast("일어났다. 손을 뗐다.")
+		return
+	if not _in_reach(p, z["pos"]):
+		return
+	var worn: Dictionary = game.zombies.worn_of(z)
+	if not worn.has(slot):
+		return
+	var g: Dictionary = worn[slot]
+	worn.erase(slot)
+	var lay := _put_down_garment(p, g)
+	lay["pos"] = z["pos"]
+	if p == game.player:
+		game.hud.toast("%s 가져왔다." % String(g.get("name", "")))
+	# Seen once a body, however many it takes off it (the pockets are their own).
+	if not bool(z.get("stripped", false)):
+		z["stripped"] = true
+		_body_seen(p, "body_strip")
 
 
 ## Arrows and small things right under the player's feet go in by themselves.
@@ -1635,14 +1803,16 @@ func start_work(p) -> void:
 	spot["state"] = "open"
 	game.view.update_spot("work_site")
 	var doors: Array = game.data["spawns"]["train_door"]
-	var rows := [
+	var rows: Array = game.work_rows()
+	if rows.is_empty():
+		rows = [
 		{"id": "s2_crew_01", "name": "운송조 1", "role": "worker", "skills": {"strength": 6, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_crew_02", "name": "운송조 2", "role": "worker", "skills": {"strength": 6, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_crew_03", "name": "운송조 3", "role": "worker", "skills": {"strength": 5, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_crew_04", "name": "운송조 4", "role": "worker", "skills": {"strength": 7, "melee": 2, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
 		{"id": "s2_escort_01", "name": "호위조 1", "role": "escort", "skills": {"strength": 6, "melee": 3, "shooting": 3, "stealth": 1, "search": 1}, "hands": [["shotgun", "factory", 0.8], ["crowbar", "factory", 0.9]]},
 		{"id": "s2_escort_02", "name": "호위조 2", "role": "escort", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 1, "search": 1}, "hands": [["axe", "factory", 0.9]]},
-	]
+		]
 	for i in range(rows.size()):
 		var c: Vector2i = doors[i % doors.size()]
 		var q = game.make_person(rows[i], FieldGrid.center(c) + Vector3(game.rng.randf_range(-0.5, 0.5), 0, 0.3))
@@ -1818,6 +1988,10 @@ func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> 
 		return
 	if Treatment.apply(o.body, index, String(step["id"])) <= 0:
 		return
+	# A medic's splint inside the first two minutes (body_injury 4 「빠른 처치」): the train
+	# counts that break as a light wound (s3 contract 4).
+	if String(step["id"]) == "splint" and medic.medical != "none" and game.clock.elapsed - float(wound.get("at", -INF)) <= o.body.QUICK_TREAT:
+		wound["quick"] = true
 	# What it takes comes from the one who treats first, then from the one treated.
 	for item: String in step["uses"]:
 		var used: int = int(step["uses"][item])
@@ -2000,6 +2174,9 @@ const NEAR_USE: float = 1.7
 func _near_things(p) -> Array:
 	var rows: Array = []
 	var lv: int = game.level_of(p.position)
+	# By the train with something to put aboard: that comes first.
+	if at_unloading(p) and not loadable(p).is_empty():
+		rows.append([0.0, "열차에 싣기", load_train.bind(p)])
 	for s in game.stairs:
 		if not (s["low"] == lv or s["high"] == lv):
 			continue
@@ -2035,6 +2212,18 @@ func _near_things(p) -> Array:
 				body = z
 	if not body.is_empty():
 		rows.append([body_d, "품 뒤지기", go_and_do.bind(p, "body", int(body["id"]), body["pos"])])
+	# The nearest one lying there with clothes still on it (decision 434): just
+	# behind its pockets, so with both to do the pockets come first.
+	var clad: Dictionary = {}
+	var clad_d: float = NEAR_USE
+	for z in game.zombies.list:
+		if z["state"] in ["dead", "downed", "rising"] and game.level_of(z["pos"]) == lv:
+			var d: float = z["pos"].distance_to(p.position)
+			if d < clad_d and game.zombies.strippable(z):
+				clad_d = d
+				clad = z
+	if not clad.is_empty():
+		rows.append([clad_d + 0.01, "옷 가져오기", go_and_do.bind(p, "strip", int(clad["id"]), clad["pos"])])
 	if lv == 0:
 		var cell := FieldGrid.cell_of(p.position)
 		for dy in range(-1, 2):
@@ -2090,19 +2279,42 @@ func on_platform(p) -> bool:
 
 
 ## Anything put down on the platform counts as loaded (s2_station 2.4).
+## The companions load what they carry by themselves; the player does it with
+## the key (load_train, decision 448-13: what goes aboard is a choice to see).
 func _auto_unload() -> void:
 	for p in game.squad:
-		if not p.is_alive() or not game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading"):
-			continue
-		var put: Array = []
-		for id in p.items.keys():
-			# A key, an empty tin and the can opener stay with the one who has them.
-			if UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id):
-				continue
-			var n: int = int(p.items[id])
-			game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
-			put.append("%s %d" % [game.item_name(id), n])
-			p.items.erase(id)
-		if not put.is_empty():
-			game.telemetry.trip()
-			game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])
+		if p != game.player and p.is_alive() and at_unloading(p):
+			load_train(p)
+
+
+## Standing where loads are put aboard (the platform's unloading cells).
+func at_unloading(p) -> bool:
+	return game.FieldMaps.by_train(game.data, FieldGrid.cell_of(p.position), "unloading")
+
+
+## What of one's bag goes aboard: all but a key, an empty tin and the can
+## opener, a weapon, and the field's own stores (bandages, cloth, tools).
+func loadable(p) -> Array:
+	var out: Array = []
+	for id in p.items.keys():
+		if not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id)):
+			out.append(id)
+	return out
+
+
+## Put aboard what one carries (s2_station 2.4: what is aboard is the train's,
+## whatever comes of the one who brought it). True if anything went.
+func load_train(p) -> bool:
+	if not at_unloading(p):
+		return false
+	var put: Array = []
+	for id in loadable(p):
+		var n: int = int(p.items[id])
+		game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
+		put.append("%s %d" % [game.item_name(id), n])
+		p.items.erase(id)
+	if put.is_empty():
+		return false
+	game.telemetry.trip()
+	game.say(p, "%s 실었다: %s" % [p.display_name, ", ".join(put)])
+	return true

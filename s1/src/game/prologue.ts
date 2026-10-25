@@ -6,6 +6,7 @@ import { josa } from './josa';
 import { addCard, isGone, journal, PROFILES, rnd, storyOf } from './state';
 import type { Card, Game } from './state';
 import { keepPromise, setLever } from './turn';
+import { noteBroken } from './council_log';
 import { TRAIL } from './trail';
 
 // 서막: 볼슈틴 차고(first_leg_story 5장 '서막 흐름', 2026-10-07 18:20 사용자 결정 '서막에 한 바퀴').
@@ -136,6 +137,7 @@ function breakPrologue(g: Game): void {
   s.broken = (s.broken ?? 0) + 1;
   if (g.dark) g.dark.broken.tail += 1;
   journal(g, `${COMM_NAME.tail}과(와)의 약속을 어겼다: 저탄장 운반조를 다 데려온다.`, 'bad');
+  noteBroken(g, 'tail');
 }
 
 function prologueChoose(g: Game, card: Card, choice: Choice): void {
