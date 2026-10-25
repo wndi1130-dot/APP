@@ -165,7 +165,7 @@ func test_ring_trees_and_yard_fences_are_drawn_as_models() -> void:
 		assert_gt(fences, 0, place)
 
 
-func test_dead_still_come_in_from_the_new_edge_along_a_clear_lane() -> void:
+func test_dead_still_come_in_from_the_new_edge() -> void:
 	for place in ["houses_01", "lodge_01", "mine_01", "freight_01"]:
 		var before := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
 		var after := FieldMaps.build(place)
@@ -173,6 +173,7 @@ func test_dead_still_come_in_from_the_new_edge_along_a_clear_lane() -> void:
 		var old: FieldGrid = before["grid"]
 		var offset := Vector2i.ONE * int(after["map_ring"]["width"])
 		var moved := 0
+		var areas: Array[Dictionary] = []
 		for id in before["entries"]:
 			assert_eq(after["entries"][id].size(), before["entries"][id].size(), place + ": " + id)
 			for i in range(before["entries"][id].size()):
@@ -184,11 +185,15 @@ func test_dead_still_come_in_from_the_new_edge_along_a_clear_lane() -> void:
 					continue
 				moved += 1
 				assert_true(now.x == 0 or now.y == 0 or now.x == g.width - 1 or now.y == g.height - 1, "%s %s on the new edge" % [place, id])
-				var step := (c + offset - now).sign()
-				var at := now
-				while at != c + offset:
-					assert_true(g.dead_can_walk(at), "%s %s lane open at %s" % [place, id, at])
-					at += step
+				assert_true(g.dead_can_walk(now), "%s %s open at %s" % [place, id, now])
+				var area: Dictionary = {}
+				for seen: Dictionary in areas:
+					if seen.has(now):
+						area = seen
+				if area.is_empty():
+					area = dead_reach(g, now)
+					areas.append(area)
+				assert_true(area.has(c + offset), "%s %s reaches the old way in" % [place, id])
 		assert_gt(moved, 0, place)
 		for key in before.get("anchors", {}):
 			if key != "flee_exit":
@@ -219,6 +224,21 @@ static func reachable(g: FieldGrid, start: Vector2i) -> Dictionary:
 		for d in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 			var n: Vector2i = c + d
 			if not seen.has(n) and g.people_can_walk(n):
+				seen[n] = true
+				queue.append(n)
+	return seen
+
+
+static func dead_reach(g: FieldGrid, start: Vector2i) -> Dictionary:
+	var queue: Array[Vector2i] = [start]
+	var seen := {start: true}
+	var index := 0
+	while index < queue.size():
+		var c := queue[index]
+		index += 1
+		for d in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var n: Vector2i = c + d
+			if not seen.has(n) and g.dead_can_walk(n):
 				seen[n] = true
 				queue.append(n)
 	return seen

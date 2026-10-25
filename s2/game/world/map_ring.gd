@@ -99,7 +99,7 @@ static func add(original: Dictionary) -> Dictionary:
 			list[i] = list[j]
 			list[j] = tmp
 	var lots: Array[Rect2i] = []
-	_move_entries_out(data, inner, lots)
+	_move_entries_out(data, inner)
 	var start_side := rng.randi_range(0, 3)
 	for round_index in range(20):
 		for k in range(4):
@@ -159,9 +159,9 @@ static func add(original: Dictionary) -> Dictionary:
 
 
 ## The dead still come from beyond the map: a ground entry on the old border moves
-## straight out to the new edge, and its lane across the ring is kept off every lot,
-## field and tree. The flee exit on such an entry goes with it.
-static func _move_entries_out(data: Dictionary, inner: Rect2i, lots: Array[Rect2i]) -> void:
+## straight out to the new edge. No lot, fence or tree stands on the outermost row, so
+## the dead walk in round the yards. The flee exit goes with it.
+static func _move_entries_out(data: Dictionary, inner: Rect2i) -> void:
 	var g: FieldGrid = data["grid"]
 	var moved := {}
 	for id in data.get("entries", {}):
@@ -183,7 +183,6 @@ static func _move_entries_out(data: Dictionary, inner: Rect2i, lots: Array[Rect2
 				continue
 			moved[c] = out
 			cells[i] = out
-			lots.append(Rect2i(Vector2i(mini(c.x, out.x), mini(c.y, out.y)), (c - out).abs() + Vector2i.ONE).grow(1))
 	var anchors: Dictionary = data.get("anchors", {})
 	if anchors.get("flee_exit") is Vector2i and moved.has(anchors["flee_exit"]):
 		anchors["flee_exit"] = moved[anchors["flee_exit"]]
@@ -245,8 +244,8 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 	Shell._door(g, door, "closed", id)
 	Shell._window(g, Vector2i(r.position.x + 2, r.position.y), id)
 	Shell._window(g, Vector2i(r.end.x - 3, r.end.y - 1), id)
-	# Low wooden yard fences, with a two-cell opening facing the road.
-	# Each straight run is cut into plank-fence models of at most FENCE_PIECE cells.
+	# Low wooden yard fences, with a three-cell opening facing the road; each straight
+	# run is drawn as plank-fence models of at most FENCE_PIECE cells.
 	var yard := r.grow(1)
 	var gate := door + direction
 	var sides_cells: Array = [[], [], [], []]
@@ -265,8 +264,14 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 				g.set_solid(c, S.LOW)
 				data["low_blocks"].append(Rect2i(c, Vector2i.ONE))
 				run.append(c)
-			if run.size() == FENCE_PIECE or (not open and not run.is_empty()):
-				data["props"].append({"kind": "plank_fence", "rect": Rect2i(run[0], run[-1] - run[0] + Vector2i.ONE), "facing": 0, "level": 0})
+			if not open and not run.is_empty():
+				# Even pieces (14 -> 5, 5, 4), so no one-cell stub squashes the planks.
+				var pieces := ceili(float(run.size()) / FENCE_PIECE)
+				var from := 0
+				for p in range(pieces):
+					var n := run.size() / pieces + (1 if p < run.size() % pieces else 0)
+					data["props"].append({"kind": "plank_fence", "rect": Rect2i(run[from], run[from + n - 1] - run[from] + Vector2i.ONE), "facing": 0, "level": 0})
+					from += n
 				run.clear()
 	var at := door + direction
 	while at != end:
