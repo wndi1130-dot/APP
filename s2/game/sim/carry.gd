@@ -47,6 +47,18 @@ const IMMOBILE_LOAD := 2.0
 const RESERVE_WEAPON_WEIGHT := 0.5
 const SOAKED_THRESHOLD := 0.5
 const SOAKED_WEIGHT := 1.0
+## One thing this heavy is held in both arms, not run with (card G 가, decision
+## 448-19): the bell, a core, a crate.
+const BIG_THING := 3.0
+
+
+## Something in `items` ({id: count}) that is held in both arms (BIG_THING); a
+## spare weapon is slung, not held.
+static func has_big(items: Dictionary) -> bool:
+	for id: String in items:
+		if int(items[id]) > 0 and item_weight(id) >= BIG_THING and not W.is_known(id):
+			return true
+	return false
 
 
 static func limit(bag: String, strength: int) -> float:
