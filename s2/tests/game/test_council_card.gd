@@ -5,14 +5,14 @@ extends "res://addons/gut/test.gd"
 
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const CouncilVote = preload("res://game/politics/council_vote.gd")
-const SliceFlow = preload("res://game/slice_flow.gd")
+const SliceSamples = preload("res://tests/game/slice_samples.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const DEALS := "res://tests/fixtures/train/deal_vectors.json"
 
 
 func _card(g: Dictionary = {}, t: Dictionary = {}):
-	var s: Array = SliceFlow.council_sample()
+	var s: Array = SliceSamples.council_sample()
 	var c = CouncilCard.new()
 	c.g = g if not g.is_empty() else s[0]
 	c.t = t if not t.is_empty() else s[1]
@@ -30,7 +30,7 @@ func _said(n: Node) -> Array:
 
 
 func test_the_card_says_what_the_port_says_for_the_sample_session() -> void:
-	var s: Array = SliceFlow.council_sample()
+	var s: Array = SliceSamples.council_sample()
 	var g: Dictionary = s[0]
 	var t: Dictionary = s[1]
 	assert_false(g.is_empty(), "the port's sample opens a session for the slice's departure and receipt")
@@ -54,7 +54,7 @@ func test_the_card_says_what_the_port_says_for_the_sample_session() -> void:
 
 
 func test_a_law_s_lines_split_as_the_mockup_s_bill() -> void:
-	var t: Dictionary = SliceFlow.council_sample()[1]
+	var t: Dictionary = SliceSamples.council_sample()[1]
 	assert_eq(CouncilCard.change_rows(t, {"law": "contribution_ration"}), [
 		["식량 절약", "구간마다", "+1.5"], ["기관실·경비대", "배급", "+10"], ["앞칸", "배급", "−10"], ["꼬리칸·의무진", "배급", "−5"]])
 	assert_eq(CouncilCard.split_change("식량 +30(한 번)"), ["식량", "한 번", "+30"])
@@ -115,7 +115,7 @@ func test_the_lever_casts_the_port_s_vote_and_closing_hands_on_its_state() -> vo
 
 
 func test_a_long_law_sets_its_lines_tight_and_scrolls_the_rest_on_its_paper() -> void:
-	var s: Array = SliceFlow.council_sample()
+	var s: Array = SliceSamples.council_sample()
 	var g: Dictionary = (s[0] as Dictionary).duplicate(true)
 	g["council"]["options"] = [{"law": "contribution_ration", "repeal": false}, {"law": "corpse_burn", "repeal": false}]
 	var c = _card(g, s[1])

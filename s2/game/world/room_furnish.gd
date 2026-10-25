@@ -901,7 +901,8 @@ static func _note_name(props: Array, idxs: Array) -> String:
 ## 방 안 이름표 가운데 방 이름 낱말이 든 첫 것. 방 번호 -> 글.
 static func _room_labels(data: Dictionary, lv: int, g: FieldGrid, of: PackedInt32Array) -> Dictionary:
 	var out: Dictionary = {}
-	for lab: Variant in data.get("labels", []):
+	# 바닥 이름표가 먼저, 그다음 방 나누기(room_split)의 숨은 이름표.
+	for lab: Variant in data.get("labels", []) + data.get("_room_hints", []):
 		if not lab is Dictionary or int(lab.get("level", 0)) != lv:
 			continue
 		var c: Variant = _cell(lab.get("cell"))
@@ -1089,6 +1090,7 @@ static func density_plan(data: Dictionary) -> Dictionary:
 			for room: Dictionary in rooms:
 				if room["area"] >= 4 and room["area"] <= 16 and room["short"] >= 2 and room["class"] != "kitchen" and not (room["class"] == "bed" and bedrooms == 1):
 					candidates.append(room)
+		candidates = [data["_split_baths"][b]] if data.get("_split_baths", {}).has(b) else candidates
 		candidates.sort_custom(func(a: Dictionary, c: Dictionary) -> bool:
 			if reason == "small_one_door" and a["level"] != c["level"]:
 				return a["level"] < c["level"]
@@ -1721,7 +1723,7 @@ const KIND_LABEL: Dictionary = {
 	"firebox": "보일러 화실", "coal_bin": "석탄함", "fuel_drum": "연료통", "toolbox": "공구함",
 	"dresser": "서랍장", "chair": "의자", "nightstand": "침대 곁 협탁", "counter": "조리대", "sink": "개수대",
 	"cupboard": "찬장", "settee": "긴 소파", "armchair": "안락의자", "low_table": "낮은 탁자", "side_table": "곁탁자",
-	"toilet": "변기", "washstand": "세면대", "bathtub": "욕조", "towel_shelf": "수건 선반", "file_cabinet": "서류장", "desk": "책상",
+	"toilet": "변기", "washstand": "세면대", "bathtub": "욕조", "towel_shelf": "수건 선반", "small_shelf": "작은 선반", "file_cabinet": "서류장", "desk": "책상",
 }
 
 
@@ -1729,7 +1731,7 @@ const KIND_LABEL: Dictionary = {
 
 ## 상자가 들어갈 수 있는 가구(장, 선반, 궤, 책상, 계산대, 상자 더미 등).
 const HOLDER_KINDS: Dictionary = {
-	"dresser": true, "nightstand": true, "counter": true, "cupboard": true, "side_table": true, "washstand": true, "towel_shelf": true,
+	"dresser": true, "nightstand": true, "counter": true, "cupboard": true, "side_table": true, "washstand": true, "towel_shelf": true, "small_shelf": true,
 	"wardrobe": true, "blanket_chest": true, "bookcase": true, "shelf": true, "jar_shelf": true,
 	"display_shelf": true, "shop_counter": true, "crate_stack": true, "tin_crate": true, "fridge_open": true,
 	"desk": true, "typewriter_desk": true, "office_desk": true, "file_cabinet": true, "map_cabinet": true,

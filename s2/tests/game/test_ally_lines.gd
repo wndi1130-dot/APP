@@ -288,3 +288,63 @@ func test_the_dead_at_a_door_are_called_out_once_in_a_while() -> void:
 	game.clock.elapsed += float(AllyLines.SQUAD_GAP["door_bang"])
 	game.shout_nearest(other.position, "door_bang", INF)
 	assert_has(_bank_of(other, "door_bang"), _line_of(other))
+
+
+# ---- What one remembers (people memory, decision 439) ----
+
+func test_one_the_chief_pulled_free_trusts_him_whatever_their_car() -> void:
+	var lines := AllyLines.new()
+	lines.voice_by["a"] = "fear"
+	lines.rel_of["a"] = "bad"
+	lines.stance_by["a"] = "good"
+	assert_eq(lines.standing("a"), "good")
+	assert_has(AllyLines.lines_for("order_follow", "fear", "good"), lines.pick("a", "order_follow", 10.0))
+	lines.stance_by.erase("a")
+	assert_eq(lines.standing("a"), "bad", "without a memory of their own, their car's standing")
+
+
+func test_a_memory_comes_back_once_a_stop_at_the_first_order() -> void:
+	var lines := AllyLines.new()
+	lines.voice_by["a"] = "rough"
+	lines.cues_by["a"] = ["saved_me"]
+	var first := lines.pick("a", "order_wait", 10.0)
+	assert_has(AllyLines.MEMORY_LINES["saved_me"]["rough"], first)
+	var later := lines.pick("a", "order_wait", 10.0 + AllyLines.GAP_SELF + 1.0)
+	assert_has(AllyLines.lines_for("order_wait", "rough", "normal"), later, "once a stop, then the order's own line")
+
+
+func test_a_memory_is_not_said_over_a_bite_or_a_kill() -> void:
+	var lines := AllyLines.new()
+	lines.voice_by["a"] = "quiet"
+	lines.cues_by["a"] = ["left_me"]
+	assert_does_not_have(AllyLines.MEMORY_LINES["left_me"]["quiet"], lines.pick("a", "kill", 10.0))
+
+
+func test_a_companion_who_saved_them_is_named_and_a_stranger_is_skipped() -> void:
+	var lines := AllyLines.new()
+	lines.voice_by["a"] = "quiet"
+	lines.cues_by["a"] = ["saved_by:p_x", "saved_by:p_unknown"]
+	lines.names_by["p_x"] = "요안나"
+	assert_eq(lines.memory_line("a"), "...요안나. 고맙다는 말 아직 못 했다.")
+	lines.cues_by["a"] = ["saved_by:p_unknown"]
+	assert_eq(lines.memory_line("a"), "", "no name, no line")
+
+
+func test_every_memory_has_a_line_in_every_voice() -> void:
+	for key: String in AllyLines.MEMORY_LINES:
+		for v: String in AllyLines.VOICES:
+			assert_gt((AllyLines.MEMORY_LINES[key][v] as Array).size(), 0, key + "/" + v)
+
+
+func test_the_squad_takes_its_memory_from_its_rows() -> void:
+	var g = FieldGame.new()
+	var squad: Array = game.default_squad("crude")
+	squad[1]["stance"] = "good"
+	squad[1]["cues"] = ["saved_me"]
+	g.opts = {"seed": 4, "auto_pause": false, "raiders": false, "squad": squad}
+	add_child_autofree(g)
+	g.set_process(false)
+	var pid: String = String(squad[1]["id"])
+	assert_eq(g.lines.standing(pid), "good")
+	assert_eq(g.lines.cues_by.get(pid), ["saved_me"])
+	assert_eq(g.lines.names_by.get(pid), String(squad[1]["name"]))
