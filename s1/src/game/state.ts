@@ -1,5 +1,6 @@
 import { createRng, nextRandom } from '../core/rng';
 import type { NeedId, NeedState } from './needs';
+import type { CouncilLogRow } from './council_log';
 import type { DomState } from './domestic/state';
 import type { ScoutGearUsed } from './domestic/scout_gear';
 import type { EduState } from './domestic/classroom';
@@ -109,6 +110,13 @@ export interface CommState {
   /** 관계가 바닥인데 레버를 돌려준 연속 구간 수(결정 080: 돌려주면 관계가 빨리 오른다) */
   backStreak: number;
   grudge: number;
+  /** 이 칸과 지킨 약속·어긴 약속 수(판 전체 누계). 설득(결정 433)과 정치 흐름의 결과 아크가 같은 키를 읽는다. 옛 저장 판에는 없어서 0이다 */
+  kept?: number;
+  broken?: number;
+  /** 약속을 세 번 어겨 이 칸과 공개 협상·현장 조달이 판 끝까지 닫혔다(결과 아크, council_log.ts) */
+  openClosed?: boolean;
+  /** 이 칸에 넘긴 안건이 이어 부결된 수(결과 아크) */
+  heldFails?: number;
   lastOffense: number;
   demandCool: number;
   favorCool: number;
@@ -205,7 +213,7 @@ export interface StopResult {
   disembark?: string;
 }
 
-export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail';
+export type DealTool = 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'persuade';
 /** refused: 이상주의 대표가 뇌물을 거절했다. 거래 자리는 썼지만 표는 움직이지 않는다(K01 1). */
 export interface Deal { comm: Comm; tool: DealTool; label: string; refused?: boolean }
 /** 의회 안건. 법(제정·폐지·추인)이거나 법이 아닌 안건(motion)이다(s1b_dark_path 12.3).
@@ -235,12 +243,16 @@ export interface VoteResult {
   decree: boolean;
   /** 표결한 그때 비밀 투표였나. 비밀 투표 법을 통과·폐지한 표결이어도 화면은 표결 때 방식을 따른다(K01 2) */
   secret?: boolean;
+  /** 개표 설명 한 줄: 미정·대표 몫 가운데 기대와 가장 크게 다르게 갈린 칸(정치 흐름 3.3). 고정 조건(꿈쩍 않는 반대·부재)은 표결 전 셈에 이미 있다 */
+  why?: string;
 }
 
 export interface CouncilState {
   options: Agenda[];
   idx: number;
   locked: boolean;
+  /** 안건 선택권을 넘겨받아 안건을 고른 칸(결과 아크) */
+  holder?: Comm;
   deals: Deal[];
   result: VoteResult | null;
   /** 회기가 아닌 구간에 열차장이 부른 비상 소집 */
@@ -357,6 +369,8 @@ export interface Game {
   needs: Partial<Record<NeedId, NeedState>>;
   /** 법 요구마다 예고가 몇 번 왔나(예고 글 변주) */
   needAsked?: Partial<Record<NeedId, number>>;
+  /** 회기 기록부: 표결마다 한 줄, 최근 줄만(council_log.ts). 옛 저장에는 없다 */
+  councilLog?: CouncilLogRow[];
   /** 비상 소집을 부른 구간들 */
   emergencyCalls: number[];
   /** 식량 0으로 버틴 구간 수 */
