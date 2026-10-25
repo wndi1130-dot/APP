@@ -25,6 +25,7 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const Motion = preload("res://game/sim/motion.gd")
+const Gait = preload("res://game/sim/gait.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
@@ -1613,9 +1614,11 @@ func _slide(at: Vector3, step: Vector3) -> Vector3:
 ## A footstep as the walk puts a foot down (decision 425): the walk goes round
 ## by the ground covered (`gone`), two steps to a round (SimNoise.STEP_AT).
 ## The round's place is kept on the body (brain "step_r") for the drawing too.
+## Each person walks at their own stride and starts from their own place in the
+## round (gait.gd, decision 423 card 3), so two who go together are not in step.
 static func steps_in(p, gone: float) -> int:
-	var size: float = float(SimNoise.STEP_ROUND["run" if p.is_running_now() else ("crouch" if p.crouched else "walk")])
-	var was := float(p.brain.get("step_r", 0.0))
+	var size: float = float(SimNoise.STEP_ROUND["run" if p.is_running_now() else ("crouch" if p.crouched else "walk")]) * Gait.stride(p)
+	var was := float(p.brain.get("step_r", Gait.first_step(p)))
 	var now := was + gone / maxf(size, 0.01)
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
