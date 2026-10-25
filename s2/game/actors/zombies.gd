@@ -27,6 +27,12 @@ const SPEED_FRESH: float = 2.7
 const SPEED_CRAWL: float = 0.35
 const ATTACK_RANGE: float = 0.85
 const WINDUP: float = 0.8
+# A crawler's bite lands later in its lunge than a standing one's (the reference
+# game: at 0.5 of it, not 0.2; decision 425): its wind-up is that much longer.
+const WINDUP_CRAWL: float = WINDUP * 0.5 / 0.2
+# One just seen is not bitten at once (the reference game's grace): the dead
+# come on at it but bite only once they have had it in sight this long.
+const SEEN_GRACE: float = 0.5
 const GET_UP: Vector2 = Vector2(5.0, 9.0)
 const RISE_TIME: float = 30.0
 ## What a fallen one may have on it (user 2026-10-11: now and then, small
@@ -558,15 +564,16 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		if z["state"] != "chase":
 			z["path_t"] = 0.0
 			_call_neighbours(z, best.position)
+			z["spotted_at"] = z["age"]
 		z["turn_t"] = 0.0
 		z["state"] = "chase"
 		z["victim"] = best
 		z["seen_t"] = 0.0
 		z["last_seen"] = best.position
 		z["target"] = best.position
-		if best_d <= ATTACK_RANGE and z["cooldown"] <= 0.0 and can_reach(z, best):
+		if best_d <= ATTACK_RANGE and z["cooldown"] <= 0.0 and can_reach(z, best) and float(z["age"]) - float(z.get("spotted_at", -INF)) >= SEEN_GRACE:
 			z["state"] = "attack"
-			z["windup"] = WINDUP
+			z["windup"] = WINDUP_CRAWL if z["crawl"] else WINDUP
 			z["angle"] = atan2(best.position.x - z["pos"].x, best.position.z - z["pos"].z)
 		return
 	if float(z.get("dash_t", 0.0)) > 0.0:
@@ -962,11 +969,16 @@ func _move(z: Dictionary, delta: float) -> void:
 
 
 func _bang(z: Dictionary, c: Vector2i, delta: float) -> void:
+	var row: Dictionary = Motion.row("dead_thump")
+	# Come up to the door, it draws its arms back first: the first blow lands
+	# where the picture's does (decision 425), then one every round.
+	if float(z["age"]) - float(z.get("bang_seen", -INF)) > DeadBody.AT_DOOR:
+		z["bang_t"] = float(row["hit"])
 	z["bang_seen"] = z["age"]      # at the door now (dead_body.gd draws it beating on it)
 	z["bang_t"] -= delta
 	if z["bang_t"] > 0.0:
 		return
-	z["bang_t"] = 1.3
+	z["bang_t"] = float(row["len"])
 	game.on_door_banged(c, z)
 
 
@@ -1066,6 +1078,12 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 			z["spent_t"] = LungerRules.SPENT   # shoved out of its tell, it does not run
 		z["state"] = "chase"
 		z["stun"] = 1.0
+
+
+## Lying knocked down and now getting up (the last of its time down, as long as
+## the drawing's rise): a shove catches it then (decision 425). A crawler does not get up.
+func getting_up(z: Dictionary) -> bool:
+	return z["state"] == "downed" and not z["crawl"] and float(z["t"]) <= float(Motion.row("dead_rise")["len"])
 
 
 ## Shoved over, half of the dead go down at once and half reel first and go

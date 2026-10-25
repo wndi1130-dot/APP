@@ -889,7 +889,11 @@ func _corner(p, walls: bool) -> Dictionary:
 func test_a_zombie_in_the_open_starts_its_attack_at_the_same_spot() -> void:
 	var z := _corner(game.player, false)
 	assert_lt(z["pos"].distance_to(game.player.position), game.zombies.ATTACK_RANGE)
-	game.zombies.update(0.2)
+	# It bites once it has had the player in sight a moment (decision 425: SEEN_GRACE).
+	for i in range(10):
+		game.zombies.update(0.2)
+		if z["state"] == "attack":
+			break
 	assert_eq(z["state"], "attack", "control: with no wall it comes")
 
 
