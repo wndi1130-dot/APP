@@ -9,6 +9,7 @@ extends RefCounted
 
 const T = preload("res://game/sim/loot_tables.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
+const Wear = preload("res://game/sim/wear.gd")
 
 
 static func _values(set_name: String) -> Dictionary:
@@ -75,6 +76,60 @@ static func place_at(buildings: Array, cell: Vector2i) -> String:
 		if place != "":
 			return place
 	return ""
+
+
+## Where a fallen one lying at cell stood, for what it has on: a police or a
+## fire station by a building's name, else the pockets' place.
+static func wear_place_at(buildings: Array, cell: Vector2i) -> String:
+	for b: Dictionary in buildings:
+		if not b.has("rect") or not (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
+			continue
+		for place: String in T.WEAR_PLACE_WORDS:
+			for w: String in T.WEAR_PLACE_WORDS[place]:
+				if String(b.get("name", "")).contains(w):
+					return place
+	return place_at(buildings, cell)
+
+
+## What one of the fallen has on, place by place as wear.gd keeps it, each
+## garment worn and holed (loot_tables.gd WEAR_*). `rng` is the body's own.
+static func wear_roll(kind: String, place: String, rng: RandomNumberGenerator) -> Dictionary:
+	var rows: Dictionary = T.WEAR_PLAIN.duplicate()
+	rows.merge(T.WEAR_KIND.get(kind, {}), true)
+	rows.merge(T.WEAR_PLACE.get(place, {}), true)
+	var worn_range: Array = T.WEAR_WORN.get(kind, T.WEAR_WORN["dead"])
+	var hole: float = float(T.WEAR_HOLES.get(kind, T.WEAR_HOLES["dead"]))
+	var out := {}
+	var taken: Array[String] = []
+	for slot: String in Wear.SLOTS:
+		if not rows.has(slot) or taken.has(slot):
+			continue
+		var id := _pick_weighted(rows[slot], rng)
+		if id == "" or taken.any(func(s: String) -> bool: return Wear.slots_of(id).has(s)):
+			continue
+		var g := Wear.make(id)
+		g["wear"] = snappedf(rng.randf_range(float(worn_range[0]), float(worn_range[1])), 0.01)
+		var holes := {}
+		for part: String in Wear.covers(id):
+			if rng.randf() < hole:
+				holes[part] = true
+		if not holes.is_empty():
+			g["holes"] = holes
+		out[slot] = g
+		taken.append_array(Wear.slots_of(id))
+	return out
+
+
+static func _pick_weighted(rows: Array, rng: RandomNumberGenerator) -> String:
+	var total := 0.0
+	for r: Array in rows:
+		total += float(r[1])
+	var at := rng.randf() * total
+	for r: Array in rows:
+		at -= float(r[1])
+		if at < 0.0:
+			return String(r[0])
+	return String(rows[rows.size() - 1][0])
 
 
 ## The place a building's name says ("" for none of PLACE_WORDS).

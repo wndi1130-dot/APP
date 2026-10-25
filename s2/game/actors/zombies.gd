@@ -196,6 +196,26 @@ func set_loot(z: Dictionary, loot: Array) -> void:
 	z["searched"] = false
 
 
+## What one of the dead has on (decision 434, loot_tables.gd WEAR_*): rolled
+## the first time it is asked for, by the place it keeps to (its home, which a
+## save keeps), on dice of its own from the run's seed and the body's number,
+## so whenever that is (a round on a vest, a hand on a coat) it comes out the
+## same and moves no other dice. A risen one of ours has what it wore
+## (field_game.gd).
+func worn_of(z: Dictionary) -> Dictionary:
+	if not z.has("worn"):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = ("%d:worn:%d" % [int(game.opts.get("seed", 0)), int(z["id"])]).hash()
+		var place := LootRules.wear_place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
+		z["worn"] = LootRules.wear_roll(String(z["kind"]), place, rng)
+	return z["worn"]
+
+
+## Lying there with something still on it to take off.
+func strippable(z: Dictionary) -> bool:
+	return not z.is_empty() and z["state"] in ["dead", "downed", "rising"] and not worn_of(z).is_empty()
+
+
 func _roll_loot(z: Dictionary) -> void:
 	if z.has("loot"):
 		return

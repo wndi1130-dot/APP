@@ -816,8 +816,11 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 
 
 ## Putting a garment on plays its place's motion once over the job (wear.gd
-## CLIP); taking it off plays it backwards.
+## CLIP); taking it off plays it backwards. At a walk (a hat or gloves, wear.gd
+## WALKABLE) the walk shows: the whole-body motion cannot be laid over the legs.
 static func wear_of(p, note: Dictionary, own: Array) -> Vector2:
+	if p.moving and bool(p.action_busy.get("walk", false)):
+		return Vector2(0.0, -1.0)
 	var slot: String = String(p.action_busy.get("slot", "jacket"))
 	var clip := clip_named(own, String(Wear.CLIP.get(slot, Wear.CLIP["jacket"])), -1)
 	if clip < 0:
