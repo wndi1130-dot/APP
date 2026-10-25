@@ -1,6 +1,7 @@
 import { riotEnd, riotFell } from './riot';
 import { bump, bumpRel, put } from './ledger';
 import { freezeTrackBoost, seasonHolds } from './climate';
+import { handsTrackBoost } from './hands';
 import { noteInjury, noteRelief } from './wounds';
 import type { WoundFrom } from './wounds';
 import { CHORE_COMMS, COMMS, COMM_NAME, P, REP_ROLE } from './data';
@@ -434,7 +435,7 @@ export function drawTravelEvent(g: Game, extra: string[] = []): string | null {
     return g.seg - m.seg >= EVENT_COOLDOWN && m.n < EVENT_CHAIN_MAX && m.st !== st;
   };
   // 결빙 구간(climate.ts)은 이미 든 선로 사건을 한 번 더 넣는다. 꺼진 판은 그대로다.
-  const pool = freezeTrackBoost(g, [...TRAVEL_EVENTS.filter(e => e.when(g) && open(e.id)).map(e => e.id), ...extra].filter(id => !g.recentEvents.includes(id)));
+  const pool = handsTrackBoost(g, freezeTrackBoost(g, [...TRAVEL_EVENTS.filter(e => e.when(g) && open(e.id)).map(e => e.id), ...extra].filter(id => !g.recentEvents.includes(id))));
   if (pool.length === 0) return null;
   const id = g.eventPack ? weightedTravelPick(g, pool) : pick(g, pool); // 꺼진 판(event_pack.ts)은 원래의 균등 뽑기다
   g.recentEvents = [...g.recentEvents, id].slice(-4);

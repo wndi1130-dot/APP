@@ -62,4 +62,5 @@ export const WHY_NAME: Record<string, string> = {
   disaster: '재난',
   arrival: '늦게 탄 사람',
   freeze: '선로 결빙',
+  hands: '일손이 모자람',
 };
