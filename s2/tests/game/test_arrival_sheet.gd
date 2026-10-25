@@ -6,12 +6,12 @@ extends "res://addons/gut/test.gd"
 
 const ArrivalSheet = preload("res://game/ui/arrival_sheet.gd")
 const PaperSheet = preload("res://game/ui/paper_sheet.gd")
-const SliceFlow = preload("res://game/slice_flow.gd")
+const SliceSamples = preload("res://tests/game/slice_samples.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _sheet(g1: Dictionary = {}, word: String = "끝 카드"):
-	var s: Array = SliceFlow.arrival_sample()
+	var s: Array = SliceSamples.arrival_sample()
 	var c = ArrivalSheet.new()
 	c.g = g1 if not g1.is_empty() else s[0]
 	c.t = s[1]
@@ -28,7 +28,7 @@ func _said(n: Node) -> Array:
 
 
 func test_the_sheet_says_what_the_arrival_summary_says() -> void:
-	var s: Array = SliceFlow.arrival_sample()
+	var s: Array = SliceSamples.arrival_sample()
 	var m: Dictionary = ArrivalSheet.model(s[0], s[1])
 	assert_eq(m["seg"], 3)
 	assert_false(m.has("kick"), "no 「구간 정차 · 도착」 kick (결정 417)")
@@ -43,7 +43,7 @@ func test_the_sheet_says_what_the_arrival_summary_says() -> void:
 
 
 func test_the_slip_is_the_session_s_record() -> void:
-	var s: Array = SliceFlow.arrival_sample()
+	var s: Array = SliceSamples.arrival_sample()
 	var c: Dictionary = ArrivalSheet.model(s[0], s[1])["council"]
 	assert_true(c["open"])
 	assert_eq(c["seg"], 2)
@@ -101,7 +101,7 @@ func test_all_it_writes_stays_on_the_paper_in_the_game_s_faces() -> void:
 
 
 func test_who_did_not_come_back_is_a_count_never_a_name() -> void:
-	var s: Array = SliceFlow.arrival_sample()
+	var s: Array = SliceSamples.arrival_sample()
 	var g1: Dictionary = (s[0] as Dictionary).duplicate(true)
 	g1["fieldReturns"]["records"][0]["dead"] = ["p_152"]
 	var m: Dictionary = ArrivalSheet.model(g1, s[1])
