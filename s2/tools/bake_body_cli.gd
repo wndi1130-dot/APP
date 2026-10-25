@@ -6,7 +6,8 @@ extends SceneTree
 ## those from a motion set need the motion files, so "-" is refused for it.
 ## --small writes the compacted bake (BodyBake.compact) the phone build carries;
 ## --keep names the clips that keep every frame in it.
-## --shell=<kind> bakes a garment (BodyBake.SHELLS) cut from the body instead of the body:
+## --shell=<kind> bakes a garment (BodyBake.SHELLS) cut from the body, or a bag on its back
+## (BodyBake.BAG_SHELLS), instead of the body:
 ## the same skin and motions, so it is drawn over a body baked with the same --set and --keep.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
