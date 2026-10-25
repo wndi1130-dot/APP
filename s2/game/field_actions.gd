@@ -1806,6 +1806,8 @@ func amputate(medic, o, part: String) -> bool:
 ## The cut done: the tools are asked again (they may have gone meanwhile), not
 ## the window: a slow hand that let it close lost the limb for nothing
 ## (body_injury 2.2). Then the shock, by who cut and how strong the body is.
+## The one who cuts can act here: the work only runs out while they can
+## (field_game.gd _update_person stops it while grabbed, fallen or down).
 func _amputated(medic, o, part: String) -> void:
 	if not o.is_alive() or not o.grabbers.is_empty() or not in_care_reach(medic, o):
 		game.say(medic, "자르지 못했다. 그 자리를 떠났다.")
