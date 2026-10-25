@@ -15,8 +15,11 @@ const V4_REQUIRED := ["departureId", "symbol", "fieldPromises"]
 ## v5 (s3_departure_receipt_contract.md 3): v4 + how each came back + the train's defence.
 const V5_REQUIRED := ["crew", "defense"]
 ## v5 may also carry (s3 contract 3): the outer things put aboard at the platform, the lures
-## that came back. Left out when there are none.
-const V5_OPTIONAL := ["wardrobeIn", "luresBack"]
+## that came back, the food put aboard by name before it melted into stock.food (J07: the pot
+## reads its state by id). Left out when there are none.
+const V5_OPTIONAL := ["wardrobeIn", "luresBack", "foodIn"]
+## The v5 keys that are counts by id.
+const V5_COUNTS := ["luresBack", "foodIn"]
 ## gearBack.wear's places: the wardrobe's (wear.gd OUTER_PLACES), the coat only when one is on.
 const GEAR_WEAR_KEYS := ["jacket", "coat", "hands"]
 const WARDROBE_ENTRY_KEYS := ["id", "condition", "holes"]
@@ -70,6 +73,7 @@ var _crew: Array[Dictionary] = []
 var _defense: Dictionary = {}
 var _wardrobe_in: Array = []
 var _lures_back: Dictionary = {}
+var _food_in: Dictionary = {}
 
 
 func _init(place_id: String, place_type: String = "freight", variant: String = "s2_graybox") -> void:
@@ -332,6 +336,13 @@ func set_lures_back(by_kind: Dictionary) -> void:
 	_lures_back = by_kind.duplicate()
 
 
+## The food put aboard, by the field's id (fresh, wilted, spoiled, frozen, dented … in the id,
+## food_cooking.md 2), as many as melted into stock.food: what it was, not more of it. On a v5
+## receipt only.
+func set_food_in(by_id: Dictionary) -> void:
+	_food_in = by_id.duplicate()
+
+
 ## The train's defence at the stop (decision 416; the stop-sound stream fills it): those who
 ## stood at the train, who of them got hurt or died, their wounds. Opts the receipt into v5.
 func set_defense(held: bool, people: Array, hurt: Array, dead: Array, wounds: Array = []) -> void:
@@ -405,6 +416,8 @@ func to_dict() -> Dictionary:
 				d["wardrobeIn"] = _wardrobe_in.duplicate(true)
 			if not _lures_back.is_empty():
 				d["luresBack"] = _lures_back.duplicate()
+			if not _food_in.is_empty():
+				d["foodIn"] = _food_in.duplicate()
 		return d
 	if not _wounds.is_empty():
 		d["version"] = 2
@@ -657,14 +670,16 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 			for i: int in (rows as Array).size():
 				if not _wardrobe_entry_ok(rows[i], id_re):
 					out.append("wardrobeIn.%d: 옷장 꼴이 아님" % i)
-	if d.has("luresBack"):
-		var lures: Variant = d["luresBack"]
-		if not lures is Dictionary:
-			out.append("luresBack: 사전이 아님")
-		else:
-			for kind: Variant in lures:
-				if not (_is_id(kind, id_re) and _is_int(lures[kind]) and float(lures[kind]) >= 0.0):
-					out.append("luresBack.%s: 0 이상 정수가 아님" % str(kind))
+	for key: String in V5_COUNTS:
+		if not d.has(key):
+			continue
+		var counts: Variant = d[key]
+		if not counts is Dictionary:
+			out.append("%s: 사전이 아님" % key)
+			continue
+		for kind: Variant in counts:
+			if not (_is_id(kind, id_re) and _is_int(counts[kind]) and float(counts[kind]) >= 0.0):
+				out.append("%s.%s: 0 이상 정수가 아님" % [key, str(kind)])
 	var defense: Variant = d.get("defense")
 	if defense is Dictionary:
 		_no_extra(out, "defense", defense, DEFENSE_KEYS)

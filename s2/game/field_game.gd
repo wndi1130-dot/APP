@@ -2708,6 +2708,15 @@ func finish(reason: String) -> void:
 			# One entry a core, so the count reads off the list (CoreScenes.count).
 			for k in range(int(unloaded[id])):
 				receipt.gain_item(id)
+	# What the food was before it melted into stock.food (s3 contract 3 foodIn, J07): the
+	# train's pot reads fresh, wilted, spoiled, raw, frozen or dented from the id.
+	if contract_on():
+		var food_in := {}
+		for id in unloaded:
+			var into: String = String(STOCK_OF[id][0]) if STOCK_OF.has(id) else (String(FieldItems.stock_of(id)[0]) if FieldItems.has(id) else "")
+			if into == "food" and int(unloaded[id]) > 0:
+				food_in[String(id)] = int(unloaded[id])
+		receipt.set_food_in(food_in)
 	# The cores' count and the blueprint pieces go into extras here and only here (decision
 	# 426), on a stop receipt, one that has its ids: setting extras on a field receipt without
 	# ids would make it a stop receipt with empty ones, which the receipt check turns down.
