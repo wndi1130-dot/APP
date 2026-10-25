@@ -35,7 +35,7 @@ func test_the_baked_folder_has_every_train_motion_by_name() -> void:
 	assert_false(baked.is_empty())
 	var names: Array = (baked["clips"] as Array).map(func(c): return String(c["name"]))
 	assert_eq(names, TrainClips.names())
-	assert_lte(names.size(), 32, "the shader's clip tables have thirty-two places")
+	assert_lte(names.size(), 128, "the shader's clip tables have a hundred and twenty-eight places")
 	for n in names:
 		assert_true(String(n).begins_with("t_"), n)
 
@@ -277,3 +277,108 @@ func test_guards_have_at_most_two_guns_on_their_knees() -> void:
 		s.people_view._process(0.1)
 		s.clock += 1.0
 		assert_lte(s.people_view.guns.multimesh.visible_instance_count, View.LAP_GUNS)
+
+
+## The cold's tremble (user 2026-10-25): nobody in a warm car, in a freezing one
+## those the cold gets to, each as much as it gets to them, never past SHIVER_MAX.
+func test_the_cold_trembles_some_and_not_the_warm() -> void:
+	var warm := 0
+	var cool := 0
+	var amounts := {}
+	for key in range(100, 160):
+		warm += int(View.shiver_for(_state(), View.traits_of(key)) > 0.0)
+		cool += int(View.shiver_for(_state({"warmth": 40.0, "cold": true}), View.traits_of(key)) > 0.0)
+		var s := View.shiver_for(_state({"warmth": 15.0, "cold": true, "freezing": true}), View.traits_of(key))
+		assert_between(s, 0.0, View.SHIVER_MAX)
+		amounts[snappedf(s, 0.01)] = true
+	assert_eq(warm, 0, "nobody trembles in a warm car")
+	assert_between(cool, 10, 50, "in a cold car some do, not every one")
+	assert_gte(amounts.size(), 10, "each as much as the cold gets to them")
+
+
+## Neighbours on a cold bench share one blanket, two or three under it.
+func test_neighbours_on_a_cold_bench_share_a_blanket() -> void:
+	var cold := _state({"warmth": 20.0, "cold": true, "freezing": true})
+	var rows: Array = []
+	for i in 5:
+		rows.append({"x": 1.2 + 0.95 * i, "free": true, "cold": 0.1})
+	assert_eq(View.blanket_groups(rows, _state()), [], "not in a warm car")
+	assert_eq(View.blanket_groups(rows, cold), [[0, 1, 2], [3, 4]], "five side by side: three and two")
+	rows[2]["free"] = false
+	assert_eq(View.blanket_groups(rows, cold), [[0, 1], [3, 4]], "one at something else breaks the bench")
+	rows[2]["free"] = true
+	rows[3]["x"] = 1.2 + 0.95 * 4
+	rows[4]["x"] = 1.2 + 0.95 * 5
+	assert_eq(View.blanket_groups(rows, cold), [[0, 1, 2], [3, 4]], "a gap starts another")
+	for r in rows:
+		r["cold"] = 0.7
+	assert_eq(View.blanket_groups(rows, _state({"warmth": 40.0, "cold": true})), [], "nor for those the cold has not got to")
+	var many: Array = []
+	for i in 12:
+		many.append({"x": 0.95 * i, "free": true, "cold": 0.1})
+	assert_eq(View.blanket_groups(many, cold).size(), View.BLANKETS_A_CAR)
+	var under := _body("sit")
+	assert_eq(View.want_for(under, _state(), "", 5, 1.0, {"blanket": true}), "t_sit_huddle", "hunched up under it")
+
+
+## The cloth lies over the shoulders, not over the heads, and faces outward.
+func test_the_blanket_lies_on_the_shoulders() -> void:
+	for n in [2, 3]:
+		var mesh := View.blanket_mesh(n)
+		var box := mesh.get_aabb()
+		assert_almost_eq(box.size.x, View.BLANKET_STEP * (n - 1) + 2.0 * View.BLANKET_EDGE, 0.01)
+		assert_lt(box.end.y, 1.06, "below the hunched heads' tops")
+		assert_gt(box.end.y, 0.95, "over the shoulders")
+		var arrays := mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var up := 0
+		var tops := 0
+		for i in verts.size():
+			if verts[i].y > 0.98:
+				tops += 1
+				up += int(normals[i].y > 0.3)
+		assert_gt(tops, 0)
+		assert_eq(up, tops, "the top of the cloth faces up")
+		assert_lt(mesh.get_faces().size() / 3, 2600, "a blanket stays light")
+
+
+## A freezing car: some tremble, neighbours pull a blanket up, a few breathe
+## out; warm again, the blankets go down and the breath stops.
+func test_a_freezing_car_trembles_shares_blankets_and_breathes() -> void:
+	var s := Scene.new()
+	s.rules = Rules.load_default()
+	s.opts = {"seed": 7, "panel": false}
+	add_child_autofree(s)
+	if s.people_view == null:
+		pass_test("no baked people here")
+		return
+	var view = s.people_view
+	assert_true(s.set_sit("tail", 0, 15.0), "a freezing tail")
+	for i in 40:
+		s.step(0.5)
+		view._process(0.5)
+	var c: Dictionary = s.car("tail1")
+	var trembling := 0
+	for b in c["bodies"]:
+		trembling += int(float(view.shivers.get(b, 0.0)) > 0.05)
+	assert_gt(trembling, 0, "some tremble in the cold")
+	var under := 0
+	for d in view.blankets:
+		under += (d as MultiMeshInstance3D).multimesh.visible_instance_count
+	assert_gt(under, 0, "neighbours share a blanket")
+	assert_true(view.breath.has("tail1"), "breath shows in the freezing car")
+	if view.breath.has("tail1"):
+		assert_true((view.breath["tail1"]["p"] as GPUParticles3D).emitting)
+	assert_true(s.set_sit("tail", 0, 75.0), "warm again")
+	for i in 40:
+		s.step(0.5)
+		view._process(0.5)
+	under = 0
+	for d in view.blankets:
+		under += (d as MultiMeshInstance3D).multimesh.visible_instance_count
+	assert_eq(under, 0, "the blankets are put away")
+	for b in c["bodies"]:
+		assert_lt(float(view.shivers.get(b, 0.0)), View.BREATH_FROM, "the trembling has died down")
+	if view.breath.has("tail1"):
+		assert_false((view.breath["tail1"]["p"] as GPUParticles3D).emitting, "no breath")

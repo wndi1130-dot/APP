@@ -102,12 +102,13 @@ static func crew_names(g: Dictionary, t: Dictionary, c: String, size: int) -> Ar
 	var sick: Variant = g["comms"][c].get("sick")
 	if sick is Dictionary:
 		sick_rep = sick["rep"]["name"]
+	var busy := crew_busy(g)
 	var alive: Array[String] = []
 	for person: Dictionary in t["PROFILES"]:
 		var person_name: String = person["name"]
 		var age := float(person["age"])
 		if person["community"] == c and not St.is_gone(g, person_name) and age >= 16.0 and age <= 65.0 \
-				and not scouts.has(person_name) and person_name != sick_rep:
+				and not scouts.has(person_name) and person_name != sick_rep and not busy.has(person_name):
 			alive.append(person_name)
 	var out: Array[String] = []
 	if alive.is_empty():
@@ -115,6 +116,20 @@ static func crew_names(g: Dictionary, t: Dictionary, c: String, size: int) -> Ar
 	var start := (int(g["seg"]) * 7) % alive.size()
 	for i: int in mini(size, alive.size()):
 		out.append(alive[(start + i) % alive.size()])
+	return out
+
+
+## Who cannot go out on a crew (S1 CREW_BUSY): one healing from more than a light
+## wound (wounds.ts) and newcomers still waiting to be taken in (arrivals.ts).
+static func crew_busy(g: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for w: Dictionary in g.get("wounds", []):
+		if ["bed", "home", "light"].has(String(w.get("state", ""))) and String(w.get("grade", "")) != "light":
+			out.append(String(w["who"]))
+	var arrivals: Variant = g.get("arrivals")
+	if arrivals is Dictionary and arrivals.get("pending") is Dictionary:
+		for n: Variant in (arrivals["pending"] as Dictionary).get("names", []):
+			out.append(String(n))
 	return out
 
 
@@ -146,7 +161,11 @@ static func stop_risk(g: Dictionary, t: Dictionary) -> Dictionary:
 	var has_stop := stop is Dictionary
 	var place := _place(t, stop.get("place") if has_stop else null)
 	var stay: Dictionary = t["STAY"][stop.get("stay", "normal") if has_stop and stop.get("stay") != null else "normal"]
-	var crew := float(stop["crewSize"]) if has_stop and stop.get("crewSize") != null else 4.0
+	# Those who can actually go, not the size picked (S1 stopRisk, 검수 PR 395): fewer when the car runs short.
+	var names: Array[String] = []
+	if has_stop:
+		names = crew_names(g, t, stop["crewComm"], int(stop["crewSize"]) if stop.get("crewSize") != null else 4)
+	var crew := float(names.size()) if has_stop else 4.0
 	var guard: Dictionary = g["comms"]["guard"]
 	var guard_refused := float(guard["fervor"]) >= 1.0 and float(guard["rel"]) <= -40.0
 	var guard_mult := 1.5 if guard_refused else 1.0
@@ -164,7 +183,6 @@ static func stop_risk(g: Dictionary, t: Dictionary) -> Dictionary:
 	var dead: Array[String] = []
 	var hurt: Array[String] = []
 	if has_stop:
-		var names := crew_names(g, t, stop["crewComm"], int(crew))
 		var qd := p_death / 4.0
 		var qh := minf(0.9, lam / maxf(1.0, names.size()))
 		for n: String in names:
@@ -177,10 +195,16 @@ static func stop_risk(g: Dictionary, t: Dictionary) -> Dictionary:
 	return {
 		"lam": lam, "pDeath": p_death, "maxHurt": hurt.size(), "maxDead": dead.size(), "dead": dead, "hurt": hurt,
 		"guardRefused": guard_refused, "horde": horde > 1.2, "fresh": raw_threat > 1.0,
-		"known": has_stop and bool(stop.get("scout", false)), "pyre": St.pyre_count(g) > 0.0,
+		# A blizzard hides what the scouts saw (S1 blizzardActive).
+		"known": has_stop and bool(stop.get("scout", false)) and not _blizzard_active(g), "pyre": St.pyre_count(g) > 0.0,
 		"noisy": threat_step(now, t) > threat_step(raw_threat, t),
 		"need": need, "ratio": ratio, "band": crew_band(ratio, t),
 	}
+
+
+static func _blizzard_active(g: Dictionary) -> bool:
+	var d: Variant = g.get("disaster")
+	return d is Dictionary and d.get("kind") == "blizzard" and d.get("stage") == "active"
 
 
 ## The promise step of a risk line: dead, hurt, light or calm (riskLevel).

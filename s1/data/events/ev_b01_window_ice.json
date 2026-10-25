@@ -15,6 +15,10 @@
       "metric": "warmth",
       "operator": "lte",
       "value": 42
+    },
+    {
+      "type": "season",
+      "needs": "frost"
     }
   ],
   "speaker": "front",

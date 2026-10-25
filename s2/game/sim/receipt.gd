@@ -12,6 +12,12 @@ const REQUIRED := ["place", "time", "stock", "items", "people", "witnessed", "pl
 const OPTIONAL := ["source", "endReason", "decisions", "content_type", "version"]
 const V3_REQUIRED := ["receiptId", "stopId", "goal", "extras"]
 const V4_REQUIRED := ["departureId", "symbol", "fieldPromises"]
+## v5 (s3_departure_receipt_contract.md 3): v4 + how each came back + the train's defence.
+const V5_REQUIRED := ["crew", "defense"]
+## What was done for a wound (s3 contract 3; quick: by a medic within two real minutes, body_injury 4).
+const WOUND_TREATS := ["bandaged", "disinfected", "sutured", "splinted", "tourniquet", "pulled", "quick"]
+const CREW_KEYS := ["person", "exhaustion", "hunger", "bodyUse", "gearBack"]
+const DEFENSE_KEYS := ["held", "people", "hurt", "dead", "wounds"]
 const GOAL_KINDS := ["coal", "food", "medicine", "materials", null]
 const GROUPS := ["tail", "medtech", "guard", "front", "engine"]
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
@@ -53,6 +59,9 @@ var _goal: Dictionary = {"kind": null, "required": 0, "earned": 0}
 var _extras: Dictionary = {"documents": [], "symbolCount": 0, "fragments": [], "coreCount": 0}
 var _symbol: Variant = null
 var _field_promises: Array[Dictionary] = []
+var _has_v5: bool = false
+var _crew: Array[Dictionary] = []
+var _defense: Dictionary = {}
 
 
 func _init(place_id: String, place_type: String = "freight", variant: String = "s2_graybox") -> void:
@@ -111,13 +120,20 @@ func person(list_name: String, id: String) -> bool:
 ## One wound of one person (body_injury 4.6). Refused for a bad id, part or kind.
 ## It folds the way S1 expects: a bite also puts the person in bitten, a deep wound,
 ## an embedded one or a fracture in injured. festering is written only when true.
-func add_wound(person_id: String, part: String, kind: String, festering: bool = false) -> bool:
+## `treat` (WOUND_TREATS keys, the true ones kept) goes out on a v5 receipt only.
+func add_wound(person_id: String, part: String, kind: String, festering: bool = false, treat: Dictionary = {}) -> bool:
 	if not _id_ok(person_id) or not WOUND_PARTS.has(part) or not WOUND_KINDS.has(kind):
 		push_warning("receipt: wound refused (%s %s %s)" % [person_id, part, kind])
 		return false
 	var row := {"person": person_id, "part": part, "kind": kind}
 	if festering:
 		row["festering"] = true
+	var done := {}
+	for k: String in WOUND_TREATS:
+		if bool(treat.get(k, false)):
+			done[k] = true
+	if not done.is_empty():
+		row["treat"] = done
 	_wounds.append(row)
 	if kind == "bite":
 		person("bitten", person_id)
@@ -277,6 +293,28 @@ func see_promise(id: String, kind: String, witnesses: Array, heard_by: Array) ->
 
 
 ## Problems with what has been built so far (check() on to_dict()).
+## How one who boarded came back (v5): exhaustion and hunger 0..2, what the body was used for,
+## the guns and things they brought back. Opts the receipt into v5.
+func set_crew_row(person_id: String, exhaustion: int, hunger: int, body_use: Dictionary = {}, hands: Array = [], items: Dictionary = {}) -> bool:
+	if not _id_ok(person_id):
+		return false
+	for row: Dictionary in _crew:
+		if row["person"] == person_id:
+			_crew.erase(row)
+			break
+	_crew.append({"person": person_id, "exhaustion": clampi(exhaustion, 0, 2), "hunger": clampi(hunger, 0, 2),
+			"bodyUse": body_use.duplicate(), "gearBack": {"hands": hands.duplicate(true), "items": items.duplicate()}})
+	_has_v5 = true
+	return true
+
+
+## The train's defence at the stop (decision 416; the stop-sound stream fills it): those who
+## stood at the train, who of them got hurt or died, their wounds. Opts the receipt into v5.
+func set_defense(held: bool, people: Array, hurt: Array, dead: Array, wounds: Array = []) -> void:
+	_defense = {"held": held, "people": people.duplicate(), "hurt": hurt.duplicate(), "dead": dead.duplicate(), "wounds": wounds.duplicate(true)}
+	_has_v5 = true
+
+
 func problems() -> Array[String]:
 	return check(to_dict())
 
@@ -299,12 +337,16 @@ func to_dict() -> Dictionary:
 	var place_state := {"looted": _looted, "remainingRisk": _risk}
 	for key: String in _place_extra:
 		place_state[key] = _place_extra[key]
+	var v5 := _has_v4 and (_has_v5 or _any_treat())
 	if not _wounds.is_empty():
 		people["wounds"] = _wounds.duplicate(true)
+		if not v5:
+			for w: Dictionary in people["wounds"]:
+				w.erase("treat")
 	# New contracts follow case1_symbol_kept.json; legacy insertion order is unchanged.
 	var d: Dictionary = {}
 	if _has_v3 or _has_v4:
-		d["version"] = 4 if _has_v4 else 3
+		d["version"] = (5 if v5 else 4) if _has_v4 else 3
 		d["receiptId"] = _receipt_id
 		if _has_v4:
 			d["departureId"] = _departure_id
@@ -332,6 +374,9 @@ func to_dict() -> Dictionary:
 		if _has_v4:
 			d["symbol"] = _symbol.duplicate(true) if _symbol is Dictionary else null
 			d["fieldPromises"] = _field_promises.duplicate(true)
+		if v5:
+			d["crew"] = _crew.duplicate(true)
+			d["defense"] = _defense.duplicate(true) if not _defense.is_empty() else null
 		return d
 	if not _wounds.is_empty():
 		d["version"] = 2
@@ -341,6 +386,13 @@ func to_dict() -> Dictionary:
 	if not _decisions.is_empty():
 		d["decisions"] = _decisions.duplicate(true)
 	return d
+
+
+func _any_treat() -> bool:
+	for w: Dictionary in _wounds:
+		if w.has("treat"):
+			return true
+	return false
 
 
 ## Two-space indent, insertion (fixed) key order.
@@ -380,8 +432,12 @@ static func check(d: Dictionary) -> Array[String]:
 	var required: Array = REQUIRED.duplicate()
 	if version == 3 or version == 4:
 		required.append_array(V3_REQUIRED)
-	if version == 4:
+	if version == 5:
+		required.append_array(V3_REQUIRED)
+	if version >= 4:
 		required.append_array(V4_REQUIRED)
+	if version == 5:
+		required.append_array(V5_REQUIRED)
 	for key: String in required:
 		if not d.has(key):
 			out.append("%s: 없음" % key)
@@ -441,7 +497,7 @@ static func check(d: Dictionary) -> Array[String]:
 			if not (PEOPLE_LISTS.has(key) or key == "wounds"):
 				out.append("people.%s: 모르는 목록" % str(key))
 		if people.has("wounds"):
-			_check_wounds(out, people["wounds"], id_re)
+			_check_wounds(out, people["wounds"], id_re, version == 5)
 			if not (_is_int(d.get("version")) and float(d.get("version")) >= 2.0):
 				out.append("version: people.wounds가 있으면 2여야 함")
 	elif d.has("people"):
@@ -523,13 +579,50 @@ static func check(d: Dictionary) -> Array[String]:
 			out.append("decisions: 목록이 아님")
 	if d.has("content_type") and d["content_type"] != "receipt":
 		out.append("content_type: receipt가 아님")
-	if d.has("version") and (version < 1 or version > 4):
-		out.append("version: 1~4가 아님")
-	if version == 3 or version == 4:
+	if d.has("version") and (version < 1 or version > 5):
+		out.append("version: 1~5가 아님")
+	if version >= 3:
 		_check_stop_fields(out, d, id_re)
-	if version == 4:
+	if version >= 4:
 		_check_field_fields(out, d, id_re)
+	if version == 5:
+		_check_v5_fields(out, d, id_re)
 	return out
+
+
+static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) -> void:
+	var crew: Variant = d.get("crew")
+	if not crew is Array:
+		out.append("crew: 목록이 아님")
+	else:
+		for i: int in (crew as Array).size():
+			var row: Variant = crew[i]
+			if not row is Dictionary:
+				out.append("crew.%d: 사전이 아님" % i)
+				continue
+			_no_extra(out, "crew.%d" % i, row, CREW_KEYS)
+			if not _is_id(row.get("person"), id_re):
+				out.append("crew.%d.person: id 형식이 아님" % i)
+			for key: String in ["exhaustion", "hunger"]:
+				if not (_is_int(row.get(key)) and float(row[key]) >= 0.0 and float(row[key]) <= 2.0):
+					out.append("crew.%d.%s: 0~2가 아님" % [i, key])
+			if not row.get("bodyUse") is Dictionary:
+				out.append("crew.%d.bodyUse: 사전이 아님" % i)
+			var back: Variant = row.get("gearBack")
+			if not (back is Dictionary and back.get("hands") is Array and back.get("items") is Dictionary):
+				out.append("crew.%d.gearBack: 꼴이 아님" % i)
+	var defense: Variant = d.get("defense")
+	if defense is Dictionary:
+		_no_extra(out, "defense", defense, DEFENSE_KEYS)
+		if not defense.get("held") is bool:
+			out.append("defense.held: 참·거짓이 아님")
+		for key: String in ["people", "hurt", "dead"]:
+			if not _is_id_list(defense.get(key), id_re, true):
+				out.append("defense.%s: 겹치지 않는 id 목록이 아님" % key)
+		if defense.has("wounds"):
+			_check_wounds(out, defense["wounds"], id_re, true)
+	elif defense != null:
+		out.append("defense: null이나 사전이 아님")
 
 
 ## Same precedence as S1 goalStatus, using this stop's earned amount (not stock).
@@ -738,8 +831,8 @@ static func _witness_ok(v: Variant, id_re: RegEx) -> bool:
 	return _is_id(v.get("person"), id_re) and v.get("text") is String and (v.get("text") as String) != ""
 
 
-## Receipt v2 per-part wounds (body_injury 4.6): {person, part, kind, festering?}.
-static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx) -> void:
+## Receipt v2 per-part wounds (body_injury 4.6): {person, part, kind, festering?}, and on v5 treat?.
+static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx, treat_ok: bool = false) -> void:
 	if not (wounds is Array):
 		out.append("people.wounds: 목록이 아님")
 		return
@@ -748,7 +841,14 @@ static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx) -> 
 		if not (w is Dictionary):
 			out.append("people.wounds.%d: 사전이 아님" % i)
 			continue
-		_no_extra(out, "people.wounds.%d" % i, w, ["person", "part", "kind", "festering"])
+		_no_extra(out, "people.wounds.%d" % i, w, ["person", "part", "kind", "festering", "treat"] if treat_ok else ["person", "part", "kind", "festering"])
+		if w.has("treat"):
+			if not w["treat"] is Dictionary:
+				out.append("people.wounds.%d.treat: 사전이 아님" % i)
+			else:
+				for k: Variant in w["treat"]:
+					if not WOUND_TREATS.has(k) or w["treat"][k] != true:
+						out.append("people.wounds.%d.treat.%s: 모르는 처치" % [i, str(k)])
 		if not _is_id(w.get("person"), id_re):
 			out.append("people.wounds.%d.person: id 형식이 아님" % i)
 		if not WOUND_PARTS.has(w.get("part")):

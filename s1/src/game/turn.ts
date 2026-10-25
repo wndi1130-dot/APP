@@ -41,6 +41,8 @@ import { applyScoutGear, effThreat, scoutHaulNow, scoutNowText, scoutPlan, threa
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
 import { voiceKept } from './promise_voice';
 import { rationCutFood } from './ration_cut';
+import { handsCoal, handsSettle, handsWatchMult } from './hands';
+import { trailAfterStop } from './trail';
 import { countCoalStop, trackLookback, writeLookback } from './lookback';
 import { darkFinish, darkHaulMult, darkPowersEnd, darkPrep, darkSettle, darkStop, darkStopTarget, darkTravel } from './dark/hooks';
 import { darkPyreWeights, darkStoredWeight } from './dark/corpses';
@@ -200,7 +202,7 @@ const tailIdleCoal = (g: Game): number => (tailIdle(g) ? P.tailIdleCoal : 0);
 
 /** 이번 구간에 들 석탄과 식량(정차 제외). 화면의 예고에 쓴다. */
 export function forecast(g: Game): { coal: number; food: number } {
-  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g) + freezeCoal(g);
+  const coal = heatCost(g) * lawMult(g, 'heatMult') + lawSum(g, 'coalAdd') + calmCoal(g) + (g.inStrike ? P.coalStrike : P.coalRun) - (g.forcedRun ? 2 : 0) + tailIdleCoal(g) + disasterCoal(g) + locoCoal(g) + freezeCoal(g) + handsCoal(g);
   const food = foodCost(g) * (1 + freezeFood(g)) + lawSum(g, 'foodAdd');
   const dom = domesticForecast(g); // S1c 내정 훅
   // 선 열차는 탈 석탄이 없다(난방도 난로에 든 것만). 식량은 평소대로 든다.
@@ -252,6 +254,8 @@ function forecastWeights(g: Game): { coal: [string, number][]; food: [string, nu
       ['loco', locoCoal(g)],
       // 결빙(climate.ts)은 켠 판의 결빙 구간에만 줄이 생긴다(꺼진 판의 장부는 그대로)
       ...(freezeCoal(g) ? [['freeze', freezeCoal(g)] as [string, number]] : []),
+      // 손 몫(hands.ts)도 화실 교대가 빈 구간에만 줄이 생긴다
+      ...(handsCoal(g) ? [['hands', handsCoal(g)] as [string, number]] : []),
       ['upkeep', dom.coal],
     ],
     food: [
@@ -290,7 +294,7 @@ function depart(g: Game): void {
     engine.fervor = 0;
     bumpRel(g, 'engine', -10, 'strike');
     g.fear = clamp(g.fear + 10, 0, 100);
-    journal(g, '파업 금지법에 따라 경비대가 기관실 문을 열었다. 화부들이 불 앞으로 끌려갔다.', 'dark');
+    journal(g, '파업 금지법을 내밀자 화부들이 말없이 불 앞으로 돌아갔다.', 'dark');
   } else if (striking && !domesticStrikeRuns(g)) {
     if (!g.inStrike) g.strikes += 1;
     g.inStrike = true;
@@ -541,7 +545,8 @@ export function stopRisk(g: Game): StopRisk {
   // 장작불의 불빛과 연기가 무리를 끈다(s1c_domestic 4.1). 태울 시신이 있으면 내리는 정차에 붙는다.
   // 정찰 장비 소리가 옮긴 기척(effThreat). 소음이 없으면 stop.threat 그대로다.
   const now = effThreat(stop);
-  const threat = now * (pyreCount(g) > 0 ? P.pyreLight : 1);
+  // 지붕 보초가 빈 만큼(손 몫, hands.ts) 무리가 다가오는 걸 늦게 본다.
+  const threat = now * (pyreCount(g) > 0 ? P.pyreLight : 1) * handsWatchMult(g);
   const dm = domesticRiskMult(g); // S1c 내정 훅
   // 내보낸 칸이 지쳐 있을수록 다치고 죽기 쉽다(결정 060 가).
   const tired = stop ? exposeMult(g, stop.crewComm) : 1;
@@ -747,8 +752,10 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   // 같은 도덕 카드가 정차마다 나오지 않게 간격을 둔다(2026-10-07 사용자 후기).
   const since = (key: string) => g.seg - (g.eventLog?.[key]?.seg ?? -99);
   // 사람이 들어오는 사건(arrivals.ts): 피난민 무리가 뜨면 이 정차의 부상자 카드는 건너뛴다. 부상자 굴림(rnd)은 그대로 굴려 난수 흐름을 끈 판과 맞춘다.
-  const arrived = g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
-  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
+  // 두고 떠난 사람의 흔적(prologue.ts, 결정 425 카드 3)이 뜬 정차엔 사람 들어옴·부상자 카드를 얹지 않는다. 부상자 굴림(rnd)은 그대로 굴린다.
+  const trail = trailAfterStop(g);
+  const arrived = !trail && g.arrivals ? arrivalsAfterStop(g, stop.crewComm, crewNames(g, stop.crewComm, stop.crewSize + P.scoutSize + AR.fetchSize).filter(n => !names.includes(n) && !(sr?.names ?? []).includes(n)), returned[0]) : false;
+  if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived && !trail) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
   if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
   return stop.result;
@@ -865,6 +872,7 @@ function settle(g: Game): void {
   if (wasStranded) tripTick(g); // 수동차 원정: 못 돌아온 열차장은 여기서 판을 끝낸다(앞의 정산 틱들이 끝난 판 위에서 돌지 않게 뒤에 둔다)
   reapplyAway(g); // 나가 있는 수동차 지원자는 자리비움으로 센다
   arrivalsAway(g); // 데리러 나간 수색대도 돌아올 때까지 자리비움으로 센다
+  handsSettle(g, notes); // 다음 구간의 손 몫: 자리비움을 다시 센 뒤라야 맞는다
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
   if (g.phase !== 'end') climateSettle(g);
@@ -878,14 +886,14 @@ function settle(g: Game): void {
 }
 
 /** 숨긴 물림의 시계(body_injury 4.4, 숫자는 제안). 귀환 검사 법이 있으면 바로, 없으면 열이 올라 구간마다 반쯤 들킨다.
- * 기한까지 안 들키면 그 칸 안에서 일어난다. 격리했으면 조용히 끝난다. */
+ * 기한까지 안 들키면 그 칸 안에서 일어난다. 따로 눕혔으면 조용히 끝난다. */
 function biteTick(g: Game): void {
   const keep: typeof g.hiddenBites = [];
   for (const b of g.hiddenBites ?? []) {
     if (g.seg >= b.due) {
       let bitten = 0;
       if (b.isolated) {
-        journal(g, `격리된 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
+        journal(g, `따로 눕힌 ${b.who}이(가) 숨을 거뒀다. 일어나기 전에 경비대가 처리했다.`, 'dark');
       } else if (!b.found || !g.cards.some(k => k.kind === 'bite_found' && k.who === b.who)) {
         // 숨긴 물림, 또는 드러났는데 아무도 처리하지 않은 채 기한이 온 물림(K02 1 보험: 무기한으로 남지 않는다).
         bitten = 1 + (rnd(g) < 0.5 ? 1 : 0);
@@ -1223,7 +1231,7 @@ function finish(g: Game, end: Game['end']): void {
   if (g.phase === 'end') return;
   g.end = end;
   g.phase = 'end';
-  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 창고칸에 앉아 있다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
+  const text = { complete: '라이프치히 중앙역에 닿았다.', stranded: '석탄이 다 떨어졌다. 열차가 섰다.', ousted: '의회가 열차장을 끌어내렸다.', revolt: g.stranded ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.' : '반란이 일어났다.', lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.', coup: '경비대장이 열차를 잡았다. 열차장은 열차장실 문을 열어 둔 채 짐을 쌌다.', slice: '둘째 역에 닿았다. 시험판은 여기서 멈춘다.' }[end ?? 'complete'];
   journal(g, text, end === 'complete' ? 'good' : 'bad');
   writeLookback(g);
   for (const line of raisedLines(g)) journal(g, line);
