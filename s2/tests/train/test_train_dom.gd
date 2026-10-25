@@ -131,3 +131,21 @@ func test_the_stores_alone_do_not_open_hanging_a_symbol_in_a_car() -> void:
 	# The bond a hung symbol builds is a domestic rule not ported yet.
 	assert_eq(FieldReturn._hang_why({"dom": TrainDom.empty(), "symbols": 1}, "tail"), "내정을 켠 판에서만 쓴다.")
 	assert_null(FieldReturn._hang_why({"dom": {"hung": []}, "symbols": 1}, "tail"))
+
+
+func test_a_stop_brings_its_fragments_and_cores_to_the_stores() -> void:
+	var g := {"dom": TrainDom.start()}
+	assert_true(TrainDom.take_extras(g, {"documents": [], "symbolCount": 0, "fragments": ["craft", "craft", "radio"], "coreCount": 1}))
+	assert_eq(float(g["dom"]["frags"]["craft"]), 2.0)
+	assert_eq(float(g["dom"]["frags"]["radio"]), 1.0)
+	assert_eq(float(g["dom"]["frags"]["engine"]), 1.0, "the start's one stays")
+	assert_eq(float(g["dom"]["cores"]), 1.0)
+	assert_true(TrainDom.is_store(g["dom"]))
+	var none := {}
+	assert_true(TrainDom.take_extras(none, {"fragments": [], "coreCount": 0}), "a stop with nothing in it")
+	assert_eq(none["dom"], TrainDom.empty())
+	for bad: Variant in [null, {"fragments": ["magic"]}, {"fragments": "craft"}, {"coreCount": -1}, {"coreCount": 0.5}]:
+		var before: Dictionary = TrainDom.start()
+		var h := {"dom": before.duplicate(true)}
+		assert_false(TrainDom.take_extras(h, bad), str(bad))
+		assert_eq(h["dom"], before, "nothing changed for " + str(bad))
