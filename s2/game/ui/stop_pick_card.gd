@@ -30,8 +30,9 @@ const TrainStop = preload("res://game/train/train_stop.gd")
 const ReceiptCard = preload("res://game/ui/receipt_card.gd")
 
 const SAMPLE := "res://tests/fixtures/train/train_vectors.json"
-## The first stretch's stop in the sample (phase stop, seg 1).
-const SAMPLE_POINT: int = 4
+## The first stretch's stop in the sample (phase stop, seg 1). The v2 points add
+## a hands variant after each step, which put it at 6.
+const SAMPLE_POINT: int = 6
 ## Where the mockup lays the sheet on its 844 × 390 stage.
 const SHEET_AT := Vector2(-10, 50)
 

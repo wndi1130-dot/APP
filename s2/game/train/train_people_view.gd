@@ -152,6 +152,9 @@ const REACT_FEW: int = 2
 const REACT_MANY: int = 6
 const REACT_FOR := Vector2(10.0, 60.0)
 const REACT_CARS: int = 3
+## What keeps someone from reacting: asleep, hurt, or at a job. The rest (a
+## chat, warming hands, a bowl, the cold hunch) look up for it.
+const REACT_BUSY: Array = ["sleep", "heal", "cook", "serve", "work", "clean", "care", "mend", "refuge", "mourn"]
 ## What each way of taking it looks like in each posture.
 const REACTIONS: Dictionary = {
 	"argue": {"sit": "t_sit_talk", "stand": "t_no", "floor": "t_floor_sit"},
@@ -498,13 +501,14 @@ static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.
 	var pose: String = String(b.pose)
 	if pose == "walk":
 		return "t_carry" if activity == "carry" or String(b.errand.get("id", "")) in ["carry", "coal", "food"] else "t_walk"
+	# Something has just happened in the car: their way of taking it, while it
+	# lasts, over the everyday gestures, unless busy or the scene has them up.
+	var reaction: String = String(life.get("react", ""))
+	if reaction != "" and String(POSTURE.get(reaction, "stand")) == pose and not REACT_BUSY.has(activity) and String(b.act) == "":
+		return reaction
 	var forced := _forced(b, s, activity, t)
 	if forced != "":
 		return forced
-	# Something has just happened in the car: their way of taking it, while it lasts.
-	var reaction: String = String(life.get("react", ""))
-	if reaction != "" and String(POSTURE.get(reaction, "stand")) == pose:
-		return reaction
 	# Under a shared blanket one sits hunched up with the others.
 	if pose == "sit" and bool(life.get("blanket", false)):
 		return "t_sit_huddle"
@@ -751,7 +755,8 @@ func react(ev: Dictionary) -> void:
 		var rows: Array = []
 		var who: Array = []
 		for b in in_seat_order(c["bodies"]):
-			if b.visible and String(b.pose) in ["sit", "stand", "floor"]:
+			var busy: bool = REACT_BUSY.has(String(scene.life.actors.get(b.get_instance_id(), {}).get("activity", "")))
+			if b.visible and String(b.pose) in ["sit", "stand", "floor"] and not busy:
 				rows.append({"key": absi(b.get_instance_id()), "pose": String(b.pose)})
 				who.append(b)
 		var picked := reaction_picks(kind, sign, size, rows, day)
