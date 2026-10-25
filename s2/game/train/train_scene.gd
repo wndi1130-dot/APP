@@ -289,6 +289,16 @@ func life_signal(cue: String, car_id: String = "") -> void:
 	life.send_signal(cue, car_id)
 
 
+## Something that happened that the people should be seen to take in, in the
+## form {kind, car, comm, sign (-1/0/1), size (0..1), day}: what the workshop
+## made ("made"), a car changed ("mod_done") or added ("car_added"). The
+## changes of the rule values themselves (laws, rations, people) the people's
+## view finds on its own. It changes no value.
+func post_event(ev: Dictionary) -> void:
+	if people_view != null:
+		people_view.react(ev)
+
+
 ## One tick of the people: movers pace their own aisle, and now and then one
 ## takes a trip with a use to another car or calls at a friendly one, stays
 ## and comes back.

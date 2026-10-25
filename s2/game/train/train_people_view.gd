@@ -29,6 +29,17 @@ extends Node3D
 ## under one blanket; in a freezing car breath before a few faces. All three
 ## follow the warmth the room shows and each person's own delay, so the stove
 ## and the frost still go first.
+##
+## What happens reaches them (user 2026-10-25: every decision of the player
+## shows in the cars): a thing that happened, {kind, car, comm, sign, size,
+## day}, comes either from the rules (a law passed or repealed, rations moved,
+## people taken in or gone, a search party out or back, the dead, a decree;
+## events_between reads the values before and after) or from post_event (what
+## the workshop made, a car changed or added). In the cars it reaches, a few
+## people react for a while, each as they are (the quick-tempered argue, the
+## talkers put their heads together, the shy close up, the ones it helps
+## approve), and for a day or two after the car keeps a trace of it in what its
+## people do. Nothing here changes a value.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
@@ -132,6 +143,49 @@ const MOUTH: Dictionary = {
 	"t_sit_talk": Vector3(0.0, 1.16, 0.04), "t_sit_doze": Vector3(0.0, 1.1, 0.18),
 }
 const MOUTH_STANDING := Vector3(0.0, 1.45, 0.13)
+## A reaction: how many react (2 .. 6 by the event's size), for how long
+## (REACT_FOR seconds by size), in at most REACT_CARS cars of a train-wide one.
+const REACT_FEW: int = 2
+const REACT_MANY: int = 6
+const REACT_FOR := Vector2(10.0, 60.0)
+const REACT_CARS: int = 3
+## What each way of taking it looks like in each posture. The motions to come
+## (a nod, a clap) go in here when they are baked.
+const REACTIONS: Dictionary = {
+	"argue": {"sit": "t_sit_talk", "stand": "t_no", "floor": "t_floor_sit"},
+	"whisper": {"sit": "t_sit_talk", "stand": "t_talk", "floor": "t_floor_sit"},
+	"withdraw": {"sit": "t_sit_huddle", "stand": "t_fold", "floor": "t_floor_sit"},
+	"headshake": {"sit": "t_sit_huddle", "stand": "t_no", "floor": "t_floor_sit"},
+	"approve": {"sit": "t_sit_talk", "stand": "t_talk", "floor": "t_floor_sit"},
+	"grief": {"sit": "t_sit_huddle", "stand": "t_fold", "floor": "t_floor_sit"},
+}
+## Events that are a loss: everyone it reaches is quiet.
+const GRIEF: Array = ["memorial", "dead_stored", "let_go"]
+## Events of the whole train (a law, a vote, a decree): every car with people.
+const TRAIN_WIDE: Array = ["law_passed", "law_repealed", "vote_called", "vote_done", "decree", "memorial", "dead_stored"]
+## The trace a car keeps for a few days: what its people do more (or less) of,
+## by kind (and "-" or "+" for its sign), scaled by the event's size.
+const MARKS: Dictionary = {
+	"ration-": {"t_eat": 1.5, "t_sit_talk": 0.6, "t_talk": 0.6, "t_sit_huddle": 0.6},
+	"ration+": {"t_eat": 1.0, "t_sit_talk": 0.8, "t_sit_doze": 0.4},
+	"law_passed": {"t_sit_talk": 1.2, "t_talk": 1.0, "t_no": 0.4},
+	"law_repealed": {"t_sit_talk": 1.2, "t_talk": 1.0, "t_no": 0.4},
+	"vote_done": {"t_sit_talk": 1.0, "t_talk": 0.8},
+	"memorial": {"t_sit_talk": -1.5, "t_talk": -1.5, "t_sit_huddle": 1.0, "t_fold": 1.0},
+	"dead_stored": {"t_sit_talk": -1.0, "t_talk": -1.0, "t_sit_huddle": 0.8, "t_fold": 0.8},
+	"taken_in": {"t_sit_talk": 0.8, "t_talk": 0.6},
+	"let_go": {"t_fold": 1.0, "t_sit_huddle": 0.6, "t_sit_talk": -0.6},
+	"party_out": {"t_fold": 0.8, "t_lantern": 0.5},
+	"party_back": {"t_sit_talk": 1.0, "t_talk": 1.0},
+	"decree": {"t_fold": 1.0, "t_no": 0.8, "t_sit_talk": 0.5},
+	"made": {"t_sit_talk": 0.6, "t_talk": 0.6, "t_kneel_work": 0.4},
+	"mod_done": {"t_sit_talk": 0.6, "t_talk": 0.6},
+	"car_added": {"t_sit_talk": 0.6, "t_talk": 0.6},
+}
+const LINGER: Dictionary = {"memorial": 3, "dead_stored": 3, "made": 1}
+const LINGER_DAYS: int = 2
+## A change of rations this big (of 100) is an event.
+const RATION_STEP: float = 8.0
 
 var scene                                 # train_scene.gd
 var bodies: Dictionary = {}               # folder -> {draw, clip_index, table, mix_in, count}
@@ -145,6 +199,10 @@ var covers: Dictionary = {}               # first under it -> {k (0 down .. 1 up
 var shivers: Dictionary = {}              # body -> the tremble drawn, for the tests and the shots
 var breath: Dictionary = {}               # car id -> {p, t, key, heads}
 var _last_now: float = 0.0
+var heard: Array = []                     # every event taken, in order
+var scenes: Dictionary = {}               # car id -> {kind, from, until, picks: {body: clip}}
+var marks: Dictionary = {}                # car id -> [{kind, sign, size, until (day)}]
+var _seen_rules: Dictionary = {}          # the rules as they were, for events_between
 
 
 static func enabled() -> bool:
@@ -200,6 +258,8 @@ func setup(train_scene) -> void:
 	guns = _lap_guns()
 	for n in [2, 3]:
 		blankets.append(_blanket_draw(n))
+	_seen_rules = scene.rules.duplicate(true)
+	scene.rules_applied.connect(_on_rules)
 
 
 func is_worn() -> bool:
@@ -236,6 +296,7 @@ func _process(_delta: float) -> void:
 				under[m] = true
 			wanted.append(members)
 		var heads: Array = []
+		var reacting: Dictionary = _reacting(String(c["id"]), now)
 		for b in ordered:
 			_hide_boxes(b)
 			if not b.visible:
@@ -246,6 +307,8 @@ func _process(_delta: float) -> void:
 			var traits: Dictionary = life.get("traits", {})
 			if under.has(b):
 				traits = traits.merged({"blanket": true})
+			if reacting.has(b):
+				traits = traits.merged({"react": reacting[b]})
 			var x: float = b.global_position.x
 			var beside: bool = String(b.pose) == last_pose and x - last_x < NEIGHBOUR
 			var want := want_for(b, state, String(life.get("activity", "")), key, now, traits, last_want if beside else "")
@@ -389,6 +452,7 @@ func car_state(c: Dictionary) -> Dictionary:
 		"resent": Look.resents(comm) if not comm.is_empty() else false,
 		"night": String(view.get("daytime", "day")) == "night", "stove_x": _stove_x(c),
 		"meal": bool(scene.life.contexts.get(c["id"], {}).get("meal", false)),
+		"marks": _marks_of(String(c["id"])),
 	}
 
 
@@ -427,6 +491,10 @@ static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.
 	var forced := _forced(b, s, activity, t)
 	if forced != "":
 		return forced
+	# Something has just happened in the car: their way of taking it, while it lasts.
+	var reaction: String = String(life.get("react", ""))
+	if reaction != "" and String(POSTURE.get(reaction, "stand")) == pose:
+		return reaction
 	# Under a shared blanket one sits hunched up with the others.
 	if pose == "sit" and bool(life.get("blanket", false)):
 		return "t_sit_huddle"
@@ -512,6 +580,19 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 ## The odds of each motion for one person in one posture: the car's numbers
 ## (0..1 how cold, hungry, exposed, tense, crowded) against their own traits.
 static func weights_for(pose: String, b, s: Dictionary, me: Dictionary) -> Dictionary:
+	var weights := _base_weights(pose, b, s, me)
+	# What happened in the car these last days leaves its trace (MARKS).
+	for m: Dictionary in s.get("marks", []):
+		var kind: String = String(m["kind"])
+		var add: Dictionary = MARKS.get("%s%s" % [kind, "-" if int(m["sign"]) < 0 else "+"], MARKS.get(kind, {}))
+		var scale: float = 0.5 + float(m["size"])
+		for clip in add:
+			if weights.has(clip):
+				weights[clip] = maxf(float(weights[clip]) + float(add[clip]) * scale, 0.0)
+	return weights
+
+
+static func _base_weights(pose: String, b, s: Dictionary, me: Dictionary) -> Dictionary:
 	var cold_n: float = cold_of(s)
 	var hunger_n: float = clampf((60.0 - float(s.get("ration", 60.0))) / 40.0, 0.0, 1.0)
 	var expo_n: float = clampf((float(s["exposure"]) - 30.0) / 60.0, 0.0, 1.0)
@@ -629,6 +710,223 @@ func shown_for(b, want: String, now: float) -> String:
 		return String(rec["shown"])
 	rec["shown"] = want
 	return want
+
+
+## Take one event: the cars it reaches keep a trace of it for a few days, and
+## in up to REACT_CARS of them a few people react now (one scene a car, a
+## newer one takes the place of an older).
+func react(ev: Dictionary) -> void:
+	var now: float = float(scene.clock)
+	var day: int = int(ev.get("day", _day()))
+	var kind: String = String(ev.get("kind", ""))
+	var size: float = clampf(float(ev.get("size", 0.5)), 0.0, 1.0)
+	heard.append(ev)
+	var shown := 0
+	for c in cars_for(ev, scene.cars):
+		var id: String = String(c["id"])
+		var sign: int = _sign_in(ev, c)
+		var list: Array = marks.get(id, [])
+		list.append({"kind": kind, "sign": sign, "size": size, "until": day + int(LINGER.get(kind, LINGER_DAYS))})
+		marks[id] = list
+		if shown >= REACT_CARS:
+			continue
+		var rows: Array = []
+		var who: Array = []
+		for b in in_seat_order(c["bodies"]):
+			if b.visible and String(b.pose) in ["sit", "stand", "floor"]:
+				rows.append({"key": absi(b.get_instance_id()), "pose": String(b.pose)})
+				who.append(b)
+		var picked := reaction_picks(kind, sign, size, rows, day)
+		if picked.is_empty():
+			continue
+		var picks: Dictionary = {}
+		for i in picked:
+			picks[who[i]] = picked[i]
+		scenes[id] = {"kind": kind, "from": now, "until": now + lerpf(REACT_FOR.x, REACT_FOR.y, size), "picks": picks}
+		shown += 1
+
+
+## The cars an event reaches: the one it names, or its community's, or every
+## car with people for one of the whole train (the council's car first), or
+## for what the workshop made the workshop. Not the engine, the stores, the cold car.
+static func cars_for(ev: Dictionary, cars: Array) -> Array:
+	var kind := String(ev.get("kind", ""))
+	var car_id := String(ev.get("car", ""))
+	var comm := String(ev.get("comm", ""))
+	var first: Array = []
+	var rest: Array = []
+	for c in cars:
+		var def: Dictionary = c["def"]
+		var layout := Catalog.layout_id(def)
+		if car_id != "":
+			if String(c["id"]) == car_id:
+				rest.append(c)
+			continue
+		if layout in ["loco", "tender", "freight", "cold"]:
+			continue
+		if comm != "":
+			if String(def.get("comm", "")) == comm:
+				rest.append(c)
+		elif TRAIN_WIDE.has(kind):
+			(first if layout == "dining" else rest).append(c)
+		elif kind == "made" and layout == "technical":
+			rest.append(c)
+	return first + rest
+
+
+## Which way an event goes for a car: its own sign, or for a law or a vote,
+## how that car's people stand with the captain.
+func _sign_in(ev: Dictionary, c: Dictionary) -> int:
+	var sign: int = int(ev.get("sign", 0))
+	if sign != 0 or not String(ev.get("kind", "")) in ["law_passed", "law_repealed", "vote_done"]:
+		return sign
+	var comm: Dictionary = (scene.rules.get("comms", {}) as Dictionary).get(String((c["def"] as Dictionary).get("comm", "")), {})
+	var rel: float = float(comm.get("rel", 0))
+	return -1 if rel < -10.0 else (1 if rel > 10.0 else 0)
+
+
+## Who reacts and how (indices into rows of {key, pose}): a different few
+## each time, more for a bigger event, each by their own traits.
+static func reaction_picks(kind: String, sign: int, size: float, rows: Array, day: int) -> Dictionary:
+	var n: int = mini(clampi(REACT_FEW + int(round(size * float(REACT_MANY - REACT_FEW))), REACT_FEW, REACT_MANY), rows.size())
+	var out: Dictionary = {}
+	if n < 1:
+		return out
+	var salt: int = absi(kind.hash()) % 997 + day * 13
+	var order: Array = range(rows.size())
+	order.sort_custom(func(a, b): return _h(int(rows[a]["key"]), salt) < _h(int(rows[b]["key"]), salt))
+	for i in order.slice(0, n):
+		var way: String = role_for(kind, sign, traits_of(int(rows[i]["key"])))
+		var clip: String = String((REACTIONS[way] as Dictionary).get(String(rows[i]["pose"]), ""))
+		if clip != "":
+			out[i] = clip
+	return out
+
+
+## How one person takes it: a loss quietly; good news approved (the shy only
+## murmur); bad news argued by the quick-tempered, murmured over by the
+## talkers, closed up against by the shy, the rest shake their heads.
+static func role_for(kind: String, sign: int, me: Dictionary) -> String:
+	if GRIEF.has(kind):
+		return "grief"
+	var hot: bool = float(me["temper"]) < 0.3
+	var talker: bool = float(me["social"]) > 0.55
+	var shy: bool = float(me["social"]) < 0.3
+	if sign > 0:
+		return "whisper" if shy else "approve"
+	if sign < 0:
+		if hot:
+			return "argue"
+		if talker:
+			return "whisper"
+		return "withdraw" if shy else "headshake"
+	if hot:
+		return "argue"
+	return "withdraw" if shy else "whisper"
+
+
+## The motions of a car's reaction going on now, by body; an ended one is let go.
+func _reacting(car_id: String, now: float) -> Dictionary:
+	if not scenes.has(car_id):
+		return {}
+	var s: Dictionary = scenes[car_id]
+	if now >= float(s["until"]):
+		scenes.erase(car_id)
+		return {}
+	var out: Dictionary = {}
+	for b in s["picks"]:
+		if is_instance_valid(b):
+			out[b] = s["picks"][b]
+	return out
+
+
+## A car's traces still in their days.
+func _marks_of(car_id: String) -> Array:
+	var day := _day()
+	var kept: Array = (marks.get(car_id, []) as Array).filter(func(m): return int(m["until"]) > day)
+	if kept.is_empty():
+		marks.erase(car_id)
+	else:
+		marks[car_id] = kept
+	return kept
+
+
+func _day() -> int:
+	return int((scene.rules.get("train", {}) as Dictionary).get("seg", 0))
+
+
+## The rules changed: what happened between then and now, the biggest few.
+func _on_rules() -> void:
+	var found := events_between(_seen_rules, scene.rules, _day())
+	found.sort_custom(func(a, b): return float(a["size"]) > float(b["size"]))
+	for ev in found.slice(0, EVENTS_AT_ONCE):
+		react(ev)
+	_seen_rules = scene.rules.duplicate(true)
+
+
+## More than this many at once is a whole new state (a load), not a moment.
+const EVENTS_AT_ONCE: int = 4
+
+
+## What happened between two sets of rule values, in the event form: laws
+## passed or repealed (train.passed), a vote called or done, a decree, the dead
+## laid in the cold car, a memorial, and for each community rations moved
+## (sit[1] by RATION_STEP or more), a search party out or back, people taken in
+## or gone. Read only.
+static func events_between(before: Dictionary, after: Dictionary, day: int) -> Array:
+	var out: Array = []
+	var tb: Dictionary = before.get("train", {})
+	var ta: Dictionary = after.get("train", {})
+	var pb: Dictionary = tb.get("passed", {}) if tb.get("passed") is Dictionary else {}
+	var pa: Dictionary = ta.get("passed", {}) if ta.get("passed") is Dictionary else {}
+	for law in pa:
+		if not pb.has(law):
+			out.append(_event("law_passed", "", 0, 0.6, day).merged({"law": law}))
+	for law in pb:
+		if not pa.has(law):
+			out.append(_event("law_repealed", "", 0, 0.6, day).merged({"law": law}))
+	var vb: bool = bool(tb.get("voting", false))
+	var va: bool = bool(ta.get("voting", false))
+	if va and not vb:
+		out.append(_event("vote_called", "", 0, 0.4, day))
+	if vb and not va:
+		out.append(_event("vote_done", "", 0, 0.5, day))
+	if int(tb.get("decreeLeft", 0)) <= 0 and int(ta.get("decreeLeft", 0)) > 0:
+		out.append(_event("decree", "", -1, 0.6, day))
+	var dead: int = int(ta.get("stored", 0)) - int(tb.get("stored", 0))
+	if dead > 0:
+		out.append(_event("dead_stored", "", -1, clampf(0.3 + 0.2 * dead, 0.0, 1.0), day))
+	if bool((after.get("view", {}) as Dictionary).get("memorial", false)) and not bool((before.get("view", {}) as Dictionary).get("memorial", false)):
+		out.append(_event("memorial", "", -1, 0.8, day))
+	var cb: Dictionary = before.get("comms", {})
+	var ca: Dictionary = after.get("comms", {})
+	for id in ca:
+		if not (cb.get(id) is Dictionary) or not (ca[id] is Dictionary):
+			continue
+		var b: Dictionary = cb[id]
+		var a: Dictionary = ca[id]
+		var sb: Array = b.get("sit", [])
+		var sa: Array = a.get("sit", [])
+		if sb.size() > 1 and sa.size() > 1:
+			var moved: float = float(sa[1]) - float(sb[1])
+			if absf(moved) >= RATION_STEP:
+				out.append(_event("ration", id, int(signf(moved)), clampf(absf(moved) / 40.0, 0.2, 1.0), day))
+		var away_b: int = int(b.get("away", 0))
+		var away_a: int = int(a.get("away", 0))
+		if away_b <= 0 and away_a > 0:
+			out.append(_event("party_out", id, 0, 0.4, day))
+		elif away_b > 0 and away_a <= 0:
+			out.append(_event("party_back", id, 1, 0.5, day))
+		var grew: int = int(a.get("pop", 0)) - int(b.get("pop", 0))
+		if grew > 0:
+			out.append(_event("taken_in", id, 0, clampf(float(grew) / 20.0, 0.2, 1.0), day))
+		elif grew < 0 and away_a - away_b < -grew and dead <= 0:
+			out.append(_event("let_go", id, -1, clampf(float(-grew) / 20.0, 0.2, 1.0), day))
+	return out
+
+
+static func _event(kind: String, comm: String, sign: int, size: float, day: int) -> Dictionary:
+	return {"kind": kind, "car": "", "comm": comm, "sign": sign, "size": size, "day": day}
 
 
 ## How cold a car is for the people in it, 0 (60 and warmer) .. 1 (20 and colder).
