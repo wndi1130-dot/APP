@@ -87,7 +87,7 @@
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
   "total_triangle_limit": 8000,
-  "total_triangles": 5884,
+  "total_triangles": 5984,
   "assets": {
     "bench": {
       "status": "ready",
@@ -1642,18 +1642,41 @@
         ]
       ],
       "origin": "box_center",
-      "use": "열린 식량 상자 두 개와 통 네 개",
-      "lod0_tris": 488,
+      "use": "창고칸 얼음 상자 둘: 열린 쪽은 톱밥 위 얼음덩이와 천에 싼 꾸러미, 닫힌 쪽은 서리와 얼음덩이",
+      "lod0_tris": 588,
       "triangle_limit": 600,
       "colours": [
-        "paper",
-        "paper_aged",
+        "cloth",
+        "cloth_faded",
+        "frost",
+        "ice",
+        "ice_dark",
+        "iron",
+        "iron_worn",
         "wood",
         "wood_dark",
         "wood_worn"
       ],
-      "bytes": 36680,
-      "sha256": "49ccab603b7fca557677c8f3b2687e692430497cf3c7e2af8a2cb0d790ad7ca6"
+      "bytes": 42144,
+      "sha256": "1f7287a4d048888a398878ec092f2941d09fbc593391dcfd56429782aaf581fa",
+      "source_asset": "손으로 만듦(tools/blender/train_ice_chest.py)",
+      "palette_extra": {
+        "ice": [
+          0.5,
+          0.6,
+          0.68
+        ],
+        "ice_dark": [
+          0.3,
+          0.38,
+          0.45
+        ],
+        "frost": [
+          0.66,
+          0.7,
+          0.74
+        ]
+      }
     },
     "divider": {
       "status": "ready",

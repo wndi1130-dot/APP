@@ -54,6 +54,10 @@ const CLIPS: Array = [
 	["eat_start", "", 24, false, "own_eat_start", 1.0],
 	["eat", "", 32, true, "own_eat", 1.6],
 	["eat_rise", "", 24, false, "own_eat_rise", 1.2],
+	# Biting the one it holds (decision 422, the teeth in at 0.5: dead_body.gd
+	# BITE_LANDS) and snapping at the air when it reached and missed.
+	["bite", "", 24, false, "own_bite", 1.0],
+	["bite_miss", "", 20, false, "own_bite_miss", 0.75],
 ]
 # The same motions with nothing from a motion set (the legs are written here
 # too): name, "", frames, loops, layer name, length in seconds. Same names in
@@ -93,10 +97,12 @@ const OWN_CLIPS: Array = [
 	["eat_start", "", 24, false, "own_eat_start", 1.0],
 	["eat", "", 32, true, "own_eat", 1.6],
 	["eat_rise", "", 24, false, "own_eat_rise", 1.2],
+	["bite", "", 24, false, "own_bite", 1.0],
+	["bite_miss", "", 20, false, "own_bite_miss", 0.75],
 ]
 # Quick, or striking on a beat: every frame kept in the small bake
 # (bake_body_cli --keep), as PERSON_KEEP is for the living.
-const DEAD_KEEP: Array = ["thump", "claw", "hit_left", "hit_right", "hit_top", "hit_upper"]
+const DEAD_KEEP: Array = ["thump", "claw", "hit_left", "hit_right", "hit_top", "hit_upper", "bite", "bite_miss"]
 # Still poses, one frame each in a clip named POSES_CLIP: source motion, where in
 # it (0..1), name of the hand-made addition (OVERLAYS, "" for none).
 const POSES: Array = [
@@ -988,6 +994,53 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.R", "hand.R", [["keys", [[0.0, 0.05], [0.3, 0.0], [0.85, 0.0], [1.0, -0.02]]], ["keys", [[0.0, -1.0], [0.3, -1.0], [0.85, -1.0], [1.0, -0.8]]], ["keys", [[0.0, 0.25], [0.3, 0.4], [0.85, 0.4], [1.0, 0.5]]]]],
 		],
 		"sink": ["keys", [[0.0, 0.52], [0.3, 0.52], [0.55, 0.38], [0.85, 0.2], [1.0, 0.03]]],
+	},
+	# Biting the one it holds (decision 422, played once from the lunge's reach,
+	# own_lunge at 0, and back to it): the arms draw them in, the head goes back,
+	# then down into them at the middle (the teeth in, dead_body.gd BITE_LANDS),
+	# shakes side to side tearing, and jerks back up as the arms let go.
+	"own_bite": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, ["keys", [[0.0, 0.04], [0.3, 0.16], [0.5, 0.2], [0.8, 0.14], [1.0, 0.04]]]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, ["keys", [[0.0, -0.543], [0.3, -0.25], [0.5, -0.18], [0.8, -0.28], [1.0, -0.543]]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0.0, 0.0], [0.5, -0.12], [0.8, -0.08], [1.0, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0.0, -0.06], [0.5, -0.3], [0.8, -0.2], [1.0, -0.06]]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.3], [0.3, 0.38], [0.5, 0.62], [0.72, 0.55], [0.86, 0.38], [1.0, 0.3]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.22], [0.3, 0.26], [0.5, 0.34], [0.72, 0.3], [1.0, 0.22]]]],
+			["turn", "chest", "y", ["keys", [[0.0, -0.0575], [0.5, 0.08], [0.62, -0.12], [0.74, 0.1], [0.86, 0.0], [1.0, -0.0575]]]],
+			["turn", "neck", "x", ["keys", [[0.0, -0.3], [0.3, -0.4], [0.44, 0.1], [0.5, 0.3], [0.72, 0.28], [0.86, -0.1], [1.0, -0.3]]]],
+			["turn", "head", "x", ["keys", [[0.0, 0.0], [0.3, -0.18], [0.5, -0.06], [0.72, 0.0], [1.0, 0.0]]]],
+			["turn", "head", "z", ["keys", [[0.0, 0.18], [0.4, 0.32], [0.72, 0.3], [1.0, 0.18]]]],
+			["turn", "head", "y", ["keys", [[0.0, 0.0], [0.55, 0.0], [0.62, 0.28], [0.7, -0.24], [0.78, 0.18], [0.86, 0.0], [1.0, 0.0]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0.0, 0.14], [0.3, 0.2], [0.8, 0.2], [1.0, 0.14]]], ["keys", [[0.0, 0.08], [0.3, -0.25], [0.5, -0.3], [0.8, -0.18], [1.0, 0.08]]], 1.0]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0.0, -0.05], [0.3, -0.42], [0.8, -0.34], [1.0, -0.05]]], ["keys", [[0.0, 0.18], [0.3, 0.12], [0.8, 0.15], [1.0, 0.18]]], ["keys", [[0.0, 1.0], [0.3, 0.55], [0.65, 0.42], [0.8, 0.6], [1.0, 1.0]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.18], [0.3, -0.2], [0.8, -0.2], [1.0, -0.18]]], ["keys", [[0.0, -0.173], [0.3, -0.25], [0.5, -0.3], [0.8, -0.18], [1.0, -0.173]]], 1.0]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, 0.06], [0.3, 0.42], [0.8, 0.34], [1.0, 0.06]]], ["keys", [[0.0, 0.05], [0.3, 0.12], [0.8, 0.15], [1.0, 0.05]]], ["keys", [[0.0, 1.0], [0.3, 0.55], [0.65, 0.42], [0.8, 0.6], [1.0, 1.0]]]]],
+		],
+		"sink": ["keys", [[0.0, 0.0522], [0.5, 0.1], [0.8, 0.07], [1.0, 0.0522]]],
+	},
+	# Snapping at the air after it reached and missed (decision 422, played once
+	# from the lunge's reach and back to it): it throws itself on, the jaws snap
+	# twice at the front of the lunge, the body carries round past it and it
+	# stumbles back a step before it gathers itself.
+	"own_bite_miss": {
+		"steps": [
+			["turn", "hips", "y", ["keys", [[0.0, 0.0], [0.35, 0.05], [0.6, 0.16], [0.85, 0.06], [1.0, 0.0]]]],
+			["aim", "thigh.L", "shin.L", [0.06, -1.0, ["keys", [[0.0, 0.04], [0.3, 0.3], [0.55, 0.26], [0.8, 0.08], [1.0, 0.04]]]]],
+			["aim", "shin.L", "foot.L", [0.03, -1.0, ["keys", [[0.0, -0.543], [0.3, -0.1], [0.55, -0.12], [0.8, -0.4], [1.0, -0.543]]]]],
+			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0.0, 0.0], [0.35, -0.18], [0.6, -0.1], [0.78, -0.26], [1.0, 0.0]]]]],
+			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0.0, -0.06], [0.35, -0.35], [0.6, -0.2], [0.78, -0.45], [1.0, -0.06]]]]],
+			["turn", "spine", "x", ["keys", [[0.0, 0.3], [0.3, 0.5], [0.45, 0.52], [0.7, 0.36], [1.0, 0.3]]]],
+			["turn", "chest", "x", ["keys", [[0.0, 0.22], [0.3, 0.3], [0.7, 0.24], [1.0, 0.22]]]],
+			["turn", "chest", "y", ["keys", [[0.0, -0.0575], [0.35, 0.05], [0.6, 0.22], [0.85, 0.05], [1.0, -0.0575]]]],
+			["turn", "neck", "x", ["keys", [[0.0, -0.3], [0.2, -0.4], [0.35, 0.3], [0.42, 0.05], [0.5, 0.28], [0.7, 0.0], [1.0, -0.3]]]],
+			["turn", "head", "z", ["keys", [[0.0, 0.18], [0.35, 0.1], [0.6, 0.3], [1.0, 0.18]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.14, ["keys", [[0.0, 0.08], [0.3, 0.2], [0.6, 0.0], [1.0, 0.08]]], 1.0]],
+			["aim", "forearm.L", "hand.L", [-0.05, ["keys", [[0.0, 0.18], [0.3, 0.28], [0.6, 0.05], [1.0, 0.18]]], 1.0]],
+			["aim", "upper_arm.R", "forearm.R", [-0.18, ["keys", [[0.0, -0.173], [0.3, 0.05], [0.6, -0.3], [1.0, -0.173]]], 1.0]],
+			["aim", "forearm.R", "hand.R", [0.06, ["keys", [[0.0, 0.05], [0.3, 0.2], [0.6, -0.1], [1.0, 0.05]]], 1.0]],
+		],
+		"sink": ["keys", [[0.0, 0.0522], [0.35, 0.09], [0.6, 0.07], [0.8, 0.08], [1.0, 0.0522]]],
 	},
 	# Run: pitched far forward as if about to fall, face up, arms trailing behind and flapping.
 	"run": {

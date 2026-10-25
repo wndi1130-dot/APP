@@ -133,7 +133,7 @@ function runCase(seed: string, receiptName: string, depName: string, hang: boole
 
 /**
  * 출발 계약 판 2·영수증 판 5(docs/design/briefs/s3_departure_receipt_contract.md). 첫 정차에 선 판(정차를 풀기 전)에서 계약을 만들고,
- * 그 계약에 맞춘 판 5 영수증(수색대 + 운송조 둘이 나감, 동료 하나가 왼팔 골절에 부목)을 반영한 뒤 같은 판에서 계약을 다시 만든다
+ * 그 계약에 맞춘 판 5 영수증(수색대 + 운송조 둘이 나감, 동료 하나가 왼팔 골절에 곧바로 부목, 운송조 하나가 다리 골절과 곪은 박힌 것, 동료 하나는 물림)을 반영한 뒤 같은 판에서 계약을 다시 만든다
  * (다시 만든 계약의 근육통·휴식이 앞 귀환을 읽는다). 내정을 끈 판과 켠 판 둘.
  */
 function liveReceipt(d: FieldDepartureV2): Record<string, unknown> {
@@ -147,10 +147,13 @@ function liveReceipt(d: FieldDepartureV2): Record<string, unknown> {
     time: { arrive: 'D1 10:30', depart: 'D1 12:40', stayGameMinutes: 130 },
     stock: { coal: 4, wood: 2, ammo_shell: -2 }, items: { gained: [], lost: [] },
     people: {
-      sent, injured: [hurt], bitten: [], dead: [], missing: [], leftBehind: [], rescued: [],
+      sent, injured: [hurt, carriers[1]], bitten: [d.roster[3].id], dead: [], missing: [], leftBehind: [], rescued: [],
       wounds: [
         { person: hurt, part: 'arm_left', kind: 'fracture', treat: { splinted: true, quick: true } },
         { person: carriers[0], part: 'leg_right', kind: 'laceration', treat: { disinfected: true, bandaged: true } },
+        { person: carriers[1], part: 'leg_left', kind: 'fracture', treat: { splinted: true } },
+        { person: carriers[1], part: 'torso', kind: 'embedded', festering: true },
+        { person: d.roster[3].id, part: 'arm_right', kind: 'bite', treat: { bandaged: true } },
       ],
     },
     witnessed: [{ who: d.roster[0].id, what: 'searched_body', where: 'siding', when: 'D1 11:05', why: 'loot', witnesses: [d.roster[2].id], template: 'body_search' }],

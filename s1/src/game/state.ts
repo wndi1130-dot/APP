@@ -399,6 +399,8 @@ export interface Game {
   left?: string[];
   /** 승강장에 남은 사람(출발 확인 쪽지, presentation_motion 5b.5). near면 쪽지 첫 줄에 '무리가 가깝다'. 출발하면 비운다 */
   platform?: { names: string[]; near: boolean };
+  /** 두고 떠난 사람의 흔적(결정 425 카드 3, prologue.ts): 뒤 정차에 한 번 보이고 다시 태울 길이 한 번 열린다. shown이면 다시 안 뜬다 */
+  trail?: { names: string[]; comm: Comm; seg: number; shown?: boolean };
   born?: { comm: Comm; mother: string; weak: boolean; left: number; lost?: boolean };
   /** 부모를 잃은 아이를 맡은 칸 */
   raised?: Record<string, Comm>;
@@ -553,6 +555,8 @@ export interface StoryState {
     depot_left_behind?: boolean;
     /** 서막 꼬리칸 대표의 약속(9.2). 없으면 서막을 거치지 않은 판이다 */
     depot_promise?: 'kept' | 'broken' | 'refused' | 'unknown';
+    /** 두고 떠난 사람의 흔적에서 무엇을 했나(결정 425 카드 3): 다시 태움 / 쪽지만(걸어서 뒤따름, campaign_story 3.9) */
+    trail?: 'back' | 'note';
     /** 첫 시신 안건이 무엇으로 열렸나 */
     first_corpse_agenda?: 'none' | 'own' | 'stranger';
     signal_heard?: boolean;
@@ -616,7 +620,8 @@ export function situation(g: Game, c: Comm): [number, number, number, number] {
     clamp(s.base[0] + P.leverStep * (s.heat - 2) + (d?.[0] ?? 0) - ARRIVAL_SIT[0] * h - HANDS.stoveWarm * (g.hands?.short.stove ?? 0), 0, 100),
     clamp(s.base[1] + P.leverStep * (s.ration - 2) + (d?.[1] ?? 0) - ARRIVAL_SIT[1] * h, 0, 100),
     clamp(s.base[2] + (d?.[2] ?? 0) + room + ARRIVAL_SIT[2] * h, 0, 100),
-    clamp(s.base[3] + (d?.[3] ?? 0), 0, 100),
+    // 사람이 줄거나 손을 거둔 칸이 있어 남은 칸이 일을 나눠 지면 그 칸이 지친다(손 몫, hands.ts handsNow)
+    clamp(s.base[3] + (d?.[3] ?? 0) + (g.hands?.expose?.[c] ?? 0), 0, 100),
   ];
 }
 

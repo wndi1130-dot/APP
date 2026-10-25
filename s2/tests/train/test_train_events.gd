@@ -167,3 +167,21 @@ func test_posted_events_are_taken_in_the_same_way() -> void:
 		assert_eq(bare.people_view.scenes, {}, "no workshop car, no one to see it")
 	s.post_event({"kind": "mod_done", "car": "tail1", "comm": "", "sign": 1, "size": 0.6, "day": 2})
 	assert_true(view.scenes.has("tail1"))
+
+
+## A screen built afresh shows no change of its own; given the values it last
+## showed, it takes in what changed in between (the slice's next stop).
+func test_a_new_screen_takes_in_what_changed_since_the_last() -> void:
+	var fresh := _scene()
+	if fresh.people_view == null:
+		pass_test("no baked people here")
+		return
+	assert_eq(fresh.people_view.heard, [], "a new screen is not an event")
+	var before := Rules.load_default()
+	var s := Scene.new()
+	s.rules = Rules.load_default()
+	s.rules["comms"]["tail"]["sit"][1] = float(before["comms"]["tail"]["sit"][1]) - 20.0
+	s.opts = {"seed": 7, "panel": false, "rules_before": before}
+	add_child_autofree(s)
+	assert_eq(_kinds(s.people_view.heard), ["ration"], "the cut since the last stop is seen")
+	assert_true(s.people_view.scenes.has("tail1"))

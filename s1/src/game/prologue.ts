@@ -1,11 +1,12 @@
 import { bump, bumpRel } from './ledger';
 import { COMM_NAME, REP_ROLE } from './data';
-import { CARD_EXTENSIONS } from './cards';
+import { CARD_EXTENSIONS, withAfford } from './cards';
 import type { CardView, Choice } from './cards';
 import { josa } from './josa';
 import { addCard, isGone, journal, PROFILES, rnd, storyOf } from './state';
 import type { Card, Game } from './state';
 import { keepPromise, setLever } from './turn';
+import { TRAIL } from './trail';
 
 // 서막: 볼슈틴 차고(first_leg_story 5장 '서막 흐름', 2026-10-07 18:20 사용자 결정 '서막에 한 바퀴').
 // 약속 → 저탄장 수색 → 출발 → 열차 안 첫 거래가 첫 10분에 한 바퀴 돈다. S1a엔 필드가 없어서 수색은 필드 결정 카드로 대신하고,
@@ -34,7 +35,7 @@ const SEARCH = {
 } as const;
 type SearchId = keyof typeof SEARCH;
 
-export const PROLOGUE_CARD_KINDS = ['pro_promise', 'pro_search', 'pro_deal'] as const;
+export const PROLOGUE_CARD_KINDS = ['pro_promise', 'pro_search', 'pro_deal', 'pro_trail'] as const;
 
 /** 새 판을 서막으로 시작한다. 앱과 봇이 부른다(테스트의 createGame은 서막 없이 바로 출발 전 운영이다). */
 export function startPrologue(g: Game): void {
@@ -98,10 +99,24 @@ function prologueView(g: Game, card: Card): CardView | null {
         ],
       };
     }
+    case 'pro_trail': {
+      const t = g.trail;
+      const names = t?.names ?? [];
+      return {
+        title: '분필 글씨', speaker: speaker(g), focus: 'tail', required: true,
+        body: `역 기둥에 분필로 쓴 이름들이 있다. ${names.join(', ')}. 그 밑에 화살표와 「선로 따라」. 재 위의 불 땐 자리가 아직 따뜻하다. ${who(g)} 말한다. "저탄장에 두고 온 사람들이다. 길을 질러 여기까지 왔다."`,
+        // 석탄이 모자라면 기다릴 불이 없다(다른 사람 카드처럼 withAfford가 막는다)
+        choices: withAfford(g, [
+          { id: 'trail_wait', label: '기다렸다 태운다', say: '불을 지펴 두고 부른다. 다 같이 간다.', effs: [{ t: 'coal', v: -TRAIL.coal }], special: 'pro_trail_wait', extra: [`${names.length}명이 다시 탄다`, `꼬리칸 관계 +${TRAIL.rel}`] },
+          { id: 'trail_note', label: '쪽지를 남긴다', say: '갈 곳을 적어 둔다. 지금은 기다릴 수 없다.', effs: [], special: 'pro_trail_note', extra: ['걸어서 뒤를 따른다'] },
+        ]),
+      };
+    }
     default:
       return null;
   }
 }
+
 
 /** 두고 떠난 사람의 이름: 꼬리칸의 일할 나이 중 대표를 뺀 사람들. */
 function leftNames(g: Game, n: number): string[] {
@@ -145,6 +160,7 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
         const names = leftNames(g, left);
         (g.left ??= []).push(...names);
         g.platform = { names, near: true }; // 망자가 얼음을 건너오는 중이라 늘 가깝다(제안)
+        g.trail = { names: [...names], comm: 'tail', seg: g.seg };
         g.comms.tail.pop = Math.max(1, g.comms.tail.pop - left);
         bumpRel(g, 'tail', PROLOGUE.leftRel, 'card');
         flags.depot_left_behind = true;
@@ -170,6 +186,22 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
     case 'pro_deal_no':
       journal(g, '꼬리칸의 첫 청을 거절했다.', 'bad');
       journal(g, '길잡이가 다시 말한다. 라이프치히 중앙역에 열차들이 모이고, 그 남쪽 땅엔 석탄이 묻혀 있다고.');
+      return;
+    case 'pro_trail_wait': {
+      // 다시 태운다: 떠난 사람 명단에서 빼고 칸 인원으로 돌린다. 어긴 약속(신임·관계)은 되돌리지 않는다.
+      const t = g.trail;
+      const back = t?.names ?? [];
+      if (!t || back.length === 0) return;
+      g.left = (g.left ?? []).filter(n => !back.includes(n));
+      g.comms[t.comm].pop += back.length;
+      bumpRel(g, t.comm, TRAIL.rel, 'card');
+      flags.trail = 'back';
+      journal(g, `불을 지펴 두고 기다렸다. ${back.join(', ')}${josa(back[back.length - 1] ?? '', '이/가')} 선로를 따라 걸어와 다시 탔다.`, 'good');
+      return;
+    }
+    case 'pro_trail_note':
+      flags.trail = 'note';
+      journal(g, `기둥에 갈 곳을 적은 쪽지를 남겼다. ${(g.trail?.names ?? []).join(', ')}은(는) 걸어서 뒤를 따른다.`);
       return;
     default:
       return;

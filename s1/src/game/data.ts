@@ -118,6 +118,9 @@ export const HANDS = {
   stokerCoal: 3, stoveWarm: 10, watchRisk: 0.5, repairWork: 0.5,
   /** 지붕·선로가 이만큼 넘게 비면 선로 사건이 roofTrack배로 뽑힌다 */
   roofOver: 0.5, roofTrack: 2,
+  /** 남은 칸이 일을 나눠 질 때(carry_people 3.3): 부담 = 드는 손 ÷ 낸 손이 loadFree를 넘은 만큼 × loadExpose를 손을 낸 칸의 노출에 더한다(뜻만큼).
+   * 시작 열차는 부담 0.53이라 0이고, 낸 손이 74까지 줄면(부담 1) 노출 +18 */
+  loadFree: 0.55, loadExpose: 40,
 };
 export const REL0: Record<Comm, number> = { tail: -20, engine: 10, guard: 15, medtech: 5, front: 20 };
 export const COH0: Record<Comm, number> = { tail: 0.55, engine: 0.85, guard: 0.8, medtech: 0.7, front: 0.65 };
