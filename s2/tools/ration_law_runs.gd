@@ -2,7 +2,7 @@ extends SceneTree
 ## The emergency ration law in the field (decision 430): the same stops, run
 ## with and without the law, side by side. The player runs a fixed round of
 ## the stop for five minutes whenever the body lets it; the companions keep up
-## as they do. Prints a Markdown table; nothing is written.
+## as they do. Prints a Markdown table after each stop; nothing is written.
 ## godot --headless --path s2 -s tools/ration_law_runs.gd -- --seeds 1:40 --seconds 300
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -27,10 +27,11 @@ func _run() -> void:
 		elif args[i] == "--seconds":
 			seconds = float(args[i + 1])
 	var rows := {"off": [], "on": []}
+	# The table so far after every stop, so a run cut short still leaves one.
 	for s in range(first_seed, last_seed + 1):
 		for law: String in ["off", "on"]:
 			rows[law].append(_trial(s, law == "on"))
-	print(_table(rows))
+		print("\n" + _table(rows))
 	quit(0)
 
 
