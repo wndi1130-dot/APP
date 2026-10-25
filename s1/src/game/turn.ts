@@ -16,6 +16,7 @@ import { onDeath, strangerCorpse, takeKinBody } from './death';
 import { arriveHub, hubLeakTick, hubOmenTick } from './hub';
 import { josa } from './josa';
 import { needTick } from './needs';
+import { noteBroken } from './council_log';
 import { mourners, peopleCardRecent, peopleTick, pickVictims, raisedLines } from './people';
 import { hash, markSeen, rollStopView } from './omens';
 import type { RiskLevel } from './omens';
@@ -811,6 +812,7 @@ export function breakPromise(g: Game, c: Comm, label = g.comms[c].promise?.label
   if (g.dark) g.dark.broken[c] += 1;
   offend(g, c);
   journal(g, `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${label}.`, 'bad');
+  noteBroken(g, c);
 }
 
 function afterStop(g: Game): void {
