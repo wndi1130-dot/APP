@@ -267,7 +267,7 @@ func test_people_are_taken_in_seat_order() -> void:
 func test_guards_have_at_most_two_guns_on_their_knees() -> void:
 	var s := Scene.new()
 	s.rules = Rules.load_default()
-	s.rules["cars"].append({"id": "guard1", "kind": "guard", "name": "경비"})
+	s.rules["cars"].append({"id": "guard1", "kind": "comm", "comm": "front", "interior": "guard", "name": "경비"})
 	s.opts = {"seed": 7, "panel": false}
 	add_child_autofree(s)
 	if s.people_view == null or s.people_view.guns == null:
