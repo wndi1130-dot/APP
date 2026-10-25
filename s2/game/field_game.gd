@@ -767,6 +767,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
+	environment.tonemap_exposure = Atmosphere.EXPOSURE
 	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
