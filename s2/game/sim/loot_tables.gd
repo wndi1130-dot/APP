@@ -102,6 +102,55 @@ const TOOL_CONDITION: float = 0.7
 ## emptier pockets: what never runs out must not pay out without end.
 const HORDE_MULT: float = 0.5
 
+## What the fallen have on (decision 434, clothing.md 8장, zombies.md 「껴입은
+## 자와 전리품」): every one of the dead is in worn plain winter clothes; the
+## padded ones are thickly dressed over that; where one stood shows in a
+## garment or two over the rest (near the police station many wear the grey
+## quilted vest, at the fire station the fire suit). Place by place, rows of
+## [id, weight] ("" for nothing there); the kind's rows replace the plain
+## ones of that place, and the place's replace both. A whole suit takes its
+## other place with it. New values (PR 「새로 넣은 값」).
+const WEAR_PLAIN: Dictionary = {
+	"under_top": [["undershirt_cotton", 3], ["undershirt_wool", 1]],
+	"shirt": [["shirt_cotton", 3], ["shirt_flannel", 2], ["shirt_wool", 1]],
+	"sweater": [["", 2], ["sweater_wool", 2], ["vest_knit", 1]],
+	"jacket": [["jacket_plain", 3], ["vest_quilted", 1], ["", 1]],
+	"coat": [["", 3], ["coat_wool_long", 2], ["coat_long", 1]],
+	"under_legs": [["drawers_cotton", 1]],
+	"trousers": [["trousers_cotton", 3], ["trousers_wool", 1]],
+	"socks": [["socks_cotton", 2], ["socks_wool", 1]],
+	"shoes": [["shoes_leather", 3], ["boots_work", 1], ["", 1]],
+	"head": [["", 3], ["hat_knit", 1], ["hat_earflap", 1]],
+	"neck": [["", 3], ["scarf_wool", 1]],
+	"hands": [["", 3], ["gloves", 1], ["mittens", 1]],
+}
+const WEAR_KIND: Dictionary = {
+	"clothed": {
+		"sweater": [["sweater_thick", 2], ["sweater_wool", 1]],
+		"coat": [["coat_padded", 2], ["coat_long", 2]],
+		"trousers": [["trousers_wool", 2], ["trousers_work", 1]],
+		"head": [["hat_earflap", 2], ["hat_knit", 1], ["", 1]],
+		"hands": [["mittens", 1], ["gloves", 1], ["", 1]],
+	},
+}
+const WEAR_PLACE: Dictionary = {
+	"police": {"coat": [["vest_armor", 2], ["", 1]]},
+	"fire": {"coat": [["fire_suit", 2], ["coat_long", 1]], "shoes": [["boots_rubber", 2], ["boots_work", 1]]},
+	"station": {"jacket": [["jacket_short", 2], ["jacket_plain", 1]]},
+	"shed": {"shirt": [["coverall", 1], ["shirt_work", 1]], "jacket": [["jacket_work", 2], ["vest_quilted", 1]], "hands": [["gloves_leather", 1], ["gloves_cotton", 1], ["", 1]]},
+	"workshop": {"shirt": [["shirt_work", 2], ["coverall", 1]], "jacket": [["jacket_work", 2], ["", 1]], "trousers": [["trousers_work", 1]], "overtrousers": [["", 2], ["bib_work", 1]], "shoes": [["boots_work", 1]], "hands": [["gloves_leather", 1], ["gloves_cotton", 1], ["", 1]]},
+	"farm": {"jacket": [["jacket_work", 1], ["vest_quilted", 1]], "coat": [["", 2], ["raincoat", 1]], "overtrousers": [["", 1], ["overtrousers_oil", 1]], "shoes": [["boots_rubber", 2], ["boots_work", 1]]},
+	"hospital": {"sweater": [["", 3], ["vest_knit", 1]], "coat": [["", 1]], "face": [["", 2], ["mask_cloth", 1]]},
+}
+## Where a fallen one stood, for what it has on: these words of a building's
+## name first (the pockets keep their own places, PLACE_WORDS), then as the pockets.
+const WEAR_PLACE_WORDS: Dictionary = {"police": ["경찰"], "fire": ["소방"]}
+## How worn the dead's clothes are, [least, most] of wear by kind, and the
+## chance each part a garment covers already has a hole in it (a few holes
+## on each at the start of the winter). New values.
+const WEAR_WORN: Dictionary = {"dead": [0.25, 0.75], "frozen": [0.25, 0.75], "clothed": [0.2, 0.6], "fresh": [0.05, 0.35]}
+const WEAR_HOLES: Dictionary = {"dead": 0.2, "frozen": 0.2, "clothed": 0.15, "fresh": 0.1}
+
 ## Container kinds of the first stop (building spec 7.2, decision 321): the
 ## words a container's name is folded by (first kind that matches wins, in
 ## this order), how many rolls, and the rows. "×2" rows are a count of 2.

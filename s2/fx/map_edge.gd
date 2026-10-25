@@ -169,13 +169,29 @@ static func edge_cells(grid: FieldGrid) -> Array[Vector2i]:
 	return out
 
 
+## The floor kind most of the edge is (open to the sky counting most), for the
+## bare look past the blend (world_vis bare_ground).
+static func mean_edge_kind(grid: FieldGrid) -> int:
+	var count := {}
+	for c in edge_cells(grid):
+		var f := grid.floor_at(c)
+		count[f] = float(count.get(f, 0.0)) + (1.0 if MapView.sky_alpha(grid, c) > 0.5 else 0.25)
+	var best := 0
+	for f in count:
+		if count[f] > float(count.get(best, 0.0)):
+			best = f
+	return best
+
+
 ## Strips out from each edge cell: its colour at the edge, the mean colour BLEND
 ## metres out, the mean to MARGIN; the corners in the mean. Up-facing, open to
-## the sky (vertex alpha 1), no snow bank (UV 0).
+## the sky (vertex alpha 1), no snow bank (UV 0). UV2.x is the floor kind + 1:
+## the edge cell's on its blend strip, the edge's commonest past it.
 static func ground_mesh(grid: FieldGrid) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var mean := mean_edge_color(grid)
+	var mk := mean_edge_kind(grid)
 	var w := float(grid.width)
 	var h := float(grid.height)
 	for x in range(grid.width):
@@ -183,22 +199,22 @@ static func ground_mesh(grid: FieldGrid) -> ArrayMesh:
 		var bottom := _cell_color(grid, Vector2i(x, grid.height - 1))
 		var x0 := float(x)
 		var x1 := float(x + 1)
-		_quad(st, Vector3(x0, 0, -BLEND), Vector3(x1, 0, -BLEND), Vector3(x1, 0, 0), Vector3(x0, 0, 0), mean, mean, top, top)
-		_quad(st, Vector3(x0, 0, -MARGIN), Vector3(x1, 0, -MARGIN), Vector3(x1, 0, -BLEND), Vector3(x0, 0, -BLEND), mean, mean, mean, mean)
-		_quad(st, Vector3(x0, 0, h), Vector3(x1, 0, h), Vector3(x1, 0, h + BLEND), Vector3(x0, 0, h + BLEND), bottom, bottom, mean, mean)
-		_quad(st, Vector3(x0, 0, h + BLEND), Vector3(x1, 0, h + BLEND), Vector3(x1, 0, h + MARGIN), Vector3(x0, 0, h + MARGIN), mean, mean, mean, mean)
+		_quad(st, Vector3(x0, 0, -BLEND), Vector3(x1, 0, -BLEND), Vector3(x1, 0, 0), Vector3(x0, 0, 0), mean, mean, top, top, grid.floor_at(Vector2i(x, 0)))
+		_quad(st, Vector3(x0, 0, -MARGIN), Vector3(x1, 0, -MARGIN), Vector3(x1, 0, -BLEND), Vector3(x0, 0, -BLEND), mean, mean, mean, mean, mk)
+		_quad(st, Vector3(x0, 0, h), Vector3(x1, 0, h), Vector3(x1, 0, h + BLEND), Vector3(x0, 0, h + BLEND), bottom, bottom, mean, mean, grid.floor_at(Vector2i(x, grid.height - 1)))
+		_quad(st, Vector3(x0, 0, h + BLEND), Vector3(x1, 0, h + BLEND), Vector3(x1, 0, h + MARGIN), Vector3(x0, 0, h + MARGIN), mean, mean, mean, mean, mk)
 	for y in range(grid.height):
 		var left := _cell_color(grid, Vector2i(0, y))
 		var right := _cell_color(grid, Vector2i(grid.width - 1, y))
 		var y0 := float(y)
 		var y1 := float(y + 1)
-		_quad(st, Vector3(-BLEND, 0, y0), Vector3(0, 0, y0), Vector3(0, 0, y1), Vector3(-BLEND, 0, y1), mean, left, left, mean)
-		_quad(st, Vector3(-MARGIN, 0, y0), Vector3(-BLEND, 0, y0), Vector3(-BLEND, 0, y1), Vector3(-MARGIN, 0, y1), mean, mean, mean, mean)
-		_quad(st, Vector3(w, 0, y0), Vector3(w + BLEND, 0, y0), Vector3(w + BLEND, 0, y1), Vector3(w, 0, y1), right, mean, mean, right)
-		_quad(st, Vector3(w + BLEND, 0, y0), Vector3(w + MARGIN, 0, y0), Vector3(w + MARGIN, 0, y1), Vector3(w + BLEND, 0, y1), mean, mean, mean, mean)
+		_quad(st, Vector3(-BLEND, 0, y0), Vector3(0, 0, y0), Vector3(0, 0, y1), Vector3(-BLEND, 0, y1), mean, left, left, mean, grid.floor_at(Vector2i(0, y)))
+		_quad(st, Vector3(-MARGIN, 0, y0), Vector3(-BLEND, 0, y0), Vector3(-BLEND, 0, y1), Vector3(-MARGIN, 0, y1), mean, mean, mean, mean, mk)
+		_quad(st, Vector3(w, 0, y0), Vector3(w + BLEND, 0, y0), Vector3(w + BLEND, 0, y1), Vector3(w, 0, y1), right, mean, mean, right, grid.floor_at(Vector2i(grid.width - 1, y)))
+		_quad(st, Vector3(w + BLEND, 0, y0), Vector3(w + MARGIN, 0, y0), Vector3(w + MARGIN, 0, y1), Vector3(w + BLEND, 0, y1), mean, mean, mean, mean, mk)
 	for corner in [Vector2(-MARGIN, -MARGIN), Vector2(w, -MARGIN), Vector2(-MARGIN, h), Vector2(w, h)]:
 		var a := Vector3(corner.x, 0, corner.y)
-		_quad(st, a, a + Vector3(MARGIN, 0, 0), a + Vector3(MARGIN, 0, MARGIN), a + Vector3(0, 0, MARGIN), mean, mean, mean, mean)
+		_quad(st, a, a + Vector3(MARGIN, 0, 0), a + Vector3(MARGIN, 0, MARGIN), a + Vector3(0, 0, MARGIN), mean, mean, mean, mean, mk)
 	return st.commit()
 
 
@@ -220,7 +236,7 @@ static func frame_mesh(size: Vector2, inset: float, margin: float) -> ArrayMesh:
 	for r in rects:
 		var p: Vector2 = r[0]
 		var q: Vector2 = r[1]
-		_quad(st, Vector3(p.x, 0, p.y), Vector3(q.x, 0, p.y), Vector3(q.x, 0, q.y), Vector3(p.x, 0, q.y), white, white, white, white)
+		_quad(st, Vector3(p.x, 0, p.y), Vector3(q.x, 0, p.y), Vector3(q.x, 0, q.y), Vector3(p.x, 0, q.y), white, white, white, white, -1)
 	return st.commit()
 
 
@@ -230,11 +246,12 @@ static func _cell_color(grid: FieldGrid, c: Vector2i) -> Color:
 
 
 ## Two triangles a, b, c / a, c, d, wound to face up (as map_view lays the ground).
-static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, ca: Color, cb: Color, cc: Color, cd: Color) -> void:
+static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, ca: Color, cb: Color, cc: Color, cd: Color, kind: int) -> void:
 	var pts := [a, b, c, a, c, d]
 	var cols := [ca, cb, cc, ca, cc, cd]
 	for i in 6:
 		st.set_color(cols[i])
 		st.set_normal(Vector3.UP)
 		st.set_uv(Vector2.ZERO)
+		st.set_uv2(Vector2(kind + 1, 0))
 		st.add_vertex(pts[i])
