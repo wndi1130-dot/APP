@@ -520,18 +520,32 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	return out
 
 
-## The colour grade (WorldEnvironment adjustments): weather and hour change
-## saturation and contrast; shadows lean to the fill's hue, lights to the sun's.
+## How far the grade spreads the tones about its grey: 1.2, in every weather
+## (an overcast or a fog does not flatten the picture; only colour goes).
+const TONE_CONTRAST := 1.2
+## The grey the tone turns about: 0.4 by day, lower as the hour's light goes,
+## so the spread does not darken a dim picture (night stays where it was).
+const TONE_PIVOT_DAY := 0.4
+const TONE_PIVOT_NIGHT := 0.1
+
+
+## The colour grade (WorldEnvironment adjustments): a fixed tone (contrast 1.2
+## about the hour's grey); weather and hour only change the saturation; shadows
+## lean to the fill's hue, lights to the sun's.
 static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
-	var sat := lerpf(1.08, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
+	var sat := lerpf(1.0, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
-	var contrast := lerpf(1.08, 0.94, maxf(veil, float(l["haze"]) * 0.8))
+	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
+	# 0.5 + k(b·c − 0.5) is the line 1.2(c − pivot) + pivot when these hold.
+	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"]))
+	var k := 1.0 + 2.0 * pivot * (TONE_CONTRAST - 1.0)
 	return {
 		"saturation": sat,
-		"contrast": contrast,
-		"brightness": 1.0,
+		"contrast": k,
+		"brightness": TONE_CONTRAST / k,
+		"pivot": pivot,
 		"shadow": Color(l["ambient_color"]),
 		"light": Color(l["sun_color"]),
 		"strength": lerpf(0.5, 0.2, veil),
