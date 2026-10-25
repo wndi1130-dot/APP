@@ -1,12 +1,13 @@
 {
   "version": 1,
   "batch": "gap",
-  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf",
+  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket",
   "expected_kinds": [
     "gap_wire",
     "gap_gate",
     "gap_planks",
-    "small_shelf"
+    "small_shelf",
+    "thicket"
   ],
   "blender": "4.5.10 LTS",
   "palette": {
@@ -242,6 +243,44 @@
         "worn_wood"
       ],
       "judgment": "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "thicket": {
+      "path": "res://models/props_field/thicket.glb",
+      "status": "ready",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.8,
+      "solid": "low",
+      "lod0_tris": 356,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.96,
+          0.0,
+          -0.96
+        ],
+        [
+          0.96,
+          1.8,
+          0.96
+        ]
+      ],
+      "dimensions_m": [
+        1.92,
+        1.8,
+        1.92
+      ],
+      "bytes": 29968,
+      "sha256": "4f813cadecb60b0b38a9d8da65f2cb9658f26b9055faa1ae54effa46aef45979",
+      "colours": [
+        "bark",
+        "wood",
+        "worn_wood"
+      ],
+      "judgment": "low: 2×2칸을 채우는 낮고 넓은 겨울 잡목 덤불, 잔가지 덩이 다섯과 삐죽한 가지, 눈은 셰이더가 윗면에",
       "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
     }
   },

@@ -1,4 +1,5 @@
-# 지도 조립 소품 gap: 샛길 틈 세 갈래(map-layout data["side_path"] gap_kind)와 벽장 선반.
+# 지도 조립 소품 gap: 샛길 틈 세 갈래(map-layout data["side_path"] gap_kind), 벽장 선반,
+# 샛길 숲 띠의 겨울 잡목 덤불.
 #
 # blender -b --factory-startup -P tools/blender/props_field_gap.py -- --repo .
 #
@@ -26,6 +27,7 @@ DESIGNS = {
     "gap_gate": (1.3, [2, 2], None, "none", "none: 판자 울타리 사이 나무 쪽문이 바깥으로 열려 있음, 자물쇠·빗장 없음, 밟힌 흙길"),
     "gap_planks": (1.2, [2, 2], None, "none", "none: 가운데 기둥이 부러져 판자 울타리가 무너지고 판자가 바닥에 흩어진 틈"),
     "small_shelf": (1.4, [1, 1], .42, "low", "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음"),
+    "thicket": (1.8, [2, 2], None, "low", "low: 2×2칸을 채우는 낮고 넓은 겨울 잡목 덤불, 잔가지 덩이 다섯과 삐죽한 가지, 눈은 셰이더가 윗면에"),
 }
 
 
@@ -168,21 +170,41 @@ def small_shelf(p):
     p.box((.02, .22), (-.12, .1), (.12, .26), "worn_wood")
 
 
-BUILD = {"gap_wire": gap_wire, "gap_gate": gap_gate, "gap_planks": gap_planks, "small_shelf": small_shelf}
+def thicket(p):
+    # 위에서 「가는 막대 줄」이 아니라 덩이로 읽히게: 잔가지 덩이 다섯(위가 넓어 눈 셰이더가 얹음)과
+    # 덩이에서 삐져나온 가지 열. 맨나무(376삼각형)보다 적게.
+    # 덩이는 낮고 넓은 둔덕(알 모양이면 돌로 읽힘), 가지는 덩이 위·옆으로 많이 삐져나오게.
+    clumps = ((-.5, -.45, .5, .44, .95, "bark"), (.45, -.5, .48, .5, .8, "bark"), (-.45, .5, .5, .42, 1.05, "bark"),
+              (.5, .45, .5, .48, .9, "bark"), (0, 0, .62, .58, 1.3, "bark"))
+    for x, y, rx, ry, h, colour in clumps:
+        p.lathe((x, y), [(0, rx*.9, ry*.9), (h*.5, rx, ry), (h*.85, rx*.7, ry*.65), (h, rx*.3, ry*.28)], colour, 5)
+    for i, (x, y, rx, ry, h, colour) in enumerate(clumps):
+        n = 6 if i == 4 else 4
+        for k in range(n):
+            a = i*1.3 + k*math.tau/n + (.4 if k % 2 else 0)
+            lean = .55 + .35*((k*7 + i*3) % 5)/4
+            base = (x + rx*.35*math.cos(a), y + ry*.35*math.sin(a), h*(.55 + .1*(k % 3)))
+            tip = (x + rx*(.75 + lean)*math.cos(a), y + ry*(.75 + lean)*math.sin(a), h*(1.0 + .25*lean) + (.5 if i == 4 else .1))
+            p.beam(base, tip, .025, "wood" if k % 2 else "worn_wood", 3, .004)
+
+
+BUILD = {"gap_wire": gap_wire, "gap_gate": gap_gate, "gap_planks": gap_planks, "small_shelf": small_shelf,
+         "thicket": thicket}
 
 
 def write_books(repo, assets, failures):
     out = repo/"s2/models/props_field"
     placement = "rect 가운데 바닥, +Y 위·+Z 앞(지도 안쪽), facing은 +Y축 -90도씩. 발자국 96% 안쪽."
-    book = {"version": 1, "batch": "gap", "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf",
+    book = {"version": 1, "batch": "gap", "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket",
             "expected_kinds": list(DESIGNS), "blender": bpy.app.version_string,
             "palette": base.PALETTE, "colour_encoding": "linear RGBA vertex Col, alpha 1",
             "axis": "+Y up, +Z front", "origin": "footprint_center_floor", "placement": placement,
             "assets": assets, "skipped": {}, "failures": failures}
     (out/"catalog_gap.json").write_text(json.dumps(book, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    lines = ["# 지도 조립 소품 gap", "", "`tools/blender/props_field_gap.py` 자동 장부. 샛길 틈 세 갈래와 벽장 선반, 4종.", "",
+    lines = ["# 지도 조립 소품 gap", "", "`tools/blender/props_field_gap.py` 자동 장부. 샛길 틈 세 갈래, 벽장 선반, 겨울 잡목 덤불, 5종.", "",
              placement, "", "재질·그림·빛·애니메이션 없는 단일 메시/단일 surface, 정점색 Col, 각 600삼각형 이하.",
-             "틈 셋은 지나갈 수 있다(solid none). 철조망·가시·망루는 금지선이라 없다.", "",
+             "틈 셋은 지나갈 수 있다(solid none). 철조망·가시·망루는 금지선이라 없다.",
+             "덤불의 눈은 굽지 않는다: 위가 넓은 덩이라 눈 오는 날 소품 셰이더(weathered)가 윗면에 얹는다.", "",
              "| 이름 | 발자국 칸 | 높이 m | solid | 삼각형 | 바이트 | SHA-256 | 판단 |",
              "|---|---|---:|---|---:|---:|---|---|"]
     for k, a in assets.items():
