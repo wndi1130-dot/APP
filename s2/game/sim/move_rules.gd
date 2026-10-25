@@ -10,17 +10,18 @@ extends RefCounted
 ## people's drawing steps round by the turn). As the reference game's moves have
 ## it: a turn of up to a quarter is blended into the walk, a half turn is a turn
 ## of its own. The pace comes up and goes down over the seconds the thumb's walk
-## takes (field_game.gd DRIVE_START, DRIVE_STOP, DRIVE_STOP_RUN).
+## takes (field_game.gd DRIVE_START, DRIVE_STOP, DRIVE_STOP_RUN); a way handed on to
+## the next keeps the pace it had (with no way it comes down as a stop does).
 ##
-## Swarmed, a companion backs off with its face to them (field_ai.gd _engage),
-## slower than a walk, the walk drawn backwards (the step round runs back).
+## Swarmed, a companion backs off with its face to them (field_ai.gd _engage), at a
+## walk at most, the walk drawn backwards (the step round runs back).
 
 const FREE_DEG: float = 25.0
 const STILL_DEG: float = 90.0
 const START: float = 0.2        # seconds to come up to pace
 const STOP: float = 0.25        # seconds to come down from a walk
 const STOP_RUN: float = 0.4     # and from a run
-const BACKPEDAL: float = 1.3    # m/s stepping back with the face to them (a walk is 2.1)
+const BACKPEDAL: float = 2.1    # m/s stepping back with the face to them: a walk, never a run (1.3 fell behind the hurrying dead)
 const FACE_HOLD: float = 0.5    # seconds a face to them holds after the AI last asked for it
 
 

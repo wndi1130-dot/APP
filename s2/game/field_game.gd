@@ -1564,7 +1564,9 @@ func _move_person(p: Person, delta: float) -> void:
 		return
 	if p.path.is_empty():
 		p.moving = false
-		p.pace = 0.0
+		# It comes down as a stop does, not to nothing at once: a way handed on to the
+		# next (the AI gives a new one as it reaches the last) goes on at the pace it had.
+		p.pace = MoveRules.paced(p.pace, 0.0, p.pace, Person.WALK, delta)
 		return
 	var next := p.path[0]
 	var d := next - p.position

@@ -8,6 +8,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const MoveRules = preload("res://game/sim/move_rules.gd")
 const Person = preload("res://game/actors/person.gd")
+const Zombies = preload("res://game/actors/zombies.gd")
 
 var game
 var ally
@@ -93,7 +94,11 @@ func test_it_gets_going_over_a_moment_not_at_once() -> void:
 	assert_almost_eq(ally.pace, top, 0.0001, "up to pace after START")
 	ally.stop()
 	game._move_person(ally, 0.05)
-	assert_eq(ally.pace, 0.0, "stopped, it starts from nothing again")
+	assert_almost_eq(ally.pace, MoveRules.paced(top, 0.0, top, Person.WALK, 0.05), 0.0001, "with no way it comes down as a stop does")
+	assert_gt(ally.pace, 0.0, "a way handed on just now goes on at the pace it had")
+	for _i in 10:
+		game._move_person(ally, 0.05)
+	assert_eq(ally.pace, 0.0, "stood a while, it starts from nothing again")
 
 
 func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -> void:
@@ -108,7 +113,9 @@ func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -
 	game._move_person(ally, 0.1)
 	assert_almost_eq(ally.facing, -PI * 0.5, 0.0001, "its face stays to them")
 	assert_gt(ally.position.x, at.x, "it goes back, away from them")
-	assert_lte(ally.position.distance_to(at), MoveRules.BACKPEDAL * 0.1 + 0.0001, "slower than a walk, never a run")
+	assert_lte(ally.position.distance_to(at), MoveRules.BACKPEDAL * 0.1 + 0.0001, "a walk at most, never a run")
+	assert_lte(MoveRules.BACKPEDAL, Person.WALK)
+	assert_gt(MoveRules.BACKPEDAL, Zombies.SPEED_HURRY, "it gains on the hurrying dead as it backs off")
 	assert_lt(float(ally.brain["step_r"]), 0.5, "the walk's round runs back: it is drawn stepping backwards")
 	ally.brain["face_hold_t"] = game.clock.elapsed - MoveRules.FACE_HOLD - 0.1
 	game._move_person(ally, 0.1)
