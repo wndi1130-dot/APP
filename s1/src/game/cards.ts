@@ -332,20 +332,30 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     }),
   },
   {
+    // 기온 켠 판에서 얼음이 서지 않는 구간(늦가을)은 동상 대신 찬비에 젖어 떠는 보초다(계절표, climate.ts seasonHolds). 값은 같다.
     id: 'guard_frost', pressure: g => 1 + (50 - situation(g, 'guard')[0]) / DRAW.pressDiv, when: g => situation(g, 'guard')[0] < 50,
-    view: (g, past) => ({
-      title: '동상', speaker: leader(g, 'guard'), focus: 'guard', required: true,
-      body: again(past, '지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.', {
-        hold_post: '지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대가 지붕 교대를 거부하겠다고 한다.',
-        watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.',
-        guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위는 여전히 영하 서른이다.',
-      }, '지붕 경계 대원들이 또 동상을 입었다.'),
-      choices: [
-        { id: 'guard_heat', label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
-        { id: 'watch_less', label: '경계를 줄인다', say: '얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
-        { id: 'hold_post', label: '그대로 선다', say: was(past, 'hold_post') ? '거부는 없다. 지붕이 비면 다 같이 죽는다.' : '경계는 줄이지 않는다. 장갑을 두 겹 껴라.', effs: [{ t: 'rel', c: 'guard', v: -worse(past, 5, 4) }, { t: 'injured', v: 1 }] },
-      ],
-    }),
+    view: (g, past) => {
+      const frost = seasonHolds(g, 'frost');
+      return {
+        title: frost ? '동상' : '젖은 보초', speaker: leader(g, 'guard'), focus: 'guard', required: true,
+        body: frost
+          ? again(past, '지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.', {
+            hold_post: '지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대가 지붕 교대를 거부하겠다고 한다.',
+            watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.',
+            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 바람은 여전히 살을 엔다.',
+          }, '지붕 경계 대원들이 또 동상을 입었다.')
+          : again(past, '지붕 경계를 서던 대원 둘이 찬비에 흠뻑 젖어 이가 맞부딪힌다. 교대를 줄여 달라고 한다.', {
+            hold_post: '지난번 지붕에 섰던 대원 하나가 열이 올라 일어나지 못한다. 경비대가 지붕 교대를 거부하겠다고 한다.',
+            watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 젖은 채 떨었다.',
+            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 찬비는 그대로다.',
+          }, '지붕 경계 대원들이 또 젖은 채 떨었다.'),
+        choices: [
+          { id: 'guard_heat', label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
+          { id: 'watch_less', label: '경계를 줄인다', say: '얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.', effs: [{ t: 'rel', c: 'guard', v: 2 }, { t: 'tension', v: worse(past, 2, 1) }] },
+          { id: 'hold_post', label: '그대로 선다', say: was(past, 'hold_post') ? '거부는 없다. 지붕이 비면 다 같이 죽는다.' : frost ? '경계는 줄이지 않는다. 장갑을 두 겹 껴라.' : '경계는 줄이지 않는다. 젖은 옷은 교대 때마다 갈아입어라.', effs: [{ t: 'rel', c: 'guard', v: -worse(past, 5, 4) }, { t: 'injured', v: 1 }] },
+        ],
+      };
+    },
   },
 ];
 
