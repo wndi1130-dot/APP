@@ -8,6 +8,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const MAPS: Array[String] = ["houses_01", "houses_02", "lodge_01"]
 const SEEDS: Array[int] = [1, 2]
@@ -35,7 +36,7 @@ func _state(d: Dictionary) -> Array:
 	doors.sort()
 	var windows: Array = []
 	for c: Vector2i in g0.windows:
-		windows.append([c, g0.windows[c]["broken"], g0.windows[c].get("boards", 0)])
+		windows.append([c, g0.windows[c]["broken"], BuildingRules.planks_total(g0.windows[c])])
 	windows.sort()
 	var boxes: Array = []
 	for id: String in d["containers"]:
@@ -175,13 +176,14 @@ func test_a_room_shut_from_inside_has_its_way_out_and_nobody_in_it() -> void:
 	var broken := 0
 	for c: Vector2i in g0.windows:
 		var w: Dictionary = g0.windows[c]
-		if int(w.get("boards", 0)) > 0:
+		if BuildingRules.planks_total(w) > 0:
 			boarded += 1
-			assert_lt(int(w["boards"]), 3, "창을 다 막지 않는다")
+			assert_lt(BuildingRules.most_on_a_face(w), BuildingRules.SIGHT_PLANKS, "창을 다 막지 않는다")
+			assert_eq(BuildingRules.planks(w, g0.outer_face(c)), 0, "판자는 안쪽 면에")
 			assert_eq(int(w.get("building", g0.building_at(c))), b)
 		if w["broken"] and int(w.get("building", -1)) == b:
 			broken += 1
-	assert_gt(boarded, 0, "판자 친 창")
+	# 판자 친 창은 창이 둘 넘는 방에만 있다(나간 창은 비움): 있으면 안쪽 면에, 셋째 장 밑.
 	assert_gt(broken, 0, "막은 사람이 나간 창")
 	assert_eq(_items(d), items, "물건 양은 그대로")
 	assert_eq(d["spawns"].get("dead_levels", []), dead, "망자를 더하지 않는다")
@@ -285,7 +287,7 @@ func test_stories_keep_the_amount_the_ban_lines_and_the_way_to_every_box() -> vo
 			assert_eq(d["spawns"].get("dead_levels", []), dead, tag + ": 망자 그대로")
 			assert_eq(_lost(reach, _box_reach(d)), [], tag + ": 닿지 않게 된 상자")
 			for c: Vector2i in g0.windows:
-				assert_lt(int(g0.windows[c].get("boards", 0)), 3, tag + ": 다 막은 창")
+				assert_lt(BuildingRules.most_on_a_face(g0.windows[c]), BuildingRules.SIGHT_PLANKS, tag + ": 다 막은 창")
 			for c: Vector2i in g0.doors:
 				if g0.doors[c]["state"] == "locked" and not locked_before.has(c):
 					assert_eq(g0.doors[c].get("barred", ""), "inside", tag + ": 밖에서 잠근 문")
