@@ -74,6 +74,12 @@
         "wood": {
           "type": "integer"
         },
+        "cloth": {
+          "type": "integer"
+        },
+        "parts": {
+          "type": "integer"
+        },
         "ammo_pistol": {
           "type": "integer"
         },

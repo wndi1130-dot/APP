@@ -180,7 +180,8 @@ func test_choosing_the_stop_goes_onto_the_roof_and_the_card_comes_up_over_the_st
 	assert_not_null(f.cinema, "the roof of the running train first")
 	assert_eq(f.cinema.stop_opts["act_progress"], f._field_opts()["act_progress"], "in the field's own weather")
 	assert_eq(String(f.stop_weather(2)["weather"]), "sleet")
-	assert_true(f.cinema.falls in ["sleet", "snow"], "the stop's sleet in the early cold snap (−1 °C, no rain), as on the train and the field")
+	# The season table (decision 423, 서막 (나)): the first stop is the early cold snap (-1 C), no rain.
+	assert_eq(f.cinema.falls, "sleet", "the first stop's sleet, as on the train and the field")
 	assert_null(f.card, "no card straight away")
 	assert_false(f.gauges.visible, "nothing over the roof but the scene")
 	assert_null(f.train, "the train's inside is not drawn under it")

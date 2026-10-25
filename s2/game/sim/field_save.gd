@@ -16,6 +16,7 @@ const PATH := "user://field_save.json"
 ## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const Wear = preload("res://game/sim/wear.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos"]
@@ -80,7 +81,7 @@ static func _person(game, p) -> Dictionary:
 	var b = p.body
 	return {
 		"pid": p.pid, "team": p.team, "pos": p.position, "level": game.level_of(p.position), "alive": p.is_alive(),
-		"bag": p.bag, "items": p.items.duplicate(), "hands": p.hands.duplicate(true),
+		"bag": p.bag, "items": p.items.duplicate(), "hands": p.hands.duplicate(true), "wear": Wear.save_of(p),
 		"body": {"wounds": b.wounds.duplicate(true), "infection": b.infection, "infected": b.infected, "exhaustion": b.exhaustion, "downed": b.downed, "dead": b.dead},
 	}
 
@@ -107,6 +108,9 @@ static func from_json(text: String) -> Dictionary:
 		z["horde"] = int(z["horde"])
 	for g in d.get("ground_items", []):
 		g["n"] = int(g["n"])
+		# An arrow saved before it took the stock's name (decision 426).
+		if g.get("id") == "arrow":
+			g["id"] = "ammo_craft"
 	for key in ["ammo", "unloaded"]:
 		var counts: Dictionary = d.get(key, {})
 		for id in counts:
@@ -216,6 +220,8 @@ static func _put_person(p, row: Dictionary) -> void:
 	p.position = row["pos"]
 	p.bag = String(row["bag"])
 	p.items = (row["items"] as Dictionary).duplicate(true)
+	# A save from before the three places has none: they keep what they put on.
+	Wear.restore(p, row.get("wear", {}))
 	p.set_weapon_slots((row["hands"] as Array).duplicate(true))
 	var b = p.body
 	var body: Dictionary = row["body"]
