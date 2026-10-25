@@ -7,6 +7,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
 const AimModel = preload("res://game/sim/aim_model.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const Wear = preload("res://game/sim/wear.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -827,7 +828,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 	var rng: RandomNumberGenerator = game.rng
 	var now: float = game.clock.elapsed
 	var part: String = BodyState.pick_scratch_part(wound_rng())
-	var block: float = GrabRules.clothing_block(p.coat, part)
+	var block: float = Wear.block(p, part)
 	var outcome: String = GrabRules.attack_outcome(rng, block)
 	match outcome:
 		"grab":
@@ -856,14 +857,13 @@ func zombie_reaches(z: Dictionary, p) -> String:
 				game.hud.grab_alert(front)
 		"scratch":
 			p.body.apply_scratch(rng, now, part)
-			GrabRules.damage_clothing(p.coat, part, false)
+			Wear.tear(p, part, false)
 			p.panic = minf(1.0, p.panic + 0.3)
 			game.telemetry.injury(now, p.pid, "scratch")
 			if p.team != "raider":
 				game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 		"blocked":
-			GrabRules.damage_clothing(p.coat, part, true)
-			_toast(p, "외투가 손톱을 막았다.")
+			_toast(p, _held_line(Wear.tear(p, part, true)))
 	return outcome
 
 
@@ -873,17 +873,25 @@ func zombie_reaches(z: Dictionary, p) -> String:
 func breach_reaches(p) -> String:
 	var now: float = game.clock.elapsed
 	var part: String = BodyState.pick_scratch_part(wound_rng())
-	var block: float = GrabRules.clothing_block(p.coat, part)
+	var block: float = Wear.block(p, part)
 	if game.rng.randf() < block:
-		GrabRules.damage_clothing(p.coat, part, true)
-		_toast(p, "외투가 손톱을 막았다.")
+		_toast(p, _held_line(Wear.tear(p, part, true)))
 		return "blocked"
 	p.body.apply_scratch(game.rng, now, part)
-	GrabRules.damage_clothing(p.coat, part, false)
+	Wear.tear(p, part, false)
 	p.panic = minf(1.0, p.panic + 0.3)
 	game.telemetry.injury(now, p.pid, "scratch")
 	game.say(p, "%s 긁혔다." % p.display_name, true, "scratch")
 	return "scratch"
+
+
+## What a held nail shows: the coat as it always said, else the garment that held.
+func _held_line(by: String) -> String:
+	if by == "" or by == String(Wear.KINDS["jacket_short"]["name"]):
+		return "외투가 손톱을 막았다."
+	var last: int = by.unicode_at(by.length() - 1) - 0xAC00
+	var closed: bool = last >= 0 and last < 11172 and last % 28 != 0
+	return "%s%s 손톱을 막았다." % [by, "이" if closed else "가"]
 
 
 ## The window ran out: the bite lands (body_injury 2). Witnesses go on the receipt.
@@ -906,9 +914,9 @@ func bite(p) -> void:
 		crawler = crawler or bool(z.get("crawl", false))
 	var part: String = GrabRules.bite_location(rng, crawler)
 	var site: String = BodyState.pick_side(wound_rng(), part)
-	var block: float = GrabRules.clothing_block(p.coat, site, true)
+	var block: float = Wear.block(p, site, true)
 	var blocked: bool = block > 0.0 and rng.randf() < block
-	GrabRules.damage_clothing(p.coat, site, blocked)
+	Wear.tear(p, site, blocked, true)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
 	for z in p.grabbers.duplicate():
