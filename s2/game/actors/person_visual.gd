@@ -178,6 +178,8 @@ const OWN_WORK: Dictionary = {
 	"treat": ["p_treat", 1.0], "splint": ["p_kneel_work", 1.0], "rub": ["p_treat", 1.0],
 	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
 	"wear": ["p_wear_outer", 0.0],
+	# Climbing up into a car at its door (field_ai.gd retreat; a climb of its own is to come).
+	"board": ["p_climb", 0.0],
 }
 # A melee blow in the living's own motions: the ways each weapon is swung, and
 # where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
