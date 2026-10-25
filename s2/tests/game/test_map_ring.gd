@@ -88,7 +88,7 @@ func test_finished_old_interior_and_loot_are_only_translated() -> void:
 		var offset := Vector2i.ONE * width
 		for lv in before["levels"]:
 			assert_true(_same_cells(before["levels"][lv], after["levels"][lv], offset), "%s level %d" % [place, lv])
-		for key in ["train", "platform", "unload", "spawns", "entries", "stairs", "train_doors", "boarding", "unloading", "anchors", "place_id", "place_kind"]:
+		for key in ["train", "platform", "unload", "spawns", "stairs", "train_doors", "boarding", "unloading", "place_id", "place_kind"]:
 			if before.has(key):
 				assert_eq(after[key], MapShift._offset(before[key], offset, key), place + ": " + key)
 		LootRules.fill(before["containers"], 7)
@@ -140,6 +140,62 @@ func test_same_place_has_same_ring_and_rooms() -> void:
 		assert_eq(a[key], b[key], key)
 	assert_true(_same_cells(a["grid"], b["grid"], Vector2i.ZERO))
 	assert_gt(a["map_ring"]["rooms"]["placed"], 0, "new rooms use existing furniture rules")
+
+
+func test_ring_trees_and_yard_fences_are_drawn_as_models() -> void:
+	for place in ["houses_01", "lodge_01"]:
+		var original := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
+		var after := Ring.add(original.duplicate(true))
+		var g: FieldGrid = after["grid"]
+		var modelled := {}
+		for p in after["props"].slice(original.get("props", []).size()):
+			if p["kind"] in ["bare_tree", "plank_fence"]:
+				for y in range(p["rect"].position.y, p["rect"].end.y):
+					for x in range(p["rect"].position.x, p["rect"].end.x):
+						modelled[Vector2i(x, y)] = p["kind"]
+		var ring_trees: Array = after["trees"].slice(original["trees"].size())
+		assert_gt(ring_trees.size(), 0, place)
+		for c in ring_trees:
+			assert_eq(modelled.get(c), "bare_tree", "%s tree %s" % [place, c])
+		var fences := 0
+		for r: Rect2i in after["low_blocks"].slice(original["low_blocks"].size()):
+			if g.building_at(r.position) < 0:
+				fences += 1
+				assert_eq(modelled.get(r.position), "plank_fence", "%s fence %s" % [place, r.position])
+		assert_gt(fences, 0, place)
+
+
+func test_dead_still_come_in_from_the_new_edge_along_a_clear_lane() -> void:
+	for place in ["houses_01", "lodge_01", "mine_01", "freight_01"]:
+		var before := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
+		var after := FieldMaps.build(place)
+		var g: FieldGrid = after["grid"]
+		var old: FieldGrid = before["grid"]
+		var offset := Vector2i.ONE * int(after["map_ring"]["width"])
+		var moved := 0
+		for id in before["entries"]:
+			assert_eq(after["entries"][id].size(), before["entries"][id].size(), place + ": " + id)
+			for i in range(before["entries"][id].size()):
+				var c: Vector2i = before["entries"][id][i]
+				var now: Vector2i = after["entries"][id][i]
+				var border := c.x == 0 or c.y == 0 or c.x == old.width - 1 or c.y == old.height - 1
+				if not border or before.get("manholes", {}).has(id) or int(before.get("entry_levels", {}).get(id, 0)) != 0:
+					assert_eq(now, c + offset, place + ": " + id)
+					continue
+				moved += 1
+				assert_true(now.x == 0 or now.y == 0 or now.x == g.width - 1 or now.y == g.height - 1, "%s %s on the new edge" % [place, id])
+				var step := (c + offset - now).sign()
+				var at := now
+				while at != c + offset:
+					assert_true(g.dead_can_walk(at), "%s %s lane open at %s" % [place, id, at])
+					at += step
+		assert_gt(moved, 0, place)
+		for key in before.get("anchors", {}):
+			if key != "flee_exit":
+				assert_eq(after["anchors"][key], MapShift._offset(before["anchors"][key], offset, key), place + ": " + key)
+		if after.get("anchors", {}).get("flee_exit") is Vector2i:
+			var flee: Vector2i = after["anchors"]["flee_exit"]
+			assert_true(g.people_can_walk(flee), place + ": flee exit open")
 
 
 func _lane_ok(old: FieldGrid, g: FieldGrid, pair: Array, width: int) -> bool:

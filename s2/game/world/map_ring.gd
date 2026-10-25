@@ -16,6 +16,7 @@ const WILD_WIDTH := 20
 const ROAD_WIDTH := 2
 const LOT_STEP := 22
 const TREE_STEP := 9
+const FENCE_PIECE := 6
 static var _finishing := false
 
 
@@ -98,6 +99,7 @@ static func add(original: Dictionary) -> Dictionary:
 			list[i] = list[j]
 			list[j] = tmp
 	var lots: Array[Rect2i] = []
+	_move_entries_out(data, inner, lots)
 	var start_side := rng.randi_range(0, 3)
 	for round_index in range(20):
 		for k in range(4):
@@ -125,6 +127,7 @@ static func add(original: Dictionary) -> Dictionary:
 			if rng.randf() < 0.55 and _clear(rg, Rect2i(c - Vector2i.ONE * 2, Vector2i.ONE * 5), inner.grow(2), lots):
 				rg.set_solid(c, S.BLOCK)
 				ring["trees"].append(c)
+				ring["props"].append({"kind": "bare_tree", "rect": Rect2i(c, Vector2i.ONE), "facing": rng.randi_range(0, 3), "level": 0})
 	ring["room_stats"] = RoomFurnish.furnish_rooms(ring)
 	RoomFurnish.clear_fronts(ring)
 	RoomFurnish.block_furniture(ring)
@@ -153,6 +156,37 @@ static func add(original: Dictionary) -> Dictionary:
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
 	return data
+
+
+## The dead still come from beyond the map: a ground entry on the old border moves
+## straight out to the new edge, and its lane across the ring is kept off every lot,
+## field and tree. The flee exit on such an entry goes with it.
+static func _move_entries_out(data: Dictionary, inner: Rect2i, lots: Array[Rect2i]) -> void:
+	var g: FieldGrid = data["grid"]
+	var moved := {}
+	for id in data.get("entries", {}):
+		if data.get("manholes", {}).has(id) or int(data.get("entry_levels", {}).get(id, 0)) != 0:
+			continue
+		var cells: Array = data["entries"][id]
+		for i in range(cells.size()):
+			var c: Vector2i = cells[i]
+			var out := c
+			if c.x == inner.position.x:
+				out = Vector2i(0, c.y)
+			elif c.x == inner.end.x - 1:
+				out = Vector2i(g.width - 1, c.y)
+			elif c.y == inner.position.y:
+				out = Vector2i(c.x, 0)
+			elif c.y == inner.end.y - 1:
+				out = Vector2i(c.x, g.height - 1)
+			if out == c:
+				continue
+			moved[c] = out
+			cells[i] = out
+			lots.append(Rect2i(Vector2i(mini(c.x, out.x), mini(c.y, out.y)), (c - out).abs() + Vector2i.ONE).grow(1))
+	var anchors: Dictionary = data.get("anchors", {})
+	if anchors.get("flee_exit") is Vector2i and moved.has(anchors["flee_exit"]):
+		anchors["flee_exit"] = moved[anchors["flee_exit"]]
 
 
 static func _paint_floor(g: FieldGrid, r: Rect2i, floor_kind: int) -> void:
@@ -212,17 +246,28 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 	Shell._window(g, Vector2i(r.position.x + 2, r.position.y), id)
 	Shell._window(g, Vector2i(r.end.x - 3, r.end.y - 1), id)
 	# Low wooden yard fences, with a two-cell opening facing the road.
+	# Each straight run is cut into plank-fence models of at most FENCE_PIECE cells.
 	var yard := r.grow(1)
-	for y in range(yard.position.y, yard.end.y):
-		for x in range(yard.position.x, yard.end.x):
-			if x != yard.position.x and x != yard.end.x - 1 and y != yard.position.y and y != yard.end.y - 1:
-				continue
-			var c := Vector2i(x, y)
-			var gate := door + direction
-			if (c - gate).length_squared() <= 1:
-				continue
-			g.set_solid(c, S.LOW)
-			data["low_blocks"].append(Rect2i(c, Vector2i.ONE))
+	var gate := door + direction
+	var sides_cells: Array = [[], [], [], []]
+	for x in range(yard.position.x, yard.end.x):
+		sides_cells[0].append(Vector2i(x, yard.position.y))
+		sides_cells[1].append(Vector2i(x, yard.end.y - 1))
+	for y in range(yard.position.y + 1, yard.end.y - 1):
+		sides_cells[2].append(Vector2i(yard.position.x, y))
+		sides_cells[3].append(Vector2i(yard.end.x - 1, y))
+	for cells: Array in sides_cells:
+		var run: Array[Vector2i] = []
+		for k in range(cells.size() + 1):
+			var c: Vector2i = cells[k] if k < cells.size() else Vector2i(-1, -1)
+			var open: bool = k < cells.size() and (c - gate).length_squared() > 1
+			if open:
+				g.set_solid(c, S.LOW)
+				data["low_blocks"].append(Rect2i(c, Vector2i.ONE))
+				run.append(c)
+			if run.size() == FENCE_PIECE or (not open and not run.is_empty()):
+				data["props"].append({"kind": "plank_fence", "rect": Rect2i(run[0], run[-1] - run[0] + Vector2i.ONE), "facing": 0, "level": 0})
+				run.clear()
 	var at := door + direction
 	while at != end:
 		g.floor[g.index(at)] = F.ROAD
