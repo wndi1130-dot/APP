@@ -68,6 +68,14 @@ func test_a_stop_built_over_frames_is_the_stop_built_at_once_and_stands_till_sho
 	staged.go_live()
 	await wait_process_frames(6)
 	assert_gt(staged.clock.elapsed, t0, "shown, its clock runs")
+	# Shown from under the stop scene: as bright as its last look, the sight
+	# mask coming in over MASK_IN_S, not a dark cut. What is in sight is the same.
+	assert_lt(float(staged.view.material.get_shader_parameter("mask_on")), 0.5, "the mask not in yet")
+	assert_true(staged.mask_on, "the sight rules as ever")
+	await wait_seconds(FieldGame.MASK_IN_S + 0.3)
+	assert_eq(staged.mask_in, 1.0)
+	assert_almost_eq(float(staged.view.material.get_shader_parameter("mask_on")), 1.0, 0.001, "the mask in full")
+	assert_almost_eq(float(whole.view.material.get_shader_parameter("mask_on")), 1.0, 0.001, "a field built at once has it from the start")
 
 
 func test_a_field_not_wanted_after_all_finishes_quietly_and_goes() -> void:
