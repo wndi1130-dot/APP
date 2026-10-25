@@ -134,12 +134,12 @@ static func post_at(x: int, train: Rect2i, engine_cells: int = 8) -> String:
 ## state ("trainGuard", a key the schema leaves open). The same for a played
 ## stop and an auto one. The people and their wounds go in the S3 contract's
 ## "defense" (receipt v5, defense() below) once the receipt has it.
-static func write(receipt, result: Dictionary, heard: int, hands: int) -> void:
+static func write(receipt, result: Dictionary, heard: int, hands: int, at_doors: int = 0) -> void:
 	var posts: Array = []
 	for h: Dictionary in result["hurt"]:
 		posts.append(String(h["post"]))
 	receipt.place_note("trainGuard", {
-		"heard": heard, "came": int(result["came"]), "hands": hands,
+		"heard": heard, "came": int(result["came"]), "atDoors": at_doors, "hands": hands,
 		"killed": int(result["killed"]), "bySquad": int(result["by_squad"]),
 		"tookSeconds": snappedf(float(result["took"]), 0.1), "hurt": posts,
 	})
