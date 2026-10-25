@@ -83,7 +83,7 @@ powersPlan?: 'return' | 'ask' | 'extend';          // 대권이 끝나는 카드
 
 **유지비** (`darkSettle`): 경비대 노출(`base[3]`) +2, 긴장 +2, 공포 +3 (`B.mlExpo, mlTension, mlFear`).
 
-**비상 변형 본문**(5.3): PR A에선 밤샘(`dark:vigil`)의 화자를 경비대장으로, '허락한다'를 '통행 쪽지를 써 준다'로만 바꾼다. 나머지 카드의 비상 본문은 데이터가 생길 때.
+**비상 변형 본문**(5.3): PR A에선 밤샘(`dark:vigil`)의 화자를 경비대장으로, '허락한다'의 대사를 '하룻밤이다. 경비대장 당직표에 적어 둬라.'로만 바꾼다(통행 쪽지는 쓰지 않는다, 결정 426 6항). 나머지 카드의 비상 본문은 데이터가 생길 때.
 
 **거두기 `liftMartial(g)`**:
 - `g.trust = clamp(martial.trustBefore - 15, 0, 100)`. `d.martial = null`, `d.martialLifted = { seg, bonus: !martial.warned }`. 경비대 배급 레버 잠금 해제(값은 그대로).

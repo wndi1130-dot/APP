@@ -110,6 +110,17 @@ describe('두고 떠난 사람의 흔적', () => {
     expect(trailAfterStop(g)).toBe(false);
   });
 
+  it('석탄이 모자라면 기다렸다 태울 수 없고 쪽지만 남길 수 있다', () => {
+    const g = leftFive('trail-poor');
+    g.seg += TRAIL.after;
+    g.cards = [];
+    trailAfterStop(g);
+    g.coal = TRAIL.coal - 1;
+    const v = viewCard(g, g.cards[0]);
+    expect(v.choices.find(c => c.label === '기다렸다 태운다')?.disabled).toBeTruthy();
+    expect(v.choices.find(c => c.label === '쪽지를 남긴다')?.disabled).toBeFalsy();
+  });
+
   it('아무도 두고 오지 않았거나 선 열차에서는 뜨지 않는다', () => {
     const g = createGame('trail-none');
     g.seg += 5;
