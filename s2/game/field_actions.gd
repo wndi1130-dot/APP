@@ -9,6 +9,8 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
+const Amputation = preload("res://game/sim/amputation.gd")
+const BodyState = preload("res://game/sim/body_state.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const DoorRules = preload("res://game/sim/door_rules.gd")
 const WindowRules = preload("res://game/sim/window_rules.gd")
@@ -84,6 +86,8 @@ var ongoing: Dictionary = {}
 var after_blow: Dictionary = {}
 ## Who stands on broken glass, and on which cell (one crunch a cell, J08).
 var glass_feet: Dictionary = {}
+## Frames with glass in them the player was stopped at and asked about: cell -> when.
+var glass_asked: Dictionary = {}
 
 
 func _init(field_game) -> void:
@@ -669,6 +673,9 @@ func window_default(p, c: Vector2i, verb: String) -> void:
 			if WindowRules.can_clear(w):
 				_begin_work(p, "glass", "유리 치우기", GLASS_TIME, _clear_glass.bind(c, p), "window", c, FieldGrid.center(c))
 			return
+		"cross":
+			cross_window(p, c)
+			return
 	if p != game.player:
 		if BuildingRules.can_open(w) and not latched_against(p, c):
 			open_window(p, c)
@@ -696,6 +703,8 @@ func window_choices(p, c: Vector2i) -> Array:
 		rows.append({"label": "창 닫기", "call": window_default.bind(p, c, "close")})
 	if WindowRules.can_clear(w):
 		rows.append({"label": "유리 치우기", "call": window_default.bind(p, c, "glass")})
+	if WindowRules.can_cross(w, p.carry_state()):
+		rows.append({"label": "그냥 넘기" if WindowRules.can_clear(w) else "넘어가기", "call": window_default.bind(p, c, "cross")})
 	if BuildingRules.has_curtain(w):
 		rows.append({"label": "커튼 열기" if String(w["curtain"]) == "closed" else "커튼 닫기", "call": window_default.bind(p, c, "curtain")})
 	if can_board_window(p, c):
@@ -798,9 +807,31 @@ func _curtain_set(p, c: Vector2i, to: String) -> void:
 	game.view.update_window(c)
 
 
+## The player who broke it is asked at once: the glass out first, or straight through.
 func _window_work_done(p, c: Vector2i) -> void:
 	if _finished_work(p, "window"):
 		_break_window(p, c)
+		if p == game.player and WindowRules.can_clear(game.grid.windows.get(c, {})):
+			_ask_glass(p, c)
+
+
+func _ask_glass(p, c: Vector2i) -> void:
+	glass_asked[c] = game.clock.elapsed
+	game.hud.offer([{"label": "유리 치우기", "call": window_default.bind(p, c, "glass")},
+		{"label": "그냥 넘기", "call": window_default.bind(p, c, "cross")}])
+
+
+## Through to the far side of the frame; walking into it does the climb (vault_window).
+func cross_window(p, c: Vector2i) -> void:
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not WindowRules.can_cross(w, p.carry_state()):
+		return
+	glass_asked[c] = -INF
+	var sides: Array[Vector2i] = game.grid.faces(c)
+	var far: Vector2i = sides[1 - game.grid.face_toward(c, p.position)]
+	var path: PackedVector3Array = game.find_path(p.position, FieldGrid.center(far), false)
+	if not path.is_empty():
+		p.go_to(path, p.running)
 
 
 ## Also called by a weapon impact: the combat caller already resolved the hit.
@@ -833,6 +864,11 @@ func _clear_glass(c: Vector2i, p = null) -> void:
 		return
 	game.grid.windows[c]["glass"] = false
 	game.view.update_window(c)
+	if p != null and game.rng.randf() < WindowRules.clear_cut_chance(p.gloves, not p.hands.is_empty()):
+		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("arm"))
+		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
+		if p.team != "raider":
+			game.say(p, "%s 유리에 손을 베였다." % p.display_name, true, "cut")
 
 
 ## The glass on the floor is swept aside as the frame's is (three seconds).
@@ -873,8 +909,18 @@ func _glass_steps() -> void:
 				game.say(p, "%s 유리에 발을 베였다." % p.display_name, true, "cut")
 
 
+## The player walking into a frame with glass still in it is stopped once and
+## asked (WindowRules.holds_for_choice); running, or a companion, goes straight in.
 func can_vault_window(p, c: Vector2i) -> bool:
-	return p.can_act() and p.action == "" and _in_reach(p, FieldGrid.center(c), true) and WindowRules.can_cross(game.grid.windows.get(c, {}), p.carry_state())
+	var w: Dictionary = game.grid.windows.get(c, {})
+	if not (p.can_act() and p.action == "" and _in_reach(p, FieldGrid.center(c), true) and WindowRules.can_cross(w, p.carry_state())):
+		return false
+	if p == game.player and WindowRules.holds_for_choice(w, p.running, glass_asked.has(c), float(glass_asked.get(c, 0.0)), game.clock.elapsed):
+		if not glass_asked.has(c):
+			p.stop()
+			_ask_glass(p, c)
+		return false
+	return true
 
 
 ## Called once on actual entry, not once per frame or once per window lifetime.
@@ -884,11 +930,14 @@ func vault_window(p, c: Vector2i) -> void:
 	if not can_vault_window(p, c):
 		return
 	var w: Dictionary = game.grid.windows[c]
-	if w["glass"] and game.rng.randf() < (0.2 if p.gloves else 0.5):
+	if game.rng.randf() < WindowRules.cross_cut_chance(w, p.gloves):
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
 		if p.team != "raider":
 			game.say(p, "%s 유리에 베였다." % p.display_name, true, "cut")
+		if p == game.player and not game.glass_warned:
+			game.glass_warned = true
+			game.hud.toast("창틀 유리를 먼저 치우면 안 베인다")
 
 
 # ---------------------------------------------------------------- searching
@@ -1782,6 +1831,77 @@ func _care_done(medic, o, wound: Dictionary, mode: String, step: Dictionary) -> 
 		game.say(medic, "%s: 처치했다." % Treatment.wound_text(wound))
 
 
+## Cutting off a bitten or scratched arm or leg (body_injury 2.2): the plan
+## (amputation.gd) names what it takes or what stops it. The one cut screams
+## as it starts and the whole map hears it. It is slow work of the hands, so
+## moving off or a blow cuts it short as it does treating; both must still be
+## there when it is done, or it was for nothing but the time. False when it
+## does not start.
+func amputate(medic, o, part: String) -> bool:
+	if _wait_blow(medic, amputate.bind(medic, o, part)):
+		return false
+	if medic.action != "" or not medic.can_act() or not in_care_reach(medic, o):
+		return false
+	var plan: Dictionary = Amputation.plan(medic, o, part, care_tools(medic, o))
+	if not bool(plan["ok"]):
+		return false
+	if medic != o:
+		medic.face_point(o.position)
+	var seconds: float = float(plan["seconds"])
+	medic.start_action("treat", "절단", seconds, _amputated.bind(medic, o, part))
+	if medic.action != "treat":
+		return false
+	_note_care(medic, o, part, seconds, "절단")
+	game.make_sound(o.position, Amputation.SCREAM, "scream", o)
+	return true
+
+
+## The cut done: the tools are asked again (they may have gone meanwhile), not
+## the window: a slow hand that let it close lost the limb for nothing
+## (body_injury 2.2). Then the shock, by who cut and how strong the body is.
+## The one who cuts can act here: the work only runs out while they can
+## (field_game.gd _update_person stops it while grabbed, fallen or down).
+func _amputated(medic, o, part: String) -> void:
+	if not o.is_alive() or not o.grabbers.is_empty() or not in_care_reach(medic, o):
+		game.say(medic, "자르지 못했다. 그 자리를 떠났다.")
+		return
+	var t: Dictionary = Amputation.tools(medic, o, care_tools(medic, o))
+	if String(t["why"]) != "":
+		game.say(medic, "자르지 못했다. %s." % t["why"])
+		return
+	# What it takes comes from the one who cuts first, then from the one cut.
+	for item: String in t["uses"]:
+		var used: int = int(t["uses"][item])
+		var from_first: int = mini(used, int(medic.items.get(item, 0)))
+		if from_first > 0:
+			medic.take_item(item, from_first)
+		if used > from_first:
+			o.take_item(item, used - from_first)
+	var bite_there: bool = o.body.bitten_limbs().has(part)
+	var in_time: bool = o.body.window_left > 0.0
+	o.body.amputate(part, Amputation.stump_kind(String(medic.medical)), game.clock.elapsed)
+	game.telemetry.injury(game.clock.elapsed, o.pid, "amputation")
+	# The blood of it on both (body_injury 2.2 「피 냄새」), as a coat soaked from close kills.
+	for who in [medic, o]:
+		if not who.blood_soaked:
+			who.blood_soaked = true
+			who.smell = mini(who.smell + 1, 2)
+	if game.rng.randf() < Amputation.shock_chance(String(medic.medical), int(o.skills["strength"]), bool(t["kit"])):
+		game.say(o, "%s 쇼크로 숨이 멎었다." % o.display_name)
+		game.on_person_died(o)
+		return
+	var what: String = "%s의 %s 잘랐다." % [o.display_name, BodyState._eul(String(Treatment.PART_NAMES[part]))]
+	if not in_time:
+		what += " 감염 창이 먼저 닫혀 소용없었다."
+	elif o.body.infection == "bite":
+		what += " 물린 데가 더 남았다."
+	elif bite_there:
+		what += " 물림은 막았다."
+	else:
+		what += " 긁힌 데가 감염이었어도 막았다."
+	game.say(medic, what)
+
+
 func splint(p) -> void:
 	if _wait_blow(p, splint.bind(p)):
 		return
@@ -1930,7 +2050,13 @@ func _near_things(p) -> Array:
 					elif st != "broken":
 						rows.append([d, "문 닫기" if st == "open" else ("문 따기" if st == "locked" else "문 열기"), go_and_do.bind(p, "door", c, at)])
 				elif game.grid.windows.has(c):
-					rows.append([d, "창", go_and_do.bind(p, "window", c, at)])
+					var w: Dictionary = game.grid.windows[c]
+					if WindowRules.can_clear(w):
+						rows.append([d, "유리 치우기", go_and_do.bind(p, "window", c, at, "glass")])
+					elif bool(w.get("broken", false)) and WindowRules.can_cross(w, p.carry_state()):
+						rows.append([d, "넘어가기", go_and_do.bind(p, "window", c, at, "cross")])
+					else:
+						rows.append([d, "창", go_and_do.bind(p, "window", c, at)])
 				elif game.grid.floor_glass.has(c):
 					rows.append([d, "유리 치우기", sweep_glass.bind(p, c)])
 		for id in game.data["spots"]:

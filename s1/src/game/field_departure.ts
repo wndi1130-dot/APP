@@ -9,6 +9,7 @@ import { CAPTAIN, isActive } from './wounds';
 import type { Wound, WoundBook, WoundGrade, WoundPart, WoundState } from './wounds';
 import { CAPTAIN_ID } from './field_receipt';
 import type { FieldPromiseSpec, FieldReturnRecord } from './field_receipt';
+import { departureMemory } from './memory';
 
 // S3 출발 계약 판 2(docs/design/briefs/s3_departure_receipt_contract.md 2절). 열차가 정차 고르기에서 「내리기」를 누를 때
 // 판 상태에서 한 장 만든다. 판 1(field_receipt.ts FieldDeparture)의 칸은 그대로 두고 사람 칸을 넓힌다.
@@ -146,6 +147,7 @@ export function departurePerson(g: Game, id: string, role: DepartureRole, gear: 
   return {
     id, comm, name, role, body: bodyOf(id, prof?.age ?? 40, comm), know: knowOf(g, name), wounds: woundsOf(g, name),
     hunger: hungerOf(g, comm), sore: soreOf(g, id), rest: restOf(g, id), gear: copyGear(gear), rel: id === CAPTAIN_ID ? 0 : g.comms[comm].rel,
+    ...departureMemory(g, id),
   };
 }
 

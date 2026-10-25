@@ -16,8 +16,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  advance, agendaOptions, blocs, castVote, cloneGame, COMM_NAME, COMMS, CORPSE_LAWS, createGame, expected, IDEO, LAW_VARIANT_OF, LAWS, P,
-  CREW, CREW_COST, FETCH_WANT, LOOT_NAME, PLACES, PROFILES, PROLOGUE, resolveStop, REST_FLOOR, stance, STAGES, STAY,
+  advance, agendaOptions, blocs, castVote, cloneGame, COMM_NAME, COMMS, CORPSE_LAWS, createGame, expected, FAMILIES, IDEO, LAW_VARIANT_OF, LAWS, P,
+  CREW, CREW_COST, FETCH_WANT, LOOT_NAME, PLACES, PROFILES, PROLOGUE, resolveStop, REST_FLOOR, stance, STAGES, STAY, voiceOf,
 } from '../src/game';
 import type { Game } from '../src/game';
 import { applyFieldReturn, chooseSymbolUse, FIELD, snapshot, symbolOptions } from '../src/game/field_receipt';
@@ -183,6 +183,38 @@ function contractCase(seed: string, domestic: boolean) {
   return { seed, domestic, opts, state, departure, receipt, apply, again };
 }
 
+/** 사람 기억(memory.ts): 목격 template 아홉 꼴을 다 담은 귀환 하나를 반영하고, 다음 출발 계약의 stance·cues까지 본다. */
+function memoryCase(seed: string) {
+  const g = createGame(seed);
+  g.seg = 2;
+  step(g); step(g);
+  const opts = { placeId: 'sulechow_station' };
+  const state = plain(g);
+  const departure = plain(buildDeparture(g, opts));
+  const [chief, r1, r2, r3] = departure.roster.map(p => p.id);
+  const [c0, c1] = departure.workCrew.filter(p => p.role === 'carrier').map(p => p.id);
+  const base = liveReceipt(departure);
+  const row = (who: string, what: string, witnesses: string[], template?: string) => ({ who, what, where: 'siding', when: 'D1 11:20', why: 'field', witnesses, ...(template ? { template } : {}) });
+  const receipt = {
+    ...base, receiptId: `ret_memory_${departure.segment}`,
+    people: { ...(base.people as Record<string, unknown>), dead: [c1] },
+    witnessed: [
+      row(chief, `freed_${r1}`, [r1, r2], 'rescued_from_grab'),
+      row(r2, `carried_${r3}`, [r3, r2], 'carried_back'),
+      row(chief, `treated_${r2}`, [r2], 'treated_by'),
+      row(chief, `left_${r3}`, [r3], 'left_behind_survived'),
+      row(chief, 'shot_surrendered_raider', [r2, r3]),
+      row(chief, 'took_raider', [r1, c0], 'spared_raider'),
+      row(r1, 'signal_box_a', [r1, r2, c0], 'resident_robbed'),
+      row(c1, 'bitten_torso', [r2, chief]),
+    ],
+  };
+  const applied = applyFieldReturn(g, departure, receipt);
+  const apply = { status: applied.status, record: plain(applied.record), after: plain(g) };
+  const again = plain(buildDeparture(g, opts));
+  return { seed, opts, state, departure, receipt, apply, again };
+}
+
 /** nextFieldStep은 회기를 여는 부작용이 있어, 열기 전 걸음은 복제본으로 본다. */
 function nextFieldStepPeek(g: Game): string {
   return nextFieldStep(cloneGame(g));
@@ -193,11 +225,14 @@ function main(): void {
   const cases = [];
   for (const seed of SEEDS) for (const [r, d, h] of PAIRS) cases.push(runCase(seed, r, d, h));
   const contracts = SEEDS.flatMap(seed => [contractCase(seed, false), contractCase(seed, true)]);
+  const memories = SEEDS.map(memoryCase);
   const tables = {
     COMMS, COMM_NAME, P, STAGES, IDEO, LAWS, LAW_VARIANT_OF, CORPSE_LAWS, PROLOGUE, FIELD,
     // 필드가 다녀온 정차를 닫는 셈(closeFieldStop)이 읽는 표.
     STAY, PLACES, LOOT_NAME, REST_FLOOR, CREW, CREW_COST, FETCH_WANT,
     PROFILES: PROFILES.map(p => ({ id: p.id, name: p.name, community: p.community, age: p.age })),
+    // 사람 기억의 가족 한 사람(memory.ts kinOf, person_memory.gd kin_of)
+    FAMILIES: FAMILIES.map(f => ({ id: f.id, parents: [...f.parents], children: [...f.children] })),
   };
   const file = {
     format: FORMAT,
@@ -207,12 +242,14 @@ function main(): void {
     tables: plain(tables),
     cases,
     contracts,
+    memories,
+    voices: Object.fromEntries(PROFILES.map(p => [p.id, voiceOf(p.id)])),
   };
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${JSON.stringify(file)}\n`);
   const votes = cases.reduce((n, c) => n + c.votes.length, 0);
   const arrivals = cases.filter(c => c.arrival).length;
-  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
+  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, 기억 ${memories.length}, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
 }
 
 main();

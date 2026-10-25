@@ -12,6 +12,7 @@ extends RefCounted
 ## draw events and places.
 
 const St = preload("res://game/train/train_state.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 
@@ -43,7 +44,7 @@ static func forecast(g: Dictionary, t: Dictionary) -> Dictionary:
 	var p: Dictionary = t["P"]
 	var run := float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])
 	var coal := heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd") + St.calm_coal(g, t) + run \
-		- (2.0 if bool(g["forcedRun"]) else 0.0) + (float(p["tailIdleCoal"]) if tail_idle(g) else 0.0) + St.loco_coal(g, t)
+		- (2.0 if bool(g["forcedRun"]) else 0.0) + (float(p["tailIdleCoal"]) if tail_idle(g) else 0.0) + St.loco_coal(g, t) + TrainHands.hands_coal(g, t)
 	var food := food_cost(g, t) + St.law_sum(g, t, "foodAdd")
 	if g.has("nextCardUid") and g.get("hands") is Dictionary:
 		coal += float(t["HANDS"]["stokerCoal"]) * float(g["hands"]["short"]["stoker"])
