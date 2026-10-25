@@ -92,6 +92,30 @@ describe('사람 기억: 귀환 반영에 붙는다', () => {
   });
 });
 
+describe('정차 사람 장면: 본 사람이 돌아와야 칸이 마음에 둔다(카드 3 「가」)', () => {
+  const MED = PROFILES.find(p => p.community === 'medtech' && p.age >= 20 && p.age < 60)!.id;
+  const MED2 = PROFILES.find(p => p.community === 'medtech' && p.age >= 20 && p.age < 60 && p.id !== MED)!.id;
+  const dep: FieldDeparture = { ...departure, roster: [{ id: MED, comm: 'medtech' }, { id: MED2, comm: 'medtech' }, { id: MATE, comm: 'tail' }] };
+  const scene = (id: string, witnesses: string[], people: Partial<Record<'dead', string[]>> = {}) => decodeFieldReceipt({
+    ...JSON.parse(JSON.stringify(receipt(id, [{ who: CAPTAIN_ID, what: 'signal_box_b', witnesses, template: 'resident_robbed' }], people))),
+    people: { sent: [MED, MED2, MATE], injured: [], bitten: [], dead: [], missing: [], leftBehind: [], rescued: [], ...people },
+  });
+
+  it('겨울 몫을 가져간 것을 본 의무진 사람이 돌아오면 의무진 칸이 한 귀환에 한 번 −1이다', () => {
+    const g = game();
+    const before = g.comms.medtech.rel;
+    applyFieldReturn(g, dep, scene('rs1', [MED, MED2, MATE]));
+    expect(g.comms.medtech.rel).toBe(before - 1);
+  });
+
+  it('본 사람이 돌아오지 못하면 칸은 모른다', () => {
+    const g = game();
+    const before = g.comms.medtech.rel;
+    applyFieldReturn(g, dep, scene('rs2', [MED], { dead: [MED] }));
+    expect(g.comms.medtech.rel).toBe(before);
+  });
+});
+
 describe('사람 기억: 출발 화면의 협조(카드 2 「가」)', () => {
   it('두고 갈 뻔한 일과 손 든 사람을 쏜 일을 본 사람은 까닭이 보이는 거절을 한 기억에 한 번씩 한다', () => {
     const g = game();
