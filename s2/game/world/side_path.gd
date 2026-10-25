@@ -10,6 +10,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const Shell = preload("res://game/world/sulehuf_map.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const PropKinds = preload("res://game/world/prop_kinds.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const NAME := "희귀 창고"  # loot_dress.gd RARE_STORE
@@ -29,6 +30,8 @@ const BOARDED_SHARE := 0.5
 const PLANKS := Vector2i(2, 4)
 const TREE_STEP := 5
 const TREE_SHARE := 0.35
+## 숲 띠 2×2칸 가운데 겨울 잡목 덤불(모형이 있을 때만, art3d `thicket`)의 몫.
+const THICKET_SHARE := 0.5
 const BOX_NAMES: Array[String] = ["궤짝", "선반", "상자", "공구함", "자루", "보관함"]
 ## 틈에 걸친 것(지나갈 수 있음, 모형은 art3d): 벌어진 철망(가시 없음)·열린 나무 쪽문·무너진 판자 울타리.
 const GAP_KINDS: Array[String] = ["gap_wire", "gap_gate", "gap_planks"]
@@ -130,19 +133,20 @@ static func _entry_lanes(data: Dictionary, g: FieldGrid, side: int) -> Array:
 
 
 ## 나무 한 그루: rect 칸을 막고(나무 칸이라 회색 덩이로 안 그려짐) 맨나무 모형 소품 하나.
-static func _tree(data: Dictionary, g: FieldGrid, r: Rect2i, rng: RandomNumberGenerator) -> void:
+static func _tree(data: Dictionary, g: FieldGrid, r: Rect2i, rng: RandomNumberGenerator, kind: String = "bare_tree") -> void:
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
 			g.set_solid(Vector2i(x, y), S.BLOCK)
 			data["trees"].append(Vector2i(x, y))
-	data.get_or_add("props", []).append({"kind": "bare_tree", "rect": r, "facing": rng.randi_range(0, 3), "level": 0})
+	data.get_or_add("props", []).append({"kind": kind, "rect": r, "facing": rng.randi_range(0, 3), "level": 0})
 
 
-## 숲 띠는 2×2칸마다 나무 한 그루(남는 칸은 2×1·1×1): 칸마다 세우면 말뚝 울타리처럼 보인다.
+## 숲 띠는 2×2칸마다 나무나 덤불 하나(남는 칸은 2×1·1×1 나무): 칸마다 세우면 말뚝 울타리처럼 보인다.
 static func _belt_trees(data: Dictionary, g: FieldGrid, cells: Array[Vector2i], rng: RandomNumberGenerator) -> void:
 	var left: Dictionary = {}
 	for c: Vector2i in cells:
 		left[c] = true
+	var thicket := not PropKinds.model_path("thicket").is_empty()
 	var order: Array = cells.duplicate()
 	order.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y if a.y != b.y else a.x < b.x)
 	for c: Vector2i in order:
@@ -160,7 +164,9 @@ static func _belt_trees(data: Dictionary, g: FieldGrid, cells: Array[Vector2i], 
 		for y in range(r.position.y, r.end.y):
 			for x in range(r.position.x, r.end.x):
 				left.erase(Vector2i(x, y))
-		_tree(data, g, r, rng)
+		# Its own dice by cell, so whether the thicket model is there yet moves nothing else of the path.
+		var bush := thicket and r.size == Vector2i(2, 2) and float(("%d|%d|thicket" % [r.position.x, r.position.y]).hash() % 1000) < THICKET_SHARE * 1000.0
+		_tree(data, g, r, rng, "thicket" if bush else "bare_tree")
 
 
 ## 모든 층 격자를 오른쪽(1)이나 아래(2)로 STRIP칸 넓힌다. 옛 칸·좌표·문·창은 그대로다.
