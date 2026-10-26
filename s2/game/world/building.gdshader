@@ -124,18 +124,25 @@ void fragment() {
 		bc.x += 0.5 * mod(floor(bc.y), 2.0);
 		vec3 brick = brick_color * (0.82 + 0.3 * fx_hash(floor(bc)));
 		brick = mix(stone_color * 0.95, brick, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
-		// 칠이 색을 띠면서 큰 얼룩이 위장 무늬로 읽혀 드문드문만(결정 469 C1).
-		float bare = smoothstep(0.66, 0.74, fx_fbm2(fp * 0.8 + vec2(7.3, 1.9))) * exposed * (1.0 - up);
+		// 칠이 떨어진 자리는 물이 닿는 곳(결정 476 대각뷰): 기단 위 1 m 남짓은 이어진 때와 함께
+		// 군데군데, 그 위는 손바닥만 한 조각만 드물게. 대각뷰에서 벽이 화면의 큰 몫이 되자 1 m 넘는
+		// 얼룩이 위장 무늬로 읽혔다. 벽돌도 집 칠처럼 색 보정을 덜 받아 회색 구멍으로 뜨지 않게 한다.
+		float damp = 1.0 - smoothstep(0.5, 1.5, w_pos.y);
+		float flake = smoothstep(mix(0.78, 0.7, damp), mix(0.82, 0.76, damp), fx_fbm2(fp * 2.2 + vec2(7.3, 1.9)));
+		float bare = max(flake, smoothstep(0.6, 0.68, fx_fbm2(fp * 1.3 + vec2(2.1, 5.7))) * damp);
+		bare *= exposed * (1.0 - up);
 		base = mix(base, brick, bare);
-		lively = house_colour * exposed * (1.0 - bare);
+		lively = house_colour * exposed;
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
-			// 안쪽 벽: 건물·층마다 바랜 벽지(세로 줄이나 잔무늬), 군데군데 뜯겨 회벽이 드러남.
+			// 안쪽 벽: 건물·층마다 바랜 벽지(세로 줄이나 잔무늬), 군데군데 뜯겨 밝은 회벽이 드러남.
+			// 뜯긴 자리에 바깥 칠을 보이면 짙은 칠 집의 방이 위장 무늬가 된다.
 			float pick = fx_hash(vec2(building_id, floor(w_pos.y / level_h) + 3.0));
 			vec3 paper = PAPERS[int(pick * 4.99)];
 			float stripe = pick > 0.5 ? smoothstep(0.35, 0.5, abs(fract(run * 2.4) - 0.5)) : smoothstep(0.62, 0.8, fx_vnoise(fp * 7.0));
 			paper *= 0.9 + 0.12 * stripe;
-			float torn = smoothstep(0.62, 0.7, fx_fbm2(fp * 1.1 + vec2(building_id, 2.0)));
-			base = mix(paper * (0.9 + 0.1 * big), base, torn);
+			float torn = smoothstep(0.68, 0.74, fx_fbm2(fp * 2.0 + vec2(building_id, 2.0)));
+			vec3 plaster = stone_color * 1.15 * (0.92 + 0.1 * fine);
+			base = mix(paper * (0.9 + 0.1 * big), plaster, torn);
 			lively = 1.0 - torn;
 		}
 	} else if (zone == 1) {
