@@ -62,9 +62,9 @@ void vertex() {
 }
 
 // 지붕 색 갈래(결정 469 C1, sRGB — 쓸 때 선형으로): 슬레이트·바랜 기와·짙은 초록·갈색 널.
-// 명암: 밝은 벽 칠 아래 지붕은 한 단 어둡게(회색조에서 집의 꼴이 읽히게), 너무 내리면 화면이
-// 어두워지므로 옛 칠(0.52~0.60)보다 한 단만 낮춘다.
-const vec3 ROOFS[4] = vec3[4](vec3(0.40, 0.43, 0.48), vec3(0.58, 0.36, 0.27), vec3(0.35, 0.44, 0.36), vec3(0.47, 0.37, 0.29));
+// 명암: 지붕은 밝은 보도·벽 칠보다 낮고 아스팔트보다 높은 가운데 단. 위에서 보면 지붕이 화면의
+// 큰 몫이라(집 지도 45% 안팎) 옛 칠(0.52~0.60)보다 조금만 낮춘다 — 더 내리면 낮 밝기 V가 0.36 밑.
+const vec3 ROOFS[4] = vec3[4](vec3(0.46, 0.49, 0.54), vec3(0.64, 0.42, 0.32), vec3(0.41, 0.51, 0.42), vec3(0.55, 0.45, 0.36));
 // 바깥벽 칠과 지붕은 집마다 굴린 색이라 모델 색 보정을 이만큼 덜 받는다(생활 색과 같은 길).
 uniform float house_colour : hint_range(0.0, 1.0) = 0.8;
 
@@ -123,7 +123,8 @@ void fragment() {
 		bc.x += 0.5 * mod(floor(bc.y), 2.0);
 		vec3 brick = brick_color * (0.82 + 0.3 * fx_hash(floor(bc)));
 		brick = mix(stone_color * 0.95, brick, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
-		float bare = smoothstep(0.6, 0.7, fx_fbm2(fp * 0.8 + vec2(7.3, 1.9))) * exposed * (1.0 - up);
+		// 칠이 색을 띠면서 큰 얼룩이 위장 무늬로 읽혀 드문드문만(결정 469 C1).
+		float bare = smoothstep(0.66, 0.74, fx_fbm2(fp * 0.8 + vec2(7.3, 1.9))) * exposed * (1.0 - up);
 		base = mix(base, brick, bare);
 		lively = house_colour * exposed * (1.0 - bare);
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
@@ -181,7 +182,7 @@ void fragment() {
 			// 평지붕: 1 m 폭 루핑 띠, 띠 사이 이음만 옅게(가로 이음은 바둑판으로 읽혀 뺌, 결정 469 C4).
 			vec2 fc = w_pos.xz / vec2(0.95, 3.0);
 			fc.y += 0.37 * fx_hash(vec2(floor(fc.x), 5.0));
-			base = slate_color * 0.95 * (0.92 + 0.12 * fx_hash(floor(fc))) * (0.9 + 0.18 * big);
+			base = slate_color * 1.05 * (0.92 + 0.12 * fx_hash(floor(fc))) * (0.9 + 0.18 * big);
 			base *= 1.0 - 0.12 * seam(vec2(fract(fc.x), 0.5), vec2(0.03, 0.0));
 			lively = 0.0;
 		} else {
