@@ -12,6 +12,12 @@ extends RefCounted
 ## they take are new values (the PR's table). What they do is the field's: the
 ## train only holds them.
 ##
+## The fourth is the remade core (decision 474 S3: a thing that holds progress
+## back has three ways or more to get it). A tier-3 restoration takes a core;
+## the field has the rare store and the stopped machines (core_scenes.gd), and
+## the workshop can remake one from parts and scrap, slow but sure. It goes to
+## the stores' cores, where the field's cores go (train_dom.gd take_extras).
+##
 ## The work is shared: parts, the making line, restoration, then insulation.
 ## Making a thing slows a refit (decision 070); the order is fixed in S2.
 ##
@@ -42,13 +48,17 @@ const TARGET_MAX: int = 10
 const QUALITY: String = "usable"
 ## The stores' names on the screen.
 const STORE_NAME: Dictionary = {"scrap": "고철", "wood": "목재", "parts": "부품", "cloth": "천"}
-## Decision 070's three: name, what they cost, the work they take, where they go.
+## Decision 070's three and the remade core: name, what they cost, the work
+## they take, where they go. The core's 8 is two stretches of the starting
+## workshop: the longest thing on the line, yet the line takes its work before
+## restoration does (`run`), so not three stretches of a tier-3 one's 12.
 const RECIPES: Dictionary = {
 	"bow": {"name": "사냥 활", "cost": {"wood": 4, "scrap": 1}, "work": 3.0, "to": "armory"},
 	"crowbar": {"name": "쇠지렛대", "cost": {"scrap": 4}, "work": 2.0, "to": "armory"},
 	"coat_long": {"name": "두꺼운 겉옷", "cost": {"cloth": 4}, "work": 3.0, "to": "wardrobe"},
+	"core_remake": {"name": "재생 코어", "cost": {"parts": 6, "scrap": 8}, "work": 8.0, "to": "cores"},
 }
-const ORDER: Array[String] = ["bow", "crowbar", "coat_long"]
+const ORDER: Array[String] = ["bow", "crowbar", "coat_long", "core_remake"]
 
 
 ## A stretch's work.
@@ -196,7 +206,9 @@ static func now(g: Dictionary) -> Dictionary:
 
 
 static func _deliver(dom: Dictionary, id: String) -> void:
-	if String(RECIPES[id]["to"]) == "wardrobe":
+	if String(RECIPES[id]["to"]) == "cores":
+		dom["cores"] = float(dom.get("cores", 0)) + 1.0
+	elif String(RECIPES[id]["to"]) == "wardrobe":
 		if not dom.get("wardrobe") is Array:
 			dom["wardrobe"] = []
 		(dom["wardrobe"] as Array).append({"id": id, "condition": 1.0})

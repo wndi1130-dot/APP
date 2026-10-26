@@ -31,7 +31,7 @@ func _key(p: Control, key_name: String) -> Button:
 	return p.find_child(key_name, true, false) as Button
 
 
-func test_the_model_reads_the_stores_and_the_three_things() -> void:
+func test_the_model_reads_the_stores_and_the_things_to_make() -> void:
 	var m: Dictionary = WorkshopPane.model(_game())
 	var ns: Array = []
 	for s: Dictionary in m["stores"]:
@@ -41,7 +41,7 @@ func test_the_model_reads_the_stores_and_the_three_things() -> void:
 	var ids: Array = []
 	for r: Dictionary in m["rows"]:
 		ids.append(r["id"])
-	assert_eq(ids, ["bow", "crowbar", "coat_long"])
+	assert_eq(ids, ["bow", "crowbar", "coat_long", "core_remake"])
 	var coat: Dictionary = m["rows"][2]
 	assert_true(bool(coat["cost"][0]["short"]), "no cloth: the coat's cloth is short")
 	assert_eq(coat["why"], "천 4 모자람")
@@ -63,13 +63,34 @@ func test_what_the_train_holds_shows_by_its_name() -> void:
 func test_every_key_takes_a_finger_48_dp_wide() -> void:
 	var p := _pane(_game())
 	await wait_frames(1)
-	for key_name: String in ["Fold", "TargetDown", "TargetUp", "Key_bow", "Key_crowbar", "Key_coat_long"]:
+	for key_name: String in ["Fold", "TargetDown", "TargetUp", "Key_bow", "Key_crowbar", "Key_coat_long", "Key_core_remake"]:
 		var b: Button = _key(p, key_name)
 		assert_not_null(b, key_name)
 		assert_gte(b.size.y, FieldHud.MIN_TOUCH - 0.01, key_name + " tall enough")
 		assert_gte(b.size.x, FieldHud.MIN_TOUCH * 0.6, key_name)
 	for key_name: String in ["TargetDown", "TargetUp", "Key_bow"]:
 		assert_gte(_key(p, key_name).size.x, FieldHud.MIN_TOUCH - 0.01, key_name + " wide enough")
+
+
+## The remade core's row (decision 474 S3) counts the cores in the stores; it
+## is the fifth row, so the pane keeps the car pane's height and that row is
+## dragged up, a shade at the foot until it is.
+func test_the_core_row_counts_the_cores_and_the_rows_scroll() -> void:
+	var g := _game()
+	g["dom"]["cores"] = 2
+	var m: Dictionary = WorkshopPane.model(g)
+	var core: Dictionary = m["rows"][3]
+	assert_eq(core["id"], "core_remake")
+	assert_eq(core["have"], 2, "the cores in the stores")
+	assert_eq(core["why"], "부품 2 모자람")
+	var p := _pane(g)
+	await wait_frames(1)
+	assert_almost_eq(p.size.y, WorkshopPane.CSS_SIZE.y * UiFonts.K, 0.5, "no taller than the car's pane")
+	var s: ScrollContainer = p.find_child("List", true, false) as ScrollContainer
+	assert_not_null(s)
+	assert_true(s.is_ancestor_of(_key(p, "Key_core_remake")), "the core's key is in the dragged list")
+	assert_not_null(p.find_child("More", true, false), "a shade while a row is below")
+	assert_eq((p.find_child("Have_core_remake", true, false) as Label).text, "×2")
 
 
 func test_a_short_store_is_red_and_its_key_will_not_start() -> void:
