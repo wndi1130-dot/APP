@@ -414,6 +414,7 @@ func _process(delta: float) -> void:
 		var k: int = d["k"]
 		var note: Dictionary = notes.get(p, {})
 		notes[p] = note
+		guard_note(game, p, note, delta)
 		var c := motion_of(p, note, delta, b_vat.get("clips", []), b_own.get("clips", []))
 		var look := Color(c.x, c.y, 1.0, SHADE)
 		var at := Transform3D(Basis(Vector3.UP, p.rotation.y) * lean_of(p, note), p.global_position)
@@ -670,6 +671,10 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		note["motion"] = turn_gait
 		return Vector2(_round(note, "step", foot, _round_of(clips, turn_gait, float(DeadBody.STRIDE.get(turn_gait, 1.2)))), turn_gait)
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		# Danger near (guard_note): the hand weapon held up, on guard.
+		var ready := clip_named(own, Gait.ready_name(p), -1) if not p.crouched and t < float(note.get("guard_until", -1.0)) else -1
+		if ready >= 0:
+			return Vector2(_own_cycle(note, OWN_BASE + ready, t, _length(own, ready, 1.0), unit), ready)
 		var mood := mood_of(p, note, t, own)
 		if mood.y >= 0.0:
 			return mood
@@ -719,6 +724,18 @@ static func gait_of(p, own: Array, running: bool) -> int:
 static func is_stepped(gait_name: String) -> bool:
 	return gait_name == OWN_WALK or gait_name == OWN_RUN or gait_name == OWN_CROUCH_WALK \
 		or Gait.WALK.values().has(gait_name) or Gait.RUN.values().has(gait_name)
+
+
+## Every Gait.GUARD_LOOK, whether danger is near enough for the hand weapon to
+## come up (gait.gd threatened): noted as the time (the visual's own, note "t")
+## the guard stays up until, Gait.GUARD_HOLD after the danger was last near.
+static func guard_note(field, p, note: Dictionary, delta: float) -> void:
+	var look := float(note.get("guard_look", 0.0)) - delta
+	if look <= 0.0:
+		look = Gait.GUARD_LOOK
+		if Gait.ready_name(p) != "" and Gait.threatened(field, p):
+			note["guard_until"] = float(note.get("t", 0.0)) + Gait.GUARD_HOLD
+	note["guard_look"] = look
 
 
 ## Eases the person's own lean (gait.gd posture) toward how they go now:
