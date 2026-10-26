@@ -404,12 +404,11 @@ func _ready() -> void:
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	place = FieldMaps.resolve(String(opts.get("place", "")))
-	if opts.get("map_data") is Dictionary:
-		_take_map(opts["map_data"])
-	else:
-		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
-		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
-		_take_map(SidePath.add(built, rng.seed))
+	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
+	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
+	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
+		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	_take_map(SidePath.add(stop_map, rng.seed))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
