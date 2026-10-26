@@ -14,6 +14,7 @@ const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -268,6 +269,11 @@ var glints: Array = []
 var key_ways: Dictionary = {}
 ## Where the note of this stop says a box is hidden at the next one ("" if none).
 var note_spot: String = ""
+## The scrawled map to the side path, read (side_note.gd, card M): {"at": where the way
+## through the edge woods starts} while anyone in the squad holds it and nobody has got
+## there yet, else {}. The HUD marks that side of the screen while it is set.
+var side_hint: Dictionary = {}
+var side_reached: bool = false
 ## Tins thrown, still to land and rattle: [{"pos", "at", "who"}]; and where
 ## they landed, shown a moment: [{"pos", "t"}].
 var lures: Array = []
@@ -1501,6 +1507,7 @@ func _step(delta: float) -> void:
 	_update_zone(delta)
 	_watch_named()
 	_reveal_glints()
+	_read_side_note()
 	_land_lures()
 	actions.update(delta)
 	holdout.tick(delta)
@@ -3047,6 +3054,28 @@ func _give_finds() -> void:
 			var holder: Dictionary = dead[who.randi_range(0, dead.size() - 1)]
 			holder["carry"] = (holder.get("carry", []) as Array) + ["note_map"]
 			note_spot = LootDress.NOTE_SPOTS[who.randi_range(0, LootDress.NOTE_SPOTS.size() - 1)]
+	# A scrawled map to this stop's side path, on its own dice (card M).
+	var carriers: Array = []
+	for z in zombies.list:
+		if z["kind"] != "frozen":
+			carriers.append(z)
+	SideNote.place(data, carriers, rng.seed)
+
+
+## Who holds the scrawled map and whether anyone has reached the way in (card M).
+func _read_side_note() -> void:
+	if not data.has("side_path"):
+		return
+	var held := false
+	var at := SideNote.way_in(data)
+	for p in squad:
+		if not p.is_alive():
+			continue
+		if p.items.has(SideNote.ID):
+			held = true
+		if not side_reached and at != Vector3.INF and Vector2(p.position.x - at.x, p.position.z - at.z).length() < SideNote.REACHED:
+			side_reached = true
+	side_hint = SideNote.hint(data, held, side_reached, SidePath.visited(data))
 
 
 ## A snow cell two steps out of a door of building b, or (-1, -1).
