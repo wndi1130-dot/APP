@@ -8,17 +8,22 @@ extends Node
 ## receipt, or the sample one when the field is skipped), and PR 3 swaps them
 ## for the real ones in turn. It sets no game value.
 ##
-## The special session is the session card (council_card.gd) over the dining
-## car, off the politics port's own sample: the session the slice's departure
-## and receipt open (field_vectors.json, S1 TS 참값). The second station is the
-## same sample's arrival (the run between the stations is not in the port), with
-## the session's record the one the slice's own vote left; its summary is the
-## stop's sheet with the session's slip (arrival_sheet.gd), and the end is the
-## long sheet (end_card.gd) off the port's end card. The stretches are the
-## port sample's: the first stop on the second, the next station on the third.
+## The slice plays on one board of its own (J01): S1's new game (the asset
+## game/train/slice_start.json, made by s1/tools/slice_vectors.ts), run by the
+## train's turn as S1 runs it (train_advance.gd) to the first stop; the stop's
+## departure contract goes out with the field, the field's receipt comes back onto
+## that board once (field_return.gd, which also closes the stop), the special
+## session opens on what came back (field_council.gd, the card council_card.gd over
+## the dining car), and the train runs on to the second station (field_arrival.gd:
+## its sheet arrival_sheet.gd, the end end_card.gd). Different finds, rescues and
+## losses on the same people make a different session or station
+## (tests/train/test_slice_vectors.gd against S1). It reads no test fixture. The
+## train's paper cards have no screen in the slice yet: they are put aside each
+## step, as S1's slice does (field_arrival.test.ts). A step gone to straight (the
+## tests do) plays what lies before it on the board first.
 ##
-## The slice holds one train state (the train sample's first stop) that the
-## gauges, the car pane and the stop card all read. On the train the carriages
+## The slice holds that one train state; the gauges, the car pane and the stop
+## card all read it. On the train the carriages
 ## wear name plates; a car with people of its own is picked by its plate and
 ## its pane frosts in at the right with the camera moving it into the clear
 ## part; its levers set that state through train_turn.gd set_lever.
@@ -36,6 +41,7 @@ const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const CarPane = preload("res://game/ui/car_pane.gd")
+const CostPane = preload("res://game/ui/cost_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const WorldWeather = preload("res://game/ui/world_weather.gd")
@@ -48,7 +54,11 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
+const ModsPane = preload("res://game/ui/mods_pane.gd")
+const ResearchPane = preload("res://game/ui/research_pane.gd")
 const StopCinema = preload("res://game/stop_cinema.gd")
+const FieldDeparture = preload("res://game/politics/field_departure.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
 const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
@@ -59,18 +69,23 @@ const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
 const FROST_L := preload("res://game/ui/tex/frost_l.png")
 const FROST_R := preload("res://game/ui/tex/frost_r.png")
 const BOOT_SCENE := "res://scenes/boot.tscn"
-## The receipt shown when the field was skipped, and the departure the field
-## goes out with, till the train sends its own (S3 영수증 판 4 표본).
-const RECEIPT_SAMPLE := "res://tests/game/fixtures/field_v4/case1_symbol_kept.json"
-const DEPARTURE_SAMPLE := "res://tests/game/fixtures/field_v4/departure_prologue.json"
-## The politics port's sample: each case a departure and a receipt played
-## through the first return and the special session it opens.
-const COUNCIL_SAMPLE := "res://tests/game/fixtures/field_port/field_vectors.json"
+## The slice's board: S1's new game and S1's tables (s1/tools/slice_vectors.ts).
+const START := "res://game/train/slice_start.json"
+const TrainAdvance = preload("res://game/train/train_advance.gd")
+const FieldReturn = preload("res://game/politics/field_return.gd")
+const FieldCouncil = preload("res://game/politics/field_council.gd")
+const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
+## The stretch the slice's train first runs (S1's slice: field_arrival.test.ts).
+const FIRST_SEG: int = 2
+## Steps the train may take from the session to the second station before the slice gives up.
+const RUN_LIMIT: int = 12
+## The train's people left to stand by it while the field is out (stop-cam's train defense).
+const GUARDS_LEFT: int = 2
 
 ## The steps in order: [id, the train's phase behind the panel ("" for none),
-## the stretch it is on, the panel's title, the next key's word]. The stretches
-## follow the port's sample (field_vectors.json: the first return on the
-## second, the second station on the third).
+## the stretch it is on, the panel's title, the next key's word]. The stretch is
+## the scenery's (the weather and the act's progress outside); the board's own
+## stretch is train_g["seg"].
 const STEPS: Array = [
 	["train", "travel", 1, "열차 · 1구간", "정차 고르기"],
 	["stop_pick", "stop", 2, "정차 고르기", "내리기"],
@@ -121,7 +136,10 @@ var field: Node3D = null
 var result: Dictionary = {}        # the field's result, when the field was played
 var receipt: Dictionary = {}       # the receipt the receipt panel reads
 var council_g: Dictionary = {}     # the state the special session was left in
-var arrival_g: Dictionary = {}     # the second station's state (the port's sample, the session's record ours)
+var arrival_g: Dictionary = {}     # the second station's state, the board run on from the session
+var passed: bool = false           # the stop passed by: no field, no return
+var port_error: String = ""        # a step of the train's turn not ported yet (train_advance.gd), shown, not hidden
+var last_rules: Dictionary = {}    # the rules the train was last shown with (its people react to the change)
 var theme: Theme
 var layer: CanvasLayer
 var panel: PanelContainer
@@ -137,14 +155,17 @@ var frost: Control                 # the corners' frost over the train (.w-frost
 var film: Control                  # the dark edges and the grain over the frost (world_film.gd)
 var plates: Control                # the carriages' name plates, where the train's cars are
 var marks: Control                 # the picked car's corners and the other cars' shade
-var train_g: Dictionary = {}       # the slice's train state (the sample's first stop)
+var train_g: Dictionary = {}       # the slice's train state (its own board)
 var train_t: Dictionary = {}       # its tables
 var home: Control = null           # the train's own screen on the train steps: pane and keys
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
 var shop: Control = null           # the workshop's pane where the car's stands (workshop_pane.gd)
-var shop_was: String = ""          # the car picked before the workshop came up
+var shop_was: String = ""          # the car picked before the workshop or the refit pane came up
+var mods: Control = null           # the refit pane, where the workshop's stands (mods_pane.gd)
+var research: Control = null       # the research pane, where the workshop's stands (research_pane.gd)
+var cost: Control = null           # what a stretch costs and why, where the rooms stand (cost_pane.gd)
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
@@ -161,9 +182,9 @@ func _ready() -> void:
 	layer = CanvasLayer.new()
 	layer.layer = 40
 	add_child(layer)
-	var s: Array = StopPickCard.sample()
-	train_g = s[0]
+	var s: Array = start_board()
 	train_t = s[1]
+	train_g = to_travel(s[0], train_t)
 	# The train's stores, so what the field brings home has somewhere to go:
 	# a new run's starting scrap, wood and parts (S1's), or what a state carries.
 	if train_g.get("dom") == null:
@@ -207,6 +228,7 @@ func _ready() -> void:
 	gauges = TrainGauges.new()
 	gauges.g = train_g
 	gauges.t = train_t
+	gauges.stock_pressed.connect(_open_cost)
 	layer.add_child(gauges)
 	_build_panel()
 	loader = StopLoader.new()
@@ -224,6 +246,7 @@ func current() -> String:
 func go(i: int) -> void:
 	step = i
 	var id: String = STEPS[i][0]
+	_ensure_board(id)
 	# The train's own screen stays a moment under the stop scene as it comes in.
 	if id == "stop_pick" and _cinema_on():
 		_let_stage_go(StopCinema.FADE_S)
@@ -236,6 +259,7 @@ func go(i: int) -> void:
 	pane = null
 	bar = null
 	shop = null
+	mods = null
 	sel = ""
 	var row: Array = STEPS[i]
 	# Over the train, not over the field; the slice's state, but the session's
@@ -267,11 +291,12 @@ func go(i: int) -> void:
 		else:
 			_start_field()
 		return
-	# Leaving a stop the workshop does a stretch's work, once (train_workshop.gd).
+	# Leaving a stop the technologies take their upkeep and the workshop does a
+	# stretch's work, once (train_workshop.gd stretch).
 	var shop_events: Array = []
 	if id == "travel" and int(row[2]) != shop_seg:
 		shop_seg = int(row[2])
-		shop_events = TrainWorkshop.run(train_g)["events"]
+		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(row[2]))
 		# What it made, for the people on the train to see (the train scene's events).
@@ -318,7 +343,8 @@ func _show_stop_pick() -> void:
 	c.stop_name = "술레후프"
 	c.g["seg"] = int(STEPS[step][2])
 	c.top_room = TrainGauges.BAND_H
-	c.promises = _sample(DEPARTURE_SAMPLE).get("promises", [])
+	c.promises = _departure().get("promises", [])
+	c.squad = _departure().get("roster", [])
 	c.sent.connect(func(_g: Dictionary) -> void: _send_crew())
 	c.passed_by.connect(_pass_stop)
 	layer.add_child(c)
@@ -393,6 +419,9 @@ func _send_crew() -> void:
 
 ## Passed by: the train picks up speed and its own screen comes back.
 func _pass_stop() -> void:
+	if not passed and not _returned():
+		passed = true
+		_take(TrainAdvance.resolve_stop(train_g, train_t, false))
 	if not is_instance_valid(cinema):
 		go(_index_of("travel"))
 		return
@@ -471,21 +500,18 @@ func _show_council() -> void:
 	for l in lines.get_children():
 		lines.remove_child(l)
 		l.queue_free()
-	var s: Array = council_sample()
-	var g0: Dictionary = s[0]
-	if g0.is_empty():
-		_show_panel(String(STEPS[step][3]), ["의회 표본 없음"], String(STEPS[step][4]))
+	if not _open_session():
+		_show_panel(String(STEPS[step][3]), [_why_no_session()], String(STEPS[step][4]))
 		return
 	_frame_dining_car()
-	var both: Dictionary = (s[1] as Dictionary).duplicate()
-	both.merge(train_t, false)
-	gauges.refresh(g0, both)
+	gauges.refresh(train_g, train_t)
 	var c = CouncilCard.new()
 	c.name = "CouncilCard"
-	c.g = g0
-	c.t = s[1]
+	c.g = train_g
+	c.t = train_t
 	c.left.connect(func(g1: Dictionary) -> void:
 		council_g = g1
+		_take(g1)
 		next())
 	layer.add_child(c)
 	card = c
@@ -496,18 +522,15 @@ func _show_council() -> void:
 ## gauges read the station's state.
 func _show_arrival(go_word: String) -> void:
 	panel.visible = false
-	var s: Array = arrival_sample(council_g)
-	arrival_g = s[0]
-	if arrival_g.is_empty():
-		_show_panel(String(STEPS[step][3]), ["도착 표본 없음"], go_word)
+	if not FieldArrival.second_station_reached(train_g):
+		_show_panel(String(STEPS[step][3]), [_why_no_station()], go_word)
 		return
-	var both: Dictionary = (s[1] as Dictionary).duplicate()
-	both.merge(train_t, false)
-	gauges.refresh(arrival_g, both)
+	arrival_g = train_g
+	gauges.refresh(arrival_g, train_t)
 	var c = ArrivalSheet.new()
 	c.name = "ArrivalSheet"
 	c.g = arrival_g
-	c.t = s[1]
+	c.t = train_t
 	c.go_word = go_word
 	c.went_on.connect(next)
 	layer.add_child(c)
@@ -518,53 +541,23 @@ func _show_arrival(go_word: String) -> void:
 ## finish_slice) and the port's end card on the long sheet over the train.
 func _show_end(go_word: String) -> void:
 	panel.visible = false
-	var s: Array = arrival_sample(council_g)
+	if arrival_g.is_empty() and FieldArrival.second_station_reached(train_g):
+		arrival_g = train_g
 	if arrival_g.is_empty():
-		arrival_g = s[0]
-	var done: Dictionary = FieldArrival.finish_slice(arrival_g, s[1]) if not arrival_g.is_empty() else {"g": {}}
-	var g_end: Dictionary = done["g"]
-	if g_end.is_empty():
-		_show_panel(String(STEPS[step][3]), ["도착 표본 없음"], go_word)
+		_show_panel(String(STEPS[step][3]), [_why_no_station()], go_word)
 		return
-	var both: Dictionary = (s[1] as Dictionary).duplicate()
-	both.merge(train_t, false)
-	gauges.refresh(g_end, both)
+	var done: Dictionary = FieldArrival.finish_slice(arrival_g, train_t)
+	var g_end: Dictionary = done["g"]
+	gauges.refresh(g_end, train_t)
 	var c = EndCard.new()
 	c.name = "EndCard"
 	c.g = g_end
-	c.t = s[1]
+	c.t = train_t
 	c.go_word = go_word
 	c.still = bool(opts.get("still", false))
 	c.went_on.connect(next)
 	layer.add_child(c)
 	card = c
-
-
-## [state, tables] of the second station in the port's sample for the slice's
-## departure and receipt, its session's record the one `left` holds when the
-## slice's session was left (its own vote); [{}, {}] when there is none.
-static func arrival_sample(left: Dictionary = {}) -> Array:
-	if not FileAccess.file_exists(COUNCIL_SAMPLE):
-		return [{}, {}]
-	var d = JSON.parse_string(FileAccess.get_file_as_string(COUNCIL_SAMPLE))
-	if not d is Dictionary:
-		return [{}, {}]
-	var receipt0: String = RECEIPT_SAMPLE.get_file().get_basename()
-	var departure: String = DEPARTURE_SAMPLE.get_file().get_basename()
-	for c in d.get("cases", []):
-		if not c is Dictionary or not c.get("arrival") is Dictionary:
-			continue
-		if c.get("receipt") != receipt0 or c.get("departure") != departure:
-			continue
-		var a: Dictionary = c["arrival"]
-		if not a.get("state") is Dictionary:
-			continue
-		var g1: Dictionary = (a["state"] as Dictionary).duplicate(true)
-		var ours: Variant = (left.get("fieldReturns", {}) as Dictionary).get("special") if left.get("fieldReturns") is Dictionary else null
-		if ours is Dictionary and g1.get("fieldReturns") is Dictionary:
-			g1["fieldReturns"]["special"] = (ours as Dictionary).duplicate(true)
-		return [g1, d.get("tables", {})]
-	return [{}, {}]
 
 
 ## The room behind the session as the mockup draws it (k3c_views.js
@@ -586,23 +579,175 @@ func _frame_dining_car() -> void:
 			return
 
 
-## [state, tables] of the session the port's sample opens when the slice's
-## departure goes out and its receipt comes back; [{}, {}] when there is none.
-static func council_sample() -> Array:
-	if not FileAccess.file_exists(COUNCIL_SAMPLE):
+# ---------------------------------------------------------------- the slice's board
+
+## [state, tables]: S1's new game for the slice and S1's tables (the asset START).
+static func start_board() -> Array:
+	if not FileAccess.file_exists(START):
+		push_error("slice: no start board at " + START)
 		return [{}, {}]
-	var d = JSON.parse_string(FileAccess.get_file_as_string(COUNCIL_SAMPLE))
-	if not d is Dictionary:
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(START))
+	if not d is Dictionary or not d.get("state") is Dictionary or not d.get("tables") is Dictionary:
+		push_error("slice: the start board does not read")
 		return [{}, {}]
-	var receipt: String = RECEIPT_SAMPLE.get_file().get_basename()
-	var departure: String = DEPARTURE_SAMPLE.get_file().get_basename()
-	for c in d.get("cases", []):
-		if not c is Dictionary or not c.get("open") is Dictionary:
-			continue
-		var opened: Dictionary = c["open"]
-		if c.get("receipt") == receipt and c.get("departure") == departure and opened.get("nextStep") == "council" and opened.get("after") is Dictionary:
-			return [(opened["after"] as Dictionary).duplicate(true), d.get("tables", {})]
-	return [{}, {}]
+	return [d["state"], d["tables"]]
+
+
+## One step of the train's turn as the slice takes it: the paper cards put aside before
+## and after (no screen for them yet), the turn as S1 runs it. An unported step comes
+## back with its _turn_port_error.
+static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
+	var g: Dictionary = g0.duplicate(true)
+	g["cards"] = []
+	var out: Dictionary = TrainAdvance.advance(g, t)
+	if not out.has("_turn_port_error"):
+		out["cards"] = []
+	return out
+
+
+## The new game on its first run: the slice starts on FIRST_SEG and takes one step.
+static func to_travel(state: Dictionary, t: Dictionary) -> Dictionary:
+	var g: Dictionary = state.duplicate(true)
+	if g.is_empty():
+		return g
+	g["seg"] = FIRST_SEG
+	return step_train(g, t)
+
+
+## The slice's first stop: the run, then the train standing at the stop, not yet resolved.
+static func first_stop(state: Dictionary, t: Dictionary) -> Dictionary:
+	return step_train(to_travel(state, t), t)
+
+
+## The receipt of a stop played without anything found (the field skipped): the contract's
+## searchers go and all come back, nothing gained or lost, the promises unseen.
+static func quiet_receipt(d: Dictionary) -> Dictionary:
+	var sent: Array = []
+	var crew: Array = []
+	for p: Dictionary in d.get("roster", []):
+		sent.append(p["id"])
+		crew.append({"person": p["id"], "exhaustion": 0, "hunger": 0, "bodyUse": {}, "gearBack": {"hands": (p["gear"]["hands"] as Array).duplicate(true), "items": {}}})
+	var promises: Array = []
+	for p: Dictionary in d.get("promises", []):
+		promises.append({"id": p["id"], "kind": p["kind"], "witnesses": []})
+	return {
+		"version": 5, "receiptId": "ret_%s_%d_quiet" % [d["placeId"], int(d["segment"])], "departureId": d["departureId"], "stopId": d["stopId"],
+		"source": "direct", "endReason": "departed",
+		"place": {"id": d["placeId"], "type": "freight", "variant": "s2_graybox"},
+		"time": {"arrive": "D1 10:30", "depart": "D1 12:30", "stayGameMinutes": 120},
+		"stock": {}, "items": {"gained": [], "lost": []},
+		"people": {"sent": sent, "injured": [], "bitten": [], "dead": [], "missing": [], "leftBehind": [], "rescued": [], "wounds": []},
+		"witnessed": [], "placeState": {"looted": 0.0, "remainingRisk": 0}, "promises": [],
+		"goal": {"kind": null, "required": 0, "earned": 0, "status": "retreat"},
+		"extras": {"documents": [], "symbolCount": 0, "fragments": [], "coreCount": 0},
+		"symbol": null, "fieldPromises": promises, "crew": crew, "defense": null,
+	}
+
+
+## The board moves on: a step the port does not have yet is said, and the board stays.
+func _take(g: Dictionary) -> void:
+	if g.has("_turn_port_error"):
+		port_error = String(g["_turn_port_error"])
+		push_error("slice: " + port_error)
+		return
+	train_g = g
+	if is_instance_valid(gauges):
+		gauges.g = train_g
+
+
+func _returned() -> bool:
+	return train_g.get("fieldReturns") is Dictionary and not (train_g["fieldReturns"]["records"] as Array).is_empty()
+
+
+## The board up to the step `id` stands on, played once in order: the stop reached, the
+## stop's return, the session sat and left, the run to the second station.
+func _ensure_board(id: String) -> void:
+	var at: int = _index_of(id)
+	if at >= _index_of("stop_pick") and String(train_g.get("phase", "")) == "travel" and port_error == "":
+		_take(step_train(train_g, train_t))
+	if at >= _index_of("receipt") and not _returned() and not passed and id != "field":
+		_apply_return(quiet_receipt(_departure()))
+	if at >= _index_of("travel") and _returned():
+		_leave_session()
+	if at >= _index_of("arrive"):
+		_run_to_station()
+
+
+## The field's receipt onto the board, once (field_return.gd: the stop closes with it).
+func _apply_return(r: Dictionary) -> void:
+	if _returned() or r.is_empty():
+		return
+	var out: Dictionary = FieldReturn.apply_field_return(train_g, train_t, _departure(), r)
+	_take(out["g"])
+	_after_return(train_g)
+
+
+## Right after a return comes onto the board. 내정 훅 자리: the hands' share for a train
+## with its domestic side on (domestic PR 638, TrainHands.settle) goes here; on the S1a
+## board the turn's own settle (turn/turn_settle_care.gd hands_settle) already shares the hands.
+func _after_return(_g: Dictionary) -> void:
+	pass
+
+
+## The special session the return opens, opened on the board; false when it opens none.
+func _open_session() -> bool:
+	if not _returned():
+		return false
+	var regular: Dictionary = CouncilAgenda.agenda_options(train_g, train_t)
+	var stepped: Dictionary = FieldCouncil.next_field_step(train_g, train_t, regular["options"])
+	_take(stepped["g"])
+	return String(stepped["step"]) == "council"
+
+
+## A session still sitting when the slice goes on: its first agenda voted and the session
+## left (as the card does with its keys), so the train can run on.
+func _leave_session() -> void:
+	var special: Variant = (train_g.get("fieldReturns", {}) as Dictionary).get("special")
+	if special is Dictionary and special.get("status") == "opened" and String(train_g.get("phase", "")) == "council":
+		if not (train_g.get("council", {}) as Dictionary).get("result") is Dictionary:
+			_take(TrainAdvance.cast_vote(train_g, train_t))
+		var left: Dictionary = FieldCouncil.leave_special_council(train_g, train_t)
+		if bool(left["left"]):
+			council_g = left["g"]
+			_take(left["g"])
+	elif not special is Dictionary and _open_session():
+		_leave_session()
+
+
+## The train runs on from the session to the second station. A stop passed by has no
+## return to carry there: the slice ends at it (its arrival and end panels say so).
+func _run_to_station() -> void:
+	if not _returned():
+		return
+	for i in RUN_LIMIT:
+		if FieldArrival.second_station_reached(train_g) or String(train_g.get("phase", "")) == "end" or port_error != "":
+			return
+		_take(step_train(train_g, train_t))
+
+
+func _why_no_session() -> String:
+	if port_error != "":
+		return "열차 턴 이식 밖: " + port_error
+	return "필드에 나가지 않아 특별 회기가 열리지 않았다." if passed else "특별 회기가 열리지 않았다."
+
+
+func _why_no_station() -> String:
+	if port_error != "":
+		return "열차 턴 이식 밖: " + port_error
+	return "필드에 나가지 않아 둘째 역의 귀환 기록이 없다." if passed else "둘째 역에 닿지 못했다."
+
+
+## The train's people who stay by it while the field is out: the guard car's own,
+## not in the contract, the first GUARDS_LEFT of them (stop-cam's train defense).
+func _guard_ids(d: Dictionary) -> Array:
+	var out: Array = []
+	var going: Array = []
+	for p: Dictionary in FieldDeparture.people_of(d):
+		going.append(p["id"])
+	for id: String in FieldDeparture.companion_candidates(train_g, train_t, "guard"):
+		if not going.has(id) and out.size() < GUARDS_LEFT:
+			out.append(id)
+	return out
 
 
 ## A picture laid over the screen from `x0` to `x1` of its width, top to bottom.
@@ -649,6 +794,10 @@ func _show_train(phase: String, seg: int) -> void:
 			rules["comms"][c]["rel"] = float(train_g["comms"][c]["rel"])
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
+	# The values last shown, so the people react to what changed since (train_people_view.gd).
+	if not last_rules.is_empty():
+		train.opts["rules_before"] = last_rules
+	last_rules = rules.duplicate(true)
 	train.rules = rules
 	add_child(train)
 	stage = train
@@ -842,7 +991,7 @@ func _show_home(word: String) -> void:
 	b.g = train_g
 	b.main_word = word
 	b.main_pressed.connect(next)
-	b.open_rooms = ["gear"]
+	b.open_rooms = ["papers", "wrench", "gear"]
 	b.room_pressed.connect(_open_room)
 	h.add_child(b)
 	layer.add_child(h)
@@ -856,10 +1005,9 @@ func _show_home(word: String) -> void:
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
 ## it into the middle of what the pane leaves clear.
 func _select(id: String) -> void:
-	# A car picked over the workshop puts the workshop away.
-	if id != "" and is_instance_valid(shop):
-		shop.queue_free()
-		shop = null
+	# A car picked over the workshop or the refit pane puts it away.
+	if id != "":
+		_put_rooms_away()
 	var was: String = sel
 	sel = ""
 	var def: Dictionary = {}
@@ -887,28 +1035,113 @@ func _select(id: String) -> void:
 func _open_room(icon: String) -> void:
 	if icon == "gear":
 		_open_workshop()
+	elif icon == "wrench":
+		_open_mods()
+	elif icon == "papers":
+		_open_research()
 
 
 ## The workshop's pane where the car's stands; folding it brings the car back.
 func _open_workshop() -> void:
 	if is_instance_valid(shop) or not is_instance_valid(home):
 		return
-	shop_was = sel if sel != "" else FIRST_CAR
-	_select("")
+	_room_up()
 	var w = WorkshopPane.new()
 	w.name = "WorkshopPane"
-	w.folded.connect(_close_workshop)
+	w.folded.connect(_close_room)
 	home.add_child(w)
 	w.pin(TrainGauges.BAND_H)
 	w.show_state(train_g)
 	shop = w
 
 
-func _close_workshop() -> void:
-	if is_instance_valid(shop):
-		shop.queue_free()
-	shop = null
+func _close_room() -> void:
+	_put_rooms_away()
 	_select(shop_was)
+
+
+## The refit pane (mods_pane.gd) where the workshop's stands, with this
+## train's cars; a refit started or taken back draws the band again (its wood).
+func _open_mods() -> void:
+	if is_instance_valid(mods) or not is_instance_valid(home):
+		return
+	_room_up()
+	var m = ModsPane.new()
+	m.name = "ModsPane"
+	if is_instance_valid(train) and train.rules is Dictionary:
+		m.cars = ModsPane.formation(train.rules)
+	m.folded.connect(_close_room)
+	m.changed.connect(_room_changed)
+	home.add_child(m)
+	m.pin(TrainGauges.BAND_H)
+	m.show_state(train_g)
+	mods = m
+
+
+## The research pane (research_pane.gd) where the workshop's stands: what
+## can be restored now, its fragments and what it asks; a start, a way picked
+## or a stop draws the band again (its parts and wood).
+func _open_research() -> void:
+	if is_instance_valid(research) or not is_instance_valid(home):
+		return
+	_room_up()
+	var r = ResearchPane.new()
+	r.name = "ResearchPane"
+	r.folded.connect(_close_room)
+	r.changed.connect(_room_changed)
+	home.add_child(r)
+	r.pin(TrainGauges.BAND_H)
+	r.show_state(train_g)
+	research = r
+
+
+## One room's pane at a time: a room opened over another keeps the car
+## picked before the first, to come back to on folding.
+func _room_up() -> void:
+	if not is_instance_valid(shop) and not is_instance_valid(mods) and not is_instance_valid(research) and not is_instance_valid(cost):
+		shop_was = sel if sel != "" else FIRST_CAR
+	_put_rooms_away()
+	_select("")
+
+
+func _put_rooms_away() -> void:
+	if is_instance_valid(cost):
+		gauges.set_focus([])
+	for r in [shop, mods, research, cost]:
+		if is_instance_valid(r):
+			r.queue_free()
+	shop = null
+	mods = null
+	research = null
+	cost = null
+
+
+## What a stretch costs in the stock pressed on the gauges and why
+## (cost_pane.gd, J12), where the rooms stand; only on the train's own screen.
+## The same stock pressed again folds it; the other one takes its place.
+func _open_cost(id: String) -> void:
+	if not is_instance_valid(home) or card != home:
+		return
+	if is_instance_valid(cost) and String(cost.which) == id:
+		_close_room()
+		return
+	_room_up()
+	var c = CostPane.new()
+	c.name = "CostPane"
+	c.which = id
+	c.folded.connect(_close_room)
+	home.add_child(c)
+	c.pin(TrainGauges.BAND_H)
+	c.show_state(train_g, train_t)
+	cost = c
+	# The stock it is about stays lit on the band, as under a sheet.
+	gauges.set_focus([id])
+
+
+func _room_changed() -> void:
+	gauges.refresh(train_g, train_t)
+	if is_instance_valid(bar):
+		bar.g = train_g
 
 
 ## A lever on the pane: set it in the slice's state and draw again what reads it.
@@ -983,8 +1216,19 @@ func _start_field() -> void:
 	stage = field
 
 
-## What the slice's field goes out with: the default crew as each one's car
-## stands with the chief now (for what they say to him), the sample departure.
+## The departure contract for the stop the slice's train stands at (field_departure.gd,
+## s3 contract 2): the train's own people, made once a stop and kept for its return.
+var contract: Dictionary = {}
+
+
+func _departure() -> Dictionary:
+	if contract.is_empty() or int(contract.get("segment", -1)) != int(train_g.get("seg", -2)):
+		contract = FieldDeparture.build(train_g, train_t, {"placeId": FieldMaps.resolve(_field_place())})
+	return contract
+
+
+## What the slice's field goes out with: the train's departure contract (who goes, their
+## bodies, kit, hunger and soreness, the promises riding on the stop).
 func _field_opts() -> Dictionary:
 	var o := {"seed": int(opts.get("seed", 1))}
 	# The stop is drawn in the same cold as the stretch that brought the train
@@ -1005,19 +1249,10 @@ func _field_opts() -> Dictionary:
 		o["look"] = want["kinds"]
 	if want.has("hour"):
 		o["look_hour"] = float(want["hour"])
-	# A field of its own to ask: the stop scene builds the field before the
-	# field step makes one.
-	var probe = FieldGame.new()
-	o["squad"] = probe.default_squad("crude")
-	probe.free()
-	# How each one's car stands with the chief now, for what they say to him.
-	var comms: Dictionary = train_g.get("comms", {})
-	for row: Dictionary in o["squad"]:
-		if comms.has(row.get("comm", "")):
-			row["rel"] = float(comms[row["comm"]]["rel"])
-	var dep: Dictionary = _sample(DEPARTURE_SAMPLE)
-	if not dep.is_empty():
-		o["departure"] = dep
+	o["departure"] = _departure().duplicate(true)
+	o["train_guard_ids"] = _guard_ids(o["departure"])
+	# The laws standing on the train (its passed laws), for the field's own effects of them (domestic: emergency_ration).
+	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
 	return o
@@ -1027,19 +1262,13 @@ func _field_opts() -> Dictionary:
 ## on to the receipt.
 func _field_done(r: Dictionary) -> void:
 	result = r
-	receipt = r.get("receipt", {}) if not r.is_empty() else _sample(RECEIPT_SAMPLE)
+	receipt = r.get("receipt", {}) if not r.is_empty() else quiet_receipt(_departure())
+	_apply_return(receipt)
 	if field == null:
 		go(step + 1)
 		return
 	_show_panel("", [], "귀환 영수증")
 	panel.visible = true
-
-
-func _sample(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
-	return parsed if parsed is Dictionary else {}
 
 
 ## What the receipt card reads off a field result, made from a bare receipt

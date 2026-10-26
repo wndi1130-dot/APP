@@ -48,7 +48,16 @@ const CHIEF_ROOM: float = 1.0
 const LEAD_AHEAD: float = 3.0
 ## Slow work is dropped when one of the dead gets this near.
 const BREAK_R: float = 1.8
-const BREAKS: Array = ["search", "treat", "loot", "salvage", "rub"]
+const BREAKS: Array = ["search", "treat", "loot", "salvage", "rub", "board"]
+## Sent to the train (the user's field test 2026-10-25, 14; new values): this near a door it climbs
+## in, for this long; the dead within DOOR_CROWD_R of a door make it as far as
+## DOOR_CROWD_M more each, and a door taken is kept unless another comes
+## DOOR_KEEP_M nearer.
+const BOARD_NEAR: float = 1.5
+const BOARD_S: float = 1.5
+const DOOR_CROWD_R: float = 3.0
+const DOOR_CROWD_M: float = 8.0
+const DOOR_KEEP_M: float = 5.0
 ## On the move and not getting anywhere for this long: find the way again.
 const STUCK_T: float = 1.5
 ## The door the chief went in by is held while he is this near it.
@@ -331,6 +340,11 @@ func _companion(p) -> void:
 	if _hold_swing(p):
 		return
 	var player = game.player
+	# Out of the train again at the door it went in by: an order other than to
+	# the train (field_hud.gd _command) took it off the train.
+	if p.brain.has("board_at") and not p.brain.get("boarded", false):
+		p.position = p.brain["board_at"]
+		p.brain.erase("board_at")
 	if _live_on:
 		_near_of = null
 		_near = _dead_near(p.position, ENGAGE_R)
@@ -383,13 +397,23 @@ func _companion(p) -> void:
 			return
 	match p.command:
 		"retreat":
-			var door := FieldGrid.center(game.data["spawns"]["train_door"][0])
-			if p.position.distance_to(door) > 1.5:
+			# Into the train (the user's field test, 14): to the door the dead crowd least,
+			# a moment to climb up, then inside and out of their reach (_boarded).
+			# One at arm's length is shoved off on the way: it does not turn its
+			# back to climb (a dead one this near breaks the climb, BREAKS).
+			if p.brain.get("boarded", false):
+				return
+			p.brain.erase("boarding")
+			var door := _board_door(p)
+			var gap: float = INF if threat.is_empty() else float(threat["pos"].distance_to(p.position))
+			if p.position.distance_to(door) > BOARD_NEAR:
 				_walk(p, door, true)
-			else:
-				p.brain["boarded"] = true
+			elif gap > BREAK_R:
 				p.stop()
-			if not threat.is_empty() and threat["pos"].distance_to(p.position) < 1.3:
+				p.face_point(door)
+				p.brain["boarding"] = true
+				p.start_action("board", "타는 중", BOARD_S, _boarded.bind(p, door))
+			if gap < 1.3:
 				game.combat.shove(p)
 			return
 		"search":
@@ -1099,6 +1123,44 @@ func _search_near(p, around: Vector3) -> bool:
 	else:
 		game.actions.search(p, best["id"])
 	return true
+
+
+## The door to climb in by: the nearest, each of the dead standing by one
+## counting as DOOR_CROWD_M more to go, and the one taken kept unless another
+## comes DOOR_KEEP_M nearer (no turning back and forth between two).
+func _board_door(p) -> Vector3:
+	var kept: Vector3 = p.brain.get("board_door", Vector3.INF)
+	var best: Vector3 = kept
+	var best_cost: float = INF
+	var kept_cost: float = INF
+	for c in game.data["spawns"]["train_door"]:
+		var at := FieldGrid.center(c)
+		var cost: float = p.position.distance_to(at)
+		for z in game.zombies.in_radius(at, DOOR_CROWD_R):
+			if z["state"] not in ["dead", "rising", "downed", "frozen"]:
+				cost += DOOR_CROWD_M
+		if at.is_equal_approx(kept):
+			kept_cost = cost
+		if cost < best_cost:
+			best_cost = cost
+			best = at
+	if kept_cost < INF and kept_cost - best_cost < DOOR_KEEP_M:
+		best = kept
+	p.brain["board_door"] = best
+	return best
+
+
+## Climbed in: inside, out of sight and out of the reach of the dead, as the
+## work crew goes in (_crew); the door is kept to come out by. An order given
+## meanwhile to do something else leaves it outside.
+func _boarded(p, door: Vector3) -> void:
+	p.brain.erase("boarding")
+	if p.command != "retreat" or not p.is_alive():
+		return
+	p.brain["boarded"] = true
+	p.brain["board_at"] = door
+	p.stop()
+	p.position = door + Vector3(0, -50, 0)
 
 
 # ---------------------------------------------------------------- work crew

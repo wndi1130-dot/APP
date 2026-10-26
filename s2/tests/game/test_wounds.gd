@@ -29,7 +29,8 @@ func _field() -> void:
 
 func test_names_match_the_receipt_schema() -> void:
 	assert_eq(Body.PARTS, Receipt.WOUND_PARTS)
-	assert_eq(Body.KINDS, Receipt.WOUND_KINDS)
+	# The receipt also names the stump a cut left; the body keeps it as the wound it is, marked stump.
+	assert_eq(Body.KINDS + ["amputation"], Receipt.WOUND_KINDS)
 
 
 func test_add_wound_stores_the_fields_and_refuses_unknown_names() -> void:

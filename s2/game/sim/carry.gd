@@ -47,6 +47,18 @@ const IMMOBILE_LOAD := 2.0
 const RESERVE_WEAPON_WEIGHT := 0.5
 const SOAKED_THRESHOLD := 0.5
 const SOAKED_WEIGHT := 1.0
+## One thing this heavy is held in both arms, not run with (card G 가, decision
+## 448-19): the bell, a core, a crate.
+const BIG_THING := 3.0
+
+
+## Something in `items` ({id: count}) that is held in both arms (BIG_THING); a
+## spare weapon is slung, not held.
+static func has_big(items: Dictionary) -> bool:
+	for id: String in items:
+		if int(items[id]) > 0 and item_weight(id) >= BIG_THING and not W.is_known(id):
+			return true
+	return false
 
 
 static func limit(bag: String, strength: int) -> float:
@@ -87,6 +99,56 @@ static func total_weight(items: Dictionary) -> float:
 	for id: String in items:
 		t += item_weight(id) * maxf(0.0, float(items[id]))
 	return t
+
+
+## How much a box takes from a bag (inventory.md 3.3), by the furniture it
+## stands in: a drawer's 20, a counter's or a crate's 50 on our scale (×0.4 —
+## a 배낭 is a drawer's worth); a small cabinet's 10 would be 4, but the maps
+## already dress some with up to 5.7, so 6. A box of its own is a crate; a
+## furniture this does not know, a drawer. What a map is dressed with is not
+## held to it: only what is put in.
+const BOX_SMALL: float = 6.0
+const BOX_MID: float = 8.0
+const BOX_BIG: float = 20.0
+const BOX_LIMITS: Dictionary = {
+	"": BOX_BIG,
+	"nightstand": BOX_SMALL, "side_table": BOX_SMALL, "washstand": BOX_SMALL, "towel_shelf": BOX_SMALL,
+	"toolbox": BOX_SMALL, "strongbox": BOX_SMALL, "glass_cabinet": BOX_SMALL, "small_shelf": BOX_SMALL,
+	"dresser": BOX_MID, "cupboard": BOX_MID, "bookcase": BOX_MID, "jar_shelf": BOX_MID, "desk": BOX_MID,
+	"typewriter_desk": BOX_MID, "office_desk": BOX_MID, "file_cabinet": BOX_MID, "map_cabinet": BOX_MID,
+	"office_cabinet": BOX_MID, "record_shelf_row": BOX_MID, "hymn_shelf": BOX_MID, "lamp_shelf": BOX_MID,
+	"evidence_shelf": BOX_MID, "bread_rack": BOX_MID, "mail_sorting_rack": BOX_MID, "medicine_crate": BOX_MID,
+	"vestry_chest": BOX_MID, "conductor_log_chest": BOX_MID, "ration_ledger_chest": BOX_MID,
+	"drawer_chest_spilled": BOX_MID,
+	"wardrobe": BOX_BIG, "counter": BOX_BIG, "shop_counter": BOX_BIG, "service_counter": BOX_BIG,
+	"checkout": BOX_BIG, "shelf": BOX_BIG, "display_shelf": BOX_BIG, "crate_stack": BOX_BIG, "tin_crate": BOX_BIG,
+	"part_crate": BOX_BIG, "ammo_crate": BOX_BIG, "relief_crate": BOX_BIG, "blanket_crate": BOX_BIG,
+	"blanket_chest": BOX_BIG, "parish_chest": BOX_BIG, "fridge_open": BOX_BIG, "freezer_chest": BOX_BIG,
+	"workbench": BOX_BIG, "tool_bench": BOX_BIG, "tool_chest": BOX_BIG, "hardware_rack": BOX_BIG,
+	"parts_rack": BOX_BIG, "cloth_bolt_rack": BOX_BIG, "cask_stack": BOX_BIG,
+}
+
+
+## A box's limit (c: a game.data["containers"] row).
+static func box_limit(c: Dictionary) -> float:
+	return float(BOX_LIMITS.get(String(c.get("furniture", "")), BOX_MID))
+
+
+## What a box holds now.
+static func box_load(c: Dictionary) -> float:
+	var t: float = 0.0
+	for id in c.get("items", []):
+		t += item_weight(String(id))
+	return t
+
+
+## How many of `id` the box still takes (none once it is at its limit or over).
+static func box_room(c: Dictionary, id: String) -> int:
+	var room: float = box_limit(c) - box_load(c)
+	var w: float = item_weight(id)
+	if w <= 0.0:
+		return 999 if room >= 0.0 else 0
+	return maxi(0, floori((room + 0.0001) / w))
 
 
 # Seconds to bring a weapon to hand from "hand", "belt" or "bag".

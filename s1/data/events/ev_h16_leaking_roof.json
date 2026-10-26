@@ -1,0 +1,96 @@
+{
+  "id": "ev_h16_leaking_roof",
+  "content_type": "event",
+  "stage": "s1a",
+  "phase": "travel",
+  "trigger": [
+    {
+      "type": "segment",
+      "min": 3,
+      "max": 16
+    },
+    {
+      "type": "season",
+      "needs": "bare"
+    }
+  ],
+  "speaker": "tail",
+  "body": "꼬리칸 지붕 이음매로 빗물이 샌다. 담요가 젖고 바닥에 물이 고였다. \"우리 칸만 매번 이렇습니다.\"",
+  "choices": [
+    {
+      "id": "c_patch_seam",
+      "label": "지붕 이음매를 막는다",
+      "say": "지붕에 올라 이음매를 막아라. 타르와 천을 내준다.",
+      "why": "비 오는 지붕 위 일이다. 꼬리칸 사람이 오르고, 타르와 천이 창고에서 나간다.",
+      "effects": [
+        {
+          "type": "luxury",
+          "amount": -3
+        },
+        {
+          "type": "community.exposure",
+          "target": "tail",
+          "amount": 4
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": 2
+        },
+        {
+          "type": "flag",
+          "id": "ev_achieved",
+          "value": true
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_move_forward",
+      "label": "젖은 자리를 앞칸에 옮긴다",
+      "say": "젖은 자리 사람들은 앞칸에서 잔다. 오늘 밤만이다.",
+      "why": "앞칸은 자리를 내주지만 좁아진 걸 말로 남긴다.",
+      "effects": [
+        {
+          "type": "community.crowding",
+          "target": "front",
+          "amount": 4
+        },
+        {
+          "type": "relation",
+          "target": "front",
+          "amount": -3
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": 2
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    },
+    {
+      "id": "c_buckets",
+      "label": "통을 대고 버틴다",
+      "say": "통을 대라. 비는 그친다.",
+      "why": "오늘은 아무것도 안 든다. 젖은 담요는 칸의 온기를 빼앗는다.",
+      "effects": [
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": -6
+        },
+        {
+          "type": "relation",
+          "target": "tail",
+          "amount": -4
+        }
+      ],
+      "followups": [],
+      "witnesses": []
+    }
+  ],
+  "repeat": 0
+}

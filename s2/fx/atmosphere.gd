@@ -251,15 +251,18 @@ const BANDS: Dictionary = {
 		"sun": Color(1.0, 0.76, 0.56), "sun_energy": 0.55, "ambient": Color(0.58, 0.52, 0.62), "ambient_energy": 0.40},
 	"day": {"zenith": Color(0.47, 0.55, 0.66), "horizon": Color(0.76, 0.78, 0.80), "glow": Color(0.95, 0.94, 0.90),
 		"sun": Color(0.80, 0.85, 0.92), "sun_energy": 0.70, "ambient": Color(0.56, 0.60, 0.67), "ambient_energy": 0.26},
+	# Dusk light (sun, ambient): the clear sunset sky photo's own light at our
+	# brightness: a softened orange sun, the shade lit by the open sky's cool blue
+	# (the old orange sun and warm shade made the whole ground one brown).
 	"dusk": {"zenith": Color(0.20, 0.18, 0.32), "horizon": Color(0.90, 0.52, 0.32), "glow": Color(1.0, 0.56, 0.30),
-		"sun": Color(1.0, 0.64, 0.40), "sun_energy": 0.5, "ambient": Color(0.55, 0.45, 0.52), "ambient_energy": 0.38},
+		"sun": Color(0.86, 0.70, 0.47), "sun_energy": 0.5, "ambient": Color(0.48, 0.47, 0.55), "ambient_energy": 0.38},
 }
 ## The same bands at the warmest: softer, greener fill and a warmer day sun.
 const WARM_BANDS: Dictionary = {
 	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.25, 0.27, 0.30)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
-	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "ambient": Color(0.48, 0.42, 0.44)},
+	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "ambient": Color(0.43, 0.43, 0.50)},
 }
 ## Most saturation a band colour may carry, and how much colour (chroma, max
 ## minus min) a bluish one may: sky blue is the support gauge's (tests keep both).
@@ -568,6 +571,15 @@ static func light(l: Dictionary) -> Dictionary:
 		"background": l["background"],
 		"lamp": l["lamp"],
 	}
+
+
+## How thick a foggy day's fog lies over the whole field (fx/map_edge.gd): 0
+## without fog in the look, 1 in a thick one (the reference game's fog days
+## go white; overcast and rain keep the field clear).
+static func field_fog(l: Dictionary) -> float:
+	if not Array(l["kinds"]).has("fog"):
+		return 0.0
+	return smoothstep(0.55, 0.9, float(l["haze"]))
 
 
 ## The fx_* shader globals for this look. FxState still makes wet, snow, frost

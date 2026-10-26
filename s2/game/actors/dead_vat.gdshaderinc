@@ -28,6 +28,8 @@ uniform float clip_rate[128];
 uniform float clip_loop[128];
 // Box bake stores offset + 0.5 in 8 bits; a skinned bake stores metres (bias 0).
 uniform float bias = 0.5;
+// Seconds the field has stood paused (pause_veil.gd): the motions run on TIME - fx_still, so they hold.
+global uniform float fx_still;
 uniform vec3 tint = vec3(0.5);
 // The bake moves vertices only, so a lying body keeps its standing normals.
 // On, the face normal is taken from the moved surface instead. Off until it
@@ -66,6 +68,17 @@ uniform bool worn_look = false;
 // against glove_light, the picture's light at the hands (body_bake.gd GLOVE_GRAIN).
 uniform bool gloves = false;
 uniform float glove_light = 0.45;
+#endif
+#ifdef WEATHERED
+// The field's dead (dead_weathered.gdshader, zombies.gd): how worn each one is,
+// in the multimesh's own colour of it (Godot gives it times the vertex colour,
+// whose rgb is 1): r blood, g dirt, b how far the skin has gone off, each 0..1.
+// Where on the body, by its resting place: blood on the front of the chest and
+// at the mouth and on the hands (the vertex colour's alpha marks them), dirt
+// from the feet up, the skin by its colour (warm and light is skin), each in
+// patches by the colour picture's own place, so they hold on the body as it moves.
+varying vec4 tear;
+varying vec2 tear_at;    // x how high it rests (0 feet .. 1 crown), y 1 on the front
 #endif
 
 varying float shade;
@@ -118,7 +131,7 @@ void vertex() {
 	float hold = max(INSTANCE_CUSTOM.b, 0.0);
 	float shiver = max(-INSTANCE_CUSTOM.b, 0.0);
 	float speed = rate * pace * (1.0 - hold);
-	float looped = mod(TIME * speed + INSTANCE_CUSTOM.r * frames, frames);
+	float looped = mod((TIME - fx_still) * speed + INSTANCE_CUSTOM.r * frames, frames);
 	float once = clamp(INSTANCE_CUSTOM.r, 0.0, 1.0) * (frames - 1.0);
 	float frame = mix(once, looped, loops);
 	float current = floor(frame);
@@ -137,9 +150,13 @@ void vertex() {
 	rest = VERTEX;
 	rest_normal = NORMAL;
 #endif
+#ifdef WEATHERED
+	tear = COLOR;
+	tear_at = vec2(clamp(VERTEX.y / 1.7, 0.0, 1.0), step(0.0, VERTEX.z));
+#endif
 	VERTEX += offset;
 	// The cold's tremble: quick and small, from the hips up, more toward the head, each body at its own phase.
-	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin(TIME * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin(TIME * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
+	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin((TIME - fx_still) * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin((TIME - fx_still) * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
 	shade = INSTANCE_CUSTOM.a;
 	view_pos = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 #ifdef WORN
@@ -195,6 +212,45 @@ float pattern_at(int kind, vec3 p, vec3 n, vec3 w) {
 }
 #endif
 
+#ifdef WEATHERED
+// Smooth noise on the colour picture's place (0..1), for patches that stay put on the body.
+float tear_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+	float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+	float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+	float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// The colour picture (linear) of one of the dead as worn as `worn_as` says, at
+// `uv`, `worn_at` where on the body (the varyings, passed in).
+vec3 worn_down(vec3 picture, vec2 uv, vec4 worn_as, vec2 worn_at) {
+	float n = tear_noise(uv * 40.0) * 0.65 + tear_noise(uv * 110.0) * 0.35;
+	float light = dot(picture, vec3(0.2126, 0.7152, 0.0722));
+	// Skin gone off: warm and light turns grey-green and blotched.
+	float skin = clamp((picture.r - picture.b) * 7.0 - 0.25, 0.0, 1.0) * smoothstep(0.02, 0.09, light);
+	vec3 off = vec3(light) * vec3(0.9, 1.0, 0.84);
+	picture = mix(picture, off * (1.0 - 0.35 * n), worn_as.b * skin);
+	// Dirt from the feet up, in patches.
+	float low = 1.0 - smoothstep(0.12, 0.55, worn_at.x);
+	float dirt = worn_as.g * clamp(low * 0.9 + (n - 0.55) * 1.6, 0.0, 1.0);
+	return mix(picture, picture * vec3(0.52, 0.47, 0.4), dirt);
+}
+
+// How much blood is on it there (0..1): down the front from the mouth, in
+// patches, and on the hands. Laid on after the picture is pressed, so it keeps
+// its own dark red where the press would turn it brown.
+float bled(vec2 uv, vec4 worn_as, vec2 worn_at) {
+	float n = tear_noise(uv * 40.0 + vec2(17.0, 5.0)) * 0.65 + tear_noise(uv * 110.0) * 0.35;
+	float chest = smoothstep(0.62, 0.74, worn_at.x) * (1.0 - smoothstep(0.9, 0.95, worn_at.x)) * worn_at.y;
+	return worn_as.r * clamp(chest * smoothstep(0.3, 0.6, n) * 1.3 + worn_as.a * 0.9, 0.0, 1.0);
+}
+const vec3 DRIED_BLOOD = vec3(0.075, 0.012, 0.01);
+#endif
+
 void fragment() {
 	if (flat_normals) {
 		NORMAL = normalize(cross(dFdy(view_pos), dFdx(view_pos)));
@@ -215,7 +271,13 @@ void fragment() {
 			picture = mix(picture, worn.rgb * pow(grain, 2.2), smoothstep(0.2, 0.4, worn.a));
 		}
 #endif
+#ifdef WEATHERED
+		picture = worn_down(picture, UV, tear, tear_at);
+#endif
 		vec3 c = fx_model_grade(picture, grade_saturation, grade_value, grade_cool, grade_cool_mix);
+#ifdef WEATHERED
+		c = mix(c, DRIED_BLOOD, bled(UV, tear, tear_at) * 0.85);
+#endif
 		base = c * (tint / 0.5);
 	}
 	ALBEDO = base * shade;

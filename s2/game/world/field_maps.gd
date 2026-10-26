@@ -15,6 +15,8 @@ const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const CellarRules = preload("res://game/world/cellar_rules.gd")
 const RoofRules = preload("res://game/world/roof_rules.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
+const RoomSplit = preload("res://game/world/room_split.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -99,6 +101,9 @@ static func build(place_id: String) -> Dictionary:
 
 
 static func build_from(script: Script) -> Dictionary:
+	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
+	if MapRing.enabled(script):
+		return MapRing.build(script, build_from)
 	var data: Dictionary = script.build()
 	var consts: Dictionary = script.get_script_constant_map()
 	if not data.has("place_id"):
@@ -146,6 +151,8 @@ static func build_from(script: Script) -> Dictionary:
 		# A flat roof to climb on a town map (house_layout.md 6), its skylight ladder a stair cell
 		# the furniture leaves clear.
 		RoofRules.plan(data)
+		# Big rooms in a home give up a bathroom, a closet or a pantry before furnishing.
+		RoomSplit.apply(data, script)
 		data["room_stats"] = RoomFurnish.furnish_rooms(data)
 		data["room_stats"]["hatches"] = hatches
 		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)
@@ -155,8 +162,9 @@ static func build_from(script: Script) -> Dictionary:
 		data["cellar_windows"] = CellarRules.windows(data)
 		data.erase("_rooms")
 		data.erase("_defer_paths")
-		for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
-			g.refresh_paths()
+		if not MapRing.skip_paths:
+			for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
+				g.refresh_paths()
 	# Every window's latch and curtain, fixed per map and window (J08).
 	BuildingRules.dress_windows(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked

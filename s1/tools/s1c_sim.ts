@@ -7,8 +7,8 @@
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { BUDGET, CL, CREW, D, DRAW, DZ, TRAVEL_EVENTS } from '../src/game';
-import type { CrewCost, CrewCurve, CrewHaul, LawId, TechId, Variant } from '../src/game';
+import { BUDGET, CL, CREW, D, DRAW, DZ, LOCO_IDS, TRAVEL_EVENTS, useSeasonAct } from '../src/game';
+import type { CrewCost, CrewCurve, CrewHaul, LawId, LocoId, SeasonAct, TechId, Variant } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, CrewPolicy, GameMetrics } from './s1c_bot';
 
@@ -42,6 +42,10 @@ const disasters = flags.includes('--disasters');
 // 시작에 완성판으로 박는다. none은 켜기만 하고 박지 않는다. natural은 켜기만 하고 봇이 연구로 얻는다(none과 같은 판이다).
 // X0은 대조: 장비는 끈 채 원래 수동차(x2)만 박는다. C·D에서 수동차 자체 몫(장소 후보 둘)을 떼어 보려는 것이다.
 const climate = flags.includes('--climate');
+// --act=act1|act2|act3: 시험 판 스위치(결정 447 카드 3). 24구간을 그 막의 계절표 곡선으로 돈다(--climate와 같이 쓴다). 판을 만들기 전에 바꾼다.
+const actFlag = flags.find(x => x.startsWith('--act='))?.slice(6) as SeasonAct | undefined;
+if (actFlag && !['act1', 'act2', 'act3'].includes(actFlag)) throw new Error(`--act는 act1·act2·act3: ${actFlag}`);
+if (actFlag) useSeasonAct(actFlag);
 // --death: 죽음의 무게(death_weight.ts)를 켠다. --arrivals: 사람 들어오는 사건(arrivals.ts)을 켠다. 앱의 새 판과 같은 조합을 재려고 둔다(결정 407 E2).
 const deathW = flags.includes('--death');
 const arrivals = flags.includes('--arrivals');
@@ -84,6 +88,9 @@ if (haulFlag) CREW.haul = haulFlag;
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 const pickRule = flags.find(x => x.startsWith('--pick='))?.slice(7);
 if (pickRule && pickRule !== 'second' && pickRule !== 'random') throw new Error(`--pick는 second나 random: ${pickRule}`);
+// --loco=c1|c2|c3|c4: 기관차를 정한다(결정 125). 없으면 기본 c3인데 c3은 측선 칸이 안 붙어, 칸 규칙을 잴 땐 c2(기본 걸림)나 c1(두 배)로 돈다.
+const locoFlag = flags.find(x => x.startsWith('--loco='))?.slice(7) as LocoId | undefined;
+if (locoFlag && !LOCO_IDS.includes(locoFlag)) throw new Error(`--loco는 ${LOCO_IDS.join('·')}: ${locoFlag}`);
 
 const RUNS: { name: string; opts: BotOptions }[] = [
   { name: 'S1a caretaker', opts: { s1c: false, policy: 'caretaker', dom: 'idle' } },
@@ -238,6 +245,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(noLevers ? { noLevers: true } : {}),
     ...(climateLevers ? { climateLevers: true } : {}),
     ...(pushLaw ? { pushLaw } : {}),
+    ...(locoFlag ? { loco: locoFlag } : {}),
     ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
@@ -255,5 +263,5 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
   console.log(`${''.padEnd(28)} 이동사건 ${r.travelCards}(반복 ${r.travelRepeats}) 콘텐츠사건 ${r.contentCards}(반복 ${r.contentRepeats}) 제목반복 ${r.titleRepeats}/${r.titleTotal}(${(100 * r.titleRepeatRate).toFixed(1)}%) `
     + `이동사건없는구간 ${r.segsNoTravel}/${r.segs}(쉼 ${r.segsNoTravelRest} 빔 ${r.segsNoTravelEmpty} 그외 ${r.segsNoTravelOther}) 구간별카드[0,1,2,3,4+] ${r.cardsPerSegDist.join('/')} 최대 ${r.cardsPerSegMax}`);
 }
-console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''}${budget ? `, 카드 예산 켬 ${JSON.stringify(BUDGET)}` : ''}${events ? `, 새 이동 사건 묶음·가중 뽑기 켬 ${JSON.stringify(DRAW)}` : ''})`);
-if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, crew: crewFlag, curve: CREW.curve, cost: CREW.cost, haul: CREW.haul, climate, noLevers, gear: gearFlag ?? null, cl: clSets, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), ...(events ? { events: true, draw: DRAW } : {}), runs: out }, null, 2));
+console.log(`(${N}판씩, ${((Date.now() - t0) / 1000).toFixed(1)}초${actFlag ? `, 계절 곡선 ${actFlag}` : ''}${Object.keys(sets).length ? `, 바꾼 값 ${JSON.stringify(sets)}` : ''}${disasters ? `, 재난 켬 ${JSON.stringify(dzSets)}` : ''}${budget ? `, 카드 예산 켬 ${JSON.stringify(BUDGET)}` : ''}${events ? `, 새 이동 사건 묶음·가중 뽑기 켬 ${JSON.stringify(DRAW)}` : ''})`);
+if (OUT) writeFileSync(OUT, JSON.stringify({ n: N, crew: crewFlag, curve: CREW.curve, cost: CREW.cost, haul: CREW.haul, climate, act: actFlag ?? 'prologue', noLevers, gear: gearFlag ?? null, cl: clSets, sets, disasters, prep: prepFlag, dz: dzSets, ...(budget ? { budget: BUDGET } : {}), ...(events ? { events: true, draw: DRAW } : {}), runs: out }, null, 2));

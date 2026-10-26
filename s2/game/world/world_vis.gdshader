@@ -19,8 +19,33 @@ uniform float lamp_gain = 0.0;
 varying vec3 world_pos;
 varying vec3 world_nrm;
 varying float bank;
+// The floor kind + 1 the ground carries in UV2.x (map_view, map_edge); 0 on all else.
+varying flat float ground_kind;
+
+// Bare ground by floor kind, for while no snow lies on it: the kinds read apart
+// by brightness as the reference's grass, asphalt and concrete tile sets do (D13).
+// Open ground is dead grass and soil in patches, the road dark asphalt, the
+// platform light concrete slabs, gravel speckled. Other kinds keep their colour.
+vec3 bare_ground(int kind, vec3 colour, vec2 p, vec4 grain) {
+	if (kind == 0 || kind == 5) {
+		float patch = fx_fbm2(p * 0.22 + vec2(3.7, 1.1));
+		vec3 grass = mix(vec3(0.70, 0.68, 0.53), vec3(0.80, 0.77, 0.60), fx_vnoise(p * 2.3));
+		vec3 soil = vec3(0.50, 0.43, 0.35) * (0.9 + 0.2 * grain.a);
+		return mix(grass, soil, smoothstep(0.42, 0.6, patch));
+	} else if (kind == 1) {
+		return vec3(0.10, 0.10, 0.11) * (0.9 + 0.2 * fx_vnoise(p * 1.7));
+	} else if (kind == 2) {
+		vec2 slab = fract(p * 0.5);
+		float seam = step(0.96, max(slab.x, slab.y));
+		return vec3(0.86, 0.85, 0.82) * (0.94 + 0.1 * fx_hash(floor(p * 0.5))) * (1.0 - 0.3 * seam);
+	} else if (kind == 7) {
+		return vec3(0.55, 0.54, 0.51) * (0.8 + 0.4 * fx_hash(floor(p * 6.0)));
+	}
+	return colour;
+}
 
 void vertex() {
+	ground_kind = UV2.x;
 	// Snow banked against the walls the wind blows at. Only the ground mesh
 	// carries UV (map_view.drift_uv: which way the wall stands from the vertex).
 	bank = (max(0.0, UV.x * fx_wind.x) + max(0.0, UV.y * fx_wind.y)) * COLOR.a;
@@ -53,6 +78,12 @@ void fragment() {
 	vec4 grain = texture(fx_ground, world_pos.xz * (1.0 / 2.6));
 	float ground_k = smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	float wander = 0.55 + 0.9 * fx_vnoise(world_pos.xz * 0.13 + 7.0);
+	// The kind's bare look on open flat ground, gone back to the floor's own colour
+	// as snow comes (the gates above keep reading the floor's own colour).
+	float bare_k = sky * smoothstep(0.6, 0.9, up) * (1.0 - smoothstep(0.25, 0.8, fx_snow));
+	if (ground_kind > 0.5 && bare_k > 0.001) {
+		base = mix(base, bare_ground(int(ground_kind + 0.5) - 1, base, world_pos.xz, grain), bare_k);
+	}
 	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander;
 	base *= 1.0 - 0.35 * wet;

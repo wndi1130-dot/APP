@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
 const St = preload("res://game/train/train_state.gd")
 
 
@@ -72,7 +73,7 @@ func test_parts_first_up_to_the_target_then_the_line() -> void:
 	var g := _game()
 	TrainWorkshop.start(g, "bow")
 	var r: Dictionary = TrainWorkshop.run(g)
-	# A stretch is 4 work: one part (4 → 5, 2 scrap and 1 wood), then the bow's 3.
+	# PR 6's starting craft master gives 5 work: one part, then the bow's 3.
 	assert_eq(r["parts"], 1)
 	assert_eq(float(g["dom"]["parts"]), 5.0)
 	assert_eq(r["made"], ["bow"])
@@ -95,8 +96,9 @@ func test_a_long_thing_carries_over_and_parts_stop_at_the_target() -> void:
 	var g := _game({"parts": 0})
 	TrainWorkshop.set_target(g, 3)
 	TrainWorkshop.start(g, "crowbar")
+	g["dom"]["make"]["need"] = 4.0
 	var r1: Dictionary = TrainWorkshop.run(g)
-	# 3 work to three parts, 1 to the crowbar's 2.
+	# Starting master gives 5 work: 3 parts, then 2 of this longer job's 4.
 	assert_eq(r1["parts"], 3)
 	assert_eq(r1["made"], [])
 	assert_almost_eq(float(TrainWorkshop.now(g)["share"]), 0.5, 1e-6)
@@ -118,3 +120,29 @@ func test_the_target_stays_between_0_and_10() -> void:
 	assert_eq(TrainWorkshop.target(g), 10)
 	TrainWorkshop.set_target(g, -3)
 	assert_eq(TrainWorkshop.target(g), 0)
+
+
+## Leaving a stop the running technologies take their upkeep before the work
+## (S1 domesticSettle: payUpkeep, then runWorkshop), so the workshop makes back
+## the parts they used; with nothing to pay it with they run at half and the
+## stretch names them. `run` alone stays S1's runWorkshop.
+func test_a_stretch_takes_the_upkeep_before_the_work() -> void:
+	var g := _game()
+	for id: String in ["e2", "e3"]:
+		g["dom"]["techs"][id] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	var parts: float = float(g["dom"]["parts"])
+	var r: Dictionary = TrainWorkshop.stretch(g)
+	assert_eq(r["starved"], [] as Array[String])
+	# 0.25 each came off before the workshop made parts back up to its target.
+	assert_eq(r["parts"], int(ceilf(float(TrainWorkshop.target(g)) - (parts - 0.5))))
+	var poor := _game({"parts": 0.0, "scrap": 0.0})
+	poor["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	var r2: Dictionary = TrainWorkshop.stretch(poor)
+	assert_eq(r2["starved"], ["e2"] as Array[String])
+	assert_eq(TrainResearch.mult(poor, {}, "e2"), float(TrainResearch.D["defectMult"]), "a starved technology runs at half")
+	var plain := _game()
+	plain["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	var before: float = float(plain["dom"]["parts"])
+	TrainWorkshop.run(plain)
+	assert_false(plain["dom"]["techs"]["e2"].has("starved"), "run alone pays no upkeep")
+	assert_gte(float(plain["dom"]["parts"]), before)

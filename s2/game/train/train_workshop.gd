@@ -12,11 +12,20 @@ extends RefCounted
 ## they take are new values (the PR's table). What they do is the field's: the
 ## train only holds them.
 ##
-## The work is shared: parts first (S1's order), then the line. The refit (PR 4)
-## comes after the line, so making a thing slows a refit (decision 070).
+## The work is shared: parts, the making line, restoration, then insulation.
+## Making a thing slows a refit (decision 070); the order is fixed in S2.
+##
+## A stretch (`stretch`) is S1 domesticSettle's order: the running technologies
+## take their upkeep from the stores first (payUpkeep), then the workshop works
+## (`run`, S1 runWorkshop). One the stores cannot keep runs at half that
+## stretch (train_research.gd pay_upkeep, mult). S1's 「부품이 모자란다」 card is
+## not here yet: S2 runs on, as that card's 「그냥 달린다」.
 
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainLawTech = preload("res://game/train/train_lawtech.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
 const WORK: float = 4.0
@@ -44,7 +53,7 @@ const ORDER: Array[String] = ["bow", "crowbar", "coat_long"]
 
 ## A stretch's work.
 static func work_power(g: Dictionary = {}, t: Dictionary = {}) -> float:
-	return WORK * SKILL * ZONE * TrainHands.hands_work_mult(g, t)
+	return TrainResearch.work_power(g, t)
 
 
 ## How many parts the workshop keeps.
@@ -107,6 +116,16 @@ static func cancel(g: Dictionary) -> bool:
 	return true
 
 
+## A stretch leaving a stop: the upkeep, then the work. `run`'s answer with
+## "starved", the running technologies whose upkeep the stores could not pay.
+static func stretch(g: Dictionary) -> Dictionary:
+	TrainDom.ensure(g)
+	var starved: Array[String] = TrainResearch.pay_upkeep(g)
+	var out: Dictionary = run(g)
+	out["starved"] = starved
+	return out
+
+
 ## A stretch of work (the train leaving a stop): parts up to the target while
 ## the stores last, then the line. {"parts": made, "made": [ids], "events": [...]}
 ## — the events in the train scene's form (train_scene post_event).
@@ -114,6 +133,8 @@ static func run(g: Dictionary) -> Dictionary:
 	TrainDom.ensure(g)
 	var dom: Dictionary = g["dom"]
 	var w: float = work_power(g)
+	var initial_work: float = w
+	var did: Array[String] = []
 	var parts_made: int = 0
 	var made: Array[String] = []
 	var events: Array = []
@@ -131,6 +152,8 @@ static func run(g: Dictionary) -> Dictionary:
 			dom["parts"] = float(dom.get("parts", 0)) + 1.0
 			parts_made += 1
 		dom["partWork"] = done_part
+	if parts_made > 0:
+		did.append("부품 %d" % parts_made)
 	var m: Variant = dom.get("make")
 	if w > 0.0 and m is Dictionary:
 		var spend_line: float = minf(w, float(m["need"]) - float(m["progress"]))
@@ -143,7 +166,22 @@ static func run(g: Dictionary) -> Dictionary:
 			made.append(id)
 			# No workshop car on S2's train yet: the train as a whole made it.
 			events.append({"kind": "made", "car": "", "comm": "", "sign": 1, "size": 0.4, "day": int(g.get("seg", 0))})
-	return {"parts": parts_made, "made": made, "events": events}
+	# Preserve the existing making line immediately after parts. Restoration
+	# receives the remaining work (S1 parts -> restore when no making is queued).
+	var restored: Dictionary = TrainResearch.advance_restore(g, w)
+	w -= float(restored["used"])
+	did.append_array(restored["did"])
+	# A standing law the restored technology bends says so (S1 completeTech's lawTechNews).
+	if restored.get("done") != null:
+		for news: String in TrainLawTech.news(g, String(restored["done"])):
+			if not g.get("journal") is Array:
+				g["journal"] = []
+			g["journal"].append({"seg": int(g.get("seg", 0)), "text": news, "tone": "good"})
+	var modified: Dictionary = TrainMods.advance_job(g, w)
+	w -= float(modified["used"])
+	did.append_array(modified["did"])
+	events.append_array(modified["events"])
+	return {"parts": parts_made, "made": made, "events": events, "used": initial_work - w, "did": did}
 
 
 ## What the workshop is doing for the screen: the line's thing and how far
