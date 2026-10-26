@@ -85,7 +85,7 @@ static func _moved(v, rows: int, key: String):
 ## Add ground on any side without changing the old cells or their identities.
 ## A direction stays a direction; dictionary keys and embedded positions move.
 ## refresh_ground false leaves the ground floor's paths to a caller that builds on it
-## and refreshes once after (side_path.gd), as the other floors are refreshed here.
+## and refreshes once after (map_ring.gd, side_path.gd), as the other floors are refreshed here.
 static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true) -> Dictionary:
 	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
 	if left + top + right + bottom == 0:
