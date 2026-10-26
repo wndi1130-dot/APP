@@ -100,7 +100,10 @@ func measure_map(id: String, data: Dictionary) -> void:
 				cls = Furnish.room_class(labels.get(ri, "") if name.is_empty() else name, kinds, lv)
 			if cls.is_empty():
 				cls = inherited.get(ri, "other")
-			cls = data.get("density_classes", {}).get("%d:%d" % [lv, ri], cls)
+			# 바깥 띠(map_ring)는 지도를 넓혀 방 번호를 다시 매기므로, 가구 놓기 때 번호로 적은 표는 그 뒤로는
+			# 다른 방을 가리킨다. 그때는 놓인 가구의 묶음(rule)과 이름으로만 읽는다.
+			if not data.has("map_ring"):
+				cls = data.get("density_classes", {}).get("%d:%d" % [lv, ri], cls)
 			if cls.is_empty():
 				cls = "other"
 			var footprint: Dictionary = {}
