@@ -2693,7 +2693,9 @@ func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	# The view ends inside the woods round the map, never past them (edge_band.gd).
 	var screen := get_viewport().get_visible_rect().size
-	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, screen.x / maxf(screen.y, 1.0), CAM_PITCH, CAM_YAW), grid.width, grid.height)
+	var aspect := screen.x / maxf(screen.y, 1.0)
+	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, aspect, CAM_PITCH, CAM_YAW), grid.width, grid.height)
+	focus = EdgeBand.keep_on_screen(focus, player.position, cam_size, aspect, CAM_PITCH, CAM_YAW)
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)

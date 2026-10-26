@@ -68,6 +68,26 @@ static func view_half(cam_size: float, aspect: float, pitch_deg: float, yaw_deg:
 	return Vector2(across * c + along * s, across * s + along * c)
 
 
+## How far from the middle of the screen the player may stand, as a share of half
+## the screen each way, before the view follows past the band (keep_on_screen).
+const KEEP: float = 0.6
+
+
+## A turned view (결정 476) held inside the band stops so far in at a corner of the
+## map that the player would slide to the screen's corner, under the thumbs, or off
+## it: the view moves toward `at` just enough to keep it inside the middle KEEP of
+## the screen. Only there does the screen go past the band, onto the fog and the
+## ground past the edge (fx/map_edge.gd: 48 m of ground, the fog whole from 12 m).
+static func keep_on_screen(focus: Vector3, at: Vector3, cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float) -> Vector3:
+	var half := Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg))) * KEEP
+	var yaw := deg_to_rad(yaw_deg)
+	# Where `at` lies from the focus across and down the screen, in metres of ground.
+	var off := Vector2(at.x - focus.x, at.z - focus.z).rotated(yaw)
+	var over := off - Vector2(clampf(off.x, -half.x, half.x), clampf(off.y, -half.y, half.y))
+	var move := over.rotated(-yaw)
+	return focus + Vector3(move.x, 0, move.y)
+
+
 ## The point the camera looks at, kept so its view ends inside the band.
 static func clamp_focus(focus: Vector3, half: Vector2, width: int, height: int, band: float = BAND) -> Vector3:
 	return Vector3(_clamp_axis(focus.x, half.x, float(width), band), focus.y, _clamp_axis(focus.z, half.y, float(height), band))
