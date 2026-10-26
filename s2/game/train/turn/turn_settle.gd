@@ -11,6 +11,7 @@ const Needs = preload("res://game/train/turn/turn_needs.gd")
 const Field = preload("res://game/politics/field_return.gd")
 const Agenda = preload("res://game/politics/council_agenda.gd")
 const Vote = preload("res://game/politics/council_vote.gd")
+const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 
 static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if g0.get("stranded") != null: return C.unsupported(g0, "settle: stranded/trip")
@@ -267,40 +268,26 @@ static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
 
 static func riot_tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 	var p: Dictionary = t["P"]
-	if float(p["riotFrom"]) <= 0: return
+	var from: float = float(p["riotFrom"])
+	if from <= 0: return
 	var r: Dictionary = g["riot"]
 	var prev: float = float(r["prev"])
 	var now: float = float(g["tension"])
 	r["prev"] = now
-	var starts: bool = int(r["stage"]) != 2 and prev < float(p["riotFrom"]) and now >= float(p["riotFrom"])
-	if int(r["stage"]) == 2 or starts:
+	var ongoing: bool = int(r["stage"]) == 2
+	var line: float = Ladder.protest_line(g, t)
+	var pending: bool = bool(r.get("pending", false))
+	var crossed: bool = not ongoing and ((prev < from and now >= from) or (pending and now >= from))
+	# Crossing the riot line in one settle without a protest first: only the protest comes now (정치 흐름 4.1).
+	var skipped: bool = crossed and not pending and prev < line
+	if skipped: r["pending"] = true
+	elif pending and (crossed or now < from): r.erase("pending")
+	var starts: bool = crossed and not skipped
+	if ongoing or starts:
 		if starts:
 			r["stage"] = 2
 			r["riots"] += 1
-		var pool: Array = []
-		for person: Dictionary in t["PROFILES"]:
-			if int(person["age"]) < 16 or int(person["age"]) > 64 or C.is_leader(g, t, person["name"]) or St.is_gone(g, person["name"]): continue
-			var wounded: bool = false
-			for w: Dictionary in W.active(g):
-				if w["who"] == person["name"]: wounded = true
-			if not wounded: pool.append(person)
-		var dead: int = 0
-		var hurt: int = 0
-		for _i: int in int(p["riotFall"]):
-			if pool.is_empty(): break
-			var idx: int = int(floor(C.rnd(g) * pool.size()))
-			var person: Dictionary = pool[idx]
-			pool.remove_at(idx)
-			if C.rnd(g) < float(p["riotDeath"]):
-				Death.on_death(g, t, person["community"], [person["name"]], "other", false, true)
-				dead += 1
-			else:
-				g["injured"] += 1
-				W.note_injury(g, t, 1, "brawl", "난장판", {"names": [person["name"]], "comm": person["community"]})
-				hurt += 1
-		r["fell"] += dead + hurt
-		r["died"] += dead
-		if dead + hurt > 0: C.journal(g, "싸움이 번져 어른 %d명이 쓰러졌다.%s" % [dead + hurt, " 그중 %d명은 일어나지 못했다." % dead if dead > 0 else " 모두 숨은 붙어 있다."], "bad")
+		Ladder.riot_fell(g, t, int(p["riotFall"]))
 		r["spilled"] += 1
 		notes.append("난장판이 이어진다.")
 		if not C.has_card(g, "protest"):
@@ -311,6 +298,11 @@ static func riot_tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		if int(r["spilled"]) > 0 and r["fire"].is_empty():
 			notes.append("엎어진 물건 %d더미를 치웠다.%s" % [int(r["spilled"]), " 그을음과 부서진 선반은 남는다." if not r["scorched"].is_empty() else ""])
 			r["spilled"] = 0
-		if prev < float(p["protestFrom"]) and now >= float(p["protestFrom"]) and not C.has_card(g, "protest"):
+		# A dismissed protest comes back if tension is still over the line (unresolved); otherwise it is done.
+		var again: bool = false
+		if r.has("ignoredAt") and int(g["seg"]) - int(r["ignoredAt"]) >= int(Ladder.LADDER["ignoreAgain"]):
+			again = now >= line
+			r.erase("ignoredAt")
+		if ((prev < line and now >= line) or skipped or again) and not C.has_card(g, "protest"):
 			r["protests"] += 1
 			C.card(g, {"kind": "protest", "comm": "tail", "text": "protest"})

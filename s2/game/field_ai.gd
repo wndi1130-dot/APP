@@ -41,6 +41,9 @@ const SAVE_FAR: float = 4.0
 ## This many on a companion at once and it steps back toward the chief.
 const CROWD_R: float = 2.5
 const CROWD_N: int = 3
+## Stepping back toward the chief, it keeps this far from the chief's body (check
+## shots 10-26: it backed into the chief and the two bodies stood as one).
+const CHIEF_ROOM: float = 1.0
 ## Walking, the one in front keeps this far ahead of the chief.
 const LEAD_AHEAD: float = 3.0
 ## Slow work is dropped when one of the dead gets this near.
@@ -334,6 +337,8 @@ func _use_bandage(giver, who, n: int) -> void:
 ## then the order, then keeping beside the chief. Threat always outranks a job
 ## (zomboid mod lesson: workers that let themselves be eaten mid-task).
 func _companion(p) -> void:
+	if _hold_swing(p):
+		return
 	var player = game.player
 	# Out of the train again at the door it went in by: an order other than to
 	# the train (field_hud.gd _command) took it off the train.
@@ -518,6 +523,10 @@ func _squad_threat(p) -> Dictionary:
 ## the chief and shove the nearest off. The pace of the blows is the combat's
 ## (decision 119); this only says whom.
 func _engage(p, z: Dictionary) -> void:
+	if _hold_swing(p):
+		return
+	if _finish_fallen(p):
+		return
 	var d: float = p.position.distance_to(z["pos"])
 	if _crowd(p) >= CROWD_N:
 		p.target_zombie = {}
@@ -526,7 +535,12 @@ func _engage(p, z: Dictionary) -> void:
 		var away: Vector3 = (p.position - z["pos"])
 		away.y = 0
 		var back: Vector3 = (away.normalized() + (game.player.position - p.position).normalized() * 0.5).normalized()
-		_walk(p, game.walkable_near(p.position + back * 2.5, false, 2), true)
+		# It steps back with its face to them, at a walk, not turning its back to run off
+		# and round again to shove (move_rules.gd; user field test: they "whip round").
+		p.running = false
+		_walk(p, game.walkable_near(_beside_chief(p.position, p.position + back * 2.5, away), false, 2), false)
+		p.brain["face_hold"] = z["pos"]
+		p.brain["face_hold_t"] = game.clock.elapsed
 		if d < 1.3:
 			p.face_point(z["pos"])
 			game.combat.shove(p)
@@ -550,7 +564,62 @@ func _engage(p, z: Dictionary) -> void:
 		return
 	if d > 3.0 and p.target_zombie != z:
 		p.running = true
+	# In reach it stops where it is and strikes; out of reach the chase walks the way (결정 441 (1)).
+	if d <= game.combat.melee_range(p) and not game.combat.melee_blocked(p, z["pos"]):
+		p.stop()
 	game.combat.melee_target(p, z, true)
+
+
+## Where to step back to from `from`, `to` as the crowd and the chief give it, not
+## through the chief: a way back that comes within CHIEF_ROOM of the chief ends at
+## the chief's side instead, the side it is on (straight on: square to `away`).
+func _beside_chief(from: Vector3, to: Vector3, away: Vector3) -> Vector3:
+	var chief: Vector3 = game.player.position
+	var way := Vector3(to.x - from.x, 0.0, to.z - from.z)
+	var rel := Vector3(chief.x - from.x, 0.0, chief.z - from.z)
+	var along := clampf(rel.dot(way) / maxf(way.length_squared(), 0.0001), 0.0, 1.0)
+	var off := from + way * along - chief
+	off.y = 0.0
+	if off.length() >= CHIEF_ROOM:
+		return to
+	if off.length() < 0.05:
+		off = Vector3(-away.z, 0.0, away.x)
+		if off.length() < 0.05:
+			off = Vector3.RIGHT
+	return Vector3(chief.x, to.y, chief.z) + off.normalized() * CHIEF_ROOM
+
+
+## A swing once begun is seen through where it stands (결정 441 (1)): no next target or
+## order takes it off. The rest after a blow and a stomp do not hold it, nor a shove:
+## that plants the feet over its first half (feet_held) but keeps the order.
+func _hold_swing(p) -> bool:
+	if p.strike_kind != "swing" or (p.strike_t <= 0.0 and not game.combat.blow_holds_feet(p)):
+		return false
+	p.stop()
+	return true
+
+
+## Stopping to swing (결정 441 (1)) left the ones it knocked down behind as it went on to the
+## next, and they got up again among the squad. So one already down within the blow's reach
+## is finished with the weapon in hand before it moves on. It never walks to a body further
+## off, and a gun or bare hands (a stomp) keep to the shove they had.
+func _finish_fallen(p) -> bool:
+	if p.action != "" or not p.grabbers.is_empty():
+		return false
+	var best: Dictionary = {}
+	var nearest: float = game.combat.melee_range(p)
+	for z in _dead_near(p.position, nearest):
+		if z["state"] != "downed" or game.combat.stomps(p, z):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		if d <= nearest and not game.combat.melee_blocked(p, z["pos"]):
+			nearest = d
+			best = z
+	if best.is_empty():
+		return false
+	p.stop()
+	game.combat.melee_target(p, best, true)
+	return true
 
 
 func _should_shoot(p, z: Dictionary, d: float) -> bool:
@@ -1160,7 +1229,7 @@ func _dug(p) -> void:
 	var w: Dictionary = _wagon_with_coal()
 	if w.is_empty():
 		return
-	var take := minf(TRIP_COAL * game.mission_play.load_mult(), float(w["coal"]))
+	var take := minf(TRIP_COAL * game.mission_play.load_mult() * game.haul_mult(), float(w["coal"]))
 	w["coal"] = float(w["coal"]) - take
 	p.brain["load"] = take
 	p.brain["job"] = "carry"
@@ -1176,6 +1245,8 @@ func _wagon_with_coal() -> Dictionary:
 ## Escorts guard the carriers. Attitude says how far they go out; fire
 ## permission says whether they may shoot (s2_station 2.4).
 func _escort(p) -> void:
+	if _hold_swing(p):
+		return
 	var site: Vector3 = FieldGrid.center(game.data["spots"]["work_site"]["cell"])
 	var reach: float = {"aggressive": 12.0, "defensive": 6.0, "neutral": 2.0}.get(crew_attitude, 6.0)
 	var threat: Dictionary = {}
@@ -1210,6 +1281,8 @@ func _escort(p) -> void:
 			_shoot_or_aim(p, threat["pos"], threat)
 			return
 	_prefer(p, false)
+	if dist <= game.combat.melee_range(p) and not game.combat.melee_blocked(p, threat["pos"]):
+		p.stop()
 	game.combat.melee_target(p, threat, true)
 
 
@@ -1331,6 +1404,8 @@ func _alert_all(target, spotter) -> void:
 
 
 func _raider_fight(r, target, sees: bool) -> void:
+	if _hold_swing(r):
+		return
 	var b: Dictionary = r.brain
 	if target == null or not target.is_alive():
 		b["state"] = "search"
@@ -1361,6 +1436,7 @@ func _raider_fight(r, target, sees: bool) -> void:
 			# Goes round the side and closes in with the axe: it names a target only
 			# within the blow's reach and with nothing in the way, else it walks on.
 			if sees and d <= game.combat.melee_range(r) and not game.combat.melee_blocked(r, target.position):
+				r.stop()
 				game.combat.melee_person(r, target)
 			else:
 				var side := Vector3(-(at - r.position).z, 0, (at - r.position).x).normalized() * 5.0

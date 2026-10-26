@@ -24,7 +24,7 @@ import { HANDS } from '../src/game/data';
 import { handShort, handsCoal, handsNow, handsOffered, handsSettle, handsTrackBoost, handsWatchMult, handsWill, handsWorkMult, workShare } from '../src/game/hands';
 
 export const FORMAT = 'train-vectors-v2';
-const SEEDS = ['train-0', 'train-1', 'train-2', 'train-3'];
+const SEEDS = ['train-0', 'train-1', 'train-2', 'train-3', 'train-4'];
 const MAX_STEPS = 2000;
 
 const byComm = <T>(f: (c: Comm) => T): Record<Comm, T> => Object.fromEntries(COMMS.map(c => [c, f(c)])) as Record<Comm, T>;

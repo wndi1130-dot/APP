@@ -23,6 +23,19 @@ const WEARABLES: Array[String] = ["coat_long"]
 ## The train's stores at the start of a run (S1 domestic/data.ts D.scrap0, wood0, parts0).
 const START: Dictionary = {"scrap": 10, "wood": 10, "parts": 4}
 const START_FRAGS: Dictionary = {"engine": 1, "med": 1}
+## The armory and the three stocks of rounds at the start (decision 426 PR 5, with the
+## domestic stream 2026-10-25): the field's first squad's kits, eleven weapons
+## (field_departure.gd: the chief, three companions, two escorts), and the rounds that
+## squad goes out with (pool and loaded: pistol 8+8, shells 4+1, arrows 8+1).
+const START_AMMO: Dictionary = {"ammo_pistol": 16, "ammo_shell": 5, "ammo_craft": 9}
+const START_ARMORY: Array = [
+	{"id": "axe", "quality": "factory", "condition": 0.9}, {"id": "pistol", "quality": "factory", "condition": 0.8},
+	{"id": "pipe_shotgun", "quality": "crude", "condition": 0.9}, {"id": "knife", "quality": "factory", "condition": 0.8},
+	{"id": "bow", "quality": "factory", "condition": 0.9}, {"id": "crowbar", "quality": "factory", "condition": 0.9},
+	{"id": "crowbar", "quality": "factory", "condition": 0.8}, {"id": "knife", "quality": "factory", "condition": 0.7},
+	{"id": "shotgun", "quality": "factory", "condition": 0.8}, {"id": "crowbar", "quality": "factory", "condition": 0.9},
+	{"id": "axe", "quality": "factory", "condition": 0.9},
+]
 ## S1's eight specialties; first unused community names in PROFILES order.
 const START_EXPERTS: Array = [
 	{
@@ -88,13 +101,17 @@ static func empty() -> Dictionary:
 	return d
 
 
-## The stores a new run starts with: S1's starting scrap, wood and parts.
+## The stores a new run starts with: S1's starting scrap, wood and parts, and the
+## field's first kits and rounds (START_ARMORY, START_AMMO).
 static func start() -> Dictionary:
 	var d := empty()
 	for key: String in START:
 		d[key] = START[key]
 	for field: String in START_FRAGS:
 		d["frags"][field] = START_FRAGS[field]
+	for key: String in START_AMMO:
+		d[key] = START_AMMO[key]
+	d["armory"] = START_ARMORY.duplicate(true)
 	d["techs"] = {}
 	d["restoring"] = null
 	d["experts"] = START_EXPERTS.duplicate(true)

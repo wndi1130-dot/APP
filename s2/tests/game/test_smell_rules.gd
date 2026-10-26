@@ -31,6 +31,27 @@ func test_downwind_is_the_blood_events_sixty_degrees() -> void:
 	assert_false(SmellRules.downwind(0.0, Vector2(1, 0), at, at + Vector3(5, 0, 0)), "no wind")
 
 
+func _trail_game(kinds: Array, air: float):
+	var g = FieldGame.new()
+	g.opts = {"seed": 11, "raiders": false, "auto_pause": false, "weather": kinds, "ambient_c": air}
+	add_child_autofree(g)
+	g.set_process(false)
+	g.blood.clear()
+	g.blood.append({"pos": Vector3(40.5, 0, 7.5), "t": g.clock.elapsed, "s": 2})
+	return g
+
+
+func test_rain_washes_the_trail_to_half_its_pull() -> void:
+	# Sideways to the wind, above zero: 12 x 0.9 = 10.8 m dry, 5.4 m in the rain.
+	var dry = _trail_game(["fog"], 4.0)
+	var wet = _trail_game(["rain"], 4.0)
+	assert_true(wet.weather.kinds.has("rain"))
+	var at := Vector3(40.5, 0, 15.5)
+	assert_false(dry.strongest_scent(at).is_empty(), "8 m off, dry: smelled")
+	assert_true(wet.strongest_scent(at).is_empty(), "8 m off, rain: washed")
+	assert_false(wet.strongest_scent(Vector3(40.5, 0, 12.5)).is_empty(), "5 m off, rain: still there")
+
+
 func test_the_blood_event_values_are_the_fields() -> void:
 	assert_eq(FieldGame.BLOOD_SCENT_R, SmellRules.EVENT_R)
 
