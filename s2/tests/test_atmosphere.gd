@@ -321,6 +321,18 @@ func test_a_closed_sky_greys_the_day_and_what_falls_dims_it() -> void:
 	assert_lt(Color(l["ambient_color"]).s, Color(band["ambient_color"]).s, "grey, not tinted")
 
 
+func test_the_view_fill_lights_the_walls_by_day_and_not_at_night() -> void:
+	# Decision 476: the diagonal view shows the walls turned from the sun.
+	for kinds in [["clear"], ["overcast"]]:
+		var t := Atmosphere.sun_times(0.5)
+		var day := Atmosphere.light(Atmosphere.look(12.0, kinds, "K1", 0.5))
+		var dusk := Atmosphere.light(Atmosphere.look(t.y - 0.4, kinds, "K1", 0.5))
+		var night := Atmosphere.light(Atmosphere.look(t.y + 2.0, kinds, "K1", 0.5))
+		assert_almost_eq(float(day["fill_energy"]), Atmosphere.VIEW_FILL, 0.01, "%s by day" % [kinds])
+		assert_between(float(dusk["fill_energy"]), 0.0, Atmosphere.VIEW_FILL * 0.75, "%s less at dusk" % [kinds])
+		assert_almost_eq(float(night["fill_energy"]), 0.0, 0.001, "%s none at night" % [kinds])
+
+
 func test_a_low_day_sun_lights_the_ground_as_noon_does() -> void:
 	# Decision 471 B0: two stops in five come in the morning. Through the day
 	# band the ground keeps the noon light; the sun still stands low (long
