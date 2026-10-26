@@ -2,8 +2,9 @@ extends RefCounted
 ## How a living body goes on its feet: which walk and run it is drawn in by what
 ## is in its hand (decision 422 M11/M14, 423 card 3), how it holds a long weapon
 ## with a broken arm (422 M2, 423 card 5), when it reels (spent or bleeding hard:
-## decision 448, how one moves shows the wounds), when it stands on guard with a
-## hand weapon (422 M3), and each person's own beat, stride and lean. The clips
+## decision 448, how one moves shows the wounds), how it crouches, carries and
+## walks hurt (448), when it stands on guard with a hand weapon (422 M3), and
+## each person's own beat, stride and lean. The clips
 ## are picture only; the beat and the stride are also where the footsteps fall
 ## (field_game.gd steps_in), so the feet and the sound stay one.
 ##
@@ -23,6 +24,15 @@ const Carry = preload("res://game/sim/carry.gd")
 ## kind with none of its own, or a folder without it, walks and runs the plain way.
 const WALK: Dictionary = {"long": "p_walk_long", "axe": "p_walk_axe", "pistol": "p_walk_pistol"}
 const RUN: Dictionary = {"long": "p_run_long", "pistol": "p_run_pistol"}
+## Crouched, the walk and the stand for each kind of hand: a long gun held low in
+## both hands, a handgun low in both; the rest crouch the plain way (decision 448:
+## the sneak by what is held, as the reference game sneaks each kind its own way).
+const CROUCH_WALK: Dictionary = {"long": "p_crouch_walk_long", "pistol": "p_crouch_walk_pistol"}
+const CROUCH_STAND: Dictionary = {"long": "p_crouch_idle_long", "pistol": "p_crouch_idle_pistol"}
+## Walking with something big held in both arms (decision 448: carried, not run).
+const CARRY_BIG: String = "p_carry_big"
+## Walking hurt: bent, a hand pressed to the side (decision 448: wounds in how one moves).
+const WALK_HURT: String = "p_walk_hurt"
 ## A long weapon held low in the one good hand, the hurt arm at the belly (standing).
 const HOLD_WEAK: String = "p_hold_weak"
 ## A one-handed melee weapon this heavy (kg) hangs in the hand as it is carried.
@@ -108,6 +118,28 @@ static func gait_name(p, running: bool) -> String:
 	if weak_hold(p):
 		return ""
 	return String((RUN if running else WALK).get(kind_of(p.weapon_id()), ""))
+
+
+## Crouched, the walk (or the stand) for what is in the hand, "" for the plain
+## one; a long weapon held in one hand (weak_hold) crouches the plain way too.
+static func crouch_name(p, walking: bool) -> String:
+	if weak_hold(p):
+		return ""
+	return String((CROUCH_WALK if walking else CROUCH_STAND).get(kind_of(p.weapon_id()), ""))
+
+
+## The walk under a burden, on its feet and not running, crouched, limping or
+## reeling (person_visual.gd picks those first): something big in both arms is
+## carried so (the load rule's own test, person.gd load_lets_run); a body wound as
+## sore as it shows standing (`shown`) goes bent with a hand to its side. Bleeding
+## hard keeps the reel: the field camera barely tells the hurt walk from a walk,
+## and that body goes down in two minutes. "" with neither.
+static func burden_name(p, shown: float) -> String:
+	if Carry.has_big(p.items):
+		return CARRY_BIG
+	if p.body.torso_effort() - 1.0 >= shown:
+		return WALK_HURT
+	return ""
 
 
 ## This person's stride, of the walk's round (the same for every gait).

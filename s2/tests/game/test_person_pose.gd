@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 const Protest = preload("res://game/actors/person_protest.gd")
+const FieldCombat = preload("res://game/field_combat.gd")
 
 var game
 
@@ -37,6 +38,12 @@ func _rising() -> Dictionary:
 
 
 # ---------------------------------------------------------------- picture
+
+## The drawing's shove clocks are the rules' own: change one, the other goes with it.
+func test_the_shove_clocks_are_the_rules_own() -> void:
+	assert_eq(Pose.SHOVE_WINDUP, FieldCombat.SHOVE_WINDUP)
+	assert_eq(Pose.LUNGE, FieldCombat.SHOVE_LUNGE)
+
 
 func test_shove_arms_come_back_then_go_out_then_hang() -> void:
 	assert_eq(Pose.shove_push(0.0, 0.0, 0.15), 0.0)

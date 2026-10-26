@@ -27,6 +27,7 @@ const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
+const GroundLook = preload("res://game/world/ground_look.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
 ## Size (along the wall, up, thickness) and height of each glowing face.
@@ -77,6 +78,8 @@ var _prop_elapsed: float = 0.0
 var door_nodes: Dictionary = {}   # Vector2i -> MeshInstance3D
 var window_nodes: Dictionary = {}
 var container_nodes: Dictionary = {}
+var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd)
+var _ground_sig: int = 0
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
@@ -548,6 +551,29 @@ func update_container(id: String) -> void:
 	if box_data["locked"]:
 		box(st, Vector3(0.18, 0.18, 0.55), at + Vector3(0.18, 0.4, 0), Color(0.7, 0.66, 0.3))
 	node.mesh = st.commit()
+
+
+## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
+## mesh a level, made again only when the list has changed.
+func update_ground(items: Array) -> void:
+	var sig := items.hash()
+	if sig == _ground_sig or level_roots.is_empty():
+		return
+	_ground_sig = sig
+	var tools: Dictionary = {}
+	for piece: Dictionary in GroundLook.pieces(items):
+		var lv: int = piece["lv"]
+		if not level_roots.has(lv):
+			continue
+		if not tools.has(lv):
+			tools[lv] = _begin()
+		box(tools[lv], piece["size"], piece["at"], piece["color"])
+	for lv in ground_nodes:
+		ground_nodes[lv].mesh = null
+	for lv in tools:
+		if not ground_nodes.has(lv):
+			ground_nodes[lv] = _mesh_node(lv)
+		ground_nodes[lv].mesh = tools[lv].commit()
 
 
 func update_spot(id: String) -> void:

@@ -45,7 +45,7 @@ func test_the_model_reads_the_stores_and_the_three_things() -> void:
 	var coat: Dictionary = m["rows"][2]
 	assert_true(bool(coat["cost"][0]["short"]), "no cloth: the coat's cloth is short")
 	assert_eq(coat["why"], "천 4 모자람")
-	assert_eq(m["rows"][1]["have"], 0)
+	assert_eq(m["rows"][1]["have"], 3, "the start armory's three crowbars (PR 5)")
 
 
 func test_what_the_train_holds_shows_by_its_name() -> void:
