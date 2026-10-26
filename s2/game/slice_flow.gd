@@ -41,6 +41,7 @@ const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const CarPane = preload("res://game/ui/car_pane.gd")
+const CostPane = preload("res://game/ui/cost_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const WorldWeather = preload("res://game/ui/world_weather.gd")
@@ -164,6 +165,7 @@ var shop: Control = null           # the workshop's pane where the car's stands 
 var shop_was: String = ""          # the car picked before the workshop or the refit pane came up
 var mods: Control = null           # the refit pane, where the workshop's stands (mods_pane.gd)
 var research: Control = null       # the research pane, where the workshop's stands (research_pane.gd)
+var cost: Control = null           # what a stretch costs and why, where the rooms stand (cost_pane.gd)
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
@@ -226,6 +228,7 @@ func _ready() -> void:
 	gauges = TrainGauges.new()
 	gauges.g = train_g
 	gauges.t = train_t
+	gauges.stock_pressed.connect(_open_cost)
 	layer.add_child(gauges)
 	_build_panel()
 	loader = StopLoader.new()
@@ -288,11 +291,12 @@ func go(i: int) -> void:
 		else:
 			_start_field()
 		return
-	# Leaving a stop the workshop does a stretch's work, once (train_workshop.gd).
+	# Leaving a stop the technologies take their upkeep and the workshop does a
+	# stretch's work, once (train_workshop.gd stretch).
 	var shop_events: Array = []
 	if id == "travel" and int(row[2]) != shop_seg:
 		shop_seg = int(row[2])
-		shop_events = TrainWorkshop.run(train_g)["events"]
+		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(row[2]))
 		# What it made, for the people on the train to see (the train scene's events).
@@ -1094,19 +1098,44 @@ func _open_research() -> void:
 ## One room's pane at a time: a room opened over another keeps the car
 ## picked before the first, to come back to on folding.
 func _room_up() -> void:
-	if not is_instance_valid(shop) and not is_instance_valid(mods) and not is_instance_valid(research):
+	if not is_instance_valid(shop) and not is_instance_valid(mods) and not is_instance_valid(research) and not is_instance_valid(cost):
 		shop_was = sel if sel != "" else FIRST_CAR
 	_put_rooms_away()
 	_select("")
 
 
 func _put_rooms_away() -> void:
-	for r in [shop, mods, research]:
+	if is_instance_valid(cost):
+		gauges.set_focus([])
+	for r in [shop, mods, research, cost]:
 		if is_instance_valid(r):
 			r.queue_free()
 	shop = null
 	mods = null
 	research = null
+	cost = null
+
+
+## What a stretch costs in the stock pressed on the gauges and why
+## (cost_pane.gd, J12), where the rooms stand; only on the train's own screen.
+## The same stock pressed again folds it; the other one takes its place.
+func _open_cost(id: String) -> void:
+	if not is_instance_valid(home) or card != home:
+		return
+	if is_instance_valid(cost) and String(cost.which) == id:
+		_close_room()
+		return
+	_room_up()
+	var c = CostPane.new()
+	c.name = "CostPane"
+	c.which = id
+	c.folded.connect(_close_room)
+	home.add_child(c)
+	c.pin(TrainGauges.BAND_H)
+	c.show_state(train_g, train_t)
+	cost = c
+	# The stock it is about stays lit on the band, as under a sheet.
+	gauges.set_focus([id])
 
 
 func _room_changed() -> void:

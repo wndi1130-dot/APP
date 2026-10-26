@@ -6,7 +6,8 @@ const FRONT_WINDOW := 1.5
 const BACK_WINDOW := 0.75
 const GRAB_SHARE := 0.65
 const BITE_ARM := 0.60
-const BITE_TORSO := 0.25
+const BITE_TORSO := 0.20
+const BITE_HEAD := 0.05  # the head or the neck, by one standing (결정 441 (5))
 const CONTACT_MARGIN: float = 0.4
 const ATTACK_COOLDOWN: float = 1.6
 const RELEASE_RECOVERY: float = 1.8
@@ -38,6 +39,8 @@ static func bite_location(rng: RandomNumberGenerator, crawler: bool) -> String:
 		return "arm"
 	if r < BITE_ARM + BITE_TORSO:
 		return "torso"
+	if r < BITE_ARM + BITE_TORSO + BITE_HEAD:
+		return "head_neck"
 	return "leg"
 
 
