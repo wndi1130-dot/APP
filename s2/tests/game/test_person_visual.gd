@@ -14,6 +14,29 @@ func _person() -> Node3D:
 	return p
 
 
+class _Field:
+	var paused := false
+	var ended := false
+
+
+# Paused (the player's pause or the app away), the people stand still as the dead
+# and the train do (user field test 10-25: they walked and breathed on through a
+# pause); at the end, the train leaving, they go on.
+func test_the_people_stand_still_while_the_field_is_paused() -> void:
+	var field := _Field.new()
+	assert_eq(PersonVisual.frame_delta(field, 0.1), 0.1)
+	field.paused = true
+	assert_eq(PersonVisual.frame_delta(field, 0.1), 0.0)
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [])
+	var t: float = float(note["t"])
+	PersonVisual.motion_of(p, note, PersonVisual.frame_delta(field, 0.5), [])
+	assert_eq(float(note["t"]), t, "the clock of its motion stands")
+	field.ended = true
+	assert_eq(PersonVisual.frame_delta(field, 0.1), 0.1, "at the end it goes on")
+
+
 func test_the_motion_follows_what_the_person_is_doing() -> void:
 	var p := _person()
 	var note := {}
