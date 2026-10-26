@@ -195,6 +195,10 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 		game.view.cut_away(b, 0)
 		game._update_camera(1.0)
 	game._update_light()
+	# Cloud shadows drift with the shader clock, so two runs of one clear scene laid
+	# them in different places: hold them still for a before/after of the same spot.
+	var cloud := Vector4(game.fx_params.get("fx_cloud", Vector4.ZERO))
+	FxState.apply({"fx_cloud": Vector4(cloud.x, 0.0, 0.0, cloud.w)})
 	await create_timer(2.6).timeout
 	var shot := ("ref_" if not scene.is_empty() else "field_") + tag
 	await _save(shot)
