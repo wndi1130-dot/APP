@@ -48,6 +48,13 @@ const JAM_CLEAR: float = 2.5
 const FALL_TIME: float = 1.5
 const BEHIND_COS: float = -0.3
 const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon's reach
+## A body hit that leaves the dead on its feet holds it this long (decision 473
+## W2: 0.6 s before; the reference game's struck dead reel some 1.6-1.8 s,
+## half of that for a crowd that comes on in numbers).
+const BODY_STUN: float = 0.9
+## How loud a melee blow on the dead is (decision 473 W3: quiet before; the
+## reference game's blows carry 8 tiles). A quiet knife from behind stays quiet.
+const BLOW_LEVEL := SimNoise.Level.NORMAL
 const RAIDER_AMMO: int = 6
 ## A companion breathes after a blow that landed, and again when it picks the
 ## next one out of the crowd (user 2026-10-12: they cut everything down in a blink).
@@ -640,6 +647,8 @@ func _land_strike(p) -> void:
 	p.swing_t = maxf(p.swing_t - windup, WHIFF_RECOVER)
 	if _is_ally(p):
 		p.swing_t += _pace(ALLY_REST_MIN, ALLY_REST_MAX)
+	elif p == game.player and not stomp_it:
+		p.swing_t += W.melee_gap(p.weapon_id())
 
 
 func _strike_reaches(p, at) -> bool:
@@ -678,10 +687,12 @@ func swing(p, z: Dictionary) -> void:
 	var from_back := behind(z, p.position)
 	# Seen struck (dead_body.gd picks which way it is thrown by these; nothing reads them here).
 	z["hit_at"] = z["age"]
+	z["hit_hold"] = 0.0   # a body hit below holds it longer (BODY_STUN)
 	z["hit_by"] = p.position
 	z["hit_way"] = String(p.get_meta(Pose.BLOW_WAY, ""))
-	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	var state: String = z["state"]
+	var quiet_kill: bool = wid == "knife" and p.crouched and from_back and state != "chase" and state != "attack" and state != "grab"
+	game.make_sound(z["pos"], SimNoise.Level.QUIET if quiet_kill else BLOW_LEVEL, "melee", p)
 	var blade: bool = bool(d["blade"])
 	# Rising corpse: crush the head before it stands (zombies.md 갓 일어난 자).
 	if state == "rising":
@@ -696,7 +707,7 @@ func swing(p, z: Dictionary) -> void:
 			_kill(p, z, "언 몸이 부서졌다")
 		return
 	# Quiet kill from behind: knife, crouched, the thing has not noticed anyone.
-	if wid == "knife" and p.crouched and from_back and state != "chase" and state != "attack" and state != "grab":
+	if quiet_kill:
 		_kill(p, z, "뒤에서 조용히 끝냈다")
 		return
 	var downed: bool = state == "downed"
@@ -719,7 +730,8 @@ func swing(p, z: Dictionary) -> void:
 	if rng.randf() < float(odds["knockdown"]):
 		game.zombies.knock_down(z)
 	else:
-		z["stun"] = 0.6
+		z["stun"] = BODY_STUN
+		z["hit_hold"] = BODY_STUN   # the picture holds its struck pose as long (dead_body.gd)
 		_push(z, p.position, 0.3)
 
 
