@@ -1,13 +1,13 @@
 extends "res://addons/gut/test.gd"
 ## 쪽지 지도의 × 도장(map_stamp.gd, 결정 카드 loot-feel M 가): 틈이 화면 안이면 그 위에,
-## 밖이면 가장자리에서 그쪽을 가리키고, 틈에 닿으면 사라진다. 글은 없다.
+## 밖이면 가장자리에서 그쪽을 가리키고, 필드의 side_hint가 비면(틈에 닿음) 사라진다. 글은 없다.
 
 const MapStamp = preload("res://game/ui/map_stamp.gd")
 
 
 class FakeGame extends Node3D:
 	var camera: Camera3D
-	var player: Node3D
+	var side_hint: Dictionary = {}
 
 
 class FakeHud extends Node:
@@ -41,8 +41,6 @@ func _setup() -> Array:
 	game.add_child(game.camera)
 	game.camera.position = Vector3(0, 20, 12)
 	game.camera.look_at(Vector3.ZERO)
-	game.player = Node3D.new()
-	game.add_child(game.player)
 	var hud: FakeHud = add_child_autofree(FakeHud.new())
 	hud.game = game
 	var stamp: Control = add_child_autofree(MapStamp.new())
@@ -50,20 +48,40 @@ func _setup() -> Array:
 	return [game, stamp]
 
 
-func test_it_shows_when_aimed_and_goes_when_the_gap_is_reached() -> void:
+func test_it_shows_while_the_field_holds_a_hint_and_fades_after() -> void:
 	var s := _setup()
 	var game: FakeGame = s[0]
 	var stamp = s[1]
 	stamp._process(0.1)
 	assert_false(stamp.visible, "nothing read, nothing shown")
-	stamp.aim(Vector3(40, 0, 30))
+	game.side_hint = {"at": Vector3(40, 0, 30)}
 	stamp._process(0.1)
 	assert_true(stamp.visible)
-	watch_signals(stamp)
-	game.player.position = Vector3(39, 0, 29)
+	assert_eq(stamp.point, Vector3(40, 0, 30))
+	game.side_hint = {}
 	stamp._process(0.1)
-	assert_signal_emitted(stamp, "reached")
+	assert_true(stamp.visible, "it fades, it does not blink out")
 	for i in 10:
 		stamp._process(0.1)
-	assert_false(stamp.visible, "wiped once there")
+	assert_false(stamp.visible, "gone once the gap is reached")
 	assert_null(stamp.point)
+
+
+func test_a_field_without_the_hint_shows_nothing() -> void:
+	var hud: FakeHud = add_child_autofree(FakeHud.new())
+	hud.game = add_child_autofree(Node3D.new())
+	var stamp: Control = add_child_autofree(MapStamp.new())
+	stamp.setup(hud)
+	stamp._process(0.1)
+	assert_false(stamp.visible)
+
+
+## At the edge the mark slides off a key it would sit under, toward the middle.
+func test_the_mark_keeps_off_the_keys() -> void:
+	var mid := Vector2(640, 360)
+	var corner := Vector2(1234, 674)
+	var key := Rect2(1100, 560, 150, 150)
+	var at := MapStamp.clear_of(corner, mid, [key])
+	assert_false(key.grow(MapStamp.RADIUS + MapStamp.NOTCH).has_point(at), "clear of the key")
+	assert_lt(at.distance_to(corner), corner.distance_to(mid), "still on the way out")
+	assert_eq(MapStamp.clear_of(Vector2(46, 360), mid, [key]), Vector2(46, 360), "a free place stays")
