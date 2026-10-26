@@ -11,7 +11,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 
 ## map-layout's room kinds (room_furnish.gd PALETTE) read as ours (card I).
-const PALETTE_ROOM: Dictionary = {"bed": "bedroom", "living": "bedroom", "kitchen": "kitchen", "bath": "bathroom", "office": "office", "shop": "shop", "store": "pantry", "boiler": "toolbox", "storage": "storage"}
+const PALETTE_ROOM: Dictionary = {"bed": "bedroom", "living": "bedroom", "kitchen": "kitchen", "bath": "bathroom", "office": "office", "shop": "shop", "store": "pantry", "boiler": "toolbox", "storage": "storage", "work": "toolbox", "garage": "toolbox", "barn": "storage", "woodshed": "storage"}
 
 const MAPS: Array[String] = ["first_leg_01_sulechow", "houses_01", "houses_04", "hospital_01", "factory_01", "freight_01", "church_01", "lodge_01", "lake_01", "office_01"]
 
