@@ -56,6 +56,14 @@ static func take_order(items: Array) -> Array:
 	return out
 
 
+## A box that shows before it is opened that there is nothing in it (card P3 가,
+## decision 472): empty, and not locked nor a goal's record box (those must be
+## opened to know). A searched box left empty shows it too. The mark is drawn on
+## the box itself (map_view.gd), so it shows only where the box does.
+static func shows_empty(c: Dictionary) -> bool:
+	return not c.is_empty() and not bool(c.get("locked", false)) and not c.has("pick") and (c.get("items", []) as Array).is_empty()
+
+
 static func can_search(container: Dictionary) -> bool:
 	return not container.is_empty() and not bool(container.get("locked", false)) and not bool(container.get("searched", false)) and not bool(container.get("busy", false))
 
