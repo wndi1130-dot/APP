@@ -11,14 +11,15 @@ const StopCinema = preload("res://game/stop_cinema.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 
-## S1's own draws (tools run on s1, seed and stretch -> pickWeather, 10-25).
+## S1's own draws (tools run on s1, seed and stretch -> pickWeather; 10-27 the route's
+## flow, decision 474 N2 route_weather.ts: a stretch may keep the one before's weather).
 const S1_DRAWS: Dictionary = {
-	"1": {1: "snow", 2: "fog", 5: "overcast", 16: "sleet", 18: "overcast", 22: "overcast"},
-	"2": {1: "snow", 2: "overcast", 5: "overcast", 16: "fog", 18: "overcast", 22: "clear"},
-	"3": {1: "snow", 2: "fog", 5: "overcast", 16: "fog", 18: "fog", 22: "snow"},
-	"7": {1: "snow", 2: "fog", 5: "fog", 16: "sleet", 18: "overcast", 22: "fog"},
-	"42": {1: "fog", 2: "overcast", 5: "clear", 16: "sleet", 18: "sleet", 22: "overcast"},
-	"slice": {1: "snow", 2: "overcast", 5: "fog", 16: "overcast", 18: "clear", 22: "fog"},
+	"1": {1: "snow", 2: "sleet", 5: "sleet", 16: "sleet", 18: "overcast", 22: "overcast"},
+	"2": {1: "snow", 2: "overcast", 5: "sleet", 16: "fog", 18: "overcast", 22: "clear"},
+	"3": {1: "snow", 2: "sleet", 5: "overcast", 16: "sleet", 18: "sleet", 22: "snow"},
+	"7": {1: "snow", 2: "fog", 5: "sleet", 16: "sleet", 18: "sleet", 22: "fog"},
+	"42": {1: "fog", 2: "overcast", 5: "clear", 16: "sleet", 18: "overcast", 22: "overcast"},
+	"slice": {1: "snow", 2: "overcast", 5: "fog", 16: "overcast", 18: "overcast", 22: "fog"},
 }
 
 
@@ -84,8 +85,8 @@ func test_the_picture_edges_are_the_tables() -> void:
 ## weather, and the field's air is the stretch's temperature (it was -14 C).
 func test_the_slice_stop_wears_one_weather_on_the_train_the_scene_and_the_field() -> void:
 	var f = SliceFlow.new()
-	# Seed 12 draws sleet for the stop (stretch 2, -1 C).
-	f.opts = {"skip_field": true, "seed": 12, "cinema": false}
+	# Seed 13 draws sleet for the stop (stretch 2, -1 C; seed 12 is clear on the route's flow, 474 N2).
+	f.opts = {"skip_field": true, "seed": 13, "cinema": false}
 	add_child_autofree(f)
 	f.next()
 	assert_eq(f.current(), "stop_pick")

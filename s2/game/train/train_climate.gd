@@ -18,7 +18,7 @@ extends RefCounted
 ## (departStage's coldStep: S2 has no disasters).
 
 const C = preload("res://game/train/turn/turn_common.gd")
-const SeasonTable = preload("res://game/season_table.gd")
+const RouteWeather = preload("res://game/train/route_weather.gd")
 
 ## climate.ts LINES: [first person, third person].
 const LINES: Dictionary = {
@@ -28,8 +28,6 @@ const LINES: Dictionary = {
 }
 ## climate.ts WEATHER_TEMP's cold (the one a departure's line can add).
 const COLD_TEMP: float = -12.0
-## season.ts DRAWN: the five a stop's weather is drawn from, in this order.
-const DRAWN: Array = ["snow", "fog", "sleet", "overcast", "clear"]
 
 
 static func on(g: Dictionary) -> bool:
@@ -118,30 +116,12 @@ static func row_at(t: Dictionary, seg: int) -> Dictionary:
 	return rows[clampi(seg, 1, rows.size()) - 1]
 
 
-## omens.ts pickWeather's climate branch: the season's shares (season.ts
-## weatherWeights), the falling weather by the stretch's temperature (fallsAt).
+## omens.ts pickWeather's climate branch: the route's flow (decision 474 N2).
 ## Null with climate off (the old fixed shares stand).
 static func weather(g: Dictionary, t: Dictionary) -> Variant:
 	if not on(g):
 		return null
-	var seg: int = int(g["seg"])
-	var shares: Dictionary = SeasonTable.data()["seasons"][String(row_at(t, seg)["season"])]["weather"]
-	var total: int = 0
-	for w: String in DRAWN:
-		total += int(shares.get(w, 0))
-	var x: int = C.hash_text("%s:w:%d" % [g["seed"], seg]) % total
-	for w: String in DRAWN:
-		var n: int = int(shares.get(w, 0))
-		if x < n:
-			return _falls(t, seg, w)
-		x -= n
-	return "snow"
-
-
-static func _falls(t: Dictionary, seg: int, w: String) -> String:
-	if w != "snow" and w != "sleet":
-		return w
-	return "snow" if float(row_at(t, seg)["temp"]) <= float(t["FALLS"]["snow_below"]) else "sleet"
+	return RouteWeather.weather(String(g["seed"]), int(g["seg"]), t)
 
 
 ## omens.ts seasonCond: which lines a stop's words swap to; null with climate off.
