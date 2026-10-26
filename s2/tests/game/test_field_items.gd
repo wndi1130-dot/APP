@@ -189,10 +189,12 @@ func test_the_same_seed_dresses_the_same_and_another_seed_another_way() -> void:
 	assert_true(differs)
 
 
-func test_kitchens_hold_the_food_and_bedrooms_come_up_empty_more_often() -> void:
-	var empty: Dictionary = {}
-	var seen: Dictionary = {}
-	var food_in: Dictionary = {}
+## Where a house has both, the food is in the kitchen. Counted by house, not by box: since
+## card L a kitchen has many cupboards and most hold little (the reference kitchen's 8 to 12
+## places to open), so box for box it is often empty — over the 81 maps a bedroom box is
+## still the one most often empty (0.46 against 0.41, card L's table), not in four runs.
+func test_the_food_is_in_the_kitchen_where_a_house_has_both() -> void:
+	var houses: Dictionary = {}   # "map:seed:building" -> {room: food}
 	# houses_01 holds only planks (by-products, field_unified 4장): two that hold food too.
 	for run in [["houses_04", 1], ["houses_04", 2], ["houses_06", 1], ["houses_06", 2]]:
 		var d := FieldMaps.build(String(run[0]))
@@ -200,17 +202,22 @@ func test_kitchens_hold_the_food_and_bedrooms_come_up_empty_more_often() -> void
 		for id: String in d["containers"]:
 			var c: Dictionary = d["containers"][id]
 			var room := LootDress.room_of(c)
-			seen[room] = int(seen.get(room, 0)) + 1
-			if (c["items"] as Array).is_empty():
-				empty[room] = int(empty.get(room, 0)) + 1
+			if room != "kitchen" and room != "bedroom":
+				continue
+			var rooms: Dictionary = houses.get_or_add("%s:%d:%d" % [run[0], run[1], int(c.get("building", -1))], {})
+			rooms[room] = int(rooms.get(room, 0))
 			for item in c["items"]:
 				if FieldItems.group(String(item)) == "food":
-					food_in[room] = int(food_in.get(room, 0)) + 1
-	assert_true(seen.has("kitchen") and seen.has("bedroom"), str(seen))
-	var kitchen_empty := float(empty.get("kitchen", 0)) / float(seen["kitchen"])
-	var bedroom_empty := float(empty.get("bedroom", 0)) / float(seen["bedroom"])
-	assert_lt(kitchen_empty, bedroom_empty, "the bedroom is the one to skip (%.2f / %.2f)" % [kitchen_empty, bedroom_empty])
-	assert_gt(float(food_in.get("kitchen", 0)) / float(seen["kitchen"]), float(food_in.get("bedroom", 0)) / float(seen["bedroom"]))
+					rooms[room] += 1
+	var food := {"kitchen": 0, "bedroom": 0}
+	var both := 0
+	for b: String in houses:
+		if houses[b].has("kitchen") and houses[b].has("bedroom"):
+			both += 1
+			food["kitchen"] += int(houses[b]["kitchen"])
+			food["bedroom"] += int(houses[b]["bedroom"])
+	assert_gt(both, 0, "houses with a kitchen and a bedroom")
+	assert_gt(food["kitchen"], 2 * food["bedroom"], "food in houses with both: %s" % [food])
 
 
 func test_a_named_find_turns_up_now_and_then_at_most_once_a_stop() -> void:
