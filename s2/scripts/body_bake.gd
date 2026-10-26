@@ -186,6 +186,16 @@ const PERSON_CLIPS: Array = [
 	["p_ready_two", "", 24, true, "p_ready_two", 1.6],
 	["p_ready_stab", "", 24, true, "p_ready_stab", 1.6],
 	["p_hold_weak", "", 24, true, "p_hold_weak", 3.0],
+	# Decision 448: creeping with a long weapon or a handgun (walking and still),
+	# the weak-hand hold the other way round (the right arm hurt), a big thing
+	# carried in both arms, and walking bent over a wound.
+	["p_crouch_walk_long", "", 32, true, "p_crouch_walk_long", 1.08],
+	["p_crouch_walk_pistol", "", 32, true, "p_crouch_walk_pistol", 1.08],
+	["p_crouch_idle_long", "", 24, true, "p_crouch_idle_long", 3.0],
+	["p_crouch_idle_pistol", "", 24, true, "p_crouch_idle_pistol", 3.0],
+	["p_hold_weak_r", "", 24, true, "p_hold_weak_r", 3.0],
+	["p_carry_big", "", 32, true, "p_carry_big", 0.78],
+	["p_walk_hurt", "", 32, true, "p_walk_hurt", 0.78],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
@@ -202,6 +212,80 @@ const ROUND_LEAST: float = 0.05               # a loop whose feet go back less t
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
 const PERSON_CRAWL_CLIP: String = "p_crawl"   # the same for the living
 const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were written for, metres
+# The walk's legs and hips (as p_walk), for walks that do something else with
+# the hands and must cover the walk's ground a round.
+const WALK_LEGS: Array = [
+	["turn", "hips", "z", [0.0, 0.035, 0.0]],
+	["turn", "hips", "y", [0.0, -0.09, 0.0]],
+	["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
+	["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
+	["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
+	["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+]
+const WALK_SINK: Array = [0.025, 0.02, -1.5708, 2.0]
+# The run's legs, hips and lean, the same whatever the hands hold so each run
+# covers the run's ground a round (SimNoise.STEP_ROUND). The thigh swings from
+# 27 degrees back to 40 ahead; the shin lands 18 ahead, gives under the body,
+# pushes off and folds to 100 back (the heel up behind) on the way forward.
+const RUN_LEGS: Array = [
+	["turn", "hips", "x", 0.12],
+	["turn", "hips", "z", [0.0, 0.05, 0.0]],
+	["turn", "hips", "y", [0.0, -0.14, 0.0]],
+	["swing", "thigh.L", "shin.L", 0.07, [0.12, 0.585, 0.0]],
+	["swing", "shin.L", "foot.L", 0.05, [[-0.707, 0.611, 0.0], [0.0, -0.628, -1.5708], [0.0, -0.41, -1.5708, 2.0]]],
+	["swing", "thigh.R", "shin.R", -0.07, [0.12, 0.585, 3.1416]],
+	["swing", "shin.R", "foot.R", -0.05, [[-0.707, 0.611, 3.1416], [0.0, -0.628, 1.5708], [0.0, -0.41, -1.5708, 2.0]]],
+	["turn", "spine", "x", 0.22],
+	["turn", "chest", "x", 0.1],
+	["turn", "neck", "x", -0.3],
+]
+const RUN_SINK: Array = [0.075, 0.025, -1.5708, 2.0]   # lowest as the legs pass, under the body
+# Creeping (crouched), the same whatever the hands hold, covering the crouched
+# walk's ground a round: knees half bent, the back well forward, the head up to
+# see ahead. The thigh swings from 11 degrees to 46 ahead, the foot kept low.
+const CROUCH_LEGS: Array = [
+	["turn", "hips", "x", 0.25],
+	["turn", "hips", "y", [0.0, -0.06, 0.0]],
+	["swing", "thigh.L", "shin.L", 0.1, [0.5, 0.305, 0.0]],
+	["swing", "shin.L", "foot.L", 0.07, [[-0.558, 0.36, 0.0], [0.0, -0.236, -1.5708], [0.0, -0.166, -1.5708, 2.0]]],
+	["swing", "thigh.R", "shin.R", -0.1, [0.5, 0.305, 3.1416]],
+	["swing", "shin.R", "foot.R", -0.07, [[-0.558, 0.36, 3.1416], [0.0, -0.236, 1.5708], [0.0, -0.166, -1.5708, 2.0]]],
+	["turn", "spine", "x", 0.42],
+	["turn", "chest", "x", 0.14],
+	["turn", "chest", "y", [0.0, 0.06, 0.0]],
+	["turn", "neck", "x", -0.65],
+]
+const CROUCH_SINK: Array = [0.12, 0.01, -1.5708, 2.0]
+# The crouch kept still, a little less deep, the left foot ahead, breathing.
+const CROUCH_STILL: Array = [
+	["turn", "hips", "x", 0.18],
+	["swing", "thigh.L", "shin.L", 0.12, 0.45],
+	["swing", "shin.L", "foot.L", 0.09, -0.2],
+	["swing", "thigh.R", "shin.R", -0.12, 0.21],
+	["swing", "shin.R", "foot.R", -0.09, -0.45],
+	["turn", "hips", "y", -0.08],
+	["turn", "spine", "x", [0.38, 0.015, 0.0]],
+	["turn", "chest", "x", [0.12, 0.01, 0.0]],
+	["turn", "neck", "x", -0.58],
+	["turn", "head", "y", [0.0, 0.2, 0.5]],
+]
+const CROUCH_STILL_SINK: Array = [0.06, 0.004, 0.0]
+# What the hands do creeping with a long weapon: held as walking with it
+# (p_walk_long) but tipped further ahead, lower with the body.
+const CROUCH_LONG_ARMS: Array = [
+	["aim", "upper_arm.R", "forearm.R", [-0.1, -1.0, 0.3]],
+	["aim", "forearm.R", "hand.R", [0.05, -0.8, 1.0]],
+	["aim", "upper_arm.L", "forearm.L", [-0.3, -0.7, 0.75]],
+	["aim", "forearm.L", "hand.L", [-0.7, 0.3, 0.75]],
+]
+# And with a handgun: the right forearm hanging so the muzzle points ahead and
+# a little down (PersonVisual.grip_of), the left hand closed over the right.
+const CROUCH_PISTOL_ARMS: Array = [
+	["swing", "upper_arm.R", "forearm.R", -0.1, 0.55],
+	["swing", "forearm.R", "hand.R", 0.2, -0.2],
+	["swing", "upper_arm.L", "forearm.L", -0.38, 0.45],
+	["swing", "forearm.L", "hand.L", -0.45, 0.05],
+]
 
 # Layers: a hand-made addition on top of a motion. For a frame at progress u
 # (0..1), w = TAU * u, and a layer holds:
@@ -211,6 +295,8 @@ const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were 
 #   "steps": [...]            applied in order after the bones are matched:
 #       ["turn", bone, axis, value]       bend a bone about "x" (forward), "y" (twist) or "z" (sideways)
 #       ["aim", bone, child, [x, y, z]]   point a bone at a direction in the body's space
+#       ["swing", bone, child, x, angle]  the same at angle radians forward of straight
+#                                         down (back below 0; past a right angle it points up), x as in "aim"
 #   "sink": value             lower the hips by that many metres, applied last
 # A value is a number, or [base, size, lag] for base + size * sin(w - lag),
 # or [base, size, lag, beats] for base + size * sin(beats * w - lag),
@@ -1098,25 +1184,19 @@ const LAYERS: Dictionary = {
 		],
 		"sink": [0.025, 0.02, -1.5708, 2.0],
 	},
-	# Leaning a little into it, knees high, elbows bent and pumping.
+	# Leaning into it. Each leg lands a little bent ahead, gives under the body,
+	# pushes off behind and folds up with the heel high on the way forward. The
+	# arms swing against the legs from the shoulder, well behind the body and
+	# up in front, the elbow bent so the hand goes from the hip to the chest.
 	"p_run": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.05, 0.0]],
-			["turn", "hips", "y", [0.0, -0.12, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
-			["turn", "spine", "x", 0.15],
-			["turn", "chest", "x", 0.05],
-			["turn", "chest", "y", [0.0, 0.16, 0.0]],
-			["turn", "neck", "x", -0.12],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.0, -0.55, 0.0]]],
-			["aim", "forearm.L", "hand.L", [0.05, [0.2, 0.25, 0.0], [0.9, -0.2, 0.0]]],
-			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.0, 0.55, 0.0]]],
-			["aim", "forearm.R", "hand.R", [-0.05, [0.2, -0.25, 0.0], [0.9, 0.2, 0.0]]],
+		"steps": RUN_LEGS + [
+			["turn", "chest", "y", [0.0, 0.32, 0.0]],
+			["swing", "upper_arm.L", "forearm.L", 0.18, [-0.78, -0.75, 0.0]],
+			["swing", "forearm.L", "hand.L", [0.0, 0.15, 0.0], [0.82, -0.9, 0.0]],
+			["swing", "upper_arm.R", "forearm.R", -0.18, [-0.78, 0.75, 0.0]],
+			["swing", "forearm.R", "hand.R", [0.0, 0.15, 0.0], [0.82, 0.9, 0.0]],
 		],
-		"sink": [0.07, 0.04, -1.5708, 2.0],
+		"sink": RUN_SINK,
 	},
 	# Standing easy: breathing, the weight drifting from one foot to the other.
 	"p_stand": {
@@ -1264,43 +1344,45 @@ const LAYERS: Dictionary = {
 		],
 		"sink": ["keys", [[0, 0.0], [0.4, 0.05], [1, 0.0]]],
 	},
-	# Crouched walk: hips low, knees well bent, back forward, feet kept low,
-	# head up to see ahead, arms low in front.
+	# Creeping (decision 448, 4): half crouched rather than squatting, the arms
+	# bent along the sides with the hands before the hips, swinging a little.
 	"p_crouch_walk": {
-		"steps": [
-			["turn", "hips", "y", [0.0, -0.06, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.12, -1.0, [[1.3, 0.65, 0.0], [0.0, -0.05, 0.0, 3.0]]]],
-			["aim", "shin.L", "foot.L", [0.08, -1.0, [[-0.75, 0.5, 0.0], [0.0, -0.22, -1.5708]]]],
-			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [[1.3, 0.65, 3.1416], [0.0, -0.05, 9.4248, 3.0]]]],
-			["aim", "shin.R", "foot.R", [-0.08, -1.0, [[-0.75, 0.5, 3.1416], [0.0, -0.22, 1.5708]]]],
-			["turn", "spine", "x", 0.5],
-			["turn", "chest", "x", 0.1],
-			["turn", "chest", "y", [0.0, 0.08, 0.0]],
-			["turn", "neck", "x", -0.4],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.5, -0.15, 0.0]]],
-			["aim", "forearm.L", "hand.L", [0.0, -0.6, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.5, 0.15, 0.0]]],
-			["aim", "forearm.R", "hand.R", [0.0, -0.6, 1.0]],
+		"steps": CROUCH_LEGS + [
+			["swing", "upper_arm.L", "forearm.L", 0.22, [-0.42, -0.1, 0.0]],
+			["swing", "forearm.L", "hand.L", -0.05, [0.5, -0.1, 0.0]],
+			["swing", "upper_arm.R", "forearm.R", -0.22, [-0.42, 0.1, 0.0]],
+			["swing", "forearm.R", "hand.R", 0.05, [0.5, 0.1, 0.0]],
 		],
-		"sink": [0.22, 0.015, -1.5708, 2.0],
+		"sink": CROUCH_SINK,
 	},
-	# The same low crouch kept still, breathing.
+	# The same crouch kept still.
 	"p_crouch_idle": {
-		"steps": [
-			["aim", "thigh.L", "shin.L", [0.15, -1.0, 1.45]],
-			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.75]],
-			["aim", "thigh.R", "shin.R", [-0.15, -1.0, 1.35]],
-			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.8]],
-			["turn", "spine", "x", [0.5, 0.02, 0.0]],
-			["turn", "chest", "x", [0.1, 0.02, 0.0]],
-			["turn", "neck", "x", -0.4],
-			["turn", "head", "y", [0.0, 0.2, 0.5]],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, 0.45]],
-			["aim", "forearm.L", "hand.L", [0.0, -0.7, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, 0.45]],
-			["aim", "forearm.R", "hand.R", [0.0, -0.7, 1.0]],
+		"steps": CROUCH_STILL + [
+			["swing", "upper_arm.L", "forearm.L", 0.22, -0.4],
+			["swing", "forearm.L", "hand.L", -0.05, 0.5],
+			["swing", "upper_arm.R", "forearm.R", -0.22, -0.4],
+			["swing", "forearm.R", "hand.R", 0.05, 0.5],
 		],
-		"sink": [0.23, 0.006, 0.0],
+		"sink": CROUCH_STILL_SINK,
+	},
+	# Creeping with a long weapon held low before the body in both hands, tipped
+	# well forward: the right fist by the hip, the left out along it.
+	"p_crouch_walk_long": {
+		"steps": CROUCH_LEGS + CROUCH_LONG_ARMS,
+		"sink": CROUCH_SINK,
+	},
+	"p_crouch_idle_long": {
+		"steps": CROUCH_STILL + CROUCH_LONG_ARMS,
+		"sink": CROUCH_STILL_SINK,
+	},
+	# Creeping with a handgun held low before the body in both hands, the muzzle ahead.
+	"p_crouch_walk_pistol": {
+		"steps": CROUCH_LEGS + CROUCH_PISTOL_ARMS,
+		"sink": CROUCH_SINK,
+	},
+	"p_crouch_idle_pistol": {
+		"steps": CROUCH_STILL + CROUCH_PISTOL_ARMS,
+		"sink": CROUCH_STILL_SINK,
 	},
 	# Searching a drawer or shelf: bent a little at the waist, the two hands
 	# turning things over in front of the chest by turns, head down.
@@ -1899,46 +1981,28 @@ const LAYERS: Dictionary = {
 		"sink": [0.025, 0.02, -1.5708, 2.0],
 	},
 	# Running with a long weapon in both hands across the front (decision 422, second set):
-	# held as when walking with it, the body leaning into the run.
+	# held as when walking with it, the legs and lean of the run.
 	"p_run_long": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.05, 0.0]],
-			["turn", "hips", "y", [0.0, -0.12, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
-			["turn", "spine", "x", 0.15],
-			["turn", "chest", "x", 0.05],
+		"steps": RUN_LEGS + [
 			["turn", "chest", "y", [0.0, 0.05, 0.0]],
-			["turn", "neck", "x", -0.12],
 			["aim", "upper_arm.R", "forearm.R", [-0.1, -1.0, [0.35, 0.02, 0.0]]],
 			["aim", "forearm.R", "hand.R", [0.05, -0.25, 1.0]],
 			["aim", "upper_arm.L", "forearm.L", [-0.3, -0.65, [0.65, 0.02, 0.0]]],
 			["aim", "forearm.L", "hand.L", [-0.75, 0.5, 0.5]],
 		],
-		"sink": [0.07, 0.04, -1.5708, 2.0],
+		"sink": RUN_SINK,
 	},
 	# Running with a pistol (decision 422, second set): the right elbow bent and pumping less,
-	# the muzzle up, the left arm pumping as it runs.
+	# the muzzle up, the left arm swinging as in the run.
 	"p_run_pistol": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.05, 0.0]],
-			["turn", "hips", "y", [0.0, -0.12, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
-			["turn", "spine", "x", 0.15],
-			["turn", "chest", "x", 0.05],
+		"steps": RUN_LEGS + [
 			["turn", "chest", "y", [0.0, 0.16, 0.0]],
-			["turn", "neck", "x", -0.12],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.0, -0.55, 0.0]]],
-			["aim", "forearm.L", "hand.L", [0.05, [0.2, 0.25, 0.0], [0.9, -0.2, 0.0]]],
+			["swing", "upper_arm.L", "forearm.L", 0.18, [-0.78, -0.75, 0.0]],
+			["swing", "forearm.L", "hand.L", [0.0, 0.15, 0.0], [0.82, -0.9, 0.0]],
 			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.05, 0.2, 0.0]]],
 			["aim", "forearm.R", "hand.R", [-0.05, [0.15, -0.12, 0.0], 0.9]],
 		],
-		"sink": [0.07, 0.04, -1.5708, 2.0],
+		"sink": RUN_SINK,
 	},
 	# On guard with a one-handed weapon (decision 422, second set): knees bent, left side
 	# forward, the right fist up by the shoulder with the head of the weapon back, the left hand out.
@@ -2018,6 +2082,59 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.L", "hand.L", [-0.85, 0.1, 0.5]],
 		],
 		"sink": [0.0, 0.004, 0.0, 4.0],
+	},
+	# The same the other way round (decision 448): the hurt right arm across the
+	# belly, the weapon held low in the left hand.
+	"p_hold_weak_r": {
+		"steps": [
+			["turn", "hips", "z", [0.0, -0.04, 0.0]],
+			["aim", "thigh.L", "shin.L", [[0.08, -0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [[0.06, -0.02, 0.0], -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [[-0.08, -0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [[-0.06, -0.02, 0.0], -1.0, -0.02]],
+			["turn", "spine", "z", [0.0, 0.03, 0.0]],
+			["turn", "spine", "x", [0.03, 0.012, 0.0, 4.0]],
+			["turn", "chest", "x", [0.02, -0.015, 0.0, 4.0]],
+			["turn", "head", "y", [0.0, -0.1, 0.8]],
+			["turn", "chest", "x", 0.08],
+			["turn", "neck", "x", 0.12],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.08, 0.01, 0.0, 4.0]]],
+			["aim", "forearm.L", "hand.L", [0.06, -1.0, 0.25]],
+			["aim", "upper_arm.R", "forearm.R", [-0.12, -1.0, 0.2]],
+			["aim", "forearm.R", "hand.R", [0.85, 0.1, 0.5]],
+		],
+		"sink": [0.0, 0.004, 0.0, 4.0],
+	},
+	# Carrying a big thing (decision 448, 19): the walk's legs, both arms brought
+	# round in front to hold it against the belly, leaning back a little under it.
+	"p_carry_big": {
+		"steps": WALK_LEGS + [
+			["turn", "spine", "x", -0.06],
+			["turn", "chest", "x", 0.02],
+			["turn", "chest", "y", [0.0, 0.04, 0.0]],
+			["turn", "neck", "x", 0.1],
+			["swing", "upper_arm.L", "forearm.L", 0.25, 0.45],
+			["swing", "forearm.L", "hand.L", -0.55, 1.45],
+			["swing", "upper_arm.R", "forearm.R", -0.25, 0.45],
+			["swing", "forearm.R", "hand.R", 0.55, 1.45],
+		],
+		"sink": WALK_SINK,
+	},
+	# Walking hurt (decision 448, 6): the walk's legs, bent at the waist and over
+	# to the right, the right hand held to that side, the left arm hardly swinging.
+	"p_walk_hurt": {
+		"steps": WALK_LEGS + [
+			["turn", "spine", "x", [0.32, 0.02, 0.0, 2.0]],
+			["turn", "chest", "x", 0.1],
+			["turn", "spine", "z", 0.08],
+			["turn", "chest", "y", [0.0, 0.06, 0.0]],
+			["turn", "neck", "x", -0.15],
+			["swing", "upper_arm.R", "forearm.R", -0.25, -0.15],
+			["swing", "forearm.R", "hand.R", 0.9, 1.3],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.04, -0.2, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.25, -0.18, 0.0]]],
+		],
+		"sink": WALK_SINK,
 	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
@@ -2181,6 +2298,9 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 			"aim":
 				var dir: Array = step[3]
 				aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
+			"swing":
+				var angle := _value(step[4], w)
+				aim(body, step[1], step[2], Vector3(_value(step[3], w), -cos(angle), sin(angle)))
 	if layer.has("sink"):
 		sink(body, _value(layer["sink"], w) * sink_scale)
 
@@ -2355,6 +2475,18 @@ const SHELLS: Dictionary = {
 	"hat_knit": {"bones": ["head"], "push": 0.02, "top": 0.55},
 	"hood": {"bones": ["head", "neck"], "push": 0.025, "top": 1.0, "face": true},
 }
+# Bags on the back (carry.gd BAGS, decision 448): not cut from the body but
+# made here against its back, each vertex weighted as the back beside it is,
+# so a bag moves and bends with the body as a garment does (bake_body_cli
+# --shell=, drawn as one). Everyday packs, not an army one (no frame, no
+# webbing). Width, height, depth in metres; a pocket on the outside, or a
+# rolled blanket strapped on top.
+const BAG_SHELLS: Dictionary = {
+	"pack": {"size": Vector3(0.3, 0.4, 0.14), "pocket": true},
+	"big_pack": {"size": Vector3(0.36, 0.54, 0.2), "roll": true},
+}
+const BAG_GAP: float = 0.04                # off the back: past a coat (SHELLS push) and a little air
+const BAG_BELOW_TOP: float = 0.05          # its top this far under the top of the back
 const SHELL_FACE_FORWARD: float = 0.3      # a head vertex facing forward more than this is face, for a piece that leaves it
 const SHELL_FACE_BROW: float = 0.15        # but not the top this share of the head (the brow is covered)
 const GLOVE_COLOUR: Color = Color(0.17, 0.16, 0.15)  # dark worn wool, as the colour picture holds it
@@ -2368,6 +2500,8 @@ const HAND_LIGHT: StringName = &"hand_light"   # a marked mesh's meta: the colou
 ## the body's vertices were split, pushed out. False if `kind` is unknown or
 ## the body has no skinned mesh.
 static func shell(body_root: Node3D, kind: String) -> bool:
+	if BAG_SHELLS.has(kind):
+		return _bag(body_root, kind)
 	var spec: Dictionary = SHELLS.get(kind, {})
 	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
 	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
@@ -2462,6 +2596,159 @@ static func shell(body_root: Node3D, kind: String) -> bool:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
 	mesh_node.mesh = mesh
 	return true
+
+
+## Puts bag `kind` (BAG_SHELLS) in place of the body's skinned mesh: a block
+## with its edges cut, against the back under the shoulders, with a pocket or
+## a roll; each face its own vertices (flat light), each vertex weighted as
+## the nearest piece of the back. False without a skinned mesh or a back.
+static func _bag(body_root: Node3D, kind: String) -> bool:
+	var spec: Dictionary = BAG_SHELLS[kind]
+	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
+	if mesh_node == null or body == null or mesh_node.skin == null:
+		return false
+	var src: Array = mesh_node.mesh.surface_get_arrays(0)
+	var pos: PackedVector3Array = src[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = src[Mesh.ARRAY_NORMAL]
+	var bones: PackedInt32Array = src[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = src[Mesh.ARRAY_WEIGHTS]
+	var per: int = bones.size() / pos.size()
+	var trunk := {_bone(body, "spine"): true, _bone(body, "chest"): true, _bone(body, "hips"): true}
+	var back := PackedInt32Array()
+	var top := -INF
+	for v in pos.size():
+		if normals[v].z < -0.2 and absf(pos[v].x) < 0.2 and trunk.has(_main_bone(body, mesh_node.skin, bones, weights, per, v)):
+			back.append(v)
+			top = maxf(top, pos[v].y)
+	if back.is_empty():
+		return false
+	var size: Vector3 = spec["size"]
+	var high := top - BAG_BELOW_TOP
+	var low := high - size.y
+	# Its face against the back, leaning as the back does: behind the furthest-out
+	# part of the back in its upper third and in its lower third.
+	var upper := INF
+	var lower := INF
+	for v in back:
+		if absf(pos[v].x) >= size.x * 0.5:
+			continue
+		if pos[v].y <= high and pos[v].y >= high - size.y / 3.0:
+			upper = minf(upper, pos[v].z)
+		elif pos[v].y >= low and pos[v].y <= low + size.y / 3.0:
+			lower = minf(lower, pos[v].z)
+	if upper == INF:
+		return false
+	if lower == INF:
+		lower = upper
+	var face := (upper + lower) * 0.5 - BAG_GAP
+	var out := {"pos": [], "normal": [], "index": []}
+	_block(out, Vector3(0.0, (low + high) * 0.5, face - size.z * 0.5), size, minf(0.035, size.z * 0.25), 0.78, upper - lower)
+	# (The pocket and the roll follow the same lean.)
+	var lean := upper - lower
+	if bool(spec.get("pocket", false)):
+		var pocket := Vector3(size.x * 0.66, size.y * 0.36, size.z * 0.4)
+		var y := low + pocket.y * 0.5 + 0.03
+		var along := lean * ((y - low) / size.y - 0.5)
+		_block(out, Vector3(0.0, y, face + along - size.z - pocket.z * 0.5 + 0.01), pocket, 0.02, 0.85, lean * pocket.y / size.y)
+	if bool(spec.get("roll", false)):
+		# On the narrowed top, toward the back.
+		_roll(out, Vector3(0.0, high + 0.05, face + lean * 0.5 - size.z * 0.4), size.x * 0.95, 0.06)
+	# Each vertex rides as the piece of the back nearest it does.
+	var out_bones := PackedInt32Array()
+	var out_weights := PackedFloat32Array()
+	for p: Vector3 in out["pos"]:
+		var best := back[0]
+		var best_d := INF
+		for v in back:
+			var d := Vector2(pos[v].x - p.x, pos[v].y - clampf(p.y, low, high)).length_squared()
+			if d < best_d:
+				best_d = d
+				best = v
+		for k in per:
+			out_bones.append(bones[best * per + k])
+			out_weights.append(weights[best * per + k])
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(out["pos"])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(out["normal"])
+	arrays[Mesh.ARRAY_BONES] = out_bones
+	arrays[Mesh.ARRAY_WEIGHTS] = out_weights
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array(out["index"])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
+	mesh_node.mesh = mesh
+	return true
+
+
+## A flat face (its corners in order around `normal`) added to `out`.
+static func _face(out: Dictionary, corners: Array, normal: Vector3) -> void:
+	var first: int = (out["pos"] as Array).size()
+	var a: Vector3 = corners[0]
+	var b: Vector3 = corners[1]
+	var c: Vector3 = corners[2]
+	var flip := (b - a).cross(c - a).dot(normal) > 0.0
+	for p: Vector3 in corners:
+		(out["pos"] as Array).append(p)
+		(out["normal"] as Array).append(normal)
+	for i in range(1, corners.size() - 1):
+		var tri := [first, first + i, first + i + 1]
+		# Godot's front faces wind clockwise as seen from outside.
+		if flip:
+			tri = [first, first + i + 1, first + i]
+		(out["index"] as Array).append_array(tri)
+
+
+## A block of `size` centred at `at`, its four upright edges cut by `cut`; its
+## top `taper` as wide and deep as its bottom, drawn to its +z side (toward the
+## back it hangs on), as a filled pack sags; its top `lean` further along z
+## than its bottom (the whole leaning as the back under it).
+static func _block(out: Dictionary, at: Vector3, size: Vector3, cut: float, taper: float = 1.0, lean: float = 0.0) -> void:
+	var hx := size.x * 0.5
+	var hz := size.z * 0.5
+	# Around the block, seen from above: eight corners of the cut rectangle.
+	var ring := [Vector2(-hx + cut, -hz), Vector2(hx - cut, -hz), Vector2(hx, -hz + cut), Vector2(hx, hz - cut),
+		Vector2(hx - cut, hz), Vector2(-hx + cut, hz), Vector2(-hx, hz - cut), Vector2(-hx, -hz + cut)]
+	var lo := at.y - size.y * 0.5
+	var hi := at.y + size.y * 0.5
+	var bottom_ring := []
+	var top_ring := []
+	for p: Vector2 in ring:
+		bottom_ring.append(Vector3(at.x + p.x, lo, at.z + p.y - lean * 0.5))
+		top_ring.append(Vector3(at.x + p.x * taper, hi, at.z + hz - (hz - p.y) * taper + lean * 0.5))
+	for i in ring.size():
+		var j := (i + 1) % ring.size()
+		var a: Vector3 = bottom_ring[i]
+		var b: Vector3 = bottom_ring[j]
+		var c: Vector3 = top_ring[j]
+		var side := (b - a).cross(c - a).normalized()
+		var mid := (a + b + c) / 3.0 - Vector3(at.x, (lo + hi) * 0.5, at.z)
+		if side.dot(Vector3(mid.x, 0.0, mid.z)) < 0.0:
+			side = -side
+		_face(out, [a, b, c, top_ring[i]], side)
+	_face(out, top_ring, Vector3.UP)
+	_face(out, bottom_ring, Vector3.DOWN)
+
+
+## A rolled blanket lying across, `length` long, of `radius`, centred at `at`.
+static func _roll(out: Dictionary, at: Vector3, length: float, radius: float) -> void:
+	var sides := 8
+	var l := at.x - length * 0.5
+	var r := at.x + length * 0.5
+	var left_cap := []
+	var right_cap := []
+	for i in sides:
+		var a := TAU * float(i) / sides
+		var b := TAU * float(i + 1) / sides
+		var pa := Vector2(cos(a), sin(a)) * radius
+		var pb := Vector2(cos(b), sin(b)) * radius
+		var mid := (a + b) * 0.5
+		_face(out, [Vector3(l, at.y + pa.y, at.z + pa.x), Vector3(r, at.y + pa.y, at.z + pa.x),
+			Vector3(r, at.y + pb.y, at.z + pb.x), Vector3(l, at.y + pb.y, at.z + pb.x)], Vector3(0.0, sin(mid), cos(mid)))
+		left_cap.append(Vector3(l, at.y + pa.y, at.z + pa.x))
+		right_cap.append(Vector3(r, at.y + pa.y, at.z + pa.x))
+	_face(out, left_cap, Vector3.LEFT)
+	_face(out, right_cap, Vector3.RIGHT)
 
 
 ## The body bone vertex `v` of a skin follows most.

@@ -61,6 +61,10 @@ fx_fade={
 "type": "float",
 "value": 0.0
 }
+fx_still={
+"type": "float",
+"value": 0.0
+}
 fx_cold={
 "type": "vec4",
 "value": Vector4(1, 1, 0, 0)

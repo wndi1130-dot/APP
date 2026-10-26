@@ -251,15 +251,18 @@ const BANDS: Dictionary = {
 		"sun": Color(1.0, 0.76, 0.56), "sun_energy": 0.55, "ambient": Color(0.58, 0.52, 0.62), "ambient_energy": 0.40},
 	"day": {"zenith": Color(0.47, 0.55, 0.66), "horizon": Color(0.76, 0.78, 0.80), "glow": Color(0.95, 0.94, 0.90),
 		"sun": Color(0.80, 0.85, 0.92), "sun_energy": 0.70, "ambient": Color(0.56, 0.60, 0.67), "ambient_energy": 0.26},
+	# Dusk light (sun, ambient): the clear sunset sky photo's own light at our
+	# brightness: a softened orange sun, the shade lit by the open sky's cool blue
+	# (the old orange sun and warm shade made the whole ground one brown).
 	"dusk": {"zenith": Color(0.20, 0.18, 0.32), "horizon": Color(0.90, 0.52, 0.32), "glow": Color(1.0, 0.56, 0.30),
-		"sun": Color(1.0, 0.64, 0.40), "sun_energy": 0.5, "ambient": Color(0.55, 0.45, 0.52), "ambient_energy": 0.38},
+		"sun": Color(0.86, 0.70, 0.47), "sun_energy": 0.5, "ambient": Color(0.48, 0.47, 0.55), "ambient_energy": 0.38},
 }
 ## The same bands at the warmest: softer, greener fill and a warmer day sun.
 const WARM_BANDS: Dictionary = {
 	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.25, 0.27, 0.30)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
-	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "ambient": Color(0.48, 0.42, 0.44)},
+	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "ambient": Color(0.43, 0.43, 0.50)},
 }
 ## Most saturation a band colour may carry, and how much colour (chroma, max
 ## minus min) a bluish one may: sky blue is the support gauge's (tests keep both).
@@ -520,18 +523,32 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	return out
 
 
-## The colour grade (WorldEnvironment adjustments): weather and hour change
-## saturation and contrast; shadows lean to the fill's hue, lights to the sun's.
+## How far the grade spreads the tones about its grey: 1.2, in every weather
+## (an overcast or a fog does not flatten the picture; only colour goes).
+const TONE_CONTRAST := 1.2
+## The grey the tone turns about: 0.4 by day, lower as the hour's light goes,
+## so the spread does not darken a dim picture (night stays where it was).
+const TONE_PIVOT_DAY := 0.4
+const TONE_PIVOT_NIGHT := 0.1
+
+
+## The colour grade (WorldEnvironment adjustments): a fixed tone (contrast 1.2
+## about the hour's grey); weather and hour only change the saturation; shadows
+## lean to the fill's hue, lights to the sun's.
 static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
-	var sat := lerpf(1.08, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
+	var sat := lerpf(1.0, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
-	var contrast := lerpf(1.08, 0.94, maxf(veil, float(l["haze"]) * 0.8))
+	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
+	# 0.5 + k(b·c − 0.5) is the line 1.2(c − pivot) + pivot when these hold.
+	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"]))
+	var k := 1.0 + 2.0 * pivot * (TONE_CONTRAST - 1.0)
 	return {
 		"saturation": sat,
-		"contrast": contrast,
-		"brightness": 1.0,
+		"contrast": k,
+		"brightness": TONE_CONTRAST / k,
+		"pivot": pivot,
 		"shadow": Color(l["ambient_color"]),
 		"light": Color(l["sun_color"]),
 		"strength": lerpf(0.5, 0.2, veil),
@@ -554,6 +571,15 @@ static func light(l: Dictionary) -> Dictionary:
 		"background": l["background"],
 		"lamp": l["lamp"],
 	}
+
+
+## How thick a foggy day's fog lies over the whole field (fx/map_edge.gd): 0
+## without fog in the look, 1 in a thick one (the reference game's fog days
+## go white; overcast and rain keep the field clear).
+static func field_fog(l: Dictionary) -> float:
+	if not Array(l["kinds"]).has("fog"):
+		return 0.0
+	return smoothstep(0.55, 0.9, float(l["haze"]))
 
 
 ## The fx_* shader globals for this look. FxState still makes wet, snow, frost

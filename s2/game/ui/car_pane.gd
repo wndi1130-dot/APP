@@ -23,6 +23,8 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const St = preload("res://game/train/train_state.gd")
+const TrainHands = preload("res://game/train/train_hands.gd")
+const TrainTurn = preload("res://game/train/train_turn.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_SIZE := Vector2(330, 286)
@@ -82,15 +84,20 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 		var bad: bool = v < float(row[2]) if bool(row[3]) else v > float(row[2])
 		stats.append({"word": row[0], "n": int(round(v)), "mark": float(row[2]), "bad": bad})
 	# What this car's step burns in a stretch: its own share of train_turn.gd
-	# heat_cost (with the laws' heat multiplier) and food_cost.
-	var coal: float = float(heat) * float(pop) / 40.0 * float(p["coalHeatPerLever"]) * St.law_mult(g0, t0, "heatMult")
+	# heat_cost (insulation and the laws' heat multiplier with it) and food_cost.
+	var coal: float = TrainTurn.comm_heat(g0, c) * float(p["coalHeatPerLever"]) * St.law_mult(g0, t0, "heatMult")
+	var dom: Dictionary = g0.get("dom", {}) if g0.get("dom") is Dictionary else {}
 	var food: float = float(pop) * float(ration) * float(p["foodPerPersonLever"])
 	var names: Dictionary = t0.get("COMM_NAME", {})
 	return {
 		"name": String(car0.get("name", names.get(c, c))),
 		"comm": c,
 		"pop": pop,
+		"hands_line": TrainHands.shortage_line(g0, t0, true),
 		"stage": String(St.stage_of(float(s["rel"]), t0).get("name", "")),
+		# An insulated car says so after its stage; what it gains is already in
+		# the warmth, the crowding and the heat lever's coal (train_mods.gd, PR 4).
+		"insulated": (dom.get("insulated", []) as Array).has(String(car0.get("id", ""))),
 		"warm": int(round(float(sit[0]))),
 		"cold": cold,
 		# Only the cold says a line: what the night does to them (결정 417).
@@ -199,10 +206,15 @@ func _head(m: Dictionary) -> void:
 	var pop := UiFonts.label(str(m["pop"]), UiFonts.NUMBER, 400, 15.0, INK, 0.225)
 	pop.name = "People"
 	_text(pop, 62.0, 45.0)
-	var stage := UiFonts.label(" · " + String(m["stage"]), UiFonts.WORD, 400, 12.0, INK2, 0.72)
+	var stage := UiFonts.label(" · " + String(m["stage"]) + (" · 단열" if bool(m["insulated"]) else ""), UiFonts.WORD, 400, 12.0, INK2, 0.72)
 	stage.name = "Stage"
 	_add(stage)
 	GlassParts.put_on(stage, pop.position.x + GlassParts.text_w(pop), GlassParts.base_of(pop))
+	if not String(m["hands_line"]).is_empty():
+		var hands := UiFonts.label(String(m["hands_line"]), UiFonts.WORD, 400, 11.0, INK2, 0.0)
+		hands.name = "HandsShortage"
+		hands.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_text(hands, 44.0, 64.0)
 	var fold := Button.new()
 	fold.name = "Fold"
 	fold.flat = true

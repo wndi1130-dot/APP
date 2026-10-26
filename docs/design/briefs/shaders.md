@@ -43,6 +43,7 @@
 | `fx_tint` | 하늘·안개·입자에 덮는 색(날씨 색 × 시각 색) | 날씨와 시각 |
 | `fx_flash` | 번개 몇 프레임 | 사건 |
 | `fx_fade` | 전술 일시정지 바램 | 필드 |
+| `fx_still` | 일시정지로 멈춰 선 초. 사람·망자·열차 칸 몸 동작(`dead_vat.gdshaderinc`)이 `TIME - fx_still`로 돌아 정지 중 멈춤 | 필드(`pause_veil.gd`) |
 
 쓰는 법:
 

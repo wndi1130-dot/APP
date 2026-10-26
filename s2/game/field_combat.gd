@@ -5,6 +5,7 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
+const WR = preload("res://game/sim/weapon_rules.gd")
 const AimModel = preload("res://game/sim/aim_model.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
@@ -71,6 +72,9 @@ var _wound_rng := RandomNumberGenerator.new()
 var _wound_seeded: bool = false
 # Companion pauses. A stream of its own with a fixed seed, so game.rng rolls stay as they were.
 var _pace_rng := RandomNumberGenerator.new()
+# Which arrows break. A stream of its own too, seeded from the game on first use.
+var _gear_rng := RandomNumberGenerator.new()
+var _gear_seeded: bool = false
 
 
 func _is_ally(p) -> bool:
@@ -92,6 +96,13 @@ func wound_rng() -> RandomNumberGenerator:
 		_wound_seeded = true
 		_wound_rng.seed = int(game.rng.seed) ^ 0x5eed
 	return _wound_rng
+
+
+func gear_rng() -> RandomNumberGenerator:
+	if not _gear_seeded:
+		_gear_seeded = true
+		_gear_rng.seed = int(game.rng.seed) ^ 0x9ea2
+	return _gear_rng
 
 
 ## A part of the group ("arm" or "leg") with a random side, for wounds from other scripts.
@@ -535,11 +546,11 @@ func _swing_empty(p) -> void:
 		var c: Vector2i = FieldGrid.cell_of(p.position + fwd * step)
 		step += 0.3
 		if lg.windows.has(c) and not bool(lg.windows[c]["broken"]):
-			_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+			_wear(p, WR.melee_wear(wid, String(p.weapon()["quality"]), int(p.skills["melee"])))
 			game.actions._break_window(p, c)
 			return
 		if lg.doors.has(c) and String(lg.doors[c]["state"]) in ["closed", "locked"]:
-			_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+			_wear(p, WR.melee_wear(wid, String(p.weapon()["quality"]), int(p.skills["melee"])))
 			game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "melee", p)
 			return
 	game.make_sound(p.position, SimNoise.Level.QUIET, "melee", p)
@@ -639,7 +650,7 @@ func swing(p, z: Dictionary) -> void:
 	var m: Dictionary = p.mults()
 	p.swing_t = float(d["swing"]) / float(m["swing"])
 	p.body.add_fatigue(float(d["fatigue"]) * BodyState.fatigue_mult({"carry_state": p.carry_state(), "cold_level": p.cold_level()}))
-	_wear(p, W.wear_per_use(wid, String(p.weapon()["quality"])))
+	_wear(p, WR.melee_wear(wid, String(p.weapon()["quality"]), int(p.skills["melee"])))
 	# Read before the blow's own sound: a quiet sound turns the body toward it
 	# (zombies.hear), and this one comes from where the body stands.
 	var from_back := behind(z, p.position)
@@ -832,13 +843,19 @@ func _wear(p, amount: float) -> void:
 	if p.hands.is_empty():
 		return
 	var h: Dictionary = p.hands[0]
-	h["condition"] = maxf(0.0, float(h["condition"]) - amount)
-	# An improvised one goes to pieces in the hand (decision 423, P23).
-	if h["condition"] <= 0.0 and W.breaks(String(h["id"])):
-		var gone: String = String(W.get_data(String(h["id"])).get("name", ""))
+	var id: String = String(h["id"])
+	var before: float = float(h["condition"])
+	h["condition"] = WR.worn(id, before, amount)
+	var label: String = String(W.get_data(id).get("name", ""))
+	# An improvised one goes to pieces in the hand (decision 423, P23); a
+	# factory one cracks first and breaks at nothing (weapons.md: never
+	# without warning).
+	if h["condition"] <= 0.0 and (W.breaks(id) or WR.melee_breaks(id)):
 		p.hands.remove_at(0)
 		p.set_weapon_slots(p.hands)
-		_toast(p, "%s이(가) 부서졌다." % gone)
+		_toast(p, ("%s이(가) 부서졌다." if W.breaks(id) else WR.BROKE_LINE) % label)
+	elif WR.cracks(id, before, float(h["condition"])):
+		_toast(p, WR.CRACK_LINE % label)
 
 
 func _toast(p, text: String) -> void:
@@ -927,9 +944,14 @@ func breach_reaches(p) -> String:
 func _held_line(by: String) -> String:
 	if by == "" or by == String(Wear.KINDS["jacket_short"]["name"]):
 		return "외투가 손톱을 막았다."
-	var last: int = by.unicode_at(by.length() - 1) - 0xAC00
+	return "%s 손톱을 막았다." % _subject(by)
+
+
+## A garment's name as the one doing it: 이 after a closed syllable, else 가.
+static func _subject(word: String) -> String:
+	var last: int = word.unicode_at(word.length() - 1) - 0xAC00 if word != "" else -1
 	var closed: bool = last >= 0 and last < 11172 and last % 28 != 0
-	return "%s%s 손톱을 막았다." % [by, "이" if closed else "가"]
+	return "%s%s" % [word, "이" if closed else "가"]
 
 
 ## The window ran out: the bite lands (body_injury 2). Witnesses go on the receipt.
@@ -957,6 +979,8 @@ func bite(p) -> void:
 	Wear.tear(p, site, blocked, true)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
+	# The one at the front bit: it is drawn tearing away through the rest of its bite (DeadBody.bite_after_k).
+	p.grabbers[0]["bit_at"] = float(p.grabbers[0]["age"])
 	for z in p.grabbers.duplicate():
 		game.zombies.release(z, p.position, false)
 	p.grabbers.clear()
@@ -1103,7 +1127,19 @@ func fire(p, at: Vector3, target = null) -> String:
 		p.aim.stop()
 		game.say(p, "%s 총열이 터졌다." % p.display_name)
 		return "burst"
-	game.make_sound(p.position, int(d["sound"]), "gun" if int(d["sound"]) > 0 else "bow", p)
+	# A silencer takes the shot one step down and wears with it (weapons.md 소음기).
+	var silencer: String = String(h.get("silencer", ""))
+	if silencer != "" and (not WR.silencer_fits(silencer, wid) or float(h.get("silencer_cond", 1.0)) <= 0.0):
+		h.erase("silencer")
+		h.erase("silencer_cond")
+		silencer = ""
+	game.make_sound(p.position, WR.shot_level(wid, silencer), "gun" if int(d["sound"]) > 0 else "bow", p)
+	if silencer != "":
+		h["silencer_cond"] = float(h.get("silencer_cond", 1.0)) - WR.silencer_wear(silencer, wid)
+		if float(h["silencer_cond"]) <= 0.0:
+			h.erase("silencer")
+			h.erase("silencer_cond")
+			_toast(p, "%s이(가) 망가졌다." % String(WR.SILENCERS[silencer]["name"]))
 	var radius: float = p.aim.radius_at(dist)
 	p.aim.fire()
 	var end := at
@@ -1114,9 +1150,9 @@ func fire(p, at: Vector3, target = null) -> String:
 	if blocked_at != null:
 		end = blocked_at
 	tracers.append({"from": p.position + Vector3(0, 1.2, 0), "to": end + Vector3(0, 1.0, 0), "t": 0.12})
-	if wid == "bow":
-		game.ground_items.append({"pos": end, "id": "ammo_craft", "n": 1})
+	var arrow: bool = wid == "bow"
 	if blocked_at != null or dist > float(d["range"]):
+		_drop_arrow(arrow, end, false)
 		game.make_sound(end, SimNoise.Level.QUIET, "impact", p)
 		_after_shot(p)
 		return "shot"
@@ -1129,12 +1165,22 @@ func fire(p, at: Vector3, target = null) -> String:
 		var z: Dictionary = game.zombies.nearest(at, 0.8, true, true)
 		if not z.is_empty():
 			hit = _shoot_zombie(p, z, d, radius, dist)
+	var lands: Vector3 = end
 	if not hit:
-		# The miss lands somewhere past the target: a small sound over there.
+		# The miss lands somewhere past the target: a small sound over there, and the arrow with it.
 		var past: Vector3 = at + (at - p.position).normalized() * rng.randf_range(1.0, 3.0)
 		game.make_sound(past, SimNoise.Level.QUIET, "impact", p)
+		lands = past
+	_drop_arrow(arrow, lands, hit)
 	_after_shot(p)
 	return "shot"
+
+
+## An arrow lies where the shot ended, to be picked up again, unless it broke
+## (weapons.md 공방탄: some break).
+func _drop_arrow(arrow: bool, at: Vector3, hit: bool) -> void:
+	if arrow and not WR.arrow_breaks(gear_rng().randf(), hit):
+		game.ground_items.append({"pos": at, "id": "ammo_craft", "n": 1})
 
 
 func _after_shot(p) -> void:
@@ -1146,17 +1192,22 @@ func _after_shot(p) -> void:
 func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) -> bool:
 	var rng: RandomNumberGenerator = game.rng
 	if z["state"] == "rising":
-		if AimModel.roll(rng, radius) != "miss":
+		var rose: String = AimModel.roll(rng, radius)
+		if rose != "miss":
+			_shot_through(z, rose)
 			_kill(p, z, "")
 			return true
 		return false
 	if int(d.get("pellets", 1)) > 1:
 		var spread_m: float = dist * tan(deg_to_rad(float(d["spread_deg"])))
 		var hits: Dictionary = AimModel.pellet_hits(rng, radius, spread_m, int(d["pellets"]))
+		var body: int = int(hits["body"])
+		if body > 0:
+			_shot_through(z, "body")
 		if int(hits["head"]) > 0:
+			_shot_through(z, "head")
 			_kill(p, z, "")
 			return true
-		var body: int = int(hits["body"])
 		if body <= 0:
 			return false
 		var knock := 1.0 - pow(1.0 - float(d["body_knockdown"]) , body)
@@ -1170,18 +1221,34 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 		return true
 	var zone: String = AimModel.roll(rng, radius)
 	if zone == "head":
+		_shot_through(z, zone)
 		_kill(p, z, "")
 		return true
 	if zone == "body":
 		# A thick coat stops blades and bites only; rounds go through (user
-		# 17:34, zombies.md 82e27ce). Only a police vest would stop a pistol
-		# round, and Sulechów has no police station.
+		# 17:34, zombies.md 82e27ce). Only the vest stops a pistol round, on the
+		# body (decision 434: the dead by the police station wear it): the round
+		# stays in it, the body only staggers, and the vest is mostly holed there.
+		var worn: Dictionary = game.zombies.worn_of(z)
+		var stop: float = Wear.bullet_block_in(worn, "torso") if String(d.get("ammo", "")) == "pistol" else 0.0
+		var held: bool = stop > 0.0 and rng.randf() < stop
+		var by: String = Wear.shot_in(worn, "torso", held, rng)
+		if held:
+			z["stun"] = 0.3
+			_toast(p, "%s 탄을 막았다." % _subject(by))
+			return true
 		if rng.randf() < float(d["body_knockdown"]):
 			game.zombies.knock_down(z)
 		else:
 			z["stun"] = 0.5
 		return true
 	return false
+
+
+## What hit one of the dead (a round, shot, an arrow) went through its clothes
+## there, holing each layer as on the living (clothing.md 3.3). No dice.
+func _shot_through(z: Dictionary, zone: String) -> void:
+	Wear.shot_in(game.zombies.worn_of(z), "head_neck" if zone == "head" else "torso", false, game.rng)
 
 
 func _shoot_person(p, o, radius: float) -> bool:
@@ -1196,7 +1263,24 @@ func _shoot_person(p, o, radius: float) -> bool:
 	if zone == "miss":
 		return false
 	o.last_hurt_by = p.pid
-	var part: String = o.body.apply_gunshot(rng, game.clock.elapsed, zone)
+	var fine: String = o.body.gunshot_part(rng, zone)
+	# A pistol round where a vest covers (decision 434, body_injury 6장): it is
+	# stopped, and the vest more often than not holed there for the next one.
+	# Where nothing stops rounds no dice are drawn: it goes in as it always did,
+	# holing what it goes through.
+	var pistol: bool = String(W.get_data(p.weapon_id()).get("ammo", "")) == "pistol"
+	var stop: float = Wear.bullet_block_in(o.worn, fine) if pistol else 0.0
+	var held: bool = stop > 0.0 and rng.randf() < stop
+	var by: String = Wear.shot_in(o.worn, fine, held, rng)
+	if held:
+		game.actions.struck(o)
+		game.make_sound(o.position, SimNoise.Level.QUIET, "impact", p)
+		if o.team == "raider":
+			game.ai.raider_hit(o, p)
+		else:
+			game.say(o, "%s 총에 맞았다 — %s 막았다." % [o.display_name, _subject(by)], true, "hurt")
+		return true
+	var part: String = o.body.gunshot_at(fine, game.clock.elapsed)
 	if zone == "head":
 		o.body.downed = true
 	game.telemetry.injury(game.clock.elapsed, o.pid, "gunshot")
