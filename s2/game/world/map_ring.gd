@@ -165,6 +165,9 @@ static func add(original: Dictionary) -> Dictionary:
 		data[key].append_array(ring[key])
 	data["containers"].merge(ring["containers"])
 	g.refresh_paths()
+	# The room kinds were numbered by room on the grid that was furnished: the grown grid numbers
+	# its rooms anew, so the old table would name the wrong rooms (box keys, room_furnish.gd).
+	data.erase("density_classes")
 	data["map_ring"] = {"width": width, "inner": inner, "seed": seed_value,
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
