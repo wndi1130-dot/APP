@@ -550,7 +550,9 @@ func _ready() -> void:
 	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
 	if opts.get("field_resume") is Dictionary:
 		FieldSave.apply(self, opts["field_resume"])
-		train_guard.resumed()
+		# A version-1 save kept no guard state: the brakes were heard before it was left.
+		if not FieldSave.exact(opts["field_resume"]):
+			train_guard.resumed()
 	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
 		# The train has just stood: its brakes are heard as the clock starts,
 		# the scene of it rolling in or not (decision 416).

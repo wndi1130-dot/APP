@@ -47,7 +47,7 @@ const GAME_FIELDS: Array[String] = [
 	"glass_warned", "player_downed_t", "spotted_events", "unseen_rattle", "lid_tip_told", "roof_seen",
 	"seen_now", "seen_memory", "vis_t", "cam_focus", "cam_push", "cam_size",
 ]
-const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry"]
+const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
 const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "dead_eaten_seconds"]
 
@@ -217,6 +217,11 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	return opts
 
 
+## A save that holds the whole running state (version 2 with "runtime"), not only the old fallbacks.
+static func exact(save: Dictionary) -> bool:
+	return int(save.get("version", 1)) >= 2 and save.has("runtime")
+
+
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
 static func apply(game, save: Dictionary) -> void:
 	game.skip_arrival()
@@ -227,7 +232,7 @@ static func apply(game, save: Dictionary) -> void:
 		for p in game.people:
 			if p.pid == String(row["pid"]):
 				_put_person(p, row)
-	if int(save.get("version", 1)) >= 2 and save.has("runtime"):
+	if exact(save):
 		game.ammo.clear()
 	_put_counts(game.ammo, save.get("ammo", {}))
 	game.unloaded.clear()
@@ -235,7 +240,7 @@ static func apply(game, save: Dictionary) -> void:
 	game.loaded_wear = (save.get("loaded_wear", []) as Array).duplicate(true)
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
-	if int(save.get("version", 1)) >= 2 and save.has("runtime"):
+	if exact(save):
 		_apply_exact(game, save)
 		return
 	var boxes: Dictionary = game.data.get("containers", {})
@@ -312,6 +317,9 @@ static func _script_state(game, object) -> Dictionary:
 		if not (int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE) or name in ["game", "tracers"]:
 			continue
 		if (object == game.mission_play and name == "mission") or (object == game.holdout and name == "doors"):
+			continue
+		# by_id holds the very rows of bodies (field_train_guard.gd): put back from them on restore.
+		if object == game.train_guard and name == "by_id":
 			continue
 		fields.append(name)
 	return _properties(game, object, fields)
@@ -511,7 +519,11 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		game.player = player
 	_restore_properties(game, game.mission_play.mission, runtime["mission"])
 	for name: String in COMPONENTS:
-		_restore_properties(game, game.get(name), runtime["components"][name])
+		if runtime["components"].has(name):
+			_restore_properties(game, game.get(name), runtime["components"][name])
+	game.train_guard.by_id.clear()
+	for row: Dictionary in game.train_guard.bodies:
+		game.train_guard.by_id[int(row["id"])] = row
 	for door: Dictionary in game.holdout.doors:
 		if is_instance_valid(door.get("node")):
 			door["node"].queue_free()
