@@ -12,6 +12,7 @@ const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
+const ObjectRules = preload("res://game/sim/object_rules.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
@@ -26,6 +27,7 @@ const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
+const GroundLook = preload("res://game/world/ground_look.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
 ## Size (along the wall, up, thickness) and height of each glowing face.
@@ -61,6 +63,8 @@ var shown_level: int = -99
 ## What the edge band drew (counts, for the build log and tests).
 var edge_band: Dictionary = {}
 var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiMeshInstance3D)}
+var object_gray: Array = [] # Individually removable fallbacks for interactive furniture.
+var stove_glows: Dictionary = {}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
 var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
 var _prop_memory := PackedByteArray()
@@ -74,6 +78,8 @@ var _prop_elapsed: float = 0.0
 var door_nodes: Dictionary = {}   # Vector2i -> MeshInstance3D
 var window_nodes: Dictionary = {}
 var container_nodes: Dictionary = {}
+var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd)
+var _ground_sig: int = 0
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
@@ -164,12 +170,7 @@ func setup(map_data: Dictionary) -> void:
 		var lv: int = int(stove.get("level", 0))
 		var node := _mesh_node(lv)
 		stove_nodes.append(node)
-		var st := _begin()
-		var base := FieldGrid.center(stove["cell"]) + Vector3(0, lv * LEVEL_H, 0)
-		box(st, Vector3(0.8, 0.9, 0.8), base + Vector3(0, 0.45, 0), Color(0.25, 0.24, 0.23))
-		if stove["lit"]:
-			box(st, Vector3(0.5, 0.06, 0.5), base + Vector3(0, 0.93, 0), Color(0.95, 0.55, 0.25))
-		node.mesh = st.commit()
+		update_stove(stove_nodes.size() - 1)
 	for key in data["manholes"]:
 		var lv: int = int(data.get("manhole_levels", {}).get(key, 0))
 		var node := _mesh_node(lv)
@@ -552,6 +553,29 @@ func update_container(id: String) -> void:
 	node.mesh = st.commit()
 
 
+## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
+## mesh a level, made again only when the list has changed.
+func update_ground(items: Array) -> void:
+	var sig := items.hash()
+	if sig == _ground_sig or level_roots.is_empty():
+		return
+	_ground_sig = sig
+	var tools: Dictionary = {}
+	for piece: Dictionary in GroundLook.pieces(items):
+		var lv: int = piece["lv"]
+		if not level_roots.has(lv):
+			continue
+		if not tools.has(lv):
+			tools[lv] = _begin()
+		box(tools[lv], piece["size"], piece["at"], piece["color"])
+	for lv in ground_nodes:
+		ground_nodes[lv].mesh = null
+	for lv in tools:
+		if not ground_nodes.has(lv):
+			ground_nodes[lv] = _mesh_node(lv)
+		ground_nodes[lv].mesh = tools[lv].commit()
+
+
 func update_spot(id: String) -> void:
 	var spot: Dictionary = data["spots"][id]
 	var node: MeshInstance3D = spot_nodes[id]
@@ -711,6 +735,171 @@ static func sky_alpha(g: FieldGrid, c: Vector2i) -> float:
 	return 0.0 if g.indoor(c) else 1.0
 
 
+## A road this wide across or more is a street: a centre line, pavement beside it.
+const STREET_WIDTH: int = 4
+## Narrower than this across: a footpath, paved like the pavement.
+const PATH_WIDTH: int = 3
+
+## What the ground shader draws on each cell beyond its floor kind (world_vis
+## bare_ground, 결정 469 C1·C4: road, pavement, yard soil, dry grass). Picture
+## only: the floor kind stays the rule (sound, speed). The first width*height
+## values are the cells:
+##   open ground (SNOW, DEEP_SNOW) out of doors: 0 grass, -1 pavement along x,
+##   -2 along z, -3 a pavement corner;
+##   ROAD: bits 0~3 the sides (N, E, S, W) that meet open ground (kerb and
+##   gutter), bit 4 a centre line along x, bit 5 along z, bits 6~8 where it lies
+##   across the cell in quarter metres, bit 9 a footpath;
+##   PLATFORM: bits 0~3 the sides at the rails (edge stripe), bit 4 laid along x,
+##   bit 5 along z.
+## Then one value a corner of the grid, (width+1)*(height+1): how much bare soil
+## shows on grass there, 0..1 (trodden before doors, the strip at a wall's foot),
+## so the soil fades out over the cells instead of stopping at their edges.
+static func ground_details(g: FieldGrid) -> PackedFloat32Array:
+	# Plain arrays and index sums only: this runs over every cell of the map
+	# (48,000 on the largest), so no per-cell calls (stop load time).
+	var w := g.width
+	var h := g.height
+	var n := w * h
+	var fl := g.floor
+	var so := g.solid
+	var bu := g.building
+	var out := PackedFloat32Array()
+	out.resize(n + (w + 1) * (h + 1))
+	# How far each road and platform cell runs along x and along z: from, to.
+	var rx0 := PackedInt32Array()
+	var rx1 := PackedInt32Array()
+	var rz0 := PackedInt32Array()
+	var rz1 := PackedInt32Array()
+	rx0.resize(n)
+	rx1.resize(n)
+	rz0.resize(n)
+	rz1.resize(n)
+	for y in h:
+		var row := y * w
+		var x := 0
+		while x < w:
+			var k := fl[row + x]
+			if k != F.ROAD and k != F.PLATFORM:
+				x += 1
+				continue
+			var x1 := x
+			while x1 + 1 < w and fl[row + x1 + 1] == k:
+				x1 += 1
+			for i in range(row + x, row + x1 + 1):
+				rx0[i] = x
+				rx1[i] = x1
+			x = x1 + 1
+	for x in w:
+		var y := 0
+		while y < h:
+			var k := fl[y * w + x]
+			if k != F.ROAD and k != F.PLATFORM:
+				y += 1
+				continue
+			var y1 := y
+			while y1 + 1 < h and fl[(y1 + 1) * w + x] == k:
+				y1 += 1
+			for yy in range(y, y1 + 1):
+				rz0[yy * w + x] = y
+				rz1[yy * w + x] = y1
+			y = y1 + 1
+	# Where each street runs (1 along x, 2 along z), for the pavement beside it.
+	var street := PackedByteArray()
+	street.resize(n)
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			var f := fl[i]
+			if f != F.ROAD and f != F.PLATFORM:
+				continue
+			var len_x := rx1[i] - rx0[i] + 1
+			var len_z := rz1[i] - rz0[i] + 1
+			var bits := 0
+			# The sides N, E, S, W; off the map counts as more of the same.
+			var nb: Array[int] = [i - w if y > 0 else -1, i + 1 if x + 1 < w else -1, i + w if y + 1 < h else -1, i - 1 if x > 0 else -1]
+			for s in 4:
+				var j: int = nb[s]
+				if j < 0:
+					continue
+				var nf := fl[j]
+				if f == F.ROAD and nf != F.ROAD and nf != F.RAIL and nf != F.PLATFORM and nf != F.ICE:
+					bits |= 1 << s
+				elif f == F.PLATFORM and nf == F.RAIL:
+					bits |= 1 << s
+			# Along the longer run; a crossing (both long) has no direction.
+			var along := 0
+			if len_x >= len_z * 2:
+				along = 1
+			elif len_z >= len_x * 2:
+				along = 2
+			if f == F.PLATFORM:
+				bits |= along << 4
+			else:
+				var across := len_z if along == 1 else len_x if along == 2 else mini(len_x, len_z)
+				if across < PATH_WIDTH:
+					bits |= 1 << 9
+				elif across >= STREET_WIDTH and along > 0:
+					street[i] = along
+					# The line at the middle of the street, in this cell or on its edge;
+					# none where a side road joins (the street is wider there or beside it).
+					var c0 := rz0 if along == 1 else rx0
+					var c1 := rz1 if along == 1 else rx1
+					var mid := (c0[i] + c1[i] + 1) * 0.5
+					var at := mid - float(y if along == 1 else x)
+					var even := true
+					for j: int in ([nb[3], nb[1]] if along == 1 else [nb[0], nb[2]]):
+						if j >= 0 and fl[j] == F.ROAD and (c0[j] != c0[i] or c1[j] != c1[i]):
+							even = false
+					if even and at >= 0.0 and at <= 1.0:
+						bits |= (1 << 4) if along == 1 else (1 << 5)
+						bits |= int(round(at * 4.0)) << 6
+			out[i] = float(bits)
+	# Walls (and the building behind them) and doors, for the soil at their feet.
+	var wall := PackedByteArray()
+	wall.resize(n)
+	for i in n:
+		var s := so[i]
+		wall[i] = 2 if s == S.DOOR else 1 if (bu[i] >= 0 or s == S.WALL or s == S.WINDOW) else 0
+	# Pavement: open ground out of doors beside a street (corners too).
+	var soil := PackedFloat32Array()
+	soil.resize(n)
+	for y in h:
+		var y0 := maxi(y - 1, 0)
+		var y1 := mini(y + 1, h - 1)
+		for x in w:
+			var i := y * w + x
+			var f := fl[i]
+			if (f != F.SNOW and f != F.DEEP_SNOW) or bu[i] >= 0 or so[i] != S.NONE:
+				continue
+			var x0 := maxi(x - 1, 0)
+			var x1 := mini(x + 1, w - 1)
+			var along := 0
+			var near := 0
+			for yy in range(y0, y1 + 1):
+				for xx in range(x0, x1 + 1):
+					var j := yy * w + xx
+					along |= street[j]
+					near = maxi(near, wall[j])
+			if along > 0:
+				out[i] = -3.0 if along == 3 else -float(along)
+			elif near == 2:
+				soil[i] = 1.0
+			elif near == 1:
+				soil[i] = 0.7
+	# Soil a corner: the mean of the cells that meet there (walls count as soil,
+	# so the strip hugs them), read only by the grass cells around it.
+	for y in h + 1:
+		for x in w + 1:
+			var sum := 0.0
+			for yy in range(maxi(y - 1, 0), mini(y, h - 1) + 1):
+				for xx in range(maxi(x - 1, 0), mini(x, w - 1) + 1):
+					var j := yy * w + xx
+					# A door in a building's wall counts as wall here.
+					sum += 0.8 if wall[j] == 1 or (wall[j] == 2 and bu[j] >= 0) else soil[j]
+			out[n + y * (w + 1) + x] = sum * 0.25
+	return out
+
+
 ## Which way the walls stand from a corner of the ground grid (the point where
 ## four cells meet): +1 or -1 on each axis, 0 for none or both. Snow banks up
 ## there when the wind blows that way (world_vis). Nothing next to a door, so
@@ -759,6 +948,10 @@ func _build_ground() -> void:
 		for x in range(grid.width + 1):
 			banks.append(drift_uv(grid, Vector2i(x, y)))
 		await BuildPace.rest(pace)
+	# Worked out with the map off the main thread when it was (stop_loader.gd).
+	var details: PackedFloat32Array = data["_ground_details"] if data.get("_ground_details") is PackedFloat32Array else ground_details(grid)
+	data.erase("_ground_details")   # read once; not kept with the map
+	await BuildPace.rest(pace)
 	for y in range(grid.height):
 		await BuildPace.rest(pace)
 		for x in range(grid.width):
@@ -768,20 +961,26 @@ func _build_ground() -> void:
 				tools[tile] = _begin()
 			var st: SurfaceTool = tools[tile]
 			var f := grid.floor_at(c)
+			# One colour a kind: the shader gives the grain (no cell checker, 결정 469 C4).
 			var color := FLOOR_COLORS[f]
-			# Small checker noise so distance reads on a flat colour.
-			var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
-			color = Color(color.r + n, color.g + n, color.b + n)
 			if f == F.RAIL and (x % 2 == 0):
 				color = color.darkened(0.15)
 			color.a = sky_alpha(grid, c)
 			var a := Vector3(x, 0, y)
 			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
+			var cell_detail: float = details[grid.index(c)]
 			for idx in [0, 1, 2, 0, 2, 3]:
+				var corner := Vector2i(int(quad[idx].x), int(quad[idx].z))
 				st.set_color(color)
 				st.set_normal(Vector3.UP)
-				st.set_uv(banks[int(quad[idx].z) * (grid.width + 1) + int(quad[idx].x)])
-				st.set_uv2(Vector2(f + 1, 0))   # the floor kind for world_vis bare_ground (0: not ground)
+				st.set_uv(banks[corner.y * (grid.width + 1) + corner.x])
+				# The floor kind for world_vis bare_ground (0: not ground), and what is
+				# drawn on it: open grass takes the soil weight of its corner (smooth),
+				# every other cell its own code (ground_details).
+				var detail := cell_detail
+				if cell_detail == 0.0 and (f == F.SNOW or f == F.DEEP_SNOW):
+					detail = details[grid.width * grid.height + corner.y * (grid.width + 1) + corner.x]
+				st.set_uv2(Vector2(f + 1, detail))
 				st.add_vertex(quad[idx])
 	for tile in tools:
 		var node := _mesh_node()
@@ -923,19 +1122,24 @@ static func remaining_low_rects(r: Rect2i, covered: Dictionary) -> Array[Rect2i]
 
 
 func _build_props() -> void:
-	if not PropModels.enabled():
-		return
 	var chosen: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
 		var kind := String(prop.get("kind", ""))
 		if not chosen.has(kind):
 			chosen[kind] = ""
 			for path in PropKinds.candidates(kind):
-				if ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
+				if PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
 					chosen[kind] = path
 					break
 		var path: String = chosen[kind]
 		var lv := int(prop.get("level", 0))
+		if _interactive_prop(kind) and prop.get("rect") is Rect2i and levels.has(lv):
+			# These cells never enter the static gray mesh: their own node moves.
+			if lv == 0:
+				for c in _object_cells(prop["rect"]):
+					modelled_prop_cells[c] = true
+			if path.is_empty():
+				_draw_object_gray(prop)
 		await BuildPace.rest(pace)
 		if path.is_empty() or not levels.has(lv) or not prop.get("rect") is Rect2i:
 			continue
@@ -956,7 +1160,7 @@ func _build_props() -> void:
 			prop_fit_counts["shrunk"] += 1
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}}
-		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b})
+		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop})
 		if lv == 0:
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
@@ -978,6 +1182,169 @@ func _build_props() -> void:
 		await BuildPace.rest(pace)
 
 
+static func _interactive_prop(kind: String) -> bool:
+	return ObjectRules.WOOD_KINDS.has(kind)
+
+
+static func _object_cells(r: Rect2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			out.append(Vector2i(x, y))
+	return out
+
+
+func _draw_object_gray(prop: Dictionary) -> void:
+	var lv := int(prop.get("level", 0))
+	var r: Rect2i = prop["rect"]
+	var node := _mesh_node(lv)
+	var st := _begin()
+	var height := 0.3 if bool(prop.get("fallen", false)) else 1.2
+	var at := Vector3(r.position.x + r.size.x * 0.5, lv * LEVEL_H + height * 0.5, r.position.y + r.size.y * 0.5)
+	box(st, Vector3(r.size.x - 0.1, height, r.size.y - 0.1), at, Color(0.42, 0.4, 0.38))
+	node.mesh = st.commit()
+	object_gray.append({"prop": prop, "node": node})
+
+
+## Change one furnishing, refilling only its model-path batch (both LODs).
+func update_prop(prop: Dictionary, removed: bool = false) -> void:
+	for i in range(object_gray.size() - 1, -1, -1):
+		if is_same(object_gray[i]["prop"], prop):
+			object_gray[i]["node"].free()
+			object_gray.remove_at(i)
+	var modelled := false
+	for path: String in prop_batches:
+		var batch: Dictionary = prop_batches[path]
+		var changed := false
+		for i in range(batch["items"].size() - 1, -1, -1):
+			var item: Dictionary = batch["items"][i]
+			if not is_same(item.get("prop", {}), prop):
+				continue
+			changed = true
+			modelled = true
+			if removed:
+				batch["items"].remove_at(i)
+			else:
+				item["rect"] = prop["rect"]
+				item["xf"] = _object_transform(prop, path)
+		if changed:
+			for node: MultiMeshInstance3D in batch["nodes"].values():
+				node.multimesh.instance_count = batch["items"].size()
+				node.multimesh.visible_instance_count = 0
+			break
+	if not modelled and not removed:
+		var path := String(prop.get("legacy_model", ""))
+		if PropModels.enabled() and path != "" and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
+			_add_object_batch(prop, path)
+		else:
+			_draw_object_gray(prop)
+	refresh_props()
+
+
+func _add_object_batch(prop: Dictionary, path: String) -> void:
+	if not prop_batches.has(path):
+		prop_batches[path] = {"items": [], "nodes": {}}
+	var batch: Dictionary = prop_batches[path]
+	batch["items"].append({"prop": prop, "rect": prop["rect"], "level": int(prop.get("level", 0)),
+		"building": int(prop.get("building", -1)), "xf": _object_transform(prop, path)})
+	var meshes := PropModels.batch_meshes(path)
+	for lod: int in meshes:
+		if not batch["nodes"].has(lod):
+			var node := MultiMeshInstance3D.new()
+			node.name = "Object_%s_LOD%d" % [path.get_file().get_basename(), lod]
+			node.multimesh = MultiMesh.new()
+			node.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			node.multimesh.mesh = meshes[lod]
+			add_child(node)
+			batch["nodes"][lod] = node
+		batch["nodes"][lod].multimesh.instance_count = batch["items"].size()
+		batch["nodes"][lod].multimesh.visible_instance_count = 0
+
+
+func _object_transform(prop: Dictionary, path: String) -> Transform3D:
+	var lv := int(prop.get("level", 0))
+	var r: Rect2i = prop["rect"]
+	var at := Vector3(r.position.x + r.size.x * 0.5, lv * LEVEL_H, r.position.y + r.size.y * 0.5)
+	var bounds: AABB = PropModels.batch_meshes(path)[0].get_aabb()
+	var fit := PropFit.fit(bounds.position, bounds.end, r, int(prop.get("facing", 0)), levels[lv])
+	var turn := Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
+	if not bool(prop.get("fallen", false)):
+		return Transform3D(Basis.from_scale(fit["scale"]) * turn, at)
+	turn = Basis(Vector3.RIGHT, PI * 0.5) * turn
+	var laid: AABB = Transform3D(turn, Vector3.ZERO) * bounds
+	var scale0 := Vector3((r.size.x - 0.1) / maxf(laid.size.x, 0.01), 0.35 / maxf(laid.size.y, 0.01), (r.size.y - 0.1) / maxf(laid.size.z, 0.01))
+	var offset := -laid.get_center() * scale0
+	offset.y = -laid.position.y * scale0.y
+	return Transform3D(Basis.from_scale(scale0) * turn, at + offset)
+
+
+func move_object_container(id: String) -> void:
+	if not container_nodes.has(id):
+		return
+	var node: MeshInstance3D = container_nodes[id]
+	var box_data: Dictionary = data["containers"][id]
+	if node.has_node("Prop"):
+		if bool(box_data.get("object_legacy", false)):
+			node.get_node("Prop").free() # The moved furnishing now owns its batch.
+		else:
+			node.get_node("Prop").position = FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
+	update_container(id)
+
+
+func remove_object_container(id: String) -> void:
+	if container_nodes.has(id):
+		container_nodes[id].free()
+		container_nodes.erase(id)
+
+
+## Only the stove glows. Three broad, faint wisps sit just above its top;
+## there is no emitter, chimney, vertical smoke trail or spreading fire.
+func update_stove(idx: int) -> void:
+	if idx < 0 or idx >= stove_nodes.size():
+		return
+	var stove: Dictionary = data["stoves"][idx]
+	var lv := int(stove.get("level", 0))
+	var node: MeshInstance3D = stove_nodes[idx]
+	var base := FieldGrid.center(stove["cell"]) + Vector3(0, lv * LEVEL_H, 0)
+	var st := _begin()
+	box(st, Vector3(0.8, 0.9, 0.8), base + Vector3(0, 0.45, 0), Color(0.25, 0.24, 0.23))
+	if stove["lit"]:
+		box(st, Vector3(0.5, 0.06, 0.5), base + Vector3(0, 0.93, 0), Color(0.95, 0.55, 0.25))
+	node.mesh = st.commit()
+	if stove_glows.has(idx):
+		stove_glows[idx].free()
+		stove_glows.erase(idx)
+	if not stove["lit"]:
+		return
+	var holder := Node3D.new()
+	holder.name = "StoveWarmth%d" % idx
+	level_roots[lv].add_child(holder)
+	holder.position = base
+	stove_glows[idx] = holder
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.58, 0.26)
+	light.light_energy = ObjectRules.LIGHT_STRENGTH
+	light.omni_range = ObjectRules.LIGHT_REACH
+	light.shadow_enabled = false
+	light.position.y = 1.0
+	holder.add_child(light)
+	var mist := StandardMaterial3D.new()
+	mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mist.albedo_color = Color(0.86, 0.87, 0.85, 0.055)
+	for i in range(3):
+		var puff := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.22
+		sphere.height = 0.12
+		puff.mesh = sphere
+		puff.material_override = mist
+		puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		puff.position = Vector3((i - 1) * 0.16, 1.03 + (i % 2) * 0.08, (i - 1) * 0.06)
+		holder.add_child(puff)
+	_refresh_object_details()
+
+
 func _process(delta: float) -> void:
 	if not lid_anim.is_empty() or _lid_puff != null:
 		advance_lids(delta)
@@ -990,6 +1357,7 @@ func _process(delta: float) -> void:
 ## MultiMesh 전체의 거리 범위로는 지도 끝의 소품도 제출된다. 보이는 인스턴스만 앞에 채운다.
 ## 미리보기는 카메라를 옮긴 직후 같은 함수를 호출한다.
 func refresh_props(camera: Camera3D = null) -> void:
+	_refresh_object_details()
 	if prop_batches.is_empty() or not is_inside_tree():
 		return
 	if camera == null:
@@ -1020,6 +1388,19 @@ func refresh_props(camera: Camera3D = null) -> void:
 			counts[lod] += 1
 		for lod: int in batch["nodes"]:
 			batch["nodes"][lod].multimesh.visible_instance_count = counts[lod]
+
+
+func _refresh_object_details() -> void:
+	for row: Dictionary in object_gray:
+		var prop: Dictionary = row["prop"]
+		var lv := int(prop.get("level", 0))
+		var b := int(prop.get("building", levels[lv].building_at((prop["rect"] as Rect2i).position)))
+		row["node"].visible = _prop_is_seen(prop["rect"], lv) and (not buildings or buildings.interior_visible(b, lv))
+	for idx: int in stove_glows:
+		var stove: Dictionary = data["stoves"][idx]
+		var lv := int(stove.get("level", 0))
+		stove_glows[idx].visible = _prop_is_seen(Rect2i(stove["cell"], Vector2i.ONE), lv) \
+			and (not buildings or buildings.interior_visible(int(stove["building"]), lv))
 
 
 ## 재질은 기존 소품 재질 그대로다. 아직 본 적 없는 층의 소품은 CPU에서 제외한다.

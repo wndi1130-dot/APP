@@ -87,6 +87,8 @@ func test_light_and_backdrop_come_from_the_atmosphere_frame() -> void:
 	assert_eq(game.environment.ambient_light_color, light["ambient_color"])
 	assert_almost_eq(game.environment.ambient_light_energy, float(light["ambient_energy"]), 0.0001)
 	assert_almost_eq(game.sun.rotation_degrees.x, float(light["sun_pitch"]), 0.001)
+	# Every colour, the floors too, is read as sRGB; the exposure lifts the picture (mood C9).
+	assert_almost_eq(game.environment.tonemap_exposure, float(Atmosphere.EXPOSURE), 0.0001)
 	# The void around the map is more land in the same light, darkened: never sky blue.
 	var back: Color = game.environment.background_color
 	assert_lt(back.v, Color(game.fx_params["fx_tint"]).v)
@@ -97,7 +99,16 @@ func test_a_blizzard_is_dimmer_than_a_clear_day() -> void:
 	var clear = _stop(["clear"])
 	var storm = _stop(["blizzard"])
 	assert_lt(storm.sun.light_energy, clear.sun.light_energy)
-	assert_lt(storm.environment.ambient_light_energy, clear.environment.ambient_light_energy)
+	# Under a closed sky the fill carries the day (Atmosphere CLOUD_KEEP), but
+	# all told less light reaches the ground than under a clear sky.
+	assert_lt(_ground_light(storm), _ground_light(clear))
+
+
+func _ground_light(game: Node) -> float:
+	var s := sin(deg_to_rad(-float(game.sun.rotation_degrees.x)))
+	var sun_l: float = Color(game.sun.light_color).srgb_to_linear().get_luminance()
+	var amb_l: float = Color(game.environment.ambient_light_color).srgb_to_linear().get_luminance()
+	return float(game.sun.light_energy) * s * sun_l + float(game.environment.ambient_light_energy) * amb_l
 
 
 func test_dusk_dims_the_arrival_light_down_to_the_night_band() -> void:
@@ -174,9 +185,11 @@ func test_a_plain_stop_has_no_storm_layers() -> void:
 	assert_null(game.storm_screen)
 	assert_true(game.snow.emitting, "plain snowfall as before")
 	# The atmosphere frame moves the sun with the hour: at 10:30 a little lower
-	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd).
+	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd). Under fog
+	# and snow by day the light comes from the bright dome, higher than the sun.
 	assert_almost_eq(game.sun.rotation_degrees.x, float(game.fx_light["sun_pitch"]), 0.001)
-	assert_gt(game.sun.rotation_degrees.x, FxState.SUN_PITCH)
+	assert_gt(float(game.atmo["sun_pitch"]), FxState.SUN_PITCH)
+	assert_lt(game.sun.rotation_degrees.x, float(game.atmo["sun_pitch"]), "the light leans to the sky dome")
 	assert_eq(game.storm_glows().size(), 0)
 
 
@@ -303,6 +316,40 @@ func test_the_storm_screen_layer_is_drawn_small_and_stretched() -> void:
 	game.hud._debug_storm()
 	assert_false(game.storm_view.visible)
 	assert_eq(game.storm_port.render_target_update_mode, SubViewport.UPDATE_DISABLED, "off: not drawn at all")
+
+
+func test_the_ground_reads_streets_pavements_and_yards() -> void:
+	# 결정 469 C1·C4: picture only, the floor kinds stay as the map set them.
+	var MapView = load("res://game/world/map_view.gd")
+	var FieldGrid = load("res://game/world/field_grid.gd")
+	var F = FieldGrid.Floor
+	var g = FieldGrid.new(20, 12)
+	# A street five wide along x (z 2..6), a footpath two wide along z, a house wall.
+	for x in 20:
+		for z in range(2, 7):
+			g.floor[g.index(Vector2i(x, z))] = F.ROAD
+	for z in range(7, 12):
+		for x in range(10, 12):
+			g.floor[g.index(Vector2i(x, z))] = F.ROAD
+	for x in range(2, 6):
+		g.set_solid(Vector2i(x, 10), FieldGrid.Solid.WALL)
+	var floors: PackedByteArray = g.floor.duplicate()
+	var d: PackedFloat32Array = MapView.ground_details(g)
+	assert_eq(g.floor, floors, "the rules' floors are untouched")
+	var at := func(c: Vector2i) -> int: return int(d[g.index(c)])
+	assert_eq(at.call(Vector2i(3, 2)) & 15, 1, "kerb on the north side")
+	assert_eq(at.call(Vector2i(3, 6)) & 15, 4, "and on the south")
+	assert_eq(at.call(Vector2i(3, 4)) & 16, 16, "the centre line runs along x in the middle row")
+	assert_eq((at.call(Vector2i(3, 4)) >> 6) & 7, 2, "half way across the cell")
+	assert_eq(at.call(Vector2i(3, 3)) & 48, 0, "not beside it")
+	assert_eq(at.call(Vector2i(10, 9)) & 512, 512, "two wide: a footpath")
+	assert_eq(d[g.index(Vector2i(3, 1))], -1.0, "pavement beside the street, along it")
+	assert_eq(d[g.index(Vector2i(3, 7))], -1.0)
+	assert_eq(d[g.index(Vector2i(3, 0))], 0.0, "grass past the pavement")
+	assert_eq(at.call(Vector2i(10, 4)) & 48, 0, "no line where the footpath joins")
+	var corner: int = g.width * g.height
+	assert_gt(d[corner + 10 * (g.width + 1) + 3], 0.3, "soil at the wall's foot")
+	assert_eq(d[corner + 0 * (g.width + 1) + 15], 0.0, "none out in the yard")
 
 
 func test_snow_banks_against_walls_the_wind_blows_at() -> void:

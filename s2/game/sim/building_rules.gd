@@ -114,6 +114,42 @@ static func wear_planks(d: Dictionary, face: int) -> void:
 		d["planks"][from] = int(d["planks"][from]) - 1
 
 
+## A furnishing reserves the closed door until it is removed or knocked over.
+## The existing timed door actions respect this reservation, including kicks.
+static func has_brace(d: Dictionary) -> bool:
+	return not (d.get("brace", {}) as Dictionary).is_empty() and int(d["brace"].get("hp", 0)) > 0
+
+
+static func add_brace(d: Dictionary, face: int, prop: Dictionary, hp: int) -> void:
+	if has_brace(d):
+		return
+	d["brace"] = {"face": face, "prop": prop, "hp": hp}
+	d["hp"] = int(d["hp"]) + hp
+	d["busy"] = true
+
+
+static func remove_brace(d: Dictionary) -> void:
+	if not d.has("brace"):
+		return
+	d["hp"] = int(d["hp"]) - int(d["brace"].get("hp", 0))
+	d.erase("brace")
+	d["busy"] = false
+
+
+## The blow already came off total hp. Struck-face boards, then the brace,
+## then far-face boards, then the door. Return only the newly toppled prop.
+static func wear_defences(d: Dictionary, face: int) -> Dictionary:
+	if planks(d, face) > 0 or not has_brace(d):
+		wear_planks(d, face)
+		return {}
+	d["brace"]["hp"] = int(d["brace"]["hp"]) - 1
+	if int(d["brace"]["hp"]) > 0:
+		return {}
+	var prop: Dictionary = d["brace"]["prop"]
+	remove_brace(d)
+	return prop
+
+
 # ---------------------------------------------------------------- windows
 
 ## Can be gone through now: broken or open, and no plank on either face.

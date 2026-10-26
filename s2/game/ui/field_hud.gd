@@ -18,6 +18,7 @@ const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
 const PauseVeil = preload("res://game/ui/pause_veil.gd")
+const MapStamp = preload("res://game/ui/map_stamp.gd")
 const TextFit = preload("res://game/ui/text_fit.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -304,6 +305,7 @@ var game
 var theme: Theme
 var root: Control
 var pause_veil: Control                   # pause_veil.gd
+var map_stamp: Control                    # map_stamp.gd
 var text_fit: Node                       # text_fit.gd
 var touch: Control
 var overlay: Control
@@ -411,7 +413,11 @@ var modal_open: bool = false
 ## The bag pane's right side: the place near shown, and the bag's order (inventory_pane.gd).
 var inv_near: Dictionary = {}
 var inv_sort: String = "weight"
-var modal_slows: bool = false      # the panel up slows the field instead of stopping it
+## The box shown while the player takes a thing out of it (card R1 가): the field
+## goes on under the pane until the thing is out; and the bar on its row.
+var taking_box: String = ""
+var take_bar: ProgressBar
+var modal_slows: bool = false     # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
 var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
 var body_look: Dictionary = {}     # what the body picture shows of each part (body_looks())
@@ -466,6 +472,10 @@ func setup(field_game) -> void:
 	pause_veil = PauseVeil.new()
 	pause_veil.setup(self)
 	root.add_child(pause_veil)
+	# A read scrawled map marks its side path's gap (map_stamp.gd, 결정 카드 loot-feel M).
+	map_stamp = MapStamp.new()
+	map_stamp.setup(self)
+	root.add_child(map_stamp)
 	_build_top()
 	_build_portrait()
 	_build_allies()
@@ -1005,6 +1015,7 @@ func _build_allies() -> void:
 	# wide as its words and as tall as a face's round.
 	crew_button = _button("작업조", work_panel, Vector2(0, CHIP_TOKEN), 17)
 	_chip(crew_button)
+	crew_button.add_theme_constant_override("icon_max_width", roundi(UiFonts.px(22)))
 	crew_button.visible = false
 	crew_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	root.add_child(crew_button)
@@ -1525,6 +1536,7 @@ func tick(delta: float) -> void:
 	_tick_lever(delta)
 	_tick_portrait(p)
 	_tick_allies()
+	_tick_take()
 	_tick_grab(p, delta)
 	_tick_toasts(delta)
 	_tick_says(delta)
@@ -2004,6 +2016,8 @@ func _tick_allies() -> void:
 			if c.is_alive():
 				alive += 1
 		crew_button.text = "작업조 %d\n석탄 %.1f" % [alive, game.actions.coal_delivered]
+		# The ration law's picture on the chip: the crew hauls less a trip (decision 430 ②).
+		crew_button.icon = StatusArt.texture("ration", false, false, STATUS_ART_SIZE) if game.haul_mult() < 1.0 else null
 	_place_allies()
 
 
@@ -2451,6 +2465,8 @@ func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
 
 
 func _close_modal() -> void:
+	# A thing still coming out goes on in the field (field_actions.gd take).
+	taking_box = ""
 	if modal != null:
 		modal.queue_free()
 		modal = null
@@ -2836,6 +2852,49 @@ func _loot_all(id: String) -> void:
 	loot(id)
 
 
+## 「멈추기」 while things come out: what is out stays out, the rest stays in.
+func _loot_stop(id: String) -> void:
+	var p = game.player
+	game.actions.take_queue.erase(p.get_instance_id())
+	if p.action == "take":
+		p.cancel_action()
+	taking_box = ""
+	loot(id)
+
+
+## Looking is free, taking costs the time (card R1 가): with the box shown and a
+## thing coming out of it the field goes on under the pane; it stops again once
+## the thing is out (took) — called each time the pane is laid.
+func run_while_taking() -> void:
+	var p = game.player
+	var shown: bool = modal_open and String(inv_near.get("kind", "")) == "box"
+	taking_box = String(inv_near["id"]) if shown and p.action == "take" else ""
+	if taking_box != "":
+		game.paused = false
+
+
+## A thing is out of box `id` (field_actions.gd _take_done): the pane shows the
+## box again — the next of 「모두 담기」 running, or stopped when none is left.
+func took(id: String) -> void:
+	if modal_open and String(inv_near.get("kind", "")) == "box" and String(inv_near.get("id", "")) == id:
+		loot(id)
+
+
+## Each frame while taking with the pane up: the row's bar fills; a blow or a
+## grab that lets the work go puts the pane away, the field already running, so
+## it can be met.
+func _tick_take() -> void:
+	if taking_box == "":
+		return
+	var p = game.player
+	if p.action != "take":
+		_close_modal()
+		toast("챙기다 손을 뗐다")
+		return
+	if take_bar != null and is_instance_valid(take_bar):
+		take_bar.value = 1.0 - p.action_t / maxf(p.action_total, 0.001)
+
+
 ## The bag on the glass with what is near beside it (decision 448-1,
 ## inventory_pane.gd): opened anew, the first place near (the train's hold by
 ## the train); shown again, the place last shown if it is still near.
@@ -3142,6 +3201,16 @@ func _command(p, cmd: String, close: bool = true) -> void:
 ## Work crew settings: attitude and fire permission per crew (s2_station 2.4).
 func work_panel() -> void:
 	var pane := _open_pane("석탄 작업", "남은 석탄 %.1f · 실은 석탄 %.1f" % [game.actions.coal_left(), game.actions.coal_delivered], "coal")
+	if game.haul_mult() < 1.0:
+		var why := GlassPane.row()
+		why.name = "RationHaul"
+		var art := TextureRect.new()
+		art.texture = StatusArt.texture("ration", false, false, STATUS_ART_SIZE)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.custom_minimum_size = Vector2.ONE * UiFonts.px(22)
+		why.add_child(art)
+		why.add_child(GlassPane.note("비상식량감축법 — 덜 먹은 작업조라 한 번에 %d%% 덜 나른다." % roundi((1.0 - game.haul_mult()) * 100.0), 360.0))
+		pane.body.add_child(why)
 	# Each setting a row headed by its word, its values as picks, the one set in
 	# its amber corners (시안 13's 레버 꼴 row).
 	var h1 := GlassPane.row()

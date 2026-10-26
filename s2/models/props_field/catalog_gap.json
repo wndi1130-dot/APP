@@ -1,13 +1,15 @@
 {
   "version": 1,
   "batch": "gap",
-  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket",
+  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket + loose_board + cold_campfire",
   "expected_kinds": [
     "gap_wire",
     "gap_gate",
     "gap_planks",
     "small_shelf",
-    "thicket"
+    "thicket",
+    "loose_board",
+    "cold_campfire"
   ],
   "blender": "4.5.10 LTS",
   "palette": {
@@ -81,6 +83,60 @@
       0.37,
       0.39,
       0.38,
+      1.0
+    ],
+    "floor_board": [
+      0.57,
+      0.33,
+      0.12,
+      1.0
+    ],
+    "floor_board_b": [
+      0.53,
+      0.31,
+      0.115,
+      1.0
+    ],
+    "floor_board_lift": [
+      0.6,
+      0.36,
+      0.14,
+      1.0
+    ],
+    "floor_seam": [
+      0.3,
+      0.17,
+      0.07,
+      1.0
+    ],
+    "floor_hole": [
+      0.09,
+      0.055,
+      0.035,
+      1.0
+    ],
+    "cold_stone": [
+      0.15,
+      0.16,
+      0.17,
+      1.0
+    ],
+    "ash": [
+      0.22,
+      0.215,
+      0.21,
+      1.0
+    ],
+    "char": [
+      0.045,
+      0.04,
+      0.035,
+      1.0
+    ],
+    "snow_dust": [
+      0.48,
+      0.5,
+      0.53,
       1.0
     ]
   },
@@ -282,6 +338,86 @@
         "worn_wood"
       ],
       "judgment": "low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "loose_board": {
+      "path": "res://models/props_field/loose_board.glb",
+      "status": "ready",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.045,
+      "solid": "none",
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          0.045,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.045,
+        0.96
+      ],
+      "bytes": 9420,
+      "sha256": "15be0530de71f9c228b6a39cdab503eeb4c0cd9107bb607f0319597d3dd67ce8",
+      "colours": [
+        "floor_board",
+        "floor_board_b",
+        "floor_board_lift",
+        "floor_hole",
+        "floor_seam"
+      ],
+      "judgment": "none: 사는 집 나무 바닥의 마루 판 넷 가운데 한 장이 한쪽 끝 3.5 cm 들리고 조금 돌아감, 밑 틈은 어둡게(마루 밑 숨긴 칸, 카드 K)",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "cold_campfire": {
+      "path": "res://models/props_field/cold_campfire.glb",
+      "status": "ready",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 0.16,
+      "solid": "none",
+      "lod0_tris": 398,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.624,
+          0.0,
+          -0.624
+        ],
+        [
+          0.624,
+          0.16,
+          0.624
+        ]
+      ],
+      "dimensions_m": [
+        1.248,
+        0.16,
+        1.248
+      ],
+      "bytes": 34776,
+      "sha256": "be524b268d91fb152470146309f0e520f2e2af332c78cd9cd1c18748e52a6173",
+      "colours": [
+        "ash",
+        "bark",
+        "char",
+        "cold_stone",
+        "snow_dust"
+      ],
+      "judgment": "none: 숲 띠 빈터의 꺼진 모닥불, 돌 여덟 둥근 테 안 검은 숯 바닥과 회색 재, 탄 막대 셋과 반 탄 장작 하나, 돌 셋 위 옅은 눈",
       "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
     }
   },
