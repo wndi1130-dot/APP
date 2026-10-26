@@ -11,6 +11,7 @@ const TrainTurn = preload("res://game/train/train_turn.gd")
 const St = preload("res://game/train/train_state.gd")
 const SeasonTable = preload("res://game/season_table.gd")
 const V = preload("res://tests/train/train_vectors.gd")
+const CardText = preload("res://game/train/turn/turn_card_text.gd")
 const PATH: String = "res://tests/fixtures/train/turn_vectors_climate.json"
 
 var _data: Dictionary = {}
@@ -110,3 +111,29 @@ func test_a_frozen_track_is_not_ported_yet() -> void:
 	assert_true(St.is_s1a(g), "climate on, no freeze")
 	g["freeze"] = 1
 	assert_false(St.is_s1a(g), "a freeze in force")
+
+
+## Where ice does not stand (late autumn, no night frost, no cold weather) the
+## guard's roof card is S1's soaked post, not frostbite; climate off, frostbite.
+func test_the_roof_guard_is_soaked_where_ice_does_not_stand() -> void:
+	var t: Dictionary = _data["tables"]
+	var g: Dictionary = (_data["runs"][0]["steps"][0]["before"] as Dictionary).duplicate(true)
+	var card := {"uid": 1, "kind": "travel", "text": "guard_frost"}
+	g["cards"] = [card]
+	var late: int = -1
+	for row: Dictionary in t["SEASON_ROWS"]:
+		if late < 0 and not bool(row["night_freeze"]) and not bool(row["snow"]):
+			late = int(row["seg"])
+	assert_gt(late, 0, "the season table has a stretch with no ice")
+	g["seg"] = late
+	g["stop"] = null
+	g["lastStop"] = {"weather": "fog"}
+	assert_false(TrainClimate.holds(g, t, "frost"))
+	var v: Dictionary = CardText.view(g, t, card)
+	assert_eq(v["title"], "젖은 보초")
+	assert_string_starts_with(String(v["body"]), "지붕 경계를 서던 대원 둘이 찬비에 흠뻑 젖어")
+	g["lastStop"] = {"weather": "cold"}
+	assert_eq(CardText.view(g, t, card)["title"], "동상", "cold weather: ice stands")
+	g["climate"] = false
+	g["lastStop"] = {"weather": "fog"}
+	assert_eq(CardText.view(g, t, card)["title"], "동상", "climate off: always winter")
