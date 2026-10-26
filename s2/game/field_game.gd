@@ -27,6 +27,7 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
+const FieldAlarms = preload("res://game/field_alarms.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
 const Carry = preload("res://game/sim/carry.gd")
@@ -144,6 +145,7 @@ var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
+var building_alarms: FieldAlarms    # buildings' alarms set off by breaking in (J17)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
@@ -434,6 +436,7 @@ func _ready() -> void:
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
 	train_guard = FieldTrainGuard.new(self)
+	building_alarms = FieldAlarms.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
 	view = MapView.new()
@@ -741,6 +744,7 @@ func _update_atmosphere() -> void:
 		sun.light_color = fx_light["sun_color"]
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -789,6 +793,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
+	environment.tonemap_exposure = Atmosphere.EXPOSURE
 	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
@@ -809,6 +814,7 @@ func _build_world() -> void:
 	if storm.is_empty():
 		# The atmosphere frame moves the sun with the hour (FxState.SUN_PITCH at midday in deep winter).
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
@@ -1497,6 +1503,7 @@ func _step(delta: float) -> void:
 	_update_hordes(delta)
 	_update_spawns(delta)
 	train_guard.tick()
+	building_alarms.tick()
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
@@ -1855,7 +1862,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
 			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
-	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
+	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
@@ -2434,6 +2441,15 @@ func cell_seen(at: Vector3) -> bool:
 	return not mask_on or seen_now.has(seen_key(at))
 
 
+## The footprint of the building whose walls are cut away round the player
+## (building_view open_b); empty outside or with grey boxes.
+func _open_room() -> Rect2i:
+	var bv = view.buildings
+	if bv == null or int(bv.open_b) < 0 or not bv.footprints.has(bv.open_b):
+		return Rect2i(0, 0, -1, -1)
+	return bv.footprints[bv.open_b]
+
+
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	# The view ends inside the woods round the map, never past them (edge_band.gd).
@@ -2442,6 +2458,7 @@ func _update_camera(delta: float) -> void:
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
+		map_edge.set_room(_open_room())
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0

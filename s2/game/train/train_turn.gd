@@ -351,7 +351,7 @@ static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 
 const END_TEXT := {
 	"complete": "라이프치히 중앙역에 닿았다.", "stranded": "석탄이 다 떨어졌다. 열차가 섰다.",
-	"ousted": "의회가 열차장을 끌어내렸다.", "revolt": "반란이 일어났다.",
+	"ousted": "의회가 열차장을 끌어내렸다. 아무도 소리치지 않았다. 사람들이 길을 비켜 섰다.", "revolt": "반란이 일어났다. 식당칸 탁자가 엎어지고 고함이 칸을 넘어왔다.",
 }
 
 
