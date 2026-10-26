@@ -50,6 +50,9 @@ var vis_texture: ImageTexture
 var vis_bytes := PackedByteArray()
 var vis_lit := PackedInt32Array()
 var lamp_lit := PackedInt32Array()   # cells the lamp channel was written to last time
+var vis_upload_count: int = 0        # texture uploads after setup
+var _lit_mark := PackedInt32Array()  # cell -> the update_vis call that last lit it
+var _vis_call: int = 0
 var track_wait: Dictionary = {}      # snow marks handed over, written at the next sight update
 var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
 var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
@@ -71,6 +74,8 @@ var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지�
 var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
+var _prop_tile_culling: bool = true # Tests can compare with the full item scan.
+var _prop_tile_y: Dictionary = {}  # Vector3i(tile x, tile y, level) -> Vector2(lowest, highest item y), all batches
 ## How deep the sight mask is drawn, 0..1: 1 in full, less while it comes in
 ## over a field just handed over from the stop scene (field_game.gd
 ## MASK_IN_S). Picture only: what is in sight is the same either way.
@@ -78,7 +83,10 @@ var mask_shade: float = 1.0
 var _prop_elapsed: float = 0.0
 var door_nodes: Dictionary = {}   # Vector2i -> MeshInstance3D
 var window_nodes: Dictionary = {}
-var container_nodes: Dictionary = {}
+var container_nodes: Dictionary = {} # id -> Node3D, only containers with a Prop model
+var container_chunks: Dictionary = {} # Vector3i(tile x, tile y, level) -> {node, ids}
+var _container_chunk: Dictionary = {} # id -> chunk key
+var _container_batching: bool = false
 var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd)
 var _ground_sig: int = 0
 var spot_nodes: Dictionary = {}
@@ -160,8 +168,13 @@ func setup(map_data: Dictionary) -> void:
 		window_nodes[c] = node
 		update_window(c)
 	await BuildPace.rest(pace)
-	for id in data["containers"]:
+	_container_batching = true
+	for id: String in data["containers"]:
 		add_container(id)
+		await BuildPace.rest(pace)
+	_container_batching = false
+	for key: Vector3i in container_chunks:
+		_bake_container_chunk(key)
 		await BuildPace.rest(pace)
 	for id in data["spots"]:
 		var node := _mesh_node()
@@ -350,7 +363,11 @@ func set_mask_shade(k: float) -> void:
 func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary = {}) -> void:
 	_prop_memory = memory
 	_prop_seen_now = seen_now
-	var n := grid.width * grid.height
+	var n: int = grid.width * grid.height
+	# Changed cells in a packed list, a cell lit this call marked with the call's
+	# number (no dictionaries: this runs every 0.1 s over every cell in sight).
+	var changed := PackedInt32Array()
+	var everything := false
 	if vis_bytes.size() != n * 4:
 		vis_bytes.resize(n * 4)
 		vis_bytes.fill(0)
@@ -359,27 +376,48 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary 
 		for k in range(memory.size()):
 			if memory[k]:
 				vis_bytes[(k % n) * 4 + 1] = 255
-	for i in vis_lit:
-		vis_bytes[i * 4] = 0
-	vis_lit = PackedInt32Array()
-	for key in seen_now:
+		_lit_mark.resize(n)
+		_lit_mark.fill(-1)
+		everything = true
+	_vis_call += 1
+	var lit := PackedInt32Array()
+	for key: int in seen_now:
 		var i: int = key % n
-		vis_bytes[i * 4] = 255
-		vis_bytes[i * 4 + 1] = 255
-		vis_lit.append(i)
-	for i in track_wait:
-		vis_bytes[int(i) * 4 + 3] = int(track_wait[i])
+		if _lit_mark[i] == _vis_call:
+			continue
+		_lit_mark[i] = _vis_call
+		lit.append(i)
+		if vis_bytes[i * 4] != 255 or vis_bytes[i * 4 + 1] != 255:
+			vis_bytes[i * 4] = 255
+			vis_bytes[i * 4 + 1] = 255
+			changed.append(i)
+	for i: int in vis_lit:
+		if _lit_mark[i] != _vis_call and vis_bytes[i * 4] != 0:
+			vis_bytes[i * 4] = 0
+			changed.append(i)
+	vis_lit = lit
+	for i: int in track_wait:
+		if vis_bytes[i * 4 + 3] != int(track_wait[i]):
+			vis_bytes[i * 4 + 3] = int(track_wait[i])
+			changed.append(i)
 	track_wait = {}
-	for i in lamp_lit:
-		vis_bytes[i * 4 + 2] = 0
-	lamp_lit = PackedInt32Array()
-	for i in lamp:
-		vis_bytes[int(i) * 4 + 2] = int(lamp[i])
-		lamp_lit.append(int(i))
-	vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RGBA8, vis_bytes)
-	vis_texture.update(vis_image)
-	if buildings:
-		buildings.update_seen(vis_bytes)
+	for i: int in lamp_lit:
+		if not lamp.has(i) and vis_bytes[i * 4 + 2] != 0:
+			vis_bytes[i * 4 + 2] = 0
+			changed.append(i)
+	for i: int in lamp:
+		if vis_bytes[i * 4 + 2] != int(lamp[i]):
+			vis_bytes[i * 4 + 2] = int(lamp[i])
+			changed.append(i)
+	lamp_lit = PackedInt32Array(lamp.keys())
+	if everything or not changed.is_empty():
+		vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RGBA8, vis_bytes)
+		vis_texture.update(vis_image)
+		vis_upload_count += 1
+		if buildings:
+			if everything:
+				changed = PackedInt32Array(range(n))
+			buildings.update_seen(vis_bytes, changed)
 	refresh_props()
 
 
@@ -528,19 +566,90 @@ func update_window(c: Vector2i) -> void:
 
 ## A container that was not there when the map was drawn (a heap left by work).
 func add_container(id: String) -> void:
+	if has_container(id):
+		update_container(id)
+		return
 	var box_data: Dictionary = data["containers"][id]
-	container_nodes[id] = _mesh_node(int(box_data.get("level", 0)))
-	PropModels.attach(container_nodes[id], id, FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0), String(box_data.get("name", "")))
-	update_container(id)
+	var lv: int = int(box_data.get("level", 0))
+	var holder: Node3D = Node3D.new()
+	var at: Vector3 = FieldGrid.center(box_data["cell"]) + Vector3(0, lv * LEVEL_H, 0)
+	if PropModels.attach(holder, id, at, String(box_data.get("name", ""))):
+		level_roots[lv].add_child(holder)
+		container_nodes[id] = holder
+	else:
+		holder.free()
+	var key: Vector3i = _container_key(box_data)
+	_join_container_chunk(id, key)
+	if not _container_batching:
+		_bake_container_chunk(key)
+
+
+## Model parents are optional; these also cover boxes drawn only in a chunk.
+func has_container(id: String) -> bool:
+	return _container_chunk.has(id)
+
+
+## Every box drawn, model or not (a copy: safe to remove while walking it).
+func container_ids() -> Array:
+	return _container_chunk.keys()
+
+
+func container_mesh(id: String) -> Mesh:
+	if not has_container(id):
+		return null
+	var node: MeshInstance3D = container_chunks[_container_chunk[id]]["node"] as MeshInstance3D
+	return node.mesh
+
+
+func _container_key(box_data: Dictionary) -> Vector3i:
+	var cell: Vector2i = box_data["cell"] as Vector2i
+	return Vector3i(floori(cell.x / float(TILE)), floori(cell.y / float(TILE)), int(box_data.get("level", 0)))
+
+
+func _join_container_chunk(id: String, key: Vector3i) -> void:
+	if not container_chunks.has(key):
+		container_chunks[key] = {"node": _mesh_node(key.z), "ids": {}}
+	container_chunks[key]["ids"][id] = true
+	_container_chunk[id] = key
 
 
 func update_container(id: String) -> void:
+	if not has_container(id):
+		add_container(id)
+		return
 	var box_data: Dictionary = data["containers"][id]
-	var node: MeshInstance3D = container_nodes[id]
-	var st := _begin()
+	var old_key: Vector3i = _container_chunk[id] as Vector3i
+	var key: Vector3i = _container_key(box_data)
+	if old_key != key:
+		container_chunks[old_key]["ids"].erase(id)
+		_join_container_chunk(id, key)
+		_bake_container_chunk(old_key)
+	if container_nodes.has(id):
+		var holder: Node3D = container_nodes[id] as Node3D
+		if holder.get_parent() != level_roots[key.z]:
+			holder.reparent(level_roots[key.z], false)
+		(holder.get_node("Prop") as Node3D).position = FieldGrid.center(box_data["cell"]) + Vector3(0, key.z * LEVEL_H, 0)
+	_bake_container_chunk(key)
+
+
+func _bake_container_chunk(key: Vector3i) -> void:
+	var chunk: Dictionary = container_chunks[key] as Dictionary
+	var node: MeshInstance3D = chunk["node"] as MeshInstance3D
+	if (chunk["ids"] as Dictionary).is_empty():
+		node.free()
+		container_chunks.erase(key)
+		return
+	var st: SurfaceTool = _begin()
+	for id: String in chunk["ids"]:
+		_bake_container(st, id)
+	node.mesh = st.commit()
+
+
+func _bake_container(st: SurfaceTool, id: String) -> void:
+	var box_data: Dictionary = data["containers"][id]
 	var at := FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
 	var color := Color(0.62, 0.5, 0.3) if not box_data["searched"] else Color(0.35, 0.32, 0.28)
-	if node.has_node("Prop") or box_data.has("furniture"):
+	if container_nodes.has(id) or box_data.has("furniture"):
 		# The furniture stands in for the box (a model of its own, or the wardrobe
 		# or shelf it was put in by room_furnish); a floor mat keeps the searched colour.
 		box(st, Vector3(0.6, 0.02, 0.6), at + Vector3(0, 0.01, 0), color)
@@ -552,11 +661,10 @@ func update_container(id: String) -> void:
 	if box_data["locked"]:
 		box(st, Vector3(0.18, 0.18, 0.55), at + Vector3(0.18, 0.4, 0), Color(0.7, 0.66, 0.3))
 	# Nothing to take, seen before it is opened (card P3 가, decision 472): four
-	# corners on the floor round the box, in its own mesh — so they show only
+	# corners on the floor round the box, in its chunk mesh — so they show only
 	# where the box does (the floor shown, the sight mask over it).
 	if SearchRules.shows_empty(box_data) and box_data["id"] != "bell":
 		_empty_corners(st, at)
-	node.mesh = st.commit()
 
 
 ## The empty mark's four corners round a box's cell, a cold pale grey low on the
@@ -1179,8 +1287,10 @@ func _build_props() -> void:
 		if fit["shrunk"]:
 			prop_fit_counts["shrunk"] += 1
 		if not prop_batches.has(path):
-			prop_batches[path] = {"items": [], "nodes": {}}
-		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop})
+			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
+		var item: Dictionary = {"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop, "remembered": false}
+		prop_batches[path]["items"].append(item)
+		_index_prop(prop_batches[path], item)
 		if lv == 0:
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
@@ -1242,11 +1352,19 @@ func update_prop(prop: Dictionary, removed: bool = false) -> void:
 				continue
 			changed = true
 			modelled = true
+			_unindex_prop(batch, item)
 			if removed:
 				batch["items"].remove_at(i)
 			else:
+				var lv: int = int(prop.get("level", 0))
+				var lg: FieldGrid = levels[lv] as FieldGrid
+				var rect: Rect2i = prop["rect"] as Rect2i
 				item["rect"] = prop["rect"]
 				item["xf"] = _object_transform(prop, path)
+				item["level"] = lv
+				item["building"] = int(prop.get("building", lg.building_at(rect.get_center())))
+				item["remembered"] = false
+				_index_prop(batch, item)
 		if changed:
 			for node: MultiMeshInstance3D in batch["nodes"].values():
 				node.multimesh.instance_count = batch["items"].size()
@@ -1263,10 +1381,12 @@ func update_prop(prop: Dictionary, removed: bool = false) -> void:
 
 func _add_object_batch(prop: Dictionary, path: String) -> void:
 	if not prop_batches.has(path):
-		prop_batches[path] = {"items": [], "nodes": {}}
+		prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
 	var batch: Dictionary = prop_batches[path]
-	batch["items"].append({"prop": prop, "rect": prop["rect"], "level": int(prop.get("level", 0)),
-		"building": int(prop.get("building", -1)), "xf": _object_transform(prop, path)})
+	var item: Dictionary = {"prop": prop, "rect": prop["rect"], "level": int(prop.get("level", 0)),
+		"building": int(prop.get("building", -1)), "xf": _object_transform(prop, path), "remembered": false}
+	batch["items"].append(item)
+	_index_prop(batch, item)
 	var meshes := PropModels.batch_meshes(path)
 	for lod: int in meshes:
 		if not batch["nodes"].has(lod):
@@ -1279,6 +1399,88 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 			batch["nodes"][lod] = node
 		batch["nodes"][lod].multimesh.instance_count = batch["items"].size()
 		batch["nodes"][lod].multimesh.visible_instance_count = 0
+
+
+## Tiles hold the same item dictionaries as the model-path batch.
+func _index_prop(batch: Dictionary, item: Dictionary) -> void:
+	var xf: Transform3D = item["xf"] as Transform3D
+	var key: Vector3i = Vector3i(floori(xf.origin.x / float(TILE)), floori(xf.origin.z / float(TILE)), int(item["level"]))
+	var tiles: Dictionary = batch["tiles"] as Dictionary
+	if not tiles.has(key):
+		tiles[key] = {"items": [], "min_y": xf.origin.y, "max_y": xf.origin.y}
+	var tile: Dictionary = tiles[key] as Dictionary
+	tile["items"].append(item)
+	tile["min_y"] = minf(float(tile["min_y"]), xf.origin.y)
+	tile["max_y"] = maxf(float(tile["max_y"]), xf.origin.y)
+	item["tile"] = key
+	# All batches' tiles in one table, so a refill tests each tile once. The
+	# heights only grow (a wider span reaches further: never too few items).
+	var span: Vector2 = _prop_tile_y.get(key, Vector2(xf.origin.y, xf.origin.y))
+	_prop_tile_y[key] = Vector2(minf(span.x, xf.origin.y), maxf(span.y, xf.origin.y))
+
+
+func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
+	var key: Vector3i = item["tile"] as Vector3i
+	var tiles: Dictionary = batch["tiles"] as Dictionary
+	var tile: Dictionary = tiles[key] as Dictionary
+	var items: Array = tile["items"] as Array
+	for i in range(items.size()):
+		if is_same(items[i], item):
+			items.remove_at(i)
+			break
+	if items.is_empty():
+		tiles.erase(key)
+		return
+	var min_y: float = INF
+	var max_y: float = -INF
+	for other: Dictionary in items:
+		var xf: Transform3D = other["xf"] as Transform3D
+		min_y = minf(min_y, xf.origin.y)
+		max_y = maxf(max_y, xf.origin.y)
+	tile["min_y"] = min_y
+	tile["max_y"] = max_y
+
+
+## Project a displacement along the camera ray onto the ground plane.
+func _prop_ground_offset(offset: Vector3, ray: Vector3) -> Vector2:
+	var flat: Vector2 = Vector2(offset.x, offset.z)
+	if absf(ray.y) > 0.001:
+		flat -= Vector2(ray.x, ray.z) * (offset.y / ray.y)
+	return flat
+
+
+func _nearby_prop_items(batch: Dictionary, eye: Vector3, ray: Vector3) -> Array:
+	return _prop_items_in(batch, _near_prop_tiles(eye, ray))
+
+
+## The tiles in reach of the camera, tested once a refill for all batches.
+func _near_prop_tiles(eye: Vector3, ray: Vector3) -> Dictionary:
+	var near: Dictionary = {}
+	var focus: Vector3 = eye + ray * ((global_position.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
+	var half_x: Vector2 = _prop_ground_offset(global_transform.basis.x * (TILE * 0.5), ray)
+	var half_z: Vector2 = _prop_ground_offset(global_transform.basis.z * (TILE * 0.5), ray)
+	var radius: float = maxf((half_x + half_z).length(), (half_x - half_z).length())
+	var height_stride: float = _prop_ground_offset(global_transform.basis.y, ray).length()
+	for key: Vector3i in _prop_tile_y:
+		var span: Vector2 = _prop_tile_y[key]
+		var at: Vector3 = to_global(Vector3((key.x + 0.5) * TILE, (span.x + span.y) * 0.5, (key.y + 0.5) * TILE))
+		# With a level-zero item this is 39 m plus half a tile diagonal. Projecting
+		# upper floors too keeps the bound conservative for their shifted focus.
+		var reach: float = PROP_CULL_DISTANCE + radius + (span.y - span.x) * 0.5 * height_stride
+		if _prop_ground_offset(at - focus, ray).length() <= reach + 0.001:
+			near[key] = true
+	return near
+
+
+func _prop_items_in(batch: Dictionary, near: Dictionary) -> Array:
+	if not _prop_tile_culling:
+		return batch["items"] as Array
+	var items: Array = []
+	var tiles: Dictionary = batch["tiles"]
+	for key: Vector3i in tiles:
+		if near.has(key):
+			items.append_array(tiles[key]["items"])
+	return items
 
 
 func _object_transform(prop: Dictionary, path: String) -> Transform3D:
@@ -1299,22 +1501,25 @@ func _object_transform(prop: Dictionary, path: String) -> Transform3D:
 
 
 func move_object_container(id: String) -> void:
-	if not container_nodes.has(id):
+	if not has_container(id):
 		return
-	var node: MeshInstance3D = container_nodes[id]
 	var box_data: Dictionary = data["containers"][id]
-	if node.has_node("Prop"):
-		if bool(box_data.get("object_legacy", false)):
-			node.get_node("Prop").free() # The moved furnishing now owns its batch.
-		else:
-			node.get_node("Prop").position = FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
+	if container_nodes.has(id) and bool(box_data.get("object_legacy", false)):
+		container_nodes[id].free() # The moved furnishing now owns its batch.
+		container_nodes.erase(id)
 	update_container(id)
 
 
 func remove_object_container(id: String) -> void:
+	if not has_container(id):
+		return
 	if container_nodes.has(id):
 		container_nodes[id].free()
 		container_nodes.erase(id)
+	var key: Vector3i = _container_chunk[id] as Vector3i
+	container_chunks[key]["ids"].erase(id)
+	_container_chunk.erase(id)
+	_bake_container_chunk(key)
 
 
 ## Only the stove glows. Three broad, faint wisps sit just above its top;
@@ -1386,15 +1591,16 @@ func refresh_props(camera: Camera3D = null) -> void:
 		return
 	var eye := camera.global_position
 	var ray := -camera.global_transform.basis.z
+	var near := _near_prop_tiles(eye, ray) if _prop_tile_culling else {}
 	for batch: Dictionary in prop_batches.values():
 		var counts := {0: 0, 1: 0}
-		for item: Dictionary in batch["items"]:
+		for item: Dictionary in _prop_items_in(batch, near):
 			var lv: int = item["level"]
 			if not level_roots[lv].visible or (shown_level == -99 and lv != 0):
 				continue
 			if buildings and not buildings.interior_visible(item["building"], lv):
 				continue
-			if not _prop_is_seen(item["rect"], lv):
+			if not _prop_is_seen(item["rect"], lv, item):
 				continue
 			var xf: Transform3D = item["xf"]
 			var at := to_global(xf.origin)
@@ -1424,16 +1630,23 @@ func _refresh_object_details() -> void:
 
 
 ## 재질은 기존 소품 재질 그대로다. 아직 본 적 없는 층의 소품은 CPU에서 제외한다.
-func _prop_is_seen(r: Rect2i, lv: int) -> bool:
+func _prop_is_seen(r: Rect2i, lv: int, cache: Dictionary = {}) -> bool:
 	if not _props_mask_on:
 		return true
+	if bool(cache.get("remembered", false)):
+		return true
 	var n := grid.width * grid.height
+	var visible_now: bool = false
 	for y in range(maxi(0, r.position.y), mini(grid.height, r.end.y)):
 		for x in range(maxi(0, r.position.x), mini(grid.width, r.end.x)):
 			var key := (lv + 1) * n + grid.index(Vector2i(x, y))
-			if _prop_seen_now.has(key) or (key >= 0 and key < _prop_memory.size() and _prop_memory[key] > 0):
+			if key >= 0 and key < _prop_memory.size() and _prop_memory[key] > 0:
+				if not cache.is_empty():
+					cache["remembered"] = true
 				return true
-	return false
+			if _prop_seen_now.has(key):
+				visible_now = true
+	return visible_now
 
 
 func _tile_tool(tools: Dictionary, c: Vector2i) -> SurfaceTool:
