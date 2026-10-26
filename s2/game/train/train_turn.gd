@@ -16,13 +16,16 @@ const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 
+## S1 heatCost: the communities' heating, by the outside's stage when the
+## board has climate on (train_climate.gd temp_mult; 1 otherwise).
 static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 	var sum := 0.0
 	for c: String in St.comms(t):
 		sum += comm_heat(g, c)
-	return sum * float(t["P"]["coalHeatPerLever"])
+	return sum * float(t["P"]["coalHeatPerLever"]) * TrainClimate.temp_mult(g, t)
 
 
 ## One community's term of heat_cost, before coalHeatPerLever: its heat
