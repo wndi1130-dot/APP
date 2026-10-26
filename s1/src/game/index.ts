@@ -17,6 +17,7 @@ export * from './scene';
 export * from './needs';
 export * from './council_log';
 export * from './omens';
+export * from './stop_time';
 export * from './people';
 export * from './domestic';
 export * from './pot_view';
