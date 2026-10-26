@@ -480,6 +480,7 @@ func _ready() -> void:
 	await BuildPace.rest(pace)
 	_spawn_dead()
 	_give_finds()
+	_ammo_from_train()
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
 	cloth_start = 0
@@ -1130,6 +1131,27 @@ func default_squad(pipe_quality: String) -> Array:
 
 
 ## Is this stop sent under the train's departure contract v2 (the people the train picked)?
+## The rounds the train hands over (the contract's train.ammo, kit_pick.gd, PR 5): the guns of
+## those who went out are loaded first, as far as the rounds go, and the rest is the pool. A stop
+## without them keeps the field's own pool (and the guns as they were loaded).
+func _ammo_from_train() -> void:
+	if not contract_on():
+		return
+	var given: Variant = (opts["departure"].get("train", {}) as Dictionary).get("ammo")
+	if not given is Dictionary:
+		return
+	for k: String in ["pistol", "shell", "craft"]:
+		var left := int(given.get(k, 0))
+		for p in squad:
+			for h in p.hands:
+				var id: String = String(h.get("id", ""))
+				if id != "" and W.is_ranged(id) and String(W.get_data(id).get("ammo", "")) == k:
+					var n := mini(int(h.get("loaded", 0)), left)
+					h["loaded"] = n
+					left -= n
+		ammo[k] = left
+
+
 func contract_on() -> bool:
 	var dep: Variant = opts.get("departure")
 	return dep is Dictionary and int((dep as Dictionary).get("version", 0)) == 2
