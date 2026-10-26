@@ -12,6 +12,7 @@ const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TurnDeath = preload("res://game/train/turn/turn_death.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
+const CouncilLog = preload("res://game/politics/council_log.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
 const SYMBOL_USES := ["hang_before_session", "hang_in_car"]
@@ -327,6 +328,7 @@ static func _break_promise(g: Dictionary, t: Dictionary, comm: String, label: St
 	state["broken"] = int(state.get("broken", 0)) + 1  # the car's own count (turn.ts breakPromise)
 	_offend(g, comm)
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
+	CouncilLog.note_broken(g, t, comm)
 
 
 static func _break_prologue(g: Dictionary, t: Dictionary, comm: String, label: String) -> void:
@@ -335,6 +337,7 @@ static func _break_prologue(g: Dictionary, t: Dictionary, comm: String, label: S
 	g["stats"]["promisesBroken"] = int(g["stats"]["promisesBroken"]) + 1
 	g["comms"][comm]["broken"] = int(g["comms"][comm].get("broken", 0)) + 1  # field_receipt.ts breakPrologueVow
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
+	CouncilLog.note_broken(g, t, comm)
 
 
 static func _active_wounds(g: Dictionary, comm: String = "") -> Array:
