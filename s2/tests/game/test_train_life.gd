@@ -287,13 +287,13 @@ func test_expansion_uses_s1_car_ids_and_keeps_car_bound_traces() -> void:
 	assert_true(s.life.rooms["tail1"].traces["sacks"]["overturned"])
 	s.set_value("view.collapse_by_car", {"tail1": 0})
 	assert_true(s.set_value("dom.extraCars", ["coach", "store"]))
-	assert_eq(s.cars.size(), 8)
+	assert_eq(s.cars.size(), 15)
 	assert_eq(Catalog.layout_id(s.car("coach1")["def"]), "coach")
 	assert_eq(s.car("store2")["bodies"].size(), 0)
 	assert_true(s.life.rooms["tail1"].traces["sacks"]["overturned"])
 	assert_eq(s.rules["dom"]["extraCars"], ["coach", "store"])
 	assert_true(s.set_value("dom.extraCars", []))
-	assert_eq(s.cars.size(), 6)
+	assert_eq(s.cars.size(), 13)
 
 
 func test_new_panel_controls_use_the_same_snapshot_and_can_be_folded() -> void:
@@ -322,7 +322,9 @@ func test_placeholder_node_budget_adds_no_new_lights() -> void:
 		count += 1
 		lights += 1 if node is Light3D else 0
 		nodes.append_array(node.get_children())
-	assert_eq(lights, 1 + 2 * s.cars.size(), "sun plus each car's own lamp and stove (six cars with the workshop: 13)")
+	# A stove stands where people live; cars only for goods, coal or the dead have none.
+	var stoves: int = s.cars.filter(func(c): return not bool(Catalog.layout(c["def"]).get("storage_only", false))).size()
+	assert_eq(lights, 1 + s.cars.size() + stoves, "sun, each car's own lamp and a stove where people live (13 cars: 23)")
 	print("TRAIN_NODE_BUDGET=" + JSON.stringify({"nodes": count, "lights": lights, "people": s.people.get_child_count(), "furniture_roots": s.life.rooms.size(), "outside_nodes": 4}))
 
 
@@ -777,16 +779,16 @@ func test_evacuation_secures_a_refuge_first_and_falls_back_to_the_next_one() -> 
 func test_the_life_panel_follows_a_shortened_train_without_reading_past_its_end() -> void:
 	var s = _scene(true)
 	assert_true(s.set_value("dom.extraCars", ["coach", "store"]))
-	assert_eq(s.cars.size(), 8)
+	assert_eq(s.cars.size(), 15)
 	s.panel._flip_life()
-	s.panel.pick(7)
+	s.panel.pick(14)
 	var panel = s.panel.life_panel
-	assert_eq(panel._car_id(), String(s.cars[7]["id"]))
+	assert_eq(panel._car_id(), String(s.cars[14]["id"]))
 	assert_true(s.set_value("dom.extraCars", []))
-	assert_eq(s.cars.size(), 6)
-	assert_eq(s.panel.car_i, 5, "칸이 줄면 고른 칸 번호부터 고친다")
-	assert_eq(panel._car_id(), String(s.cars[5]["id"]))
-	assert_true(panel.status.text.begins_with(String(s.cars[5]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
+	assert_eq(s.cars.size(), 13)
+	assert_eq(s.panel.car_i, 12, "칸이 줄면 고른 칸 번호부터 고친다")
+	assert_eq(panel._car_id(), String(s.cars[12]["id"]))
+	assert_true(panel.status.text.begins_with(String(s.cars[12]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
 
 
 func test_old_setters_check_the_whole_snapshot_before_touching_the_cars() -> void:

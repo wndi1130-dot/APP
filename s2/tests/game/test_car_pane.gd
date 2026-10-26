@@ -41,6 +41,21 @@ func test_the_pane_says_the_cars_own_numbers() -> void:
 	assert_eq(CarPane.model(g, t, {"id": "engine", "kind": "engine", "name": "기관실"}), {}, "a car with no people of its own has no pane")
 
 
+## J12: the tail lives in three cars, so its count and levers say 「세 칸」
+## after the people; a community of one car says nothing more.
+func test_a_community_of_three_cars_says_so_after_its_people() -> void:
+	var s: Array = StopPickCard.sample()
+	var g: Dictionary = s[0]
+	var t: Dictionary = s[1]
+	assert_eq(CarPane.model(g, t, TAIL)["span"], 3)
+	var pane := _pane(g, t)
+	assert_true((pane.find_child("Stage", true, false) as Label).text.begins_with(" · 세 칸 · "))
+	var front := {"id": "front", "kind": "comm", "comm": "front", "name": "앞칸", "plate": "앞칸"}
+	assert_eq(CarPane.model(g, t, front)["span"], 1)
+	pane.show_car(front, g, t)
+	assert_false((pane.find_child("Stage", true, false) as Label).text.contains("칸 · "), "one car: no count of cars")
+
+
 func test_cold_is_under_the_threshold_of_45() -> void:
 	var s: Array = StopPickCard.sample()
 	var t: Dictionary = s[1]
