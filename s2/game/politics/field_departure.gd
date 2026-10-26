@@ -201,12 +201,16 @@ static func build(g: Dictionary, t: Dictionary, opts: Dictionary) -> Dictionary:
 		work.append(person(g, t, id, "carrier", KitPick.kit(CARRIER_GEAR, stock)))
 	for i: int in escorts.size():
 		work.append(person(g, t, escorts[i], "escort", KitPick.kit(ESCORT_GEAR[i], stock)))
-	return {
+	var out := {
 		"version": 2, "departureId": "dep_%s_%d" % [place, seg], "stopId": "stop_%s_%d" % [place, seg], "placeId": place, "segment": seg,
 		"arriveMin": TrainStop.arrival_min(String(g["seed"]), seg),
 		"roster": roster, "workCrew": work, "promises": promises_of(g, t), "domestic": g.get("dom") != null,
 		"train": ({"food": g["food"], "hungerSegs": int(g.get("hunger", 0))} as Dictionary).merged(KitPick.train_kit(g)),
 	}
+	# The decks' places (decision 474 S1), when a field stop has left them in the train's state.
+	if g.get("lootDeck") is Dictionary:
+		out["lootDeck"] = (g["lootDeck"] as Dictionary).duplicate(true)
+	return out
 
 
 ## Everyone who may go out: the roster on v1, the roster and the work crew on v2.
