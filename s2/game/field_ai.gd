@@ -590,9 +590,10 @@ func _beside_chief(from: Vector3, to: Vector3, away: Vector3) -> Vector3:
 
 
 ## A swing once begun is seen through where it stands (결정 441 (1)): no next target or
-## order takes it off. The rest after a blow, a shove and a stomp do not hold the feet.
+## order takes it off. The rest after a blow and a stomp do not hold it, nor a shove:
+## that plants the feet over its first half (feet_held) but keeps the order.
 func _hold_swing(p) -> bool:
-	if p.strike_kind != "swing" or (p.strike_t <= 0.0 and not game.combat.feet_held(p)):
+	if p.strike_kind != "swing" or (p.strike_t <= 0.0 and not game.combat.blow_holds_feet(p)):
 		return false
 	p.stop()
 	return true

@@ -219,8 +219,8 @@ const FOREARM: float = 0.32
 const GRIP_FOLLOW: float = 0.5           # how far the weapon turns toward the hand's way each frame
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
-# drawn back over the rules' wind-up, out as it lands, half back by the lunge's end.
-const SHOVE_OUT: Vector2 = Vector2(0.4, 0.7)
+# drawn back over the rules' wind-up, out as it lands, all the way back by the lunge's end.
+const SHOVE_OUT: Vector2 = Vector2(0.4, 1.0)
 const CROUCH_WALK: int = 1                       # walk_b: bent over, both feet barely leaving the ground
 const CROUCH_LOW: Vector2 = Vector2(0.87, 0.97)  # where in the tell it is held, breathing between the two
 const STAND_PACE: Vector2 = Vector2(0.85, 1.15)  # each person stands at their own pace, from their own place in it
