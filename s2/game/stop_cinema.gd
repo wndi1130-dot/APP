@@ -513,6 +513,7 @@ func _build_world() -> void:
 		flake.size = Vector2(0.025, 0.5)
 		fm.set_shader_parameter("shape", 0)
 		fm.set_shader_parameter("opacity", 0.6)
+		snow.amount *= 3  # as the field's (field_game.gd)
 		pm.direction = Vector3(0.05, -1, 0.02)
 		pm.initial_velocity_min = 7.0
 		pm.initial_velocity_max = 9.0

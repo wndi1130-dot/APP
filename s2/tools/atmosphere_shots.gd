@@ -4,7 +4,7 @@ extends SceneTree
 ## the running train. Picture-only opts; the HUD and the train's keys are hidden.
 ##   godot --path s2 --resolution 1688x780 -s res://tools/atmosphere_shots.gd -- --out=<folder>
 ## Optional: --what=field|travel|both --stages=autumn,early,deep,thaw
-##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet
+##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet,rain
 ##   --region=K1 --place=<map id> --edge (the field at the map's west edge)
 ##   --ref (only the three reference scenes, REF_SCENES)
 ## Writes <what>_<stage>_<band>_<weather>.jpg and index.json (what each cell drew).
@@ -24,6 +24,7 @@ const WEATHERS: Dictionary = {
 	"snow": [["snow"], ["snow"]],
 	"blizzard": [["blizzard"], ["blizzard"]],
 	"sleet": [["sleet"], ["sleet"]],
+	"rain": [["rain"], ["rain"]],
 }
 
 var out := ""
