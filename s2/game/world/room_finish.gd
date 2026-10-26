@@ -14,12 +14,17 @@ const KITCHEN := 2
 const BATH := 3
 const LIVING := 4
 const VARIANTS := 3
-## 방 갈래를 알리는 가구. 앞 줄이 이긴다(욕실에 놓인 수건 선반·의자는 욕실).
+## 방 갈래를 알리는 가구(room_furnish PALETTE의 그 묶음 가구). 앞 줄이 이긴다: 욕실 가구가
+## 있으면 욕실, 그다음 부엌·침실·거실. 뒤의 넷은 약한 신호로, 센 신호가 없는 방만 가른다
+## (식탁만 있는 첫 정차 부엌, 옷장만 있는 방).
 const SIGNS: Array = [
 	[BATH, ["toilet", "bathtub", "washstand"]],
 	[KITCHEN, ["sink", "counter", "fridge_open"]],
 	[BED, ["bed", "dresser", "nightstand"]],
 	[LIVING, ["settee", "armchair", "low_table", "cold_stove"]],
+	[KITCHEN, ["dining_set"]],
+	[BED, ["wardrobe"]],
+	[LIVING, ["bookcase", "radio_set"]],
 ]
 ## 층 -> 채널(R G B A).
 const CHANNEL: Dictionary = {0: 0, 1: 1, -1: 2, 2: 3}
