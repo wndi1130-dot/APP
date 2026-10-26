@@ -12,6 +12,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
+const WoodsShade = preload("res://fx/woods_shade.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
@@ -449,6 +450,11 @@ func _ready() -> void:
 	map_edge.setup(view.grid, view.material)
 	map_edge.set_fog(fx_light["fog_color"])
 	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
+	# The shade under the side path's trees: the gap reads as the light way in.
+	if data.get("side_path") is Dictionary:
+		var shade := WoodsShade.new()
+		add_child(shade)
+		shade.setup(data["side_path"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -835,7 +841,7 @@ func _build_world() -> void:
 	add_child(camera)
 	camera.current = true
 	snow = GPUParticles3D.new()
-	snow.amount = maxi(weather.particles(), 1)
+	snow.amount = maxi(weather.particles(), 1) * 3  # the rules' count is thin from 52° up (precip.gdshader)
 	snow.lifetime = 4.0
 	snow.visibility_aabb = AABB(Vector3(-30, -2, -20), Vector3(60, 14, 40))
 	var pm := ParticleProcessMaterial.new()
@@ -1743,6 +1749,7 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		if p == player and audio != null:
 			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
+		_floor_creak(p, cell)
 	if running:
 		p.brain["run_score_t"] = float(p.brain.get("run_score_t", 0.0)) + delta
 		if p.brain["run_score_t"] >= 5.0:
@@ -1757,6 +1764,26 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 					combat.fall(p, "얼음에 미끄러졌다")
 		elif p.carry_state() >= 2 and rng.randf() < delta * 0.03:
 			combat.fall(p, "짐에 눌려 넘어졌다")
+
+
+## A loose board with something under it (room_stories.gd, card K) creaks when stepped on
+## or beside, softly and not again for a while; once searched it is quiet.
+const CREAK_AGAIN: float = 3.0
+
+
+func _floor_creak(p: Person, cell: Vector2i) -> void:
+	for s: Dictionary in data.get("floor_stashes", []):
+		var box: Dictionary = data["containers"].get(s["id"], {})
+		var d: Vector2i = (cell - (s["cell"] as Vector2i)).abs()
+		if box.is_empty() or box["searched"] or maxi(d.x, d.y) > 1 or int(s["level"]) != level_of(p.position):
+			continue
+		if clock.elapsed < float(s.get("quiet_until", -INF)):
+			continue
+		s["quiet_until"] = clock.elapsed + CREAK_AGAIN
+		var at := lift(s["cell"], int(s["level"]))
+		make_sound(at, SimNoise.Level.QUIET, "floor_creak", p)
+		if audio != null:
+			audio.floor_creak(at)
 
 
 ## Frozen ones wake when someone walks right up to them (crouching gets closer).
