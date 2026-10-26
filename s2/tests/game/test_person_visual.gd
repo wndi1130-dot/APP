@@ -440,7 +440,8 @@ func test_crouched_it_works_and_aims_low() -> void:
 	assert_eq(PersonVisual.aim_of(p, own), -1)
 	var note := {}
 	PersonVisual.motion_of(p, note, 0.3, [], own)
-	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)
+	# Crouched with a handgun: held low in both hands (gait.gd CROUCH_STAND).
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), String(PersonVisual.Gait.CROUCH_STAND["pistol"]))
 
 
 # Down, dragging itself, getting up and dying in the living's own (people folder
