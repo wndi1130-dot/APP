@@ -835,7 +835,7 @@ func _build_world() -> void:
 	add_child(camera)
 	camera.current = true
 	snow = GPUParticles3D.new()
-	snow.amount = maxi(weather.particles(), 1)
+	snow.amount = maxi(weather.particles(), 1) * 3  # the rules' count is thin from 52° up (precip.gdshader)
 	snow.lifetime = 4.0
 	snow.visibility_aabb = AABB(Vector3(-30, -2, -20), Vector3(60, 14, 40))
 	var pm := ParticleProcessMaterial.new()
