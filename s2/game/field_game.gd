@@ -430,7 +430,11 @@ func _ready() -> void:
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
-		loot_report = LootDress.dress(data, rng.seed)
+		# The decks pick up where the last field stop left them (decision 474 S1, the contract's lootDeck).
+		var deck: Dictionary = {}
+		if opts.get("departure") is Dictionary:
+			deck = (opts["departure"] as Dictionary).get("lootDeck", {})
+		loot_report = LootDress.dress(data, rng.seed, deck)
 		# The box a note of the last stop told of (card 10, opts "stash": its spot).
 		if String(opts.get("stash", "")) != "":
 			loot_report["stash"] = LootDress.place_stash(data, String(opts["stash"]), rng.seed)
@@ -3076,6 +3080,8 @@ func finish(reason: String) -> void:
 			if into == "food" and int(unloaded[id]) > 0:
 				food_in[String(id)] = int(unloaded[id])
 		receipt.set_food_in(food_in)
+		# Where the decks stand after this stop rides back to the train for the next contract (474 S1).
+		receipt.set_loot_deck(loot_report.get("loot_deck", {}))
 	# The cores' count and the blueprint pieces go into extras here and only here (decision
 	# 426), on a stop receipt, one that has its ids: setting extras on a field receipt without
 	# ids would make it a stop receipt with empty ones, which the receipt check turns down.
