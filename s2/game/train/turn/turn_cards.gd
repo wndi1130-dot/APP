@@ -9,6 +9,7 @@ const Death = preload("res://game/train/turn/turn_death.gd")
 const Travel = preload("res://game/train/turn/turn_travel.gd")
 const Field = preload("res://game/politics/field_return.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
+const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -65,7 +66,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var s: Dictionary = g["comms"][comm]
 	match str(card["kind"]):
 		"travel": return travel_view(g, t, card.get("text", ""))
-		"info": return {"title": "", "choices": [choice("", "덮는다", [])]}
+		"info": return {"title": str(card.get("who", "알림")), "choices": [choice("", "알았다", [])]}
 		"need_warn":
 			if not t["NEEDS"].has(card.get("text")): return {}
 			var def: Dictionary = t["NEEDS"][card["text"]]
@@ -106,6 +107,25 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 				choice("cut_spare_tail", "꼬리칸은 뺀다", [["rel", "tail", k["spareRel"]["tail"]], ["rel", "front", k["spareRel"]["front"]]], "cut_spare_tail"),
 				choice("cut_front_first", "앞칸이 먼저 낸다", [["rel", "tail", k["frontRel"]["tail"]], ["rel", "front", k["frontRel"]["front"]]], "cut_front_first"),
 				choice("refuse", "거절한다", [["rel", "tail", k["refuseRel"]], ["tension", k["refuseTension"]]], "cut_refuse")]}
+		"promise_ledger":
+			# The result arc (council_log.gd): a second broken promise brings the car's ledger; a third closes open deals.
+			return {"title": "약속 장부", "choices": [choice("", "사과하고 갚는다", [["lux", -3], ["rel", comm, 8]]), choice("", "물리친다", [["rel", comm, -5]], "ledger_refuse")]}
+		"tension_crisis":
+			# The ladder's last rung (정치 흐름 4.2): guard, yield, or nothing (the revolt end is not ported).
+			var refused: Variant = Ladder.guard_refuses(g)
+			var hold: Dictionary = choice("", "경비대를 푼다", [["fear", 15], ["trust", -10], ["rel", "tail", -10]], "crisis_guard")
+			if refused != null: hold["disabled"] = refused
+			return {"title": "마지막 기회", "choices": [hold, choice("", "창고를 연다", [["food", -15], ["coal", -10], ["rel", "tail", 8]], "crisis_yield"), choice("", "아무것도 안 한다", [], "revolt")]}
+		"protest":
+			var refused: Variant = Ladder.guard_refuses(g)
+			var opp: String = t["OPPOSITE"]["tail"]
+			if card.get("text") != "riot":
+				var hold: Dictionary = choice("", "경비대를 세운다", [["tension", -6]], "ladder_guard")
+				if refused != null: hold["disabled"] = refused
+				return {"title": "항의", "choices": [choice("", "들어준다", [["food", -8], ["coal", -5], ["tension", -10], ["rel", "tail", 3], ["rel", opp, -3]], "ladder_yield"), hold, choice("", "물리친다", [["rel", "tail", -5]], "ladder_ignore")]}
+			var hold_riot: Dictionary = choice("", "경비대를 푼다", [["fear", 8], ["trust", -5], ["rel", "tail", -5]], "riot_guard")
+			if refused != null: hold_riot["disabled"] = refused
+			return {"title": "난장판", "choices": [choice("", "들어준다", [["food", -10], ["coal", -6], ["tension", -10], ["rel", "tail", 4], ["rel", opp, -3]], "riot_yield"), hold_riot, choice("", "아무것도 안 한다", [], "ladder_ignore")]}
 		"rep_sick":
 			return {"title": "대표가 앓는다", "choices": [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if s.get("sick") is Dictionary else [choice("", "알았다", [])]}
 	return {}
@@ -146,7 +166,8 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 	if v.is_empty(): return C.unsupported(g0, "chooseCard: " + str(card["kind"]))
 	if index < 0 or index >= v["choices"].size(): return g0.duplicate(true)
 	var selected: Dictionary = v["choices"][index]
-	if not affordable(g0, selected["effs"]): return g0.duplicate(true)
+	if selected.has("disabled") or not affordable(g0, selected["effs"]): return g0.duplicate(true)
+	if selected["special"] == "revolt": return C.unsupported(g0, "chooseCard: revolt finish lookback")
 	if not St.is_s1a(g0) or g0.get("deathWeight", false): return C.unsupported(g0, "chooseCard: optional hooks")
 	var g: Dictionary = g0.duplicate(true)
 	g["cards"] = g["cards"].filter(func(row: Dictionary) -> bool: return int(row["uid"]) != uid)
@@ -186,6 +207,22 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 		"cut_front_first": RationCut.apply(g, t, "front_first")
 		"cut_refuse": RationCut.apply(g, t, "refuse")
 		"proxy_meet": g["comms"][comm]["leader"]["traitShown"] = 2
+		"ledger_refuse": Field._offend(g, comm)
+		"riot_guard":
+			Ladder.riot_end(g, t)
+			Ladder.riot_fell(g, t, int(t["P"]["riotFall"]))
+			Ladder.guard(g, "tail")
+		"riot_yield":
+			Ladder.riot_end(g, t)
+			Ladder.concede(g)
+		"ladder_yield": Ladder.concede(g)
+		"ladder_guard": Ladder.guard(g, "tail")
+		"ladder_ignore": Ladder.ignore(g)
+		"crisis_guard", "crisis_yield":
+			C.put(g, "tension", float(t["P"]["crisisBase"]) + float(t["P"]["crisisStep"]) * int(g.get("tensionCrisisUsed", 0)), "card")
+			g["tensionCrisisUsed"] = int(g.get("tensionCrisisUsed", 0)) + 1
+			if selected["special"] == "crisis_guard": Ladder.guard(g, "tail")
+			else: Ladder.concede(g)
 	# hub.ts registers hubChoose for every accepted card, including non-hub cards.
 	var hub: Dictionary = C.hub(g)
 	if not hub.has("lines"): hub["lines"] = []

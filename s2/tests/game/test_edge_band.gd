@@ -26,7 +26,40 @@ func test_values_are_fixed() -> void:
 	assert_eq(EdgeBand.EDGE_WAVE, 1.2)
 	assert_eq(EdgeBand.RAIL_CLEAR, 2.5)
 	assert_eq(EdgeBand.ROAD_RUN, 5.0)
+	assert_eq(EdgeBand.ROAD_WIDEST, 8)
 	assert_eq(EdgeBand.SHADE_DEPTH, 1.2)
+	assert_eq(EdgeBand.GLADE_EVERY, 48.0)
+	assert_eq(EdgeBand.GLADE_CHANCE, 0.5)
+	assert_eq(EdgeBand.GLADE_SIZE, Vector2(4.0, 6.0))
+	assert_eq(EdgeBand.GLADE_NEAR, 3.0)
+
+
+func test_now_and_then_a_glade_with_a_trace_of_people_behind_the_first_rows() -> void:
+	# A town-sized map: about a dozen chances round it.
+	var g := FieldGrid.new(170, 120)
+	for x in g.width:
+		g.floor[g.index(Vector2i(x, 60))] = F.RAIL
+	var total := 0
+	for seed in range(1, 21):
+		var plan := EdgeBand.plan(g, seed)
+		total += plan["glades"].size()
+		for gl: Dictionary in plan["glades"]:
+			var r: Rect2 = gl["rect"]
+			assert_between(r.size.x, EdgeBand.GLADE_SIZE.x, EdgeBand.GLADE_SIZE.y)
+			assert_eq(r.size.x, r.size.y, "square")
+			var near := minf(EdgeBand.outside(g, r.position.x, r.position.y), EdgeBand.outside(g, r.end.x, r.end.y))
+			assert_almost_eq(near, EdgeBand.GLADE_NEAR, 0.001, "behind the first rows")
+			assert_true(EdgeBand.outside(g, r.get_center().x, r.get_center().y) < EdgeBand.BAND - 2.0, "where the camera shows it")
+			assert_true(absf(r.get_center().y - 60.5) > EdgeBand.RAIL_CLEAR + r.size.y * 0.5 or (r.position.x >= 0.0 and r.end.x <= g.width), "not on the rail line running out")
+			assert_true(["felled", "rest"].has(gl["kind"]))
+			for p: Dictionary in gl["props"]:
+				var at: Vector3 = p["at"]
+				assert_true(r.has_point(Vector2(at.x, at.z)), "the trace stands in its glade")
+			for t: Dictionary in plan["trees"]:
+				var at: Vector3 = t["at"]
+				assert_false(r.has_point(Vector2(at.x, at.z)), "no tree in a glade")
+	# 20 maps of about 12 chances at one in two: well over none, well under all.
+	assert_between(total, 60, 180)
 
 
 func test_the_camera_never_looks_past_the_band() -> void:
@@ -42,6 +75,22 @@ func test_the_camera_never_looks_past_the_band() -> void:
 	assert_almost_eq(south.z + far.y, 120.0 + EdgeBand.BAND, 0.0001, "zoomed out, the bottom of the view stops there too")
 	var narrow := EdgeBand.clamp_focus(Vector3(3, 0, 3), Vector2(100, 100), 40, 30)
 	assert_eq(narrow, Vector3(20, 0, 15), "a map smaller than the view is centred")
+	# A camera turned 45° (결정 476) shows its rectangle turned: the box round it.
+	var turned := EdgeBand.view_half(24.0, 2.0, 35.0, 45.0)
+	var box := (24.0 + 12.0 / sin(deg_to_rad(35.0))) * cos(deg_to_rad(45.0))
+	assert_almost_eq(turned.x, box, 0.0001)
+	assert_almost_eq(turned.y, box, 0.0001)
+	var corner := EdgeBand.clamp_focus(Vector3(1, 0, 1), turned, 170, 120)
+	assert_almost_eq(corner.x - turned.x, -EdgeBand.BAND, 0.0001, "the turned view stops at the band too")
+	assert_almost_eq(corner.z - turned.y, -EdgeBand.BAND, 0.0001)
+	# Held that far in, a player in the map's corner would be off the screen: the
+	# view follows past the band till the player is back inside the middle of it.
+	var player := Vector3(1, 0, 1)
+	var kept := EdgeBand.keep_on_screen(corner, player, 24.0, 2.0, 35.0, 45.0)
+	var off := Vector2(player.x - kept.x, player.z - kept.z).rotated(deg_to_rad(45.0))
+	assert_almost_eq(absf(off.x), 0.0, 0.01, "the corner lies straight up the screen")
+	assert_almost_eq(off.y, -12.0 / sin(deg_to_rad(35.0)) * EdgeBand.KEEP, 0.01, "at the edge of the middle, not past it")
+	assert_eq(EdgeBand.keep_on_screen(mid, mid, 24.0, 2.0, 35.0, 45.0), mid, "in the middle of the map nothing moves")
 
 
 func test_rails_run_out_through_a_clear_corridor_and_roads_end_at_a_block() -> void:
@@ -68,6 +117,22 @@ func test_rails_run_out_through_a_clear_corridor_and_roads_end_at_a_block() -> v
 	assert_true(block.x >= 30.0 and block.x <= 32.0)
 
 
+func test_a_road_along_an_edge_is_not_walled_off() -> void:
+	var g := _grid()
+	for x in range(5, 55):
+		g.floor[g.index(Vector2i(x, g.height - 1))] = F.ROAD
+	var runs := EdgeBand.openings(g)
+	assert_eq(runs.filter(func(r): return int(r["side"]) == 3).size(), 0, "a road beside the south edge leaves nothing open")
+	var plan := EdgeBand.plan(g, 7)
+	assert_eq(plan["blocks"].size(), 1, "only the road out of the north edge is blocked")
+	var south := 0
+	for t: Dictionary in plan["trees"]:
+		var at: Vector3 = t["at"]
+		if at.z > g.height and at.x > 6.0 and at.x < 54.0:
+			south += 1
+	assert_gt(south, 20, "woods stand past the road along the edge")
+
+
 func test_the_same_map_draws_the_same_woods() -> void:
 	var a := EdgeBand.plan(_grid(), 11)
 	var b := EdgeBand.plan(_grid(), 11)
@@ -89,5 +154,8 @@ func test_the_band_is_built_under_the_ground_level() -> void:
 	assert_not_null(band)
 	assert_not_null(band.get_node("Runs"), "the road and rail runs out of the map")
 	assert_eq(int(counts["blocks"]), 1)
+	var plan := EdgeBand.plan(g, EdgeBand.seed_of({"place_id": "test"}))
+	assert_eq(int(counts["glades"]), plan["glades"].size())
+	assert_eq(band.get_child_count(), 1 + int(counts["chunks"]) + 1 + int(counts["traces"]), "runs, tree pieces, the road's block and the glades' traces")
 	assert_gt(int(counts["trees"]), 0)
 	assert_gt(int(counts["chunks"]), 4, "the woods are cut in pieces so those off screen are not drawn")

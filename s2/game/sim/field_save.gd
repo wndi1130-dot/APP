@@ -16,6 +16,7 @@ const PATH := "user://field_save.json"
 ## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
+const EatRules = preload("res://game/sim/eat_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 
@@ -47,7 +48,8 @@ const GAME_FIELDS: Array[String] = [
 	"seen_now", "seen_memory", "vis_t", "cam_focus", "cam_push", "cam_size",
 ]
 const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry"]
-const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing"]
+## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
+const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "dead_eaten_seconds"]
 
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
@@ -269,6 +271,14 @@ static func _put_person(p, row: Dictionary) -> void:
 	var body: Dictionary = row["body"]
 	b.restore(body)
 	p.heat.restore(row.get("heat", {}))
+	# How long the dead have eaten at this body (결정 441 (3)): one eaten up stays so. Version 2
+	# keeps it in "meta" (PERSON_META), a version-1 row as its own "eaten"; none before it.
+	var metadata: Dictionary = row.get("meta", {})
+	var key := String(EatRules.EATEN_META)
+	if metadata.has(key) or row.has("eaten"):
+		p.set_meta(EatRules.EATEN_META, float(metadata.get(key, row.get("eaten", 0.0))))
+	elif p.has_meta(EatRules.EATEN_META):
+		p.remove_meta(EatRules.EATEN_META)
 
 
 static func _runtime(game) -> Dictionary:

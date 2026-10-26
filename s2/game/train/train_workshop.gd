@@ -14,10 +14,17 @@ extends RefCounted
 ##
 ## The work is shared: parts, the making line, restoration, then insulation.
 ## Making a thing slows a refit (decision 070); the order is fixed in S2.
+##
+## A stretch (`stretch`) is S1 domesticSettle's order: the running technologies
+## take their upkeep from the stores first (payUpkeep), then the workshop works
+## (`run`, S1 runWorkshop). One the stores cannot keep runs at half that
+## stretch (train_research.gd pay_upkeep, mult). S1's 「부품이 모자란다」 card is
+## not here yet: S2 runs on, as that card's 「그냥 달린다」.
 
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
@@ -109,6 +116,16 @@ static func cancel(g: Dictionary) -> bool:
 	return true
 
 
+## A stretch leaving a stop: the upkeep, then the work. `run`'s answer with
+## "starved", the running technologies whose upkeep the stores could not pay.
+static func stretch(g: Dictionary) -> Dictionary:
+	TrainDom.ensure(g)
+	var starved: Array[String] = TrainResearch.pay_upkeep(g)
+	var out: Dictionary = run(g)
+	out["starved"] = starved
+	return out
+
+
 ## A stretch of work (the train leaving a stop): parts up to the target while
 ## the stores last, then the line. {"parts": made, "made": [ids], "events": [...]}
 ## — the events in the train scene's form (train_scene post_event).
@@ -154,6 +171,12 @@ static func run(g: Dictionary) -> Dictionary:
 	var restored: Dictionary = TrainResearch.advance_restore(g, w)
 	w -= float(restored["used"])
 	did.append_array(restored["did"])
+	# A standing law the restored technology bends says so (S1 completeTech's lawTechNews).
+	if restored.get("done") != null:
+		for news: String in TrainLawTech.news(g, String(restored["done"])):
+			if not g.get("journal") is Array:
+				g["journal"] = []
+			g["journal"].append({"seg": int(g.get("seg", 0)), "text": news, "tone": "good"})
 	var modified: Dictionary = TrainMods.advance_job(g, w)
 	w -= float(modified["used"])
 	did.append_array(modified["did"])

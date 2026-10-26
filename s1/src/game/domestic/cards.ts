@@ -6,7 +6,7 @@ import { CARD_EXTENSIONS } from '../cards';
 import type { CardView, Choice, Eff } from '../cards';
 import { clamp, journal, rnd } from '../state';
 import type { Card, Game } from '../state';
-import { attachCar, giveCandidates, giveCar } from './cars';
+import { attachCar, carRepair, carShort, giveCandidates, giveCar } from './cars';
 import { BRANCH_NAME, D, FIELD_NAME, TECHS } from './data';
 import type { Field, TechId, Variant } from './data';
 import { resolvePressure } from './hooks';
@@ -173,14 +173,16 @@ export function domView(g: Game, card: Card): CardView | null {
     }
     case 'dom:car': {
       const coach = card.n === 1;
+      const [wood, scrap] = carRepair(coach ? 'coach' : 'store');
       return {
         title: '쓸 만한 칸', required: false,
-        body: coach ? '측선에 낡은 객차 한 칸이 서 있다. 바퀴는 돈다.' : '측선에 닫힌 화차 한 칸이 서 있다. 바닥이 멀쩡하다.',
+        body: coach ? '측선에 낡은 객차 한 칸이 서 있다. 바퀴는 돈다. 판자를 대고 연결기를 고치면 달 수 있다.'
+          : '측선에 지붕 있는 화차 한 칸이 서 있다. 바닥이 멀쩡하다. 연결기를 고치고 선반을 짜면 달 수 있다.',
         choices: [
           coach
-            ? { label: '거주칸으로 단다', say: '사람이 먼저다. 꼬리칸을 넓혀라!', effs: [], special: 'dom:car:coach', extra: [`꼬리칸 과밀 −${D.coachCrowd}`, '달리기 석탄 +0.4/구간'] }
-            : { label: '창고로 단다', say: '쌓을 곳이 생겼다, 달아라!', effs: [], special: 'dom:car:store', extra: ['자재 상한 +40', '달리기 석탄 +0.4/구간'] },
-          { label: '두고 간다', say: '끌 석탄이 없다. 두고 간다.', effs: [], special: 'dom:none' },
+            ? { label: '고쳐서 거주칸으로 단다', say: '사람이 먼저다. 판자를 대라, 꼬리칸을 넓힌다!', effs: [], special: 'dom:car:coach', disabled: carShort(g, 'coach'), extra: [`목재 −${wood} · 고철 −${scrap}`, `꼬리칸 과밀 −${D.coachCrowd}`, '달리기 석탄 +0.4/구간'] }
+            : { label: '고쳐서 창고로 단다', say: '쌓을 곳이 생겼다. 연결기를 고쳐 달아라!', effs: [], special: 'dom:car:store', disabled: carShort(g, 'store'), extra: [`고철 −${scrap} · 목재 −${wood}`, '자재 상한 +40', '달리기 석탄 +0.4/구간'] },
+          { label: '두고 간다', say: '끌 석탄도 고칠 자재도 아깝다. 두고 간다.', effs: [], special: 'dom:none' },
         ],
       };
     }
@@ -389,9 +391,15 @@ export function domChoose(g: Game, card: Card, choice: Choice): void {
       }
       break;
     }
-    case 'car':
-      attachCar(g, arg as 'store' | 'coach');
+    case 'car': {
+      const kind = arg as 'store' | 'coach';
+      if (carShort(g, kind)) break;
+      const [wood, scrap] = carRepair(kind);
+      d.wood -= wood;
+      d.scrap -= scrap;
+      attachCar(g, kind);
       break;
+    }
     case 'give':
       giveCar(g, arg);
       break;

@@ -35,6 +35,20 @@ func _gun() -> void:
 	game.player.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}]
 
 
+func test_the_camera_looks_across_the_map_from_the_south_east() -> void:
+	# The diagonal view (결정 476): the camera stands south-east of what it
+	# follows, CAM_PITCH up, and the opening of a stop looks down the same way.
+	game._update_camera(1.0)
+	var back: Vector3 = (game.camera.position - game.cam_focus).normalized()
+	assert_gt(back.x, 0.0, "east of the player")
+	assert_gt(back.z, 0.0, "and south")
+	assert_almost_eq(back.x, back.z, 0.001, "turned 45°")
+	assert_almost_eq(rad_to_deg(asin(back.y)), game.CAM_PITCH, 0.01)
+	var StopCinema = load("res://game/stop_cinema.gd")
+	assert_eq(StopCinema.FIELD_PITCH_DEG, game.CAM_PITCH, "the stop's look down ends at the field's pitch")
+	assert_eq(StopCinema.FIELD_YAW_DEG, game.CAM_YAW, "and the field's turn")
+
+
 func _raider(at: Vector3):
 	var row := {"id": "npc_raider_t", "name": "약탈자", "role": "raider", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 1, "search": 1}, "hands": [["axe", "factory", 0.9]]}
 	var r = game.make_person(row, at)
@@ -82,10 +96,13 @@ func test_fixed_stick_origin_does_not_move_with_the_touch() -> void:
 	assert_eq(hud.stick_origin, home, "the base is home, not under the thumb")
 	hud.finger_move(0, home + Vector2(hud.STICK_R * 3.0, 0))
 	assert_eq(hud.stick_origin, home, "a long drag does not drag the base along")
-	assert_almost_eq(game.player.stick.x, 1.0, 0.01, "full push, no more")
+	assert_almost_eq(game.player.stick.length(), 1.0, 0.01, "full push, no more")
 	hud.finger_move(0, home + Vector2(0, -hud.STICK_R * 0.5))
 	assert_eq(hud.stick_origin, home)
-	assert_almost_eq(game.player.stick.y, -0.5, 0.02)
+	assert_almost_eq(game.player.stick.length(), 0.5, 0.02)
+	# Up on the screen walks north-west on the map: the camera looks from the south-east.
+	assert_almost_eq(game.player.stick.x, -0.5 * sin(deg_to_rad(game.CAM_YAW)), 0.02)
+	assert_almost_eq(game.player.stick.y, -0.5 * cos(deg_to_rad(game.CAM_YAW)), 0.02)
 	hud.finger_up(0, home)
 	assert_eq(game.player.stick, Vector2.ZERO)
 	assert_eq(hud.stick_origin, home)

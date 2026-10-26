@@ -39,6 +39,7 @@ var field: MeshInstance3D
 var field_mat: ShaderMaterial
 var _map_mat: ShaderMaterial
 var _mask := -1.0
+var _room := Rect2i(0, 0, -1, -1)
 
 
 func setup(grid: FieldGrid, map_material: ShaderMaterial) -> void:
@@ -106,6 +107,17 @@ func set_field_fog(amount: float, sight_m: float, light: Dictionary) -> void:
 func set_eye(at: Vector3) -> void:
 	if field.visible:
 		field_mat.set_shader_parameter("clear_at", Vector2(at.x, at.z))
+
+
+## The building the eye is in, its walls cut away (building_view open_b), by
+## its footprint: the reference game lays no fog in a room, so the fog over the
+## field lifts there. An empty rect when outside.
+func set_room(r: Rect2i) -> void:
+	if r == _room:
+		return
+	_room = r
+	var v := Vector4(r.position.x, r.position.y, r.end.x, r.end.y) if r.has_area() else Vector4(0, 0, -1, -1)
+	field_mat.set_shader_parameter("room", v)
 
 
 ## The fog's own linear colour (Atmosphere.light keys): half the hour's fog hue,

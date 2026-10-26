@@ -685,11 +685,57 @@ static func dress_from(p, d: Dictionary) -> void:
 			p.gloves = bool(d["hands"])
 		return
 	for s in d:
-		if SLOTS.has(String(s)):
-			if String(d[s]) == "":
-				take_off(p, String(s))
-			else:
-				put_on(p, make(String(d[s])))
+		if not SLOTS.has(String(s)):
+			continue
+		# A thing out of the wardrobe comes as it is kept there: {id, condition, holes?}.
+		if d[s] is Dictionary:
+			put_on(p, from_wardrobe(d[s]))
+		elif String(d[s]) == "":
+			take_off(p, String(s))
+		else:
+			put_on(p, make(String(d[s])))
+
+
+## The places the train's wardrobe keeps (train_dom.gd WARDROBE_SLOTS): what comes back of them
+## goes on the receipt (s3 contract 3).
+const OUTER_PLACES: Array[String] = ["jacket", "coat", "hands"]
+
+
+## A garment worn made back into a wardrobe entry ({id, condition, holes?}), the other way of
+## from_wardrobe; {} for what is not a garment.
+static func to_wardrobe(g: Dictionary) -> Dictionary:
+	var id: String = String(g.get("id", ""))
+	if not is_garment(id):
+		return {}
+	var e := {"id": id, "condition": snappedf(clampf(1.0 - float(g.get("wear", 0.0)), 0.0, 1.0), 0.01)}
+	var holes: Dictionary = g.get("holes", {})
+	if not holes.is_empty():
+		e["holes"] = holes.duplicate()
+	return e
+
+
+## What `p` comes back in at the wardrobe's places (receipt gearBack.wear): jacket and hands
+## each an entry or "" for bare, and a coat only when one is on (picked up in the field).
+static func back_of(p) -> Dictionary:
+	var out := {}
+	for s: String in OUTER_PLACES:
+		var e: Dictionary = to_wardrobe(p.worn[s]) if p.worn.has(s) else {}
+		if e.is_empty() and s == "coat":
+			continue
+		out[s] = e if not e.is_empty() else ""
+	return out
+
+
+## A garment as the train's wardrobe keeps it ({id, condition, holes?}, train_dom.gd) made
+## into the state worn: its wear is what its condition lacks.
+static func from_wardrobe(entry: Dictionary) -> Dictionary:
+	var g := make(String(entry.get("id", "")))
+	if g.is_empty():
+		return g
+	g["wear"] = clampf(1.0 - float(entry.get("condition", 1.0)), 0.0, 1.0)
+	if not (entry.get("holes", {}) as Dictionary).is_empty():
+		g["holes"] = (entry["holes"] as Dictionary).duplicate()
+	return g
 
 
 ## What a save keeps of one person's clothes, and how it comes back. A save

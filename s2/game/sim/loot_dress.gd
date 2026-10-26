@@ -17,6 +17,7 @@ extends RefCounted
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
 const LootJunk = preload("res://game/sim/loot_junk.gd")
+const Carry = preload("res://game/sim/carry.gd")
 
 ## What may be moved between the boxes of one building, and as what.
 const FAMILY: Dictionary = {
@@ -40,6 +41,20 @@ const ROOM_WORDS: Dictionary = {
 	"hall": ["제의", "성가", "회중", "종", "예배", "찬송", "합창", "탑"],
 	"storage": [],
 }
+## The room a piece of furniture says (card I 가): only what map-layout lays in one
+## kind of room (room_furnish.gd PALETTE, and the kitchen's run of counters); a
+## shelf or a crate stack, laid in several, says nothing and the name is read.
+## Their rooms as ours: bed and living → bedroom, bath → bathroom, store → pantry,
+## boiler → toolbox. A key the map gives comes first, then this, then the name.
+const FURNITURE_ROOM: Dictionary = {
+	"dresser": "bedroom", "wardrobe": "bedroom", "nightstand": "bedroom", "bookcase": "bedroom", "side_table": "bedroom",
+	"cupboard": "kitchen", "fridge_open": "kitchen", "counter": "kitchen",
+	"washstand": "bathroom", "towel_shelf": "bathroom",
+	"desk": "office", "file_cabinet": "office",
+	"display_shelf": "shop", "shop_counter": "shop",
+	"jar_shelf": "pantry", "tin_crate": "pantry",
+	"toolbox": "toolbox",
+}
 ## How strongly each room draws each kind of thing (a weight; 0.3 is 「hardly
 ## ever」). The rooms with low weights everywhere are the ones often found empty.
 const AFFINITY: Dictionary = {
@@ -56,6 +71,10 @@ const AFFINITY: Dictionary = {
 }
 ## No box takes more than this many things from the others.
 const CAP: int = 6
+## Nor more than it holds (carry.gd box_limit). A bundle is counted at the most
+## its name can weigh (a sack of oats, a picture: 1.5), as it is named after it
+## is dealt: six food bundles named sacks are 9 in a jar shelf that takes 8.
+const NAMED_MOST: float = 1.5
 
 ## What a building is, from the words of its name (first that matches). Only the
 ## naming and the finds read it.
@@ -215,6 +234,35 @@ const FRAGMENT_PLACES: Dictionary = {
 }
 const FRAGMENT_FIELDS: Array[String] = ["engine", "med", "craft", "radio", "expedition"]
 
+## The rare store at the end of a side path (decision 450, card F 가 by
+## decision 442; the path, the building and its locked door are map-layout's):
+## the building named RARE_STORE. Its boxes are filled anew from the full store
+## of the stop's kind, RARE_STORE_ROLLS a box, and one rare thing goes in one.
+const RARE_STORE: String = "희귀 창고"
+const RARE_STORE_KIND: Dictionary = {
+	"freight": "rail", "factory": "rail", "mine": "rail", "sawmill": "rail", "bare_line": "rail",
+	"houses": "arms", "office": "arms", "hospital": "arms", "church": "arms",
+	"lodge": "winter", "lake": "winter", "summit": "winter",
+}
+const RARE_STORE_ROLLS: int = 3
+## [weight, item, count] rows; the bundles weigh twice the common store's
+## (loot_tables.gd CONTAINER_KINDS storage) and there is no empty row.
+const RARE_STORE_TABLES: Dictionary = {
+	"rail": [[4, "plank", 2], [4, "scrap", 2], [2, "nails", 1], [2, "gears", 1], [2, "springs", 1], [1, "wire_coil", 1], [2, "food_pack", 1], [1, "cloth", 1]],
+	"arms": [[2, "ammo_pistol", 1], [1, "ammo_shell", 1], [3, "bandage", 2], [2, "med_box", 1], [4, "food_pack", 1], [1, "flare", 1], [2, "cloth", 1]],
+	"winter": [[6, "food_pack", 1], [3, "cloth", 2], [3, "plank", 2], [2, "bottle_spirit", 1], [2, "med_box", 1], [2, "luxury_pack", 1]],
+}
+## The rare thing. Rail: a core half the time, else a crate of parts stuff
+## (RARE_PARTS of them). Arms: a gun by weight and so many of its rounds.
+## Winter: a fur garment and a fuel can. A core here may at most double what a
+## stop gives now (0.15 seen): the side path is one stop in four, so 0.125.
+const RARE_CORE_CHANCE: float = 0.5
+const RARE_CORE: String = "core_engine"
+const RARE_PARTS: Vector2i = Vector2i(4, 6)
+const RARE_GUNS: Array = [["pistol", 3], ["shotgun", 2]]
+const RARE_GUN_ROUNDS: Dictionary = {"pistol": ["ammo_pistol", 2], "shotgun": ["ammo_shell", 2]}
+const RARE_FURS: Array = [["coat_wool_long", 1], ["boots_fur", 1]]
+
 
 static func _has_word(name: String, words: Array) -> bool:
 	var tokens: PackedStringArray = name.split(" ", false)
@@ -225,15 +273,42 @@ static func _has_word(name: String, words: Array) -> bool:
 	return false
 
 
-## The room a box stands in ("storage" when its name says nothing).
+## The room a box stands in: its "room" key (name_keys), else what its name
+## says ("storage" when it says nothing).
 static func room_of(c: Dictionary) -> String:
 	if c.has("room") and AFFINITY.has(String(c["room"])):
 		return String(c["room"])
-	var n: String = String(c.get("name", ""))
+	return room_of_box(c)
+
+
+## A box's room without a key: what the furniture it stands in says, else its name.
+static func room_of_box(c: Dictionary) -> String:
+	var by_furniture: String = String(FURNITURE_ROOM.get(String(c.get("furniture", "")), ""))
+	return by_furniture if by_furniture != "" else room_of_name(String(c.get("name", "")))
+
+
+static func room_of_name(n: String) -> String:
 	for kind in ROOM_ORDER:
 		if _has_word(n, ROOM_WORDS[kind]):
 			return kind
 	return "storage"
+
+
+## The keys the loot reads instead of names (J06): each box's "room" and each
+## building's "loot_kind", read once unless the map gives them — a box's room from
+## the furniture it stands in when that says one (FURNITURE_ROOM, card I), else
+## from the words of its name — and written on the map's rows, so what is
+## dressed no longer follows a name once the keys are there (LootRules.place_keys
+## does the same for where the fallen stood).
+static func name_keys(data: Dictionary) -> void:
+	var containers: Dictionary = data.get("containers", {})
+	for id in containers:
+		var c: Dictionary = containers[id]
+		if not (c.has("room") and AFFINITY.has(String(c["room"]))):
+			c["room"] = room_of_box(c)
+	for b in data.get("buildings", []):
+		if b is Dictionary and not (b as Dictionary).has("loot_kind"):
+			b["loot_kind"] = building_kind(String(b.get("name", "")))
 
 
 ## What a building is by its name ("" for none of these).
@@ -397,12 +472,14 @@ static func name_pocket(id: String, salt: int) -> String:
 
 ## Dress the stop in place. data: the map's dictionary (containers, buildings,
 ## place_kind). Returns what was done, for the tests and the measuring tool:
-## {"moved", "named", "finds": [[id, box]], "rare": id or "", "fragment": id or ""}.
+## {"moved", "named", "finds": [[id, box]], "rare": id or "", "fragment": id or "",
+## "store": kind or ""}.
 static func dress(data: Dictionary, seed: int) -> Dictionary:
 	var containers: Dictionary = data.get("containers", {})
 	var buildings: Array = data.get("buildings", [])
 	var place_kind: String = String(data.get("place_kind", ""))
-	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "fragment": ""}
+	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "fragment": "", "store": ""}
+	name_keys(data)
 	# 1. Within each building, the bundles go where the room says.
 	# The odds and ends go in first, as the reference rolls them, and stay where
 	# they are put (loot_junk.gd).
@@ -423,6 +500,8 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 		(by_building[b] as Array).append(id)
 	for b: int in by_building:
 		report["moved"] += _deal(containers, by_building[b], _rng(seed, "deal:%d" % b))
+	# 1b. The rare store, if the stop has one, is filled anew (its own dice).
+	_rare_store(containers, buildings, place_kind, seed, report)
 	# 2. Every bundle gets its name; boxes of one room split the themes (THEMES).
 	var themes := room_themes(containers, buildings, place_kind, _rng(seed, "themes"))
 	var name_rng := _rng(seed, "names")
@@ -457,7 +536,8 @@ static func _building_kind_of(buildings: Array, c: Dictionary) -> String:
 	var b: int = int(c.get("building", -1))
 	if b < 0 or b >= buildings.size():
 		return ""
-	return building_kind(String((buildings[b] as Dictionary).get("name", "")))
+	var bd: Dictionary = buildings[b]
+	return String(bd["loot_kind"]) if bd.has("loot_kind") else building_kind(String(bd.get("name", "")))
 
 
 ## Take the movable things out of these boxes and deal them again by room.
@@ -479,8 +559,9 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 		var weights: Array = []
 		for id: String in ids:
 			var w := 0.0
-			if (containers[id]["items"] as Array).size() < CAP:
-				w = float(AFFINITY[room_of(containers[id])][family])
+			var c: Dictionary = containers[id]
+			if (c["items"] as Array).size() < CAP and _dealt_load(c) + _dealt_weight(row[0]) <= Carry.box_limit(c):
+				w = float(AFFINITY[room_of(c)][family])
 			weights.append(w)
 			total += w
 		var to: String = row[1]
@@ -495,6 +576,18 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 		if to != row[1]:
 			moved += 1
 	return moved
+
+
+## What a thing weighs while the boxes are dealt: a bundle at the most its name can.
+static func _dealt_weight(item: String) -> float:
+	return NAMED_MOST if FieldItems.BUNDLES.has(item) else Carry.item_weight(item)
+
+
+static func _dealt_load(c: Dictionary) -> float:
+	var t := 0.0
+	for item in c.get("items", []):
+		t += _dealt_weight(String(item))
+	return t
 
 
 static func _boxes(containers: Dictionary, buildings: Array, rooms: Array, kinds: Array) -> Array:
@@ -695,3 +788,70 @@ static func _fragment(containers: Dictionary, place_kind: String, seed: int, rep
 	(containers[at]["items"] as Array).append(piece)
 	report["fragment"] = piece
 	(report["finds"] as Array).append([piece, at])
+
+
+## The id of the building that is the rare store, as a box's "building" names it (its place
+## in the list for a map whose buildings carry no id); -1 for a stop without one.
+static func rare_store_of(buildings: Array) -> int:
+	for i in buildings.size():
+		var b: Dictionary = buildings[i]
+		if String(b.get("name", "")) == RARE_STORE:
+			return int(b.get("id", i))
+	return -1
+
+
+## A [weight, item, count] row by weight.
+static func _row(rows: Array, rng: RandomNumberGenerator) -> Array:
+	var total := 0.0
+	for r: Array in rows:
+		total += float(r[0])
+	var at := rng.randf() * total
+	for r: Array in rows:
+		at -= float(r[0])
+		if at < 0.0:
+			return r
+	return rows[rows.size() - 1]
+
+
+## Fill the rare store's boxes (RARE_STORE_TABLES) and put its rare thing in one.
+static func _rare_store(containers: Dictionary, buildings: Array, place_kind: String, seed: int, report: Dictionary) -> void:
+	var b := rare_store_of(buildings)
+	if b < 0:
+		return
+	var kind: String = RARE_STORE_KIND.get(place_kind, "rail")
+	var ids: Array = []
+	for id: String in containers:
+		if int(containers[id].get("building", -1)) == b and not containers[id].has("pick"):
+			ids.append(id)
+	if ids.is_empty():
+		return
+	ids.sort()
+	var rng := _rng(seed, "rare_store")
+	for id: String in ids:
+		var items: Array = []
+		for r in range(RARE_STORE_ROLLS):
+			var row := _row(RARE_STORE_TABLES[kind], rng)
+			for k in range(int(row[2])):
+				items.append(String(row[1]))
+		containers[id]["items"] = items
+	var rare: Array = []
+	match kind:
+		"rail":
+			if rng.randf() < RARE_CORE_CHANCE:
+				rare.append(RARE_CORE)
+			else:
+				for k in range(rng.randi_range(RARE_PARTS.x, RARE_PARTS.y)):
+					rare.append(_pick(PARTS_KINDS, rng))
+		"arms":
+			var gun := _pick(RARE_GUNS, rng)
+			rare.append(gun)
+			for k in range(int(RARE_GUN_ROUNDS[gun][1])):
+				rare.append(String(RARE_GUN_ROUNDS[gun][0]))
+		"winter":
+			rare.append(_pick(RARE_FURS, rng))
+			rare.append("fuel_can")
+	var into: String = ids[rng.randi_range(0, ids.size() - 1)]
+	for item: String in rare:
+		(containers[into]["items"] as Array).append(item)
+		(report["finds"] as Array).append([item, into])
+	report["store"] = kind

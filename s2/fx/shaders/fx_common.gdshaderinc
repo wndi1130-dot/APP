@@ -18,6 +18,9 @@ global uniform vec4 fx_sky : source_color;
 // Cloud shadows crossing the ground: x cover, yz drift (m/s), w how much of the
 // light they take (0 under a closed sky, where there is no sun to block).
 global uniform vec4 fx_cloud;
+// The sight mask's floors: x for ground never seen, y for ground seen before
+// (seen now is full). Lighter by day, dark after dark (fx/fx_state.gd sight_floor).
+global uniform vec2 fx_sight;
 
 // Mobile budget: value noise with two octaves, no textures.
 float fx_hash(vec2 p) {

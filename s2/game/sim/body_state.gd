@@ -73,6 +73,9 @@ var cold_level: int = 0          # last cold_level seen by tick(), for icons
 var _heavy_reported: bool = false
 var _level_seen: int = 0         # bleed level at the last change, to reset timers on a drop
 var breath_locked: bool = false
+## Out from a train under the emergency ration law (decision 430): breath and
+## the stop's stamina run short sooner (Stamina.RATION_CUT_STAMINA).
+var ration_cut: bool = false
 
 ## Stored values only: derived wound properties must not run their setters on restore.
 const SAVE_FIELDS: Array[String] = [
@@ -190,7 +193,8 @@ func add_wound(part: String, kind: String, now: float, blood: float = -1.0) -> i
 func apply_bite(_rng: RandomNumberGenerator, part: String, now: float) -> void:
 	# Already infected: the window runs on (a closed one stays closed); a new bite never resets it.
 	var was_infected: bool = infected
-	var i: int = add_wound(_fine_part(part, "bite"), "bite", now)
+	# A bite on the head or the neck bleeds as a deep wound (결정 441 (5)); the others as before.
+	var i: int = add_wound(_fine_part(part, "bite"), "bite", now, 1.0 if part == "head_neck" else -1.0)
 	if i >= 0:
 		wounds[i]["risk"] = true
 		wounds[i]["infects"] = true
@@ -738,7 +742,7 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 	effort["torso_effort"] = torso_effort()
 	var stamina := Stamina.advance(exhaustion, breath, delta, effort)
 	exhaustion = stamina.x
-	breath = stamina.y
+	breath = minf(stamina.y, _stamina_share())
 	_update_breath_lock()
 	if exhaustion_level() == 2:
 		if not _heavy_reported:
@@ -751,11 +755,18 @@ func tick(delta: float, ctx: Dictionary) -> Array:
 
 
 func exhaustion_level() -> int:
-	if exhaustion >= Stamina.FATIGUE_HEAVY:
+	var share := _stamina_share()
+	if exhaustion >= Stamina.FATIGUE_HEAVY * share:
 		return 2
-	if exhaustion >= Stamina.FATIGUE_LIGHT:
+	if exhaustion >= Stamina.FATIGUE_LIGHT * share:
 		return 1
 	return 0
+
+
+## How much of a fed body's breath and stamina this one has (1, or less under
+## the ration law).
+func _stamina_share() -> float:
+	return Stamina.RATION_CUT_STAMINA if ration_cut else 1.0
 
 
 func can_run() -> bool:
@@ -937,6 +948,8 @@ func icons() -> Array:
 		rest.append({"id": "cold", "severe": cold_level >= 3, "faint": cold_level == 1})
 	if exhaustion_level() >= 1:
 		rest.append({"id": "exhaustion", "severe": exhaustion_level() >= 2})
+	if ration_cut:
+		rest.append({"id": "ration", "severe": false})
 	for icon: Dictionary in rest:
 		if bool(icon["severe"]):
 			severe.append(icon)
@@ -1027,6 +1040,10 @@ func status_notes() -> Array:
 				row["short"] = "지침"
 				row["title"] = "심한 탈진" if severe else "탈진"
 				row["text"] = "뛰지 못한다. 휘두르기가 느리고 조준이 흔들린다. 실내에서 쉬면 풀린다" if severe else "휘두르기와 손일이 느리고 조준이 천천히 줄어든다. 실내에서 쉬면 풀린다"
+			"ration":
+				row["short"] = "법"
+				row["title"] = "비상식량감축법"
+				row["text"] = "덜 먹은 몸이라 숨이 빨리 차고 빨리 지친다. 법이 없어지면 다음 정차부터 풀린다"
 		out.append(row)
 	return out
 

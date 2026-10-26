@@ -273,16 +273,20 @@ func test_stories_keep_the_amount_the_ban_lines_and_the_way_to_every_box() -> vo
 			var out := RoomStories.apply(d, _dice(d, s))
 			var big := 0
 			var small := 0
+			var stash := 0
 			var seen: Dictionary = {}
 			for row: Dictionary in out:
 				assert_false(seen.has(row["building"]), tag + ": 건물마다 이야기 하나")
 				seen[row["building"]] = true
 				if row["story"] == "small":
 					small += 1
+				elif row["story"] == "floor_stash":
+					stash += 1
 				else:
 					big += 1
 			assert_lte(big, RoomStories.BUILDINGS_MAX, tag)
 			assert_lte(small, RoomStories.SMALL_MAX, tag)
+			assert_lte(stash, 1, tag + ": 마루 밑 숨긴 칸은 많아야 한 곳")
 			assert_eq(_items(d), items, tag + ": 양 그대로")
 			assert_eq(d["spawns"].get("dead_levels", []), dead, tag + ": 망자 그대로")
 			assert_eq(_lost(reach, _box_reach(d)), [], tag + ": 닿지 않게 된 상자")

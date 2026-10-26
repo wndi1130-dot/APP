@@ -247,6 +247,8 @@ static func _signal_box(data: Dictionary) -> void:
 	up1.set_solid(Vector2i(108, 7), S.LOW)
 	data["stoves"].append({"cell": Vector2i(108, 7), "building": 1, "lit": false, "upstairs": true, "level": 1})
 	_stair(data, Vector2i(107, 8), 0, 1, true)
+	# Upstairs by the cold stove live an old railwayman and his daughter (field_residents.gd, J21).
+	data["residents"] = {"building": 1, "level": 1, "cells": [Vector2i(105, 10), Vector2i(106, 9)], "name": "신호소 위층"}
 
 
 static func _street(data: Dictionary) -> void:
