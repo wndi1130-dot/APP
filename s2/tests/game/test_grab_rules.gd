@@ -33,12 +33,13 @@ func test_bite_location_crawler_always_leg() -> void:
 
 func test_bite_location_distribution() -> void:
 	var r := _rng(7)
-	var n := {"arm": 0, "torso": 0, "leg": 0}
+	var n := {"arm": 0, "torso": 0, "head_neck": 0, "leg": 0}  # the head and the neck too (결정 441 (5))
 	for _i in range(4000):
 		var k: String = G.bite_location(r, false)
 		n[k] += 1
 	assert_between(n["arm"] / 4000.0, 0.56, 0.64)
-	assert_between(n["torso"] / 4000.0, 0.22, 0.28)
+	assert_between(n["torso"] / 4000.0, 0.17, 0.23)  # 0.25 before the head and the neck took 0.05
+	assert_between(n["head_neck"] / 4000.0, 0.03, 0.07)
 	assert_between(n["leg"] / 4000.0, 0.12, 0.18)
 
 
