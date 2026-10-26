@@ -117,32 +117,47 @@ func test_a_companion_waits_when_it_takes_the_next_one() -> void:
 	assert_eq(p.swing_t, 0.0)
 
 
-func test_a_body_turns_over_time_and_is_not_there_in_one_frame() -> void:
+func test_a_body_turns_over_time_and_is_not_there_in_one_step() -> void:
 	ally = null
 	_start()
 	ally.turn_rate = deg_to_rad(400.0)
 	ally.look = 0.0
 	ally.facing = PI
 	assert_false(ally.turned_to(deg_to_rad(35.0)))
-	await get_tree().process_frame
-	var step: float = ally.turn_rate * get_process_delta_time()
-	ally.refresh_view(false)
+	ally.turn_tick(0.016)
 	var moved: float = absf(angle_difference(ally.look, 0.0))
-	assert_lte(moved, step + 0.001, "one frame turns it by rate times the frame time, no more")
-	assert_gt(absf(angle_difference(ally.look, ally.facing)), 0.0, "one frame does not turn it round")
-	var frames := 0
-	while not ally.turned_to(deg_to_rad(1.0)) and frames < 3000:
-		await get_tree().process_frame
-		ally.refresh_view(false)
-		frames += 1
+	assert_almost_eq(moved, ally.turn_rate * 0.016, 0.001, "one step turns it by rate times the step, no more")
+	assert_gt(absf(angle_difference(ally.look, ally.facing)), 0.0, "one step does not turn it round")
+	var steps := 0
+	while not ally.turned_to(deg_to_rad(1.0)) and steps < 3000:
+		ally.turn_tick(0.016)
+		steps += 1
 	assert_true(ally.turned_to(deg_to_rad(1.0)), "turned round in the end")
-	assert_almost_eq(absf(angle_difference(ally.rotation.y, PI)), 0.0, 0.03)
+	ally.refresh_view(false)
+	assert_almost_eq(absf(angle_difference(ally.rotation.y, PI)), 0.0, 0.03, "the picture draws the rules' turn")
 	# No turn rate: as before, at once, always turned.
 	ally.turn_rate = 0.0
 	ally.facing = 1.0
+	ally.turn_tick(0.016)
 	ally.refresh_view(false)
 	assert_eq(ally.rotation.y, 1.0)
 	assert_true(ally.turned_to(0.0))
+
+
+# Decision 442 card C2: the turn is on the rules' clock. A field stepped with no
+# frame drawn (the 40 runs) turns its people as the one on screen does, and a
+# drawn frame alone does not turn them.
+func test_the_rules_step_turns_the_bodies_and_a_frame_alone_does_not() -> void:
+	ally = null
+	_start()
+	game._turn_people(0.0)
+	assert_gt(ally.turn_rate, 0.0, "the rules give the rate")
+	ally.look = 0.0
+	ally.facing = PI
+	ally.refresh_view(false)
+	assert_eq(ally.look, 0.0, "a frame drawn does not turn it")
+	game._turn_people(0.1)
+	assert_almost_eq(absf(angle_difference(ally.look, 0.0)), ally.turn_rate * 0.1, 0.001, "a rules step does")
 
 
 func test_a_companion_does_not_swing_until_it_faces_the_target() -> void:

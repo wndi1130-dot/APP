@@ -1561,9 +1561,6 @@ func _process(delta: float) -> void:
 		view.set_mask_shade(smoothstep(0.0, 1.0, mask_in))
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
-		if p != player and p.turn_rate <= 0.0:
-			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
-			p.look = p.facing
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
 		p.refresh_view(p.visible)
 	hud.tick(delta)
@@ -1571,10 +1568,22 @@ func _process(delta: float) -> void:
 	music.tick(delta)
 
 
+## The drawn bodies of the AI people come round on the rules' clock, each at
+## its own rate near TURN_DEG_PER_S (decision 442 card C2: it was the frame's,
+## so the rules that wait on a turn did not play in a field run on _step alone).
+func _turn_people(delta: float) -> void:
+	for p in people:
+		if p != player and p.turn_rate <= 0.0:
+			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
+			p.look = p.facing
+		p.turn_tick(delta)
+
+
 func _step(delta: float) -> void:
 	clock.advance(delta)
 	weather.dusk = clock.dusk_share()
 	var now := clock.elapsed
+	_turn_people(delta)
 	radio_t -= delta
 	_tick_radio(delta)
 	for p in people:
