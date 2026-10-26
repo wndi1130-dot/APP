@@ -9,6 +9,7 @@ const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const KitPick = preload("res://game/politics/kit_pick.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const Wear = preload("res://game/sim/wear.gd")
+const Receipt = preload("res://game/sim/receipt.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const V = preload("res://tests/politics/field_vectors.gd")
 
@@ -84,6 +85,44 @@ func test_a_short_wardrobe_sends_some_out_with_no_coat_and_says_so() -> void:
 			said = t
 	assert_true(said.contains(String(game.squad[1].display_name)), said)
 	assert_false(said.contains(String(chief.display_name)), "the chief has one")
+
+
+func test_what_comes_back_of_the_wardrobe_goes_on_the_receipt() -> void:
+	assert_eq(Wear.OUTER_PLACES, TrainDom.WARDROBE_SLOTS, "the receipt's places are the wardrobe's")
+	var g := _state(true)
+	g["dom"]["wardrobe"] = [{"id": "jacket_short", "condition": 0.6, "holes": {"torso": true}}, {"id": "gloves", "condition": 1.0}]
+	var game = _game(_departure(g))
+	var chief = game.squad[0]
+	# A long coat picked up in the field and worn back; the companions went with no gloves.
+	Wear.put_on(chief, Wear.make("coat_long"))
+	# A torn jacket and a shirt put aboard at the platform.
+	var torn := Wear.make("jacket_short")
+	torn["wear"] = 0.75
+	torn["holes"] = {"arm_left": true}
+	game.loaded_wear.append(torn)
+	game.loaded_wear.append(Wear.make("shirt_cotton"))
+	for q in game.squad:
+		q.position = game.lift(game.data["boarding"][0].position + Vector2i(game.data["boarding"][0].size.x / 2, 0), 0)
+	game.finish("departed")
+	var r: Dictionary = JSON.parse_string(JSON.stringify(game.receipt.to_dict()))
+	assert_eq(Receipt.check(r), [] as Array[String])
+	var back: Dictionary = r["crew"][0]["gearBack"]["wear"]
+	assert_eq(back["jacket"]["id"], "jacket_short")
+	assert_almost_eq(float(back["jacket"]["condition"]), 0.6, 0.001, "as it went out")
+	assert_eq(back["jacket"]["holes"], {"torso": true})
+	assert_eq(back["coat"]["id"], "coat_long", "the coat picked up comes too")
+	assert_eq(r["crew"][0]["gearBack"]["wear"]["hands"]["id"], "gloves")
+	assert_eq(r["crew"][1]["gearBack"]["wear"]["hands"], "", "bare hands back as out")
+	assert_false(r["crew"][1]["gearBack"]["wear"].has("coat"), "no coat on, no coat place")
+	assert_eq(r["wardrobeIn"], [{"id": "jacket_short", "condition": 0.25, "holes": {"arm_left": true}}], "the shirt has no place in the wardrobe")
+	assert_false(r.has("luresBack"), "no lures went out")
+
+
+func test_the_receipt_refuses_a_bad_wardrobe_row() -> void:
+	var bad: Array[String] = Receipt.check({"wardrobeIn": [{"id": "jacket_short", "condition": 1.5}], "luresBack": {"clockwork": -1}, "version": 5})
+	assert_true(bad.has("wardrobeIn.0: 옷장 꼴이 아님"), str(bad))
+	assert_true(bad.has("luresBack.clockwork: 0 이상 정수가 아님"), str(bad))
+	assert_true(Receipt.check({"wardrobeIn": [], "version": 4}).has("wardrobeIn: 모르는 칸"), "a v5 key only")
 
 
 func test_the_best_kept_coat_goes_first_and_another_for_the_place_will_do() -> void:
