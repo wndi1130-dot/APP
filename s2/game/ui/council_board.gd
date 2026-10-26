@@ -13,9 +13,13 @@ extends Control
 ## Stones (tex/stone_*.png, the mockup's gradients): y yes, blue · u undecided,
 ## grey · s a no that can be won, pale red with a dark rim · n a no that will
 ## not move, dark red (after the vote every no) · a away from the session, an
-## empty socket (the mockup has every seat filled; the game counts the away).
-## In a wedge they fill a column at a time from the inside out: yes, undecided,
-## the soft no, the hard no, the away, so each reads as one mass.
+## empty socket (the mockup has every seat filled; the game counts the away) ·
+## p a vote a bribe or a debt has the leader bring (council_vote.gd deals: it
+## comes at the group's cohesion), grey in the lamp-amber dashed ring of the
+## mockup's deal preview. In a wedge they fill a column at a time from the
+## inside out: yes, undecided, the brought, the soft no, the hard no, the away,
+## so each reads as one mass. A deal looked at before it is made rings the
+## seats it would bring the same way, a pale blue stone in them (.st__to · .st__pre).
 ##
 ## The numbers are the model's (council_card.gd model): seats and the four
 ## counts a group, the yes in hand, expected and at most, and the need.
@@ -106,6 +110,9 @@ var _clock: float = -1.0
 var _yes_shown: int = 0
 var _labels: Dictionary = {}
 var _glow: GradientTexture2D
+## The deal looked at: its group and the seats it would bring.
+var _pre_g: int = -1
+var _pre: Array = []
 
 
 func _init() -> void:
@@ -175,6 +182,7 @@ static func kinds_before(c: Dictionary) -> Array:
 	var out: Array = []
 	var y: int = int(c["yes"])
 	var u: int = int(c["und"])
+	var pool: int = int(c.get("pool", 0))
 	var no: int = int(c["no"])
 	var soft: int = no - int(c["hard"])
 	for i in int(c["seats"]):
@@ -182,9 +190,11 @@ static func kinds_before(c: Dictionary) -> Array:
 			out.append("y")
 		elif i < y + u:
 			out.append("u")
-		elif i < y + u + soft:
+		elif i < y + u + pool:
+			out.append("p")
+		elif i < y + u + pool + soft:
 			out.append("s")
-		elif i < y + u + no:
+		elif i < y + u + pool + no:
 			out.append("n")
 		else:
 			out.append("a")
@@ -192,7 +202,7 @@ static func kinds_before(c: Dictionary) -> Array:
 
 
 ## The turns of a count `res` (cast_vote's flips, in the order it took them):
-## each takes the next undecided seat of its group, to yes or to no.
+## each takes the next undecided or brought seat of its group, to yes or to no.
 static func turns_of(comms: Array, res: Dictionary) -> Array:
 	var ids: Array = []
 	var next: Array = []
@@ -206,11 +216,24 @@ static func turns_of(comms: Array, res: Dictionary) -> Array:
 			continue
 		var c: Dictionary = comms[gi]
 		var i: int = int(next[gi])
-		if i >= int(c["yes"]) + int(c["und"]):
+		if i >= int(c["yes"]) + int(c["und"]) + int(c.get("pool", 0)):
 			continue
 		next[gi] = i + 1
 		out.append({"g": gi, "i": i, "to": "y" if bool(f.get("yes", false)) else "n"})
 	return out
+
+
+## The seats deal `after` (that group's kinds were the deal made) would bring
+## in group `gi`: those that go to yes or to the brought; -1 clears it.
+func preview(gi: int, after: Array = []) -> void:
+	_pre_g = gi
+	_pre = []
+	if gi >= 0 and gi < kinds.size():
+		var now: Array = kinds[gi]
+		for i in mini(now.size(), after.size()):
+			if after[i] != now[i] and (after[i] == "y" or after[i] == "p"):
+				_pre.append(i)
+	queue_redraw()
 
 
 ## Pick group `gi` (-1: none). Nothing is picked once the vote is cast.
@@ -265,6 +288,8 @@ func show_model(m: Dictionary) -> void:
 	for c: Dictionary in comms:
 		kinds.append(kinds_before(c))
 	_yes_shown = int(m.get("got", 0))
+	_pre_g = -1
+	_pre = []
 	_build_labels()
 	queue_redraw()
 
@@ -273,6 +298,8 @@ func show_model(m: Dictionary) -> void:
 func play(res: Dictionary) -> void:
 	result = res
 	sel = -1
+	_pre_g = -1
+	_pre = []
 	var comms: Array = model.get("comms", [])
 	# After the vote every no is the same red.
 	for gi in kinds.size():
@@ -561,16 +588,35 @@ func _draw_seat(gi: int, i: int, at_css: Vector2) -> void:
 		var out_a: float = clampf(1.0 - since / 0.18, 0.0, 1.0)
 		if out_a > 0.0:
 			draw_texture_rect(SOCKET, rect, false, Color(1, 1, 1, out_a))
-			draw_texture_rect(STONES[_turn_from[key]], rect, false, Color(1, 1, 1, out_a))
+			draw_texture_rect(_stone(_turn_from[key]), rect, false, Color(1, 1, 1, out_a))
 		var f: float = LeverKeyMath.bezier(since / 0.26, 0.3, 1.6, 0.5, 1.0)
 		var s: float = lerpf(0.3, 1.0, f)
 		var r2 := Rect2(rect.get_center() - rect.size * s * 0.5, rect.size * s)
 		var a: float = clampf(f, 0.0, 1.0)
 		draw_texture_rect(SOCKET, r2, false, Color(1, 1, 1, a))
-		draw_texture_rect(STONES[kind], r2, false, Color(1, 1, 1, a))
+		draw_texture_rect(_stone(kind), r2, false, Color(1, 1, 1, a))
 		return
 	draw_texture_rect(SOCKET, rect, false)
-	draw_texture_rect(STONES[kind], rect, false)
+	draw_texture_rect(_stone(kind), rect, false)
+	if kind == "p":
+		_dashed_ring(rect.get_center(), 9.0 * k)
+	if gi == _pre_g and _pre.has(i):
+		# The deal looked at: a pale blue stone over it, the dashed ring round it.
+		draw_texture_rect(STONES["y"], rect, false, Color(1, 1, 1, 0.55))
+		_dashed_ring(rect.get_center(), 9.0 * k)
+
+
+## A seat's stone: the brought take the undecided's grey.
+func _stone(kind: String) -> Texture2D:
+	return STONES["u"] if kind == "p" else STONES[kind]
+
+
+## The deal ring (.st__pre: r 9, lamp amber, 1.6 wide, dashes 2.4 · 2.2).
+func _dashed_ring(c: Vector2, r: float) -> void:
+	var n: int = 12
+	for j in n:
+		var a0: float = TAU * float(j) / float(n)
+		draw_arc(c, r, a0, a0 + TAU / float(n) * 0.52, 4, AMBER, 1.6 * UiFonts.K, true)
 
 
 ## A group's plate (.hplate): dark enamel 22 high, radius 2, a lip of light along
