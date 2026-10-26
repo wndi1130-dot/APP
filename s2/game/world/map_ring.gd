@@ -18,6 +18,9 @@ const LOT_STEP := 22
 const TREE_STEP := 9
 const FENCE_PIECE := 7
 static var _finishing := false
+## Set while the plain map is built for a ring: its own path refresh is skipped, as the
+## ring builds every floor's grid anew at the larger size (field_maps.gd build_from).
+static var skip_paths := false
 
 
 static func width_for(kind: String) -> int:
@@ -39,7 +42,14 @@ static func plain_build(script: Script, finish: Callable) -> Dictionary:
 
 
 static func build(script: Script, finish: Callable) -> Dictionary:
-	return add(plain_build(script, finish))
+	skip_paths = true
+	var plain := plain_build(script, finish)
+	skip_paths = false
+	var data := add(plain)
+	if is_same(data, plain):
+		for g: FieldGrid in plain.get("levels", {0: plain["grid"]}).values():
+			g.refresh_paths()
+	return data
 
 
 static func add(original: Dictionary) -> Dictionary:
@@ -50,7 +60,7 @@ static func add(original: Dictionary) -> Dictionary:
 		return original
 	var old: FieldGrid = original["grid"]
 	var inner := Rect2i(width, width, old.width, old.height)
-	var data := MapShift.grow(original, width, width, width, width)
+	var data := MapShift.grow(original, width, width, width, width, false)
 	var g: FieldGrid = data["grid"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (String(data["place_id"]) + "|outer-village").hash()
@@ -134,6 +144,7 @@ static func add(original: Dictionary) -> Dictionary:
 	RoomFurnish.boxes_into_furniture(ring)
 	BuildingRules.dress_windows(ring)
 	LootRules.fill(ring["containers"], seed_value)
+	_keep_place_kinds(ring["containers"], data["containers"])
 	for y in range(g.height):
 		for x in range(g.width):
 			var c := Vector2i(x, y)
@@ -156,6 +167,26 @@ static func add(original: Dictionary) -> Dictionary:
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
 	return data
+
+
+## The outer houses belong to the same place: their boxes keep only the kinds of things the
+## place's own boxes hold, so a place whose boxes have none of a thing (the pass's scrap lies
+## only on its rails and core heap) gets none from its outer houses either.
+static func _keep_place_kinds(ring_boxes: Dictionary, place_boxes: Dictionary) -> void:
+	var kinds: Dictionary = {}
+	for id in place_boxes:
+		for it in place_boxes[id].get("items", []):
+			kinds[_item_id(it)] = true
+	for id in ring_boxes:
+		var kept: Array = []
+		for it in ring_boxes[id].get("items", []):
+			if kinds.has(_item_id(it)):
+				kept.append(it)
+		ring_boxes[id]["items"] = kept
+
+
+static func _item_id(it: Variant) -> String:
+	return String(it.get("id", "")) if it is Dictionary else String(it)
 
 
 ## The dead still come from beyond the map: a ground entry on the old border moves
