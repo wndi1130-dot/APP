@@ -356,3 +356,25 @@ func test_low_cold_sun() -> void:
 	for path in ["res://game/field_game.gd", "res://fx/gallery.gd", "res://tools/map_preview.gd", "res://scripts/graybox.gd"]:
 		var code := FileAccess.get_file_as_string(path)
 		assert_true(code.contains("FxState.SUN_PITCH"), path)
+
+func test_the_side_path_woods_shade_the_ground_and_leave_the_way_in_open() -> void:
+	# The side path's trees shade the ground (결정 450): the belt darkest, a sparse tree
+	# less and the cells round it less still; the gap stays open to the sky.
+	var WoodsShade = load("res://fx/woods_shade.gd")
+	var sp := {"belt": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)], "woods": [Vector2i(6, 6)], "gap": [Vector2i(1, 0)]}
+	var d: Dictionary = WoodsShade.darkness(sp)
+	assert_almost_eq(float(d[Vector2i(0, 0)]), WoodsShade.BELT, 0.001)
+	assert_false(d.has(Vector2i(1, 0)), "the gap stays open")
+	assert_almost_eq(float(d[Vector2i(6, 6)]), WoodsShade.TREE, 0.001)
+	assert_almost_eq(float(d[Vector2i(7, 6)]), WoodsShade.NEAR, 0.001)
+	assert_gt(WoodsShade.BELT, WoodsShade.TREE)
+	assert_gt(WoodsShade.TREE, WoodsShade.NEAR)
+	var node = WoodsShade.new()
+	add_child_autofree(node)
+	node.setup(sp)
+	assert_not_null(node.mesh, "a sheet is laid")
+	assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var bare = WoodsShade.new()
+	add_child_autofree(bare)
+	bare.setup({})
+	assert_null(bare.mesh, "no side path, nothing laid")

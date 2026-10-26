@@ -14,6 +14,29 @@ func _person() -> Node3D:
 	return p
 
 
+class _Field:
+	var paused := false
+	var ended := false
+
+
+# Paused (the player's pause or the app away), the people stand still as the dead
+# and the train do (user field test 10-25: they walked and breathed on through a
+# pause); at the end, the train leaving, they go on.
+func test_the_people_stand_still_while_the_field_is_paused() -> void:
+	var field := _Field.new()
+	assert_eq(PersonVisual.frame_delta(field, 0.1), 0.1)
+	field.paused = true
+	assert_eq(PersonVisual.frame_delta(field, 0.1), 0.0)
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [])
+	var t: float = float(note["t"])
+	PersonVisual.motion_of(p, note, PersonVisual.frame_delta(field, 0.5), [])
+	assert_eq(float(note["t"]), t, "the clock of its motion stands")
+	field.ended = true
+	assert_eq(PersonVisual.frame_delta(field, 0.1), 0.1, "at the end it goes on")
+
+
 func test_the_motion_follows_what_the_person_is_doing() -> void:
 	var p := _person()
 	var note := {}
@@ -178,6 +201,9 @@ func test_held_bitten_and_the_shove_in_their_own_motions() -> void:
 	p.shove_t = 0.0
 	p.lunge_t = PersonVisual.Pose.LUNGE
 	assert_almost_eq(PersonVisual.motion_of(p, note, 0.1, [], own).x, PersonVisual.SHOVE_OUT.x, 0.001, "out as it lands")
+	p.lunge_t = PersonVisual.Pose.LUNGE * 0.5
+	assert_almost_eq(PersonVisual.motion_of(p, note, 0.1, [], own).x, lerpf(PersonVisual.SHOVE_OUT.x, PersonVisual.SHOVE_OUT.y, 0.5), 0.001, "coming back")
+	assert_eq(PersonVisual.SHOVE_OUT.y, 1.0, "the whole shove is seen, back to where it started")
 
 
 # Two people standing do not breathe together.
@@ -414,7 +440,8 @@ func test_crouched_it_works_and_aims_low() -> void:
 	assert_eq(PersonVisual.aim_of(p, own), -1)
 	var note := {}
 	PersonVisual.motion_of(p, note, 0.3, [], own)
-	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)
+	# Crouched with a handgun: held low in both hands (gait.gd CROUCH_STAND).
+	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), String(PersonVisual.Gait.CROUCH_STAND["pistol"]))
 
 
 # Down, dragging itself, getting up and dying in the living's own (people folder

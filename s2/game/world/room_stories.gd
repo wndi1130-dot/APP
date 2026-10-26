@@ -36,8 +36,15 @@ const SMALL_PIECES: Array = [
 ]
 const KIND_NOTE: Dictionary = {
 	"drawer_chest_spilled": "다 열린 서랍장", "table_overturned": "넘어진 탁자",
-	"candle_stand": "촛대", "hand_basket": "수선 바구니",
+	"candle_stand": "촛대", "hand_basket": "수선 바구니", "loose_board": "들뜬 마루",
 }
+## 마루 밑 숨긴 칸(카드 K 가): 정차에 이 몫으로 한 곳, 사는 집 침실·거실 마루 한 칸(문·계단·창
+## 앞과 가구·상자 곁 칸은 빼고). 빈 숨은 상자 하나와 들뜬 마루 소품. 속은 loot_dress가 채운다.
+## 밟거나 곁을 지나면 작게 삐걱(field_game `_floor_creak`), 뒤지기는 짧다.
+const STASH_CHANCE: float = 0.3
+const STASH_CLASSES: Dictionary = {"bed": true, "living": true}
+const STASH_SEARCH: float = 2.0
+const STASH_NAME: String = "들뜬 마루 밑"
 
 
 ## 판 씨앗·장소로 이야기를 고르고 지도 자료에 얹는다. 돌려주는 값: 장소 상태에 남길
@@ -84,6 +91,15 @@ static func apply(data: Dictionary, dice_seed: int) -> Array:
 		if not storied.has(b) and _small(data, city, b, rng):
 			out.append({"story": "small", "building": b})
 			small += 1
+	# Last, so the stories above are the same with or without it; in a home with no story yet.
+	if rng.randf() < STASH_CHANCE:
+		var free: Array = []
+		for b: int in eligible:
+			if not out.any(func(row: Dictionary) -> bool: return row["building"] == b):
+				free.append(b)
+		var at := _floor_stash(data, city, free, rng)
+		if at >= 0:
+			out.append({"story": "floor_stash", "building": at})
 	for lv: int in city["changed"]:
 		(levels[lv] as FieldGrid).refresh_paths()
 	return out
@@ -430,6 +446,62 @@ static func _small(data: Dictionary, city: Dictionary, b: int, rng: RandomNumber
 		if not near.is_empty() and _place(data, city, room, row[0], [Vector2i.ONE], false, rng, near) != null:
 			return true
 	return false
+
+
+## 마루 밑 숨긴 칸 하나(카드 K): 건물 차례대로, 침실·거실을 섞어 처음 맞는 마루 칸. 건물 번호, 없으면 -1.
+static func _floor_stash(data: Dictionary, city: Dictionary, eligible: Array, rng: RandomNumberGenerator) -> int:
+	for b: int in eligible:
+		var rooms: Array = []
+		for room: Dictionary in city["homes"][b]:
+			if STASH_CLASSES.has(room["cls"]):
+				rooms.append(room)
+		_shuffle(rooms, rng)
+		for room: Dictionary in rooms:
+			var free := _open_floor(data, city, room)
+			if free.is_empty():
+				continue
+			var c: Vector2i = free[rng.randi_range(0, free.size() - 1)]
+			var lv: int = room["lv"]
+			var id := "floor_stash_%d" % b
+			data["containers"][id] = {"id": id, "name": STASH_NAME, "cell": c, "level": lv, "building": b,
+				"search": STASH_SEARCH, "items": [], "locked": false, "searched": false, "furniture": "loose_board", "stash": "floor"}
+			data["props"].append({"kind": "loose_board", "rect": Rect2i(c, Vector2i.ONE), "solid": "none",
+				"facing": rng.randi_range(0, 3), "level": lv, "building": b, "note": KIND_NOTE["loose_board"], "story": true})
+			data.get_or_add("floor_stashes", []).append({"id": id, "cell": c, "level": lv})
+			return b
+	return -1
+
+
+## 방의 빈 마루 칸 가운데 비울 칸(문·계단·창 앞)도, 가구·상자 칸과 그 곁도 아닌 칸.
+static func _open_floor(data: Dictionary, city: Dictionary, room: Dictionary) -> Array[Vector2i]:
+	var lv: int = room["lv"]
+	var ri: int = room["ri"]
+	var g: FieldGrid = data["levels"][lv]
+	var map: Dictionary = city["maps"][lv]
+	var of: PackedInt32Array = map["of"]
+	var cells: Array[Vector2i] = map["rooms"][ri]["cells"]
+	var forbid := RoomFurnish._forbidden(g, of, ri, cells, city["stairs"].get(lv, {}))
+	var near: Dictionary = {}
+	for p: Dictionary in data["props"]:
+		var pr: Variant = RoomFurnish._rect(p.get("rect"))
+		if int(p.get("level", 0)) != lv or pr == null:
+			continue
+		var grown: Rect2i = (pr as Rect2i).grow(1)
+		for y in range(grown.position.y, grown.end.y):
+			for x in range(grown.position.x, grown.end.x):
+				near[Vector2i(x, y)] = true
+	for id: String in data.get("containers", {}):
+		var box: Dictionary = data["containers"][id]
+		var bc: Variant = RoomFurnish._cell(box.get("cell"))
+		if int(box.get("level", 0)) == lv and bc != null:
+			for y in range(-1, 2):
+				for x in range(-1, 2):
+					near[(bc as Vector2i) + Vector2i(x, y)] = true
+	var out: Array[Vector2i] = []
+	for c in cells:
+		if g.solid_at(c) == S.NONE and not forbid.has(c) and not near.has(c):
+			out.append(c)
+	return out
 
 
 ## 방 안의 그 종류 가구 rect들.

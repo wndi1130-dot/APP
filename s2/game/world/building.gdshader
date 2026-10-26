@@ -227,9 +227,10 @@ void fragment() {
 	// 시야 가림(world_vis와 같은 셈). 지붕은 건물마다 고정 시야를 받는다(바깥벽 칸의 값).
 	vec4 cell = texture(vis, (w_pos.xz - n.xz * 0.1) / map_size);
 	vec2 seen = seen_fixed.x >= 0.0 ? seen_fixed : cell.rg;
-	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
+	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
-	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
+	// 기억의 회색도 가림이 켜졌을 때만(가림을 끄면 모두 보이는 것과 같다).
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
 	dimmed *= mix(1.0, indoor_dark, (1.0 - exposed) * (1.0 - clamp(cell.b * 2.0, 0.0, 1.0)));
 	ALBEDO = fx_photo(dimmed, fx_fade) * lit;
 	ROUGHNESS = rough;
