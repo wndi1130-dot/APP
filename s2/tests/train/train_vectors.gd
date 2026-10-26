@@ -52,7 +52,9 @@ static func diff(want: Variant, got: Variant, path: String = "") -> String:
 		var w := float(want)
 		var g := float(got)
 		if w == floorf(w) and absf(w) < 1e15:
-			return "" if g == w else "%s: want %s, got %s" % [path, w, g]
+			# Whole numbers stay exact, give or take the last bit: Godot's JSON
+			# parser reads S1's 0.9999999999999999 as 1.0.
+			return "" if absf(g - w) <= 1e-12 * maxf(1.0, absf(w)) else "%s: want %s, got %s" % [path, w, g]
 		return "" if absf(w - g) <= EPS else "%s: want %s, got %s" % [path, w, g]
 	if want is Array:
 		if not got is Array:

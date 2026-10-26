@@ -15,7 +15,7 @@ const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약
 	"tension": "긴장", "fear": "공포", "injured": "부상자"}
 const BASE_NAME: Array[String] = ["온기", "배급", "과밀", "노출"]
 ## The kinds whose S1 view runs withAfford itself (the rest only meet guardCosts).
-const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", "rescue", "bitten", "rep_sick"]
+const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", "rescue", "bitten", "rep_sick", "promise_ledger"]
 
 
 ## The card as S1 shows it: turn_cards.gd view's choices with S1's words, and
@@ -75,6 +75,14 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["body"] = ("\"%s이(가) 사흘째 일어나지 못한다. 회기엔 내가 나간다.\" 측근 %s이(가) 말한다." % [rep, s["leader"]["name"]]) if sick \
 				else "%s이(가) 앓다가 일어났다. 칸이 한숨 돌렸다." % rep
 			says = ["의무진을 보내라. 대표는 회기에 나와야 한다.", "대신 나온다는 자를 데려와라. 얼굴을 봐야겠다.", "대표가 누구든 표는 표다."] if sick else [""]
+		"promise_ledger":
+			# The result arc (council_log.gd): the car's leader brings the two broken
+			# promises; one more and the car takes no promise of the captain's.
+			var who: Dictionary = _leader(g, t, c)
+			out["speaker"] = who
+			out["focus"] = c
+			out["body"] = "%s이(가) 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 %s은(는) 열차장의 약속을 받지 않는다." % [who["name"], t["COMM_NAME"][c]]
+			says = ["내 잘못이다. 지금 갚겠다.", "지난 일이다. 앞을 보자."]
 		"need_warn":
 			var def: Dictionary = t["NEEDS"][card["text"]]
 			var warn: Array = def["warn"]
