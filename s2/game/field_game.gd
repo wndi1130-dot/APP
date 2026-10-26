@@ -408,12 +408,11 @@ func _ready() -> void:
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
 	place = FieldMaps.resolve(String(opts.get("place", "")))
-	if opts.get("map_data") is Dictionary:
-		_take_map(opts["map_data"])
-	else:
-		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
-		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
-		_take_map(SidePath.add(built, rng.seed))
+	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
+	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
+	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
+		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	_take_map(SidePath.add(stop_map, rng.seed))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
@@ -3073,7 +3072,8 @@ func finish(reason: String) -> void:
 
 
 ## The contract's side of the receipt (s3 contract 3): each departure promise as seen by those of
-## the squad who came back (the train judges it), and how each one aboard came back (v5 crew rows).
+## the squad who came back (the train judges it), how each one aboard came back (v5 crew rows,
+## with what they wear of the wardrobe's places), the outer things put aboard, the lures back.
 func _contract_end(boarded: Array) -> void:
 	if not contract_on():
 		return
@@ -3088,7 +3088,20 @@ func _contract_end(boarded: Array) -> void:
 		for h: Dictionary in p.hands:
 			if String(h.get("id", "")) != "":
 				hands.append([String(h["id"]), String(h.get("quality", "factory")), snappedf(float(h.get("condition", 1.0)), 0.01)])
-		receipt.set_crew_row(p.pid, p.body.exhaustion_level(), p.hunger_level, {}, hands, p.items)
+		receipt.set_crew_row(p.pid, p.body.exhaustion_level(), p.hunger_level, {}, hands, p.items, Wear.back_of(p))
+	# The outer things put aboard at the platform go to the wardrobe; the rest of what was put
+	# aboard has no place there.
+	var into: Array = []
+	for g: Dictionary in loaded_wear:
+		if Wear.OUTER_PLACES.has(Wear.slot_of(String(g.get("id", "")))):
+			var e := Wear.to_wardrobe(g)
+			if not e.is_empty():
+				into.append(e)
+	receipt.set_wardrobe_in(into)
+	# The train's lures are not handed out in the field yet: all come back.
+	var given_lures := int((opts["departure"].get("train", {}) as Dictionary).get("lures", 0))
+	if given_lures > 0:
+		receipt.set_lures_back({"clockwork": given_lures})
 
 
 func _save(result: Dictionary) -> void:

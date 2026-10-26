@@ -313,7 +313,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		for yy in range(floori(r.position.y), ceili(r.end.y)):
 			for xx in range(floori(r.position.x), ceili(r.end.x)):
 				var col := base.darkened(0.15) if f == F.RAIL and posmod(xx, 2) == 0 else base
-				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, col)
+				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, col, f)
 	if not p["runs"].is_empty():
 		var ground_node := MeshInstance3D.new()
 		ground_node.name = "Runs"
@@ -399,12 +399,15 @@ static func _model_mesh(path: String) -> Mesh:
 	return meshes.get(0, null)
 
 
-static func _quad(st: SurfaceTool, r: Rect2, y: float, color: Color) -> void:
+## `kind`: the floor kind, so the ground shader gives the run the map's own bare
+## look (world_vis bare_ground: asphalt, sleepers' gravel); -1 none.
+static func _quad(st: SurfaceTool, r: Rect2, y: float, color: Color, kind: int = -1) -> void:
 	var a := Vector3(r.position.x, y, r.position.y)
 	var corners := [a, a + Vector3(r.size.x, 0, 0), a + Vector3(r.size.x, 0, r.size.y), a + Vector3(0, 0, r.size.y)]
 	for idx in [0, 1, 2, 0, 2, 3]:
 		st.set_color(color)
 		st.set_normal(Vector3.UP)
+		st.set_uv2(Vector2(kind + 1, 0))
 		st.add_vertex(corners[idx])
 
 

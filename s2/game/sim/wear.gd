@@ -696,6 +696,36 @@ static func dress_from(p, d: Dictionary) -> void:
 			put_on(p, make(String(d[s])))
 
 
+## The places the train's wardrobe keeps (train_dom.gd WARDROBE_SLOTS): what comes back of them
+## goes on the receipt (s3 contract 3).
+const OUTER_PLACES: Array[String] = ["jacket", "coat", "hands"]
+
+
+## A garment worn made back into a wardrobe entry ({id, condition, holes?}), the other way of
+## from_wardrobe; {} for what is not a garment.
+static func to_wardrobe(g: Dictionary) -> Dictionary:
+	var id: String = String(g.get("id", ""))
+	if not is_garment(id):
+		return {}
+	var e := {"id": id, "condition": snappedf(clampf(1.0 - float(g.get("wear", 0.0)), 0.0, 1.0), 0.01)}
+	var holes: Dictionary = g.get("holes", {})
+	if not holes.is_empty():
+		e["holes"] = holes.duplicate()
+	return e
+
+
+## What `p` comes back in at the wardrobe's places (receipt gearBack.wear): jacket and hands
+## each an entry or "" for bare, and a coat only when one is on (picked up in the field).
+static func back_of(p) -> Dictionary:
+	var out := {}
+	for s: String in OUTER_PLACES:
+		var e: Dictionary = to_wardrobe(p.worn[s]) if p.worn.has(s) else {}
+		if e.is_empty() and s == "coat":
+			continue
+		out[s] = e if not e.is_empty() else ""
+	return out
+
+
 ## A garment as the train's wardrobe keeps it ({id, condition, holes?}, train_dom.gd) made
 ## into the state worn: its wear is what its condition lacks.
 static func from_wardrobe(entry: Dictionary) -> Dictionary:

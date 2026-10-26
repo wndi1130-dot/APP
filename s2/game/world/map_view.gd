@@ -735,6 +735,171 @@ static func sky_alpha(g: FieldGrid, c: Vector2i) -> float:
 	return 0.0 if g.indoor(c) else 1.0
 
 
+## A road this wide across or more is a street: a centre line, pavement beside it.
+const STREET_WIDTH: int = 4
+## Narrower than this across: a footpath, paved like the pavement.
+const PATH_WIDTH: int = 3
+
+## What the ground shader draws on each cell beyond its floor kind (world_vis
+## bare_ground, 결정 469 C1·C4: road, pavement, yard soil, dry grass). Picture
+## only: the floor kind stays the rule (sound, speed). The first width*height
+## values are the cells:
+##   open ground (SNOW, DEEP_SNOW) out of doors: 0 grass, -1 pavement along x,
+##   -2 along z, -3 a pavement corner;
+##   ROAD: bits 0~3 the sides (N, E, S, W) that meet open ground (kerb and
+##   gutter), bit 4 a centre line along x, bit 5 along z, bits 6~8 where it lies
+##   across the cell in quarter metres, bit 9 a footpath;
+##   PLATFORM: bits 0~3 the sides at the rails (edge stripe), bit 4 laid along x,
+##   bit 5 along z.
+## Then one value a corner of the grid, (width+1)*(height+1): how much bare soil
+## shows on grass there, 0..1 (trodden before doors, the strip at a wall's foot),
+## so the soil fades out over the cells instead of stopping at their edges.
+static func ground_details(g: FieldGrid) -> PackedFloat32Array:
+	# Plain arrays and index sums only: this runs over every cell of the map
+	# (48,000 on the largest), so no per-cell calls (stop load time).
+	var w := g.width
+	var h := g.height
+	var n := w * h
+	var fl := g.floor
+	var so := g.solid
+	var bu := g.building
+	var out := PackedFloat32Array()
+	out.resize(n + (w + 1) * (h + 1))
+	# How far each road and platform cell runs along x and along z: from, to.
+	var rx0 := PackedInt32Array()
+	var rx1 := PackedInt32Array()
+	var rz0 := PackedInt32Array()
+	var rz1 := PackedInt32Array()
+	rx0.resize(n)
+	rx1.resize(n)
+	rz0.resize(n)
+	rz1.resize(n)
+	for y in h:
+		var row := y * w
+		var x := 0
+		while x < w:
+			var k := fl[row + x]
+			if k != F.ROAD and k != F.PLATFORM:
+				x += 1
+				continue
+			var x1 := x
+			while x1 + 1 < w and fl[row + x1 + 1] == k:
+				x1 += 1
+			for i in range(row + x, row + x1 + 1):
+				rx0[i] = x
+				rx1[i] = x1
+			x = x1 + 1
+	for x in w:
+		var y := 0
+		while y < h:
+			var k := fl[y * w + x]
+			if k != F.ROAD and k != F.PLATFORM:
+				y += 1
+				continue
+			var y1 := y
+			while y1 + 1 < h and fl[(y1 + 1) * w + x] == k:
+				y1 += 1
+			for yy in range(y, y1 + 1):
+				rz0[yy * w + x] = y
+				rz1[yy * w + x] = y1
+			y = y1 + 1
+	# Where each street runs (1 along x, 2 along z), for the pavement beside it.
+	var street := PackedByteArray()
+	street.resize(n)
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			var f := fl[i]
+			if f != F.ROAD and f != F.PLATFORM:
+				continue
+			var len_x := rx1[i] - rx0[i] + 1
+			var len_z := rz1[i] - rz0[i] + 1
+			var bits := 0
+			# The sides N, E, S, W; off the map counts as more of the same.
+			var nb: Array[int] = [i - w if y > 0 else -1, i + 1 if x + 1 < w else -1, i + w if y + 1 < h else -1, i - 1 if x > 0 else -1]
+			for s in 4:
+				var j: int = nb[s]
+				if j < 0:
+					continue
+				var nf := fl[j]
+				if f == F.ROAD and nf != F.ROAD and nf != F.RAIL and nf != F.PLATFORM and nf != F.ICE:
+					bits |= 1 << s
+				elif f == F.PLATFORM and nf == F.RAIL:
+					bits |= 1 << s
+			# Along the longer run; a crossing (both long) has no direction.
+			var along := 0
+			if len_x >= len_z * 2:
+				along = 1
+			elif len_z >= len_x * 2:
+				along = 2
+			if f == F.PLATFORM:
+				bits |= along << 4
+			else:
+				var across := len_z if along == 1 else len_x if along == 2 else mini(len_x, len_z)
+				if across < PATH_WIDTH:
+					bits |= 1 << 9
+				elif across >= STREET_WIDTH and along > 0:
+					street[i] = along
+					# The line at the middle of the street, in this cell or on its edge;
+					# none where a side road joins (the street is wider there or beside it).
+					var c0 := rz0 if along == 1 else rx0
+					var c1 := rz1 if along == 1 else rx1
+					var mid := (c0[i] + c1[i] + 1) * 0.5
+					var at := mid - float(y if along == 1 else x)
+					var even := true
+					for j: int in ([nb[3], nb[1]] if along == 1 else [nb[0], nb[2]]):
+						if j >= 0 and fl[j] == F.ROAD and (c0[j] != c0[i] or c1[j] != c1[i]):
+							even = false
+					if even and at >= 0.0 and at <= 1.0:
+						bits |= (1 << 4) if along == 1 else (1 << 5)
+						bits |= int(round(at * 4.0)) << 6
+			out[i] = float(bits)
+	# Walls (and the building behind them) and doors, for the soil at their feet.
+	var wall := PackedByteArray()
+	wall.resize(n)
+	for i in n:
+		var s := so[i]
+		wall[i] = 2 if s == S.DOOR else 1 if (bu[i] >= 0 or s == S.WALL or s == S.WINDOW) else 0
+	# Pavement: open ground out of doors beside a street (corners too).
+	var soil := PackedFloat32Array()
+	soil.resize(n)
+	for y in h:
+		var y0 := maxi(y - 1, 0)
+		var y1 := mini(y + 1, h - 1)
+		for x in w:
+			var i := y * w + x
+			var f := fl[i]
+			if (f != F.SNOW and f != F.DEEP_SNOW) or bu[i] >= 0 or so[i] != S.NONE:
+				continue
+			var x0 := maxi(x - 1, 0)
+			var x1 := mini(x + 1, w - 1)
+			var along := 0
+			var near := 0
+			for yy in range(y0, y1 + 1):
+				for xx in range(x0, x1 + 1):
+					var j := yy * w + xx
+					along |= street[j]
+					near = maxi(near, wall[j])
+			if along > 0:
+				out[i] = -3.0 if along == 3 else -float(along)
+			elif near == 2:
+				soil[i] = 1.0
+			elif near == 1:
+				soil[i] = 0.7
+	# Soil a corner: the mean of the cells that meet there (walls count as soil,
+	# so the strip hugs them), read only by the grass cells around it.
+	for y in h + 1:
+		for x in w + 1:
+			var sum := 0.0
+			for yy in range(maxi(y - 1, 0), mini(y, h - 1) + 1):
+				for xx in range(maxi(x - 1, 0), mini(x, w - 1) + 1):
+					var j := yy * w + xx
+					# A door in a building's wall counts as wall here.
+					sum += 0.8 if wall[j] == 1 or (wall[j] == 2 and bu[j] >= 0) else soil[j]
+			out[n + y * (w + 1) + x] = sum * 0.25
+	return out
+
+
 ## Which way the walls stand from a corner of the ground grid (the point where
 ## four cells meet): +1 or -1 on each axis, 0 for none or both. Snow banks up
 ## there when the wind blows that way (world_vis). Nothing next to a door, so
@@ -783,6 +948,10 @@ func _build_ground() -> void:
 		for x in range(grid.width + 1):
 			banks.append(drift_uv(grid, Vector2i(x, y)))
 		await BuildPace.rest(pace)
+	# Worked out with the map off the main thread when it was (stop_loader.gd).
+	var details: PackedFloat32Array = data["_ground_details"] if data.get("_ground_details") is PackedFloat32Array else ground_details(grid)
+	data.erase("_ground_details")   # read once; not kept with the map
+	await BuildPace.rest(pace)
 	for y in range(grid.height):
 		await BuildPace.rest(pace)
 		for x in range(grid.width):
@@ -792,20 +961,26 @@ func _build_ground() -> void:
 				tools[tile] = _begin()
 			var st: SurfaceTool = tools[tile]
 			var f := grid.floor_at(c)
+			# One colour a kind: the shader gives the grain (no cell checker, 결정 469 C4).
 			var color := FLOOR_COLORS[f]
-			# Small checker noise so distance reads on a flat colour.
-			var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
-			color = Color(color.r + n, color.g + n, color.b + n)
 			if f == F.RAIL and (x % 2 == 0):
 				color = color.darkened(0.15)
 			color.a = sky_alpha(grid, c)
 			var a := Vector3(x, 0, y)
 			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
+			var cell_detail: float = details[grid.index(c)]
 			for idx in [0, 1, 2, 0, 2, 3]:
+				var corner := Vector2i(int(quad[idx].x), int(quad[idx].z))
 				st.set_color(color)
 				st.set_normal(Vector3.UP)
-				st.set_uv(banks[int(quad[idx].z) * (grid.width + 1) + int(quad[idx].x)])
-				st.set_uv2(Vector2(f + 1, 0))   # the floor kind for world_vis bare_ground (0: not ground)
+				st.set_uv(banks[corner.y * (grid.width + 1) + corner.x])
+				# The floor kind for world_vis bare_ground (0: not ground), and what is
+				# drawn on it: open grass takes the soil weight of its corner (smooth),
+				# every other cell its own code (ground_details).
+				var detail := cell_detail
+				if cell_detail == 0.0 and (f == F.SNOW or f == F.DEEP_SNOW):
+					detail = details[grid.width * grid.height + corner.y * (grid.width + 1) + corner.x]
+				st.set_uv2(Vector2(f + 1, detail))
 				st.add_vertex(quad[idx])
 	for tile in tools:
 		var node := _mesh_node()
