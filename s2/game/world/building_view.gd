@@ -88,6 +88,8 @@ var roofs: Dictionary = {}        # 건물 -> 노드
 var door_nodes: Dictionary = {}   # Vector3i(x, y, 층) -> {"node", "plan", "cut"}
 var window_nodes: Dictionary = {}
 var outer_cells: Dictionary = {}  # 건물 -> 바깥벽 칸 번호들(지붕 시야)
+var _outer_buildings: Dictionary = {} # 칸 번호 -> 닿는 건물 번호들
+var seen_buildings_checked: int = 0
 var outer_doors: Dictionary = {}  # 건물 -> 1층 바깥 문 칸들(문가에서는 열림을 둔다)
 var footprints: Dictionary = {}   # 건물 -> Rect2i(1층 사각형)
 var drawn_cells: Dictionary = {}  # 층 -> 실제 키트가 맡은 벽·문·창 칸
@@ -803,6 +805,10 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void
 			drawn_cells[key.y][c] = true
 	for b: int in p["outer"]:
 		outer_cells[b] = PackedInt32Array(p["outer"][b].keys())
+		for cell_index: int in outer_cells[b]:
+			if not _outer_buildings.has(cell_index):
+				_outer_buildings[cell_index] = {}
+			_outer_buildings[cell_index][b] = true
 	outer_doors = p["outer_doors"]
 	footprints = p["footprints"]
 	var bakes: Dictionary = {}
@@ -1151,8 +1157,16 @@ static func _window_plank_slots() -> Array:
 # ---------------------------------------------------------------- 시야와 매 틀
 
 ## 지붕은 바깥벽 칸 가운데 가장 밝게 본 값을 받는다(지붕 밑 칸은 늘 못 본 칸이라).
-func update_seen(vis_bytes: PackedByteArray) -> void:
-	for b: int in roofs:
+func update_seen(vis_bytes: PackedByteArray, changed: PackedInt32Array = PackedInt32Array()) -> void:
+	var touched: Dictionary = roofs if changed.is_empty() else {}
+	if not changed.is_empty():
+		for cell_index: int in changed:
+			for b: int in _outer_buildings.get(cell_index, {}):
+				if roofs.has(b):
+					touched[b] = true
+	seen_buildings_checked = 0
+	for b: int in touched:
+		seen_buildings_checked += 1
 		var now := 0
 		var before := 0
 		for i: int in outer_cells.get(b, PackedInt32Array()):

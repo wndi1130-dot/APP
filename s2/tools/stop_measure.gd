@@ -337,8 +337,19 @@ func _frames(f, vp: RID) -> Dictionary:
 ## One sight refresh (every 0.1 s in play: field_game.gd _refresh_vision, which
 ## refills the props too), one props refill alone and one step of all the dead,
 ## each timed apart, the median of TICKS calls; at the end, as the dead move.
+## vision_walk_ms steps the player a metre back and forth between calls, so the
+## sight changes every time (vision_ms, standing still, may find nothing to redo).
 func _ticks(f) -> Dictionary:
+	var home: Vector3 = f.player.position
+	var flip: Array[float] = [1.0]
+	var walk := _median_ms(func() -> void:
+		f.player.position.x += flip[0]
+		flip[0] = -flip[0]
+		f._refresh_vision())
+	f.player.position = home
+	f._refresh_vision()
 	return {"vision_ms": _median_ms(func() -> void: f._refresh_vision()),
+		"vision_walk_ms": walk,
 		"props_ms": _median_ms(func() -> void: f.view.refresh_props()),
 		"dead_ms": _median_ms(func() -> void: f.zombies.update(1.0 / 60.0)),
 		"dead": f.zombies.list.size()}
