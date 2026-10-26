@@ -562,7 +562,7 @@ func _whittled(p) -> void:
 ## An improvised weapon goes straight into a free hand (P23: one tap). Returns
 ## false when both hands are full.
 func _into_hand(p, id: String) -> bool:
-	if p.hands.size() >= 2 or not W.is_known(id) or String(W.get_data(id).get("kind", "")) != "melee":
+	if p.hands.size() >= 2 or not W.is_known(id) or not (String(W.get_data(id).get("kind", "")) == "melee" or W.is_ranged(id)):
 		return false
 	var h := {"id": id, "quality": "factory", "condition": 1.0, "loaded": 0}
 	if p.hands.is_empty():
@@ -1081,8 +1081,9 @@ func take(p, id: String, index: int, asked: bool = false) -> void:
 		dress(p, game.ground_items.size() - 1)
 		game.view.update_container(id)
 		return
-	# Something to hit with goes straight into a free hand (P23).
-	if not W.breaks(item) or not _into_hand(p, item):
+	# Something to hit with goes straight into a free hand (P23), and so does a
+	# gun from the rare store (card F), empty until it is loaded.
+	if not (W.breaks(item) or W.is_ranged(item)) or not _into_hand(p, item):
 		_receive(p, item, 1)
 	if item == "symbol_bell":
 		game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "bell", p)
@@ -2352,10 +2353,11 @@ func near_ground(p) -> Array:
 	return out
 
 
-## Put `id` from the bag into a searched box within reach (as many as a press moves).
+## Put `id` from the bag into a searched box within reach (as many as a press
+## moves and the box still takes, Carry.box_room).
 func store(p, box: String, id: String) -> bool:
 	var c: Dictionary = game.data["containers"].get(box, {})
-	var n: int = move_count(p, id)
+	var n: int = mini(move_count(p, id), Carry.box_room(c, id))
 	if n <= 0 or not SearchRules.can_take(c) or not _in_reach(p, _container_at(c)):
 		return false
 	p.take_item(id, n)

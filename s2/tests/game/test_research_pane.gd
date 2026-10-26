@@ -11,6 +11,7 @@ const FieldHud = preload("res://game/ui/field_hud.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
 
 
 ## The rows a press draws again are freed a frame later; let them go before GUT counts orphans.
@@ -170,3 +171,28 @@ func test_the_fold_key_folds() -> void:
 	watch_signals(p)
 	_key(p, "Fold").pressed.emit()
 	assert_signal_emitted(p, "folded")
+
+
+## On the train's home the 연구 room's pane stands where the car's did, as the
+## refit room's and the workshop's: one room at a time, folding brings the car
+## picked before back.
+func test_the_slice_opens_the_research_room() -> void:
+	var f = SliceFlow.new()
+	f.opts = {"skip_field": true, "seed": 3, "cinema": false}
+	add_child_autofree(f)
+	await wait_process_frames(1)
+	assert_eq(f.current(), "train")
+	assert_true((f.bar.open_rooms as Array).has("papers"), "the 연구 key opens a room, not 「준비 중」")
+	var was: String = f.sel
+	f._open_room("papers")
+	assert_true(is_instance_valid(f.research), "the research pane is up")
+	assert_eq(String(f.research.name), "ResearchPane")
+	assert_false(f.pane.visible, "the car's pane makes way")
+	f._open_room("wrench")
+	await wait_process_frames(1)
+	assert_false(is_instance_valid(f.research), "the refit room takes its place")
+	f._open_room("papers")
+	f._close_room()
+	await wait_process_frames(1)
+	assert_false(is_instance_valid(f.research))
+	assert_eq(f.sel, was, "folding brings back the car picked before the rooms")

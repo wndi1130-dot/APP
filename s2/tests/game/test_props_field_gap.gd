@@ -1,8 +1,8 @@
 extends "res://addons/gut/test.gd"
-## gap 장부/파일 이름 집합과 삼각형 예산(샛길 틈 세 갈래와 벽장 선반). 다른 묶음 파일은 대상에서 제외한다.
+## gap 장부/파일 이름 집합과 삼각형 예산(샛길 틈 세 갈래, 벽장 선반, 겨울 잡목 덤불). 다른 묶음 파일은 대상에서 제외한다.
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const KIT_DIR := "res://models/props_field"
-const EXPECTED_TEXT := "gap_wire gap_gate gap_planks small_shelf"
+const EXPECTED_TEXT := "gap_wire gap_gate gap_planks small_shelf thicket"
 
 
 func _assets() -> Dictionary:
@@ -10,9 +10,9 @@ func _assets() -> Dictionary:
 	return parsed.get("assets", {}) if parsed is Dictionary else {}
 
 
-func test_catalog_names_equal_the_four_gap_kinds() -> void:
+func test_catalog_names_equal_the_five_gap_kinds() -> void:
 	var assets := _assets()
-	assert_eq(assets.size(), 4, "빈 장부는 통과하지 않음")
+	assert_eq(assets.size(), 5, "빈 장부는 통과하지 않음")
 	var expected: PackedStringArray = EXPECTED_TEXT.split(" ", false)
 	var listed: PackedStringArray = PackedStringArray(assets.keys())
 	expected.sort()
@@ -51,3 +51,12 @@ func test_the_gaps_can_be_walked_through() -> void:
 	var assets := _assets()
 	for id: String in ["gap_wire", "gap_gate", "gap_planks"]:
 		assert_eq(String(assets.get(id, {}).get("solid", "")), "none", id)
+
+
+# The thicket reads as a mass from above with fewer triangles than the bare tree it
+# stands among (props_common bare_tree, 376).
+func test_the_thicket_is_lighter_than_a_bare_tree() -> void:
+	var thicket: Dictionary = _assets().get("thicket", {})
+	assert_lt(int(thicket.get("lod0_tris", 9999)), 376)
+	assert_gte(float(thicket.get("height_m", 0.0)), 1.5)
+	assert_lte(float(thicket.get("height_m", 9.0)), 2.5)
