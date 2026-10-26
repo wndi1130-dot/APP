@@ -2,7 +2,8 @@ extends RefCounted
 ## S1 council_log.ts: the council record and the result arc (정치 흐름 P1, 결정 439). A record, not a new gauge.
 ## The record keeps only its last rows; the promise counts (comms[c].kept·broken) and the lasting
 ## limit (openClosed) stay for the whole run. tests/politics/test_field_port.gd and
-## tests/train/test_train_turn.gd check it against S1 through the field and turn vectors.
+## tests/train/test_train_advance.gd check it against S1 through the field and turn vectors;
+## tests/politics/test_council_log.gd checks the arc branches.
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 
