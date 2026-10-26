@@ -5,6 +5,8 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
+const Carry = preload("res://game/sim/carry.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func _game() -> Node:
@@ -94,6 +96,67 @@ func test_by_the_train_the_hold_is_chosen_and_what_stays_cannot_go() -> void:
 	game.hud._inv_put("scrap")
 	assert_eq(int(game.unloaded.get("scrap", 0)), 2, "the kind goes aboard")
 	assert_false(p.items.has("scrap"))
+	game.hud._close_modal()
+
+
+func _box_load_text(hud) -> String:
+	var node: Node = hud.modal.find_child("BoxLoad", true, false)
+	if node == null:
+		return ""
+	var words: Array = node.find_children("*", "Label", true, false).map(func(l) -> String: return String(l.text))
+	return "".join(words).replace(UiFonts.WORD_JOINER, "")
+
+
+func test_a_box_takes_from_the_bag_only_up_to_its_limit() -> void:
+	assert_eq(Carry.box_limit({"furniture": "nightstand"}), Carry.BOX_SMALL)
+	assert_eq(Carry.box_limit({"furniture": "dresser"}), Carry.BOX_MID)
+	assert_eq(Carry.box_limit({"furniture": "crate_stack"}), Carry.BOX_BIG)
+	assert_eq(Carry.box_limit({}), Carry.BOX_BIG, "a box of its own is a crate")
+	assert_eq(Carry.box_limit({"furniture": "no_such_thing"}), Carry.BOX_MID)
+	var game = _game()
+	var p = game.player
+	var box := _at_a_box(game)
+	var c: Dictionary = game.data["containers"][box]
+	c["furniture"] = "nightstand"
+	c["items"] = ["food_pack", "food_pack", "food_pack", "food_pack", "food_pack"]
+	p.add_item("scrap", 2)
+	game.hud.loot(box)
+	assert_eq(_box_load_text(game.hud), "담긴 무게 5.0 / 6")
+	game.hud._inv_put("scrap")
+	assert_eq(c["items"].count("scrap"), 1, "one more fits")
+	assert_eq(_box_load_text(game.hud), "담긴 무게 6.0 / 6")
+	for b in game.hud.modal.find_child("Bag", true, false).find_children("*", "Button", true, false):
+		if String(b.text).begins_with(game.item_name("scrap")):
+			assert_true(b.disabled, "no room for the second")
+	game.hud._inv_put("scrap")
+	assert_eq(int(p.items.get("scrap", 0)), 1, "it stays in the bag")
+	# A handful goes in as far as it fits.
+	c["items"] = ["food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "document"]
+	p.add_item("ammo_pistol", 30)
+	game.hud._inv_put("ammo_pistol")
+	assert_eq(c["items"].count("ammo_pistol"), 5, "half a weight's room takes five rounds")
+	assert_eq(int(p.items.get("ammo_pistol", 0)), 25)
+	# The ground takes what the box does not.
+	game.hud._inv_place({"kind": "ground", "id": "", "name": "바닥"})
+	game.hud._inv_put("scrap")
+	assert_false(p.items.has("scrap"), "the ground has no limit")
+	game.hud._close_modal()
+
+
+func test_a_box_dressed_over_its_limit_still_gives() -> void:
+	var game = _game()
+	var p = game.player
+	p.items.clear()
+	var box := _at_a_box(game)
+	var c: Dictionary = game.data["containers"][box]
+	c["furniture"] = "nightstand"
+	c["items"] = ["food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "food_pack"]
+	game.hud.loot(box)
+	assert_eq(_box_load_text(game.hud), "담긴 무게 7.0 / 6", "what the map put there stays")
+	game.hud._loot_take(box, 0)
+	assert_eq(int(p.items.get("food_pack", 0)), 1, "and can be taken")
+	p.add_item("bandage", 1)
+	assert_eq(Carry.box_room(c, "bandage"), 0, "but nothing goes back while it is over")
 	game.hud._close_modal()
 
 

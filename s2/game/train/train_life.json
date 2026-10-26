@@ -2432,6 +2432,94 @@
           ],
           "yaw": 0,
           "material": "wood"
+        },
+        {
+          "id": "tool_board",
+          "model": "class_slate",
+          "at": [
+            4.2,
+            1.2,
+            -1.17
+          ],
+          "size": [
+            1.0,
+            0.7,
+            0.05
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "when": "always",
+          "grow": 1.3
+        },
+        {
+          "id": "board_wrench",
+          "model": "wrench",
+          "at": [
+            3.95,
+            1.2,
+            -1.13
+          ],
+          "size": [
+            0.12,
+            0.6,
+            0.08
+          ],
+          "yaw": 0,
+          "material": "iron",
+          "when": "always",
+          "grow": 1.4
+        },
+        {
+          "id": "board_wrench_b",
+          "model": "wrench",
+          "at": [
+            4.45,
+            1.2,
+            -1.13
+          ],
+          "size": [
+            0.1,
+            0.5,
+            0.07
+          ],
+          "yaw": 0,
+          "material": "iron",
+          "when": "always",
+          "grow": 1.2
+        },
+        {
+          "id": "tool_chest",
+          "model": "tool_chest",
+          "at": [
+            14.85,
+            0.3,
+            -0.45
+          ],
+          "size": [
+            0.8,
+            0.6,
+            0.42
+          ],
+          "yaw": 0,
+          "material": "iron",
+          "when": "always"
+        },
+        {
+          "id": "part_crate",
+          "model": "part_crate",
+          "at": [
+            6.0,
+            0.2,
+            -0.4
+          ],
+          "size": [
+            0.5,
+            0.4,
+            0.45
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "when": "always"
         }
       ],
       "spots": [
