@@ -181,7 +181,7 @@ void fragment() {
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
 	// Less on bare ground than under snow, so the blotches do not break the forms nor
 	// sink grass in a shadow under V 0.15 (결정 470 dark share).
-	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? 0.35 : 0.45;
+	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? 0.35 : (kind == 0 || kind == 5) ? 0.45 : 1.0;
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
 	base *= 1.0 - 0.35 * wet;
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
