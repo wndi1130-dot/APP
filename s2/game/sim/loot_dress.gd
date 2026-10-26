@@ -45,7 +45,8 @@ const ROOM_WORDS: Dictionary = {
 ## kind of room (room_furnish.gd PALETTE, and the kitchen's run of counters); a
 ## shelf or a crate stack, laid in several, says nothing and the name is read.
 ## Their rooms as ours: bed and living → bedroom, bath → bathroom, store → pantry,
-## boiler → toolbox. A key the map gives comes first, then this, then the name.
+## boiler, workshop and garage → toolbox. A key the map gives comes first, then this,
+## then the name.
 const FURNITURE_ROOM: Dictionary = {
 	"dresser": "bedroom", "wardrobe": "bedroom", "nightstand": "bedroom", "bookcase": "bedroom", "side_table": "bedroom",
 	"cupboard": "kitchen", "fridge_open": "kitchen", "counter": "kitchen",
@@ -53,7 +54,7 @@ const FURNITURE_ROOM: Dictionary = {
 	"desk": "office", "file_cabinet": "office",
 	"display_shelf": "shop", "shop_counter": "shop",
 	"jar_shelf": "pantry", "tin_crate": "pantry",
-	"toolbox": "toolbox",
+	"toolbox": "toolbox", "part_crate": "toolbox", "parts_rack": "toolbox", "hardware_rack": "toolbox",
 }
 ## How strongly each room draws each kind of thing (a weight; 0.3 is 「hardly
 ## ever」). The rooms with low weights everywhere are the ones often found empty.
