@@ -1232,8 +1232,9 @@ func _departure() -> Dictionary:
 ## bodies, kit, hunger and soreness, the promises riding on the stop).
 func _field_opts() -> Dictionary:
 	var o := {"seed": int(opts.get("seed", 1))}
-	# When the train comes in, rolled from the run's seed and the stop (decision 471 B0).
-	o["arrive_min"] = int(opts.get("arrive_min", FieldClock.arrival_for(int(opts.get("seed", 1)) * 1000 + step)))
+	# When the train comes in (decision 471 B0): the departure contract's, rolled by the train
+	# from its run's seed and stretch; a contract without one, from the slice's seed and step.
+	o["arrive_min"] = int(opts.get("arrive_min", _departure().get("arriveMin", FieldClock.arrival_for(int(opts.get("seed", 1)) * 1000 + step))))
 	# The stop is drawn in the same cold as the stretch that brought the train
 	# here (the stop pick and the field are the same stretch, so the stop scene
 	# building it from the pick gives the same).
