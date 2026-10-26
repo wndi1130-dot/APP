@@ -162,8 +162,9 @@ static func build_from(script: Script) -> Dictionary:
 		data["cellar_windows"] = CellarRules.windows(data)
 		data.erase("_rooms")
 		data.erase("_defer_paths")
-		for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
-			g.refresh_paths()
+		if not MapRing.skip_paths:
+			for g: FieldGrid in data.get("levels", {0: data["grid"]}).values():
+				g.refresh_paths()
 	# Every window's latch and curtain, fixed per map and window (J08).
 	BuildingRules.dress_windows(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked

@@ -562,7 +562,7 @@ func _whittled(p) -> void:
 ## An improvised weapon goes straight into a free hand (P23: one tap). Returns
 ## false when both hands are full.
 func _into_hand(p, id: String) -> bool:
-	if p.hands.size() >= 2 or not W.is_known(id) or String(W.get_data(id).get("kind", "")) != "melee":
+	if p.hands.size() >= 2 or not W.is_known(id) or not (String(W.get_data(id).get("kind", "")) == "melee" or W.is_ranged(id)):
 		return false
 	var h := {"id": id, "quality": "factory", "condition": 1.0, "loaded": 0}
 	if p.hands.is_empty():
@@ -952,7 +952,7 @@ func vault_window(p, c: Vector2i) -> void:
 # ---------------------------------------------------------------- searching
 
 func search_time(p, c: Dictionary) -> float:
-	return SearchRules.seconds(float(c["search"]), int(p.skills["search"]))
+	return SearchRules.seconds(SearchRules.box_seconds(c), int(p.skills["search"]))
 
 
 func _container_at(c: Dictionary) -> Vector3:
@@ -1081,8 +1081,9 @@ func take(p, id: String, index: int, asked: bool = false) -> void:
 		dress(p, game.ground_items.size() - 1)
 		game.view.update_container(id)
 		return
-	# Something to hit with goes straight into a free hand (P23).
-	if not W.breaks(item) or not _into_hand(p, item):
+	# Something to hit with goes straight into a free hand (P23), and so does a
+	# gun from the rare store (card F), empty until it is loaded.
+	if not (W.breaks(item) or W.is_ranged(item)) or not _into_hand(p, item):
 		_receive(p, item, 1)
 	if item == "symbol_bell":
 		game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "bell", p)

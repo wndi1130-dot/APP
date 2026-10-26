@@ -7,8 +7,8 @@
 // 실제 게임 코드를 돌린다. 판 수 차이를 볼 땐 4000판으로 잰다(1000판의 95% 오차는 ±3%p).
 
 import { writeFileSync } from 'node:fs';
-import { BUDGET, CL, CREW, D, DRAW, DZ, TRAVEL_EVENTS, useSeasonAct } from '../src/game';
-import type { CrewCost, CrewCurve, CrewHaul, LawId, SeasonAct, TechId, Variant } from '../src/game';
+import { BUDGET, CL, CREW, D, DRAW, DZ, LOCO_IDS, TRAVEL_EVENTS, useSeasonAct } from '../src/game';
+import type { CrewCost, CrewCurve, CrewHaul, LawId, LocoId, SeasonAct, TechId, Variant } from '../src/game';
 import { playGame } from './s1c_bot';
 import type { BotOptions, CrewPolicy, GameMetrics } from './s1c_bot';
 
@@ -88,6 +88,9 @@ if (haulFlag) CREW.haul = haulFlag;
 const only = flags.find(x => x.startsWith('--only='))?.slice(7);
 const pickRule = flags.find(x => x.startsWith('--pick='))?.slice(7);
 if (pickRule && pickRule !== 'second' && pickRule !== 'random') throw new Error(`--pick는 second나 random: ${pickRule}`);
+// --loco=c1|c2|c3|c4: 기관차를 정한다(결정 125). 없으면 기본 c3인데 c3은 측선 칸이 안 붙어, 칸 규칙을 잴 땐 c2(기본 걸림)나 c1(두 배)로 돈다.
+const locoFlag = flags.find(x => x.startsWith('--loco='))?.slice(7) as LocoId | undefined;
+if (locoFlag && !LOCO_IDS.includes(locoFlag)) throw new Error(`--loco는 ${LOCO_IDS.join('·')}: ${locoFlag}`);
 
 const RUNS: { name: string; opts: BotOptions }[] = [
   { name: 'S1a caretaker', opts: { s1c: false, policy: 'caretaker', dom: 'idle' } },
@@ -242,6 +245,7 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(noLevers ? { noLevers: true } : {}),
     ...(climateLevers ? { climateLevers: true } : {}),
     ...(pushLaw ? { pushLaw } : {}),
+    ...(locoFlag ? { loco: locoFlag } : {}),
     ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);

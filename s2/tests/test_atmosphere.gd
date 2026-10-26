@@ -215,6 +215,19 @@ func test_the_hours_have_their_own_colour() -> void:
 	assert_lt(float(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0)["sun_energy"]), float(day["sun_energy"]))
 
 
+func test_the_dusk_shade_is_the_open_sky_s_cool_light() -> void:
+	# A warm low sun and a shade lit by the sky's blue, as in the sunset sky
+	# photo: the ground does not go one orange-brown at dusk.
+	for cold in [0.0, 1.0]:
+		var t := Atmosphere.sun_times(cold)
+		var dusk := Atmosphere.look(t.y - 0.4, ["clear"], "K1", cold)
+		var sun: Color = dusk["sun_color"]
+		var shade: Color = dusk["ambient_color"]
+		assert_gt(sun.r - sun.b, 0.2, "a warm low sun (cold %s)" % cold)
+		assert_lt(sun.s, 0.5, "no deep orange sun (cold %s)" % cold)
+		assert_gte(shade.b, shade.r, "a cool shade (cold %s)" % cold)
+
+
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	# Contrast 1.2 about the hour's grey whatever falls: an overcast, a fog or
 	# a sleet takes colour out, not the spread (the grey day used to go flat).
@@ -394,6 +407,24 @@ func test_past_the_map_edge_the_ground_goes_on_under_fog() -> void:
 	for v in verts:
 		var inside := v.x > MapEdge.FOG_INSET + 0.01 and v.x < w - MapEdge.FOG_INSET - 0.01 and v.z > MapEdge.FOG_INSET + 0.01 and v.z < h - MapEdge.FOG_INSET - 0.01
 		assert_false(inside, "no fog corner in the map's middle: %s" % v)
+
+
+func test_a_foggy_day_lays_fog_over_the_field() -> void:
+	# 색감 루프 C5: fog in the look lays a layer over the whole field, thin round
+	# the eye and closing from where sight ends; other weathers keep it clear.
+	assert_gt(Atmosphere.field_fog(Atmosphere.look(12.0, ["fog"], "K1", 0.0)), 0.9)
+	for kinds in [["overcast"], ["rain"], ["clear"], ["snow"]]:
+		assert_eq(Atmosphere.field_fog(Atmosphere.look(12.0, kinds, "K1", 0.0)), 0.0, "%s" % [kinds])
+	var game = _stop({"weather": ["fog"], "cold": 0.0})
+	assert_true(game.map_edge.field.visible)
+	assert_almost_eq(float(game.map_edge.field_mat.get_shader_parameter("clear_r")), FieldGame.SIGHT_RADIUS * game.eye_mult(), 0.01, "fog closes in where sight ends")
+	var clear = _stop({"weather": ["clear"], "cold": 0.0})
+	assert_false(clear.map_edge.field.visible, "nothing drawn over the field on other days")
+	# Lit by the hour: the night's fog is far darker than the day's (no glow).
+	var day_light: Vector3 = MapEdge.fog_light(Atmosphere.light(Atmosphere.look(12.0, ["fog"], "K1", 0.0)))
+	var t := Atmosphere.sun_times(0.0)
+	var night_light: Vector3 = MapEdge.fog_light(Atmosphere.light(Atmosphere.look(t.y + 2.0, ["fog"], "K1", 0.0)))
+	assert_lt(night_light.length(), day_light.length() * 0.3)
 
 
 func test_breath_shows_in_the_cold_and_frost_comes_at_night() -> void:
