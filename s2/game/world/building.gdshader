@@ -5,6 +5,7 @@ render_mode cull_back, diffuse_lambert, specular_schlick_ggx;
 // 구역마다 색과 이어지는 무늬를 세계 좌표로 그리고, weathered의 날씨와 색 보정,
 // world_vis의 시야 가림과 등불 빛, 가림 구멍(3.3)과 들고 날 때의 점박이(3.4)를 한 번에 한다.
 #include "res://fx/shaders/fx_common.gdshaderinc"
+#include "res://game/world/room_finish.gdshaderinc"
 
 // 시야 그림: world_vis와 같은 것(R 지금 봄, G 본 적 있음, B 등불 빛).
 uniform sampler2D vis : filter_linear, repeat_disable;
@@ -71,7 +72,14 @@ uniform float house_colour : hint_range(0.0, 1.0) = 0.8;
 
 // 벽지·커튼 색(바랜 것만). 건물·층의 번호로 고른다.
 const vec3 PAPERS[5] = vec3[5](vec3(0.60, 0.46, 0.43), vec3(0.50, 0.56, 0.46), vec3(0.66, 0.56, 0.38), vec3(0.48, 0.52, 0.58), vec3(0.72, 0.68, 0.56));
-const vec3 CURTAINS[6] = vec3[6](vec3(0.52, 0.30, 0.22), vec3(0.70, 0.56, 0.26), vec3(0.31, 0.45, 0.31), vec3(0.75, 0.70, 0.58), vec3(0.31, 0.37, 0.52), vec3(0.80, 0.79, 0.75));
+// 살림방 벽(room_finish, 결정 469 C3, 선형): 침실·거실 벽지 셋씩, 부엌 윗벽 칠 셋, 욕실 타일 셋.
+// 흰 칠 반사율 0.8을 넘지 않게. 옛 벽지(PAPERS, 선형 밝기 0.50~0.68)보다 한 단 밝다 — 잘라 보이기로
+// 드러난 방이 밝기 줄(V 0.36) 밑이었다(mood, 낮 채움빛).
+const vec3 BED_PAPERS[3] = vec3[3](vec3(0.70, 0.56, 0.52), vec3(0.76, 0.70, 0.56), vec3(0.60, 0.66, 0.55));
+const vec3 LIVING_PAPERS[3] = vec3[3](vec3(0.74, 0.62, 0.42), vec3(0.52, 0.62, 0.50), vec3(0.56, 0.62, 0.70));
+const vec3 KITCHEN_PAINTS[3] = vec3[3](vec3(0.78, 0.74, 0.62), vec3(0.66, 0.74, 0.62), vec3(0.80, 0.74, 0.52));
+const vec3 BATH_TILES[3] = vec3[3](vec3(0.80, 0.80, 0.77), vec3(0.62, 0.72, 0.76), vec3(0.64, 0.74, 0.66));
+const vec3 CURTAINS[6] =vec3[6](vec3(0.52, 0.30, 0.22), vec3(0.70, 0.56, 0.26), vec3(0.31, 0.45, 0.31), vec3(0.75, 0.70, 0.58), vec3(0.31, 0.37, 0.52), vec3(0.80, 0.79, 0.75));
 
 // 줄눈이나 판자 틈: 무늬 칸 가장자리 폭 w(칸 비율)를 화면 크기에 맞춰 부드럽게.
 float seam(vec2 f, vec2 w) {
@@ -136,15 +144,33 @@ void fragment() {
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
 			// 안쪽 벽: 건물·층마다 바랜 벽지(세로 줄이나 잔무늬), 군데군데 뜯겨 밝은 회벽이 드러남.
 			// 뜯긴 자리에 바깥 칠을 보이면 짙은 칠 집의 방이 위장 무늬가 된다.
+			// 살림방은 갈래·판대로(room_finish): 침실은 잔무늬, 거실은 세로 줄 벽지, 부엌·욕실은
+			// 아래에 타일 허리. 그 밖의 방은 건물·층마다 굴린 벽지 그대로.
+			int rc = room_code(w_pos.xz + n.xz * 0.55, w_pos.y - 0.01, map_size);
+			int kind = rc & 7;
+			int roll = clamp(rc >> 3, 0, 2);
 			float pick = fx_hash(vec2(building_id, floor(w_pos.y / level_h) + 3.0));
-			vec3 paper = PAPERS[int(pick * 4.99)];
-			float stripe = pick > 0.5 ? smoothstep(0.35, 0.5, abs(fract(run * 2.4) - 0.5)) : smoothstep(0.62, 0.8, fx_vnoise(fp * 7.0));
+			vec3 paper = kind == 1 ? BED_PAPERS[roll] : (kind == 4 ? LIVING_PAPERS[roll] : PAPERS[int(pick * 4.99)]);
+			bool striped = kind == 4 || (kind != 1 && pick > 0.5);
+			float stripe = striped ? smoothstep(0.35, 0.5, abs(fract(run * 2.4) - 0.5)) : smoothstep(0.62, 0.8, fx_vnoise(fp * 7.0));
 			paper *= 0.9 + 0.12 * stripe;
 			float torn = smoothstep(0.68, 0.74, fx_fbm2(fp * 2.0 + vec2(building_id, 2.0)));
 			// 석회 회벽(반사율 0.6 안팎, 선형). 벽지(PAPERS, 선형)보다 조금 밝아 뜯긴 자리가 읽힌다.
 			vec3 plaster = vec3(0.66, 0.64, 0.60) * (0.92 + 0.1 * fine);
 			base = mix(paper * (0.9 + 0.1 * big), plaster, torn);
 			lively = 1.0 - torn;
+			if (kind == 2 || kind == 3) {
+				// 부엌은 1.2 m, 욕실은 1.5 m까지 15 cm 타일, 그 위 끝에 짙은 띠 4 cm, 위는 칠.
+				float rise = w_pos.y - floor((w_pos.y - 0.01) / level_h) * level_h;
+				float top = kind == 2 ? 1.2 : 1.5;
+				vec2 tc = vec2(run, rise) / 0.15;
+				vec3 tile = (kind == 2 ? vec3(0.78, 0.78, 0.74) : BATH_TILES[roll]) * (0.95 + 0.07 * fx_hash(floor(tc)));
+				tile *= 1.0 - 0.22 * seam(fract(tc), vec2(0.05, 0.05));
+				vec3 upper = (kind == 2 ? KITCHEN_PAINTS[roll] : vec3(0.78, 0.76, 0.70)) * (0.95 + 0.06 * fine);
+				base = rise < top ? tile : upper;
+				base = mix(base, vec3(0.42, 0.44, 0.43), step(top, rise) * (1.0 - step(top + 0.04, rise)));
+				lively = 0.8;
+			}
 		}
 	} else if (zone == 1) {
 		// 석재: 큰 돌과 줄눈.
