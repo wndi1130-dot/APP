@@ -233,10 +233,13 @@ static func near_prop(field, p, prop: Dictionary) -> bool:
 	return false
 
 
+## The cheap checks first: the side button asks this of every piece of furniture
+## every 0.4 s (field_hud.gd _rebuild_context), and boxes_of reads all the map's boxes
+## (a stop of 500 boxes stalled 300 ms a time when it came before the reach check).
 static func can_break(field, p, prop: Dictionary) -> bool:
 	return WOOD_KINDS.has(String(prop.get("kind", ""))) and not bool(prop.get("busy", false)) \
-		and not boxes_of(field.data, prop).any(func(b): return bool(b.get("busy", false))) \
-		and break_tool(p) and near_prop(field, p, prop)
+		and break_tool(p) and near_prop(field, p, prop) \
+		and not boxes_of(field.data, prop).any(func(b): return bool(b.get("busy", false)))
 
 
 static func fuel_item(p) -> String:
