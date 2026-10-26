@@ -141,7 +141,8 @@ void fragment() {
 			float stripe = pick > 0.5 ? smoothstep(0.35, 0.5, abs(fract(run * 2.4) - 0.5)) : smoothstep(0.62, 0.8, fx_vnoise(fp * 7.0));
 			paper *= 0.9 + 0.12 * stripe;
 			float torn = smoothstep(0.68, 0.74, fx_fbm2(fp * 2.0 + vec2(building_id, 2.0)));
-			vec3 plaster = stone_color * 1.15 * (0.92 + 0.1 * fine);
+			// 석회 회벽(반사율 0.6 안팎, 선형). 벽지(PAPERS, 선형)보다 조금 밝아 뜯긴 자리가 읽힌다.
+			vec3 plaster = vec3(0.66, 0.64, 0.60) * (0.92 + 0.1 * fine);
 			base = mix(paper * (0.9 + 0.1 * big), plaster, torn);
 			lively = 1.0 - torn;
 		}
