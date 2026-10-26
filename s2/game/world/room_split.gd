@@ -394,8 +394,9 @@ static func _drop_cleared(data: Dictionary) -> void:
 ## 비었고(soft는 빈 것으로) 지킬 칸이 아니며, 두 쪽은 각각 이어지고 MIN_REMAINDER칸·짧은 변 MIN_SIDE 이상.
 ## 원래 문이 없는 쪽에는 더 안쪽 방(PRIVACY). 두 쪽이 TARGET_AREA에 가장 가까운 줄과 쪽 나눔을 고른다.
 ## 돌려주는 값: {"walls", "door", "keep", "add", "remaining"} — keep 쪽이 원래 묶음, add 쪽이 새 묶음.
-## stairs: 이 층의 계단 칸(위층 방은 계단으로 들어온다).
-static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary, keep: String, add: String, accept: Callable = Callable(), stairs: Dictionary = {}) -> Dictionary:
+## stairs: 이 층의 계단 칸(위층 방은 계단으로 들어온다). anchors: 원래 묶음 쪽에 남아야 할 문(앞서 뗀
+## 벽장·찬방의 문 — 찬방이 거실로 열리지 않게).
+static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary, keep: String, add: String, accept: Callable = Callable(), stairs: Dictionary = {}, anchors: Array = []) -> Dictionary:
 	var lo: Vector2i = cells[0]
 	var hi := lo
 	var entries: Array[Vector2i] = []
@@ -444,6 +445,8 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 			if not (touch_a if keep_a else touch_b) and PRIVACY[keep] < PRIVACY[add]:
 				continue
 			if not (touch_b if keep_a else touch_a) and PRIVACY[add] < PRIVACY[keep]:
+				continue
+			if not anchors.is_empty() and _touches(add_cells, anchors):
 				continue
 			var score := absi(keep_cells.size() - int(TARGET_AREA[keep])) + absi(add_cells.size() - int(TARGET_AREA[add]))
 			if score >= best_score:
@@ -503,7 +506,7 @@ static func _short_side(cells: Dictionary) -> int:
 
 ## 큰 방 하나를 가른다. 그 방의 다시 놓을 지도 가구는 먼저 치우고, 남는 지도 가구의 메모는 그 쪽 이름으로.
 ## 두 쪽 묶음은 숨은 이름표로 적는다. room은 원래 쪽으로 줄고, 돌려주는 값의 cells가 새 쪽이다.
-static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String) -> Dictionary:
+static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String, anchors: Array = []) -> Dictionary:
 	var g: Grid = data.get("levels", {0: data["grid"]})[lv]
 	var keep: String = room["class"]
 	var cells: Array[Vector2i] = []
@@ -552,7 +555,7 @@ static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String) ->
 	if keep == "kitchen" or add == "kitchen":
 		var side := "keep" if keep == "kitchen" else "add"
 		accept = func(found: Dictionary) -> bool: return _keeps_counter_run(data, g, lv, found, soft, side)
-	var candidate := _cut(g, cells, line_protected, soft, keep, add, accept, stairs)
+	var candidate := _cut(g, cells, line_protected, soft, keep, add, accept, stairs, anchors)
 	if candidate.is_empty():
 		return {}
 	var moves: Variant = _box_moves(data, g, lv, candidate, soft)
@@ -686,9 +689,13 @@ static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary
 			if not has.has(cls):
 				wants.append(cls)
 		wants.append("bed")
+		var anchors: Array = []
+		for carved: Dictionary in stats["rows"]:
+			if carved["kind"] != "bath" and carved["building"] == b and carved["level"] == room["level"]:
+				anchors.append(carved["door"])
 		var row := {}
 		for add: String in wants:
-			row = _bisect(data, room["level"], room, add)
+			row = _bisect(data, room["level"], room, add, anchors)
 			if not row.is_empty():
 				break
 		if row.is_empty():
