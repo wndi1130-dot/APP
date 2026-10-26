@@ -186,3 +186,30 @@ func test_the_slice_opens_the_cost_pane_from_the_gauges() -> void:
 	f.gauges.stock_pressed.emit("coal")
 	await wait_process_frames(1)
 	assert_false(is_instance_valid(f.research), "one room at a time")
+
+
+## A technology that makes an ideal law cheaper (E3 가 under 공동 난방) takes
+## coal off the stretch as 「열차 살림」, and the settle lays that saving down
+## the same way the pane said it would.
+func test_a_technology_s_saving_is_the_same_cause_before_and_after() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/turn_vectors.json"))
+	var t: Dictionary = data["tables"]
+	var g: Dictionary = {}
+	for run: Dictionary in data["runs"]:
+		for step: Dictionary in run["steps"]:
+			if g.is_empty() and step["after"].get("lastSettle") != step["before"].get("lastSettle"):
+				g = (step["before"] as Dictionary).duplicate(true)
+	g["dom"] = TrainDom.start()
+	g["dom"]["techs"]["e3"] = {"stage": "done", "defect": false, "progress": 2, "need": 2, "variant": "a"}
+	g["passed"]["common_heating"] = 0
+	var before: Dictionary = CostPane.model(g, t, "coal")
+	var saving: Dictionary = _row(before, "upkeep")
+	assert_false(saving.is_empty(), "the saving has a row")
+	assert_gt(float(saving["now"]), 0.0, "it gives coal back")
+	assert_eq(String(saving["word"]), "열차 살림")
+	var after: Dictionary = Settle.settle(g, t)
+	assert_false(after.has("_turn_port_error"), str(after.get("_turn_port_error", "")))
+	var m: Dictionary = CostPane.model(after, t, "coal")
+	for r: Dictionary in before["rows"]:
+		assert_almost_eq(float(_row(m, String(r["why"]))["last"]), float(r["now"]), 1e-9, String(r["why"]))
+	assert_null(m["rest"])

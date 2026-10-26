@@ -3,7 +3,10 @@ extends RefCounted
 ## Data below is copied from the S1 export and checked against tech-vectors-v1.
 
 const TrainHands = preload("res://game/train/train_hands.gd")
-const VISIBLE: Array[String] = ["w1", "e5"]
+## Decision 446: the technologies whose effect runs on S2's train. The law ones
+## (train_lawtech.gd) are here; M2 and M3 wait for M1 (their tier's way in, its
+## wound and typhus effects not on S2 yet), E4 and M5 for their effects outside a law.
+const VISIBLE: Array[String] = ["e1", "e2", "e3", "e5", "w1", "x1"]
 # BEGIN S1 TABLES
 const TECHS: Dictionary = {
 	"e1": {
@@ -815,6 +818,7 @@ static func advance_restore(g: Dictionary, work: float) -> Dictionary:
 		else:
 			st["stage"] = "defective" if bool(st.get("defect", false)) else "done"
 		did.append(String(TECHS[id]["name"]) + " 복원")
+		return {"used": spend, "did": did, "done": id}
 	return {"used": spend, "did": did}
 
 
