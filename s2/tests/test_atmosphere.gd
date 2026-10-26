@@ -232,14 +232,32 @@ func test_the_dusk_shade_is_the_open_sky_s_cool_light() -> void:
 	assert_gt(autumn.r - autumn.b, winter.r - winter.b, "a warmer sun in late autumn")
 
 
+func test_the_night_light_is_a_neutral_grey() -> void:
+	# After dark the only colour is the lamps' orange: the moon and the fill are
+	# a faintly warm grey, under a clear sky or cloud (no blue screen).
+	for cold in [0.0, 1.0]:
+		var t := Atmosphere.sun_times(cold)
+		for kinds in [["clear"], ["overcast"], ["rain"]]:
+			var night := Atmosphere.look(t.y + 3.0, kinds, "K1", cold)
+			for key in ["ambient_color", "sun_color"]:
+				var c: Color = night[key]
+				assert_lte(c.b, c.r, "%s %s (cold %s) not blue" % [key, kinds, cold])
+				assert_lt(c.s, 0.08, "%s %s (cold %s) grey" % [key, kinds, cold])
+
+
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
-	# Contrast 1.2 about the hour's grey whatever falls: an overcast, a fog or
-	# a sleet takes colour out, not the spread (the grey day used to go flat).
+	# Contrast 1.2 about the hour's grey under a clear sky; an overcast, a fog or
+	# a sleet spreads the tones further, never less, and takes colour out (the
+	# grey day used to go flat).
 	var clear := Atmosphere.grade(Atmosphere.look(12.0, ["clear"], "K1", 0.0))
+	assert_almost_eq(float(clear["spread"]), Atmosphere.TONE_CONTRAST, 0.0001)
 	for kinds in [["overcast"], ["fog"], ["sleet"], ["blizzard"]]:
 		var g := Atmosphere.grade(Atmosphere.look(12.0, kinds, "K1", 0.0))
-		assert_almost_eq(float(g["contrast"]), float(clear["contrast"]), 0.0001, "%s keeps the contrast" % [kinds])
-		assert_almost_eq(float(g["brightness"]), float(clear["brightness"]), 0.0001)
+		assert_gt(float(g["spread"]), float(clear["spread"]), "%s spreads the tones more" % [kinds])
+		assert_lte(float(g["spread"]), Atmosphere.TONE_CONTRAST_DIM + 0.0001)
+		for c: float in [0.1, 0.4, 0.8]:
+			var out: float = 0.5 + float(g["contrast"]) * (float(g["brightness"]) * c - 0.5)
+			assert_almost_eq(out, float(g["spread"]) * (c - 0.4) + 0.4, 0.0001, "%s turns about the day's grey" % [kinds])
 		assert_lt(float(g["saturation"]), float(clear["saturation"]), "%s takes colour out" % [kinds])
 	# Godot: 0.5 + k(b·c − 0.5). By day that is 1.2(c − 0.4) + 0.4.
 	for c: float in [0.1, 0.4, 0.8]:
@@ -252,18 +270,19 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	var night := Atmosphere.grade(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))
 	var p := float(night["pivot"])
 	assert_lt(p, 0.15)
+	assert_gt(float(night["spread"]), Atmosphere.TONE_CONTRAST, "the night spreads the lamps from the dark")
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
 
 
 func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
-	# A closed sky by day: part of the fill becomes a light nearly overhead with
-	# a faint shadow, so walls fall darker while the ground keeps its light; a
+	# A closed sky by day: part of the fill becomes a high light with a soft
+	# shadow, so walls fall darker while the ground keeps its light; a
 	# clear sky and the night are as the look has them.
 	var l := Atmosphere.look(12.0, ["overcast"], "K1", 0.0)
 	var lt := Atmosphere.light(l)
 	assert_lt(float(lt["ambient_energy"]), float(l["ambient_energy"]), "less flat fill")
 	assert_lt(float(lt["sun_pitch"]), float(l["sun_pitch"]), "the light stands higher")
-	assert_lt(float(lt["shadow"]), 0.6, "only a faint shadow under cloud")
+	assert_lt(float(lt["shadow"]), 0.6, "a soft shadow under cloud")
 	var ground_before := float(l["sun_energy"]) * sin(deg_to_rad(-float(l["sun_pitch"]))) + float(l["ambient_energy"])
 	var ground_after := float(lt["sun_energy"]) * sin(deg_to_rad(-float(lt["sun_pitch"]))) + float(lt["ambient_energy"])
 	assert_almost_eq(ground_after, ground_before, ground_before * 0.02, "the ground keeps its light")
