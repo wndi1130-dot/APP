@@ -26,6 +26,7 @@ func test_values_are_fixed() -> void:
 	assert_eq(EdgeBand.EDGE_WAVE, 1.2)
 	assert_eq(EdgeBand.RAIL_CLEAR, 2.5)
 	assert_eq(EdgeBand.ROAD_RUN, 5.0)
+	assert_eq(EdgeBand.ROAD_WIDEST, 8)
 	assert_eq(EdgeBand.SHADE_DEPTH, 1.2)
 	assert_eq(EdgeBand.GLADE_EVERY, 48.0)
 	assert_eq(EdgeBand.GLADE_CHANCE, 0.5)
@@ -98,6 +99,22 @@ func test_rails_run_out_through_a_clear_corridor_and_roads_end_at_a_block() -> v
 	var block: Vector3 = plan["blocks"][0]["at"]
 	assert_almost_eq(block.z, -EdgeBand.ROAD_RUN - 0.6, 0.0001)
 	assert_true(block.x >= 30.0 and block.x <= 32.0)
+
+
+func test_a_road_along_an_edge_is_not_walled_off() -> void:
+	var g := _grid()
+	for x in range(5, 55):
+		g.floor[g.index(Vector2i(x, g.height - 1))] = F.ROAD
+	var runs := EdgeBand.openings(g)
+	assert_eq(runs.filter(func(r): return int(r["side"]) == 3).size(), 0, "a road beside the south edge leaves nothing open")
+	var plan := EdgeBand.plan(g, 7)
+	assert_eq(plan["blocks"].size(), 1, "only the road out of the north edge is blocked")
+	var south := 0
+	for t: Dictionary in plan["trees"]:
+		var at: Vector3 = t["at"]
+		if at.z > g.height and at.x > 6.0 and at.x < 54.0:
+			south += 1
+	assert_gt(south, 20, "woods stand past the road along the edge")
 
 
 func test_the_same_map_draws_the_same_woods() -> void:

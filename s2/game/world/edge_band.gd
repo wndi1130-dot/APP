@@ -26,6 +26,10 @@ const EDGE_WAVE: float = 1.2
 const RAIL_CLEAR: float = 2.5
 ## A road goes on this far past the edge before it is blocked.
 const ROAD_RUN: float = 5.0
+## A run of road cells along an edge wider than this is a road running beside the edge,
+## not one leaving the map: no corridor and no block for it, the woods stand as anywhere
+## (else a whole side was lined with crates, a wall). Roads out are 2 to 6 cells.
+const ROAD_WIDEST := 8
 ## Trees are drawn in pieces this many metres a side, so those off screen are not.
 const CHUNK: float = 16.0
 ## Only the first trees throw a shadow, the ones whose shadow falls on the ground
@@ -91,7 +95,7 @@ static func openings(g: FieldGrid) -> Array:
 				if (kind == F.ROAD or kind == F.RAIL) and g.people_can_walk(c):
 					f = kind
 			if f != run_floor:
-				if run_from >= 0:
+				if run_from >= 0 and (run_floor == F.RAIL or i - run_from <= ROAD_WIDEST):
 					out.append({"side": side, "from": run_from, "to": i - 1, "floor": run_floor})
 				run_from = i if f >= 0 else -1
 				run_floor = f
