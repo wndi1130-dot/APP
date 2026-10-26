@@ -47,6 +47,7 @@ const FROST := Color(0.8, 0.81, 0.8)     # off-white, not sky blue (fx colour ru
 const HOLD_TIME: float = 0.35
 const DRAG_PX: float = 28.0
 const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go: no shot
+const BODY_H: float = 1.7           # feet to head: a finger anywhere on the body picks it
 const STICK_R: float = 72.0         # thumb travel to full push (the rim runs, if set)
 const STICK_DEAD: float = 10.0
 const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
@@ -3861,18 +3862,20 @@ func _apply_stick() -> void:
 		rim_run = false
 		p.running = run_button.button_pressed or stick_dash
 		return
-	# The camera looks north with no turn: screen right is +x, screen down is +z.
+	# The camera is turned (field_game.gd CAM_YAW): the push on the screen turns
+	# with it onto the ground, so up on the stick is up on the screen.
 	var push := clampf(v.length() / STICK_R, 0.0, 1.0)
+	var dir: Vector2 = game.screen_dir(v.normalized())
 	stick_push = push
 	if fighting(p):
 		# A resting thumb, or a push at the one being hit, keeps the fight going;
 		# a real push elsewhere calls it off (field_unified 10).
 		var to := _fight_dir(p)
-		if push < STICK_STOPS_FIGHT or (to != Vector2.ZERO and v.normalized().dot(to) > 0.7):
+		if push < STICK_STOPS_FIGHT or (to != Vector2.ZERO and dir.dot(to) > 0.7):
 			p.stick = Vector2.ZERO
 			return
 		stop_fight(p)
-	p.stick = v.normalized() * push
+	p.stick = dir * push
 	game.combat.drop_melee(p)
 	_update_rim(0.0)
 	_set_running(p)
@@ -4289,7 +4292,7 @@ func stop_fight(p) -> void:
 	attack_button.button_pressed = false
 
 
-## Screen direction from the player to the one being hit (camera looks north).
+## Ground direction (x, z) from the player to the one being hit.
 func _fight_dir(p) -> Vector2:
 	var at: Vector3 = p.target_zombie["pos"] if not p.target_zombie.is_empty() else p.target_person.position
 	var d := Vector2(at.x - p.position.x, at.z - p.position.z)
@@ -4316,18 +4319,32 @@ func _pick_enemy(world: Vector3):
 	for z in game.zombies.list:
 		if z["state"] == "dead" or not game.cell_seen(z["pos"]):
 			continue
-		# The finger is on your floor; a body on another floor sits elsewhere on the screen.
-		var d: float = game.shift_to_height(world, z["pos"].y).distance_to(z["pos"])
+		var d: float = _finger_off(world, z["pos"])
 		if d < best_d:
 			best_d = d
 			best = z
 	for r in game.raiders:
 		if r.visible and game.combat.hostile(r):
-			var d: float = game.shift_to_height(world, r.position.y).distance_to(r.position)
+			var d: float = _finger_off(world, r.position)
 			if d < best_d:
 				best_d = d
 				best = r
 	return best
+
+
+## How far the finger's line on the screen passes from a body standing at base,
+## on the ground, at its nearest between the feet and the head. The finger is on
+## your floor; a body on another floor sits elsewhere on the screen. Read at the
+## feet alone, a press on the chest landed 1.4 m off once the camera leaned to 35°.
+func _finger_off(world: Vector3, base: Vector3) -> float:
+	var at: Vector3 = game.shift_to_height(world, base.y)
+	var rise: Vector3 = game.shift_to_height(world, base.y + 1.0) - at
+	var off := Vector2(at.x - base.x, at.z - base.z)
+	var step := Vector2(rise.x, rise.z)
+	var h := 0.0
+	if step.length_squared() > 0.000001:
+		h = clampf(-off.dot(step) / step.length_squared(), 0.0, BODY_H)
+	return (off + step * h).length()
 
 
 func _tap(pos: Vector2) -> void:

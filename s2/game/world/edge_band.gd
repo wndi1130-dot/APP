@@ -57,9 +57,35 @@ const FIREWOOD_MODEL := "res://models/props_field/firewood_pile.glb"
 const COLD_FIRE_MODEL := "res://models/props_field/cold_campfire.glb"
 
 
-## Half the ground the field camera shows: across from the aspect, along from the pitch.
-static func view_half(cam_size: float, aspect: float, pitch_deg: float) -> Vector2:
-	return Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg)))
+## Half the ground the field camera shows along the map's x and z: across from the
+## aspect, along from the pitch; a camera turned yaw_deg from north (결정 476) shows
+## that rectangle turned, so this is half the box round it.
+static func view_half(cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float = 0.0) -> Vector2:
+	var across := cam_size * aspect * 0.5
+	var along := cam_size * 0.5 / sin(deg_to_rad(pitch_deg))
+	var c := absf(cos(deg_to_rad(yaw_deg)))
+	var s := absf(sin(deg_to_rad(yaw_deg)))
+	return Vector2(across * c + along * s, across * s + along * c)
+
+
+## How far from the middle of the screen the player may stand, as a share of half
+## the screen each way, before the view follows past the band (keep_on_screen).
+const KEEP: float = 0.6
+
+
+## A turned view (결정 476) held inside the band stops so far in at a corner of the
+## map that the player would slide to the screen's corner, under the thumbs, or off
+## it: the view moves toward `at` just enough to keep it inside the middle KEEP of
+## the screen. Only there does the screen go past the band, onto the fog and the
+## ground past the edge (fx/map_edge.gd: 48 m of ground, the fog whole from 12 m).
+static func keep_on_screen(focus: Vector3, at: Vector3, cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float) -> Vector3:
+	var half := Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg))) * KEEP
+	var yaw := deg_to_rad(yaw_deg)
+	# Where `at` lies from the focus across and down the screen, in metres of ground.
+	var off := Vector2(at.x - focus.x, at.z - focus.z).rotated(yaw)
+	var over := off - Vector2(clampf(off.x, -half.x, half.x), clampf(off.y, -half.y, half.y))
+	var move := over.rotated(-yaw)
+	return focus + Vector3(move.x, 0, move.y)
 
 
 ## The point the camera looks at, kept so its view ends inside the band.

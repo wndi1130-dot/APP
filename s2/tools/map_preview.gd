@@ -22,8 +22,11 @@ const FxState = preload("res://fx/fx_state.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 
-## The field camera (field_game.gd): pitch, and the default height of the view in metres.
+## The whole-map pictures look straight along the map's axes from this pitch, so a
+## map reads as it is drawn; the phone pictures are the field camera's own
+## (field_game.gd CAM_PITCH, CAM_YAW: the diagonal view, 결정 476).
 const CAM_PITCH: float = 52.0
+const FieldGame = preload("res://game/field_game.gd")
 const CAM_BACK: float = 60.0
 const CAM_SIZE: float = 24.0
 ## A phone held sideways, drawn at twice its points.
@@ -168,16 +171,18 @@ func _shoot(focus: Vector3, span: Vector2, file: String) -> void:
 	await _take(focus, tall, Vector2i(int(span.x * px), int(tall * px)), file)
 
 
-## What the player sees on a phone at the default zoom.
+## What the player sees on a phone at the default zoom, from the field camera's turn.
 func _shoot_phone(focus: Vector3, file: String) -> void:
-	await _take(focus, CAM_SIZE, PHONE * PHONE_SCALE, file)
+	await _take(focus, CAM_SIZE, PHONE * PHONE_SCALE, file, FieldGame.cam_back())
 
 
-func _take(focus: Vector3, size: float, pixels: Vector2i, file: String) -> void:
+func _take(focus: Vector3, size: float, pixels: Vector2i, file: String, back := Vector3.ZERO) -> void:
 	var pitch := deg_to_rad(CAM_PITCH)
+	if back == Vector3.ZERO:
+		back = Vector3(0, sin(pitch), cos(pitch))
 	viewport.size = pixels
 	camera.size = size
-	camera.look_at_from_position(focus + Vector3(0, sin(pitch), cos(pitch)) * CAM_BACK, focus, Vector3.UP)
+	camera.look_at_from_position(focus + back * CAM_BACK, focus, Vector3.UP)
 	map_view.refresh_props(camera)
 	for k in range(3):
 		await process_frame

@@ -62,9 +62,10 @@ const HOLD_LEFT: float = 1.5
 const D_CARD: float = HOLD_LEFT + HOLD_K * CARD_SPEED
 const D_NEAR: float = D_CARD + (RUN_SPEED + CARD_SPEED) * 0.5 * NEAR_S
 ## The look down ends where the field's own camera begins (field_game.gd
-## CAM_PITCH and cam_size 24 m of height): the same pitch, the same height of
-## ground on the screen, a narrow lens standing in for its flat one.
-const FIELD_PITCH_DEG: float = 52.0
+## CAM_PITCH, CAM_YAW and cam_size 24 m of height): the same pitch and turn, the
+## same height of ground on the screen, a narrow lens standing in for its flat one.
+const FIELD_PITCH_DEG: float = 35.0
+const FIELD_YAW_DEG: float = 45.0
 const FIELD_VIEW_H: float = 24.0
 const DOWN_FOV: float = 24.0
 ## Every map's train (field_maps.gd cars_of; all 81 maps, 2026-10-24): 80 m,
@@ -892,8 +893,9 @@ func _place_camera() -> void:
 func _down_pose() -> Transform3D:
 	var focus := _down_focus()
 	var pitch: float = deg_to_rad(FIELD_PITCH_DEG)
+	var yaw: float = deg_to_rad(FIELD_YAW_DEG)
 	var dist: float = FIELD_VIEW_H * 0.5 / tan(deg_to_rad(DOWN_FOV * 0.5))
-	var at := focus + Vector3(0, sin(pitch), cos(pitch)) * dist
+	var at := focus + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * dist
 	return Transform3D(Basis(), at).looking_at(focus, Vector3.UP)
 
 
