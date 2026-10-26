@@ -7,9 +7,9 @@ extends RefCounted
 ## other seasons and unknown kinds are ignored, like weather.gd does.
 ## Numbers here are proposals (shaders.md 4장) until a play check fixes them.
 
-## fx_cold, fx_sky and fx_cloud belong to the atmosphere frame (fx/atmosphere.gd):
-## params_for gives plain values from the temperature, Atmosphere.params the real ones.
-const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud"]
+## fx_cold, fx_sky, fx_cloud and fx_sight belong to the atmosphere frame (fx/atmosphere.gd):
+## params_for gives plain values from the temperature and hour, Atmosphere.params the real ones.
+const GLOBALS: Array[String] = ["fx_wet", "fx_snow", "fx_frost", "fx_wind", "fx_tint", "fx_flash", "fx_fade", "fx_cold", "fx_sky", "fx_cloud", "fx_sight"]
 ## Texture globals (CC0 photos, 사용자 10-25 공개 자산 먼저): the ground's grain stays as
 ## project.godot sets it; the photo sky follows the look (set_sky).
 const TEXTURE_GLOBALS: Array[String] = ["fx_ground", "fx_sky_tex"]
@@ -76,6 +76,19 @@ const KIND_TINT: Dictionary = {
 	"sleet": Color(0.60, 0.62, 0.63),
 	"rain": Color(0.56, 0.58, 0.59),
 }
+
+## How bright the sight mask leaves ground the eye does not reach now (fx_sight:
+## x never seen, y seen before; seen now is full). By day the ground out of sight
+## stays readable, its shapes and paths still there to choose a way by; after
+## dark it sinks as before, and the lamps carry the night (decision 469 D3).
+const SIGHT_DAY := Vector2(0.55, 0.75)
+const SIGHT_NIGHT := Vector2(0.24, 0.54)
+
+
+## The sight mask's floors at this much daylight (0 night .. 1 full day).
+static func sight_floor(daylight: float) -> Vector2:
+	return SIGHT_NIGHT.lerp(SIGHT_DAY, clampf(daylight, 0.0, 1.0))
+
 
 ## Hour bands (presentation_motion.md 정차 변주 축 가: dawn grey-blue, day
 ## lead-grey, dusk amber windows, night lamps and torches only).
@@ -212,6 +225,7 @@ static func params_for(kinds: Array, ambient_c: float, wind_dir := Vector2(1, 0)
 		"fx_cold": Vector4(cold, ice, 0.0, 0.0),
 		"fx_sky": Color(tint.r, tint.g, tint.b, 1.0),
 		"fx_cloud": Vector4(0.0, dir.x, dir.y, 0.0),
+		"fx_sight": sight_floor(float({"day": 1.0, "dawn": 0.5, "dusk": 0.5}.get(band["name"], 0.0))),
 	}
 
 

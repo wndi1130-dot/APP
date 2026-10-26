@@ -14,6 +14,11 @@ uniform float clear_r = 11.0;        // how far sight reaches in the fog (m)
 uniform vec3 fog_albedo = vec3(0.6);  // the fog's own colour, linear (MapEdge.fog_albedo)
 uniform vec3 fog_light = vec3(0.5);   // the hour's light on an up-facing sheet, linear (MapEdge.fog_light)
 uniform float mask_on = 1.0;         // the sight mask's shade (map_view mask_on)
+uniform vec4 room = vec4(0.0, 0.0, -1.0, -1.0); // the cut-away building's footprint x0 z0 x1 z1 (none: x1 < x0)
+
+// What of the fog stays in that room: the reference game lays no fog sheet in
+// a room and tints its light half as much; a faint haze keeps the day foggy.
+const float ROOM_KEEP = 0.15;
 
 void vertex() {
 	// Over the whole screen whatever the camera.
@@ -38,11 +43,18 @@ void fragment() {
 	vec3 col = fx_photo(fog_albedo * (0.88 + 0.18 * n), fx_fade) * fog_light;
 	// Under the sight mask the fog past sight dims as unseen ground does, a
 	// little less, and smoothly (the mask's own cells would show their edges).
-	float lit = mix(1.0, 0.45, smoothstep(clear_r * 0.8, clear_r * 1.2, eye));
+	float lit = mix(1.0, max(0.45, fx_sight.x), smoothstep(clear_r * 0.8, clear_r * 1.2, eye));
 	col *= mix(1.0, lit, clamp(mask_on, 0.0, 1.0));
 	ALBEDO = col;
 	// A fixed dither of a few percent: a smooth fog in the dark otherwise breaks
 	// into flat steps of the screen's 256 levels.
 	float dither = (fx_hash(floor(FRAGCOORD.xy)) - 0.5) * 0.04;
-	ALPHA = clamp(field_fog * 0.85 * cover * near + dither * field_fog, 0.0, 1.0);
+	// In the building the eye is in, its walls cut away, the fog lifts, softly
+	// at the walls so no line runs round the room.
+	float in_room = 0.0;
+	if (room.z > room.x) {
+		vec2 a = smoothstep(room.xy - 0.2, room.xy + 0.8, ground) * (1.0 - smoothstep(room.zw - 0.8, room.zw + 0.2, ground));
+		in_room = a.x * a.y;
+	}
+	ALPHA = clamp(field_fog * 0.85 * cover * near + dither * field_fog, 0.0, 1.0) * mix(1.0, ROOM_KEEP, in_room);
 }

@@ -80,3 +80,83 @@ static func _moved(v, rows: int, key: String):
 			arr.append(_moved(item, rows, key))
 		return arr
 	return v
+
+
+## Add ground on any side without changing the old cells or their identities.
+## A direction stays a direction; dictionary keys and embedded positions move.
+## refresh_ground false leaves the ground floor's paths to a caller that builds on it
+## and refreshes once after (map_ring.gd, side_path.gd), as the other floors are refreshed here.
+static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true) -> Dictionary:
+	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
+	if left + top + right + bottom == 0:
+		return data
+	var offset := Vector2i(left, top)
+	var levels: Dictionary = {}
+	var source: Dictionary = data.get("levels", {})
+	if source.is_empty():
+		source = {0: data["grid"]}
+	for lv in source:
+		var g: FieldGrid = source[lv]
+		var n := FieldGrid.new(g.width + left + right, g.height + top + bottom)
+		# Whole rows at a time: a cell-by-cell copy of four floors took over a second on a town map.
+		var empty: int = FieldGrid.Solid.AIR if int(lv) > 0 else (FieldGrid.Solid.BLOCK if int(lv) < 0 else FieldGrid.Solid.NONE)
+		n.solid = _rows(g.solid, g.width, empty, left, top, right, bottom)
+		n.floor = _rows(g.floor, g.width, FieldGrid.Floor.SNOW, left, top, right, bottom)
+		n.building = _rows(g.building, g.width, -1, left, top, right, bottom)
+		n.zone = _rows(g.zone, g.width, "", left, top, right, bottom)
+		n.doors = _offset(g.doors, offset, "")
+		n.windows = _offset(g.windows, offset, "")
+		n.floor_glass = _offset(g.floor_glass, offset, "")
+		if int(lv) != 0 or refresh_ground:
+			n.refresh_paths()
+		n.revision = g.revision
+		levels[lv] = n
+	var out: Dictionary = _offset(data, offset, "")
+	out["levels"] = levels
+	out["grid"] = levels[0]
+	return out
+
+
+## A packed per-cell array, `width` cells a row, with `fill` rows and columns added round it.
+## Untyped so one function serves the byte, int and string arrays of a grid.
+static func _rows(src, width: int, fill, left: int, top: int, right: int, bottom: int):
+	var rows: int = src.size() / width
+	var out = src.slice(0, 0)
+	var side = src.slice(0, 0)
+	side.resize(width + left + right)
+	side.fill(fill)
+	var lpad = side.slice(0, left)
+	var rpad = side.slice(0, right)
+	for y in range(top):
+		out.append_array(side)
+	for y in range(rows):
+		out.append_array(lpad)
+		out.append_array(src.slice(y * width, (y + 1) * width))
+		out.append_array(rpad)
+	for y in range(bottom):
+		out.append_array(side)
+	return out
+
+
+static func _offset(value, offset: Vector2i, key: String):
+	if DIRECTIONS.has(key):
+		return value.duplicate(true) if value is Dictionary or value is Array else value
+	if value is Vector2i:
+		return value + offset
+	if value is Rect2i:
+		return Rect2i(value.position + offset, value.size)
+	if value is Vector3:
+		return value + Vector3(offset.x, 0, offset.y)
+	if value is Dictionary:
+		var out := {}
+		for k in value:
+			if k is String and (k == "grid" or k == "levels"):
+				continue
+			out[_offset(k, offset, "") if k is Vector2i else k] = _offset(value[k], offset, k if k is String else key)
+		return out
+	if value is Array:
+		var out := []
+		for item in value:
+			out.append(_offset(item, offset, key))
+		return out
+	return value

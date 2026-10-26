@@ -12,7 +12,10 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
+const WoodsShade = preload("res://fx/woods_shade.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const SidePath = preload("res://game/world/side_path.gd")
+const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -26,13 +29,18 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
+const FieldAlarms = preload("res://game/field_alarms.gd")
+const FieldResidents = preload("res://game/field_residents.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const MoveRules = preload("res://game/sim/move_rules.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
+const LootRules = preload("res://game/sim/loot_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
+const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
@@ -58,6 +66,7 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
+const PeopleSeparation = preload("res://game/sim/people_separation.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -96,6 +105,13 @@ const INERTIA: Dictionary = {
 	"short": [0.10, 0.12, 0.20],
 }
 const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
+## Who comes down from the train: the laws it lives under go out with them
+## (opts "laws", decision 430).
+const TRAIN_ROLES: Array = ["chief", "companion", "carrier", "escort", "worker"]
+## Under the emergency ration law a work crew that eats less hauls less a trip
+## (decision 430 ②, card domestic Q1 가): the law's haulMult in S1 data.ts
+## (LAWS_RES in the train tables; test_ration_law.gd holds the two together).
+const RATION_HAUL: float = 0.8
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
@@ -142,6 +158,8 @@ var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
+var building_alarms: FieldAlarms    # buildings' alarms set off by breaking in (J17)
+var residents: FieldResidents       # the people who live at the stop (J21)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
@@ -267,6 +285,11 @@ var glints: Array = []
 var key_ways: Dictionary = {}
 ## Where the note of this stop says a box is hidden at the next one ("" if none).
 var note_spot: String = ""
+## The scrawled map to the side path, read (side_note.gd, card M): {"at": where the way
+## through the edge woods starts} while anyone in the squad holds it and nobody has got
+## there yet, else {}. The HUD marks that side of the screen while it is set.
+var side_hint: Dictionary = {}
+var side_reached: bool = false
 ## Tins thrown, still to land and rattle: [{"pos", "at", "who"}]; and where
 ## they landed, shown a moment: [{"pos", "t"}].
 var lures: Array = []
@@ -381,7 +404,11 @@ func _ready() -> void:
 	if opts.get("map_data") is Dictionary:
 		_take_map(opts["map_data"])
 	else:
-		_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
+		_take_map(SidePath.add(built, rng.seed))
+	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
+	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
@@ -430,6 +457,8 @@ func _ready() -> void:
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
 	train_guard = FieldTrainGuard.new(self)
+	building_alarms = FieldAlarms.new(self)
+	residents = FieldResidents.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
 	view = MapView.new()
@@ -442,6 +471,11 @@ func _ready() -> void:
 	map_edge.setup(view.grid, view.material)
 	map_edge.set_fog(fx_light["fog_color"])
 	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
+	# The shade under the side path's trees: the gap reads as the light way in.
+	if data.get("side_path") is Dictionary:
+		var shade := WoodsShade.new()
+		add_child(shade)
+		shade.setup(data["side_path"])
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -452,6 +486,7 @@ func _ready() -> void:
 	actions = Actions.new(self)
 	await BuildPace.heavy(pace)
 	await _spawn_people()
+	residents.place()
 	people_look = PersonVisual.new()
 	add_child(people_look)
 	people_look.setup(self)
@@ -726,7 +761,7 @@ func _update_atmosphere() -> void:
 		fx_light = Atmosphere.light(atmo)
 		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
 		var changed := {}
-		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost"]:
+		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost", "fx_sight"]:
 			if p[key] != fx_params.get(key):
 				fx_params[key] = p[key]
 				changed[key] = p[key]
@@ -739,6 +774,7 @@ func _update_atmosphere() -> void:
 		sun.light_color = fx_light["sun_color"]
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -787,6 +823,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
+	environment.tonemap_exposure = Atmosphere.EXPOSURE
 	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
@@ -807,6 +844,7 @@ func _build_world() -> void:
 	if storm.is_empty():
 		# The atmosphere frame moves the sun with the hour (FxState.SUN_PITCH at midday in deep winter).
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
@@ -827,7 +865,7 @@ func _build_world() -> void:
 	add_child(camera)
 	camera.current = true
 	snow = GPUParticles3D.new()
-	snow.amount = maxi(weather.particles(), 1)
+	snow.amount = maxi(weather.particles(), 1) * 3  # the rules' count is thin from 52° up (precip.gdshader)
 	snow.lifetime = 4.0
 	snow.visibility_aabb = AABB(Vector3(-30, -2, -20), Vector3(60, 14, 40))
 	var pm := ParticleProcessMaterial.new()
@@ -1195,6 +1233,8 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 	p.hunger_level = clampi(int(row.get("hunger", 0)), 0, 2)
 	p.sore_level = clampi(int(row.get("sore", 0)), 0, 2)
 	p.bag = String(row.get("bag", "pack"))
+	# The emergency ration law (decision 430): an underfed body tires sooner.
+	p.body.ration_cut = TRAIN_ROLES.has(String(row["role"])) and (opts.get("laws", []) as Array).has("emergency_ration")
 	# What they go out in (wear.gd): a row may say, place by place, else what everyone wears.
 	Wear.dress_from(p, row.get("wear", {}))
 	var slots: Array = []
@@ -1522,6 +1562,7 @@ func _step(delta: float) -> void:
 	_tick_radio(delta)
 	for p in people:
 		_update_person(p, delta)
+	_separate_people(delta)
 	zombies.update(delta)
 	ai.update(delta)
 	_left_behind()
@@ -1529,14 +1570,17 @@ func _step(delta: float) -> void:
 	_update_hordes(delta)
 	_update_spawns(delta)
 	train_guard.tick()
+	building_alarms.tick()
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
 	_watch_named()
 	_reveal_glints()
+	_read_side_note()
 	_land_lures()
 	actions.update(delta)
 	holdout.tick(delta)
+	residents.tick(delta)
 	holdout.watch(delta)
 	holdout.den_watch()
 	_check_end()
@@ -1545,6 +1589,55 @@ func _step(delta: float) -> void:
 		if now - float(s["t"]) < SimNoise.EVENT_DISPLAY_SECONDS:
 			keep.append(s)
 	sounds = keep
+
+
+## The living standing still keep out of each other's bodies (people_separation.gd),
+## once everyone has moved: only where they stand changes, never onto a cell people
+## cannot walk, through a wall or onto a stair. Anyone on the way somewhere passes
+## through as before, and the player, anyone at work at a spot, carrying someone
+## or in a fight stays put: the other one standing steps aside. (Easing walkers
+## and fighters too changed the fights the 40 runs measure, 10-26.)
+func _separate_people(delta: float) -> void:
+	var bodies: Array = []
+	var positions := PackedVector3Array()
+	var floors := PackedInt32Array()
+	var ids := PackedInt64Array()
+	var speeds := PackedFloat32Array()
+	var fixed := PackedByteArray()
+	for p in people:
+		if not p.visible or not p.is_alive() or p.body.downed or p.fallen_t > 0.0 or not p.grabbers.is_empty():
+			continue
+		if p.moving or not p.path.is_empty():
+			continue
+		bodies.append(p)
+		positions.append(p.position)
+		floors.append(level_of(p.position))
+		ids.append(hash(String(p.pid)))
+		speeds.append(p.speed(grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))))
+		var fighting: bool = not p.target_zombie.is_empty() or p.target_person != null or p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+		fixed.append(1 if p == player or p.action != "" or p.carrying_wounded != null or fighting else 0)
+	if bodies.size() < 2:
+		return
+	var pushes := PeopleSeparation.pushes(positions, floors, ids, speeds, fixed, delta)
+	for i in range(bodies.size()):
+		if pushes[i] == Vector3.ZERO:
+			continue
+		var dest := positions[i] + pushes[i]
+		var cell := FieldGrid.cell_of(dest)
+		var lg := grid_at(positions[i])
+		if level_of(dest) != floors[i] or not lg.people_can_walk(cell) or not lg.body_line_clear(FieldGrid.cell_of(positions[i]), cell):
+			continue
+		if _on_stair(cell, floors[i]):
+			continue
+		bodies[i].position = dest
+
+
+## A stair or ladder end on that floor (the dead are never pushed onto one either).
+func _on_stair(cell: Vector2i, level: int) -> bool:
+	for stair in stairs:
+		if stair["cell"] == cell and (int(stair["low"]) == level or int(stair["high"]) == level):
+			return true
+	return false
 
 
 func _update_zone(delta: float) -> void:
@@ -1562,6 +1655,7 @@ func _update_zone(delta: float) -> void:
 	var pl := level_of(player.position)
 	view.show_levels(pl)
 	view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), pl)
+	view.update_ground(ground_items)
 
 
 # ---------------------------------------------------------------- people
@@ -1680,6 +1774,10 @@ func _drive(p: Person, delta: float) -> void:
 
 
 func _move_person(p: Person, delta: float) -> void:
+	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
+	if combat.feet_held(p):
+		p.moving = false
+		return
 	if p.path.is_empty():
 		p.moving = false
 		return
@@ -1702,6 +1800,23 @@ func _move_person(p: Person, delta: float) -> void:
 			hud.toast("너무 무거움")
 			p.stop()
 		return
+	var way := atan2(d.x, d.z)
+	var face := way
+	if p != player:
+		# One the AI walks turns into the way before it goes (move_rules.gd); backing
+		# off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
+		var hold: Variant = p.brain.get("face_hold")
+		if hold is Vector3 and clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
+			var them: Vector3 = hold
+			face = atan2(them.x - p.position.x, them.z - p.position.z)
+			if absf(angle_difference(face, way)) > PI * 0.5:
+				spd = minf(spd, MoveRules.BACKPEDAL)   # none runs backwards
+		elif p.turn_rate > 0.0:
+			spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
+		p.facing = face
+		if spd <= 0.0:
+			p.moving = false   # a half turn is made standing, not gliding off the other way meanwhile
+			return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
@@ -1715,8 +1830,10 @@ func _move_person(p: Person, delta: float) -> void:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
-	p.facing = atan2(step.x, step.z)
+	p.facing = face
 	var gone := p.position.distance_to(dest)
+	if absf(angle_difference(face, way)) > PI * 0.5:
+		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
@@ -1746,7 +1863,7 @@ static func steps_in(p, gone: float) -> int:
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
 	for at: float in SimNoise.STEP_AT:
-		n += int(floorf(now - at)) - int(floorf(was - at))
+		n += absi(int(floorf(now - at)) - int(floorf(was - at)))   # a step back is a step too
 	return n
 
 
@@ -1764,6 +1881,7 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		if p == player and audio != null:
 			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
+		_floor_creak(p, cell)
 	if running:
 		p.brain["run_score_t"] = float(p.brain.get("run_score_t", 0.0)) + delta
 		if p.brain["run_score_t"] >= 5.0:
@@ -1778,6 +1896,26 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 					combat.fall(p, "얼음에 미끄러졌다")
 		elif p.carry_state() >= 2 and rng.randf() < delta * 0.03:
 			combat.fall(p, "짐에 눌려 넘어졌다")
+
+
+## A loose board with something under it (room_stories.gd, card K) creaks when stepped on
+## or beside, softly and not again for a while; once searched it is quiet.
+const CREAK_AGAIN: float = 3.0
+
+
+func _floor_creak(p: Person, cell: Vector2i) -> void:
+	for s: Dictionary in data.get("floor_stashes", []):
+		var box: Dictionary = data["containers"].get(s["id"], {})
+		var d: Vector2i = (cell - (s["cell"] as Vector2i)).abs()
+		if box.is_empty() or box["searched"] or maxi(d.x, d.y) > 1 or int(s["level"]) != level_of(p.position):
+			continue
+		if clock.elapsed < float(s.get("quiet_until", -INF)):
+			continue
+		s["quiet_until"] = clock.elapsed + CREAK_AGAIN
+		var at := lift(s["cell"], int(s["level"]))
+		make_sound(at, SimNoise.Level.QUIET, "floor_creak", p)
+		if audio != null:
+			audio.floor_creak(at)
 
 
 ## Frozen ones wake when someone walks right up to them (crouching gets closer).
@@ -1883,7 +2021,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
 			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
-	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
+	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
@@ -1962,16 +2100,20 @@ func _update_blood(delta: float) -> void:
 
 
 ## Freshest, closest trail point a zombie at `at` can smell: the same 12 m
-## event shape as the minute pulse; falling snow weakens older drops (8.1).
+## event shape as the minute pulse; falling snow weakens older drops (8.1),
+## rain washes every drop to half its pull (decision 445).
 func strongest_scent(at: Vector3) -> Dictionary:
 	var best: Dictionary = {}
 	var best_score := 0.0
 	var now := clock.elapsed
 	var snowing := weather.kinds.has("snow") or weather.kinds.has("blizzard")
+	var raining := weather.kinds.has("rain")
 	for b in blood:
 		var reach: float = BLOOD_SCENT_R * weather.scent_mult(b["pos"], at)
 		if snowing and now - float(b["t"]) > 30.0:
 			reach *= 0.7
+		if raining:
+			reach *= SmellRules.RAIN_FADE
 		var d: float = at.distance_to(b["pos"])
 		if d > reach:
 			continue
@@ -2458,6 +2600,15 @@ func cell_seen(at: Vector3) -> bool:
 	return not mask_on or seen_now.has(seen_key(at))
 
 
+## The footprint of the building whose walls are cut away round the player
+## (building_view open_b); empty outside or with grey boxes.
+func _open_room() -> Rect2i:
+	var bv = view.buildings
+	if bv == null or int(bv.open_b) < 0 or not bv.footprints.has(bv.open_b):
+		return Rect2i(0, 0, -1, -1)
+	return bv.footprints[bv.open_b]
+
+
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	# The view ends inside the woods round the map, never past them (edge_band.gd).
@@ -2466,6 +2617,7 @@ func _update_camera(delta: float) -> void:
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
+		map_edge.set_room(_open_room())
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
@@ -2538,7 +2690,9 @@ func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	door["hp"] = int(door["hp"]) - 1
 	# The planks on the face they strike from give way first (building_rules.gd).
 	var had: int = BuildingRules.planks_total(door)
-	BuildingRules.wear_planks(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	var toppled := BuildingRules.wear_defences(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	if not toppled.is_empty():
+		actions.topple_furniture(toppled, c)
 	if BuildingRules.planks_total(door) != had:
 		grid.refresh_cell(c)
 		view.update_door(c)
@@ -2613,6 +2767,11 @@ func depart() -> void:
 
 
 ## The line under the weather: the held train's clock and doors, or the stop's goals.
+## What a work crew's trip carries for the laws the train lives under (1.0 with none).
+func haul_mult() -> float:
+	return RATION_HAUL if (opts.get("laws", []) as Array).has("emergency_ration") else 1.0
+
+
 func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
@@ -2775,6 +2934,9 @@ func finish(reason: String) -> void:
 	# A hidden core looked at without the engine hand (field_unified 3장): one line, a reason to bring them.
 	if String(data["spots"].get(CoreScenes.SPOT, {}).get("state", "")) == "seen_hidden":
 		receipt.place_note("coreHint", true)
+	# The side path's rare store goes on the receipt only when someone got to it.
+	if SidePath.visited(data):
+		receipt.place_note("sidePath", "rareStore")
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)
@@ -3077,6 +3239,28 @@ func _give_finds() -> void:
 			var holder: Dictionary = dead[who.randi_range(0, dead.size() - 1)]
 			holder["carry"] = (holder.get("carry", []) as Array) + ["note_map"]
 			note_spot = LootDress.NOTE_SPOTS[who.randi_range(0, LootDress.NOTE_SPOTS.size() - 1)]
+	# A scrawled map to this stop's side path, on its own dice (card M).
+	var carriers: Array = []
+	for z in zombies.list:
+		if z["kind"] != "frozen":
+			carriers.append(z)
+	SideNote.place(data, carriers, rng.seed)
+
+
+## Who holds the scrawled map and whether anyone has reached the way in (card M).
+func _read_side_note() -> void:
+	if not data.has("side_path"):
+		return
+	var held := false
+	var at := SideNote.way_in(data)
+	for p in squad:
+		if not p.is_alive():
+			continue
+		if p.items.has(SideNote.ID):
+			held = true
+		if not side_reached and at != Vector3.INF and Vector2(p.position.x - at.x, p.position.z - at.z).length() < SideNote.REACHED:
+			side_reached = true
+	side_hint = SideNote.hint(data, held, side_reached, SidePath.visited(data))
 
 
 ## A snow cell two steps out of a door of building b, or (-1, -1).

@@ -143,7 +143,7 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 		"home": _floor_y(at), "target": _floor_y(at), "path": PackedVector3Array(), "path_t": 0.0,
 		"angle": game.rng.randf() * TAU, "phase": game.rng.randf(), "t": 0.0, "linger": 0.0,
 		"victim": null, "windup": 0.0, "cooldown": 0.0, "grab_t": 0.0, "crawl": false,
-		"horde": int(opts.get("horde", -1)), "seen_t": 0.0, "last_seen": Vector3.ZERO, "age": 0.0,
+		"horde": int(opts.get("horde", -1)), "seen_t": 0.0, "seen_at": {}, "last_seen": Vector3.ZERO, "age": 0.0,
 		"rise_t": 0.0, "name": String(opts.get("name", "")), "bang_t": 0.0, "depth": float(opts.get("depth", 1.0)),
 		"stun": 0.0, "speed": 0.0, "stander": game.rng.randf() < 0.55, "search_left": 0, "sense_t": 0.0, "smell_lock": 0.0,
 	}
@@ -404,6 +404,16 @@ func update(delta: float) -> void:
 	var people: Array = game.people_alive()
 	_people = people
 	_food = _edible_bodies()
+	# Every eater's time goes on its body first (결정 441 (3)): a body eaten up this tick is
+	# no food any more, and all who ate at it go off by the usual way up.
+	for eater in list:
+		if eater["state"] != "eat":
+			continue
+		var body = _food_of(eater)
+		if body != null:
+			var eaten: float = float(body.get_meta(EatRules.EATEN_META, 0.0))
+			body.set_meta(EatRules.EATEN_META, minf(EatRules.EAT_TOTAL, eaten + delta))
+	_food = _edible_bodies()
 	_sense_cells_ready = false
 	_sense_padding = LungerRules.DASH_SPEED * maxf(delta, 0.0)
 	for z in list:
@@ -547,6 +557,8 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		sight *= EatRules.SIGHT_MULT
 	var best = null
 	var best_d := 999.0
+	var seen_at: Dictionary = z.get("seen_at", {})
+	z["seen_at"] = seen_at
 	var forward := Vector3(sin(z["angle"]), 0, cos(z["angle"]))
 	var zl: int = game.level_of(z["pos"])
 	var lg = game.grid_at(z["pos"])
@@ -568,12 +580,18 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		# Already chasing: keeps tracking a moving target a bit outside the cone.
 		if z["state"] == "chase" and z["victim"] == p and d < reach:
 			in_cone = true
-		if not in_cone or d > reach or d > best_d:
+		if not in_cone or d > reach:
 			continue
 		if not lg.line_clear(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(p.position)):
 			continue
-		best = p
-		best_d = d
+		# When it first made out each one is kept for as long as it is up (결정 441 (2)):
+		# turning to another, or back again, does not start the grace over.
+		var person_id: int = p.get_instance_id()
+		if not seen_at.has(person_id):
+			seen_at[person_id] = z["age"]
+		if d <= best_d:
+			best = p
+			best_d = d
 	if best != null:
 		if _lunges(z, best_d):
 			_begin_tell(z, best)
@@ -581,14 +599,13 @@ func _sense(z: Dictionary, people: Array, delta: float) -> void:
 		if z["state"] != "chase":
 			z["path_t"] = 0.0
 			_call_neighbours(z, best.position)
-			z["spotted_at"] = z["age"]
 		z["turn_t"] = 0.0
 		z["state"] = "chase"
 		z["victim"] = best
 		z["seen_t"] = 0.0
 		z["last_seen"] = best.position
 		z["target"] = best.position
-		if best_d <= ATTACK_RANGE and z["cooldown"] <= 0.0 and can_reach(z, best) and float(z["age"]) - float(z.get("spotted_at", -INF)) >= SEEN_GRACE:
+		if best_d <= ATTACK_RANGE and z["cooldown"] <= 0.0 and can_reach(z, best) and float(z["age"]) - float(seen_at[best.get_instance_id()]) >= SEEN_GRACE:
 			z["state"] = "attack"
 			z["windup"] = WINDUP_CRAWL if z["crawl"] else WINDUP
 			z["angle"] = atan2(best.position.x - z["pos"].x, best.position.z - z["pos"].z)
