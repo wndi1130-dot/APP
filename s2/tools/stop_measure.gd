@@ -12,7 +12,10 @@ extends SceneTree
 ## data_ms; then on the main thread the map drawn alone (view_ms) and the whole
 ## field from that map (field_ms, in one go, the dead's bodies baked once
 ## beforehand as the loader does). Frames are measured at the field's opening
-## zoom and at the widest the player can pull out to (field_hud.gd _zoom).
+## zoom and at the widest the player can pull out to (field_hud.gd _zoom), with
+## the slowest frames and the pipelines the renderer built in each (a hitch that
+## is a first draw shows so); then one sight refresh, one props refill and one
+## step of the dead are timed alone (ticks).
 ## Run it with a window: without one draw calls and video memory read 0, so it
 ## stops. A cell is a metre (field_grid.gd), so the sizes are metres too.
 ## --all takes every map there is; --size-only builds the maps alone (size,
@@ -39,6 +42,11 @@ const FREE_FRAMES: int = 30
 const WIDEST: float = 36.0
 ## The four edges, as their pictures are named.
 const SIDES: Array[String] = ["west", "east", "north", "south"]
+## The engine's counters of pipelines built (read by name: compiles()).
+const COMPILE_MONITORS: Array[String] = ["PIPELINE_COMPILATIONS_CANVAS", "PIPELINE_COMPILATIONS_MESH",
+	"PIPELINE_COMPILATIONS_SURFACE", "PIPELINE_COMPILATIONS_DRAW", "PIPELINE_COMPILATIONS_SPECIALIZATION"]
+## Calls a tick is timed over (_ticks).
+const TICKS: int = 15
 
 var places: Array = ["first_leg_01_sulechow", "freight_02", "hospital_02", "houses_01", "mine_01"]
 var seed_value: int = 1
@@ -217,6 +225,7 @@ func _measure(place: String, vp: RID) -> Dictionary:
 				var m := memory()
 				at_edges[SIDES[side]] = [m["static_mb"], m["video_mb"]]
 			r["edge_memory_mb"] = at_edges
+	r["ticks"] = _ticks(f)
 	r["held_frames"] = _held
 	f.queue_free()
 	for k in FREE_FRAMES:
@@ -269,7 +278,19 @@ func _keep_running(f) -> void:
 		_held += 1
 
 
-## Frame time and what a frame draws, over MEASURE_FRAMES with no cap.
+## Pipelines the renderer had to build so far (the first draw of a material,
+## mesh format or light setup), whichever of the engine's counters there are.
+static func compiles() -> float:
+	var n := 0.0
+	for name: String in COMPILE_MONITORS:
+		if ClassDB.class_has_integer_constant("Performance", name):
+			n += Performance.get_monitor(ClassDB.class_get_integer_constant("Performance", name))
+	return n
+
+
+## Frame time and what a frame draws, over MEASURE_FRAMES with no cap; the
+## slowest frames with the pipelines built in each, so a hitch that is a first
+## draw shows as such.
 func _frames(f, vp: RID) -> Dictionary:
 	var deltas: Array[float] = []
 	var gpu := 0.0
@@ -277,12 +298,18 @@ func _frames(f, vp: RID) -> Dictionary:
 	var draws := 0.0
 	var objects := 0.0
 	var primitives := 0.0
+	var slow: Array = []
+	var built := compiles()
+	var built_from := built
 	var last := Time.get_ticks_usec()
 	for k in MEASURE_FRAMES:
 		await process_frame
 		_keep_running(f)
 		var now := Time.get_ticks_usec()
 		deltas.append(float(now - last) / 1000.0)
+		var built_now := compiles()
+		slow.append([snappedf(float(now - last) / 1000.0, 0.1), built_now - built, k])
+		built = built_now
 		last = now
 		gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp)
 		cpu += RenderingServer.viewport_get_measured_render_time_cpu(vp)
@@ -293,11 +320,38 @@ func _frames(f, vp: RID) -> Dictionary:
 	var total := 0.0
 	for d in deltas:
 		total += d
+	var over := 0
+	for d in deltas:
+		if d > 50.0:
+			over += 1
+	slow.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
 	var n := float(MEASURE_FRAMES)
 	return {"frame_ms_mean": snappedf(total / n, 0.01), "frame_ms_p95": snappedf(deltas[int(n * 0.95)], 0.01),
 		"gpu_ms_mean": snappedf(gpu / n, 0.01),
 		"render_cpu_ms_mean": snappedf(cpu / n, 0.01), "draw_calls": snappedf(draws / n, 0.1),
-		"objects_drawn": snappedf(objects / n, 0.1), "primitives": roundi(primitives / n)}
+		"objects_drawn": snappedf(objects / n, 0.1), "primitives": roundi(primitives / n),
+		"frames_over_50ms": over, "pipelines_built": built - built_from,
+		"slowest": slow.slice(0, 3)}
+
+
+## One sight refresh (every 0.1 s in play: field_game.gd _refresh_vision, which
+## refills the props too), one props refill alone and one step of all the dead,
+## each timed apart, the median of TICKS calls; at the end, as the dead move.
+func _ticks(f) -> Dictionary:
+	return {"vision_ms": _median_ms(func() -> void: f._refresh_vision()),
+		"props_ms": _median_ms(func() -> void: f.view.refresh_props()),
+		"dead_ms": _median_ms(func() -> void: f.zombies.update(1.0 / 60.0)),
+		"dead": f.zombies.list.size()}
+
+
+func _median_ms(call: Callable) -> float:
+	var times: Array[float] = []
+	for k in TICKS:
+		var t0 := Time.get_ticks_usec()
+		call.call()
+		times.append(float(Time.get_ticks_usec() - t0) / 1000.0)
+	times.sort()
+	return snappedf(times[times.size() / 2], 0.01)
 
 
 ## The walkable cell nearest the middle of an edge (0 west, 1 east, 2 north,
