@@ -105,12 +105,15 @@ func set_main(word: String, small: String = "", down: bool = false) -> void:
 
 
 ## The middle's six spread evenly between the left keys and the right ones
-## (.hud__mid from 116 to 220 short of the right, .six inside it 10 in).
+## (.hud__mid from 116 to 220 short of the right, .six inside it 10 in). A main
+## key wider than 148 (a lever with a long small line) pushes the right keys
+## and the middle's end left by as much.
 func _lay_out() -> void:
 	var k: float = UiFonts.K
 	var w: float = size.x / k
+	var wider: float = maxf(0.0, main_key.size.x / k - 148.0) if main_key else 0.0
 	var x0: float = 126.0
-	var x1: float = w - 230.0
+	var x1: float = w - 230.0 - wider
 	var step: float = (x1 - x0 - 60.0) / float(maxi(1, _six.size() - 1))
 	for i in _six.size():
 		(_six[i] as Control).position = Vector2(x0 + step * i, 0.0) * k
@@ -121,9 +124,9 @@ func _lay_out() -> void:
 		route_line.size = Vector2(x1 - x0, RouteLine.CSS_H) * k
 	for c in get_children():
 		if c is Button and c.has_meta("right"):
-			(c as Control).position = Vector2((w + float(c.get_meta("right"))) * k, 6.0 * k)
+			(c as Control).position = Vector2((w + float(c.get_meta("right")) - wider) * k, 6.0 * k)
 	if main_key:
-		main_key.position = Vector2((w - 12.0 - 148.0) * k, 4.0 * k)
+		main_key.position = Vector2((w - 12.0 - 148.0 - wider) * k, 4.0 * k)
 
 
 ## A medal key (.med 44): at `at` (a negative x is from the right).
