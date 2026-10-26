@@ -3,6 +3,7 @@ const C = preload("res://game/train/turn/turn_common.gd")
 const St = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 const WEATHER_WEIGHT: Array = [["snow", 30], ["fog", 20], ["sleet", 15], ["overcast", 20], ["clear", 15]]
 
 static func event_state_key(g: Dictionary, t: Dictionary) -> String:
@@ -18,8 +19,9 @@ static func event_open(g: Dictionary, t: Dictionary, id: String) -> bool:
 		"tail_cold": return St.situation(g, t, "tail")[0] <= 38
 		"crowd_fight": return St.situation(g, t, "tail")[2] >= 78
 		"front_curtain": return int(g.get("eventLog", {}).get(id, {}).get("n", 0)) < 3
-		"water_tower": return int(g["seg"]) >= 2
-		"snow_drift": return int(g["seg"]) >= 3
+		# The water tower freezes only where ice stands, the drift only where snow lies (S1 seasonHolds; climate off: always).
+		"water_tower": return int(g["seg"]) >= 2 and TrainClimate.holds(g, t, "frost")
+		"snow_drift": return int(g["seg"]) >= 3 and TrainClimate.holds(g, t, "snow")
 		"abandoned_tender": return int(g["seg"]) >= 2 and float(g["coal"]) < 80
 		"sick_child": return float(g["med"]) >= 2
 		"ration_line": return St.situation(g, t, "tail")[1] < 45
@@ -50,7 +52,10 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0.duplicate(true)
 	g.erase("platform")
 	var p: Dictionary = t["P"]
-	if int(g["seg"]) % int(p["winterEvery"]) == 0:
+	# With climate on the season table's stage replaces the regular winter drop (S1 climateDepart, decision 370 1).
+	var shift: Variant = TrainClimate.depart(g, t)
+	if TrainClimate.would_freeze(g, t, shift): return C.unsupported(g0, "depart: climate freezeDepart")
+	if not TrainClimate.on(g) and int(g["seg"]) % int(p["winterEvery"]) == 0:
 		for comm: String in t["COMMS"]: g["comms"][comm]["base"][0] -= float(p["winterDrop"])
 		C.journal(g, "추위가 한 단계 깊어졌다. 모든 칸 온기 −5.", "bad")
 	# 내정 훅 자리: domesticDepart / domesticStrikeLine / domesticStrikeRuns.
@@ -144,13 +149,18 @@ static func roll_stop_view(g: Dictionary, t: Dictionary, stop: Dictionary) -> vo
 			weather = row[0]
 			break
 		x -= int(row[1])
+	# Climate on: the season's shares and its temperature's falls (S1 pickWeather), its lines swapped (seasonLine).
+	var season_weather: Variant = TrainClimate.weather(g, t)
+	if season_weather != null:
+		weather = String(season_weather)
+	var cond: Variant = TrainClimate.lines_cond(g, t, weather)
 	var horde: bool = 1 + float(t["P"]["thrownHorde"]) * float(g["thrown"]) > 1.2
 	var sign_tier: String = "many" if float(stop["threat"]) > 1 or horde else ("few" if float(stop["threat"]) < 1 else "some")
 	var salt: String = "%s:%d:%s" % [g["seed"], int(g["seg"]), stop["place"]]
 	var seen: Array = g.get("linesSeen", [])
-	var sky: String = pick_fresh(t["WEATHER_LOOK"][weather], seen, salt + ":wl")
-	var ground: String = pick_fresh(t["PLACE_LOOK"].get(stop["place"], t["PLACE_LOOK"]["freight"]), seen, salt + ":pl")
-	var omens: Array = t["PLACE_OMENS"].get(stop["place"], t["PLACE_OMENS"]["freight"])[sign_tier] + t["WEATHER_OMENS"][weather][sign_tier]
+	var sky: String = pick_fresh(TrainClimate.fit(t, t["WEATHER_LOOK"][weather], cond), seen, salt + ":wl")
+	var ground: String = pick_fresh(TrainClimate.fit(t, t["PLACE_LOOK"].get(stop["place"], t["PLACE_LOOK"]["freight"]), cond), seen, salt + ":pl")
+	var omens: Array = TrainClimate.fit(t, t["PLACE_OMENS"].get(stop["place"], t["PLACE_OMENS"]["freight"])[sign_tier] + t["WEATHER_OMENS"][weather][sign_tier], cond)
 	stop.merge({"weather": weather, "sign": sign_tier, "look": sky + " " + ground, "omen": pick_fresh(omens, seen, salt + ":om")}, true)
 	mark_seen(g, sky)
 	mark_seen(g, ground)

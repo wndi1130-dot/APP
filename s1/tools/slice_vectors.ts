@@ -108,6 +108,9 @@ function runCase(start: Game, departure: FieldDepartureV2, c: Case) {
 export function sliceVectors() {
   const t = tables();
   const start0 = S1.createGame(SEED);
+  // 조각의 열차는 바깥 기온을 읽는다(S1 내정 판 domestic.ts와 같다, 결정 370·423): 계절표 단계가 난방 석탄과 온기를 움직인다.
+  // 조각이 닿는 구간(서막 2~4)에는 결빙이 서지 않는다(추워지는 출발이 없다). 결빙은 S2에 아직 없다(train_climate.gd).
+  S1.enableClimate(start0);
   const startAsset = { format: 'slice-start-v1', seed: SEED, placeId: PLACE_ID, state: plain(start0), tables: t };
   const g = firstStop(S1.cloneGame(start0));
   const stop = plain(g);

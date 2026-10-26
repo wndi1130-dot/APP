@@ -2,9 +2,10 @@ extends RefCounted
 ## How a living body goes on its feet: which walk and run it is drawn in by what
 ## is in its hand (decision 422 M11/M14, 423 card 3), how it holds a long weapon
 ## with a broken arm (422 M2, 423 card 5), when it reels (spent or bleeding hard:
-## decision 448, how one moves shows the wounds), and each person's own beat,
-## stride and lean. The clips are picture only; the beat and the stride are also
-## where the footsteps fall (field_game.gd steps_in), so the feet and the sound stay one.
+## decision 448, how one moves shows the wounds), when it stands on guard with a
+## hand weapon (422 M3), and each person's own beat, stride and lean. The clips
+## are picture only; the beat and the stride are also where the footsteps fall
+## (field_game.gd steps_in), so the feet and the sound stay one.
 ##
 ## As the reference game picks them: a long gun and a two-handed weapon walk and
 ## run their own way, a handgun its own, a heavy tool its own; one-handed weapons,
@@ -16,6 +17,7 @@ extends RefCounted
 ## across the hip with its end on the ground (check shots, 10-25).
 
 const W = preload("res://game/sim/weapons.gd")
+const Carry = preload("res://game/sim/carry.gd")
 
 ## The walk and run for each kind of hand (the people folder's clip names); a
 ## kind with none of its own, or a folder without it, walks and runs the plain way.
@@ -25,6 +27,15 @@ const RUN: Dictionary = {"long": "p_run_long", "pistol": "p_run_pistol"}
 const HOLD_WEAK: String = "p_hold_weak"
 ## A one-handed melee weapon this heavy (kg) hangs in the hand as it is carried.
 const HEAVY_TOOL: float = 2.0
+## On guard, standing: a knife low in front with its point out; any other hand
+## weapon, or the bare fists, up by the shoulder. (The two-handed guard waits for
+## a two-handed hand weapon: every one now is held in one hand.)
+const READY_ONE: String = "p_ready_one"
+const READY_STAB: String = "p_ready_stab"
+## How often a body looks for danger near, and how long its guard stays up after
+## the danger was last near (seconds; picture only).
+const GUARD_LOOK: float = 0.25
+const GUARD_HOLD: float = 2.0
 ## Each person's stride, of the walk's round: as far apart as the bodies' own
 ## baked rounds are (about 2% either way), so a foot never slides more than the
 ## 5% the clips were taken at.
@@ -69,6 +80,27 @@ static func runs(p) -> bool:
 ## (person_visual.gd limp_of); standing still it reels either way.
 static func reels(p) -> bool:
 	return not runs(p) and not p.crouched and (p.body.exhaustion_level() >= 2 or p.body.bleed_level() >= 2)
+
+
+## The guard for what is in the hand, as the blow that follows it is picked
+## (person_visual.gd blow_of: a knife stabs). "" with a gun or a bow (they are
+## aimed their own way), an arm too hurt to hold a weapon up, or the arms full
+## (something big, or someone carried).
+static func ready_name(p) -> String:
+	var wid: String = p.weapon_id()
+	if W.is_ranged(wid) or bool(p.mults()["one_hand"]) or p.carrying_wounded != null or Carry.has_big(p.items):
+		return ""
+	return READY_STAB if wid == "knife" else READY_ONE
+
+
+## Danger near enough to stand on guard: one of the dead the tap helper stops for
+## (field_combat.gd tap_assist_off: on its feet, seen, on this floor, within
+## TAP_ASSIST_OFF_R), or a fight with someone living. The reference game raises a
+## hand weapon only while it is aimed; a phone has no aim for one, so the body
+## raises it by itself.
+static func threatened(field, p) -> bool:
+	var combat = field.get("combat")
+	return p.target_person != null or (combat != null and combat.tap_assist_off(p))
 
 
 ## The walk (or the run) for what is in the hand, "" for the plain one.

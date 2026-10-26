@@ -1,16 +1,19 @@
 extends RefCounted
 ## 샛길과 희귀 창고(결정 카드 「막힌 지도 가장자리의 샛길」 가, 결정 442·450).
-## 정차 넷에 하나꼴(이 판 씨앗), 정차 지도의 오른쪽이나 아래 끝 너머에 띠 하나(STRIP칸)를 붙인다.
+## 정차 넷에 하나꼴(이 판 씨앗), 정차 지도의 한 끝 너머에 띠 하나(STRIP칸)를 붙인다.
 ## 띠에는 숲으로 둘러싼 빈터와 잠긴 「희귀 창고」 한 채(상자 4~6, 창 절반 남짓 안쪽 판자, 둘레 망자
 ## 2~4)가 있고, 빈터는 옛 지도 끝에 난 틈 하나로만 들어간다. 나머지 띠는 성긴 숲이다.
 ## 승강장에서 걸어 편도 40~60초 걸리는 틈만 쓰고, 열차에서 먼 끝을 먼저 본다. 같은 장소·같은
-## 씨앗이면 같은 자리다. 오른쪽·아래로만 붙여 옛 지도 좌표는 하나도 움직이지 않는다.
+## 씨앗이면 같은 자리다. 오른쪽·아래를 먼저 보고(옛 지도 좌표가 하나도 움직이지 않는다), 거기에
+## 맞는 틈이 없을 때만 위·왼쪽에 붙이며 그때는 지도 전체를 STRIP칸 옮긴다(map_shift.gd) —
+## 바깥 마을 띠(map_ring.gd)로 넓어진 마을 지도는 오른쪽·아래 끝이 열차에서 60초 넘게 멀기도 하다.
 ## 출발 시계와 다른 상자는 그대로다. 상자 속은 loot_dress.gd의 희귀 창고 표가 다시 채운다.
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const Shell = preload("res://game/world/sulehuf_map.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
+const MapShift = preload("res://game/world/map_shift.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const NAME := "희귀 창고"  # loot_dress.gd RARE_STORE
@@ -53,7 +56,11 @@ static func add(data: Dictionary, run_seed: int) -> Dictionary:
 	var spot := pick(data, rng)
 	if spot.is_empty():
 		return data
-	_grow(data, int(spot["side"]))
+	var side := int(spot["side"])
+	if side == 0 or side == 3:
+		data = MapShift.grow(data, STRIP if side == 3 else 0, STRIP if side == 0 else 0, 0, 0, false)
+	else:
+		_grow(data, side)
 	_build(data, spot, rng, run_seed)
 	data["side_path"] = spot
 	return data
@@ -79,8 +86,9 @@ static func _rng(place_id: String, run_seed: int) -> RandomNumberGenerator:
 	return rng
 
 
-## 오른쪽·아래 끝에서 틈 자리를 훑어, 걷는 시간이 맞는 곳 가운데 열차에서 먼 끝의 하나.
-## 틈 바로 앞(옛 지도 끝 칸 GAP개)은 걸을 수 있는 바깥 땅이어야 한다.
+## 끝에서 틈 자리를 훑어, 걷는 시간이 맞는 곳 가운데 하나. 오른쪽·아래를 열차에서 먼 쪽부터
+## 보고, 둘 다 없으면 위·왼쪽을 먼 쪽부터 본다. 틈 바로 앞(옛 지도 끝 칸 GAP개)은 걸을 수 있는
+## 바깥 땅이어야 한다.
 static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var g: FieldGrid = data["grid"]
 	var dist := _walk_from_train(data, g)
@@ -88,8 +96,9 @@ static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	if data.get("train") is Rect2i:
 		at = Vector2((data["train"] as Rect2i).get_center())
 	var sides := [1, 2] if g.width - at.x >= g.height - at.y else [2, 1]
+	sides.append_array([3, 0] if at.x >= at.y else [0, 3])
 	for side: int in sides:
-		var length := g.height if side == 1 else g.width
+		var length := g.height if side % 2 == 1 else g.width
 		var ways := _entry_lanes(data, g, side)
 		var found: Array = []
 		for a in range(BELT, length - LOT_WIDTH - BELT + 1, 2):
@@ -102,7 +111,7 @@ static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 			var best := -1
 			var ok := true
 			for u in range(gap_u, gap_u + GAP):
-				var e := Vector2i(g.width - 1, u) if side == 1 else Vector2i(u, g.height - 1)
+				var e := _at(g, side, u, 0)
 				var f := g.floor_at(e)
 				if g.building_at(e) >= 0 or not g.people_can_walk(e) or f == F.RAIL or f == F.PLATFORM or dist[g.index(e)] < 0:
 					ok = false
@@ -125,10 +134,8 @@ static func _entry_lanes(data: Dictionary, g: FieldGrid, side: int) -> Array:
 	var out: Array = []
 	for id in data.get("entries", {}):
 		for c: Vector2i in data["entries"][id]:
-			if side == 1 and c.x == g.width - 1:
-				out.append(c.y)
-			elif side == 2 and c.y == g.height - 1:
-				out.append(c.x)
+			if _v_of(g, side, c) == 0:
+				out.append(_u_of(side, c))
 	return out
 
 
@@ -197,8 +204,31 @@ static func _grow(data: Dictionary, side: int) -> void:
 
 
 ## 띠의 u(끝을 따라)·v(새 끝에서 안쪽으로) 칸. v = STRIP이 옛 지도 끝 칸이다.
+## 끝: 0 위, 1 오른쪽, 2 아래, 3 왼쪽.
 static func _at(g: FieldGrid, side: int, u: int, v: int) -> Vector2i:
-	return Vector2i(g.width - 1 - v, u) if side == 1 else Vector2i(u, g.height - 1 - v)
+	match side:
+		0:
+			return Vector2i(u, v)
+		1:
+			return Vector2i(g.width - 1 - v, u)
+		2:
+			return Vector2i(u, g.height - 1 - v)
+	return Vector2i(v, u)
+
+
+static func _u_of(side: int, c: Vector2i) -> int:
+	return c.y if side % 2 == 1 else c.x
+
+
+static func _v_of(g: FieldGrid, side: int, c: Vector2i) -> int:
+	match side:
+		0:
+			return c.y
+		1:
+			return g.width - 1 - c.x
+		2:
+			return g.height - 1 - c.y
+	return c.x
 
 
 ## 열차 문에서 걸어서 몇 칸(닿지 못하면 -1).
@@ -228,7 +258,7 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 	var g: FieldGrid = data["grid"]
 	var side: int = spot["side"]
 	var a: int = spot["along"]
-	var length := g.height if side == 1 else g.width
+	var length := g.height if side % 2 == 1 else g.width
 	var gap_u := a + LOT_WIDTH / 2 - GAP / 2
 	var lot: Array[Vector2i] = []
 	var belt: Array[Vector2i] = []
@@ -245,23 +275,16 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 	# The ways the dead come in on that edge move out to the new edge, so they still come
 	# from beyond the map; their lanes across the strip stay clear of trees.
 	var lanes: Dictionary = {}
-	var old_edge := (g.width - STRIP - 1) if side == 1 else (g.height - STRIP - 1)
 	for id in data.get("entries", {}):
 		var cells: Array = data["entries"][id]
 		for i in range(cells.size()):
 			var c: Vector2i = cells[i]
-			if side == 1 and c.x == old_edge:
-				cells[i] = Vector2i(g.width - 1, c.y)
-				lanes[c.y] = true
-			elif side == 2 and c.y == old_edge:
-				cells[i] = Vector2i(c.x, g.height - 1)
-				lanes[c.x] = true
+			if _v_of(g, side, c) == STRIP:
+				cells[i] = _at(g, side, _u_of(side, c), 0)
+				lanes[_u_of(side, c)] = true
 	var flee: Variant = data.get("anchors", {}).get("flee_exit")
-	if flee is Vector2i:
-		if side == 1 and flee.x == old_edge:
-			data["anchors"]["flee_exit"] = Vector2i(g.width - 1, flee.y)
-		elif side == 2 and flee.y == old_edge:
-			data["anchors"]["flee_exit"] = Vector2i(flee.x, g.height - 1)
+	if flee is Vector2i and _v_of(g, side, flee) == STRIP:
+		data["anchors"]["flee_exit"] = _at(g, side, _u_of(side, flee), 0)
 	# The belt is trees, a tree on every blocked cell; the rest of the strip is sparse woods,
 	# kept off the clearing, the cells either side of the gap and the lanes of the dead.
 	if not data.has("trees"):
@@ -320,7 +343,7 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 		hi = hi.max(c)
 	var gap_kind := GAP_KINDS[rng.randi_range(0, GAP_KINDS.size() - 1)]
 	data.get_or_add("props", []).append({"kind": gap_kind, "rect": Rect2i(lo, hi - lo + Vector2i.ONE),
-		"facing": 1 if side == 1 else 2, "level": 0, "note": "샛길 틈"})
+		"facing": side, "level": 0, "note": "샛길 틈"})  # front toward the map: facing 0 +Z … 3 +X
 	# The boxes stand along the walls inside, clear of the door's two cells.
 	var faces := g.faces(door)
 	var in_door: Vector2i = faces[0] if g.building_at(faces[0]) == id else faces[1]
