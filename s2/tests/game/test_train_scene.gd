@@ -148,7 +148,7 @@ func _tripping(s) -> bool:
 
 func test_every_car_holds_as_many_bodies_as_the_look_says() -> void:
 	var s = _scene()
-	assert_eq(s.cars.size(), 5)
+	assert_eq(s.cars.size(), 6)
 	for c in s.cars:
 		var comm: Dictionary = Rules.comm_of(s.rules, c["def"])
 		assert_eq(_count(s, c["id"]), Look.figures(c["def"], comm, s.phase()), String(c["id"]))
