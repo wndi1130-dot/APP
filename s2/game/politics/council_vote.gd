@@ -1,8 +1,10 @@
 extends RefCounted
 ## S1a council stance, blocs and one non-decree vote. The field slice's two motions and every
 ## S1a law but 비상대권 are accepted, enacted or repealed (결정 426 PR 7: S1a laws are LAW_IDS less
-## S1C_LAWS and FAREWELL_LAWS; emergency_powers, ratifying and deals are not ported yet, and no
-## S1a law has a variant to amend to). tests/train/test_law_port.gd checks them against S1.
+## S1C_LAWS and FAREWELL_LAWS; emergency_powers and ratifying are not ported yet).
+## tests/train/test_law_port.gd checks them against S1. The three variant laws a technology opens
+## (train_lawtech.gd) come up beside them, over a standing original as an amendment
+## (tests/train/test_lawtech_port.gd).
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const VoteCount = preload("res://game/politics/vote_count.gd")
@@ -19,6 +21,8 @@ const SUPPORTED_LAWS := [
 	"patrol", "secret_ballot", "strike_ban", "guided_voting", "evening_pot", "wall_ledger",
 	"night_of_names", "emergency_ration",
 ]
+## S1C_LAWS a technology opens in place of a harsh law (LAW_VARIANT_OF, domestic/laws.ts).
+const VARIANT_LAWS := ["seed_half", "child_pack", "triage_std"]
 const CHILD_LAWS := ["child_labor", "child_pack"]
 const SUPPORTED_MOTIONS := ["field_symbol", "field_promise"]
 
@@ -69,10 +73,14 @@ static func _is_law(agenda: Dictionary) -> bool:
 	return agenda.get("kind") != "motion"
 
 
+static func supported_law(law: Variant) -> bool:
+	return SUPPORTED_LAWS.has(law) or VARIANT_LAWS.has(law)
+
+
 static func _assert_supported(agenda: Dictionary) -> void:
 	if _is_law(agenda):
-		assert(SUPPORTED_LAWS.has(agenda.get("law")), "지원하지 않는 법 안건: %s" % agenda.get("law"))
-		assert(not bool(agenda.get("ratify", false)) and not agenda.has("amend"), "추인·개정 안건은 아직 옮기지 않았다")
+		assert(supported_law(agenda.get("law")), "지원하지 않는 법 안건: %s" % agenda.get("law"))
+		assert(not bool(agenda.get("ratify", false)), "추인 안건은 아직 옮기지 않았다")
 	else:
 		assert(SUPPORTED_MOTIONS.has(agenda.get("motion")), "지원하지 않는 동의 안건: %s" % agenda.get("motion"))
 
@@ -267,6 +275,8 @@ static func agenda_title(t: Dictionary, agenda: Dictionary) -> String:
 		if agenda["motion"] == "field_symbol":
 			return "%s의 상징물을 열차 앞에 세우기" % name
 		return "%s과(와)의 약속을 지킨 것을 기록에 올리기" % name if agenda.get("verdict") == "kept" else "%s과(와)의 약속 어김 추궁" % name
+	if agenda.get("amend") != null:
+		return "%s 개정: %s" % [t["LAWS"][agenda["amend"]]["title"], t["LAWS"][agenda["law"]]["title"]]
 	return "%s%s" % [t["LAWS"][agenda["law"]]["title"], " 폐지" if bool(agenda.get("repeal", false)) else ""]
 
 
@@ -380,7 +390,7 @@ static func _calm_repeal(g: Dictionary, t: Dictionary, law: String) -> void:
 
 
 static func _enact_law_mut(g: Dictionary, t: Dictionary, law: String, bought_from: Array) -> void:
-	assert(SUPPORTED_LAWS.has(law), "지원하지 않는 법: %s" % law)
+	assert(supported_law(law), "지원하지 않는 법: %s" % law)
 	var definition: Dictionary = t["LAWS"][law]
 	var base: Variant = t["LAW_VARIANT_OF"].get(law)
 	if not g.get("boughtBy") is Dictionary:
@@ -451,7 +461,7 @@ static func enact_law(g0: Dictionary, t: Dictionary, law: String, bought_from: A
 ## (stance 3 or more) take it badly, and a law bought with a promise and turned
 ## over within three sessions is remembered as betrayal.
 static func _repeal_law_mut(g: Dictionary, t: Dictionary, law: String) -> void:
-	assert(SUPPORTED_LAWS.has(law), "지원하지 않는 법: %s" % law)
+	assert(supported_law(law), "지원하지 않는 법: %s" % law)
 	var definition: Dictionary = t["LAWS"][law]
 	var supporters: Array[String] = []
 	for comm: String in t["COMMS"]:

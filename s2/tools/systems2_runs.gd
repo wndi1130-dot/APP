@@ -2,6 +2,7 @@ extends SceneTree
 ## Smell and weapon detail before/after runs: fixed seeds and inputs, and the
 ## observations never draw from the simulation's random numbers.
 ## --phase before|after --seeds 1:20 --seconds 300 --hz 30 --mode both
+## [--weather rain --air 4]: the stop's weather kinds (comma list) and outside air.
 ## One JSON line per trial on stdout: the dead drawn by smell (the blood event
 ## and the trail), kills, swings and wear by weapon, squad deaths, exhaustion.
 
@@ -18,6 +19,8 @@ var seconds := 300.0
 var seed_first := 1
 var seed_last := 20
 var modes: Array[String] = ["walk", "holdout"]
+var weather_kinds: Array = []
+var air: float = INF
 
 
 func _initialize() -> void:
@@ -29,7 +32,7 @@ func _run() -> void:
 		quit(1)
 		return
 	print(JSON.stringify({"kind": "config", "phase": phase, "seeds": [seed_first, seed_last],
-		"seconds": seconds, "hz": hz, "modes": modes, "engine": Engine.get_version_info()["string"]}))
+		"seconds": seconds, "hz": hz, "modes": modes, "weather": weather_kinds, "air": air if air != INF else null, "engine": Engine.get_version_info()["string"]}))
 	for mode in modes:
 		for run_seed in range(seed_first, seed_last + 1):
 			print(JSON.stringify(_trial(run_seed, mode)))
@@ -162,6 +165,8 @@ func _arguments() -> bool:
 			"--seconds": seconds = value.to_float()
 			"--mode":
 				if value != "both": modes.assign([value])
+			"--weather": weather_kinds.assign(value.split(","))
+			"--air": air = value.to_float()
 			"--seeds":
 				var bounds := value.split(":")
 				seed_first = bounds[0].to_int()
@@ -186,6 +191,8 @@ func _game(run_seed: int, mode: String):
 	var game = game_script.new()
 	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false}
 	if mode == "holdout": game.opts["holdout"] = "start"
+	if not weather_kinds.is_empty(): game.opts["weather"] = weather_kinds
+	if air != INF: game.opts["ambient_c"] = air
 	root.add_child(game)
 	game.set_process(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED

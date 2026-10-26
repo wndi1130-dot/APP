@@ -138,7 +138,7 @@ static func cast_vote(g: Dictionary, t: Dictionary) -> Dictionary:
 	if bool(council.get("martial", false)): return _unported(g, "castVote: martial")
 	if agenda.get("kind") == "motion":
 		if not Vote.SUPPORTED_MOTIONS.has(agenda.get("motion")): return _unported(g, "castVote: motion " + str(agenda.get("motion")))
-	elif not Vote.SUPPORTED_LAWS.has(agenda.get("law")) or bool(agenda.get("ratify", false)) or agenda.has("amend"):
+	elif not Vote.supported_law(agenda.get("law")) or bool(agenda.get("ratify", false)):
 		return _unported(g, "castVote: law " + str(agenda.get("law")))
 	return Vote.cast_vote(g, t)["g"]
 
