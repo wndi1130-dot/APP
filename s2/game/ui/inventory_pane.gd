@@ -28,6 +28,10 @@ const WORN_MAX: float = 132.0
 const CHOSEN := Color(0.95, 0.65, 0.24, 0.24)
 ## A box this near its limit shows full (the lightest things weigh 0.05).
 const FULL_GAP: float = 0.05
+## Kept free under the pane at the screen's foot (css), and the least a list
+## keeps when the pane gives up height (one row and a little).
+const FOOT_GAP: float = 8.0
+const LIST_LEAST: float = 52.0
 
 
 ## The places near `p`, as the right side's keys, the train's hold first.
@@ -75,7 +79,32 @@ static func open(hud, want: Dictionary) -> void:
 	var goals: String = game.goal_text() if game.mission_play != null else ""
 	if goals != "":
 		pane.body.add_child(hud._journal_note(goals))
+	_fit_screen(pane, sides)
+	# Once more after the first layout, should a row have grown with its width.
+	_fit_screen.call_deferred(pane, sides)
 	hud.run_while_taking()
+
+
+## The pane stays inside the screen (decision 472 6): on a wide phone the
+## canvas is only 390 high, so where a side's lists would push its foot (「모두
+## 담기」, the rounds) under the bottom edge, they give up height — the tallest
+## first, down to a row and a little — and are dragged as before.
+static func _fit_screen(pane: Control, sides: Control) -> void:
+	if not is_instance_valid(pane) or not pane.is_inside_tree():
+		return
+	var room: float = pane.get_viewport_rect().size.y - pane.position.y - GlassPane.px(FOOT_GAP)
+	var outside: float = pane.get_combined_minimum_size().y - sides.get_combined_minimum_size().y
+	for side: Control in sides.get_children():
+		var over: float = side.get_combined_minimum_size().y - (room - outside)
+		var lists: Array = side.find_children("*", "ScrollContainer", true, false)
+		lists.sort_custom(func(a: Control, b: Control) -> bool: return a.custom_minimum_size.y > b.custom_minimum_size.y)
+		for s: ScrollContainer in lists:
+			if over <= 0.0:
+				break
+			var keep: float = maxf(GlassPane.px(LIST_LEAST), s.custom_minimum_size.y - over)
+			if keep < s.custom_minimum_size.y:
+				over -= s.custom_minimum_size.y - keep
+				s.custom_minimum_size.y = keep
 
 
 static func _side() -> VBoxContainer:
