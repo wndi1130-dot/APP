@@ -57,6 +57,7 @@ const SOURCES := {
 	"glass_step": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"ladder": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},
 	"lid": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"floor_creak": {"levels": [Level.QUIET], "at": "spot", "pull": true},
 	"pickaxe": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"smoke": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"light": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
