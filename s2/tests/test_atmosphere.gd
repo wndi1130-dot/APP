@@ -224,8 +224,12 @@ func test_the_dusk_shade_is_the_open_sky_s_cool_light() -> void:
 		var sun: Color = dusk["sun_color"]
 		var shade: Color = dusk["ambient_color"]
 		assert_gt(sun.r - sun.b, 0.2, "a warm low sun (cold %s)" % cold)
-		assert_lt(sun.s, 0.5, "no deep orange sun (cold %s)" % cold)
+		assert_lt(sun.s, 0.6 if cold < 0.5 else 0.5, "no deep orange sun (cold %s)" % cold)
 		assert_gte(shade.b, shade.r, "a cool shade (cold %s)" % cold)
+	# Late autumn's dusk sun is warmer than deep winter's (the season shows in it).
+	var autumn: Color = Atmosphere.look(Atmosphere.sun_times(0.0).y - 0.4, ["clear"], "K1", 0.0)["sun_color"]
+	var winter: Color = Atmosphere.look(Atmosphere.sun_times(1.0).y - 0.4, ["clear"], "K1", 1.0)["sun_color"]
+	assert_gt(autumn.r - autumn.b, winter.r - winter.b, "a warmer sun in late autumn")
 
 
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
@@ -249,6 +253,59 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	var p := float(night["pivot"])
 	assert_lt(p, 0.15)
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
+
+
+func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
+	# A closed sky by day: part of the fill becomes a light nearly overhead with
+	# a faint shadow, so walls fall darker while the ground keeps its light; a
+	# clear sky and the night are as the look has them.
+	var l := Atmosphere.look(12.0, ["overcast"], "K1", 0.0)
+	var lt := Atmosphere.light(l)
+	assert_lt(float(lt["ambient_energy"]), float(l["ambient_energy"]), "less flat fill")
+	assert_lt(float(lt["sun_pitch"]), float(l["sun_pitch"]), "the light stands higher")
+	assert_lt(float(lt["shadow"]), 0.6, "only a faint shadow under cloud")
+	var ground_before := float(l["sun_energy"]) * sin(deg_to_rad(-float(l["sun_pitch"]))) + float(l["ambient_energy"])
+	var ground_after := float(lt["sun_energy"]) * sin(deg_to_rad(-float(lt["sun_pitch"]))) + float(lt["ambient_energy"])
+	assert_almost_eq(ground_after, ground_before, ground_before * 0.02, "the ground keeps its light")
+	# A wall facing away from the light gets only the fill: darker than before.
+	assert_lt(float(lt["ambient_energy"]), float(l["ambient_energy"]) * 0.8)
+	# The low dusk sun behind cloud keeps its colour share by strength, not more.
+	var t := Atmosphere.sun_times(0.0)
+	var dusk := Atmosphere.look(t.y - 0.4, ["overcast"], "K1", 0.0)
+	var dusk_lt := Atmosphere.light(dusk)
+	var dusk_before := float(dusk["sun_energy"]) * sin(deg_to_rad(clampf(-float(dusk["sun_pitch"]), 5.0, 90.0))) + float(dusk["ambient_energy"])
+	var dusk_after := float(dusk_lt["sun_energy"]) * sin(deg_to_rad(-float(dusk_lt["sun_pitch"]))) + float(dusk_lt["ambient_energy"])
+	assert_almost_eq(dusk_after, dusk_before, dusk_before * 0.02, "no flood of dusk light from overhead")
+	for k in [[12.0, ["clear"]], [t.y + 3.0, ["overcast"]]]:
+		var same := Atmosphere.look(float(k[0]), k[1], "K1", 0.0)
+		var same_lt := Atmosphere.light(same)
+		assert_almost_eq(float(same_lt["sun_energy"]), float(same["sun_energy"]), 0.0001, "%s" % [k])
+		assert_almost_eq(float(same_lt["sun_pitch"]), float(same["sun_pitch"]), 0.0001)
+		assert_almost_eq(float(same_lt["shadow"]), 1.0, 0.0001)
+
+
+func test_a_closed_sky_greys_the_day_and_what_falls_dims_it() -> void:
+	# Cloud greys the day and gives back as fill what it takes of the sun; what
+	# falls and the wind dim it (1 − 0.15·fall − 0.2·wind), after our own
+	# CLOUD_KEEP. K1's wind is 0.5.
+	var clear := _face(Atmosphere.look(12.0, ["clear"], "K1", 1.0))
+	var grey := _face(Atmosphere.look(12.0, ["overcast"], "K1", 1.0))
+	var snow := _face(Atmosphere.look(12.0, ["snow"], "K1", 1.0))
+	var storm := _face(Atmosphere.look(12.0, ["blizzard"], "K1", 1.0))
+	assert_almost_eq(grey / clear, Atmosphere.CLOUD_KEEP * (1.0 - 0.2 * 0.5), 0.03, "an overcast keeps most of the day")
+	assert_lt(snow, grey, "falling snow dims it")
+	assert_lt(storm, snow, "a blizzard's wind more")
+	# The veil greys the light without darkening it: never less than the band's.
+	var l := Atmosphere.look(12.0, ["overcast"], "K1", 1.0)
+	var band := Atmosphere.look(12.0, ["clear"], "K1", 1.0)
+	assert_gte(Color(l["ambient_color"]).srgb_to_linear().get_luminance(), Color(band["ambient_color"]).srgb_to_linear().get_luminance() - 0.001)
+	assert_lt(Color(l["ambient_color"]).s, Color(band["ambient_color"]).s, "grey, not tinted")
+
+
+## The light an up-facing face gets (linear).
+func _face(l: Dictionary) -> float:
+	var s := sin(deg_to_rad(clampf(-float(l["sun_pitch"]), 5.0, 90.0)))
+	return float(l["sun_energy"]) * s * Color(l["sun_color"]).srgb_to_linear().get_luminance() + float(l["ambient_energy"]) * Color(l["ambient_color"]).srgb_to_linear().get_luminance()
 
 
 func test_it_looks_colder_as_the_cold_rises() -> void:
@@ -425,6 +482,19 @@ func test_a_foggy_day_lays_fog_over_the_field() -> void:
 	var t := Atmosphere.sun_times(0.0)
 	var night_light: Vector3 = MapEdge.fog_light(Atmosphere.light(Atmosphere.look(t.y + 2.0, ["fog"], "K1", 0.0)))
 	assert_lt(night_light.length(), day_light.length() * 0.3)
+
+
+func test_the_fog_lifts_in_the_room_the_eye_is_in() -> void:
+	# The reference game lays no fog sheet in a room: in the building the player
+	# is in, its walls cut away, the fog over the field lifts off its footprint.
+	var game = _stop({"weather": ["fog"], "cold": 0.0})
+	var edge = game.map_edge
+	edge.set_room(Rect2i(4, 5, 6, 3))
+	assert_eq(edge.field_mat.get_shader_parameter("room"), Vector4(4, 5, 10, 8))
+	edge.set_room(Rect2i(0, 0, -1, -1))
+	assert_eq(edge.field_mat.get_shader_parameter("room"), Vector4(0, 0, -1, -1), "outside: no room")
+	assert_false(game._open_room().has_area(), "the player starts outside")
+	assert_true(FileAccess.get_file_as_string("res://fx/shaders/field_fog.gdshader").contains("ROOM_KEEP"))
 
 
 func test_breath_shows_in_the_cold_and_frost_comes_at_night() -> void:

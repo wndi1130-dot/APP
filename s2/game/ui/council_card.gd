@@ -8,7 +8,9 @@ extends Control
 ## its cohesion, what this agenda does to it). Along the bottom the way the
 ## train goes and the lever that calls the vote. Once pulled the stones turn,
 ## the verdict is stamped, the list shows each group's yes and no, and the lever
-## stays down on 「확인」, which closes the session.
+## stays down on 「확인」, which closes the session. Under the list, the count's
+## one line on why it split so (council_vote.gd result.why, S1 council.ts
+## verdict__why), except for a secret ballot or a decree.
 ##
 ## Every number is the politics port's own, off the state it is given
 ## (council_vote.gd blocs · expected · agenda_need · agenda_title · cast_vote ·
@@ -31,6 +33,7 @@ const HomeBar = preload("res://game/ui/home_bar.gd")
 const CouncilVote = preload("res://game/politics/council_vote.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const FieldCouncil = preload("res://game/politics/field_council.gd")
+const LawTech = preload("res://game/train/train_lawtech.gd")
 const PANE_TEX := preload("res://game/ui/tex/council_pane.png")
 const BUSTS := preload("res://game/ui/tex/busts.png")
 const PAPER_TEX := preload("res://game/ui/tex/paper.png")
@@ -188,7 +191,7 @@ static func model(g0: Dictionary, t0: Dictionary, at: int) -> Dictionary:
 		"comms": comms, "got": int(ex["min"]), "mean": int(round(float(ex["mean"]))), "max": int(ex["max"]),
 		"need": need, "total": total, "title": CouncilVote.agenda_title(t0, agenda),
 		"kind": "통치" if need > 51 else "일반", "secret": (g0.get("passed", {}) as Dictionary).has("secret_ballot"),
-		"tag": String(law.get("tag", "")), "changes": change_rows(t0, agenda),
+		"tag": String(law.get("tag", "")), "changes": change_rows(t0, agenda, g0),
 		"surprise": bool(council.get("emergency", false)), "special": bool(council.get("special", false)),
 		"idx": i, "count": options.size(),
 		"seg": int(g0.get("seg", 1)), "segments": int((t0.get("P", {}) as Dictionary).get("segments", 24)),
@@ -256,8 +259,13 @@ static func kinds_after(g0: Dictionary, t0: Dictionary, at: int, comm: String, t
 ## the line has none. A law's lines are its own (LAWS changes), each split where
 ## its number is (「기관실·경비대 배급 +10」 → 기관실·경비대 · 배급 +10; a step a
 ## stretch, 「+1.5/구간」, reads 구간마다 +1.5); a motion's are what passing and
-## failing do (s1 field_council.ts changes, off FIELD).
-static func change_rows(t0: Dictionary, agenda: Dictionary) -> Array:
+## failing do (s1 field_council.ts changes, off FIELD). An amendment says first
+## which law it stands in for; the technologies in use that bend the law come
+## after its first lines, three, or more while the tech lines are fewer than two
+## (S1 ui/council.ts withTech, lawTechLines), so the bill shows them unscrolled;
+## the rest of the law's lines follow (S1 drops them; the bill scrolls) when
+## `g0` is given.
+static func change_rows(t0: Dictionary, agenda: Dictionary, g0: Dictionary = {}) -> Array:
 	var out: Array = []
 	if agenda.get("kind") == "motion":
 		var f: Dictionary = t0.get("FIELD", {})
@@ -273,9 +281,21 @@ static func change_rows(t0: Dictionary, agenda: Dictionary) -> Array:
 			out.append(["가결", name + " 관계", sign_of(float(f.get("promiseRel", 0)))])
 			out.append(["부결", name + " 관계", sign_of(-float(f.get("promiseRel", 0)))])
 		return out
-	var law: Dictionary = (t0.get("LAWS", {}) as Dictionary).get(agenda.get("law"), {})
+	var laws: Dictionary = t0.get("LAWS", {})
+	var law: Dictionary = laws.get(agenda.get("law"), {})
+	if agenda.get("amend") != null:
+		out.append(["%s 대신 선다" % String(laws.get(agenda["amend"], {}).get("title", agenda["amend"])), "", ""])
+	var changes: Array = []
 	for line in law.get("changes", []):
-		out.append(split_change(String(line)))
+		changes.append(split_change(String(line)))
+	var tech: Array = []
+	if not g0.is_empty() and agenda.get("law") != null:
+		for line: String in LawTech.law_lines(g0, String(agenda["law"])):
+			tech.append([line, "", ""])
+	var first: int = maxi(3, 5 - tech.size()) - out.size()
+	out.append_array(changes.slice(0, first))
+	out.append_array(tech)
+	out.append_array(changes.slice(first))
 	return out
 
 
@@ -1064,7 +1084,8 @@ func _list(counting: bool) -> void:
 			_hair(top + 44.0 - 2.0)
 
 
-## After the count: each group's yes and no (cast_vote byComm), rows 36 high.
+## After the count: each group's yes and no (cast_vote byComm), rows 36 high,
+## then why it split so.
 func _results() -> void:
 	_head("", [["찬성", SKY], ["반대", RED]], COLS_AFTER)
 	var comms: Array = m["comms"]
@@ -1078,6 +1099,24 @@ func _results() -> void:
 		_num(str(int(r.get("no", 0))), 500, RED, COLS_AFTER[1], base)
 		if i < comms.size() - 1:
 			_hair(top + 36.0 - 2.0)
+	_why(42.0 + 36.0 * float(comms.size()) + 6.0)
+
+
+## The count's one line (S1 voteWhy): the group whose undecided or
+## leader-brought seats split furthest from what was expected, small under the
+## list. A secret ballot does not say how groups split; a decree has no count.
+func _why(top: float) -> void:
+	var why: String = String(result.get("why", "")) if result.get("why") != null else ""
+	if why == "" or bool(result.get("secret", false)) or bool(result.get("decree", false)):
+		return
+	var k: float = UiFonts.K
+	_hair(top - 4.0)
+	var l := _ink(UiFonts.keep_all(why), UiFonts.WORD, 400, 12.0, INK2, 0.24)
+	l.name = "Why"
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.position = Vector2(PANE_X0, top + 2.0) * k
+	l.size = Vector2(PANE_X1 - PANE_X0, maxf(PANE_SIZE.y - top - 10.0, 16.0)) * k
+	_on_pane(l)
 
 
 ## The pane's head (.cl__head at 30, 12, 30 high): its words and the columns'.

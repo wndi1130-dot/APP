@@ -87,6 +87,8 @@ func test_light_and_backdrop_come_from_the_atmosphere_frame() -> void:
 	assert_eq(game.environment.ambient_light_color, light["ambient_color"])
 	assert_almost_eq(game.environment.ambient_light_energy, float(light["ambient_energy"]), 0.0001)
 	assert_almost_eq(game.sun.rotation_degrees.x, float(light["sun_pitch"]), 0.001)
+	# Every colour, the floors too, is read as sRGB; the exposure lifts the picture (mood C9).
+	assert_almost_eq(game.environment.tonemap_exposure, float(Atmosphere.EXPOSURE), 0.0001)
 	# The void around the map is more land in the same light, darkened: never sky blue.
 	var back: Color = game.environment.background_color
 	assert_lt(back.v, Color(game.fx_params["fx_tint"]).v)
@@ -97,7 +99,16 @@ func test_a_blizzard_is_dimmer_than_a_clear_day() -> void:
 	var clear = _stop(["clear"])
 	var storm = _stop(["blizzard"])
 	assert_lt(storm.sun.light_energy, clear.sun.light_energy)
-	assert_lt(storm.environment.ambient_light_energy, clear.environment.ambient_light_energy)
+	# Under a closed sky the fill carries the day (Atmosphere CLOUD_KEEP), but
+	# all told less light reaches the ground than under a clear sky.
+	assert_lt(_ground_light(storm), _ground_light(clear))
+
+
+func _ground_light(game: Node) -> float:
+	var s := sin(deg_to_rad(-float(game.sun.rotation_degrees.x)))
+	var sun_l: float = Color(game.sun.light_color).srgb_to_linear().get_luminance()
+	var amb_l: float = Color(game.environment.ambient_light_color).srgb_to_linear().get_luminance()
+	return float(game.sun.light_energy) * s * sun_l + float(game.environment.ambient_light_energy) * amb_l
 
 
 func test_dusk_dims_the_arrival_light_down_to_the_night_band() -> void:
@@ -174,9 +185,11 @@ func test_a_plain_stop_has_no_storm_layers() -> void:
 	assert_null(game.storm_screen)
 	assert_true(game.snow.emitting, "plain snowfall as before")
 	# The atmosphere frame moves the sun with the hour: at 10:30 a little lower
-	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd).
+	# than the midday height FxState.SUN_PITCH (test_atmosphere.gd). Under fog
+	# and snow by day the light comes from the bright dome, higher than the sun.
 	assert_almost_eq(game.sun.rotation_degrees.x, float(game.fx_light["sun_pitch"]), 0.001)
-	assert_gt(game.sun.rotation_degrees.x, FxState.SUN_PITCH)
+	assert_gt(float(game.atmo["sun_pitch"]), FxState.SUN_PITCH)
+	assert_lt(game.sun.rotation_degrees.x, float(game.atmo["sun_pitch"]), "the light leans to the sky dome")
 	assert_eq(game.storm_glows().size(), 0)
 
 

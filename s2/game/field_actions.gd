@@ -412,6 +412,9 @@ func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> voi
 	game.grid.set_door_state(c, state)
 	game.view.update_door(c)
 	_check_raider_door(c)
+	# Pried open is broken into (J17); opened with its key, or as it was, is not.
+	if pried and state == "open":
+		game.building_alarms.broken_into(int(game.grid.doors[c].get("building", -1)), c)
 
 
 func has_pry(p) -> bool:
@@ -633,6 +636,7 @@ func _kicked(p, c: Vector2i) -> void:
 		game.grid.set_door_state(c, "broken")
 		game.view.update_door(c)
 		_check_raider_door(c)
+		game.building_alarms.broken_into(int(game.grid.doors[c].get("building", -1)), c)
 	elif p == game.player:
 		game.hud.toast("문이 버텼다.")
 
@@ -856,6 +860,7 @@ func _break_window(p, c: Vector2i) -> void:
 	game.view.update_window(c)
 	_note_cold(c)
 	game.make_sound(FieldGrid.center(c), SimNoise.Level.LOUD, "glass", p)
+	game.building_alarms.broken_into(int(game.grid.windows[c].get("building", -1)), c)
 
 
 ## A window of a building changed: does the building still keep the warmth?
@@ -952,7 +957,7 @@ func vault_window(p, c: Vector2i) -> void:
 # ---------------------------------------------------------------- searching
 
 func search_time(p, c: Dictionary) -> float:
-	return SearchRules.seconds(float(c["search"]), int(p.skills["search"]))
+	return SearchRules.seconds(SearchRules.box_seconds(c), int(p.skills["search"]))
 
 
 func _container_at(c: Dictionary) -> Vector3:
@@ -2112,8 +2117,67 @@ func rub_snow(p) -> void:
 
 
 ## Things the player can do right here, for the context buttons.
+# ---------------------------------------------------------------- objects (J08)
+
+const ObjectRules = preload("res://game/sim/object_rules.gd")
+
+
+func push_furniture(p, c: Vector2i) -> void:
+	if not _wait_blow(p, push_furniture.bind(p, c)):
+		ObjectRules.for_game(game).push(p, c)
+
+
+func remove_furniture(p, c: Vector2i) -> void:
+	if not _wait_blow(p, remove_furniture.bind(p, c)):
+		ObjectRules.for_game(game).remove(p, c)
+
+
+func break_furniture(p, prop: Dictionary) -> void:
+	if not _wait_blow(p, break_furniture.bind(p, prop)):
+		ObjectRules.for_game(game).smash(p, prop)
+
+
+func light_stove(p, stove: Dictionary) -> void:
+	if not _wait_blow(p, light_stove.bind(p, stove)):
+		ObjectRules.for_game(game).light(p, stove)
+
+
+func topple_furniture(prop: Dictionary, c: Vector2i) -> void:
+	ObjectRules.for_game(game).topple(prop, c)
+
+
+func furniture_blocked() -> void:
+	game.hud.toast("반대편 가구가 문을 받치고 있다 · 그쪽에서 치워야 한다")
+
+
+func _object_context(p) -> Array:
+	var rows: Array = []
+	var props := ObjectRules.objects(game)
+	var g = game.grid_at(p.position)
+	var here := FieldGrid.cell_of(p.position)
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var c := here + Vector2i(dx, dy)
+			if not g.doors.has(c):
+				continue
+			if ObjectRules.can_remove(game, p, c):
+				rows.append({"label": "가구 치우기", "call": remove_furniture.bind(p, c)})
+			elif not ObjectRules.push_plan(game, p, c).is_empty():
+				rows.append({"label": "가구로 문 막기", "call": push_furniture.bind(p, c)})
+	for prop: Dictionary in props:
+		if ObjectRules.can_break(game, p, prop):
+			rows.append({"label": "부수기", "call": break_furniture.bind(p, prop)})
+			break
+	for stove: Dictionary in game.data["stoves"]:
+		if ObjectRules.can_light(game, p, stove):
+			rows.append({"label": "난로 피우기", "call": light_stove.bind(p, stove)})
+			break
+	return rows
+
+
 func context(p) -> Array:
 	var out: Array = _near_things(p)
+	out.append_array(_object_context(p))
 	if p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit")):
 		out.append({"label": "붕대", "call": self_bandage.bind(p)})
 	if (p.body.arm_fracture or p.body.leg_fracture) and not p.body.splinted:
@@ -2133,11 +2197,12 @@ func context(p) -> Array:
 				var bc: Vector2i = here + Vector2i(dx, dy)
 				if FieldGrid.center(bc).distance_to(p.position) >= NEAR_USE:
 					continue
-				if board_row.is_empty() and can_board(p, bc):
+				var braced := BuildingRules.has_brace(game.grid.doors.get(bc, {}))
+				if board_row.is_empty() and not braced and can_board(p, bc):
 					board_row = {"label": "문 막기", "call": board_door.bind(p, bc)}
 				elif board_row.is_empty() and can_board_window(p, bc):
 					board_row = {"label": "창 막기", "call": board_window.bind(p, bc)}
-				if unboard_row.is_empty() and can_unboard(p, bc):
+				if unboard_row.is_empty() and not braced and can_unboard(p, bc):
 					unboard_row = {"label": "판자 뜯기", "call": unboard.bind(p, bc)}
 		for row: Dictionary in [board_row, unboard_row]:
 			if not row.is_empty():
@@ -2232,7 +2297,10 @@ func _near_things(p) -> Array:
 				var d: float = at.distance_to(p.position)
 				if game.grid.doors.has(c):
 					var st: String = game.grid.doors[c]["state"]
-					if BuildingRules.planks_total(game.grid.doors[c]) > 0:
+					if BuildingRules.has_brace(game.grid.doors[c]):
+						if not ObjectRules.can_remove(game, p, c):
+							rows.append([d, "가구로 막힌 문", furniture_blocked])
+					elif BuildingRules.planks_total(game.grid.doors[c]) > 0:
 						rows.append([d, "막힌 문", go_and_do.bind(p, "door", c, at)])
 					elif st != "broken":
 						rows.append([d, "문 닫기" if st == "open" else ("문 따기" if st == "locked" else "문 열기"), go_and_do.bind(p, "door", c, at)])
