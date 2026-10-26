@@ -4,6 +4,7 @@ const Maps = preload("res://game/world/field_maps.gd")
 const Grid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const FieldGame = preload("res://game/field_game.gd")
 const S = Grid.Solid
 const PLACE := "houses_01"
 
@@ -167,3 +168,17 @@ func test_a_town_map_too_deep_on_the_right_and_bottom_opens_on_the_top_or_left()
 	var front := _outside_of(g, spot["door"], spot["building"])
 	assert_gt(SidePath._walk_from_train(d, g)[g.index(front)], 0, "the store's door is reached on foot")
 	_kept_cell_for_cell(Maps.build("freight_02"), d)
+
+
+## 정차 연출 로더가 미리 지어 넘긴 지도(map_data)에도, 같은 씨앗이면 필드가 지은 지도와 같은 샛길이 붙는다.
+func test_a_map_handed_over_built_gets_the_same_way_as_one_built_in_the_field() -> void:
+	var found := _with_path()
+	var s: int = found[0]
+	assert_gt(s, 0)
+	var game = FieldGame.new()
+	game.opts = {"seed": s, "place": PLACE, "map_data": Maps.build(PLACE), "raiders": false, "auto_pause": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	assert_true(game.data.has("side_path"), "the loader's map gets its side path")
+	if game.data.has("side_path"):
+		assert_eq(game.data["side_path"]["door"], found[1]["side_path"]["door"])
