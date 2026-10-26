@@ -1,5 +1,7 @@
 import { P } from './data';
-import { fallsAt, rainAt, rowAt, weatherWeights } from './season';
+import { rainAt, rowAt } from './season';
+import { routeWeather } from './route_weather';
+import { hash } from './fnv_hash';
 import type { Game, StopState } from './state';
 
 // 정차 조짐(2026-10-07 사용자): 위험을 꼬리표로 적지 않고, 정찰조가 본 조짐과 그 해석으로 알린다.
@@ -247,11 +249,7 @@ export function signTier(threat: number, horde: boolean): SignTier {
   return 'some';
 }
 
-export function hash(s: string): number {
-  let x = 2166136261;
-  for (let i = 0; i < s.length; i += 1) x = Math.imul(x ^ s.charCodeAt(i), 16777619);
-  return x >>> 0;
-}
+export { hash };
 
 /** 아직 안 본 문장 중 하나. 다 봤으면 가장 오래전에 본 것. 난수 흐름을 건드리지 않게 판 씨앗과 구간으로 고른다. */
 export function pickFresh(pool: string[], seen: string[], salt: string): string {
@@ -269,16 +267,17 @@ export function markSeen(g: Game, text: string): void {
 
 export function pickWeather(g: Game): Weather {
   // 재난을 켠 판에서 눈보라·한파가 닥친 구간이면 정차 날씨는 그 재난이다(창밖 글·조짐이 재난과 어긋나지 않게).
-  // 꺼진 판과 재난이 없는 구간은 아래 해시 그대로라 지금까지의 판이 같은 날씨를 본다.
+  // 재난은 기온 켠 판의 흐름 날씨보다 먼저 적용한다.
   // 두 구간 앞 예고(DZ.lead 2) 구간의 정차는 앞머리다: 눈보라는 흐림, 한파는 한파 전조(드문 갬과 닮았지만 바람이 멎는다).
   const d = g.disasters ? g.disaster : undefined;
   if (d?.stage === 'active') return d.kind;
   if (d?.stage === 'brewing') return d.kind === 'blizzard' ? 'overcast' : 'cold_front';
-  // 기온 켠 판은 계절표의 그 구간 계절 비율로 뽑고, 내리는 것(눈·진눈깨비·비)은 그 구간 기온이 정한다(season.ts). 꺼진 판은 옛 고정 비율 그대로(골든).
-  const table = g.climate ? weatherWeights(g.seg) : WEATHER_WEIGHT;
+  // 결정 474 N2: 기온 켠 판만 노선 흐름을 읽는다. 꺼진 판은 옛 고정 비율 그대로(골든).
+  if (g.climate) return routeWeather(g.seed, g.seg);
+  const table = WEATHER_WEIGHT;
   const total = table.reduce((s, [, w]) => s + w, 0);
   let x = hash(`${g.seed}:w:${g.seg}`) % total;
-  for (const [w, n] of table) { if (x < n) return g.climate ? fallsAt(g.seg, w) : w; x -= n; }
+  for (const [w, n] of table) { if (x < n) return w; x -= n; }
   return 'snow';
 }
 

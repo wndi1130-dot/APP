@@ -136,3 +136,36 @@ func test_the_decks_place_rides_from_one_stop_to_the_next() -> void:
 	r.set_defense(true, [], [], [])
 	r.set_loot_deck(deck)
 	assert_eq(r.to_dict().get("lootDeck"), deck, "the receipt writes the deck on v5")
+
+
+func test_route_weather_fields_match_s1_and_are_absent_with_climate_off() -> void:
+	# Decision 474 N2: current S2 id, the previous three in order, no disaster in the past.
+	var path: String = "res://tests/fixtures/train/route_weather.json"
+	assert_true(FileAccess.file_exists(path))
+	if not FileAccess.file_exists(path):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert_true(parsed is Dictionary)
+	if not parsed is Dictionary:
+		return
+	var fixture: Dictionary = parsed
+	assert_eq(fixture.get("format", ""), "route-weather-v1")
+	assert_eq((fixture.get("contracts", []) as Array).size(), 162)
+	var tables: Dictionary = _tables.merged(fixture["tables"], true)
+	var bad: Array[String] = []
+	for row: Dictionary in fixture.get("contracts", []):
+		var g: Dictionary = (fixture["baseState"] as Dictionary).duplicate(true)
+		for key: String in ["seed", "seg", "climate", "disasters", "disaster"]:
+			if row.has(key):
+				g[key] = row[key]
+		if row.has("storedWeather"):
+			g["stop"]["weather"] = row["storedWeather"]
+		var before: String = JSON.stringify(g)
+		var d: Dictionary = FieldDeparture.build(g, tables, fixture["opts"])
+		var got: Dictionary = {}
+		for key: String in ["stopWeather", "pastWeather"]:
+			if d.has(key):
+				got[key] = d[key]
+		_check(bad, String(row["name"]), row["expected"], got)
+		_check(bad, String(row["name"]) + " state unchanged", before, JSON.stringify(g))
+	assert_eq(bad, [] as Array[String])

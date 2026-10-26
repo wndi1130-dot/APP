@@ -256,6 +256,8 @@ small { font-size: 12px; }
 .bottom__mid { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .bottom__right { flex: none; min-width: 140px; display: flex; justify-content: flex-end; }
 .seg { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.next-stop { display: flex; align-items: baseline; gap: 5px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.next-stop b { font-size: 15px; font-weight: 500; color: var(--ink-1); }
 .seg b { font-size: 18px; color: var(--ink-1); }
 .steps { display: flex; gap: 10px; }
 .steps__item { display: flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 12px; white-space: nowrap; }

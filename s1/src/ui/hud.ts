@@ -1,4 +1,4 @@
-import { COMM_NAME, P, PHASES, PHASE_NAME, emergencyStatus, forecast, isSessionSeg, primaryAction, standings } from '../game';
+import { COMM_NAME, P, PHASES, PHASE_NAME, emergencyStatus, forecast, isSessionSeg, nextStopLine, primaryAction, standings } from '../game';
 import { cx, h, pct } from './dom';
 import { icon } from './icons';
 import { TIP, fmt, signed } from './common';
@@ -140,6 +140,14 @@ export function topBar(view: View): HTMLElement {
       domesticResource(view)));
 }
 
+/** 노선표의 다음 정차 예보(결정 471 B0·474 N2): 도착 시각과 날씨. 서기 전(운영·이동)에만 */
+function nextStop(view: View): HTMLElement | null {
+  const next = nextStopLine(view.g);
+  if (!next) return null;
+  return h('div', { class: 'next-stop', 'aria-label': `다음 정차 ${next.time} 도착, ${next.weather}` },
+    h('span', null, '다음 정차'), h('b', { class: 'num' }, next.time), h('span', null, `· ${next.weather}`));
+}
+
 export function bottomBar(view: View): HTMLElement {
   const { g, ui } = view;
   const primary = primaryAction(g);
@@ -178,6 +186,7 @@ export function bottomBar(view: View): HTMLElement {
     h('div', { class: 'bottom__mid' },
       h('div', { class: 'seg num' }, h('b', null, fmt(g.seg)), `/${P.segments}`),
       h('ol', { class: 'steps' }, steps),
+      nextStop(view),
       showOverview ? h('button', {
         class: cx('round round--wide', ui.screen === 'overview' && 'is-on'), 'data-action': 'go',
         'data-screen': ui.screen === 'overview' ? 'home' : 'overview', 'aria-label': '한눈에 보기',

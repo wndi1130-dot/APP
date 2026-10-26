@@ -23,29 +23,34 @@ func test_every_listed_container_is_on_the_first_stop() -> void:
 func test_first_stop_draws_furniture_and_keeps_the_rest_as_boxes() -> void:
 	var view: Node3D = autofree(MapView.new())
 	view.setup(FieldMap.build())
-	for id: String in view.container_nodes:
-		var node: Node3D = view.container_nodes[id]
-		assert_eq(node.has_node("Prop"), Props.BY_ID.has(id), id)
-	assert_false(view.container_nodes["bell"].has_node("Prop"), "the bell keeps its own shape")
+	for id: String in view.data["containers"]:
+		assert_true(view.has_container(id), id)
+		assert_not_null(view.container_mesh(id), id)
+		assert_eq(view.container_nodes.has(id), Props.BY_ID.has(id), id)
+		if view.container_nodes.has(id):
+			assert_true((view.container_nodes[id] as Node3D).has_node("Prop"), id)
+	assert_false(view.container_nodes.has("bell"), "the bell keeps its own shape in the chunk")
 
 
 func test_searching_keeps_the_model_and_changes_the_mat() -> void:
 	var data := FieldMap.build()
 	var view: Node3D = autofree(MapView.new())
 	view.setup(data)
-	var before: Mesh = view.container_nodes["office_desk"].mesh
+	var before: Mesh = view.container_mesh("office_desk")
 	data["containers"]["office_desk"]["searched"] = true
 	view.update_container("office_desk")
 	assert_true(view.container_nodes["office_desk"].has_node("Prop"))
-	assert_ne(view.container_nodes["office_desk"].mesh, before)
+	assert_ne(view.container_mesh("office_desk"), before)
 
 
 func test_switch_off_keeps_every_box() -> void:
 	ProjectSettings.set_setting(Props.MODE_SETTING, false)
 	var view: Node3D = autofree(MapView.new())
 	view.setup(FieldMap.build())
-	for id: String in view.container_nodes:
-		assert_false(view.container_nodes[id].has_node("Prop"), id)
+	assert_true(view.container_nodes.is_empty(), "no model parents when models are off")
+	for id: String in view.data["containers"]:
+		assert_true(view.has_container(id), id)
+		assert_not_null(view.container_mesh(id), id)
 
 
 func test_vertex_coloured_models_turn_the_shader_colour_on() -> void:

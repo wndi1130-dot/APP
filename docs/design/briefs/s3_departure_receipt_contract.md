@@ -20,7 +20,7 @@
 열차(S1 기준 구현, Godot 이식은 같은 값)가 정차 고르기에서 「내리기」를 누를 때 판 상태에서 만든다. 판 1(`s1/src/game/field_receipt.ts` FieldDeparture)의 칸은 그대로 두고 사람 칸을 넓힌다. 판 1 계약도 계속 읽는다(시험 표본).
 
 ```
-{ version: 2, departureId, stopId, placeId, segment, arriveMin?, lootDeck?, domestic,
+{ version: 2, departureId, stopId, placeId, segment, arriveMin?, lootDeck?, stopWeather?, pastWeather?, domestic,
   promises: [ {id, kind, madeTo, label, subjects} ],      // 판 1과 같음
   roster:   [ Person ],      // 처음부터 나가는 수색대(열차장 + 동료)
   workCrew: [ Person ],      // 작업조 부르기로 내려올 수 있는 사람(운송조·호위조)
@@ -43,6 +43,8 @@ Person = { id, comm, name, role: chief|companion|carrier|escort,
 - **도착 시각** `arriveMin`(0시부터 분, 결정 471 B0): 열차가 판 씨앗과 구간으로 굴린다(S1 `stop_time.ts`, 아침 40·한낮 35·늦은 오후 20·해 질 녘 5%, 10분 단위 — S2 `field_clock.gd`의 띠와 같다). 노선표가 도착 전에 같은 값을 보이고, 필드 시계·정차 장면이 이 값에서 시작한다. 없던 계약은 10:30.
 - **덱 자리** `lootDeck`(결정 474 S1): 갈래별 보장 몫 「n곳 중 정확히 k곳」(먹을 것 가게·약국 10곳 중 7곳, 차고 있는 정차의 기름통 10곳 중 3곳 등, 값은 S2 `loot_dress.gd`가 주인)이 정차를 넘어 지켜지도록, 열차가 판 상태의 자리를 싣고 필드가 이어서 뽑은 뒤 영수증 판 5 `lootDeck`으로 돌려준다. 열차는 받은 자리로 판 상태를 바꾼다. 필드 정차가 한 번도 없던 판엔 없다(필드는 새 묶음으로 시작).
 - **약속**은 판 1과 같다. 서막 약속은 판 상태의 `story.flags`와 서막 운반조에서, 교대 약속은 그 칸에 걸린 `skip_dispatch` 약속에서 만든다.
+- **정차 날씨** `stopWeather`(결정 474 N2): 기온 켠 판만 싣는 현재 정차의 S2 날씨 id로, 재난 덮기를 포함한다. `sleet`는 그 구간 기온에 따라 `rain` 또는 `sleet`, `cold`·`cold_front`는 `clear`, 나머지는 같은 id다. S2 `snow_cover.gd`가 이 칸과 지난 날씨로 도착 눈 깊이를 정한다.
+- **지난 날씨** `pastWeather`(결정 474 N2): 기온 켠 판만 싣는 지난 최대 세 구간의 `[{seg, weather}]`이며 오래된 것부터 적는다(구간 1은 빈 배열). 재난 없이 노선 흐름으로 구하고 각 구간 기온으로 S2 id를 바꾼다. S2 `snow_cover.gd`가 도착 눈 깊이를 정할 입력이다.
 - **동시 점유 금지**(첫 시험 범위 4절): 계약에 든 사람은 그 구간에 공방·가르치기·침상에 없다. 수색대는 정차 시작부터, 작업조는 불린 뒤부터.
 
 ## 3. 귀환 영수증 (판 5)

@@ -168,6 +168,84 @@ func test_the_night_sound_makes_the_lantern_dip() -> void:
 	assert_almost_eq(game.lantern.light_energy, float(game.player.lamp["strength"]), 0.0001)
 
 
+## 10 × 8 칸 단층 집 하나: 서쪽 벽과 동쪽 벽에 창 하나씩, 가운데 세로 안벽이 두 방을 나눈다.
+func _house() -> FieldGrid:
+	var g := FieldGrid.new(12, 8)
+	var r := Rect2i(1, 1, 10, 6)
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var c := Vector2i(x, y)
+			g.building[g.index(c)] = 0
+			if x == r.position.x or y == r.position.y or x == r.end.x - 1 or y == r.end.y - 1 or x == 6:
+				g.set_solid(c, FieldGrid.Solid.WALL)
+	for c: Vector2i in [Vector2i(1, 3), Vector2i(10, 3)]:
+		g.set_solid(c, FieldGrid.Solid.WINDOW)
+		g.windows[c] = {"broken": false, "glass": true, "building": 0, "curtain": "open"}
+	return g
+
+
+func test_window_pools_come_at_dusk_and_draw_back_to_the_sill() -> void:
+	assert_eq(LampLight.window_glow(870.0), Vector2.ZERO, "none in the afternoon")
+	assert_eq(LampLight.window_glow(890.0), Vector2(1.0, LampLight.WINDOW_REACH.x), "full at 14:50")
+	var mid := LampLight.window_glow(915.0)
+	var late := LampLight.window_glow(940.0)
+	assert_lt(mid.y, LampLight.WINDOW_REACH.x)
+	assert_lt(late.y, mid.y, "the pool draws in toward the sill")
+	assert_gt(late.x, 0.0, "still there at 15:40")
+	assert_eq(LampLight.window_glow(945.0), Vector2.ZERO, "gone at sunset")
+
+
+func test_only_windows_toward_the_sun_light_their_own_room() -> void:
+	var g := _house()
+	var west := Vector2(-1.0, 0.2)
+	var cells := LampLight.window_cells(g, west, 900.0, 1.0)
+	assert_gt(_light_in(cells, g, Vector2i(2, 3)), 0, "just inside the west window")
+	var n := LampLight.WINDOW_TEXELS
+	for t in cells:
+		var c := Vector2i(int(t) % (g.width * n) / n, int(t) / (g.width * n) / n)
+		assert_true(c.x >= 2 and c.x <= 5 and c.y >= 2 and c.y <= 5, "%s stays in the west room" % c)
+	assert_eq(_light_in(cells, g, Vector2i(9, 3)), 0, "the east window looks away from the sun")
+	# A strip thrown away from the sun, not a lamp's round glow.
+	var due_west := LampLight.window_cells(g, Vector2(-1.0, 0.0), 900.0, 1.0)
+	assert_gt(_light_in(due_west, g, Vector2i(4, 3)), 0, "along the sun's line")
+	assert_eq(_light_in(due_west, g, Vector2i(3, 5)), 0, "not off to the side")
+	var later := LampLight.window_cells(g, west, 935.0, 1.0)
+	assert_lt(later.size(), cells.size(), "fewer cells as the sun goes")
+	assert_true(LampLight.window_cells(g, west, 900.0, 0.0).is_empty(), "no pool under a cloud deck")
+	assert_true(LampLight.window_cells(g, west, 950.0, 1.0).is_empty(), "none after sunset")
+	g.windows[Vector2i(1, 3)]["curtain"] = "closed"
+	assert_true(LampLight.window_cells(g, west, 900.0, 1.0).is_empty(), "a drawn curtain keeps it out")
+
+
+## The brightest window light texel in cell c.
+func _light_in(texels: Dictionary, g: FieldGrid, c: Vector2i) -> int:
+	var n := LampLight.WINDOW_TEXELS
+	var best := 0
+	for sy in n:
+		for sx in n:
+			best = maxi(best, int(texels.get((c.y * n + sy) * g.width * n + c.x * n + sx, 0)))
+	return best
+
+
+func test_the_field_draws_the_window_pools_only_at_dusk() -> void:
+	var game = _stop()
+	game.clock.elapsed = (900.0 - 630.0) * 60.0 / 15.0
+	game._update_atmosphere()
+	assert_true(game.dusk_pools_on, "a clear 15:00 lays the sun on some floor")
+	assert_gt(_lit_cells(game.view.win_image), 0)
+	game.clock.elapsed = (950.0 - 630.0) * 60.0 / 15.0
+	game._update_atmosphere()
+	assert_false(game.dusk_pools_on)
+	assert_eq(_lit_cells(game.view.win_image), 0, "wiped at sunset")
+
+
+func _lit_cells(img: Image) -> int:
+	var n := 0
+	for b in img.get_data():
+		n += int(b > 0)
+	return n
+
+
 func test_no_game_rule_reads_the_lamp_light() -> void:
 	# Picture only: sight, the dead, mates and raiders never look at these cells.
 	for path in ["res://game/field_ai.gd", "res://game/field_combat.gd", "res://game/field_actions.gd", "res://game/actors/zombies.gd", "res://game/sim/weather.gd", "res://game/sim/noise.gd", "res://game/sim/horde_director.gd"]:
