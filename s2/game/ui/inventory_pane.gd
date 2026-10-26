@@ -4,7 +4,9 @@ extends RefCounted
 ## by the train, a searched box within reach, the ground at one's feet) chosen
 ## by its key. A press on a row moves it across: from the bag into the box, onto
 ## the ground or aboard; from the box or the ground into the bag. One key under
-## the right side moves them all. Nothing here takes time that did not before.
+## the right side moves them all. Out of a box a thing takes its weight's time
+## (card R1 가): the field goes on under the pane while it comes out, a thin bar
+## on its row fills, and 「모두 담기」 becomes 「멈추기」 until the last is out.
 ## Built on field_hud.gd's pane; field_hud.gd keeps the keys' callbacks.
 
 const GlassPane = preload("res://game/ui/glass_pane.gd")
@@ -73,6 +75,7 @@ static func open(hud, want: Dictionary) -> void:
 	var goals: String = game.goal_text() if game.mission_play != null else ""
 	if goals != "":
 		pane.body.add_child(hud._journal_note(goals))
+	hud.run_while_taking()
 
 
 static func _side() -> VBoxContainer:
@@ -201,17 +204,33 @@ static func _near_side(hud, p, at: Dictionary, all: Array) -> Control:
 	list.add_theme_constant_override("separation", GlassPane.px(GlassPane.GAP))
 	var empty := ""
 	var all_key: LampKey = null
+	var all_note := ""
 	match String(at["kind"]):
 		"box":
-			side.add_child(_box_load(hud, game.data["containers"][at["id"]]))
-			var items: Array = game.data["containers"][at["id"]]["items"]
+			var c: Dictionary = game.data["containers"][at["id"]]
+			side.add_child(_box_load(hud, c))
+			var items: Array = c["items"]
+			# The thing coming out now: its row carries the bar, the others wait.
+			var now: String = game.actions.taking_item(p) if is_same(p.action_busy, c) else ""
+			var barred := false
 			for i in items.size():
 				var item: String = items[i]
-				list.add_child(hud._thing_key(game.item_name(item), "%.1f" % Carry.item_weight(item), hud._loot_take.bind(String(at["id"]), i), game.item_icon(item)))
+				var row: Button = hud._thing_key(game.item_name(item), "%.1f" % Carry.item_weight(item), hud._loot_take.bind(String(at["id"]), i), game.item_icon(item))
+				row.disabled = now != ""
+				if item == now and not barred:
+					barred = true
+					row.add_child(_take_bar(hud, p))
+				list.add_child(row)
 			empty = "빈 곳"
-			if not items.is_empty():
+			if now != "":
+				all_key = LampKey.new("멈추기", false)
+				all_key.pressed.connect(hud._loot_stop.bind(String(at["id"])))
+			elif not items.is_empty():
 				all_key = LampKey.new("모두 담기", false)
 				all_key.pressed.connect(hud._loot_all.bind(String(at["id"])))
+				var secs: float = game.actions.take_all_seconds(c)
+				if secs > 0.0:
+					all_note = "다 챙기면 %.1f초" % secs
 		"ground":
 			for i: int in game.actions.near_ground(p):
 				var g: Dictionary = game.ground_items[i]
@@ -236,6 +255,24 @@ static func _near_side(hud, p, at: Dictionary, all: Array) -> Control:
 	if all_key != null:
 		var foot := GlassPane.row()
 		foot.alignment = BoxContainer.ALIGNMENT_END
+		if all_note != "":
+			var note := GlassPane.mixed(all_note, 13.0, 13.0, GlassPane.INK2, GlassPane.INK2)
+			note.name = "TakeAll"
+			foot.add_child(note)
 		foot.add_child(all_key)
 		side.add_child(foot)
 	return side
+
+
+## The thin bar along the foot of the row coming out (card P2 가): how far its
+## weight's time has gone; field_hud.gd fills it each frame.
+static func _take_bar(hud, p) -> ProgressBar:
+	var bar: ProgressBar = hud._bar(GlassPane.AMBER)
+	bar.name = "TakeBar"
+	bar.custom_minimum_size = Vector2.ZERO
+	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	bar.offset_top = -GlassPane.px(4.0)
+	bar.max_value = 1.0
+	bar.value = 1.0 - p.action_t / maxf(p.action_total, 0.001)
+	hud.take_bar = bar
+	return bar

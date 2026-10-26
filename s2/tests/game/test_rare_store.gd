@@ -139,6 +139,9 @@ func test_a_gun_from_a_box_goes_into_a_free_hand_empty() -> void:
 	c["items"] = ["shotgun"]
 	p.position = game.actions._container_at(c)
 	game.actions.take(p, box, 0)
+	while p.action == "take":
+		p.action_t = 0.001
+		game._update_person(p, 0.1)
 	assert_eq(p.hands.size(), 2, "in the free hand")
 	assert_eq(String(p.hands[0]["id"]), "shotgun")
 	assert_eq(int(p.hands[0]["loaded"]), 0, "empty until loaded")

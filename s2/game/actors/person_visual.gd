@@ -172,7 +172,7 @@ const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
 # the ground is done kneeling. Climbing has none that stays on the ground (UAL's
 # p_climb lifts the feet off it in place).
 const OWN_WORK: Dictionary = {
-	"search": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
+	"search": ["p_search_mid", 1.0], "take": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
 	"pry": ["p_pry", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
 	"salvage": ["p_search_mid", 1.0], "repair": ["p_search_mid", 1.0], "wall": ["p_search_mid", 1.0],
 	"craft": ["p_search_mid", 1.0], "swap": ["p_search_mid", 0.8],

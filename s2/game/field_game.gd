@@ -98,7 +98,7 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take"]
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1

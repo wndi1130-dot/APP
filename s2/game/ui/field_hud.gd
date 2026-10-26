@@ -413,7 +413,11 @@ var modal_open: bool = false
 ## The bag pane's right side: the place near shown, and the bag's order (inventory_pane.gd).
 var inv_near: Dictionary = {}
 var inv_sort: String = "weight"
-var modal_slows: bool = false      # the panel up slows the field instead of stopping it
+## The box shown while the player takes a thing out of it (card R1 가): the field
+## goes on under the pane until the thing is out; and the bar on its row.
+var taking_box: String = ""
+var take_bar: ProgressBar
+var modal_slows: bool = false     # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
 var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
 var body_look: Dictionary = {}     # what the body picture shows of each part (body_looks())
@@ -1531,6 +1535,7 @@ func tick(delta: float) -> void:
 	_tick_lever(delta)
 	_tick_portrait(p)
 	_tick_allies()
+	_tick_take()
 	_tick_grab(p, delta)
 	_tick_toasts(delta)
 	_tick_says(delta)
@@ -2457,6 +2462,8 @@ func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
 
 
 func _close_modal() -> void:
+	# A thing still coming out goes on in the field (field_actions.gd take).
+	taking_box = ""
 	if modal != null:
 		modal.queue_free()
 		modal = null
@@ -2840,6 +2847,49 @@ func _loot_take(id: String, i: int) -> void:
 func _loot_all(id: String) -> void:
 	game.actions.take_all(game.player, id)
 	loot(id)
+
+
+## 「멈추기」 while things come out: what is out stays out, the rest stays in.
+func _loot_stop(id: String) -> void:
+	var p = game.player
+	game.actions.take_queue.erase(p.get_instance_id())
+	if p.action == "take":
+		p.cancel_action()
+	taking_box = ""
+	loot(id)
+
+
+## Looking is free, taking costs the time (card R1 가): with the box shown and a
+## thing coming out of it the field goes on under the pane; it stops again once
+## the thing is out (took) — called each time the pane is laid.
+func run_while_taking() -> void:
+	var p = game.player
+	var shown: bool = modal_open and String(inv_near.get("kind", "")) == "box"
+	taking_box = String(inv_near["id"]) if shown and p.action == "take" else ""
+	if taking_box != "":
+		game.paused = false
+
+
+## A thing is out of box `id` (field_actions.gd _take_done): the pane shows the
+## box again — the next of 「모두 담기」 running, or stopped when none is left.
+func took(id: String) -> void:
+	if modal_open and String(inv_near.get("kind", "")) == "box" and String(inv_near.get("id", "")) == id:
+		loot(id)
+
+
+## Each frame while taking with the pane up: the row's bar fills; a blow or a
+## grab that lets the work go puts the pane away, the field already running, so
+## it can be met.
+func _tick_take() -> void:
+	if taking_box == "":
+		return
+	var p = game.player
+	if p.action != "take":
+		_close_modal()
+		toast("챙기다 손을 뗐다")
+		return
+	if take_bar != null and is_instance_valid(take_bar):
+		take_bar.value = 1.0 - p.action_t / maxf(p.action_total, 0.001)
 
 
 ## The bag on the glass with what is near beside it (decision 448-1,
