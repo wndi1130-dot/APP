@@ -36,8 +36,11 @@ vec3 floor_to_linear(vec3 c) {
 vec3 bare_ground(int kind, vec3 colour, vec2 p, vec4 grain) {
 	if (kind == 0 || kind == 5) {
 		float patch = fx_fbm2(p * 0.22 + vec2(3.7, 1.1));
-		vec3 grass = mix(vec3(0.66, 0.65, 0.58), vec3(0.70, 0.69, 0.61), fx_vnoise(p * 2.3));
-		vec3 soil = vec3(0.56, 0.53, 0.48) * (0.95 + 0.1 * grain.a);
+		// Under the platform's concrete as grass and soil are in the world (albedo grass 0.25,
+		// bare soil 0.17, new concrete 0.55: about 0.7 and 0.6 of it in sRGB) and in the
+		// reference's tiles (grass about 0.7 of the pavement): mood, 바닥 색.
+		vec3 grass = mix(vec3(0.53, 0.52, 0.46), vec3(0.56, 0.55, 0.49), fx_vnoise(p * 2.3));
+		vec3 soil = vec3(0.45, 0.42, 0.38) * (0.95 + 0.1 * grain.a);
 		return mix(grass, soil, smoothstep(0.42, 0.6, patch));
 	} else if (kind == 1) {
 		return vec3(0.26, 0.26, 0.27) * (0.95 + 0.1 * fx_vnoise(p * 1.7));
@@ -136,7 +139,7 @@ void fragment() {
 	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);
 	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
+	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.

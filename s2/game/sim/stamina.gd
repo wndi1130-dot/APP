@@ -16,6 +16,9 @@ const WALK_RECOVERY_MULT := 0.25
 const CROUCH_EFFORT_MULT := 1.5
 ## Past half the load a run (or a climb) costs half as much breath again (card G 가).
 const LOAD_BREATH_MULT := [1.0, 1.5, 1.5, 2.8]
+## Under the emergency ration law (decision 430) the underfed body has this
+## much of its breath and of its stop's stamina: it tires that much sooner.
+const RATION_CUT_STAMINA := 0.85
 
 
 static func fatigue_mult(ctx: Dictionary) -> float:

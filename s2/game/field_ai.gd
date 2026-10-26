@@ -41,6 +41,9 @@ const SAVE_FAR: float = 4.0
 ## This many on a companion at once and it steps back toward the chief.
 const CROWD_R: float = 2.5
 const CROWD_N: int = 3
+## Stepping back toward the chief, it keeps this far from the chief's body (check
+## shots 10-26: it backed into the chief and the two bodies stood as one).
+const CHIEF_ROOM: float = 1.0
 ## Walking, the one in front keeps this far ahead of the chief.
 const LEAD_AHEAD: float = 3.0
 ## Slow work is dropped when one of the dead gets this near.
@@ -532,7 +535,12 @@ func _engage(p, z: Dictionary) -> void:
 		var away: Vector3 = (p.position - z["pos"])
 		away.y = 0
 		var back: Vector3 = (away.normalized() + (game.player.position - p.position).normalized() * 0.5).normalized()
-		_walk(p, game.walkable_near(p.position + back * 2.5, false, 2), true)
+		# It steps back with its face to them, at a walk, not turning its back to run off
+		# and round again to shove (move_rules.gd; user field test: they "whip round").
+		p.running = false
+		_walk(p, game.walkable_near(_beside_chief(p.position, p.position + back * 2.5, away), false, 2), false)
+		p.brain["face_hold"] = z["pos"]
+		p.brain["face_hold_t"] = game.clock.elapsed
 		if d < 1.3:
 			p.face_point(z["pos"])
 			game.combat.shove(p)
@@ -562,10 +570,30 @@ func _engage(p, z: Dictionary) -> void:
 	game.combat.melee_target(p, z, true)
 
 
+## Where to step back to from `from`, `to` as the crowd and the chief give it, not
+## through the chief: a way back that comes within CHIEF_ROOM of the chief ends at
+## the chief's side instead, the side it is on (straight on: square to `away`).
+func _beside_chief(from: Vector3, to: Vector3, away: Vector3) -> Vector3:
+	var chief: Vector3 = game.player.position
+	var way := Vector3(to.x - from.x, 0.0, to.z - from.z)
+	var rel := Vector3(chief.x - from.x, 0.0, chief.z - from.z)
+	var along := clampf(rel.dot(way) / maxf(way.length_squared(), 0.0001), 0.0, 1.0)
+	var off := from + way * along - chief
+	off.y = 0.0
+	if off.length() >= CHIEF_ROOM:
+		return to
+	if off.length() < 0.05:
+		off = Vector3(-away.z, 0.0, away.x)
+		if off.length() < 0.05:
+			off = Vector3.RIGHT
+	return Vector3(chief.x, to.y, chief.z) + off.normalized() * CHIEF_ROOM
+
+
 ## A swing once begun is seen through where it stands (결정 441 (1)): no next target or
-## order takes it off. The rest after a blow, a shove and a stomp do not hold the feet.
+## order takes it off. The rest after a blow and a stomp do not hold it, nor a shove:
+## that plants the feet over its first half (feet_held) but keeps the order.
 func _hold_swing(p) -> bool:
-	if p.strike_kind != "swing" or (p.strike_t <= 0.0 and not game.combat.feet_held(p)):
+	if p.strike_kind != "swing" or (p.strike_t <= 0.0 and not game.combat.blow_holds_feet(p)):
 		return false
 	p.stop()
 	return true
@@ -1201,7 +1229,7 @@ func _dug(p) -> void:
 	var w: Dictionary = _wagon_with_coal()
 	if w.is_empty():
 		return
-	var take := minf(TRIP_COAL * game.mission_play.load_mult(), float(w["coal"]))
+	var take := minf(TRIP_COAL * game.mission_play.load_mult() * game.haul_mult(), float(w["coal"]))
 	w["coal"] = float(w["coal"]) - take
 	p.brain["load"] = take
 	p.brain["job"] = "carry"
