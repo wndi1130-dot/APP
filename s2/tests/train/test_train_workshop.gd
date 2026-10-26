@@ -20,7 +20,7 @@ func _game(stores: Dictionary = {}) -> Dictionary:
 func test_a_new_run_starts_with_s1s_scrap_wood_and_parts() -> void:
 	var d: Dictionary = TrainDom.start()
 	assert_eq([d["scrap"], d["wood"], d["parts"]], [10, 10, 4])
-	assert_eq(d["wardrobe"], [])
+	assert_eq(d["wardrobe"], TrainDom.START_WARDROBE, "the railway coats and gloves (decision 443)")
 	assert_true(TrainDom.is_store(d))
 	assert_eq(TrainDom.empty()["wardrobe"], [], "the empty stores have an empty wardrobe")
 
@@ -90,7 +90,9 @@ func test_a_coat_goes_to_the_wardrobe() -> void:
 	assert_true(TrainWorkshop.start(g, "coat_long"))
 	var r: Dictionary = TrainWorkshop.run(g)
 	assert_eq(r["made"], ["coat_long"])
-	assert_eq(g["dom"]["wardrobe"], [{"id": "coat_long", "condition": 1.0}])
+	# Onto the start wardrobe (decision 443).
+	assert_eq((g["dom"]["wardrobe"] as Array).size(), TrainDom.START_WARDROBE.size() + 1)
+	assert_eq(g["dom"]["wardrobe"].back(), {"id": "coat_long", "condition": 1.0})
 	assert_true(TrainDom.is_store(g["dom"]))
 
 

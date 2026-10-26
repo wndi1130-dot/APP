@@ -189,11 +189,13 @@ static func build(g: Dictionary, t: Dictionary, opts: Dictionary) -> Dictionary:
 	for id: String in companion_candidates(g, t, "guard"):
 		if not taken.has(id) and escorts.size() < ESCORT_GEAR.size():
 			escorts.append(id)
-	# The hands come out of the armory when the train keeps one (kit_pick.gd, PR 5).
+	# The hands come out of the armory and the chief's and companions' coats and gloves out of
+	# the wardrobe when the train keeps them (kit_pick.gd, PR 5 and PR D).
 	var stock: Variant = KitPick.stock_of(g)
-	var roster: Array = [person(g, t, CAPTAIN_ID, "chief", KitPick.kit(CHIEF_GEAR, stock))]
+	var closet: Variant = KitPick.closet_of(g)
+	var roster: Array = [person(g, t, CAPTAIN_ID, "chief", KitPick.dress(KitPick.kit(CHIEF_GEAR, stock), closet))]
 	for id: String in companions:
-		roster.append(person(g, t, id, "companion", KitPick.kit(COMPANION_GEAR[String(_profile(t, id).get("community", "tail"))], stock)))
+		roster.append(person(g, t, id, "companion", KitPick.dress(KitPick.kit(COMPANION_GEAR[String(_profile(t, id).get("community", "tail"))], stock), closet)))
 	var work: Array = []
 	for id: String in carriers:
 		work.append(person(g, t, id, "carrier", KitPick.kit(CARRIER_GEAR, stock)))
