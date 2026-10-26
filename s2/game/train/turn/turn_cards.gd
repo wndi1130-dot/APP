@@ -8,6 +8,7 @@ const People = preload("res://game/train/turn/turn_people.gd")
 const Death = preload("res://game/train/turn/turn_death.gd")
 const Travel = preload("res://game/train/turn/turn_travel.gd")
 const Field = preload("res://game/politics/field_return.gd")
+const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -64,7 +65,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var s: Dictionary = g["comms"][comm]
 	match str(card["kind"]):
 		"travel": return travel_view(g, t, card.get("text", ""))
-		"info": return {"title": "", "choices": [choice("", "덮는다", [])]}
+		"info": return {"title": str(card.get("who", "알림")), "choices": [choice("", "알았다", [])]}
 		"need_warn":
 			if not t["NEEDS"].has(card.get("text")): return {}
 			var def: Dictionary = t["NEEDS"][card["text"]]
@@ -98,6 +99,16 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		"bitten":
 			var part: String = ["팔을", "다리를", "손을"][int(card["uid"]) % 3]
 			return {"title": "물렸다", "key": "bitten", "choices": [choice("cut", part + " 자른다", [["med", -3], ["injured", 1], ["rel", comm, 2]], "", true), choice("hide", "숨겨 준다", [], "hide_bite", true), choice("leave", "두고 온다", [["rel", comm, -8], ["tension", 2]], "leave_bitten", true)]}
+		"ration_cut":
+			# The tail's demand after 비상식량감축법 stands (결정 091·430, turn_ration_cut.gd).
+			var k: Dictionary = t["RATION_CUT"]
+			return {"title": "감축 배급 요구", "key": "ration_cut", "choices": [
+				choice("cut_spare_tail", "꼬리칸은 뺀다", [["rel", "tail", k["spareRel"]["tail"]], ["rel", "front", k["spareRel"]["front"]]], "cut_spare_tail"),
+				choice("cut_front_first", "앞칸이 먼저 낸다", [["rel", "tail", k["frontRel"]["tail"]], ["rel", "front", k["frontRel"]["front"]]], "cut_front_first"),
+				choice("refuse", "거절한다", [["rel", "tail", k["refuseRel"]], ["tension", k["refuseTension"]]], "cut_refuse")]}
+		"promise_ledger":
+			# The result arc (council_log.gd): a second broken promise brings the car's ledger; a third closes open deals.
+			return {"title": "약속 장부", "choices": [choice("", "사과하고 갚는다", [["lux", -3], ["rel", comm, 8]]), choice("", "물리친다", [["rel", comm, -5]], "ledger_refuse")]}
 		"rep_sick":
 			return {"title": "대표가 앓는다", "choices": [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if s.get("sick") is Dictionary else [choice("", "알았다", [])]}
 	return {}
@@ -174,7 +185,11 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 				need["promised"] = true
 				need["due"] += 1
 		"rep_heal": People.recover(g, t, comm, "의무진의 약을 먹고")
+		"cut_spare_tail": RationCut.apply(g, t, "spare_tail")
+		"cut_front_first": RationCut.apply(g, t, "front_first")
+		"cut_refuse": RationCut.apply(g, t, "refuse")
 		"proxy_meet": g["comms"][comm]["leader"]["traitShown"] = 2
+		"ledger_refuse": Field._offend(g, comm)
 	# hub.ts registers hubChoose for every accepted card, including non-hub cards.
 	var hub: Dictionary = C.hub(g)
 	if not hub.has("lines"): hub["lines"] = []

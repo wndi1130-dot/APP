@@ -11,6 +11,7 @@ const FieldHud = preload("res://game/ui/field_hud.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
 
 
 ## The rows a press draws again are freed a frame later; let them go before GUT counts orphans.
@@ -170,3 +171,48 @@ func test_the_fold_key_folds() -> void:
 	watch_signals(p)
 	_key(p, "Fold").pressed.emit()
 	assert_signal_emitted(p, "folded")
+
+
+## On the train's home the 연구 room's pane stands where the car's did, as the
+## refit room's and the workshop's: one room at a time, folding brings the car
+## picked before back.
+func test_the_slice_opens_the_research_room() -> void:
+	var f = SliceFlow.new()
+	f.opts = {"skip_field": true, "seed": 3, "cinema": false}
+	add_child_autofree(f)
+	await wait_process_frames(1)
+	assert_eq(f.current(), "train")
+	assert_true((f.bar.open_rooms as Array).has("papers"), "the 연구 key opens a room, not 「준비 중」")
+	var was: String = f.sel
+	f._open_room("papers")
+	assert_true(is_instance_valid(f.research), "the research pane is up")
+	assert_eq(String(f.research.name), "ResearchPane")
+	assert_false(f.pane.visible, "the car's pane makes way")
+	f._open_room("wrench")
+	await wait_process_frames(1)
+	assert_false(is_instance_valid(f.research), "the refit room takes its place")
+	f._open_room("papers")
+	f._close_room()
+	await wait_process_frames(1)
+	assert_false(is_instance_valid(f.research))
+	assert_eq(f.sel, was, "folding brings back the car picked before the rooms")
+
+
+## A running technology shows what it takes a stretch where its key would be;
+## when the stores could not pay it, the amount turns red and it runs at ½.
+func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
+	var g := _game()
+	g["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	var r: Dictionary = ResearchPane.model(g, ["e2"])["rows"][0]
+	assert_eq(r["upkeep"], [{"key": "parts", "icon": "gear", "n": 0.25}])
+	assert_false(bool(r["starved"]))
+	var p := _pane(g, ["e2"])
+	var n := p.find_child("Upkeep_e2_parts", true, false) as Label
+	assert_eq(n.text, "0.25")
+	assert_false((p.find_child("Effect_e2", true, false) as Label).text.begins_with("½"))
+	g["dom"]["techs"]["e2"]["starved"] = true
+	var p2 := _pane(g, ["e2"])
+	assert_true((p2.find_child("Effect_e2", true, false) as Label).text.begins_with("½ "), "it runs at half")
+	assert_eq((p2.find_child("Upkeep_e2_parts", true, false) as Label).get_theme_color("font_color"), ResearchPane.RED)
+	g["dom"]["techs"]["e5"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	assert_null(_pane(g, ["e5"]).find_child("Upkeep_e5_parts", true, false), "no upkeep, nothing drawn")

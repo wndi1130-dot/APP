@@ -1,5 +1,5 @@
 import { installTrainScroll } from './train_scroll';
-import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard, LOCO_IDS, locoUnchosen, setLoco } from '../game';
+import { devScene, openConditions, autoLeverStatus, cloneGame, currentAgenda, platformNote, viewCard, LOCO_IDS, locoUnchosen, setLoco, useSeasonAct } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h, s } from './dom';
 import { locoScreen } from './loco_pick';
@@ -239,6 +239,8 @@ export function startApp(root: HTMLElement): void {
   const scene = urlScene(); // S1b 시험 시작 상태(?s1b=1&scene=powers|martial). 메뉴엔 없고 주소로만
   let g: Game = saved && (!urlSeed || saved.seed === urlSeed) && (!wantS1c || saved.dom) && (!wantS1b || saved.dark) && sceneResumes(scene, saved)
     ? saved : newGame(urlSeed || randomSeed(), wantS1c, wantS1b);
+  // 시험 판 곡선으로 저장한 판은 그 곡선으로 다시 돈다(곡선은 판들이 함께 읽는 표라 판을 열 때 맞춘다).
+  if (g === saved && g.seasonAct) useSeasonAct(g.seasonAct);
   if (g !== saved && scene && g.dark && devScene(g, scene)) { noteScene(scene, g); save(g); }
   // 주소에 ?loco=c1..c4가 있으면 고르는 화면을 건너뛴다(스크린샷, 같은 판 다시 보기).
   const urlLoco = new URLSearchParams(globalThis.location?.search ?? '').get('loco');

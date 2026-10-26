@@ -7,10 +7,17 @@ extends Node3D
 ## edge is map-layout's; this only hides what lies beyond it. The fog keeps the
 ## reference game's sheets: patchy noise near, solid farther out, the hour's
 ## fog colour (fx/atmosphere.gd fog_color).
+## A foggy day lays fog over the whole field as well (색감 루프 C5): one layer
+## over the screen (field_fog.gdshader), thin round the eye, closing in from
+## where sight ends in the fog. Nothing is drawn for it on other days.
 
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FOG_SHADER := preload("res://fx/shaders/map_edge_fog.gdshader")
+const FIELD_FOG_SHADER := preload("res://fx/shaders/field_fog.gdshader")
+## The fog's own brightness under the light (a pale grey, as the reference
+## game's (0.9, 0.9, 0.95) fog reads lit).
+const FOG_ALBEDO := 0.8
 
 ## How far past the edge the ground and the fog go (the camera never shows more
 ## than about 30 m past it).
@@ -27,6 +34,9 @@ const FOG_REACH := 12.0
 var ground: MeshInstance3D
 var sheets: Array[MeshInstance3D] = []
 var fog_mats: Array[ShaderMaterial] = []
+## The foggy day's layer over the screen; hidden unless the look has fog.
+var field: MeshInstance3D
+var field_mat: ShaderMaterial
 var _map_mat: ShaderMaterial
 var _mask := -1.0
 
@@ -58,12 +68,65 @@ func setup(grid: FieldGrid, map_material: ShaderMaterial) -> void:
 		add_child(node)
 		sheets.append(node)
 		fog_mats.append(m)
+	field_mat = ShaderMaterial.new()
+	field_mat.shader = FIELD_FOG_SHADER
+	field_mat.render_priority = 100
+	field = MeshInstance3D.new()
+	field.name = "FieldFog"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(2, 2)
+	field.mesh = quad
+	field.material_override = field_mat
+	field.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The shader puts it over the screen; never culled.
+	field.extra_cull_margin = 16384.0
+	field.visible = false
+	add_child(field)
 
 
 ## The hour's fog colour (Atmosphere.light fog_color).
 func set_fog(color: Color) -> void:
 	for m in fog_mats:
 		m.set_shader_parameter("fog_color", color)
+
+
+## The foggy day's fog over the field: how thick (Atmosphere.field_fog, 0 hides
+## the layer), how far sight reaches in it (m, the sight mask's radius) and the
+## hour's light (Atmosphere.light). The fog is lit as a pale up-facing sheet
+## would be: half the hour's fog hue, half the reference's cool white.
+func set_field_fog(amount: float, sight_m: float, light: Dictionary) -> void:
+	field.visible = amount > 0.0
+	field_mat.set_shader_parameter("field_fog", clampf(amount, 0.0, 1.0))
+	field_mat.set_shader_parameter("clear_r", sight_m)
+	field_mat.set_shader_parameter("fog_albedo", fog_albedo(light))
+	field_mat.set_shader_parameter("fog_light", fog_light(light))
+
+
+## Where the eye stands (the player): the fog over the field thins round it.
+func set_eye(at: Vector3) -> void:
+	if field.visible:
+		field_mat.set_shader_parameter("clear_at", Vector2(at.x, at.z))
+
+
+## The fog's own linear colour (Atmosphere.light keys): half the hour's fog hue,
+## half the reference's cool white, at a pale fog's brightness.
+static func fog_albedo(light: Dictionary) -> Vector3:
+	var fc: Color = light.get("fog_color", Color(0.6, 0.6, 0.62))
+	var top := maxf(fc.r, maxf(fc.g, maxf(fc.b, 0.05)))
+	var hue := Color(fc.r / top, fc.g / top, fc.b / top).lerp(Color(0.95, 0.95, 1.0), 0.5).srgb_to_linear()
+	return Vector3(hue.r, hue.g, hue.b) * FOG_ALBEDO
+
+
+## The hour's light on an up-facing sheet, linear: the sun by how high it
+## stands and the fill, as the ground takes them. The shader fades the fog's
+## colour first (the tactical pause, as world_vis does) and lights it after.
+static func fog_light(light: Dictionary) -> Vector3:
+	var sun := Color(light.get("sun_color", Color.WHITE)).srgb_to_linear()
+	var amb := Color(light.get("ambient_color", Color.WHITE)).srgb_to_linear()
+	var up := sin(deg_to_rad(clampf(-float(light.get("sun_pitch", -45.0)), 0.0, 90.0)))
+	var se := float(light.get("sun_energy", 1.0)) * up
+	var ae := float(light.get("ambient_energy", 1.0))
+	return Vector3(sun.r * se + amb.r * ae, sun.g * se + amb.g * ae, sun.b * se + amb.b * ae)
 
 
 func _process(_delta: float) -> void:
@@ -76,6 +139,7 @@ func _process(_delta: float) -> void:
 		_mask = k
 		for f in fog_mats:
 			f.set_shader_parameter("mask_on", k)
+		field_mat.set_shader_parameter("mask_on", k)
 
 
 ## The edge cells' mean colour (outdoor ground the most), the colour the ground

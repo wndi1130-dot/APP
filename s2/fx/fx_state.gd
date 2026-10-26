@@ -252,6 +252,12 @@ static func set_sky(tex: Texture2D) -> bool:
 	return true
 
 
+## The seconds the field has stood paused (pause_veil.gd); not a weather value,
+## so it is not in GLOBALS and a stop's params leave it alone.
+static func set_still(seconds: float) -> void:
+	RenderingServer.global_shader_parameter_set("fx_still", seconds)
+
+
 static func apply(params: Dictionary) -> Array[String]:
 	var written: Array[String] = []
 	for key in GLOBALS:
