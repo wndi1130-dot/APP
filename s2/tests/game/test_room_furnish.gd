@@ -531,3 +531,19 @@ func test_a_labelled_bedroom_with_bunks_gets_no_second_bed() -> void:
 func test_the_empty_rooms_of_a_store_building_are_stores() -> void:
 	var d := FieldMaps.build("lake_01")
 	assert_gt(_rule_rooms(d, "얼음 창고").get("storage", 0), 1, "얼음 창고의 빈 방")
+
+
+func test_workshops_garages_barns_and_woodsheds_have_their_own_sets() -> void:
+	# ref-ops 대조 7: 바깥 건물은 공구·재료 몫. 일터·농가 낱말은 살림·창고 낱말보다 먼저 읽는다.
+	assert_eq(RoomFurnish.room_class("작업실", {}, 0), "work")
+	assert_eq(RoomFurnish.room_class("정비실", {}, 0), "work")
+	assert_eq(RoomFurnish.room_class("차고", {}, 0), "garage")
+	assert_eq(RoomFurnish.room_class("외양간 앞방", {}, 0), "barn")
+	assert_eq(RoomFurnish.room_class("건초 헛간 뒷방", {}, 0), "barn")
+	assert_eq(RoomFurnish.room_class("장작 창고", {}, 0), "woodshed")
+	assert_eq(RoomFurnish.room_class("장작 헛간 안방", {}, 0), "woodshed", "헛간의 안쪽 방은 침실이 아니다")
+	assert_eq(RoomFurnish.room_class("작업실", {"bed": true}, 1), "bed", "위층 일터에 침대가 있으면 살림방")
+	var d := FieldMaps.build("houses_01")
+	assert_true(_kinds_in(d, "차고", "work").has("workbench"), "차고의 작업실에 작업대")
+	var lodge := FieldMaps.build("lodge_02")
+	assert_true(_kinds_in(lodge, "장작 창고", "woodshed").has("firewood_stack"), "장작 창고에 장작 더미")

@@ -84,11 +84,12 @@ func test_bedroom_building_without_home_name_gets_a_bath() -> void:
 	d["buildings"][0]["name"] = "가게"
 	assert_true(Furnish.density_plan(d)["baths"]["0"]["selected"])
 
-func test_office_names_and_workshop_exclusion() -> void:
+func test_office_names_and_workshops_are_work_rooms() -> void:
 	for name in ["사무방", "관리실", "역무실", "서무실", "사령실", "접수실", "계량방"]:
 		assert_eq(Furnish.room_class(name, {}, 0), "office", name)
+	# 일터 이름은 사무실이 아니라 일터 묶음이다(바깥 건물 가구, ref-ops 대조 7).
 	for name in ["작업실", "공방", "공구실"]:
-		assert_eq(Furnish.room_class(name, {}, 0), "", name)
+		assert_eq(Furnish.room_class(name, {}, 0), "work", name)
 	assert_ne(Furnish.room_class("관리인 집 안방", {}, 0), "office")
 
 func test_preserved_storage_on_a_door_front_uses_a_short_shape_when_needed() -> void:

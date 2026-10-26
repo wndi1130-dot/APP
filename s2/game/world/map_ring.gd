@@ -17,6 +17,8 @@ const ROAD_WIDTH := 2
 const LOT_STEP := 22
 const TREE_STEP := 9
 const FENCE_PIECE := 7
+const TOWN_SHEDS: Array[String] = ["차고", "바깥 헛간"]
+const WILD_SHEDS: Array[String] = ["장작 헛간", "외양간"]
 static var _finishing := false
 ## Set while the plain map is built for a ring: its own path refresh is skipped, as the
 ## ring builds every floor's grid anew at the larger size (field_maps.gd build_from).
@@ -163,6 +165,9 @@ static func add(original: Dictionary) -> Dictionary:
 		data[key].append_array(ring[key])
 	data["containers"].merge(ring["containers"])
 	g.refresh_paths()
+	# The room kinds were numbered by room on the grid that was furnished: the grown grid numbers
+	# its rooms anew, so the old table would name the wrong rooms (box keys, room_furnish.gd).
+	data.erase("density_classes")
 	data["map_ring"] = {"width": width, "inner": inner, "seed": seed_value,
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
@@ -251,11 +256,14 @@ static func _clear(g: FieldGrid, r: Rect2i, inner: Rect2i, lots: Array[Rect2i]) 
 static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int, road: int) -> void:
 	var g: FieldGrid = data["grid"]
 	var home := number % 3 == 2
-	var name: String = ["바깥 헛간", "바깥 창고", "외딴집"][number % 3]
+	# Every third lot a lone house, the rest sheds by what the place is (ref-ops 대조 7): the
+	# room names furnish them (room_furnish.gd: garage, barn, woodshed kits). Box names stay.
+	var sheds: Array[String] = TOWN_SHEDS if TOWN.has(String(data.get("place_kind", ""))) else WILD_SHEDS
+	var name: String = "외딴집" if home else (sheds[(number / 3) % sheds.size()] if number % 3 == 0 else "바깥 창고")
 	data["buildings"].append({"id": id, "name": name, "rect": r, "warm": false,
 		"window_broken": false, "role": "home" if home else "shed"})
 	if number % 3 == 0:
-		data["labels"].append({"text": "헛간 창고", "cell": r.position + Vector2i(2, 2), "level": 0})
+		data["labels"].append({"text": name, "cell": r.position + Vector2i(2, 2), "level": 0})
 	Shell._rooms(g, id, r)
 	var door := Vector2i(r.position.x + r.size.x / 2, r.end.y - 1)
 	var direction := Vector2i.DOWN
