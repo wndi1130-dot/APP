@@ -10,9 +10,11 @@ const SAFE_SEC := 1200.0
 const LIMIT_SEC := 1800.0
 ## When the train comes in, rolled stop by stop (decision 471 B0): mostly by day,
 ## now and then late, so the stops do not all end the same way. [share, from,
-## to] in game minutes: morning 07:30-09:30, midday 10:00-12:30, late afternoon
+## to] in game minutes: morning 09:00-09:50, midday 10:00-12:30, late afternoon
 ## 13:00-14:20, dusk 14:50-15:30. The light still goes at 14:50 (decision 210).
-const ARRIVALS: Array = [[0.40, 450, 570], [0.35, 600, 750], [0.20, 780, 860], [0.05, 890, 930]]
+## Morning starts at 09:00: the deepest winter's day light is full by 08:50, so
+## no stop comes in before sunrise and its first screen is as light as 10:30's.
+const ARRIVALS: Array = [[0.40, 540, 590], [0.35, 600, 750], [0.20, 780, 860], [0.05, 890, 930]]
 
 ## Debug speed. 2.0 makes every field clock run twice as fast.
 var speed: float = 1.0

@@ -522,6 +522,14 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	if float(w["night"]) > 0.5:
 		light_pitch = -40.0
 		light_yaw = -20.0
+	# The day is flat from the day band to the dusk band, as in the reference: a
+	# low morning or afternoon sun lights the ground as this stop's noon sun would.
+	# The fill makes up what the low angle takes; the long shadows stay, and dawn
+	# and dusk still dim (decision 471 B0: two stops in five now come in the morning).
+	var face_sin := sin(deg_to_rad(-light_pitch))
+	var flat_sin := lerpf(face_sin, maxf(face_sin, sin(deg_to_rad(clampf(cold_key(c, "noon", -1, side), 16.0, 60.0)))), float(w["day"]))
+	if flat_sin > face_sin:
+		ambient_energy += sun_energy * (flat_sin - face_sin) * _lin_lum(sun) / maxf(_lin_lum(ambient), 0.01)
 	var snow_level := 0
 	var cm: float = cold_key(c, "snow_cm", 1 if bool(reg["open"]) else 0, side)
 	if cm >= 15.0:
@@ -537,9 +545,8 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	# wind (the reference's day light 1 − 0.15·fall − 0.2·wind) and our own gloom.
 	var closed := clampf(veil / 0.75, 0.0, 1.0) * (1.0 - night_part)
 	if closed > 0.0:
-		var face_sin := sin(deg_to_rad(-light_pitch))
 		var clear_sun := _mix_num(w, "sun_energy") * float(WEATHER["clear"]["sun"]) * lerpf(0.35, 1.0, up)
-		var clear_face := clear_sun * face_sin * _lin_lum(_mix_bands(w, c, "sun")) + _mix_num(w, "ambient_energy") * _lin_lum(_mix_bands(w, c, "ambient"))
+		var clear_face := clear_sun * flat_sin * _lin_lum(_mix_bands(w, c, "sun")) + _mix_num(w, "ambient_energy") * _lin_lum(_mix_bands(w, c, "ambient"))
 		var face := sun_energy * face_sin * _lin_lum(sun) + ambient_energy * _lin_lum(ambient)
 		var keep := CLOUD_KEEP * (1.0 - 0.15 * fall - 0.2 * wind)
 		var short := (clear_face * keep - face) * closed
