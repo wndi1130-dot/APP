@@ -65,6 +65,7 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
+const PeopleSeparation = preload("res://game/sim/people_separation.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -1534,6 +1535,7 @@ func _step(delta: float) -> void:
 	_tick_radio(delta)
 	for p in people:
 		_update_person(p, delta)
+	_separate_people(delta)
 	zombies.update(delta)
 	ai.update(delta)
 	_left_behind()
@@ -1559,6 +1561,55 @@ func _step(delta: float) -> void:
 		if now - float(s["t"]) < SimNoise.EVENT_DISPLAY_SECONDS:
 			keep.append(s)
 	sounds = keep
+
+
+## The living standing still keep out of each other's bodies (people_separation.gd),
+## once everyone has moved: only where they stand changes, never onto a cell people
+## cannot walk, through a wall or onto a stair. Anyone on the way somewhere passes
+## through as before, and the player, anyone at work at a spot, carrying someone
+## or in a fight stays put: the other one standing steps aside. (Easing walkers
+## and fighters too changed the fights the 40 runs measure, 10-26.)
+func _separate_people(delta: float) -> void:
+	var bodies: Array = []
+	var positions := PackedVector3Array()
+	var floors := PackedInt32Array()
+	var ids := PackedInt64Array()
+	var speeds := PackedFloat32Array()
+	var fixed := PackedByteArray()
+	for p in people:
+		if not p.visible or not p.is_alive() or p.body.downed or p.fallen_t > 0.0 or not p.grabbers.is_empty():
+			continue
+		if p.moving or not p.path.is_empty():
+			continue
+		bodies.append(p)
+		positions.append(p.position)
+		floors.append(level_of(p.position))
+		ids.append(hash(String(p.pid)))
+		speeds.append(p.speed(grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))))
+		var fighting: bool = not p.target_zombie.is_empty() or p.target_person != null or p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+		fixed.append(1 if p == player or p.action != "" or p.carrying_wounded != null or fighting else 0)
+	if bodies.size() < 2:
+		return
+	var pushes := PeopleSeparation.pushes(positions, floors, ids, speeds, fixed, delta)
+	for i in range(bodies.size()):
+		if pushes[i] == Vector3.ZERO:
+			continue
+		var dest := positions[i] + pushes[i]
+		var cell := FieldGrid.cell_of(dest)
+		var lg := grid_at(positions[i])
+		if level_of(dest) != floors[i] or not lg.people_can_walk(cell) or not lg.body_line_clear(FieldGrid.cell_of(positions[i]), cell):
+			continue
+		if _on_stair(cell, floors[i]):
+			continue
+		bodies[i].position = dest
+
+
+## A stair or ladder end on that floor (the dead are never pushed onto one either).
+func _on_stair(cell: Vector2i, level: int) -> bool:
+	for stair in stairs:
+		if stair["cell"] == cell and (int(stair["low"]) == level or int(stair["high"]) == level):
+			return true
+	return false
 
 
 func _update_zone(delta: float) -> void:
