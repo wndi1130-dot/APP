@@ -573,6 +573,15 @@ static func light(l: Dictionary) -> Dictionary:
 	}
 
 
+## How thick a foggy day's fog lies over the whole field (fx/map_edge.gd): 0
+## without fog in the look, 1 in a thick one (the reference game's fog days
+## go white; overcast and rain keep the field clear).
+static func field_fog(l: Dictionary) -> float:
+	if not Array(l["kinds"]).has("fog"):
+		return 0.0
+	return smoothstep(0.55, 0.9, float(l["haze"]))
+
+
 ## The fx_* shader globals for this look. FxState still makes wet, snow, frost
 ## and wind from what is drawn and the picture temperature; this adds the cold
 ## (fx_cold: cold, ice, icicles, leaves), the sky's light (fx_sky) and the

@@ -56,9 +56,10 @@ static func weak_hold(p) -> bool:
 
 
 ## Running as the feet go now: the run is on and the body can run. Out of
-## breath, spent, crouched or overloaded it walks, as field_game.gd moves it.
+## breath, spent, crouched, over the load or with something big in its arms it
+## walks, as field_game.gd moves it (person.gd speed, load_lets_run).
 static func runs(p) -> bool:
-	return p.running and not p.crouched and p.carry_state() < 3 and p.body.can_run()
+	return p.running and not p.crouched and p.load_lets_run() and p.body.can_run()
 
 
 ## The walk (or the run) for what is in the hand, "" for the plain one.

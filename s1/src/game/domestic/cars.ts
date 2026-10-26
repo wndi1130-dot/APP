@@ -100,7 +100,21 @@ export function rollUsefulCar(g: Game): void {
   else if (r < (D.wagonChance + D.coachChance) * m) domCard(g, { kind: 'dom:car', n: 1 });
 }
 
-/** 꼬리 끝에 칸을 붙인다. 14번째 칸부터 달리기 석탄 +0.4/구간(4.2). */
+/** 측선 칸을 고쳐 다는 자재 [목재, 고철](결정 426 카드 ④ 나). */
+export function carRepair(kind: 'store' | 'coach'): [number, number] {
+  return kind === 'coach' ? [D.coachWood, D.coachScrap] : [D.wagonWood, D.wagonScrap];
+}
+
+/** 고쳐 달 자재가 모자라면 그 까닭(카드의 막힘 글), 넉넉하면 undefined. */
+export function carShort(g: Game, kind: 'store' | 'coach'): string | undefined {
+  const d = dom(g);
+  const [wood, scrap] = carRepair(kind);
+  if (d.wood < wood) return '목재가 모자라다';
+  if (d.scrap < scrap) return '고철이 모자라다';
+  return undefined;
+}
+
+/** 꼬리 끝에 칸을 붙인다. 14번째 칸부터 달리기 석탄 +0.4/구간(4.2). 자재는 부르는 쪽이 낸다(카드는 carRepair). */
 export function attachCar(g: Game, kind: 'store' | 'coach'): void {
   const d = dom(g);
   d.extraCars.push(kind);
