@@ -48,6 +48,24 @@ func test_rooms_take_their_kind_from_their_furniture() -> void:
 	assert_eq(_code(img, Vector2i(3, 3), 1), 0, "a room with no telling furniture keeps the old look")
 
 
+## 손으로 그린 지도(첫 정차): 가구 대신 이름 붙은 상자. object_rules가 찬장에 붙인 책장은 믿지 않는다.
+func test_hand_laid_boxes_tell_their_room_by_name() -> void:
+	var data := _house()
+	data["containers"] = {
+		"pantry": {"id": "pantry", "name": "남쪽 주택 찬장", "cell": Vector2i(3, 3), "level": 0},
+		"drawer": {"id": "drawer", "name": "주택 침실 서랍", "cell": Vector2i(7, 3), "level": 0,
+			"furniture": "drawer_chest", "object_legacy": true},
+		"attic": {"id": "attic", "name": "주택 다락 트렁크", "cell": Vector2i(3, 3), "level": 1},
+		"laid": {"id": "laid", "name": "부엌 찬장", "cell": Vector2i(7, 3), "level": 1, "furniture": "cupboard"},
+	}
+	data["props"] = [{"kind": "bookcase", "rect": Rect2i(3, 3, 1, 1), "level": 0, "legacy_model": "res://x.glb"}]
+	var img := RoomFinish.build(data)
+	assert_eq(_code(img, Vector2i(2, 2), 0) % 8, RoomFinish.KITCHEN, "the cupboard's name says kitchen, not its bookcase")
+	assert_eq(_code(img, Vector2i(8, 4), 0) % 8, RoomFinish.BED)
+	assert_eq(_code(img, Vector2i(3, 3), 1), 0, "an attic trunk says no room")
+	assert_eq(_code(img, Vector2i(7, 3), 1), 0, "a box laid in furniture is read from the furniture's prop")
+
+
 func test_one_house_one_finish_per_kind_and_houses_differ() -> void:
 	var seen: Dictionary = {}
 	for b in range(12):
