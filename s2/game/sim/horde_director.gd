@@ -266,7 +266,7 @@ func size_word(n: int) -> String:
 
 func _arrival_minutes(field_t: float, clock) -> float:
 	if clock != null and clock.has_method("minutes_at"):
-		return float(clock.minutes_at(field_t))
+		return float(clock.minutes_at(field_t, float(clock.arrive_min)))
 	return FieldClock.minutes_at(field_t)
 
 

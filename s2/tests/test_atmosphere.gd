@@ -321,6 +321,22 @@ func test_a_closed_sky_greys_the_day_and_what_falls_dims_it() -> void:
 	assert_lt(Color(l["ambient_color"]).s, Color(band["ambient_color"]).s, "grey, not tinted")
 
 
+func test_a_low_day_sun_lights_the_ground_as_noon_does() -> void:
+	# Decision 471 B0: two stops in five come in the morning. Through the day
+	# band the ground keeps the noon light; the sun still stands low (long
+	# shadows), and dawn and dusk still dim.
+	for c in [0.0, 0.5, 1.0]:
+		var t := Atmosphere.sun_times(c)
+		var noon := (t.x + t.y) * 0.5
+		var morning := t.x + 1.0
+		for kinds in [["clear"], ["overcast"]]:
+			var at_noon := _face(Atmosphere.look(noon, kinds, "K1", c))
+			var early := Atmosphere.look(morning, kinds, "K1", c)
+			assert_almost_eq(_face(early) / at_noon, 1.0, 0.03, "%s %s morning" % [c, kinds])
+			assert_gt(float(early["sun_pitch"]), float(Atmosphere.look(noon, kinds, "K1", c)["sun_pitch"]), "the sun still low")
+			assert_lt(_face(Atmosphere.look(t.x - 0.3, kinds, "K1", c)), at_noon * 0.8, "%s %s dawn still dim" % [c, kinds])
+
+
 ## The light an up-facing face gets (linear).
 func _face(l: Dictionary) -> float:
 	var s := sin(deg_to_rad(clampf(-float(l["sun_pitch"]), 5.0, 90.0)))

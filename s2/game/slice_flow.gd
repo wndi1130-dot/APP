@@ -29,6 +29,7 @@ extends Node
 ## part; its levers set that state through train_turn.gd set_lever.
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -1231,6 +1232,8 @@ func _departure() -> Dictionary:
 ## bodies, kit, hunger and soreness, the promises riding on the stop).
 func _field_opts() -> Dictionary:
 	var o := {"seed": int(opts.get("seed", 1))}
+	# When the train comes in, rolled from the run's seed and the stop (decision 471 B0).
+	o["arrive_min"] = int(opts.get("arrive_min", FieldClock.arrival_for(int(opts.get("seed", 1)) * 1000 + step)))
 	# The stop is drawn in the same cold as the stretch that brought the train
 	# here (the stop pick and the field are the same stretch, so the stop scene
 	# building it from the pick gives the same).

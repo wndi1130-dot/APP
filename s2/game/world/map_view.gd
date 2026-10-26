@@ -13,6 +13,7 @@ const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
+const SearchRules = preload("res://game/sim/search_rules.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
@@ -550,7 +551,26 @@ func update_container(id: String) -> void:
 		box(st, Vector3(0.7, 0.55, 0.5), at + Vector3(0, 0.28, 0), color)
 	if box_data["locked"]:
 		box(st, Vector3(0.18, 0.18, 0.55), at + Vector3(0.18, 0.4, 0), Color(0.7, 0.66, 0.3))
+	# Nothing to take, seen before it is opened (card P3 가, decision 472): four
+	# corners on the floor round the box, in its own mesh — so they show only
+	# where the box does (the floor shown, the sight mask over it).
+	if SearchRules.shows_empty(box_data) and box_data["id"] != "bell":
+		_empty_corners(st, at)
 	node.mesh = st.commit()
+
+
+## The empty mark's four corners round a box's cell, a cold pale grey low on the
+## floor (a stand-in; art3d gives it its look). Vertex colours are linear here.
+const EMPTY_MARK := Color(0.70, 0.74, 0.80)
+
+
+func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
+	var c := EMPTY_MARK.srgb_to_linear()
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			var corner := at + Vector3(sx * 0.42, 0.012, sz * 0.42)
+			box(st, Vector3(0.24, 0.015, 0.06), corner + Vector3(-sx * 0.09, 0, 0), c)
+			box(st, Vector3(0.06, 0.015, 0.24), corner + Vector3(0, 0, -sz * 0.09), c)
 
 
 ## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
