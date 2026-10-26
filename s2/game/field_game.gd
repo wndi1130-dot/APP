@@ -461,6 +461,10 @@ func _ready() -> void:
 	await BuildPace.rest(pace)
 	_spawn_dead()
 	_give_finds()
+	# What is under a loose board (card K): room_stories.gd lays the place after the dressing,
+	# floor_stash.gd fills its box.
+	if bool(opts.get("loot_dress", true)):
+		preload("res://game/sim/floor_stash.gd").fill(data, rng.seed)
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
 	cloth_start = 0
