@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## 시야 변경, 소품 덩어리 선별, 상자의 덩어리 굽기, 지붕 시야의 부분 갱신을 본다.
+## 시야 변경, 소품 덩어리 선별, 상자·문·창의 묶음 굽기, 지붕 시야의 부분 갱신을 본다.
 
 const MapView = preload("res://game/world/map_view.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
@@ -300,6 +300,254 @@ func _kit(map_data: Dictionary) -> BuildingView:
 	kit.setup(map_data, ShaderMaterial.new())
 	kit.set_process(false)
 	return kit
+
+
+func _opening_meshes(kit: BuildingView) -> Dictionary:
+	var out: Dictionary = {}
+	for group: Dictionary in kit.opening_groups.values():
+		var node: MeshInstance3D = group["node"] as MeshInstance3D
+		out[node] = node.mesh
+	return out
+
+
+func _assert_only_group_changed(before: Dictionary, changed_node: MeshInstance3D) -> void:
+	assert_true(before.has(changed_node))
+	for node: MeshInstance3D in before:
+		if node == changed_node:
+			assert_ne(node.mesh, before[node], "해당 묶음만 다시 굽는다")
+		else:
+			assert_eq(node.mesh, before[node], "다른 묶음은 같은 메시 객체")
+
+
+func test_doors_and_windows_rebake_only_their_shared_group() -> void:
+	var map_data: Dictionary = _building_map()
+	var grid: FieldGrid = map_data["grid"] as FieldGrid
+	var kit: BuildingView = _kit(map_data)
+	var door_key: Vector3i = Vector3i(5, 9, 0)
+	var node: MeshInstance3D = kit.door_nodes[door_key]["node"] as MeshInstance3D
+	assert_eq(node, kit.door_nodes[Vector3i(7, 9, 0)]["node"])
+	assert_eq(node, kit.window_nodes[Vector3i(9, 9, 0)]["node"], "같은 줄 문·창도 한 묶음")
+	assert_eq(kit.opening_groups.size(), 4, "건물 둘에 바깥 줄 둘씩")
+	assert_lt(kit.opening_groups.size(), kit.door_nodes.size() + kit.window_nodes.size())
+	assert_eq(_opening_meshes(kit).size(), kit.opening_groups.size(), "묶음마다 서로 다른 노드 하나")
+	assert_eq(kit.opening_bakes, kit.opening_groups.size(), "처음 쓰는 판만 굽는다")
+	for group: Dictionary in kit.opening_groups.values():
+		var group_node: MeshInstance3D = group["node"] as MeshInstance3D
+		var b: int = int(group["b"])
+		assert_eq(group_node.get_instance_shader_parameter("paint"), BuildingView.paint_for(b))
+		assert_eq(group_node.get_instance_shader_parameter("accent"), BuildingView.accent_for(b))
+		assert_eq(group_node.get_instance_shader_parameter("building_id"), float(b))
+		assert_eq(group_node.material_override, kit.material)
+		assert_eq(group_node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var before: Dictionary = _opening_meshes(kit)
+	var baked: int = kit.opening_bakes
+	grid.set_door_state(Vector2i(5, 9), "open")
+	kit.update_door(Vector2i(5, 9))
+	_assert_only_group_changed(before, node)
+	assert_eq(kit.opening_bakes, baked + 1)
+	before = _opening_meshes(kit)
+	grid.windows[Vector2i(9, 9)]["open"] = true
+	kit.update_window(Vector2i(9, 9))
+	_assert_only_group_changed(before, node)
+	assert_eq(kit.opening_bakes, baked + 2)
+	var shared: Mesh = node.mesh
+	var children: int = kit.get_child_count()
+	assert_not_null(kit.door_mesh(door_key), "낱 문 모양은 도구에서 따로 읽는다")
+	assert_null(kit.door_mesh(Vector3i(-1, -1, 0)))
+	assert_eq(node.mesh, shared)
+	assert_eq(kit.get_child_count(), children, "낱 문 확인은 화면 노드를 만들지 않는다")
+	assert_eq(kit.opening_bakes, baked + 2)
+
+
+func test_opening_cut_away_reuses_variants_and_keeps_fade_owner() -> void:
+	var kit: BuildingView = _kit(_building_map())
+	var key: Vector3i = Vector3i(5, 9, 0)
+	var node: MeshInstance3D = kit.door_nodes[key]["node"] as MeshInstance3D
+	var group: Dictionary = kit.opening_groups["0|0|cut"] as Dictionary
+	var full: Mesh = node.mesh
+	assert_false(bool(group["low_ready"]))
+	assert_null(group["low"])
+	# 층을 숨겼다가 다시 보이는 중에 턱 전환이 겹쳐도 같은 흐려짐을 이어 간다.
+	kit.show_levels(-1)
+	kit._process(BuildingView.FADE_S * 0.25)
+	kit.show_levels(0)
+	assert_true(kit._fades.has(node))
+	var fade_before: Array = (kit._fades[node] as Array).duplicate()
+	var fade_value: float = float(node.get_instance_shader_parameter("fade"))
+	var baked: int = kit.opening_bakes
+	kit.cut_away(0, 0)
+	var low: Mesh = node.mesh
+	assert_ne(low, full)
+	assert_eq(low, group["low"])
+	assert_eq(kit.opening_bakes, baked + 1, "턱 판은 처음 필요할 때 한 번")
+	assert_eq(kit.door_nodes[key]["node"], node)
+	assert_eq(kit.window_nodes[Vector3i(9, 9, 0)]["node"], node)
+	assert_true(bool(kit.door_nodes[key]["cut"]))
+	assert_true(bool(kit.window_nodes[Vector3i(9, 9, 0)]["cut"]))
+	assert_true(kit.opening_groups.has("0|0|cut"), "턱 전환은 묶음 키를 바꾸지 않는다")
+	assert_true(kit._fades.has(node))
+	assert_eq(kit._fades[node], fade_before)
+	assert_eq(node.get_instance_shader_parameter("fade"), fade_value)
+	kit.cut_away(-1, 0)
+	assert_eq(node.mesh, full, "나오면 원래 3 m 메시 객체를 되끼운다")
+	assert_false(bool(kit.door_nodes[key]["cut"]))
+	assert_false(bool(kit.window_nodes[Vector3i(9, 9, 0)]["cut"]))
+	assert_eq(kit._fades[node], fade_before)
+	kit.cut_away(0, 0)
+	assert_eq(node.mesh, low, "두 번째 진입은 구워 둔 턱 판")
+	assert_eq(kit.opening_bakes, baked + 1)
+	assert_eq(kit._fades[node], fade_before)
+
+
+func test_opening_change_invalidates_both_variants_and_rebakes_active_only() -> void:
+	var map_data: Dictionary = _building_map()
+	var grid: FieldGrid = map_data["grid"] as FieldGrid
+	var kit: BuildingView = _kit(map_data)
+	var group: Dictionary = kit.opening_groups["0|0|cut"] as Dictionary
+	var node: MeshInstance3D = group["node"] as MeshInstance3D
+	var old_full: Mesh = node.mesh
+	kit.cut_away(0, 0)
+	var old_low: Mesh = node.mesh
+	kit.cut_away(-1, 0)
+	var before: Dictionary = _opening_meshes(kit)
+	var baked: int = kit.opening_bakes
+	grid.set_door_state(Vector2i(5, 9), "open")
+	kit.update_door(Vector2i(5, 9))
+	_assert_only_group_changed(before, node)
+	assert_ne(node.mesh, old_full)
+	assert_eq(kit.opening_bakes, baked + 1)
+	assert_true(bool(group["full_ready"]))
+	assert_false(bool(group["low_ready"]))
+	assert_null(group["low"], "안 쓰는 턱 판은 버리고 아직 굽지 않는다")
+	var opened_full: Mesh = node.mesh
+	kit.cut_away(0, 0)
+	assert_ne(node.mesh, old_low, "옛 닫힌 턱 판을 되쓰지 않는다")
+	assert_eq(kit.opening_bakes, baked + 2)
+	kit.cut_away(-1, 0)
+	assert_eq(node.mesh, opened_full)
+	assert_eq(kit.opening_bakes, baked + 2)
+	kit.cut_away(0, 0)
+	before = _opening_meshes(kit)
+	grid.windows[Vector2i(9, 9)]["curtain"] = "closed"
+	kit.update_window(Vector2i(9, 9))
+	_assert_only_group_changed(before, node)
+	assert_eq(kit.opening_bakes, baked + 3, "턱에서 바뀌어도 현재 판만 다시 굽는다")
+	assert_true(bool(group["low_ready"]))
+	assert_false(bool(group["full_ready"]))
+	assert_null(group["full"])
+	kit.cut_away(-1, 0)
+	assert_ne(node.mesh, opened_full, "돌아온 3 m 판에는 바뀐 커튼을 넣는다")
+	assert_eq(kit.opening_bakes, baked + 4)
+	kit.cut_away(0, 0)
+	kit.cut_away(-1, 0)
+	assert_eq(kit.opening_bakes, baked + 4)
+
+
+func test_near_openings_swap_cached_meshes_without_rebaking() -> void:
+	var kit: BuildingView = _kit(_building_map(true))
+	var full: Dictionary = {}
+	var low: Dictionary = {}
+	var upper: Dictionary = {}
+	var nodes: Dictionary = {}
+	for b: int in range(2):
+		var node: MeshInstance3D = kit.door_nodes[Vector3i(5 + b * 30, 9, 0)]["node"] as MeshInstance3D
+		nodes[b] = node
+		full[b] = node.mesh
+		upper[b] = (kit.door_nodes[Vector3i(5 + b * 30, 9, 1)]["node"] as MeshInstance3D).mesh
+	var baked: int = kit.opening_bakes
+	for b: int in range(2):
+		kit._focus_cell = Vector2i(5 + b * 30, 10)
+		assert_true(kit._update_near(kit._focus_cell))
+		kit._apply()
+		assert_true(kit.near.has(b))
+		assert_false(kit.near.has(1 - b))
+		low[b] = (nodes[b] as MeshInstance3D).mesh
+		assert_ne(low[b], full[b])
+		assert_eq(kit.opening_bakes, baked + b + 1, "처음 방문한 건물의 턱 판만 굽는다")
+	baked = kit.opening_bakes
+	for cell: Vector2i in [Vector2i(20, 15), Vector2i(5, 10), Vector2i(35, 10), Vector2i(20, 15)]:
+		kit._focus_cell = cell
+		assert_true(kit._update_near(cell))
+		kit._apply()
+		for b: int in range(2):
+			var key: Vector3i = Vector3i(5 + b * 30, 9, 0)
+			var node: MeshInstance3D = kit.door_nodes[key]["node"] as MeshInstance3D
+			assert_eq(node, nodes[b])
+			assert_eq(node.mesh, low[b] if kit.near.has(b) else full[b])
+			assert_eq(bool(kit.door_nodes[key]["cut"]), kit.near.has(b))
+			assert_eq(bool(kit.window_nodes[Vector3i(9 + b * 30, 9, 0)]["cut"]), kit.near.has(b))
+			assert_eq((kit.door_nodes[Vector3i(key.x, key.y, 1)]["node"] as MeshInstance3D).mesh, upper[b])
+		assert_eq(kit.opening_bakes, baked, "둘레를 왕복할 때는 두 판을 바꿔 끼우기만 한다")
+
+
+func test_opening_update_at_shared_coordinates_keeps_unchanged_floor() -> void:
+	var map_data: Dictionary = _building_map(true)
+	var grid: FieldGrid = map_data["grid"] as FieldGrid
+	var upper: FieldGrid = map_data["levels"][1] as FieldGrid
+	var kit: BuildingView = _kit(map_data)
+	var node: MeshInstance3D = kit.door_nodes[Vector3i(5, 9, 0)]["node"] as MeshInstance3D
+	var upper_node: MeshInstance3D = kit.door_nodes[Vector3i(5, 9, 1)]["node"] as MeshInstance3D
+	assert_ne(node, upper_node, "층은 따로 굽는다")
+	var before: Dictionary = _opening_meshes(kit)
+	grid.set_door_state(Vector2i(5, 9), "open")
+	kit.update_door(Vector2i(5, 9))
+	_assert_only_group_changed(before, node)
+	before = _opening_meshes(kit)
+	upper.windows[Vector2i(9, 9)]["open"] = true
+	kit.update_window(Vector2i(9, 9))
+	_assert_only_group_changed(before, upper_node)
+	before = _opening_meshes(kit)
+	grid.floor_glass[Vector2i(9, 8)] = Vector2i(9, 9)
+	kit.update_window(Vector2i(9, 9))
+	_assert_only_group_changed(before, node)
+	before = _opening_meshes(kit)
+	grid.floor_glass.erase(Vector2i(9, 8))
+	kit.update_window(Vector2i(9, 9))
+	_assert_only_group_changed(before, node)
+	before = _opening_meshes(kit)
+	var baked: int = kit.opening_bakes
+	grid.doors[Vector2i(5, 9)]["hp"] = 2
+	grid.windows[Vector2i(9, 9)]["hp"] = 2
+	grid.floor_glass[Vector2i(4, 3)] = Vector2i(4, 2)
+	kit.update_door(Vector2i(5, 9))
+	kit.update_window(Vector2i(9, 9))
+	for unchanged: MeshInstance3D in before:
+		assert_eq(unchanged.mesh, before[unchanged], "그림 입력이 같거나 다른 창의 바닥 유리면 보존")
+	assert_eq(kit.opening_bakes, baked)
+
+
+func test_empty_opening_variant_is_cached() -> void:
+	var map_data: Dictionary = _building_map()
+	var grid: FieldGrid = map_data["grid"] as FieldGrid
+	for cell: Vector2i in [Vector2i(5, 9), Vector2i(7, 9)]:
+		grid.set_solid(cell, FieldGrid.Solid.WALL)
+		grid.doors.erase(cell)
+	var kit: BuildingView = _kit(map_data)
+	var group: Dictionary = kit.opening_groups["0|0|cut"] as Dictionary
+	var node: MeshInstance3D = group["node"] as MeshInstance3D
+	var full: Mesh = node.mesh
+	assert_not_null(full)
+	kit.cut_away(0, 0)
+	assert_null(node.mesh, "유리·바닥 조각 없는 창의 턱은 빈 메시")
+	assert_true(bool(group["low_ready"]))
+	var baked: int = kit.opening_bakes
+	kit._apply()
+	kit.cut_away(-1, 0)
+	assert_eq(node.mesh, full)
+	kit.cut_away(0, 0)
+	assert_null(node.mesh)
+	assert_eq(kit.opening_bakes, baked, "빈 메시도 굽기 완료와 미사용을 구분한다")
+	grid.floor_glass[Vector2i(9, 8)] = Vector2i(9, 9)
+	kit.update_window(Vector2i(9, 9))
+	assert_not_null(node.mesh, "턱에서도 새 바닥 유리는 보인다")
+	assert_eq(kit.opening_bakes, baked + 1)
+	assert_false(bool(group["full_ready"]))
+	grid.floor_glass.erase(Vector2i(9, 8))
+	kit.update_window(Vector2i(9, 9))
+	assert_null(node.mesh)
+	assert_eq(kit.opening_bakes, baked + 2)
+	kit._apply()
+	assert_eq(kit.opening_bakes, baked + 2)
 
 
 func test_roof_seen_uses_changed_cells_and_keeps_full_scan_entry() -> void:

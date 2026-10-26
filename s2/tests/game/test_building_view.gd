@@ -454,14 +454,14 @@ func test_a_door_redraws_when_it_opens_and_breaks() -> void:
 	var kit := _kit(data)
 	var g: FieldGrid = data["grid"]
 	var c: Vector2i = kit.outer_doors[4][0]
-	var node: MeshInstance3D = kit.door_nodes[Vector3i(c.x, c.y, 0)]["node"]
-	var closed: AABB = node.mesh.get_aabb()
+	var key: Vector3i = Vector3i(c.x, c.y, 0)
+	var closed: AABB = kit.door_mesh(key).get_aabb()
 	g.set_door_state(c, "open")
 	kit.update_door(c)
-	assert_false(node.mesh.get_aabb().is_equal_approx(closed), "열린 문짝은 돌아간다")
+	assert_false(kit.door_mesh(key).get_aabb().is_equal_approx(closed), "열린 문짝은 돌아간다")
 	g.set_door_state(c, "broken")
 	kit.update_door(c)
-	assert_lt(node.mesh.get_aabb().size.y, closed.size.y, "부서진 문짝은 낮다")
+	assert_lt(kit.door_mesh(key).get_aabb().size.y, closed.size.y, "부서진 문짝은 낮다")
 
 
 # ---------------------------------------------------------------- 지도 그리기에 붙이기
