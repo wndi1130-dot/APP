@@ -413,33 +413,28 @@ func _stand_at(kit: Node3D, c: Vector2i) -> void:
 	_settle(kit)
 
 
-func test_buildings_near_the_player_open_and_keep_their_roof_shadow() -> void:
+func test_buildings_near_the_player_open_at_the_players_floor() -> void:
 	var kit := _kit(_shed(true))
 	kit.show_levels(0)
 	kit.cut_away(-1, 0)
 	_stand_at(kit, Vector2i(5, 10))
 	assert_true(kit.near.has(0), "남쪽 문 앞 2칸")
 	var roof: MeshInstance3D = kit.roofs[0]
-	assert_true(roof.visible, "지붕은 그림자로 남는다")
-	assert_eq(roof.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY, "지붕은 그림자만")
-	for node: MeshInstance3D in _nodes(kit, 0, 1, ["cut", "stand"]):
-		assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY, "위층은 그림자만")
+	assert_false(roof.visible, "둘레 건물은 지붕을 걷는다(그림자도: 남기면 안이 검게 덮인다)")
+	_assert_shown(_nodes(kit, 0, 1, ["cut", "stand"]), false, "위층도 걷는다")
 	assert_eq(kit.cut_node(0, 0).mesh, kit.cut_meshes[Vector2i(0, 0)][1], "1층 앞벽은 턱")
 	_assert_shown(_nodes(kit, 0, 0, ["int_cut"]), true, "1층 안벽")
 	assert_true(kit.interior_visible(0, 0), "소품은 시야 가림이 본 칸에만")
 	# 멀어지면 다시 닫힌 집.
 	_stand_at(kit, Vector2i(13, 11) + Vector2i(12, 12))
 	assert_false(kit.near.has(0))
-	assert_eq(roof.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	assert_true(roof.visible)
 	assert_eq(kit.cut_node(0, 0).mesh, kit.cut_meshes[Vector2i(0, 0)][0])
 	_assert_shown(_nodes(kit, 0, 1, ["cut", "stand"]), true, "위층 다시")
-	for node: MeshInstance3D in _nodes(kit, 0, 1, ["cut", "stand"]):
-		assert_ne(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 	_assert_shown(_nodes(kit, 0, 0, ["int_cut"]), false, "안벽 다시 숨김")
 
 
-func test_a_near_building_opens_at_the_players_floor() -> void:
+func test_a_near_building_opens_at_the_players_floor_when_upstairs() -> void:
 	var kit := _kit(_shed(true))
 	kit.show_levels(1)
 	kit.cut_away(-1, 1)
@@ -447,8 +442,7 @@ func test_a_near_building_opens_at_the_players_floor() -> void:
 	assert_eq(kit.cut_node(0, 1).mesh, kit.cut_meshes[Vector2i(0, 1)][1], "플레이어 층이 열린다")
 	assert_eq(kit.cut_node(0, 0).mesh, kit.cut_meshes[Vector2i(0, 0)][0], "아래층은 닫힌 껍데기")
 	_assert_shown(_nodes(kit, 0, 0, ["cut", "stand"]), true, "아래층 껍데기")
-	assert_ne(kit.cut_node(0, 0).cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
-	# 든 건물은 둘레에서 빠지고 그림자도 걷는다(안에 해가 든다).
+	# 든 건물은 둘레에서 빠지고 든 층 규칙을 따른다.
 	kit.cut_away(0, 1)
 	_settle(kit)
 	assert_false(kit.near.has(0))

@@ -9,8 +9,9 @@ extends Node3D
 ## 지붕은 건물마다 하나. 문짝과 유리만 낱 노드다.
 ## 대각뷰(결정 476, 남동에서 북서를 봄)에서 보이는 규칙: 든 건물은 그 층을 열고(턱 줄을 낮추고
 ## 안벽을 보임) 위층과 지붕을 걷는다. 발밑에서 NEAR_R 칸 안의 둘레 건물도 지붕과 플레이어 층
-## 위를 걷고 그 층을 연다 — 걷은 지붕·위층은 그림자만 남겨 땅 그림자가 꺼지지 않는다. 연 건물
-## 안이 얼마나 보이는지는 시야 가림이 정한다(본 칸·들어간 방·불빛만 밝고, 소품은 본 칸에만).
+## 위를 걷고 그 층을 연다. 걷은 지붕·위층은 그림자도 걷는다 — 남기면 그 그림자가 연 건물 안을
+## 덮어 검은 구덩이가 된다. 연 건물 안이 얼마나 보이는지는 시야 가림이 정한다(본 칸·들어간
+## 방·불빛만 밝고, 소품은 본 칸에만).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
@@ -104,8 +105,6 @@ var _holding := false
 var _instant := true
 var _fades: Dictionary = {}       # 노드 -> [시작, 끝, 지난 몫]
 var near: Dictionary = {}         # 건물 -> true(발밑에서 NEAR_R 칸 안, 든 건물 빼고)
-var _cast: Dictionary = {}        # 노드 -> 보일 때의 그림자 설정
-var _shadow_left: Dictionary = {} # 노드 -> true(숨어도 그림자만 남김)
 var _seen: Dictionary = {}        # 건물 -> Vector2
 var _focus_cell := Vector2i(-99, -99)
 var _synced: Dictionary = {}
@@ -883,7 +882,6 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 	node.material_override = material
 	node.position.y = lv * LEVEL_H
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_cast[node] = node.cast_shadow
 	add_child(node)
 	node.set_instance_shader_parameter("paint", paint_for(b))
 	node.set_instance_shader_parameter("building_id", float(b))
@@ -942,31 +940,23 @@ func _low(b: int, lv: int) -> bool:
 	return player_lv >= 0 and near.has(b) and lv == player_lv
 
 
-## 둘레 건물의 걷은 지붕·위층: 그림자만 남긴다(든 건물은 안에 해가 들게 그림자도 걷는다).
-func _keeps_shadow(b: int) -> bool:
-	return player_lv >= 0 and near.has(b)
-
-
 func _apply() -> void:
 	for shell: Vector2i in shells:
 		var mode := _mode(shell.x, shell.y)
 		var parts: Dictionary = shells[shell]
-		var keep := _keeps_shadow(shell.x)
 		if parts.has("cut"):
 			var low := _low(shell.x, shell.y)
 			var node: MeshInstance3D = parts["cut"]
 			node.mesh = cut_meshes[shell][1] if low else cut_meshes[shell][0]
-			_cast[node] = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if low else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-			if node.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
-				node.cast_shadow = _cast[node]
-			_show(node, mode > 0, keep)
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if low else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+			_show(node, mode > 0)
 		if parts.has("stand"):
-			_show(parts["stand"], mode > 0, keep)
+			_show(parts["stand"], mode > 0)
 		for slot in ["int_cut", "int_stand"]:
 			if parts.has(slot):
 				_show(parts[slot], mode == 2)
 	for b: int in roofs:
-		_show(roofs[b], player_lv >= 0 and b != open_b and not near.has(b), _keeps_shadow(b))
+		_show(roofs[b], player_lv >= 0 and b != open_b and not near.has(b))
 	for key: Vector3i in door_nodes:
 		var row: Dictionary = door_nodes[key]
 		var plan_row: Dictionary = row["plan"]
@@ -992,27 +982,12 @@ func _apply() -> void:
 		material.set_shader_parameter("open_floor", open_lv * LEVEL_H + 0.3)
 
 
-## shadow: 숨을 때 그림자만 남긴다(다 사라진 뒤 _leave_shadow).
-func _show(node: MeshInstance3D, on: bool, shadow := false) -> void:
-	if shadow and not on:
-		_shadow_left[node] = true
-	else:
-		_shadow_left.erase(node)
-	if node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
-		if not on and shadow:
-			return
-		# 그림자만 남았던 것: 그림자까지 걷거나, 다시 보이면 숨은 자리에서 들어온다.
-		node.cast_shadow = _cast.get(node, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
-		node.visible = false
-		if not on:
-			return
+func _show(node: MeshInstance3D, on: bool) -> void:
 	var target := 0.0 if on else 1.0
 	if _instant:
 		node.visible = on
 		node.set_instance_shader_parameter("fade", 0.0)
 		_fades.erase(node)
-		if not on and _shadow_left.has(node):
-			_leave_shadow(node)
 		return
 	if _fades.has(node):
 		var f: Array = _fades[node]
@@ -1025,12 +1000,6 @@ func _show(node: MeshInstance3D, on: bool, shadow := false) -> void:
 	node.visible = true
 	node.set_instance_shader_parameter("fade", 1.0 - target)
 	_fades[node] = [1.0 - target, target, 0.0]
-
-
-func _leave_shadow(node: MeshInstance3D) -> void:
-	node.visible = true
-	node.set_instance_shader_parameter("fade", 0.0)
-	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 
 
 ## 발밑 칸에서 NEAR_R 안에 1층 사각형이 닿는 건물(든 건물 빼고). 바뀌면 참.
@@ -1249,10 +1218,7 @@ func _process(delta: float) -> void:
 		if f[2] >= 1.0:
 			_fades.erase(node)
 			if f[1] >= 1.0:
-				if _shadow_left.has(node):
-					_leave_shadow(node)
-				else:
-					node.visible = false
+				node.visible = false
 
 
 func _sync(key: String) -> void:
