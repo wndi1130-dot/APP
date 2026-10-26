@@ -11,6 +11,8 @@ const SIGHT_MULT: float = 0.5   # decided (card 4): eating, it sees half as far
 const GATHER_R: float = 10.0    # the wandering dead within this of a body come to it
 const REACH: float = 1.2        # where a body walking to a clue stops (zombies.gd investigate): it kneels there
 const AT_MOST: int = 3          # so many eat at one body; the rest stand round it
+const EAT_TOTAL: float = 120.0  # 결정 441 (3): a body is eaten up when its eaters' seconds add up to this
+const EATEN_META: StringName = &"dead_eaten_seconds"   # those seconds, kept on the body (and in the field save)
 const LEAVE_R: float = 1.6      # pushed further off it than this, it walks back to it
 
 
@@ -18,6 +20,8 @@ const LEAVE_R: float = 1.6      # pushed further off it than this, it walks back
 ## (its own risen self, `rising`, still lying there, or put down for good).
 static func edible(p, rising: Dictionary) -> bool:
 	if p == null or not is_instance_valid(p) or not p.body.dead:
+		return false
+	if float(p.get_meta(EATEN_META, 0.0)) >= EAT_TOTAL:
 		return false
 	if rising.is_empty():
 		return true

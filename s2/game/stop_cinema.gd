@@ -453,6 +453,8 @@ func _build_world() -> void:
 	var air: Color = Color(light["fog_color"]).darkened(0.3)
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = air
+	# The field's exposure (field_game.gd _build_world), so the stop and the field it opens on are one brightness.
+	env.tonemap_exposure = Atmosphere.EXPOSURE
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = light["ambient_color"]
 	env.ambient_light_energy = float(light["ambient_energy"]) * 1.15
@@ -488,7 +490,7 @@ func _build_world() -> void:
 		MapView.box(st, Vector3(6000, 0.12, 0.08), Vector3(0, 0.16, z), STEEL)
 	_mesh(world, st, false)
 	snow = GPUParticles3D.new()
-	snow.amount = 900
+	snow.amount = 2700  # three times the old 900, as the field draws (field_game.gd)
 	snow.lifetime = 3.0
 	snow.local_coords = false
 	snow.visibility_aabb = AABB(Vector3(-40, -10, -40), Vector3(80, 30, 80))
@@ -559,10 +561,13 @@ static func stop_look(o: Dictionary) -> Dictionary:
 ## A colour open to the sky as the field's world_vis.gdshader shows it: darker
 ## when wet, under the snow as far as it lies.
 func _ground(base: Color) -> Color:
+	# As world_vis does: the floor colour read as sRGB, dampened and snowed in
+	# linear (its FX_SNOW is a linear number), handed back as an sRGB vertex colour.
 	var damp: float = 1.0 - 0.35 * wet
-	var bare := Color(base.r * damp, base.g * damp, base.b * damp)
+	var lin := base.srgb_to_linear()
+	var bare := Color(lin.r * damp, lin.g * damp, lin.b * damp)
 	var snowy: Color = FX_SNOW * lerpf(1.0, 0.75, wet)
-	return bare.lerp(Color(snowy.r, snowy.g, snowy.b), 0.75 * white)
+	return bare.lerp(Color(snowy.r, snowy.g, snowy.b), 0.75 * white).linear_to_srgb()
 
 
 func _build_train() -> void:
@@ -823,6 +828,8 @@ func _mesh(parent: Node3D, st: SurfaceTool, shadow: bool) -> MeshInstance3D:
 	node.mesh = st.commit()
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
+	# The colours are sRGB numbers, as the field's floors and every other material's are (mood C9).
+	mat.vertex_color_is_srgb = true
 	mat.roughness = 1.0
 	node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

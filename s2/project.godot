@@ -77,6 +77,10 @@ fx_cloud={
 "type": "vec4",
 "value": Vector4(0, 1, 0, 0)
 }
+fx_sight={
+"type": "vec2",
+"value": Vector2(0.24, 0.54)
+}
 fx_ground={
 "type": "sampler2D",
 "value": "res://fx/textures/ground_detail.png"

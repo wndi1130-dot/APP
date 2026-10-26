@@ -345,6 +345,9 @@ func test_a_box_gives_a_garment_to_put_on_and_take_all_leaves_it() -> void:
 	c["searched"] = true
 	p.position = game.lift(c["cell"], 0)
 	game.actions.take_all(p, box)
+	while p.action == "take":
+		p.action_t = 0.001
+		game._update_person(p, 0.1)
 	assert_eq(c["items"], ["coat_long"], "the coat stays in the box")
 	game.actions.take(p, box, 0)
 	assert_eq(c["items"], [])

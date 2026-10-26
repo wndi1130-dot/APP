@@ -9,8 +9,12 @@ extends Node3D
 ##   birds      a flock taking off when a horde sets off; with it a far thud
 ##              (impact, low and dull). No far moans: the horde is told by
 ##              these, the radio and the screen's sound marks
-##   impact     noisy actions (kick, glass, pry, lid, pickaxe, fights); from
+##   impact     noisy actions (kick, glass, pry, lid, pickaxe); from
 ##              behind a wall they come through duller (SFX_MID)
+##   swing_light, swing_heavy  a weapon coming round (or a shove), light
+##              under 2 kg, heavy from it (hit_feel.gd)
+##   hit_blunt, hit_blade, hit_stomp  a melee blow landing, by the weapon;
+##              made here from noise and tones (rights_ledger), not recorded
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
 ##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust)
@@ -28,7 +32,7 @@ const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -57,6 +61,10 @@ const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
 ## impact set's iron, pitched down.
 const LID_VOICE: Array = ["lid_scrape", 0.7, 0.55, 0.65]
 const LID_STANDIN: String = "metal"    # the impact file that stands in for it
+## A loose floorboard creaking underfoot (room_stories card K): group, loudness, pitch low
+## and high. Until a file is in its group it is the impact set's wood, pitched well down.
+const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
+const CREAK_STANDIN: String = "wooden"
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
 ## moan that stands in for it. First values.
@@ -148,7 +156,9 @@ const GUST_PITCH_APART: float = 0.06  # and its starting pitch more than this fr
 const HOWL_LAYERS: Array = [1, 3]
 const HOWL_LEN: Array = [3.0, 6.5]
 const GUSTS: int = 3                  # players for gusts (a howl lays up to three)
-const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell", "train_guard"]
+## Melee blows ("melee", "fight") are not here: hit_feel.gd voices them by
+## the weapon (a miss, the swing alone), where any of these files would do.
+const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fall", "impact", "ladder", "bell", "train_guard"]
 
 var game
 var lib: Dictionary = {}               # group -> Array[AudioStream]
@@ -166,6 +176,7 @@ var last_tag_group: String = ""        # what the last make_sound played (tests)
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
+var door_creaks: Array = []             # building doors beaten on: true when it was about to give (tests)
 
 ## The music steps aside for a sound that matters (the music frame's ducking
 ## connects here; nothing in the rules reads it). kind: "brake" (the train
@@ -234,7 +245,8 @@ func setup(field_game) -> void:
 		engine.stream = lib["train_idle"][0]
 		engine.finished.connect(engine.play)
 		engine.play()
-	for i in range(6):
+	# Blows come quick and with their swings: room for a few at once.
+	for i in range(10):
 		var o := AudioStreamPlayer3D.new()
 		o.bus = "SFX"
 		o.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
@@ -780,21 +792,33 @@ func door(kind: String, at: Vector3, level: int) -> void:
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])), null, _bus_at(at))
 
 
+## A loose board creaking, for the player's ear (the rule sound is field_game's
+## "floor_creak"): its own group once there is one, else the impact set's wood.
+func floor_creak(at: Vector3) -> void:
+	_voice_or_standin(CREAK_VOICE, CREAK_STANDIN, at)
+
+
 ## A lid dragged off a manhole, for the player's ear only: no rule hears it
 ## (the dead's coming up is heard as it was).
 func lid_scrape(at: Vector3) -> void:
-	var group: String = LID_VOICE[0]
+	_voice_or_standin(LID_VOICE, LID_STANDIN, at)
+
+
+## A one-shot of its own group [group, loudness, pitch low, pitch high], or, until that
+## group has a file, the impact file whose name begins with `standin`.
+func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
+	var group: String = voice[0]
 	if not lib.has(group):
 		lib[group] = _load_group(group)
 	played.append(group)
 	var d: float = at.distance_to(game.player.position)
-	var lin: float = float(LID_VOICE[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
-	var pitch := randf_range(float(LID_VOICE[2]), float(LID_VOICE[3]))
+	var lin: float = float(voice[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
+	var pitch := randf_range(float(voice[2]), float(voice[3]))
 	if has(group):
 		_one_shot(group, at, lin, pitch, null, _bus_at(at))
 		return
 	for s: AudioStream in lib.get("impact", []):
-		if s.resource_path.get_file().begins_with(LID_STANDIN):
+		if s.resource_path.get_file().begins_with(standin):
 			_one_shot("impact", at, lin, pitch, s, _bus_at(at))
 			return
 
@@ -836,12 +860,28 @@ func lunge_tell(at: Vector3) -> void:
 	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH)
 
 
+## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
+## wall. The dead hear the blow by make_sound, not by this.
+func feel_sound(group: String, at: Vector3, loud: float, reach: float) -> void:
+	if quiet:
+		return
+	played.append(group)
+	var d: float = at.distance_to(game.player.position)
+	_one_shot(group, at, loud * clampf(1.0 - d / reach, 0.0, 1.0), randf_range(0.92, 1.08), null, _bus_at(at))
+
+
 ## A sound the dead can hear is also one the player hears (field make_sound).
 func on_sound(at: Vector3, level: int, tag: String) -> void:
 	if quiet:
 		return
+	# A building's door the dead are beating on: a door's own blow, lower and
+	# duller once it is about to give (J17, the planks aside).
+	if tag == "bang" and _building_door_bang(at, level):
+		return
 	var group := ""
-	if tag == "whistle":
+	if tag == "building_alarm" or tag == "building_alarm_ring":
+		group = "building_alarm"
+	elif tag == "whistle":
 		if departing:
 			return
 		group = "whistle"
@@ -855,9 +895,32 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 	var d: float = at.distance_to(game.player.position)
 	var loud := clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var lin := loud * clampf(1.0 - d / 60.0, 0.0, 1.0) if group != "whistle" else 1.0
+	if group == "building_alarm":
+		# It carries twice as far as a loud sound (noise.gd SOURCES "reach").
+		lin = ALARM_LOUD * clampf(1.0 - d / ALARM_HEARD_M, 0.0, 1.0)
 	if level >= SimNoise.Level.LOUD and lin > 0.01:
 		hush.emit("near", HUSH_LOUD_S)
 	_one_shot(group, at, lin, 0.7 if tag == "gun" and group == "impact" else randf_range(0.9, 1.1), null, "SFX" if group == "whistle" else _bus_at(at))
+
+
+## A building's alarm (J17): loudness, and how far the player hears it.
+const ALARM_LOUD: float = 0.75
+const ALARM_HEARD_M: float = 120.0
+## A building's door with this many blows of wear left or fewer sounds as
+## about to give.
+const DOOR_GIVING_HP: int = 2
+
+
+## True if at is a building's door (not open, not broken) and its blow was
+## played: the plain blow, or the lower one when it is about to give.
+func _building_door_bang(at: Vector3, level: int) -> bool:
+	var door: Dictionary = game.grid_at(at).doors.get(game.FieldGrid.cell_of(at), {})
+	if door.is_empty() or int(door.get("building", -1)) < 0 or String(door.get("state", "")) in ["open", "broken"]:
+		return false
+	last_tag_group = DOOR_VOICES["low"][0]
+	door_creaks.append(int(door.get("hp", 0)) <= DOOR_GIVING_HP)
+	door("low" if int(door.get("hp", 0)) <= DOOR_GIVING_HP else "door", at, level)
+	return true
 
 
 func footstep(at: Vector3, running: bool) -> void:

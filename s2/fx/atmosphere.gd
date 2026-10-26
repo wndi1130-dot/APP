@@ -242,11 +242,14 @@ static func region(name: String) -> Dictionary:
 ## straight up and at the line. glow: round the sun. sun, ambient: light
 ## colour and energy. The day band keeps the user's low cold sun (10-17) and
 ## FxState's energy; dawn leans gold and pink, dusk orange and violet, night is
-## moonlight. Saturation stays under BAND_SAT (no loud sky blue: blue is the
+## dark. Saturation stays under BAND_SAT (no loud sky blue: blue is the
 ## support gauge's colour; red stays for discontent).
+## Night light (sun, ambient): a neutral, faintly warm grey at the old blue's
+## brightness, so the only colour after dark is the lamps' and the lit windows'
+## orange (the reference's night: darkness and warm lights, not a blue screen).
 const BANDS: Dictionary = {
 	"night": {"zenith": Color(0.035, 0.045, 0.075), "horizon": Color(0.075, 0.085, 0.115), "glow": Color(0.16, 0.18, 0.24),
-		"sun": Color(0.58, 0.64, 0.78), "sun_energy": 0.06, "ambient": Color(0.26, 0.29, 0.38), "ambient_energy": 0.16},
+		"sun": Color(0.642, 0.639, 0.633), "sun_energy": 0.06, "ambient": Color(0.296, 0.291, 0.285), "ambient_energy": 0.16},
 	"dawn": {"zenith": Color(0.24, 0.27, 0.38), "horizon": Color(0.86, 0.62, 0.52), "glow": Color(1.0, 0.70, 0.46),
 		"sun": Color(1.0, 0.76, 0.56), "sun_energy": 0.55, "ambient": Color(0.58, 0.52, 0.62), "ambient_energy": 0.40},
 	"day": {"zenith": Color(0.47, 0.55, 0.66), "horizon": Color(0.76, 0.78, 0.80), "glow": Color(0.95, 0.94, 0.90),
@@ -254,15 +257,22 @@ const BANDS: Dictionary = {
 	# Dusk light (sun, ambient): the clear sunset sky photo's own light at our
 	# brightness: a softened orange sun, the shade lit by the open sky's cool blue
 	# (the old orange sun and warm shade made the whole ground one brown).
+	# Energy: the reference keeps 0.8 of the day's light at dusk; ours kept under
+	# half, and an overcast dusk read as night (V 0.23 against its 0.26).
 	"dusk": {"zenith": Color(0.20, 0.18, 0.32), "horizon": Color(0.90, 0.52, 0.32), "glow": Color(1.0, 0.56, 0.30),
-		"sun": Color(0.86, 0.70, 0.47), "sun_energy": 0.5, "ambient": Color(0.48, 0.47, 0.55), "ambient_energy": 0.38},
+		"sun": Color(0.86, 0.70, 0.47), "sun_energy": 0.55, "ambient": Color(0.48, 0.47, 0.55), "ambient_energy": 0.46},
 }
 ## The same bands at the warmest: softer, greener fill and a warmer day sun.
 const WARM_BANDS: Dictionary = {
-	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.25, 0.27, 0.30)},
+	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.272, 0.268, 0.262)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
-	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "ambient": Color(0.43, 0.43, 0.50)},
+	# Late autumn's low sun is warmer than winter's, as the reference's season
+	# palette has it (fall dusk far more orange than winter dusk): more colour
+	# (saturation 0.55 against 0.45) at the same brightness, but kept amber (hue
+	# 30 degrees): a redder sun turned the lit ground pink. The shade stays the
+	# sky's cool blue, so the ground does not go one brown.
+	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "sun": Color(0.93, 0.67, 0.42), "ambient": Color(0.43, 0.43, 0.50)},
 }
 ## Most saturation a band colour may carry, and how much colour (chroma, max
 ## minus min) a bluish one may: sky blue is the support gauge's (tests keep both).
@@ -397,6 +407,37 @@ static func _mix_num(w: Dictionary, key: String) -> float:
 	return v
 
 
+## How much of the clear hour's light a closed sky keeps by day before what
+## falls and the wind take theirs: a little gloom of our own (the reference
+## keeps it all).
+const CLOUD_KEEP := 0.7
+
+
+static func _lin_lum(c: Color) -> float:
+	return c.srgb_to_linear().get_luminance()
+
+
+## A neutral grey as bright as c (linear luminance).
+static func _grey_like(c: Color) -> Color:
+	var y := _lin_lum(c)
+	var g := Color(y, y, y).linear_to_srgb()
+	return Color(g.r, g.g, g.b, c.a)
+
+
+## Colour c brought up to the brightness of `like` (linear luminance) when it
+## fell below it, as far as it stays in range; never darkened.
+static func _keep_lum(c: Color, like: Color) -> Color:
+	var lc := c.srgb_to_linear()
+	var y := lc.get_luminance()
+	var want := _lin_lum(like)
+	if y <= 0.0001 or y >= want:
+		return c
+	var k := want / y
+	k = minf(k, 1.0 / maxf(lc.r, maxf(lc.g, maxf(lc.b, 0.0001))))
+	var out := Color(lc.r * k, lc.g * k, lc.b * k, c.a).linear_to_srgb()
+	return Color(out.r, out.g, out.b, c.a)
+
+
 ## How bright the band is, for veils and haze (night dark, day full).
 static func _band_lum(w: Dictionary) -> float:
 	return float(w["night"]) * 0.09 + float(w["dawn"]) * 0.6 + float(w["day"]) * 1.0 + float(w["dusk"]) * 0.55
@@ -467,9 +508,14 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var sun_energy := _mix_num(w, "sun_energy") * lerpf(sun_k, minf(sun_k, 1.0), night_part) * lerpf(lerpf(0.35, 1.0, up), 1.0, night_part)
 	sun_energy *= lerpf(1.0, lerpf(1.0, 0.35, cloud), night_part)
 	var ambient_energy := _mix_num(w, "ambient_energy") * fill
-	# Under a closed sky the fill is the sky's grey, not the band's tint.
-	ambient = ambient.lerp(veil_color * 0.9, veil * 0.6)
-	sun = sun.lerp(veil_color.lerp(sun, 0.5), veil * 0.5)
+	# Under a closed sky the fill is the sky's grey, not the band's tint. The
+	# veil takes the colour, not the light: cloud greys the day as the
+	# reference's cloudy palette does (CLOUD_KEEP below sets how much it dims).
+	# After dark the cloud keeps the light it gives back but lends no colour:
+	# the night's grey stays neutral.
+	var veil_tint := veil_color.lerp(_grey_like(veil_color), night_part)
+	ambient = _keep_lum(ambient.lerp(veil_tint * 0.9, veil * 0.6), ambient)
+	sun = _keep_lum(sun.lerp(veil_tint.lerp(sun, 0.5), veil * 0.5), sun)
 	# Never flatter than 16 degrees: the oblique field must still read its ground.
 	var light_pitch := -clampf(angles.x, 16.0, 60.0)
 	var light_yaw := angles.y
@@ -486,6 +532,19 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var wind := float(more.get("wind", reg["wind"]))
 	if drawn.has("blizzard"):
 		wind = maxf(wind, 0.9)
+	# By day a closed sky gives back as fill what it takes of the sun: an
+	# up-facing face keeps the clear hour's light, short of what falls and the
+	# wind (the reference's day light 1 − 0.15·fall − 0.2·wind) and our own gloom.
+	var closed := clampf(veil / 0.75, 0.0, 1.0) * (1.0 - night_part)
+	if closed > 0.0:
+		var face_sin := sin(deg_to_rad(-light_pitch))
+		var clear_sun := _mix_num(w, "sun_energy") * float(WEATHER["clear"]["sun"]) * lerpf(0.35, 1.0, up)
+		var clear_face := clear_sun * face_sin * _lin_lum(_mix_bands(w, c, "sun")) + _mix_num(w, "ambient_energy") * _lin_lum(_mix_bands(w, c, "ambient"))
+		var face := sun_energy * face_sin * _lin_lum(sun) + ambient_energy * _lin_lum(ambient)
+		var keep := CLOUD_KEEP * (1.0 - 0.15 * fall - 0.2 * wind)
+		var short := (clear_face * keep - face) * closed
+		if short > 0.0:
+			ambient_energy += short / maxf(_lin_lum(ambient), 0.01)
 	var falls := "none"
 	for k in ["blizzard", "snow", "sleet", "rain"]:
 		if drawn.has(k):
@@ -523,31 +582,44 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	return out
 
 
-## How far the grade spreads the tones about its grey: 1.2, in every weather
-## (an overcast or a fog does not flatten the picture; only colour goes).
+## How far the grade spreads the tones about its grey: 1.2 under a clear sky by
+## day. A grey sky and the night spread them further, to TONE_CONTRAST_DIM: the
+## light there casts little shadow of its own to tell form by, and the screen
+## measured half the reference's spread (p95−p5 0.23 against 0.50 at an
+## overcast noon, 0.14 against 0.38 at night). Never flatter than a clear day.
 const TONE_CONTRAST := 1.2
+const TONE_CONTRAST_DIM := 1.38
 ## The grey the tone turns about: 0.4 by day, lower as the hour's light goes,
 ## so the spread does not darken a dim picture (night stays where it was).
 const TONE_PIVOT_DAY := 0.4
 const TONE_PIVOT_NIGHT := 0.1
+## The field's exposure (WorldEnvironment tonemap): every colour, the floors
+## too (world_vis), is read as sRGB, and the hour's light alone left a mid grey
+## at 0.19 and white at 0.4 on an overcast noon. 1.8 brings them near the
+## reference's picture; the ground stays about where it was.
+const EXPOSURE := 1.8
 
 
-## The colour grade (WorldEnvironment adjustments): a fixed tone (contrast 1.2
-## about the hour's grey); weather and hour only change the saturation; shadows
-## lean to the fill's hue, lights to the sun's.
+## The colour grade (WorldEnvironment adjustments): a tone turned about the
+## hour's grey (contrast 1.2, more under a grey sky and at night); weather and
+## hour change the saturation; shadows lean to the fill's hue, lights to the sun's.
 static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
-	var sat := lerpf(1.0, 0.8, veil) * lerpf(1.0, 0.72, float(w["night"]))
+	var spread := lerpf(TONE_CONTRAST, TONE_CONTRAST_DIM, maxf(veil, float(w["night"])))
+	# A grey sky takes a tenth of the colour, no more: the grey is in the
+	# materials already, and 0.8 left an overcast day near colourless.
+	var sat := lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
 	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
-	# 0.5 + k(b·c − 0.5) is the line 1.2(c − pivot) + pivot when these hold.
+	# 0.5 + k(b·c − 0.5) is the line spread·(c − pivot) + pivot when these hold.
 	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"]))
-	var k := 1.0 + 2.0 * pivot * (TONE_CONTRAST - 1.0)
+	var k := 1.0 + 2.0 * pivot * (spread - 1.0)
 	return {
 		"saturation": sat,
 		"contrast": k,
-		"brightness": TONE_CONTRAST / k,
+		"brightness": spread / k,
+		"spread": spread,
 		"pivot": pivot,
 		"shadow": Color(l["ambient_color"]),
 		"light": Color(l["sun_color"]),
@@ -557,15 +629,40 @@ static func grade(l: Dictionary) -> Dictionary:
 
 ## Light for a WorldEnvironment and sun, the same keys as FxState.lighting_for
 ## plus where the sun stands.
+## Under a closing sky by day the light comes from the whole bright dome above:
+## this much of the fill turns into the sun light, brought up high with a soft
+## shadow. Ground and roofs stay as bright; walls and the sides of things fall
+## darker, so an overcast has form instead of one flat grey. Fill to light about
+## 35:65 and not quite overhead (-62 degrees): a light from straight above cast
+## no shadow worth reading, and the overcast screen kept half the reference's spread.
+const SKY_DOME_SHARE := 0.65
+const SKY_DOME_PITCH := -62.0
+const SKY_DOME_SHADOW := 0.5
+
+
 static func light(l: Dictionary) -> Dictionary:
+	var dome := smoothstep(0.45, 0.9, float(l["veil"])) * (1.0 - float(l["weights"]["night"]))
+	var fill := float(l["ambient_energy"])
+	var moved := fill * SKY_DOME_SHARE * dome
+	var pitch := lerpf(float(l["sun_pitch"]), SKY_DOME_PITCH, dome)
+	# Raised overhead, the sun keeps what it gave the ground from where it stood
+	# (a low dusk sun behind cloud does not flood the yard), and the light's
+	# colour is the two parts by their strength.
+	var high := sin(deg_to_rad(clampf(-pitch, 5.0, 90.0)))
+	var sun_part := float(l["sun_energy"]) * sin(deg_to_rad(clampf(-float(l["sun_pitch"]), 5.0, 90.0))) / high
+	var dome_part := moved / high
+	var color := Color(l["sun_color"])
+	if sun_part + dome_part > 0.001:
+		color = Color(l["sun_color"]).lerp(Color(l["ambient_color"]), dome_part / (sun_part + dome_part))
 	return {
 		"band": l["band"],
-		"sun_color": l["sun_color"],
-		"sun_energy": l["sun_energy"],
-		"sun_pitch": l["sun_pitch"],
+		"sun_color": color,
+		"sun_energy": sun_part + dome_part,
+		"sun_pitch": pitch,
 		"sun_yaw": l["sun_yaw"],
+		"shadow": lerpf(1.0, SKY_DOME_SHADOW, dome),
 		"ambient_color": l["ambient_color"],
-		"ambient_energy": l["ambient_energy"],
+		"ambient_energy": fill - moved,
 		"fog_color": l["fog_color"],
 		"fog_density": 0.012 + 0.03 * float(l["haze"]),
 		"background": l["background"],
@@ -608,4 +705,6 @@ static func params(l: Dictionary, wind_dir := Vector2(1, 0), ground_snow := -1.0
 	# Shadows cross the ground only where there are gaps to cross between.
 	var shade := sun_share * (1.0 - smoothstep(0.78, 0.94, cover))
 	p["fx_cloud"] = Vector4(cover, dir.x * (1.5 + 3.0 * float(l["wind"])), dir.y * (1.5 + 3.0 * float(l["wind"])), shade)
+	# The sight mask by the hour's light: night (lum 0.09) as dark as before, full day lightest.
+	p["fx_sight"] = FxState.sight_floor(inverse_lerp(0.09, 1.0, float(l["lum"])))
 	return p

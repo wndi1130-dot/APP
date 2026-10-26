@@ -23,7 +23,12 @@ const SHOVE_KNOCK: float = 0.35
 ## after the last one (user, build 47: 0.5 felt late). Still one per swing time.
 const SHOVE_TIME: float = 0.35
 const SHOVE_WINDUP: float = 0.15     # the arms come back first; then the shove lands (build 89: it was instant)
-const SHOVE_LUNGE: float = 0.15
+## The arms out and back after it lands, as long as the lockout after it: the whole shove
+## is seen through, half a second (user field test 10-25: "a little longer"; it was 0.15).
+const SHOVE_LUNGE: float = 0.35
+## The feet stay planted from the arms coming back until this long after it lands, the
+## first half of the shove: the body does not slide on under its own push.
+const SHOVE_PLANT: float = 0.1
 ## What stops a melee blow while it is drawn back (opts["melee_break"], to be
 ## shown on the phone): "grab" a grab on the one swinging stops it (as with the
 ## shove), "none" nothing does. The time is spent either way.
@@ -56,7 +61,7 @@ const ALLY_TURN_DEG: float = 35.0
 ## off these works of the hands (the ones the stick breaks off, and rummaging a
 ## body); any other (a climb, a crossing, a door or a window, a weapon swap)
 ## runs to its end and no blow or shove starts meanwhile.
-const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "loot"]
+const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take", "loot"]
 
 var game
 ## The player's shove pressed during a blow: it goes once the blow is over
@@ -121,7 +126,6 @@ func update(delta: float) -> void:
 				p.shove_t = 0.0
 				if p.can_act() and p.grabbers.is_empty():
 					p.swing_t = 0.0
-					p.lunge_t = SHOVE_LUNGE
 					shove(p)
 		if p.strike_t > 0.0:
 			p.strike_t -= delta
@@ -457,6 +461,8 @@ func start_swing(p, at) -> void:
 		return
 	var stomp_it: bool = stomps(p, at)
 	p.strike_kind = "stomp" if stomp_it else "swing"
+	if not stomp_it:
+		game.feel.swing(p, p.weapon_id())
 	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
 	if windup <= 0.0:
 		_strike(p, at)
@@ -469,10 +475,19 @@ func start_swing(p, at) -> void:
 		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
 
 
-## True while a melee blow holds the feet (decision 425): from its weapon's
-## feet_from of the swing to its end (Motion.swing_row), the body does not walk
-## off under the stick. Shoves and stomps do not hold them.
+## True while a melee blow or a shove holds the feet (decision 425): the body does
+## not walk off under the stick or its own push. Stomps do not hold them.
 func feet_held(p) -> bool:
+	return shove_holds_feet(p) or blow_holds_feet(p)
+
+
+## A shove: from the arms drawn back to just after it lands (SHOVE_PLANT).
+func shove_holds_feet(p) -> bool:
+	return p.shove_t > 0.0 or p.lunge_t > SHOVE_LUNGE - SHOVE_PLANT
+
+
+## A melee blow: from its weapon's feet_from of the swing to its end (Motion.swing_row).
+func blow_holds_feet(p) -> bool:
 	var id: int = p.get_instance_id()
 	if not blows.has(id):
 		return false
@@ -551,6 +566,7 @@ func _swing_empty(p) -> void:
 			return
 		if lg.doors.has(c) and String(lg.doors[c]["state"]) in ["closed", "locked"]:
 			_wear(p, WR.melee_wear(wid, String(p.weapon()["quality"]), int(p.skills["melee"])))
+			game.feel.struck_door(p, FieldGrid.center(c), wid)
 			game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "melee", p)
 			return
 	game.make_sound(p.position, SimNoise.Level.QUIET, "melee", p)
@@ -570,6 +586,7 @@ func stomp(p, z: Dictionary) -> void:
 	p.body.add_fatigue(STOMP_FATIGUE)
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	z["stomped"] = int(z.get("stomped", 0)) + 1
+	game.feel.stomped(p, z["pos"], int(z["stomped"]) >= STOMPS_TO_END)
 	if int(z["stomped"]) >= STOMPS_TO_END:
 		_kill(p, z, "")
 
@@ -587,7 +604,12 @@ func _strike(p, at) -> void:
 			_swing_empty(p)
 			return
 	if at is Dictionary:
+		# Read before the blow: a weapon worn through by it leaves the hand.
+		var wid: String = p.weapon_id()
+		var was: String = at["state"]
 		swing(p, at)
+		var now_state: String = at["state"]
+		game.feel.landed(p, at["pos"], wid, now_state != was and (now_state == "dead" or now_state == "downed"))
 	else:
 		swing_person(p, at)
 
@@ -716,6 +738,7 @@ func swing_person(p, o) -> void:
 	game.make_sound(o.position, SimNoise.Level.NORMAL, "fight", p)
 	var hit: float = clampf(0.45 + 0.05 * int(p.skills["melee"]) - 0.03 * int(o.skills["melee"]), 0.2, 0.85)
 	if rng.randf() < hit:
+		game.feel.landed(p, o.position, wid, false)
 		o.body.apply_cut(wid == "axe" or rng.randf() < 0.3, game.clock.elapsed, BodyState.pick_part(wound_rng()))
 		o.last_hurt_by = p.pid
 		game.telemetry.injury(game.clock.elapsed, o.pid, "cut")
@@ -759,6 +782,7 @@ func _shove_now(p) -> void:
 	blows.erase(p.get_instance_id())
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
 	p.swing_t = p.shove_t
+	game.feel.swing(p, "")
 
 
 ## In a blow or a shove: drawn back, landing, or coming back from it.
@@ -784,6 +808,8 @@ func shove(p) -> void:
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
 	p.swing_t = SHOVE_TIME / float(m["swing"])
+	# Every shove is seen, the reflex ones (not drawn back first) too: the arms out and back.
+	p.lunge_t = SHOVE_LUNGE
 	p.body.add_fatigue(0.003)
 	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
 	var hit := 0
@@ -977,6 +1003,7 @@ func bite(p) -> void:
 	var block: float = Wear.block(p, site, true)
 	var blocked: bool = block > 0.0 and rng.randf() < block
 	Wear.tear(p, site, blocked, true)
+	game.feel.bitten(p, blocked)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
 	# The one at the front bit: it is drawn tearing away through the rest of its bite (DeadBody.bite_after_k).
@@ -992,7 +1019,7 @@ func bite(p) -> void:
 	game.telemetry.injury(now, p.pid, "bite")
 	if p.team == "raider":
 		return
-	var part_word: String = {"arm": "팔", "torso": "몸통", "leg": "다리"}.get(part, part)
+	var part_word: String = {"arm": "팔", "torso": "몸통", "head_neck": "목", "leg": "다리"}.get(part, part)
 	game.say(p, UiFonts.josa("%s %s을(를) 물렸다." % [p.display_name, part_word]), true, "bite_" + part)
 	var seen: Array = []
 	for o in game.allies_alive():
@@ -1134,6 +1161,7 @@ func fire(p, at: Vector3, target = null) -> String:
 		h.erase("silencer_cond")
 		silencer = ""
 	game.make_sound(p.position, WR.shot_level(wid, silencer), "gun" if int(d["sound"]) > 0 else "bow", p)
+	game.feel.shot(p, wid, at)
 	if silencer != "":
 		h["silencer_cond"] = float(h.get("silencer_cond", 1.0)) - WR.silencer_wear(silencer, wid)
 		if float(h["silencer_cond"]) <= 0.0:
