@@ -1229,7 +1229,7 @@ func _dug(p) -> void:
 	var w: Dictionary = _wagon_with_coal()
 	if w.is_empty():
 		return
-	var take := minf(TRIP_COAL * game.mission_play.load_mult(), float(w["coal"]))
+	var take := minf(TRIP_COAL * game.mission_play.load_mult() * game.haul_mult(), float(w["coal"]))
 	w["coal"] = float(w["coal"]) - take
 	p.brain["load"] = take
 	p.brain["job"] = "carry"

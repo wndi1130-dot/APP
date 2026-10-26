@@ -1011,6 +1011,7 @@ func _build_allies() -> void:
 	# wide as its words and as tall as a face's round.
 	crew_button = _button("작업조", work_panel, Vector2(0, CHIP_TOKEN), 17)
 	_chip(crew_button)
+	crew_button.add_theme_constant_override("icon_max_width", roundi(UiFonts.px(22)))
 	crew_button.visible = false
 	crew_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	root.add_child(crew_button)
@@ -2010,6 +2011,8 @@ func _tick_allies() -> void:
 			if c.is_alive():
 				alive += 1
 		crew_button.text = "작업조 %d\n석탄 %.1f" % [alive, game.actions.coal_delivered]
+		# The ration law's picture on the chip: the crew hauls less a trip (decision 430 ②).
+		crew_button.icon = StatusArt.texture("ration", false, false, STATUS_ART_SIZE) if game.haul_mult() < 1.0 else null
 	_place_allies()
 
 
@@ -3148,6 +3151,16 @@ func _command(p, cmd: String, close: bool = true) -> void:
 ## Work crew settings: attitude and fire permission per crew (s2_station 2.4).
 func work_panel() -> void:
 	var pane := _open_pane("석탄 작업", "남은 석탄 %.1f · 실은 석탄 %.1f" % [game.actions.coal_left(), game.actions.coal_delivered], "coal")
+	if game.haul_mult() < 1.0:
+		var why := GlassPane.row()
+		why.name = "RationHaul"
+		var art := TextureRect.new()
+		art.texture = StatusArt.texture("ration", false, false, STATUS_ART_SIZE)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.custom_minimum_size = Vector2.ONE * UiFonts.px(22)
+		why.add_child(art)
+		why.add_child(GlassPane.note("비상식량감축법 — 덜 먹은 작업조라 한 번에 %d%% 덜 나른다." % roundi((1.0 - game.haul_mult()) * 100.0), 360.0))
+		pane.body.add_child(why)
 	# Each setting a row headed by its word, its values as picks, the one set in
 	# its amber corners (시안 13's 레버 꼴 row).
 	var h1 := GlassPane.row()

@@ -105,6 +105,13 @@ const INERTIA: Dictionary = {
 	"short": [0.10, 0.12, 0.20],
 }
 const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
+## Who comes down from the train: the laws it lives under go out with them
+## (opts "laws", decision 430).
+const TRAIN_ROLES: Array = ["chief", "companion", "carrier", "escort", "worker"]
+## Under the emergency ration law a work crew that eats less hauls less a trip
+## (decision 430 ②, card domestic Q1 가): the law's haulMult in S1 data.ts
+## (LAWS_RES in the train tables; test_ration_law.gd holds the two together).
+const RATION_HAUL: float = 0.8
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
@@ -1212,6 +1219,8 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 	p.hunger_level = clampi(int(row.get("hunger", 0)), 0, 2)
 	p.sore_level = clampi(int(row.get("sore", 0)), 0, 2)
 	p.bag = String(row.get("bag", "pack"))
+	# The emergency ration law (decision 430): an underfed body tires sooner.
+	p.body.ration_cut = TRAIN_ROLES.has(String(row["role"])) and (opts.get("laws", []) as Array).has("emergency_ration")
 	# What they go out in (wear.gd): a row may say, place by place, else what everyone wears.
 	Wear.dress_from(p, row.get("wear", {}))
 	var slots: Array = []
@@ -2744,6 +2753,11 @@ func depart() -> void:
 
 
 ## The line under the weather: the held train's clock and doors, or the stop's goals.
+## What a work crew's trip carries for the laws the train lives under (1.0 with none).
+func haul_mult() -> float:
+	return RATION_HAUL if (opts.get("laws", []) as Array).has("emergency_ration") else 1.0
+
+
 func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
