@@ -15,6 +15,7 @@ const SliceFlow = preload("res://game/slice_flow.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const FxState = preload("res://fx/fx_state.gd")
 
 ## Rules weather and the drawn look for each column (overcast plays by clear
 ## rules, as the storm's "before" stop does).
@@ -183,6 +184,11 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 		await process_frame
 	game.paused = false
 	game.set_process(false)
+	# Those paused frames began the pause's old-photo fade (field_game fx_fade);
+	# with processing off it would stay, and the world would be shot grey-brown.
+	print("atmosphere_shots: fx_fade %.2f after the pause, set back to 0" % float(game.fx_params["fx_fade"]))
+	game.fx_params["fx_fade"] = 0.0
+	FxState.apply({"fx_fade": 0.0})
 	if bool(scene.get("indoor", indoor)):
 		var b: int = game.view.grid.building_at(FieldGrid.cell_of(game.player.position))
 		game.view.show_levels(0)
