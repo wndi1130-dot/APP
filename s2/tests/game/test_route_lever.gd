@@ -43,15 +43,15 @@ func test_the_plate_holds_both_lines_whole() -> void:
 		var room: float = (lk.face_w - LeverKey.FACE_PAD * 2.0) * UiFonts.K
 		assert_lte(lk.ink_w(lk.get_node("Body/Word")), room, "the word fits beside %s" % small)
 		assert_lte(lk.ink_w(lk.get_node("Body/Small")), room, "%s fits" % small)
-		assert_eq(lk.custom_minimum_size.x, (lk.face_w + 46.0) * UiFonts.K, "the housing rides at the plate's right")
+		assert_almost_eq(lk.custom_minimum_size.x, (lk.face_w + 46.0) * UiFonts.K, 0.01, "the housing rides at the plate's right")
 	var vote = LeverKey.new("표결", "")
 	add_child_autofree(vote)
 	assert_eq(vote.face_w, LeverKey.FACE_CSS.x, "a word alone keeps the plate as drawn")
 
 
 ## On the narrowest phone (16:9, the 1280 × 720 the game is laid out on) and on
-## 1688 × 780 (1558 wide), the wider lever pushes the overview left and the rooms
-## still stand apart.
+## 1688 × 780 (1558 wide), the wider lever pushes the overview left and the rooms'
+## words keep 10 between them (the coordinator 10-27: not one run of words).
 func test_the_band_makes_room_for_the_wider_lever() -> void:
 	for wide in [1280.0, 1558.0]:
 		var host := Control.new()
@@ -75,5 +75,6 @@ func test_the_band_makes_room_for_the_wider_lever() -> void:
 		for i in range(1, rooms.size()):
 			var l0: Label = rooms[i - 1].get_node("Word")
 			var l1: Label = rooms[i].get_node("Word")
-			assert_lte(rooms[i - 1].position.x + l0.position.x + GlassParts.text_w(l0), rooms[i].position.x + l1.position.x, "%s and %s apart at %d" % [l0.text, l1.text, wide])
-		assert_lte(rooms[5].position.x + 47.0 * k, over.position.x, "the last room clears the overview at %d" % wide)
+			var gap: float = rooms[i].position.x + l1.position.x - (rooms[i - 1].position.x + l0.position.x + GlassParts.text_w(l0))
+			assert_gte(gap, 10.0 * k, "%s and %s apart at %d" % [l0.text, l1.text, wide])
+		assert_gte(over.position.x - (rooms[5].position.x + 47.0 * k), 12.0 * k - 0.5, "the last room clears the overview at %d" % wide)
