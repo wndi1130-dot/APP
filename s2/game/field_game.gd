@@ -132,6 +132,10 @@ const RADIO_NEAR_M: float = 60.0
 const LAMP_OFF_SIGHT: float = 0.42     # how far the eye reaches at night with the lanterns out (0.55 with them; 0.3 was too blind, build 89)
 const NIGHT_AMBIENT_MIN: float = 0.2
 const LAMP_GAIN_DAY: float = 0.25       # how much of the lamp light shows on the ground by day
+## The low sun through the windows (decision 474 B8): gold at 14:50, deep orange
+## (about 22 degrees) by sunset. Never red: red is the colour of want (atmosphere 6).
+const WINDOW_GOLD := Color(1.0, 0.8, 0.52)
+const WINDOW_SUNSET := Color(1.0, 0.46, 0.14)
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
@@ -339,6 +343,7 @@ var track_last: Dictionary = {}
 ## two real lights (the chief's lantern and the firebox).
 var lamp_key: String = "-"
 var lamp_fixed: Dictionary = {}
+var dusk_pools_on: bool = false   # the low sun lies on some floor through a window
 ## The light the last look found (cell index -> 0..255) and, per floor, the
 ## indoor cells a window lights (rebuilt when that floor's doors and windows
 ## change): what dark_at reads (decision 439 card 1).
@@ -800,6 +805,7 @@ func _update_atmosphere() -> void:
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
+		_update_window_light()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -809,6 +815,19 @@ func _update_atmosphere() -> void:
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
+
+
+## Low sun through the windows (decision 474 B8): from 14:50 the pools on the
+## floor warm from gold to deep orange and draw back to the sill, gone at sunset. Clouds hold it back
+## as they hold back the sun (Atmosphere sun_visible).
+func _update_window_light() -> void:
+	var z := sun.global_transform.basis.z
+	var sunny := 1.0 - smoothstep(0.55, 0.95, float(atmo["cloud"]))
+	var cells := LampLight.window_cells(grid, Vector2(z.x, z.z), clock.game_minutes(), sunny)
+	if cells.is_empty() and not dusk_pools_on:
+		return
+	dusk_pools_on = not cells.is_empty()
+	view.update_window_light(cells, WINDOW_GOLD.lerp(WINDOW_SUNSET, clock.dusk_share()))
 
 
 ## The look's colour grade on the WorldEnvironment: saturation and contrast, and

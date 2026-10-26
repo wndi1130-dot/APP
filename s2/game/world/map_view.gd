@@ -7,6 +7,7 @@ extends Node3D
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const LampLight = preload("res://game/sim/lamp_light.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
@@ -51,6 +52,8 @@ var vis_bytes := PackedByteArray()
 var vis_lit := PackedInt32Array()
 var lamp_lit := PackedInt32Array()   # cells the lamp channel was written to last time
 var track_wait: Dictionary = {}      # snow marks handed over, written at the next sight update
+var win_image: Image                 # low sun through the windows, one byte a texel (LampLight.window_cells)
+var win_texture: ImageTexture
 var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
 var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
@@ -125,6 +128,9 @@ func setup(map_data: Dictionary) -> void:
 	material.set_shader_parameter("vis", vis_texture)
 	material.set_shader_parameter("map_size", Vector2(grid.width, grid.height))
 	material.set_shader_parameter("lamp_color", FxState.LAMP)
+	win_image = Image.create(grid.width * LampLight.WINDOW_TEXELS, grid.height * LampLight.WINDOW_TEXELS, false, Image.FORMAT_R8)
+	win_texture = ImageTexture.create_from_image(win_image)
+	material.set_shader_parameter("win", win_texture)
 	if BuildingView.can_draw():
 		buildings = BuildingView.new()
 		buildings.name = "Buildings"
@@ -393,6 +399,17 @@ func update_tracks(changed: Dictionary) -> void:
 ## How strong the lamp light shows on the ground: faint by day, full at night.
 func set_lamp_gain(gain: float) -> void:
 	material.set_shader_parameter("lamp_gain", clampf(gain, 0.0, 1.0))
+
+
+## The low sun's pools through the windows (texel index -> byte) and their colour.
+func update_window_light(texels: Dictionary, color: Color) -> void:
+	var bytes := PackedByteArray()
+	bytes.resize(win_image.get_width() * win_image.get_height())
+	for i in texels:
+		bytes[int(i)] = int(texels[i])
+	win_image.set_data(win_image.get_width(), win_image.get_height(), false, Image.FORMAT_R8, bytes)
+	win_texture.update(win_image)
+	material.set_shader_parameter("win_color", color)
 
 
 ## The glowing faces themselves (car windows, the firebox door, the gap in the
