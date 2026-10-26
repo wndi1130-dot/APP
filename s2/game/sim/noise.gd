@@ -25,6 +25,68 @@ const STEP_AT := [0.2, 0.65]
 const STEP_ROUND := {"walk": 1.64, "run": 2.27, "crouch": 1.19}
 const EVENT_DISPLAY_SECONDS := 1.6
 
+## Every sound the field makes, by its tag (gap audit J04): where it is made,
+## how loud it may be, and whether it counts on the score that brings the next
+## horde earlier ("pull") and tells the director the squad is about ("notice":
+## the sewer, the raiders and the "lost" breather read that). Every sound in
+## the table is heard by the dead within its radius and shows on the HUD the
+## same way (field_game make_sound); a test reads the code's calls against it.
+## "at": maker (whoever made it), spot (a door, window, lid or lure),
+## train (the train's own place: the engine end).
+## The brakes and the guards at the train pull nothing (decision 416): the
+## first horde's 4.5 minutes already count them, and the dead they call come
+## to the train, not after the squad.
+const SOURCES := {
+	"walk": {"levels": [Level.QUIET], "at": "maker", "pull": true},
+	"run": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"crouch": {"levels": [Level.QUIET], "at": "maker", "pull": true},
+	"melee": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},
+	"impact": {"levels": [Level.QUIET], "at": "spot", "pull": true},
+	"fight": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"fall": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"gun": {"levels": [Level.LOUD, Level.VERY_LOUD], "at": "maker", "pull": true},
+	"bow": {"levels": [Level.QUIET], "at": "maker", "pull": true},
+	"bang": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"pry": {"levels": [Level.QUIET, Level.NORMAL], "at": "spot", "pull": true},
+	"latch": {"levels": [Level.QUIET], "at": "spot", "pull": true},
+	"kick": {"levels": [Level.LOUD], "at": "spot", "pull": true},
+	"glass": {"levels": [Level.LOUD], "at": "spot", "pull": true},
+	"hammer": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"salvage": {"levels": [Level.NORMAL, Level.LOUD], "at": "spot", "pull": true},
+	"axe": {"levels": [Level.LOUD], "at": "maker", "pull": true},
+	"search": {"levels": [Level.QUIET], "at": "maker", "pull": true},
+	"glass_step": {"levels": [Level.QUIET], "at": "maker", "pull": true},
+	"ladder": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},
+	"lid": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"pickaxe": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"smoke": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"light": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"bell": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"lure": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"alarm": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"can_bash": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
+	"scream": {"levels": [Level.VERY_LOUD], "at": "maker", "pull": true},
+	"whistle": {"levels": [Level.VERY_LOUD], "at": "train", "pull": true},
+	"train_brake": {"levels": [Level.LOUD], "at": "train", "pull": false},
+	"train_guard": {"levels": [Level.QUIET], "at": "train", "pull": false},
+}
+
+
+## Points a sound of this tag adds to the stop's score (0 for one that pulls nothing).
+static func tag_score(level: int, tag: String) -> int:
+	return score(level) if pulls(tag) else 0
+
+
+## Does this tag count on the score? A tag outside the table does, as before.
+static func pulls(tag: String) -> bool:
+	return bool((SOURCES.get(tag, {}) as Dictionary).get("pull", true))
+
+
+## Does a loud one of this tag tell the director (and the raiders) the squad
+## is about? What pulls nothing does not: the dead it calls come to the train.
+static func notices(tag: String) -> bool:
+	return pulls(tag)
+
 
 static func clamp_level(level: int) -> int:
 	return clampi(level, Level.QUIET, Level.VERY_LOUD)

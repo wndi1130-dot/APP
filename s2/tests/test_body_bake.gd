@@ -73,6 +73,22 @@ func test_turn_and_aim_move_a_bone_and_what_hangs_on_it() -> void:
 	assert_true(body.get_bone_global_pose(2).origin.is_equal_approx(Vector3(0, -1, 1)), "bent forward about the left-right axis")
 
 
+func test_a_swing_points_a_bone_ahead_of_straight_down_or_behind_past_level() -> void:
+	var body := Skeleton3D.new()
+	add_child_autofree(body)
+	body.add_bone("upper")
+	body.add_bone("lower")
+	body.set_bone_parent(1, 0)
+	body.set_bone_rest(1, Transform3D(Basis(), Vector3(0, 1, 0)))
+	body.reset_bone_poses()
+	BodyBake.apply_layer(body, {"steps": [["swing", "upper", "lower", 0.0, PI * 0.5]]}, 0.0)
+	assert_true(body.get_bone_global_pose(1).origin.is_equal_approx(Vector3(0, 0, 1)), "a right angle: straight ahead")
+	BodyBake.apply_layer(body, {"steps": [["swing", "upper", "lower", 0.0, -2.0]]}, 0.0)
+	var behind := body.get_bone_global_pose(1).origin
+	assert_lt(behind.z, -0.9, "behind")
+	assert_gt(behind.y, 0.4, "and up, past level (a heel kicked up)")
+
+
 func test_a_bake_is_written_and_read_back_the_same() -> void:
 	var assets := _two_bone_assets()
 	var dir := "user://test_body_bake"

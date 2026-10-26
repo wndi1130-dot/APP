@@ -13,15 +13,32 @@ extends RefCounted
 
 const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
+const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
+const TurnCommon = preload("res://game/train/turn/turn_common.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 
+## S1 heatCost: the communities' heating, by the outside's stage when the
+## board has climate on (train_climate.gd temp_mult; 1 otherwise).
 static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 	var sum := 0.0
 	for c: String in St.comms(t):
-		var s: Dictionary = g["comms"][c]
-		sum += (float(s["heat"]) * float(s["pop"])) / 40.0
-	return sum * float(t["P"]["coalHeatPerLever"])
+		sum += comm_heat(g, c)
+	return sum * float(t["P"]["coalHeatPerLever"]) * TrainClimate.temp_mult(g, t)
+
+
+## One community's term of heat_cost, before coalHeatPerLever: its heat
+## step over its people, less what its insulated cars save. The car pane's
+## heat cost reads this too, so the forecast and the pane agree (J12).
+## `insulated` false: what it would burn with no car insulated (the cost
+## pane's 「단열」 line is the difference).
+static func comm_heat(g: Dictionary, c: String, insulated: bool = true) -> float:
+	var s: Dictionary = g["comms"][c]
+	var share: float = TrainMods.insulated_share(g, c) if insulated else 0.0
+	return (float(s["heat"]) * float(s["pop"])) / 40.0 \
+		* (1.0 - float(TrainMods.D["insulateHeat"]) * share)
 
 
 static func food_cost(g: Dictionary, t: Dictionary) -> float:
@@ -39,13 +56,40 @@ static func tail_idle(g: Dictionary) -> bool:
 
 
 ## Coal and food this stretch will cost, stops left out: {coal, food}. A stranded train burns none.
+## The dom's share is what technology takes off an ideal law (dom_coal/dom_food, S1 domesticForecast).
 static func forecast(g: Dictionary, t: Dictionary) -> Dictionary:
 	var p: Dictionary = t["P"]
 	var run := float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])
 	var coal := heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd") + St.calm_coal(g, t) + run \
 		- (2.0 if bool(g["forcedRun"]) else 0.0) + (float(p["tailIdleCoal"]) if tail_idle(g) else 0.0) + St.loco_coal(g, t) + TrainHands.hands_coal(g, t)
 	var food := food_cost(g, t) + St.law_sum(g, t, "foodAdd")
-	return {"coal": 0.0 if g.get("stranded") != null else coal, "food": food}
+	if g.has("nextCardUid") and g.get("hands") is Dictionary:
+		coal += float(t["HANDS"]["stokerCoal"]) * float(g["hands"]["short"]["stoker"])
+	return {"coal": 0.0 if g.get("stranded") != null else coal + dom_coal(g), "food": food + dom_food(g)}
+
+
+## S1 domesticForecast's coal and food for the ported dom: E3 가 and M3 나 make
+## 공동 난방 and 공동 식당 cheaper (TrainLawTech). 0 without a dom.
+static func dom_coal(g: Dictionary) -> float:
+	return 0.0 - TrainLawTech.coal(g)
+
+
+static func dom_food(g: Dictionary) -> float:
+	return 0.0 - TrainLawTech.food(g)
+
+
+## What forecast's coal and food are made of, as settle lays them on the
+## ledger (S1 turn.ts forecastWeights): {coal: [[why, weight], ...], food: […]}.
+## Weights only: settle splits the forecast over them (turn_common.gd
+## split_parts), so their sum may differ from it. The cost pane reads these, so
+## a forecast's rows and the stretch's ledger rows are the same causes (J12).
+static func forecast_parts(g: Dictionary, t: Dictionary) -> Dictionary:
+	var p: Dictionary = t["P"]
+	var coal: Array = [["run", (float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])) - (2 if bool(g["forcedRun"]) else 0)], ["idle", float(p["tailIdleCoal"]) if tail_idle(g) else 0], ["heat", heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd")], ["calm.pot", St.calm_coal(g, t)], ["disaster", 0], ["loco", St.loco_coal(g, t)]]
+	var hands_coal: float = float(t["HANDS"]["stokerCoal"]) * TrainHands.hand_short(g, "stoker")
+	if hands_coal != 0: coal.append(["hands", hands_coal])
+	coal.append(["upkeep", dom_coal(g)])
+	return {"coal": coal, "food": [["ration", food_cost(g, t) + St.law_sum(g, t, "foodAdd")], ["upkeep", dom_food(g)]]}
 
 
 static func seg_km_of(g: Dictionary, t: Dictionary, seg: int = -1) -> float:
@@ -140,13 +184,24 @@ static func auto_levers(g0: Dictionary, t: Dictionary) -> Dictionary:
 static func _journal(g: Dictionary, text: String, tone: Variant = null) -> void:
 	if not g.get("journal") is Array:
 		g["journal"] = []
-	(g["journal"] as Array).append({"seg": g["seg"], "text": text, "tone": tone})
+	var row: Dictionary = {"seg": g["seg"], "text": text}
+	# Older train fixtures project absent tone to null; whole Game JSON omits it.
+	if tone != null or not g.has("version"):
+		row["tone"] = tone
+	(g["journal"] as Array).append(row)
 
 
 static func _card(g: Dictionary, card: Dictionary) -> void:
 	if not g.get("cards") is Array:
 		g["cards"] = []
-	(g["cards"] as Array).append(card)
+	var row: Dictionary = card.duplicate(true)
+	# Full states carry the card sequence; the original projection has no uid field.
+	if g.has("nextCardUid"):
+		row["uid"] = g["nextCardUid"]
+		g["nextCardUid"] = int(g["nextCardUid"]) + 1
+		for key: String in ["comm", "who", "text"]:
+			if row.has(key) and row[key] == null: row.erase(key)
+	(g["cards"] as Array).append(row)
 
 
 static func _bump_rel(s: Dictionary, d: float) -> void:
@@ -178,9 +233,11 @@ static func drift(g0: Dictionary, t: Dictionary) -> Dictionary:
 		elif c == "tail":
 			s["backStreak"] = 0
 		var back := c == "tail" and int(s["backStreak"]) >= int(p["backSegs"])
-		_bump_rel(s, St.clampv(dr, -6.0, float(p["recoverCap"])))
+		if g.has("nextCardUid"): TurnCommon.bump_rel(g, c, St.clampv(dr, -6.0, float(p["recoverCap"])), "situation")
+		else: _bump_rel(s, St.clampv(dr, -6.0, float(p["recoverCap"])))
 		if back:
-			_bump_rel(s, float(p["backBonus"]))
+			if g.has("nextCardUid"): TurnCommon.bump_rel(g, c, float(p["backBonus"]), "back")
+			else: _bump_rel(s, float(p["backBonus"]))
 			if int(s["fervor"]) > 0:
 				s["fervor"] = int(s["fervor"]) - 1
 			s["badStreak"] = 0
@@ -208,7 +265,8 @@ static func meters(g0: Dictionary, t: Dictionary) -> Dictionary:
 	for c: String in St.comms(t):
 		avg += float(g["comms"][c]["rel"]) * float(seat_map[c])
 	avg /= 100.0
-	g["trust"] = St.clampv(float(g["trust"]) + St.clampv(avg / 40.0, -2.5, 2.5), 0.0, 100.0)
+	if g.has("nextCardUid"): TurnCommon.bump(g, "trust", St.clampv(avg / 40.0, -2.5, 2.5), "mood")
+	else: g["trust"] = St.clampv(float(g["trust"]) + St.clampv(avg / 40.0, -2.5, 2.5), 0.0, 100.0)
 	var inc := 0.0
 	for c: String in St.comms(t):
 		var rel := float(g["comms"][c]["rel"])
@@ -219,14 +277,20 @@ static func meters(g0: Dictionary, t: Dictionary) -> Dictionary:
 		var sit := St.situation(g, t, c)
 		if sit[0] <= 25.0 or sit[1] <= 25.0:
 			inc += 2.0
-	inc += 8.0 if float(g["food"]) <= 0.0 else 0.0
+	var mood_inc: float = inc
+	var food_inc: float = 8.0 if float(g["food"]) <= 0.0 else 0.0
+	inc += food_inc
 	inc += St.law_sum(g, t, "tensionAdd") + St.calm_tension(g, t)
 	g["fear"] = St.clampv(float(g["fear"]) + St.law_sum(g, t, "fearAdd"), 0.0, 100.0)
 	if inc <= 0.0:
-		g["tension"] = St.clampv(float(g["tension"]) - 2.0, 0.0, 100.0)
+		if g.has("nextCardUid"): TurnCommon.bump(g, "tension", -2, "drift")
+		else: g["tension"] = St.clampv(float(g["tension"]) - 2.0, 0.0, 100.0)
 	else:
 		var calmed := 1.0 if int(g.get("tensionCrisisUsed", 0)) > 0 else 1.0 - float(g["fear"]) / 200.0
-		g["tension"] = St.clampv(float(g["tension"]) + maxf(0.0, inc) * calmed, 0.0, 100.0)
+		if g.has("nextCardUid"):
+			var pot_t: float = float(t["CALM"]["potTension"]) if St.pot_running(g, t) else 0.0
+			TurnCommon.bump_parts(g, "tension", maxf(0.0, inc) * calmed, [["mood", mood_inc], ["short", food_inc], ["law", St.law_sum(g, t, "tensionAdd")], ["calm.pot", pot_t], ["calm.ledger", St.calm_tension(g, t) - pot_t], ["cast", 0]])
+		else: g["tension"] = St.clampv(float(g["tension"]) + maxf(0.0, inc) * calmed, 0.0, 100.0)
 	g["fear"] = St.clampv(float(g["fear"]) - 1.0, 0.0, 100.0)
 	return g
 

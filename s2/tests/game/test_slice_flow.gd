@@ -89,7 +89,7 @@ func test_the_second_station_carries_the_slice_s_own_session() -> void:
 	assert_eq(f.arrival_g["fieldReturns"]["special"], f.council_g["fieldReturns"]["special"], "the slip is the session the slice sat")
 
 
-func test_the_receipt_step_is_the_receipt_sheet_of_the_sample_when_the_field_is_skipped() -> void:
+func test_the_receipt_step_is_the_quiet_receipt_of_the_contract_when_the_field_is_skipped() -> void:
 	var f = _flow()
 	f.next()
 	f.next()
@@ -99,16 +99,19 @@ func test_the_receipt_step_is_the_receipt_sheet_of_the_sample_when_the_field_is_
 	assert_false(f.panel.visible)
 	assert_true(f.gauges.visible, "the train's gauges over it, as over the stop card")
 	assert_false(f.soot_bot.visible, "the sheet lies over the bottom edge")
-	var m: Dictionary = ReceiptSheet.model(f.card.result, f.card.seg)
-	assert_has(m["seen"], "약속 서막 · 본 사람 2 · 꼬리칸 들음", "the sample's promise, as seen")
+	# The field skipped: the contract's searchers went and came back with nothing (slice_flow.gd quiet_receipt),
+	# on the board's own departure, and that return is on the board once.
+	assert_eq(f.receipt["departureId"], f._departure()["departureId"], "the receipt of the slice's own contract")
+	assert_eq((f.train_g["fieldReturns"]["records"] as Array).size(), 1, "taken onto the board once")
+	assert_true(bool(f.train_g["stop"]["done"]), "the stop closed with the field's result")
 	var texts: Array = []
 	for l in f.card.find_children("*", "Label", true, false):
 		texts.append((l as Label).text)
 	assert_has(texts, "출발", "the end stamped")
 	assert_has(texts, "술레후프")
 	var made: Dictionary = SliceFlow.result_of(f.receipt)
-	assert_eq(made["stay"], 160)
-	assert_eq(made["boarded"], 4, "sent less the dead, missing and left")
+	assert_eq(made["stay"], 120)
+	assert_eq(made["boarded"], (f._departure()["roster"] as Array).size(), "everyone sent came back")
 	f.card.go_key.pressed.emit()
 	assert_eq(f.current(), "council", "its key goes on")
 	assert_eq(String(f.card.name), "CouncilCard", "gone with its step")
@@ -120,7 +123,10 @@ func test_after_the_field_a_key_goes_on_to_its_own_receipt() -> void:
 	f.next()
 	assert_eq(f.current(), "field")
 	assert_not_null(f.field)
-	assert_eq(f.field.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 서막 2명 데려오기", "the field goes out with the sample departure")
+	# The train's own departure contract (s3, J09): its people and its promises, none at the first stop.
+	assert_eq(f.field.opts["departure"], f._departure(), "the field goes out under the train's contract")
+	assert_eq(f.field.squad[0].pid, "captain", "the chief and the train's own people")
+	assert_eq(f.field.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "", "no promise rides on the first stop")
 	assert_false(f.panel.visible, "nothing over the stop while it is played")
 	assert_false(f.weather.visible or f.film.visible, "the field brings its own weather")
 	f.field.set_process(false)
@@ -205,6 +211,26 @@ func test_passing_the_stop_by_brings_the_train_back_without_a_field() -> void:
 	assert_null(f.pending_field)
 
 
+## Passed by on the board: the stop resolved as passed (S1 resolveStop), no return, no
+## session, and the slice ends there without running the train on.
+func test_a_stop_passed_by_ends_the_slice_on_the_board_without_a_return() -> void:
+	var f = _flow()
+	f.next()
+	assert_eq(f.current(), "stop_pick")
+	f.card.passed_by.emit()
+	assert_eq(f.current(), "travel", "back on the line")
+	assert_true(f.passed)
+	assert_true(bool(f.train_g["stop"]["done"]), "the stop resolved as passed")
+	assert_false(f._returned(), "no field, no return")
+	var seg: int = int(f.train_g["seg"])
+	f.next()
+	assert_eq(f.current(), "arrive")
+	assert_eq(int(f.train_g["seg"]), seg, "the train is not run on past the stop")
+	assert_eq(f.port_error, "", "nothing outside the port was asked")
+	f.next()
+	assert_eq(f.current(), "end")
+
+
 func test_sent_the_field_is_built_under_the_scene_and_shown_when_it_lands() -> void:
 	var f = _cinema_flow({"skip_field": false, "seed": 5})
 	f.loader.resting = true
@@ -230,7 +256,7 @@ func test_sent_the_field_is_built_under_the_scene_and_shown_when_it_lands() -> v
 	assert_eq(f.field, building, "the field built under the scene is the one played")
 	assert_true(f.field.visible)
 	assert_false(f.field.standing_by, "shown: it starts")
-	assert_eq(f.field.hud.promise_label.text.replace(UiFonts.WORD_JOINER, ""), "약속: 서막 2명 데려오기", "with the sample departure, as before")
+	assert_eq(f.field.opts["departure"], f._departure(), "with the train's contract, as before")
 
 
 func test_skipping_the_scene_changes_nothing_the_field_goes_out_with() -> void:

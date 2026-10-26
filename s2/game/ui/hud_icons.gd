@@ -55,6 +55,8 @@ const PATHS: Dictionary = {
 	"fetch": '<path class="t" d="M4 11h16v9H4z"/><path d="M4 11h16v9H4z"/><path d="M4 14h16M4 17h16"/><path d="M12 2.500V8M9.500 5.500 12 8l2.500-2.500"/>',
 	"bribe": '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 4 14 4 14 0V7M5 12v5c0 4 14 4 14 0v-5"/>',
 	"blackmail": '<path class="t" d="M5 4h14v11l-5 5H5z"/><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h4"/>',
+	# 설득(결정 433): two speech bubbles facing, the near one filled (s1 ui/icons.ts persuade).
+	"persuade": '<path class="t" d="M3 5h11v7H8l-3 3v-3H3z"/><path d="M3 5h11v7H8l-3 3v-3H3z"/><path d="M14 9h7v7h-2v3l-3-3h-5v-4"/>',
 	"papers": '<path class="t" d="M7.500 3.500h8L19 7v11H7.500z"/><path d="M7.500 3.500h8L19 7v11H7.500z"/><path d="M15.500 3.500V7H19M10.500 10.500H16M10.500 14H16"/><path d="M4.500 7.500v13H15"/>',
 	"numbers": '<path d="M5 20V11M10 20V5M15 20v-7M20 20v-4"/>',
 	"scale": '<path class="t" d="M4 11h16v9.500H4z"/><path d="M4 11h16v9.500H4z"/><path d="M8.500 11V3.500h7V11M8.500 14.500h7M11 6.500h2"/>',
@@ -163,19 +165,52 @@ const PATHS: Dictionary = {
 	"it_bottle_broken": '<path class="t" d="M10.500 3h3v4.500l2.500 3V15l-1.200 1.800 1 2.200-2 .8-1.200-1.600-1.600 1.600-1.400-1.200-1.300 1.300L7.500 18.500l1-2-1-1.500v-4.500l3-3z"/><path d="M10.500 3h3v4.500l2.500 3V15l-1.200 1.800 1 2.200-2 .8-1.200-1.600-1.600 1.600-1.400-1.200-1.300 1.300L7.500 18.500l1-2-1-1.500v-4.500l3-3z"/><path d="M10.500 4.800h3"/>',
 	"it_stake": '<path class="t" d="M3.500 20.500 6 14.500l9.500-9.500 3.500 3.500L9.500 18z"/><path d="M3.500 20.500 6 14.500l9.500-9.500 3.500 3.500L9.500 18zM6 14.500l3.500 3.500M9 12.500l5-5"/>',
 	"it_knife": '<path class="t" d="M4 20l9-9 2 2c-3 4-7 6-11 7z"/><path d="M4 20l9-9 2 2c-3 4-7 6-11 7z"/><path class="t" d="M14 10l5-5 1.500 1.500-5 5z"/><path d="M14 10l5-5 1.500 1.500-5 5z"/>',
+	"manhole": '<circle class="t" cx="10" cy="14" r="7.5"/><circle cx="10" cy="14" r="7.5"/><path d="M5 11.5h10M3.4 14.5h13.2M5 17.5h10"/><path class="f" d="M13 3h8v7h-8z"/><path class="c" d="M13 6.5h8M17 3v7"/>',
+	"window": '<path class="t" d="M5 3h14v16H5z"/><path d="M5 3h14v16H5zM12 3v16M5 11h14M3 21h18"/>',
+	"ladder": '<path d="M8 2.5v19M16 2.5v19M8 6h8M8 10.5h8M8 15h8M8 19.5h8"/>',
+	"pickup": '<path class="t" d="M6 15h12v6H6z"/><path d="M6 15h12v6H6zM3 21h18"/><path d="M12 12V3M8.5 6.5 12 3l3.5 3.5"/>',
+	"wear": '<path class="t" d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3z"/><path d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3zM12 6v15M14.5 14h2.5"/>',
+	"unlock": '<path class="t" d="M5 11h14v10H5z"/><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.6-1.8"/><circle class="f" cx="12" cy="15.5" r="1.4"/><path d="M12 16.5v2"/>',
+	"barricade": '<path class="t" d="M7 3h10v18H7z"/><path d="M7 3h10v18H7zM4 21h16"/><path class="f" d="M4.5 8.5 19 6l.4 2.3L4.9 10.8zM4.6 15.7 19.3 13.2l.4 2.3-14.7 2.5z"/>',
+	"stake": '<path class="t" d="M7.5 6h5v11l-2.5 4-2.5-4z"/><path d="M7.5 6h5v11l-2.5 4-2.5-4zM7.5 6l2.5-3 2.5 3"/><path d="M13.5 15.5 21 8"/><path class="f" d="M19.5 6.5l2.6-2.6 1 1-2.6 2.6z"/>',
+	"wall": '<path d="M5 3v18M19 3v18"/><path class="t" d="M3 7h18v4H3zM3 13h18v4H3z"/><path d="M3 7h18v4H3zM3 13h18v4H3z"/>',
+	"rummage": '<path class="t" d="M4 11h16v10H4z"/><path d="M4 11h16v10H4zM4 11 7 5h13l-3 6M9 15h6"/>',
+	"body": '<circle class="f" cx="4.5" cy="18" r="2.2"/><path class="t" d="M7.5 16h12.5v4H7.5z"/><path d="M7.5 16h12.5v4H7.5z"/><circle cx="14" cy="7.5" r="3.6"/><path d="M16.6 10.1l2.4 2.4"/>',
 }
 
 
-## The situation pad's picture for what it would do first (its row's word).
+## The situation pad's picture for what it would do first (its row's word),
+## from the first rule that fits (user 2026-10-25: a key whose picture does not
+## say what it does). [how, words, icon]: "is" the whole word, "starts" or
+## "ends" a part of it, "has" anywhere in it. The more particular go first (문
+## 따기 before 문). A word no rule knows shows the magnifier (a place to look at).
+const CONTEXT_ICONS: Array = [
+	["ends", "치료", "bandage"], ["starts", "붕대", "bandage"], ["starts", "부목", "bandage"], ["ends", "문지름", "bandage"],
+	["starts", "맨홀", "manhole"],
+	["starts", "문 따기", "unlock"], ["starts", "문 막기", "barricade"], ["starts", "문", "door"],
+	["starts", "창", "window"],
+	["starts", "말뚝", "stake"], ["starts", "방벽", "wall"],
+	["is", "품 뒤지기", "body"], ["is", "뒤지기", "rummage"], ["is", "줍기", "pickup"], ["is", "입기", "wear"],
+	["starts", "옥상", "ladder"], ["has", "사다리", "ladder"], ["ends", "가기", "stairs"],
+	["starts", "열차", "train"],
+]
+
+
 static func context_icon(label: String) -> String:
-	if label.begins_with("붕대") or label.begins_with("부목") or label.ends_with("치료") or label.ends_with("문지름"):
-		return "bandage"
-	if label.begins_with("문"):
-		return "door"
-	if label.ends_with("가기"):
-		return "stairs"
-	if label.begins_with("열차"):
-		return "train"
+	for row: Array in CONTEXT_ICONS:
+		var words: String = row[1]
+		var hit: bool = false
+		match String(row[0]):
+			"is":
+				hit = label == words
+			"starts":
+				hit = label.begins_with(words)
+			"ends":
+				hit = label.ends_with(words)
+			"has":
+				hit = label.contains(words)
+		if hit:
+			return String(row[2])
 	return "search"
 
 static var _made: Dictionary = {}
