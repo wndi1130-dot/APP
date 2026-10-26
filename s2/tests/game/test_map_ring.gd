@@ -192,6 +192,22 @@ func test_ring_trees_and_yard_fences_are_drawn_as_models() -> void:
 		assert_gt(fences, 0, place)
 
 
+func test_outer_boxes_hold_only_what_the_place_s_own_boxes_hold() -> void:
+	for place in PLACES + ["summit_01"]:
+		var after := _ringed(place)
+		var ring_ids: Dictionary = {}
+		for id in after["map_ring"]["containers"]:
+			ring_ids[id] = true
+		var kinds: Dictionary = {}
+		for id in after["containers"]:
+			if not ring_ids.has(id):
+				for it in after["containers"][id].get("items", []):
+					kinds[Ring._item_id(it)] = true
+		for id in ring_ids:
+			for it in after["containers"][id].get("items", []):
+				assert_true(kinds.has(Ring._item_id(it)), "%s %s: %s" % [place, id, Ring._item_id(it)])
+
+
 func test_dead_still_come_in_from_the_new_edge() -> void:
 	for place in ["houses_01", "lodge_01", "mine_01", "freight_01"]:
 		var before := _plain(place)
