@@ -272,21 +272,53 @@ func test_the_bite_and_the_snap_start_and_end_at_the_lunge() -> void:
 				assert_between(float(front) / last, 0.25, 0.55, folder + ": thrown furthest forward early in the snap")
 
 
+# Once the teeth are in, the one that bit plays the rest of the bite as it is
+# thrown off (the half that tears away), not the reel at once; then, the shove
+# long over, it reels on in the daze the release left (1 s), as it did before.
+func test_the_one_that_bit_tears_away_through_the_rest_of_the_bite() -> void:
+	for i in 30:
+		DeadBody.table.append([i * 32, 32, false, 1.0])
+	DeadBody.named = {DeadBody.BITE: 25}
+	var z := _body("chase")
+	z["bit_at"] = 10.0
+	z["shoved_t"] = 0.28
+	z["stun"] = 1.0
+	var c := DeadBody.picked(z, 0.0, 0.0, 1.0, true)
+	assert_eq(int(c.g), 25, "the bite, not the reel")
+	assert_almost_eq(c.r, DeadBody.BITE_LANDS, 0.001, "on from where the teeth went in")
+	z["age"] = 10.3
+	z["shoved_t"] = 0.0
+	z["stun"] = 0.7
+	assert_almost_eq(DeadBody.picked(z, 0.0, 0.0, 1.0, true).r, DeadBody.BITE_LANDS + 0.3, 0.001)
+	z["age"] = 10.6
+	z["stun"] = 0.4
+	assert_eq(int(DeadBody.picked(z, 0.0, 0.0, 1.0, true).g), DeadBody.STAGGER, "through: still dazed, it reels")
+	z["age"] = 11.1
+	z["stun"] = 0.0
+	assert_ne(int(DeadBody.picked(z, 0.0, 0.0, 1.0, true).g), DeadBody.STAGGER, "the daze over, it comes on")
+	var other := _body("chase")
+	assert_lt(DeadBody.bite_after_k(other), 0.0, "one that did not bite does not")
+	DeadBody.named = {}
+
+
 func _last_frame(baked: Dictionary, clip: Dictionary) -> Array:
 	return _frame(baked, clip, int(clip["frames"]) - 1)
 
 
+## Each vertex's offset in frame k, read through its UV2 as the shader does
+## (vertices at one place share a column of the picture).
 func _frame(baked: Dictionary, clip: Dictionary, k: int) -> Array:
 	var img: Image = baked["image"]
 	var rows := int(baked["rows_per_frame"])
 	var first := (int(clip["start"]) + k) * rows
 	var lo := Vector3(clip["lo"][0], clip["lo"][1], clip["lo"][2])
 	var hi := Vector3(clip["hi"][0], clip["hi"][1], clip["hi"][2])
+	var look: PackedVector2Array = (baked["mesh"] as Mesh).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	var width := float(img.get_width())
 	var out: Array = []
-	for y in range(first, first + rows):
-		for x in img.get_width():
-			var c := img.get_pixel(x, y)
-			out.append(lo + Vector3(c.r, c.g, c.b) * (hi - lo))
+	for at in look:
+		var c := img.get_pixel(int(at.x * width), first + int(at.y))
+		out.append(lo + Vector3(c.r, c.g, c.b) * (hi - lo))
 	return out
 
 

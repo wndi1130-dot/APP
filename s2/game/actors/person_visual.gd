@@ -35,6 +35,7 @@ const SearchHeight = preload("res://game/actors/search_height.gd")
 const InjuryRules = preload("res://game/sim/injury_rules.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
 const Wear = preload("res://game/sim/wear.gd")
+const Gait = preload("res://game/sim/gait.gd")
 
 const FOLDER: String = "res://models/people/n5-crew_seamstress"
 const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
@@ -55,6 +56,9 @@ const BODIES_SETTING: String = "visuals/people_bodies_max"
 ## folder's motions and the dead's alike.
 const WEAR_TINTS: Dictionary = {"jacket_short": Vector3(0.1, 0.11, 0.14), "coat_long": Vector3(0.12, 0.1, 0.085),
 	"hat_knit": Vector3(0.17, 0.12, 0.1), "hood": Vector3(0.13, 0.135, 0.14)}
+## The bags worn on the back (carry.gd BAGS, body_bake.gd BAG_SHELLS), drawn as a
+## garment is: everyday colours, worn canvas brown and a faded blue.
+const BAG_TINTS: Dictionary = {"pack": Vector3(0.15, 0.11, 0.075), "big_pack": Vector3(0.075, 0.095, 0.13)}
 ## A garment's pattern as the shader numbers it (person_vat.gdshader worn_look).
 const PATTERNS: Dictionary = {"plain": 0, "check": 1, "knit": 2, "quilt": 3}
 const SHADER: Shader = preload("res://game/actors/person_vat.gdshader")
@@ -137,7 +141,9 @@ const OWN_MIX: Dictionary = {"p_walk": 0.2, "p_stand": 0.2, "p_crouch_walk": 0.5
 	"p_limp_light": 0.2, "p_limp_heavy": 0.2, "p_limp_light_l": 0.2, "p_limp_light_r": 0.2,
 	"p_limp_heavy_l": 0.2, "p_limp_heavy_r": 0.2, "p_bitten_front": 0.2, "p_bitten_back": 0.2,
 	"p_shiver": 0.3, "p_pain_head": 0.3, "p_pain_torso": 0.3, "p_pain_arm": 0.3, "p_pain_leg": 0.3,
-	"p_tired_stretch": 0.3}
+	"p_tired_stretch": 0.3,
+	# A weapon's own walk is eased in as the plain walk is, its run as the plain run (OWN_MIX_TIME).
+	"p_walk_long": 0.2, "p_walk_axe": 0.2, "p_walk_pistol": 0.2, "p_hold_weak": 0.2}
 # Decision 422 (the gaps in the motions), each only where the folder has it and
 # otherwise as before: a leg that hurts limps (splinted broken or cut deep, the
 # heavy limp; festering or lightly cut, the light one; a side's own if there is
@@ -175,6 +181,8 @@ const OWN_WORK: Dictionary = {
 	"treat": ["p_treat", 1.0], "splint": ["p_kneel_work", 1.0], "rub": ["p_treat", 1.0],
 	"dig": ["p_floor_strike", 0.8], "window": ["p_swing_one", 0.0],
 	"wear": ["p_wear_outer", 0.0],
+	# Climbing up into a car at its door (field_ai.gd retreat; a climb of its own is to come).
+	"board": ["p_climb", 0.0],
 }
 # A melee blow in the living's own motions: the ways each weapon is swung, and
 # where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
@@ -298,7 +306,7 @@ func _dress(dead_dir: String, own_dir: String) -> Dictionary:
 func garment_of(d: Dictionary, kind: String) -> MultiMeshInstance3D:
 	var wear: Dictionary = d["wear"]
 	if not wear.has(kind):
-		var shell := BodyBake.load_baked(String(d["wear_dir"]).path_join(kind)) if WEAR_TINTS.has(kind) else {}
+		var shell := BodyBake.load_baked(String(d["wear_dir"]).path_join(kind)) if WEAR_TINTS.has(kind) or BAG_TINTS.has(kind) else {}
 		wear[kind] = _wear(shell, true) if not shell.is_empty() else null
 	return wear[kind]
 
@@ -366,9 +374,17 @@ func is_worn() -> bool:
 	return draw != null
 
 
+## The time the people's motions go on by in a frame: none while the field stands
+## paused (the player's pause or the app away), as the dead and the train stand
+## still then (field_game.gd still shading); at the end, the train leaving, they go on.
+static func frame_delta(field, delta: float) -> float:
+	return 0.0 if field.get("paused") == true and field.get("ended") != true else delta
+
+
 func _process(delta: float) -> void:
 	if draw == null:
 		return
+	delta = frame_delta(game, delta)
 	for d: Dictionary in worn.values():
 		d["n"] = 0
 		d["k"] = 0
@@ -417,7 +433,7 @@ func _process(delta: float) -> void:
 			d["k"] = k + 1
 			# What they wear moves with the body: the same place, the same frame.
 			var worn_n: Dictionary = d["worn_n"]
-			for worn_look: Dictionary in looks_on(p):
+			for worn_look: Dictionary in looks_on(p) + bag_on(p):
 				var kind: String = worn_look["shell"]
 				var garment := garment_of(d, kind)
 				if garment != null:
@@ -488,6 +504,17 @@ static func looks_on(p) -> Array[Dictionary]:
 	return out
 
 
+## The bag on the back as looks_on gives a garment ({shell, colour}, plain), none
+## with pockets only (person.gd bag).
+static func bag_on(p) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var kind := String(p.bag)
+	if BAG_TINTS.has(kind):
+		var c: Vector3 = BAG_TINTS[kind]
+		out.append({"shell": kind, "colour": Color(c.x, c.y, c.z, 0.0)})
+	return out
+
+
 ## {shell, colour} of one garment kind drawn over the body, {} for one that is not.
 static func _look_of(id: String) -> Dictionary:
 	var look := Wear.look(id)
@@ -539,6 +566,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	_note_hurt(p, note, t)
 	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
 	var turned := _turned(p, note, t)
+	_note_posture(p, note, delta)
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
@@ -621,9 +649,11 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if aim >= 0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
 		return Vector2(_own_cycle(note, OWN_BASE + aim, t, _length(own, aim, 1.0), p.name_unit("aim")), aim)
 	var unit: float = p.name_unit("stand")
+	# The run as the feet go: out of breath or spent with the run still on, it walks.
+	var running: bool = Gait.runs(p)
 	# Spent, it reels as the dead do (the living have no such motion of their own
 	# yet), still reeling where it stops for breath.
-	var spent: bool = not p.running and not p.crouched and p.body.exhaustion_level() >= 2
+	var spent: bool = not running and not p.crouched and p.body.exhaustion_level() >= 2
 	var own_spent := clip_named(own, OWN_SPENT, -1) if spent else -1
 	if spent and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
 		if own_spent >= 0:
@@ -631,7 +661,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		return Vector2(_own_cycle(note, STAGGER, t, _length(clips, STAGGER, 1.0) * 2.0, unit), STAGGER)
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER and t - float(note.get("turned", -10.0)) < TURN_HOLD:
 		# Turning on the spot: the walk goes round by the turn, not by ground covered.
-		var own_turn := clip_named(own, OWN_CROUCH_WALK if p.crouched else OWN_WALK, -1)
+		var own_turn := gait_of(p, own, false)
 		var foot := turned * TURN_FOOT
 		if own_turn >= 0:
 			note["motion"] = OWN_BASE + own_turn
@@ -644,6 +674,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		if mood.y >= 0.0:
 			return mood
 		var own_stand := clip_named(own, OWN_CROUCH_STAND if p.crouched else OWN_STAND, -1)
+		if not p.crouched and Gait.weak_hold(p) and clip_named(own, Gait.HOLD_WEAK, -1) >= 0:
+			own_stand = clip_named(own, Gait.HOLD_WEAK, -1)   # a broken arm: the long weapon held low in one hand
 		if own_stand >= 0:
 			return Vector2(_own_cycle(note, OWN_BASE + own_stand, t, _length(own, own_stand, 1.0), unit), own_stand)
 		if p.crouched:
@@ -653,18 +685,17 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		return Vector2(_own_cycle(note, STAND, t, _length(clips, STAND, 1.0), unit), STAND)
 	var own_gait := own_spent if spent else -1
 	if not spent:
-		own_gait = limp_of(p, own) if not p.running and not p.crouched else -1
+		own_gait = limp_of(p, own) if not running and not p.crouched else -1
 	if not spent and own_gait < 0:
-		own_gait = clip_named(own, OWN_RUN if p.running else (OWN_CROUCH_WALK if p.crouched else OWN_WALK), -1)
+		own_gait = gait_of(p, own, running)
 	if own_gait >= 0:
 		note["motion"] = OWN_BASE + own_gait
 		var stepped := _round(note, "step", gone, _round_of(own, own_gait, 1.2))
-		var gait_name := String(own[own_gait].get("name", ""))
-		if p.brain.has("step_r") and (gait_name == OWN_WALK or gait_name == OWN_RUN or gait_name == OWN_CROUCH_WALK):
+		if p.brain.has("step_r") and is_stepped(String(own[own_gait].get("name", ""))):
 			stepped = float(p.brain["step_r"])   # the feet land with the footsteps (field_game.gd steps_in)
 		return Vector2(stepped, own_gait)
 	var gait := WALK
-	if p.running:
+	if running:
 		gait = RUN
 	elif p.crouched:
 		gait = CROUCH_WALK
@@ -672,6 +703,32 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		gait = STAGGER
 	note["motion"] = gait
 	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+
+
+## The living's own walk (or run) for what is in the hand (gait.gd), the plain
+## one where the folder has none of it; crouched, the crouched walk. -1 with
+## neither in the folder.
+static func gait_of(p, own: Array, running: bool) -> int:
+	if p.crouched and not running:
+		return clip_named(own, OWN_CROUCH_WALK, -1)
+	var held := clip_named(own, Gait.gait_name(p, running), -1)
+	return held if held >= 0 else clip_named(own, OWN_RUN if running else OWN_WALK, -1)
+
+
+## A gait that goes round with the footsteps (field_game.gd steps_in): the
+## walks and runs whose round is the rules' own, not the limps or the reel.
+static func is_stepped(gait_name: String) -> bool:
+	return gait_name == OWN_WALK or gait_name == OWN_RUN or gait_name == OWN_CROUCH_WALK \
+		or Gait.WALK.values().has(gait_name) or Gait.RUN.values().has(gait_name)
+
+
+## Eases the person's own lean (gait.gd posture) toward how they go now:
+## leaning as they walk or run, upright standing, crouched, held or down.
+static func _note_posture(p, note: Dictionary, delta: float) -> void:
+	var want := 0.0
+	if p.moving and not p.crouched and p.grabbers.is_empty() and not (p.body.downed or p.body.dead or p.fallen_t > 0.0):
+		want = Gait.posture(p, Gait.runs(p))
+	note["posture"] = lerpf(float(note.get("posture", 0.0)), want, 1.0 - exp(-Gait.POSTURE_EASE * maxf(delta, 0.0)))
 
 
 ## Which of the living's own falls a body goes down in: dead on its back,
@@ -767,8 +824,11 @@ static func work_of(p, note: Dictionary, t: float, own: Array) -> Vector2:
 
 
 ## Putting a garment on plays its place's motion once over the job (wear.gd
-## CLIP); taking it off plays it backwards.
+## CLIP); taking it off plays it backwards. At a walk (a hat or gloves, wear.gd
+## WALKABLE) the walk shows: the whole-body motion cannot be laid over the legs.
 static func wear_of(p, note: Dictionary, own: Array) -> Vector2:
+	if p.moving and bool(p.action_busy.get("walk", false)):
+		return Vector2(0.0, -1.0)
 	var slot: String = String(p.action_busy.get("slot", "jacket"))
 	var clip := clip_named(own, String(Wear.CLIP.get(slot, Wear.CLIP["jacket"])), -1)
 	if clip < 0:
@@ -1138,12 +1198,12 @@ static func hurt_k(note: Dictionary, t: float) -> float:
 
 
 ## How the whole body leans on top of the motion it is in (drawing only):
-## held, hurt. Nothing for a body on the ground.
+## the person's own lean on the move, held, hurt. Nothing for a body on the ground.
 static func lean_of(p, note: Dictionary) -> Basis:
 	if p.body.downed or p.body.dead or p.fallen_t > 0.0:
 		return Basis()
 	var t: float = float(note.get("t", 0.0))
-	var pitch := 0.0
+	var pitch := float(note.get("posture", 0.0))
 	var roll := 0.0
 	var turn := 0.0
 	if not p.grabbers.is_empty():

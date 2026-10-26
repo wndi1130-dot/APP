@@ -28,6 +28,9 @@ func _body_at(state: String, dx: float = 0.9, kind: String = "dead") -> Dictiona
 	var z: Dictionary = game.zombies.spawn(kind, p.position + Vector3(dx, 0, 0))
 	if kind != "frozen":
 		z["state"] = state
+	# Each blow's odds are counted, not the weapon worn through (it breaks at nothing).
+	if not p.hands.is_empty():
+		p.hands[0]["condition"] = 1.0
 	return z
 
 

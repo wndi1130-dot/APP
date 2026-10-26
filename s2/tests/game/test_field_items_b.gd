@@ -83,9 +83,10 @@ func test_an_improvised_weapon_goes_to_pieces_when_worn_out() -> void:
 	assert_eq(p.hands.size(), 1, "still whole")
 	game.combat._wear(p, 0.25)
 	assert_true(p.hands.is_empty(), "gone to pieces")
-	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.01, "loaded": 0}])
-	game.combat._wear(p, 0.5)
-	assert_eq(p.hands.size(), 1, "a real knife only wears down")
+	# A real knife lasts far longer and breaks only when worn to nothing (weapons.md).
+	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.3, "loaded": 0}])
+	game.combat._wear(p, 0.25)
+	assert_eq(p.hands.size(), 1, "a real knife is not gone where a bottle would be")
 
 
 func _locked_door(game) -> Vector2i:
@@ -268,7 +269,7 @@ func test_keys_tins_and_the_opener_stay_on_the_body_at_the_train() -> void:
 		p.add_item(id)
 	var rect: Rect2i = game.data["unload"]
 	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
-	game.actions._auto_unload()
+	game.actions.load_train(p)
 	assert_true(p.items.has("key_1") and p.items.has("can_empty") and p.items.has("can_opener"))
 	assert_false(p.items.has("can_beans"))
 	assert_eq(int(game.unloaded.get("can_beans", 0)), 1)
