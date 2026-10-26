@@ -243,6 +243,6 @@ void fragment() {
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
 	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
 	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
-		* smoothstep(0.6, 0.9, up) * (1.0 - step(1.0, world_pos.y));
+		* smoothstep(0.6, 0.9, up) * step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y));
 	EMISSION = (lamp_color * lamp + win_color * pool) * (0.25 + 0.75 * grey);
 }
