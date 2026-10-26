@@ -857,12 +857,12 @@ const DENSITY: Dictionary = {
 ## Rooms that, short of their share, take the pieces the dice left out (_palette_for).
 const FILL_UNROLLED: Dictionary = {"work": true, "garage": true, "barn": true, "woodshed": true}
 ## 목표 몫 채우기(결정 469 F2): 묶음을 다 굴리고도 목표 몫(DENSITY 하한~상한에서 굴린 값)보다 빈 방은
-## 이 차례로 더 놓는다. 벽 가구가 먼저, 모형이 있는 것(위층에서도 몸을 막음)이 먼저.
+## 이 차례로 더 놓는다. 벽 가구가 먼저, 모형이 있는 것(위층에서도 몸을 막음)이 먼저. 담는 가구는
+## 묶음에서 놓이는 방 갈래에만 둔다(loot_dress.gd FURNITURE_ROOM이 가구로 방을 읽는다).
 const FILL: Dictionary = {
 	"bed": [
 		{"kind": "wardrobe", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
 		{"kind": "blanket_chest", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
-		{"kind": "bookcase", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
 		{"kind": "dresser", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
 		{"kind": "chair", "size": Vector2i(1, 1), "at": "wall"},
 	],
@@ -887,7 +887,6 @@ const FILL: Dictionary = {
 	],
 	"office": [
 		{"kind": "file_cabinet", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
-		{"kind": "bookcase", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
 		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
 		{"kind": "chair", "size": Vector2i(1, 1), "at": "wall"},
 	],
