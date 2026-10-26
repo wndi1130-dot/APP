@@ -172,6 +172,10 @@ func test_a_pan_from_a_box_is_in_the_hand_at_once() -> void:
 	p.position = game.lift(c["cell"], int(c.get("level", 0)))
 	p.stop()
 	game.actions.take(p, id, 0)
+	assert_eq(p.action, "take", "out by its weight's time (card R1)")
+	while p.action == "take":
+		p.action_t = 0.001
+		game._update_person(p, 0.1)
 	assert_eq(p.weapon_id(), "frying_pan", "in the hand")
 	assert_eq(String(p.hands[1]["id"]), "axe", "the axe to the other")
 	assert_false(p.items.has("frying_pan"))

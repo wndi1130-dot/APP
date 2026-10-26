@@ -67,6 +67,9 @@ func test_a_press_moves_a_thing_across() -> void:
 	assert_eq(c["items"].count("scrap"), 1)
 	# And out of it again.
 	game.hud._loot_take(box, c["items"].find("scrap"))
+	while p.action == "take":
+		p.action_t = 0.001
+		game._update_person(p, 0.1)
 	assert_eq(int(p.items.get("scrap", 0)), 2)
 	# Onto the ground; a small thing goes by the handful.
 	p.add_item("ammo_pistol", 3)
@@ -154,6 +157,9 @@ func test_a_box_dressed_over_its_limit_still_gives() -> void:
 	game.hud.loot(box)
 	assert_eq(_box_load_text(game.hud), "담긴 무게 7.0 / 6", "what the map put there stays")
 	game.hud._loot_take(box, 0)
+	while p.action == "take":
+		p.action_t = 0.001
+		game._update_person(p, 0.1)
 	assert_eq(int(p.items.get("food_pack", 0)), 1, "and can be taken")
 	p.add_item("bandage", 1)
 	assert_eq(Carry.box_room(c, "bandage"), 0, "but nothing goes back while it is over")

@@ -229,7 +229,8 @@ void fragment() {
 	vec2 seen = seen_fixed.x >= 0.0 ? seen_fixed : cell.rg;
 	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
-	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
+	// 기억의 회색도 가림이 켜졌을 때만(가림을 끄면 모두 보이는 것과 같다).
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
 	dimmed *= mix(1.0, indoor_dark, (1.0 - exposed) * (1.0 - clamp(cell.b * 2.0, 0.0, 1.0)));
 	ALBEDO = fx_photo(dimmed, fx_fade) * lit;
 	ROUGHNESS = rough;

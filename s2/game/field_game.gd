@@ -104,7 +104,7 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take"]
 ## Who comes down from the train: the laws it lives under go out with them
 ## (opts "laws", decision 430).
 const TRAIN_ROLES: Array = ["chief", "companion", "carrier", "escort", "worker"]
@@ -2548,7 +2548,16 @@ func _refresh_vision() -> void:
 		seen_memory[key] = 1
 	if not ended and not paused:
 		_mark_tracks()
-	view.update_vis(seen_now, seen_memory, lit_now)
+	# The room the eye stands in is drawn as seen whichever way the eye faces
+	# (decision 469 D3): its floor, furniture and walls keep their outline. Only
+	# the picture: who and what the rules see stays the cone's (seen_now).
+	var shown := seen_now
+	var room := _room_cells(lg, lv, origin)
+	if not room.is_empty():
+		shown = seen_now.duplicate()
+		for i in room:
+			shown[(lv + 1) * n + i] = true
+	view.update_vis(shown, seen_memory, lit_now)
 	view.update_labels(seen_memory, mask_on)
 
 
@@ -2559,6 +2568,54 @@ func dark_at(at: Vector3) -> bool:
 		return false
 	var lv := level_of(at)
 	return lv >= 0 and _dark_cell(grid_at(at), lv, FieldGrid.cell_of(at))
+
+
+## The room round the eye on its floor (decision 469 D3): floor cells of the
+## same building reached from it side by side without passing a wall, door or
+## window, and the walls, doors and windows round them. None outdoors, in a
+## doorway or in the cellar, and none past ROOM_SHOWN_MAX cells (a hall is not
+## one room). Kept until the eye moves or the floor changes.
+const ROOM_SHOWN_MAX: int = 400
+var _room_cache: Dictionary = {}
+
+
+func _room_cells(lg: FieldGrid, lv: int, origin: Vector2i) -> Array[int]:
+	var at := Vector3i(origin.x, origin.y, lv)
+	if _room_cache.get("at") == at and int(_room_cache.get("rev", -1)) == lg.revision:
+		return _room_cache["cells"]
+	var out: Array[int] = []
+	var b := lg.building_at(origin)
+	if lv >= 0 and b >= 0 and _room_floor(lg, origin, b):
+		var done := {lg.index(origin): true}
+		var todo: Array[Vector2i] = [origin]
+		while not todo.is_empty() and out.size() <= ROOM_SHOWN_MAX:
+			var c: Vector2i = todo.pop_back()
+			out.append(lg.index(c))
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					var d := c + Vector2i(dx, dy)
+					if (dx == 0 and dy == 0) or not lg.inside(d) or done.has(lg.index(d)):
+						continue
+					var floor_cell := _room_floor(lg, d, b)
+					# Floor goes on side by side; across a corner only the wall shows.
+					if floor_cell and dx != 0 and dy != 0:
+						continue
+					if not floor_cell and lg.building_at(d) != b:
+						continue
+					done[lg.index(d)] = true
+					if floor_cell:
+						todo.append(d)
+					else:
+						out.append(lg.index(d))
+		if out.size() > ROOM_SHOWN_MAX:
+			out = []
+	_room_cache = {"at": at, "rev": lg.revision, "cells": out}
+	return out
+
+
+func _room_floor(lg: FieldGrid, c: Vector2i, b: int) -> bool:
+	var solid := lg.solid_at(c)
+	return lg.building_at(c) == b and (solid == FieldGrid.Solid.NONE or solid == FieldGrid.Solid.BLOCK or solid == FieldGrid.Solid.LOW)
 
 
 func _dark_cell(lg: FieldGrid, lv: int, c: Vector2i) -> bool:
