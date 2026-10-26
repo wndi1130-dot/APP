@@ -1,0 +1,1639 @@
+{
+  "version": 1,
+  "batch": "room",
+  "expected_kinds": [
+    "dresser",
+    "chair",
+    "nightstand",
+    "counter",
+    "sink",
+    "cupboard",
+    "settee",
+    "armchair",
+    "low_table",
+    "side_table",
+    "toilet",
+    "washstand",
+    "bathtub",
+    "towel_shelf",
+    "medicine_cabinet",
+    "waste_bin"
+  ],
+  "status": "ready",
+  "source_credit": "Kenney Furniture Kit 2.0, CC0",
+  "license_path": "tools/blender/_src_kenney/License.txt",
+  "license_sha256": "bc0de1a0742cb490f9ed4bae0bd284286ebb27e23149b9917c7d8c0d590b8b29",
+  "axis": "+Y up, +Z front",
+  "origin": "footprint_center_floor",
+  "placement": "발자국 가운데 바닥, facing 0 앞 +Z / 등 -Z, 2×1 긴 쪽 X, 발자국 96% 이내",
+  "palette": {
+    "wood": [
+      0.24,
+      0.17,
+      0.11,
+      1.0
+    ],
+    "worn_wood": [
+      0.38,
+      0.29,
+      0.19,
+      1.0
+    ],
+    "iron": [
+      0.12,
+      0.15,
+      0.17,
+      1.0
+    ],
+    "worn_metal": [
+      0.28,
+      0.32,
+      0.33,
+      1.0
+    ],
+    "cloth": [
+      0.43,
+      0.41,
+      0.31,
+      1.0
+    ],
+    "enamel": [
+      0.68,
+      0.7,
+      0.66,
+      1.0
+    ],
+    "snow": [
+      0.82,
+      0.87,
+      0.89,
+      1.0
+    ],
+    "bark": [
+      0.18,
+      0.14,
+      0.11,
+      1.0
+    ],
+    "rust": [
+      0.32,
+      0.18,
+      0.11,
+      1.0
+    ],
+    "glass": [
+      0.22,
+      0.35,
+      0.39,
+      1.0
+    ],
+    "rubber": [
+      0.055,
+      0.065,
+      0.07,
+      1.0
+    ],
+    "stone": [
+      0.37,
+      0.39,
+      0.38,
+      1.0
+    ],
+    "room_cream": [
+      0.8191739555532066,
+      0.7148995355860589,
+      0.3779360391945979,
+      1.0
+    ],
+    "room_sage": [
+      0.4854028478366693,
+      0.7078962610206577,
+      0.3760272451361949,
+      1.0
+    ],
+    "room_blue": [
+      0.2945461073488219,
+      0.5501966169265242,
+      0.719915596102526,
+      1.0
+    ],
+    "room_walnut": [
+      0.3435245620061834,
+      0.22367870191021205,
+      0.07663016099035302,
+      1.0
+    ],
+    "room_oak": [
+      0.554924292471527,
+      0.3228246177155282,
+      0.06649946992055504,
+      1.0
+    ],
+    "room_brick": [
+      0.594561741933779,
+      0.1885732387541102,
+      0.045636671386328514,
+      1.0
+    ],
+    "room_moss": [
+      0.2107009524058312,
+      0.47622112105026054,
+      0.13510926196024367,
+      1.0
+    ],
+    "room_mustard": [
+      0.6606241577041988,
+      0.422450846599445,
+      0.020059664839533847,
+      1.0
+    ],
+    "room_linen": [
+      0.8588114050154585,
+      0.8094631096818234,
+      0.5777370249063564,
+      1.0
+    ],
+    "room_enamel": [
+      0.9711175118251725,
+      0.9582187815692067,
+      0.936967520025728,
+      1.0
+    ],
+    "room_steel": [
+      0.6752598684753894,
+      0.7200684305177357,
+      0.7447402718301992,
+      1.0
+    ],
+    "room_metal": [
+      0.3082688605619526,
+      0.36003421525886786,
+      0.3723701359150996,
+      1.0
+    ],
+    "room_cast": [
+      0.2108961843162991,
+      0.22659157620734227,
+      0.23583441941289646,
+      1.0
+    ],
+    "room_seam": [
+      0.1399439917721455,
+      0.15943540638116066,
+      0.17377273009371316,
+      1.0
+    ]
+  },
+  "colour_encoding": "linear RGBA vertex Col, alpha 1",
+  "grade": {
+    "saturation": 0.45,
+    "value": 0.82,
+    "cool": [
+      0.78,
+      0.85,
+      0.95
+    ],
+    "cool_mix": 0.35
+  },
+  "graded_palette_targets": {
+    "room_cream": [
+      0.62,
+      0.6,
+      0.5
+    ],
+    "room_sage": [
+      0.46,
+      0.55,
+      0.45
+    ],
+    "room_blue": [
+      0.4,
+      0.5,
+      0.58
+    ],
+    "room_walnut": [
+      0.26,
+      0.225,
+      0.18
+    ],
+    "room_oak": [
+      0.42,
+      0.35,
+      0.27
+    ],
+    "room_brick": [
+      0.45,
+      0.32,
+      0.28
+    ],
+    "room_moss": [
+      0.27,
+      0.37,
+      0.26
+    ],
+    "room_mustard": [
+      0.5,
+      0.43,
+      0.3
+    ],
+    "room_linen": [
+      0.65,
+      0.65,
+      0.59
+    ],
+    "room_enamel": [
+      0.735,
+      0.75,
+      0.77
+    ],
+    "room_steel": [
+      0.54,
+      0.57,
+      0.6
+    ],
+    "room_metal": [
+      0.26,
+      0.285,
+      0.3
+    ],
+    "room_cast": [
+      0.17,
+      0.18,
+      0.19
+    ],
+    "room_seam": [
+      0.12,
+      0.13,
+      0.14
+    ]
+  },
+  "source_orientation_review": "앞/뒤 CPU 투영 그림을 확인함; Blender Workbench 최종 그림은 별도 verification 참조",
+  "assumptions": [
+    "1칸=1 m; 깊이는 표의 칸보다 얕은 실가구 비율",
+    "medicine_cabinet의 1.75 m는 위끝 높이, 메시 자체 높이는 0.60 m",
+    "washstand는 제공 원본 중 수납장이 있는 bathroomCabinetDrawer로 선택",
+    "실제 게임의 조명·날씨·fx_photo 결과는 이 생성 스크립트만으로 보증하지 않음"
+  ],
+  "verification": {
+    "blender": "4.5.10 LTS",
+    "glb": "pass",
+    "workbench_render": "pass: rendered, visual review still required",
+    "visual_review": "not_verified",
+    "godot_tests": "not_run: caller owns Godot/import",
+    "imports": "not_run"
+  },
+  "assets": {
+    "dresser": {
+      "path": "res://models/props_field/dresser.glb",
+      "status": "ready",
+      "source_name": "sideTableDrawers",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "sideTableDrawers",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/sideTableDrawers.glb",
+        "sha256": "911145653c11b103b2c2e84f3d019205d1886186015c3b52aceddc3801ae8fdf",
+        "bytes": 19072,
+        "triangles": 238,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "_defaultMat",
+            "base_color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 1.0,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        1.76,
+        0.62
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 342,
+      "bytes": 32424,
+      "sha256": "10598f2f89dc0632ecba0097099730f32900394fde0866f9a5b34ad84fd1558b",
+      "bounds_m": [
+        [
+          -0.88,
+          0.0,
+          -0.32
+        ],
+        [
+          0.88,
+          1.0,
+          0.32
+        ]
+      ],
+      "dimensions_m": [
+        1.76,
+        1.0,
+        0.64
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "기존 두 서랍·상판·다리를 살리고 아래 몸통과 서랍 네 개를 덧댄 낮고 넓은 목제 서랍장",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cream",
+        "room_metal",
+        "room_oak",
+        "room_steel",
+        "room_walnut"
+      ]
+    },
+    "chair": {
+      "path": "res://models/props_field/chair.glb",
+      "status": "ready",
+      "source_name": "chair",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "chair",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/chair.glb",
+        "sha256": "c8a11eec93e89e31250ba91afc1b8d56c3bec7ae86640fd1239f595ff4180883",
+        "bytes": 10756,
+        "triangles": 170,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.85,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.52,
+        0.55
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 162,
+      "bytes": 17532,
+      "sha256": "3fa0e4ff9b2b2f4d0ae966c21c4f3c55948aee084394e39411a23f97d7d999dc",
+      "bounds_m": [
+        [
+          -0.26,
+          0.0,
+          -0.275
+        ],
+        [
+          0.26,
+          0.85,
+          0.275
+        ]
+      ],
+      "dimensions_m": [
+        0.52,
+        0.85,
+        0.55
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "네 다리와 뚫린 등받이의 목제 의자, 밝은 크림 칠과 짙은 좌판",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cream",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "nightstand": {
+      "path": "res://models/props_field/nightstand.glb",
+      "status": "ready",
+      "source_name": "cabinetBedDrawerTable",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "cabinetBedDrawerTable",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/cabinetBedDrawerTable.glb",
+        "sha256": "fec6271639df5aff9f8ac75d6679385eab2abb7c8d2f51abeba3ed689ddb6f0d",
+        "bytes": 12200,
+        "triangles": 140,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "_defaultMat",
+            "base_color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.55,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.5,
+        0.43
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 138,
+      "bytes": 15060,
+      "sha256": "3ca924514e6a899f44919d77ecaf7b260aa78d2315b72857f85a4d4e0539738e",
+      "bounds_m": [
+        [
+          -0.25,
+          0.0,
+          -0.215
+        ],
+        [
+          0.25,
+          0.55,
+          0.215
+        ]
+      ],
+      "dimensions_m": [
+        0.5,
+        0.55,
+        0.43
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "작은 서랍 하나, 네 다리, 바랜 파랑 칠과 나무 상판",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_blue",
+        "room_oak",
+        "room_steel",
+        "room_walnut"
+      ]
+    },
+    "counter": {
+      "path": "res://models/props_field/counter.glb",
+      "status": "ready",
+      "source_name": "kitchenCabinet",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "kitchenCabinet",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/kitchenCabinet.glb",
+        "sha256": "7238c57778935ae25db5e57e9f7af3ba7068c71b005ff7cfbff3b6f3b1a13200",
+        "bytes": 10444,
+        "triangles": 114,
+        "materials": [
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          },
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "woodDark",
+            "base_color": [
+              0.678000033,
+              0.455947667,
+              0.2990306,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.9,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.96,
+        0.66
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 114,
+      "bytes": 12640,
+      "sha256": "7438bae86451353b1baa0c099e8cb92b62ebc594df3c74e308ddb8f3af321f13",
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.33
+        ],
+        [
+          0.48,
+          0.9,
+          0.33
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.9,
+        0.66
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "옆면이 단순한 조리대, 상판의 금속색도 목재색으로 변경",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_oak",
+        "room_sage",
+        "room_steel",
+        "room_walnut"
+      ]
+    },
+    "sink": {
+      "path": "res://models/props_field/sink.glb",
+      "status": "ready",
+      "source_name": "kitchenSink",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "kitchenSink",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/kitchenSink.glb",
+        "sha256": "7b9610277d71f00dcf1bba49cf4d98d77ce5177e84bf76c7da2f8893e542f743",
+        "bytes": 23480,
+        "triangles": 318,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          },
+          {
+            "name": "metalDark",
+            "base_color": [
+              0.305882365,
+              0.3882353,
+              0.3882353,
+              1
+            ]
+          },
+          {
+            "name": "metalLight",
+            "base_color": [
+              0.9372549,
+              0.980392158,
+              0.956862748,
+              1
+            ]
+          },
+          {
+            "name": "_defaultMat",
+            "base_color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "woodDark",
+            "base_color": [
+              0.678000033,
+              0.455947667,
+              0.2990306,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.9,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.9,
+        0.66
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 316,
+      "bytes": 33244,
+      "sha256": "adffd6fc5908cff2f268dbabe2c9f2479af0199f60d583ba1d4da914d23ad900",
+      "bounds_m": [
+        [
+          -0.45,
+          0.0,
+          -0.33
+        ],
+        [
+          0.45,
+          0.9,
+          0.33
+        ]
+      ],
+      "dimensions_m": [
+        0.9,
+        0.9,
+        0.66
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "밝은 회색 금속 개수통·수도꼭지, 크림 칠 목제 하부장",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cast",
+        "room_cream",
+        "room_steel",
+        "room_walnut"
+      ]
+    },
+    "cupboard": {
+      "path": "res://models/props_field/cupboard.glb",
+      "status": "ready",
+      "source_name": "bookcaseClosedDoors",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "bookcaseClosedDoors",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/bookcaseClosedDoors.glb",
+        "sha256": "ff33f535acdb1825c0e958a293642b39665adcae0b1317b650e83d2bb687f4e2",
+        "bytes": 22644,
+        "triangles": 296,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 1.8,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.78,
+        0.44
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 277,
+      "bytes": 29272,
+      "sha256": "53354dbdc36b68b6d60682141be407fe075eae2c8fd0ce74182c28235cb2a9dc",
+      "bounds_m": [
+        [
+          -0.39,
+          0.0,
+          -0.22
+        ],
+        [
+          0.39,
+          1.8,
+          0.22
+        ]
+      ],
+      "dimensions_m": [
+        0.78,
+        1.8,
+        0.44
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "연초록 칠의 높은 두 문 찬장, 짙은 목재 상판과 회색 손잡이",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_oak",
+        "room_sage",
+        "room_steel",
+        "room_walnut"
+      ]
+    },
+    "settee": {
+      "path": "res://models/props_field/settee.glb",
+      "status": "ready",
+      "source_name": "loungeSofa",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "loungeSofa",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/loungeSofa.glb",
+        "sha256": "1886b811c0d3ad0d8525a4fd43adf4112c497c8e0ed906f06877ca3517f4c7dd",
+        "bytes": 9644,
+        "triangles": 128,
+        "materials": [
+          {
+            "name": "carpet",
+            "base_color": [
+              0.9433962,
+              0.367175967,
+              0.3426486,
+              1
+            ]
+          },
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.85,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        1.76,
+        0.78
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 147,
+      "bytes": 15236,
+      "sha256": "f699480b5e9f9ad6d7b2b86cabf9e169678cba5530000107f26f39f46f8885ce",
+      "bounds_m": [
+        [
+          -0.88,
+          0.0,
+          -0.39
+        ],
+        [
+          0.88,
+          0.85,
+          0.39
+        ]
+      ],
+      "dimensions_m": [
+        1.76,
+        0.85,
+        0.78
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "바랜 붉은 갈색 천의 두 자리 소파, 나무 다리와 덧댄 목제 팔걸이 상단",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_brick",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "armchair": {
+      "path": "res://models/props_field/armchair.glb",
+      "status": "ready",
+      "source_name": "loungeChair",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "loungeChair",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/loungeChair.glb",
+        "sha256": "ddfe6bc4b3451bca61666d7b614552d6ed2a03d82fc76244b72ae3155874dc6c",
+        "bytes": 9648,
+        "triangles": 128,
+        "materials": [
+          {
+            "name": "carpet",
+            "base_color": [
+              0.9433962,
+              0.367175967,
+              0.3426486,
+              1
+            ]
+          },
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.9,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.82,
+        0.78
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 148,
+      "bytes": 15340,
+      "sha256": "d38748c192ca40c40c7f804acf754334f2623f98486756693f0857ac090f788e",
+      "bounds_m": [
+        [
+          -0.41,
+          0.0,
+          -0.39
+        ],
+        [
+          0.41,
+          0.9,
+          0.39
+        ]
+      ],
+      "dimensions_m": [
+        0.82,
+        0.9,
+        0.78
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "바랜 초록 천의 넓은 의자, 나무 다리와 목제 팔걸이 상단",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_moss",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "low_table": {
+      "path": "res://models/props_field/low_table.glb",
+      "status": "ready",
+      "source_name": "tableCoffeeSquare",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "tableCoffeeSquare",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/tableCoffeeSquare.glb",
+        "sha256": "bcc81d8919a3af9141c9c93b4520106dd0a90a7144346cd87928014018aac816",
+        "bytes": 8276,
+        "triangles": 124,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.45,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.72,
+        0.66
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 118,
+      "bytes": 13052,
+      "sha256": "7d59fe438e0a56be25a7f37b7b030b2f722e96bb86389fccb267a207dcd9ecf6",
+      "bounds_m": [
+        [
+          -0.36,
+          0.0,
+          -0.33
+        ],
+        [
+          0.36,
+          0.45,
+          0.33
+        ]
+      ],
+      "dimensions_m": [
+        0.72,
+        0.45,
+        0.66
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "짙은 나무 사각 상판과 바랜 파랑 다리의 낮은 탁자",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_blue",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "side_table": {
+      "path": "res://models/props_field/side_table.glb",
+      "status": "ready",
+      "source_name": "sideTable",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "sideTable",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/sideTable.glb",
+        "sha256": "8227810584f7d37582e4e9ec821c56f1dc54b99c88a8dc74242ea3b7402bc472",
+        "bytes": 8800,
+        "triangles": 118,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "_defaultMat",
+            "base_color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.6,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.56,
+        0.43
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 116,
+      "bytes": 12848,
+      "sha256": "aa13e2af9437e5cbee1e6ca74260390f045295fcacea45b979eaf92efcb5c33c",
+      "bounds_m": [
+        [
+          -0.28,
+          0.0,
+          -0.215
+        ],
+        [
+          0.28,
+          0.6,
+          0.215
+        ]
+      ],
+      "dimensions_m": [
+        0.56,
+        0.6,
+        0.43
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "밝은 크림 다리와 짙은 목제 상판의 작은 탁자",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cream",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "toilet": {
+      "path": "res://models/props_field/toilet.glb",
+      "status": "ready",
+      "source_name": "toilet",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "toilet",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/toilet.glb",
+        "sha256": "16165cfd03c56c2cb443b800570810a22ef770f65e7a468f6761d9dc14eaaeae",
+        "bytes": 18112,
+        "triangles": 230,
+        "materials": [
+          {
+            "name": "carpetWhite",
+            "base_color": [
+              0.972549,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "metalLight",
+            "base_color": [
+              0.9372549,
+              0.980392158,
+              0.956862748,
+              1
+            ]
+          },
+          {
+            "name": "metalDark",
+            "base_color": [
+              0.305882365,
+              0.3882353,
+              0.3882353,
+              1
+            ]
+          },
+          {
+            "name": "_defaultMat",
+            "base_color": [
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.65,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.46,
+        0.68
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 223,
+      "bytes": 23760,
+      "sha256": "8d477b3d861ca96d4398dd4c761a554bf7c1cdfcb92db3afc5ad2f8c3161c1c9",
+      "bounds_m": [
+        [
+          -0.23,
+          0.0,
+          -0.34
+        ],
+        [
+          0.23,
+          0.65,
+          0.34
+        ]
+      ],
+      "dimensions_m": [
+        0.46,
+        0.65,
+        0.68
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "밝은 흰 도기, 닫힌 뚜껑과 뒤쪽 물통",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cast",
+        "room_enamel",
+        "room_steel"
+      ]
+    },
+    "washstand": {
+      "path": "res://models/props_field/washstand.glb",
+      "status": "ready",
+      "source_name": "bathroomCabinetDrawer",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "bathroomCabinetDrawer",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/bathroomCabinetDrawer.glb",
+        "sha256": "f32d09c6dab20fe823d238310f75ce81f24e893a91c2078b12efd3f7fe6c6b10",
+        "bytes": 34744,
+        "triangles": 508,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "carpetWhite",
+            "base_color": [
+              0.972549,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "metalDark",
+            "base_color": [
+              0.305882365,
+              0.3882353,
+              0.3882353,
+              1
+            ]
+          },
+          {
+            "name": "metalLight",
+            "base_color": [
+              0.9372549,
+              0.980392158,
+              0.956862748,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.85,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.72,
+        0.55
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 546,
+      "bytes": 55180,
+      "sha256": "9bc5b4bb3e90ab9eff4c69ed20763cfed912a7feb5748b347705a6765a7f83b6",
+      "bounds_m": [
+        [
+          -0.36,
+          0.0,
+          -0.275
+        ],
+        [
+          0.36,
+          0.85,
+          0.275
+        ]
+      ],
+      "dimensions_m": [
+        0.72,
+        0.85,
+        0.55
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "후보 받침 세면대 대신 같은 제공 묶음의 수납형 세면대 선택, 법랑 대야·목제 서랍·짧은 다리",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cast",
+        "room_cream",
+        "room_enamel",
+        "room_steel",
+        "room_walnut"
+      ]
+    },
+    "bathtub": {
+      "path": "res://models/props_field/bathtub.glb",
+      "status": "ready",
+      "source_name": "bathtub",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "bathtub",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/bathtub.glb",
+        "sha256": "54c405c7035aab63dc41e709dc3c50fc5bcfbc4cddc91ffc54188075a6d25d01",
+        "bytes": 35500,
+        "triangles": 602,
+        "materials": [
+          {
+            "name": "carpetWhite",
+            "base_color": [
+              0.972549,
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "name": "metalLight",
+            "base_color": [
+              0.9372549,
+              0.980392158,
+              0.956862748,
+              1
+            ]
+          },
+          {
+            "name": "metalDark",
+            "base_color": [
+              0.305882365,
+              0.3882353,
+              0.3882353,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.6,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        1.82,
+        0.83
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 647,
+      "bytes": 65480,
+      "sha256": "ae8d1e51aa538173907114c2242f77682db223a9bb7a13f8df67208cda2183b7",
+      "bounds_m": [
+        [
+          -0.91,
+          0.0,
+          -0.415
+        ],
+        [
+          0.91,
+          0.6,
+          0.415
+        ]
+      ],
+      "dimensions_m": [
+        1.82,
+        0.6,
+        0.83
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "긴 쪽 X, 밝은 흰 법랑 욕조에 짧은 주철 다리 네 개 추가",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cast",
+        "room_enamel",
+        "room_steel"
+      ]
+    },
+    "towel_shelf": {
+      "path": "res://models/props_field/towel_shelf.glb",
+      "status": "ready",
+      "source_name": "bookcaseOpen",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "bookcaseOpen",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/bookcaseOpen.glb",
+        "sha256": "750702218d68c062b15dfef6ab06a4014d1cfa8bd05f02e57c53b7e13bec157c",
+        "bytes": 18020,
+        "triangles": 320,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 1.6,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.62,
+        0.4
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 436,
+      "bytes": 40892,
+      "sha256": "cbc8d7fca9f1739a71ede12d91a1da91c5411deb6629417e37d7175cff9a3970",
+      "bounds_m": [
+        [
+          -0.31,
+          0.0,
+          -0.2
+        ],
+        [
+          0.31,
+          1.6,
+          0.2
+        ]
+      ],
+      "dimensions_m": [
+        0.62,
+        1.6,
+        0.4
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "좁고 높은 목제 선반, 기존 수평 선반 높이를 찾아 접은 수건 여섯 장 추가",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cream",
+        "room_linen",
+        "room_moss",
+        "room_mustard",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "medicine_cabinet": {
+      "path": "res://models/props_field/medicine_cabinet.glb",
+      "status": "ready",
+      "source_name": "bathroomCabinet",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "bathroomCabinet",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/bathroomCabinet.glb",
+        "sha256": "9db540227acaaedbbadc6a085f4a00460b73944e608afaad4770e53238a3b7f8",
+        "bytes": 7216,
+        "triangles": 64,
+        "materials": [
+          {
+            "name": "wood",
+            "base_color": [
+              0.8962264,
+              0.6015712,
+              0.3931559,
+              1
+            ]
+          },
+          {
+            "name": "woodDark",
+            "base_color": [
+              0.678000033,
+              0.455947667,
+              0.2990306,
+              1
+            ]
+          },
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 1.75,
+      "bottom_m": 1.15,
+      "planned_width_depth_m": [
+        0.46,
+        0.2
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 76,
+      "bytes": 8400,
+      "sha256": "70d39fbfff29adea07546ce06b40daa86c70a7e8bb371f62d5c697f595f9107c",
+      "bounds_m": [
+        [
+          -0.23,
+          1.15,
+          -0.109
+        ],
+        [
+          0.23,
+          1.75,
+          0.109
+        ]
+      ],
+      "dimensions_m": [
+        0.46,
+        0.6,
+        0.218
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "바닥 기준 원점, 높이 1.15~1.75 m의 작은 벽 약장, 거울색은 법랑색으로 대체, 표지 없음",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_blue",
+        "room_enamel",
+        "room_metal",
+        "room_oak",
+        "room_walnut"
+      ]
+    },
+    "waste_bin": {
+      "path": "res://models/props_field/waste_bin.glb",
+      "status": "ready",
+      "source_name": "trashcan",
+      "source_credit": "Kenney Furniture Kit 2.0, CC0",
+      "source": {
+        "name": "trashcan",
+        "credit": "Kenney Furniture Kit 2.0, CC0",
+        "path": "tools/blender/_src_kenney/trashcan.glb",
+        "sha256": "e0ccc1fe50cbd05386477fdff527171d1cf7c0de2ba7ff3233f8d9561feb2561",
+        "bytes": 6452,
+        "triangles": 68,
+        "materials": [
+          {
+            "name": "metal",
+            "base_color": [
+              0.74061054,
+              0.822866738,
+              0.8396226,
+              1
+            ]
+          },
+          {
+            "name": "metalDark",
+            "base_color": [
+              0.305882365,
+              0.3882353,
+              0.3882353,
+              1
+            ]
+          }
+        ]
+      },
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.45,
+      "bottom_m": 0.0,
+      "planned_width_depth_m": [
+        0.34,
+        0.34
+      ],
+      "triangle_limit": 700,
+      "lod0_tris": 136,
+      "bytes": 12200,
+      "sha256": "e8c6b96b69cc00339d6ed7c748d16f7547cc45f6f44c3448f384649872b3f8b4",
+      "bounds_m": [
+        [
+          -0.17,
+          0.0,
+          -0.17
+        ],
+        [
+          0.17,
+          0.45,
+          0.17
+        ]
+      ],
+      "dimensions_m": [
+        0.34,
+        0.45,
+        0.34
+      ],
+      "source_yaw_degrees": 0,
+      "source_node_transforms": "baked into vertices",
+      "judgment": "뚜껑과 발판이 있는 작은 회색 금속 휴지통, 윗면에 주철 손잡이 추가",
+      "verification": "pass",
+      "failure_code": null,
+      "surfaces": 1,
+      "meshes": 1,
+      "vertex_colours": "Col / COLOR_0",
+      "colours": [
+        "room_cast",
+        "room_metal"
+      ]
+    }
+  },
+  "skipped": {},
+  "failures": []
+}

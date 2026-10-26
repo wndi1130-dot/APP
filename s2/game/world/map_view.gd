@@ -589,6 +589,11 @@ func has_container(id: String) -> bool:
 	return _container_chunk.has(id)
 
 
+## Every box drawn, model or not (a copy: safe to remove while walking it).
+func container_ids() -> Array:
+	return _container_chunk.keys()
+
+
 func container_mesh(id: String) -> Mesh:
 	if not has_container(id):
 		return null

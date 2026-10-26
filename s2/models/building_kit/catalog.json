@@ -976,17 +976,17 @@
       "status": "ready",
       "path": "res://models/building_kit/roof_gable_end.glb",
       "category": "roof",
-      "use": "박공 끝 삼각 벽",
+      "use": "박공 끝 삼각 벽과 다락 환기창",
       "stretch": "span_xz",
       "origin": "wall_top",
       "height": "free",
       "fits_cell": false,
-      "lod0_tris": 2,
-      "triangle_limit": 4,
+      "lod0_tris": 60,
+      "triangle_limit": 80,
       "dimensions_m": [
         9.5816,
         3.3545,
-        0.45
+        0.52
       ],
       "bounds_m": [
         [
@@ -997,14 +997,16 @@
         [
           4.7908,
           3.3545,
-          0.225
+          0.295
         ]
       ],
       "zones": [
-        0
+        0,
+        2,
+        3
       ],
-      "bytes": 1204,
-      "sha256": "e7b78e01d40cc3dcaed3b91ac8ab6ac65dafc3dfbb444635081a9d5be4431795"
+      "bytes": 5284,
+      "sha256": "d6fd5444776b096ed7d556cd4fd53d680d0f714657a7d91e28d4f25ed30a09f2"
     },
     "roof_flat": {
       "status": "ready",
@@ -1219,9 +1221,9 @@
       "창(벽과 유리)": 5022,
       "바깥 문(벽과 문짝)": 972,
       "모서리": 1600,
-      "박공지붕": 390,
+      "박공지붕": 1898,
       "굴뚝": 160
     },
-    "total": 9720
+    "total": 11228
   }
 }
