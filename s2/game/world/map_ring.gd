@@ -18,6 +18,9 @@ const LOT_STEP := 22
 const TREE_STEP := 9
 const FENCE_PIECE := 7
 static var _finishing := false
+## Set while the plain map is built for a ring: its own path refresh is skipped, as the
+## ring builds every floor's grid anew at the larger size (field_maps.gd build_from).
+static var skip_paths := false
 
 
 static func width_for(kind: String) -> int:
@@ -39,7 +42,14 @@ static func plain_build(script: Script, finish: Callable) -> Dictionary:
 
 
 static func build(script: Script, finish: Callable) -> Dictionary:
-	return add(plain_build(script, finish))
+	skip_paths = true
+	var plain := plain_build(script, finish)
+	skip_paths = false
+	var data := add(plain)
+	if is_same(data, plain):
+		for g: FieldGrid in plain.get("levels", {0: plain["grid"]}).values():
+			g.refresh_paths()
+	return data
 
 
 static func add(original: Dictionary) -> Dictionary:
@@ -50,7 +60,7 @@ static func add(original: Dictionary) -> Dictionary:
 		return original
 	var old: FieldGrid = original["grid"]
 	var inner := Rect2i(width, width, old.width, old.height)
-	var data := MapShift.grow(original, width, width, width, width)
+	var data := MapShift.grow(original, width, width, width, width, false)
 	var g: FieldGrid = data["grid"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (String(data["place_id"]) + "|outer-village").hash()

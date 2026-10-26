@@ -7,6 +7,28 @@ const Ring = preload("res://game/world/map_ring.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
+## One of each edge kind (town, freight, wood, mine, open line); each map is built once for
+## the whole file, plain and ringed, as building them is most of this file's time.
+const PLACES: Array[String] = ["houses_01", "freight_01", "lodge_01", "mine_01", "bare_line_01"]
+static var _built: Dictionary = {}
+
+
+func after_all() -> void:
+	_built.clear()
+
+
+## The map finished at its own size, without the ring. Read only: tests copy what they change.
+func _plain(place: String) -> Dictionary:
+	if not _built.has("plain:" + place):
+		_built["plain:" + place] = Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
+	return _built["plain:" + place]
+
+
+## The same map as the field gets it, with the ring. Read only.
+func _ringed(place: String) -> Dictionary:
+	if not _built.has("ring:" + place):
+		_built["ring:" + place] = FieldMaps.build(place)
+	return _built["ring:" + place]
 
 
 func test_grow_moves_every_layer_cell_rect_key_and_preserves_directions() -> void:
@@ -82,8 +104,8 @@ func test_widths_and_first_stop_and_test_fixtures_are_unchanged() -> void:
 
 func test_finished_old_interior_and_loot_are_only_translated() -> void:
 	for place in ["houses_01", "lodge_01", "mine_01", "freight_01"]:
-		var before := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
-		var after := FieldMaps.build(place)
+		var before := _plain(place)
+		var after := _ringed(place)
 		var width: int = after["map_ring"]["width"]
 		var offset := Vector2i.ONE * width
 		for lv in before["levels"]:
@@ -91,10 +113,12 @@ func test_finished_old_interior_and_loot_are_only_translated() -> void:
 		for key in ["train", "platform", "unload", "spawns", "stairs", "train_doors", "boarding", "unloading", "place_id", "place_kind"]:
 			if before.has(key):
 				assert_eq(after[key], MapShift._offset(before[key], offset, key), place + ": " + key)
-		LootRules.fill(before["containers"], 7)
-		LootRules.fill(after["containers"], 7)
-		for id in before["containers"]:
-			assert_eq(after["containers"][id], MapShift._offset(before["containers"][id], offset, ""), place + ": " + id)
+		var before_boxes: Dictionary = before["containers"].duplicate(true)
+		var after_boxes: Dictionary = after["containers"].duplicate(true)
+		LootRules.fill(before_boxes, 7)
+		LootRules.fill(after_boxes, 7)
+		for id in before_boxes:
+			assert_eq(after_boxes[id], MapShift._offset(before_boxes[id], offset, ""), place + ": " + id)
 		for i in range(before["buildings"].size()):
 			assert_eq(after["buildings"][i], MapShift._offset(before["buildings"][i], offset, ""))
 		for i in range(before.get("props", []).size()):
@@ -102,10 +126,9 @@ func test_finished_old_interior_and_loot_are_only_translated() -> void:
 
 
 func test_road_and_rail_reach_every_new_edge_and_all_new_boxes_are_reachable() -> void:
-	for kind in FieldMaps.KINDS:
-		var place: String = kind + "_01"
-		var original := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
-		var after := Ring.add(original)
+	for place in PLACES:
+		var original := _plain(place)
+		var after := _ringed(place)
 		var old: FieldGrid = original["grid"]
 		var g: FieldGrid = after["grid"]
 		var meta: Dictionary = after["map_ring"]
@@ -134,7 +157,7 @@ func test_road_and_rail_reach_every_new_edge_and_all_new_boxes_are_reachable() -
 
 
 func test_same_place_has_same_ring_and_rooms() -> void:
-	var a := FieldMaps.build("houses_01")
+	var a := _ringed("houses_01")
 	var b := FieldMaps.build("houses_01")
 	for key in ["map_ring", "containers", "buildings", "props", "trees", "low_blocks"]:
 		assert_eq(a[key], b[key], key)
@@ -144,8 +167,8 @@ func test_same_place_has_same_ring_and_rooms() -> void:
 
 func test_ring_trees_and_yard_fences_are_drawn_as_models() -> void:
 	for place in ["houses_01", "lodge_01"]:
-		var original := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
-		var after := Ring.add(original.duplicate(true))
+		var original := _plain(place)
+		var after := _ringed(place)
 		var g: FieldGrid = after["grid"]
 		var modelled := {}
 		for p in after["props"].slice(original.get("props", []).size()):
@@ -171,8 +194,8 @@ func test_ring_trees_and_yard_fences_are_drawn_as_models() -> void:
 
 func test_dead_still_come_in_from_the_new_edge() -> void:
 	for place in ["houses_01", "lodge_01", "mine_01", "freight_01"]:
-		var before := Ring.plain_build(load(FieldMaps.path_of(place)), FieldMaps.build_from)
-		var after := FieldMaps.build(place)
+		var before := _plain(place)
+		var after := _ringed(place)
 		var g: FieldGrid = after["grid"]
 		var old: FieldGrid = before["grid"]
 		var offset := Vector2i.ONE * int(after["map_ring"]["width"])
