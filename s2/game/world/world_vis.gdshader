@@ -139,7 +139,7 @@ void fragment() {
 	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);
 	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
+	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
