@@ -415,7 +415,10 @@ func _ready() -> void:
 	# Room stories on the maps laid out by rule (house_layout.md 4): this run's own dice for this
 	# place, so a resumed stop gets the same ones; what was picked stays in the place's state.
 	if data.has("room_stats"):
-		receipt.place_note("roomStories", RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash()))
+		var stories := RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash())
+		receipt.place_note("roomStories", stories)
+		# What a looted house tipped out lies on its floors (loot_junk.gd, card J); out in _give_finds.
+		data["loose"] = LootDress.LootJunk.spill_looted(data, stories, rng.seed)
 	# A freight yard's or works' one fixed core scene (decision 426): the place is the map's,
 	# whether a core is left in it is this run's dice, kept in the place's state like the stories.
 	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash())
@@ -2999,6 +3002,8 @@ const LURE_MARK_S: float = 3.0
 func _give_finds() -> void:
 	if not bool(opts.get("loot_dress", true)):
 		return
+	for g: Dictionary in data.get("loose", []):
+		ground_items.append(g.duplicate())
 	glints = LootDress.glints(data, rng.seed)
 	key_ways = LootDress.key_ways(grid.doors, rng.seed)
 	var who := RandomNumberGenerator.new()
