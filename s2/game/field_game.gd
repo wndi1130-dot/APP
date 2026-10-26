@@ -35,6 +35,7 @@ const Gait = preload("res://game/sim/gait.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
+const LootRules = preload("res://game/sim/loot_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
@@ -395,6 +396,8 @@ func _ready() -> void:
 		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
 		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
 		_take_map(SidePath.add(built, rng.seed))
+	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
+	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):

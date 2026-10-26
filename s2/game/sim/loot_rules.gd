@@ -62,17 +62,18 @@ static func body_roll(kind: String, place: String, in_horde: bool, rng: RandomNu
 
 ## The place tag of a fallen one lying at cell, from the map's buildings: the
 ## named buildings first (where a padded one worked), then by the words of a
-## building's name (decision 423, P08).
+## building's name (decision 423, P08). Read from the buildings' keys
+## (place_keys) when they are there.
 static func place_at(buildings: Array, cell: Vector2i) -> String:
 	for b: Dictionary in buildings:
-		if not T.PLACE_OF_BUILDING.has(String(b.get("name", ""))):
+		if not T.PLACE_OF_BUILDING.values().has(_dead_place(b)):
 			continue
 		if (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
-			return String(T.PLACE_OF_BUILDING[b["name"]])
+			return _dead_place(b)
 	for b: Dictionary in buildings:
 		if not b.has("rect") or not (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
 			continue
-		var place := place_of_name(String(b.get("name", "")))
+		var place := _dead_place(b)
 		if place != "":
 			return place
 	return ""
@@ -84,11 +85,41 @@ static func wear_place_at(buildings: Array, cell: Vector2i) -> String:
 	for b: Dictionary in buildings:
 		if not b.has("rect") or not (b["rect"] as Rect2i).grow(T.PLACE_REACH).has_point(cell):
 			continue
-		for place: String in T.WEAR_PLACE_WORDS:
-			for w: String in T.WEAR_PLACE_WORDS[place]:
-				if String(b.get("name", "")).contains(w):
-					return place
+		var place := _dead_wear(b)
+		if place != "":
+			return place
 	return place_at(buildings, cell)
+
+
+## The keys of where the fallen stood (J06, as LootDress.name_keys for the
+## boxes): each building's "dead_place" (PLACE_OF_BUILDING by its whole name,
+## else PLACE_WORDS) and "dead_wear" (WEAR_PLACE_WORDS), read once from the name
+## unless the map gives them.
+static func place_keys(buildings: Array) -> void:
+	for b in buildings:
+		if not b is Dictionary:
+			continue
+		if not (b as Dictionary).has("dead_place"):
+			b["dead_place"] = _dead_place(b)
+		if not (b as Dictionary).has("dead_wear"):
+			b["dead_wear"] = _dead_wear(b)
+
+
+static func _dead_place(b: Dictionary) -> String:
+	if b.has("dead_place"):
+		return String(b["dead_place"])
+	var n: String = String(b.get("name", ""))
+	return String(T.PLACE_OF_BUILDING[n]) if T.PLACE_OF_BUILDING.has(n) else place_of_name(n)
+
+
+static func _dead_wear(b: Dictionary) -> String:
+	if b.has("dead_wear"):
+		return String(b["dead_wear"])
+	for place: String in T.WEAR_PLACE_WORDS:
+		for w: String in T.WEAR_PLACE_WORDS[place]:
+			if String(b.get("name", "")).contains(w):
+				return place
+	return ""
 
 
 ## What one of the fallen has on, place by place as wear.gd keeps it, each
