@@ -495,6 +495,7 @@ func _bind_fuel_clock() -> void:
 		return
 	var fuel_clock := FuelClock.new()
 	fuel_clock.elapsed = game.clock.elapsed
+	fuel_clock.arrive_min = game.clock.arrive_min
 	fuel_clock.speed = game.clock.speed
 	fuel_clock.stoves = game.data["stoves"]
 	fuel_clock.expired = stove_changed

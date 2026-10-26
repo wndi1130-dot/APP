@@ -1494,7 +1494,7 @@ func _debug_horde() -> void:
 ## Test key: the clock jumps to 15:40 so dusk and the lanterns can be seen
 ## without playing twenty minutes. The next horde keeps its distance in time.
 func _debug_dusk() -> void:
-	var to: float = (DUSK_TEST_MIN - float(game.clock.ARRIVE_MIN)) * 60.0 / game.clock.GAME_PER_REAL
+	var to: float = (DUSK_TEST_MIN - float(game.clock.arrive_min)) * 60.0 / game.clock.GAME_PER_REAL
 	var jump: float = to - game.clock.elapsed
 	if jump <= 0.0:
 		toast("이미 해 질 녘")
