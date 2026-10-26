@@ -15,6 +15,128 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # GUT was most of a run (20 of 27 minutes on main 10-26), so its scripts run in
+  # parallel shards. Each shard takes every GUT_SHARDS-th script of the sorted list,
+  # which split the 10-26 scripts 9.9 / 10.8 minutes. test-and-apk keeps the parse
+  # checks and the export.
+  gut:
+    name: GUT ${{ matrix.shard }}/2
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      GODOT_VERSION: 4.7.2
+      GUT_VERSION: 9.7.1
+      GUT_SHARDS: 2
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download exact stable engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="${GODOT_VERSION}-stable"
+          base="https://github.com/godotengine/godot-builds/releases/download/${release}"
+          engine="Godot_v${release}_linux.x86_64.zip"
+          mkdir -p "$RUNNER_TEMP/godot-download" s2/build
+          cd "$RUNNER_TEMP/godot-download"
+          curl --fail --location --retry 3 "$base/$engine" -o "$engine"
+          curl --fail --location --retry 3 "$base/SHA512-SUMS.txt" -o SHA512-SUMS.txt
+          python3 - "$engine" <<'PY'
+          import hashlib, pathlib, sys
+          sums = {}
+          for line in pathlib.Path('SHA512-SUMS.txt').read_text().splitlines():
+              fields = line.split()
+              if len(fields) == 2:
+                  sums[fields[1].lstrip('*')] = fields[0]
+          for name in sys.argv[1:]:
+              actual = hashlib.sha512(pathlib.Path(name).read_bytes()).hexdigest()
+              if sums.get(name) != actual:
+                  raise SystemExit(f'Checksum missing or mismatched: {name}')
+              print(f'SHA512 verified: {name}')
+          PY
+          unzip -q "$engine" -d engine
+          chmod +x "engine/Godot_v${release}_linux.x86_64"
+          echo "GODOT_BIN=$PWD/engine/Godot_v${release}_linux.x86_64" >> "$GITHUB_ENV"
+          "$PWD/engine/Godot_v${release}_linux.x86_64" --headless --version | tee "$GITHUB_WORKSPACE/s2/build/godot-version.txt"
+          test "$(cut -d. -f1-4 "$GITHUB_WORKSPACE/s2/build/godot-version.txt")" = "${GODOT_VERSION}.stable"
+
+      - name: Fetch GUT only in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 "https://github.com/bitwes/Gut/archive/refs/tags/v${GUT_VERSION}.zip" -o "$RUNNER_TEMP/gut.zip"
+          unzip -q "$RUNNER_TEMP/gut.zip" -d "$RUNNER_TEMP/gut"
+          mkdir -p s2/addons
+          gut_root="$RUNNER_TEMP/gut/Gut-${GUT_VERSION}"
+          cp -a "$gut_root/addons/gut" s2/addons/gut
+          test -s s2/addons/gut/LICENSE.md
+          python3 -c "from pathlib import Path; Path('s2/tests/.gdignore').unlink()"
+
+      - name: Import resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GODOT_BIN" --headless --path s2 --editor --quit 2>&1 | tee s2/build/import.log
+          python3 - <<'PY'
+          import pathlib, re
+          log = pathlib.Path('s2/build/import.log').read_text()
+          if re.search(r'(?m)^(?:SCRIPT ERROR:|ERROR:)|Parse Error:', log):
+              raise SystemExit('Godot import reported an error; inspect import.log')
+          PY
+
+      - name: Run this shard's GUT scripts
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib
+          shard, total = int(os.environ['SHARD']), int(os.environ['GUT_SHARDS'])
+          scripts = sorted(p.relative_to('s2').as_posix() for p in pathlib.Path('s2/tests').rglob('test_*.gd'))
+          mine = scripts[shard - 1::total]
+          if not mine:
+              raise SystemExit(f'shard {shard}/{total} got no test scripts')
+          pathlib.Path('s2/build/gut-shard.txt').write_text(''.join(f'res://{s}\n' for s in mine))
+          print(f'shard {shard}/{total}: {len(mine)} of {len(scripts)} test scripts')
+          PY
+          "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
+            -gtest="$(paste -sd, s2/build/gut-shard.txt)" -gexit \
+            -gjunit_xml_file=res://build/gut-results.xml 2>&1 | tee s2/build/gut.log
+          # Require a real passing test report, even if runner exits zero.
+          # Every `func test_` in this shard's scripts must appear as a case, so a
+          # test script GUT could not load cannot drop out silently.
+          python3 - <<'PY'
+          import pathlib, re
+          import xml.etree.ElementTree as ET
+          mine = pathlib.Path('s2/build/gut-shard.txt').read_text().split()
+          expected = sum(len(re.findall(r'(?m)^func test_', pathlib.Path('s2', s[len('res://'):]).read_text()))
+                         for s in mine)
+          report = ET.parse('s2/build/gut-results.xml').getroot()
+          cases = list(report.iter('testcase'))
+          if any(list(case.iter('failure')) or list(case.iter('error')) or list(case.iter('skipped')) for case in cases):
+              raise SystemExit('Failed, errored or skipped GUT tests')
+          if expected == 0 or len(cases) < expected:
+              raise SystemExit(f'GUT ran {len(cases)} cases but this shard defines {expected} test functions')
+          print(f'GUT report: {len(cases)} passing test cases ({expected} test functions in {len(mine)} scripts)')
+          PY
+
+      - name: Upload GUT logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: s2-gut-${{ matrix.shard }}-${{ github.run_number }}
+          path: |
+            s2/build/*.log
+            s2/build/*.xml
+            s2/build/*.txt
+          if-no-files-found: warn
+          retention-days: 14
+
   test-and-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -106,30 +228,6 @@ jobs:
           log = pathlib.Path('s2/build/import.log').read_text()
           if re.search(r'(?m)^(?:SCRIPT ERROR:|ERROR:)|Parse Error:', log):
               raise SystemExit('Godot import reported an error; inspect import.log')
-          PY
-
-      - name: Run GUT headless tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
-            -gdir=res://tests -ginclude_subdirs -gexit \
-            -gjunit_xml_file=res://build/gut-results.xml 2>&1 | tee s2/build/gut.log
-          # Require a real passing test report, even if runner exits zero.
-          # Every `func test_` in s2/tests must appear as a case, so a test script
-          # GUT could not load cannot drop out silently (10-08 main: 263 = 263).
-          python3 - <<'PY'
-          import pathlib, re
-          import xml.etree.ElementTree as ET
-          expected = sum(len(re.findall(r'(?m)^func test_', p.read_text()))
-                         for p in pathlib.Path('s2/tests').rglob('test_*.gd'))
-          report = ET.parse('s2/build/gut-results.xml').getroot()
-          cases = list(report.iter('testcase'))
-          if any(list(case.iter('failure')) or list(case.iter('error')) or list(case.iter('skipped')) for case in cases):
-              raise SystemExit('Failed, errored or skipped GUT tests')
-          if expected == 0 or len(cases) < expected:
-              raise SystemExit(f'GUT ran {len(cases)} cases but s2/tests defines {expected} test functions')
-          print(f'GUT report: {len(cases)} passing test cases ({expected} test functions in s2/tests)')
           PY
 
       - name: Debug signing key (fixed one from secrets, else ephemeral) and Android editor settings

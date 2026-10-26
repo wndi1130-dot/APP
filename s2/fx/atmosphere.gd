@@ -267,7 +267,12 @@ const WARM_BANDS: Dictionary = {
 	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.272, 0.268, 0.262)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
-	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "ambient": Color(0.43, 0.43, 0.50)},
+	# Late autumn's low sun is warmer than winter's, as the reference's season
+	# palette has it (fall dusk far more orange than winter dusk): more colour
+	# (saturation 0.55 against 0.45) at the same brightness, but kept amber (hue
+	# 30 degrees): a redder sun turned the lit ground pink. The shade stays the
+	# sky's cool blue, so the ground does not go one brown.
+	"dusk": {"zenith": Color(0.26, 0.21, 0.30), "horizon": Color(0.90, 0.56, 0.34), "sun": Color(0.93, 0.67, 0.42), "ambient": Color(0.43, 0.43, 0.50)},
 }
 ## Most saturation a band colour may carry, and how much colour (chroma, max
 ## minus min) a bluish one may: sky blue is the support gauge's (tests keep both).
