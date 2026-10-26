@@ -82,11 +82,19 @@ export interface FieldCrewRow {
   exhaustion: 0 | 1 | 2;
   hunger: 0 | 1 | 2;
   bodyUse: Record<string, number>;
-  gearBack: { hands: [string, string, number][]; items: Record<string, number> };
+  gearBack: { hands: [string, string, number][]; items: Record<string, number>; wear?: FieldWearBack };
 }
+/** 옷장 자리 옷 한 벌(파밍 손맛 줄기의 옷장 꼴). holes는 해진 부위. */
+export interface FieldGarment { id: string; condition: number; holes?: Record<string, true> }
+/** 입고 돌아온 옷장 자리 옷. "" = 맨몸, coat는 필드에서 주워 입은 긴 외투가 있을 때만. */
+export interface FieldWearBack { jacket: FieldGarment | ''; hands: FieldGarment | ''; coat?: FieldGarment | '' }
 /** 열차 방어(결정 416, 정차 소리 줄기가 채운다). 방어에 선 사람은 출발 명단이 아니라 열차에 남은 사람이다. */
 export interface FieldDefense { held: boolean; people: string[]; hurt: string[]; dead: string[]; wounds: FieldWound[] }
-export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & { version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null };
+export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & {
+  version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null;
+  /** 승강장에서 실은 옷장 자리 옷, 남은 미끼, 실은 음식의 이름별 개수(계약 글 3절). 없으면 빈 것 */
+  wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>; foodIn?: Record<string, number>;
+};
 export type FieldReceipt = ReceiptV4 | FieldReceiptV5;
 /** 출발 계약 판 1(시험 표본) 또는 판 2(field_departure.ts buildDeparture). */
 export type AnyDeparture = FieldDeparture | FieldDepartureV2;
@@ -166,6 +174,12 @@ const handRow = { type: 'array', prefixItems: [{ type: 'string' }, { type: 'stri
 const counts = { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } };
 const treat = { type: 'object', properties: Object.fromEntries(WOUND_TREATS.map(k => [k, { const: true }])), additionalProperties: false };
 const woundV5 = { ...receiptSchema.$defs.wound, properties: { ...receiptSchema.$defs.wound.properties, treat } };
+const garment = object({
+  id, condition: { type: 'number', minimum: 0, maximum: 1 },
+  holes: { type: 'object', additionalProperties: { const: true } },
+}, ['id', 'condition']);
+const wearSlot = { anyOf: [{ const: '' }, garment] };
+const wearBack = object({ jacket: wearSlot, hands: wearSlot, coat: wearSlot }, ['jacket', 'hands']);
 const v5Schema = {
   ...v4Schema, $id: 'urn:s1:prep:field-receipt-v5',
   $defs: { ...receiptSchema.$defs, wound: woundV5 },
@@ -173,9 +187,12 @@ const v5Schema = {
     ...v4Schema.properties, version: { const: 5 },
     crew: { type: 'array', items: object({
       person: id, exhaustion: level, hunger: level, bodyUse: { type: 'object', additionalProperties: { type: 'number', minimum: 0 } },
-      gearBack: object({ hands: { type: 'array', items: handRow }, items: counts }),
+      gearBack: object({ hands: { type: 'array', items: handRow }, items: counts, wear: wearBack }, ['hands', 'items']),
     }) },
     defense: { anyOf: [{ type: 'null' }, object({ held: { type: 'boolean' }, people: ids, hurt: ids, dead: ids, wounds: { type: 'array', items: woundV5 } })] },
+    wardrobeIn: { type: 'array', items: garment },
+    luresBack: counts,
+    foodIn: counts,
   },
   required: [...v4Schema.required, 'crew', 'defense'],
 };
@@ -191,7 +208,7 @@ export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const record = value as Record<string, unknown>;
   const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
   if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, ...rest } = record;
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, ...rest } = record;
   // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
   const people = rest.people as { wounds?: Record<string, unknown>[] };
   const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;
@@ -435,6 +452,7 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   }
 
   bodySearches(g, departure, r);
+  residentScenes(g, departure, r);
   RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
   closeFieldStop(g, departure, r);
   if (r.symbol) {
@@ -499,6 +517,28 @@ function closeFieldStop(g: Game, departure: AnyDeparture, r: FieldReceipt): void
  * 영수증 witnessed의 template 'body_search' 줄만 읽고, 한 귀환에 칸마다 한 번이다. S2 field_return.gd와 같은 값.
  */
 export const BODY_SEARCH_REL: Readonly<Record<Comm, number>> = Object.freeze({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
+
+/**
+ * 정차 사람 장면(J21): 그 정차에 사는 사람들의 겨울 몫을 가져간 것을 본 사람이 살아 돌아오면 그 칸이 한 귀환에 한 번 마음에 둔다
+ * (결정 439 카드 3 「가」: 안건 없이 작게, 값은 정치 흐름과 맞춤). 돕기·지나치기는 칸 값이 없고 사람 기억(memory.ts)에만 남는다.
+ */
+export const RESIDENT_ROBBED_REL: Readonly<Record<Comm, number>> = Object.freeze({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
+
+function residentScenes(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
+  const back = new Set(returnedOf(r));
+  const minded = new Set<Comm>();
+  for (const row of r.witnessed) {
+    if (row.template !== 'resident_robbed' || !Array.isArray(row.witnesses)) continue;
+    for (const w of row.witnesses as unknown[]) {
+      const pid = typeof w === 'string' ? w : (w as { person?: unknown } | null)?.person;
+      if (typeof pid !== 'string' || !back.has(pid)) continue;
+      const c = departurePeople(departure).find(x => x.id === pid)?.comm;
+      if (!c || minded.has(c)) continue;
+      minded.add(c);
+      if (RESIDENT_ROBBED_REL[c]) bumpRel(g, c, RESIDENT_ROBBED_REL[c], 'field.resident');
+    }
+  }
+}
 
 function bodySearches(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
   const minded = new Set<Comm>();

@@ -17,6 +17,13 @@ extends Control
 ##
 ## While a sheet is up only what it is about stays lit (`focus`); the rest
 ## fades to a third and loses most of its colour (.hud--top .is-dim).
+##
+## Coal and food are keys: a press asks for what a stretch costs and why
+## (`stock_pressed`, the slice opens cost_pane.gd; J12). Nothing else takes a
+## press.
+
+## A stock among TAPPABLE pressed: "coal" or "food".
+signal stock_pressed(id: String)
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
@@ -51,6 +58,8 @@ const ZONES: Dictionary = {"trust": {"low": true, "warn": 45, "bad": 30}, "tensi
 ## A stock that lasts this many stretches or fewer is short (red, underlined).
 const SHORT_LEFT: int = 3
 const STOCKS: Array = [["coal", "coal", "석탄"], ["food", "food", "식량"], ["med", "med", "의약품"], ["lux", "lux", "사치품"]]
+## The stocks whose press opens what a stretch costs (cost_pane.gd).
+const TAPPABLE: Array = ["coal", "food"]
 ## The trust well's cracks: one 24 × 8 tile, repeated (c9.css).
 const TILE_CRACKS: Array = [
 	[Vector2(0, 3.4), Vector2(3.6, 2.5), Vector2(6.4, 4.7), Vector2(10.2, 3.9), Vector2(13.4, 1.3), Vector2(17, 3.7), Vector2(21, 2.9), Vector2(24, 3.4)],
@@ -601,6 +610,17 @@ func _stock(s: Dictionary) -> Control:
 	var w_css: float = 30.0 + maxf(text_w, 24.0) + 4.0
 	c.custom_minimum_size = Vector2(w_css * k, 48.0 * k)
 	c.size = c.custom_minimum_size
+	if TAPPABLE.has(id):
+		# The whole stock, 48 high, is the key (field_hud.gd MIN_TOUCH).
+		var tap := Button.new()
+		tap.name = "Tap_" + id
+		tap.flat = true
+		tap.focus_mode = Control.FOCUS_NONE
+		for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+			tap.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		tap.pressed.connect(func() -> void: stock_pressed.emit(id))
+		c.add_child(tap)
 	if short:
 		# .res.is-low::after: a red line under the words, 30 in from the left, 4 from the right.
 		c.draw.connect(func() -> void:

@@ -55,6 +55,8 @@ const PATHS: Dictionary = {
 	"fetch": '<path class="t" d="M4 11h16v9H4z"/><path d="M4 11h16v9H4z"/><path d="M4 14h16M4 17h16"/><path d="M12 2.500V8M9.500 5.500 12 8l2.500-2.500"/>',
 	"bribe": '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v5c0 4 14 4 14 0V7M5 12v5c0 4 14 4 14 0v-5"/>',
 	"blackmail": '<path class="t" d="M5 4h14v11l-5 5H5z"/><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 13h4"/>',
+	# 설득(결정 433): two speech bubbles facing, the near one filled (s1 ui/icons.ts persuade).
+	"persuade": '<path class="t" d="M3 5h11v7H8l-3 3v-3H3z"/><path d="M3 5h11v7H8l-3 3v-3H3z"/><path d="M14 9h7v7h-2v3l-3-3h-5v-4"/>',
 	"papers": '<path class="t" d="M7.500 3.500h8L19 7v11H7.500z"/><path d="M7.500 3.500h8L19 7v11H7.500z"/><path d="M15.500 3.500V7H19M10.500 10.500H16M10.500 14H16"/><path d="M4.500 7.500v13H15"/>',
 	"numbers": '<path d="M5 20V11M10 20V5M15 20v-7M20 20v-4"/>',
 	"scale": '<path class="t" d="M4 11h16v9.500H4z"/><path d="M4 11h16v9.500H4z"/><path d="M8.500 11V3.500h7V11M8.500 14.500h7M11 6.500h2"/>',

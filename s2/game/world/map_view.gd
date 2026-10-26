@@ -10,7 +10,9 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
+const ObjectRules = preload("res://game/sim/object_rules.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const WALL_H: float = 2.1
@@ -57,7 +59,11 @@ var cut_level: int = 0
 var levels: Dictionary = {}       # level -> FieldGrid
 var level_roots: Dictionary = {}  # level -> Node3D
 var shown_level: int = -99
+## What the edge band drew (counts, for the build log and tests).
+var edge_band: Dictionary = {}
 var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiMeshInstance3D)}
+var object_gray: Array = [] # Individually removable fallbacks for interactive furniture.
+var stove_glows: Dictionary = {}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
 var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
 var _prop_memory := PackedByteArray()
@@ -125,6 +131,8 @@ func setup(map_data: Dictionary) -> void:
 				wall_nodes[key] = buildings.cut_node(key.x, key.y)
 	await BuildPace.rest(pace)
 	await _build_ground()
+	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
+	edge_band = EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS)
 	_build_walls()
 	await BuildPace.rest(pace)
 	await _build_props()
@@ -159,12 +167,7 @@ func setup(map_data: Dictionary) -> void:
 		var lv: int = int(stove.get("level", 0))
 		var node := _mesh_node(lv)
 		stove_nodes.append(node)
-		var st := _begin()
-		var base := FieldGrid.center(stove["cell"]) + Vector3(0, lv * LEVEL_H, 0)
-		box(st, Vector3(0.8, 0.9, 0.8), base + Vector3(0, 0.45, 0), Color(0.25, 0.24, 0.23))
-		if stove["lit"]:
-			box(st, Vector3(0.5, 0.06, 0.5), base + Vector3(0, 0.93, 0), Color(0.95, 0.55, 0.25))
-		node.mesh = st.commit()
+		update_stove(stove_nodes.size() - 1)
 	for key in data["manholes"]:
 		var lv: int = int(data.get("manhole_levels", {}).get(key, 0))
 		var node := _mesh_node(lv)
@@ -918,19 +921,24 @@ static func remaining_low_rects(r: Rect2i, covered: Dictionary) -> Array[Rect2i]
 
 
 func _build_props() -> void:
-	if not PropModels.enabled():
-		return
 	var chosen: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
 		var kind := String(prop.get("kind", ""))
 		if not chosen.has(kind):
 			chosen[kind] = ""
 			for path in PropKinds.candidates(kind):
-				if ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
+				if PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
 					chosen[kind] = path
 					break
 		var path: String = chosen[kind]
 		var lv := int(prop.get("level", 0))
+		if _interactive_prop(kind) and prop.get("rect") is Rect2i and levels.has(lv):
+			# These cells never enter the static gray mesh: their own node moves.
+			if lv == 0:
+				for c in _object_cells(prop["rect"]):
+					modelled_prop_cells[c] = true
+			if path.is_empty():
+				_draw_object_gray(prop)
 		await BuildPace.rest(pace)
 		if path.is_empty() or not levels.has(lv) or not prop.get("rect") is Rect2i:
 			continue
@@ -951,7 +959,7 @@ func _build_props() -> void:
 			prop_fit_counts["shrunk"] += 1
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}}
-		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b})
+		prop_batches[path]["items"].append({"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop})
 		if lv == 0:
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
@@ -973,6 +981,169 @@ func _build_props() -> void:
 		await BuildPace.rest(pace)
 
 
+static func _interactive_prop(kind: String) -> bool:
+	return ObjectRules.WOOD_KINDS.has(kind)
+
+
+static func _object_cells(r: Rect2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			out.append(Vector2i(x, y))
+	return out
+
+
+func _draw_object_gray(prop: Dictionary) -> void:
+	var lv := int(prop.get("level", 0))
+	var r: Rect2i = prop["rect"]
+	var node := _mesh_node(lv)
+	var st := _begin()
+	var height := 0.3 if bool(prop.get("fallen", false)) else 1.2
+	var at := Vector3(r.position.x + r.size.x * 0.5, lv * LEVEL_H + height * 0.5, r.position.y + r.size.y * 0.5)
+	box(st, Vector3(r.size.x - 0.1, height, r.size.y - 0.1), at, Color(0.42, 0.4, 0.38))
+	node.mesh = st.commit()
+	object_gray.append({"prop": prop, "node": node})
+
+
+## Change one furnishing, refilling only its model-path batch (both LODs).
+func update_prop(prop: Dictionary, removed: bool = false) -> void:
+	for i in range(object_gray.size() - 1, -1, -1):
+		if is_same(object_gray[i]["prop"], prop):
+			object_gray[i]["node"].free()
+			object_gray.remove_at(i)
+	var modelled := false
+	for path: String in prop_batches:
+		var batch: Dictionary = prop_batches[path]
+		var changed := false
+		for i in range(batch["items"].size() - 1, -1, -1):
+			var item: Dictionary = batch["items"][i]
+			if not is_same(item.get("prop", {}), prop):
+				continue
+			changed = true
+			modelled = true
+			if removed:
+				batch["items"].remove_at(i)
+			else:
+				item["rect"] = prop["rect"]
+				item["xf"] = _object_transform(prop, path)
+		if changed:
+			for node: MultiMeshInstance3D in batch["nodes"].values():
+				node.multimesh.instance_count = batch["items"].size()
+				node.multimesh.visible_instance_count = 0
+			break
+	if not modelled and not removed:
+		var path := String(prop.get("legacy_model", ""))
+		if PropModels.enabled() and path != "" and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
+			_add_object_batch(prop, path)
+		else:
+			_draw_object_gray(prop)
+	refresh_props()
+
+
+func _add_object_batch(prop: Dictionary, path: String) -> void:
+	if not prop_batches.has(path):
+		prop_batches[path] = {"items": [], "nodes": {}}
+	var batch: Dictionary = prop_batches[path]
+	batch["items"].append({"prop": prop, "rect": prop["rect"], "level": int(prop.get("level", 0)),
+		"building": int(prop.get("building", -1)), "xf": _object_transform(prop, path)})
+	var meshes := PropModels.batch_meshes(path)
+	for lod: int in meshes:
+		if not batch["nodes"].has(lod):
+			var node := MultiMeshInstance3D.new()
+			node.name = "Object_%s_LOD%d" % [path.get_file().get_basename(), lod]
+			node.multimesh = MultiMesh.new()
+			node.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			node.multimesh.mesh = meshes[lod]
+			add_child(node)
+			batch["nodes"][lod] = node
+		batch["nodes"][lod].multimesh.instance_count = batch["items"].size()
+		batch["nodes"][lod].multimesh.visible_instance_count = 0
+
+
+func _object_transform(prop: Dictionary, path: String) -> Transform3D:
+	var lv := int(prop.get("level", 0))
+	var r: Rect2i = prop["rect"]
+	var at := Vector3(r.position.x + r.size.x * 0.5, lv * LEVEL_H, r.position.y + r.size.y * 0.5)
+	var bounds: AABB = PropModels.batch_meshes(path)[0].get_aabb()
+	var fit := PropFit.fit(bounds.position, bounds.end, r, int(prop.get("facing", 0)), levels[lv])
+	var turn := Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
+	if not bool(prop.get("fallen", false)):
+		return Transform3D(Basis.from_scale(fit["scale"]) * turn, at)
+	turn = Basis(Vector3.RIGHT, PI * 0.5) * turn
+	var laid: AABB = Transform3D(turn, Vector3.ZERO) * bounds
+	var scale0 := Vector3((r.size.x - 0.1) / maxf(laid.size.x, 0.01), 0.35 / maxf(laid.size.y, 0.01), (r.size.y - 0.1) / maxf(laid.size.z, 0.01))
+	var offset := -laid.get_center() * scale0
+	offset.y = -laid.position.y * scale0.y
+	return Transform3D(Basis.from_scale(scale0) * turn, at + offset)
+
+
+func move_object_container(id: String) -> void:
+	if not container_nodes.has(id):
+		return
+	var node: MeshInstance3D = container_nodes[id]
+	var box_data: Dictionary = data["containers"][id]
+	if node.has_node("Prop"):
+		if bool(box_data.get("object_legacy", false)):
+			node.get_node("Prop").free() # The moved furnishing now owns its batch.
+		else:
+			node.get_node("Prop").position = FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
+	update_container(id)
+
+
+func remove_object_container(id: String) -> void:
+	if container_nodes.has(id):
+		container_nodes[id].free()
+		container_nodes.erase(id)
+
+
+## Only the stove glows. Three broad, faint wisps sit just above its top;
+## there is no emitter, chimney, vertical smoke trail or spreading fire.
+func update_stove(idx: int) -> void:
+	if idx < 0 or idx >= stove_nodes.size():
+		return
+	var stove: Dictionary = data["stoves"][idx]
+	var lv := int(stove.get("level", 0))
+	var node: MeshInstance3D = stove_nodes[idx]
+	var base := FieldGrid.center(stove["cell"]) + Vector3(0, lv * LEVEL_H, 0)
+	var st := _begin()
+	box(st, Vector3(0.8, 0.9, 0.8), base + Vector3(0, 0.45, 0), Color(0.25, 0.24, 0.23))
+	if stove["lit"]:
+		box(st, Vector3(0.5, 0.06, 0.5), base + Vector3(0, 0.93, 0), Color(0.95, 0.55, 0.25))
+	node.mesh = st.commit()
+	if stove_glows.has(idx):
+		stove_glows[idx].free()
+		stove_glows.erase(idx)
+	if not stove["lit"]:
+		return
+	var holder := Node3D.new()
+	holder.name = "StoveWarmth%d" % idx
+	level_roots[lv].add_child(holder)
+	holder.position = base
+	stove_glows[idx] = holder
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.58, 0.26)
+	light.light_energy = ObjectRules.LIGHT_STRENGTH
+	light.omni_range = ObjectRules.LIGHT_REACH
+	light.shadow_enabled = false
+	light.position.y = 1.0
+	holder.add_child(light)
+	var mist := StandardMaterial3D.new()
+	mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mist.albedo_color = Color(0.86, 0.87, 0.85, 0.055)
+	for i in range(3):
+		var puff := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.22
+		sphere.height = 0.12
+		puff.mesh = sphere
+		puff.material_override = mist
+		puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		puff.position = Vector3((i - 1) * 0.16, 1.03 + (i % 2) * 0.08, (i - 1) * 0.06)
+		holder.add_child(puff)
+	_refresh_object_details()
+
+
 func _process(delta: float) -> void:
 	if not lid_anim.is_empty() or _lid_puff != null:
 		advance_lids(delta)
@@ -985,6 +1156,7 @@ func _process(delta: float) -> void:
 ## MultiMesh 전체의 거리 범위로는 지도 끝의 소품도 제출된다. 보이는 인스턴스만 앞에 채운다.
 ## 미리보기는 카메라를 옮긴 직후 같은 함수를 호출한다.
 func refresh_props(camera: Camera3D = null) -> void:
+	_refresh_object_details()
 	if prop_batches.is_empty() or not is_inside_tree():
 		return
 	if camera == null:
@@ -1015,6 +1187,19 @@ func refresh_props(camera: Camera3D = null) -> void:
 			counts[lod] += 1
 		for lod: int in batch["nodes"]:
 			batch["nodes"][lod].multimesh.visible_instance_count = counts[lod]
+
+
+func _refresh_object_details() -> void:
+	for row: Dictionary in object_gray:
+		var prop: Dictionary = row["prop"]
+		var lv := int(prop.get("level", 0))
+		var b := int(prop.get("building", levels[lv].building_at((prop["rect"] as Rect2i).position)))
+		row["node"].visible = _prop_is_seen(prop["rect"], lv) and (not buildings or buildings.interior_visible(b, lv))
+	for idx: int in stove_glows:
+		var stove: Dictionary = data["stoves"][idx]
+		var lv := int(stove.get("level", 0))
+		stove_glows[idx].visible = _prop_is_seen(Rect2i(stove["cell"], Vector2i.ONE), lv) \
+			and (not buildings or buildings.interior_visible(int(stove["building"]), lv))
 
 
 ## 재질은 기존 소품 재질 그대로다. 아직 본 적 없는 층의 소품은 CPU에서 제외한다.

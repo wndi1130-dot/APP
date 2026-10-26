@@ -106,6 +106,8 @@ export interface GameMetrics {
     restored: number; tier3: number; defective: number; breakdowns: number; repairs: number; lice: number; typhus: number;
     hotCoal: number; techCoal: number; apprentices: number; manuals: number; demands: number; partsMade: number; partsEnd: number;
     scrapEnd: number; woodEnd: number; buried: number; s1cLaws: number; techs: string[];
+    /** 꼬리 끝에 붙인 칸 수(측선 칸, 결정 426 카드 ④) */
+    extraCars: number;
   };
   dark?: Record<string, number>;
   /** 사건 반복·카드 밀도 측정(2026-10-09). 이동 사건 = card.kind==='travel'(id는 card.text). */
@@ -695,7 +697,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       restored: d.stats.restored, tier3: d.stats.tier3, defective: d.stats.defective, breakdowns: d.stats.breakdowns, repairs: d.stats.repairs,
       lice: d.stats.lice, typhus: d.stats.typhus, hotCoal: d.stats.hotCoal, techCoal: d.stats.techCoal, apprentices: d.stats.apprentices,
       manuals: d.stats.manuals, demands: d.stats.demands, partsMade: d.stats.partsMade, partsEnd: d.parts, scrapEnd: d.scrap, woodEnd: d.wood,
-      buried: d.stats.buried, s1cLaws: Object.keys(g.passed).filter(l => ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack'].includes(l)).length,
+      buried: d.stats.buried, extraCars: d.extraCars.length, s1cLaws: Object.keys(g.passed).filter(l => ['tech_control', 'apprentice_duty', 'triage_std', 'bath_rota', 'hands_first', 'seed_half', 'child_pack'].includes(l)).length,
       techs: Object.keys(d.techs).filter(id => d.techs[id as keyof typeof d.techs]?.stage !== 'restoring'),
     };
   }

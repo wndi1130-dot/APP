@@ -13,6 +13,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const SidePath = preload("res://game/world/side_path.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -33,6 +34,7 @@ const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
+const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
@@ -57,6 +59,7 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 ## 10-25; it was -14 C fixed), the same the stop scene and the pictures read.
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -387,7 +390,9 @@ func _ready() -> void:
 	if opts.get("map_data") is Dictionary:
 		_take_map(opts["map_data"])
 	else:
-		_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
+		_take_map(SidePath.add(built, rng.seed))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
@@ -447,6 +452,7 @@ func _ready() -> void:
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
 	map_edge.set_fog(fx_light["fog_color"])
+	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 	zombies = Zombies.new()
 	add_child(zombies)
 	# The stand-in bodies, baked off the main thread when handed over (stop_loader.gd).
@@ -747,6 +753,7 @@ func _update_atmosphere() -> void:
 		environment.background_color = fx_light["background"]
 		if map_edge != null:
 			map_edge.set_fog(fx_light["fog_color"])
+			map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
@@ -1932,16 +1939,20 @@ func _update_blood(delta: float) -> void:
 
 
 ## Freshest, closest trail point a zombie at `at` can smell: the same 12 m
-## event shape as the minute pulse; falling snow weakens older drops (8.1).
+## event shape as the minute pulse; falling snow weakens older drops (8.1),
+## rain washes every drop to half its pull (decision 445).
 func strongest_scent(at: Vector3) -> Dictionary:
 	var best: Dictionary = {}
 	var best_score := 0.0
 	var now := clock.elapsed
 	var snowing := weather.kinds.has("snow") or weather.kinds.has("blizzard")
+	var raining := weather.kinds.has("rain")
 	for b in blood:
 		var reach: float = BLOOD_SCENT_R * weather.scent_mult(b["pos"], at)
 		if snowing and now - float(b["t"]) > 30.0:
 			reach *= 0.7
+		if raining:
+			reach *= SmellRules.RAIN_FADE
 		var d: float = at.distance_to(b["pos"])
 		if d > reach:
 			continue
@@ -2430,7 +2441,12 @@ func cell_seen(at: Vector3) -> bool:
 
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
+	# The view ends inside the woods round the map, never past them (edge_band.gd).
+	var screen := get_viewport().get_visible_rect().size
+	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, screen.x / maxf(screen.y, 1.0), CAM_PITCH), grid.width, grid.height)
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
+	if map_edge != null:
+		map_edge.set_eye(player.position)
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
@@ -2503,7 +2519,9 @@ func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	door["hp"] = int(door["hp"]) - 1
 	# The planks on the face they strike from give way first (building_rules.gd).
 	var had: int = BuildingRules.planks_total(door)
-	BuildingRules.wear_planks(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	var toppled := BuildingRules.wear_defences(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	if not toppled.is_empty():
+		actions.topple_furniture(toppled, c)
 	if BuildingRules.planks_total(door) != had:
 		grid.refresh_cell(c)
 		view.update_door(c)
@@ -2745,6 +2763,9 @@ func finish(reason: String) -> void:
 	# A hidden core looked at without the engine hand (field_unified 3장): one line, a reason to bring them.
 	if String(data["spots"].get(CoreScenes.SPOT, {}).get("state", "")) == "seen_hidden":
 		receipt.place_note("coreHint", true)
+	# The side path's rare store goes on the receipt only when someone got to it.
+	if SidePath.visited(data):
+		receipt.place_note("sidePath", "rareStore")
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)
