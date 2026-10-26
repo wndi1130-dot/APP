@@ -1648,6 +1648,10 @@ func _drive(p: Person, delta: float) -> void:
 
 
 func _move_person(p: Person, delta: float) -> void:
+	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
+	if combat.feet_held(p):
+		p.moving = false
+		return
 	if p.path.is_empty():
 		p.moving = false
 		return
@@ -2510,7 +2514,9 @@ func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	door["hp"] = int(door["hp"]) - 1
 	# The planks on the face they strike from give way first (building_rules.gd).
 	var had: int = BuildingRules.planks_total(door)
-	BuildingRules.wear_planks(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	var toppled := BuildingRules.wear_defences(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	if not toppled.is_empty():
+		actions.topple_furniture(toppled, c)
 	if BuildingRules.planks_total(door) != had:
 		grid.refresh_cell(c)
 		view.update_door(c)
