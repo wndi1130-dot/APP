@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  attachCar, createS1cGame, D, extraCarCoal, forecast, LOCO, LOCO_DEFAULT, LOCO_IDS, locoIdOf, locoPressureChance, locoUnchosen, rollBreakdown, rollUsefulCar, setLoco,
+  attachCar, chooseCard, createS1cGame, D, extraCarCoal, forecast, LOCO, LOCO_DEFAULT, LOCO_IDS, locoIdOf, locoPressureChance, locoUnchosen, rollBreakdown, rollUsefulCar, setLoco,
+  viewCard,
 } from '../../src/game';
 import type { Game, LocoId } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
@@ -57,6 +58,28 @@ describe('기관차 넷', () => {
     const c1 = count('c1');
     expect(c2).toBeGreaterThan(0);
     expect(c1).toBeGreaterThan(c2 * 1.3);
+  });
+
+  it('측선 칸은 자재를 내고 고쳐 단다: 모자라면 막히고, 고르면 목재·고철이 빠진다(결정 426 카드 ④ 나)', () => {
+    for (const [n, kind] of [[1, 'coach'], [0, 'store']] as const) {
+      const g = fresh('c2');
+      g.cards = [];
+      const [wood, scrap] = kind === 'coach' ? [D.coachWood, D.coachScrap] : [D.wagonWood, D.wagonScrap];
+      g.dom!.wood = wood - 1;
+      g.dom!.scrap = scrap + 5;
+      g.cards.push({ uid: 900, kind: 'dom:car', n });
+      expect(viewCard(g, g.cards[0]).choices[0].disabled, kind).toBe('목재가 모자라다');
+      expect(chooseCard(g, 900, 0), kind).toBe(false);
+      expect(g.dom!.extraCars, kind).toEqual([]);
+      g.dom!.wood = wood + 2;
+      const v = viewCard(g, g.cards[0]);
+      expect(v.choices[0].disabled, kind).toBeUndefined();
+      expect(v.choices[0].extra?.[0], kind).toContain(`목재 −${wood}`);
+      expect(chooseCard(g, 900, 0), kind).toBe(true);
+      expect(g.dom!.extraCars, kind).toEqual([kind]);
+      expect(g.dom!.wood, kind).toBe(2);
+      expect(g.dom!.scrap, kind).toBe(5);
+    }
   });
 
   it('고장: c3은 안 나고, c4는 부품 4가 있어야 막는다', () => {
