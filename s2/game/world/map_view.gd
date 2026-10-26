@@ -561,7 +561,7 @@ func update_container(id: String) -> void:
 
 ## The empty mark's four corners round a box's cell, a cold pale grey low on the
 ## floor (a stand-in; art3d gives it its look). Vertex colours are linear here.
-const EMPTY_MARK := Color(0.55, 0.58, 0.62)
+const EMPTY_MARK := Color(0.70, 0.74, 0.80)
 
 
 func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
@@ -569,8 +569,8 @@ func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
 	for sx: float in [-1.0, 1.0]:
 		for sz: float in [-1.0, 1.0]:
 			var corner := at + Vector3(sx * 0.42, 0.012, sz * 0.42)
-			box(st, Vector3(0.18, 0.015, 0.04), corner + Vector3(-sx * 0.07, 0, 0), c)
-			box(st, Vector3(0.04, 0.015, 0.18), corner + Vector3(0, 0, -sz * 0.07), c)
+			box(st, Vector3(0.24, 0.015, 0.06), corner + Vector3(-sx * 0.09, 0, 0), c)
+			box(st, Vector3(0.06, 0.015, 0.24), corner + Vector3(0, 0, -sz * 0.09), c)
 
 
 ## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
