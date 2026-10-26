@@ -4,7 +4,7 @@ extends SceneTree
 ## the running train. Picture-only opts; the HUD and the train's keys are hidden.
 ##   godot --path s2 --resolution 1688x780 -s res://tools/atmosphere_shots.gd -- --out=<folder>
 ## Optional: --what=field|travel|both --stages=autumn,early,deep,thaw
-##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet
+##   --bands=dawn,day,dusk,night --weathers=clear,overcast,fog,snow,blizzard,sleet,rain
 ##   --region=K1 --place=<map id> --edge (the field at the map's west edge)
 ##   --ref (only the three reference scenes, REF_SCENES)
 ##   --indoor (the field shots from inside a building, its walls cut away)
@@ -25,6 +25,7 @@ const WEATHERS: Dictionary = {
 	"snow": [["snow"], ["snow"]],
 	"blizzard": [["blizzard"], ["blizzard"]],
 	"sleet": [["sleet"], ["sleet"]],
+	"rain": [["rain"], ["rain"]],
 }
 
 var out := ""
@@ -176,7 +177,7 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 	# The rules drop sleet below -3 C (the rules temperature stays the stop's);
 	# the shot still shows what the picture would let fall.
 	if String(game.atmo["falls"]) != "none" and not game.snow.emitting:
-		game.snow.amount = 400
+		game.snow.amount = 1200
 		game.snow.emitting = true
 	for _i in range(4):
 		await process_frame

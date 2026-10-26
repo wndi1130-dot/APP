@@ -12,6 +12,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const LootDress = preload("res://game/sim/loot_dress.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -1749,6 +1750,7 @@ const HOLDER_KINDS: Dictionary = {
 ## 걸어서 닿는 칸). 들 가구가 없으면 그대로. 돌려주는 값: 옮긴 상자 수.
 static func boxes_into_furniture(data: Dictionary) -> int:
 	var moved := 0
+	var stats := {"keyed": 0, "kitchen_added": 0}
 	var containers: Variant = data.get("containers", {})
 	if not containers is Dictionary or containers.is_empty():
 		return 0
@@ -1821,4 +1823,107 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 				used[key] = true
 				moved += 1
 				break
+		# The room each box stands in, as a key loot_dress.gd room_of reads before the box's name.
+		# A key the map gave is kept; a room of no known kind gets none; a box whose name says its
+		# room in loot_dress.gd's words (부엌 찬장, 매장 상자, 작업실 상자) keeps that, so what it
+		# holds never belies its name. 「창고」 is no such word there: a 창고 상자 takes the key.
+		var keys := _room_keys(data, lv, g, map, of)
+		var in_room: Dictionary = {}  # room -> boxes in it
+		for id: String in ids:
+			var box: Dictionary = containers[id]
+			var bc: Variant = _cell(box.get("cell"))
+			if int(box.get("level", 0)) != lv or bc == null:
+				continue
+			var ri := _at(g, of, bc)
+			in_room[ri] = int(in_room.get(ri, 0)) + 1
+			var key: String = keys.get(ri, "")
+			if not key.is_empty() and not box.has("room") and not _name_places(String(box.get("name", ""))):
+				box["room"] = key
+				stats["keyed"] += 1
+		# A kitchen's spare counters, cupboards and fridge get an empty box each: the place's
+		# bundles are dealt over the boxes by room when the stop opens (loot_dress.gd), so more
+		# places to open, the same things in all.
+		for ri: int in holders_of:
+			if keys.get(ri, "") != "kitchen":
+				continue
+			var list: Array = holders_of[ri]
+			for k in range(list.size()):
+				var kind: String = list[k][1]
+				if int(in_room.get(ri, 0)) >= KITCHEN_MOST:
+					break
+				if used.has(Vector3i(lv, ri, k)) or not KITCHEN_SPARE.has(kind):
+					continue
+				if not seen_of.has(ri):
+					var room: Dictionary = map["rooms"][ri]
+					seen_of[ri] = _from_first(g, of, ri, _keys(g, of, ri, room["cells"], stairs_by.get(lv, {}), []))
+				var r: Rect2i = list[k][0]
+				var spot := _front_cell(r, seen_of[ri], r.position)
+				var id := "kitchen_%d_%d_%d" % [lv, ri, k]
+				if spot.x < 0 or containers.has(id):
+					continue
+				containers[id] = {"id": id, "name": KIND_LABEL.get(kind, kind), "cell": spot, "level": lv,
+					"building": int(map["rooms"][ri]["building"]), "search": KITCHEN_SEARCH, "items": [], "locked": false,
+					"searched": false, "furniture": kind, "room": "kitchen"}
+				used[Vector3i(lv, ri, k)] = true
+				in_room[ri] = int(in_room.get(ri, 0)) + 1
+				stats["kitchen_added"] += 1
+	data["box_rooms"] = stats
 	return moved
+
+
+static func _name_places(name: String) -> bool:
+	return LootDress.room_of({"name": name}) != "storage"
+
+
+## Kitchen furniture that opens: an empty box goes in each one no box is in yet, until the
+## kitchen has KITCHEN_MOST places to open (the reference kitchen has some 8 to 12).
+const KITCHEN_SPARE: Dictionary = {"counter": true, "cupboard": true, "fridge_open": true}
+const KITCHEN_MOST: int = 10
+## Seconds to search one of those (card L, decision 442): half a map box's 4, so opening all
+## of a stop's adds some 36 s, not 73 (after the box-size factor: cupboard 1.5 s, counter 2 s).
+const KITCHEN_SEARCH: float = 2.0
+## Room kind (room_class) -> the room key loot_dress.gd deals by. A living room deals as a
+## bedroom (loot-feel: its hall is a chapel's, nearly every pull 0.3), the store a pantry.
+const ROOM_KEYS: Dictionary = {"kitchen": "kitchen", "bed": "bedroom", "living": "bedroom", "bath": "bathroom",
+	"store": "pantry", "storage": "storage", "shop": "shop", "office": "office", "boiler": "toolbox"}
+
+
+## The room key of a room: a closet or pantry split off (room_split.gd) by its hidden name,
+## then its kind, then words in its name, then its building's role.
+static func room_key(cls: String, words: String, role: String) -> String:
+	if _named(words, "벽장"):
+		return "bedroom"
+	if _named(words, "찬방"):
+		return "pantry"
+	if ROOM_KEYS.has(cls):
+		return ROOM_KEYS[cls]
+	for word: String in ["진료", "병실", "약"]:
+		if _named(words, word):
+			return "clinic"
+	for word: String in ["작업", "공구", "공방"]:
+		if _named(words, word):
+			return "toolbox"
+	if role in ["shop", "shopmain", "market"]:
+		return "shop"
+	if role == "office":
+		return "office"
+	return ""
+
+
+## Room number -> room key on one level.
+static func _room_keys(data: Dictionary, lv: int, g: FieldGrid, map: Dictionary, of: PackedInt32Array) -> Dictionary:
+	var classes: Dictionary = data.get("density_classes", {})
+	var props: Array = data.get("props", [])
+	var labels := _room_labels(data, lv, g, of)
+	var in_room := _props_by_room(g, of, props, lv)
+	var roles: Dictionary = {}
+	for b: Variant in data.get("buildings", []):
+		if b is Dictionary:
+			roles[int(b.get("id", -1))] = String(b.get("role", ""))
+	var out: Dictionary = {}
+	for ri in range(map["rooms"].size()):
+		var words := "%s %s" % [labels.get(ri, ""), _note_name(props, in_room.get(ri, []))]
+		var key := room_key(String(classes.get("%d:%d" % [lv, ri], "")), words, String(roles.get(int(map["rooms"][ri]["building"]), "")))
+		if not key.is_empty():
+			out[ri] = key
+	return out

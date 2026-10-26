@@ -488,7 +488,7 @@ func _build_world() -> void:
 		MapView.box(st, Vector3(6000, 0.12, 0.08), Vector3(0, 0.16, z), STEEL)
 	_mesh(world, st, false)
 	snow = GPUParticles3D.new()
-	snow.amount = 900
+	snow.amount = 2700  # three times the old 900, as the field draws (field_game.gd)
 	snow.lifetime = 3.0
 	snow.local_coords = false
 	snow.visibility_aabb = AABB(Vector3(-40, -10, -40), Vector3(80, 30, 80))

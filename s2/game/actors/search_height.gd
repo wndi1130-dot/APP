@@ -14,7 +14,8 @@ const BY_WORD: Dictionary = {
 	"침실": LOW, "다락": LOW,
 	"묶음": FLOOR, "더미": FLOOR, "밑": FLOOR,
 	"보관함": MID, "공구함": MID, "부엌": MID, "책상": MID, "옷장": MID, "사물함": MID,
-	"칸": MID, "장부": MID, "계산대": MID, "탁자": MID,
+	"칸": MID, "장부": MID, "계산대": MID, "탁자": MID, "냉장고": MID,
+	"조리대": LOW,
 	"선반": HIGH, "찬장": HIGH, "창고": HIGH, "장": HIGH, "종": HIGH,
 }
 ## The living's own motion for each height.
