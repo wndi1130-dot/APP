@@ -744,6 +744,7 @@ func _update_atmosphere() -> void:
 		sun.light_color = fx_light["sun_color"]
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -792,6 +793,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
+	environment.tonemap_exposure = Atmosphere.EXPOSURE
 	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
@@ -812,6 +814,7 @@ func _build_world() -> void:
 	if storm.is_empty():
 		# The atmosphere frame moves the sun with the hour (FxState.SUN_PITCH at midday in deep winter).
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
+		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
@@ -2438,6 +2441,15 @@ func cell_seen(at: Vector3) -> bool:
 	return not mask_on or seen_now.has(seen_key(at))
 
 
+## The footprint of the building whose walls are cut away round the player
+## (building_view open_b); empty outside or with grey boxes.
+func _open_room() -> Rect2i:
+	var bv = view.buildings
+	if bv == null or int(bv.open_b) < 0 or not bv.footprints.has(bv.open_b):
+		return Rect2i(0, 0, -1, -1)
+	return bv.footprints[bv.open_b]
+
+
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	# The view ends inside the woods round the map, never past them (edge_band.gd).
@@ -2446,6 +2458,7 @@ func _update_camera(delta: float) -> void:
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
+		map_edge.set_room(_open_room())
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
