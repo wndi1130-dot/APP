@@ -1,5 +1,5 @@
 # 지도 조립 소품 gap: 샛길 틈 세 갈래(map-layout data["side_path"] gap_kind), 벽장 선반,
-# 샛길 숲 띠의 겨울 잡목 덤불.
+# 샛길 숲 띠의 겨울 잡목 덤불, 마루 밑 숨긴 칸의 들뜬 마루.
 #
 # blender -b --factory-startup -P tools/blender/props_field_gap.py -- --repo .
 #
@@ -28,7 +28,18 @@ DESIGNS = {
     "gap_planks": (1.2, [2, 2], None, "none", "none: 가운데 기둥이 부러져 판자 울타리가 무너지고 판자가 바닥에 흩어진 틈"),
     "small_shelf": (1.4, [1, 1], .42, "low", "low: 벽장·찬방 끝 선 선반, 단지·자루·작은 상자, 현대 가전 없음"),
     "thicket": (1.8, [2, 2], None, "low", "low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른"),
+    "loose_board": (.045, [1, 1], None, "none", "none: 사는 집 나무 바닥의 마루 판 넷 가운데 한 장이 한쪽 끝 3.5 cm 들리고 조금 돌아감, 밑 틈은 어둡게(마루 밑 숨긴 칸, 카드 K)"),
 }
+# 마루 판 색: 소품 셰이더의 색 누르기(weathered.gdshader fx_model_grade 채도 .45·밝기 .82·찬 기운 .35)를
+# 지나면 바닥 칸 WOOD(map_view.gd FLOOR_COLORS[3] 0.40, 0.34, 0.29)와 같은 밝기·색이 되게 거꾸로 맞춘 값.
+FLOOR_PALETTE = {
+    "floor_board": (0.57, 0.33, 0.12, 1.0),
+    "floor_board_b": (0.53, 0.31, 0.115, 1.0),
+    "floor_board_lift": (0.6, 0.36, 0.14, 1.0),
+    "floor_seam": (0.3, 0.17, 0.07, 1.0),
+    "floor_hole": (0.09, 0.055, 0.035, 1.0),
+}
+base.PALETTE.update(FLOOR_PALETTE)
 
 
 def slab(p, centre, u, v, w, hu, hv, hw, colour):
@@ -190,28 +201,53 @@ def thicket(p):
             p.beam(base, tip, .032, tips[(k + i) % 4], 3, .006)
 
 
+def loose_board(p):
+    # 1 m 칸을 덮는 마루 판 넷(앞뒤로 길게, 판 사이 홈). 셋째 판(+X 쪽)이 앞(-Y) 끝에서
+    # 3.5 cm 들리고 조금 돌아가, 그 밑과 양옆 홈이 어두운 틈으로 보인다. 바닥과 같은 색이라 칸 둘레는
+    # 거의 안 보이고 들린 판만 읽힌다. 바닥 위 두께 9 mm, 몸을 막지 않는다.
+    t = .009
+    p.box((-.5, -.256), (-.5, .15), (0, t), "floor_board")
+    p.box((-.5, -.256), (.158, .5), (0, t), "floor_board_b")
+    p.box((-.5, -.256), (.15, .158), (0, t*.45), "floor_seam")
+    p.box((-.256, -.248), (-.5, .5), (0, t*.45), "floor_seam")
+    p.box((-.248, -.004), (-.5, .5), (0, t), "floor_board_b")
+    p.box((.256, .5), (-.5, -.3), (0, t), "floor_board_b")
+    p.box((.256, .5), (-.292, .5), (0, t), "floor_board")
+    p.box((.256, .5), (-.3, -.292), (0, t*.45), "floor_seam")
+    # 들린 판 밑 틈: 판보다 조금 넓어 양옆 홈까지 어둡다.
+    p.box((-.004, .256), (-.5, .5), (0, .002), "floor_hole")
+    lift = .035
+    u = Vector((.03, -1, lift)).normalized()
+    v = Vector((0, 0, 1)).cross(u).normalized()
+    w = u.cross(v).normalized()
+    if w.z < 0:
+        w = -w
+    slab(p, (.126, -.004, t*.5 + lift*.5), u, v, w, .496, .118, t*.5, "floor_board_lift")
+
+
 BUILD = {"gap_wire": gap_wire, "gap_gate": gap_gate, "gap_planks": gap_planks, "small_shelf": small_shelf,
-         "thicket": thicket}
+         "thicket": thicket, "loose_board": loose_board}
 
 
 def write_books(repo, assets, failures):
     out = repo/"s2/models/props_field"
     placement = "rect 가운데 바닥, +Y 위·+Z 앞(지도 안쪽), facing은 +Y축 -90도씩. 발자국 96% 안쪽."
-    book = {"version": 1, "batch": "gap", "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket",
+    book = {"version": 1, "batch": "gap", "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket + loose_board",
             "expected_kinds": list(DESIGNS), "blender": bpy.app.version_string,
             "palette": base.PALETTE, "colour_encoding": "linear RGBA vertex Col, alpha 1",
             "axis": "+Y up, +Z front", "origin": "footprint_center_floor", "placement": placement,
             "assets": assets, "skipped": {}, "failures": failures}
     (out/"catalog_gap.json").write_text(json.dumps(book, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    lines = ["# 지도 조립 소품 gap", "", "`tools/blender/props_field_gap.py` 자동 장부. 샛길 틈 세 갈래, 벽장 선반, 겨울 잡목 덤불, 5종.", "",
+    lines = ["# 지도 조립 소품 gap", "", "`tools/blender/props_field_gap.py` 자동 장부. 샛길 틈 세 갈래, 벽장 선반, 겨울 잡목 덤불, 들뜬 마루, 6종.", "",
              placement, "", "재질·그림·빛·애니메이션 없는 단일 메시/단일 surface, 정점색 Col, 각 600삼각형 이하.",
              "틈 셋은 지나갈 수 있다(solid none). 철조망·가시·망루는 금지선이라 없다.",
-             "덤불의 눈은 굽지 않는다: 위가 넓은 덩이라 눈 오는 날 소품 셰이더(weathered)가 윗면에 얹는다.", "",
+             "덤불의 눈은 굽지 않는다: 위가 넓은 덩이라 눈 오는 날 소품 셰이더(weathered)가 윗면에 얹는다.",
+             "들뜬 마루는 바닥 칸 WOOD 색에 맞춘 마루 판 색 다섯을 쓴다(소품 셰이더의 색 누르기를 거꾸로 맞춤). 칸 둘레는 거의 안 보이고 들린 판과 밑 틈만 읽힌다.", "",
              "| 이름 | 발자국 칸 | 높이 m | solid | 삼각형 | 바이트 | SHA-256 | 판단 |",
              "|---|---|---:|---|---:|---:|---|---|"]
     for k, a in assets.items():
         lines.append(f'| `{k}` | {a["footprint_m"][0]}×{a["footprint_m"][1]} | {a["height_m"]} | {a["solid"]} | {a["lod0_tris"]} | {a["bytes"]} | `{a["sha256"]}` | {a["judgment"]} |')
-    lines += ["", "팔레트는 E 묶음과 같다(`catalog_gap.json` palette)."]
+    lines += ["", "팔레트는 E 묶음에 마루 판 색 다섯을 더한 것이다(`catalog_gap.json` palette)."]
     (out/"README_gap.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

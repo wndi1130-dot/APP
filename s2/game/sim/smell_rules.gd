@@ -14,6 +14,9 @@ const TRAIL_MAX: int = 200
 ## Falling snow weakens drops older than this to that share of their reach.
 const SNOW_FADE_AFTER: float = 30.0
 const SNOW_FADE: float = 0.7
+## Rain washes the trail harder: every drop pulls from half as far (decision
+## 445, card 4). The minute's blood event is not washed: it is fresh blood.
+const RAIN_FADE: float = 0.5
 ## A smelled spot holds the dead there this long; a trail it follows is not
 ## given up for another for this long (the sense ticks at ~6 Hz).
 const LINGER: float = 8.0
