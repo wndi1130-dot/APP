@@ -79,10 +79,12 @@ const KIND_TINT: Dictionary = {
 
 ## How bright the sight mask leaves ground the eye does not reach now (fx_sight:
 ## x never seen, y seen before; seen now is full). By day the ground out of sight
-## stays readable, its shapes and paths still there to choose a way by; after
-## dark it sinks as before, and the lamps carry the night (decision 469 D3).
+## stays readable, its shapes and paths still there to choose a way by. After
+## dark it is dimmed less, not more: the night is dark already, and pressing it
+## a second time left a black screen round the lamp (play screen at night 87%
+## dark cells at 0.24, against the reference's 67%; decision 469 D3).
 const SIGHT_DAY := Vector2(0.55, 0.75)
-const SIGHT_NIGHT := Vector2(0.24, 0.54)
+const SIGHT_NIGHT := Vector2(0.60, 0.78)
 
 
 ## The sight mask's floors at this much daylight (0 night .. 1 full day).
