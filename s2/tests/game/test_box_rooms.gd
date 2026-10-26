@@ -42,6 +42,7 @@ func test_kitchens_get_empty_boxes_in_spare_furniture_and_keys_stand() -> void:
 		assert_eq(c["room"], "kitchen", id)
 		assert_true(Furnish.KITCHEN_SPARE.has(String(c["furniture"])), id)
 		assert_eq((c["items"] as Array).size(), 0, id + " starts empty")
+		assert_eq(float(c["search"]), Furnish.KITCHEN_SEARCH, id + " is quick to open")
 		var front := false
 		for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 			front = front or g.people_can_walk(c["cell"] + d)

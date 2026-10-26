@@ -1859,7 +1859,7 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 				if spot.x < 0 or containers.has(id):
 					continue
 				containers[id] = {"id": id, "name": KIND_LABEL.get(kind, kind), "cell": spot, "level": lv,
-					"building": int(map["rooms"][ri]["building"]), "search": 4, "items": [], "locked": false,
+					"building": int(map["rooms"][ri]["building"]), "search": KITCHEN_SEARCH, "items": [], "locked": false,
 					"searched": false, "furniture": kind, "room": "kitchen"}
 				used[Vector3i(lv, ri, k)] = true
 				in_room[ri] = int(in_room.get(ri, 0)) + 1
@@ -1872,6 +1872,9 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 ## kitchen has KITCHEN_MOST places to open (the reference kitchen has some 8 to 12).
 const KITCHEN_SPARE: Dictionary = {"counter": true, "cupboard": true, "fridge_open": true}
 const KITCHEN_MOST: int = 10
+## Seconds to search one of those (card L, decision 442): half a map box's 4, so opening all
+## of a stop's adds some 36 s, not 73 (after the box-size factor: cupboard 1.5 s, counter 2 s).
+const KITCHEN_SEARCH: float = 2.0
 ## Room kind (room_class) -> the room key loot_dress.gd deals by. A living room deals as a
 ## bedroom (loot-feel: its hall is a chapel's, nearly every pull 0.3), the store a pantry.
 const ROOM_KEYS: Dictionary = {"kitchen": "kitchen", "bed": "bedroom", "living": "bedroom", "bath": "bathroom",
